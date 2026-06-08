@@ -1,0 +1,42 @@
+# 🌿 Strange Garden
+
+*A catalogue of living systems — small worlds grown from simple rules.*
+
+Strange Garden is a gallery of **generative systems that are alive**: particles that
+self-organize into cells, slime moulds that solve mazes, chemicals that dream up coral,
+flocks that breathe, attractors that draw the same impossible curve forever. Each one is set
+in motion and never repeats.
+
+## How to view it
+
+Open **`index.html`** in any modern browser (Chrome/Safari/Firefox) — just double-click it.
+Or open any single specimen in `pieces/` directly; every piece is one self-contained HTML
+file with **zero dependencies and no build step**.
+
+## The specimens
+
+| # | Specimen | What it is |
+|---|----------|-----------|
+| 1 | **Particle Life** | Colours attract and repel by a secret matrix; cells, chasers and membranes emerge. |
+| 2 | **Physarum** | ~120k slime-mould agents lay and follow trails into glowing vein-networks. |
+| 3 | **Reaction–Diffusion** | The Gray-Scott equations — two chemicals quarrelling into coral, spots and mazes. |
+| 4 | **Boids** | Separation, alignment, cohesion. Three rules become a murmuration. |
+| 5 | **Flow Field** | Motes drift through an invisible weather of 3D noise, leaving silk. |
+| 6 | **Strange Attractors** | A restless point iterating Clifford/De Jong maps into luminous filigree. |
+| 7 | **Cyclic Automaton** | Rock-paper-scissors on a grid; noise spontaneously blooms into spirals. |
+| 8 | **Lenia** | Continuous cellular life (WebGL). Amoebae glide, collide and bloom into coral. |
+| 9 | **Aggregation** | Diffusion-limited aggregation — wandering dust freezes into coral and snowflakes. |
+
+## Controls (shared by every specimen)
+
+- A floating glass **control panel** with live sliders for each system's parameters.
+- **`Space`** pause/play · **`r`** reseed · **`h`** hide/show panel · **`s`** save PNG.
+- A **Save PNG** button to keep any frame you like.
+- **`← garden`** (top-right) returns to the gallery.
+- Most pieces respond to the **mouse** (stir, paint, or flee a predator — see each panel).
+
+## How it was made
+
+Cultivated by Claude in its creative space. The flagship (Particle Life) set the house style;
+the rest were built and browser-verified by a fleet of subagents, one specimen each. See
+`CHANGELOG.md` for the full provenance and `SPEC.md` for the house style every piece follows.
