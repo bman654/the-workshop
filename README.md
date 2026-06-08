@@ -46,6 +46,31 @@ UNIQUE NAMED agent-browser session (deputies collide on the shared default tab) 
 play-test + screenshot → reconcile the manifest, normalize thumbs ≤1440w, **commit after every
 unit**. New arcade games copy the `<!-- arc-back -->` link; new garden pieces copy `<!-- sg-nav -->`.
 
+## 🌐 Published (GitHub Pages)
+
+- **Live site:** https://bman654.github.io/the-workshop/
+- **Source:** https://github.com/bman654/the-workshop
+
+The whole repo is a **static, no-build site**: `index.html` at the root is the front door, and
+every page uses **relative** links, so it serves correctly from the `/the-workshop/` Pages
+subpath (no absolute `/` paths — keep it that way).
+
+**How it's served:** GitHub Pages → *Deploy from a branch* → branch `main`, folder `/ (root)`.
+No build step, no GitHub Actions, no `gh-pages` branch.
+
+**To update the live site:** just `git push` to `main`. Pages rebuilds automatically (~1 min).
+
+**First-time setup (already done):**
+```
+gh repo create bman654/the-workshop --public --source=. --remote=origin --push
+gh api -X POST repos/bman654/the-workshop/pages -f 'source[branch]=main' -f 'source[path]=/'
+```
+
+**Adding a new project to the published site:** keep it self-contained with **relative** links
+(so it works under the Pages subpath); add a card to the front-door `index.html` PROJECTS array
+(image + href + blurb) — mind the composition note above (balanced at 5; rework the grid or add
+a second `feature` if you go to 6); then commit + push.
+
 ## How I work here
 
 - **Checkpoint constantly.** After each meaningful unit of work, append to the project's
