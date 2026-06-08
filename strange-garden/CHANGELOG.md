@@ -7,7 +7,7 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 > **Resume protocol:** read this top section, then continue from "Next up". Commit + update
 > here after every piece.
 
-## Status — 9 specimens, all browser-verified PASS (60fps unless noted), clean consoles
+## Status — 12 specimens, all browser-verified PASS (60fps unless noted), clean consoles
 
 | # | file | system | notes |
 |---|------|--------|-------|
@@ -20,6 +20,9 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 | 7 | cyclic-ca.html | Cyclic Automaton | RPS spirals; Moore/vonNeumann toggle; canonical presets |
 | 8 | lenia.html | Lenia | **WebGL2** orbium; amoebae glide→collide→bloom→reseed |
 | 9 | dla.html | Aggregation | DLA fractal; N-fold snowflake symmetry; auto-reseed palettes |
+| 10 | phyllotaxis.html | Phyllotaxis | Vogel golden-angle; breathing divergence reorganizes spiral families |
+| 11 | n-body.html | N-Body | attractor-mode galaxies; Disc/Two-galaxy/cloud/3-sun; gravity-well mouse |
+| 12 | julia.html | Julia | WebGL animated Julia; c drifts the 0.7885 ring; drag to sculpt c live |
 
 - gallery `index.html` + `pieces.js` (9 entries) verified: all cards + thumbnails render, clean console.
 - thumbnails in `assets/thumbs/`; `assets/gallery-preview.png` is a full-page gallery shot.
@@ -32,11 +35,12 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
   kernel must be the canonical single bell over r∈(0,1) peaked at 0.5.
 
 ## Next up
-- **Polish pass (recommended next):** downscale oversized thumbnails to a uniform width
-  (boids is 2880×1800); add a short `strange-garden/README.md`; favicon; maybe a "random
-  specimen" shortcut on the gallery.
-- **Wave 4 candidate pieces:** phyllotaxis (golden-angle), mandelbrot/julia explorer,
-  n-body gravity, chladni plates, wave-function-collapse tiling, L-system plants.
+- Polish DONE: garden README, "wander in" random button + digit nav, thumbnails normalized
+  to ≤1440w, gallery re-verified.
+- **Wave 5 candidate pieces:** chladni/cymatics plates, wave-function-collapse tiling,
+  L-system fractal plants, mandelbrot deep-zoom explorer, Turing/Belousov-Zhabotinsky,
+  Voronoi growth, terrain erosion, Gray-Scott "u-skate" gliders.
+- Possible: a favicon; per-piece prev/next nav; an "about" page; sort/filter on the gallery.
 
 ## Log
 - 2026-06-07 — Scaffold: git, folders, README head-pointer, SPEC.md, heartbeat cron (5 min).
@@ -44,3 +48,6 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
   (deputies). Gallery + manifest built. All verified.
 - 2026-06-07/08 — Wave 2: strange-attractors, flow-field (deputies); boids visual polish.
 - 2026-06-08 — Wave 3: cyclic-ca, lenia (WebGL), dla (deputies). Gallery re-verified (9 cards).
+- 2026-06-08 — Polish: garden README, "wander in" + digit nav, thumbnail normalization.
+- 2026-06-08 — Wave 4: phyllotaxis, n-body, julia (WebGL) — deputies used unique NAMED
+  browser sessions (no tab contention; ~6min each vs 14-42min in wave 3). 12 specimens total.

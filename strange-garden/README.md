@@ -26,6 +26,9 @@ file with **zero dependencies and no build step**.
 | 7 | **Cyclic Automaton** | Rock-paper-scissors on a grid; noise spontaneously blooms into spirals. |
 | 8 | **Lenia** | Continuous cellular life (WebGL). Amoebae glide, collide and bloom into coral. |
 | 9 | **Aggregation** | Diffusion-limited aggregation — wandering dust freezes into coral and snowflakes. |
+| 10 | **Phyllotaxis** | The golden angle, repeated — a living sunflower of spiral seed-heads. |
+| 11 | **N-Body** | Dust and suns wind themselves into slow spiral galaxies under gravity. |
+| 12 | **Julia** | One drifting constant in z²+c blooms a thousand morphing fractal lives. |
 
 ## Controls (shared by every specimen)
 

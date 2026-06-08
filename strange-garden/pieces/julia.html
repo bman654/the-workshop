@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Julia — Strange Garden</title>
+<style>
+  :root { --accent: #b58cff; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel .manual { transition:opacity .2s; }
+  #panel .manual.off { opacity:.35; pointer-events:none; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  .toggle { display:flex; align-items:center; justify-content:space-between; margin-top:13px;
+    font:11px ui-monospace,Menlo,monospace; opacity:.85; }
+  .toggle input { accent-color:var(--accent); width:auto; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Julia</h1>
+  <p class="desc">One constant <i>c</i> drifts forever, and a whole menagerie of fractals
+    blooms and dissolves in its wake. Drag to sculpt the set by hand.</p>
+  <div class="toggle"><span>auto-animate</span><input type="checkbox" id="auto" checked></div>
+  <label>Morph speed <b id="vSpd">0.30</b></label>
+  <input type="range" id="sSpd" min="0" max="2" step="0.01" value="0.30">
+  <div class="manual" id="manualGrp">
+    <label>c.x <b id="vCx">-0.400</b></label>
+    <input type="range" id="sCx" min="-1" max="1" step="0.001" value="-0.4">
+    <label>c.y <b id="vCy">0.600</b></label>
+    <input type="range" id="sCy" min="-1" max="1" step="0.001" value="0.6">
+  </div>
+  <label>Max iterations <b id="vIter">220</b></label>
+  <input type="range" id="sIter" min="40" max="600" step="10" value="220">
+  <label>Zoom <b id="vZoom">1.00×</b></label>
+  <input type="range" id="sZoom" min="0.4" max="8" step="0.01" value="1">
+  <label>Palette <b id="vPal">2</b></label>
+  <input type="range" id="sPal" min="0" max="5" step="1" value="2">
+  <label>Color cycle <b id="vCyc">0.20</b></label>
+  <input type="range" id="sCyc" min="0" max="1.5" step="0.01" value="0.20">
+  <div class="row"><button id="reseed" class="pri">Reseed c</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">drag to sculpt c · space pause · r reseed · h hides panel · s saves</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c');
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+const $=id=>document.getElementById(id);
+let W,H,DPR;
+
+// ---------- parameters / state ----------
+let auto=true, morphSpeed=0.30, maxIter=220, zoom=1.0, palette=2, colorCycle=0.20;
+let cx=-0.4, cy=0.6;          // current julia constant
+let theta=Math.random()*6.283; // phase for the auto dance
+const R=0.7885;               // classic dancing radius
+let panX=0, panY=0;           // small pan (complex units)
+let colorPhase=0;             // shimmer offset
+let dragging=false;
+let renderer='';              // 'WebGL' | 'Canvas2D'
+
+// ---------- WebGL2 path ----------
+let gl=null, prog=null, uni={}, vao=null;
+
+const VERT=`#version 300 es
+in vec2 a_pos;
+void main(){ gl_Position=vec4(a_pos,0.0,1.0); }`;
+
+const FRAG=`#version 300 es
+precision highp float;
+out vec4 o;
+uniform vec2  u_res;
+uniform vec2  u_c;
+uniform float u_iter;
+uniform float u_zoom;
+uniform vec2  u_pan;
+uniform float u_pal;
+uniform float u_phase;
+
+// smooth cyclic palette. mode picks a flavour.
+vec3 palette(float t, float mode){
+  t = fract(t);
+  float a = t * 6.28318530718;
+  vec3 col;
+  if(mode < 0.5){
+    // ember / gold
+    col = 0.5 + 0.5*cos(a + vec3(0.0, 0.9, 1.9));
+    col = pow(col, vec3(1.1,1.0,1.4));
+  } else if(mode < 1.5){
+    // amethyst (accent) — violet, magenta, teal
+    col = 0.5 + 0.5*cos(a*vec3(1.0,1.0,1.0) + vec3(4.2, 2.0, 0.6));
+  } else if(mode < 2.5){
+    // ocean / aurora
+    col = 0.5 + 0.5*cos(a + vec3(3.6, 2.2, 0.7));
+  } else if(mode < 3.5){
+    // rose / coral
+    col = 0.5 + 0.5*cos(a + vec3(0.2, 5.4, 4.4));
+  } else if(mode < 4.5){
+    // spectral rainbow (gentle)
+    col = 0.5 + 0.5*cos(a + vec3(0.0, 2.094, 4.188));
+  } else {
+    // monochrome jade glow
+    col = 0.5 + 0.5*cos(a*0.5 + vec3(2.4, 1.6, 1.0));
+    col *= vec3(0.7,1.05,0.95);
+  }
+  return clamp(col, 0.0, 1.0);
+}
+
+void main(){
+  // map pixel -> complex plane, centered, aspect-correct
+  vec2 uv = (gl_FragCoord.xy - 0.5*u_res) / u_res.y;
+  float scale = 1.6 / u_zoom;
+  vec2 z = uv * 2.0 * scale + u_pan;
+
+  float esc = 4.0;       // escape radius^2 = 16, radius 4
+  float escR2 = 16.0;
+  float n = 0.0;
+  float maxi = u_iter;
+  float zx=z.x, zy=z.y;
+  float m2 = zx*zx+zy*zy;
+  // iterate z = z^2 + c
+  for(int i=0;i<2000;i++){
+    if(float(i) >= maxi) break;
+    float nx = zx*zx - zy*zy + u_c.x;
+    float ny = 2.0*zx*zy + u_c.y;
+    zx=nx; zy=ny;
+    m2 = zx*zx+zy*zy;
+    if(m2 > escR2){ break; }
+    n += 1.0;
+  }
+
+  vec3 col;
+  if(n >= maxi){
+    // interior — deep accent ember, with a faint inner shimmer
+    float inner = 0.5 + 0.5*sin(u_phase*2.0);
+    col = vec3(0.02,0.015,0.04) + 0.012*inner*vec3(0.6,0.4,1.0);
+  } else {
+    // smooth (continuous) iteration count
+    float mu = n + 1.0 - log2(log(sqrt(m2)));
+    float t = mu*0.018 + u_phase;          // band scale + shimmer
+    col = palette(t, u_pal);
+    // far field (slow-escaping, low mu) fades to near-black so the surround
+    // stays elegant & dark; bright filaments live near the boundary (high mu).
+    float depth = smoothstep(1.0, 14.0, mu);   // 0 in far field -> 1 near set
+    col *= 0.04 + 0.96*depth;
+    col = pow(col, vec3(0.9));             // lift midtones a touch
+    col += vec3(0.012,0.01,0.02)*(1.0-depth); // faint cool veil in the void
+  }
+  o = vec4(col, 1.0);
+}`;
+
+function compile(type,src){
+  const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){
+    console.error('shader compile error:', gl.getShaderInfoLog(s));
+    return null;
+  }
+  return s;
+}
+
+function initGL(){
+  gl = cv.getContext('webgl2', {antialias:false, preserveDrawingBuffer:true});
+  if(!gl) return false;
+  const vs=compile(gl.VERTEX_SHADER, VERT), fs=compile(gl.FRAGMENT_SHADER, FRAG);
+  if(!vs||!fs) return false;
+  prog=gl.createProgram(); gl.attachShader(prog,vs); gl.attachShader(prog,fs);
+  gl.bindAttribLocation(prog,0,'a_pos'); gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog,gl.LINK_STATUS)){
+    console.error('program link error:', gl.getProgramInfoLog(prog)); return false;
+  }
+  gl.useProgram(prog);
+  // fullscreen triangle
+  const buf=gl.createBuffer();
+  vao=gl.createVertexArray(); gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+  for(const u of ['u_res','u_c','u_iter','u_zoom','u_pan','u_pal','u_phase'])
+    uni[u]=gl.getUniformLocation(prog,u);
+  return true;
+}
+
+function drawGL(){
+  gl.viewport(0,0,W,H);
+  gl.uniform2f(uni.u_res, W, H);
+  gl.uniform2f(uni.u_c, cx, cy);
+  gl.uniform1f(uni.u_iter, maxIter);
+  gl.uniform1f(uni.u_zoom, zoom);
+  gl.uniform2f(uni.u_pan, panX, panY);
+  gl.uniform1f(uni.u_pal, palette);
+  gl.uniform1f(uni.u_phase, colorPhase);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+}
+
+// ---------- Canvas2D fallback ----------
+let ctx2d=null, img=null, off=null, octx=null, oW=0, oH=0;
+const C2D_SCALE=0.5; // render at half-res then upscale
+
+function initC2D(){
+  ctx2d=cv.getContext('2d');
+  off=document.createElement('canvas'); octx=off.getContext('2d');
+}
+function paletteJS(t, mode){
+  t=t-Math.floor(t); const a=t*6.28318530718;
+  let r,g,b;
+  const cos=(p)=>0.5+0.5*Math.cos(a+p);
+  if(mode<0.5){ r=cos(0); g=cos(0.9); b=cos(1.9); }
+  else if(mode<1.5){ r=cos(4.2); g=cos(2.0); b=cos(0.6); }
+  else if(mode<2.5){ r=cos(3.6); g=cos(2.2); b=cos(0.7); }
+  else if(mode<3.5){ r=cos(0.2); g=cos(5.4); b=cos(4.4); }
+  else if(mode<4.5){ r=cos(0); g=cos(2.094); b=cos(4.188); }
+  else { r=0.7*(0.5+0.5*Math.cos(a*0.5+2.4)); g=1.05*(0.5+0.5*Math.cos(a*0.5+1.6)); b=0.95*(0.5+0.5*Math.cos(a*0.5+1.0)); }
+  return [Math.max(0,Math.min(1,r)),Math.max(0,Math.min(1,g)),Math.max(0,Math.min(1,b))];
+}
+function drawC2D(){
+  oW=Math.max(2,Math.floor(W*C2D_SCALE)); oH=Math.max(2,Math.floor(H*C2D_SCALE));
+  if(off.width!==oW||off.height!==oH){ off.width=oW; off.height=oH; img=octx.createImageData(oW,oH); }
+  // adaptive iteration: cap cost for the CPU path
+  const mi=Math.min(maxIter, 300);
+  const scale=1.6/zoom, escR2=16.0;
+  const data=img.data;
+  for(let py=0;py<oH;py++){
+    const v=((py - 0.5*oH)/oH);            // note: oH used as res.y
+    for(let px=0;px<oW;px++){
+      const u=((px - 0.5*oW)/oH);
+      let zx=u*2*scale+panX, zy=v*2*scale+panY;
+      let n=0, m2=zx*zx+zy*zy;
+      while(n<mi){
+        const nx=zx*zx-zy*zy+cx, ny=2*zx*zy+cy;
+        zx=nx; zy=ny; m2=zx*zx+zy*zy;
+        if(m2>escR2) break; n++;
+      }
+      const idx=(py*oW+px)*4;
+      if(n>=mi){
+        data[idx]=5; data[idx+1]=4; data[idx+2]=11; data[idx+3]=255;
+      } else {
+        const mu=n+1-Math.log2(Math.log(Math.sqrt(m2)));
+        const t=mu*0.018+colorPhase;
+        const col=paletteJS(t,palette);
+        const dd=Math.max(0,Math.min(1,(mu-1)/13)); // far->0, near set->1
+        const depth=dd*dd*(3-2*dd);                  // smoothstep
+        const k=(0.04+0.96*depth);
+        data[idx]=(Math.pow(col[0]*k,0.9)+0.012*(1-depth))*255;
+        data[idx+1]=(Math.pow(col[1]*k,0.9)+0.01*(1-depth))*255;
+        data[idx+2]=(Math.pow(col[2]*k,0.9)+0.02*(1-depth))*255;
+        data[idx+3]=255;
+      }
+    }
+  }
+  octx.putImageData(img,0,0);
+  ctx2d.imageSmoothingEnabled=true;
+  ctx2d.drawImage(off,0,0,oW,oH,0,0,W,H);
+}
+
+// ---------- resize ----------
+function resize(){
+  DPR=Math.min(devicePixelRatio||1, renderer==='WebGL'?2:1.25);
+  W=cv.width=Math.floor(innerWidth*DPR); H=cv.height=Math.floor(innerHeight*DPR);
+  cv.style.width=innerWidth+'px'; cv.style.height=innerHeight+'px';
+}
+addEventListener('resize',resize);
+
+// ---------- mouse: set c live ----------
+function clientToC(clientX, clientY){
+  // map screen pixel to complex coords using same transform as shader
+  const r=cv.getBoundingClientRect();
+  const fx=(clientX-r.left)/r.width, fy=(clientY-r.top)/r.height;
+  const resx=W, resy=H;
+  // gl_FragCoord origin bottom-left; clientY is top-down -> flip
+  const gx=fx*resx, gy=(1-fy)*resy;
+  const ux=(gx-0.5*resx)/resy, uy=(gy-0.5*resy)/resy;
+  const scale=1.6/zoom;
+  return [ux*2*scale+panX, uy*2*scale+panY];
+}
+cv.addEventListener('pointerdown',e=>{
+  dragging=true; cv.setPointerCapture(e.pointerId);
+  if(auto){ $('auto').checked=false; auto=false; updateManualUI(); }
+  const c=clientToC(e.clientX,e.clientY); cx=c[0]; cy=c[1]; syncManualSliders();
+});
+cv.addEventListener('pointermove',e=>{
+  if(!dragging) return;
+  const c=clientToC(e.clientX,e.clientY); cx=c[0]; cy=c[1]; syncManualSliders();
+});
+addEventListener('pointerup',()=>dragging=false);
+
+// ---------- loop ----------
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){
+    if(auto && !dragging){
+      theta += morphSpeed*dt*0.45;
+      cx = R*Math.cos(theta);
+      cy = R*Math.sin(theta) * 0.95 + 0.04*Math.sin(theta*0.37);
+      syncManualSliders();
+    }
+    colorPhase += colorCycle*dt*0.12;
+    if(renderer==='WebGL') drawGL(); else drawC2D();
+  }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${renderer} · c=(${cx.toFixed(3)}, ${cy.toFixed(3)}) · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---------- controls ----------
+function syncManualSliders(){
+  $('sCx').value=cx.toFixed(3); $('vCx').textContent=cx.toFixed(3);
+  $('sCy').value=cy.toFixed(3); $('vCy').textContent=cy.toFixed(3);
+}
+function updateManualUI(){ $('manualGrp').classList.toggle('off', auto); }
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); }; }
+
+$('auto').onchange=()=>{ auto=$('auto').checked; if(auto){ theta=Math.atan2(cy,cx); } updateManualUI(); };
+bind('sSpd','vSpd',x=>x.toFixed(2),x=>morphSpeed=x);
+bind('sCx','vCx',x=>x.toFixed(3),x=>{ if(!auto)cx=x; });
+bind('sCy','vCy',x=>x.toFixed(3),x=>{ if(!auto)cy=x; });
+bind('sIter','vIter',x=>x|0,x=>maxIter=x|0);
+bind('sZoom','vZoom',x=>x.toFixed(2)+'×',x=>zoom=x);
+bind('sPal','vPal',x=>x|0,x=>palette=x|0);
+bind('sCyc','vCyc',x=>x.toFixed(2),x=>colorCycle=x);
+
+function reseed(){
+  // pick a fresh interesting c, biased to the dancing ring
+  const ang=Math.random()*6.283;
+  const rr=R*(0.85+Math.random()*0.25);
+  cx=rr*Math.cos(ang); cy=rr*Math.sin(ang);
+  theta=ang; syncManualSliders();
+}
+$('reseed').onclick=reseed;
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ if(renderer==='WebGL') drawGL(); else drawC2D();
+  const a=document.createElement('a'); a.download='julia.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')reseed();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---------- go ----------
+if(initGL()){ renderer='WebGL'; }
+else { renderer='Canvas2D'; initC2D(); }
+console.log('Julia renderer:', renderer);
+resize(); updateManualUI(); syncManualSliders();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phyllotaxis — Strange Garden</title>
+<style>
+  :root { --accent: #f0b429; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Phyllotaxis</h1>
+  <p class="desc">The golden angle, repeated. Florets emerge from the heart of the
+    flower and drift outward, spiral families forever rearranging.</p>
+  <label>Florets <b id="vN">2400</b></label>
+  <input type="range" id="sN" min="200" max="6000" step="50" value="2400">
+  <label>Divergence° <b id="vA">137.500</b></label>
+  <input type="range" id="sA" min="135" max="140" step="0.001" value="137.50776">
+  <label>Spacing <b id="vC">7.0</b></label>
+  <input type="range" id="sC" min="3" max="14" step="0.1" value="7">
+  <label>Dot size <b id="vD">1.7</b></label>
+  <input type="range" id="sD" min="0.6" max="4" step="0.1" value="1.7">
+  <label>Growth <b id="vG">1.0</b></label>
+  <input type="range" id="sG" min="0" max="3" step="0.05" value="1">
+  <label>Breathing <b id="vB">0.30</b></label>
+  <input type="range" id="sB" min="0" max="1.5" step="0.01" value="0.3">
+  <label>Palette cycle <b id="vP">0.15</b></label>
+  <input type="range" id="sP" min="0" max="1" step="0.01" value="0.15">
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">space pause · r reseed · h hides panel · s saves</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR,cssW,cssH;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  cssW=innerWidth; cssH=innerHeight;
+  W=cv.width=Math.floor(cssW*DPR); H=cv.height=Math.floor(cssH*DPR);
+  cv.style.width=cssW+'px'; cv.style.height=cssH+'px';
+}
+addEventListener('resize',resize);
+
+const GOLDEN=Math.PI*(3-Math.sqrt(5));           // 137.50776...° in radians
+const GOLDEN_DEG=GOLDEN*180/Math.PI;
+const TAU=Math.PI*2;
+
+// ---- parameters ----
+let nTarget=2400;          // requested floret count
+let baseAngleDeg=GOLDEN_DEG;  // slider value (degrees), center of the breathing
+let c=7;                   // spacing constant
+let dotSize=1.7;           // base dot radius scale
+let growth=1.0;            // how fast florets emerge
+let breathing=0.3;         // amplitude of angle wobble (degrees)
+let paletteCycle=0.15;     // hue rotation speed
+
+// ---- live state ----
+let grown=60;              // current number of florets actually shown (animated up)
+let t=0;                   // global time accumulator
+let huePhase=0;            // phase driving the palette breathing
+let hueShift=0;            // animated palette offset (gently bounded, stays warm)
+let liveAngle=GOLDEN;      // current divergence angle in radians (with breathing)
+
+function reseed(){ grown=Math.min(60,nTarget); t=Math.random()*1000; huePhase=Math.random()*TAU; }
+
+// warm ramp: pale-gold heart -> amber -> deep ember rim, with an animated hue drift.
+// Hue runs from ~52 (light gold) at the center down toward ~14 (ember/red) at the rim.
+function floretColor(frac, hue){
+  // frac: 0 (center) .. 1 (rim).  hue: animated rotation in degrees.
+  const h = (50 - frac*28 + hue + 360) % 360; // pale gold (~50) -> ember orange (~22)
+  const s = 76 + frac*22;                 // richer, more saturated toward the rim
+  const l = 82 - frac*40;                 // luminous heart, glowing ember rim
+  return `hsl(${h.toFixed(1)} ${s.toFixed(0)}% ${l.toFixed(0)}%)`;
+}
+
+function step(dt){
+  t+=dt;
+  // grow floret count toward the target
+  if(growth>0){
+    grown += growth*nTarget*0.11*dt;       // emerge a fraction of N per second
+    if(grown>nTarget) grown=nTarget;
+  } else {
+    grown=nTarget;
+  }
+  // breathing of the divergence angle around the slider's base value
+  const wobble = breathing * Math.sin(t*0.18) + breathing*0.4*Math.sin(t*0.071+1.3);
+  liveAngle = (baseAngleDeg + wobble) * Math.PI/180;
+  // palette breathing — a gentle bounded sway that keeps the ramp in the warm band
+  huePhase += paletteCycle*0.6*dt;
+  hueShift = 14*Math.sin(huePhase) + 6*Math.sin(huePhase*0.37+0.8);
+}
+
+function draw(){
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle='#0a0b0f';
+  ctx.fillRect(0,0,W,H);
+
+  const cx=W*0.5, cy=H*0.5;
+  const N=grown|0;
+  if(N<=0) return;
+
+  // scale spacing so the head fills a comfortable fraction of the viewport
+  const maxR = Math.min(W,H)*0.46;
+  const cc = c*DPR;
+  // radius at outermost shown floret with current spacing:
+  const rimRaw = cc*Math.sqrt(Math.max(nTarget,N));
+  const fit = rimRaw>0 ? Math.min(1, maxR/rimRaw) : 1;
+  const scale = cc*fit;
+  const rimR = scale*Math.sqrt(N) || 1;
+
+  const ang = liveAngle;
+  const baseDot = dotSize*DPR;
+
+  // Pass 1 — soft halos (additive, gives the luminous sunflower glow)
+  ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<N;i++){
+    const r = scale*Math.sqrt(i);
+    const a = i*ang;
+    const x = cx + r*Math.cos(a);
+    const y = cy + r*Math.sin(a);
+    const frac = r/rimR;
+    const emerge = N<nTarget && i>N-50 ? (N-i)/50 : 1; // soft leading edge
+    const rad = baseDot*(0.55 + frac*1.7)*emerge;
+    ctx.beginPath();
+    ctx.fillStyle=floretColor(frac, hueShift);
+    ctx.globalAlpha = 0.16*emerge;
+    ctx.arc(x,y,rad*2.4,0,TAU);
+    ctx.fill();
+  }
+  // Pass 2 — bright cores (normal blend, crisp seeds)
+  ctx.globalCompositeOperation='source-over';
+  for(let i=0;i<N;i++){
+    const r = scale*Math.sqrt(i);
+    const a = i*ang;
+    const x = cx + r*Math.cos(a);
+    const y = cy + r*Math.sin(a);
+    const frac = r/rimR;
+    const emerge = N<nTarget && i>N-50 ? (N-i)/50 : 1;
+    const rad = baseDot*(0.55 + frac*1.7)*emerge;
+    ctx.beginPath();
+    ctx.fillStyle=floretColor(frac, hueShift);
+    ctx.globalAlpha = 0.92*emerge;
+    ctx.arc(x,y,rad,0,TAU);
+    ctx.fill();
+  }
+
+  // central bloom glow
+  ctx.globalCompositeOperation='lighter';
+  const glow=ctx.createRadialGradient(cx,cy,0,cx,cy,rimR*0.55);
+  glow.addColorStop(0,'rgba(255,224,150,0.14)');
+  glow.addColorStop(1,'rgba(255,224,150,0)');
+  ctx.globalAlpha=1;
+  ctx.fillStyle=glow;
+  ctx.beginPath(); ctx.arc(cx,cy,rimR*0.55,0,TAU); ctx.fill();
+
+  ctx.globalAlpha=1;
+  ctx.globalCompositeOperation='source-over';
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){ step(dt); draw(); }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${grown|0} florets · ${(liveAngle*180/Math.PI).toFixed(3)}° · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ set(parseFloat(s.value)); v.textContent=fmt(parseFloat(s.value)); }; }
+bind('sN','vN',x=>x|0,x=>{ nTarget=x|0; if(grown>nTarget)grown=nTarget; });
+bind('sA','vA',x=>x.toFixed(3),x=>{ baseAngleDeg=x; });
+bind('sC','vC',x=>x.toFixed(1),x=>{ c=x; });
+bind('sD','vD',x=>x.toFixed(1),x=>{ dotSize=x; });
+bind('sG','vG',x=>x.toFixed(2),x=>{ growth=x; });
+bind('sB','vB',x=>x.toFixed(2),x=>{ breathing=x; });
+bind('sP','vP',x=>x.toFixed(2),x=>{ paletteCycle=x; });
+$('reseed').onclick=()=>reseed();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='phyllotaxis.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')reseed();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+resize(); reseed();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

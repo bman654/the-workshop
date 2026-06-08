@@ -55,5 +55,23 @@ window.PIECES = [
     name: "Aggregation",
     blurb: "wandering dust freezes into coral, lightning and frost",
     accent: "#7cc7ff"
+  },
+  {
+    file: "phyllotaxis.html",
+    name: "Phyllotaxis",
+    blurb: "the golden angle, repeated, blooms a living sunflower",
+    accent: "#f0b429"
+  },
+  {
+    file: "n-body.html",
+    name: "N-Body",
+    blurb: "dust and suns wind themselves into slow spiral galaxies",
+    accent: "#b79bff"
+  },
+  {
+    file: "julia.html",
+    name: "Julia",
+    blurb: "one drifting constant blooms a thousand fractal lives",
+    accent: "#b58cff"
   }
 ];
