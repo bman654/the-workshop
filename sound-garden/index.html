@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Whitney Music Box</title>
+<style>
+  :root { --accent: #7fd4ff; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#06070c; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:default; }
+  #panel { position:fixed; top:16px; left:16px; width:268px; padding:16px 16px 14px;
+    background:rgba(16,18,26,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; z-index:10; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; padding:5px 6px; font-size:12px; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:7px; margin-top:2px; -webkit-appearance:none; appearance:none; }
+  #panel select:focus { outline:1px solid color-mix(in srgb,var(--accent) 50%,transparent); }
+  .two { display:flex; gap:8px; }
+  .two > div { flex:1; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 16%,transparent); }
+  button.on { border-color:color-mix(in srgb,var(--accent) 60%,transparent);
+    background:color-mix(in srgb,var(--accent) 24%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; z-index:10; }
+  a.back:hover { opacity:.8; }
+  #overlay { position:fixed; inset:0; z-index:40; display:flex; align-items:center;
+    justify-content:center; flex-direction:column; gap:18px;
+    background:radial-gradient(1200px 800px at 50% 42%, rgba(40,60,110,.22), transparent 60%), rgba(4,5,9,.86);
+    backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+    transition:opacity .55s ease; }
+  #overlay.gone { opacity:0; pointer-events:none; }
+  #overlay .t { font-family:Georgia,serif; font-weight:500; font-size:clamp(30px,5.5vw,52px);
+    letter-spacing:.01em; background:linear-gradient(180deg,#fff,#9fb6d6);
+    -webkit-background-clip:text; background-clip:text; color:transparent; margin:0; }
+  #overlay .poem { font-family:Georgia,serif; font-style:italic; font-size:15px;
+    color:#9aa6bd; opacity:.85; text-align:center; max-width:460px; line-height:1.55; margin:0 6px; }
+  #begin { font-size:16px; padding:13px 34px; flex:0 0 auto; margin-top:6px;
+    border-color:color-mix(in srgb,var(--accent) 55%,transparent);
+    background:color-mix(in srgb,var(--accent) 18%,transparent); border-radius:30px;
+    letter-spacing:.04em; }
+  #begin:hover { background:color-mix(in srgb,var(--accent) 30%,transparent); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Whitney Music Box</h1>
+  <p class="desc">Concentric dots orbit, fanning into a spiral and gathering back to a line.
+    Each chimes its note as it crosses the bar.</p>
+  <label>Rings <b id="vN">24</b></label>
+  <input type="range" id="sN" min="6" max="48" step="1" value="24">
+  <label>Cycle length <b id="vT">40s</b></label>
+  <input type="range" id="sT" min="16" max="90" step="1" value="40">
+  <div class="two">
+    <div>
+      <label>Scale</label>
+      <select id="sScale">
+        <option value="pentaMaj">Pentatonic major</option>
+        <option value="pentaMin">Pentatonic minor</option>
+        <option value="major">Major</option>
+        <option value="dorian">Dorian</option>
+        <option value="lydian">Lydian</option>
+        <option value="insen">Japanese in-sen</option>
+        <option value="wholeTone">Whole-tone</option>
+      </select>
+    </div>
+    <div>
+      <label>Root</label>
+      <select id="sRoot">
+        <option value="0">C</option><option value="1">C#</option>
+        <option value="2">D</option><option value="3">D#</option>
+        <option value="4">E</option><option value="5">F</option>
+        <option value="6">F#</option><option value="7">G</option>
+        <option value="8">G#</option><option value="9">A</option>
+        <option value="10">A#</option><option value="11">B</option>
+      </select>
+    </div>
+  </div>
+  <label>Timbre <b id="vTm">bell</b></label>
+  <input type="range" id="sTm" min="0" max="2" step="1" value="0">
+  <label>Reverb <b id="vRv">0.42</b></label>
+  <input type="range" id="sRv" min="0" max="0.95" step="0.01" value="0.42">
+  <label>Volume <b id="vVol">0.70</b></label>
+  <input type="range" id="sVol" min="0" max="1" step="0.01" value="0.7">
+  <div class="row">
+    <button id="bReseed" class="pri">Reseed</button>
+    <button id="bPlay">Pause</button>
+    <button id="bMute">Mute</button>
+  </div>
+</div>
+<div id="hud"></div>
+<div id="hint">space play/pause · m mute · h hide panel</div>
+<a class="back" href="../index.html">← workshop</a>
+
+<div id="overlay">
+  <p class="t">Whitney Music Box</p>
+  <p class="poem">Twenty-four little moons, each in its own time —<br>
+    they scatter into a spiral and gather back to a chord.</p>
+  <button id="begin">▶ begin</button>
+</div>
+
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+const $=id=>document.getElementById(id);
+let W,H,DPR,cx,cy,maxR;
+
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  W=cv.width=Math.floor(innerWidth*DPR); H=cv.height=Math.floor(innerHeight*DPR);
+  cv.style.width=innerWidth+'px'; cv.style.height=innerHeight+'px';
+  cx=W*0.5; cy=H*0.5; maxR=Math.min(W,H)*0.43;
+}
+addEventListener('resize',resize);
+resize();
+
+// ================= musical scales =================
+// semitone offsets within an octave; index into scale wraps with octave shift
+const SCALES = {
+  pentaMaj:  { name:'Pentatonic major', steps:[0,2,4,7,9] },
+  pentaMin:  { name:'Pentatonic minor', steps:[0,3,5,7,10] },
+  major:     { name:'Major',            steps:[0,2,4,5,7,9,11] },
+  dorian:    { name:'Dorian',           steps:[0,2,3,5,7,9,10] },
+  lydian:    { name:'Lydian',           steps:[0,2,4,6,7,9,11] },
+  insen:     { name:'Japanese in-sen',  steps:[0,1,5,7,10] },
+  wholeTone: { name:'Whole-tone',       steps:[0,2,4,6,8,10] },
+};
+const NOTE_NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+// ================= parameters =================
+const P = {
+  rings: 24,
+  cycle: 40,        // seconds for a full gather/scatter cycle (innermost-relative)
+  scale: 'pentaMaj',
+  root: 0,          // semitone offset of root (C=0)
+  rootOctave: -1,   // base octave below middle (lower = darker)
+  timbre: 0,        // 0 bell, 1 marimba, 2 glass
+  reverb: 0.42,
+  volume: 0.70,
+  muted: false,
+};
+const TIMBRE_NAMES=['bell','marimba','glass'];
+
+// ring data, rebuilt when rings/scale/root change. no per-frame alloc.
+let ring=[];        // {speed, freq, hue, lastAngle, flash, ripple[]}
+let notesPlayed=0;  // counter (verifiable)
+
+function buildRings(){
+  const sc=SCALES[P.scale].steps;
+  const n=P.rings;
+  ring.length=0;
+  // map ring index -> scale degree. innermost (i=0) = lowest pitch, ascends outward.
+  for(let i=0;i<n;i++){
+    const deg=i;
+    const octave=Math.floor(deg/sc.length);
+    const semis=sc[deg%sc.length] + 12*octave + 12*P.rootOctave + P.root;
+    const freq=261.625565*Math.pow(2, semis/12); // relative to middle C
+    // angular speed: revolutions in one cycle = baseRevs + i  (inner fastest)
+    const revs = (n - i);            // inner ring (i=0) does the most revolutions
+    const hue = 198 + (i/Math.max(1,n-1))*150; // smooth gradient up the scale
+    ring.push({
+      revs,
+      freq,
+      hue,
+      sat: 78,
+      lig: 60,
+      angle: 0,
+      lastAngle: 0,
+      flash: 0,
+      r: 0,           // pixel radius, set in layout
+      ripples: [],    // pooled {age,max} — small, capped
+    });
+  }
+  layoutRings();
+}
+function layoutRings(){
+  const n=ring.length; if(!n) return;
+  const inner=maxR*0.14;
+  for(let i=0;i<n;i++){
+    ring[i].r = inner + (maxR-inner)*(i+1)/n;
+  }
+}
+
+// ================= Web Audio =================
+let actx=null, master=null, reverbGain=null, dryGain=null, convolver=null,
+    compressor=null, lowpass=null, masterGain=null;
+let started=false, playing=false;
+let activeVoices=0;       // verifiable — should stay bounded
+
+function buildImpulse(seconds, decay){
+  const rate=actx.sampleRate;
+  const len=Math.max(1,Math.floor(rate*seconds));
+  const buf=actx.createBuffer(2,len,rate);
+  for(let ch=0;ch<2;ch++){
+    const d=buf.getChannelData(ch);
+    for(let i=0;i<len;i++){
+      const t=i/len;
+      // decaying noise burst, slightly diffuse
+      d[i]=(Math.random()*2-1)*Math.pow(1-t,decay);
+    }
+  }
+  return buf;
+}
+
+function initAudio(){
+  actx=new (window.AudioContext||window.webkitAudioContext)();
+  // master chain:  voices -> lowpass -> [dry + convolver(wet)] -> compressor -> masterGain -> dest
+  master=actx.createGain(); master.gain.value=1;
+  lowpass=actx.createBiquadFilter();
+  lowpass.type='lowpass'; lowpass.frequency.value=4200; lowpass.Q.value=0.4;
+  convolver=actx.createConvolver();
+  convolver.buffer=buildImpulse(3.2,2.6);
+  dryGain=actx.createGain();
+  reverbGain=actx.createGain();
+  compressor=actx.createDynamicsCompressor();
+  compressor.threshold.value=-14; compressor.knee.value=24;
+  compressor.ratio.value=4; compressor.attack.value=0.004; compressor.release.value=0.18;
+  masterGain=actx.createGain();
+  // wiring
+  master.connect(lowpass);
+  lowpass.connect(dryGain);
+  lowpass.connect(convolver);
+  convolver.connect(reverbGain);
+  dryGain.connect(compressor);
+  reverbGain.connect(compressor);
+  compressor.connect(masterGain);
+  masterGain.connect(actx.destination);
+  applyMix();
+}
+function applyMix(){
+  if(!actx) return;
+  const w=P.reverb;                       // wet amount
+  dryGain.gain.value = 1 - 0.45*w;        // keep some dry presence
+  reverbGain.gain.value = 0.95*w;
+  masterGain.gain.value = (P.muted?0:1) * (0.06 + 0.46*P.volume); // safe headroom
+}
+
+const MAX_VOICES=22;                       // cap simultaneous voices
+// play a note at a scheduled time. self-cleaning (disconnects on end).
+function playNote(freq, when, hue){
+  if(!actx || activeVoices>=MAX_VOICES) return;
+  const tim=P.timbre;
+  // per-note envelope params by timbre
+  let attack, decay, peak, partials, ratio, modAmt;
+  if(tim===0){       // bell — FM-ish, longer shimmer
+    attack=0.004; decay=2.0; peak=0.34; partials=[1,2.01]; ratio=3.5; modAmt=0.6;
+  } else if(tim===1){ // marimba — short woody
+    attack=0.003; decay=0.85; peak=0.40; partials=[1,4.0]; ratio=4.0; modAmt=0.25;
+  } else {            // glass — pure-ish, airy
+    attack=0.006; decay=2.6; peak=0.30; partials=[1,2.0,3.0]; ratio=2.0; modAmt=0.4;
+  }
+  const g=actx.createGain();
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.linearRampToValueAtTime(peak, when+attack);
+  g.gain.exponentialRampToValueAtTime(0.0008, when+attack+decay);
+  // a gentle bandpass tied to pitch for character
+  const lp=actx.createBiquadFilter();
+  lp.type='lowpass'; lp.frequency.setValueAtTime(Math.min(7000,freq*8), when);
+  lp.Q.value=0.6;
+  g.connect(lp); lp.connect(master);
+
+  const oscs=[];
+  // carrier partials (slightly detuned for warmth)
+  for(let k=0;k<partials.length;k++){
+    const o=actx.createOscillator();
+    o.type = tim===1?'triangle':'sine';
+    o.frequency.setValueAtTime(freq*partials[k], when);
+    o.detune.value=(k===0? -4 : 5);
+    const pg=actx.createGain();
+    pg.gain.value = k===0?1:(0.34/(k+1));
+    o.connect(pg); pg.connect(g);
+    oscs.push(o);
+  }
+  // FM modulator on the fundamental for a bell-like inharmonic shimmer
+  const mod=actx.createOscillator();
+  mod.frequency.setValueAtTime(freq*ratio, when);
+  const modGain=actx.createGain();
+  modGain.gain.setValueAtTime(freq*modAmt, when);
+  modGain.gain.exponentialRampToValueAtTime(freq*modAmt*0.05+0.001, when+decay);
+  mod.connect(modGain); modGain.connect(oscs[0].frequency);
+
+  const stopAt=when+attack+decay+0.05;
+  activeVoices++;
+  oscs.forEach(o=>{ o.start(when); o.stop(stopAt); });
+  mod.start(when); mod.stop(stopAt);
+  // cleanup on the last carrier's end
+  oscs[0].onended=()=>{
+    try{
+      oscs.forEach(o=>o.disconnect());
+      mod.disconnect(); modGain.disconnect();
+      g.disconnect(); lp.disconnect();
+    }catch(e){}
+    activeVoices--;
+    if(activeVoices<0) activeVoices=0;
+  };
+  notesPlayed++;
+}
+
+// ================= animation + crossing detection =================
+// The trigger line is the 3-o'clock / 0-radian axis (positive x). A dot triggers
+// when its angle wraps past 0 (crossing from just-below-2π to just-above-0).
+let lastNow=performance.now();
+let elapsed=0;            // seconds of musical time (advances only while playing)
+let fps=60;
+const TAU=Math.PI*2;
+
+// schedule-ahead lookahead so triggers land tightly on the audio clock
+function angleAt(r, t){
+  // angle grows clockwise visually but math is fine either way; keep consistent
+  return (r.revs * (t / P.cycle)) * TAU;
+}
+
+function step(dtMusic){
+  const prev=elapsed;
+  elapsed += dtMusic;
+  for(let i=0;i<ring.length;i++){
+    const r=ring[i];
+    const aPrev = angleAt(r, prev) % TAU;
+    const aNow  = angleAt(r, elapsed) % TAU;
+    r.angle = aNow;
+    // detect wrap past 0 within this frame (one or more crossings)
+    const cyclesPrev=Math.floor(angleAt(r,prev)/TAU);
+    const cyclesNow =Math.floor(angleAt(r,elapsed)/TAU);
+    if(cyclesNow>cyclesPrev){
+      // crossed the line (possibly multiple times if very fast — trigger once per frame for the latest)
+      // schedule slightly ahead for tight timing
+      const when = actx ? actx.currentTime + 0.02 : 0;
+      if(actx && playing && !P.muted) playNote(r.freq, when, r.hue);
+      r.flash=1;
+      // spawn a ripple (pooled, capped at 3 per ring)
+      if(r.ripples.length<3) r.ripples.push({age:0});
+    }
+    // decay flash + ripples
+    if(r.flash>0){ r.flash-=dtMusic*2.2; if(r.flash<0)r.flash=0; }
+    const rip=r.ripples;
+    for(let k=rip.length-1;k>=0;k--){
+      rip[k].age += dtMusic;
+      if(rip[k].age>0.9) rip.splice(k,1);
+    }
+  }
+}
+
+function draw(){
+  // dark ground with gentle trail fade for bloom
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle='rgba(6,7,12,0.34)';
+  ctx.fillRect(0,0,W,H);
+
+  // faint orbit rings
+  ctx.globalCompositeOperation='lighter';
+  ctx.lineWidth=Math.max(1,DPR*0.6);
+  for(let i=0;i<ring.length;i++){
+    const r=ring[i];
+    ctx.beginPath();
+    ctx.strokeStyle=`hsla(${r.hue|0},60%,55%,0.07)`;
+    ctx.arc(cx,cy,r.r,0,TAU);
+    ctx.stroke();
+  }
+
+  // trigger line (subtle, 3 o'clock axis)
+  ctx.beginPath();
+  const grad=ctx.createLinearGradient(cx,cy,cx+maxR*1.05,cy);
+  grad.addColorStop(0,'rgba(170,200,255,0.0)');
+  grad.addColorStop(0.15,'rgba(170,200,255,0.10)');
+  grad.addColorStop(1,'rgba(200,220,255,0.20)');
+  ctx.strokeStyle=grad; ctx.lineWidth=Math.max(1,DPR*1.1);
+  ctx.moveTo(cx,cy); ctx.lineTo(cx+maxR*1.05,cy); ctx.stroke();
+
+  // ripples + dots
+  for(let i=0;i<ring.length;i++){
+    const r=ring[i];
+    const a=r.angle;
+    const dx=cx+Math.cos(a)*r.r, dy=cy+Math.sin(a)*r.r;
+
+    // ripples
+    for(let k=0;k<r.ripples.length;k++){
+      const rp=r.ripples[k];
+      const t=rp.age/0.9;
+      const rad=(6+34*t)*DPR;
+      ctx.beginPath();
+      ctx.strokeStyle=`hsla(${r.hue|0},90%,70%,${(1-t)*0.5})`;
+      ctx.lineWidth=Math.max(1,DPR*1.4*(1-t));
+      ctx.arc(dx,dy,rad,0,TAU);
+      ctx.stroke();
+    }
+
+    // glow halo
+    const flash=r.flash;
+    const base=(3.0 + i*0.06)*DPR;
+    const rad=base*(1+flash*1.4);
+    const glowR=rad*4.5;
+    const g=ctx.createRadialGradient(dx,dy,0,dx,dy,glowR);
+    const lig=58+flash*24;
+    g.addColorStop(0,`hsla(${r.hue|0},90%,${lig}%,${0.9})`);
+    g.addColorStop(0.25,`hsla(${r.hue|0},90%,${lig-6}%,${0.4+flash*0.4})`);
+    g.addColorStop(1,`hsla(${r.hue|0},90%,55%,0)`);
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.arc(dx,dy,glowR,0,TAU); ctx.fill();
+
+    // bright core
+    ctx.beginPath();
+    ctx.fillStyle=`hsla(${r.hue|0},85%,${78+flash*16}%,${0.95})`;
+    ctx.arc(dx,dy,rad,0,TAU); ctx.fill();
+  }
+
+  // soft center dot
+  ctx.globalCompositeOperation='lighter';
+  ctx.beginPath();
+  ctx.fillStyle='rgba(180,205,255,0.5)';
+  ctx.arc(cx,cy,Math.max(1.5,DPR*1.6),0,TAU); ctx.fill();
+}
+
+// ================= loop =================
+function loop(now){
+  let dt=(now-lastNow)/1000; lastNow=now;
+  if(dt>0.05) dt=0.05;
+  if(playing && !document.hidden){
+    step(dt);
+  }
+  if(!document.hidden) draw();
+  fps += ((1/Math.max(dt,1e-4)) - fps)*0.08;
+  const sc=SCALES[P.scale];
+  hud.textContent =
+    `${NOTE_NAMES[P.root]} ${sc.name} · ${P.rings} rings · ${fps.toFixed(0)} fps · ${notesPlayed} notes · ${activeVoices} voices`;
+  requestAnimationFrame(loop);
+}
+
+// ================= controls =================
+function bindRange(slider,val,fmt,set){
+  const s=$(slider),v=$(val);
+  const handler=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); };
+  s.oninput=handler; handler();
+}
+bindRange('sN','vN',x=>x|0,x=>{ P.rings=x|0; buildRings(); });
+bindRange('sT','vT',x=>x+'s',x=>{ P.cycle=x; });
+bindRange('sTm','vTm',x=>TIMBRE_NAMES[x|0],x=>{ P.timbre=x|0; });
+bindRange('sRv','vRv',x=>x.toFixed(2),x=>{ P.reverb=x; applyMix(); });
+bindRange('sVol','vVol',x=>x.toFixed(2),x=>{ P.volume=x; applyMix(); });
+
+$('sScale').onchange=e=>{ P.scale=e.target.value; buildRings(); };
+$('sRoot').onchange=e=>{ P.root=parseInt(e.target.value,10); buildRings(); };
+
+function syncSelects(){
+  $('sScale').value=P.scale; $('sRoot').value=String(P.root);
+}
+
+$('bPlay').onclick=togglePlay;
+$('bMute').onclick=toggleMute;
+$('bReseed').onclick=reseed;
+
+function togglePlay(){
+  if(!started) return;
+  if(actx.state==='suspended') actx.resume();
+  playing=!playing;
+  $('bPlay').textContent=playing?'Pause':'Play';
+  $('bPlay').classList.toggle('on',!playing);
+}
+function toggleMute(){
+  P.muted=!P.muted; applyMix();
+  $('bMute').textContent=P.muted?'Unmute':'Mute';
+  $('bMute').classList.toggle('on',P.muted);
+}
+function reseed(){
+  const scaleKeys=Object.keys(SCALES);
+  P.scale=scaleKeys[(Math.random()*scaleKeys.length)|0];
+  P.root=(Math.random()*12)|0;
+  P.rings=12+((Math.random()*30)|0);
+  P.cycle=24+((Math.random()*46)|0);
+  P.timbre=(Math.random()*3)|0;
+  // reflect into UI
+  $('sN').value=P.rings; $('vN').textContent=P.rings;
+  $('sT').value=P.cycle; $('vT').textContent=P.cycle+'s';
+  $('sTm').value=P.timbre; $('vTm').textContent=TIMBRE_NAMES[P.timbre];
+  syncSelects();
+  buildRings();
+}
+
+addEventListener('keydown',e=>{
+  const t=e.target;
+  if(t && (t.tagName==='INPUT'||t.tagName==='SELECT'||t.tagName==='TEXTAREA')) return;
+  if(e.key===' '){ togglePlay(); e.preventDefault(); }
+  else if(e.key==='m'||e.key==='M'){ toggleMute(); }
+  else if(e.key==='h'||e.key==='H'){ panel.classList.toggle('hidden'); }
+});
+
+// ================= begin (user gesture unlocks audio) =================
+$('begin').onclick=async ()=>{
+  if(!started){
+    initAudio();
+    started=true;
+  }
+  if(actx.state==='suspended'){ await actx.resume(); }
+  playing=true;
+  $('bPlay').textContent='Pause';
+  lastNow=performance.now();
+  document.getElementById('overlay').classList.add('gone');
+};
+
+// ================= go =================
+buildRings();
+syncSelects();
+requestAnimationFrame(loop);
+
+// expose a tiny introspection hook for verification
+window.__wmb = {
+  get state(){ return actx?actx.state:'none'; },
+  get notes(){ return notesPlayed; },
+  get voices(){ return activeVoices; },
+  get playing(){ return playing; },
+  get hasGraph(){ return !!(actx&&master&&convolver&&compressor&&lowpass); },
+  P,
+};
+</script>
+</body>
+</html>
