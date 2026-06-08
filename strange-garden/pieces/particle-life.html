@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Particle Life — Strange Garden</title>
+<style>
+  :root { --accent: #f6a45c; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Particle Life</h1>
+  <p class="desc">Each colour attracts and repels the others by its own secret rules.
+    Cells, chasers and membranes emerge from nothing.</p>
+  <label>Particles <b id="vN">2000</b></label>
+  <input type="range" id="sN" min="200" max="6000" step="100" value="2000">
+  <label>Colours <b id="vK">5</b></label>
+  <input type="range" id="sK" min="2" max="7" step="1" value="5">
+  <label>Radius <b id="vR">80</b></label>
+  <input type="range" id="sR" min="40" max="170" step="5" value="80">
+  <label>Force <b id="vF">6.0</b></label>
+  <input type="range" id="sF" min="0" max="15" step="0.5" value="6">
+  <label>Friction <b id="vFr">0.040</b></label>
+  <input type="range" id="sFr" min="0.01" max="0.20" step="0.005" value="0.04">
+  <label>Trails <b id="vT">0.55</b></label>
+  <input type="range" id="sT" min="0" max="0.92" step="0.01" value="0.55">
+  <div class="row"><button id="rules" class="pri">New Rules</button><button id="reseed">Reseed</button></div>
+  <div class="row"><button id="pause">Pause</button><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">drag to stir · shift-drag to repel · h hides panel</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR,worldW,worldH;
+function resize(){
+  const oldW=worldW, oldH=worldH;
+  DPR=Math.min(devicePixelRatio||1,2);
+  worldW=innerWidth; worldH=innerHeight;
+  W=cv.width=Math.floor(worldW*DPR); H=cv.height=Math.floor(worldH*DPR);
+  cv.style.width=worldW+'px'; cv.style.height=worldH+'px';
+  if(oldW && px){ const sx=worldW/oldW, sy=worldH/oldH;
+    for(let i=0;i<n;i++){ px[i]*=sx; py[i]*=sy; } }
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+}
+addEventListener('resize',resize);
+
+// ---- parameters ----
+let n=2000, K=5, rMax=80, forceFactor=6, frictionHalfLife=0.04, persistence=0.55;
+let px,py,vx,vy,type, F, colors, sprites;
+
+function makeColors(k){
+  const c=[];
+  for(let i=0;i<k;i++){ const h=(i/k*360 + 18)%360;
+    c.push(`hsl(${h.toFixed(0)} 85% 62%)`); }
+  return c;
+}
+function makeSprites(){
+  sprites = colors.map(col=>{
+    const s=Math.ceil(7*DPR), cvs=document.createElement('canvas');
+    cvs.width=cvs.height=s*2; const g=cvs.getContext('2d');
+    const grad=g.createRadialGradient(s,s,0,s,s,s);
+    grad.addColorStop(0,col); grad.addColorStop(0.35,col);
+    grad.addColorStop(1,'transparent');
+    g.fillStyle=grad; g.beginPath(); g.arc(s,s,s,0,7); g.fill();
+    return cvs;
+  });
+}
+function randomRules(){
+  F=new Float32Array(K*K);
+  for(let i=0;i<K*K;i++) F[i]=Math.random()*2-1;
+}
+function init(){ // (re)allocate & seed positions
+  px=new Float32Array(n); py=new Float32Array(n);
+  vx=new Float32Array(n); vy=new Float32Array(n); type=new Uint8Array(n);
+  for(let i=0;i<n;i++){ px[i]=Math.random()*worldW; py[i]=Math.random()*worldH;
+    vx[i]=0; vy[i]=0; type[i]=(Math.random()*K)|0; }
+}
+function setupColors(){ colors=makeColors(K); makeSprites(); }
+
+// ---- force curve ----
+const beta=0.3;
+function force(r,a){ // r in [0,1]
+  if(r<beta) return r/beta-1;
+  if(r<1) return a*(1-Math.abs(2*r-1-beta)/(1-beta));
+  return 0;
+}
+
+// ---- spatial grid (cell linked-list) ----
+let head, next, cols, rows, cellW, cellH;
+function buildGrid(){
+  cols=Math.max(1,Math.floor(worldW/rMax)); rows=Math.max(1,Math.floor(worldH/rMax));
+  cellW=worldW/cols; cellH=worldH/rows;
+  const nc=cols*rows;
+  if(!head || head.length!==nc) head=new Int32Array(nc);
+  head.fill(-1);
+  if(!next || next.length!==n) next=new Int32Array(n);
+  for(let i=0;i<n;i++){
+    let cx=(px[i]/cellW)|0, cy=(py[i]/cellH)|0;
+    if(cx<0)cx=0; else if(cx>=cols)cx=cols-1;
+    if(cy<0)cy=0; else if(cy>=rows)cy=rows-1;
+    const c=cy*cols+cx; next[i]=head[c]; head[c]=i;
+  }
+}
+
+// ---- mouse stir ----
+let mDown=false,mx=0,my=0,mShift=false;
+cv.addEventListener('pointerdown',e=>{mDown=true;mShift=e.shiftKey;mx=e.clientX;my=e.clientY;});
+addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;});
+addEventListener('pointerup',()=>mDown=false);
+
+function step(dt){
+  buildGrid();
+  const r2=rMax*rMax, ff=rMax*forceFactor;
+  const friction=Math.pow(0.5, dt/frictionHalfLife);
+  const halfW=worldW*0.5, halfH=worldH*0.5;
+  for(let i=0;i<n;i++){
+    const xi=px[i], yi=py[i], ti=type[i];
+    let fx=0,fy=0;
+    let cx=(xi/cellW)|0, cy=(yi/cellH)|0;
+    if(cx<0)cx=0; else if(cx>=cols)cx=cols-1;
+    if(cy<0)cy=0; else if(cy>=rows)cy=rows-1;
+    for(let dy=-1;dy<=1;dy++){
+      let ny=cy+dy; if(ny<0)ny+=rows; else if(ny>=rows)ny-=rows;
+      for(let dx=-1;dx<=1;dx++){
+        let nx=cx+dx; if(nx<0)nx+=cols; else if(nx>=cols)nx-=cols;
+        let j=head[ny*cols+nx];
+        while(j!==-1){
+          if(j!==i){
+            let rx=px[j]-xi, ry=py[j]-yi;
+            if(rx>halfW)rx-=worldW; else if(rx<-halfW)rx+=worldW;
+            if(ry>halfH)ry-=worldH; else if(ry<-halfH)ry+=worldH;
+            const d2=rx*rx+ry*ry;
+            if(d2>0 && d2<r2){
+              const d=Math.sqrt(d2);
+              const f=force(d/rMax, F[ti*K+type[j]]);
+              fx+=rx/d*f; fy+=ry/d*f;
+            }
+          }
+          j=next[j];
+        }
+      }
+    }
+    vx[i]=vx[i]*friction + fx*ff*dt;
+    vy[i]=vy[i]*friction + fy*ff*dt;
+  }
+  // mouse stir
+  if(mDown){
+    const R=160, R2=R*R, sgn=mShift?-1:1;
+    for(let i=0;i<n;i++){
+      const rx=mx-px[i], ry=my-py[i], d2=rx*rx+ry*ry;
+      if(d2<R2 && d2>1){ const d=Math.sqrt(d2), s=sgn*(1-d/R)*900*dt/Math.max(d,8);
+        vx[i]+=rx*s; vy[i]+=ry*s; }
+    }
+  }
+  // integrate + wrap
+  for(let i=0;i<n;i++){
+    let x=px[i]+vx[i]*dt, y=py[i]+vy[i]*dt;
+    if(x<0)x+=worldW; else if(x>=worldW)x-=worldW;
+    if(y<0)y+=worldH; else if(y>=worldH)y-=worldH;
+    px[i]=x; py[i]=y;
+  }
+}
+
+function draw(){
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle=`rgba(10,11,15,${Math.max(0.05,1-persistence)})`;
+  ctx.fillRect(0,0,W,H);
+  ctx.globalCompositeOperation='lighter';
+  for(let t=0;t<K;t++){
+    const sp=sprites[t], hw=sp.width*0.5;
+    for(let i=0;i<n;i++) if(type[i]===t){
+      ctx.drawImage(sp, px[i]*DPR-hw, py[i]*DPR-hw);
+    }
+  }
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){ step(dt); draw(); }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${n} particles · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ set(parseFloat(s.value)); v.textContent=fmt(parseFloat(s.value)); }; }
+bind('sN','vN',x=>x|0,x=>{ n=x|0; init(); });
+bind('sK','vK',x=>x|0,x=>{ K=x|0; setupColors(); randomRules(); init(); });
+bind('sR','vR',x=>x|0,x=>{ rMax=x; });
+bind('sF','vF',x=>x.toFixed(1),x=>{ forceFactor=x; });
+bind('sFr','vFr',x=>x.toFixed(3),x=>{ frictionHalfLife=x; });
+bind('sT','vT',x=>x.toFixed(2),x=>{ persistence=x; });
+$('rules').onclick=()=>randomRules();
+$('reseed').onclick=()=>init();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='particle-life.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')init();
+  else if(e.key==='n')randomRules();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+resize(); setupColors(); randomRules(); init();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
