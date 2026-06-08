@@ -13,5 +13,11 @@ window.INSTRUMENTS = [
     name: "Drift",
     blurb: "sustained voices breathe a slow, ever-drifting consonant chord",
     accent: "#b6a8ff"
+  },
+  {
+    file: "euclid.html",
+    name: "Euclidean Rhythms",
+    blurb: "circular tracks spread their beats evenly, braiding shifting polyrhythms",
+    accent: "#ffb454"
   }
 ];

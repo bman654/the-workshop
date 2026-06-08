@@ -15,7 +15,9 @@ dependencies** — all sound synthesised live with the Web Audio API, no audio f
 |---|---|
 | **Whitney Music Box** (`whitney.html`) | Concentric rings of orbiting dots; each chimes a note from a consonant scale as it crosses the line. Their differing periods spiral apart and realign, weaving ever-shifting polyrhythmic music. Pick scale/root/tempo/timbre/reverb. |
 | **Drift** (`drift.html`) | Sustained voices breathe a slow, ever-drifting consonant chord — an Eno-ish ambient pad/drone under a vast procedural reverb, with a soft cloud-bloom visual. |
+| **Euclidean Rhythms** (`euclid.html`) | Circular tracks spread their beats evenly (Bjorklund) into braided polyrhythms — synth percussion on a tight audio-clock scheduler, with rotating beat-rings. |
 
+A little ensemble: **melody** (Whitney), **harmony** (Drift), **rhythm** (Euclid).
 (`index.html` is the rack listing them; `instruments.js` is its manifest.)
 
 ## A note on verification
