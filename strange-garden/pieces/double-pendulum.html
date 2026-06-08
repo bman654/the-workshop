@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Double Pendulum — Strange Garden</title>
+<style>
+  :root { --accent: #ff5d73; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Double Pendulum</h1>
+  <p class="desc">A thousand pendulums released as one. A breath of difference, and chaos
+    fans them into a spray of colour.</p>
+  <label>Pendulums <b id="vN">400</b></label>
+  <input type="range" id="sN" min="50" max="2000" step="10" value="400">
+  <label>Initial spread <b id="vS">0.30°</b></label>
+  <input type="range" id="sS" min="0.0002" max="0.06" step="0.0002" value="0.0052">
+  <label>Gravity <b id="vG">1.0</b></label>
+  <input type="range" id="sG" min="0.2" max="3" step="0.05" value="1.0">
+  <label>Length ratio <b id="vL">1.00</b></label>
+  <input type="range" id="sL" min="0.4" max="1.8" step="0.05" value="1.0">
+  <label>Trail persistence <b id="vT">0.94</b></label>
+  <input type="range" id="sT" min="0.5" max="0.99" step="0.005" value="0.94">
+  <label>Speed <b id="vSp">8</b></label>
+  <input type="range" id="sSp" min="1" max="20" step="1" value="8">
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">they begin as one curve · then chaos · h hides panel</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR,worldW,worldH;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  worldW=innerWidth; worldH=innerHeight;
+  W=cv.width=Math.floor(worldW*DPR); H=cv.height=Math.floor(worldH*DPR);
+  cv.style.width=worldW+'px'; cv.style.height=worldH+'px';
+  computeGeometry();
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+}
+addEventListener('resize',resize);
+
+// ---- parameters ----
+let n=400, spread=0.0052, gravity=1.0, lenRatio=1.0, persistence=0.94, substeps=8;
+// physics constants (mass fixed equal; gravity scaled by slider)
+const m1=1.0, m2=1.0, gBase=9.81;
+let L1, L2, pivotX, pivotY, scale;
+
+// state (typed arrays) — angles & angular velocities
+let th1, th2, w1, w2;
+// scratch for RK4 (avoid per-frame alloc)
+let k_th1, k_th2, k_w1, k_w2;
+// previous tip pixel positions (for line segments)
+let prevX, prevY, hasPrev;
+// hue per pendulum
+let hue;
+
+let age=0;          // simulation steps since reseed
+let reseedAt=3200;  // min steps before a fully-bloomed bundle may auto-reseed
+
+function computeGeometry(){
+  // arm lengths in pixels: total span ~ 40% of min dimension
+  const span = Math.min(worldW, worldH) * 0.40;
+  const total = 1 + lenRatio;        // L1=1 unit, L2=lenRatio units
+  scale = span / total;
+  L1 = 1.0; L2 = lenRatio;
+  pivotX = worldW * 0.5;
+  pivotY = worldH * 0.42;
+}
+
+function allocate(){
+  th1=new Float64Array(n); th2=new Float64Array(n);
+  w1=new Float64Array(n);  w2=new Float64Array(n);
+  k_th1=new Float64Array(n); k_th2=new Float64Array(n);
+  k_w1=new Float64Array(n);  k_w2=new Float64Array(n);
+  prevX=new Float64Array(n); prevY=new Float64Array(n);
+  hasPrev=new Uint8Array(n);
+  hue=new Float32Array(n);
+}
+
+function init(){
+  if(!th1 || th1.length!==n) allocate();
+  computeGeometry();
+  // base release angles — both arms raised to ~86° from straight-down. This is
+  // the legible sweet spot: the bundle stays a single coherent bright curve for
+  // ~1.5s, then sensitive dependence dramatically fans it into a rainbow spray
+  // over the next couple of seconds (rather than instantly, or never).
+  const baseTh1 = 1.50;
+  const baseTh2 = 1.50;
+  for(let i=0;i<n;i++){
+    const t = n>1 ? i/(n-1) : 0.5;          // 0..1 across the bundle
+    th1[i] = baseTh1 + (t-0.5)*spread;       // tiny fanned spread on theta1
+    th2[i] = baseTh2;
+    w1[i]=0; w2[i]=0;
+    hasPrev[i]=0;
+    hue[i] = t*300;                          // rainbow ramp across index
+  }
+  age=0;
+  // clear canvas on reseed for a clean convergence
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+}
+
+// ---- double-pendulum angular accelerations ----
+// Standard equations of motion (Lagrangian). Returns [a1,a2].
+function accel(t1,t2,o1,o2,g, out){
+  const d = t1 - t2;
+  const sd = Math.sin(d), cd = Math.cos(d);
+  const M = m1 + m2;
+  const den = (2*m1 + m2 - m2*Math.cos(2*d));   // common denominator factor
+  // a1
+  const num1 = -g*(2*m1+m2)*Math.sin(t1)
+               - m2*g*Math.sin(t1-2*t2)
+               - 2*sd*m2*(o2*o2*L2 + o1*o1*L1*cd);
+  out[0] = num1 / (L1*den);
+  // a2
+  const num2 = 2*sd*( o1*o1*L1*(m1+m2)
+               + g*(m1+m2)*Math.cos(t1)
+               + o2*o2*L2*m2*cd );
+  out[1] = num2 / (L2*den);
+}
+
+const _a = [0,0];
+// RK4 integrate one pendulum by dt; mutates returned-by-index arrays via closure
+function rk4(i, dt, g){
+  let t1=th1[i], t2=th2[i], o1=w1[i], o2=w2[i];
+
+  // k1
+  accel(t1,t2,o1,o2,g,_a);
+  const k1_t1=o1, k1_t2=o2, k1_o1=_a[0], k1_o2=_a[1];
+
+  // k2
+  let bt1=t1+0.5*dt*k1_t1, bt2=t2+0.5*dt*k1_t2, bo1=o1+0.5*dt*k1_o1, bo2=o2+0.5*dt*k1_o2;
+  accel(bt1,bt2,bo1,bo2,g,_a);
+  const k2_t1=bo1, k2_t2=bo2, k2_o1=_a[0], k2_o2=_a[1];
+
+  // k3
+  bt1=t1+0.5*dt*k2_t1; bt2=t2+0.5*dt*k2_t2; bo1=o1+0.5*dt*k2_o1; bo2=o2+0.5*dt*k2_o2;
+  accel(bt1,bt2,bo1,bo2,g,_a);
+  const k3_t1=bo1, k3_t2=bo2, k3_o1=_a[0], k3_o2=_a[1];
+
+  // k4
+  bt1=t1+dt*k3_t1; bt2=t2+dt*k3_t2; bo1=o1+dt*k3_o1; bo2=o2+dt*k3_o2;
+  accel(bt1,bt2,bo1,bo2,g,_a);
+  const k4_t1=bo1, k4_t2=bo2, k4_o1=_a[0], k4_o2=_a[1];
+
+  const s = dt/6;
+  th1[i] = t1 + s*(k1_t1 + 2*k2_t1 + 2*k3_t1 + k4_t1);
+  th2[i] = t2 + s*(k1_t2 + 2*k2_t2 + 2*k3_t2 + k4_t2);
+  w1[i]  = o1 + s*(k1_o1 + 2*k2_o1 + 2*k3_o1 + k4_o1);
+  w2[i]  = o2 + s*(k1_o2 + 2*k2_o2 + 2*k3_o2 + k4_o2);
+}
+
+const dtStep = 0.012;   // base integration timestep (sim units)
+
+function step(){
+  const g = gBase * gravity;
+  for(let s=0;s<substeps;s++){
+    for(let i=0;i<n;i++) rk4(i, dtStep, g);
+    age++;
+  }
+}
+
+// ---- divergence measure (for auto-reseed) ----
+// Spread of tip positions AMONG the pendulums (RMS distance from their mean
+// tip), normalised by total arm length. This measures how fanned-out the
+// bundle is — NOT how wide the swept arc is — so it reads ~0 while the bundle
+// traces a single coherent curve and grows toward ~1 as chaos disperses them.
+function divergence(){
+  const stepI = Math.max(1, (n/64)|0);
+  let cnt=0, mx=0, my=0;
+  for(let i=0;i<n;i+=stepI){
+    const t1=th1[i], t2=th2[i];
+    mx += L1*Math.sin(t1) + L2*Math.sin(t2);
+    my += L1*Math.cos(t1) + L2*Math.cos(t2);
+    cnt++;
+  }
+  mx/=cnt; my/=cnt;
+  let varr=0;
+  for(let i=0;i<n;i+=stepI){
+    const t1=th1[i], t2=th2[i];
+    const dx=(L1*Math.sin(t1)+L2*Math.sin(t2))-mx;
+    const dy=(L1*Math.cos(t1)+L2*Math.cos(t2))-my;
+    varr += dx*dx+dy*dy;
+  }
+  return Math.sqrt(varr/cnt) / (L1+L2);
+}
+
+function draw(){
+  // persistence fade — translucent black wash, never full clear
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle=`rgba(10,11,15,${(1-persistence).toFixed(4)})`;
+  ctx.fillRect(0,0,W,H);
+
+  const L1p=L1*scale, L2p=L2*scale;
+
+  // faint live rods for a few representative pendulums — drawn FIRST and in
+  // source-over so they don't accumulate into permanent streaks. A ghostly
+  // skeleton hinting at the mechanism behind the spray.
+  ctx.globalCompositeOperation='source-over';
+  ctx.lineWidth=Math.max(0.5, 0.8*DPR);
+  ctx.lineCap='round';
+  const reps = Math.min(5, n);
+  for(let r=0;r<reps;r++){
+    const i = ((r+0.5)/reps * n)|0;
+    const t1=th1[i], t2=th2[i];
+    const x1 = pivotX + L1p*Math.sin(t1);
+    const y1 = pivotY + L1p*Math.cos(t1);
+    const x2 = x1 + L2p*Math.sin(t2);
+    const y2 = y1 + L2p*Math.cos(t2);
+    ctx.strokeStyle = `hsla(${hue[i].toFixed(0)},75%,62%,0.18)`;
+    ctx.beginPath();
+    ctx.moveTo(pivotX*DPR, pivotY*DPR);
+    ctx.lineTo(x1*DPR, y1*DPR);
+    ctx.lineTo(x2*DPR, y2*DPR);
+    ctx.stroke();
+  }
+
+  // additive glowing tip trails — the hero. Each pendulum's bob-2 path,
+  // coloured by index so the diverging spray blooms into a rainbow fan.
+  ctx.globalCompositeOperation='lighter';
+  ctx.lineWidth=Math.max(0.8, 1.3*DPR);
+  for(let i=0;i<n;i++){
+    const t1=th1[i], t2=th2[i];
+    const x2 = pivotX + L1p*Math.sin(t1) + L2p*Math.sin(t2);
+    const y2 = pivotY + L1p*Math.cos(t1) + L2p*Math.cos(t2);
+    const px = x2*DPR, py = y2*DPR;
+
+    // brightness tied to tip speed (capped to avoid white blowout)
+    const speed = Math.abs(w1[i]) + Math.abs(w2[i]);
+    let bright = 0.45 + speed*0.06;
+    if(bright>0.9) bright=0.9;
+
+    ctx.strokeStyle = `hsla(${hue[i].toFixed(0)},90%,60%,${bright.toFixed(3)})`;
+    if(hasPrev[i]){
+      ctx.beginPath();
+      ctx.moveTo(prevX[i], prevY[i]);
+      ctx.lineTo(px, py);
+      ctx.stroke();
+    }
+    prevX[i]=px; prevY[i]=py; hasPrev[i]=1;
+  }
+
+  // pivot dot
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle='rgba(230,232,238,0.45)';
+  ctx.beginPath(); ctx.arc(pivotX*DPR, pivotY*DPR, 2.4*DPR, 0, 7); ctx.fill();
+}
+
+// ---- auto-reseed lifecycle ----
+function maybeReseed(){
+  // Let the fan fully bloom before recycling: require both a minimum coherence
+  // window (so the converge phase reads) and near-complete divergence. A hard
+  // safety cap guarantees the cycle never stalls.
+  if(age>=reseedAt && divergence() > 0.52){
+    init();
+  } else if(age >= reseedAt*2.4){
+    init();   // safety: recycle even if the metric never fully tripped
+  }
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now;
+  if(!paused && !document.hidden){
+    step();
+    draw();
+    maybeReseed();
+  }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${n} pendulums · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); }; }
+bind('sN','vN',x=>x|0,x=>{ n=x|0; init(); });
+bind('sS','vS',x=>(x*180/Math.PI).toFixed(2)+'°',x=>{ spread=x; init(); });
+bind('sG','vG',x=>x.toFixed(2),x=>{ gravity=x; });
+bind('sL','vL',x=>x.toFixed(2),x=>{ lenRatio=x; computeGeometry(); init(); });
+bind('sT','vT',x=>x.toFixed(3),x=>{ persistence=x; });
+bind('sSp','vSp',x=>x|0,x=>{ substeps=x|0; });
+$('reseed').onclick=()=>init();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='double-pendulum.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')init();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// initialize displayed slider values to match defaults
+$('vS').textContent=(spread*180/Math.PI).toFixed(2)+'°';
+
+// ---- go ----
+resize(); init();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

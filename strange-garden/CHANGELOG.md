@@ -7,7 +7,7 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 > **Resume protocol:** read this top section, then continue from "Next up". Commit + update
 > here after every piece.
 
-## Status — 15 specimens, all browser-verified PASS (60fps unless noted), clean consoles
+## Status — 18 specimens, all browser-verified PASS (60fps unless noted), clean consoles
 
 | # | file | system | notes |
 |---|------|--------|-------|
@@ -26,6 +26,9 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 | 13 | l-system.html | L-System | stochastic L-systems; 6 species; grow→sway→fade→reseed; seasons |
 | 14 | chladni.html | Chladni | sand migrates to nodal lines; (m,n) morph; 16 presets |
 | 15 | ripple-tank.html | Ripple Tank | 2D wave eq; 2-source interference; double-slit diffraction; click-to-ripple |
+| 16 | truchet.html | Truchet | multi-scale Truchet tiles; 4 styles; flowing dash-current animation |
+| 17 | mandelbrot.html | Mandelbrot | WebGL deep-zoom to ~5e5×; 8 famous targets; auto-iterations |
+| 18 | double-pendulum.html | Double Pendulum | RK4 array; converge→diverge→reseed chaos fan |
 
 - gallery `index.html` + `pieces.js` (9 entries) verified: all cards + thumbnails render, clean console.
 - thumbnails in `assets/thumbs/`; `assets/gallery-preview.png` is a full-page gallery shot.
@@ -40,9 +43,9 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 ## Next up
 - Polish DONE: garden README, "wander in" random button + digit nav, thumbnails normalized
   to ≤1440w, gallery re-verified.
-- **Wave 6 candidate pieces:** wave-function-collapse tiling, mandelbrot deep-zoom explorer,
-  Voronoi/Delaunay growth, terrain erosion, falling-sand sandbox, Belousov-Zhabotinsky,
-  double-pendulum/chaos field, magnetic-pendulum fractal basins.
+- **Wave 7 candidate pieces:** wave-function-collapse tiling, Voronoi/Delaunay growth,
+  terrain erosion, falling-sand sandbox, Belousov-Zhabotinsky, magnetic-pendulum fractal
+  basins, Lorenz/strange-attractor 3D, Lissajous, Penrose/quasicrystal tiling.
 - Possible: a favicon; per-piece prev/next nav; an "about" page; sort/filter on the gallery.
 - Note: ripple-tank thumbnail shows the control panel (others hide it) — minor, could recapture.
 
@@ -58,3 +61,5 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 - 2026-06-08 — Wave 5: l-system (6 species), chladni (cymatics), ripple-tank (wave eq +
   double-slit). Named sessions; deputies returned manifests, orchestrator registered them.
   15 specimens total.
+- 2026-06-08 — Wave 6: truchet (multi-scale tiling), mandelbrot (WebGL deep-zoom),
+  double-pendulum (RK4 chaos array). 18 specimens total. Gallery verified at 15 (16-18 pending verify).

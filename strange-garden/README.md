@@ -32,6 +32,9 @@ file with **zero dependencies and no build step**.
 | 13 | **L-System** | A whispered grammar unfolds, turtle-drawn, into a plant that grows and sways. |
 | 14 | **Chladni** | Sand on a singing plate flees the antinodes and settles into nodal figures. |
 | 15 | **Ripple Tank** | The 2D wave equation — interference, and double-slit diffraction you can poke. |
+| 16 | **Truchet** | Broken arcs, randomly turned, conspire into endless multi-scale labyrinths. |
+| 17 | **Mandelbrot** | An endless fall into the set's blooming coastline, magnifying past 500,000×. |
+| 18 | **Double Pendulum** | Hundreds start as one; a breath of difference blooms them into chaos. |
 
 ## Controls (shared by every specimen)
 

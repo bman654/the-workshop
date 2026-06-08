@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Truchet — Strange Garden</title>
+<style>
+  :root { --accent: #8fd0ff; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:266px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; margin-top:3px; padding:5px 6px; font-size:12px; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:8px;
+    font-family:ui-monospace,Menlo,monospace; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Truchet</h1>
+  <p class="desc">Tiles choose a tilt at random, and their broken arcs conspire into
+    endless looping labyrinths — fine filigree nested inside great sweeping knots.</p>
+  <label>Grid <b id="vG">8</b></label>
+  <input type="range" id="sG" min="3" max="22" step="1" value="8">
+  <label>Subdivide <b id="vP">0.45</b></label>
+  <input type="range" id="sP" min="0" max="0.9" step="0.01" value="0.45">
+  <label>Max depth <b id="vD">3</b></label>
+  <input type="range" id="sD" min="0" max="4" step="1" value="3">
+  <label>Line width <b id="vW">0.18</b></label>
+  <input type="range" id="sW" min="0.04" max="0.34" step="0.01" value="0.18">
+  <label>Flow speed <b id="vF">1.0</b></label>
+  <input type="range" id="sF" min="0" max="4" step="0.05" value="1.0">
+  <label>Style</label>
+  <select id="sStyle">
+    <option value="arcs">Arcs</option>
+    <option value="diagonals">Diagonals</option>
+    <option value="weave">Weave</option>
+    <option value="mixed">Mixed</option>
+  </select>
+  <label>Palette <b id="vPal">aurora</b></label>
+  <input type="range" id="sPal" min="0" max="4" step="1" value="0">
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">space pause · r reseed · h hide · s save</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR,worldW,worldH;
+
+// ---- parameters ----
+let grid=8, subProb=0.45, maxDepth=3, lwFrac=0.18, flowSpeed=1.0, style='arcs', palIdx=0;
+
+// ---- seeded RNG (mulberry32) so reseed gives reproducible-per-seed tilings ----
+let seed=(Math.random()*1e9)|0;
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0;
+  let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t;
+  return ((t^t>>>14)>>>0)/4294967296; }; }
+let rnd=mulberry32(seed);
+
+// ---- palettes: each is a small set of base hues; depth selects within ----
+const palettes=[
+  {name:'aurora', bg:'#070a0e', stops:['#3ad6c0','#5fb8ff','#9d7bff','#56e0a0']},
+  {name:'ember',  bg:'#0c0707', stops:['#ff8a4c','#ffd24c','#ff5d6c','#ffb070']},
+  {name:'orchid', bg:'#0a0710', stops:['#c86bff','#ff6bd0','#7b8bff','#e58cff']},
+  {name:'sea',    bg:'#06090d', stops:['#2fa8ff','#3ad6ff','#67ffd0','#4f8bff']},
+  {name:'gilt',   bg:'#0b0a06', stops:['#ffe08a','#e8c062','#fff3c0','#d9a94e']},
+];
+function curPal(){ return palettes[palIdx]; }
+function accentHex(){ return curPal().stops[1]; }
+
+// hex -> rgb
+function hex2rgb(h){ h=h.replace('#',''); return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]; }
+function lerp(a,b,t){ return a+(b-a)*t; }
+// smooth gradient across canvas (x,y in 0..1) blended with depth tint
+function strokeColor(x,y,depth){
+  const p=curPal(); const stops=p.stops;
+  // position along a diagonal sweep (clamp: cells can extend slightly off-canvas)
+  let t=(x*0.6+y*0.4); if(t<0)t=0; else if(t>1)t=1;
+  const f=t*(stops.length-1);
+  const i=Math.max(0,Math.min(stops.length-2,Math.floor(f))); const fr=f-i;
+  const a=hex2rgb(stops[i]), b=hex2rgb(stops[i+1]);
+  let r=lerp(a[0],b[0],fr), g=lerp(a[1],b[1],fr), bl=lerp(a[2],b[2],fr);
+  // deeper tiles a touch brighter & cooler-shifted for filigree shimmer
+  const lift=depth*22; r=Math.min(255,r+lift*0.4); g=Math.min(255,g+lift*0.6); bl=Math.min(255,bl+lift*0.7);
+  return `rgb(${r|0},${g|0},${bl|0})`;
+}
+
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  worldW=innerWidth; worldH=innerHeight;
+  W=cv.width=Math.floor(worldW*DPR); H=cv.height=Math.floor(worldH*DPR);
+  cv.style.width=worldW+'px'; cv.style.height=worldH+'px';
+  buildTiling();
+}
+addEventListener('resize',resize);
+
+// ---- the tiling: a flat list of "strokes" ----
+// each stroke = {type:'arc'|'line', cx,cy,r,a0,a1 (arc) | x0,y0,x1,y1 (line), len, color, w}
+// We render in device pixels. Built once per (re)build; animated only by dash-offset.
+let strokes=[];
+let off; // offscreen base layer (optional faint backdrop)
+
+// pick tile style for a given style setting
+function pickStyle(){
+  if(style==='mixed'){ const r=rnd(); return r<0.5?'arcs':(r<0.8?'weave':'diagonals'); }
+  return style;
+}
+
+// emit strokes for one square cell at (x,y) with size s, at given depth.
+// cellStyle chosen per top-level region for cohesion in 'mixed'.
+function emitCell(x,y,s,depth,cellStyle,lw){
+  const r=rnd();
+  if(cellStyle==='diagonals'){
+    // two orientations of a single diagonal pair (\\ or //) — Truchet "smith" of lines
+    if(r<0.5){ pushLine(x,y,x+s,y+s,depth); }
+    else      { pushLine(x+s,y,x,y+s,depth); }
+    return;
+  }
+  if(cellStyle==='weave'){
+    // multi-arc: quarter arcs at all four corners (two visible per rotation) -> richer weave
+    const rot = r<0.5;
+    // arcs of radius s/2 centered at corners connecting adjacent edge midpoints,
+    // plus inner small arcs for a woven feel
+    if(rot){
+      pushArc(x,     y,     s*0.5, 0,        Math.PI*0.5, depth);
+      pushArc(x+s,   y+s,   s*0.5, Math.PI,  Math.PI*1.5, depth);
+      pushArc(x+s,   y,     s*0.25, Math.PI*0.5, Math.PI, depth);
+      pushArc(x,     y+s,   s*0.25, Math.PI*1.5, Math.PI*2, depth);
+    } else {
+      pushArc(x+s,   y,     s*0.5, Math.PI*0.5, Math.PI,   depth);
+      pushArc(x,     y+s,   s*0.5, Math.PI*1.5, Math.PI*2, depth);
+      pushArc(x,     y,     s*0.25, 0,         Math.PI*0.5, depth);
+      pushArc(x+s,   y+s,   s*0.25, Math.PI,   Math.PI*1.5, depth);
+    }
+    return;
+  }
+  // default 'arcs': classic two quarter-circle arcs connecting opposite edge midpoints
+  const r2=s*0.5;
+  if(r<0.5){
+    // arcs centered at top-left & bottom-right corners
+    pushArc(x,   y,   r2, 0,         Math.PI*0.5, depth);
+    pushArc(x+s, y+s, r2, Math.PI,   Math.PI*1.5, depth);
+  } else {
+    // arcs centered at top-right & bottom-left corners
+    pushArc(x+s, y,   r2, Math.PI*0.5, Math.PI,   depth);
+    pushArc(x,   y+s, r2, Math.PI*1.5, Math.PI*2, depth);
+  }
+}
+
+function pushArc(cx,cy,r,a0,a1,depth){
+  const col=strokeColor(cx/worldW,cy/worldH,depth);
+  const len=Math.abs(a1-a0)*r*DPR;
+  strokes.push({t:0, cx:cx*DPR, cy:cy*DPR, r:r*DPR, a0, a1, len, col, depth});
+}
+function pushLine(x0,y0,x1,y1,depth){
+  const col=strokeColor((x0+x1)*0.5/worldW,(y0+y1)*0.5/worldH,depth);
+  const dx=(x1-x0)*DPR, dy=(y1-y0)*DPR; const len=Math.hypot(dx,dy);
+  strokes.push({t:1, x0:x0*DPR, y0:y0*DPR, x1:x1*DPR, y1:y1*DPR, len, col, depth});
+}
+
+// recursive subdivision
+function subdivide(x,y,s,depth,cellStyle,lw){
+  if(depth<maxDepth && rnd()<subProb*Math.pow(0.92,depth)){
+    const h=s/2;
+    subdivide(x,   y,   h, depth+1, cellStyle, lw);
+    subdivide(x+h, y,   h, depth+1, cellStyle, lw);
+    subdivide(x,   y+h, h, depth+1, cellStyle, lw);
+    subdivide(x+h, y+h, h, depth+1, cellStyle, lw);
+  } else {
+    emitCell(x,y,s,depth,cellStyle,lw);
+  }
+}
+
+let maxStrokeLen=1, cellPx=1;
+function buildTiling(){
+  rnd=mulberry32(seed);
+  strokes=[];
+  if(!worldW) return;
+  // square cells sized to cover the viewport; grid = cells across the SHORTER dimension
+  const minDim=Math.min(worldW,worldH);
+  const s=minDim/grid;
+  cellPx=s*DPR;
+  const cols=Math.ceil(worldW/s)+1, rows=Math.ceil(worldH/s)+1;
+  // offset so pattern is centered-ish
+  const ox=(worldW-cols*s)/2, oy=(worldH-rows*s)/2;
+  const baseLw=Math.max(0.5, s*lwFrac);
+  // assign a coherent style per coarse region (4x4 blocks) for 'mixed'
+  for(let j=0;j<rows;j++){
+    for(let i=0;i<cols;i++){
+      const cs = (style==='mixed')
+        ? ['arcs','weave','arcs','diagonals'][((i>>1)+(j>>1))&3]
+        : style;
+      subdivide(ox+i*s, oy+j*s, s, 0, cs, baseLw);
+    }
+  }
+  maxStrokeLen=1;
+  for(const st of strokes) if(st.len>maxStrokeLen) maxStrokeLen=st.len;
+}
+
+// ---- drawing ----
+// Animated flowing current via dash offset. We re-stroke each frame (acceptable: a few
+// thousand short strokes). Width derives from cell size & depth (finer tiles -> thinner).
+let phase=0;
+function lineWidthFor(depth){
+  const minDim=Math.min(W,H);
+  const s=minDim/grid; // device px cell at depth 0
+  const cw=s/Math.pow(2,depth);
+  return Math.max(0.6, cw*lwFrac);
+}
+
+function draw(){
+  const p=curPal();
+  ctx.fillStyle=p.bg; ctx.fillRect(0,0,W,H);
+  ctx.lineCap='round';
+  ctx.lineJoin='round';
+
+  // dash pattern: a flowing segment. Use a dash whose unit scales with cell size so
+  // the "current" reads consistently across scales.
+  const unit=Math.max(10, cellPx*0.55);
+  const dash=[unit*0.78, unit*0.22];
+
+  // Pass 1: soft glow underlay (wider, dim, additive)
+  ctx.globalCompositeOperation='lighter';
+  ctx.setLineDash([]);
+  for(const st of strokes){
+    ctx.strokeStyle=st.col;
+    ctx.globalAlpha=0.10;
+    ctx.lineWidth=lineWidthFor(st.depth)*2.6;
+    strokePath(st);
+  }
+
+  // Pass 2: crisp flowing strokes with animated dash offset
+  ctx.setLineDash(dash);
+  for(const st of strokes){
+    ctx.strokeStyle=st.col;
+    ctx.globalAlpha=0.92;
+    ctx.lineWidth=lineWidthFor(st.depth);
+    // offset by phase; sign alternates by depth parity so adjacent scales drift apart
+    ctx.lineDashOffset = (st.depth&1 ? 1 : -1) * phase;
+    strokePath(st);
+  }
+  ctx.setLineDash([]);
+  ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+}
+
+function strokePath(st){
+  ctx.beginPath();
+  if(st.t===0){ ctx.arc(st.cx, st.cy, st.r, st.a0, st.a1); }
+  else { ctx.moveTo(st.x0,st.y0); ctx.lineTo(st.x1,st.y1); }
+  ctx.stroke();
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){
+    phase += flowSpeed * 60 * dt; // px/sec of dash travel
+    if(phase>1e7) phase=phase%1e6;
+    draw();
+  }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${strokes.length} tiles · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ set(parseFloat(s.value)); if(v)v.textContent=fmt(parseFloat(s.value)); }; }
+bind('sG','vG',x=>x|0,x=>{ grid=x|0; buildTiling(); });
+bind('sP','vP',x=>x.toFixed(2),x=>{ subProb=x; buildTiling(); });
+bind('sD','vD',x=>x|0,x=>{ maxDepth=x|0; buildTiling(); });
+bind('sW','vW',x=>x.toFixed(2),x=>{ lwFrac=x; });
+bind('sF','vF',x=>x.toFixed(2),x=>{ flowSpeed=x; });
+$('sStyle').onchange=()=>{ style=$('sStyle').value; buildTiling(); };
+bind('sPal','vPal',x=>palettes[x|0].name,x=>{ palIdx=x|0;
+  document.documentElement.style.setProperty('--accent',accentHex());
+  buildTiling(); $('vPal').textContent=palettes[palIdx].name; });
+
+function reseed(){ seed=(Math.random()*1e9)|0; buildTiling(); }
+$('reseed').onclick=reseed;
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='truchet.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')reseed();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+document.documentElement.style.setProperty('--accent',accentHex());
+resize();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

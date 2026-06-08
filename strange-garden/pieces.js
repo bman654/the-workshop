@@ -91,5 +91,23 @@ window.PIECES = [
     name: "Ripple Tank",
     blurb: "crests meet troughs in a lattice of light",
     accent: "#4fd6e6"
+  },
+  {
+    file: "truchet.html",
+    name: "Truchet",
+    blurb: "broken arcs conspire into endless looping labyrinths",
+    accent: "#5fb8ff"
+  },
+  {
+    file: "mandelbrot.html",
+    name: "Mandelbrot",
+    blurb: "falling forever toward an infinite, blooming coastline",
+    accent: "#f0a830"
+  },
+  {
+    file: "double-pendulum.html",
+    name: "Double Pendulum",
+    blurb: "one breath of difference blooms into chaos",
+    accent: "#ff5d73"
   }
 ];
