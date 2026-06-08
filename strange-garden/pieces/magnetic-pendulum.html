@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Magnetic Pendulum — Strange Garden</title>
+<style>
+  :root { --accent: #6ec6ff; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  .toggle { display:flex; align-items:center; justify-content:space-between; margin-top:13px;
+    font:11px ui-monospace,Menlo,monospace; opacity:.85; }
+  .toggle input { accent-color:var(--accent); width:auto; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.45; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Magnetic Pendulum</h1>
+  <p class="desc">A swinging iron bob, pulled by hidden magnets, can't decide where to rest.
+    Each pixel is a release point, coloured by its destiny — and the borders never stop dividing.</p>
+  <label>Magnets <b id="vN">3</b></label>
+  <input type="range" id="sN" min="2" max="5" step="1" value="3">
+  <label>Magnet strength <b id="vM">3.2</b></label>
+  <input type="range" id="sM" min="0.5" max="8" step="0.1" value="3.2">
+  <label>Friction <b id="vFr">0.22</b></label>
+  <input type="range" id="sFr" min="0.02" max="0.6" step="0.01" value="0.22">
+  <label>Spring k <b id="vK">0.30</b></label>
+  <input type="range" id="sK" min="0.0" max="1.2" step="0.01" value="0.30">
+  <label>Height h <b id="vH">0.28</b></label>
+  <input type="range" id="sH" min="0.05" max="0.9" step="0.01" value="0.28">
+  <label>Iterations <b id="vIt">320</b></label>
+  <input type="range" id="sIt" min="80" max="700" step="20" value="320">
+  <label>Anim speed <b id="vS">0.40</b></label>
+  <input type="range" id="sS" min="0" max="2" step="0.01" value="0.40">
+  <label>Palette <b id="vP">0</b></label>
+  <input type="range" id="sP" min="0" max="5" step="1" value="0">
+  <div class="toggle"><span>auto-animate</span><input type="checkbox" id="auto" checked></div>
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">drag a magnet · space pause · r reseed · h hides · s saves</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c');
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+const $=id=>document.getElementById(id);
+let W,H,DPR;
+
+// ---------- parameters ----------
+let N=3;                 // magnet count
+let magStrength=3.2;     // pull strength per magnet
+let friction=0.22;       // velocity damping
+let springK=0.30;        // restoring force toward origin
+let heightH=0.28;        // softening (height of bob above plane)
+let iterations=320;      // integration steps
+let animSpeed=0.40;      // ring rotation speed
+let palette=0;
+let auto=true;
+let phase=0;             // accumulated rotation phase
+let ringRadius=0.62;     // radius of the magnet ring in world units
+let baseAngles=[];       // per-magnet base angles (reseed jitters these)
+let magnets=new Float32Array(2*8);   // up to 8 magnets (x,y) in world units
+let dragIdx=-1;          // index of magnet being dragged, -1 none
+let renderer='';
+let needsRedraw=true;    // for canvas2D fallback: restart progressive render
+
+// world: x,y in roughly [-1.4,1.4] centered, aspect-corrected on the short axis
+
+// magnet base colors (RGB 0..1) — distinct, tasteful hues
+const MAGCOLORS=[
+  [0.43,0.78,1.00],  // sky blue (accent family)
+  [1.00,0.52,0.36],  // coral
+  [0.62,0.92,0.58],  // jade green
+  [0.95,0.78,0.36],  // gold
+  [0.80,0.58,1.00],  // amethyst
+];
+
+function reseedAngles(){
+  baseAngles=[];
+  const off=Math.random()*6.2831853;
+  for(let i=0;i<N;i++){
+    // symmetric placement with a touch of random jitter on radius/angle
+    baseAngles.push(off + i/N*6.2831853 + (Math.random()-0.5)*0.25);
+  }
+  ringRadius=0.50+Math.random()*0.28;
+}
+function updateMagnets(){
+  // place magnets on a ring, rotated by phase
+  for(let i=0;i<N;i++){
+    const a=baseAngles[i]+phase;
+    magnets[i*2]=Math.cos(a)*ringRadius;
+    magnets[i*2+1]=Math.sin(a)*ringRadius;
+  }
+}
+
+// ---------- WebGL2 ----------
+let gl=null, prog=null, uni={}, vao=null;
+
+const VERT=`#version 300 es
+in vec2 a_pos;
+void main(){ gl_Position=vec4(a_pos,0.0,1.0); }`;
+
+const FRAG=`#version 300 es
+precision highp float;
+out vec4 o;
+uniform vec2  u_res;
+uniform int   u_n;          // magnet count
+uniform vec2  u_mag[8];     // magnet positions (world)
+uniform vec3  u_col[8];     // magnet colors
+uniform float u_strength;
+uniform float u_friction;
+uniform float u_spring;
+uniform float u_h2;         // height^2 (softening)
+uniform int   u_iter;
+uniform float u_pal;
+uniform float u_view;       // world half-extent on short axis
+
+// tasteful tinting palettes — multiplied with the basin's base color so
+// each piece still reads as a distinct attractor, but the mood shifts.
+vec3 tint(vec3 base, float pal){
+  if(pal < 0.5)        return base;                                  // natural
+  else if(pal < 1.5)   return mix(base, base.brg, 0.55);            // rotated hues
+  else if(pal < 2.5)   return pow(base, vec3(0.7,0.85,1.2));        // cool ice
+  else if(pal < 3.5)   return mix(base, vec3(1.0,0.85,0.5)*base, 0.6); // warm ember
+  else if(pal < 4.5)   return mix(base, vec3(dot(base,vec3(.33))), -0.4); // hyper-saturated
+  else                 return mix(base, base.gbr, 0.6);             // shifted spectral
+}
+
+void main(){
+  // map pixel -> world, aspect-correct on short axis, centered at origin
+  vec2 uv = (gl_FragCoord.xy - 0.5*u_res) / min(u_res.x, u_res.y);
+  vec2 p = uv * (2.0 * u_view);
+
+  vec2 vel = vec2(0.0);
+  float dt = 0.12;
+  // Track the running nearest magnet. Count how many times it changes
+  // (flips) and remember the final settle time. Smooth basin interiors
+  // resolve to one magnet almost immediately (few flips); chaotic boundary
+  // points keep changing their mind for many flips -> this flip count is a
+  // crisp fractal-boundary detector that darkens the interwoven frontiers.
+  int lastNearest = -1;
+  int flips = 0;
+  int settleStep = u_iter;
+  bool stopped = false;
+
+  for(int i=0;i<700;i++){
+    if(i >= u_iter) break;
+    vec2 acc = -u_spring * p - u_friction * vel;
+    float best = 1e9; int cur = 0;
+    for(int m=0;m<8;m++){
+      if(m >= u_n) break;
+      vec2 d = u_mag[m] - p;
+      float r2 = dot(d,d) + u_h2;
+      float inv = u_strength / (r2 * sqrt(r2));   // m * d / (dist^2+h^2)^{3/2}
+      acc += d * inv;
+      float dd = dot(d,d);
+      if(dd < best){ best = dd; cur = m; }
+    }
+    vel += acc * dt;
+    p   += vel * dt;
+
+    if(cur != lastNearest){ if(lastNearest >= 0) flips++; lastNearest = cur; }
+
+    // hard settle: very slow and very close -> stop early (cheap + crisp wells)
+    if(dot(vel,vel) < 0.0004 && best < 0.0144){ settleStep = i; stopped = true; break; }
+  }
+  if(!stopped) settleStep = u_iter;
+
+  int nearest = lastNearest;
+  vec3 base = (nearest>=0) ? u_col[nearest] : vec3(0.06);
+  base = tint(base, u_pal);
+
+  // Boundary intricacy = number of times the bob switched allegiance.
+  // 0-1 flips -> smooth basin interior (bright). Many flips -> chaotic
+  // frontier (dark). Normalised softly so detail keeps resolving.
+  float fl = float(flips);
+  float chaos = 1.0 - exp(-fl * 0.55);        // 0 (calm) .. ->1 (very chaotic)
+  float bright = mix(1.0, 0.10, chaos);
+
+  // a small extra dimming for trajectories that never truly settled
+  float st = float(settleStep) / float(u_iter);
+  bright *= mix(1.0, 0.78, smoothstep(0.85, 1.0, st));
+
+  vec3 col = base * bright;
+  // luminous rim: the first couple of flips trace the bright basin shoreline
+  float rim = (1.0 - exp(-fl*0.9)) * exp(-fl*0.35);
+  col += base * 0.6 * rim;
+
+  // gentle filmic-ish lift; keep deep tangles dark for contrast
+  col = pow(col, vec3(0.85));
+  o = vec4(clamp(col,0.0,1.0), 1.0);
+}`;
+
+function compile(type,src){
+  const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){
+    console.error('shader compile error:', gl.getShaderInfoLog(s)); return null;
+  }
+  return s;
+}
+function initGL(){
+  gl = cv.getContext('webgl2', {antialias:false, preserveDrawingBuffer:true});
+  if(!gl) return false;
+  const vs=compile(gl.VERTEX_SHADER,VERT), fs=compile(gl.FRAGMENT_SHADER,FRAG);
+  if(!vs||!fs) return false;
+  prog=gl.createProgram(); gl.attachShader(prog,vs); gl.attachShader(prog,fs);
+  gl.bindAttribLocation(prog,0,'a_pos'); gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog,gl.LINK_STATUS)){
+    console.error('program link error:', gl.getProgramInfoLog(prog)); return false;
+  }
+  gl.useProgram(prog);
+  const buf=gl.createBuffer();
+  vao=gl.createVertexArray(); gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+  for(const u of ['u_res','u_n','u_strength','u_friction','u_spring','u_h2','u_iter','u_pal','u_view'])
+    uni[u]=gl.getUniformLocation(prog,u);
+  uni.u_mag=gl.getUniformLocation(prog,'u_mag');
+  uni.u_col=gl.getUniformLocation(prog,'u_col');
+  return true;
+}
+function viewExtent(){ return 1.35; }   // world half-extent on the short axis
+function drawGL(){
+  gl.viewport(0,0,W,H);
+  gl.uniform2f(uni.u_res, W, H);
+  gl.uniform1i(uni.u_n, N);
+  const mflat=new Float32Array(16), cflat=new Float32Array(24);
+  for(let i=0;i<N;i++){
+    mflat[i*2]=magnets[i*2]; mflat[i*2+1]=magnets[i*2+1];
+    const c=MAGCOLORS[i%MAGCOLORS.length];
+    cflat[i*3]=c[0]; cflat[i*3+1]=c[1]; cflat[i*3+2]=c[2];
+  }
+  gl.uniform2fv(uni.u_mag, mflat);
+  gl.uniform3fv(uni.u_col, cflat);
+  gl.uniform1f(uni.u_strength, magStrength);
+  gl.uniform1f(uni.u_friction, friction);
+  gl.uniform1f(uni.u_spring, springK);
+  gl.uniform1f(uni.u_h2, heightH*heightH);
+  gl.uniform1i(uni.u_iter, iterations|0);
+  gl.uniform1f(uni.u_pal, palette);
+  gl.uniform1f(uni.u_view, viewExtent());
+  gl.drawArrays(gl.TRIANGLES,0,3);
+}
+
+// ---------- Canvas2D progressive fallback ----------
+let ctx2d=null, off=null, octx=null, img=null, oW=0, oH=0, scanRow=0;
+const C2D_SCALE=0.42;     // render at lower res, upscale
+function initC2D(){ ctx2d=cv.getContext('2d'); off=document.createElement('canvas'); octx=off.getContext('2d'); }
+function smooth(e0,e1,x){ const t=Math.max(0,Math.min(1,(x-e0)/(e1-e0))); return t*t*(3-2*t); }
+function tintJS(base, pal){
+  const [r,g,b]=base;
+  if(pal<0.5) return [r,g,b];
+  if(pal<1.5) return [ r+(b-r)*.55, g+(r-g)*.55, b+(g-b)*.55 ];
+  if(pal<2.5) return [ Math.pow(r,0.7), Math.pow(g,0.85), Math.pow(b,1.2) ];
+  if(pal<3.5){ const wr=1.0*r,wg=0.85*g,wb=0.5*b; return [ r+(wr-r)*.6, g+(wg-g)*.6, b+(wb-b)*.6 ]; }
+  if(pal<4.5){ const m=(r+g+b)/3; return [ r+(r-m)*.4, g+(g-m)*.4, b+(b-m)*.4 ]; }
+  return [ r+(g-r)*.6, g+(b-g)*.6, b+(r-b)*.6 ];
+}
+function resetC2D(){
+  oW=Math.max(2,Math.floor(W*C2D_SCALE)); oH=Math.max(2,Math.floor(H*C2D_SCALE));
+  if(off.width!==oW||off.height!==oH){ off.width=oW; off.height=oH; img=octx.createImageData(oW,oH); }
+  scanRow=0; needsRedraw=false;
+}
+function drawC2D(){
+  if(needsRedraw) resetC2D();
+  if(scanRow>=oH){ return; }   // fully rendered, idle
+  const view=viewExtent(), shortRes=Math.min(oW,oH);
+  const it=iterations|0, h2=heightH*heightH, dt=0.12;
+  const rowsPerFrame=Math.max(2, Math.floor(oH/16));
+  const data=img.data;
+  const tinted=[];
+  for(let m=0;m<N;m++) tinted.push(tintJS(MAGCOLORS[m%MAGCOLORS.length], palette));
+  const endRow=Math.min(oH, scanRow+rowsPerFrame);
+  for(let py=scanRow;py<endRow;py++){
+    const vy=((py+0.5)-0.5*oH)/shortRes;
+    for(let px=0;px<oW;px++){
+      const vx=((px+0.5)-0.5*oW)/shortRes;
+      let x=vx*2*view, y=vy*2*view, ux=0, uy=0;
+      let lastNearest=-1, flips=0, settleStep=it, stopped=false;
+      for(let i=0;i<it;i++){
+        let ax=-springK*x - friction*ux;
+        let ay=-springK*y - friction*uy;
+        let cur=0, best=1e9;
+        for(let m=0;m<N;m++){
+          const dx=magnets[m*2]-x, dy=magnets[m*2+1]-y;
+          const r2=dx*dx+dy*dy+h2;
+          const inv=magStrength/(r2*Math.sqrt(r2));
+          ax+=dx*inv; ay+=dy*inv;
+          const dd=dx*dx+dy*dy;
+          if(dd<best){ best=dd; cur=m; }
+        }
+        ux+=ax*dt; uy+=ay*dt; x+=ux*dt; y+=uy*dt;
+        if(cur!==lastNearest){ if(lastNearest>=0) flips++; lastNearest=cur; }
+        if((ux*ux+uy*uy)<0.0004 && best<0.0144){ settleStep=i; stopped=true; break; }
+      }
+      if(!stopped) settleStep=it;
+      const nearest=lastNearest<0?0:lastNearest;
+      const base=tinted[nearest];
+      const chaos=1-Math.exp(-flips*0.55);
+      let bright=1.0+(0.10-1.0)*chaos;
+      const st=settleStep/it; bright*=1.0+(0.78-1.0)*smooth(0.85,1.0,st);
+      const rim=(1-Math.exp(-flips*0.9))*Math.exp(-flips*0.35);
+      const idx=(py*oW+px)*4;
+      data[idx]  =Math.min(255,Math.pow(base[0]*bright+base[0]*0.6*rim,0.85)*255);
+      data[idx+1]=Math.min(255,Math.pow(base[1]*bright+base[1]*0.6*rim,0.85)*255);
+      data[idx+2]=Math.min(255,Math.pow(base[2]*bright+base[2]*0.6*rim,0.85)*255);
+      data[idx+3]=255;
+    }
+  }
+  scanRow=endRow;
+  octx.putImageData(img,0,0);
+  ctx2d.imageSmoothingEnabled=true;
+  ctx2d.drawImage(off,0,0,oW,oH,0,0,W,H);
+}
+
+// ---------- resize ----------
+function resize(){
+  DPR=Math.min(devicePixelRatio||1, renderer==='WebGL'?2:1);
+  W=cv.width=Math.floor(innerWidth*DPR); H=cv.height=Math.floor(innerHeight*DPR);
+  cv.style.width=innerWidth+'px'; cv.style.height=innerHeight+'px';
+  needsRedraw=true;
+}
+addEventListener('resize',resize);
+
+// ---------- screen <-> world ----------
+function clientToWorld(clientX, clientY){
+  const r=cv.getBoundingClientRect();
+  const shortRes=Math.min(r.width, r.height);
+  const ux=(clientX-r.left-0.5*r.width)/shortRes;
+  const uy=(clientY-r.top-0.5*r.height)/shortRes;
+  const view=viewExtent();
+  // gl_FragCoord y is bottom-up; client y is top-down -> flip y
+  return [ux*2*view, -uy*2*view];
+}
+
+// ---------- magnet drag ----------
+cv.addEventListener('pointerdown',e=>{
+  const w=clientToWorld(e.clientX,e.clientY);
+  let best=1e9, bi=-1;
+  for(let i=0;i<N;i++){
+    const dx=magnets[i*2]-w[0], dy=magnets[i*2+1]-w[1], dd=dx*dx+dy*dy;
+    if(dd<best){ best=dd; bi=i; }
+  }
+  // grab if within ~0.18 world units of a magnet
+  if(best < 0.18*0.18){
+    dragIdx=bi; cv.setPointerCapture(e.pointerId);
+    // pause auto so the drag isn't fought by rotation
+    if(auto){ auto=false; $('auto').checked=false; }
+  }
+});
+cv.addEventListener('pointermove',e=>{
+  if(dragIdx<0) return;
+  const w=clientToWorld(e.clientX,e.clientY);
+  magnets[dragIdx*2]=w[0]; magnets[dragIdx*2+1]=w[1];
+  // also update this magnet's base angle/radius so toggling auto resumes sensibly
+  const a=Math.atan2(w[1],w[0]); const rr=Math.hypot(w[0],w[1]);
+  baseAngles[dragIdx]=a-phase;
+  needsRedraw=true;
+});
+cv.addEventListener('pointerup',e=>{ dragIdx=-1; });
+cv.addEventListener('pointercancel',()=>{ dragIdx=-1; });
+
+// ---------- loop ----------
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){
+    if(auto && dragIdx<0){
+      phase += animSpeed*dt;
+      updateMagnets();
+      needsRedraw=true;
+    } else if(dragIdx>=0){
+      // dragging: magnet position already set; ensure others stay put
+    } else {
+      updateMagnets();   // keep positions consistent when paused-auto
+    }
+    if(renderer==='WebGL') drawGL();
+    else drawC2D();
+  }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${renderer} · ${N} magnets · ${iterations} it · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---------- controls ----------
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); }; }
+bind('sN','vN',x=>x|0,x=>{ N=x|0; reseedAngles(); updateMagnets(); needsRedraw=true; });
+bind('sM','vM',x=>x.toFixed(1),x=>{ magStrength=x; needsRedraw=true; });
+bind('sFr','vFr',x=>x.toFixed(2),x=>{ friction=x; needsRedraw=true; });
+bind('sK','vK',x=>x.toFixed(2),x=>{ springK=x; needsRedraw=true; });
+bind('sH','vH',x=>x.toFixed(2),x=>{ heightH=x; needsRedraw=true; });
+bind('sIt','vIt',x=>x|0,x=>{ iterations=x|0; needsRedraw=true; });
+bind('sS','vS',x=>x.toFixed(2),x=>{ animSpeed=x; });
+bind('sP','vP',x=>x|0,x=>{ palette=x|0; needsRedraw=true; });
+$('auto').onchange=()=>{ auto=$('auto').checked; };
+
+function reseed(){ reseedAngles(); updateMagnets(); needsRedraw=true; }
+$('reseed').onclick=reseed;
+$('pause').onclick=()=>{ paused=!paused; $('pause').textContent=paused?'Play':'Pause'; };
+$('save').onclick=()=>{
+  if(renderer==='WebGL') drawGL();          // ensure fresh pixels for readback
+  else { // canvas2D: force a full synchronous render at full progressive res
+    needsRedraw=true; resetC2D(); while(scanRow<oH) drawC2D();
+  }
+  const a=document.createElement('a'); a.download='magnetic-pendulum.png';
+  a.href=cv.toDataURL('image/png'); a.click();
+};
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT') return;
+  if(e.key===' '){ paused=!paused; $('pause').textContent=paused?'Play':'Pause'; e.preventDefault(); }
+  else if(e.key==='r') reseed();
+  else if(e.key==='h') panel.classList.toggle('hidden');
+  else if(e.key==='s') $('save').click();
+});
+
+// ---------- go ----------
+if(initGL()){ renderer='WebGL'; }
+else { renderer='Canvas2D'; initC2D(); }
+console.log('Magnetic Pendulum renderer:', renderer);
+reseedAngles(); updateMagnets();
+resize();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -121,5 +121,17 @@ window.PIECES = [
     name: "Lorenz",
     blurb: "a weather model dreaming the same butterfly forever",
     accent: "#5cc8f6"
+  },
+  {
+    file: "falling-sand.html",
+    name: "Falling Sand",
+    blurb: "paint the elements and watch them quarrel",
+    accent: "#e0b063"
+  },
+  {
+    file: "magnetic-pendulum.html",
+    name: "Magnetic Pendulum",
+    blurb: "an iron heart torn between three magnets",
+    accent: "#6ec6ff"
   }
 ];

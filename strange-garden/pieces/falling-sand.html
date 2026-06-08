@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Falling Sand — Strange Garden</title>
+<style>
+  :root { --accent: #e0b063; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair;
+    image-rendering:pixelated; box-shadow:inset 0 0 0 3px rgba(0,0,0,.85), inset 0 0 0 4px rgba(255,255,255,.05); }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s;
+    max-height:calc(100vh - 32px); overflow:auto; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  .sectlabel { font-size:10px; letter-spacing:.08em; text-transform:uppercase; opacity:.45;
+    font-family:ui-monospace,Menlo,monospace; margin:14px 0 7px; }
+  .palette { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .mat { position:relative; padding:7px 4px 6px; font-size:10px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.10);
+    border-radius:8px; text-align:center; transition:border-color .12s, background .12s;
+    display:flex; flex-direction:column; align-items:center; gap:5px; }
+  .mat:hover { background:rgba(255,255,255,.10); }
+  .mat .sw { width:100%; height:13px; border-radius:4px; box-shadow:inset 0 0 0 1px rgba(0,0,0,.3); }
+  .mat .nm { font-family:ui-monospace,Menlo,monospace; opacity:.85; line-height:1; }
+  .mat .key { position:absolute; top:3px; right:5px; font:9px ui-monospace,Menlo,monospace; opacity:.35; }
+  .mat.sel { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 16%,transparent); }
+  .mat.sel .nm { opacity:1; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  button.on { border-color:color-mix(in srgb,var(--accent) 60%,transparent);
+    background:color-mix(in srgb,var(--accent) 24%,transparent); color:#fff; }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Falling Sand</h1>
+  <p class="desc">Paint earth, water and fire into a tiny world and watch the elements
+    quarrel. Sand piles, water finds its level, flame eats the wood.</p>
+
+  <div class="sectlabel">Material</div>
+  <div class="palette" id="palette"></div>
+
+  <label>Brush size <b id="vB">9</b></label>
+  <input type="range" id="sB" min="1" max="40" step="1" value="9">
+  <label>Sim speed <b id="vS">2</b></label>
+  <input type="range" id="sS" min="1" max="6" step="1" value="2">
+  <label>Gravity <b id="vG">1.0</b></label>
+  <input type="range" id="sG" min="0" max="1" step="1" value="1">
+
+  <div class="row"><button id="rain" class="pri">Rain</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="clear">Clear</button><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">click + drag to paint · 0–9 pick material · space pause · r clear · h hides panel</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+
+// ---- materials ----
+const EMPTY=0, SAND=1, WATER=2, STONE=3, WOOD=4, FIRE=5, OIL=6, SMOKE=7, STEAM=8, ACID=9, PLANT=10;
+const MATS=[
+  {id:EMPTY, name:'Erase', key:'0', base:[10,11,15],   sw:'#0a0b0f'},
+  {id:SAND,  name:'Sand',  key:'1', base:[214,176,108], sw:'#d6b06c'},
+  {id:WATER, name:'Water', key:'2', base:[64,118,196],  sw:'#4076c4'},
+  {id:STONE, name:'Stone', key:'3', base:[120,124,134], sw:'#787c86'},
+  {id:WOOD,  name:'Wood',  key:'4', base:[120,80,46],   sw:'#78502e'},
+  {id:FIRE,  name:'Fire',  key:'5', base:[255,140,40],  sw:'#ff8c28'},
+  {id:OIL,   name:'Oil',   key:'6', base:[58,44,64],    sw:'#3a2c40'},
+  {id:ACID,  name:'Acid',  key:'7', base:[150,230,70],  sw:'#96e646'},
+  {id:PLANT, name:'Plant', key:'8', base:[70,150,60],   sw:'#469638'},
+];
+// palette buttons we actually show (smoke/steam aren't paintable; they emerge)
+const PAINTABLE=[EMPTY,SAND,WATER,STONE,WOOD,FIRE,OIL,ACID,PLANT];
+let selected=SAND;
+
+// ---- grid ----
+let CELL=4;                 // px per cell (will adapt)
+let GW, GH;                 // grid dims in cells
+let grid, life, moved;      // material, per-cell life/timer, moved-this-frame guard
+let W,H,DPR, img, buf32;
+
+function resize(){
+  DPR=1; // grid render is already low-res; we scale canvas to window via CSS pixelated
+  const oldGW=GW, oldGH=GH, old=grid, oldLife=life;
+  // pick cell size so grid is a sensible resolution (cap cells for perf)
+  CELL=4;
+  let gw=Math.floor(innerWidth/CELL), gh=Math.floor(innerHeight/CELL);
+  // cap total cells ~ for 60fps headroom
+  const MAXCELLS=240000;
+  while(gw*gh>MAXCELLS){ CELL++; gw=Math.floor(innerWidth/CELL); gh=Math.floor(innerHeight/CELL); }
+  GW=Math.max(8,gw); GH=Math.max(8,gh);
+  grid=new Uint8Array(GW*GH); life=new Uint8Array(GW*GH); moved=new Uint8Array(GW*GH);
+  // canvas backing store == grid resolution; CSS stretches it (pixelated)
+  W=cv.width=GW; H=cv.height=GH;
+  cv.style.width=innerWidth+'px'; cv.style.height=innerHeight+'px';
+  img=ctx.createImageData(GW,GH);
+  buf32=new Uint32Array(img.data.buffer);
+  // copy old content (scaled by nearest) so a resize doesn't wipe a scene
+  if(old){
+    for(let y=0;y<GH;y++){
+      const sy=Math.min(oldGH-1,(y/GH*oldGH)|0);
+      for(let x=0;x<GW;x++){
+        const sx=Math.min(oldGW-1,(x/GW*oldGW)|0);
+        grid[y*GW+x]=old[sy*oldGW+sx];
+        life[y*GW+x]=oldLife[sy*oldGW+sx];
+      }
+    }
+  }
+}
+addEventListener('resize',()=>{ resize(); });
+
+// ---- color packing (ABGR for little-endian Uint32) ----
+function pack(r,g,b){ return (255<<24)|(b<<16)|(g<<8)|r; }
+// precompute a small variation table per material for texture
+const VAR=8;
+const matColor=[];   // matColor[m] = Uint32Array(VAR)
+function buildMatColors(){
+  for(const M of MATS){
+    if(matColor[M.id]) continue;
+    const a=new Uint32Array(VAR);
+    for(let i=0;i<VAR;i++){
+      const t=(i/(VAR-1)-0.5);   // -0.5..0.5
+      let [r,g,b]=M.base;
+      let j=22*t;
+      if(M.id===WATER||M.id===OIL||M.id===STEAM||M.id===SMOKE) j=14*t;
+      r=Math.max(0,Math.min(255,r+j*1.0|0));
+      g=Math.max(0,Math.min(255,g+j*0.9|0));
+      b=Math.max(0,Math.min(255,b+j*0.7|0));
+      a[i]=pack(r,g,b);
+    }
+    matColor[M.id]=a;
+  }
+  // smoke / steam not in MATS palette list at top — define explicitly
+  matColor[SMOKE]=(()=>{const a=new Uint32Array(VAR);for(let i=0;i<VAR;i++){const t=i/(VAR-1);const v=(70+t*40)|0;a[i]=pack(v,v,v+4);}return a;})();
+  matColor[STEAM]=(()=>{const a=new Uint32Array(VAR);for(let i=0;i<VAR;i++){const t=i/(VAR-1);const v=(190+t*45)|0;a[i]=pack(v,v,Math.min(255,v+8));}return a;})();
+  matColor[FIRE]=(()=>{const a=new Uint32Array(VAR);for(let i=0;i<VAR;i++){const t=i/(VAR-1);
+     // orange->yellow flicker
+     const r=255, g=(110+t*130)|0, b=(20+t*30)|0; a[i]=pack(r,g,b);}return a;})();
+  matColor[PLANT]=(()=>{const a=new Uint32Array(VAR);for(let i=0;i<VAR;i++){const t=(i/(VAR-1)-0.5);
+     const r=Math.max(0,55+30*t|0), g=(135+40*t)|0, b=Math.max(0,48+20*t|0); a[i]=pack(r,g,b);}return a;})();
+}
+
+// hash per cell for stable-ish texture
+function cellHash(idx){ let h=idx*2654435761; h^=h>>>15; return h>>>0; }
+
+// ---- helpers ----
+function inb(x,y){ return x>=0&&x<GW&&y>=0&&y<GH; }
+function isFluidOrEmpty(m){ return m===EMPTY||m===WATER||m===OIL||m===SMOKE||m===STEAM; }
+function density(m){
+  switch(m){
+    case STONE: case WOOD: case PLANT: return 100;
+    case SAND: return 60;
+    case WATER: return 30;
+    case ACID: return 28;
+    case OIL: return 20;     // lighter than water -> floats
+    case EMPTY: return 0;
+    case FIRE: return -5;
+    case SMOKE: return -10;
+    case STEAM: return -12;
+  }
+  return 0;
+}
+
+function swap(a,b){ const t=grid[a]; grid[a]=grid[b]; grid[b]=t;
+  const tl=life[a]; life[a]=life[b]; life[b]=tl;
+  moved[a]=1; moved[b]=1; }
+function setCell(i,m,l){ grid[i]=m; life[i]=l||0; moved[i]=1; }
+
+// ---- simulation ----
+let gravityOn=1;
+function step(){
+  moved.fill(0);
+  // bottom-to-top so falling resolves in one pass
+  for(let y=GH-1;y>=0;y--){
+    const leftFirst = (y&1) ? 1 : 0; // alternate scan dir per row to reduce bias
+    if(leftFirst){
+      for(let x=0;x<GW;x++) updateCell(x,y);
+    } else {
+      for(let x=GW-1;x>=0;x--) updateCell(x,y);
+    }
+  }
+}
+
+function updateCell(x,y){
+  const i=y*GW+x;
+  const m=grid[i];
+  if(m===EMPTY) return;
+  if(moved[i]) return;
+  switch(m){
+    case SAND:  updPowder(x,y,i,false); break;
+    case WATER: updLiquid(x,y,i,WATER); break;
+    case OIL:   updLiquid(x,y,i,OIL); break;
+    case ACID:  updAcid(x,y,i); break;
+    case FIRE:  updFire(x,y,i); break;
+    case SMOKE: updGas(x,y,i,SMOKE); break;
+    case STEAM: updGas(x,y,i,STEAM); break;
+    case WOOD:  updWood(x,y,i); break;
+    case PLANT: updPlant(x,y,i); break;
+    // STONE static
+  }
+}
+
+// powder: falls; sinks through fluids of lower density
+function updPowder(x,y,i){
+  if(!gravityOn) return;
+  const dn=i+GW;
+  if(y+1<GH){
+    const below=grid[dn];
+    if(below===EMPTY){ swap(i,dn); return; }
+    if(density(SAND)>density(below) && (below===WATER||below===OIL||below===ACID)){ swap(i,dn); return; }
+    // diagonals
+    const dir = (cellHash(i+(frame*131))&1) ? 1 : -1;
+    for(const d of [dir,-dir]){
+      const nx=x+d;
+      if(nx>=0&&nx<GW){
+        const di=dn+d;
+        const t=grid[di];
+        if(t===EMPTY || ((t===WATER||t===OIL||t===ACID)&&density(SAND)>density(t))){ swap(i,di); return; }
+      }
+    }
+  }
+}
+
+// liquid: falls, sinks/floats by density, spreads sideways
+function updLiquid(x,y,i,self){
+  const myD=density(self);
+  // down
+  if(y+1<GH && gravityOn){
+    const dn=i+GW, below=grid[dn];
+    if(below===EMPTY){ swap(i,dn); return; }
+    if((below===WATER||below===OIL||below===ACID) && myD>density(below)){ swap(i,dn); return; }
+    // diagonal down
+    const dir=(cellHash(i+frame*977)&1)?1:-1;
+    for(const d of [dir,-dir]){
+      const nx=x+d; if(nx<0||nx>=GW) continue;
+      const di=dn+d, t=grid[di];
+      if(t===EMPTY || ((t===WATER||t===OIL||t===ACID)&&myD>density(t))){ swap(i,di); return; }
+    }
+  }
+  // float up through denser liquid (e.g. oil rising through water)
+  if(y-1>=0 && gravityOn){
+    const up=i-GW, above=grid[up];
+    if((above===WATER||above===ACID) && myD<density(above)){ swap(i,up); return; }
+  }
+  // spread sideways (fluidity): travel through same-liquid cells to reach an empty gap
+  const dir=(cellHash(i*7+frame)&1)?1:-1;
+  const reach=5;
+  for(const d of [dir,-dir]){
+    for(let s=1;s<=reach;s++){
+      const nx=x+d*s; if(nx<0||nx>=GW) break;
+      const si=y*GW+nx, t=grid[si];
+      if(t===EMPTY){ swap(i,si); return; }
+      if(t!==self) break; // blocked by anything that isn't more of me
+    }
+  }
+}
+
+// gas: rises, drifts, dissipates
+function updGas(x,y,i,self){
+  // dissipate
+  if(life[i]>0){ life[i]--; if(life[i]===0){ setCell(i,EMPTY,0); return; } }
+  else { setCell(i,EMPTY,0); return; }
+  const up=i-GW;
+  if(y-1>=0){
+    const above=grid[up];
+    if(above===EMPTY){ swap(i,up); return; }
+    if(above===WATER||above===OIL){ swap(i,up); return; }
+    // diagonal up
+    const dir=(cellHash(i+frame*53)&1)?1:-1;
+    for(const d of [dir,-dir]){
+      const nx=x+d; if(nx<0||nx>=GW) continue;
+      const di=up+d; if(grid[di]===EMPTY){ swap(i,di); return; }
+    }
+  }
+  // lateral drift occasionally
+  if((cellHash(i+frame*17)&7)===0){
+    const d=(cellHash(i*3+frame)&1)?1:-1, nx=x+d;
+    if(nx>=0&&nx<GW){ const si=i+d; if(grid[si]===EMPTY) swap(i,si); }
+  }
+}
+
+// fire: short life, rises, ignites neighbors, doused by water -> steam, spawns smoke
+function updFire(x,y,i){
+  if(life[i]===0) life[i]=24+(cellHash(i)&31); // safety: ensure a lifespan
+  // doused by adjacent water/steam -> becomes steam
+  for(const [dx,dy] of NB4){
+    const nx=x+dx, ny=y+dy; if(!inb(nx,ny)) continue;
+    const ni=ny*GW+nx;
+    if(grid[ni]===WATER){
+      setCell(i, STEAM, 90+(cellHash(i)&31));
+      if((cellHash(i+frame)&1)) setCell(ni, STEAM, 80+(cellHash(ni)&31));
+      return;
+    }
+  }
+  // ignite flammable neighbors
+  for(const [dx,dy] of NB8){
+    const nx=x+dx, ny=y+dy; if(!inb(nx,ny)) continue;
+    const ni=ny*GW+nx; const nm=grid[ni];
+    if(nm===WOOD){ if((cellHash(ni+frame*7)&7)===0) setCell(ni, FIRE, 26+(cellHash(ni)&31)); }
+    else if(nm===PLANT){ if((cellHash(ni+frame*5)&3)===0) setCell(ni, FIRE, 18+(cellHash(ni)&15)); }
+    else if(nm===OIL){ if((cellHash(ni+frame*11)&1)===0) setCell(ni, FIRE, 30+(cellHash(ni)&31)); }
+  }
+  // burn down; on death sometimes leave smoke
+  life[i]--;
+  if(life[i]<=0){
+    if(y-1>=0 && grid[i-GW]===EMPTY && (cellHash(i+frame)&3)===0) setCell(i-GW, SMOKE, 70+(cellHash(i)&63));
+    setCell(i, EMPTY, 0);
+    return;
+  }
+  // rise into empty space sometimes (carries its remaining life)
+  if(y-1>=0 && grid[i-GW]===EMPTY && (cellHash(i+frame*3)&3)===0) swap(i,i-GW);
+}
+
+// wood: static but flammable (handled by fire). Could char—keep static.
+function updWood(x,y,i){ /* static */ }
+
+// plant: static, flammable; slowly grows upward if adjacent to water
+function updPlant(x,y,i){
+  if(y-1<0) return;
+  if((cellHash(i+frame*23)&63)!==0) return; // grow rarely
+  // need water nearby to grow
+  let nearWater=false;
+  for(const [dx,dy] of NB4){
+    const nx=x+dx, ny=y+dy; if(!inb(nx,ny)) continue;
+    if(grid[ny*GW+nx]===WATER){ nearWater=true; break; }
+  }
+  if(!nearWater) return;
+  const up=i-GW;
+  if(grid[up]===EMPTY) setCell(up, PLANT, 0);
+}
+
+// acid: fluid that eats materials it touches (not stone-immune for fun, but slow on stone)
+function updAcid(x,y,i){
+  // try to dissolve a neighbor
+  for(const [dx,dy] of NB4){
+    const nx=x+dx, ny=y+dy; if(!inb(nx,ny)) continue;
+    const ni=ny*GW+nx, nm=grid[ni];
+    if(nm===SAND||nm===WOOD||nm===PLANT){
+      if((cellHash(ni+frame*9)&7)===0){ setCell(ni,EMPTY,0); // consumed; acid sometimes used up
+        if((cellHash(i+frame)&3)===0){ setCell(i,EMPTY,0); return; }
+      }
+    } else if(nm===STONE){
+      if((cellHash(ni+frame*9)&63)===0){ setCell(ni,EMPTY,0); }
+    }
+  }
+  // then behave like a liquid (slightly denser than oil)
+  updLiquid(x,y,i,ACID);
+}
+
+const NB4=[[0,1],[0,-1],[1,0],[-1,0]];
+const NB8=[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+
+// ---- render ----
+function draw(){
+  // wood/plant texture uses a vertical-streak factor; everything else uses variation
+  for(let i=0;i<grid.length;i++){
+    const m=grid[i];
+    if(m===EMPTY){ buf32[i]=BG; continue; }
+    const tbl=matColor[m];
+    let vi;
+    if(m===FIRE||m===SMOKE||m===STEAM){
+      vi=(cellHash(i+frame*5)>>>0)%VAR;     // animated flicker for gases/fire
+    } else {
+      vi=(cellHash(i)>>>0)%VAR;             // stable texture
+    }
+    buf32[i]=tbl[vi];
+  }
+  ctx.putImageData(img,0,0);
+}
+const BG=pack(12,13,18);
+
+// ---- painting ----
+let brush=9, mDown=false, lastMx=null, lastMy=null;
+function clientToCell(cx,cy){
+  const r=cv.getBoundingClientRect();
+  const gx=Math.floor((cx-r.left)/r.width*GW);
+  const gy=Math.floor((cy-r.top)/r.height*GH);
+  return [gx,gy];
+}
+function paintAt(gx,gy){
+  const rad=brush, r2=rad*rad;
+  for(let dy=-rad;dy<=rad;dy++){
+    for(let dx=-rad;dx<=rad;dx++){
+      if(dx*dx+dy*dy>r2) continue;
+      const x=gx+dx, y=gy+dy;
+      if(!inb(x,y)) continue;
+      const i=y*GW+x;
+      if(selected===EMPTY){ grid[i]=EMPTY; life[i]=0; continue; }
+      // sparse fill for fluids/sand so brush isn't a solid block (more natural)
+      if((selected===SAND||selected===WATER||selected===OIL||selected===ACID)){
+        if((cellHash(i*13+frame+(dx*7+dy*131))&3)===0 && grid[i]!==EMPTY && grid[i]!==selected) continue;
+      }
+      grid[i]=selected;
+      // initialize life
+      if(selected===FIRE) life[i]=24+(cellHash(i)&31);
+      else if(selected===SMOKE) life[i]=70+(cellHash(i)&63);
+      else if(selected===STEAM) life[i]=90+(cellHash(i)&31);
+      else life[i]=0;
+    }
+  }
+}
+function paintLine(x0,y0,x1,y1){
+  // bresenham-ish to fill gaps during fast drags
+  const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+  const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+  let err=dx-dy, x=x0, y=y0, guard=0;
+  while(guard++<5000){
+    paintAt(x,y);
+    if(x===x1&&y===y1) break;
+    const e2=2*err;
+    if(e2>-dy){ err-=dy; x+=sx; }
+    if(e2<dx){ err+=dx; y+=sy; }
+  }
+}
+cv.addEventListener('pointerdown',e=>{
+  cv.setPointerCapture(e.pointerId);
+  mDown=true; const [gx,gy]=clientToCell(e.clientX,e.clientY);
+  lastMx=gx; lastMy=gy; paintAt(gx,gy);
+});
+cv.addEventListener('pointermove',e=>{
+  if(!mDown) return;
+  const [gx,gy]=clientToCell(e.clientX,e.clientY);
+  if(lastMx!==null) paintLine(lastMx,lastMy,gx,gy); else paintAt(gx,gy);
+  lastMx=gx; lastMy=gy;
+});
+addEventListener('pointerup',()=>{ mDown=false; lastMx=lastMy=null; });
+
+// ---- rain mode ----
+let rainOn=false;
+function doRain(){
+  if(!rainOn) return;
+  const drops=Math.max(2,(GW/30)|0);
+  for(let k=0;k<drops;k++){
+    const x=(Math.random()*GW)|0;
+    const i=x; // top row
+    if(grid[i]===EMPTY){ grid[i]=WATER; life[i]=0; }
+    // a couple cells wide
+    if(x+1<GW && grid[i+1]===EMPTY && Math.random()<0.5){ grid[i+1]=WATER; }
+  }
+}
+
+// ---- scene seed (nice default so it's not empty) ----
+function seedScene(){
+  grid.fill(EMPTY); life.fill(0);
+  // ground of sand
+  const groundH=Math.max(6,(GH*0.16)|0);
+  for(let y=GH-groundH;y<GH;y++)
+    for(let x=0;x<GW;x++){
+      // hilly top
+      const top=GH-groundH + (Math.sin(x*0.05)*3 + Math.sin(x*0.013)*5)|0;
+      if(y>=top) grid[y*GW+x]=SAND;
+    }
+  // a stone basin to hold water on the right
+  const bx=(GW*0.62)|0, bw=(GW*0.30)|0, by=(GH*0.55)|0, bh=(GH*0.30)|0;
+  for(let y=by;y<by+bh;y++)
+    for(let x=bx;x<bx+bw;x++){
+      if(x===bx||x===bx+bw-1||y===by+bh-1) grid[y*GW+x]=STONE;
+    }
+  // water in the basin
+  for(let y=by+2;y<by+bh-1;y++)
+    for(let x=bx+1;x<bx+bw-1;x++){
+      if(y>by+bh*0.4) grid[y*GW+x]=WATER;
+    }
+  // a little wood pile on the left ground + an ember
+  const wx=(GW*0.12)|0, wtop=GH-groundH-1;
+  for(let y=wtop;y>wtop-Math.min(14,GH*0.12);y--)
+    for(let x=wx;x<wx+6;x++) if(inb(x,y)) grid[y*GW+x]=WOOD;
+  // ignite top of the pile
+  const fy=wtop-Math.min(14,(GH*0.12)|0);
+  for(let x=wx;x<wx+6;x++) if(inb(x,fy)){ grid[fy*GW+x]=FIRE; life[fy*GW+x]=26+(cellHash(fy*GW+x)&31); }
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60,frame=0,simSpeed=2;
+function loop(now){
+  let dt=(now-last)/1000; last=now;
+  if(!paused && !document.hidden){
+    for(let s=0;s<simSpeed;s++){ frame++; doRain(); step(); }
+    draw();
+  }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${GW}×${GH} · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- palette UI ----
+function buildPalette(){
+  const el=document.getElementById('palette');
+  el.innerHTML='';
+  for(const id of PAINTABLE){
+    const M=MATS.find(m=>m.id===id && !m.hide);
+    const b=document.createElement('div');
+    b.className='mat'+(id===selected?' sel':'');
+    b.dataset.id=id;
+    b.innerHTML=`<span class="key">${M.key}</span>
+      <span class="sw" style="background:${M.sw}"></span>
+      <span class="nm">${M.name}</span>`;
+    b.onclick=()=>selectMat(id);
+    el.appendChild(b);
+  }
+}
+function selectMat(id){
+  selected=id;
+  document.querySelectorAll('.mat').forEach(el=>{
+    el.classList.toggle('sel', +el.dataset.id===id);
+  });
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); }; }
+bind('sB','vB',x=>x|0,x=>{ brush=x|0; });
+bind('sS','vS',x=>x|0,x=>{ simSpeed=x|0; });
+bind('sG','vG',x=>x?'1.0':'0.0',x=>{ gravityOn=x?1:0; });
+$('rain').onclick=()=>{ rainOn=!rainOn; $('rain').classList.toggle('on',rainOn); };
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('clear').onclick=()=>{ grid.fill(EMPTY); life.fill(0); };
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='falling-sand.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r'){ grid.fill(EMPTY); life.fill(0); }
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+  else {
+    const M=MATS.find(m=>m.key===e.key && !m.hide);
+    if(M) selectMat(M.id);
+  }
+});
+
+// ---- go ----
+buildMatColors();
+resize();
+seedScene();
+buildPalette();
+selectMat(SAND);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
