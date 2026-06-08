@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reaction–Diffusion — Strange Garden</title>
+<style>
+  :root { --accent: #4fd6c2; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:266px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; margin:0; padding:6px 7px; font-size:12px; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:8px;
+    font-family:ui-monospace,Menlo,monospace; cursor:pointer; }
+  #panel select:focus { outline:1px solid color-mix(in srgb,var(--accent) 50%,transparent); }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Reaction–Diffusion</h1>
+  <p class="desc">Two chemicals feed and devour each other; from their quarrel
+    rise coral, stripes and restless spots — Turing's living skin.</p>
+  <label>Preset</label>
+  <select id="preset"></select>
+  <label>Feed rate <b id="vF">0.0545</b></label>
+  <input type="range" id="sF" min="0.005" max="0.110" step="0.0001" value="0.0545">
+  <label>Kill rate <b id="vK">0.0620</b></label>
+  <input type="range" id="sK" min="0.030" max="0.073" step="0.0001" value="0.0620">
+  <label>Resolution <b id="vS">0.50</b></label>
+  <input type="range" id="sS" min="0.25" max="1.0" step="0.05" value="0.5">
+  <label>Substeps <b id="vSub">10</b></label>
+  <input type="range" id="sSub" min="2" max="20" step="1" value="10">
+  <label>Palette</label>
+  <select id="pal"></select>
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="clear">Clear</button></div>
+  <div class="row"><button id="pause">Pause</button><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">drag to paint life · r reseeds · h hides panel</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+const $=id=>document.getElementById(id);
+
+// ---- simulation parameters ----
+let feed=0.0545, kill=0.0620, scale=0.5, substeps=10;
+const Du=0.16, Dv=0.08, dt=1.0;
+
+// ---- grid state (ping-pong typed arrays) ----
+let gw=0, gh=0;            // simulation grid dimensions
+let U,V,U2,V2;             // Float32Array fields, double buffered
+let img, off, offCtx;      // ImageData + offscreen canvas for upscaling
+
+// ---- presets: classic (feed, kill) regimes ----
+const PRESETS = [
+  { name:'Coral',            f:0.0545, k:0.0620 },
+  { name:'Mitosis',          f:0.0367, k:0.0649 },
+  { name:'Worms',            f:0.0580, k:0.0630 },
+  { name:'Maze',             f:0.0290, k:0.0570 },
+  { name:'Spots',            f:0.0220, k:0.0510 },
+  { name:'Solitons',         f:0.0300, k:0.0620 },
+  { name:'Bubbles',          f:0.0980, k:0.0570 },
+  { name:'Holes',            f:0.0390, k:0.0580 },
+  { name:'Pulsing waves',    f:0.0250, k:0.0600 },
+  { name:'Flickering loops', f:0.0140, k:0.0450 },
+];
+
+// ---- color palettes: stops as [t, r,g,b] over V in [0,1] ----
+const PALETTES = {
+  'Teal abyss': [
+    [0.00,  6,  9, 16],
+    [0.20, 10, 38, 52],
+    [0.40, 18, 96,108],
+    [0.60, 46,180,176],
+    [0.80,150,236,224],
+    [1.00,245,255,252],
+  ],
+  'Magma': [
+    [0.00,  4,  3, 12],
+    [0.22, 48, 12, 70],
+    [0.45,128, 28, 86],
+    [0.66,205, 70, 52],
+    [0.84,243,150, 44],
+    [1.00,252,238,170],
+  ],
+  'Bioluminescence': [
+    [0.00,  3,  6, 14],
+    [0.25, 12, 26, 64],
+    [0.48, 28, 70,140],
+    [0.66, 64,150,180],
+    [0.82,120,224,170],
+    [1.00,232,255,196],
+  ],
+  'Ash & ember': [
+    [0.00,  8,  8, 10],
+    [0.30, 40, 36, 40],
+    [0.55, 96, 80, 78],
+    [0.74,176,120, 86],
+    [0.90,232,168, 96],
+    [1.00,255,232,180],
+  ],
+};
+let palName='Teal abyss';
+let lut=new Uint8Array(256*3);   // precomputed 256-entry color lookup
+function buildLUT(){
+  const stops=PALETTES[palName];
+  for(let i=0;i<256;i++){
+    const t=i/255;
+    let a=stops[0], b=stops[stops.length-1];
+    for(let s=0;s<stops.length-1;s++){
+      if(t>=stops[s][0] && t<=stops[s+1][0]){ a=stops[s]; b=stops[s+1]; break; }
+    }
+    const span=(b[0]-a[0])||1, u=Math.min(1,Math.max(0,(t-a[0])/span));
+    lut[i*3  ]=(a[1]+(b[1]-a[1])*u)|0;
+    lut[i*3+1]=(a[2]+(b[2]-a[2])*u)|0;
+    lut[i*3+2]=(a[3]+(b[3]-a[3])*u)|0;
+  }
+}
+
+// ---- sizing ----
+let W,H,viewW,viewH;
+function resize(){
+  viewW=innerWidth; viewH=innerHeight;
+  W=cv.width=viewW; H=cv.height=viewH;
+  cv.style.width=viewW+'px'; cv.style.height=viewH+'px';
+  allocGrid();
+}
+addEventListener('resize',()=>{ resize(); seed(); });
+
+function allocGrid(){
+  gw=Math.max(2, Math.round(viewW*scale));
+  gh=Math.max(2, Math.round(viewH*scale));
+  U=new Float32Array(gw*gh); V=new Float32Array(gw*gh);
+  U2=new Float32Array(gw*gh); V2=new Float32Array(gw*gh);
+  off=document.createElement('canvas'); off.width=gw; off.height=gh;
+  offCtx=off.getContext('2d');
+  img=offCtx.createImageData(gw,gh);
+  // opaque alpha
+  const d=img.data; for(let i=3;i<d.length;i+=4) d[i]=255;
+}
+
+// ---- seeding ----
+function clearField(){
+  U.fill(1.0); V.fill(0.0);
+}
+function seedPatch(cx,cy,r){
+  const r2=r*r;
+  for(let y=-r;y<=r;y++){
+    for(let x=-r;x<=r;x++){
+      if(x*x+y*y>r2) continue;
+      let px=cx+x, py=cy+y;
+      px=((px%gw)+gw)%gw; py=((py%gh)+gh)%gh;
+      const idx=py*gw+px;
+      U[idx]=0.0; V[idx]=1.0;
+    }
+  }
+}
+function seed(){
+  clearField();
+  // a small cluster of seed patches near the center
+  const cx=gw>>1, cy=gh>>1;
+  const r=Math.max(3, Math.round(Math.min(gw,gh)*0.02));
+  seedPatch(cx,cy,r);
+  seedPatch(cx-r*4,cy-r*2,r);
+  seedPatch(cx+r*4,cy+r*2,r);
+  seedPatch(cx+r*2,cy-r*5,r);
+  seedPatch(cx-r*3,cy+r*5,r);
+}
+
+// ---- painting (mouse) ----
+let painting=false, lastPx=-1, lastPy=-1;
+function paintAt(clientX, clientY){
+  const gx=Math.floor(clientX/viewW*gw);
+  const gy=Math.floor(clientY/viewH*gh);
+  const r=Math.max(2, Math.round(Math.min(gw,gh)*0.012));
+  // paint a stroke between last point and this one for smooth drags
+  if(lastPx>=0){
+    const steps=Math.max(1, Math.hypot(gx-lastPx, gy-lastPy)|0);
+    for(let s=0;s<=steps;s++){
+      const t=s/steps;
+      seedPatch(Math.round(lastPx+(gx-lastPx)*t), Math.round(lastPy+(gy-lastPy)*t), r);
+    }
+  } else {
+    seedPatch(gx,gy,r);
+  }
+  lastPx=gx; lastPy=gy;
+}
+cv.addEventListener('pointerdown',e=>{ painting=true; lastPx=-1; lastPy=-1; paintAt(e.clientX,e.clientY); });
+addEventListener('pointermove',e=>{ if(painting) paintAt(e.clientX,e.clientY); });
+addEventListener('pointerup',()=>{ painting=false; lastPx=-1; lastPy=-1; });
+cv.addEventListener('pointerleave',()=>{ lastPx=-1; lastPy=-1; });
+
+// ---- simulation step (toroidal 9-point Laplacian) ----
+function simStep(){
+  const w=gw, h=gh;
+  const f=feed, k=kill, du=Du, dv=Dv;
+  for(let y=0;y<h;y++){
+    const ym=(y===0? h-1 : y-1)*w;
+    const yp=(y===h-1? 0 : y+1)*w;
+    const yc=y*w;
+    for(let x=0;x<w;x++){
+      const xm=(x===0? w-1 : x-1);
+      const xp=(x===w-1? 0 : x+1);
+      const c=yc+x;
+      const uc=U[c], vc=V[c];
+      // neighbors
+      const uN=U[ym+x],  vN=V[ym+x];
+      const uS=U[yp+x],  vS=V[yp+x];
+      const uW=U[yc+xm], vW=V[yc+xm];
+      const uE=U[yc+xp], vE=V[yc+xp];
+      const uNW=U[ym+xm], vNW=V[ym+xm];
+      const uNE=U[ym+xp], vNE=V[ym+xp];
+      const uSW=U[yp+xm], vSW=V[yp+xm];
+      const uSE=U[yp+xp], vSE=V[yp+xp];
+      // 9-point laplacian: center -1, ortho 0.2, diag 0.05
+      const lapU = -uc + 0.2*(uN+uS+uW+uE) + 0.05*(uNW+uNE+uSW+uSE);
+      const lapV = -vc + 0.2*(vN+vS+vW+vE) + 0.05*(vNW+vNE+vSW+vSE);
+      const uvv = uc*vc*vc;
+      let nu = uc + (du*lapU - uvv + f*(1-uc))*dt;
+      let nv = vc + (dv*lapV + uvv - (f+k)*vc)*dt;
+      // clamp to keep things numerically sane
+      U2[c]=nu<0?0:(nu>1?1:nu);
+      V2[c]=nv<0?0:(nv>1?1:nv);
+    }
+  }
+  // swap buffers
+  let tu=U; U=U2; U2=tu;
+  let tv=V; V=V2; V2=tv;
+}
+
+// ---- rendering: V mapped through palette LUT ----
+function draw(){
+  const d=img.data, n=gw*gh;
+  for(let i=0;i<n;i++){
+    // emphasize V; gentle gamma for contrast
+    let v=V[i];
+    if(v<0)v=0; else if(v>1)v=1;
+    v=Math.sqrt(v);              // perceptual lift of the faint structures
+    let li=(v*255)|0; if(li>255)li=255;
+    const o=i*4, p=li*3;
+    d[o]=lut[p]; d[o+1]=lut[p+1]; d[o+2]=lut[p+2];
+  }
+  offCtx.putImageData(img,0,0);
+  // upscale to full viewport
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(off, 0,0, viewW, viewH);
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let frameDt=(now-last)/1000; last=now;
+  if(!paused && !document.hidden){
+    for(let s=0;s<substeps;s++) simStep();
+    draw();
+  }
+  fps+=((1/Math.max(frameDt,1e-4))-fps)*0.08;
+  hud.textContent=`${gw}×${gh} · ${substeps} substeps · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); }; }
+bind('sF','vF',x=>x.toFixed(4),x=>{ feed=x; });
+bind('sK','vK',x=>x.toFixed(4),x=>{ kill=x; });
+bind('sS','vS',x=>x.toFixed(2),x=>{ scale=x; allocGrid(); seed(); });
+bind('sSub','vSub',x=>x|0,x=>{ substeps=x|0; });
+
+// preset dropdown
+const presetSel=$('preset');
+PRESETS.forEach((p,i)=>{ const o=document.createElement('option');
+  o.value=i; o.textContent=`${p.name}  (${p.f.toFixed(4)}, ${p.k.toFixed(4)})`;
+  presetSel.appendChild(o); });
+function applyPreset(i){
+  const p=PRESETS[i]; feed=p.f; kill=p.k;
+  $('sF').value=feed; $('vF').textContent=feed.toFixed(4);
+  $('sK').value=kill; $('vK').textContent=kill.toFixed(4);
+  seed();
+}
+presetSel.onchange=()=>applyPreset(parseInt(presetSel.value,10));
+
+// palette dropdown
+const palSel=$('pal');
+Object.keys(PALETTES).forEach(name=>{ const o=document.createElement('option');
+  o.value=name; o.textContent=name; palSel.appendChild(o); });
+palSel.value=palName;
+palSel.onchange=()=>{ palName=palSel.value; buildLUT(); };
+
+$('reseed').onclick=()=>seed();
+$('clear').onclick=()=>clearField();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='reaction-diffusion.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')seed();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+buildLUT();
+resize();
+applyPreset(0);   // Coral, also seeds
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

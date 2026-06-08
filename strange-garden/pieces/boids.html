@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boids — Strange Garden</title>
+<style>
+  :root { --accent: #8fb7ff; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Boids</h1>
+  <p class="desc">Three small rules — keep apart, fly together, match the flock — and a
+    murmuration breathes itself into being.</p>
+  <label>Boids <b id="vN">1200</b></label>
+  <input type="range" id="sN" min="200" max="4000" step="50" value="1200">
+  <label>Perception <b id="vP">42</b></label>
+  <input type="range" id="sP" min="15" max="100" step="1" value="42">
+  <label>Separation <b id="vS">1.6</b></label>
+  <input type="range" id="sS" min="0" max="4" step="0.05" value="1.6">
+  <label>Alignment <b id="vA">1.0</b></label>
+  <input type="range" id="sA" min="0" max="4" step="0.05" value="1.0">
+  <label>Cohesion <b id="vCo">0.9</b></label>
+  <input type="range" id="sCo" min="0" max="4" step="0.05" value="0.9">
+  <label>Max speed <b id="vMx">3.4</b></label>
+  <input type="range" id="sMx" min="1" max="7" step="0.1" value="3.4">
+  <label>Trails <b id="vT">0.78</b></label>
+  <input type="range" id="sT" min="0" max="0.95" step="0.01" value="0.78">
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">move mouse = predator · shift = attract · h hides panel</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR,worldW,worldH;
+function resize(){
+  const oldW=worldW, oldH=worldH;
+  DPR=Math.min(devicePixelRatio||1,2);
+  worldW=innerWidth; worldH=innerHeight;
+  W=cv.width=Math.floor(worldW*DPR); H=cv.height=Math.floor(worldH*DPR);
+  cv.style.width=worldW+'px'; cv.style.height=worldH+'px';
+  if(oldW && px){ const sx=worldW/oldW, sy=worldH/oldH;
+    for(let i=0;i<n;i++){ px[i]*=sx; py[i]*=sy; } }
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+}
+addEventListener('resize',resize);
+
+// ---- parameters ----
+let n=1200, perception=42, wSep=1.6, wAli=1.0, wCoh=0.9, maxSpeed=3.4, persistence=0.78;
+const minSpeed=1.2, maxForce=0.08;
+let px,py,vx,vy;
+
+function init(){
+  px=new Float32Array(n); py=new Float32Array(n);
+  vx=new Float32Array(n); vy=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    px[i]=Math.random()*worldW; py[i]=Math.random()*worldH;
+    const a=Math.random()*Math.PI*2, sp=minSpeed+Math.random()*(maxSpeed-minSpeed);
+    vx[i]=Math.cos(a)*sp; vy[i]=Math.sin(a)*sp;
+  }
+}
+
+// ---- spatial grid (cell linked-list, toroidal) ----
+let head, next, cols, rows, cellW, cellH;
+function buildGrid(){
+  const cell=Math.max(perception,8);
+  cols=Math.max(1,Math.floor(worldW/cell)); rows=Math.max(1,Math.floor(worldH/cell));
+  cellW=worldW/cols; cellH=worldH/rows;
+  const nc=cols*rows;
+  if(!head || head.length!==nc) head=new Int32Array(nc);
+  head.fill(-1);
+  if(!next || next.length!==n) next=new Int32Array(n);
+  for(let i=0;i<n;i++){
+    let cx=(px[i]/cellW)|0, cy=(py[i]/cellH)|0;
+    if(cx<0)cx=0; else if(cx>=cols)cx=cols-1;
+    if(cy<0)cy=0; else if(cy>=rows)cy=rows-1;
+    const c=cy*cols+cx; next[i]=head[c]; head[c]=i;
+  }
+}
+
+// ---- mouse (predator / attractor) ----
+let mActive=false, mx=0, my=0, mAttract=false;
+const predR=120, predR2=predR*predR;
+cv.addEventListener('pointermove',e=>{ mActive=true; mx=e.clientX; my=e.clientY; mAttract=e.shiftKey; });
+cv.addEventListener('pointerdown',e=>{ mActive=true; mx=e.clientX; my=e.clientY; mAttract=e.shiftKey; });
+cv.addEventListener('pointerleave',()=>{ mActive=false; });
+addEventListener('keydown',e=>{ if(e.key==='Shift') mAttract=true; });
+addEventListener('keyup',e=>{ if(e.key==='Shift') mAttract=false; });
+
+function step(){
+  buildGrid();
+  const r2=perception*perception, sepR=perception*0.5, sepR2=sepR*sepR;
+  const halfW=worldW*0.5, halfH=worldH*0.5;
+  const mf2=maxForce*maxForce;
+  for(let i=0;i<n;i++){
+    const xi=px[i], yi=py[i], vxi=vx[i], vyi=vy[i];
+    let cx=(xi/cellW)|0, cy=(yi/cellH)|0;
+    if(cx<0)cx=0; else if(cx>=cols)cx=cols-1;
+    if(cy<0)cy=0; else if(cy>=rows)cy=rows-1;
+    // accumulators
+    let sepX=0, sepY=0;            // separation (away from close neighbors)
+    let aliX=0, aliY=0, aliN=0;    // alignment (avg velocity)
+    let cohX=0, cohY=0, cohN=0;    // cohesion (avg position)
+    for(let dy=-1;dy<=1;dy++){
+      let ny=cy+dy; if(ny<0)ny+=rows; else if(ny>=rows)ny-=rows;
+      for(let dx=-1;dx<=1;dx++){
+        let nx=cx+dx; if(nx<0)nx+=cols; else if(nx>=cols)nx-=cols;
+        let j=head[ny*cols+nx];
+        while(j!==-1){
+          if(j!==i){
+            let rx=px[j]-xi, ry=py[j]-yi;
+            if(rx>halfW)rx-=worldW; else if(rx<-halfW)rx+=worldW;
+            if(ry>halfH)ry-=worldH; else if(ry<-halfH)ry+=worldH;
+            const d2=rx*rx+ry*ry;
+            if(d2>0 && d2<r2){
+              // alignment + cohesion over full perception
+              aliX+=vx[j]; aliY+=vy[j]; aliN++;
+              cohX+=rx; cohY+=ry; cohN++;
+              // separation only for very close ones, weighted by inverse distance
+              if(d2<sepR2){ const inv=1/d2; sepX-=rx*inv; sepY-=ry*inv; }
+            }
+          }
+          j=next[j];
+        }
+      }
+    }
+    let ax=0, ay=0;
+    // separation steering
+    if(sepX!==0 || sepY!==0){
+      const m=Math.hypot(sepX,sepY);
+      const dx2=sepX/m*maxSpeed - vxi, dy2=sepY/m*maxSpeed - vyi;
+      ax+=clampF(dx2)*wSep; ay+=clampF(dy2)*wSep;
+    }
+    // alignment steering
+    if(aliN>0){
+      let avx=aliX/aliN, avy=aliY/aliN;
+      const m=Math.hypot(avx,avy);
+      if(m>0){ avx=avx/m*maxSpeed; avy=avy/m*maxSpeed;
+        ax+=clampF(avx-vxi)*wAli; ay+=clampF(avy-vyi)*wAli; }
+    }
+    // cohesion steering (cohX/cohY already relative to self)
+    if(cohN>0){
+      let cdx=cohX/cohN, cdy=cohY/cohN;
+      const m=Math.hypot(cdx,cdy);
+      if(m>0){ cdx=cdx/m*maxSpeed; cdy=cdy/m*maxSpeed;
+        ax+=clampF(cdx-vxi)*wCoh; ay+=clampF(cdy-vyi)*wCoh; }
+    }
+    // predator / attractor
+    if(mActive){
+      let rx=mx-xi, ry=my-yi;
+      if(rx>halfW)rx-=worldW; else if(rx<-halfW)rx+=worldW;
+      if(ry>halfH)ry-=worldH; else if(ry<-halfH)ry+=worldH;
+      const d2=rx*rx+ry*ry;
+      if(d2<predR2 && d2>0.01){
+        const d=Math.sqrt(d2), s=mAttract?1:-1;
+        const strength=(1-d/predR);
+        // strong panic steer, scaled; attractor is gentler
+        const k=(mAttract?0.6:2.4)*strength;
+        ax+=rx/d*maxSpeed*s*k; ay+=ry/d*maxSpeed*s*k;
+      }
+    }
+    // integrate velocity
+    let nvx=vxi+ax, nvy=vyi+ay;
+    // clamp speed
+    let sp2=nvx*nvx+nvy*nvy;
+    if(sp2>maxSpeed*maxSpeed){ const f=maxSpeed/Math.sqrt(sp2); nvx*=f; nvy*=f; }
+    else if(sp2<minSpeed*minSpeed && sp2>1e-6){ const f=minSpeed/Math.sqrt(sp2); nvx*=f; nvy*=f; }
+    vx[i]=nvx; vy[i]=nvy;
+  }
+  // integrate position + toroidal wrap
+  for(let i=0;i<n;i++){
+    let x=px[i]+vx[i], y=py[i]+vy[i];
+    if(x<0)x+=worldW; else if(x>=worldW)x-=worldW;
+    if(y<0)y+=worldH; else if(y>=worldH)y-=worldH;
+    px[i]=x; py[i]=y;
+  }
+}
+function clampF(v){ return v>maxForce?maxForce:(v<-maxForce?-maxForce:v); }
+
+// ---- draw ----
+function draw(){
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle=`rgba(10,11,15,${Math.max(0.05,1-persistence)})`;
+  ctx.fillRect(0,0,W,H);
+  ctx.globalCompositeOperation='lighter';
+  const size=3.0*DPR, predActive=mActive;
+  for(let i=0;i<n;i++){
+    const vxi=vx[i], vyi=vy[i];
+    const ang=Math.atan2(vyi,vxi);
+    const sp=Math.hypot(vxi,vyi);
+    // hue from heading; lightness gently from speed
+    let hue=((ang/(Math.PI*2))*360+200)%360; if(hue<0)hue+=360;
+    const light=42+Math.min(28,(sp/maxSpeed)*30);
+    ctx.fillStyle=`hsl(${hue|0} 80% ${light|0}%)`;
+    const x=px[i]*DPR, y=py[i]*DPR;
+    const ca=Math.cos(ang), sa=Math.sin(ang);
+    // oriented arrowhead triangle
+    const tx=x+ca*size*2, ty=y+sa*size*2;       // nose
+    const bx=x-ca*size, by=y-sa*size;            // tail center
+    const lx=bx-sa*size*0.9, ly=by+ca*size*0.9;  // left wing
+    const rx=bx+sa*size*0.9, ry=by-ca*size*0.9;  // right wing
+    ctx.beginPath();
+    ctx.moveTo(tx,ty); ctx.lineTo(lx,ly); ctx.lineTo(rx,ry);
+    ctx.closePath(); ctx.fill();
+  }
+  // predator marker
+  if(predActive){
+    ctx.globalCompositeOperation='source-over';
+    ctx.beginPath();
+    ctx.arc(mx*DPR,my*DPR,6*DPR,0,Math.PI*2);
+    ctx.fillStyle = mAttract ? 'rgba(143,183,255,.85)' : 'rgba(255,120,120,.85)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(mx*DPR,my*DPR,predR*DPR,0,Math.PI*2);
+    ctx.strokeStyle = mAttract ? 'rgba(143,183,255,.15)' : 'rgba(255,120,120,.15)';
+    ctx.lineWidth=1.5*DPR; ctx.stroke();
+  }
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){ step(); draw(); }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${n} boids · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ set(parseFloat(s.value)); v.textContent=fmt(parseFloat(s.value)); }; }
+bind('sN','vN',x=>x|0,x=>{ n=x|0; init(); });
+bind('sP','vP',x=>x|0,x=>{ perception=x; });
+bind('sS','vS',x=>x.toFixed(2),x=>{ wSep=x; });
+bind('sA','vA',x=>x.toFixed(2),x=>{ wAli=x; });
+bind('sCo','vCo',x=>x.toFixed(2),x=>{ wCoh=x; });
+bind('sMx','vMx',x=>x.toFixed(1),x=>{ maxSpeed=x; });
+bind('sT','vT',x=>x.toFixed(2),x=>{ persistence=x; });
+$('reseed').onclick=()=>init();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='boids.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')init();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+resize(); init();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Physarum — Strange Garden</title>
+<style>
+  :root { --accent: #f5a623; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Physarum</h1>
+  <p class="desc">A million tiny appetites tracing chemical roads — and a slime
+    mould remembers the shape of the world.</p>
+  <label>Agents <b id="vN">120k</b></label>
+  <input type="range" id="sN" min="20000" max="400000" step="10000" value="120000">
+  <label>Sensor angle <b id="vSA">22°</b></label>
+  <input type="range" id="sSA" min="5" max="80" step="1" value="22">
+  <label>Sensor distance <b id="vSD">12</b></label>
+  <input type="range" id="sSD" min="3" max="40" step="1" value="12">
+  <label>Turn angle <b id="vTA">28°</b></label>
+  <input type="range" id="sTA" min="2" max="80" step="1" value="28">
+  <label>Deposit <b id="vDE">1.0</b></label>
+  <input type="range" id="sDE" min="0.2" max="3" step="0.1" value="1.0">
+  <label>Decay <b id="vDC">0.92</b></label>
+  <input type="range" id="sDC" min="0.75" max="0.99" step="0.005" value="0.92">
+  <label>Diffusion <b id="vDF">0.70</b></label>
+  <input type="range" id="sDF" min="0" max="1" step="0.05" value="0.70">
+  <div class="row"><button id="palette" class="pri">Palette</button><button id="reseed">Reseed</button></div>
+  <div class="row"><button id="pause">Pause</button><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">drag to attract · p palette · h hides panel</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+
+// ---- parameters ----
+let n=120000;
+let sensorAngle=22*Math.PI/180;   // radians
+let sensorDist=12;                 // pixels (in sim space)
+let turnAngle=28*Math.PI/180;     // radians
+let deposit=1.0;
+let decay=0.92;
+let diffuse=0.70;                  // 0..1 blend of box-blur
+const stepSize=1.0;               // pixels per step (sim space)
+
+// ---- sim grid (downscaled for perf) ----
+const SCALE=0.75;
+let GW,GH;                         // grid dimensions
+let trail, tmp;                    // Float32Array trail + blur scratch
+let img, imgData;                  // ImageData for the sim grid
+let off, offctx;                   // offscreen canvas (grid sized) for upscale
+
+// ---- agents ----
+let ax, ay, ah;                    // Float32Array x, y, heading
+
+let W,H,DPR,worldW,worldH;
+
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  worldW=innerWidth; worldH=innerHeight;
+  W=cv.width=Math.floor(worldW*DPR); H=cv.height=Math.floor(worldH*DPR);
+  cv.style.width=worldW+'px'; cv.style.height=worldH+'px';
+  GW=Math.max(8,Math.floor(worldW*SCALE));
+  GH=Math.max(8,Math.floor(worldH*SCALE));
+  trail=new Float32Array(GW*GH);
+  tmp=new Float32Array(GW*GH);
+  off=document.createElement('canvas'); off.width=GW; off.height=GH;
+  offctx=off.getContext('2d');
+  img=offctx.createImageData(GW,GH);
+  imgData=img.data;
+  ctx.imageSmoothingEnabled=true;
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+  initAgents();
+}
+addEventListener('resize',resize);
+
+// ---- seeding: agents in a central disc, pointing random ----
+function initAgents(){
+  ax=new Float32Array(n); ay=new Float32Array(n); ah=new Float32Array(n);
+  const cx=GW*0.5, cy=GH*0.5;
+  const R=Math.min(GW,GH)*0.30;
+  for(let i=0;i<n;i++){
+    // uniform in disc
+    const r=R*Math.sqrt(Math.random());
+    const t=Math.random()*Math.PI*2;
+    ax[i]=cx+Math.cos(t)*r;
+    ay[i]=cy+Math.sin(t)*r;
+    ah[i]=Math.random()*Math.PI*2;
+  }
+  if(trail) trail.fill(0);
+}
+function init(){ initAgents(); }
+
+// ---- palettes: stop arrays [t, r,g,b] mapped over intensity 0..1 ----
+const PALETTES=[
+  { name:'ember', accent:'#f5a623', stops:[
+    [0.00,  4,  2,  8],
+    [0.22, 60,  6, 50],
+    [0.48,170, 38, 38],
+    [0.74,245,140, 40],
+    [1.00,255,242,196] ] },
+  { name:'aurora', accent:'#5cf0c2', stops:[
+    [0.00,  2,  6,  8],
+    [0.25, 14, 60, 70],
+    [0.52, 30,150,140],
+    [0.78,120,240,190],
+    [1.00,228,255,238] ] },
+  { name:'violet', accent:'#b07cff', stops:[
+    [0.00,  5,  3, 12],
+    [0.24, 46, 18, 88],
+    [0.50,120, 50,190],
+    [0.76,200,120,250],
+    [1.00,246,232,255] ] },
+  { name:'gold', accent:'#ffd36b', stops:[
+    [0.00,  6,  5,  3],
+    [0.26, 70, 40, 10],
+    [0.54,170,110, 24],
+    [0.80,240,190, 70],
+    [1.00,255,248,214] ] },
+];
+let paletteIdx=0;
+// precomputed 256-entry LUT (r,g,b)
+const lutR=new Uint8Array(256), lutG=new Uint8Array(256), lutB=new Uint8Array(256);
+function buildLUT(){
+  const stops=PALETTES[paletteIdx].stops;
+  for(let i=0;i<256;i++){
+    const t=i/255;
+    let a=stops[0], b=stops[stops.length-1];
+    for(let s=0;s<stops.length-1;s++){
+      if(t>=stops[s][0] && t<=stops[s+1][0]){ a=stops[s]; b=stops[s+1]; break; }
+    }
+    const span=(b[0]-a[0])||1, f=(t-a[0])/span;
+    lutR[i]=(a[1]+(b[1]-a[1])*f)|0;
+    lutG[i]=(a[2]+(b[2]-a[2])*f)|0;
+    lutB[i]=(a[3]+(b[3]-a[3])*f)|0;
+  }
+  document.documentElement.style.setProperty('--accent', PALETTES[paletteIdx].accent);
+}
+
+// ---- sensing ----
+function senseAt(x,y){
+  // wrap into grid, nearest cell
+  let ix=x|0, iy=y|0;
+  ix=((ix%GW)+GW)%GW;
+  iy=((iy%GH)+GH)%GH;
+  return trail[iy*GW+ix];
+}
+
+// ---- step: agent update + deposit + diffuse + decay ----
+let mDown=false, mxg=0, myg=0;  // mouse in grid space
+
+function step(dt){
+  const sa=sensorAngle, ta=turnAngle, sd=sensorDist;
+  const dep=deposit;
+  for(let i=0;i<n;i++){
+    const x=ax[i], y=ay[i], h=ah[i];
+    // sample 3 sensors
+    const fx=x+Math.cos(h)*sd,           fy=y+Math.sin(h)*sd;
+    const lx=x+Math.cos(h-sa)*sd,        ly=y+Math.sin(h-sa)*sd;
+    const rx=x+Math.cos(h+sa)*sd,        ry=y+Math.sin(h+sa)*sd;
+    const cf=senseAt(fx,fy);
+    const cl=senseAt(lx,ly);
+    const cr=senseAt(rx,ry);
+    let nh=h;
+    if(cf>cl && cf>cr){
+      // straight
+    } else if(cf<cl && cf<cr){
+      // both sides better: random turn
+      nh += (Math.random()<0.5?-ta:ta);
+    } else if(cl>cr){
+      nh -= ta;
+    } else if(cr>cl){
+      nh += ta;
+    }
+    // move
+    let nx=x+Math.cos(nh)*stepSize;
+    let ny=y+Math.sin(nh)*stepSize;
+    // toroidal wrap
+    if(nx<0)nx+=GW; else if(nx>=GW)nx-=GW;
+    if(ny<0)ny+=GH; else if(ny>=GH)ny-=GH;
+    ax[i]=nx; ay[i]=ny; ah[i]=nh;
+    // deposit at new cell
+    const ci=((ny|0)*GW)+(nx|0);
+    trail[ci]+=dep;
+  }
+
+  // mouse attraction: nudge nearby agents toward cursor
+  if(mDown){
+    const R=Math.max(GW,GH)*0.12, R2=R*R;
+    for(let i=0;i<n;i++){
+      const dx=mxg-ax[i], dy=myg-ay[i];
+      const d2=dx*dx+dy*dy;
+      if(d2<R2 && d2>0.0001){
+        const target=Math.atan2(dy,dx);
+        // steer heading toward target a little
+        let diff=target-ah[i];
+        while(diff>Math.PI)diff-=Math.PI*2;
+        while(diff<-Math.PI)diff+=Math.PI*2;
+        ah[i]+=diff*0.25;
+      }
+    }
+  }
+
+  diffuseAndDecay();
+}
+
+// separable 3x3 box blur blended by `diffuse`, then *decay
+function diffuseAndDecay(){
+  const w=GW, h=GH;
+  if(diffuse<=0.001){
+    for(let k=0;k<trail.length;k++) trail[k]*=decay;
+    return;
+  }
+  // horizontal pass: trail -> tmp
+  for(let y=0;y<h;y++){
+    const row=y*w;
+    for(let x=0;x<w;x++){
+      const xm=x===0?w-1:x-1;
+      const xp=x===w-1?0:x+1;
+      tmp[row+x]=(trail[row+xm]+trail[row+x]+trail[row+xp])*0.3333333;
+    }
+  }
+  // vertical pass: tmp -> trail, blended + decay
+  const inv=1-diffuse, dc=decay, d3=diffuse;
+  for(let y=0;y<h;y++){
+    const ym=(y===0?h-1:y-1)*w;
+    const yp=(y===h-1?0:y+1)*w;
+    const row=y*w;
+    for(let x=0;x<w;x++){
+      const blurred=(tmp[ym+x]+tmp[row+x]+tmp[yp+x])*0.3333333;
+      const orig=trail[row+x];
+      trail[row+x]=(orig*inv + blurred*d3)*dc;
+    }
+  }
+}
+
+// ---- draw: map trail through LUT into ImageData, upscale to canvas ----
+const GAIN=42;   // intensity -> 0..255 scaling
+function draw(){
+  const d=imgData, t=trail, len=t.length;
+  let p=0;
+  for(let i=0;i<len;i++){
+    let v=t[i]*GAIN;
+    if(v>255)v=255;
+    const idx=v|0;
+    d[p]=lutR[idx]; d[p+1]=lutG[idx]; d[p+2]=lutB[idx]; d[p+3]=255;
+    p+=4;
+  }
+  offctx.putImageData(img,0,0);
+  // upscale grid -> full canvas
+  ctx.drawImage(off,0,0,GW,GH,0,0,W,H);
+}
+
+// ---- mouse ----
+cv.addEventListener('pointerdown',e=>{mDown=true; updateMouse(e);});
+addEventListener('pointermove',e=>{ if(mDown) updateMouse(e); });
+addEventListener('pointerup',()=>mDown=false);
+function updateMouse(e){
+  mxg=(e.clientX/worldW)*GW;
+  myg=(e.clientY/worldH)*GH;
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){ step(dt); draw(); }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${(n/1000)|0}k agents · ${GW}×${GH} · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); }; }
+bind('sN','vN',x=>((x/1000)|0)+'k',x=>{ n=x|0; initAgents(); });
+bind('sSA','vSA',x=>x+'°',x=>{ sensorAngle=x*Math.PI/180; });
+bind('sSD','vSD',x=>x|0,x=>{ sensorDist=x; });
+bind('sTA','vTA',x=>x+'°',x=>{ turnAngle=x*Math.PI/180; });
+bind('sDE','vDE',x=>x.toFixed(1),x=>{ deposit=x; });
+bind('sDC','vDC',x=>x.toFixed(3),x=>{ decay=x; });
+bind('sDF','vDF',x=>x.toFixed(2),x=>{ diffuse=x; });
+$('palette').onclick=()=>{ paletteIdx=(paletteIdx+1)%PALETTES.length; buildLUT(); };
+$('reseed').onclick=()=>init();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='physarum.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')init();
+  else if(e.key==='p'){ paletteIdx=(paletteIdx+1)%PALETTES.length; buildLUT(); }
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+buildLUT();
+resize();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
