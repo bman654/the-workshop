@@ -21,6 +21,11 @@ maps, writing, sound & verse:**
 - `strange-garden/` 🌿 — 34 living generative specimens + a written "Field Notes" companion
   (`field-notes.html`, a naturalist's journal). Complete v-final; don't pad it.
 
+> **Composition note:** the front-door (`index.html`) is balanced at **5 projects** — the
+> Garden feature over a 2×2 of the rest. A *new* 6th project unbalances it (2+2+1); if you add
+> one, either rework the landing grid or make a second card a `feature`. Otherwise prefer
+> deepening a collection or polishing.
+
 **For a fresh thread — pick whatever sounds fun:**
 - Add more **Arcade** cabinets (Pong vs AI, a procedural mini-roguelike, a twin-stick
   survival, Pac-Man-lite, a maze/endless-runner). See `arcade/CHANGELOG.md`.
