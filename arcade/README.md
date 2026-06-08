@@ -15,8 +15,12 @@ Open **`index.html`** (the cabinet rack) and pick a game, or open any `games/*.h
 | Game | What it is |
 |---|---|
 | **Asteroids** | Neon-vector survival — thrust, wrap, split the rocks, dodge the saucer. |
+| **Breakout** | Smash neon bricks, chain combos, catch power-ups (multiball, lasers, sticky…). |
+| **Snake** | Glide a glowing serpent — buffered turns, combos, walls-or-wrap toggle. |
+| **Tetris** | Modern stack-'em — 7-bag, SRS wall-kicks, ghost, hold, next, back-to-back. |
+| **Starfighter** | Galaga-style shmup — swooping waves, power-ups, smart-bombs, a boss. |
 
-*(more coming — see `CHANGELOG.md` / the manifest in `games.js`)*
+Every game has a `← arcade` link back to the rack. *(more cabinets may come — see `CHANGELOG.md`.)*
 
 ## Shared style & conventions
 

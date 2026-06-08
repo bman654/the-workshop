@@ -7,17 +7,20 @@ Each game is self-contained, zero-dependency, browser-play-tested. Reference sty
 
 ## Status
 
-- **Done (browser play-tested PASS, 60fps, clean consoles):**
+- **Done (browser play-tested PASS, 60fps, clean consoles) — 5 cabinets:**
   - asteroids.html ✅ — inertia/thrust/wrap, splitting rocks, saucer, hyperspace, full juice
   - breakout.html ✅ — 6 power-ups, combos, multiball, swept collision, procedural levels
   - snake.html ✅ — smooth gliding ribbon, buffered turns, combos, walls/wrap toggle
-- **Gallery:** index.html (neon "cabinet rack"), games.js manifest (3), README ✅
+  - tetris.html ✅ — 7-bag, SRS+wall-kicks, ghost, hold, next, B2B/combo, level gravity
+  - starfighter.html ✅ — Galaga-style waves, divers/turrets, WARLORD boss, power-ups, bombs
+- **Nav:** every game has a click-only `← arcade` back-link (NO key binding — games use keys).
+- **Gallery:** index.html (neon "cabinet rack"), games.js manifest (5), README ✅
 
 ## Next up
-- Add a `← arcade` back-link to each game (click-only — games USE the arrow keys, so NO
-  key-bound nav); verify the rack renders all 3 cabinets.
-- More cabinet ideas: Tetris, Pong (vs AI), a twin-stick/space shooter, Missile Command,
-  2048, Flappy/one-button, a procedural mini-roguelike, Pac-Man-lite.
+- Optional more cabinets: Pong (vs AI), Missile Command, 2048, Flappy/one-button, a
+  procedural mini-roguelike, Pac-Man-lite, a twin-stick shooter.
+- 5 is a well-rounded starter rack (shooter / paddle / snake / falling-block / shmup) —
+  a fine checkpoint.
 
 ## Log
 - 2026-06-08 — Started Arcade. Built juicy Asteroids (subagent, play-tested). Scaffolded

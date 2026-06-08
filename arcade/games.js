@@ -19,5 +19,17 @@ window.GAMES = [
     name: "Snake",
     blurb: "glide a glowing neon serpent, grow, survive",
     accent: "#39ff9e"
+  },
+  {
+    file: "starfighter.html",
+    name: "Starfighter",
+    blurb: "neon shmup — blast waves, grab power-ups, kill bosses",
+    accent: "#ff2e88"
+  },
+  {
+    file: "tetris.html",
+    name: "Tetris",
+    blurb: "stack neon blocks, clear lines, chase the tetris",
+    accent: "#37d6ff"
   }
 ];
