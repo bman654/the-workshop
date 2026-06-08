@@ -7,7 +7,7 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 > **Resume protocol:** read this top section, then continue from "Next up". Commit + update
 > here after every piece.
 
-## Status — 18 specimens, all browser-verified PASS (60fps unless noted), clean consoles
+## Status — 20 specimens (v1 🎉), all browser-verified PASS (60fps unless noted), clean consoles
 
 | # | file | system | notes |
 |---|------|--------|-------|
@@ -29,6 +29,8 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 | 16 | truchet.html | Truchet | multi-scale Truchet tiles; 4 styles; flowing dash-current animation |
 | 17 | mandelbrot.html | Mandelbrot | WebGL deep-zoom to ~5e5×; 8 famous targets; auto-iterations |
 | 18 | double-pendulum.html | Double Pendulum | RK4 array; converge→diverge→reseed chaos fan |
+| 19 | wfc.html | Wave Function Collapse | full propagating WFC; 3 tilesets; animated crystallization |
+| 20 | lorenz.html | Lorenz | RK4 3D butterfly; 4 diverging trajectories; rotating camera |
 
 - gallery `index.html` + `pieces.js` (9 entries) verified: all cards + thumbnails render, clean console.
 - thumbnails in `assets/thumbs/`; `assets/gallery-preview.png` is a full-page gallery shot.
@@ -62,4 +64,6 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
   double-slit). Named sessions; deputies returned manifests, orchestrator registered them.
   15 specimens total.
 - 2026-06-08 — Wave 6: truchet (multi-scale tiling), mandelbrot (WebGL deep-zoom),
-  double-pendulum (RK4 chaos array). 18 specimens total. Gallery verified at 15 (16-18 pending verify).
+  double-pendulum (RK4 chaos array). 18 specimens total.
+- 2026-06-08 — Wave 7: wfc (full propagating Wave Function Collapse), lorenz (3D butterfly).
+  **20 specimens — v1 complete.** Final gallery verify + preview next.

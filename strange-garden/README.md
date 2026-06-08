@@ -35,6 +35,8 @@ file with **zero dependencies and no build step**.
 | 16 | **Truchet** | Broken arcs, randomly turned, conspire into endless multi-scale labyrinths. |
 | 17 | **Mandelbrot** | An endless fall into the set's blooming coastline, magnifying past 500,000×. |
 | 18 | **Double Pendulum** | Hundreds start as one; a breath of difference blooms them into chaos. |
+| 19 | **Wave Function Collapse** | Constraints ripple outward as cells of doubt resolve into a coherent tiling. |
+| 20 | **Lorenz** | The 3D butterfly — a weather model dreaming the same strange orbit forever. |
 
 ## Controls (shared by every specimen)
 

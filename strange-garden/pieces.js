@@ -109,5 +109,17 @@ window.PIECES = [
     name: "Double Pendulum",
     blurb: "one breath of difference blooms into chaos",
     accent: "#ff5d73"
+  },
+  {
+    file: "wfc.html",
+    name: "Wave Function Collapse",
+    blurb: "certainty ripples outward; doubt resolves into pattern",
+    accent: "#8fb8ff"
+  },
+  {
+    file: "lorenz.html",
+    name: "Lorenz",
+    blurb: "a weather model dreaming the same butterfly forever",
+    accent: "#5cc8f6"
   }
 ];

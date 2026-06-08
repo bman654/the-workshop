@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wave Function Collapse — Strange Garden</title>
+<style>
+  :root { --accent: #8fb8ff; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; margin:0; padding:5px 6px; font-size:12px; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:8px;
+    font-family:ui-monospace,Menlo,monospace; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.45; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Wave Function Collapse</h1>
+  <p class="desc">Every cell holds all possibilities at once. Observe one, and certainty
+    ripples outward — a coherent pattern crystallises from doubt.</p>
+  <label>Tileset <b id="vTS">Knots</b></label>
+  <select id="sTS">
+    <option value="knots">Knots</option>
+    <option value="circuit">Circuit</option>
+    <option value="curves">Truchet Curves</option>
+  </select>
+  <label>Grid <b id="vG">28</b></label>
+  <input type="range" id="sG" min="8" max="64" step="1" value="28">
+  <label>Speed <b id="vSp">6</b></label>
+  <input type="range" id="sSp" min="1" max="60" step="1" value="6">
+  <label>Palette <b id="vPal">Aurora</b></label>
+  <input type="range" id="sPal" min="0" max="5" step="1" value="0">
+  <div class="row"><button id="reseed" class="pri">Restart</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">space pause · r restart · h hide · s save</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+"use strict";
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR,worldW,worldH;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  worldW=innerWidth; worldH=innerHeight;
+  W=cv.width=Math.floor(worldW*DPR); H=cv.height=Math.floor(worldH*DPR);
+  cv.style.width=worldW+'px'; cv.style.height=worldH+'px';
+  if(TS){ layout(); buildAtlas(); fullRedraw(); }
+}
+addEventListener('resize',resize);
+
+// ===================== PALETTES =====================
+// each palette: { name, bg, dim (uncollapsed wash), ink[] (1-2 stroke colors), glow }
+const PALETTES=[
+  {name:'Aurora',  bg:'#0a0b0f', ink:['#8fb8ff','#7fe6c7'], node:'#cfe3ff', accent:'#8fb8ff'},
+  {name:'Ember',   bg:'#0d0907', ink:['#f6a45c','#ef6f6f'], node:'#ffd9b0', accent:'#f6a45c'},
+  {name:'Moss',    bg:'#080b09', ink:['#9fd66b','#5fc7a8'], node:'#dcf3c0', accent:'#9fd66b'},
+  {name:'Orchid',  bg:'#0c080f', ink:['#c79bff','#ff8fd0'], node:'#f0dcff', accent:'#c79bff'},
+  {name:'Mono',    bg:'#0a0a0c', ink:['#d7dbe6','#9aa0b2'], node:'#ffffff', accent:'#cfd4e0'},
+  {name:'Coral',   bg:'#0b0a0d', ink:['#5fd0e6','#ff9c7a'], node:'#dff6ff', accent:'#5fd0e6'},
+];
+let palIndex=0, PAL=PALETTES[0];
+
+// ===================== TILESETS =====================
+// A tile has 4 edge sockets [N,E,S,W]. Socket value is a small int "color".
+// Two adjacent tiles match iff the touching sockets are equal.
+// We define base tiles, then generate all distinct rotations.
+//
+// draw(g, s, pal) draws the tile into a [0..s]x[0..s] box.
+// Edge midpoints: N=(s/2,0) E=(s,s/2) S=(s/2,s) W=(0,s/2).
+
+// socket codes: 0 = blank/empty, 1 = connector (single channel)
+// circuit adds: 2 = wire variant (kept compatible by code equality)
+
+function rotSockets(sk){ // rotate sockets 90deg clockwise: new N=old W, etc.
+  return [sk[3],sk[0],sk[1],sk[2]];
+}
+function socketsEqual(a,b){ return a[0]===b[0]&&a[1]===b[1]&&a[2]===b[2]&&a[3]===b[3]; }
+
+// ---- generic geometry helpers used by draw fns (operate in unit box, scaled by s) ----
+function edgePt(dir,s){ // returns [x,y] midpoint of edge dir 0=N 1=E 2=S 3=W
+  const h=s/2;
+  return dir===0?[h,0]:dir===1?[s,h]:dir===2?[h,s]:[0,h];
+}
+
+// Build one tileset descriptor: returns { tiles:[{sockets, draw, weight}], name }.
+// Each base tile defines geometry in its CANONICAL orientation only; finalize() rotates
+// the canvas context per rotation so geometry and sockets always stay in sync. `sym` is
+// the rotational symmetry order (1 = all 4 rotations distinct, 2 = 180°-symmetric -> 2
+// distinct, 4 = fully symmetric -> 1). Set it to the tile's true symmetry so rotated
+// duplicates that would render identically are not added.
+function buildTileset(kind){
+  const base=[]; // {sockets, draw(g,s,pal), weight, sym}
+  if(kind==='knots' || kind==='circuit'){
+    const isCircuit=(kind==='circuit');
+    const lw=s=>Math.max(2,s*(isCircuit?0.11:0.14)); // line width fn
+    const setStroke=(g,s,pal,coli)=>{
+      g.lineWidth=lw(s); g.lineCap='round'; g.lineJoin='round';
+      g.strokeStyle=pal.ink[coli%pal.ink.length];
+    };
+    function drawNode(g,x,y,s,pal){
+      const r=s*0.09;
+      g.beginPath(); g.arc(x,y,r,0,7);
+      g.fillStyle=pal.node; g.fill();
+    }
+    function drawPads(g,s,pal,dirs){ // small square pads where wires meet edges
+      g.fillStyle=pal.ink[1];
+      const r=s*0.06;
+      for(const d of dirs){ const p=edgePt(d,s);
+        g.fillRect(p[0]-r,p[1]-r,r*2,r*2); }
+    }
+    // straight: connectors N-S (180° symmetric -> sym 2)
+    base.push({sockets:[1,0,1,0], weight:0.9, sym:2, draw:(g,s,pal)=>{
+      setStroke(g,s,pal,0);
+      g.beginPath(); g.moveTo(s/2,0); g.lineTo(s/2,s); g.stroke();
+      if(isCircuit) drawPads(g,s,pal,[0,2]);
+    }});
+    // curve: connectors N-E (no symmetry -> 4 rotations)
+    base.push({sockets:[1,1,0,0], weight:1.3, sym:1, draw:(g,s,pal)=>{
+      setStroke(g,s,pal,1);
+      g.beginPath();
+      if(isCircuit){ g.moveTo(s/2,0); g.lineTo(s/2,s/2); g.lineTo(s,s/2); }
+      else { g.arc(s,0,s/2,Math.PI/2,Math.PI); }
+      g.stroke();
+      if(isCircuit) drawPads(g,s,pal,[0,1]);
+    }});
+    // T-junction: connectors N-E-W (no symmetry -> 4 rotations)
+    base.push({sockets:[1,1,0,1], weight:0.5, sym:1, draw:(g,s,pal)=>{
+      setStroke(g,s,pal,0);
+      g.beginPath();
+      if(isCircuit){ g.moveTo(0,s/2); g.lineTo(s,s/2); g.moveTo(s/2,s/2); g.lineTo(s/2,0); }
+      else { g.moveTo(0,s/2); g.lineTo(s,s/2); g.moveTo(s/2,0); g.lineTo(s/2,s/2); }
+      g.stroke();
+      drawNode(g,s/2,s/2,s,pal);
+      if(isCircuit) drawPads(g,s,pal,[0,1,3]);
+    }});
+    // crossing (sym 4 -> single tile)
+    if(isCircuit){
+      base.push({sockets:[1,1,1,1], weight:0.35, sym:4, draw:(g,s,pal)=>{
+        setStroke(g,s,pal,0);
+        g.beginPath(); g.moveTo(s/2,0); g.lineTo(s/2,s); g.moveTo(0,s/2); g.lineTo(s,s/2); g.stroke();
+        drawNode(g,s/2,s/2,s,pal);
+        drawPads(g,s,pal,[0,1,2,3]);
+      }});
+    } else {
+      // knot crossing: over strand N-S, under strand W-E broken with a gap (sym 2: the two
+      // orientations swap which strand is on top -> distinct, so sym 2)
+      base.push({sockets:[1,1,1,1], weight:0.6, sym:2, draw:(g,s,pal)=>{
+        setStroke(g,s,pal,1);
+        g.beginPath(); g.moveTo(0,s/2); g.lineTo(s*0.36,s/2); g.stroke();
+        g.beginPath(); g.moveTo(s*0.64,s/2); g.lineTo(s,s/2); g.stroke();
+        setStroke(g,s,pal,0);
+        g.beginPath(); g.moveTo(s/2,0); g.lineTo(s/2,s); g.stroke();
+      }});
+    }
+    // blank tile (all empty, sym 4)
+    base.push({sockets:[0,0,0,0], weight:isCircuit?0.85:0.7, sym:4, draw:(g,s,pal)=>{
+      if(isCircuit){
+        g.fillStyle='rgba(255,255,255,0.045)';
+        g.beginPath(); g.arc(s/2,s/2,Math.max(1.2,s*0.05),0,7); g.fill();
+      }
+    }});
+    // dead-end / terminal: single connector to N, ends in a node (no symmetry -> 4)
+    base.push({sockets:[1,0,0,0], weight:isCircuit?0.5:0.32, sym:1, draw:(g,s,pal)=>{
+      setStroke(g,s,pal,0);
+      g.beginPath(); g.moveTo(s/2,0); g.lineTo(s/2,s*0.5); g.stroke();
+      drawNode(g,s/2,s*0.5,s,pal);
+      if(isCircuit) drawPads(g,s,pal,[0]);
+    }});
+    return finalize(base, kind==='circuit'?'Circuit':'Knots');
+  }
+  if(kind==='curves'){
+    // Truchet-style ribbons: every edge is a connector, so all tiles mate and curves form
+    // long flowing continuous loops. Geometry differs per rotation -> use real canvas
+    // rotation. Each tile connects edge midpoints with arcs/lines.
+    const lw=s=>Math.max(2,s*0.17);
+    const setStroke=(g,s,pal,coli)=>{ g.lineWidth=lw(s); g.lineCap='butt';
+      g.strokeStyle=pal.ink[coli%pal.ink.length]; };
+    // truchet arc tile: quarter-arc N-W and quarter-arc S-E. 180° symmetric -> sym 2,
+    // giving the two classic truchet orientations.
+    base.push({sockets:[1,1,1,1], weight:1.0, sym:2, draw:(g,s,pal)=>{
+      setStroke(g,s,pal,0);
+      g.beginPath(); g.arc(0,0,s/2,0,Math.PI/2); g.stroke();
+      setStroke(g,s,pal,1);
+      g.beginPath(); g.arc(s,s,s/2,Math.PI,Math.PI*1.5); g.stroke();
+    }});
+    // straight ribbons crossing N-S and W-E. sym 2.
+    base.push({sockets:[1,1,1,1], weight:0.45, sym:2, draw:(g,s,pal)=>{
+      setStroke(g,s,pal,0);
+      g.beginPath(); g.moveTo(s/2,0); g.lineTo(s/2,s); g.stroke();
+      setStroke(g,s,pal,1);
+      g.beginPath(); g.moveTo(0,s/2); g.lineTo(s,s/2); g.stroke();
+    }});
+    return finalize(base,'Truchet Curves');
+  }
+}
+
+// Expand base tiles into all distinct rotations -> flat tile list. Each entry stores a
+// rotation-aware draw(g,s,pal) that rotates the context before calling the base draw.
+function finalize(base, name){
+  const tiles=[];
+  for(const b of base){
+    const nrot = b.sym? (4/b.sym) : 4;
+    let sk=b.sockets.slice();
+    for(let r=0;r<nrot;r++){
+      const rot=r, bdraw=b.draw;
+      const draw=(g,s,pal)=>{
+        if(rot===0){ bdraw(g,s,pal); return; }
+        g.save();
+        g.translate(s/2,s/2); g.rotate(rot*Math.PI/2); g.translate(-s/2,-s/2);
+        bdraw(g,s,pal);
+        g.restore();
+      };
+      tiles.push({ sockets:sk.slice(), rot, draw, weight:b.weight });
+      sk=rotSockets(sk);
+    }
+  }
+  return { name, tiles };
+}
+
+// ===================== WFC CORE =====================
+let TS;            // current tileset {name, tiles}
+let NT=0;          // number of tiles
+let gridN=28;      // grid dimension (square count along smaller axis)
+let cols=0, rows=0;
+let cell=0;        // pixel size of a cell (CSS px)
+let ox=0, oy=0;    // origin offset (CSS px) to center grid
+// adjacency: compat[dir][a] = bitmask (BigInt-free: use Uint32 array of words) of tiles b
+//   that may sit in direction dir of tile a. dir: 0=N 1=E 2=S 3=W. Opposite = (dir+2)%4.
+let WORDS=0;       // number of 32-bit words per tile bitset
+let compat=null;   // Uint32Array[4 * NT * WORDS]
+// wave: for each cell, a bitset of possible tiles (Uint32Array length cols*rows*WORDS)
+let wave=null;
+let popcount=null; // Int16Array length cols*rows : number of remaining options
+let sumWeight=null;// Float64Array : sum of weights of remaining options (entropy aid)
+let collapsedTile=null; // Int32Array : -1 if not collapsed, else tile index
+let collapsedCount=0;
+let totalCells=0;
+let stack=null, sp=0; // worklist of cell indices needing propagation
+let weights=null;     // Float64Array NT
+let logWeights=null;
+let rng=mulberry32(Date.now()>>>0);
+let done=false, contradiction=false, retries=0, lifetimeRetries=0;
+let pauseTimer=0;     // frames to wait after completion before auto-restart
+
+// fast RNG
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0;
+  let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t;
+  return ((t^t>>>14)>>>0)/4294967296; }; }
+
+function setTile(bits,i,t){ bits[i*WORDS+(t>>5)] |= (1<<(t&31)); }
+function clearTile(bits,i,t){ bits[i*WORDS+(t>>5)] &= ~(1<<(t&31)); }
+function hasTile(bits,i,t){ return (bits[i*WORDS+(t>>5)] & (1<<(t&31)))!==0; }
+
+function buildAdjacency(){
+  NT=TS.tiles.length;
+  WORDS=(NT+31)>>5;
+  compat=new Uint32Array(4*NT*WORDS);
+  weights=new Float64Array(NT);
+  logWeights=new Float64Array(NT);
+  for(let a=0;a<NT;a++){
+    weights[a]=TS.tiles[a].weight;
+    logWeights[a]=weights[a]*Math.log(weights[a]);
+  }
+  // For each pair, each dir: a can have b on side dir iff a.sockets[dir]==b.sockets[opp]
+  for(let dir=0;dir<4;dir++){
+    const opp=(dir+2)%4;
+    for(let a=0;a<NT;a++){
+      const sa=TS.tiles[a].sockets[dir];
+      const baseIdx=(dir*NT+a)*WORDS;
+      for(let b=0;b<NT;b++){
+        if(TS.tiles[b].sockets[opp]===sa){
+          compat[baseIdx+(b>>5)] |= (1<<(b&31));
+        }
+      }
+    }
+  }
+}
+
+function layout(){
+  // choose cols/rows from gridN, fitting the viewport with square cells
+  const aspect=worldW/worldH;
+  if(aspect>=1){ rows=gridN; cols=Math.max(1,Math.round(gridN*aspect)); }
+  else { cols=gridN; rows=Math.max(1,Math.round(gridN/aspect)); }
+  cell=Math.min(worldW/cols, worldH/rows);
+  ox=(worldW-cols*cell)/2; oy=(worldH-rows*cell)/2;
+}
+
+function initWave(newSeed){
+  if(newSeed!==false) rng=mulberry32((Math.random()*4294967296)>>>0);
+  totalCells=cols*rows;
+  wave=new Uint32Array(totalCells*WORDS);
+  popcount=new Int16Array(totalCells);
+  sumWeight=new Float64Array(totalCells);
+  collapsedTile=new Int32Array(totalCells); collapsedTile.fill(-1);
+  stack=new Int32Array(totalCells*4+16); sp=0;
+  // full superposition everywhere
+  const full=new Uint32Array(WORDS);
+  for(let t=0;t<NT;t++) full[t>>5]|=(1<<(t&31));
+  // mask off unused high bits already handled (only set valid bits)
+  let sw=0; for(let t=0;t<NT;t++) sw+=weights[t];
+  for(let i=0;i<totalCells;i++){
+    for(let w=0;w<WORDS;w++) wave[i*WORDS+w]=full[w];
+    popcount[i]=NT; sumWeight[i]=sw;
+  }
+  collapsedCount=0; done=false; contradiction=false; pauseTimer=0;
+}
+
+function entropyAt(i){ return popcount[i]; } // option-count entropy (simple & robust)
+
+function pickLowestEntropyCell(){
+  let best=-1, bestE=1e9, bestCount=0;
+  for(let i=0;i<totalCells;i++){
+    const p=popcount[i];
+    if(p<=1) continue; // collapsed or contradiction already handled
+    const e=p; // could add weight-noise; keep deterministic-ish with tiny jitter
+    const ej=e + rng()*0.5;
+    if(ej<bestE){ bestE=ej; best=i; bestCount=1; }
+    else if(ej===bestE){ bestCount++; if(rng()<1/bestCount) best=i; }
+  }
+  return best;
+}
+
+function collapseCell(i){
+  // weighted random pick among remaining options
+  let total=0;
+  for(let t=0;t<NT;t++) if(hasTile(wave,i,t)) total+=weights[t];
+  let r=rng()*total, chosen=-1;
+  for(let t=0;t<NT;t++){ if(hasTile(wave,i,t)){ r-=weights[t]; if(r<=0){chosen=t;break;} } }
+  if(chosen<0){ for(let t=NT-1;t>=0;t--) if(hasTile(wave,i,t)){chosen=t;break;} }
+  // collapse: keep only chosen
+  for(let w=0;w<WORDS;w++) wave[i*WORDS+w]=0;
+  setTile(wave,i,chosen);
+  popcount[i]=1; sumWeight[i]=weights[chosen];
+  collapsedTile[i]=chosen; collapsedCount++;
+  stack[sp++]=i;
+}
+
+// propagate constraints from the worklist
+function propagate(){
+  while(sp>0){
+    const ci=stack[--sp];
+    const cx=ci%cols, cy=(ci/cols)|0;
+    for(let dir=0;dir<4;dir++){
+      let nx=cx, ny=cy;
+      if(dir===0)ny--; else if(dir===1)nx++; else if(dir===2)ny++; else nx--;
+      if(nx<0||ny<0||nx>=cols||ny>=rows) continue;
+      const ni=ny*cols+nx;
+      // allowed mask for ni = union over tiles still possible in ci of compat[dir][t].
+      // Intersect ni's current wave with that mask; if it shrinks, enqueue ni.
+      let changed=false;
+      for(let w=0;w<WORDS;w++){
+        const allowed=allowedUnionWord(ci,dir,w);
+        const idx=ni*WORDS+w;
+        const before=wave[idx];
+        const after=before & allowed;
+        if(after!==before){
+          wave[idx]=after; changed=true;
+        }
+      }
+      if(changed){
+        // recompute popcount & sumWeight for ni
+        let pc=0, sw=0;
+        for(let t=0;t<NT;t++) if(hasTile(wave,ni,t)){ pc++; sw+=weights[t]; }
+        popcount[ni]=pc; sumWeight[ni]=sw;
+        if(pc===0){ contradiction=true; sp=0; return; }
+        if(pc===1 && collapsedTile[ni]<0){
+          // became forced -> record as collapsed
+          let t0=-1; for(let t=0;t<NT;t++) if(hasTile(wave,ni,t)){t0=t;break;}
+          collapsedTile[ni]=t0; collapsedCount++;
+        }
+        stack[sp++]=ni;
+        if(sp>=stack.length-1){ // grow worklist if needed
+          const ns=new Int32Array(stack.length*2); ns.set(stack); stack=ns;
+        }
+      }
+    }
+  }
+}
+
+// compute, for cell ci, the union over its possible tiles of compat[dir][tile], word w
+function allowedUnionWord(ci,dir,w){
+  let allowed=0;
+  const dirBase=dir*NT*WORDS;
+  const base=ci*WORDS;
+  for(let ww=0; ww<WORDS; ww++){
+    let bits=wave[base+ww];
+    if(bits===0) continue;
+    const tBase=ww<<5;
+    while(bits){
+      const lsb=bits & (-bits);
+      const pos=31 - Math.clz32(lsb); // bit index 0..31 within this word
+      const t=tBase + pos;
+      allowed |= compat[dirBase + t*WORDS + w];
+      bits &= (bits-1);
+    }
+  }
+  return allowed;
+}
+
+// One observe+propagate step. Returns true if work was done.
+function wfcStep(){
+  if(done||contradiction) return false;
+  const i=pickLowestEntropyCell();
+  if(i<0){ done=true; return false; } // all collapsed
+  collapseCell(i);
+  propagate();
+  if(contradiction){ return false; }
+  if(collapsedCount>=totalCells) done=true;
+  return true;
+}
+
+// ===================== RENDERING =====================
+// We render to an offscreen tile-atlas (one canvas per tile) once per tileset/size/palette,
+// then blit collapsed cells. Uncollapsed cells get a faint superposition wash.
+let atlas=null, atlasS=0;
+function buildAtlas(){
+  atlasS=Math.max(8, Math.round(cell*DPR));
+  atlas=[];
+  for(let t=0;t<NT;t++){
+    const c=document.createElement('canvas'); c.width=c.height=atlasS;
+    const g=c.getContext('2d');
+    g.clearRect(0,0,atlasS,atlasS);
+    TS.tiles[t].draw(g, atlasS, PAL);
+    atlas.push(c);
+  }
+}
+
+let dirty=true;
+function fullRedraw(){ dirty=true; }
+
+function draw(){
+  // background
+  ctx.fillStyle=PAL.bg;
+  ctx.fillRect(0,0,W,H);
+  if(!atlas||atlasS!==Math.round(cell*DPR)) buildAtlas();
+  const cs=cell*DPR;
+  const offx=ox*DPR, offy=oy*DPR;
+  // 1) uncollapsed cells: faint superposition wash (brighter = more options resolved away)
+  ctx.save();
+  for(let i=0;i<totalCells;i++){
+    if(collapsedTile[i]>=0) continue;
+    const x=offx + (i%cols)*cs, y=offy + ((i/cols)|0)*cs;
+    const p=popcount[i];
+    // resolved fraction
+    const frac=NT>1 ? (1 - (p-1)/(NT-1)) : 1;
+    // dim bluish wash; tighter (more resolved) => slightly brighter
+    const a=0.04 + frac*0.10;
+    ctx.fillStyle=`rgba(140,160,210,${a.toFixed(3)})`;
+    ctx.fillRect(x+cs*0.18,y+cs*0.18,cs*0.64,cs*0.64);
+  }
+  ctx.restore();
+  // 2) collapsed cells: blit tile
+  for(let i=0;i<totalCells;i++){
+    const t=collapsedTile[i];
+    if(t<0) continue;
+    const x=offx + (i%cols)*cs, y=offy + ((i/cols)|0)*cs;
+    ctx.drawImage(atlas[t], x, y, cs, cs);
+  }
+  // 3) subtle grid frame
+  ctx.strokeStyle='rgba(255,255,255,0.05)';
+  ctx.lineWidth=1;
+  ctx.strokeRect(offx+0.5, offy+0.5, cols*cs-1, rows*cs-1);
+  dirty=false;
+}
+
+// ===================== DRIVER =====================
+let stepsPerFrame=6;
+const MAX_RETRY_BURST=200;
+function tick(){
+  if(done){
+    if(pauseTimer>0){ pauseTimer--; }
+    else { restart(true); }
+    return;
+  }
+  let steps=stepsPerFrame, guard=0;
+  while(steps>0 && !done && guard<10000){
+    guard++;
+    const ok=wfcStep();
+    if(contradiction){
+      retries++; lifetimeRetries++;
+      if(retries>MAX_RETRY_BURST){
+        console.warn('[WFC] many contradictions ('+retries+'), continuing with fresh seed');
+        retries=0;
+      }
+      initWave(true); // new seed, restart this attempt
+      continue;
+    }
+    if(ok) steps--;
+    if(!ok && !done) break;
+  }
+  if(done){ pauseTimer=90; retries=0; }
+}
+
+function restart(newSeed){
+  layout();
+  buildAtlas();
+  initWave(newSeed!==false);
+  done=false; contradiction=false;
+}
+
+function rebuildAll(newSeed){
+  TS=buildTileset(currentKind);
+  buildAdjacency();
+  layout();
+  buildAtlas();
+  initWave(newSeed!==false);
+}
+
+// ===================== LOOP =====================
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now;
+  if(!paused && !document.hidden){
+    tick();
+    draw();
+  }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  const pct = totalCells? (collapsedCount/totalCells*100):0;
+  hud.textContent=`${TS.name} · ${cols}×${rows} · ${pct.toFixed(0)}% · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ===================== CONTROLS =====================
+const $=id=>document.getElementById(id);
+let currentKind='knots';
+function applyPalette(){
+  PAL=PALETTES[palIndex];
+  document.documentElement.style.setProperty('--accent', PAL.accent);
+  $('vPal').textContent=PAL.name;
+  buildAtlas(); fullRedraw();
+}
+$('sTS').onchange=()=>{ currentKind=$('sTS').value;
+  $('vTS').textContent=$('sTS').selectedOptions[0].text; rebuildAll(true); };
+$('sG').oninput=()=>{ gridN=parseInt($('sG').value); $('vG').textContent=gridN;
+  restart(true); };
+$('sSp').oninput=()=>{ stepsPerFrame=parseInt($('sSp').value); $('vSp').textContent=stepsPerFrame; };
+$('sPal').oninput=()=>{ palIndex=parseInt($('sPal').value)%PALETTES.length; applyPalette(); };
+$('reseed').onclick=()=>restart(true);
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='wave-function-collapse.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')restart(true);
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ===================== GO =====================
+resize();
+rebuildAll(true);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

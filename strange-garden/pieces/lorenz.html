@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lorenz — Strange Garden</title>
+<style>
+  :root { --accent: #5cc8f6; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:grab; }
+  #c.drag { cursor:grabbing; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Lorenz</h1>
+  <p class="desc">A weather model that never repeats. Two wings of a strange butterfly,
+    forever traced and never the same.</p>
+  <label>Rayleigh ρ <b id="vRho">28.0</b></label>
+  <input type="range" id="sRho" min="1" max="120" step="0.5" value="28">
+  <label>Prandtl σ <b id="vSig">10.0</b></label>
+  <input type="range" id="sSig" min="1" max="30" step="0.5" value="10">
+  <label>β <b id="vBeta">2.67</b></label>
+  <input type="range" id="sBeta" min="0.2" max="6" step="0.05" value="2.667">
+  <label>Rotation <b id="vRot">0.18</b></label>
+  <input type="range" id="sRot" min="-0.8" max="0.8" step="0.02" value="0.18">
+  <label>Trail persistence <b id="vTrail">0.90</b></label>
+  <input type="range" id="sTrail" min="0.5" max="0.985" step="0.005" value="0.90">
+  <label>Speed <b id="vSpd">8</b></label>
+  <input type="range" id="sSpd" min="1" max="30" step="1" value="8">
+  <label>Trajectories <b id="vTraj">4</b></label>
+  <input type="range" id="sTraj" min="1" max="8" step="1" value="4">
+  <label>Palette <b id="vPal">depth</b></label>
+  <input type="range" id="sPal" min="0" max="3" step="1" value="0">
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">drag to orbit · space pause · r reseed · h hides panel · s saves</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  W=cv.width=Math.floor(innerWidth*DPR); H=cv.height=Math.floor(innerHeight*DPR);
+  cv.style.width=innerWidth+'px'; cv.style.height=innerHeight+'px';
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+}
+addEventListener('resize',resize);
+
+// ---- parameters ----
+let sigma=10, rho=28, beta=8/3;
+let rotSpeed=0.18, persistence=0.90, stepsPerFrame=8, nTraj=4, palette=0;
+const DT=0.005;            // RK4 timestep
+const TRAIL=2600;          // points kept per trajectory (ring buffer) — long enough to show both wings
+// camera: attractor centred at origin, viewer sits at -CAM_DIST along view axis.
+const FOCAL=2.4;           // perspective focal length (world units, in attractor scale)
+const CAM_DIST=6.0;        // viewer distance from centre (in attractor scale, ~radius 1)
+const Z_CENTER=25;         // attractor z sits ~0..50; recentre vertically
+const NORM=22;             // half-extent of attractor -> normalise world to ~[-1,1]
+let camYaw=0;              // auto-rotation accumulator
+let dragYaw=0;             // user orbit yaw offset
+let pitch=0.30;            // camera pitch (look slightly down)
+
+// ---- trajectory state (typed ring buffers, no per-frame alloc) ----
+// per trajectory: current x,y,z + ring buffer of past world coords + write head
+let trajX, trajY, trajZ;          // ring buffers, length nTraj*TRAIL
+let curX, curY, curZ;             // current positions, length nTraj
+let head, filled;                 // ring write index & fill count per traj
+let hueBase;                      // base hue per trajectory
+
+// palettes return [r,g,b] given t in [0,1]
+const PALETTES=[
+  // 0: depth / ice — teal->blue->violet
+  t=>{ const h=200-60*t, s=70+20*t, l=42+26*(1-Math.abs(2*t-1));
+       return hsl(h,s,l); },
+  // 1: fire — amber->red->magenta
+  t=>{ const h=45-65*t, s=85, l=44+22*(1-Math.abs(2*t-1));
+       return hsl((h+360)%360,s,l); },
+  // 2: aurora — green->cyan->violet
+  t=>{ const h=130+150*t, s=72, l=42+24*(1-Math.abs(2*t-1));
+       return hsl(h,s,l); },
+  // 3: mono accent glow
+  t=>{ const h=198, s=80-40*t, l=38+30*(1-Math.abs(2*t-1));
+       return hsl(h,s,l); }
+];
+const PAL_NAMES=['depth','fire','aurora','mono'];
+
+function hsl(h,s,l){
+  // hsl -> rgb (0..255)
+  h=((h%360)+360)%360; s/=100; l/=100;
+  const c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((h/60)%2-1)), m=l-c/2;
+  let r,g,b;
+  if(h<60){r=c;g=x;b=0;} else if(h<120){r=x;g=c;b=0;}
+  else if(h<180){r=0;g=c;b=x;} else if(h<240){r=0;g=x;b=c;}
+  else if(h<300){r=x;g=0;b=c;} else {r=c;g=0;b=x;}
+  return [(r+m)*255,(g+m)*255,(b+m)*255];
+}
+
+function deriv(x,y,z,o){
+  o[0]=sigma*(y-x);
+  o[1]=x*(rho-z)-y;
+  o[2]=x*y-beta*z;
+}
+const k1=[0,0,0],k2=[0,0,0],k3=[0,0,0],k4=[0,0,0];
+function rk4(i){
+  let x=curX[i], y=curY[i], z=curZ[i];
+  deriv(x,y,z,k1);
+  deriv(x+0.5*DT*k1[0], y+0.5*DT*k1[1], z+0.5*DT*k1[2], k2);
+  deriv(x+0.5*DT*k2[0], y+0.5*DT*k2[1], z+0.5*DT*k2[2], k3);
+  deriv(x+DT*k3[0], y+DT*k3[1], z+DT*k3[2], k4);
+  curX[i]=x+DT/6*(k1[0]+2*k2[0]+2*k3[0]+k4[0]);
+  curY[i]=y+DT/6*(k1[1]+2*k2[1]+2*k3[1]+k4[1]);
+  curZ[i]=z+DT/6*(k1[2]+2*k2[2]+2*k3[2]+k4[2]);
+}
+
+function init(){
+  const N=nTraj;
+  trajX=new Float32Array(N*TRAIL);
+  trajY=new Float32Array(N*TRAIL);
+  trajZ=new Float32Array(N*TRAIL);
+  curX=new Float32Array(N); curY=new Float32Array(N); curZ=new Float32Array(N);
+  head=new Int32Array(N); filled=new Int32Array(N);
+  hueBase=new Float32Array(N);
+  for(let i=0;i<N;i++){
+    // nearby starts -> sensitive dependence -> they diverge across the wings
+    curX[i]=0.5 + (Math.random()-0.5)*0.02 + i*1e-3;
+    curY[i]=0.5 + (Math.random()-0.5)*0.02;
+    curZ[i]=1.05 + (Math.random()-0.5)*0.02;
+    head[i]=0; filled[i]=0;
+    hueBase[i]=Math.random();
+    // prime the ring so a full butterfly (both wings) appears immediately
+    for(let s=0;s<TRAIL;s++){ rk4(i); pushPoint(i); }
+  }
+}
+function pushPoint(i){
+  const b=i*TRAIL, h=head[i];
+  trajX[b+h]=curX[i]; trajY[b+h]=curY[i]; trajZ[b+h]=curZ[i];
+  head[i]=(h+1)%TRAIL;
+  if(filled[i]<TRAIL) filled[i]++;
+}
+
+function step(dt){
+  camYaw += rotSpeed*dt;
+  const steps=stepsPerFrame;
+  for(let i=0;i<nTraj;i++){
+    let runaway=false;
+    for(let s=0;s<steps;s++){
+      rk4(i);
+      if(!isFinite(curX[i])||Math.abs(curX[i])>1e4){ runaway=true; break; }
+      pushPoint(i);
+    }
+    if(runaway){ // numerical blow-up safety: reseed this trajectory
+      curX[i]=0.5+(Math.random()-0.5)*0.02; curY[i]=0.5; curZ[i]=1.05;
+      head[i]=0; filled[i]=0;
+    }
+  }
+}
+
+// project a normalised world point through the camera into screen px.
+// returns into scratch [sx, sy, dn, scl] where dn=0 near..1 far, scl=perspective factor
+const cam={cy:1,sy:0,cp:1,sp:0,cx:0,cy0:0,fit:1,zc:Z_CENTER,inorm:1/NORM};
+const proj=[0,0,0,0];
+function project(wx,wy,wz){
+  // normalise (attractor span scales with rho); z is the "vertical wing" axis.
+  const nx=wx*cam.inorm, ny=wy*cam.inorm, nz=(wz-cam.zc)*cam.inorm;
+  // rotate about vertical (nz) axis -> spins the two wings
+  const rx=nx*cam.cy - ny*cam.sy;
+  const ry=nx*cam.sy + ny*cam.cy;
+  // pitch about horizontal axis (tilt so we look slightly down on it)
+  const ty=ry*cam.cp - nz*cam.sp;   // along view direction (depth)
+  const tz=ry*cam.sp + nz*cam.cp;   // screen-up
+  // perspective: viewer at -CAM_DIST looking +ty
+  const depth=CAM_DIST + ty;        // always positive (ty in ~[-1,1], CAM_DIST=6)
+  const f=FOCAL/depth;
+  proj[0]=cam.cx + rx*f*cam.fit;
+  proj[1]=cam.cy0 - tz*f*cam.fit;
+  proj[2]=Math.min(1,Math.max(0,(depth-(CAM_DIST-1))/2)); // near->far normalised
+  proj[3]=f;
+  return proj;
+}
+
+function draw(){
+  // persistence fade
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle=`rgba(10,11,15,${(1-persistence).toFixed(4)})`;
+  ctx.fillRect(0,0,W,H);
+  ctx.globalCompositeOperation='lighter';
+  ctx.lineCap='round';
+
+  const yaw=camYaw+dragYaw;
+  cam.cy=Math.cos(yaw); cam.sy=Math.sin(yaw);
+  cam.cp=Math.cos(pitch); cam.sp=Math.sin(pitch);
+  cam.cx=W*0.5; cam.cy0=H*0.5;
+  // attractor size & vertical centre grow with rho; adapt so it stays framed across the range.
+  const lobeR=Math.sqrt(beta*Math.max(rho-1,1));   // horizontal lobe radius ~ fixed-point distance
+  cam.inorm=1/(NORM*lobeR/Math.sqrt(8*(28-1)));    // NORM tuned for rho~28; scale relative to that
+  cam.zc=(rho-1)*0.94 + 1;                          // vertical centre tracks z ~ rho-1
+  cam.fit=Math.min(W,H)*0.42;
+
+  for(let i=0;i<nTraj;i++){
+    const cnt=filled[i]; if(cnt<2) continue;
+    const b=i*TRAIL, h=head[i];
+    let px=0,py=0,have=false;
+    for(let s=0;s<cnt;s++){
+      const idx=(h - cnt + s + TRAIL*2)%TRAIL;
+      const p=project(trajX[b+idx], trajY[b+idx], trajZ[b+idx]);
+      const sxp=p[0], syp=p[1], dn=p[2];
+      const age=s/cnt;                       // 0 old -> 1 new
+      if(have){
+        let col = palette===0 ? PALETTES[0](dn) : PALETTES[palette]((age*0.5+hueBase[i])%1);
+        // whole butterfly stays visible (floor); head accented; depth fades far points
+        const tip = age*age*age;                    // sharp brightening only near the head
+        const fade = (0.085 + 0.10*age + 0.42*tip) * (0.45+0.55*(1-dn));
+        const lw = (0.8 + 0.6*age + 1.6*tip) * (0.6+0.6*(1-dn)) * DPR;
+        ctx.strokeStyle=`rgba(${col[0]|0},${col[1]|0},${col[2]|0},${fade.toFixed(3)})`;
+        ctx.lineWidth=lw;
+        ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(sxp,syp); ctx.stroke();
+      }
+      px=sxp; py=syp; have=true;
+    }
+    // glowing head
+    const hi=(h-1+TRAIL)%TRAIL;
+    const p=project(trajX[b+hi], trajY[b+hi], trajZ[b+hi]);
+    const sxp=p[0], syp=p[1];
+    const col = palette===0 ? PALETTES[0](0.0) : PALETTES[palette]((hueBase[i])%1);
+    const r=3.4*DPR;
+    const g=ctx.createRadialGradient(sxp,syp,0,sxp,syp,r*3);
+    g.addColorStop(0,`rgba(${col[0]|0},${col[1]|0},${col[2]|0},0.7)`);
+    g.addColorStop(0.4,`rgba(${col[0]|0},${col[1]|0},${col[2]|0},0.25)`);
+    g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sxp,syp,r*3,0,6.2832); ctx.fill();
+  }
+}
+
+// ---- mouse orbit ----
+let mDown=false,lastX=0,lastY=0;
+cv.addEventListener('pointerdown',e=>{mDown=true;lastX=e.clientX;lastY=e.clientY;cv.classList.add('drag');});
+addEventListener('pointermove',e=>{ if(!mDown)return;
+  dragYaw += (e.clientX-lastX)*0.006;
+  pitch = Math.max(-1.3,Math.min(1.3, pitch + (e.clientY-lastY)*0.005));
+  lastX=e.clientX; lastY=e.clientY; });
+addEventListener('pointerup',()=>{mDown=false;cv.classList.remove('drag');});
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){ step(dt); draw(); }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${nTraj} ${nTraj>1?'wings':'wing'} · ρ=${rho.toFixed(1)} · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); }; }
+bind('sRho','vRho',x=>x.toFixed(1),x=>{ rho=x; });
+bind('sSig','vSig',x=>x.toFixed(1),x=>{ sigma=x; });
+bind('sBeta','vBeta',x=>x.toFixed(2),x=>{ beta=x; });
+bind('sRot','vRot',x=>x.toFixed(2),x=>{ rotSpeed=x; });
+bind('sTrail','vTrail',x=>x.toFixed(2),x=>{ persistence=x; });
+bind('sSpd','vSpd',x=>x|0,x=>{ stepsPerFrame=x|0; });
+bind('sTraj','vTraj',x=>x|0,x=>{ nTraj=x|0; init(); });
+bind('sPal','vPal',x=>PAL_NAMES[x|0],x=>{ palette=x|0; });
+$('reseed').onclick=()=>init();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='lorenz.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')init();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+resize(); init();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
