@@ -62,8 +62,9 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 - **Wave 13 candidate pieces (still unbuilt):** terrain erosion, Brian's Brain / excitable
   media, percolation / forest-fire, spirograph/epicycloid gears, Hopf fibration, 3D rotating
   polyhedra (Platonic/Archimedean), Mandelbulb slice, sand/Turing on a sphere, double-spiral.
-- Possible: a favicon; an "about" page; sort/filter on the gallery; per-piece "view source".
-- Note: ripple-tank thumbnail shows the control panel (others hide it) — minor, could recapture.
+- Possible polish (optional): a favicon; an "about" page; sort/filter on the gallery.
+- Considered COMPLETE at 34 — a curated v-final. A future session should default to a NEW
+  project (see top-level README head-pointer), not padding the garden.
 
 ## Log
 - 2026-06-07 — Scaffold: git, folders, README head-pointer, SPEC.md, heartbeat cron (5 min).
