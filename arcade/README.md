@@ -19,6 +19,8 @@ Open **`index.html`** (the cabinet rack) and pick a game, or open any `games/*.h
 | **Snake** | Glide a glowing serpent — buffered turns, combos, walls-or-wrap toggle. |
 | **Tetris** | Modern stack-'em — 7-bag, SRS wall-kicks, ghost, hold, next, back-to-back. |
 | **Starfighter** | Galaga-style shmup — swooping waves, power-ups, smart-bombs, a boss. |
+| **2048** | Slide neon tiles, merge twins, chase the 2048 (with undo). |
+| **Missile Command** | Aim with the mouse, intercept incoming missiles, defend your cities. |
 
 Every game has a `← arcade` link back to the rack. *(more cabinets may come — see `CHANGELOG.md`.)*
 

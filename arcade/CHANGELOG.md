@@ -7,12 +7,14 @@ Each game is self-contained, zero-dependency, browser-play-tested. Reference sty
 
 ## Status
 
-- **Done (browser play-tested PASS, 60fps, clean consoles) — 5 cabinets:**
+- **Done (browser play-tested PASS, 60fps, clean consoles) — 7 cabinets:**
   - asteroids.html ✅ — inertia/thrust/wrap, splitting rocks, saucer, hyperspace, full juice
   - breakout.html ✅ — 6 power-ups, combos, multiball, swept collision, procedural levels
   - snake.html ✅ — smooth gliding ribbon, buffered turns, combos, walls/wrap toggle
   - tetris.html ✅ — 7-bag, SRS+wall-kicks, ghost, hold, next, B2B/combo, level gravity
   - starfighter.html ✅ — Galaga-style waves, divers/turrets, WARLORD boss, power-ups, bombs
+  - 2048.html ✅ — slide/merge/spawn, win+gameover, undo, value-bloom tiles, big-merge shake
+  - missile-command.html ✅ — mouse-aim defense, MIRV/smart-bombs, chain blasts, wave bonus
 - **Nav:** every game has a click-only `← arcade` back-link (NO key binding — games use keys).
 - **Gallery:** index.html (neon "cabinet rack"), games.js manifest (5), README ✅
 

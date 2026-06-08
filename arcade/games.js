@@ -31,5 +31,17 @@ window.GAMES = [
     name: "Tetris",
     blurb: "stack neon blocks, clear lines, chase the tetris",
     accent: "#37d6ff"
+  },
+  {
+    file: "2048.html",
+    name: "2048",
+    blurb: "slide neon tiles, merge twins, chase 2048",
+    accent: "#ffb13d"
+  },
+  {
+    file: "missile-command.html",
+    name: "Missile Command",
+    blurb: "aim, intercept, defend your neon cities",
+    accent: "#ff6a3d"
   }
 ];
