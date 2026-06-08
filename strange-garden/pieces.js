@@ -73,5 +73,23 @@ window.PIECES = [
     name: "Julia",
     blurb: "one drifting constant blooms a thousand fractal lives",
     accent: "#b58cff"
+  },
+  {
+    file: "l-system.html",
+    name: "L-System",
+    blurb: "one whispered rule unfolds into a breathing plant",
+    accent: "#8fd16a"
+  },
+  {
+    file: "chladni.html",
+    name: "Chladni",
+    blurb: "sand finds stillness on a singing plate",
+    accent: "#d9c4a3"
+  },
+  {
+    file: "ripple-tank.html",
+    name: "Ripple Tank",
+    blurb: "crests meet troughs in a lattice of light",
+    accent: "#4fd6e6"
   }
 ];

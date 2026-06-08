@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L-System — Strange Garden</title>
+<style>
+  :root { --accent: #8fd16a; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; padding:6px 8px; font-size:12px; color:#e6e8ee; margin-top:2px;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:8px;
+    font-family:ui-monospace,Menlo,monospace; }
+  .toggles { display:flex; gap:8px; margin-top:13px; }
+  .toggles button { font-size:11px; }
+  .toggles button.on { border-color:color-mix(in srgb,var(--accent) 55%,transparent);
+    background:color-mix(in srgb,var(--accent) 16%,transparent); color:var(--accent); }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s,border-color .15s,color .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #warn { font:10px ui-monospace,Menlo,monospace; color:#f6a45c; opacity:.85;
+    margin-top:8px; min-height:12px; line-height:1.3; }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>L-System</h1>
+  <p class="desc">A single rule, whispered over and over, unfolds into a whole plant — grown
+    from the base, then breathing in the wind.</p>
+  <label>Species</label>
+  <select id="species"></select>
+  <label>Iterations <b id="vIt">5</b></label>
+  <input type="range" id="sIt" min="1" max="9" step="1" value="5">
+  <label>Branch angle <b id="vAn">22°</b></label>
+  <input type="range" id="sAn" min="8" max="45" step="1" value="22">
+  <label>Length scale <b id="vLn">1.00</b></label>
+  <input type="range" id="sLn" min="0.6" max="1.5" step="0.02" value="1.0">
+  <label>Randomness <b id="vRn">0.35</b></label>
+  <input type="range" id="sRn" min="0" max="1" step="0.02" value="0.35">
+  <label>Wind <b id="vWi">0.5</b></label>
+  <input type="range" id="sWi" min="0" max="1.5" step="0.05" value="0.5">
+  <label>Growth speed <b id="vGr">1.0</b></label>
+  <input type="range" id="sGr" min="0.2" max="3" step="0.1" value="1.0">
+  <div class="toggles">
+    <button id="tLeaf" class="on">Leaves</button>
+    <button id="tFlower" class="on">Flowers</button>
+    <button id="palette">Spring</button>
+  </div>
+  <div id="warn"></div>
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">space pause · r reseed · h hides panel · s saves</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+const $=id=>document.getElementById(id);
+let W,H,DPR,worldW,worldH;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  worldW=innerWidth; worldH=innerHeight;
+  W=cv.width=Math.floor(worldW*DPR); H=cv.height=Math.floor(worldH*DPR);
+  cv.style.width=worldW+'px'; cv.style.height=worldH+'px';
+  rebuild(); // canvas size affects scale
+}
+addEventListener('resize',resize);
+
+// ============================================================
+//  SPECIES — classic L-systems. Rules may be arrays (stochastic).
+//  Each rule entry: {to:'...', w:weight}.  '+' '-' turn, '[' ']' push/pop.
+//  'F' draws.  'X' is a non-drawing control symbol.
+// ============================================================
+const SPECIES = {
+  'Binary Tree': {
+    axiom:'F',
+    rules:{ F:[ {to:'FF+[+F-F-F]-[-F+F+F]', w:1} ] },
+    angle:22, iters:4, len:1.0, blossom:0.7, leafy:0.35, segLen:9
+  },
+  'Bushy Plant': {
+    axiom:'X',
+    rules:{
+      X:[ {to:'F+[[X]-X]-F[-FX]+X', w:3}, {to:'F-[[X]+X]+F[+FX]-X', w:3}, {to:'F[+X][-X]FX', w:2} ],
+      F:[ {to:'FF', w:1} ]
+    },
+    angle:24, iters:5, len:1.0, blossom:0.45, leafy:0.85, segLen:5.5
+  },
+  'Fern': {
+    axiom:'X',
+    rules:{
+      X:[ {to:'F+[[X]-X]-F[-FX]+X', w:1} ],
+      F:[ {to:'FF', w:1} ]
+    },
+    angle:25, iters:6, len:1.0, blossom:0.0, leafy:1.0, segLen:4.5
+  },
+  'Seaweed': {
+    axiom:'F',
+    rules:{ F:[ {to:'F[+F]F[-F]F', w:2}, {to:'F[+F]F', w:1}, {to:'F[-F][+F]F', w:1} ] },
+    angle:20, iters:4, len:1.05, blossom:0.0, leafy:0.6, segLen:7
+  },
+  'Flowering Bush': {
+    axiom:'X',
+    rules:{
+      X:[ {to:'F[+X]F[-X]+X', w:2}, {to:'F[-X]F[+X]-X', w:2}, {to:'F[+X][-X]FX', w:2}, {to:'F[++X]F[--X]X', w:1} ],
+      F:[ {to:'FF', w:1} ]
+    },
+    angle:20, iters:5, len:1.0, blossom:1.0, leafy:0.55, segLen:5.5
+  },
+  'Weeping Willow': {
+    axiom:'F',
+    rules:{
+      F:[ {to:'F[&+F]F[&-F][&F]', w:2}, {to:'F[&-F]F[&+F]', w:1}, {to:'FF[&+F][&-F]', w:1} ]
+    },
+    angle:16, iters:4, len:1.1, blossom:0.0, leafy:0.95, segLen:7, droop:0.55
+  }
+};
+
+// ============================================================
+//  PALETTES (season cycle)
+// ============================================================
+const PALETTES = [
+  { name:'Spring', accent:'#8fd16a',
+    stemBase:[58,40,28], stemTip:[120,170,80],
+    leaf:[ [140,200,90],[110,180,70],[160,210,110] ],
+    flower:[ [240,180,200],[250,210,160],[230,160,210] ],
+    bg1:'#0a0f0b', bg2:'#0a0b0f' },
+  { name:'Summer', accent:'#5fd1a7',
+    stemBase:[52,38,26], stemTip:[70,150,90],
+    leaf:[ [60,160,90],[40,140,80],[90,180,110] ],
+    flower:[ [255,210,90],[255,150,80],[250,120,140] ],
+    bg1:'#080f0c', bg2:'#0a0b0f' },
+  { name:'Autumn', accent:'#f0964a',
+    stemBase:[60,42,28], stemTip:[150,110,50],
+    leaf:[ [220,140,50],[200,90,40],[240,180,70] ],
+    flower:[ [240,90,60],[250,180,80],[210,70,50] ],
+    bg1:'#100b08', bg2:'#0a0b0f' },
+  { name:'Winter', accent:'#a8c4e0',
+    stemBase:[48,46,52], stemTip:[120,140,160],
+    leaf:[ [170,190,210],[150,170,200],[200,215,230] ],
+    flower:[ [220,235,255],[200,220,250],[235,245,255] ],
+    bg1:'#080a0e', bg2:'#0a0b0f' },
+  { name:'Twilight', accent:'#c79bf0',
+    stemBase:[50,40,55], stemTip:[110,90,150],
+    leaf:[ [120,100,170],[90,80,150],[150,120,190] ],
+    flower:[ [200,150,240],[160,120,230],[230,190,250] ],
+    bg1:'#0c0a12', bg2:'#0a0b0f' }
+];
+let palIdx=0;
+
+// ============================================================
+//  PARAMETERS
+// ============================================================
+let curSpecies='Bushy Plant';
+let iters=5, angleDeg=22, lenScale=1.0, randomness=0.35, windStr=0.5, growthSpeed=1.0;
+let showLeaves=true, showFlowers=true;
+const MAX_STRING = 360000; // hard cap on rewritten string length
+
+// seeded RNG so a plant is reproducible within its life
+let rngState=12345;
+function srand(){ rngState=(rngState*1664525+1013904223)>>>0; return rngState/4294967296; }
+let seedBase=Date.now()>>>0;
+
+// ============================================================
+//  L-SYSTEM REWRITE (stochastic)
+// ============================================================
+function pickRule(opts){
+  if(opts.length===1) return opts[0].to;
+  let tot=0; for(const o of opts) tot+=o.w;
+  let r=srand()*tot;
+  for(const o of opts){ r-=o.w; if(r<=0) return o.to; }
+  return opts[opts.length-1].to;
+}
+function rewrite(spec, n){
+  let s=spec.axiom;
+  for(let it=0; it<n; it++){
+    let out='';
+    for(let i=0;i<s.length;i++){
+      const ch=s[i];
+      const rule=spec.rules[ch];
+      if(rule){ out += pickRule(rule); }
+      else out += ch;
+      if(out.length>MAX_STRING){ out=out.slice(0,MAX_STRING); return out; }
+    }
+    s=out;
+    if(s.length>MAX_STRING) return s.slice(0,MAX_STRING);
+  }
+  return s;
+}
+
+// ============================================================
+//  TURTLE -> SEGMENT LIST
+//  Each segment: x0,y0,x1,y1 (base coords), depth, lenFromBase (cumulative
+//  branch length from root, used for growth ordering & wind weighting),
+//  branchTip (no child), parentIdx, swayPivotX/Y carried for wind, ang0.
+// ============================================================
+let segs=[];        // flat array of segment objects
+let leaves=[];      // {x,y,ang,depth,kind:'leaf'|'flower', seg, t}
+let totalLen=0;     // total drawn length (all segments summed)
+let maxPathLen=1;   // longest root->tip distance — paces base-up growth
+let maxDepth=1;
+let baseX=0, baseY=0;
+let buildScale=1;
+let stringLen=0;
+
+function buildPlant(){
+  rngState=(seedBase ^ 0x9e3779b9)>>>0; srand();
+  const spec=SPECIES[curSpecies];
+  // clamp iterations sensibly per species to avoid explosion
+  const n=Math.min(iters, 9);
+  const str=rewrite(spec, n);
+  stringLen=str.length;
+
+  // turtle
+  segs=[]; leaves=[]; maxDepth=1; totalLen=0; maxPathLen=1;
+  const angle = angleDeg*Math.PI/180;
+  const droop = spec.droop||0;
+  // base segment length before fitting
+  let segLen = (spec.segLen||6) * lenScale;
+  // pitch via & ^ for 3D-ish droop, projected
+  let x=0, y=0, ang=-Math.PI/2; // pointing up
+  let depth=0;
+  const stack=[];
+  let curLen=0; // cumulative length from base along current path
+  let parentIdx=-1;
+  // we collect raw points then fit to viewport
+  let minX=0,maxX=0,minY=0,maxY=0;
+
+  for(let i=0;i<str.length;i++){
+    const ch=str[i];
+    if(ch==='F' || ch==='G'){
+      // small per-branch randomness in angle handled at draw; here use mild jitter in length
+      const jitter = 1 + (srand()-0.5)*0.35*randomness;
+      const L = segLen * jitter;
+      const nx=x+Math.cos(ang)*L, ny=y+Math.sin(ang)*L;
+      const seg={ x0:x,y0:y,x1:nx,y1:ny, depth, len:L, start:curLen, end:curLen+L,
+                  ang, parent:parentIdx, tip:true, jit:(srand()-0.5) };
+      if(parentIdx>=0) segs[parentIdx].tip=false;
+      const idx=segs.length;
+      segs.push(seg);
+      parentIdx=idx;
+      curLen+=L;
+      totalLen+=L;
+      if(curLen>maxPathLen) maxPathLen=curLen; // longest root->tip distance
+      x=nx; y=ny;
+      if(x<minX)minX=x; if(x>maxX)maxX=x;
+      if(y<minY)minY=y; if(y>maxY)maxY=y;
+      if(depth>maxDepth)maxDepth=depth;
+    } else if(ch==='f'){
+      x+=Math.cos(ang)*segLen; y+=Math.sin(ang)*segLen;
+    } else if(ch==='+'){
+      ang += angle*(1+(srand()-0.5)*0.5*randomness);
+    } else if(ch==='-'){
+      ang -= angle*(1+(srand()-0.5)*0.5*randomness);
+    } else if(ch==='&'){
+      ang += (angle*0.5 + droop)*(1+(srand()-0.5)*0.4*randomness); // pitch down (droop)
+    } else if(ch==='^'){
+      ang -= (angle*0.5)*(1+(srand()-0.5)*0.4*randomness);
+    } else if(ch==='['){
+      stack.push({x,y,ang,depth,curLen,parentIdx});
+      depth++;
+    } else if(ch===']'){
+      const st=stack.pop();
+      if(st){ x=st.x; y=st.y; ang=st.ang; depth=st.depth; curLen=st.curLen; parentIdx=st.parentIdx; }
+    }
+  }
+
+  // Mark leaf/flower spawn points. Colors are NOT baked here — we store a
+  // palette index (ci) and pick the actual RGB from the active palette at draw
+  // time, so cycling the season recolors a live plant. blossom/leafy are
+  // per-species probabilities.
+  for(let i=0;i<segs.length;i++){
+    const s=segs[i];
+    if(s.tip){
+      const rr=srand();
+      const wantFlower = spec.blossom>0 && rr<spec.blossom;
+      const wantLeaf = !wantFlower && srand()<spec.leafy;
+      if(wantFlower){
+        leaves.push({ seg:i, t:1, kind:'flower', size:3.4+srand()*2.8,
+          rot:srand()*6.28, petals:5+((srand()*3)|0), ci:(srand()*3)|0 });
+      } else if(wantLeaf){
+        leaves.push({ seg:i, t:1, kind:'leaf', size:4+srand()*4,
+          rot:(srand()-0.5)*1.0, ci:(srand()*3)|0 });
+      }
+    } else if(spec.leafy>0.5 && srand()<spec.leafy*0.16){
+      // sparse mid-branch leaves for fullness
+      leaves.push({ seg:i, t:0.7+srand()*0.3, kind:'leaf', size:3+srand()*3,
+        rot:(srand()-0.5)*1.2, ci:(srand()*3)|0 });
+    }
+  }
+
+  // ---- fit to viewport ----
+  // Turtle starts at origin facing up (ang=-PI/2 -> y decreases upward), so the
+  // plant occupies negative Y. We scale to fit and anchor the bbox bottom near
+  // the ground line. Screen point = base + (p - centerX)*scale (vertical: p-bottomY).
+  const w=Math.max(1, maxX-minX), h=Math.max(1, maxY-minY);
+  const margin = Math.min(worldW,worldH)*0.10;
+  const availW = worldW - margin*2, availH = worldH - margin*2;
+  buildScale = Math.min(availW/w, availH/h);
+  baseX = worldW*0.5;                 // horizontal center
+  cx0 = (minX+maxX)*0.5;              // bbox center mapped to baseX
+  bottomY = maxY;                     // lowest turtle point -> ground line
+  baseY = worldH - margin;            // ground line on screen
+
+  growthT=0; phase='growing'; phaseT=0;
+}
+let cx0=0, bottomY=0;
+
+// ============================================================
+//  GROWTH + WIND state
+// ============================================================
+let growthT=0;        // 0..1 fraction grown
+let phase='growing';  // growing | swaying | fading
+let phaseT=0;         // seconds in current phase
+const GROW_DUR_BASE=4.5, SWAY_DUR=14, FADE_DUR=2.2;
+let windPhase=0;
+
+function rebuild(){ buildPlant(); }
+
+// ============================================================
+//  COLOR HELPERS
+// ============================================================
+function lerp(a,b,t){ return a+(b-a)*t; }
+function stemColor(depth, frac){
+  const p=PALETTES[palIdx];
+  // depth-based + a touch of tip fade
+  const d=Math.min(1, depth/Math.max(1,maxDepth));
+  const t=Math.max(d, frac*0.4);
+  const r=lerp(p.stemBase[0],p.stemTip[0],t)|0;
+  const g=lerp(p.stemBase[1],p.stemTip[1],t)|0;
+  const b=lerp(p.stemBase[2],p.stemTip[2],t)|0;
+  return `rgb(${r},${g},${b})`;
+}
+
+// ============================================================
+//  DRAW
+// ============================================================
+function bgPaint(){
+  const p=PALETTES[palIdx];
+  const grad=ctx.createRadialGradient(W*0.5,H*0.62,0, W*0.5,H*0.62, Math.max(W,H)*0.75);
+  grad.addColorStop(0,p.bg1); grad.addColorStop(1,p.bg2);
+  ctx.fillStyle=grad; ctx.fillRect(0,0,W,H);
+}
+
+// Transform a turtle point to screen with wind sway.
+// Segments are precomputed in turtle space; per-frame we apply a smooth
+// vertical-shear wind whose horizontal displacement grows with height above
+// the base (tips move most). Layered sines + a slow gust give organic motion.
+// This is a cheap, convincing approximation of a swaying plant at 60fps.
+function tx(px,py,time){
+  const sx=(px-cx0)*buildScale;
+  const sy=(py-bottomY)*buildScale; // <=0 above base
+  let wind=0;
+  if(windStr>0){
+    const hAbove = -sy; // upward distance in screen px (>=0)
+    const hn=hAbove/Math.max(1,worldH*0.7);
+    const sway = Math.sin(time*0.9 + py*0.02) * 0.6
+               + Math.sin(time*1.9 + px*0.03 + 1.1) * 0.35
+               + Math.sin(time*0.4) * 0.5;
+    const gust = 0.55 + 0.45*(Math.sin(time*0.27)*0.5+0.5);
+    wind = sway * Math.pow(hn,1.6) * windStr * 26 * gust;
+  }
+  return [ baseX + sx + wind, baseY + sy ];
+}
+
+function draw(time){
+  bgPaint();
+  ctx.lineCap='round'; ctx.lineJoin='round';
+
+  // growth front sweeps from base to the farthest tip (by root->tip distance),
+  // so the plant reveals bottom-up, branch by branch.
+  const grown = growthT*maxPathLen;
+  const maxLW = Math.max(1.2, Math.min(worldW,worldH)*0.006) * lenScale;
+
+  // draw segments up to the grown length
+  ctx.save();
+  ctx.scale(DPR,DPR);
+  for(let i=0;i<segs.length;i++){
+    const s=segs[i];
+    if(s.start > grown) continue; // not yet grown
+    let frac=1;
+    if(s.end > grown){
+      frac=(grown - s.start)/Math.max(1e-3,s.len);
+      if(frac<=0) continue;
+    }
+    const [ax,ay]=tx(s.x0,s.y0,time);
+    let ex=s.x0 + (s.x1-s.x0)*frac, ey=s.y0 + (s.y1-s.y0)*frac;
+    const [bx,by]=tx(ex,ey,time);
+    // width tapers with depth
+    const depthN=s.depth/Math.max(1,maxDepth);
+    const lw = Math.max(0.5, maxLW*(1-depthN*0.82)) ;
+    ctx.lineWidth=lw;
+    ctx.strokeStyle=stemColor(s.depth, s.end/Math.max(1,totalLen));
+    ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+  }
+
+  // draw leaves / flowers — only those whose host segment is fully grown
+  for(let k=0;k<leaves.length;k++){
+    const lf=leaves[k];
+    const s=segs[lf.seg];
+    if(!s) continue;
+    const spawnLen = s.start + s.len*lf.t;
+    if(spawnLen > grown) continue;
+    // pop-in scale based on how recently this point was revealed
+    const since = (grown - spawnLen)/Math.max(1,maxPathLen);
+    const pop = Math.min(1, since*16 + 0.02);
+    if(pop<=0) continue;
+    const lx=s.x0 + (s.x1-s.x0)*lf.t, ly=s.y0 + (s.y1-s.y0)*lf.t;
+    const [px,py]=tx(lx,ly,time);
+    const p=PALETTES[palIdx];
+    if(lf.kind==='leaf' && showLeaves){
+      drawLeaf(px,py, s.ang + lf.rot, lf.size*pop, p.leaf[lf.ci % p.leaf.length]);
+    } else if(lf.kind==='flower' && showFlowers){
+      drawFlower(px,py, lf.size*pop, p.flower[lf.ci % p.flower.length], lf.petals, lf.rot+time*0.1);
+    }
+  }
+  ctx.restore();
+}
+
+function drawLeaf(x,y,ang,size,col){
+  const [r,g,b]=col;
+  ctx.save();
+  ctx.translate(x,y); ctx.rotate(ang+Math.PI/2);
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.quadraticCurveTo(size*0.7, -size*0.6, 0, -size*1.8);
+  ctx.quadraticCurveTo(-size*0.7, -size*0.6, 0, 0);
+  ctx.fillStyle=`rgba(${r},${g},${b},0.82)`;
+  ctx.fill();
+  ctx.restore();
+}
+function drawFlower(x,y,size,col,petals,rot){
+  const [r,g,b]=col;
+  ctx.save(); ctx.translate(x,y); ctx.rotate(rot);
+  for(let i=0;i<petals;i++){
+    ctx.rotate(Math.PI*2/petals);
+    ctx.beginPath();
+    ctx.ellipse(size*0.9,0, size*0.9, size*0.5, 0, 0, Math.PI*2);
+    ctx.fillStyle=`rgba(${r},${g},${b},0.85)`;
+    ctx.fill();
+  }
+  // center
+  ctx.beginPath(); ctx.arc(0,0,size*0.55,0,Math.PI*2);
+  ctx.fillStyle=`rgba(255,235,170,0.95)`; ctx.fill();
+  ctx.restore();
+}
+
+// ============================================================
+//  STEP (advance growth / phase)
+// ============================================================
+function step(dt){
+  windPhase += dt;
+  phaseT += dt;
+  const growDur = GROW_DUR_BASE/growthSpeed;
+  if(phase==='growing'){
+    growthT += dt/growDur;
+    if(growthT>=1){ growthT=1; phase='swaying'; phaseT=0; }
+  } else if(phase==='swaying'){
+    if(phaseT>=SWAY_DUR){ phase='fading'; phaseT=0; }
+  } else if(phase==='fading'){
+    // shrink growthT back to 0 (recede), then reseed new plant
+    growthT -= dt/(FADE_DUR);
+    if(growthT<=0){ growthT=0; seedBase=(seedBase*1103515245+12345)>>>0; buildPlant(); }
+  }
+}
+
+// ============================================================
+//  LOOP
+// ============================================================
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){ step(dt); draw(windPhase); }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  const phaseLabel = phase==='growing'?'growing':phase==='swaying'?'swaying':'fading';
+  hud.textContent=`${segs.length} segments · ${phaseLabel} · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ============================================================
+//  WARNING (string-size clamp feedback)
+// ============================================================
+function updateWarn(){
+  $('warn').textContent = stringLen>=MAX_STRING
+    ? `⚠ string capped at ${(MAX_STRING/1000)|0}k symbols — lower iterations`
+    : '';
+}
+
+// ============================================================
+//  CONTROLS
+// ============================================================
+function fillSpecies(){
+  const sel=$('species');
+  for(const k of Object.keys(SPECIES)){
+    const o=document.createElement('option'); o.value=k; o.textContent=k; sel.appendChild(o);
+  }
+  sel.value=curSpecies;
+}
+function applySpeciesDefaults(){
+  const s=SPECIES[curSpecies];
+  iters=s.iters; angleDeg=s.angle; lenScale=s.len;
+  $('sIt').value=iters; $('vIt').textContent=iters;
+  $('sAn').value=angleDeg; $('vAn').textContent=angleDeg+'°';
+  $('sLn').value=lenScale.toFixed(2); $('vLn').textContent=lenScale.toFixed(2);
+}
+function reseed(){ seedBase=(Date.now()^(Math.random()*1e9))>>>0; buildPlant(); updateWarn(); }
+
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); }; }
+bind('sIt','vIt',x=>x|0,x=>{ iters=x|0; buildPlant(); updateWarn(); });
+bind('sAn','vAn',x=>x+'°',x=>{ angleDeg=x; buildPlant(); });
+bind('sLn','vLn',x=>x.toFixed(2),x=>{ lenScale=x; buildPlant(); });
+bind('sRn','vRn',x=>x.toFixed(2),x=>{ randomness=x; buildPlant(); });
+bind('sWi','vWi',x=>x.toFixed(1),x=>{ windStr=x; });
+bind('sGr','vGr',x=>x.toFixed(1),x=>{ growthSpeed=x; });
+
+$('species').onchange=e=>{ curSpecies=e.target.value; applySpeciesDefaults(); buildPlant(); updateWarn(); };
+$('tLeaf').onclick=()=>{ showLeaves=!showLeaves; $('tLeaf').classList.toggle('on',showLeaves); };
+$('tFlower').onclick=()=>{ showFlowers=!showFlowers; $('tFlower').classList.toggle('on',showFlowers); };
+$('palette').onclick=()=>{ palIdx=(palIdx+1)%PALETTES.length;
+  const p=PALETTES[palIdx]; $('palette').textContent=p.name;
+  document.documentElement.style.setProperty('--accent', p.accent); };
+$('reseed').onclick=()=>reseed();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='l-system.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')reseed();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ============================================================
+//  GO
+// ============================================================
+fillSpecies();
+applySpeciesDefaults();
+$('palette').textContent=PALETTES[palIdx].name;
+document.documentElement.style.setProperty('--accent', PALETTES[palIdx].accent);
+resize();
+updateWarn();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ripple Tank — Strange Garden</title>
+<style>
+  :root { --accent: #4fd6e6; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s;
+    max-height:calc(100vh - 32px); overflow:auto; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  button.on { border-color:color-mix(in srgb,var(--accent) 70%,transparent);
+    background:color-mix(in srgb,var(--accent) 26%,transparent); color:#fff; }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Ripple Tank</h1>
+  <p class="desc">Oscillators stir a shallow sea. Crests meet troughs and the water
+    remembers every collision as a lattice of light.</p>
+  <label>Source freq <b id="vFreq">0.16</b></label>
+  <input type="range" id="sFreq" min="0.03" max="0.45" step="0.005" value="0.16">
+  <label>Sources <b id="vSrc">2</b></label>
+  <input type="range" id="sSrc" min="0" max="4" step="1" value="2">
+  <label>Spacing <b id="vSpace">0.40</b></label>
+  <input type="range" id="sSpace" min="0.05" max="0.85" step="0.01" value="0.40">
+  <label>Wave speed C <b id="vC">0.40</b></label>
+  <input type="range" id="sC" min="0.05" max="0.49" step="0.01" value="0.40">
+  <label>Damping <b id="vDamp">0.9985</b></label>
+  <input type="range" id="sDamp" min="0.990" max="0.9999" step="0.0001" value="0.9985">
+  <label>Resolution <b id="vRes">3</b></label>
+  <input type="range" id="sRes" min="2" max="6" step="1" value="3">
+  <label>Edge reflection <b id="vRef">0.10</b></label>
+  <input type="range" id="sRef" min="0" max="1" step="0.02" value="0.10">
+  <label>Palette <b id="vPal">Abyss</b></label>
+  <input type="range" id="sPal" min="0" max="4" step="1" value="0">
+  <div class="row">
+    <button id="barrier" class="pri">Double-slit</button>
+    <button id="paint">Paint walls</button>
+  </div>
+  <div class="row">
+    <button id="clear">Clear</button>
+    <button id="reseed">Reseed</button>
+  </div>
+  <div class="row">
+    <button id="pause">Pause</button>
+    <button id="save">Save PNG</button>
+  </div>
+</div>
+<div id="hud"></div>
+<div id="hint">click / drag = drop ripples · b double-slit · h hides panel</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+
+// ---- parameters ----
+let freq=0.16;          // oscillation frequency (cycles per frame at 60fps reference)
+let nSources=2;         // number of driven oscillators
+let spacing=0.40;       // fraction of grid height between sources
+let C=0.40;             // wave speed squared coefficient (<=0.5 for stability)
+let damping=0.9985;     // global energy loss per step
+let scale=3;            // px per sim cell (downscale factor)
+let edgeReflect=0.10;   // 0 = fully absorbing edges, 1 = hard reflection
+let palette=0;
+let barrierMode=false;  // double-slit barrier active
+let paintMode=false;    // mouse paints walls instead of ripples
+
+// ---- canvas / sim sizing ----
+let W,H,DPR;            // device-pixel canvas size
+let cssW,cssH;          // css px
+let gw,gh;              // grid width/height (sim cells)
+let cur,prev,next,wall; // Float32Array buffers + wall mask (Uint8)
+let img, off, offCtx;   // ImageData for sim grid + offscreen canvas
+let t=0;                // frame counter (sim time)
+let sources=[];         // {gx, gy} in grid coords
+
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  cssW=innerWidth; cssH=innerHeight;
+  W=cv.width=Math.floor(cssW*DPR); H=cv.height=Math.floor(cssH*DPR);
+  cv.style.width=cssW+'px'; cv.style.height=cssH+'px';
+  ctx.imageSmoothingEnabled=true;
+  allocGrid();
+}
+addEventListener('resize',resize);
+
+function allocGrid(){
+  gw=Math.max(8,Math.floor(cssW/scale));
+  gh=Math.max(8,Math.floor(cssH/scale));
+  const N=gw*gh;
+  cur=new Float32Array(N); prev=new Float32Array(N); next=new Float32Array(N);
+  wall=new Uint8Array(N);
+  // offscreen at grid resolution; upscaled by main ctx
+  off=document.createElement('canvas'); off.width=gw; off.height=gh;
+  offCtx=off.getContext('2d');
+  img=offCtx.createImageData(gw,gh);
+  placeSources();
+  if(barrierMode) buildBarrier();
+}
+
+// ---- sources ----
+function placeSources(){
+  sources=[];
+  if(nSources<=0) return;
+  const cx=Math.floor(gw*0.30);     // sources sit toward the left third
+  const cy=Math.floor(gh*0.5);
+  if(nSources===1){
+    sources.push({gx:cx, gy:cy});
+  } else {
+    const span=spacing*gh;
+    for(let i=0;i<nSources;i++){
+      const f=(i/(nSources-1))-0.5;  // -0.5 .. 0.5
+      let y=Math.round(cy+f*span);
+      y=Math.max(2,Math.min(gh-3,y));
+      sources.push({gx:cx, gy:y});
+    }
+  }
+}
+
+// ---- barrier / double-slit ----
+let slitWidth=4, slitSep=18;
+function buildBarrier(){
+  wall.fill(0);
+  const bx=Math.floor(gw*0.50);     // vertical wall mid-tank
+  const cy=Math.floor(gh*0.5);
+  const half=Math.floor(slitSep*0.5);
+  // gap cell-sets for the two slits
+  const slits=[];
+  for(let dy=-slitWidth;dy<=slitWidth;dy++){
+    slits.push(cy-half+dy);
+    slits.push(cy+half+dy);
+  }
+  const slitSet=new Set(slits);
+  for(let y=0;y<gh;y++){
+    if(slitSet.has(y)) continue;
+    for(let w=-1;w<=1;w++){            // wall is 3 cells thick
+      const x=bx+w;
+      if(x>=0&&x<gw) wall[y*gw+x]=1;
+    }
+  }
+}
+function clearWalls(){ if(wall) wall.fill(0); }
+
+// ---- init / clear ----
+function clearField(){
+  if(!cur) return;
+  cur.fill(0); prev.fill(0); next.fill(0);
+  t=0;
+}
+function init(){
+  clearField();
+  placeSources();
+  if(barrierMode) buildBarrier(); else clearWalls();
+}
+
+// ---- physics step (one substep) ----
+function physics(){
+  const C0=C;
+  // interior update: discrete 2D wave equation, 4-neighbour laplacian
+  for(let y=1;y<gh-1;y++){
+    const row=y*gw;
+    for(let x=1;x<gw-1;x++){
+      const i=row+x;
+      if(wall[i]){ next[i]=0; continue; }
+      const lap = cur[i-1]+cur[i+1]+cur[i-gw]+cur[i+gw] - 4*cur[i];
+      let v = (2*cur[i] - prev[i] + C0*lap)*damping;
+      next[i]=v;
+    }
+  }
+  // boundaries: blend absorbing (Mur-ish: copy inward) with reflection
+  // edgeReflect 1 -> mirror (next=interior neighbour) ; 0 -> absorbing
+  const a=edgeReflect;
+  for(let x=0;x<gw;x++){
+    const top=x, bot=(gh-1)*gw+x;
+    next[top] = a*next[top+gw] + (1-a)*cur[top+gw];
+    next[bot] = a*next[bot-gw] + (1-a)*cur[bot-gw];
+  }
+  for(let y=0;y<gh;y++){
+    const left=y*gw, right=y*gw+gw-1;
+    next[left]  = a*next[left+1]  + (1-a)*cur[left+1];
+    next[right] = a*next[right-1] + (1-a)*cur[right-1];
+  }
+  // ping-pong
+  const tmp=prev; prev=cur; cur=next; next=tmp;
+}
+
+// ---- drive sources (after swap, write into cur so it propagates next step) ----
+function drive(){
+  if(nSources<=0) return;
+  const amp=0.9;
+  const ph=2*Math.PI*freq*t;
+  for(let s=0;s<sources.length;s++){
+    const sx=sources[s].gx, sy=sources[s].gy;
+    const val=amp*Math.sin(ph);
+    // small soft kernel so the source isn't a single hard pixel
+    for(let dy=-1;dy<=1;dy++){
+      for(let dx=-1;dx<=1;dx++){
+        const x=sx+dx, y=sy+dy;
+        if(x<1||x>=gw-1||y<1||y>=gh-1) continue;
+        const i=y*gw+x;
+        if(wall[i]) continue;
+        const fall = (dx===0&&dy===0)?1:0.5;
+        cur[i]=val*fall;
+      }
+    }
+  }
+}
+
+// ---- impulse (mouse ripple) ----
+function impulse(gx,gy,strength){
+  const R=Math.max(2,Math.round(6));
+  for(let dy=-R;dy<=R;dy++){
+    for(let dx=-R;dx<=R;dx++){
+      const x=gx+dx, y=gy+dy;
+      if(x<1||x>=gw-1||y<1||y>=gh-1) continue;
+      const d2=dx*dx+dy*dy; if(d2>R*R) continue;
+      const i=y*gw+x;
+      if(wall[i]) continue;
+      const g=Math.exp(-d2/(R*0.55));
+      cur[i]+=strength*g;
+      prev[i]+=strength*g*0.6; // bias so it spreads outward
+    }
+  }
+}
+
+// ---- palettes (signed: trough -> mid -> crest) ----
+// each returns [r,g,b] for normalized signed value n in [-1,1]
+const palettes=[
+  {name:'Abyss', fn:(n)=>{ // deep blue trough -> black -> teal/white crest
+    if(n>=0){ const p=n; return [ p*p*255, (60+p*195), (90+p*165) ]; }
+    const p=-n; return [ 8+p*30, 14+p*70, 40+p*150 ];
+  }},
+  {name:'Ember', fn:(n)=>{
+    if(n>=0){ const p=n; return [ 60+p*195, 20+p*180, p*p*90 ]; }
+    const p=-n; return [ 20+p*60, 6+p*20, 30+p*120 ];
+  }},
+  {name:'Aurora', fn:(n)=>{
+    if(n>=0){ const p=n; return [ p*p*120, 70+p*185, 90+p*120 ]; }
+    const p=-n; return [ 40+p*120, 10+p*60, 60+p*150 ];
+  }},
+  {name:'Mono', fn:(n)=>{
+    const v=(n*0.5+0.5); const g=Math.pow(v,0.9)*255; return [g,g,g];
+  }},
+  {name:'Magma', fn:(n)=>{
+    if(n>=0){ const p=n; return [ 80+p*175, p*p*160, 30+p*60 ]; }
+    const p=-n; return [ 25+p*40, 5+p*15, 35+p*110 ];
+  }},
+];
+
+// precompute a 512-entry LUT per palette for speed
+let lut=new Uint8Array(512*3);
+function buildLUT(){
+  const fn=palettes[palette].fn;
+  for(let k=0;k<512;k++){
+    const n=(k/511)*2-1;
+    const c=fn(n);
+    lut[k*3]  =clamp255(c[0]);
+    lut[k*3+1]=clamp255(c[1]);
+    lut[k*3+2]=clamp255(c[2]);
+  }
+}
+function clamp255(v){ v=v|0; return v<0?0:(v>255?255:v); }
+
+// ---- render ----
+const gain=2.6;      // visual amplification of height -> color
+function draw(){
+  const d=img.data;
+  const N=gw*gh;
+  for(let i=0;i<N;i++){
+    let v=cur[i]*gain;
+    if(v>1) v=1; else if(v<-1) v=-1;
+    let k=((v*0.5+0.5)*511)|0;
+    const li=k*3, j=i*4;
+    let r=lut[li], g=lut[li+1], b=lut[li+2];
+    if(wall[i]){ r=44; g=48; b=58; } // walls render as slate
+    d[j]=r; d[j+1]=g; d[j+2]=b; d[j+3]=255;
+  }
+  offCtx.putImageData(img,0,0);
+  // upscale grid -> full canvas
+  ctx.drawImage(off,0,0,gw,gh,0,0,W,H);
+  // mark active sources with a faint pulse ring
+  if(nSources>0 && !paintMode){
+    ctx.save();
+    ctx.strokeStyle='rgba(255,255,255,0.10)';
+    ctx.lineWidth=Math.max(1,DPR);
+    const sxk=W/gw, syk=H/gh;
+    for(const s of sources){
+      ctx.beginPath();
+      ctx.arc(s.gx*sxk, s.gy*syk, 6*DPR, 0, 7);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+// ---- mouse ----
+let mDown=false;
+function evtToGrid(e){
+  const x=e.clientX, y=e.clientY;
+  return { gx:Math.floor(x/cssW*gw), gy:Math.floor(y/cssH*gh) };
+}
+function applyMouse(e){
+  const {gx,gy}=evtToGrid(e);
+  if(gx<0||gx>=gw||gy<0||gy>=gh) return;
+  if(paintMode){
+    const R=3;
+    for(let dy=-R;dy<=R;dy++) for(let dx=-R;dx<=R;dx++){
+      const x=gx+dx,y=gy+dy;
+      if(x<1||x>=gw-1||y<1||y>=gh-1) continue;
+      if(dx*dx+dy*dy>R*R) continue;
+      wall[y*gw+x]=1;
+    }
+  } else {
+    impulse(gx,gy, -1.4);
+  }
+}
+cv.addEventListener('pointerdown',e=>{ mDown=true; applyMouse(e); });
+addEventListener('pointermove',e=>{ if(mDown) applyMouse(e); });
+addEventListener('pointerup',()=>mDown=false);
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+const SUBSTEPS=2;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){
+    for(let s=0;s<SUBSTEPS;s++){
+      physics();
+      t+=0.5;        // half a frame per substep -> freq stays per-frame
+      drive();
+    }
+    draw();
+  }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${gw}×${gh} grid · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); }; }
+bind('sFreq','vFreq',x=>x.toFixed(3),x=>{ freq=x; });
+bind('sSrc','vSrc',x=>x|0,x=>{ nSources=x|0; placeSources(); });
+bind('sSpace','vSpace',x=>x.toFixed(2),x=>{ spacing=x; placeSources(); });
+bind('sC','vC',x=>x.toFixed(2),x=>{ C=x; });
+bind('sDamp','vDamp',x=>x.toFixed(4),x=>{ damping=x; });
+bind('sRes','vRes',x=>x|0,x=>{ scale=x|0; allocGrid(); });
+bind('sRef','vRef',x=>x.toFixed(2),x=>{ edgeReflect=x; });
+bind('sPal','vPal',x=>palettes[x|0].name,x=>{ palette=x|0; buildLUT(); });
+
+$('barrier').onclick=()=>{
+  barrierMode=!barrierMode;
+  $('barrier').classList.toggle('on',barrierMode);
+  if(barrierMode) buildBarrier(); else clearWalls();
+};
+$('paint').onclick=()=>{
+  paintMode=!paintMode;
+  $('paint').classList.toggle('on',paintMode);
+  cv.style.cursor=paintMode?'cell':'crosshair';
+};
+$('clear').onclick=()=>clearField();
+$('reseed').onclick=()=>init();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='ripple-tank.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')init();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+  else if(e.key==='b'){ $('barrier').click(); }
+  else if(e.key==='c')clearField();
+});
+
+// ---- go ----
+resize(); buildLUT(); init();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

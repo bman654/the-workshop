@@ -7,7 +7,7 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 > **Resume protocol:** read this top section, then continue from "Next up". Commit + update
 > here after every piece.
 
-## Status — 12 specimens, all browser-verified PASS (60fps unless noted), clean consoles
+## Status — 15 specimens, all browser-verified PASS (60fps unless noted), clean consoles
 
 | # | file | system | notes |
 |---|------|--------|-------|
@@ -23,6 +23,9 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 | 10 | phyllotaxis.html | Phyllotaxis | Vogel golden-angle; breathing divergence reorganizes spiral families |
 | 11 | n-body.html | N-Body | attractor-mode galaxies; Disc/Two-galaxy/cloud/3-sun; gravity-well mouse |
 | 12 | julia.html | Julia | WebGL animated Julia; c drifts the 0.7885 ring; drag to sculpt c live |
+| 13 | l-system.html | L-System | stochastic L-systems; 6 species; grow→sway→fade→reseed; seasons |
+| 14 | chladni.html | Chladni | sand migrates to nodal lines; (m,n) morph; 16 presets |
+| 15 | ripple-tank.html | Ripple Tank | 2D wave eq; 2-source interference; double-slit diffraction; click-to-ripple |
 
 - gallery `index.html` + `pieces.js` (9 entries) verified: all cards + thumbnails render, clean console.
 - thumbnails in `assets/thumbs/`; `assets/gallery-preview.png` is a full-page gallery shot.
@@ -37,10 +40,11 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 ## Next up
 - Polish DONE: garden README, "wander in" random button + digit nav, thumbnails normalized
   to ≤1440w, gallery re-verified.
-- **Wave 5 candidate pieces:** chladni/cymatics plates, wave-function-collapse tiling,
-  L-system fractal plants, mandelbrot deep-zoom explorer, Turing/Belousov-Zhabotinsky,
-  Voronoi growth, terrain erosion, Gray-Scott "u-skate" gliders.
+- **Wave 6 candidate pieces:** wave-function-collapse tiling, mandelbrot deep-zoom explorer,
+  Voronoi/Delaunay growth, terrain erosion, falling-sand sandbox, Belousov-Zhabotinsky,
+  double-pendulum/chaos field, magnetic-pendulum fractal basins.
 - Possible: a favicon; per-piece prev/next nav; an "about" page; sort/filter on the gallery.
+- Note: ripple-tank thumbnail shows the control panel (others hide it) — minor, could recapture.
 
 ## Log
 - 2026-06-07 — Scaffold: git, folders, README head-pointer, SPEC.md, heartbeat cron (5 min).
@@ -51,3 +55,6 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 - 2026-06-08 — Polish: garden README, "wander in" + digit nav, thumbnail normalization.
 - 2026-06-08 — Wave 4: phyllotaxis, n-body, julia (WebGL) — deputies used unique NAMED
   browser sessions (no tab contention; ~6min each vs 14-42min in wave 3). 12 specimens total.
+- 2026-06-08 — Wave 5: l-system (6 species), chladni (cymatics), ripple-tank (wave eq +
+  double-slit). Named sessions; deputies returned manifests, orchestrator registered them.
+  15 specimens total.

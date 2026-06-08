@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chladni — Strange Garden</title>
+<style>
+  :root { --accent: #d9c4a3; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; margin-top:3px; padding:5px 6px; font-size:12px;
+    color:#e6e8ee; background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.12); border-radius:8px;
+    font-family:ui-monospace,Menlo,monospace; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Chladni</h1>
+  <p class="desc">Sand flees the trembling antinodes and settles along the still
+    nodal lines of a singing plate — figures bloom, dissolve, reform.</p>
+  <label>Mode m <b id="vM">5</b></label>
+  <input type="range" id="sM" min="1" max="12" step="1" value="5">
+  <label>Mode n <b id="vN">3</b></label>
+  <input type="range" id="sN" min="1" max="12" step="1" value="3">
+  <label>Grains <b id="vG">26000</b></label>
+  <input type="range" id="sG" min="3000" max="60000" step="1000" value="26000">
+  <label>Vibration <b id="vV">1.0</b></label>
+  <input type="range" id="sV" min="0.2" max="3" step="0.05" value="1.0">
+  <label>Morph speed <b id="vMs">0.35</b></label>
+  <input type="range" id="sMs" min="0" max="2" step="0.05" value="0.35">
+  <label>Preset</label>
+  <select id="preset"></select>
+  <label>Tint <b id="vTint">amber</b></label>
+  <input type="range" id="sTint" min="0" max="4" step="1" value="0">
+  <div class="row"><button id="next" class="pri">Next figure</button><button id="reseed">Reseed</button></div>
+  <div class="row"><button id="pause">Pause</button><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">click plate to retune · space pause · r reseed · h hide</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  W=cv.width=Math.floor(innerWidth*DPR); H=cv.height=Math.floor(innerHeight*DPR);
+  cv.style.width=innerWidth+'px'; cv.style.height=innerHeight+'px';
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+}
+addEventListener('resize',resize);
+
+// ---- parameters ----
+let nGrains=26000, vibration=1.0, morphSpeed=0.35, tintIdx=0;
+// current (rendered) modes, and target modes we morph toward
+let m=5, n=3, mT=5, nT=3, mF=5, nF=3; // F = fractional interpolated modes used in field
+let morphPhase=1; // 0..1 progress of current transition (1 = settled)
+
+// grain positions in normalized plate space [0,1]
+let gx, gy;
+
+// ---- plate geometry: square plate centered, with margin ----
+// We map normalized field coords u,v in [0,1] to a centered square on the canvas.
+let plate; // {x,y,size} in device px
+function computePlate(){
+  const margin = Math.min(W,H)*0.06;
+  const size = Math.min(W,H) - margin*2;
+  plate = { x:(W-size)/2, y:(H-size)/2, size };
+}
+
+// ---- presets: beautiful (m,n) pairs ----
+const presets = [
+  {m:1,n:2}, {m:2,n:3}, {m:3,n:1}, {m:3,n:5}, {m:4,n:2},
+  {m:5,n:3}, {m:5,n:7}, {m:6,n:2}, {m:7,n:4}, {m:7,n:8},
+  {m:8,n:3}, {m:9,n:5}, {m:10,n:6}, {m:11,n:4}, {m:6,n:6}, {m:8,n:9}
+];
+
+// ---- palettes (warm sand tints over dark plate) ----
+const tints = [
+  { name:'amber',  grain:'255,234,200', field:[ 60, 35, 18] },
+  { name:'bone',   grain:'238,236,228', field:[ 30, 34, 44] },
+  { name:'rose',   grain:'248,222,214', field:[ 64, 28, 34] },
+  { name:'jade',   grain:'224,240,224', field:[ 18, 48, 40] },
+  { name:'ash',    grain:'214,214,222', field:[ 34, 34, 40] }
+];
+
+function seedGrains(){
+  gx=new Float32Array(nGrains); gy=new Float32Array(nGrains);
+  for(let i=0;i<nGrains;i++){ gx[i]=Math.random(); gy[i]=Math.random(); }
+}
+
+// standing-wave amplitude for the free square plate.
+// s(x,y) = cos(mπx)cos(nπy) - cos(nπx)cos(mπy)
+function ampAt(x,y,mm,nn){
+  const mpx=Math.cos(mm*Math.PI*x), npx=Math.cos(nn*Math.PI*x);
+  const mpy=Math.cos(mm*Math.PI*y), npy=Math.cos(nn*Math.PI*y);
+  return mpx*mpy - npx*npy;
+}
+
+// pick next target modes (avoid degenerate m==n giving blank, and repeats)
+let presetCursor=0;
+function advanceTarget(useCursor){
+  let pm,pn;
+  if(useCursor){ const p=presets[presetCursor%presets.length]; presetCursor++; pm=p.m; pn=p.n; }
+  else { const p=presets[(Math.random()*presets.length)|0]; pm=p.m; pn=p.n; }
+  // store the previous settled modes as the morph start
+  mStart=mF; nStart=nF;
+  mT=pm; nT=pn; morphPhase=0;
+  // reflect in sliders
+  $('sM').value=pm; $('vM').textContent=pm;
+  $('sN').value=pn; $('vN').textContent=pn;
+}
+let mStart=5, nStart=3;
+
+// when user drags sliders directly, snap target instantly with quick morph
+function setTarget(pm,pn){
+  mStart=mF; nStart=nF; mT=pm; nT=pn; morphPhase=0;
+}
+
+// smoothstep
+function smooth(t){ return t*t*(3-2*t); }
+
+function step(dt){
+  // ---- morph the field modes toward target ----
+  if(morphSpeed>0){
+    if(morphPhase<1){
+      morphPhase=Math.min(1, morphPhase + dt*morphSpeed*1.4);
+    } else {
+      // settled. auto-advance after a dwell if morphSpeed>0
+      dwell += dt;
+      const dwellTime = 2.2/Math.max(morphSpeed,0.05);
+      if(dwell>dwellTime){ dwell=0; advanceTarget(true); }
+    }
+  } else {
+    // hold: snap morph to target instantly
+    if(morphPhase<1) morphPhase=Math.min(1, morphPhase+dt*2.5);
+  }
+  const e=smooth(morphPhase);
+  mF = mStart + (mT-mStart)*e;
+  nF = nStart + (nT-nStart)*e;
+  m = Math.round(mF); n = Math.round(nF);
+
+  // ---- migrate grains ----
+  // where |s| large -> big random jiggle; where |s|~0 -> calm -> accumulate.
+  // also nudge down gradient of |s| toward nodes.
+  const eps = 0.0016;            // finite-diff step for gradient
+  const baseJiggle = 0.0009;     // baseline random walk so grains never fully freeze
+  const jig = 0.020 * vibration; // jiggle amplitude scale
+  const grad = 0.030;            // descent toward nodes strength
+  // during active morph, shake harder so old figure dissolves
+  const stir = morphPhase<1 ? (0.7 + 0.9*(1-Math.abs(2*morphPhase-1))) : 1.0;
+
+  for(let i=0;i<nGrains;i++){
+    const x=gx[i], y=gy[i];
+    const s = ampAt(x,y,mF,nF);
+    const as = Math.abs(s);
+    // gradient of |s| via central differences
+    const sxp=Math.abs(ampAt(x+eps,y,mF,nF)), sxm=Math.abs(ampAt(x-eps,y,mF,nF));
+    const syp=Math.abs(ampAt(x,y+eps,mF,nF)), sym=Math.abs(ampAt(x,y-eps,mF,nF));
+    let gxv=(sxp-sxm)/(2*eps), gyv=(syp-sym)/(2*eps);
+    const gn=Math.hypot(gxv,gyv)+1e-6;
+    // step down the |s| gradient (toward smaller |s| = nodes)
+    let nx = x - (gxv/gn) * grad * as;
+    let ny = y - (gyv/gn) * grad * as;
+    // random jiggle scaled by local shaking
+    const amp = (baseJiggle + jig*as) * stir;
+    nx += (Math.random()*2-1)*amp;
+    ny += (Math.random()*2-1)*amp;
+    // keep in bounds (reflect)
+    if(nx<0) nx=-nx; else if(nx>1) nx=2-nx;
+    if(ny<0) ny=-ny; else if(ny>1) ny=2-ny;
+    if(nx<0)nx=0; else if(nx>1)nx=1;
+    if(ny<0)ny=0; else if(ny>1)ny=1;
+    gx[i]=nx; gy[i]=ny;
+  }
+}
+
+let dwell=0;
+
+// precomputed field tint image (low-res, regenerated when modes change enough)
+let fieldCanvas=document.createElement('canvas'), fctx=fieldCanvas.getContext('2d');
+let fieldRes=96, lastFieldKey='';
+fieldCanvas.width=fieldCanvas.height=fieldRes;
+let fieldImg=fctx.createImageData(fieldRes,fieldRes);
+function renderField(){
+  const t=tints[tintIdx], fr=t.field;
+  const d=fieldImg.data;
+  let p=0;
+  for(let j=0;j<fieldRes;j++){
+    const y=(j+0.5)/fieldRes;
+    for(let i2=0;i2<fieldRes;i2++){
+      const x=(i2+0.5)/fieldRes;
+      const s=ampAt(x,y,mF,nF);
+      const a=Math.abs(s);            // 0 at nodes, up to ~2 at antinodes
+      const k=Math.min(1,a*0.5);      // 0..1
+      // faint: antinodes get a whisper of tint, nodes stay near-black
+      const w=k*k*0.5;
+      d[p++]=10 + fr[0]*w;
+      d[p++]=11 + fr[1]*w;
+      d[p++]=15 + fr[2]*w;
+      d[p++]=255;
+    }
+  }
+  fctx.putImageData(fieldImg,0,0);
+}
+
+function draw(){
+  computePlate();
+  const {x:px0,y:py0,size}=plate;
+  // background
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+
+  // faint amplitude field behind, only on the plate
+  renderField();
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(fieldCanvas, px0, py0, size, size);
+
+  // plate edge
+  ctx.strokeStyle='rgba(255,255,255,0.06)';
+  ctx.lineWidth=1*DPR;
+  ctx.strokeRect(px0+0.5, py0+0.5, size-1, size-1);
+
+  // grains: draw as small soft dots via fillRect (fast)
+  const t=tints[tintIdx];
+  const r=Math.max(0.7*DPR, size/900); // grain radius-ish
+  const sz=r*1.6;
+  // additive build so overlapping grains brighten the dense nodal lines
+  ctx.globalCompositeOperation='lighter';
+  ctx.fillStyle='rgba('+t.grain+',0.5)';
+  for(let i=0;i<nGrains;i++){
+    const cx=px0 + gx[i]*size;
+    const cy=py0 + gy[i]*size;
+    ctx.fillRect(cx-r, cy-r, sz, sz);
+  }
+  ctx.globalCompositeOperation='source-over';
+}
+
+// ---- interaction: click plate to retune to a random pleasing preset ----
+cv.addEventListener('pointerdown',()=>{ advanceTarget(false); dwell=0; });
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){ step(dt); draw(); }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`m,n ${m},${n} · ${(nGrains/1000)|0}k grains · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+// populate presets
+(function(){
+  const sel=$('preset');
+  presets.forEach((p,i)=>{ const o=document.createElement('option');
+    o.value=i; o.textContent=`m=${p.m}  n=${p.n}`; sel.appendChild(o); });
+  sel.onchange=()=>{ const p=presets[sel.value|0]; setTarget(p.m,p.n);
+    $('sM').value=p.m; $('vM').textContent=p.m;
+    $('sN').value=p.n; $('vN').textContent=p.n; dwell=0; };
+})();
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ const x=parseFloat(s.value); set(x); if(v)v.textContent=fmt(x); }; }
+bind('sM','vM',x=>x|0,x=>{ setTarget(x|0, nT); dwell=0; });
+bind('sN','vN',x=>x|0,x=>{ setTarget(mT, x|0); dwell=0; });
+bind('sG','vG',x=>x|0,x=>{ nGrains=x|0; seedGrains(); });
+bind('sV','vV',x=>x.toFixed(2),x=>{ vibration=x; });
+bind('sMs','vMs',x=>x.toFixed(2),x=>{ morphSpeed=x; });
+bind('sTint','vTint',x=>tints[x|0].name,x=>{ tintIdx=x|0; });
+$('next').onclick=()=>{ advanceTarget(true); dwell=0; };
+$('reseed').onclick=()=>seedGrains();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='chladni.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')seedGrains();
+  else if(e.key==='n'){ advanceTarget(true); dwell=0; }
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+resize(); computePlate();
+mStart=m; nStart=n; mT=m; nT=n; mF=m; nF=n; morphPhase=1;
+seedGrains();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
