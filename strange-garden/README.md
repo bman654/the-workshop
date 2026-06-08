@@ -45,6 +45,9 @@ file with **zero dependencies and no build step**.
 | 26 | **Fourier Epicycles** | A chain of spinning circles, summed, will draw any outline you give them. |
 | 27 | **Tesseract** | A four-dimensional cube rotates through hyperspace, forever folding its inside out. |
 | 28 | **Game of Life** | Conway's classic — three rules conjure gliders, guns and oscillators from a soup. |
+| 29 | **Penrose** | Golden-ratio deflation grows a five-fold tiling of rhombi that never repeats. |
+| 30 | **Belousov–Zhabotinsky** | A chemical clock — three reagents spiral into glowing, endless target waves. |
+| 31 | **Metaballs** | Drops of liquid metal drift, kiss, and pour into one another. |
 
 ## Controls (shared by every specimen)
 

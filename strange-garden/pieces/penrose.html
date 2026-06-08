@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Penrose — Strange Garden</title>
+<style>
+  :root { --accent: #c79be8; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel .check { display:flex; align-items:center; gap:8px; margin:12px 0 0;
+    font:11px ui-monospace,Menlo,monospace; opacity:.8; cursor:pointer; }
+  #panel .check input { accent-color:var(--accent); }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Penrose</h1>
+  <p class="desc">Two rhombi tile the plane in five-fold symmetry and never repeat —
+    an aperiodic crystal grown by golden deflation.</p>
+  <label>Depth <b id="vD">6</b></label>
+  <input type="range" id="sD" min="2" max="9" step="1" value="6">
+  <label>Shimmer <b id="vS">0.5</b></label>
+  <input type="range" id="sS" min="0" max="2" step="0.05" value="0.5">
+  <label>Rotation <b id="vR">0.10</b></label>
+  <input type="range" id="sR" min="0" max="1" step="0.02" value="0.10">
+  <label>Palette <b id="vP">aurora</b></label>
+  <input type="range" id="sP" min="0" max="4" step="1" value="0">
+  <label class="check"><input type="checkbox" id="edges" checked> show edges</label>
+  <div class="row"><button id="regen" class="pri">Regenerate</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">space pause · r regen · h hide · s save</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR,cssW,cssH;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  cssW=innerWidth; cssH=innerHeight;
+  W=cv.width=Math.floor(cssW*DPR); H=cv.height=Math.floor(cssH*DPR);
+  cv.style.width=cssW+'px'; cv.style.height=cssH+'px';
+}
+let resizeTimer=null;
+addEventListener('resize',()=>{ resize(); clearTimeout(resizeTimer);
+  resizeTimer=setTimeout(()=>{ if(typeof build==='function') build(); }, 150); });
+
+// ---- parameters ----
+let depth=6, shimmer=0.5, rotSpeed=0.10, paletteIdx=0, showEdges=true;
+const PHI=(1+Math.sqrt(5))/2;       // golden ratio
+const INVPHI=1/PHI;                  // 1/phi ~ 0.618
+
+// ---- triangle store ----
+// each triangle: {type:0=fat|1=thin, ax,ay,bx,by,cx,cy}
+// Robinson triangles. The apex is vertex A; B and C are the base corners.
+let tris=[];
+let cx0=0, cy0=0;   // tiling center (in css px)
+
+// Build the initial "sun" wheel of 10 fat (acute Robinson) half-rhombi.
+// Each spoke has its 36° apex at the centre; the two rim vertices fan out by
+// 36°.  Mirroring alternate spokes makes the two halves of every fat rhombus
+// meet cleanly, giving true 5-fold symmetry. Stored as flat verts [color,A,B,C].
+function seed(R){
+  const out=[];
+  for(let i=0;i<10;i++){
+    let B = [Math.cos((2*i-1)*Math.PI/10)*R, Math.sin((2*i-1)*Math.PI/10)*R];
+    let C = [Math.cos((2*i+1)*Math.PI/10)*R, Math.sin((2*i+1)*Math.PI/10)*R];
+    if(i % 2 === 0){ const t=B; B=C; C=t; }
+    out.push([0, [0,0], B, C]);
+  }
+  return out;
+}
+
+// One deflation pass — the canonical Robinson-triangle subdivision for P3
+// (Robinson / de Bruijn / Preshing).  Vertices are [x,y]; triangle is
+// [color, A, B, C] where color 0 = fat (acute 36-72-72) and 1 = thin
+// (obtuse 108-36-36).  Cut points sit 1/φ along an edge:
+//   fat  -> 1 fat + 1 thin  (cut P = A + (B-A)/φ)
+//   thin -> 1 fat + 2 thin  (cuts Q = B + (A-B)/φ, S = B + (C-B)/φ)
+// Every child edge shrinks by 1/φ, so the tiling refines without slivers.
+function deflate(list){
+  const out=[];
+  for(let k=0;k<list.length;k++){
+    const tr=list[k], A=tr[1], B=tr[2], C=tr[3];
+    if(tr[0]===0){
+      const P=[A[0]+(B[0]-A[0])*INVPHI, A[1]+(B[1]-A[1])*INVPHI];
+      out.push([0, C, P, B]);
+      out.push([1, P, C, A]);
+    } else {
+      const Q=[B[0]+(A[0]-B[0])*INVPHI, B[1]+(A[1]-B[1])*INVPHI];
+      const S=[B[0]+(C[0]-B[0])*INVPHI, B[1]+(C[1]-B[1])*INVPHI];
+      out.push([1, S, C, A]);
+      out.push([1, Q, S, B]);
+      out.push([0, S, Q, A]);
+    }
+  }
+  return out;
+}
+
+function build(){
+  // size the seed so the deflated pattern overfills the screen a touch
+  const R = Math.hypot(cssW, cssH) * 0.62;
+  let list = seed(R);
+  for(let i=0;i<depth;i++) list = deflate(list);
+  const maxR = Math.hypot(cssW, cssH)*0.55;
+  // flatten to a compact draw-friendly form and precompute the static
+  // (rotation-invariant) centroid distance and angle used by the colour wave.
+  tris = list.map(tr=>{
+    const ax=tr[1][0], ay=tr[1][1], bx=tr[2][0], by=tr[2][1], cx=tr[3][0], cy=tr[3][1];
+    const mx=(ax+bx+cx)/3, my=(ay+by+cy)/3;
+    return { t:tr[0], ax,ay, bx,by, cx,cy,
+      d: Math.hypot(mx,my)/maxR, a: Math.atan2(my,mx) };
+  });
+  // Sort so triangles that share a colour-wave phase sit next to each other in
+  // the draw list (the wave is dominated by d*7 + a*2).  Grouping like colours
+  // contiguously lets draw() issue one fill per run instead of one per triangle.
+  tris.sort((p,q)=>(p.d*7 + p.a*2 + p.t*1000) - (q.d*7 + q.a*2 + q.t*1000));
+  cx0 = cssW*0.5; cy0 = cssH*0.5;
+  vigKey='';
+}
+
+// ---- palettes: [fatHue, thinHue, satF, satT, baseLight] ----
+const PALETTES = [
+  { name:'aurora',  fatH:265, thinH:175, satF:42, satT:46, light:54, edge:'rgba(232,230,245,0.30)' },
+  { name:'ember',   fatH: 22, thinH:340, satF:62, satT:54, light:52, edge:'rgba(255,235,220,0.26)' },
+  { name:'tide',    fatH:200, thinH:155, satF:48, satT:52, light:53, edge:'rgba(220,240,250,0.28)' },
+  { name:'bloom',   fatH:320, thinH: 95, satF:50, satT:46, light:55, edge:'rgba(245,235,250,0.26)' },
+  { name:'slate',   fatH:230, thinH: 40, satF:20, satT:34, light:58, edge:'rgba(235,238,248,0.22)' },
+];
+
+let t0=performance.now();
+// Bake the vignette to an offscreen canvas once per size — drawImage is far
+// cheaper than re-rasterising a full-screen radial gradient every frame.
+let vigCanvas=null, vigKey='';
+function vig(){
+  const key=cssW+'x'+cssH;
+  if(vigCanvas && vigKey===key) return vigCanvas;
+  const oc=document.createElement('canvas');
+  oc.width=Math.max(1,Math.floor(cssW)); oc.height=Math.max(1,Math.floor(cssH));
+  const g2=oc.getContext('2d');
+  const cx=cssW*0.5, cy=cssH*0.5;
+  const grad=g2.createRadialGradient(cx,cy,Math.min(cssW,cssH)*0.2,cx,cy,Math.hypot(cssW,cssH)*0.62);
+  grad.addColorStop(0,'rgba(0,0,0,0)');
+  grad.addColorStop(1,'rgba(6,7,11,0.55)');
+  g2.fillStyle=grad; g2.fillRect(0,0,oc.width,oc.height);
+  vigCanvas=oc; vigKey=key; return oc;
+}
+
+// Per triangle we precompute its static distance-from-centre and angle (they
+// only change with rotation) plus a colour string built from a quantised
+// (hue,light) bucket.  fillStyle strings are cached per bucket so the per-frame
+// hot loop avoids template-string allocation; triangles are drawn grouped by
+// colour so the canvas changes fillStyle only a few hundred times per frame.
+const HUE_STEP=5, LIGHT_STEP=3;
+let colorCache=new Map();          // "hueQ_lightQ_t" -> css hsl string
+function colorFor(hue,light,t,P){
+  const hueQ=Math.round(hue/HUE_STEP)*HUE_STEP;
+  let lightQ=Math.round(light/LIGHT_STEP)*LIGHT_STEP; if(lightQ<14)lightQ=14;
+  const key=hueQ+'_'+lightQ+'_'+t;
+  let s=colorCache.get(key);
+  if(s===undefined){ s=`hsl(${hueQ} ${t===0?P.satF:P.satT}% ${lightQ}%)`; colorCache.set(key,s); }
+  return s;
+}
+
+// draw order grouped by colour bucket to minimise fillStyle churn
+const order=[];   // reused scratch: indices sorted by colour key
+function draw(now){
+  const tsec=(now-t0)/1000;
+  const rot = tsec * rotSpeed * 0.18;     // very slow rotation (radians)
+  const P = PALETTES[paletteIdx];
+  if(colorCache._pal!==paletteIdx){ colorCache=new Map(); colorCache._pal=paletteIdx; }
+
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle='#0a0b0f';
+  ctx.fillRect(0,0,cssW,cssH);
+
+  const ca=Math.cos(rot), sa=Math.sin(rot);
+  const sinw=Math.sin;
+  const maxR=Math.hypot(cssW,cssH)*0.55;
+  const wavePhase=tsec*shimmer;
+  const c0x=cx0, c0y=cy0;
+
+  let curStyle=null;
+  ctx.beginPath();
+  for(let k=0;k<tris.length;k++){
+    const tr=tris[k];
+    const wave=sinw(tr.d*7.0 - wavePhase*1.6 + (tr.a+rot)*2.0);
+    const hue=(tr.t===0?P.fatH:P.thinH)+wave*26;
+    const light=P.light+wave*9-tr.d*10;
+    const style=colorFor(hue,light,tr.t,P);
+    if(style!==curStyle){
+      if(curStyle!==null) ctx.fill();
+      ctx.fillStyle=style; curStyle=style; ctx.beginPath();
+    }
+    // rotate verts about centre
+    const Ax=c0x+tr.ax*ca-tr.ay*sa, Ay=c0y+tr.ax*sa+tr.ay*ca;
+    const Bx=c0x+tr.bx*ca-tr.by*sa, By=c0y+tr.bx*sa+tr.by*ca;
+    const Cx=c0x+tr.cx*ca-tr.cy*sa, Cy=c0y+tr.cx*sa+tr.cy*ca;
+    ctx.moveTo(Ax,Ay); ctx.lineTo(Bx,By); ctx.lineTo(Cx,Cy); ctx.closePath();
+  }
+  if(curStyle!==null) ctx.fill();
+
+  // edges in one batched pass
+  if(showEdges){
+    ctx.beginPath();
+    for(let k=0;k<tris.length;k++){
+      const tr=tris[k];
+      const Ax=c0x+tr.ax*ca-tr.ay*sa, Ay=c0y+tr.ax*sa+tr.ay*ca;
+      const Bx=c0x+tr.bx*ca-tr.by*sa, By=c0y+tr.bx*sa+tr.by*ca;
+      const Cx=c0x+tr.cx*ca-tr.cy*sa, Cy=c0y+tr.cx*sa+tr.cy*ca;
+      ctx.moveTo(Ax,Ay); ctx.lineTo(Bx,By); ctx.lineTo(Cx,Cy); ctx.closePath();
+    }
+    ctx.lineJoin='round'; ctx.lineWidth=0.6; ctx.strokeStyle=P.edge; ctx.stroke();
+  }
+
+  // soft vignette (pre-baked image)
+  ctx.drawImage(vig(),0,0,cssW,cssH);
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){ draw(now); }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${tris.length.toLocaleString()} tiles · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ set(parseFloat(s.value)); v.textContent=fmt(parseFloat(s.value)); }; }
+bind('sD','vD',x=>x|0,x=>{ depth=x|0; build(); });
+bind('sS','vS',x=>x.toFixed(2),x=>{ shimmer=x; });
+bind('sR','vR',x=>x.toFixed(2),x=>{ rotSpeed=x; });
+bind('sP','vP',x=>PALETTES[x|0].name,x=>{ paletteIdx=x|0; });
+$('edges').onchange=()=>{ showEdges=$('edges').checked; };
+$('regen').onclick=()=>{ build(); };
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='penrose.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')build();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+resize(); build();
+requestAnimationFrame(loop);
+</script>
+<!-- sg-nav -->
+<script src="../pieces.js"></script>
+<script>
+(function(){
+  if (document.getElementById('sg-nav')) return;
+  var pieces = window.PIECES;
+  if (!pieces || !pieces.length) return;
+  var here = (location.pathname.split('/').pop() || '').toLowerCase();
+  var idx = -1;
+  for (var i = 0; i < pieces.length; i++) {
+    if ((pieces[i].file || '').toLowerCase() === here) { idx = i; break; }
+  }
+  if (idx < 0) return;
+  var n = pieces.length;
+  var prev = pieces[(idx - 1 + n) % n];
+  var next = pieces[(idx + 1) % n];
+  var neutral = 'rgba(220,225,235,0.85)';
+
+  var bar = document.createElement('div');
+  bar.id = 'sg-nav';
+  bar.style.cssText = 'position:fixed;bottom:10px;left:50%;transform:translateX(-50%);' +
+    'z-index:50;pointer-events:auto;font:11px ui-monospace,Menlo,monospace;' +
+    'opacity:0.45;transition:opacity .18s ease;white-space:nowrap;' +
+    'letter-spacing:.02em;-webkit-font-smoothing:antialiased;user-select:none;';
+  bar.addEventListener('mouseenter', function(){ bar.style.opacity = '0.9'; });
+  bar.addEventListener('mouseleave', function(){ bar.style.opacity = '0.45'; });
+
+  function mkLink(piece, label){
+    var a = document.createElement('a');
+    a.href = piece.file;
+    a.style.cssText = 'color:' + (piece.accent || neutral) + ';text-decoration:none;';
+    a.textContent = label;
+    return a;
+  }
+  var prevLink = mkLink(prev, '‹ ' + prev.name);
+  var nextLink = mkLink(next, next.name + ' ›');
+  var sep = document.createElement('span');
+  sep.textContent = '   ·   ';
+  sep.style.color = 'rgba(180,185,195,0.6)';
+
+  bar.appendChild(prevLink);
+  bar.appendChild(sep);
+  bar.appendChild(nextLink);
+  document.body.appendChild(bar);
+
+  window.addEventListener('keydown', function(e){
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t) {
+      var tag = (t.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable) return;
+    }
+    if (e.key === 'ArrowLeft') { location.href = prev.file; }
+    else if (e.key === 'ArrowRight') { location.href = next.file; }
+  });
+})();
+</script>
+</body>
+</html>

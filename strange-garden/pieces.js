@@ -169,5 +169,23 @@ window.PIECES = [
     name: "Game of Life",
     blurb: "three rules conjure gliders, oscillators, life from nothing",
     accent: "#5fd0a8"
+  },
+  {
+    file: "penrose.html",
+    name: "Penrose",
+    blurb: "golden deflation grows a crystal that never repeats",
+    accent: "#c79be8"
+  },
+  {
+    file: "bz-reaction.html",
+    name: "Belousov–Zhabotinsky",
+    blurb: "a chemical clock spiraling into glowing endless waves",
+    accent: "#4cc9f0"
+  },
+  {
+    file: "metaballs.html",
+    name: "Metaballs",
+    blurb: "drops of liquid metal kiss and pour into one",
+    accent: "#6fe6d0"
   }
 ];

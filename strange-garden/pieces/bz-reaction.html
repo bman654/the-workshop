@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Belousov–Zhabotinsky — Strange Garden</title>
+<style>
+  :root { --accent: #4cc9f0; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Belousov–Zhabotinsky</h1>
+  <p class="desc">A chemical clock that refuses to settle. Three reagents chase one another
+    into glowing spirals and target waves, oscillating forever.</p>
+  <label>α reaction <b id="vA">1.10</b></label>
+  <input type="range" id="sA" min="0.6" max="1.6" step="0.01" value="1.1">
+  <label>β reaction <b id="vB">1.00</b></label>
+  <input type="range" id="sB" min="0.6" max="1.6" step="0.01" value="1.0">
+  <label>γ reaction <b id="vG">1.00</b></label>
+  <input type="range" id="sG" min="0.6" max="1.6" step="0.01" value="1.0">
+  <label>Speed <b id="vS">3</b></label>
+  <input type="range" id="sS" min="1" max="8" step="1" value="3">
+  <label>Scale <b id="vSc">4</b></label>
+  <input type="range" id="sSc" min="2" max="6" step="1" value="4">
+  <label>Palette <b id="vP">aurora</b></label>
+  <input type="range" id="sP" min="0" max="4" step="1" value="0">
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">click · drag to nucleate spirals · p palette · h hides panel</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR;
+
+// ---- simulation grid ----
+let scale=4;                 // CSS px per simulation cell
+let gw,gh;                   // grid width/height in cells
+let a,b,c, a2,b2,c2;         // double-buffered Float32 fields
+let img, buf32;              // ImageData (gw x gh) and Uint32 view
+let off, offctx;            // offscreen canvas holding the small image
+
+// ---- parameters ----
+let alpha=1.1, beta=1.0, gamma=1.0, substeps=3, palette=0;
+const PAL_NAMES=['aurora','ember','toxic','plasma','ice'];
+
+// ---- palette: 256-entry lookup of 0xAABBGGRR (canvas ImageData is little-endian RGBA) ----
+let lut=new Uint32Array(256);
+function pack(r,g,b){ return (255<<24)|((b&255)<<16)|((g&255)<<8)|(r&255); }
+function clamp8(x){ return x<0?0:x>255?255:x|0; }
+// smooth gradient between control colour stops
+function buildLUT(){
+  // stops: [pos0..1, r,g,b]
+  let stops;
+  switch(palette){
+    case 0: // aurora — deep indigo → teal → cyan → pale gold (classic BZ glow)
+      stops=[[0.0,6,8,28],[0.30,12,40,86],[0.52,20,150,170],[0.72,90,230,220],[0.88,200,255,200],[1.0,255,248,190]]; break;
+    case 1: // ember — black → blood → orange → white-hot
+      stops=[[0.0,8,4,6],[0.32,90,12,18],[0.56,210,60,20],[0.78,250,160,40],[1.0,255,245,210]]; break;
+    case 2: // toxic — midnight green → acid yellow-green → lime
+      stops=[[0.0,4,12,8],[0.34,12,70,40],[0.58,60,170,40],[0.80,180,235,30],[1.0,240,255,170]]; break;
+    case 3: // plasma — violet → magenta → orange → yellow
+      stops=[[0.0,12,2,28],[0.30,80,10,110],[0.54,190,30,120],[0.76,250,110,50],[1.0,250,235,120]]; break;
+    case 4: // ice — near-black blue → steel → cyan → white
+      stops=[[0.0,4,8,16],[0.34,18,42,78],[0.60,40,120,180],[0.82,140,210,235],[1.0,245,252,255]]; break;
+  }
+  for(let i=0;i<256;i++){
+    const t=i/255;
+    let s=0; while(s<stops.length-2 && t>stops[s+1][0]) s++;
+    const s0=stops[s], s1=stops[s+1];
+    const span=(s1[0]-s0[0])||1, f=Math.max(0,Math.min(1,(t-s0[0])/span));
+    // smoothstep for silkier bands
+    const ff=f*f*(3-2*f);
+    const r=clamp8(s0[1]+(s1[1]-s0[1])*ff);
+    const g=clamp8(s0[2]+(s1[2]-s0[2])*ff);
+    const bl=clamp8(s0[3]+(s1[3]-s0[3])*ff);
+    lut[i]=pack(r,g,bl);
+  }
+}
+
+function allocGrid(){
+  gw=Math.max(8, Math.floor(innerWidth/scale));
+  gh=Math.max(8, Math.floor(innerHeight/scale));
+  const N=gw*gh;
+  a=new Float32Array(N); b=new Float32Array(N); c=new Float32Array(N);
+  a2=new Float32Array(N); b2=new Float32Array(N); c2=new Float32Array(N);
+  off=document.createElement('canvas'); off.width=gw; off.height=gh;
+  offctx=off.getContext('2d');
+  img=offctx.createImageData(gw,gh);
+  buf32=new Uint32Array(img.data.buffer);
+}
+
+function seed(){
+  const N=gw*gh;
+  for(let i=0;i<N;i++){
+    a[i]=Math.random();
+    b[i]=Math.random();
+    c[i]=Math.random();
+  }
+}
+function init(){ allocGrid(); seed(); }
+
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  W=cv.width=Math.floor(innerWidth*DPR); H=cv.height=Math.floor(innerHeight*DPR);
+  cv.style.width=innerWidth+'px'; cv.style.height=innerHeight+'px';
+  ctx.imageSmoothingEnabled=true;
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+}
+addEventListener('resize',()=>{ resize(); init(); });
+
+// ---- BZ reaction step (3-species Turner model) ----
+// neighbourhood averages = diffusion; then react. Toroidal edges.
+function react(){
+  const aa=a, bb=b, cc=c, na=a2, nb=b2, nc=c2;
+  const al=alpha, be=beta, ga=gamma;
+  for(let y=0;y<gh;y++){
+    const ym=((y-1+gh)%gh)*gw, yp=((y+1)%gh)*gw, y0=y*gw;
+    for(let x=0;x<gw;x++){
+      const xm=(x-1+gw)%gw, xp=(x+1)%gw;
+      // 3x3 Moore neighbourhood (includes centre) → averages
+      const i=y0+x;
+      let sa = aa[ym+xm]+aa[ym+x]+aa[ym+xp]
+             + aa[y0+xm]+aa[i]   +aa[y0+xp]
+             + aa[yp+xm]+aa[yp+x]+aa[yp+xp];
+      let sb = bb[ym+xm]+bb[ym+x]+bb[ym+xp]
+             + bb[y0+xm]+bb[i]   +bb[y0+xp]
+             + bb[yp+xm]+bb[yp+x]+bb[yp+xp];
+      let sc = cc[ym+xm]+cc[ym+x]+cc[ym+xp]
+             + cc[y0+xm]+cc[i]   +cc[y0+xp]
+             + cc[yp+xm]+cc[yp+x]+cc[yp+xp];
+      const av=sa*0.111111111, bv=sb*0.111111111, cv2=sc*0.111111111;
+      let A=av + av*(al*bv - ga*cv2);
+      let B=bv + bv*(be*cv2 - al*av);
+      let C=cv2 + cv2*(ga*av - be*bv);
+      // clamp [0,1]
+      na[i]= A<0?0:A>1?1:A;
+      nb[i]= B<0?0:B>1?1:B;
+      nc[i]= C<0?0:C>1?1:C;
+    }
+  }
+  // swap buffers
+  let t;
+  t=a;a=a2;a2=t; t=b;b=b2;b2=t; t=c;c=c2;c2=t;
+}
+
+function step(){
+  for(let s=0;s<substeps;s++) react();
+}
+
+function draw(){
+  // map (a - c) → vivid colour. a leads the wave, c is the "refractory" trailing reagent.
+  const N=gw*gh, A=a, C=c;
+  for(let i=0;i<N;i++){
+    // a-c ranges roughly [-1,1]; remap to [0,1] then through LUT
+    let v=(A[i]-C[i])*0.5+0.5;
+    let idx=(v*255)|0;
+    if(idx<0)idx=0; else if(idx>255)idx=255;
+    buf32[i]=lut[idx];
+  }
+  offctx.putImageData(img,0,0);
+  // upscale the small grid to fill the canvas (bilinear via imageSmoothing)
+  ctx.drawImage(off, 0,0,gw,gh, 0,0,W,H);
+}
+
+// ---- mouse: nucleate spirals by injecting a disturbance ----
+let mDown=false;
+function perturb(cx,cy){
+  // cx,cy in CSS px → grid coords
+  const gx=Math.floor(cx/innerWidth*gw), gy=Math.floor(cy/innerHeight*gh);
+  const R=Math.max(4, Math.round(7/ (scale/3)));
+  for(let dy=-R;dy<=R;dy++){
+    let yy=gy+dy; yy=((yy%gh)+gh)%gh;
+    for(let dx=-R;dx<=R;dx++){
+      if(dx*dx+dy*dy>R*R) continue;
+      let xx=gx+dx; xx=((xx%gw)+gw)%gw;
+      const i=yy*gw+xx;
+      // drive reagents to a fresh excited state → seeds a new wavefront
+      a[i]=1.0; b[i]=Math.random()*0.2; c[i]=Math.random()*0.2;
+    }
+  }
+}
+cv.addEventListener('pointerdown',e=>{ mDown=true; perturb(e.clientX,e.clientY); });
+addEventListener('pointermove',e=>{ if(mDown) perturb(e.clientX,e.clientY); });
+addEventListener('pointerup',()=>mDown=false);
+cv.addEventListener('pointerleave',()=>mDown=false);
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now;
+  if(!paused && !document.hidden){ step(); draw(); }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${gw}×${gh} cells · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); }; }
+bind('sA','vA',x=>x.toFixed(2),x=>{ alpha=x; });
+bind('sB','vB',x=>x.toFixed(2),x=>{ beta=x; });
+bind('sG','vG',x=>x.toFixed(2),x=>{ gamma=x; });
+bind('sS','vS',x=>x|0,x=>{ substeps=x|0; });
+bind('sSc','vSc',x=>x|0,x=>{ scale=x|0; init(); });
+bind('sP','vP',x=>PAL_NAMES[x|0],x=>{ palette=x|0; buildLUT(); });
+$('reseed').onclick=()=>seed();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='bz-reaction.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')seed();
+  else if(e.key==='p'){ palette=(palette+1)%PAL_NAMES.length; buildLUT();
+    $('sP').value=palette; $('vP').textContent=PAL_NAMES[palette]; }
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+resize(); buildLUT(); init();
+requestAnimationFrame(loop);
+</script>
+<!-- sg-nav -->
+<script src="../pieces.js"></script>
+<script>
+(function(){
+  if (document.getElementById('sg-nav')) return;
+  var pieces = window.PIECES;
+  if (!pieces || !pieces.length) return;
+  var here = (location.pathname.split('/').pop() || '').toLowerCase();
+  var idx = -1;
+  for (var i = 0; i < pieces.length; i++) {
+    if ((pieces[i].file || '').toLowerCase() === here) { idx = i; break; }
+  }
+  if (idx < 0) return;
+  var n = pieces.length;
+  var prev = pieces[(idx - 1 + n) % n];
+  var next = pieces[(idx + 1) % n];
+  var neutral = 'rgba(220,225,235,0.85)';
+
+  var bar = document.createElement('div');
+  bar.id = 'sg-nav';
+  bar.style.cssText = 'position:fixed;bottom:10px;left:50%;transform:translateX(-50%);' +
+    'z-index:50;pointer-events:auto;font:11px ui-monospace,Menlo,monospace;' +
+    'opacity:0.45;transition:opacity .18s ease;white-space:nowrap;' +
+    'letter-spacing:.02em;-webkit-font-smoothing:antialiased;user-select:none;';
+  bar.addEventListener('mouseenter', function(){ bar.style.opacity = '0.9'; });
+  bar.addEventListener('mouseleave', function(){ bar.style.opacity = '0.45'; });
+
+  function mkLink(piece, label){
+    var a = document.createElement('a');
+    a.href = piece.file;
+    a.style.cssText = 'color:' + (piece.accent || neutral) + ';text-decoration:none;';
+    a.textContent = label;
+    return a;
+  }
+  var prevLink = mkLink(prev, '‹ ' + prev.name);
+  var nextLink = mkLink(next, next.name + ' ›');
+  var sep = document.createElement('span');
+  sep.textContent = '   ·   ';
+  sep.style.color = 'rgba(180,185,195,0.6)';
+
+  bar.appendChild(prevLink);
+  bar.appendChild(sep);
+  bar.appendChild(nextLink);
+  document.body.appendChild(bar);
+
+  window.addEventListener('keydown', function(e){
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t) {
+      var tag = (t.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable) return;
+    }
+    if (e.key === 'ArrowLeft') { location.href = prev.file; }
+    else if (e.key === 'ArrowRight') { location.href = next.file; }
+  });
+})();
+</script>
+</body>
+</html>
