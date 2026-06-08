@@ -11,19 +11,19 @@ window.PIECES = [
   {
     file: "physarum.html",
     name: "Physarum",
-    blurb: "a million cells solving mazes with slime",
-    accent: "#e8a24c"
+    blurb: "a million appetites remember the shape of the world",
+    accent: "#f5a623"
   },
   {
     file: "reaction-diffusion.html",
     name: "Reaction–Diffusion",
-    blurb: "two chemicals dreaming up coral and stripes",
-    accent: "#5fd0c5"
+    blurb: "two chemicals quarrel into coral and restless spots",
+    accent: "#4fd6c2"
   },
   {
     file: "boids.html",
     name: "Boids",
-    blurb: "three simple urges become a murmuration",
-    accent: "#7fb0ff"
+    blurb: "three rules, and a murmuration breathes itself alive",
+    accent: "#8fb7ff"
   }
 ];

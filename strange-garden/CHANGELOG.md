@@ -8,18 +8,19 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together.
 
 ## Status
 
-- **Done:**
-  - particle-life.html ✅ built + browser-verified (PASS, clean console, animates)
-  - index.html gallery (dark "specimen catalogue", reads pieces.js manifest) ✅
-  - pieces.js manifest, assets/thumbs/ ✅
-- **In progress (deputies running):** physarum.html, reaction-diffusion.html, boids.html
-  — each self-verifies with agent-browser + saves a thumbnail.
-- **Next up (wave 2 — launch after wave 1 deputies finish, to avoid browser contention):**
+- **Done (wave 1 — all browser-verified PASS, clean consoles):**
+  - particle-life.html ✅ (flagship, by me)
+  - physarum.html ✅ (~50fps @120k agents, 4 palettes) — gorgeous ember vein-network
+  - reaction-diffusion.html ✅ (55fps, Coral/Mitosis/Spots presets, mouse-paint)
+  - boids.html ✅ (60fps, predator-flee) — *functionally good but thumbnail weak (blowout/sparse)*
+  - index.html gallery + pieces.js manifest (blurbs/accents from deputy reports) ✅
+- **Next up (wave 2 — browser free now):**
+  - 🔧 boids visual polish: reduce additive-glow blowout, fuller/even flock, better thumbnail
   - strange-attractors.html (Clifford/De Jong, millions of glowing points)
+  - flow-field.html (perlin/curl-noise particle flow)
   - lenia.html (continuous CA / smooth life)
-  - cyclic-ca.html (rock-paper-scissors spirals) OR flow-field.html (perlin flow)
   - dla.html (diffusion-limited aggregation, coral/lightning)
-  - phyllotaxis / mandelbrot explorer / n-body gravity (later waves)
+  - later: phyllotaxis, mandelbrot/julia explorer, n-body gravity, cyclic-CA spirals
 
 > Orchestration note: limit concurrent agent-browser deputies (they each drive a real
 > Chrome). After each deputy reports, update pieces.js blurb/accent + commit.

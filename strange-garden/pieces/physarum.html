@@ -47,16 +47,16 @@
   <input type="range" id="sN" min="20000" max="400000" step="10000" value="120000">
   <label>Sensor angle <b id="vSA">22°</b></label>
   <input type="range" id="sSA" min="5" max="80" step="1" value="22">
-  <label>Sensor distance <b id="vSD">12</b></label>
-  <input type="range" id="sSD" min="3" max="40" step="1" value="12">
-  <label>Turn angle <b id="vTA">28°</b></label>
-  <input type="range" id="sTA" min="2" max="80" step="1" value="28">
+  <label>Sensor distance <b id="vSD">9</b></label>
+  <input type="range" id="sSD" min="3" max="40" step="1" value="9">
+  <label>Turn angle <b id="vTA">32°</b></label>
+  <input type="range" id="sTA" min="2" max="80" step="1" value="32">
   <label>Deposit <b id="vDE">1.0</b></label>
   <input type="range" id="sDE" min="0.2" max="3" step="0.1" value="1.0">
   <label>Decay <b id="vDC">0.92</b></label>
   <input type="range" id="sDC" min="0.75" max="0.99" step="0.005" value="0.92">
-  <label>Diffusion <b id="vDF">0.70</b></label>
-  <input type="range" id="sDF" min="0" max="1" step="0.05" value="0.70">
+  <label>Diffusion <b id="vDF">0.55</b></label>
+  <input type="range" id="sDF" min="0" max="1" step="0.05" value="0.55">
   <div class="row"><button id="palette" class="pri">Palette</button><button id="reseed">Reseed</button></div>
   <div class="row"><button id="pause">Pause</button><button id="save">Save PNG</button></div>
 </div>
@@ -70,12 +70,14 @@ const panel=document.getElementById('panel'), hud=document.getElementById('hud')
 // ---- parameters ----
 let n=120000;
 let sensorAngle=22*Math.PI/180;   // radians
-let sensorDist=12;                 // pixels (in sim space)
-let turnAngle=28*Math.PI/180;     // radians
+let sensorDist=9;                  // pixels (in sim space)
+let turnAngle=32*Math.PI/180;     // radians
 let deposit=1.0;
 let decay=0.92;
-let diffuse=0.70;                  // 0..1 blend of box-blur
+let diffuse=0.55;                  // 0..1 blend of box-blur
 const stepSize=1.0;               // pixels per step (sim space)
+const TRAIL_MAX=12;               // clamp so busy cells can't run away & saturate
+const JITTER=0.10;                // small random heading wobble (radians) -> finer veins
 
 // ---- sim grid (downscaled for perf) ----
 const SCALE=0.75;
@@ -108,11 +110,13 @@ function resize(){
 }
 addEventListener('resize',resize);
 
-// ---- seeding: agents in a central disc, pointing random ----
+// ---- seeding: agents in a large central disc, pointing random ----
+// A broad disc (covering most of the frame) lets the network develop edge-to-edge
+// and continuously regenerate instead of shrinking to a migrating island.
 function initAgents(){
   ax=new Float32Array(n); ay=new Float32Array(n); ah=new Float32Array(n);
   const cx=GW*0.5, cy=GH*0.5;
-  const R=Math.min(GW,GH)*0.30;
+  const R=Math.min(GW,GH)*0.48;
   for(let i=0;i<n;i++){
     // uniform in disc
     const r=R*Math.sqrt(Math.random());
@@ -206,6 +210,8 @@ function step(dt){
     } else if(cr>cl){
       nh += ta;
     }
+    // small random wobble keeps trails from fusing into single fat ropes
+    nh += (Math.random()-0.5)*JITTER;
     // move
     let nx=x+Math.cos(nh)*stepSize;
     let ny=y+Math.sin(nh)*stepSize;
@@ -213,9 +219,11 @@ function step(dt){
     if(nx<0)nx+=GW; else if(nx>=GW)nx-=GW;
     if(ny<0)ny+=GH; else if(ny>=GH)ny-=GH;
     ax[i]=nx; ay[i]=ny; ah[i]=nh;
-    // deposit at new cell
+    // deposit at new cell (clamped to avoid runaway saturation)
     const ci=((ny|0)*GW)+(nx|0);
-    trail[ci]+=dep;
+    let tv=trail[ci]+dep;
+    if(tv>TRAIL_MAX)tv=TRAIL_MAX;
+    trail[ci]=tv;
   }
 
   // mouse attraction: nudge nearby agents toward cursor
@@ -269,7 +277,7 @@ function diffuseAndDecay(){
 }
 
 // ---- draw: map trail through LUT into ImageData, upscale to canvas ----
-const GAIN=42;   // intensity -> 0..255 scaling
+const GAIN=30;   // intensity -> 0..255 scaling
 function draw(){
   const d=imgData, t=trail, len=t.length;
   let p=0;
