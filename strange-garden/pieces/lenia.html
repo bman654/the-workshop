@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lenia — Strange Garden</title>
+<style>
+  :root { --accent: #6fd3c0; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:266px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; margin-top:4px; padding:5px; font-size:12px; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:8px; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+  #err { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    padding:40px; text-align:center; font:14px ui-monospace,Menlo,monospace; color:#ff9a9a; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Lenia</h1>
+  <p class="desc">Conway's Life dissolved into a continuum. Smooth ring-kernels grow
+    <i>orbia</i> — gliding amoebae that swim, turn, collide and bud.</p>
+  <label>Kernel R <b id="vR">13</b></label>
+  <input type="range" id="sR" min="9" max="20" step="1" value="13">
+  <label>Growth center μ <b id="vMu">0.150</b></label>
+  <input type="range" id="sMu" min="0.08" max="0.30" step="0.001" value="0.15">
+  <label>Growth width σ <b id="vSig">0.017</b></label>
+  <input type="range" id="sSig" min="0.006" max="0.060" step="0.001" value="0.017">
+  <label>Time step dt <b id="vDt">0.10</b></label>
+  <input type="range" id="sDt" min="0.02" max="0.30" step="0.01" value="0.10">
+  <label>Kernel peak β <b id="vBeta">0.50</b></label>
+  <input type="range" id="sBeta" min="0.20" max="0.80" step="0.01" value="0.50">
+  <label>Palette</label>
+  <select id="pal">
+    <option value="0">Indigo · teal · ivory</option>
+    <option value="1">Abyss · ember</option>
+    <option value="2">Spore · jade</option>
+    <option value="3">Mono mist</option>
+  </select>
+  <div class="row"><button id="preset" class="pri">Wander rules</button><button id="reseed">Reseed</button></div>
+  <div class="row"><button id="pause">Pause</button><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">click/drag to drop life · space pause · r reseed · h hide</div>
+<a class="back" href="../index.html">← garden</a>
+<div id="err"></div>
+<script>
+const cv=document.getElementById('c');
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+const errEl=document.getElementById('err');
+const $=id=>document.getElementById(id);
+
+let DPR=1, dispW=0, dispH=0, GW=512, GH=320;
+
+// ---- Lenia parameters (orbium defaults) ----
+let R=13, mu=0.15, sigma=0.017, dt=0.10, beta=0.5;
+let palette=0;
+
+function fitGrid(){
+  const ar=innerWidth/innerHeight, base=360;
+  let gw,gh;
+  if(ar>=1){ gh=base; gw=Math.round(base*ar); } else { gw=base; gh=Math.round(base/ar); }
+  return {gw:Math.min(gw,760), gh:Math.min(gh,760)};
+}
+
+const gl=cv.getContext('webgl2',{antialias:false, preserveDrawingBuffer:true});
+let usingWebGL=!!gl;
+
+let prog={}, fbA, fbB, texA, texB, kernTex, quadVAO, uni={};
+let hasFloatLinear=false;
+let KR=0; // kernel half-size in cells
+
+function fail(m){ usingWebGL=false; console.error('Lenia WebGL2 unavailable:', m); }
+
+const VERT=`#version 300 es
+in vec2 p; out vec2 uv;
+void main(){ uv=p*0.5+0.5; gl_Position=vec4(p,0.0,1.0); }`;
+
+// Simulation: convolve state with precomputed kernel texture, apply growth.
+const SIM_FRAG=`#version 300 es
+precision highp float;
+in vec2 uv; out vec4 outColor;
+uniform sampler2D state;     // current A in .r
+uniform sampler2D kernel;    // kernel weights in .r, size (2*KR+1)^2 laid in a square
+uniform vec2 texel;          // 1/gridSize
+uniform int KR;              // kernel radius (cells)
+uniform float kSize;         // kernel texture size (2*KR+1)
+uniform float mu, sigma, dt;
+
+float growth(float u){
+  float d = u - mu;
+  return 2.0*exp(-(d*d)/(2.0*sigma*sigma)) - 1.0;
+}
+void main(){
+  float acc = 0.0;
+  for(int dy=-32; dy<=32; dy++){
+    if(dy < -KR || dy > KR) continue;
+    for(int dx=-32; dx<=32; dx++){
+      if(dx < -KR || dx > KR) continue;
+      vec2 suv = uv + vec2(float(dx),float(dy))*texel;   // REPEAT wrap
+      float v = texture(state, suv).r;
+      // kernel weight from kernel texture
+      vec2 kuv = (vec2(float(dx+KR), float(dy+KR))+0.5)/kSize;
+      float w = texture(kernel, kuv).r;
+      acc += v*w;
+    }
+  }
+  float cur = texture(state, uv).r;
+  float nv = cur + dt*growth(acc);
+  nv = clamp(nv, 0.0, 1.0);
+  outColor = vec4(nv, nv, nv, 1.0);
+}`;
+
+const DRAW_FRAG=`#version 300 es
+precision highp float;
+in vec2 uv; out vec4 outColor;
+uniform sampler2D state;
+uniform int palette;
+vec3 r0(float t){vec3 c0=vec3(0.043,0.047,0.094),c1=vec3(0.094,0.157,0.337),c2=vec3(0.149,0.486,0.498),c3=vec3(0.541,0.886,0.682),c4=vec3(0.929,0.984,0.949);
+  if(t<0.25)return mix(c0,c1,t/0.25); if(t<0.5)return mix(c1,c2,(t-0.25)/0.25); if(t<0.78)return mix(c2,c3,(t-0.5)/0.28); return mix(c3,c4,(t-0.78)/0.22);}
+vec3 r1(float t){vec3 c0=vec3(0.035,0.035,0.063),c1=vec3(0.282,0.071,0.137),c2=vec3(0.78,0.282,0.118),c3=vec3(0.984,0.812,0.435),c4=vec3(1.0,0.969,0.886);
+  if(t<0.3)return mix(c0,c1,t/0.3); if(t<0.62)return mix(c1,c2,(t-0.3)/0.32); if(t<0.85)return mix(c2,c3,(t-0.62)/0.23); return mix(c3,c4,(t-0.85)/0.15);}
+vec3 r2(float t){vec3 c0=vec3(0.063,0.047,0.094),c1=vec3(0.247,0.149,0.42),c2=vec3(0.235,0.541,0.498),c3=vec3(0.561,0.886,0.561),c4=vec3(0.949,0.992,0.871);
+  if(t<0.28)return mix(c0,c1,t/0.28); if(t<0.55)return mix(c1,c2,(t-0.28)/0.27); if(t<0.8)return mix(c2,c3,(t-0.55)/0.25); return mix(c3,c4,(t-0.8)/0.2);}
+vec3 r3(float t){vec3 c0=vec3(0.039,0.043,0.063),c1=vec3(0.3,0.34,0.42),c2=vec3(0.94,0.96,0.99);
+  if(t<0.55)return mix(c0,c1,t/0.55); return mix(c1,c2,(t-0.55)/0.45);}
+void main(){
+  float v=texture(state,uv).r; float t=clamp(v,0.0,1.0); t=pow(t,0.85);
+  vec3 col = palette==0?r0(t):palette==1?r1(t):palette==2?r2(t):r3(t);
+  vec2 d=uv-0.5; col*= 1.0 - dot(d,d)*0.55;
+  outColor=vec4(col,1.0);
+}`;
+
+function compile(type,src){const sh=gl.createShader(type);gl.shaderSource(sh,src);gl.compileShader(sh);
+  if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(sh)+'\n'+src);return sh;}
+function linkP(vs,fs){const p=gl.createProgram();gl.attachShader(p,compile(gl.VERTEX_SHADER,vs));
+  gl.attachShader(p,compile(gl.FRAGMENT_SHADER,fs));gl.bindAttribLocation(p,0,'p');gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));return p;}
+
+function makeTex(w,h,data,filterLinear){
+  const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA32F,w,h,0,gl.RGBA,gl.FLOAT,data);
+  const filt=(filterLinear&&hasFloatLinear)?gl.LINEAR:gl.NEAREST;
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,filt);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,filt);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);
+  return t;
+}
+function makeFBO(tex){const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);return f;}
+
+function initGL(){
+  if(!gl.getExtension('EXT_color_buffer_float')){ fail('EXT_color_buffer_float missing'); return false; }
+  hasFloatLinear=!!gl.getExtension('OES_texture_float_linear');
+  prog.sim=linkP(VERT,SIM_FRAG); prog.draw=linkP(VERT,DRAW_FRAG);
+  quadVAO=gl.createVertexArray(); gl.bindVertexArray(quadVAO);
+  const vbo=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,vbo);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+  gl.bindVertexArray(null);
+  uni.sim={}; for(const u of ['state','kernel','texel','KR','kSize','mu','sigma','dt'])
+    uni.sim[u]=gl.getUniformLocation(prog.sim,u);
+  uni.draw={}; for(const u of ['state','palette']) uni.draw[u]=gl.getUniformLocation(prog.draw,u);
+  return true;
+}
+
+function allocSim(){
+  const g=fitGrid(); GW=g.gw; GH=g.gh;
+  if(texA){ gl.deleteTexture(texA);gl.deleteTexture(texB);gl.deleteFramebuffer(fbA);gl.deleteFramebuffer(fbB); }
+  texA=makeTex(GW,GH,null,true); texB=makeTex(GW,GH,null,true);
+  fbA=makeFBO(texA); fbB=makeFBO(texB);
+}
+
+// ---- kernel: smooth ring shell, normalized so weights sum to 1 ----
+function buildKernel(){
+  KR=R;
+  const size=2*KR+1;
+  const data=new Float32Array(size*size*4);
+  // Canonical Lenia (orbium) kernel: single smooth bell shell over the full
+  // normalized radius r in (0,1), K(r)=exp(a - a/(4 r(1-r))), peaked at r=0.5.
+  // `beta` shifts the peak radius: beta=0.5 -> canonical (orbium-stable);
+  // smaller beta -> tighter inner ring, larger -> wider ring.
+  const a=4.0;
+  let sum=0; const tmp=new Float32Array(size*size);
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+    const dx=x-KR, dy=y-KR;
+    const r=Math.hypot(dx,dy)/R;          // 0..>1 over the kernel disk
+    let w=0;
+    if(r>0 && r<1){
+      // remap so the bell's peak sits at radius `beta` (default 0.5 = canonical)
+      const rho = r/(2.0*beta);
+      if(rho>0 && rho<1) w=Math.exp(a - a/(4*rho*(1-rho)));
+    }
+    tmp[y*size+x]=w; sum+=w;
+  }
+  if(sum<=0) sum=1;
+  for(let i=0;i<size*size;i++){ data[i*4]=tmp[i]/sum; data[i*4+3]=1; }
+  if(kernTex) gl.deleteTexture(kernTex);
+  kernTex=makeTex(size,size,data,false); // NEAREST sampled per-texel
+  return size;
+}
+let kSize=0;
+
+// ---- orbium seed pattern (Bert Chan, classic stable glider) ----
+const ORBIUM=[
+[0,0,0,0,0,0,0.1,0.14,0.1,0,0,0.03,0.03,0,0,0.3,0,0,0,0],
+[0,0,0,0,0,0.08,0.24,0.3,0.3,0.18,0.14,0.15,0.16,0.15,0.09,0.2,0,0,0,0],
+[0,0,0,0,0,0.15,0.34,0.44,0.46,0.38,0.18,0.14,0.11,0.13,0.19,0.18,0.45,0,0,0],
+[0,0,0,0,0.06,0.13,0.39,0.5,0.5,0.37,0.06,0,0,0,0.02,0.16,0.68,0,0,0],
+[0,0,0,0.11,0.17,0.17,0.33,0.4,0.38,0.28,0.14,0,0,0,0,0,0.18,0.42,0,0],
+[0,0,0.09,0.18,0.13,0.06,0.08,0.26,0.32,0.32,0.27,0,0,0,0,0,0,0.82,0,0],
+[0.27,0,0.16,0.12,0,0,0,0.25,0.38,0.44,0.45,0.34,0,0,0,0,0,0.22,0.17,0],
+[0,0.07,0.2,0.02,0,0,0,0.31,0.48,0.57,0.6,0.57,0,0,0,0,0,0,0.49,0],
+[0,0.59,0.19,0,0,0,0,0.2,0.57,0.69,0.76,0.76,0.49,0,0,0,0,0,0.36,0],
+[0,0.58,0.19,0,0,0,0,0,0.67,0.83,0.9,0.92,0.87,0.12,0,0,0,0,0.22,0.07],
+[0,0,0.46,0,0,0,0,0,0.7,0.93,1,1,1,0.61,0,0,0,0,0.18,0.11],
+[0,0,0.82,0,0,0,0,0,0.47,1,1,0.98,1,0.96,0.27,0,0,0,0.19,0.1],
+[0,0,0.46,0,0,0,0,0,0.25,0.83,0.95,0.98,1,1,0.84,0,0,0,0.21,0.05],
+[0,0,0,0.4,0,0,0,0,0.09,0.8,1,0.82,0.8,0.85,0.63,0.05,0,0,0.18,0],
+[0,0,0,0.36,0,0,0,0,0.05,0.54,0.86,0.58,0.44,0.61,0.49,0,0,0,0.13,0],
+[0,0,0,0.01,0.3,0,0,0,0,0.2,0.6,0.7,0.4,0.32,0.45,0,0,0,0.05,0],
+[0,0,0,0,0.45,0,0,0,0,0.06,0.34,0.7,0.6,0.32,0.27,0,0,0,0,0],
+[0,0,0,0,0.18,0.31,0,0,0,0,0.07,0.42,0.65,0.49,0.18,0,0,0,0,0],
+[0,0,0,0,0,0.31,0.3,0.04,0,0,0,0.1,0.43,0.4,0.13,0,0,0,0,0],
+[0,0,0,0,0,0,0.18,0.34,0.27,0.18,0.13,0.18,0.32,0.19,0,0,0,0,0,0]
+];
+const OH=ORBIUM.length, OWid=ORBIUM[0].length;
+
+let seedBuf=null;
+function ensureSeedBuf(){ if(!seedBuf||seedBuf.length!==GW*GH*4) seedBuf=new Float32Array(GW*GH*4); }
+function uploadSeed(){ gl.bindTexture(gl.TEXTURE_2D,texA);
+  gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,GW,GH,gl.RGBA,gl.FLOAT,seedBuf); }
+
+// place an orbium scaled to the current R, at (cx,cy), rotated by one of 4 quarter turns + flip
+function stampOrbium(cx,cy){
+  // orbium pattern is authored at R≈13; scale to current R
+  const scale=R/13;
+  const rot=(Math.random()*4)|0, flip=Math.random()<0.5;
+  for(let oy=0; oy<OH; oy++){
+    for(let ox=0; ox<OWid; ox++){
+      const v=ORBIUM[oy][ox]; if(v<=0) continue;
+      // local coords centered
+      let lx=ox-OWid/2, ly=oy-OH/2;
+      if(flip) lx=-lx;
+      // quarter-turn rotation
+      let rx=lx, ry=ly;
+      if(rot===1){ rx=-ly; ry=lx; }
+      else if(rot===2){ rx=-lx; ry=-ly; }
+      else if(rot===3){ rx=ly; ry=-lx; }
+      const sx=Math.round(cx+rx*scale), sy=Math.round(cy+ry*scale);
+      // nearest-neighbor splat with small fill to cover scale gaps
+      const fill=Math.max(1,Math.ceil(scale));
+      for(let fy=0; fy<fill; fy++)for(let fx=0; fx<fill; fx++){
+        const xx=((sx+fx)%GW+GW)%GW, yy=((sy+fy)%GH+GH)%GH;
+        const i=(yy*GW+xx)*4;
+        if(v>seedBuf[i]){ seedBuf[i]=v; seedBuf[i+1]=v; seedBuf[i+2]=v; seedBuf[i+3]=1; }
+      }
+    }
+  }
+}
+
+function seed(){
+  ensureSeedBuf(); seedBuf.fill(0);
+  // Place a handful of WELL-SEPARATED orbia. Spacing matters: clustered orbia
+  // collide in chain reactions and seed an expanding colony that fills the whole
+  // field. Kept apart, each swims freely as a distinct glider for a long time.
+  const area=GW*GH;
+  const n=Math.max(4, Math.min(9, Math.round(area/26000)));
+  const margin=Math.ceil(R*2.2);
+  const minSep=R*7;                       // keep creatures far apart at birth
+  const placed=[];
+  for(let k=0;k<n;k++){
+    let cx,cy,ok=false;
+    for(let tries=0; tries<40 && !ok; tries++){
+      cx=margin+Math.random()*(GW-2*margin);
+      cy=margin+Math.random()*(GH-2*margin);
+      ok=true;
+      for(const p of placed){ const dx=cx-p[0], dy=cy-p[1];
+        if(dx*dx+dy*dy < minSep*minSep){ ok=false; break; } }
+    }
+    placed.push([cx,cy]); stampOrbium(cx,cy);
+  }
+  uploadSeed();
+}
+
+function stepSim(){
+  gl.useProgram(prog.sim); gl.bindVertexArray(quadVAO);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,fbB); gl.viewport(0,0,GW,GH);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,texA); gl.uniform1i(uni.sim.state,0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,kernTex); gl.uniform1i(uni.sim.kernel,1);
+  gl.uniform2f(uni.sim.texel,1/GW,1/GH);
+  gl.uniform1i(uni.sim.KR,KR); gl.uniform1f(uni.sim.kSize,2*KR+1);
+  gl.uniform1f(uni.sim.mu,mu); gl.uniform1f(uni.sim.sigma,sigma); gl.uniform1f(uni.sim.dt,dt);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  let t=texA;texA=texB;texB=t; let f=fbA;fbA=fbB;fbB=f;
+}
+function drawGL(){
+  gl.useProgram(prog.draw); gl.bindVertexArray(quadVAO);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.viewport(0,0,cv.width,cv.height);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,texA); gl.uniform1i(uni.draw.state,0);
+  gl.uniform1i(uni.draw.palette,palette);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+}
+
+/* ============== Canvas2D fallback (small grid, precomputed kernel) ============== */
+let ctx2d=null,fA=null,fB=null,imgData=null,kOff=null,kW=null,fallR=11;
+function initCanvas2D(){ ctx2d=cv.getContext('2d'); GW=GH=200; fA=new Float32Array(GW*GH);fB=new Float32Array(GW*GH);
+  fallR=Math.min(R,11); buildKernel2D(); imgData=ctx2d.createImageData(GW,GH); }
+function buildKernel2D(){ const off=[],w=[]; let sum=0; const a=4;
+  for(let dy=-fallR;dy<=fallR;dy++)for(let dx=-fallR;dx<=fallR;dx++){
+    const r=Math.hypot(dx,dy)/fallR; if(r<=0||r>=1)continue; const rho=r/(2*beta);
+    if(rho<=0||rho>=1)continue; const ww=Math.exp(a-a/(4*rho*(1-rho))); off.push(dx,dy);w.push(ww);sum+=ww; }
+  for(let i=0;i<w.length;i++)w[i]/=sum||1; kOff=new Int16Array(off); kW=new Float32Array(w); }
+function seed2D(){ fA.fill(0); const sc=fallR/13;
+  for(let k=0;k<5;k++){ const cx=30+Math.random()*(GW-60), cy=30+Math.random()*(GH-60);
+    for(let oy=0;oy<OH;oy++)for(let ox=0;ox<OWid;ox++){const v=ORBIUM[oy][ox];if(v<=0)continue;
+      const sx=Math.round(cx+(ox-OWid/2)*sc),sy=Math.round(cy+(oy-OH/2)*sc);
+      const f=Math.max(1,Math.ceil(sc));
+      for(let fy=0;fy<f;fy++)for(let fx=0;fx<f;fx++){const xx=((sx+fx)%GW+GW)%GW,yy=((sy+fy)%GH+GH)%GH;
+        if(v>fA[yy*GW+xx])fA[yy*GW+xx]=v;}}}}
+function step2D(){const W=GW,H=GH;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){let acc=0;
+    for(let k=0,j=0;k<kOff.length;k+=2,j++){const xx=(x+kOff[k]+W)%W,yy=(y+kOff[k+1]+H)%H;acc+=fA[yy*W+xx]*kW[j];}
+    const d=acc-mu; const g=2*Math.exp(-(d*d)/(2*sigma*sigma))-1; let v=fA[y*W+x]+dt*g;
+    fB[y*W+x]=v<0?0:v>1?1:v;}
+  const t=fA;fA=fB;fB=t;}
+function ramp2D(t){t=Math.pow(Math.max(0,Math.min(1,t)),0.85);
+  const s=[[11,12,24],[24,40,86],[38,124,127],[138,226,174],[237,251,242]],ts=[0,0.25,0.5,0.78,1];
+  let i=0;while(i<ts.length-1&&t>ts[i+1])i++;const f=(t-ts[i])/((ts[i+1]-ts[i])||1);
+  const a=s[i],b=s[Math.min(i+1,s.length-1)];return[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f];}
+function draw2D(){const d=imgData.data;for(let i=0;i<GW*GH;i++){const c=ramp2D(fA[i]),j=i*4;
+    d[j]=c[0];d[j+1]=c[1];d[j+2]=c[2];d[j+3]=255;}
+  const tmp=document.createElement('canvas');tmp.width=GW;tmp.height=GH;tmp.getContext('2d').putImageData(imgData,0,0);
+  ctx2d.imageSmoothingEnabled=true;ctx2d.drawImage(tmp,0,0,cv.width,cv.height);}
+
+/* ============================ common ============================ */
+function resize(){ DPR=Math.min(devicePixelRatio||1,2); dispW=innerWidth; dispH=innerHeight;
+  cv.width=Math.floor(dispW*DPR); cv.height=Math.floor(dispH*DPR);
+  cv.style.width=dispW+'px'; cv.style.height=dispH+'px'; }
+
+function reseed(){ if(usingWebGL) seed(); else seed2D(); }
+function rebuildKernel(){ if(usingWebGL){ kSize=buildKernel(); } else { fallR=Math.min(R,11); buildKernel2D(); } }
+
+// drop an orbium where you click
+let mDown=false;
+function dropAt(clientX,clientY){
+  if(usingWebGL){
+    ensureSeedBuf(); seedBuf.fill(0);
+    // read current state into seedBuf, add an orbium, re-upload
+    gl.bindFramebuffer(gl.FRAMEBUFFER,fbA); gl.readPixels(0,0,GW,GH,gl.RGBA,gl.FLOAT,seedBuf);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+    const gx=Math.floor(clientX/dispW*GW), gy=Math.floor((1-clientY/dispH)*GH);
+    stampOrbium(gx,gy); uploadSeed();
+  } else {
+    const gx=Math.floor(clientX/dispW*GW), gy=Math.floor(clientY/dispH*GH), sc=fallR/13;
+    for(let oy=0;oy<OH;oy++)for(let ox=0;ox<OWid;ox++){const v=ORBIUM[oy][ox];if(v<=0)continue;
+      const sx=Math.round(gx+(ox-OWid/2)*sc),sy=Math.round(gy+(oy-OH/2)*sc);
+      const xx=((sx)%GW+GW)%GW,yy=((sy)%GH+GH)%GH; if(v>fA[yy*GW+xx])fA[yy*GW+xx]=v;}
+  }
+}
+let lastDrop=0;
+cv.addEventListener('pointerdown',e=>{mDown=true; dropAt(e.clientX,e.clientY); lastDrop=performance.now();});
+addEventListener('pointermove',e=>{ if(mDown && performance.now()-lastDrop>200){ dropAt(e.clientX,e.clientY); lastDrop=performance.now(); }});
+addEventListener('pointerup',()=>mDown=false);
+
+// --- Lifecycle manager -------------------------------------------------------
+// An orbium is a stable solitary glider, but on a torus the swimmers eventually
+// collide; a collision can ignite an expanding "coral" colony that grows and
+// divides until it fills the field with a churning living texture. We let that
+// whole drama play out, then quietly reseed so the viewer always returns to the
+// swimming phase — an eternal cycle of glide → collide → bloom → renewal. We
+// also top up lone survivors so the field never goes empty.
+let lifecycle=true;
+const popBuf={data:null};
+function readField(){
+  if(!popBuf.data || popBuf.data.length!==GW*GH*4) popBuf.data=new Float32Array(GW*GH*4);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,fbA); gl.readPixels(0,0,GW,GH,gl.RGBA,gl.FLOAT,popBuf.data);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  return popBuf.data;
+}
+let bloomHold=0;                 // frames to linger on a full bloom before reseed
+function tendGarden(){
+  if(!usingWebGL) return;
+  const b=readField();
+  let cells=0; for(let i=0;i<GW*GH;i++) if(b[i*4]>0.1) cells++;
+  const cap=GW*GH, fill=cells/cap;
+  if(fill > 0.16){
+    // a colony has bloomed across the field — admire it briefly, then renew
+    if(bloomHold===0) bloomHold=frame + 360;     // ~6s of bloom at 60fps
+    else if(frame >= bloomHold){ bloomHold=0; seed(); }
+    return;
+  }
+  bloomHold=0;
+  // field is in the sparse swimming phase — top up if it has thinned too far
+  const target=Math.max(4, Math.min(7, Math.round(cap/30000)));
+  const aliveApprox=cells/110;                    // ~110 cells per orbium
+  if(aliveApprox < target){
+    ensureSeedBuf(); seedBuf.set(b);
+    const margin=Math.ceil(R*2);
+    let bx=margin,by=margin,best=1e9;
+    for(let t=0;t<16;t++){
+      const cx=margin+Math.random()*(GW-2*margin), cy=margin+Math.random()*(GH-2*margin);
+      let local=0; const rr=R*3|0;
+      for(let yy=-rr;yy<=rr;yy+=4)for(let xx=-rr;xx<=rr;xx+=4){
+        const px=(((cx+xx)|0)%GW+GW)%GW, py=(((cy+yy)|0)%GH+GH)%GH; local+=seedBuf[(py*GW+px)*4];
+      }
+      if(local<best){best=local;bx=cx;by=cy;}
+    }
+    stampOrbium(bx,by); uploadSeed();
+  }
+}
+
+let paused=false,last=performance.now(),fps=60,frame=0;
+function loop(now){ let real=(now-last)/1000; last=now;
+  if(!paused && !document.hidden){
+    if(usingWebGL){stepSim();drawGL();} else {step2D();draw2D();}
+    frame++;
+    if(lifecycle && usingWebGL && frame%60===0) tendGarden();
+  }
+  fps+=((1/Math.max(real,1e-4))-fps)*0.08;
+  hud.textContent=`${GW}×${GH} · ${usingWebGL?'GPU':'CPU'} · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop); }
+
+// ---- controls ----
+function bind(s,v,fmt,set){ const e=$(s),o=$(v); e.oninput=()=>{const x=parseFloat(e.value);set(x);o.textContent=fmt(x);}; }
+bind('sR','vR',x=>x|0,x=>{ R=x|0; rebuildKernel(); });
+bind('sMu','vMu',x=>x.toFixed(3),x=>{ mu=x; });
+bind('sSig','vSig',x=>x.toFixed(3),x=>{ sigma=x; });
+bind('sDt','vDt',x=>x.toFixed(2),x=>{ dt=x; });
+bind('sBeta','vBeta',x=>x.toFixed(2),x=>{ beta=x; rebuildKernel(); });
+$('pal').onchange=()=>{ palette=parseInt($('pal').value); };
+function setS(id,vid,val,fmt){ $(id).value=val; $(vid).textContent=fmt(val); }
+function wanderRules(){
+  // gentle jitter of orbium params that keeps creatures alive & swimming
+  mu=0.15+(Math.random()*2-1)*0.012;
+  sigma=0.017+(Math.random()*2-1)*0.004;
+  beta=0.5+(Math.random()*2-1)*0.08;
+  setS('sMu','vMu',mu,x=>x.toFixed(3)); setS('sSig','vSig',sigma,x=>x.toFixed(3));
+  setS('sBeta','vBeta',beta,x=>x.toFixed(2));
+  rebuildKernel(); reseed();
+}
+$('preset').onclick=()=>wanderRules();
+$('reseed').onclick=()=>reseed();
+$('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a'); a.download='lenia.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')reseed(); else if(e.key==='n')wanderRules();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='p'){palette=(palette+1)%4;$('pal').value=palette;}
+  else if(e.key==='s')$('save').click(); });
+addEventListener('resize',()=>{ resize(); if(usingWebGL){ allocSim(); rebuildKernel(); seed(); } });
+
+// ---- boot ----
+try{
+  resize();
+  if(usingWebGL){ if(!initGL())throw new Error('initGL failed'); allocSim(); rebuildKernel(); seed(); }
+  else { initCanvas2D(); rebuildKernel(); seed2D(); }
+  requestAnimationFrame(loop);
+}catch(e){
+  console.error(e);
+  try{ usingWebGL=false; initCanvas2D(); rebuildKernel(); seed2D(); requestAnimationFrame(loop); }
+  catch(e2){ errEl.style.display='flex'; errEl.textContent='Lenia could not start: '+(e2.message||e2); }
+}
+</script>
+</body>
+</html>

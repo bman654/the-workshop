@@ -37,5 +37,23 @@ window.PIECES = [
     name: "Strange Attractors",
     blurb: "a restless point carves the same luminous filigree",
     accent: "#c792ea"
+  },
+  {
+    file: "cyclic-ca.html",
+    name: "Cyclic Automaton",
+    blurb: "each state devours the next; noise blooms into spirals",
+    accent: "#e84ddb"
+  },
+  {
+    file: "lenia.html",
+    name: "Lenia",
+    blurb: "smooth amoebae glide, collide and bloom into coral",
+    accent: "#6fd3c0"
+  },
+  {
+    file: "dla.html",
+    name: "Aggregation",
+    blurb: "wandering dust freezes into coral, lightning and frost",
+    accent: "#7cc7ff"
   }
 ];

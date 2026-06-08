@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aggregation — Strange Garden</title>
+<style>
+  :root { --accent: #7cc7ff; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; margin-top:3px; padding:5px 6px; font-size:12px; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:7px; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Aggregation</h1>
+  <p class="desc">Wandering particles drift inward and freeze where they touch, growing
+    coral, lightning and frost one chance encounter at a time.</p>
+  <label>Stickiness <b id="vS">0.60</b></label>
+  <input type="range" id="sS" min="0.04" max="1" step="0.01" value="0.60">
+  <label>Walkers / frame <b id="vW">350</b></label>
+  <input type="range" id="sW" min="30" max="2000" step="10" value="350">
+  <label>Symmetry <b id="vSy">1</b></label>
+  <input type="range" id="sSy" min="1" max="12" step="1" value="1">
+  <label>Grain <b id="vG">2.0</b></label>
+  <input type="range" id="sG" min="1" max="4" step="0.5" value="2">
+  <label>Glow <b id="vGl">0.6</b></label>
+  <input type="range" id="sGl" min="0" max="1" step="0.05" value="0.6">
+  <label>Palette <b id="vP"></b></label>
+  <select id="sP">
+    <option value="0">Ice &amp; Ember</option>
+    <option value="1">Aurora</option>
+    <option value="2">Coral Reef</option>
+    <option value="3">Magma</option>
+    <option value="4">Bioluminescence</option>
+    <option value="5">Frost</option>
+  </select>
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">space pauses · r reseeds · 1–9 symmetry · h hides panel</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR,CX,CY;
+
+// ---- parameters ----
+let stickiness=0.6, walkersPerFrame=350, symmetry=1, grain=2.0, glow=0.6, paletteIdx=0;
+
+// ---- grid (occupancy) ----
+// One cell per (cellSize) device pixels. cellSize derived from grain so that
+// particles render as visible flecks while the grid stays affordable.
+let cellSize, GW, GH, grid; // grid: Uint8Array, 0 empty / 1 stuck
+let stuckCount=0, aggR=0;   // aggregate radius (in grid cells from center)
+let killR=0, maxR=0;        // kill radius, max possible radius
+let cgx, cgy;               // center in grid coords
+let done=false;
+
+// palettes: function(t in [0,1]) -> [r,g,b]; t=0 core (oldest), t=1 tips (newest)
+const palettes=[
+  // Ice & Ember: deep blue core -> cyan -> warm ember tips
+  t=>{ const a=[28,52,120],b=[90,200,255],c=[255,190,90],d=[255,240,200];
+       return ramp(t,[a,b,c,d]); },
+  // Aurora: violet -> teal -> green -> pale
+  t=>ramp(t,[[60,30,110],[40,150,180],[90,230,160],[210,255,220]]),
+  // Coral Reef: magenta -> coral -> gold
+  t=>ramp(t,[[120,30,90],[230,80,110],[255,150,90],[255,235,170]]),
+  // Magma: dark red -> orange -> yellow -> white
+  t=>ramp(t,[[40,10,15],[160,30,30],[240,130,30],[255,250,210]]),
+  // Bioluminescence: near black-blue -> teal -> electric green
+  t=>ramp(t,[[10,30,50],[20,120,140],[60,230,200],[200,255,230]]),
+  // Frost: indigo -> periwinkle -> ice white
+  t=>ramp(t,[[40,40,100],[110,140,230],[180,210,255],[245,250,255]]),
+];
+function ramp(t,stops){
+  t=t<0?0:t>1?1:t;
+  const n=stops.length-1, f=t*n, i=Math.min(n-1,f|0), u=f-i;
+  const a=stops[i], b=stops[i+1];
+  return [a[0]+(b[0]-a[0])*u, a[1]+(b[1]-a[1])*u, a[2]+(b[2]-a[2])*u];
+}
+
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  W=cv.width=Math.floor(innerWidth*DPR); H=cv.height=Math.floor(innerHeight*DPR);
+  cv.style.width=innerWidth+'px'; cv.style.height=innerHeight+'px';
+  CX=W*0.5; CY=H*0.5;
+  init();
+}
+addEventListener('resize',resize);
+
+// Geometry: the grid maps 1:1 to canvas pixels. A SMALL launch margin keeps growth
+// dense and radially BALANCED, and stopping the instant the longest arm reaches the
+// frame radius keeps the envelope round (running longer lets one direction spike out).
+// Kill = 2x the aggregate keeps the launch/kill annulus thick -> no thin-rim-shell ring.
+let ox=0, oy=0;        // device-px offset of grid cell (0,0) -> 0; kept for drawCell math
+let growR=0, gridR=0;  // growR: stop/frame radius. gridR: hard kill bound (inscribed).
+function init(){
+  cellSize=Math.max(1, Math.round(grain*DPR));
+  GW=Math.ceil(W/cellSize); GH=Math.ceil(H/cellSize);
+  grid=new Uint8Array(GW*GH);
+  cgx=GW>>1; cgy=GH>>1;
+  ox=0; oy=0;
+  gridR=Math.min(GW,GH)*0.5 - 2;        // inscribed radius (hard kill bound)
+  growR=gridR*0.97;                     // stop just inside -> circular coral fills frame
+  maxR=growR;
+  stuckCount=0; aggR=2; done=false;
+  // seed: single stuck particle at center
+  setStuck(cgx,cgy);
+  // draw background fresh
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+  drawCell(cgx,cgy);
+  ctx.fillStyle='#0a0b0f'; // reset
+}
+
+// stuckCount also serves as a monotonic age counter for attachment order.
+
+function setStuck(gx,gy){
+  if(gx<1||gy<1||gx>=GW-1||gy>=GH-1) return false;
+  const idx=gy*GW+gx;
+  if(grid[idx]) return false;
+  grid[idx]=1; stuckCount++;
+  const dx=gx-cgx, dy=gy-cgy;
+  const r=Math.sqrt(dx*dx+dy*dy);
+  if(r>aggR) aggR=r;
+  return true;
+}
+
+// Color by RADIAL distance from the seed. DLA grows strictly outward, so radius is
+// a stable proxy for attachment order (age): core = oldest hue, tips = newest hue.
+// This is robust because a particle's colour never depends on when it was drawn.
+function ageColor(gx,gy){
+  const dx=gx-cgx, dy=gy-cgy;
+  const r=Math.sqrt(dx*dx+dy*dy);
+  const t=maxR>1 ? r/maxR : 0;
+  // gentle gamma so the inner detail isn't all crushed into the core colour
+  return palettes[paletteIdx](Math.pow(Math.min(1,t/0.92),0.85));
+}
+
+// Paint one fleck at device-pixel (dx,dy) with rgb (r,g,b). Shared by all draws.
+function paintCell(x,y,r,g,b){
+  const s=cellSize;
+  ctx.fillStyle=`rgb(${r},${g},${b})`;
+  ctx.fillRect(x,y,s,s);
+  if(glow>0){ // soft additive halo for the "alive" glow on fresh tips
+    ctx.globalCompositeOperation='lighter';
+    ctx.globalAlpha=glow*0.5;
+    ctx.fillRect(x-s,y-s,s*3,s*3);
+    ctx.globalAlpha=1;
+    ctx.globalCompositeOperation='source-over';
+  }
+}
+function inFrame(gx,gy){ const dx=gx-cgx, dy=gy-cgy; return dx*dx+dy*dy<=growR*growR; }
+
+// Draw a canonical grid cell (and, in symmetry mode, all its mirror images).
+function drawCell(gx,gy){
+  if(!inFrame(gx,gy)) return;
+  const col=ageColor(gx,gy);
+  const r=Math.round(col[0]), g=Math.round(col[1]), b=Math.round(col[2]);
+  paintCell(gx*cellSize+ox, gy*cellSize+oy, r,g,b);
+  if(symmetry>1) drawMirrors(gx,gy,r,g,b);
+}
+// Draw a single mirror dot at device-pixel position derived from fractional grid pos.
+function drawDot(fgx,fgy,r,g,b){
+  const dx=fgx-cgx, dy=fgy-cgy;
+  if(dx*dx+dy*dy>growR*growR) return;
+  paintCell(Math.round(fgx)*cellSize+ox, Math.round(fgy)*cellSize+oy, r,g,b);
+}
+
+// Symmetry (snowflake) mode. Only ONE aggregate arm actually lives in `grid`; walkers
+// roam the full plane and stick to it from any direction (natural, lacy density). Each
+// stuck cell is then DRAWN as N rotations + their reflections, producing an N-fold
+// crystal. Because the mirrors are display-only (never in `grid`), deposition isn't
+// multiplied, so the arm stays a sparse dendrite rather than a caked fan.
+// Draw all N rotations + reflections of a stuck cell (DISPLAY ONLY).
+function drawMirrors(gx,gy,r,g,b){
+  const dx=gx-cgx, dy=gy-cgy, baseAng=Math.atan2(dy,dx), rad=Math.sqrt(dx*dx+dy*dy);
+  const step=Math.PI*2/symmetry;
+  for(let k=1;k<symmetry;k++){ // k=0 rotation is the canonical cell itself (already drawn)
+    const a=baseAng+step*k;
+    drawDot(cgx+Math.cos(a)*rad, cgy+Math.sin(a)*rad, r,g,b);
+  }
+  for(let k=0;k<symmetry;k++){ // all N reflections
+    const a2=step*k-baseAng;
+    drawDot(cgx+Math.cos(a2)*rad, cgy+Math.sin(a2)*rad, r,g,b);
+  }
+}
+
+// neighbor check: is any of the 8-neighbors stuck?
+function hasStuckNeighbor(gx,gy){
+  const base=gy*GW+gx;
+  if(grid[base-1]) return true;
+  if(grid[base+1]) return true;
+  if(grid[base-GW]) return true;
+  if(grid[base+GW]) return true;
+  if(grid[base-GW-1]) return true;
+  if(grid[base-GW+1]) return true;
+  if(grid[base+GW-1]) return true;
+  if(grid[base+GW+1]) return true;
+  return false;
+}
+
+// ---- walker simulation (hot loop, no allocations) ----
+const MAX_STEPS=900;
+function step(){
+  if(done) return;
+  // SMALL launch margin beyond the longest arm: walkers approach from every angle and
+  // fill the aggregate densely & radially-balanced (a large margin or hugging the bulk
+  // grows a lopsided dumbbell). Kill at 2x the aggregate so the launch/kill annulus
+  // stays thick (no thin-rim-shell ring).
+  const launchR=Math.min(aggR+6, gridR-2);
+  const kill=Math.min(aggR*2+24, gridR-1);
+  const sym=symmetry>1, wedgeW=Math.PI*2/symmetry; // canonical wedge [0, wedgeW)
+  let newlyStuck=0;
+  // auto-stop the instant the longest arm reaches the frame radius -> round envelope.
+  if(aggR>=growR){ done=true; return 0; }
+  for(let w=0; w<walkersPerFrame; w++){
+    // spawn on the full launch circle (grid coords). In symmetry mode walkers are NOT
+    // folded into the wedge -- only the wedge arm is in `grid`, so walkers approach it
+    // naturally from every direction -> a lacy dendrite, not an over-caked fan.
+    const ang=Math.random()*6.283185307;
+    let fx=cgx+Math.cos(ang)*launchR;
+    let fy=cgy+Math.sin(ang)*launchR;
+    let steps=0, stuck=false;
+    while(steps++<MAX_STEPS){
+      const dx=fx-cgx, dy=fy-cgy;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist>kill){
+        // respawn on launch circle instead of discarding (cheaper convergence)
+        const a2=Math.random()*6.283185307;
+        fx=cgx+Math.cos(a2)*launchR; fy=cgy+Math.sin(a2)*launchR;
+        continue;
+      }
+      // distance from walker to aggregate surface (approx): dist - aggR
+      const gap=dist-aggR;
+      if(gap>2.5){
+        // far away: jump in a random direction. Length ~ gap (a circle of radius
+        // gap is guaranteed empty of aggregate), capped so growth stays roughly
+        // isotropic & watchable and a single arm can't teleport to the rim.
+        const jump=Math.min(Math.max(1, gap-1.5), 28);
+        const ja=Math.random()*6.283185307;
+        fx+=Math.cos(ja)*jump;
+        fy+=Math.sin(ja)*jump;
+      } else {
+        // close: unit random walk on the grid (8-dir)
+        const r=Math.random();
+        if(r<0.25) fx+=1; else if(r<0.5) fx-=1;
+        else if(r<0.75) fy+=1; else fy-=1;
+        const gx=fx|0, gy=fy|0;
+        if(gx<1||gy<1||gx>=GW-1||gy>=GH-1){
+          // drifted to edge, respawn
+          const a2=Math.random()*6.283185307;
+          fx=cgx+Math.cos(a2)*launchR; fy=cgy+Math.sin(a2)*launchR;
+          continue;
+        }
+        if(!grid[gy*GW+gx] && hasStuckNeighbor(gx,gy)){
+          // In symmetry mode the arm is CONFINED to one canonical wedge [0, 2π/N):
+          // walkers roam freely (natural density) but only deposit inside the wedge, so
+          // its N mirror copies tile into a crystal instead of overlapping into a disk.
+          if(sym){
+            let a=Math.atan2(gy-cgy, gx-cgx); if(a<0) a+=6.283185307;
+            if(a>=wedgeW){ stuck=false; continue; } // outside wedge: keep walking
+          }
+          if(Math.random()<stickiness){
+            if(setStuck(gx,gy)){ drawCell(gx,gy); newlyStuck++; }
+            stuck=true;
+            break;
+          }
+        }
+      }
+    }
+    if(done) break;
+  }
+  return newlyStuck;
+}
+
+// ---- mouse: drop a seed where you click (start a new colony) ----
+cv.addEventListener('pointerdown',e=>{
+  const gx=Math.round((e.clientX*DPR-ox)/cellSize);
+  const gy=Math.round((e.clientY*DPR-oy)/cellSize);
+  if(setStuck(gx,gy)) drawCell(gx,gy);
+});
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+let doneAt=0, autoReseed=true; // when grown, admire briefly then bloom afresh ("alive")
+function loop(now){
+  let dt=(now-last)/1000; last=now;
+  if(!paused && !document.hidden){
+    const wasDone=done;
+    step();
+    if(done && !wasDone) doneAt=now;
+    // once fully grown, pause to admire then reseed (rotating palette) so the gallery
+    // tile is perpetually alive rather than freezing on a finished frame.
+    if(done && autoReseed && now-doneAt>2600){
+      paletteIdx=(paletteIdx+1)%palettes.length;
+      $('sP').value=paletteIdx; setAccent();
+      init();
+    }
+  }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  const pct=Math.min(100, aggR/growR*100);
+  hud.textContent=`${stuckCount.toLocaleString()} stuck · ${pct.toFixed(0)}% · ${fps.toFixed(0)} fps${done?' · grown':''}`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  v.textContent=fmt(parseFloat(s.value));
+  s.oninput=()=>{ set(parseFloat(s.value)); v.textContent=fmt(parseFloat(s.value)); }; }
+bind('sS','vS',x=>x.toFixed(2),x=>{ stickiness=x; });
+bind('sW','vW',x=>x|0,x=>{ walkersPerFrame=x|0; });
+bind('sSy','vSy',x=>x|0,x=>{ symmetry=x|0; });
+bind('sG','vG',x=>x.toFixed(1),x=>{ grain=x; init(); });
+bind('sGl','vGl',x=>x.toFixed(2),x=>{ glow=x; });
+$('sP').onchange=()=>{ paletteIdx=parseInt($('sP').value)||0; setAccent(); };
+$('vP').textContent='';
+
+function setAccent(){
+  const c=palettes[paletteIdx](0.78);
+  const hex='#'+[c[0],c[1],c[2]].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
+  document.documentElement.style.setProperty('--accent',hex);
+}
+
+$('reseed').onclick=()=>init();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='aggregation.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')init();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+  else if(e.key>='1'&&e.key<='9'){ symmetry=parseInt(e.key); $('sSy').value=symmetry; $('vSy').textContent=symmetry; init(); }
+});
+
+// ---- go ----
+setAccent();
+resize();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

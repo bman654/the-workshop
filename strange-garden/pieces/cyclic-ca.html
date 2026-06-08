@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cyclic Automaton — Strange Garden</title>
+<style>
+  :root { --accent: #e84ddb; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; image-rendering:pixelated; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; margin:0; padding:5px 6px; font-size:12px; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:8px;
+    font-family:ui-monospace,Menlo,monospace; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Cyclic Automaton</h1>
+  <p class="desc">Each state devours the next in an endless cycle. From static noise,
+    rotating spiral galaxies nucleate and spin forever.</p>
+  <label>Preset</label>
+  <select id="preset">
+    <option value="rainbow" selected>Rainbow Spirals (1/1/14/N)</option>
+    <option value="perfect">Perfect Spirals (1/3/4/M)</option>
+    <option value="cyclic">Cyclic Spirals (3/5/8/M)</option>
+    <option value="vortex">Vortex Soup (2/2/10/N)</option>
+    <option value="lava">Lava Lamp (2/10/3/M)</option>
+    <option value="313">313 Turbulence (1/3/3/M)</option>
+  </select>
+  <label>States (N) <b id="vN">14</b></label>
+  <input type="range" id="sN" min="3" max="16" step="1" value="14">
+  <label>Range <b id="vR">1</b></label>
+  <input type="range" id="sR" min="1" max="4" step="1" value="1">
+  <label>Threshold <b id="vT">1</b></label>
+  <input type="range" id="sT" min="1" max="24" step="1" value="1">
+  <label>Neighbourhood <b id="vNb">von Neumann</b></label>
+  <input type="range" id="sNb" min="0" max="1" step="1" value="0">
+  <label>Resolution <b id="vS">4</b></label>
+  <input type="range" id="sS" min="1" max="8" step="1" value="4">
+  <label>Steps / frame <b id="vSp">1</b></label>
+  <input type="range" id="sSp" min="1" max="6" step="1" value="1">
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="palette">Palette</button></div>
+  <div class="row"><button id="pause">Pause</button><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">space pause · r reseed · p palette · h hides panel · s save</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+ctx.imageSmoothingEnabled=false;
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+const $=id=>document.getElementById(id);
+
+// ---- parameters ----
+// nbType: 0 = von Neumann (Manhattan ball), 1 = Moore (Chebyshev box)
+let N=14, range=1, threshold=1, nbType=0, scale=4, stepsPerFrame=1, paletteMode=0;
+
+// ---- sim state ----
+let gw, gh;                 // grid width/height (sim cells)
+let cur, nxt;               // Uint8Array ping-pong buffers
+let offsets;                // Int32Array of neighbour cell-index deltas (computed per gw)
+let lut;                    // Uint8Array RGBA LUT, 4*N entries (per palette)
+let buf;                    // offscreen ImageData-backed canvas, gw x gh
+let bufCtx, bufImg, bufData32;
+
+let W,H,DPR;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  W=cv.width=Math.floor(innerWidth*DPR); H=cv.height=Math.floor(innerHeight*DPR);
+  cv.style.width=innerWidth+'px'; cv.style.height=innerHeight+'px';
+  ctx.imageSmoothingEnabled=false;
+  allocGrid();
+}
+addEventListener('resize',resize);
+
+function allocGrid(){
+  // sim grid is the CSS-pixel viewport downscaled by `scale`
+  gw=Math.max(8, Math.floor(innerWidth/scale));
+  gh=Math.max(8, Math.floor(innerHeight/scale));
+  cur=new Uint8Array(gw*gh);
+  nxt=new Uint8Array(gw*gh);
+  buildOffsets();
+  // offscreen buffer matching grid resolution
+  buf=document.createElement('canvas'); buf.width=gw; buf.height=gh;
+  bufCtx=buf.getContext('2d');
+  bufImg=bufCtx.createImageData(gw,gh);
+  bufData32=new Uint32Array(bufImg.data.buffer);
+  seed();
+}
+
+// Precompute Moore-neighbourhood cell-index offsets for toroidal grid.
+// We store dx,dy pairs and wrap manually in step() (so wrap is correct at edges).
+let nbrDX, nbrDY, nbrCount;
+function buildOffsets(){
+  const list=[];
+  for(let dy=-range;dy<=range;dy++)
+    for(let dx=-range;dx<=range;dx++){
+      if(dx===0 && dy===0) continue;
+      // von Neumann uses Manhattan distance; Moore uses the full box
+      if(nbType===0 && Math.abs(dx)+Math.abs(dy)>range) continue;
+      list.push([dx,dy]);
+    }
+  nbrCount=list.length;
+  nbrDX=new Int16Array(nbrCount);
+  nbrDY=new Int16Array(nbrCount);
+  for(let i=0;i<nbrCount;i++){ nbrDX[i]=list[i][0]; nbrDY[i]=list[i][1]; }
+}
+
+function seed(){
+  for(let i=0;i<cur.length;i++) cur[i]=(Math.random()*N)|0;
+}
+
+// ---- palette LUT ----
+function buildLUT(){
+  lut=new Uint32Array(N);
+  const isLE=(()=>{const b=new ArrayBuffer(4);new Uint32Array(b)[0]=1;return new Uint8Array(b)[0]===1;})();
+  for(let s=0;s<N;s++){
+    let r,g,b;
+    const t=s/N;
+    if(paletteMode===0){
+      // rich hue wheel on dark
+      [r,g,b]=hsl2rgb(t*360, 0.78, 0.55);
+    } else if(paletteMode===1){
+      // ember -> violet (warm cyclic)
+      [r,g,b]=hsl2rgb((t*300+330)%360, 0.85, 0.40+0.22*Math.sin(t*Math.PI));
+    } else if(paletteMode===2){
+      // aurora: green-teal-blue-magenta
+      [r,g,b]=hsl2rgb((t*260+120)%360, 0.72, 0.50);
+    } else {
+      // ice/copper duotone cycling
+      [r,g,b]=hsl2rgb((t*360)%360, 0.55, 0.30+0.4*(0.5-0.5*Math.cos(t*2*Math.PI)));
+    }
+    // pack RGBA (alpha 255)
+    if(isLE) lut[s]=(255<<24)|(b<<16)|(g<<8)|r;
+    else     lut[s]=(r<<24)|(g<<16)|(b<<8)|255;
+  }
+}
+function hsl2rgb(h,s,l){
+  h=((h%360)+360)%360/360;
+  const a=s*Math.min(l,1-l);
+  const f=n=>{const k=(n+h*12)%12; return l-a*Math.max(-1,Math.min(k-3,9-k,1));};
+  return [Math.round(f(0)*255), Math.round(f(8)*255), Math.round(f(4)*255)];
+}
+
+// ---- simulation step ----
+function step(){
+  const w=gw, h=gh, n=N, thr=threshold, nc=nbrCount;
+  const c=cur, nx=nxt;
+  for(let y=0;y<h;y++){
+    const row=y*w;
+    for(let x=0;x<w;x++){
+      const idx=row+x;
+      const s=c[idx];
+      const succ = s+1===n ? 0 : s+1;
+      let count=0;
+      for(let k=0;k<nc;k++){
+        let nxp=x+nbrDX[k]; if(nxp<0)nxp+=w; else if(nxp>=w)nxp-=w;
+        let nyp=y+nbrDY[k]; if(nyp<0)nyp+=h; else if(nyp>=h)nyp-=h;
+        if(c[nyp*w+nxp]===succ){ if(++count>=thr) break; }
+      }
+      nx[idx] = count>=thr ? succ : s;
+    }
+  }
+  const tmp=cur; cur=nxt; nxt=tmp;
+}
+
+// ---- render ----
+function draw(){
+  const data=bufData32, c=cur, L=lut, len=c.length;
+  for(let i=0;i<len;i++) data[i]=L[c[i]];
+  bufCtx.putImageData(bufImg,0,0);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(buf, 0, 0, gw, gh, 0, 0, W, H);
+}
+
+// ---- presets ----
+// nb: 0 = von Neumann, 1 = Moore. Names/params are the canonical Griffeath /
+// Mirek's Cellebration cyclic-CA spiral rules (R/T/C/N notation).
+const PRESETS={
+  rainbow:{N:14, range:1, threshold:1,  nb:0, scale:4},  // 1/1/14/N  rainbow target spirals
+  perfect:{N:4,  range:1, threshold:3,  nb:1, scale:4},  // 1/3/4/M   widely-spaced spiral cores
+  cyclic: {N:8,  range:3, threshold:5,  nb:1, scale:4},  // 3/5/8/M   cyclic spirals
+  vortex: {N:10, range:2, threshold:2,  nb:0, scale:4},  // 2/2/10/N  swirling vortices
+  lava:   {N:3,  range:2, threshold:10, nb:1, scale:5},  // 2/10/3/M  lava-lamp blobs
+  '313':  {N:3,  range:1, threshold:3,  nb:1, scale:3},  // 1/3/3/M   turbulence
+};
+const NB_NAMES=['von Neumann','Moore'];
+function applyPreset(name){
+  const p=PRESETS[name]; if(!p) return;
+  N=p.N; range=p.range; threshold=p.threshold; nbType=p.nb; scale=p.scale;
+  $('sN').value=N; $('vN').textContent=N;
+  $('sR').value=range; $('vR').textContent=range;
+  $('sNb').value=nbType; $('vNb').textContent=NB_NAMES[nbType];
+  $('sS').value=scale; $('vS').textContent=scale;
+  buildLUT(); allocGrid();        // rebuilds offsets (needs nbType+range) then seeds
+  clampThreshold();               // sets slider max from neighbour count
+  threshold=p.threshold;          // restore (clamp may have lowered if below)
+  $('sT').value=threshold; $('vT').textContent=threshold;
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now;
+  if(!paused && !document.hidden){
+    for(let i=0;i<stepsPerFrame;i++) step();
+    draw();
+  }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${range}/${threshold}/${N}/${nbType?'M':'N'} · ${gw}×${gh} · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); }; }
+bind('sN','vN',x=>x|0,x=>{ N=x|0; buildLUT(); seed(); });
+bind('sR','vR',x=>x|0,x=>{ range=x|0; buildOffsets(); clampThreshold(); seed(); });
+bind('sT','vT',x=>x|0,x=>{ threshold=x|0; });
+bind('sNb','vNb',x=>NB_NAMES[x|0],x=>{ nbType=x|0; buildOffsets(); clampThreshold(); seed(); });
+bind('sS','vS',x=>x|0,x=>{ scale=x|0; allocGrid(); });
+bind('sSp','vSp',x=>x|0,x=>{ stepsPerFrame=x|0; });
+function nbrCountMax(){ return nbrCount; } // exact neighbour count for current range+nbType
+function clampThreshold(){
+  const mx=Math.max(1,nbrCountMax());
+  $('sT').max=mx;
+  if(threshold>mx){ threshold=mx; }
+  $('sT').value=threshold; $('vT').textContent=threshold;
+}
+$('preset').onchange=e=>applyPreset(e.target.value);
+$('palette').onclick=()=>{ paletteMode=(paletteMode+1)%4; buildLUT(); };
+$('reseed').onclick=()=>seed();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='cyclic-automaton.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')seed();
+  else if(e.key==='p'){ paletteMode=(paletteMode+1)%4; buildLUT(); }
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+resize();                 // sets canvas size; allocGrid happens again in applyPreset
+applyPreset('rainbow');   // canonical default: rainbow von-Neumann spirals (1/1/14/N)
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
