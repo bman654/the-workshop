@@ -187,5 +187,23 @@ window.PIECES = [
     name: "Metaballs",
     blurb: "drops of liquid metal kiss and pour into one",
     accent: "#6fe6d0"
+  },
+  {
+    file: "kuramoto.html",
+    name: "Kuramoto",
+    blurb: "a thousand fireflies fall into one breathing pulse",
+    accent: "#ffd166"
+  },
+  {
+    file: "voronoi.html",
+    name: "Voronoi",
+    blurb: "shattered cells drift and settle into honeycomb",
+    accent: "#8fd6b4"
+  },
+  {
+    file: "cloth.html",
+    name: "Cloth",
+    blurb: "pinned fabric drapes, swings, and tears in your hands",
+    accent: "#c9a3e0"
   }
 ];

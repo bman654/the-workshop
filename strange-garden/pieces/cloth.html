@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloth — Strange Garden</title>
+<style>
+  :root { --accent: #c9a3e0; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:grab; }
+  #c.grabbing { cursor:grabbing; }
+  #c.tear { cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; margin:2px 0 0; padding:5px 6px; font-size:12px; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:8px;
+    font-family:ui-monospace,Menlo,monospace; }
+  .seg { display:flex; gap:0; margin-top:2px; border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; overflow:hidden; }
+  .seg button { flex:1; padding:6px 2px; font-size:11px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.04); border:0; border-right:1px solid rgba(255,255,255,.08);
+    border-radius:0; transition:background .15s; }
+  .seg button:last-child { border-right:0; }
+  .seg button.on { background:color-mix(in srgb,var(--accent) 22%,transparent); color:#fff; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  button.pri.on { background:color-mix(in srgb,var(--accent) 30%,transparent); color:#fff; }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Cloth</h1>
+  <p class="desc">A hanging fabric of point-masses, woven by distance constraints.
+    Grab it, pull it, let it swing — or tear it apart.</p>
+  <label>Resolution <b id="vRes">36</b></label>
+  <input type="range" id="sRes" min="12" max="60" step="2" value="36">
+  <label>Gravity <b id="vG">1.00</b></label>
+  <input type="range" id="sG" min="0" max="3" step="0.05" value="1">
+  <label>Stiffness <b id="vS">4</b></label>
+  <input type="range" id="sS" min="1" max="10" step="1" value="4">
+  <label>Wind <b id="vW">0.0</b></label>
+  <input type="range" id="sW" min="0" max="3" step="0.05" value="0">
+  <label>Damping <b id="vD">0.99</b></label>
+  <input type="range" id="sD" min="0.94" max="1.00" step="0.005" value="0.99">
+  <label>Pin mode</label>
+  <select id="selPin">
+    <option value="edge">Curtain — top edge</option>
+    <option value="corners">Hammock — top corners</option>
+    <option value="flag">Flag — left edge</option>
+  </select>
+  <label>Render</label>
+  <div class="seg" id="segRender">
+    <button data-v="filled" class="on">Filled</button>
+    <button data-v="mesh">Mesh</button>
+    <button data-v="both">Both</button>
+  </div>
+  <div class="row"><button id="tear" class="pri">Tear mode</button><button id="palette">Palette</button></div>
+  <div class="row"><button id="reseed">Reset</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">drag to grab the cloth · tear mode rips it · right-drag also tears</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+const $=id=>document.getElementById(id);
+let W,H,DPR,worldW,worldH;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  worldW=innerWidth; worldH=innerHeight;
+  W=cv.width=Math.floor(worldW*DPR); H=cv.height=Math.floor(worldH*DPR);
+  cv.style.width=worldW+'px'; cv.style.height=worldH+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+addEventListener('resize',()=>{ resize(); init(); });
+
+// ---- parameters ----
+let cols=36, rows=24;          // grid resolution (cols derived from slider; rows scaled by aspect)
+let resParam=36;
+let gravity=1.0;               // multiplier (world gravity ~ 980 px/s^2 * this)
+let iterations=4;              // constraint relaxation passes (stiffness)
+let windAmt=0.0;
+let damping=0.99;
+let pinMode='edge';            // edge | corners | flag
+let renderMode='filled';       // filled | mesh | both
+let paletteIdx=0;
+
+// ---- cloth state (typed arrays) ----
+let px,py,ox,oy;               // position + previous position (Verlet)
+let pinned;                    // Uint8 1 if anchored
+let pinX,pinY;                 // pin anchor positions
+let cN=0;                      // node count
+// constraints stored as flat arrays for cache friendliness
+let cA,cB,cRest,cAlive,cCount; // node index a, node index b, rest length, alive flag
+let restX=0, restY=0;          // nominal spacing
+
+// palettes: [fabric base hsl-ish, sheen tint, accent]
+const PALETTES=[
+  {name:'orchid',  base:[268,42,52], sheen:[286,60,80], accent:'#c9a3e0', bg:8},
+  {name:'ember',   base:[14,68,50],  sheen:[36,85,72],  accent:'#f6a45c', bg:9},
+  {name:'teal',    base:[178,46,46], sheen:[168,70,74], accent:'#7fd1c7', bg:8},
+  {name:'rose',    base:[342,52,52], sheen:[348,72,80], accent:'#f08aa6', bg:9},
+  {name:'indigo',  base:[224,48,50], sheen:[210,72,78], accent:'#8fb0f0', bg:8},
+  {name:'moss',    base:[96,40,42],  sheen:[78,62,68],  accent:'#a8cf7a', bg:8},
+];
+
+function gridLayout(){
+  // cols from slider; rows preserve a pleasing cloth aspect to the viewport
+  cols=resParam;
+  const aspect=worldH/worldW;
+  rows=Math.max(8, Math.round(cols*Math.min(1.1,Math.max(0.5,aspect*1.15))));
+}
+
+function init(){
+  gridLayout();
+  cN=cols*rows;
+  px=new Float32Array(cN); py=new Float32Array(cN);
+  ox=new Float32Array(cN); oy=new Float32Array(cN);
+  pinned=new Uint8Array(cN);
+  pinX=new Float32Array(cN); pinY=new Float32Array(cN);
+
+  // place the cloth: a rectangle centred-ish near the top, leaving room to drape
+  const margin=Math.min(worldW,worldH)*0.12;
+  let clothW, clothH, x0, y0;
+  if(pinMode==='flag'){
+    clothW=Math.min(worldW*0.46, worldH*0.6);
+    clothH=clothW*(rows-1)/(cols-1);
+    // start the pole clear of the control panel (panel ~ 300px wide)
+    x0=Math.max(worldW*0.30, 320); y0=worldH*0.18;
+  } else {
+    clothW=Math.min(worldW-margin*2, worldH*0.7);
+    clothH=clothW*(rows-1)/(cols-1);
+    x0=(worldW-clothW)/2; y0=worldH*0.13;
+  }
+  restX=clothW/(cols-1); restY=clothH/(rows-1);
+
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const i=r*cols+c;
+      const x=x0+c*restX, y=y0+r*restY;
+      px[i]=x; py[i]=y; ox[i]=x; oy[i]=y;
+    }
+  }
+  applyPins();
+  buildConstraints();
+}
+
+function applyPins(){
+  pinned.fill(0);
+  if(pinMode==='edge'){
+    for(let c=0;c<cols;c++){ const i=c; pinned[i]=1; pinX[i]=px[i]; pinY[i]=py[i]; }
+  } else if(pinMode==='corners'){
+    const a=0, b=cols-1;
+    pinned[a]=1; pinX[a]=px[a]; pinY[a]=py[a];
+    pinned[b]=1; pinX[b]=px[b]; pinY[b]=py[b];
+  } else if(pinMode==='flag'){
+    for(let r=0;r<rows;r++){ const i=r*cols; pinned[i]=1; pinX[i]=px[i]; pinY[i]=py[i]; }
+  }
+}
+
+// edgeKey maps an unordered node pair to the index of its structural constraint,
+// so render-time hole detection reflects ACTUAL cuts, not gravity stretch.
+let edgeIdx; // Map keyed by a*cN+b (a<b) -> constraint index
+function ekey(a,b){ return a<b ? a*cN+b : b*cN+a; }
+function structAlive(a,b){
+  const k=edgeIdx.get(ekey(a,b));
+  return k===undefined ? false : cAlive[k]===1;
+}
+
+function buildConstraints(){
+  // structural (right + down) and shear (diagonals) constraints
+  const maxC=cN*4;
+  cA=new Int32Array(maxC); cB=new Int32Array(maxC);
+  cRest=new Float32Array(maxC); cAlive=new Uint8Array(maxC);
+  edgeIdx=new Map();
+  let k=0;
+  const add=(a,b,struct)=>{
+    const dx=px[a]-px[b], dy=py[a]-py[b];
+    cA[k]=a; cB[k]=b; cRest[k]=Math.hypot(dx,dy); cAlive[k]=1;
+    if(struct) edgeIdx.set(ekey(a,b), k);
+    k++;
+  };
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const i=r*cols+c;
+      if(c<cols-1) add(i, i+1, true);      // structural horizontal
+      if(r<rows-1) add(i, i+cols, true);   // structural vertical
+      if(c<cols-1 && r<rows-1){            // shear diagonals
+        add(i, i+cols+1, false);
+        add(i+1, i+cols, false);
+      }
+    }
+  }
+  cCount=k;
+}
+
+// ---- interaction ----
+let grab=-1;                    // grabbed node index (-1 none)
+let mx=0,my=0,pmx=0,pmy=0;
+let tearMode=false, tearing=false, dragging=false;
+const tearRadius=26;
+
+function nearestNode(x,y,maxD){
+  let best=-1, bd=maxD*maxD;
+  for(let i=0;i<cN;i++){
+    const dx=px[i]-x, dy=py[i]-y, d2=dx*dx+dy*dy;
+    if(d2<bd){ bd=d2; best=i; }
+  }
+  return best;
+}
+
+function tearAt(x,y){
+  const r2=tearRadius*tearRadius;
+  for(let k=0;k<cCount;k++){
+    if(!cAlive[k]) continue;
+    const a=cA[k], b=cB[k];
+    // midpoint distance test (cheap, good enough)
+    const mxp=(px[a]+px[b])*0.5, myp=(py[a]+py[b])*0.5;
+    const dx=mxp-x, dy=myp-y;
+    if(dx*dx+dy*dy<r2) cAlive[k]=0;
+  }
+}
+
+function onDown(e){
+  const x=e.clientX, y=e.clientY; mx=x; my=y; pmx=x; pmy=y;
+  const rightOrTear = tearMode || e.button===2;
+  if(rightOrTear){ tearing=true; tearAt(x,y); cv.classList.add('tear'); }
+  else {
+    grab=nearestNode(x,y,restX*2.2);
+    if(grab>=0){ dragging=true; cv.classList.add('grabbing'); }
+  }
+}
+function onMove(e){
+  pmx=mx; pmy=my; mx=e.clientX; my=e.clientY;
+  if(tearing) tearAt(mx,my);
+}
+function onUp(){
+  if(dragging){ dragging=false; grab=-1; cv.classList.remove('grabbing'); }
+  tearing=false; cv.classList.remove('tear');
+}
+cv.addEventListener('pointerdown',e=>{ onDown(e); try{ cv.setPointerCapture(e.pointerId); }catch(_){} });
+addEventListener('pointermove',onMove);
+addEventListener('pointerup',onUp);
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+
+// ---- simulation ----
+function step(dt){
+  // clamp dt to keep Verlet stable; use a fixed-ish step
+  const h=Math.min(dt,1/50);
+  const g=gravity*980*h*h;          // gravity displacement per step
+  const t=performance.now()*0.001;
+  // wind: a gusting horizontal push plus a traveling-wave flutter so the sheet
+  // ripples like a flag instead of translating rigidly.
+  const windOn=windAmt>0;
+  const gust=0.55+0.45*Math.sin(t*0.8)+0.22*Math.sin(t*2.3+1.1); // 0..~1.2
+  const wx=windAmt*640*gust*h*h;
+  const flutterAmp=windAmt*900*h*h;   // peak flutter displacement near free edge
+  // flag flutters along columns (away from left pin); others along rows.
+  const flagMode=(pinMode==='flag');
+
+  // Verlet integration
+  for(let i=0;i<cN;i++){
+    if(pinned[i]){ px[i]=pinX[i]; py[i]=pinY[i]; ox[i]=pinX[i]; oy[i]=pinY[i]; continue; }
+    const x=px[i], y=py[i];
+    let vx=(x-ox[i])*damping, vy=(y-oy[i])*damping;
+    let nx=x+vx, ny=y+vy+g;
+    if(windOn){
+      const c=i%cols, r=(i/cols)|0;
+      // distance (0..1) from the anchored edge -> wave grows toward the free end
+      const along = flagMode ? c/(cols-1) : r/(rows-1);
+      // traveling wave: phase sweeps across the cloth over time
+      const phase = t*6.0 - along*7.0;
+      const env = along*along;                 // little motion near the pin, lots at the tip
+      const flutter = Math.sin(phase + (flagMode?r:c)*0.6) * flutterAmp * env;
+      nx += wx*(0.35+0.65*along);              // gust also stronger toward free edge
+      ny += flutter;                            // vertical ripple
+      if(flagMode) nx += flutter*0.4;          // a flag also waves horizontally
+    }
+    ox[i]=x; oy[i]=y; px[i]=nx; py[i]=ny;
+  }
+
+  // dragged node follows cursor (set after integration so it leads the cloth)
+  if(dragging && grab>=0 && !pinned[grab]){
+    px[grab]=mx; py[grab]=my;
+    // give it velocity so the cloth keeps swinging on release
+    ox[grab]=mx-(mx-pmx); oy[grab]=my-(my-pmy);
+  }
+
+  // constraint relaxation
+  for(let it=0;it<iterations;it++){
+    for(let k=0;k<cCount;k++){
+      if(!cAlive[k]) continue;
+      const a=cA[k], b=cB[k];
+      const dx=px[b]-px[a], dy=py[b]-py[a];
+      const d=Math.sqrt(dx*dx+dy*dy)||1e-6;
+      const diff=(d-cRest[k])/d;
+      const pa=pinned[a], pb=pinned[b];
+      if(pa&&pb) continue;
+      const offx=dx*0.5*diff, offy=dy*0.5*diff;
+      if(!pa&&!pb){
+        px[a]+=offx; py[a]+=offy;
+        px[b]-=offx; py[b]-=offy;
+      } else if(pa){
+        px[b]-=offx*2; py[b]-=offy*2;
+      } else { // pb pinned
+        px[a]+=offx*2; py[a]+=offy*2;
+      }
+    }
+    // hard re-pin each iter so anchors never drift
+    if(dragging && grab>=0 && !pinned[grab]){ px[grab]=mx; py[grab]=my; }
+  }
+
+  // floor: gentle collision with bottom of viewport
+  const floor=worldH-2;
+  for(let i=0;i<cN;i++){
+    if(py[i]>floor){ py[i]=floor; }
+    // keep things sane against runaway NaN
+    if(!isFinite(px[i])||!isFinite(py[i])){ px[i]=pinX[i]||worldW*0.5; py[i]=pinY[i]||0; ox[i]=px[i]; oy[i]=py[i]; }
+  }
+}
+
+// ---- render ----
+function draw(){
+  const pal=PALETTES[paletteIdx];
+  ctx.fillStyle=`rgb(${pal.bg+1},${pal.bg+2},${pal.bg+6})`;
+  ctx.fillRect(0,0,worldW,worldH);
+
+  if(renderMode==='filled' || renderMode==='both') drawFilled(pal);
+  if(renderMode==='mesh'   || renderMode==='both') drawMesh(pal, renderMode==='both');
+
+  // draw grab highlight
+  if(dragging && grab>=0){
+    ctx.beginPath(); ctx.arc(px[grab],py[grab],6,0,7);
+    ctx.fillStyle=pal.accent; ctx.fill();
+    ctx.beginPath(); ctx.arc(px[grab],py[grab],14,0,7);
+    ctx.strokeStyle=pal.accent+'66'; ctx.lineWidth=1.5; ctx.stroke();
+  }
+  if(tearMode || tearing){
+    ctx.beginPath(); ctx.arc(mx,my,tearRadius,0,7);
+    ctx.strokeStyle='rgba(255,120,120,.5)'; ctx.lineWidth=1.2; ctx.stroke();
+  }
+}
+
+function drawFilled(pal){
+  const [bh,bs,bl]=pal.base;
+  const restArea=restX*restY;
+  for(let r=0;r<rows-1;r++){
+    for(let c=0;c<cols-1;c++){
+      const i00=r*cols+c, i10=i00+1, i01=i00+cols, i11=i01+1;
+      // skip a quad if any of its bordering structural constraints are torn
+      // (cheap proxy for a hole)
+      if(quadTorn(i00,i10,i01,i11)) continue;
+      const ax=px[i00],ay=py[i00], bx=px[i10],by=py[i10],
+            dx=px[i01],dy=py[i01], ex=px[i11],ey=py[i11];
+
+      // shading: surface normal proxy from the two edge vectors -> lighting,
+      // plus stretch -> brightness so taut fabric catches the light
+      const ux=bx-ax, uy=by-ay;       // horizontal edge
+      const vx=dx-ax, vy=dy-ay;       // vertical edge
+      // 2D "normal" tilt: how the quad faces, approximated by cross & edge dirs
+      const cross=ux*vy-uy*vx;         // signed area (orientation/foreshortening)
+      const area=Math.abs(cross);
+      // foreshortening: smaller area => quad turned away from us => darker
+      let fore=area/restArea;          // 1 at rest
+      fore=Math.max(0,Math.min(1.6,fore));
+      // directional light from upper-left: dot of horizontal edge dir with light
+      const ulen=Math.hypot(ux,uy)||1;
+      const nx=-uy/ulen, ny=ux/ulen;   // edge normal in 2D
+      const light=0.5+0.5*(nx*-0.55 + ny*-0.83); // light dir (up-left)
+      // stretch of this cell vs rest
+      const stretch=(Math.hypot(ux,uy)/restX + Math.hypot(vx,vy)/restY)*0.5;
+
+      let L=bl + (light-0.5)*30 + (fore-1)*22 - (stretch-1)*26;
+      L=Math.max(10,Math.min(86,L));
+      let S=Math.max(18,Math.min(70, bs - (stretch-1)*30));
+      const a=0.92;
+      ctx.fillStyle=`hsla(${bh},${S}%,${L}%,${a})`;
+      ctx.beginPath();
+      ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.lineTo(ex,ey); ctx.lineTo(dx,dy);
+      ctx.closePath(); ctx.fill();
+
+      // subtle sheen highlight on taut, well-lit quads
+      if(light>0.72 && fore>0.85){
+        const [sh,ss]=pal.sheen;
+        ctx.fillStyle=`hsla(${sh},${ss}%,${pal.sheen[2]}%,${(light-0.72)*0.6})`;
+        ctx.fill();
+      }
+    }
+  }
+}
+
+function quadTorn(i00,i10,i01,i11){
+  // a quad is a hole when any of its four bordering structural edges was cut
+  return !structAlive(i00,i10) || !structAlive(i00,i01) ||
+         !structAlive(i10,i11) || !structAlive(i01,i11);
+}
+
+function drawMesh(pal, overlay){
+  ctx.lineWidth=overlay?0.5:0.8;
+  ctx.strokeStyle=overlay?'rgba(255,255,255,.12)':pal.accent+'aa';
+  ctx.beginPath();
+  for(let k=0;k<cCount;k++){
+    if(!cAlive[k]) continue;
+    const a=cA[k], b=cB[k];
+    // only draw structural (skip diagonals for a cleaner weave)
+    const da=Math.abs(a-b);
+    if(da!==1 && da!==cols) continue;
+    if(da===1 && (a%cols)===(cols-1)) continue;
+    ctx.moveTo(px[a],py[a]); ctx.lineTo(px[b],py[b]);
+  }
+  ctx.stroke();
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){ step(dt); draw(); }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  let alive=0; for(let k=0;k<cCount;k++) if(cAlive[k]) alive++;
+  hud.textContent=`${cN} nodes · ${alive} links · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); }; }
+bind('sRes','vRes',x=>x|0,x=>{ resParam=x|0; init(); });
+bind('sG','vG',x=>x.toFixed(2),x=>{ gravity=x; });
+bind('sS','vS',x=>x|0,x=>{ iterations=x|0; });
+bind('sW','vW',x=>x.toFixed(1),x=>{ windAmt=x; });
+bind('sD','vD',x=>x.toFixed(3),x=>{ damping=x; });
+
+$('selPin').onchange=e=>{ pinMode=e.target.value; init(); };
+
+document.querySelectorAll('#segRender button').forEach(btn=>{
+  btn.onclick=()=>{
+    document.querySelectorAll('#segRender button').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on'); renderMode=btn.dataset.v;
+  };
+});
+
+function applyPalette(){
+  const pal=PALETTES[paletteIdx];
+  document.documentElement.style.setProperty('--accent', pal.accent);
+}
+$('palette').onclick=()=>{ paletteIdx=(paletteIdx+1)%PALETTES.length; applyPalette(); };
+
+$('tear').onclick=()=>{ tearMode=!tearMode; $('tear').classList.toggle('on',tearMode);
+  $('tear').textContent=tearMode?'Tear ✓':'Tear mode'; cv.classList.toggle('tear',tearMode); };
+$('reseed').onclick=()=>init();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='cloth.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')init();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+  else if(e.key==='t')$('tear').click();
+});
+
+// ---- go ----
+resize(); applyPalette(); init();
+requestAnimationFrame(loop);
+</script>
+<!-- sg-nav -->
+<script src="../pieces.js"></script>
+<script>
+(function(){
+  if (document.getElementById('sg-nav')) return;
+  var pieces = window.PIECES;
+  if (!pieces || !pieces.length) return;
+  var here = (location.pathname.split('/').pop() || '').toLowerCase();
+  var idx = -1;
+  for (var i = 0; i < pieces.length; i++) {
+    if ((pieces[i].file || '').toLowerCase() === here) { idx = i; break; }
+  }
+  if (idx < 0) return;
+  var n = pieces.length;
+  var prev = pieces[(idx - 1 + n) % n];
+  var next = pieces[(idx + 1) % n];
+  var neutral = 'rgba(220,225,235,0.85)';
+
+  var bar = document.createElement('div');
+  bar.id = 'sg-nav';
+  bar.style.cssText = 'position:fixed;bottom:10px;left:50%;transform:translateX(-50%);' +
+    'z-index:50;pointer-events:auto;font:11px ui-monospace,Menlo,monospace;' +
+    'opacity:0.45;transition:opacity .18s ease;white-space:nowrap;' +
+    'letter-spacing:.02em;-webkit-font-smoothing:antialiased;user-select:none;';
+  bar.addEventListener('mouseenter', function(){ bar.style.opacity = '0.9'; });
+  bar.addEventListener('mouseleave', function(){ bar.style.opacity = '0.45'; });
+
+  function mkLink(piece, label){
+    var a = document.createElement('a');
+    a.href = piece.file;
+    a.style.cssText = 'color:' + (piece.accent || neutral) + ';text-decoration:none;';
+    a.textContent = label;
+    return a;
+  }
+  var prevLink = mkLink(prev, '‹ ' + prev.name);
+  var nextLink = mkLink(next, next.name + ' ›');
+  var sep = document.createElement('span');
+  sep.textContent = '   ·   ';
+  sep.style.color = 'rgba(180,185,195,0.6)';
+
+  bar.appendChild(prevLink);
+  bar.appendChild(sep);
+  bar.appendChild(nextLink);
+  document.body.appendChild(bar);
+
+  window.addEventListener('keydown', function(e){
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t) {
+      var tag = (t.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable) return;
+    }
+    if (e.key === 'ArrowLeft') { location.href = prev.file; }
+    else if (e.key === 'ArrowRight') { location.href = next.file; }
+  });
+})();
+</script>
+</body>
+</html>

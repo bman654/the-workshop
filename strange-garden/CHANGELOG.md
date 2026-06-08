@@ -7,7 +7,7 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 > **Resume protocol:** read this top section, then continue from "Next up". Commit + update
 > here after every piece.
 
-## Status — 31 specimens, all browser-verified PASS (60fps unless noted), clean consoles. Browsable (prev/next).
+## Status — 34 specimens, all browser-verified PASS (60fps unless noted), clean consoles. Browsable (prev/next).
 
 | # | file | system | notes |
 |---|------|--------|-------|
@@ -42,6 +42,9 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 | 29 | penrose.html | Penrose | P3 rhombus deflation; 5-fold aperiodic; shimmer + rotation |
 | 30 | bz-reaction.html | Belousov–Zhabotinsky | 3-species oscillating reaction; spiral/target waves; click-nucleate |
 | 31 | metaballs.html | Metaballs | WebGL chrome iso-surface; blobs merge/split; cursor-follow |
+| 32 | kuramoto.html | Kuramoto | mean-field coupled oscillators sync; order-parameter inset; fireflies |
+| 33 | voronoi.html | Voronoi | nearest-site mosaic + Lloyd relaxation; drag/add sites |
+| 34 | cloth.html | Cloth | Verlet soft-body; drag/tear/wind; curtain/hammock/flag pins |
 
 - gallery `index.html` + `pieces.js` (9 entries) verified: all cards + thumbnails render, clean console.
 - thumbnails in `assets/thumbs/`; `assets/gallery-preview.png` is a full-page gallery shot.
@@ -56,9 +59,9 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 ## Next up
 - Polish DONE: garden README, "wander in" random button + digit nav, thumbnails normalized
   to ≤1440w, gallery re-verified.
-- **Wave 12 candidate pieces (still unbuilt):** Voronoi/Lloyd relaxation, terrain erosion,
-  Brian's Brain / excitable media, percolation / forest-fire, spirograph/epicycloid gears,
-  Hopf fibration, Mandelbulb slice, 3D rotating polyhedra, Kuramoto sync oscillators.
+- **Wave 13 candidate pieces (still unbuilt):** terrain erosion, Brian's Brain / excitable
+  media, percolation / forest-fire, spirograph/epicycloid gears, Hopf fibration, 3D rotating
+  polyhedra (Platonic/Archimedean), Mandelbulb slice, sand/Turing on a sphere, double-spiral.
 - Possible: a favicon; an "about" page; sort/filter on the gallery; per-piece "view source".
 - Note: ripple-tank thumbnail shows the control panel (others hide it) — minor, could recapture.
 
@@ -88,4 +91,6 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
   ArrowLeft/Right keys (wrap-around), injected from pieces.js via the `#sg-nav` snippet.
   The garden is now browsable specimen-to-specimen. (Idempotent marker `<!-- sg-nav -->`.)
 - 2026-06-08 — Wave 11: penrose (aperiodic deflation), bz-reaction (Belousov–Zhabotinsky),
-  metaballs (WebGL). New pieces copy the `#sg-nav` snippet. **31 specimens.**
+  metaballs (WebGL). New pieces copy the `#sg-nav` snippet. 31 specimens. Preview shared.
+- 2026-06-08 — Wave 12: kuramoto (synchronization), voronoi (Lloyd relaxation), cloth
+  (Verlet soft-body). **34 specimens.**

@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voronoi — Strange Garden</title>
+<style>
+  :root { --accent: #8fd6b4; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; margin-top:3px; padding:5px 6px; font-size:12px; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:7px; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Voronoi</h1>
+  <p class="desc">A shattered plane of cells, each ruled by its nearest seed.
+    Lloyd relaxation drifts the seeds toward their centroids — chaos evens into honeycomb.</p>
+  <label>Sites <b id="vN">90</b></label>
+  <input type="range" id="sN" min="8" max="220" step="1" value="90">
+  <label>Relaxation <b id="vL">0.060</b></label>
+  <input type="range" id="sL" min="0" max="0.30" step="0.005" value="0.06">
+  <label>Drift <b id="vD">0.20</b></label>
+  <input type="range" id="sD" min="0" max="1.5" step="0.05" value="0.2">
+  <label>Border <b id="vB">1.4</b></label>
+  <input type="range" id="sB" min="0" max="4" step="0.1" value="1.4">
+  <label>Color mode</label>
+  <select id="selC">
+    <option value="0">Index</option>
+    <option value="1">Area</option>
+    <option value="2" selected>Gradient</option>
+  </select>
+  <label>Palette <b id="vP">Lichen</b></label>
+  <input type="range" id="sP" min="0" max="5" step="1" value="0">
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">drag to move a site · click empty space to add · h hides panel</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR,worldW,worldH;
+
+// ---- offscreen low-res grid for nearest-site assignment ----
+// We compute the Voronoi assignment on a downscaled grid, then upscale.
+let gw=0, gh=0;             // grid (low-res) dimensions
+const TARGET_GRID=320;      // longest grid edge ~ this many cells
+let owner;                  // Int16Array: site index owning each grid pixel
+let img;                    // ImageData for the low-res grid
+let off, offctx;            // offscreen canvas holding the low-res image
+let edge;                   // Uint8Array marking cell-border grid pixels
+
+// ---- sites ----
+let N=90;
+let sx,sy,svx,svy;          // site positions (grid coords) + drift velocity
+let accX,accY,accN;         // centroid accumulators
+let siteCol;               // Float32Array(N*3) cached rgb per site
+
+// ---- parameters ----
+let relax=0.06, drift=0.20, borderW=1.4, colorMode=2, palette=0;
+
+function resize(){
+  const oldW=worldW, oldH=worldH;
+  DPR=Math.min(devicePixelRatio||1,2);
+  worldW=innerWidth; worldH=innerHeight;
+  W=cv.width=Math.floor(worldW*DPR); H=cv.height=Math.floor(worldH*DPR);
+  cv.style.width=worldW+'px'; cv.style.height=worldH+'px';
+  // grid dims keep screen aspect; longest edge = TARGET_GRID
+  if(worldW>=worldH){ gw=TARGET_GRID; gh=Math.max(2,Math.round(TARGET_GRID*worldH/worldW)); }
+  else { gh=TARGET_GRID; gw=Math.max(2,Math.round(TARGET_GRID*worldW/worldH)); }
+  owner=new Int16Array(gw*gh);
+  edge=new Uint8Array(gw*gh);
+  off=document.createElement('canvas'); off.width=gw; off.height=gh;
+  offctx=off.getContext('2d'); img=offctx.createImageData(gw,gh);
+  // remap existing sites (stored in grid coords) to the new grid proportionally
+  if(sx && _gw>0 && _gh>0 && (gw!==_gw || gh!==_gh)){
+    const sxr=gw/_gw, syr=gh/_gh;
+    for(let i=0;i<N;i++){ sx[i]*=sxr; sy[i]*=syr; }
+  }
+  _gw=gw; _gh=gh;
+}
+let _gw=0,_gh=0;
+addEventListener('resize',()=>{ resize(); });
+
+// ---- palettes: t in [0,1] -> [r,g,b] (0..255) ----
+const PAL_NAMES=['Lichen','Ember','Abyss','Bloom','Mineral','Aurora'];
+// each palette: array of color stops [t, r,g,b]
+const PALS=[
+  // Lichen — moss greens / teal / pale gold
+  [[0,18,38,40],[0.35,34,86,78],[0.6,96,168,128],[0.82,176,206,128],[1,224,226,176]],
+  // Ember — deep ember to warm gold
+  [[0,28,14,24],[0.3,96,32,46],[0.55,184,64,52],[0.78,230,128,52],[1,248,206,128]],
+  // Abyss — indigo / cyan deep sea
+  [[0,10,16,40],[0.32,22,46,96],[0.58,30,104,150],[0.8,72,170,196],[1,168,226,224]],
+  // Bloom — plum / magenta / rose
+  [[0,28,14,40],[0.32,72,26,86],[0.56,150,48,120],[0.78,214,96,148],[1,248,196,212]],
+  // Mineral — slate / copper / cream
+  [[0,22,26,34],[0.34,52,60,72],[0.58,128,104,96],[0.8,196,150,112],[1,236,220,190]],
+  // Aurora — green / cyan / violet
+  [[0,12,28,34],[0.3,28,88,92],[0.54,52,168,150],[0.74,108,170,224],[1,196,168,236]],
+];
+function palLookup(p, t){
+  const stops=PALS[p];
+  if(t<=0){ const s=stops[0]; return [s[1],s[2],s[3]]; }
+  if(t>=1){ const s=stops[stops.length-1]; return [s[1],s[2],s[3]]; }
+  for(let i=1;i<stops.length;i++){
+    if(t<=stops[i][0]){
+      const a=stops[i-1], b=stops[i];
+      const f=(t-a[0])/(b[0]-a[0]);
+      return [ a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f, a[3]+(b[3]-a[3])*f ];
+    }
+  }
+  const s=stops[stops.length-1]; return [s[1],s[2],s[3]];
+}
+
+// ---- init / seed ----
+function alloc(){
+  sx=new Float32Array(N); sy=new Float32Array(N);
+  svx=new Float32Array(N); svy=new Float32Array(N);
+  accX=new Float32Array(N); accY=new Float32Array(N); accN=new Int32Array(N);
+  siteCol=new Float32Array(N*3);
+}
+function seed(){
+  alloc();
+  for(let i=0;i<N;i++){
+    sx[i]=Math.random()*gw; sy[i]=Math.random()*gh;
+    const ang=Math.random()*Math.PI*2;
+    svx[i]=Math.cos(ang); svy[i]=Math.sin(ang);
+  }
+  _gw=gw; _gh=gh;
+  computeColors();
+}
+function init(){ seed(); }
+
+// per-site base color (used for index & gradient modes; area recolors per frame)
+function computeColors(){
+  for(let i=0;i<N;i++){
+    let t;
+    if(colorMode===0){ // index: hash the site index into palette domain, golden-ratio spread
+      t=(i*0.61803398875)%1;
+    } else { // gradient: by position (radial-ish blend of x and y)
+      t=0.5; // placeholder, recomputed per-site below from position
+    }
+    const c=palLookup(palette, t);
+    siteCol[i*3]=c[0]; siteCol[i*3+1]=c[1]; siteCol[i*3+2]=c[2];
+  }
+}
+
+// ---- nearest-site assignment via spatial bucket grid (fast) ----
+// Bucket sites into coarse cells; for each grid pixel only scan nearby buckets,
+// expanding rings until guaranteed nearest found. Falls back gracefully.
+let bCols,bRows,bCellW,bCellH,bHead,bNext;
+function buildBuckets(){
+  // aim ~ 1.5 sites per bucket
+  const target=Math.max(1, Math.round(Math.sqrt(N/1.5)));
+  bCols=Math.max(1,Math.min(target, gw)); bRows=Math.max(1,Math.min(target, gh));
+  bCellW=gw/bCols; bCellH=gh/bRows;
+  const nb=bCols*bRows;
+  if(!bHead || bHead.length!==nb) bHead=new Int32Array(nb);
+  bHead.fill(-1);
+  if(!bNext || bNext.length!==N) bNext=new Int32Array(N);
+  for(let i=0;i<N;i++){
+    let cx=(sx[i]/bCellW)|0, cy=(sy[i]/bCellH)|0;
+    if(cx<0)cx=0; else if(cx>=bCols)cx=bCols-1;
+    if(cy<0)cy=0; else if(cy>=bRows)cy=bRows-1;
+    const c=cy*bCols+cx; bNext[i]=bHead[c]; bHead[c]=i;
+  }
+}
+function assign(){
+  buildBuckets();
+  // reset centroid accumulators
+  accX.fill(0); accY.fill(0); accN.fill(0);
+  const maxRing=Math.max(bCols,bRows);
+  for(let gy=0; gy<gh; gy++){
+    const py=gy+0.5;
+    const bcy=Math.min(bRows-1,(py/bCellH)|0);
+    const rowOff=gy*gw;
+    for(let gx=0; gx<gw; gx++){
+      const pxx=gx+0.5;
+      const bcx=Math.min(bCols-1,(pxx/bCellW)|0);
+      let best=-1, bestD=Infinity;
+      // expanding rings of buckets
+      for(let ring=0; ring<=maxRing; ring++){
+        const x0=bcx-ring, x1=bcx+ring, y0=bcy-ring, y1=bcy+ring;
+        // scan only the ring's perimeter buckets
+        for(let by=y0; by<=y1; by++){
+          if(by<0||by>=bRows) continue;
+          const onYEdge=(by===y0||by===y1);
+          for(let bx=x0; bx<=x1; bx++){
+            if(bx<0||bx>=bCols) continue;
+            if(!onYEdge && bx!==x0 && bx!==x1) continue; // interior already scanned
+            let j=bHead[by*bCols+bx];
+            while(j!==-1){
+              const dx=sx[j]-pxx, dy=sy[j]-py, d=dx*dx+dy*dy;
+              if(d<bestD){ bestD=d; best=j; }
+              j=bNext[j];
+            }
+          }
+        }
+        // once we have a candidate, one extra ring guarantees correctness
+        if(best>=0){
+          // distance to nearest unscanned bucket boundary
+          const ringDist=ring*Math.min(bCellW,bCellH);
+          if(bestD <= ringDist*ringDist) break;
+        }
+      }
+      owner[rowOff+gx]=best;
+      accX[best]+=pxx; accY[best]+=py; accN[best]++;
+    }
+  }
+}
+
+// ---- detect cell borders on the grid ----
+function detectEdges(){
+  edge.fill(0);
+  for(let gy=0; gy<gh; gy++){
+    const off=gy*gw;
+    for(let gx=0; gx<gw; gx++){
+      const o=owner[off+gx];
+      // compare with right & down neighbor; mark a boundary
+      if(gx+1<gw && owner[off+gx+1]!==o){ edge[off+gx]=1; edge[off+gx+1]=1; }
+      if(gy+1<gh && owner[off+gw+gx]!==o){ edge[off+gx]=1; edge[off+gw+gx]=1; }
+    }
+  }
+}
+
+// ---- Lloyd relaxation + drift ----
+function relaxStep(dt){
+  for(let i=0;i<N;i++){
+    if(accN[i]>0){
+      const cx=accX[i]/accN[i], cy=accY[i]/accN[i];
+      // move a fraction toward centroid (frame-rate scaled, capped)
+      const k=Math.min(1, relax*dt*60);
+      sx[i]+=(cx-sx[i])*k;
+      sy[i]+=(cy-sy[i])*k;
+    }
+    // gentle wandering drift so it never fully freezes
+    if(drift>0){
+      // slowly rotate the drift heading via small random nudges
+      const a=(Math.random()-0.5)*0.3;
+      const ca=Math.cos(a), sa=Math.sin(a);
+      const nvx=svx[i]*ca-svy[i]*sa, nvy=svx[i]*sa+svy[i]*ca;
+      svx[i]=nvx; svy[i]=nvy;
+      sx[i]+=svx[i]*drift*dt*12;
+      sy[i]+=svy[i]*drift*dt*12;
+    }
+    // keep inside grid
+    if(sx[i]<0.5)sx[i]=0.5; else if(sx[i]>gw-0.5)sx[i]=gw-0.5;
+    if(sy[i]<0.5)sy[i]=0.5; else if(sy[i]>gh-0.5)sy[i]=gh-0.5;
+  }
+}
+
+function step(dt){
+  assign();
+  relaxStep(dt);
+}
+
+// ---- render ----
+const EDGE_RGB=[10,11,15];
+function colorForSite(i){
+  if(colorMode===0){ // index (precomputed)
+    return [siteCol[i*3],siteCol[i*3+1],siteCol[i*3+2]];
+  } else if(colorMode===1){ // area: bigger cells brighter end
+    // normalize area by expected average (gw*gh/N)
+    const avg=(gw*gh)/N;
+    let t=accN[i]/(avg*1.8);
+    if(t>1)t=1; else if(t<0)t=0;
+    return palLookup(palette,t);
+  } else { // gradient: by position across the field
+    const t=(sx[i]/gw*0.6 + sy[i]/gh*0.4);
+    return palLookup(palette, t);
+  }
+}
+function draw(){
+  const d=img.data;
+  // fill colors by owner
+  for(let p=0,q=0; p<owner.length; p++, q+=4){
+    const o=owner[p];
+    let r,g,b;
+    if(o<0){ r=EDGE_RGB[0]; g=EDGE_RGB[1]; b=EDGE_RGB[2]; }
+    else { const c=cellColor[o]; r=c[0]; g=c[1]; b=c[2]; }
+    d[q]=r; d[q+1]=g; d[q+2]=b; d[q+3]=255;
+  }
+  offctx.putImageData(img,0,0);
+
+  // upscale (smoothing OFF gives crisp cells; we draw borders on top)
+  ctx.imageSmoothingEnabled=true;
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+  ctx.drawImage(off,0,0,gw,gh,0,0,W,H);
+
+  // borders: draw the edge grid pixels darkened, scaled
+  if(borderW>0){
+    detectEdges();
+    const sxr=W/gw, syr=H/gh;
+    ctx.fillStyle=`rgba(10,11,15,0.9)`;
+    const bw=borderW*DPR;
+    for(let gy=0; gy<gh; gy++){
+      const off=gy*gw;
+      for(let gx=0; gx<gw; gx++){
+        if(edge[off+gx]){
+          ctx.fillRect(gx*sxr - bw*0.5, gy*syr - bw*0.5, sxr+bw, syr+bw);
+        }
+      }
+    }
+  }
+
+  // site dots
+  ctx.fillStyle='rgba(245,247,250,0.85)';
+  const sxr=W/gw, syr=H/gh, rad=Math.max(1.3,1.6*DPR);
+  for(let i=0;i<N;i++){
+    ctx.beginPath();
+    ctx.arc(sx[i]*sxr, sy[i]*syr, rad, 0, 6.2832);
+    ctx.fill();
+  }
+}
+
+// per-frame cached cell colors (avoid recompute inside pixel loop)
+let cellColor=[];
+function refreshCellColors(){
+  cellColor.length=N;
+  for(let i=0;i<N;i++) cellColor[i]=colorForSite(i);
+}
+
+// ---- mouse: drag to move nearest site; click empty to add ----
+let dragging=-1;
+function gridFromEvent(e){
+  const r=cv.getBoundingClientRect();
+  const x=(e.clientX-r.left)/r.width*gw;
+  const y=(e.clientY-r.top)/r.height*gh;
+  return [x,y];
+}
+function nearestSite(x,y){
+  let best=-1,bd=Infinity;
+  for(let i=0;i<N;i++){ const dx=sx[i]-x,dy=sy[i]-y,d=dx*dx+dy*dy; if(d<bd){bd=d;best=i;} }
+  return [best,bd];
+}
+cv.addEventListener('pointerdown',e=>{
+  const [x,y]=gridFromEvent(e);
+  const [i,d]=nearestSite(x,y);
+  const grab=Math.max(gw,gh)*0.04; // grab radius in grid units
+  if(i>=0 && d<grab*grab){ dragging=i; }
+  else if(N<260){ addSite(x,y); dragging=N-1; }
+  cv.setPointerCapture(e.pointerId);
+});
+addEventListener('pointermove',e=>{
+  if(dragging>=0){ const [x,y]=gridFromEvent(e);
+    sx[dragging]=Math.max(0.5,Math.min(gw-0.5,x));
+    sy[dragging]=Math.max(0.5,Math.min(gh-0.5,y)); }
+});
+addEventListener('pointerup',()=>{ dragging=-1; });
+
+function addSite(x,y){
+  const nn=N+1;
+  const nsx=new Float32Array(nn), nsy=new Float32Array(nn);
+  const nvx=new Float32Array(nn), nvy=new Float32Array(nn);
+  nsx.set(sx); nsy.set(sy); nvx.set(svx); nvy.set(svy);
+  nsx[N]=x; nsy[N]=y; const a=Math.random()*6.283; nvx[N]=Math.cos(a); nvy[N]=Math.sin(a);
+  sx=nsx; sy=nsy; svx=nvx; svy=nvy;
+  N=nn;
+  accX=new Float32Array(N); accY=new Float32Array(N); accN=new Int32Array(N);
+  siteCol=new Float32Array(N*3);
+  computeColors();
+  $('sN').value=N; $('vN').textContent=N;
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05; if(dt<=0)dt=1/60;
+  if(!paused && !document.hidden){ step(dt); }
+  refreshCellColors();
+  if(!document.hidden) draw();
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${N} sites · ${PAL_NAMES[palette]} · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ set(parseFloat(s.value)); if(v) v.textContent=fmt(parseFloat(s.value)); }; }
+bind('sN','vN',x=>x|0,x=>{ N=x|0; seed(); });
+bind('sL','vL',x=>x.toFixed(3),x=>{ relax=x; });
+bind('sD','vD',x=>x.toFixed(2),x=>{ drift=x; });
+bind('sB','vB',x=>x.toFixed(1),x=>{ borderW=x; });
+bind('sP','vP',x=>PAL_NAMES[x|0],x=>{ palette=x|0; computeColors(); });
+$('selC').onchange=()=>{ colorMode=parseInt($('selC').value,10); computeColors(); };
+$('reseed').onclick=()=>{ seed(); };
+$('pause').onclick=()=>{ paused=!paused; $('pause').textContent=paused?'Play':'Pause'; };
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='voronoi.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')seed();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+resize(); seed();
+requestAnimationFrame(loop);
+</script>
+<!-- sg-nav -->
+<script src="../pieces.js"></script>
+<script>
+(function(){
+  if (document.getElementById('sg-nav')) return;
+  var pieces = window.PIECES;
+  if (!pieces || !pieces.length) return;
+  var here = (location.pathname.split('/').pop() || '').toLowerCase();
+  var idx = -1;
+  for (var i = 0; i < pieces.length; i++) {
+    if ((pieces[i].file || '').toLowerCase() === here) { idx = i; break; }
+  }
+  if (idx < 0) return;
+  var n = pieces.length;
+  var prev = pieces[(idx - 1 + n) % n];
+  var next = pieces[(idx + 1) % n];
+  var neutral = 'rgba(220,225,235,0.85)';
+
+  var bar = document.createElement('div');
+  bar.id = 'sg-nav';
+  bar.style.cssText = 'position:fixed;bottom:10px;left:50%;transform:translateX(-50%);' +
+    'z-index:50;pointer-events:auto;font:11px ui-monospace,Menlo,monospace;' +
+    'opacity:0.45;transition:opacity .18s ease;white-space:nowrap;' +
+    'letter-spacing:.02em;-webkit-font-smoothing:antialiased;user-select:none;';
+  bar.addEventListener('mouseenter', function(){ bar.style.opacity = '0.9'; });
+  bar.addEventListener('mouseleave', function(){ bar.style.opacity = '0.45'; });
+
+  function mkLink(piece, label){
+    var a = document.createElement('a');
+    a.href = piece.file;
+    a.style.cssText = 'color:' + (piece.accent || neutral) + ';text-decoration:none;';
+    a.textContent = label;
+    return a;
+  }
+  var prevLink = mkLink(prev, '‹ ' + prev.name);
+  var nextLink = mkLink(next, next.name + ' ›');
+  var sep = document.createElement('span');
+  sep.textContent = '   ·   ';
+  sep.style.color = 'rgba(180,185,195,0.6)';
+
+  bar.appendChild(prevLink);
+  bar.appendChild(sep);
+  bar.appendChild(nextLink);
+  document.body.appendChild(bar);
+
+  window.addEventListener('keydown', function(e){
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t) {
+      var tag = (t.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable) return;
+    }
+    if (e.key === 'ArrowLeft') { location.href = prev.file; }
+    else if (e.key === 'ArrowRight') { location.href = next.file; }
+  });
+})();
+</script>
+</body>
+</html>

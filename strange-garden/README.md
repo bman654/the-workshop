@@ -48,6 +48,9 @@ file with **zero dependencies and no build step**.
 | 29 | **Penrose** | Golden-ratio deflation grows a five-fold tiling of rhombi that never repeats. |
 | 30 | **Belousov–Zhabotinsky** | A chemical clock — three reagents spiral into glowing, endless target waves. |
 | 31 | **Metaballs** | Drops of liquid metal drift, kiss, and pour into one another. |
+| 32 | **Kuramoto** | Coupled oscillators — a field of fireflies that falls into one breathing pulse. |
+| 33 | **Voronoi** | Shattered nearest-neighbour cells drift and relax into an even honeycomb. |
+| 34 | **Cloth** | A pinned Verlet fabric you can drape, swing, billow in wind, and tear by hand. |
 
 ## Controls (shared by every specimen)
 

@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kuramoto — Strange Garden</title>
+<style>
+  :root { --accent: #ffd166; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:default; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; margin:2px 0 0; padding:5px 6px; font-size:12px;
+    color:#e6e8ee; background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.12); border-radius:8px; }
+  .seg { display:flex; gap:6px; margin:3px 0 0; }
+  .seg button { flex:1; padding:6px 4px; font-size:11px;
+    font-family:ui-monospace,Menlo,monospace; }
+  .seg button.on { border-color:color-mix(in srgb,var(--accent) 55%,transparent);
+    background:color-mix(in srgb,var(--accent) 16%,transparent); color:#fff; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.45; text-align:right; }
+  #hud b { color:var(--accent); font-weight:600; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Kuramoto</h1>
+  <p class="desc">A field of fireflies, each blinking to its own clock. Raise the coupling
+    and watch chaos fall, all at once, into one breathing pulse.</p>
+  <label>Oscillators <b id="vN">2500</b></label>
+  <input type="range" id="sN" min="100" max="8000" step="100" value="2500">
+  <label>Coupling K <b id="vK">0.40</b></label>
+  <input type="range" id="sK" min="0" max="4" step="0.02" value="0.40">
+  <label>Frequency spread <b id="vS">0.60</b></label>
+  <input type="range" id="sS" min="0" max="3" step="0.02" value="0.60">
+  <label>Speed <b id="vSp">1.0</b></label>
+  <input type="range" id="sSp" min="0.1" max="3" step="0.1" value="1.0">
+  <label>Layout</label>
+  <div class="seg">
+    <button id="lgrid" class="on">grid</button>
+    <button id="lring">ring</button>
+  </div>
+  <label>Palette <b id="vP">spectrum</b></label>
+  <select id="sP">
+    <option value="0">spectrum</option>
+    <option value="1">firefly</option>
+    <option value="2">aurora</option>
+    <option value="3">ember</option>
+  </select>
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">drag K up to synchronize · h hides panel</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR,worldW,worldH;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  worldW=innerWidth; worldH=innerHeight;
+  W=cv.width=Math.floor(worldW*DPR); H=cv.height=Math.floor(worldH*DPR);
+  cv.style.width=worldW+'px'; cv.style.height=worldH+'px';
+  layoutPositions();
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+}
+addEventListener('resize',resize);
+
+// ---- parameters ----
+let n=2500, K=0.40, spread=0.60, speed=1.0, layout=0, palette=0;
+const TAU=Math.PI*2;
+
+// ---- state (typed arrays) ----
+let theta, omega;            // phase + natural frequency per oscillator
+let posX, posY, cellR;       // screen positions (device px) + dot radius
+let r=0, psi=0;              // order parameter magnitude & mean phase
+let cols=0, rows=0;          // grid dims
+
+// gaussian via Box–Muller
+function gauss(){
+  let u=0,v=0;
+  while(u===0) u=Math.random();
+  while(v===0) v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(TAU*v);
+}
+
+function init(){
+  theta=new Float32Array(n);
+  omega=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    theta[i]=Math.random()*TAU;
+    omega[i]=gauss()*spread;     // re-scaled live in step() too
+  }
+  layoutPositions();
+}
+
+// Lay out oscillators in screen space for the chosen layout. Device px.
+function layoutPositions(){
+  if(!theta) return;
+  posX=new Float32Array(n);
+  posY=new Float32Array(n);
+  const insetW = 150*DPR;      // keep the order-parameter inset clear (bottom-right)
+  if(layout===1){
+    // ring(s): pack oscillators into concentric rings, ordered by natural freq
+    const cx=W*0.5, cy=H*0.5;
+    const order=Array.from({length:n},(_,i)=>i).sort((a,b)=>omega[a]-omega[b]);
+    const rMax=Math.min(W,H)*0.43;
+    const ringCount=Math.max(1,Math.round(Math.sqrt(n/6)));
+    let placed=0;
+    for(let ringIdx=0; ringIdx<ringCount && placed<n; ringIdx++){
+      const frac=(ringIdx+1)/ringCount;
+      const rad=rMax*(0.18+0.82*frac);
+      const remainingRings=ringCount-ringIdx;
+      const cnt=Math.min(n-placed, Math.ceil((n-placed)/remainingRings));
+      for(let k=0;k<cnt;k++){
+        const idx=order[placed];
+        const a=(k/cnt)*TAU + ringIdx*0.6;
+        posX[idx]=cx+Math.cos(a)*rad;
+        posY[idx]=cy+Math.sin(a)*rad;
+        placed++;
+      }
+    }
+    cellR=Math.max(1.5*DPR, rMax*0.9/Math.sqrt(n)*2.6);
+  } else {
+    // grid: square-ish lattice filling the viewport
+    const aspect=W/H;
+    cols=Math.max(1,Math.round(Math.sqrt(n*aspect)));
+    rows=Math.ceil(n/cols);
+    const pad=Math.min(W,H)*0.04;
+    const gw=W-pad*2, gh=H-pad*2;
+    const dx=gw/cols, dy=gh/rows;
+    for(let i=0;i<n;i++){
+      const gx=i%cols, gy=(i/cols)|0;
+      posX[i]=pad+dx*(gx+0.5);
+      posY[i]=pad+dy*(gy+0.5);
+    }
+    cellR=Math.max(1.2*DPR, Math.min(dx,dy)*0.46);
+  }
+}
+
+// ---- palettes: phase (0..TAU) + brightness -> rgb ----
+// returns packed via the shared scratch object to avoid allocation
+const _rgb={r:0,g:0,b:0};
+function hsv(h,s,v){ // h in [0,1)
+  h=(h%1+1)%1; const i=(h*6)|0, f=h*6-i;
+  const p=v*(1-s), q=v*(1-f*s), t=v*(1-(1-f)*s);
+  let r,g,b;
+  switch(i%6){
+    case 0: r=v;g=t;b=p; break;
+    case 1: r=q;g=v;b=p; break;
+    case 2: r=p;g=v;b=t; break;
+    case 3: r=p;g=q;b=v; break;
+    case 4: r=t;g=p;b=v; break;
+    default:r=v;g=p;b=q;
+  }
+  _rgb.r=r*255|0; _rgb.g=g*255|0; _rgb.b=b*255|0;
+}
+function lerp(a,b,t){ return a+(b-a)*t; }
+// fill _rgb for phase ph (0..TAU) at brightness br (0..1) under current palette
+function phaseColor(ph,br){
+  const u=ph/TAU; // 0..1
+  switch(palette){
+    case 1: { // firefly: warm yellow-green glow, hue rides phase narrowly
+      hsv(0.13+0.16*Math.sin(ph), 0.7, 1);
+      _rgb.r=lerp(20,_rgb.r,br)|0; _rgb.g=lerp(22,_rgb.g,br)|0; _rgb.b=lerp(14,_rgb.b,br)|0;
+      return;
+    }
+    case 2: { // aurora: teal-violet
+      hsv(0.45+0.35*u, 0.72, 1);
+      break;
+    }
+    case 3: { // ember: red-orange-gold
+      hsv(0.0+0.14*u, 0.85, 1);
+      break;
+    }
+    default: { // spectrum: full rainbow around the circle
+      hsv(u, 0.85, 1);
+      break;
+    }
+  }
+  // apply brightness toward near-black
+  _rgb.r=lerp(12,_rgb.r,br)|0;
+  _rgb.g=lerp(13,_rgb.g,br)|0;
+  _rgb.b=lerp(18,_rgb.b,br)|0;
+}
+const PNAME=['spectrum','firefly','aurora','ember'];
+const ACCENT=['#ffd166','#ffe08a','#7fe3d6','#ff8a5c'];
+
+// ---- mean-field Kuramoto update: O(N) ----
+function step(dt){
+  dt*=speed;
+  if(dt>0.05) dt=0.05;
+  // order parameter r·e^{iψ} = (1/N) Σ e^{iθ_j}
+  let sx=0, sy=0;
+  for(let i=0;i<n;i++){ sx+=Math.cos(theta[i]); sy+=Math.sin(theta[i]); }
+  sx/=n; sy/=n;
+  r=Math.sqrt(sx*sx+sy*sy);
+  psi=Math.atan2(sy,sx);
+  // dθ_i = ω_i + K·r·sin(ψ − θ_i)
+  const Kr=K*r;
+  for(let i=0;i<n;i++){
+    let th=theta[i] + (omega[i] + Kr*Math.sin(psi-theta[i]))*dt;
+    th%=TAU; if(th<0) th+=TAU;
+    theta[i]=th;
+  }
+}
+
+// ---- render ----
+function draw(){
+  // gentle motion-blur fade so flashes leave a soft afterglow
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle='rgba(10,11,15,0.42)';
+  ctx.fillRect(0,0,W,H);
+  ctx.globalCompositeOperation='lighter';
+
+  const rad=cellR;
+  for(let i=0;i<n;i++){
+    const ph=theta[i];
+    // "flash" brightness: brightest as phase passes 0 (firefly blink)
+    const br=0.18+0.82*Math.pow((Math.cos(ph)*0.5+0.5),3);
+    phaseColor(ph,br);
+    ctx.fillStyle='rgb('+_rgb.r+','+_rgb.g+','+_rgb.b+')';
+    ctx.beginPath();
+    ctx.arc(posX[i],posY[i],rad*(0.55+0.6*br),0,TAU);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation='source-over';
+  drawInset();
+}
+
+// ---- order-parameter inset (unit circle + centroid vector) ----
+function drawInset(){
+  const size=128*DPR, m=14*DPR;
+  const cx=W-size*0.5-m, cy=H-size*0.5-m, R=size*0.40;
+  // backing panel
+  ctx.fillStyle='rgba(14,15,21,0.72)';
+  roundRect(W-size-m, H-size-m, size, size, 12*DPR); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.10)';
+  ctx.lineWidth=1*DPR;
+  roundRect(W-size-m, H-size-m, size, size, 12*DPR); ctx.stroke();
+  // unit circle
+  ctx.strokeStyle='rgba(255,255,255,0.16)';
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,TAU); ctx.stroke();
+  // oscillators as points on the circle (subsample for big N)
+  const stepI=Math.max(1,(n/600)|0);
+  ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<n;i+=stepI){
+    const ph=theta[i];
+    phaseColor(ph,0.95);
+    ctx.fillStyle='rgba('+_rgb.r+','+_rgb.g+','+_rgb.b+',0.7)';
+    ctx.beginPath();
+    ctx.arc(cx+Math.cos(ph)*R, cy+Math.sin(ph)*R, 1.6*DPR, 0, TAU);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation='source-over';
+  // centroid vector r·e^{iψ}
+  const ex=cx+Math.cos(psi)*R*r, ey=cy+Math.sin(psi)*R*r;
+  const acc=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#ffd166';
+  ctx.strokeStyle=acc; ctx.lineWidth=2.2*DPR;
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(ex,ey); ctx.stroke();
+  ctx.fillStyle=acc;
+  ctx.beginPath(); ctx.arc(ex,ey,3.4*DPR,0,TAU); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.beginPath(); ctx.arc(cx,cy,1.8*DPR,0,TAU); ctx.fill();
+  // r label
+  ctx.fillStyle='rgba(230,232,238,0.85)';
+  ctx.font=(11*DPR)+'px ui-monospace,Menlo,monospace';
+  ctx.textAlign='center';
+  ctx.fillText('r = '+r.toFixed(3), cx, H-m-7*DPR);
+  ctx.textAlign='left';
+}
+function roundRect(x,y,w,h,rr){
+  ctx.beginPath();
+  ctx.moveTo(x+rr,y);
+  ctx.arcTo(x+w,y,x+w,y+h,rr);
+  ctx.arcTo(x+w,y+h,x,y+h,rr);
+  ctx.arcTo(x,y+h,x,y,rr);
+  ctx.arcTo(x,y,x+w,y,rr);
+  ctx.closePath();
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){ step(dt); draw(); }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.innerHTML=`${n} oscillators · r <b>${r.toFixed(3)}</b> · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ set(parseFloat(s.value)); if(v)v.textContent=fmt(parseFloat(s.value)); }; }
+bind('sN','vN',x=>x|0,x=>{ n=x|0; init(); });
+bind('sK','vK',x=>x.toFixed(2),x=>{ K=x; });
+bind('sS','vS',x=>x.toFixed(2),x=>{ spread=x; init(); });
+bind('sSp','vSp',x=>x.toFixed(1),x=>{ speed=x; });
+
+function setLayout(l){
+  layout=l;
+  $('lgrid').classList.toggle('on',l===0);
+  $('lring').classList.toggle('on',l===1);
+  layoutPositions();
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+}
+$('lgrid').onclick=()=>setLayout(0);
+$('lring').onclick=()=>setLayout(1);
+
+$('sP').onchange=()=>{
+  palette=parseInt($('sP').value,10);
+  $('vP').textContent=PNAME[palette];
+  document.documentElement.style.setProperty('--accent',ACCENT[palette]);
+};
+
+$('reseed').onclick=()=>init();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='kuramoto.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')init();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+resize(); init();
+requestAnimationFrame(loop);
+</script>
+<!-- sg-nav -->
+<script src="../pieces.js"></script>
+<script>
+(function(){
+  if (document.getElementById('sg-nav')) return;
+  var pieces = window.PIECES;
+  if (!pieces || !pieces.length) return;
+  var here = (location.pathname.split('/').pop() || '').toLowerCase();
+  var idx = -1;
+  for (var i = 0; i < pieces.length; i++) {
+    if ((pieces[i].file || '').toLowerCase() === here) { idx = i; break; }
+  }
+  if (idx < 0) return;
+  var n = pieces.length;
+  var prev = pieces[(idx - 1 + n) % n];
+  var next = pieces[(idx + 1) % n];
+  var neutral = 'rgba(220,225,235,0.85)';
+
+  var bar = document.createElement('div');
+  bar.id = 'sg-nav';
+  bar.style.cssText = 'position:fixed;bottom:10px;left:50%;transform:translateX(-50%);' +
+    'z-index:50;pointer-events:auto;font:11px ui-monospace,Menlo,monospace;' +
+    'opacity:0.45;transition:opacity .18s ease;white-space:nowrap;' +
+    'letter-spacing:.02em;-webkit-font-smoothing:antialiased;user-select:none;';
+  bar.addEventListener('mouseenter', function(){ bar.style.opacity = '0.9'; });
+  bar.addEventListener('mouseleave', function(){ bar.style.opacity = '0.45'; });
+
+  function mkLink(piece, label){
+    var a = document.createElement('a');
+    a.href = piece.file;
+    a.style.cssText = 'color:' + (piece.accent || neutral) + ';text-decoration:none;';
+    a.textContent = label;
+    return a;
+  }
+  var prevLink = mkLink(prev, '‹ ' + prev.name);
+  var nextLink = mkLink(next, next.name + ' ›');
+  var sep = document.createElement('span');
+  sep.textContent = '   ·   ';
+  sep.style.color = 'rgba(180,185,195,0.6)';
+
+  bar.appendChild(prevLink);
+  bar.appendChild(sep);
+  bar.appendChild(nextLink);
+  document.body.appendChild(bar);
+
+  window.addEventListener('keydown', function(e){
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t) {
+      var tag = (t.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable) return;
+    }
+    if (e.key === 'ArrowLeft') { location.href = prev.file; }
+    else if (e.key === 'ArrowRight') { location.href = next.file; }
+  });
+})();
+</script>
+</body>
+</html>
