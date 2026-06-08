@@ -109,8 +109,14 @@ init(); requestAnimationFrame(loop);
 
 ## Gallery integration
 
-The gallery (`index.html`) discovers pieces from a small `pieces.json` manifest (array of
-`{file, name, blurb, accent}`). When you add a piece, add an entry to `pieces.json`.
+The gallery (`index.html`) discovers pieces from the **`pieces.js`** manifest (`window.PIECES`,
+an array of `{file, name, blurb, accent}`, loaded via `<script src>` so it works over
+`file://`). When you add a piece, add an entry to `pieces.js`.
+
+**Prev/next navigation:** every piece carries a shared bottom-centre prev/next specimen bar
+plus ArrowLeft/Right keys (wrap-around), injected before `</body>` via the `#sg-nav` snippet
+(marker `<!-- sg-nav -->`) which reads `window.PIECES`. When you add a NEW piece, include the
+same `#sg-nav` snippet (copy it from any existing piece) so the new specimen is browsable.
 
 ## Verification (deputies must do this)
 

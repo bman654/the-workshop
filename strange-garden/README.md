@@ -51,7 +51,8 @@ file with **zero dependencies and no build step**.
 - A floating glass **control panel** with live sliders for each system's parameters.
 - **`Space`** pause/play · **`r`** reseed · **`h`** hide/show panel · **`s`** save PNG.
 - A **Save PNG** button to keep any frame you like.
-- **`← garden`** (top-right) returns to the gallery.
+- **`← garden`** (top-right) returns to the gallery; **`‹ prev · next ›`** (bottom-centre)
+  or the **`←` / `→`** arrow keys browse from one specimen to the next.
 - Most pieces respond to the **mouse** (stir, paint, or flee a predator — see each panel).
 
 ## How it was made

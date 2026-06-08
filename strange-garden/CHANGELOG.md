@@ -56,7 +56,7 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 - **Wave 11 candidate pieces (still unbuilt):** Belousov-Zhabotinsky oscillating waves,
   Voronoi/Lloyd relaxation, Penrose/quasicrystal tiling, terrain erosion, Brian's Brain /
   excitable media, percolation / forest-fire, spirograph/epicycloid gears, Hopf fibration.
-- Possible: a favicon; per-piece prev/next nav; an "about" page; sort/filter on the gallery.
+- Possible: a favicon; an "about" page; sort/filter on the gallery; per-piece "view source".
 - Note: ripple-tank thumbnail shows the control panel (others hide it) — minor, could recapture.
 
 ## Log
@@ -81,3 +81,6 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
   25 specimens. Preview shared with Brandon.
 - 2026-06-08 — Wave 10: fourier-epicycles (DFT + draw-your-own), tesseract (4D polytopes),
   game-of-life (Conway + variants, age-colour). **28 specimens.**
+- 2026-06-08 — Navigation: every piece now has a bottom-centre prev/next specimen bar +
+  ArrowLeft/Right keys (wrap-around), injected from pieces.js via the `#sg-nav` snippet.
+  The garden is now browsable specimen-to-specimen. (Idempotent marker `<!-- sg-nav -->`.)
