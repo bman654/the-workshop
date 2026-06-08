@@ -6,13 +6,17 @@ The workshop's ear. Where the Strange Garden gives you systems to *watch*, the S
 gives you systems to *hear* (and watch). Each is one self-contained HTML file, **zero
 dependencies** — all sound synthesised live with the Web Audio API, no audio files.
 
-> Audio needs a click to begin (browser autoplay rules) — open the page and press **▶ begin**.
+> Audio needs a click to begin (browser autoplay rules). Open `index.html` (the rack),
+> pick an instrument, and press **▶ begin**.
 
 ## Instruments
 
 | Instrument | What it is |
 |---|---|
-| **Whitney Music Box** (`index.html`) | Concentric rings of orbiting dots; each chimes a note from a consonant scale as it crosses the line. Their differing periods spiral apart and realign, weaving ever-shifting polyrhythmic ambient music. Pick scale/root/tempo/timbre/reverb. |
+| **Whitney Music Box** (`whitney.html`) | Concentric rings of orbiting dots; each chimes a note from a consonant scale as it crosses the line. Their differing periods spiral apart and realign, weaving ever-shifting polyrhythmic music. Pick scale/root/tempo/timbre/reverb. |
+| **Drift** (`drift.html`) | Sustained voices breathe a slow, ever-drifting consonant chord — an Eno-ish ambient pad/drone under a vast procedural reverb, with a soft cloud-bloom visual. |
+
+(`index.html` is the rack listing them; `instruments.js` is its manifest.)
 
 ## A note on verification
 

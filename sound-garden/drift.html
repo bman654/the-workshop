@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drift</title>
+<style>
+  :root { --accent: #b6a8ff; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#05060a; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:default; }
+  #panel { position:fixed; top:16px; left:16px; width:268px; padding:16px 16px 14px;
+    background:rgba(16,18,26,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; z-index:10; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; padding:5px 6px; font-size:12px; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:7px; margin-top:2px; -webkit-appearance:none; appearance:none; }
+  #panel select:focus { outline:1px solid color-mix(in srgb,var(--accent) 50%,transparent); }
+  .two { display:flex; gap:8px; }
+  .two > div { flex:1; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 16%,transparent); }
+  button.on { border-color:color-mix(in srgb,var(--accent) 60%,transparent);
+    background:color-mix(in srgb,var(--accent) 24%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; z-index:10; }
+  a.back:hover { opacity:.8; }
+  #overlay { position:fixed; inset:0; z-index:40; display:flex; align-items:center;
+    justify-content:center; flex-direction:column; gap:18px;
+    background:radial-gradient(1200px 800px at 50% 42%, rgba(80,60,130,.22), transparent 60%), rgba(4,4,9,.86);
+    backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+    transition:opacity .55s ease; }
+  #overlay.gone { opacity:0; pointer-events:none; }
+  #overlay .t { font-family:Georgia,serif; font-weight:500; font-size:clamp(30px,5.5vw,52px);
+    letter-spacing:.01em; background:linear-gradient(180deg,#fff,#bfb0e6);
+    -webkit-background-clip:text; background-clip:text; color:transparent; margin:0; }
+  #overlay .poem { font-family:Georgia,serif; font-style:italic; font-size:15px;
+    color:#aaa0c4; opacity:.85; text-align:center; max-width:460px; line-height:1.55; margin:0 6px; }
+  #begin { font-size:16px; padding:13px 34px; flex:0 0 auto; margin-top:6px;
+    border-color:color-mix(in srgb,var(--accent) 55%,transparent);
+    background:color-mix(in srgb,var(--accent) 18%,transparent); border-radius:30px;
+    letter-spacing:.04em; }
+  #begin:hover { background:color-mix(in srgb,var(--accent) 30%,transparent); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Drift</h1>
+  <p class="desc">A few sustained voices breathe a slow, consonant chord,
+    drifting between neighbouring tones. It never resolves; it never ends.</p>
+  <div class="two">
+    <div>
+      <label>Scale</label>
+      <select id="sScale">
+        <option value="lydian">Lydian</option>
+        <option value="major">Major</option>
+        <option value="ionianAdd9">Major add9</option>
+        <option value="dorian">Dorian</option>
+        <option value="pentaMaj">Pentatonic major</option>
+        <option value="pentaMinAdd">Pentatonic minor+</option>
+        <option value="mixolydian">Mixolydian</option>
+      </select>
+    </div>
+    <div>
+      <label>Root</label>
+      <select id="sRoot">
+        <option value="0">C</option><option value="1">C#</option>
+        <option value="2">D</option><option value="3">D#</option>
+        <option value="4">E</option><option value="5">F</option>
+        <option value="6">F#</option><option value="7">G</option>
+        <option value="8">G#</option><option value="9">A</option>
+        <option value="10">A#</option><option value="11">B</option>
+      </select>
+    </div>
+  </div>
+  <label>Voices <b id="vN">5</b></label>
+  <input type="range" id="sN" min="3" max="6" step="1" value="5">
+  <label>Drift speed <b id="vDr">0.50</b></label>
+  <input type="range" id="sDr" min="0" max="1" step="0.01" value="0.50">
+  <label>Brightness <b id="vBr">0.50</b></label>
+  <input type="range" id="sBr" min="0" max="1" step="0.01" value="0.50">
+  <label>Reverb <b id="vRv">0.55</b></label>
+  <input type="range" id="sRv" min="0" max="0.95" step="0.01" value="0.55">
+  <label>Volume <b id="vVol">0.65</b></label>
+  <input type="range" id="sVol" min="0" max="1" step="0.01" value="0.65">
+  <div class="row">
+    <button id="bReseed" class="pri">Reseed</button>
+    <button id="bPlay">Pause</button>
+    <button id="bMute">Mute</button>
+  </div>
+</div>
+<div id="hud"></div>
+<div id="hint">space play/pause · m mute · h hide panel</div>
+<a class="back" href="index.html">← sound garden</a>
+
+<div id="overlay">
+  <p class="t">Drift</p>
+  <p class="poem">Five quiet voices, holding a chord between them —<br>
+    each wanders to a neighbouring note, and the calm reassembles.</p>
+  <button id="begin">▶ begin</button>
+</div>
+
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+const $=id=>document.getElementById(id);
+let W,H,DPR;
+
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  W=cv.width=Math.floor(innerWidth*DPR); H=cv.height=Math.floor(innerHeight*DPR);
+  cv.style.width=innerWidth+'px'; cv.style.height=innerHeight+'px';
+}
+addEventListener('resize',resize);
+resize();
+
+// ================= musical scales =================
+// semitone offsets within an octave. Voices pick chord tones FROM these scales,
+// so every simultaneous sounding is consonant within the chosen mode.
+const SCALES = {
+  lydian:        { name:'Lydian',            steps:[0,2,4,6,7,9,11] },
+  major:         { name:'Major',             steps:[0,2,4,5,7,9,11] },
+  ionianAdd9:    { name:'Major add9',        steps:[0,2,4,7,9,11,14] },
+  dorian:        { name:'Dorian',            steps:[0,2,3,5,7,9,10] },
+  pentaMaj:      { name:'Pentatonic major',  steps:[0,2,4,7,9] },
+  pentaMinAdd:   { name:'Pentatonic minor+', steps:[0,3,5,7,10,14] },
+  mixolydian:    { name:'Mixolydian',        steps:[0,2,4,5,7,9,10] },
+};
+const NOTE_NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+// ================= parameters =================
+const P = {
+  scale: 'lydian',
+  root: 0,          // semitone offset of root (C=0)
+  voices: 5,        // active voice count
+  drift: 0.50,      // 0..1 how fast harmony evolves
+  brightness: 0.50, // 0..1 filter openness
+  reverb: 0.55,
+  volume: 0.65,
+  muted: false,
+};
+
+// register span (in semitones above root anchor) the voices roam within.
+// keep it a calm, mostly-mid spread so the pad is warm, not muddy or shrill.
+const ROOT_OCTAVE = -1;        // base octave below middle C
+const VOICE_SPAN_OCT = 2.4;    // voices spread across ~2.4 octaves
+
+// ================= scale / chord helpers =================
+// Build the absolute semitone ladder (relative to middle C, C4=261.6Hz) of
+// available pitches: the scale, tiled across the register span we allow.
+let ladder=[];   // sorted ascending list of semitone offsets (rel middle C)
+function buildLadder(){
+  const sc=SCALES[P.scale].steps;
+  ladder.length=0;
+  const baseSemi = 12*ROOT_OCTAVE + P.root;
+  const octs = Math.ceil(VOICE_SPAN_OCT)+1;
+  for(let o=0;o<octs;o++){
+    for(let k=0;k<sc.length;k++){
+      // only take steps inside one octave to avoid duplicates from add-9 etc.
+      if(sc[k]>=12*o-0.0001 && sc[k]<12*(o+1)) {
+        ladder.push(baseSemi + sc[k]);
+      } else if(sc[k]<12 && o===0){
+        // already handled
+      }
+    }
+  }
+  // generic tiling: take base scale-within-octave and add octave copies
+  ladder.length=0;
+  const inOct=[];
+  for(const s of sc){ const m=((s%12)+12)%12; if(!inOct.includes(m)) inOct.push(m); }
+  inOct.sort((a,b)=>a-b);
+  for(let o=0;o<octs;o++){
+    for(const m of inOct){ ladder.push(baseSemi + m + 12*o); }
+  }
+  ladder.sort((a,b)=>a-b);
+}
+function semiToFreq(semi){ return 261.625565*Math.pow(2, semi/12); }
+
+// Pick an initial set of chord tones: spread voices across the ladder so they
+// span the register without crowding (consonant by construction within scale).
+function pickChordIndices(n){
+  const out=[];
+  const lo=0, hi=ladder.length-1;
+  for(let i=0;i<n;i++){
+    let idx = Math.round(lo + (hi-lo)*(i/(n-1||1)));
+    // small randomisation so reseed/voice-changes vary
+    idx += (Math.random()*2-1)|0;
+    idx=Math.max(lo,Math.min(hi,idx));
+    out.push(idx);
+  }
+  return out;
+}
+
+// ================= Web Audio =================
+let actx=null, master=null, sat=null, highcut=null, convolver=null,
+    reverbGain=null, dryGain=null, swell=null, swellLFO=null, swellDepth=null,
+    compressor=null, masterGain=null;
+let started=false, playing=false;
+
+// each voice is a managed object; pooled, never leaks.
+let voices=[];          // active Voice objects
+let chordChanges=0;     // verifiable counter — harmony evolution
+let nextDriftAt=0;      // actx time of next harmony move
+
+class Voice {
+  constructor(ladderIdx){
+    this.idx=ladderIdx;                    // index into ladder (current chord tone)
+    this.targetIdx=ladderIdx;
+    this.semi=ladder[ladderIdx];
+    this.dead=false;
+    const t=actx.currentTime;
+    // two/three detuned oscillators for warmth + chorus
+    this.oscs=[]; this.oscGains=[];
+    const freq=semiToFreq(this.semi);
+    const detunes=[-6, 5, 0.0];            // cents-ish (we use detune in cents)
+    const waves=['sine','triangle','sine'];
+    const oscGainVals=[1.0, 0.5, 0.7];
+    this.sumGain=actx.createGain(); this.sumGain.gain.value=1;
+    // per-voice breathing lowpass
+    this.lp=actx.createBiquadFilter(); this.lp.type='lowpass';
+    this.lp.Q.value=0.5;
+    this.baseCut=this.cutoffFor(); this.lp.frequency.setValueAtTime(this.baseCut,t);
+    // LFO sweeping the lowpass (slow breathing)
+    this.filtLFO=actx.createOscillator(); this.filtLFO.type='sine';
+    this.filtLFO.frequency.value=0.04 + Math.random()*0.05;  // ~0.04-0.09 Hz
+    this.filtDepth=actx.createGain(); this.filtDepth.gain.value=this.baseCut*0.45;
+    this.filtLFO.connect(this.filtDepth); this.filtDepth.connect(this.lp.frequency);
+    this.filtLFO.start(t);
+    for(let k=0;k<3;k++){
+      const o=actx.createOscillator(); o.type=waves[k];
+      o.frequency.setValueAtTime(freq,t); o.detune.value=detunes[k];
+      const g=actx.createGain(); g.gain.value=oscGainVals[k];
+      o.connect(g); g.connect(this.sumGain);
+      o.start(t); this.oscs.push(o); this.oscGains.push(g);
+    }
+    this.sumGain.connect(this.lp); this.lp.connect(master);
+    // long fade-in envelope
+    this.env=this.sumGain; // we automate sumGain.gain for the master envelope
+    const atk=this.attackTime();
+    this.sumGain.gain.setValueAtTime(0.0001,t);
+    this.sumGain.gain.linearRampToValueAtTime(this.voicePeak(), t+atk);
+  }
+  voicePeak(){ return 0.16; }
+  attackTime(){ return 5 + (1-P.drift)*5; }   // 5-10s
+  releaseTime(){ return 5 + (1-P.drift)*6; }   // 5-11s
+  cutoffFor(){
+    const f=semiToFreq(this.semi);
+    const br=P.brightness;
+    // open filter scales with pitch and brightness; warm floor
+    return Math.min(8000, Math.max(380, f*(2.2 + br*7.0)));
+  }
+  // glide this voice to a new chord tone (smooth portamento + filter follow)
+  glideTo(newIdx){
+    if(newIdx===this.idx || this.dead) return;
+    this.targetIdx=newIdx;
+    this.idx=newIdx;
+    this.semi=ladder[newIdx];
+    const t=actx.currentTime;
+    const glide=4 + (1-P.drift)*8;          // 4-12s portamento
+    const freq=semiToFreq(this.semi);
+    const detunes=[-6,5,0];
+    for(let k=0;k<this.oscs.length;k++){
+      const o=this.oscs[k];
+      o.frequency.cancelScheduledValues(t);
+      o.frequency.setValueAtTime(o.frequency.value,t);
+      o.frequency.exponentialRampToValueAtTime(Math.max(20,freq*Math.pow(2,detunes[k]/1200)), t+glide);
+    }
+    this.baseCut=this.cutoffFor();
+    this.lp.frequency.cancelScheduledValues(t);
+    this.lp.frequency.setValueAtTime(this.lp.frequency.value,t);
+    this.lp.frequency.linearRampToValueAtTime(this.baseCut, t+glide);
+    this.filtDepth.gain.setTargetAtTime(this.baseCut*0.45, t, 2.0);
+  }
+  // refresh filter on brightness change
+  refreshFilter(){
+    if(this.dead) return;
+    const t=actx.currentTime;
+    this.baseCut=this.cutoffFor();
+    this.lp.frequency.setTargetAtTime(this.baseCut, t, 1.5);
+    this.filtDepth.gain.setTargetAtTime(this.baseCut*0.45, t, 1.5);
+  }
+  // fade out and self-destruct (no node leak)
+  release(){
+    if(this.dead) return; this.dead=true;
+    const t=actx.currentTime; const rel=this.releaseTime();
+    this.sumGain.gain.cancelScheduledValues(t);
+    this.sumGain.gain.setValueAtTime(Math.max(0.0001,this.sumGain.gain.value),t);
+    this.sumGain.gain.exponentialRampToValueAtTime(0.0001, t+rel);
+    const stopAt=t+rel+0.1;
+    try{
+      this.oscs.forEach(o=>o.stop(stopAt));
+      this.filtLFO.stop(stopAt);
+    }catch(e){}
+    this.oscs[0].onended=()=>{
+      try{
+        this.oscs.forEach(o=>o.disconnect());
+        this.oscGains.forEach(g=>g.disconnect());
+        this.filtLFO.disconnect(); this.filtDepth.disconnect();
+        this.sumGain.disconnect(); this.lp.disconnect();
+      }catch(e){}
+    };
+  }
+}
+
+function buildImpulse(seconds, decay){
+  const rate=actx.sampleRate;
+  const len=Math.max(1,Math.floor(rate*seconds));
+  const buf=actx.createBuffer(2,len,rate);
+  for(let ch=0;ch<2;ch++){
+    const d=buf.getChannelData(ch);
+    for(let i=0;i<len;i++){
+      const t=i/len;
+      // smooth exponentially-decaying noise tail for a vast, soft space
+      d[i]=(Math.random()*2-1)*Math.pow(1-t,decay);
+    }
+  }
+  return buf;
+}
+
+function makeSoftSatCurve(){
+  const n=2048, c=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const x=(i/(n-1))*2-1;
+    c[i]=Math.tanh(x*1.3);    // gentle saturation, no hard clip
+  }
+  return c;
+}
+
+function initAudio(){
+  actx=new (window.AudioContext||window.webkitAudioContext)();
+  // master chain: voices -> master -> sat -> highcut -> [dry + convolver(wet)]
+  //   -> swell(tremolo) -> compressor -> masterGain -> dest
+  master=actx.createGain(); master.gain.value=1;
+  sat=actx.createWaveShaper(); sat.curve=makeSoftSatCurve(); sat.oversample='2x';
+  highcut=actx.createBiquadFilter();
+  highcut.type='lowpass'; highcut.frequency.value=9000; highcut.Q.value=0.3;
+  convolver=actx.createConvolver();
+  convolver.buffer=buildImpulse(4.5,2.8);
+  dryGain=actx.createGain();
+  reverbGain=actx.createGain();
+  // slow master swell (subtle tremolo / breathing)
+  swell=actx.createGain(); swell.gain.value=1;
+  swellLFO=actx.createOscillator(); swellLFO.type='sine'; swellLFO.frequency.value=0.06;
+  swellDepth=actx.createGain(); swellDepth.gain.value=0.06;
+  swellLFO.connect(swellDepth); swellDepth.connect(swell.gain);
+  compressor=actx.createDynamicsCompressor();
+  compressor.threshold.value=-16; compressor.knee.value=26;
+  compressor.ratio.value=4; compressor.attack.value=0.02; compressor.release.value=0.4;
+  masterGain=actx.createGain();
+  // wiring
+  master.connect(sat);
+  sat.connect(highcut);
+  highcut.connect(dryGain);
+  highcut.connect(convolver);
+  convolver.connect(reverbGain);
+  dryGain.connect(swell);
+  reverbGain.connect(swell);
+  swell.connect(compressor);
+  compressor.connect(masterGain);
+  masterGain.connect(actx.destination);
+  swellLFO.start();
+  applyMix();
+}
+function applyMix(){
+  if(!actx) return;
+  const w=P.reverb;
+  dryGain.gain.value = 1 - 0.4*w;
+  reverbGain.gain.value = 1.15*w;
+  highcut.frequency.setTargetAtTime(5000 + P.brightness*6000, actx.currentTime, 1.0);
+  masterGain.gain.setTargetAtTime((P.muted?0:1)*(0.05 + 0.5*P.volume), actx.currentTime, 0.05);
+}
+
+// ============== voice management ==============
+function spawnVoicesTo(n){
+  // grow or shrink the voice pool to n, gently.
+  buildLadder();
+  // remove extras (release them)
+  while(countAlive() > n){
+    const v=voices.find(v=>!v.dead);
+    if(v) v.release();
+    break; // release one per call to keep it gentle; loop driver re-invokes
+  }
+  // add new
+  let alive=countAlive();
+  if(alive < n){
+    const used=voices.filter(v=>!v.dead).map(v=>v.idx);
+    const idxs=pickChordIndices(n);
+    // pick a ladder index not already used
+    let chosen=idxs.find(i=>!used.includes(i));
+    if(chosen===undefined) chosen=idxs[(Math.random()*idxs.length)|0];
+    voices.push(new Voice(chosen));
+  }
+}
+function countAlive(){ let c=0; for(const v of voices) if(!v.dead) c++; return c; }
+function pruneDead(){
+  // drop voices whose envelope has fully finished (their nodes are disconnected
+  // in onended). We keep them only briefly; mark removable after release window.
+  voices=voices.filter(v=>{
+    if(!v.dead) return true;
+    // dead voices: keep until their oscs stopped (onended nulls happen async);
+    // safe to drop reference once release scheduled — GC handles the rest.
+    return false;
+  });
+}
+
+function initVoices(){
+  // release any existing
+  voices.forEach(v=>v.release());
+  voices=[];
+  buildLadder();
+  const idxs=pickChordIndices(P.voices);
+  for(let i=0;i<P.voices;i++){
+    voices.push(new Voice(idxs[i]));
+  }
+  chordChanges=0;
+  scheduleNextDrift();
+}
+
+function scheduleNextDrift(){
+  // 8-20s between harmony moves, faster with higher drift
+  const base=20 - P.drift*12;     // 20 (slow) .. 8 (fast)
+  nextDriftAt = actx.currentTime + base*(0.7+Math.random()*0.6);
+}
+
+// move one or two voices to a neighbouring ladder tone (always consonant: stays in scale)
+function evolveHarmony(){
+  buildLadder();
+  const alive=voices.filter(v=>!v.dead);
+  if(!alive.length) return;
+  const moveCount = Math.random()<0.35 ? 2 : 1;
+  for(let m=0;m<moveCount;m++){
+    const v=alive[(Math.random()*alive.length)|0];
+    if(!v) continue;
+    const used=new Set(alive.map(x=>x.idx));
+    // neighbour step: -2..+2 ladder positions (small, smooth)
+    const dirs=[-2,-1,1,2];
+    // shuffle and find a free, in-range neighbour
+    for(let s=dirs.length-1;s>0;s--){ const j=(Math.random()*(s+1))|0; [dirs[s],dirs[j]]=[dirs[j],dirs[s]]; }
+    let target=null;
+    for(const d of dirs){
+      const ni=v.idx+d;
+      if(ni>=0 && ni<ladder.length && !used.has(ni)){ target=ni; break; }
+    }
+    if(target!==null){ v.glideTo(target); }
+  }
+  chordChanges++;
+}
+
+// recompute the visual chord state (avg pitch, openness) — no alloc
+let visRootHue=270, visBright=0.5, visSpread=0.5, visCentroid=0.5;
+function updateVisFromAudio(){
+  const alive=voices.filter(v=>!v.dead);
+  if(!alive.length) return;
+  let sum=0,min=1e9,max=-1e9;
+  for(const v of alive){ sum+=v.semi; if(v.semi<min)min=v.semi; if(v.semi>max)max=v.semi; }
+  const avg=sum/alive.length;
+  // map root semitone -> hue. Root chroma drives base hue.
+  const rootChroma=((P.root)%12+12)%12;
+  visRootHue = 215 + rootChroma*9;            // slowly varying base hue per root
+  // centroid 0..1 over the ladder register -> hue + brightness drift
+  const lo=ladder[0], hi=ladder[ladder.length-1]||lo+1;
+  visCentroid = (avg-lo)/Math.max(1,(hi-lo));
+  visBright = P.brightness;
+  visSpread = (max-min)/Math.max(1,(hi-lo));
+}
+
+// ================= visual: drifting cloud / aurora bloom =================
+// Precompute blob field; no per-frame allocation in draw().
+const NBLOBS=7;
+const blobs=[];
+for(let i=0;i<NBLOBS;i++){
+  blobs.push({
+    px:Math.random(), py:Math.random(),
+    vx:(Math.random()*2-1)*0.012, vy:(Math.random()*2-1)*0.010,
+    phase:Math.random()*Math.PI*2,
+    pspeed:0.06+Math.random()*0.10,
+    baseR:0.28+Math.random()*0.30,
+    hueOff:(Math.random()*2-1)*40,
+  });
+}
+let smRootHue=270, smBright=0.5, smCentroid=0.5, smSpread=0.5, smLevel=0;
+let fps=60;
+const TAU=Math.PI*2;
+
+function draw(dt){
+  // smooth the visual params toward audio-derived targets (breathing)
+  smRootHue += (visRootHue-smRootHue)*Math.min(1,dt*0.6);
+  smBright  += (visBright -smBright )*Math.min(1,dt*0.6);
+  smCentroid+= (visCentroid-smCentroid)*Math.min(1,dt*0.4);
+  smSpread  += (visSpread -smSpread )*Math.min(1,dt*0.4);
+  const targetLevel = (playing && !P.muted && countAlive()>0)? 1 : 0.12;
+  smLevel += (targetLevel-smLevel)*Math.min(1,dt*0.5);
+
+  // dark ground with gentle trail fade (foggy persistence)
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle='rgba(5,6,11,0.16)';
+  ctx.fillRect(0,0,W,H);
+
+  ctx.globalCompositeOperation='lighter';
+  const baseHue=smRootHue + smCentroid*60;     // hue drifts with pitch centroid
+  const brightL=24 + smBright*30 + smCentroid*10;
+  const minDim=Math.min(W,H);
+
+  for(let i=0;i<NBLOBS;i++){
+    const b=blobs[i];
+    // slow drift; advance only here (dt scaled, smooth)
+    b.phase += b.pspeed*dt;
+    b.px += b.vx*dt; b.py += b.vy*dt;
+    // wrap softly within [-.15,1.15]
+    if(b.px<-0.15) b.px=1.15; else if(b.px>1.15) b.px=-0.15;
+    if(b.py<-0.15) b.py=1.15; else if(b.py>1.15) b.py=-0.15;
+    const breathe=0.5+0.5*Math.sin(b.phase);
+    const cxp=b.px*W, cyp=b.py*H;
+    const rad=(b.baseR*(0.75+0.5*breathe)*(0.7+0.5*smSpread))*minDim*0.9;
+    const hue=(baseHue + b.hueOff + i*14)%360;
+    const alpha=(0.05 + 0.10*breathe)*smLevel*(0.5+0.5*smBright);
+    const lig=brightL + breathe*14;
+    const grad=ctx.createRadialGradient(cxp,cyp,0,cxp,cyp,rad);
+    grad.addColorStop(0, `hsla(${hue|0},70%,${(lig+14)|0}%,${alpha.toFixed(3)})`);
+    grad.addColorStop(0.45,`hsla(${hue|0},72%,${lig|0}%,${(alpha*0.5).toFixed(3)})`);
+    grad.addColorStop(1, `hsla(${hue|0},72%,${lig|0}%,0)`);
+    ctx.fillStyle=grad;
+    ctx.beginPath(); ctx.arc(cxp,cyp,rad,0,TAU); ctx.fill();
+  }
+
+  // central breathing bloom whose brightness follows filter-openness
+  const cx=W*0.5, cy=H*0.5;
+  const bloomBreath=0.5+0.5*Math.sin(performance.now()*0.0004);
+  const bloomR=minDim*(0.30+0.18*smBright+0.08*bloomBreath)*(0.6+0.6*smLevel);
+  const bloomHue=(baseHue+30)%360;
+  const bloomA=(0.05+0.12*smBright)*smLevel;
+  const bg=ctx.createRadialGradient(cx,cy,0,cx,cy,bloomR);
+  bg.addColorStop(0,`hsla(${bloomHue|0},65%,${(48+smBright*22)|0}%,${bloomA.toFixed(3)})`);
+  bg.addColorStop(0.5,`hsla(${bloomHue|0},65%,${(36)|0}%,${(bloomA*0.4).toFixed(3)})`);
+  bg.addColorStop(1,`hsla(${bloomHue|0},65%,30%,0)`);
+  ctx.fillStyle=bg;
+  ctx.beginPath(); ctx.arc(cx,cy,bloomR,0,TAU); ctx.fill();
+
+  // faint drifting aurora band near vertical centre
+  const bandY=cy + Math.sin(performance.now()*0.00018)*minDim*0.10;
+  const bandG=ctx.createLinearGradient(0,bandY-minDim*0.22,0,bandY+minDim*0.22);
+  const bandHue=(baseHue+70)%360;
+  const bandA=0.05*smLevel*(0.4+0.6*smBright);
+  bandG.addColorStop(0,`hsla(${bandHue|0},75%,55%,0)`);
+  bandG.addColorStop(0.5,`hsla(${bandHue|0},75%,${(46+smBright*16)|0}%,${bandA.toFixed(3)})`);
+  bandG.addColorStop(1,`hsla(${bandHue|0},75%,55%,0)`);
+  ctx.fillStyle=bandG;
+  ctx.fillRect(0,bandY-minDim*0.22,W,minDim*0.44);
+}
+
+// ================= main loop =================
+let lastNow=performance.now();
+function loop(now){
+  let dt=(now-lastNow)/1000; lastNow=now;
+  if(dt>0.05) dt=0.05;
+
+  if(actx && playing){
+    // harmony evolution on the audio clock
+    if(actx.currentTime>=nextDriftAt){
+      evolveHarmony();
+      scheduleNextDrift();
+    }
+    // keep voice pool sized correctly (gentle grow/shrink)
+    if(countAlive()!==P.voices){ spawnVoicesTo(P.voices); }
+    pruneDead();
+    updateVisFromAudio();
+  }
+
+  if(!document.hidden) draw(dt);
+
+  fps += ((1/Math.max(dt,1e-4)) - fps)*0.06;
+  const sc=SCALES[P.scale];
+  hud.textContent =
+    `${NOTE_NAMES[P.root]} ${sc.name} · ${countAlive()} voices · ${chordChanges} chord moves · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ================= controls =================
+function bindRange(slider,val,fmt,set){
+  const s=$(slider),v=$(val);
+  const handler=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); };
+  s.oninput=handler; handler();
+}
+bindRange('sN','vN',x=>x|0,x=>{ P.voices=x|0; if(playing&&actx) spawnVoicesTo(P.voices); });
+bindRange('sDr','vDr',x=>x.toFixed(2),x=>{ P.drift=x; });
+bindRange('sBr','vBr',x=>x.toFixed(2),x=>{ P.brightness=x; if(actx){ voices.forEach(v=>v.refreshFilter()); applyMix(); } });
+bindRange('sRv','vRv',x=>x.toFixed(2),x=>{ P.reverb=x; applyMix(); });
+bindRange('sVol','vVol',x=>x.toFixed(2),x=>{ P.volume=x; applyMix(); });
+
+$('sScale').onchange=e=>{ P.scale=e.target.value; if(playing&&actx) initVoices(); };
+$('sRoot').onchange=e=>{ P.root=parseInt(e.target.value,10); if(playing&&actx) initVoices(); };
+
+function syncSelects(){ $('sScale').value=P.scale; $('sRoot').value=String(P.root); }
+
+$('bPlay').onclick=togglePlay;
+$('bMute').onclick=toggleMute;
+$('bReseed').onclick=reseed;
+
+function togglePlay(){
+  if(!started) return;
+  if(actx.state==='suspended') actx.resume();
+  playing=!playing;
+  if(playing){
+    // re-seed voices if all faded out while paused
+    if(countAlive()===0) initVoices();
+    lastNow=performance.now();
+  } else {
+    // pause = release all voices gently (they fade out); harmony halts
+    voices.forEach(v=>v.release());
+  }
+  $('bPlay').textContent=playing?'Pause':'Play';
+  $('bPlay').classList.toggle('on',!playing);
+}
+function toggleMute(){
+  P.muted=!P.muted; applyMix();
+  $('bMute').textContent=P.muted?'Unmute':'Mute';
+  $('bMute').classList.toggle('on',P.muted);
+}
+function reseed(){
+  const scaleKeys=Object.keys(SCALES);
+  P.scale=scaleKeys[(Math.random()*scaleKeys.length)|0];
+  P.root=(Math.random()*12)|0;
+  P.voices=3+((Math.random()*4)|0);   // 3..6
+  // reflect into UI
+  $('sN').value=P.voices; $('vN').textContent=P.voices;
+  syncSelects();
+  if(playing&&actx) initVoices();
+}
+
+addEventListener('keydown',e=>{
+  const t=e.target;
+  if(t && (t.tagName==='INPUT'||t.tagName==='SELECT'||t.tagName==='TEXTAREA')) return;
+  if(e.key===' '){ togglePlay(); e.preventDefault(); }
+  else if(e.key==='m'||e.key==='M'){ toggleMute(); }
+  else if(e.key==='h'||e.key==='H'){ panel.classList.toggle('hidden'); }
+});
+
+// ================= begin (user gesture unlocks audio) =================
+$('begin').onclick=async ()=>{
+  if(!started){ initAudio(); started=true; }
+  if(actx.state==='suspended'){ await actx.resume(); }
+  playing=true;
+  initVoices();
+  $('bPlay').textContent='Pause';
+  lastNow=performance.now();
+  document.getElementById('overlay').classList.add('gone');
+};
+
+// ================= go =================
+syncSelects();
+requestAnimationFrame(loop);
+
+// expose introspection hook for verification
+window.__drift = {
+  get state(){ return actx?actx.state:'none'; },
+  get playing(){ return playing; },
+  get voices(){ return countAlive(); },
+  get totalVoiceObjs(){ return voices.length; },
+  get chordChanges(){ return chordChanges; },
+  get voiceGains(){ return voices.filter(v=>!v.dead).map(v=>+(v.sumGain.gain.value.toFixed(4))); },
+  get voiceSemis(){ return voices.filter(v=>!v.dead).map(v=>v.semi); },
+  get hasGraph(){ return !!(actx&&master&&convolver&&compressor&&highcut&&sat&&masterGain); },
+  get nodeCount(){ let n=0; for(const v of voices){ if(!v.dead) n+=v.oscs.length+v.oscGains.length+3; } return n; },
+  P,
+};
+</script>
+</body>
+</html>

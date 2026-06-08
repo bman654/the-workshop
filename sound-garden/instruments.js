@@ -11,7 +11,7 @@ window.INSTRUMENTS = [
   {
     file: "drift.html",
     name: "Drift",
-    blurb: "slowly-breathing chords adrift in a vast reverb",
-    accent: "#6fb7ff"
+    blurb: "sustained voices breathe a slow, ever-drifting consonant chord",
+    accent: "#b6a8ff"
   }
 ];
