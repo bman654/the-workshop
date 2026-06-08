@@ -7,5 +7,11 @@ window.GAMES = [
     name: "Asteroids",
     blurb: "neon vector survival — split rocks, dodge saucers",
     accent: "#37f7e0"
+  },
+  {
+    file: "breakout.html",
+    name: "Breakout",
+    blurb: "smash neon bricks, chain combos, catch power-ups",
+    accent: "#ff3ea5"
   }
 ];

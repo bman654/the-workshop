@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>NEON SNAKE — grid arcade</title>
+<style>
+  :root{ --accent:#39ff9e; --accent2:#37c8f7; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; background:#04080a; overflow:hidden;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    color:#dffff0; -webkit-font-smoothing:antialiased; cursor:default; }
+  #stage{ position:fixed; inset:0; }
+  canvas{ display:block; position:absolute; inset:0; }
+
+  /* ---------- HUD ---------- */
+  .hud{ position:fixed; inset:0; pointer-events:none; z-index:5;
+    font-variant-numeric:tabular-nums; }
+  .hud-row{ position:absolute; top:18px; display:flex; align-items:baseline; gap:10px;
+    text-shadow:0 0 12px rgba(57,255,158,.45); }
+  .hud-left{ left:24px; flex-direction:column; gap:4px; align-items:flex-start; }
+  .hud-right{ right:24px; flex-direction:column; align-items:flex-end; gap:4px; }
+  .label{ font-size:10px; letter-spacing:.32em; color:#54b68d; opacity:.85; text-transform:uppercase; }
+  .value{ font-size:30px; font-weight:700; letter-spacing:.04em; line-height:1;
+    color:#eaffef; text-shadow:0 0 16px rgba(57,255,158,.6); }
+  .value.small{ font-size:17px; color:#9fe7c8; }
+  .len-tag{ position:fixed; top:18px; left:50%; transform:translateX(-50%);
+    text-align:center; }
+  .len-tag .label{ font-size:10px; }
+  .len-tag .value{ font-size:20px; }
+  #comboTag{ position:fixed; top:62px; left:50%; transform:translateX(-50%);
+    text-align:center; font-size:13px; letter-spacing:.18em; font-weight:700;
+    color:var(--accent2); text-shadow:0 0 14px rgba(55,200,247,.7); opacity:0;
+    transition:opacity .2s; text-transform:uppercase; }
+  #muteTag{ position:fixed; bottom:16px; right:20px; font-size:10px; letter-spacing:.24em;
+    color:#54b68d; opacity:.7; text-transform:uppercase; }
+  #wrapTag{ position:fixed; bottom:16px; left:20px; font-size:10px; letter-spacing:.24em;
+    color:#54b68d; opacity:.7; text-transform:uppercase; }
+
+  /* ---------- Overlays ---------- */
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:8px;
+    background:radial-gradient(120% 120% at 50% 40%, rgba(4,10,12,.32), rgba(2,5,7,.86));
+    backdrop-filter:blur(1.5px); transition:opacity .35s; }
+  .overlay.hidden{ opacity:0; pointer-events:none; }
+  .title{ font-size:clamp(54px,13vw,150px); font-weight:800; letter-spacing:.16em;
+    line-height:.9; color:#eaffef; margin-bottom:6px;
+    text-shadow:0 0 30px rgba(57,255,158,.65), 0 0 70px rgba(57,255,158,.35);
+    -webkit-text-stroke:1px rgba(180,255,220,.25); }
+  .title .a2{ color:var(--accent); -webkit-text-stroke:1px rgba(57,255,158,.4); }
+  .tagline{ font-size:13px; letter-spacing:.34em; color:#7fd8b6; text-transform:uppercase;
+    opacity:.9; margin-bottom:26px; }
+  .prompt{ font-size:15px; letter-spacing:.12em; color:#eaffef;
+    margin-top:14px; animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:.45} 50%{opacity:1} }
+  .controls{ margin-top:30px; display:grid; grid-template-columns:auto auto;
+    gap:6px 26px; font-size:12px; letter-spacing:.06em; color:#9fe7c8; opacity:.85; }
+  .controls b{ color:#eaffef; font-weight:700; }
+  .controls .k{ text-align:right; color:var(--accent); }
+  .go-score{ font-size:16px; letter-spacing:.14em; color:#9fe7c8; margin-top:6px; }
+  .go-score b{ color:#eaffef; font-size:34px; display:block; margin-top:4px;
+    text-shadow:0 0 18px rgba(57,255,158,.6); }
+  .go-sub{ font-size:13px; letter-spacing:.1em; color:#7fd8b6; margin-top:10px; }
+  .newhigh{ color:var(--accent); font-size:13px; letter-spacing:.3em; text-transform:uppercase;
+    margin-top:10px; animation:pulse 1s ease-in-out infinite; }
+  .gameover-title{ font-size:clamp(34px,8vw,76px); font-weight:800; letter-spacing:.14em;
+    color:#ff5e7a; text-shadow:0 0 28px rgba(255,94,122,.6); margin-bottom:8px; }
+  .pausetitle{ font-size:48px; font-weight:800; letter-spacing:.22em; color:#eaffef;
+    text-shadow:0 0 24px rgba(57,255,158,.55); }
+  .hint{ margin-top:18px; font-size:11px; letter-spacing:.16em; color:#54b68d; opacity:.7;
+    text-transform:uppercase; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg"></canvas>
+  <canvas id="game"></canvas>
+</div>
+
+<!-- HUD -->
+<div class="hud" id="hud" style="display:none">
+  <div class="hud-row hud-left">
+    <div class="label">Score</div>
+    <div class="value" id="score">0</div>
+  </div>
+  <div class="hud-row hud-right">
+    <div class="label">High</div>
+    <div class="value small" id="high">0</div>
+  </div>
+  <div class="len-tag">
+    <div class="label">Length</div>
+    <div class="value" id="len">3</div>
+  </div>
+</div>
+<div id="comboTag"></div>
+<div id="muteTag">M · sound on</div>
+<div id="wrapTag">T · walls kill</div>
+
+<!-- Title -->
+<div class="overlay" id="titleScreen">
+  <div class="title">NEON<span class="a2"> SNAKE</span></div>
+  <div class="tagline">glide · grow · survive</div>
+  <div class="prompt">Press ENTER to start</div>
+  <div class="controls">
+    <span class="k">◄ ▲ ▼ ►</span><span><b>WASD</b> &nbsp;steer</span>
+    <span class="k">ENTER</span><span>start / retry</span>
+    <span class="k">P / ESC</span><span>pause</span>
+    <span class="k">T</span><span>toggle walls / wrap</span>
+    <span class="k">M</span><span>mute</span>
+  </div>
+</div>
+
+<!-- Game over -->
+<div class="overlay hidden" id="gameoverScreen">
+  <div class="gameover-title">GAME OVER</div>
+  <div class="go-score">FINAL SCORE<b id="finalScore">0</b></div>
+  <div class="go-sub" id="goSub">length 3 · best 0</div>
+  <div class="newhigh" id="newHigh" style="display:none">★ NEW HIGH SCORE ★</div>
+  <div class="prompt">Press ENTER to play again</div>
+</div>
+
+<!-- Pause -->
+<div class="overlay hidden" id="pauseScreen">
+  <div class="pausetitle">PAUSED</div>
+  <div class="prompt">Press P or ESC to resume</div>
+</div>
+
+<script>
+"use strict";
+(function(){
+//============================================================== setup / canvas
+const bgCanvas = document.getElementById('bg');
+const canvas   = document.getElementById('game');
+const bgx = bgCanvas.getContext('2d');
+const ctx = canvas.getContext('2d');
+
+let W = 0, H = 0, DPR = 1;
+// playfield geometry (computed in resize)
+let CELL = 0, COLS = 0, ROWS = 0, GX = 0, GY = 0, GW = 0, GH = 0;
+
+function computeGrid(){
+  // target a comfortable cell size; keep the grid centered with margin
+  const margin = Math.max(24, Math.min(W,H)*0.05);
+  const availW = W - margin*2, availH = H - margin*2;
+  const target = clamp(Math.round(Math.min(availW,availH)/26), 22, 46);
+  CELL = target;
+  COLS = Math.max(10, Math.floor(availW / CELL));
+  ROWS = Math.max(10, Math.floor(availH / CELL));
+  GW = COLS*CELL; GH = ROWS*CELL;
+  GX = Math.round((W - GW)/2);
+  GY = Math.round((H - GH)/2);
+}
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  for (const c of [bgCanvas, canvas]){
+    c.width  = Math.floor(W * DPR);
+    c.height = Math.floor(H * DPR);
+    c.style.width = W + 'px';
+    c.style.height = H + 'px';
+  }
+  bgx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  const hadGrid = COLS>0;
+  computeGrid();
+  // if grid shrank below snake, clamp snake into bounds
+  if (hadGrid && game.state!=='title') clampSnakeToGrid();
+  drawBackground();
+}
+window.addEventListener('resize', resize);
+
+//============================================================== utilities
+const TAU = Math.PI * 2;
+const rand  = (a=1,b=0)=> b + Math.random()*(a-b);
+const randi = (a,b)=> Math.floor(rand(a,b));
+const clamp = (v,lo,hi)=> v<lo?lo:(v>hi?hi:v);
+const lerp  = (a,b,t)=> a+(b-a)*t;
+// cell center -> pixel
+function px(cx){ return GX + cx*CELL + CELL*0.5; }
+function py(cy){ return GY + cy*CELL + CELL*0.5; }
+// hsl helper
+function hsl(h,s,l,a){ return 'hsla('+((h%360+360)%360)+','+s+'%,'+l+'%,'+(a===undefined?1:a)+')'; }
+
+//============================================================== background grid
+function drawBackground(){
+  bgx.clearRect(0,0,W,H);
+  bgx.fillStyle = '#04080a';
+  bgx.fillRect(0,0,W,H);
+  // faint nebula glow
+  const g = bgx.createRadialGradient(W*0.5,H*0.46,0, W*0.5,H*0.46, Math.max(W,H)*0.7);
+  g.addColorStop(0,'rgba(16,46,40,0.55)');
+  g.addColorStop(1,'rgba(4,8,10,0)');
+  bgx.fillStyle = g; bgx.fillRect(0,0,W,H);
+
+  if (!COLS) return;
+  // playfield panel
+  bgx.save();
+  bgx.fillStyle = 'rgba(10,26,24,0.34)';
+  roundRect(bgx, GX-2, GY-2, GW+4, GH+4, 10); bgx.fill();
+
+  // inner grid lines
+  bgx.lineWidth = 1;
+  bgx.strokeStyle = 'rgba(57,255,158,0.06)';
+  bgx.beginPath();
+  for (let c=0;c<=COLS;c++){ const x=GX+c*CELL; bgx.moveTo(x,GY); bgx.lineTo(x,GY+GH); }
+  for (let r=0;r<=ROWS;r++){ const y=GY+r*CELL; bgx.moveTo(GX,y); bgx.lineTo(GX+GW,y); }
+  bgx.stroke();
+
+  // border frame glow
+  bgx.shadowBlur = 18; bgx.shadowColor = 'rgba(57,255,158,0.5)';
+  bgx.strokeStyle = 'rgba(57,255,158,0.5)';
+  bgx.lineWidth = 2;
+  roundRect(bgx, GX-1, GY-1, GW+2, GH+2, 10); bgx.stroke();
+  bgx.restore();
+}
+function roundRect(c,x,y,w,h,r){
+  c.beginPath();
+  c.moveTo(x+r,y);
+  c.arcTo(x+w,y,x+w,y+h,r);
+  c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r);
+  c.arcTo(x,y,x+w,y,r);
+  c.closePath();
+}
+
+//============================================================== audio (procedural)
+const Audio_ = {
+  ctx:null, master:null, muted:false,
+  init(){
+    if (this.ctx) return;
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.45;
+      this.master.connect(this.ctx.destination);
+    }catch(e){ this.ctx = null; }
+  },
+  resume(){ if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+  blip(type, freq, dur, vol, sweep){
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (sweep) o.frequency.exponentialRampToValueAtTime(Math.max(40,freq*sweep), t+dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t+dur+0.02);
+  },
+  noise(dur, vol, lp){
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i=0;i<len;i++){ d[i] = (Math.random()*2-1) * (1 - i/len); }
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value = lp||1200;
+    const g = this.ctx.createGain(); g.gain.value = vol;
+    src.connect(f); f.connect(g); g.connect(this.master);
+    src.start(t);
+  },
+  eat(combo){ const base = 520 + Math.min(combo,8)*60; this.blip('triangle', base, 0.10, 0.12, 1.6); },
+  bonus(){ this.blip('square', 680, 0.10, 0.10, 1.5); this.blip('square', 1020, 0.12, 0.09, 1.4); },
+  turn(){ this.blip('sine', 300, 0.04, 0.035, 1.2); },
+  death(){ this.noise(0.6,0.32,520); this.blip('sawtooth',220,0.6,0.16,0.25); },
+  spawn(){ this.blip('sine', 240, 0.16, 0.07, 2.4); },
+  appear(){ this.blip('triangle', 880, 0.08, 0.05, 1.2); }
+};
+
+//============================================================== object pool (particles)
+function makePool(factory, size){
+  const free = []; const active = [];
+  for (let i=0;i<size;i++) free.push(factory());
+  return {
+    free, active,
+    spawn(){ let o = free.pop() || factory(); o.alive = true; active.push(o); return o; },
+    sweep(){
+      for (let i=active.length-1;i>=0;i--){
+        if (!active[i].alive){ free.push(active[i]); active.splice(i,1); }
+      }
+    },
+    clear(){ for (const o of active) free.push(o); active.length=0; }
+  };
+}
+const particles = makePool(()=>({x:0,y:0,vx:0,vy:0,life:0,max:1,r:1,hue:140,spark:false,alive:false,drag:0.985}), 900);
+function spawnParticle(x,y,vx,vy,life,r,hue,spark,drag){
+  const p = particles.spawn();
+  p.x=x;p.y=y;p.vx=vx;p.vy=vy;p.life=life;p.max=life;p.r=r;p.hue=hue;p.spark=!!spark;
+  p.drag=(drag===undefined?0.985:drag);
+}
+function burst(x,y,n,opts){
+  opts = opts || {};
+  const speed = opts.speed||140, life=opts.life||0.6, hue=opts.hue||140;
+  const spread = opts.spread||1, base=opts.base||0, drag=opts.drag;
+  for (let i=0;i<n;i++){
+    const a = rand(TAU);
+    const sp = base + rand(speed*spread);
+    spawnParticle(x,y, Math.cos(a)*sp, Math.sin(a)*sp,
+      life*rand(1.3,0.5), rand(2.8,1.0), hue + rand(30,-30), opts.spark, drag);
+  }
+}
+function updateParticles(dt){
+  for (const p of particles.active){
+    p.life -= dt;
+    if (p.life <= 0){ p.alive=false; continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    const d = Math.pow(p.drag, dt*60);
+    p.vx *= d; p.vy *= d;
+  }
+  particles.sweep();
+}
+function drawParticles(){
+  ctx.save();
+  ctx.lineCap='round';
+  for (const p of particles.active){
+    const k = p.life/p.max;
+    ctx.globalAlpha = clamp(k,0,1);
+    const col = hsl(p.hue, 90, 65);
+    ctx.shadowBlur = 10; ctx.shadowColor = col;
+    if (p.spark){
+      ctx.strokeStyle = col; ctx.lineWidth = p.r;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - p.vx*0.014, p.y - p.vy*0.014);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(p.x,p.y, p.r*(0.4+0.6*k), 0, TAU); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+//============================================================== snake (ring buffer of cells)
+// We store the body as grid cells. Rendering interpolates between steps so it glides.
+const MAXBODY = 4096;
+// Snake body is a plain array (head at index 0); a typed-array occupancy grid
+// gives O(1) self-collision tests and free-cell picks.
+let snake = [];           // [{x,y}] head at index 0
+let occ = null;           // Uint8Array grid occupancy for O(1) self-collision & free-cell pick
+
+function allocOcc(){ occ = new Uint8Array(COLS*ROWS); }
+function occIndex(x,y){ return y*COLS + x; }
+function setOcc(x,y,v){ if (x>=0&&x<COLS&&y>=0&&y<ROWS) occ[occIndex(x,y)] = v; }
+function isOcc(x,y){ return (x>=0&&x<COLS&&y>=0&&y<ROWS) ? occ[occIndex(x,y)] : 0; }
+
+// movement
+let dir = {x:1,y:0};          // current heading
+let pendingDirs = [];         // buffered turns (max 2)
+let stepProgress = 0;         // 0..1 interpolation toward next cell
+let stepTime = 0;             // seconds per step (decreases as we grow)
+let growPending = 0;          // cells to grow
+let prevHead = {x:0,y:0};     // for interpolation: where head was last step
+let tailEase = {x:0,y:0,from:{x:0,y:0}}; // tail interpolation
+
+function clampSnakeToGrid(){
+  // ensure grid + occupancy sized to current COLS/ROWS, rebuild occupancy
+  allocOcc();
+  for (const s of snake){
+    s.x = clamp(s.x, 0, COLS-1); s.y = clamp(s.y, 0, ROWS-1);
+    setOcc(s.x, s.y, 1);
+  }
+  placeFoodIfNeeded();
+}
+
+function initSnake(){
+  allocOcc();
+  snake = [];
+  const cx = Math.floor(COLS/2), cy = Math.floor(ROWS/2);
+  for (let i=0;i<3;i++){
+    const c = {x:cx-i, y:cy};
+    snake.push(c); setOcc(c.x,c.y,1);
+  }
+  dir = {x:1,y:0};
+  pendingDirs.length = 0;
+  stepProgress = 0;
+  growPending = 0;
+  prevHead = {x:cx, y:cy};
+  tailEase.from = {x:snake[snake.length-1].x, y:snake[snake.length-1].y};
+}
+
+//============================================================== food
+let food = null;            // {x,y,kind,hue,spawnT}
+let bonus = null;           // {x,y,ttl,maxTtl,value}
+let bonusTimer = 0;
+let foodPulse = 0;
+
+function freeCellCount(){ let c = COLS*ROWS - snake.length; return c; }
+function pickFreeCell(){
+  if (freeCellCount() <= 0) return null;
+  // rejection sampling; fall back to scan if dense
+  for (let i=0;i<80;i++){
+    const x = randi(0,COLS), y = randi(0,ROWS);
+    if (!isOcc(x,y)) return {x,y};
+  }
+  // scan
+  const start = randi(0, COLS*ROWS);
+  for (let i=0;i<COLS*ROWS;i++){
+    const idx = (start+i)%(COLS*ROWS);
+    if (!occ[idx]) return {x: idx%COLS, y: Math.floor(idx/COLS)};
+  }
+  return null;
+}
+function placeFood(){
+  const cell = pickFreeCell();
+  if (!cell){ food=null; return; }
+  food = {x:cell.x, y:cell.y, hue:120+randi(0,60), spawnT:0};
+  Audio_.appear();
+}
+function placeFoodIfNeeded(){ if (!food) placeFood(); }
+function maybeSpawnBonus(){
+  if (bonus) return;
+  bonusTimer -= 1;
+  if (bonusTimer<=0){
+    bonusTimer = randi(5, 9); // eat-count based interval
+    const cell = pickFreeCell();
+    if (cell){
+      const maxTtl = 7.5;
+      bonus = {x:cell.x, y:cell.y, ttl:maxTtl, maxTtl, value:5};
+      Audio_.spawn();
+      burst(px(cell.x),py(cell.y), 10, {speed:90, life:0.5, hue:50, spark:true});
+    }
+  }
+}
+
+//============================================================== screen shake & flash
+let shake = 0, flashAmt = 0, flashHue = 140;
+function addShake(v){ shake = Math.min(30, shake + v); }
+function flash(v,hue){ flashAmt = Math.min(1, flashAmt + v); if(hue!==undefined) flashHue=hue; }
+
+//============================================================== game state
+const game = {
+  state:'title',   // title | playing | paused | gameover
+  score:0, displayScore:0, high:0,
+  wallsKill:true,
+  combo:0, comboTimer:0,
+  speedLevel:0
+};
+function loadPrefs(){
+  try{ game.high = parseInt(localStorage.getItem('snake_high')||'0',10)||0; }catch(e){ game.high=0; }
+  try{ const w = localStorage.getItem('snake_wallskill'); if (w!==null) game.wallsKill = (w==='1'); }catch(e){}
+}
+function saveHigh(){ try{ localStorage.setItem('snake_high', String(game.high)); }catch(e){} }
+function saveWalls(){ try{ localStorage.setItem('snake_wallskill', game.wallsKill?'1':'0'); }catch(e){} }
+
+const BASE_STEP = 0.135;     // seconds per cell at start
+const MIN_STEP  = 0.052;     // fastest
+function computeStepTime(){
+  // ramp by length and score
+  const grow = (snake.length - 3);
+  const t = BASE_STEP - grow*0.0022 - Math.min(0.03, game.score*0.00012);
+  stepTime = clamp(t, MIN_STEP, BASE_STEP);
+}
+
+//============================================================== input
+const keys = {};
+function queueDir(nx,ny){
+  // determine the direction to compare against (last queued or current)
+  const last = pendingDirs.length ? pendingDirs[pendingDirs.length-1] : dir;
+  // no reverse, no no-op
+  if (nx===last.x && ny===last.y) return;
+  if (nx===-last.x && ny===-last.y) return;
+  if (pendingDirs.length < 2){
+    pendingDirs.push({x:nx,y:ny});
+    if (game.state==='playing') Audio_.turn();
+  }
+}
+function setMuteTag(){ document.getElementById('muteTag').textContent = 'M · sound ' + (Audio_.muted?'off':'on'); }
+function setWrapTag(){ document.getElementById('wrapTag').textContent = 'T · ' + (game.wallsKill?'walls kill':'wrap-around'); }
+
+window.addEventListener('keydown', e=>{
+  const k = e.key.toLowerCase();
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  switch(k){
+    case 'arrowleft': case 'a': if(game.state==='playing') queueDir(-1,0); break;
+    case 'arrowright':case 'd': if(game.state==='playing') queueDir(1,0); break;
+    case 'arrowup':   case 'w': if(game.state==='playing') queueDir(0,-1); break;
+    case 'arrowdown': case 's': if(game.state==='playing') queueDir(0,1); break;
+    case 'p': case 'escape':
+      if (game.state==='playing'||game.state==='paused') togglePause(); break;
+    case 'enter':
+      if (game.state==='title' || game.state==='gameover') startGame();
+      break;
+    case 't':
+      if (game.state!=='playing'){ game.wallsKill=!game.wallsKill; saveWalls(); setWrapTag(); }
+      break;
+    case 'm':
+      Audio_.init(); Audio_.muted=!Audio_.muted; setMuteTag(); break;
+  }
+}, {passive:false});
+window.addEventListener('pointerdown', ()=>{ Audio_.init(); Audio_.resume(); }, {once:true});
+document.addEventListener('visibilitychange', ()=>{
+  if (document.hidden && game.state==='playing') togglePause();
+});
+
+//============================================================== flow
+function startGame(){
+  game.state='playing';
+  game.score=0; game.displayScore=0;
+  game.combo=0; game.comboTimer=0;
+  computeGrid(); // ensure sized
+  initSnake();
+  food=null; bonus=null; bonusTimer=randi(4,7);
+  particles.clear();
+  placeFood();
+  computeStepTime();
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('gameoverScreen').classList.add('hidden');
+  document.getElementById('hud').style.display='block';
+  updateHud();
+  Audio_.init(); Audio_.resume();
+  last = performance.now();
+}
+function endGame(){
+  game.state='gameover';
+  if (game.score > game.high){
+    game.high = game.score; saveHigh();
+    document.getElementById('newHigh').style.display='block';
+  } else {
+    document.getElementById('newHigh').style.display='none';
+  }
+  document.getElementById('finalScore').textContent = game.score.toLocaleString();
+  document.getElementById('goSub').textContent =
+    'length '+snake.length+' · best '+Math.max(game.high,game.score).toLocaleString();
+  document.getElementById('high').textContent = game.high.toLocaleString();
+  document.getElementById('gameoverScreen').classList.remove('hidden');
+}
+function togglePause(){
+  if (game.state==='playing'){
+    game.state='paused';
+    document.getElementById('pauseScreen').classList.remove('hidden');
+  } else if (game.state==='paused'){
+    game.state='playing';
+    document.getElementById('pauseScreen').classList.add('hidden');
+    last = performance.now();
+  }
+}
+
+//============================================================== death
+let deathFx = 0; // lingering shimmer after death
+function die(){
+  game.state='dying';
+  Audio_.death();
+  addShake(20); flash(0.55, 0);
+  // scatter snake into particles
+  for (let i=0;i<snake.length;i++){
+    const s = snake[i];
+    const x = px(s.x), y = py(s.y);
+    const hue = (140 + i*6) % 360;
+    burst(x,y, 5, {speed:160, life:0.9, hue, spark:true, base:30});
+    burst(x,y, 2, {speed:70, life:1.2, hue});
+  }
+  deathFx = 0.0;
+  // brief delay then game over screen
+  setTimeout(endGame, 900);
+}
+
+//============================================================== step (one grid advance)
+function stepSnake(){
+  // apply one buffered direction
+  if (pendingDirs.length){ dir = pendingDirs.shift(); }
+
+  const headC = snake[0];
+  prevHead = {x:headC.x, y:headC.y};
+  let nx = headC.x + dir.x;
+  let ny = headC.y + dir.y;
+
+  // walls
+  let wallDeath = false;
+  if (nx<0||nx>=COLS||ny<0||ny>=ROWS){
+    if (game.wallsKill){ wallDeath = true; }
+    else {
+      nx = (nx+COLS)%COLS; ny = (ny+ROWS)%ROWS;
+    }
+  }
+  if (wallDeath){ die(); return; }
+
+  // will the tail move? (only if not growing)
+  const willGrow = growPending>0;
+  const tail = snake[snake.length-1];
+
+  // self collision: hitting any body cell except the tail-that-will-vacate
+  let selfHit = isOcc(nx,ny);
+  if (selfHit && !willGrow && nx===tail.x && ny===tail.y){
+    selfHit = false; // tail vacates this turn
+  }
+  if (selfHit){ die(); return; }
+
+  // advance: add new head
+  const newHead = {x:nx, y:ny};
+  snake.unshift(newHead);
+  setOcc(nx,ny,1);
+
+  if (willGrow){
+    growPending--;
+  } else {
+    const t = snake.pop();
+    tailEase.from = {x:t.x, y:t.y};
+    setOcc(t.x,t.y,0);
+  }
+
+  // food?
+  if (food && nx===food.x && ny===food.y){
+    eatFood();
+  }
+  if (bonus && nx===bonus.x && ny===bonus.y){
+    eatBonus();
+  }
+}
+
+function eatFood(){
+  const fx = px(food.x), fy = py(food.y);
+  // combo
+  game.combo++; game.comboTimer = 2.4;
+  const mult = 1 + Math.min(game.combo-1, 6)*0.25; // up to ~2.5x
+  const gained = Math.round(10 * mult);
+  game.score += gained;
+  growPending += 1;
+  // juice
+  const hue = food.hue;
+  burst(fx,fy, 22, {speed:200, life:0.7, hue, spark:true, base:40});
+  burst(fx,fy, 10, {speed:90, life:1.0, hue});
+  addShake(3.5); flash(0.10, hue);
+  Audio_.eat(game.combo);
+  food = null;
+  maybeSpawnBonus();
+  placeFood();
+  computeStepTime();
+  showCombo();
+  updateHud();
+}
+function eatBonus(){
+  const bx = px(bonus.x), by = py(bonus.y);
+  const base = 50;
+  const gained = base + Math.round(bonus.ttl*8);
+  game.score += gained;
+  growPending += 2;
+  burst(bx,by, 30, {speed:240, life:0.85, hue:48, spark:true, base:50});
+  burst(bx,by, 14, {speed:110, life:1.1, hue:48});
+  addShake(6); flash(0.18, 48);
+  Audio_.bonus();
+  bonus = null;
+  computeStepTime();
+  flashComboText('BONUS +'+gained);
+  updateHud();
+}
+
+//============================================================== combo UI
+const comboEl = document.getElementById('comboTag');
+let comboHideT = 0;
+function showCombo(){
+  if (game.combo>=2){
+    const mult = (1 + Math.min(game.combo-1,6)*0.25).toFixed(2).replace(/0$/,'');
+    comboEl.textContent = 'COMBO ×'+game.combo;
+    comboEl.style.opacity = '1';
+    comboHideT = 0.9;
+  }
+}
+function flashComboText(txt){
+  comboEl.textContent = txt;
+  comboEl.style.opacity = '1';
+  comboHideT = 1.0;
+}
+
+//============================================================== HUD
+const elScore = document.getElementById('score');
+const elHigh  = document.getElementById('high');
+const elLen   = document.getElementById('len');
+function updateHud(){
+  elLen.textContent = snake.length;
+  elHigh.textContent = Math.max(game.high, game.score).toLocaleString();
+}
+
+//============================================================== update
+function update(dt){
+  // combo timer
+  if (game.comboTimer>0){ game.comboTimer-=dt; if (game.comboTimer<=0) game.combo=0; }
+  if (comboHideT>0){ comboHideT-=dt; if (comboHideT<=0) comboEl.style.opacity='0'; }
+
+  // bonus ttl
+  if (bonus){
+    bonus.ttl -= dt;
+    if (bonus.ttl<=0){
+      burst(px(bonus.x),py(bonus.y), 12, {speed:80, life:0.6, hue:48});
+      bonus=null;
+    }
+  }
+
+  foodPulse += dt;
+
+  // advance snake by step time, possibly multiple steps if dt large
+  if (game.state==='playing'){
+    stepProgress += dt / stepTime;
+    let guard = 0;
+    while (stepProgress >= 1 && game.state==='playing' && guard<4){
+      stepProgress -= 1;
+      stepSnake();
+      guard++;
+    }
+    if (stepProgress>1) stepProgress = 1; // safety
+  }
+
+  updateParticles(dt);
+
+  // animated score counter
+  game.displayScore += (game.score - game.displayScore)*Math.min(1, dt*10);
+  elScore.textContent = Math.round(game.displayScore).toLocaleString();
+
+  shake *= Math.pow(0.05, dt);
+  flashAmt *= Math.pow(0.02, dt);
+}
+
+//============================================================== render snake (gliding ribbon)
+// The ribbon is computed directly in drawSnake for performance & wrap-handling.
+function drawSnake(){
+  const n = snake.length;
+  if (n===0) return;
+  const t = clamp(stepProgress, 0, 1);
+
+  // Build interpolated centerline points (head -> tail).
+  // pt[0] = head sliding from prevHead to snake[0]
+  // pt[i] (i>0) = snake[i] sliding toward snake[i-1] by t  (follow-the-leader)
+  // tail = snake[n-1] sliding from tailEase.from toward snake[n-1]
+  const pts = ribbonPts; let pc = 0;
+  // head
+  pushPt(pts, pc++, interpCell(prevHead.x, prevHead.y, snake[0].x, snake[0].y, t));
+  for (let i=1;i<n;i++){
+    pushPt(pts, pc++, interpCell(snake[i].x, snake[i].y, snake[i-1].x, snake[i-1].y, t));
+  }
+  // tail tip extension for a smooth taper: tail slides from its previous cell
+  if (!growPending){
+    pushPt(pts, pc++, interpCell(tailEase.from.x, tailEase.from.y, snake[n-1].x, snake[n-1].y, t));
+  } else {
+    pushPt(pts, pc++, interpCell(snake[n-1].x, snake[n-1].y, snake[n-1].x, snake[n-1].y, 0));
+  }
+  const count = pc;
+
+  // hue shift along length + over time
+  const baseHue = 140 + (performance.now()*0.02)%360;
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  const maxW = CELL*0.82;
+
+  // glow underlay pass (single wide stroke, additive feel)
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.shadowBlur = 22; ctx.shadowColor = hsl(baseHue, 95, 55);
+  ctx.strokeStyle = hsl(baseHue, 95, 50, 0.30);
+  ctx.lineWidth = maxW*1.15;
+  strokePolyline(pts, count);
+
+  // main gradient ribbon: stroke segment-by-segment so we can taper + hue-shift
+  ctx.globalCompositeOperation = 'source-over';
+  for (let i=0;i<count-1;i++){
+    const a = pts[i], b = pts[i+1];
+    const f = i/(count-1);
+    const hue = baseHue + f*120;
+    const w = lerp(maxW, maxW*0.34, f);   // taper toward tail
+    const light = lerp(66, 48, f);
+    ctx.shadowBlur = lerp(16, 6, f);
+    ctx.shadowColor = hsl(hue, 95, 60);
+    ctx.strokeStyle = hsl(hue, 92, light);
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  // bright inner core line
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(235,255,239,0.85)';
+  ctx.lineWidth = Math.max(1.5, maxW*0.18);
+  strokePolyline(pts, count);
+
+  // head: glowing eye + cap
+  const hp = pts[0];
+  ctx.shadowBlur = 24; ctx.shadowColor = hsl(baseHue, 95, 60);
+  ctx.fillStyle = hsl(baseHue, 95, 70);
+  ctx.beginPath(); ctx.arc(hp.x, hp.y, maxW*0.52, 0, TAU); ctx.fill();
+  // eyes
+  const aimx = (pts[0].x - pts[1].x), aimy = (pts[0].y - pts[1].y);
+  const al = Math.hypot(aimx,aimy)||1;
+  const ux = aimx/al, uy = aimy/al;       // forward
+  const pxn = -uy, pyn = ux;               // perpendicular
+  const eo = maxW*0.22, ef = maxW*0.10;
+  ctx.shadowBlur = 0;
+  for (const s of [-1,1]){
+    const ex = hp.x + ux*ef + pxn*eo*s;
+    const ey = hp.y + uy*ef + pyn*eo*s;
+    ctx.fillStyle = '#04110b';
+    ctx.beginPath(); ctx.arc(ex,ey, maxW*0.12, 0, TAU); ctx.fill();
+  }
+  ctx.restore();
+}
+// scratch buffers (no per-frame allocation in hot path)
+const ribbonPts = [];
+(function initRibbon(){ for (let i=0;i<MAXBODY+2;i++) ribbonPts.push({x:0,y:0}); })();
+function pushPt(arr, i, p){ const o=arr[i]; o.x=p.x; o.y=p.y; }
+function interpCell(ax,ay,bx,by,t){
+  // interpolate between two grid cells, handling wrap-around shortest path
+  let cax = ax, cay = ay, cbx = bx, cby = by;
+  if (!game.wallsKill){
+    // choose nearest representation for wrap to avoid teleport lines
+    if (Math.abs(cbx-cax) > COLS/2){ if (cbx>cax) cax+=COLS; else cbx+=COLS; }
+    if (Math.abs(cby-cay) > ROWS/2){ if (cby>cay) cay+=ROWS; else cby+=ROWS; }
+  }
+  const gx = lerp(cax, cbx, t);
+  const gy = lerp(cay, cby, t);
+  return { x: GX + (gx+0.5)*CELL, y: GY + (gy+0.5)*CELL };
+}
+function strokePolyline(pts, count){
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i=1;i<count;i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.stroke();
+}
+
+//============================================================== render food
+function drawFood(){
+  if (food){
+    const x = px(food.x), y = py(food.y);
+    const pulse = 0.5 + 0.5*Math.sin(foodPulse*4);
+    const r = CELL*0.30 * (0.9 + 0.18*pulse);
+    const hue = food.hue;
+    ctx.save();
+    // outer halo
+    ctx.globalCompositeOperation='lighter';
+    const g = ctx.createRadialGradient(x,y,0,x,y, r*2.6);
+    g.addColorStop(0, hsl(hue,95,70,0.5));
+    g.addColorStop(1, hsl(hue,95,60,0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x,y, r*2.6, 0, TAU); ctx.fill();
+    ctx.globalCompositeOperation='source-over';
+    // core
+    ctx.shadowBlur = 18; ctx.shadowColor = hsl(hue,95,60);
+    ctx.fillStyle = hsl(hue,95,62);
+    ctx.beginPath(); ctx.arc(x,y, r, 0, TAU); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath(); ctx.arc(x - r*0.28, y - r*0.28, r*0.32, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  if (bonus){
+    const x = px(bonus.x), y = py(bonus.y);
+    const k = bonus.ttl/bonus.maxTtl;
+    const pulse = 0.5 + 0.5*Math.sin(foodPulse*9);
+    const r = CELL*0.34 * (0.85 + 0.2*pulse);
+    const hue = 48;
+    ctx.save();
+    // ttl ring
+    ctx.globalCompositeOperation='lighter';
+    const g = ctx.createRadialGradient(x,y,0,x,y, r*2.8);
+    g.addColorStop(0, hsl(hue,95,70,0.55));
+    g.addColorStop(1, hsl(hue,95,60,0));
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r*2.8,0,TAU); ctx.fill();
+    ctx.globalCompositeOperation='source-over';
+    // diamond core
+    ctx.translate(x,y); ctx.rotate(foodPulse*1.5);
+    ctx.shadowBlur=20; ctx.shadowColor=hsl(hue,95,62);
+    ctx.fillStyle = hsl(hue,95,64);
+    ctx.beginPath();
+    ctx.moveTo(0,-r); ctx.lineTo(r,0); ctx.lineTo(0,r); ctx.lineTo(-r,0); ctx.closePath();
+    ctx.fill();
+    ctx.rotate(-foodPulse*1.5);
+    // ttl arc
+    ctx.shadowBlur=0;
+    ctx.strokeStyle = hsl(hue,95,70, 0.9);
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0,0, r*1.55, -Math.PI/2, -Math.PI/2 + k*TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+//============================================================== main loop
+let last = performance.now();
+let fpsCount=0, fpsTime=0, fpsValue=60;
+function frame(now){
+  let dt = (now - last)/1000;
+  last = now;
+  if (dt>0.05) dt=0.05;
+
+  fpsTime += dt; fpsCount++;
+  if (fpsTime>=0.5){ fpsValue = Math.round(fpsCount/fpsTime); fpsTime=0; fpsCount=0; }
+
+  if (game.state==='playing' || game.state==='dying'){
+    update(dt);
+  } else {
+    // keep particles + pulse alive on title/gameover for ambiance
+    updateParticles(dt);
+    foodPulse += dt;
+    shake *= Math.pow(0.05, dt);
+    flashAmt *= Math.pow(0.02, dt);
+  }
+
+  render(now);
+  requestAnimationFrame(frame);
+}
+
+function render(now){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  if (shake>0.3){
+    const a = rand(TAU), m = shake;
+    ctx.translate(Math.cos(a)*m, Math.sin(a)*m);
+  }
+
+  drawParticles();
+  if (game.state==='playing' || game.state==='paused' || game.state==='dying'){
+    drawFood();
+    if (game.state!=='dying') drawSnake();
+  }
+
+  ctx.restore();
+
+  // flash overlay (tinted)
+  if (flashAmt>0.01){
+    ctx.fillStyle = hsl(flashHue, 90, 70, flashAmt*0.4);
+    ctx.fillRect(0,0,W,H);
+  }
+
+  // vignette
+  drawVignette();
+}
+let vignetteCache = null, vignetteKey='';
+function drawVignette(){
+  const key = W+'x'+H;
+  if (vignetteKey!==key){
+    vignetteKey=key;
+    vignetteCache = ctx.createRadialGradient(W/2,H/2, Math.min(W,H)*0.35, W/2,H/2, Math.max(W,H)*0.72);
+    vignetteCache.addColorStop(0,'rgba(0,0,0,0)');
+    vignetteCache.addColorStop(1,'rgba(0,0,0,0.55)');
+  }
+  ctx.fillStyle = vignetteCache;
+  ctx.fillRect(0,0,W,H);
+}
+
+//============================================================== boot
+loadPrefs();
+resize();
+document.getElementById('high').textContent = game.high.toLocaleString();
+setMuteTag(); setWrapTag();
+requestAnimationFrame(frame);
+
+// expose hook for verification
+window.__SNAKE__ = {
+  get state(){return game.state;},
+  get score(){return game.score;},
+  get length(){return snake.length;},
+  get high(){return game.high;},
+  get fps(){return fpsValue;},
+  get wallsKill(){return game.wallsKill;},
+  get cols(){return COLS;},
+  get rows(){return ROWS;},
+  get particleCount(){return particles.active.length;},
+  get dir(){return {x:dir.x,y:dir.y};},
+  get headCell(){return snake.length?{x:snake[0].x,y:snake[0].y}:null;},
+  get foodCell(){return food?{x:food.x,y:food.y}:null;},
+  // test helper: place reachable food one cell ahead of the head (no wall-wrap)
+  _foodAhead(){
+    if (!snake.length || game.state!=='playing') return false;
+    const h = snake[0];
+    const fx = h.x + dir.x, fy = h.y + dir.y;
+    if (fx<0||fx>=COLS||fy<0||fy>=ROWS) return false;
+    if (isOcc(fx,fy)) return false;
+    food = {x:fx,y:fy,hue:130,spawnT:0};
+    return true;
+  },
+  // test helper: trigger the real eat/grow path n times (latency-proof verification)
+  _grow(n){
+    n = n|0;
+    for (let i=0;i<n;i++){
+      if (game.state!=='playing') break;
+      const cell = pickFreeCell();
+      food = cell ? {x:cell.x,y:cell.y,hue:130,spawnT:0} : food;
+      eatFood();
+    }
+    return snake.length;
+  }
+};
+
+})();
+</script>
+</body>
+</html>
