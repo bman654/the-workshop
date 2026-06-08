@@ -7,7 +7,7 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 > **Resume protocol:** read this top section, then continue from "Next up". Commit + update
 > here after every piece.
 
-## Status — 25 specimens, all browser-verified PASS (60fps unless noted), clean consoles
+## Status — 28 specimens, all browser-verified PASS (60fps unless noted), clean consoles
 
 | # | file | system | notes |
 |---|------|--------|-------|
@@ -36,6 +36,9 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 | 23 | harmonograph.html | Harmonograph | sum of decaying sinusoids; evolving Lissajous-like figures |
 | 24 | sandpile.html | Sandpile | Abelian sandpile; big-pile & dripping; 4-colour fractal mandala |
 | 25 | langtons-ant.html | Langton's Ant | turmites; 12 rule presets + custom + up to 12 ants |
+| 26 | fourier-epicycles.html | Fourier Epicycles | DFT of a path as rotating circles; 9 presets + draw-your-own |
+| 27 | tesseract.html | Tesseract | 4D polytopes (tesseract/5-cell/16-cell/24-cell); 6-plane rotation |
+| 28 | game-of-life.html | Game of Life | Conway + 6 rule variants; age-colour + ghost trails; glider gun |
 
 - gallery `index.html` + `pieces.js` (9 entries) verified: all cards + thumbnails render, clean console.
 - thumbnails in `assets/thumbs/`; `assets/gallery-preview.png` is a full-page gallery shot.
@@ -50,9 +53,9 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 ## Next up
 - Polish DONE: garden README, "wander in" random button + digit nav, thumbnails normalized
   to ≤1440w, gallery re-verified.
-- **Wave 7 candidate pieces:** wave-function-collapse tiling, Voronoi/Delaunay growth,
-  terrain erosion, falling-sand sandbox, Belousov-Zhabotinsky, magnetic-pendulum fractal
-  basins, Lorenz/strange-attractor 3D, Lissajous, Penrose/quasicrystal tiling.
+- **Wave 11 candidate pieces (still unbuilt):** Belousov-Zhabotinsky oscillating waves,
+  Voronoi/Lloyd relaxation, Penrose/quasicrystal tiling, terrain erosion, Brian's Brain /
+  excitable media, percolation / forest-fire, spirograph/epicycloid gears, Hopf fibration.
 - Possible: a favicon; per-piece prev/next nav; an "about" page; sort/filter on the gallery.
 - Note: ripple-tank thumbnail shows the control panel (others hide it) — minor, could recapture.
 
@@ -75,4 +78,6 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 - 2026-06-08 — Wave 8: falling-sand (interactive 11-material powder toy), magnetic-pendulum
   (WebGL basin fractal). 22 specimens.
 - 2026-06-08 — Wave 9: harmonograph, sandpile (Abelian), langtons-ant (turmites).
-  **25 specimens.**
+  25 specimens. Preview shared with Brandon.
+- 2026-06-08 — Wave 10: fourier-epicycles (DFT + draw-your-own), tesseract (4D polytopes),
+  game-of-life (Conway + variants, age-colour). **28 specimens.**

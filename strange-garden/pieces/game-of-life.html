@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game of Life — Strange Garden</title>
+<style>
+  :root { --accent: #5fd0a8; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:266px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; margin:2px 0 0; padding:5px 6px; font-size:12px; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:8px;
+    font-family:ui-monospace,Menlo,monospace; }
+  #panel .checks { display:flex; gap:14px; margin-top:11px; font-size:11px;
+    font-family:ui-monospace,Menlo,monospace; opacity:.85; }
+  #panel .checks label { margin:0; display:flex; align-items:center; gap:5px; cursor:pointer; }
+  #panel input[type=checkbox] { accent-color:var(--accent); margin:0; cursor:pointer; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.42; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Game of Life</h1>
+  <p class="desc">Conway's cellular world. Three rules of birth and death conjure
+    gliders, oscillators and still lifes — life from nothing.</p>
+  <label>Rule <b id="vRule">Conway</b></label>
+  <select id="selRule">
+    <option value="conway">Conway · B3/S23</option>
+    <option value="highlife">HighLife · B36/S23</option>
+    <option value="daynight">Day &amp; Night · B3678/S34678</option>
+    <option value="maze">Maze · B3/S12345</option>
+    <option value="seeds">Seeds · B2/S</option>
+    <option value="twobytwo">2×2 · B36/S125</option>
+    <option value="replicator">Replicator · B1357/S1357</option>
+  </select>
+  <label>Drop pattern <b></b></label>
+  <select id="selPat">
+    <option value="">— click canvas to draw —</option>
+    <option value="glider">Glider</option>
+    <option value="lwss">Lightweight spaceship</option>
+    <option value="pulsar">Pulsar</option>
+    <option value="gun">Gosper glider gun</option>
+  </select>
+  <label>Soup density <b id="vDen">0.32</b></label>
+  <input type="range" id="sDen" min="0.02" max="0.7" step="0.01" value="0.32">
+  <label>Speed <b id="vSpd">1</b></label>
+  <input type="range" id="sSpd" min="1" max="8" step="1" value="1">
+  <label>Cell size <b id="vCell">5</b></label>
+  <input type="range" id="sCell" min="2" max="16" step="1" value="5">
+  <label>Palette <b id="vPal">Ember</b></label>
+  <input type="range" id="sPal" min="0" max="4" step="1" value="0">
+  <div class="checks">
+    <label><input type="checkbox" id="cAge" checked> age color</label>
+    <label><input type="checkbox" id="cTrail" checked> ghost trails</label>
+  </div>
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="clear">Clear</button></div>
+  <div class="row"><button id="step">Step</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">draw life with the mouse · drop patterns from menu · space r h s</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+const $=id=>document.getElementById(id);
+
+let W,H,DPR;            // backing-store pixels
+let cssW,cssH;          // css pixels
+let cellSize=5;         // css px per cell
+let cols,rows;          // grid dims
+let cur,nxt;            // Uint8 alive grids (double buffered)
+let age;                // Uint16 — gens alive (capped)
+let ghost;              // Uint8 — fading dead trail (0..GMAX)
+const GMAX=200;         // age cap for coloring
+const GHOST_MAX=24;     // ghost trail brightness / decay frames
+
+// offscreen 1px-per-cell buffer; scaled up to canvas
+let buf, bufCtx, bufImg, bufData;
+
+let density=0.32, speed=1, paused=false, generation=0, population=0;
+let ageColor=true, trails=true, palIdx=0;
+
+// ---------- rules ----------
+// birth[n]/survive[n] lookup over neighbor count 0..8
+const RULES={
+  conway:    {b:[3],        s:[2,3],          name:'Conway',     accent:'#5fd0a8'},
+  highlife:  {b:[3,6],      s:[2,3],          name:'HighLife',   accent:'#f2b34c'},
+  daynight:  {b:[3,6,7,8],  s:[3,4,6,7,8],    name:'Day & Night',accent:'#86a8ff'},
+  maze:      {b:[3],        s:[1,2,3,4,5],    name:'Maze',       accent:'#c98bff'},
+  seeds:     {b:[2],        s:[],             name:'Seeds',      accent:'#ff7a8a'},
+  twobytwo:  {b:[3,6],      s:[1,2,5],        name:'2×2',        accent:'#7fe0d4'},
+  replicator:{b:[1,3,5,7],  s:[1,3,5,7],      name:'Replicator', accent:'#9ad14c'},
+};
+let ruleKey='conway';
+let birthLUT=new Uint8Array(9), survLUT=new Uint8Array(9);
+function setRule(key){
+  ruleKey=key; const r=RULES[key];
+  birthLUT.fill(0); survLUT.fill(0);
+  r.b.forEach(n=>birthLUT[n]=1); r.s.forEach(n=>survLUT[n]=1);
+  document.documentElement.style.setProperty('--accent', r.accent);
+  $('vRule').textContent=r.name;
+}
+
+// ---------- palettes (age -> rgb) built as LUTs ----------
+// each palette is a function t in [0,1] -> [r,g,b]
+const PAL_NAMES=['Ember','Aurora','Ocean','Spring','Mono'];
+function lerp(a,b,t){return a+(b-a)*t;}
+function ramp(stops,t){ // stops: [[pos,[r,g,b]],...]
+  if(t<=stops[0][0]) return stops[0][1];
+  for(let i=1;i<stops.length;i++){
+    if(t<=stops[i][0]){
+      const a=stops[i-1],b=stops[i];
+      const u=(t-a[0])/(b[0]-a[0]);
+      return [lerp(a[1][0],b[1][0],u),lerp(a[1][1],b[1][1],u),lerp(a[1][2],b[1][2],u)];
+    }
+  }
+  return stops[stops.length-1][1];
+}
+const PALETTES=[
+  // Ember: newborn warm white -> gold -> deep ember red
+  t=>ramp([[0,[255,244,214]],[0.12,[255,206,120]],[0.4,[244,140,52]],[0.75,[193,58,40]],[1,[120,24,30]]],t),
+  // Aurora: cyan-white -> teal -> green -> violet
+  t=>ramp([[0,[224,255,246]],[0.15,[120,232,205]],[0.45,[60,200,150]],[0.7,[80,150,235]],[1,[150,90,220]]],t),
+  // Ocean: pale -> cyan -> blue -> indigo
+  t=>ramp([[0,[222,246,255]],[0.18,[120,210,240]],[0.5,[58,140,220]],[0.8,[40,70,170]],[1,[24,30,90]]],t),
+  // Spring: white -> lime -> green -> moss
+  t=>ramp([[0,[244,255,228]],[0.15,[190,240,120]],[0.45,[120,210,80]],[0.75,[60,150,70]],[1,[28,84,52]]],t),
+  // Mono: white -> grey
+  t=>ramp([[0,[245,247,250]],[0.5,[150,158,172]],[1,[60,66,82]]],t),
+];
+let ageRGB;   // Uint8 LUT [ (GMAX+1)*3 ] for current palette
+let ghostRGB; // Uint8 LUT [ (GHOST_MAX+1)*3 ]
+function buildLUTs(){
+  const pal=PALETTES[palIdx];
+  ageRGB=new Uint8Array((GMAX+1)*3);
+  for(let a=0;a<=GMAX;a++){
+    // nonlinear: rapid early shift then slow — newborns pop, elders settle
+    const t=Math.pow(a/GMAX,0.55);
+    const c=pal(t);
+    ageRGB[a*3]=c[0]|0; ageRGB[a*3+1]=c[1]|0; ageRGB[a*3+2]=c[2]|0;
+  }
+  // ghost: tint toward the palette's elder color but dim, fading to bg
+  const eg=pal(0.85);
+  ghostRGB=new Uint8Array((GHOST_MAX+1)*3);
+  const bg=[10,11,15];
+  for(let g=0;g<=GHOST_MAX;g++){
+    const f=g/GHOST_MAX;            // 1 = freshly dead, 0 = gone
+    const k=Math.pow(f,1.4)*0.6;    // dim ceiling
+    ghostRGB[g*3]=(bg[0]+(eg[0]-bg[0])*k)|0;
+    ghostRGB[g*3+1]=(bg[1]+(eg[1]-bg[1])*k)|0;
+    ghostRGB[g*3+2]=(bg[2]+(eg[2]-bg[2])*k)|0;
+  }
+  $('vPal').textContent=PAL_NAMES[palIdx];
+}
+
+// ---------- grid sizing ----------
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  cssW=innerWidth; cssH=innerHeight;
+  W=cv.width=Math.floor(cssW*DPR); H=cv.height=Math.floor(cssH*DPR);
+  cv.style.width=cssW+'px'; cv.style.height=cssH+'px';
+  allocGrid();
+}
+function allocGrid(){
+  const oldCols=cols, oldRows=rows, oldCur=cur, oldAge=age;
+  cols=Math.max(8,Math.floor(cssW/cellSize));
+  rows=Math.max(8,Math.floor(cssH/cellSize));
+  const N=cols*rows;
+  cur=new Uint8Array(N); nxt=new Uint8Array(N);
+  age=new Uint16Array(N); ghost=new Uint8Array(N);
+  // offscreen buffer 1px/cell
+  buf=document.createElement('canvas'); buf.width=cols; buf.height=rows;
+  bufCtx=buf.getContext('2d');
+  bufImg=bufCtx.createImageData(cols,rows); bufData=bufImg.data;
+  // fill alpha
+  for(let i=3;i<bufData.length;i+=4) bufData[i]=255;
+  // migrate previous state (best-effort, preserves art on cell-size change)
+  if(oldCur){
+    const cc=Math.min(cols,oldCols), rr=Math.min(rows,oldRows);
+    for(let y=0;y<rr;y++) for(let x=0;x<cc;x++){
+      const oi=y*oldCols+x, ni=y*cols+x;
+      cur[ni]=oldCur[oi]; age[ni]=oldAge[oi];
+    }
+  }
+  ctx.imageSmoothingEnabled=false;
+}
+
+// ---------- seeding ----------
+function reseed(){
+  generation=0;
+  age.fill(0); ghost.fill(0);
+  const N=cols*rows;
+  for(let i=0;i<N;i++){
+    if(Math.random()<density){ cur[i]=1; age[i]=1; } else cur[i]=0;
+  }
+}
+function clearGrid(){
+  generation=0;
+  cur.fill(0); age.fill(0); ghost.fill(0);
+}
+
+// ---------- patterns (relative coords) ----------
+const PATTERNS={
+  glider:[[1,0],[2,1],[0,2],[1,2],[2,2]],
+  lwss:[[0,0],[3,0],[4,1],[0,2],[4,2],[1,3],[2,3],[3,3],[4,3]],
+  pulsar:(()=>{ // classic period-3 pulsar
+    const base=[[2,0],[3,0],[4,0],[0,2],[5,2],[0,3],[5,3],[0,4],[5,4],[2,5],[3,5],[4,5]];
+    const pts=[]; const q=[[0,0],[1,0],[0,1],[1,1]];
+    // build the canonical 13x13 pulsar explicitly
+    const s="..OOO...OOO..\n.............\nO....O.O....O\nO....O.O....O\nO....O.O....O\n..OOO...OOO..\n.............\n..OOO...OOO..\nO....O.O....O\nO....O.O....O\nO....O.O....O\n.............\n..OOO...OOO..";
+    s.split("\n").forEach((row,y)=>{ for(let x=0;x<row.length;x++) if(row[x]==='O') pts.push([x,y]); });
+    return pts;
+  })(),
+  gun:(()=>{ // Gosper glider gun
+    const s=
+"........................O...........\n"+
+"......................O.O...........\n"+
+"............OO......OO............OO\n"+
+"...........O...O....OO............OO\n"+
+"OO........O.....O...OO..............\n"+
+"OO........O...O.OO....O.O...........\n"+
+"..........O.....O.......O...........\n"+
+"...........O...O....................\n"+
+"............OO......................";
+    const pts=[]; s.split("\n").forEach((row,y)=>{ for(let x=0;x<row.length;x++) if(row[x]==='O') pts.push([x,y]); });
+    return pts;
+  })(),
+};
+function dropPattern(name,cx,cy){
+  const p=PATTERNS[name]; if(!p) return;
+  let maxX=0,maxY=0; p.forEach(([x,y])=>{ if(x>maxX)maxX=x; if(y>maxY)maxY=y; });
+  const ox=cx-(maxX>>1), oy=cy-(maxY>>1);
+  for(const [x,y] of p){
+    let gx=ox+x, gy=oy+y;
+    gx=((gx%cols)+cols)%cols; gy=((gy%rows)+rows)%rows;
+    const i=gy*cols+gx; if(!cur[i]){ cur[i]=1; age[i]=1; ghost[i]=0; }
+  }
+}
+
+// ---------- simulation step (toroidal) ----------
+function stepGen(){
+  const c=cur, nx=nxt, ag=age, gh=ghost;
+  let pop=0;
+  for(let y=0;y<rows;y++){
+    const yU=(y===0?rows-1:y-1)*cols;
+    const yD=(y===rows-1?0:y+1)*cols;
+    const yC=y*cols;
+    for(let x=0;x<cols;x++){
+      const xL=(x===0?cols-1:x-1);
+      const xR=(x===cols-1?0:x+1);
+      const n=c[yU+xL]+c[yU+x]+c[yU+xR]
+             +c[yC+xL]+        c[yC+xR]
+             +c[yD+xL]+c[yD+x]+c[yD+xR];
+      const i=yC+x;
+      const alive=c[i];
+      let na;
+      if(alive){ na=survLUT[n]; }
+      else     { na=birthLUT[n]; }
+      nx[i]=na;
+      if(na){
+        // alive: increment age (cap), clear ghost
+        let a=ag[i]+1; if(a>GMAX)a=GMAX; ag[i]=a; gh[i]=0;
+        pop++;
+      }else{
+        if(alive){ gh[i]=GHOST_MAX; } // just died -> fresh ghost
+        else if(gh[i]>0){ gh[i]--; }  // fade existing ghost
+        ag[i]=0;
+      }
+    }
+  }
+  // swap
+  cur=nx; nxt=c;
+  population=pop; generation++;
+}
+
+// ---------- render ----------
+function render(){
+  const d=bufData, N=cols*rows;
+  const aRGB=ageRGB, gRGB=ghostRGB;
+  const useAge=ageColor, useTrail=trails;
+  // peak age color (when age coloring off, use a single vivid color)
+  const flat=PALETTES[palIdx](0.18);
+  const fr=flat[0]|0, fg=flat[1]|0, fb=flat[2]|0;
+  for(let i=0;i<N;i++){
+    const o=i<<2;
+    if(cur[i]){
+      if(useAge){
+        const a=age[i]; const p=a*3;
+        d[o]=aRGB[p]; d[o+1]=aRGB[p+1]; d[o+2]=aRGB[p+2];
+      }else{ d[o]=fr; d[o+1]=fg; d[o+2]=fb; }
+    }else if(useTrail && ghost[i]){
+      const p=ghost[i]*3;
+      d[o]=gRGB[p]; d[o+1]=gRGB[p+1]; d[o+2]=gRGB[p+2];
+    }else{
+      d[o]=10; d[o+1]=11; d[o+2]=15;
+    }
+  }
+  bufCtx.putImageData(bufImg,0,0);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(buf,0,0,cols,rows,0,0,W,H);
+}
+
+// ---------- mouse drawing ----------
+let drawing=false, eraseMode=false, lastGX=-1,lastGY=-1;
+function cellAt(e){
+  const x=e.clientX, y=e.clientY;
+  let gx=Math.floor(x/cssW*cols), gy=Math.floor(y/cssH*rows);
+  gx=Math.max(0,Math.min(cols-1,gx)); gy=Math.max(0,Math.min(rows-1,gy));
+  return [gx,gy];
+}
+function paint(gx,gy){
+  const i=gy*cols+gx;
+  if(eraseMode){ cur[i]=0; age[i]=0; }
+  else if(!cur[i]){ cur[i]=1; age[i]=1; ghost[i]=0; }
+}
+function linePaint(x0,y0,x1,y1){ // bresenham so fast drags fill
+  let dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+  let sx=x0<x1?1:-1, sy=y0<y1?1:-1, err=dx-dy;
+  while(true){ paint(x0,y0);
+    if(x0===x1&&y0===y1)break;
+    const e2=2*err;
+    if(e2>-dy){err-=dy;x0+=sx;} if(e2<dx){err+=dx;y0+=sy;}
+  }
+}
+cv.addEventListener('pointerdown',e=>{
+  const pat=$('selPat').value;
+  const [gx,gy]=cellAt(e);
+  if(pat){ dropPattern(pat,gx,gy); render(); return; }
+  drawing=true; eraseMode=e.shiftKey||e.button===2;
+  lastGX=gx; lastGY=gy; paint(gx,gy); render();
+});
+addEventListener('pointermove',e=>{
+  if(!drawing)return;
+  const [gx,gy]=cellAt(e);
+  if(gx!==lastGX||gy!==lastGY){ linePaint(lastGX,lastGY,gx,gy); lastGX=gx; lastGY=gy; render(); }
+});
+addEventListener('pointerup',()=>drawing=false);
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+
+// ---------- loop ----------
+let last=performance.now(), fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.25)dt=0.25;
+  if(!paused && !document.hidden){
+    for(let s=0;s<speed;s++) stepGen();
+    render();
+  }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`gen ${generation} · pop ${population.toLocaleString()} · ${cols}×${rows} · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---------- controls ----------
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ set(parseFloat(s.value)); if(v)v.textContent=fmt(parseFloat(s.value)); }; }
+$('selRule').onchange=e=>setRule(e.target.value);
+bind('sDen','vDen',x=>x.toFixed(2),x=>{ density=x; });
+bind('sSpd','vSpd',x=>x|0,x=>{ speed=x|0; });
+bind('sCell','vCell',x=>x|0,x=>{ cellSize=x|0; allocGrid(); render(); });
+bind('sPal','vPal',x=>PAL_NAMES[x|0],x=>{ palIdx=x|0; buildLUTs(); render(); });
+$('cAge').onchange=e=>{ ageColor=e.target.checked; render(); };
+$('cTrail').onchange=e=>{ trails=e.target.checked; render(); };
+function setPaused(p){ paused=p; $('pause').textContent=paused?'Play':'Pause'; }
+$('reseed').onclick=()=>{ reseed(); render(); };
+$('clear').onclick=()=>{ clearGrid(); render(); };
+$('step').onclick=()=>{ stepGen(); render(); };
+$('pause').onclick=()=>setPaused(!paused);
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='game-of-life.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){ setPaused(!paused); e.preventDefault(); }
+  else if(e.key==='r'){ reseed(); render(); }
+  else if(e.key==='c'){ clearGrid(); render(); }
+  else if(e.key==='.'||e.key==='n'){ stepGen(); render(); }
+  else if(e.key==='h'){ panel.classList.toggle('hidden'); }
+  else if(e.key==='s'){ $('save').click(); }
+});
+addEventListener('resize',()=>{ resize(); render(); });
+
+// ---------- go ----------
+setRule('conway');
+resize();
+buildLUTs();
+reseed();
+render();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

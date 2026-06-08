@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fourier Epicycles — Strange Garden</title>
+<style>
+  :root { --accent: #9fd0ff; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; margin:2px 0 0; padding:5px 6px; font-size:12px; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); border-radius:8px;
+    font-family:ui-monospace,Menlo,monospace; }
+  .checkrow { display:flex; gap:14px; margin-top:12px; font-family:ui-monospace,Menlo,monospace;
+    font-size:11px; opacity:.85; }
+  .checkrow label { display:flex; align-items:center; gap:5px; margin:0; cursor:pointer; }
+  .checkrow input { accent-color:var(--accent); }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Fourier Epicycles</h1>
+  <p class="desc">A chain of spinning circles, summed, draws any outline. The whole world
+    rendered as turning wheels — pick a shape, or draw your own.</p>
+  <label>Shape</label>
+  <select id="shape">
+    <option value="heart">heart</option>
+    <option value="star">five-point star</option>
+    <option value="treble">treble squiggle</option>
+    <option value="spiral">spiral</option>
+    <option value="cat">cat silhouette</option>
+    <option value="bird">bird</option>
+    <option value="hello">word · "hello"</option>
+    <option value="infinity">infinity</option>
+    <option value="draw">✎ draw your own</option>
+  </select>
+  <label>Epicycles <b id="vE">64</b></label>
+  <input type="range" id="sE" min="1" max="160" step="1" value="64">
+  <label>Speed <b id="vS">1.0</b></label>
+  <input type="range" id="sS" min="0.05" max="4" step="0.05" value="1">
+  <div class="checkrow">
+    <label><input type="checkbox" id="cCirc" checked> circles</label>
+    <label><input type="checkbox" id="cRad" checked> radii</label>
+    <label><input type="checkbox" id="cTrace" checked> fade</label>
+  </div>
+  <div class="row"><button id="palette" class="pri">Palette</button><button id="reseed">Reseed</button></div>
+  <div class="row"><button id="pause">Pause</button><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">choose “draw your own” &amp; drag on canvas · space pause · h hides</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR,worldW,worldH;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  worldW=innerWidth; worldH=innerHeight;
+  W=cv.width=Math.floor(worldW*DPR); H=cv.height=Math.floor(worldH*DPR);
+  cv.style.width=worldW+'px'; cv.style.height=worldH+'px';
+  clearBG();
+}
+addEventListener('resize',()=>{ resize(); });
+
+// ===================== palettes =====================
+// each: {name, accent (curve), circle, radius, glow}
+const PALETTES=[
+  {name:'aurora',  accent:'#9fd0ff', circle:'rgba(150,180,230,', radius:'rgba(190,210,245,', glow:'#bfe2ff'},
+  {name:'ember',   accent:'#ffb070', circle:'rgba(220,150,90,',  radius:'rgba(240,180,120,', glow:'#ffd0a0'},
+  {name:'jade',    accent:'#7fe3c0', circle:'rgba(120,200,170,',  radius:'rgba(160,220,195,', glow:'#aef3da'},
+  {name:'magenta', accent:'#ff8fd0', circle:'rgba(210,130,180,',  radius:'rgba(235,170,205,', glow:'#ffbce4'},
+  {name:'gold',    accent:'#ffe27a', circle:'rgba(210,190,110,',  radius:'rgba(235,215,140,', glow:'#fff0b0'},
+  {name:'violet',  accent:'#c4a8ff', circle:'rgba(170,150,225,',  radius:'rgba(200,185,240,', glow:'#dccbff'},
+];
+let palIdx=0;
+function pal(){ return PALETTES[palIdx]; }
+function applyPalette(){
+  document.documentElement.style.setProperty('--accent', pal().accent);
+}
+
+// ===================== shape generators =====================
+// Each returns an array of {x,y} points forming a closed-ish path, roughly centred at (0,0),
+// scaled to ~[-1,1]. We then resample to N evenly-spaced points and centre/scale to canvas.
+function sampleParam(fn, count){
+  const pts=[];
+  for(let i=0;i<count;i++){ const t=i/count*Math.PI*2; pts.push(fn(t)); }
+  return pts;
+}
+const SHAPES={
+  heart(){ return sampleParam(t=>{
+      const x=16*Math.pow(Math.sin(t),3);
+      const y=13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t);
+      return {x:x/16, y:-y/16};
+    }, 400); },
+  star(){ // 5-point star outline as polyline
+    const pts=[]; const spikes=5, outer=1, inner=0.42;
+    for(let i=0;i<spikes;i++){
+      const a0=-Math.PI/2 + i/spikes*Math.PI*2;
+      const a1=a0 + Math.PI/spikes;
+      pts.push({x:Math.cos(a0)*outer, y:Math.sin(a0)*outer});
+      pts.push({x:Math.cos(a1)*inner, y:Math.sin(a1)*inner});
+    }
+    return densifyPoly(pts, 420);
+  },
+  treble(){ // treble-clef-ish: a spiral head winding into a long vertical stem with a tail flick
+    const pts=[]; const N=560;
+    for(let i=0;i<N;i++){
+      const u=i/N;                         // 0..1 around the closed loop
+      // a single continuous curve drawn there-and-back so it forms a closed path
+      const s = u<0.5 ? u*2 : (1-u)*2;     // 0->1->0
+      // parameter along the clef: spiral (0..0.45) then stem (0.45..0.85) then tail
+      const a = s*2*Math.PI*1.9;           // ~2 turns of decreasing-radius spiral
+      const rad = 0.42*(1 - s*0.78);
+      let x = Math.cos(a)*rad;
+      let y = -1.0 + s*1.9 + Math.sin(a)*rad; // stem rises as s grows
+      // tail flick at the bottom
+      if(s>0.86){ const f=(s-0.86)/0.14; x += -0.32*Math.sin(f*Math.PI); }
+      pts.push({x:x*0.95, y:y*0.62});
+    }
+    return pts; },
+  spiral(){ // spiral that returns to centre to close
+    const pts=[]; const turns=4, N=600;
+    for(let i=0;i<N;i++){
+      const f=i/(N-1);
+      const tt = f<0.5 ? f*2 : (1-f)*2; // out then back
+      const ang = tt*turns*Math.PI*2;
+      const r = tt;
+      pts.push({x:Math.cos(ang)*r, y:Math.sin(ang)*r});
+    }
+    return pts; },
+  cat(){ // cat head silhouette polyline (ears, cheeks)
+    const raw=[
+      [0,-0.55],[-0.30,-0.50],[-0.42,-0.95],[-0.62,-0.55],
+      [-0.85,-0.30],[-0.92,0.05],[-0.78,0.42],[-0.50,0.68],
+      [-0.18,0.80],[0,0.82],[0.18,0.80],[0.50,0.68],
+      [0.78,0.42],[0.92,0.05],[0.85,-0.30],[0.62,-0.55],
+      [0.42,-0.95],[0.30,-0.50]
+    ];
+    return densifyPoly(raw.map(p=>({x:p[0],y:p[1]})), 460);
+  },
+  bird(){ // flying bird silhouette: body + two swept wings + forked tail, as a polyline
+    const raw=[
+      [0.00,-0.06],            // beak tip / head front
+      [0.10,-0.02],[0.16,0.04],// head
+      [0.22,0.02],             // neck into wing root (right)
+      [0.55,-0.34],[0.92,-0.20],// right wing upper edge out
+      [0.66,-0.04],[0.95,0.14], // right wing lower edge / tip feathers
+      [0.40,0.06],             // back to body (right)
+      [0.30,0.12],[0.14,0.30], // tail upper fork
+      [0.06,0.16],             // tail notch
+      [-0.02,0.30],            // tail lower fork
+      [-0.10,0.10],            // body underside (left)
+      [-0.40,0.06],            // wing root (left)
+      [-0.66,0.14],[-0.95,0.14],// left wing lower
+      [-0.55,-0.04],[-0.92,-0.20],// left wing upper / tip
+      [-0.22,-0.20],           // back to neck (left)
+      [-0.10,-0.10],[-0.04,-0.06] // head left -> close to beak
+    ];
+    return densifyPoly(raw.map(p=>({x:p[0],y:-p[1]})), 480);
+  },
+  infinity(){ return sampleParam(t=>{
+      const s=Math.sin(t), c=Math.cos(t), d=1+s*s;
+      return {x:c/d*1.4, y:s*c/d*1.4};
+    }, 400); },
+  hello(){ return textPath('hello'); },
+};
+
+function densifyPoly(poly, count){
+  // resample a closed polyline to `count` evenly spaced points
+  const closed=poly.concat([poly[0]]);
+  let total=0; const seg=[];
+  for(let i=0;i<closed.length-1;i++){
+    const dx=closed[i+1].x-closed[i].x, dy=closed[i+1].y-closed[i].y;
+    const L=Math.hypot(dx,dy); seg.push(L); total+=L;
+  }
+  const out=[]; let segi=0, acc=0;
+  for(let i=0;i<count;i++){
+    const target=i/count*total;
+    while(segi<seg.length-1 && acc+seg[segi]<target){ acc+=seg[segi]; segi++; }
+    const f=seg[segi]>0?(target-acc)/seg[segi]:0;
+    out.push({
+      x:closed[segi].x+(closed[segi+1].x-closed[segi].x)*f,
+      y:closed[segi].y+(closed[segi+1].y-closed[segi].y)*f
+    });
+  }
+  return out;
+}
+
+// --- minimalist stroke font for "hello" rendered as a single continuous polyline ---
+// Each letter is a list of strokes; we connect letters with travel moves and treat
+// the whole thing as one open path traced there-and-back so the DFT sees a closed loop.
+function textPath(word){
+  const letters={
+    h:[[[0,0],[0,2]],[[0,1],[0.7,1]],[[0.7,1],[0.7,2]]],
+    e:[[[0.7,1.4],[0,1.4],[0,2],[0.7,2]],[[0,1.4],[0,2]],[[0,2],[0.7,2]],[[0,1.4],[0.7,1.4]]],
+    l:[[[0.1,0],[0.1,2]]],
+    o:[[[0,1.4],[0.7,1.4],[0.7,2],[0,2],[0,1.4]]],
+  };
+  // Build polyline left-to-right
+  let cursor=0; const path=[];
+  for(const ch of word){
+    const strokes=letters[ch]||[[[0,1.4],[0,2]]];
+    for(const st of strokes){
+      for(let i=0;i<st.length;i++){
+        path.push({x:st[i][0]+cursor, y:st[i][1]});
+      }
+    }
+    cursor+=1.0;
+  }
+  // trace back to close
+  const back=path.slice(0,-1).reverse();
+  const full=path.concat(back);
+  // normalise to [-1,1]
+  let minx=Infinity,maxx=-Infinity,miny=Infinity,maxy=-Infinity;
+  for(const p of full){ minx=Math.min(minx,p.x); maxx=Math.max(maxx,p.x);
+    miny=Math.min(miny,p.y); maxy=Math.max(maxy,p.y); }
+  const cx=(minx+maxx)/2, cy=(miny+maxy)/2, sc=Math.max(maxx-minx,maxy-miny)/2;
+  const norm=full.map(p=>({x:(p.x-cx)/sc, y:(p.y-cy)/sc}));
+  return densifyPoly(norm, 600);
+}
+
+// ===================== DFT =====================
+// Input: array of {x,y}. Output: coefficients [{re,im,freq,amp,phase}] sorted by amp desc.
+function dft(points){
+  const N=points.length;
+  const X=[];
+  for(let k=0;k<N;k++){
+    let re=0, im=0;
+    for(let n=0;n<N;n++){
+      const phi=-2*Math.PI*k*n/N;
+      const c=Math.cos(phi), s=Math.sin(phi);
+      re += points[n].x*c - points[n].y*s;
+      im += points[n].x*s + points[n].y*c;
+    }
+    re/=N; im/=N;
+    // map k>N/2 to negative frequency so epicycles spin both ways
+    const freq = k<=N/2 ? k : k-N;
+    X.push({re, im, freq, amp:Math.hypot(re,im), phase:Math.atan2(im,re)});
+  }
+  X.sort((a,b)=>b.amp-a.amp);
+  return X;
+}
+
+// ===================== piece state =====================
+let coeffs=[];          // DFT result (sorted desc by amp)
+let pointCount=0;       // N used for DFT (period)
+let nEpi=64;            // epicycles to use
+let speed=1.0;
+let showCircles=true, showRadii=true, fade=true;
+let centerX=0, centerY=0, scaleFix=1; // canvas placement (world coords)
+let t=0;                // phase 0..1
+let traced=[];          // accumulated traced points (world coords)
+let completedLoop=false;
+let currentShape='heart';
+
+// place coeffs onto canvas: choose scale so amplitude span fits comfortably
+function fitToCanvas(points){
+  let minx=Infinity,maxx=-Infinity,miny=Infinity,maxy=-Infinity;
+  for(const p of points){ minx=Math.min(minx,p.x);maxx=Math.max(maxx,p.x);
+    miny=Math.min(miny,p.y);maxy=Math.max(maxy,p.y); }
+  const spanx=maxx-minx, spany=maxy-miny;
+  const margin=0.34;
+  const sc=Math.min(worldW,worldH)*(1-margin)/Math.max(spanx,spany,1e-6);
+  centerX=worldW/2 - (minx+maxx)/2*sc;
+  centerY=worldH/2 - (miny+maxy)/2*sc;
+  scaleFix=sc;
+}
+
+function loadShape(name){
+  currentShape=name;
+  if(name==='draw'){
+    coeffs=[]; traced=[]; t=0; completedLoop=false;
+    clearBG(); return;
+  }
+  const pts=SHAPES[name]();
+  fitToCanvas(pts);
+  coeffs=dft(pts);
+  pointCount=pts.length;
+  t=0; traced=[]; completedLoop=false;
+  clearBG();
+}
+
+function loadDrawn(rawPts){
+  if(rawPts.length<8) return;
+  // resample to fixed N
+  const N=Math.min(360, Math.max(120, rawPts.length));
+  const resampled=densifyPoly(rawPts, N);
+  // convert from world coords to centred coords for DFT, then keep direct mapping
+  // We DFT directly in world coordinates (px), and place at origin offset 0.
+  coeffs=dft(resampled);
+  pointCount=resampled.length;
+  centerX=0; centerY=0; scaleFix=1; // already in world px
+  t=0; traced=[]; completedLoop=false;
+  clearBG();
+}
+
+// ===================== reconstruction =====================
+// returns {tipX,tipY, chain:[{cx,cy,r,tipx,tipy}]} in world coords for given t
+function reconstruct(tt){
+  const useN=Math.min(nEpi, coeffs.length);
+  let x=centerX, y=centerY;
+  const chain=[];
+  for(let i=0;i<useN;i++){
+    const c=coeffs[i];
+    const prevX=x, prevY=y;
+    const ang = c.freq*2*Math.PI*tt + c.phase;
+    const r=c.amp*scaleFix;
+    x += r*Math.cos(ang);
+    y += r*Math.sin(ang);
+    chain.push({cx:prevX, cy:prevY, r, tipx:x, tipy:y});
+  }
+  return {tipX:x, tipY:y, chain};
+}
+
+// ===================== drawing =====================
+function clearBG(){
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle='#0a0b0f';
+  ctx.fillRect(0,0,W,H);
+}
+
+function draw(){
+  const P=pal();
+  ctx.globalCompositeOperation='source-over';
+  // dark ground (full clear each frame so circles don't smear; trace is its own array)
+  ctx.fillStyle='#0a0b0f';
+  ctx.fillRect(0,0,W,H);
+
+  if(currentShape==='draw' && coeffs.length===0){
+    drawDrawHint();
+    drawLiveStroke();
+    return;
+  }
+  if(coeffs.length===0) return;
+
+  const r=reconstruct(t);
+
+  // ---- epicycle circles + radii ----
+  ctx.save();
+  ctx.scale(DPR,DPR);
+  const useN=Math.min(nEpi, coeffs.length);
+  if(showCircles){
+    ctx.lineWidth=1/DPR*DPR*0.7;
+    for(let i=0;i<useN;i++){
+      const seg=r.chain[i];
+      if(seg.r<0.4) continue;
+      const a=Math.min(0.5, 0.07 + 14/(seg.r+18));
+      ctx.strokeStyle=P.circle+a.toFixed(3)+')';
+      ctx.beginPath();
+      ctx.arc(seg.cx, seg.cy, seg.r, 0, Math.PI*2);
+      ctx.stroke();
+    }
+  }
+  if(showRadii){
+    ctx.lineWidth=1;
+    ctx.strokeStyle=P.radius+'0.45)';
+    ctx.beginPath();
+    ctx.moveTo(r.chain[0].cx, r.chain[0].cy);
+    for(let i=0;i<useN;i++){ ctx.lineTo(r.chain[i].tipx, r.chain[i].tipy); }
+    ctx.stroke();
+    // little joints
+    ctx.fillStyle=P.radius+'0.6)';
+    for(let i=0;i<useN;i++){
+      ctx.beginPath(); ctx.arc(r.chain[i].tipx, r.chain[i].tipy, 1.1, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  // ---- accumulate traced point (store with its phase so we keep exactly one period) ----
+  traced.push({x:r.tipX, y:r.tipY, t:t});
+  // keep only points within one period behind the head -> a full, persistent outline
+  // drop points older than (head - 1.0) in phase, accounting for wrap
+  while(traced.length>2){
+    const p0=traced[0];
+    let age = t - p0.t; if(age<0) age+=1;        // phase distance behind head
+    if(age > 0.999 && traced.length>3) traced.shift(); else break;
+  }
+  if(traced.length>6000) traced.shift();
+
+  // ---- draw the luminous curve ----
+  ctx.save();
+  ctx.scale(DPR,DPR);
+  ctx.globalCompositeOperation='lighter';
+  ctx.lineJoin='round'; ctx.lineCap='round';
+
+  const n=traced.length;
+  if(n>1){
+    if(fade){
+      // glow underlay: one shadowed polyline (cheap — single stroke op)
+      ctx.shadowColor=P.glow; ctx.shadowBlur=16;
+      ctx.strokeStyle=hexToRGBA(P.accent, 0.12);
+      ctx.lineWidth=4.2;
+      strokeTrace();
+      ctx.shadowBlur=0;
+      // comet core: brightness fades with phase-age behind the drawing head.
+      // batch consecutive segments by quantised brightness to minimise stroke calls.
+      ctx.lineWidth=1.8;
+      let bucket=-1, started=false;
+      const flush=()=>{ if(started){ ctx.stroke(); started=false; } };
+      for(let i=1;i<n;i++){
+        if(traced[i].t < traced[i-1].t){ flush(); bucket=-1; continue; } // wrap seam
+        let age=t-traced[i].t; if(age<0) age+=1;        // 0 at head, ~1 at tail
+        const k=1-age;
+        const b=Math.round(k*16);                       // 17 brightness buckets
+        if(b!==bucket){
+          flush();
+          ctx.strokeStyle=hexToRGBA(P.accent, 0.92*(b/16)+0.05);
+          bucket=b;
+          ctx.beginPath(); ctx.moveTo(traced[i-1].x, traced[i-1].y); started=true;
+        }
+        ctx.lineTo(traced[i].x, traced[i].y);
+      }
+      flush();
+    } else {
+      // persistent uniform outline
+      ctx.shadowColor=P.glow; ctx.shadowBlur=18;
+      ctx.strokeStyle=hexToRGBA(P.accent, 0.18);
+      ctx.lineWidth=4.5;
+      strokeTrace();
+      ctx.shadowBlur=10;
+      ctx.strokeStyle=hexToRGBA(P.accent, 0.95);
+      ctx.lineWidth=1.7;
+      strokeTrace();
+    }
+  }
+  ctx.shadowBlur=0;
+
+  // bright drawing tip
+  ctx.fillStyle=P.glow;
+  ctx.shadowColor=P.glow; ctx.shadowBlur=14;
+  ctx.beginPath(); ctx.arc(r.tipX, r.tipY, 2.8, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.restore();
+
+  function strokeTrace(){
+    // the trace holds one period of points ordered by time; phase wraps 1->0,
+    // so break the polyline wherever the stored phase jumps backward.
+    ctx.beginPath();
+    ctx.moveTo(traced[0].x, traced[0].y);
+    for(let i=1;i<n;i++){
+      if(traced[i].t < traced[i-1].t){          // wrap point: lift the pen
+        ctx.moveTo(traced[i].x, traced[i].y);
+      } else {
+        ctx.lineTo(traced[i].x, traced[i].y);
+      }
+    }
+    ctx.stroke();
+  }
+}
+
+function drawDrawHint(){
+  ctx.save();
+  ctx.scale(DPR,DPR);
+  ctx.fillStyle='rgba(230,235,245,0.30)';
+  ctx.font='15px ui-monospace, Menlo, monospace';
+  ctx.textAlign='center';
+  ctx.fillText('drag anywhere to draw a closed shape', worldW/2, worldH/2);
+  ctx.font='12px ui-monospace, Menlo, monospace';
+  ctx.fillStyle='rgba(230,235,245,0.18)';
+  ctx.fillText('release to watch the epicycles reconstruct it', worldW/2, worldH/2+24);
+  ctx.restore();
+}
+
+let liveStroke=[];
+function drawLiveStroke(){
+  if(liveStroke.length<2) return;
+  const P=pal();
+  ctx.save();
+  ctx.scale(DPR,DPR);
+  ctx.globalCompositeOperation='lighter';
+  ctx.strokeStyle=hexToRGBA(P.accent,0.9);
+  ctx.lineWidth=2; ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.shadowColor=P.glow; ctx.shadowBlur=8;
+  ctx.beginPath();
+  ctx.moveTo(liveStroke[0].x, liveStroke[0].y);
+  for(let i=1;i<liveStroke.length;i++) ctx.lineTo(liveStroke[i].x, liveStroke[i].y);
+  ctx.stroke();
+  ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+function hexToRGBA(hex,a){
+  const h=hex.replace('#','');
+  const r=parseInt(h.substring(0,2),16), g=parseInt(h.substring(2,4),16), b=parseInt(h.substring(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// ===================== step =====================
+function step(dt){
+  if(coeffs.length===0 || pointCount===0) return;
+  // advance t; one full period per (pointCount frames-ish) — scale by speed
+  const dtt = (dt) * speed * 0.18;
+  t += dtt;
+  if(t>=1){
+    t-=1;
+    completedLoop=true;     // outline persists; the trace ring-buffer keeps one full period
+  }
+}
+
+// ===================== freehand drawing =====================
+let drawing=false;
+cv.addEventListener('pointerdown',e=>{
+  if(currentShape!=='draw') return;
+  drawing=true; liveStroke=[{x:e.clientX, y:e.clientY}];
+  coeffs=[]; traced=[]; completedLoop=false;
+});
+cv.addEventListener('pointermove',e=>{
+  if(!drawing) return;
+  const last=liveStroke[liveStroke.length-1];
+  if(!last || Math.hypot(e.clientX-last.x, e.clientY-last.y)>2)
+    liveStroke.push({x:e.clientX, y:e.clientY});
+});
+addEventListener('pointerup',()=>{
+  if(!drawing) return;
+  drawing=false;
+  if(liveStroke.length>=8){
+    loadDrawn(liveStroke.slice());
+  }
+  liveStroke=[];
+});
+
+// ===================== loop =====================
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){ step(dt); draw(); }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  const used=Math.min(nEpi, coeffs.length);
+  hud.textContent=`${used} epicycles · ${(t*100).toFixed(0)}% · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ===================== controls =====================
+const $=id=>document.getElementById(id);
+$('shape').onchange=()=>{ loadShape($('shape').value); };
+$('sE').oninput=()=>{ nEpi=parseInt($('sE').value); $('vE').textContent=nEpi;
+  traced=[]; completedLoop=false; };
+$('sS').oninput=()=>{ speed=parseFloat($('sS').value); $('vS').textContent=speed.toFixed(2); };
+$('cCirc').onchange=()=>showCircles=$('cCirc').checked;
+$('cRad').onchange=()=>showRadii=$('cRad').checked;
+$('cTrace').onchange=()=>fade=$('cTrace').checked;
+$('palette').onclick=()=>{ palIdx=(palIdx+1)%PALETTES.length; applyPalette(); $('palette').textContent='Palette · '+pal().name; };
+$('reseed').onclick=()=>{ if(currentShape==='draw'){ coeffs=[]; traced=[]; liveStroke=[]; completedLoop=false; clearBG(); }
+  else loadShape(currentShape); };
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='fourier-epicycles.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r'){ $('reseed').click(); }
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ===================== go =====================
+resize();
+applyPalette();
+loadShape('heart');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

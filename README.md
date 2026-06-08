@@ -24,9 +24,9 @@ what's in progress, and what's next. That is the authoritative status.
 
 | Project | Status | Description |
 |---|---|---|
-| `strange-garden/` | 🌿 22 specimens | Interactive gallery of emergent/generative systems |
+| `strange-garden/` | 🌿 28 specimens | Interactive gallery of emergent/generative systems |
 
-**Strange Garden quick status:** 22 self-contained interactive HTML specimens, all
+**Strange Garden quick status:** 28 self-contained interactive HTML specimens, all
 browser-verified, in `strange-garden/`. A fresh session wanting to extend it should read
 `strange-garden/CHANGELOG.md` ("Next up" lists wave-9 piece ideas + the per-piece
 prev/next navigation polish). Pattern that worked well: build each new piece with a

@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tesseract — Strange Garden</title>
+<style>
+  :root { --accent: #8ab4ff; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:grab; }
+  #c.drag { cursor:grabbing; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; margin:3px 0 0; padding:5px 6px; font-size:12px; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:8px;
+    font-family:ui-monospace,Menlo,monospace; }
+  .togrow { display:flex; align-items:center; justify-content:space-between; margin-top:11px;
+    font:11px ui-monospace,Menlo,monospace; opacity:.8; }
+  .togrow input { accent-color:var(--accent); }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Tesseract</h1>
+  <p class="desc">A four-dimensional solid turns through a space too small to hold it,
+    forever folding its inside out.</p>
+  <label>Polytope</label>
+  <select id="poly">
+    <option value="tesseract">Tesseract · 8-cell</option>
+    <option value="5cell">5-cell · simplex</option>
+    <option value="16cell">16-cell · orthoplex</option>
+    <option value="24cell">24-cell</option>
+  </select>
+  <label>XW spin <b id="vXW">0.30</b></label>
+  <input type="range" id="sXW" min="-1" max="1" step="0.02" value="0.30">
+  <label>YZ spin <b id="vYZ">0.22</b></label>
+  <input type="range" id="sYZ" min="-1" max="1" step="0.02" value="0.22">
+  <label>ZW spin <b id="vZW">0.14</b></label>
+  <input type="range" id="sZW" min="-1" max="1" step="0.02" value="0.14">
+  <label>4D distance <b id="vD4">2.6</b></label>
+  <input type="range" id="sD4" min="1.6" max="6" step="0.05" value="2.6">
+  <label>3D distance <b id="vD3">5.0</b></label>
+  <input type="range" id="sD3" min="2.5" max="12" step="0.1" value="5.0">
+  <label>Line width <b id="vLW">2.2</b></label>
+  <input type="range" id="sLW" min="0.5" max="6" step="0.1" value="2.2">
+  <label>Trails <b id="vT">0.30</b></label>
+  <input type="range" id="sT" min="0" max="0.92" step="0.01" value="0.30">
+  <div class="togrow"><span>Vertices</span><input type="checkbox" id="cVtx" checked></div>
+  <div class="row"><button id="palette" class="pri">Palette</button><button id="reseed">Reseed</button></div>
+  <div class="row"><button id="pause">Pause</button><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">drag to rotate · space pause · r reseed · h hides panel</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR,worldW,worldH;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  worldW=innerWidth; worldH=innerHeight;
+  W=cv.width=Math.floor(worldW*DPR); H=cv.height=Math.floor(worldH*DPR);
+  cv.style.width=worldW+'px'; cv.style.height=worldH+'px';
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+}
+addEventListener('resize',resize);
+
+// ---------- parameters ----------
+let spinXW=0.30, spinYZ=0.22, spinZW=0.14;
+let dist4=2.6, dist3=5.0, lineW=2.2, persistence=0.30;
+let showVtx=true, polyName='tesseract', paletteIdx=0;
+
+// ---------- palettes (cool → warm depth ramps) ----------
+// each palette: function(t in [0,1]) -> [r,g,b], t=0 far/deep, t=1 near
+const palettes=[
+  {name:'glacier', accent:'#8ab4ff', f:t=>lerp3([40,52,120],[150,210,255],[255,255,255],t)},
+  {name:'ember',   accent:'#ff9a5c', f:t=>lerp3([70,24,60],[255,120,60],[255,240,180],t)},
+  {name:'jade',    accent:'#5ce0b0', f:t=>lerp3([18,60,72],[60,200,150],[200,255,230],t)},
+  {name:'orchid',  accent:'#d18aff', f:t=>lerp3([56,28,90],[180,90,230],[255,210,255],t)},
+  {name:'spectrum',accent:'#9bd1ff', f:t=>hueRamp(t)},
+];
+function lerp(a,b,t){return a+(b-a)*t;}
+function lerp3(c0,c1,c2,t){
+  // two-segment ramp through c1 midtone
+  if(t<0.5){const u=t*2;return [lerp(c0[0],c1[0],u),lerp(c0[1],c1[1],u),lerp(c0[2],c1[2],u)];}
+  const u=(t-0.5)*2;return [lerp(c1[0],c2[0],u),lerp(c1[1],c2[1],u),lerp(c1[2],c2[2],u)];
+}
+function hueRamp(t){
+  const h=(220 - t*200 +360)%360, s=0.7+0.25*t, l=0.30+0.5*t;
+  return hsl2rgb(h,s,l);
+}
+function hsl2rgb(h,s,l){
+  h/=360; const a=s*Math.min(l,1-l);
+  const f=k=>{const x=(k+h*12)%12;return l-a*Math.max(-1,Math.min(x-3,9-x,1));};
+  return [f(0)*255,f(8)*255,f(4)*255];
+}
+
+// ---------- polytope definitions ----------
+// returns {verts:[[x,y,z,w],...], edges:[[i,j],...]}
+function buildTesseract(){
+  const verts=[];
+  for(let i=0;i<16;i++){
+    verts.push([ (i&1?1:-1),(i&2?1:-1),(i&4?1:-1),(i&8?1:-1) ]);
+  }
+  const edges=[];
+  for(let a=0;a<16;a++)for(let b=a+1;b<16;b++){
+    // differ in exactly one coordinate => bit difference is power of two
+    const x=a^b; if((x&(x-1))===0) edges.push([a,b]);
+  }
+  return {verts,edges};
+}
+function build5cell(){
+  // 4-simplex: 5 vertices, fully connected. Symmetric coords on a 4-sphere.
+  const v=[
+    [1,1,1,-1/Math.sqrt(5)],
+    [1,-1,-1,-1/Math.sqrt(5)],
+    [-1,1,-1,-1/Math.sqrt(5)],
+    [-1,-1,1,-1/Math.sqrt(5)],
+    [0,0,0,Math.sqrt(5)-1/Math.sqrt(5)],
+  ];
+  const verts=normalizeSet(v,1.45);
+  const edges=[];
+  for(let a=0;a<5;a++)for(let b=a+1;b<5;b++) edges.push([a,b]);
+  return {verts,edges};
+}
+function build16cell(){
+  // orthoplex: 8 vertices = ±unit on each axis. Edge between any two non-antipodal verts.
+  const v=[];
+  for(let ax=0;ax<4;ax++)for(let s=-1;s<=1;s+=2){const p=[0,0,0,0];p[ax]=s;v.push(p);}
+  const verts=normalizeSet(v,1.5);
+  const edges=[];
+  for(let a=0;a<8;a++)for(let b=a+1;b<8;b++){
+    // antipodal pairs: a and a^1 in this ordering (each axis pair is consecutive)
+    if((a>>1)===(b>>1)) continue; // same axis = antipodal, no edge
+    edges.push([a,b]);
+  }
+  return {verts,edges};
+}
+function build24cell(){
+  // 24 vertices: all permutations of (±1,±1,0,0)
+  const v=[];
+  for(let i=0;i<4;i++)for(let j=i+1;j<4;j++){
+    for(let si=-1;si<=1;si+=2)for(let sj=-1;sj<=1;sj+=2){
+      const p=[0,0,0,0]; p[i]=si; p[j]=sj; v.push(p);
+    }
+  }
+  const verts=normalizeSet(v,1.6);
+  // edges: vertices at squared distance 2 (the minimal nonzero distance for this set)
+  const edges=[];
+  for(let a=0;a<v.length;a++)for(let b=a+1;b<v.length;b++){
+    let d=0; for(let k=0;k<4;k++){const dd=v[a][k]-v[b][k]; d+=dd*dd;}
+    if(Math.abs(d-2)<1e-6) edges.push([a,b]);
+  }
+  return {verts,edges};
+}
+function normalizeSet(v,scale){
+  // scale each vertex so the set roughly fills the same radius as the tesseract (~radius 1.7)
+  let maxr=0;
+  for(const p of v){const r=Math.hypot(p[0],p[1],p[2],p[3]); if(r>maxr)maxr=r;}
+  const k=scale/Math.max(maxr,1e-6);
+  return v.map(p=>p.map(c=>c*k));
+}
+const builders={tesseract:buildTesseract,'5cell':build5cell,'16cell':build16cell,'24cell':build24cell};
+let geom=buildTesseract();
+function setPolytope(name){ polyName=name; geom=builders[name](); }
+
+// ---------- 4D rotation ----------
+// six independent angles
+let ang={XY:0,XZ:0,XW:0,YZ:0,YW:0,ZW:0};
+// rotate point p (length-4 array) in plane (i,j) by angle a, into out
+function rot(p,i,j,a){
+  const c=Math.cos(a),s=Math.sin(a);
+  const pi=p[i],pj=p[j];
+  p[i]=pi*c - pj*s;
+  p[j]=pi*s + pj*c;
+}
+// scratch
+const tmp=[0,0,0,0];
+const proj=[]; // projected screen coords + depth per vertex
+
+function project(){
+  const cx=W*0.5, cy=H*0.5;
+  // fit: scale based on min viewport dimension. The perspective divides
+  // (dist3/(dist3-z)) add their own magnification, so keep this modest.
+  const fit=Math.min(W,H)*0.16;
+  const V=geom.verts, N=V.length;
+  if(proj.length!==N){ proj.length=0; for(let i=0;i<N;i++)proj.push({x:0,y:0,z:0,w:0,vis:true}); }
+  for(let i=0;i<N;i++){
+    const v=V[i];
+    tmp[0]=v[0]; tmp[1]=v[1]; tmp[2]=v[2]; tmp[3]=v[3];
+    // apply all six rotations
+    rot(tmp,0,1,ang.XY);
+    rot(tmp,0,2,ang.XZ);
+    rot(tmp,0,3,ang.XW);
+    rot(tmp,1,2,ang.YZ);
+    rot(tmp,1,3,ang.YW);
+    rot(tmp,2,3,ang.ZW);
+    let x=tmp[0],y=tmp[1],z=tmp[2],w=tmp[3];
+    // 4D -> 3D perspective
+    let k4=1/(dist4 - w);
+    if(k4<=0){ proj[i].vis=false; continue; }
+    x*=dist4*k4; y*=dist4*k4; z*=dist4*k4;
+    // 3D -> 2D perspective
+    let k3=1/(dist3 - z);
+    if(k3<=0){ proj[i].vis=false; continue; }
+    const sx=cx + x*dist3*k3*fit;
+    const sy=cy + y*dist3*k3*fit;
+    const o=proj[i];
+    o.x=sx; o.y=sy; o.z=z; o.w=w; o.vis=true;
+  }
+}
+
+function draw(){
+  // persistence fade
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle=`rgba(10,11,15,${Math.max(0.06,1-persistence)})`;
+  ctx.fillRect(0,0,W,H);
+
+  // ground glow / vignette base under the figure
+  ctx.globalCompositeOperation='lighter';
+
+  const pal=palettes[paletteIdx].f;
+  // depth range from w (4D) for color; combine with z for brightness/thickness
+  // determine w extents
+  let wMin=1e9,wMax=-1e9,zMin=1e9,zMax=-1e9;
+  for(const o of proj){ if(!o.vis)continue;
+    if(o.w<wMin)wMin=o.w; if(o.w>wMax)wMax=o.w;
+    if(o.z<zMin)zMin=o.z; if(o.z>zMax)zMax=o.z; }
+  const wSpan=Math.max(wMax-wMin,1e-6), zSpan=Math.max(zMax-zMin,1e-6);
+
+  const E=geom.edges;
+  // sort edges far->near by avg z so near edges overdraw
+  const order=E.map((e,idx)=>idx);
+  order.sort((a,b)=>{
+    const za=proj[E[a][0]].z+proj[E[a][1]].z;
+    const zb=proj[E[b][0]].z+proj[E[b][1]].z;
+    return za-zb;
+  });
+
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  for(const idx of order){
+    const e=E[idx], A=proj[e[0]], B=proj[e[1]];
+    if(!A.vis||!B.vis) continue;
+    // 4D depth -> color
+    const tw=( ( (A.w+B.w)*0.5 ) - wMin)/wSpan; // 0 far(deep) ..1 near
+    const tz=( ( (A.z+B.z)*0.5 ) - zMin)/zSpan; // 0 back ..1 front
+    const t=0.35*tw + 0.65*tz; // blend; front edges pop
+    const col=pal(t);
+    const bright=0.45+0.55*tz;
+    const r=col[0]*bright, g=col[1]*bright, b=col[2]*bright;
+    const lw=lineW*DPR*(0.55+0.85*tz);
+    // soft glow pass
+    ctx.strokeStyle=`rgba(${r|0},${g|0},${b|0},0.16)`;
+    ctx.lineWidth=lw*2.6;
+    ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+    // core line
+    ctx.strokeStyle=`rgba(${r|0},${g|0},${b|0},${(0.55+0.4*tz).toFixed(3)})`;
+    ctx.lineWidth=lw;
+    ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+  }
+
+  // vertices
+  if(showVtx){
+    const vorder=proj.map((o,i)=>i).filter(i=>proj[i].vis);
+    vorder.sort((a,b)=>proj[a].z-proj[b].z);
+    for(const i of vorder){
+      const o=proj[i];
+      const tz=(o.z-zMin)/zSpan, tw=(o.w-wMin)/wSpan;
+      const t=0.35*tw+0.65*tz;
+      const col=pal(t);
+      const rad=(1.6+3.2*tz)*DPR;
+      const grad=ctx.createRadialGradient(o.x,o.y,0,o.x,o.y,rad*3.2);
+      grad.addColorStop(0,`rgba(${col[0]|0},${col[1]|0},${col[2]|0},${(0.85*(0.4+0.6*tz)).toFixed(3)})`);
+      grad.addColorStop(0.4,`rgba(${col[0]|0},${col[1]|0},${col[2]|0},0.25)`);
+      grad.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=grad;
+      ctx.beginPath(); ctx.arc(o.x,o.y,rad*3.2,0,6.2832); ctx.fill();
+      // bright core
+      ctx.fillStyle=`rgba(255,255,255,${(0.5+0.5*tz).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(o.x,o.y,rad*0.5,0,6.2832); ctx.fill();
+    }
+  }
+  ctx.globalCompositeOperation='source-over';
+}
+
+// ---------- simulation ----------
+function step(dt){
+  ang.XW += spinXW*dt;
+  ang.YZ += spinYZ*dt;
+  ang.ZW += spinZW*dt;
+  // gentle drift on a couple others for richness
+  ang.XY += 0.012*dt;
+  ang.YW += 0.018*dt;
+  // mouse drag rotation handled separately (adds to XW & YW)
+  project();
+}
+
+// ---------- reseed (randomize rotation state + slight speed jitter) ----------
+function reseed(){
+  ang.XY=Math.random()*6.28; ang.XZ=Math.random()*6.28; ang.XW=Math.random()*6.28;
+  ang.YZ=Math.random()*6.28; ang.YW=Math.random()*6.28; ang.ZW=Math.random()*6.28;
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+}
+
+// ---------- mouse drag rotate ----------
+let dragging=false,lastX=0,lastY=0;
+cv.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;cv.classList.add('drag');cv.setPointerCapture(e.pointerId);});
+cv.addEventListener('pointermove',e=>{
+  if(!dragging)return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY; lastX=e.clientX;lastY=e.clientY;
+  ang.XW += dx*0.006;   // horizontal drag -> XW plane (the 4D turn)
+  ang.YW += dy*0.006;   // vertical drag   -> YW plane
+});
+cv.addEventListener('pointerup',e=>{dragging=false;cv.classList.remove('drag');});
+cv.addEventListener('pointercancel',()=>{dragging=false;cv.classList.remove('drag');});
+
+// ---------- loop ----------
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){ step(dt); draw(); }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${polyName} · ${geom.edges.length} edges · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---------- controls ----------
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); }; }
+bind('sXW','vXW',x=>x.toFixed(2),x=>spinXW=x);
+bind('sYZ','vYZ',x=>x.toFixed(2),x=>spinYZ=x);
+bind('sZW','vZW',x=>x.toFixed(2),x=>spinZW=x);
+bind('sD4','vD4',x=>x.toFixed(1),x=>dist4=x);
+bind('sD3','vD3',x=>x.toFixed(1),x=>dist3=x);
+bind('sLW','vLW',x=>x.toFixed(1),x=>lineW=x);
+bind('sT','vT',x=>x.toFixed(2),x=>persistence=x);
+$('cVtx').onchange=()=>showVtx=$('cVtx').checked;
+$('poly').onchange=()=>{ setPolytope($('poly').value); reseed(); };
+function applyPalette(){ document.documentElement.style.setProperty('--accent',palettes[paletteIdx].accent); }
+$('palette').onclick=()=>{ paletteIdx=(paletteIdx+1)%palettes.length; applyPalette(); };
+$('reseed').onclick=()=>reseed();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='tesseract.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')reseed();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+  else if(e.key==='p'){paletteIdx=(paletteIdx+1)%palettes.length;applyPalette();}
+});
+
+// ---------- go ----------
+resize(); setPolytope('tesseract'); applyPalette();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

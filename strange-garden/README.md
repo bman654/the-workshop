@@ -42,6 +42,9 @@ file with **zero dependencies and no build step**.
 | 23 | **Harmonograph** | Coupled, slowly-dying pendulums trace looping, almost-closing figures of light. |
 | 24 | **Sandpile** | Drop a million grains on one cell; toppling cascades settle into a four-colour mandala. |
 | 25 | **Langton's Ant** | Blind ants obeying two letters of rule build cathedrals over ten thousand steps. |
+| 26 | **Fourier Epicycles** | A chain of spinning circles, summed, will draw any outline you give them. |
+| 27 | **Tesseract** | A four-dimensional cube rotates through hyperspace, forever folding its inside out. |
+| 28 | **Game of Life** | Conway's classic — three rules conjure gliders, guns and oscillators from a soup. |
 
 ## Controls (shared by every specimen)
 

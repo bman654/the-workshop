@@ -151,5 +151,23 @@ window.PIECES = [
     name: "Langton's Ant",
     blurb: "two blind letters, ten thousand steps, a cathedral",
     accent: "#8be0d4"
+  },
+  {
+    file: "fourier-epicycles.html",
+    name: "Fourier Epicycles",
+    blurb: "spinning wheels conspire to draw any line",
+    accent: "#9fd0ff"
+  },
+  {
+    file: "tesseract.html",
+    name: "Tesseract",
+    blurb: "a four-dimensional solid forever folding its inside out",
+    accent: "#8ab4ff"
+  },
+  {
+    file: "game-of-life.html",
+    name: "Game of Life",
+    blurb: "three rules conjure gliders, oscillators, life from nothing",
+    accent: "#5fd0a8"
   }
 ];
