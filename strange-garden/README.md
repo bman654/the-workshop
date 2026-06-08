@@ -39,6 +39,9 @@ file with **zero dependencies and no build step**.
 | 20 | **Lorenz** | The 3D butterfly — a weather model dreaming the same strange orbit forever. |
 | 21 | **Falling Sand** | A powder sandbox — paint sand, water, fire, oil, acid and plant, and watch them quarrel. |
 | 22 | **Magnetic Pendulum** | Colour each point by the magnet a swinging iron bob finally chooses — a fractal of basins. |
+| 23 | **Harmonograph** | Coupled, slowly-dying pendulums trace looping, almost-closing figures of light. |
+| 24 | **Sandpile** | Drop a million grains on one cell; toppling cascades settle into a four-colour mandala. |
+| 25 | **Langton's Ant** | Blind ants obeying two letters of rule build cathedrals over ten thousand steps. |
 
 ## Controls (shared by every specimen)
 

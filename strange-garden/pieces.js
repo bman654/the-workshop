@@ -133,5 +133,23 @@ window.PIECES = [
     name: "Magnetic Pendulum",
     blurb: "an iron heart torn between three magnets",
     accent: "#6ec6ff"
+  },
+  {
+    file: "harmonograph.html",
+    name: "Harmonograph",
+    blurb: "coupled pendulums dying into looping near-closed light",
+    accent: "#c79bf0"
+  },
+  {
+    file: "sandpile.html",
+    name: "Sandpile",
+    blurb: "grains topple in cascades into a fractal mandala",
+    accent: "#f0b440"
+  },
+  {
+    file: "langtons-ant.html",
+    name: "Langton's Ant",
+    blurb: "two blind letters, ten thousand steps, a cathedral",
+    accent: "#8be0d4"
   }
 ];

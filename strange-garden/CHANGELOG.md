@@ -7,7 +7,7 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 > **Resume protocol:** read this top section, then continue from "Next up". Commit + update
 > here after every piece.
 
-## Status — 22 specimens, all browser-verified PASS (60fps unless noted), clean consoles
+## Status — 25 specimens, all browser-verified PASS (60fps unless noted), clean consoles
 
 | # | file | system | notes |
 |---|------|--------|-------|
@@ -33,6 +33,9 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 | 20 | lorenz.html | Lorenz | RK4 3D butterfly; 4 diverging trajectories; rotating camera |
 | 21 | falling-sand.html | Falling Sand | interactive powder CA; 11 materials; paint sand/water/fire/oil/acid/plant |
 | 22 | magnetic-pendulum.html | Magnetic Pendulum | WebGL basins-of-attraction fractal; rotating; drag magnets |
+| 23 | harmonograph.html | Harmonograph | sum of decaying sinusoids; evolving Lissajous-like figures |
+| 24 | sandpile.html | Sandpile | Abelian sandpile; big-pile & dripping; 4-colour fractal mandala |
+| 25 | langtons-ant.html | Langton's Ant | turmites; 12 rule presets + custom + up to 12 ants |
 
 - gallery `index.html` + `pieces.js` (9 entries) verified: all cards + thumbnails render, clean console.
 - thumbnails in `assets/thumbs/`; `assets/gallery-preview.png` is a full-page gallery shot.
@@ -70,4 +73,6 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 - 2026-06-08 — Wave 7: wfc (full propagating Wave Function Collapse), lorenz (3D butterfly).
   20 specimens — v1 complete. Final gallery verified PASS; preview shared with Brandon.
 - 2026-06-08 — Wave 8: falling-sand (interactive 11-material powder toy), magnetic-pendulum
-  (WebGL basin fractal). **22 specimens.**
+  (WebGL basin fractal). 22 specimens.
+- 2026-06-08 — Wave 9: harmonograph, sandpile (Abelian), langtons-ant (turmites).
+  **25 specimens.**

@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Langton's Ant — Strange Garden</title>
+<style>
+  :root { --accent: #8be0d4; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; image-rendering:pixelated; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select, #panel input[type=text] { width:100%; margin:2px 0 0; padding:5px 7px;
+    font:12px ui-monospace,Menlo,monospace; color:#e6e8ee; letter-spacing:.08em;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:8px; }
+  #panel select option { background:#14161c; }
+  #rule.bad { border-color:#e0726b; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Langton's Ant</h1>
+  <p class="desc">A blind ant follows two letters and builds cathedrals. Chaos for
+    ten thousand steps, then it lays a highway and walks forever.</p>
+  <label>Rule preset</label>
+  <select id="preset"></select>
+  <label>Rule string <b id="vState"></b></label>
+  <input type="text" id="rule" spellcheck="false" value="RL" maxlength="14">
+  <label>Ants <b id="vAnts">1</b></label>
+  <input type="range" id="sAnts" min="1" max="12" step="1" value="1">
+  <label>Steps / frame <b id="vSpeed">8000</b></label>
+  <input type="range" id="sSpeed" min="200" max="80000" step="200" value="8000">
+  <label>Cell size <b id="vCell">3</b></label>
+  <input type="range" id="sCell" min="1" max="8" step="1" value="3">
+  <label>Palette <b id="vPal">aurora</b></label>
+  <input type="range" id="sPal" min="0" max="5" step="1" value="0">
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">space pause · r reseed · h hides panel · s save</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+const $=id=>document.getElementById(id);
+
+// ---- presets: rule string + suggested cell size + a note ----
+const PRESETS=[
+  {name:'RL — classic highway', rule:'RL', cell:3, ants:1},
+  {name:'RLR — symmetric triangle', rule:'RLR', cell:3, ants:1},
+  {name:'LLRR — cardioid bloom', rule:'LLRR', cell:3, ants:1},
+  {name:'LRRRRRLLR — square spiral', rule:'LRRRRRLLR', cell:3, ants:1},
+  {name:'LLRRRLRLRLLR — filigree', rule:'LLRRRLRLRLLR', cell:3, ants:1},
+  {name:'RRLLLRLLLRRR — chaos garden', rule:'RRLLLRLLLRRR', cell:3, ants:1},
+  {name:'RRLL — woven lattice', rule:'RRLL', cell:3, ants:1},
+  {name:'LRRL — pinwheel', rule:'LRRL', cell:3, ants:1},
+  {name:'RLLR — coral', rule:'RLLR', cell:3, ants:1},
+  {name:'RRLR — drifting reef', rule:'RRLR', cell:3, ants:1},
+  {name:'RLLLR — slow spiral', rule:'RLLLR', cell:3, ants:1},
+  {name:'RL · swarm (8 ants)', rule:'RL', cell:3, ants:8},
+];
+
+// ---- palettes: function state(0..N-1, N) -> [r,g,b]; state 0 is the dark ground ----
+const PALNAMES=['aurora','ember','viridian','magenta','ice','botanic'];
+function paletteRGB(palIdx, s, N){
+  if(s===0) return [10,11,15];                 // unvisited / ground
+  const t=N<=1?0:(s-1)/(N-1);                  // 0..1 across painted states
+  let h,sat,lit;
+  switch(palIdx){
+    case 0: h=170+t*120; sat=70; lit=34+t*34; break;            // aurora teal->violet
+    case 1: h=18+t*42;  sat=85; lit=30+t*38; break;             // ember red->gold
+    case 2: h=95+t*70;  sat=62; lit=28+t*40; break;             // viridian greens
+    case 3: h=300+t*70; sat=72; lit=32+t*36; break;             // magenta->pink
+    case 4: h=190+t*60; sat=55; lit=40+t*42; break;             // ice blues
+    case 5: h=70+t*120; sat=58; lit=30+t*40; break;             // botanic lime->cyan
+  }
+  return hsl2rgb(((h%360)+360)%360, sat/100, lit/100);
+}
+function hsl2rgb(h,s,l){
+  h/=360; let r,g,b;
+  if(s===0){ r=g=b=l; }
+  else{
+    const hue=(p,q,t)=>{ if(t<0)t+=1; if(t>1)t-=1;
+      if(t<1/6)return p+(q-p)*6*t; if(t<1/2)return q;
+      if(t<2/3)return p+(q-p)*(2/3-t)*6; return p; };
+    const q=l<0.5?l*(1+s):l+s-l*s, p=2*l-q;
+    r=hue(p,q,h+1/3); g=hue(p,q,h); b=hue(p,q,h-1/3);
+  }
+  return [Math.round(r*255),Math.round(g*255),Math.round(b*255)];
+}
+
+// ---- world state ----
+let W,H,DPR,cell=3, cols,rows;
+let grid;                  // Uint8Array states
+let img, buf32;            // ImageData + Uint32 view
+let palette32;             // precomputed 0xAABBGGRR per state
+let turns;                 // Int8Array: +1 right, -1 left per state
+let N=2;                   // number of states (= rule length)
+let palIdx=0;
+let speed=8000, nAnts=1, steps=0;
+let ants=[];               // {x,y,dir}  dir: 0=N,1=E,2=S,3=W
+const DX=[0,1,0,-1], DY=[-1,0,1,0];
+let antColors=[];
+
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  W=cv.width=Math.floor(innerWidth*DPR);
+  H=cv.height=Math.floor(innerHeight*DPR);
+  cv.style.width=innerWidth+'px'; cv.style.height=innerHeight+'px';
+  setupGrid();
+}
+addEventListener('resize',resize);
+
+function parseRule(str){
+  const t=[];
+  for(const ch of str.toUpperCase()){
+    if(ch==='R') t.push(1); else if(ch==='L') t.push(-1);
+    else return null;
+  }
+  return t.length>=2 ? t : null;
+}
+
+function buildPalette(){
+  palette32=new Uint32Array(N);
+  for(let s=0;s<N;s++){
+    const [r,g,b]=paletteRGB(palIdx,s,N);
+    palette32[s]=(255<<24)|(b<<16)|(g<<8)|r;     // little-endian ABGR
+  }
+}
+
+function setupGrid(){
+  // canvas pixel grid -> logical cell grid
+  cols=Math.max(8,Math.floor(W/cell));
+  rows=Math.max(8,Math.floor(H/cell));
+  grid=new Uint8Array(cols*rows);
+  img=ctx.createImageData(cols,rows);
+  buf32=new Uint32Array(img.data.buffer);
+  buildPalette();
+  buf32.fill(palette32[0]);
+  seedAnts();
+  blit(true);
+}
+
+function seedAnts(){
+  ants=[];
+  antColors=[];
+  for(let i=0;i<nAnts;i++){
+    let x,y;
+    if(nAnts===1){ x=cols>>1; y=rows>>1; }
+    else{
+      // spread ants on a ring around centre for interaction
+      const a=i/nAnts*Math.PI*2, R=Math.min(cols,rows)*0.18;
+      x=Math.round(cols/2+Math.cos(a)*R);
+      y=Math.round(rows/2+Math.sin(a)*R);
+    }
+    ants.push({x:(x+cols)%cols, y:(y+rows)%rows, dir:(i*1)&3});
+    const h=(i/Math.max(1,nAnts)*360+40)%360;
+    antColors.push(hsl2rgb(h,0.9,0.7));
+  }
+  steps=0;
+}
+
+function applyRule(str, fromPreset){
+  const t=parseRule(str);
+  const el=$('rule');
+  if(!t){ el.classList.add('bad'); return false; }
+  el.classList.remove('bad');
+  turns=Int8Array.from(t);
+  N=t.length;
+  $('vState').textContent=N+' states';
+  // reallocate palette / grid (states changed)
+  setupGrid();
+  return true;
+}
+
+// ---- simulation ----
+function step(){
+  const g=grid, tn=turns, nN=N, c=cols, r=rows, total=c*r;
+  let cnt=0, batch=speed;
+  // process ants in interleaved order for fairness
+  const A=ants, na=A.length;
+  for(let b=0;b<batch;b++){
+    for(let k=0;k<na;k++){
+      const ant=A[k];
+      const idx=ant.y*c+ant.x;
+      const s=g[idx];
+      // turn according to current state
+      ant.dir=(ant.dir + (tn[s]===1?1:3))&3;
+      // advance cell state, paint pixel
+      const ns=s+1>=nN?0:s+1;
+      g[idx]=ns;
+      buf32[idx]=palette32[ns];
+      // move forward (toroidal)
+      let nx=ant.x+DX[ant.dir]; if(nx<0)nx+=c; else if(nx>=c)nx-=c;
+      let ny=ant.y+DY[ant.dir]; if(ny<0)ny+=r; else if(ny>=r)ny-=r;
+      ant.x=nx; ant.y=ny;
+    }
+    cnt++;
+  }
+  steps+=cnt*na;
+}
+
+// draw the offscreen cell grid scaled up to the canvas, plus ant markers
+let scratch=document.createElement('canvas'), sctx=scratch.getContext('2d');
+function blit(full){
+  if(scratch.width!==cols||scratch.height!==rows){ scratch.width=cols; scratch.height=rows; }
+  sctx.putImageData(img,0,0);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(scratch,0,0,cols,rows,0,0,W,H);
+  // ant markers
+  const sx=W/cols, sy=H/rows, m=Math.max(2,Math.min(sx,sy)*0.9);
+  for(let k=0;k<ants.length;k++){
+    const a=ants[k], col=antColors[k];
+    ctx.fillStyle=`rgb(${col[0]},${col[1]},${col[2]})`;
+    ctx.fillRect(a.x*sx-m/2+sx/2, a.y*sy-m/2+sy/2, m, m);
+  }
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){ step(); blit(); }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${(steps/1e6).toFixed(2)}M steps · ${nAnts} ant${nAnts>1?'s':''} · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ set(parseFloat(s.value)); v.textContent=fmt(parseFloat(s.value)); }; }
+bind('sAnts','vAnts',x=>x|0,x=>{ nAnts=x|0; seedAnts(); buf32.fill(palette32[0]); blit(true); });
+bind('sSpeed','vSpeed',x=>x|0,x=>{ speed=x|0; });
+bind('sCell','vCell',x=>x|0,x=>{ cell=x|0; setupGrid(); });
+bind('sPal','vPal',x=>PALNAMES[x|0],x=>{ palIdx=x|0; buildPalette(); repaintAll(); });
+
+function repaintAll(){
+  // recolour entire grid from current palette without resetting states
+  const g=grid;
+  for(let i=0;i<g.length;i++) buf32[i]=palette32[g[i]];
+  blit(true);
+}
+
+// preset dropdown
+const ps=$('preset');
+PRESETS.forEach((p,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=p.name; ps.appendChild(o); });
+ps.onchange=()=>{
+  const p=PRESETS[+ps.value];
+  $('rule').value=p.rule;
+  cell=p.cell; $('sCell').value=p.cell; $('vCell').textContent=p.cell;
+  nAnts=p.ants; $('sAnts').value=p.ants; $('vAnts').textContent=p.ants;
+  applyRule(p.rule, true);
+};
+
+$('rule').oninput=()=>{
+  ps.value='';  // custom
+  applyRule($('rule').value, false);
+};
+
+$('reseed').onclick=()=>{ setupGrid(); };
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='langtons-ant.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')setupGrid();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+resize();
+// open on the LLRR "cardioid bloom" — symmetric growth makes the best hero
+const startIdx=PRESETS.findIndex(p=>p.rule==='LLRR');
+ps.value=startIdx;
+$('rule').value=PRESETS[startIdx].rule;
+cell=PRESETS[startIdx].cell; $('sCell').value=cell; $('vCell').textContent=cell;
+applyRule($('rule').value, true);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

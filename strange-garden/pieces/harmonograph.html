@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harmonograph — Strange Garden</title>
+<style>
+  :root { --accent: #c79bf0; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  .freqs { display:flex; gap:6px; margin-top:12px; font:10px ui-monospace,Menlo,monospace;
+    opacity:.6; justify-content:space-between; }
+  .freqs span b { color:var(--accent); font-weight:600; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Harmonograph</h1>
+  <p class="desc">Two coupled pendulums, slowly dying, trace looping figures that almost
+    close and never quite repeat.</p>
+  <label>Detune <b id="vDet">0.0020</b></label>
+  <input type="range" id="sDet" min="0" max="0.012" step="0.0002" value="0.002">
+  <label>Damping <b id="vDmp">0.0042</b></label>
+  <input type="range" id="sDmp" min="0.0010" max="0.0120" step="0.0002" value="0.0042">
+  <label>Pen speed <b id="vSpd">1.00</b></label>
+  <input type="range" id="sSpd" min="0.25" max="3.0" step="0.05" value="1.0">
+  <label>Line width <b id="vLw">1.4</b></label>
+  <input type="range" id="sLw" min="0.4" max="3.5" step="0.1" value="1.4">
+  <label>Glow <b id="vGlow">0.55</b></label>
+  <input type="range" id="sGlow" min="0" max="1" step="0.05" value="0.55">
+  <div class="freqs">
+    <span>f1 <b id="vf1">2.00</b></span><span>f2 <b id="vf2">3.00</b></span>
+    <span>f3 <b id="vf3">3.00</b></span><span>f4 <b id="vf4">4.00</b></span>
+  </div>
+  <div class="row"><button id="rand" class="pri">Randomize</button><button id="palette">Palette</button></div>
+  <div class="row"><button id="reseed">Reseed</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">space pause · r reseed · p palette · h hides panel · s save</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+let W,H,DPR,worldW,worldH;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  worldW=innerWidth; worldH=innerHeight;
+  W=cv.width=Math.floor(worldW*DPR); H=cv.height=Math.floor(worldH*DPR);
+  cv.style.width=worldW+'px'; cv.style.height=worldH+'px';
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+  if(fig) fig.dirty=true; // force a fresh figure sized to new canvas
+}
+addEventListener('resize',resize);
+
+// ---- parameters ----
+let detune=0.002, damping=0.0042, penSpeed=1.0, lineW=1.4, glow=0.55;
+
+// ---- palettes (hue ranges drifted along the curve) ----
+// each palette: function(phase 0..1)-> [h,s,l]
+const palettes=[
+  {name:'aurora',  base:[160,260], sat:78, lum:62},   // teal -> violet
+  {name:'ember',   base:[12,52],   sat:88, lum:60},    // red -> gold
+  {name:'iris',    base:[210,320], sat:80, lum:64},    // blue -> magenta
+  {name:'bloom',   base:[300,40],  sat:78, lum:64},    // magenta -> orange (wraps)
+  {name:'frost',   base:[180,230], sat:62, lum:70},    // cyan -> indigo
+  {name:'verdant', base:[90,180],  sat:72, lum:60},    // green -> teal
+];
+let palIdx=0;
+
+function lerp(a,b,t){ return a+(b-a)*t; }
+function paletteColor(phase, alpha){
+  const p=palettes[palIdx];
+  // gentle drift along curve, oscillating so the figure has a woven multi-hue look
+  const t=0.5+0.5*Math.sin(phase*Math.PI*2*1.0);
+  const h=lerp(p.base[0], p.base[1], t);
+  return `hsla(${h.toFixed(1)},${p.sat}%,${p.lum}%,${alpha})`;
+}
+
+// ---- figure (a single harmonograph drawing) ----
+let fig=null;
+
+function rnd(a,b){ return a+Math.random()*(b-a); }
+function pick(arr){ return arr[(Math.random()*arr.length)|0]; }
+
+// near-integer frequency ratios that read as harmonious
+const RATIOS=[
+  [1,2,2,3],[2,3,3,4],[3,4,4,5],[1,1,2,3],[2,3,2,3],
+  [3,5,4,5],[1,2,3,4],[2,3,3,5],[3,4,5,6],[1,3,2,3],
+  [4,5,5,6],[2,5,3,5],[1,2,2,5],[3,4,3,5]
+];
+
+function newFigure(reseedRatios){
+  if(reseedRatios===undefined) reseedRatios=true;
+  // base frequencies near small-integer ratios, each detuned slightly
+  let r;
+  if(reseedRatios || !fig){ r=pick(RATIOS).slice(); }
+  else { r=fig.ratio.slice(); }
+  const base=rnd(1.4,2.2); // overall frequency scale
+  const det=()=> (Math.random()*2-1)*detune;
+  const f=[ r[0]*base+det(), r[1]*base+det(), r[2]*base+det(), r[3]*base+det() ];
+  // phases
+  const p=[ rnd(0,Math.PI*2), rnd(0,Math.PI*2), rnd(0,Math.PI*2), rnd(0,Math.PI*2) ];
+  // amplitudes — two contributors per axis, varied so loops are rich not circular
+  const R=Math.min(worldW,worldH)*0.34;
+  const A=[ R*rnd(0.55,1.0), R*rnd(0.35,0.8), R*rnd(0.55,1.0), R*rnd(0.35,0.8) ];
+  // per-term damping (slightly different gives organic spiral-in)
+  const d=[ damping*rnd(0.7,1.3), damping*rnd(0.7,1.3),
+            damping*rnd(0.7,1.3), damping*rnd(0.7,1.3) ];
+  fig={
+    ratio:r, f, p, A, d,
+    t:0,
+    cx:worldW*0.5, cy:worldH*0.5,
+    prev:null,
+    fade:0,           // 0 while drawing; >0 while fading out
+    fadeIn:0,         // brief fade-in opacity ramp
+    hueSeed:Math.random(),
+    dirty:false,
+  };
+  updateFreqHud();
+}
+
+function evalPoint(t){
+  const {f,p,A,d,cx,cy}=fig;
+  const x = A[0]*Math.sin(f[0]*t+p[0])*Math.exp(-d[0]*t)
+          + A[1]*Math.sin(f[1]*t+p[1])*Math.exp(-d[1]*t);
+  const y = A[2]*Math.sin(f[2]*t+p[2])*Math.exp(-d[2]*t)
+          + A[3]*Math.sin(f[3]*t+p[3])*Math.exp(-d[3]*t);
+  return [cx+x, cy+y];
+}
+
+// envelope (max remaining amplitude factor) to know when figure is "done"
+function envelope(t){
+  const {d}=fig;
+  return Math.max(Math.exp(-d[0]*t),Math.exp(-d[1]*t),
+                  Math.exp(-d[2]*t),Math.exp(-d[3]*t));
+}
+
+function init(){
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+  fig=null;
+  newFigure(true);
+}
+
+// ---- drawing ----
+// We advance t each frame and draw the segments traced since last frame.
+const DT=0.012;          // parametric step per sub-segment (smaller=smoother)
+const SUBS_BASE=90;      // sub-segments per frame at penSpeed=1
+
+let totalLen=0;          // for hue drift along curve
+
+function step(){
+  if(!fig) return;
+  if(fig.dirty){ // canvas resized mid-draw — start over cleanly
+    ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+    newFigure(true); return;
+  }
+  if(fig.fade>0){
+    // fade the whole canvas out, then spawn a new figure
+    ctx.globalCompositeOperation='source-over';
+    ctx.fillStyle=`rgba(10,11,15,${0.05+fig.fade*0.10})`;
+    ctx.fillRect(0,0,W,H);
+    fig.fade+=0.012;
+    if(fig.fade>=1){ ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H); newFigure(true); }
+    return;
+  }
+
+  const subs=Math.max(2, Math.round(SUBS_BASE*penSpeed));
+  ctx.globalCompositeOperation='lighter';
+  ctx.lineCap='round'; ctx.lineJoin='round';
+
+  for(let s=0;s<subs;s++){
+    const t=fig.t;
+    const pt=evalPoint(t);
+    if(fig.prev){
+      const env=envelope(t);
+      const a=Math.min(1,fig.fadeIn) * (0.18+0.62*env);
+      const phase=(t*0.012+fig.hueSeed)%1;
+      // glow pass (wider, dimmer)
+      if(glow>0){
+        ctx.strokeStyle=paletteColor(phase, a*0.22*glow);
+        ctx.lineWidth=(lineW+2.4*glow)*DPR;
+        ctx.beginPath();
+        ctx.moveTo(fig.prev[0]*DPR, fig.prev[1]*DPR);
+        ctx.lineTo(pt[0]*DPR, pt[1]*DPR);
+        ctx.stroke();
+      }
+      // core stroke
+      ctx.strokeStyle=paletteColor(phase, a);
+      ctx.lineWidth=lineW*DPR;
+      ctx.beginPath();
+      ctx.moveTo(fig.prev[0]*DPR, fig.prev[1]*DPR);
+      ctx.lineTo(pt[0]*DPR, pt[1]*DPR);
+      ctx.stroke();
+    }
+    fig.prev=pt;
+    fig.t+=DT;
+    fig.fadeIn+=0.02;
+  }
+
+  // figure complete when envelope has decayed below threshold (and enough drawn)
+  if(fig.t>60 && envelope(fig.t)<0.10){ fig.fade=0.0001; }
+}
+
+function draw(){ /* drawing happens inline in step() for progressive trace */ }
+
+// ---- hud / freq display ----
+function updateFreqHud(){
+  if(!fig)return;
+  document.getElementById('vf1').textContent=fig.f[0].toFixed(2);
+  document.getElementById('vf2').textContent=fig.f[1].toFixed(2);
+  document.getElementById('vf3').textContent=fig.f[2].toFixed(2);
+  document.getElementById('vf4').textContent=fig.f[3].toFixed(2);
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60,acc=0;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.1)dt=0.1;
+  if(!paused && !document.hidden){ step(); draw(); }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  const prog=fig? Math.min(100,(1-envelope(fig.t))*100) : 0;
+  hud.textContent=`${palettes[palIdx].name} · ${prog.toFixed(0)}% · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+const $=id=>document.getElementById(id);
+function bind(slider,val,fmt,set){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ set(parseFloat(s.value)); v.textContent=fmt(parseFloat(s.value)); }; }
+bind('sDet','vDet',x=>x.toFixed(4),x=>{ detune=x; });
+bind('sDmp','vDmp',x=>x.toFixed(4),x=>{ damping=x; });
+bind('sSpd','vSpd',x=>x.toFixed(2),x=>{ penSpeed=x; });
+bind('sLw','vLw',x=>x.toFixed(1),x=>{ lineW=x; });
+bind('sGlow','vGlow',x=>x.toFixed(2),x=>{ glow=x; });
+
+$('rand').onclick=()=>{ ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H); newFigure(true); };
+$('palette').onclick=()=>{ palIdx=(palIdx+1)%palettes.length; };
+$('reseed').onclick=()=>init();
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='harmonograph.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')init();
+  else if(e.key==='p')palIdx=(palIdx+1)%palettes.length;
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+resize(); palIdx=(Math.random()*palettes.length)|0; init();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

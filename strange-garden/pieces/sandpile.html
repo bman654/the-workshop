@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sandpile — Strange Garden</title>
+<style>
+  :root { --accent: #f0b440; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; image-rendering:pixelated; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:264px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; margin-top:3px; padding:5px 6px; font-size:12px; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:8px; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.45; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Sandpile</h1>
+  <p class="desc">A tower of sand topples grain by grain, four spilling to four,
+    and from the chaos a self-similar mandala blooms.</p>
+  <label>Mode</label>
+  <select id="mode">
+    <option value="big" selected>Avalanche — big pile</option>
+    <option value="drip">Dripping</option>
+  </select>
+  <label id="lPile">Pile size <b id="vPile">2¹⁸</b></label>
+  <input type="range" id="sPile" min="14" max="21" step="1" value="18">
+  <label id="lDrip" style="display:none">Drip rate <b id="vDrip">16</b></label>
+  <input type="range" id="sDrip" min="1" max="64" step="1" value="16" style="display:none">
+  <label>Topples / frame <b id="vSpeed">220</b></label>
+  <input type="range" id="sSpeed" min="10" max="600" step="10" value="220">
+  <label>Palette <b id="vPal">Ember</b></label>
+  <input type="range" id="sPal" min="0" max="4" step="1" value="0">
+  <div class="row"><button id="reseed" class="pri">Reseed</button><button id="pause">Pause</button></div>
+  <div class="row"><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">space pause · r reseed · h panel · s save</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+const $=id=>document.getElementById(id);
+
+// ---- grid (fixed, odd so a true center cell exists) ----
+const N=601;               // grid cells per side
+const SIZE=N*N;
+const CEN=((N>>1)*N)+(N>>1);
+let G   = new Int32Array(SIZE);   // grain counts
+let G2  = new Int32Array(SIZE);   // double buffer for parallel toppling
+// active bounding box (region that may contain unstable cells)
+let bx0,by0,bx1,by1;
+
+// ---- palettes : 4 colours for grain counts 0,1,2,3 ----
+// each entry: [bg(0), c1, c2, c3]  as [r,g,b]
+const PALETTES = [
+  { name:'Ember',   accent:'#f0b440', c:[[14,12,20],[44,28,74],[224,96,52],[247,224,150]] },
+  { name:'Tide',    accent:'#62d6c8', c:[[8,14,20],[20,60,84],[34,154,158],[206,244,236]] },
+  { name:'Orchid',  accent:'#d680e0', c:[[16,10,22],[70,28,96],[196,72,168],[248,212,244]] },
+  { name:'Forest',  accent:'#9bd45a', c:[[10,16,12],[24,64,40],[120,162,58],[226,244,196]] },
+  { name:'Mono',    accent:'#cfd6e6', c:[[10,11,15],[58,64,84],[140,150,176],[238,242,250]] },
+];
+let palIdx=0;
+// precomputed packed ABGR colours for the 4 levels (little-endian RGBA in Uint32)
+let LUT = new Uint32Array(4);
+function buildLUT(){
+  const c=PALETTES[palIdx].c;
+  for(let i=0;i<4;i++){
+    const r=c[i][0], g=c[i][1], b=c[i][2];
+    LUT[i] = (255<<24) | (b<<16) | (g<<8) | r;
+  }
+  document.documentElement.style.setProperty('--accent', PALETTES[palIdx].accent);
+}
+
+// ---- rendering buffer ----
+let img, buf32;
+function makeImage(){
+  img = ctx.createImageData(N,N);
+  buf32 = new Uint32Array(img.data.buffer);
+}
+
+// ---- params ----
+let mode='big';
+let pileExp=18, dripRate=16, topplesPerFrame=220;
+let stable=false;
+
+function resetBox(){ bx0=by0=N>>1; bx1=by1=N>>1; }
+
+function reseed(){
+  G.fill(0);
+  resetBox();
+  if(mode==='big'){
+    G[CEN] = Math.pow(2, pileExp)|0;  // exponents <=21 fit in int32
+    stable=false;
+  } else {
+    stable=false;
+  }
+}
+
+// expand active box to include (x,y) with a small margin, clamped to grid
+function touch(x,y){
+  if(x<bx0)bx0=x; if(x>bx1)bx1=x;
+  if(y<by0)by0=y; if(y>by1)by1=y;
+}
+
+// One parallel toppling pass over the active box.
+// Returns total number of cells that toppled this pass.
+function topplePass(){
+  // clamp / pad box by 1 so neighbours that receive grains are covered next pass
+  const x0=Math.max(1,bx0-1), x1=Math.min(N-2,bx1+1);
+  const y0=Math.max(1,by0-1), y1=Math.min(N-2,by1+1);
+  let toppled=0;
+  let nx0=N, ny0=N, nx1=0, ny1=0; // new active box (cells still >=4 after pass)
+  for(let y=y0;y<=y1;y++){
+    const row=y*N;
+    for(let x=x0;x<=x1;x++){
+      const i=row+x;
+      const v=G[i];
+      if(v>=4){
+        const t=v>>2;            // number of topples this cell does at once
+        toppled+=t;
+        G[i]=v-(t<<2);
+        // distribute (edge cells drop grains off-grid; interior cells only here)
+        G[i-1]+=t; G[i+1]+=t; G[i-N]+=t; G[i+N]+=t;
+        // neighbours may now be >=4 -> expand new box around them
+        if(x-1<nx0)nx0=x-1; if(x+1>nx1)nx1=x+1;
+        if(y-1<ny0)ny0=y-1; if(y+1>ny1)ny1=y+1;
+      }
+    }
+  }
+  if(toppled>0){
+    // grow active box to union of regions that changed
+    bx0=Math.min(bx0,nx0); bx1=Math.max(bx1,nx1);
+    by0=Math.min(by0,ny0); by1=Math.max(by1,ny1);
+    if(bx0<1)bx0=1; if(by0<1)by0=1; if(bx1>N-2)bx1=N-2; if(by1>N-2)by1=N-2;
+  }
+  return toppled;
+}
+
+let lastToppled=0;        // topples performed in the most recent step (for HUD)
+const FRAME_MS=13;        // wall-clock cap per step so the loop stays ~60fps
+
+function step(){
+  lastToppled=0;
+  const tStart=performance.now();
+  if(mode==='drip'){
+    // add grains at centre every frame, then relax a bounded amount
+    G[CEN]+=dripRate;
+    touch(N>>1,N>>1);
+    let budget=topplesPerFrame*400; // drip resolves quickly; spend generously
+    while(budget>0){
+      const t=topplePass();
+      if(t===0)break;
+      budget-=t; lastToppled+=t;
+      if(performance.now()-tStart>FRAME_MS)break;
+    }
+    stable=false;
+    return;
+  }
+  // big pile: animate the relaxation. slider sets target topples/frame; a wall-clock
+  // cap keeps frames smooth even when the slider is maxed on a huge pile.
+  if(stable)return;
+  let budget = topplesPerFrame * 1200; // scale: each slider unit ~ many real topples
+  while(budget>0){
+    const t=topplePass();
+    if(t===0)break;
+    budget-=t; lastToppled+=t;
+    if(performance.now()-tStart>FRAME_MS)break;
+  }
+  if(lastToppled===0){ stable=true; }
+}
+
+function draw(){
+  // fill background level-0 colour first across whole image, then paint active-ish region.
+  // simplest & fast: write every cell each frame (N*N ~ 361k, cheap).
+  const l0=LUT[0],l1=LUT[1],l2=LUT[2],l3=LUT[3];
+  for(let i=0;i<SIZE;i++){
+    const v=G[i];
+    buf32[i] = v===0?l0 : v===1?l1 : v===2?l2 : l3;
+  }
+  // blit ImageData to an offscreen of grid size then upscale onto canvas
+  blit();
+}
+
+// offscreen grid-sized canvas used as the upscale source
+let oc, octx;
+function makeOffscreen(){
+  oc=document.createElement('canvas'); oc.width=N; oc.height=N;
+  octx=oc.getContext('2d');
+}
+function blit(){
+  octx.putImageData(img,0,0);
+  // letterbox-fit the square grid into the viewport, centred
+  const side=Math.min(W,H);
+  const ox=((W-side)/2)|0, oy=((H-side)/2)|0;
+  ctx.imageSmoothingEnabled=false;
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+  ctx.drawImage(oc,0,0,N,N, ox,oy, side,side);
+}
+
+// ---- canvas sizing ----
+let W,H,DPR;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  W=cv.width=Math.floor(innerWidth*DPR); H=cv.height=Math.floor(innerHeight*DPR);
+  cv.style.width=innerWidth+'px'; cv.style.height=innerHeight+'px';
+  ctx.fillStyle='#0a0b0f'; ctx.fillRect(0,0,W,H);
+}
+addEventListener('resize',()=>{resize(); if(buf32)draw();});
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt<=0)dt=1e-3;
+  if(!paused && !document.hidden){ step(); draw(); }
+  fps+=((1/dt)-fps)*0.08;
+  let state;
+  if(mode==='drip')      state = `dripping · ${(lastToppled/1000).toFixed(0)}k/f`;
+  else if(stable)        state = `100% stable`;
+  else                   state = `settling · ${(lastToppled/1000).toFixed(0)}k topples/f`;
+  hud.textContent = `${N}×${N} · ${state} · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+function fmtPile(e){
+  const sup='⁰¹²³⁴⁵⁶⁷⁸⁹';
+  return '2'+String(e).split('').map(d=>sup[+d]).join('');
+}
+$('mode').onchange=()=>{
+  mode=$('mode').value;
+  const big=mode==='big';
+  $('lPile').style.display = big?'flex':'none';
+  $('sPile').style.display = big?'block':'none';
+  $('lDrip').style.display = big?'none':'flex';
+  $('sDrip').style.display = big?'none':'block';
+  reseed();
+};
+$('sPile').oninput=()=>{ pileExp=+$('sPile').value; $('vPile').textContent=fmtPile(pileExp); reseed(); };
+$('sDrip').oninput=()=>{ dripRate=+$('sDrip').value; $('vDrip').textContent=dripRate; };
+$('sSpeed').oninput=()=>{ topplesPerFrame=+$('sSpeed').value; $('vSpeed').textContent=topplesPerFrame; };
+$('sPal').oninput=()=>{ palIdx=+$('sPal').value; $('vPal').textContent=PALETTES[palIdx].name; buildLUT(); draw(); };
+$('reseed').onclick=reseed;
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a=document.createElement('a');
+  a.download='sandpile.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r')reseed();
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+resize(); makeImage(); makeOffscreen(); buildLUT(); reseed();
+$('vPile').textContent=fmtPile(pileExp);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
