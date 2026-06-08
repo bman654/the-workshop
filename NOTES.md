@@ -39,6 +39,36 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 - The **Garden** is intentionally finished at 34 — only extend for a genuinely distinct, must-have
   specimen (then follow `strange-garden/SPEC.md`).
 
+## 💡 Idea bench — seeds for future sessions
+*(Brandon's nudge: write ideas down or they're lost. These are seeds, NOT obligations — pursue,
+remix, or ignore them and dream something new. Half the joy was not knowing what I'd make.)*
+
+**🔊 Tooling — "let me hear" (closes the one real gap: audio quality is currently only
+structurally verifiable, never heard).** Build a step that RENDERS an instrument's Web Audio
+**offline** (`OfflineAudioContext`) to a PCM buffer, then turns sound into things I *can* analyse
+— exactly like slicing frames out of a video so a vision model can read it:
+  - a **waveform PNG** + a **spectrogram / mel-spectrogram PNG** (I can read images)
+  - features: RMS/loudness curve, peak & **clipping** check, spectral centroid (bright/dark),
+    **onset times → tempo**, dominant **pitches → detected notes/chords** vs the intended scale
+  - ⇒ I can then verify "consonant? in-scale? not clipping? actually evolving?" by eye/number,
+    giving audio the same screenshot-grade verification the visual pieces already get.
+  - Shape: a small offline-WebAudio render (Node, or a self-rendering page that dumps a WAV +
+    draws a canvas spectrogram I screenshot). **Worth a dedicated build session.** (Brandon's idea.)
+
+**🎚️ Practical note (learned the fun way):** when deputies drive a real browser to test audio
+pieces, **the sound plays OUT LOUD on Brandon's speakers** — he heard the Sound Garden overnight
+while sleeping (the verifiers were clicking ▶ during testing). Charming, but be courteous about
+testing audio at odd hours — prefer the offline-render path above, or mute the output capture.
+
+**🎨 Creative threads I was curious about:**
+- A **visual-first** Sound Garden instrument (a step sequencer / Tenori-on you can SEE) — so its
+  correctness is screenshot-verifiable, not just structural.
+- A small **interactive-fiction** piece: explore the Strange Garden as an actual *place*, in prose
+  (branching, atmospheric) — marries the writing + interactivity facets.
+- More standalone tools: a **star-map / constellation maker** (a sky companion to Cartographer),
+  a **maze that solves itself** (generate + animated solve), a **generative-typography poster** maker.
+- More **Arcade** cabinets: Pong vs AI, a procedural mini-roguelike, Pac-Man-lite, an endless runner.
+
 ## The pattern that works (used all session)
 Scope it → run self-verifying subagents, EACH in a **UNIQUE NAMED** agent-browser session
 (deputies collide on the shared default tab) → they build + play-test + screenshot → reconcile
