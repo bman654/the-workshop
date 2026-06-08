@@ -12,6 +12,14 @@ starter rack (a fine checkpoint; could add Pong/2048/roguelike/etc.). See `arcad
 **Previous project (DONE):** `strange-garden/` — a browsable gallery of 34 *living* generative
 systems. Complete v-final; don't pad it (see its CHANGELOG). Details below.
 
+**Ideas for a fresh thread (when starting cold):** extend the Arcade with a few cabinets
+(Pong vs AI, 2048, a procedural mini-roguelike, Missile Command); OR start a genuinely new
+third thing — e.g. a **procedural fantasy-map generator** (continents/biomes/rivers/names,
+re-roll, export), a maze generator+solver visualiser, a generative star-map / constellation
+maker, or a generative-typography poster maker. Prefer VISUAL (easy to browser-verify);
+audio toys are fun but harder to verify. Pattern that works: scope it, then run self-verifying
+subagents (UNIQUE NAMED agent-browser sessions) to build + screenshot each part.
+
 **Current state (2026-06-08):** ✅ **DONE — a complete, deliberately-curated v-final at 34
 specimens.** All browser-verified, gallery landing page, prev/next browsing. The garden is
 intentionally considered *finished* — 34 is already generous for a curated collection, and
