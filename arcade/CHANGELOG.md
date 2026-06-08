@@ -9,13 +9,13 @@ Each game is self-contained, zero-dependency, browser-play-tested. Reference sty
 
 - **Done (browser play-tested PASS, 60fps, clean consoles):**
   - asteroids.html ✅ — inertia/thrust/wrap, splitting rocks, saucer, hyperspace, full juice
-    (particles, screen shake, hit-stop, parallax starfield, localStorage high score)
-- **In progress (deputies):** snake.html, breakout.html
-- **Gallery:** index.html (neon "cabinet rack"), games.js manifest, README ✅
+  - breakout.html ✅ — 6 power-ups, combos, multiball, swept collision, procedural levels
+  - snake.html ✅ — smooth gliding ribbon, buffered turns, combos, walls/wrap toggle
+- **Gallery:** index.html (neon "cabinet rack"), games.js manifest (3), README ✅
 
 ## Next up
-- Integrate snake + breakout; add prev/next nav between games (port the garden's `#sg-nav`
-  idea → an `#arc-nav` snippet reading games.js); verify the rack renders all cabinets.
+- Add a `← arcade` back-link to each game (click-only — games USE the arrow keys, so NO
+  key-bound nav); verify the rack renders all 3 cabinets.
 - More cabinet ideas: Tetris, Pong (vs AI), a twin-stick/space shooter, Missile Command,
   2048, Flappy/one-button, a procedural mini-roguelike, Pac-Man-lite.
 

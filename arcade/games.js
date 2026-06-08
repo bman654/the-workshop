@@ -13,5 +13,11 @@ window.GAMES = [
     name: "Breakout",
     blurb: "smash neon bricks, chain combos, catch power-ups",
     accent: "#ff3ea5"
+  },
+  {
+    file: "snake.html",
+    name: "Snake",
+    blurb: "glide a glowing neon serpent, grow, survive",
+    accent: "#39ff9e"
   }
 ];
