@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strange Attractors — Strange Garden</title>
+<style>
+  :root { --accent: #c792ea; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:266px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; margin:0; padding:6px 7px; font-size:12px; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:8px;
+    font-family:ui-monospace,Menlo,monospace; cursor:pointer; }
+  #panel select:focus { outline:1px solid color-mix(in srgb,var(--accent) 50%,transparent); }
+  .seg { display:flex; gap:0; margin:0; border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; overflow:hidden; }
+  .seg button { flex:1; padding:7px 4px; font-size:12px; border:0; border-radius:0;
+    background:rgba(255,255,255,.04); }
+  .seg button.on { background:color-mix(in srgb,var(--accent) 22%,transparent);
+    color:#fff; font-weight:600; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Strange Attractors</h1>
+  <p class="desc">A single point, iterated a thousand thousand times, never lands —
+    yet its restlessness carves the same luminous filigree, breathing as the rules drift.</p>
+  <label>Map</label>
+  <div class="seg">
+    <button id="mClifford" class="on">Clifford</button>
+    <button id="mDeJong">De Jong</button>
+  </div>
+  <label>a <b id="va">0.000</b></label>
+  <input type="range" id="sa" min="-3" max="3" step="0.001" value="0">
+  <label>b <b id="vb">0.000</b></label>
+  <input type="range" id="sb" min="-3" max="3" step="0.001" value="0">
+  <label>c <b id="vc">0.000</b></label>
+  <input type="range" id="sc" min="-3" max="3" step="0.001" value="0">
+  <label>d <b id="vd">0.000</b></label>
+  <input type="range" id="sd" min="-3" max="3" step="0.001" value="0">
+  <label>Points / frame <b id="vP">220k</b></label>
+  <input type="range" id="sP" min="40" max="450" step="10" value="220">
+  <label>Persistence <b id="vDec">0.90</b></label>
+  <input type="range" id="sDec" min="0.50" max="0.99" step="0.01" value="0.90">
+  <label>Morph speed <b id="vM">0.35</b></label>
+  <input type="range" id="sM" min="0" max="1.5" step="0.01" value="0.35">
+  <label>Palette</label>
+  <select id="pal"></select>
+  <div class="row"><button id="rand" class="pri">Randomize</button><button id="reseed">Reseed</button></div>
+  <div class="row"><button id="pause">Pause</button><button id="save">Save PNG</button></div>
+</div>
+<div id="hud"></div>
+<div id="hint">space pauses · r reseeds · h hides panel · s saves</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+const $=id=>document.getElementById(id);
+
+// ---- attractor parameters ----
+let mapType='clifford';        // 'clifford' | 'dejong'
+let a=-1.4, b=1.6, c=1.0, d=0.7;
+let ptsK=220;                  // points per frame, in thousands
+let persistence=0.90;          // density buffer decay per frame
+let morphSpeed=0.35;           // 0 = frozen; otherwise gently drifts params
+
+// auto-morph base values + per-param phase/freq so each axis breathes uniquely
+let baseA=a, baseB=b, baseC=c, baseD=d;
+let amp=0.14;                  // morph amplitude (param units) — gentle breathing
+let ph=[0,0,0,0], freq=[0.11,0.137,0.091,0.163];
+let morphT=0;
+
+// wandering iterate state (kept across frames so the orbit never resets jarringly)
+let ix=0.1, iy=0.0;
+
+// ---- density buffer + render targets ----
+let viewW,viewH,W,H;          // css px == device px here (we render at a fixed-ish res)
+let gw=0, gh=0;               // density grid (== render canvas) dims
+let dens;                     // Float32Array density accumulator (gw*gh)
+let img, off, offCtx;         // ImageData + offscreen canvas for upscale
+let renderScale=0.72;         // grid resolution vs viewport (perf vs crispness)
+
+// attractor coordinate range -> grid mapping (auto-fit, gently adapted)
+let cxr=0, cyr=0, halfRange=2.6;   // center x/y and half-extent in attractor space
+
+// ---- color palettes: stops as [t, r,g,b] over normalized log-density [0,1] ----
+const PALETTES = {
+  'Violet ember': [
+    [0.00,  4,  4, 10],
+    [0.18, 28, 14, 54],
+    [0.42, 86, 36,128],
+    [0.64,176, 70,150],
+    [0.84,246,150,120],
+    [1.00,255,246,222],
+  ],
+  'Aurora': [
+    [0.00,  3,  7, 12],
+    [0.20, 10, 40, 60],
+    [0.44, 22,108,116],
+    [0.66, 70,196,150],
+    [0.85,176,238,160],
+    [1.00,238,255,228],
+  ],
+  'Goldsmith': [
+    [0.00,  6,  4,  6],
+    [0.22, 44, 20, 22],
+    [0.46,116, 54, 32],
+    [0.68,196,116, 44],
+    [0.86,244,196, 96],
+    [1.00,255,248,206],
+  ],
+  ' Inkfish ': [
+    [0.00,  4,  5, 11],
+    [0.22, 16, 28, 70],
+    [0.46, 44, 70,150],
+    [0.66,110,120,210],
+    [0.85,190,170,236],
+    [1.00,244,236,255],
+  ],
+  'Coral reef': [
+    [0.00,  5,  6, 12],
+    [0.20, 18, 44, 70],
+    [0.42, 30,118,128],
+    [0.62,120,196,160],
+    [0.82,250,168,128],
+    [1.00,255,238,210],
+  ],
+};
+const palNames=Object.keys(PALETTES);
+let palName='Violet ember';
+let lut=new Uint8Array(256*3);
+function buildLUT(){
+  const stops=PALETTES[palName];
+  for(let i=0;i<256;i++){
+    const t=i/255;
+    let a0=stops[0], b0=stops[stops.length-1];
+    for(let s=0;s<stops.length-1;s++){
+      if(t>=stops[s][0] && t<=stops[s+1][0]){ a0=stops[s]; b0=stops[s+1]; break; }
+    }
+    const span=(b0[0]-a0[0])||1, u=Math.min(1,Math.max(0,(t-a0[0])/span));
+    lut[i*3  ]=(a0[1]+(b0[1]-a0[1])*u)|0;
+    lut[i*3+1]=(a0[2]+(b0[2]-a0[2])*u)|0;
+    lut[i*3+2]=(a0[3]+(b0[3]-a0[3])*u)|0;
+  }
+}
+
+// accent hue per palette (drives --accent) — pick the bright highlight stop
+function syncAccent(){
+  const s=PALETTES[palName];
+  const hi=s[s.length-2];
+  document.documentElement.style.setProperty('--accent',
+    `rgb(${hi[1]},${hi[2]},${hi[3]})`);
+}
+
+// ---- sizing ----
+function resize(){
+  viewW=innerWidth; viewH=innerHeight;
+  W=cv.width=viewW; H=cv.height=viewH;
+  cv.style.width=viewW+'px'; cv.style.height=viewH+'px';
+  allocGrid();
+}
+addEventListener('resize',resize);
+
+function allocGrid(){
+  gw=Math.max(2, Math.round(viewW*renderScale));
+  gh=Math.max(2, Math.round(viewH*renderScale));
+  dens=new Float32Array(gw*gh);
+  off=document.createElement('canvas'); off.width=gw; off.height=gh;
+  offCtx=off.getContext('2d');
+  img=offCtx.createImageData(gw,gh);
+  const da=img.data; for(let i=3;i<da.length;i+=4) da[i]=255;  // opaque
+}
+
+// ---- the attractor maps ----
+// Clifford: x' = sin(a*y) + c*cos(a*x);  y' = sin(b*x) + d*cos(b*y)
+// De Jong:  x' = sin(a*y) - cos(b*x);    y' = sin(c*x) - cos(d*y)
+
+// ---- iterate + accumulate density for one frame ----
+function accumulate(npts){
+  const w=gw, h=gh;
+  // grid scale: attractor space [cx-half, cx+half] -> [0,w]; keep aspect via min span
+  const aspect=w/h;
+  let hx=halfRange, hy=halfRange;
+  if(aspect>=1) hx=halfRange*aspect; else hy=halfRange/aspect;
+  const sx=w/(2*hx), sy=h/(2*hy);
+  const ox=cxr, oy=cyr;
+  let x=ix, y=iy;
+  const clifford = (mapType==='clifford');
+  for(let i=0;i<npts;i++){
+    let nx,ny;
+    if(clifford){
+      nx=Math.sin(a*y)+c*Math.cos(a*x);
+      ny=Math.sin(b*x)+d*Math.cos(b*y);
+    } else {
+      nx=Math.sin(a*y)-Math.cos(b*x);
+      ny=Math.sin(c*x)-Math.cos(d*y);
+    }
+    x=nx; y=ny;
+    const gx=((x-ox)*sx + w*0.5)|0;
+    const gy=((y-oy)*sy + h*0.5)|0;
+    if(gx>=0 && gx<w && gy>=0 && gy<h) dens[gy*w+gx]+=1;
+  }
+  ix=x; iy=y;
+}
+
+// ---- auto-fit the coordinate range from a quick sample of the current map ----
+// smooth=true: EMA-blend toward the measured frame (used during live morph) and
+// clear the density buffer when the frame shifts enough that old points would be
+// misplaced. smooth=false: snap immediately (used on randomize / map switch).
+function autoFit(smooth){
+  let minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9;
+  let x=0.1,y=0.0;
+  const clifford=(mapType==='clifford');
+  // burn-in then sample (more samples = tighter, stabler bounds)
+  for(let i=0;i<600;i++){
+    if(clifford){ const nx=Math.sin(a*y)+c*Math.cos(a*x); y=Math.sin(b*x)+d*Math.cos(b*y); x=nx; }
+    else { const nx=Math.sin(a*y)-Math.cos(b*x); y=Math.sin(c*x)-Math.cos(d*y); x=nx; }
+  }
+  for(let i=0;i<9000;i++){
+    if(clifford){ const nx=Math.sin(a*y)+c*Math.cos(a*x); y=Math.sin(b*x)+d*Math.cos(b*y); x=nx; }
+    else { const nx=Math.sin(a*y)-Math.cos(b*x); y=Math.sin(c*x)-Math.cos(d*y); x=nx; }
+    if(x<minx)minx=x; if(x>maxx)maxx=x;
+    if(y<miny)miny=y; if(y>maxy)maxy=y;
+  }
+  if(!isFinite(minx)||!isFinite(maxx)){ return; }
+  const ncx=(minx+maxx)*0.5, ncy=(miny+maxy)*0.5;
+  const span=Math.max(maxx-minx, maxy-miny);
+  const nhalf=Math.max(0.3, span*0.5*1.10);   // small margin
+  if(smooth){
+    // glide the view toward the measured frame. Slow EMA keeps the breathing
+    // attractor centred; persisted density (decayed each frame) tolerates the
+    // gentle drift without needing to be cleared — clearing here would starve
+    // accumulation and leave the canvas sparse.
+    const k=0.05;
+    cxr+=(ncx-cxr)*k; cyr+=(ncy-cyr)*k; halfRange+=(nhalf-halfRange)*k;
+  } else {
+    cxr=ncx; cyr=ncy; halfRange=nhalf;
+  }
+}
+
+// ---- rendering: log-scaled density through palette LUT ----
+function draw(){
+  const n=gw*gh, da=img.data;
+  // find a robust max (running peak) to normalize log scaling
+  let mx=0;
+  for(let i=0;i<n;i++){ const v=dens[i]; if(v>mx) mx=v; }
+  if(mx<1e-6) mx=1e-6;
+  const inv=1/Math.log1p(mx);
+  for(let i=0;i<n;i++){
+    let v=dens[i];
+    let t = v>0 ? Math.log1p(v)*inv : 0;     // log scaling, 0..1
+    // gentle contrast lift on the faint filigree
+    t = t*t*(3-2*t);                          // smoothstep
+    let li=(t*255)|0; if(li>255)li=255; else if(li<0)li=0;
+    const o=i*4, p=li*3;
+    da[o]=lut[p]; da[o+1]=lut[p+1]; da[o+2]=lut[p+2];
+  }
+  offCtx.putImageData(img,0,0);
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(off, 0,0, viewW, viewH);
+}
+
+// ---- per-frame morph: gently nudge a/b/c/d + decay density ----
+function morph(dt){
+  if(morphSpeed>0){
+    morphT += dt*morphSpeed;
+    a = baseA + amp*Math.sin(morphT*freq[0]*6.283 + ph[0]);
+    b = baseB + amp*Math.sin(morphT*freq[1]*6.283 + ph[1]);
+    c = baseC + amp*Math.sin(morphT*freq[2]*6.283 + ph[2]);
+    d = baseD + amp*Math.sin(morphT*freq[3]*6.283 + ph[3]);
+    clampParams();
+    syncSlidersLive();
+    // continuously re-fit the frame so a drifting/breathing attractor stays
+    // centred and filling the canvas; EMA-smooth so the view glides, not jumps,
+    // and clear the (now-misaligned) density when the frame shifts noticeably.
+    autoFit(true);
+  }
+  // decay the density buffer (persistence)
+  if(persistence<1){
+    const dec=persistence;
+    const n=gw*gh;
+    for(let i=0;i<n;i++) dens[i]*=dec;
+  }
+}
+
+function clampParams(){
+  if(a<-3)a=-3; else if(a>3)a=3;
+  if(b<-3)b=-3; else if(b>3)b=3;
+  if(c<-3)c=-3; else if(c>3)c=3;
+  if(d<-3)d=-3; else if(d>3)d=3;
+}
+
+// ---- parameter helpers ----
+function syncSlidersLive(){
+  $('sa').value=a; $('va').textContent=a.toFixed(3);
+  $('sb').value=b; $('vb').textContent=b.toFixed(3);
+  $('sc').value=c; $('vc').textContent=c.toFixed(3);
+  $('sd').value=d; $('vd').textContent=d.toFixed(3);
+}
+function setBaseFromCurrent(){ baseA=a; baseB=b; baseC=c; baseD=d; }
+
+function reseedOrbit(){ ix=Math.random()*0.4-0.2; iy=Math.random()*0.4-0.2; }
+
+function clearDensity(){ if(dens) dens.fill(0); }
+
+// Score a candidate (pa,pb,pc,pd) for visual quality. A great strange attractor
+// is (1) chaotic — positive largest Lyapunov exponent (Benettin method) — and
+// (2) space-filling, not a thin ribbon: its orbit covers many cells of a coarse
+// grid laid over its own bounding box. We combine both into one score; a thin
+// chaotic curve gets a low coverage and loses to a fuller cloud.
+// Returns {score, l, cover, span} or null for point/cycle/divergent orbits.
+const QGRID=48;                    // coarse coverage grid resolution
+const _qcells=new Uint8Array(QGRID*QGRID);
+function attractorQuality(pa,pb,pc,pd,clifford){
+  let x=0.1, y=0.0, nx, ny;
+  for(let i=0;i<600;i++){          // burn-in onto the attractor
+    if(clifford){ nx=Math.sin(pa*y)+pc*Math.cos(pa*x); ny=Math.sin(pb*x)+pd*Math.cos(pb*y); }
+    else { nx=Math.sin(pa*y)-Math.cos(pb*x); ny=Math.sin(pc*x)-Math.cos(pd*y); }
+    x=nx; y=ny; if(!isFinite(x)||!isFinite(y)) return null;
+  }
+  // first pass: bounding box
+  let minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9, sx2=x, sy2=y;
+  for(let i=0;i<2500;i++){
+    if(clifford){ nx=Math.sin(pa*sy2)+pc*Math.cos(pa*sx2); ny=Math.sin(pb*sx2)+pd*Math.cos(pb*sy2); }
+    else { nx=Math.sin(pa*sy2)-Math.cos(pb*sx2); ny=Math.sin(pc*sx2)-Math.cos(pd*sy2); }
+    sx2=nx; sy2=ny; if(!isFinite(sx2)||!isFinite(sy2)) return null;
+    if(sx2<minx)minx=sx2; if(sx2>maxx)maxx=sx2; if(sy2<miny)miny=sy2; if(sy2>maxy)maxy=sy2;
+  }
+  const span=Math.max(maxx-minx, maxy-miny);
+  if(!(span>0.5)) return null;     // collapsed to point / tiny cycle
+  const gscale=(QGRID-1)/span, gox=minx, goy=miny;
+  // second pass: Lyapunov + coverage on the QGRID
+  const d0=1e-8; let xe=x+d0, ye=y, sum=0, cnt=0;
+  _qcells.fill(0); let cover=0;
+  for(let i=0;i<2500;i++){
+    let nxe,nye;
+    if(clifford){
+      nx =Math.sin(pa*y )+pc*Math.cos(pa*x );  ny =Math.sin(pb*x )+pd*Math.cos(pb*y );
+      nxe=Math.sin(pa*ye)+pc*Math.cos(pa*xe);  nye=Math.sin(pb*xe)+pd*Math.cos(pb*ye);
+    } else {
+      nx =Math.sin(pa*y )-Math.cos(pb*x );  ny =Math.sin(pc*x )-Math.cos(pd*y );
+      nxe=Math.sin(pa*ye)-Math.cos(pb*xe);  nye=Math.sin(pc*xe)-Math.cos(pd*ye);
+    }
+    x=nx; y=ny; xe=nxe; ye=nye;
+    if(!isFinite(x)||!isFinite(y)) return null;
+    const gx=((x-gox)*gscale)|0, gy=((y-goy)*gscale)|0;
+    if(gx>=0&&gx<QGRID&&gy>=0&&gy<QGRID){ const ci=gy*QGRID+gx; if(!_qcells[ci]){_qcells[ci]=1; cover++;} }
+    const dx=xe-x, dy=ye-y, dist=Math.hypot(dx,dy);
+    if(dist>0){ sum+=Math.log(dist/d0); cnt++; const s=d0/dist; xe=x+dx*s; ye=y+dy*s; }
+  }
+  if(!cnt) return null;
+  const l=sum/cnt;                              // largest Lyapunov exponent
+  const coverFrac=cover/(QGRID*QGRID);          // fraction of cells visited (0..1)
+  if(l<=0.01) return null;                      // not meaningfully chaotic
+  if(coverFrac<0.045) return null;              // too thin / sparse -> reject
+  // reward both chaos and fullness; coverage weighted heavily to avoid ribbons
+  return { score: l + coverFrac*4.0, l, cover:coverFrac, span };
+}
+
+function randomize(){
+  // Clifford likes |a|,|b| in ~[1,2], c,d in [-2,2]; De Jong likes all in [-3,3].
+  // Many random params yield trivial (point/cycle/ribbon) attractors, so we
+  // sample many candidates and keep the best chaotic + space-filling one.
+  const r=(lo,hi)=>lo+Math.random()*(hi-lo);
+  const clifford=(mapType==='clifford');
+  let best=null, bestScore=-Infinity;
+  for(let tries=0; tries<300; tries++){
+    let pa,pb,pc,pd;
+    if(clifford){
+      // bias |a|,|b| away from zero — low magnitudes give thin curves
+      pa=r(1.0,2.1)*(Math.random()<0.5?-1:1); pb=r(1.0,2.1)*(Math.random()<0.5?-1:1);
+      pc=r(-1.9,1.9); pd=r(-1.9,1.9);
+    } else {
+      pa=r(-2.9,2.9); pb=r(-2.9,2.9); pc=r(-2.9,2.9); pd=r(-2.9,2.9);
+    }
+    const q=attractorQuality(pa,pb,pc,pd,clifford);
+    if(q && q.score>bestScore){ bestScore=q.score; best=[pa,pb,pc,pd];
+      if(q.l>0.12 && q.cover>0.16) break;   // chaotic and full enough — done
+    }
+  }
+  if(best){ a=best[0]; b=best[1]; c=best[2]; d=best[3]; }
+  else { // extremely unlikely fallback: a known-good attractor
+    if(clifford){ a=-1.4; b=1.6; c=1.0; d=0.7; } else { a=-2.0; b=-2.0; c=-1.2; d=2.0; }
+  }
+  // fresh morph phases so the breathing changes character too
+  for(let i=0;i<4;i++) ph[i]=Math.random()*6.283;
+  setBaseFromCurrent();
+  syncSlidersLive();
+  autoFit();
+  clearDensity();
+  reseedOrbit();
+}
+
+// ---- loop ----
+let paused=false,last=performance.now(),fps=60;
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(!paused && !document.hidden){
+    morph(dt);
+    accumulate(ptsK*1000);
+    draw();
+  }
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.08;
+  hud.textContent=`${mapType} · ${ptsK}k pts · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ---- controls ----
+function bindParam(slider,val,setter){ const s=$(slider),v=$(val);
+  s.oninput=()=>{ const x=parseFloat(s.value); setter(x); v.textContent=x.toFixed(3);
+    setBaseFromCurrent(); autoFit(); clearDensity(); }; }
+bindParam('sa','va',x=>{a=x;});
+bindParam('sb','vb',x=>{b=x;});
+bindParam('sc','vc',x=>{c=x;});
+bindParam('sd','vd',x=>{d=x;});
+
+$('sP').oninput=()=>{ ptsK=parseInt($('sP').value,10);
+  $('vP').textContent=ptsK+'k'; };
+$('sDec').oninput=()=>{ persistence=parseFloat($('sDec').value);
+  $('vDec').textContent=persistence.toFixed(2); };
+$('sM').oninput=()=>{ morphSpeed=parseFloat($('sM').value);
+  $('vM').textContent=morphSpeed.toFixed(2);
+  if(morphSpeed>0) setBaseFromCurrent(); };
+
+// map toggle (segmented)
+function setMap(t){
+  mapType=t;
+  $('mClifford').classList.toggle('on', t==='clifford');
+  $('mDeJong').classList.toggle('on', t==='dejong');
+  // sensible defaults per map, then fit + clear
+  if(t==='clifford'){ a=-1.4; b=1.6; c=1.0; d=0.7; }
+  else { a=-2.0; b=-2.0; c=-1.2; d=2.0; }
+  setBaseFromCurrent(); syncSlidersLive();
+  autoFit(); clearDensity(); reseedOrbit();
+}
+$('mClifford').onclick=()=>setMap('clifford');
+$('mDeJong').onclick=()=>setMap('dejong');
+
+// palette dropdown
+const palSel=$('pal');
+palNames.forEach(name=>{ const o=document.createElement('option');
+  o.value=name; o.textContent=name.trim(); palSel.appendChild(o); });
+palSel.value=palName;
+palSel.onchange=()=>{ palName=palSel.value; buildLUT(); syncAccent(); };
+
+$('rand').onclick=()=>randomize();
+$('reseed').onclick=()=>{ clearDensity(); reseedOrbit(); };
+$('pause').onclick=()=>{paused=!paused; $('pause').textContent=paused?'Play':'Pause';};
+$('save').onclick=()=>{ const a2=document.createElement('a');
+  a2.download='strange-attractors.png'; a2.href=cv.toDataURL('image/png'); a2.click(); };
+
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key===' '){paused=!paused;$('pause').textContent=paused?'Play':'Pause';e.preventDefault();}
+  else if(e.key==='r'){ clearDensity(); reseedOrbit(); }
+  else if(e.key==='h')panel.classList.toggle('hidden');
+  else if(e.key==='s')$('save').click();
+});
+
+// ---- go ----
+buildLUT(); syncAccent();
+resize();
+setMap('clifford');     // sets defaults, fits, clears, seeds
+syncSlidersLive();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -14,13 +14,18 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together.
   - reaction-diffusion.html ✅ (55fps, Coral/Mitosis/Spots presets, mouse-paint)
   - boids.html ✅ (60fps, predator-flee) — *functionally good but thumbnail weak (blowout/sparse)*
   - index.html gallery + pieces.js manifest (blurbs/accents from deputy reports) ✅
-- **Next up (wave 2 — browser free now):**
-  - 🔧 boids visual polish: reduce additive-glow blowout, fuller/even flock, better thumbnail
-  - strange-attractors.html (Clifford/De Jong, millions of glowing points)
-  - flow-field.html (perlin/curl-noise particle flow)
-  - lenia.html (continuous CA / smooth life)
-  - dla.html (diffusion-limited aggregation, coral/lightning)
-  - later: phyllotaxis, mandelbrot/julia explorer, n-body gravity, cyclic-CA spirals
+- **Wave 2 done (all browser-verified PASS, 60fps, clean consoles):**
+  - strange-attractors.html ✅ (Clifford/De Jong, density accumulation, auto-morph; deputy
+    added a Lyapunov+coverage quality scorer so Randomize only keeps chaotic attractors)
+  - flow-field.html ✅ (self-contained 3D simplex noise, 4500 motes, silky streamlines)
+  - boids.html 🔧 polished ✅ (two-pass render kills white blowout; alignment-dominant bands)
+  - pieces.js now has all 6 entries (deputies self-appended, reconciled clean)
+- **Next up (wave 3):**
+  - lenia.html (continuous CA / smooth life — orbium creatures)
+  - cyclic-ca.html (rock-paper-scissors spirals)
+  - dla.html (diffusion-limited aggregation, coral/lightning growth)
+  - 🔍 verify index.html gallery renders all 6 cards + thumbnails
+  - later: phyllotaxis, mandelbrot/julia explorer, n-body gravity, chladni plates, WFC tiling
 
 > Orchestration note: limit concurrent agent-browser deputies (they each drive a real
 > Chrome). After each deputy reports, update pieces.js blurb/accent + commit.

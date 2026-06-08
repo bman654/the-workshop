@@ -25,5 +25,17 @@ window.PIECES = [
     name: "Boids",
     blurb: "three rules, and a murmuration breathes itself alive",
     accent: "#8fb7ff"
+  },
+  {
+    file: "flow-field.html",
+    name: "Flow Field",
+    blurb: "motes drift down an invisible weather of noise",
+    accent: "#9ad7ff"
+  },
+  {
+    file: "strange-attractors.html",
+    name: "Strange Attractors",
+    blurb: "a restless point carves the same luminous filigree",
+    accent: "#c792ea"
   }
 ];
