@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firmament</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,18,30,0.82);
+    --panel-edge: rgba(95,140,200,0.45);
+    --ink: #dfe7f5;
+    --ink-dim: #93a4c2;
+    --accent: #5fd0ff;
+    --accent-soft: rgba(95,208,255,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:#05060c;
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  #stage{
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background: radial-gradient(1200px 800px at 50% 40%, #0b1020 0%, #07090f 70%, #03040a 100%);
+    padding:18px;
+  }
+  #skyWrap{
+    position:relative;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.7), 0 2px 0 rgba(255,255,255,0.03) inset;
+    border-radius:4px;
+    max-width:100%; max-height:100%;
+  }
+  canvas#sky{
+    display:block;
+    border-radius:3px;
+    max-width:100%; max-height:calc(100vh - 36px);
+    cursor:crosshair;
+  }
+  /* ---------- Control panel ---------- */
+  #panel{
+    position:fixed; top:18px; left:18px;
+    width:286px;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border:1px solid var(--panel-edge);
+    border-radius:12px;
+    padding:14px 15px 16px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.6);
+    z-index:20;
+    transition: transform .35s cubic-bezier(.2,.8,.2,1), opacity .25s;
+    max-height: calc(100vh - 36px);
+    overflow-y:auto;
+  }
+  #panel.collapsed{ transform: translateX(calc(-100% - 24px)); opacity:0; pointer-events:none; }
+  #panel h1{
+    font-family:var(--font-serif);
+    font-size:19px; font-weight:600; letter-spacing:.3px;
+    margin:0 0 2px; color:var(--ink);
+  }
+  #panel .sub{ font-size:11px; color:var(--ink-dim); margin:0 0 12px; letter-spacing:.4px; text-transform:uppercase; }
+  .row{ margin:10px 0; }
+  .row label{ display:flex; justify-content:space-between; align-items:baseline; font-size:11.5px; color:var(--ink-dim); margin-bottom:5px; letter-spacing:.3px; }
+  .row label .val{ color:var(--accent); font-variant-numeric:tabular-nums; font-size:11px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#e8f4ff; border:2px solid #3a7ba0; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%; background:#e8f4ff; border:2px solid #3a7ba0; cursor:pointer;
+  }
+  .seedrow{ display:flex; gap:6px; align-items:center; }
+  .seedrow input[type=text]{
+    flex:1; min-width:0; background:rgba(0,0,0,0.32); border:1px solid var(--panel-edge); color:var(--ink);
+    border-radius:7px; padding:7px 9px; font-size:13px; font-family:var(--font-serif); letter-spacing:.5px;
+  }
+  .seedrow input[type=text]:focus{ outline:none; border-color:var(--accent); }
+  .iconbtn, button.dice{
+    flex:0 0 auto; width:34px; height:34px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.04); color:var(--ink); cursor:pointer; font-size:15px; line-height:1;
+    display:flex; align-items:center; justify-content:center; transition:.15s;
+  }
+  .iconbtn:hover, button.dice:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.28); padding:3px; border-radius:9px; border:1px solid rgba(95,140,200,0.28); }
+  .seg button{
+    flex:1; border:none; background:transparent; color:var(--ink-dim); font-size:10.5px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px;
+  }
+  .seg button.active{ background:var(--accent); color:#04121b; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .toggles{ display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+  .chip{
+    font-size:11px; padding:5px 9px; border-radius:14px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.03); color:var(--ink-dim); cursor:pointer; transition:.15s; user-select:none;
+  }
+  .chip.on{ background:var(--accent-soft); border-color:var(--accent); color:var(--ink); }
+  .actions{ display:flex; gap:8px; margin-top:14px; }
+  .actions button{
+    flex:1; padding:10px 8px; border-radius:9px; border:1px solid var(--panel-edge);
+    background:linear-gradient(180deg, rgba(95,208,255,0.20), rgba(95,208,255,0.06));
+    color:var(--ink); font-size:12.5px; font-weight:600; cursor:pointer; transition:.15s; letter-spacing:.3px;
+  }
+  .actions button:hover{ border-color:var(--accent); background:linear-gradient(180deg, rgba(95,208,255,0.32), rgba(95,208,255,0.12)); }
+  .actions button.primary{ background:linear-gradient(180deg, #6fd6ff, #2f9fd6); color:#04121b; border-color:#8fe0ff; }
+  .actions button.primary:hover{ background:linear-gradient(180deg, #82ddff, #41acdf); }
+  hr.sep{ border:none; border-top:1px solid rgba(95,140,200,0.25); margin:13px 0 11px; }
+  .hint{ font-size:10px; color:#6a7a98; margin-top:10px; line-height:1.5; letter-spacing:.2px; }
+  /* Collapsed-panel reopen tab */
+  #reopen{
+    position:fixed; top:18px; left:18px; z-index:21;
+    width:42px; height:42px; border-radius:10px; border:1px solid var(--panel-edge);
+    background:var(--panel-bg); color:var(--accent); cursor:pointer; font-size:18px;
+    display:none; align-items:center; justify-content:center; backdrop-filter:blur(8px);
+    box-shadow:0 8px 24px rgba(0,0,0,.5);
+  }
+  #panel.collapsed ~ #reopen{ display:flex; }
+  .collapse-x{
+    position:absolute; top:9px; right:9px; width:22px; height:22px; border-radius:6px; border:none;
+    background:transparent; color:var(--ink-dim); cursor:pointer; font-size:15px; line-height:1;
+  }
+  .collapse-x:hover{ color:var(--ink); background:rgba(255,255,255,0.06); }
+  /* Myth readout (hover) */
+  #readout{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(8px);
+    z-index:18; max-width:min(620px, 80vw); pointer-events:none;
+    background:rgba(8,11,20,0.86); border:1px solid var(--panel-edge); border-radius:11px;
+    padding:11px 18px; box-shadow:0 14px 40px rgba(0,0,0,.6);
+    backdrop-filter:blur(8px); opacity:0; transition:opacity .18s, transform .18s;
+    text-align:center;
+  }
+  #readout.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  #readout .rname{ font-family:var(--font-serif); font-size:15px; color:var(--accent); letter-spacing:.4px; }
+  #readout .rmyth{ font-family:var(--font-serif); font-size:12.5px; color:var(--ink-dim); font-style:italic; margin-top:3px; line-height:1.45; }
+  ::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-thumb{background:rgba(95,208,255,.3);border-radius:4px}
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="skyWrap">
+      <canvas id="sky"></canvas>
+    </div>
+  </div>
+
+  <div id="panel">
+    <button class="collapse-x" id="collapseBtn" title="Hide panel">&#10005;</button>
+    <h1>Firmament</h1>
+    <p class="sub">Procedural Sky Engine</p>
+
+    <div class="row">
+      <label>Seed</label>
+      <div class="seedrow">
+        <input type="text" id="seed" spellcheck="false" value="">
+        <button class="dice" id="randSeed" title="Random seed">&#9860;</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Style</label>
+      <div class="seg" id="styleSeg">
+        <button data-v="observatory" class="active">Observ.</button>
+        <button data-v="antique">Antique</button>
+        <button data-v="mythic">Mythic</button>
+        <button data-v="blueprint">Blueprint</button>
+      </div>
+    </div>
+
+    <hr class="sep">
+
+    <div class="row">
+      <label>Star Density <span class="val" id="densVal"></span></label>
+      <input type="range" id="dens" min="0.2" max="1" step="0.01" value="0.6">
+    </div>
+    <div class="row">
+      <label>Constellations <span class="val" id="conVal"></span></label>
+      <input type="range" id="con" min="4" max="16" step="1" value="9">
+    </div>
+    <div class="row">
+      <label>Milky Way <span class="val" id="mwVal"></span></label>
+      <input type="range" id="mw" min="0" max="1" step="0.01" value="0.6">
+    </div>
+    <div class="row">
+      <label>Twinkle <span class="val" id="twVal"></span></label>
+      <input type="range" id="tw" min="0" max="1" step="0.01" value="0.5">
+    </div>
+    <div class="row">
+      <label>Label Density <span class="val" id="labVal"></span></label>
+      <input type="range" id="lab" min="0" max="1" step="0.01" value="0.6">
+    </div>
+
+    <hr class="sep">
+    <div class="row" style="margin:0 0 2px">
+      <label style="margin-bottom:7px">Flourishes</label>
+      <div class="toggles">
+        <div class="chip" data-t="graticule">Graticule</div>
+        <div class="chip" data-t="compass">Compass</div>
+        <div class="chip on" data-t="nebulae">Nebulae</div>
+        <div class="chip on" data-t="myths">Myth labels</div>
+        <div class="chip on" data-t="glow">Star glow</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="primary" id="reroll">&#10227; Re-roll</button>
+      <button id="exportBtn">&#8595; PNG</button>
+    </div>
+
+    <p class="hint">Each seed yields one fixed sky. Drag sliders, or hit Re-roll for a new firmament. Hover a constellation to read its myth. Switching style never changes the stars.</p>
+  </div>
+
+  <button id="reopen" title="Show panel">&#9776;</button>
+
+  <div id="readout"><div class="rname"></div><div class="rmyth"></div></div>
+
+<script>
+"use strict";
+/* ============================================================================
+   FIRMAMENT — single-file procedural night-sky / constellation generator
+   ----------------------------------------------------------------------------
+   Sibling of Cartographer. Pipeline: seeded mulberry32 PRNG -> star field
+   (magnitude + colour-temperature) -> Milky Way band + nebulae -> constellation
+   clustering + minimum-spanning-tree asterisms -> invented names + one-line
+   myths (curated pools + templates) -> palette-driven render of all layers.
+   The SKY is a pure function of (seed + density/count sliders). STYLE changes
+   only the palette/furniture, never the stars.
+   ========================================================================== */
+
+/* ----------------------------- PRNG (mulberry32) -------------------------- */
+function xmur3(str){
+  let h = 1779033703 ^ str.length;
+  for (let i=0;i<str.length;i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function(){
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return h >>> 0;
+  };
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeRng(seedStr){ const s = xmur3(String(seedStr)); return mulberry32(s()); }
+function pick(rng,a){ return a[(rng()*a.length)|0]; }
+
+/* ============================================================================
+   PALETTES — render reads EVERYTHING from STYLES[current]. No colour is
+   hardcoded in the draw code. observatory is fully realized; the other three
+   carry plausible distinct palettes now (their bespoke furniture is a later
+   pass — see TODOs in the render functions).
+   ========================================================================== */
+const STYLES = {
+  observatory: {
+    name:"observatory",
+    // background radial gradient stops (inner -> outer)
+    bg:["#0c1426","#070d1c","#03060f"],
+    vignette:"rgba(0,0,0,0.45)",
+    // star colour-temperature endpoints: cool (blue-white) -> warm
+    starCool:[207,224,255],  // #cfe0ff
+    starMid:[255,255,255],
+    starWarm:[255,179,122],  // #ffb37a
+    starGlow:"rgba(180,210,255,",   // glow halo prefix (alpha appended)
+    diffraction:true,               // thin diffraction crosses on bright stars
+    // constellation asterism lines
+    line:"#5fd0ff",
+    lineGlow:"rgba(95,208,255,",
+    lineWidth:1.0,
+    // labels
+    label:"#dbe8fb",
+    labelDim:"rgba(190,210,240,0.55)",
+    labelFont:'var(--font-ui)',
+    labelItalic:false,
+    labelGlow:false,
+    catalog:true,                   // show greek-letter catalogue designations
+    // milky way + nebula tints
+    mwTint:[150,180,230],
+    nebula:[[95,200,255],[255,110,180],[255,200,110]], // cyan / magenta / gold
+    nebulaAlpha:0.10,
+    // furniture
+    graticule:"rectangular",        // rectangular RA/Dec grid
+    gridColor:"rgba(120,160,220,0.10)",
+    compassStyle:"none",            // observatory uses no compass rose
+    cartoucheBg:"rgba(10,18,34,0.78)",
+    cartoucheEdge:"rgba(95,208,255,0.5)",
+    cartoucheText:"#dbe8fb",
+    cartoucheFont:'var(--font-ui)',
+    coordTicks:false
+  },
+  antique: {
+    name:"antique",
+    bg:["#241d12","#191307","#0e0a04"],          // dark sepia / ink
+    vignette:"rgba(60,40,12,0.42)",
+    starCool:[235,225,200], starMid:[244,236,214], starWarm:[230,196,140], // warm cream
+    starGlow:"rgba(235,210,150,",
+    diffraction:false,
+    line:"#d9b46a", lineGlow:"rgba(217,180,106,", lineWidth:1.1,
+    label:"#ecd9aa", labelDim:"rgba(220,196,150,0.55)",
+    labelFont:'var(--font-serif)', labelItalic:true, labelGlow:false,
+    catalog:false,
+    mwTint:[200,180,130],
+    nebula:[[210,170,110],[200,150,120],[180,160,120]],
+    nebulaAlpha:0.08,
+    graticule:"planisphere",        // TODO(stage2): ornate circular planisphere graticule + radial ticks
+    gridColor:"rgba(180,150,90,0.12)",
+    compassStyle:"ornate",          // TODO(stage2): ornate engraved compass rose
+    cartoucheBg:"rgba(40,30,16,0.80)",
+    cartoucheEdge:"rgba(217,180,106,0.55)",
+    cartoucheText:"#ecd9aa",
+    cartoucheFont:'var(--font-serif)',
+    coordTicks:false
+    // TODO(stage2): parchment vignette + paper-grain texture over the whole field
+  },
+  mythic: {
+    name:"mythic",
+    bg:["#1c1538","#140e2a","#0a0618"],          // deep indigo -> violet
+    vignette:"rgba(20,8,40,0.45)",
+    starCool:[224,214,255], starMid:[255,250,235], starWarm:[255,214,150],
+    starGlow:"rgba(255,220,150,",   // warm gold halos
+    diffraction:false,
+    line:"#f4c45a", lineGlow:"rgba(244,196,90,", lineWidth:1.3,
+    label:"#ffe6a8", labelDim:"rgba(240,210,150,0.6)",
+    labelFont:'var(--font-serif)', labelItalic:false, labelGlow:true,
+    catalog:false,
+    mwTint:[150,120,210],
+    nebula:[[170,110,255],[255,120,180],[255,200,120]],
+    nebulaAlpha:0.14,
+    graticule:"planisphere",        // TODO(stage2): dreamlike planisphere ring
+    gridColor:"rgba(150,120,210,0.10)",
+    compassStyle:"ornate",          // TODO(stage2): glowing zodiacal compass
+    cartoucheBg:"rgba(28,18,52,0.80)",
+    cartoucheEdge:"rgba(244,196,90,0.5)",
+    cartoucheText:"#ffe6a8",
+    cartoucheFont:'var(--font-serif)',
+    coordTicks:false
+  },
+  blueprint: {
+    name:"blueprint",
+    bg:["#06222b","#04161d","#020c11"],          // dark teal / cyan technical
+    vignette:"rgba(0,20,28,0.40)",
+    starCool:[180,235,245], starMid:[200,240,250], starWarm:[150,220,235], // monochrome cyan
+    starGlow:"rgba(120,220,240,",
+    diffraction:true,
+    line:"#39c6df", lineGlow:"rgba(57,198,223,", lineWidth:0.9,
+    label:"#a8e6f0", labelDim:"rgba(140,210,225,0.55)",
+    labelFont:'var(--font-mono)', labelItalic:false, labelGlow:false,
+    catalog:true,
+    mwTint:[90,180,200],
+    nebula:[[60,180,200],[80,200,210],[100,210,220]],
+    nebulaAlpha:0.07,
+    graticule:"rectangular",
+    gridColor:"rgba(80,200,220,0.14)",
+    compassStyle:"none",
+    cartoucheBg:"rgba(6,30,38,0.82)",
+    cartoucheEdge:"rgba(57,198,223,0.55)",
+    cartoucheText:"#a8e6f0",
+    cartoucheFont:'var(--font-mono)',
+    coordTicks:true                 // TODO(stage2): full coordinate ticks along all four grid margins
+  }
+};
+
+/* ============================================================================
+   LANGUAGE ENGINE — the special sauce. Curated evocative pools + ~12 myth
+   templates. Coherent miniature legends, never word-salad. Seed-driven.
+   ========================================================================== */
+const LANG = (function(){
+  // Evocative nouns: things one might enshrine in the sky.
+  const nouns = [
+    "Lantern","Crown","Wheel","Serpent","Mariner","Anvil","Heron","Lyre","Chalice",
+    "Hound","Mirror","Bridge","Throne","Loom","Compass","Reaper","Falcon","Vessel",
+    "Hart","Ferryman","Beacon","Spindle","Wolf","Harp","Scythe","Ember","Veil",
+    "Owl","Galleon","Bell","Forge","Crane","Pilgrim","Stag","Net","Plough","Maiden",
+    "Smith","Watchman","Raven","Kestrel","Diadem","Cauldron","Mantle","Oarsman",
+    "Shepherd","Archer","Whale","Lance","Coil","Gate","Hourglass","Thorn"
+  ];
+  // Possessor figures for "X's Y" forms.
+  const possessors = [
+    "Heron","Smith","Mariner","Hunter","Weaver","Shepherd","Reaper","Ferryman",
+    "Widow","Pilgrim","Watchman","Oracle","Drowned King","Forgotten Queen",
+    "Sleeping Giant","Old Sailor","Blind Seer","Wandering Monk","Sea-Witch","Falconer"
+  ];
+  // What the possessor owns / wears.
+  const possessions = [
+    "Crown","Lantern","Anvil","Net","Harp","Mirror","Veil","Compass","Scythe",
+    "Wheel","Mantle","Spindle","Diadem","Lance","Bell","Hourglass","Cauldron","Diadem"
+  ];
+  // Adjectives — restrained, never piling up.
+  const adjs = [
+    "Drowned","Sundered","Weeping","Ash","Silent","Burning","Hollow","Broken",
+    "Golden","Veiled","Frozen","Wandering","Last","Forgotten","Crimson","Pale",
+    "Iron","Twin","Fallen","Risen","Shrouded","Gilded","Tideless","Ninefold",
+    "Singing","Sleeping","Restless","Bound","Unmoored","Lonely"
+  ];
+  // Greek letters for catalogue designations (alpha = brightest).
+  const greek = ["α","β","γ","δ","ε","ζ","η","θ","ι","κ"];
+
+  function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+  // Pick a constellation name. Returns {name, key} where key is the core noun
+  // used for the genitive catalogue designation (e.g. "Lantern" -> "Lanternae").
+  function name(rng){
+    const r = rng();
+    let name, key;
+    if(r < 0.34){
+      // The {adjective} {noun}
+      const n = pick(rng,nouns);
+      name = "The "+pick(rng,adjs)+" "+n; key = n;
+    } else if(r < 0.62){
+      // The {noun}            (plain, dignified)
+      const n = pick(rng,nouns);
+      name = "The "+n; key = n;
+    } else if(r < 0.86){
+      // The {possessor}'s {possession}
+      const p = pick(rng,possessors), n = pick(rng,possessions);
+      name = "The "+p+"'s "+n; key = n;
+    } else {
+      // The {adjective} {possessor}   (a figure)
+      const p = pick(rng,possessors);
+      name = "The "+pick(rng,adjs)+" "+p; key = p.split(" ").pop();
+    }
+    return { name, key };
+  }
+
+  // Latinish genitive of the core word, for "α Lanternae" style catalogue names.
+  function genitive(key){
+    const w = key.toLowerCase();
+    if(/[aeiou]$/.test(w)) return cap(w)+"e";
+    if(/(s|x)$/.test(w))   return cap(w)+"is";
+    if(/n$/.test(w))       return cap(w)+"is";
+    return cap(w)+"ae";
+  }
+
+  // Myth-template pools.
+  const deeds = [
+    "lit the way for lost sailors","stole fire from the first dawn","wept a river into the sea",
+    "wove the night from a single thread","guarded the gate between worlds","ferried the dead across the dark water",
+    "sang the tides to sleep","forged the chains of the morning","outran the falling sky",
+    "kept a vigil no mortal could endure","drowned chasing a reflected moon","sealed the storm inside a bell",
+    "hunted the comet to the world's edge","traded one eye for a glimpse of fate","carried the last ember through the long winter",
+    "counted every wave and lost only one","betrayed the dawn and was forgiven","gathered the scattered stars in a net"
+  ];
+  const fates = [
+    "claimed by the tide","hung among the stars as a warning","turned to silver light at the last",
+    "left to wander the cold meridian","bound forever to the turning wheel","forgotten by all but the sea",
+    "lifted whole into the dark","granted a single night each year to return","scattered into a thousand faint lights",
+    "set to watch the pole until the end","unmade and remade by the morning","mourned by the ninefold moons",
+    "kept as a lantern for the drowned","frozen mid-step across the sky"
+  ];
+  const folk = [
+    "sailors","shepherds","the old mariners","the river-folk","the desert tribes","mothers at the shore",
+    "the temple watchers","children of the coast","the last astronomers","exiles","the salt-wives","pilgrims"
+  ];
+  const seasons = ["in the long dark of midwinter","when the first frost comes","at the turning of the year",
+    "on the longest night","when the harvest moon hangs low","before the spring tides","in the dying days of autumn"];
+  const objects = ["a single coin","a strand of hair","an unlit candle","a cup of seawater","a knot of red thread",
+    "a black feather","a handful of ash","a broken oar","a ring of cold iron"];
+  const places = ["the world's edge","the meridian","the seventh sea","the gate of dawn","the drowned coast",
+    "the far meridian","the bottom of the night","the shoulder of the dark"];
+  const virtues = ["the lost","the faithful","the drowning","the sleepless","the parted","the storm-caught","the homebound"];
+
+  // ~12 template shapes. {N}=name. Each yields one coherent line.
+  const templates = [
+    (rng,N)=> `${N}, who ${pick(rng,deeds)} and was ${pick(rng,fates)}.`,
+    (rng,N)=> `${folkCap(rng)} say ${N} once ${pick(rng,deeds)}.`,
+    (rng,N)=> `${N} watches over ${pick(rng,virtues)}, and rises ${pick(rng,seasons)}.`,
+    (rng,N)=> `Where ${N} ${pick(rng,deeds)}, no shadow has fallen since.`,
+    (rng,N)=> `${N} — for the figure that ${pick(rng,deeds)}, then was ${pick(rng,fates)}.`,
+    (rng,N)=> `They say ${N} will not set until ${pick(rng,objects)} is returned to ${pick(rng,places)}.`,
+    (rng,N)=> `${N} guides ${pick(rng,folk)} home ${pick(rng,seasons)}.`,
+    (rng,N)=> `Once ${N} ${pick(rng,deeds)}; now it is ${pick(rng,fates)}.`,
+    (rng,N)=> `${N} marks the place where ${pick(rng,folk)} first read the sky.`,
+    (rng,N)=> `${N} carries ${pick(rng,objects)} toward ${pick(rng,places)}, and never arrives.`,
+    (rng,N)=> `${N}, named by ${pick(rng,folk)} for the one who ${pick(rng,deeds)}.`,
+    (rng,N)=> `${N} burns brightest ${pick(rng,seasons)}, a memory of ${pick(rng,virtues)}.`
+  ];
+  function folkCap(rng){ const f = pick(rng,folk); return f.charAt(0).toUpperCase()+f.slice(1); }
+
+  function myth(rng, displayName){
+    const t = pick(rng, templates);
+    return t(rng, displayName);
+  }
+
+  return { name, genitive, myth, greek };
+})();
+
+/* ============================================================================
+   STATE
+   ========================================================================== */
+const state = {
+  seed:"",
+  style:"observatory",
+  dens:0.6, con:9, mw:0.6, tw:0.5, lab:0.6,
+  flags:{ graticule:false, compass:false, nebulae:true, myths:true, glow:true },
+  // generated (logical 0..1 coordinate space, aspect-corrected at draw time):
+  stars:[],            // {x,y,mag,radius,temp,col,glow,twPhase,twAmt}
+  brightOrder:[],      // indices of brightest stars (for twinkle budget)
+  constellations:[],   // {name,key,myth,starIdx[],edges[[i,j]],brightLocal,labelX,labelY,cx,cy,r}
+  // mw (number) = Milky-Way INTENSITY slider; mwBand (object) = its seed-driven geometry.
+  mw:0.6,
+  mwBand:{ angle:0, offset:0.5, width:0.25, wobble:[0,0,0,0,0] },
+  nebulae:[],          // {x,y,r,colIdx}
+  title:"",
+  W:0, H:0, aspect:1.6,
+  hoverCon:-1,
+  genMs:0
+};
+
+/* ============================================================================
+   GENERATION — pure function of (seed + sliders). Style-independent.
+   ========================================================================== */
+function generate(){
+  const t0 = performance.now();
+  const seed = state.seed;
+  const rng     = makeRng(seed);              // field / layout
+  const conRng  = makeRng(seed + "::con");    // constellation clustering
+  const nameRng = makeRng(seed + "::names");  // names + myths
+
+  const aspect = state.aspect;                // logical width units (height = 1)
+
+  /* --- 1. Star field ---------------------------------------------------- */
+  // Count scales with density slider. Logical coords: x in [0,aspect], y in [0,1].
+  const nStars = Math.round(320 + state.dens * 1180); // ~320 .. ~1500
+  const stars = [];
+  for(let i=0;i<nStars;i++){
+    const x = rng()*aspect;
+    const y = rng();
+    // magnitude: most stars faint, a few bright. Use a skewed distribution.
+    // mag in 0..1 where 1 = brightest.
+    const u = rng();
+    const mag = Math.pow(u, 2.4); // skew toward faint
+    // radius + brightness from magnitude
+    const radius = 0.35 + mag*mag*2.6;        // logical-ish px scale (scaled at draw)
+    const bright = 0.30 + mag*0.70;
+    // colour temperature: bimodal-ish, slight bias to white-blue
+    const temp = rng();                        // 0 cool(blue) .. 1 warm(red)
+    stars.push({
+      x, y, mag, radius, bright, temp,
+      twPhase: rng()*Math.PI*2,
+      twSpeed: 0.5 + rng()*1.4
+    });
+  }
+
+  /* --- 2. Milky Way band ------------------------------------------------- */
+  // A diagonal ribbon with a noisy spine. Generated even if toggled off
+  // (cheap) so toggling doesn't change the sky.
+  const mwAngle = (-0.5 + rng()*1.0) * 0.9 + (rng()<0.5 ? Math.PI*0.25 : -Math.PI*0.18);
+  const mwOffset = 0.3 + rng()*0.4;     // perpendicular offset of spine (0..1 of height)
+  const mwWidth = 0.22 + rng()*0.12;    // half-width of the band as frac of height
+  // a few spine wobble control points (seeded) for the noisy centre line
+  const mwWobble = [];
+  for(let i=0;i<5;i++) mwWobble.push((rng()-0.5)*0.16);
+  // extra dim field stars concentrated along the band (added to stars list,
+  // tagged mw=true so render can keep them faint)
+  const mwStarCount = Math.round(260 + state.dens*640);
+  for(let i=0;i<mwStarCount;i++){
+    // sample a point along the band line then jitter perpendicular w/ gaussian-ish
+    const t = rng();                             // along-band param 0..1
+    const along = t*Math.hypot(aspect,1)*1.2 - 0.1;
+    // gaussian-ish perpendicular via sum of uniforms
+    const g = (rng()+rng()+rng()-1.5)/1.5;       // ~-1..1 centred
+    const perp = g*mwWidth;
+    // band local coords -> world
+    const wob = mwWobbleAt(t, mwWobble);
+    const bx = Math.cos(mwAngle)*along - Math.sin(mwAngle)*(perp+wob) ;
+    const by = Math.sin(mwAngle)*along + Math.cos(mwAngle)*(perp+wob) ;
+    const x = bx + 0.1;
+    const y = by + mwOffset;
+    if(x<-0.05||x>aspect+0.05||y<-0.05||y>1.05) continue;
+    const mag = Math.pow(rng(),3.2)*0.45;        // faint
+    stars.push({
+      x, y, mag, radius:0.3+mag*1.2, bright:0.18+mag*0.5, temp:rng()*0.6,
+      twPhase: rng()*Math.PI*2, twSpeed:0.4+rng()*1.0, mw:true
+    });
+  }
+
+  /* --- 3. Nebulae -------------------------------------------------------- */
+  const nNeb = 1 + (rng()*3|0);                 // 1..3
+  const nebulae = [];
+  for(let i=0;i<nNeb;i++){
+    nebulae.push({
+      x: 0.15*aspect + rng()*0.7*aspect,
+      y: 0.12 + rng()*0.76,
+      r: 0.10 + rng()*0.18,
+      colIdx: (rng()*3|0)
+    });
+  }
+
+  /* --- 4. Constellations ------------------------------------------------- */
+  // Pick K anchors among the brighter, non-MW stars, well-spaced. For each,
+  // gather nearby brightish stars into a small cluster, then connect with a
+  // minimum-spanning-tree (clean asterism, no wild crossings).
+  const K = state.con;
+  // candidate anchor stars: brighter than threshold, not MW filler
+  const cand = [];
+  for(let i=0;i<stars.length;i++){
+    const s = stars[i];
+    if(s.mw) continue;
+    if(s.mag > 0.42) cand.push(i);
+  }
+  // sort by brightness desc, then greedily space anchors apart
+  cand.sort((a,b)=> stars[b].mag - stars[a].mag);
+  const anchors = [];
+  const minAnchorSep = 0.16; // logical units
+  for(const idx of cand){
+    if(anchors.length>=K) break;
+    const s = stars[idx];
+    let ok = true;
+    for(const a of anchors){
+      const o = stars[a];
+      const dx=o.x-s.x, dy=o.y-s.y;
+      if(dx*dx+dy*dy < minAnchorSep*minAnchorSep){ ok=false; break; }
+    }
+    if(ok) anchors.push(idx);
+  }
+
+  const constellations = [];
+  const usedStars = new Set();
+  for(const anchorIdx of anchors){
+    const a = stars[anchorIdx];
+    // gather nearby brightish stars not already used by another constellation
+    const near = [];
+    const gatherR = 0.13 + conRng()*0.05;
+    for(let i=0;i<stars.length;i++){
+      if(i===anchorIdx) continue;
+      const s = stars[i];
+      if(s.mw) continue;
+      if(usedStars.has(i)) continue;
+      if(s.mag < 0.22) continue;
+      const dx=s.x-a.x, dy=s.y-a.y;
+      const d2 = dx*dx+dy*dy;
+      if(d2 < gatherR*gatherR) near.push({ i, d2 });
+    }
+    near.sort((p,q)=>p.d2-q.d2);
+    // target figure size: 3..8 stars
+    const want = 3 + (conRng()*5|0);
+    const members = [anchorIdx];
+    for(const n of near){
+      if(members.length>=want) break;
+      members.push(n.i);
+    }
+    if(members.length < 3) continue; // too sparse to be a figure
+    for(const m of members) usedStars.add(m);
+
+    // Minimum-spanning-tree (Prim) over the member stars -> clean tree of edges.
+    const edges = mstEdges(members, stars);
+
+    // brightest local star (enlarge + catalogue alpha)
+    let brightLocal = members[0], bestMag = -1;
+    for(const m of members){ if(stars[m].mag>bestMag){ bestMag=stars[m].mag; brightLocal=m; } }
+
+    // centroid + label anchor (offset from centroid toward a free corner)
+    let cx=0, cy=0;
+    for(const m of members){ cx+=stars[m].x; cy+=stars[m].y; }
+    cx/=members.length; cy/=members.length;
+    // bounding radius for hit-testing
+    let r=0;
+    for(const m of members){ const dx=stars[m].x-cx, dy=stars[m].y-cy; r=Math.max(r,Math.hypot(dx,dy)); }
+    r += 0.03;
+
+    // name + myth (dedicated stream, deterministic order)
+    const nm = LANG.name(nameRng);
+    const myth = LANG.myth(nameRng, nm.name);
+
+    // label placed below-right of the brightest star by default
+    const bs = stars[brightLocal];
+    const labelX = bs.x + 0.012;
+    const labelY = bs.y + 0.030;
+
+    constellations.push({
+      name:nm.name, key:nm.key, myth,
+      stars:members, edges, brightLocal,
+      cx, cy, r, labelX, labelY
+    });
+  }
+
+  /* --- 5. Sky title ------------------------------------------------------ */
+  // A region-of-sky title (e.g. "The Drowned Quarter") for the cartouche.
+  const quarter = pick(nameRng, ["Quarter","Meridian","Reach","Expanse","Hemisphere","Vault","Field","Wheel"]);
+  const qadj = pick(nameRng, ["Drowned","Silent","Northern","Forgotten","Gilded","Veiled","Wandering","Elder","Frozen","Burning"]);
+  state.title = "The "+qadj+" "+quarter;
+
+  state.stars = stars;
+  state.constellations = constellations;
+  state.nebulae = nebulae;
+  // mwBand = band GEOMETRY (seed-driven). state.mw stays the slider INTENSITY.
+  state.mwBand = { angle:mwAngle, offset:mwOffset, width:mwWidth, wobble:mwWobble };
+
+  // Twinkle budget: only the brightest N stars twinkle (perf). Build that list.
+  const order = stars.map((s,i)=>i).sort((a,b)=> stars[b].mag - stars[a].mag);
+  state.brightOrder = order.slice(0, Math.min(order.length, 260));
+
+  state.genMs = performance.now()-t0;
+}
+
+// Smooth wobble of the milky-way spine along param t in [0,1].
+function mwWobbleAt(t, wob){
+  // piecewise-linear interpolation between control points
+  const n = wob.length;
+  const f = t*(n-1);
+  const i = Math.min(n-2, Math.floor(f));
+  const frac = f - i;
+  return wob[i]*(1-frac) + wob[i+1]*frac;
+}
+
+// Prim's minimum-spanning-tree over a set of star indices. Returns edge pairs.
+function mstEdges(members, stars){
+  const n = members.length;
+  if(n<2) return [];
+  const inTree = new Array(n).fill(false);
+  const bestDist = new Array(n).fill(Infinity);
+  const bestFrom = new Array(n).fill(-1);
+  inTree[0] = true;
+  for(let k=1;k<n;k++){
+    const dx = stars[members[k]].x - stars[members[0]].x;
+    const dy = stars[members[k]].y - stars[members[0]].y;
+    bestDist[k] = dx*dx+dy*dy; bestFrom[k]=0;
+  }
+  const edges=[];
+  for(let added=1; added<n; added++){
+    // find nearest non-tree node
+    let v=-1, vd=Infinity;
+    for(let k=0;k<n;k++){ if(!inTree[k] && bestDist[k]<vd){ vd=bestDist[k]; v=k; } }
+    if(v<0) break;
+    inTree[v]=true;
+    edges.push([members[bestFrom[v]], members[v]]);
+    // relax
+    for(let k=0;k<n;k++){
+      if(inTree[k]) continue;
+      const dx=stars[members[k]].x-stars[members[v]].x;
+      const dy=stars[members[k]].y-stars[members[v]].y;
+      const d=dx*dx+dy*dy;
+      if(d<bestDist[k]){ bestDist[k]=d; bestFrom[k]=v; }
+    }
+  }
+  return edges;
+}
+
+/* ============================================================================
+   RENDERING — palette-driven. Every colour comes from STYLES[state.style].
+   ========================================================================== */
+const canvas = document.getElementById('sky');
+const ctx = canvas.getContext('2d');
+let DPR = Math.min(window.devicePixelRatio||1, 2);
+let CW=0, CH=0;       // css px
+let SX=1, SY=1;       // logical->css px scale
+
+function computeSize(){
+  const stagePad=36;
+  const maxW = window.innerWidth - stagePad;
+  const maxH = window.innerHeight - stagePad;
+  const aspect = state.aspect;
+  let w = maxW, h = w/aspect;
+  if(h>maxH){ h=maxH; w=h*aspect; }
+  w = Math.min(w, 1600); h = w/aspect;
+  CW=Math.round(w); CH=Math.round(h);
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  canvas.width=Math.round(CW*DPR); canvas.height=Math.round(CH*DPR);
+  canvas.style.width=CW+'px'; canvas.style.height=CH+'px';
+  SX = CW/aspect;  // logical x in [0,aspect] -> css px
+  SY = CH;         // logical y in [0,1] -> css px
+}
+
+// logical -> css px helpers
+function px(x){ return x*SX; }
+function py(y){ return y*SY; }
+function rcol(rgb,a){ return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`; }
+// star colour from temperature using palette cool/mid/warm
+function starColor(pal, temp){
+  let c;
+  if(temp<0.5){ const t=temp/0.5; c=lerp3(pal.starCool, pal.starMid, t); }
+  else { const t=(temp-0.5)/0.5; c=lerp3(pal.starMid, pal.starWarm, t); }
+  return c;
+}
+function lerp3(a,b,t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
+
+let _twTime = 0;   // animation clock
+
+function render(twinklePhase){
+  computeSize();
+  const pal = STYLES[state.style];
+  ctx.save();
+  ctx.scale(DPR,DPR);
+
+  drawBackground(pal);
+  if(state.flags.nebulae) drawNebulae(pal);
+  if(state.mw>0) drawMilkyWay(pal);                        // Milky-Way intensity slider
+  if(state.flags.graticule) drawGraticule(pal);
+
+  drawStars(pal, twinklePhase||0);
+  drawConstellations(pal);
+
+  if(state.flags.compass) drawCompass(pal);   // TODO(stage2): style-specific ornate vs none
+  drawCartouche(pal);
+  drawVignette(pal);
+
+  ctx.restore();
+}
+
+/* ---- background gradient + base ---- */
+function drawBackground(pal){
+  const g = ctx.createRadialGradient(CW*0.5, CH*0.42, 0, CW*0.5, CH*0.42, Math.hypot(CW,CH)*0.62);
+  g.addColorStop(0, pal.bg[0]);
+  g.addColorStop(0.6, pal.bg[1]);
+  g.addColorStop(1, pal.bg[2]);
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,CW,CH);
+}
+
+/* ---- nebulae: soft radial colour glows ---- */
+function drawNebulae(pal){
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  for(const n of state.nebulae){
+    const cx=px(n.x), cy=py(n.y), r=n.r*CH;
+    const col = pal.nebula[n.colIdx % pal.nebula.length];
+    const g=ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+    g.addColorStop(0, rcol(col, pal.nebulaAlpha));
+    g.addColorStop(0.5, rcol(col, pal.nebulaAlpha*0.45));
+    g.addColorStop(1, rcol(col, 0));
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ---- Milky Way: a soft luminous ribbon. Painted as a perpendicular linear
+   gradient inside a rotated transform (smooth falloff, no stroke banding) plus
+   a few soft cloud puffs along the spine for organic, deterministic texture.
+   Intensity = state.mw slider; geometry = state.mwBand (seed-driven). ---- */
+function drawMilkyWay(pal){
+  const amt = state.mw;                 // intensity slider 0..1
+  if(amt<=0) return;
+  const band = state.mwBand;
+  const tint = pal.mwTint;
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+
+  // Move to the band centre and rotate so the band runs along the local X axis.
+  const cx = px(0.1), cy = py(band.offset);
+  ctx.translate(cx, cy);
+  ctx.rotate(band.angle);
+
+  const L = Math.hypot(CW,CH)*1.5;      // long enough to span the canvas
+  const half = band.width*CH*1.9;       // perpendicular half-extent of the haze
+  // Smooth perpendicular falloff: transparent -> tint -> transparent.
+  const g = ctx.createLinearGradient(0,-half,0,half);
+  g.addColorStop(0.00, rcol(tint,0));
+  g.addColorStop(0.32, rcol(tint,0.030*amt));
+  g.addColorStop(0.50, rcol(tint,0.075*amt));
+  g.addColorStop(0.68, rcol(tint,0.030*amt));
+  g.addColorStop(1.00, rcol(tint,0));
+  ctx.fillStyle=g;
+  ctx.fillRect(-L, -half, L*2, half*2);
+
+  // A handful of soft cloud puffs along the spine (deterministic from a seeded
+  // RNG so toggling intensity never changes their placement).
+  const puffRng = makeRng(state.seed+"::mwpuff");
+  const nPuff = 7;
+  for(let i=0;i<nPuff;i++){
+    const along = (i/(nPuff-1) - 0.5)*L*0.9;
+    const perp  = (puffRng()-0.5)*half*0.9 + band.wobble[i % band.wobble.length]*CH;
+    const pr = (0.5 + puffRng()*0.9)*band.width*CH;
+    const a = (0.018 + puffRng()*0.020)*amt;
+    const pg = ctx.createRadialGradient(along,perp,0, along,perp,pr);
+    pg.addColorStop(0, rcol(tint,a));
+    pg.addColorStop(1, rcol(tint,0));
+    ctx.fillStyle=pg;
+    ctx.beginPath(); ctx.arc(along,perp,pr,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+  // The dim MW filler stars are drawn in drawStars (tagged mw); their alpha is
+  // scaled by intensity there.
+}
+
+/* ---- star field ---- */
+function drawStars(pal, twPhase){
+  const stars = state.stars;
+  const glowOn = state.flags.glow;
+  const mwAmt = state.mw;            // Milky-Way intensity (fades MW filler stars)
+  const twAmt = state.tw;            // twinkle amplitude 0..1
+  // base scale for radii (relative to canvas height); keeps look stable across sizes
+  const RS = CH/720;
+  // build a quick set of bright indices for twinkle
+  const brightSet = state._brightSet || (state._brightSet = new Set(state.brightOrder));
+
+  // 1) glow halos on the brightest first (so points sit on top)
+  if(glowOn){
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    for(const i of state.brightOrder){
+      const s=stars[i];
+      if(s.mag<0.55) break; // brightOrder sorted desc; stop once dim
+      const col = starColor(pal, s.temp);
+      let b = s.bright;
+      if(twAmt>0 && brightSet.has(i)) b *= 1 + Math.sin(twPhase*s.twSpeed + s.twPhase)*0.22*twAmt;
+      const gx=px(s.x), gy=py(s.y);
+      const gr = (s.radius*RS) * (4.5 + s.mag*5);
+      const g=ctx.createRadialGradient(gx,gy,0,gx,gy,gr);
+      g.addColorStop(0, pal.starGlow + (0.42*b)+")");
+      g.addColorStop(0.4, pal.starGlow + (0.12*b)+")");
+      g.addColorStop(1, pal.starGlow + "0)");
+      ctx.fillStyle=g;
+      ctx.beginPath(); ctx.arc(gx,gy,gr,0,Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 2) the star points themselves
+  ctx.save();
+  for(let i=0;i<stars.length;i++){
+    const s=stars[i];
+    const col = starColor(pal, s.temp);
+    let b = s.bright;
+    if(s.mw) b *= (0.35 + 0.65*mwAmt);             // MW fillers fade with slider
+    if(twAmt>0 && brightSet.has(i)){
+      b *= 1 + Math.sin(twPhase*s.twSpeed + s.twPhase)*0.30*twAmt;
+    }
+    b = Math.max(0, Math.min(1, b));
+    const r = Math.max(0.4, s.radius*RS);
+    ctx.fillStyle = rcol(col, b);
+    ctx.beginPath();
+    ctx.arc(px(s.x), py(s.y), r, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // 3) diffraction crosses on the brightest (style-dependent)
+  if(pal.diffraction && glowOn){
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    for(const i of state.brightOrder){
+      const s=stars[i];
+      if(s.mag<0.72) break;
+      const col=starColor(pal,s.temp);
+      let b=s.bright;
+      if(twAmt>0 && brightSet.has(i)) b *= 1 + Math.sin(twPhase*s.twSpeed + s.twPhase)*0.30*twAmt;
+      const cx=px(s.x), cy=py(s.y);
+      const len=(s.radius*RS)*(4+s.mag*6);
+      ctx.strokeStyle=rcol(col, 0.30*b);
+      ctx.lineWidth=Math.max(0.5, s.radius*RS*0.35);
+      ctx.beginPath();
+      ctx.moveTo(cx-len,cy); ctx.lineTo(cx+len,cy);
+      ctx.moveTo(cx,cy-len); ctx.lineTo(cx,cy+len);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+/* ---- constellations: asterism lines + enlarged anchors + labels ---- */
+function drawConstellations(pal){
+  const stars=state.stars;
+  const cons=state.constellations;
+  const RS = CH/720;
+  const labelMode = state.lab;     // 0 none .. 1 all
+  const hover = state.hoverCon;
+
+  for(let ci=0; ci<cons.length; ci++){
+    const c=cons[ci];
+    const isHover = hover===ci;
+    const dim = (hover>=0 && !isHover);
+    const lineAlpha = isHover ? 0.95 : (dim ? 0.18 : 0.55);
+    const glowAlpha = isHover ? 0.5 : (dim ? 0.0 : 0.18);
+
+    // line glow underlay (for mythic/observatory accents)
+    if(glowAlpha>0){
+      ctx.save();
+      ctx.globalCompositeOperation='lighter';
+      ctx.strokeStyle = pal.lineGlow + glowAlpha + ")";
+      ctx.lineWidth = pal.lineWidth*RS*3.2;
+      ctx.lineCap='round'; ctx.lineJoin='round';
+      ctx.beginPath();
+      for(const [a,b] of c.edges){
+        ctx.moveTo(px(stars[a].x),py(stars[a].y));
+        ctx.lineTo(px(stars[b].x),py(stars[b].y));
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // crisp asterism lines
+    ctx.save();
+    ctx.strokeStyle = applyAlpha(pal.line, lineAlpha);
+    ctx.lineWidth = pal.lineWidth*RS*(isHover?1.5:1);
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.beginPath();
+    for(const [a,b] of c.edges){
+      ctx.moveTo(px(stars[a].x),py(stars[a].y));
+      ctx.lineTo(px(stars[b].x),py(stars[b].y));
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // enlarged + accented member stars when hovered (brighten)
+    if(isHover){
+      ctx.save();
+      ctx.globalCompositeOperation='lighter';
+      for(const m of c.stars){
+        const s=stars[m];
+        const col=starColor(pal,s.temp);
+        const r=Math.max(1, s.radius*RS*1.4);
+        const gr=r*5;
+        const gx=px(s.x), gy=py(s.y);
+        const g=ctx.createRadialGradient(gx,gy,0,gx,gy,gr);
+        g.addColorStop(0, rcol(col,0.55));
+        g.addColorStop(1, rcol(col,0));
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(gx,gy,gr,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle=rcol(col,0.95);
+        ctx.beginPath(); ctx.arc(gx,gy,r,0,Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // enlarge the brightest member a touch (always)
+    {
+      const s=stars[c.brightLocal];
+      const col=starColor(pal,s.temp);
+      ctx.save();
+      ctx.fillStyle=rcol(col, isHover?1:0.92);
+      ctx.beginPath();
+      ctx.arc(px(s.x),py(s.y), Math.max(1.2, s.radius*RS*1.35), 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // labels: Label-Density slider maps to all / major-only / none
+    //   lab >= 0.66   -> all names
+    //   0 < lab < 0.66 -> only the bigger figures (>=5 stars)
+    //   lab == 0      -> none
+    // A hovered constellation always shows its label.
+    let drawLabel;
+    if(labelMode>=0.66) drawLabel=true;
+    else if(labelMode>0) drawLabel = (c.stars.length>=5);
+    else drawLabel=false;
+    if(isHover) drawLabel=true;
+
+    if(drawLabel){
+      drawConLabel(pal, c, isHover, dim, RS);
+    }
+  }
+}
+
+function drawConLabel(pal, c, isHover, dim, RS){
+  const fs = Math.max(11, CH*0.0185);
+  const italic = pal.labelItalic ? 'italic ' : '';
+  ctx.save();
+  ctx.font = `${italic}600 ${fs}px ${pal.labelFont}`;
+  ctx.textBaseline='top';
+  ctx.textAlign='left';
+  const lx = px(c.labelX), ly = py(c.labelY);
+  const alpha = isHover?1 : dim?0.30 : 0.85;
+
+  if(pal.labelGlow && !dim){
+    ctx.shadowColor = applyAlpha(pal.line, 0.7);
+    ctx.shadowBlur = fs*0.7;
+  }
+  // catalogue designation for the brightest star (observatory/blueprint)
+  ctx.fillStyle = applyAlpha(pal.label, alpha);
+  ctx.fillText(c.name, lx, ly);
+
+  ctx.shadowBlur=0;
+  if(pal.catalog){
+    const gen = LANG.genitive(c.key);
+    ctx.font = `${fs*0.72}px ${pal.labelFont}`;
+    ctx.fillStyle = applyAlpha(pal.labelDim, isHover?1:0.8);
+    ctx.fillText(`α ${gen}`, lx, ly+fs*1.15);
+  }
+  ctx.restore();
+}
+
+/* ---- chart furniture ---- */
+function drawGraticule(pal){
+  // Stage 1: a SUBTLE rectangular RA/Dec-style grid for all styles.
+  // TODO(stage2): planisphere (circular horizon ring + radial ticks) for
+  //   antique/mythic; full coordinate ticks along margins for blueprint
+  //   (pal.coordTicks) — branch on pal.graticule / pal.coordTicks here.
+  ctx.save();
+  ctx.strokeStyle = pal.gridColor;
+  ctx.lineWidth = 1;
+  const cols=12, rows=8;
+  for(let i=1;i<cols;i++){ const x=CW*i/cols; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,CH); ctx.stroke(); }
+  for(let j=1;j<rows;j++){ const y=CH*j/rows; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(CW,y); ctx.stroke(); }
+  ctx.restore();
+}
+
+function drawCompass(pal){
+  // Stage 1: a simple N E S W cardinal ring (top-right).
+  // TODO(stage2): ornate engraved compass for antique, glowing zodiacal compass
+  //   for mythic (branch on pal.compassStyle); planisphere styles get a horizon
+  //   ring with radial degree ticks.
+  const cx=CW-CH*0.10, cy=CH*0.12, r=CH*0.055;
+  ctx.save();
+  ctx.strokeStyle=applyAlpha(pal.line,0.5); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx,cy,r*0.62,0,Math.PI*2); ctx.stroke();
+  ctx.fillStyle=applyAlpha(pal.label,0.8);
+  ctx.font=`${Math.max(9,r*0.34)}px ${pal.cartoucheFont}`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('N',cx,cy-r*0.78);
+  ctx.fillText('S',cx,cy+r*0.78);
+  ctx.fillText('E',cx+r*0.78,cy);
+  ctx.fillText('W',cx-r*0.78,cy);
+  // pointer
+  ctx.strokeStyle=applyAlpha(pal.line,0.7);
+  ctx.beginPath(); ctx.moveTo(cx,cy+r*0.5); ctx.lineTo(cx,cy-r*0.5); ctx.stroke();
+  ctx.restore();
+}
+
+function drawCartouche(pal){
+  // Title cartouche bottom-left: sky region title + seed.
+  const fs = Math.max(13, CH*0.024);
+  const sfs = fs*0.62;
+  ctx.save();
+  ctx.font = `600 ${fs}px ${pal.cartoucheFont}`;
+  const title = state.title;
+  const sub = "seed · "+state.seed;
+  const w = Math.max(ctx.measureText(title).width, ctx.measureText(sub).width);
+  const padX=fs*0.8, padY=fs*0.55;
+  const boxW=w+padX*2, boxH=fs+sfs+padY*2+fs*0.3;
+  const bx=CH*0.045, by=CH-boxH-CH*0.045;
+  ctx.fillStyle=pal.cartoucheBg;
+  roundRect(bx,by,boxW,boxH,fs*0.28); ctx.fill();
+  ctx.lineWidth=1.2; ctx.strokeStyle=pal.cartoucheEdge; ctx.stroke();
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillStyle=pal.cartoucheText;
+  ctx.fillText(title, bx+padX, by+padY);
+  ctx.font=`${sfs}px ${pal.cartoucheFont}`;
+  ctx.fillStyle=applyAlpha(pal.labelDim,0.9);
+  ctx.fillText(sub, bx+padX, by+padY+fs*1.25);
+  ctx.restore();
+}
+
+function drawVignette(pal){
+  const g=ctx.createRadialGradient(CW*0.5,CH*0.5,Math.min(CW,CH)*0.35, CW*0.5,CH*0.5,Math.hypot(CW,CH)*0.62);
+  g.addColorStop(0,"rgba(0,0,0,0)");
+  g.addColorStop(1,pal.vignette);
+  ctx.fillStyle=g; ctx.fillRect(0,0,CW,CH);
+  // TODO(stage2): antique parchment vignette + paper grain texture here.
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+// Apply an alpha to a palette colour that may be a hex string.
+function applyAlpha(col, a){
+  if(col[0]==='#'){
+    const n=parseInt(col.slice(1),16);
+    return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+  }
+  // assume rgba(...) with trailing ) — replace final alpha if present
+  if(col.startsWith('rgba')){
+    return col.replace(/[\d.]+\)$/, a+')');
+  }
+  return col;
+}
+
+/* ============================================================================
+   ANIMATION — twinkle loop. Runs only when Twinkle > 0; otherwise static.
+   ========================================================================== */
+let rafId=null;
+let lastFps=0, fpsAccum=0, fpsFrames=0, fpsLast=0;
+function animate(ts){
+  if(state.tw<=0){ rafId=null; return; }   // stopped; static render already drawn
+  if(!fpsLast) fpsLast=ts;
+  const dt=ts-fpsLast; fpsLast=ts;
+  fpsAccum+=dt; fpsFrames++;
+  if(fpsAccum>=500){ lastFps=Math.round(1000*fpsFrames/fpsAccum); fpsAccum=0; fpsFrames=0; }
+  _twTime = ts/1000;
+  render(_twTime*1.4);
+  rafId=requestAnimationFrame(animate);
+}
+function startTwinkle(){
+  if(state.tw<=0){ if(rafId){cancelAnimationFrame(rafId);rafId=null;} render(0); return; }
+  if(rafId==null){ fpsLast=0; rafId=requestAnimationFrame(animate); }
+}
+function stopTwinkle(){
+  if(rafId){ cancelAnimationFrame(rafId); rafId=null; }
+}
+
+/* ============================================================================
+   HOVER — pick the constellation whose hit-region (centroid radius / nearest
+   edge) is under the cursor; highlight + show myth.
+   ========================================================================== */
+const readout = document.getElementById('readout');
+function pickConstellation(mx,my){
+  // mx,my in css px -> logical
+  const lx = mx/SX, ly = my/SY;
+  const stars=state.stars;
+  let best=-1, bestD=Infinity;
+  const cons=state.constellations;
+  for(let ci=0;ci<cons.length;ci++){
+    const c=cons[ci];
+    // distance to centroid; within bounding radius is a candidate
+    const dx=lx-c.cx, dy=ly-c.cy;
+    const dc=Math.hypot(dx,dy);
+    if(dc <= c.r){
+      // refine: distance to nearest member star or edge midpoint
+      let dmin=dc;
+      for(const m of c.stars){
+        const sd=Math.hypot(lx-stars[m].x, ly-stars[m].y);
+        if(sd<dmin) dmin=sd;
+      }
+      if(dmin<bestD){ bestD=dmin; best=ci; }
+    }
+  }
+  return best;
+}
+function onMove(e){
+  const rect=canvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  const ci=pickConstellation(mx,my);
+  if(ci!==state.hoverCon){
+    state.hoverCon=ci;
+    if(ci>=0){
+      const c=state.constellations[ci];
+      readout.querySelector('.rname').textContent=c.name;
+      // "Myth labels" flourish gates the one-line myth in the readout.
+      readout.querySelector('.rmyth').textContent = state.flags.myths ? c.myth : '';
+      readout.classList.add('show');
+    } else {
+      readout.classList.remove('show');
+    }
+    if(state.tw<=0) render(0);   // static styles need an explicit redraw
+  }
+}
+function onLeave(){
+  if(state.hoverCon!==-1){
+    state.hoverCon=-1;
+    readout.classList.remove('show');
+    if(state.tw<=0) render(0);
+  }
+}
+
+/* ============================================================================
+   UI WIRING (mirrors Cartographer)
+   ========================================================================== */
+function randomSeedString(){
+  const r=makeRng(String(Date.now()*Math.random()));
+  const nm = LANG.name(r);
+  const core = nm.key.toUpperCase().slice(0,3);
+  return core + "-" + (1000+(r()*9000|0));
+}
+
+function regenAndRender(){
+  try{
+    generate();
+    state._brightSet=null;   // invalidate twinkle set
+    if(state.tw>0){ stopTwinkle(); render(_twTime*1.4); startTwinkle(); }
+    else render(0);
+  }catch(e){ console.error("Generation error:",e); }
+}
+
+let regenTimer=null;
+function scheduleRegen(){ clearTimeout(regenTimer); regenTimer=setTimeout(regenAndRender,90); }
+let renderTimer=null;
+function scheduleRender(){
+  clearTimeout(renderTimer);
+  renderTimer=setTimeout(()=>{ if(state.tw>0){ /* loop handles it */ } else render(0); },16);
+}
+
+function syncSliderFill(el){
+  const min=+el.min,max=+el.max,v=+el.value;
+  el.style.setProperty('--fill', ((v-min)/(max-min)*100)+'%');
+}
+
+function wireUI(){
+  const seedInput=document.getElementById('seed');
+  const sliders=[
+    ['dens','densVal',v=>Math.round(v*100)+'%', true],
+    ['con','conVal',v=>String(v|0), true],
+    ['mw','mwVal',v=>Math.round(v*100)+'%', false],
+    ['tw','twVal',v=>Math.round(v*100)+'%', false],
+    ['lab','labVal',v=>Math.round(v*100)+'%', false],
+  ];
+  for(const [id,valId,fmt,regen] of sliders){
+    const el=document.getElementById(id);
+    const val=document.getElementById(valId);
+    syncSliderFill(el); val.textContent=fmt(+el.value);
+    el.addEventListener('input',()=>{
+      const v=+el.value;
+      state[id]=v; val.textContent=fmt(v); syncSliderFill(el);
+      if(id==='tw'){
+        // twinkle is a render-only param; start/stop the loop
+        if(v>0) startTwinkle(); else { stopTwinkle(); render(0); }
+        return;
+      }
+      if(regen) scheduleRegen();    // dens / con change the SKY -> regenerate
+      else { if(state.tw>0){/*loop*/} else render(0); }  // mw/lab are render-only
+    });
+  }
+  // style segmented — render only (sky must NOT change)
+  document.getElementById('styleSeg').addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    [...e.currentTarget.children].forEach(c=>c.classList.toggle('active',c===b));
+    state.style=b.dataset.v;
+    if(state.tw<=0) render(0); // loop already redraws when twinkling
+  });
+  // flag chips — render only
+  document.querySelectorAll('.chip').forEach(chip=>{
+    chip.addEventListener('click',()=>{
+      const t=chip.dataset.t; state.flags[t]=!state.flags[t];
+      chip.classList.toggle('on',state.flags[t]);
+      if(state.tw<=0) render(0);
+    });
+  });
+  seedInput.addEventListener('change',()=>{ state.seed=seedInput.value.trim()||'Vega'; regenAndRender(); });
+  seedInput.addEventListener('keydown',e=>{ if(e.key==='Enter') seedInput.blur(); });
+  document.getElementById('randSeed').addEventListener('click',()=>{
+    state.seed=randomSeedString(); seedInput.value=state.seed; regenAndRender();
+  });
+  document.getElementById('reroll').addEventListener('click',()=>{
+    state.seed=randomSeedString(); seedInput.value=state.seed; regenAndRender();
+  });
+  document.getElementById('exportBtn').addEventListener('click',exportPNG);
+  document.getElementById('collapseBtn').addEventListener('click',()=>{
+    document.getElementById('panel').classList.add('collapsed');
+  });
+  document.getElementById('reopen').addEventListener('click',()=>{
+    document.getElementById('panel').classList.remove('collapsed');
+  });
+  // hover
+  canvas.addEventListener('mousemove',onMove);
+  canvas.addEventListener('mouseleave',onLeave);
+  // resize (debounced)
+  let rt=null;
+  window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(()=>{ render(state.tw>0?_twTime*1.4:0); },120); });
+}
+
+function exportPNG(){
+  try{
+    // ensure a fresh static frame is on the canvas
+    render(state.tw>0?_twTime*1.4:0);
+    const url=canvas.toDataURL('image/png');
+    const a=document.createElement('a');
+    const safe=(state.title||'sky').replace(/[^a-z0-9]+/gi,'_').toLowerCase();
+    a.href=url; a.download='firmament_'+safe+'.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  }catch(e){ console.error('Export failed:',e); }
+}
+
+/* ----------------------------- boot --------------------------------------- */
+function boot(){
+  state.dens=+document.getElementById('dens').value;
+  state.con =+document.getElementById('con').value;
+  state.mw  =+document.getElementById('mw').value;
+  state.tw  =+document.getElementById('tw').value;
+  state.lab =+document.getElementById('lab').value;
+  state.seed = randomSeedString();
+  document.getElementById('seed').value=state.seed;
+  wireUI();
+  generate();
+  render(0);
+  if(state.tw>0) startTwinkle();
+  console.log('Firmament ready. Seed:', state.seed,
+    '| stars:', state.stars.length,
+    '| constellations:', state.constellations.length,
+    '| gen', state.genMs.toFixed(1)+'ms');
+}
+window.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>
