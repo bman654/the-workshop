@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compositor</title>
+<style>
+  :root{
+    --panel-bg: rgba(22,22,24,0.86);
+    --panel-edge: rgba(150,150,160,0.30);
+    --ink: #ededf0;
+    --ink-dim: #9a9aa4;
+    --accent: #e5443b;
+    --accent-soft: rgba(229,68,59,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:#0e0e10;
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  #stage{
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(1200px 800px at 50% 38%, #1a1a1d 0%, #121214 70%, #0a0a0c 100%);
+    padding:18px;
+  }
+  #posterWrap{
+    position:relative;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6), 0 2px 0 rgba(255,255,255,0.03) inset;
+    border-radius:3px;
+    max-width:100%; max-height:100%;
+  }
+  canvas#poster{
+    display:block;
+    border-radius:2px;
+    max-width:100%; max-height:calc(100vh - 36px);
+  }
+  /* ---------- Control panel ---------- */
+  #panel{
+    position:fixed; top:18px; left:18px;
+    width:288px;
+    background:var(--panel-bg);
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+    border:1px solid var(--panel-edge);
+    border-radius:12px;
+    padding:14px 15px 16px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.55);
+    z-index:20;
+    transition: transform .35s cubic-bezier(.2,.8,.2,1), opacity .25s;
+    max-height: calc(100vh - 36px);
+    overflow-y:auto;
+  }
+  #panel.collapsed{ transform: translateX(calc(-100% - 24px)); opacity:0; pointer-events:none; }
+  #panel h1{
+    font-size:20px; font-weight:700; letter-spacing:-0.5px;
+    margin:0 0 2px; color:var(--ink);
+  }
+  #panel .sub{ font-size:10.5px; color:var(--ink-dim); margin:0 0 12px; letter-spacing:1.4px; text-transform:uppercase; }
+  .row{ margin:10px 0; }
+  .row label{ display:flex; justify-content:space-between; align-items:baseline; font-size:11.5px; color:var(--ink-dim); margin-bottom:5px; letter-spacing:.3px; }
+  .row label .val{ color:var(--accent); font-variant-numeric:tabular-nums; font-size:11px; font-family:var(--font-mono); }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#fff; border:2px solid #c23128; box-shadow:0 1px 4px rgba(0,0,0,.4); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%; background:#fff; border:2px solid #c23128; cursor:pointer;
+  }
+  .seedrow{ display:flex; gap:6px; align-items:center; }
+  .seedrow input[type=text]{
+    flex:1; min-width:0; background:rgba(0,0,0,0.32); border:1px solid var(--panel-edge); color:var(--ink);
+    border-radius:7px; padding:7px 9px; font-size:13px; font-family:var(--font-mono); letter-spacing:.5px;
+  }
+  .seedrow input[type=text]:focus{ outline:none; border-color:var(--accent); }
+  .textfield{
+    width:100%; background:rgba(0,0,0,0.32); border:1px solid var(--panel-edge); color:var(--ink);
+    border-radius:7px; padding:7px 9px; font-size:13px; font-family:var(--font-ui); letter-spacing:.2px; margin-bottom:6px;
+  }
+  .textfield:focus{ outline:none; border-color:var(--accent); }
+  .iconbtn, button.dice{
+    flex:0 0 auto; width:34px; height:34px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.04); color:var(--ink); cursor:pointer; font-size:15px; line-height:1;
+    display:flex; align-items:center; justify-content:center; transition:.15s;
+  }
+  .iconbtn:hover, button.dice:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.28); padding:3px; border-radius:9px; border:1px solid rgba(150,150,160,0.18); flex-wrap:wrap; }
+  .seg button{
+    flex:1 1 0; min-width:0; border:none; background:transparent; color:var(--ink-dim); font-size:10.5px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap;
+  }
+  .seg button.active{ background:var(--accent); color:#fff; font-weight:700; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .genbtn{
+    width:100%; padding:7px 8px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.04); color:var(--ink-dim); font-size:11.5px; cursor:pointer; transition:.15s;
+  }
+  .genbtn:hover{ color:var(--ink); border-color:var(--accent); background:var(--accent-soft); }
+  .toggles{ display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+  .chip{
+    font-size:11px; padding:5px 9px; border-radius:14px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.03); color:var(--ink-dim); cursor:pointer; transition:.15s; user-select:none;
+  }
+  .chip.on{ background:var(--accent-soft); border-color:var(--accent); color:var(--ink); }
+  .actions{ display:flex; gap:8px; margin-top:14px; }
+  .actions button{
+    flex:1; padding:10px 8px; border-radius:9px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.05);
+    color:var(--ink); font-size:12.5px; font-weight:600; cursor:pointer; transition:.15s; letter-spacing:.3px;
+  }
+  .actions button:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .actions button.primary{ background:linear-gradient(180deg, #e5443b, #c23128); color:#fff; border-color:#f05a50; }
+  .actions button.primary:hover{ background:linear-gradient(180deg, #ef574e, #d23e34); }
+  hr.sep{ border:none; border-top:1px solid rgba(150,150,160,0.18); margin:13px 0 11px; }
+  .hint{ font-size:10px; color:#6e6e78; margin-top:10px; line-height:1.5; letter-spacing:.2px; }
+  #reopen{
+    position:fixed; top:18px; left:18px; z-index:21;
+    width:42px; height:42px; border-radius:10px; border:1px solid var(--panel-edge);
+    background:var(--panel-bg); color:var(--accent); cursor:pointer; font-size:18px;
+    display:none; align-items:center; justify-content:center; backdrop-filter:blur(8px);
+    box-shadow:0 8px 24px rgba(0,0,0,.5);
+  }
+  #panel.collapsed ~ #reopen{ display:flex; }
+  .collapse-x{
+    position:absolute; top:9px; right:9px; width:22px; height:22px; border-radius:6px; border:none;
+    background:transparent; color:var(--ink-dim); cursor:pointer; font-size:15px; line-height:1;
+  }
+  .collapse-x:hover{ color:var(--ink); background:rgba(255,255,255,0.06); }
+  ::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-thumb{background:rgba(229,68,59,.3);border-radius:4px}
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="posterWrap">
+      <canvas id="poster"></canvas>
+    </div>
+  </div>
+
+  <div id="panel">
+    <button class="collapse-x" id="collapseBtn" title="Hide panel">&#10005;</button>
+    <h1>Compositor</h1>
+    <p class="sub">Generative Type Press</p>
+
+    <div class="row">
+      <label>Seed</label>
+      <div class="seedrow">
+        <input type="text" id="seed" spellcheck="false" value="">
+        <button class="dice" id="randSeed" title="Random seed">&#9860;</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Movement</label>
+      <div class="seg" id="moveSeg">
+        <button data-v="swiss" class="active">Swiss</button>
+        <button data-v="bauhaus">Bauhaus</button>
+        <button data-v="brutalist">Brutal</button>
+        <button data-v="deco">Deco</button>
+        <button data-v="editorial">Editorial</button>
+      </div>
+    </div>
+
+    <hr class="sep">
+
+    <div class="row">
+      <label>Title</label>
+      <input type="text" class="textfield" id="titleField" spellcheck="false" placeholder="Title">
+      <label>Subtitle <span class="val" style="color:var(--ink-dim);font-family:var(--font-ui);text-transform:none;letter-spacing:0">optional</span></label>
+      <input type="text" class="textfield" id="subField" spellcheck="false" placeholder="Subtitle">
+      <button class="genbtn" id="genText">&#127922; generate text</button>
+    </div>
+
+    <hr class="sep">
+
+    <div class="row">
+      <label>Scale / Contrast <span class="val" id="scaleVal"></span></label>
+      <input type="range" id="scale" min="0" max="1" step="0.01" value="0.6">
+    </div>
+    <div class="row">
+      <label>Ornament <span class="val" id="ornVal"></span></label>
+      <input type="range" id="orn" min="0" max="1" step="0.01" value="0.5">
+    </div>
+    <div class="row">
+      <label>Format <span class="val" id="fmtVal"></span></label>
+      <input type="range" id="fmt" min="0" max="2" step="1" value="0">
+    </div>
+
+    <hr class="sep">
+    <div class="row" style="margin:0 0 2px">
+      <label style="margin-bottom:7px">Flourishes</label>
+      <div class="toggles">
+        <div class="chip" data-t="grid">Grid overlay</div>
+        <div class="chip" data-t="grain">Texture</div>
+        <div class="chip" data-t="frame">Frame</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="primary" id="reroll">&#10227; Re-roll</button>
+      <button id="exportBtn">&#8595; PNG</button>
+    </div>
+
+    <p class="hint">Each seed + movement + text yields one fixed poster. Movement sets the design system; the seed varies the composition. Type your own title, or hit generate text.</p>
+  </div>
+
+  <button id="reopen" title="Show panel">&#9776;</button>
+
+<script>
+"use strict";
+/* ============================================================================
+   COMPOSITOR — single-file generative typographic poster press
+   ----------------------------------------------------------------------------
+   Seed (xmur3 + mulberry32) -> generated phrase -> a poster laid out in a chosen
+   design MOVEMENT (Swiss / Bauhaus / Brutalist / Art Deco / Editorial). Each
+   movement is its own design SYSTEM (palette + type + grid + layout rules); the
+   seed varies the composition within it. Canvas -> trivial PNG export. System
+   font stacks only; no web fonts, no network.
+   ========================================================================== */
+
+/* ----------------------------- PRNG (mulberry32) -------------------------- */
+function xmur3(str){
+  let h = 1779033703 ^ str.length;
+  for (let i=0;i<str.length;i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function(){
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return h >>> 0;
+  };
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeRng(seedStr){ const s = xmur3(String(seedStr)); return mulberry32(s()); }
+
+/* ----------------------------- Font stacks -------------------------------- */
+/* System fonts only. We name families directly (CSS vars can't be measured by
+   canvas measureText reliably across browsers, so we use literal stacks). */
+const FONT = {
+  grotesque: '"Helvetica Neue", Helvetica, Arial, "Segoe UI", Roboto, sans-serif',
+  geometric: '"Futura", "Century Gothic", "Avenir Next", "Helvetica Neue", Arial, sans-serif',
+  serif: 'Georgia, "Times New Roman", "Iowan Old Style", "Palatino Linotype", Palatino, serif',
+  mono: 'ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace',
+  display: '"Helvetica Neue", "Arial Black", Arial, sans-serif'
+};
+
+/* ----------------------------- Phrase generator --------------------------- */
+/* Curated evocative pools — coherent short titles + optional subtitle/kicker/
+   numeral. The generator keeps results restrained and "designed", never random
+   word salad: a title is drawn from a small set of grammatical templates. */
+const PHRASE = (function(){
+  const adjectives = ["LONG","QUIET","DISTANT","HIDDEN","SILENT","SLOW","VAST","STILL","BRIEF","DEEP","PALE","LATE","BRIGHT","HOLLOW","FAINT","GRAVE","LUMINOUS","SEVERE"];
+  const nouns = ["QUIET","HOUR","SIGNAL","HORIZON","INTERVAL","THRESHOLD","CURRENT","FREQUENCY","MARGIN","PASSAGE","DRIFT","ASCENT","FIELD","ARCHIVE","ASSEMBLY","STRUCTURE","FORM","MOTION","SILENCE","DISTANCE","MACHINE","GARDEN","NETWORK","SYSTEM"];
+  const placeNouns = ["edge of the map","far shore","quiet country","new world","lower atmosphere","inner city","open sea","grey north","empty quarter","middle distance"];
+  const abstractNouns = ["falling","forgetting","arrival","departure","attention","repair","listening","stillness","wandering","return"];
+  const kickers = ["A FIELD GUIDE","NEW WORK","SELECTED","FIRST EDITION","AN EXHIBITION","COLLECTED","NOTES","A SURVEY","IN FOUR PARTS","RETROSPECTIVE","PROCEEDINGS","A MONOGRAPH"];
+  const subjects = ["TYPE","FORM","SPACE","COLOUR","ORDER","LIGHT","GRID","LINE","STRUCTURE","SILENCE","MOTION","MATTER"];
+  const verbsing = ["BUILDING","DRAWING","READING","MAKING","SHAPING","SETTING","HOLDING","FINDING"];
+
+  function pick(rng,a){ return a[(rng()*a.length)|0]; }
+  function roman(n){
+    const map=[[1000,"M"],[900,"CM"],[500,"D"],[400,"CD"],[100,"C"],[90,"XC"],[50,"L"],[40,"XL"],[10,"X"],[9,"IX"],[5,"V"],[4,"IV"],[1,"I"]];
+    let out=""; for(const [v,s] of map){ while(n>=v){ out+=s; n-=v; } } return out;
+  }
+
+  // Title templates -> ALWAYS coherent, short.
+  function title(rng){
+    const r=rng();
+    if(r<0.30) return "THE " + pick(rng,adjectives) + " " + pick(rng,nouns);
+    if(r<0.50) return pick(rng,verbsing) + " " + pick(rng,subjects);
+    if(r<0.66) return pick(rng,nouns) + " & " + pick(rng,nouns);
+    if(r<0.82) return "THE " + pick(rng,nouns);
+    return pick(rng,adjectives) + " " + pick(rng,nouns);
+  }
+  // Lowercase, gentler subtitle.
+  function subtitle(rng){
+    const r=rng();
+    if(r<0.34) return "a field guide to " + pick(rng,abstractNouns);
+    if(r<0.58) return "dispatches from the " + pick(rng,placeNouns);
+    if(r<0.78) return "on " + pick(rng,subjects).toLowerCase() + ", " + pick(rng,subjects).toLowerCase() + " & " + pick(rng,subjects).toLowerCase();
+    return "an inquiry into " + pick(rng,abstractNouns);
+  }
+  function kicker(rng){ return pick(rng,kickers); }
+  function numeral(rng){
+    const r=rng();
+    if(r<0.4) return "NO. " + (1+(rng()*12|0));
+    if(r<0.7) return roman(2020 + (rng()*12|0)); // MMXX..
+    return ("0"+(1+(rng()*9|0))).slice(-2);
+  }
+  return { title, subtitle, kicker, numeral };
+})();
+
+/* Generate a coherent text bundle from the seed. */
+function genPhrase(seedStr){
+  const rng = makeRng(seedStr + "::phrase");
+  return {
+    title: PHRASE.title(rng),
+    subtitle: PHRASE.subtitle(rng),
+    kicker: PHRASE.kicker(rng),
+    numeral: PHRASE.numeral(rng)
+  };
+}
+
+/* ----------------------------- Palettes ----------------------------------- */
+/* Each movement carries a family of harmonious palettes; the seed picks one.
+   Restrained: 2-4 colours. */
+const PALETTES = {
+  swiss: [
+    { bg:"#f4f4f2", ink:"#111111", accent:"#e5231b", soft:"#8a8a8a" },
+    { bg:"#111111", ink:"#f4f4f2", accent:"#e5231b", soft:"#7a7a7a" },
+    { bg:"#f4f4f2", ink:"#111111", accent:"#1b53e5", soft:"#8a8a8a" },
+    { bg:"#ecebe7", ink:"#1a1a1a", accent:"#0f0f0f", soft:"#9a9a94" }
+  ],
+  bauhaus: [
+    { bg:"#efe9dc", ink:"#1b1b1b", c1:"#d62828", c2:"#1d3aa8", c3:"#f0c419" },
+    { bg:"#f2ede1", ink:"#161616", c1:"#e63b2e", c2:"#2a4fb0", c3:"#f4b400" },
+    { bg:"#e8e2d4", ink:"#101010", c1:"#c81f1f", c2:"#22307a", c3:"#edb700" }
+  ],
+  brutalist: [
+    { bg:"#e9e7e1", ink:"#0c0c0c", accent:"#0c0c0c" },
+    { bg:"#0c0c0c", ink:"#ececec", accent:"#ff3b1f" },
+    { bg:"#f4f400", ink:"#0c0c0c", accent:"#0c0c0c" },
+    { bg:"#1f2b8a", ink:"#f0f0f0", accent:"#f4f400" }
+  ],
+  deco: [
+    { bg:"#0b2b2b", ink:"#e9d9a8", accent:"#c8a13a", line:"#9d7e2c" },
+    { bg:"#0c0c10", ink:"#e6cf86", accent:"#c8a13a", line:"#8a6f24" },
+    { bg:"#10222e", ink:"#e8dcb0", accent:"#cba64a", line:"#9a7f30" },
+    { bg:"#2a0d12", ink:"#e8cf9a", accent:"#caa23c", line:"#9c7a28" }
+  ],
+  editorial: [
+    { bg:"#f6f3ec", ink:"#1d1c1a", accent:"#7a1f1f", rule:"#b8b2a4" },
+    { bg:"#f3f1ea", ink:"#20201e", accent:"#1d3a5f", rule:"#bdb8ab" },
+    { bg:"#efece3", ink:"#26241f", accent:"#3a3a36", rule:"#c2bcae" },
+    { bg:"#22201c", ink:"#ece6d8", accent:"#c8a64a", rule:"#5a564c" }
+  ]
+};
+
+/* ----------------------------- App state ---------------------------------- */
+const FORMATS = [
+  { name:"portrait", w:2, h:3 },
+  { name:"square",   w:1, h:1 },
+  { name:"wide",     w:3, h:2 }
+];
+const MOVEMENTS = ["swiss","bauhaus","brutalist","deco","editorial"];
+const MOVEMENT_LABEL = { swiss:"Swiss / International", bauhaus:"Bauhaus", brutalist:"Brutalist", deco:"Art Deco", editorial:"Editorial" };
+
+const state = {
+  seed:"",
+  movement:"swiss",
+  title:"",        // user-overridable
+  subtitle:"",     // user-overridable
+  userTitle:false, // did the user type a title?
+  userSub:false,
+  scale:0.6,
+  orn:0.5,
+  fmt:0,
+  flags:{ grid:false, grain:false, frame:false },
+  gen:null         // last generated phrase bundle
+};
+
+/* ----------------------------- Canvas setup ------------------------------- */
+const canvas = document.getElementById('poster');
+const ctx = canvas.getContext('2d');
+let DPR = Math.min(window.devicePixelRatio||1, 2);
+let CW=0, CH=0;
+
+function computeSize(){
+  const stagePad=36;
+  const maxW = window.innerWidth - stagePad;
+  const maxH = window.innerHeight - stagePad;
+  const f = FORMATS[state.fmt];
+  const aspect = f.w/f.h;
+  let w = maxW, h = w/aspect;
+  if(h>maxH){ h=maxH; w=h*aspect; }
+  // cap for perf
+  const capH = 1280;
+  if(h>capH){ h=capH; w=h*aspect; }
+  CW=Math.round(w); CH=Math.round(h);
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  canvas.width=Math.round(CW*DPR); canvas.height=Math.round(CH*DPR);
+  canvas.style.width=CW+'px'; canvas.style.height=CH+'px';
+}
+
+/* ----------------------------- Layout helpers ----------------------------- */
+/* Fit a single line of text to a target width by binary-searching font size.
+   Returns the size that fills targetW (clamped between min and max). */
+function fitSize(text, fontSpec, targetW, minS, maxS){
+  let lo=minS, hi=maxS;
+  for(let i=0;i<22;i++){
+    const mid=(lo+hi)/2;
+    ctx.font = fontSpec.replace("__SIZE__", mid.toFixed(2)+"px");
+    const w = ctx.measureText(text).width;
+    if(w>targetW) hi=mid; else lo=mid;
+  }
+  return lo;
+}
+function setFont(weight, sizePx, family){
+  ctx.font = `${weight} ${sizePx.toFixed(2)}px ${family}`;
+}
+function measureW(text, weight, sizePx, family){
+  ctx.font = `${weight} ${sizePx.toFixed(2)}px ${family}`;
+  return ctx.measureText(text).width;
+}
+/* draw letter-spaced text (canvas has no native tracking in all browsers) */
+function drawTracked(text, x, y, tracking, align){
+  // measure full width including tracking
+  let total=0; const widths=[];
+  for(const ch of text){ const w=ctx.measureText(ch).width; widths.push(w); total+=w+tracking; }
+  total-=tracking;
+  let cx = align==='center' ? x-total/2 : align==='right' ? x-total : x;
+  const savedAlign=ctx.textAlign; ctx.textAlign='left';
+  let i=0;
+  for(const ch of text){ ctx.fillText(ch,cx,y); cx+=widths[i]+tracking; i++; }
+  ctx.textAlign=savedAlign;
+  return total;
+}
+function trackedWidth(text, tracking){
+  let total=0;
+  for(const ch of text){ total+=ctx.measureText(ch).width+tracking; }
+  return total-tracking;
+}
+/* Word-wrap a string into <=maxLines lines that each fit targetW at the given
+   font. Returns {lines, size} — shrinks size until it fits. */
+function wrapToLines(text, weight, family, targetW, maxLines, startS, minS){
+  const words = text.split(/\s+/);
+  let size=startS;
+  while(size>=minS){
+    ctx.font=`${weight} ${size.toFixed(2)}px ${family}`;
+    // guard: if any single word can't fit at this size, this size is invalid.
+    let widestWord=0;
+    for(const w of words){ widestWord=Math.max(widestWord, ctx.measureText(w).width); }
+    if(widestWord>targetW){ size-=Math.max(1,size*0.06); continue; }
+    // greedy wrap
+    const lines=[]; let cur="";
+    for(const w of words){
+      const test = cur? cur+" "+w : w;
+      if(ctx.measureText(test).width<=targetW || cur===""){ cur=test; }
+      else { lines.push(cur); cur=w; }
+    }
+    if(cur) lines.push(cur);
+    if(lines.length<=maxLines) return {lines, size};
+    size-=Math.max(1,size*0.06);
+  }
+  // last resort at minS: wrap greedily even if it spills (caller chose minS)
+  ctx.font=`${weight} ${minS.toFixed(2)}px ${family}`;
+  const lines=[]; let cur="";
+  for(const w of words){
+    const test=cur?cur+" "+w:w;
+    if(ctx.measureText(test).width<=targetW || cur===""){ cur=test; }
+    else { lines.push(cur); cur=w; }
+  }
+  if(cur) lines.push(cur);
+  return {lines, size:minS};
+}
+
+function fillBg(color){ ctx.fillStyle=color; ctx.fillRect(0,0,CW,CH); }
+function pickFrom(rng,arr){ return arr[(rng()*arr.length)|0]; }
+function hexToRgb(h){ const n=parseInt(h.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+
+/* ----------------------------- Grid overlay ------------------------------- */
+function drawGridOverlay(g){
+  ctx.save();
+  ctx.strokeStyle="rgba(120,120,200,0.45)";
+  ctx.lineWidth=0.75;
+  ctx.setLineDash([3,3]);
+  // margin box
+  ctx.strokeRect(g.mx, g.my, g.gw, g.gh);
+  ctx.setLineDash([]);
+  ctx.strokeStyle="rgba(120,120,200,0.30)";
+  ctx.lineWidth=0.5;
+  for(let c=1;c<g.cols;c++){
+    const x=g.mx + (g.gw/g.cols)*c;
+    ctx.beginPath(); ctx.moveTo(x,g.my); ctx.lineTo(x,g.my+g.gh); ctx.stroke();
+  }
+  for(let r=1;r<g.rows;r++){
+    const y=g.my + (g.gh/g.rows)*r;
+    ctx.beginPath(); ctx.moveTo(g.mx,y); ctx.lineTo(g.mx+g.gw,y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* ----------------------------- Grain ------------------------------------- */
+let _grainCanvas=null, _grainKey="";
+function drawGrain(strength){
+  const key=CW+"x"+CH;
+  if(!_grainCanvas || _grainKey!==key){
+    _grainCanvas=document.createElement('canvas');
+    const gw=Math.max(2,Math.round(CW/2)), gh=Math.max(2,Math.round(CH/2));
+    _grainCanvas.width=gw; _grainCanvas.height=gh;
+    const gctx=_grainCanvas.getContext('2d');
+    const img=gctx.createImageData(gw,gh);
+    const d=img.data;
+    const rng=makeRng("grain"+key);
+    for(let i=0;i<gw*gh;i++){
+      const v=(rng()*255)|0;
+      d[i*4]=v; d[i*4+1]=v; d[i*4+2]=v; d[i*4+3]=255;
+    }
+    gctx.putImageData(img,0,0);
+    _grainKey=key;
+  }
+  ctx.save();
+  ctx.globalCompositeOperation='overlay';
+  ctx.globalAlpha=strength;
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(_grainCanvas,0,0,CW,CH);
+  ctx.restore();
+}
+
+/* ============================================================================
+   RENDER ENTRY
+   ========================================================================== */
+function render(){
+  computeSize();
+  ctx.save();
+  ctx.scale(DPR,DPR);
+  ctx.clearRect(0,0,CW,CH);
+  ctx.textBaseline='alphabetic';
+
+  const seedStr = state.seed;
+  const t = currentText();
+
+  let grid;
+  try{
+    switch(state.movement){
+      case "swiss":     grid=renderSwiss(seedStr,t); break;
+      case "bauhaus":   grid=renderBauhaus(seedStr,t); break;
+      case "brutalist": grid=renderBrutalist(seedStr,t); break;
+      case "deco":      grid=renderDeco(seedStr,t); break;
+      case "editorial": grid=renderEditorial(seedStr,t); break;
+      default:          grid=renderSwiss(seedStr,t);
+    }
+  }catch(e){ console.error("Render error:",e); }
+
+  if(state.flags.frame && grid) drawFrameOverlay(grid);
+  if(state.flags.grain) drawGrain(0.05);
+  if(state.flags.grid && grid) drawGridOverlay(grid);
+
+  ctx.restore();
+}
+
+/* A restrained inner frame in the movement's ink, drawn just inside the page
+   edge (independent of any movement-specific border such as Deco's). */
+function drawFrameOverlay(g){
+  const ink = (g && g.ink) ? g.ink : "#111";
+  const inset = Math.round(Math.min(CW,CH)*0.035);
+  ctx.save();
+  ctx.strokeStyle=ink;
+  ctx.globalAlpha=0.9;
+  ctx.lineWidth=Math.max(1.5, Math.min(CW,CH)*0.0035);
+  ctx.strokeRect(inset, inset, CW-inset*2, CH-inset*2);
+  ctx.restore();
+}
+
+/* The text currently shown: user fields override generated, blank-safe. */
+function currentText(){
+  const g = state.gen || genPhrase(state.seed);
+  return {
+    title: (state.userTitle && state.title.trim()) ? state.title.trim() : g.title,
+    subtitle: state.userSub ? state.subtitle.trim() : g.subtitle,
+    kicker: g.kicker,
+    numeral: g.numeral
+  };
+}
+
+/* ============================================================================
+   MOVEMENT: SWISS / INTERNATIONAL
+   Strict modular grid, flush-left grotesque, huge size contrast, white space,
+   one accent. Asymmetric balance, optional rotated baseline.
+   ========================================================================== */
+function renderSwiss(seedStr, t){
+  const rng = makeRng(seedStr+"::swiss");
+  const pal = pickFrom(rng, PALETTES.swiss);
+  fillBg(pal.bg);
+
+  // modular grid
+  const cols = 6;
+  const margin = Math.round(Math.min(CW,CH)*(0.072 + rng()*0.02));
+  const mx=margin, my=margin, gw=CW-margin*2, gh=CH-margin*2;
+  const colW = gw/cols;
+  const rows = 9;
+  const rowH = gh/rows;
+  const grid={mx,my,gw,gh,cols,rows,ink:pal.ink};
+
+  const upper = t.title.toUpperCase();
+  const words = upper.split(" ");
+
+  // hierarchy: huge title set flush-left, wrapped by word into the grid width.
+  const contrast = 0.6 + state.scale*0.9;
+  // title block occupies upper-left; choose start row
+  const topAnchor = rng()<0.5;
+  const titleTargetW = gw * (0.96);
+  const maxLines = words.length>=3 ? 3 : 2;
+  const wrap = wrapToLines(upper, "700", FONT.grotesque, titleTargetW, maxLines, rowH*2.4*contrast, rowH*0.7);
+  const tSize = wrap.size;
+  const lineH = tSize*0.96;
+
+  // place title: flush-left at margin, vertically near top or upper third
+  let ty = topAnchor ? my + tSize*0.95 : my + gh*0.30 + tSize*0.5;
+
+  // accent: a small filled square/bar at a grid node, OR one word in accent
+  const accentMode = (rng()*3)|0;
+
+  // kicker (small label) top-left + numeral top-right, with a collision guard
+  let kickSize = Math.max(10, rowH*0.30);
+  while(kickSize>rowH*0.18){
+    const kw=measureW(t.kicker,"600",kickSize,FONT.grotesque);
+    const nw=measureW(t.numeral,"700",kickSize,FONT.grotesque);
+    if(kw+nw+kickSize*2.5<=gw) break;
+    kickSize-=1;
+  }
+  ctx.fillStyle = pal.soft;
+  setFont("600", kickSize, FONT.grotesque);
+  ctx.textAlign='left';
+  const kickY = my + kickSize*0.9;
+  ctx.fillText(t.kicker, mx, kickY);
+  // numeral top-right
+  ctx.textAlign='right';
+  ctx.fillStyle = pal.accent;
+  setFont("700", kickSize, FONT.grotesque);
+  ctx.fillText(t.numeral, mx+gw, kickY);
+  ctx.textAlign='left';
+
+  // thin horizontal rule under header band (Swiss hairline)
+  if(state.orn>0.15){
+    ctx.fillStyle=pal.ink;
+    const ruleY = my + rowH*0.95;
+    ctx.fillRect(mx, Math.round(ruleY)+0.5, gw, Math.max(1, Math.round(Math.min(CW,CH)*0.0016)));
+  }
+
+  // title lines
+  if(topAnchor) ty = my + rowH*1.6 + tSize*0.78;
+  ctx.textAlign='left';
+  for(let i=0;i<wrap.lines.length;i++){
+    const line=wrap.lines[i];
+    // accent one word: colour the last word of title if accentMode===1
+    if(accentMode===1 && i===wrap.lines.length-1){
+      // split line, colour final token
+      const toks=line.split(" ");
+      let cx=mx;
+      setFont("700", tSize, FONT.grotesque);
+      for(let k=0;k<toks.length;k++){
+        ctx.fillStyle = (k===toks.length-1) ? pal.accent : pal.ink;
+        ctx.fillText(toks[k], cx, ty+i*lineH);
+        cx += ctx.measureText(toks[k]+" ").width;
+      }
+    } else {
+      ctx.fillStyle=pal.ink;
+      setFont("700", tSize, FONT.grotesque);
+      ctx.fillText(line, mx, ty+i*lineH);
+    }
+  }
+  const titleBottom = ty + (wrap.lines.length-1)*lineH + tSize*0.18;
+
+  // subtitle: small, flush-left, set in a narrow measure (2-3 cols), lower area
+  if(t.subtitle){
+    const subSize = Math.max(11, rowH*0.42);
+    const subW = colW*3.0;
+    const sw = wrapToLines(t.subtitle, "400", FONT.grotesque, subW, 4, subSize, subSize*0.7);
+    ctx.fillStyle = pal.ink;
+    const subTop = my + gh - sw.lines.length*sw.size*1.28 - rowH*0.2;
+    ctx.textAlign='left';
+    for(let i=0;i<sw.lines.length;i++){
+      setFont("400", sw.size, FONT.grotesque);
+      ctx.fillText(sw.lines[i], mx, subTop + i*sw.size*1.28 + sw.size*0.8);
+    }
+  }
+
+  // accent block: a solid square at a lower-right grid node (asymmetric balance)
+  if(accentMode===0 && state.orn>0.1){
+    const blkCol = 5, blkRow = 6 + ((rng()*2)|0);
+    const bs = colW*(0.7+rng()*0.3);
+    const bx = mx + gw - bs;
+    const by = my + rowH*(blkRow) ;
+    ctx.fillStyle=pal.accent;
+    ctx.fillRect(bx, Math.min(by, my+gh-bs), bs, bs);
+  }
+  if(accentMode===2 && state.orn>0.1){
+    // a rotated 90deg baseline label running up the right margin
+    ctx.save();
+    const label = MOVEMENT_LABEL.swiss.toUpperCase();
+    const rotSize=Math.max(9,rowH*0.26);
+    ctx.translate(mx+gw+ (CW-(mx+gw))*0.32 , my+gh);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillStyle=pal.soft;
+    setFont("600",rotSize,FONT.grotesque);
+    ctx.textAlign='left';
+    drawTracked(label,0,0,rotSize*0.12,'left');
+    ctx.restore();
+  }
+
+  // bottom hairline + footer meta (restraint)
+  if(state.orn>0.4){
+    ctx.fillStyle=pal.ink;
+    const ruleY = my+gh - rowH*0.05;
+    ctx.fillRect(mx, Math.round(ruleY)+0.5, gw, Math.max(1, Math.round(Math.min(CW,CH)*0.0014)));
+  }
+  return grid;
+}
+
+/* ============================================================================
+   MOVEMENT: BAUHAUS
+   Primary palette + black on warm white, geometric shapes (circle/triangle/bar)
+   interacting with type, 45/90 rotation, geometric sans.
+   ========================================================================== */
+function renderBauhaus(seedStr, t){
+  const rng = makeRng(seedStr+"::bauhaus");
+  const pal = pickFrom(rng, PALETTES.bauhaus);
+  fillBg(pal.bg);
+  const prims=[pal.c1,pal.c2,pal.c3];
+
+  const margin = Math.round(Math.min(CW,CH)*0.085);
+  const mx=margin,my=margin,gw=CW-margin*2,gh=CH-margin*2;
+  const cols=6, rows=8;
+  const colW=gw/cols, rowH=gh/rows;
+  const grid={mx,my,gw,gh,cols,rows,ink:pal.ink};
+  const ornK = state.orn;
+
+  // The composition is split into deterministic ZONES so type and shapes never
+  // collide. A "shape band" occupies one horizontal third; type lives in another.
+  // layout A: shapes top band, type lower-left.  layout B: type upper-left,
+  // shapes lower-right block.  Pick by seed.
+  const layoutB = rng()<0.45;
+
+  // --- header: kicker (left) + numeral (right) with a collision guard ---
+  const kickSize=Math.max(10,rowH*0.26);
+  // shrink kicker until it leaves a clear gap before the numeral.
+  let ks=kickSize;
+  setFont("700", ks, FONT.geometric);
+  const numW0 = trackedWidth(t.numeral, ks*0.10);
+  while(ks>kickSize*0.6){
+    setFont("700", ks, FONT.geometric);
+    const kw = trackedWidth(t.kicker, ks*0.14);
+    setFont("800", ks, FONT.geometric);
+    const nw = trackedWidth(t.numeral, ks*0.10);
+    if(kw + nw + ks*3 <= gw) break;
+    ks-=1;
+  }
+  ctx.fillStyle=pal.ink;
+  setFont("700", ks, FONT.geometric);
+  ctx.textAlign='left';
+  drawTracked(t.kicker, mx, my+ks, ks*0.14,'left');
+  ctx.fillStyle=pal.c1;
+  setFont("800", ks, FONT.geometric);
+  ctx.textAlign='right';
+  drawTracked(t.numeral, mx+gw, my+ks, ks*0.10, 'right');
+  ctx.textAlign='left';
+  const headerBottom = my + ks*1.8;
+
+  // --- composed geometric motif (Bauhaus signature) ---
+  // A deliberate stacked arrangement in a defined block: a large circle with a
+  // bar crossing it, plus one small accent shape. Restrained, related, aligned.
+  function drawMotif(cx, cy, R, colA, colB, variant){
+    ctx.save();
+    // big circle
+    ctx.fillStyle=colA;
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fill();
+    if(variant===0){
+      // half-circle of second colour overlapping bottom
+      ctx.fillStyle=colB;
+      ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI); ctx.fill();
+    } else if(variant===1){
+      // bar crossing the circle horizontally
+      ctx.fillStyle=colB;
+      ctx.fillRect(cx-R*1.25, cy-R*0.22, R*2.5, R*0.44);
+    } else {
+      // triangle nested
+      ctx.fillStyle=colB;
+      const r=R*0.92;
+      ctx.beginPath(); ctx.moveTo(cx,cy-r); ctx.lineTo(cx+r*0.87,cy+r*0.5); ctx.lineTo(cx-r*0.87,cy+r*0.5); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  if(ornK>=0.1){
+    // choose two distinct primaries
+    const ci=(rng()*3)|0; const cj=(ci+1+((rng()*2)|0))%3;
+    const variant=(rng()*3)|0;
+    if(layoutB){
+      // motif anchored lower-right, type sits upper-left — clear separation
+      const R=colW*1.15;
+      const cx=mx+gw - R*1.0;
+      const cy=my+gh - R*1.0;
+      drawMotif(cx,cy,R, prims[ci], prims[cj], variant);
+      // a small square accent up-left of the motif, grid-aligned
+      if(ornK>0.55){
+        ctx.fillStyle=prims[(cj+1)%3];
+        const s=colW*0.5;
+        ctx.fillRect(mx+gw - R*2.0 - s, cy - R*0.5, s, s);
+      }
+    } else {
+      // motif anchored top band right side, type lower-left
+      const R=colW*1.1;
+      const cx=mx+gw - R*1.0;
+      const cy=headerBottom + R*0.9;
+      drawMotif(cx,cy,R, prims[ci], prims[cj], variant);
+      if(ornK>0.55){
+        // a vertical bar on the left of the same band for asymmetric balance
+        ctx.fillStyle=prims[(cj+2)%3];
+        ctx.fillRect(mx, cy-R*0.5, colW*0.5, R*1.6);
+      }
+    }
+  }
+
+  // --- type: stacked geometric sans, flush-left, strong ---
+  const upper=t.title.toUpperCase();
+  const contrast=0.6+state.scale*0.7;
+  const titleTargetW=gw*0.98;
+  const words=upper.split(" ");
+  // type zone: lower 55% (layoutB upper-left) — keep generous, wrap fully.
+  const zoneH = layoutB ? gh*0.46 : gh*0.42;
+  const wrap=wrapToLines(upper,"800",FONT.geometric, titleTargetW, Math.min(3, Math.max(1,words.length)), rowH*1.7*contrast, rowH*0.55);
+  const tSize=wrap.size, lineH=tSize*1.04;
+  const blockH=wrap.lines.length*lineH;
+  // anchor
+  let ty;
+  if(layoutB){
+    ty = headerBottom + rowH*0.6 + tSize*0.82;
+  } else {
+    ty = my + gh - blockH - rowH*0.7 + tSize*0.82;
+    if(ty < headerBottom + tSize) ty = headerBottom + tSize*1.4;
+  }
+  ctx.textAlign='left';
+  // colour exactly one line as accent (the last), rest ink — restrained pop
+  const accentLine = wrap.lines.length>1 ? wrap.lines.length-1 : -1;
+  for(let i=0;i<wrap.lines.length;i++){
+    ctx.fillStyle = (i===accentLine) ? pal.c1 : pal.ink;
+    setFont("800", tSize, FONT.geometric);
+    ctx.fillText(wrap.lines[i], mx, ty+i*lineH);
+  }
+  const titleBottom = ty + (wrap.lines.length-1)*lineH + tSize*0.2;
+
+  // subtitle small below title block (only when there's clear room)
+  if(t.subtitle){
+    const subSize=Math.max(11,rowH*0.30);
+    const sw=wrapToLines(t.subtitle,"400",FONT.geometric, colW*3.4, 2, subSize, subSize*0.7);
+    const subTop = titleBottom + rowH*0.35;
+    if(subTop + sw.lines.length*sw.size*1.3 <= my+gh){
+      ctx.fillStyle=pal.ink;
+      for(let i=0;i<sw.lines.length;i++){
+        setFont("400",sw.size,FONT.geometric);
+        ctx.fillText(sw.lines[i], mx, subTop + i*sw.size*1.3 + sw.size*0.8);
+      }
+    }
+  }
+  return grid;
+}
+
+/* ============================================================================
+   MOVEMENT: BRUTALIST / TYPE-AS-IMAGE
+   One or two MASSIVE words filling the canvas, tight leading, high contrast,
+   heavy sans/mono, minimal palette, intentional edge crop.
+   ========================================================================== */
+function renderBrutalist(seedStr, t){
+  const rng = makeRng(seedStr+"::brutalist");
+  const pal = pickFrom(rng, PALETTES.brutalist);
+  fillBg(pal.bg);
+
+  const margin=Math.round(Math.min(CW,CH)*0.045);
+  const mx=margin,my=margin,gw=CW-margin*2,gh=CH-margin*2;
+  const grid={mx,my,gw,gh,cols:1,rows:1,ink:pal.ink};
+
+  // Use the title; break into words and stack them HUGE. Tight leading.
+  const upper=t.title.toUpperCase().replace(/&/g,"+");
+  let words=upper.split(" ").filter(Boolean);
+  // brutalist favours 1-3 stacked massive lines; merge short trailing words
+  if(words.length>4){
+    // group into up to 3 lines by length
+    const lines=[[],[],[]]; let li=0;
+    for(const w of words){ lines[li].push(w); if(lines[li].join("").length>=6 && li<2) li++; }
+    words = lines.filter(l=>l.length).map(l=>l.join(" "));
+  }
+  const nLines=Math.min(words.length,4);
+  const lines=words.slice(0,nLines);
+
+  // intentional crop: allow lines to slightly exceed the width (opt-in via orn>0.5)
+  const allowCrop = state.orn>0.45;
+  const fillFactor = allowCrop ? (1.04 + rng()*0.12) : 0.985;
+  const heavy = "800";
+  const fam = rng()<0.35 ? FONT.mono : FONT.display;
+
+  // Fit each line to width; use the SMALLEST size so they share a scale? No —
+  // brutalist wants each line maxed. But keep one shared size for cohesion when
+  // heavy contrast off. We give each line its own fit but cap by vertical space.
+  const lineH = gh/nLines;
+  const sizes = lines.map(l=>{
+    const fs = fitSize(l, `${heavy} __SIZE__ ${fam}`, gw*fillFactor, lineH*0.4, lineH*1.35);
+    return fs;
+  });
+  // tight leading: cap size by row height
+  const cap = lineH*1.18;
+  for(let i=0;i<sizes.length;i++) sizes[i]=Math.min(sizes[i],cap);
+
+  // vertical layout: stack flush-left, tight (but not colliding)
+  ctx.textAlign='left';
+  let y = my;
+  // tight leading — enough that cap-tops clear the descenders above them.
+  const lead = 0.92;
+  let totalH=0;
+  for(const s of sizes) totalH += s*lead;
+  // center the stack vertically-ish, biased up
+  let startY = my + (gh - totalH)*0.42;
+  if(startY<my-sizes[0]*0.1) startY=my;
+  let cursor=startY;
+  for(let i=0;i<lines.length;i++){
+    const fs=sizes[i];
+    setFont(heavy, fs, fam);
+    const baseline = cursor + fs*0.80;
+    // accent every other line OR the longest line
+    ctx.fillStyle = (i%2===1) ? pal.accent : pal.ink;
+    // brutalist: occasionally start a line slightly off the left edge (crop)
+    let lx = mx;
+    if(allowCrop && rng()<0.4) lx = mx - fs*0.06;
+    ctx.fillText(lines[i], lx, baseline);
+    cursor += fs*lead;
+  }
+
+  // a single heavy footer bar with kicker/numeral (mono), high contrast
+  if(state.orn>0.2){
+    const barH=Math.max(18, gh*0.06);
+    const by=my+gh-barH;
+    ctx.fillStyle=pal.ink;
+    ctx.fillRect(mx, by, gw, barH);
+    const fs=Math.min(barH*0.5, gw*0.05);
+    setFont("700", fs, FONT.mono);
+    ctx.fillStyle=pal.bg;
+    ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(t.kicker, mx+barH*0.4, by+barH*0.54);
+    ctx.textAlign='right';
+    ctx.fillText(t.numeral, mx+gw-barH*0.4, by+barH*0.54);
+    ctx.textBaseline='alphabetic';
+  }
+  // subtitle as a tight mono line at top (optional, very restrained)
+  if(t.subtitle && state.orn>0.1){
+    const fs=Math.max(10, gh*0.024);
+    setFont("700", fs, FONT.mono);
+    ctx.fillStyle=pal.accent;
+    ctx.textAlign='left';
+    drawTracked(t.subtitle.toUpperCase(), mx, my+fs, fs*0.06,'left');
+  }
+  return grid;
+}
+
+/* ============================================================================
+   MOVEMENT: ART DECO
+   Symmetric, centred, gold/cream on deep teal/black, geometric rules/chevrons,
+   letter-spaced caps, a framing border.
+   ========================================================================== */
+function renderDeco(seedStr, t){
+  const rng = makeRng(seedStr+"::deco");
+  const pal = pickFrom(rng, PALETTES.deco);
+  fillBg(pal.bg);
+
+  const margin=Math.round(Math.min(CW,CH)*0.10);
+  const mx=margin,my=margin,gw=CW-margin*2,gh=CH-margin*2;
+  const cx=CW/2;
+  const grid={mx,my,gw,gh,cols:1,rows:8,ink:pal.accent};
+
+  // --- framing border (double rule) — Deco signature, always present ---
+  ctx.strokeStyle=pal.accent;
+  const fw=Math.max(2, Math.min(CW,CH)*0.004);
+  ctx.lineWidth=fw;
+  ctx.strokeRect(mx, my, gw, gh);
+  ctx.lineWidth=fw*0.5;
+  ctx.strokeStyle=pal.line;
+  const inset=Math.min(CW,CH)*0.018;
+  ctx.strokeRect(mx+inset, my+inset, gw-inset*2, gh-inset*2);
+
+  const innerX=mx+inset*2.2, innerW=gw-inset*4.4;
+
+  // --- top chevron / sunburst ornament ---
+  function chevronRow(yy, w, dir){
+    ctx.save();
+    ctx.strokeStyle=pal.accent;
+    ctx.lineWidth=Math.max(1.5, fw*0.6);
+    const n=5, step=w/n;
+    for(let i=0;i<n;i++){
+      const sx=cx-w/2 + i*step;
+      ctx.beginPath();
+      ctx.moveTo(sx, yy);
+      ctx.lineTo(sx+step/2, yy+dir*step*0.45);
+      ctx.lineTo(sx+step, yy);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // stepped sunburst fan at top centre
+  function sunburst(yy, r){
+    ctx.save();
+    ctx.translate(cx,yy);
+    ctx.strokeStyle=pal.accent;
+    ctx.lineWidth=Math.max(1.2,fw*0.45);
+    const rays=9;
+    for(let i=0;i<rays;i++){
+      const a=-Math.PI/2 + (i-(rays-1)/2)*(Math.PI*0.62/(rays-1));
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  const ornK=state.orn;
+  let topY = my + gh*0.16;
+  if(ornK>0.25){
+    if(rng()<0.5) sunburst(my+gh*0.135, gw*0.16);
+    else chevronRow(my+gh*0.12, gw*0.30, 1);
+    topY = my+gh*0.22;
+  }
+
+  // kicker (letter-spaced caps, gold), centred
+  const kickSize=Math.max(10, gh*0.022);
+  ctx.fillStyle=pal.accent;
+  ctx.textAlign='center';
+  setFont("600", kickSize, FONT.serif);
+  drawTracked(t.kicker, cx, my+gh*0.085, kickSize*0.32, 'center');
+
+  // --- TITLE: centred, letter-spaced caps, big. Wrap by word, each line tracked.
+  const upper=t.title.toUpperCase();
+  const contrast=0.6+state.scale*0.7;
+  // choose tracking
+  const trackFrac=0.14;
+  // fit: compute size so the widest needed line of a word-wrap fits innerW with tracking
+  const words=upper.split(" ");
+  // try sizes downward until a 1-3 line tracked layout fits
+  let chosen=null;
+  for(let size=gh*0.16*contrast; size>gh*0.03; size*=0.94){
+    ctx.font=`700 ${size.toFixed(2)}px ${FONT.serif}`;
+    const tr=size*trackFrac;
+    // greedy wrap with tracked width
+    const lines=[]; let cur="";
+    for(const w of words){
+      const test=cur?cur+" "+w:w;
+      if(trackedWidth(test,tr)<=innerW || cur===""){ cur=test; }
+      else { lines.push(cur); cur=w; }
+    }
+    if(cur) lines.push(cur);
+    const widest=Math.max(...lines.map(l=>trackedWidth(l,tr)));
+    if(widest<=innerW && lines.length<=3){ chosen={size,lines,tr}; break; }
+  }
+  if(!chosen){
+    const size=gh*0.05; ctx.font=`700 ${size}px ${FONT.serif}`;
+    chosen={size, lines:[upper], tr:size*trackFrac};
+  }
+  const {size:tSize, lines:tLines, tr} = chosen;
+  const lineH=tSize*1.18;
+  // vertically centre the title block in the middle band
+  const blockH=tLines.length*lineH;
+  let ty = CH/2 - blockH/2 + tSize*0.78;
+  ctx.fillStyle=pal.ink;
+  for(let i=0;i<tLines.length;i++){
+    setFont("700", tSize, FONT.serif);
+    drawTracked(tLines[i], cx, ty+i*lineH, tr, 'center');
+  }
+  const titleBottom = ty + (tLines.length-1)*lineH + tSize*0.3;
+
+  // thin divider rule with center diamond under title
+  if(ornK>0.1){
+    const ry=titleBottom + gh*0.04;
+    const rw=Math.min(innerW*0.6, tSize*8);
+    ctx.strokeStyle=pal.accent; ctx.lineWidth=Math.max(1,fw*0.45);
+    ctx.beginPath(); ctx.moveTo(cx-rw/2, ry); ctx.lineTo(cx-tSize*0.4, ry); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+tSize*0.4, ry); ctx.lineTo(cx+rw/2, ry); ctx.stroke();
+    // diamond
+    const ds=tSize*0.22;
+    ctx.fillStyle=pal.accent;
+    ctx.beginPath(); ctx.moveTo(cx,ry-ds); ctx.lineTo(cx+ds,ry); ctx.lineTo(cx,ry+ds); ctx.lineTo(cx-ds,ry); ctx.closePath(); ctx.fill();
+  }
+
+  // subtitle centred under divider
+  if(t.subtitle){
+    const subSize=Math.max(11, gh*0.026);
+    const sw=wrapToLines(t.subtitle.toUpperCase(),"400",FONT.serif, innerW*0.8, 2, subSize, subSize*0.7);
+    ctx.fillStyle=pal.ink;
+    const sy=titleBottom + gh*0.10;
+    for(let i=0;i<sw.lines.length;i++){
+      setFont("400", sw.size, FONT.serif);
+      drawTracked(sw.lines[i], cx, sy+i*sw.size*1.4, sw.size*0.22, 'center');
+    }
+  }
+
+  // numeral at very bottom, gold, tracked
+  const numSize=Math.max(10, gh*0.024);
+  ctx.fillStyle=pal.accent;
+  setFont("600", numSize, FONT.serif);
+  drawTracked(t.numeral, cx, my+gh*0.93, numSize*0.3, 'center');
+  return grid;
+}
+
+/* ============================================================================
+   MOVEMENT: EDITORIAL / CLASSICAL
+   Elegant serif, classic margins, refined small palette, hairline rules, a
+   drop-figure / large initial; magazine-cover calm.
+   ========================================================================== */
+function renderEditorial(seedStr, t){
+  const rng=makeRng(seedStr+"::editorial");
+  const pal=pickFrom(rng,PALETTES.editorial);
+  fillBg(pal.bg);
+
+  // classic generous margins, slightly larger at bottom (golden-ish)
+  const mL=Math.round(CW*0.12), mR=Math.round(CW*0.12);
+  const mT=Math.round(CH*0.10), mB=Math.round(CH*0.13);
+  const mx=mL,my=mT, gw=CW-mL-mR, gh=CH-mT-mB;
+  const cx=CW/2;
+  const grid={mx,my,gw,gh,cols:1,rows:10,ink:pal.ink};
+
+  const centred = rng()<0.55;
+
+  // top hairline rule + kicker (small caps tracked)
+  const kickSize=Math.max(10, gh*0.020);
+  ctx.fillStyle=pal.accent;
+  setFont("600", kickSize, FONT.serif);
+  if(centred){
+    ctx.textAlign='center';
+    drawTracked(t.kicker, cx, my+kickSize, kickSize*0.28, 'center');
+  } else {
+    ctx.textAlign='left';
+    drawTracked(t.kicker, mx, my+kickSize, kickSize*0.24, 'left');
+    ctx.textAlign='right';
+    ctx.fillStyle=pal.rule;
+    setFont("400", kickSize*0.92, FONT.serif);
+    ctx.fillText(t.numeral, mx+gw, my+kickSize);
+  }
+  // hairline under kicker
+  ctx.strokeStyle=pal.rule; ctx.lineWidth=1;
+  const r1=my+kickSize*1.9;
+  ctx.beginPath(); ctx.moveTo(mx, r1+0.5); ctx.lineTo(mx+gw, r1+0.5); ctx.stroke();
+
+  // TITLE: elegant serif, mixed case (title case), large but calm.
+  const titleText = toTitleCase(t.title);
+  const contrast=0.55+state.scale*0.6;
+  const tw=wrapToLines(titleText, "600", FONT.serif, gw*(centred?0.92:0.96), 3, gh*0.13*contrast, gh*0.04);
+  const tSize=tw.size, lineH=tSize*1.12;
+  let ty = my + gh*0.30 + tSize*0.4;
+  ctx.fillStyle=pal.ink;
+  ctx.textAlign = centred?'center':'left';
+  const tx = centred?cx:mx;
+  for(let i=0;i<tw.lines.length;i++){
+    setFont("600", tSize, FONT.serif);
+    ctx.fillText(tw.lines[i], tx, ty+i*lineH);
+  }
+  const titleBottom=ty+(tw.lines.length-1)*lineH;
+
+  // subtitle: italic-ish (use lighter weight serif), smaller, calm
+  if(t.subtitle){
+    const subSize=Math.max(12, gh*0.030);
+    const sw=wrapToLines(t.subtitle, "400", FONT.serif, gw*0.7, 3, subSize, subSize*0.7);
+    ctx.fillStyle=pal.accent;
+    const sy=titleBottom + gh*0.07;
+    ctx.textAlign=centred?'center':'left';
+    for(let i=0;i<sw.lines.length;i++){
+      setFont("400", sw.size, FONT.serif);
+      ctx.fillText(sw.lines[i], centred?cx:mx, sy+i*sw.size*1.35 + sw.size);
+    }
+  }
+
+  // large drop initial in lower area (drop-figure) — restrained, only if room
+  if(state.orn>0.3 && !centred){
+    const ch = t.title.replace(/[^A-Za-z]/g,"").charAt(0).toUpperCase() || "A";
+    const dSize=gh*0.30;
+    setFont("600", dSize, FONT.serif);
+    ctx.fillStyle = hexWithAlpha(pal.accent, 0.14);
+    ctx.textAlign='left';
+    ctx.fillText(ch, mx, my+gh*0.96);
+  } else if(state.orn>0.3 && centred){
+    // centred ornament: a small numeral set large+light at bottom centre
+    const dSize=gh*0.12;
+    setFont("400", dSize, FONT.serif);
+    ctx.fillStyle=hexWithAlpha(pal.accent,0.5);
+    ctx.textAlign='center';
+    drawTracked(t.numeral, cx, my+gh*0.97, dSize*0.18, 'center');
+  }
+
+  // bottom hairline
+  ctx.strokeStyle=pal.rule; ctx.lineWidth=1;
+  const r2=my+gh - kickSize*0.4;
+  ctx.beginPath(); ctx.moveTo(mx, r2+0.5); ctx.lineTo(mx+gw, r2+0.5); ctx.stroke();
+  return grid;
+}
+
+function toTitleCase(s){
+  const small=new Set(["a","an","the","and","or","of","to","in","on","at","for","&","from"]);
+  return s.toLowerCase().split(" ").map((w,i)=>{
+    if(i>0 && small.has(w)) return w;
+    return w.charAt(0).toUpperCase()+w.slice(1);
+  }).join(" ");
+}
+function hexWithAlpha(hex,a){
+  const [r,g,b]=hexToRgb(hex);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+/* ============================================================================
+   UI WIRING
+   ========================================================================== */
+function randomSeedString(){
+  const r=makeRng(String(Date.now()*Math.random()));
+  const letters="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  let s=""; for(let i=0;i<3;i++) s+=letters[(r()*26)|0];
+  return s + "-" + (100+(r()*900|0));
+}
+
+let rerenderTimer=null;
+function scheduleRender(){
+  clearTimeout(rerenderTimer);
+  rerenderTimer=setTimeout(render, 12);
+}
+
+function syncSliderFill(el){
+  const min=+el.min,max=+el.max,v=+el.value;
+  el.style.setProperty('--fill', ((v-min)/(max-min)*100)+'%');
+}
+
+// Refresh the generated phrase for the current seed; push into fields if not user-edited.
+function refreshGen(){
+  state.gen = genPhrase(state.seed);
+  const tf=document.getElementById('titleField');
+  const sf=document.getElementById('subField');
+  if(!state.userTitle){ tf.value=state.gen.title; }
+  if(!state.userSub){ sf.value=state.gen.subtitle; }
+}
+
+function wireUI(){
+  const seedInput=document.getElementById('seed');
+  const titleField=document.getElementById('titleField');
+  const subField=document.getElementById('subField');
+
+  // sliders
+  const fmtNames=["Portrait 2:3","Square 1:1","Wide 3:2"];
+  const sliders=[
+    ['scale','scaleVal',v=>Math.round(v*100)+'%'],
+    ['orn','ornVal',v=>Math.round(v*100)+'%'],
+    ['fmt','fmtVal',v=>fmtNames[v]],
+  ];
+  for(const [id,valId,fmt] of sliders){
+    const el=document.getElementById(id);
+    const val=document.getElementById(valId);
+    syncSliderFill(el); val.textContent=fmt(+el.value);
+    el.addEventListener('input',()=>{
+      state[id]=+el.value; val.textContent=fmt(+el.value); syncSliderFill(el);
+      scheduleRender();
+    });
+  }
+
+  // movement segmented
+  document.getElementById('moveSeg').addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    [...e.currentTarget.children].forEach(c=>c.classList.toggle('active',c===b));
+    state.movement=b.dataset.v; render();
+  });
+
+  // text fields
+  titleField.addEventListener('input',()=>{
+    state.title=titleField.value; state.userTitle=titleField.value.trim().length>0; scheduleRender();
+  });
+  subField.addEventListener('input',()=>{
+    state.subtitle=subField.value; state.userSub=true; scheduleRender();
+  });
+  // generate text button — re-seed phrase fields from seed, clear user override
+  document.getElementById('genText').addEventListener('click',()=>{
+    state.userTitle=false; state.userSub=false;
+    state.gen = genPhrase(state.seed);
+    titleField.value=state.gen.title;
+    subField.value=state.gen.subtitle;
+    render();
+  });
+
+  // flag chips
+  document.querySelectorAll('.chip').forEach(chip=>{
+    chip.addEventListener('click',()=>{
+      const t=chip.dataset.t; state.flags[t]=!state.flags[t];
+      chip.classList.toggle('on',state.flags[t]);
+      render();
+    });
+  });
+
+  // seed input
+  seedInput.addEventListener('change',()=>{
+    state.seed=seedInput.value.trim()||'COMP-001';
+    state.userTitle=false; state.userSub=false; refreshGen(); render();
+  });
+  seedInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ seedInput.blur(); } });
+
+  function newSeed(){
+    state.seed=randomSeedString(); seedInput.value=state.seed;
+    state.userTitle=false; state.userSub=false; refreshGen(); render();
+  }
+  document.getElementById('randSeed').addEventListener('click',newSeed);
+  document.getElementById('reroll').addEventListener('click',newSeed);
+
+  // export
+  document.getElementById('exportBtn').addEventListener('click',exportPNG);
+
+  // collapse / reopen
+  document.getElementById('collapseBtn').addEventListener('click',()=>{
+    document.getElementById('panel').classList.add('collapsed');
+  });
+  document.getElementById('reopen').addEventListener('click',()=>{
+    document.getElementById('panel').classList.remove('collapsed');
+  });
+
+  // resize (debounced)
+  let rt=null;
+  window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(render,120); });
+}
+
+function exportPNG(){
+  try{
+    const url=canvas.toDataURL('image/png');
+    const a=document.createElement('a');
+    const safeSeed=(state.seed||'poster').replace(/[^a-z0-9]+/gi,'_').toLowerCase();
+    a.href=url; a.download='compositor_'+safeSeed+'.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  }catch(e){ console.error('Export failed:',e); }
+}
+
+/* ----------------------------- boot --------------------------------------- */
+function boot(){
+  state.scale=+document.getElementById('scale').value;
+  state.orn=+document.getElementById('orn').value;
+  state.fmt=+document.getElementById('fmt').value;
+  state.seed=randomSeedString();
+  document.getElementById('seed').value=state.seed;
+  wireUI();
+  refreshGen();
+  render();
+  console.log('Compositor ready. Seed:', state.seed, 'Movement:', state.movement);
+}
+window.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>
