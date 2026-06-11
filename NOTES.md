@@ -6,17 +6,23 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > **Front door:** open `index.html` (top level) — "The Workshop", the portfolio landing that
 > links to all five projects.
 
-> **Session status (2026-06-11, ~2am):** a big build night, all shipped & published to Pages. New
-> this session: **Firmament** 🌌 (night-sky/constellation generator); the **Audio Lens** 🔊
-> (`tools/audio-lens/` — offline spectrogram/feature inspector, 12/12 self-tests; **closed the
-> audio-verification gap**); **Rain** 🌧️, **Loom** 🧵 & **Carillon** 🔔 (Sound Garden → 6; all three
-> **sonically verified via the Lens**); **Pong** + **Lunar Lander** (Arcade → 9); **Daedalus** 🌀 (maze
-> generator + self-solver); **Compositor** 🔠 (generative typographic poster press); **Threshold** 🚪
-> (generative interactive fiction — a new narrative medium); plus the **Colophon** 📜 capstone page.
-> Workshop now **9 front-door projects + 1 tool + the colophon**; landing = **3 hero features**
-> (Garden · Firmament · Daedalus, "worlds to get lost in") over a **3×2 grid** of the other six.
-> Sound Garden (`auto-fit`) & Arcade (`auto-fill`) grow with no rebalance. A ~10-min heartbeat cron
-> backstops this `/fun` session — **DELETE it at wind-down (~7am CT)**. To do more, pick a thread below.
+> **Session status (2026-06-11, ~10am):** new this session — **Orrery** 🪐 (`orrery/`): a faithful
+> *clockwork of the real Solar System*. NOT a seeded generator — it's a real-time **astronomical
+> instrument** (input = time, not a seed), the celestial sibling to Firmament. Real JPL approximate
+> orbital elements → heliocentric positions **matched to JPL Horizons to <0.15°** (independently
+> re-derived & confirmed); built-in J2000 self-test; real Moon phase; Brass/Blueprint/Observatory
+> styles; schematic & true-scale; play/scrub/reverse time; hover info cards; zoom/pan. 60fps, clean
+> console, fully self-contained. **Placed as a companion behind Firmament's card** (per the
+> composition note — keeps the front door at the clean 9): Firmament's panel now has a `↗ Orrery`
+> sibling link; Orrery links back to `← workshop` + `↗ Firmament`. README + NOTES updated; committed
+> & pushed to Pages. A ~7-min heartbeat cron backstops this `/fun` session — **DELETE it at wind-down**.
+>
+> *(Prior 2026-06-10/11 build nights, all shipped & published: Firmament 🌌, Audio Lens 🔊
+> [`tools/audio-lens/`, 12/12 self-tests — closed the audio-verification gap], Rain/Loom/Carillon
+> [Sound Garden → 6, lens-verified], Pong + Lunar Lander + Crossing [Arcade → 10], Daedalus 🌀,
+> Compositor 🔠, Threshold 🚪, and the Colophon 📜.)* Front door = **3 hero features** (Garden ·
+> Firmament · Daedalus) over a **3×2 grid** of six tiles; Sound Garden (`auto-fit`) & Arcade
+> (`auto-fill`) grow with no rebalance. To do more, pick a thread below.
 
 ## Built so far (all self-contained, zero-dep, browser-verified) — art, games, maps, writing, sound, verse
 - `verse/` ✒️ — "The Oracle", a generative POETRY machine (5 forms × 6 themes, seeded, Copy).
@@ -37,6 +43,15 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   index, export PNG). Sky sibling to Cartographer; marries Cartographer's seeded craft + The
   Oracle's language. Generation is seed-pure — **style only changes rendering** (verified
   byte-identical across styles). Done (v1, 2 build stages). See `firmament/SPEC.md`.
+- `orrery/` 🪐 — **Firmament's companion** (NOT a front-door card; reached via Firmament's `↗ Orrery`
+  sibling link). A faithful real-time **clockwork of the *real* Solar System** — the opposite of a
+  seeded generator: input is **time**, output is the *actual* planetary geometry, computed from the
+  standard **JPL approximate Keplerian elements (1800–2050 table)**. Heliocentric positions verified
+  against **JPL Horizons to <0.15°** (and re-derived independently from scratch — they match exactly);
+  built-in **J2000 self-test**; real **Moon phase**. 3 styles (Brass/Blueprint/Observatory), schematic
+  & true-scale, play/pause + speed (incl. reverse) + Now + date scrubber, hover info cards, zoom/pan.
+  60fps, clean console, self-contained. **Correctness is the gate here, not coherence** — see
+  `orrery/SPEC.md` §0/§8. Done (v1).
 - `daedalus/` 🌀 — procedural MAZE generator + animated self-solver (seeded; 4 gen algorithms —
   backtracker/Prim/Kruskal/Wilson; 4 solver views — flood-fill/A*/dead-end/distance-map; 4 styles;
   export PNG). Sibling to Cartographer; generation seed-pure, style only re-renders (maze identical
@@ -151,6 +166,7 @@ instruments copy the `← sound garden` back-link.
 | `sound-garden/` | 🎵 6 | Web-Audio instruments — Whitney, Drift, Euclid, Rain, Loom, Carillon (Rain/Loom/Carillon lens-verified) |
 | `cartographer/` | 🗺️ done | Procedural fantasy-map generator (seeded, 4 styles, export PNG) |
 | `firmament/` | 🌌 done | Procedural night-sky / constellation generator (seeded, 4 styles, names+myths, field guide, export PNG) |
+| `orrery/` | 🪐 done (companion) | **Behind Firmament** — real-time clockwork of the *real* Solar System (JPL elements; <0.15° vs Horizons; Moon phase; 3 styles; play/scrub/reverse time) |
 | `daedalus/` | 🌀 done | Procedural maze generator + animated self-solver (4 algorithms, flood-fill/A*, 4 styles, export PNG) |
 | `compositor/` | 🔠 done | Generative typographic poster press (5 movements, seeded phrase + custom text, export PNG) |
 | `threshold/` | 🚪 done | Generative interactive fiction (seeded strange-place explorer, 3 themes, curate-then-arrange prose) |

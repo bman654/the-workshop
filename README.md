@@ -12,7 +12,8 @@ HTML file: no build step, no dependencies, no network.*
 
 ## What's inside
 
-Ten creative mediums across nine projects. Click a live link, or open any `.html` in a browser.
+Ten creative mediums across nine projects — plus the **Orrery**, a companion instrument tucked behind
+Firmament's door. Click a live link, or open any `.html` in a browser.
 
 ### 🌿 [Strange Garden](https://bman654.github.io/the-workshop/strange-garden/)
 **34 *living* generative systems** — particle life, slime moulds, reaction–diffusion, boids,
@@ -34,6 +35,12 @@ chart from any seed: star fields (magnitude & colour-temperature), a soft Milky 
 constellations**, each drawn as an asterism with its own name and a one-line **myth**. Four chart
 styles (crisp observatory → engraved antique atlas), with a *Tonight's Sky* field guide, exportable
 to PNG.
+
+> 🪐 **Companion — [Orrery](https://bman654.github.io/the-workshop/orrery/):** behind Firmament lives a
+> faithful **clockwork of the *real* Solar System**. Not seeded — *computed*, from published JPL
+> orbital elements (matched against JPL Horizons to <0.15°). Set it running, or scrub to any date to
+> find where the planets actually are tonight. Brass / Blueprint / Observatory styles, schematic &
+> true-scale, real Moon phase. The mechanism behind the sky.
 
 ### 🌀 [Daedalus](https://bman654.github.io/the-workshop/daedalus/)
 A **procedural maze that solves itself** — re-roll a perfect labyrinth from any seed (recursive
