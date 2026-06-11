@@ -43,5 +43,17 @@ window.GAMES = [
     name: "Missile Command",
     blurb: "aim, intercept, defend your neon cities",
     accent: "#ff6a3d"
+  },
+  {
+    file: "pong.html",
+    name: "Pong",
+    blurb: "neon table tennis — out-angle the cpu, first to eleven",
+    accent: "#c6ff4d"
+  },
+  {
+    file: "lunar-lander.html",
+    name: "Lunar Lander",
+    blurb: "thrust against gravity, land soft on the neon flats",
+    accent: "#8fbaff"
   }
 ];

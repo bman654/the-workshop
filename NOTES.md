@@ -29,8 +29,9 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   index, export PNG). Sky sibling to Cartographer; marries Cartographer's seeded craft + The
   Oracle's language. Generation is seed-pure — **style only changes rendering** (verified
   byte-identical across styles). Done (v1, 2 build stages). See `firmament/SPEC.md`.
-- `arcade/` 🕹️ — 7 playable neon games (Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
-  Missile Command), each with a click-only `← arcade` back-link. Rack at `arcade/index.html`.
+- `arcade/` 🕹️ — 9 playable neon games (Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
+  Missile Command, Pong vs CPU, Lunar Lander), each with a click-only `← arcade` back-link. Rack at
+  `arcade/index.html` (responsive `auto-fill` grid — no rebalance to add cabinets). Manifest `games.js`.
 - `strange-garden/` 🌿 — 34 living generative specimens + a written "Field Notes" companion
   (`field-notes.html`). Browsable prev/next. Complete v-final; don't pad it.
 
@@ -118,7 +119,7 @@ instruments copy the `← sound garden` back-link.
 | `sound-garden/` | 🎵 4 | Web-Audio instruments — Whitney, Drift, Euclid, Rain (rain on a tuned pool, lens-verified) |
 | `cartographer/` | 🗺️ done | Procedural fantasy-map generator (seeded, 4 styles, export PNG) |
 | `firmament/` | 🌌 done | Procedural night-sky / constellation generator (seeded, 4 styles, names+myths, field guide, export PNG) |
-| `arcade/` | 🕹️ 7 cabinets | Rack of juicy single-file neon-vector browser games |
+| `arcade/` | 🕹️ 9 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander) |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
 
 Each project has its own `CHANGELOG.md` (full provenance) and the Garden has a `SPEC.md` (house style).

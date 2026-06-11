@@ -21,8 +21,8 @@ metaballs, and more. A browsable catalogue you can tend and tweak; each set in m
 same twice. Includes a written **Field Notes** naturalist's journal.
 
 ### 🕹️ [Arcade](https://bman654.github.io/the-workshop/arcade/)
-**7 fully-playable neon-vector games** — Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
-and Missile Command. Insert coin.
+**9 fully-playable neon-vector games** — Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
+Missile Command, Pong (vs CPU), and Lunar Lander. Insert coin.
 
 ### 🗺️ [Cartographer](https://bman654.github.io/the-workshop/cartographer/)
 A **procedural fantasy-map generator** — re-roll coherent worlds (coastlines, mountain ranges,

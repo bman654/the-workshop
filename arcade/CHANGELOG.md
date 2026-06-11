@@ -7,7 +7,7 @@ Each game is self-contained, zero-dependency, browser-play-tested. Reference sty
 
 ## Status
 
-- **Done (browser play-tested PASS, 60fps, clean consoles) — 7 cabinets:**
+- **Done (browser play-tested PASS, 60fps, clean consoles) — 9 cabinets:**
   - asteroids.html ✅ — inertia/thrust/wrap, splitting rocks, saucer, hyperspace, full juice
   - breakout.html ✅ — 6 power-ups, combos, multiball, swept collision, procedural levels
   - snake.html ✅ — smooth gliding ribbon, buffered turns, combos, walls/wrap toggle
@@ -15,15 +15,21 @@ Each game is self-contained, zero-dependency, browser-play-tested. Reference sty
   - starfighter.html ✅ — Galaga-style waves, divers/turrets, WARLORD boss, power-ups, bombs
   - 2048.html ✅ — slide/merge/spawn, win+gameover, undo, value-bloom tiles, big-merge shake
   - missile-command.html ✅ — mouse-aim defense, MIRV/smart-bombs, chain blasts, wave bonus
+  - pong.html ✅ — vs CPU, paddle-angle physics, beatable predictive AI, first to 11, full juice
+  - lunar-lander.html ✅ — thrust/gravity flight, fuel, procedural terrain + multiplier pads, soft-land/crash, levels
 - **Nav:** every game has a click-only `← arcade` back-link (NO key binding — games use keys).
-- **Gallery:** index.html (neon "cabinet rack"), games.js manifest (5), README ✅
+- **Gallery:** index.html (neon "cabinet rack"), games.js manifest (9), README ✅
 
 ## Next up
-- Optional more cabinets: Pong (vs AI), Missile Command, 2048, Flappy/one-button, a
-  procedural mini-roguelike, Pac-Man-lite, a twin-stick shooter.
-- 5 is a well-rounded starter rack (shooter / paddle / snake / falling-block / shmup) —
-  a fine checkpoint.
+- Optional more cabinets: Flappy/one-button, a procedural mini-roguelike, Pac-Man-lite,
+  a twin-stick shooter, Frogger-lite, a rhythm game.
+- 9 cabinets — a well-rounded rack (shooter / paddle / snake / falling-block / shmup / puzzle /
+  defense / vs-CPU / physics-landing). Responsive `auto-fill` grid: adding more needs no rebalance.
 
 ## Log
+- 2026-06-10 — Added two cabinets (→ **9**): **Pong** (vs CPU — paddle-angle physics, beatable
+  predictive AI, first to 11) and **Lunar Lander** (thrust/gravity flight, fuel budget, procedural
+  terrain + multiplier landing pads, soft-land-vs-crash, escalating levels). Both single-file
+  neon-vector, ~60fps, 0 console errors, silent by default; play-tested by self-verifying subagents.
 - 2026-06-08 — Started Arcade. Built juicy Asteroids (subagent, play-tested). Scaffolded
   rack gallery (index.html + games.js + README). Snake + Breakout dispatched.
