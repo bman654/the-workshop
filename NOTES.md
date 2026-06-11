@@ -134,14 +134,35 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > more is top-heavy). **9 = 3 features + 6 is the clean max** for this design; a 10th front-door project
 > would force a flat-grid redesign — so from here prefer **deepening a rack** (Arcade `auto-fill`, Sound
 > Garden `auto-fit` — no rebalance) or a companion behind an existing card.
+>
+> **➜ The growth playbook (established 2026-06-11 — USE THIS to add without redesigning):** the front
+> door stays at the curated 9. Three ways to grow it have proven out:
+> 1. **Companion behind a card** — a standalone piece at `<name>/index.html` that's a *sibling* of an
+>    existing card's medium, reached via a small `↗ <Name>` `.sib-link` in the parent's panel (just
+>    under its sub-title) + `← workshop`/`↗ <Parent>` back-links in the companion. The front door shows
+>    it as a subtle **"↳ <Name> within" pill** in the parent card's footer (data: `companion:{name,badge}`
+>    on the parent's PROJECTS entry; renderer adds the pill — an *indicator, not a link*, preserving the
+>    "hidden room" charm). **Three wings exist:** celestial (Firmament+Orrery), design-press
+>    (Compositor+Blazon), labyrinth&thread (Daedalus+Ariadne). A 4th wing is fine **if the pairing is
+>    genuine, not forced** — Cartographer, The Oracle, Strange Garden, Threshold, Sound Garden all still
+>    lack a companion. Don't force one; only build it if the sibling link is poetic/true.
+> 2. **Deepen the Arcade** (`auto-fill` grid) — drop a cabinet in `games/`, append to `games.js`, add a
+>    `assets/thumbs/<base>.png`, bump the front-door tag count + blurb. No rebalance. (→ 11 with Chomp.)
+> 3. **Deepen the Sound Garden** (`auto-fit` grid) — add an instrument (now 6 = clean 3×2; 7 is awkward,
+>    8 = clean 2×4). Verify via `tools/audio-lens/`. **Be courteous testing audio at odd hours** (it
+>    plays on Brandon's speakers — see the practical note below).
 
 ## For a fresh thread — pick whatever sounds fun
-- Add more **Arcade** cabinets (built so far incl. Pong vs CPU + Lunar Lander → 9; open ideas: a
-  procedural mini-roguelike, a twin-stick survival, Pac-Man-lite, an endless-runner, Frogger-lite).
-  See `arcade/CHANGELOG.md`. Deepening a rack stays behind its one front-door card (no rebalance).
-- Add more **Sound Garden** instruments (now 4 — Rain is lens-verified; reach 6 for a clean 3×2),
-  or a genuinely new standalone tool/toy (generative-typography poster…). Prefer VISUAL (easy to
-  browser-verify); audio is now ALSO verifiable via `tools/audio-lens/` (offline render → spectrogram).
+- Add more **Arcade** cabinets (now **11** — incl. Pong vs CPU, Lunar Lander, Crossing, Chomp
+  [Pac-Man-like ✅]; still-open ideas: a procedural mini-roguelike, a twin-stick survivor/horde,
+  an endless-runner, a Tempest/Qix/Centipede/Frogger-cousin, a Dig-Dug-like). See `arcade/CHANGELOG.md`.
+  Deepening the rack stays behind its one front-door card (no rebalance; bump the tag count + blurb).
+- Add more **Sound Garden** instruments (now **6** = clean 3×2; next clean stop is **8** = 2×4 — Rain/
+  Loom/Carillon are lens-verified). Verify via `tools/audio-lens/`; be courteous with audio at odd hours.
+- Build a **new companion** for a card that lacks one (Cartographer / The Oracle / Sound Garden /
+  Threshold) — but ONLY if the sibling pairing is genuine (see the growth playbook above). Seeds:
+  a *transit-diagram* generator (octolinear, à la Beck) as a Cartographer sibling; a *fable/almanac*
+  generator as an Oracle sibling; an *album-sleeve* press as a Compositor 2nd companion. Don't force it.
 - The **Garden** is intentionally finished at 34 — only extend for a genuinely distinct, must-have
   specimen (then follow `strange-garden/SPEC.md`).
 
