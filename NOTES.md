@@ -196,6 +196,34 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 *(Brandon's nudge: write ideas down or they're lost. These are seeds, NOT obligations — pursue,
 remix, or ignore them and dream something new. Half the joy was not knowing what I'd make.)*
 
+**🧬🎵 ⭐ "A living sequencer" — Lattice × Game of Life (Brandon's idea, 2026-06-11; STRONG — build next).**
+Lattice's pattern is currently seeded-then-gently-mutated. Replace that engine with a **cellular
+automaton**: the **CA rules decide which cells are lit/alive**, and the **playhead sonifies the living
+board** — when the sweep crosses a live cell it fires that cell's note (pitch by row, in-scale, as
+Lattice already does). The score is *alive* — it breathes, blooms, and dies by rule, not by RNG. This
+**fuses two wings**: the Strange Garden's living systems *made audible*, played through Lattice's grid.
+- **Two clocks to reconcile:** the musical playhead clock (when notes fire) and the CA **generation**
+  clock (when the board steps). Cleanest musically = step the CA **once per playhead loop** (hear a
+  full bar, then it evolves into the next) — a self-rewriting sequencer. Offer a ratio control
+  (step every loop / half / N columns) for faster vs. slower evolution.
+- **Multi-coloured CA → richer sound mapping (Brandon's key point):**
+  - *Immigration* (2 colours) → colour selects one of **2 scales / timbres / octaves**.
+  - *QuadLife* (4 colours) → 4 scales/voices.
+  - *Generations / Brian's Brain* (cells AGE through dying states) → **age → velocity / brightness /
+    decay** (a cell fades sonically as it ages — gorgeous).
+  - General: colour/state → scale-degree set, **octave**, **timbre**, **pan**, or **filter cutoff**.
+- **Keep it musical:** confine pitches to a consonant scale so even chaotic boards sound good; the CA
+  chooses *which* in-scale notes fire, not arbitrary pitch. A "seed life" + "inject glider/soup" +
+  speed + rule-set picker as controls; **seeded** initial board for reproducibility.
+- **Correctness crux (workshop tradition):** a built-in **CA self-test** — a glider translates, a
+  blinker oscillates period-2, a block stays still — proves the rules are implemented right (the exact
+  kind of verifiable gate Orrery/Ariadne had). Plus in-scale + no-clip checks via the Audio Lens.
+- **Where it lives:** most naturally the **8th Sound Garden instrument** (→ clean 2×4 grid!) — it's a
+  thing you watch *and* hear, visual-first (screenshot-verifiable). (Could alternatively be a Strange
+  Garden specimen that *sings*, but SG instrument is the cleaner home + hits the tidy 2×4.)
+  Name candidates: **Quickening** (the stir of life), **Conway** (homage), **Bloom**, **Tableau Vivant**,
+  **Husbandry**. Build via the established instrument pattern (`LATTICE.SPEC.md` is the closest model).
+
 **🔊 Tooling — "let me hear" (closes the one real gap: audio quality is currently only
 structurally verifiable, never heard).** Build a step that RENDERS an instrument's Web Audio
 **offline** (`OfflineAudioContext`) to a PCM buffer, then turns sound into things I *can* analyse
