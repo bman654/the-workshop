@@ -19,5 +19,11 @@ window.INSTRUMENTS = [
     name: "Euclidean Rhythms",
     blurb: "circular tracks spread their beats evenly, braiding shifting polyrhythms",
     accent: "#ffb454"
+  },
+  {
+    file: "rain.html",
+    name: "Rain",
+    blurb: "seeded rain falls on a tuned pool — each drop plinks a note in scale, rings, and ripples away",
+    accent: "#6fb6ff"
   }
 ];

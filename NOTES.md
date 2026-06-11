@@ -15,8 +15,9 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 ## Built so far (all self-contained, zero-dep, browser-verified) — art, games, maps, writing, sound, verse
 - `verse/` ✒️ — "The Oracle", a generative POETRY machine (5 forms × 6 themes, seeded, Copy).
   New medium: generative language. Verify the *text* reads as coherent, evocative poetry.
-- `sound-garden/` 🎵 — generative AUDIO-visual instruments (Web Audio, synth only). A trio:
-  Whitney (melody/chimes), Drift (ambient pads), Euclid (rhythm). `index.html` is the rack.
+- `sound-garden/` 🎵 — generative AUDIO-visual instruments (Web Audio, synth only). A quartet:
+  Whitney (orbital polyrhythm), Drift (ambient pad), Euclid (Euclidean rhythm), Rain (in-scale rain
+  on a tuned pool — **first piece sonically verified via the Audio Lens**). `index.html` is the rack (2×2).
   NB: audio can't be *heard* headless — but `tools/audio-lens/` now renders Web Audio offline →
   spectrogram + features, so sonic quality (in-scale? clipping? evolving?) is verifiable by SIGHT.
   Verify graph/scheduling/no-leak/visual AND run the output through the lens. New instruments copy
@@ -114,7 +115,7 @@ instruments copy the `← sound garden` back-link.
 | Project | Status | Description |
 |---|---|---|
 | `verse/` | ✒️ done | "The Oracle" — generative poetry machine (5 forms, 6 themes, seeded) |
-| `sound-garden/` | 🎵 3 (trio) | Web-Audio instruments — Whitney (melody), Drift (pads), Euclid (rhythm) |
+| `sound-garden/` | 🎵 4 | Web-Audio instruments — Whitney, Drift, Euclid, Rain (rain on a tuned pool, lens-verified) |
 | `cartographer/` | 🗺️ done | Procedural fantasy-map generator (seeded, 4 styles, export PNG) |
 | `firmament/` | 🌌 done | Procedural night-sky / constellation generator (seeded, 4 styles, names+myths, field guide, export PNG) |
 | `arcade/` | 🕹️ 7 cabinets | Rack of juicy single-file neon-vector browser games |
