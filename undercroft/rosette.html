@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rosette</title>
+<style>
+  :root { --accent: #5b8dff; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#05060c; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e9ecf6; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  #panel { position:fixed; top:16px; left:16px; width:272px; padding:16px 16px 14px;
+    background:rgba(10,12,24,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.55); font-size:13px; transition:opacity .2s; z-index:10; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; font-family:Georgia,serif; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  #panel select { width:100%; padding:5px 6px; font-size:12px; color:#e9ecf6;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:7px; margin-top:2px; -webkit-appearance:none; appearance:none; }
+  #panel select:focus { outline:1px solid color-mix(in srgb,var(--accent) 50%,transparent); }
+  .two { display:flex; gap:8px; }
+  .two > div { flex:1; }
+  .row { display:flex; gap:8px; margin-top:13px; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e9ecf6;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 16%,transparent); }
+  .seedrow { display:flex; gap:8px; align-items:flex-end; }
+  .seedrow .sd { flex:1; }
+  .seedrow input[type=text]{ width:100%; padding:5px 6px; font-size:12px;
+    font-family:ui-monospace,Menlo,monospace; color:#e9ecf6;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:7px; }
+  .seedrow button{ flex:0 0 auto; width:42px; font-size:15px; padding:6px 0; }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.42; text-align:right; line-height:1.5; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:var(--accent); opacity:.55; text-decoration:none; z-index:10; }
+  a.back:hover { opacity:.95; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Rosette</h1>
+  <p class="desc">A seeded Gothic rose window. Concentric rings of jewelled glass,
+    cusped tracery and dark lead came — light blooming through. The whole window is
+    a pure function of the seed; the palette only recolours it.</p>
+  <label>Seed</label>
+  <div class="seedrow">
+    <div class="sd"><input type="text" id="iSeed" value="rosette" spellcheck="false"></div>
+    <button id="bDice" class="pri" title="re-roll">⚄</button>
+  </div>
+  <label>Palette</label>
+  <select id="sPal"></select>
+  <div class="two">
+    <div>
+      <label>Petals <b id="vPet">12</b></label>
+      <input type="range" id="sPet" min="6" max="24" step="1" value="12">
+    </div>
+    <div>
+      <label>Rings <b id="vRing">4</b></label>
+      <input type="range" id="sRing" min="3" max="6" step="1" value="4">
+    </div>
+  </div>
+  <label>Complexity <b id="vCx">0.55</b></label>
+  <input type="range" id="sCx" min="0" max="1" step="0.01" value="0.55">
+  <label>Leading <b id="vLead">1.0</b></label>
+  <input type="range" id="sLead" min="0.4" max="2" step="0.05" value="1.0">
+  <label>Glow <b id="vGlow">0.6</b></label>
+  <input type="range" id="sGlow" min="0" max="1" step="0.01" value="0.6">
+  <label>Background</label>
+  <select id="sBg">
+    <option value="stone">Cathedral stone</option>
+    <option value="dark">Deep dark</option>
+    <option value="parchment">Parchment</option>
+  </select>
+  <div class="row">
+    <button id="bRoll" class="pri">Re-roll</button>
+    <button id="bExport">Export PNG</button>
+  </div>
+</div>
+<div id="hud"></div>
+<div id="hint">r re-roll · s save · h hide panel · click re-roll</div>
+<a class="back" href="index.html">← the undercroft</a>
+
+<script>
+"use strict";
+
+/* ===========================================================================
+   Rosette — a seeded generative Gothic rose window for The Undercroft.
+
+   A circular stained-glass window centred on the canvas, built from concentric
+   RINGS of repeating radial SECTORS with perfect N-fold symmetry BY
+   CONSTRUCTION: each ring's motif is generated once for a single sector and
+   then rotated petal-count times around the centre. Glass is drawn first (lit
+   jewel tones with a soft inner glow), then the dark lead came + cusped/foiled
+   tracery is stroked on top, then a faint backlight bloom sells the "light
+   coming through".
+
+   SEED-PURE: the geometry (ring radii, cell counts, motif ids) is a pure
+   function of seed + the structural params (petals / rings / complexity). The
+   PALETTE is a separate recolour layer applied at draw time and NEVER touches
+   geometry — so the same seed under two palettes shares one signature().
+
+   Introspection hook: window.__rosette = { seed, petals, rings, palette,
+   signature() } for headless reproducibility checks.
+   =========================================================================== */
+
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const panel = document.getElementById('panel'), hud = document.getElementById('hud');
+const $ = id => document.getElementById(id);
+const TAU = Math.PI * 2;
+let W, H, DPR;
+
+function resize(){
+  DPR = Math.min(devicePixelRatio || 1, 2);
+  W = cv.width = Math.floor(innerWidth*DPR); H = cv.height = Math.floor(innerHeight*DPR);
+  cv.style.width = innerWidth+'px'; cv.style.height = innerHeight+'px';
+  if (GEOM) requestDraw();
+}
+addEventListener('resize', resize);
+
+/* ===================== seedable PRNG (xmur3 + mulberry32) ================= */
+function xmur3(str){
+  let h = 1779033703 ^ str.length;
+  for (let i=0;i<str.length;i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function(){
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return h >>> 0;
+  };
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+// independent deterministic streams off one seed integer + a string tag.
+function rngFor(seedInt, tag){
+  const seed = xmur3(tag + ':' + (seedInt>>>0))();
+  return mulberry32(seed);
+}
+function hashSeed(str){ return xmur3(String(str))() >>> 0; }
+
+/* ===================== palettes (recolour only — never geometry) =========
+   Each palette is a small harmonious set of saturated GLASS colours + a dark
+   LEADING colour + a backlight tint. Glass entries carry a hue/sat/light triple
+   so per-cell lit-glass shading (brighter core, darker at the leading) is just
+   a lightness ramp on the same hue — keeps every cell readable and harmonious. */
+const PALETTES = {
+  chartres: { name:'Chartres', lead:'#0d0f17', tint:[44, 70, 60],
+    glass:[ [218,72,46], [222,64,30], [350,68,46], [44,82,54], [150,55,40] ] },
+  sainte:   { name:'Sainte-Chapelle', lead:'#0a0d1a', tint:[224, 70, 60],
+    glass:[ [224,74,42], [232,66,30], [348,70,48], [276,52,46], [40,80,56] ] },
+  rosegold: { name:'Rose Gold', lead:'#1a1109', tint:[36, 78, 66],
+    glass:[ [38,84,58], [28,80,52], [346,58,60], [16,72,48], [46,40,82] ] },
+  forest:   { name:'Forest', lead:'#0a120e', tint:[150, 60, 56],
+    glass:[ [150,62,40], [168,58,34], [120,50,44], [44,80,54], [28,76,48] ] },
+  amethyst: { name:'Amethyst', lead:'#120a1a', tint:[280, 64, 62],
+    glass:[ [278,58,46], [300,56,42], [256,58,44], [330,60,50], [206,56,48] ] },
+  grisaille:{ name:'Grisaille', lead:'#15171c', tint:[210, 14, 70],
+    glass:[ [210,16,66], [200,12,58], [44,22,68], [220,18,50], [160,12,60] ] },
+};
+const PAL_ORDER = ['chartres','sainte','rosegold','forest','amethyst','grisaille'];
+
+const BG = {
+  stone:     { a:[230,18,9], b:[228,12,4] },     // cool deep stone
+  dark:      { a:[230,30,3], b:[240,40,1] },     // near-black
+  parchment: { a:[40,18,16], b:[34,22,7] },      // warm dusky parchment-dark
+};
+
+/* ===================== parameters ======================================== */
+const P = {
+  seed: hashSeed('rosette'),
+  seedRaw: 'rosette',
+  petals: 12,
+  rings: 4,
+  complexity: 0.55,
+  leading: 1.0,
+  glow: 0.6,
+  palette: 'chartres',
+  bg: 'stone',
+};
+
+/* ===========================================================================
+   GEOMETRY — a pure function of (seed, petals, rings, complexity).
+   Produces GEOM: { petals, rings:[ {r0,r1,count,motif,sub,phase,fill,…} ],
+   oculus:{…}, outer:{…}, radii:[…] } in a UNIT space (radius 0..1). Rendering
+   scales this to the canvas. No colour lives here.
+
+   Motif vocabulary (the curated set the seed arranges — always composes):
+     'roundel'  — a circle (cusped roundel) centred in the sector.
+     'vesica'   — an almond / petal (pointed at both ends), radial.
+     'lozenge'  — a diamond cell.
+     'trefoil'  — three-lobed cusped figure.
+     'quatrefoil' — four-lobed cusped figure.
+     'lancet'   — a pointed-arch bar (radial light).
+     'fan'      — a foiled fan of small cusps along the ring.
+   =========================================================================== */
+let GEOM = null;
+
+const MOTIFS = ['roundel','vesica','lozenge','trefoil','quatrefoil','lancet','fan'];
+
+function buildWindow(){
+  const rng = rngFor(P.seed, 'geom:'+P.petals+':'+P.rings+':'+Math.round(P.complexity*100));
+  const N = P.petals;
+  const ringCount = P.rings;
+  const cx = P.complexity;
+
+  // --- ring radii: oculus, then ringCount glass rings, then an outer band.
+  // partition the unit radius with seeded but monotonic, well-separated bands.
+  const inner = 0.10 + rng()*0.05;            // oculus outer radius
+  const outerBand = 0.055 + 0.03*cx;          // thickness of the framing outer band
+  const glassSpan = 0.965 - outerBand - inner; // room for the glass rings
+  // seeded weights for each glass ring's thickness (kept within a sane range)
+  const wts = [];
+  let wsum = 0;
+  for (let i=0;i<ringCount;i++){ const w = 0.7 + rng()*0.9; wts.push(w); wsum += w; }
+  const radii = [inner];
+  for (let i=0;i<ringCount;i++){ radii.push(radii[radii.length-1] + glassSpan*wts[i]/wsum); }
+  const rimOuter = radii[radii.length-1] + outerBand;
+
+  // --- oculus / central boss: a small medallion. A foiled roundel.
+  const oculusMotif = rng()<0.5 ? 'rosette' : (rng()<0.5 ? 'quatrefoil' : 'star');
+  const oculusFoils = 4 + Math.floor(rng()*5);       // 4..8 lobes
+  const oculus = { r:inner, motif:oculusMotif, foils:oculusFoils,
+    spin: rng()<0.5 ? 0 : 0.5, fill: Math.floor(rng()*5) };
+
+  // --- glass rings.
+  const rings = [];
+  for (let i=0;i<ringCount;i++){
+    const r0 = radii[i], r1 = radii[i+1];
+    const mid = (r0+r1)/2, thick = r1-r0;
+    // cell count per ring: N, or a multiple (2N) on wider/outer rings when complex.
+    let count = N;
+    const doubleChance = cx*0.6 + (i/ringCount)*0.25;
+    if (i>0 && thick > 0.10 && rng() < doubleChance) count = N*2;
+    // pick a motif appropriate to the ring's radial thickness.
+    const slotW = TAU*mid/count;                 // tangential cell width at mid radius
+    const aspect = thick / Math.max(1e-3, slotW); // tall (radial) vs wide
+    let motif;
+    const pool = [];
+    if (aspect > 1.25){ pool.push('vesica','lancet','vesica'); }       // tall cells
+    else if (aspect < 0.7){ pool.push('fan','lozenge','roundel'); }    // wide cells
+    else { pool.push('roundel','quatrefoil','trefoil','lozenge','vesica'); }
+    if (cx > 0.55) pool.push('trefoil','quatrefoil','fan');
+    if (i===0) pool.push('roundel','vesica');                          // inner ring calmer
+    motif = pool[Math.floor(rng()*pool.length)];
+
+    // sub-foiling: small cusps decorating the motif/leading, scaled by complexity.
+    const sub = (motif==='roundel'||motif==='lozenge')
+      ? 3 + Math.floor(rng()*4 + cx*3)
+      : (motif==='fan' ? 2 + Math.floor(rng()*2 + cx*2) : 0);
+    // half-step phase: stagger this ring's cells relative to the previous one
+    // (brick-like offset) — read as designed coursing, not aligned spokes.
+    const phase = (i>0 && rng()<0.6) ? 0.5 : 0;
+    // a seeded glass-colour assignment PER CELL INDEX within the sector group,
+    // stored as indices into the palette (palette resolves the actual colour).
+    const cells = count;
+    const fillIdx = [];
+    // alternate / pattern the glass colours around the ring for rhythm.
+    const base = Math.floor(rng()*5);
+    const alt  = (base + 1 + Math.floor(rng()*3)) % 5;
+    const triadic = rng() < 0.4;
+    const third = (base + 3) % 5;
+    for (let k=0;k<cells;k++){
+      let idx;
+      if (triadic) idx = (k%3===0)?base : (k%3===1)?alt : third;
+      else idx = (k%2===0)?base:alt;
+      fillIdx.push(idx);
+    }
+    // a contrasting "eye" colour for motif centres (roundel/quatrefoil cores)
+    const eyeIdx = (base + 2 + Math.floor(rng()*2)) % 5;
+
+    rings.push({ r0, r1, mid, count, motif, sub, phase, fillIdx, eyeIdx,
+      // a tiny per-ring inset so glass doesn't touch the leading exactly
+      inset: 0.012 + rng()*0.01 });
+  }
+
+  // --- outer band: a ring of small repeating cusps / roundels (the frame
+  // tracery). Count is a multiple of N.
+  const outer = { r0: radii[radii.length-1], r1: rimOuter,
+    count: N * (rng()<0.5?2:1),
+    motif: rng()<0.5 ? 'fan' : 'roundel',
+    fillIdx: Math.floor(rng()*5) };
+
+  GEOM = { petals:N, ringCount, complexity:cx, radii, oculus, rings, outer, rimOuter };
+  return GEOM;
+}
+
+/* ===========================================================================
+   RENDERING — scale GEOM to the canvas + apply the chosen palette.
+   For each ring we draw ONE sector's glass, then rotate it N (or count) times.
+   Then the lead came is stroked on top of everything. Symmetry is guaranteed
+   because we literally re-use one transform rotated by 360/count.
+   =========================================================================== */
+
+// glass fill: a radial gradient on a single hue — brighter, lighter core
+// (lit-glass glow) fading to a darker rim near the leading.
+function glassGrad(g, x, y, r, hsl, glow){
+  const [h,s,l] = hsl;
+  const lc = Math.min(94, l + 22 + glow*16);    // lit core lightness
+  const le = Math.max(8, l - 16);               // darker edge
+  const grad = g.createRadialGradient(x, y, r*0.05, x, y, r);
+  grad.addColorStop(0,  `hsl(${h} ${Math.min(100,s+6)}% ${lc}%)`);
+  grad.addColorStop(0.55,`hsl(${h} ${s}% ${l}%)`);
+  grad.addColorStop(1,  `hsl(${h} ${Math.max(20,s-8)}% ${le}%)`);
+  return grad;
+}
+function glassFlat(hsl, dl){ const [h,s,l]=hsl; return `hsl(${h} ${s}% ${Math.max(6,Math.min(95,l+(dl||0)))}%)`; }
+
+// Path helpers (all in canvas px around an origin already translated to centre).
+function pathRoundel(g, x, y, r){ g.moveTo(x+r,y); g.arc(x,y,r,0,TAU); }
+
+// cusped circle: a circle with `lobes` inward-pointing cusps (foiled roundel).
+function pathFoiled(g, x, y, r, lobes, depth, spin){
+  const steps = Math.max(64, lobes*16);
+  for (let i=0;i<=steps;i++){
+    const t = i/steps*TAU;
+    const cusp = 1 - depth*Math.pow(Math.abs(Math.cos(lobes*t/2)), 6);
+    const rr = r*cusp;
+    const px = x + Math.cos(t+spin)*rr, py = y + Math.sin(t+spin)*rr;
+    if (i===0) g.moveTo(px,py); else g.lineTo(px,py);
+  }
+}
+
+// vesica / almond pointed at both radial ends, centred at radius `rm`, spanning
+// [r0in,r1in] radially and `half` radians tangentially. Drawn in polar→cart.
+function pathVesica(g, r0in, r1in, half){
+  const rm = (r0in+r1in)/2, hr = (r1in-r0in)/2;
+  // two arcs meeting at points (rm, ±0) along radial axis. Build via samples.
+  const n = 40;
+  for (let i=0;i<=n;i++){
+    const t = -1 + 2*i/n;                  // -1..1 along radial axis
+    const rr = rm + t*hr;
+    const w = half*Math.sqrt(Math.max(0,1 - t*t));   // tangential half-width (lens)
+    const px = Math.cos(w)*rr, py = Math.sin(w)*rr;
+    if (i===0) g.moveTo(px,py); else g.lineTo(px,py);
+  }
+  for (let i=n;i>=0;i--){
+    const t = -1 + 2*i/n;
+    const rr = rm + t*hr;
+    const w = half*Math.sqrt(Math.max(0,1 - t*t));
+    const px = Math.cos(-w)*rr, py = Math.sin(-w)*rr;
+    g.lineTo(px,py);
+  }
+  g.closePath();
+}
+
+// a radial cell quad (sector slice) between radii r0,r1 and ±half radians,
+// optionally with a pointed-arch (lancet) top.
+function pathSector(g, r0, r1, half, pointed){
+  const arcN = 14;
+  // inner arc (left→right)
+  for (let i=0;i<=arcN;i++){ const a=-half+2*half*i/arcN; const px=Math.cos(a)*r0, py=Math.sin(a)*r0; if(i===0)g.moveTo(px,py); else g.lineTo(px,py); }
+  if (pointed){
+    // rise to a point at the outer mid-radius
+    g.lineTo(Math.cos(half)*r1*0.86, Math.sin(half)*r1*0.86);
+    g.lineTo(r1, 0);
+    g.lineTo(Math.cos(-half)*r1*0.86, Math.sin(-half)*r1*0.86);
+  } else {
+    for (let i=0;i<=arcN;i++){ const a=half-2*half*i/arcN; const px=Math.cos(a)*r1, py=Math.sin(a)*r1; g.lineTo(px,py); }
+  }
+  g.closePath();
+}
+
+// lozenge (diamond) centred at radius rm with radial/tangential half extents.
+function pathLozenge(g, rm, hr, half){
+  g.moveTo(rm-hr, 0);
+  g.lineTo(rm, Math.tan(half)*rm*0.92);
+  g.lineTo(rm+hr, 0);
+  g.lineTo(rm, -Math.tan(half)*rm*0.92);
+  g.closePath();
+}
+
+// multifoil figure (trefoil=3, quatrefoil=4): `lobes` circles around a centre.
+function pathMultifoil(g, x, y, r, lobes, spin){
+  const lr = r*0.52, off = r*0.46;
+  for (let k=0;k<lobes;k++){
+    const a = spin + k/lobes*TAU;
+    const px = x + Math.cos(a)*off, py = y + Math.sin(a)*off;
+    g.moveTo(px+lr, py); g.arc(px,py,lr,0,TAU);
+  }
+}
+
+function pal(){ return PALETTES[P.palette]; }
+
+// draw everything for the current GEOM + palette into context `g` sized SxS,
+// centred. `scale` = window radius in px. Used both on-screen and for export.
+function render(g, size, scale){
+  const Gm = GEOM, N = Gm.petals;
+  const P_ = pal();
+  const lead = P_.lead;
+  const bgc = BG[P.bg];
+  const cxp = size/2, cyp = size/2;
+
+  // ---- background stone + backlight bloom ----
+  g.save();
+  const bggrad = g.createRadialGradient(cxp,cyp,0,cxp,cyp,size*0.75);
+  bggrad.addColorStop(0, `hsl(${bgc.a[0]} ${bgc.a[1]}% ${bgc.a[2]}%)`);
+  bggrad.addColorStop(1, `hsl(${bgc.b[0]} ${bgc.b[1]}% ${bgc.b[2]}%)`);
+  g.fillStyle = bggrad; g.fillRect(0,0,size,size);
+  // backlight bloom behind the window (light coming through)
+  if (P.glow > 0.001){
+    const [bh,bs] = P_.tint;
+    const bl = 38 + P.glow*22;
+    const bloom = g.createRadialGradient(cxp,cyp,0,cxp,cyp,scale*1.18);
+    bloom.addColorStop(0, `hsla(${bh}, ${bs}%, ${bl}%, ${0.16+0.30*P.glow})`);
+    bloom.addColorStop(0.6, `hsla(${bh}, ${bs}%, ${bl-10}%, ${0.07+0.14*P.glow})`);
+    bloom.addColorStop(1, `hsla(${bh}, ${bs}%, ${bl}%, 0)`);
+    g.fillStyle = bloom; g.fillRect(0,0,size,size);
+  }
+  g.restore();
+
+  g.save();
+  g.translate(cxp, cyp);
+  // tasteful slow alignment: petal 0 points up
+  g.rotate(-Math.PI/2);
+
+  const leadW = scale * 0.012 * P.leading;          // base lead came width
+  const glassGlow = P.glow;
+
+  // helper to stroke the lead came over a path we just built
+  function stroke(width){ g.lineWidth = Math.max(0.6, width); g.strokeStyle = lead;
+    g.lineJoin='round'; g.lineCap='round'; g.stroke(); }
+
+  // ============ glass + tracery, ring by ring (outer→inner so inner overlaps) ============
+  // We draw outer band first, then glass rings outer→inner, then oculus, so the
+  // central medallion sits cleanly on top.
+
+  // ---- outer framing band ----
+  drawOuterBand(g, Gm.outer, scale, N, P_, leadW, glassGlow, lead);
+
+  // ---- glass rings ----
+  for (let i=Gm.rings.length-1;i>=0;i--){
+    drawRing(g, Gm.rings[i], scale, N, P_, leadW, glassGlow, lead);
+  }
+
+  // ---- oculus / central boss ----
+  drawOculus(g, Gm.oculus, scale, P_, leadW, glassGlow, lead);
+
+  // ---- outer rim heavy lead circle ----
+  g.beginPath(); g.arc(0,0, scale*Gm.rimOuter, 0, TAU);
+  g.lineWidth = leadW*2.4; g.strokeStyle = lead; g.stroke();
+  // a thin stone highlight just inside the rim for depth
+  g.beginPath(); g.arc(0,0, scale*Gm.rimOuter - leadW*1.4, 0, TAU);
+  g.lineWidth = Math.max(0.5, leadW*0.5); g.strokeStyle = 'rgba(255,255,255,0.05)'; g.stroke();
+
+  g.restore();
+}
+
+// ---- one glass ring: draw a sector once, rotate `count` times ----
+function drawRing(g, ring, scale, N, P_, leadW, glow, lead){
+  const count = ring.count;
+  const step = TAU/count;
+  const half = step/2;
+  const r0 = ring.r0*scale, r1 = ring.r1*scale, mid = ring.mid*scale;
+  const inset = ring.inset;
+  const phase = ring.phase*step;
+  const glassCols = P_.glass;
+
+  for (let k=0;k<count;k++){
+    g.save();
+    g.rotate(k*step + phase);
+    const fill = glassCols[ring.fillIdx[k % ring.fillIdx.length]];
+    const eye = glassCols[ring.eyeIdx];
+
+    // 1) fill the WHOLE sector cell with glass first (the lit pane), so there
+    //    are no gaps; the motif then sub-divides it with leading.
+    g.beginPath();
+    pathSector(g, r0+leadW*0.5, r1-leadW*0.5, half*(1-inset), false);
+    g.fillStyle = glassGrad(g, mid*Math.cos(0), 0, r1-r0, fill, glow);
+    g.fill();
+
+    // 2) the motif drawn ON TOP as a contrasting inner glass shape + its leading.
+    drawMotif(g, ring.motif, r0, r1, mid, half*(1-inset), ring.sub, eye, fill, leadW, glow, glassCols, lead, k);
+
+    // 3) lead came around the whole cell (the radial + arc skeleton).
+    g.beginPath();
+    pathSector(g, r0+leadW*0.5, r1-leadW*0.5, half*(1-inset), false);
+    g.lineWidth = Math.max(0.8, leadW*1.15); g.strokeStyle = lead;
+    g.lineJoin='round'; g.stroke();
+
+    g.restore();
+  }
+}
+
+// motif drawn within a sector cell already rotated to angle 0, spanning radii.
+function drawMotif(g, motif, r0, r1, mid, half, sub, eye, fill, leadW, glow, glassCols, lead, k){
+  const cx = mid, cy = 0;                       // motif centre on the radial axis
+  const cellR = Math.min((r1-r0)*0.5, Math.tan(half)*mid) * 0.92;
+
+  if (motif==='roundel'){
+    const rr = cellR*0.96;
+    // foiled (cusped) roundel
+    g.beginPath(); pathFoiled(g, cx, cy, rr, Math.max(3,sub||6), 0.16, 0);
+    g.fillStyle = glassGrad(g, cx, cy, rr, eye, glow); g.fill();
+    g.lineWidth = Math.max(0.7, leadW*0.9); g.strokeStyle = lead; g.stroke();
+    // tiny bright eye
+    g.beginPath(); g.arc(cx,cy,rr*0.30,0,TAU);
+    g.fillStyle = glassFlat(fill, 26); g.fill();
+    g.lineWidth = Math.max(0.5,leadW*0.6); g.stroke();
+  }
+  else if (motif==='vesica'){
+    g.beginPath(); pathVesica(g, r0+leadW, r1-leadW, half*0.62);
+    g.fillStyle = glassGrad(g, cx, cy, (r1-r0)*0.5, eye, glow); g.fill();
+    g.lineWidth = Math.max(0.7, leadW*0.95); g.strokeStyle = lead; g.stroke();
+    // an inner thin vesica highlight
+    g.beginPath(); pathVesica(g, r0+leadW*2.4, r1-leadW*2.4, half*0.40);
+    g.lineWidth = Math.max(0.5, leadW*0.55); g.strokeStyle = 'rgba(255,255,255,0.10)'; g.stroke();
+  }
+  else if (motif==='lozenge'){
+    g.beginPath(); pathLozenge(g, mid, (r1-r0)*0.40, half*0.8);
+    g.fillStyle = glassGrad(g, cx, cy, (r1-r0)*0.45, eye, glow); g.fill();
+    g.lineWidth = Math.max(0.7, leadW*0.9); g.strokeStyle = lead; g.stroke();
+    if (sub>0){ g.beginPath(); pathLozenge(g, mid, (r1-r0)*0.22, half*0.45);
+      g.lineWidth = Math.max(0.5, leadW*0.55); g.strokeStyle='rgba(255,255,255,0.10)'; g.stroke(); }
+  }
+  else if (motif==='trefoil' || motif==='quatrefoil'){
+    const lobes = motif==='trefoil'?3:4;
+    const rr = cellR;
+    g.beginPath(); pathMultifoil(g, cx, cy, rr, lobes, k%2?Math.PI/lobes:0);
+    g.fillStyle = glassGrad(g, cx, cy, rr*1.4, eye, glow); g.fill('evenodd');
+    g.lineWidth = Math.max(0.7, leadW*0.9); g.strokeStyle = lead; g.stroke();
+    // centre boss
+    g.beginPath(); g.arc(cx,cy,rr*0.30,0,TAU);
+    g.fillStyle = glassFlat(fill,24); g.fill();
+    g.lineWidth=Math.max(0.5,leadW*0.6); g.stroke();
+  }
+  else if (motif==='lancet'){
+    // a pointed-arch radial light, narrower than the cell
+    g.beginPath(); pathSector(g, r0+leadW*1.4, r1-leadW*1.4, half*0.52, true);
+    g.fillStyle = glassGrad(g, cx, cy, (r1-r0)*0.6, eye, glow); g.fill();
+    g.lineWidth = Math.max(0.7, leadW*0.9); g.strokeStyle = lead; g.stroke();
+  }
+  else if (motif==='fan'){
+    // a foiled fan: a row of small cusped lobes across the cell width
+    const lobes = Math.max(2, sub||3);
+    const baseR = (r0+r1)/2;
+    for (let i=0;i<lobes;i++){
+      const a = -half*0.74 + (lobes>1 ? (2*half*0.74)*i/(lobes-1) : 0);
+      const lr = cellR*0.62;
+      const lx = Math.cos(a)*baseR, ly = Math.sin(a)*baseR;
+      g.beginPath(); pathFoiled(g, lx, ly, lr, 3, 0.12, a);
+      g.fillStyle = glassGrad(g, lx, ly, lr, i%2?eye:fill, glow); g.fill();
+      g.lineWidth = Math.max(0.6, leadW*0.75); g.strokeStyle=lead; g.stroke();
+    }
+  }
+}
+
+// ---- the central oculus / boss medallion ----
+function drawOculus(g, oc, scale, P_, leadW, glow, lead){
+  const r = oc.r*scale;
+  const cols = P_.glass;
+  const fill = cols[oc.fill % cols.length];
+  const eye  = cols[(oc.fill+2) % cols.length];
+
+  // backing glass disc
+  g.beginPath(); g.arc(0,0,r,0,TAU);
+  g.fillStyle = glassGrad(g, 0, 0, r, fill, glow+0.1); g.fill();
+
+  if (oc.motif==='rosette' || oc.motif==='star'){
+    // a foiled rosette of `foils` petals around the centre
+    const foils = oc.foils;
+    const spin = oc.spin*TAU/foils;
+    for (let k=0;k<foils;k++){
+      g.save(); g.rotate(spin + k/foils*TAU);
+      g.beginPath(); pathVesica(g, r*0.22, r*0.94, (Math.PI/foils)*0.78);
+      g.fillStyle = glassGrad(g, r*0.6, 0, r*0.5, k%2?eye:fill, glow); g.fill();
+      g.lineWidth = Math.max(0.7, leadW*0.85); g.strokeStyle=lead; g.stroke();
+      g.restore();
+    }
+  } else { // quatrefoil boss
+    g.beginPath(); pathMultifoil(g, 0,0, r*0.82, 4, oc.spin*Math.PI/4);
+    g.fillStyle = glassGrad(g, 0,0, r*1.1, eye, glow); g.fill('evenodd');
+    g.lineWidth = Math.max(0.7, leadW*0.85); g.strokeStyle=lead; g.stroke();
+  }
+  // central jewel + heavy lead ring
+  g.beginPath(); g.arc(0,0,r*0.26,0,TAU);
+  g.fillStyle = glassGrad(g, 0,0, r*0.26, eye, glow+0.2); g.fill();
+  g.lineWidth = Math.max(0.8, leadW*1.0); g.strokeStyle=lead; g.stroke();
+  g.beginPath(); g.arc(0,0,r,0,TAU);
+  g.lineWidth = leadW*2.0; g.strokeStyle=lead; g.stroke();
+}
+
+// ---- the outer framing band of small repeating cusps ----
+function drawOuterBand(g, ob, scale, N, P_, leadW, glow, lead){
+  const r0 = ob.r0*scale, r1 = ob.r1*scale, mid=(r0+r1)/2;
+  const count = ob.count, step = TAU/count, half = step/2;
+  const cols = P_.glass;
+  const fill = cols[ob.fillIdx % cols.length];
+  const fill2 = cols[(ob.fillIdx+1) % cols.length];
+  for (let k=0;k<count;k++){
+    g.save(); g.rotate(k*step);
+    // fill the band cell
+    g.beginPath(); pathSector(g, r0+leadW*0.4, r1-leadW*0.4, half*0.96, false);
+    g.fillStyle = glassGrad(g, mid, 0, r1-r0, k%2?fill:fill2, glow*0.8); g.fill();
+    // a small cusped lobe
+    if (ob.motif==='fan' || ob.motif==='roundel'){
+      const lr = Math.min((r1-r0)*0.42, Math.tan(half)*mid*0.8);
+      g.beginPath(); pathFoiled(g, mid, 0, lr, 3, 0.14, 0);
+      g.fillStyle = glassFlat(k%2?fill2:fill, 14); g.fill();
+      g.lineWidth=Math.max(0.6,leadW*0.7); g.strokeStyle=lead; g.stroke();
+    }
+    g.beginPath(); pathSector(g, r0+leadW*0.4, r1-leadW*0.4, half*0.96, false);
+    g.lineWidth = Math.max(0.7, leadW*0.95); g.strokeStyle=lead; g.stroke();
+    g.restore();
+  }
+  // band edge circles
+  g.beginPath(); g.arc(0,0,r0,0,TAU); g.lineWidth=leadW*1.4; g.strokeStyle=lead; g.stroke();
+}
+
+/* ===================== signature (deterministic geometry string) ========= */
+function signature(){
+  if (!GEOM) return '';
+  const r = GEOM.radii.map(x=>x.toFixed(4)).join(',');
+  const cells = GEOM.rings.map(rg=>rg.count+rg.motif[0]+rg.sub+(rg.phase>0?'p':'.')).join('|');
+  const oc = GEOM.oculus.motif[0]+GEOM.oculus.foils+GEOM.oculus.fill;
+  const ob = GEOM.outer.count+GEOM.outer.motif[0];
+  return `N${GEOM.petals}R${GEOM.ringCount}|${r}|oc:${oc}|${cells}|ob:${ob}`;
+}
+
+/* ===================== draw scheduling (debounced via rAF) =============== */
+let drawPending = false, lastDrawMs = 0;
+function requestDraw(){ if (!drawPending){ drawPending = true; requestAnimationFrame(doDraw); } }
+function doDraw(){
+  drawPending = false;
+  const t0 = performance.now();
+  const size = Math.min(W, H);
+  // letterbox: clear full canvas to bg first
+  ctx.save();
+  ctx.fillStyle = '#05060c'; ctx.fillRect(0,0,W,H);
+  ctx.translate((W-size)/2, (H-size)/2);
+  const scale = size*0.46;          // window radius leaves a margin
+  // shift the SxS render box so the window centres
+  render(ctx, size, scale);
+  ctx.restore();
+  lastDrawMs = performance.now()-t0;
+  updateHud();
+}
+
+function regen(rebuild){
+  if (rebuild!==false) buildWindow();
+  requestDraw();
+  syncHook();
+}
+
+function updateHud(){
+  hud.innerHTML =
+    `${PALETTES[P.palette].name} · seed ${P.seedRaw}<br>`+
+    `${P.petals}-fold · ${P.rings} rings · draw ${lastDrawMs.toFixed(1)}ms`;
+}
+
+/* ===================== PNG export (high-res, off-screen) ================= */
+function exportPNG(){
+  const SZ = 2000;                   // high-res square export
+  const off = document.createElement('canvas');
+  off.width = off.height = SZ;
+  const og = off.getContext('2d');
+  render(og, SZ, SZ*0.46);
+  off.toBlob(blob=>{
+    try{
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `rosette_${P.seedRaw}_${P.petals}x${P.rings}_${P.palette}.png`;
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 3000);
+    }catch(e){}
+  }, 'image/png');
+}
+
+/* ===================== controls ========================================== */
+function bindRange(slider,val,fmt,set){
+  const s=$(slider), v=$(val);
+  const handler=()=>{ const x=parseFloat(s.value); set(x); v.textContent=fmt(x); };
+  s.oninput=handler; handler();
+}
+// structural ranges rebuild geometry; cosmetic ranges (glow) only redraw.
+bindRange('sPet','vPet', x=>x|0, x=>{ P.petals=x|0; });
+bindRange('sRing','vRing', x=>x|0, x=>{ P.rings=x|0; });
+bindRange('sCx','vCx', x=>x.toFixed(2), x=>{ P.complexity=x; });
+bindRange('sLead','vLead', x=>x.toFixed(2), x=>{ P.leading=x; });
+bindRange('sGlow','vGlow', x=>x.toFixed(2), x=>{ P.glow=x; });
+
+// re-bind structural sliders to actually rebuild + redraw on input
+$('sPet').addEventListener('input', ()=>regen(true));
+$('sRing').addEventListener('input', ()=>regen(true));
+$('sCx').addEventListener('input', ()=>regen(true));
+$('sLead').addEventListener('input', ()=>regen(false));   // leading is cosmetic (no geom change)
+$('sGlow').addEventListener('input', ()=>regen(false));   // glow is cosmetic
+
+// palette select (recolour only — geometry unchanged)
+const palSel = $('sPal');
+PAL_ORDER.forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=PALETTES[k].name; palSel.appendChild(o); });
+palSel.value = P.palette;
+palSel.onchange = e=>{ P.palette=e.target.value; regen(false); };
+$('sBg').onchange = e=>{ P.bg=e.target.value; regen(false); };
+
+$('iSeed').onchange = e=>applySeed(e.target.value);
+$('bDice').onclick  = ()=>applySeed(String((Math.random()*0xFFFFFF|0).toString(36)));
+$('bRoll').onclick  = ()=>applySeed(String((Math.random()*0xFFFFFF|0).toString(36)));
+$('bExport').onclick= exportPNG;
+
+function applySeed(raw){
+  raw = String(raw).trim() || 'rosette';
+  P.seedRaw = raw;
+  P.seed = /^\d+$/.test(raw) ? (parseInt(raw,10)>>>0) : hashSeed(raw);
+  $('iSeed').value = raw;
+  regen(true);
+}
+
+addEventListener('keydown', e=>{
+  const t=e.target;
+  if (t && (t.tagName==='INPUT'||t.tagName==='SELECT'||t.tagName==='TEXTAREA')) return;
+  if (e.key==='r'||e.key==='R'){ $('bRoll').click(); }
+  else if (e.key==='s'||e.key==='S'){ exportPNG(); }
+  else if (e.key==='h'||e.key==='H'){ panel.classList.toggle('hidden'); }
+});
+// click the canvas to re-roll (a quiet nicety)
+cv.addEventListener('click', ()=>$('bRoll').click());
+
+/* ===================== introspection hook ================================ */
+function syncHook(){
+  window.__rosette.seed = P.seedRaw;
+  window.__rosette.seedInt = P.seed;
+  window.__rosette.petals = P.petals;
+  window.__rosette.rings = P.rings;
+  window.__rosette.palette = P.palette;
+}
+window.__rosette = {
+  seed: P.seedRaw, seedInt: P.seed, petals: P.petals, rings: P.rings, palette: P.palette,
+  signature, P,
+  get geom(){ return GEOM; },
+  get drawMs(){ return +lastDrawMs.toFixed(2); },
+  setSeed(v){ applySeed(String(v)); },
+  setPalette(p){ if (PALETTES[p]){ P.palette=p; palSel.value=p; regen(false); } },
+  setParams(o){ if(o.petals!=null){P.petals=o.petals|0;$('sPet').value=P.petals;$('vPet').textContent=P.petals;}
+    if(o.rings!=null){P.rings=o.rings|0;$('sRing').value=P.rings;$('vRing').textContent=P.rings;}
+    if(o.complexity!=null){P.complexity=+o.complexity;$('sCx').value=P.complexity;$('vCx').textContent=P.complexity.toFixed(2);}
+    regen(true); },
+  exportPNG,
+};
+
+/* ===================== go ================================================ */
+resize();
+applySeed(P.seedRaw);
+
+/* ws: unlock breadcrumb — see /UNLOCK.md. Records first-visit of the rarest
+   Undercroft inhabitant. Harmless & silent if storage is off. */
+(function(){ try{ var k='ws:seen:rosette';
+  if(!localStorage.getItem(k)) localStorage.setItem(k,String(Date.now())); }catch(e){} })();
+</script>
+</body>
+</html>

@@ -1,5 +1,56 @@
 # The Undercroft — changelog
 
+## Build 3 — a new visual medium: "Rosette", a seeded Gothic rose window (2026-06-11)
+
+Added `undercroft/rosette.html` — a single self-contained, zero-dependency, no-network HTML maker,
+intended as the Undercroft's **rarest** inhabitant (a HIDDEN *place* — directly URL-reachable, but the
+gating is about *revealing* it). It is a **brand-new visual medium** for the workshop: a seeded
+**stained-glass rose window** — concentric rings of repeating radial sectors with **N-fold symmetry by
+construction**, jewel-toned lit glass, dark lead came, cusped/foiled tracery, and a soft backlight bloom.
+
+- **What it draws.** A central oculus/boss (a foiled rosette or quatrefoil medallion) → 3–6 rings of
+  glass → an outer framing band, all centred on the canvas. Each ring is subdivided into the petal-count
+  sectors (or 2× on wider/outer rings when complex); the motif for one sector is generated once and
+  **rotated `count` times**, so the window is perfectly symmetric. A curated motif vocabulary the seed
+  arranges so it always composes: roundels, vesica/almond petals, lozenges, trefoils, quatrefoils,
+  pointed lancets, foiled fans. Glass is filled first with a radial lit-glass gradient (brighter core,
+  darker at the leading), then the dark **lead came** is stroked on top of every cell.
+- **House idiom.** Reuses Lattice's left control **panel** (seed text + ⚄ dice, sliders/selects), the
+  full-bleed canvas, dim HUD, and the **xmur3 + mulberry32 PRNG** (`rngFor`/`hashSeed`) so the window is
+  a pure function of the seed. Back-link top-right `← the undercroft` → `index.html`. Accent: cobalt
+  `#5b8dff`. Controls: Seed, Palette (6 named jewel sets), Petals (6–24), Rings (3–6), Complexity,
+  Leading, Glow, Background (stone/dark/parchment), Re-roll, Export PNG; keys `r` re-roll, `s` save,
+  `h` hide panel; click canvas to re-roll.
+- **Seed-pure, palette-invariant.** Geometry (ring radii + per-ring cell counts + motif ids) is a pure
+  function of `(seed, petals, rings, complexity)`; the **palette is a separate recolour layer** applied
+  only at draw time and never touches geometry. Introspection hook `window.__rosette = { seed, seedInt,
+  petals, rings, palette, signature() , … }`; `signature()` is a deterministic geometry string.
+- **Palettes (recolour only):** Chartres, Sainte-Chapelle, Rose Gold, Forest, Amethyst, Grisaille — each
+  a harmonious set of saturated glass HSLs + a dark leading + a backlight tint.
+- **Breadcrumb.** Drops `ws:seen:rosette` on load (try/catch, silent if storage is off).
+- **File:** `undercroft/rosette.html` — **772 lines**, self-contained, relative links only.
+
+### Verification (agent-browser, session `rosette-build`, served origin `http://127.0.0.1:8765`)
+
+- **Renders as a designed rose window:** clearly symmetric, concentric, jewel-toned, cusped — not random
+  spokes / a pie chart. Hero (`rosette`/Chartres, 12-fold, 4 rings) + 3 variety shots captured: Sainte-
+  Chapelle 16-fold/5-ring, Rose Gold 8-fold/3-ring, Amethyst 20-fold/6-ring (max complexity). Draw time
+  **~2–3 ms** (≪ 150 ms target); DPR-aware 2× export.
+- **Clean console:** zero errors / zero warnings after stress-exercising every code path (all 6 palettes,
+  petals 6/10/16/24, rings 3–6, complexity 0 and 1, re-seed, PNG export). Captured via injected
+  `console.error`/`warn` + `error`/`unhandledrejection` listeners → `{errors:[],warns:[]}`.
+- **Reproducibility:** same seed+params → identical `signature()` (switched away to another seed and back
+  → byte-identical); different seeds differ; numeric seeds deterministic.
+- **Palette-invariance:** the same seed under Chartres / Amethyst / Forest yields **identical**
+  `signature()` (palette recolours, geometry unchanged).
+- **Controls:** petals/rings/palette/complexity/leading/glow/background all visibly work; **PNG export**
+  downloads a clean **2000×2000** image (verified dims + viewed — crisp leading, glowing glass).
+- **Breadcrumb:** `ws:seen:rosette` present in localStorage on load (served origin, not `file://`).
+
+> Not yet wired into the Undercroft `SECRETS` table — this build delivers the maker page itself per its
+> spec (the file being URL-reachable is fine; *revealing* it is a separate, future step: decide the
+> trigger, drop the relevant breadcrumb(s), append a `SECRETS` row, test the trail on a served origin).
+
 ## Build 2 — 2nd secret: "The Long Quiet" (patience/dwell trigger) (2026-06-11)
 
 Added the **second inhabitant** of the Undercroft and the framework's **second trigger type:
