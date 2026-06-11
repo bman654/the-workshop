@@ -43,6 +43,16 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > into the footer — the way down. Absent from the DOM until earned (no first-visit spoiler); degrades to
 > absent if storage is off. Breadcrumbs also added to **Game of Life** + **Lattice** (the two parents).
 >
+> **5. A SECOND secret — "The Long Quiet" 🌙 (`undercroft/the-long-quiet.html`) — proves the framework
+> generalizes to a different TRIGGER TYPE: patience/dwell** (not exploration-combo). A dwell accumulator
+> (`UNLOCK.md`) is wired **byte-identically into all 8 Sound Garden voices** (whitney/drift/euclid/rain/
+> loom/carillon/lattice/quickening, id = basename): while a voice is open + visible it accrues
+> `ws:dwell:<id>`; once the **summed** total crosses ~2.5 min it sets `ws:flag:patience`, unlocking a
+> still, moon-lit room — a slow-breathing form, drifting motes, and a short intimate prose gift for someone
+> who lingered. The Undercroft now holds **3** (places: Living Lattice + The Long Quiet; trophy: Eleven);
+> progress auto-reads "of 3" (`SECRETS.length`). Verified on a served origin (dwell accrues → flag →
+> unlock → page loads 60fps clean; stays a riddle-ghost without the flag; no instrument regressed).
+>
 > **Verified end-to-end** (agent-browser, served origin): clean first visit (no rune) → scavenger trail
 > → Undercroft unlocks the Living Lattice → Enter loads Quickening; threshold gate + storage-off degrade
 > confirmed; 0 console errors throughout. **The front door still shows the curated 9; Sound Garden still
