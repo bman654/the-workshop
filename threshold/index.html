@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Threshold · a generative interactive fiction</title>
+<style>
+  :root{
+    /* defaults; theme tints overwrite these on --tint vars */
+    --bg:#0a0c10; --ink:#e7e3d8; --ink-soft:#b9b6ac; --muted:#7c7a72;
+    --accent:#9fb3c8; --accent-soft:#c2d2e2; --line:rgba(180,200,220,.16);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; min-height:100%; }
+  html{ background:var(--bg); }
+  body{
+    background:
+      radial-gradient(1200px 820px at 50% -14%, var(--glow1), transparent 60%),
+      radial-gradient(900px 700px at 12% 116%, var(--glow2), transparent 58%),
+      radial-gradient(820px 600px at 92% 110%, var(--glow3), transparent 56%),
+      var(--bg);
+    color:var(--ink); font-family:var(--serif);
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    min-height:100vh; display:flex; flex-direction:column; align-items:center;
+    transition:background .9s ease, color .9s ease;
+  }
+  a{ color:inherit; }
+
+  /* ---- top bar ---- */
+  .topbar{ width:100%; max-width:880px; display:flex; align-items:center;
+    justify-content:space-between; padding:20px 28px 0; }
+  .back{ font:600 11px/1 var(--mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--muted); text-decoration:none; opacity:.78; transition:.25s; }
+  .back:hover{ color:var(--accent-soft); opacity:1; }
+  .mark{ font:600 11px/1 var(--mono); letter-spacing:.34em; text-transform:uppercase;
+    color:var(--muted); opacity:.62; }
+
+  /* ---- stage ---- */
+  /* top-aligned reading flow: content begins near the top and the page scrolls
+     naturally, so the footer panel is always reachable even when a passage is
+     long or the viewport is short. On tall viewports flex:1 keeps the column
+     comfortably high without stranding the panel below the fold. */
+  .stage{ flex:1 0 auto; width:100%; max-width:720px;
+    padding:6vh 30px calc(5vh + 104px);
+    display:flex; flex-direction:column; align-items:center; justify-content:flex-start; }
+  /* margin:auto vertically centres the reader when the passage is short, but
+     lets it top-align and scroll (with the padding-bottom clearing the sticky
+     panel) when the passage is tall. */
+  .reader{ width:100%; max-width:36rem; margin:auto 0; }
+
+  .kicker{ text-align:center; font:600 10px/1 var(--mono); letter-spacing:.42em;
+    text-transform:uppercase; color:var(--accent); opacity:.62; margin:0 0 16px;
+    padding-left:.42em; }
+  .place-name{ text-align:center; font-weight:500; font-style:normal;
+    font-size:clamp(23px,4.4vw,31px); line-height:1.2; letter-spacing:.004em;
+    margin:0 0 6px; color:var(--ink); }
+  .where{ text-align:center; font:italic 400 14.5px/1.4 var(--serif);
+    color:var(--muted); margin:0 0 34px; letter-spacing:.01em; opacity:.9; }
+
+  /* the passage */
+  .passage{ font-size:clamp(17px,2.35vw,19.5px); line-height:1.78; color:var(--ink-soft);
+    text-align:left; max-width:62ch; margin:0 auto; }
+  .passage p{ margin:0 0 1.05em; }
+  .passage p:last-child{ margin-bottom:0; }
+  .fade{ opacity:0; transform:translateY(6px); filter:blur(1.5px); }
+  .fade.in{ opacity:1; transform:none; filter:blur(0);
+    transition:opacity .7s ease, transform .7s cubic-bezier(.22,.7,.2,1), filter .7s ease; }
+
+  /* a small drop-letter to open a passage gives it a "page" feel */
+  .passage.lede p:first-child::first-letter{
+    font-size:2.9em; line-height:.82; float:left; padding:.06em .12em 0 0;
+    color:var(--accent-soft); font-weight:500; }
+
+  /* the choices */
+  .choices{ margin:38px auto 0; max-width:62ch; display:flex; flex-direction:column;
+    gap:2px; }
+  .choice{ display:block; width:100%; text-align:left; cursor:pointer;
+    background:none; border:none; color:var(--ink-soft);
+    font:400 16.5px/1.5 var(--serif); letter-spacing:.005em;
+    padding:11px 14px 11px 30px; position:relative; border-radius:6px;
+    transition:color .22s, background .22s, padding .22s; }
+  .choice::before{ content:"›"; position:absolute; left:12px; top:11px;
+    color:var(--accent); opacity:.5; transition:.22s; font-size:17px; }
+  .choice:hover, .choice:focus-visible{ color:var(--ink); background:var(--hover);
+    padding-left:34px; outline:none; }
+  .choice:hover::before, .choice:focus-visible::before{ opacity:1; left:14px; }
+  .choice .lead{ color:var(--muted); font-style:italic; }
+  .choice:hover .lead, .choice:focus-visible .lead{ color:var(--accent-soft); }
+  .choice.act{ color:var(--muted); font-style:italic; }
+  .choice.act:hover, .choice.act:focus-visible{ color:var(--ink-soft); }
+
+  /* ending state */
+  .ending .choices{ margin-top:46px; }
+  .ending .choice{ font-style:italic; color:var(--muted); }
+
+  /* ---- footer panel ---- (sticky so the controls are always reachable,
+     even when a passage is long or the viewport is short) */
+  .panel{ position:sticky; bottom:0; z-index:5; width:100%; max-width:none;
+    padding:16px 28px 20px; display:flex; flex-wrap:wrap; gap:12px 18px;
+    align-items:center; justify-content:center; border-top:1px solid var(--line);
+    background:linear-gradient(180deg, transparent, var(--bg) 38%); }
+  .panel > *{ position:relative; }
+  .trail{ flex:1 1 100%; text-align:center; min-width:0;
+    font:11px/1.7 var(--mono); letter-spacing:.06em; color:var(--muted); opacity:.6;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .trail b{ color:var(--accent); font-weight:600; opacity:.85; }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field label{ font:600 9px/1 var(--mono); letter-spacing:.2em; text-transform:uppercase;
+    color:var(--muted); opacity:.8; padding-left:2px; }
+  input[type=text]{
+    appearance:none; background:rgba(255,255,255,.03); color:var(--ink-soft);
+    border:1px solid var(--line); border-radius:5px; padding:8px 11px;
+    font:13px/1 var(--serif); letter-spacing:.01em; width:128px; transition:.2s; }
+  input:hover{ border-color:var(--accent); }
+  input:focus{ outline:none; border-color:var(--accent-soft); background:rgba(255,255,255,.05); }
+  .btns{ display:flex; gap:9px; align-items:center; }
+  button.ctl{ font:600 10.5px/1 var(--mono); letter-spacing:.13em; text-transform:uppercase;
+    cursor:pointer; border-radius:5px; padding:10px 15px; transition:.22s;
+    border:1px solid var(--line); background:rgba(255,255,255,.03); color:var(--ink-soft); }
+  button.ctl:hover{ border-color:var(--accent); color:var(--ink); background:rgba(255,255,255,.05); }
+  button.ctl:active{ transform:translateY(1px); }
+  button.ctl.primary{ color:var(--accent-soft); border-color:var(--accent); }
+
+  .toast{ position:fixed; bottom:24px; left:50%; transform:translate(-50%,16px);
+    background:rgba(10,12,16,.96); border:1px solid var(--line); color:var(--ink);
+    padding:9px 17px; border-radius:6px; font:600 11px/1 var(--mono); letter-spacing:.13em;
+    text-transform:uppercase; opacity:0; pointer-events:none; transition:.3s;
+    box-shadow:0 14px 40px -16px rgba(0,0,0,.85); }
+  .toast.show{ opacity:1; transform:translate(-50%,0); }
+
+  @media(max-width:560px){
+    .stage{ padding:5vh 22px 3vh; }
+    .passage{ font-size:17px; }
+    .choice{ font-size:16px; }
+    .panel{ padding:16px 20px 22px; }
+    input[type=text]{ width:108px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">← workshop</a>
+    <div class="mark">Threshold</div>
+  </div>
+
+  <main class="stage">
+    <div class="reader" id="reader">
+      <div class="kicker">Threshold</div>
+      <h1 class="place-name" id="placeName">—</h1>
+      <div class="where" id="where"></div>
+      <div class="passage" id="passage"></div>
+      <div class="choices" id="choices"></div>
+    </div>
+  </main>
+
+  <div class="panel">
+    <div class="trail" id="trail"></div>
+    <div class="field">
+      <label for="seed">Seed</label>
+      <input type="text" id="seed" placeholder="random" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="btns">
+      <button class="ctl primary" id="reroll" title="A new place">⚄ New place</button>
+      <button class="ctl" id="restart" title="Return to the threshold">↺ Begin again</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* =======================================================================
+   THRESHOLD — a generative interactive fiction.
+   Each seed assembles one coherent strange PLACE: a theme, a graph of
+   8–12 connected locations, recurring proper nouns and motifs, and a
+   reachable heart. You wander, reading, choosing exits.
+
+   Design: CURATE, THEN ARRANGE. The load-bearing sentences are
+   hand-authored. The seed chooses the theme, instantiates the place's
+   proper nouns, draws the location graph, picks which authored variant
+   each room shows, names the exits, and threads the motif. Generation
+   never writes a sentence from scratch — it arranges authored ones and
+   binds in the place's own names.
+   ======================================================================= */
+
+/* ---------- seeded PRNG (xmur3 + mulberry32, as Cartographer) ---------- */
+function xmur3(str){ let h=1779033703^str.length;
+  for(let i=0;i<str.length;i++){ h=Math.imul(h^str.charCodeAt(i),3432918353); h=(h<<13)|(h>>>19); }
+  return function(){ h=Math.imul(h^(h>>>16),2246822507); h=Math.imul(h^(h>>>13),3266489909);
+    h^=h>>>16; return h>>>0; }; }
+function mulberry32(a){ return function(){ a|=0; a=(a+0x6D2B79F5)|0;
+  let t=Math.imul(a^(a>>>15),1|a); t=(t+Math.imul(t^(t>>>7),61|t))^t;
+  return ((t^(t>>>14))>>>0)/4294967296; }; }
+function makeRng(seedStr){ const s=xmur3(String(seedStr)); return mulberry32(s()); }
+
+/* RND is rebound per place so a seed reproduces a place exactly. */
+let RND = Math.random;
+function rnd(){ return RND(); }
+function pick(a){ return a[(rnd()*a.length)|0]; }
+function chance(p){ return rnd()<p; }
+function shuffle(a){ const x=a.slice();
+  for(let i=x.length-1;i>0;i--){ const j=(rnd()*(i+1))|0; [x[i],x[j]]=[x[j],x[i]]; } return x; }
+function pickN(a,n){ return shuffle(a).slice(0,n); }
+/* fill {tokens} from a bag, capitalising {Token}; leaves unknown tokens alone */
+function fill(str, bag){
+  return str.replace(/\{(\w+)\}/g, (m,k)=>{
+    const lower=k.charAt(0).toLowerCase()+k.slice(1);
+    let v = bag[lower];
+    if(v==null) return m;
+    if(k[0]===k[0].toUpperCase()) v = v.charAt(0).toUpperCase()+v.slice(1);
+    return v;
+  });
+}
+
+/* =======================================================================
+   THEMES.  Three, gone deep.  Each is its own world of authored prose.
+
+   A theme provides:
+     - tint:       palette variables for the reading interface
+     - kicker:     the small word under "Threshold"
+     - placeName:  pools the seed assembles the place's title from
+     - nouns:      proper-noun pools, instantiated ONCE per place and
+                   bound into passages so the place feels singular
+                   (a keeper, a named feature, a sound, a thing-kept)
+     - entrance:   authored opening passages (variants)
+     - rooms:      location archetypes; each has an id, a "where" label,
+                   and 2–4 fully authored passage variants. Variants may
+                   reference the place's bound nouns via {tokens}.
+     - heart:      the destination archetype + its closing passages
+     - exits:      authored phrasings for a link TO a room of a given id
+     - revisit:    short authored lines prepended when a room is re-entered
+   The arrangement (which rooms, their order, which exit goes where,
+   which variant shows) is the seed's job.
+   ======================================================================= */
+
+const THEMES = {
+
+  /* ------------------------------------------------------------------ */
+  /*  THE DROWNED LIBRARY — a library long underwater, still legible    */
+  /* ------------------------------------------------------------------ */
+  library:{
+    kicker:"the drowned library",
+    tint:{
+      "--bg":"#06100f","--ink":"#dfeae6","--ink-soft":"#9fb6b1","--muted":"#5f7b76",
+      "--accent":"#5fb0a3","--accent-soft":"#9bd8cd","--line":"rgba(95,176,163,.16)",
+      "--hover":"rgba(95,176,163,.07)",
+      "--glow1":"rgba(40,120,110,.13)","--glow2":"rgba(20,70,90,.12)","--glow3":"rgba(60,140,120,.08)"
+    },
+    placeName:{
+      a:["The Library of","The Reading Rooms of","The Stacks at","The Archive of","The Lending House of","The Athenaeum of"],
+      b:["Drowned Aldermere","Sunk Verial","Low Carrow","the Tideline","Quiet Fathom","Salt and Vellum","the Forgetting Water","Old Selisme","the Eleventh Depth","Vane-Beneath-the-Water"]
+    },
+    /* proper-noun pools, one drawn for the whole place */
+    nouns:{
+      keeper:["the Underlibrarian","Madame Selisse, who has not surfaced in years","the drowned clerk","the Reader who stayed","old Aldous of the lower stacks","the Keeper of the Wet Catalogue"],
+      keeperShort:["the Underlibrarian","Madame Selisse","the clerk","the Reader who stayed","Aldous","the Keeper"],
+      feature:["the Grand Stair, gone to green water","the Tideline, where the dry shelves end","the Reading Room with its sunken lamps","the Catalogue Hall","the Atrium, full of slow light"],
+      sound:["a low pressure, like a held breath","the soft click of pages turning untouched","a far bell, ringing somewhere in the current","the long sigh of water against the spines","a faint reciting, just under hearing"],
+      /* kept = the abstract object of the search (reads as object of 'looking for', 'appointment with') */
+      kept:["the one book you were always meant to return","the volume everyone comes here to find","the page that has your name on it","the book you did not finish, and could not forget"],
+      /* object = a concrete, placeable, openable thing (lies open / on the lectern / on the table) */
+      object:["a slim waterlogged book, its pages somehow still legible","a letter sealed in wax the water has not loosened","the last dry leaf of a flooded ledger","a journal in a hand that becomes, as you read, your own"],
+      tideName:["the Forgetting Tide","the slow green flood","the rising","the patient water"]
+    },
+    entrance:[
+      [ "You come in by the high door, the dry one, the one that still remembers being a door. Below you the floor simply stops being floor and becomes water — clear, and lit from somewhere underneath, and full of shelves.",
+        "Books stand in their ranks beneath the surface, perfectly ordered, perfectly still. {Sound} reaches you from below. The library has been drowned a long time, and has decided to go on lending." ],
+      [ "The threshold is a watermark on the wall, chest-high, brown as tea. Above it, the entrance hall is dry and ordinary. Below it, {place} begins in earnest — every reading room, every gallery, every spine of every book, held under glass-clear flood.",
+        "You can hear {sound}. You understand, the way you understand things in a place like this, that you are expected. That you have, in fact, an appointment with {kept}." ]
+    ],
+    rooms:{
+      catalogue:{ where:"the catalogue hall",
+        v:[
+          [ "Drawers. A wall of small brass-handled drawers from floor to lost ceiling, each labelled in a hand gone soft with damp. Half are open and trailing cards into the water like roots.",
+            "You pull one. The card inside is for a book you have never read and somehow miss. {KeeperShort} catalogued everything here, even the things that were never written — especially those." ],
+          [ "The catalogue floats. Index cards drift at eye level in their thousands, sorted by some logic the water keeps but will not explain. When you reach for one, the others draw gently back, making room, the way a crowd makes room for the bereaved.",
+            "One card stays. It bears your own name, and a shelf-mark, and the single word: *overdue*." ],
+          [ "Here the cards have learned to swim. They school past your face, flick away, regroup — each a title, each a life filed and forgotten. {Sound} keeps them moving. You could spend a year reading the spines as they pass and never reach the one you want." ]
+        ]},
+      reading:{ where:"the reading room",
+        v:[
+          [ "Long tables, and at every place a green-shaded lamp still burning underwater, which should not be possible and is. The readers are gone but their chairs are pushed back at the careless angles of people who meant to return.",
+            "An open book lies at the nearest place, its pages held flat by the weight of the water. You read a line. It is about you, but in the past tense, and kind." ],
+          [ "The reading room keeps its hush even drowned — perhaps especially drowned, the flood pressing every sound flat. Lamplight pools gold on the tabletops. Someone has left a coat over a chair, and it stirs in the current as if its owner only just stood.",
+            "You sit. It seems the thing to do. The chair accepts you. Far off, {sound}." ],
+          [ "The chandeliers have come down and lie on the tables like the skeletons of luminous animals, still faintly lit. Between them, dry-eyed, the readers' abandoned work: a half-corrected proof, a letter begun *My dear—* and stopped, a sum that does not add." ]
+        ]},
+      stacks:{ where:"the lower stacks",
+        v:[
+          [ "The stacks go down. Aisle after aisle of shelving descends into deeper and bluer water, the light thinning as it goes, the titles giving up their gold. Somewhere down there the cataloguing stopped being possible and the books were simply *let be*.",
+            "You can go further down. The water is colder there, and the books, they say, are truer." ],
+          [ "You move along the shelves with one hand out, the way you would in the dark, though it is not dark — it is merely deep. The spines slide under your fingers, swollen, soft, the lettering risen like a scar. Each is a door someone closed.",
+            "{KeeperShort} is supposed to be down here, still shelving, having long since stopped distinguishing the work from the drowning." ],
+          [ "A shelf has given way and spilled its books into a slow drift across the aisle, pages opening and closing in the current like things breathing. You step over them carefully. It feels wrong to stand on a sentence." ]
+        ]},
+      atrium:{ where:"the atrium",
+        v:[
+          [ "The great central well of the library, roofed once in glass, now in green water and the wavering coin of the sun. Galleries rise on every side, tier on tier, all of it submerged, all of it patient. Dust that should have settled centuries ago still falls, slow as snow, and never lands.",
+            "From here you can see the whole drowned shape of {place}, and how every gallery leans, very slightly, toward the same dark doorway below." ],
+          [ "Light comes down through the flood in long columns, and the dust hangs in them, turning. It is the most beautiful room you have ever been afraid of. {Sound} fills the whole well, soft as a congregation.",
+            "Balconies ring you on every side. Books look down from all of them like an audience that has been waiting a very long time to see how you end." ]
+        ]},
+      gallery:{ where:"the upper gallery",
+        v:[
+          [ "A narrow gallery rings the wall, just below the old waterline, where the light is best and the books driest — though dry, here, means only *less drowned*. The volumes are the cherished ones, the ones someone carried up as the water rose.",
+            "They are arranged not by subject but, you slowly understand, by how much they were loved." ],
+          [ "You walk the gallery at the height of the watermark, half in the bright dry air, half in the flood, so that you cast two shadows: one ordinary, one wavering and vast on the books below. {Sound} comes from beneath your better shadow." ]
+        ]},
+      chapel:{ where:"the chapel of the lost",
+        v:[
+          [ "A small side room, almost a chapel, where the unfinished books are kept — the abandoned, the lost, the ones whose authors died at the comma. Candles of green water burn in their sconces. It is very quiet, even for here.",
+            "On the central lectern, open, weighted by the flood, lies {object}. You are not the first to come and read it. You can tell by the worn place where the readers rest their hands." ],
+          [ "Here they keep the manuscripts the world never received: the apologies unposted, the confessions burned and somehow re-collected leaf by leaf from the smoke. The water has been very gentle with them. {KeeperShort} comes here, it is said, to grieve the way other people pray." ]
+        ]},
+      map:{ where:"the map room",
+        v:[
+          [ "A round room hung with charts gone soft and translucent in the flood, the coastlines bleeding gently into one another so that every country becomes, at the edges, the sea. A great globe stands at the centre, turning very slowly in the current, though no hand turns it.",
+            "You find your own town on one of the maps. The cartographer has marked it, in a careful hand, *here he was happy* — and you cannot now remember whether that was true." ],
+          [ "The map room, where the library kept its account of the dry world it used to belong to. The charts have all begun, slowly, to agree with the water: rivers widen, lakes join hands, the blue rises off the page to meet the blue it is drowned in. Soon there will be only one country left on all of them, and it will be this one." ]
+        ]},
+      conservatory:{ where:"the conservation room",
+        v:[
+          [ "The room where they mended the broken books — the press still clamped on a spine it will never finish setting, the little pots of paste gone to soft stone, the bone folders laid out in their order like surgeon's tools abandoned mid-operation. The work was interrupted. You can feel exactly how suddenly.",
+            "On the bench, half-repaired, a book waits with its torn page held open by a weight, as if the binder had only stepped away to fetch the right thread, and the water came instead." ],
+          [ "Here the wounded books were brought to be made whole. {KeeperShort} worked at this bench, you understand, long after there was any dryness left to restore them to — mending for the sake of mending, the way you go on speaking gently to someone past hearing. {Sound} is very close in this room." ]
+        ]},
+      cistern:{ where:"the cistern stair",
+        v:[
+          [ "The grandest stair in the library descends from the dry hall straight down into the deepest green, its marble steps going under one by one, each tread a little more drowned than the last, until the banister itself dissolves into pure depth. It is the most direct way down, and the loneliest.",
+            "The water gets warmer as you descend. That, you have read somewhere, is how you know you are nearing the bottom of a thing — the deepest water keeps the day's last warmth the longest." ],
+          [ "The cistern stair, where the flood first came in, all those years ago, and where it is therefore oldest and most at home. The steps are worn into shallow basins by feet and then by current. You go down them the way you'd go down into a memory: carefully, and as if you had done it many times before, because you have." ]
+        ]}
+    },
+    heart:{ where:"the deepest reading room",
+      v:[
+        [ "The water is darkest here, and warmest, and entirely still — the still of a held note about to resolve. This is the bottom of {place}, the room every gallery leaned toward, and on its single long table, lit by no lamp you can find, lies {object}.",
+          "You open it. You already know, the way you have known since the threshold, that this is {kept}, and that it has only ever had one reader in mind.",
+          "The first page is the day you arrived. The last page is this one. In between, set down in a careful hand by {keeperShort}, is everything — kept, and catalogued, and waited on, and at last, gently, returned to you.",
+          "{Sound} settles. The dust, after all this time, begins to land." ],
+        [ "You reach the deepest room, where the flood goes black and tender, and you are not afraid, which surprises you. The whole library has been a long sentence leading here, and here is its full stop: a small table, a single chair drawn out, and {object} laid open as if someone set it down only a moment before you came.",
+          "It is yours — {kept}, that you were always the one who'd kept out too long. {KeeperShort} stamps it returned, somewhere far above, and the water, for the first time in years, begins — very slowly, very kindly — to recede.",
+          "You sit down to read it before it dries." ]
+      ]},
+    exits:{
+      catalogue:["into the catalogue hall","through the drifting cards","toward the wall of drawers","to where the cards are schooling"],
+      reading:["into the reading room, where the lamps still burn","to the long tables","toward the green lamplight","into the hush of the reading room"],
+      stacks:["down into the lower stacks","along the descending shelves","deeper, where the water cools","down where the books are let be"],
+      atrium:["out into the atrium","to the great drowned well","toward the columns of falling light","into the central well"],
+      gallery:["up to the gallery, near the old waterline","along the upper gallery","toward the loved and lifted books","up where the light is best"],
+      chapel:["aside, to the chapel of the lost","into the room of unfinished books","toward the green candles","to where the lost things are kept"],
+      map:["into the round map room","to where the charts are drowning","toward the slowly turning globe","into the room of bleeding coastlines"],
+      conservatory:["into the conservation room","to the bench where the books were mended","toward the abandoned binding press","where the broken books were brought"],
+      cistern:["down the great cistern stair","toward the marble steps going under","down where the water keeps its warmth","onto the drowned grand stair"],
+      heart:["down, toward the stillness at the bottom","to the deepest room, where the dust waits to land","down where the water goes warm and dark","toward the last reading room"]
+    },
+    actions:[
+      { label:"Listen.", text:["You hold still and listen. Under everything — under the water, under the turning dust — there is {sound}, and beneath that, fainter, your own pulse, keeping a slower time than you remember it keeping. The library is patient with you. It has all the time that has ever been lost."] },
+      { label:"Read a spine.", text:["You tilt your head and read the nearest spine. The title is a sentence you once said and meant and forgot you'd meant. The water has kept it better than you did.","You let it go. There are others. There are always others, here."] }
+    ],
+    revisit:["The current has brought you back here.","You have circled, and arrived here again.","The water lets you return, as water does.","You know this room now; it knows you."]
+  },
+
+  /* ------------------------------------------------------------------ */
+  /*  THE WINTER TERMINUS — the last station at the end of the line     */
+  /* ------------------------------------------------------------------ */
+  terminus:{
+    kicker:"the end of the line",
+    tint:{
+      "--bg":"#0b0d12","--ink":"#e9ebf0","--ink-soft":"#aeb4c0","--muted":"#6b7280",
+      "--accent":"#8aa0bd","--accent-soft":"#cdd8e8","--line":"rgba(160,180,210,.15)",
+      "--hover":"rgba(160,180,210,.06)",
+      "--glow1":"rgba(120,140,180,.10)","--glow2":"rgba(70,90,130,.10)","--glow3":"rgba(150,160,190,.07)"
+    },
+    placeName:{
+      a:["The Terminus at","The Last Station,","Platform's End,","The Halt at","The Junction of","The Waiting Rooms of"],
+      b:["Verst","Cold Halt","Nivose","the Frostline","Last Light","Brume","Snowmere Halt","the Far Siding","Hesper","Vane Crossing"]
+    },
+    nouns:{
+      keeper:["the Stationmaster, who has not lifted his lamp in years","the Conductor of the last train","the woman at the closed ticket window","the signalman in the frozen box","the Porter who waits with you"],
+      keeperShort:["the Stationmaster","the Conductor","the ticket-clerk","the signalman","the Porter"],
+      feature:["Platform One, under its long iron canopy","the great clock, stopped at the hour of the last departure","the waiting room with its dead stove","the footbridge over the silent rails","the buffers, where the track simply ends"],
+      sound:["the tick of cooling iron, though nothing here is warm","a far-off whistle that never quite resolves into a train","snow against the canopy, ceaseless and soft","the creak of the empty footbridge","a timetable being read aloud, just out of hearing"],
+      /* kept = the abstract destination/longing (object of 'an appointment with', 'came here to reach') */
+      kept:["the destination you came all this way to reach","the journey you put off until it was almost too late","the place your grandmother named once and never explained","the stop you should have got off at, years ago"],
+      /* object = a small, placeable, claimable thing (on the mantel of lost things / on the seat) */
+      object:["a ticket, soft with handling, the destination worn away","a small suitcase, labelled in your own hand, that you do not remember packing","a pocket-watch, still ticking, set to a time you almost recognise","a folded coat, still holding the shape and warmth of whoever wore it"],
+      tideName:["the snow","the cold","the long waiting","the timetable"]
+    },
+    entrance:[
+      [ "The train sets you down and goes on without you — you watch its tail-lamp shrink and wink out down a line that the snow takes back almost at once. Then there is only the platform, and the cold, and the great dark shape of {place} under its lamps.",
+        "A board above the empty barrier lists departures: every one of them tonight, every one of them long past. {Sound} comes from somewhere along the platform. You pull your coat closer and go in." ],
+      [ "It is the kind of cold that is also a silence. You step down onto Platform One and your breath goes out before you like a small surrendered ghost. The doors close. The train is already a memory by the time you turn around.",
+        "{Place}. End of the line. The lamps are lit and no one lit them. Somewhere a clock that has stopped goes on being looked at, and {sound} keeps the only time there is." ]
+    ],
+    rooms:{
+      platform:{ where:"the long platform",
+        v:[
+          [ "The platform runs away into snow in both directions, longer than any platform has cause to be, its lamps standing in the dark at intervals like a sentence with too many full stops. The snow has drifted up against the benches and over the abandoned trunks of travellers who, it seems, also waited.",
+            "Down at the far end, almost lost, a single carriage stands with its windows lit." ],
+          [ "Iron canopy overhead, ribbed and vast, and the snow sifting in at the open ends to settle on the rails. Your footsteps are the only marks on the platform, and behind you they are already filling. {Sound} carries the length of it.",
+            "{KeeperShort} stands at the edge of the lamplight, waiting, as they have been waiting, for a train that is yours to either catch or release." ],
+          [ "The benches along the platform are full — of snow, shaped by the wind into the postures of people: here a hunched old man, here a woman with a child, here someone leaning to watch the line. You sit among them. You are the only one warm, and you are not very warm." ]
+        ]},
+      waiting:{ where:"the waiting room",
+        v:[
+          [ "Inside, out of the snow, the waiting room keeps a ghost of warmth — a cast-iron stove gone cold long ago, but cold the way a kettle is cold an hour after the tea, as if heat had only just given up the room. Timetables paper the walls, every one of them out of date.",
+            "Someone has left a newspaper folded to the obituaries, and a cup with a skin of frost across the tea. The clock says it is always nearly time." ],
+          [ "The waiting room is small and brown and unbearably patient. Posters peel from the walls advertising resorts that have themselves, by now, gone under snow. The benches are worn smooth in the places where the anxious sit and the resigned lean back.",
+            "You take the resigned place. It fits you better than you would like. {Sound} comes through the wall from the platform." ],
+          [ "A fire is laid in the stove but never lit; the matches are damp; the kindling has been arranged and rearranged by hands less idle than yours. On the mantel, a row of lost things waits to be claimed: a glove, a child's mitten, a single earring, and {object}." ]
+        ]},
+      clock:{ where:"beneath the great clock",
+        v:[
+          [ "The station clock hangs over the concourse, four-faced, taller than a house, and stopped — all four faces agreeing, for once, on a single hour: the hour the last train left. The hands have not moved since, but the clock has not stopped *trying*; you can hear, faintly, the strain of it.",
+            "Stand under it long enough and you begin to feel that the hour is not past but *held*, the way a breath is held — and that it is being held for you, until you decide." ],
+          [ "Under the clock the air is somehow older. {KeeperShort} keeps to the shadow of its great stopped face, lamp unlit, and does not look at you so much as wait to be looked *to*. The departure board above clatters once, settles, and shows nothing it has not shown for years." ]
+        ]},
+      bridge:{ where:"the footbridge",
+        v:[
+          [ "The footbridge crosses high over the silent rails, iron and ice, every rivet furred with frost. From its crown you can see the whole layout of {place}: the platforms, the dark sidings, the one lit carriage, and the point where every line, every single one, curves together and runs out into the white.",
+            "The snow on the bridge is unmarked but for one set of footprints, going over, never coming back. They are about your size." ],
+          [ "Halfway across the bridge the wind finds you, carrying the snow level along the rails below, and for a moment you cannot tell up from down, only cold from less cold. The handrail is the one certain thing. {Sound} rises through the iron grating under your feet.",
+            "On the far side, a stair descends to a platform you had not seen, where something with lit windows is waiting." ]
+        ]},
+      sidings:{ where:"the dark sidings",
+        v:[
+          [ "Beyond the platforms the sidings begin — the disused track, the rolling stock left to the weather, carriages with their seats still plush and their windows blind with frost. Snow has buried the points; nothing will be shunted here again. It has the peace of a thing that has finished being useful.",
+            "You walk between the dead trains. In one, faintly, a light. In another, you would swear, the warmth of recent breath on the glass." ],
+          [ "The sidings are where the line keeps the trains it could not let go of: the boat-train that missed its tide, the night-mail with the mail still aboard, the special laid on for someone who never came. The frost has sealed them all very tenderly.",
+            "{KeeperShort} oils a coupling that will never couple again, out of habit, or kindness, or grief — it is hard, in this cold, to tell the three apart." ]
+        ]},
+      board:{ where:"the departure board",
+        v:[
+          [ "The great board fills one wall of the concourse, a hundred slots and shutters, and as you watch it begins, with a sound like a flock taking off, to *turn* — names and times flickering past too fast to read, the whole timetable of everywhere the line has ever gone shuffling itself before you.",
+            "Then it stops. One destination. One platform. One time, and the time is now. The rest of the board goes blank, as if it had only ever been keeping this one place from you." ],
+          [ "Departures, the board says, and lists them: every town you meant to reach and didn't, every place you said you'd go back to, the village a voice you loved named once and never explained. All of them tonight. All of them from the platform with the lit carriage.",
+            "One line on the board is scratched out, as if someone hoped to spare you — or to keep it. You lean close, and read it anyway. It is {kept}." ]
+        ]},
+      ticket:{ where:"the ticket hall",
+        v:[
+          [ "The booking hall, all dark wood and brass and the high ecclesiastical hush of places built when travel was a kind of faith. The windows are shuttered, every one, the little half-moons of glass gone blind with frost. A sign hangs in the nearest: POSITION CLOSED, in a hand that has been closing it for a very long time.",
+            "But there is a bell on the counter. You could ring it. You get the strong sense that, if you did, someone would come — and that you would then have to say, aloud, where it is you are trying to go." ],
+          [ "Rank on rank of pigeonholes behind the counter, each stuffed with the tickets no one collected: the trips cancelled, the journeys deferred, the returns of people who only ever bought singles. A whole archive of intended departures. {Sound} sifts through it like a draught.",
+            "{KeeperShort} is behind the glass, you think — a shape, a stillness, a patience the shape of a person who has waited so long they have half become the waiting." ]
+        ]},
+      refreshment:{ where:"the refreshment room",
+        v:[
+          [ "The buffet, behind its etched-glass door: a long marble counter, an urn gone cold, a bell-jar with a single curling sandwich kept under it like a relic. The mirror behind the bottles has silvered over at the edges, so that the room it shows is a little smaller, a little older, a little kinder than the one you stand in.",
+            "Two cups sit on a corner table, both half-finished, the chairs angled toward each other. Whoever they were, they had not quite said goodbye when the last train was called. The tea has long since frozen mid-conversation." ],
+          [ "Warmth lived here once — you can feel the ghost of it, the fug of tea and wet wool and last embraces, pressed into the very plaster. Now it is only cold and clean and waiting. The clock over the urn has stopped at the same hour as all the others. {Sound} comes faintly through the swing door.",
+            "On the counter, someone has left the exact change for a journey, counted out in coins gone green, and never spent." ]
+        ]},
+      signalbox:{ where:"the signal box",
+        v:[
+          [ "Up an iron stair, the signal box, glass on every side, looking out over the whole frozen geometry of the junction: the points, the gantries, the great levers in their frame, every signal arm dropped at last to *all clear* — though there is nothing left to clear, and nothing coming, or everything is.",
+            "From up here the lines make sense the way they never do from the platform: how they gather, how they choose, how every one of them, in the end, runs to the same lit carriage at the end of the same long dark." ],
+          [ "The levers stand in their polished frame, each labelled, each set to its final position by a hand that knew exactly what it was doing and then stopped doing anything at all. The frost has welded them. You could not move one if you tried, and you understand that you are not meant to — that the road has already been set, for you, kindly, and only waits for you to walk it." ]
+        ]}
+    },
+    heart:{ where:"the last train",
+      v:[
+        [ "The lit carriage stands alone at the platform's end, its doors open, and the warmth comes off it in a soft gold breath that meets you while you are still ten yards away. After all this cold, the warmth is almost unbearable; you have to stop, and gather yourself, before you can go to it.",
+          "Inside: lamplight, and a seat by the window with your name on the little card, and {object} set ready on it as if you had only stepped down for a moment onto the platform of your whole life and are now, at last, getting back on. The board above the seat names {kept}, and the way is clear.",
+          "{KeeperShort} stands at the door with the lamp finally lit, and does not hurry you, but does — gently, the way you'd wake someone from a cold sleep — invite you up.",
+          "The doors are open. The whistle, when it comes, will not be far-off any more. It will be yours." ],
+        [ "You come at last to the one warm thing at the end of the line. The carriage is lit and waiting and has been waiting, you understand, for exactly as long as you have. The snow does not fall on it. The cold stops at its open door like a dog told to sit.",
+          "There is a seat kept for you, and the destination on the board above it is not scratched out after all — only kept, until you were ready to read it. It is the place you have been trying to remember the whole way here.",
+          "{KeeperShort} lifts the lamp. Far down the impossible line, very faint, a whistle answers, and this time it does not fade. This time it is coming closer. You step up into the light, and the doors, with great kindness, close." ]
+      ]},
+    exits:{
+      platform:["out onto the long platform","along the platform, into the snow","back to the platform's edge","down the platform toward the lamps"],
+      waiting:["into the waiting room, out of the snow","through the door to the waiting room","toward the cold stove and the timetables","into the small warm-once room"],
+      clock:["under the great stopped clock","to the foot of the four-faced clock","toward the held hour","into the older air beneath the clock"],
+      bridge:["up onto the footbridge","over the rails by the iron bridge","up where you can see the whole line","across the high bridge"],
+      sidings:["off into the dark sidings","among the abandoned carriages","where the line keeps its lost trains","into the sidings, between the dead trains"],
+      board:["to the great departure board","under the clattering board","to where the destinations turn","toward the board and its names"],
+      ticket:["into the booking hall","to the closed ticket windows","toward the counter and its bell","through to the ticket hall"],
+      refreshment:["into the refreshment room","through the etched-glass door to the buffet","toward the cold urn and the frozen cups","into the old buffet"],
+      signalbox:["up to the signal box","up the iron stair to the levers","where the lines all make sense","into the glass box above the junction"],
+      heart:["down the platform, toward the one lit carriage","to the warm train at the line's end","toward the open doors and the gold light","to the last train"]
+    },
+    actions:[
+      { label:"Wait.", text:["You wait. It is, after all, what the place is for. The snow comes down; the clock holds its hour; {sound} keeps on. Waiting here is not the empty thing it is elsewhere — it is a kind of arrival you have not finished yet. You let yourself do it properly, for once."] },
+      { label:"Check your pockets.", text:["You go through your pockets, slowly, with cold-stiff fingers. A stub. A button. Lint, and a folded thing too soft to be paper any more. No ticket. Not yet. But the shape of where a ticket would be is warm, as if it had only just been there, or were only just about to be."] }
+    ],
+    revisit:["Your own filling footprints have led you back here.","You have come round again; the snow does not mind.","The cold has turned you in a circle, gently.","Here again. The waiting does not keep score."]
+  },
+
+  /* ------------------------------------------------------------------ */
+  /*  THE HOUSE THAT REMEMBERS — a house keeping the lives lived in it   */
+  /* ------------------------------------------------------------------ */
+  house:{
+    kicker:"the house that remembers",
+    tint:{
+      "--bg":"#100c0b","--ink":"#efe6dc","--ink-soft":"#c2b3a4","--muted":"#857468",
+      "--accent":"#c79a6a","--accent-soft":"#e3c69a","--line":"rgba(199,154,106,.16)",
+      "--hover":"rgba(199,154,106,.06)",
+      "--glow1":"rgba(150,100,60,.11)","--glow2":"rgba(90,60,50,.11)","--glow3":"rgba(170,120,80,.07)"
+    },
+    placeName:{
+      a:["The House at","The Old House on","Number Nine,","The House Called","The House on","Wyck House,"],
+      b:["Ashgrove","Lammas End","Quietwood Lane","Mirebourne","the Long Meadow","Selwood","Halloran Street","the Edge of the Orchard","Vane Hill","Thornfield"]
+    },
+    nouns:{
+      keeper:["your grandmother, who is everywhere in the house and nowhere in it","the house itself, which keeps you the way it kept the others","someone who loved you, going from room to room ahead of you","the child you were, hiding and not wanting to be found","the woman in the photographs, whose name is on your tongue"],
+      keeperShort:["your grandmother","the house","the one who loved you","the child you were","the woman in the photographs"],
+      feature:["the long hall with its runner worn pale down the middle","the stair with the loose third step","the kitchen, where the warmth always was","the front room kept for best and so never lived in","the window seat where the afternoons were spent"],
+      sound:["a clock in another room, a beat slower than your heart","someone humming a tune you almost have","the settle of old timber, the house turning in its sleep","rain on a window you cannot quite place","a kettle just beginning, in a kitchen you have not reached"],
+      /* kept = the abstract thing you came back for (object of 'looking for' / 'came to say') */
+      kept:["the thing you came back to say, and the one you came to say it to","what was left unfinished here, the year everything changed","the name you have not let yourself remember","the goodbye no one in this house ever got to make"],
+      /* object = a concrete, placeable thing (stands on the mantel / lies on the pillow / set on the table) */
+      object:["a photograph with one face you can never make come clear","a letter, addressed to you in a familiar hand, still sealed","a small book of pressed flowers, brittle as moth-wing","a child's drawing of this house, with too many people at the windows"],
+      tideName:["the quiet","the dusk","the house's long memory","the afternoon"]
+    },
+    entrance:[
+      [ "The door is unlocked, as it always was, and gives with the same low complaint it always gave, and the smell of the hall reaches you before the light does — beeswax, woodsmoke, and under that the particular dust of {place}, which is the smell of every afternoon you spent here and forgot you'd kept.",
+        "The house knows you. You feel it know you, the way a room changes when someone steps in. {Sound}, somewhere ahead. You take off your coat out of an old habit the house remembers better than you do." ],
+      [ "You did not mean to come back. But the lane brought you, the way lanes do, and here is the gate, and here the path, and here {place} with its lamps already lit against a dusk that seems to have been waiting for you to arrive in.",
+        "Inside, nothing has changed and everything is smaller. {Sound} comes from deeper in. You know, without deciding to, that you are looking for {kept}, and that the house — patient, faithful, a little sad — will help you find it." ]
+    ],
+    rooms:{
+      hall:{ where:"the long hall",
+        v:[
+          [ "The hall runs the length of the house, its runner worn pale down the centre by all the feet that hurried along it to all the things that seemed urgent then. Doors stand along it, some open on dim rooms, some shut. The coats on the row of pegs are the coats of people you loved.",
+            "At the far end, where the hall darkens, a single door is closed. It has always been closed. You have always meant to open it." ],
+          [ "You stand in the hall and the house arranges itself around you out of memory: here the umbrella stand, here the barometer no one ever tapped to any purpose, here the spot on the wall where the picture hung that was taken down after, and never spoken of.",
+            "{Sound} comes from a room you cannot yet name. {KeeperShort} is just ahead of you — you keep arriving in rooms a moment after they have left them." ],
+          [ "The hall is longer than the house could possibly hold, the way halls are in the houses we carry. Doors and doors and doors. Behind one, laughter; behind another, the particular silence of a room where someone is crying quietly and does not want to be heard. You pass them gently." ]
+        ]},
+      kitchen:{ where:"the kitchen",
+        v:[
+          [ "The kitchen is where the warmth always was, and is still — the range ticking, a kettle just beginning to think about the boil, the table scrubbed pale and set, somehow, for one more than are present. The window over the sink holds the last of the light.",
+            "Someone has been baking. The smell of it is so exactly the smell of being small and safe here that you have to put your hand on the table. {KeeperShort} has only just stepped out — the chair is still warm." ],
+          [ "This was the heart of it, the kitchen, the room everyone ended up in no matter how grand the front rooms were kept. The marks are all still here: the height-lines pencilled on the doorframe, the burn on the table from the iron, the cup with the chip everyone knew not to drink from but no one threw away.",
+            "{Sound} fills the room like steam. You could stay here. People did. People stayed in this room their whole lives and called it happiness, and were right." ]
+        ]},
+      stair:{ where:"the staircase",
+        v:[
+          [ "The stair turns up into the dimmer storey, and the third step still gives its small warning creak — the one that gave every child away, the one that announced every late and hopeful homecoming. You take it deliberately, to be announced.",
+            "Photographs climb the wall beside you, a life per frame, the faces getting younger as you go up, or older, you can never afterward agree with yourself which way the stair runs in time." ],
+          [ "You go up with one hand on the rail worn satin-smooth by all the hands before yours. Halfway, the landing window holds a square of failing gold, and in it the orchard, and the long meadow, and the dusk coming on exactly as it came on then.",
+            "From above, {sound}. {KeeperShort} is up there, or was, or will be — the house is not strict about which." ]
+        ]},
+      parlour:{ where:"the front room",
+        v:[
+          [ "The front room, kept for best and therefore never quite lived in — the good chairs, the clock under glass, the photographs ranked on the mantel in their silver. A room for the occasions of a family: the christenings and the wakes, which in the end are the same furniture rearranged.",
+            "On the mantel, among the others, stands {object}. You have looked at it a thousand times. You have never, you realise, truly looked." ],
+          [ "Dust-sheets are half-drawn over the good furniture, as if someone began to put the room away and was called off mid-task and never came back to finish. The clock under its glass dome has stopped, its hands fallen together at the bottom of the hour like two people leaning on each other.",
+            "{Sound} reaches even here, into the room kept for best. Nothing, in this house, is finally kept *out*." ]
+        ]},
+      nursery:{ where:"the small bedroom",
+        v:[
+          [ "A small room under the eaves, the ceiling sloping so an adult must stoop, though you do not remember ever having to stoop. The bed is made. A few toys keep their patient vigil on the sill. The wallpaper is the wallpaper you fell asleep reading shapes into, and the shapes are all still there.",
+            "Low on the doorframe, where a small hand could reach, a name is carved. You crouch — you have to crouch now — to read it. It is yours, in a child's letters, recording that you were here, and small, and certain you'd remember." ],
+          [ "The child's room. Someone's. Yours, or one you stood for. The night-light still burns its low amber against a dark that the house has kept thin and kindly in here, on purpose, all these years. {Sound} is softest in this room, almost a lullaby.",
+            "On the pillow, as if set out for a returning traveller, is {object}." ]
+        ]},
+      garden:{ where:"the garden, through the glass",
+        v:[
+          [ "The french doors give onto the garden, gone to seed now, the borders blurred, the apple trees grown wild and generous. The dusk lies along the long meadow exactly as it used to lie while you were called in to wash and you pretended not to hear, to keep the day a little longer.",
+            "You could go out. But the glass is cool against your hand and the house is warm at your back, and you understand the choice the garden is offering, and you are not, quite, ready to make it." ],
+          [ "Through the window the garden holds the last of the light, the way it always did, hoarding the gold under the apple trees long after the house had gone to shadow. Someone is out there at the far end of the meadow, by the gate, not looking back, in no hurry, waiting.",
+            "{Sound} is behind you, in the house. The figure at the gate is ahead, in the dusk. Between them, you, in the doorway of your whole life, deciding which way the evening goes." ]
+        ]},
+      attic:{ where:"the attic",
+        v:[
+          [ "Up the last narrow stair into the attic, where the house keeps the things it could not throw away and could not bear to use: the cot broken down to its slats, the trunk of clothes in shapes no one is any more, the boxes labelled in a hand that has outlived the hand. Dust lies on everything like a soft grey snowfall that fell once and stayed.",
+            "A bare bulb, unlit, hangs on its flex. You do not need it. The dusk through the gable window is exactly enough to see by, and to remember by, which here are the same thing." ],
+          [ "The attic smells of hot slate and old paper and the particular sweetness of things kept too long. Trunks, hatboxes, a dressmaker's dummy standing patient in the corner like someone who came up to fetch something years ago and is still deciding. {Sound} is muffled here, under the roof, close as a held breath.",
+            "You open the nearest trunk. On top, folded, is a thing of yours from when you were very small, kept against exactly this — against the day you would come back up the stairs needing proof that you had been loved." ]
+        ]},
+      landing:{ where:"the landing",
+        v:[
+          [ "The landing, where the house pauses to breathe between its storeys — the airing cupboard ticking with its slow warmth, the bowl of potpourri gone to dust and ghost-of-roses, the long window where, as a child, you knelt on the seat to watch for headlights on the lane. The carpet remembers the path your bare feet wore to each door.",
+            "All the bedroom doors stand a little ajar, the way they were left on the last ordinary morning, before anyone knew it was the last." ],
+          [ "A still, between-places quiet on the landing, neither up nor down, neither one room nor another. The clock on the half-landing has stopped, of course. Through the banisters you can see down into the hall, and up into the dark of the attic stair, and the house holds you here a moment, gently, at its own heart's height. {Sound} comes from below, and above, and is the same sound." ]
+        ]},
+      study:{ where:"the study",
+        v:[
+          [ "The study, smelling of pipe-smoke that has not been smoked in years and of leather and of the particular dust of a man who worked here with the door closed. The desk is as it was left: the blotter, the dry pen, the spectacles folded on a letter, the chair pushed back a careful inch as if its occupant had only risen to find a word.",
+            "The drawers are not locked. They never were; you only thought they were, being small, and forbidden, and certain that grown people kept their true selves in drawers." ],
+          [ "Books to the ceiling, read and re-read, the cracked spines all leaning the same tired way. A reading-lamp throws its small warm island over the desk, lit by nothing, lit anyway. On the wall, in their frames, the degrees and the photographs and the one watercolour of this very house, painted from the meadow, in summer, by a hand that loved it.",
+            "{KeeperShort} sat here in the evenings, you remember now — the lamp, the quiet, the {sound} from the rest of the house, the door open just enough to be reached." ]
+        ]}
+    },
+    heart:{ where:"the room at the end of the hall",
+      v:[
+        [ "You come at last to the closed door at the end of the hall — the one always shut, the one you always meant to open and never did, the one the whole house has been, gently and for years, drawing you toward. The handle is cool and familiar in your hand. You have, you find, been holding your breath since the threshold.",
+          "You open it. Inside is not the dark you feared but a small warm ordinary room, lamplit, lived-in, and there — turning from the window as if they have only been waiting for you to be ready — is {keeperShort}, with your name already on their lips.",
+          "On the table between you lies {object}, set out as if it had always been meant for this evening. You understand, now, what {kept} was. You say it. {Sound} stops, having done its work, having brought you home.",
+          "You go in. The door does not close behind you so much as it relaxes, the way a held thing relaxes once it has finally been set safely down." ],
+        [ "The last door. You have walked the whole house to reach it, and the house has walked beside you. It opens easily, as if it had never been locked at all, only waiting for the right hand and the right evening.",
+          "The room beyond is the one you have been trying to remember the whole way back: the lamp, the chair, the window full of dusk and orchard, and {object} set out on the table as if you'd left it there yourself, meaning to return. And you have. You have returned.",
+          "{KeeperShort} is here, the way warmth is in a room — not to be pointed to, only to be in. There is nothing left to find — only {kept}, and you give it, at last, freely, and {sound} falls away into the deep quiet of a house that has finished remembering, and can rest." ]
+      ]},
+    exits:{
+      hall:["into the long hall","back to the worn runner of the hall","down the hall toward the doors","into the hall, lined with its coats"],
+      kitchen:["through to the kitchen, where the warmth is","toward the kitchen and the kettle","into the warm kitchen","to the kitchen, following the smell of baking"],
+      stair:["up the staircase","to the stair with its creaking step","up into the dimmer storey","to the foot of the stairs"],
+      parlour:["into the front room, kept for best","to the parlour and its mantel","through to the good room","into the front room"],
+      nursery:["up under the eaves, to the small bedroom","to the child's room","into the little room with the night-light","up to the small slope-ceilinged room"],
+      garden:["to the french doors and the garden beyond","toward the glass and the failing light","to the doors onto the garden","where the dusk lies on the meadow"],
+      attic:["up the narrow stair to the attic","into the attic, under the slates","up where the kept things are","to the attic and its soft grey dust"],
+      landing:["out onto the landing","to the landing, between the storeys","where the bedroom doors stand ajar","to the long landing window"],
+      study:["into the study","to the desk with its folded spectacles","through to the quiet study","into the room kept behind a closed door"],
+      heart:["down the hall, to the door that was always shut","toward the closed room at the end","to the last door","down to the room you always meant to open"]
+    },
+    actions:[
+      { label:"Stay a moment.", text:["You stay a moment, the way you would have been told not to dawdle, and dawdle anyway. The house breathes around you — {sound}, the settle of timber, the dusk coming on. It is in no hurry. It has kept you this long; it can keep you a moment more. You let it. It is the kindest thing either of you has done in years."] },
+      { label:"Say the name.", text:["You open your mouth to say the name — the one that has been just behind your teeth since the gate, the name for {keeperShort} — and the house leans in to hear it, every room of it listening at once.","It does not quite come. Not yet. But it is closer now. It is in the next room. It is at the end of the hall."] }
+    ],
+    revisit:["The house has led you gently back here.","You have wandered, and the house has returned you here.","Your feet have found this room again, the way they always did.","Here once more; the house is patient with your circling."]
+  }
+
+};
+
+const THEME_KEYS = Object.keys(THEMES);
+
+/* =======================================================================
+   PLACE ASSEMBLY
+   Given a seed: choose a theme, instantiate the place's proper nouns,
+   build a connected graph of rooms (one is the heart), and freeze a
+   variant + exit-set per node so the place is stable across a visit.
+   ======================================================================= */
+
+function buildPlace(seedStr){
+  RND = makeRng(seedStr);
+  const themeKey = pick(THEME_KEYS);
+  const T = THEMES[themeKey];
+
+  /* --- bind the place's proper nouns ONCE --- */
+  const bag = {};
+  bag.place = fill(pick(T.placeName.a), {}) + " " + pick(T.placeName.b);
+  // placeName.a entries with a trailing comma read better without the space-comma
+  bag.place = bag.place.replace(" ,", ",");
+  for(const k in T.nouns){ bag[k] = pick(T.nouns[k]); }
+
+  /* --- choose which room archetypes the place contains --- */
+  const roomKeys = Object.keys(T.rooms);
+  // total interior locations between 7 and 9 (plus entrance + heart = 9..11)
+  const interiorCount = Math.min(roomKeys.length, 7 + ((rnd()*3)|0));
+  const chosen = shuffle(roomKeys).slice(0, interiorCount);
+
+  /* --- nodes: entrance(0) ... interior ... heart(last) --- */
+  const nodes = [];
+  const ENTRANCE=0;
+  nodes.push({ id:"__entrance", kind:"entrance" });
+  chosen.forEach(rk=> nodes.push({ id:rk, kind:"room" }));
+  const HEART = nodes.length;
+  nodes.push({ id:"__heart", kind:"heart" });
+
+  const N = nodes.length;
+  const adj = Array.from({length:N}, ()=> new Set());
+  function link(a,b){ if(a!==b){ adj[a].add(b); adj[b].add(a); } }
+
+  /* Build a connected, gently heart-ward graph that always reads as a
+     JOURNEY (the heart sits at genuine depth) yet stays woven and freely
+     wanderable:
+       - a spanning "spine" entrance -> interior... -> heart guarantees
+         everything is reachable and the heart is the deepest node
+       - cross-links between INTERIOR rooms make it a place, not a corridor
+       - the heart is reached ONLY from its spine-predecessor (one
+         approach), so no cross-link can shortcut the depth of arrival   */
+  const order = shuffle(Array.from({length:N-2}, (_,i)=> i+1)); // interior indices
+  const spine = [ENTRANCE, ...order, HEART];
+  // spine edges
+  for(let i=0;i<spine.length-1;i++) link(spine[i], spine[i+1]);
+  const heartApproach = spine[spine.length-2]; // the one room that opens onto the heart
+
+  // weave the interior: extra links among interior rooms only (never the
+  // entrance-to-heart shortcut, never a second door into the heart).
+  const interior = order.slice();
+  for(let i=0;i<interior.length;i++){
+    if(rnd()<0.6){
+      // connect to another interior room a short hop away in the spine
+      const a = interior[i];
+      const others = interior.filter(x=> x!==a && !adj[a].has(x) && x!==HEART);
+      if(others.length){
+        // prefer a nearby spine neighbour for local coherence
+        others.sort((p,q)=> Math.abs(order.indexOf(p)-i) - Math.abs(order.indexOf(q)-i));
+        const b = others[(rnd()* Math.min(3,others.length))|0];
+        if(b!=null && b!==HEART) link(a,b);
+      }
+    }
+  }
+  // give the entrance a second way in (a fork at the very start) if it has one option
+  if(adj[ENTRANCE].size<2){
+    const cand = order.filter(i=> !adj[ENTRANCE].has(i) && i!==HEART && i!==heartApproach);
+    if(cand.length) link(ENTRANCE, pick(cand));
+  }
+  // hard guarantees: entrance never touches the heart; heart has exactly
+  // its single approach (plus whatever the spine gave it = the approach).
+  adj[ENTRANCE].delete(HEART); adj[HEART].delete(ENTRANCE);
+  for(const v of Array.from(adj[HEART])){ if(v!==heartApproach){ adj[HEART].delete(v); adj[v].delete(HEART); } }
+  if(!adj[HEART].has(heartApproach)) link(HEART, heartApproach);
+
+  /* --- freeze a passage variant + a "where" per node --- */
+  nodes.forEach((node,i)=>{
+    if(node.kind==="entrance"){ node.where=""; node.variant = pick(T.entrance); }
+    else if(node.kind==="heart"){ node.where = T.heart.where; node.variant = pick(T.heart.v); }
+    else { const r=T.rooms[node.id]; node.where = r.where; node.variant = pick(r.v); }
+  });
+
+  return { themeKey, T, bag, nodes, adj, ENTRANCE, HEART };
+}
+
+/* =======================================================================
+   RENDER + STATE
+   ======================================================================= */
+const $ = id=>document.getElementById(id);
+let PLACE=null, AT=0, VISITED=null, PENDING_ACTION=null, SEED="";
+
+function applyTint(T){
+  const root=document.documentElement;
+  for(const k in T.tint){ root.style.setProperty(k, T.tint[k]); }
+}
+
+function renderTrail(){
+  const T=PLACE.T;
+  const seen=[];
+  VISITED.forEach((v,i)=>{ if(v){ const n=PLACE.nodes[i];
+    if(n.kind==="entrance") seen.push("the threshold");
+    else if(n.kind==="heart") seen.push("the heart");
+    else seen.push(n.where.replace(/^the /,"")); } });
+  const dots = PLACE.nodes.map((n,i)=> VISITED[i] ? "●" : (i===AT?"○":"·")).join(" ");
+  $("trail").innerHTML = `<b>${PLACE.bag.place}</b> &nbsp;·&nbsp; ${seen.length} of ${PLACE.nodes.length} &nbsp;·&nbsp; ${dots}`;
+}
+
+function paragraphsHTML(lines){
+  return lines.map(p=> "<p>"+escapeHTML(p).replace(/\*(.+?)\*/g,"<em>$1</em>")+"</p>").join("");
+}
+function escapeHTML(s){ return s.replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function go(toIndex, actionTextLines){
+  const reader=$("reader");
+  // fade out, then swap
+  const passage=$("passage"), choices=$("choices");
+  passage.classList.add("fade"); choices.classList.add("fade");
+  passage.classList.remove("in"); choices.classList.remove("in");
+  setTimeout(()=>{ render(toIndex, actionTextLines); }, 360);
+}
+
+function render(toIndex, actionTextLines){
+  AT = toIndex;
+  const node = PLACE.nodes[AT];
+  const T = PLACE.T, bag = PLACE.bag;
+  const firstVisit = !VISITED[AT];
+  VISITED[AT] = true;
+
+  $("placeName").textContent = bag.place;
+
+  // "where" line
+  let where = node.where;
+  if(node.kind==="entrance") where = "the threshold";
+  $("where").textContent = where ? "— "+where+" —" : "";
+
+  // passage body
+  let lines = node.variant.slice();
+  // revisit flavour: prepend a soft re-entry line (self-contained, so it never
+  // collides with a passage that opens on the room's own name).
+  if(!firstVisit && node.kind==="room"){
+    const lead = fill(pick(T.revisit), bag) + " ";
+    lines = lines.slice();
+    lines[0] = lead + lines[0];
+  }
+  // if we arrived via an in-place action, show its text instead, then the room stays
+  let bodyLines = lines;
+  if(actionTextLines){ bodyLines = actionTextLines; }
+
+  const passage=$("passage");
+  passage.className = "passage fade" + (node.kind==="entrance" || node.kind==="heart" ? " lede" : (firstVisit && !actionTextLines ? " lede":""));
+  passage.innerHTML = paragraphsHTML(bodyLines.map(s=> fill(s,bag)));
+
+  // choices
+  const choices=$("choices");
+  choices.innerHTML="";
+  const reader=$("reader");
+  reader.classList.toggle("ending", node.kind==="heart" && !actionTextLines);
+
+  if(node.kind==="heart" && !actionTextLines){
+    // the ending: only meta choices
+    addChoice(choices, "Begin again, at the threshold", "", ()=>restart(), true);
+    addChoice(choices, "Find another place", "", ()=>reroll(), true);
+  } else if(actionTextLines){
+    // after an action, a single "return" choice back to the room body
+    addChoice(choices, "", "and then", ()=>go(AT), false);
+  } else {
+    // exits to neighbours, phrased per destination
+    const neigh = shuffle(Array.from(PLACE.adj[AT]));
+    // gentle guidance: if heart is a neighbour, list it last (a discovery)
+    neigh.sort((a,b)=> (PLACE.nodes[a].kind==="heart"?1:0)-(PLACE.nodes[b].kind==="heart"?1:0));
+    neigh.forEach(ni=>{
+      const dest = PLACE.nodes[ni];
+      const key = dest.kind==="heart" ? "heart" : dest.id;
+      const phrase = pick(T.exits[key] || ["onward"]);
+      const lead = VISITED[ni] ? "back " : "";
+      addChoice(choices, (lead?lead:"")+phrase, "", ()=>go(ni), false);
+    });
+    // sometimes offer an in-place action (listen/wait/read) — authored, themed
+    if(T.actions && T.actions.length && chance(0.7)){
+      const act = T.actions[(rnd()*T.actions.length)|0];
+      addChoice(choices, act.label, "", ()=>go(AT, act.text), false, true);
+    }
+  }
+
+  renderTrail();
+  // fade in
+  requestAnimationFrame(()=>{
+    passage.classList.add("in");
+    setTimeout(()=> choices.classList.add("in"), 140);
+    choices.classList.add("fade");
+  });
+}
+
+function addChoice(parent, text, leadWord, fn, ending, isAct){
+  const b=document.createElement("button");
+  b.className = "choice" + (ending?" end":"") + (isAct?" act":"");
+  if(leadWord){
+    b.innerHTML = `<span class="lead">${escapeHTML(leadWord)} </span>${escapeHTML(text)}`;
+  } else {
+    b.textContent = text;
+  }
+  b.addEventListener("click", fn);
+  parent.appendChild(b);
+}
+
+/* ---- session control ---- */
+function startPlace(seedStr){
+  SEED = seedStr;
+  PLACE = buildPlace(seedStr);
+  applyTint(PLACE.T);
+  document.querySelector(".kicker").textContent = "Threshold · " + PLACE.T.kicker;
+  VISITED = new Array(PLACE.nodes.length).fill(false);
+  $("seed").value = seedStr;
+  // hard render the entrance (no fade-out from nothing)
+  render(PLACE.ENTRANCE);
+}
+function restart(){
+  VISITED = new Array(PLACE.nodes.length).fill(false);
+  $("reader").classList.remove("ending");
+  go(PLACE.ENTRANCE);
+}
+function reroll(){
+  const s = (Date.now().toString(36)+Math.floor(Math.random()*1e6).toString(36));
+  $("reader").classList.remove("ending");
+  // brief fade then new place
+  const passage=$("passage"), choices=$("choices");
+  passage.classList.remove("in"); choices.classList.remove("in");
+  setTimeout(()=> startPlace(s), 360);
+}
+
+/* ---- toast ---- */
+let toastT=null;
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),1500); }
+
+/* ---- wiring ---- */
+$("reroll").addEventListener("click", reroll);
+$("restart").addEventListener("click", restart);
+$("seed").addEventListener("keydown", e=>{
+  if(e.key==="Enter"){ const v=$("seed").value.trim(); if(v){
+    $("reader").classList.remove("ending");
+    const passage=$("passage"), choices=$("choices");
+    passage.classList.remove("in"); choices.classList.remove("in");
+    setTimeout(()=> startPlace(v), 360); toast("a new place"); } }
+});
+
+/* first place */
+startPlace((Date.now().toString(36)+Math.floor(Math.random()*1e6).toString(36)));
+</script>
+</body>
+</html>
