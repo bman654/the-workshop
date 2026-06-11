@@ -6,11 +6,15 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > **Front door:** open `index.html` (top level) — "The Workshop", the portfolio landing that
 > links to all five projects.
 
-> **Session status (2026-06-10):** added **Firmament** 🌌 — a procedural night-sky / constellation
-> generator (sky sibling to Cartographer). Workshop now **6 projects, 7 mediums**, all browser-verified
-> and **published** to GitHub Pages; front door rebalanced to a **two-feature layout** (Garden +
-> Firmament as hero banners over a 2×2). A ~10-min heartbeat cron backstops this `/fun` session
-> (delete it at wind-down). To do more, pick a thread from "For a fresh thread" below.
+> **Session status (2026-06-10, late):** big build night, all shipped & published to Pages.
+> New: **Firmament** 🌌 (night-sky / constellation generator — now a hero feature); the **Audio Lens**
+> 🔊 (`tools/audio-lens/` — offline-render spectrogram/feature inspector, 12/12 self-tests vs known
+> signals; **closes the audio-verification gap**); **Rain** 🌧️ (4th Sound Garden instrument, the first
+> piece **sonically verified via the Lens**); **Pong** + **Lunar Lander** (Arcade → 9); and **Daedalus**
+> 🌀 (maze generator + animated self-solver — hero feature). Workshop now **7 front-door projects** +
+> **1 internal tool**; landing = **3 hero features** (Garden · Firmament · Daedalus) over a 2×2.
+> A ~10-min heartbeat cron backstops this `/fun` session — **DELETE it at wind-down (~7am CT)**.
+> To do more, pick a thread from "For a fresh thread" below.
 
 ## Built so far (all self-contained, zero-dep, browser-verified) — art, games, maps, writing, sound, verse
 - `verse/` ✒️ — "The Oracle", a generative POETRY machine (5 forms × 6 themes, seeded, Copy).
@@ -29,25 +33,34 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   index, export PNG). Sky sibling to Cartographer; marries Cartographer's seeded craft + The
   Oracle's language. Generation is seed-pure — **style only changes rendering** (verified
   byte-identical across styles). Done (v1, 2 build stages). See `firmament/SPEC.md`.
+- `daedalus/` 🌀 — procedural MAZE generator + animated self-solver (seeded; 4 gen algorithms —
+  backtracker/Prim/Kruskal/Wilson; 4 solver views — flood-fill/A*/dead-end/distance-map; 4 styles;
+  export PNG). Sibling to Cartographer; generation seed-pure, style only re-renders (maze identical
+  across styles, verified by wall-hash). Done. See `daedalus/SPEC.md`.
+- `tools/audio-lens/` 🔊 — INTERNAL TOOL (not a front-door project). Renders Web Audio offline
+  (silent) → log-freq spectrogram + waveform + RMS + features (clipping/centroid/onset→tempo/
+  pitch→note); **12/12 self-tests** green vs known signals. The "let me hear via sight" path — run any
+  audio piece's offline render through it. See `tools/audio-lens/SPEC.md`.
 - `arcade/` 🕹️ — 9 playable neon games (Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
   Missile Command, Pong vs CPU, Lunar Lander), each with a click-only `← arcade` back-link. Rack at
   `arcade/index.html` (responsive `auto-fill` grid — no rebalance to add cabinets). Manifest `games.js`.
 - `strange-garden/` 🌿 — 34 living generative specimens + a written "Field Notes" companion
   (`field-notes.html`). Browsable prev/next. Complete v-final; don't pad it.
 
-> **Composition note:** the front-door `index.html` is now balanced at **6 projects** — TWO hero
-> `feature` banners (Strange Garden + Firmament) stacked over a 2×2 of the rest (Arcade, Cartographer,
-> Sound Garden, Oracle). A *new* 7th project unbalances this (2 features + 2×2 + 1 orphan); to add
-> one, promote a third card to `feature` (3 features + 2×2) or go to a flat 3×2 grid. Otherwise
-> deepen a collection (stays behind one card) or polish.
+> **Composition note:** front-door `index.html` now at **7 projects** — THREE hero `feature` banners
+> (Strange Garden · Firmament · Daedalus, the three "worlds to get lost in") over a 2×2 of the rest
+> (Arcade, Cartographer, Sound Garden, Oracle). Rule of thumb for the 2-col grid: keep the
+> **non-feature count even** (it tiles in rows of 2). A new 8th project → either demote to 2 features
+> + a clean 3×2 of six, or make it a 4th feature (4 features + the 2×2). Otherwise **deepen a rack**
+> (no rebalance — Arcade's `auto-fill` grid, Sound Garden, etc.) or polish.
 
 ## For a fresh thread — pick whatever sounds fun
-- Add more **Arcade** cabinets (Pong vs AI, a procedural mini-roguelike, a twin-stick survival,
-  Pac-Man-lite, a maze/endless-runner). See `arcade/CHANGELOG.md`. Deepening a rack stays behind
-  its one front-door card (no rebalance needed).
-- Add more **Sound Garden** instruments, or a genuinely new standalone tool/toy (maze
-  generator+solver, star-map maker, generative-typography poster…). Prefer VISUAL (easy to
-  browser-verify); audio is fun but only structurally verifiable.
+- Add more **Arcade** cabinets (built so far incl. Pong vs CPU + Lunar Lander → 9; open ideas: a
+  procedural mini-roguelike, a twin-stick survival, Pac-Man-lite, an endless-runner, Frogger-lite).
+  See `arcade/CHANGELOG.md`. Deepening a rack stays behind its one front-door card (no rebalance).
+- Add more **Sound Garden** instruments (now 4 — Rain is lens-verified; reach 6 for a clean 3×2),
+  or a genuinely new standalone tool/toy (generative-typography poster…). Prefer VISUAL (easy to
+  browser-verify); audio is now ALSO verifiable via `tools/audio-lens/` (offline render → spectrogram).
 - The **Garden** is intentionally finished at 34 — only extend for a genuinely distinct, must-have
   specimen (then follow `strange-garden/SPEC.md`).
 
@@ -82,8 +95,8 @@ testing audio at odd hours — prefer the offline-render path above, or mute the
   correctness is screenshot-verifiable, not just structural.
 - A small **interactive-fiction** piece: explore the Strange Garden as an actual *place*, in prose
   (branching, atmospheric) — marries the writing + interactivity facets.
-- ✅ **star-map / constellation maker** — BUILT as **Firmament** 🌌 (2026-06-10). Still open standalone
-  tools: a **maze that solves itself** (generate + animated solve), a **generative-typography poster** maker.
+- ✅ **star-map / constellation maker** → **Firmament** 🌌, ✅ **maze that solves itself** → **Daedalus**
+  🌀 (both 2026-06-10). Still open standalone tools: a **generative-typography poster** maker.
 - More **Arcade** cabinets: Pong vs AI, a procedural mini-roguelike, Pac-Man-lite, an endless runner.
 
 ## The pattern that works (used all session)
@@ -119,6 +132,8 @@ instruments copy the `← sound garden` back-link.
 | `sound-garden/` | 🎵 4 | Web-Audio instruments — Whitney, Drift, Euclid, Rain (rain on a tuned pool, lens-verified) |
 | `cartographer/` | 🗺️ done | Procedural fantasy-map generator (seeded, 4 styles, export PNG) |
 | `firmament/` | 🌌 done | Procedural night-sky / constellation generator (seeded, 4 styles, names+myths, field guide, export PNG) |
+| `daedalus/` | 🌀 done | Procedural maze generator + animated self-solver (4 algorithms, flood-fill/A*, 4 styles, export PNG) |
+| `tools/audio-lens/` | 🔊 tool | Offline-render audio inspector — spectrogram + features + 12/12 self-tests (internal, not a front-door card) |
 | `arcade/` | 🕹️ 9 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander) |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
 

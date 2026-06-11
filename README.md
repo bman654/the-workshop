@@ -1,7 +1,7 @@
 # 🛠️ The Workshop
 
 *A small workshop of things made for the joy of making them — generative art to watch, games to
-play, and maps, skies, sound, and verse to wander through. Every piece is a single self-contained
+play, and maps, skies, mazes, sound, and verse to wander through. Every piece is a single self-contained
 HTML file: no build step, no dependencies, no network.*
 
 ### ▶ Visit the live workshop → **https://bman654.github.io/the-workshop/**
@@ -12,7 +12,7 @@ HTML file: no build step, no dependencies, no network.*
 
 ## What's inside
 
-Seven creative mediums across six projects. Click a live link, or open any `.html` in a browser.
+Eight creative mediums across seven projects. Click a live link, or open any `.html` in a browser.
 
 ### 🌿 [Strange Garden](https://bman654.github.io/the-workshop/strange-garden/)
 **34 *living* generative systems** — particle life, slime moulds, reaction–diffusion, boids,
@@ -34,6 +34,12 @@ chart from any seed: star fields (magnitude & colour-temperature), a soft Milky 
 constellations**, each drawn as an asterism with its own name and a one-line **myth**. Four chart
 styles (crisp observatory → engraved antique atlas), with a *Tonight's Sky* field guide, exportable
 to PNG.
+
+### 🌀 [Daedalus](https://bman654.github.io/the-workshop/daedalus/)
+A **procedural maze that solves itself** — re-roll a perfect labyrinth from any seed (recursive
+backtracker, Prim, Kruskal or Wilson, each a different texture), then watch a **distance wavefront**
+flood the maze and trace the one true path (flood-fill, A\*, dead-end filling, or a static distance
+heatmap). Four styles, seeded & reproducible, exportable to PNG. The workshop's maze-maker.
 
 ### 🎵 [Sound Garden](https://bman654.github.io/the-workshop/sound-garden/)
 Three **generative Web-Audio instruments** — *Whitney* (a polyrhythmic music box), *Drift*
