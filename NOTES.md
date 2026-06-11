@@ -39,12 +39,14 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > the old thick cord choked the over/under channels). Placed as **Daedalus's companion** (same pattern):
 > Daedalus's panel gains a `↗ Ariadne` link; Ariadne links back to `← workshop` + `↗ Daedalus`.
 >
-> The workshop now has **three "wings" built on the companion pattern**: **celestial** (Firmament +
-> Orrery), **design press** (Compositor + Blazon), and **labyrinth & thread** (Daedalus + Ariadne).
-> The **front door now surfaces these companions** as subtle "↳ Orrery/Blazon/Ariadne within" pills on
-> the three parent cards (an indicator, not a button — preserves the "hidden room" charm; still 3
-> features + 6 tiles; subtitle nods "…a few have another room behind them"). Finally, a 4th piece this
-> session: **Chomp** 🟡 — a neon **Pac-Man-like** maze-muncher (Arcade → **11**; faithful distinct
+> The workshop now has **four "wings" built on the companion pattern**: **celestial** (Firmament +
+> Orrery), **design press** (Compositor + Blazon), **labyrinth & thread** (Daedalus + Ariadne), and
+> **realm & city** (Cartographer + **Bastion** 🏰 — a procedural walled-city-plan generator, coherent-
+> by-construction + seed-pure, the realm zoomed all the way in). The **front door surfaces all four
+> companions** as subtle "↳ Orrery/Blazon/Ariadne/Bastion within" pills on the four parent cards (an
+> indicator, not a button — preserves the "hidden room" charm; still 3 features + 6 tiles; subtitle nods
+> "…a few have another room behind them"). Also this session: **Chomp** 🟡 — a neon **Pac-Man-like**
+> maze-muncher (Arcade → **11**; faithful distinct
 > 4-ghost AI, frightened+eyes-revive, levels; verified). And a **Sound Garden** deepening: **Lattice**
 > 🟦 (→ **7**) — a *visual-first* Tenori-on step-sequencer (a playhead sweeps a pitch×time grid; seeded,
 > in-scale, evolving, no-clip), chosen so its correctness is screenshot-verifiable and it could be built
@@ -76,6 +78,14 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   `← sound garden`.
 - `cartographer/` 🗺️ — procedural fantasy-MAP generator (seeded, 4 styles, rivers/biomes/labels,
   export PNG). Standalone; done.
+- `bastion/` 🏰 — **Cartographer's companion** (NOT a front-door card; reached via Cartographer's
+  `↗ Bastion` link + a "within" pill). A procedural **city-plan** generator (the realm zoomed in): a
+  walled town — wall circuit + gates → arterial roads to a market hub → organic street/block network →
+  packed buildings → citadel + cathedral + market → river + bridges; every quarter/gate **named**
+  (Oracle-style gazetteer). Crux = **coherence by construction** (reject-based building packing → 0 in
+  water/streets, gates reach market, wall encloses — verified across 8 rolls × 3 layouts) + **seed-pure**
+  (identical geometry+name fingerprint across all 4 styles). 4 styles (Parchment/Ink/Blueprint/
+  Illuminated), export PNG. Done (v1). See `bastion/SPEC.md` §0/§7.
 - `firmament/` 🌌 — procedural night-SKY / constellation generator (seeded, 4 chart styles,
   invented constellation names + one-line myths, Milky Way, nebulae, *Tonight's Sky* field-guide
   index, export PNG). Sky sibling to Cartographer; marries Cartographer's seeded craft + The
@@ -149,10 +159,10 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 >    under its sub-title) + `← workshop`/`↗ <Parent>` back-links in the companion. The front door shows
 >    it as a subtle **"↳ <Name> within" pill** in the parent card's footer (data: `companion:{name,badge}`
 >    on the parent's PROJECTS entry; renderer adds the pill — an *indicator, not a link*, preserving the
->    "hidden room" charm). **Three wings exist:** celestial (Firmament+Orrery), design-press
->    (Compositor+Blazon), labyrinth&thread (Daedalus+Ariadne). A 4th wing is fine **if the pairing is
->    genuine, not forced** — Cartographer, The Oracle, Strange Garden, Threshold, Sound Garden all still
->    lack a companion. Don't force one; only build it if the sibling link is poetic/true.
+>    "hidden room" charm). **Four wings exist:** celestial (Firmament+Orrery), design-press
+>    (Compositor+Blazon), labyrinth&thread (Daedalus+Ariadne), realm&city (Cartographer+Bastion). A 5th
+>    wing is fine **if the pairing is genuine, not forced** — The Oracle, Strange Garden, Threshold all
+>    still lack a companion. Don't force one; only build it if the sibling link is poetic/true.
 > 2. **Deepen the Arcade** (`auto-fill` grid) — drop a cabinet in `games/`, append to `games.js`, add a
 >    `assets/thumbs/<base>.png`, bump the front-door tag count + blurb. No rebalance. (→ 11 with Chomp.)
 > 3. **Deepen the Sound Garden** (`auto-fit` grid) — add an instrument (now **7**; 3+3+1 reflows fine
@@ -242,6 +252,7 @@ instruments copy the `← sound garden` back-link.
 | `verse/` | ✒️ done | "The Oracle" — generative poetry machine (5 forms, 6 themes, seeded) |
 | `sound-garden/` | 🎵 7 | Web-Audio instruments — Whitney, Drift, Euclid, Rain, Loom, Carillon, Lattice [visual-first step-sequencer] (Rain/Loom/Carillon/Lattice lens-verified) |
 | `cartographer/` | 🗺️ done | Procedural fantasy-map generator (seeded, 4 styles, export PNG) |
+| `bastion/` | 🏰 done (companion) | **Behind Cartographer** — procedural city-plan generator (walls/gates/roads/districts/citadel/cathedral/river, named quarters; coherent-by-construction; seed-pure; 4 styles, export PNG) |
 | `firmament/` | 🌌 done | Procedural night-sky / constellation generator (seeded, 4 styles, names+myths, field guide, export PNG) |
 | `orrery/` | 🪐 done (companion) | **Behind Firmament** — real-time clockwork of the *real* Solar System (JPL elements; <0.15° vs Horizons; Moon phase; 3 styles; play/scrub/reverse time) |
 | `daedalus/` | 🌀 done | Procedural maze generator + animated self-solver (4 algorithms, flood-fill/A*, 4 styles, export PNG) |

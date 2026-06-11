@@ -12,9 +12,9 @@ HTML file: no build step, no dependencies, no network.*
 
 ## What's inside
 
-Ten creative mediums across nine projects — plus three companions tucked behind their parent doors:
-the **Orrery** behind Firmament, **Blazon** behind Compositor, and **Ariadne** behind Daedalus. Click
-a live link, or open any `.html` in a browser.
+Ten creative mediums across nine projects — plus four companions tucked behind their parent doors:
+the **Orrery** behind Firmament, **Blazon** behind Compositor, **Ariadne** behind Daedalus, and
+**Bastion** behind Cartographer. Click a live link, or open any `.html` in a browser.
 
 ### 🌿 [Strange Garden](https://bman654.github.io/the-workshop/strange-garden/)
 **34 *living* generative systems** — particle life, slime moulds, reaction–diffusion, boids,
@@ -29,6 +29,12 @@ Missile Command, Pong (vs CPU), Lunar Lander, Crossing, and Chomp (a neon maze-m
 ### 🗺️ [Cartographer](https://bman654.github.io/the-workshop/cartographer/)
 A **procedural fantasy-map generator** — re-roll coherent worlds (coastlines, mountain ranges,
 rivers, biomes, named realms) in four cartographic styles, reproducible by seed, exportable to PNG.
+
+> 🏰 **Companion — [Bastion](https://bman654.github.io/the-workshop/bastion/):** the realm zoomed all
+> the way in — a **city-plan** generator. Re-roll a coherent walled town from any seed: a ring of walls
+> and gates, arterial roads meeting at a market square, a citadel and a cathedral, districts of packed
+> blocks, a river crossed by bridges — every quarter and gate **named** (a real little gazetteer).
+> Parchment / Ink / Blueprint / Illuminated, reproducible by seed, export PNG.
 
 ### 🌌 [Firmament](https://bman654.github.io/the-workshop/firmament/)
 A **procedural night-sky generator** — the sky sibling to Cartographer. Re-roll a coherent star
