@@ -1,5 +1,57 @@
 # Sound Garden — Changelog
 
+## 2026-06-11 — Loom (new instrument)
+
+Added `loom.html`, the rack's fifth instrument and its harmony / chord-progression
+voice (Whitney = orbital chimes, Drift = static ambient chord, Euclid = Euclidean
+rhythm, Rain = tuned-pool plinks, **Loom = an evolving, arpeggiated chord
+progression** — the melodic/chordal *motion* the rack was missing).
+
+- **Concept — a generative loom.** The **warp** is a field of vertical strings,
+  each tuned to a degree of a selectable consonant scale across 1–3 octaves
+  (selectable root) — every note in-scale by construction. The **weft** is time:
+  a left→right **shuttle/playhead** sweeps and plucks strings per the current
+  arpeggio figure. A seeded engine walks an evolving **diatonic chord
+  progression** (weighted functional motion — I→vi→IV→V-style, voice-led) and,
+  per chord, weaves an arpeggio (up / down / up-down / in-out / out-in / root-top
+  / broken). Chord length (Motion), notes-per-chord (Density) and the figure all
+  drift, so the cloth never repeats and never leaves the key.
+- **Voice — Karplus–Strong plucked string** (the signature timbre). Rendered with
+  the authentic KS algorithm *into an AudioBuffer in JS* (delay line of one period,
+  noise excitation, 2-tap moving-average + loss), then played via a BufferSource.
+  This is numerically stable and deterministic — a WebAudio `DelayNode` feedback
+  loop is unstable (round-trip gain ≥ 1 → runaway) and, when un-terminated, makes
+  `OfflineAudioContext` stop processing later voices (→ silence after a few
+  seconds). Buffer-rendering fixes both.
+- **Musical guardrails:** in-scale always; master through a soft-clip waveshaper +
+  brick-wall limiter (never clips); polyphony cap (16) with graceful voice-stealing
+  (duck the oldest); arpeggio onsets on a tempo grid; optional soft **pad** drone
+  that follows the current chord root (voice-led); gentle convolution reverb.
+- **Lens-native:** the synth voice + progression/weave engine are factored to accept
+  an injected `AudioContext`, so the exact same code runs under an
+  `OfflineAudioContext`. `window.__renderOffline(seconds, seed)` renders the
+  generative weave offline → 16-bit stereo WAV `Blob` (and triggers a download).
+  Permanent "let me hear" hook; verified via the Audio Lens.
+- **Visuals:** dark canvas — a field of glowing warp strings (pitch→colour,
+  amber→rose across the register), a luminous sweeping shuttle, plucked strings
+  ringing (a sine-bowed vibration + travelling pluck packet + a bloom), and an
+  accreting woven cloth (weft knots laid behind the live weave, fading slowly).
+  ~60fps, animates on `requestAnimationFrame` independently of audio (alive on
+  load via a seeded visual-only weaver); audible sound gated behind an explicit
+  click. Controls: Seed/dice, Scale, Root, Tempo, Density, Motion, Octave range,
+  Reverb, Pad, Volume, Pause, Mute (keys: space/m/p/r/h).
+- **Verified via the Audio Lens (offline, silent):** seed 1618 / C major →
+  peak −7.5 dBFS, 0.000% clipped, tonic detected C3; seed 42 / C major →
+  peak −7.0 dBFS, 0.000% clipped, tonic detected F3 (the IV that opens that
+  seed). Windowed pitch analysis: 92–100% of detected pitches in-scale, with the
+  dominant pitch-set clearly *moving* between chords across each clip (iii→I→vi
+  vs IV→vi→V→I for the two seeds) — an evolving progression, not a static drone.
+- Accent `#e8b765`. Thumbnail `assets/loom.png` (1280×800, 16:10).
+
+### Rack
+- Desktop grid changed from `repeat(2,1fr)` → `repeat(auto-fit,minmax(240px,1fr))`
+  so the now-five instruments (and any future count) flow cleanly with no orphan.
+
 ## 2026-06-10 — Rain (new instrument)
 
 Added `rain.html`, the rack's fourth instrument and its melody/harmony-forward,

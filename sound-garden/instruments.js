@@ -25,5 +25,11 @@ window.INSTRUMENTS = [
     name: "Rain",
     blurb: "seeded rain falls on a tuned pool — each drop plinks a note in scale, rings, and ripples away",
     accent: "#6fb6ff"
+  },
+  {
+    file: "loom.html",
+    name: "Loom",
+    blurb: "a seeded loom weaves evolving chord progressions into shimmering plucked arpeggios",
+    accent: "#e8b765"
   }
 ];
