@@ -237,11 +237,13 @@ Lattice already does). The score is *alive* — it breathes, blooms, and dies by
     `localStorage` is keyed by **origin, not path** → **every page already shares one storage bucket.**
     So each prerequisite display drops a breadcrumb on load (e.g. `localStorage['ws:seen:game-of-life']=…`,
     `ws:seen:lattice`), and the secret room reads which breadcrumbs exist to decide what's unlocked.
-    Tiny, non-invasive one-line writes added to the parent pages. **Caveat:** on `file://` (double-click)
-    browsers give each file a *null/opaque* origin, so localStorage may NOT be shared across paths locally
-    — so **verify the unlock on a served origin** (`python3 -m http.server` over the repo root, or the
-    live Pages site), not via `file://`. Degrade gracefully if storage is blocked (and offer a quiet
-    "forget my discoveries" reset for honesty). Once unlocked, it stays unlocked (that's the reward).
+    Tiny, non-invasive one-line writes added to the parent pages. **Caveat + the easy fix (Brandon):**
+    on `file://` (double-click) browsers give each file a *null/opaque* origin, so localStorage may NOT be
+    shared across paths locally — but **just serve it**: `npx serve` (or `python3 -m http.server`, or any
+    static server) over the repo root puts every page on one `localhost` origin, so the shared-storage
+    unlock behaves **exactly like the live Pages site**. So local testing is trivial — develop & verify
+    over a local server, never `file://`, for any unlock work. Degrade gracefully if storage is blocked
+    (offer a quiet "forget my discoveries" reset for honesty). Once unlocked, it stays unlocked.
   - **Why this is exciting:** it establishes a SECOND secret growth axis — the *hidden door* (companions,
     behind one card) and now a *hidden world* (exploration-gated cross-pollinations, found by visiting
     several). The Living Lattice is its **first inhabitant**; future hidden pieces can join the room as
