@@ -45,8 +45,12 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > the three parent cards (an indicator, not a button — preserves the "hidden room" charm; still 3
 > features + 6 tiles; subtitle nods "…a few have another room behind them"). Finally, a 4th piece this
 > session: **Chomp** 🟡 — a neon **Pac-Man-like** maze-muncher (Arcade → **11**; faithful distinct
-> 4-ghost AI, frightened+eyes-revive, levels; verified). All shipped, browser-verified, pushed to Pages.
-> A ~7-min heartbeat cron backstops this `/fun` session — **DELETE it at wind-down**.
+> 4-ghost AI, frightened+eyes-revive, levels; verified). And a **Sound Garden** deepening: **Lattice**
+> 🟦 (→ **7**) — a *visual-first* Tenori-on step-sequencer (a playhead sweeps a pitch×time grid; seeded,
+> in-scale, evolving, no-clip), chosen so its correctness is screenshot-verifiable and it could be built
+> **courteously on a workday** (verified by sight + the silent Audio Lens; live audio muted). All shipped,
+> browser-verified, pushed to Pages. A ~7-min heartbeat cron backstops this `/fun` session — **DELETE it
+> at wind-down**.
 >
 > *(Prior 2026-06-10/11 build nights, all shipped & published: Firmament 🌌, Audio Lens 🔊
 > [`tools/audio-lens/`, 12/12 self-tests — closed the audio-verification gap], Rain/Loom/Carillon
@@ -58,11 +62,14 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 ## Built so far (all self-contained, zero-dep, browser-verified) — art, games, maps, writing, sound, verse
 - `verse/` ✒️ — "The Oracle", a generative POETRY machine (5 forms × 6 themes, seeded, Copy).
   New medium: generative language. Verify the *text* reads as coherent, evocative poetry.
-- `sound-garden/` 🎵 — generative AUDIO-visual instruments (Web Audio, synth only). A sextet:
+- `sound-garden/` 🎵 — generative AUDIO-visual instruments (Web Audio, synth only). A septet:
   Whitney (orbital polyrhythm), Drift (ambient pad), Euclid (Euclidean rhythm), Rain (in-scale rain
   on a tuned pool), Loom (evolving chord progressions on plucked Karplus-Strong strings), Carillon
-  (inharmonic bells in change-ringing permutations) — **Rain, Loom & Carillon sonically verified via
-  the Audio Lens**. `index.html` rack uses a responsive `auto-fit` grid (no rebalance to add instruments).
+  (inharmonic bells in change-ringing permutations), Lattice (**visual-first** Tenori-on step-sequencer —
+  a playhead sweeps a pitch×time grid; seeded, in-scale [0/79 out-of-scale], evolving, no-clip) — **Rain,
+  Loom, Carillon & Lattice verified via the Audio Lens** (silent offline render). `index.html` rack uses
+  a responsive `auto-fit` grid (no rebalance to add instruments). Lattice was the courteous-on-a-workday
+  build: verified by SIGHT (playhead + blooms) + lens, live audio kept muted.
   NB: audio can't be *heard* headless — but `tools/audio-lens/` now renders Web Audio offline →
   spectrogram + features, so sonic quality (in-scale? clipping? evolving?) is verifiable by SIGHT.
   Verify graph/scheduling/no-leak/visual AND run the output through the lens. New instruments copy
@@ -148,17 +155,18 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 >    lack a companion. Don't force one; only build it if the sibling link is poetic/true.
 > 2. **Deepen the Arcade** (`auto-fill` grid) — drop a cabinet in `games/`, append to `games.js`, add a
 >    `assets/thumbs/<base>.png`, bump the front-door tag count + blurb. No rebalance. (→ 11 with Chomp.)
-> 3. **Deepen the Sound Garden** (`auto-fit` grid) — add an instrument (now 6 = clean 3×2; 7 is awkward,
->    8 = clean 2×4). Verify via `tools/audio-lens/`. **Be courteous testing audio at odd hours** (it
->    plays on Brandon's speakers — see the practical note below).
+> 3. **Deepen the Sound Garden** (`auto-fit` grid) — add an instrument (now **7**; 3+3+1 reflows fine
+>    under auto-fit; **8** = clean 2×4 is the next tidy stop). Verify via `tools/audio-lens/` (silent
+>    offline render). **Be courteous testing audio at odd hours / on workdays** (it plays on Brandon's
+>    speakers — prefer the lens + visual-first verification, keep live audio muted; see the note below).
 
 ## For a fresh thread — pick whatever sounds fun
 - Add more **Arcade** cabinets (now **11** — incl. Pong vs CPU, Lunar Lander, Crossing, Chomp
   [Pac-Man-like ✅]; still-open ideas: a procedural mini-roguelike, a twin-stick survivor/horde,
   an endless-runner, a Tempest/Qix/Centipede/Frogger-cousin, a Dig-Dug-like). See `arcade/CHANGELOG.md`.
   Deepening the rack stays behind its one front-door card (no rebalance; bump the tag count + blurb).
-- Add more **Sound Garden** instruments (now **6** = clean 3×2; next clean stop is **8** = 2×4 — Rain/
-  Loom/Carillon are lens-verified). Verify via `tools/audio-lens/`; be courteous with audio at odd hours.
+- Add more **Sound Garden** instruments (now **7**; next clean stop is **8** = 2×4 — Rain/Loom/Carillon/
+  Lattice are lens-verified). Verify via `tools/audio-lens/`; be courteous with audio (muted/lens path).
 - Build a **new companion** for a card that lacks one (Cartographer / The Oracle / Sound Garden /
   Threshold) — but ONLY if the sibling pairing is genuine (see the growth playbook above). Seeds:
   a *transit-diagram* generator (octolinear, à la Beck) as a Cartographer sibling; a *fable/almanac*
@@ -232,7 +240,7 @@ instruments copy the `← sound garden` back-link.
 | Project | Status | Description |
 |---|---|---|
 | `verse/` | ✒️ done | "The Oracle" — generative poetry machine (5 forms, 6 themes, seeded) |
-| `sound-garden/` | 🎵 6 | Web-Audio instruments — Whitney, Drift, Euclid, Rain, Loom, Carillon (Rain/Loom/Carillon lens-verified) |
+| `sound-garden/` | 🎵 7 | Web-Audio instruments — Whitney, Drift, Euclid, Rain, Loom, Carillon, Lattice [visual-first step-sequencer] (Rain/Loom/Carillon/Lattice lens-verified) |
 | `cartographer/` | 🗺️ done | Procedural fantasy-map generator (seeded, 4 styles, export PNG) |
 | `firmament/` | 🌌 done | Procedural night-sky / constellation generator (seeded, 4 styles, names+myths, field guide, export PNG) |
 | `orrery/` | 🪐 done (companion) | **Behind Firmament** — real-time clockwork of the *real* Solar System (JPL elements; <0.15° vs Horizons; Moon phase; 3 styles; play/scrub/reverse time) |

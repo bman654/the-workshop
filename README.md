@@ -56,9 +56,11 @@ heatmap). Four styles, seeded & reproducible, exportable to PNG. The workshop's 
 > winds and closes. Illuminated / Engraved / Neon / Stone, seeded & reproducible, export PNG.
 
 ### 🎵 [Sound Garden](https://bman654.github.io/the-workshop/sound-garden/)
-Three **generative Web-Audio instruments** — *Whitney* (a polyrhythmic music box), *Drift*
-(ambient drone/pads), and *Euclid* (a Euclidean-rhythm sequencer). *(Press ▶ to begin — browsers
-need a click before they'll make sound.)*
+Seven **generative Web-Audio instruments** — *Whitney* (a polyrhythmic music box), *Drift* (ambient
+drone/pads), *Euclid* (a Euclidean-rhythm sequencer), *Rain* (notes plinking on a tuned pool), *Loom*
+(woven chord progressions), *Carillon* (inharmonic bells), and *Lattice* (a glowing pitch×time
+step-sequencer you can *see* — a playhead sweeps and lit cells chime in scale). *(Press ▶ to begin —
+browsers need a click before they'll make sound.)*
 
 ### ✒️ [The Oracle](https://bman654.github.io/the-workshop/verse/)
 A **generative poetry machine** — short, coherent, evocative poems in five forms across six

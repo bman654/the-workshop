@@ -1,5 +1,71 @@
 # Sound Garden — Changelog
 
+## 2026-06-11 — Lattice (new instrument)
+
+Added `lattice.html`, the rack's **seventh** instrument and its sequenced-melody voice
+(Whitney = orbital chimes, Drift = ambient chord, Euclid = Euclidean rhythm, Rain =
+tuned-pool plinks, Loom = plucked arpeggios, Carillon = bells, **Lattice = a Tenori-on-like
+pitch×time step-sequencer you can *see*** — the one whose correctness is screenshot-provable).
+
+- **Concept — a glowing pitch × time lattice.** A 16-column × 14-row grid; columns are time
+  steps, rows are pitches (bottom→top = low→high). A bright **playhead column** sweeps
+  left→right on a musical clock (8th-note feel, loops); when it crosses a lit cell that cell
+  **fires** — its note plays and it blooms (scale-up + expanding ripple ring + flash). The
+  opening pattern is a **pure function of the seed** (xmur3 + mulberry32, separate streams for
+  pattern / evolution / visuals), biased toward music — a low-pad anchor on strong beats, a
+  small-interval lead random-walk through mid rows, call/response echoing the first half into
+  a transposed second half, and rare high sparkle on offbeats — *not* random static. It
+  **evolves**: every few bars a couple of cells cross-fade on/off (Evolve rate; 0 = frozen),
+  so it never repeats. Click/drag toggles cells to play along; default is autonomous self-play.
+- **Voices — three soft synth layers in distinct aqua hues.** Low **pad** (detuned triangles +
+  sub-sine, slow attack, long soft tail; bottom rows), mid **lead** (triangle + sine octave +
+  fifth-ish partial, bell-ish pluck; mid rows), high **sparkle** (sine + 2× + 4×, fast bright
+  pluck, short tail; top rows). Pitch register picks the voice, so the texture is layered and
+  readable.
+- **In-scale by construction (provably consonant).** Each row *is* a scale degree ascending
+  from the root through the chosen scale (pentatonic maj/min, Dorian, Lydian, major,
+  Mixolydian, whole-tone, Hirajoshi — all chosen so any lit subset is consonant). There is no
+  code path that schedules an out-of-scale frequency. Verified: an offline render of seed 2718
+  scheduled 79 notes, **0 out of scale**, and the pitch classes actually sounded
+  (`{0,2,4,7,9}`) exactly equal the C-pentatonic-major ladder.
+- **Never clips.** Master chain: bus → low-pass (8.2 kHz) → soft-clip tanh waveshaper (2×
+  oversample) → brick-wall limiter (threshold −8 dB, ratio 20) → master gain (well below
+  unity) → destination, with a bounded feedback delay (fb 0.34 < 1) + synthesized convolution
+  reverb for shimmer. Polyphony cap (24) with oldest-voice stealing; oscillators self-disconnect
+  on `ended` (no node leak — bounded state confirmed across 200 regen/mutate ops). Measured
+  peak ≈ **−37 dBFS / 0 % clipped** at the calm default; even at max tempo/density/reverb/volume
+  the worst case was **−11.9 dBFS / 0 % clipped**.
+- **Lens-native (silent verification).** The 3-voice synth + the column sequencer run unchanged
+  under an `OfflineAudioContext`; `window.__renderOffline(seconds, seed)` renders the evolving
+  pattern → 16-bit stereo WAV `Blob` (and triggers a download). The rendered WAV, dropped through
+  `tools/audio-lens/` (self-tests 12/12 green), independently read back peak **−38.8 dBFS,
+  clipping = false, 0 %**, centroid 320 Hz — the courteous, no-speakers path.
+- **Visuals (the verifiable surface):** a dark aqua field; off cells are faint dots, on cells
+  glow in their voice's hue and brighten near the playhead, the playhead is a soft sweeping band
+  with a bright center line, and fired cells bloom + send expanding ripple rings. ~60fps;
+  devicePixelRatio-aware; alive on load and while paused (the playhead sweeps on a visual clock
+  when the audio context isn't running, so the lattice is screenshot-verifiable regardless of
+  audio state); audible sound gated behind an explicit ▶ begin. Controls: Seed/dice, Scale,
+  Root, Tempo, Density, Evolve, Reverb, Volume, Pause, Mute, Regenerate, Clear
+  (keys: space/m/r/g/c/h).
+- **Verified (visual-first, courteous — live audio kept muted + volume 0 throughout):**
+  - *Sweep + fire:* in `agent-browser` (unique session `lattice-verify`, file://) the visual
+    playhead advanced smoothly (headPos 2.6 → 6.6 → 10.7 → 14.7 → wrap) and cells bloomed with
+    ripple rings exactly under the playhead column — frames at col 5 vs col 13 show different
+    cells firing in time with its position.
+  - *Seed:* seed 2718 loaded twice ⇒ identical pattern; 2718 vs 4242 vs 99 ⇒ different patterns.
+  - *Evolve:* Evolve 0.7 mutated the pattern over steps (signature changed, density drifted);
+    Evolve 0 froze it (forced mutations were no-ops).
+  - *Audio (silent path):* offline render + Audio Lens as above — in-scale, no clip, no leak.
+  - *Health:* steady ~60 fps; **zero console errors/warnings**; pause stops audio scheduling
+    cleanly (`pumpAudio` early-returns when not playing).
+- Accent `#5fe6c4` (aqua). Thumbnail `assets/lattice.png` (1280×720) — a gorgeous lit pattern
+  mid-sweep with the playhead band and a blooming cell.
+
+### Rack
+- No grid change — the responsive `auto-fit` grid flows the now-seven instruments cleanly
+  (3 + 3 + 1). README brought current (the table had drifted to 3 rows; now lists all 7).
+
 ## 2026-06-11 — Carillon (new instrument)
 
 Added `carillon.html`, the rack's sixth instrument and its struck-inharmonic-metal

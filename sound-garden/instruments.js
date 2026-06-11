@@ -37,5 +37,11 @@ window.INSTRUMENTS = [
     name: "Carillon",
     blurb: "tuned bells ring slow, overlapping changes — inharmonic, resonant, ever-shifting",
     accent: "#c79a4b"
+  },
+  {
+    file: "lattice.html",
+    name: "Lattice",
+    blurb: "a glowing pitch×time lattice — a playhead sweeps, lit cells chime in scale, the seeded pattern blooms and evolves",
+    accent: "#5fe6c4"
   }
 ];
