@@ -31,5 +31,11 @@ window.INSTRUMENTS = [
     name: "Loom",
     blurb: "a seeded loom weaves evolving chord progressions into shimmering plucked arpeggios",
     accent: "#e8b765"
+  },
+  {
+    file: "carillon.html",
+    name: "Carillon",
+    blurb: "tuned bells ring slow, overlapping changes — inharmonic, resonant, ever-shifting",
+    accent: "#c79a4b"
   }
 ];

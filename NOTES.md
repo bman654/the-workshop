@@ -20,11 +20,11 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 ## Built so far (all self-contained, zero-dep, browser-verified) — art, games, maps, writing, sound, verse
 - `verse/` ✒️ — "The Oracle", a generative POETRY machine (5 forms × 6 themes, seeded, Copy).
   New medium: generative language. Verify the *text* reads as coherent, evocative poetry.
-- `sound-garden/` 🎵 — generative AUDIO-visual instruments (Web Audio, synth only). A quintet:
+- `sound-garden/` 🎵 — generative AUDIO-visual instruments (Web Audio, synth only). A sextet:
   Whitney (orbital polyrhythm), Drift (ambient pad), Euclid (Euclidean rhythm), Rain (in-scale rain
-  on a tuned pool), Loom (woven, evolving chord progressions on plucked Karplus-Strong strings) —
-  **Rain & Loom sonically verified via the Audio Lens**. `index.html` rack uses a responsive
-  `auto-fit` grid (no rebalance to add instruments).
+  on a tuned pool), Loom (evolving chord progressions on plucked Karplus-Strong strings), Carillon
+  (inharmonic bells in change-ringing permutations) — **Rain, Loom & Carillon sonically verified via
+  the Audio Lens**. `index.html` rack uses a responsive `auto-fit` grid (no rebalance to add instruments).
   NB: audio can't be *heard* headless — but `tools/audio-lens/` now renders Web Audio offline →
   spectrogram + features, so sonic quality (in-scale? clipping? evolving?) is verifiable by SIGHT.
   Verify graph/scheduling/no-leak/visual AND run the output through the lens. New instruments copy
@@ -140,7 +140,7 @@ instruments copy the `← sound garden` back-link.
 | Project | Status | Description |
 |---|---|---|
 | `verse/` | ✒️ done | "The Oracle" — generative poetry machine (5 forms, 6 themes, seeded) |
-| `sound-garden/` | 🎵 5 | Web-Audio instruments — Whitney, Drift, Euclid, Rain, Loom (Rain & Loom lens-verified) |
+| `sound-garden/` | 🎵 6 | Web-Audio instruments — Whitney, Drift, Euclid, Rain, Loom, Carillon (Rain/Loom/Carillon lens-verified) |
 | `cartographer/` | 🗺️ done | Procedural fantasy-map generator (seeded, 4 styles, export PNG) |
 | `firmament/` | 🌌 done | Procedural night-sky / constellation generator (seeded, 4 styles, names+myths, field guide, export PNG) |
 | `daedalus/` | 🌀 done | Procedural maze generator + animated self-solver (4 algorithms, flood-fill/A*, 4 styles, export PNG) |
