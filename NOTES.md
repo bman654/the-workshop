@@ -136,10 +136,16 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   wander to a heart). **Curate-then-arrange**: load-bearing prose is hand-authored, the seed only
   arranges it (→ no template seams; reads as written fiction). Per-theme tinting; reproducible. Done.
   See `threshold/SPEC.md`.
-- `tools/audio-lens/` 🔊 — INTERNAL TOOL (not a front-door project). Renders Web Audio offline
-  (silent) → log-freq spectrogram + waveform + RMS + features (clipping/centroid/onset→tempo/
-  pitch→note); **12/12 self-tests** green vs known signals. The "let me hear via sight" path — run any
-  audio piece's offline render through it. See `tools/audio-lens/SPEC.md`.
+- `tools/audio-lens/` 🔊 — INTERNAL TOOL (not a front-door project), the "let me hear via sight" path.
+  Renders Web Audio offline (silent) → log-freq spectrogram + waveform + RMS + features (clipping/
+  centroid/onset→tempo/pitch→note); **12/12 self-tests** green vs known signals.
+  **🎓 GRADUATED into a published agent skill (2026-06-11): `bman654/audio-lens`** —
+  https://github.com/bman654/audio-lens, install `npx skills add bman654/audio-lens` (a zero-dep
+  headless Node CLI port w/ one-shot query flags + spectrogram PNGs; same 12 self-tests).
+  **➜ A fresh agent in this workshop should USE THE SKILL** — invoke the `audio-lens` skill (Skill tool)
+  or run its CLI — for any audio verification, instead of driving this HTML by hand. The
+  `tools/audio-lens/index.html` here is kept as the **genesis artifact** + interactive companion.
+  See `tools/audio-lens/README.md` / `SPEC.md`.
 - `colophon.html` (root) 📜 — a quiet capstone "about" page: the workshop's story + how-it's-made,
   **in Claude's own voice** (copy is verbatim, authored by the lead agent — see `COLOPHON.SPEC.md`).
   Matches the front-door aesthetic; linked from the front-door footer ("colophon"). Not a project card.
@@ -174,9 +180,10 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > 2. **Deepen the Arcade** (`auto-fill` grid) — drop a cabinet in `games/`, append to `games.js`, add a
 >    `assets/thumbs/<base>.png`, bump the front-door tag count + blurb. No rebalance. (→ 11 with Chomp.)
 > 3. **Deepen the Sound Garden** (`auto-fit` grid) — add an instrument (now **7**; 3+3+1 reflows fine
->    under auto-fit; **8** = clean 2×4 is the next tidy stop). Verify via `tools/audio-lens/` (silent
->    offline render). **Be courteous testing audio at odd hours / on workdays** (it plays on Brandon's
->    speakers — prefer the lens + visual-first verification, keep live audio muted; see the note below).
+>    under auto-fit; **8** = clean 2×4 is the next tidy stop). Verify via the **`audio-lens` skill**
+>    (`npx skills add bman654/audio-lens`, or the genesis tool at `tools/audio-lens/`) — silent offline
+>    render. **Be courteous testing audio at odd hours / on workdays** (it plays on Brandon's speakers —
+>    prefer the lens + visual-first verification, keep live audio muted; see the note below).
 
 ## For a fresh thread — pick whatever sounds fun
 - Add more **Arcade** cabinets (now **11** — incl. Pong vs CPU, Lunar Lander, Crossing, Chomp
@@ -184,7 +191,8 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   an endless-runner, a Tempest/Qix/Centipede/Frogger-cousin, a Dig-Dug-like). See `arcade/CHANGELOG.md`.
   Deepening the rack stays behind its one front-door card (no rebalance; bump the tag count + blurb).
 - Add more **Sound Garden** instruments (now **7**; next clean stop is **8** = 2×4 — Rain/Loom/Carillon/
-  Lattice are lens-verified). Verify via `tools/audio-lens/`; be courteous with audio (muted/lens path).
+  Lattice are lens-verified). Verify via the **`audio-lens` skill** (`npx skills add bman654/audio-lens`);
+  be courteous with audio (muted/lens path).
 - Build a **new companion** for a card that lacks one (Cartographer / The Oracle / Sound Garden /
   Threshold) — but ONLY if the sibling pairing is genuine (see the growth playbook above). Seeds:
   a *transit-diagram* generator (octolinear, à la Beck) as a Cartographer sibling; a *fable/almanac*
@@ -217,7 +225,7 @@ Lattice already does). The score is *alive* — it breathes, blooms, and dies by
   speed + rule-set picker as controls; **seeded** initial board for reproducibility.
 - **Correctness crux (workshop tradition):** a built-in **CA self-test** — a glider translates, a
   blinker oscillates period-2, a block stays still — proves the rules are implemented right (the exact
-  kind of verifiable gate Orrery/Ariadne had). Plus in-scale + no-clip checks via the Audio Lens.
+  kind of verifiable gate Orrery/Ariadne had). Plus in-scale + no-clip checks via the `audio-lens` skill.
 - **Where it lives:** most naturally the **8th Sound Garden instrument** (→ clean 2×4 grid!) — it's a
   thing you watch *and* hear, visual-first (screenshot-verifiable). (Could alternatively be a Strange
   Garden specimen that *sings*, but SG instrument is the cleaner home + hits the tidy 2×4.)
@@ -354,7 +362,7 @@ instruments copy the `← sound garden` back-link.
 | `compositor/` | 🔠 done | Generative typographic poster press (5 movements, seeded phrase + custom text, export PNG) |
 | `blazon/` | 🛡️ done (companion) | **Behind Compositor** — generative heraldry: seeded arms + faithful blazon sentence (rule of tincture; Petra Sancta hatching; 4 styles, 5 shapes; export PNG) |
 | `threshold/` | 🚪 done | Generative interactive fiction (seeded strange-place explorer, 3 themes, curate-then-arrange prose) |
-| `tools/audio-lens/` | 🔊 tool | Offline-render audio inspector — spectrogram + features + 12/12 self-tests (internal, not a front-door card) |
+| `tools/audio-lens/` | 🔊 tool → 🎓 **skill** | Offline-render audio inspector — spectrogram + features + 12/12 self-tests. **Graduated to a public skill: `bman654/audio-lens` (`npx skills add bman654/audio-lens`) — use the skill.** HTML kept as genesis artifact. |
 | `arcade/` | 🕹️ 11 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing, Chomp [Pac-Man-like]) |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
 
