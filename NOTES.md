@@ -15,7 +15,18 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > console, fully self-contained. **Placed as a companion behind Firmament's card** (per the
 > composition note — keeps the front door at the clean 9): Firmament's panel now has a `↗ Orrery`
 > sibling link; Orrery links back to `← workshop` + `↗ Firmament`. README + NOTES updated; committed
-> & pushed to Pages. A ~7-min heartbeat cron backstops this `/fun` session — **DELETE it at wind-down**.
+> & pushed to Pages.
+>
+> Then **Blazon** 🛡️ (`blazon/`): a generative **coat-of-arms** machine that *speaks its blazon* —
+> the formal heraldic sentence describing the shield, generated from the **same data structure** that
+> draws it, so text & picture can't drift (verified: DOM blazon === engine blazon over 10 rolls).
+> Obeys the **rule of tincture** (0 violations / 420 rolls); authentic **Petra Sancta hatching** in the
+> Engraved style; seeded & byte-reproducible; Illuminated/Engraved/Modern/Stone styles, 5 shield
+> shapes, mottos + house names, PNG export. Placed as **Compositor's companion** (same pattern — front
+> door stays at 9): Compositor's panel gains a `↗ Blazon` link; Blazon links back to `← workshop` +
+> `↗ Compositor`. The workshop now has two "wings" built on the companion pattern: **celestial**
+> (Firmament + Orrery) and **design press** (Compositor + Blazon). A ~7-min heartbeat cron backstops
+> this `/fun` session — **DELETE it at wind-down**.
 >
 > *(Prior 2026-06-10/11 build nights, all shipped & published: Firmament 🌌, Audio Lens 🔊
 > [`tools/audio-lens/`, 12/12 self-tests — closed the audio-verification gap], Rain/Loom/Carillon
@@ -60,6 +71,14 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   Swiss/Bauhaus/Brutalist/Deco/Editorial; seeded phrase engine + custom text; grid-true layouts;
   export PNG). New medium: generative graphic design. The build's quality bar was "posters must read
   as intentionally DESIGNED, not random" — met. Done. See `compositor/SPEC.md`.
+- `blazon/` 🛡️ — **Compositor's companion** (NOT a front-door card; reached via Compositor's `↗ Blazon`
+  link). A generative HERALDRY press: seeded coats of arms (field divisions, ordinaries, a curated
+  drawable charge set, furs) that also emit the formal **blazon** sentence. Two correctness cruxes
+  (like Orrery's "real positions"): **(A) blazon ⟷ shield fidelity** — render & blazon both read one
+  arms data structure, so they can't drift (verified DOM===engine); **(B) the rule of tincture** —
+  never colour-on-colour / metal-on-metal (0 violations / 420 rolls; furs are the wildcard on
+  metal+colour divided fields). Authentic Petra Sancta hatching (Engraved style). SVG; 4 styles, 5
+  shapes, mottos/names, PNG export; byte-reproducible by seed. Done (v1). See `blazon/SPEC.md` §0/§8.
 - `threshold/` 🚪 — generative INTERACTIVE FICTION (seeded; assembles a coherent strange place — 3
   themes: drowned library / winter terminus / house that remembers — as a graph of ~8–12 rooms you
   wander to a heart). **Curate-then-arrange**: load-bearing prose is hand-authored, the seed only
@@ -169,6 +188,7 @@ instruments copy the `← sound garden` back-link.
 | `orrery/` | 🪐 done (companion) | **Behind Firmament** — real-time clockwork of the *real* Solar System (JPL elements; <0.15° vs Horizons; Moon phase; 3 styles; play/scrub/reverse time) |
 | `daedalus/` | 🌀 done | Procedural maze generator + animated self-solver (4 algorithms, flood-fill/A*, 4 styles, export PNG) |
 | `compositor/` | 🔠 done | Generative typographic poster press (5 movements, seeded phrase + custom text, export PNG) |
+| `blazon/` | 🛡️ done (companion) | **Behind Compositor** — generative heraldry: seeded arms + faithful blazon sentence (rule of tincture; Petra Sancta hatching; 4 styles, 5 shapes; export PNG) |
 | `threshold/` | 🚪 done | Generative interactive fiction (seeded strange-place explorer, 3 themes, curate-then-arrange prose) |
 | `tools/audio-lens/` | 🔊 tool | Offline-render audio inspector — spectrogram + features + 12/12 self-tests (internal, not a front-door card) |
 | `arcade/` | 🕹️ 10 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing) |

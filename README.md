@@ -12,8 +12,9 @@ HTML file: no build step, no dependencies, no network.*
 
 ## What's inside
 
-Ten creative mediums across nine projects — plus the **Orrery**, a companion instrument tucked behind
-Firmament's door. Click a live link, or open any `.html` in a browser.
+Ten creative mediums across nine projects — plus two companions tucked behind their parent doors:
+the **Orrery** behind Firmament, and **Blazon** behind Compositor. Click a live link, or open any
+`.html` in a browser.
 
 ### 🌿 [Strange Garden](https://bman654.github.io/the-workshop/strange-garden/)
 **34 *living* generative systems** — particle life, slime moulds, reaction–diffusion, boids,
@@ -61,6 +62,12 @@ themes, each with an invented poet and a seed you can keep. Press space for anot
 A **generative type press** — seed a striking **typographic poster** from an evocative phrase, set in
 one of five design movements (Swiss · Bauhaus · Brutalist · Art Deco · Editorial), with a grid-true
 layout, restrained palette, and ornaments. Re-roll endlessly, type your own text, export to PNG.
+
+> 🛡️ **Companion — [Blazon](https://bman654.github.io/the-workshop/blazon/):** the press's second
+> stamp — a generative **coat-of-arms** machine that also *speaks its blazon* (the formal heraldic
+> sentence describing the shield, faithfully). Seeded & reproducible, obeying the **rule of tincture**;
+> Illuminated / Engraved (authentic Petra Sancta hatching) / Modern / Stone styles, five shield shapes,
+> mottos & names, export PNG. Re-roll yourself a house.
 
 ### 🚪 [Threshold](https://bman654.github.io/the-workshop/threshold/)
 A **generative interactive fiction** — each seed assembles a coherent *strange place* to wander, room
