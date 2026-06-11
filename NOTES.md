@@ -17,8 +17,10 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   New medium: generative language. Verify the *text* reads as coherent, evocative poetry.
 - `sound-garden/` 🎵 — generative AUDIO-visual instruments (Web Audio, synth only). A trio:
   Whitney (melody/chimes), Drift (ambient pads), Euclid (rhythm). `index.html` is the rack.
-  NB: audio can't be heard headless — verify graph/scheduling/no-leak/visual; sonic quality is
-  engineered (consonant scales, limiters), not ear-checked. New instruments copy `← sound garden`.
+  NB: audio can't be *heard* headless — but `tools/audio-lens/` now renders Web Audio offline →
+  spectrogram + features, so sonic quality (in-scale? clipping? evolving?) is verifiable by SIGHT.
+  Verify graph/scheduling/no-leak/visual AND run the output through the lens. New instruments copy
+  `← sound garden`.
 - `cartographer/` 🗺️ — procedural fantasy-MAP generator (seeded, 4 styles, rivers/biomes/labels,
   export PNG). Standalone; done.
 - `firmament/` 🌌 — procedural night-SKY / constellation generator (seeded, 4 chart styles,
@@ -62,6 +64,11 @@ structurally verifiable, never heard).** Build a step that RENDERS an instrument
     giving audio the same screenshot-grade verification the visual pieces already get.
   - Shape: a small offline-WebAudio render (Node, or a self-rendering page that dumps a WAV +
     draws a canvas spectrogram I screenshot). **Worth a dedicated build session.** (Brandon's idea.)
+  - ✅ **BUILT (2026-06-10) → `tools/audio-lens/`** — self-rendering page; log-freq spectrogram +
+    waveform + RMS + features (clipping / centroid / onset→tempo / pitch→note). **12/12 self-tests
+    green** against known signals (440 Hz→A4, 120 BPM clicks→120, clipped→flagged, chirp centroid
+    rises). Offline = silent. The "let me hear via sight" path is now real & trustworthy — run any
+    future audio piece's output through it to verify. NOT a front-door project (lives in `tools/`).
 
 **🎚️ Practical note (learned the fun way):** when deputies drive a real browser to test audio
 pieces, **the sound plays OUT LOUD on Brandon's speakers** — he heard the Sound Garden overnight

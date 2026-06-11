@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio Lens — see the sound</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --panel: #12151d;
+    --panel2: #171b25;
+    --ink: #d8dee9;
+    --dim: #8a93a6;
+    --line: #232838;
+    --accent: #7fd3ff;
+    --accent2: #ffb86b;
+    --good: #4ec98a;
+    --bad: #ff6b6b;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font: 14px/1.5 var(--mono);
+    padding: 18px 20px 60px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 18px; margin: 0 0 2px; letter-spacing: .04em; font-weight: 600; }
+  h1 .sub { color: var(--dim); font-weight: 400; font-size: 12px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim);
+       margin: 0 0 8px; font-weight: 600; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+           padding: 14px 16px; margin-bottom: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .sources { display: flex; flex-wrap: wrap; gap: 6px; }
+  button {
+    font: inherit; color: var(--ink); background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 6px; padding: 6px 11px;
+    cursor: pointer; transition: border-color .12s, background .12s;
+  }
+  button:hover { border-color: var(--accent); }
+  button.sel { border-color: var(--accent); background: #1d2738; color: #fff; }
+  button.primary { background: #1d3a52; border-color: var(--accent); color: #eaf6ff; font-weight: 600; }
+  button.primary:hover { background: #234a68; }
+  button.go { background: #1d3a2c; border-color: var(--good); color: #dfffe9; font-weight: 600; }
+  button:disabled { opacity: .45; cursor: default; }
+  label.ctl { color: var(--dim); display: inline-flex; align-items: center; gap: 5px; }
+  select, input[type=number] {
+    font: inherit; color: var(--ink); background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 7px;
+  }
+  .drop {
+    border: 1px dashed #36405a; border-radius: 6px; padding: 7px 12px; color: var(--dim);
+    cursor: pointer; transition: border-color .12s, color .12s; user-select: none;
+  }
+  .drop.hot { border-color: var(--accent); color: var(--accent); background: #141d2a; }
+  .canvases { display: grid; gap: 10px; }
+  .cvwrap { position: relative; }
+  .cvlabel { position: absolute; top: 6px; left: 8px; font-size: 11px; color: var(--dim);
+             background: rgba(11,13,18,.6); padding: 1px 6px; border-radius: 4px; }
+  canvas { width: 100%; display: block; background: #06070a; border: 1px solid var(--line);
+           border-radius: 6px; }
+  .feat { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 18px; }
+  .feat .k { color: var(--dim); }
+  .feat .v { color: var(--ink); }
+  .feat .v.warn { color: var(--accent2); }
+  .feat .v.bad { color: var(--bad); }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
+  td.r { text-align: right; font-variant-numeric: tabular-nums; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+  .tag.pass { background: #123226; color: var(--good); }
+  .tag.fail { background: #3a1414; color: var(--bad); }
+  .summary { font-weight: 700; }
+  .summary.allpass { color: var(--good); }
+  .summary.anyfail { color: var(--bad); }
+  .status { color: var(--dim); margin-left: 10px; }
+  .hint { color: var(--dim); font-size: 12px; margin-top: 4px; }
+  .legend { display: flex; gap: 14px; align-items: center; margin-top: 6px; font-size: 11px; color: var(--dim); }
+  .swatch { width: 120px; height: 10px; border-radius: 3px; }
+  code { color: var(--accent); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Audio Lens <span class="sub">— offline, silent. see the sound, read the numbers.</span></h1>
+  <p class="hint">Renders everything through <code>OfflineAudioContext</code> — makes <b>no audible sound</b>.
+     Pure-JS FFT. Pick a test signal or drop a WAV, then Render &amp; Analyze.</p>
+
+  <div class="panel">
+    <h2>Source</h2>
+    <div class="sources" id="sources"></div>
+    <div class="row" style="margin-top:10px">
+      <div class="drop" id="drop">⬇ drop a WAV/audio file here, or click to pick</div>
+      <input type="file" id="file" accept="audio/*" style="display:none">
+      <span class="status" id="srcStatus">selected: 440 Hz sine</span>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label class="ctl">FFT
+        <select id="fftSize">
+          <option>1024</option><option selected>2048</option><option>4096</option>
+        </select>
+      </label>
+      <label class="ctl">hop
+        <select id="hop">
+          <option>256</option><option selected>512</option><option>1024</option>
+        </select>
+      </label>
+      <button class="primary" id="render">▶ Render &amp; Analyze</button>
+      <span class="status" id="renderStatus"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Visualizations</h2>
+    <div class="canvases">
+      <div class="cvwrap"><span class="cvlabel">waveform — amplitude vs time</span>
+        <canvas id="cvWave" width="1040" height="130"></canvas></div>
+      <div class="cvwrap"><span class="cvlabel" id="specLabel">spectrogram — log-frequency, dB→colour</span>
+        <canvas id="cvSpec" width="1040" height="300"></canvas></div>
+      <div class="cvwrap"><span class="cvlabel">RMS / loudness — dBFS vs time</span>
+        <canvas id="cvRms" width="1040" height="120"></canvas></div>
+    </div>
+    <div class="legend">
+      <span>quiet</span><div class="swatch" id="swatch"></div><span>loud</span>
+      <span style="margin-left:18px" id="freqAxisNote"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Feature readout</h2>
+    <div class="feat" id="feat"><span class="k">—</span><span class="v">run an analysis</span></div>
+  </div>
+
+  <div class="panel">
+    <h2>Self-tests <span class="status" id="stStatus"></span></h2>
+    <div class="row" style="margin-bottom:10px">
+      <button class="go" id="runTests">✓ Run self-tests</button>
+      <span class="summary" id="stSummary"></span>
+    </div>
+    <table id="stTable">
+      <thead><tr><th>Signal</th><th>Check</th><th>Expected</th><th class="r">Measured</th><th>Result</th></tr></thead>
+      <tbody id="stBody"><tr><td colspan="5" style="color:var(--dim)">not run yet</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================================
+   Audio Lens — single-file offline audio analyzer.
+   Pure-JS radix-2 FFT, STFT spectrogram, RMS, spectral features,
+   onset/tempo, pitch (autocorrelation + spectral peaks), self-tests.
+   ============================================================================ */
+
+const SR = 44100;          // sample rate for all offline renders
+const DUR = 4.0;           // default generator duration (s)
+
+/* ---------------------------------------------------------------------------
+   FFT — radix-2 Cooley–Tukey, in-place, iterative (bit reversal + butterflies).
+   re[], im[] are Float64Array of length n (power of two). Forward transform.
+   --------------------------------------------------------------------------- */
+function fft(re, im) {
+  const n = re.length;
+  if (n <= 1) return;
+  if ((n & (n - 1)) !== 0) throw new Error("FFT length must be power of two: " + n);
+
+  // bit-reversal permutation
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      const tr = re[i]; re[i] = re[j]; re[j] = tr;
+      const ti = im[i]; im[i] = im[j]; im[j] = ti;
+    }
+  }
+  // butterflies
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = -2 * Math.PI / len;       // forward transform
+    const wpr = Math.cos(ang), wpi = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let wr = 1, wi = 0;
+      const half = len >> 1;
+      for (let k = 0; k < half; k++) {
+        const a = i + k, b = i + k + half;
+        const tr = wr * re[b] - wi * im[b];
+        const ti = wr * im[b] + wi * re[b];
+        re[b] = re[a] - tr; im[b] = im[a] - ti;
+        re[a] += tr;        im[a] += ti;
+        const nwr = wr * wpr - wi * wpi;   // advance twiddle
+        wi = wr * wpi + wi * wpr;
+        wr = nwr;
+      }
+    }
+  }
+}
+
+// Hann window cache
+const hannCache = new Map();
+function hann(n) {
+  let w = hannCache.get(n);
+  if (w) return w;
+  w = new Float64Array(n);
+  for (let i = 0; i < n; i++) w[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (n - 1));
+  hannCache.set(n, w);
+  return w;
+}
+
+/* ---------------------------------------------------------------------------
+   STFT → array of magnitude spectra (linear magnitude per bin, 0..fftSize/2).
+   --------------------------------------------------------------------------- */
+function stft(samples, fftSize, hopSize) {
+  const win = hann(fftSize);
+  const half = fftSize / 2;
+  const re = new Float64Array(fftSize);
+  const im = new Float64Array(fftSize);
+  const frames = [];
+  const n = samples.length;
+  for (let start = 0; start + fftSize <= n; start += hopSize) {
+    for (let i = 0; i < fftSize; i++) { re[i] = samples[start + i] * win[i]; im[i] = 0; }
+    fft(re, im);
+    const mag = new Float32Array(half + 1);
+    for (let k = 0; k <= half; k++) mag[k] = Math.hypot(re[k], im[k]);
+    frames.push(mag);
+  }
+  return frames; // [frame][bin]
+}
+
+/* ---------------------------------------------------------------------------
+   Analysis primitives
+   --------------------------------------------------------------------------- */
+function dbfs(amp) { return 20 * Math.log10(Math.max(amp, 1e-12)); }
+
+function peakAndClip(samples) {
+  let peak = 0, clipped = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const a = Math.abs(samples[i]);
+    if (a > peak) peak = a;
+    if (a >= 0.999) clipped++;
+  }
+  return { peak, peakDb: dbfs(peak), clipped, clipPct: 100 * clipped / samples.length };
+}
+
+// per-frame RMS in dBFS over the whole buffer
+function rmsCurve(samples, frame, hopSize) {
+  const out = [];
+  for (let s = 0; s + frame <= samples.length; s += hopSize) {
+    let sum = 0;
+    for (let i = 0; i < frame; i++) { const v = samples[s + i]; sum += v * v; }
+    out.push(dbfs(Math.sqrt(sum / frame)));
+  }
+  return out;
+}
+function meanRmsDb(samples) {
+  let sum = 0;
+  for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+  return dbfs(Math.sqrt(sum / samples.length));
+}
+
+// spectral centroid (Hz) for one magnitude frame; uses power weighting
+function frameCentroid(mag, sampleRate, fftSize) {
+  let num = 0, den = 0;
+  for (let k = 0; k < mag.length; k++) {
+    const p = mag[k] * mag[k];
+    const f = k * sampleRate / fftSize;
+    num += f * p; den += p;
+  }
+  return den > 0 ? num / den : 0;
+}
+function meanCentroid(frames, sampleRate, fftSize, fromFrac, toFrac) {
+  const a = Math.floor((fromFrac || 0) * frames.length);
+  const b = Math.floor((toFrac == null ? 1 : toFrac) * frames.length);
+  let sum = 0, n = 0;
+  for (let i = a; i < b; i++) {
+    // ignore near-silent frames so silence doesn't drag the centroid
+    let e = 0; for (let k = 0; k < frames[i].length; k++) e += frames[i][k] * frames[i][k];
+    if (e < 1e-9) continue;
+    sum += frameCentroid(frames[i], sampleRate, fftSize); n++;
+  }
+  return n > 0 ? sum / n : 0;
+}
+
+/* ---- pitch: parabolic-interpolated autocorrelation (monophonic f0) -------- */
+function detectPitchAC(samples, sampleRate) {
+  // analyze a centered ~64ms window, only if there's signal
+  const N = Math.min(samples.length, 4096);
+  const start = Math.max(0, Math.floor(samples.length / 2 - N / 2));
+  const buf = new Float64Array(N);
+  let mean = 0;
+  for (let i = 0; i < N; i++) mean += samples[start + i];
+  mean /= N;
+  let energy = 0;
+  for (let i = 0; i < N; i++) { buf[i] = samples[start + i] - mean; energy += buf[i] * buf[i]; }
+  if (energy < 1e-6) return null;
+
+  const minF = 50, maxF = 5000;
+  const minLag = Math.floor(sampleRate / maxF);
+  const maxLag = Math.min(N - 1, Math.floor(sampleRate / minF));
+
+  // normalized autocorrelation
+  const r = new Float64Array(maxLag + 1);
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    let s = 0;
+    for (let i = 0; i < N - lag; i++) s += buf[i] * buf[i + lag];
+    r[lag] = s;
+  }
+  // first local max after the initial descent — skip zero-lag region by starting at minLag
+  let bestLag = -1, bestVal = -Infinity;
+  for (let lag = minLag + 1; lag < maxLag; lag++) {
+    if (r[lag] > r[lag - 1] && r[lag] >= r[lag + 1] && r[lag] > bestVal) {
+      bestVal = r[lag]; bestLag = lag;
+    }
+  }
+  if (bestLag < 0) return null;
+  // require a reasonably strong correlation (reject noise)
+  if (bestVal / energy < 0.3) return null;
+
+  // parabolic interpolation around bestLag for sub-sample precision
+  const y0 = r[bestLag - 1], y1 = r[bestLag], y2 = r[bestLag + 1];
+  const denom = (y0 - 2 * y1 + y2);
+  const shift = denom !== 0 ? 0.5 * (y0 - y2) / denom : 0;
+  const lag = bestLag + shift;
+  return sampleRate / lag;
+}
+
+/* ---- chord: top-N spectral peaks (parabolic-interpolated) ----------------- */
+function spectralPeaks(frames, sampleRate, fftSize, topN) {
+  // average magnitude spectrum across all energetic frames
+  const half = fftSize / 2;
+  const avg = new Float64Array(half + 1);
+  let used = 0;
+  for (const f of frames) {
+    let e = 0; for (let k = 0; k < f.length; k++) e += f[k] * f[k];
+    if (e < 1e-9) continue;
+    for (let k = 0; k <= half; k++) avg[k] += f[k];
+    used++;
+  }
+  if (used === 0) return [];
+  for (let k = 0; k <= half; k++) avg[k] /= used;
+
+  let maxMag = 0; for (let k = 1; k < half; k++) if (avg[k] > maxMag) maxMag = avg[k];
+  const thresh = maxMag * 0.1;
+  const minBin = Math.ceil(60 * fftSize / sampleRate);    // ignore < 60 Hz
+  const maxBin = Math.floor(5000 * fftSize / sampleRate); // ignore > 5 kHz
+
+  const peaks = [];
+  for (let k = Math.max(2, minBin); k < Math.min(half - 1, maxBin); k++) {
+    if (avg[k] > thresh && avg[k] > avg[k - 1] && avg[k] >= avg[k + 1]) {
+      const y0 = avg[k - 1], y1 = avg[k], y2 = avg[k + 1];
+      const denom = (y0 - 2 * y1 + y2);
+      const shift = denom !== 0 ? 0.5 * (y0 - y2) / denom : 0;
+      const freq = (k + shift) * sampleRate / fftSize;
+      peaks.push({ freq, mag: y1 });
+    }
+  }
+  peaks.sort((a, b) => b.mag - a.mag);
+  // de-duplicate peaks that are within ~3% (same note) keeping strongest
+  const kept = [];
+  for (const p of peaks) {
+    if (kept.some(q => Math.abs(q.freq - p.freq) / q.freq < 0.03)) continue;
+    kept.push(p);
+    if (kept.length >= topN) break;
+  }
+  return kept;
+}
+
+/* ---- onset detection (spectral flux) → tempo ------------------------------
+   Raw half-wave-rectified spectral flux is normalized into a dimensionless
+   "onset strength" by dividing by each frame's own spectral magnitude sum.
+   This is the key to not firing on a steady tone: a sustained sine's flux is a
+   minuscule fraction of its sustained spectral energy (window-edge ripple),
+   while a true transient (click) spikes the flux far above the running energy.
+   We then peak-pick on the normalized function with an ABSOLUTE floor so a
+   pure tone reports zero onsets regardless of its (tiny) relative max.
+   --------------------------------------------------------------------------- */
+function onsetsAndTempo(frames, sampleRate, fftSize, hopSize) {
+  const N = frames.length;
+  const flux = new Float64Array(N);     // normalized onset strength
+  let prev = null;
+  for (let i = 0; i < N; i++) {
+    const cur = frames[i];
+    let energy = 0;
+    for (let k = 0; k < cur.length; k++) energy += cur[k];   // L1 magnitude sum
+    if (prev) {
+      let f = 0;
+      for (let k = 0; k < cur.length; k++) {
+        const d = cur[k] - prev[k];
+        if (d > 0) f += d;                                    // half-wave rectified
+      }
+      // normalize by the larger of the two frames' magnitude sums → relative jump
+      const denom = Math.max(energy, 1e-6);
+      flux[i] = f / denom;
+    }
+    prev = cur;
+  }
+  let mx = 0; for (let i = 0; i < N; i++) if (flux[i] > mx) mx = flux[i];
+  if (mx <= 0) return { onsets: [], tempo: 0, flux };
+
+  // ABSOLUTE floor on normalized strength: a real transient injects a large
+  // fraction of new spectral energy in one hop; a steady tone never does.
+  const ABS_FLOOR = 0.30;
+  const W = 8;
+  const onsets = [];
+  const minGap = Math.ceil(0.10 * sampleRate / hopSize); // 100ms refractory
+  let lastOnset = -1e9;
+  for (let i = 1; i < N - 1; i++) {
+    let lo = Math.max(0, i - W), hi = Math.min(N, i + W + 1), sum = 0;
+    for (let j = lo; j < hi; j++) sum += flux[j];
+    const localMean = sum / (hi - lo);
+    const thr = Math.max(ABS_FLOOR, localMean + 0.15);   // must clear floor AND local baseline
+    if (flux[i] > thr && flux[i] >= flux[i - 1] && flux[i] > flux[i + 1] && (i - lastOnset) >= minGap) {
+      onsets.push(i * hopSize / sampleRate);
+      lastOnset = i;
+    }
+  }
+  // tempo from median inter-onset interval
+  let tempo = 0;
+  if (onsets.length >= 2) {
+    const ivals = [];
+    for (let i = 1; i < onsets.length; i++) ivals.push(onsets[i] - onsets[i - 1]);
+    ivals.sort((a, b) => a - b);
+    const med = ivals[Math.floor(ivals.length / 2)];
+    if (med > 0) tempo = 60 / med;
+  }
+  return { onsets, tempo, flux };
+}
+
+/* ---- note naming (A4=440, equal temperament) ------------------------------ */
+const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+function hzToNote(freq) {
+  if (!freq || freq <= 0) return null;
+  const midi = 69 + 12 * Math.log2(freq / 440);
+  const rounded = Math.round(midi);
+  const name = NOTE_NAMES[((rounded % 12) + 12) % 12];
+  const octave = Math.floor(rounded / 12) - 1;
+  const cents = Math.round((midi - rounded) * 100);
+  return { name: name + octave, cents, midi: rounded, freq };
+}
+
+/* ===========================================================================
+   Full analysis bundle for a Float32Array of mono samples.
+   =========================================================================== */
+function analyze(samples, sampleRate, fftSize, hopSize) {
+  const frames = stft(samples, fftSize, hopSize);
+  const pc = peakAndClip(samples);
+  const meanRms = meanRmsDb(samples);
+  const centroid = meanCentroid(frames, sampleRate, fftSize, 0, 1);
+  const centroid1 = meanCentroid(frames, sampleRate, fftSize, 0, 0.5);
+  const centroid2 = meanCentroid(frames, sampleRate, fftSize, 0.5, 1);
+  const ot = onsetsAndTempo(frames, sampleRate, fftSize, hopSize);
+  const f0 = detectPitchAC(samples, sampleRate);
+  const monoNote = f0 ? hzToNote(f0) : null;
+  const peaks = spectralPeaks(frames, sampleRate, fftSize, 3);
+  const peakNotes = peaks.map(p => ({ ...hzToNote(p.freq), freq: p.freq }));
+  const rms = rmsCurve(samples, 1024, hopSize);
+
+  // dominant single spectral peak (for the 1000 Hz test)
+  let topPeakFreq = peaks.length ? peaks[0].freq : 0;
+
+  return {
+    sampleRate, fftSize, hopSize, frames, samples,
+    peak: pc, meanRms, centroid, centroid1, centroid2,
+    onsets: ot.onsets, tempo: ot.tempo,
+    f0, monoNote, peaks, peakNotes, topPeakFreq, rms,
+    clipping: pc.clipPct > 1
+  };
+}
+
+/* ===========================================================================
+   Signal generators — rendered through OfflineAudioContext (silent).
+   Each returns Promise<Float32Array> mono @ SR.
+   =========================================================================== */
+function renderOffline(durationSec, buildGraph) {
+  const len = Math.ceil(durationSec * SR);
+  const ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, len, SR);
+  buildGraph(ctx);
+  return ctx.startRendering().then(buf => buf.getChannelData(0).slice());
+}
+
+function genSine(freq, dur, gain) {
+  return renderOffline(dur || DUR, (ctx) => {
+    const o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = freq;
+    const g = ctx.createGain(); g.gain.value = gain == null ? 0.8 : gain;
+    o.connect(g).connect(ctx.destination); o.start(0); o.stop(dur || DUR);
+  });
+}
+function genTriad(freqs, dur) {
+  return renderOffline(dur || DUR, (ctx) => {
+    const master = ctx.createGain(); master.gain.value = 0.8 / freqs.length;
+    master.connect(ctx.destination);
+    for (const f of freqs) {
+      const o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = f;
+      o.connect(master); o.start(0); o.stop(dur || DUR);
+    }
+  });
+}
+// click train: synthesize directly into a buffer source (sharp impulses)
+function genClicks(bpm, dur) {
+  const d = dur || DUR;
+  return renderOffline(d, (ctx) => {
+    const len = Math.ceil(d * SR);
+    const b = ctx.createBuffer(1, len, SR);
+    const data = b.getChannelData(0);
+    const period = 60 / bpm;
+    for (let t = 0; t < d; t += period) {
+      const idx = Math.floor(t * SR);
+      // short decaying click (a few samples) so it has broadband content
+      for (let k = 0; k < 64 && idx + k < len; k++) {
+        data[idx + k] = Math.exp(-k / 8) * (k === 0 ? 1 : Math.sin(k * 0.7)) * 0.9;
+      }
+    }
+    const src = ctx.createBufferSource(); src.buffer = b;
+    src.connect(ctx.destination); src.start(0);
+  });
+}
+function genChirp(f0, f1, dur) {
+  const d = dur || DUR;
+  return renderOffline(d, (ctx) => {
+    const len = Math.ceil(d * SR);
+    const b = ctx.createBuffer(1, len, SR);
+    const data = b.getChannelData(0);
+    // linear chirp via integrated phase: phase(t)=2π(f0 t + (f1-f0)/(2T) t²)
+    const k = (f1 - f0) / d;
+    for (let i = 0; i < len; i++) {
+      const t = i / SR;
+      const phase = 2 * Math.PI * (f0 * t + 0.5 * k * t * t);
+      data[i] = 0.8 * Math.sin(phase);
+    }
+    const src = ctx.createBufferSource(); src.buffer = b;
+    src.connect(ctx.destination); src.start(0);
+  });
+}
+function genNoise(dur) {
+  const d = dur || DUR;
+  return renderOffline(d, (ctx) => {
+    const len = Math.ceil(d * SR);
+    const b = ctx.createBuffer(1, len, SR);
+    const data = b.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * 0.5;
+    const src = ctx.createBufferSource(); src.buffer = b;
+    src.connect(ctx.destination); src.start(0);
+  });
+}
+function genClipped(freq, dur, gain) {
+  const d = dur || DUR;
+  return renderOffline(d, (ctx) => {
+    const len = Math.ceil(d * SR);
+    const b = ctx.createBuffer(1, len, SR);
+    const data = b.getChannelData(0);
+    const g = gain || 1.5;
+    for (let i = 0; i < len; i++) {
+      let v = g * Math.sin(2 * Math.PI * freq * i / SR);
+      if (v > 1) v = 1; else if (v < -1) v = -1;   // hard clip
+      data[i] = v;
+    }
+    const src = ctx.createBufferSource(); src.buffer = b;
+    src.connect(ctx.destination); src.start(0);
+  });
+}
+
+/* Source registry: id → {label, make()->Promise<Float32Array>, expected} */
+const SIGNALS = {
+  sine440:  { label: "Sine 440 Hz (A4)", make: () => genSine(440), },
+  sine1000: { label: "Sine 1000 Hz",     make: () => genSine(1000), },
+  triad:    { label: "A-major triad",    make: () => genTriad([440, 554.37, 659.25]), },
+  clicks:   { label: "Click 120 BPM",    make: () => genClicks(120), },
+  chirp:    { label: "Chirp 100→2000",   make: () => genChirp(100, 2000), },
+  noise:    { label: "White noise",      make: () => genNoise(), },
+  clipped:  { label: "Clipped sine",     make: () => genClipped(440, DUR, 1.5), },
+};
+
+/* ===========================================================================
+   Drawing: colour map + waveform + spectrogram + RMS
+   =========================================================================== */
+// magma-ish perceptual colormap, t in [0,1] → [r,g,b]
+const MAGMA = [
+  [0,0,4],[28,16,68],[79,18,123],[129,37,129],[181,54,122],
+  [229,80,100],[251,135,97],[254,194,135],[252,253,191]
+];
+function magma(t) {
+  t = Math.max(0, Math.min(1, t));
+  const x = t * (MAGMA.length - 1);
+  const i = Math.floor(x), f = x - i;
+  const a = MAGMA[i], b = MAGMA[Math.min(i + 1, MAGMA.length - 1)];
+  return [a[0] + (b[0]-a[0])*f, a[1] + (b[1]-a[1])*f, a[2] + (b[2]-a[2])*f];
+}
+function paintSwatch() {
+  const el = document.getElementById("swatch");
+  const c = document.createElement("canvas"); c.width = 120; c.height = 10;
+  const g = c.getContext("2d");
+  for (let x = 0; x < 120; x++) {
+    const [r,gg,b] = magma(x / 119);
+    g.fillStyle = `rgb(${r|0},${gg|0},${b|0})`; g.fillRect(x, 0, 1, 10);
+  }
+  el.style.background = `url(${c.toDataURL()})`;
+  el.style.backgroundSize = "cover";
+}
+
+function drawWaveform(cv, samples) {
+  const ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, mid = H / 2;
+  ctx.fillStyle = "#06070a"; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "#1a2333"; ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(W, mid); ctx.stroke();
+  ctx.strokeStyle = "#7fd3ff"; ctx.lineWidth = 1;
+  ctx.beginPath();
+  const per = samples.length / W;
+  for (let x = 0; x < W; x++) {
+    let mn = 1, mx = -1;
+    const s = Math.floor(x * per), e = Math.min(samples.length, Math.floor((x + 1) * per));
+    for (let i = s; i < e; i++) { const v = samples[i]; if (v < mn) mn = v; if (v > mx) mx = v; }
+    if (s >= e) { mn = mx = 0; }
+    ctx.moveTo(x + 0.5, mid - mx * mid * 0.95);
+    ctx.lineTo(x + 0.5, mid - mn * mid * 0.95);
+  }
+  ctx.stroke();
+}
+
+function drawSpectrogram(cv, frames, sampleRate, fftSize) {
+  const ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  const img = ctx.createImageData(W, H);
+  const data = img.data;
+  const half = fftSize / 2;
+  const fMin = 40, fMax = sampleRate / 2;
+  const logMin = Math.log2(fMin), logMax = Math.log2(fMax);
+
+  // dB range for colour mapping
+  const dbFloor = -90, dbCeil = -10;
+
+  // precompute, for each output row (y), the bin range it maps to (log freq)
+  // y=0 top = fMax, y=H-1 bottom = fMin
+  for (let x = 0; x < W; x++) {
+    const fi = Math.min(frames.length - 1, Math.floor(x * frames.length / W));
+    const mag = frames[fi] || frames[frames.length - 1];
+    if (!mag) continue;
+    for (let y = 0; y < H; y++) {
+      const frac = 1 - y / (H - 1);                 // 0 bottom..1 top
+      const f = Math.pow(2, logMin + frac * (logMax - logMin));
+      const bin = f * fftSize / sampleRate;
+      const b0 = Math.floor(bin), b1 = Math.min(half, b0 + 1);
+      const bf = bin - b0;
+      let m = (mag[b0] || 0) * (1 - bf) + (mag[b1] || 0) * bf;
+      // normalize magnitude → dB. Hann coherent gain ~0.5, scale by fftSize.
+      const db = 20 * Math.log10((m / (fftSize * 0.25)) + 1e-9);
+      let t = (db - dbFloor) / (dbCeil - dbFloor);
+      const [r, g, bb] = magma(t);
+      const idx = (y * W + x) * 4;
+      data[idx] = r; data[idx + 1] = g; data[idx + 2] = bb; data[idx + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // frequency gridlines + labels
+  ctx.font = "10px monospace"; ctx.fillStyle = "rgba(216,222,233,0.55)";
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  for (const f of [100, 200, 440, 1000, 2000, 5000, 10000]) {
+    if (f < fMin || f > fMax) continue;
+    const frac = (Math.log2(f) - logMin) / (logMax - logMin);
+    const y = Math.round((1 - frac) * (H - 1));
+    ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); ctx.stroke();
+    ctx.fillText((f >= 1000 ? (f/1000) + "k" : f) + " Hz", 4, y - 2);
+  }
+}
+
+function drawRms(cv, rms) {
+  const ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = "#06070a"; ctx.fillRect(0, 0, W, H);
+  const dbTop = 0, dbBot = -80;
+  ctx.strokeStyle = "rgba(255,255,255,0.07)"; ctx.fillStyle = "rgba(216,222,233,0.5)";
+  ctx.font = "10px monospace";
+  for (const db of [0, -20, -40, -60]) {
+    const y = Math.round((db - dbTop) / (dbBot - dbTop) * (H - 1));
+    ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); ctx.stroke();
+    ctx.fillText(db + " dB", 4, y - 2);
+  }
+  ctx.strokeStyle = "#ffb86b"; ctx.lineWidth = 1.5; ctx.beginPath();
+  for (let x = 0; x < rms.length; x++) {
+    const px = x / Math.max(1, rms.length - 1) * (W - 1);
+    let db = rms[x]; if (db < dbBot) db = dbBot; if (db > dbTop) db = dbTop;
+    const y = (db - dbTop) / (dbBot - dbTop) * (H - 1);
+    if (x === 0) ctx.moveTo(px, y); else ctx.lineTo(px, y);
+  }
+  ctx.stroke();
+}
+
+/* ===========================================================================
+   UI wiring
+   =========================================================================== */
+let selectedId = "sine440";
+let droppedSamples = null;   // Float32Array if a file was decoded
+let droppedName = null;
+
+function buildSourceButtons() {
+  const host = document.getElementById("sources");
+  host.innerHTML = "";
+  for (const id of Object.keys(SIGNALS)) {
+    const b = document.createElement("button");
+    b.textContent = SIGNALS[id].label;
+    b.dataset.id = id;
+    if (id === selectedId) b.classList.add("sel");
+    b.addEventListener("click", () => {
+      selectedId = id; droppedSamples = null; droppedName = null;
+      document.querySelectorAll("#sources button").forEach(x => x.classList.remove("sel"));
+      b.classList.add("sel");
+      document.getElementById("srcStatus").textContent = "selected: " + SIGNALS[id].label;
+    });
+    host.appendChild(b);
+  }
+}
+
+function fmt(n, d) { return (n == null || isNaN(n)) ? "—" : Number(n).toFixed(d == null ? 1 : d); }
+
+function renderFeatures(a, expected) {
+  const host = document.getElementById("feat");
+  const items = [];
+  const push = (k, v, cls) => items.push(`<span class="k">${k}</span><span class="v ${cls||''}">${v}</span>`);
+
+  push("peak", `${fmt(a.peak.peakDb)} dBFS`);
+  push("clipping", a.clipping ? `YES — ${fmt(a.peak.clipPct,2)}% (${a.peak.clipped} samp)` : `no (${fmt(a.peak.clipPct,3)}%)`,
+       a.clipping ? "bad" : "");
+  push("mean RMS", `${fmt(a.meanRms)} dBFS`);
+  push("spectral centroid", `${fmt(a.centroid,0)} Hz`);
+  push("centroid 1st→2nd half", `${fmt(a.centroid1,0)} → ${fmt(a.centroid2,0)} Hz`);
+  push("onsets", `${a.onsets.length}` + (a.onsets.length ? ` (first ${fmt(a.onsets[0],2)}s)` : ""));
+  push("tempo", a.tempo ? `${fmt(a.tempo,1)} BPM` : "—");
+
+  const mn = a.monoNote;
+  push("mono pitch (autocorr)", mn ? `${mn.name} ${mn.cents>=0?'+':''}${mn.cents}c (${fmt(a.f0,1)} Hz)` : "—");
+
+  const chord = a.peakNotes.map(p => `${p.name}${p.cents>=0?'+':''}${p.cents}c`).join("  ");
+  push("top-3 spectral peaks", chord || "—");
+
+  if (expected) push("expected", expected, "warn");
+
+  host.innerHTML = items.join("");
+}
+
+async function getSelectedSamples() {
+  if (droppedSamples) return { samples: droppedSamples, label: droppedName, expected: null };
+  const sig = SIGNALS[selectedId];
+  const samples = await sig.make();
+  return { samples, label: sig.label, expected: expectedText(selectedId) };
+}
+
+function expectedText(id) {
+  switch (id) {
+    case "sine440":  return "pitch A4 (440), centroid≈440, 0 onsets, no clip";
+    case "sine1000": return "peak 1000 Hz, pitch B5+ cents";
+    case "triad":    return "peaks {A4, C#5, E5}";
+    case "clicks":   return "tempo ≈120 BPM";
+    case "chirp":    return "centroid rises (2nd half > 1st)";
+    case "noise":    return "centroid > 3 kHz, no stable pitch";
+    case "clipped":  return "clipping flagged (>1%)";
+    default: return null;
+  }
+}
+
+async function doRenderAnalyze() {
+  const btn = document.getElementById("render");
+  const st = document.getElementById("renderStatus");
+  btn.disabled = true; st.textContent = "rendering (offline, silent)…";
+  try {
+    const fftSize = parseInt(document.getElementById("fftSize").value, 10);
+    const hopSize = parseInt(document.getElementById("hop").value, 10);
+    const { samples, label, expected } = await getSelectedSamples();
+    const a = analyze(samples, SR, fftSize, hopSize);
+    document.getElementById("specLabel").textContent =
+      `spectrogram — ${label} · FFT ${fftSize}/hop ${hopSize} · log-freq`;
+    drawWaveform(document.getElementById("cvWave"), samples);
+    drawSpectrogram(document.getElementById("cvSpec"), a.frames, SR, fftSize);
+    drawRms(document.getElementById("cvRms"), a.rms);
+    renderFeatures(a, expected);
+    st.textContent = `done — ${samples.length} samples (${fmt(samples.length/SR,2)} s)`;
+  } catch (e) {
+    st.textContent = "error: " + e.message;
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ---- file drop / picker ---- */
+function wireFileInput() {
+  const drop = document.getElementById("drop");
+  const file = document.getElementById("file");
+  drop.addEventListener("click", () => file.click());
+  file.addEventListener("change", () => { if (file.files[0]) loadFile(file.files[0]); });
+  ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.add("hot");
+  }));
+  ["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.remove("hot");
+  }));
+  drop.addEventListener("drop", e => {
+    const f = e.dataTransfer.files[0]; if (f) loadFile(f);
+  });
+}
+async function loadFile(f) {
+  const st = document.getElementById("srcStatus");
+  st.textContent = "decoding " + f.name + "…";
+  try {
+    const arr = await f.arrayBuffer();
+    const ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, SR);
+    const buf = await ctx.decodeAudioData(arr);
+    // downmix to mono
+    const n = buf.length, ch = buf.numberOfChannels;
+    const mono = new Float32Array(n);
+    for (let c = 0; c < ch; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < n; i++) mono[i] += d[i] / ch;
+    }
+    droppedSamples = mono; droppedName = f.name;
+    document.querySelectorAll("#sources button").forEach(x => x.classList.remove("sel"));
+    st.textContent = `file: ${f.name} (${buf.sampleRate} Hz → resampled view, ${ch}ch→mono, ${fmt(n/buf.sampleRate,2)}s)`;
+  } catch (e) {
+    st.textContent = "decode failed: " + e.message;
+    console.error(e);
+  }
+}
+
+/* ===========================================================================
+   Self-tests
+   =========================================================================== */
+const TESTS = [
+  { sig: "sine440", check: "detected pitch = A4 (±30c)", exp: "A4 ±30c",
+    run: a => { const n = a.monoNote; return { ok: n && n.name === "A4" && Math.abs(n.cents) <= 30,
+      measured: n ? `${n.name} ${n.cents>=0?'+':''}${n.cents}c` : "none" }; } },
+  { sig: "sine440", check: "centroid 440 (±20%)", exp: "352–528 Hz",
+    run: a => ({ ok: a.centroid >= 352 && a.centroid <= 528, measured: `${fmt(a.centroid,0)} Hz` }) },
+  { sig: "sine440", check: "0 onsets", exp: "0",
+    run: a => ({ ok: a.onsets.length === 0, measured: `${a.onsets.length}` }) },
+  { sig: "sine440", check: "not clipping", exp: "no",
+    run: a => ({ ok: !a.clipping, measured: a.clipping ? `${fmt(a.peak.clipPct,2)}%` : "no" }) },
+
+  { sig: "sine1000", check: "spectral peak 1000 (±3%)", exp: "970–1030 Hz",
+    run: a => ({ ok: a.topPeakFreq >= 970 && a.topPeakFreq <= 1030, measured: `${fmt(a.topPeakFreq,1)} Hz` }) },
+  { sig: "sine1000", check: "pitch ≈ B5", exp: "B5",
+    run: a => { const n = a.monoNote; return { ok: n && n.name === "B5", measured: n ? `${n.name} ${n.cents>=0?'+':''}${n.cents}c` : "none" }; } },
+
+  { sig: "triad", check: "peaks = {A4, C#5, E5}", exp: "{A4,C#5,E5}",
+    run: a => {
+      const set = new Set(a.peakNotes.map(p => p.name));
+      const want = ["A4","C#5","E5"];
+      const ok = want.every(w => set.has(w));
+      return { ok, measured: "{" + a.peakNotes.map(p=>p.name).join(",") + "}" };
+    } },
+
+  { sig: "clicks", check: "tempo 120 (±3)", exp: "117–123 BPM",
+    run: a => ({ ok: a.tempo >= 117 && a.tempo <= 123, measured: `${fmt(a.tempo,1)} BPM (${a.onsets.length} onsets)` }) },
+
+  { sig: "chirp", check: "centroid rises (2nd>1st)", exp: "2nd half > 1st",
+    run: a => ({ ok: a.centroid2 > a.centroid1, measured: `${fmt(a.centroid1,0)}→${fmt(a.centroid2,0)} Hz` }) },
+
+  { sig: "noise", check: "centroid > 3 kHz", exp: ">3000 Hz",
+    run: a => ({ ok: a.centroid > 3000, measured: `${fmt(a.centroid,0)} Hz` }) },
+  { sig: "noise", check: "no stable pitch", exp: "none / unstable",
+    run: a => ({ ok: a.f0 === null || noStablePitch(a),
+      measured: a.f0 ? `${fmt(a.f0,0)} Hz?` : "none" }) },
+
+  { sig: "clipped", check: "clipping flagged (>1%)", exp: ">1% clipped",
+    run: a => ({ ok: a.clipping && a.peak.clipPct > 1, measured: `${fmt(a.peak.clipPct,2)}%` }) },
+];
+
+// noise has no single dominant peak: check that top peak isn't hugely above the others
+function noStablePitch(a) {
+  if (a.peaks.length < 2) return a.f0 === null;
+  // ratio of strongest to median peak — broadband noise → low ratio
+  const mags = a.peaks.map(p => p.mag).sort((x,y)=>y-x);
+  return mags[0] / (mags[mags.length-1] || 1e-9) < 4;
+}
+
+async function runSelfTests() {
+  const btn = document.getElementById("runTests");
+  const body = document.getElementById("stBody");
+  const summary = document.getElementById("stSummary");
+  const status = document.getElementById("stStatus");
+  btn.disabled = true; summary.textContent = ""; summary.className = "summary";
+  status.textContent = "running…";
+  body.innerHTML = `<tr><td colspan="5" style="color:var(--dim)">rendering signals offline…</td></tr>`;
+
+  const fftSize = 2048, hopSize = 512;
+  // render + analyze each unique signal once, cache by sig id
+  const cache = {};
+  const sigIds = [...new Set(TESTS.map(t => t.sig))];
+  for (const id of sigIds) {
+    const samples = await SIGNALS[id].make();
+    cache[id] = analyze(samples, SR, fftSize, hopSize);
+  }
+
+  const rows = [];
+  let passCount = 0;
+  for (const t of TESTS) {
+    let res;
+    try { res = t.run(cache[t.sig]); }
+    catch (e) { res = { ok: false, measured: "err: " + e.message }; }
+    if (res.ok) passCount++;
+    rows.push(`<tr>
+      <td>${SIGNALS[t.sig].label}</td>
+      <td>${t.check}</td>
+      <td style="color:var(--dim)">${t.exp}</td>
+      <td class="r">${res.measured}</td>
+      <td><span class="tag ${res.ok?'pass':'fail'}">${res.ok?'PASS':'FAIL'}</span></td>
+    </tr>`);
+  }
+  body.innerHTML = rows.join("");
+  const all = passCount === TESTS.length;
+  summary.textContent = `${passCount}/${TESTS.length} passed`;
+  summary.className = "summary " + (all ? "allpass" : "anyfail");
+  status.textContent = all ? "all green ✓" : "see failures";
+  btn.disabled = false;
+  return { passCount, total: TESTS.length };
+}
+
+// expose for headless verification
+window.__audioLens = { runSelfTests, analyze, SIGNALS, fft, detectPitchAC, hzToNote };
+
+/* ---- init ---- */
+buildSourceButtons();
+wireFileInput();
+paintSwatch();
+document.getElementById("render").addEventListener("click", doRenderAnalyze);
+document.getElementById("runTests").addEventListener("click", runSelfTests);
+document.getElementById("freqAxisNote").textContent = "y-axis: log frequency 40 Hz → 22 kHz";
+</script>
+</body>
+</html>
