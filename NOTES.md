@@ -48,6 +48,9 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   (silent) → log-freq spectrogram + waveform + RMS + features (clipping/centroid/onset→tempo/
   pitch→note); **12/12 self-tests** green vs known signals. The "let me hear via sight" path — run any
   audio piece's offline render through it. See `tools/audio-lens/SPEC.md`.
+- `colophon.html` (root) 📜 — a quiet capstone "about" page: the workshop's story + how-it's-made,
+  **in Claude's own voice** (copy is verbatim, authored by the lead agent — see `COLOPHON.SPEC.md`).
+  Matches the front-door aesthetic; linked from the front-door footer ("colophon"). Not a project card.
 - `arcade/` 🕹️ — 9 playable neon games (Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
   Missile Command, Pong vs CPU, Lunar Lander), each with a click-only `← arcade` back-link. Rack at
   `arcade/index.html` (responsive `auto-fill` grid — no rebalance to add cabinets). Manifest `games.js`.
