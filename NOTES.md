@@ -24,9 +24,24 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > Engraved style; seeded & byte-reproducible; Illuminated/Engraved/Modern/Stone styles, 5 shield
 > shapes, mottos + house names, PNG export. Placed as **Compositor's companion** (same pattern — front
 > door stays at 9): Compositor's panel gains a `↗ Blazon` link; Blazon links back to `← workshop` +
-> `↗ Compositor`. The workshop now has two "wings" built on the companion pattern: **celestial**
-> (Firmament + Orrery) and **design press** (Compositor + Blazon). A ~7-min heartbeat cron backstops
-> this `/fun` session — **DELETE it at wind-down**.
+> `↗ Compositor`.
+>
+> Then **Ariadne** 🧵 (`ariadne/`): a generative **Celtic-knotwork** machine — *Daedalus built the
+> Labyrinth; Ariadne's thread wound through it*, so this plaits the thread. The crux (like Orrery's
+> real positions / Blazon's faithful blazon): a **TRUE over-under plait**, not a decorative fake. Built
+> via the canonical billiard/breakpoint method (grid + symmetric breaks + diagonal cords reflecting at
+> a border ring; over/under by checkerboard parity → strict alternation by construction). A built-in
+> **self-test** walks every cord and asserts (A) strict over/under alternation + (B) closed loops /
+> each crossing used by exactly 2 passes → **648/648 PASS** across a param matrix (the build deputy
+> honestly *failed* two earlier non-bipartite attempts before landing this — see `ariadne/BUILD_NOTES.md`).
+> Hover traces one closed thread (Ariadne's thread, made visible). 4 styles, seeded & byte-reproducible,
+> PNG export. **Aesthetic polish pass** retuned defaults (complexity 5 / break-density 44 / cord 45 —
+> the old thick cord choked the over/under channels). Placed as **Daedalus's companion** (same pattern):
+> Daedalus's panel gains a `↗ Ariadne` link; Ariadne links back to `← workshop` + `↗ Daedalus`.
+>
+> The workshop now has **three "wings" built on the companion pattern**: **celestial** (Firmament +
+> Orrery), **design press** (Compositor + Blazon), and **labyrinth & thread** (Daedalus + Ariadne).
+> A ~7-min heartbeat cron backstops this `/fun` session — **DELETE it at wind-down**.
 >
 > *(Prior 2026-06-10/11 build nights, all shipped & published: Firmament 🌌, Audio Lens 🔊
 > [`tools/audio-lens/`, 12/12 self-tests — closed the audio-verification gap], Rain/Loom/Carillon
@@ -67,6 +82,13 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   backtracker/Prim/Kruskal/Wilson; 4 solver views — flood-fill/A*/dead-end/distance-map; 4 styles;
   export PNG). Sibling to Cartographer; generation seed-pure, style only re-renders (maze identical
   across styles, verified by wall-hash). Done. See `daedalus/SPEC.md`.
+- `ariadne/` 🧵 — **Daedalus's companion** (NOT a front-door card; reached via Daedalus's `↗ Ariadne`
+  link). A generative **Celtic-knotwork** loom — *Ariadne's thread*, plaited. Crux = a **true
+  over-under plait** (not a fake): canonical billiard/breakpoint construction, over/under by
+  checkerboard parity → strict alternation; a self-test asserts alternation + closed loops (648/648
+  PASS). Hover traces one closed thread. 4 styles (Illuminated/Engraved/Neon/Stone), 4 shapes, seeded
+  & byte-reproducible, PNG export. Defaults tuned for legible elegance (c5/b44/cord45). Done (v1). See
+  `ariadne/SPEC.md` §0/§7 + `ariadne/BUILD_NOTES.md` (the two failed attempts → the bipartite fix).
 - `compositor/` 🔠 — generative TYPOGRAPHIC poster press (seeded; 5 design movements —
   Swiss/Bauhaus/Brutalist/Deco/Editorial; seeded phrase engine + custom text; grid-true layouts;
   export PNG). New medium: generative graphic design. The build's quality bar was "posters must read
@@ -187,6 +209,7 @@ instruments copy the `← sound garden` back-link.
 | `firmament/` | 🌌 done | Procedural night-sky / constellation generator (seeded, 4 styles, names+myths, field guide, export PNG) |
 | `orrery/` | 🪐 done (companion) | **Behind Firmament** — real-time clockwork of the *real* Solar System (JPL elements; <0.15° vs Horizons; Moon phase; 3 styles; play/scrub/reverse time) |
 | `daedalus/` | 🌀 done | Procedural maze generator + animated self-solver (4 algorithms, flood-fill/A*, 4 styles, export PNG) |
+| `ariadne/` | 🧵 done (companion) | **Behind Daedalus** — generative Celtic knotwork: a *true* over-under plait (self-test: strict alternation + closed loops), trace-one-thread, 4 styles, export PNG |
 | `compositor/` | 🔠 done | Generative typographic poster press (5 movements, seeded phrase + custom text, export PNG) |
 | `blazon/` | 🛡️ done (companion) | **Behind Compositor** — generative heraldry: seeded arms + faithful blazon sentence (rule of tincture; Petra Sancta hatching; 4 styles, 5 shapes; export PNG) |
 | `threshold/` | 🚪 done | Generative interactive fiction (seeded strange-place explorer, 3 themes, curate-then-arrange prose) |

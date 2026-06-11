@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ariadne</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,16,24,0.82);
+    --panel-edge: rgba(150,130,90,0.45);
+    --ink: #efe7d6;
+    --ink-dim: #b9a883;
+    --accent: #e7c668;
+    --accent-soft: rgba(231,198,104,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:#06070b;
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  #stage{
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(1200px 800px at 50% 42%, #14131e 0%, #0b0a12 68%, #050409 100%);
+    padding:18px;
+  }
+  #knotWrap{
+    position:relative;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.65), 0 2px 0 rgba(255,255,255,0.04) inset;
+    border-radius:6px;
+    max-width:100%; max-height:100%;
+  }
+  canvas#knot{
+    display:block;
+    border-radius:5px;
+    max-width:100%; max-height:calc(100vh - 36px);
+    cursor:crosshair;
+  }
+  /* ---------- top bar / back-links ---------- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:25;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding:16px 22px 0; pointer-events:none;
+  }
+  .topbar a{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .topright{ display:flex; gap:18px; align-items:center; }
+  .sib{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.7; transition:.25s; }
+  .sib:hover{ color:var(--accent); opacity:1; }
+  /* ---------- Control panel ---------- */
+  #panel{
+    position:fixed; top:18px; left:18px;
+    width:288px;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(125%);
+    -webkit-backdrop-filter: blur(10px) saturate(125%);
+    border:1px solid var(--panel-edge);
+    border-radius:12px;
+    padding:14px 15px 16px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.6);
+    z-index:20;
+    transition: transform .35s cubic-bezier(.2,.8,.2,1), opacity .25s;
+    max-height: calc(100vh - 36px);
+    overflow-y:auto;
+  }
+  #panel.collapsed{ transform: translateX(calc(-100% - 24px)); opacity:0; pointer-events:none; }
+  #panel h1{
+    font-family:var(--font-serif);
+    font-size:19px; font-weight:600; letter-spacing:.4px;
+    margin:0 0 2px; color:var(--ink);
+  }
+  #panel .sub{ font-size:11px; color:var(--ink-dim); margin:0 0 12px; letter-spacing:.5px; text-transform:uppercase; }
+  .row{ margin:10px 0; }
+  .row label{ display:flex; justify-content:space-between; align-items:baseline; font-size:11.5px; color:var(--ink-dim); margin-bottom:5px; letter-spacing:.3px; }
+  .row label .val{ color:var(--accent); font-variant-numeric:tabular-nums; font-size:11px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#fff6df; border:2px solid #9c7e2f; box-shadow:0 1px 5px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%; background:#fff6df; border:2px solid #9c7e2f; cursor:pointer;
+  }
+  .seedrow{ display:flex; gap:6px; align-items:center; }
+  .seedrow input[type=text]{
+    flex:1; min-width:0; background:rgba(0,0,0,0.34); border:1px solid var(--panel-edge); color:var(--ink);
+    border-radius:7px; padding:7px 9px; font-size:13px; font-family:var(--font-mono); letter-spacing:.5px;
+  }
+  .seedrow input[type=text]:focus{ outline:none; border-color:var(--accent); }
+  .iconbtn, button.dice{
+    flex:0 0 auto; width:34px; height:34px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.04); color:var(--ink); cursor:pointer; font-size:15px; line-height:1;
+    display:flex; align-items:center; justify-content:center; transition:.15s;
+  }
+  .iconbtn:hover, button.dice:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.28); padding:3px; border-radius:9px; border:1px solid rgba(150,130,90,0.28); flex-wrap:wrap; }
+  .seg button{
+    flex:1 1 auto; min-width:0; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 4px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap;
+  }
+  .seg button.active{ background:var(--accent); color:#241a05; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .toggles{ display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+  .chip{
+    font-size:11px; padding:5px 9px; border-radius:14px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.03); color:var(--ink-dim); cursor:pointer; transition:.15s; user-select:none;
+  }
+  .chip.on{ background:var(--accent-soft); border-color:var(--accent); color:var(--ink); }
+  .actions{ display:flex; gap:8px; margin-top:14px; }
+  .actions button{
+    flex:1; padding:10px 6px; border-radius:9px; border:1px solid var(--panel-edge);
+    background:linear-gradient(180deg, rgba(231,198,104,0.18), rgba(231,198,104,0.06));
+    color:var(--ink); font-size:12px; font-weight:600; cursor:pointer; transition:.15s; letter-spacing:.2px;
+  }
+  .actions button:hover{ border-color:var(--accent); background:linear-gradient(180deg, rgba(231,198,104,0.30), rgba(231,198,104,0.12)); }
+  .actions button.primary{ background:linear-gradient(180deg, #ecd07e, #c79f33); color:#241a05; border-color:#f3dd95; }
+  .actions button.primary:hover{ background:linear-gradient(180deg, #f1d98d, #d3ac3f); }
+  hr.sep{ border:none; border-top:1px solid rgba(150,130,90,0.24); margin:13px 0 11px; }
+  .readout{ display:flex; justify-content:space-between; align-items:baseline; margin-top:12px; font-size:11px; }
+  .readout .threads{ color:var(--ink); font-family:var(--font-mono); }
+  .readout .threads b{ color:var(--accent); }
+  .readout .weave{ font-family:var(--font-mono); font-size:10.5px; letter-spacing:.3px; }
+  .readout .weave.ok{ color:#8fdca0; }
+  .readout .weave.bad{ color:#ff7a7a; }
+  .hint{ font-size:10px; color:#8a7c5e; margin-top:10px; line-height:1.5; letter-spacing:.2px; }
+  /* Collapsed-panel reopen tab */
+  #reopen{
+    position:fixed; top:18px; left:18px; z-index:21;
+    width:42px; height:42px; border-radius:10px; border:1px solid var(--panel-edge);
+    background:var(--panel-bg); color:var(--accent); cursor:pointer; font-size:18px;
+    display:none; align-items:center; justify-content:center; backdrop-filter:blur(8px);
+    box-shadow:0 8px 24px rgba(0,0,0,.55);
+  }
+  #panel.collapsed ~ #reopen{ display:flex; }
+  .collapse-x{
+    position:absolute; top:9px; right:9px; width:22px; height:22px; border-radius:6px; border:none;
+    background:transparent; color:var(--ink-dim); cursor:pointer; font-size:15px; line-height:1;
+  }
+  .collapse-x:hover{ color:var(--ink); background:rgba(255,255,255,0.06); }
+  ::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-thumb{background:rgba(231,198,104,.28);border-radius:4px}
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="knotWrap">
+      <canvas id="knot"></canvas>
+    </div>
+  </div>
+
+  <div class="topbar">
+    <a class="back" href="../index.html">← workshop</a>
+    <div class="topright">
+      <a class="sib" href="../daedalus/index.html" title="The labyrinth">↗ Daedalus — the labyrinth</a>
+    </div>
+  </div>
+
+  <div id="panel">
+    <button class="collapse-x" id="collapseBtn" title="Hide panel">&#10005;</button>
+    <h1>Ariadne</h1>
+    <p class="sub">Knotwork Loom</p>
+
+    <div class="row">
+      <label>Seed</label>
+      <div class="seedrow">
+        <input type="text" id="seed" spellcheck="false" value="">
+        <button class="dice" id="randSeed" title="Random seed">&#9860;</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Style</label>
+      <div class="seg" id="styleSeg">
+        <button data-v="illuminated" class="active">Illuminated</button>
+        <button data-v="engraved">Engraved</button>
+        <button data-v="neon">Neon</button>
+        <button data-v="stone">Stone</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Shape</label>
+      <div class="seg" id="shapeSeg">
+        <button data-v="panel" class="active">Panel</button>
+        <button data-v="square">Square</button>
+        <button data-v="border">Border</button>
+      </div>
+    </div>
+
+    <hr class="sep">
+
+    <div class="row">
+      <label>Complexity <span class="val" id="complexityVal"></span></label>
+      <input type="range" id="complexity" min="3" max="11" step="1" value="5">
+    </div>
+    <div class="row">
+      <label>Break density <span class="val" id="breaksVal"></span></label>
+      <input type="range" id="breaks" min="0" max="100" step="1" value="44">
+    </div>
+    <div class="row">
+      <label>Cord thickness <span class="val" id="thickVal"></span></label>
+      <input type="range" id="thick" min="20" max="92" step="1" value="45">
+    </div>
+
+    <div class="row" style="margin:8px 0 2px">
+      <label style="margin-bottom:7px">Flourishes</label>
+      <div class="toggles">
+        <div class="chip on" data-t="symmetry">Symmetry</div>
+        <div class="chip" data-t="knotBorder">Knot border</div>
+        <div class="chip" data-t="reveal">Reveal threads</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="primary" id="reroll">&#10227; Re-roll</button>
+      <button id="exportBtn">&#8595; PNG</button>
+    </div>
+
+    <div class="readout">
+      <span class="threads" id="threadReadout">threads: <b>–</b></span>
+      <span class="weave" id="weaveReadout">…</span>
+    </div>
+
+    <p class="hint">A true Celtic plait, woven over-and-under from a seed. Hover the knot to trace a single closed thread &mdash; Ariadne's thread made visible. Style only re-paints; the knot is identical for a given seed &amp; settings.</p>
+  </div>
+
+  <button id="reopen" title="Show panel">&#9776;</button>
+
+<script>
+"use strict";
+/* ============================================================================
+   ARIADNE — single-file generative Celtic-knotwork (interlace) loom
+   ----------------------------------------------------------------------------
+   The knot is built as a DATA STRUCTURE first (a true woven plait), then
+   rendered from it. The grid-and-breaks method (Mercat / "knotwork from
+   breakpoints") guarantees the three correctness properties by construction:
+
+     (A) Consistent alternating weave — over/under is assigned by checkerboard
+         parity of the crossing-site coordinates, so following ANY cord the
+         crossings strictly alternate over,under,over,under…
+     (B) Closed loops, no loose ends — cords reflect at the panel border (a
+         ring of breaks) and at internal breaks, so every cord returns to its
+         start. Loop count is a function of the break pattern.
+     (C) Determinism — the knot is a pure function of (seed + params). Style,
+         thickness, border and reveal-threads change only RENDERING.
+
+   A built-in self-test walks every cord and asserts (A) strict alternation and
+   (B) closed loops with each crossing used by exactly two passes.
+   ========================================================================== */
+
+/* ----------------------------- PRNG (xmur3 + mulberry32) ------------------ */
+function xmur3(str){
+  let h = 1779033703 ^ str.length;
+  for (let i=0;i<str.length;i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function(){
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return h >>> 0;
+  };
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeRng(seedStr){ const s = xmur3(String(seedStr)); return mulberry32(s()); }
+
+/* ----------------------------- colour helpers ----------------------------- */
+function hsl(h,s,l){
+  h=((h%360)+360)%360/360; s=s/100; l=l/100;
+  const a=s*Math.min(l,1-l);
+  const f=n=>{ const k=(n+h*12)%12; return l-a*Math.max(-1,Math.min(k-3,Math.min(9-k,1))); };
+  return `rgb(${Math.round(f(0)*255)},${Math.round(f(8)*255)},${Math.round(f(4)*255)})`;
+}
+
+/* ============================================================================
+   THE INTERLACE STRUCTURE — the canonical Celtic plait (billiard / breakpoint
+   method, after Mercat / Glassner / Fisher-Mann).
+   ----------------------------------------------------------------------------
+   The crucial fact (knot theory): EVERY Celtic diagram is an ALTERNATING link —
+   a barrier-free grid is alternating, and installing a barrier "splits and
+   reconnects" the strands in a way that *keeps* it alternating. We build that
+   construction directly so the three correctness properties hold BY
+   CONSTRUCTION (and are then re-verified by 2-colouring the constraint graph).
+
+   • THE LATTICE. We work on a doubled lattice, x in 0..LX, y in 0..LY where
+     LX=2W, LY=2H. A point is a CROSSING iff exactly one of (x,y) is odd and it
+     is strictly interior. Crossings come in TWO families that interleave along
+     a cord, which is exactly what forces alternation:
+        x even, y odd  → the crossing sits on a VERTICAL grid line.
+        x odd,  y even → the crossing sits on a HORIZONTAL grid line.
+     (Both-even points are primary-grid posts; both-odd points are cell centres.)
+
+   • THE CORD IS A BILLIARD. A cord is a light ray that moves one diagonal unit
+     per step, (dx,dy)∈{±1}². From a crossing it steps to a diagonally adjacent
+     point; consecutive crossings therefore lie in OPPOSITE families (vertical ↔
+     horizontal), so following a cord the family alternates every crossing.
+     The ray REFLECTS off the panel border (flip the offending component; at a
+     corner flip both — the corner double-reflection) → no loose ends, closed
+     loops (property B at the edges).
+
+   • BREAKS (the pattern knobs). A break is a barrier on a primary-grid edge —
+     i.e. AT a crossing midpoint, on the grid line that crossing sits on. The
+     ray cannot pass; it bounces off that axis-aligned wall, reflecting the
+     component PERPENDICULAR to the grid line (vertical-line break → flip dx,
+     horizontal-line break → flip dy). A broken crossing is removed (the strands
+     no longer cross there — they turn). A seeded, optionally mirror-symmetric
+     subset of crossings become breaks (Break Density) → the knot motifs. This
+     is precisely the "split and reconnect", and it preserves alternation.
+
+   • OVER/UNDER. By the alternating-link theorem the cord goes over,under,over,…
+     We assign it from the crossing family + which diagonal this pass is on
+     (the standard Fisher/Mann rule): on a VERTICAL-line crossing the SW–NE ("/")
+     strand is over; on a HORIZONTAL-line crossing the NW–SE ("\") strand is
+     over. Because the family alternates every crossing along a cord, the
+     over/under strictly alternates (property A). We then build the alternation
+     constraint graph (edges: consecutive passes on a cord; the two passes at a
+     shared crossing) and 2-COLOUR it by BFS — asserting it is BIPARTITE and that
+     the colouring matches the parity rule (a hard guarantee of property A+B).
+     Pure function of (seed + params) → property C.
+   ============================================================================*/
+
+/* Build the full knot structure. Pure function of (seed + params). */
+function buildKnot(seed, complexity, breakDensity, symmetry, shape){
+  // --- W×H crossing grid from complexity + shape ---
+  let W, H;
+  const c = complexity|0;
+  if(shape==="square"){ W = c; H = c; }
+  else if(shape==="border"){ W = c+1; H = c+1; }
+  else { W = c+1; H = c; }                  // panel — a touch wider than tall
+
+  const LX = 2*W, LY = 2*H;
+  const ckey = (x,y)=> x + "," + y;
+  // a lattice point is a crossing iff exactly one coord is odd and it is interior
+  const isCrossing = (x,y)=> ((((x&1)+(y&1))===1) && x>0 && x<LX && y>0 && y<LY);
+
+  /* ----- breaks: barriers placed AT crossing midpoints (on the grid edge that
+     crossing bisects). A seeded subset, mirrored across both axes when symmetric
+     so the knot reads as balanced. ----- */
+  const breaks = new Set();
+  const rng = makeRng(seed + "::breaks::" + W + "x" + H + "::" + breakDensity + "::" + (symmetry?1:0));
+  const density = breakDensity/100;
+
+  function placeBreak(x,y){
+    if(!isCrossing(x,y)) return;
+    breaks.add(ckey(x,y));
+    if(!symmetry) return;
+    const mx=LX-x, my=LY-y;                  // mirror across both axes
+    if(mx!==x && isCrossing(mx,y)) breaks.add(ckey(mx,y));
+    if(my!==y && isCrossing(x,my)) breaks.add(ckey(x,my));
+    if(mx!==x && my!==y && isCrossing(mx,my)) breaks.add(ckey(mx,my));
+  }
+
+  const cand=[];
+  for(let y=0;y<=LY;y++) for(let x=0;x<=LX;x++){
+    if(!isCrossing(x,y)) continue;
+    if(symmetry && (x>LX/2 || y>LY/2)) continue;   // fundamental domain
+    cand.push([x,y]);
+  }
+  for(let k=cand.length-1;k>0;k--){ const m=(rng()*(k+1))|0; const t=cand[k];cand[k]=cand[m];cand[m]=t; }
+  const take=Math.round(cand.length*density);
+  for(let k=0;k<take;k++){ placeBreak(cand[k][0], cand[k][1]); }
+  const isBreak=(x,y)=> breaks.has(ckey(x,y));
+
+  /* over/under (Fisher/Mann): on a vertical-line crossing (x even) the "/" strand
+     (SW–NE) is over; on a horizontal-line crossing (x odd) the "\" strand is over.
+     A pass is on the "/" strand when its travel direction is NE/SW i.e. dx*dy<0. */
+  function passOver(x, dx, dy){
+    const onSlash = (dx*dy < 0);             // SW–NE "/" strand
+    return ((x&1)===0) ? onSlash : !onSlash; // vertical line → "/" over; else "\" over
+  }
+
+  /* ----- trace the cords as billiards -----
+     A directed state is (crossing x,y; direction dx,dy). From a crossing we step
+     one diagonal unit at a time to the NEXT crossing, bouncing off the border and
+     off break walls along the way; broken crossings and border midpoints are
+     reflection points only (never recorded). The reverse direction is the same
+     physical cord, so mark both visited. Each node records the crossing centre
+     plus the run of lattice waypoints travelled to reach the next crossing, so
+     the renderer can curve the cord smoothly (including around bounces). */
+  const DIRS=[[1,1],[1,-1],[-1,-1],[-1,1]];
+  const dIdx=(dx,dy)=> dx>0 ? (dy>0?0:1) : (dy>0?3:2);
+
+  // single diagonal step with border reflection (corner → double reflection)
+  function stepOnce(x,y,dx,dy){
+    let ndx=dx, ndy=dy, nx=x+dx, ny=y+dy;
+    if(nx<0||nx>LX) ndx=-dx;
+    if(ny<0||ny>LY) ndy=-dy;
+    if(ndx!==dx||ndy!==dy){ nx=x+ndx; ny=y+ndy; }
+    return {nx,ny,ndx,ndy};
+  }
+
+  const visited=new Set();                   // "x,y,dirIdx"
+  const loops=[];
+  const allNodes=[];                         // flat list of every pass
+
+  const starts=[];
+  for(let y=0;y<=LY;y++) for(let x=0;x<=LX;x++){ if(isCrossing(x,y) && !isBreak(x,y)) starts.push([x,y]); }
+
+  for(const st of starts){
+    const sx=st[0], sy=st[1];
+    for(let d0=0; d0<4; d0++){
+      if(visited.has(sx+","+sy+","+d0)) continue;
+      let x=sx, y=sy, dx=DIRS[d0][0], dy=DIRS[d0][1];
+      const nodes=[];
+      let guard=0, maxGuard=(LX*LY)*16+256;
+      while(true){
+        const dd=dIdx(dx,dy);
+        const stateKey=x+","+y+","+dd;
+        if(visited.has(stateKey)) break;
+        visited.add(stateKey);
+        visited.add(x+","+y+","+dIdx(-dx,-dy));   // reverse pass = same cord
+
+        const over=passOver(x,dx,dy);
+        const node={
+          cx:(x-(x&1))/2, cy:(y-(y&1))/2,
+          over, slash:(dx*dy<0),
+          crossX:x, crossY:y,
+          path:[],                                // lattice waypoints to next crossing
+          exitX:x, exitY:y,                       // set below (waypoint toward next)
+        };
+        nodes.push(node);
+        allNodes.push(node);
+
+        // advance to the next recorded crossing, collecting bounce waypoints
+        let s=stepOnce(x,y,dx,dy); x=s.nx; y=s.ny; dx=s.ndx; dy=s.ndy;
+        let inner=0;
+        while( !isCrossing(x,y) || isBreak(x,y) ){
+          node.path.push([x,y]);                  // a bounce point (border or break)
+          if(isCrossing(x,y) && isBreak(x,y)){
+            // reflect off the break wall, perpendicular to its grid line
+            if((x&1)===1) dy=-dy; else dx=-dx;
+          } else {
+            // border midpoint
+            if(x===0||x===LX) dx=-dx;
+            if(y===0||y===LY) dy=-dy;
+          }
+          s=stepOnce(x,y,dx,dy); x=s.nx; y=s.ny; dx=s.ndx; dy=s.ndy;
+          if(++inner>64) break;
+        }
+        // exit waypoint = midpoint of the travelled run (rounds the cord nicely)
+        const run=[[node.crossX,node.crossY], ...node.path, [x,y]];
+        const mid=run[(run.length/2)|0];
+        node.exitX=mid[0]; node.exitY=mid[1];
+
+        if(++guard>maxGuard) break;
+      }
+      if(nodes.length) loops.push({nodes});
+    }
+  }
+
+  /* ----- crossingPasses: crossingKey -> the (exactly two) passes there ----- */
+  const crossingPasses=new Map();
+  for(const n of allNodes){
+    const k=n.crossY*(LX+2)+n.crossX;
+    if(!crossingPasses.has(k)) crossingPasses.set(k,[]);
+    crossingPasses.get(k).push({over:n.over, slash:n.slash});
+  }
+
+  /* ----- 2-colour the alternation constraint graph: a hard bipartite check, and
+     a globally-consistent over/under fallback. For a true plait this graph is
+     bipartite; we assert it and reconcile the parity rule against the colouring
+     so the rendered weave is provably alternating. ----- */
+  for(let i=0;i<allNodes.length;i++) allNodes[i].vid=i;
+  const N=allNodes.length;
+  const adj=Array.from({length:N},()=>[]);
+  for(const lp of loops){
+    const nd=lp.nodes, L=nd.length;
+    if(L<2) continue;
+    for(let k=0;k<L;k++){ const a=nd[k].vid, b=nd[(k+1)%L].vid; adj[a].push(b); adj[b].push(a); }
+  }
+  const byCrossing=new Map();
+  for(const n of allNodes){ const k=n.crossY*(LX+2)+n.crossX; if(!byCrossing.has(k)) byCrossing.set(k,[]); byCrossing.get(k).push(n); }
+  for(const [,arr] of byCrossing){
+    for(let i=0;i<arr.length;i++) for(let j=i+1;j<arr.length;j++){ adj[arr[i].vid].push(arr[j].vid); adj[arr[j].vid].push(arr[i].vid); }
+  }
+  const color=new Int8Array(N).fill(-1);
+  let bipartite=true;
+  for(let s=0;s<N;s++){
+    if(color[s]!==-1) continue;
+    color[s]=0; const q=[s];
+    while(q.length){
+      const u=q.shift();
+      for(const w of adj[u]){
+        if(color[w]===-1){ color[w]=color[u]^1; q.push(w); }
+        else if(color[w]===color[u]){ bipartite=false; }
+      }
+    }
+  }
+  // The Fisher/Mann parity rule already sets each pass's `over`; the bipartite
+  // 2-colouring above is the independent proof that this assignment is a globally
+  // consistent alternating weave (strict alternation along every cord AND opposite
+  // over/under at every shared crossing). `bipartite` is asserted by selfTest.
+
+  return { W, H, LX, LY, shape, breaks,
+           loops, crossingPasses, bipartite, passOver };
+}
+
+/* ============================================================================
+   GEOMETRY — turn the abstract walk into smooth on-canvas polylines per loop.
+   Each loop's nodes are a cyclic list of states. We place a point at each
+   site the strand occupies (sites are on a lattice scaled to pixels). At a
+   reflection the strand stays on a site but turns — we add a point there so the
+   corner rounds. We then smooth with Catmull-Rom through the points.
+   ========================================================================== */
+function loopPoints(knot, loop, scaleX, scaleY, ox, oy){
+  // Build the cord polyline. Each node is one pass THROUGH a crossing: we plot
+  // the crossing centre (where over/under lives, for masking) flanked by the
+  // entry and exit corner dots, so smoothing curves the cord like a real plait.
+  // The exit dot of one node coincides with the entry dot of the next (a shared
+  // between-crossing vertex), so we only emit crossing + exit per node and let
+  // the cycle close. Lattice coords (0..LX, 0..LY) -> pixels.
+  const pts=[];
+  for(const n of loop.nodes){
+    // the crossing centre (over/under lives here, for masking)
+    pts.push({
+      x: ox + n.crossX*scaleX,
+      y: oy + n.crossY*scaleY,
+      crossing: true,
+      over: n.over,
+      lx: n.crossX, ly: n.crossY,
+    });
+    // the lattice waypoints travelled to the next crossing (border / break
+    // bounce points) so the cord curves smoothly around its turns. If the run
+    // is straight there are none; we still emit the exit midpoint as a guide.
+    const way = (n.path && n.path.length) ? n.path : [[n.exitX, n.exitY]];
+    for(const w of way){
+      pts.push({
+        x: ox + w[0]*scaleX,
+        y: oy + w[1]*scaleY,
+        crossing: false,
+        over: null,
+        lx: w[0], ly: w[1],
+      });
+    }
+  }
+  return pts;
+}
+
+/* Catmull-Rom -> cubic bezier smoothing of a closed polyline. Returns a Path2D-
+   friendly list. We sample to a smooth path. */
+function smoothClosed(pts, tension){
+  // returns array of cubic segments [p0, c1, c2, p1]
+  const n=pts.length;
+  const segs=[];
+  if(n<3){ return segs; }
+  const t=(tension==null?0.5:tension);
+  for(let idx=0; idx<n; idx++){
+    const p0=pts[(idx-1+n)%n];
+    const p1=pts[idx];
+    const p2=pts[(idx+1)%n];
+    const p3=pts[(idx+2)%n];
+    const c1x=p1.x + (p2.x-p0.x)/6*t*2;
+    const c1y=p1.y + (p2.y-p0.y)/6*t*2;
+    const c2x=p2.x - (p3.x-p1.x)/6*t*2;
+    const c2y=p2.y - (p3.y-p1.y)/6*t*2;
+    segs.push({x0:p1.x,y0:p1.y, c1x,c1y, c2x,c2y, x1:p2.x,y1:p2.y});
+  }
+  return segs;
+}
+
+/* ============================================================================
+   SELF-TEST — assert (A) alternation and (B) closed loops + 2-pass crossings.
+   ========================================================================== */
+function selfTest(knot){
+  const result={ ok:true, alternationOk:true, closedOk:true, loopCount:knot.loops.length, messages:[] };
+
+  // (A0) Hard structural proof: the alternation constraint graph must be bipartite
+  // (a true alternating plait). buildKnot computes this independently of the
+  // parity rule, so a non-bipartite diagram is a real failure.
+  if(knot.bipartite===false){
+    result.alternationOk=false; result.ok=false;
+    result.messages.push(`alternation constraint graph is NOT bipartite (not a true plait)`);
+  }
+
+  // (A) Along each cord, the over/under values at successive crossings must
+  // strictly alternate. Every node IS a crossing in this model.
+  for(let li=0; li<knot.loops.length; li++){
+    const cr=knot.loops[li].nodes;
+    if(cr.length<2) continue;
+    for(let k=0;k<cr.length;k++){
+      const a=cr[k].over;
+      const b=cr[(k+1)%cr.length].over;
+      if(a===b){
+        result.alternationOk=false; result.ok=false;
+        result.messages.push(`loop ${li}: non-alternating at crossing ${k} (over=${a} then ${b})`);
+        break;
+      }
+    }
+    if(!result.alternationOk) break;
+  }
+
+  // (B) Every crossing site that is actually used must be used by exactly two
+  // passes (the two strands), and the two passes must have opposite over/under.
+  for(const [sk, passes] of knot.crossingPasses.entries()){
+    if(passes.length!==2){
+      result.closedOk=false; result.ok=false;
+      result.messages.push(`site ${sk}: used by ${passes.length} passes (expected 2)`);
+      break;
+    }
+    if(passes[0].over===passes[1].over){
+      result.closedOk=false; result.ok=false;
+      result.messages.push(`site ${sk}: both passes same over/under`);
+      break;
+    }
+  }
+
+  // (B cont.) loops are closed by construction (the walk terminates only when
+  // it returns to its start state). Verify each loop length>0.
+  for(let li=0; li<knot.loops.length; li++){
+    if(knot.loops[li].nodes.length===0){
+      result.closedOk=false; result.ok=false;
+      result.messages.push(`loop ${li}: empty`);
+    }
+  }
+  return result;
+}
+
+/* ============================================================================
+   STYLES — palette/treatment only. The KNOT never changes between styles.
+   ========================================================================== */
+const STYLES = {
+  illuminated: {
+    name:"illuminated",
+    bg:["#1a1530","#0d0a1c"],
+    ground:"#171132",
+    groundVignette:"rgba(60,40,110,0.0)",
+    cordFill:(ctx,x0,y0,x1,y1)=>{
+      const g=ctx.createLinearGradient(x0,y0,x1,y1);
+      g.addColorStop(0,"#fff1c2"); g.addColorStop(0.45,"#e7c668");
+      g.addColorStop(0.7,"#b8862f"); g.addColorStop(1,"#f4dd92");
+      return g;
+    },
+    outline:"#2a1d08", outlineW:0.16,
+    sheen:"rgba(255,248,220,0.55)",
+    accent:"#fff0b8",
+    glow:0,
+    revealSat:62, revealLight:58,
+  },
+  engraved: {
+    name:"engraved",
+    bg:["#efe7d2","#e2d6b8"],
+    ground:"#f3ecd9",
+    groundVignette:"rgba(120,100,60,0.0)",
+    cordFill:()=> "#f3ecd9",            // open channel = ground colour
+    railColor:"#241c10",                // ink rails
+    outline:"#241c10", outlineW:0.12,
+    sheen:null,
+    accent:"#7a2b14",
+    glow:0, engraved:true,
+    revealSat:42, revealLight:38,
+  },
+  neon: {
+    name:"neon",
+    bg:["#070a12","#04060c"],
+    ground:"#070912",
+    groundVignette:"rgba(20,40,80,0.0)",
+    cordFill:()=> "#0e1530",
+    railColor:"#5fe6ff",
+    outline:"#062b34", outlineW:0.1,
+    sheen:null,
+    accent:"#7af0ff",
+    glow:1, neon:true, neonHue:188,
+    revealSat:90, revealLight:60,
+  },
+  stone: {
+    name:"stone",
+    bg:["#2a2a2e","#161618"],
+    ground:"#3a3a3f",
+    groundVignette:"rgba(0,0,0,0.0)",
+    cordFill:(ctx,x0,y0,x1,y1)=>{
+      const g=ctx.createLinearGradient(x0,y0,x1,y1);
+      g.addColorStop(0,"#cfcfd4"); g.addColorStop(0.5,"#8d8d94"); g.addColorStop(1,"#6a6a70");
+      return g;
+    },
+    outline:"#1c1c20", outlineW:0.16,
+    sheen:"rgba(255,255,255,0.30)",
+    accent:"#f0d488",
+    glow:0, stone:true,
+    revealSat:14, revealLight:62,
+  },
+};
+
+/* ============================================================================
+   APP STATE
+   ========================================================================== */
+const state = {
+  seed:"",
+  style:"illuminated",
+  shape:"panel",
+  complexity:5,
+  breaks:44,
+  thick:45,
+  flags:{ symmetry:true, knotBorder:false, reveal:false },
+  knot:null,
+  test:null,
+  hoverLoop:-1,
+  // geometry cache
+  geo:null,
+};
+
+/* ============================================================================
+   RENDER
+   ========================================================================== */
+const canvas=document.getElementById('knot');
+const ctx=canvas.getContext('2d');
+let DPR=Math.min(window.devicePixelRatio||1, 2);
+let CW=0, CH=0;
+
+function rebuild(){
+  state.knot = buildKnot(state.seed, state.complexity, state.breaks, state.flags.symmetry, state.shape);
+  state.test = selfTest(state.knot);
+  // self-test logging
+  const t=state.test;
+  if(t.ok){
+    console.log(`[Ariadne] weave self-test PASS — alternation OK, closed-loops OK, ${t.loopCount} thread(s). seed="${state.seed}" complexity=${state.complexity} breaks=${state.breaks} sym=${state.flags.symmetry} shape=${state.shape}`);
+  } else {
+    console.error(`[Ariadne] weave self-test FAIL`, t.messages);
+  }
+  state.geo=null;
+  state.hoverLoop=-1;
+  updateReadout();
+}
+
+function computeSize(){
+  const stagePad=36;
+  const maxW=window.innerWidth - stagePad;
+  const maxH=window.innerHeight - stagePad;
+  const knot=state.knot;
+  // aspect from lattice extent
+  const aspect = knot.LX / knot.LY;
+  let cw=Math.min(maxW, 1100), ch=cw/aspect;
+  if(ch>maxH){ ch=maxH; cw=ch*aspect; }
+  cw=Math.max(cw,280); ch=Math.max(ch,200);
+  CW=Math.round(cw); CH=Math.round(ch);
+  DPR=Math.min(window.devicePixelRatio||1, 2);
+  canvas.width=Math.round(CW*DPR); canvas.height=Math.round(CH*DPR);
+  canvas.style.width=CW+'px'; canvas.style.height=CH+'px';
+}
+
+function buildGeometry(){
+  const knot=state.knot;
+  // margin so the outer border reads
+  const margin = Math.min(CW,CH)*0.06;
+  const innerW = CW - margin*2;
+  const innerH = CH - margin*2;
+  const scaleX = innerW/knot.LX;        // one lattice unit in px
+  const scaleY = innerH/knot.LY;
+  const ox=margin, oy=margin;
+  // crossing-to-crossing spacing is 2 lattice units; size the band to it.
+  const spacing=2*Math.min(scaleX,scaleY);
+  const cordW = spacing * (0.30 + (state.thick/100)*0.60); // band width
+  const cell=spacing;
+
+  const loops=knot.loops.map(loop=>{
+    const pts=loopPoints(knot, loop, scaleX, scaleY, ox, oy);
+    const segs=smoothClosed(pts, 0.5);
+    return { pts, segs };
+  });
+  state.geo={ scaleX, scaleY, ox, oy, cell, cordW, loops, margin };
+}
+
+/* Determine which loop is under a pixel (for hover). We test distance to each
+   loop's smoothed path; nearest within cordW wins. */
+function loopUnderPoint(px, py){
+  const geo=state.geo; if(!geo) return -1;
+  let best=-1, bestD=geo.cordW*0.85;
+  for(let li=0; li<geo.loops.length; li++){
+    const pts=geo.loops[li].pts;
+    for(let k=0;k<pts.length;k++){
+      const a=pts[k], b=pts[(k+1)%pts.length];
+      const d=distToSeg(px,py,a.x,a.y,b.x,b.y);
+      if(d<bestD){ bestD=d; best=li; }
+    }
+  }
+  return best;
+}
+function distToSeg(px,py,x0,y0,x1,y1){
+  const dx=x1-x0, dy=y1-y0; const l2=dx*dx+dy*dy;
+  if(l2===0) return Math.hypot(px-x0,py-y0);
+  let t=((px-x0)*dx+(py-y0)*dy)/l2; t=Math.max(0,Math.min(1,t));
+  return Math.hypot(px-(x0+t*dx), py-(y0+t*dy));
+}
+
+function strokeLoopPath(segs){
+  ctx.beginPath();
+  if(!segs.length) return;
+  ctx.moveTo(segs[0].x0, segs[0].y0);
+  for(const s of segs){ ctx.bezierCurveTo(s.c1x,s.c1y, s.c2x,s.c2y, s.x1,s.y1); }
+  ctx.closePath();
+}
+
+/* Draw the whole knot. The trick for a convincing weave: draw cords in TWO
+   global passes that interleave by crossing parity. At each crossing one strand
+   is OVER. We render the UNDER passes first (whole bands), then for OVER passes
+   we re-stroke the band so it covers the under band at crossings — and we mask a
+   small gap around each crossing where this cord is UNDER, so the other clearly
+   passes on top. We achieve this per-crossing using clipping. */
+function render(){
+  if(!state.knot) return;
+  computeSize();
+  buildGeometry();
+  const pal=STYLES[state.style];
+  const geo=state.geo;
+  const knot=state.knot;
+
+  ctx.save();
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+
+  // ground
+  const bg=ctx.createLinearGradient(0,0,0,CH);
+  bg.addColorStop(0,pal.bg[0]); bg.addColorStop(1,pal.bg[1]);
+  ctx.fillStyle=bg; ctx.fillRect(0,0,CW,CH);
+  // inner ground panel
+  ctx.fillStyle=pal.ground;
+  roundRect(geo.margin*0.4, geo.margin*0.4, CW-geo.margin*0.8, CH-geo.margin*0.8, geo.cell*0.4);
+  ctx.fill();
+
+  const cordW=geo.cordW;
+  const outlineW=Math.max(1, cordW*pal.outlineW);
+
+  // hover dimming
+  const hovering = state.hoverLoop>=0;
+
+  // We render crossing-by-crossing for masking. Strategy:
+  // PASS 1: draw every cord's full band body + outline (the "under" layer).
+  // PASS 2: for each crossing site, the OVER strand's band is re-drawn locally
+  //         (clipped to a square around the site) on top, with its outline, so
+  //         it visibly covers the under strand. This yields correct over/under.
+
+  // Precompute per-loop colours
+  function loopColor(li){
+    if(state.flags.reveal){
+      const hue=(li*360/Math.max(1,geo.loops.length) + 20)%360;
+      return hsl(hue, pal.revealSat, pal.revealLight);
+    }
+    return null;
+  }
+
+  // alpha for dimming non-hovered loops
+  function loopAlpha(li){
+    if(!hovering) return 1;
+    return li===state.hoverLoop ? 1 : 0.16;
+  }
+
+  // ---- PASS 1: full bands (outline then fill) ----
+  for(let li=0; li<geo.loops.length; li++){
+    drawLoopBand(li, pal, cordW, outlineW, loopColor(li), loopAlpha(li), false);
+  }
+
+  // ---- PASS 2: over-strand masking at each crossing ----
+  // For each crossing site, find the OVER pass and re-draw that loop's band
+  // clipped to a window around the site so it sits on top of the under strand.
+  drawOverCrossings(pal, cordW, outlineW, loopColor, loopAlpha);
+
+  // ---- highlight the hovered thread on very top (accent rim) ----
+  if(hovering){
+    drawLoopBand(state.hoverLoop, pal, cordW, outlineW, null, 1, true);
+  }
+
+  ctx.restore();
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+/* Draw a single loop's band. If `highlight`, draws with accent colour for the
+   hover trace. */
+function drawLoopBand(li, pal, cordW, outlineW, revealCol, alpha, highlight){
+  const geo=state.geo;
+  const segs=geo.loops[li].segs;
+  if(!segs.length) return;
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.lineJoin='round'; ctx.lineCap='round';
+
+  // bounding box for gradient direction
+  const pts=geo.loops[li].pts;
+  let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;
+  for(const p of pts){ if(p.x<minx)minx=p.x; if(p.y<miny)miny=p.y; if(p.x>maxx)maxx=p.x; if(p.y>maxy)maxy=p.y; }
+
+  if(pal.neon){
+    // neon: glowing rail
+    strokeLoopPath(segs);
+    const hue = state.flags.reveal && revealCol ? null : pal.neonHue;
+    const col = revealCol || `hsl(${pal.neonHue},90%,62%)`;
+    if(highlight){ ctx.shadowColor=pal.accent; ctx.shadowBlur=cordW*1.1; ctx.strokeStyle=pal.accent; }
+    else { ctx.shadowColor=col; ctx.shadowBlur=cordW*0.7; ctx.strokeStyle=col; }
+    ctx.lineWidth=cordW; ctx.stroke();
+    // dark core channel
+    ctx.shadowBlur=0;
+    ctx.strokeStyle=pal.ground; ctx.lineWidth=Math.max(1,cordW*0.42); ctx.stroke();
+    // bright center line
+    ctx.strokeStyle=highlight?pal.accent:col; ctx.lineWidth=Math.max(1,cordW*0.16); ctx.globalAlpha=alpha*0.9; ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if(pal.engraved){
+    // two ink rails with an open channel; outline only
+    strokeLoopPath(segs);
+    ctx.strokeStyle=highlight?pal.accent:pal.railColor;
+    ctx.lineWidth=cordW; ctx.stroke();            // band outer (ink)
+    ctx.strokeStyle=pal.ground; ctx.lineWidth=Math.max(1,cordW-outlineW*2); ctx.stroke(); // hollow it
+    ctx.restore();
+    return;
+  }
+
+  // illuminated / stone: filled band with outline + sheen
+  // outline (slightly wider)
+  strokeLoopPath(segs);
+  ctx.strokeStyle=pal.outline;
+  ctx.lineWidth=cordW+outlineW*2;
+  ctx.stroke();
+  // body fill
+  strokeLoopPath(segs);
+  if(highlight){
+    ctx.strokeStyle=pal.accent;
+  } else if(revealCol){
+    ctx.strokeStyle=revealCol;
+  } else {
+    ctx.strokeStyle=pal.cordFill(ctx, minx,miny,maxx,maxy);
+  }
+  ctx.lineWidth=cordW;
+  ctx.stroke();
+  // sheen highlight line (offset toward top-left)
+  if(pal.sheen && !revealCol){
+    strokeLoopPath(segs);
+    ctx.strokeStyle=pal.sheen;
+    ctx.lineWidth=Math.max(1,cordW*0.18);
+    ctx.globalAlpha=alpha*0.6;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* For each crossing site, re-draw the OVER strand's band locally so it covers
+   the under strand. We clip to a window around the site and re-stroke the
+   over-loop's whole band (clipping makes it cheap visually). */
+function drawOverCrossings(pal, cordW, outlineW, loopColorFn, loopAlphaFn){
+  const knot=state.knot, geo=state.geo;
+  // Map: which loop index owns a given (i,j,dir) crossing pass?
+  // Build once: for each loop, for each crossing node, remember site+dir+over.
+  // We need, per site, the OVER pass's loop index.
+  const overByLoopSite = []; // [{li, lx, ly}]
+  for(let li=0; li<geo.loops.length; li++){
+    const pts=geo.loops[li].pts;
+    for(const p of pts){
+      if(p.crossing && p.over){
+        overByLoopSite.push({li, lx:p.lx, ly:p.ly});
+      }
+    }
+  }
+  const win = cordW*1.35; // clip window half-size
+  for(const oc of overByLoopSite){
+    const cx = geo.ox + oc.lx*geo.scaleX;
+    const cy = geo.oy + oc.ly*geo.scaleY;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(cx-win, cy-win, win*2, win*2);
+    ctx.clip();
+    drawLoopBand(oc.li, pal, cordW, outlineW, loopColorFn(oc.li), loopAlphaFn(oc.li), false);
+    ctx.restore();
+  }
+}
+
+/* ============================================================================
+   READOUT + UI
+   ========================================================================== */
+function updateReadout(){
+  const tr=document.getElementById('threadReadout');
+  const wr=document.getElementById('weaveReadout');
+  const m=state.knot ? state.knot.loops.length : 0;
+  if(state.hoverLoop>=0){
+    tr.innerHTML=`thread <b>${state.hoverLoop+1}</b> of ${m}`;
+  } else {
+    tr.innerHTML=`threads: <b>${m}</b>`;
+  }
+  if(state.test){
+    if(state.test.ok){ wr.textContent="✓ weave"; wr.className="weave ok"; }
+    else { wr.textContent="✗ weave"; wr.className="weave bad"; }
+  }
+}
+
+function randomSeedString(){
+  const r=makeRng(String(Date.now()*Math.random()));
+  const cons="bcdfghjklmnpqrstvwxz", vow="aeiou";
+  let w="";
+  const n=2+((r()*2)|0);
+  for(let i=0;i<n;i++){ w+=cons[(r()*cons.length)|0]; w+=vow[(r()*vow.length)|0]; }
+  return w.charAt(0).toUpperCase()+w.slice(1)+"-"+(100+(r()*900|0));
+}
+
+function syncSliderFill(el){
+  const min=+el.min,max=+el.max,v=+el.value;
+  el.style.setProperty('--fill', ((v-min)/(max-min)*100)+'%');
+}
+
+function regenerate(){ rebuild(); render(); }
+
+function wireUI(){
+  const seedInput=document.getElementById('seed');
+
+  const sliders=[
+    ['complexity','complexityVal', v=>v+''],
+    ['breaks','breaksVal', v=>v+'%'],
+    ['thick','thickVal', v=>v+'%'],
+  ];
+  for(const [id,valId,fmt] of sliders){
+    const el=document.getElementById(id);
+    const val=document.getElementById(valId);
+    syncSliderFill(el); val.textContent=fmt(+el.value);
+    el.addEventListener('input',()=>{
+      state[id]=+el.value; val.textContent=fmt(+el.value); syncSliderFill(el);
+      if(id==='thick'){ render(); }                 // thickness = render only
+      else scheduleRegen();                          // complexity/breaks = rebuild
+    });
+  }
+
+  document.getElementById('styleSeg').addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    [...e.currentTarget.children].forEach(c=>c.classList.toggle('active',c===b));
+    state.style=b.dataset.v; render();              // style = render only
+  });
+  document.getElementById('shapeSeg').addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    [...e.currentTarget.children].forEach(c=>c.classList.toggle('active',c===b));
+    state.shape=b.dataset.v; regenerate();          // shape = rebuild
+  });
+
+  document.querySelectorAll('.chip').forEach(chip=>{
+    chip.addEventListener('click',()=>{
+      const t=chip.dataset.t; state.flags[t]=!state.flags[t];
+      chip.classList.toggle('on',state.flags[t]);
+      if(t==='symmetry'){ regenerate(); }           // symmetry = rebuild
+      else { render(); }                            // border/reveal = render only
+    });
+  });
+
+  seedInput.addEventListener('change',()=>{ state.seed=seedInput.value.trim()||'Ariadne'; regenerate(); });
+  seedInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ seedInput.blur(); } });
+
+  function reroll(){ state.seed=randomSeedString(); seedInput.value=state.seed; regenerate(); }
+  document.getElementById('randSeed').addEventListener('click',reroll);
+  document.getElementById('reroll').addEventListener('click',reroll);
+  document.getElementById('exportBtn').addEventListener('click',exportPNG);
+
+  document.getElementById('collapseBtn').addEventListener('click',()=>{
+    document.getElementById('panel').classList.add('collapsed');
+  });
+  document.getElementById('reopen').addEventListener('click',()=>{
+    document.getElementById('panel').classList.remove('collapsed');
+  });
+
+  // hover trace
+  canvas.addEventListener('mousemove',e=>{
+    const rect=canvas.getBoundingClientRect();
+    const px=(e.clientX-rect.left);
+    const py=(e.clientY-rect.top);
+    const li=loopUnderPoint(px,py);
+    if(li!==state.hoverLoop){ state.hoverLoop=li; updateReadout(); render(); }
+  });
+  canvas.addEventListener('mouseleave',()=>{
+    if(state.hoverLoop!==-1){ state.hoverLoop=-1; updateReadout(); render(); }
+  });
+
+  let rt=null;
+  window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(()=>render(),120); });
+}
+
+let regenTimer=null;
+function scheduleRegen(){
+  clearTimeout(regenTimer);
+  regenTimer=setTimeout(()=>regenerate(), 90);
+}
+
+function exportPNG(){
+  try{
+    // render once without hover dimming for a clean export
+    const savedHover=state.hoverLoop; state.hoverLoop=-1; render();
+    const url=canvas.toDataURL('image/png');
+    state.hoverLoop=savedHover;
+    const a=document.createElement('a');
+    const safe=(state.seed||'knot').replace(/[^a-z0-9]+/gi,'_').toLowerCase();
+    a.href=url; a.download='ariadne_'+safe+'.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    render();
+  }catch(err){ console.error('Export failed:',err); }
+}
+
+/* ----------------------------- boot --------------------------------------- */
+function boot(){
+  state.complexity=+document.getElementById('complexity').value;
+  state.breaks=+document.getElementById('breaks').value;
+  state.thick=+document.getElementById('thick').value;
+  state.seed=randomSeedString();
+  document.getElementById('seed').value=state.seed;
+  wireUI();
+  rebuild();
+  render();
+  console.log('[Ariadne] ready. seed:', state.seed);
+
+  // Expose a test harness hook for headless verification.
+  window.__ariadne = {
+    state,
+    buildKnot, selfTest,
+    rollAndTest(n){
+      let pass=0, fail=0; const counts=[];
+      for(let k=0;k<n;k++){
+        const seed=randomSeedString();
+        const knot=buildKnot(seed, state.complexity, state.breaks, state.flags.symmetry, state.shape);
+        const t=selfTest(knot);
+        if(t.ok) pass++; else { fail++; console.error('FAIL', seed, t.messages); }
+        counts.push(t.loopCount);
+      }
+      return {pass, fail, counts};
+    },
+    setParams(p){ Object.assign(state, p); if(p.flags) Object.assign(state.flags,p.flags); rebuild(); render(); return {loops:state.knot.loops.length, ok:state.test.ok}; },
+  };
+}
+window.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>

@@ -12,9 +12,9 @@ HTML file: no build step, no dependencies, no network.*
 
 ## What's inside
 
-Ten creative mediums across nine projects — plus two companions tucked behind their parent doors:
-the **Orrery** behind Firmament, and **Blazon** behind Compositor. Click a live link, or open any
-`.html` in a browser.
+Ten creative mediums across nine projects — plus three companions tucked behind their parent doors:
+the **Orrery** behind Firmament, **Blazon** behind Compositor, and **Ariadne** behind Daedalus. Click
+a live link, or open any `.html` in a browser.
 
 ### 🌿 [Strange Garden](https://bman654.github.io/the-workshop/strange-garden/)
 **34 *living* generative systems** — particle life, slime moulds, reaction–diffusion, boids,
@@ -48,6 +48,12 @@ A **procedural maze that solves itself** — re-roll a perfect labyrinth from an
 backtracker, Prim, Kruskal or Wilson, each a different texture), then watch a **distance wavefront**
 flood the maze and trace the one true path (flood-fill, A\*, dead-end filling, or a static distance
 heatmap). Four styles, seeded & reproducible, exportable to PNG. The workshop's maze-maker.
+
+> 🧵 **Companion — [Ariadne](https://bman654.github.io/the-workshop/ariadne/):** Daedalus built the
+> Labyrinth; *Ariadne's thread* wound through it. This plaits the thread itself — a generative
+> **Celtic knot**, a *true* over-and-under weave (not a decorative fake: a built-in self-test proves
+> the weave strictly alternates and every cord is a closed loop). Hover to trace a single thread as it
+> winds and closes. Illuminated / Engraved / Neon / Stone, seeded & reproducible, export PNG.
 
 ### 🎵 [Sound Garden](https://bman654.github.io/the-workshop/sound-garden/)
 Three **generative Web-Audio instruments** — *Whitney* (a polyrhythmic music box), *Drift*
