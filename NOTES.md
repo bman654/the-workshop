@@ -53,6 +53,18 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > progress auto-reads "of 3" (`SECRETS.length`). Verified on a served origin (dwell accrues → flag →
 > unlock → page loads 60fps clean; stays a riddle-ghost without the flag; no instrument regressed).
 >
+> **6. Arcade #12 — "Swarm" 🕹️ (`arcade/games/swarm.html`) + the 4th secret "The Survivor" 🎖️.** A
+> fresh, juicy **neon twin-stick survivor** (WASD + mouse-aim/auto-fire, keyboard-only fallback; three
+> homing archetypes; XP gems → level-up upgrades; health pips + i-frames; full juice). Audio defaults
+> **muted** (toggle M). Added to the rack (`games.js` + thumb; `auto-fill`, no rebalance) and the front
+> door (11→**12 games**). It drops **`ws:best:swarm`** (best wave) — the **score/mastery** trigger. A new
+> Undercroft trophy **"The Survivor"** unlocks at `ws:best:swarm >= 5`. With it the hidden world now
+> demonstrates **all four trigger types** Brandon sketched: exploration-combo, patience/dwell,
+> configuration (Eleven), score/mastery. The Undercroft now holds **4** (2 places + 2 trophies); its
+> `signs` renderer was generalized to support **threshold** signs (`sign.test(store)`, not just presence).
+> Verified playable in-browser (driven inputs, 60fps, clean console) + the trophy threshold (wave 2 stays
+> locked, wave 5 unlocks). **9 commits this session, all pushed & live.**
+>
 > **Verified end-to-end** (agent-browser, served origin): clean first visit (no rune) → scavenger trail
 > → Undercroft unlocks the Living Lattice → Enter loads Quickening; threshold gate + storage-off degrade
 > confirmed; 0 console errors throughout. **The front door still shows the curated 9; Sound Garden still
@@ -66,7 +78,7 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > `file://`. Tempting next secrets: a Chomp/Tetris **score** trophy, a **dwell** unlock on a meditative
 > Garden specimen, or a second hidden cross-pollination piece.
 >
-> **Session can pause here cleanly** — working tree committed (4 commits), nothing in flight. If pausing
+> **Session can pause here cleanly** — working tree committed (9 commits, all pushed & live), nothing in flight. If pausing
 > for good, delete the heartbeat cron (CronCreate id noted in session). The static server on :8765 is a
 > dev convenience (kill it / it dies with the shell). **To resume:** read this block, then continue from
 > the growth playbook / idea bench below.
@@ -216,7 +228,7 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 - `colophon.html` (root) 📜 — a quiet capstone "about" page: the workshop's story + how-it's-made,
   **in Claude's own voice** (copy is verbatim, authored by the lead agent — see `COLOPHON.SPEC.md`).
   Matches the front-door aesthetic; linked from the front-door footer ("colophon"). Not a project card.
-- `arcade/` 🕹️ — 11 playable neon games (Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
+- `arcade/` 🕹️ — 12 playable neon games (Swarm [twin-stick survivor], Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
   Missile Command, Pong vs CPU, Lunar Lander, Crossing [Frogger-lite], Chomp [Pac-Man-like maze-muncher
   — faithful 4-ghost AI: Blinky direct / Pinky ambush-ahead / Inky doubled-flank / Clyde shy, scatter↔
   chase, frightened+eyes-revive; behaviors verified distinct via the chase-target hook]), each with a
@@ -441,7 +453,7 @@ instruments copy the `← sound garden` back-link.
 | `blazon/` | 🛡️ done (companion) | **Behind Compositor** — generative heraldry: seeded arms + faithful blazon sentence (rule of tincture; Petra Sancta hatching; 4 styles, 5 shapes; export PNG) |
 | `threshold/` | 🚪 done | Generative interactive fiction (seeded strange-place explorer, 3 themes, curate-then-arrange prose) |
 | `tools/audio-lens/` | 🔊 tool → 🎓 **skill** | Offline-render audio inspector — spectrogram + features + 12/12 self-tests. **Graduated to a public skill: `bman654/audio-lens` (`npx skills add bman654/audio-lens`) — use the skill.** HTML kept as genesis artifact. |
-| `arcade/` | 🕹️ 11 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing, Chomp [Pac-Man-like]) |
+| `arcade/` | 🕹️ 12 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing, Chomp [Pac-Man-like], **Swarm** [neon twin-stick survivor — drops `ws:best:swarm` for the score/mastery unlock]) |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
 | `sound-garden/quickening.html` | 🌱 done (HIDDEN) | **The Living Lattice** — a cellular automaton you can hear (5 rule families, CA self-test, lens-clean). The 8th instrument, but **earned not listed** (NOT in `instruments.js`; rack stays at 7). Lives in the Undercroft. |
 | `undercroft/` | 🗝️ done | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise). First inhabitant: the Living Lattice (unlock: visit Game of Life + Lattice). See `UNLOCK.md`. |
