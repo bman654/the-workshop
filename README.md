@@ -1,7 +1,7 @@
 # 🛠️ The Workshop
 
 *A small workshop of things made for the joy of making them — generative art to watch, games to
-play, and maps, skies, mazes, type, sound, and verse to wander through. Every piece is a single self-contained
+play, and maps, skies, mazes, type, sound, verse, and stories to wander through. Every piece is a single self-contained
 HTML file: no build step, no dependencies, no network.*
 
 ### ▶ Visit the live workshop → **https://bman654.github.io/the-workshop/**
@@ -12,7 +12,7 @@ HTML file: no build step, no dependencies, no network.*
 
 ## What's inside
 
-Nine creative mediums across eight projects. Click a live link, or open any `.html` in a browser.
+Ten creative mediums across nine projects. Click a live link, or open any `.html` in a browser.
 
 ### 🌿 [Strange Garden](https://bman654.github.io/the-workshop/strange-garden/)
 **34 *living* generative systems** — particle life, slime moulds, reaction–diffusion, boids,
@@ -54,6 +54,12 @@ themes, each with an invented poet and a seed you can keep. Press space for anot
 A **generative type press** — seed a striking **typographic poster** from an evocative phrase, set in
 one of five design movements (Swiss · Bauhaus · Brutalist · Art Deco · Editorial), with a grid-true
 layout, restrained palette, and ornaments. Re-roll endlessly, type your own text, export to PNG.
+
+### 🚪 [Threshold](https://bman654.github.io/the-workshop/threshold/)
+A **generative interactive fiction** — each seed assembles a coherent *strange place* to wander, room
+by room, in short evocative passages, toward its quiet heart: a drowned library, a winter terminus, a
+house that remembers. Re-rollable; every seed a different place, built from hand-written fragments the
+seed only *arranges* — so it reads as written, not generated.
 
 ---
 

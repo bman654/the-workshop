@@ -6,16 +6,17 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > **Front door:** open `index.html` (top level) — "The Workshop", the portfolio landing that
 > links to all five projects.
 
-> **Session status (2026-06-11, ~1am):** big build night, all shipped & published to Pages. New:
-> **Firmament** 🌌 (night-sky/constellation generator); the **Audio Lens** 🔊 (`tools/audio-lens/` —
-> offline spectrogram/feature inspector, 12/12 self-tests; **closes the audio-verification gap**);
-> **Rain** 🌧️ + **Loom** 🔁 (Sound Garden → 5; both **sonically verified via the Lens**); **Pong** +
-> **Lunar Lander** (Arcade → 9); **Daedalus** 🌀 (maze generator + animated self-solver); and
-> **Compositor** 🔠 (generative typographic poster press — a new medium). Workshop now **8 front-door
-> projects + 1 internal tool**; landing = **2 hero features** (Garden · Firmament) over a **3×2 grid**
-> of the rest. Sound Garden (`auto-fit`) & Arcade (`auto-fill`) racks grow with no rebalance.
-> A ~10-min heartbeat cron backstops this `/fun` session — **DELETE it at wind-down (~7am CT)**.
-> To do more, pick a thread from "For a fresh thread" below.
+> **Session status (2026-06-11, ~2am):** a big build night, all shipped & published to Pages. New
+> this session: **Firmament** 🌌 (night-sky/constellation generator); the **Audio Lens** 🔊
+> (`tools/audio-lens/` — offline spectrogram/feature inspector, 12/12 self-tests; **closed the
+> audio-verification gap**); **Rain** 🌧️, **Loom** 🧵 & **Carillon** 🔔 (Sound Garden → 6; all three
+> **sonically verified via the Lens**); **Pong** + **Lunar Lander** (Arcade → 9); **Daedalus** 🌀 (maze
+> generator + self-solver); **Compositor** 🔠 (generative typographic poster press); **Threshold** 🚪
+> (generative interactive fiction — a new narrative medium); plus the **Colophon** 📜 capstone page.
+> Workshop now **9 front-door projects + 1 tool + the colophon**; landing = **3 hero features**
+> (Garden · Firmament · Daedalus, "worlds to get lost in") over a **3×2 grid** of the other six.
+> Sound Garden (`auto-fit`) & Arcade (`auto-fill`) grow with no rebalance. A ~10-min heartbeat cron
+> backstops this `/fun` session — **DELETE it at wind-down (~7am CT)**. To do more, pick a thread below.
 
 ## Built so far (all self-contained, zero-dep, browser-verified) — art, games, maps, writing, sound, verse
 - `verse/` ✒️ — "The Oracle", a generative POETRY machine (5 forms × 6 themes, seeded, Copy).
@@ -44,6 +45,11 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   Swiss/Bauhaus/Brutalist/Deco/Editorial; seeded phrase engine + custom text; grid-true layouts;
   export PNG). New medium: generative graphic design. The build's quality bar was "posters must read
   as intentionally DESIGNED, not random" — met. Done. See `compositor/SPEC.md`.
+- `threshold/` 🚪 — generative INTERACTIVE FICTION (seeded; assembles a coherent strange place — 3
+  themes: drowned library / winter terminus / house that remembers — as a graph of ~8–12 rooms you
+  wander to a heart). **Curate-then-arrange**: load-bearing prose is hand-authored, the seed only
+  arranges it (→ no template seams; reads as written fiction). Per-theme tinting; reproducible. Done.
+  See `threshold/SPEC.md`.
 - `tools/audio-lens/` 🔊 — INTERNAL TOOL (not a front-door project). Renders Web Audio offline
   (silent) → log-freq spectrogram + waveform + RMS + features (clipping/centroid/onset→tempo/
   pitch→note); **12/12 self-tests** green vs known signals. The "let me hear via sight" path — run any
@@ -57,12 +63,13 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 - `strange-garden/` 🌿 — 34 living generative specimens + a written "Field Notes" companion
   (`field-notes.html`). Browsable prev/next. Complete v-final; don't pad it.
 
-> **Composition note:** front-door `index.html` now at **8 projects** — TWO hero `feature` banners
-> (Strange Garden · Firmament) over a **3×2 grid** of the other six (Daedalus, Cartographer,
-> Compositor, Arcade, Sound Garden, Oracle) in the 2-col layout. Rules of thumb: keep the
-> **non-feature count even** (it tiles in rows of 2), and **≤3 features** (more reads top-heavy — 3
-> was judged the ceiling). A 9th project tiles cleanly as **3 features + 3×2** (promote one to a
-> feature). Otherwise **deepen a rack** (no rebalance — Arcade `auto-fill`, Sound Garden `auto-fit`).
+> **Composition note:** front-door `index.html` now at **9 projects** — THREE hero `feature` banners
+> (Strange Garden · Firmament · Daedalus, the "worlds to get lost in") over a **3×2 grid** of the other
+> six (Cartographer, Compositor, Arcade, Sound Garden, Oracle, Threshold) in the 2-col layout. Rules of
+> thumb: keep the **non-feature count even** (tiles in rows of 2) and **≤3 features** (3 is the ceiling —
+> more is top-heavy). **9 = 3 features + 6 is the clean max** for this design; a 10th front-door project
+> would force a flat-grid redesign — so from here prefer **deepening a rack** (Arcade `auto-fill`, Sound
+> Garden `auto-fit` — no rebalance) or a companion behind an existing card.
 
 ## For a fresh thread — pick whatever sounds fun
 - Add more **Arcade** cabinets (built so far incl. Pong vs CPU + Lunar Lander → 9; open ideas: a
@@ -145,6 +152,7 @@ instruments copy the `← sound garden` back-link.
 | `firmament/` | 🌌 done | Procedural night-sky / constellation generator (seeded, 4 styles, names+myths, field guide, export PNG) |
 | `daedalus/` | 🌀 done | Procedural maze generator + animated self-solver (4 algorithms, flood-fill/A*, 4 styles, export PNG) |
 | `compositor/` | 🔠 done | Generative typographic poster press (5 movements, seeded phrase + custom text, export PNG) |
+| `threshold/` | 🚪 done | Generative interactive fiction (seeded strange-place explorer, 3 themes, curate-then-arrange prose) |
 | `tools/audio-lens/` | 🔊 tool | Offline-render audio inspector — spectrogram + features + 12/12 self-tests (internal, not a front-door card) |
 | `arcade/` | 🕹️ 9 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander) |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
