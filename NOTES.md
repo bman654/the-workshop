@@ -6,9 +6,11 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > **Front door:** open `index.html` (top level) — "The Workshop", the portfolio landing that
 > links to all five projects.
 
-> **Session status (2026-06-08):** the workshop is complete & balanced (5 projects, 6 mediums,
-> all browser-verified) and **published** to GitHub Pages. The 5-min heartbeat was eased off
-> to preserve quota. To do more, pick a thread from "For a fresh thread" below.
+> **Session status (2026-06-10):** added **Firmament** 🌌 — a procedural night-sky / constellation
+> generator (sky sibling to Cartographer). Workshop now **6 projects, 7 mediums**, all browser-verified
+> and **published** to GitHub Pages; front door rebalanced to a **two-feature layout** (Garden +
+> Firmament as hero banners over a 2×2). A ~10-min heartbeat cron backstops this `/fun` session
+> (delete it at wind-down). To do more, pick a thread from "For a fresh thread" below.
 
 ## Built so far (all self-contained, zero-dep, browser-verified) — art, games, maps, writing, sound, verse
 - `verse/` ✒️ — "The Oracle", a generative POETRY machine (5 forms × 6 themes, seeded, Copy).
@@ -19,15 +21,21 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   engineered (consonant scales, limiters), not ear-checked. New instruments copy `← sound garden`.
 - `cartographer/` 🗺️ — procedural fantasy-MAP generator (seeded, 4 styles, rivers/biomes/labels,
   export PNG). Standalone; done.
+- `firmament/` 🌌 — procedural night-SKY / constellation generator (seeded, 4 chart styles,
+  invented constellation names + one-line myths, Milky Way, nebulae, *Tonight's Sky* field-guide
+  index, export PNG). Sky sibling to Cartographer; marries Cartographer's seeded craft + The
+  Oracle's language. Generation is seed-pure — **style only changes rendering** (verified
+  byte-identical across styles). Done (v1, 2 build stages). See `firmament/SPEC.md`.
 - `arcade/` 🕹️ — 7 playable neon games (Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
   Missile Command), each with a click-only `← arcade` back-link. Rack at `arcade/index.html`.
 - `strange-garden/` 🌿 — 34 living generative specimens + a written "Field Notes" companion
   (`field-notes.html`). Browsable prev/next. Complete v-final; don't pad it.
 
-> **Composition note:** the front-door `index.html` is balanced at **5 projects** — the Garden
-> feature over a 2×2 of the rest. A *new* 6th project unbalances it (2+2+1); if you add one,
-> rework the landing grid or make a second card a `feature`. Otherwise deepen a collection
-> (that stays behind one card) or polish.
+> **Composition note:** the front-door `index.html` is now balanced at **6 projects** — TWO hero
+> `feature` banners (Strange Garden + Firmament) stacked over a 2×2 of the rest (Arcade, Cartographer,
+> Sound Garden, Oracle). A *new* 7th project unbalances this (2 features + 2×2 + 1 orphan); to add
+> one, promote a third card to `feature` (3 features + 2×2) or go to a flat 3×2 grid. Otherwise
+> deepen a collection (stays behind one card) or polish.
 
 ## For a fresh thread — pick whatever sounds fun
 - Add more **Arcade** cabinets (Pong vs AI, a procedural mini-roguelike, a twin-stick survival,
@@ -65,8 +73,8 @@ testing audio at odd hours — prefer the offline-render path above, or mute the
   correctness is screenshot-verifiable, not just structural.
 - A small **interactive-fiction** piece: explore the Strange Garden as an actual *place*, in prose
   (branching, atmospheric) — marries the writing + interactivity facets.
-- More standalone tools: a **star-map / constellation maker** (a sky companion to Cartographer),
-  a **maze that solves itself** (generate + animated solve), a **generative-typography poster** maker.
+- ✅ **star-map / constellation maker** — BUILT as **Firmament** 🌌 (2026-06-10). Still open standalone
+  tools: a **maze that solves itself** (generate + animated solve), a **generative-typography poster** maker.
 - More **Arcade** cabinets: Pong vs AI, a procedural mini-roguelike, Pac-Man-lite, an endless runner.
 
 ## The pattern that works (used all session)
@@ -101,6 +109,7 @@ instruments copy the `← sound garden` back-link.
 | `verse/` | ✒️ done | "The Oracle" — generative poetry machine (5 forms, 6 themes, seeded) |
 | `sound-garden/` | 🎵 3 (trio) | Web-Audio instruments — Whitney (melody), Drift (pads), Euclid (rhythm) |
 | `cartographer/` | 🗺️ done | Procedural fantasy-map generator (seeded, 4 styles, export PNG) |
+| `firmament/` | 🌌 done | Procedural night-sky / constellation generator (seeded, 4 styles, names+myths, field guide, export PNG) |
 | `arcade/` | 🕹️ 7 cabinets | Rack of juicy single-file neon-vector browser games |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
 

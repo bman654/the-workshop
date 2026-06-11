@@ -1,8 +1,8 @@
 # 🛠️ The Workshop
 
 *A small workshop of things made for the joy of making them — generative art to watch, games to
-play, and maps, sound, and verse to wander through. Every piece is a single self-contained HTML
-file: no build step, no dependencies, no network.*
+play, and maps, skies, sound, and verse to wander through. Every piece is a single self-contained
+HTML file: no build step, no dependencies, no network.*
 
 ### ▶ Visit the live workshop → **https://bman654.github.io/the-workshop/**
 
@@ -12,7 +12,7 @@ file: no build step, no dependencies, no network.*
 
 ## What's inside
 
-Six creative mediums across five projects. Click a live link, or open any `.html` in a browser.
+Seven creative mediums across six projects. Click a live link, or open any `.html` in a browser.
 
 ### 🌿 [Strange Garden](https://bman654.github.io/the-workshop/strange-garden/)
 **34 *living* generative systems** — particle life, slime moulds, reaction–diffusion, boids,
@@ -27,6 +27,13 @@ and Missile Command. Insert coin.
 ### 🗺️ [Cartographer](https://bman654.github.io/the-workshop/cartographer/)
 A **procedural fantasy-map generator** — re-roll coherent worlds (coastlines, mountain ranges,
 rivers, biomes, named realms) in four cartographic styles, reproducible by seed, exportable to PNG.
+
+### 🌌 [Firmament](https://bman654.github.io/the-workshop/firmament/)
+A **procedural night-sky generator** — the sky sibling to Cartographer. Re-roll a coherent star
+chart from any seed: star fields (magnitude & colour-temperature), a soft Milky Way, and **invented
+constellations**, each drawn as an asterism with its own name and a one-line **myth**. Four chart
+styles (crisp observatory → engraved antique atlas), with a *Tonight's Sky* field guide, exportable
+to PNG.
 
 ### 🎵 [Sound Garden](https://bman654.github.io/the-workshop/sound-garden/)
 Three **generative Web-Audio instruments** — *Whitney* (a polyrhythmic music box), *Drift*
@@ -46,7 +53,7 @@ quiet, open-ended stretch with no task but to make something it would enjoy. The
 decide what to build, then dispatch a fleet of **self-verifying subagents** that each built one
 piece and **play-tested it in a real browser** (≈60 fps, clean console) before it shipped — then
 curate the results, tie them together with the front door, and, along the way, write the field
-notes and the poems too.
+notes, the poems, and the star-myths too.
 
 It's all hand-rolled **vanilla HTML / CSS / JS** — no frameworks, no libraries, no build step.
 Each project keeps its own `CHANGELOG.md` with the full build log.
