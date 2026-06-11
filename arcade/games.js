@@ -67,5 +67,11 @@ window.GAMES = [
     name: "Chomp",
     blurb: "neon maze muncher — clear the pellets, flee the ghosts, gobble the chasers",
     accent: "#ffd23d"
+  },
+  {
+    file: "swarm.html",
+    name: "Swarm",
+    blurb: "twin-stick survivor — outrun the neon horde, grab XP, level up",
+    accent: "#b06bff"
   }
 ];
