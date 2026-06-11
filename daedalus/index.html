@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daedalus</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,16,24,0.82);
+    --panel-edge: rgba(90,120,170,0.45);
+    --ink: #dfe7f2;
+    --ink-dim: #8fa0bd;
+    --accent: #57e0c8;
+    --accent-soft: rgba(87,224,200,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:#06080e;
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  #stage{
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(1200px 800px at 50% 42%, #10131d 0%, #0a0c13 68%, #05060a 100%);
+    padding:18px;
+  }
+  #mazeWrap{
+    position:relative;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.65), 0 2px 0 rgba(255,255,255,0.04) inset;
+    border-radius:6px;
+    max-width:100%; max-height:100%;
+  }
+  canvas#maze{
+    display:block;
+    border-radius:5px;
+    max-width:100%; max-height:calc(100vh - 36px);
+  }
+  /* ---------- Control panel ---------- */
+  #panel{
+    position:fixed; top:18px; left:18px;
+    width:288px;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(125%);
+    -webkit-backdrop-filter: blur(10px) saturate(125%);
+    border:1px solid var(--panel-edge);
+    border-radius:12px;
+    padding:14px 15px 16px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.6);
+    z-index:20;
+    transition: transform .35s cubic-bezier(.2,.8,.2,1), opacity .25s;
+    max-height: calc(100vh - 36px);
+    overflow-y:auto;
+  }
+  #panel.collapsed{ transform: translateX(calc(-100% - 24px)); opacity:0; pointer-events:none; }
+  #panel h1{
+    font-family:var(--font-serif);
+    font-size:19px; font-weight:600; letter-spacing:.4px;
+    margin:0 0 2px; color:var(--ink);
+  }
+  #panel .sub{ font-size:11px; color:var(--ink-dim); margin:0 0 12px; letter-spacing:.5px; text-transform:uppercase; }
+  .row{ margin:10px 0; }
+  .row label{ display:flex; justify-content:space-between; align-items:baseline; font-size:11.5px; color:var(--ink-dim); margin-bottom:5px; letter-spacing:.3px; }
+  .row label .val{ color:var(--accent); font-variant-numeric:tabular-nums; font-size:11px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#eafffb; border:2px solid #2f8f7e; box-shadow:0 1px 5px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%; background:#eafffb; border:2px solid #2f8f7e; cursor:pointer;
+  }
+  .seedrow{ display:flex; gap:6px; align-items:center; }
+  .seedrow input[type=text]{
+    flex:1; min-width:0; background:rgba(0,0,0,0.34); border:1px solid var(--panel-edge); color:var(--ink);
+    border-radius:7px; padding:7px 9px; font-size:13px; font-family:var(--font-mono); letter-spacing:.5px;
+  }
+  .seedrow input[type=text]:focus{ outline:none; border-color:var(--accent); }
+  .iconbtn, button.dice{
+    flex:0 0 auto; width:34px; height:34px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.04); color:var(--ink); cursor:pointer; font-size:15px; line-height:1;
+    display:flex; align-items:center; justify-content:center; transition:.15s;
+  }
+  .iconbtn:hover, button.dice:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.28); padding:3px; border-radius:9px; border:1px solid rgba(90,120,170,0.28); flex-wrap:wrap; }
+  .seg button{
+    flex:1 1 auto; min-width:0; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 4px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap;
+  }
+  .seg button.active{ background:var(--accent); color:#062019; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .toggles{ display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+  .chip{
+    font-size:11px; padding:5px 9px; border-radius:14px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.03); color:var(--ink-dim); cursor:pointer; transition:.15s; user-select:none;
+  }
+  .chip.on{ background:var(--accent-soft); border-color:var(--accent); color:var(--ink); }
+  .actions{ display:flex; gap:8px; margin-top:14px; }
+  .actions button{
+    flex:1; padding:10px 6px; border-radius:9px; border:1px solid var(--panel-edge);
+    background:linear-gradient(180deg, rgba(87,224,200,0.18), rgba(87,224,200,0.06));
+    color:var(--ink); font-size:12px; font-weight:600; cursor:pointer; transition:.15s; letter-spacing:.2px;
+  }
+  .actions button:hover{ border-color:var(--accent); background:linear-gradient(180deg, rgba(87,224,200,0.30), rgba(87,224,200,0.12)); }
+  .actions button.primary{ background:linear-gradient(180deg, #5fe6cf, #2bbfa3); color:#042019; border-color:#7af0dc; }
+  .actions button.primary:hover{ background:linear-gradient(180deg, #74efdb, #36cbae); }
+  hr.sep{ border:none; border-top:1px solid rgba(90,120,170,0.24); margin:13px 0 11px; }
+  .hint{ font-size:10px; color:#6a7790; margin-top:10px; line-height:1.5; letter-spacing:.2px; }
+  /* Collapsed-panel reopen tab */
+  #reopen{
+    position:fixed; top:18px; left:18px; z-index:21;
+    width:42px; height:42px; border-radius:10px; border:1px solid var(--panel-edge);
+    background:var(--panel-bg); color:var(--accent); cursor:pointer; font-size:18px;
+    display:none; align-items:center; justify-content:center; backdrop-filter:blur(8px);
+    box-shadow:0 8px 24px rgba(0,0,0,.55);
+  }
+  #panel.collapsed ~ #reopen{ display:flex; }
+  .collapse-x{
+    position:absolute; top:9px; right:9px; width:22px; height:22px; border-radius:6px; border:none;
+    background:transparent; color:var(--ink-dim); cursor:pointer; font-size:15px; line-height:1;
+  }
+  .collapse-x:hover{ color:var(--ink); background:rgba(255,255,255,0.06); }
+  ::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-thumb{background:rgba(87,224,200,.28);border-radius:4px}
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="mazeWrap">
+      <canvas id="maze"></canvas>
+    </div>
+  </div>
+
+  <div id="panel">
+    <button class="collapse-x" id="collapseBtn" title="Hide panel">&#10005;</button>
+    <h1>Daedalus</h1>
+    <p class="sub">Procedural Labyrinth Engine</p>
+
+    <div class="row">
+      <label>Seed</label>
+      <div class="seedrow">
+        <input type="text" id="seed" spellcheck="false" value="">
+        <button class="dice" id="randSeed" title="Random seed">&#9860;</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Algorithm</label>
+      <div class="seg" id="algoSeg">
+        <button data-v="backtracker" class="active">Backtracker</button>
+        <button data-v="prim">Prim</button>
+        <button data-v="kruskal">Kruskal</button>
+        <button data-v="wilson">Wilson</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Solver</label>
+      <div class="seg" id="solverSeg">
+        <button data-v="flood" class="active">Flood&#8209;fill</button>
+        <button data-v="astar">A*</button>
+        <button data-v="deadend">Dead&#8209;end</button>
+        <button data-v="distance">Distance</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Style</label>
+      <div class="seg" id="styleSeg">
+        <button data-v="neon" class="active">Neon</button>
+        <button data-v="blueprint">Blueprint</button>
+        <button data-v="ink">Ink</button>
+        <button data-v="classic">Classic</button>
+      </div>
+    </div>
+
+    <hr class="sep">
+
+    <div class="row">
+      <label>Size <span class="val" id="sizeVal"></span></label>
+      <input type="range" id="size" min="10" max="80" step="1" value="32">
+    </div>
+    <div class="row">
+      <label>Animation Speed <span class="val" id="speedVal"></span></label>
+      <input type="range" id="speed" min="1" max="100" step="1" value="55">
+    </div>
+
+    <hr class="sep">
+    <div class="row" style="margin:0 0 2px">
+      <label style="margin-bottom:7px">Flourishes</label>
+      <div class="toggles">
+        <div class="chip" data-t="animateGen">Animate generation</div>
+        <div class="chip on" data-t="distColours">Show distance colours</div>
+        <div class="chip on" data-t="showPath">Show solution path</div>
+        <div class="chip" data-t="thickWalls">Thick walls</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="primary" id="reroll">&#10227; Re-roll</button>
+      <button id="solveBtn">&#9654; Solve</button>
+      <button id="exportBtn">&#8595; PNG</button>
+    </div>
+
+    <p class="hint">Each seed carves one fixed labyrinth. Pick an algorithm for its texture, then watch the solver flood the maze and trace the one true path. Style only re-paints &mdash; the maze is identical for a given seed, algorithm and size.</p>
+  </div>
+
+  <button id="reopen" title="Show panel">&#9776;</button>
+
+<script>
+"use strict";
+/* ============================================================================
+   DAEDALUS — single-file procedural maze generator + animated self-solver
+   ----------------------------------------------------------------------------
+   Pipeline: seeded PRNG -> carve a "perfect" maze with a choice of classic
+   algorithms (Recursive Backtracker / Prim / Kruskal / Wilson) -> animate a
+   solver (BFS flood-fill distance wavefront / A* / dead-end filling / static
+   distance heatmap) -> palette-driven render (Neon / Blueprint / Ink /
+   Classic). Generation is style-independent: same seed+algorithm+size yields
+   an identical maze; style only changes how it is painted.
+   ========================================================================== */
+
+/* ----------------------------- PRNG (mulberry32) -------------------------- */
+function xmur3(str){
+  let h = 1779033703 ^ str.length;
+  for (let i=0;i<str.length;i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function(){
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return h >>> 0;
+  };
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeRng(seedStr){ const s = xmur3(String(seedStr)); return mulberry32(s()); }
+
+/* ----------------------------- Palettes (style-driven) -------------------- */
+/* Every colour the renderer needs lives here. Generation never touches this.
+   `flood` is a function (t in 0..1) -> "r,g,b" used for the distance wavefront
+   and distance heatmap. `glow` controls walls/path glow strength. */
+function lerp(a,b,t){ return a+(b-a)*t; }
+function mixRGB(c1,c2,t){
+  return [Math.round(lerp(c1[0],c2[0],t)),Math.round(lerp(c1[1],c2[1],t)),Math.round(lerp(c1[2],c2[2],t))];
+}
+// multi-stop gradient sampler -> [r,g,b]
+function gradient(stops, t){
+  t = t<0?0:t>1?1:t;
+  const n=stops.length-1;
+  const f=t*n; let i=Math.floor(f);
+  if(i>=n) i=n-1;
+  return mixRGB(stops[i],stops[i+1], f-i);
+}
+// HSL rainbow used by neon flood
+function hsl(h,s,l){
+  h=((h%360)+360)%360/360; s=s/100; l=l/100;
+  const a=s*Math.min(l,1-l);
+  const f=n=>{ const k=(n+h*12)%12; return l-a*Math.max(-1,Math.min(k-3,Math.min(9-k,1))); };
+  return [Math.round(f(0)*255),Math.round(f(8)*255),Math.round(f(4)*255)];
+}
+
+const STYLES = {
+  neon: {
+    name:"neon",
+    bg:["#070a12","#04060c"],            // canvas backdrop gradient
+    cellBg:"#0a0e18",                    // open cell base (under flood tint)
+    wall:"#1d2740",                      // wall colour (dim) when no glow path
+    wallGlow:"#5fe6ff",                  // wall glow tint
+    wallGlowAmt:0.0,                     // base walls subtle; flood carries colour
+    pathCore:"#ffffff", pathGlow:"#ffd24a", pathGlowAmt:1.0,
+    start:"#6effc1", goal:"#ff8fe0",
+    frontier:"#ffe066", explored:"rgba(120,150,220,0.55)",
+    deadFill:"rgba(40,52,82,0.85)",
+    floodAlpha:0.92, floodLight:0.62, floodDim:false,
+    flood:(t)=> hsl(255 - t*295, 92, 56),   // violet -> cyan -> green -> gold -> red sweep
+    grid:false, gridTicks:false,
+    glow:true
+  },
+  blueprint: {
+    name:"blueprint",
+    bg:["#0a2236","#07182a"],
+    cellBg:"#0c2b45",
+    wall:"#9fd0ff",
+    wallGlow:"#bfe4ff", wallGlowAmt:0.0,
+    pathCore:"#eafbff", pathGlow:"#ffd36b", pathGlowAmt:0.6,
+    start:"#8effd0", goal:"#ffd36b",
+    frontier:"#ffd36b", explored:"rgba(150,200,255,0.40)",
+    deadFill:"rgba(20,60,95,0.8)",
+    floodAlpha:0.82, floodLight:0.5, floodDim:false,
+    flood:(t)=> gradient([[20,70,110],[40,120,180],[90,180,230],[180,225,250],[235,248,255]], t),
+    grid:true, gridTicks:true,
+    glow:false
+  },
+  ink: {
+    name:"ink",
+    bg:["#efe6cf","#e3d6b6"],
+    cellBg:"#f3ecd9",
+    wall:"#2a2014",
+    wallGlow:"#000000", wallGlowAmt:0.0,
+    pathCore:"#7a2b14", pathGlow:"#c0603a", pathGlowAmt:0.35,
+    start:"#3a6e3a", goal:"#8a2f2f",
+    frontier:"#b06a2a", explored:"rgba(120,96,60,0.30)",
+    deadFill:"rgba(150,132,98,0.55)",
+    floodAlpha:0.7, floodLight:0.5, floodDim:false,
+    flood:(t)=> gradient([[244,236,214],[226,200,150],[200,156,98],[166,108,58],[120,66,34],[86,40,22]], t),
+    grid:false, gridTicks:false,
+    glow:false
+  },
+  classic: {
+    name:"classic",
+    bg:["#fbfbfd","#eef0f4"],
+    cellBg:"#ffffff",
+    wall:"#15171c",
+    wallGlow:"#000000", wallGlowAmt:0.0,
+    pathCore:"#ff5a3c", pathGlow:"#ff8a3c", pathGlowAmt:0.3,
+    start:"#1f9d55", goal:"#e23b3b",
+    frontier:"#f7b500", explored:"rgba(90,110,150,0.28)",
+    deadFill:"rgba(190,196,208,0.7)",
+    floodAlpha:0.78, floodLight:0.5, floodDim:false,
+    flood:(t)=> gradient([[40,90,200],[70,150,225],[120,205,210],[180,225,150],[245,210,90],[235,120,60],[210,50,55]], t),
+    grid:false, gridTicks:false,
+    glow:false
+  }
+};
+
+/* ----------------------------- Maze model state --------------------------- */
+const state = {
+  seed:"",
+  algo:"backtracker",
+  solver:"flood",
+  style:"neon",
+  size:32,
+  speed:55,
+  flags:{ animateGen:false, distColours:true, showPath:true, thickWalls:false },
+  // generated maze:
+  W:0, H:0,
+  // walls[i] is a bitmask of open passages: N=1 E=2 S=4 W=8 (bit set => open)
+  cells:null,
+  start:0, goal:0,
+  // solve products:
+  dist:null,        // BFS distance from start (Int32, -1 = unreached)
+  maxDist:0,
+  path:null,        // array of cell indices: start..goal
+  // animation:
+  anim:null,
+  genMs:0, solveMs:0
+};
+
+/* passage bit directions: N,E,S,W */
+const DIRS = [
+  {bit:1, dx:0, dy:-1, opp:4},  // N
+  {bit:2, dx:1, dy:0,  opp:8},  // E
+  {bit:4, dx:0, dy:1,  opp:1},  // S
+  {bit:8, dx:-1,dy:0,  opp:2}   // W
+];
+function idx(x,y,W){ return y*W+x; }
+
+/* ============================================================================
+   GENERATION — each algorithm produces a perfect maze with a distinct texture.
+   We record an ordered list of "carve" events (cell pairs) so generation can be
+   animated; the final wall bitmask is identical regardless of animation.
+   ========================================================================== */
+function generate(){
+  const t0=performance.now();
+  const W=state.size, H=state.size;
+  state.W=W; state.H=H;
+  const N=W*H;
+  const cells=new Uint8Array(N);   // passage bitmask per cell
+  state.cells=cells;
+  state.start=idx(0,0,W);
+  state.goal=idx(W-1,H-1,W);
+  const rng=makeRng(state.seed + "::" + state.algo + "::" + W + "x" + H);
+  const carveOrder=[];             // [a,b] cell-index pairs in carve order
+
+  function carve(a,b){
+    const ax=a%W, ay=(a/W)|0, bx=b%W, by=(b/W)|0;
+    const dx=bx-ax, dy=by-ay;
+    if(dx===1){ cells[a]|=2; cells[b]|=8; }
+    else if(dx===-1){ cells[a]|=8; cells[b]|=2; }
+    else if(dy===1){ cells[a]|=4; cells[b]|=1; }
+    else if(dy===-1){ cells[a]|=1; cells[b]|=4; }
+    carveOrder.push([a,b]);
+  }
+  function neighbours(c){
+    const x=c%W, y=(c/W)|0; const out=[];
+    if(y>0) out.push(c-W);
+    if(x<W-1) out.push(c+1);
+    if(y<H-1) out.push(c+W);
+    if(x>0) out.push(c-1);
+    return out;
+  }
+  function shuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=(rng()*(i+1))|0; const t=arr[i];arr[i]=arr[j];arr[j]=t; } }
+
+  if(state.algo==="backtracker") genBacktracker(N,cells,rng,carve,neighbours,carveOrder);
+  else if(state.algo==="prim")   genPrim(N,W,H,rng,carve,neighbours);
+  else if(state.algo==="kruskal")genKruskal(N,W,H,rng,carve);
+  else if(state.algo==="wilson") genWilson(N,W,H,rng,carve,neighbours);
+  else genBacktracker(N,cells,rng,carve,neighbours,carveOrder);
+
+  state.carveOrder=carveOrder;
+  state.genMs=performance.now()-t0;
+}
+
+/* Recursive Backtracker (iterative DFS) — long winding river-like corridors */
+function genBacktracker(N,cells,rng,carve,neighbours,carveOrder){
+  const visited=new Uint8Array(N);
+  const stack=[0];
+  visited[0]=1;
+  while(stack.length){
+    const c=stack[stack.length-1];
+    const nb=neighbours(c).filter(n=>!visited[n]);
+    if(nb.length===0){ stack.pop(); continue; }
+    const n=nb[(rng()*nb.length)|0];
+    carve(c,n); visited[n]=1; stack.push(n);
+  }
+}
+
+/* Randomized Prim's — bushy, many short branches */
+function genPrim(N,W,H,rng,carve,neighbours){
+  const inMaze=new Uint8Array(N);
+  // frontier: edges (cell-in-maze, cell-out) represented as [from,to]
+  const frontier=[];
+  function addFrontier(c){
+    inMaze[c]=1;
+    for(const n of neighbours(c)) if(!inMaze[n]) frontier.push([c,n]);
+  }
+  const start=(rng()*N)|0;
+  addFrontier(start);
+  while(frontier.length){
+    const k=(rng()*frontier.length)|0;
+    const [from,to]=frontier[k];
+    // swap-remove
+    frontier[k]=frontier[frontier.length-1]; frontier.pop();
+    if(inMaze[to]) continue;
+    carve(from,to);
+    addFrontier(to);
+  }
+}
+
+/* Randomized Kruskal's — uniform, even branching (union-find over walls) */
+function genKruskal(N,W,H,rng,carve){
+  const parent=new Int32Array(N);
+  for(let i=0;i<N;i++) parent[i]=i;
+  function find(a){ while(parent[a]!==a){ parent[a]=parent[parent[a]]; a=parent[a]; } return a; }
+  // build wall list (each interior edge once)
+  const walls=[];
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const c=y*W+x;
+    if(x<W-1) walls.push([c,c+1]);
+    if(y<H-1) walls.push([c,c+W]);
+  }
+  for(let i=walls.length-1;i>0;i--){ const j=(rng()*(i+1))|0; const t=walls[i];walls[i]=walls[j];walls[j]=t; }
+  for(const [a,b] of walls){
+    const ra=find(a), rb=find(b);
+    if(ra!==rb){ parent[ra]=rb; carve(a,b); }
+  }
+}
+
+/* Wilson's — unbiased uniform spanning tree via loop-erased random walks */
+function genWilson(N,W,H,rng,carve,neighbours){
+  const inTree=new Uint8Array(N);
+  const order=new Int32Array(N);
+  for(let i=0;i<N;i++) order[i]=i;
+  for(let i=N-1;i>0;i--){ const j=(rng()*(i+1))|0; const t=order[i];order[i]=order[j];order[j]=t; }
+  // seed the tree with one random cell
+  inTree[order[0]]=1;
+  const dirOf=new Int32Array(N); // last walk direction (next cell) from each cell
+  for(let oi=1;oi<N;oi++){
+    let c=order[oi];
+    if(inTree[c]) continue;
+    // loop-erased random walk until hitting the tree
+    let walk=c;
+    while(!inTree[walk]){
+      const nb=neighbours(walk);
+      const nxt=nb[(rng()*nb.length)|0];
+      dirOf[walk]=nxt;
+      walk=nxt;
+    }
+    // carve the loop-erased path from c following dirOf until in-tree
+    let cur=c;
+    while(!inTree[cur]){
+      const nxt=dirOf[cur];
+      carve(cur,nxt);
+      inTree[cur]=1;
+      cur=nxt;
+    }
+  }
+}
+
+/* ============================================================================
+   SOLVING — compute the products each solver view needs (independent of style)
+   ========================================================================== */
+/* BFS distance field from start across open passages; also parent for path. */
+function computeBFS(){
+  const {W,H,cells,start,goal}=state;
+  const N=W*H;
+  const dist=new Int32Array(N).fill(-1);
+  const parent=new Int32Array(N).fill(-1);
+  const order=new Int32Array(N); // BFS visitation order (for wavefront animation)
+  let oc=0;
+  const q=new Int32Array(N); let head=0, tail=0;
+  dist[start]=0; q[tail++]=start; order[oc++]=start;
+  while(head<tail){
+    const c=q[head++]; const x=c%W, y=(c/W)|0; const m=cells[c];
+    for(const d of DIRS){
+      if(!(m&d.bit)) continue;
+      const nx=x+d.dx, ny=y+d.dy;
+      if(nx<0||ny<0||nx>=W||ny>=H) continue;
+      const n=ny*W+nx;
+      if(dist[n]!==-1) continue;
+      dist[n]=dist[c]+1; parent[n]=c; q[tail++]=n; order[oc++]=n;
+    }
+  }
+  let maxDist=0;
+  for(let i=0;i<N;i++) if(dist[i]>maxDist) maxDist=dist[i];
+  // reconstruct solution path start..goal
+  const path=[]; let p=goal;
+  while(p!==-1){ path.push(p); if(p===start) break; p=parent[p]; }
+  path.reverse();
+  state.dist=dist; state.maxDist=maxDist; state.parent=parent;
+  state.bfsOrder=order.subarray(0,oc); state.path=path;
+}
+
+/* A* with Manhattan heuristic; records the order cells are expanded + frontier. */
+function computeAStar(){
+  const {W,H,cells,start,goal}=state;
+  const N=W*H;
+  const gx=goal%W, gy=(goal/W)|0;
+  const g=new Int32Array(N).fill(0x7fffffff);
+  const f=new Int32Array(N).fill(0x7fffffff);
+  const parent=new Int32Array(N).fill(-1);
+  const closed=new Uint8Array(N);
+  const inOpen=new Uint8Array(N);
+  const expandOrder=[];           // cells in the order they're popped (explored)
+  // binary heap on f
+  const heap=[]; // store cell indices
+  function hpush(c){ heap.push(c); let i=heap.length-1;
+    while(i>0){ const p=(i-1)>>1; if(f[heap[p]]<=f[heap[i]])break; const t=heap[p];heap[p]=heap[i];heap[i]=t; i=p; } }
+  function hpop(){ const top=heap[0]; const last=heap.pop();
+    if(heap.length){ heap[0]=last; let i=0; const n=heap.length;
+      for(;;){ let l=2*i+1,r=2*i+2,s=i; if(l<n&&f[heap[l]]<f[heap[s]])s=l; if(r<n&&f[heap[r]]<f[heap[s]])s=r; if(s===i)break; const t=heap[s];heap[s]=heap[i];heap[i]=t; i=s; } }
+    return top; }
+  function heur(c){ const x=c%W,y=(c/W)|0; return Math.abs(x-gx)+Math.abs(y-gy); }
+  g[start]=0; f[start]=heur(start); hpush(start); inOpen[start]=1;
+  while(heap.length){
+    const c=hpop();
+    if(closed[c]) continue;
+    closed[c]=1; inOpen[c]=0;
+    expandOrder.push(c);
+    if(c===goal) break;
+    const x=c%W, y=(c/W)|0; const m=cells[c];
+    for(const d of DIRS){
+      if(!(m&d.bit)) continue;
+      const nx=x+d.dx, ny=y+d.dy;
+      if(nx<0||ny<0||nx>=W||ny>=H) continue;
+      const n=ny*W+nx;
+      if(closed[n]) continue;
+      const ng=g[c]+1;
+      if(ng<g[n]){ g[n]=ng; f[n]=ng+heur(n); parent[n]=c; hpush(n); inOpen[n]=1; }
+    }
+  }
+  const path=[]; let p=goal;
+  while(p!==-1){ path.push(p); if(p===start)break; p=parent[p]; }
+  path.reverse();
+  state.astarOrder=expandOrder; state.path=path; state.parent=parent;
+}
+
+/* Dead-end filling: repeatedly plug dead ends (cells with <=1 open passage,
+   excluding start/goal) until only the solution corridor remains. Records the
+   sequence of filled cells for animation; the surviving cells are the path. */
+function computeDeadEnd(){
+  const {W,H,cells,start,goal}=state;
+  const N=W*H;
+  // working copy of openness count (degree) per cell
+  const deg=new Int32Array(N);
+  const open=new Uint8Array(N).fill(1); // 1 = still part of maze, 0 = filled
+  for(let i=0;i<N;i++){ let d=0; const m=cells[i]; for(const dr of DIRS) if(m&dr.bit) d++; deg[i]=d; }
+  const fillOrder=[];
+  // queue of current dead ends
+  const dq=[];
+  for(let i=0;i<N;i++) if(deg[i]<=1 && i!==start && i!==goal) dq.push(i);
+  let head=0;
+  while(head<dq.length){
+    const c=dq[head++];
+    if(!open[c]) continue;
+    if(deg[c]>1) continue;
+    if(c===start||c===goal) continue;
+    open[c]=0; fillOrder.push(c);
+    // reduce neighbour degree along open passages
+    const x=c%W, y=(c/W)|0; const m=cells[c];
+    for(const d of DIRS){
+      if(!(m&d.bit)) continue;
+      const nx=x+d.dx, ny=y+d.dy;
+      if(nx<0||ny<0||nx>=W||ny>=H) continue;
+      const n=ny*W+nx;
+      if(!open[n]) continue;
+      deg[n]--;
+      if(deg[n]<=1 && n!==start && n!==goal) dq.push(n);
+    }
+  }
+  // surviving open cells form the unique solution corridor
+  state.deadFillOrder=fillOrder; state.deadOpen=open;
+  // path for the glowing ribbon: derive via BFS parent (already have dist) order
+  // ensure we have a path
+  if(!state.path){ computeBFS(); }
+}
+
+/* prepare solver data for the current solver mode */
+function prepareSolve(){
+  const t0=performance.now();
+  computeBFS(); // always needed (path + distance heatmap + dead-end path)
+  if(state.solver==="astar") computeAStar();
+  else if(state.solver==="deadend") computeDeadEnd();
+  state.solveMs=performance.now()-t0;
+}
+
+/* ============================================================================
+   RENDERING — fully palette-driven
+   ========================================================================== */
+const canvas=document.getElementById('maze');
+const ctx=canvas.getContext('2d');
+let DPR=Math.min(window.devicePixelRatio||1, 2);
+let CW=0, CH=0;     // css px
+let CELL=0, OFFX=0, OFFY=0, WALLW=0;
+
+function computeSize(){
+  const stagePad=36;
+  const maxW=window.innerWidth - stagePad;
+  const maxH=window.innerHeight - stagePad;
+  // square maze; pick the largest square that fits
+  let side=Math.min(maxW, maxH);
+  side=Math.min(side, 1100);
+  side=Math.max(side, 280);
+  CW=Math.round(side); CH=Math.round(side);
+  DPR=Math.min(window.devicePixelRatio||1, 2);
+  canvas.width=Math.round(CW*DPR); canvas.height=Math.round(CH*DPR);
+  canvas.style.width=CW+'px'; canvas.style.height=CH+'px';
+  // cell geometry: leave a small margin so the outer wall reads
+  const margin=Math.max(8, Math.round(side*0.018));
+  const inner=side - margin*2;
+  CELL=inner/state.W;
+  OFFX=margin; OFFY=margin;
+  WALLW=Math.max(1, CELL*(state.flags.thickWalls?0.18:0.085));
+}
+
+// cell rect in css px
+function cellRect(c){
+  const x=c%state.W, y=(c/state.W)|0;
+  return { px:OFFX+x*CELL, py:OFFY+y*CELL, s:CELL };
+}
+
+function clearBg(pal){
+  const g=ctx.createLinearGradient(0,0,0,CH);
+  g.addColorStop(0,pal.bg[0]); g.addColorStop(1,pal.bg[1]);
+  ctx.fillStyle=g; ctx.fillRect(0,0,CW,CH);
+}
+
+/* Paint a cell's open interior fill (used for flood tint / explored / dead-fill).
+   We slightly overdraw so adjacent tinted cells join through their open passage
+   for a continuous wavefront. */
+function fillCellTint(c, rgb, alpha){
+  const {W,H,cells}=state;
+  const x=c%W, y=(c/W)|0; const m=cells[c];
+  const px=OFFX+x*CELL, py=OFFY+y*CELL;
+  const pad=WALLW*0.5;
+  ctx.fillStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+  // core cell (inset by half a wall)
+  ctx.fillRect(px+pad, py+pad, CELL-pad*2, CELL-pad*2);
+  // bridge into open neighbours so the tint is continuous through passages
+  if(m&2){ ctx.fillRect(px+CELL*0.5, py+pad, CELL*0.5, CELL-pad*2); } // E
+  if(m&4){ ctx.fillRect(px+pad, py+CELL*0.5, CELL-pad*2, CELL*0.5); } // S
+  if(m&1){ ctx.fillRect(px+pad, py-pad, CELL-pad*2, CELL*0.5+pad); }  // N
+  if(m&8){ ctx.fillRect(px-pad, py+pad, CELL*0.5+pad, CELL-pad*2); }  // W
+}
+
+/* Draw all walls as line segments between closed neighbours + the outer border. */
+function drawWalls(pal){
+  const {W,H,cells}=state;
+  ctx.save();
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.lineWidth=WALLW;
+  ctx.strokeStyle=pal.wall;
+  if(pal.glow){
+    ctx.shadowColor=pal.wallGlow; ctx.shadowBlur=Math.max(2,CELL*0.18);
+  }
+  ctx.beginPath();
+  for(let y=0;y<H;y++){
+    for(let x=0;x<W;x++){
+      const c=y*W+x; const m=cells[c];
+      const px=OFFX+x*CELL, py=OFFY+y*CELL;
+      // draw the wall on a side when the passage bit is CLOSED.
+      // To avoid double-drawing shared walls, draw N and W for every cell,
+      // plus E on the last column and S on the last row.
+      if(!(m&1)){ ctx.moveTo(px,py); ctx.lineTo(px+CELL,py); }            // N wall
+      if(!(m&8)){ ctx.moveTo(px,py); ctx.lineTo(px,py+CELL); }            // W wall
+      if(x===W-1 && !(m&2)){ ctx.moveTo(px+CELL,py); ctx.lineTo(px+CELL,py+CELL); } // E border
+      if(y===H-1 && !(m&4)){ ctx.moveTo(px,py+CELL); ctx.lineTo(px+CELL,py+CELL); } // S border
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* Blueprint grid ticks: faint dots at every cell corner. */
+function drawGridTicks(pal){
+  if(!pal.gridTicks) return;
+  const {W,H}=state;
+  ctx.save();
+  ctx.fillStyle="rgba(150,200,255,0.16)";
+  const r=Math.max(0.5, CELL*0.04);
+  for(let y=0;y<=H;y++)for(let x=0;x<=W;x++){
+    ctx.beginPath(); ctx.arc(OFFX+x*CELL, OFFY+y*CELL, r, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* Marker for start / goal cells. */
+function drawEndpoints(pal){
+  const draw=(c,col)=>{
+    const {px,py,s}=cellRect(c);
+    ctx.save();
+    if(pal.glow){ ctx.shadowColor=col; ctx.shadowBlur=Math.max(4,s*0.5); }
+    ctx.fillStyle=col;
+    const r=s*0.26;
+    ctx.beginPath(); ctx.arc(px+s/2, py+s/2, r, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  };
+  draw(state.start, pal.start);
+  draw(state.goal, pal.goal);
+}
+
+/* The glowing solution ribbon — the centrepiece. progress in 0..1 reveals
+   part of the path. Drawn as layered strokes: a wide soft halo, a brighter
+   mid glow, then a crisp bright core, so it reads as a luminous ribbon that
+   sits clearly above the distance flood. */
+function drawPath(pal, progress){
+  const path=state.path;
+  if(!path || path.length<2) return;
+  const count=Math.max(2, Math.floor(path.length*progress));
+  const pts=[];
+  for(let i=0;i<count;i++){ const c=path[i]; const x=c%state.W, y=(c/state.W)|0; pts.push([OFFX+(x+0.5)*CELL, OFFY+(y+0.5)*CELL]); }
+  ctx.save();
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  const glowing = pal.glow || pal.pathGlowAmt>0;
+
+  // 1) wide soft halo (pushes the flood back, frames the ribbon)
+  if(glowing){
+    ctx.shadowColor=pal.pathGlow;
+    ctx.shadowBlur=Math.max(6, CELL*1.4);
+    ctx.strokeStyle=pal.pathGlow;
+    ctx.lineWidth=Math.max(3, CELL*0.5);
+    ctx.globalAlpha=0.45;
+    strokePts(pts);
+  }
+  // 2) mid glow body in the glow colour
+  ctx.shadowColor=pal.pathGlow;
+  ctx.shadowBlur= glowing ? Math.max(3, CELL*0.6) : 0;
+  ctx.strokeStyle=pal.pathGlow;
+  ctx.lineWidth=Math.max(2.5, CELL*0.34);
+  ctx.globalAlpha= glowing ? 0.85 : 0.55;
+  strokePts(pts);
+  // 3) crisp bright core
+  ctx.shadowBlur= glowing ? Math.max(2, CELL*0.22) : 0;
+  ctx.shadowColor=pal.pathCore;
+  ctx.globalAlpha=1;
+  ctx.strokeStyle=pal.pathCore;
+  ctx.lineWidth=Math.max(2, CELL*0.2);
+  strokePts(pts);
+  ctx.restore();
+}
+function strokePts(pts){
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0],pts[0][1]);
+  for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0],pts[i][1]);
+  ctx.stroke();
+}
+
+/* Full static render of the current state (no animation in flight). */
+function render(){
+  computeSize();
+  const pal=STYLES[state.style];
+  ctx.save();
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  clearBg(pal);
+
+  // base cell fill (so open cells read against the bg)
+  ctx.fillStyle=pal.cellBg;
+  ctx.fillRect(OFFX, OFFY, CELL*state.W, CELL*state.H);
+
+  // distance colours (heatmap or solved wavefront in full)
+  const showDist = state.flags.distColours && state.dist &&
+                   (state.solver==="flood" || state.solver==="distance");
+  if(showDist){
+    const md=state.maxDist||1;
+    for(let i=0;i<state.W*state.H;i++){
+      const d=state.dist[i]; if(d<0) continue;
+      fillCellTint(i, pal.flood(d/md), pal.floodAlpha);
+    }
+  }
+
+  // A* explored shading (static)
+  if(state.solver==="astar" && state.astarOrder){
+    for(const c of state.astarOrder) fillCellTintCol(c, pal.explored);
+  }
+  // dead-end filled cells (static)
+  if(state.solver==="deadend" && state.deadFillOrder){
+    for(const c of state.deadFillOrder) fillCellTintCol(c, pal.deadFill);
+  }
+
+  drawGridTicks(pal);
+  drawWalls(pal);
+
+  // solution path
+  const wantPath = state.flags.showPath && state.path &&
+                   (state.solver==="flood"||state.solver==="astar"||state.solver==="deadend");
+  if(wantPath) drawPath(pal, 1);
+
+  drawEndpoints(pal);
+  ctx.restore();
+}
+
+// helpers for rgba string fills
+function fillCellTintCol(c, rgbaStr){
+  const {W,cells}=state;
+  const x=c%W, y=(c/W)|0; const m=cells[c];
+  const px=OFFX+x*CELL, py=OFFY+y*CELL; const pad=WALLW*0.5;
+  ctx.fillStyle=rgbaStr;
+  ctx.fillRect(px+pad,py+pad,CELL-pad*2,CELL-pad*2);
+  if(m&2) ctx.fillRect(px+CELL*0.5,py+pad,CELL*0.5,CELL-pad*2);
+  if(m&4) ctx.fillRect(px+pad,py+CELL*0.5,CELL-pad*2,CELL*0.5);
+  if(m&1) ctx.fillRect(px+pad,py-pad,CELL-pad*2,CELL*0.5+pad);
+  if(m&8) ctx.fillRect(px-pad,py+pad,CELL*0.5+pad,CELL-pad*2);
+}
+
+/* ============================================================================
+   ANIMATION — generation carve + solver wavefront/frontier, ~60fps via rAF
+   ========================================================================== */
+function cancelAnim(){ if(state.anim){ cancelAnimationFrame(state.anim); state.anim=null; } }
+
+// speed slider (1..100) -> cells revealed per frame
+function stepsPerFrame(total){
+  const s=state.speed/100;            // 0..1
+  // scale so even small mazes feel lively and big ones finish quickly
+  const base=Math.max(1, Math.round(total * (0.004 + s*0.06)));
+  return base;
+}
+
+/* Animate the carve order, then auto-run the solver. Carved cells are tinted
+   along the flood gradient by *recency*: the active carving frontier glows
+   bright, fading to a calm tint behind it, so the maze visibly grows. */
+function animateGeneration(then){
+  cancelAnim();
+  const pal=STYLES[state.style];
+  const order=state.carveOrder;
+  const W=state.W, H=state.H, N=W*H;
+  const liveCells=new Uint8Array(N);
+  const carveStep=new Int32Array(N).fill(-1); // step index a cell first appeared
+  let drawn=0;
+  const total=order.length;
+  function frame(){
+    computeSize();
+    const adv=stepsPerFrame(total);
+    for(let k=0;k<adv && drawn<total;k++,drawn++){
+      const [a,b]=order[drawn];
+      const dx=(b%W)-(a%W);
+      if(dx===1){ liveCells[a]|=2; liveCells[b]|=8; }
+      else if(dx===-1){ liveCells[a]|=8; liveCells[b]|=2; }
+      else if(b-a===W){ liveCells[a]|=4; liveCells[b]|=1; }
+      else { liveCells[a]|=1; liveCells[b]|=4; }
+      if(carveStep[a]<0) carveStep[a]=drawn;
+      carveStep[b]=drawn; // b is freshly reached -> mark as most-recent
+    }
+    ctx.save(); ctx.setTransform(DPR,0,0,DPR,0,0);
+    clearBg(pal);
+    ctx.fillStyle=pal.cellBg; ctx.fillRect(OFFX,OFFY,CELL*W,CELL*H);
+    // tint carved cells by recency along the flood gradient
+    const cur=Math.max(1,drawn);
+    for(let i=0;i<N;i++){
+      if(!liveCells[i]) continue;
+      const age=(cur-carveStep[i])/cur;        // 0 = just carved, 1 = oldest
+      const t=0.15+age*0.7;
+      fillCellTint(i, pal.flood(t), pal.floodAlpha*0.5);
+    }
+    // bright leading frontier
+    for(let i=0;i<N;i++){
+      if(liveCells[i] && carveStep[i]>=drawn-Math.max(2,adv)) fillCellTint(i,[255,255,255],0.35);
+    }
+    drawPartialWalls(pal, liveCells);
+    drawEndpoints(pal);
+    ctx.restore();
+    if(drawn<total){ state.anim=requestAnimationFrame(frame); }
+    else { state.anim=null; if(then) then(); }
+  }
+  state.anim=requestAnimationFrame(frame);
+}
+
+function drawPartialWalls(pal, lc){
+  const {W,H}=state;
+  ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.lineWidth=WALLW; ctx.strokeStyle=pal.wall;
+  if(pal.glow){ ctx.shadowColor=pal.wallGlow; ctx.shadowBlur=Math.max(2,CELL*0.14); }
+  ctx.beginPath();
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const c=y*W+x; const m=lc[c];
+    // only render walls for cells touched by carving (keeps "growing" look)
+    if(m===0 && !(x===0&&y===0)) continue;
+    const px=OFFX+x*CELL, py=OFFY+y*CELL;
+    if(!(m&1)){ ctx.moveTo(px,py); ctx.lineTo(px+CELL,py); }
+    if(!(m&8)){ ctx.moveTo(px,py); ctx.lineTo(px,py+CELL); }
+    if(!(m&2)){ ctx.moveTo(px+CELL,py); ctx.lineTo(px+CELL,py+CELL); }
+    if(!(m&4)){ ctx.moveTo(px,py+CELL); ctx.lineTo(px+CELL,py+CELL); }
+  }
+  ctx.stroke(); ctx.restore();
+}
+
+/* Animate the active solver. Renders the maze base each frame then overlays
+   progressively more of the solver's product, finishing on the static look. */
+function animateSolve(){
+  cancelAnim();
+  prepareSolve();
+  const pal=STYLES[state.style];
+
+  if(state.solver==="distance"){
+    // static heatmap — no animation needed, just render
+    render();
+    return;
+  }
+
+  if(state.solver==="flood"){ animateFlood(pal); return; }
+  if(state.solver==="astar"){ animateAStar(pal); return; }
+  if(state.solver==="deadend"){ animateDeadEnd(pal); return; }
+  render();
+}
+
+function paintMazeBase(pal){
+  computeSize();
+  ctx.save(); ctx.setTransform(DPR,0,0,DPR,0,0);
+  clearBg(pal);
+  ctx.fillStyle=pal.cellBg; ctx.fillRect(OFFX,OFFY,CELL*state.W,CELL*state.H);
+  return pal;
+}
+
+function animateFlood(pal){
+  const order=state.bfsOrder;
+  const md=state.maxDist||1;
+  const total=order.length;
+  let n=0;
+  function frame(){
+    paintMazeBase(pal);
+    n=Math.min(total, n+stepsPerFrame(total));
+    if(state.flags.distColours){
+      for(let k=0;k<n;k++){
+        const c=order[k]; const d=state.dist[c];
+        fillCellTint(c, pal.flood(d/md), pal.floodAlpha);
+      }
+      // bright leading wavefront edge: tint the most-recent ring brighter
+      const ringStart=Math.max(0, n-Math.max(2,stepsPerFrame(total)));
+      for(let k=ringStart;k<n;k++){
+        const c=order[k]; fillCellTint(c, [255,255,255], 0.28);
+      }
+    }
+    drawGridTicks(pal);
+    drawWalls(pal);
+    // reveal path progressively once flood reaches the goal
+    const reachedGoal = state.dist[state.goal]>=0 && n>=goalOrderIndex();
+    if(state.flags.showPath && reachedGoal){
+      pathProg = Math.min(1, pathProg + 0.05 + state.speed/600);
+      drawPath(pal, pathProg);
+    }
+    drawEndpoints(pal);
+    ctx.restore();
+    if(n<total || (state.flags.showPath && pathProg<1)){
+      state.anim=requestAnimationFrame(frame);
+    } else { state.anim=null; }
+  }
+  let pathProg=0;
+  let _goalIdx=-1;
+  function goalOrderIndex(){
+    if(_goalIdx>=0) return _goalIdx;
+    for(let i=0;i<order.length;i++) if(order[i]===state.goal){ _goalIdx=i; break; }
+    if(_goalIdx<0) _goalIdx=order.length;
+    return _goalIdx;
+  }
+  state.anim=requestAnimationFrame(frame);
+}
+
+function animateAStar(pal){
+  const order=state.astarOrder;
+  const total=order.length;
+  let n=0, pathProg=0;
+  // precompute goal expansion index
+  let goalIdx=total;
+  for(let i=0;i<total;i++) if(order[i]===state.goal){ goalIdx=i+1; break; }
+  function frame(){
+    paintMazeBase(pal);
+    n=Math.min(total, n+stepsPerFrame(total));
+    // explored set
+    for(let k=0;k<n;k++) fillCellTintCol(order[k], pal.explored);
+    // frontier ring = last expanded few, in frontier colour
+    const ringStart=Math.max(0,n-Math.max(2,stepsPerFrame(total)*2));
+    for(let k=ringStart;k<n;k++){
+      const c=order[k];
+      fillCellTint(c, hexToRgb(pal.frontier), pal.floodAlpha*0.7);
+    }
+    drawGridTicks(pal);
+    drawWalls(pal);
+    if(state.flags.showPath && n>=goalIdx){
+      pathProg=Math.min(1, pathProg + 0.05 + state.speed/600);
+      drawPath(pal, pathProg);
+    }
+    drawEndpoints(pal);
+    ctx.restore();
+    if(n<total || (state.flags.showPath && pathProg<1)) state.anim=requestAnimationFrame(frame);
+    else state.anim=null;
+  }
+  state.anim=requestAnimationFrame(frame);
+}
+
+function animateDeadEnd(pal){
+  const order=state.deadFillOrder;
+  const total=order.length;
+  let n=0, pathProg=0;
+  function frame(){
+    paintMazeBase(pal);
+    n=Math.min(total, n+stepsPerFrame(Math.max(total,1)));
+    for(let k=0;k<n;k++) fillCellTintCol(order[k], pal.deadFill);
+    drawGridTicks(pal);
+    drawWalls(pal);
+    if(state.flags.showPath && n>=total){
+      pathProg=Math.min(1, pathProg + 0.04 + state.speed/700);
+      drawPath(pal, pathProg);
+    }
+    drawEndpoints(pal);
+    ctx.restore();
+    if(n<total || (state.flags.showPath && pathProg<1)) state.anim=requestAnimationFrame(frame);
+    else state.anim=null;
+  }
+  state.anim=requestAnimationFrame(frame);
+}
+
+function hexToRgb(h){
+  if(Array.isArray(h)) return h;
+  if(h[0]!=="#") return [255,255,255];
+  const n=parseInt(h.slice(1),16);
+  return [(n>>16)&255,(n>>8)&255,n&255];
+}
+
+/* ============================================================================
+   ORCHESTRATION
+   ========================================================================== */
+function regenerate(autoSolve){
+  cancelAnim();
+  generate();
+  // reset solve products
+  state.dist=null; state.path=null; state.maxDist=0;
+  state.astarOrder=null; state.deadFillOrder=null; state.deadOpen=null;
+  if(state.flags.animateGen){
+    animateGeneration(()=>{ if(autoSolve) solve(); });
+  } else {
+    if(autoSolve){ solve(); }
+    else render();
+  }
+}
+
+function solve(){
+  cancelAnim();
+  // static distance view: just compute + render
+  if(state.solver==="distance"){
+    prepareSolve(); render(); return;
+  }
+  animateSolve();
+}
+
+/* ----------------------------- UI wiring --------------------------------- */
+function randomSeedString(){
+  const r=makeRng(String(Date.now()*Math.random()));
+  const cons="bcdfghjklmnpqrstvwxz", vow="aeiou";
+  let w="";
+  const n=2+((r()*2)|0);
+  for(let i=0;i<n;i++){ w+=cons[(r()*cons.length)|0]; w+=vow[(r()*vow.length)|0]; }
+  return w.charAt(0).toUpperCase()+w.slice(1)+"-"+(100+(r()*900|0));
+}
+
+function syncSliderFill(el){
+  const min=+el.min,max=+el.max,v=+el.value;
+  el.style.setProperty('--fill', ((v-min)/(max-min)*100)+'%');
+}
+
+function wireUI(){
+  const seedInput=document.getElementById('seed');
+
+  // sliders
+  const sliders=[
+    ['size','sizeVal', v=>v+'×'+v],
+    ['speed','speedVal', v=>v+'%'],
+  ];
+  for(const [id,valId,fmt] of sliders){
+    const el=document.getElementById(id);
+    const val=document.getElementById(valId);
+    syncSliderFill(el); val.textContent=fmt(+el.value);
+    el.addEventListener('input',()=>{
+      state[id]=+el.value; val.textContent=fmt(+el.value); syncSliderFill(el);
+      if(id==='size') scheduleRegen();           // size changes the maze -> regenerate
+      // speed only affects future animation; no redraw needed
+    });
+  }
+
+  // algorithm segmented -> regenerate (new maze texture), then re-solve
+  document.getElementById('algoSeg').addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    [...e.currentTarget.children].forEach(c=>c.classList.toggle('active',c===b));
+    state.algo=b.dataset.v; regenerate(true);
+  });
+  // solver segmented -> re-run the solve animation on the same maze
+  document.getElementById('solverSeg').addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    [...e.currentTarget.children].forEach(c=>c.classList.toggle('active',c===b));
+    state.solver=b.dataset.v; solve();
+  });
+  // style segmented -> palette change = re-render only (maze identical)
+  document.getElementById('styleSeg').addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    [...e.currentTarget.children].forEach(c=>c.classList.toggle('active',c===b));
+    state.style=b.dataset.v; cancelAnim(); render();
+  });
+
+  // flag chips
+  document.querySelectorAll('.chip').forEach(chip=>{
+    chip.addEventListener('click',()=>{
+      const t=chip.dataset.t; state.flags[t]=!state.flags[t];
+      chip.classList.toggle('on',state.flags[t]);
+      cancelAnim();
+      render(); // static re-render reflects toggles immediately
+    });
+  });
+
+  // seed input
+  seedInput.addEventListener('change',()=>{ state.seed=seedInput.value.trim()||'Daedalus'; regenerate(true); });
+  seedInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ seedInput.blur(); } });
+
+  // random seed + reroll
+  function reroll(){
+    state.seed=randomSeedString(); seedInput.value=state.seed; regenerate(true);
+  }
+  document.getElementById('randSeed').addEventListener('click',reroll);
+  document.getElementById('reroll').addEventListener('click',reroll);
+
+  // solve (re-run animation)
+  document.getElementById('solveBtn').addEventListener('click',solve);
+
+  // export
+  document.getElementById('exportBtn').addEventListener('click',exportPNG);
+
+  // collapse / reopen
+  document.getElementById('collapseBtn').addEventListener('click',()=>{
+    document.getElementById('panel').classList.add('collapsed');
+  });
+  document.getElementById('reopen').addEventListener('click',()=>{
+    document.getElementById('panel').classList.remove('collapsed');
+  });
+
+  // debounced resize redraw
+  let rt=null;
+  window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(()=>{ if(!state.anim) render(); },120); });
+}
+
+// debounced regenerate for the size slider
+let regenTimer=null;
+function scheduleRegen(){
+  clearTimeout(regenTimer);
+  regenTimer=setTimeout(()=>regenerate(true), 110);
+}
+
+function exportPNG(){
+  try{
+    const url=canvas.toDataURL('image/png');
+    const a=document.createElement('a');
+    const safe=(state.seed||'maze').replace(/[^a-z0-9]+/gi,'_').toLowerCase();
+    a.href=url; a.download='daedalus_'+safe+'.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  }catch(e){ console.error('Export failed:',e); }
+}
+
+/* ----------------------------- boot --------------------------------------- */
+function boot(){
+  state.size=+document.getElementById('size').value;
+  state.speed=+document.getElementById('speed').value;
+  state.seed=randomSeedString();
+  document.getElementById('seed').value=state.seed;
+  wireUI();
+  generate();
+  // solve on load so the hero flood-fill is visible immediately
+  solve();
+  console.log('Daedalus ready. Seed:', state.seed, '| algo:', state.algo,
+              '| gen', state.genMs.toFixed(1)+'ms');
+}
+window.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>
