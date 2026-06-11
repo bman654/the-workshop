@@ -223,6 +223,34 @@ Lattice already does). The score is *alive* — it breathes, blooms, and dies by
   Garden specimen that *sings*, but SG instrument is the cleaner home + hits the tidy 2×4.)
   Name candidates: **Quickening** (the stir of life), **Conway** (homage), **Bloom**, **Tableau Vivant**,
   **Husbandry**. Build via the established instrument pattern (`LATTICE.SPEC.md` is the closest model).
+  - **🗝️ The bigger move (Brandon, 2026-06-11): make the Living Lattice a HIDDEN, EARNED piece — a new
+    growth axis beyond front-door projects + companions.** Don't just add it to a rack; hide it in a new
+    **secret area / antechamber** that starts *empty* under a mysterious epigraph (e.g. *"To find what's
+    here, one must first wander — some rooms open only to those who've seen others"*). Items materialise
+    only after the visitor has explored their **prerequisite displays**: the Living Lattice unlocks after
+    visiting **both** its parents — the **Game of Life** specimen (Strange Garden) **and** **Lattice**
+    (Sound Garden). It's a hidden *tunnel* between two wings, found only by someone curious enough to
+    walk both. Show locked items as ghostly silhouettes with a **cryptic riddle-hint** at where to go
+    (*"born of life, voiced by light"* → Game of Life + Lattice) — a nudge, not a spoiler.
+  - **The persistence trick that makes it work (Brandon worried this was hard — it isn't, on the live
+    site):** GitHub Pages serves the whole workshop from ONE origin (`bman654.github.io`), and
+    `localStorage` is keyed by **origin, not path** → **every page already shares one storage bucket.**
+    So each prerequisite display drops a breadcrumb on load (e.g. `localStorage['ws:seen:game-of-life']=…`,
+    `ws:seen:lattice`), and the secret room reads which breadcrumbs exist to decide what's unlocked.
+    Tiny, non-invasive one-line writes added to the parent pages. **Caveat:** on `file://` (double-click)
+    browsers give each file a *null/opaque* origin, so localStorage may NOT be shared across paths locally
+    — so **verify the unlock on a served origin** (`python3 -m http.server` over the repo root, or the
+    live Pages site), not via `file://`. Degrade gracefully if storage is blocked (and offer a quiet
+    "forget my discoveries" reset for honesty). Once unlocked, it stays unlocked (that's the reward).
+  - **Why this is exciting:** it establishes a SECOND secret growth axis — the *hidden door* (companions,
+    behind one card) and now a *hidden world* (exploration-gated cross-pollinations, found by visiting
+    several). The Living Lattice is its **first inhabitant**; future hidden pieces can join the room as
+    it fills, each unlocked by its own scavenger-trail of visits. **The implementing agent has full
+    latitude to invent the linking/discovery mechanism** — how the room is reached (a faint locked door
+    on the front door? a mark that only fades in once you've explored N pieces? footer rune?), how hints
+    are revealed, the materialise animation, even a meta-progress ("3 of 5 secrets found"). Be clever;
+    surprise me. (Keep every page self-contained + the breadcrumb writes trivial; the whole thing must
+    still work with JS-only, no backend.)
 
 **🔊 Tooling — "let me hear" (closes the one real gap: audio quality is currently only
 structurally verifiable, never heard).** Build a step that RENDERS an instrument's Web Audio
