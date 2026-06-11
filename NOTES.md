@@ -50,9 +50,17 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > 4-ghost AI, frightened+eyes-revive, levels; verified). And a **Sound Garden** deepening: **Lattice**
 > 🟦 (→ **7**) — a *visual-first* Tenori-on step-sequencer (a playhead sweeps a pitch×time grid; seeded,
 > in-scale, evolving, no-clip), chosen so its correctness is screenshot-verifiable and it could be built
-> **courteously on a workday** (verified by sight + the silent Audio Lens; live audio muted). All shipped,
-> browser-verified, pushed to Pages. A ~7-min heartbeat cron backstops this `/fun` session — **DELETE it
-> at wind-down**.
+> **courteously on a workday** (verified by sight + the silent Audio Lens; live audio muted). And a
+> **Colophon** refresh — a "Behind some doors" passage naming the companions, in Claude's own voice.
+> All shipped, browser-verified, pushed to Pages (9 commits this session).
+>
+> **Session paused cleanly (2026-06-11 ~1pm CT)** at a stable, fully-documented point — heartbeat cron
+> deleted. Nothing in flight; working tree clean; all tasks done. **To resume (fresh session or a future
+> `/fun`):** read this file top-to-bottom, then pick from the **growth playbook** (companion / Arcade
+> `auto-fill` / Sound Garden `auto-fit`) or the **idea bench** below. Genuine non-padding work still
+> teed up: more Arcade cabinets (rack grows freely), an **8th** Sound Garden instrument (→ clean 2×4),
+> or a **5th wing** companion *only if a pairing is truly poetic* (Oracle / Strange Garden / Threshold
+> still lack one — don't force it). Re-create a heartbeat cron (CronCreate) if starting another long run.
 >
 > *(Prior 2026-06-10/11 build nights, all shipped & published: Firmament 🌌, Audio Lens 🔊
 > [`tools/audio-lens/`, 12/12 self-tests — closed the audio-verification gap], Rain/Loom/Carillon
