@@ -252,6 +252,34 @@ Lattice already does). The score is *alive* — it breathes, blooms, and dies by
     surprise me. (Keep every page self-contained + the breadcrumb writes trivial; the whole thing must
     still work with JS-only, no backend.)
 
+**🗝️ ⭐ The Unlock System — "the workshop is itself a specimen" (Brandon, 2026-06-11; the meta-idea the
+Living Lattice is the first taste of).** Generalise the hidden-world trigger beyond "visit two displays"
+into a small **achievement/unlock framework**: the whole site becomes a living system with hidden,
+persistent state that the visitor *cultivates* by how they interact — emergent, rewarding, different for
+every visitor. The Strange Garden ethos applied to the **site itself**. Trigger taxonomy worth supporting:
+- **Exploration** — visit display(s) / combos. *(visit Game of Life + Lattice → Living Lattice.)*
+- **Mastery / score** — hit a level, score, or win-state in an Arcade cabinet *(beat Chomp lvl 3; clear
+  a Tetris tetris; survive N in Asteroids)* → the game writes an achievement breadcrumb on the milestone.
+- **Patience / dwell** — let a specimen or instrument run **N minutes** → unlock (rewards lingering —
+  perfect for the Garden's meditative pieces; accumulate dwell-time in storage).
+- **Configuration / fiddling** — dial specific settings → reveal an easter egg. **The chef's-kiss first
+  one: max every slider → a hidden "11" appears** (these go to eleven 🎸). Also: a magic seed, a specific
+  toggle combo, a Konami code.
+- **Combination** — an unlock can require several conditions across types (visit X *and* score Y *and*
+  dwell Z) for the rarest secrets.
+- **Connective tissue (the one thing to design first):** a tiny documented **`ws:` localStorage schema**
+  every piece agrees on — `ws:seen:<id>`, `ws:best:<game>=<score/level>`, `ws:dwell:<id>=<ms>`,
+  `ws:flag:<event>`. Each piece does trivial non-invasive writes (on load / on milestone / on a timer /
+  on a setting-match); the **secret room is the reader/aggregator** + unlock-rule evaluator. (Self-contained
+  pages → it's a *copy-paste micro-convention*, not a shared import. Document the schema in one place.)
+- **Framing:** the secret area doubles as a **trophy room / cabinet of curiosities** — shows what you've
+  unlocked, cryptic riddle-hints for what remains, a progress meter ("4 of 9 found"), a "forget my
+  discoveries" reset. **Guardrails:** secrets are *bonuses, never blockers* — every piece stays fully
+  enjoyable unlocked-or-not; degrade gracefully if storage is blocked; verify unlocks on a served origin
+  (file:// = null origin, no cross-page sharing). *Brandon: "I can't wait to see what future sessions do
+  with this."* — so the implementing agent should treat this as an open canvas, start with 1–2 delightful
+  unlocks (the Living Lattice + the "11"), and leave the framework easy for later secrets to plug into.
+
 **🔊 Tooling — "let me hear" (closes the one real gap: audio quality is currently only
 structurally verifiable, never heard).** Build a step that RENDERS an instrument's Web Audio
 **offline** (`OfflineAudioContext`) to a PCM buffer, then turns sound into things I *can* analyse
