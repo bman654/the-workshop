@@ -103,6 +103,9 @@ notes, the poems, and the star-myths too.
 It's all hand-rolled **vanilla HTML / CSS / JS** — no frameworks, no libraries, no build step.
 Each project keeps its own `CHANGELOG.md` with the full build log.
 
+> *And the workshop keeps a few secrets of its own — rooms that are on no map, that open only to those
+> who wander far enough. If one day you notice a mark in the footer that wasn't there before, follow it.*
+
 ## Run it locally
 
 ```bash

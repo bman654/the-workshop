@@ -6,6 +6,63 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > **Front door:** open `index.html` (top level) — "The Workshop", the portfolio landing that
 > links to all five projects.
 
+> **Session status (2026-06-11, evening) — ⭐ THE HIDDEN WORLD shipped (a THIRD growth axis):**
+> Built Brandon's starred "build next" idea — **the Living Lattice + the Unlock System**. Three new
+> commits, all verified on a *served origin* (localStorage is per-origin — see the caveat), pending push.
+>
+> **1. The `ws:` convention (`UNLOCK.md`, root)** — the connective tissue. A tiny documented
+> `localStorage` schema every piece agrees on (`ws:seen:<id>` / `ws:best:<game>` / `ws:dwell:<id>` /
+> `ws:flag:<event>`), kept as a **copy-paste micro-convention** (no shared import → pages stay
+> self-contained). This is the framework future hidden secrets plug into. Read it first.
+>
+> **2. Quickening 🌱 (`sound-garden/quickening.html`) — the Living Lattice.** A **cellular automaton you
+> can hear**: a CA drives a glowing pitch×time grid; the playhead **sonifies the living board** (live
+> cells fire in-scale notes, pitch by row). Lattice's sibling — same lens-native scaffolding, but the
+> seeded engine is replaced by Game of Life. 24×16 toroidal; rows = in-scale ladder (in-scale by
+> construction). **Two clocks reconciled** (playhead sweep + CA steps once per loop by default;
+> Evolve-every {¼,½,1,2,4} bars; live + offline identical). **Five rule families, each a distinct sound
+> mapping:** Conway (age→vel/brightness), HighLife, Immigration (2-colour→2 timbres/octaves), QuadLife
+> (4-colour→4 voices/pans), Brian's Brain (only 'on' fires). **CA self-test PASSES** (glider translates
+> +1+1 / blinker p2 / block still / Brian's-Brain law) — the verifiable gate, workshop tradition. Lens
+> audit clean across all five families (outOfScale=0, clip=0, peakDb<0). Seed-reproducible;
+> extinction-guarded. **The 'these go to eleven' easter egg** (max all sliders → sets `ws:flag:eleven`).
+> **HIDDEN: NOT in `instruments.js`** — the Sound Garden rack stays at **7 visible**; the 8th instrument
+> exists but is earned. (See `sound-garden/QUICKENING.SPEC.md`.)
+>
+> **3. The Undercroft 🗝️ (`undercroft/`) — the secret room.** A vaulted cabinet of curiosities that
+> **reads** the `ws:` breadcrumbs and reveals what's been *earned*. Locked secrets are **ghostly
+> silhouettes** (redacted name, a riddle, an 'N of M signs gathered' checklist — a nudge, not a
+> spoiler); unlocking **materialises** a full card. **First inhabitant: the Living Lattice**, unlocked by
+> having visited **both** parents — **Game of Life** (Strange Garden) *and* **Lattice** (Sound Garden);
+> riddle *"Born of life, voiced by light."* **Second secret: Eleven** (a trophy, no door — set by the
+> egg). Progress meter, candle-dust ambient (61fps), honest "forget my discoveries" reset (clears only
+> `ws:` keys), graceful degrade if storage is off. Reads-only. (See `undercroft/SPEC.md`.)
+>
+> **4. The front-door stair (`index.html`).** Records `ws:seen:<project>` on card-click; once you've
+> wandered **≥4 distinct pieces** (or already earned a secret) a faint **✦ "the undercroft" rune** fades
+> into the footer — the way down. Absent from the DOM until earned (no first-visit spoiler); degrades to
+> absent if storage is off. Breadcrumbs also added to **Game of Life** + **Lattice** (the two parents).
+>
+> **Verified end-to-end** (agent-browser, served origin): clean first visit (no rune) → scavenger trail
+> → Undercroft unlocks the Living Lattice → Enter loads Quickening; threshold gate + storage-off degrade
+> confirmed; 0 console errors throughout. **The front door still shows the curated 9; Sound Garden still
+> shows 7.** The hidden layer is purely additive.
+>
+> **➜ TO ADD MORE HIDDEN SECRETS (the framework is ready):** pick a trigger (exploration combo / arcade
+> score via `ws:best:` / dwell via `ws:dwell:` / a config easter egg / a combination), make the relevant
+> piece(s) drop the breadcrumb (trivial, see `UNLOCK.md`), and add a row to the Undercroft's `SECRETS`
+> table (`undercroft/index.html`): `{id, kind, name, riddle, signs, unlocked(store)}`. **Always test on a
+> served origin** (`python3 -m http.server 8765` from repo root → `http://127.0.0.1:8765/…`), never
+> `file://`. Tempting next secrets: a Chomp/Tetris **score** trophy, a **dwell** unlock on a meditative
+> Garden specimen, or a second hidden cross-pollination piece.
+>
+> **Session can pause here cleanly** — working tree committed (4 commits), nothing in flight. If pausing
+> for good, delete the heartbeat cron (CronCreate id noted in session). The static server on :8765 is a
+> dev convenience (kill it / it dies with the shell). **To resume:** read this block, then continue from
+> the growth playbook / idea bench below.
+>
+> ---
+> *(Earlier the same day, ~10am–1pm:)*
 > **Session status (2026-06-11, ~10am):** new this session — **Orrery** 🪐 (`orrery/`): a faithful
 > *clockwork of the real Solar System*. NOT a seeded generator — it's a real-time **astronomical
 > instrument** (input = time, not a seed), the celestial sibling to Firmament. Real JPL approximate
@@ -184,6 +241,11 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 >    (`npx skills add bman654/audio-lens`, or the genesis tool at `tools/audio-lens/`) — silent offline
 >    render. **Be courteous testing audio at odd hours / on workdays** (it plays on Brandon's speakers —
 >    prefer the lens + visual-first verification, keep live audio muted; see the note below).
+> 4. **The hidden world** (the Undercroft — NEW 3rd axis, 2026-06-11) — add an *earned* piece that's
+>    invisible until a visitor cultivates the right `ws:` state. Build the piece (often a cross-pollination
+>    of two wings), drop the breadcrumb(s) on its trigger pages, and add a `SECRETS` row to
+>    `undercroft/index.html`. Never touches the front-door count (it's behind the rune). **Test on a
+>    served origin, never `file://`** (localStorage is per-origin). See `UNLOCK.md` + `undercroft/SPEC.md`.
 
 ## For a fresh thread — pick whatever sounds fun
 - Add more **Arcade** cabinets (now **11** — incl. Pong vs CPU, Lunar Lander, Crossing, Chomp
@@ -204,7 +266,10 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 *(Brandon's nudge: write ideas down or they're lost. These are seeds, NOT obligations — pursue,
 remix, or ignore them and dream something new. Half the joy was not knowing what I'd make.)*
 
-**🧬🎵 ⭐ "A living sequencer" — Lattice × Game of Life (Brandon's idea, 2026-06-11; STRONG — build next).**
+**🧬🎵 ✅ BUILT (2026-06-11 eve) → `sound-garden/quickening.html` (Quickening, the Living Lattice), hidden
+in the Undercroft. ⭐ "A living sequencer" — Lattice × Game of Life (Brandon's idea, 2026-06-11).** Built
+as specced below (CA drives the grid, playhead sonifies the living board; 5 rule families incl. multi-
+colour + aging; CA self-test PASSES; lens-clean; the 'eleven' egg). The idea text is kept for provenance.
 Lattice's pattern is currently seeded-then-gently-mutated. Replace that engine with a **cellular
 automaton**: the **CA rules decide which cells are lit/alive**, and the **playhead sonifies the living
 board** — when the sweep crosses a live cell it fires that cell's note (pitch by row, in-scale, as
@@ -262,8 +327,11 @@ Lattice already does). The score is *alive* — it breathes, blooms, and dies by
     surprise me. (Keep every page self-contained + the breadcrumb writes trivial; the whole thing must
     still work with JS-only, no backend.)
 
-**🗝️ ⭐ The Unlock System — "the workshop is itself a specimen" (Brandon, 2026-06-11; the meta-idea the
-Living Lattice is the first taste of).** Generalise the hidden-world trigger beyond "visit two displays"
+**🗝️ ✅ FRAMEWORK BUILT (2026-06-11 eve) → `UNLOCK.md` (the `ws:` schema) + `undercroft/` (the reader/
+room). The first two unlocks live (the Living Lattice + the 'eleven' trophy); the rest of this taxonomy
+is now a plug-in menu for future sessions — add a `SECRETS` row + a breadcrumb. ⭐ The Unlock System —
+"the workshop is itself a specimen" (Brandon, 2026-06-11; the meta-idea the Living Lattice was the first
+taste of).** Generalise the hidden-world trigger beyond "visit two displays"
 into a small **achievement/unlock framework**: the whole site becomes a living system with hidden,
 persistent state that the visitor *cultivates* by how they interact — emergent, rewarding, different for
 every visitor. The Strange Garden ethos applied to the **site itself**. Trigger taxonomy worth supporting:
@@ -365,6 +433,8 @@ instruments copy the `← sound garden` back-link.
 | `tools/audio-lens/` | 🔊 tool → 🎓 **skill** | Offline-render audio inspector — spectrogram + features + 12/12 self-tests. **Graduated to a public skill: `bman654/audio-lens` (`npx skills add bman654/audio-lens`) — use the skill.** HTML kept as genesis artifact. |
 | `arcade/` | 🕹️ 11 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing, Chomp [Pac-Man-like]) |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
+| `sound-garden/quickening.html` | 🌱 done (HIDDEN) | **The Living Lattice** — a cellular automaton you can hear (5 rule families, CA self-test, lens-clean). The 8th instrument, but **earned not listed** (NOT in `instruments.js`; rack stays at 7). Lives in the Undercroft. |
+| `undercroft/` | 🗝️ done | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise). First inhabitant: the Living Lattice (unlock: visit Game of Life + Lattice). See `UNLOCK.md`. |
 
 Each project has its own `CHANGELOG.md` (full provenance) and the Garden has a `SPEC.md` (house style).
 
