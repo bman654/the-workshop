@@ -1,0 +1,1289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>CROSSING — neon hop arcade</title>
+<style>
+  :root{ --accent:#39ff14; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; background:#04080a; overflow:hidden;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    color:#e6ffe1; -webkit-font-smoothing:antialiased; cursor:default; }
+  #stage{ position:fixed; inset:0; }
+  canvas{ display:block; position:absolute; inset:0; }
+
+  /* ---------- HUD ---------- */
+  .hud{ position:fixed; inset:0; pointer-events:none; z-index:5;
+    font-variant-numeric:tabular-nums; }
+  .hud-row{ position:absolute; top:18px; display:flex; align-items:baseline; gap:10px;
+    text-shadow:0 0 12px rgba(57,255,20,.45); }
+  .hud-left{ left:24px; flex-direction:column; gap:4px; align-items:flex-start; }
+  .hud-right{ right:24px; flex-direction:column; align-items:flex-end; gap:4px; }
+  .label{ font-size:10px; letter-spacing:.32em; color:#69b95f; opacity:.85; text-transform:uppercase; }
+  .value{ font-size:30px; font-weight:700; letter-spacing:.04em; line-height:1;
+    color:#f0ffe9; text-shadow:0 0 16px rgba(57,255,20,.6); }
+  .value.small{ font-size:17px; color:#bdf0a8; }
+  .lives{ display:flex; gap:9px; align-items:center; margin-top:2px; }
+  .life{ width:18px; height:18px; opacity:.95;
+    filter:drop-shadow(0 0 6px rgba(57,255,20,.7)); }
+  .level-tag{ position:fixed; top:18px; left:50%; transform:translateX(-50%);
+    text-align:center; }
+  .level-tag .label{ font-size:10px; }
+  .level-tag .value{ font-size:20px; }
+  /* per-life timer bar */
+  .timer-wrap{ position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+    width:min(360px,46vw); height:6px; border-radius:4px;
+    background:rgba(57,255,20,.10); overflow:hidden; pointer-events:none; z-index:5;
+    box-shadow:0 0 10px rgba(57,255,20,.18) inset; }
+  .timer-bar{ height:100%; width:100%; transform-origin:left center;
+    background:linear-gradient(90deg, #39ff14, #c6ff4d);
+    box-shadow:0 0 12px rgba(57,255,20,.8); }
+  #muteTag{ position:fixed; bottom:16px; right:20px; font-size:10px; letter-spacing:.24em;
+    color:#69b95f; opacity:.7; text-transform:uppercase; }
+
+  /* ---------- Overlays ---------- */
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:8px;
+    background:radial-gradient(120% 120% at 50% 40%, rgba(4,10,8,.35), rgba(2,5,4,.86));
+    backdrop-filter:blur(1.5px); transition:opacity .35s; }
+  .overlay.hidden{ opacity:0; pointer-events:none; }
+  .title{ font-size:clamp(54px,13vw,150px); font-weight:800; letter-spacing:.14em;
+    line-height:.9; color:#f0ffe9; margin-bottom:6px;
+    text-shadow:0 0 30px rgba(57,255,20,.6), 0 0 70px rgba(57,255,20,.32);
+    -webkit-text-stroke:1px rgba(190,255,170,.25); }
+  .title .a2{ color:var(--accent); -webkit-text-stroke:1px rgba(57,255,20,.4); }
+  .tagline{ font-size:13px; letter-spacing:.34em; color:#8fde7c; text-transform:uppercase;
+    opacity:.9; margin-bottom:26px; }
+  .prompt{ font-size:15px; letter-spacing:.12em; color:#f0ffe9;
+    margin-top:14px; animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:.45} 50%{opacity:1} }
+  .controls{ margin-top:30px; display:grid; grid-template-columns:auto auto;
+    gap:6px 26px; font-size:12px; letter-spacing:.06em; color:#bdf0a8; opacity:.88; }
+  .controls b{ color:#f0ffe9; font-weight:700; }
+  .controls .k{ text-align:right; color:var(--accent); }
+  .go-score{ font-size:16px; letter-spacing:.14em; color:#bdf0a8; margin-top:6px; }
+  .go-score b{ color:#f0ffe9; font-size:34px; display:block; margin-top:4px;
+    text-shadow:0 0 18px rgba(57,255,20,.6); }
+  .newhigh{ color:var(--accent); font-size:13px; letter-spacing:.3em; text-transform:uppercase;
+    margin-top:10px; animation:pulse 1s ease-in-out infinite; }
+  .gameover-title{ font-size:clamp(34px,8vw,76px); font-weight:800; letter-spacing:.14em;
+    color:#ff5e7a; text-shadow:0 0 28px rgba(255,94,122,.6); margin-bottom:8px; }
+  .pausetitle{ font-size:48px; font-weight:800; letter-spacing:.22em; color:#f0ffe9;
+    text-shadow:0 0 24px rgba(57,255,20,.55); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg"></canvas>
+  <canvas id="game"></canvas>
+</div>
+
+<!-- HUD -->
+<div class="hud" id="hud" style="display:none">
+  <div class="hud-row hud-left">
+    <div class="label">Score</div>
+    <div class="value" id="score">0</div>
+    <div class="lives" id="lives"></div>
+  </div>
+  <div class="hud-row hud-right">
+    <div class="label">High</div>
+    <div class="value small" id="high">0</div>
+  </div>
+  <div class="level-tag">
+    <div class="label">Level</div>
+    <div class="value" id="level">1</div>
+  </div>
+</div>
+<div class="timer-wrap" id="timerWrap" style="display:none"><div class="timer-bar" id="timerBar"></div></div>
+<div id="muteTag">M · sound off</div>
+
+<!-- Title -->
+<div class="overlay" id="titleScreen">
+  <div class="title">CROSS<span class="a2">ING</span></div>
+  <div class="tagline">hop · ride · survive</div>
+  <div class="prompt">Press ENTER to start</div>
+  <div class="controls">
+    <span class="k">▲ ◄ ▼ ►</span><span><b>WASD</b> &nbsp;hop one tile</span>
+    <span class="k">GOAL</span><span>fill the top bays</span>
+    <span class="k">RIVER</span><span>ride logs &amp; turtles</span>
+    <span class="k">P / ESC</span><span>pause</span>
+    <span class="k">M</span><span>mute (off)</span>
+  </div>
+</div>
+
+<!-- Game over -->
+<div class="overlay hidden" id="gameoverScreen">
+  <div class="gameover-title">GAME OVER</div>
+  <div class="go-score">FINAL SCORE<b id="finalScore">0</b></div>
+  <div class="newhigh" id="newHigh" style="display:none">★ NEW HIGH SCORE ★</div>
+  <div class="prompt">Press ENTER to play again</div>
+</div>
+
+<!-- Pause -->
+<div class="overlay hidden" id="pauseScreen">
+  <div class="pausetitle">PAUSED</div>
+  <div class="prompt">Press P or ESC to resume</div>
+</div>
+
+<script>
+"use strict";
+(function(){
+//============================================================== setup / canvas
+const bgCanvas = document.getElementById('bg');
+const canvas   = document.getElementById('game');
+const bgx = bgCanvas.getContext('2d');
+const ctx = canvas.getContext('2d');
+
+let W = 0, H = 0, DPR = 1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  for (const c of [bgCanvas, canvas]){
+    c.width  = Math.floor(W * DPR);
+    c.height = Math.floor(H * DPR);
+    c.style.width = W + 'px';
+    c.style.height = H + 'px';
+  }
+  bgx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  computeLayout();
+  drawBackground();
+}
+window.addEventListener('resize', resize);
+
+//============================================================== utilities
+const TAU = Math.PI * 2;
+const rand  = (a=1,b=0)=> b + Math.random()*(a-b);
+const randi = (a,b)=> Math.floor(rand(a,b));
+const clamp = (v,lo,hi)=> v<lo?lo:(v>hi?hi:v);
+const lerp  = (a,b,t)=> a + (b-a)*t;
+const easeOutBack = (t)=>{ const c1=1.70158, c3=c1+1; return 1 + c3*Math.pow(t-1,3) + c1*Math.pow(t-1,2); };
+const easeOutCubic = (t)=> 1 - Math.pow(1-t,3);
+
+//============================================================== layout (grid)
+// Vertical band layout, top -> bottom:
+//   goal row (bays)         : 1 tile
+//   river zone              : RIVER_LANES tiles
+//   median (safe)           : 1 tile
+//   road zone               : ROAD_LANES tiles
+//   start row (safe)        : 1 tile
+const RIVER_LANES = 5;
+const ROAD_LANES  = 5;
+const GOAL_BAYS   = 5;
+// row indices (0 = top goal row)
+const ROW_GOAL   = 0;
+const RIVER_TOP  = 1;
+const RIVER_BOT  = RIVER_TOP + RIVER_LANES - 1;         // last river row
+const ROW_MEDIAN = RIVER_BOT + 1;                        // safe strip
+const ROAD_TOP   = ROW_MEDIAN + 1;
+const ROAD_BOT   = ROAD_TOP + ROAD_LANES - 1;
+const ROW_START  = ROAD_BOT + 1;
+const ROW_COUNT  = ROW_START + 1;                        // total rows
+
+let TILE = 40;        // pixel size of a tile (square-ish)
+let GRID_W = 13;      // columns
+let fieldX = 0, fieldY = 0, fieldW = 0, fieldH = 0;
+let rowY = [];        // y of top of each row
+function rowCenterY(r){ return rowY[r] + TILE/2; }
+
+function computeLayout(){
+  // choose a tile size so the field fits nicely in the window
+  const maxH = H - 24;            // small margin top/bottom
+  TILE = Math.floor(maxH / ROW_COUNT);
+  TILE = clamp(TILE, 30, 78);
+  fieldH = TILE * ROW_COUNT;
+  // columns: as many as fit in width (odd count so a center column exists)
+  GRID_W = Math.floor((W * 0.96) / TILE);
+  if (GRID_W % 2 === 0) GRID_W -= 1;
+  GRID_W = clamp(GRID_W, 9, 27);
+  fieldW = TILE * GRID_W;
+  fieldX = Math.floor((W - fieldW)/2);
+  fieldY = Math.floor((H - fieldH)/2);
+  rowY = [];
+  for (let r=0;r<ROW_COUNT;r++) rowY[r] = fieldY + r*TILE;
+  // recompute goal bay positions
+  layoutBays();
+}
+function colX(c){ return fieldX + c*TILE; }
+function colCenterX(c){ return fieldX + c*TILE + TILE/2; }
+
+//============================================================== background (static field art, drawn once per resize)
+let scanShift = 0;
+// All non-animated field art lives on the bg canvas so the per-frame game canvas
+// only paints moving things (traffic, river platforms, player, particles). This is
+// the key to holding 60fps — no per-frame gradients or scanline loops.
+function drawBackground(){
+  bgx.clearRect(0,0,W,H);
+  bgx.fillStyle = '#04080a';
+  bgx.fillRect(0,0,W,H);
+  // ambient vertical gradient
+  const g = bgx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'rgba(8,28,16,0.55)');
+  g.addColorStop(0.5,'rgba(4,10,10,0.2)');
+  g.addColorStop(1,'rgba(6,16,24,0.5)');
+  bgx.fillStyle = g; bgx.fillRect(0,0,W,H);
+  // dotted grid backdrop
+  bgx.globalAlpha = 0.10; bgx.fillStyle = '#39ff14';
+  for (let y=0;y<H;y+=46){ for (let x=0;x<W;x+=46){ bgx.fillRect(x,y,1,1); } }
+  bgx.globalAlpha = 1;
+
+  if (!rowY.length) return;
+
+  // ---- zone bands ----
+  bgBand(ROW_START, ROW_START, 'rgba(20,40,28,0.55)', 'rgba(57,255,20,0.16)');
+  for (let r=ROAD_TOP;r<=ROAD_BOT;r++) bgBand(r, r, 'rgba(10,12,16,0.7)', null);
+  // road lane dashes
+  bgx.save();
+  bgx.setLineDash([TILE*0.32, TILE*0.32]);
+  bgx.strokeStyle='rgba(120,140,160,0.25)'; bgx.lineWidth=1.4;
+  for (let r=ROAD_TOP;r<ROAD_BOT;r++){
+    const y=rowY[r+1];
+    bgx.beginPath(); bgx.moveTo(fieldX,y); bgx.lineTo(fieldX+fieldW,y); bgx.stroke();
+  }
+  bgx.restore();
+  bgBand(ROW_MEDIAN, ROW_MEDIAN, 'rgba(24,46,30,0.6)', 'rgba(57,255,20,0.18)');
+
+  // ---- water (static gradient + shimmer baked in) ----
+  const wy=rowY[RIVER_TOP], wh=RIVER_LANES*TILE;
+  const wg=bgx.createLinearGradient(0,wy,0,wy+wh);
+  wg.addColorStop(0,'rgba(6,26,46,0.92)'); wg.addColorStop(1,'rgba(8,20,38,0.92)');
+  bgx.fillStyle=wg; bgx.fillRect(fieldX,wy,fieldW,wh);
+  bgx.save();
+  bgx.globalAlpha=0.16; bgx.strokeStyle='#37d6ff'; bgx.lineWidth=1;
+  for (let i=0;i<RIVER_LANES*2;i++){
+    const yy=wy+(i+0.5)*(wh/(RIVER_LANES*2));
+    bgx.beginPath(); bgx.moveTo(fieldX,yy); bgx.lineTo(fieldX+fieldW,yy); bgx.stroke();
+  }
+  bgx.restore();
+
+  // ---- goal-row hedge backdrop ----
+  bgx.fillStyle='rgba(8,30,16,0.85)';
+  bgx.fillRect(fieldX, rowY[ROW_GOAL], fieldW, TILE);
+
+  // ---- field border ----
+  bgx.save();
+  bgx.strokeStyle='rgba(57,255,20,0.28)'; bgx.lineWidth=2; bgx.shadowBlur=14; bgx.shadowColor='rgba(57,255,20,0.4)';
+  bgx.strokeRect(fieldX+0.5, fieldY+0.5, fieldW-1, fieldH-1);
+  bgx.restore();
+
+  // ---- vignette ----
+  const vg=bgx.createRadialGradient(W/2,H/2, Math.min(W,H)*0.3, W/2,H/2, Math.max(W,H)*0.72);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.55)');
+  bgx.fillStyle=vg; bgx.fillRect(0,0,W,H);
+
+  // ---- scanlines (baked once) ----
+  bgx.save(); bgx.globalAlpha=0.05; bgx.fillStyle='#000';
+  for (let y=0;y<H;y+=3) bgx.fillRect(0,y,W,1);
+  bgx.restore();
+}
+function bgBand(r0,r1,fill,topGlow){
+  const y=rowY[r0], h=(r1-r0+1)*TILE;
+  bgx.fillStyle=fill; bgx.fillRect(fieldX,y,fieldW,h);
+  if (topGlow){
+    bgx.save();
+    bgx.strokeStyle=topGlow; bgx.lineWidth=1.5; bgx.shadowBlur=8; bgx.shadowColor=topGlow;
+    bgx.beginPath(); bgx.moveTo(fieldX,y); bgx.lineTo(fieldX+fieldW,y); bgx.stroke();
+    bgx.beginPath(); bgx.moveTo(fieldX,y+h); bgx.lineTo(fieldX+fieldW,y+h); bgx.stroke();
+    bgx.restore();
+  }
+}
+
+//============================================================== goal bays
+let bays = [];   // {c, x, w, filled, bonus, anim}
+function layoutBays(){
+  const newBays = [];
+  // distribute GOAL_BAYS evenly across columns; each bay is one tile wide,
+  // separated by walls.
+  const innerCols = GRID_W;
+  for (let i=0;i<GOAL_BAYS;i++){
+    // place bays at fractional positions across the field
+    const frac = (i + 0.5) / GOAL_BAYS;
+    const c = clamp(Math.round(frac * innerCols - 0.5), 0, innerCols-1);
+    newBays.push({ c, filled:false, bonus:false, anim:0 });
+  }
+  // ensure unique columns (spread out)
+  for (let i=1;i<newBays.length;i++){
+    if (newBays[i].c <= newBays[i-1].c) newBays[i].c = Math.min(GRID_W-1, newBays[i-1].c + 1);
+  }
+  // preserve filled/bonus state if bays already existed and counts match
+  if (bays.length === newBays.length){
+    for (let i=0;i<newBays.length;i++){
+      newBays[i].filled = bays[i].filled;
+      newBays[i].bonus  = bays[i].bonus;
+      newBays[i].anim   = bays[i].anim;
+    }
+  }
+  bays = newBays;
+}
+function resetBays(){ for (const b of bays){ b.filled=false; b.bonus=false; b.anim=0; } placeBonus(); }
+function placeBonus(){
+  // occasionally place a bonus fly/gem in one unfilled bay
+  for (const b of bays) b.bonus=false;
+  if (Math.random() < 0.7){
+    const open = bays.filter(b=>!b.filled);
+    if (open.length){ open[randi(0,open.length)].bonus = true; }
+  }
+}
+
+//============================================================== lanes (traffic + river)
+// Each lane belongs to a row. Road lanes carry vehicles; river lanes carry logs/turtles.
+let roadLanes = [];   // {row, dir, speed, items:[{x,w,type}]}
+let riverLanes = [];  // {row, dir, speed, items:[{x,w,type,segs,submerge,phase}]}
+
+function laneSpeedBase(){ return TILE * (0.95 + (game.level-1)*0.14); }
+
+function buildLanes(){
+  roadLanes = [];
+  riverLanes = [];
+  const base = laneSpeedBase();
+  // ---- road lanes (alternate direction) ----
+  // Difficulty curve: the lane nearest the start (highest i / lowest row distance
+  // travelled) is the SLOWEST, ramping faster toward the median. j=0 is the bottom
+  // (first) lane the player meets.
+  for (let i=0;i<ROAD_LANES;i++){
+    const row = ROAD_TOP + i;
+    const dir = (i % 2 === 0) ? 1 : -1;
+    const j = (ROAD_LANES-1) - i;            // 0 = bottom lane (met first)
+    const speed = base * rand(1.3, 0.85) * (1 + j*0.14);
+    const lane = { row, dir, speed, items:[] };
+    populateRoadLane(lane);
+    roadLanes.push(lane);
+  }
+  // ---- river lanes (alternate direction) ----
+  for (let i=0;i<RIVER_LANES;i++){
+    const row = RIVER_TOP + i;
+    const dir = (i % 2 === 0) ? -1 : 1;
+    const speed = base * rand(1.25, 0.7);
+    const lane = { row, dir, speed, items:[] };
+    populateRiverLane(lane, i);
+    riverLanes.push(lane);
+  }
+}
+
+function populateRoadLane(lane){
+  lane.items = [];
+  // Lay out vehicles to seamlessly fill a fixed span (= wrap distance), so spacing
+  // stays uniform as vehicles wrap. Gaps are guaranteed wide enough to step into.
+  const span = fieldW + TILE*7;             // matches LANE_WRAP span
+  lane.span = span;
+  const start = -TILE*3.5;                   // = wrapLeft
+  let x = start + rand(TILE*1.5, 0);
+  const minGap = TILE*2.0;                    // always leave room for the frog
+  while (x < start + span - TILE*2){
+    const isTruck = Math.random() < 0.30;
+    const w = isTruck ? TILE*rand(2.7,2.1) : TILE*rand(1.5,1.1);
+    lane.items.push({ x, w, type: isTruck?'truck':'car', hue: pickCarHue() });
+    const gap = minGap + TILE*rand(2.2, 0.4);
+    x += w + gap;
+  }
+}
+function pickCarHue(){
+  // neon palette for vehicles (avoid accent green so player stands out)
+  const hues = ['#ff3ea5','#37d6ff','#ffb13d','#c6ff4d','#ff6a3d','#b07bff'];
+  return hues[randi(0,hues.length)];
+}
+
+function populateRiverLane(lane, idx){
+  lane.items = [];
+  const turtleLane = (idx % 2 === 1); // alternate: some lanes are turtles
+  const span = fieldW + TILE*7;        // matches LANE_WRAP span
+  lane.span = span;
+  const start = -TILE*3.5;
+  let x = start + rand(TILE*1.5, 0);
+  while (x < start + span - TILE*2){
+    if (turtleLane){
+      const segs = randi(4,2); // 2 or 3 turtle pods
+      const w = segs * TILE * 0.94;
+      lane.items.push({
+        x, w, type:'turtle', segs,
+        submerge: Math.random()<0.45,       // some pods can dive
+        phase: rand(TAU),
+        diveT: rand(6.5,4)                   // slow cycle so windows are fair
+      });
+      const gap = TILE * rand(1.9, 1.1);     // tight gaps: a path is usually there
+      x += w + gap;
+    } else {
+      const w = TILE * rand(3.6, 2.4);       // logs are wide & safe
+      lane.items.push({ x, w, type:'log', phase: rand(TAU) });
+      const gap = TILE * rand(1.8, 1.0);
+      x += w + gap;
+    }
+  }
+}
+
+function updateLanes(dt){
+  const wrapLeft = -TILE*3.5;
+  for (const lane of roadLanes){
+    const span = lane.span || (fieldW + TILE*7);
+    for (const it of lane.items){
+      it.x += lane.dir * lane.speed * dt;
+      // seamless wrap across the lane span (preserves uniform spacing)
+      if (lane.dir>0 && it.x > wrapLeft + span) it.x -= span;
+      else if (lane.dir<0 && it.x + it.w < wrapLeft) it.x += span;
+    }
+  }
+  for (const lane of riverLanes){
+    const span = lane.span || (fieldW + TILE*7);
+    for (const it of lane.items){
+      it.x += lane.dir * lane.speed * dt;
+      if (it.type==='turtle' && it.submerge){
+        it.phase += dt * (TAU / it.diveT);
+      }
+      if (lane.dir>0 && it.x > wrapLeft + span) it.x -= span;
+      else if (lane.dir<0 && it.x + it.w < wrapLeft) it.x += span;
+    }
+  }
+}
+
+// turtle visibility: returns 0..1 (1 = fully up & rideable, 0 = submerged)
+function turtleUp(it){
+  if (!it.submerge) return 1;
+  // sine wave; up for ~70% of cycle. Submerged when below threshold.
+  const s = (Math.sin(it.phase) + 1) / 2; // 0..1
+  return s;
+}
+function turtleRideable(it){ return turtleUp(it) > 0.32; }
+
+//============================================================== player
+const player = {
+  col:0, row:ROW_START,
+  px:0, py:0,           // pixel position (center)
+  // hop animation
+  hopping:false, hopT:0, hopDur:0.12,
+  fromX:0, fromY:0, toX:0, toY:0,
+  facing:'up',
+  dead:false, deathT:0, deathKind:null,  // 'crash' | 'splash' | 'drown' | 'edge'
+  onLog:null,          // ref to river item currently ridden
+  spawnT:0,            // invulnerable-ish spawn flash
+};
+function playerTileX(){ return colCenterX(player.col); }
+function playerTileY(){ return rowCenterY(player.row); }
+
+function spawnPlayer(){
+  player.col = Math.floor(GRID_W/2);
+  player.row = ROW_START;
+  player.px = playerTileX();
+  player.py = playerTileY();
+  player.hopping=false; player.hopT=0;
+  player.facing='up';
+  player.dead=false; player.deathT=0; player.deathKind=null;
+  player.onLog=null;
+  player.spawnT=0.9;
+}
+
+function startHop(dx,dy){
+  if (player.dead || game.state!=='playing') return;
+  if (player.hopping) return; // one hop at a time (crisp)
+  const nc = clamp(player.col + dx, 0, GRID_W-1);
+  const nr = clamp(player.row + dy, ROW_GOAL, ROW_START);
+  // facing
+  if (dx<0) player.facing='left'; else if (dx>0) player.facing='right';
+  else if (dy<0) player.facing='up'; else if (dy>0) player.facing='down';
+  if (nc===player.col && nr===player.row){
+    // hop in place against a wall — small squash, no move
+    player.fromX=player.px; player.fromY=player.py;
+    player.toX=player.px; player.toY=player.py;
+  } else {
+    player.fromX=player.px; player.fromY=player.py;
+    player.toX=colCenterX(nc); player.toY=rowCenterY(nr);
+  }
+  player.col=nc; player.row=nr;
+  player.onLog=null; // leaving any log when we hop (re-evaluated on land)
+  player.hopping=true; player.hopT=0;
+  Audio_.hop();
+}
+
+function updatePlayer(dt){
+  if (player.spawnT>0) player.spawnT -= dt;
+  if (player.dead){
+    player.deathT += dt;
+    return;
+  }
+  // hop animation
+  if (player.hopping){
+    player.hopT += dt;
+    const t = clamp(player.hopT / player.hopDur, 0, 1);
+    const e = easeOutCubic(t);
+    player.px = lerp(player.fromX, player.toX, e);
+    player.py = lerp(player.fromY, player.toY, e);
+    if (t >= 1){
+      player.hopping=false;
+      onLand();
+    }
+    return;
+  }
+  // not hopping: if riding a log/turtle, move with it
+  if (player.row>=RIVER_TOP && player.row<=RIVER_BOT){
+    if (player.onLog){
+      const lane = laneOfRow(player.row);
+      if (lane){
+        player.px += lane.dir * lane.speed * dt;
+        // carried off either edge = death
+        if (player.px < fieldX - TILE*0.2 || player.px > fieldX + fieldW + TILE*0.2){
+          killPlayer('edge');
+          return;
+        }
+        // keep column index roughly synced for facing logic
+        player.col = clamp(Math.round((player.px - fieldX - TILE/2)/TILE), 0, GRID_W-1);
+      }
+    }
+  }
+}
+
+function laneOfRow(row){
+  for (const l of riverLanes) if (l.row===row) return l;
+  for (const l of roadLanes) if (l.row===row) return l;
+  return null;
+}
+
+// called when a hop lands on a tile
+function onLand(){
+  player.px = (player.row>=RIVER_TOP && player.row<=RIVER_BOT) ? player.px : playerTileX();
+  if (player.row<RIVER_TOP || player.row>RIVER_BOT){
+    player.px = playerTileX();
+  }
+  player.py = playerTileY();
+
+  const r = player.row;
+  // squash impact pop
+  spawnHopDust();
+
+  if (r === ROW_GOAL){
+    handleGoalLanding();
+    return;
+  }
+  if (r >= RIVER_TOP && r <= RIVER_BOT){
+    // must be on a log/turtle
+    const ride = riderUnderPlayer();
+    if (ride){
+      player.onLog = ride;
+    } else {
+      killPlayer('splash');
+    }
+    return;
+  }
+  // road / median / start rows: just landed, collision check happens in handleCollisions
+  player.onLog=null;
+}
+
+// returns the river item the player is standing on (rideable), or null
+function riderUnderPlayer(){
+  const lane = laneOfRow(player.row);
+  if (!lane) return null;
+  const x = player.px;
+  for (const it of lane.items){
+    if (x >= it.x + TILE*0.18 && x <= it.x + it.w - TILE*0.18){
+      if (it.type==='turtle' && !turtleRideable(it)) continue;
+      return it;
+    }
+  }
+  return null;
+}
+
+function handleGoalLanding(){
+  // which bay? must align with an open bay column (within tolerance)
+  let hit = null;
+  for (const b of bays){
+    if (b.filled) continue;
+    if (Math.abs(player.col - b.c) <= 0){ hit = b; break; }
+  }
+  if (!hit){
+    // landed on goal-row wall (not in a bay) = death
+    killPlayer('crash');
+    return;
+  }
+  // success!
+  hit.filled = true;
+  hit.anim = 1;
+  let gained = 60 + Math.max(0, Math.round(game.lifeTime*4));   // time bonus
+  if (hit.bonus){ gained += 250; hit.bonus=false; spawnBonusBurst(colCenterX(hit.c), rowCenterY(ROW_GOAL)); }
+  game.score += gained;
+  scorePopup(colCenterX(hit.c), rowCenterY(ROW_GOAL)-6, '+'+gained, hit.bonus?'#ffd36e':'#39ff14');
+  burst(colCenterX(hit.c), rowCenterY(ROW_GOAL), 22, {speed:150, life:0.7, color:'#39ff14', spark:true, base:30});
+  addShake(4); flash(0.12);
+  Audio_.goal();
+  game.lifeTime = game.lifeTimeMax; // reset per-life timer on success
+
+  // level cleared?
+  if (bays.every(b=>b.filled)){
+    levelClear();
+  } else {
+    placeBonus();
+    // respawn at start
+    softRespawn();
+  }
+}
+
+function softRespawn(){
+  player.col = Math.floor(GRID_W/2);
+  player.row = ROW_START;
+  player.px = playerTileX();
+  player.py = playerTileY();
+  player.hopping=false; player.hopT=0;
+  player.facing='up'; player.onLog=null;
+  player.spawnT=0.5;
+}
+
+function killPlayer(kind){
+  if (player.dead || game.state!=='playing') return;
+  if (player.spawnT>0 && kind!=='edge') { /* brief grace at spawn */ }
+  player.dead=true; player.deathT=0; player.deathKind=kind;
+  player.onLog=null;
+  game.lives--;
+  updateLives();
+  addShake(kind==='crash'?14:9);
+  flash(kind==='splash'||kind==='drown'?0.2:0.32);
+  if (kind==='splash' || kind==='drown'){
+    splashBurst(player.px, player.py);
+    Audio_.splash();
+  } else {
+    burst(player.px, player.py, 30, {speed:210, life:1.0, color:'#ff5e7a', spark:true, base:40});
+    burst(player.px, player.py, 16, {speed:120, life:1.2, color:'#ffd36e'});
+    Audio_.crash();
+  }
+  if (game.lives<=0){
+    setTimeout(endGame, 1100);
+  } else {
+    setTimeout(()=>{ if (game.state==='playing'){ spawnPlayer(); game.lifeTime=game.lifeTimeMax; } }, 850);
+  }
+}
+
+//============================================================== collisions
+function handleCollisions(){
+  if (player.dead || player.hopping || game.state!=='playing') return;
+  const r = player.row;
+  // road collision
+  if (r >= ROAD_TOP && r <= ROAD_BOT){
+    const lane = laneOfRow(r);
+    if (lane){
+      const px = player.px, half = TILE*0.34;
+      for (const it of lane.items){
+        if (px + half > it.x + TILE*0.10 && px - half < it.x + it.w - TILE*0.10){
+          killPlayer('crash');
+          return;
+        }
+      }
+    }
+  }
+  // river: continuously verify still on a rideable platform
+  if (r >= RIVER_TOP && r <= RIVER_BOT){
+    if (player.onLog){
+      // turtle may have submerged under us
+      if (player.onLog.type==='turtle' && !turtleRideable(player.onLog)){
+        killPlayer('drown'); return;
+      }
+      // drifted off the end of the platform?
+      const x = player.px;
+      const it = player.onLog;
+      if (x < it.x + TILE*0.05 || x > it.x + it.w - TILE*0.05){
+        // try to grab an adjacent platform before drowning
+        const re = riderUnderPlayer();
+        if (re){ player.onLog = re; }
+        else { killPlayer('splash'); return; }
+      }
+    } else {
+      const re = riderUnderPlayer();
+      if (re) player.onLog = re; else { killPlayer('splash'); return; }
+    }
+  }
+}
+
+//============================================================== level flow
+function levelClear(){
+  game.state='levelclear';
+  game.levelClearT = 0;
+  const bonus = 500 + game.level*100;
+  game.score += bonus;
+  scorePopup(W/2, fieldY + TILE*0.5, 'LEVEL +'+bonus, '#c6ff4d');
+  for (const b of bays){
+    burst(colCenterX(b.c), rowCenterY(ROW_GOAL), 26, {speed:180, life:0.9, color:'#39ff14', spark:true, base:40});
+  }
+  addShake(8); flash(0.22);
+  Audio_.level();
+  setTimeout(()=>{
+    game.level++;
+    updateLevel();
+    resetBays();
+    buildLanes();
+    spawnPlayer();
+    game.lifeTime = game.lifeTimeMax;
+    game.state='playing';
+    last = performance.now();
+  }, 1400);
+}
+
+//============================================================== particles
+function makePool(factory, size){
+  const free = []; const active = [];
+  for (let i=0;i<size;i++) free.push(factory());
+  return {
+    free, active,
+    spawn(){ let o = free.pop() || factory(); o.alive=true; active.push(o); return o; },
+    sweep(){ for (let i=active.length-1;i>=0;i--){ if (!active[i].alive){ free.push(active[i]); active.splice(i,1);} } }
+  };
+}
+const particles = makePool(()=>({x:0,y:0,vx:0,vy:0,life:0,max:1,r:1,color:'#fff',alive:false,spark:false,grav:0}), 600);
+function spawnParticle(x,y,vx,vy,life,r,color,spark,grav){
+  const p = particles.spawn();
+  p.x=x;p.y=y;p.vx=vx;p.vy=vy;p.life=life;p.max=life;p.r=r;p.color=color;p.spark=!!spark;p.grav=grav||0;
+}
+function burst(x,y,n,opts){
+  opts=opts||{};
+  const speed=opts.speed||140, life=opts.life||0.6, color=opts.color||'#e6ffe1';
+  const spread=opts.spread||1, base=opts.base||0;
+  for (let i=0;i<n;i++){
+    const a=rand(TAU); const sp=base+rand(speed*spread);
+    spawnParticle(x,y, Math.cos(a)*sp, Math.sin(a)*sp, life*rand(1.3,0.5), rand(2.4,0.8), color, opts.spark, opts.grav||0);
+  }
+}
+function splashBurst(x,y){
+  for (let i=0;i<26;i++){
+    const a = -Math.PI/2 + rand(0.9,-0.9);
+    const sp = rand(260,120);
+    spawnParticle(x,y, Math.cos(a)*sp, Math.sin(a)*sp, rand(0.9,0.4), rand(3,1.4), Math.random()<0.5?'#7fdcff':'#bff0ff', false, 620);
+  }
+  // ring
+  for (let i=0;i<14;i++){
+    const a = (i/14)*TAU;
+    spawnParticle(x,y, Math.cos(a)*120, Math.sin(a)*120, 0.5, 2, '#9fe9ff', true, 0);
+  }
+}
+function spawnBonusBurst(x,y){
+  for (let i=0;i<24;i++){
+    const a=rand(TAU); const sp=rand(220,90);
+    spawnParticle(x,y, Math.cos(a)*sp, Math.sin(a)*sp, rand(1.0,0.5), rand(2.6,1.2), Math.random()<0.5?'#ffd36e':'#fff3b0', true, 0);
+  }
+}
+function spawnHopDust(){
+  if (player.dead) return;
+  for (let i=0;i<5;i++){
+    const a = rand(TAU); const sp=rand(70,20);
+    spawnParticle(player.px, player.py+TILE*0.28, Math.cos(a)*sp, Math.abs(Math.sin(a))*sp*0.4, rand(0.3,0.12), rand(2,1), '#39ff14', false, 120);
+  }
+}
+function updateParticles(dt){
+  for (const p of particles.active){
+    p.life -= dt;
+    if (p.life<=0){ p.alive=false; continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.vy += p.grav*dt;
+    p.vx *= 0.985; p.vy *= 0.985;
+  }
+  particles.sweep();
+}
+function drawParticles(){
+  ctx.save(); ctx.lineCap='round';
+  for (const p of particles.active){
+    const k=p.life/p.max;
+    ctx.globalAlpha=clamp(k,0,1);
+    ctx.shadowBlur=8; ctx.shadowColor=p.color;
+    if (p.spark){
+      ctx.strokeStyle=p.color; ctx.lineWidth=p.r;
+      ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x-p.vx*0.012, p.y-p.vy*0.012); ctx.stroke();
+    } else {
+      ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r*(0.4+0.6*k),0,TAU); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+// ---- floating score popups ----
+let popups = [];
+function scorePopup(x,y,text,color){ popups.push({x,y,text,color:color||'#39ff14',life:1.1,max:1.1}); }
+function updatePopups(dt){
+  for (let i=popups.length-1;i>=0;i--){
+    const p=popups[i]; p.life-=dt; p.y -= 26*dt;
+    if (p.life<=0) popups.splice(i,1);
+  }
+}
+function drawPopups(){
+  ctx.save(); ctx.textAlign='center'; ctx.font='700 '+Math.round(TILE*0.42)+'px ui-monospace,monospace';
+  for (const p of popups){
+    const k=p.life/p.max;
+    ctx.globalAlpha=clamp(k,0,1);
+    ctx.shadowBlur=14; ctx.shadowColor=p.color; ctx.fillStyle=p.color;
+    ctx.fillText(p.text, p.x, p.y);
+  }
+  ctx.restore();
+}
+
+//============================================================== screen shake & flash
+let shake=0, flashAmt=0;
+function addShake(v){ shake=Math.min(26, shake+v); }
+function flash(v){ flashAmt=Math.min(1, flashAmt+v); }
+
+//============================================================== game state
+const game = {
+  state:'title', // title | playing | paused | gameover | levelclear
+  score:0, displayScore:0, high:0, lives:3, level:1,
+  lifeTime:0, lifeTimeMax:30, levelClearT:0
+};
+function loadHigh(){ try{ game.high = parseInt(localStorage.getItem('crossing_high')||'0',10)||0; }catch(e){ game.high=0; } }
+function saveHigh(){ try{ localStorage.setItem('crossing_high', String(game.high)); }catch(e){} }
+
+function startGame(){
+  game.state='playing';
+  game.score=0; game.displayScore=0; game.lives=3; game.level=1;
+  game.lifeTimeMax=30; game.lifeTime=game.lifeTimeMax;
+  particles.active.length=0; popups.length=0;
+  resetBays(); buildLanes(); spawnPlayer();
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('gameoverScreen').classList.add('hidden');
+  document.getElementById('hud').style.display='block';
+  document.getElementById('timerWrap').style.display='block';
+  updateLives(); updateLevel();
+  Audio_.init(); Audio_.resume();
+  last = performance.now();
+}
+function endGame(){
+  game.state='gameover';
+  if (game.score>game.high){ game.high=game.score; saveHigh(); document.getElementById('newHigh').style.display='block'; }
+  else document.getElementById('newHigh').style.display='none';
+  document.getElementById('finalScore').textContent = game.score.toLocaleString();
+  document.getElementById('high').textContent = game.high.toLocaleString();
+  document.getElementById('gameoverScreen').classList.remove('hidden');
+  document.getElementById('timerWrap').style.display='none';
+}
+function togglePause(){
+  if (game.state==='playing'){ game.state='paused'; document.getElementById('pauseScreen').classList.remove('hidden'); }
+  else if (game.state==='paused'){ game.state='playing'; document.getElementById('pauseScreen').classList.add('hidden'); last=performance.now(); }
+}
+
+//============================================================== HUD
+const elScore=document.getElementById('score');
+const elHigh =document.getElementById('high');
+const elLevel=document.getElementById('level');
+const elLives=document.getElementById('lives');
+const elTimerBar=document.getElementById('timerBar');
+function updateLevel(){ elLevel.textContent=game.level; }
+function updateLives(){
+  elLives.innerHTML='';
+  for (let i=0;i<Math.max(0,game.lives);i++){
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('viewBox','-12 -12 24 24'); svg.setAttribute('class','life');
+    // little frog head: circle + two eyes
+    const body=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    body.setAttribute('cx','0'); body.setAttribute('cy','2'); body.setAttribute('r','8');
+    body.setAttribute('fill','rgba(57,255,20,.20)'); body.setAttribute('stroke','#39ff14'); body.setAttribute('stroke-width','2');
+    svg.appendChild(body);
+    for (const ex of [-4,4]){
+      const eye=document.createElementNS('http://www.w3.org/2000/svg','circle');
+      eye.setAttribute('cx',String(ex)); eye.setAttribute('cy','-6'); eye.setAttribute('r','3');
+      eye.setAttribute('fill','rgba(57,255,20,.25)'); eye.setAttribute('stroke','#bdf0a8'); eye.setAttribute('stroke-width','1.6');
+      svg.appendChild(eye);
+    }
+    elLives.appendChild(svg);
+  }
+}
+
+//============================================================== audio (default OFF / silent)
+const Audio_ = {
+  ctx:null, master:null, muted:true,   // DEFAULT MUTED
+  init(){
+    if (this.ctx) return;
+    try{
+      const AC=window.AudioContext||window.webkitAudioContext;
+      this.ctx=new AC(); this.master=this.ctx.createGain();
+      this.master.gain.value=0.4; this.master.connect(this.ctx.destination);
+    }catch(e){ this.ctx=null; }
+  },
+  resume(){ if (this.ctx && this.ctx.state==='suspended') this.ctx.resume(); },
+  blip(type,freq,dur,vol,sweep){
+    if (!this.ctx || this.muted) return;
+    const t=this.ctx.currentTime;
+    const o=this.ctx.createOscillator(), g=this.ctx.createGain();
+    o.type=type; o.frequency.setValueAtTime(freq,t);
+    if (sweep) o.frequency.exponentialRampToValueAtTime(Math.max(40,freq*sweep), t+dur);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol,t+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t+dur+0.02);
+  },
+  noise(dur,vol,lp){
+    if (!this.ctx || this.muted) return;
+    const t=this.ctx.currentTime, len=Math.floor(this.ctx.sampleRate*dur);
+    const buf=this.ctx.createBuffer(1,len,this.ctx.sampleRate), d=buf.getChannelData(0);
+    for (let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len);
+    const src=this.ctx.createBufferSource(); src.buffer=buf;
+    const f=this.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=lp||1200;
+    const g=this.ctx.createGain(); g.gain.value=vol;
+    src.connect(f); f.connect(g); g.connect(this.master); src.start(t);
+  },
+  hop(){ this.blip('square',520,0.07,0.07,1.6); },
+  goal(){ this.blip('triangle',620,0.10,0.10,1.4); this.blip('triangle',880,0.12,0.10,1.3); },
+  level(){ this.blip('triangle',520,0.14,0.10,1.5); this.blip('triangle',780,0.16,0.10,1.4); this.blip('triangle',1040,0.18,0.10,1.3); },
+  crash(){ this.noise(0.4,0.3,700); this.blip('sawtooth',160,0.4,0.12,0.3); },
+  splash(){ this.noise(0.45,0.26,900); this.blip('sine',300,0.3,0.08,3.0); }
+};
+
+//============================================================== rendering — field (dynamic only; static art is on bg canvas)
+function drawField(){
+  // only the goal bays change state, so that's all we paint per frame here
+  drawGoalRow();
+}
+function drawGoalRow(){
+  const y=rowY[ROW_GOAL];
+  // draw bays as glowing slots
+  for (const b of bays){
+    const x=colX(b.c);
+    ctx.save();
+    ctx.shadowBlur=12; ctx.shadowColor='rgba(57,255,20,0.5)';
+    ctx.fillStyle = b.filled ? 'rgba(57,255,20,0.22)' : 'rgba(57,255,20,0.06)';
+    ctx.fillRect(x+2, y+2, TILE-4, TILE-4);
+    ctx.strokeStyle='rgba(57,255,20,0.6)'; ctx.lineWidth=1.6;
+    ctx.strokeRect(x+2, y+2, TILE-4, TILE-4);
+    ctx.restore();
+    if (b.filled){
+      // a happy frog sitting in the bay
+      drawFrogAt(x+TILE/2, y+TILE/2, TILE*0.32, 'up', 0, true);
+      if (b.anim>0){ b.anim=Math.max(0,b.anim-0.04); }
+    } else if (b.bonus){
+      drawBonus(x+TILE/2, y+TILE/2);
+    }
+  }
+  // walls between bays (decorative pillars)
+  ctx.save();
+  ctx.strokeStyle='rgba(57,255,20,0.22)'; ctx.lineWidth=1; ctx.shadowBlur=6; ctx.shadowColor='rgba(57,255,20,0.3)';
+  ctx.beginPath(); ctx.moveTo(fieldX,y+TILE); ctx.lineTo(fieldX+fieldW,y+TILE); ctx.stroke();
+  ctx.restore();
+}
+function drawBonus(cx,cy){
+  const pulse = 0.7 + 0.3*Math.sin(scanShift*2);
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.shadowBlur=16*pulse; ctx.shadowColor='#ffd36e';
+  ctx.fillStyle='rgba(255,211,110,'+(0.5+0.3*pulse)+')'; ctx.strokeStyle='#fff3b0'; ctx.lineWidth=1.6;
+  // gem (diamond)
+  const s=TILE*0.22;
+  ctx.beginPath();
+  ctx.moveTo(0,-s); ctx.lineTo(s*0.8,0); ctx.lineTo(0,s); ctx.lineTo(-s*0.8,0); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0,-s); ctx.lineTo(0,s); ctx.moveTo(-s*0.8,0); ctx.lineTo(s*0.8,0); ctx.stroke();
+  ctx.restore();
+}
+
+//============================================================== rendering — traffic
+function drawTraffic(){
+  for (const lane of roadLanes){
+    const y=rowCenterY(lane.row);
+    for (const it of lane.items){
+      drawVehicle(it, y, lane.dir);
+    }
+  }
+}
+function drawVehicle(it, cy, dir){
+  const x=it.x, w=it.w, h=TILE*0.62;
+  const y=cy-h/2;
+  // cull off-field
+  if (x+w < fieldX-TILE || x > fieldX+fieldW+TILE) return;
+  ctx.save();
+  const r=Math.min(8, h*0.3);
+  // faux-glow: a wide low-alpha stroke under a crisp one (no shadowBlur — far cheaper)
+  ctx.beginPath(); roundRectPath(x+2, y, w-4, h, r);
+  ctx.globalAlpha=0.30; ctx.lineWidth=5; ctx.strokeStyle=it.hue; ctx.stroke();
+  ctx.globalAlpha=1;
+  ctx.fillStyle='rgba(255,255,255,0.05)'; ctx.fill();
+  ctx.lineWidth=2; ctx.strokeStyle=it.hue; ctx.stroke();
+  // windshield / cab detail
+  ctx.fillStyle=it.hue; ctx.globalAlpha=0.45;
+  const cabW = it.type==='truck' ? w*0.28 : w*0.4;
+  const cabX = dir>0 ? x+w-cabW-4 : x+4;
+  ctx.fillRect(cabX, y+h*0.18, cabW, h*0.64);
+  ctx.globalAlpha=1;
+  // headlight glints (leading edge)
+  ctx.fillStyle='#fffbe0';
+  const lx = dir>0 ? x+w-5 : x+5;
+  ctx.beginPath(); ctx.arc(lx, y+h*0.3, 1.8, 0, TAU); ctx.arc(lx, y+h*0.7, 1.8, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+//============================================================== rendering — river platforms
+function drawRiver(){
+  for (const lane of riverLanes){
+    const y=rowCenterY(lane.row);
+    for (const it of lane.items){
+      if (it.type==='log') drawLog(it, y);
+      else drawTurtles(it, y, lane.dir);
+    }
+  }
+}
+function drawLog(it, cy){
+  const x=it.x, w=it.w, h=TILE*0.64; const y=cy-h/2;
+  if (x+w < fieldX-TILE || x > fieldX+fieldW+TILE) return;
+  ctx.save();
+  // faux-glow underlay then crisp body (no shadowBlur)
+  ctx.beginPath(); roundRectPath(x, y, w, h, h*0.42);
+  ctx.globalAlpha=0.22; ctx.lineWidth=5; ctx.strokeStyle='rgba(202,160,106,0.9)'; ctx.stroke();
+  ctx.globalAlpha=1;
+  ctx.fillStyle='rgba(78,52,28,0.9)'; ctx.fill();
+  ctx.lineWidth=2; ctx.strokeStyle='#caa06a'; ctx.stroke();
+  // wood rings on ends
+  ctx.strokeStyle='rgba(202,160,106,0.6)'; ctx.lineWidth=1.4;
+  for (const ex of [x+h*0.42, x+w-h*0.42]){
+    ctx.beginPath(); ctx.arc(ex, cy, h*0.22, 0, TAU); ctx.stroke();
+  }
+  // bark grooves
+  ctx.globalAlpha=0.4;
+  ctx.beginPath(); ctx.moveTo(x+h*0.6, cy-h*0.12); ctx.lineTo(x+w-h*0.6, cy-h*0.12);
+  ctx.moveTo(x+h*0.6, cy+h*0.12); ctx.lineTo(x+w-h*0.6, cy+h*0.12); ctx.stroke();
+  ctx.restore();
+}
+function drawTurtles(it, cy, dir){
+  const segs=it.segs; const podW=it.w/segs;
+  const up = turtleUp(it);
+  if (it.x+it.w < fieldX-TILE || it.x > fieldX+fieldW+TILE) return;
+  for (let i=0;i<segs;i++){
+    const cx = it.x + podW*(i+0.5);
+    const r = podW*0.42;
+    // submerge animation: shrink + fade as it dives
+    let vis = up;
+    if (it.submerge){
+      // stagger pods slightly for life
+      vis = clamp(turtleUp({phase:it.phase + i*0.5, submerge:true}),0,1);
+    }
+    ctx.save();
+    ctx.globalAlpha = it.submerge ? clamp(vis*1.2,0,1) : 1;
+    const rr = r * (it.submerge ? (0.55+0.45*vis) : 1);
+    const down = (it.submerge && vis<0.34);
+    // faux-glow underlay (no shadowBlur)
+    ctx.beginPath(); ctx.arc(cx, cy, rr+1.6, 0, TAU);
+    ctx.globalAlpha*=0.5; ctx.lineWidth=4; ctx.strokeStyle=down?'rgba(90,160,120,0.5)':'rgba(95,224,138,0.6)'; ctx.stroke();
+    ctx.globalAlpha = it.submerge ? clamp(vis*1.2,0,1) : 1;
+    ctx.fillStyle = down ? 'rgba(40,90,70,0.5)' : 'rgba(30,90,50,0.9)';
+    ctx.strokeStyle = down ? 'rgba(90,160,120,0.6)' : '#5fe08a';
+    ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(cx, cy, rr, 0, TAU); ctx.fill(); ctx.stroke();
+    // shell pattern
+    if (vis>0.34){
+      ctx.globalAlpha*=0.7; ctx.strokeStyle='#a8ffce'; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.arc(cx,cy,rr*0.55,0,TAU); ctx.stroke();
+      // head pointing in travel dir
+      const hx = cx + dir*rr*1.05;
+      ctx.beginPath(); ctx.arc(hx, cy, rr*0.26, 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+//============================================================== rendering — player (frog)
+function drawPlayer(){
+  if (game.state==='gameover') return;
+  if (player.dead){
+    // splash death handled by particles; crash leaves nothing
+    return;
+  }
+  // hop squash & stretch
+  let sx=1, sy=1, lift=0;
+  if (player.hopping){
+    const t=clamp(player.hopT/player.hopDur,0,1);
+    // arc lift
+    lift = -Math.sin(t*Math.PI)*TILE*0.42;
+    // stretch up at launch, squash on land
+    const s = Math.sin(t*Math.PI);
+    sy = 1 + s*0.28; sx = 1 - s*0.18;
+  }
+  // spawn flash blink
+  if (player.spawnT>0){
+    const on=(Math.floor(player.spawnT*16)%2)===0;
+    if (!on){ /* skip frame for blink */ return; }
+  }
+  drawFrogAt(player.px, player.py+lift, TILE*0.36, player.facing, 0, false, sx, sy);
+}
+function drawFrogAt(cx, cy, r, facing, _t, sitting, sx, sy){
+  sx=sx||1; sy=sy||1;
+  ctx.save();
+  ctx.translate(cx,cy);
+  // orient
+  let rot=0;
+  if (facing==='left') rot=-Math.PI/2;
+  else if (facing==='right') rot=Math.PI/2;
+  else if (facing==='down') rot=Math.PI;
+  ctx.rotate(rot);
+  ctx.scale(sx,sy);
+  ctx.shadowBlur = sitting?8:16; ctx.shadowColor='#39ff14';
+  ctx.lineWidth=2; ctx.strokeStyle='#9bff7a'; ctx.fillStyle='rgba(57,255,20,0.22)';
+  // body
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r*0.78, r*0.92, 0, 0, TAU);
+  ctx.fill(); ctx.stroke();
+  // back legs (splayed)
+  ctx.lineWidth=2.4;
+  for (const sgn of [-1,1]){
+    ctx.beginPath();
+    ctx.moveTo(sgn*r*0.55, r*0.2);
+    ctx.quadraticCurveTo(sgn*r*1.05, r*0.55, sgn*r*0.62, r*0.95);
+    ctx.stroke();
+  }
+  // front legs
+  for (const sgn of [-1,1]){
+    ctx.beginPath();
+    ctx.moveTo(sgn*r*0.4, -r*0.4);
+    ctx.quadraticCurveTo(sgn*r*0.85, -r*0.55, sgn*r*0.55, -r*0.9);
+    ctx.stroke();
+  }
+  // eyes (two bumps at front/top)
+  ctx.fillStyle='#eafff0'; ctx.shadowBlur=6;
+  for (const sgn of [-1,1]){
+    ctx.beginPath(); ctx.arc(sgn*r*0.34, -r*0.62, r*0.24, 0, TAU); ctx.fill();
+    ctx.fillStyle='#0a1f10'; ctx.beginPath(); ctx.arc(sgn*r*0.34, -r*0.62, r*0.10, 0, TAU); ctx.fill();
+    ctx.fillStyle='#eafff0';
+  }
+  ctx.restore();
+}
+
+//============================================================== input
+function setMuteTag(){ document.getElementById('muteTag').textContent='M · sound '+(Audio_.muted?'off':'on'); }
+window.addEventListener('keydown', e=>{
+  const k=e.key.toLowerCase();
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  // movement (one hop per keydown, ignore auto-repeat)
+  if (game.state==='playing' && !e.repeat){
+    switch(k){
+      case 'arrowup': case 'w': startHop(0,-1); break;
+      case 'arrowdown': case 's': startHop(0,1); break;
+      case 'arrowleft': case 'a': startHop(-1,0); break;
+      case 'arrowright': case 'd': startHop(1,0); break;
+    }
+  }
+  switch(k){
+    case 'p': case 'escape':
+      if (game.state==='playing'||game.state==='paused') togglePause(); break;
+    case 'enter':
+      if (game.state==='title'||game.state==='gameover') startGame(); break;
+    case 'm':
+      Audio_.init(); Audio_.muted=!Audio_.muted; setMuteTag();
+      if (!Audio_.muted) Audio_.resume();
+      break;
+  }
+}, {passive:false});
+window.addEventListener('pointerdown', ()=>{ Audio_.init(); }, {once:true});
+document.addEventListener('visibilitychange', ()=>{ if (document.hidden && game.state==='playing') togglePause(); });
+
+//============================================================== main loop
+let last=performance.now();
+let fpsCount=0, fpsTime=0, fpsValue=60;
+function frame(now){
+  let dt=(now-last)/1000; last=now;
+  if (dt>0.05) dt=0.05;
+  fpsTime+=dt; fpsCount++;
+  if (fpsTime>=0.5){ fpsValue=Math.round(fpsCount/fpsTime); fpsTime=0; fpsCount=0; }
+
+  scanShift += dt;
+
+  if (game.state==='playing'){ update(dt); }
+  else if (game.state==='levelclear'){ updateParticles(dt); updatePopups(dt); shake*=Math.pow(0.04,dt); flashAmt*=Math.pow(0.02,dt); }
+  else if (game.state==='title'){ updateLanes(dt); updateParticles(dt); }
+
+  render(now);
+  requestAnimationFrame(frame);
+}
+
+function update(dt){
+  updateLanes(dt);
+  updatePlayer(dt);
+  handleCollisions();
+  updateParticles(dt);
+  updatePopups(dt);
+
+  // per-life timer
+  if (!player.dead){
+    game.lifeTime -= dt;
+    if (game.lifeTime<=0){ game.lifeTime=0; killPlayer('crash'); }
+  }
+
+  // animated score counter
+  game.displayScore += (game.score-game.displayScore)*Math.min(1,dt*8);
+  shake*=Math.pow(0.04,dt); flashAmt*=Math.pow(0.02,dt);
+
+  elScore.textContent=Math.round(game.displayScore).toLocaleString();
+  elHigh.textContent=Math.max(game.high,game.score).toLocaleString();
+  if (elTimerBar) elTimerBar.style.transform='scaleX('+clamp(game.lifeTime/game.lifeTimeMax,0,1)+')';
+}
+
+function render(now){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  if (shake>0.3){ const a=rand(TAU), m=shake; ctx.translate(Math.cos(a)*m, Math.sin(a)*m); }
+
+  drawField();
+  drawTraffic();
+  drawRiver();
+  drawParticles();
+  if (game.state==='playing'||game.state==='paused'||game.state==='levelclear') drawPlayer();
+  drawPopups();
+
+  ctx.restore();
+
+  // flash (transient; cheap full-screen fill)
+  if (flashAmt>0.01){
+    ctx.fillStyle='rgba(190,255,170,'+(flashAmt*0.4)+')';
+    ctx.fillRect(0,0,W,H);
+  }
+
+  // level-clear banner
+  if (game.state==='levelclear'){
+    ctx.save();
+    ctx.globalAlpha=0.95; ctx.textAlign='center';
+    ctx.fillStyle='#f0ffe9'; ctx.shadowBlur=22; ctx.shadowColor='#39ff14';
+    ctx.font='800 '+Math.round(Math.min(W*0.08,52))+'px ui-monospace,monospace';
+    ctx.fillText('LEVEL CLEAR', W/2, H/2);
+    ctx.font='700 '+Math.round(Math.min(W*0.03,20))+'px ui-monospace,monospace';
+    ctx.fillStyle='#bdf0a8'; ctx.shadowColor='#39ff14';
+    ctx.fillText('next: level '+(game.level+1), W/2, H/2+Math.min(W*0.06,40));
+    ctx.restore();
+  }
+}
+
+//============================================================== boot
+loadHigh();
+resize();
+document.getElementById('high').textContent=game.high.toLocaleString();
+setMuteTag();
+// seed a gentle attract animation on the title (lanes drift behind title)
+buildLanes();
+requestAnimationFrame(frame);
+
+// verification hook
+window.__CROSSING__ = {
+  get state(){ return game.state; },
+  get score(){ return game.score; },
+  get level(){ return game.level; },
+  get lives(){ return game.lives; },
+  get fps(){ return fpsValue; },
+  get player(){ return {col:player.col,row:player.row,px:player.px,py:player.py,dead:player.dead,onLog:!!player.onLog,deathKind:player.deathKind}; },
+  get bays(){ return bays.map(b=>({c:b.c,filled:b.filled,bonus:b.bonus})); },
+  get rows(){ return {GOAL:ROW_GOAL, RIVER_TOP, RIVER_BOT, MEDIAN:ROW_MEDIAN, ROAD_TOP, ROAD_BOT, START:ROW_START}; },
+  get gridW(){ return GRID_W; },
+  // lightweight debug controls (harmless; mirrors the asteroids reference hook)
+  hop(dx,dy){ startHop(dx,dy); },
+  start(){ if (game.state!=='playing') startGame(); },
+  setMuted(m){ Audio_.muted=!!m; setMuteTag(); }
+};
+
+//============================================================== helpers
+function roundRectPath(x,y,w,h,r){
+  r=Math.min(r,w/2,h/2);
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+})();
+</script>
+
+<!-- arc-back -->
+<style>
+  .arc-back{ position:fixed; left:18px; bottom:14px; z-index:9999; pointer-events:auto;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11.5px;
+    letter-spacing:.18em; text-transform:uppercase; text-decoration:none;
+    color:#e6ffe1; opacity:.40; transition:opacity .2s, text-shadow .2s;
+    text-shadow:0 0 8px rgba(57,255,20,.45); }
+  .arc-back:hover{ opacity:.95; text-shadow:0 0 12px rgba(57,255,20,.85); }
+</style>
+<a class="arc-back" href="../index.html" style="position:fixed;z-index:9999;pointer-events:auto">← arcade</a>
+</body>
+</html>

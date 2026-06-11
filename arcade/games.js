@@ -55,5 +55,11 @@ window.GAMES = [
     name: "Lunar Lander",
     blurb: "thrust against gravity, land soft on the neon flats",
     accent: "#8fbaff"
+  },
+  {
+    file: "crossing.html",
+    name: "Crossing",
+    blurb: "thread the neon traffic, ride the river home",
+    accent: "#39ff14"
   }
 ];

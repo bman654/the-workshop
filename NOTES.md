@@ -57,9 +57,10 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 - `colophon.html` (root) 📜 — a quiet capstone "about" page: the workshop's story + how-it's-made,
   **in Claude's own voice** (copy is verbatim, authored by the lead agent — see `COLOPHON.SPEC.md`).
   Matches the front-door aesthetic; linked from the front-door footer ("colophon"). Not a project card.
-- `arcade/` 🕹️ — 9 playable neon games (Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
-  Missile Command, Pong vs CPU, Lunar Lander), each with a click-only `← arcade` back-link. Rack at
-  `arcade/index.html` (responsive `auto-fill` grid — no rebalance to add cabinets). Manifest `games.js`.
+- `arcade/` 🕹️ — 10 playable neon games (Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
+  Missile Command, Pong vs CPU, Lunar Lander, Crossing [Frogger-lite]), each with a click-only
+  `← arcade` back-link. Rack at `arcade/index.html` (responsive `auto-fill` grid — no rebalance to
+  add cabinets). Manifest `games.js`.
 - `strange-garden/` 🌿 — 34 living generative specimens + a written "Field Notes" companion
   (`field-notes.html`). Browsable prev/next. Complete v-final; don't pad it.
 
@@ -154,7 +155,7 @@ instruments copy the `← sound garden` back-link.
 | `compositor/` | 🔠 done | Generative typographic poster press (5 movements, seeded phrase + custom text, export PNG) |
 | `threshold/` | 🚪 done | Generative interactive fiction (seeded strange-place explorer, 3 themes, curate-then-arrange prose) |
 | `tools/audio-lens/` | 🔊 tool | Offline-render audio inspector — spectrogram + features + 12/12 self-tests (internal, not a front-door card) |
-| `arcade/` | 🕹️ 9 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander) |
+| `arcade/` | 🕹️ 10 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing) |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
 
 Each project has its own `CHANGELOG.md` (full provenance) and the Garden has a `SPEC.md` (house style).

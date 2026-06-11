@@ -23,6 +23,7 @@ Open **`index.html`** (the cabinet rack) and pick a game, or open any `games/*.h
 | **Missile Command** | Aim with the mouse, intercept incoming missiles, defend your cities. |
 | **Pong** | Neon table tennis vs the CPU — angle your shots off the paddle, first to eleven. |
 | **Lunar Lander** | Thrust against gravity on a fuel budget, land soft on the neon flats (narrow pads pay more). |
+| **Crossing** | Frogger-lite — hop through neon traffic, ride logs across the river, fill the goal bays. |
 
 Every game has a `← arcade` link back to the rack. *(more cabinets may come — see `CHANGELOG.md`.)*
 
