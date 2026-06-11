@@ -1,5 +1,29 @@
 # Sound Garden — Changelog
 
+## 2026-06-11 — Dwell accumulator wired into all 8 voices (patience unlock)
+
+Added the **dwell accumulator IIFE** from `/UNLOCK.md` (verbatim, only the `id` differs per piece) to
+**all 8 Sound Garden instruments**: `whitney.html` (id `whitney`), `drift.html`, `euclid.html`,
+`rain.html`, `loom.html`, `carillon.html`, `lattice.html`, `quickening.html`. It is an isolated,
+silent `try/catch` IIFE that does not touch the instrument — for the 6 standalone voices it sits just
+before the closing `</script>` after the introspection hook; for `lattice` and `quickening` it sits
+directly after their existing `ws:seen:` breadcrumb IIFE.
+
+- **What it does.** While the tab is **visible**, every `TICK=5000` ms it adds 5 s to that piece's
+  `ws:dwell:<id>` key, then sums **all** `ws:dwell:*` keys across the workshop; once the summed total
+  crosses `THRESH=150000` (~2.5 min of lingering, across any combination of voices) it sets the
+  one-time flag `ws:flag:patience`. Pauses when the tab is hidden (`document.hidden`).
+- **Why it's safe.** Pure additive breadcrumb — wrapped in `try/catch`, degrades silently if storage
+  is off, never read by the instrument. Audio is irrelevant: the tick runs on `setInterval` whether or
+  not you press *begin*.
+- **It drives the Undercroft's 2nd secret, "The Long Quiet"** (see `undercroft/CHANGELOG.md`) — the
+  framework's **second trigger type: patience/dwell** (the first, Quickening, was an exploration combo).
+- **Verified on the served origin** (`http://127.0.0.1:8765`, never `file://`): loading `drift.html`
+  for ~12 s grew `ws:dwell:drift` 0 → 15000; pre-seeding `ws:dwell:lattice=148000` then loading
+  `lattice.html` for ~12 s pushed the sum past threshold and set `ws:flag:patience=1`. `whitney.html`
+  still loads with a clean console and an intact `__wmb` hook. All 8 IIFE bodies are byte-identical
+  but for the `id` string.
+
 ## 2026-06-11 — Quickening (the Living Lattice — HIDDEN piece, the Undercroft)
 
 Added `quickening.html`, **Lattice's sibling** and the first inhabitant of **The Undercroft**

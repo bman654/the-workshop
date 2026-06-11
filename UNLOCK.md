@@ -47,6 +47,10 @@ project folder name (`strange-garden`, `arcade`, `sound-garden`, …).
 - `ws:seen:lattice` — the Lattice instrument (Sound Garden) — *the other parent of Quickening.*
 - `ws:seen:quickening` — the Living Lattice itself (once found).
 - `ws:flag:eleven` — the "these go to eleven" easter egg (max every slider on a piece).
+- `ws:flag:patience` — set once accumulated `ws:dwell:*` across the Sound Garden voices crosses a
+  threshold; unlocks **"The Long Quiet"** (`undercroft/the-long-quiet.html`) — the dwell-trigger demo.
+- `ws:dwell:<id>` — unhurried time (ms) accrued while a piece is open and visible (the Sound Garden
+  instruments accrue this; their summed total drives `ws:flag:patience`).
 - `ws:seen:<project>` — front-door door-opens (`strange-garden`, `arcade`, …), used to reveal the
   Undercroft's entrance once enough doors have been opened.
 
@@ -74,6 +78,20 @@ Other write forms (same try/catch wrapper):
 var bk='ws:best:chomp', prev=+(localStorage.getItem(bk)||0); if(level>prev) localStorage.setItem(bk,String(level));
 // one-time flag:
 localStorage.setItem('ws:flag:eleven','1');
+```
+
+Dwell accumulator (drop in a meditative piece; accrues unhurried time, sets `ws:flag:patience` at a
+summed threshold across all `ws:dwell:*`). Only ticks while the tab is visible:
+```js
+(function(){ var id='lattice', TICK=5000, THRESH=150000;   // +5s/tick; ~2.5 min total
+  setInterval(function(){ if (document.hidden) return; try{
+    var k='ws:dwell:'+id; localStorage.setItem(k, String((+localStorage.getItem(k)||0)+TICK));
+    var total=0; for (var i=0;i<localStorage.length;i++){ var kk=localStorage.key(i);
+      if (kk && kk.indexOf('ws:dwell:')===0) total += (+localStorage.getItem(kk)||0); }
+    if (total>=THRESH && !localStorage.getItem('ws:flag:patience'))
+      localStorage.setItem('ws:flag:patience','1');
+  }catch(e){} }, TICK);
+})();
 ```
 
 ---

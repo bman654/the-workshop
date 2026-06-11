@@ -1,5 +1,32 @@
 # The Undercroft — changelog
 
+## Build 2 — 2nd secret: "The Long Quiet" (patience/dwell trigger) (2026-06-11)
+
+Added the **second inhabitant** of the Undercroft and the framework's **second trigger type:
+patience/dwell** (Build 1's Quickening was an exploration *combo*). Lingering among the Sound Garden
+voices accrues `ws:dwell:*` time; once the summed total crosses 150000 ms (~2.5 min) the voices set
+`ws:flag:patience`, which unlocks a new contemplative *place*, **The Long Quiet**.
+
+- **New SECRETS row** (inserted as the **2nd** entry, between `quickening` and `eleven` ⇒ order is
+  place, place, trophy): `id:'the-long-quiet'`, `kind:'place'`, badge `🌙`, `href:'the-long-quiet.html'`,
+  unlocked by `s => s.has('ws:flag:patience')`, with riddle *"Stillness is also a way of looking. Stay a
+  while among the voices."* and a single sign *"unhurried time spent among the voices"* (`ws:flag:patience`).
+  Added a moonlit `accent:'#9ab0c9'` to match the existing rows' `accent` field (every other row has one;
+  without it the locked-card `--c` glow would be `undefined`).
+- **Progress meter is automatic.** It already reads `SECRETS.length` (no hardcoded "2" anywhere), so it
+  now shows **"of 3"** with zero extra wiring.
+- **New reward page `the-long-quiet.html`** — a single self-contained, zero-dep, no-network page. A
+  *restful* sibling of this room: dark candle-/moon-lit vault, Georgia serif, ui-monospace kick, but slow
+  and unhurried — the prose breathes in, centered. Ambient visual is a single **slow-breathing luminous
+  form** (~16 s breath cycle, gentle sway) with barely-drifting motes settling around it, drawn with
+  `globalCompositeOperation:'lighter'`; pauses when hidden, honours `prefers-reduced-motion`, never throws.
+  Drops an optional `ws:seen:the-long-quiet` breadcrumb on load. Back-link `← the undercroft` → `index.html`.
+- **Verified on the served origin** (`http://127.0.0.1:8765`, never `file://`): with `ws:flag:patience=1`
+  the card materialises (full card, `Enter ▸` → `the-long-quiet.html`) and progress reads **"1 of 3
+  discoveries found"**; the page loads at ~60 fps (measured 60.7) with a clean console. With no flag the
+  card is a locked ghost showing the riddle and "0 of 1 sign gathered", progress "0 of 3". Screenshots of
+  unlocked + locked + the page captured.
+
 ## Build 1 — the hidden room (2026-06-11)
 
 **What it is.** `undercroft/index.html` is a single self-contained, zero-dependency, no-network HTML
