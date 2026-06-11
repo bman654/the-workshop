@@ -24,6 +24,7 @@ Open **`index.html`** (the cabinet rack) and pick a game, or open any `games/*.h
 | **Pong** | Neon table tennis vs the CPU — angle your shots off the paddle, first to eleven. |
 | **Lunar Lander** | Thrust against gravity on a fuel budget, land soft on the neon flats (narrow pads pay more). |
 | **Crossing** | Frogger-lite — hop through neon traffic, ride logs across the river, fill the goal bays. |
+| **Chomp** | Pac-Man-lite — clear a neon maze of pellets while four ghosts with distinct AI hunt you; grab a power-pellet to flip the chase and gobble them. |
 
 Every game has a `← arcade` link back to the rack. *(more cabinets may come — see `CHANGELOG.md`.)*
 

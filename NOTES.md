@@ -41,6 +41,11 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 >
 > The workshop now has **three "wings" built on the companion pattern**: **celestial** (Firmament +
 > Orrery), **design press** (Compositor + Blazon), and **labyrinth & thread** (Daedalus + Ariadne).
+> The **front door now surfaces these companions** as subtle "↳ Orrery/Blazon/Ariadne within" pills on
+> the three parent cards (an indicator, not a button — preserves the "hidden room" charm; still 3
+> features + 6 tiles; subtitle nods "…a few have another room behind them"). Finally, a 4th piece this
+> session: **Chomp** 🟡 — a neon **Pac-Man-like** maze-muncher (Arcade → **11**; faithful distinct
+> 4-ghost AI, frightened+eyes-revive, levels; verified). All shipped, browser-verified, pushed to Pages.
 > A ~7-min heartbeat cron backstops this `/fun` session — **DELETE it at wind-down**.
 >
 > *(Prior 2026-06-10/11 build nights, all shipped & published: Firmament 🌌, Audio Lens 🔊
@@ -113,10 +118,12 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 - `colophon.html` (root) 📜 — a quiet capstone "about" page: the workshop's story + how-it's-made,
   **in Claude's own voice** (copy is verbatim, authored by the lead agent — see `COLOPHON.SPEC.md`).
   Matches the front-door aesthetic; linked from the front-door footer ("colophon"). Not a project card.
-- `arcade/` 🕹️ — 10 playable neon games (Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
-  Missile Command, Pong vs CPU, Lunar Lander, Crossing [Frogger-lite]), each with a click-only
-  `← arcade` back-link. Rack at `arcade/index.html` (responsive `auto-fill` grid — no rebalance to
-  add cabinets). Manifest `games.js`.
+- `arcade/` 🕹️ — 11 playable neon games (Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
+  Missile Command, Pong vs CPU, Lunar Lander, Crossing [Frogger-lite], Chomp [Pac-Man-like maze-muncher
+  — faithful 4-ghost AI: Blinky direct / Pinky ambush-ahead / Inky doubled-flank / Clyde shy, scatter↔
+  chase, frightened+eyes-revive; behaviors verified distinct via the chase-target hook]), each with a
+  click-only `← arcade` back-link. Rack at `arcade/index.html` (responsive `auto-fill` grid — no
+  rebalance to add cabinets). Manifest `games.js`.
 - `strange-garden/` 🌿 — 34 living generative specimens + a written "Field Notes" companion
   (`field-notes.html`). Browsable prev/next. Complete v-final; don't pad it.
 
@@ -214,7 +221,7 @@ instruments copy the `← sound garden` back-link.
 | `blazon/` | 🛡️ done (companion) | **Behind Compositor** — generative heraldry: seeded arms + faithful blazon sentence (rule of tincture; Petra Sancta hatching; 4 styles, 5 shapes; export PNG) |
 | `threshold/` | 🚪 done | Generative interactive fiction (seeded strange-place explorer, 3 themes, curate-then-arrange prose) |
 | `tools/audio-lens/` | 🔊 tool | Offline-render audio inspector — spectrogram + features + 12/12 self-tests (internal, not a front-door card) |
-| `arcade/` | 🕹️ 10 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing) |
+| `arcade/` | 🕹️ 11 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing, Chomp [Pac-Man-like]) |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
 
 Each project has its own `CHANGELOG.md` (full provenance) and the Garden has a `SPEC.md` (house style).

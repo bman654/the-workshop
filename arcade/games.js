@@ -61,5 +61,11 @@ window.GAMES = [
     name: "Crossing",
     blurb: "thread the neon traffic, ride the river home",
     accent: "#39ff14"
+  },
+  {
+    file: "chomp.html",
+    name: "Chomp",
+    blurb: "neon maze muncher — clear the pellets, flee the ghosts, gobble the chasers",
+    accent: "#ffd23d"
   }
 ];
