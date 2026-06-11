@@ -1,5 +1,86 @@
 # Sound Garden — Changelog
 
+## 2026-06-11 — Quickening (the Living Lattice — HIDDEN piece, the Undercroft)
+
+Added `quickening.html`, **Lattice's sibling** and the first inhabitant of **The Undercroft**
+(the hidden world — see `/UNLOCK.md`). It is **deliberately NOT in the rack** (`instruments.js`
+untouched; the Sound Garden stays at 7 visible) — it is reached only from the Undercroft once
+unlocked. Quickening is the audible incarnation of the Strange Garden's Game of Life: where
+Lattice ran a seeded, hand-biased pattern, Quickening hands the grid to a **cellular automaton**
+and the playhead **sonifies the living board**.
+
+- **Concept — the board IS the CA world AND the sequencer.** A **24-column (time) × 16-row
+  (pitch)** toroidal grid. ROWS map to the in-scale pitch ladder exactly as Lattice does (row =
+  scale degree ascending from root ⇒ **every fired note is in-scale by construction**). A bright
+  **playhead column** sweeps left→right on the musical clock; every **live** cell it crosses
+  fires its row's note and blooms (scale-up + expanding ripple + flash).
+- **Two clocks, reconciled.** The musical playhead sweeps columns (8th feel). The **CA
+  generation clock** steps the board on an **"Evolve every {¼,½,1,2,4} bars"** cadence (default
+  1 bar = one full playhead loop) — so you hear a bar, then it pops to the next generation: a
+  self-rewriting sequencer. Implemented as a columns-per-generation counter so ¼/½-bar evolve
+  *mid-loop* (shimmering) and 1/2/4-bar evolve *at loop boundaries*. **Live and offline step the
+  CA on the identical cadence**, so the rendered WAV mirrors the evolving life.
+- **Five rule families, each with a distinct sound mapping (kept consonant — colour selects
+  octave/voice/timbre, never an arbitrary pitch):**
+  - **Conway** B3/S23 — **age → velocity & brightness** (newborn = bright accent pop, elder =
+    settled/quieter); voice by pitch register (low pad / mid lead / high sparkle).
+  - **HighLife** B36/S23 — same mapping; its replicators keep the board lively.
+  - **Immigration** (2-colour) — newborn takes the majority colour of its 3 parents; the two
+    species sing as **2 timbres an octave apart**, panned L/R.
+  - **QuadLife** (4-colour) — newborn = majority, or the **absent** colour on a 3-way tie (the
+    canonical rule); **4 colours → 4 voices / octave offsets / pan positions** (low pad, lead,
+    high sparkle, glass).
+  - **Brian's Brain** — on/dying/off; **only "on" cells fire** (the moving wavefront); "dying"
+    cells are visible but silent (amber ghost). Lots of motion ⇒ evolving rhythm.
+- **Seeded, reproducible, never silent.** Initial soup is a pure function of seed × rule ×
+  density (xmur3 + mulberry32); CA evolution is deterministic ⇒ the whole piece is reproducible
+  by seed until poked. An **extinction guard** gently re-soups if the audible population stays ~0
+  for a couple of loops, so it's never permanently silent. Controls: Seed/dice, Rule, Scale,
+  Root, Tempo, Seed density, Evolve-every, Reverb, Volume; buttons Play/Pause, Mute, Reseed,
+  Clear, **Inject glider**, **Inject soup**; **click/drag toggles cells** (play along, like a
+  parent). Keys: space/m/r/g/s/n/c/h (n = step a generation).
+- **Correctness — the CA self-test (the verifiable gate).** `window.__quickening.selfTest()`
+  runs each canonical pattern on an **isolated 16×16 scratch board** (centred, no wrap
+  interference): **glider** translates (+1,+1) after 4 gens, **blinker** is period-2, **block**
+  is a still life, and **Brian's Brain** obeys its transition law (on→dying, dying→off, an off
+  cell with exactly 2 on-neighbours → on). **All 4 cases PASS.**
+- **Never clips / lens-native.** Same master chain as Lattice (bus → low-pass → soft-clip tanh →
+  brick-wall limiter → master well below unity → dest; bounded feedback delay + convolution
+  reverb; polyphony cap 28, self-disconnecting voices). `window.__renderOffline(seconds, seed)`
+  renders the evolving CA under `OfflineAudioContext` → 16-bit stereo WAV + a silent self-check.
+  **Offline audit (20 s each, every rule family): `outOfScale === 0`, `clipPct === 0`, `peakDb <
+  0`, `notes > 0`:**
+  - Conway — peak **−7.86 dBFS**, 0 % clip, 376 notes, 0 out of scale.
+  - HighLife — peak **−9.20 dBFS**, 0 % clip, 336 notes, 0 out of scale.
+  - Immigration — peak **−8.44 dBFS**, 0 % clip, 355 notes, 0 out of scale.
+  - QuadLife — peak **−8.81 dBFS**, 0 % clip, 334 notes, 0 out of scale.
+  - Brian's Brain — peak **−11.53 dBFS**, 0 % clip, **227 notes** (fewer — only "on" cells fire,
+    confirming the wavefront mapping), 0 out of scale.
+- **Hidden-world wiring.** Drops the breadcrumb **`ws:seen:quickening`** on load (verified
+  written: a ms timestamp). The **"these go to eleven"** easter egg: when every range slider is
+  simultaneously at max, a glowing **"11"** badge reveals and **`ws:flag:eleven`** is set (try/
+  catch); it hides when a slider leaves max, and the flag persists once earned (all verified via
+  `localStorage`). Back-link **`← the undercroft`** → `../undercroft/index.html`.
+- **Visuals.** Live cells glow green-gold (hue by voice/colour, lightness by age); recently-dead
+  cells leave **ghost trails**; Brian's-Brain dying cells show as silent amber rings; the
+  playhead is a sweeping band with a bright center line; fired cells bloom + ripple; a **board-
+  wide generation pulse** marks each CA step. Alive on load (visual sweep before audio unlock).
+  HUD: rule · scale/root · seed · gen · pop · col · voices · fps.
+- **Verified (visual-first, live audio kept muted — courtesy; offline render is the audio gate),
+  unique `agent-browser` session over the served origin `http://127.0.0.1:8765`:** self-test
+  4/4 PASS; steady **~60 fps**, **zero console errors/warnings**, playhead sweeping, cells alive
+  and evolving (gen advancing, pop ~130), blooms firing under the head; offline audit clean for
+  all 5 families (above); **seed reproducibility** — seed 42 stepped 15 gens twice ⇒ identical
+  `signature()`, seed 99 differs; the "11" egg + `ws:seen:quickening` breadcrumb verified in
+  `localStorage`.
+- Accent `#7fe6a0` (luminous living green-gold, distinct from Lattice's aqua). Hero shot
+  `assets/quickening-hero.png` — a lively mid-sweep Conway board (playhead band + blooming cells
+  + ripples). ~1206 lines, self-contained, relative links only.
+
+### Rack
+- **No change** — Quickening is hidden by design; `instruments.js` and the visible 7-instrument
+  rack are untouched.
+
 ## 2026-06-11 — Lattice (new instrument)
 
 Added `lattice.html`, the rack's **seventh** instrument and its sequenced-melody voice
