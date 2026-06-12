@@ -7,6 +7,47 @@ engine code. See `ADVENTURE.SPEC.md` for the contract.*
 
 ---
 
+## Build 3 — The Night Shift, a HIDDEN tale (2026-06-12)
+
+**Shipped:** the third tale — and the first **hidden** one. It lives in the Undercroft
+(`undercroft/the-night-shift.html`), not on the public shelf: the shelf stays at two tales on
+purpose, and the only doors to this one are below. (Unlock trail + verification detail live in
+`undercroft/CHANGELOG.md` Build 9 — earned by playing both public tales to their endings.)
+
+### The tale — *The Night Shift*
+Five rooms (hall · arcade · garden · soundgarden · undercroft), accent `#a9b8d8` (moon-silver). You
+are the keeper of THIS workshop — the one with the nine doors — walking the last round after
+closing. Three wings have not gone to sleep: the arcade's last cabinet still burns, a fern droops
+unwatered under its dome, the great bell hums on. Play the game home, water the fern, hear the bell
+out — the chained stair unbars, and you go down to keep *The Night Watch*. **Solver-confirmed:
+winnable, shortest path 11 moves, softlock-free, deterministic; self-test 5/5.** The gentlest world
+of the three: nothing is consumable at all — every gate is a monotonic flag, the can is never spent.
+
+### Engine: 5 new scene-art entries (cosmetic registry content; `LANTERN_VERSION` stays 1.0)
+- `hall` — the long hall in perspective: nine dark door-shapes receding (helper `hallDoors`), the
+  coat-peg + can silhouette, the chained stair-opening at the far end; **state-responsive:** once
+  `arcade-rested` + `garden-rested` + `bell-rested` are all set, the chain drops aside and a faint
+  accent glow rises in the opening.
+- `arcade-night` — the dark cabinet row, one screen burning (accent glow + a tiny ship), the
+  loaf-cat on top; **state:** `arcade-rested` → screen dark, cat stays.
+- `garden-night` — three glass domes, the nearest holding a drooped fern of bowed arc-fronds
+  (helper `fernFronds`); **state:** `garden-rested` → the earth band darkens, two fronds take a
+  faint accent shine.
+- `sound-night` — hung instrument silhouettes, the great bell at the back with concentric accent
+  hum-rings; **state:** `bell-rested` → the rings are gone, the bell at rest.
+- `below` — worn steps converging down into the dark, a faint warm glow waiting at the bottom.
+
+No core/model/solver changes — scenes + two string-builder helpers (`hallDoors`, `fernFronds`) only.
+
+### Files
+- `worlds/the-night-shift.js` — the authored world-file (solver-verified before the build).
+- `undercroft/the-night-shift.src.html` — the chrome (copied from the ferryman's; tints re-keyed to
+  moon-silver; `forge:include` paths reach `../adventure/…` — forge resolves relative to the src
+  file). A hidden piece carries a **single** back-link, `← the undercroft` — never the public shelf.
+- Built with `node tools/forge/forge.mjs --all`; `--check --all` clean (all three tales current).
+- `assets/the-night-shift.png` — a 1440×900 mid-play capture (an asset, not navigation; the shelf
+  does not link the tale).
+
 ## Build 2 — The Ferryman (2026-06-12)
 
 **Shipped:** the second tale — written to a deliberately *different shape* than The Lamplighter, to

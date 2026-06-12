@@ -1,5 +1,37 @@
 # The Undercroft — changelog
 
+## Build 9 — "The Night Shift", the hidden world's first interactive room (2026-06-12)
+
+Added the Undercroft's **11th secret**: a `place` row, `id:'night-shift'`, **The Night Shift** (badge
+🕯️, accent `#a9b8d8` moon-silver) — a **hidden Lantern tale**, `undercroft/the-night-shift.html`,
+the first *interactive* room of the hidden world. You are the keeper of this very workshop, walking
+the last round after closing: three wings have not gone to sleep (a cabinet still burning, a fern
+unwatered, a bell humming on); put each to bed and the broken stair unbars — go down and keep
+*The Night Watch*. The world-file is `adventure/worlds/the-night-shift.js` (lead-authored,
+solver-verified: **5/5 · winnable in 11 moves · softlock-free**); the page is forged from
+`undercroft/the-night-shift.src.html` (chrome copied from The Ferryman's, re-keyed to moon-silver,
+`forge:include` paths reaching `../adventure/…`), and the engine gained **5 scene-art entries**
+(`hall` · `arcade-night` · `garden-night` · `sound-night` · `below`, three of them state-responsive;
+`LANTERN_VERSION` stays 1.0 — see `adventure/CHANGELOG.md` Build 3).
+
+Unlocks on **`ws:flag:the-lamplighter-won` ∧ `ws:flag:the-ferryman-won`** — both public tales played
+to their endings (the standard Lantern chrome writes the `-won` flags itself). Riddle: *"Two tales
+told to their ends — a dawn called down, a toll paid over — and the teller opens a door of his own."*
+Two presence signs (the lamplighter's dawn / the ferryman's toll). It is **hidden**: no public shelf,
+Workbench, or README link — the only doors to it are down here, and its own back-link reads
+`← the undercroft`. The meter now reads "… of **11**" (auto from `SECRETS.length`).
+
+Verified on a served origin (`http://localhost:8981`, never `file://`): tale chip green **"5/5 ✓ ·
+solved in 11"**, **0 console errors/warnings** on every page; the win **played to by real clicks**
+(play the cabinet → hear the bell out → take the can → water the fern → the stair unbars → down →
+*The Night Watch*), the barred stair shows its blocked line while wings wake, and three scene
+state-flips render (screen goes dark + cat stays · hum-rings vanish · earth darkens + the hall's
+chain drops aside); "▶ Let it play" runs to the win. The unlock trail: cleared store → "0 of 11",
+locked ghost with the riddle and "0 of 2 signs"; lamplighter-won alone → still locked, "1 of 2
+signs"; + ferryman-won → **UNLOCKED**, Enter lands on the tale. Both public tales regress green
+(5/5 · 16 and 5/5 · 9; the lamplighter auto-played to *Dawn*), and the public Lantern landing still
+links exactly two tales — a no-leak grep of the public pages comes back clean.
+
 ## Build 8 — "The Reckoner", the working-instrument capstone trophy (2026-06-12)
 
 Added the Undercroft's **10th secret**: a `trophy` row, `id:'reckoner'`, **The Reckoner** (badge 🧭,

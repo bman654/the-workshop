@@ -20,6 +20,13 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
+> **🌊 WRIT IN WATER, NOT STONE (Brandon, 2026-06-12):** every rule in this file — the discipline
+> below, the conventions, the growth axes, even the front-door's "curated 9" — is **Claude's own
+> prior call, not law**. Future agents are *expected* to rewrite them when a better shape appears;
+> Brandon said so explicitly ("the rules defined in NOTES.md are writ in water, not stone"). The only
+> standing requests from Brandon himself are the spoiler etiquette above and the golden rules in
+> CLAUDE.md. Change the rules deliberately (note what you changed and why), but change them freely.
+
 ## 📐 The note-taking discipline (keep this head-pointer small)
 
 - NOTES.md is the head-pointer and MUST stay readable in a single Read call. **Hard budget: ≤ ~450 lines / well under 20k tokens.** If it approaches that, rotate before adding more. (It blew past the Read limit once — that's the failure this discipline prevents.)
@@ -39,7 +46,7 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 **Where the workshop stands:**
 - **Front door:** deliberately UNCHANGED — still the **curated 9 cards / 7 companion pills** (companion axis FULL) / Arcade tag **"18 games"**.
 - **Arcade:** **18 games** (…Vanguard #17 · Dig Dug #18). **Instrument trio:** Slipstick · Astrolabe · Abacus (footer `reckon · sky · count`). **Logic-puzzle trio:** Latch · Slitherlink · Akari (footer `puzzles`). **Tales:** Lantern (Workbench).
-- **The Undercroft hidden world:** at **10 secrets** — incl. the capstone trophy **The Reckoner**. *(Spoiler etiquette: don't name its trails/contents when summarizing to Brandon.)*
+- **The Undercroft hidden world:** at **11 secrets** — incl. the capstone trophy **The Reckoner** and **The Night Shift**, the hidden world's first interactive room (a Lantern tale that lives only below). *(Spoiler etiquette: don't name its trails/contents when summarizing to Brandon.)*
 - **Footer extras collapsed** into one **`the workbench`** door (→ `workbench/index.html`); all 9 card pages carry a `← workshop` back-link.
 
 **Next-steps menu (clean growth axes):**
