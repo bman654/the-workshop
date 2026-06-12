@@ -20,6 +20,8 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
+> **▶ Theogony legibility fix (2026-06-12):** enforced **name distinctiveness** so no two gods in a pantheon read as confusable near-twins (a visitor mistook *Rireistul* for *Reithstivur* and thought the kinship graph cycled — the graph was always acyclic; the *names* clustered). Widened the phonology (9–12 onsets, ≤2 per shared initial letter), stopped consecutive-syllable onset stutter, and rewrote `coinUniqueName` to enforce a **Jaro-Winkler similarity < 0.72** between every pair (graceful tiers; never just appends a vowel). Added a 5th self-test check ("name distinctiveness"); chip now reads **5/5**. Verified: 360+ seed Node sweep 0 failures (worst-case JW 0.720), browser chip green 5/5 with 0 console errors, determinism intact (fingerprints match Node). See `theogony/CHANGELOG.md` Build 2.
+
 > **▶ Undercroft 10th secret (2026-06-12):** added **The Reckoner** 🧭 — a SECRETS-only `trophy` (no new page/front-door/footer), the working-instrument capstone. Earned by working all three reckoners (Slipstick + Astrolabe + Abacus). Meter is now "of 10". Browser-verified locked→2/3→unlocked, 0 console errors. See `undercroft/CHANGELOG.md` Build 8.
 
 > **▶▶ MORNING SUMMARY & RESUME POINTER — 2026-06-12 (consolidated; verbose per-piece blocks follow below, reverse-chronological).**

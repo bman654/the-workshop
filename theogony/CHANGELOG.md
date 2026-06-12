@@ -75,3 +75,52 @@ rasterizes a valid non-blank 2× image.
   subtle "⚡ Theogony within" pill. No new card (still 9).
 - `README.md`: a companion blockquote under Threshold; companion count six → seven.
 - Drops `ws:seen:theogony` (breadcrumb for the hidden-world framework; see `/UNLOCK.md`).
+
+## Build 2 — name distinctiveness (2026-06-12)
+
+**Legibility fix: no two gods in a pantheon may read as confusable near-twins.** A visitor on
+seed `morael` mistook **Rireistul** for **Reithstivur** and thought the kinship graph had a cycle.
+The graph was always acyclic and the prose referential — the real bug was the *coined names*
+clustering. Root causes & fixes:
+
+- **Phonology too narrow / initial-letter clustered.** `rollPhonology` drew only **5–8 onsets**
+  for ~14 gods, and `s/st/sk/sp/sl/sn/sr` all start with "s", so one initial dominated. Now it
+  draws **9–12 onsets** with a **per-initial cap (≤2 onsets sharing a leading letter)** so the
+  sound system is richer and less clustered. Vowels/codas unchanged.
+- **Stutter within a name.** `coinName` could repeat the same onset in consecutive syllables
+  ("Stiskeisk…"). It now avoids repeating the previous syllable's onset, and biases harder to
+  **2 syllables** (cap 3) so names stay short and readable.
+- **Uniqueness ≠ distinctiveness.** `coinUniqueName` only enforced *exact* uniqueness. It now
+  enforces **distinctiveness** via a compact **Jaro-Winkler** similarity (weights shared
+  prefixes — the right metric for "do these look alike?") with graceful tiers: (1) distinct
+  initial letter **and** max JW < threshold; (2) drop the initial requirement, still require
+  max JW < threshold; (3) last resort, keep re-coining until JW clears (the name space is large;
+  it never just appends a vowel — that makes near-duplicates). Exact-uniqueness always holds.
+- **THRESHOLD = 0.72**, chosen empirically. It must (a) **reject** the old morael near-twins —
+  Rireistul/Reithstivur (JW 0.739), Stith/Stiskeiskush (0.732), Srei/Srosrisral (0.747) — and (b)
+  be satisfiable for every seed. 0.72 sits below all three named pairs and a **1500-seed sweep at
+  0.72 had 0 failures / 0 exhaustion** (the tier-3 loop always clears it).
+- **5th self-test check — "name distinctiveness":** for each sampled seed, asserts all names are
+  unique AND every pair has Jaro-Winkler < 0.72 (the same guarantee the generator enforces). The
+  chip count derives from `checks.length`, so the chip now reads **5/5**.
+
+### morael — before → after
+- **Before (confusable):** Rireistul, Stuveivoth, Stith, Larush, Lor, Stiskeiskush, Reithstivur,
+  Skover, Skistevi, Srosrisral, Srevul, Veiresri, Roruste, Srei.
+- **After (distinct):** Wisraskosh, Visrir, Norolsri, Rufeil, Srulesh, Merili, Thisro, Fawa,
+  Lumuth, Wafuth, Wothlath, Leithaveith, Fimithoth, Vuskefu. Worst pairwise JW = **0.694**
+  (Rufeil/Merili). Same nGen=4 / 14 gods; fingerprint changed (`ae36fc2f` → `afde8e97`) because
+  name coinage consumes different RNG — expected; determinism (seed purity) still holds.
+
+### Verified
+- **Headless Node sweep** (`/tmp/theo-sweep.cjs`, real generator + DOM stubs): morael distinct
+  (worst JW 0.694); **360+ seed sweep, worst-case max pairwise JW = 0.7200 (< 0.72), 0 generation
+  errors, 0 failures** on distinctiveness / duplicates / acyclic / referential / seed-purity. The
+  page's real `selfTest()` returns ok=true with **5/5 PASS**.
+- **Browser** (agent-browser, named session, served origin): chip **green, "self-test ✓ 5/5"**,
+  tooltip shows all 5 ✓, **0 console errors/warnings**; `buildPantheon('morael')` in-browser
+  matches Node byte-for-byte (fingerprint `afde8e97`, same 14 names) → determinism confirmed;
+  rendered genealogies read as clearly distinct gods.
+- **Tradeoff:** names trend slightly shorter (the ≤3-syllable bias) and a touch plainer than the
+  occasional long "Stiskeiskush" — a deliberate legibility win; they still share a per-pantheon
+  family resemblance (à la Apollo/Ares/Artemis), just no near-twins.

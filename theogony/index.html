@@ -285,19 +285,89 @@ const SOUND = {
     ["","","n","r","s","l","th"]
   ]
 };
+/* The similarity threshold the generator enforces between any two god names in
+   a pantheon (Jaro-Winkler, 0..1). Tuned empirically (see CHANGELOG): low enough
+   to reject morael-style near-twins (Rireistul/Reithstivur, Stith/Stiskeiskush,
+   Srei/Srevul/Srosrisral), high enough that a 300+ seed sweep never exhausts. */
+const NAME_JW_THRESHOLD = 0.72;
+
+/* Jaro-Winkler similarity (0..1). Weights a shared prefix more heavily, which
+   is exactly what "do these two names look confusingly alike?" needs. */
+function jaroWinkler(s1, s2){
+  s1 = s1.toLowerCase(); s2 = s2.toLowerCase();
+  if(s1===s2) return 1;
+  const len1=s1.length, len2=s2.length;
+  if(len1===0 || len2===0) return 0;
+  const matchDist = Math.max(0, ((Math.max(len1,len2)/2)|0) - 1);
+  const m1=new Array(len1).fill(false), m2=new Array(len2).fill(false);
+  let matches=0;
+  for(let i=0;i<len1;i++){
+    const lo=Math.max(0,i-matchDist), hi=Math.min(i+matchDist+1,len2);
+    for(let j=lo;j<hi;j++){
+      if(m2[j]||s1[i]!==s2[j]) continue;
+      m1[i]=m2[j]=true; matches++; break;
+    }
+  }
+  if(matches===0) return 0;
+  // transpositions
+  let k=0, transpositions=0;
+  for(let i=0;i<len1;i++){
+    if(!m1[i]) continue;
+    while(!m2[k]) k++;
+    if(s1[i]!==s2[k]) transpositions++;
+    k++;
+  }
+  transpositions = transpositions/2;
+  const jaro = (matches/len1 + matches/len2 + (matches-transpositions)/matches)/3;
+  // Winkler prefix boost (up to 4 leading chars, scale 0.1)
+  let prefix=0; const maxPre=Math.min(4,len1,len2);
+  while(prefix<maxPre && s1[prefix]===s2[prefix]) prefix++;
+  return jaro + prefix*0.1*(1-jaro);
+}
+/* the maximum pairwise Jaro-Winkler between a candidate and every existing name */
+function maxJW(name, existing){
+  let mx=0; for(const e of existing){ const v=jaroWinkler(name,e); if(v>mx) mx=v; } return mx;
+}
+
 function rollPhonology(rng){
   const ip = rng.int(SOUND.onsetPools.length);
-  const onsets = rng.shuffle(SOUND.onsetPools[ip]).slice(0, rng.range(5,8));
+  // Build a richer, initial-letter-diverse onset inventory. We cap how many
+  // onsets share a leading letter (e.g. s/st/sk/sp/sl/sn/sr all begin "s") so
+  // one initial can't dominate — that clustering is what made names confusable.
+  const PER_INITIAL_CAP = 2;
+  const shuffled = rng.shuffle(SOUND.onsetPools[ip]);
+  const want = rng.range(9, 12);
+  const onsets=[]; const perInitial={};
+  // first pass: respect the per-initial cap
+  for(const o of shuffled){
+    if(onsets.length>=want) break;
+    const init = (o[0]||"").toLowerCase();
+    if((perInitial[init]||0) >= PER_INITIAL_CAP) continue;
+    perInitial[init]=(perInitial[init]||0)+1; onsets.push(o);
+  }
+  // second pass: if the pool was too small to reach `want` under the cap, top up
+  for(const o of shuffled){
+    if(onsets.length>=want) break;
+    if(!onsets.includes(o)) onsets.push(o);
+  }
   const vowels = rng.shuffle(SOUND.vowelPools[rng.int(SOUND.vowelPools.length)]).slice(0, rng.range(4,6));
   const codas  = rng.shuffle(SOUND.codaPools[rng.int(SOUND.codaPools.length)]).slice(0, rng.range(4,7));
   // a syllable-count tendency: mostly 2, some 1 or 3
   return { onsets, vowels, codas, idx:ip };
 }
 function coinName(rng, phon){
-  const n = rng.pick([1,2,2,2,3,3]);
-  let s = "";
+  // bias to 2 syllables, allow 1 or 3 — keep names short and readable (<=3)
+  const n = rng.pick([1,2,2,2,2,3,3]);
+  let s = ""; let prevOnset=null;
   for(let i=0;i<n;i++){
-    s += rng.pick(phon.onsets) + rng.pick(phon.vowels);
+    // avoid repeating the same onset in consecutive syllables — that repetition
+    // is what produced "Stiskeisk"-style stutters. Try a few times for a fresh one.
+    let onset=rng.pick(phon.onsets);
+    if(phon.onsets.length>1){
+      for(let t=0; t<4 && onset===prevOnset; t++) onset=rng.pick(phon.onsets);
+    }
+    prevOnset=onset;
+    s += onset + rng.pick(phon.vowels);
     // a coda mainly on the final syllable, sometimes mid
     if(i===n-1 || rng.chance(.28)) s += rng.pick(phon.codas);
   }
@@ -464,12 +534,34 @@ function buildPantheon(seedStr){
   const usedNames = new Set();
   const usedDomains = new Set();   // principal gods hold DISTINCT primary domains
 
+  // names so far, preserving original case for similarity comparison
+  const nameList = [];
+  const initials = new Set();
+  function acceptName(nm){
+    usedNames.add(nm.toLowerCase()); nameList.push(nm);
+    initials.add(nm[0].toLowerCase()); return nm;
+  }
+  // Coin a name that reads as a CLEARLY DISTINCT god — not merely exact-unique.
+  // Graceful tiers: (1) distinct initial AND low Jaro-Winkler; (2) low JW only;
+  // (3) last resort, keep re-coining until JW clears (never append a vowel —
+  // that just makes a near-duplicate). Exact-uniqueness is enforced throughout.
   function coinUniqueName(){
-    for(let t=0;t<40;t++){ const nm=coinName(rng,phon);
-      if(!usedNames.has(nm.toLowerCase())){ usedNames.add(nm.toLowerCase()); return nm; } }
-    // fallback: append a vowel to guarantee uniqueness
-    let nm=coinName(rng,phon)+rng.pick(phon.vowels);
-    usedNames.add(nm.toLowerCase()); return nm;
+    const fresh = ()=>{ const nm=coinName(rng,phon); return usedNames.has(nm.toLowerCase()) ? null : nm; };
+    // tier 1 — distinct initial letter AND distinct sound
+    for(let t=0;t<40;t++){ const nm=fresh(); if(!nm) continue;
+      if(!initials.has(nm[0].toLowerCase()) && maxJW(nm,nameList)<NAME_JW_THRESHOLD) return acceptName(nm); }
+    // tier 2 — drop the distinct-initial requirement, still require distinct sound
+    for(let t=0;t<60;t++){ const nm=fresh(); if(!nm) continue;
+      if(maxJW(nm,nameList)<NAME_JW_THRESHOLD) return acceptName(nm); }
+    // tier 3 — last resort: re-coin (with a tiny syllable-count nudge to widen the
+    // search) until distinctiveness holds. The name space is large; this terminates.
+    for(let t=0;t<400;t++){ const nm=coinName(rng,phon);
+      if(usedNames.has(nm.toLowerCase())) continue;
+      if(maxJW(nm,nameList)<NAME_JW_THRESHOLD) return acceptName(nm); }
+    // absolute fallback (effectively unreachable for our pantheon sizes): a fresh
+    // exact-unique coinage so the generator can never throw or loop forever.
+    let nm; do{ nm=coinName(rng,phon); }while(usedNames.has(nm.toLowerCase()));
+    return acceptName(nm);
   }
   // domain pool: shuffle and draw distinct, but bias to include opposing pairs.
   const domPool = rng.shuffle(DOMAINS.map(d=>d.id));
@@ -726,6 +818,24 @@ function selfTest(){
   if(buildPantheon("seedA").fingerprint===buildPantheon("seedB").fingerprint){
     pureOk=false; pureDetail="distinct seeds collided"; }
   log("seed purity / style-invariance (identical fingerprint)", pureOk, pureDetail); okAll=okAll&&pureOk;
+
+  // (5) NAME DISTINCTIVENESS — within a pantheon, all names are unique AND no
+  //     two read confusingly alike (max pairwise Jaro-Winkler < threshold).
+  let distOk=true, distDetail="";
+  for(const s of seeds){
+    const p=buildPantheon(s);
+    const names=p.gods.map(g=>g.name);
+    const lower=names.map(n=>n.toLowerCase());
+    if(new Set(lower).size!==lower.length){ distOk=false; distDetail=`duplicate name in "${s}"`; }
+    for(let i=0;i<names.length && distOk;i++){
+      for(let j=i+1;j<names.length;j++){
+        const sim=jaroWinkler(names[i],names[j]);
+        if(sim>=NAME_JW_THRESHOLD){ distOk=false;
+          distDetail=`"${names[i]}"/"${names[j]}" too similar (JW ${sim.toFixed(2)}) in "${s}"`; break; }
+      }
+    }
+  }
+  log(`name distinctiveness (unique + pairwise Jaro-Winkler < ${NAME_JW_THRESHOLD})`, distOk, distDetail); okAll=okAll&&distOk;
 
   return { ok:okAll, checks };
 }
