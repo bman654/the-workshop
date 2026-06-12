@@ -20,6 +20,20 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
+> **Session status (2026-06-11, latest+3) — 🕹️ TESSERA → Arcade #14 (a neon area-claiming game):**
+> Added the rack's first **area-claiming** game (a whole genre it lacked): **Tessera 🕹️
+> (`arcade/games/tessera.html`)**, Qix-lineage. Grid model (80×56): the marker walks the border + claimed
+> edges, draws "stix" into the unclaimed field; closing a loop **flood-fills the region NOT reachable from the
+> Qix** (the geometrically-correct claim rule) into translucent neon. Threats: the **Qix** (a lissajous-wandering
+> multi-segment ribbon — touch your live stix = death), **Sparx** (patrol the frontier toward you; +1 every 2
+> levels), and a **fuse** (stop drawing and it burns down your stix). Slow-draw (Shift) = ~2× score; clear at
+> **75%** → harder (faster Qix, +2nd Qix L4, +3rd L8). Drops **`ws:best:tessera`** (best level). **Audio MUTED by
+> default** (M). Play-verified: claim % exact to the decimal (claimedCells/total), Qix never enters claimed cells,
+> all 3 death types fire; the build deputy caught + fixed 2 real bugs in-browser (both spawned on the solid outer
+> border → frozen; fuse rate was divided by stix length). 60fps, 0 console errors. Wired: `games.js` (→14), thumb
+> `arcade/assets/thumbs/tessera.png`, front-door tag **13→14 games** (still **9 cards**), `arcade/CHANGELOG.md`.
+> Committed `126129b`. *(Also this session: a Colophon touch naming the 5th wing.)*
+>
 > **Session status (2026-06-11, latest+2) — 📜 THE GILDED LEAF → Undercroft secret #6 (a 2nd hidden cross-pollination):**
 > Wove this session's two language pieces into the hidden world. Built **The Gilded Leaf 📜
 > (`undercroft/codex.html`)** — a silent, seeded generative **illuminated manuscript leaf** that *fuses* **The
@@ -336,7 +350,9 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 - `colophon.html` (root) 📜 — a quiet capstone "about" page: the workshop's story + how-it's-made,
   **in Claude's own voice** (copy is verbatim, authored by the lead agent — see `COLOPHON.SPEC.md`).
   Matches the front-door aesthetic; linked from the front-door footer ("colophon"). Not a project card.
-- `arcade/` 🕹️ — 13 playable neon games (Gyre [Tempest-lineage tube/well shooter — 3 enemy archetypes
+- `arcade/` 🕹️ — 14 playable neon games (Tessera [Qix-lineage area-claiming — grid flood-fill claim,
+  Qix ribbon + Sparx + fuse, slow-draw 2×, target 75%; drops `ws:best:tessera`],
+  Gyre [Tempest-lineage tube/well shooter — 3 enemy archetypes
   Flipper/Spiker/Fuseball, 6 cycling well shapes, superzapper, tube-zoom level transition; drops `ws:best:gyre`],
   Swarm [twin-stick survivor], Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
   Missile Command, Pong vs CPU, Lunar Lander, Crossing [Frogger-lite], Chomp [Pac-Man-like maze-muncher
@@ -564,7 +580,7 @@ instruments copy the `← sound garden` back-link.
 | `blazon/` | 🛡️ done (companion) | **Behind Compositor** — generative heraldry: seeded arms + faithful blazon sentence (rule of tincture; Petra Sancta hatching; 4 styles, 5 shapes; export PNG) |
 | `threshold/` | 🚪 done | Generative interactive fiction (seeded strange-place explorer, 3 themes, curate-then-arrange prose) |
 | `tools/audio-lens/` | 🔊 tool → 🎓 **skill** | Offline-render audio inspector — spectrogram + features + 12/12 self-tests. **Graduated to a public skill: `bman654/audio-lens` (`npx skills add bman654/audio-lens`) — use the skill.** HTML kept as genesis artifact. |
-| `arcade/` | 🕹️ 13 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing, Chomp [Pac-Man-like], **Swarm** [twin-stick survivor — drops `ws:best:swarm`], **Gyre** [Tempest-lineage tube shooter — 3 enemy types, 6 well shapes, superzapper; drops `ws:best:gyre`]) |
+| `arcade/` | 🕹️ 14 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing, Chomp [Pac-Man-like], **Swarm** [twin-stick survivor — drops `ws:best:swarm`], **Gyre** [Tempest-lineage tube shooter — 3 enemy types, 6 well shapes, superzapper; drops `ws:best:gyre`], **Tessera** [Qix-lineage area-claiming — flood-fill claim, Qix+Sparx+fuse; drops `ws:best:tessera`]) |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
 | `sound-garden/quickening.html` | 🌱 done (HIDDEN) | **The Living Lattice** — a cellular automaton you can hear (5 rule families, CA self-test, lens-clean). The 8th instrument, but **earned not listed** (NOT in `instruments.js`; rack stays at 7). Lives in the Undercroft. |
 | `undercroft/` | 🗝️ done (6 secrets) | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise) + an all-found capstone (now needs all 6). Holds 6, ALL trigger types demonstrated: Living Lattice (exploration), The Long Quiet (dwell), Eleven (config), The Survivor (score), **Rosette** 🌹 (combination — rarest), **The Gilded Leaf** 📜 (exploration-combo — 2nd cross-pollination). See `UNLOCK.md`. |
