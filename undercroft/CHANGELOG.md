@@ -1,5 +1,74 @@
 # The Undercroft — changelog
 
+## Build 6 — "The Almanac", a seeded book of days under a REAL sky (2026-06-12)
+
+Added `undercroft/almanac.html` (≈1080 lines of code; self-contained, zero-dep, no-network) — the
+Undercroft's **8th secret** and its **3rd cross-pollination**: it weds **The Oracle** (`verse/`, the
+workshop's voice of invented folklore) to **Orrery** (`orrery/`, the real clockwork of the heavens).
+A seeded perpetual **almanac / book of days** for an invented folk-calendar laid over the real
+Gregorian year — *"a book of days written beneath a true sky."* Full brief in `ALMANAC.SPEC.md`.
+
+- **What it composes.** From a **seed + a year** it writes a coherent book: a title plate (invented
+  almanac name + a Poor-Richard-ish compiler + an epigraph), a **wheel-of-the-year** visual (12 months
+  ringed, season-tinted, with the **four REAL cardinal points** marked in gold), and a **day-reader**
+  (date input + prev/next-day + a Today button defaulting to the real current date) showing for any
+  day: the **real Moon phase** (name + a drawn moon glyph + illumination %), the **season** and days
+  since/until the nearest solstice/equinox, an invented **feast/observance**, a **weather-lore
+  couplet**, an **omen** (anchored to the computed moon phase), a line of **husbandry counsel**
+  (seasonally gated), and the weekday. Plus a **feast-days index** for the year, 3 cosmetic render
+  styles (**Woodcut** warm cream / **Star-Chart** Orrery indigo+gold / **Plain Leaf**), and **2× PNG
+  export** of the day-leaf.
+- **The headline crux is that the sky is computed, not decorative** — a headless **5-check self-test**
+  runs on load, calls the *real* engine functions, logs PASS per check, and shows a green
+  **"sky verified — 5/5 ✓"** chip (never red):
+  1. **Real Moon phase** (synodic-epoch method; new-moon epoch 2000-01-06 18:14 UTC, synodic
+     29.530588853 d) verified ≤1 day of phase-age on 5 independently-known new/full moons (worst
+     Δ0.61 d). A wider sweep matched 9 of 10 outside refs to ~1 day.
+  2. **Real solstices & equinoxes** (Meeus ch.27 low-precision formulae + the 24-term periodic
+     correction) verified within ±1 day of the known 2024 UTC dates — and spot-on across 2020/2025/2030.
+  3. **Correct calendrical math** — weekday via **Zeller's congruence** (2000-01-01 = Saturday,
+     2026-06-12 = Friday, Apollo-11 1969-07-20 = Sunday), Gregorian leap years (2000 yes / 1900 no /
+     2024 yes), February length, day-of-year.
+  4. **Seed purity / style-invariance** — `buildBook(seed,year)` takes no style argument; the content
+     hash is identical across all three render styles (style only re-renders). Asserted by hashing the
+     live entry across style flips.
+  5. **Coherence** — a 23,016-day-entry sweep (7 seeds × 9 years, every day) found **0** template
+     seams / NaN / empty fields; the omen always comes from *that day's* computed moon-phase pool and
+     the counsel from *that day's* season pool (the seasonal gate is enforced, not hoped-for).
+- **Folklore is curate-then-arrange** (the Oracle/Threshold idiom): hand-authored fragment pools the
+  seed selects and lightly arranges through a small grammar/agreement pass, so each entry reads as
+  *written* — wry, earthy, Poor-Richard-meets-a-hedge-witch — not mad-libbed. Same `(seed, year)` ⇒
+  same book, always (xmur3 + mulberry32 per-field RNG streams). No RAF/interval loop at all (the wheel
+  & moon are drawn once per state change), so there is nothing to leak on re-roll.
+- **Trigger (exploration-combo): `ws:seen:verse` ∧ `ws:seen:orrery`.** `verse/` already self-drops its
+  breadcrumb; **`orrery/index.html` now self-drops `ws:seen:orrery`** (deep-link robust). `almanac.html`
+  drops `ws:seen:almanac` on load. New `SECRETS` row added (id `almanac`, accent `#cba15a`, riddle
+  *"Set the speaker of days beneath the true wheeling of the heavens…"*). The room's count/meter/capstone
+  auto-read `SECRETS.length` — **the Undercroft now holds 8 secrets** (6 places + 2 trophies); the
+  capstone requires all 8.
+
+### Verification (agent-browser, session `almanac-build`, served origin `http://127.0.0.1:8791`)
+
+- **Self-test green** — console logs `5/5 checks PASS`; the panel chip reads **"sky verified — 5/5 ✓"**;
+  **0 console errors/warnings** on the page (after 5 re-rolls + 10 day-steps the console held only the
+  7 boot log lines).
+- **Day-reader** renders coherent moon / season / feast / lore / omen / counsel across many dates
+  (today defaults to the real 2026-06-12, Friday — correct weekday & a real Waning-Crescent moon).
+- **Determinism & style-invariance** — re-roll changes plate/compiler/feasts while the *real* sky for
+  the date stays put; re-binding a seed reproduces the same book; the entry text is **byte-identical**
+  across Woodcut / Star-Chart / Plain Leaf (looks-only). **PNG export** produces a valid `image/png`
+  (correct ‰PNG signature) at 2×.
+- **Full unlock flow** (`ws:` cleared first) — the Undercroft shows the Almanac as a **locked ghost**
+  at "0 of 2 signs" / "0 of 8 discoveries found" → visiting `verse/` → "1 of 2" → visiting `orrery/`
+  → the niche **materialises** (full gold card, `Enter ▸` href `almanac.html`) and **Enter loads the
+  page**. **0 console errors on `undercroft/index.html`, `verse/`, and `orrery/`.**
+- **Bugs found & fixed during the build:** (1) the coherence self-test's seam regex matched `NaN`
+  case-insensitively as a *substring*, falsely flagging the authored saint-name **"Cynan"** — tightened
+  to match the literal error-tokens (`undefined`/`null`/`NaN`) case-sensitively as whole words; (2) the
+  feast-name grammar had a dead double-assignment and conflated adjective-stems with "the X" phrases
+  ("Old the Standing Corn") — replaced with a clean noun/connective stem pool so every name composes
+  ("Goose the Loud Geese", "Lammas of the Last Sheaf").
+
 ## Build 5 — a new visual medium: "The Floating Ink", seeded marbling (suminagashi · ebru) (2026-06-11)
 
 Added `undercroft/floating-ink.html` (888 lines, self-contained, zero-dep, no-network) — the
