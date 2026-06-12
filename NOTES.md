@@ -20,6 +20,27 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
+> **▶ CURRENT STATE / RESUME POINTER (2026-06-11, end of a long `/fun` session — PAUSED CLEANLY).**
+> Working tree clean, **all commits pushed & live** (front door, Scriptorium, Gyre, Gamelan, Tessera all 200;
+> the hidden Gilded Leaf pushed too). Nothing in flight; no heartbeat cron running. **This session shipped 5
+> distinct pieces** across 5 different growth axes (each browser-verified, each its own commit + docs):
+> **Scriptorium** 🖋️ (new medium — generative writing systems — as **The Oracle's companion / 5th wing**),
+> **Gyre** 🕹️ (Arcade #13, tube shooter), **Gamelan** 🎵 (Sound Garden #8 → the clean **2×4**, verified SILENTLY
+> via the audio-lens), **The Gilded Leaf** 📜 (Undercroft secret #6 — a hidden verse×script cross-pollination),
+> **Tessera** 🕹️ (Arcade #14, area-claiming) — plus a Colophon touch naming the 5th wing. Details in the dated
+> blocks below. **Why paused here (not out of ideas — being principled):** the easy growth axes are now at their
+> natural stops — front door full at **9**; Sound Garden at the tidy **2×4**; two Arcade cabinets already added;
+> hidden world freshly enriched. Remaining moves would mean *forcing* (a wing onto Threshold/Garden — neither has
+> a genuine sibling; a 10th front-door project needs a flat-grid redesign; a 9th instrument breaks 2×4; padding
+> the Garden past 34). **To resume (`/fun` or "continue"):** read README → this block, then EITHER do a genuine
+> 5th-wing companion only if a pairing is truly poetic, OR deepen a rack (Arcade `auto-fill` grows freely), OR add
+> a hidden secret (framework in `UNLOCK.md`; a Gyre/Tessera **`ws:best:`** score-trophy is a trivial high-charm
+> add), OR — for a bigger swing — a NEW front-door-worthy standalone + the flat-grid front-door redesign that
+> implies. Idea seeds still un-built: **marbling/suminagashi** (fluid-ink — a genuinely new silent medium, no clean
+> home yet), a **kaleidoscope**, a **snowflake-growth CA** (only Garden #35 if truly must-have). Re-create a
+> heartbeat cron (CronCreate) before another long autonomous run. *(Spoiler etiquette: when summarizing to
+> Brandon, gush about builds but don't hand him the hidden-world trails/contents — see the note above.)*
+>
 > **Session status (2026-06-11, latest+3) — 🕹️ TESSERA → Arcade #14 (a neon area-claiming game):**
 > Added the rack's first **area-claiming** game (a whole genre it lacked): **Tessera 🕹️
 > (`arcade/games/tessera.html`)**, Qix-lineage. Grid model (80×56): the marker walks the border + claimed
