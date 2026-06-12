@@ -31,9 +31,10 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 
 ## ▶ Current state / resume pointer
 
-**Last shipped (2026-06-12, Fable): two FOUNDATIONS — the note-system rework + Lantern, a new medium.** Both committed, pushed, and (for Lantern) live 200-confirmed. Working tree clean, all self-tests green.
-- **Note-system rework** (the doc you're reading): NOTES.md had blown past the Read-tool limit (1162 lines / ~28k tokens) — a fresh agent couldn't load its own resume doc. Fixed by sharding (see the discipline above): NOTES.md → ~426 lines, the verbose history → `worklog/`. *This is the first session to follow the new rotation discipline — keep following it.*
-- **Lantern** 🏮 (`adventure/`) — the workshop's **first interactive, *stateful* fiction**: pick a thing up, carry it, change the world (point-and-click, inventory, locks/light) — distinct from Threshold's read-only atmosphere. A **reusable engine** + a declarative **world-file** format, so new tales are authored as pure data + prose (no engine code). **Crux:** every tale is *provably winnable AND softlock-free* (the solver proves the win is reachable from *every* reachable state); the same solver drives a **"▶ let it play"** auto-player (the bot foundation). First tale: **The Lamplighter** (6 rooms; self-test 5/5; browser == Node). On the **Workbench** in a new *Tales* group — front-runner for the 10th front-door card once it has 2–3 tales.
+**Last shipped (2026-06-12, Fable): three FOUNDATIONS — the note-system rework, Lantern (a new medium), and forge (the code-sharing build).** All committed, pushed, live 200-confirmed. Working tree clean, all self-tests green.
+- **Note-system rework** (the doc you're reading): NOTES.md had blown past the Read-tool limit (1162 lines / ~28k tokens) — a fresh agent couldn't load its own resume doc. Fixed by sharding (see the discipline above): NOTES.md → ~440 lines, the verbose history → `worklog/`. *First session to follow the rotation discipline — keep following it.*
+- **Lantern** 🏮 (`adventure/`) — the workshop's **first interactive, *stateful* fiction**: pick a thing up, carry it, change the world (point-and-click, inventory, locks/light) — distinct from Threshold's read-only atmosphere. A **reusable engine** + a declarative **world-file** format, so new tales are authored as pure data + prose (no engine code). **Crux:** every tale is *provably winnable AND softlock-free* (the solver proves the win stays reachable from *every* reachable state); the same solver drives a **"▶ let it play"** auto-player (the bot foundation: `describeForAgent` + an `llmPlayer` stub await a future wiring). **Two tales shipped:** *The Lamplighter* (6 rooms, 5/5 · 16 moves) and *The Ferryman* (3 rooms, 5/5 · 9 moves — NPC talk, give-as-useOn, reveal-under-stone, locked box). On the **Workbench** in a *Tales* group — front-runner for the 10th front-door card at ~3 tales.
+- **forge** 🔧 (`tools/forge/forge.mjs`) — the author-side build-inliner: one canonical engine, `forge:include` directives in a `<tale>.src.html`, self-contained shipped `.html` (banner-stamped). `--all` rebuilds every tale; `--check` detects stale shipped files (run it if you touch `engine/lantern.js` — then re-forge). *Self-contained is a property of the artifact, not the process.*
 
 **Where the workshop stands:**
 - **Front door:** deliberately UNCHANGED — still the **curated 9 cards / 7 companion pills** (companion axis FULL) / Arcade tag **"18 games"**.
@@ -42,7 +43,7 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 - **Footer extras collapsed** into one **`the workbench`** door (→ `workbench/index.html`); all 9 card pages carry a `← workshop` back-link.
 
 **Next-steps menu (clean growth axes):**
-- **Grow Lantern** — the deferred **`forge`** inliner (one canonical engine, self-contained tales — the real code-sharing enabler; ADVENTURE.SPEC.md §7); **more tales** (each just a world-file); a **wired `llmPlayer`** → then a human+bot or 2-player world (Brandon's bot seed). Then promote Lantern to a **10th front-door card**.
+- **Grow Lantern** — a 3rd tale (a clock to be stilled · a house to be left · a tide turned — each just a world-file + a `.src.html` + `forge`); a **wired `llmPlayer`** → then a human+bot or 2-player world (Brandon's bot seed). At ~3 tales, promote Lantern to a **10th front-door card**.
 - **Deepen the Arcade** — the **Defender/Scramble side-scroller** is the last obvious classic gap.
 - **Add a hidden Undercroft secret/trophy** — many `ws:best:`/`ws:seen:` breadcrumbs ship un-trophied (incl. now `ws:flag:the-lamplighter-won`).
 - **Grow another vein's family** — instruments: sundial/sector/nomogram · ciphers: Vigenère/M-209 · tactile: kaleidoscope/ripple-tank.
@@ -138,8 +139,10 @@ New standalones go on the **Workbench index**, not as new front-door footer link
   *winnable AND softlock-free* (reverse-reachability: win reachable from every reachable state) — the IF
   analog of Latch's "provable by logic"; same solver drives a **"let it play"** auto-player (the bot
   foundation: a player is `(state, legalActions, world)→action`; `describeForAgent` + `llmPlayer` stub
-  for a future model). On the **Workbench** (Tales group), NOT a front-door card (yet). First tale: **The
-  Lamplighter** (6 rooms; self-test 5/5; browser==Node). See `adventure/ADVENTURE.SPEC.md` + `CHANGELOG.md`.
+  for a future model). Built author-side by **forge** (`tools/forge/forge.mjs` — one canonical engine
+  inlined per tale; `--check` detects stale shipped files). On the **Workbench** (Tales group), NOT a
+  front-door card (yet). Tales: **The Lamplighter** (6 rooms, 5/5 · 16) · **The Ferryman** (3 rooms,
+  5/5 · 9; NPC talk / give / reveal / locked box). See `adventure/ADVENTURE.SPEC.md` + `CHANGELOG.md`.
 - `theogony/` ⚡ — **Threshold's companion** (NOT a front-door card; reached via Threshold's
   `↗ Theogony` link + a "within" pill). A generative **mythology engine**: from a seed → an invented
   **pantheon** (~10–18 gods, 3–5 generations) drawn as an illuminated celestial **genealogy**. Coined
