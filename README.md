@@ -136,9 +136,9 @@ footer — standalone tools, toys & tales, each self-contained:
   before a tale ships and proves that from *every* state you can reach, the win is *still* reachable —
   so you can wander and fumble freely; the dawn is always still ahead of you. The same solver lets the
   engine **play the tale itself** ("▶ let it play"). Each tale is authored as a declarative *world-file*
-  (pure data + prose), so new tales are written without touching the engine. First tale: **The
-  Lamplighter** — dusk has come with no lamps lit, and the morning waits on the round. Self-contained,
-  no build, no network.
+  (pure data + prose), so new tales are written without touching the engine. Tales so far: **The
+  Lamplighter** (dusk has come with no lamps lit, and the morning waits on the round) and **The
+  Ferryman** (a river with no far side, and a toll to be found). Self-contained, no build, no network.
 - **[Latch](https://bman654.github.io/the-workshop/latch/)** — the first of two **logic puzzles**:
   a generative **nonogram (picross) atelier**. From a seed it draws a little pixel picture, encodes
   it as row/column run-clues, and hands you the puzzle to solve by deduction. The twist (and the

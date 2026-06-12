@@ -7,6 +7,62 @@ engine code. See `ADVENTURE.SPEC.md` for the contract.*
 
 ---
 
+## Build 2 — The Ferryman (2026-06-12)
+
+**Shipped:** the second tale — written to a deliberately *different shape* than The Lamplighter, to
+prove the format's range — and the first tale shipped end-to-end through the **forge** pipeline.
+
+### The tale — *The Ferryman*
+Three rooms (bank · willow · shrine), accent `#79b4b0` (river-teal). A river with no far side, a
+hooded ferryman, and a toll to be found: talk to learn the fare, read the cut tablet, turn the grey
+stone for the iron key, unlock the offering-box for the old coin, and give the coin to the ferryman —
+*The Far Shore*. **Solver-confirmed: winnable, shortest path 9 moves, softlock-free, deterministic;
+self-test 5/5.**
+
+**The different shape it proves** (none of which the first tale used): an **NPC with `talk`** (the
+ferryman's line changes once you hold the coin), **`useOn` as *give*** (the coin on the ferryman is
+the winning act), a **reveal-under-stone** (a `move` effect summons the key from `_gone`), and a
+**locked container** (key → box → coin chain). Nothing is consumed except the coin, and the coin only
+into the win — softlock-freedom by construction.
+
+### Engine: 3 new scene-art entries (cosmetic registry content; `LANTERN_VERSION` stays 1.0)
+- `bank` — the black river band with a faint accent shimmer, reeds at the near edge, the low flat
+  boat + hooded ferryman with his pole as dark silhouettes.
+- `willow` — a curtain of thin curved strands (a few accent threads stirring), the flat grey stone at
+  its foot; **state-responsive:** flag `stone-turned` tips the stone aside over the bare hollow.
+- `shrine` — the broken pale arch, the cut tablet, the iron-bound offering-box; **state-responsive:**
+  flag `box-open` tips the lid back and lights a faint accent glow inside.
+
+No core/model/solver changes — scenes + two string-builder helpers (`reeds`, `willowStrands`) only.
+
+### Files
+- `worlds/the-ferryman.js` — the authored world-file (solver-verified before the build).
+- `the-ferryman.src.html` — the chrome template (copied from the lamplighter's; accent tints re-keyed
+  to river-teal; win card *The Far Shore* ☾).
+- `the-ferryman.html` — the shipped, self-contained artifact, **built by forge** (banner-stamped,
+  engine v1.0 inlined, zero external refs).
+- `the-lamplighter.html` — **re-forged** (the engine grew 3 scenes, so its inlined engine block
+  changed; chrome untouched). `node tools/forge/forge.mjs --all` rebuilt both;
+  `forge.mjs --check --all` clean.
+- `index.html` — the shelf now holds both tales (the ferryman with its teal accent cue + river thumb).
+- `assets/the-ferryman.png` — a 1440×900 mid-play capture.
+
+### Verification
+- **Node:** `the-ferryman` 5/5 (9-move path) · `the-lamplighter` 5/5 (16) · `_template` 5/5 (3).
+- **Browser QA** (served origin `http://localhost:8979`, agent-browser): chip green **5/5 ✓ · solved
+  in 9**; in-page `runSelfTest` == Node; **0 console errors/warnings** across load, a full hand-played
+  win, and auto-play; **played to the win via real clicks** (both `talk` branches heard; the boat's
+  `enter` barred line shown before paying; the stone-turned and box-open scene flips observed);
+  **"▶ Let it play" ran to the win on its own**; crumbs `ws:seen:the-ferryman` (load) +
+  `ws:flag:the-ferryman-won` (win) set. **Regression:** the lamplighter chip green 5/5 · 16,
+  auto-play to *Dawn*, 0 errors. Landing: both tales shelved, links resolve, 0 errors.
+
+### Wiring
+- Workbench Lantern card + README Lantern bullet now read "Tales so far: The Lamplighter · The
+  Ferryman."
+
+---
+
 ## Build 1 — the foundation (2026-06-12)
 
 **Shipped (Fable session):** the engine, the authoring format, the verifiable crux, the player

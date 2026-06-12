@@ -822,6 +822,68 @@ const SCENE_ART = {
       <circle cx="270" cy="216" r="5" fill="${o.accent}" opacity="${o.flags && o.flags.has('lit-square')?0.8:0.12}"/>
     `);
   },
+
+  /* — The Ferryman's scenes — */
+  bank(o) {
+    return svg(`
+      <!-- the river: a wide black band, no far side -->
+      <rect x="0" y="64" width="400" height="108" fill="rgba(0,0,0,.42)"/>
+      <line x1="0" y1="64" x2="400" y2="64" stroke="${grey(0.06)}" stroke-width="1"/>
+      <!-- a faint shimmer moving on the water -->
+      <path d="M24 112 q30 -5 60 0 t60 0 t60 0 t60 0 t60 0" fill="none" stroke="${o.accent}" stroke-width="1.4" opacity="0.2"/>
+      <path d="M80 138 q26 -4 52 0 t52 0 t52 0" fill="none" stroke="${o.accent}" stroke-width="1" opacity="0.09"/>
+      <!-- the boat, long and flat, riding low -->
+      <path d="M118 152 L272 152 L254 168 L134 168 Z" fill="${grey(0.14)}"/>
+      <!-- the ferryman: hooded, his back to you, the pole across -->
+      <path d="M188 122 q14 -22 28 0 l5 30 h-38 Z" fill="${grey(0.24)}"/>
+      <line x1="166" y1="98" x2="248" y2="156" stroke="${grey(0.28)}" stroke-width="3" stroke-linecap="round"/>
+      <!-- the near bank: cold mud, reeds at the water's edge -->
+      <rect x="0" y="172" width="400" height="68" fill="${grey(0.06)}"/>
+      ${reeds(o.accent)}
+    `);
+  },
+
+  willow(o) {
+    const turned = o.flags && o.flags.has('stone-turned');
+    return svg(`
+      <rect x="0" y="210" width="400" height="30" fill="${grey(0.05)}"/>
+      <!-- the trunk, mostly behind the curtain -->
+      <line x1="200" y1="120" x2="196" y2="212" stroke="${grey(0.14)}" stroke-width="9"/>
+      <!-- the willow: a fall of thin curved strands, a grey curtain -->
+      ${willowStrands(o.accent)}
+      <!-- the flat grey stone at its foot -->
+      ${turned
+        ? `<ellipse cx="262" cy="212" rx="20" ry="6" fill="rgba(0,0,0,.5)"/>
+           <g transform="rotate(-62 296 206)"><ellipse cx="296" cy="206" rx="23" ry="6" fill="${grey(0.22)}"/></g>`
+        : `<ellipse cx="268" cy="210" rx="26" ry="8" fill="${grey(0.2)}"/>
+           <ellipse cx="268" cy="208" rx="26" ry="8" fill="${grey(0.1)}"/>`}
+    `);
+  },
+
+  shrine(o) {
+    const open = o.flags && o.flags.has('box-open');
+    return svg(`
+      <rect x="0" y="212" width="400" height="28" fill="${grey(0.05)}"/>
+      <!-- the broken arch: pale stone, the span snapped -->
+      <rect x="134" y="92" width="17" height="120" fill="${grey(0.17)}"/>
+      <rect x="249" y="92" width="17" height="120" fill="${grey(0.17)}"/>
+      <path d="M142 94 Q146 48 196 42" fill="none" stroke="${grey(0.17)}" stroke-width="13" stroke-linecap="round"/>
+      <path d="M258 94 Q257 70 246 58" fill="none" stroke="${grey(0.15)}" stroke-width="13" stroke-linecap="round"/>
+      <!-- the cut tablet, set into the arch -->
+      <rect x="176" y="92" width="48" height="36" rx="2" fill="${grey(0.12)}" stroke="${grey(0.24)}"/>
+      <line x1="183" y1="102" x2="217" y2="102" stroke="${grey(0.3)}" stroke-width="1.4"/>
+      <line x1="183" y1="110" x2="213" y2="110" stroke="${grey(0.3)}" stroke-width="1.4"/>
+      <line x1="183" y1="118" x2="217" y2="118" stroke="${grey(0.3)}" stroke-width="1.4"/>
+      <!-- the offering-box beneath, iron-bound -->
+      <rect x="176" y="176" width="48" height="34" rx="2" fill="${grey(0.1)}" stroke="${grey(0.22)}"/>
+      <line x1="200" y1="176" x2="200" y2="210" stroke="${grey(0.26)}" stroke-width="3"/>
+      ${open
+        ? `<ellipse cx="200" cy="184" rx="16" ry="5" fill="${o.accent}" opacity="0.3"/>
+           <g transform="rotate(-68 178 176)"><rect x="172" y="170" width="56" height="8" rx="2" fill="${grey(0.18)}"/></g>`
+        : `<rect x="172" y="170" width="56" height="8" rx="2" fill="${grey(0.18)}"/>
+           <circle cx="200" cy="190" r="3.5" fill="none" stroke="${grey(0.3)}" stroke-width="1.5"/>`}
+    `);
+  },
 };
 
 /* a street-lamp scene shared by lane + square; lit when its glow-flag is set. */
@@ -851,6 +913,28 @@ function cobbles(lit, accent) {
 function stoneCourses() {
   let s = '';
   for (let y = 60; y < 220; y += 30) s += `<line x1="40" y1="${y}" x2="360" y2="${y}" stroke="${grey(0.07)}" stroke-width="1"/>`;
+  return s;
+}
+/* reeds at the near edge of the bank (a couple catch the accent). */
+function reeds(accent) {
+  let s = '';
+  const xs = [28, 44, 58, 330, 348, 366, 382];
+  for (let i = 0; i < xs.length; i++) {
+    const x = xs[i], h = 36 + ((i * 17) % 22), lean = (i % 2 ? 6 : -5);
+    const acc = (i === 2 || i === 5);
+    s += `<path d="M${x} 176 q${lean} ${-h / 2} ${Math.round(lean * 1.6)} ${-h}" fill="none" stroke="${acc ? accent : grey(0.2)}" stroke-width="2" opacity="${acc ? 0.4 : 1}" stroke-linecap="round"/>`;
+  }
+  return s;
+}
+/* the willow's curtain of thin curved strands (a few accent threads stirring). */
+function willowStrands(accent) {
+  let s = '';
+  for (let i = 0; i < 17; i++) {
+    const x = 88 + i * 14;                  // where the strand falls to
+    const drop = 140 + ((i * 37) % 64);     // varied fall
+    const acc = (i % 7 === 3);
+    s += `<path d="M200 46 Q${x} ${78 + (i % 5) * 7} ${x + (i % 2 ? 4 : -4)} ${drop}" fill="none" stroke="${acc ? accent : grey(0.13 + (i % 3) * 0.04)}" stroke-width="1.3" opacity="${acc ? 0.35 : 1}"/>`;
+  }
   return s;
 }
 
