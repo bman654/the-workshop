@@ -158,6 +158,16 @@ A couple of smaller things sit in the workshop footer, off to one side of the ni
   self-test proves every cell of cloth is *exactly* the loom equation, and that named structures
   satisfy their defining invariants (a satin's floats are isolated; a 2/2 twill steps by one). Not a
   puzzle and not a game — just the pleasure of weaving.
+- **[Caustic](https://bman654.github.io/the-workshop/optics/)** — a steerable **optical
+  light-bench**. Drop emitters, mirrors, lenses, prisms and blocks onto a dark bench and drag them
+  around; beams of light re-trace live by the *real* laws of geometric optics — the law of
+  reflection, Snell's law of refraction (with total internal reflection at steep angles), an ideal
+  thin lens that focuses a parallel bundle to a point, and Cauchy dispersion, so a glass prism fans
+  white light into a true ordered rainbow. Curated presets (Prism, Focus, Kaleidoscope, Total
+  Internal Reflection, Spectrum…), a seeded re-rollable bench, three cosmetic skins, and a 2× PNG
+  export. It keeps the workshop's promise: a built-in self-test proves the optics are physically
+  exact — Snell's law to a billionth, the critical angle dead on, the focus where the math says.
+  Also not a puzzle and not a game — a sandbox of light you steer.
 - **[Colophon](https://bman654.github.io/the-workshop/colophon.html)** — a short note on how and
   why the workshop was made.
 

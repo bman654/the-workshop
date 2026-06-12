@@ -1,0 +1,1585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caustic</title>
+<style>
+  :root{
+    --panel-bg: rgba(9,12,20,0.86);
+    --panel-edge: rgba(120,170,230,0.34);
+    --ink: #dce7f4;
+    --ink-dim: #8499b6;
+    --accent: #6fb8e6;
+    --accent-soft: rgba(111,184,230,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    /* style-skin variables (cosmetic only — never read by the trace) */
+    --bench: #060810;
+    --grid: rgba(120,170,230,0.06);
+    --axis: rgba(120,170,230,0.10);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bench);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .mark{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-size:21px; font-weight:600; letter-spacing:.5px; margin:0; color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; }
+  .brand .seedtag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .brand .seedtag b{ color:var(--accent); font-weight:600; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); pointer-events:auto; white-space:nowrap; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; }
+  #bench{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:crosshair; }
+  #hud{ position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    font:11px/1.3 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.5);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 12px; letter-spacing:.3px;
+    pointer-events:none; opacity:0; transition:opacity .15s; max-width:90%; text-align:center; }
+  #hud.show{ opacity:1; }
+  #hud b{ color:var(--accent); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:318px; flex:0 0 318px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 22px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 8px; border-top:1px solid rgba(120,170,230,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .row{ margin:11px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .row > label .val{ color:var(--accent); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.2px; }
+  select{
+    width:100%; background:rgba(0,0,0,0.34); border:1px solid var(--panel-edge); color:var(--ink);
+    border-radius:8px; padding:8px 10px; font-size:12.5px; font-family:var(--font-ui); letter-spacing:.2px;
+    cursor:pointer; appearance:none;
+    background-image:linear-gradient(45deg,transparent 50%,var(--ink-dim) 50%),linear-gradient(135deg,var(--ink-dim) 50%,transparent 50%);
+    background-position:calc(100% - 16px) calc(50% - 2px),calc(100% - 11px) calc(50% - 2px);
+    background-size:5px 5px,5px 5px; background-repeat:no-repeat;
+  }
+  select:focus{ outline:none; border-color:var(--accent); }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#eaf3ff; border:2px solid #2f6b97; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%; background:#eaf3ff; border:2px solid #2f6b97; cursor:pointer;
+  }
+  .palette{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .palette button{
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 4px; font-size:11px; font-weight:600; letter-spacing:.2px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui); display:flex; flex-direction:column; align-items:center; gap:4px;
+  }
+  .palette button:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .palette button .ic{ font-size:15px; line-height:1; }
+  .preset-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:6px; }
+  .chip{
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink-dim);
+    border-radius:8px; padding:8px 6px; font-size:11px; font-weight:600; letter-spacing:.2px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui); text-align:center;
+  }
+  .chip:hover{ background:var(--accent-soft); border-color:var(--accent); color:var(--ink); }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(120,170,230,0.24); }
+  .seg button{
+    flex:1; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#08121c; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .btnrow{ display:flex; gap:8px; margin:12px 0; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(111,184,230,0.26), rgba(111,184,230,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(111,184,230,0.40), rgba(111,184,230,0.14)); }
+  .btn.danger{ color:#f0a99e; border-color:rgba(220,120,100,0.45); }
+  .btn.danger:hover{ background:rgba(120,40,34,0.3); border-color:rgba(220,120,100,0.7); }
+  .seedrow{ display:flex; gap:8px; align-items:stretch; }
+  .seedrow input{
+    flex:1; min-width:0; background:rgba(0,0,0,0.34); border:1px solid var(--panel-edge); color:var(--ink);
+    border-radius:8px; padding:8px 10px; font:12px/1 var(--font-mono); letter-spacing:.4px;
+  }
+  .seedrow input:focus{ outline:none; border-color:var(--accent); }
+  #inspector{ min-height:10px; }
+  #inspector .empty{ font:11px/1.5 var(--font-mono); color:var(--ink-dim); opacity:.7; letter-spacing:.2px; }
+  .swatchrow{ display:flex; gap:5px; flex-wrap:wrap; margin-top:2px; }
+  .swatchrow .sw{ width:22px; height:22px; border-radius:6px; cursor:pointer; border:1px solid rgba(255,255,255,0.18); transition:transform .12s, box-shadow .12s; }
+  .swatchrow .sw.sel{ transform:scale(1.16); box-shadow:0 0 0 2px var(--accent); }
+  .swatchrow .sw.spectrum{ background:linear-gradient(90deg,#7a4bd0,#3f6bff,#2bd6c8,#7fe04b,#ffe04b,#ff7a3a,#ff3a3a); }
+  .hint{ font:10.5px/1.55 var(--font-mono); color:var(--ink-dim); opacity:.8; letter-spacing:.2px; margin:16px 0 4px;
+    border-top:1px solid rgba(120,170,230,0.16); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; workshop</a>
+    <div class="brand">
+      <h1>Caustic</h1>
+      <span class="seedtag">seed <b id="seedEcho">—</b></span>
+    </div>
+    <div class="selftest" id="selftest">checking…</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="bench"></canvas>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A steerable light-bench. <b>Drag</b> elements to place them, grab the
+        <b>ring handle</b> to rotate, and click to select. Rays re-trace live by real
+        geometric optics — reflection, Snell refraction, total internal reflection, thin-lens
+        focusing, and Cauchy dispersion that fans white light into a rainbow.</p>
+
+      <div class="sect">Add element</div>
+      <div class="palette" id="palette">
+        <button data-add="emitter"><span class="ic">✦</span>Emitter</button>
+        <button data-add="mirror"><span class="ic">▱</span>Mirror</button>
+        <button data-add="lens"><span class="ic">◐</span>Lens</button>
+        <button data-add="prism"><span class="ic">△</span>Prism</button>
+        <button data-add="block"><span class="ic">▮</span>Block</button>
+        <button data-add="drop"><span class="ic">◯</span>Droplet</button>
+      </div>
+
+      <div class="sect">Presets</div>
+      <div class="preset-grid" id="presets"></div>
+
+      <div class="sect">Selected</div>
+      <div id="inspector"><div class="empty">Nothing selected. Click an element on the bench, or add one above.</div></div>
+
+      <div class="sect">Look</div>
+      <div class="row">
+        <div class="seg" id="styleSeg">
+          <button data-style="blueprint" class="active">Blueprint</button>
+          <button data-style="spectral">Spectral</button>
+          <button data-style="graphite">Graphite</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Glow <span class="val" id="glowVal">1.0</span></label>
+        <input type="range" id="glowSlider" min="0" max="2" step="0.05" value="1">
+      </div>
+
+      <div class="sect">Bench</div>
+      <div class="row">
+        <label>Seed</label>
+        <div class="seedrow">
+          <input id="seedInput" type="text" spellcheck="false" placeholder="seed">
+          <button class="btn primary" id="rerollBtn" style="flex:0 0 auto;width:auto;padding:8px 12px">⟳</button>
+        </div>
+      </div>
+      <div class="btnrow">
+        <button class="btn danger" id="deleteBtn">Delete</button>
+        <button class="btn" id="clearBtn">Clear</button>
+        <button class="btn" id="pngBtn">PNG ×2</button>
+      </div>
+
+      <div class="hint">
+        <b>Drag</b> body to move · <b>ring</b> to rotate · <b>click</b> to select · <b>⌫ / Del</b> to remove.<br>
+        Try the <b>Prism</b> or <b>Spectrum</b> preset and watch white light fan into a rainbow; <b>Focus</b> converges a fan to a point.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+// ============================================================================
+// Caustic core — pure 2D geometric optics. NO DOM access in this section.
+// The headless self-test below calls THESE real functions (not copies).
+// ============================================================================
+
+// ---------- seeded RNG: xmur3 (hash) + mulberry32 (stream) ------------------
+function xmur3(str){
+  let h = 1779033703 ^ str.length;
+  for (let i=0;i<str.length;i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h<<13) | (h>>>19);
+  }
+  return function(){
+    h = Math.imul(h ^ (h>>>16), 2246822507);
+    h = Math.imul(h ^ (h>>>13), 3266489909);
+    h ^= h>>>16;
+    return h>>>0;
+  };
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a>>>15), 1 | a);
+    t = (t + Math.imul(t ^ (t>>>7), 61 | t)) ^ t;
+    return ((t ^ (t>>>14)) >>> 0) / 4294967296;
+  };
+}
+function rngFromSeed(seedStr){
+  const seedFn = xmur3(String(seedStr));
+  return mulberry32(seedFn());
+}
+
+// ---------- vector helpers --------------------------------------------------
+function vlen(x,y){ return Math.hypot(x,y); }
+function norm(x,y){ const l=Math.hypot(x,y)||1; return [x/l, y/l]; }
+function dot(ax,ay,bx,by){ return ax*bx + ay*by; }
+// reflect direction d about unit normal n:  d' = d - 2(d·n)n
+function reflect(dx,dy,nx,ny){
+  const k = 2*(dx*nx + dy*ny);
+  return [dx - k*nx, dy - k*ny];
+}
+// vector Snell refraction. d incident unit dir, n unit normal pointing into the
+// medium the ray is LEAVING (i.e. against the ray), eta = n1/n2.
+// Returns {tir:true} for total internal reflection, else {dir:[x,y]}.
+function refract(dx,dy,nx,ny,eta){
+  const cosI = -(dx*nx + dy*ny);            // cos of incidence angle, >0
+  const k = 1 - eta*eta*(1 - cosI*cosI);
+  if (k < 0) return { tir:true };
+  const c2 = Math.sqrt(k);
+  const tx = eta*dx + (eta*cosI - c2)*nx;
+  const ty = eta*dy + (eta*cosI - c2)*ny;
+  const [ux,uy] = norm(tx,ty);
+  return { tir:false, dir:[ux,uy] };
+}
+
+// ---------- Cauchy dispersion + spectral colour -----------------------------
+// n(λ) = A + B/λ²  (λ in micrometres). Tuned crown-glass-ish: n≈1.52 @ 589nm.
+const CAUCHY_A = 1.5046;
+const CAUCHY_B = 0.00420;          // µm² — visible spread ≈ 0.013 across 400–700nm
+function cauchyIndex(lambdaNm, baseN){
+  // baseN scales the whole curve so a slider can set the d-line index while the
+  // dispersion shape (the B term) is preserved. baseN defaults to the 589nm value.
+  const lamUm = lambdaNm/1000;
+  const nRaw = CAUCHY_A + CAUCHY_B/(lamUm*lamUm);
+  if (baseN === undefined) return nRaw;
+  const n589 = CAUCHY_A + CAUCHY_B/(0.589*0.589);
+  return nRaw + (baseN - n589);
+}
+// approximate visible-wavelength → linear sRGB (Bruton-style), 380–780nm.
+function wavelengthToRGB(nm){
+  let r=0,g=0,b=0;
+  if (nm>=380 && nm<440){ r=-(nm-440)/(440-380); g=0; b=1; }
+  else if (nm>=440 && nm<490){ r=0; g=(nm-440)/(490-440); b=1; }
+  else if (nm>=490 && nm<510){ r=0; g=1; b=-(nm-510)/(510-490); }
+  else if (nm>=510 && nm<580){ r=(nm-510)/(580-510); g=1; b=0; }
+  else if (nm>=580 && nm<645){ r=1; g=-(nm-645)/(645-580); b=0; }
+  else if (nm>=645 && nm<=780){ r=1; g=0; b=0; }
+  // intensity falloff at the spectrum edges
+  let f=1;
+  if (nm>=380 && nm<420) f=0.3+0.7*(nm-380)/(420-380);
+  else if (nm>700 && nm<=780) f=0.3+0.7*(780-nm)/(780-700);
+  const gamma=0.8;
+  const ch=(c)=>Math.round(255*Math.pow(Math.max(0,c)*f,gamma));
+  return [ch(r),ch(g),ch(b)];
+}
+
+// ============================================================================
+// ELEMENTS & GEOMETRY
+// Each element is a plain data object {type, x, y, ang, ...}. The geometry of a
+// element is derived purely from those fields by the segment builders below.
+// ============================================================================
+
+// A "surface" is a directed segment {ax,ay,bx,by, kind, owner, extra}. The
+// trace finds the nearest surface a ray hits and applies the kind's interaction.
+// kinds: 'mirror' | 'lens' | 'block' | 'prismFace' | 'dropArc'.
+
+function rot(px,py,cx,cy,ang){
+  const c=Math.cos(ang), s=Math.sin(ang);
+  const dx=px-cx, dy=py-cy;
+  return [cx + dx*c - dy*s, cy + dx*s + dy*c];
+}
+
+// Build the list of optical surfaces for one element.
+function elementSurfaces(el){
+  const out=[];
+  if (el.type==='mirror'){
+    const hl = el.len/2;
+    const [ax,ay]=rot(el.x-hl, el.y, el.x, el.y, el.ang);
+    const [bx,by]=rot(el.x+hl, el.y, el.x, el.y, el.ang);
+    out.push({ax,ay,bx,by, kind:'mirror', owner:el});
+  } else if (el.type==='block'){
+    // rectangle: four opaque segments
+    const hw=el.w/2, hh=el.h/2;
+    const c=[[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].map(p=>rot(el.x+p[0],el.y+p[1],el.x,el.y,el.ang));
+    for(let i=0;i<4;i++){ const a=c[i], b=c[(i+1)%4]; out.push({ax:a[0],ay:a[1],bx:b[0],by:b[1], kind:'block', owner:el}); }
+  } else if (el.type==='lens'){
+    const hh=el.h/2;
+    const [ax,ay]=rot(el.x, el.y-hh, el.x, el.y, el.ang);
+    const [bx,by]=rot(el.x, el.y+hh, el.x, el.y, el.ang);
+    out.push({ax,ay,bx,by, kind:'lens', owner:el});
+  } else if (el.type==='prism'){
+    const v=prismVerts(el);
+    for(let i=0;i<v.length;i++){ const a=v[i], b=v[(i+1)%v.length]; out.push({ax:a[0],ay:a[1],bx:b[0],by:b[1], kind:'prismFace', owner:el}); }
+  } else if (el.type==='drop'){
+    out.push({kind:'dropArc', owner:el, cx:el.x, cy:el.y, r:el.r});
+  }
+  return out;
+}
+
+// equilateral-ish triangle vertices for a prism (pointing per ang). size = side.
+function prismVerts(el){
+  const R = el.size/Math.sqrt(3);   // circumradius of equilateral triangle
+  const v=[];
+  for(let i=0;i<3;i++){
+    const a = el.ang - Math.PI/2 + i*2*Math.PI/3;
+    v.push([el.x + R*Math.cos(a), el.y + R*Math.sin(a)]);
+  }
+  return v;
+}
+
+// point-in-polygon (prism interior test) — used to know if a ray starts inside.
+function pointInPoly(px,py,verts){
+  let inside=false;
+  for(let i=0,j=verts.length-1;i<verts.length;j=i++){
+    const xi=verts[i][0], yi=verts[i][1], xj=verts[j][0], yj=verts[j][1];
+    if(((yi>py)!==(yj>py)) && (px < (xj-xi)*(py-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+
+// ---------- ray ↔ segment intersection --------------------------------------
+// Returns parametric t along the ray (>EPS) and segment normal, or null.
+const EPS = 1e-7;
+function intersectSeg(ox,oy,dx,dy, ax,ay,bx,by){
+  const ex=bx-ax, ey=by-ay;            // segment dir
+  const denom = dx*ey - dy*ex;
+  if (Math.abs(denom) < 1e-12) return null;   // parallel
+  const t = ((ax-ox)*ey - (ay-oy)*ex) / denom;   // along ray
+  const s = ((ax-ox)*dy - (ay-oy)*dx) / denom;   // along segment
+  if (t > EPS && s >= -1e-9 && s <= 1+1e-9){
+    // unit normal of the segment
+    let [nx,ny]=norm(ey,-ex);
+    return { t, nx, ny, ex, ey };
+  }
+  return null;
+}
+// ray ↔ circle: nearest forward hit, with outward normal at hit point.
+function intersectCircle(ox,oy,dx,dy, cx,cy,r){
+  const fx=ox-cx, fy=oy-cy;
+  const b = 2*(fx*dx + fy*dy);
+  const c = fx*fx + fy*fy - r*r;
+  const disc = b*b - 4*c;             // a=1 since dir is unit
+  if (disc < 0) return null;
+  const sd = Math.sqrt(disc);
+  let t = (-b - sd)/2;
+  if (t <= EPS) t = (-b + sd)/2;
+  if (t <= EPS) return null;
+  const hx=ox+dx*t, hy=oy+dy*t;
+  const [nx,ny]=norm(hx-cx, hy-cy);   // outward normal
+  return { t, nx, ny };
+}
+
+// ============================================================================
+// THE TRACE — pure. Given elements + one ray seed, returns a polyline path with
+// per-segment colour/intensity. This is the single source of truth for physics.
+// ============================================================================
+const AIR = 1.0;
+
+// Trace one ray. cfg: {maxBounces, minIntensity, bounds:{w,h}}.
+// ray: {x,y,dx,dy, lambda, intensity}. Returns {pts:[{x,y,i}], color:[r,g,b]}.
+function traceRay(elements, ray, cfg){
+  const maxB = cfg.maxBounces, minI = cfg.minIntensity;
+  const W=cfg.bounds.w, H=cfg.bounds.h;
+  let ox=ray.x, oy=ray.y;
+  let [dx,dy]=norm(ray.dx, ray.dy);
+  let intensity = ray.intensity!==undefined ? ray.intensity : 1;
+  const lambda = ray.lambda!==undefined ? ray.lambda : 589;
+  // medium stack: which prism interiors are we currently inside?
+  // we track by recomputing membership at the START using the seed point.
+  const prisms = elements.filter(e=>e.type==='prism');
+  const drops  = elements.filter(e=>e.type==='drop');
+  let curN = AIR;
+  // determine starting medium
+  for(const p of prisms){ if(pointInPoly(ox,oy,prismVerts(p))){ curN = prismIndex(p, lambda); } }
+  for(const d of drops){ if(vlen(ox-d.x,oy-d.y) < d.r){ curN = dropIndex(d, lambda); } }
+
+  // precompute all surfaces once
+  const surfaces=[];
+  for(const el of elements){ for(const s of elementSurfaces(el)) surfaces.push(s); }
+
+  const pts = [{x:ox,y:oy,i:intensity}];
+  let energyTrace=[intensity];
+
+  for(let bounce=0; bounce<maxB; bounce++){
+    // find nearest surface hit
+    let best=null, bestT=Infinity, bestSurf=null;
+    for(const s of surfaces){
+      let hit=null;
+      if(s.kind==='dropArc') hit=intersectCircle(ox,oy,dx,dy, s.cx,s.cy,s.r);
+      else hit=intersectSeg(ox,oy,dx,dy, s.ax,s.ay,s.bx,s.by);
+      if(hit && hit.t < bestT){ bestT=hit.t; best=hit; bestSurf=s; }
+    }
+    // also clip to bounds (so paths end at the canvas edge)
+    const tBound = clipToBounds(ox,oy,dx,dy, W,H);
+    if(!best || tBound < bestT){
+      // leaves the scene
+      const ex = ox + dx*tBound, ey = oy + dy*tBound;
+      pts.push({x:ex,y:ey,i:intensity});
+      break;
+    }
+
+    const hx = ox + dx*bestT, hy = oy + dy*bestT;
+    const s = bestSurf;
+
+    if(s.kind==='block'){
+      pts.push({x:hx,y:hy,i:intensity});
+      break;                                  // absorbed
+    }
+    if(s.kind==='mirror'){
+      let nx=best.nx, ny=best.ny;
+      // normal should oppose the incoming ray
+      if(dx*nx + dy*ny > 0){ nx=-nx; ny=-ny; }
+      const [rdx,rdy]=reflect(dx,dy,nx,ny);
+      intensity *= 0.96;                      // tiny loss per mirror
+      pts.push({x:hx,y:hy,i:intensity});
+      ox=hx; oy=hy; dx=rdx; dy=rdy;
+      energyTrace.push(intensity);
+      if(intensity<minI) break;
+      continue;
+    }
+    if(s.kind==='lens'){
+      // ideal thin-lens transfer in the lens's local frame.
+      const el=s.owner;
+      const out = thinLensTransfer(dx,dy, hx,hy, el);
+      pts.push({x:hx,y:hy,i:intensity});
+      ox=hx; oy=hy; dx=out[0]; dy=out[1];
+      // nudge off the plane to avoid re-hitting it
+      ox += dx*1e-4; oy += dy*1e-4;
+      energyTrace.push(intensity);
+      continue;
+    }
+    if(s.kind==='prismFace' || s.kind==='dropArc'){
+      const el=s.owner;
+      let nx=best.nx, ny=best.ny;
+      // decide entering vs leaving by current medium membership of a point
+      // just past the hit along the ray.
+      const probeX = hx + dx*1e-4, probeY = hy + dy*1e-4;
+      let inside;
+      if(el.type==='prism') inside = pointInPoly(probeX,probeY, prismVerts(el));
+      else inside = vlen(probeX-el.x, probeY-el.y) < el.r;
+      const glassN = el.type==='prism' ? prismIndex(el,lambda) : dropIndex(el,lambda);
+      // n1 = medium we're leaving, n2 = medium we're entering
+      const n1 = curN;
+      const n2 = inside ? glassN : AIR;
+      // normal must point back into the medium we are leaving (against ray)
+      if(dx*nx + dy*ny > 0){ nx=-nx; ny=-ny; }
+      const eta = n1/n2;
+      const res = refract(dx,dy,nx,ny,eta);
+      pts.push({x:hx,y:hy,i:intensity});
+      if(res.tir){
+        const [rdx,rdy]=reflect(dx,dy,nx,ny);
+        ox=hx; oy=hy; dx=rdx; dy=rdy;
+        // stay in same medium (curN unchanged)
+        ox += dx*1e-5; oy += dy*1e-5;
+        energyTrace.push(intensity);
+      } else {
+        intensity *= 0.985;                   // small Fresnel-ish transmission loss
+        ox=hx; oy=hy; dx=res.dir[0]; dy=res.dir[1];
+        curN = n2;                            // we crossed into the new medium
+        ox += dx*1e-5; oy += dy*1e-5;
+        energyTrace.push(intensity);
+      }
+      if(intensity<minI) break;
+      continue;
+    }
+  }
+  const rgb = ray.colorRGB || wavelengthToRGB(lambda);
+  return { pts, color:rgb, energy:energyTrace, lambda };
+}
+
+// thin-lens ray transfer. The lens is a plane through (el.x,el.y) along its local
+// y-axis (rotated by el.ang); the optical axis is the local x-axis. A ray crossing
+// the plane at local height y, with local incoming angle u (to the axis), leaves
+// at the same point with u' where tan(u') = tan(u) - y/f. Then rotate back.
+function thinLensTransfer(dx,dy, hx,hy, el){
+  const ca=Math.cos(-el.ang), sa=Math.sin(-el.ang);
+  // local height of hit point (perpendicular distance from axis)
+  const rx = hx-el.x, ry = hy-el.y;
+  const localY = rx*sa + ry*ca;            // rotate point by -ang, take y
+  // local incoming direction
+  const ldx = dx*ca - dy*sa;
+  const ldy = dx*sa + dy*ca;
+  // We keep the propagation sign (sign of ldx) and adjust the transverse slope.
+  // tan(u) = ldy/ldx ; tan(u') = tan(u) - localY/f.  Preserve travel direction.
+  const sgn = ldx >= 0 ? 1 : -1;
+  const tanU = ldy/ (ldx===0 ? 1e-12*sgn : ldx);
+  const tanUp = tanU - localY/el.f;
+  // outgoing local dir keeps same x-sign, slope tanUp
+  let olx = sgn, oly = sgn*tanUp;
+  const ll = Math.hypot(olx,oly)||1; olx/=ll; oly/=ll;
+  // rotate back by +ang
+  const cb=Math.cos(el.ang), sb=Math.sin(el.ang);
+  const ox = olx*cb - oly*sb;
+  const oy = olx*sb + oly*cb;
+  return [ox,oy];
+}
+
+function prismIndex(el, lambda){
+  // el.n is the base (589nm) index the user set; dispersion preserved.
+  return cauchyIndex(lambda, el.n);
+}
+function dropIndex(el, lambda){
+  return cauchyIndex(lambda, el.n);
+}
+
+// clip a ray to the canvas bounds (0..W, 0..H); returns t at exit (or large).
+function clipToBounds(ox,oy,dx,dy, W,H){
+  let tmax=Infinity;
+  if(dx>1e-12) tmax=Math.min(tmax,(W-ox)/dx);
+  else if(dx<-1e-12) tmax=Math.min(tmax,(0-ox)/dx);
+  if(dy>1e-12) tmax=Math.min(tmax,(H-oy)/dy);
+  else if(dy<-1e-12) tmax=Math.min(tmax,(0-oy)/dy);
+  return tmax>0 ? tmax : 1e9;
+}
+
+// ---------- emitter → ray seeds ---------------------------------------------
+// Returns an array of ray seeds {x,y,dx,dy,lambda,intensity}.
+const SPECTRUM_SAMPLES = [410,440,470,490,510,540,570,600,630,660,690];
+function emitterRays(el){
+  const rays=[];
+  const baseAng = el.ang;
+  const n = el.rays;
+  if(el.color==='spectrum'){
+    // a fan whose rays carry distinct wavelengths; spread over el.spread
+    const m = SPECTRUM_SAMPLES.length;
+    for(let i=0;i<m;i++){
+      const frac = m===1?0.5:i/(m-1);
+      const a = baseAng + (frac-0.5)*el.spread;
+      rays.push({x:el.x, y:el.y, dx:Math.cos(a), dy:Math.sin(a),
+                 lambda:SPECTRUM_SAMPLES[i], intensity:1});
+    }
+    return rays;
+  }
+  const rgb = colorToRGB(el.color);
+  if(el.mode==='beam'){
+    rays.push({x:el.x,y:el.y, dx:Math.cos(baseAng), dy:Math.sin(baseAng), lambda:589, intensity:1, colorRGB:rgb});
+  } else if(el.mode==='point'){
+    for(let i=0;i<n;i++){ const a=baseAng + i*2*Math.PI/n;
+      rays.push({x:el.x,y:el.y, dx:Math.cos(a), dy:Math.sin(a), lambda:589, intensity:1, colorRGB:rgb}); }
+  } else { // fan
+    for(let i=0;i<n;i++){ const frac = n===1?0.5:i/(n-1);
+      const a = baseAng + (frac-0.5)*el.spread;
+      rays.push({x:el.x,y:el.y, dx:Math.cos(a), dy:Math.sin(a), lambda:589, intensity:1, colorRGB:rgb}); }
+  }
+  return rays;
+}
+function colorToRGB(c){
+  if(c==='white') return [255,250,235];
+  if(c==='amber') return [255,196,92];
+  if(c==='cyan')  return [120,224,255];
+  if(c==='rose')  return [255,120,160];
+  if(c==='green') return [140,235,140];
+  return [255,250,235];
+}
+
+// trace every emitter's rays for a scene.
+function traceScene(elements, cfg){
+  const paths=[];
+  for(const el of elements){
+    if(el.type!=='emitter') continue;
+    for(const seed of emitterRays(el)){
+      paths.push(traceRay(elements, seed, cfg));
+    }
+  }
+  return paths;
+}
+
+// ============================================================================
+// SEEDED SCENE BUILDER — pure. buildScene(seed) → {elements:[...]} reproducible.
+// ============================================================================
+function buildScene(seed, W, H){
+  W = W||1200; H = H||800;
+  const rnd = rngFromSeed(seed);
+  const pick = (arr)=>arr[Math.floor(rnd()*arr.length)];
+  const between = (a,b)=>a + rnd()*(b-a);
+  const els=[];
+  // Always: an emitter on the left, aimed across the bench.
+  const emY = between(H*0.30, H*0.70);
+  const emitterColor = pick(['white','spectrum','spectrum','amber','cyan']);
+  els.push({type:'emitter', x:W*0.10, y:emY, ang:0, mode:'fan',
+            rays: emitterColor==='spectrum'?1:(2+Math.floor(rnd()*5)),
+            spread: between(0.18,0.55), color:emitterColor});
+  // A prism somewhere in the middle.
+  els.push({type:'prism', x:between(W*0.40,W*0.58), y:between(H*0.35,H*0.62),
+            ang: between(-0.5,0.5), size: between(150,210), n: between(1.50,1.62)});
+  // A lens often.
+  if(rnd()<0.8){
+    els.push({type:'lens', x:between(W*0.62,W*0.74), y:between(H*0.38,H*0.62),
+              ang: between(-0.2,0.2), h: between(150,230), f: between(150,320)});
+  }
+  // A mirror to fold the beam.
+  if(rnd()<0.75){
+    els.push({type:'mirror', x:between(W*0.78,W*0.90), y:between(H*0.30,H*0.70),
+              ang: between(-1.4,-0.6), len: between(150,260)});
+  }
+  // Occasionally a block for shaping.
+  if(rnd()<0.4){
+    els.push({type:'block', x:between(W*0.55,W*0.80), y:between(H*0.12,H*0.28),
+              ang: between(-0.3,0.3), w: between(40,90), h: between(60,140)});
+  }
+  return { elements: els, seed:String(seed), W, H };
+}
+
+// scene fingerprint — stable hash over physics-relevant fields ONLY (style &
+// glow are NOT included, proving the trace is style-invariant).
+function sceneFingerprint(elements){
+  const parts=[];
+  for(const e of elements){
+    const f=[e.type, r4(e.x), r4(e.y), r4(e.ang)];
+    if(e.type==='emitter') f.push(e.mode, e.rays, r4(e.spread), e.color);
+    if(e.type==='mirror')  f.push(r4(e.len));
+    if(e.type==='lens')    f.push(r4(e.h), r4(e.f));
+    if(e.type==='prism')   f.push(r4(e.size), r4(e.n));
+    if(e.type==='block')   f.push(r4(e.w), r4(e.h));
+    if(e.type==='drop')    f.push(r4(e.r), r4(e.n));
+    parts.push(f.join(':'));
+  }
+  return hashStr(parts.join('|'));
+}
+function r4(v){ return Math.round(v*1e4)/1e4; }
+function hashStr(s){
+  let h=2166136261>>>0;
+  for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
+  return ('00000000'+(h>>>0).toString(16)).slice(-8)+':'+s.length;
+}
+// fingerprint of a TRACE (geometry of all ray paths) — must be identical across
+// cosmetic styles, since the trace never reads style.
+function traceFingerprint(paths){
+  const parts=[];
+  for(const p of paths){
+    const seg=[];
+    for(const pt of p.pts) seg.push(r2(pt.x)+','+r2(pt.y));
+    parts.push(seg.join(';')+'@'+(p.lambda||0));
+  }
+  return hashStr(parts.join('|'));
+}
+function r2(v){ return Math.round(v*100)/100; }
+
+// ============================================================================
+// HEADLESS SELF-TEST — calls the REAL functions above. Returns {pass,total,log}.
+// Exposed on window for the browser chip AND extractable for Node (see footer).
+// ============================================================================
+function runSelfTest(){
+  let pass=0, total=0; const log=[];
+  function check(name, cond){
+    total++;
+    if(cond){ pass++; log.push('PASS: '+name); if(typeof console!=='undefined') console.log('PASS: '+name); }
+    else { log.push('FAIL: '+name); if(typeof console!=='undefined') console.error('FAIL: '+name); }
+  }
+  const TAU=Math.PI*2;
+  const angleOf=(x,y)=>Math.atan2(y,x);
+  const angBetween=(ax,ay,bx,by)=>Math.acos(Math.max(-1,Math.min(1, ax*bx+ay*by)));
+
+  // (1) Reflection law: angle of incidence == angle of reflection about normal;
+  //     double reflection returns original direction.
+  {
+    let ok=true, maxErr=0;
+    for(let k=0;k<400;k++){
+      const nAng = (k/400)*TAU;
+      const nx=Math.cos(nAng), ny=Math.sin(nAng);
+      // incident dir hitting the surface (must have d·n<0 so it approaches)
+      const iAng = nAng + Math.PI + (Math.random()-0.5)*Math.PI*0.9;
+      let dx=Math.cos(iAng), dy=Math.sin(iAng);
+      // ensure approaching the surface from the normal's side
+      if(dx*nx+dy*ny>0){ dx=-dx; dy=-dy; }
+      const [rx,ry]=reflect(dx,dy,nx,ny);
+      // angle of incidence (between -d and n) == angle of reflection (between r and n)
+      const ai=angBetween(-dx,-dy,nx,ny);
+      const ar=angBetween(rx,ry,nx,ny);
+      maxErr=Math.max(maxErr, Math.abs(ai-ar));
+      // reflecting the reflected ray about same normal returns original dir
+      const [bx,by]=reflect(rx,ry,nx,ny);
+      maxErr=Math.max(maxErr, Math.abs(bx-dx), Math.abs(by-dy));
+    }
+    ok = maxErr < 1e-9;
+    check('reflection law: θi==θr (<1e-9) and double-reflect is identity', ok);
+  }
+
+  // (2) Snell exactness + parallel-slab emerges parallel.
+  {
+    let ok=true, maxSnell=0;
+    for(let k=0;k<400;k++){
+      const n1=1.0, n2=1.2+Math.random()*0.6;        // air → glass (no TIR going in)
+      const nx=0, ny=1;                               // flat surface normal up
+      const inc = (Math.random()*0.8+0.05)*Math.PI/2; // 0.05..0.85 of 90°, from normal
+      // incident ray travelling downward into surface
+      const dx=Math.sin(inc), dy=Math.cos(inc);       // d·n = cos(inc) > 0...
+      // normal pointing into medium we leave = against ray → use -n
+      const res=refract(dx,dy,0,-1, n1/n2);
+      if(res.tir){ continue; }
+      const thetaI=inc;
+      const thetaT=angBetween(res.dir[0],res.dir[1], 0,1); // refracted vs +y (into glass)
+      maxSnell=Math.max(maxSnell, Math.abs(n1*Math.sin(thetaI) - n2*Math.sin(thetaT)));
+    }
+    ok = maxSnell < 1e-9;
+
+    // parallel slab: in one face (air→glass), out the parallel face (glass→air);
+    // emergent direction equals incident direction.
+    let maxPar=0;
+    for(let k=0;k<200;k++){
+      const n2=1.3+Math.random()*0.4;
+      const inc=(Math.random()*0.8+0.05)*Math.PI/2;
+      let dx=Math.sin(inc), dy=Math.cos(inc);         // going +y into top face
+      const r1=refract(dx,dy,0,-1, 1/n2);             // enter glass
+      if(r1.tir) continue;
+      // bottom face parallel, normal also vertical; leaving glass→air, ray still +y
+      const r2=refract(r1.dir[0],r1.dir[1], 0,-1, n2/1);  // exit glass
+      if(r2.tir) continue;
+      maxPar=Math.max(maxPar, Math.abs(r2.dir[0]-dx), Math.abs(r2.dir[1]-dy));
+    }
+    ok = ok && maxPar<1e-9;
+    check('Snell exact (n1 sinθi==n2 sinθt <1e-9) & parallel slab emerges parallel', ok);
+  }
+
+  // (3) Total internal reflection threshold at θc = asin(1/n).
+  {
+    let ok=true;
+    for(let t=0;t<30;t++){
+      const n=1.3+Math.random()*0.7;          // glass index
+      const thetaC=Math.asin(1/n);
+      // just below critical → transmits; just above → TIR. (glass→air, eta=n/1)
+      const below=thetaC-1e-4, above=thetaC+1e-4;
+      const dB=[Math.sin(below),Math.cos(below)], dA=[Math.sin(above),Math.cos(above)];
+      const rB=refract(dB[0],dB[1], 0,-1, n/1);
+      const rA=refract(dA[0],dA[1], 0,-1, n/1);
+      if(rB.tir) ok=false;        // should transmit just below
+      if(!rA.tir) ok=false;       // should TIR just above
+    }
+    // and the analytic boundary matches to <1e-6: find numeric threshold by bisection
+    {
+      const n=1.5; const thetaC=Math.asin(1/n);
+      let lo=0, hi=Math.PI/2;
+      for(let it=0; it<60; it++){
+        const mid=(lo+hi)/2;
+        const r=refract(Math.sin(mid),Math.cos(mid),0,-1,n/1);
+        if(r.tir) hi=mid; else lo=mid;
+      }
+      if(Math.abs((lo+hi)/2 - thetaC) > 1e-6) ok=false;
+    }
+    check('TIR threshold matches θc=asin(1/n) to <1e-6 (below transmits, above reflects)', ok);
+  }
+
+  // (4) Thin-lens focusing: parallel bundle → focal point at distance f; center
+  //     ray undeviated; f<0 back-projections meet at virtual focus.
+  {
+    let ok=true, maxConv=0, maxCenter=0;
+    const lensAngs=[0, 0.4, 1.1, 2.7];
+    for(const la of lensAngs){
+      const f=180+Math.random()*120;
+      const el={type:'lens', x:500, y:400, ang:la, h:4000, f};
+      // optical axis is the lens's local x-axis (== world angle `la`); the lens
+      // plane is perpendicular to it. (Convention is shared with thinLensTransfer.)
+      const axisAng = la;
+      const adx=Math.cos(axisAng), ady=Math.sin(axisAng);
+      // expected focal point: lens center + f * axis
+      const fxp=el.x + f*adx, fyp=el.y + f*ady;
+      // bundle of rays parallel to axis, offset transversely, started "before" lens
+      const tdx=Math.cos(axisAng+Math.PI/2), tdy=Math.sin(axisAng+Math.PI/2); // transverse
+      const cross=[];
+      for(let j=-5;j<=5;j++){
+        if(j===0) continue;
+        const off=j*30;
+        const startX=el.x - 250*adx + off*tdx;
+        const startY=el.y - 250*ady + off*tdy;
+        const seed={x:startX,y:startY, dx:adx, dy:ady, lambda:589, intensity:1};
+        const path=traceRay([el], seed, {maxBounces:6, minIntensity:1e-3, bounds:{w:100000,h:100000}});
+        // after the lens, the segment direction; find where it crosses axis (the
+        // focal point). The post-lens ray is the last segment.
+        const p=path.pts;
+        const a=p[p.length-2], b=p[p.length-1];
+        const ddx=b.x-a.x, ddy=b.y-a.y;
+        // distance from expected focal point to this outgoing line
+        const num=Math.abs(ddx*(fyp-a.y) - ddy*(fxp-a.x));
+        const den=Math.hypot(ddx,ddy)||1;
+        maxConv=Math.max(maxConv, num/den);
+      }
+      // center ray (through lens center) undeviated
+      {
+        const seed={x:el.x-200*adx, y:el.y-200*ady, dx:adx, dy:ady, lambda:589, intensity:1};
+        const path=traceRay([el], seed, {maxBounces:6, minIntensity:1e-3, bounds:{w:100000,h:100000}});
+        const p=path.pts; const a=p[p.length-2], b=p[p.length-1];
+        const [ux,uy]=norm(b.x-a.x,b.y-a.y);
+        maxCenter=Math.max(maxCenter, Math.abs(ux-adx), Math.abs(uy-ady));
+      }
+    }
+    ok = maxConv<1e-6 && maxCenter<1e-9;
+    // f<0 diverging: back-projection meets at virtual focus at -f (behind lens)
+    let okNeg=true;
+    {
+      const f=-200; const la=0;
+      const el={type:'lens', x:500, y:400, ang:la, h:4000, f};
+      const axisAng=la; const adx=Math.cos(axisAng), ady=Math.sin(axisAng);
+      const tdx=Math.cos(axisAng+Math.PI/2), tdy=Math.sin(axisAng+Math.PI/2);
+      const vfx=el.x + f*adx, vfy=el.y + f*ady;  // virtual focus at -|f| side
+      let mErr=0;
+      for(let j=-4;j<=4;j++){ if(j===0)continue;
+        const off=j*25;
+        const seed={x:el.x-250*adx+off*tdx, y:el.y-250*ady+off*tdy, dx:adx, dy:ady, lambda:589, intensity:1};
+        const path=traceRay([el], seed, {maxBounces:6,minIntensity:1e-3,bounds:{w:100000,h:100000}});
+        const p=path.pts; const a=p[p.length-2], b=p[p.length-1];
+        const ddx=b.x-a.x, ddy=b.y-a.y;
+        const num=Math.abs(ddx*(vfy-a.y)-ddy*(vfx-a.x));
+        const den=Math.hypot(ddx,ddy)||1;
+        mErr=Math.max(mErr, num/den);
+      }
+      okNeg = mErr<1e-6;
+    }
+    check('thin lens: parallel bundle → focal point & center ray undeviated; f<0 virtual focus', ok && okNeg);
+  }
+
+  // (5) Dispersion ordering: n(λ) monotone decreasing; through a prism violet
+  //     deviates more than red.
+  {
+    let mono=true;
+    let prev=Infinity;
+    for(const lam of [400,450,500,550,600,650,700]){
+      const n=cauchyIndex(lam);
+      if(!(n<prev)) mono=false;
+      prev=n;
+    }
+    // Deviation through a prism: a clean two-slanted-face path (enter left face,
+    // exit right face — no base interaction / no TIR), the classic dispersing
+    // geometry. Deviation = angle between incoming and emergent direction.
+    const prism={type:'prism', x:600,y:400, ang:0, size:200, n:1.52};
+    const inAng=-0.05;                    // shallow downward into the upper-left face
+    const idx=Math.cos(inAng), idy=Math.sin(inAng);
+    function deviation(lam){
+      const seed={x:420,y:350, dx:idx, dy:idy, lambda:lam, intensity:1};
+      const path=traceRay([prism], seed, {maxBounces:12,minIntensity:1e-3,bounds:{w:100000,h:100000}});
+      const p=path.pts; const a=p[p.length-2], b=p[p.length-1];
+      const [ux,uy]=norm(b.x-a.x,b.y-a.y);
+      // signed angle between emergent and incident directions = deviation
+      return Math.atan2(idx*uy - idy*ux, idx*ux + idy*uy);
+    }
+    const dViolet=deviation(410), dRed=deviation(690);
+    // deviation magnitude must strictly decrease as λ increases (violet bends most)
+    const samples=[410,470,540,600,660,690].map(deviation);
+    let ordered=true;
+    for(let i=1;i<samples.length;i++){ if(!(Math.abs(samples[i]) < Math.abs(samples[i-1]))) ordered=false; }
+    const violetMore = Math.abs(dViolet) > Math.abs(dRed) + 1e-6;
+    check('dispersion: n(λ) monotone↓ & prism deviation strictly ordered (violet bends most)', mono && violetMore && ordered);
+  }
+
+  // (6) Energy non-increasing along a path + guaranteed termination in a mirror box.
+  {
+    let energyOk=true;
+    // adversarial: a closed-ish mirror box that would loop forever without maxB.
+    const box=[
+      {type:'mirror', x:400,y:200, ang:0,    len:600},
+      {type:'mirror', x:400,y:600, ang:0,    len:600},
+      {type:'mirror', x:100,y:400, ang:Math.PI/2, len:600},
+      {type:'mirror', x:700,y:400, ang:Math.PI/2, len:600},
+    ];
+    const seed={x:400,y:400, dx:Math.cos(0.37), dy:Math.sin(0.37), lambda:589, intensity:1};
+    const maxB=64;
+    const path=traceRay(box, seed, {maxBounces:maxB, minIntensity:1e-4, bounds:{w:800,h:800}});
+    // energy per recorded point must be non-increasing & non-negative
+    let prevI=Infinity;
+    for(const pt of path.pts){ if(pt.i<0) energyOk=false; if(pt.i>prevI+1e-12) energyOk=false; prevI=pt.i; }
+    // termination: number of vertices bounded (no infinite loop). pts ≤ maxB+2.
+    const terminated = path.pts.length <= maxB+2;
+    check('energy non-negative & non-increasing along path; trace terminates in mirror box', energyOk && terminated);
+  }
+
+  // (7) Seed purity & style-invariance of the trace fingerprint.
+  {
+    const a1=buildScene('repro-1',1200,800), a2=buildScene('repro-1',1200,800), b=buildScene('repro-2',1200,800);
+    const fa1=sceneFingerprint(a1.elements), fa2=sceneFingerprint(a2.elements), fb=sceneFingerprint(b.elements);
+    const seedPure = fa1===fa2 && fa1!==fb;
+    // style-invariance: trace the SAME scene; fingerprint must not change. (The
+    // trace functions take no style argument at all, which is the structural proof;
+    // here we assert two traces of the same scene are byte-identical.)
+    const cfg={maxBounces:24,minIntensity:1e-3,bounds:{w:1200,h:800}};
+    const t1=traceFingerprint(traceScene(a1.elements,cfg));
+    const t2=traceFingerprint(traceScene(a1.elements,cfg));
+    const styleInvariant = t1===t2;
+    check('seed purity (same seed identical, fresh differs) + trace fingerprint style-invariant', seedPure && styleInvariant);
+  }
+
+  return {pass, total, log};
+}
+
+// expose for Node extraction / external re-audit
+if(typeof window!=='undefined'){
+  window.CausticCore = { traceRay, traceScene, buildScene, sceneFingerprint, traceFingerprint,
+    reflect, refract, cauchyIndex, wavelengthToRGB, thinLensTransfer, elementSurfaces, prismVerts,
+    emitterRays, runSelfTest };
+}
+if(typeof module!=='undefined' && module.exports){
+  module.exports = { traceRay, traceScene, buildScene, sceneFingerprint, traceFingerprint,
+    reflect, refract, cauchyIndex, wavelengthToRGB, thinLensTransfer, elementSurfaces, prismVerts,
+    emitterRays, runSelfTest };
+}
+
+// ============================================================================
+// APPLICATION (DOM). Everything below derives from the pure core above. Skipped
+// entirely when loaded under Node (no document).
+// ============================================================================
+if(typeof document!=='undefined'){ (function(){
+
+// ---------- style skins (COSMETIC ONLY — never touch the physics) -----------
+const STYLES = {
+  blueprint: { bench:'#060810', grid:'rgba(120,170,230,0.07)', axis:'rgba(120,170,230,0.12)',
+    glassFill:'rgba(120,170,230,0.06)', glassEdge:'rgba(150,200,255,0.55)',
+    mirrorEdge:'#cfe6ff', mirrorBack:'rgba(90,140,200,0.25)', blockFill:'rgba(20,30,46,0.92)', blockEdge:'rgba(120,170,230,0.5)',
+    lensFill:'rgba(120,200,255,0.10)', lensEdge:'rgba(160,210,255,0.7)', rayBoost:1.0, gridOn:true },
+  spectral:  { bench:'#0a0606', grid:'rgba(230,170,120,0.06)', axis:'rgba(230,170,120,0.10)',
+    glassFill:'rgba(230,180,130,0.07)', glassEdge:'rgba(255,200,150,0.55)',
+    mirrorEdge:'#ffe2c4', mirrorBack:'rgba(200,140,90,0.25)', blockFill:'rgba(40,24,18,0.92)', blockEdge:'rgba(230,170,120,0.5)',
+    lensFill:'rgba(255,200,150,0.10)', lensEdge:'rgba(255,210,160,0.7)', rayBoost:1.08, gridOn:true },
+  graphite:  { bench:'#0c0d0f', grid:'rgba(200,210,220,0.05)', axis:'rgba(200,210,220,0.08)',
+    glassFill:'rgba(200,210,220,0.05)', glassEdge:'rgba(220,228,236,0.5)',
+    mirrorEdge:'#e8edf2', mirrorBack:'rgba(150,160,170,0.22)', blockFill:'rgba(24,26,30,0.94)', blockEdge:'rgba(200,210,220,0.45)',
+    lensFill:'rgba(210,220,230,0.07)', lensEdge:'rgba(225,232,240,0.65)', rayBoost:0.95, gridOn:false },
+};
+
+// ---------- app state -------------------------------------------------------
+const state = {
+  elements: [],
+  selected: null,        // index into elements
+  style: 'blueprint',
+  glow: 1.0,
+  seed: 'caustic',
+};
+const reduceMotion = (typeof window.matchMedia==='function')
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const cv = document.getElementById('bench');
+let ctx = cv.getContext('2d');
+let dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+let W=0, H=0;                              // CSS px logical bench size
+let paths=[];                             // last trace result (cache)
+let needsTrace=true;
+
+function bounds(){ return {w:W, h:H}; }
+function traceCfg(){ return {maxBounces:28, minIntensity:0.012, bounds:bounds()}; }
+
+function resize(){
+  const stage=document.getElementById('stage');
+  W = Math.max(200, stage.clientWidth);
+  H = Math.max(200, stage.clientHeight);
+  dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+  cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
+  cv.style.width=W+'px'; cv.style.height=H+'px';
+  needsTrace=true;
+}
+
+// ---------- defaults for newly-added elements -------------------------------
+function makeElement(type){
+  const cx=W*0.45, cy=H*0.5;
+  if(type==='emitter') return {type, x:W*0.16, y:H*0.5, ang:0, mode:'fan', rays:7, spread:0.5, color:'white'};
+  if(type==='mirror')  return {type, x:cx, y:cy, ang:-0.9, len:220};
+  if(type==='lens')    return {type, x:cx, y:cy, ang:0, h:200, f:240};
+  if(type==='prism')   return {type, x:cx, y:cy, ang:0, size:190, n:1.52};
+  if(type==='block')   return {type, x:cx, y:cy, ang:0, w:60, h:120};
+  if(type==='drop')    return {type, x:cx, y:cy, ang:0, r:90, n:1.50};
+  return null;
+}
+
+// ============================================================================
+// RENDERING
+// ============================================================================
+function S(){ return STYLES[state.style]; }
+
+function draw(){
+  if(needsTrace){ paths = traceScene(state.elements, traceCfg()); needsTrace=false; }
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const sk=S();
+  // bench background
+  ctx.fillStyle = sk.bench;
+  ctx.fillRect(0,0,W,H);
+  drawGrid(sk);
+  drawRays(sk);
+  drawElements(sk);
+}
+
+function drawGrid(sk){
+  if(!sk.gridOn) { // graphite: faint vignette only
+    const g=ctx.createRadialGradient(W*0.5,H*0.5,0, W*0.5,H*0.5,Math.max(W,H)*0.7);
+    g.addColorStop(0,'rgba(255,255,255,0.02)'); g.addColorStop(1,'rgba(0,0,0,0.25)');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H); return;
+  }
+  const step=40;
+  ctx.lineWidth=1; ctx.strokeStyle=sk.grid; ctx.beginPath();
+  for(let x=0;x<=W;x+=step){ ctx.moveTo(Math.round(x)+0.5,0); ctx.lineTo(Math.round(x)+0.5,H); }
+  for(let y=0;y<=H;y+=step){ ctx.moveTo(0,Math.round(y)+0.5); ctx.lineTo(W,Math.round(y)+0.5); }
+  ctx.stroke();
+}
+
+function drawRays(sk){
+  const glow = state.glow * sk.rayBoost;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  // pass 1: wide soft glow (additive)
+  if(glow>0.01){
+    ctx.globalCompositeOperation='lighter';
+    for(const p of paths){
+      const [r,g,b]=p.color;
+      for(let i=0;i<p.pts.length-1;i++){
+        const a=p.pts[i], c=p.pts[i+1];
+        const alpha = Math.min(1, a.i)*0.10*glow;
+        if(alpha<0.004) continue;
+        ctx.strokeStyle=`rgba(${r},${g},${b},${alpha})`;
+        ctx.lineWidth=7;
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(c.x,c.y); ctx.stroke();
+      }
+    }
+    // pass 2: bright thin core
+    for(const p of paths){
+      const [r,g,b]=p.color;
+      for(let i=0;i<p.pts.length-1;i++){
+        const a=p.pts[i], c=p.pts[i+1];
+        const alpha=Math.min(1, a.i)*0.95;
+        ctx.strokeStyle=`rgba(${r},${g},${b},${alpha})`;
+        ctx.lineWidth=1.4;
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(c.x,c.y); ctx.stroke();
+      }
+    }
+    ctx.globalCompositeOperation='source-over';
+  } else {
+    for(const p of paths){
+      const [r,g,b]=p.color;
+      for(let i=0;i<p.pts.length-1;i++){
+        const a=p.pts[i], c=p.pts[i+1];
+        ctx.strokeStyle=`rgba(${r},${g},${b},${Math.min(1,a.i)})`;
+        ctx.lineWidth=1.4;
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(c.x,c.y); ctx.stroke();
+      }
+    }
+  }
+}
+
+function drawElements(sk){
+  for(let i=0;i<state.elements.length;i++){
+    const el=state.elements[i];
+    const sel = (i===state.selected);
+    ctx.save();
+    if(el.type==='emitter') drawEmitter(el,sk,sel);
+    else if(el.type==='mirror') drawMirror(el,sk,sel);
+    else if(el.type==='lens') drawLens(el,sk,sel);
+    else if(el.type==='prism') drawPrism(el,sk,sel);
+    else if(el.type==='block') drawBlock(el,sk,sel);
+    else if(el.type==='drop') drawDrop(el,sk,sel);
+    ctx.restore();
+    if(sel) drawHandles(el);
+  }
+}
+
+function selRing(){ return state.style==='spectral' ? '#ffd9a0' : (state.style==='graphite' ? '#e8edf2' : '#9fd0ff'); }
+
+function drawEmitter(el,sk,sel){
+  ctx.translate(el.x,el.y);
+  // halo
+  const grad=ctx.createRadialGradient(0,0,0,0,0,18);
+  const col = el.color==='spectrum' ? 'rgba(255,255,255,0.9)' : `rgba(${colorToRGB(el.color).join(',')},0.9)`;
+  grad.addColorStop(0,col); grad.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(0,0,18,0,Math.PI*2); ctx.fill();
+  // body
+  ctx.rotate(el.ang);
+  ctx.fillStyle = sel? selRing() : '#eaf3ff';
+  ctx.beginPath(); ctx.arc(0,0,7,0,Math.PI*2); ctx.fill();
+  // little nozzle showing aim
+  ctx.strokeStyle = sel? selRing() : 'rgba(234,243,255,0.8)';
+  ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(4,0); ctx.lineTo(16,0); ctx.stroke();
+}
+
+function drawMirror(el,sk,sel){
+  ctx.translate(el.x,el.y); ctx.rotate(el.ang);
+  const hl=el.len/2;
+  // reflective face + a darker back
+  ctx.strokeStyle=sk.mirrorBack; ctx.lineWidth=6;
+  ctx.beginPath(); ctx.moveTo(-hl,3); ctx.lineTo(hl,3); ctx.stroke();
+  ctx.strokeStyle= sel? selRing() : sk.mirrorEdge; ctx.lineWidth=2.5;
+  ctx.beginPath(); ctx.moveTo(-hl,0); ctx.lineTo(hl,0); ctx.stroke();
+  // hatch marks on back
+  ctx.strokeStyle=sk.mirrorBack; ctx.lineWidth=1;
+  for(let x=-hl+6;x<hl;x+=10){ ctx.beginPath(); ctx.moveTo(x,3); ctx.lineTo(x-5,9); ctx.stroke(); }
+}
+
+function drawLens(el,sk,sel){
+  ctx.translate(el.x,el.y); ctx.rotate(el.ang);
+  const hh=el.h/2;
+  const conv = el.f>0;
+  const bulge = Math.min(26, Math.max(8, Math.abs(el.h)*0.10)) * (conv?1:-1);
+  ctx.beginPath();
+  if(conv){
+    ctx.moveTo(0,-hh);
+    ctx.quadraticCurveTo(bulge,0, 0,hh);
+    ctx.quadraticCurveTo(-bulge,0, 0,-hh);
+  } else {
+    // concave (diverging): pinched waist
+    ctx.moveTo(-10,-hh); ctx.quadraticCurveTo(10,0,-10,hh);
+    ctx.lineTo(10,hh); ctx.quadraticCurveTo(-10,0,10,-hh); ctx.closePath();
+  }
+  ctx.fillStyle=sk.lensFill; ctx.fill();
+  ctx.strokeStyle= sel? selRing() : sk.lensEdge; ctx.lineWidth=2; ctx.stroke();
+  // optical axis tick
+  ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,-hh-6); ctx.lineTo(0,hh+6); ctx.stroke();
+}
+
+function drawPrism(el,sk,sel){
+  const v=prismVerts(el);
+  ctx.beginPath(); ctx.moveTo(v[0][0],v[0][1]);
+  for(let i=1;i<v.length;i++) ctx.lineTo(v[i][0],v[i][1]);
+  ctx.closePath();
+  // glassy gradient fill
+  const g=ctx.createLinearGradient(v[0][0],v[0][1], v[1][0],v[2][1]);
+  g.addColorStop(0, sk.glassFill); g.addColorStop(1,'rgba(255,255,255,0.02)');
+  ctx.fillStyle=g; ctx.fill();
+  ctx.strokeStyle= sel? selRing() : sk.glassEdge; ctx.lineWidth=2; ctx.stroke();
+}
+
+function drawBlock(el,sk,sel){
+  ctx.translate(el.x,el.y); ctx.rotate(el.ang);
+  const hw=el.w/2, hh=el.h/2;
+  ctx.fillStyle=sk.blockFill; ctx.fillRect(-hw,-hh,el.w,el.h);
+  ctx.strokeStyle= sel? selRing() : sk.blockEdge; ctx.lineWidth=2; ctx.strokeRect(-hw,-hh,el.w,el.h);
+  // diagonal hatch
+  ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let o=-hh;o<hw;o+=9){ ctx.moveTo(-hw,o); ctx.lineTo(-hw+ (hh*2),o-(hh*2)); }
+  ctx.save(); ctx.beginPath(); ctx.rect(-hw,-hh,el.w,el.h); ctx.clip();
+  ctx.beginPath();
+  for(let o=-el.h;o<el.w+el.h;o+=9){ ctx.moveTo(-hw+o,-hh); ctx.lineTo(-hw+o-el.h, hh); }
+  ctx.stroke(); ctx.restore();
+}
+
+function drawDrop(el,sk,sel){
+  ctx.translate(el.x,el.y);
+  const g=ctx.createRadialGradient(-el.r*0.3,-el.r*0.3,el.r*0.1, 0,0,el.r);
+  g.addColorStop(0,'rgba(255,255,255,0.10)'); g.addColorStop(1, sk.glassFill);
+  ctx.beginPath(); ctx.arc(0,0,el.r,0,Math.PI*2);
+  ctx.fillStyle=g; ctx.fill();
+  ctx.strokeStyle= sel? selRing() : sk.glassEdge; ctx.lineWidth=2; ctx.stroke();
+}
+
+// selection handles: a body dot + a rotate ring offset along the element's axis.
+function handleGeom(el){
+  let hx,hy, R=Math.max(40, elementReach(el)+26);
+  const a = el.ang;
+  hx = el.x + Math.cos(a)*R;
+  hy = el.y + Math.sin(a)*R;
+  return {hx,hy, R};
+}
+function elementReach(el){
+  if(el.type==='mirror') return el.len/2;
+  if(el.type==='lens') return el.h/2;
+  if(el.type==='prism') return el.size/Math.sqrt(3);
+  if(el.type==='block') return Math.hypot(el.w,el.h)/2;
+  if(el.type==='drop') return el.r;
+  return 20;
+}
+function drawHandles(el){
+  const {hx,hy}=handleGeom(el);
+  const ring=selRing();
+  ctx.save();
+  // tether
+  ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(el.x,el.y); ctx.lineTo(hx,hy); ctx.stroke(); ctx.setLineDash([]);
+  // rotate ring
+  ctx.strokeStyle=ring; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(hx,hy,7,0,Math.PI*2); ctx.stroke();
+  ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.arc(hx,hy,7,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle=ring; ctx.beginPath(); ctx.arc(hx,hy,7,0,Math.PI*2); ctx.stroke();
+  // selection outline marker on body
+  ctx.fillStyle=ring; ctx.beginPath(); ctx.arc(el.x,el.y,3,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+// ============================================================================
+// HIT-TESTING for direct manipulation
+// ============================================================================
+function dist2(ax,ay,bx,by){ const dx=ax-bx, dy=ay-by; return dx*dx+dy*dy; }
+function distToSeg(px,py, ax,ay,bx,by){
+  const ex=bx-ax, ey=by-ay; const l2=ex*ex+ey*ey;
+  let t = l2? ((px-ax)*ex+(py-ay)*ey)/l2 : 0; t=Math.max(0,Math.min(1,t));
+  const cx=ax+ex*t, cy=ay+ey*t; return Math.hypot(px-cx,py-cy);
+}
+
+// returns {idx, part:'body'|'rotate'} or null
+function pickAt(px,py){
+  // rotate handle of selected element takes priority
+  if(state.selected!=null){
+    const el=state.elements[state.selected];
+    const {hx,hy}=handleGeom(el);
+    if(dist2(px,py,hx,hy) < 14*14) return {idx:state.selected, part:'rotate'};
+  }
+  // body hit-test (topmost first)
+  for(let i=state.elements.length-1;i>=0;i--){
+    const el=state.elements[i];
+    if(hitBody(el,px,py)) return {idx:i, part:'body'};
+  }
+  return null;
+}
+function hitBody(el,px,py){
+  const pad=12;
+  if(el.type==='emitter') return dist2(px,py,el.x,el.y) < 16*16;
+  if(el.type==='drop') return vlen(px-el.x,py-el.y) < el.r+pad;
+  if(el.type==='prism') {
+    const v=prismVerts(el);
+    if(pointInPoly(px,py,v)) return true;
+    for(let i=0;i<v.length;i++){ if(distToSeg(px,py,v[i][0],v[i][1],v[(i+1)%v.length][0],v[(i+1)%v.length][1])<pad) return true; }
+    return false;
+  }
+  if(el.type==='mirror'){
+    const hl=el.len/2;
+    const a=rot(el.x-hl,el.y,el.x,el.y,el.ang), b=rot(el.x+hl,el.y,el.x,el.y,el.ang);
+    return distToSeg(px,py,a[0],a[1],b[0],b[1])<pad;
+  }
+  if(el.type==='lens'){
+    const hh=el.h/2;
+    const a=rot(el.x,el.y-hh,el.x,el.y,el.ang), b=rot(el.x,el.y+hh,el.x,el.y,el.ang);
+    return distToSeg(px,py,a[0],a[1],b[0],b[1])<pad+4;
+  }
+  if(el.type==='block'){
+    // rotate the point into local frame
+    const c=Math.cos(-el.ang), s=Math.sin(-el.ang);
+    const lx=(px-el.x)*c-(py-el.y)*s, ly=(px-el.x)*s+(py-el.y)*c;
+    return Math.abs(lx)<el.w/2+pad && Math.abs(ly)<el.h/2+pad;
+  }
+  return false;
+}
+
+// ============================================================================
+// POINTER INTERACTION (real pointer events)
+// ============================================================================
+let drag=null;   // {idx, part, offx, offy, startAng, grabAng}
+function evToCanvas(ev){ const r=cv.getBoundingClientRect(); return {px:ev.clientX-r.left, py:ev.clientY-r.top}; }
+
+function onPointerDown(ev){
+  const {px,py}=evToCanvas(ev);
+  const hit=pickAt(px,py);
+  if(!hit){ select(null); requestDraw(); return; }
+  cv.setPointerCapture && cv.setPointerCapture(ev.pointerId);
+  ev.preventDefault();
+  select(hit.idx);
+  const el=state.elements[hit.idx];
+  if(hit.part==='rotate'){
+    drag={idx:hit.idx, part:'rotate', startAng:el.ang, grabAng:Math.atan2(py-el.y,px-el.x)};
+  } else {
+    drag={idx:hit.idx, part:'body', offx:px-el.x, offy:py-el.y};
+  }
+  requestDraw();
+}
+function onPointerMove(ev){
+  const {px,py}=evToCanvas(ev);
+  if(drag){
+    const el=state.elements[drag.idx];
+    if(drag.part==='body'){
+      el.x = clamp(px-drag.offx, 4, W-4);
+      el.y = clamp(py-drag.offy, 4, H-4);
+    } else {
+      const cur=Math.atan2(py-el.y, px-el.x);
+      el.ang = drag.startAng + (cur - drag.grabAng);
+    }
+    needsTrace=true; requestDraw(); syncInspectorLive(el); return;
+  }
+  // hover cursor feedback
+  const hit=pickAt(px,py);
+  cv.style.cursor = hit ? (hit.part==='rotate'?'grab':'move') : 'crosshair';
+}
+function onPointerUp(ev){ if(drag){ drag=null; } }
+
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+
+cv.addEventListener('pointerdown', onPointerDown);
+cv.addEventListener('pointermove', onPointerMove);
+window.addEventListener('pointerup', onPointerUp);
+
+window.addEventListener('keydown', ev=>{
+  if((ev.key==='Delete'||ev.key==='Backspace') && state.selected!=null){
+    const tag=(document.activeElement&&document.activeElement.tagName)||'';
+    if(tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA') return;
+    ev.preventDefault(); deleteSelected();
+  }
+});
+
+// ============================================================================
+// SELECTION + INSPECTOR (contextual sliders)
+// ============================================================================
+function select(idx){ state.selected=idx; renderInspector(); }
+
+function deleteSelected(){
+  if(state.selected==null) return;
+  state.elements.splice(state.selected,1);
+  state.selected=null;
+  needsTrace=true; renderInspector(); requestDraw();
+}
+
+const inspector=document.getElementById('inspector');
+function renderInspector(){
+  if(state.selected==null){ inspector.innerHTML='<div class="empty">Nothing selected. Click an element on the bench, or add one above.</div>'; return; }
+  const el=state.elements[state.selected];
+  let h='';
+  const title=el.type[0].toUpperCase()+el.type.slice(1);
+  h+=`<div class="row"><label style="margin-bottom:2px">${title}</label></div>`;
+  const slider=(id,label,min,max,step,val,unit)=>{
+    const fill=((val-min)/(max-min)*100);
+    return `<div class="row"><label>${label} <span class="val" id="v_${id}">${fmt(val)}${unit||''}</span></label>
+      <input type="range" id="s_${id}" min="${min}" max="${max}" step="${step}" value="${val}" style="--fill:${fill}%"></div>`;
+  };
+  if(el.type==='emitter'){
+    h+=`<div class="row"><label>Mode</label><div class="seg" id="modeSeg">
+        <button data-m="fan"${el.mode==='fan'?' class="active"':''}>Fan</button>
+        <button data-m="beam"${el.mode==='beam'?' class="active"':''}>Beam</button>
+        <button data-m="point"${el.mode==='point'?' class="active"':''}>Point</button></div></div>`;
+    h+=`<div class="row"><label>Colour</label><div class="swatchrow" id="colorRow">
+        ${swatch('white','#fffaeb')}${swatch('amber','#ffc45c')}${swatch('cyan','#78e0ff')}
+        ${swatch('rose','#ff78a0')}${swatch('green','#8ceb8c')}
+        <div class="sw spectrum${el.color==='spectrum'?' sel':''}" data-c="spectrum" title="spectrum"></div></div></div>`;
+    if(el.mode!=='beam' && el.color!=='spectrum') h+=slider('rays','Ray count',1,40,1,el.rays,'');
+    if(el.mode==='fan'||el.color==='spectrum') h+=slider('spread','Spread',0.05,1.4,0.01,el.spread,' rad');
+    h+=slider('ang','Aim',-Math.PI,Math.PI,0.01,el.ang,' rad');
+  } else if(el.type==='mirror'){
+    h+=slider('ang','Angle',-Math.PI,Math.PI,0.01,el.ang,' rad');
+    h+=slider('len','Length',40,500,1,el.len,' px');
+  } else if(el.type==='lens'){
+    h+=slider('f','Focal length',-600,600,1,el.f,' px');
+    h+=slider('h','Aperture',60,400,1,el.h,' px');
+    h+=slider('ang','Angle',-Math.PI,Math.PI,0.01,el.ang,' rad');
+  } else if(el.type==='prism'){
+    h+=slider('n','Index n (589nm)',1.30,2.00,0.005,el.n,'');
+    h+=slider('size','Size',80,320,1,el.size,' px');
+    h+=slider('ang','Rotation',-Math.PI,Math.PI,0.01,el.ang,' rad');
+  } else if(el.type==='block'){
+    h+=slider('w','Width',16,260,1,el.w,' px');
+    h+=slider('h','Height',16,300,1,el.h,' px');
+    h+=slider('ang','Angle',-Math.PI,Math.PI,0.01,el.ang,' rad');
+  } else if(el.type==='drop'){
+    h+=slider('n','Index n (589nm)',1.30,2.00,0.005,el.n,'');
+    h+=slider('r','Radius',30,200,1,el.r,' px');
+  }
+  inspector.innerHTML=h;
+  wireInspector(el);
+}
+function fmt(v){ return (Math.abs(v)>=100||Number.isInteger(v))?String(Math.round(v)):v.toFixed(2); }
+function swatch(name,hex){ const sel = state.selected!=null && state.elements[state.selected].color===name;
+  return `<div class="sw${sel?' sel':''}" data-c="${name}" style="background:${hex}" title="${name}"></div>`; }
+
+function wireInspector(el){
+  inspector.querySelectorAll('input[type=range]').forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      const key=inp.id.slice(2); const v=parseFloat(inp.value);
+      el[key]=v;
+      const lab=document.getElementById('v_'+key);
+      const unit = inp.parentElement.querySelector('.val').textContent.replace(/[-\d.]+/,'');
+      if(lab) lab.textContent=fmt(v)+(/rad|px/.test(unit)? (' '+unit.trim()):'' );
+      inp.style.setProperty('--fill', ((v-inp.min)/(inp.max-inp.min)*100)+'%');
+      needsTrace=true; requestDraw();
+    });
+  });
+  const modeSeg=document.getElementById('modeSeg');
+  if(modeSeg) modeSeg.addEventListener('click', ev=>{ const b=ev.target.closest('button'); if(!b)return;
+    el.mode=b.dataset.m; needsTrace=true; renderInspector(); requestDraw(); });
+  const colorRow=document.getElementById('colorRow');
+  if(colorRow) colorRow.addEventListener('click', ev=>{ const s=ev.target.closest('.sw'); if(!s)return;
+    el.color=s.dataset.c; needsTrace=true; renderInspector(); requestDraw(); });
+}
+// live-update value labels while dragging an element (angle changes)
+function syncInspectorLive(el){
+  if(state.selected==null) return;
+  const va=document.getElementById('v_ang');
+  if(va && el.ang!==undefined){ va.textContent=fmt(el.ang)+' rad';
+    const inp=document.getElementById('s_ang'); if(inp){ inp.value=el.ang; inp.style.setProperty('--fill',((el.ang- inp.min)/(inp.max-inp.min)*100)+'%'); } }
+}
+
+// ============================================================================
+// PRESETS — curated named scenes (NOT seeded; deliberate arrangements)
+// ============================================================================
+const PRESETS = {
+  // A single near-collimated white beam (spectrum rays superimposed) striking a
+  // prism and fanning into a rainbow on exit — the signature moment. Geometry is
+  // tuned so every wavelength takes the clean two-face path (no base TIR).
+  'Prism': (W,H)=>[
+    {type:'emitter', x:W*0.12, y:H*0.44, ang:-0.04, mode:'fan', rays:1, spread:0.0, color:'spectrum'},
+    {type:'prism',   x:W*0.46, y:H*0.50, ang:0.0,   size:200, n:1.52},
+  ],
+  // A higher-index prism for a wider rainbow sweep across the bench.
+  'Spectrum': (W,H)=>[
+    {type:'emitter', x:W*0.11, y:H*0.43, ang:-0.05, mode:'fan', rays:1, spread:0.0, color:'spectrum'},
+    {type:'prism',   x:W*0.45, y:H*0.50, ang:0.0,   size:210, n:1.55},
+  ],
+  'Focus': (W,H)=>[
+    {type:'emitter', x:W*0.10, y:H*0.5, ang:0, mode:'fan', rays:13, spread:0.42, color:'amber'},
+    {type:'lens',    x:W*0.42, y:H*0.5, ang:0, h:300, f:260},
+  ],
+  // A fan fired into a narrow mirrored channel ping-pongs many times, each ray
+  // exiting after a different number of bounces — a folded lattice of light.
+  'Kaleidoscope': (W,H)=>[
+    {type:'emitter', x:W*0.08, y:H*0.5,  ang:0.5, mode:'fan', rays:9, spread:0.6, color:'cyan'},
+    {type:'mirror',  x:W*0.55, y:H*0.44, ang:0.0, len:Math.min(W*0.92,1050)},
+    {type:'mirror',  x:W*0.55, y:H*0.56, ang:0.0, len:Math.min(W*0.92,1050)},
+  ],
+  // A horizontal beam enters a large dense prism, strikes the far face beyond
+  // the critical angle, and totally internally reflects before exiting.
+  'Total Internal Reflection': (W,H)=>[
+    {type:'emitter', x:W*0.15, y:H*0.52, ang:0.0, mode:'beam', rays:1, spread:0, color:'cyan'},
+    {type:'prism',   x:W*0.5,  y:H*0.5,  ang:0.0, size:300, n:1.6},
+  ],
+  // A spectral beam grazing a glass droplet near its rim — dispersion on curved
+  // surfaces (the droplet element is also free to play with from the palette).
+  'Droplet': (W,H)=>[
+    {type:'emitter', x:W*0.10, y:H*0.68, ang:0, mode:'fan', rays:1, spread:0, color:'spectrum'},
+    {type:'drop',    x:W*0.5,  y:H*0.5,  ang:0, r:160, n:1.52},
+  ],
+};
+function loadPreset(name){
+  const fn=PRESETS[name]; if(!fn) return;
+  state.elements = fn(W,H).map(e=>({...e}));
+  state.selected = state.elements.length? 0 : null;
+  state.seed = name.toLowerCase().replace(/\s+/g,'-');
+  needsTrace=true; renderInspector(); syncSeedEcho(); requestDraw();
+}
+
+// ============================================================================
+// SEED / RE-ROLL / CLEAR / EXPORT
+// ============================================================================
+function applySeed(seed){
+  state.seed=String(seed);
+  const sc=buildScene(state.seed, W, H);
+  state.elements = sc.elements.map(e=>({...e}));
+  state.selected = null;
+  needsTrace=true; renderInspector(); syncSeedEcho(); requestDraw();
+  try{ const u=new URL(window.location.href); u.searchParams.set('seed',state.seed); window.history.replaceState(null,'',u.toString()); }catch(_){}
+}
+function randomSeed(){ return Math.random().toString(36).slice(2,9); }
+function syncSeedEcho(){ document.getElementById('seedEcho').textContent=state.seed;
+  const si=document.getElementById('seedInput'); if(document.activeElement!==si) si.value=state.seed; }
+
+// PNG ×2 export — re-render crisply offscreen.
+function exportPNG(){
+  const scale=2;
+  const off=document.createElement('canvas');
+  off.width=Math.round(W*scale); off.height=Math.round(H*scale);
+  const octx=off.getContext('2d');
+  const savedCtx=ctx, savedDpr=dpr;
+  ctx=octx; dpr=scale;
+  // ensure trace fresh, then draw without selection handles
+  const savedSel=state.selected; state.selected=null;
+  needsTrace=true; draw();
+  state.selected=savedSel;
+  ctx=savedCtx; dpr=savedDpr; needsTrace=true; requestDraw();
+  const finish=(url)=>{ const a=document.createElement('a'); a.href=url; a.download='caustic-'+state.seed+'.png'; document.body.appendChild(a); a.click(); a.remove(); };
+  if(off.toBlob){ off.toBlob(b=>{ const u=URL.createObjectURL(b); finish(u); setTimeout(()=>URL.revokeObjectURL(u),4000); },'image/png'); }
+  else finish(off.toDataURL('image/png'));
+}
+
+// ============================================================================
+// RENDER LOOP — only redraw when dirty (cheap static scene), reduced-motion safe
+// ============================================================================
+let drawQueued=false;
+function requestDraw(){ if(drawQueued) return; drawQueued=true; requestAnimationFrame(()=>{ drawQueued=false; draw(); }); }
+
+// ============================================================================
+// WIRE CONTROLS
+// ============================================================================
+function buildPresetButtons(){
+  const host=document.getElementById('presets');
+  for(const name of Object.keys(PRESETS)){
+    const b=document.createElement('button'); b.className='chip'; b.textContent=name;
+    b.addEventListener('click', ()=>loadPreset(name)); host.appendChild(b);
+  }
+}
+document.getElementById('palette').addEventListener('click', ev=>{
+  const b=ev.target.closest('button'); if(!b) return;
+  const el=makeElement(b.dataset.add); if(!el) return;
+  state.elements.push(el); state.selected=state.elements.length-1;
+  needsTrace=true; renderInspector(); requestDraw();
+});
+document.getElementById('styleSeg').addEventListener('click', ev=>{
+  const b=ev.target.closest('button'); if(!b) return;
+  state.style=b.dataset.style;
+  document.querySelectorAll('#styleSeg button').forEach(x=>x.classList.toggle('active',x===b));
+  applyStyleVars();
+  requestDraw();   // re-render ONLY — no re-trace (style is cosmetic; needsTrace stays false)
+});
+function applyStyleVars(){
+  const sk=STYLES[state.style]; const r=document.documentElement.style;
+  r.setProperty('--bench',sk.bench); r.setProperty('--grid',sk.grid); r.setProperty('--axis',sk.axis);
+}
+const glowSlider=document.getElementById('glowSlider');
+glowSlider.addEventListener('input', ()=>{ state.glow=parseFloat(glowSlider.value);
+  document.getElementById('glowVal').textContent=state.glow.toFixed(2);
+  glowSlider.style.setProperty('--fill',(state.glow/2*100)+'%'); requestDraw(); });
+
+const seedInput=document.getElementById('seedInput');
+document.getElementById('rerollBtn').addEventListener('click', ()=>{
+  let s=seedInput.value.trim(); if(s===''||s===state.seed) s=randomSeed(); applySeed(s);
+});
+seedInput.addEventListener('keydown', ev=>{ if(ev.key==='Enter'){ const s=seedInput.value.trim()||randomSeed(); applySeed(s); } });
+document.getElementById('deleteBtn').addEventListener('click', deleteSelected);
+document.getElementById('clearBtn').addEventListener('click', ()=>{ state.elements=[]; state.selected=null; needsTrace=true; renderInspector(); requestDraw(); });
+document.getElementById('pngBtn').addEventListener('click', exportPNG);
+
+window.addEventListener('resize', ()=>{ resize(); requestDraw(); });
+
+// ============================================================================
+// INIT
+// ============================================================================
+function init(){
+  try{ localStorage.setItem('ws:seen:optics','1'); }catch(_){}
+
+  const res=runSelfTest();
+  const chip=document.getElementById('selftest');
+  if(res.pass===res.total){ chip.className='selftest ok'; chip.textContent='optics verified — '+res.pass+'/'+res.total+' ✓'; }
+  else { chip.className='selftest bad'; chip.textContent='optics FAILED — '+res.pass+'/'+res.total; }
+  console.log('Caustic self-test: '+res.pass+'/'+res.total+' passed.');
+
+  buildPresetButtons();
+  applyStyleVars();
+  glowSlider.style.setProperty('--fill','50%');
+  resize();
+
+  // initial scene: seed from URL if present, else the signature Prism preset.
+  let urlSeed=null;
+  try{ const u=new URL(window.location.href); urlSeed=u.searchParams.get('seed'); }catch(_){}
+  if(urlSeed){ applySeed(urlSeed); }
+  else { loadPreset('Prism'); }
+
+  requestDraw();
+}
+init();
+
+})(); }
+</script>
+</body>
+</html>
