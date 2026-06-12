@@ -20,7 +20,59 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
-> **▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — 🕹️ QUBIT shipped → Arcade #16, the rack's first iso-hopper).**
+> **▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — 📅 THE ALMANAC shipped → Undercroft secret #8, a cross-pollination in the WORDS vein).**
+> Working tree committed & pushed; live 200 confirmed. **New this session (deliberately a LESS-developed vein —
+> the recent run was heavy on arcade games + visual presses, so this is a generative-TEXT piece):** built **The
+> Almanac 📅 (`undercroft/almanac.html`, 1422 lines, single self-contained vanilla file, 0 deps/0 network)** — a
+> seeded perpetual **almanac / book of days** for an invented folk-calendar laid over the real Gregorian year, and
+> placed it as the **Undercroft's 8th secret + its 3rd cross-pollination** (an exploration-combo marrying **The
+> Oracle**'s invented folklore × **Orrery**'s real heavens — "the speaker of days, set beneath the true wheeling of
+> the heavens"). From a `(seed, year)` it composes a coherent book: a title plate (invented almanac name + compiler,
+> e.g. "compiled by Mother Ambrose Wildgoose") + a **wheel-of-the-year** visual (12 months, the 4 REAL cardinal
+> points marked) + a **day-reader** (date picker / prev-next / Today) showing the **real moon phase** (drawn glyph +
+> illumination % + age) · the season + days to the nearest solstice/equinox · an invented **observance/feast** ·
+> a **weather-lore couplet** · an **omen** (agrees with the computed phase) · **husbandry counsel** (season-gated:
+> sow in spring, harvest in autumn) · the real weekday — plus a **feast-days-of-the-year index**, 3 cosmetic styles
+> (Woodcut / Star-Chart / Plain-Leaf), re-roll/seed/year, 2× PNG export. Tone: wry earthy old-farmer's-almanac
+> (Poor Richard meets a hedge-witch), curate-then-arrange so it reads as WRITTEN (no template seams). **The crux
+> (workshop tradition) is the SKY being REAL + PROVEN:** a headless **5-check self-test** runs on load against the
+> *real* engine functions and shows a green **"sky verified — 5/5 ✓"** chip (never ships red): (1) real **moon
+> phase** ≤1 day vs 5 known new/full moons (worst Δ0.61d, synodic-epoch method); (2) real **solstices/equinoxes**
+> within ±1 day of the known 2024 dates (Meeus-simplified; spot-on for 2020/2025/2030 too); (3) **calendrical math**
+> (Zeller weekday — 2000-01-01=Sat, 2026-06-12=Fri; Gregorian leap rule 2000✓/1900✗/2024✓; month length); (4)
+> **seed-purity / style-invariance** (content hash identical across all 3 styles for one seed+year — style only
+> re-renders); (5) **coherence** (a 23,016-entry sweep: 0 seams/NaN/empty; omens always match the computed phase,
+> counsel always matches the season). **Browser-verified end to end** (agent-browser, served origin, by the build
+> deputy AND independently re-confirmed by the lead): 5/5 PASS + green chip, **0 console errors / 0 warnings**;
+> for the real today (Jun 12 2026) it correctly shows **Friday · Waning Crescent 8% · age 26.8d · "Spring — 9 days
+> until the summer solstice"**, wheel marks **eq Mar 20 · sol Jun 21 · eq Sep 23 · sol Dec 21** (real 2026); re-roll
+> changes the book, same seed+year reproduces it byte-for-byte, style-switch keeps content identical, PNG export
+> valid. **Full unlock flow verified** (cleared `ws:` → locked ghost "0 of 2 signs" / "0 of 8 discoveries" → visit
+> `verse/` → "1 of 2" → visit `orrery/` → niche materialises → Enter loads the page); 0 console errors on
+> undercroft/verse/orrery. **Two real bugs found & fixed by the deputy** (a seam-regex false-positive on an authored
+> name "Cynan"; an awkward feast-name grammar stem). **Wired (HIDDEN — front door UNTOUCHED, still the curated 9):**
+> `undercroft/almanac.html` drops `ws:seen:almanac`; **`orrery/index.html` now self-drops `ws:seen:orrery`** (it
+> didn't before — the trail needed it; verse already dropped `ws:seen:verse`); a `SECRETS` row added to
+> `undercroft/index.html` (`{id:'almanac', verse∧orrery}`; the room's count/meter/capstone auto-read
+> `SECRETS.length` → now **"of 8"**); `undercroft/CHANGELOG.md` Build 6. Spec: `undercroft/ALMANAC.SPEC.md`
+> (untracked — input, not a deliverable). Commits `210293c` + `54faeda`, pushed. **The Undercroft now holds 8
+> secrets** (6 places: Living Lattice, The Long Quiet, Rosette, The Gilded Leaf, The Floating Ink, The Almanac;
+> + 2 trophies: Eleven, The Survivor). *(Spoiler etiquette: this block is internal; don't hand
+> Brandon the trail/contents in a celebratory summary.)*
+>
+> **Cool ideas thought of but NOT pursued (for the lead/future sessions):** (a) the Almanac is a natural **wing
+> seed** — an *almanac/folklore press* could one day surface as a front-door-worthy language standalone if the
+> flat-grid redesign ever happens (it's currently the verse vein's richest unbuilt direction); (b) the words vein
+> still lacks a **generative myth/genealogy engine** (a seeded pantheon + family-tree of gods with consistent
+> kinship + origin-myths — a true correctness crux in the relationship graph) and a **generative epitaph/letter**
+> toy; (c) a **different IF place** (Threshold is the only front-door card without a companion — an IF *sibling*
+> only if the pairing is genuinely poetic); (d) the SOUND vein is at the clean 2×4 stop — a *hidden* Undercroft
+> sound piece (verified silently via the audio-lens) remains the courteous way to add sound without breaking the
+> grid; (e) the Almanac could itself grow a hidden **cross-link** (e.g. its feast-index feeding a Firmament star-
+> chart of the year, or an "almanac leaf" illuminated like the Gilded Leaf). *(Spoiler etiquette respected.)*
+>
+> ---
+> **(prior) ▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — 🕹️ QUBIT shipped → Arcade #16, the rack's first iso-hopper).**
 > Working tree committed & pushed; live 200 confirmed. **New this session:** deepened the Arcade rack (the
 > no-rebalance `auto-fill` growth axis) with **Qubit 🕹️ (`arcade/games/qubit.html`, 1382 lines, single
 > self-contained vanilla file, zero deps/network)** — the rack's first **Q*bert-lineage isometric cube-hopper**
@@ -762,7 +814,8 @@ instruments copy the `← sound garden` back-link.
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
 | `tessellarium/` | 🔷 done (companion) | **Behind the Strange Garden** — generative **ornament press** grounded in the **17 wallpaper symmetry groups** (p1 … p6m): seed a seamless ornament in any group; 4 styles (Stained/Inked/Block/Line), 8 palettes, cell-repeat slider, symmetry-axes overlay, PNG 2×. Crux = **proven symmetry**: `f(P)=motif(fold_G(P))` via exact orbit-min canonicalization → invariance true to machine precision (self-test 4/4, check #1 max err **0.0**); seed-pure + style-invariant. The Garden's ornamental cousin (grows pattern ↔ composes it). Spec `TESSELLARIUM.SPEC.md`. |
 | `sound-garden/quickening.html` | 🌱 done (HIDDEN) | **The Living Lattice** — a cellular automaton you can hear (5 rule families, CA self-test, lens-clean). The 8th instrument, but **earned not listed** (NOT in `instruments.js`; rack stays at 7). Lives in the Undercroft. |
-| `undercroft/` | 🗝️ done (7 secrets) | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise) + an all-found capstone (now needs all 7). Holds 7, ALL trigger types demonstrated: Living Lattice (exploration), The Long Quiet (dwell), Eleven (config), The Survivor (score), **Rosette** 🌹 (combination — rarest), **The Gilded Leaf** 📜 (exploration-combo — cross-pollination #1), **The Floating Ink** 🌊 (exploration-combo — cross-pollination #2). See `UNLOCK.md`. |
+| `undercroft/` | 🗝️ done (8 secrets) | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise) + an all-found capstone (now needs all 8). Holds 8, ALL trigger types demonstrated: Living Lattice (exploration), The Long Quiet (dwell), Eleven (config), The Survivor (score), **Rosette** 🌹 (combination — rarest), **The Gilded Leaf** 📜 (exploration-combo — cross-pollination #1), **The Floating Ink** 🌊 (exploration-combo — cross-pollination #2), **The Almanac** 📅 (exploration-combo — cross-pollination #3). See `UNLOCK.md`. |
+| `undercroft/almanac.html` | 📅 done (HIDDEN) | **The Almanac** — a seeded perpetual **book of days** for an invented folk-calendar over the real Gregorian year, anchored to a **REAL computed sky**: real moon phase (drawn glyph + illumination %), real solstices/equinoxes, correct calendrical math (Zeller weekday, Gregorian leap rule). From `(seed, year)`: title plate + wheel-of-the-year (4 real cardinal points) + day-reader (moon/season/invented feast/weather-lore couplet/omen/season-gated husbandry counsel/weekday) + feast index; 3 cosmetic styles (Woodcut/Star-Chart/Plain-Leaf), 2× PNG. Tone: wry old-farmer's-almanac, curate-then-arrange (reads as written). Self-test 5/5 (moon ≤1d / solstices ±1d / calendar / seed-purity & style-invariance / coherence — 23k-entry sweep 0 seams). New medium: generative folklore-reference anchored to real ephemeris. Unlocked by `ws:seen:verse` ∧ `ws:seen:orrery` (orrery now self-drops its breadcrumb). Spec: `ALMANAC.SPEC.md`. |
 | `undercroft/rosette.html` | 🌹 done (HIDDEN) | **Rosette** — a seeded generative Gothic **rose window** (stained glass: concentric rings, N-fold symmetry, cusped tracery, jewel glass + lead came; seed-pure, palette recolours only; 6 palettes, PNG export). A new visual medium; the rarest Undercroft secret. |
 | `undercroft/codex.html` | 📜 done (HIDDEN) | **The Gilded Leaf** — a seeded generative **illuminated manuscript leaf** fusing verse × script: composes a coherent verse (Oracle-style curate-then-arrange) + invents a script hand (Scriptorium-style bijective glyph map) and writes the verse in it on a gilded parchment leaf (versal, jewel+gold border, gloss + key). Self-test 5/5 (round-trip/bijection/seed-purity). Unlocked by `ws:seen:verse` ∧ `ws:seen:scriptorium`. |
 | `undercroft/floating-ink.html` | 🌊 done (HIDDEN) | **The Floating Ink** — seeded **mathematical marbling** (suminagashi · ebru): ink floated on water via exact fluid-displacement maps (**Drop** area-preserving `√(1+r²/d²)`, **Tine** comb, **Vortex** swirl); 6 recipes (rings/stone/gel-git/non-pareil/bouquet/vortex), 6 palettes, 2× PNG export. Self-test 5/5 (area-preservation A/B/C, seed-repro, palette-invariance, finiteness, tine). New visual medium (fluid-ink art). Unlocked by `ws:seen:cartographer` ∧ `ws:seen:scriptorium`. Spec: `FLOATING-INK.SPEC.md`. |
