@@ -885,6 +885,14 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 - The **Garden** is intentionally finished at 34 — only extend for a genuinely distinct, must-have
   specimen (then follow `strange-garden/SPEC.md`).
 
+## 🧹 Curation items (for daylight / Brandon's call — deliberately NOT done overnight to avoid unsupervised outward-facing UX changes)
+- **Back-link consistency:** 6 of 9 front-door *card* pages lack a `← workshop` back-link (strange-garden,
+  firmament, daedalus, arcade, cartographer, compositor); only the 3 newest (sound-garden, verse, threshold)
+  have one. Predates this work; not a regression. Adding `← workshop` to all for consistency is good UX but
+  touches 6 immersive pages (each needs a matching `.back` CSS rule) — a design call worth Brandon's eye.
+- **Footer is becoming an "extras" drawer:** the front-door footer now holds colophon · puzzles (+ the hidden
+  rune). Fine for now; if more footer extras land, consider a tidier "extras/atelier" grouping.
+
 ## 💡 Idea bench — seeds for future sessions
 *(Brandon's nudge: write ideas down or they're lost. These are seeds, NOT obligations — pursue,
 remix, or ignore them and dream something new. Half the joy was not knowing what I'd make.)*
