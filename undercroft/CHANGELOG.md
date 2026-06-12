@@ -1,5 +1,69 @@
 # The Undercroft — changelog
 
+## Build 7 — "Enigma", a faithful working cipher machine (2026-06-12)
+
+Added `undercroft/enigma.html` (1072 lines of code; self-contained, zero-dep, no-network, **no audio**)
+— the Undercroft's **9th secret** and a cross-pollination in a brand-new **working-device / encoding**
+vein: it weds **Scriptorium** (`scriptorium/`, the hand that hides meaning in an invented script) to
+**Slipstick** (`slipstick/`, the workshop's other genuine instrument) — *"the scribe's hidden hand,
+given a reckoner's wheels, made to keep a secret."* Unlocks on `ws:seen:scriptorium ∧ ws:seen:slipstick`.
+Full brief in `ENIGMA.SPEC.md`.
+
+- **What it is.** A genuine, mechanically-correct three-rotor **Enigma I** (Wehrmacht/Heer). Real
+  historical rotor wirings (I–V, with their turnover notches), reflectors **UKW-B / UKW-C**, the
+  **plugboard** (up to 10 reciprocal steckers, click-to-pair), **ring settings** (Ringstellung), and a
+  settable **start position** (Grundstellung). Type on the QWERTZ keyboard (or your own keys): the
+  rotors **step** before each letter, a **lamp lights**, and a **live signal-path trace** threads the
+  current keyboard → plugboard → right→mid→left rotor → reflector → back → lamp so you can *watch the
+  machine think*. A transcript encrypts live in 5-letter groups; because Enigma is **reciprocal**, a
+  "reset to start" button lets you type the ciphertext back and read the plaintext out. Three cosmetic
+  **skins** (Heeres field-grey bakelite / Brass museum / Blueprint schematic) and a **2× PNG export**.
+- **The crux is that the cipher is REAL and PROVEN.** A pure cryptographic core (`makeMachine`,
+  `stepMachine`, `thruRotor`, `encLetter`) is the single source of truth for both the renderer and a
+  headless self-test that calls the *real* functions and shows a green **"cipher verified — 12/12 ✓"**
+  chip (never red):
+  1. **Historical test vectors, exact string equality** — rotors I·II·III, UKW-B, rings AAA, start AAA,
+     no plugboard: `AAAAA → BDZGO`. The fully-documented German-Wikipedia **"Aachen" daily-key** worked
+     example (I·IV·III, UKW-B, rings P·Z·H, 10 steckers, start RTZ) reproduced byte-for-byte. These pin
+     the wiring, the ring/position offset math, and the stepping.
+  2. **The double-step anomaly** — the canonical middle-rotor double-step is implemented and asserted
+     against a computed position trace (start ADU → ADV → AEW → BFX: the middle steps on two consecutive
+     keypresses, dragging the left rotor).
+  3. **Reciprocity / self-inverse** — over 2000+ random machine settings, enciphering a plaintext then
+     deciphering the ciphertext from the **same start** returns the original, exactly (the defining
+     Enigma property the reflector guarantees).
+  4. **No fixed point** — the famous weakness: across a large sweep, **no letter ever enciphers to
+     itself** (0 violations).
+  5. **Reciprocal lamp** — in any fixed machine state, if X lights Y then Y lights X (the permutation is
+     an involution); plugboard & reflector are involutions; all rotor wirings are valid permutations.
+  6. **Determinism + skin invariance** — identical settings ⇒ identical ciphertext, byte-for-byte; and
+     the cosmetic skin **never** changes a ciphertext (fingerprint identical across all three skins —
+     the workshop's "style only re-renders" invariant).
+- **Self-test core re-run under Node — 12/12 PASS** (the browser chip and the Node run agree), and the
+  lead independently re-audited the math from first principles in Node (**17 fresh assertions, 0
+  failed**: 3000-trial reciprocity round-trip, ~37k enciphered letters with **0** fixed points, a
+  3000-state reciprocal-lamp involution sweep, `AAAAA→BDZGO`, the double-step trace, permutation/
+  involution validity, determinism). **Browser-verified end to end** (agent-browser, served origin, by
+  the build deputy AND re-confirmed by the lead): green 12/12 chip, the page's real `runSelfTest()`
+  re-run in-browser = 12/12, **0 console errors / 0 warnings / 0 page-errors**; typed a live message
+  (lamp lit, rotors stepped, path rendered), loaded the worked presets, switched all 3 skins
+  (ciphertext fingerprint `ff5adfbc` unchanged), did the reciprocity round-trip (ATTACKATDAWN → cipher
+  → back to ATTACKATDAWN), 2× PNG export valid (~1MB data-URL), `ws:seen:enigma=1` set, ~0.5 ms/keypress
+  (comfortable 60fps), reduced-motion honored.
+- **Two real bugs root-caused during the build.** (a) A test vector supplied in the brief (a purported
+  "ECSHL" worked example) was **wrong** — an exhaustive 26⁶ ring×start sweep under a correct engine
+  found *no* faithful Enigma producing it; the deputy validated the ring/stecker math against the
+  documented Aachen example instead (which the engine reproduces byte-for-byte) and replaced the bad
+  vector. (b) The first PNG export tainted the canvas in headless Chromium (an SVG `foreignObject`
+  taints even trivially → `SecurityError` on `toDataURL`); rewritten to paint the machine face directly
+  onto a 2-D canvas (the same canvas-native pattern Slipstick uses) so export always works.
+- **Wiring (front door UNTOUCHED — still the curated 9 cards, no new footer link).** Registered as a
+  new `SECRETS` row in `undercroft/index.html` (badge 🔐, accent `#9bb2c0`, riddle *"Give the scribe's
+  hidden hand a reckoner's wheels, and let it keep a secret."*, gated on `ws:seen:scriptorium ∧
+  ws:seen:slipstick`). Backlink `← the undercroft → index.html`. Drops `ws:seen:enigma` for future
+  hidden-world use (an Enigma trophy — e.g. "broke a message" — is a trivial future add). Spec
+  `ENIGMA.SPEC.md`.
+
 ## Build 6 — "The Almanac", a seeded book of days under a REAL sky (2026-06-12)
 
 Added `undercroft/almanac.html` (≈1080 lines of code; self-contained, zero-dep, no-network) — the
