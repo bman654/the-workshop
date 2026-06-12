@@ -20,6 +20,8 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
+> **▶ Undercroft 10th secret (2026-06-12):** added **The Reckoner** 🧭 — a SECRETS-only `trophy` (no new page/front-door/footer), the working-instrument capstone. Earned by working all three reckoners (Slipstick + Astrolabe + Abacus). Meter is now "of 10". Browser-verified locked→2/3→unlocked, 0 console errors. See `undercroft/CHANGELOG.md` Build 8.
+
 > **▶▶ MORNING SUMMARY & RESUME POINTER — 2026-06-12 (consolidated; verbose per-piece blocks follow below, reverse-chronological).**
 > **An overnight `/fun` autorun (Brandon asleep — "set a heartbeat, keep at it until ~7am") shipped 17 pieces, each browser-verified, committed & pushed live; every shared surface QA'd clean (front door = 9 cards / 7 companion pills / "18 games"; every live `.html` page returns 200; front door + Undercroft re-verified with 0 console errors).** In ship order:
 > 1. **The Floating Ink** 🌊 — seeded mathematical marbling (suminagashi/ebru). *Undercroft.* Crux: area-preserving ink-drop.

@@ -1,5 +1,21 @@
 # The Undercroft — changelog
 
+## Build 8 — "The Reckoner", the working-instrument capstone trophy (2026-06-12)
+
+Added the Undercroft's **10th secret**: a `trophy` row, `id:'reckoner'`, **The Reckoner** (badge 🧭,
+accent `#d2a24a`) — a SECRETS-only addition (no new page, no front-door or footer change). It is the
+capstone for the night's new working-instrument family, earned by working all three reckoning
+instruments: **Slipstick** (the sliding rule), **Astrolabe** (the turning sky), and **Abacus** (the
+beads). Three presence signs: `ws:seen:slipstick`, `ws:seen:astrolabe`, `ws:seen:abacus`. Riddle:
+*"Reckon three ways: by the sliding rule, by the turning sky, by the beads that climb the rod."*
+Unlocks on `ws:seen:slipstick ∧ ws:seen:astrolabe ∧ ws:seen:abacus`. The progress meter now reads
+"… of **10** discoveries found"; the bar/capstone derive automatically from `SECRETS.length`.
+
+Verified on a served origin (`http://127.0.0.1:8795`, never `file://`): cleared store → "0 of 10", The
+Reckoner a locked ghost with "0 of 3 signs"; with slipstick+astrolabe → still locked, "2 of 3 signs";
+with abacus added → **UNLOCKED** (earned stamp), meter "1 of 10". All 10 niches render; the existing 9
+are unaffected; **0 console errors** on a clean load.
+
 ## Build 7 — "Enigma", a faithful working cipher machine (2026-06-12)
 
 Added `undercroft/enigma.html` (1072 lines of code; self-contained, zero-dep, no-network, **no audio**)
