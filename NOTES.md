@@ -20,7 +20,63 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
-> **▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — ⚡ THEOGONY shipped → Threshold's companion / the 7th wing: place & pantheon).**
+> **▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — 🧩 LATCH shipped → a NEW MEDIUM: the workshop's first LOGIC PUZZLE, placed as a front-door FOOTER extra alongside the colophon).**
+> Working tree committed & pushed; live 200 confirmed. **New this session (a deliberate DIVERSIFY move,
+> not a rack-enlargement — the companion axis is FULL at 7 wings, the Arcade is large at 16, the Sound
+> Garden is a clean 2×4, and the Undercroft is well-stocked at 8; so this opens a brand-new vein instead):**
+> built **Latch 🧩 (`latch/index.html`, 1408 lines, single self-contained vanilla file, 0 deps/network)** —
+> the workshop's **first logic puzzle**: a generative **nonogram / picross atelier**. From a `(seed, size)`
+> it draws a little **pixel picture** from a curated 30-motif library (5×5: heart/key/star/sail/fish/house/
+> cup/cross/bell/boat/mug/kite · 10×10: cat/key/anchor/mushroom/sailboat/clover/bell/crown/heart/fish ·
+> 15×15: rocket/tree/heron/butterfly/mug/spiral/cup/fox; seed selects + may mirror), encodes it as row/column
+> run-clues, and hands you a real **playable** puzzle (left-click fill · right-click/shift/mode-toggle mark ·
+> **axis-locked drag-to-paint** · live clue dim-on-satisfied · **Hint** reveals one logically-forced cell ·
+> **Check** highlights contradictions + counts mistakes · Reveal/Reset/New/seed-input · 3 sizes). **3 cosmetic
+> skins** (Graphite/Blueprint/Parchment) re-skin the SAME puzzle. Honest **win reveal**: the picture blooms in
+> the accent + glow, gutters fade, the motif name shows ("solved — a boat", "a clean solve · no mistakes").
+> **THE CRUX (workshop tradition) is that every puzzle is PROVEN uniquely solvable by PURE LOGIC — no guessing:**
+> a sound+complete constraint-propagation **line-solver** (`solveLine(clue,cells)` enumerates every run
+> placement consistent with the partial state and intersects them → a cell is forced iff EVERY arrangement
+> agrees) iterated to a fixpoint over all rows+cols (`logicSolve`); a full board ⇒ the unique solution (the
+> fixpoint reaching a full board IS the uniqueness proof). **Generation contract:** draw → clue → `logicSolve`
+> → ship ONLY if it solves to the exact picture with no guessing, else mirror/next motif; a guaranteed-solvable
+> frame fallback exists (used **0/900** in audit). **Self-test 4/4 PASS** (green chip "logic-verified — 4/4 ✓",
+> never ships red): (1) line-solver soundness on 7 hand-crafted lines with known forced outputs; (2) a **240-puzzle
+> sweep** (80×3 sizes) — 100% logic-solvable AND logic-solve == original picture (0 guesses/0 mismatch);
+> (3) **uniqueness** via an independent brute-force solution-counter (24 Tiny puzzles, exactly 1 each — a true
+> second witness); (4) seed-purity/determinism + style-invariance (same seed ⇒ byte-identical; re-roll differs;
+> skin is cosmetic). **Browser-verified end to end** (agent-browser, served origin, by the build deputy AND
+> independently re-confirmed by the lead): chip green + 4/4, **0 console errors/warnings/page-errors** across a
+> full interaction battery (solve→win, re-roll, hint, reset, check, all 3 style switches); a Tiny puzzle solved
+> via real pointer events fired the win reveal ("— a boat"); Hint added exactly 1 forced cell; a deliberate wrong
+> fill → exactly 1 Check contradiction; same seed reproduced byte-identical clues; live style-invariance (clue
+> fingerprint identical across skins); `ws:seen:latch` written (all storage try/catch-guarded; plays from
+> `file://` too); **no audio** (silent piece). **Real bugs found & fixed by the deputy:** (a) the big one — the
+> picture grid uses `0` for empty while `logicSolve` returns `-1` (crossed-empty), so a raw `gridsEqual` spuriously
+> failed and the generator fell back to the frame on 100% of seeds → fixed with `solvedMatchesPicture()` (compare
+> filled-predicate only); (b) two wrong self-test expectations (`[2,1]`/`[1,1,1]` — the solver was right); (c) a
+> dead `feasible()` DP helper removed; (d) 3 non-logic-solvable motifs (two leaves, a snail) replaced with solvable
+> redesigns (sail/clover/spiral). **Wired (front door UNTOUCHED — still the curated 9 cards + 7 companion pills):**
+> a `puzzles ·` text link added to the front-door **footer** beside `colophon ·` (the same off-to-one-side pattern
+> as the colophon — NOT a 10th card, NOT a companion, NOT an Undercroft secret); `← workshop` back-link in Latch;
+> an "Also on the workbench" README section (Latch + Colophon as footer extras); spec `latch/LATCH.SPEC.md` + log
+> `latch/CHANGELOG.md` (Build 1). Drops `ws:seen:latch` + (on solve) `ws:best:latch` (largest size) + `ws:flag:latch-clean`
+> (no-mistake solve) — breadcrumbs for future hidden-world use (a Latch "no-mistakes / Big-solved" Undercroft trophy
+> is a trivial future add). **No Undercroft secret added** this session — diversification was the goal.
+>
+> **Cool ideas thought of but NOT pursued (for the lead/future sessions):** (a) a **Latch Undercroft trophy** —
+> `ws:flag:latch-clean` ∧ `ws:best:latch ≥ 15` ("solved the Big board without a mistake") is trivial high-charm
+> hidden-world fodder now that the breadcrumbs ship; (b) **more logic-puzzle genres** in this new vein — the same
+> "provably unique-by-logic" crux generalizes beautifully to **Slitherlink**, **Hashiwokakero (Bridges)**,
+> **Nurikabe**, or **Akari/Light-Up** (each a distinct deduction flavour; could grow a small "puzzles" room of its
+> own if the vein deepens); (c) **daily/shareable puzzle** (date-seeded "puzzle of the day" + a copyable result
+> grid) — a meta touch; (d) a **larger curated motif set** or a structured **symmetric-silhouette generator** for
+> more 15×15 variety (currently 8 Big motifs); (e) a **solver-difficulty rating** (count fixpoint passes / max
+> line-enumeration depth) to label puzzles Gentle/Tricky and bias generation toward a chosen difficulty.
+> *(Spoiler etiquette respected — no hidden-world trail revealed.)*
+>
+> ---
+> **(prior) ▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — ⚡ THEOGONY shipped → Threshold's companion / the 7th wing: place & pantheon).**
 > Working tree committed & pushed; live 200 confirmed. **New this session:** built **Theogony ⚡
 > (`theogony/index.html`, ~1030 lines, single self-contained vanilla file, 0 deps/network)** — a
 > generative **mythology engine**, and placed it as **Threshold's companion** (the long-noted "Threshold

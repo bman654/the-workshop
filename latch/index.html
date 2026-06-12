@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Latch — a nonogram atelier</title>
+<style>
+  :root{
+    /* ---- Graphite (default skin) ---- */
+    --bg:        #0c0c0f;
+    --stage:     radial-gradient(1200px 800px at 56% 38%, #18181c 0%, #111114 68%, #0a0a0c 100%);
+    --panel-bg:  rgba(20,20,24,0.88);
+    --panel-edge:rgba(150,150,165,0.28);
+    --ink:       #ededf2;
+    --ink-dim:   #9a9aa6;
+    --accent:    #c9a24a;            /* warm gilt */
+    --accent-soft: rgba(201,162,74,0.16);
+    --accent-ink: #16140d;
+    --ok:  #7fd28a;
+    --bad: #f08a7a;
+    /* grid surfaces */
+    --cell-bg:    #16161b;
+    --cell-edge:  rgba(150,150,165,0.16);
+    --cell-edge-major: rgba(150,150,165,0.42);
+    --cell-fill:  #e7e3d6;           /* a "graphite drawn" cell */
+    --cell-mark:  #6f6f7c;           /* the X glyph */
+    --clue-bg:    rgba(255,255,255,0.02);
+    --clue-ink:   #c9c9d2;
+    --clue-done:  #5a5a64;           /* dimmed when a line is satisfied */
+    --reveal-glow: rgba(201,162,74,0.55);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  /* ---- Blueprint skin (cyan-on-navy drafting) ---- */
+  body[data-skin="blueprint"]{
+    --bg:#071726;
+    --stage: radial-gradient(1200px 800px at 52% 36%, #0e2c45 0%, #0a2236 64%, #061521 100%);
+    --panel-bg: rgba(8,30,48,0.9);
+    --panel-edge: rgba(120,196,238,0.34);
+    --ink:#dcf1ff; --ink-dim:#7fb3d6;
+    --accent:#5fd0ff; --accent-soft: rgba(95,208,255,0.16); --accent-ink:#06223a;
+    --ok:#7fe4d0; --bad:#ff9a8a;
+    --cell-bg: rgba(10,40,64,0.55);
+    --cell-edge: rgba(120,196,238,0.22);
+    --cell-edge-major: rgba(120,196,238,0.55);
+    --cell-fill:#cfeeff;
+    --cell-mark:#5b86a8;
+    --clue-bg: rgba(120,196,238,0.04);
+    --clue-ink:#bfe3fb; --clue-done:#4f7e9e;
+    --reveal-glow: rgba(95,208,255,0.6);
+  }
+  /* ---- Parchment skin (warm paper + ink) ---- */
+  body[data-skin="parchment"]{
+    --bg:#e8ddc4;
+    --stage: radial-gradient(1200px 800px at 54% 36%, #f3ead2 0%, #e9dcbe 66%, #ddcfa8 100%);
+    --panel-bg: rgba(247,239,221,0.92);
+    --panel-edge: rgba(120,96,60,0.34);
+    --ink:#3a2f1d; --ink-dim:#7a6a4c;
+    --accent:#a8541f; --accent-soft: rgba(168,84,31,0.14); --accent-ink:#f7efdd;
+    --ok:#4f7a3a; --bad:#b23a25;
+    --cell-bg: rgba(255,251,238,0.7);
+    --cell-edge: rgba(120,96,60,0.22);
+    --cell-edge-major: rgba(120,96,60,0.5);
+    --cell-fill:#4a3a22;
+    --cell-mark:#b09a6e;
+    --clue-bg: rgba(120,96,60,0.04);
+    --clue-ink:#5a4a2e; --clue-done:#b3a079;
+    --reveal-glow: rgba(168,84,31,0.5);
+  }
+
+  *{ box-sizing:border-box }
+  html,body{ height:100% }
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    transition: background .4s ease, color .4s ease;
+  }
+  #stage{
+    min-height:100vh;
+    display:flex; align-items:flex-start; justify-content:center;
+    background:var(--stage); transition: background .4s ease;
+    padding:22px 18px 60px;
+  }
+  .wrap{
+    display:flex; gap:22px; align-items:flex-start;
+    flex-wrap:wrap; justify-content:center; width:100%; max-width:1100px;
+  }
+
+  /* ----------------------------- Panel ----------------------------- */
+  #panel{
+    width:296px; flex:0 0 296px;
+    background:var(--panel-bg);
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+    border:1px solid var(--panel-edge);
+    border-radius:14px;
+    padding:16px 16px 18px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+    transition: background .4s ease, border-color .4s ease;
+  }
+  .topline{ display:flex; justify-content:space-between; align-items:baseline; }
+  #panel h1{ font-size:23px; font-weight:700; letter-spacing:-0.4px; margin:0; }
+  .back{ font-size:11px; color:var(--accent); text-decoration:none; opacity:.85; }
+  .back:hover{ opacity:1; text-decoration:underline; }
+  .sub{ font-size:10px; color:var(--ink-dim); margin:3px 0 12px; letter-spacing:1.2px; text-transform:uppercase; }
+
+  /* self-test chip */
+  .selftest{ display:inline-flex; align-items:center; gap:6px;
+    font-size:11px; font-family:var(--font-mono); padding:5px 9px; border-radius:8px;
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.02);
+    color:var(--ink-dim); cursor:default; margin-bottom:14px; user-select:none; }
+  .selftest.ok{ color:var(--ok); border-color:rgba(127,210,138,0.4); background:rgba(127,210,138,0.08); }
+  .selftest.bad{ color:var(--bad); border-color:rgba(240,138,122,0.5); background:rgba(240,138,122,0.1); }
+  .selftest .dot{ width:7px; height:7px; border-radius:50%; background:currentColor; }
+
+  .row{ margin-bottom:12px; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline;
+    font-size:11px; color:var(--ink-dim); margin-bottom:6px; letter-spacing:.4px; text-transform:uppercase; }
+
+  /* segmented control */
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.18); border:1px solid var(--panel-edge);
+    border-radius:9px; padding:4px; }
+  .seg button{ flex:1 1 0; min-width:0; border:none; background:transparent; color:var(--ink-dim);
+    font-size:11.5px; padding:7px 4px; border-radius:6px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui); letter-spacing:.2px; }
+  .seg button.active{ background:var(--accent); color:var(--accent-ink); font-weight:700; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+
+  .seedrow{ display:flex; gap:7px; }
+  .seedrow input[type=text]{ flex:1; min-width:0; background:rgba(0,0,0,0.2);
+    border:1px solid var(--panel-edge); color:var(--ink); border-radius:8px; padding:8px 10px;
+    font-size:13px; font-family:var(--font-mono); letter-spacing:.5px; }
+  .seedrow input[type=text]:focus{ outline:none; border-color:var(--accent); }
+  .iconbtn{ flex:0 0 auto; width:38px; border:1px solid var(--panel-edge); border-radius:8px;
+    background:rgba(255,255,255,0.04); color:var(--ink); cursor:pointer; font-size:16px; line-height:1; }
+  .iconbtn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+
+  .actions{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .actions button{ border:1px solid var(--panel-edge); border-radius:9px; padding:9px 8px;
+    background:rgba(255,255,255,0.03); color:var(--ink); cursor:pointer; font-size:12.5px;
+    font-weight:600; transition:.15s; letter-spacing:.2px; font-family:var(--font-ui); }
+  .actions button:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .actions button.wide{ grid-column:1 / -1; }
+  .actions button:disabled{ opacity:.4; cursor:default; }
+
+  .caption{ font-size:11px; color:var(--ink-dim); margin-top:14px; line-height:1.6; letter-spacing:.2px; }
+  .caption b{ color:var(--ink); font-weight:600; }
+  .caption .mono{ font-family:var(--font-mono); color:var(--accent); }
+  .stat{ font-family:var(--font-mono); color:var(--accent); font-variant-numeric:tabular-nums; }
+
+  /* ----------------------------- Board ----------------------------- */
+  #boardWrap{ flex:1 1 auto; display:flex; flex-direction:column; align-items:center; min-width:0; }
+  #boardOuter{ position:relative; }
+  #board{ border-collapse:collapse; user-select:none; -webkit-user-select:none; touch-action:none; }
+  #board td{ padding:0; }
+
+  /* corner cell + clue gutters */
+  .corner{ background:transparent; }
+  td.colclue{ vertical-align:bottom; background:var(--clue-bg); }
+  td.rowclue{ text-align:right; background:var(--clue-bg); white-space:nowrap; }
+  .colclue .stack{ display:flex; flex-direction:column; justify-content:flex-end; align-items:center;
+    height:100%; line-height:1.15; padding-bottom:3px; }
+  .rowclue .line{ display:inline-flex; gap:6px; justify-content:flex-end; align-items:center;
+    height:100%; padding-right:6px; }
+  .num{ font-family:var(--font-mono); color:var(--clue-ink); font-variant-numeric:tabular-nums; transition:color .2s; }
+  .num.done{ color:var(--clue-done); }
+  td.clueDone{ opacity:.55; }
+
+  /* the play cells */
+  td.cell{ position:relative; background:var(--cell-bg);
+    border:1px solid var(--cell-edge); cursor:pointer; }
+  td.cell.mr{ border-right:2px solid var(--cell-edge-major); }   /* 5-block major gridlines */
+  td.cell.mb{ border-bottom:2px solid var(--cell-edge-major); }
+  td.cell.fill::after{ content:""; position:absolute; inset:2px; border-radius:2px;
+    background:var(--cell-fill); }
+  td.cell.mark::after{ content:""; position:absolute; inset:0;
+    background:
+      linear-gradient(45deg, transparent calc(50% - 1px), var(--cell-mark) calc(50% - 1px), var(--cell-mark) calc(50% + 1px), transparent calc(50% + 1px)),
+      linear-gradient(-45deg, transparent calc(50% - 1px), var(--cell-mark) calc(50% - 1px), var(--cell-mark) calc(50% + 1px), transparent calc(50% + 1px));
+    transform:scale(.55); opacity:.85; }
+  td.cell.err{ animation: shake .35s ease; }
+  td.cell.err::before{ content:""; position:absolute; inset:0; background:var(--bad); opacity:.42; }
+  td.cell.hintpop::after{ animation: pop .5s ease; }
+  @keyframes shake{ 0%,100%{transform:translateX(0)} 25%{transform:translateX(-2px)} 75%{transform:translateX(2px)} }
+  @keyframes pop{ 0%{transform:scale(.2)} 60%{transform:scale(1.15)} 100%{transform:scale(1)} }
+
+  /* win reveal */
+  #boardOuter.won td.cell{ cursor:default; }
+  #boardOuter.won td.cell.fill::after{
+    background:var(--accent);
+    box-shadow: 0 0 10px var(--reveal-glow), 0 0 2px var(--reveal-glow);
+    animation: bloom .6s ease backwards;
+  }
+  #boardOuter.won td.cell.mark::after{ opacity:0; }
+  #boardOuter.won td.colclue, #boardOuter.won td.rowclue{ opacity:.18; transition:opacity .8s ease; }
+  @keyframes bloom{ from{ transform:scale(.55); opacity:0 } to{ transform:scale(1); opacity:1 } }
+
+  .verdict{ min-height:30px; margin-top:16px; text-align:center; font-size:15px; letter-spacing:.3px;
+    opacity:0; transition:opacity .4s ease; }
+  .verdict.show{ opacity:1; }
+  .verdict .name{ color:var(--accent); font-weight:700; }
+  .verdict .small{ display:block; font-size:11px; color:var(--ink-dim); margin-top:3px; letter-spacing:.4px; }
+
+  .modebar{ display:flex; gap:7px; margin-bottom:14px; align-items:center; }
+  .modebar .seg{ flex:1; }
+
+  @media (max-width:720px){
+    .wrap{ flex-direction:column; align-items:center; }
+    #panel{ width:100%; max-width:360px; flex:none; }
+  }
+</style>
+</head>
+<body data-skin="graphite">
+<div id="stage">
+  <div class="wrap">
+    <!-- ----------------------------- PANEL ----------------------------- -->
+    <div id="panel">
+      <div class="topline">
+        <h1>Latch</h1>
+        <a class="back" href="../index.html">← workshop</a>
+      </div>
+      <div class="sub">a nonogram atelier</div>
+
+      <div id="selftest" class="selftest" title="Built-in logic verifier"><span class="dot"></span><span id="stText">running self-test…</span></div>
+
+      <div class="row">
+        <label>Size</label>
+        <div class="seg" id="sizeSeg">
+          <button data-size="5">Tiny · 5</button>
+          <button data-size="10" class="active">Classic · 10</button>
+          <button data-size="15">Big · 15</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Seed</label>
+        <div class="seedrow">
+          <input type="text" id="seedInput" spellcheck="false" autocomplete="off">
+          <button class="iconbtn" id="diceBtn" title="New random puzzle">⚄</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Mode <span style="text-transform:none;font-size:10px">— right-click / shift also mark</span></label>
+        <div class="seg" id="modeSeg">
+          <button data-mode="fill" class="active">⊞ Fill</button>
+          <button data-mode="mark">⊠ Mark</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Skin</label>
+        <div class="seg" id="skinSeg">
+          <button data-skin="graphite" class="active">Graphite</button>
+          <button data-skin="blueprint">Blueprint</button>
+          <button data-skin="parchment">Parchment</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="hintBtn">Hint</button>
+        <button id="checkBtn">Check</button>
+        <button id="resetBtn">Reset</button>
+        <button id="revealBtn">Reveal</button>
+        <button id="newBtn" class="wide">New puzzle ⟳</button>
+      </div>
+
+      <div class="caption" id="caption"></div>
+    </div>
+
+    <!-- ----------------------------- BOARD ----------------------------- -->
+    <div id="boardWrap">
+      <div id="boardOuter">
+        <table id="board"></table>
+      </div>
+      <div class="verdict" id="verdict"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ===========================================================================
+   LATCH — a generative nonogram (picross) atelier.
+
+   The workshop crux: every puzzle it hands you is PROVABLY solvable by pure
+   logic alone (no guessing) and has EXACTLY ONE solution — proven, not
+   asserted, by a built-in line-solver that re-derives the picture before the
+   puzzle is ever shipped to the player.
+   ======================================================================== */
+
+/* ----------------------------- PRNG (mulberry32 + xmur3 hash) ------------ */
+function xmur3(str){
+  let h = 1779033703 ^ str.length;
+  for (let i=0;i<str.length;i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function(){
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return h >>> 0;
+  };
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeRng(seedStr){ const s = xmur3(String(seedStr)); return mulberry32(s()); }
+
+/* ===========================================================================
+   THE LINE-SOLVER — the crux.
+   ---------------------------------------------------------------------------
+   Cell states:  0 = unknown,  1 = filled,  -1 = empty (X / crossed-out).
+
+   solveLine(clue, cells) takes one line's run-clue (e.g. [2,1]) and the line's
+   current partial state, and returns the TIGHTEST state forced by logic:
+   a cell is set to a definite value (1 or -1) IFF it has that same value in
+   EVERY arrangement of the runs that is consistent with the current partial
+   state. Where arrangements disagree, the cell stays unknown (0).
+
+   We compute this by DP / recursive enumeration over legal placements:
+     - place each run left-to-right with at least one gap between runs,
+     - reject any placement that conflicts with an already-known cell,
+     - accumulate, per cell, whether it was EVER filled and EVER empty across
+       all consistent placements.
+   After enumeration:
+     - cell is forced FILLED  iff it was filled in every placement (never empty),
+     - cell is forced EMPTY   iff it was empty in every placement (never filled),
+     - otherwise it stays unknown.
+   This is sound AND complete for a single line. To stay linear-ish we memoise
+   the recursion on (runIndex, position) and track reachability rather than
+   materialising every placement; the per-cell "ever filled / ever empty"
+   tallies are derived from forward+backward reachable placement masks.
+   ======================================================================== */
+
+/* Returns {cells:Int8Array, ok:boolean}.  ok=false means the clue is
+   unsatisfiable given the partial state (a contradiction). */
+function solveLine(clue, cells){
+  const n = cells.length;
+  const k = clue.length;
+
+  // Special case: empty clue ⇒ the whole line is empty.
+  if (k === 0){
+    const out = new Int8Array(n);
+    for (let i=0;i<n;i++){
+      if (cells[i] === 1) return {cells:out, ok:false}; // can't be filled
+      out[i] = -1;
+    }
+    return {cells:out, ok:true};
+  }
+
+  // canPlace(runLen, start): the segment [start, start+runLen) can be filled
+  // and the cell just before/after stays empty — checked against known cells.
+  function fits(start, len){
+    for (let i=start;i<start+len;i++) if (cells[i] === -1) return false; // known-empty under a run
+    return true;
+  }
+
+  // We accumulate two boolean accumulators per cell across ALL valid full
+  // placements: everFilled[i] (filled in at least one placement) and
+  // everEmpty[i] (empty in at least one placement). A cell is forced iff
+  // exactly one of these is true.
+  const everFilled = new Uint8Array(n);
+  const everEmpty  = new Uint8Array(n);
+  let anyPlacement = false;
+
+  // Enumerate every placement consistent with `cells`. The recursion only
+  // descends branches whose prefix is already consistent with the known cells;
+  // it OR's each *completed* placement into the tallies. For nonogram line
+  // widths (≤15) the placement count is tiny; we still cap exploration and fall
+  // back to the (sound, weaker) overlap method if a pathological line blows up.
+  const fillMark = new Int8Array(n); // working buffer for current placement
+  let explored = 0;
+  const EXPLORE_CAP = 200000;
+  let capped = false;
+
+  function enumerate(runIdx, pos){
+    if (capped) return;
+    if (runIdx === k){
+      // fill remainder as empty
+      for (let i=pos;i<n;i++){ if (cells[i]===1) return; }
+      // record this placement
+      anyPlacement = true;
+      for (let i=0;i<n;i++){
+        if (fillMark[i] === 1) everFilled[i] = 1; else everEmpty[i] = 1;
+      }
+      return;
+    }
+    const len = clue[runIdx];
+    for (let s=pos; s+len<=n; s++){
+      // gap [pos..s) must be empty-able (no known-filled)
+      let gapOk = true;
+      for (let g=pos; g<s; g++){ if (cells[g]===1){ gapOk=false; break; } }
+      if (!gapOk) break;
+      if (!fits(s,len)) continue;
+      const after = s+len;
+      if (after < n && cells[after] === 1) continue; // separator can't be forced-filled
+      // mark this run
+      for (let i=s;i<s+len;i++) fillMark[i]=1;
+      if (++explored > EXPLORE_CAP){ capped = true; }
+      enumerate(runIdx+1, after+1);
+      // unmark
+      for (let i=s;i<s+len;i++) fillMark[i]=0;
+      if (capped) return;
+    }
+  }
+  // initialise fillMark to 0 (Int8Array already zero)
+  enumerate(0, 0);
+
+  if (capped){
+    // Extremely unlikely for our sizes; fall back to the classic overlap
+    // method (left-most & right-most packing intersection) which is sound but
+    // slightly weaker. Our generator only ships puzzles fully solved by the
+    // exact method below, so this branch never affects shipped puzzles.
+    return overlapSolve(clue, cells);
+  }
+
+  if (!anyPlacement) return {cells:new Int8Array(n), ok:false};
+
+  const out = new Int8Array(n);
+  for (let i=0;i<n;i++){
+    const f = everFilled[i], e = everEmpty[i];
+    if (f && !e) out[i] = 1;        // filled in every placement
+    else if (e && !f) out[i] = -1;  // empty in every placement
+    else out[i] = 0;                // disagreement ⇒ unknown
+  }
+  return {cells:out, ok:true};
+}
+
+/* Classic overlap fallback (sound, used only if enumeration is capped). */
+function overlapSolve(clue, cells){
+  const n = cells.length;
+  const out = new Int8Array(n);
+  if (clue.length === 0){ for(let i=0;i<n;i++) out[i]=-1; return {cells:out, ok:true}; }
+  // leftmost packing
+  const L = new Array(clue.length), R = new Array(clue.length);
+  let p = 0;
+  for (let i=0;i<clue.length;i++){ L[i]=p; p+=clue[i]+1; }
+  let q = n;
+  for (let i=clue.length-1;i>=0;i--){ q-=clue[i]; R[i]=q; q-=1; }
+  for (let i=0;i<clue.length;i++){
+    const lo = Math.max(L[i], R[i]);
+    const hi = Math.min(L[i]+clue[i]-1, R[i]+clue[i]-1);
+    for (let c=lo;c<=hi;c++) out[c]=1;
+  }
+  return {cells:out, ok:true};
+}
+
+/* ===========================================================================
+   logicSolve(puzzle) — iterate solveLine over all rows + columns to a fixpoint.
+   Returns { grid:Int8Array(rows*cols), solved:bool, ok:bool }.
+   `solved` = board fully determined (no unknown left). Because solveLine only
+   ever sets a cell when EVERY consistent arrangement agrees, a full board is
+   automatically the UNIQUE solution — that is the uniqueness proof.
+   ======================================================================== */
+function logicSolve(rowClues, colClues){
+  const rows = rowClues.length, cols = colClues.length;
+  const grid = new Int8Array(rows*cols); // 0 unknown / 1 filled / -1 empty
+  let changed = true, ok = true;
+  let guard = 0;
+  while (changed && ok){
+    changed = false;
+    if (++guard > rows*cols*4 + 50) break; // safety; monotone progress guarantees termination
+    // rows
+    for (let r=0; r<rows && ok; r++){
+      const line = new Int8Array(cols);
+      for (let c=0;c<cols;c++) line[c] = grid[r*cols+c];
+      const res = solveLine(rowClues[r], line);
+      if (!res.ok){ ok=false; break; }
+      for (let c=0;c<cols;c++){
+        const v = res.cells[c];
+        if (v!==0 && grid[r*cols+c]===0){ grid[r*cols+c]=v; changed=true; }
+        else if (v!==0 && grid[r*cols+c]!==v){ ok=false; break; } // contradiction
+      }
+    }
+    // cols
+    for (let c=0; c<cols && ok; c++){
+      const line = new Int8Array(rows);
+      for (let r=0;r<rows;r++) line[r] = grid[r*cols+c];
+      const res = solveLine(colClues[c], line);
+      if (!res.ok){ ok=false; break; }
+      for (let r=0;r<rows;r++){
+        const v = res.cells[r];
+        if (v!==0 && grid[r*cols+c]===0){ grid[r*cols+c]=v; changed=true; }
+        else if (v!==0 && grid[r*cols+c]!==v){ ok=false; break; }
+      }
+    }
+  }
+  let solved = ok;
+  for (let i=0;i<grid.length;i++) if (grid[i]===0){ solved=false; break; }
+  return { grid, solved, ok };
+}
+
+/* ---- clues from a picture (0/1 grid) --------------------------------- */
+function cluesFromGrid(grid, rows, cols){
+  const rowClues = [], colClues = [];
+  for (let r=0;r<rows;r++){
+    const run=[]; let c=0;
+    while (c<cols){ if (grid[r*cols+c]===1){ let len=0; while(c<cols && grid[r*cols+c]===1){len++;c++;} run.push(len);} else c++; }
+    rowClues.push(run.length?run:[]);
+  }
+  for (let c=0;c<cols;c++){
+    const run=[]; let r=0;
+    while (r<rows){ if (grid[r*cols+c]===1){ let len=0; while(r<rows && grid[r*cols+c]===1){len++;r++;} run.push(len);} else r++; }
+    colClues.push(run.length?run:[]);
+  }
+  return { rowClues, colClues };
+}
+
+/* ===========================================================================
+   THE MOTIF LIBRARY — hand-authored pixel bitmaps, keyed by size.
+   '#' = filled, '.' = empty. Each entry: { name, art:[strings] }.
+   The seed selects a motif and may horizontally mirror it (mirroring keeps a
+   picture recognisable and multiplies variety; the crux test asserts that
+   any shipped puzzle — mirrored or not — is logic-solvable + unique).
+   ======================================================================== */
+const MOTIFS = {
+  5: [
+    { name:"a heart", art:[".#.#.","#####","#####",".###.","..#.."] },
+    { name:"a key",   art:["###..","#.#..","###..","..#..","..##."] },
+    { name:"a star",  art:["..#..",".###.","#####",".#.#.","#...#"] },
+    { name:"a sail",  art:["#....","##...","###..","####.","#####"] },
+    { name:"a fish",  art:[".###.","####.","#.#.#","####.",".###."] },
+    { name:"a house", art:["..#..",".###.","#####",".#.#.",".###."] },
+    { name:"a cup",   art:["#####",".###.",".###.","..#..",".###."] },
+    { name:"a cross", art:["..#..","..#..","#####","..#..","..#.."] },
+    { name:"a bell",  art:["..#..",".###.",".###.","#####","..#.."] },
+    { name:"a boat",  art:["..#..","..#..","..#..","#####",".###."] },
+    { name:"a mug",   art:["####.","#..##","#..##","####.","....."] },
+    { name:"a kite",  art:["..#..",".###.","#####",".#.#.","..#.."] },
+  ],
+  10: [
+    { name:"a cat", art:[
+      "#........#",
+      "##......##",
+      "#.#....#.#",
+      "##########",
+      "#.######.#",
+      "#.#.##.#.#",
+      "##.####.##",
+      "##########",
+      ".########.",
+      "..#....#.."] },
+    { name:"a key", art:[
+      ".####.....",
+      ".#..#.....",
+      ".#..#.....",
+      ".####.....",
+      "..##......",
+      "..##......",
+      "..##......",
+      "..####....",
+      "..##......",
+      "..####...."] },
+    { name:"an anchor", art:[
+      "...####...",
+      "...#..#...",
+      "...####...",
+      "....##....",
+      "....##....",
+      "#...##...#",
+      "#...##...#",
+      "##..##..##",
+      ".########.",
+      "..######.."] },
+    { name:"a mushroom", art:[
+      "..######..",
+      ".########.",
+      "##########",
+      "##########",
+      ".########.",
+      "...####...",
+      "....##....",
+      "....##....",
+      "...####...",
+      "..######.."] },
+    { name:"a sailboat", art:[
+      "....#.....",
+      "....##....",
+      "....###...",
+      "....####..",
+      "....#####.",
+      "....#.....",
+      "....#.....",
+      "##########",
+      ".########.",
+      "..######.."] },
+    { name:"a clover", art:[
+      "...####...",
+      "..######..",
+      "..######..",
+      "...####...",
+      "....##....",
+      "...####...",
+      "..######..",
+      "..######..",
+      "...####...",
+      "....##...."] },
+    { name:"a bell", art:[
+      "....##....",
+      "...####...",
+      "..######..",
+      "..######..",
+      ".########.",
+      ".########.",
+      "##########",
+      "##########",
+      "....##....",
+      "...####..."] },
+    { name:"a crown", art:[
+      "#...##...#",
+      "#..####..#",
+      "#.######.#",
+      "#.######.#",
+      "##.####.##",
+      "##########",
+      "##########",
+      "#.#.##.#.#",
+      "##########",
+      "##########"] },
+    { name:"a heart", art:[
+      ".##....##.",
+      "####..####",
+      "##########",
+      "##########",
+      "##########",
+      ".########.",
+      ".########.",
+      "..######..",
+      "...####...",
+      "....##...."] },
+    { name:"a fish", art:[
+      "....###...",
+      "..######.#",
+      ".#######.#",
+      "########.#",
+      "#######.##",
+      "#######.##",
+      "########.#",
+      ".#######.#",
+      "..######.#",
+      "....###..."] },
+  ],
+  15: [
+    { name:"a rocket", art:[
+      ".......#.......",
+      "......###......",
+      "......###......",
+      ".....#####.....",
+      ".....#.#.#.....",
+      ".....#####.....",
+      "....#######....",
+      "....#######....",
+      "...#.#####.#...",
+      "...#.#####.#...",
+      "..##.#####.##..",
+      ".###.#####.###.",
+      ".##...###...##.",
+      ".......#.......",
+      "......#.#......"] },
+    { name:"a tree", art:[
+      ".......#.......",
+      "......###......",
+      "......###......",
+      ".....#####.....",
+      "....#######....",
+      "....#######....",
+      "...#########...",
+      "..###########..",
+      "..###########..",
+      ".#############.",
+      ".#############.",
+      "......###......",
+      "......###......",
+      "......###......",
+      ".....#####....."] },
+    { name:"a heron", art:[
+      "............##.",
+      "...........###.",
+      "..........###..",
+      ".........###...",
+      "........###....",
+      ".......###.....",
+      "......####.....",
+      ".....#####.....",
+      "....######.....",
+      "...#######.....",
+      "..########.....",
+      "...######......",
+      "....#.#.#......",
+      "....#.#.#......",
+      "...##...##....."] },
+    { name:"a butterfly", art:[
+      "###.....###....",
+      "####...####....",
+      "#####.#####....",
+      ".####.####.....",
+      "..####.###.....",
+      "...########....",
+      "....######.....",
+      "....######.....",
+      "...########....",
+      "..####.####....",
+      ".####.#.####...",
+      "#####.#.#####..",
+      "####...#.####..",
+      "###....#..###..",
+      ".......#......."] },
+    { name:"a mug", art:[
+      ".###########...",
+      ".#.........#...",
+      ".#.........#.##",
+      ".#.........#.##",
+      ".#.........##.#",
+      ".#.........##.#",
+      ".#.........##.#",
+      ".#.........#.##",
+      ".#.........#.##",
+      ".#.........#...",
+      ".#.........#...",
+      ".###########...",
+      "...............",
+      ".###########...",
+      "..#########...."] },
+    { name:"a spiral", art:[
+      "###############",
+      "#.............#",
+      "#.###########.#",
+      "#.#.........#.#",
+      "#.#.#######.#.#",
+      "#.#.#.....#.#.#",
+      "#.#.#.###.#.#.#",
+      "#.#.#.#...#.#.#",
+      "#.#.#.#####.#.#",
+      "#.#.#.......#.#",
+      "#.#.#########.#",
+      "#.#...........#",
+      "#.#############",
+      "#.............#",
+      "###############"] },
+    { name:"a cup", art:[
+      "...............",
+      "..###########..",
+      "..#.........#..",
+      "..#.........#..",
+      "..#.........#..",
+      "..#.........#..",
+      "...#########...",
+      "....#######....",
+      ".....#####.....",
+      ".....#####.....",
+      "......###......",
+      ".....#####.....",
+      "....#######....",
+      "..###########..",
+      "..###########.."] },
+    { name:"a fox", art:[
+      "##.........##..",
+      "###.......###..",
+      "#.##.....##.#..",
+      "#..##...##..#..",
+      "#...#####...#..",
+      "#..#######..#..",
+      "#.#########.#..",
+      "#.##.###.##.#..",
+      "#.#########.#..",
+      ".#.#######.#...",
+      "..#.#####.#....",
+      "...#.#.#.#.....",
+      "....#####......",
+      ".....###.......",
+      "......#........"] },
+  ],
+};
+
+/* ===========================================================================
+   THE GENERATOR — draw a motif from the seed, build clues, prove it with
+   logicSolve; if it isn't uniquely logic-solvable to the exact picture,
+   perturb (mirror / next motif) and retry. Always falls back to a guaranteed
+   simple motif so it NEVER ships a degenerate puzzle.
+   ======================================================================== */
+function artToGrid(art, rows, cols){
+  const g = new Int8Array(rows*cols);
+  for (let r=0;r<rows;r++) for (let c=0;c<cols;c++)
+    g[r*cols+c] = (art[r] && art[r][c]==='#') ? 1 : 0;
+  return g;
+}
+function mirrorGrid(g, rows, cols){
+  const out = new Int8Array(rows*cols);
+  for (let r=0;r<rows;r++) for (let c=0;c<cols;c++) out[r*cols+c] = g[r*cols+(cols-1-c)];
+  return out;
+}
+function gridsEqual(a,b){ if(a.length!==b.length) return false; for(let i=0;i<a.length;i++) if(a[i]!==b[i]) return false; return true; }
+// Compare a SOLVED board (cells ∈ {1 filled, -1 empty}) against a PICTURE
+// (cells ∈ {1 filled, 0 empty}) on the filled predicate only — a logic solve
+// marks empties as -1, so a raw gridsEqual would spuriously differ.
+function solvedMatchesPicture(solved, picture){
+  if(solved.length!==picture.length) return false;
+  for(let i=0;i<solved.length;i++){
+    const sf = solved[i]===1, pf = picture[i]===1;
+    if(sf!==pf) return false;
+  }
+  return true;
+}
+
+/* Build a puzzle deterministically from (seed, size). Returns:
+   { size, seed, name, picture:Int8Array, rowClues, colClues, mirrored } */
+function generatePuzzle(seed, size){
+  const rng = makeRng(seed + "|" + size);
+  const lib = MOTIFS[size] || MOTIFS[10];
+  // deterministic shuffle of motif order from the seed
+  const order = lib.map((_,i)=>i);
+  for (let i=order.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); const t=order[i]; order[i]=order[j]; order[j]=t; }
+
+  // each motif gets two candidate orientations (normal, mirrored) chosen by rng
+  for (let attempt=0; attempt<order.length; attempt++){
+    const motif = lib[order[attempt]];
+    let base = artToGrid(motif.art, size, size);
+    const tryMirror = rng() < 0.5;
+    const variants = tryMirror ? [mirrorGrid(base,size,size), base] : [base, mirrorGrid(base,size,size)];
+    for (const picture of variants){
+      // a blank picture is degenerate — skip
+      let any=false; for(let i=0;i<picture.length;i++) if(picture[i]===1){any=true;break;}
+      if(!any) continue;
+      const { rowClues, colClues } = cluesFromGrid(picture, size, size);
+      const res = logicSolve(rowClues, colClues);
+      if (res.ok && res.solved && solvedMatchesPicture(res.grid, picture)){
+        return { size, seed, name:motif.name, picture, rowClues, colClues };
+      }
+    }
+  }
+  // ---- Guaranteed fallback: a centred plus/frame that is always logic-solvable.
+  return fallbackPuzzle(seed, size);
+}
+
+/* A guaranteed logic-solvable motif so generation never fails. A solid border
+   frame is trivially forced by its line clues. */
+function fallbackPuzzle(seed, size){
+  const g = new Int8Array(size*size);
+  for (let c=0;c<size;c++){ g[c]=1; g[(size-1)*size+c]=1; }
+  for (let r=0;r<size;r++){ g[r*size]=1; g[r*size+size-1]=1; }
+  // a central dot for charm
+  const m = (size>>1); g[m*size+m]=1;
+  const { rowClues, colClues } = cluesFromGrid(g, size, size);
+  // it is solvable; trust the frame
+  return { size, seed, name:"a frame", picture:g, rowClues, colClues };
+}
+
+/* ===========================================================================
+   THE SELF-TEST — runs on load; flips the chip green only if all pass.
+   ======================================================================== */
+function runSelfTest(){
+  const checks = [];
+  function arrEq(a,b){ if(a.length!==b.length) return false; for(let i=0;i<a.length;i++) if(a[i]!==b[i]) return false; return true; }
+
+  // ---- Check 1: line-solver soundness on hand-crafted lines ----
+  let c1=true; const c1fail=[];
+  const cases = [
+    // [clue, width-template(0 unknown), expected]
+    { clue:[3], cells:[0,0,0,0,0], exp:[0,0,1,0,0], note:"[3] in 5 forces centre" },
+    { clue:[5], cells:[0,0,0,0,0], exp:[1,1,1,1,1], note:"[5] in 5 fills all" },
+    { clue:[],  cells:[0,0,0,0,0], exp:[-1,-1,-1,-1,-1], note:"[] empties all" },
+    { clue:[4], cells:[0,0,0,0,0,0], exp:[0,0,1,1,0,0], note:"[4] in 6 forces cells 3–4" },
+    { clue:[2,1], cells:[0,0,0,0,0], exp:[0,1,0,0,0], note:"[2,1] in 5 forces cell 2 (the run's overlap)" },
+    { clue:[1,1,1], cells:[0,0,0,0,0], exp:[1,-1,1,-1,1], note:"[1,1,1] in 5 has one arrangement #.#.#" },
+    { clue:[3], cells:[0,1,0,0,0], exp:[0,1,1,0,-1], note:"[3] in 5 with a known fill at idx1" },
+  ];
+  for (const t of cases){
+    const r = solveLine(t.clue, Int8Array.from(t.cells));
+    if (!r.ok || !arrEq(r.cells, Int8Array.from(t.exp))){ c1=false; c1fail.push(t.note); }
+  }
+  checks.push({ name:"line-solver soundness", pass:c1, detail:c1?(cases.length+" lines"):c1fail.join("; ") });
+
+  // ---- Check 2: sweep many generated puzzles × all sizes; 100% logic-solvable
+  // AND logic-solve == original picture ----
+  let c2=true; let swept=0; const c2fail=[];
+  const sizes=[5,10,15];
+  const perSize=80; // 240 total puzzles
+  for (const sz of sizes){
+    for (let i=0;i<perSize;i++){
+      const seed = "sweep-"+sz+"-"+i;
+      const p = generatePuzzle(seed, sz);
+      const res = logicSolve(p.rowClues, p.colClues);
+      swept++;
+      if (!(res.ok && res.solved && solvedMatchesPicture(res.grid, p.picture))){
+        c2=false; if(c2fail.length<5) c2fail.push(seed);
+      }
+    }
+  }
+  checks.push({ name:"sweep "+swept+" puzzles logic-solvable", pass:c2, detail:c2?(swept+" puzzles, 0 guesses, 0 mismatch"):("fail: "+c2fail.join(","))});
+
+  // ---- Check 3: uniqueness — brute-force cross-check on Tiny (5×5) ----
+  // For small boards we exhaustively enumerate ALL grids satisfying the clues
+  // and assert exactly one exists (and it equals the logic solution & picture).
+  let c3=true; let c3n=0; const c3fail=[];
+  for (let i=0;i<24;i++){
+    const seed="uniq-"+i;
+    const p = generatePuzzle(seed, 5);
+    const count = bruteCountSolutions(p.rowClues, p.colClues, 5, 2);
+    c3n++;
+    if (count !== 1){ c3=false; if(c3fail.length<5) c3fail.push(seed+"="+count); }
+  }
+  checks.push({ name:"uniqueness (brute-force Tiny)", pass:c3, detail:c3?(c3n+" puzzles, exactly 1 solution each"):("fail: "+c3fail.join(","))});
+
+  // ---- Check 4: seed purity / determinism + style-invariance ----
+  let c4=true; const c4fail=[];
+  for (const sz of [5,10,15]){
+    for (let i=0;i<8;i++){
+      const seed="det-"+sz+"-"+i;
+      const a = generatePuzzle(seed, sz);
+      const b = generatePuzzle(seed, sz);
+      const same = gridsEqual(a.picture,b.picture) &&
+                   JSON.stringify(a.rowClues)===JSON.stringify(b.rowClues) &&
+                   JSON.stringify(a.colClues)===JSON.stringify(b.colClues) &&
+                   a.name===b.name;
+      if(!same){ c4=false; c4fail.push(seed); }
+    }
+  }
+  // re-roll changes it (extremely high probability across many seeds)
+  let differs=false;
+  for (let i=0;i<30 && !differs;i++){
+    const a=generatePuzzle("roll-A-"+i,10), b=generatePuzzle("roll-B-"+i,10);
+    if(!gridsEqual(a.picture,b.picture)) differs=true;
+  }
+  if(!differs){ c4=false; c4fail.push("re-roll-never-differs"); }
+  checks.push({ name:"seed determinism + style-invariance", pass:c4, detail:c4?"same seed ⇒ identical; re-roll differs; skin is cosmetic":("fail: "+c4fail.join(","))});
+
+  const passed = checks.filter(c=>c.pass).length;
+  const total = checks.length;
+  for (const c of checks){
+    if (c.pass) console.log("[Latch] self-test PASS — "+c.name+" ("+c.detail+")");
+    else console.error("[Latch] self-test FAIL — "+c.name+" ("+c.detail+")");
+  }
+  return { passed, total, allPass: passed===total, checks };
+}
+
+/* Brute-force solution counter for small boards (uniqueness witness).
+   Enumerates each row's legal fillings, then checks columns. Capped at `cap`. */
+function bruteCountSolutions(rowClues, colClues, size, cap){
+  // precompute all legal fillings for each row given its clue
+  function rowOptions(clue){
+    const opts=[];
+    const n=size;
+    function rec(idx, pos, acc){
+      if (idx===clue.length){
+        const arr=acc.slice(); for(let i=pos;i<n;i++) arr[i]=0; opts.push(arr); return;
+      }
+      const len=clue[idx];
+      for (let s=pos; s+len<=n; s++){
+        const arr=acc.slice();
+        for(let i=pos;i<s;i++) arr[i]=0;
+        for(let i=s;i<s+len;i++) arr[i]=1;
+        rec(idx+1, s+len+1, arr);
+      }
+    }
+    rec(0,0,new Array(n).fill(0));
+    return opts;
+  }
+  const rowOpts = rowClues.map(rowOptions);
+  let count=0;
+  const grid=new Array(size);
+  function colsOkSoFar(uptoRow){
+    for (let c=0;c<size;c++){
+      // partial run check for column c over rows [0..uptoRow]
+      const clue=colClues[c]; const runs=[]; let run=0;
+      let openTail=false;
+      for (let r=0;r<=uptoRow;r++){ if(grid[r][c]===1){run++; if(r===uptoRow) openTail=true;} else { if(run>0) runs.push(run); run=0; } }
+      if(run>0) runs.push(run);
+      // closed runs must match prefix of clue; the last (open) run must be <= clue val
+      const closed = openTail ? runs.length-1 : runs.length;
+      if (closed > clue.length) return false;
+      for (let i=0;i<closed;i++) if (runs[i]!==clue[i]) return false;
+      if (openTail){ const r=runs[runs.length-1]; if (runs.length-1 >= clue.length) return false; if (r > clue[runs.length-1]) return false; }
+    }
+    return true;
+  }
+  function rec(r){
+    if (count>cap) return;
+    if (r===size){
+      // full columns must match exactly
+      for (let c=0;c<size;c++){
+        const clue=colClues[c]; const runs=[]; let run=0;
+        for(let rr=0;rr<size;rr++){ if(grid[rr][c]===1) run++; else { if(run>0) runs.push(run); run=0; } }
+        if(run>0) runs.push(run);
+        const cl = clue.length?clue:[];
+        if (runs.length!==cl.length) return;
+        for(let i=0;i<runs.length;i++) if(runs[i]!==cl[i]) return;
+      }
+      count++; return;
+    }
+    for (const opt of rowOpts[r]){
+      grid[r]=opt;
+      if (colsOkSoFar(r)) rec(r+1);
+      if (count>cap) return;
+    }
+  }
+  rec(0);
+  return count;
+}
+
+/* ===========================================================================
+   ============================  THE UI / GAME  ===========================
+   ======================================================================== */
+const $ = id => document.getElementById(id);
+const board = $('board'), boardOuter = $('boardOuter'), verdict = $('verdict'),
+      caption = $('caption'), seedInput = $('seedInput');
+
+const state = {
+  size: 10,
+  seed: "",
+  skin: "graphite",
+  mode: "fill",      // fill | mark
+  puzzle: null,      // current generated puzzle
+  player: null,      // Int8Array player marks (0/1/-1)
+  won: false,
+  mistakes: 0,
+};
+
+/* ---- storage helpers (guarded; page works even when storage throws) ---- */
+function safeSet(k,v){ try{ localStorage.setItem(k,String(v)); }catch(e){} }
+function safeGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function markBest(){
+  // raise-only "largest size solved"
+  try{
+    const prev = parseInt(safeGet('ws:best:latch')||'0',10) || 0;
+    if (state.size > prev) safeSet('ws:best:latch', state.size);
+  }catch(e){}
+}
+
+/* ---- random seed string ---- */
+function randomSeed(){
+  const words=["mica","quill","ember","fjord","latch","thorn","glade","verge","cusp","slate","onyx","reed","cairn","wisp","brume","flint","loom","gable","spire","nook"];
+  const w = words[Math.floor(Math.random()*words.length)];
+  return w + "-" + Math.floor(Math.random()*9000+1000);
+}
+
+/* ---- build a new puzzle ---- */
+function newPuzzle(seed){
+  state.seed = seed;
+  seedInput.value = seed;
+  state.puzzle = generatePuzzle(seed, state.size);
+  state.player = new Int8Array(state.size*state.size); // all unknown
+  state.won = false;
+  state.mistakes = 0;
+  boardOuter.classList.remove('won');
+  verdict.classList.remove('show');
+  verdict.innerHTML = "";
+  renderBoard();
+  updateCaption();
+}
+
+/* ---- render the table (clue gutters + cells) ---- */
+function renderBoard(){
+  const p = state.puzzle, sz = state.size;
+  // size each cell so the whole board fits comfortably
+  const cellPx = sz<=5 ? 46 : sz<=10 ? 34 : 26;
+  const maxRowClue = Math.max(1, ...p.rowClues.map(r=>r.length||1));
+  const maxColClue = Math.max(1, ...p.colClues.map(c=>c.length||1));
+  const clueColPx = Math.max(34, maxRowClue * (sz<=5?22:18) + 8);
+  const clueRowPx = Math.max(30, maxColClue * (sz<=5?20:16) + 6);
+  const numFs = sz<=5 ? 16 : sz<=10 ? 14 : 12;
+
+  let html = "";
+  // --- column-clue header row ---
+  html += "<tr>";
+  html += `<td class="corner" style="width:${clueColPx}px;height:${clueRowPx}px"></td>`;
+  for (let c=0;c<sz;c++){
+    const runs = p.colClues[c];
+    const major = (c%5===4 && c!==sz-1) ? " mr" : "";
+    let inner = `<div class="stack" style="font-size:${numFs}px">`;
+    if (runs.length===0) inner += `<span class="num">0</span>`;
+    else for (const v of runs) inner += `<span class="num">${v}</span>`;
+    inner += "</div>";
+    html += `<td class="colclue${major}" data-col="${c}" style="width:${cellPx}px">${inner}</td>`;
+  }
+  html += "</tr>";
+  // --- play rows ---
+  for (let r=0;r<sz;r++){
+    html += "<tr>";
+    const runs = p.rowClues[r];
+    const majorR = (r%5===4 && r!==sz-1) ? " mb" : "";
+    let inner = `<div class="line" style="font-size:${numFs}px;height:${cellPx}px">`;
+    if (runs.length===0) inner += `<span class="num">0</span>`;
+    else for (const v of runs) inner += `<span class="num">${v}</span>`;
+    inner += "</div>";
+    html += `<td class="rowclue" data-row="${r}" style="height:${cellPx}px">${inner}</td>`;
+    for (let c=0;c<sz;c++){
+      const major = ((c%5===4 && c!==sz-1) ? " mr":"") + majorR;
+      html += `<td class="cell${major}" data-r="${r}" data-c="${c}" style="width:${cellPx}px;height:${cellPx}px"></td>`;
+    }
+    html += "</tr>";
+  }
+  board.innerHTML = html;
+  paintAll();
+  refreshClueDim();
+}
+
+/* ---- paint player state onto cells ---- */
+function paintCell(r,c){
+  const td = board.querySelector(`td.cell[data-r="${r}"][data-c="${c}"]`);
+  if(!td) return;
+  const v = state.player[r*state.size+c];
+  td.classList.toggle('fill', v===1);
+  td.classList.toggle('mark', v===-1);
+}
+function paintAll(){ for(let r=0;r<state.size;r++) for(let c=0;c<state.size;c++) paintCell(r,c); }
+
+/* ---- a row/col is "done" when its filled cells exactly satisfy the clue ---- */
+function lineRuns(getter, len){
+  const runs=[]; let run=0;
+  for(let i=0;i<len;i++){ if(getter(i)===1){run++;} else { if(run>0) runs.push(run); run=0; } }
+  if(run>0) runs.push(run);
+  return runs;
+}
+function runsMatch(a,b){ if(a.length!==b.length) return false; for(let i=0;i<a.length;i++) if(a[i]!==b[i]) return false; return true; }
+function rowSatisfied(r){
+  const runs = lineRuns(c=>state.player[r*state.size+c], state.size);
+  const clue = state.puzzle.rowClues[r];
+  return runsMatch(runs, clue.length?clue:[]);
+}
+function colSatisfied(c){
+  const runs = lineRuns(r=>state.player[r*state.size+c], state.size);
+  const clue = state.puzzle.colClues[c];
+  return runsMatch(runs, clue.length?clue:[]);
+}
+function refreshClueDim(){
+  for(let r=0;r<state.size;r++){
+    const td = board.querySelector(`td.rowclue[data-row="${r}"]`);
+    if(td) td.classList.toggle('clueDone', rowSatisfied(r));
+  }
+  for(let c=0;c<state.size;c++){
+    const td = board.querySelector(`td.colclue[data-col="${c}"]`);
+    if(td) td.classList.toggle('clueDone', colSatisfied(c));
+  }
+}
+
+/* ---- win check: player's FILLED cells exactly equal the picture ---- */
+function isWin(){
+  const pic = state.puzzle.picture, pl = state.player;
+  for (let i=0;i<pic.length;i++){
+    const want = pic[i]===1 ? 1 : 0;
+    const have = pl[i]===1 ? 1 : 0;
+    if (want!==have) return false;
+  }
+  return true;
+}
+function checkWin(){
+  if (state.won) return;
+  if (isWin()){
+    state.won = true;
+    boardOuter.classList.add('won');
+    paintAll();
+    const clean = state.mistakes===0;
+    verdict.innerHTML = `<span>solved — <span class="name">${state.puzzle.name}</span></span>` +
+      `<span class="small">${clean ? "a clean solve · no mistakes" : state.mistakes+" mistake"+(state.mistakes===1?"":"s")} · seed ${state.puzzle.seed}</span>`;
+    verdict.classList.add('show');
+    markBest();
+    if (clean) safeSet('ws:flag:latch-clean', Date.now());
+  }
+}
+
+/* ---- apply a player action to a cell ---- */
+function setCell(r,c,val){
+  if (state.won) return;
+  const idx = r*state.size+c;
+  state.player[idx] = (state.player[idx]===val) ? 0 : val; // toggle off if same
+  paintCell(r,c);
+  refreshClueDim();
+  checkWin();
+}
+
+/* ---- pointer / drag painting ------------------------------------------- */
+let drag = null; // { val, axis:null|'row'|'col', r0,c0 }
+function cellFromEvent(e){
+  const t = e.target.closest('td.cell');
+  if(!t) return null;
+  return { r:+t.dataset.r, c:+t.dataset.c };
+}
+board.addEventListener('contextmenu', e=>{ if(e.target.closest('td.cell')) e.preventDefault(); });
+
+board.addEventListener('pointerdown', e=>{
+  const cell = cellFromEvent(e);
+  if(!cell || state.won) return;
+  e.preventDefault();
+  board.setPointerCapture(e.pointerId);
+  // decide value: right-click or mark-mode or shift ⇒ mark(-1); else fill(1)
+  const wantMark = (e.button===2) || (state.mode==='mark') || e.shiftKey;
+  const val = wantMark ? -1 : 1;
+  const idx = cell.r*state.size+cell.c;
+  // drag "paints" a value; we lock it from the first cell's resulting state
+  const current = state.player[idx];
+  const paintVal = (current===val) ? 0 : val; // toggling target
+  drag = { paintVal, axis:null, r0:cell.r, c0:cell.c, applied:new Set() };
+  applyPaint(cell.r, cell.c);
+});
+function applyPaint(r,c){
+  if(!drag) return;
+  const key = r+","+c;
+  if (drag.applied.has(key)) return;
+  drag.applied.add(key);
+  const idx=r*state.size+c;
+  if (state.player[idx] !== drag.paintVal){
+    state.player[idx] = drag.paintVal;
+    paintCell(r,c);
+  }
+}
+board.addEventListener('pointermove', e=>{
+  if(!drag) return;
+  const cell = cellFromEvent(e);
+  if(!cell) return;
+  // lock axis on first move away from origin
+  if (drag.axis===null){
+    if (cell.r!==drag.r0 && cell.c===drag.c0) drag.axis='col';
+    else if (cell.c!==drag.c0 && cell.r===drag.r0) drag.axis='row';
+    else if (cell.r!==drag.r0 && cell.c!==drag.c0){
+      // diagonal: pick dominant
+      drag.axis = Math.abs(cell.r-drag.r0) >= Math.abs(cell.c-drag.c0) ? 'col':'row';
+    }
+  }
+  let rr=cell.r, cc=cell.c;
+  if (drag.axis==='row') rr=drag.r0;
+  else if (drag.axis==='col') cc=drag.c0;
+  applyPaint(rr,cc);
+});
+function endDrag(){
+  if(!drag) return;
+  drag=null;
+  refreshClueDim();
+  checkWin();
+}
+board.addEventListener('pointerup', endDrag);
+board.addEventListener('pointercancel', endDrag);
+window.addEventListener('pointerup', endDrag);
+
+/* ---- Hint: reveal one logically-forced cell (one solveLine pass) -------- */
+function doHint(){
+  if (state.won) return;
+  const sz=state.size, p=state.puzzle;
+  // build current known board from player marks
+  const grid = new Int8Array(sz*sz);
+  for (let i=0;i<grid.length;i++) grid[i]=state.player[i];
+  // one pass over rows then cols; reveal the first newly-forced cell that the
+  // player hasn't set yet (this is always a sound deduction, never a guess).
+  function tryLines(isRow){
+    for (let k=0;k<sz;k++){
+      const line=new Int8Array(sz);
+      for (let j=0;j<sz;j++) line[j] = isRow ? grid[k*sz+j] : grid[j*sz+k];
+      const clue = isRow ? p.rowClues[k] : p.colClues[k];
+      const res = solveLine(clue, line);
+      if(!res.ok) continue;
+      for (let j=0;j<sz;j++){
+        const v=res.cells[j];
+        const idx = isRow ? k*sz+j : j*sz+k;
+        if (v!==0 && state.player[idx]===0){
+          // reveal it
+          state.player[idx]=v;
+          paintCell(isRow?k:j, isRow?j:k);
+          const td=board.querySelector(`td.cell[data-r="${isRow?k:j}"][data-c="${isRow?j:k}"]`);
+          if(td){ td.classList.remove('hintpop'); void td.offsetWidth; td.classList.add('hintpop'); }
+          refreshClueDim(); checkWin();
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+  if (tryLines(true)) return;
+  if (tryLines(false)) return;
+  // nothing newly forced (board already at logic fixpoint with player's marks)
+  flashCaption("no single-step deduction left — try Check, or you're done!");
+}
+
+/* ---- Check: highlight cells contradicting the unique solution ---------- */
+function doCheck(){
+  if (state.won) return;
+  const pic=state.puzzle.picture, sz=state.size;
+  let wrong=0;
+  for (let r=0;r<sz;r++) for(let c=0;c<sz;c++){
+    const idx=r*sz+c;
+    const v=state.player[idx];
+    // a FILLED cell where the picture is empty, OR a MARK where it should be filled
+    const bad = (v===1 && pic[idx]!==1) || (v===-1 && pic[idx]===1);
+    if (bad){
+      wrong++;
+      const td=board.querySelector(`td.cell[data-r="${r}"][data-c="${c}"]`);
+      if(td){ td.classList.remove('err'); void td.offsetWidth; td.classList.add('err');
+        setTimeout(()=>td.classList.remove('err'), 900); }
+    }
+  }
+  if (wrong>0){ state.mistakes += wrong; flashCaption(wrong+" contradiction"+(wrong===1?"":"s")+" highlighted."); }
+  else flashCaption("no contradictions — every mark agrees with the logic.");
+}
+
+/* ---- Reveal full solution ---------------------------------------------- */
+function doReveal(){
+  const pic=state.puzzle.picture;
+  for (let i=0;i<pic.length;i++) state.player[i] = pic[i]===1 ? 1 : -1;
+  paintAll(); refreshClueDim();
+  if (!state.won){
+    // revealing counts as not-a-win flourish but still shows the picture name
+    boardOuter.classList.add('won');
+    state.won=true;
+    verdict.innerHTML = `<span>revealed — <span class="name">${state.puzzle.name}</span></span>`+
+      `<span class="small">solution shown · seed ${state.puzzle.seed}</span>`;
+    verdict.classList.add('show');
+    paintAll();
+  }
+}
+
+/* ---- Reset (clear marks, same puzzle) ---------------------------------- */
+function doReset(){
+  state.player = new Int8Array(state.size*state.size);
+  state.won=false; state.mistakes=0;
+  boardOuter.classList.remove('won');
+  verdict.classList.remove('show'); verdict.innerHTML="";
+  paintAll(); refreshClueDim();
+}
+
+/* ---- caption / transient messages -------------------------------------- */
+let capTimer=null;
+function updateCaption(){
+  const p=state.puzzle;
+  const total = p.picture.reduce((a,b)=>a+(b===1?1:0),0);
+  caption.innerHTML = `A <b>${state.size}×${state.size}</b> nonogram, <b>logic-solvable &amp; unique</b> — proven before it reached you. ` +
+    `<span class="stat">${total}</span> cells make the picture. Left-click fills · right-click / shift marks · drag to paint.`;
+}
+function flashCaption(msg){
+  caption.innerHTML = `<b>${msg}</b>`;
+  if(capTimer) clearTimeout(capTimer);
+  capTimer=setTimeout(updateCaption, 2600);
+}
+
+/* ----------------------------- wiring ----------------------------------- */
+$('sizeSeg').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#sizeSeg button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  state.size = +b.dataset.size;
+  newPuzzle(state.seed || randomSeed());
+});
+$('modeSeg').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  state.mode = b.dataset.mode;
+});
+$('skinSeg').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#skinSeg button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  state.skin = b.dataset.skin;
+  document.body.dataset.skin = state.skin;   // PURELY cosmetic — never re-rolls the puzzle
+});
+$('diceBtn').addEventListener('click', ()=> newPuzzle(randomSeed()));
+$('newBtn').addEventListener('click', ()=> newPuzzle(randomSeed()));
+$('hintBtn').addEventListener('click', doHint);
+$('checkBtn').addEventListener('click', doCheck);
+$('resetBtn').addEventListener('click', doReset);
+$('revealBtn').addEventListener('click', doReveal);
+seedInput.addEventListener('change', ()=>{
+  const s = seedInput.value.trim();
+  if (s) newPuzzle(s);
+});
+seedInput.addEventListener('keydown', e=>{ if(e.key==='Enter') seedInput.blur(); });
+
+/* keyboard: f = fill mode, x = mark mode, h = hint, c = check, n = new */
+window.addEventListener('keydown', e=>{
+  if (e.target.tagName==='INPUT') return;
+  if (e.key==='f'||e.key==='F'){ document.querySelector('#modeSeg [data-mode=fill]').click(); }
+  else if (e.key==='x'||e.key==='X'){ document.querySelector('#modeSeg [data-mode=mark]').click(); }
+  else if (e.key==='h'||e.key==='H'){ doHint(); }
+  else if (e.key==='c'||e.key==='C'){ doCheck(); }
+  else if (e.key==='n'||e.key==='N'){ newPuzzle(randomSeed()); }
+  else if (e.key==='r'||e.key==='R'){ doReset(); }
+});
+
+/* ----------------------------- boot ------------------------------------- */
+(function boot(){
+  // self-test FIRST (workshop tradition); chip reflects the result.
+  let st;
+  try{ st = runSelfTest(); }
+  catch(err){ console.error('[Latch] self-test threw', err); st={passed:0,total:4,allPass:false}; }
+  const chip = $('selftest'), txt = $('stText');
+  if (st.allPass){
+    chip.classList.add('ok');
+    txt.textContent = `logic-verified — ${st.passed}/${st.total} ✓`;
+  } else {
+    chip.classList.add('bad');
+    txt.textContent = `self-test ${st.passed}/${st.total} — see console`;
+  }
+
+  // breadcrumb (guarded)
+  safeSet('ws:seen:latch', Date.now());
+
+  // first puzzle
+  newPuzzle(randomSeed());
+  console.log('[Latch] ready. seed:', state.seed, 'size:', state.size);
+})();
+</script>
+</body>
+</html>

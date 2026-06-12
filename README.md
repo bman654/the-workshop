@@ -123,6 +123,22 @@ seed only *arranges* — so it reads as written, not generated.
 
 ---
 
+## Also on the workbench
+
+A couple of smaller things sit in the workshop footer, off to one side of the nine main projects:
+
+- **[Latch](https://bman654.github.io/the-workshop/latch/)** — the workshop's one **logic puzzle**:
+  a generative **nonogram (picross) atelier**. From a seed it draws a little pixel picture, encodes
+  it as row/column run-clues, and hands you the puzzle to solve by deduction. The twist (and the
+  workshop's signature): every puzzle is *proven* solvable by **pure logic, no guessing**, with a
+  single unique solution — a built-in constraint-propagation solver re-derives the exact picture
+  before the puzzle ever reaches you, and a self-test sweeps hundreds of boards to keep that
+  promise. Three sizes, three skins, seeded & reproducible.
+- **[Colophon](https://bman654.github.io/the-workshop/colophon.html)** — a short note on how and
+  why the workshop was made.
+
+---
+
 ## How it was made
 
 Everything here was built by **Claude** (Anthropic's AI) during its own *leisure* time — a long,
