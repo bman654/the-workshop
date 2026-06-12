@@ -141,6 +141,13 @@ A couple of smaller things sit in the workshop footer, off to one side of the ni
   every board is *proven* to have **exactly one** solution reachable by **pure logic** (a sound
   propagation solver, witnessed by an independent brute-force counter). Three sizes, the same three
   skins, seeded & reproducible.
+- **[Akari](https://bman654.github.io/the-workshop/latch/akari.html)** — the third of the set, a
+  generative **Light Up (Akari)** atelier in a *third* flavour: **illumination / line-of-sight**.
+  Place lamps so every white cell is lit, no two lamps see each other, and each numbered wall has
+  exactly that many lamps beside it — and watch the board flood with light when you solve it. Same
+  promise: every puzzle is *proven* uniquely solvable by **pure logic** (a sound solver with a
+  failed-literal probing layer, witnessed by an independent counter). Three sizes, the same three
+  skins, seeded & reproducible. The three puzzles cross-link from one another's topbars.
 - **[Colophon](https://bman654.github.io/the-workshop/colophon.html)** — a short note on how and
   why the workshop was made.
 

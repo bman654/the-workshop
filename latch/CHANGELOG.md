@@ -227,3 +227,131 @@ RESULT 4/4 — chip GREEN (~0.45s)
      validity (symmetric with `unplace`). Also re-pointed the counter to
      dot-major edge order with finalize-on-last-edge pruning, taking a 5×5 count
      from "hangs" to ~0.3ms and making 7×7 feasible (~2ms).
+
+---
+
+# Akari — Changelog
+
+## Build 1 — 2026-06-12
+
+The workshop's **third logic puzzle**: a generative **Akari (Light Up)** atelier.
+Where Latch is line-run deduction over a pixel grid and Slitherlink is loop-topology,
+Akari is a third distinct deduction flavour — **illumination / line-of-sight** reasoning.
+Single self-contained vanilla HTML/CSS/JS file (`latch/akari.html`, 1468 lines, no
+dependencies / no network / no build step / no audio).
+
+### The game
+An N×N grid of white floor cells and black walls (some numbered 0–4). Place **bulbs** on
+white cells so (1) every white cell is lit (a bulb lights its row+column until a wall),
+(2) no two bulbs light each other, and (3) each numbered wall has exactly that many
+orthogonally-adjacent bulbs. The payoff is gorgeous: warm light floods the whole board on
+solve, with glowing bulbs and rays running down every row and column.
+
+### What shipped
+- **Seeded generative Akari**, three square sizes: Tidy (7×7), Classic (10×10), Big (14×14).
+  Size-aware wall density (~32–47%, scaling gently with N) keeps boards open yet reliably
+  logic-solvable; no 2×2 all-wall blocks (kept pretty).
+- **The correctness crux** — two independent engines, both exercised by the self-test:
+  - A **sound LOGIC SOLVER** that never guesses. Cell states ∈ {UNKNOWN, BULB, EMPTY}. An
+    inner `propagate()` fixpoint runs two sound rule families — **wall saturation** (a
+    numbered wall forces its remaining neighbours when its bulb/unknown counts pin the
+    number; 0-walls force all-EMPTY) and **illumination necessity** (an unlit cell whose
+    only lighting candidate is a single UNKNOWN forces a BULB there; zero candidates ⇒
+    contradiction). Placing a bulb propagates its no-mutual-sight EMPTY shadow. Wrapped
+    around that, a **failed-literal probing** layer: tentatively assume each UNKNOWN cell
+    is a BULB (then EMPTY) on a copy and propagate; if an assumption provably breaks, the
+    cell is forced to the opposite value — a sound, no-guess deduction (the same "if a bulb
+    here breaks, it can't be here" a human uses). Reaching a fully-decided valid fixpoint
+    IS the logic-solvability proof.
+  - An **independent BRUTE-FORCE solution counter** (the second uniqueness witness) — a DFS
+    over white cells deciding BULB/EMPTY with the three Akari constraints as pruning,
+    accepting a leaf only when the validity helpers agree. It does NOT call `logicSolve`.
+    Capped (cap=1 distinguishes exactly-1 from ≥2).
+  - **Generation contract (place → number → prove → ship):** place a wall layout → place a
+    valid fully-lit, conflict-free bulb solution (greedy least-lit, mutual-sight-forbidden;
+    several bulb placements tried per layout) → number all walls from the solution → verify
+    the full board logic-solves to that exact solution → drop wall numbers in seeded order
+    while `logicSolve` still uniquely reaches the solution. Ship ONLY if the reduced board
+    logic-solves to the exact solution; a denser fallback exists but is **never** hit
+    (0 fallback in audit).
+- **Built-in self-test on load** — green chip "logic-verified — 4/4 ✓", never ships red:
+  1. **logic-solver soundness** — hand-crafted tiny boards: a 0-wall forcing all neighbours
+     EMPTY, a lone walled-in cell forcing a BULB, mutual-sight propagation + a two-bulb
+     mutual-sight contradiction, plus soundness on 6 generated boards (every decided cell
+     agrees with the true solution).
+  2. **sweep 96 puzzles** (32 × 3 sizes) — 100% logic-solvable AND logicSolve bulbs ==
+     generated solution AND the solution independently validates (fully lit / no mutual
+     sight / walls satisfied). 0 mismatch, 0 fallback.
+  3. **uniqueness** — independent brute-force counter returns exactly 1 on 24 small boards.
+  4. **seed purity + skin-invariance** — same seed ⇒ byte-identical (wall+number+solution
+     fingerprint); re-roll differs; cosmetic skin switch leaves the fingerprint identical.
+- **Real playable interaction:** left-click toggles a bulb; right-click / shift-click cycles
+  a ✕ "no bulb" pencil-mark. Live illumination feedback (the soul of Akari): lit floors glow
+  warm, rays shoot down rows/columns to the wall, a bulb in mutual sight flashes a warning
+  colour, and a numbered wall dims when satisfied / reddens when exceeded. Hint (asserts one
+  logically-forced bulb or ✕), Check (flags bulbs/marks that contradict the unique solution
+  plus structural mutual-sight / over-counted-wall contradictions, counts mistakes), Reveal
+  (the money shot — board fully blooms), Reset, New / seed input, size selector. Keyboard
+  h/c/n/r. Honest win: the whole board blooms with warm light and the verdict shows
+  ("solved — NN lamps light every cell · a clean solve").
+- **Three cosmetic skins** (Graphite / Blueprint / Parchment) reuse Latch's CSS-var system
+  verbatim; skin never re-rolls the puzzle (crux test #4 asserts it).
+- **Persistence (`ws:` convention, all guarded in try/catch):** drops `ws:seen:akari` on
+  load; raises `ws:best:akari` (largest size solved); sets `ws:flag:akari-clean` on a
+  no-mistake solve (Reveal records best but NOT the clean flag). Fully playable from
+  `file://` even when storage throws.
+- **Three-way puzzles cross-link:** `akari.html` links `↗ Latch`, `↗ Slitherlink`,
+  `← workshop`; a matching `↗ Akari` link added to both Latch's and Slitherlink's topbars.
+  Front door untouched (still the curated 9 cards; footer `puzzles` link unchanged).
+
+### Self-test results (this build)
+```
+PASS logic-solver soundness — 0-wall, lone-bulb, mutual-sight + 6 boards
+PASS sweep 96 puzzles logic-solvable — 96 puzzles, 0 guesses, 0 mismatch, 0 fallback
+PASS uniqueness (brute-force witness) — 24 small boards, exactly 1 solution each
+PASS seed purity + skin-invariance — same seed ⇒ identical; re-roll differs; skin is cosmetic
+RESULT 4/4 — chip GREEN (~0.54s). Extra stress: 300/300 random boards solved (0 fallback,
+0 unsound), 40/40 unique (brute counter, incl. cap=5 sanity).
+```
+
+### Browser verification (served from repo root, http://127.0.0.1:8771/latch/akari.html)
+- Self-test chip GREEN "logic-verified — 4/4 ✓"; **0 console errors / 0 warnings /
+  0 page-errors** across a full battery (seed change, all 3 skin switches, Hint, Check,
+  both size changes) captured via an in-page console hook.
+- Solved a 7×7 (seed `lumen-2024`, 11 lamps) via real pointer events on the solution's
+  white cells → honest win bloom fired ("solved — 11 lamps light every cell · a clean
+  solve · no mistakes"); wrote `ws:best:akari=7` and `ws:flag:akari-clean`.
+- Hint added exactly one forced placement (delta = 1). A deliberate wrong bulb → Check
+  flagged exactly 1 contradiction (mistakes 0→1); two mutually-seeing bulbs → Check
+  reported "incl. 2 bulbs in mutual sight".
+- Same seed reproduced a byte-identical puzzle; skin switch
+  (Graphite/Blueprint/Parchment) left the solution fingerprint and seed identical.
+- Reveal showed the solution and fully lit the board but did NOT set the clean flag
+  (honest); it did record best size.
+- Runs from `file://` too (chip green, board renders, storage degrades gracefully).
+- Static SVG/DOM (no rAF loop, no setInterval) — measured 61fps idle; only the CSS win
+  bloom and brief class-driven flashes animate.
+
+### Notes
+- Real bugs found & fixed during the build (all caught by the Node self-test harness
+  before the browser):
+  1. **Seeded-bulb soundness gap (a correctness hole):** `logicSolve` copied an `initial`
+     state verbatim, so two pre-seeded bulbs that light each other were silently accepted
+     as a non-contradiction — and `doHint` / probing build exactly such seeded states.
+     Fixed by replaying every seeded BULB through the propagation path (which casts its
+     EMPTY shadow and surfaces any mutual-sight collision). The self-test's two-bulb
+     mutual-sight case now correctly reports a contradiction.
+  2. **Logic solver far too weak (the big one):** with only wall-saturation +
+     single-candidate illumination, the *fully-numbered* board logic-solved just ~7% at
+     7×7, ~0.8% at 10×10, and **0%** at 14×14 — so generation fell back constantly (35/96
+     fallbacks, 14 boards unsolved even with every clue). Diagnosed by instrumenting the
+     per-stage hit rate. Fixed by (a) adding the **failed-literal probing** layer (sound,
+     no-guess lookahead) and (b) discovering wall **density** is the dominant lever
+     (frac 0.20 → 0% solvable; 0.42 → ~80%; 0.50 → ~95%) and raising the layout to a
+     size-aware ~32–47%. Combined: full-board solve rate jumped to ~70–95% and the sweep
+     went to **96/96 logic-solvable, 0 fallback**.
+  3. **Wall-free fallback board surfaced the density bug:** the first stalled sweep board
+     was a 14×14 with all 196 cells UNKNOWN — the canned last-ditch fallback (a wall-free
+     field) had been reached because the main + fallback loops exhausted their tries. This
+     made the real problem (solver weakness + low density, above) visible; once fixed, the
+     fallback path is never reached.

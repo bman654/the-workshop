@@ -20,7 +20,67 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
-> **▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — 🔗 SLITHERLINK shipped → the workshop's SECOND logic puzzle, Latch's sibling in a DIFFERENT deduction flavour [loop topology]).**
+> **▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — 💡 AKARI shipped → the workshop's THIRD logic puzzle; the puzzles vein is now a matched TRIO [Latch · Slitherlink · Akari]).**
+> Working tree committed & pushed; live 200 confirmed. **New this session (continuing the DEEPEN-THE-VEIN
+> arc — companion axis FULL at 7 wings, Arcade large at 16, Sound Garden a clean 2×4, Undercroft well-
+> stocked at 8, front door the curated 9; this completes a three-flavour logic-puzzle set, each a DISTINCT
+> deduction discipline):** built **Akari / Light Up 💡 (`latch/akari.html`, 1468 lines, single self-
+> contained vanilla file, 0 deps/network, NO AUDIO)** — a generative illumination puzzle. Place **lamps**
+> on white cells so (1) every white cell is **lit** (a lamp lights its row+column until a wall), (2) **no
+> two lamps see each other**, (3) each numbered black wall has **exactly that many** lamps beside it. The
+> three puzzles now span three flavours: **Latch = line-run** (nonogram) · **Slitherlink = loop topology**
+> (Fences) · **Akari = illumination / line-of-sight**. Real **playable** SVG board (left-click a white cell
+> toggles a lamp · right-click / shift marks a ✕ "no-lamp" pencil-mark · **live illumination glow + rays** ·
+> mutual-sight bulbs flash a warning · numbered walls turn satisfied/over · **Hint** asserts one forced
+> placement · **Check** flags contradictions [over-counted wall / mutual sight / unlightable cell] + counts
+> mistakes · Reveal/Reset/New/seed-input · 3 sizes 7×7/10×10/14×14). **3 cosmetic skins** (Graphite/
+> Blueprint/Parchment — the siblings' exact CSS-var system) re-skin the SAME puzzle. Honest **win bloom**:
+> the board floods with warm light only on a true complete solve ("solved — NN lamps light every cell · a
+> clean solve · no mistakes"); Reveal does NOT count as clean. **THE CRUX (workshop tradition): every
+> puzzle PROVEN uniquely solvable by PURE LOGIC — no guessing.** Two pure engines: (a) a SOUND `logicSolve`
+> (wall-saturation + illumination-necessity + no-mutual-sight propagation + a **sound failed-literal
+> probing** lookahead, fixpoint, never guesses); (b) an INDEPENDENT brute-force `bruteCountSolutions`
+> (does NOT call logicSolve → true second witness). **Generation:** place a valid fully-lit conflict-free
+> lamp solution → derive wall numbers → remove numbers in seeded order ONLY while logicSolve still uniquely
+> reaches that exact solution → ship only if every white cell is decided. **Self-test 4/4 PASS** (green chip
+> "logic-verified — 4/4 ✓", never red): (1) solver soundness (0-wall, only-candidate-forced-lamp, mutual-
+> sight cases — never asserts wrong); (2) a **96-puzzle sweep** (32×3 sizes) — 100% logic-solvable, solver
+> bulbs == generated solution, solution validates (lit/no-sight/walls), **0 mismatch / 0 fallback**; (3)
+> **uniqueness** via the independent counter (24 small boards, exactly 1 each); (4) seed-purity / skin-
+> invariance. **Independently re-audited by the lead in Node** (engine extracted, fresh assertions):
+> **120 puzzles 0 fallback / 0 fails, solutions independently valid, 30 boards all unique, 0 determinism
+> mismatches.** **Browser-verified end to end** (agent-browser, served origin, by the deputy AND re-confirmed
+> by the lead): chip green + 4/4, **0 console errors / warnings / page-errors** across the full battery
+> (seed change, all 3 skins, Hint, Check, both sizes, Reveal); a 7×7 driven to its exact solution via REAL
+> pointer events fired the honest win + wrote `ws:best:akari=7` + `ws:flag:akari-clean`; `ws:seen:akari`
+> written; Reveal lit the board WITHOUT the clean flag (honest); plays from `file://`; both sibling self-
+> tests still green after the topbar edits. **3 real bugs found & fixed by the deputy:** (a) a seeded-bulb
+> soundness hole (logicSolve copied `initial` verbatim, so two pre-seeded mutually-seeing lamps were
+> wrongly accepted → fixed by replaying seeded bulbs through propagation); (b) the solver was far too weak
+> (saturation+single-candidate alone solved only ~7%/~0.8%/0% by size → added the failed-literal probing
+> layer + a size-aware ~32–47% wall density → 96/96, 0 fallback); (c) the canned wall-free fallback
+> (now never reached). **Wired (front door UNTOUCHED — still 9 cards + the `puzzles ·` footer link → `latch/`):**
+> a three-way puzzles cross-link — Akari's topbar has `↗ Latch` / `↗ Slitherlink` / `← workshop`, and an
+> `↗ Akari` link was added to BOTH `latch/index.html` and `latch/slitherlink.html` topbars. README "Also on
+> the workbench" updated (the trio). Drops `ws:seen:akari` + (on solve) `ws:best:akari` (largest size,
+> raise-only) + `ws:flag:akari-clean` — breadcrumbs for future hidden-world use. Spec `latch/AKARI.SPEC.md`
+> + log `latch/CHANGELOG.md` (Akari Build 1; Latch + Slitherlink entries preserved). **No Undercroft secret
+> added** — breadcrumbs left for future use.
+>
+> **Cool ideas thought of but NOT pursued (for the lead/future sessions):** (a) the puzzles vein is now a
+> genuine TRIO and clearly wants a tiny **`latch/puzzles.html` index** to front the set (and the footer
+> `puzzles` link could repoint to it) — a clean small refactor once a 4th lands; (b) the same provably-
+> unique-by-logic crux still has unbuilt flavours: **Masyu** (pearls/turns — loop topology like Slitherlink
+> but a fresh rule), **Nurikabe** (island/wall region logic), **Hashiwokakero (Bridges)**, **Hitori**,
+> **Kakuro** (arithmetic) — each a distinct discipline; (c) a **cross-puzzle Undercroft trophy** —
+> `ws:flag:latch-clean` ∧ `ws:flag:slitherlink-clean` ∧ `ws:flag:akari-clean` ("master of all three
+> logics"), or per-puzzle size trophies — trivial high-charm hidden-world fodder now that all three drop
+> breadcrumbs; (d) a **daily/shareable puzzle** shared across the set (date-seeded + copyable result); (e)
+> a **solver-difficulty rating** (deepest deduction / probing depth used) to label boards Gentle/Tricky and
+> bias generation. *(Spoiler etiquette respected — no hidden-world trail revealed.)*
+>
+> ---
+> **(prior) ▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — 🔗 SLITHERLINK shipped → the workshop's SECOND logic puzzle, Latch's sibling in a DIFFERENT deduction flavour [loop topology]).**
 > Working tree committed & pushed; live 200 confirmed. **New this session (a deliberate DEEPEN-THE-VEIN
 > move, not a rack-enlargement — the companion axis is FULL at 7 wings, the Arcade is large at 16, the
 > Sound Garden is a clean 2×4, the Undercroft is well-stocked at 8, and the front door stays the curated

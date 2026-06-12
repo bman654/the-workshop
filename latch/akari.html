@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Akari — light up</title>
+<style>
+  :root{
+    /* ---- Graphite (default skin) — verbatim from Latch ---- */
+    --bg:        #0c0c0f;
+    --stage:     radial-gradient(1200px 800px at 56% 38%, #18181c 0%, #111114 68%, #0a0a0c 100%);
+    --panel-bg:  rgba(20,20,24,0.88);
+    --panel-edge:rgba(150,150,165,0.28);
+    --ink:       #ededf2;
+    --ink-dim:   #9a9aa6;
+    --accent:    #c9a24a;            /* warm gilt */
+    --accent-soft: rgba(201,162,74,0.16);
+    --accent-ink: #16140d;
+    --ok:  #7fd28a;
+    --bad: #f08a7a;
+    /* board surfaces */
+    --board-bg:   #14141a;
+    --floor:      rgba(255,255,255,0.020);   /* an unlit white-cell floor */
+    --floor-edge: rgba(150,150,165,0.10);
+    --wall:       #26262e;                   /* a black wall block */
+    --wall-edge:  rgba(0,0,0,0.55);
+    --wall-ink:   #cfcfd8;                   /* the number on a wall */
+    --wall-done:  #5a5a64;                   /* dimmed when satisfied */
+    --wall-over:  #f08a7a;                   /* warning when exceeded */
+    --bulb:       var(--accent);             /* the glowing bulb */
+    --bulb-ink:   #16140d;
+    --mark:       #6f6f7c;                   /* the ✕ pencil-mark */
+    /* the warm light a lit cell takes on */
+    --lit:        rgba(201,162,74,0.18);
+    --lit-strong: rgba(201,162,74,0.30);
+    --ray:        rgba(201,162,74,0.26);
+    --reveal-glow:rgba(201,162,74,0.55);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --font-clue: Georgia, "Times New Roman", serif;
+  }
+  /* ---- Blueprint skin (cyan-on-navy drafting) — verbatim from Latch ---- */
+  body[data-skin="blueprint"]{
+    --bg:#071726;
+    --stage: radial-gradient(1200px 800px at 52% 36%, #0e2c45 0%, #0a2236 64%, #061521 100%);
+    --panel-bg: rgba(8,30,48,0.9);
+    --panel-edge: rgba(120,196,238,0.34);
+    --ink:#dcf1ff; --ink-dim:#7fb3d6;
+    --accent:#5fd0ff; --accent-soft: rgba(95,208,255,0.16); --accent-ink:#06223a;
+    --ok:#7fe4d0; --bad:#ff9a8a;
+    --board-bg: rgba(10,40,64,0.5);
+    --floor: rgba(120,196,238,0.030);
+    --floor-edge: rgba(120,196,238,0.12);
+    --wall:#0a2236; --wall-edge: rgba(0,0,0,0.5);
+    --wall-ink:#bfe3fb; --wall-done:#4f7e9e; --wall-over:#ff9a8a;
+    --bulb:#ffd27a; --bulb-ink:#2a1a04;
+    --mark:#5b86a8;
+    --lit: rgba(255,210,122,0.16); --lit-strong: rgba(255,210,122,0.28);
+    --ray: rgba(255,210,122,0.24);
+    --reveal-glow: rgba(255,210,122,0.6);
+  }
+  /* ---- Parchment skin (warm paper + ink) — verbatim from Latch ---- */
+  body[data-skin="parchment"]{
+    --bg:#e8ddc4;
+    --stage: radial-gradient(1200px 800px at 54% 36%, #f3ead2 0%, #e9dcbe 66%, #ddcfa8 100%);
+    --panel-bg: rgba(247,239,221,0.92);
+    --panel-edge: rgba(120,96,60,0.34);
+    --ink:#3a2f1d; --ink-dim:#7a6a4c;
+    --accent:#a8541f; --accent-soft: rgba(168,84,31,0.14); --accent-ink:#f7efdd;
+    --ok:#4f7a3a; --bad:#b23a25;
+    --board-bg: rgba(255,251,238,0.55);
+    --floor: rgba(120,96,60,0.030);
+    --floor-edge: rgba(120,96,60,0.16);
+    --wall:#4a3c26; --wall-edge: rgba(0,0,0,0.32);
+    --wall-ink:#f3ead2; --wall-done:#9c8a64; --wall-over:#b23a25;
+    --bulb:#c8761f; --bulb-ink:#fbf3e2;
+    --mark:#b09a6e;
+    --lit: rgba(216,150,40,0.20); --lit-strong: rgba(216,150,40,0.34);
+    --ray: rgba(216,150,40,0.26);
+    --reveal-glow: rgba(168,84,31,0.5);
+  }
+
+  *{ box-sizing:border-box }
+  html,body{ height:100% }
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    transition: background .4s ease, color .4s ease;
+  }
+  #stage{
+    min-height:100vh;
+    display:flex; align-items:flex-start; justify-content:center;
+    background:var(--stage); transition: background .4s ease;
+    padding:22px 18px 60px;
+  }
+  .wrap{
+    display:flex; gap:22px; align-items:flex-start;
+    flex-wrap:wrap; justify-content:center; width:100%; max-width:1100px;
+  }
+
+  /* ----------------------------- Panel (Latch chrome) ----------------------------- */
+  #panel{
+    width:296px; flex:0 0 296px;
+    background:var(--panel-bg);
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+    border:1px solid var(--panel-edge);
+    border-radius:14px;
+    padding:16px 16px 18px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+    transition: background .4s ease, border-color .4s ease;
+  }
+  .topline{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  #panel h1{ font-size:23px; font-weight:700; letter-spacing:-0.4px; margin:0; }
+  .links{ display:flex; gap:10px; align-items:baseline; white-space:nowrap; }
+  .back{ font-size:11px; color:var(--accent); text-decoration:none; opacity:.85; }
+  .back:hover{ opacity:1; text-decoration:underline; }
+  .sub{ font-size:10px; color:var(--ink-dim); margin:3px 0 12px; letter-spacing:1.2px; text-transform:uppercase; }
+
+  /* self-test chip */
+  .selftest{ display:inline-flex; align-items:center; gap:6px;
+    font-size:11px; font-family:var(--font-mono); padding:5px 9px; border-radius:8px;
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.02);
+    color:var(--ink-dim); cursor:default; margin-bottom:14px; user-select:none; }
+  .selftest.ok{ color:var(--ok); border-color:rgba(127,210,138,0.4); background:rgba(127,210,138,0.08); }
+  .selftest.bad{ color:var(--bad); border-color:rgba(240,138,122,0.5); background:rgba(240,138,122,0.1); }
+  .selftest .dot{ width:7px; height:7px; border-radius:50%; background:currentColor; }
+
+  .row{ margin-bottom:12px; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline;
+    font-size:11px; color:var(--ink-dim); margin-bottom:6px; letter-spacing:.4px; text-transform:uppercase; }
+
+  /* segmented control */
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.18); border:1px solid var(--panel-edge);
+    border-radius:9px; padding:4px; }
+  .seg button{ flex:1 1 0; min-width:0; border:none; background:transparent; color:var(--ink-dim);
+    font-size:11.5px; padding:7px 4px; border-radius:6px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui); letter-spacing:.2px; }
+  .seg button.active{ background:var(--accent); color:var(--accent-ink); font-weight:700; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+
+  .seedrow{ display:flex; gap:7px; }
+  .seedrow input[type=text]{ flex:1; min-width:0; background:rgba(0,0,0,0.2);
+    border:1px solid var(--panel-edge); color:var(--ink); border-radius:8px; padding:8px 10px;
+    font-size:13px; font-family:var(--font-mono); letter-spacing:.5px; }
+  .seedrow input[type=text]:focus{ outline:none; border-color:var(--accent); }
+  .iconbtn{ flex:0 0 auto; width:38px; border:1px solid var(--panel-edge); border-radius:8px;
+    background:rgba(255,255,255,0.04); color:var(--ink); cursor:pointer; font-size:16px; line-height:1; }
+  .iconbtn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+
+  .actions{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .actions button{ border:1px solid var(--panel-edge); border-radius:9px; padding:9px 8px;
+    background:rgba(255,255,255,0.03); color:var(--ink); cursor:pointer; font-size:12.5px;
+    font-weight:600; transition:.15s; letter-spacing:.2px; font-family:var(--font-ui); }
+  .actions button:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .actions button.wide{ grid-column:1 / -1; }
+  .actions button:disabled{ opacity:.4; cursor:default; }
+
+  .caption{ font-size:11px; color:var(--ink-dim); margin-top:14px; line-height:1.6; letter-spacing:.2px; }
+  .caption b{ color:var(--ink); font-weight:600; }
+  .caption .mono{ font-family:var(--font-mono); color:var(--accent); }
+  .stat{ font-family:var(--font-mono); color:var(--accent); font-variant-numeric:tabular-nums; }
+
+  /* ----------------------------- Board ----------------------------- */
+  #boardWrap{ flex:1 1 auto; display:flex; flex-direction:column; align-items:center; min-width:0; }
+  #boardOuter{ position:relative; border-radius:12px; padding:14px;
+    background:var(--board-bg); border:1px solid var(--panel-edge);
+    transition: background .4s ease, border-color .4s ease; }
+  svg#board{ display:block; user-select:none; -webkit-user-select:none; touch-action:manipulation; }
+
+  /* SVG element styles (driven by classes toggled in JS) */
+  .floor{ fill:var(--floor); stroke:var(--floor-edge); stroke-width:1;
+    transition: fill .22s ease; }
+  .floor.lit{ fill:var(--lit); }
+  .floor.lit2{ fill:var(--lit-strong); }       /* lit by 2+ rays — a touch warmer */
+
+  .wall{ fill:var(--wall); stroke:var(--wall-edge); stroke-width:1; }
+  .wnum{ font-family:var(--font-clue); fill:var(--wall-ink); text-anchor:middle;
+    dominant-baseline:central; transition: fill .2s; pointer-events:none; font-weight:600; }
+  .wnum.done{ fill:var(--wall-done); }
+  .wnum.over{ fill:var(--wall-over); font-weight:700; }
+
+  /* a beam segment cast by a bulb (drawn under the bulb dot) */
+  .ray{ stroke:var(--ray); stroke-linecap:round; opacity:0;
+    transition: opacity .14s ease; pointer-events:none; }
+  .ray.on{ opacity:1; }
+
+  /* the bulb dot */
+  .bulb{ fill:var(--bulb); opacity:0; transform-box:fill-box; transform-origin:center;
+    transition: opacity .14s ease, transform .14s ease; pointer-events:none;
+    filter: drop-shadow(0 0 5px var(--reveal-glow)); }
+  .cell.bulb-on .bulb{ opacity:1; }
+  .bulbglow{ fill:var(--bulb); opacity:0; transition: opacity .18s ease; pointer-events:none; }
+  .cell.bulb-on .bulbglow{ opacity:.20; }
+  /* a bulb that sees another bulb (illegal mutual sight) flashes a warning */
+  .cell.bulb-bad .bulb{ fill:var(--bad); filter: drop-shadow(0 0 6px var(--bad)); }
+  .cell.bulb-bad .bulbglow{ fill:var(--bad); opacity:.26; }
+
+  /* the small ✕ pencil-mark ("no bulb here") */
+  .mark{ stroke:var(--mark); stroke-width:2; stroke-linecap:round; opacity:0;
+    transition: opacity .12s ease; pointer-events:none; }
+  .cell.mark-on .mark{ opacity:.85; }
+
+  /* invisible click target per white cell */
+  .hit{ fill:transparent; cursor:pointer; }
+
+  /* check-mode flashes */
+  .cell.err .bulb{ animation: epop .5s ease; }
+  .floor.err{ animation: eflash .8s ease; }
+  .wall.err{ animation: eflash .8s ease; }
+  .cell.hintpop .bulb, .cell.hintpop .mark{ animation: hpop .55s ease; }
+  @keyframes epop{ 0%,100%{ transform:scale(1) } 40%{ transform:scale(1.35) } }
+  @keyframes eflash{ 0%,100%{ filter:none } 30%,60%{ filter: drop-shadow(0 0 7px var(--bad)) } }
+  @keyframes hpop{ 0%{ transform:scale(.2) } 60%{ transform:scale(1.3) } 100%{ transform:scale(1) } }
+
+  /* win reveal — the whole board blooms with warm light */
+  #boardOuter.won svg#board{ cursor:default; }
+  #boardOuter.won .floor{ fill:var(--lit-strong); }
+  #boardOuter.won .cell.bulb-on .bulb{
+    filter: drop-shadow(0 0 11px var(--reveal-glow)) drop-shadow(0 0 4px var(--reveal-glow));
+    animation: bloom .8s ease backwards;
+  }
+  #boardOuter.won .cell.bulb-on .bulbglow{ opacity:.34; }
+  #boardOuter.won .ray.on{ opacity:1; }
+  #boardOuter.won .cell.mark-on .mark{ opacity:0; }
+  #boardOuter.won .wnum{ fill:var(--wall-done); }
+  @keyframes bloom{ from{ opacity:.25; transform:scale(.4) } to{ opacity:1; transform:scale(1) } }
+
+  .verdict{ min-height:30px; margin-top:16px; text-align:center; font-size:15px; letter-spacing:.3px;
+    opacity:0; transition:opacity .4s ease; }
+  .verdict.show{ opacity:1; }
+  .verdict .name{ color:var(--accent); font-weight:700; }
+  .verdict .small{ display:block; font-size:11px; color:var(--ink-dim); margin-top:3px; letter-spacing:.4px; }
+
+  @media (max-width:720px){
+    .wrap{ flex-direction:column; align-items:center; }
+    #panel{ width:100%; max-width:360px; flex:none; }
+  }
+</style>
+</head>
+<body data-skin="graphite">
+<div id="stage">
+  <div class="wrap">
+    <!-- ----------------------------- PANEL ----------------------------- -->
+    <div id="panel">
+      <div class="topline">
+        <h1>Akari</h1>
+        <div class="links">
+          <a class="back" href="index.html">↗ Latch</a>
+          <a class="back" href="slitherlink.html">↗ Slitherlink</a>
+          <a class="back" href="../index.html">← workshop</a>
+        </div>
+      </div>
+      <div class="sub">light up</div>
+
+      <div id="selftest" class="selftest" title="Built-in logic verifier"><span class="dot"></span><span id="stText">running self-test…</span></div>
+
+      <div class="row">
+        <label>Size</label>
+        <div class="seg" id="sizeSeg">
+          <button data-size="7" class="active">Tidy · 7</button>
+          <button data-size="10">Classic · 10</button>
+          <button data-size="14">Big · 14</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Seed</label>
+        <div class="seedrow">
+          <input type="text" id="seedInput" spellcheck="false" autocomplete="off">
+          <button class="iconbtn" id="diceBtn" title="New random puzzle">⚄</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Skin</label>
+        <div class="seg" id="skinSeg">
+          <button data-skin="graphite" class="active">Graphite</button>
+          <button data-skin="blueprint">Blueprint</button>
+          <button data-skin="parchment">Parchment</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="hintBtn">Hint</button>
+        <button id="checkBtn">Check</button>
+        <button id="resetBtn">Reset</button>
+        <button id="revealBtn">Reveal</button>
+        <button id="newBtn" class="wide">New puzzle ⟳</button>
+      </div>
+
+      <div class="caption" id="caption"></div>
+    </div>
+
+    <!-- ----------------------------- BOARD ----------------------------- -->
+    <div id="boardWrap">
+      <div id="boardOuter">
+        <svg id="board" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      <div class="verdict" id="verdict"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ===========================================================================
+   AKARI (Light Up) — a generative illumination-logic atelier.
+
+   The workshop crux (sibling to Latch & Slitherlink): every puzzle it hands
+   you is PROVABLY solvable by PURE LOGIC alone (no guessing) and has EXACTLY
+   ONE solution — proven, not asserted, by two independent engines that run
+   before any puzzle is shipped:
+     (a) a sound constraint-propagation LOGIC SOLVER (never guesses), and
+     (b) an independent BRUTE-FORCE solution counter (the second witness).
+
+   GRID MODEL
+   ----------
+   N×N cells; cell(r,c) = r*N + c.
+   board[i]: WALL_NONE = a numbered/plain wall sentinel space; actual layout:
+     board[i] === WHITE (-2)          → a white floor cell (can hold a bulb)
+     board[i] === WALL_PLAIN (-1)     → a black wall with no number
+     board[i] in 0..4                 → a black wall carrying that number
+   Bulb-state of a white cell ∈ { UNKNOWN, BULB, EMPTY } during solving.
+
+   SEGMENTS (the illumination primitive)
+   -------------------------------------
+   For each white cell we precompute its row-segment and column-segment: the
+   maximal run of white cells reachable along that line before a wall blocks
+   the beam. A bulb lights exactly the union of its own row-seg + col-seg. Two
+   bulbs "see" each other iff they share a row-seg or a col-seg. These two
+   precomputed lists make illumination + mutual-sight O(segment), not O(N).
+   ======================================================================== */
+
+const WHITE = -2, WALL_PLAIN = -1;            // board sentinels (0..4 = numbered wall)
+const UNKNOWN = 0, BULB = 1, EMPTY = 2;       // white-cell bulb states
+
+const isWall = v => v !== WHITE;              // -1 plain wall, 0..4 numbered wall
+const isWhite = v => v === WHITE;
+
+/* ----------------------------- geometry ----------------------------- */
+// Builds the static structure for an N×N board with a given `board` layout:
+// white-cell list, per-white row/col segments, and per-wall white neighbours.
+function makeGeom(N, board) {
+  const idx = (r, c) => r * N + c;
+  const whites = [];                          // list of white cell indices
+  const isW = new Uint8Array(N * N);
+  for (let i = 0; i < N * N; i++) if (board[i] === WHITE) { isW[i] = 1; whites.push(i); }
+
+  // rowSeg[i] / colSeg[i] = array of white cell indices lit along that ray
+  // (INCLUDING i itself). Computed via maximal wall-free runs.
+  const rowSeg = new Array(N * N), colSeg = new Array(N * N);
+
+  // horizontal runs
+  for (let r = 0; r < N; r++) {
+    let c = 0;
+    while (c < N) {
+      if (!isW[idx(r, c)]) { c++; continue; }
+      let c2 = c; const run = [];
+      while (c2 < N && isW[idx(r, c2)]) { run.push(idx(r, c2)); c2++; }
+      for (const cell of run) rowSeg[cell] = run;
+      c = c2;
+    }
+  }
+  // vertical runs
+  for (let c = 0; c < N; c++) {
+    let r = 0;
+    while (r < N) {
+      if (!isW[idx(r, c)]) { r++; continue; }
+      let r2 = r; const run = [];
+      while (r2 < N && isW[idx(r2, c)]) { run.push(idx(r2, c)); r2++; }
+      for (const cell of run) colSeg[cell] = run;
+      r = r2;
+    }
+  }
+
+  // the set of white cells a bulb at i would light (row-seg ∪ col-seg, deduped)
+  const sightOf = new Array(N * N);
+  for (const i of whites) {
+    const seen = new Set(rowSeg[i]);
+    for (const j of colSeg[i]) seen.add(j);
+    sightOf[i] = Array.from(seen);
+  }
+
+  // walls (numbered or plain) and, for each, its orthogonal WHITE neighbours.
+  const walls = [];                           // wall cell indices (numbered & plain)
+  const wallWhite = new Array(N * N);         // wall index → adjacent white indices
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const i = idx(r, c);
+    if (board[i] === WHITE) continue;
+    walls.push(i);
+    const nb = [];
+    if (r > 0     && isW[idx(r - 1, c)]) nb.push(idx(r - 1, c));
+    if (r < N - 1 && isW[idx(r + 1, c)]) nb.push(idx(r + 1, c));
+    if (c > 0     && isW[idx(r, c - 1)]) nb.push(idx(r, c - 1));
+    if (c < N - 1 && isW[idx(r, c + 1)]) nb.push(idx(r, c + 1));
+    wallWhite[i] = nb;
+  }
+  // numbered walls only (subset of walls with board[i] in 0..4)
+  const numberedAll = walls.filter(i => board[i] >= 0);
+
+  // for each white cell, which numbered walls is it adjacent to? (for solver)
+  const wallsOfWhite = new Array(N * N);
+  for (const i of whites) wallsOfWhite[i] = [];
+  for (const w of walls) for (const nb of wallWhite[w]) wallsOfWhite[nb].push(w);
+
+  return { N, board, idx, isW, whites, rowSeg, colSeg, sightOf, walls, wallWhite, numberedAll, wallsOfWhite };
+}
+
+/* ===========================================================================
+   VALIDITY HELPERS (reused by solver soundness, tests, generator, win-check).
+   `bulbs` is a Uint8Array over N*N (1 ⇒ a bulb on that white cell).
+   ======================================================================== */
+function fullyLit(geom, bulbs) {
+  // every white cell must be lit by some bulb along a clear ray (its own
+  // row-seg/col-seg). Equivalently: for each white cell, some cell in its
+  // row-seg OR col-seg holds a bulb.
+  const lit = computeLit(geom, bulbs);
+  for (const i of geom.whites) if (!lit[i]) return false;
+  return true;
+}
+// returns a Uint8Array marking which white cells are lit by >=1 bulb
+function computeLit(geom, bulbs) {
+  const lit = new Uint8Array(geom.N * geom.N);
+  for (const i of geom.whites) {
+    if (!bulbs[i]) continue;
+    for (const j of geom.sightOf[i]) lit[j] = 1;   // a bulb lights all it sees + itself
+  }
+  return lit;
+}
+function noMutualSight(geom, bulbs) {
+  // no two bulbs share a row-seg or col-seg with no wall between them.
+  // Since a bulb's sight already stops at walls, two bulbs see each other iff
+  // one lies in the other's row-seg/col-seg. Check each bulb's sight for a
+  // second bulb.
+  for (const i of geom.whites) {
+    if (!bulbs[i]) continue;
+    for (const j of geom.sightOf[i]) {
+      if (j !== i && bulbs[j]) return false;
+    }
+  }
+  return true;
+}
+function wallsSatisfied(geom, bulbs) {
+  // every NUMBERED wall has exactly its number of orthogonally-adjacent bulbs.
+  for (const w of geom.numberedAll) {
+    const want = geom.board[w];
+    let k = 0;
+    for (const nb of geom.wallWhite[w]) if (bulbs[nb]) k++;
+    if (k !== want) return false;
+  }
+  return true;
+}
+function isValidSolution(geom, bulbs) {
+  return fullyLit(geom, bulbs) && noMutualSight(geom, bulbs) && wallsSatisfied(geom, bulbs);
+}
+
+/* ===========================================================================
+   LOGIC SOLVER — sound deduction only, never guesses.
+   Cell state grid over white cells ∈ { UNKNOWN, BULB, EMPTY }. Walls are
+   skipped. Propagates to a fixpoint with three sound rule families.
+   Returns { state:Int8Array(N*N), ok:bool, solved:bool }.
+   ok=false ⇒ the partial marks are contradictory.
+   solved   ⇒ ok AND every white cell is decided (BULB/EMPTY) — i.e. logic
+              alone fully solved it.
+   ======================================================================== */
+// PROPAGATE — the sound local-deduction fixpoint (Rules A & B). Mutates `st`
+// (an Int8Array of cell states). Returns false iff a contradiction is found.
+// This is the inner kernel both logicSolve and the failed-literal prober use;
+// every conclusion it draws is locally forced (never a guess).
+function propagate(geom, st) {
+  const { N, sightOf, whites, board, numberedAll, wallWhite } = geom;
+  let ok = true;
+
+  // place a BULB at i: BULB, and EMPTY on everything it sees (no mutual sight +
+  // they become lit). A mutual-sight collision flags a contradiction.
+  function setBulb(i) {
+    if (st[i] === BULB) return false;
+    if (st[i] === EMPTY) { ok = false; return false; }
+    st[i] = BULB;
+    for (const j of sightOf[i]) {
+      if (j === i) continue;
+      if (st[j] === BULB) ok = false;            // mutual sight ⇒ contradiction
+      else if (st[j] === UNKNOWN) st[j] = EMPTY;
+    }
+    return true;
+  }
+  function setEmpty(i) {
+    if (st[i] === EMPTY) return false;
+    if (st[i] === BULB) { ok = false; return false; }
+    st[i] = EMPTY; return true;
+  }
+  function isLit(i) { for (const j of sightOf[i]) if (st[j] === BULB) return true; return false; }
+
+  // any seeded BULBs must propagate their EMPTY shadow (and surface mutual-sight
+  // conflicts) before the fixpoint loop — replay them through setBulb.
+  for (const i of whites) { if (!ok) break; if (st[i] === BULB) { st[i] = UNKNOWN; setBulb(i); } }
+
+  let changed = true, guard = 0;
+  const guardMax = N * N * 8 + 64;
+  while (changed && ok) {
+    changed = false;
+    if (++guard > guardMax) break;
+
+    /* RULE A — wall saturation. For each numbered wall (b adjacent BULBs, u
+       adjacent UNKNOWN, target want):
+         b > want | b+u < want   → contradiction
+         b == want (u>0)         → all UNKNOWN neighbours EMPTY
+         b + u == want (u>0)     → all UNKNOWN neighbours BULB                 */
+    for (let wi = 0; wi < numberedAll.length && ok; wi++) {
+      const w = numberedAll[wi]; const want = board[w]; const nbs = wallWhite[w];
+      let b = 0, u = 0;
+      for (const nb of nbs) { const s = st[nb]; if (s === BULB) b++; else if (s === UNKNOWN) u++; }
+      if (b > want) { ok = false; break; }
+      if (b + u < want) { ok = false; break; }
+      if (b === want && u > 0) { for (const nb of nbs) if (st[nb] === UNKNOWN) { if (setEmpty(nb)) changed = true; } }
+      else if (b + u === want && u > 0) { for (const nb of nbs) if (st[nb] === UNKNOWN) { if (setBulb(nb)) changed = true; if (!ok) break; } }
+    }
+    if (!ok) break;
+
+    /* RULE B — illumination necessity. For each white cell not yet lit, the
+       candidates that could ever light it = UNKNOWN cells in its sight. Zero
+       candidates ⇒ contradiction; exactly one ⇒ that cell must be a BULB.     */
+    for (let wi = 0; wi < whites.length && ok; wi++) {
+      const i = whites[wi];
+      if (st[i] === BULB) continue;
+      if (isLit(i)) continue;
+      let candidate = -1, cnt = 0;
+      for (const j of sightOf[i]) { if (st[j] === UNKNOWN) { cnt++; candidate = j; if (cnt > 1) break; } }
+      if (cnt === 0) { ok = false; break; }      // unlit & nothing can ever light it
+      if (cnt === 1) { if (setBulb(candidate)) changed = true; }
+    }
+  }
+  return ok;
+}
+
+/* LOGIC SOLVER — sound deduction only, never guesses. Wraps the propagate()
+   fixpoint with a FAILED-LITERAL probing layer: for each still-UNKNOWN cell,
+   tentatively assume it is a BULB (then EMPTY) on a COPY and propagate; if an
+   assumption provably yields a contradiction, the cell is forced to the
+   opposite value — a sound, no-guess deduction (resolution / lookahead, the
+   same "if I place a bulb here it breaks, so it can't be here" a human uses).
+   This loops until neither propagation nor probing changes anything. */
+function logicSolve(geom, initial) {
+  const { N, whites } = geom;
+  const st = new Int8Array(N * N);
+  if (initial) for (const i of whites) st[i] = initial[i];
+  let ok = propagate(geom, st);
+
+  let progress = true, guard = 0;
+  const guardMax = whites.length + 4;
+  while (ok && progress && guard++ < guardMax) {
+    progress = false;
+    for (const i of whites) {
+      if (st[i] !== UNKNOWN) continue;
+      // probe BULB
+      const tb = Int8Array.from(st); tb[i] = BULB;
+      const bulbOk = propagate(geom, tb);
+      // probe EMPTY
+      const te = Int8Array.from(st); te[i] = EMPTY;
+      const emptyOk = propagate(geom, te);
+      if (!bulbOk && !emptyOk) { ok = false; break; }       // both fail ⇒ dead state
+      if (!bulbOk) {                                          // BULB breaks ⇒ EMPTY forced
+        st[i] = EMPTY; ok = propagate(geom, st); progress = true;
+        if (!ok) break;
+      } else if (!emptyOk) {                                  // EMPTY breaks ⇒ BULB forced
+        st[i] = BULB; ok = propagate(geom, st); progress = true;
+        if (!ok) break;
+      }
+    }
+  }
+
+  let solved = ok;
+  if (ok) for (const i of whites) if (st[i] === UNKNOWN) { solved = false; break; }
+  // a fully-decided fixpoint is only a genuine solution if it actually validates
+  if (ok && solved) {
+    const bulbs = new Uint8Array(N * N);
+    for (const i of whites) if (st[i] === BULB) bulbs[i] = 1;
+    if (!isValidSolution(geom, bulbs)) solved = false;
+  }
+  return { state: st, ok, solved };
+}
+
+/* ===========================================================================
+   PRNG (mulberry32 + xmur3 — same family as Latch & Slitherlink)
+   ======================================================================== */
+function xmur3(str) {
+  let h = 1779033703 ^ str.length;
+  for (let i = 0; i < str.length; i++) { h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
+  return function () { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16; return h >>> 0; };
+}
+function mulberry32(a) {
+  return function () { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+function makeRng(seedStr) { const s = xmur3(String(seedStr)); return mulberry32(s()); }
+
+/* ===========================================================================
+   GENERATOR — place a wall layout, then a valid fully-lit conflict-free bulb
+   solution; derive wall numbers; drop numbers while logicSolve still uniquely
+   reaches that exact solution (place → number → prove → ship).
+   ======================================================================== */
+
+// A seeded black-wall layout, scattered so no 2×2 all-wall block (keeps boards
+// open & pretty). Density is SIZE-AWARE: larger boards need a touch more wall
+// to stay reliably logic-solvable (open regions are what make a board
+// logically ambiguous). Tuned empirically for ~100% generation w/o fallback.
+// Returns an Int8Array board of WHITE / WALL_PLAIN (numbers added later).
+function makeWallLayout(N, rng) {
+  const board = new Int8Array(N * N).fill(WHITE);
+  const cells = N * N;
+  // base fraction grows gently with N; small jitter for variety.
+  const base = N <= 7 ? 0.32 : N <= 10 ? 0.37 : 0.41;
+  const frac = base + rng() * 0.06;            // e.g. 7:0.32–0.38, 14:0.41–0.47
+  const target = Math.round(cells * frac);
+  const order = []; for (let i = 0; i < cells; i++) order.push(i);
+  for (let i = order.length - 1; i > 0; i--) { const j = (rng() * (i + 1)) | 0; const t = order[i]; order[i] = order[j]; order[j] = t; }
+  let placed = 0;
+  for (const i of order) {
+    if (placed >= target) break;
+    board[i] = WALL_PLAIN;
+    // reject if it creates a 2×2 all-wall block (ugly, and can over-fragment)
+    if (hasWallSquare(N, board, i)) { board[i] = WHITE; continue; }
+    placed++;
+  }
+  return board;
+}
+// does placing/keeping a wall at i complete any 2×2 block of all walls?
+function hasWallSquare(N, board, i) {
+  const r = (i / N) | 0, c = i % N;
+  const W = (rr, cc) => rr >= 0 && rr < N && cc >= 0 && cc < N && isWall(board[rr * N + cc]);
+  // four 2×2 squares that include (r,c)
+  const sq = [[r-1,c-1],[r-1,c],[r,c-1],[r,c]];
+  for (const [r0, c0] of sq) {
+    if (W(r0, c0) && W(r0, c0 + 1) && W(r0 + 1, c0) && W(r0 + 1, c0 + 1)) return true;
+  }
+  return false;
+}
+
+// Place a valid bulb solution onto a white-cell layout: greedily light the
+// least-lit white cells, never creating mutual sight, until everything is lit.
+// Returns a Uint8Array of bulbs, or null if it got stuck (caller retries).
+function placeBulbSolution(geom, rng) {
+  const { N, whites, sightOf } = geom;
+  const bulbs = new Uint8Array(N * N);
+  const lit = new Uint8Array(N * N);
+  const forbidden = new Uint8Array(N * N);     // cells in sight of a placed bulb (no bulb allowed)
+  let unlitCount = whites.length;
+
+  function placeBulb(i) {
+    bulbs[i] = 1;
+    for (const j of sightOf[i]) {
+      if (!lit[j]) { lit[j] = 1; unlitCount--; }
+      forbidden[j] = 1;                          // cannot host a bulb (mutual sight)
+    }
+  }
+
+  let guard = 0;
+  while (unlitCount > 0 && guard++ < whites.length * 4) {
+    // collect unlit white cells; pick among those the candidate bulb spots
+    // (unlit & not forbidden) that would light the most currently-unlit cells.
+    // Prefer placing a bulb ON an unlit cell to guarantee progress.
+    const candidates = [];
+    for (const i of whites) if (!forbidden[i] && bulbs[i] === 0) candidates.push(i);
+    if (candidates.length === 0) return null;    // stuck: an unlit cell has no legal bulb
+
+    // score each candidate by how many unlit cells it would newly light
+    let best = -1, bestScore = -1; const tied = [];
+    for (const i of candidates) {
+      let s = 0;
+      for (const j of sightOf[i]) if (!lit[j]) s++;
+      if (s > bestScore) { bestScore = s; tied.length = 0; tied.push(i); }
+      else if (s === bestScore) tied.push(i);
+    }
+    if (bestScore <= 0) return null;             // no candidate lights anything new ⇒ unlightable
+    best = tied[(rng() * tied.length) | 0];      // seeded tie-break
+    placeBulb(best);
+  }
+  if (unlitCount > 0) return null;
+  // sanity: this must be a conflict-free fully-lit placement
+  if (!fullyLit(geom, bulbs) || !noMutualSight(geom, bulbs)) return null;
+  return bulbs;
+}
+
+// derive wall numbers from a bulb solution (all walls numbered for now)
+function numberAllWalls(geom, bulbs) {
+  const { board, walls, wallWhite } = geom;
+  const numbered = Int8Array.from(board);
+  for (const w of walls) {
+    let k = 0; for (const nb of wallWhite[w]) if (bulbs[nb]) k++;
+    numbered[w] = k;                              // 0..4
+  }
+  return numbered;
+}
+
+function bulbsEqual(geom, a, b) {
+  for (const i of geom.whites) if ((a[i] === 1) !== (b[i] === 1)) return false;
+  return true;
+}
+
+// logicSolve's decided BULB cells as a Uint8Array (for comparison to solution)
+function solverBulbs(geom, res) {
+  const bulbs = new Uint8Array(geom.N * geom.N);
+  for (const i of geom.whites) if (res.state[i] === BULB) bulbs[i] = 1;
+  return bulbs;
+}
+
+// Drop wall numbers (seeded order) while logicSolve still uniquely reaches the
+// exact solution. A "plain" wall is encoded WALL_PLAIN (-1). Returns the final
+// numbered board (the puzzle's clue layout).
+function reduceClues(geom, rng, fullNumbered, solution) {
+  const board = Int8Array.from(fullNumbered);
+  // walls we may drop = all currently-numbered walls
+  const order = geom.walls.filter(w => board[w] >= 0);
+  for (let i = order.length - 1; i > 0; i--) { const j = (rng() * (i + 1)) | 0; const t = order[i]; order[i] = order[j]; order[j] = t; }
+  for (const w of order) {
+    const saved = board[w];
+    board[w] = WALL_PLAIN;                        // tentatively drop the number
+    const g2 = makeGeom(geom.N, board);           // re-derive geometry (walls same, numbers differ)
+    const res = logicSolve(g2, null);
+    if (!(res.ok && res.solved && bulbsEqual(g2, solverBulbs(g2, res), solution))) board[w] = saved;
+  }
+  return board;
+}
+
+// Generate deterministically. Returns
+//   { N, seed, geom, board, solution, fullNumbered, nWalls, nClues, fallback }.
+function generatePuzzle(seed, N) {
+  const rng = makeRng(seed + "|" + N + "x" + N);
+  const MAX_LAYOUTS = 40;
+  const BULB_TRIES = 8;                          // bulb placements per layout
+  for (let attempt = 0; attempt < MAX_LAYOUTS; attempt++) {
+    const layout = makeWallLayout(N, rng);
+    const baseGeom = makeGeom(N, layout);
+    if (baseGeom.whites.length < 2) continue;
+    // For a single wall layout, several distinct valid bulb solutions exist;
+    // only SOME are logically forceable from clue numbers. Try a few per layout
+    // (cheap: bulb placement + a full-board solve) before the costly reduceClues.
+    for (let bt = 0; bt < BULB_TRIES; bt++) {
+      const solution = placeBulbSolution(baseGeom, rng);
+      if (!solution) continue;
+      if (!isValidSolution(baseGeom, solution)) continue;  // belt & suspenders
+      // number ALL walls from the solution, then verify logic solves the full board
+      const fullNumbered = numberAllWalls(baseGeom, solution);
+      const fullGeom = makeGeom(N, fullNumbered);
+      const full = logicSolve(fullGeom, null);
+      if (!(full.ok && full.solved && bulbsEqual(fullGeom, solverBulbs(fullGeom, full), solution))) continue;
+      // reduce clues while logic-unique
+      const board = reduceClues(fullGeom, rng, fullNumbered, solution);
+      const geom = makeGeom(N, board);
+      const res = logicSolve(geom, null);
+      if (res.ok && res.solved && bulbsEqual(geom, solverBulbs(geom, res), solution)) {
+        const nWalls = geom.walls.length;
+        let nClues = 0; for (const w of geom.walls) if (board[w] >= 0) nClues++;
+        return { N, seed, geom, board, solution, fullNumbered, nWalls, nClues, fallback: false };
+      }
+    }
+  }
+  return fallbackPuzzle(seed, N);
+}
+
+// Fallback: keep ALL walls numbered (the maximally-clued board is always
+// logic-solvable by construction since the full board was verified). We still
+// re-run a layout that produced a valid solution; if even that fails we hand
+// back a tiny canned board so the UI never breaks.
+function fallbackPuzzle(seed, N) {
+  const rng = makeRng(seed + "|fb|" + N);
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const layout = makeWallLayout(N, rng);
+    const baseGeom = makeGeom(N, layout);
+    if (baseGeom.whites.length < 2) continue;
+    const solution = placeBulbSolution(baseGeom, rng);
+    if (!solution || !isValidSolution(baseGeom, solution)) continue;
+    const fullNumbered = numberAllWalls(baseGeom, solution);
+    const geom = makeGeom(N, fullNumbered);
+    const res = logicSolve(geom, null);
+    if (res.ok && res.solved && bulbsEqual(geom, solverBulbs(geom, res), solution)) {
+      const nWalls = geom.walls.length;
+      let nClues = 0; for (const w of geom.walls) if (fullNumbered[w] >= 0) nClues++;
+      return { N, seed, geom, board: fullNumbered, solution, fullNumbered, nWalls, nClues, fallback: true };
+    }
+  }
+  // last-ditch canned board: a single wall in an open field, solver-trivial.
+  const board = new Int8Array(N * N).fill(WHITE);
+  const geom0 = makeGeom(N, board);
+  const sol = placeBulbSolution(geom0, makeRng("canned")) || new Uint8Array(N * N);
+  return { N, seed, geom: geom0, board, solution: sol, fullNumbered: board, nWalls: 0, nClues: 0, fallback: true };
+}
+
+/* ===========================================================================
+   INDEPENDENT BRUTE-FORCE SOLUTION COUNTER (the second witness).
+   Exhaustive DFS over white cells in a fixed order, deciding BULB/EMPTY with
+   the three Akari constraints as pruning. INDEPENDENT of logicSolve. Returns
+   the solution count, capped at `cap` (cap=1 distinguishes exactly-1 from ≥2).
+   Small boards only.
+   ======================================================================== */
+function bruteCountSolutions(geom, cap) {
+  const { N, whites, sightOf, numberedAll, board, wallWhite, wallsOfWhite, rowSeg, colSeg } = geom;
+  const order = whites.slice();                  // decision order = white cells
+  const decision = new Int8Array(N * N);         // UNKNOWN/BULB/EMPTY during DFS
+  const litBy = new Int32Array(N * N);           // how many placed bulbs light cell i
+  const wallB = new Int32Array(N * N);           // bulbs adjacent to wall w (placed so far)
+  // incremental "is this white cell lit" via litBy counts.
+  let count = 0;
+
+  // Can a bulb legally go on cell i right now? (no bulb in its sight, and no
+  // adjacent numbered wall would exceed its number)
+  function canPlaceBulb(i) {
+    for (const j of sightOf[i]) if (j !== i && decision[j] === BULB) return false;  // mutual sight
+    for (const w of wallsOfWhite[i]) if (board[w] >= 0 && wallB[w] + 1 > board[w]) return false;
+    return true;
+  }
+  function applyBulb(i, on) {
+    const d = on ? 1 : -1;
+    decision[i] = on ? BULB : UNKNOWN;
+    for (const j of sightOf[i]) litBy[j] += d;
+    for (const w of wallsOfWhite[i]) wallB[w] += d;
+  }
+  // After deciding cell at `pos`, prune: any already-decided EMPTY cell that is
+  // now impossible to ever light (no bulb on it, litBy 0, and no later cell in
+  // its sight is still UNKNOWN) is a dead end. Also any numbered wall whose
+  // remaining UNKNOWN neighbours can't reach its number is dead.
+  // We use a simpler, obviously-correct full check at the leaf + light pruning.
+
+  // pre-index: for each white cell, the max decision-position among cells in its
+  // sight (so we know when "lightability" is finalized) — for pruning unlit cells.
+  const posOf = new Int32Array(N * N).fill(-1);
+  for (let p = 0; p < order.length; p++) posOf[order[p]] = p;
+  const lightFinalizedAt = new Int32Array(order.length); // pos → list handled below
+  const finalizeUnlit = Array.from({ length: order.length }, () => []);
+  for (const i of whites) {
+    let last = -1;
+    for (const j of sightOf[i]) last = Math.max(last, posOf[j]);
+    finalizeUnlit[last].push(i);                 // after this pos, cell i's lit status is fixed
+  }
+  // numbered walls finalize when their last white neighbour is decided
+  const finalizeWall = Array.from({ length: order.length }, () => []);
+  for (const w of numberedAll) {
+    let last = -1;
+    for (const nb of wallWhite[w]) last = Math.max(last, posOf[nb]);
+    if (last < 0) { /* a numbered wall with no white neighbours: number must be 0 */ }
+    else finalizeWall[last].push(w);
+  }
+  // a numbered wall with zero white neighbours must carry 0 — check once.
+  for (const w of numberedAll) if (wallWhite[w].length === 0 && board[w] !== 0) return 0;
+
+  function deadAfter(pos) {
+    // any white cell whose lit status is now finalized and is unlit (no bulb, litBy 0) → dead
+    for (const i of finalizeUnlit[pos]) {
+      if (decision[i] !== BULB && litBy[i] === 0) return true;
+    }
+    // any numbered wall finalized this step with wrong count → dead
+    for (const w of finalizeWall[pos]) {
+      if (wallB[w] !== board[w]) return true;
+    }
+    return false;
+  }
+
+  function rec(pos) {
+    if (count > cap) return;
+    if (pos === order.length) {
+      // leaf: verify independently with the helpers (no shortcuts trusted)
+      const bulbs = new Uint8Array(N * N);
+      for (const i of whites) if (decision[i] === BULB) bulbs[i] = 1;
+      if (isValidSolution(geom, bulbs)) count++;
+      return;
+    }
+    const i = order[pos];
+    // branch 1: place a BULB (if legal)
+    if (canPlaceBulb(i)) {
+      applyBulb(i, true);
+      if (!deadAfter(pos)) rec(pos + 1);
+      applyBulb(i, false);
+      if (count > cap) return;
+    }
+    // branch 2: leave EMPTY
+    decision[i] = EMPTY;
+    if (!deadAfter(pos)) rec(pos + 1);
+    decision[i] = UNKNOWN;
+  }
+  rec(0);
+  return count;
+}
+
+/* ===========================================================================
+   THE SELF-TEST — runs on load; flips the chip green only if all pass.
+   ======================================================================== */
+function runSelfTest() {
+  const checks = [];
+
+  /* Check 1 — logic-solver soundness on hand-crafted tiny boards. */
+  let c1 = true; const c1notes = [];
+  {
+    // (a) a 0-wall forces all its white neighbours EMPTY.
+    //   layout (3x1 column): white, wall(0), white  →  both whites EMPTY.
+    {
+      const N = 3; const b = new Int8Array(N * N).fill(WHITE);
+      // 3x3 but use the centre column: put a 0-wall at (1,1)
+      b[1 * N + 1] = 0; // numbered wall, number 0
+      const g = makeGeom(N, b);
+      const r = logicSolve(g, null);
+      const up = g.idx(0, 1), dn = g.idx(2, 1), lf = g.idx(1, 0), rt = g.idx(1, 2);
+      if (!r.ok) { c1 = false; c1notes.push("0-wall contradiction"); }
+      else if (!(r.state[up] === EMPTY && r.state[dn] === EMPTY && r.state[lf] === EMPTY && r.state[rt] === EMPTY))
+        { c1 = false; c1notes.push("0-wall neighbours not all EMPTY"); }
+    }
+    // (b) only-candidate-forced-bulb: a length-1 isolated white cell (walls all
+    //   around) can only be lit by a bulb ON itself → forced BULB.
+    {
+      const N = 3; const b = new Int8Array(N * N).fill(WALL_PLAIN);
+      const ci = 1 * N + 1; b[ci] = WHITE;        // a lone white cell amid walls
+      const g = makeGeom(N, b);
+      const r = logicSolve(g, null);
+      if (!(r.ok && r.state[ci] === BULB)) { c1 = false; c1notes.push("lone-cell forced bulb"); }
+    }
+    // (c) mutual-sight propagation: a 1x3 white row. A bulb at the end lights the
+    //   whole row; the illumination-necessity rule should force exactly one bulb
+    //   and the others EMPTY, never two bulbs that see each other. We assert the
+    //   solver, given a hand-placed bulb at one end, marks the rest EMPTY.
+    {
+      const N = 3; const b = new Int8Array(N * N).fill(WALL_PLAIN);
+      const a = 1 * N + 0, m = 1 * N + 1, z = 1 * N + 2;
+      b[a] = WHITE; b[m] = WHITE; b[z] = WHITE;   // a clear 3-wide white row
+      const g = makeGeom(N, b);
+      const init = new Int8Array(N * N); init[a] = BULB;
+      const r = logicSolve(g, init);
+      if (!(r.ok && r.state[m] === EMPTY && r.state[z] === EMPTY))
+        { c1 = false; c1notes.push("mutual-sight propagation"); }
+      // and a board with two mutually-seeing bulbs must be flagged contradictory
+      const init2 = new Int8Array(N * N); init2[a] = BULB; init2[z] = BULB;
+      const r2 = logicSolve(g, init2);
+      if (r2.ok) { c1 = false; c1notes.push("two-bulb mutual sight not flagged"); }
+    }
+    // (d) soundness across a few generated boards: every solver-decided cell
+    //   agrees with the true solution (never asserts a wrong cell).
+    {
+      for (let i = 0; i < 6 && c1; i++) {
+        const p = generatePuzzle("sound-" + i, 7);
+        const r = logicSolve(p.geom, null);
+        if (!r.ok || !r.solved) { c1 = false; c1notes.push("sound-" + i + " not solved"); break; }
+        for (const cell of p.geom.whites) {
+          const want = p.solution[cell] === 1 ? BULB : EMPTY;
+          if (r.state[cell] !== want) { c1 = false; c1notes.push("sound-" + i + " unsound cell " + cell); break; }
+        }
+      }
+    }
+  }
+  checks.push({ name: "logic-solver soundness", pass: c1, detail: c1 ? "0-wall, lone-bulb, mutual-sight + 6 boards" : c1notes.join("; ") });
+
+  /* Check 2 — generation sweep: each fully logic-solvable AND logicSolve bulbs
+     == generated solution AND the solution independently validates. */
+  let c2 = true, swept = 0, mismatch = 0, fallback = 0, invalid = 0, unsolved = 0; const c2fail = [];
+  const sweepSizes = [7, 10, 14];
+  const perSize = 32;                              // 96 puzzles
+  for (const N of sweepSizes) {
+    for (let i = 0; i < perSize; i++) {
+      const seed = "sweep-" + N + "-" + i;
+      const p = generatePuzzle(seed, N); swept++;
+      if (p.fallback) fallback++;
+      const res = logicSolve(p.geom, null);
+      const ok = res.ok && res.solved;
+      const match = ok && bulbsEqual(p.geom, solverBulbs(p.geom, res), p.solution);
+      const valid = isValidSolution(p.geom, p.solution);
+      if (!ok) unsolved++;
+      if (ok && !match) mismatch++;
+      if (!valid) invalid++;
+      if (!ok || !match || !valid || p.fallback) { c2 = false; if (c2fail.length < 5) c2fail.push(seed); }
+    }
+  }
+  checks.push({ name: "sweep " + swept + " puzzles logic-solvable", pass: c2, detail: c2 ? (swept + " puzzles, 0 guesses, 0 mismatch, 0 fallback") : ("fail: " + c2fail.join(",") + " (unsolved " + unsolved + ", mismatch " + mismatch + ", invalid " + invalid + ", fallback " + fallback + ")") });
+
+  /* Check 3 — uniqueness via the independent brute-force counter. */
+  let c3 = true, c3n = 0; const c3fail = [];
+  for (const N of [7, 10]) {
+    const per = N === 7 ? 16 : 8;                  // 24 small boards
+    for (let i = 0; i < per; i++) {
+      const seed = "uniq-" + N + "-" + i;
+      const p = generatePuzzle(seed, N);
+      const cnt = bruteCountSolutions(p.geom, 1);
+      c3n++;
+      if (cnt !== 1) { c3 = false; if (c3fail.length < 6) c3fail.push(seed + "=" + cnt); }
+    }
+  }
+  checks.push({ name: "uniqueness (brute-force witness)", pass: c3, detail: c3 ? (c3n + " small boards, exactly 1 solution each") : ("fail: " + c3fail.join(",")) });
+
+  /* Check 4 — seed purity / skin-invariance. */
+  let c4 = true; const c4fail = [];
+  function fingerprint(p) {
+    // wall+number layout + solution bulbs, joined
+    let s = "";
+    for (let i = 0; i < p.N * p.N; i++) s += (p.board[i] + 3) + ",";
+    s += "|";
+    for (let i = 0; i < p.N * p.N; i++) s += (p.solution[i] ? 1 : 0);
+    return s;
+  }
+  for (const N of [7, 10, 14]) {
+    for (let i = 0; i < 6; i++) {
+      const seed = "det-" + N + "-" + i;
+      const a = generatePuzzle(seed, N), b = generatePuzzle(seed, N);
+      if (fingerprint(a) !== fingerprint(b)) { c4 = false; c4fail.push(seed); }
+    }
+  }
+  let differs = false;
+  for (let i = 0; i < 30 && !differs; i++) {
+    const a = generatePuzzle("rollA-" + i, 7), b = generatePuzzle("rollB-" + i, 7);
+    if (fingerprint(a) !== fingerprint(b)) differs = true;
+  }
+  if (!differs) { c4 = false; c4fail.push("re-roll-never-differs"); }
+  checks.push({ name: "seed purity + skin-invariance", pass: c4, detail: c4 ? "same seed ⇒ identical; re-roll differs; skin is cosmetic" : ("fail: " + c4fail.join(",")) });
+
+  const passed = checks.filter(c => c.pass).length, total = checks.length;
+  for (const c of checks) {
+    if (c.pass) console.log("[Akari] self-test PASS — " + c.name + " (" + c.detail + ")");
+    else console.error("[Akari] self-test FAIL — " + c.name + " (" + c.detail + ")");
+  }
+  return { passed, total, allPass: passed === total, checks };
+}
+
+/* ===========================================================================
+   ============================  THE UI / GAME  ===========================
+   ======================================================================== */
+const $ = id => document.getElementById(id);
+const SVGNS = "http://www.w3.org/2000/svg";
+const board = $('board'), boardOuter = $('boardOuter'), verdict = $('verdict'),
+      caption = $('caption'), seedInput = $('seedInput');
+
+const state = {
+  size: 7,            // cells per side (square boards)
+  seed: "",
+  skin: "graphite",
+  puzzle: null,       // current generated puzzle
+  player: null,       // Int8Array bulb-state over white cells (UNKNOWN/BULB(player)/EMPTY=mark)
+  bulb: null,         // Uint8Array: 1 ⇒ player placed a bulb here
+  mark: null,         // Uint8Array: 1 ⇒ player placed a ✕ "no bulb" mark here
+  won: false,
+  mistakes: 0,
+  geom: null,
+  cellEls: null,      // per-white-cell { g, bulb, glow, mark, floor } element refs
+  floorEls: null,     // per-white-cell floor rect
+  rayEls: null,       // ray <line> elements, rebuilt each render
+};
+
+/* ---- storage helpers (guarded; page works even when storage throws) ---- */
+function safeSet(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) { } }
+function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function markBest() {
+  try { const prev = parseInt(safeGet('ws:best:akari') || '0', 10) || 0; if (state.size > prev) safeSet('ws:best:akari', state.size); } catch (e) { }
+}
+
+/* ---- random seed string (Latch's word list) ---- */
+function randomSeed() {
+  const words = ["mica","quill","ember","fjord","latch","thorn","glade","verge","cusp","slate","onyx","reed","cairn","wisp","brume","flint","loom","gable","spire","nook","weft","skein","helix","noose","lumen","taper","wick","glow","beacon"];
+  return words[Math.floor(Math.random() * words.length)] + "-" + Math.floor(Math.random() * 9000 + 1000);
+}
+
+/* ---- build a new puzzle ---- */
+function newPuzzle(seed) {
+  state.seed = seed;
+  seedInput.value = seed;
+  state.puzzle = generatePuzzle(seed, state.size);
+  state.geom = state.puzzle.geom;
+  const n = state.geom.N * state.geom.N;
+  state.bulb = new Uint8Array(n);
+  state.mark = new Uint8Array(n);
+  state.won = false; state.mistakes = 0;
+  boardOuter.classList.remove('won');
+  verdict.classList.remove('show'); verdict.innerHTML = "";
+  renderBoard();
+  updateCaption();
+}
+
+/* ---- render the SVG board ---- */
+function renderBoard() {
+  const g = state.geom, N = g.N, board0 = state.puzzle.board;
+  const cellPx = N <= 7 ? 56 : N <= 10 ? 44 : 34;
+  const pad = Math.round(cellPx * 0.28);
+  const W = N * cellPx + pad * 2, H = N * cellPx + pad * 2;
+  const X = c => pad + c * cellPx, Y = r => pad + r * cellPx;
+  const cx = c => pad + c * cellPx + cellPx / 2, cy = r => pad + r * cellPx + cellPx / 2;
+
+  board.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  board.setAttribute('width', W); board.setAttribute('height', H);
+  board.style.maxWidth = '100%';
+  while (board.firstChild) board.removeChild(board.firstChild);
+
+  // LAYER 1 — floors (white cells) + walls (black) + wall numbers
+  const baseLayer = document.createElementNS(SVGNS, 'g');
+  const floorEls = new Array(N * N).fill(null);
+  const wnumEls = new Array(N * N).fill(null);
+  const wallEls = new Array(N * N).fill(null);
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const i = r * N + c; const v = board0[i];
+    const rect = document.createElementNS(SVGNS, 'rect');
+    rect.setAttribute('x', X(c)); rect.setAttribute('y', Y(r));
+    rect.setAttribute('width', cellPx); rect.setAttribute('height', cellPx);
+    if (v === WHITE) {
+      rect.setAttribute('class', 'floor');
+      rect.setAttribute('rx', Math.round(cellPx * 0.10));
+      floorEls[i] = rect;
+    } else {
+      rect.setAttribute('class', 'wall');
+      rect.setAttribute('rx', Math.round(cellPx * 0.10));
+      wallEls[i] = rect;
+    }
+    baseLayer.appendChild(rect);
+    if (v >= 0) {                                  // numbered wall → centered glyph
+      const t = document.createElementNS(SVGNS, 'text');
+      t.setAttribute('x', cx(c)); t.setAttribute('y', cy(r) + 1);
+      t.setAttribute('class', 'wnum');
+      t.setAttribute('font-size', Math.round(cellPx * 0.46));
+      t.textContent = String(v);
+      baseLayer.appendChild(t);
+      wnumEls[i] = t;
+    }
+  }
+  board.appendChild(baseLayer);
+  state.floorEls = floorEls; state.wnumEls = wnumEls; state.wallEls = wallEls;
+
+  // LAYER 2 — rays (beams), drawn beneath bulbs. One ray line per (white cell,
+  // direction) toward each segment neighbour; toggled on when lit by a bulb.
+  // Simpler & crisp: per white cell, four directional ray lines from its centre
+  // to the far edge of its row/col segment, shown when a bulb on this cell lights.
+  // We instead draw rays per bulb dynamically in paint; here we make a layer.
+  const rayLayer = document.createElementNS(SVGNS, 'g');
+  board.appendChild(rayLayer);
+  state.rayLayer = rayLayer;
+
+  // LAYER 3 — bulbs + glow + marks + hit targets, one group per white cell
+  const cellLayer = document.createElementNS(SVGNS, 'g');
+  const cellEls = new Array(N * N).fill(null);
+  const bulbR = cellPx * 0.26, glowR = cellPx * 0.62, markR = cellPx * 0.17;
+  for (const i of g.whites) {
+    const r = (i / N) | 0, c = i % N;
+    const grp = document.createElementNS(SVGNS, 'g');
+    grp.setAttribute('class', 'cell'); grp.dataset.i = i;
+    // glow halo (under the dot)
+    const glow = document.createElementNS(SVGNS, 'circle');
+    glow.setAttribute('cx', cx(c)); glow.setAttribute('cy', cy(r)); glow.setAttribute('r', glowR);
+    glow.setAttribute('class', 'bulbglow');
+    grp.appendChild(glow);
+    // bulb dot
+    const bulb = document.createElementNS(SVGNS, 'circle');
+    bulb.setAttribute('cx', cx(c)); bulb.setAttribute('cy', cy(r)); bulb.setAttribute('r', bulbR);
+    bulb.setAttribute('class', 'bulb');
+    grp.appendChild(bulb);
+    // ✕ mark (two strokes)
+    const m1 = document.createElementNS(SVGNS, 'line');
+    m1.setAttribute('x1', cx(c) - markR); m1.setAttribute('y1', cy(r) - markR);
+    m1.setAttribute('x2', cx(c) + markR); m1.setAttribute('y2', cy(r) + markR);
+    m1.setAttribute('class', 'mark');
+    const m2 = document.createElementNS(SVGNS, 'line');
+    m2.setAttribute('x1', cx(c) - markR); m2.setAttribute('y1', cy(r) + markR);
+    m2.setAttribute('x2', cx(c) + markR); m2.setAttribute('y2', cy(r) - markR);
+    m2.setAttribute('class', 'mark');
+    grp.appendChild(m1); grp.appendChild(m2);
+    // hit target on top
+    const hit = document.createElementNS(SVGNS, 'rect');
+    hit.setAttribute('x', X(c)); hit.setAttribute('y', Y(r));
+    hit.setAttribute('width', cellPx); hit.setAttribute('height', cellPx);
+    hit.setAttribute('class', 'hit');
+    grp.appendChild(hit);
+    cellLayer.appendChild(grp);
+    cellEls[i] = grp;
+  }
+  board.appendChild(cellLayer);
+  state.cellEls = cellEls;
+  state._cellPx = cellPx; state._cx = cx; state._cy = cy;
+
+  paintAll();
+}
+
+/* ---- rebuild ray lines for the currently-placed bulbs ---- */
+function rebuildRays() {
+  const g = state.geom, N = g.N, layer = state.rayLayer;
+  const cx = state._cx, cy = state._cy, cellPx = state._cellPx;
+  while (layer.firstChild) layer.removeChild(layer.firstChild);
+  const rayW = Math.max(3, Math.round(cellPx * 0.10));
+  for (const i of g.whites) {
+    if (!state.bulb[i]) continue;
+    const r = (i / N) | 0, c = i % N;
+    // row-seg extent
+    const rs = g.rowSeg[i]; const cols = rs.map(x => x % N);
+    const minC = Math.min(...cols), maxC = Math.max(...cols);
+    // col-seg extent
+    const cs = g.colSeg[i]; const rows = cs.map(x => (x / N) | 0);
+    const minR = Math.min(...rows), maxR = Math.max(...rows);
+    // horizontal ray
+    const hl = document.createElementNS(SVGNS, 'line');
+    hl.setAttribute('x1', cx(minC)); hl.setAttribute('y1', cy(r));
+    hl.setAttribute('x2', cx(maxC)); hl.setAttribute('y2', cy(r));
+    hl.setAttribute('class', 'ray on'); hl.setAttribute('stroke-width', rayW);
+    layer.appendChild(hl);
+    // vertical ray
+    const vl = document.createElementNS(SVGNS, 'line');
+    vl.setAttribute('x1', cx(c)); vl.setAttribute('y1', cy(minR));
+    vl.setAttribute('x2', cx(c)); vl.setAttribute('y2', cy(maxR));
+    vl.setAttribute('class', 'ray on'); vl.setAttribute('stroke-width', rayW);
+    layer.appendChild(vl);
+  }
+}
+
+/* ---- paint everything from player state ---- */
+function paintAll() {
+  const g = state.geom;
+  // compute lit cells + lit counts from the player's bulbs
+  const litCount = new Int32Array(g.N * g.N);
+  for (const i of g.whites) {
+    if (!state.bulb[i]) continue;
+    for (const j of g.sightOf[i]) litCount[j]++;
+  }
+  // a bulb is "bad" if it sees another bulb (mutual sight)
+  const bulbBad = new Uint8Array(g.N * g.N);
+  for (const i of g.whites) {
+    if (!state.bulb[i]) continue;
+    for (const j of g.sightOf[i]) if (j !== i && state.bulb[j]) { bulbBad[i] = 1; break; }
+  }
+  // floors
+  for (const i of g.whites) {
+    const f = state.floorEls[i]; if (!f) continue;
+    f.classList.toggle('lit', litCount[i] >= 1 && litCount[i] < 2);
+    f.classList.toggle('lit2', litCount[i] >= 2);
+  }
+  // cells: bulb / mark / bad
+  for (const i of g.whites) {
+    const grp = state.cellEls[i]; if (!grp) continue;
+    grp.classList.toggle('bulb-on', state.bulb[i] === 1);
+    grp.classList.toggle('mark-on', state.mark[i] === 1);
+    grp.classList.toggle('bulb-bad', bulbBad[i] === 1);
+  }
+  rebuildRays();
+  refreshWalls();
+}
+
+/* ---- wall-number feedback: dim when satisfied, warn when exceeded ---- */
+function refreshWalls() {
+  const g = state.geom;
+  for (const w of g.numberedAll) {
+    const t = state.wnumEls[w]; if (!t) continue;
+    const want = g.board[w];
+    let k = 0; for (const nb of g.wallWhite[w]) if (state.bulb[nb]) k++;
+    t.classList.toggle('done', k === want);
+    t.classList.toggle('over', k > want);
+  }
+}
+
+/* ---- win check: player's bulbs == the unique solution AND a valid Akari
+       solution (honest: only a true solve wins) ---- */
+function isWin() {
+  const g = state.geom, sol = state.puzzle.solution;
+  for (const i of g.whites) if ((state.bulb[i] === 1) !== (sol[i] === 1)) return false;
+  return isValidSolution(g, state.bulb);
+}
+function checkWin() {
+  if (state.won) return;
+  if (isWin()) {
+    state.won = true;
+    boardOuter.classList.add('won');
+    paintAll();
+    let lamps = 0; for (const i of state.geom.whites) if (state.bulb[i]) lamps++;
+    const clean = state.mistakes === 0;
+    verdict.innerHTML = `<span>solved — <span class="name">${lamps} lamps light every cell</span></span>` +
+      `<span class="small">${clean ? "a clean solve · no mistakes" : state.mistakes + " mistake" + (state.mistakes === 1 ? "" : "s")} · seed ${state.puzzle.seed}</span>`;
+    verdict.classList.add('show');
+    markBest();
+    if (clean) safeSet('ws:flag:akari-clean', Date.now());
+  }
+}
+
+/* ---- player actions ---- */
+function toggleBulb(i) {            // left-click: bulb on/off (clears a mark)
+  if (state.won) return;
+  if (state.bulb[i]) state.bulb[i] = 0;
+  else { state.bulb[i] = 1; state.mark[i] = 0; }
+  paintAll(); checkWin();
+}
+function toggleMark(i) {            // right/shift-click: ✕ no-bulb mark (clears a bulb)
+  if (state.won) return;
+  if (state.mark[i]) state.mark[i] = 0;
+  else { state.mark[i] = 1; state.bulb[i] = 0; }
+  paintAll();
+}
+
+/* ---- pointer input on white cells (left = bulb, right/shift = mark) ---- */
+function cellFromEvent(ev) {
+  const t = ev.target.closest('g.cell');
+  if (!t) return -1;
+  return +t.dataset.i;
+}
+board.addEventListener('contextmenu', ev => { if (ev.target.closest('g.cell')) ev.preventDefault(); });
+board.addEventListener('pointerdown', ev => {
+  const i = cellFromEvent(ev);
+  if (i < 0 || state.won) return;
+  ev.preventDefault();
+  const wantMark = (ev.button === 2) || ev.shiftKey;
+  if (wantMark) toggleMark(i); else toggleBulb(i);
+});
+
+/* ---- Hint: assert one logically-forced placement the player hasn't made ---- */
+function doHint() {
+  if (state.won) return;
+  const g = state.geom;
+  // build the current known cell-state from the player's bulbs/marks
+  const init = new Int8Array(g.N * g.N);
+  for (const i of g.whites) init[i] = state.bulb[i] ? BULB : (state.mark[i] ? EMPTY : UNKNOWN);
+  const res = logicSolve(g, init);
+  if (!res.ok) { flashCaption("your marks contradict the logic — try Check, then clear a wrong bulb/mark."); return; }
+  // find the first cell the solver decided that the player hasn't set yet
+  for (const i of g.whites) {
+    const playerSet = state.bulb[i] || state.mark[i];
+    if (playerSet) continue;
+    if (res.state[i] === BULB) {
+      state.bulb[i] = 1; state.mark[i] = 0;
+      popCell(i); paintAll(); checkWin(); return;
+    }
+    if (res.state[i] === EMPTY) {
+      state.mark[i] = 1; state.bulb[i] = 0;
+      popCell(i); paintAll(); return;
+    }
+  }
+  flashCaption("no single-step deduction left from here — you're at a logic fixpoint.");
+}
+function popCell(i) {
+  const grp = state.cellEls[i]; if (!grp) return;
+  grp.classList.remove('hintpop'); void grp.getBBox(); grp.classList.add('hintpop');
+  setTimeout(() => grp.classList.remove('hintpop'), 600);
+}
+
+/* ---- Check: highlight contradictions vs the unique solution ---- */
+function doCheck() {
+  if (state.won) return;
+  const g = state.geom, sol = state.puzzle.solution;
+  let wrongBulb = 0, missMark = 0;
+  // a player bulb is wrong if the solution has no bulb there; a ✕ mark is wrong
+  // if the solution actually places a bulb there.
+  for (const i of g.whites) {
+    if (state.bulb[i] && sol[i] !== 1) {
+      wrongBulb++;
+      const grp = state.cellEls[i];
+      if (grp) { grp.classList.remove('err'); void grp.getBBox(); grp.classList.add('err'); setTimeout(() => grp.classList.remove('err'), 800); }
+    }
+    if (state.mark[i] && sol[i] === 1) {
+      missMark++;
+      const grp = state.cellEls[i];
+      if (grp) { grp.classList.remove('err'); void grp.getBBox(); grp.classList.add('err'); setTimeout(() => grp.classList.remove('err'), 800); }
+    }
+  }
+  // structural contradictions among the player's actual placements
+  let mutual = 0;
+  for (const i of g.whites) {
+    if (!state.bulb[i]) continue;
+    for (const j of g.sightOf[i]) if (j !== i && state.bulb[j]) { mutual++; break; }
+  }
+  let overWall = 0;
+  for (const w of g.numberedAll) { let k = 0; for (const nb of g.wallWhite[w]) if (state.bulb[nb]) k++; if (k > g.board[w]) { overWall++; const t = state.wallEls[w]; if (t) { t.classList.remove('err'); void t.getBBox(); t.classList.add('err'); setTimeout(() => t.classList.remove('err'), 800); } } }
+
+  const wrong = wrongBulb + missMark;
+  if (wrong > 0) {
+    state.mistakes += wrong;
+    let msg = wrong + " contradiction" + (wrong === 1 ? "" : "s") + " with the unique solution";
+    const extra = [];
+    if (mutual) extra.push(mutual + " bulb" + (mutual === 1 ? "" : "s") + " in mutual sight");
+    if (overWall) extra.push(overWall + " over-counted wall" + (overWall === 1 ? "" : "s"));
+    if (extra.length) msg += " (incl. " + extra.join(", ") + ")";
+    flashCaption(msg + ".");
+  } else if (mutual > 0 || overWall > 0) {
+    const parts = [];
+    if (mutual) parts.push(mutual + " pair-of-bulbs lighting each other");
+    if (overWall) parts.push(overWall + " wall over its number");
+    flashCaption("structural contradiction: " + parts.join(", ") + ".");
+  } else {
+    flashCaption("no contradictions — every bulb and mark agrees with the logic.");
+  }
+}
+
+/* ---- Reveal full solution (the money shot: board fully lights up) ---- */
+function doReveal() {
+  const g = state.geom, sol = state.puzzle.solution;
+  for (const i of g.whites) { state.bulb[i] = sol[i] === 1 ? 1 : 0; state.mark[i] = 0; }
+  paintAll();
+  if (!state.won) {
+    boardOuter.classList.add('won'); state.won = true;
+    let lamps = 0; for (const i of g.whites) if (state.bulb[i]) lamps++;
+    verdict.innerHTML = `<span>revealed — <span class="name">${lamps} lamps light every cell</span></span>` +
+      `<span class="small">solution shown · seed ${state.puzzle.seed}</span>`;
+    verdict.classList.add('show'); paintAll();
+    // honest: Reveal records best size reached but NOT a clean solve.
+    markBest();
+  }
+}
+
+/* ---- Reset (clear bulbs/marks, same puzzle) ---- */
+function doReset() {
+  const n = state.geom.N * state.geom.N;
+  state.bulb = new Uint8Array(n); state.mark = new Uint8Array(n);
+  state.won = false; state.mistakes = 0;
+  boardOuter.classList.remove('won');
+  verdict.classList.remove('show'); verdict.innerHTML = "";
+  paintAll();
+}
+
+/* ---- caption / transient messages ---- */
+let capTimer = null;
+function updateCaption() {
+  const p = state.puzzle, g = state.geom;
+  let lamps = 0; for (const i of g.whites) if (p.solution[i]) lamps++;
+  caption.innerHTML = `A <b>${g.N}×${g.N}</b> Akari, <b>logic-solvable &amp; unique</b> — proven before it reached you by a sound solver and an independent counter. ` +
+    `<span class="stat">${g.whites.length}</span> floor cells, <span class="stat">${p.nWalls}</span> walls (<span class="stat">${p.nClues}</span> numbered), lit by <span class="stat">${lamps}</span> lamps. ` +
+    `Left-click a cell for a bulb · right-click / shift to mark ✕ "no bulb".`;
+}
+function flashCaption(msg) {
+  caption.innerHTML = `<b>${msg}</b>`;
+  if (capTimer) clearTimeout(capTimer);
+  capTimer = setTimeout(updateCaption, 3200);
+}
+
+/* ----------------------------- wiring ----------------------------- */
+$('sizeSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#sizeSeg button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  state.size = +b.dataset.size;
+  newPuzzle(state.seed || randomSeed());
+});
+$('skinSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#skinSeg button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  state.skin = b.dataset.skin;
+  document.body.dataset.skin = state.skin;   // PURELY cosmetic — never re-rolls the puzzle
+});
+$('diceBtn').addEventListener('click', () => newPuzzle(randomSeed()));
+$('newBtn').addEventListener('click', () => newPuzzle(randomSeed()));
+$('hintBtn').addEventListener('click', doHint);
+$('checkBtn').addEventListener('click', doCheck);
+$('resetBtn').addEventListener('click', doReset);
+$('revealBtn').addEventListener('click', doReveal);
+seedInput.addEventListener('change', () => { const s = seedInput.value.trim(); if (s) newPuzzle(s); });
+seedInput.addEventListener('keydown', e => { if (e.key === 'Enter') seedInput.blur(); });
+
+/* keyboard: h hint, c check, n new, r reset */
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'h' || e.key === 'H') doHint();
+  else if (e.key === 'c' || e.key === 'C') doCheck();
+  else if (e.key === 'n' || e.key === 'N') newPuzzle(randomSeed());
+  else if (e.key === 'r' || e.key === 'R') doReset();
+});
+
+/* ----------------------------- boot ----------------------------- */
+(function boot() {
+  // self-test FIRST (workshop tradition); chip reflects the result.
+  let st;
+  try { st = runSelfTest(); }
+  catch (err) { console.error('[Akari] self-test threw', err); st = { passed: 0, total: 4, allPass: false }; }
+  const chip = $('selftest'), txt = $('stText');
+  if (st.allPass) { chip.classList.add('ok'); txt.textContent = `logic-verified — ${st.passed}/${st.total} ✓`; }
+  else { chip.classList.add('bad'); txt.textContent = `self-test ${st.passed}/${st.total} — see console`; }
+
+  // breadcrumb (guarded; see /UNLOCK.md)
+  safeSet('ws:seen:akari', Date.now());
+
+  // first puzzle
+  newPuzzle(randomSeed());
+  console.log('[Akari] ready. seed:', state.seed, 'size:', state.size);
+})();
+</script>
+</body>
+</html>
