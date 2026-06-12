@@ -180,6 +180,17 @@ footer — standalone tools, toys & tales, each self-contained:
   export. It keeps the workshop's promise: a built-in self-test proves the optics are physically
   exact — Snell's law to a billionth, the critical angle dead on, the focus where the math says.
   Also not a puzzle and not a game — a sandbox of light you steer.
+- **[Ripple](https://bman654.github.io/the-workshop/ripple/)** — Caustic's wave-physics sibling: a
+  steerable **wave-interference tank**. Drop point sources on dark water and drag them around;
+  circular ripples spread and **interfere** live by the *exact* physics of linear superposition —
+  bright antinodal lines where crest meets crest, dark nodal hyperbolae where crest meets trough.
+  Dial the wavelength and watch the fringes breathe, flip a source's phase to swap nodes for
+  antinodes, freeze the pattern to study it, or load the **double-slit** and see far-field fringes
+  spaced exactly λL/d. Curated presets (two-source, double-slit, line array, single drop), three
+  cosmetic skins, a 2× PNG export. It keeps the workshop's promise: a built-in self-test proves the
+  field is physically exact — the rendered tank *equals* the analytic superposition to a billionth,
+  and the interference maxima and minima land precisely where the path-difference math demands. Where
+  Caustic traces light as rays, Ripple is the wave story — a sandbox of waves you steer.
 - **[Slipstick](https://bman654.github.io/the-workshop/slipstick/)** — a genuine, working **slide
   rule**: a draggable analog computer. Slide the C scale's index over a number on D and read products
   straight off — the rule *does* multiplication because adding logarithms multiplies the numbers
