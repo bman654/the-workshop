@@ -43,5 +43,11 @@ window.INSTRUMENTS = [
     name: "Lattice",
     blurb: "a glowing pitch×time lattice — a playhead sweeps, lit cells chime in scale, the seeded pattern blooms and evolves",
     accent: "#5fe6c4"
+  },
+  {
+    file: "gamelan.html",
+    name: "Gamelan",
+    blurb: "two interlocking parts — polos and sangsih — weave into one gap-free stream on inharmonic metallophones tuned to slendro or pelog",
+    accent: "#e0a23c"
   }
 ];

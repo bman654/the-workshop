@@ -1,5 +1,93 @@
 # Sound Garden — Changelog
 
+## 2026-06-11 — Gamelan (new instrument — the rack's 8th, → a clean 2×4)
+
+Added `gamelan.html`, the rack's **eighth** visible instrument and its interlocking-pulse /
+non-Western-tuning voice (Whitney = orbital chimes, Drift = ambient chord, Euclid = Euclidean
+rhythm, Rain = tuned-pool plinks, Loom = plucked arpeggios, Carillon = change-ringing bells,
+Lattice = a Tenori-on you can *see*, **Gamelan = interlocking kotekan on inharmonic metallophones,
+tuned to slendro/pelog** — the gap-free two-part shimmer the rack lacked). The responsive
+`auto-fit` grid now flows a clean **2×4** (8 cards); no rebalance needed.
+
+- **Concept — kotekan interlock you can SEE.** Two parts, **polos** (on-beat) and **sangsih**
+  (off-beat), interleave into ONE continuous melodic stream — the defining property of kotekan:
+  neither part alone is the melody; together they are a steady, even, gap-free pulse. A seeded
+  **pokok** (core melody contour) is the slow tone the kotekan elaborates; each beat defines a
+  small cell of adjacent keys (kotekan **telu** = 3-note cell, **empat** = 4-note cell) and the two
+  parts trade interleaving members of the cell (the shimmer). By construction polos fills the even
+  slots and sangsih the odd slots of a 16-slot cycle, so their union is provably gap-free
+  (`unionOnsets()` = `0101010101010101`). The whole pattern is a **pure function of seed × scale ×
+  style × density** (xmur3 + mulberry32, separate pokok/kotekan streams).
+- **Inharmonic metallophone/gong timbre (the timbral crux).** Each strike is additive over
+  **stretched, non-integer partial ratios** `1 : 1.51 : 2.76 : 5.40 : 8.93` (a bar/gong-like
+  inharmonic spectrum, NOT 1:2:3 harmonic), each partial with its own gain and an exponential decay
+  where higher partials die sooner (struck metal), plus a fast metallic attack and a brief
+  band-passed noise tick for the mallet contact. Lower/larger bars ring longer (gong-like). This
+  inharmonic signature is exactly what the audio-lens spectrogram reveals (see below).
+- **Authentic non-12-TET tuning, in-scale by construction.** Scales are defined in **cents**, not
+  semitones, so the pitches are genuinely un-equal / inharmonically tuned: **Slendro** = 5
+  near-equal steps (`0,231,474,717,955`c ≈ ~240c each) and **Pelog** = 7 unequal degrees
+  (`0,120,258,540,675,785,943`c). Each metallophone bar *is* a fixed scale-degree frequency; the
+  kotekan only ever picks bar indices ⇒ no out-of-scale pitch can be scheduled.
+- **Built-in self-test (visible `self-test 3/3 ✓` badge; runs on load + on every change).**
+  Asserts **(A) kotekan interlock** — over one cycle the union of polos+sangsih onsets is an evenly
+  spaced pulse with no gaps and no double-strikes (every slot filled, polos exactly the even slots,
+  sangsih exactly the odd, strict alternation); **(B) in-scale** — every scheduled key index is a
+  valid bar whose frequency equals the scale-degree frequency; **(C) seed reproducibility** — same
+  seed ⇒ identical pattern fingerprint. A standalone Node replication ran the self-test across
+  **840 configs** (both scales × both styles × keys 5–10 × densities 0.2–1.0 × 7 seeds) — **all
+  PASS**.
+- **Never clips / lens-native.** Master chain bus → low-pass (11 kHz) → soft-clip tanh waveshaper
+  (2× oversample) → brick-wall limiter (threshold −8 dB, ratio 20) → master (well below unity) →
+  dest, with a synthesized convolution reverb for bloom. Polyphony cap 28 with oldest-voice
+  stealing; oscillators + the noise tick self-disconnect on `ended` (bounded node count confirmed
+  across 60 re-roll/scale/style churn ops — activeVoices stayed 0 while muted, fps held 60).
+  `window.__renderOffline(seconds, seed)` renders the pattern under `OfflineAudioContext` → 16-bit
+  stereo WAV + a silent self-check.
+- **Visuals (the verifiable surface):** a centred row of glowing metallophone bars (low/wide bronze
+  on the left → short teal on the right). On strike a bar **blooms** (glow halo + scale-up + an
+  expanding resonance ripple) in its **part's colour — polos gold (hue 42), sangsih teal (hue
+  172)** — so you SEE the two colours weave. A **stream ribbon** along the top renders the 16 cycle
+  slots as alternating gold/teal ticks (the interlock made plainly legible), with the sweep marked
+  and `polos ▸ / ◂ sangsih` labels; a **pulse dot** below the row pulses on each on-beat. ~60fps,
+  devicePixelRatio-aware, alive on load (the sweep + blooms run on a visual clock before audio is
+  unlocked, so it is screenshot-verifiable regardless of audio state). Controls: Seed/dice, Scale
+  (slendro/pelog), Kotekan (telu/empat), Tempo, Density, Keys (5–10), Reverb, Volume; Play/Pause,
+  Mute, Regenerate, **Save PNG** (keys: space/m/r/g/p/h).
+- **Verified SILENTLY (no live audio EVER played — courtesy; evening on the owner's speakers).**
+  Unique `agent-browser` session `gamelan-build` over the served origin `http://127.0.0.1:8765`
+  (never `file://`):
+  - *Structural / visual:* page loads **0 console errors**; `self-test 3/3 ✓` (green badge);
+    audio **never started** (`started:false, state:'none'` on load; after pressing *begin* the
+    context is `suspended` and **P.muted defaults true**, so playing the visual sweep emits no
+    sound — `activeVoices` stayed 0); steady **60 fps**; screenshots of 3 seeds/scales (slendro
+    telu seed 1729 @ 7 keys, pelog empat seed 42, slendro seed 314159 @ 10 keys) show the bar row,
+    the two-colour blooms + ripples, the alternating interlock ribbon, and the pulse dot — gorgeous
+    and on-theme (warm bronze gamelan palette). No graph leak across 60 re-rolls (bounded voices,
+    self-test still 3/3, 60 fps).
+  - *Audio (silent, offline render → audio-lens skill; self-test 12/12 green):* two 18 s renders.
+    **Slendro/telu seed 1729 @ 7 keys:** peak **−17.3 dBFS**, **clips = false / 0 %**, silenceRatio
+    **0.031** (not silent), **79 onsets** evenly spaced ~0.22 s apart (the gap-free kotekan pulse;
+    tempo read 258 BPM = the 16th-pulse of 132 BPM), centroid 587 Hz, top peaks **A#4 −48c, C5 −5c,
+    G4 +10c** (the large cent offsets confirm authentic non-12-TET slendro pitch — it sits between
+    the equal-tempered notes). **Pelog/empat seed 42:** peak **−18.5 dBFS**, **0 % clip**,
+    silenceRatio 0.039, 79 onsets, centroid 533 Hz, peaks **G4 −12c, C6 +34c, D5 −12c**.
+    **Inharmonic confirmed** — both spectrograms show a bright fundamental band with **stretched,
+    non-integer partial bands above it** (upper partials decaying faster than the fundamental), and
+    regular vertical strike streaks = the audible interlock; **evolving** — the centroid first/second
+    half differ (slendro 597→577, pelog 528→538) and the partial bands undulate in pitch, so it's
+    not a static drone. The in-render audit reported **outOfScale = 0** for both.
+- **Hidden-world wiring (see `/UNLOCK.md`).** Drops `ws:seen:gamelan` on load and carries the
+  **dwell accumulator** IIFE **byte-identical** to the other voices (only `id='gamelan'` differs),
+  so its visible time accrues toward `ws:flag:patience`. Back-link `← sound garden`.
+- Accent `#e0a23c` (warm bronze/gold). Thumbnail `assets/gamelan.png` (1280×720) — the 10-bar row
+  mid-sweep with a gold (polos) and a cyan (sangsih) bar blooming + resonance rings. ~1021 lines,
+  self-contained, zero deps, relative links only.
+
+### Rack
+- `instruments.js` gains the Gamelan entry → the rack shows **8** instruments; the responsive
+  `auto-fit` grid flows them as a clean **2×4** (verified: 8 cards render, Gamelan thumbnail loads).
+
 ## 2026-06-11 — Dwell accumulator wired into all 8 voices (patience unlock)
 
 Added the **dwell accumulator IIFE** from `/UNLOCK.md` (verbatim, only the `id` differs per piece) to
