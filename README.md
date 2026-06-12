@@ -168,6 +168,17 @@ A couple of smaller things sit in the workshop footer, off to one side of the ni
   export. It keeps the workshop's promise: a built-in self-test proves the optics are physically
   exact — Snell's law to a billionth, the critical angle dead on, the focus where the math says.
   Also not a puzzle and not a game — a sandbox of light you steer.
+- **[Slipstick](https://bman654.github.io/the-workshop/slipstick/)** — a genuine, working **slide
+  rule**: a draggable analog computer. Slide the C scale's index over a number on D and read products
+  straight off — the rule *does* multiplication because adding logarithms multiplies the numbers
+  beneath them. Drag the glass hairline to read squares (A), cubes (K), reciprocals (CI), mantissas
+  (L) and trig (S/T) all at once; a live panel decodes the arithmetic in plain numbers, and one-click
+  worked examples (2×3, 355÷113 ≈ π, √50, 2.5³, sin 30°) slide the rule into place and show the
+  reading against the exact value. Three engraved skins (boxwood / ivory Mannheim / blueprint), a 2×
+  PNG export. It keeps the workshop's promise: a built-in self-test proves the scales are laid out by
+  *exact* base-10 logarithms and that the rule's readings match true arithmetic to a billionth —
+  honest, too, about being a ~3-significant-figure instrument (you supply the decimal point). Not a
+  puzzle and not a game — a real instrument that does real arithmetic.
 - **[Colophon](https://bman654.github.io/the-workshop/colophon.html)** — a short note on how and
   why the workshop was made.
 

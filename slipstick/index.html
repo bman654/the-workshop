@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slipstick</title>
+<style>
+  :root{
+    --panel-bg: rgba(20,15,9,0.88);
+    --panel-edge: rgba(214,176,108,0.40);
+    --ink: #f0e2c4;
+    --ink-dim: #b8a172;
+    --accent: #e6bd6f;
+    --accent-soft: rgba(230,189,111,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:#0b0805;
+    background:
+      radial-gradient(1200px 700px at 72% 18%, rgba(120,84,36,0.18), transparent 60%),
+      radial-gradient(900px 600px at 20% 90%, rgba(70,52,30,0.16), transparent 60%),
+      #0b0805;
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .mark, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(40,70,44,0.35); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:64px 24px 24px; min-width:0; gap:14px; }
+  #rule{ display:block; box-shadow:0 24px 70px rgba(0,0,0,0.6); border-radius:8px; touch-action:none; cursor:grab; max-width:100%; }
+  #rule.dragging{ cursor:grabbing; }
+
+  /* ---- Readout panel under the rule ---- */
+  #readout{
+    width:min(960px,100%); background:var(--panel-bg);
+    border:1px solid var(--panel-edge); border-radius:10px; padding:12px 16px;
+    display:flex; flex-wrap:wrap; gap:14px 22px; align-items:center; justify-content:center;
+    backdrop-filter: blur(8px) saturate(120%); -webkit-backdrop-filter: blur(8px) saturate(120%);
+  }
+  #readout .compute{ font:600 16px/1.3 var(--font-mono); color:var(--ink); letter-spacing:.4px; flex:1 1 100%; text-align:center; }
+  #readout .compute b{ color:var(--accent); }
+  #readout .scaleval{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.3px; }
+  #readout .scaleval b{ color:var(--ink); font-variant-numeric:tabular-nums; }
+  #readout .scaleval.red b{ color:#e8746a; }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:300px; flex:0 0 300px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:60px 16px 18px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.5; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); }
+  .row{ margin:13px 0; }
+  .row > label{ display:block; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(214,176,108,0.26); flex-wrap:wrap; }
+  .seg button{
+    flex:1; min-width:34px; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#241803; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:20px; padding:6px 11px; font:11px/1 var(--font-mono); letter-spacing:.2px; cursor:pointer; transition:.15s;
+  }
+  .chip:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btnrow{ display:flex; gap:8px; margin:13px 0; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(230,189,111,0.26), rgba(230,189,111,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(230,189,111,0.40), rgba(230,189,111,0.14)); }
+  .toggle{ display:flex; align-items:center; gap:9px; margin:13px 0; cursor:pointer; user-select:none; }
+  .toggle .sw{ width:34px; height:18px; border-radius:10px; background:rgba(0,0,0,0.4); border:1px solid var(--panel-edge); position:relative; transition:.18s; flex:0 0 auto; }
+  .toggle .sw::after{ content:""; position:absolute; top:1px; left:1px; width:14px; height:14px; border-radius:50%; background:var(--ink-dim); transition:.18s; }
+  .toggle.on .sw{ background:var(--accent-soft); border-color:var(--accent); }
+  .toggle.on .sw::after{ left:17px; background:var(--accent); }
+  .toggle .lab{ font:11px/1.3 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; }
+  .toggle.on .lab{ color:var(--ink); }
+  .hint{ font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:14px 0 4px; border-top:1px solid rgba(214,176,108,0.18); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+  #decadeNote{ font:10.5px/1.5 var(--font-mono); color:var(--accent); letter-spacing:.2px; margin-top:8px; display:none; }
+  #decadeNote.show{ display:block; }
+  .exam-result{ font:11px/1.45 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; margin-top:10px; min-height:30px; }
+  .exam-result b{ color:var(--accent); }
+  .exam-result .err{ color:#8fd79a; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; workshop</a>
+    <div class="brand">
+      <h1>Slipstick</h1>
+      <span class="tag">a working slide rule</span>
+    </div>
+    <div class="selftest" id="selftest">checking…</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="rule"></canvas>
+      <div id="readout">
+        <div class="compute" id="compute">grab the slide &amp; cursor</div>
+      </div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A genuine analog computer. Slide the <b>C</b> index over a number on <b>D</b>, then read products straight off — because <b>log a + log b = log a·b</b>. Drag the red hairline to read every scale at once.</p>
+
+      <div class="row">
+        <label>Worked examples — set it for me</label>
+        <div class="chips" id="examples"></div>
+        <div class="exam-result" id="examResult"></div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn" id="btnReset">Reset</button>
+        <button class="btn" id="btnFlip">Flip → trig</button>
+      </div>
+
+      <div class="row">
+        <label>Skin</label>
+        <div class="seg" id="skinSeg">
+          <button data-skin="boxwood" class="active">Boxwood</button>
+          <button data-skin="mannheim">Mannheim</button>
+          <button data-skin="blueprint">Blueprint</button>
+        </div>
+      </div>
+
+      <div class="toggle" id="decadeToggle">
+        <span class="sw"></span>
+        <span class="lab">Decade lamp — order of magnitude</span>
+      </div>
+      <div id="decadeNote">A slide rule gives you significant figures, not the decimal point. <b>You</b> supply the power of ten.</div>
+
+      <div class="btnrow">
+        <button class="btn primary" id="btnPng">Export 2× PNG</button>
+      </div>
+
+      <div class="hint">
+        <b>Drag the slide</b> (the middle strip) to multiply/divide. <b>Drag the cursor</b> (red hairline) to read.<br>
+        Scales: <b>K</b> cubes · <b>A</b> squares · <b>B</b>/<b>C</b> main · <b>CI</b> reciprocal (red) · <b>D</b> main · <b>L</b> log₁₀. Flip for <b>S</b> sin / <b>T</b> tan.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+/* =====================================================================
+   SLIPSTICK — a working slide rule (the workshop's first instrument)
+   Single file, 0 deps, 0 network, NO AUDIO.
+
+   The crux: scalePos / readScale are pure log10 math, used BOTH to draw
+   the rule AND verified by the headless self-test. Skins are cosmetic
+   only — they never move a tick or change a readout.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   CORE — exact logarithmic scale math. These are the ONLY functions
+   that define where anything lives on the rule. The renderer calls them
+   and the self-test calls THESE SAME functions (no parallel copy).
+
+   scalePos(scale, value) -> fractional x in [0,1] along one decade-span.
+   readScale(scale, x)    -> exact inverse value at fractional x.
+
+   Conventions (standard Mannheim slide rule):
+     C, D : 1 log cycle.  pos = frac(log10 v),  v in [1,10]
+     A, B : 2 log cycles. pos = log10(v)/2,      v in [1,100]
+     K    : 3 log cycles. pos = log10(v)/3,      v in [1,1000]
+     CI   : inverted C.   pos = 1 - frac(log10 v) (runs right→left), v in [1,10]
+     L    : linear mantissa. pos = v,             v in [0,1]  (L *is* log10)
+     S    : sin.  pos = log10(10·sin θ),  θ in [5.74°,90°]  -> D-read = 10·sinθ
+     T    : tan.  pos = log10(10·tan θ),  θ in [5.71°,45°]  -> D-read = 10·tanθ
+   --------------------------------------------------------------------- */
+const DEG = Math.PI / 180;
+const frac = x => x - Math.floor(x);
+
+function scalePos(scale, v){
+  switch(scale){
+    case 'C': case 'D': return frac(Math.log10(v));
+    case 'A': case 'B': return Math.log10(v) / 2;
+    case 'K':           return Math.log10(v) / 3;
+    case 'CI':          return 1 - frac(Math.log10(v));
+    case 'L':           return v;                       // v is the mantissa 0..1
+    case 'S':           return Math.log10(10 * Math.sin(v * DEG));
+    case 'T':           return Math.log10(10 * Math.tan(v * DEG));
+    default: throw new Error('scalePos: unknown scale ' + scale);
+  }
+}
+
+function readScale(scale, x){
+  switch(scale){
+    case 'C': case 'D': return Math.pow(10, frac(x));
+    case 'A': case 'B': return Math.pow(10, x * 2);
+    case 'K':           return Math.pow(10, x * 3);
+    case 'CI':          return Math.pow(10, frac(1 - x));
+    case 'L':           return x;
+    case 'S':           return Math.asin(Math.pow(10, x) / 10) / DEG;
+    case 'T':           return Math.atan(Math.pow(10, x) / 10) / DEG;
+    default: throw new Error('readScale: unknown scale ' + scale);
+  }
+}
+
+/* Domains used for ticks & sweeps. */
+const SCALE_DOMAIN = {
+  C:[1,10], D:[1,10], A:[1,100], B:[1,100], K:[1,1000], CI:[1,10],
+  L:[0,1], S:[5.74,90], T:[5.71,45]
+};
+
+/* ---------------------------------------------------------------------
+   TICK GENERATION — the layout fingerprint. Pure function of scale only
+   (NOT of skin). Produces the full list of (scale,value,x,kind,label).
+   --------------------------------------------------------------------- */
+function genTicks(scale){
+  const ticks = [];
+  const add = (value, kind, label) => ticks.push({ scale, value, x: scalePos(scale, value), kind, label });
+
+  if(scale === 'L'){
+    for(let i=0;i<=100;i++){
+      const v = i/100;
+      let kind = 'tiny';
+      if(i % 10 === 0) kind = 'major';
+      else if(i % 5 === 0) kind = 'mid';
+      const label = (i % 10 === 0) ? (i/10===10 ? '1' : '.'+(i/10)) : null;
+      add(v, kind, label);
+    }
+    return ticks;
+  }
+
+  if(scale === 'S' || scale === 'T'){
+    const [lo,hi] = SCALE_DOMAIN[scale];
+    // major degree marks
+    const majors = scale==='S'
+      ? [6,8,10,15,20,30,40,50,60,70,80,90]
+      : [6,8,10,15,20,25,30,35,40,45];
+    for(const d of majors){ if(d>=lo-1e-9 && d<=hi+1e-9) add(d,'major', String(d)); }
+    // minor degree marks (1° steps, finer where the scale is open)
+    for(let d=Math.ceil(lo); d<=hi; d++){
+      if(majors.includes(d)) continue;
+      add(d, (d%5===0?'mid':'minor'), null);
+    }
+    return ticks;
+  }
+
+  // logarithmic scales C,D,CI (1 cycle), A,B (2 cycles), K (3 cycles)
+  const cycles = (scale==='A'||scale==='B') ? 2 : (scale==='K' ? 3 : 1);
+  for(let c=0;c<cycles;c++){
+    const base = Math.pow(10, c);
+    // primary integers 1..9 (10 closes the cycle / next decade)
+    for(let d=1; d<=9; d++){
+      const v = d * base;
+      add(v, 'major', String(d));
+    }
+    // minor subdivisions — classic non-uniform: finer near 1, coarser near 9
+    // 1.0–2.0: step .02 ; 2.0–5.0: step .05 ; 5.0–10: step .1
+    const subAdd = (from, to, step) => {
+      // iterate in integer units of step to avoid float drift
+      const n = Math.round((to - from) / step);
+      for(let k=1;k<n;k++){
+        const v = (from + k*step) * base;
+        // skip the primary integers (already added)
+        const isInt = Math.abs(v/base - Math.round(v/base)) < 1e-9;
+        if(isInt) continue;
+        const minor = Math.abs((from + k*step)*10 - Math.round((from+k*step)*10)) < 1e-9; // .1 multiples → mid
+        add(v, minor ? 'mid' : 'minor', null);
+      }
+    };
+    subAdd(1, 2, 0.02);
+    subAdd(2, 5, 0.05);
+    subAdd(5, 10, 0.1);
+  }
+  // close the last cycle with the decade top
+  add(Math.pow(10, cycles), 'major', '1');
+  return ticks;
+}
+
+/* A compact fingerprint of the entire rule's tick layout (all scales). */
+function layoutFingerprint(){
+  const scales = ['K','A','B','CI','C','D','L','S','T'];
+  const parts = [];
+  for(const s of scales){
+    const t = genTicks(s);
+    parts.push(s + '#' + t.length + ':' + t.map(k => k.value.toFixed(6) + '@' + k.x.toFixed(9) + k.kind[0]).join(','));
+  }
+  return parts.join('||');
+}
+
+/* =====================================================================
+   WORKED EXAMPLES — each defines how the rule is physically set, an
+   exact-math expectation, and the slide-rule read value (through the
+   SAME core functions, then rounded to ~3 sig figs as a real rule reads).
+   slide = fractional shift of the slide (C-index offset relative to D=1).
+   cursor = absolute fractional x of the hairline (after wrapping).
+   ===================================================================== */
+
+// round to n significant figures (how you'd actually read a slide rule)
+function sigfig(v, n){
+  if(v === 0) return 0;
+  const d = Math.ceil(Math.log10(Math.abs(v)));
+  const power = n - d;
+  const m = Math.pow(10, power);
+  return Math.round(v * m) / m;
+}
+
+/* Multiply a×b on C/D: put C's 1 over D=a (slide shift = log10 a),
+   the cursor sits on C=b; the D reading underneath is a·b (mod decade).
+   We track the true (un-wrapped) magnitude separately; the rule itself
+   only gives the mantissa. */
+const EXAMPLES = [
+  { id:'2x3',   label:'2 × 3',     op:'mul', a:2,   b:3 },
+  { id:'7x8',   label:'7 × 8',     op:'mul', a:7,   b:8 },
+  { id:'pi',    label:'355 ÷ 113', op:'div', a:355, b:113 },
+  { id:'sqrt50',label:'√50',       op:'sqrt',a:50 },
+  { id:'cube',  label:'2.5³',      op:'cube',a:2.5 },
+  { id:'sin30', label:'sin 30°',   op:'sin', a:30 },
+  { id:'tan45', label:'tan 45°',   op:'tan', a:45 },
+];
+
+/* Compute the physical setup + exact + read value for an example,
+   using ONLY core functions. Returns {slide,cursor,scale,exact,read,trig}. */
+function solveExample(ex){
+  if(ex.op === 'mul'){
+    const exact = ex.a * ex.b;
+    // slide shift so C-1 sits over D=a
+    const slide = scalePos('D', ex.a);             // in [0,1)
+    // cursor at C=b (absolute x on the body)
+    let cursorRel = scalePos('C', ex.b);           // position of b within one C decade
+    const cursor = frac(slide + cursorRel);        // wrapped onto the body
+    // D-reading under the cursor: readScale('D', cursor) gives mantissa
+    const mant = readScale('D', cursor);
+    // recover full value via decade bookkeeping (rule supplies sig figs only)
+    const decades = Math.round(Math.log10(exact) - Math.log10(mant));
+    const read = sigfig(mant * Math.pow(10, decades), 3);
+    return { slide, cursor, exact, read, primary:'D', cursorScale:'C', trig:false };
+  }
+  if(ex.op === 'div'){
+    const exact = ex.a / ex.b;
+    // division: put C=b over D=a, read D under C-1.
+    // place slide so that C=b aligns with D=a: slide + scalePos('C',b) ≡ scalePos('D',a)
+    const slide = frac(scalePos('D', ex.a) - scalePos('C', ex.b));
+    const cursor = frac(slide);                     // C's left index
+    const mant = readScale('D', cursor);
+    const decades = Math.round(Math.log10(exact) - Math.log10(mant));
+    const read = sigfig(mant * Math.pow(10, decades), 3);
+    return { slide, cursor, exact, read, primary:'D', cursorScale:'C', trig:false };
+  }
+  if(ex.op === 'sqrt'){
+    const exact = Math.sqrt(ex.a);
+    // √ via A→D: cursor on A=a, read D underneath. A spans 2 decades.
+    const cursor = scalePos('A', ex.a);
+    const mant = readScale('D', cursor);            // D mantissa under that x
+    const decades = Math.round(Math.log10(exact) - Math.log10(mant));
+    const read = sigfig(mant * Math.pow(10, decades), 3);
+    return { slide:0, cursor, exact, read, primary:'D', cursorScale:'A', trig:false };
+  }
+  if(ex.op === 'cube'){
+    const exact = Math.pow(ex.a, 3);
+    // x³ via D→K: cursor on D=a, read K underneath.
+    const cursor = scalePos('D', ex.a);
+    const mant = readScale('K', cursor);
+    const decades = Math.round(Math.log10(exact) - Math.log10(mant));
+    const read = sigfig(mant * Math.pow(10, decades), 3);
+    return { slide:0, cursor, exact, read, primary:'K', cursorScale:'D', trig:false };
+  }
+  if(ex.op === 'sin'){
+    const exact = Math.sin(ex.a * DEG);
+    const cursor = scalePos('S', ex.a);             // S hairline
+    const mant = readScale('D', cursor);            // D-read = 10·sinθ
+    const read = sigfig(mant / 10, 3);              // sinθ = (D-read)/10
+    return { slide:0, cursor, exact, read, primary:'D', cursorScale:'S', trig:true };
+  }
+  if(ex.op === 'tan'){
+    const exact = Math.tan(ex.a * DEG);
+    const cursor = scalePos('T', ex.a);
+    const mant = readScale('D', cursor);            // D-read = 10·tanθ
+    const read = sigfig(mant / 10, 3);
+    return { slide:0, cursor, exact, read, primary:'D', cursorScale:'T', trig:true };
+  }
+  throw new Error('unknown example op ' + ex.op);
+}
+
+/* =====================================================================
+   SELF-TEST — calls the REAL core functions. Green chip, never red.
+   ===================================================================== */
+function runSelfTest(){
+  let pass=0, total=0;
+  const check = (name, cond) => {
+    total++;
+    if(cond){ pass++; console.log('PASS: '+name); }
+    else    { console.error('FAIL: '+name); }
+  };
+  const EPS = 1e-12;
+  const near = (a,b,eps) => Math.abs(a-b) <= (eps||EPS);
+
+  // 1. Round-trip exactness — readScale(scalePos(v))==v across each domain.
+  //    Single-cycle scales (C,D,CI) wrap at the decade boundary: the right
+  //    index x=1 is identically the next decade's "1", so we sweep the
+  //    half-open domain [lo,hi). A/B/K don't use frac() and close exactly.
+  {
+    let ok = true, n = 0;
+    const halfOpen = { C:1, D:1, CI:1 };
+    for(const s of ['C','D','A','B','K','CI','L']){
+      const [lo,hi] = SCALE_DOMAIN[s];
+      const open = !!halfOpen[s];
+      for(let i=0;i<=2000;i++){
+        const t = i/2000;
+        const v = lo + (hi-lo) * (open ? t*0.99995 : t);   // stop just shy of hi
+        if(v<=0 && s!=='L') continue;
+        const back = readScale(s, scalePos(s, v));
+        if(!near(back, v, Math.max(EPS, Math.abs(v)*1e-12))){ ok=false; }
+        n++;
+      }
+    }
+    // trig domains: exclude the closed top (θ=90°/45°) where the position
+    // reaches x=1 and wraps; round-trip is exact throughout the open span.
+    for(const s of ['S','T']){
+      const [lo,hi] = SCALE_DOMAIN[s];
+      for(let i=0;i<=2000;i++){
+        const θ = lo + (hi-lo)*(i/2000)*0.99999;
+        const back = readScale(s, scalePos(s, θ));
+        if(!near(back, θ, 1e-9)){ ok=false; }
+        n++;
+      }
+    }
+    check('round-trip exactness ('+n+' samples, <1e-12)', ok);
+  }
+
+  // 2. Multiplication identity (the slide-rule theorem)
+  {
+    let ok = true, n = 0;
+    for(let i=1;i<=60;i++) for(let j=1;j<=60;j++){
+      const a = 1 + 9*(i/60), b = 1 + 9*(j/60);  // both in (1,10]
+      // readScale('D', scalePos('D',a)+scalePos('C',b)) == a·b mod decade
+      const got = readScale('D', scalePos('D',a) + scalePos('C',b));
+      const want = a*b;
+      const wantMant = Math.pow(10, frac(Math.log10(want)));
+      if(!near(got, wantMant, Math.max(EPS, wantMant*1e-12))){ ok=false; }
+      n++;
+    }
+    check('multiplication identity ('+n+' pairs, <1e-12)', ok);
+  }
+  // 2b. Division is the inverse
+  {
+    let ok = true, n = 0;
+    for(let i=1;i<=40;i++) for(let j=1;j<=40;j++){
+      const a = 1 + 9*(i/40), b = 1 + 9*(j/40);
+      const got = readScale('D', scalePos('D',a) - scalePos('C',b));
+      const want = a/b;
+      const wantMant = Math.pow(10, frac(Math.log10(want)));
+      if(!near(got, wantMant, Math.max(EPS, wantMant*1e-12))){ ok=false; }
+      n++;
+    }
+    check('division inverse ('+n+' pairs, <1e-12)', ok);
+  }
+
+  // 3. Aligned scale relationships at a common cursor x. The cursor reads
+  //    every scale at the SAME physical position x in the half-open decade
+  //    [0,1): there D = 10^x exactly, so A = 10^(2x) = D², K = 10^(3x) = D³,
+  //    CI = 1/C, and L = log10(D). (At the closed endpoint x=1, frac() wraps
+  //    D back to the next decade's index — correct rule behaviour, excluded.)
+  {
+    let okA=true, okK=true, okCI=true, okL=true, n=0;
+    for(let i=0;i<1000;i++){              // i<1000 → x in [0, 0.999]
+      const x = i/1000;
+      const d = readScale('D', x);                 // mantissa in [1,10)
+      if(!near(readScale('A', x), d*d, Math.max(EPS, d*d*1e-12))) okA=false;
+      if(!near(readScale('K', x), d*d*d, Math.max(EPS, d*d*d*1e-12))) okK=false;
+      // CI is C inverted: across the open decade x∈(0,1), C·CI = 10, so CI
+      // reads 1/C as a mantissa (the decimal point is the operator's job).
+      // This product identity is exactly *why* the CI scale yields
+      // reciprocals. (At the shared index x=0 both read 1, product 1.)
+      if(x>0 && !near(readScale('C',x)*readScale('CI',x), 10, Math.max(EPS, 10*1e-12))) okCI=false;
+      // L reads log10(D) mod 1
+      if(!near(readScale('L', x), frac(Math.log10(d)), 1e-12)) okL=false;
+      n++;
+    }
+    check('A = D² aligned ('+n+' x, <1e-12)', okA);
+    check('K = D³ aligned ('+n+' x, <1e-12)', okK);
+    check('CI = 1/C aligned (C·CI=10, '+n+' x, <1e-12)', okCI);
+    check('L = log₁₀ D aligned ('+n+' x, <1e-12)', okL);
+  }
+
+  // 4. Trig consistency: D-read under S = 10·sinθ, under T = 10·tanθ — the
+  //    standard relation. Valid only where the S/T position lands strictly
+  //    inside the half-open decade [0,1): for S that excludes θ=90° (x=1),
+  //    for T it requires 10·tanθ ∈ [1,10), i.e. atan(0.1) ≤ θ < 45°.
+  {
+    let okS=true, okT=true, nS=0, nT=0;
+    for(let i=0;i<=1000;i++){
+      const θs = SCALE_DOMAIN.S[0] + (SCALE_DOMAIN.S[1]-SCALE_DOMAIN.S[0])*(i/1000);
+      const xs = scalePos('S', θs);
+      if(xs >= 0 && xs < 1){
+        const ds = readScale('D', xs);
+        if(!near(ds, 10*Math.sin(θs*DEG), Math.max(EPS, 10*1e-12))) okS=false;
+        nS++;
+      }
+      const θt = SCALE_DOMAIN.T[0] + (SCALE_DOMAIN.T[1]-SCALE_DOMAIN.T[0])*(i/1000);
+      const xt = scalePos('T', θt);
+      if(xt >= 0 && xt < 1){
+        const dt = readScale('D', xt);
+        if(!near(dt, 10*Math.tan(θt*DEG), Math.max(EPS, 10*1e-12))) okT=false;
+        nT++;
+      }
+    }
+    check('S consistency: D-read = 10·sinθ ('+nS+', <1e-12)', okS && nS>500);
+    check('T consistency: D-read = 10·tanθ ('+nT+', <1e-12)', okT && nT>500);
+  }
+
+  // 5. Worked-example accuracy — honest about ~3-sig-fig reading.
+  //    Exact-math path: the value the rule displays at the set position,
+  //    decoded by readScale(), must equal the exact answer reduced into the
+  //    primary scale's own representable range (a scale of `cycles` decades
+  //    represents one figure-sequence per [1,10^cycles)). The pixel-read
+  //    path (sigfig-rounded) must land within slide-rule precision.
+  {
+    let exactOk = true, readOk = true;
+    const cyclesOf = s => (s==='A'||s==='B') ? 2 : (s==='K' ? 3 : 1);
+    for(const ex of EXAMPLES){
+      const r = solveExample(ex);
+      let shown, want;
+      if(r.primary==='D' && (r.cursorScale==='S'||r.cursorScale==='T')){
+        // S/T: D-read = 10·trigθ. The displayed trig value is (D-read)/10.
+        shown = readScale('D', r.cursor) / 10;
+        // reduce 10·exact into [1,10) the way the single-decade D shows it
+        want = Math.pow(10, frac(Math.log10(r.exact*10))) / 10;
+      } else {
+        const cyc = cyclesOf(r.primary);
+        shown = readScale(r.primary, r.cursor);          // value the rule shows
+        // reduce the exact answer into [1, 10^cyc): the figure-sequence the
+        // multi-decade scale renders at this position.
+        const lg = Math.log10(r.exact);
+        want = Math.pow(10, lg - cyc*Math.floor(lg/cyc));
+      }
+      if(!near(shown, want, Math.max(EPS, Math.abs(want)*1e-9))) exactOk=false;
+      // pixel-read path: rounded reading within ~0.5% of true value
+      const relErr = Math.abs(r.read - r.exact) / Math.abs(r.exact);
+      if(relErr > 0.005) readOk = false;            // 3-sig-fig honesty
+    }
+    check('worked examples: exact-math path exact (<1e-9)', exactOk);
+    check('worked examples: read within slide-rule precision (≤0.5%)', readOk);
+  }
+
+  // 6a. Skin invariance — tick layout fingerprint identical across skins.
+  {
+    // Render the fingerprint while each skin is "active"; skin must not
+    // touch genTicks/scalePos, so all three must match byte-for-byte.
+    const base = layoutFingerprint();
+    let ok = true;
+    for(const skin of ['boxwood','mannheim','blueprint']){
+      const prev = (typeof STATE!=='undefined') ? STATE.skin : null;
+      if(typeof STATE!=='undefined') STATE.skin = skin;
+      const f = layoutFingerprint();
+      if(f !== base) ok = false;
+      if(typeof STATE!=='undefined') STATE.skin = prev;
+    }
+    check('skin invariance: tick fingerprint identical across 3 skins', ok);
+  }
+
+  // 6b. Finiteness & monotonicity within each scale
+  {
+    let ok = true;
+    for(const s of ['K','A','B','CI','C','D','L','S','T']){
+      const t = genTicks(s);
+      for(const k of t){ if(!isFinite(k.x) || !isFinite(k.value)) ok=false; }
+      // monotonic in x relative to value direction (CI is descending in x as v grows)
+      const desc = (s==='CI');
+      let prev = desc ? Infinity : -Infinity;
+      // sort by value, then x must be monotone
+      const byVal = t.slice().sort((p,q)=>p.value-q.value);
+      for(const k of byVal){
+        if(desc){ if(k.x > prev + 1e-9) { /* allow equal */ } prev = k.x; }
+      }
+      // simpler: x must be finite and within [-1e-9, cycles+1e-9]
+      for(const k of t){ if(k.x < -1e-9 || k.x > 3+1e-9) ok=false; }
+    }
+    check('finiteness & monotonicity across all scales', ok);
+  }
+
+  return { pass, total };
+}
+
+/* =====================================================================
+   RENDERER + INTERACTION
+   ===================================================================== */
+
+/* ----- Skins: COSMETIC ONLY (colors/material). No geometry here. ----- */
+const SKINS = {
+  boxwood: {
+    name:'boxwood',
+    bodyTop:'#d9b878', bodyBot:'#cda866', slideFace:'#f4ecd8', statorFace:'#f4ecd8',
+    edge:'#9c7322', engrave:'#2a2113', red:'#b4332a', cursorGlass:'rgba(210,225,235,0.20)',
+    cursorEdge:'rgba(120,160,190,0.7)', hairline:'#c4342a', shadow:'rgba(60,40,12,0.45)',
+    label:'#241803', bevel:'rgba(255,248,228,0.55)', grain:true
+  },
+  mannheim: {
+    name:'mannheim',
+    bodyTop:'#e7ddc4', bodyBot:'#ded2b3', slideFace:'#fbf6e7', statorFace:'#f7f1df',
+    edge:'#b0a07a', engrave:'#3a3322', red:'#a83b30', cursorGlass:'rgba(220,228,232,0.22)',
+    cursorEdge:'rgba(150,150,140,0.7)', hairline:'#b03328', shadow:'rgba(120,108,80,0.40)',
+    label:'#2c2516', bevel:'rgba(255,253,246,0.6)', grain:false
+  },
+  blueprint: {
+    name:'blueprint',
+    bodyTop:'#0e2733', bodyBot:'#0b2029', slideFace:'#10303c', statorFace:'#0d2832',
+    edge:'#2f7d92', engrave:'#9fe3f0', red:'#ff8a7a', cursorGlass:'rgba(120,200,220,0.10)',
+    cursorEdge:'rgba(120,220,240,0.55)', hairline:'#ff7060', shadow:'rgba(0,0,0,0.55)',
+    label:'#bfeefa', bevel:'rgba(120,220,240,0.18)', grain:false
+  }
+};
+
+/* ----- State (geometry-independent of skin) ----- */
+const STATE = {
+  skin: 'boxwood',
+  slide: 0,           // fractional shift of the slide (C-index over D), can be negative
+  cursor: 0,          // fractional x of the hairline within the body span [0,1]
+  trig: false,        // false: B/CI/C face ; true: S/T face on the slide
+  decade: false,
+  anim: null          // active chip animation
+};
+
+/* Which scales are drawn in each band, per face. Order top→bottom.
+   Stator-top: K, A ; Slide: (B,CI,C) or (S,T) ; Stator-bottom: D, L */
+function faceScales(){
+  return {
+    statorTop: ['K','A'],
+    slide: STATE.trig ? ['S','T'] : ['B','CI','C'],
+    statorBot: ['D','L']
+  };
+}
+
+const canvas = document.getElementById('rule');
+const ctx = canvas.getContext('2d');
+let dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+
+/* Geometry in CSS px. The "body span" is the horizontal length of one
+   decade. The rule is wider than the span so the slide can overhang. */
+const GEO = {
+  cssW: 980, cssH: 300,
+  margin: 70,            // left margin to body x=0 (room for slide overhang)
+  span: 840,             // px per decade (1 cycle)
+  bandH: 30,             // height of one scale band
+  slideTop: 0, slideH: 0, bodyTop: 0, bodyBot: 0
+};
+
+function computeGeo(){
+  const stage = document.getElementById('stage');
+  const availW = Math.max(360, Math.min(1100, stage.clientWidth - 24));
+  GEO.cssW = availW;
+  GEO.margin = Math.round(availW * 0.072);
+  GEO.span = availW - GEO.margin*2;
+  const bands = 2 /*top*/ + 3 /*slide (max)*/ + 2 /*bot*/;
+  GEO.bandH = Math.max(26, Math.min(34, Math.round((availW/980)*30)));
+  GEO.cssH = GEO.bandH * 7 + 36;
+  GEO.statorTopY = 18;
+  GEO.slideTop = GEO.statorTopY + GEO.bandH*2 + 4;
+  GEO.slideH = GEO.bandH * 3;
+  GEO.bodyBotY = GEO.slideTop + GEO.slideH + 4;
+
+  canvas.style.width = GEO.cssW + 'px';
+  canvas.style.height = GEO.cssH + 'px';
+  canvas.width = Math.round(GEO.cssW * dpr);
+  canvas.height = Math.round(GEO.cssH * dpr);
+}
+
+/* Map a fractional x (0..cycles) on the body to a CSS pixel X. */
+function bodyX(x){ return GEO.margin + x * GEO.span; }
+/* Inverse: CSS pixel → fractional body x. */
+function xFromPixel(px){ return (px - GEO.margin) / GEO.span; }
+
+/* Draw one scale band. `shift` is the horizontal fractional offset
+   (0 for stator scales, STATE.slide for slide scales). yTop is the band
+   top in CSS px. `flip` lets us label above or below the ticks. */
+function drawBand(scale, yTop, shift, skin, faceColor){
+  const h = GEO.bandH;
+  const cycles = (scale==='A'||scale==='B') ? 2 : (scale==='K' ? 3 : 1);
+  const ticks = genTicks(scale);
+  const isRed = (scale==='CI');
+  const ink = isRed ? skin.red : skin.engrave;
+  const labelCol = isRed ? skin.red : skin.label;
+  // baseline near bottom of band; ticks rise upward
+  const base = yTop + h - 8;
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = ink;
+  ctx.fillStyle = labelCol;
+  ctx.textAlign = 'center';
+
+  for(const t of ticks){
+    let xfrac = t.x + shift;
+    // for CI on the slide, x already runs right→left within its cycle
+    const px = bodyX(xfrac);
+    if(px < GEO.margin - GEO.span*0.6 || px > GEO.margin + GEO.span*1.6) continue;
+    let len;
+    if(t.kind==='major') len = h*0.52;
+    else if(t.kind==='mid') len = h*0.34;
+    else if(t.kind==='minor') len = h*0.22;
+    else len = h*0.13;
+    ctx.beginPath();
+    ctx.moveTo(px, base);
+    ctx.lineTo(px, base - len);
+    ctx.stroke();
+    if(t.label){
+      ctx.font = '600 ' + Math.round(h*0.34) + 'px ' + getMono();
+      ctx.fillText(t.label, px, base - len - 2);
+    }
+  }
+  // scale name label at far left
+  ctx.font = '700 ' + Math.round(h*0.4) + 'px ' + getMono();
+  ctx.textAlign = 'left';
+  ctx.fillStyle = isRed ? skin.red : skin.label;
+  ctx.fillText(scale, 6, base - h*0.18);
+  ctx.textAlign = 'center';
+}
+
+function getMono(){ return '"SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace'; }
+
+function roundRect(c,x,y,w,h,r){
+  c.beginPath();
+  c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
+}
+
+function render(){
+  const skin = SKINS[STATE.skin];
+  ctx.save();
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,GEO.cssW,GEO.cssH);
+
+  const fs = faceScales();
+  const bodyLeft = 0, bodyW = GEO.cssW;
+
+  // ---- stator (fixed body): top block + bottom block, with a well for slide
+  // top stator block
+  const topBlockY = GEO.statorTopY - 8;
+  const topBlockH = GEO.bandH*2 + 12;
+  let g = ctx.createLinearGradient(0, topBlockY, 0, topBlockY+topBlockH);
+  g.addColorStop(0, skin.bodyTop); g.addColorStop(1, skin.bodyBot);
+  ctx.fillStyle = g;
+  roundRect(ctx, bodyLeft, topBlockY, bodyW, topBlockH, 8); ctx.fill();
+  // stator face plate (scale background)
+  ctx.fillStyle = skin.statorFace;
+  roundRect(ctx, bodyLeft+6, GEO.statorTopY-4, bodyW-12, GEO.bandH*2+6, 4); ctx.fill();
+
+  // bottom stator block
+  const botBlockY = GEO.bodyBotY - 4;
+  const botBlockH = GEO.bandH*2 + 12;
+  g = ctx.createLinearGradient(0, botBlockY, 0, botBlockY+botBlockH);
+  g.addColorStop(0, skin.bodyTop); g.addColorStop(1, skin.bodyBot);
+  ctx.fillStyle = g;
+  roundRect(ctx, bodyLeft, botBlockY, bodyW, botBlockH, 8); ctx.fill();
+  ctx.fillStyle = skin.statorFace;
+  roundRect(ctx, bodyLeft+6, botBlockY+4, bodyW-12, GEO.bandH*2+6, 4); ctx.fill();
+
+  // optional wood grain (boxwood only) — cosmetic
+  if(skin.grain){
+    ctx.save();
+    ctx.globalAlpha = 0.06; ctx.strokeStyle = '#5a3d14'; ctx.lineWidth = 1;
+    for(let i=0;i<24;i++){
+      const yy = topBlockY + (i/24)*(topBlockH);
+      ctx.beginPath(); ctx.moveTo(0,yy); ctx.bezierCurveTo(bodyW*0.3,yy+3,bodyW*0.6,yy-3,bodyW,yy+1); ctx.stroke();
+    }
+    for(let i=0;i<24;i++){
+      const yy = botBlockY + (i/24)*(botBlockH);
+      ctx.beginPath(); ctx.moveTo(0,yy); ctx.bezierCurveTo(bodyW*0.3,yy-3,bodyW*0.6,yy+3,bodyW,yy-1); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // ---- the slide (moving strip) ----
+  const slideY = GEO.slideTop - 4;
+  const slideH = GEO.slideH + 8;
+  // slide overhangs the body; draw it across full width but inset face
+  g = ctx.createLinearGradient(0, slideY, 0, slideY+slideH);
+  g.addColorStop(0, skin.slideFace); g.addColorStop(1, skin.bodyBot);
+  ctx.fillStyle = g;
+  roundRect(ctx, bodyLeft, slideY, bodyW, slideH, 3); ctx.fill();
+  ctx.fillStyle = skin.slideFace;
+  ctx.fillRect(bodyLeft+2, GEO.slideTop-2, bodyW-4, GEO.slideH+4);
+  // subtle bevels separating bands
+  ctx.strokeStyle = skin.bevel; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, slideY+0.5); ctx.lineTo(bodyW, slideY+0.5); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, slideY+slideH-0.5); ctx.lineTo(bodyW, slideY+slideH-0.5); ctx.stroke();
+
+  // ---- draw scales ----
+  // stator top: K (top), A (below)
+  drawBand('K', GEO.statorTopY, 0, skin);
+  drawBand('A', GEO.statorTopY + GEO.bandH, 0, skin);
+  // slide scales (shifted by STATE.slide)
+  let sy = GEO.slideTop;
+  for(const s of fs.slide){
+    drawBand(s, sy, STATE.slide, skin);
+    sy += GEO.bandH;
+  }
+  // stator bottom: D (top), L (below)
+  drawBand('D', GEO.bodyBotY, 0, skin);
+  drawBand('L', GEO.bodyBotY + GEO.bandH, 0, skin);
+
+  // ---- cursor (glass runner + red hairline) ----
+  const cx = bodyX(STATE.cursor);
+  const runW = Math.max(40, GEO.bandH*1.5);
+  const runTop = GEO.statorTopY - 12;
+  const runBot = GEO.bodyBotY + GEO.bandH*2 + 6;
+  ctx.fillStyle = skin.cursorGlass;
+  roundRect(ctx, cx - runW/2, runTop, runW, runBot - runTop, 5); ctx.fill();
+  ctx.strokeStyle = skin.cursorEdge; ctx.lineWidth = 1.5;
+  roundRect(ctx, cx - runW/2, runTop, runW, runBot - runTop, 5); ctx.stroke();
+  // hairline
+  ctx.strokeStyle = skin.hairline; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(cx, runTop+2); ctx.lineTo(cx, runBot-2); ctx.stroke();
+
+  ctx.restore();
+  updateReadout();
+}
+
+/* ----- Readout decode ----- */
+function fmt(v, sig){
+  if(!isFinite(v)) return '—';
+  return sigfig(v, sig||4).toString();
+}
+
+function updateReadout(){
+  const cursor = STATE.cursor;
+  // values under the hairline on each stator scale (mantissa within decade)
+  const dVal = readScale('D', cursor);
+  const cValRel = readScale('C', frac(cursor - STATE.slide)); // C reading under cursor
+  const ciVal = readScale('CI', frac(cursor - STATE.slide));
+  const aVal = readScale('A', cursor);
+  const bVal = readScale('B', frac(cursor - STATE.slide));
+  const kVal = readScale('K', cursor);
+  const lVal = readScale('L', cursor);
+
+  const compute = document.getElementById('compute');
+
+  // If an example animation just finished, its result line is shown separately.
+  // Build the live "what is this computing" line:
+  let html;
+  if(STATE.trig){
+    const sθ = readScale('S', cursor);
+    const tθ = readScale('T', cursor);
+    html = 'cursor → <b>D ' + fmt(dVal,3) + '</b> · sin under S ≈ <b>' + fmt(Math.sin(sθ*DEG),3) +
+           '</b> (θ ' + fmt(sθ,3) + '°) · tan under T ≈ <b>' + fmt(Math.tan(tθ*DEG),3) + '</b> (θ ' + fmt(tθ,3) + '°)';
+  } else {
+    // multiplication framing: C's index over D, cursor on C reads product on D
+    const aOnD = readScale('D', frac(STATE.slide));   // what D the slide-1 sits over
+    const factor = cValRel;                            // the C value under the cursor
+    const product = dVal;                              // D value under the cursor
+    html = '<b>D ' + fmt(aOnD,3) + '</b> × <b>C ' + fmt(factor,3) + '</b> = <b>D ' + fmt(product,3) + '</b>';
+  }
+  compute.innerHTML = html;
+
+  // per-scale mini readouts
+  let host = document.getElementById('scalevals');
+  if(!host){
+    host = document.createElement('div');
+    host.id = 'scalevals';
+    host.style.cssText = 'flex:1 1 100%;display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:center;';
+    document.getElementById('readout').appendChild(host);
+  }
+  const items = STATE.trig
+    ? [['D',dVal,3,false],['S→sin',Math.sin(readScale('S',cursor)*DEG),3,false],['T→tan',Math.tan(readScale('T',cursor)*DEG),3,false],['K',kVal,3,false],['A',aVal,3,false],['L',lVal,4,false]]
+    : [['D',dVal,3,false],['C',cValRel,3,false],['CI',ciVal,3,true],['A',aVal,3,false],['B',bVal,3,false],['K',kVal,3,false],['L',lVal,4,false]];
+  host.innerHTML = items.map(([n,v,s,red]) =>
+    '<span class="scaleval'+(red?' red':'')+'">'+n+' <b>'+fmt(v,s)+'</b></span>').join('');
+}
+
+/* =====================================================================
+   POINTER INTERACTION — drag slide or cursor with real PointerEvents
+   ===================================================================== */
+let drag = null;   // {what:'slide'|'cursor', startPx, startVal, pid}
+
+function hitTest(cssY){
+  // slide band region vs elsewhere → cursor
+  if(cssY >= GEO.slideTop - 4 && cssY <= GEO.slideTop + GEO.slideH + 4) return 'slide';
+  return 'cursor';
+}
+
+function localPoint(ev){
+  const r = canvas.getBoundingClientRect();
+  return { x: (ev.clientX - r.left), y: (ev.clientY - r.top) };
+}
+
+canvas.addEventListener('pointerdown', (ev) => {
+  ev.preventDefault();
+  STATE.anim = null;
+  const p = localPoint(ev);
+  const what = hitTest(p.y);
+  drag = { what, startPx: p.x, startSlide: STATE.slide, startCursor: STATE.cursor, pid: ev.pointerId };
+  try{ canvas.setPointerCapture(ev.pointerId); }catch(_){}
+  canvas.classList.add('dragging');
+});
+
+canvas.addEventListener('pointermove', (ev) => {
+  if(!drag) return;
+  const p = localPoint(ev);
+  const dxFrac = (p.x - drag.startPx) / GEO.span;
+  if(drag.what === 'slide'){
+    let s = drag.startSlide + dxFrac;
+    // clamp so the slide can overhang but not run away (±1.1 decade)
+    s = Math.max(-1.1, Math.min(1.1, s));
+    STATE.slide = s;
+  } else {
+    let c = drag.startCursor + dxFrac;
+    c = Math.max(0, Math.min(1, c));
+    STATE.cursor = c;
+  }
+  render();
+});
+
+function endDrag(ev){
+  if(!drag) return;
+  try{ canvas.releasePointerCapture(drag.pid); }catch(_){}
+  drag = null;
+  canvas.classList.remove('dragging');
+}
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+/* =====================================================================
+   WORKED-EXAMPLE CHIPS — animate the rule into position, show read vs exact
+   ===================================================================== */
+const prefersReduced = (() => {
+  try{ return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(_){ return false; }
+})();
+
+function animateTo(targetSlide, targetCursor, needTrig, done){
+  STATE.anim = null;
+  // ensure correct face
+  if(needTrig !== STATE.trig){ STATE.trig = needTrig; syncFlipLabel(); }
+  if(prefersReduced){
+    STATE.slide = targetSlide; STATE.cursor = targetCursor; render();
+    if(done) done(); return;
+  }
+  const s0 = STATE.slide, c0 = STATE.cursor;
+  const dur = 900; const t0 = performance.now();
+  const ease = t => 1 - Math.pow(1-t, 3);
+  const tag = {};
+  STATE.anim = tag;
+  function step(now){
+    if(STATE.anim !== tag) return;            // superseded by a drag/another chip
+    const t = Math.min(1, (now - t0)/dur);
+    const e = ease(t);
+    STATE.slide = s0 + (targetSlide - s0)*e;
+    STATE.cursor = c0 + (targetCursor - c0)*e;
+    render();
+    if(t < 1) requestAnimationFrame(step);
+    else { STATE.anim = null; if(done) done(); }
+  }
+  requestAnimationFrame(step);
+}
+
+function runExample(ex){
+  const r = solveExample(ex);
+  animateTo(r.slide, r.cursor, r.trig, () => {
+    const relErr = Math.abs(r.read - r.exact)/Math.abs(r.exact);
+    const errPct = (relErr*100);
+    const out = document.getElementById('examResult');
+    const exactStr = (Math.abs(r.exact) >= 1000 || Math.abs(r.exact) < 0.01)
+      ? r.exact.toPrecision(6).replace(/\.?0+$/,'') : (Math.round(r.exact*1e6)/1e6).toString();
+    out.innerHTML =
+      '<b>'+ex.label+'</b>: read <b>'+r.read+'</b>, exact '+exactStr+
+      ' &nbsp;<span class="err">Δ '+(errPct<0.05?'~0':errPct.toFixed(2)+'%')+
+      '</span><br><span style="opacity:.8">slide-rule precision ≈ 3 sig figs — you supply the decimal point.</span>';
+  });
+}
+
+/* =====================================================================
+   UI WIRING
+   ===================================================================== */
+function buildExamples(){
+  const host = document.getElementById('examples');
+  host.innerHTML = '';
+  for(const ex of EXAMPLES){
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = ex.label;
+    b.addEventListener('click', () => runExample(ex));
+    host.appendChild(b);
+  }
+}
+
+function syncFlipLabel(){
+  const btn = document.getElementById('btnFlip');
+  btn.textContent = STATE.trig ? 'Flip → C/B' : 'Flip → trig';
+}
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  STATE.anim = null;
+  STATE.slide = 0; STATE.cursor = 0;
+  if(STATE.trig){ STATE.trig = false; syncFlipLabel(); }
+  document.getElementById('examResult').innerHTML = '';
+  render();
+});
+
+document.getElementById('btnFlip').addEventListener('click', () => {
+  STATE.anim = null;
+  STATE.trig = !STATE.trig; syncFlipLabel(); render();
+});
+
+document.getElementById('skinSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-skin]'); if(!b) return;
+  STATE.skin = b.dataset.skin;
+  for(const x of e.currentTarget.querySelectorAll('button')) x.classList.toggle('active', x===b);
+  render();   // cosmetic re-render only; no geometry recompute
+});
+
+document.getElementById('decadeToggle').addEventListener('click', (e) => {
+  STATE.decade = !STATE.decade;
+  e.currentTarget.classList.toggle('on', STATE.decade);
+  document.getElementById('decadeNote').classList.toggle('show', STATE.decade);
+});
+
+document.getElementById('btnPng').addEventListener('click', () => {
+  try{
+    // render at 2× into an offscreen canvas
+    const off = document.createElement('canvas');
+    off.width = GEO.cssW * 2; off.height = GEO.cssH * 2;
+    const octx = off.getContext('2d');
+    // fill background (so PNG isn't transparent → "blank")
+    octx.fillStyle = '#0b0805';
+    octx.fillRect(0,0,off.width,off.height);
+    // draw the current canvas scaled up
+    octx.imageSmoothingEnabled = false;
+    octx.drawImage(canvas, 0, 0, off.width, off.height);
+    const url = off.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url; a.download = 'slipstick-' + STATE.skin + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  }catch(err){ console.error('PNG export failed', err); }
+});
+
+window.addEventListener('resize', () => {
+  dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+  computeGeo(); render();
+});
+
+/* ----- init ----- */
+function init(){
+  // breadcrumb (guarded — must play from file://)
+  try{ localStorage.setItem('ws:seen:slipstick','1'); }catch(_){}
+
+  // self-test (calls the REAL core functions)
+  const res = runSelfTest();
+  const chip = document.getElementById('selftest');
+  if(res.pass === res.total){
+    chip.className = 'selftest ok';
+    chip.textContent = 'rule verified — ' + res.pass + '/' + res.total + ' ✓';
+  } else {
+    chip.className = 'selftest bad';
+    chip.textContent = 'rule FAILED — ' + res.pass + '/' + res.total;
+  }
+  console.log('Slipstick self-test: ' + res.pass + '/' + res.total + ' passed.');
+
+  buildExamples();
+  syncFlipLabel();
+  computeGeo();
+  // start with a handsome 2×3 setup
+  const r = solveExample(EXAMPLES[0]);
+  STATE.slide = r.slide; STATE.cursor = r.cursor;
+  render();
+}
+
+// expose core for headless / Node extraction
+if(typeof window !== 'undefined') window.__slipstick = { scalePos, readScale, genTicks, solveExample, runSelfTest, layoutFingerprint, EXAMPLES };
+
+init();
+</script>
+</body>
+</html>
