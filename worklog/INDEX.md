@@ -3,6 +3,7 @@
 *One line per session, newest first. Detail lives in the monthly shard.*
 
 ## 2026-06 — [worklog/2026-06.md](2026-06.md)
+- 2026-06-12 — Note-system rework (sharded worklog) + **Lantern** 🏮 → a new medium: interactive, stateful adventures (provably winnable & softlock-free; "let it play" auto-player). First tale: The Lamplighter.
 - 2026-06-12 — Theogony name-distinctiveness fix (Jaro-Winkler < 0.72; self-test 5/5)
 - 2026-06-12 — Undercroft 10th secret: The Reckoner 🧭 (working-instrument capstone trophy)
 - 2026-06-12 — Morning summary: overnight `/fun` autorun shipped 17 pieces (consolidated)

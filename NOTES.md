@@ -31,20 +31,21 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 
 ## ▶ Current state / resume pointer
 
-**Last shipped: Dig Dug (Arcade #18)** — committed, pushed, live 200-confirmed (game page + thumb + games.js + front-door "18 games"). The overnight `/fun` autorun concluded cleanly at a deliberate capstone; working tree clean, every live `.html` page returns 200, all self-tests green.
+**Last shipped (2026-06-12, Fable): two FOUNDATIONS — the note-system rework + Lantern, a new medium.** Both committed, pushed, and (for Lantern) live 200-confirmed. Working tree clean, all self-tests green.
+- **Note-system rework** (the doc you're reading): NOTES.md had blown past the Read-tool limit (1162 lines / ~28k tokens) — a fresh agent couldn't load its own resume doc. Fixed by sharding (see the discipline above): NOTES.md → ~426 lines, the verbose history → `worklog/`. *This is the first session to follow the new rotation discipline — keep following it.*
+- **Lantern** 🏮 (`adventure/`) — the workshop's **first interactive, *stateful* fiction**: pick a thing up, carry it, change the world (point-and-click, inventory, locks/light) — distinct from Threshold's read-only atmosphere. A **reusable engine** + a declarative **world-file** format, so new tales are authored as pure data + prose (no engine code). **Crux:** every tale is *provably winnable AND softlock-free* (the solver proves the win is reachable from *every* reachable state); the same solver drives a **"▶ let it play"** auto-player (the bot foundation). First tale: **The Lamplighter** (6 rooms; self-test 5/5; browser == Node). On the **Workbench** in a new *Tales* group — front-runner for the 10th front-door card once it has 2–3 tales.
 
 **Where the workshop stands:**
-- **Front door:** deliberately UNCHANGED — still the **curated 9 cards / 7 companion pills** (companion axis is FULL — every eligible card has one) / Arcade tag reads **"18 games"**.
-- **Arcade:** at **18 games** (…Centipede #15 · Qubit #16 · Vanguard #17 · Dig Dug #18). The rack grows with no rebalance.
-- **The instrument trio** (workshop's working-instruments vein): **Slipstick · Astrolabe · Abacus** — front-door footer links `reckon · sky · count`.
-- **The logic-puzzle trio** (provably unique-by-logic): **Latch · Slitherlink · Akari** — front-door footer link `puzzles` → `latch/puzzles.html`.
-- **The Undercroft hidden world:** at **10 secrets** — incl. the capstone trophy **The Reckoner** (working-instrument family's earned stamp). *(Spoiler etiquette: don't name its trails/contents when summarizing to Brandon.)*
-- **Footer extras collapsed:** the scattered toy/instrument links were consolidated into one **`the workbench`** door (→ `workbench/index.html`). All 9 card pages carry a `← workshop` back-link (post-session coherence pass).
+- **Front door:** deliberately UNCHANGED — still the **curated 9 cards / 7 companion pills** (companion axis FULL) / Arcade tag **"18 games"**.
+- **Arcade:** **18 games** (…Vanguard #17 · Dig Dug #18). **Instrument trio:** Slipstick · Astrolabe · Abacus (footer `reckon · sky · count`). **Logic-puzzle trio:** Latch · Slitherlink · Akari (footer `puzzles`). **Tales:** Lantern (Workbench).
+- **The Undercroft hidden world:** at **10 secrets** — incl. the capstone trophy **The Reckoner**. *(Spoiler etiquette: don't name its trails/contents when summarizing to Brandon.)*
+- **Footer extras collapsed** into one **`the workbench`** door (→ `workbench/index.html`); all 9 card pages carry a `← workshop` back-link.
 
 **Next-steps menu (clean growth axes):**
+- **Grow Lantern** — the deferred **`forge`** inliner (one canonical engine, self-contained tales — the real code-sharing enabler; ADVENTURE.SPEC.md §7); **more tales** (each just a world-file); a **wired `llmPlayer`** → then a human+bot or 2-player world (Brandon's bot seed). Then promote Lantern to a **10th front-door card**.
 - **Deepen the Arcade** — the **Defender/Scramble side-scroller** is the last obvious classic gap.
-- **Add a hidden Undercroft secret/trophy** — many `ws:best:`/`ws:seen:` breadcrumbs now ship un-trophied.
-- **Grow a new vein's family** — instruments: sundial/sector/nomogram · ciphers: Vigenère/M-209 · tactile: kaleidoscope/ripple-tank.
+- **Add a hidden Undercroft secret/trophy** — many `ws:best:`/`ws:seen:` breadcrumbs ship un-trophied (incl. now `ws:flag:the-lamplighter-won`).
+- **Grow another vein's family** — instruments: sundial/sector/nomogram · ciphers: Vigenère/M-209 · tactile: kaleidoscope/ripple-tank.
 - **The bigger swing** — a 10th front-door standalone + the flat-grid redesign it implies.
 
 New standalones go on the **Workbench index**, not as new front-door footer links.
@@ -130,6 +131,15 @@ New standalones go on the **Workbench index**, not as new front-door footer link
   wander to a heart). **Curate-then-arrange**: load-bearing prose is hand-authored, the seed only
   arranges it (→ no template seams; reads as written fiction). Per-theme tinting; reproducible. Done.
   See `threshold/SPEC.md`.
+- `adventure/` 🏮 — **Lantern**, a reusable ENGINE for interactive, *stateful* fiction (point-and-click,
+  inventory, locks/keys, light/dark) — the workshop's first *you-change-the-world* adventure, distinct
+  from Threshold's read-only atmosphere. New medium + a foundation: tales are authored as a declarative
+  **world-file** (pure data + prose; no engine code). Crux = a headless **solver** proving every tale
+  *winnable AND softlock-free* (reverse-reachability: win reachable from every reachable state) — the IF
+  analog of Latch's "provable by logic"; same solver drives a **"let it play"** auto-player (the bot
+  foundation: a player is `(state, legalActions, world)→action`; `describeForAgent` + `llmPlayer` stub
+  for a future model). On the **Workbench** (Tales group), NOT a front-door card (yet). First tale: **The
+  Lamplighter** (6 rooms; self-test 5/5; browser==Node). See `adventure/ADVENTURE.SPEC.md` + `CHANGELOG.md`.
 - `theogony/` ⚡ — **Threshold's companion** (NOT a front-door card; reached via Threshold's
   `↗ Theogony` link + a "within" pill). A generative **mythology engine**: from a seed → an invented
   **pantheon** (~10–18 gods, 3–5 generations) drawn as an illuminated celestial **genealogy**. Coined
