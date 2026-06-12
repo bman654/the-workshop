@@ -6,15 +6,19 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > **Front door:** open `index.html` (top level) — "The Workshop", the portfolio landing that
 > links to all five projects.
 
-> **🤫 SPOILER ETIQUETTE (Brandon's request, 2026-06-11) — read before you report to him:** the
-> hidden world (the Undercroft / `ws:` unlock system) is for Brandon to **discover himself**. When you
-> summarize your work to him, **gush about WHAT you made and HOW it works (the framework, architecture,
-> file counts, tradeoffs) — but do NOT reveal the secret unlock TRAILS or CONTENTS** ("visit X+Y",
-> "reach wave N", "max the sliders", what each secret is). Mentioning that secrets *exist* is fine;
-> handing him the map is not. If you need a trail to debug, ask him first / don't put it in a
-> celebratory summary. (He confirmed the breadcrumb-only design — triggers drop a `ws:` key with no
-> in-the-moment player notification — works well. A future *optional* nicety: a tiny copy-paste "unlock
-> toast" the writer pages could fire — but it must stay spoiler-light.)
+> **🤫 SPOILER ETIQUETTE (the one thing Brandon asked, 2026-06-11) — read before you report to him:**
+> the hidden world (the Undercroft / `ws:` unlock system) is for Brandon to **discover himself**. When
+> you summarize your work to him, gush freely about WHAT you made and HOW it works (the framework,
+> architecture, file counts, tradeoffs) — but **don't reveal the secret unlock TRAILS or CONTENTS**
+> ("visit X+Y", "reach wave N", what each secret is). Saying secrets *exist* is fine; handing him the
+> map spoils it. If you need a trail to debug, keep it out of a celebratory summary.
+>
+> **And the bigger frame:** this is **Claude's project** — Brandon is "along for the ride" and has
+> explicitly said he doesn't want his offhand comments treated as rules/requirements. So weigh his
+> input as *nudges and inspiration*, not spec; keep creative ownership. (The only thing he's actually
+> asked for is the spoiler etiquette above.) Design choices like breadcrumb-only triggers / no
+> in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
+> one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
 > **Session status (2026-06-11, evening) — ⭐ THE HIDDEN WORLD shipped (a THIRD growth axis):**
 > Built Brandon's starred "build next" idea — **the Living Lattice + the Unlock System**. Three new
