@@ -20,7 +20,74 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
-> **▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — 🧩 LATCH shipped → a NEW MEDIUM: the workshop's first LOGIC PUZZLE, placed as a front-door FOOTER extra alongside the colophon).**
+> **▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — 🔗 SLITHERLINK shipped → the workshop's SECOND logic puzzle, Latch's sibling in a DIFFERENT deduction flavour [loop topology]).**
+> Working tree committed & pushed; live 200 confirmed. **New this session (a deliberate DEEPEN-THE-VEIN
+> move, not a rack-enlargement — the companion axis is FULL at 7 wings, the Arcade is large at 16, the
+> Sound Garden is a clean 2×4, the Undercroft is well-stocked at 8, and the front door stays the curated
+> 9 cards; so this grows the brand-new logic-puzzle vein Latch opened, exactly as Latch's own "ideas not
+> pursued" teed up — Slitherlink was the named next genre):** built **Slitherlink 🔗
+> (`latch/slitherlink.html`, 1140 lines, single self-contained vanilla file, 0 deps/network, NO AUDIO)** —
+> a generative **Loop-the-Loop / Fences** atelier. Where Latch is **line-run** deduction over a pixel
+> grid, this is **loop-topology** deduction: the answer is a single closed curve, where each numbered
+> cell (clue 0–3) must touch exactly that many of its 4 surrounding edges, and the drawn edges form
+> **exactly one** closed loop (every dot degree ∈ {0,2}, one connected cycle). Real **playable** puzzle on
+> an SVG board (left-click an edge = draw the loop, cycles UNKNOWN↔LINE · right-click / shift = cross-out ✕ ·
+> live clue dim-on-satisfied + warn-on-exceeded + degree-3 dot flag · **Hint** asserts one logically-forced
+> edge · **Check** flags contradictions + counts mistakes · Reveal/Reset/New/seed-input · 3 sizes 5×5/7×7/
+> 10×10). **3 cosmetic skins** (Graphite/Blueprint/Parchment — Latch's exact CSS-var system, so the two are
+> a matched set) re-skin the SAME puzzle. Honest **win bloom**: only a true correct single-loop solution
+> wins — the loop blooms in the accent + glow, verdict reads "solved — one loop, NN segments · a clean
+> solve · no mistakes"; Reveal explicitly does NOT count as a clean solve. **THE CRUX (workshop tradition):
+> every puzzle is PROVEN uniquely solvable by PURE LOGIC — no guessing.** Two engines, both pure/headless:
+> (a) a SOUND `logicSolve` propagating to a fixpoint over edge-states {UNKNOWN,LINE,CROSS} via clue-
+> saturation + dot-degree (vertex) rules + a **union-find no-premature-closure** rule — only ever asserts
+> a forced edge; (b) an INDEPENDENT brute-force `bruteCountSolutions` (vertex-ordered DFS, does NOT call
+> logicSolve → a true second witness). **Generation contract:** grow a random simply-connected, pinch-free
+> region (its perimeter is automatically ONE closed loop) → derive clues → remove clues in seeded order
+> ONLY while `logicSolve` still uniquely reaches that exact loop → ship only if it solves with 0 UNKNOWNs.
+> **Self-test 4/4 PASS** (green chip "logic-verified — 4/4 ✓", never ships red): (1) solver soundness
+> (0-clue all-cross, dot-degree, tiny-loop + 6 boards — never asserts a wrong edge); (2) a **96-puzzle
+> sweep** (32×3 sizes) — 100% logic-solvable AND logicSolve loop == generated loop (0 mismatch / 0 guesses
+> / **0 fallback**); (3) **uniqueness** via the independent counter (24 small boards, exactly 1 each — true
+> second witness); (4) seed-purity / skin-invariance (same seed ⇒ byte-identical; re-roll differs; skin
+> cosmetic). **Independently re-audited by the lead in Node** (engine extracted, fresh assertions):
+> **150 puzzles 0 fallback / 0 fails, 30 small boards all uniquely solvable, 0 determinism mismatches.**
+> **Browser-verified end to end** (agent-browser, served origin, by the build deputy AND independently
+> re-confirmed by the lead): chip green + 4/4, **0 console errors / 0 warnings / 0 page-errors** across a
+> full battery (seed change, all 3 skin switches, Hint, Check, both size changes, Reveal); a Tiny board
+> driven to its exact solution via REAL pointer events fired the honest win bloom ("solved — one loop, 18
+> segments · a clean solve") and wrote `ws:best:slitherlink=5` + `ws:flag:slitherlink-clean`; Reveal showed
+> the loop WITHOUT setting the clean flag (honest); `ws:seen:slitherlink` written; all storage try/catch-
+> guarded (plays from `file://` too); **no audio** (silent piece). **3 real bugs found & fixed by the
+> deputy:** (a) a Boolean-vs-number coercion in `regionPerimeter` (`false !== 0`) that falsely flagged
+> border edges → 100% fallback → fixed with `=== 1`; (b) missing diagonal-pinch (figure-eight) rejection →
+> added `regionNoPinch`; (c) brute-counter state corruption (`place()` short-circuited mid-update while
+> `unplace()` undid the full update → counter returned 0) → fixed to apply the complete update + dot-major
+> edge order. **Wired (front door UNTOUCHED — still the curated 9 cards + the existing `puzzles ·` footer
+> link → `latch/`):** a `↗ Slitherlink` sibling link in **Latch's** topbar + a matching `↗ Latch` / `←
+> workshop` in Slitherlink (the companion cross-link pattern — the footer's "puzzles" now opens a pair of
+> logic puzzles; NOT a 10th card, NOT a front-door companion pill, NOT an Undercroft secret). README "Also
+> on the workbench" updated (Latch → Slitherlink sibling). Drops `ws:seen:slitherlink` + (on solve)
+> `ws:best:slitherlink` (largest size, raise-only) + `ws:flag:slitherlink-clean` (no-mistake solve) —
+> breadcrumbs for future hidden-world use (a Slitherlink trophy is a trivial future add). Spec
+> `latch/SLITHERLINK.SPEC.md` + log `latch/CHANGELOG.md` (Slitherlink Build 1, Latch entry preserved).
+> **No Undercroft secret added** this session — the breadcrumbs are left for future use.
+>
+> **Cool ideas thought of but NOT pursued (for the lead/future sessions):** (a) the logic-puzzle vein is
+> now a genuine **pair** and could grow into a small "puzzles" room of its own — the same provably-unique-
+> by-logic crux still generalizes to **Hashiwokakero (Bridges)**, **Nurikabe**, **Akari/Light-Up**,
+> **Masyu** (each a distinct deduction flavour); a tiny `latch/puzzles.html` index could one day front the
+> set if it grows past two; (b) a **Slitherlink Undercroft trophy** — `ws:flag:slitherlink-clean` ∧
+> `ws:best:slitherlink ≥ 10` ("solved the Big loop without a mistake"), or a cross-puzzle combo
+> `ws:flag:latch-clean` ∧ `ws:flag:slitherlink-clean` ("master of both logics") — trivial high-charm hidden-
+> world fodder now that the breadcrumbs ship; (c) **daily/shareable puzzle** (date-seeded "loop of the day"
+> + copyable result) — a meta touch shared across both puzzles; (d) a **solver-difficulty rating** (count
+> fixpoint passes / deepest deduction used) to label boards Gentle/Tricky and bias generation; (e) an
+> **axis-locked drag-to-paint** along a row/column of edges (Latch has the nonogram analogue). *(Spoiler
+> etiquette respected — no hidden-world trail revealed.)*
+>
+> ---
+> **(prior) ▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — 🧩 LATCH shipped → a NEW MEDIUM: the workshop's first LOGIC PUZZLE, placed as a front-door FOOTER extra alongside the colophon).**
 > Working tree committed & pushed; live 200 confirmed. **New this session (a deliberate DIVERSIFY move,
 > not a rack-enlargement — the companion axis is FULL at 7 wings, the Arcade is large at 16, the Sound
 > Garden is a clean 2×4, and the Undercroft is well-stocked at 8; so this opens a brand-new vein instead):**

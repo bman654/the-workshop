@@ -86,3 +86,144 @@ RESULT 4/4 — chip GREEN
   (`[2,1]` and `[1,1,1]` lines) that were wrong — the solver was right. Removed a dead
   `feasible()` DP helper that was never called. Replaced 3 non-logic-solvable motifs (two
   leaves, a snail) with solvable redesigns (sail, clover, spiral) so all 30 ship directly.
+
+---
+
+# Slitherlink — Changelog
+
+## Build 1 — 2026-06-12
+
+The workshop's **second logic puzzle** and a sibling to Latch: a generative
+**Slitherlink** (Loop-the-Loop / Fences) atelier. Where Latch is line-run
+deduction over a pixel grid, Slitherlink is **loop-topology** deduction — the
+answer is a single closed curve. Single self-contained vanilla HTML/CSS/JS file
+(`latch/slitherlink.html`, 1140 lines, no dependencies / no network / no build
+step / **no audio** — a silent piece).
+
+### What shipped
+- **Seeded generative Slitherlinks**, three square sizes: Tiny (5×5),
+  Classic (7×7), Big (10×10). Boards render as crisp SVG: a (R+1)×(C+1) dot
+  lattice, faint cell backgrounds, serif clue numbers, wide invisible edge
+  hit-zones, the loop as rounded glowing segments, and a muted ✕ for crossed-out
+  edges.
+
+- **The correctness crux** — two independent pure engines (no DOM), both
+  exercised by the self-test, proving every shipped puzzle is **uniquely
+  solvable by pure logic, no guessing**, the solution being **exactly one
+  closed loop**:
+  - **(a) A sound LOGIC SOLVER** — constraint propagation to a fixpoint over
+    edge states {UNKNOWN, LINE, CROSS}. Three sound rule families, each firing
+    only when the conclusion is forced: **clue saturation** (k==N ⇒ rest CROSS;
+    k+u==N ⇒ rest LINE; over/under ⇒ contradiction), **dot-degree** (a vertex's
+    LINE-degree must end at 0 or 2: 2 LINE ⇒ rest CROSS; 1 LINE + 1 UNKNOWN ⇒
+    that UNKNOWN LINE; 0 LINE + 1 UNKNOWN ⇒ CROSS; >2 ⇒ contradiction), and
+    **no-premature-closure** (a union-find over dots joined by LINE edges; an
+    UNKNOWN edge whose endpoints are already in one LINE-component that does NOT
+    yet contain all LINE edges is forced CROSS — it would orphan a sub-loop).
+    A fully-decided valid-single-loop fixpoint IS the logic-solvability proof.
+  - **(b) An independent BRUTE-FORCE solution counter** (the second witness) —
+    an exhaustive DFS over edges in dot-major order with O(1)-incremental degree
+    + clue maintenance, accepting a leaf iff `isSingleLoop` ∧ `cluesSatisfied`
+    agree (the same helpers the win-check uses). Confirms exactly 1 solution on
+    small boards. Built on a different basis than the logic solver.
+  - **Generation contract:** grow a random **simply-connected, pinch-free
+    region** (flood-growth, rejecting any cell that creates a hole, disconnects
+    the blob, or makes a diagonal pinch) → its **perimeter is automatically one
+    closed loop** → derive full clues → remove clues in seeded order, keeping a
+    removal only while `logicSolve` still solves uniquely to the exact loop →
+    ship only if it logic-solves with zero UNKNOWNs. Guaranteed-solvable
+    rectangle fallback exists for safety but is **never** hit (0 fallback in the
+    audit).
+
+- **Built-in self-test on load** — green chip "logic-verified — 4/4 ✓", never
+  ships red (runs headless in ~0.45s):
+  1. **logic-solver soundness** — hand-crafted tiny boards: a 0-clue (all
+     CROSS), a 1×1 clue-4 tiny loop, a 2×1 dot-degree case, plus 6 generated
+     boards where every decided edge must agree with the true loop (never asserts
+     a wrong edge).
+  2. **generation sweep** — 96 puzzles (32 × {5×5, 7×7, 10×10}): each fully
+     logic-solvable AND logicSolve's loop == the generated loop, a valid single
+     loop, clues satisfied. **0 guesses, 0 mismatch, 0 fallback.**
+  3. **uniqueness** — the independent brute-force counter returns exactly 1 on
+     24 small boards (16 × 5×5 + 8 × 7×7).
+  4. **seed purity / skin-invariance** — same seed ⇒ byte-identical puzzle
+     across sizes; re-roll differs; cosmetic skin switch never changes the puzzle.
+
+- **Real playable interaction:** left-click an edge cycles undecided ↔ drawn;
+  right-click / shift-click toggles a ✕ cross-out. Live feedback: a clue dims
+  when its LINE count is exactly satisfied and turns a warning colour when
+  exceeded; a dot with LINE-degree > 2 (illegal branch) subtly flags. **Hint**
+  reveals exactly one logically-forced edge (a single `logicSolve` pass seeded
+  with the player's marks — never a guess). **Check** highlights edges that
+  contradict the unique solution (+ counts mistakes, + surfaces over-degree
+  dots). **Reveal** draws the full loop (honestly: it shows but does not "win").
+  **Reset / New / seed input / size selector.** Keyboard: h/c/n/r. Honest win
+  reveal: only the true unique single loop wins — the loop blooms in the accent
+  with a glow, clues fade, verdict reads "solved — one loop, NN segments · a
+  clean solve · no mistakes". A wrong closure (a valid loop that isn't the
+  solution) does NOT falsely win.
+
+- **Three cosmetic skins** reused verbatim from Latch — Graphite (default),
+  Blueprint (cyan-on-navy drafting), Parchment (warm paper + ink) — re-skin the
+  same puzzle in place; crux test #4 asserts the skin never alters the puzzle.
+
+- **Persistence (`ws:` convention, all guarded in try/catch):** drops
+  `ws:seen:slitherlink` on load; raises `ws:best:slitherlink` (largest size
+  solved); sets `ws:flag:slitherlink-clean` on a no-mistake solve. Fully playable
+  from `file://` even when storage throws.
+
+- **Companion cross-link:** a `↗ Latch` link in Slitherlink's topbar and a
+  matching `↗ Slitherlink` link added to Latch's topbar — the two logic puzzles
+  cross-link. Front door untouched (still the curated 9 cards).
+
+### Self-test results (this build)
+```
+PASS logic-solver soundness — 0-clue, dot-degree, tiny-loop + 6 boards
+PASS sweep 96 puzzles logic-solvable — 96 puzzles, 0 guesses, 0 mismatch, 0 fallback
+PASS uniqueness (brute-force witness) — 24 small boards, exactly 1 solution each
+PASS seed purity + skin-invariance — same seed ⇒ identical; re-roll differs; skin is cosmetic
+RESULT 4/4 — chip GREEN (~0.45s)
+```
+
+### Browser verification (served from repo root, http://127.0.0.1:8765/latch/slitherlink.html)
+- Self-test chip GREEN "logic-verified — 4/4 ✓"; **0 console errors / 0 warnings /
+  0 page-errors** across reloads, size churn, skin switches, and a full
+  interaction battery (19 console entries, all `level:log`).
+- Solved a 5×5 (seed `demo-A`) via real pointer events on the loop edges → honest
+  win bloom fired ("solved — one loop, 20 segments · a clean solve · no mistakes").
+  Also solved a 7×7 → `ws:best:slitherlink=7`, `ws:flag:slitherlink-clean` set.
+- Hint added exactly one forced edge (a 0-clue cross-out), and it agreed with the
+  unique solution.
+- A deliberate wrong LINE edge → Check flagged exactly 1 contradiction (mistakes
+  0→1, exactly 1 edge shook). Check on a correct partial reported 0. A degree-3
+  branch flagged exactly 1 dot.
+- Same seed reproduced a byte-identical puzzle (clue + loop fingerprint); skin
+  switch (Graphite/Blueprint/Parchment) left the fingerprint identical.
+- Reveal showed the loop but did NOT set the clean flag (honest); a non-solution
+  valid loop did NOT win.
+- Runs from `file://` too (chip green, board renders, storage degrades gracefully).
+- Static SVG (no rAF loop, no setInterval) — inherently 60fps; only the CSS win
+  bloom and brief class-driven flashes animate.
+
+### Notes
+- Real bugs found & fixed during the build (all caught by the Node self-test
+  harness before the browser):
+  1. **Boolean-coercion perimeter bug (the big one):** `regionPerimeter`'s
+     in-region test returned a *boolean* `false` for out-of-bounds cells but a
+     *number* `0` for in-bounds empties; `0 !== false` under strict compare
+     falsely flagged grid-border edges as perimeter, producing odd-degree dots
+     (an impossible "perimeter"). Result: `isSingleLoop` rejected every grown
+     region and the generator fell back 100% of the time. Fixed by coercing the
+     in-region predicate to a real boolean (`=== 1`). After the fix: 0 fallback.
+  2. **Missing pinch rejection:** simply-connected regions can still self-touch
+     at a diagonal corner (a degree-4 "pinch" → a figure-eight, not one loop).
+     Added `regionNoPinch` (rejects any interior dot with a diagonal-only
+     checkerboard of region cells) to the growth acceptance test.
+  3. **Brute-counter state corruption:** the incremental `place()` short-circuited
+     mid-update on an upper-bound violation, but the paired `unplace()` always
+     undid the *full* update — corrupting the shared dot-degree / clue counters
+     across sibling DFS branches, so the counter returned 0 solutions for every
+     real board. Fixed `place()` to apply the complete update before evaluating
+     validity (symmetric with `unplace`). Also re-pointed the counter to
+     dot-major edge order with finalize-on-last-edge pruning, taking a 5×5 count
+     from "hangs" to ~0.3ms and making 7×7 feasible (~2ms).
