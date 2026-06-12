@@ -1,0 +1,86 @@
+# Lantern — Changelog
+
+*An engine for interactive, stateful adventures (point-and-click · inventory · locks/keys ·
+light/dark). A new medium for the workshop, distinct from Threshold's read-only atmosphere. The
+foundation: a declarative **world-file** format so a new tale is authored as pure data + prose, never
+engine code. See `ADVENTURE.SPEC.md` for the contract.*
+
+---
+
+## Build 1 — the foundation (2026-06-12)
+
+**Shipped (Fable session):** the engine, the authoring format, the verifiable crux, the player
+interface + auto-player, and the first authored tale.
+
+### Files
+- `ADVENTURE.SPEC.md` — the contract: the world-file DSL (rooms / things / verbs / guards / effects),
+  the solver/self-test crux, the player-function interface + auto-player (the bot foundation), the
+  shipped-artifact chrome conventions, an author's voice guide, and the deferred `forge` inliner.
+- `engine/lantern.js` (1237 lines) — the canonical engine. `LANTERN_VERSION = '1.0'`. A pure, DOM-free
+  core (`initState · legalActions · apply · isWin · stateKey`) + the **solver** (`solve` — BFS) + the
+  self-test (`runSelfTest`) + the **players** (`solverPlayer · randomPlayer · describeForAgent · llmPlayer`
+  stub) + the browser UI (scene-art registry, prose panel, exits, inventory tray, context action bar),
+  which mounts only when `document` + `WORLD` + `#lantern-root` exist. Node-requireable for headless
+  proving.
+- `worlds/the-lamplighter.js` — the exemplar tale (6 rooms, authored prose).
+- `worlds/_template.js` — a minimal starter world authors copy.
+- `the-lamplighter.html` (1783 lines) — the self-contained shipped tale (engine + world inlined +
+  chrome). Double-click and play; no build, no network, no dependencies.
+- `the-lamplighter.src.html` — an inlining template (`__LANTERN_ENGINE__` / `__LANTERN_WORLD__`
+  placeholders) so re-inlining the canonical engine/world into the shipped `.html` stays idempotent —
+  a step toward the spec's §7 `forge`. (The shipped `.html` is fully self-contained regardless.)
+- `index.html` — "The Lantern" landing: what it is, the shelf of tales (one so far), "author your own".
+- `assets/the-lamplighter.png` — a 1440×900 mid-play thumb.
+
+### The verifiable crux (workshop tradition) — story made provable
+Every Lantern tale is **provably winnable AND provably softlock-free.** The headless solver:
+1. **Winnable** — BFS over canonical state-keys finds a winning state; reports the **shortest path**.
+2. **Reachable map** — every room reachable; static validation that every id (exit `to`, thing `at`,
+   guard/effect/useOn referent) names a real room/thing/flag.
+3. **No softlock** — *reverse-reachability:* compute the set of states from which a win is reachable
+   (reverse the action graph, BFS back from every winning state), then assert **every reachable state
+   is in it.** No sequence of legal actions can strand the player. (Opt-out: `world.allowSoftlock`.)
+4. **Determinism** — `apply` is pure (no time, no RNG in the core).
+5. **Effects total** — every DSL feature a world uses is one the engine implements (no silent no-ops).
+
+The self-test runs identically in Node and the browser (browser == Node).
+
+### The bot foundation (the cleanest possible surface)
+A player is just `(state, legalActions, world) → action`. Ships `solverPlayer` (replays the BFS path —
+drives the **"▶ Let it play"** auto-player), `randomPlayer(seedFn)` (seeded wanderer), and
+`describeForAgent(state)` (a plain-text state digest) + an `llmPlayer` documented stub so a future
+agent wires a real model in a small, well-defined job. (Enables, later: human-vs-bot / bot-vs-bot /
+"let the bot finish it if you're stuck.")
+
+### The first tale — *The Lamplighter*
+Six rooms (lodge · shed · cellar · lane · square · hill). Dusk has come with no lamps lit, and the
+morning waits on the round: find oil (pry the swollen cellar hatch), flame (the lodge hearth), then
+light the lamps lowest-to-highest — lane, square, and last the beacon on the hill — to call the dawn.
+**Solver-confirmed: winnable, shortest path 16 moves, softlock-free, deterministic; self-test 5/5.**
+
+### Verification
+- **Node solver:** `the-lamplighter` 5/5 (winnable · 16-move path · softlock-free · deterministic ·
+  6/6 rooms reachable · 0 errors); `_template` 5/5 (3-move win). *The solver caught a real
+  unwinnability bug in the first `_template` draft (the win flag was never set) — the crux earning its
+  keep — fixed with one declarative line (`onEnter:{do:[{win:true}]}` on the exit room).*
+- **Browser QA** (served origin `http://localhost:8975`, agent-browser): chip green **5/5 · solved in
+  16**; in-page `runSelfTest` == Node; **0 console errors/warnings/page-errors** across load + full
+  play + auto-play; **played to the win via real clicks** (barred exits showed their blocked reasons
+  before their gates opened); **the auto-player ran to the win on its own** (incl. from a restored
+  save — resets to a fresh start first); landing clean, links resolve, `ws:` breadcrumbs set.
+- **Two engine robustness fixes during QA:** `solverPlayer` returns `null` on a desynced replay
+  (stops cleanly instead of applying an illegal move); `letItPlay` resets to `initState` before
+  replaying (the solved path is absolute from the start).
+
+### Wiring
+- Added to the **Workbench index** in a new **Tales** group (`workbench/index.html`) — *not* a new
+  front-door card. Front door deliberately unchanged. *(Front-runner for the 10th front-door card once
+  the shelf has 2–3 tales — the "bigger swing" growth axis.)*
+- README "Also on the workbench" entry.
+- `ws:` breadcrumbs: `ws:seen:the-lamplighter` (on load), `ws:flag:the-lamplighter-won` (on win,
+  raise-only), `ws:save:the-lamplighter` (autosave), `ws:seen:lantern` (landing). Left for the hidden
+  world; an Undercroft trophy off these is a trivial future add.
+
+### Not done (future — see ADVENTURE.SPEC.md §7)
+The `forge` build-inliner (remove engine duplication across tales); more tales; a wired `llmPlayer`;
+bespoke per-world scene art; an Undercroft trophy off the win crumb.

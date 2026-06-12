@@ -7,7 +7,7 @@
      take lantern → (back) shed: take pry-bar → (out) lodge: use pry-bar on hatch
        → (down) cellar: take oil → (up) lodge: use oil on lantern, light lantern at hearth
        → (out) lane: light the lane's lamp → (on) square: light the square's lamp
-       → (up) hill: light the last lamp → the dawn answers. ~13 moves.
+       → (up) hill: light the last lamp → the dawn answers. (Solver-confirmed: shortest path = 16 moves.)
 
    Verifiable promise: provably winnable AND provably softlock-free (the only
    consumable — the oil — is spent only into the lantern, after which it is never

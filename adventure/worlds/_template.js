@@ -38,6 +38,7 @@ const WORLD = {
       name: 'Outside',
       art:  '_neutral',
       desc: 'Open air, and the road going on. (A real tale would put something here.)',
+      onEnter: { do:[{ win:true }] },    // stepping through the door is the win
       exits: {},
     },
   },

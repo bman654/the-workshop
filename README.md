@@ -125,8 +125,20 @@ seed only *arranges* — so it reads as written, not generated.
 
 ## Also on the workbench
 
-A couple of smaller things sit in the workshop footer, off to one side of the nine main projects:
+A small wing off to one side of the nine main projects, reached by **the workbench** door in the
+footer — standalone tools, toys & tales, each self-contained:
 
+- **[Lantern](https://bman654.github.io/the-workshop/adventure/)** — a small **engine for hand-made
+  adventures**, and the workshop's first *interactive, stateful* fiction (you pick a thing up, carry
+  it, and change the world with it — distinct from Threshold's read-only atmosphere). Point-and-click,
+  inventory, locks and keys, light and dark. The signature promise, applied to story: **every tale is
+  *provably winnable — and provably softlock-free***. A built-in solver re-derives a winning path
+  before a tale ships and proves that from *every* state you can reach, the win is *still* reachable —
+  so you can wander and fumble freely; the dawn is always still ahead of you. The same solver lets the
+  engine **play the tale itself** ("▶ let it play"). Each tale is authored as a declarative *world-file*
+  (pure data + prose), so new tales are written without touching the engine. First tale: **The
+  Lamplighter** — dusk has come with no lamps lit, and the morning waits on the round. Self-contained,
+  no build, no network.
 - **[Latch](https://bman654.github.io/the-workshop/latch/)** — the first of two **logic puzzles**:
   a generative **nonogram (picross) atelier**. From a seed it draws a little pixel picture, encodes
   it as row/column run-clues, and hands you the puzzle to solve by deduction. The twist (and the
