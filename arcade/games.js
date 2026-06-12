@@ -79,5 +79,11 @@ window.GAMES = [
     name: "Gyre",
     blurb: "neon tube shooter — hold the rim, fire down the well, dive deeper",
     accent: "#37f7e0"
+  },
+  {
+    file: "tessera.html",
+    name: "Tessera",
+    blurb: "neon area-claiming — carve the dark, fence off the Qix, take the field",
+    accent: "#ff2e88"
   }
 ];

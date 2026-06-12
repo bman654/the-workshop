@@ -1,0 +1,1360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>TESSERA — neon area-claiming</title>
+<style>
+  :root{ --accent:#37f7e0; --accent2:#ff2e88; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; background:#03030a; overflow:hidden;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    color:#e9f6ff; -webkit-font-smoothing:antialiased; cursor:default; }
+  #stage{ position:fixed; inset:0; }
+  canvas{ display:block; position:absolute; inset:0; }
+
+  /* ---------- HUD ---------- */
+  .hud{ position:fixed; inset:0; pointer-events:none; z-index:5;
+    font-variant-numeric:tabular-nums; }
+  .hud-row{ position:absolute; top:18px; display:flex; }
+  .hud-left{ left:24px; flex-direction:column; gap:4px; align-items:flex-start; }
+  .hud-right{ right:24px; flex-direction:column; align-items:flex-end; gap:4px; }
+  .label{ font-size:10px; letter-spacing:.32em; color:#5fb6c9; opacity:.85; text-transform:uppercase; }
+  .value{ font-size:30px; font-weight:700; letter-spacing:.04em; line-height:1;
+    color:#eafffb; text-shadow:0 0 16px rgba(55,247,224,.6); }
+  .value.small{ font-size:17px; color:#9be8df; }
+  .level-tag{ position:fixed; top:18px; left:50%; transform:translateX(-50%); text-align:center; }
+  .level-tag .label{ font-size:10px; }
+  .level-tag .value{ font-size:22px; color:#ff6fb0; text-shadow:0 0 16px rgba(255,46,136,.6); }
+
+  /* claim meter (bottom center) */
+  .claimwrap{ position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
+    z-index:5; pointer-events:none; display:flex; flex-direction:column; align-items:center; gap:7px; }
+  .claimlabel{ font-size:10px; letter-spacing:.26em; text-transform:uppercase; color:#5fb6c9; }
+  .claimlabel b{ color:var(--accent); font-weight:700; }
+  .claimlabel .tg{ color:#ff6fb0; }
+  .meter{ width:min(46vw,420px); height:10px; border-radius:6px;
+    background:rgba(120,160,200,.12); box-shadow:inset 0 0 0 1px rgba(120,200,220,.2);
+    overflow:hidden; position:relative; }
+  .meter .fill{ position:absolute; inset:0; width:0%;
+    background:linear-gradient(90deg, var(--accent), #9be8df);
+    box-shadow:0 0 14px var(--accent); transition:width .14s linear; }
+  .meter .tgt{ position:absolute; top:-3px; bottom:-3px; width:2px; left:75%;
+    background:#ff6fb0; box-shadow:0 0 8px #ff6fb0; }
+
+  /* lives pips */
+  .lives{ display:flex; gap:8px; align-items:center; margin-top:6px; }
+  .pip{ width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent;
+    border-bottom:16px solid var(--accent);
+    filter:drop-shadow(0 0 7px rgba(55,247,224,.7)); transition:opacity .2s, transform .2s; }
+  .pip.empty{ opacity:.16; filter:none; transform:scale(.8); }
+
+  #muteTag{ position:fixed; bottom:16px; right:20px; font-size:10px; letter-spacing:.24em;
+    color:#5fb6c9; opacity:.7; text-transform:uppercase; pointer-events:none; }
+
+  /* ---------- Overlays ---------- */
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:8px;
+    background:radial-gradient(120% 120% at 50% 45%, rgba(6,8,20,.34), rgba(2,2,8,.9));
+    backdrop-filter:blur(1.5px); transition:opacity .35s; }
+  .overlay.hidden{ opacity:0; pointer-events:none; }
+  .title{ font-size:clamp(50px,13vw,168px); font-weight:800; letter-spacing:.14em;
+    line-height:.9; color:#eafffb;
+    text-shadow:0 0 30px rgba(55,247,224,.65), 0 0 70px rgba(55,247,224,.35);
+    -webkit-text-stroke:1px rgba(170,255,245,.25); }
+  .title .a2{ color:var(--accent2); -webkit-text-stroke:1px rgba(255,46,136,.4);
+    text-shadow:0 0 30px rgba(255,46,136,.6); }
+  .tagline{ font-size:13px; letter-spacing:.34em; color:#ff6fb0; text-transform:uppercase;
+    opacity:.9; margin-bottom:24px; }
+  .prompt{ font-size:15px; letter-spacing:.12em; color:#eafffb;
+    margin-top:14px; animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:.45} 50%{opacity:1} }
+  .controls{ margin-top:28px; display:grid; grid-template-columns:auto auto;
+    gap:6px 26px; font-size:12px; letter-spacing:.06em; color:#9be8df; opacity:.9; }
+  .controls b{ color:#eafffb; font-weight:700; }
+  .controls .k{ text-align:right; color:var(--accent); }
+  .hint{ margin-top:20px; font-size:11px; letter-spacing:.16em; color:#5fb6c9;
+    text-transform:uppercase; opacity:.8; max-width:50ch; line-height:1.7; }
+  .go-stats{ margin-top:8px; display:grid; grid-template-columns:auto auto; gap:6px 30px;
+    font-size:14px; letter-spacing:.06em; color:#9be8df; }
+  .go-stats .k{ text-align:right; color:#5fb6c9; }
+  .go-stats b{ color:#eafffb; }
+  .newhigh{ color:var(--accent); font-size:13px; letter-spacing:.3em; text-transform:uppercase;
+    margin-top:14px; animation:pulse 1s ease-in-out infinite; }
+  .gameover-title{ font-size:clamp(34px,8vw,76px); font-weight:800; letter-spacing:.14em;
+    color:#ff2e88; text-shadow:0 0 28px rgba(255,46,136,.6); margin-bottom:8px; }
+  .level-clear-title{ font-size:clamp(34px,8vw,72px); font-weight:800; letter-spacing:.1em;
+    color:var(--accent); text-shadow:0 0 28px rgba(55,247,224,.6); margin-bottom:8px; }
+  .pausetitle{ font-size:48px; font-weight:800; letter-spacing:.22em; color:#eafffb;
+    text-shadow:0 0 24px rgba(55,247,224,.55); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg"></canvas>
+  <canvas id="game"></canvas>
+</div>
+
+<!-- HUD -->
+<div class="hud" id="hud" style="display:none">
+  <div class="hud-row hud-left">
+    <div class="label">Score</div>
+    <div class="value" id="score">0</div>
+    <div class="lives" id="lives"></div>
+  </div>
+  <div class="hud-row hud-right">
+    <div class="label">Best Level</div>
+    <div class="value small" id="best">0</div>
+  </div>
+  <div class="level-tag">
+    <div class="label">Level</div>
+    <div class="value" id="level">1</div>
+  </div>
+</div>
+<div class="claimwrap" id="claimwrap" style="display:none">
+  <div class="claimlabel">Claimed <b id="claimpct">0%</b> · <span class="tg">target <span id="targetpct">75%</span></span></div>
+  <div class="meter"><div class="fill" id="meterfill"></div><div class="tgt" id="metertgt"></div></div>
+</div>
+<div id="muteTag">M · sound off</div>
+
+<!-- Title -->
+<div class="overlay" id="titleScreen">
+  <div class="title">TESS<span class="a2">ERA</span></div>
+  <div class="tagline">neon · area · claiming</div>
+  <div class="prompt">Press ENTER to start</div>
+  <div class="controls">
+    <span class="k">← ↑ → ↓ / WASD</span><span>move along edges &amp; draw out</span>
+    <span class="k">HOLD SHIFT</span><span>slow draw — worth more</span>
+    <span class="k">P / ESC</span><span>pause</span>
+    <span class="k">M</span><span>sound (off by default)</span>
+  </div>
+  <div class="hint">Walk the lit border. Draw a path out into the dark, return to safety, and the region without the Qix is yours. Claim the target to advance. Don't let the Qix touch your line — and never stop drawing, the fuse is hungry.</div>
+</div>
+
+<!-- Level clear -->
+<div class="overlay hidden" id="levelClearScreen">
+  <div class="level-clear-title">SECTOR CLEAR</div>
+  <div class="go-stats">
+    <span class="k">Claimed</span><b id="lcClaimed">0%</b>
+    <span class="k">Bonus</span><b id="lcBonus">0</b>
+    <span class="k">Score</span><b id="lcScore">0</b>
+  </div>
+  <div class="prompt">Press ENTER for the next sector</div>
+</div>
+
+<!-- Game over -->
+<div class="overlay hidden" id="gameoverScreen">
+  <div class="gameover-title">GAME OVER</div>
+  <div class="go-stats">
+    <span class="k">Score</span><b id="goScore">0</b>
+    <span class="k">Level reached</span><b id="goLevel">0</b>
+    <span class="k">Best claim</span><b id="goClaim">0%</b>
+  </div>
+  <div class="newhigh" id="newHigh" style="display:none">★ NEW BEST LEVEL ★</div>
+  <div class="prompt">Press ENTER to play again</div>
+</div>
+
+<!-- Pause -->
+<div class="overlay hidden" id="pauseScreen">
+  <div class="pausetitle">PAUSED</div>
+  <div class="prompt">Press P or ESC to resume</div>
+</div>
+
+<script>
+"use strict";
+(function(){
+//============================================================== setup / canvas
+const bgCanvas = document.getElementById('bg');
+const canvas   = document.getElementById('game');
+const bgx = bgCanvas.getContext('2d');
+const ctx = canvas.getContext('2d');
+const stage = document.getElementById('stage');
+
+let W = 0, H = 0, DPR = 1;
+// playfield rect in screen space (computed in resize)
+let FX = 0, FY = 0, FW = 0, FH = 0;   // pixel origin + size of the claimable field
+let CELL = 0;                          // pixel size of one grid cell
+
+// the grid: GW x GH cells. Vertices are (GW+1) x (GH+1). The player walks on vertices.
+const GW = 80, GH = 56;                // grid resolution (cells). Field aspect ~ 10:7
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  for (const c of [bgCanvas, canvas]){
+    c.width  = Math.floor(W * DPR);
+    c.height = Math.floor(H * DPR);
+    c.style.width = W + 'px';
+    c.style.height = H + 'px';
+  }
+  bgx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  layoutField();
+  buildBg();
+}
+function layoutField(){
+  // fit a GW:GH cell field inside the viewport with margins, integer cell size for crispness
+  const marginX = Math.min(W*0.10, 120), marginY = Math.min(H*0.13, 120);
+  const availW = W - marginX*2, availH = H - marginY*2;
+  CELL = Math.max(4, Math.floor(Math.min(availW/GW, availH/GH)));
+  FW = CELL*GW; FH = CELL*GH;
+  FX = Math.round((W-FW)/2); FY = Math.round((H-FH)/2);
+}
+window.addEventListener('resize', resize);
+
+//============================================================== utilities
+const TAU = Math.PI * 2;
+const rand  = (a=1,b=0)=> b + Math.random()*(a-b);
+const randi = (a,b)=> Math.floor(rand(a,b));
+const clamp = (v,lo,hi)=> v<lo?lo:(v>hi?hi:v);
+const lerp  = (a,b,t)=> a+(b-a)*t;
+// vertex (gx,gy) -> screen
+function vx(gx){ return FX + gx*CELL; }
+function vy(gy){ return FY + gy*CELL; }
+// cell center (cx,cy) -> screen
+function ccx(cx){ return FX + (cx+0.5)*CELL; }
+function ccy(cy){ return FY + (cy+0.5)*CELL; }
+
+//============================================================== background
+function buildBg(){
+  bgx.clearRect(0,0,W,H);
+  bgx.fillStyle = '#03030a';
+  bgx.fillRect(0,0,W,H);
+  const g = bgx.createRadialGradient(W/2,H/2,0, W/2,H/2, Math.max(W,H)*0.7);
+  g.addColorStop(0,'rgba(16,24,52,0.5)');
+  g.addColorStop(1,'rgba(3,3,10,0)');
+  bgx.fillStyle = g; bgx.fillRect(0,0,W,H);
+  // faint starfield
+  bgx.save();
+  for (let i=0;i<70;i++){
+    const x=rand(W), y=rand(H), s=rand(1.4,0.4);
+    bgx.globalAlpha=rand(0.45,0.06);
+    bgx.fillStyle='#cfe9ff';
+    bgx.fillRect(x,y,s,s);
+  }
+  bgx.restore();
+}
+
+//============================================================== audio (procedural, default MUTED)
+const Audio_ = {
+  ctx:null, master:null, muted:true,   // DEFAULT OFF — owner's speakers
+  init(){
+    if (this.ctx) return;
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.36;
+      this.master.connect(this.ctx.destination);
+    }catch(e){ this.ctx = null; }
+  },
+  resume(){ if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+  blip(type, freq, dur, vol, sweep){
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (sweep) o.frequency.exponentialRampToValueAtTime(Math.max(40,freq*sweep), t+dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t+dur+0.02);
+  },
+  noise(dur, vol, lp){
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i=0;i<len;i++){ d[i] = (Math.random()*2-1) * (1 - i/len); }
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value = lp||1200;
+    const gn = this.ctx.createGain(); gn.gain.value = vol;
+    src.connect(f); f.connect(gn); gn.connect(this.master);
+    src.start(t);
+  },
+  draw(){ this.blip('sine', 180, 0.025, 0.012, 1.1); },     // soft tick while drawing
+  step(){ this.blip('sine', 240, 0.02, 0.01, 1.05); },       // moving on safe edge
+  claim(){ this.blip('triangle',440,0.12,0.08,1.7); this.blip('triangle',660,0.18,0.07,1.5); this.noise(0.1,0.05,2200); },
+  claimBig(){ this.blip('triangle',330,0.2,0.1,1.8); this.blip('triangle',550,0.26,0.09,1.7); this.noise(0.16,0.08,2600); },
+  fuse(){ this.blip('square', 120, 0.04, 0.03, 0.9); },
+  death(){ this.noise(0.7,0.4,420); this.blip('sawtooth',150,0.7,0.16,0.25); },
+  levelClear(){ this.blip('triangle',520,0.16,0.09,1.6); this.blip('triangle',780,0.22,0.09,1.5); this.blip('triangle',1040,0.3,0.08,1.4); },
+  sparx(){ this.blip('square', 320, 0.03, 0.018, 1.3); }
+};
+
+//============================================================== object pools (particles)
+function makePool(factory, size){
+  const free = []; const active = [];
+  for (let i=0;i<size;i++) free.push(factory());
+  return {
+    free, active,
+    spawn(){ let o = free.pop() || factory(); o.alive = true; active.push(o); return o; },
+    sweep(){ for (let i=active.length-1;i>=0;i--){ if (!active[i].alive){ free.push(active[i]); active.splice(i,1); } } },
+    clear(){ for (const o of active) free.push(o); active.length=0; }
+  };
+}
+const particles = makePool(()=>({x:0,y:0,vx:0,vy:0,life:0,max:1,r:1,color:'#fff',alive:false,spark:false,drag:0.985}), 1000);
+function spawnParticle(x,y,vx,vy,life,r,color,spark,drag){
+  const p = particles.spawn();
+  p.x=x;p.y=y;p.vx=vx;p.vy=vy;p.life=life;p.max=life;p.r=r;p.color=color;
+  p.spark=!!spark; p.drag = drag===undefined?0.985:drag;
+}
+function burst(x,y,n,opts){
+  opts = opts || {};
+  const speed = opts.speed||140, life=opts.life||0.6, color=opts.color||'#eafffb';
+  const spread = opts.spread||1, base=opts.base||0;
+  for (let i=0;i<n;i++){
+    const a = rand(TAU);
+    const sp = base + rand(speed*spread);
+    spawnParticle(x,y, Math.cos(a)*sp, Math.sin(a)*sp,
+      life*rand(1.3,0.5), rand(2.6,0.9), color, opts.spark, opts.drag);
+  }
+}
+function updateParticles(dt){
+  for (const p of particles.active){
+    p.life -= dt;
+    if (p.life <= 0){ p.alive=false; continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.vx *= p.drag; p.vy *= p.drag;
+  }
+  particles.sweep();
+}
+function drawParticles(){
+  ctx.save(); ctx.lineCap='round';
+  for (const p of particles.active){
+    const k = p.life/p.max;
+    ctx.globalAlpha = clamp(k,0,1);
+    ctx.shadowBlur = 8; ctx.shadowColor = p.color;
+    if (p.spark){
+      ctx.strokeStyle = p.color; ctx.lineWidth = p.r;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx*0.014, p.y - p.vy*0.014); ctx.stroke();
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x,p.y, p.r*(0.4+0.6*k), 0, TAU); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+//============================================================== the grid model
+// Cell states:
+const EMPTY  = 0;   // unclaimed (the Qix roams here)
+const CLAIM  = 1;   // claimed/filled territory
+// Each claimed cell records a hue index for variety.
+let cell, hue;       // Uint8Array(GW*GH): state; Int8Array: hue idx (-1 = none)
+function cidx(cx,cy){ return cy*GW + cx; }
+
+// Vertex traversability: a vertex is "safe" (walkable) if it lies on the boundary
+// between a claimed region and the outside, i.e. it's a corner/edge of claimed cells
+// OR on the field border. We compute a boolean per vertex: onEdge[(GH+1)*(GW+1)].
+let onEdge;          // Uint8Array((GW+1)*(GH+1))
+function vidx(gx,gy){ return gy*(GW+1) + gx; }
+
+// A vertex (gx,gy) touches up to 4 cells: (gx-1,gy-1),(gx,gy-1),(gx-1,gy),(gx,gy).
+// It is "on edge" if it borders at least one EMPTY cell AND at least one CLAIM cell-or-outside.
+// Outside the field counts as CLAIM-like (the border is always walkable).
+function cellState(cx,cy){
+  if (cx<0||cy<0||cx>=GW||cy>=GH) return CLAIM;   // outside = solid (walkable border)
+  return cell[cidx(cx,cy)];
+}
+function recomputeEdges(){
+  for (let gy=0; gy<=GH; gy++){
+    for (let gx=0; gx<=GW; gx++){
+      const a=cellState(gx-1,gy-1), b=cellState(gx,gy-1), c=cellState(gx-1,gy), d=cellState(gx,gy);
+      const anyEmpty = (a===EMPTY||b===EMPTY||c===EMPTY||d===EMPTY);
+      const anySolid = (a!==EMPTY||b!==EMPTY||c!==EMPTY||d!==EMPTY);
+      onEdge[vidx(gx,gy)] = (anyEmpty && anySolid) ? 1 : 0;
+    }
+  }
+}
+// Can the player step along the edge from vertex v to vertex (gx2,gy2)?
+// The two vertices must be adjacent, both onEdge, AND the edge between them must
+// separate an EMPTY cell from a solid cell (so we walk the actual frontier, not a
+// diagonal across open space). For border edges, one side is "outside" = solid.
+function edgeWalkable(gx,gy,gx2,gy2){
+  if (!onEdge[vidx(gx2,gy2)]) return false;
+  // the two cells flanking this edge
+  let s1, s2;
+  if (gy2===gy){ // horizontal edge; flank cells above & below
+    const x = Math.min(gx,gx2);
+    s1 = cellState(x, gy-1); s2 = cellState(x, gy);
+  } else {       // vertical edge; flank cells left & right
+    const y = Math.min(gy,gy2);
+    s1 = cellState(gx-1, y); s2 = cellState(gx, y);
+  }
+  // walkable frontier: exactly one side empty (the other solid/outside)
+  return (s1===EMPTY) !== (s2===EMPTY);
+}
+
+//============================================================== claimed-area fill (flood)
+// After the player closes a loop along the border/claimed edges (the stix), we mark the
+// stix cells solid and flood-fill the EMPTY region that CONTAINS the Qix; everything
+// EMPTY not reached by that flood becomes CLAIM. This is the geometrically-correct rule:
+// the side without the Qix gets claimed.
+let claimedCount = 0;       // number of CLAIM cells
+const TOTAL = GW*GH;
+let floodVisit;             // Uint8Array reused for flood
+function performClaim(stixCells){
+  // 1) mark every cell the stix passed through as solid CLAIM (the line itself).
+  for (const k of stixCells){ if (cell[k]===EMPTY){ cell[k]=CLAIM; } }
+  // 2) flood EMPTY from every Qix position; those reachable cells stay EMPTY.
+  floodVisit.fill(0);
+  const stack = [];
+  function seed(qx,qy){
+    const ix = cidx(qx,qy);
+    if (cell[ix]===EMPTY && !floodVisit[ix]){ floodVisit[ix]=1; stack.push(qx,qy); return true; }
+    return false;
+  }
+  for (const q of qixes){
+    const qx = clamp(Math.floor((q.x-FX)/CELL),0,GW-1);
+    const qy = clamp(Math.floor((q.y-FY)/CELL),0,GH-1);
+    if (seed(qx,qy)) continue;
+    // Defensive: the Qix's exact cell was stamped solid by the stix (can't happen in fair
+    // play — the Qix would have killed the line on contact first). Seed from a nearby empty
+    // so the Qix's region is never wrongly claimed.
+    for (let r=1; r<=2; r++){
+      let placed=false;
+      for (let oy=-r; oy<=r && !placed; oy++) for (let ox=-r; ox<=r; ox++){
+        const nx=qx+ox, ny=qy+oy;
+        if (nx<0||ny<0||nx>=GW||ny>=GH) continue;
+        if (seed(nx,ny)){ placed=true; break; }
+      }
+      if (placed) break;
+    }
+  }
+  while (stack.length){
+    const cy=stack.pop(), cx=stack.pop();
+    // 4-neighbour flood within EMPTY cells
+    const nb = [cx-1,cy, cx+1,cy, cx,cy-1, cx,cy+1];
+    for (let i=0;i<8;i+=2){
+      const nx=nb[i], ny=nb[i+1];
+      if (nx<0||ny<0||nx>=GW||ny>=GH) continue;
+      const ni=cidx(nx,ny);
+      if (cell[ni]===EMPTY && !floodVisit[ni]){ floodVisit[ni]=1; stack.push(nx,ny); }
+    }
+  }
+  // 3) any EMPTY cell NOT reached by the Qix flood becomes newly CLAIMed.
+  let newly = 0;
+  const newHue = (level % HUES.length);
+  for (let i=0;i<TOTAL;i++){
+    if (cell[i]===EMPTY && !floodVisit[i]){ cell[i]=CLAIM; hue[i]=newHue; newly++; }
+  }
+  // the stix cells we just marked also get the hue if they were freshly added
+  for (const k of stixCells){ if (hue[k]<0) hue[k]=newHue; }
+  recomputeCount();
+  recomputeEdges();
+  return newly;
+}
+function recomputeCount(){
+  let n=0; for (let i=0;i<TOTAL;i++) if (cell[i]===CLAIM) n++;
+  claimedCount = n;
+}
+function claimPct(){ return claimedCount / TOTAL; }
+
+//============================================================== the field reset
+function resetField(){
+  cell = new Uint8Array(TOTAL);          // all EMPTY
+  hue  = new Int8Array(TOTAL).fill(-1);
+  onEdge = new Uint8Array((GW+1)*(GH+1));
+  floodVisit = new Uint8Array(TOTAL);
+  // Border ring: top/bottom rows and left/right columns of cells start CLAIMed so the
+  // player has a frame to walk. (The border is 1 cell thick.)
+  for (let cx=0; cx<GW; cx++){ cell[cidx(cx,0)]=CLAIM; cell[cidx(cx,GH-1)]=CLAIM; }
+  for (let cy=0; cy<GH; cy++){ cell[cidx(0,cy)]=CLAIM; cell[cidx(GW-1,cy)]=CLAIM; }
+  // border hue
+  for (let i=0;i<TOTAL;i++) if (cell[i]===CLAIM) hue[i]=0;
+  recomputeCount();
+  recomputeEdges();
+}
+
+//============================================================== player (marker)
+const player = {
+  gx:0, gy:0,                 // current vertex
+  // smooth screen pos for rendering
+  sx:0, sy:0,
+  drawing:false,             // currently out in empty space?
+  stix:[],                   // ordered list of vertex indices forming the in-progress path
+  stixCells:[],              // set of cell indices the stix has "swept" (for fill)
+  stixCellSet:null,          // Set for dedupe
+  startGx:0, startGy:0,      // where the current draw began (on the frontier)
+  slow:false,
+  moveCd:0,
+  alive:true, invuln:0, blink:0,
+  fuse:0,                    // 0..1 fraction of stix consumed by the fuse from the start
+  fuseTimer:0                // seconds since last move while drawing
+};
+function placePlayerStart(){
+  player.gx = Math.floor(GW/2); player.gy = 1;   // top inner-frontier middle vertex
+  // ensure it's on an edge; the inner frontier vertices border the empty interior
+  player.sx = vx(player.gx); player.sy = vy(player.gy);
+  player.drawing=false; player.stix.length=0; player.stixCells.length=0;
+  player.stixCellSet=new Set();
+  player.fuse=0; player.fuseTimer=0; player.slow=false;
+  player.alive=true; player.invuln=1.2; player.blink=0;
+}
+
+// Attempt a step in (dx,dy) (one of the 4 cardinal directions, magnitude 1 vertex)
+function tryMove(dx,dy){
+  if (!player.alive) return;
+  const ngx = player.gx+dx, ngy = player.gy+dy;
+  if (ngx<0||ngy<0||ngx>GW||ngy>GH) return;     // off the vertex lattice
+
+  if (!player.drawing){
+    // SAFE travel: must move along a walkable frontier edge.
+    if (edgeWalkable(player.gx,player.gy,ngx,ngy)){
+      player.gx=ngx; player.gy=ngy;
+      player.sx=vx(ngx); player.sy=vy(ngy);
+      Audio_.step();
+    } else {
+      // try to START a draw: stepping into EMPTY space from a frontier vertex.
+      if (canStartDrawTo(ngx,ngy)){ beginDraw(ngx,ngy,dx,dy); }
+    }
+    return;
+  }
+
+  // DRAWING: extend the stix. We move vertex-by-vertex through empty space.
+  extendDraw(ngx,ngy,dx,dy);
+}
+
+// can we begin drawing from current vertex toward (ngx,ngy)? The edge between must border
+// an EMPTY cell on at least one side (i.e. we're leaving the frontier into open space),
+// and the target vertex must be inside the lattice and NOT already on a solid frontier we
+// could simply walk (that's handled above).
+function canStartDrawTo(ngx,ngy){
+  if (ngx<0||ngy<0||ngx>GW||ngy>GH) return false;
+  // the edge from (gx,gy)->(ngx,ngy): one of its flank cells must be EMPTY (we go into it)
+  let s1,s2;
+  if (ngy===player.gy){ const x=Math.min(player.gx,ngx); s1=cellState(x,player.gy-1); s2=cellState(x,player.gy); }
+  else { const y=Math.min(player.gy,ngy); s1=cellState(player.gx-1,y); s2=cellState(player.gx,y); }
+  return (s1===EMPTY || s2===EMPTY);
+}
+function beginDraw(ngx,ngy,dx,dy){
+  player.drawing=true;
+  player.startGx=player.gx; player.startGy=player.gy;
+  player.stix.length=0; player.stixCells.length=0; player.stixCellSet=new Set();
+  player.stix.push(vidx(player.gx,player.gy));
+  player.fuse=0; player.fuseTimer=0;
+  // step into empty
+  stampStixEdge(player.gx,player.gy,ngx,ngy);
+  player.gx=ngx; player.gy=ngy; player.sx=vx(ngx); player.sy=vy(ngy);
+  player.stix.push(vidx(ngx,ngy));
+  Audio_.draw();
+}
+// when drawing, stamp the EMPTY cells flanking the edge we just traversed as "stix cells"
+// (these become the dividing line on close). We stamp BOTH flank empties so the line is solid.
+function stampStixEdge(ax,ay,bx,by){
+  let cells=[];
+  if (by===ay){ const x=Math.min(ax,bx); cells=[[x,ay-1],[x,ay]]; }
+  else { const y=Math.min(ay,by); cells=[[ax-1,y],[ax,y]]; }
+  for (const [cx,cy] of cells){
+    if (cx<0||cy<0||cx>=GW||cy>=GH) continue;
+    if (cell[cidx(cx,cy)]===EMPTY){
+      const k=cidx(cx,cy);
+      if (!player.stixCellSet.has(k)){ player.stixCellSet.add(k); player.stixCells.push(k); }
+    }
+  }
+}
+function extendDraw(ngx,ngy,dx,dy){
+  if (ngx<0||ngy<0||ngx>GW||ngy>GH) return;
+  // can't reverse onto the immediately-previous vertex (no instant backtrack into the line)
+  const prevK = player.stix.length>=2 ? player.stix[player.stix.length-2] : -1;
+  if (vidx(ngx,ngy)===prevK) return;
+  // Did we hit a frontier/solid vertex? If the edge we're crossing borders a SOLID cell on
+  // BOTH sides we'd be walking on solid — not allowed mid-draw. But arriving AT a solid
+  // frontier vertex closes the loop.
+  const targetOnFrontier = onEdge[vidx(ngx,ngy)] && !isOwnStixVertex(ngx,ngy);
+  // Determine the flank cells of the edge we're about to cross
+  let s1,s2;
+  if (ngy===player.gy){ const x=Math.min(player.gx,ngx); s1=cellState(x,player.gy-1); s2=cellState(x,player.gy); }
+  else { const y=Math.min(player.gy,ngy); s1=cellState(player.gx-1,y); s2=cellState(player.gx,y); }
+  const edgeTouchesEmpty = (s1===EMPTY||s2===EMPTY);
+  if (!edgeTouchesEmpty && !targetOnFrontier) return;   // would walk solid interior — block
+
+  // stamp & advance
+  stampStixEdge(player.gx,player.gy,ngx,ngy);
+  player.gx=ngx; player.gy=ngy; player.sx=vx(ngx); player.sy=vy(ngy);
+  player.stix.push(vidx(ngx,ngy));
+  player.fuseTimer=0;   // moving resets the fuse burn
+  player.fuse = Math.max(0, player.fuse - 0.04);
+  Audio_.draw();
+
+  // Closed the loop? We returned to a solid frontier (border/claimed), not our own stix.
+  if (targetOnFrontier){ closeLoop(); }
+}
+function isOwnStixVertex(gx,gy){
+  const k=vidx(gx,gy);
+  for (let i=0;i<player.stix.length-1;i++){ if (player.stix[i]===k) return true; }
+  return false;
+}
+function closeLoop(){
+  const slowDraw = player.slow;
+  const newly = performClaim(player.stixCells);
+  // scoring: area * base, slow draws worth 2x
+  const pts = Math.round(newly * (slowDraw?22:10) * (1 + (level-1)*0.15));
+  if (newly>0){ score += pts; floatScoreAt(player.sx,player.sy,pts, slowDraw?'#ffe14d':accentColor()); }
+  // feedback
+  if (newly>40){ addShake(5); flash(0.18); Audio_.claimBig(); } else { addShake(1.5); flash(0.08); Audio_.claim(); }
+  // little fill sparkle across the newly-claimed region centroid
+  burst(player.sx,player.sy, 14, {speed:160,life:0.6,color:accentColor(),spark:true,base:40});
+  // end the draw, snap player to the frontier vertex
+  player.drawing=false; player.stix.length=0; player.stixCells.length=0; player.stixCellSet=new Set();
+  player.fuse=0; player.fuseTimer=0;
+  // newly-claimed flash overlay
+  triggerClaimFlash();
+  updateClaimHUD();
+  // win?
+  if (claimPct() >= target){ winLevel(); }
+}
+
+// the fuse: while drawing, if you stop moving it burns along the stix from the start.
+function updateFuse(dt){
+  if (!player.drawing){ player.fuseTimer=0; return; }
+  player.fuseTimer += dt;
+  // grace period before the fuse starts; then it eats the stix
+  if (player.fuseTimer > 0.45){
+    // constant-rate burn (fraction of the WHOLE stix per second), independent of length so a
+    // stop always kills in a fair, bounded time. Faster on later levels.
+    const burnRate = 0.42 + level*0.045;   // ~2.4s at L1, quicker later
+    player.fuse += burnRate * dt;
+    if (Math.random()<0.3) Audio_.fuse();
+    // fuse reached the player's end of the line -> death
+    if (player.fuse >= 1){ deathByFuse(); }
+  }
+}
+function fuseScreenPos(){
+  // position of the fuse spark along the stix (from start, fraction = player.fuse)
+  if (player.stix.length<2) return null;
+  const segs = player.stix.length-1;
+  const f = clamp(player.fuse,0,1)*segs;
+  const i = Math.min(segs-1, Math.floor(f));
+  const t = f-i;
+  const a = player.stix[i], b = player.stix[i+1];
+  const agx=a%(GW+1), agy=(a/(GW+1))|0, bgx=b%(GW+1), bgy=(b/(GW+1))|0;
+  return { x: lerp(vx(agx),vx(bgx),t), y: lerp(vy(agy),vy(bgy),t) };
+}
+
+//============================================================== the Qix (writhing ribbon)
+// A multi-segment lissajous wanderer confined to EMPTY cells. Stored as a head pos +
+// a trailing history of points; the ribbon is drawn through the history.
+const qixes = [];
+function makeQix(speedMul){
+  const q = {
+    x:0,y:0, ax:0,ay:0,            // angle phases for lissajous drift
+    vx:0,vy:0,
+    trail:[],                       // array of {x,y}
+    hueShift: rand(TAU),
+    spdx: rand(0.9,0.5)*speedMul, spdy: rand(0.9,0.5)*speedMul
+  };
+  // place in the middle empty region
+  q.x = FX+FW*rand(0.65,0.35); q.y = FY+FH*rand(0.65,0.35);
+  q.ax=rand(TAU); q.ay=rand(TAU);
+  for (let i=0;i<26;i++) q.trail.push({x:q.x,y:q.y});
+  return q;
+}
+function isEmptyAt(px,py){
+  const cx=Math.floor((px-FX)/CELL), cy=Math.floor((py-FY)/CELL);
+  if (cx<0||cy<0||cx>=GW||cy>=GH) return false;
+  return cell[cidx(cx,cy)]===EMPTY;
+}
+function updateQix(dt){
+  const baseSpeed = (90 + level*14) * qixSpeed;   // px/s
+  for (const q of qixes){
+    q.ax += q.spdx*dt*1.7; q.ay += q.spdy*dt*1.3;
+    // lissajous velocity direction + a slow random wander
+    let dirx = Math.cos(q.ax) + 0.4*Math.cos(q.ay*0.7+1);
+    let diry = Math.sin(q.ay) + 0.4*Math.sin(q.ax*0.6);
+    const m = Math.hypot(dirx,diry)||1; dirx/=m; diry/=m;
+    let nx = q.x + dirx*baseSpeed*dt;
+    let ny = q.y + diry*baseSpeed*dt;
+    // confine to empty cells: if the next pos is not empty, reflect by nudging phases
+    if (!isEmptyAt(nx,ny)){
+      // try axis-separated moves; bounce the phase that pushed us into solid
+      if (isEmptyAt(nx,q.y)){ ny=q.y; q.ay+=Math.PI*rand(1.4,0.6); }
+      else if (isEmptyAt(q.x,ny)){ nx=q.x; q.ax+=Math.PI*rand(1.4,0.6); }
+      else { nx=q.x; ny=q.y; q.ax+=Math.PI*rand(1.6,0.8); q.ay+=Math.PI*rand(1.6,0.8); }
+    }
+    q.x=nx; q.y=ny;
+    q.trail.push({x:q.x,y:q.y});
+    if (q.trail.length>30) q.trail.shift();
+  }
+}
+function drawQix(now){
+  for (const q of qixes){
+    const t = q.trail;
+    if (t.length<2) continue;
+    // ribbon: draw the trail as a glowing multi-segment line with shifting hue
+    ctx.save();
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    for (let pass=0; pass<2; pass++){
+      ctx.beginPath();
+      for (let i=0;i<t.length;i++){ if(i===0) ctx.moveTo(t[i].x,t[i].y); else ctx.lineTo(t[i].x,t[i].y); }
+      const huev = ((now*0.06 + q.hueShift*40) % 360);
+      ctx.strokeStyle = pass===0 ? 'hsl('+huev+',100%,70%)' : '#ffffff';
+      ctx.lineWidth = pass===0 ? 6 : 2;
+      ctx.globalAlpha = pass===0 ? 0.85 : 0.9;
+      ctx.shadowBlur = pass===0 ? 22 : 8;
+      ctx.shadowColor = 'hsl('+huev+',100%,60%)';
+      ctx.stroke();
+    }
+    // a bright writhing head
+    const h=t[t.length-1];
+    const huev = ((now*0.06 + q.hueShift*40) % 360);
+    ctx.beginPath(); ctx.arc(h.x,h.y, 5+2*Math.sin(now*0.01+q.hueShift),0,TAU);
+    ctx.fillStyle='#ffffff'; ctx.shadowBlur=20; ctx.shadowColor='hsl('+huev+',100%,65%)'; ctx.fill();
+    ctx.restore();
+  }
+}
+// does any Qix segment cross the player's in-progress stix? (line-vs-polyline)
+function qixHitsStix(){
+  if (!player.drawing || player.stix.length<2) return false;
+  for (const q of qixes){
+    const t=q.trail;
+    for (let i=1;i<t.length;i++){
+      const a=t[i-1], b=t[i];
+      // test this qix segment against each stix segment
+      for (let s=1;s<player.stix.length;s++){
+        const p1=stixVertexPos(s-1), p2=stixVertexPos(s);
+        if (segIntersect(a.x,a.y,b.x,b.y, p1.x,p1.y,p2.x,p2.y)) return true;
+      }
+      // also: qix head near the player marker while drawing
+    }
+    // proximity of qix head to the player's current point
+    const h=t[t.length-1];
+    if (player.drawing && Math.hypot(h.x-player.sx, h.y-player.sy) < CELL*0.9) return true;
+  }
+  return false;
+}
+function stixVertexPos(i){
+  const k=player.stix[i]; const gx=k%(GW+1), gy=(k/(GW+1))|0;
+  return { x:vx(gx), y:vy(gy) };
+}
+function segIntersect(ax,ay,bx,by,cx,cy,dx,dy){
+  const d1=cross(cx,cy,dx,dy,ax,ay), d2=cross(cx,cy,dx,dy,bx,by);
+  const d3=cross(ax,ay,bx,by,cx,cy), d4=cross(ax,ay,bx,by,dx,dy);
+  if (((d1>0&&d2<0)||(d1<0&&d2>0)) && ((d3>0&&d4<0)||(d3<0&&d4>0))) return true;
+  return false;
+}
+function cross(ax,ay,bx,by,px,py){ return (bx-ax)*(py-ay)-(by-ay)*(px-ax); }
+
+//============================================================== Sparx (patrol the frontier)
+// Sparx walk along walkable frontier edges (vertex to vertex), pursuing the player loosely.
+// If a sparx reaches the player's vertex (while not drawing it kills; while drawing the
+// player is off the frontier so sparx can still reach the stix start — we kill on contact
+// with the player marker or the stix start).
+const sparxes = [];
+function makeSparx(){
+  return { gx:0,gy:0, px:0,py:0, dir:1, moveCd:0, prevK:-1, color:'#ff6a3d' };
+}
+function spawnSparx(){
+  const s = makeSparx();
+  // spawn on the top INNER frontier (row 1 — the actual walkable edge), away from the player
+  s.gx = clamp(player.gx + (Math.random()<0.5?-1:1)*randi(16,8), 2, GW-2);
+  s.gy = 1;
+  s.px=vx(s.gx); s.py=vy(s.gy); s.prevK=-1;
+  s.moveCd = rand(0.18,0.08);
+  sparxes.push(s);
+  return s;
+}
+function updateSparx(dt){
+  for (const s of sparxes){
+    s.moveCd -= dt;
+    if (s.moveCd>0) continue;
+    s.moveCd = Math.max(0.05, 0.16 - level*0.006);   // faster on later levels
+    // enumerate walkable neighbours along the frontier
+    const cands=[];
+    const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+    for (const [dx,dy] of dirs){
+      const ngx=s.gx+dx, ngy=s.gy+dy;
+      if (ngx<0||ngy<0||ngx>GW||ngy>GH) continue;
+      if (!edgeWalkable(s.gx,s.gy,ngx,ngy)) continue;
+      cands.push([ngx,ngy]);
+    }
+    if (cands.length===0){ s.prevK=-1; continue; }
+    // prefer not to immediately backtrack; bias toward the player
+    let best=null, bestScore=-1e9;
+    for (const [ngx,ngy] of cands){
+      const k=vidx(ngx,ngy);
+      let sc = 0;
+      // toward the player (where the player is — or the stix start if drawing)
+      const tx = player.drawing ? player.startGx : player.gx;
+      const ty = player.drawing ? player.startGy : player.gy;
+      const dHere = Math.abs(s.gx-tx)+Math.abs(s.gy-ty);
+      const dThere= Math.abs(ngx-tx)+Math.abs(ngy-ty);
+      sc += (dHere-dThere)*1.0;          // reward getting closer
+      if (k===s.prevK) sc -= 3.0;        // avoid backtrack
+      sc += rand(0.6);                   // jitter so it's not perfectly optimal
+      if (sc>bestScore){ bestScore=sc; best=[ngx,ngy]; }
+    }
+    s.prevK = vidx(s.gx,s.gy);
+    s.gx=best[0]; s.gy=best[1]; s.px=vx(s.gx); s.py=vy(s.gy);
+    if (Math.random()<0.15) Audio_.sparx();
+  }
+}
+function drawSparx(now){
+  for (const s of sparxes){
+    ctx.save();
+    ctx.translate(s.px,s.py);
+    const r = CELL*0.6+4;
+    const spin = now*0.012;
+    ctx.rotate(spin);
+    ctx.shadowBlur=16; ctx.shadowColor=s.color;
+    ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.fillStyle='rgba(255,106,61,0.35)';
+    // a spiky star
+    ctx.beginPath();
+    for (let i=0;i<8;i++){
+      const a=i/8*TAU; const rr = (i%2===0)? r : r*0.45;
+      const x=Math.cos(a)*rr, y=Math.sin(a)*rr;
+      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+}
+function sparxHitsPlayer(){
+  if (!player.alive || player.invuln>0) return false;
+  for (const s of sparxes){
+    // hit the player's marker (when on frontier) or the stix start vertex (when drawing)
+    const tx = player.drawing ? vx(player.startGx) : player.sx;
+    const ty = player.drawing ? vy(player.startGy) : player.sy;
+    if (Math.abs(s.gx - (player.drawing?player.startGx:player.gx))<=0 &&
+        Math.abs(s.gy - (player.drawing?player.startGy:player.gy))<=0) return true;
+    if (Math.hypot(s.px-tx, s.py-ty) < CELL*0.7) return true;
+  }
+  return false;
+}
+
+//============================================================== floating score text
+const floats = makePool(()=>({x:0,y:0,vy:0,life:0,max:1,text:'',color:'#fff',size:14,alive:false}), 40);
+function floatScoreAt(x,y,score,color){
+  const f=floats.spawn();
+  f.x=x;f.y=y;f.vy=-48;f.life=0.9;f.max=0.9;f.text='+'+score;f.color=color||accentColor();f.size=14;
+}
+function updateFloats(dt){
+  for (const f of floats.active){ f.life-=dt; if(f.life<=0){f.alive=false;continue;} f.y+=f.vy*dt; f.vy*=0.94; }
+  floats.sweep();
+}
+function drawFloats(){
+  ctx.save(); ctx.textAlign='center';
+  for (const f of floats.active){
+    const k=f.life/f.max;
+    ctx.globalAlpha=clamp(k*1.4,0,1);
+    ctx.shadowBlur=10; ctx.shadowColor=f.color;
+    ctx.fillStyle=f.color; ctx.font='700 '+f.size+'px ui-monospace,monospace';
+    ctx.fillText(f.text, f.x, f.y);
+  }
+  ctx.restore();
+}
+
+//============================================================== claimed-region rendering
+const HUES = [
+  '#37f7e0', // cyan (border + level 0)
+  '#ff2e88', // magenta
+  '#b06bff', // violet
+  '#ffb13d', // amber
+  '#39ff9e', // green
+  '#5ad6ff', // ice
+  '#ff6fb0', // pink
+];
+function accentColor(){ return HUES[level % HUES.length]; }
+let claimFlash = 0;
+function triggerClaimFlash(){ claimFlash = 1; }
+
+// Render the claimed cells. We draw filled translucent rects grouped by hue, plus a bright
+// neon outline around the whole claimed frontier (the edges between claimed & empty).
+function drawField(now){
+  // 1) translucent claimed fills (batched by hue for fewer state changes)
+  ctx.save();
+  for (let h=0; h<HUES.length; h++){
+    ctx.beginPath();
+    let any=false;
+    for (let cy=0;cy<GH;cy++){
+      for (let cx=0;cx<GW;cx++){
+        const i=cidx(cx,cy);
+        if (cell[i]===CLAIM && hue[i]===h){
+          ctx.rect(vx(cx),vy(cy),CELL+0.6,CELL+0.6); any=true;
+        }
+      }
+    }
+    if (any){
+      ctx.fillStyle = hexA(HUES[h], 0.16 + 0.06*Math.sin(now*0.002+h));
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  // 2) the glowing frontier outline (edges separating claimed from empty / border)
+  ctx.save();
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.strokeStyle = accentColor();
+  ctx.shadowBlur = 14; ctx.shadowColor = accentColor();
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  // horizontal edges
+  for (let gy=0; gy<=GH; gy++){
+    for (let cx=0; cx<GW; cx++){
+      const above=cellState(cx,gy-1), below=cellState(cx,gy);
+      if ((above===EMPTY) !== (below===EMPTY)){
+        ctx.moveTo(vx(cx),vy(gy)); ctx.lineTo(vx(cx+1),vy(gy));
+      }
+    }
+  }
+  // vertical edges
+  for (let gx=0; gx<=GW; gx++){
+    for (let cy=0; cy<GH; cy++){
+      const left=cellState(gx-1,cy), right=cellState(gx,cy);
+      if ((left===EMPTY) !== (right===EMPTY)){
+        ctx.moveTo(vx(gx),vy(cy)); ctx.lineTo(vx(gx),vy(cy+1));
+      }
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // 3) outer border (always a bright frame)
+  ctx.save();
+  ctx.strokeStyle = '#eafffb'; ctx.globalAlpha=0.9;
+  ctx.shadowBlur=18; ctx.shadowColor=HUES[0];
+  ctx.lineWidth=2.8;
+  ctx.strokeRect(FX+0.5, FY+0.5, FW-1, FH-1);
+  ctx.restore();
+
+  // claim flash overlay on the whole field
+  if (claimFlash>0.01){
+    ctx.save();
+    ctx.globalAlpha = claimFlash*0.5;
+    ctx.fillStyle = accentColor();
+    ctx.fillRect(FX,FY,FW,FH);
+    ctx.restore();
+  }
+}
+function hexA(hex,a){
+  const n=parseInt(hex.slice(1),16);
+  const r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  return 'rgba('+r+','+g+','+b+','+a+')';
+}
+
+//============================================================== stix + player rendering
+function drawStix(now){
+  if (!player.drawing || player.stix.length<1) return;
+  ctx.save();
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  // the drawn line glows
+  ctx.beginPath();
+  for (let i=0;i<player.stix.length;i++){
+    const p=stixVertexPos(i);
+    if (i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+  }
+  // to the live player position
+  ctx.lineTo(player.sx, player.sy);
+  ctx.strokeStyle = player.slow ? '#ffe14d' : '#eafffb';
+  ctx.shadowBlur = 16; ctx.shadowColor = player.slow ? '#ffe14d' : HUES[0];
+  ctx.lineWidth = player.slow ? 3.6 : 2.8;
+  ctx.stroke();
+  ctx.restore();
+
+  // the fuse spark crawling from the start
+  if (player.fuse>0.001){
+    const fp=fuseScreenPos();
+    if (fp){
+      ctx.save();
+      ctx.shadowBlur=18; ctx.shadowColor='#ff6a3d';
+      ctx.fillStyle='#ffd23d';
+      ctx.beginPath(); ctx.arc(fp.x,fp.y, 4+2*Math.sin(now*0.03),0,TAU); ctx.fill();
+      // a couple of sparks
+      if (Math.random()<0.5) spawnParticle(fp.x,fp.y, rand(60,-60),rand(60,-60), 0.3, rand(2,1),'#ff8a3d',true,0.9);
+      ctx.restore();
+    }
+  }
+}
+function drawPlayer(now){
+  if (!player.alive){ return; }
+  if (player.invuln>0){ const on=(Math.floor(player.blink*12)%2)===0; if(!on) return; }
+  ctx.save();
+  ctx.translate(player.sx, player.sy);
+  const r = CELL*0.55+4;
+  ctx.rotate(now*0.006);
+  ctx.shadowBlur=18; ctx.shadowColor = player.drawing ? '#ffe14d' : '#ffffff';
+  ctx.strokeStyle='#ffffff'; ctx.lineWidth=2.4; ctx.fillStyle='rgba(255,255,255,0.25)';
+  // a diamond marker
+  ctx.beginPath();
+  ctx.moveTo(0,-r); ctx.lineTo(r,0); ctx.lineTo(0,r); ctx.lineTo(-r,0); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+//============================================================== death / lives
+function deathBy(reason){
+  if (!player.alive || player.invuln>0) return;
+  player.alive=false;
+  addShake(20); flash(0.5); Audio_.death();
+  burst(player.sx,player.sy, 40, {speed:300,life:1.1,color:'#eafffb',spark:true,base:50});
+  burst(player.sx,player.sy, 22, {speed:160,life:1.4,color:accentColor()});
+  burst(player.sx,player.sy, 14, {speed:110,life:1.6,color:'#ff2e88'});
+  lives--;
+  updateLives();
+  // abandon any in-progress draw (the claimed cells we stamped revert to empty)
+  for (const k of player.stixCells){ if (cell[k]===CLAIM && hue[k]<0) {} }
+  // the stix cells were never committed to `cell` (only on closeLoop), so nothing to revert.
+  player.stix.length=0; player.stixCells.length=0; player.stixCellSet=new Set();
+  player.drawing=false; player.fuse=0;
+  if (lives<=0){ setTimeout(endGame, 950); }
+  else { setTimeout(()=>{ if(state==='playing'){ placePlayerStart(); } }, 850); }
+}
+function deathByFuse(){ deathBy('fuse'); }
+
+//============================================================== screen shake / flash
+let shake=0, flashAmt=0;
+function addShake(v){ shake=Math.min(28, shake+v); }
+function flash(v){ flashAmt=Math.min(1, flashAmt+v); }
+
+//============================================================== game state / levels
+let state='title';
+let score=0, displayScore=0;
+let level=1, lives=3;
+let best=0, bestClaim=0;
+let target=0.75;
+let qixSpeed=1;
+let levelBonus=0;
+
+function loadBest(){
+  try{ best=parseInt(localStorage.getItem('ws:best:tessera')||'0',10)||0; }catch(e){ best=0; }
+}
+function raiseBest(){
+  // ws: unlock breadcrumb — see /UNLOCK.md. Only raise it; harmless if storage is off.
+  try{
+    var k='ws:best:tessera', prev=+(localStorage.getItem(k)||0);
+    if(level>prev) localStorage.setItem(k,String(level));
+  }catch(e){}
+  if (level>best) best=level;
+  elBest.textContent=best;
+}
+
+function startLevel(lvl){
+  level=lvl;
+  document.documentElement.style.setProperty('--accent', accentColor());
+  resetField();
+  placePlayerStart();
+  // Qixes: 1, then a 2nd from level 4
+  qixes.length=0;
+  const nq = 1 + (lvl>=4?1:0) + (lvl>=8?1:0);
+  qixSpeed = 1 + (lvl-1)*0.12;
+  for (let i=0;i<nq;i++) qixes.push(makeQix(1));
+  // sparx: 1 + extra on later levels
+  sparxes.length=0;
+  const ns = 1 + Math.floor((lvl-1)/2);
+  for (let i=0;i<ns;i++) spawnSparx();
+  target = 0.75;
+  elLevel.textContent=lvl;
+  updateLives();
+  updateClaimHUD();
+  raiseBest();
+}
+function winLevel(){
+  state='levelclear';
+  Audio_.levelClear();
+  addShake(8); flash(0.3);
+  // bonus for over-claiming + remaining lives
+  const over = Math.max(0, claimPct()-target);
+  levelBonus = Math.round(over*100*50 + lives*250 + level*100);
+  score += levelBonus;
+  bestClaim = Math.max(bestClaim, Math.round(claimPct()*100));
+  // confetti burst
+  for (let i=0;i<60;i++){
+    spawnParticle(FX+rand(FW),FY+rand(FH), rand(120,-120),rand(120,-120), rand(1.2,0.5), rand(3,1.2), HUES[randi(0,HUES.length)], true, 0.95);
+  }
+  document.getElementById('lcClaimed').textContent = Math.round(claimPct()*100)+'%';
+  document.getElementById('lcBonus').textContent = levelBonus.toLocaleString();
+  document.getElementById('lcScore').textContent = score.toLocaleString();
+  document.getElementById('levelClearScreen').classList.remove('hidden');
+  raiseBest();
+}
+
+//============================================================== HUD
+const elScore=document.getElementById('score');
+const elLevel=document.getElementById('level');
+const elBest=document.getElementById('best');
+const elLives=document.getElementById('lives');
+const elClaimPct=document.getElementById('claimpct');
+const elTargetPct=document.getElementById('targetpct');
+const elMeterFill=document.getElementById('meterfill');
+const elMeterTgt=document.getElementById('metertgt');
+function updateLives(){
+  elLives.innerHTML='';
+  for (let i=0;i<Math.max(lives,0);i++){
+    const d=document.createElement('div'); d.className='pip'; elLives.appendChild(d);
+  }
+}
+function updateClaimHUD(){
+  const pct=Math.round(claimPct()*100);
+  elClaimPct.textContent = pct+'%';
+  elTargetPct.textContent = Math.round(target*100)+'%';
+  elMeterFill.style.width = clamp(pct/Math.max(1,target*100)*100,0,100)+'%';
+  elMeterTgt.style.left = '100%';   // target marks the full meter (meter scaled to target)
+  bestClaim=Math.max(bestClaim,pct);
+}
+
+//============================================================== input
+const keys={};
+let heldDir=null;   // [dx,dy] currently driving continuous movement
+function setMuteTag(){
+  document.getElementById('muteTag').textContent='M · sound '+(Audio_.muted?'off':'on');
+}
+const DIRS = { left:[-1,0], right:[1,0], up:[0,-1], down:[0,1] };
+function keyToDir(k){
+  if (k==='arrowleft'||k==='a') return 'left';
+  if (k==='arrowright'||k==='d') return 'right';
+  if (k==='arrowup'||k==='w') return 'up';
+  if (k==='arrowdown'||k==='s') return 'down';
+  return null;
+}
+window.addEventListener('keydown', e=>{
+  const k=e.key.toLowerCase();
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  if (k==='shift'){ player.slow=true; return; }
+  const dir=keyToDir(k);
+  if (dir){
+    if (!keys[dir]){
+      keys[dir]=true; heldDir=DIRS[dir];
+      // a tap = one immediate step (responsive); holding then repeats via tickMove's cadence
+      if (state==='playing' && player.alive){ tryMove(DIRS[dir][0], DIRS[dir][1]); player.moveCd=0.12; }
+    }
+    return;
+  }
+  switch(k){
+    case ' ': case 'spacebar': case 'enter':
+      if (state==='title'||state==='gameover'){ startGame(); }
+      else if (state==='levelclear'){ nextLevel(); }
+      break;
+    case 'p': case 'escape':
+      if (state==='playing'||state==='paused') togglePause(); break;
+    case 'm':
+      Audio_.init(); Audio_.muted=!Audio_.muted; setMuteTag();
+      if(!Audio_.muted) Audio_.resume(); break;
+  }
+}, {passive:false});
+window.addEventListener('keyup', e=>{
+  const k=e.key.toLowerCase();
+  if (k==='shift'){ player.slow=false; return; }
+  const dir=keyToDir(k);
+  if (dir){ keys[dir]=false;
+    // recompute heldDir to another still-held key (last-pressed priority is fine: pick any held)
+    heldDir=null;
+    for (const d of ['up','down','left','right']) if (keys[d]) heldDir=DIRS[d];
+  }
+});
+window.addEventListener('pointerdown', ()=>{ Audio_.init(); if(!Audio_.muted) Audio_.resume(); }, {once:true});
+document.addEventListener('visibilitychange', ()=>{ if (document.hidden && state==='playing') togglePause(); });
+
+// continuous movement: step on a cadence while a direction is held.
+function tickMove(dt){
+  if (state!=='playing' || !player.alive) return;
+  player.moveCd -= dt;
+  if (!heldDir) return;
+  // move speed: slow draw is slower (and worth more); safe travel & fast draw are quicker
+  const interval = (player.drawing && player.slow) ? 0.085 : (player.drawing ? 0.045 : 0.04);
+  if (player.moveCd<=0){
+    tryMove(heldDir[0], heldDir[1]);
+    player.moveCd = interval;
+  }
+}
+
+//============================================================== state transitions
+function startGame(){
+  state='playing';
+  score=0; displayScore=0; bestClaim=0;
+  level=1; lives=3;
+  startLevel(1);
+  shake=0; flashAmt=0; claimFlash=0;
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('gameoverScreen').classList.add('hidden');
+  document.getElementById('levelClearScreen').classList.add('hidden');
+  document.getElementById('hud').style.display='block';
+  document.getElementById('claimwrap').style.display='flex';
+  elScore.textContent='0';
+  Audio_.init(); if(!Audio_.muted) Audio_.resume();
+}
+function nextLevel(){
+  document.getElementById('levelClearScreen').classList.add('hidden');
+  startLevel(level+1);
+  state='playing';
+  last=performance.now();
+}
+function endGame(){
+  state='gameover';
+  raiseBest();
+  document.getElementById('goScore').textContent=score.toLocaleString();
+  document.getElementById('goLevel').textContent=level;
+  document.getElementById('goClaim').textContent=bestClaim+'%';
+  const isBest=level>=best && level>1;
+  document.getElementById('newHigh').style.display=isBest?'block':'none';
+  document.getElementById('gameoverScreen').classList.remove('hidden');
+}
+function togglePause(){
+  if (state==='playing'){
+    state='paused';
+    document.getElementById('pauseScreen').classList.remove('hidden');
+  } else if (state==='paused'){
+    state='playing';
+    document.getElementById('pauseScreen').classList.add('hidden');
+    last=performance.now();
+  }
+}
+
+//============================================================== main loop
+let last=performance.now();
+let fpsTime=0, fpsCount=0, fpsValue=60;
+function frame(now){
+  let dt=(now-last)/1000; last=now;
+  if (dt>0.05) dt=0.05;
+  fpsTime+=dt; fpsCount++;
+  if (fpsTime>=0.5){ fpsValue=Math.round(fpsCount/fpsTime); fpsTime=0; fpsCount=0; }
+
+  if (state==='playing') update(dt);
+  else if (state==='paused'){ updateParticles(dt*0.4); updateFloats(dt*0.4); }
+  else { updateParticles(dt); if(state==='title'||state==='levelclear') updateQix(dt); }
+  render(now);
+  requestAnimationFrame(frame);
+}
+function update(dt){
+  tickMove(dt);
+  if (player.alive){
+    updateFuse(dt);
+    updateQix(dt);
+    updateSparx(dt);
+    // collisions
+    if (qixHitsStix()) deathBy('qix');
+    else if (sparxHitsPlayer()) deathBy('sparx');
+  } else {
+    updateQix(dt*0.4);
+  }
+  if (player.invuln>0){ player.invuln-=dt; player.blink+=dt; }
+  updateParticles(dt);
+  updateFloats(dt);
+
+  shake *= Math.pow(0.04, dt);
+  flashAmt *= Math.pow(0.02, dt);
+  claimFlash *= Math.pow(0.0015, dt);
+
+  displayScore += (score-displayScore)*Math.min(1,dt*8);
+  elScore.textContent=Math.round(displayScore).toLocaleString();
+  // live claim meter
+  const pct=Math.round(claimPct()*100);
+  elClaimPct.textContent=pct+'%';
+  elMeterFill.style.width = clamp(pct/Math.max(1,target*100)*100,0,100)+'%';
+}
+
+//============================================================== render
+function render(now){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  if (shake>0.3){ const a=rand(TAU); ctx.translate(Math.cos(a)*shake, Math.sin(a)*shake); }
+
+  drawField(now);
+  drawParticles();
+  drawQix(now);
+  drawSparx(now);
+  if (state==='playing'||state==='paused'){
+    drawStix(now);
+    drawPlayer(now);
+  }
+  drawFloats();
+
+  ctx.restore();
+
+  if (flashAmt>0.01){
+    ctx.fillStyle='rgba(200,240,255,'+(flashAmt*0.4)+')';
+    ctx.fillRect(0,0,W,H);
+  }
+}
+
+//============================================================== boot
+loadBest();
+resize();
+elBest.textContent=best;
+setMuteTag();
+// attract: an idle field with a roaming qix behind the title
+resetField();
+qixes.length=0; qixes.push(makeQix(0.7));
+sparxes.length=0;
+
+requestAnimationFrame(frame);
+
+// verification hook
+window.__TESSERA__ = {
+  get state(){return state;},
+  get score(){return score;},
+  get level(){return level;},
+  get lives(){return lives;},
+  get best(){return best;},
+  get claimPct(){return Math.round(claimPct()*1000)/10;},
+  get target(){return Math.round(target*100);},
+  get drawing(){return player.drawing;},
+  get playerGx(){return player.gx;},
+  get playerGy(){return player.gy;},
+  get playerAlive(){return player.alive;},
+  get qixCount(){return qixes.length;},
+  get sparxCount(){return sparxes.length;},
+  get stixLen(){return player.stix.length;},
+  get fuse(){return Math.round(player.fuse*1000)/1000;},
+  get particleCount(){return particles.active.length;},
+  get claimedCells(){return claimedCount;},
+  get totalCells(){return TOTAL;},
+  get fps(){return fpsValue;},
+  get bestClaim(){return bestClaim;},
+  _start(){ startGame(); },
+  _next(){ if(state==='levelclear') nextLevel(); },
+  _setLevel(l){ startLevel(l); },
+  _move(dx,dy){ tryMove(dx,dy); },          // single vertex step
+  _hold(dir){ heldDir = DIRS[dir]||null; },  // set continuous direction
+  _release(){ heldDir=null; },
+  _slow(on){ player.slow=!!on; },
+  _qixPos(){ return qixes.map(q=>({x:Math.round(q.x),y:Math.round(q.y),
+      cx:Math.floor((q.x-FX)/CELL),cy:Math.floor((q.y-FY)/CELL)})); },
+  // is the Qix inside any claimed cell? (should always be false)
+  _qixInClaimed(){ return qixes.some(q=>{ const cx=Math.floor((q.x-FX)/CELL),cy=Math.floor((q.y-FY)/CELL);
+      if(cx<0||cy<0||cx>=GW||cy>=GH) return false; return cell[cidx(cx,cy)]===CLAIM; }); },
+  _sparxPos(){ return sparxes.map(s=>({gx:s.gx,gy:s.gy})); },
+  _parkQix(cx,cy){ // move every qix to a given cell center (test helper)
+    const x=ccx(cx), y=ccy(cy);
+    for(const q of qixes){ q.x=x; q.y=y; q.trail.length=0; for(let i=0;i<8;i++) q.trail.push({x,y}); }
+    return T_qpos(); function T_qpos(){ return qixes.map(q=>({cx:Math.floor((q.x-FX)/CELL),cy:Math.floor((q.y-FY)/CELL)})); }
+  },
+  _fieldDims(){ return {GW,GW2:GW,GH,FX,FY,FW,FH,CELL}; },
+  _kill(){ player.invuln=0; deathBy('test'); },
+  // deterministic Qix-vs-stix collision test: lay a qix trail straight across the middle
+  // of the current in-progress stix, then report whether the collision check fires.
+  _testQixStix(){
+    if (!player.drawing || player.stix.length<2) return {ok:false, reason:'not drawing'};
+    player.invuln=0;
+    const i=Math.floor(player.stix.length/2);
+    const a=stixVertexPos(i-1), b=stixVertexPos(i);
+    const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+    const q=qixes[0]; q.trail.length=0;
+    // a segment crossing the stix segment perpendicular-ish through its midpoint
+    q.trail.push({x:mx-30,y:my-30}); q.trail.push({x:mx+30,y:my+30});
+    q.x=mx+30; q.y=my+30;
+    return {ok:true, hits: qixHitsStix()};
+  },
+  // claim a quick box for testing: walk down, across, up, back to border
+  _autoBox(w,h){ // returns a promise-like immediate sequence is hard; expose primitives instead
+    return 'use _move sequence'; }
+};
+
+})();
+</script>
+
+<!-- arc-back -->
+<style>
+  .arc-back{ position:fixed; left:18px; bottom:14px; z-index:9999; pointer-events:auto;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11.5px;
+    letter-spacing:.18em; text-transform:uppercase; text-decoration:none;
+    color:#e9f6ff; opacity:.40; transition:opacity .2s, text-shadow .2s;
+    text-shadow:0 0 8px rgba(55,247,224,.45); }
+  .arc-back:hover{ opacity:.95; text-shadow:0 0 12px rgba(55,247,224,.85); }
+</style>
+<a class="arc-back" href="../index.html" style="position:fixed;z-index:9999;pointer-events:auto">← arcade</a>
+</body>
+</html>
