@@ -97,5 +97,11 @@ window.GAMES = [
     name: "Qubit",
     blurb: "neon iso cube-hopper — flip every face, dodge the balls, lure Coily off the edge",
     accent: "#ffd23d"
+  },
+  {
+    file: "vanguard.html",
+    name: "Vanguard",
+    blurb: "neon formation shooter — fly in, dive-bomb, free a captured wing into a dual fighter",
+    accent: "#37d6ff"
   }
 ];

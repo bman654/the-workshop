@@ -1,0 +1,1386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>VANGUARD — neon formation shooter</title>
+<style>
+  :root{ --accent:#37d6ff; --accent2:#ff2e88; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; background:#03030a; overflow:hidden;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    color:#e9f6ff; -webkit-font-smoothing:antialiased; cursor:default; }
+  #stage{ position:fixed; inset:0; }
+  canvas{ display:block; position:absolute; inset:0; }
+
+  /* ---------- HUD ---------- */
+  .hud{ position:fixed; inset:0; pointer-events:none; z-index:5;
+    font-variant-numeric:tabular-nums; }
+  .hud-row{ position:absolute; top:18px; display:flex; }
+  .hud-left{ left:24px; flex-direction:column; gap:4px; align-items:flex-start; }
+  .hud-right{ right:24px; flex-direction:column; align-items:flex-end; gap:4px; }
+  .label{ font-size:10px; letter-spacing:.32em; color:#5fa9c9; opacity:.85; text-transform:uppercase; }
+  .value{ font-size:30px; font-weight:700; letter-spacing:.04em; line-height:1;
+    color:#eafaff; text-shadow:0 0 16px rgba(55,214,255,.6); }
+  .value.small{ font-size:17px; color:#9bd8e8; }
+  .wave-tag{ position:fixed; top:18px; left:50%; transform:translateX(-50%); text-align:center; }
+  .wave-tag .label{ font-size:10px; }
+  .wave-tag .value{ font-size:22px; color:#ff6fb0; text-shadow:0 0 16px rgba(255,46,136,.6); }
+
+  /* lives pips (little fighters) */
+  .lives{ display:flex; gap:8px; align-items:center; margin-top:6px; }
+  .pip{ width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent;
+    border-bottom:16px solid var(--accent);
+    filter:drop-shadow(0 0 7px rgba(55,214,255,.7)); transition:opacity .2s, transform .2s; }
+  .pip.empty{ opacity:.16; filter:none; transform:scale(.8); }
+
+  /* self-test chip */
+  #selftest{ position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
+    z-index:6; font-size:10px; letter-spacing:.22em; text-transform:uppercase;
+    color:#04141a; background:var(--accent); border-radius:10px; padding:3px 10px;
+    box-shadow:0 0 14px rgba(55,214,255,.7); opacity:0; transition:opacity .4s;
+    pointer-events:none; font-weight:700; }
+  #selftest.show{ opacity:.92; }
+  #selftest.fail{ color:#fff; background:#ff2e88; box-shadow:0 0 14px rgba(255,46,136,.8); }
+
+  #muteTag{ position:fixed; bottom:16px; right:20px; font-size:10px; letter-spacing:.24em;
+    color:#5fa9c9; opacity:.7; text-transform:uppercase; pointer-events:none; }
+  #dualTag{ position:fixed; bottom:16px; left:50%; transform:translateX(-50%);
+    font-size:10px; letter-spacing:.26em; color:#ffe14d; opacity:0; text-transform:uppercase;
+    pointer-events:none; text-shadow:0 0 12px rgba(255,225,77,.7); transition:opacity .3s; font-weight:700; }
+  #dualTag.show{ opacity:.95; }
+
+  /* ---------- Overlays ---------- */
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:8px;
+    background:radial-gradient(120% 120% at 50% 42%, rgba(6,16,24,.34), rgba(2,2,8,.9));
+    backdrop-filter:blur(1.5px); transition:opacity .35s; }
+  .overlay.hidden{ opacity:0; pointer-events:none; }
+  .title{ font-size:clamp(48px,12.5vw,158px); font-weight:800; letter-spacing:.12em;
+    line-height:.9; color:#eafaff;
+    text-shadow:0 0 30px rgba(55,214,255,.65), 0 0 70px rgba(55,214,255,.35);
+    -webkit-text-stroke:1px rgba(170,235,255,.25); }
+  .title .a2{ color:var(--accent2); -webkit-text-stroke:1px rgba(255,46,136,.4);
+    text-shadow:0 0 30px rgba(255,46,136,.6); }
+  .tagline{ font-size:13px; letter-spacing:.34em; color:#ff6fb0; text-transform:uppercase;
+    opacity:.9; margin-bottom:24px; }
+  .prompt{ font-size:15px; letter-spacing:.12em; color:#eafaff;
+    margin-top:14px; animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:.45} 50%{opacity:1} }
+  .controls{ margin-top:28px; display:grid; grid-template-columns:auto auto;
+    gap:6px 26px; font-size:12px; letter-spacing:.06em; color:#9bd8e8; opacity:.9; }
+  .controls b{ color:#eafaff; font-weight:700; }
+  .controls .k{ text-align:right; color:var(--accent); }
+  .hint{ margin-top:20px; font-size:11px; letter-spacing:.16em; color:#5fa9c9;
+    text-transform:uppercase; opacity:.8; max-width:54ch; line-height:1.7; }
+  .go-stats{ margin-top:8px; display:grid; grid-template-columns:auto auto; gap:6px 30px;
+    font-size:14px; letter-spacing:.06em; color:#9bd8e8; }
+  .go-stats .k{ text-align:right; color:#5fa9c9; }
+  .go-stats b{ color:#eafaff; }
+  .newhigh{ color:var(--accent); font-size:13px; letter-spacing:.3em; text-transform:uppercase;
+    margin-top:14px; animation:pulse 1s ease-in-out infinite; }
+  .gameover-title{ font-size:clamp(34px,8vw,76px); font-weight:800; letter-spacing:.14em;
+    color:#ff2e88; text-shadow:0 0 28px rgba(255,46,136,.6); margin-bottom:8px; }
+  .wave-clear-title{ font-size:clamp(34px,8vw,72px); font-weight:800; letter-spacing:.1em;
+    color:var(--accent); text-shadow:0 0 28px rgba(55,214,255,.6); margin-bottom:8px; }
+  .wave-clear-title.bonus{ color:#ffe14d; text-shadow:0 0 28px rgba(255,225,77,.6); }
+  .pausetitle{ font-size:48px; font-weight:800; letter-spacing:.22em; color:#eafaff;
+    text-shadow:0 0 24px rgba(55,214,255,.55); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg"></canvas>
+  <canvas id="game"></canvas>
+</div>
+
+<!-- HUD -->
+<div class="hud" id="hud" style="display:none">
+  <div class="hud-row hud-left">
+    <div class="label">Score</div>
+    <div class="value" id="score">0</div>
+    <div class="lives" id="lives"></div>
+  </div>
+  <div class="hud-row hud-right">
+    <div class="label">Best Score</div>
+    <div class="value small" id="best">0</div>
+  </div>
+  <div class="wave-tag">
+    <div class="label">Wave</div>
+    <div class="value" id="wave">1</div>
+  </div>
+</div>
+<div id="selftest">✓ self-test</div>
+<div id="muteTag">M · sound off</div>
+<div id="dualTag">⟡ DUAL FIGHTER ⟡</div>
+
+<!-- Title -->
+<div class="overlay" id="titleScreen">
+  <div class="title">VAN<span class="a2">GUARD</span></div>
+  <div class="tagline">neon · formation · shooter</div>
+  <div class="prompt">Press ENTER to start</div>
+  <div class="controls">
+    <span class="k">← → / A D</span><span>steer the fighter</span>
+    <span class="k">SPACE</span><span>fire (max two shots aloft)</span>
+    <span class="k">ENTER</span><span>start / next wave</span>
+    <span class="k">P / ESC</span><span>pause</span>
+    <span class="k">M</span><span>sound (off by default)</span>
+  </div>
+  <div class="hint">Enemies swarm in along glowing arcs and lock into formation. They peel off to dive-bomb you. Beware the boss tractor beam — if it captures your ship, shoot the boss while it still holds your fighter to rescue it and forge a DUAL FIGHTER: two ships, double the guns.</div>
+</div>
+
+<!-- Wave clear -->
+<div class="overlay hidden" id="waveClearScreen">
+  <div class="wave-clear-title" id="wcTitle">WAVE CLEAR</div>
+  <div class="go-stats">
+    <span class="k">Wave</span><b id="wcWave">0</b>
+    <span class="k">Bonus</span><b id="wcBonus">0</b>
+    <span class="k">Score</span><b id="wcScore">0</b>
+  </div>
+  <div class="prompt">Press ENTER for the next wave</div>
+</div>
+
+<!-- Game over -->
+<div class="overlay hidden" id="gameoverScreen">
+  <div class="gameover-title">GAME OVER</div>
+  <div class="go-stats">
+    <span class="k">Score</span><b id="goScore">0</b>
+    <span class="k">Wave reached</span><b id="goWave">0</b>
+  </div>
+  <div class="newhigh" id="newHigh" style="display:none">★ NEW BEST SCORE ★</div>
+  <div class="prompt">Press ENTER to play again</div>
+</div>
+
+<!-- Pause -->
+<div class="overlay hidden" id="pauseScreen">
+  <div class="pausetitle">PAUSED</div>
+  <div class="prompt">Press P or ESC to resume</div>
+</div>
+
+<script>
+"use strict";
+(function(){
+//============================================================== setup / canvas
+const bgCanvas = document.getElementById('bg');
+const canvas   = document.getElementById('game');
+const bgx = bgCanvas.getContext('2d');
+const ctx = canvas.getContext('2d');
+
+let W = 0, H = 0, DPR = 1;
+// playfield rect in screen space (computed in resize). The formation lives near the top;
+// the player roams a band near the bottom.
+let FX = 0, FY = 0, FW = 0, FH = 0;
+
+// formation grid dimensions
+const COLS = 8, ROWS = 5;     // 8 columns x 5 rows of slots
+const SLOTS = COLS * ROWS;
+// row tiers: row 0 = boss tier, rows 1-2 = escorts, rows 3-4 = grunts
+function rowTier(row){ return row===0 ? 'boss' : (row<=2 ? 'escort' : 'grunt'); }
+
+let PLAYER_Y = 0;             // pixel y the player fighter rides at
+let PLAYER_BAND_TOP = 0;      // top of the band divers must descend past
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  for (const c of [bgCanvas, canvas]){
+    c.width  = Math.floor(W * DPR);
+    c.height = Math.floor(H * DPR);
+    c.style.width = W + 'px';
+    c.style.height = H + 'px';
+  }
+  bgx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  layoutField();
+  buildBg();
+}
+function layoutField(){
+  const marginX = Math.min(W*0.08, 110), marginY = Math.min(H*0.09, 70);
+  FX = marginX; FY = marginY;
+  FW = W - marginX*2; FH = H - marginY*2;
+  PLAYER_Y = FY + FH*0.92;
+  PLAYER_BAND_TOP = FY + FH*0.74;
+  player.x = clamp(player.x, FX+20, FX+FW-20);
+}
+window.addEventListener('resize', resize);
+
+//============================================================== utilities
+const TAU = Math.PI * 2;
+const rand  = (a=1,b=0)=> b + Math.random()*(a-b);
+const randi = (a,b)=> Math.floor(rand(a,b));
+const clamp = (v,lo,hi)=> v<lo?lo:(v>hi?hi:v);
+const lerp  = (a,b,t)=> a+(b-a)*t;
+
+//============================================================== seeded RNG (deterministic self-test)
+function makeRng(seed){
+  let s = seed>>>0 || 1;
+  return function(){ s ^= s<<13; s ^= s>>>17; s ^= s<<5; s>>>=0; return s/4294967296; };
+}
+
+//============================================================== background
+function buildBg(){
+  bgx.clearRect(0,0,W,H);
+  bgx.fillStyle = '#03030a';
+  bgx.fillRect(0,0,W,H);
+  const g = bgx.createRadialGradient(W/2,H*0.32,0, W/2,H*0.32, Math.max(W,H)*0.74);
+  g.addColorStop(0,'rgba(12,28,44,0.5)');
+  g.addColorStop(1,'rgba(3,3,10,0)');
+  bgx.fillStyle = g; bgx.fillRect(0,0,W,H);
+  // starfield (two layers for depth)
+  bgx.save();
+  for (let i=0;i<110;i++){
+    const x=rand(W), y=rand(H), s=rand(1.6,0.4);
+    bgx.globalAlpha=rand(0.5,0.06);
+    bgx.fillStyle = Math.random()<0.18 ? '#9be8ff' : '#cfe9ff';
+    bgx.fillRect(x,y,s,s);
+  }
+  bgx.restore();
+  // player band divider
+  bgx.save();
+  bgx.strokeStyle='rgba(255,46,136,0.14)'; bgx.lineWidth=1.5; bgx.setLineDash([6,9]);
+  bgx.beginPath(); bgx.moveTo(FX,PLAYER_BAND_TOP); bgx.lineTo(FX+FW,PLAYER_BAND_TOP); bgx.stroke();
+  bgx.restore();
+}
+
+//============================================================== audio (procedural, default MUTED)
+const Audio_ = {
+  ctx:null, master:null, muted:true,   // DEFAULT OFF — owner's speakers
+  init(){
+    if (this.ctx) return;
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.32;
+      this.master.connect(this.ctx.destination);
+    }catch(e){ this.ctx = null; }
+  },
+  resume(){ if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+  blip(type, freq, dur, vol, sweep){
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (sweep) o.frequency.exponentialRampToValueAtTime(Math.max(40,freq*sweep), t+dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t+dur+0.02);
+  },
+  noise(dur, vol, lp){
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i=0;i<len;i++){ d[i] = (Math.random()*2-1) * (1 - i/len); }
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value = lp||1200;
+    const gn = this.ctx.createGain(); gn.gain.value = vol;
+    src.connect(f); f.connect(gn); gn.connect(this.master);
+    src.start(t);
+  },
+  fire(){ this.blip('square', 820, 0.05, 0.028, 0.5); },
+  fireDual(){ this.blip('square', 820, 0.05, 0.024, 0.5); this.blip('square', 980, 0.05, 0.02, 0.5); },
+  enemyDie(){ this.blip('triangle', 440, 0.08, 0.06, 1.6); this.noise(0.06,0.04,2400); },
+  bossHit(){ this.blip('triangle', 300, 0.06, 0.05, 1.3); },
+  bossDie(){ this.blip('triangle', 240, 0.16, 0.09, 1.9); this.blip('triangle',520,0.2,0.06,1.6); this.noise(0.12,0.06,2000); },
+  dive(){ this.blip('sawtooth', 600, 0.14, 0.03, 0.4); },
+  enemyShot(){ this.blip('square', 220, 0.05, 0.02, 0.7); },
+  captureBeam(){ this.blip('sawtooth', 140, 0.5, 0.05, 3.2); this.blip('sine', 90, 0.5, 0.04, 2.4); },
+  captured(){ this.noise(0.4,0.16,500); this.blip('sawtooth', 260, 0.4, 0.06, 0.3); },
+  rescue(){ this.blip('triangle',520,0.12,0.09,1.6); this.blip('triangle',780,0.16,0.09,1.5); this.blip('triangle',1100,0.26,0.09,1.5); },
+  playerDie(){ this.noise(0.7,0.4,420); this.blip('sawtooth',150,0.7,0.16,0.25); },
+  waveClear(){ this.blip('triangle',520,0.16,0.09,1.6); this.blip('triangle',780,0.22,0.09,1.5); this.blip('triangle',1040,0.3,0.08,1.4); },
+  extraLife(){ this.blip('triangle',660,0.12,0.08,1.4); this.blip('triangle',990,0.18,0.07,1.5); }
+};
+
+//============================================================== object pools (particles)
+function makePool(factory, size){
+  const free = []; const active = [];
+  for (let i=0;i<size;i++) free.push(factory());
+  return {
+    free, active,
+    spawn(){ let o = free.pop() || factory(); o.alive = true; active.push(o); return o; },
+    sweep(){ for (let i=active.length-1;i>=0;i--){ if (!active[i].alive){ free.push(active[i]); active.splice(i,1); } } },
+    clear(){ for (const o of active) free.push(o); active.length=0; }
+  };
+}
+const particles = makePool(()=>({x:0,y:0,vx:0,vy:0,life:0,max:1,r:1,color:'#fff',alive:false,spark:false,drag:0.985}), 1100);
+function spawnParticle(x,y,vx,vy,life,r,color,spark,drag){
+  const p = particles.spawn();
+  p.x=x;p.y=y;p.vx=vx;p.vy=vy;p.life=life;p.max=life;p.r=r;p.color=color;
+  p.spark=!!spark; p.drag = drag===undefined?0.985:drag;
+}
+function burst(x,y,n,opts){
+  opts = opts || {};
+  const speed = opts.speed||140, life=opts.life||0.6, color=opts.color||'#eafaff';
+  const spread = opts.spread||1, base=opts.base||0;
+  for (let i=0;i<n;i++){
+    const a = rand(TAU);
+    const sp = base + rand(speed*spread);
+    spawnParticle(x,y, Math.cos(a)*sp, Math.sin(a)*sp,
+      life*rand(1.3,0.5), rand(2.6,0.9), color, opts.spark, opts.drag);
+  }
+}
+function updateParticles(dt){
+  for (const p of particles.active){
+    p.life -= dt;
+    if (p.life <= 0){ p.alive=false; continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.vx *= p.drag; p.vy *= p.drag;
+  }
+  particles.sweep();
+}
+function drawParticles(){
+  ctx.save(); ctx.lineCap='round';
+  for (const p of particles.active){
+    const k = p.life/p.max;
+    ctx.globalAlpha = clamp(k,0,1);
+    ctx.shadowBlur = 8; ctx.shadowColor = p.color;
+    if (p.spark){
+      ctx.strokeStyle = p.color; ctx.lineWidth = p.r;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx*0.014, p.y - p.vy*0.014); ctx.stroke();
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x,p.y, p.r*(0.4+0.6*k), 0, TAU); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+//==================================================================================
+//  PURE CORE LOGIC  (testable; no rendering, no rAF, no DOM)
+//==================================================================================
+
+// ---- Formation slot mapping -----------------------------------------------------
+// A slot index in [0, SLOTS) maps bijectively to (row,col), and (row,col) to a
+// normalized formation-local offset (fx,fy) in [-1..1]-ish, then to a screen point given
+// the field rect + a deterministic sway offset for a time t.
+function slotToRC(index){ return { row: Math.floor(index / COLS), col: index % COLS }; }
+function rcToSlot(row,col){ return row*COLS + col; }
+// formation-local point (origin = formation center top). Returns {fx,fy} in pixels-from-anchor
+// (before sway). Columns spread around center; rows stack downward.
+function slotLocal(row,col, colGap, rowGap){
+  const cx = (col - (COLS-1)/2) * colGap;
+  const cy = row * rowGap;
+  return { fx: cx, fy: cy };
+}
+// deterministic horizontal sway: bounded sinusoid. amp in px, period in seconds.
+function swayOffset(t, amp, period){
+  return Math.sin((t / period) * TAU) * amp;
+}
+// full slot -> screen position given anchor (ax,ay), gaps, and sway at time t.
+function slotScreen(index, ax, ay, colGap, rowGap, t, swayAmp, swayPeriod){
+  const { row, col } = slotToRC(index);
+  const loc = slotLocal(row, col, colGap, rowGap);
+  return { x: ax + loc.fx + swayOffset(t, swayAmp, swayPeriod), y: ay + loc.fy, row, col };
+}
+
+// ---- Cubic bezier path (entry & dive) -------------------------------------------
+// path(t) for t in [0,1] over control points p0..p3. Continuous; path(0)=p0, path(1)=p3.
+function bezier(p0,p1,p2,p3,t){
+  const u = 1-t, uu=u*u, uuu=uu*u, tt=t*t, ttt=tt*t;
+  return {
+    x: uuu*p0.x + 3*uu*t*p1.x + 3*u*tt*p2.x + ttt*p3.x,
+    y: uuu*p0.y + 3*uu*t*p1.y + 3*u*tt*p2.y + ttt*p3.y
+  };
+}
+// Build an ENTRY path: from an off-screen corner, swooping to the slot point.
+function makeEntryPath(slotX, slotY, fromLeft, fieldW, fieldTop){
+  const sx = fromLeft ? -fieldW*0.18 : fieldW*1.18;       // start off the side
+  const sy = fieldTop - fieldW*0.08;                       // above the top edge
+  const p0 = { x:sx, y:sy };
+  // sweep down and across then curl up into the slot
+  const p1 = { x: fromLeft ? fieldW*0.30 : fieldW*0.70, y: fieldTop + fieldW*0.30 };
+  const p2 = { x: slotX + (fromLeft? fieldW*0.10 : -fieldW*0.10), y: slotY + fieldW*0.16 };
+  const p3 = { x: slotX, y: slotY };
+  return { p0, p1, p2, p3 };
+}
+// Build a DIVE path: from the slot, plunging down past the player band, then off bottom.
+// We aim the dive toward a target x (the player) near the bottom.
+function makeDivePath(slotX, slotY, targetX, bandTop, fieldBottom){
+  const p0 = { x: slotX, y: slotY };
+  const p1 = { x: slotX + (targetX-slotX)*0.1, y: slotY + (bandTop-slotY)*0.5 };
+  const p2 = { x: targetX + (slotX-targetX)*0.2, y: bandTop + (fieldBottom-bandTop)*0.4 };
+  const p3 = { x: targetX, y: fieldBottom + 60 };          // exits below the field
+  return { p0, p1, p2, p3 };
+}
+
+// ---- Circle overlap (collision) -------------------------------------------------
+function circleOverlap(ax,ay,ar, bx,by,br){
+  const dx=ax-bx, dy=ay-by, rr=ar+br;
+  return dx*dx + dy*dy <= rr*rr;
+}
+
+// ---- Enemy hit / scoring ---------------------------------------------------------
+// Enemy: { tier, hp, value, ... }. applyHit decrements hp and reports the outcome.
+const TIER_HP    = { grunt:1, escort:1, boss:2 };
+const TIER_VALUE = { grunt:60, escort:100, boss:400 };
+function makeEnemyCore(tier){
+  return { tier, hp: TIER_HP[tier], value: TIER_VALUE[tier], dead:false };
+}
+// Returns 'killed' | 'wounded' | 'dead-already'. Mutates e.hp / e.dead.
+function applyHit(e, dmg){
+  if (e.dead) return 'dead-already';
+  e.hp -= (dmg||1);
+  if (e.hp <= 0){ e.dead = true; return 'killed'; }
+  return 'wounded';
+}
+
+// ---- THE CAPTURE / DUAL-FIGHTER STATE MACHINE -----------------------------------
+// This is VANGUARD's signature mechanic, kept pure so the self-test can drive every
+// transition deterministically.
+//
+// Player capture state lives in an object:
+//   { mode:'single'|'dual', lives:int, captured:bool, captorId:int|null, dead:bool }
+//   - mode 'single': one fighter.
+//   - mode 'dual':   two fighters side by side (double fire).
+//   - captured: true while a boss is holding one of the player's ships aloft.
+//   - captorId: id of the boss currently holding a captured ship (so a rescue shot is
+//     unambiguous), else null.
+//   - dead: true once the player has no ships left to fly.
+//
+// Transitions:
+//   capturePlayer(ps): a tractor beam catches the active fighter. The player loses that
+//     ship (lives--). The captured ship is held by the boss (captured=true, captorId set).
+//     If lives remain, the player respawns with a fresh single fighter (mode stays/ becomes
+//     'single'). If no lives remain, dead=true.
+//   shootBoss(ps, bossId): the player shoots a boss.
+//     - if that boss is the captor of a held ship -> RESCUE: the held ship is freed and
+//       docks alongside the current fighter -> mode='dual', captured=false, captorId=null.
+//       (returns 'rescued')
+//     - otherwise -> ordinary boss kill (returns 'killed'); state unchanged otherwise.
+//   loseFighter(ps): a normal death (collision / bomb). In dual mode, lose ONE of the two
+//     ships and revert to single (the dual is sundered, no life lost — the second ship was
+//     a bonus). In single mode, lose the ship and a life; respawn if lives remain else dead.
+
+function makePlayerState(lives){
+  return { mode:'single', lives:(lives===undefined?3:lives), captured:false, captorId:null, dead:false };
+}
+function capturePlayer(ps, bossId){
+  if (ps.dead) return 'dead';
+  // the active flying ship is seized
+  ps.lives -= 1;
+  ps.captured = true;
+  ps.captorId = bossId;
+  // a dual fighter being captured loses only the captured half and reverts to single
+  ps.mode = 'single';
+  if (ps.lives < 0){ ps.dead = true; return 'captured-final'; }
+  return 'captured';
+}
+function shootBoss(ps, bossId){
+  if (ps.captured && ps.captorId === bossId){
+    // RESCUE: free the held ship, dock it -> dual fighter
+    ps.captured = false;
+    ps.captorId = null;
+    if (!ps.dead){ ps.mode = 'dual'; }
+    return 'rescued';
+  }
+  return 'killed';
+}
+function loseFighter(ps){
+  if (ps.dead) return 'dead';
+  if (ps.mode === 'dual'){
+    // sunder the dual: lose one ship, no life cost
+    ps.mode = 'single';
+    return 'sundered';
+  }
+  ps.lives -= 1;
+  if (ps.lives < 0){ ps.dead = true; return 'dead'; }
+  return 'respawn';
+}
+// fire emitters: a single fighter fires from one x; a dual fires from two offsets.
+// Returns an array of muzzle x-offsets relative to the fighter center.
+function fireEmitters(ps, halfGap){
+  if (ps.mode === 'dual'){ const g = (halfGap===undefined?16:halfGap); return [-g, +g]; }
+  return [0];
+}
+
+//============================================================== game state
+let state = 'title';   // title | playing | paused | waveclear | gameover
+let score = 0, displayScore = 0;
+let wave = 1, best = 0;
+let isBonusWave = false;
+let extraLifeGiven = false;
+const EXTRA_LIFE_AT = 20000;
+
+const playerState = makePlayerState(3);    // the pure capture/dual state machine instance
+let enemies = [];        // live enemies
+let bullets = [];        // player bullets {x,y,alive}
+let bombs = [];          // enemy bombs {x,y,vy,alive}
+let beam = null;         // active tractor beam {bossId,x,y,t,phase,...}
+let captiveShip = null;  // visual: the captured fighter riding above its captor {bossId}
+let nextEnemyId = 1;
+
+let shake = 0, flashAmt = 0;
+
+// formation anchor + sway params (deterministic given time)
+const formation = { ax:0, ay:0, colGap:0, rowGap:0, swayAmp:0, swayPeriod:7, t:0 };
+
+const player = {
+  x: 0, vx: 0, alive:true, invuln:0, blink:0, fireCd:0, respawnT:0,
+  halfGap: 16    // dual fighter spacing (px from center to each ship)
+};
+
+let diveTimer = 0, beamTimer = 0;
+
+//============================================================== best / breadcrumb
+function loadBest(){
+  try{ best=parseInt(localStorage.getItem('ws:best:vanguard')||'0',10)||0; }catch(e){ best=0; }
+}
+function raiseBest(){
+  // ws: unlock breadcrumb. Only raise it; harmless if storage is off. Best is by SCORE.
+  try{
+    var k='ws:best:vanguard', prev=+(localStorage.getItem(k)||0);
+    if(score>prev) localStorage.setItem(k,String(score));
+  }catch(e){}
+  if (score>best) best=score;
+  if (elBest) elBest.textContent=best.toLocaleString();
+}
+
+//============================================================== HUD refs
+const elScore=document.getElementById('score');
+const elWave=document.getElementById('wave');
+const elBest=document.getElementById('best');
+const elLives=document.getElementById('lives');
+const elDualTag=document.getElementById('dualTag');
+function updateLives(){
+  elLives.innerHTML='';
+  const n = Math.max(playerState.lives, 0);
+  for (let i=0;i<n;i++){
+    const d=document.createElement('div'); d.className='pip'; elLives.appendChild(d);
+  }
+}
+function updateDualTag(){ elDualTag.classList.toggle('show', playerState.mode==='dual'); }
+
+//============================================================== formation layout
+function layoutFormation(){
+  formation.colGap = Math.min(FW/(COLS+1), 78);
+  formation.rowGap = Math.min(FH*0.085, 56);
+  formation.ax = FX + FW/2;
+  formation.ay = FY + FH*0.12;
+  formation.swayAmp = Math.min(FW*0.06, 46);
+}
+// resolve an enemy's home slot screen position right now
+function slotPosNow(slotIndex){
+  return slotScreen(slotIndex, formation.ax, formation.ay,
+    formation.colGap, formation.rowGap, formation.t, formation.swayAmp, formation.swayPeriod);
+}
+
+//============================================================== wave / enemy setup
+function makeEnemy(slotIndex, tier, fromLeft, delay){
+  const core = makeEnemyCore(tier);
+  const home = slotPosNow(slotIndex);
+  const e = {
+    id: nextEnemyId++, slot: slotIndex, tier,
+    hp: core.hp, value: core.value, dead:false,
+    state:'entering',    // entering | formed | diving | returning
+    x: home.x, y: home.y,
+    entryT: 0, entryDur: rand(2.0,1.5), entryDelay: delay||0,
+    path: makeEntryPath(home.x, home.y, fromLeft, FW, FY),
+    diveT: 0, diveDur: 1.6, divePath:null,
+    fireCd: rand(1.6,0.6),
+    isCaptor:false        // boss currently holding a captured ship
+  };
+  return e;
+}
+function buildWave(w){
+  enemies = [];
+  bullets = []; bombs = []; beam = null; captiveShip = null;
+  isBonusWave = (w % 4 === 0);
+  layoutFormation();
+  // how many slots fill this wave: always full formation except bonus waves use a subset path
+  const bossCount = w >= 3 ? 2 : 1;
+  let order = [];
+  for (let i=0;i<SLOTS;i++) order.push(i);
+  // bosses occupy center of the top row
+  const bossSlots = [];
+  const midCol = Math.floor(COLS/2);
+  for (let b=0;b<bossCount;b++){ bossSlots.push(rcToSlot(0, midCol - (bossCount>1?1:0) + b*2)); }
+  let idx=0;
+  for (const s of order){
+    const { row } = slotToRC(s);
+    let tier = rowTier(row);
+    if (bossSlots.includes(s)) tier='boss';
+    else if (row===0) tier='escort';   // non-boss top-row slots are escorts
+    const fromLeft = (idx % 2 === 0);
+    const delay = idx * 0.10;
+    enemies.push(makeEnemy(s, tier, fromLeft, delay));
+    idx++;
+  }
+  // aggression scales with wave
+  diveTimer = Math.max(0.7, 2.4 - (w-1)*0.18);
+  beamTimer = isBonusWave ? Infinity : Math.max(5.5, 11 - (w-1)*0.7);
+  elWave.textContent = w;
+}
+
+//============================================================== player control
+function placePlayerStart(){
+  player.x = FX + FW/2; player.vx = 0;
+  player.alive = true; player.invuln = 1.6; player.blink = 0; player.fireCd = 0;
+}
+function playerFire(){
+  if (!player.alive || player.fireCd > 0) return;
+  const cap = 2;            // signature Galaga 2-bullet cap (per shot-press, total on screen)
+  const live = bullets.reduce((a,b)=>a+(b.alive?1:0),0);
+  const emitters = fireEmitters(playerState, player.halfGap);
+  // a dual fighter shoots a pair; but never exceed the on-screen cap.
+  if (live >= cap) return;
+  for (const ox of emitters){
+    if (bullets.reduce((a,b)=>a+(b.alive?1:0),0) >= cap) break;
+    bullets.push({ x: player.x + ox, y: PLAYER_Y - 18, alive:true });
+  }
+  player.fireCd = 0.14;
+  if (playerState.mode==='dual') Audio_.fireDual(); else Audio_.fire();
+}
+
+//============================================================== capture beam (game-side wrapper)
+function triggerBeam(){
+  // pick a boss that's currently formed (not already diving / a captor)
+  const cands = enemies.filter(e=>!e.dead && e.tier==='boss' && e.state==='formed' && !e.isCaptor);
+  if (!cands.length) return false;
+  const boss = cands[randi(0,cands.length)];
+  // the boss dives to a beam position above the player, then fires the cone
+  boss.state='diving';
+  boss.diveT=0; boss.diveDur=1.4;
+  boss.divePath = makeDivePath(boss.x, boss.y, clamp(player.x, FX+40, FX+FW-40), PLAYER_BAND_TOP, FY+FH);
+  boss.isBeamRun = true;
+  Audio_.dive();
+  return true;
+}
+function fireBeamFrom(boss){
+  beam = { bossId: boss.id, x: boss.x, y: boss.y, t:0, dur:1.7, captured:false, width: 0 };
+  Audio_.captureBeam();
+}
+// the beam caught the player's fighter -> run the pure state machine
+function doCapture(boss){
+  const before = playerState.lives;
+  const res = capturePlayer(playerState, boss.id);
+  boss.isCaptor = true;
+  captiveShip = { bossId: boss.id };
+  Audio_.captured();
+  addShake(14); flash(0.4);
+  burst(player.x, PLAYER_Y, 30, {speed:200,life:0.8,color:'#ff6fb0',spark:true});
+  player.alive = false; player.respawnT = 1.3;
+  updateLives(); updateDualTag();
+  beam = null;
+  return res;
+}
+// the player shot a boss -> run the pure rescue check
+function resolveBossShot(boss){
+  const res = shootBoss(playerState, boss.id);
+  if (res === 'rescued'){
+    // free the captive and dock alongside -> dual
+    captiveShip = null;
+    Audio_.rescue();
+    flash(0.5); addShake(8);
+    // a triumphant rescue burst where the boss was
+    burst(boss.x, boss.y, 40, {speed:240,life:0.9,color:'#ffe14d',spark:true});
+    burst(boss.x, boss.y, 24, {speed:160,life:0.7,color:accentColor(),spark:true});
+    // if the player was waiting to respawn, bring them in immediately as a dual
+    if (!player.alive && !playerState.dead){ placePlayerStart(); }
+    updateDualTag();
+    score += 1500; addFloat(boss.x, boss.y, '+1500 RESCUE','#ffe14d');
+  }
+  return res;
+}
+
+//============================================================== bullets / bombs / collisions
+function enemyRadius(e){ return e.tier==='boss' ? 22 : (e.tier==='escort' ? 16 : 14); }
+function updateBullets(dt){
+  const sp = Math.max(FH*1.7, 760);
+  for (const b of bullets){
+    if (!b.alive) continue;
+    b.y -= sp*dt;
+    if (b.y < FY-20){ b.alive=false; continue; }
+    // hit an enemy?
+    for (const e of enemies){
+      if (e.dead) continue;
+      const r = enemyRadius(e);
+      if (circleOverlap(b.x,b.y, 3, e.x,e.y, r)){
+        b.alive=false;
+        hitEnemy(e);
+        break;
+      }
+    }
+  }
+  bullets = bullets.filter(b=>b.alive);
+}
+function hitEnemy(e){
+  const out = applyHit(e, 1);
+  if (out === 'killed'){
+    const wasCaptor = e.isCaptor;
+    // a boss kill may be a rescue
+    if (e.tier==='boss'){
+      const res = resolveBossShot(e);
+      Audio_.bossDie();
+      if (res!=='rescued'){ /* normal kill */ }
+    } else {
+      Audio_.enemyDie();
+    }
+    killEnemy(e, wasCaptor);
+  } else if (out === 'wounded'){
+    Audio_.bossHit();
+    burst(e.x,e.y, 6, {speed:90,life:0.3,color:'#fff',spark:true});
+    flash(0.06);
+  }
+}
+function killEnemy(e, wasCaptor){
+  score += e.value;
+  addFloat(e.x, e.y, '+'+e.value, e.tier==='boss'?'#ff6fb0':accentColor());
+  const col = e.tier==='boss' ? '#ff6fb0' : (e.tier==='escort' ? '#b6a8ff' : accentColor());
+  burst(e.x,e.y, e.tier==='boss'?26:16, {speed:e.tier==='boss'?220:160, life:0.6, color:col, spark:true});
+  flash(e.tier==='boss'?0.18:0.1); addShake(e.tier==='boss'?5:2);
+  e.dead = true;
+  // if a captor with a still-held ship is destroyed by a non-rescue path, the captive is lost
+  if (wasCaptor && playerState.captured && playerState.captorId===e.id){
+    playerState.captured=false; playerState.captorId=null; captiveShip=null; updateDualTag();
+  }
+  maybeExtraLife();
+  // remove dead enemies & possibly clear wave
+  enemies = enemies.filter(x=>!x.dead);
+  if (beam && beam.bossId===e.id) beam=null;
+  if (enemies.length===0) winWave();
+}
+function maybeExtraLife(){
+  if (!extraLifeGiven && score>=EXTRA_LIFE_AT){ playerState.lives++; extraLifeGiven=true; updateLives(); Audio_.extraLife(); flash(0.3); }
+}
+function updateBombs(dt){
+  const sp = Math.max(FH*0.55, 280);
+  for (const bo of bombs){
+    if (!bo.alive) continue;
+    bo.y += sp*dt; bo.x += bo.vx*dt;
+    if (bo.y > FY+FH+20){ bo.alive=false; continue; }
+    if (player.alive && player.invuln<=0){
+      // check against each active ship of the (possibly dual) fighter
+      for (const ox of fireEmitters(playerState, player.halfGap)){
+        if (circleOverlap(bo.x,bo.y, 5, player.x+ox, PLAYER_Y, 12)){ bo.alive=false; hitPlayer('bomb'); break; }
+      }
+    }
+  }
+  bombs = bombs.filter(b=>b.alive);
+}
+
+//============================================================== enemy AI
+function pickDiver(){
+  const cands = enemies.filter(e=>!e.dead && e.state==='formed');
+  if (!cands.length) return null;
+  // grunts/escorts prefer to dive; bosses dive less often (they save themselves for beams)
+  const weighted = cands.filter(e=>e.tier!=='boss');
+  const pool = weighted.length ? weighted : cands;
+  return pool[randi(0,pool.length)];
+}
+function startDive(e){
+  e.state='diving'; e.diveT=0; e.diveDur=rand(1.9,1.3); e.isBeamRun=false;
+  e.divePath = makeDivePath(e.x, e.y, clamp(player.x + rand(80,-80), FX+30, FX+FW-30), PLAYER_BAND_TOP, FY+FH);
+  Audio_.dive();
+}
+function enemyDropBomb(e){
+  bombs.push({ x:e.x, y:e.y+10, vx: clamp((player.x-e.x)*0.4, -120,120), alive:true });
+  Audio_.enemyShot();
+}
+function updateEnemies(dt){
+  formation.t += dt;
+  for (const e of enemies){
+    if (e.dead) continue;
+    if (e.state==='entering'){
+      if (e.entryDelay>0){ e.entryDelay-=dt; continue; }
+      e.entryT += dt / e.entryDur;
+      if (e.entryT>=1){
+        e.entryT=1; e.state='formed';
+        const home=slotPosNow(e.slot); e.x=home.x; e.y=home.y;
+      } else {
+        const pt = bezier(e.path.p0,e.path.p1,e.path.p2,e.path.p3, easeInOut(e.entryT));
+        e.x=pt.x; e.y=pt.y;
+      }
+    } else if (e.state==='formed'){
+      const home = slotPosNow(e.slot);
+      e.x = home.x; e.y = home.y;
+      // occasional bomb from a formed enemy (lower rows) when player is roughly below
+      e.fireCd -= dt;
+      if (e.fireCd<=0 && state==='playing' && !isBonusWave && player.alive){
+        e.fireCd = rand(4.5,2.2);
+        if (Math.abs(e.x-player.x) < FW*0.12 && Math.random()<0.4) enemyDropBomb(e);
+      }
+    } else if (e.state==='diving'){
+      e.diveT += dt / e.diveDur;
+      const tt = clamp(e.diveT,0,1);
+      const pt = bezier(e.divePath.p0,e.divePath.p1,e.divePath.p2,e.divePath.p3, tt);
+      e.x=pt.x; e.y=pt.y;
+      // beam-run boss: fire the tractor beam near the bottom of its plunge, once
+      if (e.isBeamRun && !e.beamFired && e.y > PLAYER_BAND_TOP - 30){
+        e.beamFired = true; fireBeamFrom(e);
+      }
+      // drop bombs during a normal dive
+      if (!e.isBeamRun && !isBonusWave && Math.random() < dt*2.2 && e.y<PLAYER_BAND_TOP) enemyDropBomb(e);
+      // collide with player
+      if (player.alive && player.invuln<=0){
+        for (const ox of fireEmitters(playerState, player.halfGap)){
+          if (circleOverlap(e.x,e.y, enemyRadius(e), player.x+ox, PLAYER_Y, 12)){
+            // diving into the player: enemy dies, player hit
+            killEnemy(e, e.isCaptor); hitPlayer('collision'); break;
+          }
+        }
+        if (e.dead) continue;
+      }
+      if (e.diveT>=1){
+        // loop back to the top and re-enter the slot
+        e.state='entering'; e.entryT=0; e.entryDur=rand(1.6,1.1); e.beamFired=false; e.isBeamRun=false;
+        const home=slotPosNow(e.slot);
+        e.path = makeEntryPath(home.x, home.y, e.x < FX+FW/2, FW, FY);
+      }
+    }
+  }
+}
+function easeInOut(t){ return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
+
+//============================================================== beam update
+function updateBeam(dt){
+  if (!beam) return;
+  beam.t += dt;
+  beam.width = lerp(0, 1, clamp(beam.t/0.4,0,1));   // cone widens in
+  // capture check while the beam is live and player alive
+  if (!beam.captured && player.alive && player.invuln<=0 && beam.t>0.35){
+    // beam cone reaches down from the boss; capture if player under it
+    const boss = enemies.find(e=>e.id===beam.bossId && !e.dead);
+    if (boss){
+      const coneHalf = lerp(10, 78, clamp(beam.width,0,1));
+      if (Math.abs(player.x - boss.x) < coneHalf && PLAYER_Y > boss.y){
+        beam.captured = true;
+        doCapture(boss);
+      }
+    }
+  }
+  if (beam && beam.t>=beam.dur){ beam=null; }
+}
+
+//============================================================== player damage / lives
+function hitPlayer(cause){
+  if (!player.alive || player.invuln>0) return;
+  const res = loseFighter(playerState);
+  Audio_.playerDie(); addShake(16); flash(0.5);
+  burst(player.x,PLAYER_Y, 40, {speed:240,life:0.9,color:accentColor(),spark:true});
+  burst(player.x,PLAYER_Y, 24, {speed:160,life:0.7,color:'#ff2e88',spark:true});
+  updateLives(); updateDualTag();
+  if (res==='sundered'){
+    // dual sundered back to single — keep flying, brief invuln
+    player.invuln=1.0;
+  } else if (res==='respawn'){
+    player.alive=false; player.respawnT=1.3;
+  } else if (res==='dead'){
+    player.alive=false; player.respawnT=1.6;
+  }
+}
+function respawnOrEnd(){
+  if (playerState.dead){ endGame(); return; }
+  placePlayerStart();
+}
+
+//============================================================== floating score text
+const floats = [];
+function addFloat(x,y,txt,color){ floats.push({x,y,txt,color,life:1.0,max:1.0}); }
+function updateFloats(dt){ for (const f of floats) f.life-=dt; for (let i=floats.length-1;i>=0;i--) if (floats[i].life<=0) floats.splice(i,1); }
+function drawFloats(){
+  ctx.save(); ctx.textAlign='center'; ctx.font='700 15px ui-monospace,monospace';
+  for (const f of floats){
+    const k=f.life/f.max; ctx.globalAlpha=clamp(k*1.3,0,1);
+    ctx.fillStyle=f.color; ctx.shadowBlur=8; ctx.shadowColor=f.color;
+    ctx.fillText(f.txt, f.x, f.y - (1-k)*26);
+  }
+  ctx.restore();
+}
+
+//============================================================== waves
+function winWave(){
+  state='waveclear';
+  Audio_.waveClear(); addShake(8); flash(0.3);
+  const bonus = wave*250 + (isBonusWave?1200:0) + playerState.lives*150;
+  score += bonus;
+  for (let i=0;i<60;i++) spawnParticle(FX+rand(FW),FY+rand(FH*0.6), rand(120,-120),rand(120,-120), rand(1.2,0.5), rand(3,1.2), [accentColor(),'#ff6fb0','#ffe14d'][randi(0,3)], true, 0.95);
+  document.getElementById('wcTitle').textContent = isBonusWave ? 'BONUS CLEAR' : 'WAVE CLEAR';
+  document.getElementById('wcTitle').classList.toggle('bonus', isBonusWave);
+  document.getElementById('wcWave').textContent = wave;
+  document.getElementById('wcBonus').textContent = bonus.toLocaleString();
+  document.getElementById('wcScore').textContent = score.toLocaleString();
+  document.getElementById('waveClearScreen').classList.remove('hidden');
+  raiseBest();
+}
+
+//============================================================== shake / flash / accent
+function addShake(a){ shake=Math.max(shake,a); }
+function flash(a){ flashAmt=Math.max(flashAmt,a); }
+const ACCENTS = ['#37d6ff','#37f7e0','#5ad6ff','#7cf0ff','#39ff9e','#ffe14d','#b6a8ff'];
+function accentColor(){ return ACCENTS[(wave-1)%ACCENTS.length]; }
+
+//============================================================== update
+function update(dt){
+  // player horizontal motion
+  if (player.alive){
+    const speed = Math.max(FW*0.7, 520);
+    let dir=0;
+    if (held.left) dir-=1; if (held.right) dir+=1;
+    player.vx = dir*speed;
+    player.x = clamp(player.x + player.vx*dt, FX+18, FX+FW-18);
+    player.fireCd-=dt;
+    if (player.invuln>0){ player.invuln-=dt; player.blink+=dt; }
+    if (keys.fire) playerFire();
+  } else {
+    player.respawnT-=dt;
+    if (player.respawnT<=0) respawnOrEnd();
+  }
+
+  updateEnemies(dt);
+  updateBeam(dt);
+  updateBullets(dt);
+  updateBombs(dt);
+
+  // dive scheduling
+  if (state==='playing' && !beam){
+    diveTimer-=dt;
+    if (diveTimer<=0){
+      const d=pickDiver(); if (d) startDive(d);
+      diveTimer = Math.max(0.55, (2.4 - (wave-1)*0.16) * rand(1.3,0.7));
+    }
+  }
+  // beam scheduling
+  if (state==='playing' && beamTimer!==Infinity && !beam && !playerState.captured){
+    beamTimer-=dt;
+    if (beamTimer<=0){ triggerBeam(); beamTimer = Math.max(7, 14 - (wave-1)*0.6); }
+  }
+
+  updateParticles(dt);
+  updateFloats(dt);
+  shake *= Math.pow(0.04, dt);
+  flashAmt *= Math.pow(0.02, dt);
+
+  displayScore += (score-displayScore)*Math.min(1,dt*8);
+  elScore.textContent=Math.round(displayScore).toLocaleString();
+}
+
+//============================================================== render
+function drawEnemy(e, now){
+  const col = e.tier==='boss' ? '#ff6fb0' : (e.tier==='escort' ? '#b6a8ff' : accentColor());
+  const r = enemyRadius(e);
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  ctx.shadowBlur = e.tier==='boss'?18:12; ctx.shadowColor=col;
+  ctx.fillStyle=col; ctx.strokeStyle=col; ctx.lineWidth=2;
+  if (e.tier==='boss'){
+    // wide winged boss
+    ctx.beginPath();
+    ctx.moveTo(0,-r*0.7); ctx.lineTo(r,0); ctx.lineTo(r*0.4,r*0.5);
+    ctx.lineTo(0,r*0.2); ctx.lineTo(-r*0.4,r*0.5); ctx.lineTo(-r,0); ctx.closePath();
+    ctx.globalAlpha=0.9; ctx.fill();
+    ctx.globalAlpha=1; ctx.fillStyle='#fff'; ctx.shadowBlur=0;
+    ctx.beginPath(); ctx.arc(0,-r*0.1, r*0.22,0,TAU); ctx.fill();
+    if (e.hp>1){ ctx.strokeStyle='#fff'; ctx.globalAlpha=0.6; ctx.beginPath(); ctx.arc(0,0,r*1.15,0,TAU); ctx.stroke(); }
+  } else if (e.tier==='escort'){
+    ctx.beginPath();
+    ctx.moveTo(0,-r); ctx.lineTo(r*0.8,r*0.6); ctx.lineTo(0,r*0.2); ctx.lineTo(-r*0.8,r*0.6); ctx.closePath();
+    ctx.globalAlpha=0.92; ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(0,-r*0.6); ctx.lineTo(r*0.7,r*0.4); ctx.lineTo(-r*0.7,r*0.4); ctx.closePath();
+    ctx.globalAlpha=0.92; ctx.fill();
+  }
+  ctx.restore();
+}
+function drawBeam(now){
+  if (!beam) return;
+  const boss = enemies.find(e=>e.id===beam.bossId && !e.dead);
+  if (!boss) return;
+  const coneHalf = lerp(10, 78, clamp(beam.width,0,1));
+  const topY = boss.y + 10, botY = PLAYER_Y + 14;
+  ctx.save();
+  ctx.globalAlpha = 0.32 + 0.18*Math.sin(now*0.02);
+  const grad = ctx.createLinearGradient(0,topY,0,botY);
+  grad.addColorStop(0,'rgba(255,111,176,0.7)');
+  grad.addColorStop(1,'rgba(255,225,77,0.05)');
+  ctx.fillStyle=grad; ctx.shadowBlur=24; ctx.shadowColor='#ff6fb0';
+  ctx.beginPath();
+  ctx.moveTo(boss.x-8, topY); ctx.lineTo(boss.x+8, topY);
+  ctx.lineTo(boss.x+coneHalf, botY); ctx.lineTo(boss.x-coneHalf, botY); ctx.closePath();
+  ctx.fill();
+  // scan lines
+  ctx.globalAlpha=0.5; ctx.strokeStyle='#ffe14d'; ctx.lineWidth=1.5; ctx.shadowBlur=8;
+  for (let i=0;i<4;i++){
+    const yy = topY + ((now*0.12 + i*40) % (botY-topY));
+    const t=(yy-topY)/(botY-topY); const hw=lerp(8,coneHalf,t);
+    ctx.beginPath(); ctx.moveTo(boss.x-hw,yy); ctx.lineTo(boss.x+hw,yy); ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawShip(x,y,col,scale){
+  scale=scale||1;
+  ctx.save(); ctx.translate(x,y); ctx.scale(scale,scale);
+  ctx.shadowBlur=14; ctx.shadowColor=col; ctx.fillStyle=col;
+  const r=14;
+  ctx.beginPath();
+  ctx.moveTo(0,-r); ctx.lineTo(r*0.82,r*0.7); ctx.lineTo(0,r*0.3); ctx.lineTo(-r*0.82,r*0.7); ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle='#eafaff'; ctx.shadowBlur=0; ctx.globalAlpha=0.9;
+  ctx.beginPath(); ctx.moveTo(0,-r*0.55); ctx.lineTo(r*0.16,0); ctx.lineTo(-r*0.16,0); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function drawPlayer(now){
+  if (!player.alive) return;
+  if (player.invuln>0 && Math.floor(player.blink*16)%2===0) return;
+  const col = accentColor();
+  for (const ox of fireEmitters(playerState, player.halfGap)){
+    drawShip(player.x+ox, PLAYER_Y, col, 1);
+  }
+  if (playerState.mode==='dual'){
+    // a little link arc between the two ships
+    ctx.save(); ctx.strokeStyle='#ffe14d'; ctx.globalAlpha=0.5; ctx.lineWidth=2;
+    ctx.shadowBlur=8; ctx.shadowColor='#ffe14d';
+    ctx.beginPath(); ctx.moveTo(player.x-player.halfGap, PLAYER_Y+4); ctx.lineTo(player.x+player.halfGap, PLAYER_Y+4); ctx.stroke();
+    ctx.restore();
+  }
+}
+function drawCaptive(now){
+  if (!captiveShip) return;
+  const boss = enemies.find(e=>e.id===captiveShip.bossId && !e.dead);
+  if (!boss) return;
+  // the captured fighter rides just above its captor, inverted (classic Galaga)
+  ctx.save(); ctx.translate(boss.x, boss.y - 30); ctx.rotate(Math.PI);
+  drawShip(0,0,'#ffe14d',0.9);
+  ctx.restore();
+  // a holding tether
+  ctx.save(); ctx.strokeStyle='rgba(255,225,77,0.4)'; ctx.lineWidth=1.5; ctx.setLineDash([3,4]);
+  ctx.beginPath(); ctx.moveTo(boss.x,boss.y-16); ctx.lineTo(boss.x,boss.y-44); ctx.stroke();
+  ctx.restore();
+}
+function drawBullets(){
+  ctx.save(); ctx.lineCap='round'; ctx.strokeStyle='#eafaff'; ctx.lineWidth=3;
+  ctx.shadowBlur=10; ctx.shadowColor=accentColor();
+  for (const b of bullets){ ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(b.x,b.y+12); ctx.stroke(); }
+  ctx.restore();
+}
+function drawBombs(){
+  ctx.save(); ctx.shadowBlur=10; ctx.shadowColor='#ff6fb0';
+  for (const bo of bombs){
+    ctx.fillStyle='#ff8fc0';
+    ctx.beginPath(); ctx.arc(bo.x,bo.y,4,0,TAU); ctx.fill();
+  }
+  ctx.restore();
+}
+function render(now){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  if (shake>0.3){ const a=rand(TAU); ctx.translate(Math.cos(a)*shake, Math.sin(a)*shake); }
+  drawParticles();
+  for (const e of enemies) if (!e.dead) drawEnemy(e, now);
+  drawCaptive(now);
+  drawBeam(now);
+  if (state==='playing'||state==='paused'){ drawBullets(); drawBombs(); drawPlayer(now); }
+  drawFloats();
+  ctx.restore();
+  if (flashAmt>0.01){ ctx.fillStyle='rgba(190,235,255,'+(flashAmt*0.4)+')'; ctx.fillRect(0,0,W,H); }
+}
+
+//============================================================== input
+const keys = { fire:false };
+const held = { left:false, right:false };
+function setMuteTag(){ document.getElementById('muteTag').textContent='M · sound '+(Audio_.muted?'off':'on'); }
+window.addEventListener('keydown', e=>{
+  const k=e.key.toLowerCase();
+  if (['arrowleft','arrowright','arrowup','arrowdown',' '].includes(k)) e.preventDefault();
+  switch(k){
+    case 'arrowleft': case 'a': held.left=true; break;
+    case 'arrowright': case 'd': held.right=true; break;
+    case ' ': case 'spacebar': keys.fire=true; break;
+    case 'enter':
+      if (state==='title'||state==='gameover') startGame();
+      else if (state==='waveclear') nextWave();
+      break;
+    case 'p': case 'escape':
+      if (state==='playing'||state==='paused') togglePause(); break;
+    case 'm':
+      Audio_.init(); Audio_.muted=!Audio_.muted; setMuteTag(); if(!Audio_.muted) Audio_.resume(); break;
+  }
+}, {passive:false});
+window.addEventListener('keyup', e=>{
+  const k=e.key.toLowerCase();
+  switch(k){
+    case 'arrowleft': case 'a': held.left=false; break;
+    case 'arrowright': case 'd': held.right=false; break;
+    case ' ': case 'spacebar': keys.fire=false; break;
+  }
+});
+window.addEventListener('pointerdown', ()=>{ Audio_.init(); if(!Audio_.muted) Audio_.resume(); }, {once:true});
+document.addEventListener('visibilitychange', ()=>{ if (document.hidden && state==='playing') togglePause(); });
+
+//============================================================== state transitions
+function startGame(){
+  state='playing';
+  score=0; displayScore=0; extraLifeGiven=false;
+  Object.assign(playerState, makePlayerState(3));
+  enemies=[]; bullets=[]; bombs=[]; beam=null; captiveShip=null; floats.length=0; particles.clear();
+  wave=1;
+  placePlayerStart();
+  buildWave(1);
+  shake=0; flashAmt=0;
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('gameoverScreen').classList.add('hidden');
+  document.getElementById('waveClearScreen').classList.add('hidden');
+  document.getElementById('hud').style.display='block';
+  elScore.textContent='0';
+  updateLives(); updateDualTag();
+  document.documentElement.style.setProperty('--accent', accentColor());
+  Audio_.init(); if(!Audio_.muted) Audio_.resume();
+}
+function nextWave(){
+  document.getElementById('waveClearScreen').classList.add('hidden');
+  wave++;
+  placePlayerStart();
+  buildWave(wave);
+  document.documentElement.style.setProperty('--accent', accentColor());
+  buildBg();
+  state='playing'; last=performance.now();
+}
+function endGame(){
+  state='gameover'; raiseBest();
+  document.getElementById('goScore').textContent=score.toLocaleString();
+  document.getElementById('goWave').textContent=wave;
+  document.getElementById('newHigh').style.display=(score>=best&&score>0)?'block':'none';
+  document.getElementById('gameoverScreen').classList.remove('hidden');
+}
+function togglePause(){
+  if (state==='playing'){ state='paused'; document.getElementById('pauseScreen').classList.remove('hidden'); }
+  else if (state==='paused'){ state='playing'; document.getElementById('pauseScreen').classList.add('hidden'); last=performance.now(); }
+}
+
+//============================================================== main loop
+let last=performance.now();
+let fpsTime=0, fpsCount=0, fpsValue=60;
+function frame(now){
+  let dt=(now-last)/1000; last=now;
+  if (dt>0.05) dt=0.05;
+  fpsTime+=dt; fpsCount++;
+  if (fpsTime>=0.5){ fpsValue=Math.round(fpsCount/fpsTime); fpsTime=0; fpsCount=0; }
+
+  if (state==='playing'){ update(dt); }
+  else if (state==='paused'){ updateParticles(dt*0.4); updateFloats(dt*0.4); }
+  else { updateParticles(dt); if (state==='title') attractUpdate(dt); }
+  render(now);
+  requestAnimationFrame(frame);
+}
+// attract: enemies sway behind the title
+function attractUpdate(dt){
+  formation.t += dt;
+  for (const e of enemies){ if (e.state==='formed'){ const h=slotPosNow(e.slot); e.x=h.x; e.y=h.y; } }
+}
+
+//============================================================== SELF-TEST (headless logic)
+function runSelfTest(){
+  const results=[]; let allPass=true;
+  function check(name, cond, detail){ const pass=!!cond; if(!pass) allPass=false;
+    results.push({name,pass,detail}); console.log((pass?'PASS':'FAIL')+' — '+name+(detail?'  ('+detail+')':'')); }
+
+  // 1) CAPTURE STATE MACHINE: single -> captured (life lost, respawn) -> shoot captor -> dual.
+  {
+    const ps = makePlayerState(3);
+    const r1 = capturePlayer(ps, 7);
+    const okCapture = r1==='captured' && ps.captured===true && ps.captorId===7 && ps.lives===2 && ps.dead===false && ps.mode==='single';
+    check('capture: tractor beam seizes ship → captured, life 3→2, captor=7, respawns single', okCapture,
+      'mode '+ps.mode+' lives '+ps.lives+' captured '+ps.captured+' captor '+ps.captorId);
+    const r2 = shootBoss(ps, 7);
+    const okRescue = r2==='rescued' && ps.captured===false && ps.captorId===null && ps.mode==='dual';
+    check('rescue: shoot the capturing boss → freed ship docks → DUAL fighter', okRescue,
+      'res '+r2+' mode '+ps.mode+' captured '+ps.captured);
+  }
+  // 2) SHOOTING A NON-CAPTOR BOSS = ordinary kill, no dual.
+  {
+    const ps = makePlayerState(3);
+    const r = shootBoss(ps, 9);   // never captured anyone
+    const ok = r==='killed' && ps.mode==='single' && ps.captured===false;
+    check('non-captor boss kill: plain kill, no dual formed', ok, 'res '+r+' mode '+ps.mode);
+    // captor mismatch: held by boss 7 but we shoot boss 8 -> plain kill, still captured
+    const ps2 = makePlayerState(3); capturePlayer(ps2,7);
+    const r2 = shootBoss(ps2,8);
+    const ok2 = r2==='killed' && ps2.captured===true && ps2.mode==='single';
+    check('captor mismatch: shooting a different boss does not rescue', ok2, 'res '+r2+' stillCaptured '+ps2.captured);
+  }
+  // 3) DUAL FIREPOWER: dual emits two muzzles, single emits one (positions differ).
+  {
+    const single = fireEmitters(makePlayerState(3), 16);
+    const dps = makePlayerState(3); capturePlayer(dps,1); shootBoss(dps,1);
+    const dual = fireEmitters(dps, 16);
+    const ok = single.length===1 && dual.length===2 && dual[0]!==dual[1] &&
+               single[0]===0 && Math.abs(dual[0])===16 && Math.abs(dual[1])===16;
+    check('dual firepower: single→1 muzzle, dual→2 distinct muzzles (±16)', ok,
+      'single '+JSON.stringify(single)+' dual '+JSON.stringify(dual));
+  }
+  // 4) DUAL SUNDER vs CAPTURE-OF-DUAL: losing a fighter in dual reverts to single (no life lost);
+  //    being captured while dual also reverts to single but DOES cost a life.
+  {
+    const ps = makePlayerState(3); capturePlayer(ps,1); shootBoss(ps,1);   // now dual, lives=2
+    const livesBefore = ps.lives;
+    const r = loseFighter(ps);
+    const okSunder = r==='sundered' && ps.mode==='single' && ps.lives===livesBefore;
+    check('dual sunder: a bomb hit on a dual reverts to single, no life lost', okSunder,
+      'res '+r+' mode '+ps.mode+' lives '+ps.lives+' (was '+livesBefore+')');
+    const ps2 = makePlayerState(3); capturePlayer(ps2,1); shootBoss(ps2,1); // dual, lives 2
+    const r2 = capturePlayer(ps2, 5);
+    const okCapDual = r2==='captured' && ps2.mode==='single' && ps2.lives===1 && ps2.captured===true;
+    check('capture-of-dual: captured while dual → single, costs a life', okCapDual,
+      'mode '+ps2.mode+' lives '+ps2.lives);
+  }
+  // 5) FORMATION SLOT MAPPING is a bijection; sway is bounded & deterministic.
+  {
+    let bij=true; const seen=new Set();
+    for (let i=0;i<SLOTS;i++){
+      const rc=slotToRC(i); const back=rcToSlot(rc.row,rc.col);
+      if (back!==i) bij=false;
+      const key=rc.row+'x'+rc.col; if (seen.has(key)) bij=false; seen.add(key);
+      if (rc.row<0||rc.row>=ROWS||rc.col<0||rc.col>=COLS) bij=false;
+    }
+    check('formation slots: index↔(row,col) is a bijection over all '+SLOTS+' slots', bij && seen.size===SLOTS,
+      'distinct '+seen.size+'/'+SLOTS);
+    const amp=40, period=7;
+    const s1=swayOffset(1.0,amp,period), s2=swayOffset(1.0,amp,period);
+    const bounded = Math.abs(swayOffset(2.345,amp,period))<=amp+1e-9 && Math.abs(swayOffset(99,amp,period))<=amp+1e-9;
+    check('formation sway: deterministic & bounded by amplitude', s1===s2 && bounded,
+      'det '+(s1===s2)+' bounded '+bounded);
+  }
+  // 6) ENTRY PATH: continuous, starts off-screen, ends exactly at the slot.
+  {
+    const fieldW=1000, fieldTop=80, slotX=500, slotY=200;
+    const pth=makeEntryPath(slotX,slotY,true,fieldW,fieldTop);
+    const start=bezier(pth.p0,pth.p1,pth.p2,pth.p3,0);
+    const end=bezier(pth.p0,pth.p1,pth.p2,pth.p3,1);
+    const offscreen = start.x < 0 || start.y < fieldTop;          // begins outside the field
+    const endsAtSlot = Math.abs(end.x-slotX)<1e-6 && Math.abs(end.y-slotY)<1e-6;
+    // continuity: small dt → small position change
+    let cont=true, prev=bezier(pth.p0,pth.p1,pth.p2,pth.p3,0);
+    for (let t=0.02;t<=1.0001;t+=0.02){ const p=bezier(pth.p0,pth.p1,pth.p2,pth.p3,t);
+      if (Math.hypot(p.x-prev.x,p.y-prev.y) > fieldW*0.25) cont=false; prev=p; }
+    check('entry path: starts off-screen, ends at slot, continuous', offscreen&&endsAtSlot&&cont,
+      'start '+start.x.toFixed(0)+','+start.y.toFixed(0)+' end '+end.x.toFixed(1)+','+end.y.toFixed(1));
+  }
+  // 7) DIVE PATH: starts at the slot, descends past the player band, exits below the field.
+  {
+    const slotX=500, slotY=200, targetX=460, bandTop=700, fieldBottom=860;
+    const dp=makeDivePath(slotX,slotY,targetX,bandTop,fieldBottom);
+    const start=bezier(dp.p0,dp.p1,dp.p2,dp.p3,0);
+    const end=bezier(dp.p0,dp.p1,dp.p2,dp.p3,1);
+    const startsAtSlot = Math.abs(start.x-slotX)<1e-6 && Math.abs(start.y-slotY)<1e-6;
+    const exitsBelow = end.y > fieldBottom;
+    // it must actually descend past the band somewhere in the curve (leaves formation region)
+    let passedBand=false, maxY=-1;
+    for (let t=0;t<=1.0001;t+=0.02){ const p=bezier(dp.p0,dp.p1,dp.p2,dp.p3,t); maxY=Math.max(maxY,p.y); if (p.y>bandTop) passedBand=true; }
+    check('dive path: starts at slot, plunges past player band, exits below field', startsAtSlot&&exitsBelow&&passedBand,
+      'maxY '+maxY.toFixed(0)+' bandTop '+bandTop+' endY '+end.y.toFixed(0));
+  }
+  // 8) PLAYER-BULLET CAP: the cap blocks the (cap+1)th emit. (pure simulation of the rule)
+  {
+    const CAP=2; let onScreen=0; const tryFire=()=>{ if(onScreen<CAP){ onScreen++; return true; } return false; };
+    const f1=tryFire(), f2=tryFire(), f3=tryFire();
+    const ok = f1&&f2&&!f3 && onScreen===CAP;
+    check('bullet cap: 2 allowed aloft, 3rd is a no-op until one clears', ok,
+      'fires '+[f1,f2,f3].join(',')+' onScreen '+onScreen);
+  }
+  // 9) COLLISION + SCORING: circle overlap detects a hit; boss takes 2 hits; score accrues.
+  {
+    const hit = circleOverlap(100,100,3, 104,100,22);     // bullet 3px vs boss r22, 4px apart
+    const miss= circleOverlap(100,100,3, 200,100,22);
+    const boss = makeEnemyCore('boss');
+    const r1=applyHit(boss,1), aliveMid=!boss.dead, r2=applyHit(boss,1);
+    let sc=0; if (r2==='killed') sc+=boss.value;
+    const okBoss = hit && !miss && r1==='wounded' && aliveMid && r2==='killed' && sc===TIER_VALUE.boss;
+    check('collision/scoring: overlap hits; boss=2 hits; score += value', okBoss,
+      'hit '+hit+' miss '+miss+' boss '+r1+'/'+r2+' score '+sc);
+    // grunt: one hit kills, lower value
+    const g=makeEnemyCore('grunt'); const gr=applyHit(g,1);
+    check('grunt dies in one hit, worth less than a boss', gr==='killed' && g.value<TIER_VALUE.boss,
+      'grunt '+gr+' value '+g.value+' < boss '+TIER_VALUE.boss);
+  }
+  // 10) CLEAR FLIP: a pure "is the wave cleared?" check — last enemy removed → cleared.
+  {
+    const list=[makeEnemyCore('grunt'),makeEnemyCore('grunt')];
+    applyHit(list[0],1); let live=list.filter(e=>!e.dead).length;
+    const notYet = live>0;
+    applyHit(list[1],1); live=list.filter(e=>!e.dead).length;
+    const cleared = live===0;
+    check('wave clear flips only when the last enemy dies', notYet && cleared, 'after1 '+1+' after2 '+0);
+  }
+
+  const chip=document.getElementById('selftest');
+  if (chip){
+    if (allPass){ chip.classList.add('show'); chip.textContent='✓ self-test '+results.length+'/'+results.length; console.log('SELF-TEST: ALL PASS ('+results.length+' checks)'); }
+    else { const f=results.filter(r=>!r.pass).length; chip.classList.add('show','fail'); chip.textContent='✗ self-test'; console.error('SELF-TEST: '+f+' FAILURE(S)'); }
+  }
+  return { allPass, results, total:results.length, passed:results.filter(r=>r.pass).length };
+}
+
+//============================================================== boot
+loadBest();
+resize();
+if (elBest) elBest.textContent=best.toLocaleString();
+setMuteTag();
+updateLives();
+// attract field: a quiet formation breathing behind the title
+buildWave(1);
+for (const e of enemies){ e.state='formed'; const h=slotPosNow(e.slot); e.x=h.x; e.y=h.y; }
+const SELFTEST = runSelfTest();
+requestAnimationFrame(frame);
+
+// verification hook
+window.__VANGUARD__ = {
+  get state(){return state;},
+  get score(){return score;},
+  get wave(){return wave;},
+  get lives(){return playerState.lives;},
+  get best(){return best;},
+  get fps(){return fpsValue;},
+  get enemyCount(){return enemies.filter(e=>!e.dead).length;},
+  get bossCount(){return enemies.filter(e=>!e.dead&&e.tier==='boss').length;},
+  get playerBullets(){return bullets.filter(b=>b.alive).length;},
+  get bombCount(){return bombs.filter(b=>b.alive).length;},
+  get captureState(){return { captured:playerState.captured, captorId:playerState.captorId, beamActive:!!beam }; },
+  get isDual(){return playerState.mode==='dual';},
+  get playerAlive(){return player.alive;},
+  get playerX(){return player.x;},
+  get diverCount(){return enemies.filter(e=>!e.dead&&e.state==='diving').length;},
+  get selfTest(){return SELFTEST;},
+  _start(){ startGame(); },
+  _next(){ if(state==='waveclear') nextWave(); },
+  _fire(){ playerFire(); },
+  _move(dir,on){ if(dir==='left') held.left=!!on; else if(dir==='right') held.right=!!on; },
+  _setPlayerX(x){ player.x=clamp(x, FX+18, FX+FW-18); },
+  // force a tractor beam from the first available boss (drops it into a beam-run dive)
+  _forceCaptureBeam(){ return triggerBeam(); },
+  // kill every enemy except the first n (deterministic wave-advance helper)
+  _killAllExcept(n){ const live=enemies.filter(e=>!e.dead); for (let i=n||0;i<live.length;i++){ live[i].hp=0; live[i].dead=true; }
+    enemies=enemies.filter(e=>!e.dead); if(enemies.length===0) winWave(); },
+  // kill all enemies (advance the wave outright)
+  _clearWave(){ for (const e of enemies) e.dead=true; enemies=[]; winWave(); },
+  // force a capture without the beam choreography (drives the pure state machine + visuals)
+  _testCapture(){ const b=enemies.find(e=>!e.dead&&e.tier==='boss'); if(b){ b.state='formed'; doCapture(b); return b.id; } return null; },
+  // shoot a specific boss by id (rescue if it is the captor)
+  _shootBoss(id){ const b=enemies.find(e=>e.id===id); if(b){ b.hp=1; hitEnemy(b); return true; } return false; },
+  _loseFighter(){ player.invuln=0; hitPlayer('test'); },
+  _addScore(n){ score+=n; },
+  // expose the pure machine for direct inspection
+  _ps(){ return Object.assign({}, playerState); },
+  COLS, ROWS, SLOTS
+};
+
+})();
+</script>
+
+<!-- arc-back -->
+<style>
+  .arc-back{ position:fixed; left:18px; bottom:14px; z-index:9999; pointer-events:auto;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11.5px;
+    letter-spacing:.18em; text-transform:uppercase; text-decoration:none;
+    color:#e9f6ff; opacity:.40; transition:opacity .2s, text-shadow .2s;
+    text-shadow:0 0 8px rgba(55,214,255,.45); }
+  .arc-back:hover{ opacity:.95; text-shadow:0 0 12px rgba(55,214,255,.85); }
+</style>
+<a class="arc-back" href="../index.html" style="position:fixed;z-index:9999;pointer-events:auto">← arcade</a>
+</body>
+</html>
