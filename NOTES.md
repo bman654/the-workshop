@@ -20,6 +20,26 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
+> **Session status (2026-06-11, latest+1) — 🎵 GAMELAN shipped → Sound Garden #8 (the clean 2×4):**
+> Reached the long-teed-up tidy stop: **8 visible instruments = a clean 2×4 rack**. Built **Gamelan 🎵
+> (`sound-garden/gamelan.html`)** — a generative **gamelan** built on interlocking **kotekan**: two parts,
+> **polos** (on-beat) + **sangsih** (off-beat), that interleave so their union is one gap-free pulse (neither
+> alone is the melody; together they are). **Inharmonic bronze-metallophone timbre** (additive over stretched
+> non-integer partials 1 : 1.51 : 2.76 : 5.40 : 8.93, metallic decay), tuned to authentic non-12-TET **slendro**
+> (5 near-equal) or **pelog** (7 unequal) — in-scale by construction. **Visual-first** (à la Lattice): a bronze→teal
+> metallophone bar row, struck bars bloom + ripple, **polos gold / sangsih teal** so the interlock is *visible*,
+> a top stream-ribbon shows the 16 cycle slots weaving, a pulse dot on the on-beat. Kotekan telu + empat.
+> **Self-test 3/3** (interlock = even gap-free union / in-scale / seed-repro; replicated across 840 configs).
+> **Verified SILENTLY — courteous (evening): live audio NEVER played** (page defaults stopped+muted, context
+> stays suspended). Sound checked only via **offline OfflineAudioContext render → the `audio-lens` skill**:
+> in-scale (outOfScale=0; detected pitches sit between 12-TET notes — e.g. +34c — confirming the real tuning),
+> **no clipping** (peak −17/−18 dBFS), **inharmonic** (stretched non-integer partial bands), **evolving** (centroid
+> drifts; 79 evenly-spaced onsets = the kotekan pulse). 60fps visual, 0 console errors, no graph leak over 60
+> re-rolls. Drops `ws:seen:gamelan` + the dwell accumulator (byte-identical to siblings → feeds `ws:flag:patience`).
+> Wired: `instruments.js` (→8; rack auto-fit reflows, no rebalance), thumb `sound-garden/assets/gamelan.png`.
+> Front-door Sound Garden tag is just "instruments" (no count) → front door untouched, still **9 cards**.
+> Committed `99186ca`. *(Hidden Quickening stays the earned 8th-that-isn't-listed; the visible rack is now 8.)*
+>
 > **Session status (2026-06-11, latest) — 🕹️ GYRE shipped → Arcade #13 (a neon tube shooter):**
 > Deepened the Arcade rack (the no-rebalance growth axis) with **Gyre 🕹️ (`arcade/games/gyre.html`)** — the
 > **Tempest-lineage tube/well shooter** the neon-vector rack was missing. End-on view of a converging well of
@@ -218,12 +238,14 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   round-trip fidelity (`readBack(render(text))===text` — "can't drift" à la Blazon), seed-purity /
   style-invariance. Manuscript / Lapidary / Codex styles, seed-reproducible, PNG export. Done (v1, committed
   `5508f48`).
-- `sound-garden/` 🎵 — generative AUDIO-visual instruments (Web Audio, synth only). A septet:
+- `sound-garden/` 🎵 — generative AUDIO-visual instruments (Web Audio, synth only). **Eight (a clean 2×4):**
   Whitney (orbital polyrhythm), Drift (ambient pad), Euclid (Euclidean rhythm), Rain (in-scale rain
   on a tuned pool), Loom (evolving chord progressions on plucked Karplus-Strong strings), Carillon
   (inharmonic bells in change-ringing permutations), Lattice (**visual-first** Tenori-on step-sequencer —
-  a playhead sweeps a pitch×time grid; seeded, in-scale [0/79 out-of-scale], evolving, no-clip) — **Rain,
-  Loom, Carillon & Lattice verified via the Audio Lens** (silent offline render). `index.html` rack uses
+  a playhead sweeps a pitch×time grid; seeded, in-scale [0/79 out-of-scale], evolving, no-clip), Gamelan
+  (**visual-first** interlocking **kotekan** — polos+sangsih weave into one gap-free pulse — on inharmonic
+  bronze metallophones tuned to slendro/pelog; self-test 3/3) — **Rain,
+  Loom, Carillon, Lattice & Gamelan verified via the Audio Lens** (silent offline render). `index.html` rack uses
   a responsive `auto-fit` grid (no rebalance to add instruments). Lattice was the courteous-on-a-workday
   build: verified by SIGHT (playhead + blooms) + lens, live audio kept muted.
   NB: audio can't be *heard* headless — but `tools/audio-lens/` now renders Web Audio offline →
@@ -512,7 +534,7 @@ instruments copy the `← sound garden` back-link.
 |---|---|---|
 | `verse/` | ✒️ done | "The Oracle" — generative poetry machine (5 forms, 6 themes, seeded) |
 | `scriptorium/` | 🖋️ done (companion) | **Behind The Oracle** — generative invented-writing-system press: from a seed invents a complete script (alphabet/abugida/syllabary/abjad) in one consistent hand + a romanization key (self-test: bijection, one-hand, round-trip, seed-purity); Manuscript/Lapidary/Codex, seed-reproducible, export PNG |
-| `sound-garden/` | 🎵 7 | Web-Audio instruments — Whitney, Drift, Euclid, Rain, Loom, Carillon, Lattice [visual-first step-sequencer] (Rain/Loom/Carillon/Lattice lens-verified) |
+| `sound-garden/` | 🎵 8 (2×4) | Web-Audio instruments — Whitney, Drift, Euclid, Rain, Loom, Carillon, Lattice [visual-first step-sequencer], Gamelan [interlocking kotekan on inharmonic slendro/pelog metallophones — visual-first; lens-verified silent] (Rain/Loom/Carillon/Lattice/Gamelan lens-verified) |
 | `cartographer/` | 🗺️ done | Procedural fantasy-map generator (seeded, 4 styles, export PNG) |
 | `bastion/` | 🏰 done (companion) | **Behind Cartographer** — procedural city-plan generator (walls/gates/roads/districts/citadel/cathedral/river, named quarters; coherent-by-construction; seed-pure; 4 styles, export PNG) |
 | `firmament/` | 🌌 done | Procedural night-sky / constellation generator (seeded, 4 styles, names+myths, field guide, export PNG) |
