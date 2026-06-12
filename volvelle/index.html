@@ -1,0 +1,1306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Volvelle</title>
+<style>
+  :root{
+    /* brass (default) skin */
+    --panel-bg: rgba(20,15,9,0.88);
+    --panel-edge: rgba(214,176,108,0.40);
+    --ink: #f0e2c4;
+    --ink-dim: #b8a172;
+    --accent: #e6bd6f;
+    --accent-soft: rgba(230,189,111,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --bg: #0b0805;
+    --bg-grad1: rgba(120,84,36,0.18);
+    --bg-grad2: rgba(70,52,30,0.16);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    background:
+      radial-gradient(1200px 700px at 72% 18%, var(--bg-grad1), transparent 60%),
+      radial-gradient(900px 600px at 20% 90%, var(--bg-grad2), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(40,70,44,0.35); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:64px 24px 18px; min-width:0; gap:14px; }
+  #frame{ display:block; box-shadow:0 24px 70px rgba(0,0,0,0.6); border-radius:50%; touch-action:none; cursor:grab; max-width:100%; max-height:60vh; user-select:none; -webkit-user-select:none; }
+  #frame.grabbing{ cursor:grabbing; }
+  #frame text{ user-select:none; -webkit-user-select:none; }
+
+  /* ---- Output tape under the disk ---- */
+  #tape{
+    width:min(820px,100%); background:var(--panel-bg);
+    border:1px solid var(--panel-edge); border-radius:10px; padding:12px 16px;
+    display:grid; grid-template-columns:auto 1fr auto; gap:6px 14px; align-items:center;
+    backdrop-filter: blur(8px) saturate(120%); -webkit-backdrop-filter: blur(8px) saturate(120%);
+  }
+  #tape .lbl{ font:600 9.5px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); white-space:nowrap; }
+  #tape .row-plain, #tape .row-key{ font:13px/1.3 var(--font-mono); letter-spacing:3px; color:var(--ink-dim); word-break:break-all; }
+  #tape .row-key{ color:var(--accent); opacity:.78; }
+  #tape .row-out{ font:700 19px/1.25 var(--font-mono); letter-spacing:4px; color:var(--accent); word-break:break-all; min-height:24px; }
+  #tape .tapebtns{ grid-column:3; grid-row:1 / span 3; display:flex; flex-direction:column; gap:6px; align-self:start; }
+  #tape .tapebtns button{
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:7px; padding:6px 10px; font:11px/1 var(--font-mono); letter-spacing:.3px; cursor:pointer; transition:.15s; white-space:nowrap;
+  }
+  #tape .tapebtns button:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  #tape .row-note{ grid-column:1 / -1; font:10.5px/1.4 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; opacity:.85; }
+  #tape .row-note b{ color:var(--accent); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:312px; flex:0 0 312px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:60px 16px 18px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.5; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); }
+  .row{ margin:13px 0; }
+  .row > label{ display:block; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .inrow{ display:flex; gap:8px; align-items:center; }
+  input[type=text], input[type=number]{
+    flex:1; min-width:0; background:rgba(0,0,0,0.32); border:1px solid var(--panel-edge); color:var(--ink);
+    border-radius:8px; padding:8px 10px; font:13px/1 var(--font-mono); letter-spacing:.4px; outline:none;
+    font-variant-numeric:tabular-nums;
+  }
+  input[type=text]:focus, input[type=number]:focus{ border-color:var(--accent); }
+  input[type=range]{ flex:1; min-width:0; accent-color:var(--accent); cursor:pointer; }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(214,176,108,0.26); flex-wrap:wrap; }
+  .seg button{
+    flex:1; min-width:34px; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#241803; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:20px; padding:6px 11px; font:11px/1 var(--font-mono); letter-spacing:.2px; cursor:pointer; transition:.15s;
+  }
+  .chip:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .valbox{ flex:0 0 auto; width:46px; text-align:center; }
+  .dialbtn{
+    flex:0 0 auto; width:34px; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:8px 0; font:600 15px/1 var(--font-mono); cursor:pointer; transition:.15s;
+  }
+  .dialbtn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btnrow{ display:flex; gap:8px; margin:13px 0; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(230,189,111,0.26), rgba(230,189,111,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(230,189,111,0.40), rgba(230,189,111,0.14)); }
+  .modepanel{ display:none; }
+  .modepanel.show{ display:block; }
+  .hint{ font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:14px 0 4px; border-top:1px solid rgba(214,176,108,0.18); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; workshop</a>
+    <div class="brand">
+      <h1>Volvelle</h1>
+      <span class="tag">a cipher disk</span>
+    </div>
+    <div class="selftest" id="selftest">checking…</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <svg id="frame" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="tape">
+        <span class="lbl">plain</span><div class="row-plain" id="rowPlain"></div>
+        <span class="lbl" id="keyLbl">key</span><div class="row-key" id="rowKey"></div>
+        <span class="lbl" id="outLbl">cipher</span><div class="row-out" id="rowOut"></div>
+        <div class="tapebtns">
+          <button id="btnCopy">copy</button>
+          <button id="btnClearTape">clear</button>
+        </div>
+        <div class="row-note" id="tapeNote">↺ reversible — the same settings decode it. Type to turn the disk.</div>
+      </div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A real <b>Alberti cipher disk</b> — turn the lettered wheel and it performs three genuine classical ciphers. The outer ring is fixed plaintext <b>A–Z</b>; the inner disk is the cipher alphabet. Type to watch it step letter by letter.</p>
+
+      <div class="row">
+        <label>Type to encipher</label>
+        <div class="inrow">
+          <input type="text" id="msgInput" placeholder="ATTACK AT DAWN" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Mode</label>
+        <div class="seg" id="modeSeg">
+          <button data-mode="caesar" class="active">Caesar</button>
+          <button data-mode="vigenere">Vigen&egrave;re</button>
+          <button data-mode="alberti">Alberti</button>
+        </div>
+      </div>
+
+      <!-- Caesar key control -->
+      <div class="modepanel show" id="mp-caesar">
+        <div class="row">
+          <label>Shift &mdash; rotation of the disk (0&ndash;25)</label>
+          <div class="inrow">
+            <button class="dialbtn" id="shiftDown" title="rotate −1">&minus;</button>
+            <input type="range" id="shiftRange" min="0" max="25" step="1" value="3">
+            <input type="number" id="shiftNum" class="valbox" min="0" max="25" value="3">
+            <button class="dialbtn" id="shiftUp" title="rotate +1">+</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vigenère key control -->
+      <div class="modepanel" id="mp-vigenere">
+        <div class="row">
+          <label>Keyword &mdash; drives the rotation per letter</label>
+          <div class="inrow">
+            <input type="text" id="keywordInput" placeholder="LEMON" autocomplete="off" autocapitalize="characters" spellcheck="false" value="LEMON">
+          </div>
+        </div>
+      </div>
+
+      <!-- Alberti key control -->
+      <div class="modepanel" id="mp-alberti">
+        <div class="row">
+          <label>Seed &mdash; the mixed cipher alphabet</label>
+          <div class="inrow">
+            <input type="text" id="seedInput" autocomplete="off" spellcheck="false" value="4821">
+            <button class="dialbtn" id="seedRoll" title="surprise me" style="width:40px">🎲</button>
+          </div>
+        </div>
+        <div class="row">
+          <label>Index period N &mdash; re-key every N letters</label>
+          <div class="inrow">
+            <input type="range" id="periodRange" min="1" max="8" step="1" value="4">
+            <input type="number" id="periodNum" class="valbox" min="1" max="8" value="4">
+          </div>
+        </div>
+        <div class="row">
+          <label>Per-period step &mdash; cells the disk turns each re-key</label>
+          <div class="inrow">
+            <input type="range" id="stepRange" min="1" max="25" step="1" value="1">
+            <input type="number" id="stepNum" class="valbox" min="1" max="25" value="1">
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Direction</label>
+        <div class="seg" id="dirSeg">
+          <button data-dir="enc" class="active">Encipher</button>
+          <button data-dir="dec">Decipher</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Presets</label>
+        <div class="chips" id="presets">
+          <button class="chip" data-preset="caesar3">Caesar (shift 3)</button>
+          <button class="chip" data-preset="rot13">ROT13</button>
+          <button class="chip" data-preset="vigenere">Vigen&egrave;re — ATTACK/LEMON</button>
+          <button class="chip" data-preset="alberti">Alberti — worked</button>
+          <button class="chip" data-preset="clear">Clear</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Skin</label>
+        <div class="seg" id="skinSeg">
+          <button data-skin="brass" class="active">Brass</button>
+          <button data-skin="parchment">Parchment</button>
+          <button data-skin="blueprint">Blueprint</button>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn primary" id="btnPng">Export 2× PNG</button>
+      </div>
+
+      <div class="hint">
+        Encipher: find a plaintext letter on the <b>fixed outer ring</b>; its cipher letter is on the <b>rotating inner disk</b> beneath it. Drag the inner disk to turn it by hand (snaps to letters; sets the shift in Caesar mode). Skins change only colour &amp; material — never the cipher.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+/* =====================================================================
+   VOLVELLE — a genuine, operable Alberti cipher disk (a "volvelle").
+   The workshop's 4th instrument (after Slipstick, Astrolabe, Abacus).
+   Single file, 0 deps, 0 network, NO audio.
+
+   THE CRUX: a PURE cipher CORE is the single source of truth for BOTH
+   the SVG renderer and the headless self-test. The renderer reads the
+   disk's alignment from CORE; the self-test calls THESE SAME functions
+   (no parallel copy). Skins are cosmetic only — they never change the
+   cipher, geometry, or readout; output is invariant across skins by
+   construction (CORE never sees a skin) and the same test core passes
+   headlessly under Node.
+   ===================================================================== */
+
+/* =====================================================================
+   CORE — pure cipher-disk engine. No DOM, no skin, no render.
+
+   THE DISK: outer ring (FIXED) = plaintext A-Z in natural order; inner
+   disk (ROTATES) = the cipher alphabet (ordered for Caesar/Vigenere, a
+   seeded MIXED permutation for Alberti). Letter index A=0..Z=25.
+
+   At inner-disk rotation `rot` (cells the inner alphabet has advanced
+   under the fixed outer ring), the cipher letter under outer cell P is
+       cipher(P) = inner[(P + rot) mod 26].
+   Decipher is the exact inverse: find j with inner[j]===C, P=(j-rot)%26.
+   ===================================================================== */
+const CORE = (function(){
+  const A = 26;
+  const ORDERED = (function(){ const a=[]; for(let i=0;i<A;i++) a.push(i); return a; })();
+
+  function isLetter(ch){ return ch >= 'A' && ch <= 'Z'; }
+  function idx(ch){ return ch.charCodeAt(0) - 65; }
+  function chr(i){ return String.fromCharCode(65 + (((i % A) + A) % A)); }
+  function mod(n){ return ((n % A) + A) % A; }
+
+  function cleanText(s){
+    let out = '';
+    const up = String(s).toUpperCase();
+    for(let i=0;i<up.length;i++){ const c = up[i]; if(isLetter(c)) out += c; }
+    return out;
+  }
+
+  /* seeded PRNG — the workshop's mulberry32 + xmur3, verbatim */
+  function xmur3(str){
+    let h = 1779033703 ^ str.length;
+    for(let i=0;i<str.length;i++){
+      h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+      h = (h << 13) | (h >>> 19);
+    }
+    return function(){
+      h = Math.imul(h ^ (h >>> 16), 2246822507);
+      h = Math.imul(h ^ (h >>> 13), 3266489909);
+      h ^= h >>> 16;
+      return h >>> 0;
+    };
+  }
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function makeRng(seedStr){ const s = xmur3(String(seedStr)); return mulberry32(s()); }
+
+  function orderedAlphabet(){ return ORDERED.slice(); }
+  // seeded Fisher-Yates shuffle of A-Z -> a true permutation (bijection).
+  function mixedAlphabet(seed){
+    const a = ORDERED.slice();
+    const rng = makeRng('volvelle:' + String(seed));
+    for(let i = a.length - 1; i > 0; i--){
+      const j = Math.floor(rng() * (i + 1));
+      const t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+  function innerAlphabet(settings){
+    return settings.mode === 'alberti' ? mixedAlphabet(settings.seed) : orderedAlphabet();
+  }
+
+  function keyLetters(keyword){
+    const k = cleanText(keyword);
+    return k.length ? k.split('').map(idx) : [0];
+  }
+  // the inner-disk rotation in effect at plaintext position i.
+  function rotationAt(settings, i){
+    if(settings.mode === 'caesar'){
+      return mod(settings.shift|0);
+    }
+    if(settings.mode === 'vigenere'){
+      const ks = keyLetters(settings.keyword);
+      return mod(ks[i % ks.length]);
+    }
+    const period = Math.max(1, settings.period|0);
+    const step = ((settings.step|0) || 1);
+    const start = mod(settings.start|0);
+    const block = Math.floor(i / period);
+    return mod(start + block * step);
+  }
+  function rotationSequence(settings, n){
+    const out = new Array(n);
+    for(let i=0;i<n;i++) out[i] = rotationAt(settings, i);
+    return out;
+  }
+
+  /* the disk's READING — geometry == math. The renderer and the math
+     both call cipherUnder/plainOver, so the instrument can't lie. */
+  function cipherUnder(inner, P, rot){ return inner[mod(P + rot)]; }
+  function plainOver(inner, C, rot){ return mod(inner.indexOf(C) - rot); }
+
+  function encipher(message, settings){
+    const inner = innerAlphabet(settings);
+    const msg = cleanText(message);
+    const rots = rotationSequence(settings, msg.length);
+    let out = '';
+    for(let i=0;i<msg.length;i++) out += chr(cipherUnder(inner, idx(msg[i]), rots[i]));
+    return out;
+  }
+  function decipher(message, settings){
+    const inner = innerAlphabet(settings);
+    const msg = cleanText(message);
+    const rots = rotationSequence(settings, msg.length);
+    let out = '';
+    for(let i=0;i<msg.length;i++) out += chr(plainOver(inner, idx(msg[i]), rots[i]));
+    return out;
+  }
+  function transform(message, settings, decode){
+    return decode ? decipher(message, settings) : encipher(message, settings);
+  }
+
+  // the repeating key string shown under the plaintext.
+  function keyStream(settings, n){
+    if(settings.mode === 'vigenere'){
+      const k = cleanText(settings.keyword) || 'A';
+      let s=''; for(let i=0;i<n;i++) s += k[i % k.length]; return s;
+    }
+    if(settings.mode === 'caesar'){
+      return chr(mod(settings.shift|0)).repeat(n);
+    }
+    let s=''; for(let i=0;i<n;i++) s += chr(rotationAt(settings,i)); return s;
+  }
+
+  function group5(s){ return (s.match(/.{1,5}/g) || []).join(' '); }
+
+  // depends only on (settings, message); never on the skin (CORE is skin-blind).
+  function cipherFingerprint(settings, message){
+    const s = settings;
+    const head = [s.mode, s.shift|0, cleanText(s.keyword||''), s.seed, s.period|0, s.step|0, s.start|0].join('/');
+    return head + '=>' + encipher(message, settings);
+  }
+
+  return {
+    A, ORDERED,
+    isLetter, idx, chr, mod, cleanText,
+    makeRng, orderedAlphabet, mixedAlphabet, innerAlphabet,
+    keyLetters, rotationAt, rotationSequence,
+    cipherUnder, plainOver,
+    encipher, decipher, transform,
+    keyStream, group5, cipherFingerprint
+  };
+})();
+
+/* =====================================================================
+   SELF-TEST — calls the REAL CORE functions. Green chip, never red.
+   Mirrors the headless Node harness; proves all of the build spec §1.
+   ===================================================================== */
+function runSelfTest(){
+  const C = CORE;
+  let pass=0, total=0;
+  const check = (name, cond) => { total++; if(cond){ pass++; } else { console.error('FAIL: '+name); } };
+
+  let seed = 0x2545F491;
+  const rnd = () => { seed ^= seed<<13; seed ^= seed>>>17; seed ^= seed<<5; seed>>>=0; return seed/0x100000000; };
+  const randInt = (lo,hi) => lo + Math.floor(rnd()*(hi-lo+1));
+  const randMsg = (len) => { let s=''; for(let i=0;i<len;i++) s += C.chr(randInt(0,25)); return s; };
+  const randKw = () => { let n=randInt(1,8), s=''; for(let i=0;i<n;i++) s += C.chr(randInt(0,25)); return s; };
+  const randSettings = () => {
+    const m = ['caesar','vigenere','alberti'][randInt(0,2)];
+    if(m==='caesar') return { mode:m, shift:randInt(0,25) };
+    if(m==='vigenere') return { mode:m, keyword:randKw() };
+    return { mode:m, seed:randInt(0,99999), period:randInt(1,8), step:randInt(1,25), start:randInt(0,25) };
+  };
+
+  // 1. ROUND-TRIP IDENTITY across all 3 modes, random settings + 200-letter msgs.
+  {
+    let ok = true;
+    for(let k=0;k<800;k++){
+      const s = randSettings(), m = randMsg(200);
+      if(C.decipher(C.encipher(m, s), s) !== m) ok = false;
+    }
+    check('round-trip decipher(encipher(m,S),S)===m, all 3 modes (random settings x 200)', ok);
+  }
+
+  // 2. ALIGNMENT == MATH: Caesar disk reading == (P+k) mod 26, all P,k.
+  {
+    let ok = true;
+    for(let k=0;k<26;k++){
+      const inner = C.innerAlphabet({ mode:'caesar', shift:k });
+      const rot = C.rotationAt({ mode:'caesar', shift:k }, 0);
+      for(let P=0;P<26;P++){ if(C.cipherUnder(inner, P, rot) !== ((P+k)%26)) ok = false; }
+    }
+    check("alignment==math: disk's cipher-under-P == (P+k) mod 26 (26x26)", ok);
+  }
+
+  // 3. BIJECTION: seeded mixed alphabet is a permutation of A-Z, many seeds.
+  {
+    let ok = true;
+    for(let k=0;k<800;k++){
+      const a = C.mixedAlphabet(randInt(0,1e9));
+      if(a.length !== 26){ ok=false; continue; }
+      const seen = new Array(26).fill(false);
+      for(const v of a){ if(v<0||v>25||seen[v]){ ok=false; break; } seen[v]=true; }
+      if(seen.some(x=>!x)) ok=false;
+    }
+    check('bijection: seeded mixed alphabet is a true permutation of A-Z', ok);
+  }
+
+  // 4. CANONICAL VECTORS (non-negotiable).
+  {
+    check('CANONICAL Vigenere: ATTACKATDAWN/LEMON -> LXFOPVEFRNHR',
+          C.encipher('ATTACKATDAWN', {mode:'vigenere',keyword:'LEMON'}) === 'LXFOPVEFRNHR');
+    check('CANONICAL Caesar shift 3: HELLO -> KHOOR',
+          C.encipher('HELLO', {mode:'caesar',shift:3}) === 'KHOOR');
+    check('CANONICAL ROT13: HELLO -> URYYB',
+          C.encipher('HELLO', {mode:'caesar',shift:13}) === 'URYYB');
+    let selfInv = true;
+    for(let k=0;k<300;k++){ const m = randMsg(randInt(1,40));
+      if(C.encipher(C.encipher(m,{mode:'caesar',shift:13}),{mode:'caesar',shift:13}) !== m) selfInv=false; }
+    check('CANONICAL ROT13 self-inverse', selfInv);
+    check('Vigenere decode: LXFOPVEFRNHR/LEMON -> ATTACKATDAWN',
+          C.decipher('LXFOPVEFRNHR', {mode:'vigenere',keyword:'LEMON'}) === 'ATTACKATDAWN');
+  }
+
+  // 5. MODE CONSISTENCY: Caesar(k) === Vigenere(length-1 key of index k).
+  {
+    let ok = true;
+    for(let k=0;k<26;k++){
+      const m = randMsg(120);
+      if(C.encipher(m,{mode:'caesar',shift:k}) !== C.encipher(m,{mode:'vigenere',keyword:C.chr(k)})) ok=false;
+    }
+    check('mode consistency: Caesar(k) === Vigenere(length-1 key index k)', ok);
+  }
+
+  // 6. SEED-PURITY / SKIN-INVARIANCE: output a pure fn of settings+msg; CORE never sees the skin.
+  {
+    let ok = true;
+    const prev = (typeof STATE!=='undefined') ? STATE.skin : null;
+    for(let k=0;k<200;k++){
+      const s = { mode:'alberti', seed:randInt(0,99999), period:randInt(1,8), step:randInt(1,25), start:randInt(0,25) };
+      const m = randMsg(80);
+      const base = C.cipherFingerprint(s, m);
+      for(const skin of ['brass','parchment','blueprint']){
+        if(typeof STATE!=='undefined') STATE.skin = skin;        // mutate the skin...
+        if(C.cipherFingerprint(s, m) !== base) ok = false;        // ...output must not budge
+      }
+    }
+    if(typeof STATE!=='undefined') STATE.skin = prev;
+    check('seed-purity/skin-invariance: cipher output identical across all 3 skins', ok);
+  }
+
+  // 7. Non-letters dropped + uppercased (classical convention).
+  {
+    check("clean+drop: 'Hello, World!' caesar3 -> KHOORZRUOG",
+          C.encipher('Hello, World!', {mode:'caesar',shift:3}) === 'KHOORZRUOG');
+  }
+
+  // 8. Alberti re-keys every N letters (rot constant within a period, steps at boundary).
+  {
+    const s = { mode:'alberti', seed:42, period:4, step:5, start:2 };
+    const r = C.rotationSequence(s, 12);
+    const ok = r[0]===r[1] && r[1]===r[2] && r[2]===r[3]
+            && r[4]===C.mod(r[0]+5) && r[8]===C.mod(r[0]+10)
+            && r[4]===r[7] && r[8]===r[11];
+    check('alberti: rotation constant per period of N, steps at each boundary', ok);
+  }
+
+  // 9. group5 tape formatting.
+  {
+    check("group5: LXFOPVEFRNHR -> 'LXFOP VEFRN HR'", C.group5('LXFOPVEFRNHR') === 'LXFOP VEFRN HR');
+  }
+
+  return { pass, total };
+}
+
+/* =====================================================================
+   STATE — the live disk settings + which letter is "active" (highlighted).
+   skin is cosmetic and never reaches CORE.
+   ===================================================================== */
+const C = CORE;
+const STATE = {
+  skin: 'brass',
+  mode: 'caesar',
+  decode: false,
+  shift: 3,
+  keyword: 'LEMON',
+  seed: '4821',
+  period: 4,
+  step: 1,
+  start: 0,                 // alberti starting rotation (fixed at 0; step does the work)
+  message: '',
+  rot: 3,                   // the inner disk's current displayed rotation (cells)
+  activeP: -1,              // highlighted plaintext index (outer), -1 = none
+  activeC: -1               // highlighted cipher index (inner cell under activeP), -1 = none
+};
+function settings(){
+  return { mode:STATE.mode, shift:STATE.shift, keyword:STATE.keyword,
+           seed:STATE.seed, period:STATE.period, step:STATE.step, start:STATE.start };
+}
+
+/* =====================================================================
+   SKINS — COSMETIC ONLY (palette + material flags). No geometry, no
+   cipher. Pure colour.
+   ===================================================================== */
+const SKINS = {
+  brass: {
+    bg:'#0b0805', grad1:'rgba(120,84,36,0.18)', grad2:'rgba(70,52,30,0.16)',
+    discOuterTop:'#caa05a', discOuterBot:'#8a6730', discOuterEdge:'#6e4f1f',
+    discInnerTop:'#d9b878', discInnerBot:'#a07f40', discInnerEdge:'#7a5b27',
+    ring:'#1c1408', tick:'rgba(40,28,12,0.55)',
+    outerInk:'#241803', innerInk:'#2a1d06',
+    hub:'#3a2a12', hubEdge:'#e6bd6f',
+    index:'#e6bd6f', indexEdge:'#7a5527',
+    spoke:'#ffd98a', spokeGlow:'rgba(255,210,120,0.85)',
+    hi:'#fff4d8', hiInk:'#1a1204'
+  },
+  parchment: {
+    bg:'#181308', grad1:'rgba(150,120,70,0.16)', grad2:'rgba(90,70,40,0.14)',
+    discOuterTop:'#e9dcb6', discOuterBot:'#cdb888', discOuterEdge:'#9c854f',
+    discInnerTop:'#f2e8c8', discInnerBot:'#dcc999', discInnerEdge:'#a8915a',
+    ring:'#7a5a2e', tick:'rgba(120,86,46,0.45)',
+    outerInk:'#5a3a1e', innerInk:'#6a2418',
+    hub:'#b89a5e', hubEdge:'#7a5a2e',
+    index:'#9e2b1c', indexEdge:'#6a1a10',
+    spoke:'#b83524', spokeGlow:'rgba(180,53,36,0.6)',
+    hi:'#8a2418', hiInk:'#fdf6e0'
+  },
+  blueprint: {
+    bg:'#071018', grad1:'rgba(40,110,150,0.20)', grad2:'rgba(20,60,90,0.18)',
+    discOuterTop:'#0e3140', discOuterBot:'#0a2330', discOuterEdge:'#15455a',
+    discInnerTop:'#0f3a4c', discInnerBot:'#0a2a38', discInnerEdge:'#1c5a72',
+    ring:'#7fd4ee', tick:'rgba(127,212,238,0.30)',
+    outerInk:'#bfeefa', innerInk:'#9fe3f0',
+    hub:'#0d3243', hubEdge:'#7fd4ee',
+    index:'#7fd4ee', indexEdge:'#0a2330',
+    spoke:'#aef0ff', spokeGlow:'rgba(150,225,245,0.8)',
+    hi:'#eafdff', hiInk:'#062029'
+  }
+};
+function applySkinVars(){
+  const sk = SKINS[STATE.skin];
+  const rs = document.documentElement.style;
+  rs.setProperty('--bg', sk.bg);
+  rs.setProperty('--bg-grad1', sk.grad1);
+  rs.setProperty('--bg-grad2', sk.grad2);
+}
+
+/* =====================================================================
+   GEOMETRY — pure disk layout (no skin). SVG user units; viewBox scales.
+   26 cells, 360/26 = 13.846° each. The index mark is at 12 o'clock; cell
+   centres are measured CLOCKWISE from the top. A given letter index L on
+   a ring at disk-rotation `rot` sits at angle (L - rot)*cellDeg from top.
+   (Rotating the inner disk by +1 cell moves letter L one cell clockwise.)
+   ===================================================================== */
+const GEO = (function(){
+  const A = 26;
+  const cellDeg = 360 / A;            // 13.846…
+  const cx = 250, cy = 250;           // centre
+  const rOuterText = 222;             // outer ring letter radius
+  const rRingDiv   = 200;             // boundary between outer ring and inner disk
+  const rInnerText = 176;             // inner disk letter radius
+  const rDiscOuter = 244;             // outer disc edge
+  const rInnerDisc = 198;             // inner rotating disc edge
+  const rHub       = 30;              // brass pivot hub
+  const W = 500, H = 500;
+
+  // angle (deg, clockwise from 12 o'clock) of letter at ring-index position p
+  // for a ring rotated by `rot` cells. p is the cell slot 0..25 going clockwise.
+  function slotAngle(p){ return p * cellDeg; }
+  // a point on a circle at angle a (deg clockwise from top)
+  function pt(r, aDeg){
+    const a = (aDeg - 90) * Math.PI / 180;   // 0deg = up
+    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+  }
+  return { A, cellDeg, cx, cy, rOuterText, rRingDiv, rInnerText, rDiscOuter, rInnerDisc, rHub, W, H, slotAngle, pt };
+})();
+
+/* =====================================================================
+   SVG RENDERER — two concentric lettered rings. The OUTER ring (fixed
+   plaintext A-Z) is drawn once; the INNER disk rides a <g> we rotate via
+   transform:rotate(theta). The index triangle is fixed at 12 o'clock. An
+   active radial spoke + brightened letters show the current pair. NO
+   <foreignObject> — PNG export draws to canvas from the same geometry.
+   ===================================================================== */
+const svg = document.getElementById('frame');
+const SVGNS = 'http://www.w3.org/2000/svg';
+const prefersReduced = (() => {
+  try{ return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(_){ return false; }
+})();
+
+let innerG = null;            // the rotating inner-disk group
+let outerTextEls = [];        // outerTextEls[L] = <text> for plaintext letter L
+let innerTextEls = [];        // innerTextEls[cell] = <text> for inner cell `cell`
+let spokeEl = null, spokeOuterDot = null, spokeInnerDot = null;
+let built = false;
+
+function el(tag, attrs){
+  const e = document.createElementNS(SVGNS, tag);
+  if(attrs) for(const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+function buildSVG(){
+  const g = GEO;
+  svg.setAttribute('viewBox', `0 0 ${g.W} ${g.H}`);
+  svg.setAttribute('width', g.W);
+  svg.setAttribute('height', g.H);
+  svg.innerHTML = '';
+  outerTextEls = []; innerTextEls = [];
+
+  const defs = el('defs'); defs.id = 'sk-defs'; svg.appendChild(defs);
+
+  // static frame group (outer disc + outer ring letters + ticks + index mark)
+  const frameG = el('g', { id:'frameG' }); svg.appendChild(frameG);
+
+  // rotating inner-disk group
+  innerG = el('g', { id:'innerG' }); svg.appendChild(innerG);
+
+  // active-spoke overlay (drawn above everything; static frame coords)
+  const spokeG = el('g', { id:'spokeG' }); svg.appendChild(spokeG);
+  spokeEl = el('line', { id:'spoke', 'stroke-linecap':'round' });
+  spokeOuterDot = el('circle', { id:'spokeO', r:9, fill:'none' });
+  spokeInnerDot = el('circle', { id:'spokeI', r:9, fill:'none' });
+  spokeG.appendChild(spokeEl);
+  spokeG.appendChild(spokeOuterDot);
+  spokeG.appendChild(spokeInnerDot);
+
+  built = true;
+  if(!prefersReduced) innerG.style.transition = 'transform 0.26s cubic-bezier(.22,.9,.3,1)';
+  paintSkin();
+  applyRotation(true);
+  updateActive();
+}
+
+// Build (and repaint) the static frame + the inner disk contents for the skin.
+function paintSkin(){
+  const sk = SKINS[STATE.skin];
+  const g = GEO;
+
+  // ---- defs (gradients) ----
+  const defs = svg.querySelector('#sk-defs');
+  defs.innerHTML = '';
+  const og = el('radialGradient', { id:'discOuterGrad', cx:'0.5', cy:'0.42', r:'0.62' });
+  og.appendChild(el('stop', { offset:'0', 'stop-color':sk.discOuterTop }));
+  og.appendChild(el('stop', { offset:'1', 'stop-color':sk.discOuterBot }));
+  defs.appendChild(og);
+  const ig = el('radialGradient', { id:'discInnerGrad', cx:'0.5', cy:'0.42', r:'0.62' });
+  ig.appendChild(el('stop', { offset:'0', 'stop-color':sk.discInnerTop }));
+  ig.appendChild(el('stop', { offset:'1', 'stop-color':sk.discInnerBot }));
+  defs.appendChild(ig);
+
+  // ---- static frame ----
+  const frameG = svg.querySelector('#frameG');
+  frameG.innerHTML = '';
+  // outer disc
+  frameG.appendChild(el('circle', { cx:g.cx, cy:g.cy, r:g.rDiscOuter, fill:'url(#discOuterGrad)',
+    stroke:sk.discOuterEdge, 'stroke-width':3 }));
+  // ring divider (groove between the two rings)
+  frameG.appendChild(el('circle', { cx:g.cx, cy:g.cy, r:g.rRingDiv, fill:'none',
+    stroke:sk.ring, 'stroke-width':1.5, opacity:0.7 }));
+  frameG.appendChild(el('circle', { cx:g.cx, cy:g.cy, r:g.rDiscOuter-7, fill:'none',
+    stroke:sk.ring, 'stroke-width':1, opacity:0.4 }));
+  // tick marks between the 26 outer cells (radial groove lines)
+  for(let p=0;p<g.A;p++){
+    const a = g.slotAngle(p) + g.cellDeg/2;       // between letters
+    const p1 = g.pt(g.rRingDiv+2, a), p2 = g.pt(g.rDiscOuter-9, a);
+    frameG.appendChild(el('line', { x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, stroke:sk.tick, 'stroke-width':1 }));
+  }
+  // outer ring letters (plaintext A-Z, upright, fixed) — slot p shows letter p.
+  for(let L=0;L<g.A;L++){
+    const a = g.slotAngle(L);
+    const pos = g.pt(g.rOuterText, a);
+    const t = el('text', { x:pos.x, y:pos.y, 'text-anchor':'middle', 'dominant-baseline':'central',
+      'font-family':'var(--font-serif)', 'font-size':21, 'font-weight':600, fill:sk.outerInk });
+    t.textContent = C.chr(L);
+    frameG.appendChild(t);
+    outerTextEls[L] = t;
+  }
+  // index triangle at 12 o'clock (fixed)
+  const top = g.pt(g.rDiscOuter+2, 0);
+  const tri = el('path', { d:`M ${g.cx-12} ${top.y-16} L ${g.cx+12} ${top.y-16} L ${g.cx} ${top.y+10} Z`,
+    fill:sk.index, stroke:sk.indexEdge, 'stroke-width':1.5 });
+  frameG.appendChild(tri);
+
+  // ---- rotating inner disk (rebuilt: it depends on the cipher alphabet) ----
+  buildInner();
+
+  // ---- spoke colours ----
+  if(spokeEl){
+    spokeEl.setAttribute('stroke', sk.spoke);
+    spokeEl.setAttribute('stroke-width', 3.5);
+    spokeOuterDot.setAttribute('stroke', sk.spokeGlow);
+    spokeOuterDot.setAttribute('stroke-width', 3);
+    spokeInnerDot.setAttribute('stroke', sk.spokeGlow);
+    spokeInnerDot.setAttribute('stroke-width', 3);
+  }
+}
+
+// Build the inner disk's contents (disc + the cipher-alphabet letters).
+// The inner alphabet's letters are laid in cell slots 0..25; cell `cell`
+// carries cipher letter inner[cell]. At rotation rot, cell `cell` lands at
+// outer slot (cell - rot) — i.e. the disk-rotation transform places it.
+function buildInner(){
+  const sk = SKINS[STATE.skin];
+  const g = GEO;
+  innerG.innerHTML = '';
+  innerTextEls = [];
+  // inner disc face
+  innerG.appendChild(el('circle', { cx:g.cx, cy:g.cy, r:g.rInnerDisc, fill:'url(#discInnerGrad)',
+    stroke:sk.discInnerEdge, 'stroke-width':2.5 }));
+  innerG.appendChild(el('circle', { cx:g.cx, cy:g.cy, r:g.rInnerDisc-6, fill:'none',
+    stroke:sk.ring, 'stroke-width':1, opacity:0.4 }));
+  // tick marks between inner cells (ride with the disk)
+  for(let cell=0;cell<g.A;cell++){
+    const a = g.slotAngle(cell) + g.cellDeg/2;
+    const p1 = g.pt(g.rHub+8, a), p2 = g.pt(g.rInnerDisc-6, a);
+    innerG.appendChild(el('line', { x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y, stroke:sk.tick, 'stroke-width':0.8, opacity:0.6 }));
+  }
+  const inner = C.innerAlphabet(settings());
+  for(let cell=0;cell<g.A;cell++){
+    const a = g.slotAngle(cell);
+    const pos = g.pt(g.rInnerText, a);
+    const t = el('text', { x:pos.x, y:pos.y, 'text-anchor':'middle', 'dominant-baseline':'central',
+      'font-family':'var(--font-serif)', 'font-size':19, 'font-weight':600, fill:sk.innerInk,
+      'data-cell':cell });
+    t.textContent = C.chr(inner[cell]);
+    innerG.appendChild(t);
+    innerTextEls[cell] = t;
+  }
+  // pivot hub
+  innerG.appendChild(el('circle', { cx:g.cx, cy:g.cy, r:g.rHub, fill:sk.hub, stroke:sk.hubEdge, 'stroke-width':2 }));
+  innerG.appendChild(el('circle', { cx:g.cx, cy:g.cy, r:g.rHub*0.4, fill:'none', stroke:sk.hubEdge, 'stroke-width':1.2, opacity:0.7 }));
+}
+
+// Apply STATE.rot to the inner-disk transform (rotate clockwise by rot cells).
+function applyRotation(instant){
+  if(!innerG) return;
+  if(instant && !prefersReduced){
+    innerG.style.transition = 'none';
+    innerG.setAttribute('transform', `rotate(${STATE.rot * GEO.cellDeg} ${GEO.cx} ${GEO.cy})`);
+    requestAnimationFrame(() => { if(!prefersReduced) innerG.style.transition = 'transform 0.26s cubic-bezier(.22,.9,.3,1)'; });
+  } else {
+    innerG.setAttribute('transform', `rotate(${STATE.rot * GEO.cellDeg} ${GEO.cx} ${GEO.cy})`);
+  }
+}
+
+// Highlight the active plaintext/cipher pair + draw the spoke.
+function updateActive(){
+  const sk = SKINS[STATE.skin];
+  const g = GEO;
+  // reset all letters to base ink
+  for(let L=0;L<g.A;L++){ if(outerTextEls[L]) outerTextEls[L].setAttribute('fill', sk.outerInk); }
+  for(let cell=0;cell<g.A;cell++){ if(innerTextEls[cell]) innerTextEls[cell].setAttribute('fill', sk.innerInk); }
+
+  if(STATE.activeP < 0 || STATE.activeC < 0){
+    spokeEl.setAttribute('opacity', 0);
+    spokeOuterDot.setAttribute('opacity', 0);
+    spokeInnerDot.setAttribute('opacity', 0);
+    return;
+  }
+  // outer slot for plaintext P (fixed): angle = P*cellDeg.
+  // inner cell holding cipher index C must be found, then it lands at outer
+  // slot (cell - rot) — which, by construction, equals P. So the pair share
+  // the same screen angle = P*cellDeg.
+  const angle = g.slotAngle(STATE.activeP);
+  const po = g.pt(g.rOuterText, angle);
+  const pi = g.pt(g.rInnerText, angle);
+  spokeEl.setAttribute('x1', po.x); spokeEl.setAttribute('y1', po.y);
+  spokeEl.setAttribute('x2', pi.x); spokeEl.setAttribute('y2', pi.y);
+  spokeEl.setAttribute('opacity', 1);
+  spokeOuterDot.setAttribute('cx', po.x); spokeOuterDot.setAttribute('cy', po.y); spokeOuterDot.setAttribute('opacity', 1);
+  spokeInnerDot.setAttribute('cx', pi.x); spokeInnerDot.setAttribute('cy', pi.y); spokeInnerDot.setAttribute('opacity', 1);
+  // brighten the two active letters
+  if(outerTextEls[STATE.activeP]) outerTextEls[STATE.activeP].setAttribute('fill', sk.hi);
+  // the inner cell carrying cipher index activeC:
+  const inner = C.innerAlphabet(settings());
+  const cell = inner.indexOf(STATE.activeC);
+  if(cell >= 0 && innerTextEls[cell]) innerTextEls[cell].setAttribute('fill', sk.hi);
+}
+
+/* =====================================================================
+   THE READOUT (output tape) + the live encipher.
+   ===================================================================== */
+function fullTransform(){
+  return C.transform(STATE.message, settings(), STATE.decode);
+}
+
+function updateTape(){
+  const g5 = C.group5;
+  const cleaned = C.cleanText(STATE.message);
+  const out = fullTransform();
+  document.getElementById('rowPlain').textContent = g5(cleaned) || '·';
+  document.getElementById('rowOut').textContent = g5(out) || '·';
+
+  // key row: shown in Vigenère (repeating key under plaintext); a soft hint
+  // in Caesar/Alberti.
+  const keyLbl = document.getElementById('keyLbl');
+  const keyRow = document.getElementById('rowKey');
+  if(STATE.mode === 'vigenere'){
+    keyLbl.style.opacity = 1;
+    keyRow.textContent = g5(C.keyStream(settings(), cleaned.length)) || '·';
+  } else if(STATE.mode === 'caesar'){
+    keyLbl.style.opacity = .6;
+    keyRow.textContent = 'shift ' + C.mod(STATE.shift) + '  (' + C.chr(C.mod(STATE.shift)) + ')';
+  } else {
+    keyLbl.style.opacity = .6;
+    keyRow.textContent = 'seed ' + STATE.seed + ' · re-keys every ' + STATE.period;
+  }
+
+  // out label reflects direction
+  document.getElementById('outLbl').textContent = STATE.decode ? 'plain' : 'cipher';
+  if(STATE.decode){ document.getElementById('rowPlain').textContent = g5(cleaned) || '·'; }
+}
+
+/* Compute the disk rotation + active pair for the LAST typed letter so the
+   user watches the disk settle on that letter's alignment. With no message,
+   show the resting rotation (shift / key[0] / alberti start). */
+function syncDiskToMessage(animate){
+  const cleaned = C.cleanText(STATE.message);
+  const s = settings();
+  if(cleaned.length === 0){
+    // resting rotation: position 0's rotation
+    STATE.rot = C.rotationAt(s, 0);
+    STATE.activeP = -1; STATE.activeC = -1;
+  } else {
+    const i = cleaned.length - 1;
+    const rot = C.rotationAt(s, i);
+    STATE.rot = rot;
+    const inner = C.innerAlphabet(s);
+    if(STATE.decode){
+      // typing ciphertext: highlight cipher letter (outer slot shows the cipher
+      // letter's position? No — outer ring is plaintext). For decode we show
+      // the recovered plaintext on the outer ring and the typed cipher on inner.
+      const cIdx = C.idx(cleaned[i]);
+      const P = C.plainOver(inner, cIdx, rot);
+      STATE.activeP = P;
+      STATE.activeC = cIdx;
+    } else {
+      const P = C.idx(cleaned[i]);
+      const cIdx = C.cipherUnder(inner, P, rot);
+      STATE.activeP = P;
+      STATE.activeC = cIdx;
+    }
+  }
+  applyRotation(!animate);
+  updateActive();
+}
+
+function refreshAll(animate){
+  if(!built) buildSVG();
+  updateTape();
+  syncDiskToMessage(animate);
+}
+
+/* =====================================================================
+   DRAG THE INNER DISK — rotate by hand, snapping to letter steps. In
+   Caesar mode this sets the live shift. Pointer angle -> rotation cells.
+   ===================================================================== */
+let drag = null;
+function pointerAngle(ev){
+  const rect = svg.getBoundingClientRect();
+  // map client point into viewBox coords
+  const x = (ev.clientX - rect.left) / rect.width * GEO.W;
+  const y = (ev.clientY - rect.top) / rect.height * GEO.H;
+  let a = Math.atan2(y - GEO.cy, x - GEO.cx) * 180 / Math.PI; // 0 = +x (3 o'clock)
+  a = (a + 90 + 360) % 360;                                    // 0 = up, clockwise
+  return a;
+}
+svg.addEventListener('pointerdown', (ev) => {
+  ev.preventDefault();
+  const a = pointerAngle(ev);
+  drag = { startAngle: a, startRot: STATE.rot, pid: ev.pointerId, moved:false };
+  svg.classList.add('grabbing');
+  try{ svg.setPointerCapture(ev.pointerId); }catch(_){}
+});
+svg.addEventListener('pointermove', (ev) => {
+  if(!drag) return;
+  const a = pointerAngle(ev);
+  let d = a - drag.startAngle;                       // degrees turned
+  // shortest signed delta
+  d = ((d + 180 + 360) % 360) - 180;
+  const cellsTurned = Math.round(d / GEO.cellDeg);
+  if(cellsTurned !== 0) drag.moved = true;
+  const newRot = C.mod(drag.startRot + cellsTurned);
+  if(newRot !== STATE.rot){
+    STATE.rot = newRot;
+    // hand-turning sets the shift in Caesar mode (the disk IS the key there).
+    if(STATE.mode === 'caesar'){
+      STATE.shift = newRot;
+      syncShiftControls();
+      updateTape();
+    }
+    applyRotation(false);
+    // clear the active pair while hand-dragging (no specific letter)
+    STATE.activeP = -1; STATE.activeC = -1; updateActive();
+    document.getElementById('tapeNote').innerHTML =
+      'disk turned to rotation <b>' + STATE.rot + '</b>' +
+      (STATE.mode==='caesar' ? ' — Caesar shift <b>'+STATE.rot+'</b>' : '');
+  }
+});
+function endDrag(){
+  if(!drag) return;
+  try{ svg.releasePointerCapture(drag.pid); }catch(_){}
+  svg.classList.remove('grabbing');
+  drag = null;
+  // re-settle on the message's last letter if there is one
+  if(C.cleanText(STATE.message).length) syncDiskToMessage(true);
+}
+svg.addEventListener('pointerup', endDrag);
+svg.addEventListener('pointercancel', endDrag);
+
+/* =====================================================================
+   UI WIRING
+   ===================================================================== */
+function syncShiftControls(){
+  document.getElementById('shiftRange').value = STATE.shift;
+  document.getElementById('shiftNum').value = STATE.shift;
+}
+function syncModePanels(){
+  for(const id of ['caesar','vigenere','alberti']){
+    document.getElementById('mp-'+id).classList.toggle('show', STATE.mode===id);
+  }
+  for(const b of document.querySelectorAll('#modeSeg button')) b.classList.toggle('active', b.dataset.mode===STATE.mode);
+}
+
+// message input
+const msgInput = document.getElementById('msgInput');
+msgInput.addEventListener('input', () => {
+  STATE.message = msgInput.value;
+  refreshAll(true);
+  document.getElementById('tapeNote').innerHTML = '↺ reversible — the same settings decode it.';
+});
+
+// mode selector
+document.getElementById('modeSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-mode]'); if(!b) return;
+  STATE.mode = b.dataset.mode;
+  syncModePanels();
+  if(STATE.mode === 'caesar') STATE.rot = STATE.shift;
+  paintSkin();          // inner alphabet may change (alberti<->ordered)
+  refreshAll(true);
+});
+
+// direction
+document.getElementById('dirSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-dir]'); if(!b) return;
+  STATE.decode = (b.dataset.dir === 'dec');
+  for(const x of e.currentTarget.querySelectorAll('button')) x.classList.toggle('active', x===b);
+  refreshAll(true);
+});
+
+// ---- Caesar shift controls ----
+function setShift(v){
+  STATE.shift = C.mod(v);
+  STATE.rot = STATE.shift;
+  syncShiftControls();
+  refreshAll(true);
+}
+document.getElementById('shiftRange').addEventListener('input', e => setShift(+e.target.value));
+document.getElementById('shiftNum').addEventListener('input', e => setShift(+e.target.value||0));
+document.getElementById('shiftUp').addEventListener('click', () => setShift(STATE.shift+1));
+document.getElementById('shiftDown').addEventListener('click', () => setShift(STATE.shift-1));
+
+// ---- Vigenère keyword ----
+const kwInput = document.getElementById('keywordInput');
+kwInput.addEventListener('input', () => {
+  STATE.keyword = C.cleanText(kwInput.value);
+  refreshAll(true);
+});
+
+// ---- Alberti seed / period / step ----
+const seedInput = document.getElementById('seedInput');
+seedInput.addEventListener('input', () => {
+  STATE.seed = seedInput.value.trim() || '0';
+  paintSkin();           // mixed alphabet changes
+  refreshAll(true);
+});
+document.getElementById('seedRoll').addEventListener('click', () => {
+  STATE.seed = String(Math.floor(Math.random()*100000));
+  seedInput.value = STATE.seed;
+  paintSkin();
+  refreshAll(true);
+});
+function setPeriod(v){
+  STATE.period = Math.max(1, Math.min(8, v|0));
+  document.getElementById('periodRange').value = STATE.period;
+  document.getElementById('periodNum').value = STATE.period;
+  refreshAll(true);
+}
+document.getElementById('periodRange').addEventListener('input', e => setPeriod(+e.target.value));
+document.getElementById('periodNum').addEventListener('input', e => setPeriod(+e.target.value));
+function setStep(v){
+  STATE.step = Math.max(1, Math.min(25, v|0));
+  document.getElementById('stepRange').value = STATE.step;
+  document.getElementById('stepNum').value = STATE.step;
+  refreshAll(true);
+}
+document.getElementById('stepRange').addEventListener('input', e => setStep(+e.target.value));
+document.getElementById('stepNum').addEventListener('input', e => setStep(+e.target.value));
+
+// ---- presets ----
+document.getElementById('presets').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-preset]'); if(!b) return;
+  const p = b.dataset.preset;
+  STATE.decode = false;
+  for(const x of document.querySelectorAll('#dirSeg button')) x.classList.toggle('active', x.dataset.dir==='enc');
+  if(p === 'caesar3'){
+    STATE.mode='caesar'; STATE.shift=3; STATE.rot=3; STATE.message='HELLO';
+  } else if(p === 'rot13'){
+    STATE.mode='caesar'; STATE.shift=13; STATE.rot=13; STATE.message='HELLO';
+  } else if(p === 'vigenere'){
+    STATE.mode='vigenere'; STATE.keyword='LEMON'; STATE.message='ATTACKATDAWN';
+  } else if(p === 'alberti'){
+    STATE.mode='alberti'; STATE.seed='4821'; STATE.period=4; STATE.step=1; STATE.start=0; STATE.message='THEGOLDISBURIED';
+  } else if(p === 'clear'){
+    STATE.message='';
+  }
+  // reflect into controls
+  msgInput.value = STATE.message;
+  kwInput.value = STATE.keyword;
+  seedInput.value = STATE.seed;
+  syncShiftControls();
+  document.getElementById('periodRange').value = STATE.period;
+  document.getElementById('periodNum').value = STATE.period;
+  document.getElementById('stepRange').value = STATE.step;
+  document.getElementById('stepNum').value = STATE.step;
+  syncModePanels();
+  paintSkin();
+  refreshAll(true);
+});
+
+// ---- copy / clear tape ----
+document.getElementById('btnCopy').addEventListener('click', () => {
+  const txt = C.group5(fullTransform());
+  const note = document.getElementById('tapeNote');
+  try{
+    navigator.clipboard.writeText(txt).then(
+      () => { note.innerHTML = 'copied <b>' + (txt||'·') + '</b> to clipboard'; },
+      () => { note.textContent = 'copy failed — select the tape manually'; }
+    );
+  }catch(_){ note.textContent = 'copy unavailable in this context'; }
+});
+document.getElementById('btnClearTape').addEventListener('click', () => {
+  STATE.message = ''; msgInput.value = '';
+  refreshAll(true);
+  document.getElementById('tapeNote').innerHTML = '↺ reversible — the same settings decode it. Type to turn the disk.';
+});
+
+// ---- skins (COSMETIC) ----
+document.getElementById('skinSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-skin]'); if(!b) return;
+  STATE.skin = b.dataset.skin;
+  for(const x of e.currentTarget.querySelectorAll('button')) x.classList.toggle('active', x===b);
+  applySkinVars();
+  paintSkin();          // COSMETIC re-render only — cipher/rotation untouched
+  applyRotation(true);
+  updateActive();
+});
+
+/* =====================================================================
+   2x PNG EXPORT — paint the disk (at its live rotation, with the active
+   spoke) + the tape directly onto a 2D canvas. The never-tainted manual
+   pattern (no <foreignObject>), so toDataURL works in headless Chromium.
+   ===================================================================== */
+function exportPNG(){
+  try{
+    const sk = SKINS[STATE.skin];
+    const g = GEO;
+    const scale = 2;
+    const padBottom = 96;                 // room for the tape strip under the disk
+    const cv = document.createElement('canvas');
+    cv.width = g.W * scale; cv.height = (g.H + padBottom) * scale;
+    const cx = cv.getContext('2d');
+    cx.scale(scale, scale);
+    cx.textAlign = 'center'; cx.textBaseline = 'middle';
+
+    // background
+    cx.fillStyle = sk.bg; cx.fillRect(0, 0, g.W, g.H + padBottom);
+
+    const cxC = g.cx, cyC = g.cy;
+    const ang = (slot) => (slot * g.cellDeg - 90) * Math.PI/180;
+    const ptC = (r, slot) => ({ x: cxC + r*Math.cos(ang(slot)), y: cyC + r*Math.sin(ang(slot)) });
+
+    // outer disc
+    let og = cx.createRadialGradient(cxC, cyC - g.rDiscOuter*0.18, g.rDiscOuter*0.1, cxC, cyC, g.rDiscOuter);
+    og.addColorStop(0, sk.discOuterTop); og.addColorStop(1, sk.discOuterBot);
+    cx.beginPath(); cx.arc(cxC, cyC, g.rDiscOuter, 0, Math.PI*2);
+    cx.fillStyle = og; cx.fill();
+    cx.lineWidth = 3; cx.strokeStyle = sk.discOuterEdge; cx.stroke();
+    // ring divider
+    cx.beginPath(); cx.arc(cxC, cyC, g.rRingDiv, 0, Math.PI*2);
+    cx.lineWidth = 1.5; cx.strokeStyle = sk.ring; cx.globalAlpha = 0.7; cx.stroke(); cx.globalAlpha = 1;
+    // outer ticks
+    cx.strokeStyle = sk.tick; cx.lineWidth = 1;
+    for(let p=0;p<g.A;p++){
+      const a = ang(p + 0.5);
+      cx.beginPath();
+      cx.moveTo(cxC + (g.rRingDiv+2)*Math.cos(a), cyC + (g.rRingDiv+2)*Math.sin(a));
+      cx.lineTo(cxC + (g.rDiscOuter-9)*Math.cos(a), cyC + (g.rDiscOuter-9)*Math.sin(a));
+      cx.stroke();
+    }
+    // outer letters (plaintext, fixed)
+    cx.font = '600 21px ' + getComputedStyle(document.body).getPropertyValue('--font-serif');
+    for(let L=0;L<g.A;L++){
+      const pos = ptC(g.rOuterText, L);
+      cx.fillStyle = (L === STATE.activeP) ? sk.hi : sk.outerInk;
+      cx.fillText(C.chr(L), pos.x, pos.y);
+    }
+    // index triangle
+    const topY = cyC - g.rDiscOuter - 2;
+    cx.beginPath();
+    cx.moveTo(cxC-12, topY-14); cx.lineTo(cxC+12, topY-14); cx.lineTo(cxC, topY+12); cx.closePath();
+    cx.fillStyle = sk.index; cx.fill(); cx.lineWidth = 1.5; cx.strokeStyle = sk.indexEdge; cx.stroke();
+
+    // inner disk (drawn rotated by STATE.rot cells)
+    cx.save();
+    cx.translate(cxC, cyC);
+    cx.rotate(STATE.rot * g.cellDeg * Math.PI/180);
+    cx.translate(-cxC, -cyC);
+    let ig = cx.createRadialGradient(cxC, cyC - g.rInnerDisc*0.18, g.rInnerDisc*0.1, cxC, cyC, g.rInnerDisc);
+    ig.addColorStop(0, sk.discInnerTop); ig.addColorStop(1, sk.discInnerBot);
+    cx.beginPath(); cx.arc(cxC, cyC, g.rInnerDisc, 0, Math.PI*2);
+    cx.fillStyle = ig; cx.fill();
+    cx.lineWidth = 2.5; cx.strokeStyle = sk.discInnerEdge; cx.stroke();
+    // inner ticks
+    cx.strokeStyle = sk.tick; cx.lineWidth = 0.8; cx.globalAlpha = 0.6;
+    for(let cell=0;cell<g.A;cell++){
+      const a = ang(cell + 0.5);
+      cx.beginPath();
+      cx.moveTo(cxC + (g.rHub+8)*Math.cos(a), cyC + (g.rHub+8)*Math.sin(a));
+      cx.lineTo(cxC + (g.rInnerDisc-6)*Math.cos(a), cyC + (g.rInnerDisc-6)*Math.sin(a));
+      cx.stroke();
+    }
+    cx.globalAlpha = 1;
+    // inner letters (cipher alphabet); counter-rotate each glyph so it reads upright
+    const inner = C.innerAlphabet(settings());
+    const activeCell = (STATE.activeC >= 0) ? inner.indexOf(STATE.activeC) : -1;
+    cx.font = '600 19px ' + getComputedStyle(document.body).getPropertyValue('--font-serif');
+    for(let cell=0;cell<g.A;cell++){
+      const pos = ptC(g.rInnerText, cell);
+      cx.save();
+      cx.translate(pos.x, pos.y);
+      cx.rotate(-STATE.rot * g.cellDeg * Math.PI/180);   // keep glyph upright
+      cx.fillStyle = (cell === activeCell) ? sk.hi : sk.innerInk;
+      cx.fillText(C.chr(inner[cell]), 0, 0);
+      cx.restore();
+    }
+    // hub
+    cx.beginPath(); cx.arc(cxC, cyC, g.rHub, 0, Math.PI*2);
+    cx.fillStyle = sk.hub; cx.fill(); cx.lineWidth = 2; cx.strokeStyle = sk.hubEdge; cx.stroke();
+    cx.restore();
+
+    // active spoke (in fixed frame coords)
+    if(STATE.activeP >= 0 && STATE.activeC >= 0){
+      const po = ptC(g.rOuterText, STATE.activeP);
+      const pi = ptC(g.rInnerText, STATE.activeP);
+      cx.strokeStyle = sk.spoke; cx.lineWidth = 3.5; cx.lineCap = 'round';
+      cx.beginPath(); cx.moveTo(po.x, po.y); cx.lineTo(pi.x, pi.y); cx.stroke();
+      cx.strokeStyle = sk.spokeGlow; cx.lineWidth = 3;
+      cx.beginPath(); cx.arc(po.x, po.y, 9, 0, Math.PI*2); cx.stroke();
+      cx.beginPath(); cx.arc(pi.x, pi.y, 9, 0, Math.PI*2); cx.stroke();
+    }
+
+    // tape strip
+    const out = C.group5(fullTransform()) || '·';
+    cx.font = '700 22px ' + getComputedStyle(document.body).getPropertyValue('--font-mono');
+    cx.fillStyle = sk.spoke; cx.textAlign = 'center';
+    cx.fillText(out, g.W/2, g.H + padBottom/2 - 8);
+    cx.font = '12px ' + getComputedStyle(document.body).getPropertyValue('--font-mono');
+    cx.fillStyle = sk.outerInk;
+    const modeLbl = STATE.mode.toUpperCase() + (STATE.decode ? ' · DECIPHER' : ' · ENCIPHER');
+    cx.fillText(modeLbl, g.W/2, g.H + padBottom - 16);
+
+    const url = cv.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url; a.download = 'volvelle-' + STATE.skin + '-' + STATE.mode + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    return url;
+  }catch(err){ console.error('PNG export failed', err); return null; }
+}
+document.getElementById('btnPng').addEventListener('click', exportPNG);
+
+/* =====================================================================
+   INIT
+   ===================================================================== */
+function init(){
+  /* ws: unlock breadcrumb — see /UNLOCK.md. Records first-visit. */
+  try{ if(!localStorage.getItem('ws:seen:volvelle')) localStorage.setItem('ws:seen:volvelle', String(Date.now())); }catch(_){}
+
+  const res = runSelfTest();
+  const chip = document.getElementById('selftest');
+  if(res.pass === res.total){
+    chip.className = 'selftest ok';
+    chip.textContent = 'volvelle verified — ' + res.pass + '/' + res.total + ' ✓';
+  } else {
+    chip.className = 'selftest bad';
+    chip.textContent = 'volvelle FAILED — ' + res.pass + '/' + res.total;
+  }
+  console.log('Volvelle self-test: ' + res.pass + '/' + res.total + ' passed.');
+
+  applySkinVars();
+  syncModePanels();
+  syncShiftControls();
+  buildSVG();
+  refreshAll(true);
+}
+
+// expose core for headless / Node extraction & in-browser inspection
+if(typeof window !== 'undefined'){
+  window.__volvelle = {
+    CORE, runSelfTest, STATE,
+    output: fullTransform,
+    fingerprint: () => C.cipherFingerprint(settings(), STATE.message),
+    exportPNG
+  };
+}
+if(typeof module !== 'undefined' && module.exports){
+  module.exports = { CORE, runSelfTest };
+}
+
+init();
+</script>
+</body>
+</html>
