@@ -20,7 +20,60 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
-> **▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — 📅 THE ALMANAC shipped → Undercroft secret #8, a cross-pollination in the WORDS vein).**
+> **▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — ⚡ THEOGONY shipped → Threshold's companion / the 7th wing: place & pantheon).**
+> Working tree committed & pushed; live 200 confirmed. **New this session:** built **Theogony ⚡
+> (`theogony/index.html`, ~1030 lines, single self-contained vanilla file, 0 deps/network)** — a
+> generative **mythology engine**, and placed it as **Threshold's companion** (the long-noted "Threshold
+> is the only front-door card without a companion" gap, filled with a genuinely poetic pairing:
+> **Threshold builds the *place*; Theogony begets the *gods* of such a world**). From a seed → an invented
+> **pantheon** of **~10–18 gods across 3–5 generations**, rendered as an **illuminated celestial
+> genealogy**. Names coined from a per-pantheon **sound-system** (seeded onset/vowel/coda set, so names
+> share a family resemblance, à la the constellation/poet names); each god holds a **distinct domain**
+> from a 24-pool of **opposing pairs** (sea↔flame, dawn↔dusk, memory↔forgetting, hearth↔wild,
+> harvest↔famine, making↔ruin, loom↔knife, storm↔silence, deep↔height, threshold↔road, dead↔birth,
+> green↔stone), plus 1–2 **epithets**, parentage, derived siblinghood, **consorts**, and a short
+> **origin-myth** curate-then-arranged from hand-authored fragments that reference **only that god's real
+> kin/domains** in this pantheon. **Render:** SVG family tree by generation, seeded **sigil nodes** (glyph
+> + domain mark), descent lines, distinct dashed-gold consort bonds, a click-to-read **read-a-god** panel,
+> seed + ⟳ re-roll, **3 styles** (Star-Chart indigo+gold / Illuminated parchment+ink / Stone tablet), 2×
+> PNG export. **The crux (workshop tradition) is the KINSHIP being PROVEN:** the generator is pure
+> (`buildPantheon(seed)→pantheon`, no DOM); a headless **4-check self-test** runs on load + shows a green
+> **"self-test ✓ 4/4"** chip (never ships red): (1) **acyclic descent** — full ancestor-walk over every god
+> finds no cycle; child generation strictly > every parent's (monotonic by construction — parents drawn
+> only from strictly-earlier generations); consorts reciprocal & never lineal; (2) **referential integrity
+> ("can't drift", à la Blazon)** — every myth/epithet declares its referent ids; the test confirms each is
+> a real god, the prose names no *other* god (whole-token match), and each referent is genuine kin/rival —
+> the prose and the family tree can never disagree; (3) **domain coherence** — distinct primaries; opposing
+> pairs map to two real gods; (4) **seed purity / style-invariance** — same seed → identical fingerprint;
+> style only re-renders (fingerprint identical across all 3 styles). **Browser-verified end to end**
+> (agent-browser, served origin AND the live Pages site): chip green + **4/4 PASS**, **0 console errors / 0
+> warnings**, varied coherent re-rolls (20 rolls all distinct-domain + valid-DAG), click-to-read matches
+> the selection, same seed reproduces byte-identically, style switch is content-identical (only colours
+> change), PNG export rasterizes a valid non-blank 2× image, 60fps (static SVG — nothing to drop). **Two
+> real bugs found & fixed during the build** (a referential-integrity false-positive from substring
+> name-collision — fixed with whole-token back-parse; a size distribution skewed small — retuned gens to
+> 4–5 / per-gen 3–4 so 98% land in [10,18]); plus a UX fix (surface the seed on first load). **Wired
+> (front door UNTOUCHED — still the curated 9 cards):** a `↗ Theogony — the gods that made such a place`
+> sib-link in Threshold's topbar (CSS copied from verse/), `← workshop` / `↗ Threshold` back-links here, a
+> `⚡ Theogony within` pill on Threshold's front-door card, a README companion blockquote (+ companion
+> count six→seven). Drops `ws:seen:theogony` (breadcrumb for the hidden-world framework). Spec
+> `theogony/THEOGONY.SPEC.md` + log `theogony/CHANGELOG.md` (Build 1). Commit `800ed47`, pushed, live 200
+> (theogony + threshold + root). **The workshop now has SEVEN wings** (celestial, design-press,
+> labyrinth&thread, realm&city, verse&script, garden&ornament, and now **place&pantheon**). **No Undercroft
+> secret added** — the `ws:seen:theogony` breadcrumb is left for future hidden-world use.
+>
+> **Cool ideas thought of but NOT pursued (for the lead/future sessions):** (a) a **contact-sheet / gallery**
+> showing a row of pantheons from a seed-sweep (a "field of theogonies"); (b) an **Undercroft
+> cross-pollination secret** marrying Theogony × Firmament (a pantheon written *into* a star-chart — gods as
+> constellations with their myths) or × Scriptorium (a theogony inscribed in an invented hand) — natural
+> exploration-combos (`ws:seen:theogony` ∧ a sibling); (c) deeper **myth weaving** — a multi-sentence myth
+> *per god* or a single woven "creation hymn" paragraph for the whole pantheon (still referentially closed);
+> (d) **clickable descent highlighting** (hover a god → light its full ancestor/descendant subtree, à la
+> Ariadne's thread-trace); (e) **pantheon archetypes** (chthonic vs olympian flavour, a trickster/culture-hero
+> role) layered on top of the domain system. *(Spoiler etiquette respected — no hidden-world trail revealed.)*
+>
+> ---
+> **(prior) ▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — 📅 THE ALMANAC shipped → Undercroft secret #8, a cross-pollination in the WORDS vein).**
 > Working tree committed & pushed; live 200 confirmed. **New this session (deliberately a LESS-developed vein —
 > the recent run was heavy on arcade games + visual presses, so this is a generative-TEXT piece):** built **The
 > Almanac 📅 (`undercroft/almanac.html`, 1422 lines, single self-contained vanilla file, 0 deps/0 network)** — a
@@ -555,6 +608,15 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   wander to a heart). **Curate-then-arrange**: load-bearing prose is hand-authored, the seed only
   arranges it (→ no template seams; reads as written fiction). Per-theme tinting; reproducible. Done.
   See `threshold/SPEC.md`.
+- `theogony/` ⚡ — **Threshold's companion** (NOT a front-door card; reached via Threshold's
+  `↗ Theogony` link + a "within" pill). A generative **mythology engine**: from a seed → an invented
+  **pantheon** (~10–18 gods, 3–5 generations) drawn as an illuminated celestial **genealogy**. Coined
+  names from a per-pantheon sound-system; distinct domains with opposing pairs; epithets; parentage;
+  consorts; an origin-myth per god referencing only that god's real kin/domains. Crux = a built-in
+  **self-test (4 checks)**: acyclic descent (DAG + monotonic generations), referential integrity
+  (the prose can't drift from the graph), domain coherence, seed-purity/style-invariance.
+  Star-Chart / Illuminated / Stone styles, click-to-read panel, seed-reproducible, PNG export. Done
+  (v1, committed `800ed47`). See `theogony/THEOGONY.SPEC.md`.
 - `tools/audio-lens/` 🔊 — INTERNAL TOOL (not a front-door project), the "let me hear via sight" path.
   Renders Web Audio offline (silent) → log-freq spectrogram + waveform + RMS + features (clipping/
   centroid/onset→tempo/pitch→note); **12/12 self-tests** green vs known signals.
