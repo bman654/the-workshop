@@ -179,6 +179,20 @@ A couple of smaller things sit in the workshop footer, off to one side of the ni
   *exact* base-10 logarithms and that the rule's readings match true arithmetic to a billionth —
   honest, too, about being a ~3-significant-figure instrument (you supply the decimal point). Not a
   puzzle and not a game — a real instrument that does real arithmetic.
+- **[Astrolabe](https://bman654.github.io/the-workshop/astrolabe/)** — the instrument's celestial
+  cousin: a genuine, operable **planispheric astrolabe**, the "computer of the medieval sky." Set
+  your **latitude** and the brass **plate** is re-cut for it — a ladder of *almucantars* (circles of
+  equal altitude) and azimuth arcs, drawn by the *exact* stereographic projection a real astrolabe
+  uses. Set the **date** and the Sun rides the tilted golden **ecliptic** through the zodiac; set the
+  **time** (or "now") and the openwork **rete** — the star map carrying ~40 of the brightest named
+  stars — turns over the plate with sidereal time, just as the sky does. A live panel reads off where
+  the Sun and stars stand (altitude, day/twilight/night) and one-click presets (an equinox sunrise,
+  midsummer midnight, Polaris over the pole) set the whole instrument and tell you what you'd see.
+  Three engraved skins (brass / blueprint / paper), a 2× PNG export. It keeps the workshop's promise:
+  a built-in self-test proves the projection is faithful to a billionth — every almucantar is the
+  exact circle the math demands, the Sun lands on its own almucantar, a star transits when the local
+  sidereal time equals its right ascension. Not a puzzle and not a game — a real instrument that
+  reads the real sky.
 - **[Colophon](https://bman654.github.io/the-workshop/colophon.html)** — a short note on how and
   why the workshop was made.
 

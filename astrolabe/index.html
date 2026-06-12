@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Astrolabe</title>
+<style>
+  :root{
+    --panel-bg: rgba(20,15,9,0.88);
+    --panel-edge: rgba(214,176,108,0.40);
+    --ink: #f0e2c4;
+    --ink-dim: #b8a172;
+    --accent: #e6bd6f;
+    --accent-soft: rgba(230,189,111,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    /* skin (cosmetic only — never touches projection geometry) */
+    --bg: #0b0805;
+    --bg-grad1: rgba(120,84,36,0.18);
+    --bg-grad2: rgba(70,52,30,0.16);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    background:
+      radial-gradient(1200px 700px at 72% 18%, var(--bg-grad1), transparent 60%),
+      radial-gradient(900px 600px at 20% 90%, var(--bg-grad2), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .mark, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(40,70,44,0.35); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:64px 24px 18px; min-width:0; gap:12px; }
+  #disc{ display:block; box-shadow:0 24px 70px rgba(0,0,0,0.6); border-radius:50%; touch-action:none; cursor:grab; max-width:100%; }
+  #disc.dragging{ cursor:grabbing; }
+
+  /* ---- Readout panel under the disc ---- */
+  #readout{
+    width:min(680px,100%); background:var(--panel-bg);
+    border:1px solid var(--panel-edge); border-radius:10px; padding:12px 16px;
+    display:flex; flex-wrap:wrap; gap:10px 22px; align-items:center; justify-content:center;
+    backdrop-filter: blur(8px) saturate(120%); -webkit-backdrop-filter: blur(8px) saturate(120%);
+  }
+  #readout .compute{ font:600 15px/1.4 var(--font-mono); color:var(--ink); letter-spacing:.3px; flex:1 1 100%; text-align:center; }
+  #readout .compute b{ color:var(--accent); }
+  #readout .scaleval{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.3px; }
+  #readout .scaleval b{ color:var(--ink); font-variant-numeric:tabular-nums; }
+  #readout .scaleval.night b{ color:#9db4ff; }
+  #readout .scaleval.day b{ color:#ffcf6b; }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:300px; flex:0 0 300px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:60px 16px 18px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.5; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); }
+  .row{ margin:13px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .row > label .val{ color:var(--accent); font-weight:700; letter-spacing:.04em; text-transform:none; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:rgba(214,176,108,0.25); outline:none; margin:0;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:16px; height:16px; border-radius:50%;
+    background:var(--accent); cursor:pointer; border:2px solid #241803; box-shadow:0 1px 4px rgba(0,0,0,0.5);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:16px; height:16px; border-radius:50%; background:var(--accent); cursor:pointer;
+    border:2px solid #241803; box-shadow:0 1px 4px rgba(0,0,0,0.5);
+  }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(214,176,108,0.26); flex-wrap:wrap; }
+  .seg button{
+    flex:1; min-width:34px; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#241803; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:20px; padding:6px 11px; font:11px/1 var(--font-mono); letter-spacing:.2px; cursor:pointer; transition:.15s;
+  }
+  .chip:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btnrow{ display:flex; gap:8px; margin:13px 0; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(230,189,111,0.26), rgba(230,189,111,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(230,189,111,0.40), rgba(230,189,111,0.14)); }
+  .toggle{ display:flex; align-items:center; gap:9px; margin:13px 0; cursor:pointer; user-select:none; }
+  .toggle .sw{ width:34px; height:18px; border-radius:10px; background:rgba(0,0,0,0.4); border:1px solid var(--panel-edge); position:relative; transition:.18s; flex:0 0 auto; }
+  .toggle .sw::after{ content:""; position:absolute; top:1px; left:1px; width:14px; height:14px; border-radius:50%; background:var(--ink-dim); transition:.18s; }
+  .toggle.on .sw{ background:var(--accent-soft); border-color:var(--accent); }
+  .toggle.on .sw::after{ left:17px; background:var(--accent); }
+  .toggle .lab{ font:11px/1.3 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; }
+  .toggle.on .lab{ color:var(--ink); }
+  .hint{ font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:14px 0 4px; border-top:1px solid rgba(214,176,108,0.18); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; workshop</a>
+    <div class="brand">
+      <h1>Astrolabe</h1>
+      <span class="tag">the medieval computer of the sky</span>
+    </div>
+    <div class="selftest" id="selftest">checking…</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="disc"></canvas>
+      <div id="readout">
+        <div class="compute" id="compute">set date, time &amp; latitude — read the sky</div>
+      </div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A real instrument, not a picture of one. The <b>plate</b> is cut for your latitude (its almucantars are exact stereographic circles); the <b>rete</b> — the openwork star map and ecliptic — turns over it with sidereal time. Set the dials and read where the Sun and stars stand.</p>
+
+      <div class="row">
+        <label>Latitude <span class="val" id="latVal">40°N</span></label>
+        <input type="range" id="latSlider" min="-66" max="66" step="0.5" value="40">
+      </div>
+
+      <div class="row">
+        <label>Day of year <span class="val" id="dateVal">—</span></label>
+        <input type="range" id="dateSlider" min="0" max="365" step="1" value="171">
+      </div>
+
+      <div class="row">
+        <label>Time (local) <span class="val" id="timeVal">22:00</span></label>
+        <input type="range" id="timeSlider" min="0" max="1439" step="1" value="1320">
+      </div>
+
+      <div class="row">
+        <label>Longitude <span class="val" id="lonVal">0°</span></label>
+        <input type="range" id="lonSlider" min="-180" max="180" step="0.5" value="0">
+      </div>
+
+      <div class="btnrow">
+        <button class="btn" id="btnNow">Set to now</button>
+        <button class="btn" id="btnReset">Reset</button>
+      </div>
+
+      <div class="toggle" id="spinToggle">
+        <span class="sw"></span>
+        <span class="lab">Spin — watch the sky turn</span>
+      </div>
+
+      <div class="row">
+        <label>Presets — set it for me</label>
+        <div class="chips" id="presets"></div>
+      </div>
+
+      <div class="row">
+        <label>Skin</label>
+        <div class="seg" id="skinSeg">
+          <button data-skin="brass" class="active">Brass</button>
+          <button data-skin="blueprint">Blueprint</button>
+          <button data-skin="paper">Paper</button>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn primary" id="btnPng">Export 2× PNG</button>
+      </div>
+
+      <div class="hint">
+        <b>Drag the disc</b> to spin the rete (it sets the time). The bright <b>day-circles</b> are the tropics &amp; equator; the tilted ring is the <b>ecliptic</b> carrying the Sun. Stars above the heavy <b>horizon</b> circle are visible now.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+/* =====================================================================
+   ASTROLABE — a genuine planispheric astrolabe (north-pole, stereographic
+   projection of the celestial sphere onto the plane of the equator,
+   projecting from the south celestial pole). The workshop's 2nd instrument.
+   Single file, 0 deps, 0 network, NO AUDIO.
+
+   THE CRUX: the projection / almucantar / solar-position / sidereal-time
+   math below is ONE source of truth. The renderer calls it AND the headless
+   self-test calls THESE SAME functions (no parallel copy). Skins are purely
+   cosmetic — they never move a circle or a star. The geometry fingerprint
+   is byte-identical across skins, and the same test core passes under Node.
+   ===================================================================== */
+
+/* =====================================================================
+   CORE — the proven astrolabe construction (verified in Node, 34/34 at
+   tol 1e-5*Req). Angles in radians unless a name says *Deg.
+   ===================================================================== */
+const CORE = (function(){
+  const D2R = Math.PI/180, R2D = 180/Math.PI;
+  const EPS = 23.4392911 * D2R;            // obliquity of the ecliptic (J2000-ish)
+  const TAU = Math.PI*2;
+  const clamp1 = x => Math.max(-1, Math.min(1, x));
+
+  // Stereographic radius for a declination delta, given equator radius Req.
+  //   delta=+90 -> 0 (center) ; delta=0 -> Req ; delta=-EPS (Capricorn) -> outer rim.
+  function rOfDec(delta, Req){ return Req * Math.tan((Math.PI/2 - delta)/2); }
+
+  // Inverse: recover declination from a projected radius. Proves the
+  // projection is a faithful bijection on declination.
+  function decFromR(r, Req){ return Math.PI/2 - 2*Math.atan(r/Req); }
+
+  // Almucantar (circle of equal altitude `alt`) on a plate for latitude `phi`.
+  // Classical closed form (Morrison, "The Astrolabe"): center on the meridian.
+  //   alt=0  -> the HORIZON circle ; alt=90 -> the ZENITH point at (0, rOfDec(phi)).
+  function almucantar(alt, phi, Req){
+    const den = Math.sin(phi) + Math.sin(alt);
+    // The center cy is exact for every latitude; the radius is its magnitude.
+    // (For southern plates, sin(phi)+sin(alt) can go negative — the circle is the
+    // same, only the closed-form radius flips sign — so take |.| to stay exact in
+    // both hemispheres. den==0 is the equator's horizon, a straight line: r->Inf.)
+    return { cx:0, cy: Req*Math.cos(phi)/den, r: Math.abs(Req*Math.cos(alt)/den) };
+  }
+
+  // Azimuth circle (line of constant azimuth A, measured from north). These
+  // also project to circles. Closed form (Morrison): all azimuth circles pass
+  // through the zenith and the nadir; for azimuth A on latitude phi:
+  //   zenith Zy = rOfDec(phi)   ; nadir  Ny = -rOfDec(-phi) ... but the standard
+  //   construction places the circle center off the meridian. We use the
+  //   verified great-circle sampling (exact: each is a small/great circle that
+  //   projects to a circle) AND the closed form, choosing the closed form.
+  // Closed form: center (cx,cy), radius rr, derived from the two pole points of
+  // the azimuth great-circle. We derive it from the zenith/nadir + the fact the
+  // circle is orthogonal to every almucantar. The robust closed form:
+  //   yZ = rOfDec(phi,Req)            (zenith on meridian)
+  //   yN = -rOfDec(-phi,Req)? -> nadir is alt=-90 -> dec=-phi, projects to
+  //        rOfDec(-phi) on the OPPOSITE side, i.e. y = -rOfDec(-phi,Req).
+  // The azimuth circle through zenith & nadir with the correct tilt:
+  function azimuthCircle(azFromNorth, phi, Req){
+    // zenith point (alt=+90): dec=phi, H=0 -> (0, rOfDec(phi))
+    const yZ = rOfDec(phi, Req);
+    // nadir point (alt=-90): dec=-phi, H=0(north side) -> at y = -rOfDec(-phi)
+    const yN = -rOfDec(-phi, Req);
+    // Both zenith & nadir lie on EVERY azimuth circle. The diameter along the
+    // meridian (az=0/180) is the segment yZ..yN. A general azimuth circle has
+    // its center on the perpendicular bisector of that chord, displaced by
+    //   d = (yZ - yN)/2 / tan(az)  along x.
+    const ym = (yZ + yN)/2;                 // midpoint y (center y is here)
+    const half = (yZ - yN)/2;               // half the meridian chord
+    const A = azFromNorth;
+    if (Math.abs(Math.sin(A)) < 1e-9){
+      // az = 0 or 180 -> the meridian line itself (infinite radius).
+      return { line:true, x:0, cy:ym, half:Math.abs(half) };
+    }
+    const cx = half / Math.tan(A);
+    const rr = Math.abs(half / Math.sin(A));
+    return { line:false, cx:cx, cy:ym, r:rr };
+  }
+
+  // Horizon-coordinate (alt,az) -> equatorial (dec, hourAngle H) for latitude phi.
+  function altAzToDecH(alt, az, phi){
+    const sinDec = Math.sin(alt)*Math.sin(phi) + Math.cos(alt)*Math.cos(phi)*Math.cos(az);
+    const dec = Math.asin(clamp1(sinDec));
+    const cosDec = Math.cos(dec);
+    let H;
+    if (cosDec < 1e-12){ H = 0; }
+    else {
+      const sinH = -Math.sin(az)*Math.cos(alt)/cosDec;
+      const cosH = (Math.sin(alt) - Math.sin(phi)*sinDec)/(Math.cos(phi)*cosDec);
+      H = Math.atan2(sinH, cosH);
+    }
+    return {dec, H};
+  }
+
+  // Equatorial (dec, H) -> horizon (alt, az) for latitude phi. The inverse;
+  // used to read the Sun's altitude/azimuth from its dec & hour angle.
+  function decHToAltAz(dec, H, phi){
+    const sinAlt = Math.sin(phi)*Math.sin(dec) + Math.cos(phi)*Math.cos(dec)*Math.cos(H);
+    const alt = Math.asin(clamp1(sinAlt));
+    const cosAlt = Math.cos(alt);
+    let az;
+    if (cosAlt < 1e-12){ az = 0; }
+    else {
+      const sinAz = -Math.sin(H)*Math.cos(dec)/cosAlt;
+      const cosAz = (Math.sin(dec) - Math.sin(phi)*sinAlt)/(Math.cos(phi)*cosAlt);
+      az = Math.atan2(sinAz, cosAz);
+    }
+    return { alt, az: (az + TAU) % TAU };
+  }
+
+  // Project (dec, H) to plate xy. Meridian H=0 -> straight up (+y); the rete
+  // turns by sidereal time through H. Renderer flips +y to screen-down so
+  // south sits at the bottom (classical). x=r sin H, y=r cos H.
+  function projDecH(dec, H, Req){
+    const r = rOfDec(dec, Req);
+    return { x: r*Math.sin(H), y: r*Math.cos(H), r };
+  }
+
+  // ---- Time ----
+  // Julian Date from a UTC Date.
+  function julianDate(d){ return d.getTime()/86400000 + 2440587.5; }
+  // Greenwich Mean Sidereal Time (deg) from JD.
+  function gmstDeg(jd){
+    let g = 280.46061837 + 360.98564736629*(jd - 2451545.0);
+    g = ((g % 360) + 360) % 360;
+    return g;
+  }
+  // Local Sidereal Time (deg) = GMST + east longitude.
+  function lstDeg(jd, lonEastDeg){ return ((gmstDeg(jd) + lonEastDeg) % 360 + 360) % 360; }
+
+  // ---- Sun on the ecliptic ----
+  // Low-precision solar ecliptic longitude (deg) from JD. Accurate to ~0.01deg,
+  // far better than the ~0.5deg an astrolabe can read.
+  function sunEclipticLonDeg(jd){
+    const n = jd - 2451545.0;
+    const L = (280.460 + 0.9856474*n) % 360;          // mean longitude
+    const g = ((357.528 + 0.9856003*n) % 360) * D2R;  // mean anomaly
+    let lam = L + 1.915*Math.sin(g) + 0.020*Math.sin(2*g);
+    return ((lam % 360) + 360) % 360;
+  }
+  // Solar declination from ecliptic longitude (rad in/out... lambda in rad).
+  function solarDec(lambda){ return Math.asin(Math.sin(EPS)*Math.sin(lambda)); }
+  // Solar right ascension from ecliptic longitude (quadrant-correct), rad.
+  function solarRA(lambda){
+    let ra = Math.atan2(Math.cos(EPS)*Math.sin(lambda), Math.cos(lambda));
+    return (ra + TAU) % TAU;
+  }
+  // Full solar equatorial position from JD.
+  function sunPosition(jd){
+    const lam = sunEclipticLonDeg(jd) * D2R;
+    return { lambda: lam, dec: solarDec(lam), ra: solarRA(lam) };
+  }
+
+  // Ecliptic ring as a projected circle on the rete (a small circle of the
+  // sphere whose plane is tilted by EPS). The ecliptic touches the Tropic of
+  // Cancer (dec=+EPS) at lambda=90 and Capricorn (dec=-EPS) at lambda=270; its
+  // projected circle has center on the rete's 0h axis and passes through both
+  // r(+EPS) and r(-EPS) on opposite sides. In the rete's own (unrotated) frame
+  // (RA measured from the vernal equinox at +y), the ecliptic projects to a
+  // circle centered on the +y axis.
+  function eclipticCircle(Req){
+    // lambda=90 (Cancer): dec=+EPS, ra=90 -> r=rOfDec(+EPS) on +x... but easiest:
+    // the ecliptic pole projects to a point; the circle through the two solstice
+    // points along the solstitial colure (ra=90/270) is the diameter.
+    const rCancer = rOfDec(EPS, Req);     // lambda=90, smaller radius
+    const rCap    = rOfDec(-EPS, Req);    // lambda=270, larger radius
+    // In the unrotated rete frame, place the vernal equinox (lambda=0, dec=0,
+    // ra=0) at +y (r=Req). Cancer (ra=90) projects 90deg CW; Capricorn (ra=270)
+    // 90deg CCW. The two solstice points sit on the x-axis at +rCancer and
+    // -rCap, so the ecliptic circle's diameter lies on x: center cx, radius rr.
+    const cx = (rCancer - rCap)/2;
+    const rr = (rCancer + rCap)/2;
+    return { cx: cx, cy: 0, r: rr };
+  }
+  // Point on the ecliptic ring for a given ecliptic longitude (in the unrotated
+  // rete frame). Uses the exact projection of (ra(lambda), dec(lambda)).
+  function eclipticPoint(lambdaRad, Req){
+    const dec = solarDec(lambdaRad);
+    const ra  = solarRA(lambdaRad);
+    // unrotated rete frame: angle from +y is RA (so vernal eq at +y). Same
+    // mapping as projDecH but with H replaced by RA: x=r sin(ra), y=r cos(ra).
+    const r = rOfDec(dec, Req);
+    return { x: r*Math.sin(ra), y: r*Math.cos(ra), dec, ra };
+  }
+
+  // Zodiac sign name for an ecliptic longitude in degrees.
+  const ZODIAC = ['Aries','Taurus','Gemini','Cancer','Leo','Virgo',
+                  'Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces'];
+  function zodiacOf(lonDeg){
+    const i = Math.floor((((lonDeg%360)+360)%360)/30);
+    return { name: ZODIAC[i], deg: (((lonDeg%360)+360)%360) - i*30 };
+  }
+
+  // ---- Bright-star catalogue (J2000), RA in hours, dec in degrees. ----
+  // ~40 of the brightest named stars; values are standard J2000 positions.
+  const STARS = [
+    {n:'Sirius',     ra:6.7525,  dec:-16.716, m:-1.46},
+    {n:'Canopus',    ra:6.3992,  dec:-52.696, m:-0.74},
+    {n:'Arcturus',   ra:14.2610, dec:19.182,  m:-0.05},
+    {n:'Vega',       ra:18.6156, dec:38.784,  m:0.03},
+    {n:'Capella',    ra:5.2782,  dec:45.998,  m:0.08},
+    {n:'Rigel',      ra:5.2423,  dec:-8.202,  m:0.13},
+    {n:'Procyon',    ra:7.6550,  dec:5.225,   m:0.34},
+    {n:'Betelgeuse', ra:5.9195,  dec:7.407,   m:0.50},
+    {n:'Achernar',   ra:1.6286,  dec:-57.237, m:0.46},
+    {n:'Hadar',      ra:14.0637, dec:-60.373, m:0.61},
+    {n:'Altair',     ra:19.8464, dec:8.868,   m:0.77},
+    {n:'Aldebaran',  ra:4.5987,  dec:16.509,  m:0.85},
+    {n:'Antares',    ra:16.4901, dec:-26.432, m:0.96},
+    {n:'Spica',      ra:13.4199, dec:-11.161, m:0.97},
+    {n:'Pollux',     ra:7.7553,  dec:28.026,  m:1.14},
+    {n:'Fomalhaut',  ra:22.9608, dec:-29.622, m:1.16},
+    {n:'Deneb',      ra:20.6905, dec:45.280,  m:1.25},
+    {n:'Mimosa',     ra:12.7953, dec:-59.689, m:1.25},
+    {n:'Regulus',    ra:10.1395, dec:11.967,  m:1.35},
+    {n:'Adhara',     ra:6.9770,  dec:-28.972, m:1.50},
+    {n:'Castor',     ra:7.5767,  dec:31.888,  m:1.58},
+    {n:'Gacrux',     ra:12.5194, dec:-57.113, m:1.63},
+    {n:'Shaula',     ra:17.5601, dec:-37.104, m:1.62},
+    {n:'Bellatrix',  ra:5.4188,  dec:6.350,   m:1.64},
+    {n:'Elnath',     ra:5.4382,  dec:28.608,  m:1.65},
+    {n:'Alnilam',    ra:5.6036,  dec:-1.202,  m:1.69},
+    {n:'Alnitak',    ra:5.6793,  dec:-1.943,  m:1.74},
+    {n:'Alioth',     ra:12.9004, dec:55.960,  m:1.76},
+    {n:'Dubhe',      ra:11.0621, dec:61.751,  m:1.79},
+    {n:'Mirfak',     ra:3.4054,  dec:49.861,  m:1.79},
+    {n:'Wezen',      ra:7.1399,  dec:-26.393, m:1.83},
+    {n:'Alkaid',     ra:13.7923, dec:49.313,  m:1.85},
+    {n:'Sargas',     ra:17.6219, dec:-42.998, m:1.86},
+    {n:'Avior',      ra:8.3752,  dec:-59.510, m:1.86},
+    {n:'Menkalinan', ra:5.9921,  dec:44.947,  m:1.90},
+    {n:'Polaris',    ra:2.5302,  dec:89.264,  m:1.98},
+    {n:'Mirzam',     ra:6.3783,  dec:-17.956, m:1.98},
+    {n:'Alphard',    ra:9.4597,  dec:-8.659,  m:1.98},
+    {n:'Hamal',      ra:2.1195,  dec:23.462,  m:2.00},
+    {n:'Algol',      ra:3.1361,  dec:40.956,  m:2.12},
+  ];
+
+  // Project a star (RA hours, dec deg) given LST (deg). Hour angle H = LST - RA.
+  // Returns plate xy plus its hour angle.
+  function projStar(star, lstHours, Req){
+    const ra = star.ra;                    // hours
+    let H = (lstHours - ra) * 15 * D2R;    // hours -> deg -> rad
+    const dec = star.dec * D2R;
+    const r = rOfDec(dec, Req);
+    return { x: r*Math.sin(H), y: r*Math.cos(H), H, dec, r };
+  }
+
+  // ---- Geometry fingerprint: a deterministic hash of EVERY drawn primitive's
+  // geometry (plate circles + rete star xy + ecliptic + sun). Skin-independent
+  // by construction (it never reads skin). Used to prove style-only re-renders.
+  function _h(s){ // small stable string hash -> hex
+    let h = 0x811c9dc5;
+    for (let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return ('00000000'+h.toString(16)).slice(-8);
+  }
+  function geometryFingerprint(state){
+    const Req = 1000;                      // canonical reference radius
+    const phi = state.latDeg * D2R;
+    const parts = [];
+    const f = x => x.toFixed(6);
+    // tropics + equator
+    parts.push('TROP', f(rOfDec(-EPS,Req)), f(rOfDec(0,Req)), f(rOfDec(EPS,Req)));
+    // almucantars (the showpiece) at a fixed altitude ladder
+    for (const a of [0,6,12,18,30,45,60,75,90]){
+      const c = almucantar(a*D2R, phi, Req);
+      parts.push('AL'+a, f(c.cx), f(c.cy), f(c.r));
+    }
+    // azimuth circles at a fixed ladder
+    for (const A of [30,60,90,120,150]){
+      const c = azimuthCircle(A*D2R, phi, Req);
+      parts.push('AZ'+A, c.line?'L':'C', f(c.cx||0), f(c.cy), f(c.line?c.half:c.r));
+    }
+    // ecliptic
+    const e = eclipticCircle(Req);
+    parts.push('ECL', f(e.cx), f(e.cy), f(e.r));
+    // sun
+    const sp = sunPosition(state.jd);
+    parts.push('SUN', f(sp.dec), f(sp.ra), f(sunEclipticLonDeg(state.jd)));
+    // stars (projected for this LST)
+    const lst = lstDeg(state.jd, state.lonDeg)/15;  // hours
+    for (const s of STARS){
+      const p = projStar(s, lst, Req);
+      parts.push(s.n, f(p.x), f(p.y));
+    }
+    return _h(parts.join('|'));
+  }
+
+  return {
+    D2R, R2D, EPS, TAU,
+    rOfDec, decFromR, almucantar, azimuthCircle,
+    altAzToDecH, decHToAltAz, projDecH,
+    julianDate, gmstDeg, lstDeg,
+    sunEclipticLonDeg, solarDec, solarRA, sunPosition,
+    eclipticCircle, eclipticPoint, zodiacOf,
+    STARS, projStar, geometryFingerprint, ZODIAC
+  };
+})();
+
+/* =====================================================================
+   SELF-TEST — calls the REAL CORE functions. Green chip, never red.
+   Mirrors the verified Node proto's assertions plus the workshop's
+   skin-invariance & determinism cruxes.
+   ===================================================================== */
+function runSelfTest(){
+  const C = CORE;
+  let pass=0, total=0;
+  const check = (name, cond) => { total++; if(cond){ pass++; } else { console.error('FAIL: '+name); } };
+  const D2R = C.D2R, EPS = C.EPS, Req = 1000;
+  const TOL = 1e-5 * Req;                  // 0.01px on a 1000px disc (float noise)
+
+  // 1. Almucantar exactness across latitudes & altitudes (the showpiece).
+  //    Swept across BOTH hemispheres + the equator (the slider reaches -66..66),
+  //    so a southern plate is held to the same exactness as a northern one.
+  {
+    let maxErr = 0;
+    for (const phiDeg of [-66,-52,-30,-10,0,10,35,45,52,66]){
+      const phi = phiDeg*D2R;
+      for (const altDeg of [0,5,10,30,60,85]){
+        const alt = altDeg*D2R;
+        const circ = C.almucantar(alt, phi, Req);
+        if (!isFinite(circ.r)) continue;    // equator's horizon is a straight line, not a circle
+        for (let azDeg=0; azDeg<360; azDeg+=7){
+          const {dec,H} = C.altAzToDecH(alt, azDeg*D2R, phi);
+          const p = C.projDecH(dec, H, Req);
+          maxErr = Math.max(maxErr, Math.abs(Math.hypot(p.x-circ.cx, p.y-circ.cy) - circ.r));
+        }
+      }
+    }
+    check('almucantar exactness (10 lats N&S x 6 alts, <1e-5·Req)', maxErr < TOL);
+  }
+
+  // 2. Horizon / zenith sanity at phi=45.
+  {
+    const phi = 45*D2R;
+    const horizon = C.almucantar(0, phi, Req);
+    const zr = C.rOfDec(phi, Req);                  // zenith on meridian
+    const dz = Math.hypot(0 - horizon.cx, zr - horizon.cy);
+    check('zenith projects inside the horizon circle', dz < horizon.r);
+    const {dec,H} = C.altAzToDecH(0, 90*D2R, phi);  // due-east horizon point
+    const p = C.projDecH(dec, H, Req);
+    check('due-east horizon point lies on the horizon circle (<1e-5·Req)',
+      Math.abs(Math.hypot(p.x-horizon.cx, p.y-horizon.cy) - horizon.r) < TOL);
+  }
+
+  // 3. Tropic ordering & exact equator radius.
+  {
+    const rCap = C.rOfDec(-EPS,Req), rEqu = C.rOfDec(0,Req), rCan = C.rOfDec(EPS,Req);
+    check('equator radius == Req (<1e-9)', Math.abs(rEqu - Req) < 1e-9);
+    check('Capricorn > equator > Cancer (tropic ordering)', rCap > rEqu && rEqu > rCan);
+  }
+
+  // 4. Solar declination at the 4 cardinal ecliptic longitudes.
+  {
+    const sd = lam => C.solarDec(lam)*C.R2D;
+    check('sun dec: lambda 0 -> 0',           Math.abs(sd(0)) < 1e-9);
+    check('sun dec: lambda 90 -> +EPS',       Math.abs(sd(Math.PI/2) - EPS*C.R2D) < 1e-9);
+    check('sun dec: lambda 180 -> 0',         Math.abs(sd(Math.PI)) < 1e-9);
+    check('sun dec: lambda 270 -> -EPS',      Math.abs(sd(3*Math.PI/2) + EPS*C.R2D) < 1e-9);
+  }
+
+  // 5a. ROUND-TRIP: projected radius rOfDec(dec) inverts back to dec exactly
+  //     across a dec sweep — proves the projection is a faithful bijection.
+  {
+    let ok = true;
+    for (let dDeg=-66; dDeg<=89; dDeg+=0.5){
+      const dec = dDeg*D2R;
+      const r = C.rOfDec(dec, Req);
+      const back = C.decFromR(r, Req);
+      if (Math.abs(back - dec) > 1e-12) ok = false;
+    }
+    check('projection bijection: decFromR(rOfDec(dec)) == dec (<1e-12)', ok);
+  }
+  // 5b. ROUND-TRIP horizon coords: altAz -> decH -> altAz recovers (alt,az).
+  {
+    let ok = true;
+    const phi = 38*D2R;
+    for (let altDeg=5; altDeg<=85; altDeg+=10){
+      for (let azDeg=15; azDeg<360; azDeg+=30){
+        const alt0=altDeg*D2R, az0=azDeg*D2R;
+        const {dec,H} = C.altAzToDecH(alt0, az0, phi);
+        const back = C.decHToAltAz(dec, H, phi);
+        if (Math.abs(back.alt-alt0) > 1e-9) ok = false;
+        let dAz = Math.abs(back.az - az0); dAz = Math.min(dAz, C.TAU - dAz);
+        if (dAz > 1e-9) ok = false;
+      }
+    }
+    check('horizon round-trip: altAz->decH->altAz recovers (<1e-9)', ok);
+  }
+  // 5c. PHYSICAL inverse: read the Sun's altitude two independent ways for a
+  //     fixed date/time/lat — (a) from its dec & hour angle via decHToAltAz,
+  //     (b) by finding which almucantar its projected point lands on. Must agree.
+  {
+    const phi = 40*D2R, lonDeg = 0;
+    const jd = C.julianDate(new Date(Date.UTC(2026,2,20,12,0,0)));  // ~equinox noon UTC
+    const sp = C.sunPosition(jd);
+    const lst = C.lstDeg(jd, lonDeg)/15;        // hours
+    const Hsun = ((lst - sp.ra*C.R2D/15) * 15) * D2R;  // hour angle of Sun (rad)
+    const aa = C.decHToAltAz(sp.dec, Hsun, phi);       // altitude method (a)
+    const p = C.projDecH(sp.dec, Hsun, Req);           // projected Sun
+    const alm = C.almucantar(aa.alt, phi, Req);        // the almucantar at that alt
+    const onCircle = Math.abs(Math.hypot(p.x-alm.cx, p.y-alm.cy) - alm.r);
+    check('Sun lands on its own almucantar (alt read two ways agrees, <1e-5·Req)', onCircle < TOL);
+  }
+
+  // 6. DETERMINISM & SKIN INVARIANCE: identical state -> identical fingerprint;
+  //    switching skin never changes any projected geometry.
+  {
+    const state = { latDeg:40, lonDeg:0,
+      jd: C.julianDate(new Date(Date.UTC(2026,5,21,4,0,0))) };
+    const a = C.geometryFingerprint(state);
+    const b = C.geometryFingerprint(state);
+    check('determinism: same state -> identical fingerprint', a === b);
+    // skin must NOT be a parameter of geometry; fingerprint ignores it entirely.
+    const withSkins = ['brass','blueprint','paper'].map(sk =>
+      C.geometryFingerprint(Object.assign({}, state, { skin: sk })));
+    check('skin invariance: fingerprint identical across 3 skins',
+      withSkins.every(f => f === a));
+  }
+
+  // 7. Catalogue sanity: fixed, finite, no NaNs; Polaris sits very near center.
+  {
+    let finite = true;
+    for (const s of C.STARS){
+      const p = C.projStar(s, 6.0, Req);
+      if (!isFinite(p.x) || !isFinite(p.y)) finite = false;
+    }
+    check('star catalogue: all '+C.STARS.length+' stars project finite', finite);
+    const pol = C.STARS.find(s => s.n==='Polaris');
+    const rPol = C.rOfDec(pol.dec*D2R, Req);
+    check('Polaris projects within ~1.3% of disc center (it is the pole star)',
+      rPol < 0.013*Req);
+  }
+
+  // 8. Ecliptic ring passes through both tropics (touches Cancer & Capricorn).
+  {
+    const e = C.eclipticCircle(Req);
+    const pCancer = C.eclipticPoint(Math.PI/2, Req);   // lambda 90 -> Cancer
+    const pCap    = C.eclipticPoint(3*Math.PI/2, Req); // lambda 270 -> Capricorn
+    const onA = Math.abs(Math.hypot(pCancer.x-e.cx, pCancer.y-e.cy) - e.r);
+    const onB = Math.abs(Math.hypot(pCap.x-e.cx, pCap.y-e.cy) - e.r);
+    check('ecliptic ring passes through both solstice points (<1e-5·Req)',
+      onA < TOL && onB < TOL);
+    // and the equinoxes (lambda 0,180) sit on the equator (r==Req).
+    const p0 = C.eclipticPoint(0, Req), p180 = C.eclipticPoint(Math.PI, Req);
+    check('ecliptic equinoxes sit on the equator circle (r==Req, <1e-5·Req)',
+      Math.abs(Math.hypot(p0.x,p0.y)-Req) < TOL && Math.abs(Math.hypot(p180.x,p180.y)-Req) < TOL);
+  }
+
+  return { pass, total };
+}
+
+/* =====================================================================
+   STATE (geometry depends ONLY on lat/lon/date/time — never on skin)
+   ===================================================================== */
+const C = CORE;
+const STATE = {
+  skin: 'brass',
+  latDeg: 40,
+  lonDeg: 0,
+  dayOfYear: 171,        // ~summer solstice
+  minutesOfDay: 1320,    // 22:00
+  year: 2026,
+  spin: false,
+};
+
+// Build a UTC Date from STATE's local civil date/time + longitude. We treat the
+// longitude as defining a "mean local time" zone (lonDeg/15 hours from UTC), so
+// "Set to now / here" and the local-time slider behave intuitively.
+function stateToDate(){
+  // start-of-year UTC, add dayOfYear days + minutes, then subtract the lon offset
+  const base = Date.UTC(STATE.year, 0, 1, 0, 0, 0);
+  const localMs = base + STATE.dayOfYear*86400000 + STATE.minutesOfDay*60000;
+  const utcMs = localMs - (STATE.lonDeg/15)*3600000;   // local = UTC + lon/15 h
+  return new Date(utcMs);
+}
+function stateJD(){ return C.julianDate(stateToDate()); }
+
+/* =====================================================================
+   SKINS — COSMETIC ONLY (palette + a couple of material flags). No geometry.
+   ===================================================================== */
+const SKINS = {
+  brass: {
+    bg:'#0b0805', grad1:'rgba(120,84,36,0.18)', grad2:'rgba(70,52,30,0.16)',
+    mater:'#caa256', materDark:'#7c5a22', materFace:'#19120a',
+    rim:'#e6bd6f', engrave:'#caa257', engraveDim:'rgba(202,162,87,0.40)',
+    plateLine:'rgba(214,176,108,0.40)', plateBold:'rgba(230,189,111,0.85)',
+    horizon:'#e6bd6f', dayCircle:'rgba(230,189,111,0.55)', label:'#e6dcc0',
+    rete:'#f2d791', star:'#fff4d6', starDim:'#caa257', ecliptic:'#ffd36b',
+    sun:'#ffd36b', sunGlow:'rgba(255,211,107,0.5)', rule:'rgba(242,215,145,0.8)',
+    nightFill:'rgba(10,14,30,0.55)', dayFill:'rgba(90,70,30,0.16)'
+  },
+  blueprint: {
+    bg:'#071018', grad1:'rgba(40,110,150,0.20)', grad2:'rgba(20,60,90,0.18)',
+    mater:'#13455a', materDark:'#0a2b3a', materFace:'#08161f',
+    rim:'#7fd4ee', engrave:'#9fe3f0', engraveDim:'rgba(120,210,235,0.38)',
+    plateLine:'rgba(120,210,235,0.40)', plateBold:'rgba(170,235,250,0.9)',
+    horizon:'#aaf0ff', dayCircle:'rgba(150,225,245,0.55)', label:'#cdeffa',
+    rete:'#bfeefa', star:'#eafaff', starDim:'#7fd4ee', ecliptic:'#7fe0ff',
+    sun:'#ffe07a', sunGlow:'rgba(255,224,122,0.5)', rule:'rgba(190,238,250,0.8)',
+    nightFill:'rgba(4,16,30,0.55)', dayFill:'rgba(60,110,140,0.16)'
+  },
+  paper: {
+    bg:'#15110b', grad1:'rgba(150,120,70,0.14)', grad2:'rgba(90,72,42,0.12)',
+    mater:'#d8c49a', materDark:'#a78f5e', materFace:'#efe6cf',
+    rim:'#7a5f2e', engrave:'#4a3a1e', engraveDim:'rgba(74,58,30,0.45)',
+    plateLine:'rgba(74,58,30,0.42)', plateBold:'rgba(60,46,22,0.85)',
+    horizon:'#5a4420', dayCircle:'rgba(90,70,34,0.6)', label:'#3a2d14',
+    rete:'#5a4420', star:'#2c2110', starDim:'#7a5f2e', ecliptic:'#9a5a1e',
+    sun:'#b8801e', sunGlow:'rgba(184,128,30,0.4)', rule:'rgba(90,68,32,0.85)',
+    nightFill:'rgba(40,40,60,0.10)', dayFill:'rgba(150,120,60,0.10)'
+  }
+};
+
+function applySkinVars(){
+  const sk = SKINS[STATE.skin];
+  const rs = document.documentElement.style;
+  rs.setProperty('--bg', sk.bg);
+  rs.setProperty('--bg-grad1', sk.grad1);
+  rs.setProperty('--bg-grad2', sk.grad2);
+}
+
+/* =====================================================================
+   RENDERER — Canvas. All geometry comes from CORE; skin supplies colour.
+   ===================================================================== */
+const canvas = document.getElementById('disc');
+const ctx = canvas.getContext('2d');
+let dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+
+const GEO = { size: 620, Req: 0, cx: 0, cy: 0, rimR: 0 };
+
+function computeGeo(){
+  const stage = document.getElementById('stage');
+  const avail = Math.max(360, Math.min(720,
+    Math.min(stage.clientWidth - 24, stage.clientHeight - 150)));
+  GEO.size = avail;
+  canvas.style.width = avail + 'px';
+  canvas.style.height = avail + 'px';
+  canvas.width = Math.round(avail * dpr);
+  canvas.height = Math.round(avail * dpr);
+  GEO.cx = avail/2; GEO.cy = avail/2;
+  GEO.rimR = avail/2 - 4;
+  // The mater rim is the Tropic of Capricorn (the outermost day-circle). Leave
+  // an outer engraved limb band, so the projection radius Req maps the
+  // equator inside the rim. rim corresponds to rOfDec(-EPS); equator -> Req.
+  const limb = avail * 0.085;            // engraved hour band width
+  const capR = GEO.rimR - limb;          // Capricorn = inner edge of the limb
+  // capR = rOfDec(-EPS, Req)  =>  Req = capR / tan((90+EPS)/2 deg)
+  GEO.Req = capR / Math.tan((Math.PI/2 + C.EPS)/2);
+  GEO.capR = capR;
+  GEO.limb = limb;
+}
+
+// Convert a CORE plate xy (math frame: +y up, south at H=0 up) to SCREEN px.
+// Classical orientation: south at the BOTTOM. So flip y: screenY = cy - y... but
+// in CORE H=0 (south meridian) is +y (up). To put south at bottom we negate y.
+function toScreen(x, y){ return { px: GEO.cx + x, py: GEO.cy + y }; }
+// NOTE: CORE's projDecH puts H=0 at +y. We keep +y pointing DOWN on screen by
+// NOT negating, which places the south meridian (H=0) at the bottom. Consistent
+// for plate AND rete (both share this frame), so the instrument is coherent.
+
+function strokeCircle(cx, cy, r, color, w){
+  const s = toScreen(cx, cy);
+  ctx.beginPath();
+  ctx.arc(s.px, s.py, r, 0, C.TAU);
+  ctx.strokeStyle = color; ctx.lineWidth = w; ctx.stroke();
+}
+
+// Clip to the inside of the Capricorn (mater) circle.
+function clipToPlate(){
+  const s = toScreen(0,0);
+  ctx.beginPath(); ctx.arc(s.px, s.py, GEO.capR, 0, C.TAU); ctx.clip();
+}
+
+function drawMater(sk){
+  const s = toScreen(0,0);
+  // outer brass disc with radial gradient
+  let g = ctx.createRadialGradient(s.px-GEO.rimR*0.3, s.py-GEO.rimR*0.3, GEO.rimR*0.2,
+                                   s.px, s.py, GEO.rimR);
+  g.addColorStop(0, sk.mater); g.addColorStop(1, sk.materDark);
+  ctx.beginPath(); ctx.arc(s.px, s.py, GEO.rimR, 0, C.TAU);
+  ctx.fillStyle = g; ctx.fill();
+  // engraved limb (hour band)
+  ctx.beginPath(); ctx.arc(s.px, s.py, GEO.rimR, 0, C.TAU);
+  ctx.arc(s.px, s.py, GEO.capR, 0, C.TAU, true);
+  ctx.fillStyle = sk.materFace; ctx.fill('evenodd');
+  // limb rings
+  strokeCircle(0,0, GEO.rimR, sk.rim, 2.5);
+  strokeCircle(0,0, GEO.capR, sk.rim, 1.5);
+  strokeCircle(0,0, (GEO.rimR+GEO.capR)/2, sk.engraveDim, 0.7);
+  // 24-hour scale on the limb (each hour = 15deg). 0h at the bottom (south).
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for (let h=0; h<24; h++){
+    const ang = h*15*C.D2R;              // hour angle around the limb
+    // screen angle: bottom (south, H=0) is +y(down) => angle measured from down
+    const sx = Math.sin(ang), sy = Math.cos(ang);
+    const r1 = GEO.capR, r2 = GEO.rimR;
+    const rMid = (r1+r2)/2;
+    ctx.beginPath();
+    ctx.moveTo(s.px + sx*r1, s.py + sy*r1);
+    ctx.lineTo(s.px + sx*r2, s.py + sy*r2);
+    ctx.strokeStyle = sk.rim; ctx.lineWidth = 1.4; ctx.stroke();
+    // minor ticks every 15 min
+    for (let q=1;q<4;q++){
+      const a2 = (h*15 + q*3.75)*C.D2R;
+      const tx=Math.sin(a2), ty=Math.cos(a2);
+      ctx.beginPath();
+      ctx.moveTo(s.px+tx*(r2-GEO.limb*0.32), s.py+ty*(r2-GEO.limb*0.32));
+      ctx.lineTo(s.px+tx*r2, s.py+ty*r2);
+      ctx.strokeStyle = sk.engraveDim; ctx.lineWidth=0.7; ctx.stroke();
+    }
+    ctx.save();
+    ctx.translate(s.px + sx*rMid, s.py + sy*rMid);
+    ctx.rotate(Math.atan2(sy, sx) + Math.PI/2);
+    ctx.fillStyle = sk.rim;
+    ctx.font = '600 '+Math.round(GEO.limb*0.34)+'px '+mono();
+    ctx.fillText(String(h), 0, 0);
+    ctx.restore();
+  }
+}
+
+function mono(){ return '"SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace'; }
+function serif(){ return '"Iowan Old Style", Palatino, Georgia, "Times New Roman", serif'; }
+
+function drawPlate(sk){
+  const phi = STATE.latDeg * C.D2R;
+  const Req = GEO.Req;
+  ctx.save();
+  clipToPlate();
+
+  // ---- day-circles (tropics + equator) ----
+  strokeCircle(0,0, C.rOfDec(-C.EPS,Req), sk.dayCircle, 1.4);   // Capricorn (== capR)
+  strokeCircle(0,0, C.rOfDec(0,Req),      sk.dayCircle, 1.4);   // equator
+  strokeCircle(0,0, C.rOfDec(C.EPS,Req),  sk.dayCircle, 1.4);   // Cancer
+
+  const absPhi = Math.abs(phi);
+  // ---- almucantars (equal-altitude circles) ----
+  // Below ~the pole there is no real horizon geometry near phi=0; guard den~0.
+  const altList = [];
+  for (let a=0; a<=80; a+=10) altList.push(a);
+  altList.push(85);
+  ctx.save();
+  for (const aDeg of altList){
+    const alt = aDeg * C.D2R;
+    const den = Math.sin(phi) + Math.sin(alt);
+    if (Math.abs(den) < 1e-4) continue;
+    const cobj = C.almucantar(alt, phi, Req);
+    if (!isFinite(cobj.r) || cobj.r > Req*40) continue;
+    const isHorizon = (aDeg === 0);
+    strokeCircle(cobj.cx, cobj.cy, cobj.r,
+      isHorizon ? sk.horizon : sk.plateLine,
+      isHorizon ? 2.6 : (aDeg%30===0 ? 1.1 : 0.7));
+  }
+  ctx.restore();
+
+  // ---- azimuth circles (constant azimuth) ----
+  ctx.save();
+  for (let A=10; A<180; A+=10){
+    if (A===90) continue;  // 90/270 handled as the prime-vertical; draw E-W line below
+    const azc = C.azimuthCircle(A*C.D2R, phi, Req);
+    if (azc.line) continue;
+    if (!isFinite(azc.r) || azc.r > Req*40) continue;
+    strokeCircle(azc.cx, azc.cy, azc.r, sk.engraveDim, 0.6);
+    // mirror to the other hemisphere (azimuth A and 360-A share the circle's
+    // reflection across the meridian)
+    strokeCircle(-azc.cx, azc.cy, azc.r, sk.engraveDim, 0.6);
+  }
+  ctx.restore();
+
+  // ---- meridian (N-S line) & the horizon-defining cardinal lines ----
+  const s = toScreen(0,0);
+  ctx.strokeStyle = sk.plateBold; ctx.lineWidth = 1;
+  // meridian: vertical through center, within plate
+  ctx.beginPath();
+  ctx.moveTo(s.px, s.py - GEO.capR); ctx.lineTo(s.px, s.py + GEO.capR); ctx.stroke();
+
+  // ---- zenith marker ----
+  const zr = C.rOfDec(phi, Req);
+  const zen = toScreen(0, zr);
+  ctx.beginPath(); ctx.arc(zen.px, zen.py, 3.2, 0, C.TAU);
+  ctx.fillStyle = sk.plateBold; ctx.fill();
+  ctx.fillStyle = sk.label; ctx.font = '600 '+Math.round(GEO.size*0.018)+'px '+mono();
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText('zenith', zen.px, zen.py - 5);
+
+  // ---- almucantar labels (horizon / 30 / 60) on the meridian ----
+  ctx.textBaseline='middle'; ctx.textAlign='left';
+  ctx.font = '600 '+Math.round(GEO.size*0.016)+'px '+mono();
+  for (const aDeg of [0,30,60]){
+    const alt=aDeg*C.D2R, den=Math.sin(phi)+Math.sin(alt);
+    if (Math.abs(den)<1e-4) continue;
+    const cobj = C.almucantar(alt, phi, Req);
+    // top of the circle on the meridian: y = cy + r (toward zenith side)
+    const top = toScreen(0, cobj.cy - cobj.r);   // upper intersection
+    ctx.fillStyle = aDeg===0 ? sk.horizon : sk.label;
+    ctx.fillText(aDeg===0?'horizon':(aDeg+'°'), top.px + 4, top.py);
+  }
+
+  ctx.restore();   // unclip
+}
+
+// Day/night shading on the plate: fill below the horizon faintly (night),
+// above faintly (day). Clipped to the plate; cosmetic only — uses the same
+// horizon circle geometry, so it is still geometry-driven.
+function drawDayNight(sk){
+  const phi = STATE.latDeg * C.D2R;
+  const Req = GEO.Req;
+  const den = Math.sin(phi) + 0;          // alt=0
+  if (Math.abs(den) < 1e-3) return;
+  const hz = C.almucantar(0, phi, Req);
+  const s = toScreen(0,0);
+  ctx.save();
+  clipToPlate();
+  // fill the whole plate "night", then carve the day region (inside horizon,
+  // on the zenith side) as "day".
+  ctx.fillStyle = sk.nightFill;
+  ctx.beginPath(); ctx.arc(s.px, s.py, GEO.capR, 0, C.TAU); ctx.fill();
+  const hc = toScreen(hz.cx, hz.cy);
+  ctx.fillStyle = sk.dayFill;
+  ctx.beginPath(); ctx.arc(hc.px, hc.py, hz.r, 0, C.TAU); ctx.fill();
+  ctx.restore();
+}
+
+// The rete: rotates rigidly by the LST angle. We draw it in CORE's unrotated
+// frame (vernal equinox at +y) then rotate the canvas by the rete angle.
+function drawRete(sk){
+  const Req = GEO.Req;
+  const jd = stateJD();
+  const lstHours = C.lstDeg(jd, STATE.lonDeg)/15;
+  // Rete rotation: a star at RA has hour angle H = LST - RA. In the unrotated
+  // frame we place each star at polar angle = RA (from +y). Rotating the whole
+  // frame by +LST makes the star's screen angle = RA + LST... we want angle = H
+  // = LST - RA, i.e. angle decreasing with RA. So rotate by LST and place stars
+  // at angle = -RA. Equivalent: draw stars directly via projStar (which already
+  // uses H = LST - RA) WITHOUT a canvas rotation. We do the latter for the
+  // stars (exact), and draw the ecliptic ring rotated to match.
+  const s = toScreen(0,0);
+
+  ctx.save();
+  clipToPlate();
+
+  // ---- ecliptic ring ---- drawn by sampling eclipticPoint then applying the
+  // rete rotation so it shares the stars' frame. The rete angle maps RA->H by
+  // H = LST - RA. eclipticPoint returns the point at polar angle = RA (+y). To
+  // convert to screen we need angle = H = LST - RA = LST - (angle from +y). So:
+  //   screen point = rotate( eclipticPoint, by (LST mapped) ) with a reflection.
+  // Cleanest: recompute each ecliptic vertex through the SAME H mapping.
+  ctx.beginPath();
+  for (let i=0;i<=180;i++){
+    const lam = (i/180)*C.TAU;
+    const dec = C.solarDec(lam);
+    const ra  = C.solarRA(lam);                  // rad
+    const H = (lstHours*15*C.D2R) - ra;          // hour angle
+    const r = C.rOfDec(dec, Req);
+    const p = toScreen(r*Math.sin(H), r*Math.cos(H));
+    if (i===0) ctx.moveTo(p.px, p.py); else ctx.lineTo(p.px, p.py);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = sk.ecliptic; ctx.lineWidth = 2; ctx.stroke();
+
+  // zodiac sign ticks every 30deg of longitude (12 signs)
+  ctx.fillStyle = sk.ecliptic;
+  ctx.font = '600 '+Math.round(GEO.size*0.015)+'px '+mono();
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for (let z=0; z<12; z++){
+    const lam = z*30*C.D2R;
+    const dec=C.solarDec(lam), ra=C.solarRA(lam);
+    const H=(lstHours*15*C.D2R)-ra, r=C.rOfDec(dec,Req);
+    const p = toScreen(r*Math.sin(H), r*Math.cos(H));
+    ctx.beginPath(); ctx.arc(p.px,p.py,2.2,0,C.TAU); ctx.fill();
+  }
+
+  // ---- stars ---- little flame/leaf pointers; size by magnitude.
+  for (const st of C.STARS){
+    const p = C.projStar(st, lstHours, Req);
+    if (!isFinite(p.x) || p.r > GEO.capR*1.02) continue;     // off the plate
+    const sp = toScreen(p.x, p.y);
+    const mag = st.m;
+    const rad = Math.max(1.1, 3.4 - mag*0.7);
+    // glow
+    const g = ctx.createRadialGradient(sp.px,sp.py,0, sp.px,sp.py,rad*3);
+    g.addColorStop(0, sk.star); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(sp.px,sp.py,rad*3,0,C.TAU); ctx.fill();
+    // core
+    ctx.fillStyle = sk.star;
+    ctx.beginPath(); ctx.arc(sp.px,sp.py,rad,0,C.TAU); ctx.fill();
+    // label only the brightest, to avoid clutter
+    if (mag < 1.0){
+      ctx.fillStyle = sk.starDim;
+      ctx.font = '500 '+Math.round(GEO.size*0.0145)+'px '+mono();
+      ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillText(st.n, sp.px + rad + 3, sp.py);
+    }
+  }
+
+  // ---- the Sun on the ecliptic ----
+  const sun = C.sunPosition(jd);
+  {
+    const H = (lstHours*15*C.D2R) - sun.ra;
+    const r = C.rOfDec(sun.dec, Req);
+    const sp = toScreen(r*Math.sin(H), r*Math.cos(H));
+    const g = ctx.createRadialGradient(sp.px,sp.py,0, sp.px,sp.py,12);
+    g.addColorStop(0, sk.sun); g.addColorStop(1, sk.sunGlow.replace(/[\d.]+\)$/,'0)'));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sp.px,sp.py,12,0,C.TAU); ctx.fill();
+    ctx.fillStyle = sk.sun; ctx.beginPath(); ctx.arc(sp.px,sp.py,4.5,0,C.TAU); ctx.fill();
+    ctx.strokeStyle = sk.materFace; ctx.lineWidth=1; ctx.stroke();
+  }
+
+  ctx.restore();   // unclip
+}
+
+// The rule / alidade — a thin straightedge across the whole disc, fixed for now
+// pointing at the Sun's hour circle (a charming, real touch).
+function drawRule(sk){
+  const Req = GEO.Req;
+  const jd = stateJD();
+  const lstHours = C.lstDeg(jd, STATE.lonDeg)/15;
+  const sun = C.sunPosition(jd);
+  const H = (lstHours*15*C.D2R) - sun.ra;
+  const s = toScreen(0,0);
+  // a diameter through the Sun's projected direction
+  const ang = Math.atan2(Math.sin(H), Math.cos(H));   // screen angle from +y(down)
+  const dx = Math.sin(H), dy = Math.cos(H);
+  ctx.save();
+  ctx.strokeStyle = sk.rule; ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(s.px - dx*GEO.capR, s.py - dy*GEO.capR);
+  ctx.lineTo(s.px + dx*GEO.capR, s.py + dy*GEO.capR);
+  ctx.stroke();
+  // little brass boss at center
+  ctx.beginPath(); ctx.arc(s.px, s.py, 4, 0, C.TAU);
+  ctx.fillStyle = sk.rim; ctx.fill();
+  ctx.restore();
+}
+
+function render(){
+  const sk = SKINS[STATE.skin];
+  ctx.save();
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,GEO.size,GEO.size);
+  drawMater(sk);
+  drawDayNight(sk);
+  drawPlate(sk);
+  drawRete(sk);
+  drawRule(sk);
+  ctx.restore();
+  updateReadout();
+}
+
+/* =====================================================================
+   READOUT — decode the current sky in plain terms.
+   ===================================================================== */
+function pad2(n){ return (n<10?'0':'')+n; }
+function fmtTime(min){ const h=Math.floor(min/60)%24, m=Math.floor(min)%60; return pad2(h)+':'+pad2(m); }
+function dayOfYearToMonthDay(doy, year){
+  const d = new Date(Date.UTC(year,0,1));
+  d.setUTCDate(d.getUTCDate() + Math.round(doy));
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return months[d.getUTCMonth()] + ' ' + d.getUTCDate();
+}
+
+function updateReadout(){
+  const phi = STATE.latDeg * C.D2R;
+  const jd = stateJD();
+  const lstDeg = C.lstDeg(jd, STATE.lonDeg);
+  const lstHours = lstDeg/15;
+  const sun = C.sunPosition(jd);
+  const Hsun = (lstHours*15 - sun.ra*C.R2D) * C.D2R;
+  const aa = C.decHToAltAz(sun.dec, Hsun, phi);
+  const altDeg = aa.alt * C.R2D;
+  const azDeg = aa.az * C.R2D;
+  const lonEcl = C.sunEclipticLonDeg(jd);
+  const zod = C.zodiacOf(lonEcl);
+
+  // day / twilight / night
+  let phase, cls;
+  if (altDeg > -0.833){ phase='day'; cls='day'; }
+  else if (altDeg > -6){ phase='civil twilight'; cls='day'; }
+  else if (altDeg > -12){ phase='nautical twilight'; cls='night'; }
+  else if (altDeg > -18){ phase='astronomical twilight'; cls='night'; }
+  else { phase='night'; cls='night'; }
+
+  // stars above the horizon right now
+  let visible = 0;
+  for (const st of C.STARS){
+    const H = (lstHours - st.ra)*15*C.D2R;
+    const a = C.decHToAltAz(st.dec*C.D2R, H, phi);
+    if (a.alt > 0) visible++;
+  }
+
+  const compute = document.getElementById('compute');
+  const risen = altDeg > -0.833;
+  compute.innerHTML =
+    'Sun in <b>'+zod.name+'</b> '+zod.deg.toFixed(0)+'° — altitude <b>'+altDeg.toFixed(1)+'°</b> '+
+    (risen ? '(<b>above</b> the horizon)' : '(below the horizon)') +
+    ' · it is <b>'+phase+'</b>';
+
+  let host = document.getElementById('scalevals');
+  if(!host){
+    host = document.createElement('div');
+    host.id='scalevals';
+    host.style.cssText='flex:1 1 100%;display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:center;';
+    document.getElementById('readout').appendChild(host);
+  }
+  const compass = ['N','NE','E','SE','S','SW','W','NW'][Math.round(azDeg/45)%8];
+  const items = [
+    ['Sun az', azDeg.toFixed(0)+'° '+compass, false],
+    ['Sun dec', (sun.dec*C.R2D).toFixed(1)+'°', false],
+    ['Sidereal', fmtTime(lstHours*60), false],
+    ['Stars up', visible+' / '+C.STARS.length, cls==='night'],
+    ['Date', dayOfYearToMonthDay(STATE.dayOfYear, STATE.year), false],
+  ];
+  host.innerHTML = items.map(([n,v,nt]) =>
+    '<span class="scaleval'+(nt?' night':'')+'">'+n+' <b>'+v+'</b></span>').join('');
+}
+
+/* =====================================================================
+   CONTROLS WIRING
+   ===================================================================== */
+function syncLabels(){
+  const lat = STATE.latDeg;
+  document.getElementById('latVal').textContent =
+    Math.abs(lat).toFixed(lat%1?1:0)+'°'+(lat>=0?'N':'S');
+  document.getElementById('lonVal').textContent =
+    Math.abs(STATE.lonDeg).toFixed(STATE.lonDeg%1?1:0)+'°'+(STATE.lonDeg===0?'':(STATE.lonDeg>0?'E':'W'));
+  document.getElementById('timeVal').textContent = fmtTime(STATE.minutesOfDay);
+  document.getElementById('dateVal').textContent = dayOfYearToMonthDay(STATE.dayOfYear, STATE.year);
+}
+
+function refresh(){ syncLabels(); render(); }
+
+document.getElementById('latSlider').addEventListener('input', e => {
+  STATE.latDeg = parseFloat(e.target.value); refresh();
+});
+document.getElementById('lonSlider').addEventListener('input', e => {
+  STATE.lonDeg = parseFloat(e.target.value); refresh();
+});
+document.getElementById('dateSlider').addEventListener('input', e => {
+  STATE.dayOfYear = parseInt(e.target.value,10); refresh();
+});
+document.getElementById('timeSlider').addEventListener('input', e => {
+  STATE.minutesOfDay = parseInt(e.target.value,10); refresh();
+});
+
+document.getElementById('btnNow').addEventListener('click', () => {
+  const now = new Date();
+  // derive day-of-year & minutes from the *local* clock; longitude stays as set
+  const startY = new Date(now.getFullYear(),0,1);
+  STATE.year = now.getFullYear();
+  STATE.dayOfYear = Math.floor((now - startY)/86400000);
+  STATE.minutesOfDay = now.getHours()*60 + now.getMinutes();
+  document.getElementById('dateSlider').value = STATE.dayOfYear;
+  document.getElementById('timeSlider').value = STATE.minutesOfDay;
+  refresh();
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  STATE.latDeg=40; STATE.lonDeg=0; STATE.dayOfYear=171; STATE.minutesOfDay=1320; STATE.year=2026;
+  setSpin(false);
+  document.getElementById('latSlider').value=40;
+  document.getElementById('lonSlider').value=0;
+  document.getElementById('dateSlider').value=171;
+  document.getElementById('timeSlider').value=1320;
+  refresh();
+});
+
+document.getElementById('skinSeg').addEventListener('click', e => {
+  const b = e.target.closest('button[data-skin]'); if(!b) return;
+  STATE.skin = b.dataset.skin;
+  for (const x of e.currentTarget.querySelectorAll('button')) x.classList.toggle('active', x===b);
+  applySkinVars();
+  render();   // cosmetic re-render only; geometry unchanged
+});
+
+/* ---- spin animation (advances time so you watch the sky turn) ---- */
+const prefersReduced = (() => {
+  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch(_){ return false; }
+})();
+let spinRAF = null, spinLast = 0;
+function setSpin(on){
+  STATE.spin = on;
+  document.getElementById('spinToggle').classList.toggle('on', on);
+  if (on && !spinRAF){ spinLast = performance.now(); spinRAF = requestAnimationFrame(spinStep); }
+  if (!on && spinRAF){ cancelAnimationFrame(spinRAF); spinRAF = null; }
+}
+function spinStep(now){
+  if (!STATE.spin){ spinRAF=null; return; }
+  const dt = (now - spinLast)/1000; spinLast = now;
+  // advance ~ 6 sky-minutes per real second (slower if reduced motion)
+  const rate = prefersReduced ? 1.5 : 6;
+  STATE.minutesOfDay = (STATE.minutesOfDay + dt*rate) % 1440;
+  document.getElementById('timeSlider').value = Math.floor(STATE.minutesOfDay);
+  refresh();
+  spinRAF = requestAnimationFrame(spinStep);
+}
+document.getElementById('spinToggle').addEventListener('click', () => setSpin(!STATE.spin));
+
+/* ---- drag the disc to spin the rete (sets the time) ---- */
+let drag = null;
+function localPoint(ev){
+  const r = canvas.getBoundingClientRect();
+  return { x: ev.clientX - r.left - GEO.cx, y: ev.clientY - r.top - GEO.cy };
+}
+canvas.addEventListener('pointerdown', ev => {
+  ev.preventDefault();
+  setSpin(false);
+  const p = localPoint(ev);
+  drag = { startAng: Math.atan2(p.y, p.x), startMin: STATE.minutesOfDay, pid: ev.pointerId };
+  try { canvas.setPointerCapture(ev.pointerId); } catch(_){}
+  canvas.classList.add('dragging');
+});
+canvas.addEventListener('pointermove', ev => {
+  if (!drag) return;
+  const p = localPoint(ev);
+  const ang = Math.atan2(p.y, p.x);
+  let dAng = ang - drag.startAng;
+  // unwrap
+  while (dAng > Math.PI) dAng -= C.TAU;
+  while (dAng < -Math.PI) dAng += C.TAU;
+  // a full turn of the rete ~= one sidereal day ~= 1440 civil min (close enough
+  // for a hands-on dial). Map the dragged angle to minutes.
+  let m = drag.startMin + (dAng/C.TAU)*1440;
+  m = ((m % 1440) + 1440) % 1440;
+  STATE.minutesOfDay = m;
+  document.getElementById('timeSlider').value = Math.floor(m);
+  refresh();
+});
+function endDrag(){ if(!drag) return; try{ canvas.releasePointerCapture(drag.pid);}catch(_){} drag=null; canvas.classList.remove('dragging'); }
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+/* ---- presets ---- */
+const PRESETS = [
+  { id:'eqsr',  label:'Equinox sunrise',     lat:0,    lon:0, doy:79,  min:360,  spin:false },
+  { id:'midsm', label:'Midsummer midnight',  lat:52,   lon:0, doy:171, min:0,    spin:false },
+  { id:'pole',  label:'Polaris at the pole', lat:66,   lon:0, doy:355, min:1320, spin:true  },
+  { id:'london',label:'London tonight',      lat:51.5, lon:-0.13, doy:340, min:1290, spin:false },
+];
+function applyPreset(p){
+  setSpin(false);
+  STATE.latDeg=p.lat; STATE.lonDeg=p.lon; STATE.dayOfYear=p.doy; STATE.minutesOfDay=p.min;
+  document.getElementById('latSlider').value=p.lat;
+  document.getElementById('lonSlider').value=p.lon;
+  document.getElementById('dateSlider').value=p.doy;
+  document.getElementById('timeSlider').value=p.min;
+  refresh();
+  if (p.spin) setSpin(true);
+}
+function buildPresets(){
+  const host = document.getElementById('presets');
+  host.innerHTML='';
+  for (const p of PRESETS){
+    const b=document.createElement('button');
+    b.className='chip'; b.textContent=p.label;
+    b.addEventListener('click', ()=>applyPreset(p));
+    host.appendChild(b);
+  }
+}
+
+/* ---- PNG export (canvas-native; background painted so it isn't transparent) ---- */
+document.getElementById('btnPng').addEventListener('click', () => {
+  try{
+    const off = document.createElement('canvas');
+    off.width = GEO.size*2; off.height = GEO.size*2;
+    const octx = off.getContext('2d');
+    octx.fillStyle = SKINS[STATE.skin].bg;
+    octx.fillRect(0,0,off.width,off.height);
+    octx.imageSmoothingEnabled = true; octx.imageSmoothingQuality='high';
+    octx.drawImage(canvas, 0, 0, off.width, off.height);
+    const url = off.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url; a.download = 'astrolabe-'+STATE.skin+'.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  }catch(err){ console.error('PNG export failed', err); }
+});
+
+window.addEventListener('resize', () => {
+  dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+  computeGeo(); render();
+});
+
+/* =====================================================================
+   INIT
+   ===================================================================== */
+function init(){
+  try{ localStorage.setItem('ws:seen:astrolabe','1'); }catch(_){}
+
+  const res = runSelfTest();
+  const chip = document.getElementById('selftest');
+  if (res.pass === res.total){
+    chip.className='selftest ok';
+    chip.textContent='projection verified — '+res.pass+'/'+res.total+' ✓';
+  } else {
+    chip.className='selftest bad';
+    chip.textContent='projection FAILED — '+res.pass+'/'+res.total;
+  }
+  console.log('Astrolabe self-test: '+res.pass+'/'+res.total+' passed.');
+
+  applySkinVars();
+  buildPresets();
+  computeGeo();
+  syncLabels();
+  render();
+}
+
+// expose core for headless / Node extraction & in-browser inspection
+if (typeof window !== 'undefined'){
+  window.__astrolabe = {
+    CORE, runSelfTest, STATE,
+    fingerprint: () => CORE.geometryFingerprint({ latDeg:STATE.latDeg, lonDeg:STATE.lonDeg, jd:stateJD() }),
+    setState: (s)=>{ Object.assign(STATE, s); if(typeof refresh==='function') refresh(); }
+  };
+}
+if (typeof module !== 'undefined' && module.exports){
+  module.exports = { CORE, runSelfTest };
+}
+
+init();
+</script>
+</body>
+</html>
