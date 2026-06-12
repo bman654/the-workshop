@@ -29,13 +29,20 @@ adventure/
   worlds/_template.js      ← a minimal, commented starter world.
   ADVENTURE.SPEC.md        ← this contract.
   CHANGELOG.md
+tools/
+  forge/forge.mjs          ← the build-inliner (§7): <tale>.src.html + sources → self-contained <tale>.html.
+  forge/README.md          ← forge's own docs.
+adventure/
+  the-lamplighter.src.html ← the authoring template (chrome + forge:include directives); forge emits the .html.
 ```
 
 **Self-contained, like every workshop piece.** A shipped tale (`the-lamplighter.html`) is one HTML
-file: the engine + that world inlined, no build step, no network, no dependencies, double-clickable.
-The `engine/` and `worlds/` source files are the **canonical, readable source of truth** an author
-edits; the shipped HTML is their inlined combination. (For one tale, inline by hand. When the shelf
-grows, the optional `forge` build in §7 automates the inline so the engine lives in exactly one place.)
+file: the engine + that world inlined, no network, no dependencies, double-clickable. "Self-contained"
+is a property of the **shipped artifact**, not the process. The `engine/` and `worlds/` source files
+are the **canonical, readable source of truth** an author edits; the shipped HTML is their inlined
+combination, produced **author-side** by `forge` (§7) from a `<tale>.src.html` template. The engine
+thus lives in exactly one canonical place and is inlined into each tale — never forked per tale —
+while visitors still open one dependency-free file.
 
 **Engine versioning to prevent drift:** `engine/lantern.js` declares `const LANTERN_VERSION = 'x.y'`.
 A shipped tale stamps the version it inlined; the spec's intent is that re-inlining the current engine
@@ -275,8 +282,11 @@ A tale's HTML follows the workshop house style:
 2. Run the solver (Node or the in-page self-test) until it's green: **winnable, reachable, no softlock,
    deterministic.** The solver is your proof-reader — it will tell you if you stranded the player or
    left an orphan. Fix the world, not the engine.
-3. Inline the current `engine/lantern.js` + your world into a new self-contained `<your-id>.html`
-   (copy the chrome from `the-lamplighter.html`; swap the world block). Set the accent and the title.
+3. Write `<your-id>.src.html` (copy `the-lamplighter.src.html`; swap the world include to
+   `<!-- forge:include worlds/<your-id>.js -->`, and set the accent + title). Run
+   `node tools/forge/forge.mjs adventure/<your-id>.src.html` to emit the self-contained
+   `<your-id>.html` (engine + world inlined). `node tools/forge/forge.mjs --check <file.src.html>`
+   tells you if a shipped file has gone stale.
 4. Add the tale to the shelf in `adventure/index.html`. (Standalone tales live under `adventure/`; the
    Lantern landing is their shelf. They are **not** new front-door cards — see NOTES.md.)
 5. Browse-test on a **served origin** (not `file://` — the `ws:` crumbs need a real origin; see
@@ -298,15 +308,19 @@ A tale's HTML follows the workshop house style:
 
 ---
 
-## 7. Future (deliberately deferred — note, don't build now)
+## 7. Shipped & future
 
-- **`forge` — an optional build-time inliner.** A tiny zero-dependency Node script: a `<tale>.src.html`
-  carries `<!-- forge:include engine/lantern.js -->` + `<!-- forge:include worlds/<id>.js -->`; `forge`
-  emits the self-contained `<tale>.html`. This removes engine duplication across tales (one canonical
-  engine, inlined at build) **while keeping the shipped artifact exactly as self-contained as today** —
-  the build is author-time only; visitors still open one dependency-free file. This is the "code-sharing
-  between specimens" enabler, done without betraying the workshop's no-runtime-deps ethos. *(Until it
-  lands, inline by hand — fine for a small shelf.)*
+- **`forge` — the build-time inliner (SHIPPED: `tools/forge/forge.mjs`).** A tiny zero-dependency Node
+  ESM script (only `node:fs`/`node:path`): a `<tale>.src.html` carries `<!-- forge:include engine/lantern.js -->`
+  + `<!-- forge:include worlds/<id>.js -->` (each `<relpath>` resolves relative to the .src.html's own
+  directory), and `forge` replaces each directive with the file's contents — stripping the dual-use
+  `module.exports` guard + any leading `export ` from included `.js` — to emit the self-contained
+  `<tale>.html` (banner-stamped with the engine version). This removes engine duplication across tales
+  (one canonical engine, inlined at build) **while keeping the shipped artifact exactly as
+  self-contained as ever** — the build is author-time only; visitors still open one dependency-free
+  file. Modes: build named files, `--all [root]` (recursive), `--check` (diff vs on-disk `.html`,
+  exit 1 on drift). This is the "code-sharing between specimens" enabler, done without betraying the
+  workshop's no-runtime-deps ethos. See `tools/forge/README.md`.
 - **More tales.** A clock that must be stilled; a house that must be left; a tide that must be turned.
   Each is a world-file. The engine doesn't change.
 - **`llmPlayer` wired** (§4) — a real model driving a tale; then a 2-player or human+bot world.
