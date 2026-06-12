@@ -1,0 +1,1474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>DIG DUG — neon tunneler</title>
+<style>
+  :root{ --accent:#ffa83d; --accent2:#ff5a3d; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; background:#03030a; overflow:hidden;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    color:#ffe9cf; -webkit-font-smoothing:antialiased; cursor:default; }
+  #stage{ position:fixed; inset:0; }
+  canvas{ display:block; position:absolute; inset:0; }
+
+  /* ---------- HUD ---------- */
+  .hud{ position:fixed; inset:0; pointer-events:none; z-index:5;
+    font-variant-numeric:tabular-nums; }
+  .hud-row{ position:absolute; top:18px; display:flex; }
+  .hud-left{ left:24px; flex-direction:column; gap:4px; align-items:flex-start; }
+  .hud-right{ right:24px; flex-direction:column; align-items:flex-end; gap:4px; }
+  .label{ font-size:10px; letter-spacing:.32em; color:#c98a47; opacity:.85; text-transform:uppercase; }
+  .value{ font-size:30px; font-weight:700; letter-spacing:.04em; line-height:1;
+    color:#fff2e0; text-shadow:0 0 16px rgba(255,168,61,.6); }
+  .value.small{ font-size:17px; color:#e8c08a; }
+  .level-tag{ position:fixed; top:18px; left:50%; transform:translateX(-50%); text-align:center; }
+  .level-tag .label{ font-size:10px; }
+  .level-tag .value{ font-size:22px; color:#ff8a3d; text-shadow:0 0 16px rgba(255,90,61,.6); }
+
+  /* lives pips (little diggers) */
+  .lives{ display:flex; gap:8px; align-items:center; margin-top:6px; }
+  .pip{ width:14px; height:14px; border-radius:3px; background:var(--accent);
+    filter:drop-shadow(0 0 7px rgba(255,168,61,.7)); transition:opacity .2s, transform .2s; }
+  .pip.empty{ opacity:.16; filter:none; transform:scale(.8); }
+
+  /* self-test chip */
+  #selftest{ position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
+    z-index:6; font-size:10px; letter-spacing:.22em; text-transform:uppercase;
+    color:#1a0e04; background:var(--accent); border-radius:10px; padding:3px 10px;
+    box-shadow:0 0 14px rgba(255,168,61,.7); opacity:0; transition:opacity .4s;
+    pointer-events:none; font-weight:700; }
+  #selftest.show{ opacity:.92; }
+  #selftest.fail{ color:#fff; background:#ff2e88; box-shadow:0 0 14px rgba(255,46,136,.8); }
+
+  #muteTag{ position:fixed; bottom:16px; right:20px; font-size:10px; letter-spacing:.24em;
+    color:#c98a47; opacity:.7; text-transform:uppercase; pointer-events:none; }
+
+  /* ---------- Overlays ---------- */
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:8px;
+    background:radial-gradient(120% 120% at 50% 42%, rgba(28,14,6,.34), rgba(2,2,8,.9));
+    backdrop-filter:blur(1.5px); transition:opacity .35s; }
+  .overlay.hidden{ opacity:0; pointer-events:none; }
+  .title{ font-size:clamp(48px,12.5vw,158px); font-weight:800; letter-spacing:.12em;
+    line-height:.9; color:#fff2e0;
+    text-shadow:0 0 30px rgba(255,168,61,.65), 0 0 70px rgba(255,168,61,.35);
+    -webkit-text-stroke:1px rgba(255,210,150,.25); }
+  .title .a2{ color:var(--accent2); -webkit-text-stroke:1px rgba(255,90,61,.4);
+    text-shadow:0 0 30px rgba(255,90,61,.6); }
+  .tagline{ font-size:13px; letter-spacing:.34em; color:#ff8a3d; text-transform:uppercase;
+    opacity:.9; margin-bottom:24px; }
+  .prompt{ font-size:15px; letter-spacing:.12em; color:#fff2e0;
+    margin-top:14px; animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:.45} 50%{opacity:1} }
+  .controls{ margin-top:28px; display:grid; grid-template-columns:auto auto;
+    gap:6px 26px; font-size:12px; letter-spacing:.06em; color:#e8c08a; opacity:.9; }
+  .controls b{ color:#fff2e0; font-weight:700; }
+  .controls .k{ text-align:right; color:var(--accent); }
+  .hint{ margin-top:20px; font-size:11px; letter-spacing:.16em; color:#c98a47;
+    text-transform:uppercase; opacity:.8; max-width:56ch; line-height:1.7; }
+  .go-stats{ margin-top:8px; display:grid; grid-template-columns:auto auto; gap:6px 30px;
+    font-size:14px; letter-spacing:.06em; color:#e8c08a; }
+  .go-stats .k{ text-align:right; color:#c98a47; }
+  .go-stats b{ color:#fff2e0; }
+  .newhigh{ color:var(--accent); font-size:13px; letter-spacing:.3em; text-transform:uppercase;
+    margin-top:14px; animation:pulse 1s ease-in-out infinite; }
+  .gameover-title{ font-size:clamp(34px,8vw,76px); font-weight:800; letter-spacing:.14em;
+    color:#ff2e88; text-shadow:0 0 28px rgba(255,46,136,.6); margin-bottom:8px; }
+  .level-clear-title{ font-size:clamp(34px,8vw,72px); font-weight:800; letter-spacing:.1em;
+    color:var(--accent); text-shadow:0 0 28px rgba(255,168,61,.6); margin-bottom:8px; }
+  .pausetitle{ font-size:48px; font-weight:800; letter-spacing:.22em; color:#fff2e0;
+    text-shadow:0 0 24px rgba(255,168,61,.55); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg"></canvas>
+  <canvas id="game"></canvas>
+</div>
+
+<!-- HUD -->
+<div class="hud" id="hud" style="display:none">
+  <div class="hud-row hud-left">
+    <div class="label">Score</div>
+    <div class="value" id="score">0</div>
+    <div class="lives" id="lives"></div>
+  </div>
+  <div class="hud-row hud-right">
+    <div class="label">Best Score</div>
+    <div class="value small" id="best">0</div>
+  </div>
+  <div class="level-tag">
+    <div class="label">Level</div>
+    <div class="value" id="level">1</div>
+  </div>
+</div>
+<div id="selftest">✓ self-test</div>
+<div id="muteTag">M · sound off</div>
+
+<!-- Title -->
+<div class="overlay" id="titleScreen">
+  <div class="title">DIG<span class="a2">DUG</span></div>
+  <div class="tagline">neon · tunneler</div>
+  <div class="prompt">Press ENTER to start</div>
+  <div class="controls">
+    <span class="k">← ↑ → ↓ / WASD</span><span>dig &amp; move through dirt</span>
+    <span class="k">SPACE</span><span>pump the air-hose (inflate &amp; pop)</span>
+    <span class="k">ENTER</span><span>start / next level</span>
+    <span class="k">P / ESC</span><span>pause</span>
+    <span class="k">M</span><span>sound (off by default)</span>
+  </div>
+  <div class="hint">Tunnel through the earth. Face an enemy and PUMP your air-hose to inflate it stage by stage — a fourth pump POPS it. Dig the dirt out from under a ROCK and it wobbles, then falls — crushing every enemy in its column for big points. Cornered enemies turn to drifting EYES and phase through dirt to reach you. Clear every enemy to dig deeper.</div>
+</div>
+
+<!-- Level clear -->
+<div class="overlay hidden" id="levelClearScreen">
+  <div class="level-clear-title" id="lcTitle">LEVEL CLEAR</div>
+  <div class="go-stats">
+    <span class="k">Level</span><b id="lcLevel">0</b>
+    <span class="k">Bonus</span><b id="lcBonus">0</b>
+    <span class="k">Score</span><b id="lcScore">0</b>
+  </div>
+  <div class="prompt">Press ENTER to dig deeper</div>
+</div>
+
+<!-- Game over -->
+<div class="overlay hidden" id="gameoverScreen">
+  <div class="gameover-title">GAME OVER</div>
+  <div class="go-stats">
+    <span class="k">Score</span><b id="goScore">0</b>
+    <span class="k">Level reached</span><b id="goLevel">0</b>
+  </div>
+  <div class="newhigh" id="newHigh" style="display:none">★ NEW BEST SCORE ★</div>
+  <div class="prompt">Press ENTER to play again</div>
+</div>
+
+<!-- Pause -->
+<div class="overlay hidden" id="pauseScreen">
+  <div class="pausetitle">PAUSED</div>
+  <div class="prompt">Press P or ESC to resume</div>
+</div>
+
+<script>
+"use strict";
+(function(){
+//============================================================== setup / canvas
+const bgCanvas = document.getElementById('bg');
+const canvas   = document.getElementById('game');
+const bgx = bgCanvas.getContext('2d');
+const ctx = canvas.getContext('2d');
+
+let W = 0, H = 0, DPR = 1;
+// playfield rect in screen space (computed in resize).
+let FX = 0, FY = 0, FW = 0, FH = 0, CELL = 0;
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  for (const c of [bgCanvas, canvas]){
+    c.width  = Math.floor(W * DPR);
+    c.height = Math.floor(H * DPR);
+    c.style.width = W + 'px';
+    c.style.height = H + 'px';
+  }
+  bgx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  layoutField();
+  buildBg();
+}
+function layoutField(){
+  const marginX = Math.min(W*0.07, 120), topPad = Math.min(H*0.12, 96), botPad = Math.min(H*0.05, 44);
+  const availW = W - marginX*2, availH = H - topPad - botPad;
+  // fit GCOLS x GROWS cells, square cells
+  CELL = Math.floor(Math.min(availW / GCOLS, availH / GROWS));
+  FW = CELL * GCOLS; FH = CELL * GROWS;
+  FX = Math.floor((W - FW)/2);
+  FY = Math.floor(topPad + (availH - FH)/2);
+}
+window.addEventListener('resize', ()=>{ resize(); });
+
+//============================================================== utilities
+const TAU = Math.PI * 2;
+const rand  = (a=1,b=0)=> b + Math.random()*(a-b);
+const clamp = (v,lo,hi)=> v<lo?lo:(v>hi?hi:v);
+const lerp  = (a,b,t)=> a+(b-a)*t;
+
+//============================================================== seeded RNG (deterministic self-test)
+function makeRng(seed){
+  let s = seed>>>0 || 1;
+  return function(){ s ^= s<<13; s ^= s>>>17; s ^= s<<5; s>>>=0; return s/4294967296; };
+}
+
+//==================================================================================
+//  PURE CORE LOGIC  (testable; no rendering, no rAF, no DOM)
+//==================================================================================
+// Grid dimensions (cells). The top SKY rows are pre-dug open air; the rest is dirt.
+const GCOLS = 15, GROWS = 13;
+const SKY_ROWS = 2;            // top rows start as open air (the surface band)
+
+// Tile codes
+const DIRT = 0, OPEN = 1;      // a cell is solid dirt or open tunnel
+
+// ---- Grid construction & queries -----------------------------------------------
+// A grid is { cols, rows, tiles:Uint8Array (DIRT|OPEN), rocks:[{x,y,state,...}] }.
+// tiles index = y*cols + x.
+function idx(grid,x,y){ return y*grid.cols + x; }
+function inBounds(grid,x,y){ return x>=0 && y>=0 && x<grid.cols && y<grid.rows; }
+function tileAt(grid,x,y){ return inBounds(grid,x,y) ? grid.tiles[idx(grid,x,y)] : DIRT; }
+function isOpen(grid,x,y){ return tileAt(grid,x,y)===OPEN; }
+function isDirt(grid,x,y){ return inBounds(grid,x,y) && grid.tiles[idx(grid,x,y)]===DIRT; }
+
+function makeGrid(cols, rows){
+  const tiles = new Uint8Array(cols*rows);   // all DIRT by default
+  for (let y=0;y<SKY_ROWS;y++) for (let x=0;x<cols;x++) tiles[y*cols+x]=OPEN;
+  return { cols, rows, tiles, rocks:[] };
+}
+// Open a tile (excavate). Returns true if it was dirt (newly dug), false if already open.
+function digTile(grid,x,y){
+  if (!inBounds(grid,x,y)) return false;
+  const i = idx(grid,x,y);
+  if (grid.tiles[i]===OPEN) return false;
+  grid.tiles[i]=OPEN; return true;
+}
+// Can the PLAYER move into (x,y)? Only into already-open tunnel OR into a dirt tile
+// (which excavates it). Out of bounds = no. (The active dig tile is handled by digTile.)
+function canEnter(grid,x,y){ return inBounds(grid,x,y); }
+// Is (x,y) a tile the player can stand/walk on WITHOUT digging? (open tunnel only)
+function canWalk(grid,x,y){ return inBounds(grid,x,y) && grid.tiles[idx(grid,x,y)]===OPEN; }
+
+// ---- Reachability (open tunnel only) — used by tests & enemy chase ------------
+// BFS over OPEN tiles (4-neighbour). Returns a Set of "x,y" keys reachable from start.
+function reachableOpen(grid, sx, sy){
+  const seen = new Set();
+  if (!canWalk(grid,sx,sy)) return seen;
+  const q=[[sx,sy]]; seen.add(sx+','+sy);
+  const dx=[1,-1,0,0], dy=[0,0,1,-1];
+  while(q.length){
+    const [x,y]=q.shift();
+    for (let k=0;k<4;k++){
+      const nx=x+dx[k], ny=y+dy[k], key=nx+','+ny;
+      if (!seen.has(key) && canWalk(grid,nx,ny)){ seen.add(key); q.push([nx,ny]); }
+    }
+  }
+  return seen;
+}
+
+// ---- Rock gravity ---------------------------------------------------------------
+// Rock states: 'rest' (supported by dirt below), 'wobble' (unsupported, about to fall),
+// 'falling', 'gone'. A rock at (x,y) is UNSUPPORTED when the cell directly below is OPEN
+// (dug out) and in bounds. (A rock on the bottom row is always supported.)
+function rockShouldFall(grid, x, y){
+  if (y+1 >= grid.rows) return false;     // sitting on the floor
+  return isOpen(grid, x, y+1);            // nothing solid beneath it
+}
+// Compute which entities get crushed when a rock falls down column `col` from row `fromY`.
+// `entities` = [{x,y,id,...}] (player gets id='player' say). The rock travels straight down
+// through OPEN cells until it hits dirt (or the floor); everything in those cells (inclusive
+// of fromY+1 .. stopRow) sharing the column is crushed. Returns { crushed:[ids], stopY }.
+function rockFallCrush(grid, col, fromY, entities){
+  let stopY = fromY;
+  // travel down while the next cell is open & in bounds
+  while (stopY+1 < grid.rows && isOpen(grid, col, stopY+1)) stopY++;
+  const crushed = [];
+  for (const e of entities){
+    if (Math.round(e.x)!==col) continue;
+    const ey = Math.round(e.y);
+    if (ey>fromY && ey<=stopY) crushed.push(e.id);
+  }
+  return { crushed, stopY };
+}
+
+// ---- Enemy inflate (air-pump) state machine ------------------------------------
+// An enemy has a pump stage 0..MAX. Stage 0 = normal. Each pump +1 stage. At MAX it POPS
+// (dies, scored). Releasing the pump deflates it back over time (handled by caller ticking
+// deflate). Pure transitions only here.
+const PUMP_MAX = 4;            // 1→2→3→4 ; reaching 4 pops
+function makeEnemyCore(kind){
+  // kind: 'pooka' | 'fygar'
+  return { kind, stage:0, popped:false, dead:false };
+}
+// One pump. Returns 'popped' if it reached max (enemy dies), else 'inflated'. No-op if dead.
+function pumpEnemy(e){
+  if (e.dead || e.popped) return 'dead';
+  e.stage += 1;
+  if (e.stage >= PUMP_MAX){ e.stage = PUMP_MAX; e.popped = true; e.dead = true; return 'popped'; }
+  return 'inflated';
+}
+// Deflate one stage (called on a timer when the pump is released). Returns the new stage.
+function deflateEnemy(e){
+  if (e.dead) return e.stage;
+  if (e.stage>0) e.stage -= 1;
+  return e.stage;
+}
+
+// ---- Depth-tiered scoring -------------------------------------------------------
+// Deeper kills are worth more (faithful to the original's depth bands). `y` is the enemy's
+// grid row; `rows` total. Returns the base points for a POP kill at that depth. A CRUSH kill
+// scores more than a pump kill at the same depth (handled by crushScore).
+function depthTier(y){
+  // bands every ~2 rows below the sky
+  if (y < SKY_ROWS+2) return 0;
+  if (y < SKY_ROWS+4) return 1;
+  if (y < SKY_ROWS+6) return 2;
+  if (y < SKY_ROWS+8) return 3;
+  return 4;
+}
+const POOKA_SCORE = [200, 300, 400, 500, 600];   // pumped, by depth tier
+const FYGAR_SCORE = [300, 400, 500, 600, 700];
+function pumpScore(kind, y){
+  const tier = depthTier(y);
+  return (kind==='fygar' ? FYGAR_SCORE : POOKA_SCORE)[tier];
+}
+// A rock-crush kill scores more than a pump at the same depth. Original gives a flat-ish
+// crush value scaling with how many were crushed together; we use a base bigger than pump
+// plus a chain bonus. nCrushed = how many enemies this single rock crushed.
+function crushScore(kind, y, nCrushed){
+  const base = pumpScore(kind, y) * 2;          // strictly > pump at same depth
+  const chain = (nCrushed>1 ? (nCrushed-1)*250 : 0);
+  return base + chain;
+}
+
+// ---- Level clear ----------------------------------------------------------------
+function levelCleared(enemies){
+  return enemies.filter(e=>!e.dead).length === 0;
+}
+
+// ---- Enemy chase step -----------------------------------------------------------
+// Two modes:
+//   normal (ghost=false): the enemy may only step into OPEN tunnel; it picks the neighbour
+//     that minimises BFS distance to the player THROUGH TUNNEL. If no tunnel path exists it
+//     holds (returns same cell) — the caller decides when to flip to ghost mode.
+//   ghost  (ghost=true): the enemy drifts in a straight-ish line toward the player THROUGH
+//     DIRT (greedy: step the axis with the larger gap), ignoring walls.
+// Returns {x,y} the next cell. Pure: reads grid + positions only.
+function bfsDist(grid, sx, sy){
+  // distance map from (sx,sy) over OPEN tiles
+  const dist = new Map(); if (!canWalk(grid,sx,sy)) return dist;
+  const q=[[sx,sy]]; dist.set(sx+','+sy,0);
+  const dx=[1,-1,0,0], dy=[0,0,1,-1];
+  while(q.length){
+    const [x,y]=q.shift(); const d=dist.get(x+','+y);
+    for (let k=0;k<4;k++){
+      const nx=x+dx[k], ny=y+dy[k], key=nx+','+ny;
+      if (!dist.has(key) && canWalk(grid,nx,ny)){ dist.set(key,d+1); q.push([nx,ny]); }
+    }
+  }
+  return dist;
+}
+function enemyChaseStep(grid, ex, ey, px, py, ghost){
+  if (ghost){
+    // drift through dirt toward the player: reduce the larger-magnitude axis first.
+    const ddx = px-ex, ddy = py-ey;
+    let nx=ex, ny=ey;
+    if (Math.abs(ddx) >= Math.abs(ddy) && ddx!==0) nx += ddx>0?1:-1;
+    else if (ddy!==0) ny += ddy>0?1:-1;
+    else if (ddx!==0) nx += ddx>0?1:-1;
+    nx = clamp(nx,0,grid.cols-1); ny = clamp(ny,0,grid.rows-1);
+    return { x:nx, y:ny };
+  }
+  // tunnel chase: BFS distance from the PLAYER, step to the open neighbour with the
+  // smallest distance to the player.
+  const dist = bfsDist(grid, px, py);
+  const dx=[1,-1,0,0], dy=[0,0,1,-1];
+  let best=null, bestD=Infinity;
+  for (let k=0;k<4;k++){
+    const nx=ex+dx[k], ny=ey+dy[k], key=nx+','+ny;
+    if (!canWalk(grid,nx,ny)) continue;
+    const d = dist.has(key) ? dist.get(key) : Infinity;
+    if (d<bestD){ bestD=d; best={x:nx,y:ny}; }
+  }
+  if (!best || bestD===Infinity) return { x:ex, y:ey, stuck:true };  // no tunnel path → hold
+  return best;
+}
+
+// ---- Deterministic level layout ------------------------------------------------
+// Given a level number + seed, place rocks and enemy spawns deterministically so the
+// self-test can assert identical layout for identical seeds. Returns {grid, enemies, rocks,
+// playerStart}. Pre-carves the player's surface tunnel and a small starting shaft.
+function buildLevel(level, seed){
+  const rng = makeRng((seed>>>0) ^ (level*2654435761>>>0));
+  const grid = makeGrid(GCOLS, GROWS);
+  // player starts in the surface band, center
+  const playerStart = { x: (GCOLS>>1), y: SKY_ROWS };
+  digTile(grid, playerStart.x, playerStart.y);   // a pocket to stand in
+
+  // ---- rocks: 2..4 scattered in the dirt body (not in the sky, not bottom row) ----
+  const rockCount = clamp(2 + Math.floor(level/2), 2, 4);
+  const rocks = [];
+  const usedRock = new Set();
+  let guard=0;
+  while (rocks.length<rockCount && guard++<400){
+    const x = Math.floor(rng()*GCOLS);
+    const y = SKY_ROWS+1 + Math.floor(rng()*(GROWS-SKY_ROWS-2));
+    const key=x+','+y;
+    if (usedRock.has(key)) continue;
+    usedRock.add(key);
+    rocks.push({ x, y, state:'rest', t:0, vy:0, id:'rock'+rocks.length });
+  }
+  grid.rocks = rocks;
+
+  // ---- enemies: pookas + fygars, deeper as the level grows ----
+  const enemyCount = clamp(3 + Math.floor(level*0.8), 3, 8);
+  const enemies = [];
+  const usedE = new Set([playerStart.x+','+playerStart.y]);
+  guard=0;
+  while (enemies.length<enemyCount && guard++<600){
+    const x = Math.floor(rng()*GCOLS);
+    const y = SKY_ROWS+1 + Math.floor(rng()*(GROWS-SKY_ROWS-1));
+    const key=x+','+y;
+    if (usedE.has(key)) continue;
+    // don't spawn on a rock cell
+    if (usedRock.has(key)) continue;
+    usedE.add(key);
+    // ~1 in 3 are fygars, more fygars deeper
+    const fygarChance = 0.25 + Math.min(0.25, level*0.03);
+    const kind = (rng() < fygarChance) ? 'fygar' : 'pooka';
+    const core = makeEnemyCore(kind);
+    enemies.push({
+      id:'e'+enemies.length, kind, x, y, hx:x, hy:y,
+      stage:0, popped:false, dead:false,
+      ghost:false, ghostT:0, fireCd: 2+rng()*3,
+      moveCd: 0.5+rng()*0.5
+    });
+    // carve a small open pocket at each enemy so they can move at start
+    digTile(grid, x, y);
+  }
+
+  return { grid, enemies, rocks, playerStart, enemyCount, rockCount };
+}
+
+//============================================================== background
+function buildBg(){
+  bgx.clearRect(0,0,W,H);
+  bgx.fillStyle = '#03030a';
+  bgx.fillRect(0,0,W,H);
+  // a warm earthy radial glow up top (the surface / sky)
+  const g = bgx.createRadialGradient(W/2,FY,0, W/2,FY, Math.max(W,H)*0.7);
+  g.addColorStop(0,'rgba(40,24,10,0.45)');
+  g.addColorStop(1,'rgba(3,3,10,0)');
+  bgx.fillStyle = g; bgx.fillRect(0,0,W,H);
+  // faint dust specks
+  bgx.save();
+  for (let i=0;i<70;i++){
+    const x=rand(W), y=rand(H), s=rand(1.4,0.4);
+    bgx.globalAlpha=rand(0.4,0.05);
+    bgx.fillStyle = Math.random()<0.2 ? '#ffd9a0' : '#caa97f';
+    bgx.fillRect(x,y,s,s);
+  }
+  bgx.restore();
+}
+
+//============================================================== audio (procedural, default MUTED)
+const Audio_ = {
+  ctx:null, master:null, muted:true,   // DEFAULT OFF — owner's speakers
+  init(){
+    if (this.ctx) return;
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.3;
+      this.master.connect(this.ctx.destination);
+    }catch(e){ this.ctx = null; }
+  },
+  resume(){ if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+  blip(type, freq, dur, vol, sweep){
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (sweep) o.frequency.exponentialRampToValueAtTime(Math.max(40,freq*sweep), t+dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t+dur+0.02);
+  },
+  noise(dur, vol, lp){
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i=0;i<len;i++){ d[i] = (Math.random()*2-1) * (1 - i/len); }
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value = lp||1200;
+    const gn = this.ctx.createGain(); gn.gain.value = vol;
+    src.connect(f); f.connect(gn); gn.connect(this.master);
+    src.start(t);
+  },
+  dig(){ this.blip('square', 140, 0.04, 0.02, 1.4); this.noise(0.03,0.02,900); },
+  pump(stage){ this.blip('sawtooth', 200 + stage*120, 0.06, 0.03, 1.5); },
+  pop(){ this.blip('triangle', 520, 0.12, 0.08, 2.2); this.noise(0.1,0.06,2600); },
+  rockWobble(){ this.blip('square', 110, 0.05, 0.02, 1.2); },
+  rockFall(){ this.blip('sawtooth', 90, 0.3, 0.05, 0.4); },
+  crush(){ this.blip('triangle', 200, 0.18, 0.09, 0.5); this.noise(0.16,0.1,1400); },
+  fire(){ this.blip('sawtooth', 320, 0.22, 0.05, 0.5); this.noise(0.18,0.05,2000); },
+  ghost(){ this.blip('sine', 300, 0.4, 0.03, 1.4); },
+  playerDie(){ this.noise(0.7,0.36,420); this.blip('sawtooth',150,0.7,0.14,0.25); },
+  levelClear(){ this.blip('triangle',440,0.16,0.08,1.6); this.blip('triangle',660,0.22,0.08,1.5); this.blip('triangle',880,0.3,0.07,1.4); },
+  extraLife(){ this.blip('triangle',660,0.12,0.07,1.4); this.blip('triangle',990,0.18,0.07,1.5); }
+};
+
+//============================================================== object pools (particles)
+function makePool(factory, size){
+  const free = []; const active = [];
+  for (let i=0;i<size;i++) free.push(factory());
+  return {
+    free, active,
+    spawn(){ let o = free.pop() || factory(); o.alive = true; active.push(o); return o; },
+    sweep(){ for (let i=active.length-1;i>=0;i--){ if (!active[i].alive){ free.push(active[i]); active.splice(i,1); } } },
+    clear(){ for (const o of active) free.push(o); active.length=0; }
+  };
+}
+const particles = makePool(()=>({x:0,y:0,vx:0,vy:0,life:0,max:1,r:1,color:'#fff',alive:false,spark:false,drag:0.985}), 900);
+function spawnParticle(x,y,vx,vy,life,r,color,spark,drag){
+  const p = particles.spawn();
+  p.x=x;p.y=y;p.vx=vx;p.vy=vy;p.life=life;p.max=life;p.r=r;p.color=color;
+  p.spark=!!spark; p.drag = drag===undefined?0.985:drag;
+}
+function burst(x,y,n,opts){
+  opts = opts || {};
+  const speed = opts.speed||140, life=opts.life||0.6, color=opts.color||'#ffe9cf';
+  const spread = opts.spread||1, base=opts.base||0;
+  for (let i=0;i<n;i++){
+    const a = rand(TAU);
+    const sp = base + rand(speed*spread);
+    spawnParticle(x,y, Math.cos(a)*sp, Math.sin(a)*sp,
+      life*rand(1.3,0.5), rand(2.6,0.9), color, opts.spark, opts.drag);
+  }
+}
+function updateParticles(dt){
+  for (const p of particles.active){
+    p.life -= dt;
+    if (p.life <= 0){ p.alive=false; continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.vx *= p.drag; p.vy *= p.drag;
+  }
+  particles.sweep();
+}
+function drawParticles(){
+  ctx.save(); ctx.lineCap='round';
+  for (const p of particles.active){
+    const k = p.life/p.max;
+    ctx.globalAlpha = clamp(k,0,1);
+    ctx.shadowBlur = 8; ctx.shadowColor = p.color;
+    if (p.spark){
+      ctx.strokeStyle = p.color; ctx.lineWidth = p.r;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx*0.014, p.y - p.vy*0.014); ctx.stroke();
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x,p.y, p.r*(0.4+0.6*k), 0, TAU); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+//============================================================== game state
+let state = 'title';   // title | playing | paused | levelclear | gameover
+let score = 0, displayScore = 0;
+let level = 1, best = 0;
+let lives = 3, extraLifeGiven = false;
+const EXTRA_LIFE_AT = 20000;
+let levelSeed = 0;
+
+let grid = null;
+let enemies = [];
+let rocksDropped = 0;          // rocks that fell this level (2 = bonus)
+
+let shake = 0, flashAmt = 0;
+
+// grid<->pixel helpers (depend on CELL/FX/FY)
+function cellCx(gx){ return FX + gx*CELL + CELL/2; }
+function cellCy(gy){ return FY + gy*CELL + CELL/2; }
+
+// the player digger
+const player = {
+  gx:0, gy:0,          // grid cell currently occupied (logical)
+  x:0, y:0,            // pixel position (smoothly lerped toward the cell)
+  dir:'right',         // facing direction for the pump
+  moving:false, mt:0, fromX:0, fromY:0,  // tween of the active move
+  alive:true, invuln:0, blink:0,
+  pumping:false, pumpCd:0,
+  respawnT:0
+};
+let pumpTarget = null;         // {enemy, t} currently being inflated
+let hose = null;               // visual: {x,y,tx,ty,t} the air-hose harpoon
+
+//============================================================== best / breadcrumb
+function loadBest(){
+  try{ best=parseInt(localStorage.getItem('ws:best:digdug')||'0',10)||0; }catch(e){ best=0; }
+}
+function raiseBest(){
+  try{
+    var k='ws:best:digdug', prev=+(localStorage.getItem(k)||0);
+    if(score>prev) localStorage.setItem(k,String(score));
+  }catch(e){}
+  if (score>best) best=score;
+  if (elBest) elBest.textContent=best.toLocaleString();
+}
+
+//============================================================== HUD refs
+const elScore=document.getElementById('score');
+const elLevel=document.getElementById('level');
+const elBest=document.getElementById('best');
+const elLives=document.getElementById('lives');
+function updateLives(){
+  elLives.innerHTML='';
+  const n = Math.max(lives, 0);
+  for (let i=0;i<n;i++){
+    const d=document.createElement('div'); d.className='pip'; elLives.appendChild(d);
+  }
+}
+
+//============================================================== level setup
+function startLevel(lv){
+  level = lv;
+  const built = buildLevel(lv, levelSeed);
+  grid = built.grid;
+  enemies = built.enemies;
+  rocksDropped = 0;
+  player.gx = built.playerStart.x; player.gy = built.playerStart.y;
+  player.x = cellCx(player.gx); player.y = cellCy(player.gy);
+  player.dir='down'; player.moving=false; player.mt=0;
+  player.alive=true; player.invuln=1.4; player.blink=0; player.pumping=false; player.pumpCd=0;
+  pumpTarget=null; hose=null;
+  particles.clear();
+  elLevel.textContent = lv;
+}
+
+//============================================================== player control
+const DIRS = { left:[-1,0], right:[1,0], up:[0,-1], down:[0,1] };
+function tryMove(dir){
+  if (!player.alive || player.moving) return;
+  if (pumpTarget) return;                 // can't move mid-pump
+  player.dir = dir;
+  const [dx,dy] = DIRS[dir];
+  const nx = player.gx+dx, ny = player.gy+dy;
+  if (!canEnter(grid,nx,ny)) return;      // wall of the cabinet
+  // can't move into a cell occupied by a resting/wobbling rock
+  for (const r of grid.rocks){ if (r.state!=='gone' && r.x===nx && r.y===ny && !(r.state==='falling')) return; }
+  // excavate the destination (dig through dirt)
+  const wasDirt = digTile(grid,nx,ny);
+  if (wasDirt) Audio_.dig();
+  // begin the move tween
+  player.moving=true; player.mt=0; player.fromX=player.x; player.fromY=player.y;
+  player.gx=nx; player.gy=ny;
+}
+function updatePlayerMove(dt){
+  if (!player.moving) return;
+  const dur = 0.12;
+  player.mt += dt/dur;
+  if (player.mt>=1){
+    player.mt=1; player.moving=false;
+    player.x=cellCx(player.gx); player.y=cellCy(player.gy);
+    // queued continuous move if a key is held
+    const d = currentHeldDir();
+    if (d) tryMove(d);
+  } else {
+    player.x = lerp(player.fromX, cellCx(player.gx), player.mt);
+    player.y = lerp(player.fromY, cellCy(player.gy), player.mt);
+  }
+}
+function currentHeldDir(){
+  if (held.up) return 'up'; if (held.down) return 'down';
+  if (held.left) return 'left'; if (held.right) return 'right';
+  return null;
+}
+// fire a move immediately on a key TAP (so a quick press digs one cell even if the keyup
+// lands before the next update tick — continuous holds still flow through tryMove on idle)
+function tapMove(dir){
+  if (state!=='playing') return;
+  if (player.alive && !player.moving) tryMove(dir);
+}
+
+// ---- pump: find an enemy in the faced direction (adjacent / in-line up to range) ----
+function pumpRange(){ return 3; }
+function findPumpTarget(){
+  const [dx,dy]=DIRS[player.dir];
+  for (let step=1; step<=pumpRange(); step++){
+    const cx=player.gx+dx*step, cy=player.gy+dy*step;
+    if (!inBounds(grid,cx,cy)) break;
+    // hose can't pass through dirt or a resting rock
+    if (isDirt(grid,cx,cy)) break;
+    if (grid.rocks.some(r=>r.state!=='gone'&&r.state!=='falling'&&r.x===cx&&r.y===cy)) break;
+    const e = enemies.find(en=>!en.dead && Math.round(en.x)===cx && Math.round(en.y)===cy);
+    if (e) return e;
+  }
+  return null;
+}
+function startPump(){
+  if (!player.alive || player.moving || player.pumpCd>0) return;
+  const e = findPumpTarget();
+  if (!e){ player.pumpCd=0.12; return; }
+  pumpTarget = { enemy:e, t:0 };
+  e.pumpedBy = true;
+  const out = pumpEnemy(e);
+  Audio_.pump(e.stage);
+  // hose visual from player to enemy
+  hose = { x:cellCx(player.gx), y:cellCy(player.gy), tx:cellCx(Math.round(e.x)), ty:cellCy(Math.round(e.y)), t:0 };
+  burst(cellCx(Math.round(e.x)), cellCy(Math.round(e.y)), 5, {speed:60,life:0.3,color:'#fff',spark:true});
+  if (out==='popped'){ popEnemy(e); }
+  player.pumpCd=0.22;
+}
+function popEnemy(e){
+  e.dead=true; e.popped=true;
+  const pts = pumpScore(e.kind, Math.round(e.y));
+  score += pts;
+  addFloat(cellCx(Math.round(e.x)), cellCy(Math.round(e.y)), '+'+pts, e.kind==='fygar'?'#ff8a3d':accentColor());
+  const col = e.kind==='fygar' ? '#ff5a3d' : accentColor();
+  burst(cellCx(Math.round(e.x)), cellCy(Math.round(e.y)), 22, {speed:200,life:0.7,color:col,spark:true});
+  burst(cellCx(Math.round(e.x)), cellCy(Math.round(e.y)), 10, {speed:120,life:0.5,color:'#fff'});
+  Audio_.pop(); flash(0.14); addShake(4);
+  pumpTarget=null; hose=null;
+  maybeExtraLife();
+  cleanupEnemies();
+}
+function cleanupEnemies(){
+  enemies = enemies.filter(e=>!e.dead);
+  if (state==='playing' && levelCleared(enemies)) winLevel();
+}
+
+//============================================================== rocks
+function updateRocks(dt){
+  for (const r of grid.rocks){
+    if (r.state==='gone') continue;
+    if (r.state==='rest'){
+      if (rockShouldFall(grid, r.x, r.y)){ r.state='wobble'; r.t=0; Audio_.rockWobble(); }
+    } else if (r.state==='wobble'){
+      r.t += dt;
+      if (r.t>=0.7){ r.state='falling'; r.vy=0; r.py=cellCy(r.y); Audio_.rockFall(); }
+    } else if (r.state==='falling'){
+      r.vy += 1400*dt;
+      r.py = (r.py===undefined?cellCy(r.y):r.py) + r.vy*dt;
+      // which row are we visually in?
+      const curRow = Math.floor((r.py - FY)/CELL);
+      // landing: next cell below is dirt or floor
+      const restY = landingRowFor(r.x, r.y);
+      if (curRow>=restY || r.py>=cellCy(restY)){
+        // resolve crush along the column from the original y to restY
+        resolveRockLanding(r, restY);
+      } else {
+        // crush anything we pass through in real time
+        crushAtRow(r, curRow);
+      }
+    }
+  }
+}
+function landingRowFor(col, fromY){
+  let y=fromY;
+  while (y+1<grid.rows && isOpen(grid,col,y+1)) y++;
+  return y;
+}
+function crushAtRow(r, row){
+  // player
+  if (player.alive && Math.round(player.gx)===r.x && Math.round(player.gy)===row && player.invuln<=0){
+    hitPlayer('rock');
+  }
+  for (const e of enemies){
+    if (e.dead) continue;
+    if (Math.round(e.x)===r.x && Math.round(e.y)===row){ crushEnemy(e, r); }
+  }
+}
+function resolveRockLanding(r, restY){
+  // build entity list for the pure crush calc
+  const ents = enemies.filter(e=>!e.dead).map(e=>({x:Math.round(e.x),y:Math.round(e.y),id:e.id}));
+  if (player.alive && player.invuln<=0) ents.push({x:player.gx,y:player.gy,id:'player'});
+  const res = rockFallCrush(grid, r.x, r.y, ents);
+  let nCrushed=0;
+  for (const id of res.crushed){
+    if (id==='player'){ hitPlayer('rock'); }
+    else { const e=enemies.find(x=>x.id===id); if (e&&!e.dead){ crushEnemy(e,r,res.crushed.length); nCrushed++; } }
+  }
+  // settle the rock at restY
+  r.state='gone'; r.y=restY;
+  rocksDropped++;
+  burst(cellCx(r.x), cellCy(restY), 18, {speed:160,life:0.6,color:'#caa97f',spark:true});
+  Audio_.crush(); addShake(8); flash(0.12);
+  if (rocksDropped===2){ score+=2500; addFloat(cellCx(r.x), cellCy(restY)-CELL, '+2500 BONUS','#ffd23d'); }
+  cleanupEnemies();
+}
+function crushEnemy(e, r, nCrushed){
+  if (e.dead) return;
+  e.dead=true;
+  const pts = crushScore(e.kind, Math.round(e.y), nCrushed||1);
+  score += pts;
+  addFloat(cellCx(Math.round(e.x)), cellCy(Math.round(e.y)), '+'+pts, '#ffd23d');
+  burst(cellCx(Math.round(e.x)), cellCy(Math.round(e.y)), 20, {speed:180,life:0.6,color:'#ffd23d',spark:true});
+  maybeExtraLife();
+}
+
+function maybeExtraLife(){
+  if (!extraLifeGiven && score>=EXTRA_LIFE_AT){ lives++; extraLifeGiven=true; updateLives(); Audio_.extraLife(); flash(0.3); }
+}
+
+//============================================================== enemy AI
+const FYGAR_FIRE_RANGE = 4;
+function updateEnemies(dt){
+  const pgx=player.gx, pgy=player.gy;
+  for (const e of enemies){
+    if (e.dead) continue;
+    // a pumped/inflated enemy can't move; it deflates over time when not actively pumped
+    if (e.stage>0){
+      if (!(pumpTarget && pumpTarget.enemy===e)){
+        e.deflateT = (e.deflateT||0)+dt;
+        if (e.deflateT>=0.6){ e.deflateT=0; deflateEnemy(e); }
+      }
+      continue;        // inflated enemies are stunned, don't chase
+    }
+    // movement cadence
+    e.moveCd -= dt;
+    const speed = enemyStepInterval();
+    if (e.moveCd<=0){
+      e.moveCd = speed;
+      stepEnemy(e, pgx, pgy);
+    }
+    // fygar fire
+    if (e.kind==='fygar'){
+      e.fireCd -= dt;
+      if (e.fireCd<=0 && player.alive && !e.ghost){
+        // same row, clear tunnel line of sight toward player within range
+        if (Math.round(e.y)===pgy && fygarHasLine(e, pgx)){
+          e.firing = 0.6; e.fireDir = (pgx>e.x)?1:-1; Audio_.fire();
+        }
+        e.fireCd = 2.5 + Math.random()*2.5;
+      }
+      if (e.firing>0){
+        e.firing -= dt;
+        // flame hits the player along the row
+        if (player.alive && player.invuln<=0 && player.gy===Math.round(e.y)){
+          const ahead = (e.fireDir>0) ? (player.gx>e.x) : (player.gx<e.x);
+          if (ahead && Math.abs(player.gx-e.x)<=FYGAR_FIRE_RANGE && fygarHasLine(e, player.gx)){
+            hitPlayer('fire');
+          }
+        }
+      }
+    }
+    // contact with player
+    if (player.alive && player.invuln<=0 && Math.round(e.x)===pgx && Math.round(e.y)===pgy){
+      hitPlayer('contact');
+    }
+  }
+}
+function enemyStepInterval(){ return Math.max(0.18, 0.42 - (level-1)*0.025); }
+function fygarHasLine(e, targetGx){
+  const ex=Math.round(e.x), ey=Math.round(e.y);
+  const dir = targetGx>ex?1:-1;
+  for (let x=ex+dir; x!==targetGx+dir && Math.abs(x-ex)<=FYGAR_FIRE_RANGE; x+=dir){
+    if (!inBounds(grid,x,ey)) return false;
+    if (isDirt(grid,x,ey)) return false;
+    if (grid.rocks.some(r=>r.state!=='gone'&&r.x===x&&r.y===ey)) return false;
+    if (x===targetGx) return true;
+  }
+  return false;
+}
+function stepEnemy(e, pgx, pgy){
+  const ex=Math.round(e.x), ey=Math.round(e.y);
+  // decide ghost mode: if no tunnel path to player, occasionally phase through dirt
+  if (!e.ghost){
+    const probe = enemyChaseStep(grid, ex, ey, pgx, pgy, false);
+    if (probe.stuck){
+      e.ghostWant = (e.ghostWant||0) + 1;
+      if (e.ghostWant>2){ enterGhost(e); }
+    } else { e.ghostWant=0; }
+  }
+  const nextcell = enemyChaseStep(grid, ex, ey, pgx, pgy, e.ghost);
+  // move (snap logically; the render lerps via e.x/e.y toward target)
+  e.tx = nextcell.x; e.ty = nextcell.y; e.mt = 0; e.fromX=e.x; e.fromY=e.y;
+  if (e.ghost){
+    e.ghostT -= 1;
+    // re-materialise when we reach open tunnel near the player and have drifted enough
+    if (canWalk(grid, nextcell.x, nextcell.y) && e.ghostT<=0){ exitGhost(e); }
+  }
+}
+function enterGhost(e){ e.ghost=true; e.ghostT=4 + Math.floor(Math.random()*4); e.ghostWant=0; Audio_.ghost(); }
+function exitGhost(e){ e.ghost=false; e.ghostT=0; e.ghostWant=0; }
+
+function updateEnemyTweens(dt){
+  for (const e of enemies){
+    if (e.dead) continue;
+    if (e.tx!==undefined && (e.x!==cellCxCell(e.tx) || e.y!==cellCyCell(e.ty))){
+      e.mt = (e.mt||0) + dt/Math.max(0.12, enemyStepInterval());
+      if (e.mt>=1){ e.x=e.tx; e.y=e.ty; e.px=cellCx(e.tx); e.py=cellCy(e.ty); }
+      else {
+        e.x = lerp(e.fromX!==undefined?e.fromX:e.x, e.tx, e.mt);
+        e.y = lerp(e.fromY!==undefined?e.fromY:e.y, e.ty, e.mt);
+      }
+    }
+  }
+}
+function cellCxCell(c){ return c; } function cellCyCell(c){ return c; }
+
+//============================================================== player damage / lives
+function hitPlayer(cause){
+  if (!player.alive || player.invuln>0) return;
+  player.alive=false; player.respawnT=1.5;
+  lives -= 1;
+  Audio_.playerDie(); addShake(16); flash(0.5);
+  burst(player.x,player.y, 36, {speed:230,life:0.9,color:accentColor(),spark:true});
+  burst(player.x,player.y, 20, {speed:150,life:0.7,color:'#ff5a3d',spark:true});
+  pumpTarget=null; hose=null;
+  updateLives();
+}
+function respawnOrEnd(){
+  if (lives<=0){ endGame(); return; }
+  // respawn at the surface center
+  player.gx=(GCOLS>>1); player.gy=SKY_ROWS;
+  digTile(grid,player.gx,player.gy);
+  player.x=cellCx(player.gx); player.y=cellCy(player.gy);
+  player.alive=true; player.invuln=1.6; player.dir='down'; player.moving=false;
+  // un-ghost & deflate enemies a touch so the respawn isn't instant death
+  for (const e of enemies){ exitGhost(e); e.stage=0; e.popped=false; }
+}
+
+//============================================================== floating score text
+const floats = [];
+function addFloat(x,y,txt,color){ floats.push({x,y,txt,color,life:1.0,max:1.0}); }
+function updateFloats(dt){ for (const f of floats) f.life-=dt; for (let i=floats.length-1;i>=0;i--) if (floats[i].life<=0) floats.splice(i,1); }
+function drawFloats(){
+  ctx.save(); ctx.textAlign='center'; ctx.font='700 15px ui-monospace,monospace';
+  for (const f of floats){
+    const k=f.life/f.max; ctx.globalAlpha=clamp(k*1.3,0,1);
+    ctx.fillStyle=f.color; ctx.shadowBlur=8; ctx.shadowColor=f.color;
+    ctx.fillText(f.txt, f.x, f.y - (1-k)*26);
+  }
+  ctx.restore();
+}
+
+//============================================================== levels
+function winLevel(){
+  state='levelclear';
+  Audio_.levelClear(); addShake(8); flash(0.3);
+  const bonus = level*300 + lives*200 + (rocksDropped>=2?1000:0);
+  score += bonus;
+  for (let i=0;i<50;i++) spawnParticle(FX+rand(FW),FY+rand(FH*0.6), rand(120,-120),rand(120,-120), rand(1.2,0.5), rand(3,1.2), [accentColor(),'#ff8a3d','#ffd23d'][Math.floor(rand(3))], true, 0.95);
+  document.getElementById('lcLevel').textContent = level;
+  document.getElementById('lcBonus').textContent = bonus.toLocaleString();
+  document.getElementById('lcScore').textContent = score.toLocaleString();
+  document.getElementById('levelClearScreen').classList.remove('hidden');
+  raiseBest();
+}
+
+//============================================================== shake / flash / accent
+function addShake(a){ shake=Math.max(shake,a); }
+function flash(a){ flashAmt=Math.max(flashAmt,a); }
+const ACCENTS = ['#ffa83d','#ffb13d','#ff9a3d','#ffc24d','#ff8a3d','#ffd23d'];
+function accentColor(){ return ACCENTS[(level-1)%ACCENTS.length]; }
+
+//============================================================== update
+function update(dt){
+  if (player.alive){
+    if (player.invuln>0){ player.invuln-=dt; player.blink+=dt; }
+    player.pumpCd-=dt;
+    if (!player.moving){
+      const d = currentHeldDir();
+      if (d) tryMove(d);
+    }
+    updatePlayerMove(dt);
+    if (keys.fire) startPump();
+    // pump-hold: keep inflating the same target on a cadence
+    if (pumpTarget){
+      pumpTarget.t += dt;
+      if (keys.fire && pumpTarget.t>=0.32){
+        pumpTarget.t=0;
+        const out = pumpEnemy(pumpTarget.enemy);
+        if (out!=='dead') Audio_.pump(pumpTarget.enemy.stage);
+        burst(cellCx(Math.round(pumpTarget.enemy.x)), cellCy(Math.round(pumpTarget.enemy.y)), 4, {speed:50,life:0.25,color:'#fff'});
+        if (out==='popped'){ popEnemy(pumpTarget.enemy); }
+      }
+      if (!keys.fire){ pumpTarget=null; hose=null; }  // released → let it deflate
+    }
+  } else {
+    player.respawnT-=dt;
+    if (player.respawnT<=0) respawnOrEnd();
+  }
+
+  updateRocks(dt);
+  updateEnemies(dt);
+  updateEnemyTweens(dt);
+  if (hose){ hose.t+=dt; }
+
+  updateParticles(dt);
+  updateFloats(dt);
+  shake *= Math.pow(0.04, dt);
+  flashAmt *= Math.pow(0.02, dt);
+
+  displayScore += (score-displayScore)*Math.min(1,dt*8);
+  elScore.textContent=Math.round(displayScore).toLocaleString();
+}
+
+//============================================================== render
+function drawGrid(){
+  // dirt body with subtle depth banding; open tunnels are dark
+  for (let y=0;y<grid.rows;y++){
+    for (let x=0;x<grid.cols;x++){
+      const px=FX+x*CELL, py=FY+y*CELL;
+      if (grid.tiles[idx(grid,x,y)]===DIRT){
+        // depth-banded earth color
+        const band = depthTier(y);
+        const cols = ['#3a2410','#42280f','#4a2a10','#3c2410','#341f0c'];
+        ctx.fillStyle = cols[Math.min(band,cols.length-1)];
+        ctx.fillRect(px,py,CELL,CELL);
+        // speckle texture
+        ctx.fillStyle='rgba(255,200,140,0.05)';
+        ctx.fillRect(px+ (x*7%CELL), py + (y*5%CELL), 2,2);
+        ctx.fillRect(px+ (x*3%CELL), py + (y*9%CELL), 2,2);
+      } else {
+        // open tunnel
+        ctx.fillStyle = y<SKY_ROWS ? 'rgba(20,12,4,0.6)' : '#0a0703';
+        ctx.fillRect(px,py,CELL,CELL);
+      }
+    }
+  }
+  // tunnel glow outlines: stroke the boundary between open and dirt faintly
+  ctx.save();
+  ctx.strokeStyle='rgba(255,168,61,0.10)'; ctx.lineWidth=1;
+  ctx.strokeRect(FX+0.5,FY+0.5,FW-1,FH-1);
+  ctx.restore();
+}
+function drawRocks(){
+  for (const r of grid.rocks){
+    if (r.state==='gone'){ /* draw the settled rock */ }
+    let cx=cellCx(r.x), cy = r.state==='falling' ? (r.py||cellCy(r.y)) : cellCy(r.y);
+    if (r.state==='gone') cy=cellCy(r.y);
+    ctx.save();
+    if (r.state==='wobble'){ cx += Math.sin(r.t*40)*CELL*0.06; }
+    ctx.translate(cx,cy);
+    ctx.shadowBlur=10; ctx.shadowColor='#caa97f';
+    const rad=CELL*0.36;
+    ctx.fillStyle='#8a6a42'; ctx.strokeStyle='#caa97f'; ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(-rad,0); ctx.lineTo(-rad*0.6,-rad*0.8); ctx.lineTo(rad*0.3,-rad);
+    ctx.lineTo(rad,-rad*0.3); ctx.lineTo(rad*0.7,rad*0.7); ctx.lineTo(-rad*0.3,rad);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='rgba(255,230,200,0.25)';
+    ctx.beginPath(); ctx.arc(-rad*0.2,-rad*0.3,rad*0.22,0,TAU); ctx.fill();
+    ctx.restore();
+  }
+}
+function drawEnemy(e){
+  const cx=cellCx(e.x), cy=cellCy(e.y);
+  const baseR = CELL*0.34;
+  const r = baseR * (1 + e.stage*0.28);
+  ctx.save();
+  ctx.translate(cx,cy);
+  const col = e.kind==='fygar' ? '#ff5a3d' : accentColor();
+  if (e.ghost){
+    // disembodied eyes drifting through dirt
+    ctx.globalAlpha=0.85; ctx.shadowBlur=14; ctx.shadowColor='#bfe9ff';
+    ctx.fillStyle='#eaf6ff';
+    ctx.beginPath(); ctx.arc(-baseR*0.45,0,baseR*0.4,0,TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc( baseR*0.45,0,baseR*0.4,0,TAU); ctx.fill();
+    ctx.fillStyle='#0a3a55';
+    const lookx = clamp((player.gx-e.x),-1,1)*baseR*0.16;
+    ctx.beginPath(); ctx.arc(-baseR*0.45+lookx,0,baseR*0.17,0,TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc( baseR*0.45+lookx,0,baseR*0.17,0,TAU); ctx.fill();
+    ctx.restore(); return;
+  }
+  ctx.shadowBlur=14; ctx.shadowColor=col;
+  ctx.fillStyle=col; ctx.strokeStyle=col; ctx.lineWidth=2;
+  if (e.stage>=PUMP_MAX-1){ /* about to pop — bright */ ctx.globalAlpha=1; }
+  if (e.kind==='fygar'){
+    // dragon: a chunky body + snout; breathes fire along the row
+    ctx.globalAlpha=0.92;
+    ctx.beginPath(); ctx.ellipse(0,0,r*1.05,r*0.92,0,0,TAU); ctx.fill();
+    // snout in facing dir (toward player horizontally)
+    const fdir = (player.gx>=e.x)?1:-1;
+    ctx.fillRect(fdir>0?r*0.6:-r*1.2, -r*0.25, r*0.6, r*0.5);
+    // eye
+    ctx.globalAlpha=1; ctx.fillStyle='#fff'; ctx.shadowBlur=0;
+    ctx.beginPath(); ctx.arc(fdir*r*0.3,-r*0.25,r*0.18,0,TAU); ctx.fill();
+    ctx.fillStyle='#200'; ctx.beginPath(); ctx.arc(fdir*r*0.34,-r*0.25,r*0.09,0,TAU); ctx.fill();
+    // flame
+    if (e.firing>0){
+      ctx.save(); ctx.globalAlpha=clamp(e.firing*1.6,0,1);
+      ctx.shadowBlur=18; ctx.shadowColor='#ffb13d';
+      const flen = CELL*FYGAR_FIRE_RANGE*0.9;
+      const grd=ctx.createLinearGradient(0,0,e.fireDir*flen,0);
+      grd.addColorStop(0,'#fff2c0'); grd.addColorStop(0.5,'#ff8a3d'); grd.addColorStop(1,'rgba(255,60,40,0)');
+      ctx.fillStyle=grd;
+      ctx.beginPath(); ctx.moveTo(0,-r*0.5); ctx.lineTo(e.fireDir*flen,-r*0.18);
+      ctx.lineTo(e.fireDir*flen,r*0.18); ctx.lineTo(0,r*0.5); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+  } else {
+    // pooka: round goggle-creature
+    ctx.globalAlpha=0.92;
+    ctx.beginPath(); ctx.arc(0,0,r,0,TAU); ctx.fill();
+    ctx.globalAlpha=1; ctx.fillStyle='#fff'; ctx.shadowBlur=0;
+    ctx.beginPath(); ctx.arc(-r*0.34,-r*0.1,r*0.34,0,TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc( r*0.34,-r*0.1,r*0.34,0,TAU); ctx.fill();
+    ctx.fillStyle='#3a1500';
+    ctx.beginPath(); ctx.arc(-r*0.34,-r*0.1,r*0.16,0,TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc( r*0.34,-r*0.1,r*0.16,0,TAU); ctx.fill();
+  }
+  // inflation strain lines
+  if (e.stage>0){
+    ctx.globalAlpha=0.5; ctx.strokeStyle='#fff'; ctx.shadowBlur=0; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(0,0,r*1.08,0,TAU); ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawPlayer(){
+  if (!player.alive) return;
+  if (player.invuln>0 && Math.floor(player.blink*16)%2===0){ /* blink */ return; }
+  const r = CELL*0.34;
+  ctx.save();
+  ctx.translate(player.x, player.y);
+  ctx.shadowBlur=14; ctx.shadowColor='#fff2e0';
+  ctx.fillStyle='#fff2e0'; ctx.strokeStyle=accentColor(); ctx.lineWidth=2.5;
+  // body
+  ctx.beginPath(); ctx.arc(0,0,r,0,TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(0,0,r,0,TAU); ctx.stroke();
+  // a directional "visor" facing the dig direction
+  const [dx,dy]=DIRS[player.dir];
+  ctx.fillStyle=accentColor(); ctx.shadowBlur=0;
+  ctx.beginPath();
+  ctx.moveTo(dx*r*0.2 - dy*r*0.5, dy*r*0.2 + dx*r*0.5);
+  ctx.lineTo(dx*r*1.05, dy*r*1.05);
+  ctx.lineTo(dx*r*0.2 + dy*r*0.5, dy*r*0.2 - dx*r*0.5);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+  // air-hose harpoon while pumping
+  if (hose && pumpTarget && !pumpTarget.enemy.dead){
+    ctx.save();
+    ctx.strokeStyle='#bfe9ff'; ctx.lineWidth=3; ctx.shadowBlur=10; ctx.shadowColor='#bfe9ff';
+    ctx.beginPath(); ctx.moveTo(player.x,player.y); ctx.lineTo(cellCx(Math.round(pumpTarget.enemy.x)), cellCy(Math.round(pumpTarget.enemy.y))); ctx.stroke();
+    ctx.restore();
+  }
+}
+function render(now){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  if (shake>0.3){ ctx.translate(rand(shake,-shake), rand(shake,-shake)); }
+  if (grid){
+    drawGrid();
+    drawRocks();
+    for (const e of enemies){ if (!e.dead) drawEnemy(e); }
+    drawPlayer();
+    drawParticles();
+    drawFloats();
+  }
+  ctx.restore();
+  if (flashAmt>0.01){
+    ctx.save(); ctx.globalAlpha=clamp(flashAmt,0,0.6);
+    ctx.fillStyle='#ffd9a0'; ctx.fillRect(0,0,W,H); ctx.restore();
+  }
+}
+
+//============================================================== input
+const keys = { fire:false };
+const held = { left:false, right:false, up:false, down:false };
+function setMuteTag(){ document.getElementById('muteTag').textContent='M · sound '+(Audio_.muted?'off':'on'); }
+window.addEventListener('keydown', e=>{
+  const k=e.key.toLowerCase();
+  if (['arrowleft','arrowright','arrowup','arrowdown',' ','spacebar'].includes(k)) e.preventDefault();
+  switch(k){
+    case 'arrowleft': case 'a': held.left=true; tapMove('left'); break;
+    case 'arrowright': case 'd': held.right=true; tapMove('right'); break;
+    case 'arrowup': case 'w': held.up=true; tapMove('up'); break;
+    case 'arrowdown': case 's': held.down=true; tapMove('down'); break;
+    case ' ': case 'spacebar': keys.fire=true; break;
+    case 'enter':
+      if (state==='title'||state==='gameover') startGame();
+      else if (state==='levelclear') nextLevel();
+      break;
+    case 'p': case 'escape': if (state==='playing'||state==='paused') togglePause(); break;
+    case 'm':
+      Audio_.init(); Audio_.muted=!Audio_.muted; setMuteTag(); if(!Audio_.muted) Audio_.resume(); break;
+  }
+});
+window.addEventListener('keyup', e=>{
+  const k=e.key.toLowerCase();
+  switch(k){
+    case 'arrowleft': case 'a': held.left=false; break;
+    case 'arrowright': case 'd': held.right=false; break;
+    case 'arrowup': case 'w': held.up=false; break;
+    case 'arrowdown': case 's': held.down=false; break;
+    case ' ': case 'spacebar': keys.fire=false; break;
+  }
+});
+
+//============================================================== game flow
+function startGame(){
+  score=0; displayScore=0; level=1; lives=3; extraLifeGiven=false;
+  levelSeed = (Math.random()*0xffffffff)>>>0;
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('gameoverScreen').classList.add('hidden');
+  document.getElementById('levelClearScreen').classList.add('hidden');
+  document.getElementById('hud').style.display='block';
+  updateLives();
+  Audio_.init();
+  startLevel(1);
+  document.documentElement.style.setProperty('--accent', accentColor());
+  buildBg();
+  state='playing'; last=performance.now();
+}
+function nextLevel(){
+  document.getElementById('levelClearScreen').classList.add('hidden');
+  startLevel(level+1);
+  document.documentElement.style.setProperty('--accent', accentColor());
+  buildBg();
+  state='playing'; last=performance.now();
+}
+function endGame(){
+  state='gameover'; raiseBest();
+  document.getElementById('goScore').textContent=score.toLocaleString();
+  document.getElementById('goLevel').textContent=level;
+  document.getElementById('newHigh').style.display=(score>=best&&score>0)?'block':'none';
+  document.getElementById('gameoverScreen').classList.remove('hidden');
+}
+function togglePause(){
+  if (state==='playing'){ state='paused'; document.getElementById('pauseScreen').classList.remove('hidden'); }
+  else if (state==='paused'){ state='playing'; document.getElementById('pauseScreen').classList.add('hidden'); last=performance.now(); }
+}
+
+//============================================================== main loop
+let last=performance.now();
+let fpsTime=0, fpsCount=0, fpsValue=60;
+function frame(now){
+  let dt=(now-last)/1000; last=now;
+  if (dt>0.05) dt=0.05;
+  fpsTime+=dt; fpsCount++;
+  if (fpsTime>=0.5){ fpsValue=Math.round(fpsCount/fpsTime); fpsTime=0; fpsCount=0; }
+
+  if (state==='playing'){ update(dt); }
+  else if (state==='paused'){ updateParticles(dt*0.4); updateFloats(dt*0.4); }
+  else { updateParticles(dt); }
+  if (grid) render(now);
+  requestAnimationFrame(frame);
+}
+
+//============================================================== SELF-TEST (headless logic)
+function runSelfTest(){
+  const results=[]; let allPass=true;
+  function check(name, cond, detail){ const pass=!!cond; if(!pass) allPass=false;
+    results.push({name,pass,detail}); console.log((pass?'PASS':'FAIL')+' — '+name+(detail?'  ('+detail+')':'')); }
+
+  // 1) DIGGING opens exactly the dug tile; reachability only spreads through dug tunnel.
+  {
+    const g = makeGrid(GCOLS, GROWS);
+    // dig a vertical shaft from the surface pocket down 3 rows
+    const sx=GCOLS>>1; digTile(g,sx,SKY_ROWS);
+    const newly = [digTile(g,sx,SKY_ROWS+1), digTile(g,sx,SKY_ROWS+2)];
+    const reAfter = digTile(g,sx,SKY_ROWS+2);   // re-digging an open tile = false
+    // a side tile we never dug stays solid → not walkable & not reachable
+    const sideDirt = isDirt(g, sx+1, SKY_ROWS+1);
+    const reach = reachableOpen(g, sx, SKY_ROWS);
+    const inShaft = reach.has(sx+','+(SKY_ROWS+1)) && reach.has(sx+','+(SKY_ROWS+2));
+    const sideNotReached = !reach.has((sx+1)+','+(SKY_ROWS+1));
+    const ok = newly[0]===true && newly[1]===true && reAfter===false && sideDirt===true && inShaft && sideNotReached
+               && !canWalk(g, sx+1, SKY_ROWS+1) && canWalk(g, sx, SKY_ROWS+2);
+    check('dig: opens only the dug tile; player can\'t walk unbroken dirt; tunnel reachable', ok,
+      'newly '+newly+' redug '+reAfter+' sideDirt '+sideDirt+' inShaft '+inShaft+' sideUnreached '+sideNotReached);
+  }
+  // 2) PUMP inflates exactly one stage per pump; pops at MAX; deflates when released.
+  {
+    const e = makeEnemyCore('pooka');
+    const r1=pumpEnemy(e), s1=e.stage;   // 1
+    const r2=pumpEnemy(e), s2=e.stage;   // 2
+    const r3=pumpEnemy(e), s3=e.stage;   // 3
+    const r4=pumpEnemy(e), s4=e.stage;   // 4 → pop
+    const ok = r1==='inflated'&&s1===1 && r2==='inflated'&&s2===2 && r3==='inflated'&&s3===3 &&
+               r4==='popped'&&s4===PUMP_MAX && e.popped===true && e.dead===true;
+    check('pump: +1 stage per pump (1,2,3) then POP at stage '+PUMP_MAX+'; popped enemy dead', ok,
+      'stages '+[s1,s2,s3,s4]+' results '+[r1,r2,r3,r4]);
+    // deflate when released
+    const e2 = makeEnemyCore('pooka'); pumpEnemy(e2); pumpEnemy(e2);  // stage 2
+    const d1=deflateEnemy(e2), d2=deflateEnemy(e2), d3=deflateEnemy(e2); // 1,0,0
+    check('pump release: deflates one stage at a time, floors at 0, no underflow', d1===1&&d2===0&&d3===0,
+      'deflate '+[d1,d2,d3]);
+    // pumping a dead enemy is a no-op
+    const rd = pumpEnemy(e);
+    check('pump: popped/dead enemy ignores further pumps', rd==='dead' && e.stage===PUMP_MAX, 'res '+rd);
+  }
+  // 3) LEVEL CLEAR flips iff zero live enemies remain.
+  {
+    const list=[makeEnemyCore('pooka'), makeEnemyCore('fygar')];
+    const before = levelCleared(list);
+    list[0].dead=true; const mid = levelCleared(list);
+    list[1].dead=true; const after = levelCleared(list);
+    check('level clears iff zero enemies remain', before===false && mid===false && after===true,
+      'before '+before+' mid '+mid+' after '+after);
+  }
+  // 4) ROCK gravity: a rock is unsupported (falling) iff the cell below is open; resting otherwise.
+  {
+    const g = makeGrid(GCOLS, GROWS);
+    const rx=4, ry=SKY_ROWS+3;
+    // initially dirt below → supported
+    const supported = !rockShouldFall(g, rx, ry);
+    // dig out the cell beneath → now unsupported
+    digTile(g, rx, ry+1);
+    const fallsNow = rockShouldFall(g, rx, ry);
+    // a rock on the bottom row is always supported (the floor)
+    const onFloor = !rockShouldFall(g, rx, GROWS-1);
+    check('rock: supported on dirt/floor; falls only when the cell below is dug out', supported&&fallsNow&&onFloor,
+      'supported '+supported+' fallsNow '+fallsNow+' floor '+onFloor);
+  }
+  // 5) ROCK CRUSH: a falling rock crushes EVERY entity in the open cells it passes (incl. the
+  //    player) and stops at the first dirt/floor. Hand-built column, known expected set.
+  {
+    const g = makeGrid(8, 10);
+    const col=3, fromY=2;
+    // carve an open shaft below the rock: rows 3,4,5 open; row 6 stays dirt (the rock will stop at 5)
+    digTile(g,col,3); digTile(g,col,4); digTile(g,col,5);
+    const ents = [
+      {x:3,y:3,id:'p1'},   // in the shaft  → crushed
+      {x:3,y:5,id:'p2'},   // bottom of shaft → crushed
+      {x:3,y:6,id:'below'},// below the stop (dirt) → NOT crushed
+      {x:4,y:4,id:'other'},// different column → NOT crushed
+      {x:3,y:2,id:'atRock'},// same cell as the rock origin → NOT crushed (above)
+      {x:3,y:7,id:'player'} // far below → NOT crushed
+    ];
+    const res = rockFallCrush(g, col, fromY, ents);
+    const crushedSet = res.crushed.slice().sort().join(',');
+    const ok = crushedSet==='p1,p2' && res.stopY===5;
+    check('rock crush: crushes every entity in the cells it falls through, stops at dirt', ok,
+      'crushed ['+crushedSet+'] stopY '+res.stopY+' (expected p1,p2 / 5)');
+    // player-in-column case: a rock falling onto the player crushes them
+    const g2 = makeGrid(8,10); digTile(g2,2,3); digTile(g2,2,4);
+    const res2 = rockFallCrush(g2, 2, 2, [{x:2,y:4,id:'player'}]);
+    check('rock crush: the player is crushed when standing in the falling column', res2.crushed.indexOf('player')>=0,
+      'crushed ['+res2.crushed.join(',')+']');
+  }
+  // 6) DEPTH-TIERED SCORING increases monotonically with depth (deeper kill = more points).
+  {
+    let mono=true; let prev=-1; const seen=[];
+    for (let y=SKY_ROWS; y<GROWS; y+=2){ const s=pumpScore('pooka',y); seen.push(s); if (s<prev) mono=false; prev=s; }
+    const deeperMore = pumpScore('pooka', GROWS-1) > pumpScore('pooka', SKY_ROWS);
+    check('depth scoring: pump points increase monotonically with depth', mono && deeperMore,
+      'series '+seen.join(','));
+    // a CRUSH at a given depth strictly out-scores a PUMP at the same depth
+    const y=SKY_ROWS+5;
+    const crushBeatsPump = crushScore('pooka',y,1) > pumpScore('pooka',y);
+    check('scoring: a rock-crush kill out-scores a pump kill at the same depth', crushBeatsPump,
+      'crush '+crushScore('pooka',y,1)+' > pump '+pumpScore('pooka',y));
+    // fygar worth more than pooka at the same depth
+    check('scoring: fygar out-scores pooka at the same depth', pumpScore('fygar',y) > pumpScore('pooka',y),
+      'fygar '+pumpScore('fygar',y)+' pooka '+pumpScore('pooka',y));
+  }
+  // 7) ENEMY CHASE (tunnel): steps along the dug path toward the player, never through dirt;
+  //    holds (stuck) when there is no tunnel path.
+  {
+    const g = makeGrid(10, 6);
+    // carve a horizontal corridor on row 3 from x=2..6
+    for (let x=2;x<=6;x++) digTile(g,x,3);
+    // player at x=2, enemy at x=6 on the corridor → enemy steps toward x=5 (closer)
+    const step = enemyChaseStep(g, 6,3, 2,3, false);
+    const movedToward = step.x===5 && step.y===3;
+    const stayedOpen = canWalk(g, step.x, step.y);
+    // disconnected: enemy at x=8 (dirt, no path) → stuck (holds in place)
+    const stuckStep = enemyChaseStep(g, 8,3, 2,3, false);
+    const stuck = stuckStep.x===8 && stuckStep.y===3 && stuckStep.stuck===true;
+    check('chase (tunnel): steps along dug path toward the player; never enters dirt', movedToward&&stayedOpen,
+      'step '+step.x+','+step.y);
+    check('chase (tunnel): no tunnel path → enemy holds (cannot phase yet)', stuck,
+      'stuckStep '+stuckStep.x+','+stuckStep.y+' stuck '+stuckStep.stuck);
+  }
+  // 8) ENEMY GHOST mode: drifts straight THROUGH dirt toward the player (ignores walls),
+  //    reducing the larger-gap axis first.
+  {
+    const g = makeGrid(10, 8);   // all dirt below the sky
+    // enemy far away with a bigger horizontal gap → moves horizontally through dirt
+    const s1 = enemyChaseStep(g, 8,5, 2,5, true);
+    const horiz = s1.x===7 && s1.y===5 && isDirt(g,7,5);  // moved into solid dirt
+    // bigger vertical gap → moves vertically through dirt
+    const s2 = enemyChaseStep(g, 5,1, 5,6, true);
+    const vert = s2.x===5 && s2.y===2;
+    check('ghost mode: drifts THROUGH dirt toward the player (closes the larger gap first)', horiz&&vert,
+      's1 '+s1.x+','+s1.y+' s2 '+s2.x+','+s2.y);
+  }
+  // 9) DETERMINISM: same seed ⇒ identical enemy spawn layout & rock layout.
+  {
+    const a = buildLevel(3, 12345);
+    const b = buildLevel(3, 12345);
+    const c = buildLevel(3, 99999);
+    const sig = lv => lv.enemies.map(e=>e.kind+'@'+e.x+','+e.y).join('|') + '##' +
+                      lv.rocks.map(r=>r.x+','+r.y).join('|');
+    const sameSeed = sig(a)===sig(b);
+    const diffSeed = sig(a)!==sig(c);
+    check('determinism: identical seed → identical enemy + rock layout', sameSeed,
+      'a==b '+sameSeed);
+    check('determinism: a different seed → a different layout', diffSeed, 'a!=c '+diffSeed);
+    // and the layout is non-trivial (has enemies + rocks)
+    check('level build: spawns enemies and rocks within bounds', a.enemies.length>=3 && a.rocks.length>=2 &&
+      a.enemies.every(e=>e.x>=0&&e.x<GCOLS&&e.y>=SKY_ROWS&&e.y<GROWS) && a.rocks.every(r=>r.y<GROWS-1),
+      'enemies '+a.enemies.length+' rocks '+a.rocks.length);
+  }
+
+  const chip=document.getElementById('selftest');
+  if (chip){
+    if (allPass){ chip.classList.add('show'); chip.textContent='✓ self-test '+results.length+'/'+results.length; console.log('SELF-TEST: ALL PASS ('+results.length+' checks)'); }
+    else { const f=results.filter(r=>!r.pass).length; chip.classList.add('show','fail'); chip.textContent='✗ self-test'; console.error('SELF-TEST: '+f+' FAILURE(S)'); }
+  }
+  return { allPass, results, total:results.length, passed:results.filter(r=>r.pass).length };
+}
+
+//============================================================== boot
+loadBest();
+resize();
+if (elBest) elBest.textContent=best.toLocaleString();
+setMuteTag();
+updateLives();
+const SELFTEST = runSelfTest();
+requestAnimationFrame(frame);
+
+// verification hook
+window.__DIGDUG__ = {
+  get state(){return state;},
+  get score(){return score;},
+  get level(){return level;},
+  get lives(){return lives;},
+  get best(){return best;},
+  get fps(){return fpsValue;},
+  get enemyCount(){return enemies.filter(e=>!e.dead).length;},
+  get fygarCount(){return enemies.filter(e=>!e.dead&&e.kind==='fygar').length;},
+  get ghostCount(){return enemies.filter(e=>!e.dead&&e.ghost).length;},
+  get rocksDropped(){return rocksDropped;},
+  get playerAlive(){return player.alive;},
+  get playerCell(){return {x:player.gx, y:player.gy};},
+  get pumping(){return !!pumpTarget;},
+  get inflatedCount(){return enemies.filter(e=>!e.dead&&e.stage>0).length;},
+  get selfTest(){return SELFTEST;},
+  _start(){ startGame(); },
+  _next(){ if(state==='levelclear') nextLevel(); },
+  _move(dir,on){ if(dir in held) held[dir]=!!on; },
+  _step(dir){ tryMove(dir); },
+  _fire(on){ keys.fire=!!on; },
+  _pumpOnce(){ startPump(); },
+  // teleport the player to a cell (digging the path is not done; for tests only)
+  _setCell(x,y){ player.gx=x; player.gy=y; player.x=cellCx(x); player.y=cellCy(y); player.moving=false; digTile(grid,x,y); },
+  // spawn a single enemy adjacent to the player (right) for pump testing
+  _enemyAt(x,y,kind,mv){ const e={id:'t'+Math.random(),kind:kind||'pooka',x,y,hx:x,hy:y,stage:0,popped:false,dead:false,ghost:false,ghostT:0,fireCd:99,moveCd:(mv===undefined?99:mv)}; enemies.push(e); digTile(grid,x,y); return e.id; },
+  // drop the nearest rock by digging under it (forces a fall)
+  _undermineRock(i){ const r=grid.rocks[i||0]; if(r){ digTile(grid,r.x,r.y+1); return {x:r.x,y:r.y}; } return null; },
+  _rockStates(){ return grid.rocks.map(r=>r.state); },
+  _clearLevel(){ for(const e of enemies) e.dead=true; enemies=[]; if(state==='playing') winLevel(); },
+  _killExcept(n){ const live=enemies.filter(e=>!e.dead); for(let i=n||0;i<live.length;i++){ live[i].dead=true; } cleanupEnemies(); },
+  _hurt(){ player.invuln=0; hitPlayer('test'); },
+  _addScore(n){ score+=n; },
+  // test isolation: keep ONLY the last-spawned enemy alive (no level-clear), park the player safe
+  _isolate(px,py){ const last=enemies[enemies.length-1]; enemies=last?[last]:[]; player.gx=px; player.gy=py;
+    player.x=cellCx(px); player.y=cellCy(py); player.moving=false; player.invuln=99; digTile(grid,px,py); },
+  _face(dir){ player.dir=dir; },
+  _invuln(t){ player.invuln=t; },
+  GCOLS, GROWS, SKY_ROWS, PUMP_MAX
+};
+
+})();
+</script>
+
+<!-- arc-back -->
+<style>
+  .arc-back{ position:fixed; left:18px; bottom:14px; z-index:9999; pointer-events:auto;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11.5px;
+    letter-spacing:.18em; text-transform:uppercase; text-decoration:none;
+    color:#ffe9cf; opacity:.40; transition:opacity .2s, text-shadow .2s;
+    text-shadow:0 0 8px rgba(255,168,61,.45); }
+  .arc-back:hover{ opacity:.95; text-shadow:0 0 12px rgba(255,168,61,.85); }
+</style>
+<a class="arc-back" href="../index.html" style="position:fixed;z-index:9999;pointer-events:auto">← arcade</a>
+</body>
+</html>

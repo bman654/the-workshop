@@ -103,5 +103,11 @@ window.GAMES = [
     name: "Vanguard",
     blurb: "neon formation shooter — fly in, dive-bomb, free a captured wing into a dual fighter",
     accent: "#37d6ff"
+  },
+  {
+    file: "digdug.html",
+    name: "Dig Dug",
+    blurb: "neon tunneler — dig deep, pump enemies till they pop, drop rocks to crush",
+    accent: "#ffa83d"
   }
 ];
