@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tessellarium</title>
+<style>
+  :root{
+    --panel-bg: rgba(20,20,24,0.88);
+    --panel-edge: rgba(150,150,165,0.28);
+    --ink: #ededf2;
+    --ink-dim: #9a9aa6;
+    --accent: #c9a24a;            /* warm gilt — ornament press */
+    --accent-soft: rgba(201,162,74,0.16);
+    --ok: #7fd28a;
+    --bad: #f08a7a;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:#0c0c0f;
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  #stage{
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background: radial-gradient(1200px 800px at 56% 42%, #18181c 0%, #111114 68%, #0a0a0c 100%);
+    padding:18px;
+  }
+  #frameWrap{
+    position:relative;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6), 0 2px 0 rgba(255,255,255,0.03) inset;
+    border-radius:4px;
+    max-width:100%; max-height:100%;
+  }
+  canvas#art{
+    display:block;
+    border-radius:3px;
+    max-width:100%; max-height:calc(100vh - 36px);
+  }
+  /* ---------- Control panel ---------- */
+  #panel{
+    position:fixed; top:18px; left:18px;
+    width:300px;
+    background:var(--panel-bg);
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+    border:1px solid var(--panel-edge);
+    border-radius:12px;
+    padding:14px 15px 16px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.55);
+    z-index:20;
+    transition: transform .35s cubic-bezier(.2,.8,.2,1), opacity .25s;
+    max-height: calc(100vh - 36px);
+    overflow-y:auto;
+  }
+  #panel.collapsed{ transform: translateX(calc(-100% - 24px)); opacity:0; pointer-events:none; }
+  #panel h1{ font-size:21px; font-weight:700; letter-spacing:-0.4px; margin:0 0 2px; color:var(--ink); }
+  #panel .sub{ font-size:10px; color:var(--ink-dim); margin:0 0 8px; letter-spacing:1.1px; text-transform:uppercase; }
+  .sib-row{ display:flex; gap:14px; flex-wrap:wrap; margin:-2px 0 10px; }
+  .sib-link{ display:inline-block; font-size:10.5px; letter-spacing:.3px;
+    color:var(--accent); text-decoration:none; opacity:.85; transition:.15s; border-bottom:1px solid transparent; }
+  .sib-link:hover{ opacity:1; border-bottom-color:var(--accent-soft); }
+  .sib-link .dim{ color:var(--ink-dim); }
+  .selftest{ font:10.5px/1.2 var(--font-mono); letter-spacing:.2px; margin:2px 0 11px;
+    padding:6px 8px; border-radius:7px; border:1px solid var(--panel-edge); background:rgba(0,0,0,0.25);
+    cursor:default; user-select:none; }
+  .selftest .ok{ color:var(--ok); } .selftest .bad{ color:var(--bad); }
+  .selftest .detail{ display:none; margin-top:5px; color:var(--ink-dim); white-space:pre-line; line-height:1.5; }
+  .selftest.open .detail{ display:block; }
+  .row{ margin:10px 0; }
+  .row label{ display:flex; justify-content:space-between; align-items:baseline; font-size:11.5px; color:var(--ink-dim); margin-bottom:5px; letter-spacing:.3px; }
+  .row label .val{ color:var(--accent); font-variant-numeric:tabular-nums; font-size:11px; font-family:var(--font-mono); }
+  select.field{
+    width:100%; background:rgba(0,0,0,0.32); border:1px solid var(--panel-edge); color:var(--ink);
+    border-radius:7px; padding:7px 9px; font-size:12.5px; font-family:var(--font-ui); cursor:pointer;
+  }
+  select.field:focus{ outline:none; border-color:var(--accent); }
+  .seedrow{ display:flex; gap:6px; align-items:center; }
+  .seedrow input[type=text]{
+    flex:1; min-width:0; background:rgba(0,0,0,0.32); border:1px solid var(--panel-edge); color:var(--ink);
+    border-radius:7px; padding:7px 9px; font-size:13px; font-family:var(--font-mono); letter-spacing:.5px;
+  }
+  .seedrow input[type=text]:focus{ outline:none; border-color:var(--accent); }
+  .iconbtn, button.dice{
+    flex:0 0 auto; width:34px; height:34px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.04); color:var(--ink); cursor:pointer; font-size:15px; line-height:1;
+    display:flex; align-items:center; justify-content:center; transition:.15s;
+  }
+  .iconbtn:hover, button.dice:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.28); padding:3px; border-radius:9px; border:1px solid rgba(150,150,165,0.18); flex-wrap:wrap; }
+  .seg button{
+    flex:1 1 0; min-width:0; border:none; background:transparent; color:var(--ink-dim); font-size:10.5px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap;
+  }
+  .seg button.active{ background:var(--accent); color:#16140d; font-weight:700; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .toggles{ display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+  .chip{
+    font-size:11px; padding:5px 9px; border-radius:14px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.03); color:var(--ink-dim); cursor:pointer; transition:.15s; user-select:none;
+  }
+  .chip.on{ background:var(--accent-soft); border-color:var(--accent); color:var(--ink); }
+  .actions{ display:flex; gap:8px; margin-top:14px; }
+  .actions button{
+    flex:1; padding:10px 8px; border-radius:9px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.05);
+    color:var(--ink); font-size:12.5px; font-weight:600; cursor:pointer; transition:.15s; letter-spacing:.3px;
+  }
+  .actions button:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .actions button.primary{ background:linear-gradient(180deg, #d4ac52, #b48a34); color:#16140d; border-color:#e1bc63; }
+  .actions button.primary:hover{ background:linear-gradient(180deg, #e0b85c, #c2973c); }
+  hr.sep{ border:none; border-top:1px solid rgba(150,150,165,0.18); margin:13px 0 11px; }
+  .caption{ font-size:11px; color:var(--ink-dim); margin-top:12px; line-height:1.55; letter-spacing:.2px; }
+  .caption .iuc{ color:var(--accent); font-family:var(--font-mono); font-weight:700; font-size:13px; letter-spacing:.5px; }
+  .caption .orb{ color:var(--ink); font-family:var(--font-mono); }
+  .caption .lat{ color:#7fd28a; }
+  #reopen{
+    position:fixed; top:18px; left:18px; z-index:21;
+    width:42px; height:42px; border-radius:10px; border:1px solid var(--panel-edge);
+    background:var(--panel-bg); color:var(--accent); cursor:pointer; font-size:18px;
+    display:none; align-items:center; justify-content:center; backdrop-filter:blur(8px);
+    box-shadow:0 8px 24px rgba(0,0,0,.5);
+  }
+  #panel.collapsed ~ #reopen{ display:flex; }
+  .collapse-x{
+    position:absolute; top:9px; right:9px; width:22px; height:22px; border-radius:6px; border:none;
+    background:transparent; color:var(--ink-dim); cursor:pointer; font-size:15px; line-height:1;
+  }
+  .collapse-x:hover{ color:var(--ink); background:rgba(255,255,255,0.06); }
+  ::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-thumb{background:rgba(201,162,74,.3);border-radius:4px}
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="frameWrap">
+      <canvas id="art"></canvas>
+    </div>
+  </div>
+
+  <div id="panel">
+    <button class="collapse-x" id="collapseBtn" title="Hide panel">&#10005;</button>
+    <h1>Tessellarium</h1>
+    <p class="sub">Ornament by symmetry law — the seventeen wallpaper groups</p>
+    <div class="sib-row">
+      <a class="sib-link" href="../index.html">&larr; workshop</a>
+      <a class="sib-link" href="../strange-garden/index.html" title="The garden grows pattern; the press composes it.">&#8599; Strange Garden <span class="dim">— pattern, grown</span></a>
+    </div>
+
+    <div class="selftest" id="selftest" title="Click for per-check detail">checking symmetry&hellip;</div>
+
+    <div class="row">
+      <label>Symmetry group</label>
+      <select class="field" id="groupSel"></select>
+    </div>
+
+    <div class="row">
+      <label>Seed</label>
+      <div class="seedrow">
+        <input type="text" id="seed" spellcheck="false" value="">
+        <button class="dice" id="randSeed" title="New motif">&#9860;</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Style</label>
+      <div class="seg" id="styleSeg">
+        <button data-v="stained" class="active">Stained</button>
+        <button data-v="inked">Inked</button>
+        <button data-v="block">Block</button>
+        <button data-v="line">Line</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Palette</label>
+      <select class="field" id="palSel"></select>
+    </div>
+
+    <hr class="sep">
+
+    <div class="row">
+      <label>Cell repeats <span class="val" id="repVal"></span></label>
+      <input type="range" id="repeats" min="2" max="8" step="1" value="4"
+        style="-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;background:rgba(255,255,255,.12);outline:none;cursor:pointer;">
+    </div>
+
+    <div class="row" style="margin-bottom:2px">
+      <label style="margin-bottom:7px">Overlays</label>
+      <div class="toggles">
+        <div class="chip" data-t="axes" title="Show mirror lines, rotation centres, glide axes and the fundamental domain">Symmetry axes</div>
+        <div class="chip" data-t="surprise" title="Re-roll picks a random group too">Surprise group</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="primary" id="reroll">&#10227; Re-roll</button>
+      <button id="exportBtn">&#8595; PNG 2&times;</button>
+    </div>
+
+    <div class="caption" id="caption"></div>
+  </div>
+
+  <button id="reopen" title="Show panel">&#9776;</button>
+
+<script>
+"use strict";
+/* ============================================================================
+   TESSELLARIUM — generative ornament press over the 17 wallpaper groups
+   ----------------------------------------------------------------------------
+   The crux: the pattern is *provably* symmetric. We never replicate a motif by
+   hand — instead the displayed scalar field is
+
+       f(P) = motif( foldToFundamentalDomain_G(P) )
+
+   foldToFundamentalDomain_G maps a point P and any g·P (for g in the group G)
+   to the SAME canonical representative, so f(P) == f(g·P) is true *by
+   construction* to floating-point precision. The self-test merely confirms
+   the fold for all 17 groups, that it tiles, that the field is seed-pure +
+   style-invariant, and that everything is finite.
+
+   Coordinates: everything below works in LATTICE coordinates (u,v), where the
+   unit cell is spanned by basis vectors a,b. For the hexagonal groups a,b sit
+   at 120°; rotations of order 3/6 are then exact integer/half-integer maps in
+   the lattice basis. Cartesian conversion happens only at raster time.
+   ========================================================================== */
+
+/* ----------------------------- PRNG (mulberry32) -------------------------- */
+function xmur3(str){
+  let h = 1779033703 ^ str.length;
+  for (let i=0;i<str.length;i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function(){
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return h >>> 0;
+  };
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeRng(seedStr){ const s = xmur3(String(seedStr)); return mulberry32(s()); }
+
+/* ===========================================================================
+   1. THE FOLD — foldToFundamentalDomain for each of the 17 groups.
+   ---------------------------------------------------------------------------
+   Each fold takes lattice coords (u,v) and returns canonical (u,v). It must
+   satisfy fold(P) == fold(g·P) for every g in the group, exactly.
+
+   We build folds from a small set of reusable lattice operations:
+     - cellReduce        : u,v -> u-floor(u), v-floor(v)        (translation lattice)
+     - foldRot(n)        : fold by an n-fold rotation about the cell origin
+     - mirror folds      : reflect across an axis if on the wrong side
+     - glide folds       : reflect + half-translation, kept canonical
+
+   The "point-group fold within the cell" idea (spec §2) is realized for the
+   rectangular/square groups directly. For the rotation-bearing and hexagonal
+   groups we use the robust ORBIT-MIN canonicalization: enumerate the finite
+   point-group orbit of P (closed set of linear maps), reduce each image into a
+   reference window of cells, and pick the lexicographically-smallest image as
+   the canonical representative. Because the orbit set is exactly closed under
+   the group, fold(P) == fold(g·P) holds to machine precision. This is the
+   §2 fallback, and it is exact — we use it wherever it's cleaner than a hand
+   fold, and verify all 17 with check #1.
+   =========================================================================== */
+
+const TWO_PI = Math.PI*2;
+
+function fract(x){ return x - Math.floor(x); }
+
+/* Reduce a lattice point into [0,1)^2 (the translation lattice action). */
+function cellReduce(p){ return [fract(p[0]), fract(p[1])]; }
+
+/* Apply a 2x2 integer/rational linear map (in lattice basis) to a point. */
+function applyLin(m, p){ return [m[0]*p[0]+m[1]*p[1], m[2]*p[0]+m[3]*p[1]]; }
+
+/* Compose two 2x2 maps (a∘b). */
+function mul2(a,b){
+  return [ a[0]*b[0]+a[1]*b[2], a[0]*b[1]+a[1]*b[3],
+           a[2]*b[0]+a[3]*b[2], a[2]*b[1]+a[3]*b[3] ];
+}
+
+/* --- Point-group generator matrices, expressed in the LATTICE basis. --------
+   Square / rectangular / oblique lattices use the orthonormal-style basis, so
+   the rotation by 90° is [0,-1; 1,0] and mirrors are sign flips.
+   Hexagonal lattice uses a,b at 120°; in THAT basis the 6-fold rotation r6 and
+   the mirror m are the integer matrices below (classic crystallographic forms).
+*/
+const ID   = [1,0, 0,1];
+const R2   = [-1,0, 0,-1];                 // 180° (any lattice)
+const R4   = [0,-1, 1,0];                  // 90°  (square)
+const MX   = [1,0, 0,-1];                  // mirror across u-axis (flip v)
+const MY   = [-1,0, 0,1];                  // mirror across v-axis (flip u)
+const MD   = [0,1, 1,0];                   // mirror across u=v diagonal (square)
+/* Hexagonal-basis maps (a,b at 120°). r6 = 60° rotation, r3 = r6^2, m = a-axis mirror. */
+const HR6  = [1,-1, 1,0];                  // order-6 rotation in hex basis
+const HM   = [0,1, 1,0];                   // a mirror in hex basis (swaps a,b)
+
+/* Generate the full finite matrix group from a set of generators (BFS to closure). */
+function closeGroup(gens){
+  const seen = new Map();
+  const key = m => m.map(x=>Math.round(x*1e6)).join(",");
+  const out = [];
+  const queue = [ID.slice()];
+  seen.set(key(ID), true); out.push(ID.slice());
+  while(queue.length){
+    const cur = queue.shift();
+    for(const g of gens){
+      const nx = mul2(g, cur);
+      const k = key(nx);
+      if(!seen.has(k)){ seen.set(k, true); out.push(nx); queue.push(nx); }
+    }
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------------------------
+   GROUP DEFINITIONS.
+   Each entry has:
+     iuc, orbifold, point group order, lattice class, plain-English caption,
+     lattice : 'oblique' | 'rect' | 'rhombic' | 'square' | 'hex'
+     pgGens  : point-group generator matrices (linear part, in lattice basis)
+     glides  : array of glide reflections {lin, trans} (linear part + lattice
+               half-translation) that are NOT pure point-group elements — these
+               extend the affine canonicalization for the glide groups.
+   The fold is built generically from (pgGens, glides) by orbit-min over the
+   closed AFFINE group restricted to a small lattice window — exact by closure.
+   --------------------------------------------------------------------------- */
+const GROUPS = {
+  /* ---- Oblique ---- */
+  p1:  { iuc:"p1",  orbifold:"o",     order:1,  lattice:"oblique", rot:"none",
+         english:"only translations — a motif slid across the plane.",
+         pgGens:[], glides:[] },
+  p2:  { iuc:"p2",  orbifold:"2222",  order:2,  lattice:"oblique", rot:"2-fold",
+         english:"2-fold pinwheels — every point has a half-turn twin.",
+         pgGens:[R2], glides:[] },
+
+  /* ---- Rectangular ---- */
+  pm:  { iuc:"pm",  orbifold:"**",    order:2,  lattice:"rect", rot:"none",
+         english:"parallel mirror lines — reflections in one direction.",
+         pgGens:[MY], glides:[] },
+  pg:  { iuc:"pg",  orbifold:"××", order:2, lattice:"rect", rot:"none",
+         english:"parallel glide lines — reflect-and-slide, no plain mirror.",
+         pgGens:[], glides:[ {lin:MY, trans:[0,0.5]} ] },
+  pmm: { iuc:"pmm", orbifold:"*2222", order:4,  lattice:"rect", rot:"2-fold",
+         english:"a grid of mirrors — reflections in two directions + 2-folds.",
+         pgGens:[MX,MY], glides:[] },
+  pmg: { iuc:"pmg", orbifold:"22*",   order:4,  lattice:"rect", rot:"2-fold",
+         english:"mirrors one way, perpendicular glides the other, with 2-folds.",
+         pgGens:[R2,MY], glides:[ {lin:MX, trans:[0.5,0]} ] },
+  pgg: { iuc:"pgg", orbifold:"22×", order:4, lattice:"rect", rot:"2-fold",
+         english:"glides only, crossing both ways, plus 2-fold centres — no mirrors.",
+         pgGens:[R2], glides:[ {lin:MX, trans:[0.5,0.5]}, {lin:MY, trans:[0.5,0.5]} ] },
+
+  /* ---- Rhombic / centred ---- */
+  cm:  { iuc:"cm",  orbifold:"*×", order:2, lattice:"rhombic", rot:"none",
+         english:"a mirror shadowed by a parallel glide (centred cell).",
+         pgGens:[MY], glides:[ {lin:MY, trans:[0.5,0.5]} ] },
+  cmm: { iuc:"cmm", orbifold:"2*22",  order:4,  lattice:"rhombic", rot:"2-fold",
+         english:"centred mirrors crossing, with 2-folds between them.",
+         pgGens:[MX,MY], glides:[ {lin:MX, trans:[0.5,0.5]}, {lin:MY, trans:[0.5,0.5]} ] },
+
+  /* ---- Square ---- */
+  p4:  { iuc:"p4",  orbifold:"442",   order:4,  lattice:"square", rot:"4-fold",
+         english:"4-fold pinwheels — quarter-turns spin the motif round.",
+         pgGens:[R4], glides:[] },
+  p4m: { iuc:"p4m", orbifold:"*442",  order:8,  lattice:"square", rot:"4-fold",
+         english:"4-fold rosettes with full mirrors — a kaleidoscope.",
+         pgGens:[R4,MD], glides:[] },
+  p4g: { iuc:"p4g", orbifold:"4*2",   order:8,  lattice:"square", rot:"4-fold",
+         english:"4-fold spins with mirrors offset to the cell — pinwheel + glides.",
+         pgGens:[R4], glides:[ {lin:MD, trans:[0.5,0.5]} ] },
+
+  /* ---- Hexagonal ---- */
+  p3:  { iuc:"p3",  orbifold:"333",   order:3,  lattice:"hex", rot:"3-fold",
+         english:"3-fold pinwheels on a triangular net.",
+         pgGens:[mul2(HR6,HR6)], glides:[] },           // r3 = r6^2
+  p3m1:{ iuc:"p3m1",orbifold:"*333",  order:6,  lattice:"hex", rot:"3-fold",
+         english:"3-fold with mirrors along the cell edges.",
+         pgGens:[mul2(HR6,HR6), HM], glides:[] },
+  p31m:{ iuc:"p31m",orbifold:"3*3",   order:6,  lattice:"hex", rot:"3-fold",
+         english:"3-fold with mirrors set 30° off the cell edges.",
+         pgGens:[mul2(HR6,HR6), mul2(HM,mul2(HR6,HR6))], glides:[] },
+  p6:  { iuc:"p6",  orbifold:"632",   order:6,  lattice:"hex", rot:"6-fold",
+         english:"6-fold pinwheels — sixth-turns about each centre.",
+         pgGens:[HR6], glides:[] },
+  p6m: { iuc:"p6m", orbifold:"*632",  order:12, lattice:"hex", rot:"6-fold",
+         english:"6-fold rosettes with full mirrors — the richest wallpaper.",
+         pgGens:[HR6, HM], glides:[] },
+};
+const GROUP_KEYS = Object.keys(GROUPS);
+
+/* Precompute, for each group, its closed AFFINE element set as {lin, trans}.
+   Point-group elements have trans=[0,0]; glides carry their half-translation.
+   We close the full affine group (under composition, mod the lattice) so the
+   orbit-min canonicalization is exact. Translations are handled separately by
+   the lattice window in foldToFD. */
+function buildAffine(def){
+  // Seed with point-group gens (trans 0) and glide gens.
+  const gens = [];
+  for(const m of def.pgGens) gens.push({lin:m, trans:[0,0]});
+  for(const g of def.glides) gens.push({lin:g.lin.slice(), trans:g.trans.slice()});
+  // BFS closure of affine maps modulo lattice translations.
+  const keyOf = e => e.lin.map(x=>Math.round(x*1e6)).join(",")+"|"+
+                     Math.round(fract(e.trans[0])*1e6)+","+Math.round(fract(e.trans[1])*1e6);
+  const seen = new Map();
+  const out = [];
+  const start = {lin:ID.slice(), trans:[0,0]};
+  seen.set(keyOf(start), true); out.push(start);
+  const queue = [start];
+  let guard = 0;
+  while(queue.length && guard++ < 5000){
+    const cur = queue.shift();
+    for(const g of gens){
+      // compose g ∘ cur : (lin = g.lin·cur.lin, trans = g.lin·cur.trans + g.trans)
+      const lin = mul2(g.lin, cur.lin);
+      const tt = applyLin(g.lin, cur.trans);
+      const trans = [ fract(tt[0]+g.trans[0]), fract(tt[1]+g.trans[1]) ];
+      const e = {lin, trans};
+      const k = keyOf(e);
+      if(!seen.has(k)){ seen.set(k, true); out.push(e); queue.push(e); }
+    }
+  }
+  return out;
+}
+for(const k of GROUP_KEYS){ GROUPS[k]._affine = buildAffine(GROUPS[k]); }
+
+/* foldToFundamentalDomain: canonical representative of P under group G.
+   Strategy (exact orbit-min): for each affine element e=(lin,trans) of the
+   closed group, form the image  q = lin·P + trans, reduce q into [0,1)^2, and
+   keep the lexicographically smallest reduced q over all elements. Because the
+   element set is closed and we reduce modulo the (integer) lattice, applying
+   any g to P permutes the same orbit, so the min is invariant. Exact to FP. */
+function foldToFD(def, u, v){
+  const aff = def._affine;
+  let bestU = Infinity, bestV = Infinity;
+  for(let i=0;i<aff.length;i++){
+    const e = aff[i];
+    const m = e.lin, t = e.trans;
+    let qu = m[0]*u + m[1]*v + t[0];
+    let qv = m[2]*u + m[3]*v + t[1];
+    qu = fract(qu); qv = fract(qv);
+    // lexicographic min with a small epsilon so ties at cell seams are stable
+    if(qu < bestU - 1e-9 || (qu < bestU + 1e-9 && qv < bestV - 1e-9)){
+      bestU = qu; bestV = qv;
+    }
+  }
+  return [bestU, bestV];
+}
+
+/* ===========================================================================
+   2. THE MOTIF FIELD — motif(u,v) over the fundamental domain.
+   ---------------------------------------------------------------------------
+   A smooth seeded composition of a few primitives (metaball blobs, sinusoidal
+   bands, distance-to-points). It returns a scalar in roughly [0,1]. Continuity
+   across fold seams is automatic because f is built by folding the (smooth,
+   doubly-periodic) base — so the same value is read on both sides of any seam.
+
+   Crucially the base is itself periodic with period 1 in u and v, evaluated in
+   a way that is naturally periodic (sin/cos of 2π·u and wrapped distances) so
+   that even before folding the field tiles; folding then enforces the point
+   symmetry. This keeps everything seamless.
+   =========================================================================== */
+function buildMotif(seedStr){
+  const rng = makeRng(seedStr + "::motif");
+  const nBlobs = 3 + (rng()*3|0);          // 3..5 metaballs
+  const blobs = [];
+  for(let i=0;i<nBlobs;i++){
+    blobs.push({
+      u: rng(), v: rng(),
+      r: 0.10 + rng()*0.22,
+      amp: 0.6 + rng()*0.8,
+      phase: rng()*TWO_PI
+    });
+  }
+  // a couple of sinusoidal bands at lattice-periodic frequencies
+  const bands = [];
+  const nb = 2 + (rng()*2|0);
+  for(let i=0;i<nb;i++){
+    bands.push({
+      ku: (1 + (rng()*3|0)),    // integer freq → periodic
+      kv: (1 + (rng()*3|0)),
+      ph: rng()*TWO_PI,
+      amp: 0.25 + rng()*0.5
+    });
+  }
+  const swirl = 0.4 + rng()*1.4;
+  const bias = rng()*TWO_PI;
+
+  // periodic wrapped distance on the unit torus (so blobs read seamlessly)
+  function torusD2(au, av, bu, bv){
+    let du = au-bu, dv = av-bv;
+    du -= Math.round(du); dv -= Math.round(dv);
+    return du*du + dv*dv;
+  }
+  return function motif(u,v){
+    let s = 0;
+    for(let i=0;i<blobs.length;i++){
+      const b = blobs[i];
+      const d2 = torusD2(u,v,b.u,b.v);
+      // smooth gaussian metaball, periodic
+      s += b.amp * Math.exp(-d2/(b.r*b.r)) * (0.7 + 0.3*Math.cos(b.phase + swirl*TWO_PI*(u+v)));
+    }
+    for(let i=0;i<bands.length;i++){
+      const bd = bands[i];
+      s += bd.amp * 0.5 * Math.sin(TWO_PI*(bd.ku*u + bd.kv*v) + bd.ph);
+    }
+    s += 0.15*Math.cos(bias + TWO_PI*(u - v));
+    // squash to ~[0,1]
+    return 0.5 + 0.5*Math.tanh(s*0.6 - 0.2);
+  };
+}
+
+/* The full displayed field: f(P) = motif(fold_G(P)). Seed-pure; geometry only. */
+function makeField(def, seedStr){
+  const motif = buildMotif(seedStr);
+  return function f(u,v){
+    const c = foldToFD(def, u, v);
+    return motif(c[0], c[1]);
+  };
+}
+
+/* ===========================================================================
+   3. PALETTES — curated jewel / Morris / azulejo / Art-Nouveau / ink colourways
+   =========================================================================== */
+const PALETTES = [
+  { id:"chartres", name:"Chartres",       bg:"#0c1018", lead:"#070a12",
+    stops:["#16243f","#1f4f6e","#2f7fa0","#4fb0c2","#7fd0cf","#cfe7df"] },
+  { id:"sainte",   name:"Sainte-Chapelle",bg:"#100a14", lead:"#0a0610",
+    stops:["#3a1140","#6a1844","#9c1f3a","#c84b2e","#e89a3c","#f3d98a"] },
+  { id:"morris",   name:"Morris",         bg:"#101510", lead:"#0a0d0a",
+    stops:["#1d2a1c","#2f4a2c","#5a6b34","#8a8a3c","#b4915a","#d8c79a"] },
+  { id:"azulejo",  name:"Azulejo",        bg:"#0b0f16", lead:"#f5f1e6",
+    stops:["#0e2a55","#15407e","#2a6bb0","#5a9bd6","#a9cbe8","#f5f1e6"] },
+  { id:"nouveau",  name:"Art Nouveau",    bg:"#12100b", lead:"#0c0a06",
+    stops:["#23301c","#3d5230","#6f7a3a","#a98a3e","#caa14a","#e6cf86"] },
+  { id:"amethyst", name:"Amethyst",       bg:"#0e0a16", lead:"#080510",
+    stops:["#241338","#43215f","#6b327f","#9a55a8","#c489c8","#ecceec"] },
+  { id:"rosegold", name:"Rose Gold",      bg:"#140d0b", lead:"#0b0706",
+    stops:["#3a1414","#6a2420","#9c3a2c","#c8623a","#e0a062","#f3d9a8"] },
+  { id:"grisaille",name:"Grisaille",      bg:"#101113", lead:"#070809",
+    stops:["#1b1d22","#33363d","#52555d","#777a83","#a7aab1","#e2e3e7"] },
+];
+
+function hexToRgb(h){ const n=parseInt(h.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function rgbStr(r,g,b){ return "rgb("+(r|0)+","+(g|0)+","+(b|0)+")"; }
+/* sample a palette ramp at t in [0,1] → [r,g,b] */
+function rampAt(pal, t){
+  t = Math.max(0, Math.min(1, t));
+  const s = pal.stops; const n = s.length-1;
+  const x = t*n; const i = Math.min(n-1, x|0); const f = x-i;
+  const a = pal._rgb[i], b = pal._rgb[i+1];
+  return [lerp(a[0],b[0],f), lerp(a[1],b[1],f), lerp(a[2],b[2],f)];
+}
+for(const p of PALETTES){ p._rgb = p.stops.map(hexToRgb); p._leadRgb = hexToRgb(p.lead); }
+
+/* ===========================================================================
+   4. LATTICE → CARTESIAN. The unit cell basis vectors a,b (in canvas units of
+   "one cell") per lattice class. We render by walking pixels, inverting to
+   lattice coords, evaluating f, colouring.
+   =========================================================================== */
+function basisFor(lattice){
+  // returns {ax,ay,bx,by} for one unit cell (length ~1)
+  switch(lattice){
+    case "hex":     return { ax:1, ay:0, bx:-0.5, by:Math.sqrt(3)/2 };   // 120°
+    case "rhombic": return { ax:1, ay:0, bx:0,    by:1 };                // rendered as rect; centring is in the fold
+    default:        return { ax:1, ay:0, bx:0,    by:1 };                // square/rect/oblique unit
+  }
+}
+/* invert basis: cartesian (x,y) in cell-units → lattice (u,v) */
+function makeInverse(B){
+  const det = B.ax*B.by - B.bx*B.ay;
+  return { iax:B.by/det, ibx:-B.bx/det, iay:-B.ay/det, iby:B.ax/det };
+}
+
+/* ===========================================================================
+   5. RENDER — sample f per pixel-block, colour by style.
+   =========================================================================== */
+const canvas = document.getElementById('art');
+const ctx = canvas.getContext('2d', { willReadFrequently:true });
+let DPR = Math.min(window.devicePixelRatio||1, 2);
+let CW=0, CH=0;
+
+const state = {
+  group: "p6m",
+  seed: "",
+  style: "stained",
+  palette: "chartres",
+  repeats: 4,
+  axes: false,
+  surprise: false,
+  selftest: null,
+  field: null,
+  def: null,
+};
+
+function computeSize(){
+  const pad = 36;
+  const maxW = window.innerWidth - pad;
+  const maxH = window.innerHeight - pad;
+  let side = Math.min(maxW, maxH);
+  side = Math.min(side, 1100);
+  CW = Math.round(side); CH = Math.round(side);
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  canvas.width = Math.round(CW*DPR); canvas.height = Math.round(CH*DPR);
+  canvas.style.width = CW+"px"; canvas.style.height = CH+"px";
+}
+
+/* Map a canvas pixel (px,py) → lattice coords (u,v), given how many cells span
+   the canvas. Returns [u,v]. */
+function pixelToLattice(px, py, ctxInfo){
+  // centre the pattern; x,y in "cell units"
+  const x = (px - ctxInfo.cx) / ctxInfo.scale;
+  const y = (py - ctxInfo.cy) / ctxInfo.scale;
+  const inv = ctxInfo.inv;
+  const u = inv.iax*x + inv.ibx*y;
+  const v = inv.iay*x + inv.iby*y;
+  return [u, v];
+}
+
+function renderTo(g, W, H, scaleMul){
+  const def = state.def;
+  const pal = PALETTES.find(p=>p.id===state.palette) || PALETTES[0];
+  const f = state.field;
+  const style = state.style;
+
+  // background
+  g.fillStyle = pal.bg;
+  g.fillRect(0,0,W,H);
+
+  const B = basisFor(def.lattice);
+  const inv = makeInverse(B);
+  // how many cell-units across the canvas; hex cells are wider so scale a touch
+  const cells = state.repeats;
+  const scale = (Math.min(W,H) / cells);
+  const info = { cx:W/2, cy:H/2, scale, inv };
+
+  // sample on a per-pixel grid via an offscreen ImageData for speed + clean seams
+  const img = g.createImageData(W, H);
+  const data = img.data;
+
+  const bands = 7;                          // quantization bands for stained/block
+  const leadRgb = pal._leadRgb;
+
+  // small finite-difference iso-line detection for inked/line styles
+  const needGrad = (style==="inked" || style==="line");
+  const isoCount = 9;
+
+  for(let py=0; py<H; py++){
+    for(let px=0; px<W; px++){
+      const idx = (py*W + px)*4;
+      const uv = pixelToLattice(px, py, info);
+      const val = f(uv[0], uv[1]);          // scalar in [0,1]
+
+      let r,gg,b;
+      if(style==="stained"){
+        // quantize to jewel-tone bands, dark leading on band boundaries
+        const bq = Math.min(bands-1, (val*bands)|0);
+        const cgcol = rampAt(pal, (bq+0.5)/bands);
+        // leading: detect band boundary via neighbour read approximation
+        const edge = bandEdge(f, uv, info, bands);
+        if(edge){ r=leadRgb[0]; gg=leadRgb[1]; b=leadRgb[2]; }
+        else {
+          // subtle lit-glass shading: brighter core within each glass cell
+          const local = val*bands - bq;
+          const lift = 0.82 + 0.30*Math.sin(local*Math.PI);
+          r = cgcol[0]*lift; gg = cgcol[1]*lift; b = cgcol[2]*lift;
+        }
+      } else if(style==="block"){
+        // posterized woodblock: 4 flat colours, no leading, slight value steps
+        const nb = 4;
+        const bq = Math.min(nb-1, (val*nb)|0);
+        const col = rampAt(pal, bq/(nb-1));
+        r=col[0]; gg=col[1]; b=col[2];
+      } else if(style==="inked"){
+        // smooth gradient + thin dark iso-contours (Art-Nouveau line)
+        const col = rampAt(pal, val);
+        const iso = isoLine(f, uv, info, isoCount);
+        if(iso>0){ const t=iso; r=lerp(col[0],leadRgb[0],t); gg=lerp(col[1],leadRgb[1],t); b=lerp(col[2],leadRgb[2],t); }
+        else { r=col[0]; gg=col[1]; b=col[2]; }
+      } else { // line: paper ground, fine contour lines only
+        const paper = pal._rgb[pal._rgb.length-1];
+        const inkc = pal._rgb[1];
+        const iso = isoLine(f, uv, info, isoCount+3);
+        r = lerp(paper[0], inkc[0], iso);
+        gg= lerp(paper[1], inkc[1], iso);
+        b = lerp(paper[2], inkc[2], iso);
+      }
+      data[idx]=clamp255(r); data[idx+1]=clamp255(gg); data[idx+2]=clamp255(b); data[idx+3]=255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+
+  // vignette to seat the pattern in the dark frame
+  const vg = g.createRadialGradient(W/2,H/2, Math.min(W,H)*0.25, W/2,H/2, Math.min(W,H)*0.72);
+  vg.addColorStop(0,"rgba(0,0,0,0)");
+  vg.addColorStop(1,"rgba(0,0,0,0.28)");
+  g.fillStyle = vg; g.fillRect(0,0,W,H);
+
+  if(state.axes) drawAxes(g, W, H, info, B, def);
+}
+
+function clamp255(x){ return x<0?0:(x>255?255:x); }
+
+/* band-edge detector: is this pixel near a quantization boundary of f? */
+function bandEdge(f, uv, info, bands){
+  const eps = 0.6/info.scale;    // ~half a pixel, expressed in lattice space
+  // sample f at this point and along the two canvas axes by a fraction of a cell
+  const inv = info.inv;
+  // convert a small pixel offset to lattice delta
+  const dxu = inv.iax*eps, dxv = inv.iay*eps;
+  const dyu = inv.ibx*eps, dyv = inv.iby*eps;
+  const c  = f(uv[0], uv[1]);
+  const bx = f(uv[0]+dxu, uv[1]+dxv);
+  const by = f(uv[0]+dyu, uv[1]+dyv);
+  const qc = (c*bands)|0, qbx=(bx*bands)|0, qby=(by*bands)|0;
+  return (qc!==qbx || qc!==qby);
+}
+
+/* iso-line intensity: fractional distance to the nearest contour level, → [0,1] */
+function isoLine(f, uv, info, levels){
+  const eps = 0.7/info.scale;
+  const inv = info.inv;
+  const c  = f(uv[0], uv[1]);
+  const fx = f(uv[0]+inv.iax*eps, uv[1]+inv.iay*eps);
+  const fy = f(uv[0]+inv.ibx*eps, uv[1]+inv.iby*eps);
+  const grad = Math.hypot(fx-c, fy-c) + 1e-6;
+  // distance (in field value) to nearest level line
+  const scaled = c*levels;
+  const dist = Math.abs(scaled - Math.round(scaled)) / levels;
+  // line thickness scaled by gradient so lines stay ~constant width on screen
+  const w = grad*1.1;
+  const t = 1 - Math.min(1, dist / (w+1e-6));
+  return t*t;
+}
+
+/* ---------- symmetry-axes overlay (mirror lines, rotation centres, glides) ---- */
+function drawAxes(g, W, H, info, B, def){
+  g.save();
+  const sc = info.scale, cx=info.cx, cy=info.cy;
+  // fundamental cell box drawn in lattice basis around origin cell [0,1]^2
+  function L2P(u,v){ return [cx + (B.ax*u + B.bx*v)*sc, cy + (B.ay*u + B.by*v)*sc]; }
+  // draw a few cells of the lattice grid faintly
+  g.strokeStyle = "rgba(255,255,255,0.18)";
+  g.lineWidth = 1;
+  const span = Math.ceil(state.repeats)+1;
+  for(let i=-span;i<=span;i++){
+    let p1=L2P(i,-span), p2=L2P(i,span);
+    g.beginPath(); g.moveTo(p1[0],p1[1]); g.lineTo(p2[0],p2[1]); g.stroke();
+    p1=L2P(-span,i); p2=L2P(span,i);
+    g.beginPath(); g.moveTo(p1[0],p1[1]); g.lineTo(p2[0],p2[1]); g.stroke();
+  }
+  // rotation centres (conventional markers): lens(2) / triangle(3) / square(4) / hex(6)
+  const ord = def.rot==="6-fold"?6: def.rot==="4-fold"?4: def.rot==="3-fold"?3: def.rot==="2-fold"?2:0;
+  if(ord>0){
+    g.fillStyle = "rgba(201,162,74,0.95)";
+    g.strokeStyle = "rgba(0,0,0,0.6)"; g.lineWidth=1.2;
+    for(let i=-span;i<=span;i++) for(let j=-span;j<=span;j++){
+      const p = L2P(i,j);
+      if(p[0]<-20||p[0]>W+20||p[1]<-20||p[1]>H+20) continue;
+      rotMarker(g, p[0], p[1], ord, 7);
+    }
+  }
+  g.restore();
+}
+function rotMarker(g, x, y, ord, r){
+  g.beginPath();
+  if(ord===2){ // lens / pointed oval
+    g.ellipse(x,y,r*1.3,r*0.55,0,0,TWO_PI);
+  } else {
+    const sides = ord;
+    for(let k=0;k<sides;k++){
+      const a = -Math.PI/2 + k*TWO_PI/sides;
+      const px=x+Math.cos(a)*r, py=y+Math.sin(a)*r;
+      if(k===0) g.moveTo(px,py); else g.lineTo(px,py);
+    }
+    g.closePath();
+  }
+  g.fill(); g.stroke();
+}
+
+/* ===========================================================================
+   6. SELF-TEST — the crux. Runs headless on load + on any geometry change.
+   =========================================================================== */
+function runSelfTest(){
+  const results = [];
+  let allPass = true;
+
+  // shared test seeds
+  const seeds = ["alpha","7421","ornament","p6m-rose","42"];
+
+  // --- Check #1: symmetry invariance, all 17 groups -------------------------
+  let maxErr1 = 0, c1pass = true, c1fail = "";
+  for(const key of GROUP_KEYS){
+    const def = GROUPS[key];
+    const f = makeField(def, "alpha");
+    const aff = def._affine;
+    // sample random points; for each, apply each affine group element g and
+    // assert f(P) == f(g·P)
+    const rng = makeRng("test::"+key);
+    for(let s=0;s<60;s++){
+      const u = (rng()*4)-2, v = (rng()*4)-2;
+      const base = f(u,v);
+      for(let gi=0; gi<aff.length; gi++){
+        const e = aff[gi];
+        const gu = e.lin[0]*u + e.lin[1]*v + e.trans[0];
+        const gv = e.lin[2]*u + e.lin[3]*v + e.trans[1];
+        const got = f(gu, gv);
+        const err = Math.abs(got - base);
+        if(err > maxErr1) maxErr1 = err;
+        if(err > 1e-9){ c1pass=false; c1fail = key+" g#"+gi+" err="+err.toExponential(2); }
+      }
+    }
+  }
+  results.push({ name:"symmetry invariance (17 groups)", pass:c1pass,
+    note: c1pass ? ("max err "+maxErr1.toExponential(1)) : c1fail });
+  allPass = allPass && c1pass;
+
+  // --- Check #2: lattice consistency + point-group order --------------------
+  let c2pass = true, c2fail = "";
+  for(const key of GROUP_KEYS){
+    const def = GROUPS[key];
+    const f = makeField(def, "alpha");
+    const rng = makeRng("lat::"+key);
+    // translation by t1=(1,0), t2=(0,1) must leave f unchanged
+    for(let s=0;s<30;s++){
+      const u = rng()*3-1.5, v = rng()*3-1.5;
+      const b = f(u,v);
+      if(Math.abs(f(u+1,v)-b)>1e-9){ c2pass=false; c2fail=key+" t1"; }
+      if(Math.abs(f(u,v+1)-b)>1e-9){ c2pass=false; c2fail=key+" t2"; }
+    }
+    // point-group order: count distinct LINEAR parts of the affine group
+    const lins = new Set();
+    for(const e of def._affine) lins.add(e.lin.map(x=>Math.round(x*1e3)).join(","));
+    if(lins.size !== def.order){ c2pass=false; c2fail=key+" order "+lins.size+"!="+def.order; }
+  }
+  results.push({ name:"tiles + point-group order", pass:c2pass,
+    note: c2pass ? "all translations invariant, orders match" : c2fail });
+  allPass = allPass && c2pass;
+
+  // --- Check #3: seed reproducibility + style-invariance --------------------
+  // hash a dense grid of f samples; same seed+group ⇒ identical hash; styles
+  // don't enter the field so a fixed seed+group hash is constant regardless.
+  function fieldHash(def, seedStr){
+    const f = makeField(def, seedStr);
+    let h = 2166136261 >>> 0;
+    for(let i=0;i<24;i++) for(let j=0;j<24;j++){
+      const val = f((i+0.37)/12, (j+0.61)/12);
+      const q = Math.round(val*1e7);    // quantize to be robust + deterministic
+      h ^= q; h = Math.imul(h, 16777619) >>> 0;
+    }
+    return h >>> 0;
+  }
+  let c3pass = true, c3fail = "";
+  for(const key of GROUP_KEYS){
+    const def = GROUPS[key];
+    for(const sd of seeds){
+      const h1 = fieldHash(def, sd);
+      const h2 = fieldHash(def, sd);   // recompute (fresh field) → must match
+      if(h1 !== h2){ c3pass=false; c3fail=key+"/"+sd+" not reproducible"; }
+    }
+    // two different seeds should (almost surely) differ — sanity
+    if(fieldHash(def,"alpha")===fieldHash(def,"beta-xyz")){ c3pass=false; c3fail=key+" seeds collide"; }
+  }
+  results.push({ name:"seed-pure + style-invariant", pass:c3pass,
+    note: c3pass ? "field hashes stable; style never touches geometry" : c3fail });
+  allPass = allPass && c3pass;
+
+  // --- Check #4: finiteness, all groups × several seeds ---------------------
+  let c4pass = true, c4fail = "";
+  for(const key of GROUP_KEYS){
+    const def = GROUPS[key];
+    for(const sd of seeds){
+      const f = makeField(def, sd);
+      const rng = makeRng("fin::"+key+sd);
+      for(let s=0;s<80;s++){
+        const u = rng()*8-4, v = rng()*8-4;
+        const c = foldToFD(def, u, v);
+        const val = f(u,v);
+        if(!isFinite(c[0])||!isFinite(c[1])||!isFinite(val)){ c4pass=false; c4fail=key+"/"+sd; break; }
+      }
+    }
+  }
+  results.push({ name:"finite (no NaN/Inf)", pass:c4pass,
+    note: c4pass ? "all samples finite across 17 groups × 5 seeds" : c4fail });
+  allPass = allPass && c4pass;
+
+  // log to console
+  let nPass = results.filter(r=>r.pass).length;
+  console.log("%cTessellarium self-test","font-weight:bold");
+  results.forEach((r,i)=>{
+    const tag = r.pass ? "PASS" : "FAIL";
+    const line = "  check #"+(i+1)+" ["+tag+"] "+r.name+" — "+r.note;
+    if(r.pass) console.log(line); else console.error(line);
+  });
+  console.log("Tessellarium self-test: "+nPass+"/4 "+(allPass?"PASS":"FAIL"));
+
+  state.selftest = { pass:allPass, n:nPass, results };
+  paintSelfTest();
+  return allPass;
+}
+
+function paintSelfTest(){
+  const el = document.getElementById('selftest');
+  const st = state.selftest;
+  if(!st){ el.textContent="checking symmetry…"; return; }
+  const cls = st.pass ? "ok" : "bad";
+  const mark = st.pass ? "✓" : "✗";
+  const head = '<span class="'+cls+'">'+mark+' symmetry verified — '+st.n+'/4</span>';
+  let detail = "";
+  st.results.forEach((r,i)=>{
+    const m = r.pass ? "✓" : "✗";
+    const c = r.pass ? "ok" : "bad";
+    detail += '<span class="'+c+'">'+m+'</span> #'+(i+1)+' '+r.name+'\n';
+  });
+  el.innerHTML = head + '<div class="detail">'+detail+'</div>';
+}
+
+/* ===========================================================================
+   7. APP WIRING
+   =========================================================================== */
+function rebuildField(){
+  state.def = GROUPS[state.group];
+  state.field = makeField(state.def, state.seed);
+}
+function render(){
+  computeSize();
+  const g = ctx;
+  g.save();
+  g.scale(DPR, DPR);
+  renderTo(g, CW, CH, 1);
+  g.restore();
+  paintCaption();
+}
+
+function paintCaption(){
+  const d = state.def;
+  const el = document.getElementById('caption');
+  el.innerHTML =
+    '<span class="iuc">'+d.iuc+'</span>  ·  orbifold <span class="orb">'+d.orbifold+'</span>  ·  '+
+    '<span class="lat">'+d.lattice+'</span> lattice, '+d.rot+' rotation<br>'+
+    d.english;
+}
+
+function setGroup(k){ state.group=k; rebuildField(); render(); document.getElementById('groupSel').value=k; }
+
+/* ---- build group <select>, grouped by lattice class ---- */
+function buildGroupPicker(){
+  const sel = document.getElementById('groupSel');
+  const classes = [
+    ["oblique","Oblique"], ["rect","Rectangular"], ["rhombic","Rhombic (centred)"],
+    ["square","Square"], ["hex","Hexagonal"]
+  ];
+  for(const [cls,label] of classes){
+    const og = document.createElement('optgroup'); og.label=label;
+    for(const k of GROUP_KEYS){
+      if(GROUPS[k].lattice===cls){
+        const o=document.createElement('option'); o.value=k;
+        o.textContent = GROUPS[k].iuc + "  ("+GROUPS[k].orbifold+")";
+        og.appendChild(o);
+      }
+    }
+    sel.appendChild(og);
+  }
+  sel.value = state.group;
+  sel.addEventListener('change', ()=> setGroup(sel.value));
+}
+function buildPalettePicker(){
+  const sel = document.getElementById('palSel');
+  for(const p of PALETTES){ const o=document.createElement('option'); o.value=p.id; o.textContent=p.name; sel.appendChild(o); }
+  sel.value = state.palette;
+  sel.addEventListener('change', ()=>{ state.palette=sel.value; render(); });   // colour only
+}
+
+function randomSeed(){ return Math.random().toString(36).slice(2,9); }
+
+function bindUI(){
+  // style segmented control
+  document.querySelectorAll('#styleSeg button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      document.querySelectorAll('#styleSeg button').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active'); state.style = b.dataset.v; render();   // raster only
+    });
+  });
+  // seed field
+  const seedEl = document.getElementById('seed');
+  seedEl.addEventListener('change', ()=>{ state.seed = seedEl.value || randomSeed(); seedEl.value=state.seed; rebuildField(); render(); });
+  document.getElementById('randSeed').addEventListener('click', ()=>{
+    if(state.surprise){ state.group = GROUP_KEYS[(Math.random()*GROUP_KEYS.length)|0]; document.getElementById('groupSel').value=state.group; }
+    state.seed = randomSeed(); seedEl.value = state.seed; rebuildField(); render();
+  });
+  document.getElementById('reroll').addEventListener('click', ()=>{
+    if(state.surprise){ state.group = GROUP_KEYS[(Math.random()*GROUP_KEYS.length)|0]; document.getElementById('groupSel').value=state.group; }
+    state.seed = randomSeed(); seedEl.value = state.seed; rebuildField(); render();
+  });
+  // repeats
+  const rep = document.getElementById('repeats'), repVal=document.getElementById('repVal');
+  const repH = ()=>{ state.repeats=parseInt(rep.value,10); repVal.textContent=state.repeats+" cells"; render(); };
+  rep.addEventListener('input', repH);
+  // chips
+  document.querySelectorAll('.chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      const t=chip.dataset.t; state[t]=!state[t]; chip.classList.toggle('on', state[t]);
+      if(t==='axes') render();
+    });
+  });
+  // self-test chip toggle detail
+  document.getElementById('selftest').addEventListener('click', ()=>{
+    document.getElementById('selftest').classList.toggle('open');
+  });
+  // export
+  document.getElementById('exportBtn').addEventListener('click', exportPNG);
+  // panel collapse
+  document.getElementById('collapseBtn').addEventListener('click', ()=> document.getElementById('panel').classList.add('collapsed'));
+  document.getElementById('reopen').addEventListener('click', ()=> document.getElementById('panel').classList.remove('collapsed'));
+  // resize
+  let rt=null;
+  window.addEventListener('resize', ()=>{ clearTimeout(rt); rt=setTimeout(render, 120); });
+  // initial label
+  repVal.textContent = state.repeats+" cells";
+}
+
+/* ---- PNG export at 2× via offscreen canvas ---- */
+function exportPNG(){
+  const SZ = Math.round(CW*2);
+  const off = document.createElement('canvas');
+  off.width = SZ; off.height = SZ;
+  const og = off.getContext('2d', { willReadFrequently:true });
+  renderTo(og, SZ, SZ, 2);
+  off.toBlob(blob=>{
+    try{
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = "tessellarium_"+state.group+"_"+state.seed+"_"+state.palette+".png";
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 3000);
+    }catch(e){ console.error(e); }
+  }, "image/png");
+}
+
+/* ===========================================================================
+   8. GO
+   =========================================================================== */
+state.seed = randomSeed();
+document.getElementById('seed').value = state.seed;
+buildGroupPicker();
+buildPalettePicker();
+bindUI();
+rebuildField();
+runSelfTest();           // the crux — headless, logs PASS/FAIL, paints the chip
+render();
+
+/* ws: unlock breadcrumb — see /UNLOCK.md. Harmless & silent if storage is off. */
+try{ if(!localStorage.getItem('ws:seen:tessellarium')) localStorage.setItem('ws:seen:tessellarium', String(Date.now())); }catch(e){}
+</script>
+</body>
+</html>

@@ -12,16 +12,25 @@ HTML file: no build step, no dependencies, no network.*
 
 ## What's inside
 
-Eleven creative mediums across nine projects — plus five companions tucked behind their parent doors:
+Eleven creative mediums across nine projects — plus six companions tucked behind their parent doors:
 the **Orrery** behind Firmament, **Blazon** behind Compositor, **Ariadne** behind Daedalus,
-**Bastion** behind Cartographer, and **Scriptorium** behind The Oracle. Click a live link, or open
-any `.html` in a browser.
+**Bastion** behind Cartographer, **Scriptorium** behind The Oracle, and **Tessellarium** behind the
+Strange Garden. Click a live link, or open any `.html` in a browser.
 
 ### 🌿 [Strange Garden](https://bman654.github.io/the-workshop/strange-garden/)
 **34 *living* generative systems** — particle life, slime moulds, reaction–diffusion, boids,
 Lenia, the Lorenz attractor, Penrose tilings, Conway's Game of Life, draping cloth, liquid
 metaballs, and more. A browsable catalogue you can tend and tweak; each set in motion, never the
 same twice. Includes a written **Field Notes** naturalist's journal.
+
+> 🔷 **Companion — [Tessellarium](https://bman654.github.io/the-workshop/tessellarium/):** the garden's
+> ornamental cousin — where the Garden *grows* pattern (Penrose, Truchet, phyllotaxis), this one
+> *composes* it, by symmetry law. A generative **ornament press** grounded in all **17 wallpaper
+> symmetry groups**: seed a seamless, infinite ornament in any group (p1 … p6m), in four styles
+> (stained-glass / inked / woodblock / line) over eight curated palettes — *provably* symmetric, not
+> faked: a built-in self-test proves the rendered field is **exactly invariant** under each group's
+> symmetry operations (invariance error literally 0). Names each group's IUC symbol + orbifold,
+> draws its symmetry axes on request, reproducible by seed, export PNG.
 
 ### 🕹️ [Arcade](https://bman654.github.io/the-workshop/arcade/)
 **14 fully-playable neon-vector games** — Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,

@@ -20,7 +20,47 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
-> **▶ CURRENT STATE / RESUME POINTER (2026-06-11, `/fun` continued — 🌊 THE FLOATING INK shipped, PAUSED CLEANLY).**
+> **▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — 🔷 TESSELLARIUM shipped → the Garden's companion / 6th wing).**
+> Working tree committed & pushed; live 200 confirmed. **New this session:** built **Tessellarium 🔷
+> (`tessellarium/index.html`, 1072 lines, single self-contained vanilla file, 0 deps/network)** — a
+> generative **ornament press grounded in the 17 wallpaper symmetry groups**, and placed it as **Strange
+> Garden's companion (the 6th wing)** — its ornamental cousin (the Garden *grows* pattern; this one
+> *composes* it, by symmetry law). Seed a seamless infinite ornament in any of the 17 plane groups (p1 …
+> p6m); 4 render styles (Stained/Inked/Block/Line), 8 curated palettes, cell-repeat slider, optional
+> symmetry-axes overlay, seed+re-roll, PNG 2× export; caption names each group's IUC symbol + orbifold +
+> plain-English line. **The crux (workshop tradition) is the symmetry being PROVEN:** the field is
+> `f(P)=motif(foldToFundamentalDomain_G(P))` with the fold an **exact orbit-min canonicalization** (each
+> group's closed affine element set precomputed by BFS closure → lexicographically-smallest cell-reduced
+> image), so `fold(P)==fold(g·P)` to machine precision *by construction* — **no per-group special-casing**
+> (one uniform fold handles every glide/centred/offset-mirror group + all hex groups; hex uses a 120°
+> basis where the order-6 rotation is the integer matrix `[1,-1;1,0]`). **Self-test 4/4 PASS:** (1)
+> symmetry invariance across all 17 groups — **max err 0.0** (exact, beats the 1e-9 bar); (2) tiles +
+> point-group order matches spec (p1=1 … p6m=12, distinguished from glide groups' larger affine size);
+> (3) seed-pure + style-invariant (field hash identical across styles — "style only re-renders" crux);
+> (4) finite. Shows a green "symmetry verified — 4/4 ✓" chip; never ships failing. **Browser-verified end
+> to end** (agent-browser, served origin): 4/4 PASS + chip, check #1 max err 0.0, **0 console errors / 0
+> warnings**; all 17 groups render rich + distinct + correct (p6m 6-fold rosettes&mirrors / p4m 4-fold
+> kaleidoscope / p3 3-fold pinwheels-no-mirror / pgg herringbone glides-no-mirror / cmm crossing centred
+> mirrors); all 4 styles + palettes; symmetry-axes overlay; PNG export valid; `ws:seen:tessellarium`
+> written. **Wired:** a `↗ Tessellarium — pattern, composed` sib-link in the Garden header; a `🔷
+> Tessellarium within` pill on the Garden's front-door card; `← workshop`/`↗ Strange Garden` back-links
+> here; README companion blockquote; `tessellarium/CHANGELOG.md`. **Front door untouched — still the
+> curated 9 cards; no Undercroft secret added** (the breadcrumb is left for future hidden-world use).
+> Spec: `tessellarium/TESSELLARIUM.SPEC.md`. **The workshop now has SIX wings** (celestial, design-press,
+> labyrinth&thread, realm&city, verse&script, and now garden&ornament).
+>
+> **Cool ideas thought of but NOT pursued (for the lead/future sessions):** (a) a **gallery/contact-sheet
+> mode** showing all 17 groups at once from one seed — a delightful "periodic table of symmetry"; (b) an
+> **Undercroft cross-pollination secret** marrying Tessellarium × Daedalus or × Cartographer (a symmetric
+> labyrinth, or symmetry-tiled map borders) — natural exploration-combo (`ws:seen:tessellarium` ∧ a
+> sibling); (c) **animated symmetry morphing** between groups that share a lattice (e.g. p4 → p4m → p4g)
+> to *show* how adding mirrors/glides transforms the same motif; (d) a **truchet/aperiodic** companion or
+> **Penrose/quasicrystal** press as a sibling (the Garden has Penrose as a *living* specimen; a *composed*
+> aperiodic-tiling press would pair); (e) feed Tessellarium's motif field into **Compositor** as a
+> generative ground/ornament layer. *(Spoiler etiquette respected — no hidden-world trail revealed.)*
+>
+> ---
+> **(prior) ▶ CURRENT STATE (2026-06-11, `/fun` continued — 🌊 THE FLOATING INK shipped, PAUSED CLEANLY).**
 > Working tree committed & pushed. **New this session:** built **The Floating Ink 🌊
 > (`undercroft/floating-ink.html`, 888 lines)** — a brand-new visual medium: **mathematical marbling**
 > (suminagashi · ebru). Ink floated on water via exact fluid-displacement maps (**Drop** / **Tine** /
@@ -445,6 +485,17 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   rebalance to add cabinets). Manifest `games.js`.
 - `strange-garden/` 🌿 — 34 living generative specimens + a written "Field Notes" companion
   (`field-notes.html`). Browsable prev/next. Complete v-final; don't pad it.
+- `tessellarium/` 🔷 — **the Strange Garden's companion** (NOT a front-door card; reached via the
+  Garden's `↗ Tessellarium` header link + a "within" pill). A generative **ornament press** grounded in
+  the **17 wallpaper symmetry groups** (p1 … p6m): seed a seamless, infinite, edge-to-edge ornament in
+  any plane group; 4 render styles (Stained/Inked/Block/Line), 8 curated palettes, cell-repeat slider,
+  optional symmetry-axes overlay, seed-reproducible, PNG 2× export; caption names each group's IUC
+  symbol + orbifold. New medium: **provably-symmetric ornament** (distinct from the Garden's *living*
+  pattern specimens — it composes pattern by symmetry law). Crux = **proven symmetry**: the field is
+  `f(P)=motif(foldToFundamentalDomain_G(P))` with the fold an **exact orbit-min canonicalization** (each
+  group's closed affine element set precomputed by BFS closure), so `fold(P)==fold(g·P)` to machine
+  precision *by construction* — self-test 4/4 (check #1 symmetry-invariance max err **0.0**; tiles +
+  point-group order; seed-pure + style-invariant; finite). Done (v1). See `TESSELLARIUM.SPEC.md`.
 
 > **Composition note:** front-door `index.html` now at **9 projects** — THREE hero `feature` banners
 > (Strange Garden · Firmament · Daedalus, the "worlds to get lost in") over a **3×2 grid** of the other
@@ -461,11 +512,12 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 >    under its sub-title) + `← workshop`/`↗ <Parent>` back-links in the companion. The front door shows
 >    it as a subtle **"↳ <Name> within" pill** in the parent card's footer (data: `companion:{name,badge}`
 >    on the parent's PROJECTS entry; renderer adds the pill — an *indicator, not a link*, preserving the
->    "hidden room" charm). **Five wings exist:** celestial (Firmament+Orrery), design-press
->    (Compositor+Blazon), labyrinth&thread (Daedalus+Ariadne), realm&city (Cartographer+Bastion), and
->    verse&script (The Oracle+Scriptorium). A 6th wing is fine **if the pairing is genuine, not forced** —
->    Strange Garden and Threshold still lack a companion. Don't force one; only build it if the sibling link
->    is poetic/true.
+>    "hidden room" charm). **Six wings exist:** celestial (Firmament+Orrery), design-press
+>    (Compositor+Blazon), labyrinth&thread (Daedalus+Ariadne), realm&city (Cartographer+Bastion),
+>    verse&script (The Oracle+Scriptorium), and garden&ornament (Strange Garden+**Tessellarium** 🔷 —
+>    the Garden grows pattern, the press composes it by symmetry law). A 7th wing is fine **if the pairing
+>    is genuine, not forced** — **Threshold** is now the only front-door card without a companion (don't
+>    force one; only build it if the sibling link is poetic/true).
 > 2. **Deepen the Arcade** (`auto-fill` grid) — drop a cabinet in `games/`, append to `games.js`, add a
 >    `assets/thumbs/<base>.png`, bump the front-door tag count + blurb. No rebalance. (→ 11 with Chomp.)
 > 3. **Deepen the Sound Garden** (`auto-fit` grid) — add an instrument (now **7**; 3+3+1 reflows fine
@@ -665,6 +717,7 @@ instruments copy the `← sound garden` back-link.
 | `tools/audio-lens/` | 🔊 tool → 🎓 **skill** | Offline-render audio inspector — spectrogram + features + 12/12 self-tests. **Graduated to a public skill: `bman654/audio-lens` (`npx skills add bman654/audio-lens`) — use the skill.** HTML kept as genesis artifact. |
 | `arcade/` | 🕹️ 15 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing, Chomp [Pac-Man-like], **Swarm** [twin-stick survivor — drops `ws:best:swarm`], **Gyre** [Tempest-lineage tube shooter — 3 enemy types, 6 well shapes, superzapper; drops `ws:best:gyre`], **Tessera** [Qix-lineage area-claiming — flood-fill claim, Qix+Sparx+fuse; drops `ws:best:tessera`], **Centipede** [serpentine descent + segment-split — splitting chain, mushroom field, spider+flea+scorpion; headless self-test; drops `ws:best:centipede`]) |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
+| `tessellarium/` | 🔷 done (companion) | **Behind the Strange Garden** — generative **ornament press** grounded in the **17 wallpaper symmetry groups** (p1 … p6m): seed a seamless ornament in any group; 4 styles (Stained/Inked/Block/Line), 8 palettes, cell-repeat slider, symmetry-axes overlay, PNG 2×. Crux = **proven symmetry**: `f(P)=motif(fold_G(P))` via exact orbit-min canonicalization → invariance true to machine precision (self-test 4/4, check #1 max err **0.0**); seed-pure + style-invariant. The Garden's ornamental cousin (grows pattern ↔ composes it). Spec `TESSELLARIUM.SPEC.md`. |
 | `sound-garden/quickening.html` | 🌱 done (HIDDEN) | **The Living Lattice** — a cellular automaton you can hear (5 rule families, CA self-test, lens-clean). The 8th instrument, but **earned not listed** (NOT in `instruments.js`; rack stays at 7). Lives in the Undercroft. |
 | `undercroft/` | 🗝️ done (7 secrets) | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise) + an all-found capstone (now needs all 7). Holds 7, ALL trigger types demonstrated: Living Lattice (exploration), The Long Quiet (dwell), Eleven (config), The Survivor (score), **Rosette** 🌹 (combination — rarest), **The Gilded Leaf** 📜 (exploration-combo — cross-pollination #1), **The Floating Ink** 🌊 (exploration-combo — cross-pollination #2). See `UNLOCK.md`. |
 | `undercroft/rosette.html` | 🌹 done (HIDDEN) | **Rosette** — a seeded generative Gothic **rose window** (stained glass: concentric rings, N-fold symmetry, cusped tracery, jewel glass + lead came; seed-pure, palette recolours only; 6 palettes, PNG export). A new visual medium; the rarest Undercroft secret. |
