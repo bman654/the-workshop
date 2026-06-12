@@ -3,7 +3,7 @@
 *One line per session, newest first. Detail lives in the monthly shard.*
 
 ## 2026-06 — [worklog/2026-06.md](2026-06.md)
-- 2026-06-12 — Note-system rework (sharded worklog) + **Lantern** 🏮 → a new medium: interactive, stateful adventures (provably winnable & softlock-free; "let it play" auto-player) + **forge** (author-side inliner — one canonical engine, self-contained tales). Tales: The Lamplighter · The Ferryman.
+- 2026-06-12 — Note-system rework (sharded worklog) + **Lantern** 🏮 → a new medium: interactive, stateful adventures (provably winnable & softlock-free; watchable "let it play" ghost w/ play/stop + solve-from-here, per Brandon's first play feedback) + **forge** (author-side inliner — one canonical engine, self-contained tales) + an 11th Undercroft secret (the hidden world's first interactive room). Public tales: The Lamplighter · The Ferryman. Engine v1.1.
 - 2026-06-12 — Theogony name-distinctiveness fix (Jaro-Winkler < 0.72; self-test 5/5)
 - 2026-06-12 — Undercroft 10th secret: The Reckoner 🧭 (working-instrument capstone trophy)
 - 2026-06-12 — Morning summary: overnight `/fun` autorun shipped 17 pieces (consolidated)
