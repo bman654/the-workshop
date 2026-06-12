@@ -52,6 +52,23 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > session's pointer follows below as history.*
 >
 > ---
+> **Session status (2026-06-12) — 🕹️ CENTIPEDE shipped → Arcade #15.** Deepened the Arcade rack (the
+> no-rebalance `auto-fill` growth axis) with **Centipede** (`arcade/games/centipede.html`, ~1200 lines,
+> single self-contained vanilla file, zero deps/network) — the classic, the rack's first field-shooter
+> with a **splitting enemy**. The heart is a pure, testable core: a serpentine `centipedeStep` (wall/mushroom
+> ahead → drop one row + reverse, edge-flip so it never vanishes) and a `splitCentipede` (body hit → **two
+> independent chains**, each a valid head + sensible heading + a planted mushroom; head hit → adjacent
+> promoted, direction preserved) over a 4-HP mushroom model. Spider/flea/(optional scorpion), waves, 3 lives +
+> extra at 12k, full juice. A **headless 4-check self-test** runs on load (split/serpentine/head-shot/mushroom-HP),
+> logs PASS per check, shows a green ✓ chip (never shipped red). **Browser-verified end to end** (agent-browser,
+> served origin): 4/4 self-test PASS + chip, **0 console errors/warnings**, split/head-shot/serpentine/death/
+> wave-advance all exercised live, `ws:best:centipede` raised 0→2 (raise-only). Wired: `games.js` (→15), thumb
+> `arcade/assets/thumbs/centipede.png` (1440×900), front-door tag **14→15 games** + "Centipede" appended to the
+> Arcade blurb list (**front door otherwise untouched — still the curated 9 cards**), `arcade/CHANGELOG.md`
+> (Centipede log entry). No Undercroft secret added — just the breadcrumb left for future use. Working tree
+> committed & pushed; live 200 confirmed.
+>
+> ---
 > **(prior) ▶ RESUME POINTER (2026-06-11, end of a long `/fun` session — PAUSED CLEANLY).**
 > Working tree clean, **all commits pushed & live** (front door, Scriptorium, Gyre, Gamelan, Tessera all 200;
 > the hidden Gilded Leaf pushed too). Nothing in flight; no heartbeat cron running.
@@ -646,7 +663,7 @@ instruments copy the `← sound garden` back-link.
 | `blazon/` | 🛡️ done (companion) | **Behind Compositor** — generative heraldry: seeded arms + faithful blazon sentence (rule of tincture; Petra Sancta hatching; 4 styles, 5 shapes; export PNG) |
 | `threshold/` | 🚪 done | Generative interactive fiction (seeded strange-place explorer, 3 themes, curate-then-arrange prose) |
 | `tools/audio-lens/` | 🔊 tool → 🎓 **skill** | Offline-render audio inspector — spectrogram + features + 12/12 self-tests. **Graduated to a public skill: `bman654/audio-lens` (`npx skills add bman654/audio-lens`) — use the skill.** HTML kept as genesis artifact. |
-| `arcade/` | 🕹️ 14 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing, Chomp [Pac-Man-like], **Swarm** [twin-stick survivor — drops `ws:best:swarm`], **Gyre** [Tempest-lineage tube shooter — 3 enemy types, 6 well shapes, superzapper; drops `ws:best:gyre`], **Tessera** [Qix-lineage area-claiming — flood-fill claim, Qix+Sparx+fuse; drops `ws:best:tessera`]) |
+| `arcade/` | 🕹️ 15 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing, Chomp [Pac-Man-like], **Swarm** [twin-stick survivor — drops `ws:best:swarm`], **Gyre** [Tempest-lineage tube shooter — 3 enemy types, 6 well shapes, superzapper; drops `ws:best:gyre`], **Tessera** [Qix-lineage area-claiming — flood-fill claim, Qix+Sparx+fuse; drops `ws:best:tessera`], **Centipede** [serpentine descent + segment-split — splitting chain, mushroom field, spider+flea+scorpion; headless self-test; drops `ws:best:centipede`]) |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
 | `sound-garden/quickening.html` | 🌱 done (HIDDEN) | **The Living Lattice** — a cellular automaton you can hear (5 rule families, CA self-test, lens-clean). The 8th instrument, but **earned not listed** (NOT in `instruments.js`; rack stays at 7). Lives in the Undercroft. |
 | `undercroft/` | 🗝️ done (7 secrets) | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise) + an all-found capstone (now needs all 7). Holds 7, ALL trigger types demonstrated: Living Lattice (exploration), The Long Quiet (dwell), Eleven (config), The Survivor (score), **Rosette** 🌹 (combination — rarest), **The Gilded Leaf** 📜 (exploration-combo — cross-pollination #1), **The Floating Ink** 🌊 (exploration-combo — cross-pollination #2). See `UNLOCK.md`. |

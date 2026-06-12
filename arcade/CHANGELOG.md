@@ -7,7 +7,7 @@ Each game is self-contained, zero-dependency, browser-play-tested. Reference sty
 
 ## Status
 
-- **Done (browser play-tested PASS, 60fps, clean consoles) — 14 cabinets:**
+- **Done (browser play-tested PASS, 60fps, clean consoles) — 15 cabinets:**
   - asteroids.html ✅ — inertia/thrust/wrap, splitting rocks, saucer, hyperspace, full juice
   - breakout.html ✅ — 6 power-ups, combos, multiball, swept collision, procedural levels
   - snake.html ✅ — smooth gliding ribbon, buffered turns, combos, walls/wrap toggle
@@ -22,8 +22,9 @@ Each game is self-contained, zero-dependency, browser-play-tested. Reference sty
   - swarm.html ✅ — twin-stick survivor: WASD/arrows move + mouse-aim auto-fire (keyboard fallback fires the way you move), 3 distinct homing archetypes (red chaser / orange brute / cyan zig-zag splitter), endless escalating waves, XP gems w/ magnet pickup → level-up upgrade chooser (8 upgrades, pick 3), health pips + i-frames, full juice (muzzle/hit/death bursts, shake, flash), `ws:best:swarm` = wave reached
   - gyre.html ✅ — Tempest-lineage tube shooter: a neon well viewed end-on, N radial lanes converging to a vanishing point; blaster rides the near rim (←/→ or A/D, mouse-rotate optional), fires down its lane (Space), Superzapper screen-clear (Z/Shift). 3 distinct archetypes (magenta **Flipper** flips lane-to-lane while climbing; green **Spiker** lays a shootable spike trail down its lane; orange **Fuseball** rides a lane boundary, surges erratically, **splits into two flippers** on death). Enemies that reach the rim **crawl around it toward the player** (faithful Tempest threat). 6 cycling well shapes (circle / square / star / open line / plus / V) with a per-level neon palette shift and the iconic **zoom-down-the-tube** dive transition between levels. Lives + per-level zapper recharge, full juice (rim flash on fire, explosions, screen-shake, dive fountain), `ws:best:gyre` = best level reached
   - tessera.html ✅ — Qix-lineage **area-claiming**: a grid playfield (80×56 cells) with a bright cabinet border; the marker walks the border + already-claimed edges (arrows/WASD), draws **stix** out into the dark, and on returning to a frontier **closes a polygon** that flood-fills the side **not** containing the Qix (translucent neon, hue per claim). A writhing **Qix** ribbon (lissajous wander, confined to unclaimed cells) kills you if it crosses your live stix; a **Sparx** star patrols the frontier and kills on contact (+1 sparx every 2 levels, +1 Qix at L4/L8); a **fuse** burns up your stix at a constant rate if you stop drawing. **Hold Shift = slow draw** (worth ~2×). Win at **75% claimed** → next sector (faster Qix, more threats). Lives + respawn i-frames, full juice (claim flash/thunk, screen-shake on death, fuse sparks, confetti on clear). Geometry verified correct: claim % = claimed cells / total (exact), the Qix is never enclosed in claimed territory, the player only travels border/claimed edges. `ws:best:tessera` = best level reached
+  - centipede.html ✅ — Centipede-genre **serpentine descent + segment-split**: a 30×32 cell garden, blaster confined to the bottom 6-row band (arrows/WASD or mouse-move + click-to-fire; Space fires, ≤2 bolts on screen). The centipede is a linked head+body chain that marches horizontally; on a **wall or mushroom ahead** it **drops one row and reverses** (classic serpentine), flipping vertical direction at the bottom so it never stalls or vanishes. A bolt through a **body** segment **splits the chain into two independent centipedes** (each re-derives a valid head; the back piece turns to flee the gap) and plants a mushroom at the cut; a **head** shot promotes the adjacent segment with direction preserved. Mushrooms take **4 hits** (damage shown), block/redirect the chain. Secondary enemies: a **spider** bounces through the band eating mushrooms (touch = death; 300/600/900 by range when shot), a **flea** drops vertically re-seeding the band when mushrooms run low (2 hits), and an optional **scorpion** poisons mushrooms (poisoned stalk = straight dive). Waves escalate (faster steps), 3 lives + extra life at 12k, full juice (hit sparks, segment-pop bursts, screen-shake on death). Ships with a **headless logic self-test** (split / serpentine / head-shot / mushroom-HP) that logs PASS per check and shows a green ✓ chip; the pure core (`centipedeStep`/`splitCentipede`/mushroom model) is testable. Verified in a real browser (agent-browser): all 4 self-test checks PASS + green chip, **0 console errors/warnings**, the split seen live (5-seg → two chains heading opposite ways + planted mushroom), head-shot, wall-serpentine drop, mushroom clearing, flea planting, spider shot, player death → −1 life → respawn, wave clear → advance to wave 2, and `ws:best:centipede` raised 0→2 in localStorage on a served origin. `ws:best:centipede` = best wave reached
 - **Nav:** every game has a click-only `← arcade` back-link (NO key binding — games use keys).
-- **Gallery:** index.html (neon "cabinet rack"), games.js manifest (14), README ✅
+- **Gallery:** index.html (neon "cabinet rack"), games.js manifest (15), README ✅
 
 ## Next up
 - Optional more cabinets: Flappy/one-button, a procedural mini-roguelike, a rhythm game.
@@ -31,6 +32,30 @@ Each game is self-contained, zero-dependency, browser-play-tested. Reference sty
   defense / vs-CPU / physics-landing). Responsive `auto-fill` grid: adding more needs no rebalance.
 
 ## Log
+- 2026-06-12 — Added **Centipede** (neon serpentine descent → **15** cabinets): the arcade classic,
+  the rack's first **field-shooter with a splitting enemy**. Built on a pure, testable core — a
+  `centipedeStep` (the serpentine rule: head tries to advance horizontally; a **wall or mushroom
+  ahead** drops it one row and reverses, with a vertical-direction flip at field edges so it never
+  vanishes or stalls; a poisoned stalk forces a straight dive), a `splitCentipede` (body hit →
+  **two independent chains**, each with a valid re-derived head and a sensible heading, plus a
+  mushroom planted at the cut; head hit → adjacent segment promoted, direction preserved), and a
+  4-HP mushroom model. Around that: a bottom-band blaster (arrows/WASD or mouse + click-to-fire,
+  ≤2 bolts), a **spider** (bounces, eats mushrooms, range-scaled 300/600/900), a **flea**
+  (re-seeds the band when sparse, 2 hits), and an optional **scorpion** (poisons mushrooms).
+  Waves escalate, 3 lives + extra at 12k, full juice. A **headless self-test** runs the 4
+  correctness checks on load (split / serpentine / head-shot / mushroom-HP), logs PASS per check,
+  and shows a green **✓ self-test** chip (red if any fails — never shipped red). Self-verified by
+  the build deputy in a real browser (agent-browser, served origin): **4/4 self-test PASS** + green
+  chip, **0 console errors/warnings**, the split observed live (a 5-seg chain shot at body[2] became
+  two len-2 centipedes marching opposite directions with a mushroom at the gap, then one hit the
+  wall and did the serpentine drop), head-shot, mushroom clearing, flea planting, spider shot,
+  player death → **−1 life** → respawn, **wave clear → advance to wave 2**, and **`ws:best:centipede`
+  raised 0 → 2** in localStorage (raise-only). ~48–53fps in headless Chrome (the env caps a bare rAF
+  loop at ~53/s — render is lightweight, 60fps on a real display). Single self-contained file
+  (~1200 lines, vanilla, zero deps/network), RELATIVE `← arcade` back-link verified, **silent by
+  default** (M toggles). Thumb captured mid-play at 1440×900 (full garden, centipede chain + spider).
+  No bugs survived to ship; the only logic rework during the build was simplifying the drop branch's
+  vertical-bounds handling (the original had tangled TOPROW conditionals) into a clean edge-flip.
 - 2026-06-11 — Added **Tessera** (neon area-claiming → **14** cabinets): the iconic Qix genre, the
   rack's first **area-claiming** game. Built on a correct grid model (80×56 cells; the marker walks
   the *vertex lattice* along the border + claimed edges; drawing out into empty cells lays a **stix**;

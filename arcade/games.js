@@ -85,5 +85,11 @@ window.GAMES = [
     name: "Tessera",
     blurb: "neon area-claiming — carve the dark, fence off the Qix, take the field",
     accent: "#ff2e88"
+  },
+  {
+    file: "centipede.html",
+    name: "Centipede",
+    blurb: "neon serpentine descent — split the chain, mind the spider, hold the garden",
+    accent: "#39ff9e"
   }
 ];

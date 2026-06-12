@@ -1,0 +1,1201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>CENTIPEDE — neon serpentine descent</title>
+<style>
+  :root{ --accent:#39ff9e; --accent2:#ff2e88; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; background:#03030a; overflow:hidden;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    color:#e9f6ff; -webkit-font-smoothing:antialiased; cursor:default; }
+  #stage{ position:fixed; inset:0; }
+  canvas{ display:block; position:absolute; inset:0; }
+
+  /* ---------- HUD ---------- */
+  .hud{ position:fixed; inset:0; pointer-events:none; z-index:5;
+    font-variant-numeric:tabular-nums; }
+  .hud-row{ position:absolute; top:18px; display:flex; }
+  .hud-left{ left:24px; flex-direction:column; gap:4px; align-items:flex-start; }
+  .hud-right{ right:24px; flex-direction:column; align-items:flex-end; gap:4px; }
+  .label{ font-size:10px; letter-spacing:.32em; color:#5fc99a; opacity:.85; text-transform:uppercase; }
+  .value{ font-size:30px; font-weight:700; letter-spacing:.04em; line-height:1;
+    color:#eafff4; text-shadow:0 0 16px rgba(57,255,158,.6); }
+  .value.small{ font-size:17px; color:#9be8c4; }
+  .wave-tag{ position:fixed; top:18px; left:50%; transform:translateX(-50%); text-align:center; }
+  .wave-tag .label{ font-size:10px; }
+  .wave-tag .value{ font-size:22px; color:#ff6fb0; text-shadow:0 0 16px rgba(255,46,136,.6); }
+
+  /* lives pips (little blasters) */
+  .lives{ display:flex; gap:8px; align-items:center; margin-top:6px; }
+  .pip{ width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent;
+    border-bottom:16px solid var(--accent);
+    filter:drop-shadow(0 0 7px rgba(57,255,158,.7)); transition:opacity .2s, transform .2s; }
+  .pip.empty{ opacity:.16; filter:none; transform:scale(.8); }
+
+  /* self-test chip */
+  #selftest{ position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
+    z-index:6; font-size:10px; letter-spacing:.22em; text-transform:uppercase;
+    color:#0b160f; background:var(--accent); border-radius:10px; padding:3px 10px;
+    box-shadow:0 0 14px rgba(57,255,158,.7); opacity:0; transition:opacity .4s;
+    pointer-events:none; font-weight:700; }
+  #selftest.show{ opacity:.92; }
+  #selftest.fail{ color:#fff; background:#ff2e88; box-shadow:0 0 14px rgba(255,46,136,.8); }
+
+  #muteTag{ position:fixed; bottom:16px; right:20px; font-size:10px; letter-spacing:.24em;
+    color:#5fc99a; opacity:.7; text-transform:uppercase; pointer-events:none; }
+
+  /* ---------- Overlays ---------- */
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:8px;
+    background:radial-gradient(120% 120% at 50% 45%, rgba(6,18,12,.34), rgba(2,2,8,.9));
+    backdrop-filter:blur(1.5px); transition:opacity .35s; }
+  .overlay.hidden{ opacity:0; pointer-events:none; }
+  .title{ font-size:clamp(46px,12vw,150px); font-weight:800; letter-spacing:.1em;
+    line-height:.9; color:#eafff4;
+    text-shadow:0 0 30px rgba(57,255,158,.65), 0 0 70px rgba(57,255,158,.35);
+    -webkit-text-stroke:1px rgba(170,255,220,.25); }
+  .title .a2{ color:var(--accent2); -webkit-text-stroke:1px rgba(255,46,136,.4);
+    text-shadow:0 0 30px rgba(255,46,136,.6); }
+  .tagline{ font-size:13px; letter-spacing:.34em; color:#ff6fb0; text-transform:uppercase;
+    opacity:.9; margin-bottom:24px; }
+  .prompt{ font-size:15px; letter-spacing:.12em; color:#eafff4;
+    margin-top:14px; animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:.45} 50%{opacity:1} }
+  .controls{ margin-top:28px; display:grid; grid-template-columns:auto auto;
+    gap:6px 26px; font-size:12px; letter-spacing:.06em; color:#9be8c4; opacity:.9; }
+  .controls b{ color:#eafff4; font-weight:700; }
+  .controls .k{ text-align:right; color:var(--accent); }
+  .hint{ margin-top:20px; font-size:11px; letter-spacing:.16em; color:#5fc99a;
+    text-transform:uppercase; opacity:.8; max-width:54ch; line-height:1.7; }
+  .go-stats{ margin-top:8px; display:grid; grid-template-columns:auto auto; gap:6px 30px;
+    font-size:14px; letter-spacing:.06em; color:#9be8c4; }
+  .go-stats .k{ text-align:right; color:#5fc99a; }
+  .go-stats b{ color:#eafff4; }
+  .newhigh{ color:var(--accent); font-size:13px; letter-spacing:.3em; text-transform:uppercase;
+    margin-top:14px; animation:pulse 1s ease-in-out infinite; }
+  .gameover-title{ font-size:clamp(34px,8vw,76px); font-weight:800; letter-spacing:.14em;
+    color:#ff2e88; text-shadow:0 0 28px rgba(255,46,136,.6); margin-bottom:8px; }
+  .wave-clear-title{ font-size:clamp(34px,8vw,72px); font-weight:800; letter-spacing:.1em;
+    color:var(--accent); text-shadow:0 0 28px rgba(57,255,158,.6); margin-bottom:8px; }
+  .pausetitle{ font-size:48px; font-weight:800; letter-spacing:.22em; color:#eafff4;
+    text-shadow:0 0 24px rgba(57,255,158,.55); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg"></canvas>
+  <canvas id="game"></canvas>
+</div>
+
+<!-- HUD -->
+<div class="hud" id="hud" style="display:none">
+  <div class="hud-row hud-left">
+    <div class="label">Score</div>
+    <div class="value" id="score">0</div>
+    <div class="lives" id="lives"></div>
+  </div>
+  <div class="hud-row hud-right">
+    <div class="label">Best Wave</div>
+    <div class="value small" id="best">0</div>
+  </div>
+  <div class="wave-tag">
+    <div class="label">Wave</div>
+    <div class="value" id="wave">1</div>
+  </div>
+</div>
+<div id="selftest">✓ self-test</div>
+<div id="muteTag">M · sound off</div>
+
+<!-- Title -->
+<div class="overlay" id="titleScreen">
+  <div class="title">CENTI<span class="a2">PEDE</span></div>
+  <div class="tagline">neon · serpentine · descent</div>
+  <div class="prompt">Press ENTER to start</div>
+  <div class="controls">
+    <span class="k">← → ↑ ↓ / WASD</span><span>move the blaster (mouse works too)</span>
+    <span class="k">SPACE / CLICK</span><span>fire upward (hold to repeat)</span>
+    <span class="k">P / ESC</span><span>pause</span>
+    <span class="k">M</span><span>sound (off by default)</span>
+  </div>
+  <div class="hint">Shoot the centipede before it reaches you. A bolt through its body splits it in two — and plants a mushroom. Clear the field. Beware the spider that eats the garden, and the flea that re-seeds it.</div>
+</div>
+
+<!-- Wave clear -->
+<div class="overlay hidden" id="waveClearScreen">
+  <div class="wave-clear-title">WAVE CLEAR</div>
+  <div class="go-stats">
+    <span class="k">Wave</span><b id="wcWave">0</b>
+    <span class="k">Bonus</span><b id="wcBonus">0</b>
+    <span class="k">Score</span><b id="wcScore">0</b>
+  </div>
+  <div class="prompt">Press ENTER for the next wave</div>
+</div>
+
+<!-- Game over -->
+<div class="overlay hidden" id="gameoverScreen">
+  <div class="gameover-title">GAME OVER</div>
+  <div class="go-stats">
+    <span class="k">Score</span><b id="goScore">0</b>
+    <span class="k">Wave reached</span><b id="goWave">0</b>
+  </div>
+  <div class="newhigh" id="newHigh" style="display:none">★ NEW BEST WAVE ★</div>
+  <div class="prompt">Press ENTER to play again</div>
+</div>
+
+<!-- Pause -->
+<div class="overlay hidden" id="pauseScreen">
+  <div class="pausetitle">PAUSED</div>
+  <div class="prompt">Press P or ESC to resume</div>
+</div>
+
+<script>
+"use strict";
+(function(){
+//============================================================== setup / canvas
+const bgCanvas = document.getElementById('bg');
+const canvas   = document.getElementById('game');
+const bgx = bgCanvas.getContext('2d');
+const ctx = canvas.getContext('2d');
+
+let W = 0, H = 0, DPR = 1;
+// playfield rect in screen space (computed in resize)
+let FX = 0, FY = 0, FW = 0, FH = 0;   // pixel origin + size of the field
+let CELL = 0;                          // pixel size of one grid cell
+
+// the grid: GW x GH cells. Player confined to the bottom PLAYER_BAND rows.
+const GW = 30, GH = 32;
+const PLAYER_BAND = 6;                 // bottom rows the blaster may roam
+const TOPROW = GH - PLAYER_BAND;       // first row the player can occupy
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  for (const c of [bgCanvas, canvas]){
+    c.width  = Math.floor(W * DPR);
+    c.height = Math.floor(H * DPR);
+    c.style.width = W + 'px';
+    c.style.height = H + 'px';
+  }
+  bgx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  layoutField();
+  buildBg();
+}
+function layoutField(){
+  const marginX = Math.min(W*0.08, 90), marginY = Math.min(H*0.10, 80);
+  const availW = W - marginX*2, availH = H - marginY*2;
+  CELL = Math.max(6, Math.floor(Math.min(availW/GW, availH/GH)));
+  FW = CELL*GW; FH = CELL*GH;
+  FX = Math.round((W-FW)/2); FY = Math.round((H-FH)/2);
+}
+window.addEventListener('resize', resize);
+
+//============================================================== utilities
+const TAU = Math.PI * 2;
+const rand  = (a=1,b=0)=> b + Math.random()*(a-b);
+const randi = (a,b)=> Math.floor(rand(a,b));
+const clamp = (v,lo,hi)=> v<lo?lo:(v>hi?hi:v);
+const lerp  = (a,b,t)=> a+(b-a)*t;
+// cell (cx,cy) center -> screen
+function ccx(cx){ return FX + (cx+0.5)*CELL; }
+function ccy(cy){ return FY + (cy+0.5)*CELL; }
+function cidx(cx,cy){ return cy*GW + cx; }
+function inBounds(cx,cy){ return cx>=0 && cy>=0 && cx<GW && cy<GH; }
+
+//============================================================== seeded RNG (for deterministic self-test)
+function makeRng(seed){
+  let s = seed>>>0 || 1;
+  return function(){ s ^= s<<13; s ^= s>>>17; s ^= s<<5; s>>>=0; return s/4294967296; };
+}
+
+//============================================================== background
+function buildBg(){
+  bgx.clearRect(0,0,W,H);
+  bgx.fillStyle = '#03030a';
+  bgx.fillRect(0,0,W,H);
+  const g = bgx.createRadialGradient(W/2,H*0.42,0, W/2,H*0.42, Math.max(W,H)*0.72);
+  g.addColorStop(0,'rgba(14,34,24,0.5)');
+  g.addColorStop(1,'rgba(3,3,10,0)');
+  bgx.fillStyle = g; bgx.fillRect(0,0,W,H);
+  // faint starfield
+  bgx.save();
+  for (let i=0;i<70;i++){
+    const x=rand(W), y=rand(H), s=rand(1.4,0.4);
+    bgx.globalAlpha=rand(0.45,0.06);
+    bgx.fillStyle='#cfeedf';
+    bgx.fillRect(x,y,s,s);
+  }
+  bgx.restore();
+  // field frame + player-band divider
+  bgx.save();
+  bgx.strokeStyle='rgba(57,255,158,0.20)'; bgx.lineWidth=2;
+  bgx.shadowBlur=12; bgx.shadowColor='rgba(57,255,158,0.5)';
+  bgx.strokeRect(FX-2,FY-2,FW+4,FH+4);
+  bgx.restore();
+  bgx.save();
+  bgx.strokeStyle='rgba(255,46,136,0.16)'; bgx.lineWidth=1.5; bgx.setLineDash([6,8]);
+  const by = FY + TOPROW*CELL;
+  bgx.beginPath(); bgx.moveTo(FX,by); bgx.lineTo(FX+FW,by); bgx.stroke();
+  bgx.restore();
+}
+
+//============================================================== audio (procedural, default MUTED)
+const Audio_ = {
+  ctx:null, master:null, muted:true,   // DEFAULT OFF — owner's speakers
+  init(){
+    if (this.ctx) return;
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.34;
+      this.master.connect(this.ctx.destination);
+    }catch(e){ this.ctx = null; }
+  },
+  resume(){ if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+  blip(type, freq, dur, vol, sweep){
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (sweep) o.frequency.exponentialRampToValueAtTime(Math.max(40,freq*sweep), t+dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t+dur+0.02);
+  },
+  noise(dur, vol, lp){
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i=0;i<len;i++){ d[i] = (Math.random()*2-1) * (1 - i/len); }
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value = lp||1200;
+    const gn = this.ctx.createGain(); gn.gain.value = vol;
+    src.connect(f); f.connect(gn); gn.connect(this.master);
+    src.start(t);
+  },
+  fire(){ this.blip('square', 760, 0.05, 0.03, 0.5); },
+  hitBody(){ this.blip('triangle', 420, 0.07, 0.05, 1.5); this.noise(0.05,0.03,2400); },
+  hitHead(){ this.blip('triangle', 300, 0.14, 0.08, 1.8); this.blip('triangle',520,0.18,0.06,1.6); this.noise(0.1,0.05,2000); },
+  mush(){ this.blip('sine', 200, 0.03, 0.02, 1.1); },
+  mushPop(){ this.blip('triangle', 260, 0.08, 0.04, 1.4); this.noise(0.06,0.03,1800); },
+  spider(){ this.blip('sawtooth', 180, 0.05, 0.025, 1.2); },
+  spiderHit(){ this.blip('triangle', 360, 0.16, 0.08, 1.7); this.noise(0.12,0.06,2200); },
+  flea(){ this.blip('square', 140, 0.04, 0.02, 0.85); },
+  death(){ this.noise(0.7,0.4,420); this.blip('sawtooth',150,0.7,0.16,0.25); },
+  waveClear(){ this.blip('triangle',520,0.16,0.09,1.6); this.blip('triangle',780,0.22,0.09,1.5); this.blip('triangle',1040,0.3,0.08,1.4); },
+  extraLife(){ this.blip('triangle',660,0.12,0.08,1.4); this.blip('triangle',990,0.18,0.07,1.5); }
+};
+
+//============================================================== object pools (particles)
+function makePool(factory, size){
+  const free = []; const active = [];
+  for (let i=0;i<size;i++) free.push(factory());
+  return {
+    free, active,
+    spawn(){ let o = free.pop() || factory(); o.alive = true; active.push(o); return o; },
+    sweep(){ for (let i=active.length-1;i>=0;i--){ if (!active[i].alive){ free.push(active[i]); active.splice(i,1); } } },
+    clear(){ for (const o of active) free.push(o); active.length=0; }
+  };
+}
+const particles = makePool(()=>({x:0,y:0,vx:0,vy:0,life:0,max:1,r:1,color:'#fff',alive:false,spark:false,drag:0.985}), 1200);
+function spawnParticle(x,y,vx,vy,life,r,color,spark,drag){
+  const p = particles.spawn();
+  p.x=x;p.y=y;p.vx=vx;p.vy=vy;p.life=life;p.max=life;p.r=r;p.color=color;
+  p.spark=!!spark; p.drag = drag===undefined?0.985:drag;
+}
+function burst(x,y,n,opts){
+  opts = opts || {};
+  const speed = opts.speed||140, life=opts.life||0.6, color=opts.color||'#eafff4';
+  const spread = opts.spread||1, base=opts.base||0;
+  for (let i=0;i<n;i++){
+    const a = rand(TAU);
+    const sp = base + rand(speed*spread);
+    spawnParticle(x,y, Math.cos(a)*sp, Math.sin(a)*sp,
+      life*rand(1.3,0.5), rand(2.6,0.9), color, opts.spark, opts.drag);
+  }
+}
+function updateParticles(dt){
+  for (const p of particles.active){
+    p.life -= dt;
+    if (p.life <= 0){ p.alive=false; continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.vx *= p.drag; p.vy *= p.drag;
+  }
+  particles.sweep();
+}
+function drawParticles(){
+  ctx.save(); ctx.lineCap='round';
+  for (const p of particles.active){
+    const k = p.life/p.max;
+    ctx.globalAlpha = clamp(k,0,1);
+    ctx.shadowBlur = 8; ctx.shadowColor = p.color;
+    if (p.spark){
+      ctx.strokeStyle = p.color; ctx.lineWidth = p.r;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx*0.014, p.y - p.vy*0.014); ctx.stroke();
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x,p.y, p.r*(0.4+0.6*k), 0, TAU); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+function popMush(cx,cy){ burst(ccx(cx),ccy(cy), 14, {speed:140,life:0.5,color:'#7fd1c7',spark:true,base:30}); }
+
+//==================================================================================
+//  PURE CORE LOGIC  (testable, no rendering / no globals beyond GW/GH/PLAYER_BAND)
+//==================================================================================
+// A centipede is { segs:[{cx,cy}], dir:+1|-1 (horizontal), vdir:+1|-1 (vertical descent) }.
+// segs[0] is the HEAD; the rest trail behind it. Mushrooms live in a Map keyed cidx -> {hp, poison}.
+const MUSH_HP = 4;
+
+// Mushroom field model. `mfield` is a Uint8Array of hp (0 = empty), `mpoison` flags.
+function makeMushModel(){
+  return { hp:new Uint8Array(GW*GH), poison:new Uint8Array(GW*GH) };
+}
+function mushAt(m, cx, cy){
+  if (!inBounds(cx,cy)) return 0;
+  return m.hp[cidx(cx,cy)];
+}
+function plantMush(m, cx, cy, hp){
+  if (!inBounds(cx,cy)) return false;
+  const i = cidx(cx,cy);
+  if (m.hp[i] > 0) return false;     // already a mushroom
+  m.hp[i] = hp===undefined ? MUSH_HP : hp;
+  m.poison[i] = 0;
+  return true;
+}
+// Damage a mushroom by `dmg` (default 1). Returns 'cleared' if it reaches 0, 'hit' if it
+// survives, 'none' if there was nothing there.
+function damageMush(m, cx, cy, dmg){
+  if (!inBounds(cx,cy)) return 'none';
+  const i = cidx(cx,cy);
+  if (m.hp[i] <= 0) return 'none';
+  m.hp[i] = Math.max(0, m.hp[i] - (dmg||1));
+  if (m.hp[i] === 0){ m.poison[i]=0; return 'cleared'; }
+  return 'hit';
+}
+
+// ---- Centipede serpentine step --------------------------------------------------
+// One discrete step of a centipede on the grid, given the mushroom model.
+// Rule: the head attempts to move horizontally by `dir`. If the target cell is a wall
+// (out of bounds) OR holds a mushroom, the centipede DROPS one row (in its current vertical
+// direction) and REVERSES horizontal direction — it does NOT pass through. At the bottom row
+// it flips vertical direction to climb back up (never stuck / never vanishes). A poisoned
+// mushroom directly ahead makes it dive straight down instead.
+// The body follows: each segment takes the previous position of the segment ahead of it.
+// Returns true if the head dropped a row this step (used by callers for audio/fx; pure otherwise).
+function centipedeStep(c, m){
+  const head = c.segs[0];
+  const nx = head.cx + c.dir;
+  const ny = head.cy;
+  const blockedByWall = (nx < 0 || nx >= GW);
+  const aheadMush = !blockedByWall ? mushAt(m, nx, ny) : 0;
+  const poisonedAhead = !blockedByWall && aheadMush>0 && m.poison[cidx(nx,ny)];
+
+  let dropped = false;
+  let tx, ty;
+  if (poisonedAhead){
+    // dive straight down through the poisoned stalk
+    tx = head.cx; ty = head.cy + 1;
+    if (ty >= GH){ ty = head.cy; c.vdir = -1; }   // safety: can't leave the field
+  } else if (blockedByWall || aheadMush>0){
+    // drop one row in the current vertical direction and reverse horizontal direction.
+    // If dropping would leave the field (top or bottom), flip vertical direction first so
+    // the centipede turns around instead of vanishing — at the bottom it climbs back up.
+    let nvy = head.cy + c.vdir;
+    if (nvy < 0 || nvy >= GH){ c.vdir = -c.vdir; nvy = head.cy + c.vdir; }
+    ty = nvy;
+    tx = head.cx;             // stay in column; horizontal flips for next step
+    c.dir = -c.dir;
+    dropped = true;
+  } else {
+    tx = nx; ty = ny;         // ordinary horizontal advance
+  }
+
+  // shift body: from tail toward head, each seg inherits the prior seg's old position
+  for (let i = c.segs.length - 1; i > 0; i--){
+    c.segs[i].cx = c.segs[i-1].cx;
+    c.segs[i].cy = c.segs[i-1].cy;
+  }
+  head.cx = tx; head.cy = ty;
+  return dropped;
+}
+
+// ---- Split on a body/head hit ---------------------------------------------------
+// Shooting segment index `hitIdx` of centipede `c`. Plants a mushroom at the hit cell (caller
+// supplies the mush model). Returns an array of resulting centipedes (0, 1, or 2):
+//   - head hit (idx 0): segment removed, segs[1] becomes the new head, DIRECTION PRESERVED.
+//   - body hit: the chain splits at the hit. The part AHEAD of the hit (closer to old head,
+//     indices 0..hitIdx-1) stays one centipede keeping its head & direction. The part BEHIND
+//     (indices hitIdx+1..end) becomes a NEW centipede; its head is re-derived as the segment
+//     that was nearest the hit (the old segs[hitIdx+1]), and it heads in a sensible direction
+//     (it turns around to flee the gap — i.e. its head leads away from where the body was).
+// Each surviving piece keeps the parent vdir.
+function splitCentipede(c, hitIdx, m){
+  const cell = c.segs[hitIdx];
+  if (m) plantMush(m, cell.cx, cell.cy, MUSH_HP);
+  const out = [];
+
+  if (hitIdx === 0){
+    // head shot: drop the head; next segment becomes head, same direction.
+    const rest = c.segs.slice(1);
+    if (rest.length){
+      out.push({ segs: rest, dir: c.dir, vdir: c.vdir });
+    }
+    return out;
+  }
+
+  // front piece: indices 0..hitIdx-1 (head intact, direction intact)
+  const front = c.segs.slice(0, hitIdx);
+  if (front.length){
+    out.push({ segs: front, dir: c.dir, vdir: c.vdir });
+  }
+  // back piece: indices hitIdx+1..end. The segment adjacent to the gap becomes the new head.
+  // That segment was trailing the body; to derive a sensible heading, the new chain reverses
+  // its order so the segment nearest the gap leads, and it turns to move away from the gap.
+  const back = c.segs.slice(hitIdx + 1);
+  if (back.length){
+    // new head = back[0] (the segment that was nearest the hit). Reverse direction so it
+    // flees the newly-opened gap rather than marching back into it.
+    out.push({ segs: back, dir: -c.dir, vdir: c.vdir });
+  }
+  return out;
+}
+
+//============================================================== game state
+let state = 'title';   // title | playing | paused | waveclear | gameover
+let score = 0, displayScore = 0;
+let lives = 3, wave = 1, best = 0;
+let extraLifeGiven = false;
+const EXTRA_LIFE_AT = 12000;
+
+const mush = makeMushModel();
+let centipedes = [];   // array of live centipedes
+let bolts = [];        // player bolts {x,y, alive}
+let spider = null;
+let flea = null;
+let scorpion = null;
+let spiderTimer = 0, fleaTimer = 0, scorpionTimer = 0;
+let stepTimer = 0, stepInterval = 0.13;   // centipede step cadence (seconds)
+
+let shake = 0, flashAmt = 0;
+
+const player = {
+  cx: GW>>1, cy: GH-1, px:0, py:0,    // px/py = smooth pixel position
+  alive:true, invuln:0, blink:0, fireCd:0, respawnT:0
+};
+
+// pointer (mouse) control
+let useMouse = false, mouseX = 0, mouseY = 0, mouseFire = false;
+
+//============================================================== best / breadcrumb
+function loadBest(){
+  try{ best=parseInt(localStorage.getItem('ws:best:centipede')||'0',10)||0; }catch(e){ best=0; }
+}
+function raiseBest(){
+  // ws: unlock breadcrumb — see /UNLOCK.md. Only raise it; harmless if storage is off.
+  try{
+    var k='ws:best:centipede', prev=+(localStorage.getItem(k)||0);
+    if(wave>prev) localStorage.setItem(k,String(wave));
+  }catch(e){}
+  if (wave>best) best=wave;
+  elBest.textContent=best;
+}
+
+//============================================================== HUD refs
+const elScore=document.getElementById('score');
+const elWave=document.getElementById('wave');
+const elBest=document.getElementById('best');
+const elLives=document.getElementById('lives');
+function updateLives(){
+  elLives.innerHTML='';
+  for (let i=0;i<Math.max(lives,0);i++){
+    const d=document.createElement('div'); d.className='pip'; elLives.appendChild(d);
+  }
+}
+
+//============================================================== field setup
+function clearMush(){ mush.hp.fill(0); mush.poison.fill(0); }
+function seedMushrooms(density){
+  clearMush();
+  // scatter through the upper field (leave a clear row at very top + keep player band sparse)
+  for (let cy=1; cy<GH-1; cy++){
+    for (let cx=0; cx<GW; cx++){
+      const inBand = cy >= TOPROW;
+      const p = inBand ? density*0.35 : density;
+      if (Math.random() < p) plantMush(mush, cx, cy, MUSH_HP);
+    }
+  }
+  // never leave a mushroom on the player's exact start cell
+  const i = cidx(player.cx, GH-1); mush.hp[i]=0; mush.poison[i]=0;
+}
+
+function spawnCentipede(len, speedScale){
+  // enters from the top, heading right, full length single chain.
+  const segs = [];
+  const startCx = 0, startCy = 0;
+  for (let i=0;i<len;i++) segs.push({ cx: clamp(startCx - i, 0, GW-1), cy: startCy });
+  centipedes = [{ segs, dir: 1, vdir: 1 }];
+}
+
+function startWave(w){
+  wave = w;
+  elWave.textContent = w;
+  document.documentElement.style.setProperty('--accent', accentColor());
+  buildBg();
+  // mushrooms persist across waves in the arcade tradition, but we top them up + reseed wave 1
+  if (w === 1) seedMushrooms(0.16);
+  else topUpMushrooms(0.05);
+  const len = clamp(10 + Math.floor((w-1)*0.5), 10, 14);
+  stepInterval = Math.max(0.055, 0.13 - (w-1)*0.008);
+  spawnCentipede(len, 1);
+  spider = null; flea = null; scorpion = null;
+  spiderTimer = rand(7, 4);
+  fleaTimer = rand(6, 3);
+  scorpionTimer = w >= 3 ? rand(16, 10) : Infinity;
+  stepTimer = 0;
+  raiseBest();
+}
+function topUpMushrooms(extra){
+  for (let cy=1; cy<GH-1; cy++){
+    for (let cx=0; cx<GW; cx++){
+      if (cy>=TOPROW) continue;
+      if (mush.hp[cidx(cx,cy)]===0 && Math.random()<extra) plantMush(mush,cx,cy,MUSH_HP);
+    }
+  }
+}
+
+//============================================================== player
+function placePlayerStart(){
+  player.cx = GW>>1; player.cy = GH-1;
+  player.px = ccx(player.cx); player.py = ccy(player.cy);
+  player.alive = true; player.invuln = 1.5; player.blink = 0; player.fireCd = 0;
+}
+function playerMove(dx,dy){
+  if (!player.alive) return;
+  const ncx = clamp(player.cx+dx, 0, GW-1);
+  const ncy = clamp(player.cy+dy, TOPROW, GH-1);
+  // can't move onto a mushroom (classic) — block it
+  if (mushAt(mush,ncx,ncy)>0) return;
+  player.cx=ncx; player.cy=ncy;
+}
+function fire(){
+  if (!player.alive || player.fireCd>0) return;
+  const live = bolts.filter(b=>b.alive).length;
+  if (live >= 2) return;   // at most 2 bolts on screen
+  bolts.push({ x:player.px, y:player.py - CELL*0.4, alive:true });
+  player.fireCd = 0.12;
+  Audio_.fire();
+}
+
+//============================================================== enemies
+function spawnSpider(){
+  const fromLeft = Math.random()<0.5;
+  const x = fromLeft ? FX-CELL : FX+FW+CELL;
+  const y = ccy(GH - 1 - randi(0, PLAYER_BAND-1));
+  spider = { x, y, vx:(fromLeft?1:-1)*CELL*rand(7,5), vy:CELL*rand(7,5)*(Math.random()<0.5?1:-1),
+             alive:true, eatCd:0 };
+  Audio_.spider();
+}
+function updateSpider(dt){
+  if (!spider) return;
+  const s = spider;
+  s.x += s.vx*dt; s.y += s.vy*dt;
+  // bounce vertically inside the player band
+  const topY = FY + TOPROW*CELL + CELL*0.5, botY = FY + FH - CELL*0.5;
+  if (s.y < topY){ s.y=topY; s.vy=Math.abs(s.vy); }
+  if (s.y > botY){ s.y=botY; s.vy=-Math.abs(s.vy); }
+  // eat mushrooms it passes over
+  s.eatCd -= dt;
+  if (s.eatCd<=0){
+    const cx=Math.floor((s.x-FX)/CELL), cy=Math.floor((s.y-FY)/CELL);
+    if (inBounds(cx,cy) && mushAt(mush,cx,cy)>0){ mush.hp[cidx(cx,cy)]=0; mush.poison[cidx(cx,cy)]=0; popMush(cx,cy); Audio_.mushPop(); }
+    s.eatCd = 0.12;
+  }
+  // leaves the field
+  if (s.x < FX-CELL*2 || s.x > FX+FW+CELL*2){ spider=null; spiderTimer = rand(9, 5); return; }
+  // touch = death
+  if (player.alive && player.invuln<=0){
+    if (Math.abs(s.x-player.px) < CELL*0.7 && Math.abs(s.y-player.py) < CELL*0.7) deathBy('spider');
+  }
+}
+function spiderScore(){
+  // points scale with closeness when shot
+  const dy = Math.abs(spider.y - player.py)/CELL;
+  if (dy < 1.2) return 900;
+  if (dy < 3) return 600;
+  return 300;
+}
+
+function fewMushroomsInBand(){
+  let n=0;
+  for (let cy=TOPROW; cy<GH; cy++) for (let cx=0;cx<GW;cx++) if (mush.hp[cidx(cx,cy)]>0) n++;
+  return n < 4;
+}
+function spawnFlea(){
+  const cx = randi(0, GW);
+  flea = { cx, x:ccx(cx), y:FY-CELL, hp:2, alive:true, plantCd:0 };
+  Audio_.flea();
+}
+function updateFlea(dt){
+  if (!flea) return;
+  const f = flea;
+  const speed = CELL*9;
+  f.y += speed*dt;
+  f.plantCd -= dt;
+  if (f.plantCd<=0){
+    const cy=Math.floor((f.y-FY)/CELL);
+    if (inBounds(f.cx,cy) && cy>=1 && Math.random()<0.6) { if(plantMush(mush,f.cx,cy,MUSH_HP)) Audio_.mush(); }
+    f.plantCd = 0.09;
+  }
+  if (f.y > FY+FH+CELL){ flea=null; fleaTimer=rand(8,4); return; }
+  if (player.alive && player.invuln<=0 && Math.abs(f.x-player.px)<CELL*0.7 && Math.abs(f.y-player.py)<CELL*0.7) deathBy('flea');
+}
+
+function spawnScorpion(){
+  const fromLeft = Math.random()<0.5;
+  const row = randi(2, TOPROW-3);
+  scorpion = { x: fromLeft?FX-CELL:FX+FW+CELL, cy:row, dir:fromLeft?1:-1, alive:true, poisonCd:0 };
+}
+function updateScorpion(dt){
+  if (!scorpion) return;
+  const s = scorpion;
+  s.x += s.dir*CELL*6*dt;
+  s.poisonCd -= dt;
+  if (s.poisonCd<=0){
+    const cx=Math.floor((s.x-FX)/CELL);
+    if (inBounds(cx,s.cy) && mush.hp[cidx(cx,s.cy)]>0) mush.poison[cidx(cx,s.cy)]=1;
+    s.poisonCd=0.05;
+  }
+  if (s.x < FX-CELL*2 || s.x > FX+FW+CELL*2){ scorpion=null; scorpionTimer=rand(22,14); }
+}
+
+//============================================================== bolts & collisions
+function updateBolts(dt){
+  const boltSpeed = CELL*46;
+  for (const b of bolts){
+    if (!b.alive) continue;
+    b.y -= boltSpeed*dt;
+    if (b.y < FY-CELL){ b.alive=false; continue; }
+    const cx=Math.floor((b.x-FX)/CELL), cy=Math.floor((b.y-FY)/CELL);
+    // spider
+    if (spider && spider.alive && Math.abs(b.x-spider.x)<CELL*0.7 && Math.abs(b.y-spider.y)<CELL*0.8){
+      const pts=spiderScore(); score+=pts; addFloat(spider.x,spider.y,'+'+pts,'#ffd23d');
+      burst(spider.x,spider.y,22,{speed:200,life:0.6,color:'#ffd23d',spark:true});
+      spider=null; spiderTimer=rand(9,5); b.alive=false; addShake(4); Audio_.spiderHit(); continue;
+    }
+    // flea
+    if (flea && flea.alive && Math.abs(b.x-flea.x)<CELL*0.7 && Math.abs(b.y-flea.y)<CELL*0.8){
+      flea.hp--; b.alive=false; burst(flea.x,flea.y,8,{speed:120,life:0.4,color:'#b06bff',spark:true});
+      if (flea.hp<=0){ score+=200; addFloat(flea.x,flea.y,'+200','#b06bff'); flea=null; fleaTimer=rand(8,4); Audio_.spiderHit(); }
+      continue;
+    }
+    // scorpion
+    if (scorpion && scorpion.alive && Math.abs(b.x-scorpion.x)<CELL*0.8 && Math.abs(b.y-ccy(scorpion.cy))<CELL*0.8){
+      score+=1000; addFloat(scorpion.x,ccy(scorpion.cy),'+1000','#ff6a3d');
+      burst(scorpion.x,ccy(scorpion.cy),24,{speed:200,life:0.6,color:'#ff6a3d',spark:true});
+      scorpion=null; scorpionTimer=rand(22,14); b.alive=false; addShake(4); continue;
+    }
+    // centipede segment hit?
+    if (inBounds(cx,cy)){
+      let hit=false;
+      for (let ci=0; ci<centipedes.length && !hit; ci++){
+        const c=centipedes[ci];
+        for (let si=0; si<c.segs.length; si++){
+          if (c.segs[si].cx===cx && c.segs[si].cy===cy){
+            hitSegment(ci, si); b.alive=false; hit=true; break;
+          }
+        }
+      }
+      if (hit) continue;
+      // mushroom hit
+      if (mush.hp[cidx(cx,cy)]>0){
+        const r=damageMush(mush,cx,cy,1);
+        b.alive=false;
+        if (r==='cleared'){ score+=1; addFloat(ccx(cx),ccy(cy),'+1','#7fd1c7'); popMush(cx,cy); Audio_.mushPop(); }
+        else { burst(b.x,b.y,4,{speed:60,life:0.25,color:'#7fd1c7'}); Audio_.mush(); }
+        continue;
+      }
+    }
+  }
+  bolts = bolts.filter(b=>b.alive);
+}
+
+function hitSegment(ci, si){
+  const c = centipedes[ci];
+  const seg = c.segs[si];
+  const isHead = (si===0);
+  // fx + score
+  if (isHead){ score+=100; addFloat(ccx(seg.cx),ccy(seg.cy),'+100','#ff6fb0'); Audio_.hitHead(); addShake(3); }
+  else { score+=10; addFloat(ccx(seg.cx),ccy(seg.cy),'+10','#9be8c4'); Audio_.hitBody(); }
+  burst(ccx(seg.cx),ccy(seg.cy), isHead?20:12, {speed:170, life:0.5, color:isHead?'#ff6fb0':'var-body', spark:true});
+  // recolor the var-body marker
+  for (const p of particles.active){ if (p.color==='var-body') p.color = accentColor(); }
+  flash(0.12);
+  // logic: split
+  const pieces = splitCentipede(c, si, mush);
+  centipedes.splice(ci, 1, ...pieces);
+  maybeExtraLife();
+  if (centipedes.length===0) winWave();
+}
+function maybeExtraLife(){
+  if (!extraLifeGiven && score>=EXTRA_LIFE_AT){ lives++; extraLifeGiven=true; updateLives(); Audio_.extraLife(); flash(0.3); }
+}
+
+//============================================================== floating score text
+const floats = [];
+function addFloat(x,y,txt,color){ floats.push({x,y,txt,color,life:0.9,max:0.9}); }
+function updateFloats(dt){ for (const f of floats) f.life-=dt; for (let i=floats.length-1;i>=0;i--) if (floats[i].life<=0) floats.splice(i,1); }
+function drawFloats(){
+  ctx.save(); ctx.textAlign='center'; ctx.font='700 '+Math.round(CELL*0.9)+'px ui-monospace,monospace';
+  for (const f of floats){
+    const k=f.life/f.max; ctx.globalAlpha=clamp(k,0,1);
+    ctx.fillStyle=f.color; ctx.shadowBlur=8; ctx.shadowColor=f.color;
+    ctx.fillText(f.txt, f.x, f.y - (1-k)*CELL*1.4);
+  }
+  ctx.restore();
+}
+
+//============================================================== death / waves
+function deathBy(cause){
+  if (!player.alive || player.invuln>0) return;
+  player.alive=false; player.respawnT=1.4;
+  Audio_.death(); addShake(16); flash(0.5);
+  burst(player.px,player.py, 40, {speed:240,life:0.9,color:accentColor(),spark:true});
+  burst(player.px,player.py, 24, {speed:160,life:0.7,color:'#ff2e88',spark:true});
+}
+function respawn(){
+  lives--; updateLives();
+  if (lives<0){ endGame(); return; }
+  // clear mushrooms damaged but keep them; pull centipedes that descended back up a touch is not classic — leave them
+  placePlayerStart();
+}
+function winWave(){
+  state='waveclear';
+  Audio_.waveClear(); addShake(8); flash(0.3);
+  const bonus = wave*200 + lives*100;
+  score += bonus;
+  for (let i=0;i<60;i++) spawnParticle(FX+rand(FW),FY+rand(FH*0.7), rand(120,-120),rand(120,-120), rand(1.2,0.5), rand(3,1.2), [accentColor(),'#ff6fb0','#ffd23d'][randi(0,3)], true, 0.95);
+  document.getElementById('wcWave').textContent = wave;
+  document.getElementById('wcBonus').textContent = bonus.toLocaleString();
+  document.getElementById('wcScore').textContent = score.toLocaleString();
+  document.getElementById('waveClearScreen').classList.remove('hidden');
+  raiseBest();
+}
+
+//============================================================== shake / flash
+function addShake(a){ shake=Math.max(shake,a); }
+function flash(a){ flashAmt=Math.max(flashAmt,a); }
+
+//============================================================== accent per wave
+const ACCENTS = ['#39ff9e','#37f7e0','#37d6ff','#b06bff','#ff6fb0','#ffd23d','#ff6a3d'];
+function accentColor(){ return ACCENTS[(wave-1)%ACCENTS.length]; }
+
+//============================================================== update
+function stepCentipedes(){
+  let droppedAny=false;
+  for (const c of centipedes){
+    const dropped = centipedeStep(c, mush);
+    droppedAny = droppedAny || dropped;
+    // collision with player: any segment on the player's cell
+    if (player.alive && player.invuln<=0){
+      for (const s of c.segs){ if (s.cx===player.cx && s.cy===player.cy){ deathBy('centipede'); break; } }
+    }
+  }
+}
+function update(dt){
+  // smooth player pixel pos toward grid cell
+  const tx=ccx(player.cx), ty=ccy(player.cy);
+  player.px += (tx-player.px)*Math.min(1,dt*22);
+  player.py += (ty-player.py)*Math.min(1,dt*22);
+
+  if (player.alive){
+    player.fireCd-=dt;
+    if (player.invuln>0){ player.invuln-=dt; player.blink+=dt; }
+    if ((keys.fire||mouseFire)) fire();
+
+    stepTimer-=dt;
+    if (stepTimer<=0){ stepCentipedes(); stepTimer=stepInterval; }
+
+    // enemy timers
+    if (spider) updateSpider(dt); else { spiderTimer-=dt; if (spiderTimer<=0) spawnSpider(); }
+    if (flea) updateFlea(dt);
+    else { fleaTimer-=dt; if (fleaTimer<=0){ if (fewMushroomsInBand()) spawnFlea(); else fleaTimer=2; } }
+    if (scorpion) updateScorpion(dt); else if (scorpionTimer!==Infinity){ scorpionTimer-=dt; if (scorpionTimer<=0) spawnScorpion(); }
+
+    updateBolts(dt);
+    // collision: centipede moved onto player between steps (player moved into it)
+    if (player.alive && player.invuln<=0){
+      for (const c of centipedes) for (const s of c.segs) if (s.cx===player.cx && s.cy===player.cy){ deathBy('centipede'); break; }
+    }
+  } else {
+    player.respawnT-=dt;
+    // centipedes keep coming slowly while dead
+    stepTimer-=dt; if (stepTimer<=0){ for (const c of centipedes) centipedeStep(c,mush); stepTimer=stepInterval*1.6; }
+    if (player.respawnT<=0) respawn();
+  }
+
+  updateParticles(dt);
+  updateFloats(dt);
+  shake *= Math.pow(0.04, dt);
+  flashAmt *= Math.pow(0.02, dt);
+
+  displayScore += (score-displayScore)*Math.min(1,dt*8);
+  elScore.textContent=Math.round(displayScore).toLocaleString();
+}
+
+//============================================================== render
+function drawMushrooms(now){
+  for (let cy=0; cy<GH; cy++){
+    for (let cx=0; cx<GW; cx++){
+      const i=cidx(cx,cy); const hp=mush.hp[i];
+      if (hp<=0) continue;
+      const x=ccx(cx), y=ccy(cy), r=CELL*0.42;
+      const poison = mush.poison[i];
+      const base = poison ? '#ff6a3d' : '#7fd1c7';
+      ctx.save();
+      ctx.globalAlpha = 0.35 + 0.65*(hp/MUSH_HP);
+      ctx.shadowBlur=8; ctx.shadowColor=base;
+      // cap
+      ctx.fillStyle=base;
+      ctx.beginPath(); ctx.arc(x,y-r*0.15, r, Math.PI, 0); ctx.lineTo(x+r*0.55,y+r*0.5); ctx.lineTo(x-r*0.55,y+r*0.5); ctx.closePath(); ctx.fill();
+      // damage notches
+      if (hp<MUSH_HP){ ctx.globalAlpha*=0.5; ctx.strokeStyle='#03030a'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(x-r*0.4,y-r*0.1); ctx.lineTo(x+r*0.4,y-r*0.1); ctx.stroke(); }
+      ctx.restore();
+    }
+  }
+}
+function drawCentipedes(now){
+  for (const c of centipedes){
+    for (let i=c.segs.length-1;i>=0;i--){
+      const s=c.segs[i]; const x=ccx(s.cx), y=ccy(s.cy);
+      const head=(i===0);
+      const r=CELL*(head?0.52:0.46);
+      ctx.save();
+      ctx.shadowBlur= head?16:11; ctx.shadowColor= head?'#ff6fb0':accentColor();
+      ctx.fillStyle= head?'#ff6fb0':accentColor();
+      ctx.globalAlpha=0.96;
+      ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fill();
+      // inner pip
+      ctx.globalAlpha=0.5; ctx.fillStyle='#03030a';
+      ctx.beginPath(); ctx.arc(x,y,r*0.45,0,TAU); ctx.fill();
+      if (head){
+        // eyes pointing in direction of travel
+        ctx.globalAlpha=0.95; ctx.fillStyle='#eafff4'; ctx.shadowBlur=0;
+        const ex=c.dir*r*0.32;
+        ctx.beginPath(); ctx.arc(x+ex, y-r*0.28, r*0.16, 0, TAU); ctx.arc(x+ex, y+r*0.28, r*0.16, 0, TAU); ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+}
+function drawEnemies(now){
+  if (spider){
+    const x=spider.x,y=spider.y,r=CELL*0.55;
+    ctx.save(); ctx.shadowBlur=14; ctx.shadowColor='#ffd23d'; ctx.strokeStyle='#ffd23d'; ctx.lineWidth=2.2; ctx.lineCap='round';
+    for (let k=0;k<4;k++){ const a=0.5+k*0.5; const lx=Math.cos(a)*r, ly=Math.sin(a)*r;
+      ctx.beginPath(); ctx.moveTo(x-lx,y-ly); ctx.lineTo(x+lx,y+ly); ctx.stroke(); }
+    ctx.fillStyle='#ffd23d'; ctx.beginPath(); ctx.arc(x,y,r*0.5,0,TAU); ctx.fill();
+    ctx.restore();
+  }
+  if (flea){
+    const x=flea.x,y=flea.y,r=CELL*0.4;
+    ctx.save(); ctx.shadowBlur=12; ctx.shadowColor='#b06bff'; ctx.fillStyle='#b06bff';
+    ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fill();
+    ctx.globalAlpha=0.6; ctx.strokeStyle='#d9b6ff'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(x,y-r); ctx.lineTo(x,y-r*2); ctx.stroke();
+    ctx.restore();
+  }
+  if (scorpion){
+    const x=scorpion.x,y=ccy(scorpion.cy),r=CELL*0.5;
+    ctx.save(); ctx.shadowBlur=12; ctx.shadowColor='#ff6a3d'; ctx.strokeStyle='#ff6a3d'; ctx.lineWidth=2.4; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(x-r,y); ctx.lineTo(x+r,y); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x+r*scorpion.dir,y-r*0.5,r*0.3,0,TAU); ctx.stroke();
+    ctx.restore();
+  }
+}
+function drawBolts(){
+  ctx.save(); ctx.lineCap='round'; ctx.strokeStyle='#eafff4'; ctx.lineWidth=CELL*0.18;
+  ctx.shadowBlur=10; ctx.shadowColor=accentColor();
+  for (const b of bolts){ ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(b.x,b.y+CELL*0.7); ctx.stroke(); }
+  ctx.restore();
+}
+function drawPlayer(now){
+  if (!player.alive) return;
+  if (player.invuln>0 && Math.floor(player.blink*16)%2===0) return;
+  const x=player.px,y=player.py,r=CELL*0.5;
+  ctx.save(); ctx.shadowBlur=14; ctx.shadowColor=accentColor(); ctx.fillStyle=accentColor();
+  ctx.beginPath(); ctx.moveTo(x,y-r); ctx.lineTo(x+r*0.8,y+r*0.7); ctx.lineTo(x,y+r*0.3); ctx.lineTo(x-r*0.8,y+r*0.7); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function render(now){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  if (shake>0.3){ const a=rand(TAU); ctx.translate(Math.cos(a)*shake, Math.sin(a)*shake); }
+  drawMushrooms(now);
+  drawParticles();
+  drawCentipedes(now);
+  drawEnemies(now);
+  if (state==='playing'||state==='paused'){ drawBolts(); drawPlayer(now); }
+  drawFloats();
+  ctx.restore();
+  if (flashAmt>0.01){ ctx.fillStyle='rgba(200,255,230,'+(flashAmt*0.4)+')'; ctx.fillRect(0,0,W,H); }
+}
+
+//============================================================== input
+const keys = { fire:false };
+const held = { left:false,right:false,up:false,down:false };
+let moveCd = 0;
+function keyToDir(k){
+  if (k==='arrowleft'||k==='a') return 'left';
+  if (k==='arrowright'||k==='d') return 'right';
+  if (k==='arrowup'||k==='w') return 'up';
+  if (k==='arrowdown'||k==='s') return 'down';
+  return null;
+}
+const DIRV = { left:[-1,0], right:[1,0], up:[0,-1], down:[0,1] };
+function setMuteTag(){ document.getElementById('muteTag').textContent='M · sound '+(Audio_.muted?'off':'on'); }
+window.addEventListener('keydown', e=>{
+  const k=e.key.toLowerCase();
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  const dir=keyToDir(k);
+  if (dir){
+    if (!held[dir]){ held[dir]=true; if (state==='playing'&&player.alive){ const v=DIRV[dir]; playerMove(v[0],v[1]); moveCd=0.14; } }
+    useMouse=false; return;
+  }
+  switch(k){
+    case ' ': case 'spacebar':
+      keys.fire=true; break;
+    case 'enter':
+      if (state==='title'||state==='gameover') startGame();
+      else if (state==='waveclear') nextWave();
+      break;
+    case 'p': case 'escape':
+      if (state==='playing'||state==='paused') togglePause(); break;
+    case 'm':
+      Audio_.init(); Audio_.muted=!Audio_.muted; setMuteTag(); if(!Audio_.muted) Audio_.resume(); break;
+  }
+}, {passive:false});
+window.addEventListener('keyup', e=>{
+  const k=e.key.toLowerCase();
+  if (k===' '||k==='spacebar'){ keys.fire=false; return; }
+  const dir=keyToDir(k);
+  if (dir) held[dir]=false;
+});
+// mouse control: move blaster horizontally to mouse, click to fire
+canvas.addEventListener('pointermove', e=>{
+  mouseX=e.clientX; mouseY=e.clientY;
+  if (state==='playing'&&player.alive){
+    useMouse=true;
+    const cx=clamp(Math.floor((mouseX-FX)/CELL),0,GW-1);
+    const cy=clamp(Math.floor((mouseY-FY)/CELL),TOPROW,GH-1);
+    if (mushAt(mush,cx,player.cy)===0) player.cx=cx;
+    if (mushAt(mush,player.cx,cy)===0) player.cy=cy;
+  }
+});
+canvas.addEventListener('pointerdown', e=>{ mouseFire=true; if(state==='playing') fire(); });
+window.addEventListener('pointerup', ()=>{ mouseFire=false; });
+window.addEventListener('pointerdown', ()=>{ Audio_.init(); if(!Audio_.muted) Audio_.resume(); }, {once:true});
+document.addEventListener('visibilitychange', ()=>{ if (document.hidden && state==='playing') togglePause(); });
+
+function tickMove(dt){
+  if (state!=='playing' || !player.alive || useMouse) return;
+  moveCd-=dt;
+  if (moveCd>0) return;
+  let dx=0,dy=0;
+  if (held.left) dx=-1; else if (held.right) dx=1;
+  if (held.up) dy=-1; else if (held.down) dy=1;
+  if (dx||dy){ playerMove(dx,dy); moveCd=0.06; }
+}
+
+//============================================================== state transitions
+function startGame(){
+  state='playing';
+  score=0; displayScore=0; lives=3; extraLifeGiven=false;
+  centipedes=[]; bolts=[]; floats.length=0; particles.clear();
+  spider=null; flea=null; scorpion=null;
+  placePlayerStart();
+  startWave(1);
+  shake=0; flashAmt=0;
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('gameoverScreen').classList.add('hidden');
+  document.getElementById('waveClearScreen').classList.add('hidden');
+  document.getElementById('hud').style.display='block';
+  elScore.textContent='0';
+  updateLives();
+  Audio_.init(); if(!Audio_.muted) Audio_.resume();
+}
+function nextWave(){
+  document.getElementById('waveClearScreen').classList.add('hidden');
+  bolts=[]; placePlayerStart();
+  startWave(wave+1);
+  state='playing'; last=performance.now();
+}
+function endGame(){
+  state='gameover'; raiseBest();
+  document.getElementById('goScore').textContent=score.toLocaleString();
+  document.getElementById('goWave').textContent=wave;
+  document.getElementById('newHigh').style.display=(wave>=best&&wave>1)?'block':'none';
+  document.getElementById('gameoverScreen').classList.remove('hidden');
+}
+function togglePause(){
+  if (state==='playing'){ state='paused'; document.getElementById('pauseScreen').classList.remove('hidden'); }
+  else if (state==='paused'){ state='playing'; document.getElementById('pauseScreen').classList.add('hidden'); last=performance.now(); }
+}
+
+//============================================================== main loop
+let last=performance.now();
+let fpsTime=0, fpsCount=0, fpsValue=60;
+function frame(now){
+  let dt=(now-last)/1000; last=now;
+  if (dt>0.05) dt=0.05;
+  fpsTime+=dt; fpsCount++;
+  if (fpsTime>=0.5){ fpsValue=Math.round(fpsCount/fpsTime); fpsTime=0; fpsCount=0; }
+
+  if (state==='playing'){ tickMove(dt); update(dt); }
+  else if (state==='paused'){ updateParticles(dt*0.4); updateFloats(dt*0.4); }
+  else { updateParticles(dt); if (state==='title') attractUpdate(dt); }
+  render(now);
+  requestAnimationFrame(frame);
+}
+// attract: a centipede wanders behind the title
+let attractStep=0;
+function attractUpdate(dt){
+  attractStep-=dt;
+  if (attractStep<=0){ for (const c of centipedes) centipedeStep(c,mush); attractStep=0.16; }
+}
+
+//============================================================== SELF-TEST (headless logic)
+function runSelfTest(){
+  const results=[]; let allPass=true;
+  function check(name, cond, detail){ const pass=!!cond; if(!pass) allPass=false;
+    results.push({name,pass,detail}); console.log((pass?'PASS':'FAIL')+' — '+name+(detail?'  ('+detail+')':'')); }
+
+  // 1) SPLIT: 5-seg centipede, shoot body index 2 → two centipedes len 2 & 2, valid heads, mush at shot cell.
+  {
+    const m=makeMushModel();
+    const segs=[{cx:10,cy:5},{cx:9,cy:5},{cx:8,cy:5},{cx:7,cy:5},{cx:6,cy:5}];
+    const c={segs,dir:1,vdir:1};
+    const shotCell={cx:segs[2].cx,cy:segs[2].cy};
+    const pieces=splitCentipede(c,2,m);
+    const ok = pieces.length===2 && pieces[0].segs.length===2 && pieces[1].segs.length===2 &&
+               pieces[0].segs[0] && pieces[1].segs[0] && mushAt(m,shotCell.cx,shotCell.cy)===MUSH_HP;
+    check('split: body[2] of 5 → two len-2 chains, valid heads, mushroom planted', ok,
+      'lens '+pieces.map(p=>p.segs.length).join('&')+', mush '+mushAt(m,shotCell.cx,shotCell.cy));
+  }
+  // 2) SERPENTINE: 1-seg heading right, mushroom directly ahead, step → dropped one row, reversed left, didn't pass.
+  {
+    const m=makeMushModel(); plantMush(m,11,5,MUSH_HP);
+    const c={segs:[{cx:10,cy:5}],dir:1,vdir:1};
+    centipedeStep(c,m);
+    const ok = c.segs[0].cy===6 && c.segs[0].cx===10 && c.dir===-1;
+    check('serpentine (mushroom): drop one row + reverse, no pass-through', ok,
+      'pos '+c.segs[0].cx+','+c.segs[0].cy+' dir '+c.dir);
+    // wall variant
+    const c2={segs:[{cx:GW-1,cy:5}],dir:1,vdir:1}; const m2=makeMushModel();
+    centipedeStep(c2,m2);
+    const ok2 = c2.segs[0].cy===6 && c2.segs[0].cx===GW-1 && c2.dir===-1;
+    check('serpentine (wall): drop one row + reverse at edge', ok2,
+      'pos '+c2.segs[0].cx+','+c2.segs[0].cy+' dir '+c2.dir);
+  }
+  // 3) HEAD-SHOT: 4-seg, shoot head → len 3, adjacent seg is new head, direction preserved.
+  {
+    const m=makeMushModel();
+    const segs=[{cx:10,cy:5},{cx:9,cy:5},{cx:8,cy:5},{cx:7,cy:5}];
+    const c={segs,dir:1,vdir:1};
+    const pieces=splitCentipede(c,0,m);
+    const ok = pieces.length===1 && pieces[0].segs.length===3 &&
+               pieces[0].segs[0].cx===9 && pieces[0].segs[0].cy===5 && pieces[0].dir===1;
+    check('head-shot: 4→3, adjacent becomes head, direction preserved', ok,
+      'len '+(pieces[0]?pieces[0].segs.length:0)+' head '+(pieces[0]?pieces[0].segs[0].cx:'-')+','+(pieces[0]?pieces[0].segs[0].cy:'-')+' dir '+(pieces[0]?pieces[0].dir:'-'));
+  }
+  // 4) MUSHROOM HP: fresh mushroom hit 4× → removed only on the 4th hit.
+  {
+    const m=makeMushModel(); plantMush(m,3,3,MUSH_HP);
+    const r1=damageMush(m,3,3), r2=damageMush(m,3,3), r3=damageMush(m,3,3);
+    const aliveBefore = mushAt(m,3,3)>0;
+    const r4=damageMush(m,3,3);
+    const goneAfter = mushAt(m,3,3)===0;
+    const ok = r1==='hit'&&r2==='hit'&&r3==='hit'&&aliveBefore&&r4==='cleared'&&goneAfter;
+    check('mushroom HP: 4 hits to clear (survives 3, dies on 4th)', ok,
+      [r1,r2,r3,r4].join(',')+' aliveBefore4='+aliveBefore);
+  }
+
+  const chip=document.getElementById('selftest');
+  if (allPass){ chip.classList.add('show'); chip.textContent='✓ self-test'; console.log('SELF-TEST: ALL PASS ('+results.length+' checks)'); }
+  else { chip.classList.add('show','fail'); chip.textContent='✗ self-test'; console.error('SELF-TEST: FAILURES PRESENT'); }
+  return { allPass, results };
+}
+
+//============================================================== boot
+loadBest();
+resize();
+elBest.textContent=best;
+setMuteTag();
+updateLives();
+// attract field
+seedMushrooms(0.14);
+spawnCentipede(12,1);
+const SELFTEST = runSelfTest();
+requestAnimationFrame(frame);
+
+// verification hook
+window.__CENTIPEDE__ = {
+  get state(){return state;},
+  get score(){return score;},
+  get wave(){return wave;},
+  get lives(){return lives;},
+  get best(){return best;},
+  get fps(){return fpsValue;},
+  get centipedeCount(){return centipedes.length;},
+  get segmentCount(){return centipedes.reduce((a,c)=>a+c.segs.length,0);},
+  get boltCount(){return bolts.length;},
+  get mushCount(){ let n=0; for(let i=0;i<mush.hp.length;i++) if(mush.hp[i]>0)n++; return n; },
+  get spiderAlive(){return !!spider;},
+  get fleaAlive(){return !!flea;},
+  get scorpionAlive(){return !!scorpion;},
+  get playerAlive(){return player.alive;},
+  get playerCx(){return player.cx;},
+  get playerCy(){return player.cy;},
+  get selfTest(){return SELFTEST;},
+  _start(){ startGame(); },
+  _next(){ if(state==='waveclear') nextWave(); },
+  _move(dx,dy){ playerMove(dx,dy); },
+  _setPlayer(cx,cy){ player.cx=clamp(cx,0,GW-1); player.cy=clamp(cy,TOPROW,GH-1); player.px=ccx(player.cx); player.py=ccy(player.cy); },
+  _fire(){ fire(); },
+  _hold(dir,on){ if(dir in held) held[dir]=!!on; },
+  // spawn a known centipede right above the player for a deterministic in-game split test
+  _spawnTestCentipede(cx,cy,len,dir){ centipedes=[{segs:Array.from({length:len},(_,i)=>({cx:clamp(cx-i*dir,0,GW-1),cy})),dir:dir||1,vdir:1}]; },
+  _clearMush(){ clearMush(); },
+  _forceSpider(){ if(!spider) spawnSpider(); },
+  _forceFlea(){ if(!flea) spawnFlea(); },
+  _kill(){ player.invuln=0; deathBy('test'); },
+  _stepCentipedes(){ stepCentipedes(); },
+  _segPositions(){ return centipedes.map(c=>({dir:c.dir,segs:c.segs.map(s=>({cx:s.cx,cy:s.cy}))})); },
+  GW, GH, TOPROW, PLAYER_BAND
+};
+
+})();
+</script>
+
+<!-- arc-back -->
+<style>
+  .arc-back{ position:fixed; left:18px; bottom:14px; z-index:9999; pointer-events:auto;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11.5px;
+    letter-spacing:.18em; text-transform:uppercase; text-decoration:none;
+    color:#e9f6ff; opacity:.40; transition:opacity .2s, text-shadow .2s;
+    text-shadow:0 0 8px rgba(57,255,158,.45); }
+  .arc-back:hover{ opacity:.95; text-shadow:0 0 12px rgba(57,255,158,.85); }
+</style>
+<a class="arc-back" href="../index.html" style="position:fixed;z-index:9999;pointer-events:auto">← arcade</a>
+</body>
+</html>
