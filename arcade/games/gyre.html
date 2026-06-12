@@ -1,0 +1,1302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>GYRE — neon tube shooter</title>
+<style>
+  :root{ --accent:#37f7e0; --accent2:#ff2e88; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; background:#03030a; overflow:hidden;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    color:#e9f6ff; -webkit-font-smoothing:antialiased; cursor:default; }
+  #stage{ position:fixed; inset:0; }
+  canvas{ display:block; position:absolute; inset:0; }
+  #stage.playing{ cursor:none; }
+
+  /* ---------- HUD ---------- */
+  .hud{ position:fixed; inset:0; pointer-events:none; z-index:5;
+    font-variant-numeric:tabular-nums; }
+  .hud-row{ position:absolute; top:18px; display:flex; }
+  .hud-left{ left:24px; flex-direction:column; gap:4px; align-items:flex-start; }
+  .hud-right{ right:24px; flex-direction:column; align-items:flex-end; gap:4px; }
+  .label{ font-size:10px; letter-spacing:.32em; color:#5fb6c9; opacity:.85; text-transform:uppercase; }
+  .value{ font-size:30px; font-weight:700; letter-spacing:.04em; line-height:1;
+    color:#eafffb; text-shadow:0 0 16px rgba(55,247,224,.6); }
+  .value.small{ font-size:17px; color:#9be8df; }
+  .level-tag{ position:fixed; top:18px; left:50%; transform:translateX(-50%); text-align:center; }
+  .level-tag .label{ font-size:10px; }
+  .level-tag .value{ font-size:22px; color:#ff6fb0; text-shadow:0 0 16px rgba(255,46,136,.6); }
+
+  /* lives pips */
+  .lives{ display:flex; gap:8px; align-items:center; margin-top:6px; }
+  .pip{ width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent;
+    border-bottom:16px solid var(--accent);
+    filter:drop-shadow(0 0 7px rgba(55,247,224,.7)); transition:opacity .2s, transform .2s; }
+  .pip.empty{ opacity:.16; filter:none; transform:scale(.8); }
+
+  /* zapper charges (bottom center) */
+  .zapwrap{ position:fixed; left:50%; bottom:16px; transform:translateX(-50%);
+    z-index:5; pointer-events:none; display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .zaplabel{ font-size:10px; letter-spacing:.26em; text-transform:uppercase; color:#5fb6c9; }
+  .zaplabel b{ color:#ffe14d; font-weight:700; }
+  .zapdots{ display:flex; gap:9px; }
+  .zdot{ width:13px; height:13px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #fff7c2, #ffd23d);
+    box-shadow:0 0 12px rgba(255,210,61,.85); transition:opacity .2s, transform .2s; }
+  .zdot.spent{ opacity:.18; background:transparent; border:1.5px solid rgba(255,210,61,.4);
+    box-shadow:none; transform:scale(.78); }
+
+  #muteTag{ position:fixed; bottom:16px; right:20px; font-size:10px; letter-spacing:.24em;
+    color:#5fb6c9; opacity:.7; text-transform:uppercase; pointer-events:none; }
+
+  /* ---------- Overlays ---------- */
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:8px;
+    background:radial-gradient(120% 120% at 50% 45%, rgba(6,8,20,.34), rgba(2,2,8,.9));
+    backdrop-filter:blur(1.5px); transition:opacity .35s; }
+  .overlay.hidden{ opacity:0; pointer-events:none; }
+  .title{ font-size:clamp(56px,15vw,178px); font-weight:800; letter-spacing:.16em;
+    line-height:.9; color:#eafffb;
+    text-shadow:0 0 30px rgba(55,247,224,.65), 0 0 70px rgba(55,247,224,.35);
+    -webkit-text-stroke:1px rgba(170,255,245,.25); }
+  .title .a2{ color:var(--accent2); -webkit-text-stroke:1px rgba(255,46,136,.4);
+    text-shadow:0 0 30px rgba(255,46,136,.6); }
+  .tagline{ font-size:13px; letter-spacing:.34em; color:#ff6fb0; text-transform:uppercase;
+    opacity:.9; margin-bottom:24px; }
+  .prompt{ font-size:15px; letter-spacing:.12em; color:#eafffb;
+    margin-top:14px; animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:.45} 50%{opacity:1} }
+  .controls{ margin-top:28px; display:grid; grid-template-columns:auto auto;
+    gap:6px 26px; font-size:12px; letter-spacing:.06em; color:#9be8df; opacity:.9; }
+  .controls b{ color:#eafffb; font-weight:700; }
+  .controls .k{ text-align:right; color:var(--accent); }
+  .hint{ margin-top:20px; font-size:11px; letter-spacing:.16em; color:#5fb6c9;
+    text-transform:uppercase; opacity:.8; max-width:46ch; line-height:1.7; }
+  .go-stats{ margin-top:8px; display:grid; grid-template-columns:auto auto; gap:6px 30px;
+    font-size:14px; letter-spacing:.06em; color:#9be8df; }
+  .go-stats .k{ text-align:right; color:#5fb6c9; }
+  .go-stats b{ color:#eafffb; }
+  .newhigh{ color:var(--accent); font-size:13px; letter-spacing:.3em; text-transform:uppercase;
+    margin-top:14px; animation:pulse 1s ease-in-out infinite; }
+  .gameover-title{ font-size:clamp(34px,8vw,76px); font-weight:800; letter-spacing:.14em;
+    color:#ff2e88; text-shadow:0 0 28px rgba(255,46,136,.6); margin-bottom:8px; }
+  .pausetitle{ font-size:48px; font-weight:800; letter-spacing:.22em; color:#eafffb;
+    text-shadow:0 0 24px rgba(55,247,224,.55); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg"></canvas>
+  <canvas id="game"></canvas>
+</div>
+
+<!-- HUD -->
+<div class="hud" id="hud" style="display:none">
+  <div class="hud-row hud-left">
+    <div class="label">Score</div>
+    <div class="value" id="score">0</div>
+    <div class="lives" id="lives"></div>
+  </div>
+  <div class="hud-row hud-right">
+    <div class="label">Best Level</div>
+    <div class="value small" id="best">0</div>
+  </div>
+  <div class="level-tag">
+    <div class="label">Level</div>
+    <div class="value" id="level">1</div>
+  </div>
+</div>
+<div class="zapwrap" id="zapwrap" style="display:none">
+  <div class="zaplabel">Superzapper <b id="zapn">1</b></div>
+  <div class="zapdots" id="zapdots"></div>
+</div>
+<div id="muteTag">M · sound off</div>
+
+<!-- Title -->
+<div class="overlay" id="titleScreen">
+  <div class="title">GY<span class="a2">RE</span></div>
+  <div class="tagline">neon · tube · shooter</div>
+  <div class="prompt">Press ENTER to start</div>
+  <div class="controls">
+    <span class="k">← → / A D</span><span>move around the rim</span>
+    <span class="k">SPACE</span><span>fire down the lane</span>
+    <span class="k">Z / SHIFT</span><span>superzapper (screen-clear)</span>
+    <span class="k">MOUSE</span><span>rotate the rim (optional)</span>
+    <span class="k">P / ESC</span><span>pause</span>
+    <span class="k">M</span><span>sound (off by default)</span>
+  </div>
+  <div class="hint">They climb the well from the dark. Hold the rim, fire down the lanes, clear the well to dive deeper.</div>
+</div>
+
+<!-- Game over -->
+<div class="overlay hidden" id="gameoverScreen">
+  <div class="gameover-title">GAME OVER</div>
+  <div class="go-stats">
+    <span class="k">Score</span><b id="goScore">0</b>
+    <span class="k">Level reached</span><b id="goLevel">0</b>
+    <span class="k">Wells cleared</span><b id="goCleared">0</b>
+  </div>
+  <div class="newhigh" id="newHigh" style="display:none">★ NEW BEST LEVEL ★</div>
+  <div class="prompt">Press ENTER to play again</div>
+</div>
+
+<!-- Pause -->
+<div class="overlay hidden" id="pauseScreen">
+  <div class="pausetitle">PAUSED</div>
+  <div class="prompt">Press P or ESC to resume</div>
+</div>
+
+<script>
+"use strict";
+(function(){
+//============================================================== setup / canvas
+const bgCanvas = document.getElementById('bg');
+const canvas   = document.getElementById('game');
+const bgx = bgCanvas.getContext('2d');
+const ctx = canvas.getContext('2d');
+const stage = document.getElementById('stage');
+
+let W = 0, H = 0, DPR = 1, CX = 0, CY = 0, RIM = 0;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  for (const c of [bgCanvas, canvas]){
+    c.width  = Math.floor(W * DPR);
+    c.height = Math.floor(H * DPR);
+    c.style.width = W + 'px';
+    c.style.height = H + 'px';
+  }
+  bgx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  CX = W/2; CY = H*0.5;
+  RIM = Math.min(W, H) * 0.42;     // near-rim radius (player's ring)
+  buildBg();
+  if (well) well.layout();
+}
+window.addEventListener('resize', resize);
+
+//============================================================== utilities
+const TAU = Math.PI * 2;
+const rand  = (a=1,b=0)=> b + Math.random()*(a-b);
+const randi = (a,b)=> Math.floor(rand(a,b));
+const clamp = (v,lo,hi)=> v<lo?lo:(v>hi?hi:v);
+const lerp  = (a,b,t)=> a+(b-a)*t;
+// shortest angular difference a->b
+function angDiff(a,b){ let d=(b-a)%TAU; if(d>Math.PI)d-=TAU; if(d<-Math.PI)d+=TAU; return d; }
+
+//============================================================== depth model
+// Each enemy/projectile rides a lane at depth z in [0,1]; 0 = deep vanishing point, 1 = near rim.
+// We map depth -> a screen-radius scale so lanes converge to the center as z->0.
+const VANISH = 0.085;            // radius fraction at the vanishing point (never quite 0, looks better)
+function depthScale(z){ return VANISH + (1-VANISH)*z*z; }   // quadratic = nice perspective rush
+
+//============================================================== palettes (per-level neon shift)
+const PALETTES = [
+  { web:'#37f7e0', rim:'#37f7e0', spoke:'rgba(55,247,224,', glow:'#37f7e0' },   // cyan
+  { web:'#ff2e88', rim:'#ff2e88', spoke:'rgba(255,46,136,', glow:'#ff2e88' },   // magenta
+  { web:'#b06bff', rim:'#b06bff', spoke:'rgba(176,107,255,', glow:'#b06bff' },  // violet
+  { web:'#ffb13d', rim:'#ffb13d', spoke:'rgba(255,177,61,', glow:'#ffb13d' },   // amber
+  { web:'#39ff9e', rim:'#39ff9e', spoke:'rgba(57,255,158,', glow:'#39ff9e' },   // green
+  { web:'#5ad6ff', rim:'#5ad6ff', spoke:'rgba(90,214,255,', glow:'#5ad6ff' },   // ice blue
+];
+let pal = PALETTES[0];
+
+//============================================================== background
+function buildBg(){
+  bgx.clearRect(0,0,W,H);
+  bgx.fillStyle = '#03030a';
+  bgx.fillRect(0,0,W,H);
+  const g = bgx.createRadialGradient(CX,CY,0, CX,CY, Math.max(W,H)*0.7);
+  g.addColorStop(0,'rgba(16,24,52,0.55)');
+  g.addColorStop(1,'rgba(3,3,10,0)');
+  bgx.fillStyle = g; bgx.fillRect(0,0,W,H);
+  // faint starfield for depth
+  bgx.save();
+  for (let i=0;i<90;i++){
+    const a=rand(TAU), r=rand(Math.max(W,H)*0.55, 30);
+    const x=CX+Math.cos(a)*r, y=CY+Math.sin(a)*r;
+    const s=rand(1.4,0.4);
+    bgx.globalAlpha=rand(0.5,0.08);
+    bgx.fillStyle='#cfe9ff';
+    bgx.fillRect(x,y,s,s);
+  }
+  bgx.restore();
+}
+
+//============================================================== audio (procedural, default MUTED)
+const Audio_ = {
+  ctx:null, master:null, muted:true,   // DEFAULT OFF — owner's speakers
+  init(){
+    if (this.ctx) return;
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.38;
+      this.master.connect(this.ctx.destination);
+    }catch(e){ this.ctx = null; }
+  },
+  resume(){ if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+  blip(type, freq, dur, vol, sweep){
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (sweep) o.frequency.exponentialRampToValueAtTime(Math.max(40,freq*sweep), t+dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t+dur+0.02);
+  },
+  noise(dur, vol, lp){
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i=0;i<len;i++){ d[i] = (Math.random()*2-1) * (1 - i/len); }
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value = lp||1200;
+    const gn = this.ctx.createGain(); gn.gain.value = vol;
+    src.connect(f); f.connect(gn); gn.connect(this.master);
+    src.start(t);
+  },
+  fire(){ this.blip('square', 740, 0.05, 0.045, 1.7); },
+  hit(){ this.blip('square', 300, 0.05, 0.05, 0.7); },
+  kill(){ this.noise(0.16, 0.11, 1600); this.blip('triangle',420,0.1,0.05,0.5); },
+  killBig(){ this.noise(0.32, 0.2, 800); this.blip('sawtooth',150,0.32,0.08,0.4); },
+  move(){ this.blip('sine', 220, 0.03, 0.02, 1.2); },
+  zap(){ this.noise(0.5,0.3,2400); this.blip('sawtooth',900,0.5,0.12,0.18); },
+  spike(){ this.blip('square',180,0.06,0.05,0.6); },
+  flip(){ this.blip('triangle',520,0.04,0.03,1.4); },
+  clear(){ this.blip('triangle',440,0.14,0.09,1.6); this.blip('triangle',660,0.2,0.09,1.5); },
+  dive(){ this.blip('sawtooth',120,0.9,0.12,7.0); },
+  death(){ this.noise(0.7,0.4,420); this.blip('sawtooth',150,0.7,0.16,0.25); }
+};
+
+//============================================================== object pools
+function makePool(factory, size){
+  const free = []; const active = [];
+  for (let i=0;i<size;i++) free.push(factory());
+  return {
+    free, active,
+    spawn(){ let o = free.pop() || factory(); o.alive = true; active.push(o); return o; },
+    sweep(){
+      for (let i=active.length-1;i>=0;i--){
+        if (!active[i].alive){ free.push(active[i]); active.splice(i,1); }
+      }
+    },
+    clear(){ for (const o of active) free.push(o); active.length=0; }
+  };
+}
+
+// ---- particles ----
+const particles = makePool(()=>({x:0,y:0,vx:0,vy:0,life:0,max:1,r:1,
+  color:'#fff',alive:false,spark:false,drag:0.985}), 1100);
+function spawnParticle(x,y,vx,vy,life,r,color,spark,drag){
+  const p = particles.spawn();
+  p.x=x;p.y=y;p.vx=vx;p.vy=vy;p.life=life;p.max=life;p.r=r;p.color=color;
+  p.spark=!!spark; p.drag = drag===undefined?0.985:drag;
+}
+function burst(x,y,n,opts){
+  opts = opts || {};
+  const speed = opts.speed||140, life=opts.life||0.6, color=opts.color||'#eafffb';
+  const spread = opts.spread||1, base=opts.base||0;
+  for (let i=0;i<n;i++){
+    const a = rand(TAU);
+    const sp = base + rand(speed*spread);
+    spawnParticle(x,y, Math.cos(a)*sp, Math.sin(a)*sp,
+      life*rand(1.3,0.5), rand(2.6,0.9), color, opts.spark, opts.drag);
+  }
+}
+function updateParticles(dt){
+  for (const p of particles.active){
+    p.life -= dt;
+    if (p.life <= 0){ p.alive=false; continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.vx *= p.drag; p.vy *= p.drag;
+  }
+  particles.sweep();
+}
+function drawParticles(){
+  ctx.save();
+  ctx.lineCap='round';
+  for (const p of particles.active){
+    const k = p.life/p.max;
+    ctx.globalAlpha = clamp(k,0,1);
+    ctx.shadowBlur = 8; ctx.shadowColor = p.color;
+    if (p.spark){
+      ctx.strokeStyle = p.color; ctx.lineWidth = p.r;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - p.vx*0.014, p.y - p.vy*0.014);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x,p.y, p.r*(0.4+0.6*k), 0, TAU); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+//============================================================== the WELL (tube geometry)
+// A well is N lanes around a closed/open ring. Each lane index L has a rim point and a tangent.
+// Lane geometry is defined by `rimPts` (one per lane *vertex*) and a `closed` flag.
+// Player rides lanes (the gaps between adjacent vertices are the lanes a flipper flips across).
+// We model lanes as N positions around the rim; lane center = vertex direction from center.
+const WELL_SHAPES = [
+  { name:'circle', lanes:16, closed:true },
+  { name:'square', lanes:16, closed:true },
+  { name:'star',   lanes:16, closed:true },
+  { name:'line',   lanes:13, closed:false },
+  { name:'plus',   lanes:16, closed:true },
+  { name:'vee',    lanes:12, closed:false },
+];
+
+let well = null;
+function makeWell(shapeIdx){
+  const def = WELL_SHAPES[((shapeIdx%WELL_SHAPES.length)+WELL_SHAPES.length)%WELL_SHAPES.length];
+  const w = {
+    def, name:def.name, N:def.lanes, closed:def.closed,
+    dir:[],   // unit direction (angle) from center for each lane center
+    rad:[],   // rim radius scalar (0..1) per lane (lets non-circular shapes warp)
+    layout(){ this.buildGeom(); }
+  };
+  w.buildGeom = function(){
+    const N=this.N; this.dir.length=0; this.rad.length=0;
+    for (let i=0;i<N;i++){
+      let t = this.closed ? (i/N) : (N>1? i/(N-1) : 0.5);   // param 0..1
+      let ang, r=1;
+      switch(this.name){
+        case 'circle':
+          ang = t*TAU - Math.PI/2; r=1; break;
+        case 'square': {
+          // map t around a rounded square perimeter
+          ang = t*TAU - Math.PI/2;
+          // square radius for a given angle (distance to square edge of half-size 1)
+          const ca=Math.abs(Math.cos(ang)), sa=Math.abs(Math.sin(ang));
+          r = 1/Math.max(ca,sa); r = Math.min(r,1.32);
+          break; }
+        case 'star': {
+          ang = t*TAU - Math.PI/2;
+          r = (i%2===0)? 1.18 : 0.62;       // alternating points/valleys
+          break; }
+        case 'plus': {
+          ang = t*TAU - Math.PI/2;
+          // plus/cross: long arms along the 4 axes
+          const k=Math.abs(Math.sin(2*ang));
+          r = 0.72 + 0.55*(1-k);
+          break; }
+        case 'line': {
+          // a horizontal open line: lanes spread left-to-right, slight bow
+          const x = lerp(-1.15, 1.15, t);
+          const y = -0.18 + 0.5*(x*x);       // shallow upward bow
+          ang = Math.atan2(y, x); r = Math.hypot(x,y);
+          break; }
+        case 'vee': {
+          // open V: two arms meeting at bottom-center
+          const half = (t-0.5)*2;            // -1..1
+          const x = half*1.15;
+          const y = 0.85 - 1.6*Math.abs(half);
+          ang = Math.atan2(y, x); r = Math.hypot(x,y);
+          break; }
+        default: ang = t*TAU - Math.PI/2; r=1;
+      }
+      this.dir.push(ang); this.rad.push(r);
+    }
+  };
+  // screen position for (lane L, depth z)
+  w.pos = function(L, z){
+    L = ((L%this.N)+this.N)%this.N;
+    const s = depthScale(z) * RIM;
+    const ang = this.dir[L];
+    const r = this.rad[L] * s;
+    return { x: CX + Math.cos(ang)*r, y: CY + Math.sin(ang)*r };
+  };
+  w.buildGeom();
+  return w;
+}
+
+// draw the well: spokes (lane separators) + rim outline + a few depth rings
+function drawWell(zoom){
+  const N=well.N;
+  zoom = zoom||0;   // 0..1 for the dive transition (pushes everything outward)
+  ctx.save();
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  // depth rings (concentric, fading inward)
+  const rings = 7;
+  for (let k=0;k<rings;k++){
+    const z = (k+1)/rings;
+    const zz = clamp(z + zoom*1.4, 0, 1.6);
+    ctx.beginPath();
+    for (let i=0;i<=N;i++){
+      const L = i % N;
+      if (!well.closed && i===N) break;
+      const p = well.pos(L, zz>1?1:zz);
+      if (i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+    }
+    if (well.closed) ctx.closePath();
+    ctx.globalAlpha = 0.10 + 0.16*z;
+    ctx.lineWidth = 1 + z*0.8;
+    ctx.shadowBlur = 8; ctx.shadowColor = pal.glow;
+    ctx.strokeStyle = pal.spoke + (0.5+0.5*z) + ')';
+    ctx.stroke();
+  }
+  // spokes from deep to rim
+  ctx.globalAlpha = 0.5;
+  ctx.lineWidth = 1.4;
+  ctx.shadowBlur = 10; ctx.shadowColor = pal.glow;
+  ctx.strokeStyle = pal.spoke + '0.34)';
+  const drawSpokes = well.closed ? N : N;
+  for (let L=0; L<drawSpokes; L++){
+    const a = well.pos(L, clamp(0.04+zoom, 0, 1));
+    const b = well.pos(L, clamp(1+zoom*0.0, 0, 1));
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  }
+  // bright near rim
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 3.0;
+  ctx.shadowBlur = 18; ctx.shadowColor = pal.glow;
+  ctx.strokeStyle = pal.rim;
+  ctx.beginPath();
+  for (let i=0;i<=N;i++){
+    const L=i%N;
+    if (!well.closed && i===N) break;
+    const p = well.pos(L, clamp(1+zoom, 0, 1.0));
+    if (i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+  }
+  if (well.closed) ctx.closePath();
+  ctx.stroke();
+  // rim flash on fire
+  if (rimFlash>0.01){
+    ctx.globalAlpha = clamp(rimFlash,0,1);
+    ctx.lineWidth = 5.5; ctx.shadowBlur = 26;
+    ctx.strokeStyle = '#ffffff';
+    ctx.beginPath();
+    for (let i=0;i<=N;i++){
+      const L=i%N;
+      if (!well.closed && i===N) break;
+      const p = well.pos(L, 1);
+      if (i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+    }
+    if (well.closed) ctx.closePath();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+//============================================================== player (blaster)
+const player = {
+  lane:0, laneF:0,          // integer lane + smooth float for animation
+  alive:true, invuln:0, blink:0,
+  fireCd:0, fireRate:0.085
+};
+function resetPlayer(){
+  player.lane = Math.floor(well.N/2);
+  player.laneF = player.lane;
+  player.alive=true; player.invuln=1.4; player.blink=0; player.fireCd=0;
+}
+function moveLane(dir){
+  if (!player.alive) return;
+  let n = player.lane + dir;
+  if (well.closed){ n = ((n%well.N)+well.N)%well.N; }
+  else { n = clamp(n, 0, well.N-1); if (n===player.lane) return; }
+  player.lane = n;
+  Audio_.move();
+}
+function updatePlayer(dt){
+  // smooth laneF toward lane (handle wrap for closed wells)
+  if (well.closed){
+    let d = player.lane - player.laneF;
+    if (d>well.N/2) d-=well.N; if (d<-well.N/2) d+=well.N;
+    player.laneF += d*Math.min(1, dt*18);
+    player.laneF = ((player.laneF%well.N)+well.N)%well.N;
+  } else {
+    player.laneF = lerp(player.laneF, player.lane, Math.min(1,dt*18));
+  }
+  if (player.invuln>0){ player.invuln-=dt; player.blink+=dt; }
+  // fire
+  player.fireCd -= dt;
+  if (keys.fire && player.fireCd<=0 && player.alive){
+    shoot(); player.fireCd = player.fireRate;
+  }
+}
+// draw the blaster as a claw straddling its lane on the near rim
+function drawPlayer(){
+  if (!player.alive) return;
+  if (player.invuln>0){ const on=(Math.floor(player.blink*12)%2)===0; if(!on) return; }
+  // position at near rim, straddling the lane (between vertex L and L+1 for closed; on vertex otherwise)
+  const L = player.laneF;
+  const Li = Math.round(L);
+  const p = well.pos(Li, 1.0);
+  // tangent direction (toward next lane) for orientation
+  const a = well.dir[((Math.floor(L)%well.N)+well.N)%well.N];
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  // outward normal = from center to rim point
+  const nrm = Math.atan2(p.y-CY, p.x-CX);
+  ctx.rotate(nrm);
+  const sz = clamp(RIM*0.07, 13, 24);
+  ctx.shadowBlur=16; ctx.shadowColor=pal.glow;
+  ctx.lineWidth=2.6; ctx.strokeStyle='#ffffff';
+  ctx.fillStyle='rgba(255,255,255,0.10)';
+  // a claw/yoke shape pointing inward (toward the well)
+  ctx.beginPath();
+  ctx.moveTo(-sz*1.0, -sz*0.78);
+  ctx.lineTo(-sz*1.0, sz*0.78);
+  ctx.lineTo(-sz*0.25, sz*0.30);
+  ctx.lineTo(-sz*0.65, 0);
+  ctx.lineTo(-sz*0.25, -sz*0.30);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  // inner accent
+  ctx.strokeStyle=pal.rim; ctx.lineWidth=1.6;
+  ctx.beginPath();
+  ctx.moveTo(-sz*0.95,-sz*0.5); ctx.lineTo(-sz*0.45,0); ctx.lineTo(-sz*0.95,sz*0.5);
+  ctx.stroke();
+  // invuln halo
+  if (player.invuln>0){
+    ctx.beginPath(); ctx.arc(-sz*0.5,0, sz*1.3, 0, TAU);
+    ctx.globalAlpha=0.3+0.25*Math.sin(player.blink*10);
+    ctx.lineWidth=1.4; ctx.strokeStyle=pal.glow; ctx.stroke();
+  }
+  ctx.restore();
+}
+function killPlayer(){
+  if (!player.alive) return;
+  player.alive=false;
+  const p = well.pos(player.lane, 1.0);
+  addShake(18); flash(0.5); Audio_.death();
+  burst(p.x,p.y, 40, {speed:300,life:1.1,color:'#eafffb',spark:true,base:50});
+  burst(p.x,p.y, 22, {speed:160,life:1.4,color:pal.rim});
+  burst(p.x,p.y, 14, {speed:110,life:1.6,color:'#ff2e88'});
+  game.lives--;
+  updateLives();
+  if (game.lives<=0){ setTimeout(endGame, 950); }
+  else { setTimeout(()=>{ if(game.state==='playing'){ resetPlayer(); } }, 850); }
+}
+
+//============================================================== bullets (player shots, travel DOWN a lane)
+const bullets = makePool(()=>({lane:0,z:1,vz:0,alive:false}), 60);
+function shoot(){
+  const b = bullets.spawn();
+  b.lane = player.lane; b.z = 0.985; b.vz = -1.95;   // dives inward (z decreasing)
+  rimFlash = Math.min(1, rimFlash+0.7);
+  Audio_.fire();
+  const p = well.pos(player.lane, 0.96);
+  burst(p.x,p.y, 3, {speed:60,life:0.14,color:'#eafffb',spark:true});
+}
+function updateBullets(dt){
+  for (const b of bullets.active){
+    b.z += b.vz*dt;
+    if (b.z<=0.02){
+      // reached the deep end — small sparkle, gone
+      const p=well.pos(b.lane,0.06);
+      burst(p.x,p.y,3,{speed:50,life:0.2,color:pal.rim,spark:true});
+      b.alive=false;
+    }
+  }
+  bullets.sweep();
+}
+function drawBullets(){
+  ctx.save();
+  ctx.lineCap='round';
+  for (const b of bullets.active){
+    const p1=well.pos(b.lane, b.z);
+    const p2=well.pos(b.lane, clamp(b.z+0.06,0,1));
+    const sc = depthScale(b.z);
+    ctx.shadowBlur=14; ctx.shadowColor='#eafffb';
+    ctx.strokeStyle='#ffffff'; ctx.lineWidth=2+3*sc;
+    ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+//============================================================== enemies
+// Archetypes:
+//  flipper — climbs, periodically flips to an adjacent lane (closed wells wrap).
+//  spiker  — climbs while laying a spike trail down its lane; the trail is a hazard at the rim.
+//  fuseball— rides on lane boundaries, erratic up/down, hard to hit between lanes; splits on death.
+const ENEMIES = {
+  flipper:  { hp:1, score:50,  speed:0.115, color:'#ff2e88', glow:'#ff2e88' },
+  spiker:   { hp:1, score:75,  speed:0.085, color:'#39ff9e', glow:'#39ff9e' },
+  fuseball: { hp:2, score:100, speed:0.10,  color:'#ffb13d', glow:'#ffb13d' },
+};
+const enemies = makePool(()=>({type:'flipper',lane:0,laneF:0,z:0,hp:1,maxhp:1,
+  speed:0.1,score:0,color:'#fff',glow:'#fff',
+  flipT:0,flipFrom:0,flipTo:0,flipping:0,flipDir:1,
+  spikeT:0,laidTo:1, dir:1, wob:0, hitFlash:0, atRim:0, alive:false}), 220);
+
+function spawnEnemy(type, lane){
+  const d = ENEMIES[type];
+  const e = enemies.spawn();
+  e.type=type; e.lane=lane; e.laneF=lane; e.z=0.02;
+  e.maxhp=d.hp; e.hp=d.hp; e.speed=d.speed*game.speedMul; e.score=d.score;
+  e.color=d.color; e.glow=d.glow; e.hitFlash=0; e.atRim=0;
+  e.flipT=rand(1.6,0.7); e.flipping=0; e.dir=1; e.wob=rand(TAU);
+  e.spikeT=0; e.laidTo=0.02; e.flipDir = Math.random()<0.5?1:-1;
+  return e;
+}
+function updateEnemies(dt){
+  for (const e of enemies.active){
+    if (e.hitFlash>0) e.hitFlash-=dt;
+    // climb toward rim (z -> 1)
+    let climb = e.speed;
+    if (e.type==='flipper'){
+      // flipper: animate flips between lanes while climbing
+      e.flipT -= dt;
+      if (e.flipping>0){
+        e.flipping -= dt*5.5;
+        const t = clamp(1-e.flipping,0,1);
+        // ease laneF from flipFrom to flipTo (handle wrap)
+        let to=e.flipTo, from=e.flipFrom;
+        if (well.closed){
+          let d=to-from; if(d>well.N/2)d-=well.N; if(d<-well.N/2)d+=well.N;
+          e.laneF = from + d*t;
+          e.laneF = ((e.laneF%well.N)+well.N)%well.N;
+        } else e.laneF = lerp(from,to,t);
+        if (e.flipping<=0){ e.lane=((e.flipTo%well.N)+well.N)%well.N; e.laneF=e.lane; e.flipT=rand(1.5,0.6); }
+      } else if (e.flipT<=0 && e.z<0.92){
+        // start a flip
+        let dir = e.flipDir;
+        let n = e.lane+dir;
+        if (!well.closed){ if(n<0||n>well.N-1){ dir=-dir; e.flipDir=dir; n=e.lane+dir; } }
+        e.flipFrom=e.lane; e.flipTo=((n%well.N)+well.N)%well.N; e.flipping=1;
+        if (Math.random()<0.4) e.flipDir=-e.flipDir;
+        Audio_.flip();
+      }
+    } else if (e.type==='spiker'){
+      // descends a touch then climbs, laying spikes up to its current z
+      e.spikeT -= dt;
+      const lane=((e.lane%well.N)+well.N)%well.N;
+      const col = spikes[lane];
+      if (e.z > col){ spikes[lane] = e.z; }   // extend spike column to its high-water mark
+    } else if (e.type==='fuseball'){
+      // rides between two lanes (on a boundary): wobble laneF, erratic climb
+      e.wob += dt*4;
+      e.laneF = e.lane + 0.5 + Math.sin(e.wob)*0.5;   // sits on the boundary, jitters
+      if (well.closed) e.laneF=((e.laneF%well.N)+well.N)%well.N;
+      // occasional direction flip to feel erratic, but it always net-climbs
+      if (Math.random()<0.012){ e.dir = -e.dir; }
+      climb = e.dir>0 ? e.speed*1.2 : e.speed*0.35;   // surges up, briefly eases — never retreats
+    }
+    e.z += climb*dt;
+    if (e.type!=='flipper' && e.type!=='fuseball') e.laneF = e.lane;
+    // reached the rim?
+    if (e.z >= 1.0){
+      e.z = 1.0; e.atRim += dt;
+      rimHunt(e, dt);                 // crawl along the rim toward the player (classic Tempest)
+      // grab/kill the player if on (or adjacent for fuseball) the same lane
+      tryGrabPlayer(e);
+    }
+  }
+}
+// once at the rim, flippers/fuseballs crawl around it toward the player's lane.
+// spikers at the rim cap their spike column then expire (their spike is the hazard left behind).
+function rimHunt(e, dt){
+  if (e.type==='spiker'){
+    const lane=((e.lane%well.N)+well.N)%well.N;
+    spikes[lane] = 1.0;              // spike now reaches the rim — a lasting hazard
+    e.atRim += dt*0;
+    if (e.atRim>0.25) e.alive=false; // the spiker itself is spent; the spike remains
+    return;
+  }
+  // flipper / fuseball: step toward the player around the rim, on a cadence
+  e.flipT -= dt;
+  if (e.flipping>0){
+    e.flipping -= dt*6.5;
+    const t=clamp(1-e.flipping,0,1);
+    let from=e.flipFrom, to=e.flipTo;
+    if (well.closed){
+      let d=to-from; if(d>well.N/2)d-=well.N; if(d<-well.N/2)d+=well.N;
+      e.laneF=((from+d*t)%well.N+well.N)%well.N;
+    } else e.laneF=lerp(from,to,t);
+    if (e.flipping<=0){ e.lane=((e.flipTo%well.N)+well.N)%well.N; e.laneF=e.lane; e.flipT=rand(0.42,0.26); }
+  } else if (e.flipT<=0){
+    // choose a step toward the player's lane
+    const here=Math.round(e.laneF);
+    let step;
+    if (well.closed){ const dd=angDiffLane(here, player.lane); step = dd===0?0:(dd>0?1:-1); }
+    else { step = player.lane>here?1:(player.lane<here?-1:0); }
+    if (step!==0){
+      let n=here+step;
+      if (!well.closed) n=clamp(n,0,well.N-1);
+      e.flipFrom=here; e.flipTo=((n%well.N)+well.N)%well.N; e.flipping=1;
+      Audio_.flip();
+    } else { e.flipT=rand(0.4,0.2); }   // already on the player's lane — hold and grab
+  }
+}
+function laneNear(a,b){
+  if (well.closed){ let d=Math.abs(angDiffLane(a,b)); return d; }
+  return Math.abs(a-b);
+}
+function angDiffLane(a,b){ let d=(b-a)%well.N; if(d>well.N/2)d-=well.N; if(d<-well.N/2)d+=well.N; return d; }
+function tryGrabPlayer(e){
+  if (!player.alive || player.invuln>0) return;
+  let hit=false;
+  if (e.type==='fuseball'){
+    // fuseball straddles a boundary -> dangerous on either adjacent lane
+    if (laneNear(Math.floor(e.laneF), player.lane)<0.6 || laneNear(Math.ceil(e.laneF), player.lane)<0.6) hit=true;
+  } else {
+    if (laneNear(Math.round(e.laneF), player.lane)<0.6) hit=true;
+  }
+  if (hit){
+    e.alive=false;
+    const p=well.pos(player.lane,1); burst(p.x,p.y,12,{speed:160,life:0.5,color:e.color,spark:true});
+    killPlayer();
+  }
+}
+function drawEnemy(e){
+  const p = well.pos(e.laneF, e.z);
+  const sc = depthScale(e.z);
+  const size = clamp(RIM*0.085*sc + 4, 4, 30);
+  ctx.save();
+  ctx.translate(p.x,p.y);
+  const nrm = Math.atan2(p.y-CY,p.x-CX);
+  ctx.rotate(nrm);
+  const flash = e.hitFlash>0;
+  ctx.shadowBlur = flash?22:14; ctx.shadowColor=e.glow;
+  ctx.lineWidth=2; ctx.strokeStyle=flash?'#fff':e.color;
+  ctx.fillStyle = flash?'rgba(255,255,255,0.5)':'rgba(0,0,0,0.25)';
+  if (e.type==='flipper'){
+    // bowtie / pinwheel
+    ctx.beginPath();
+    ctx.moveTo(-size,-size*0.7); ctx.lineTo(size,size*0.7);
+    ctx.lineTo(-size,size*0.7); ctx.lineTo(size,-size*0.7);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  } else if (e.type==='spiker'){
+    // diamond drill
+    ctx.beginPath();
+    ctx.moveTo(size,0); ctx.lineTo(0,-size*0.8); ctx.lineTo(-size,0); ctx.lineTo(0,size*0.8);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(size*1.4,0); ctx.lineTo(-size*0.2,0); ctx.stroke();
+  } else { // fuseball — pulsing orb with cross sparks
+    const pr = size*(0.9+0.18*Math.sin(e.wob*2));
+    ctx.beginPath(); ctx.arc(0,0,pr,0,TAU); ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-pr*1.3,0); ctx.lineTo(pr*1.3,0);
+    ctx.moveTo(0,-pr*1.3); ctx.lineTo(0,pr*1.3);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function damageEnemy(e){
+  e.hp--; e.hitFlash=0.08;
+  const p=well.pos(e.laneF,e.z);
+  burst(p.x,p.y,4,{speed:120,life:0.22,color:'#eafffb',spark:true,base:30});
+  if (e.hp<=0){ killEnemy(e); return true; }
+  Audio_.hit();
+  // fuseball that survives a hit jitters away
+  if (e.type==='fuseball'){ e.wob+=1.2; }
+  return false;
+}
+function killEnemy(e){
+  game.score += e.score;
+  const p=well.pos(e.laneF,e.z);
+  floatScore(p.x,p.y,e.score,e.color);
+  const big = e.type==='fuseball';
+  burst(p.x,p.y, big?26:16, {speed:big?240:180, life:0.7, color:e.color, spark:true, base:40});
+  burst(p.x,p.y, big?9:6, {speed:90, life:1.0, color:e.glow});
+  if (big){ addShake(6); flash(0.12); Audio_.killBig(); } else { addShake(1.4); Audio_.kill(); }
+  // fuseball splits into two flippers
+  if (e.type==='fuseball' && e.z<0.9){
+    for (let i=0;i<2;i++){
+      const ln = ((Math.round(e.laneF)+(i?1:0))%well.N+well.N)%well.N;
+      const c=spawnEnemy('flipper', ln);
+      c.z = clamp(e.z-0.04,0.05,0.9); c.score=25;
+    }
+  }
+  e.alive=false;
+  game.killsThisWell++;
+}
+
+//============================================================== spikes (laid by spikers, down each lane)
+let spikes = [];   // spikes[lane] = z height of spike column (0 = none)
+function resetSpikes(){ spikes = new Array(well.N).fill(0); }
+function updateSpikesShoot(){
+  // bullets passing through a spike column shave it back
+  for (const b of bullets.active){
+    const lane=((b.lane%well.N)+well.N)%well.N;
+    if (spikes[lane] > 0 && b.z <= spikes[lane]+0.02 && b.z >= spikes[lane]-0.10){
+      spikes[lane] = Math.max(0, spikes[lane]-0.16);
+      if (spikes[lane] < 0.05) spikes[lane] = 0;   // snap fully clear
+      const p=well.pos(lane, spikes[lane]+0.04);
+      burst(p.x,p.y,3,{speed:70,life:0.18,color:'#39ff9e',spark:true});
+      Audio_.spike();
+      b.alive=false;
+    }
+  }
+}
+function drawSpikes(){
+  ctx.save();
+  ctx.lineCap='round';
+  for (let L=0;L<well.N;L++){
+    if (spikes[L]<=0) continue;
+    const top=well.pos(L, clamp(spikes[L],0,1));
+    const base=well.pos(L, 1.0);
+    ctx.shadowBlur=10; ctx.shadowColor='#39ff9e';
+    ctx.strokeStyle='#39ff9e'; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.moveTo(base.x,base.y); ctx.lineTo(top.x,top.y); ctx.stroke();
+    // barb at the top
+    ctx.fillStyle='#bfffe0';
+    ctx.beginPath(); ctx.arc(top.x,top.y,2.6,0,TAU); ctx.fill();
+  }
+  ctx.restore();
+}
+function checkSpikeDeath(){
+  // player dies if standing on a lane with a spike that reaches the rim
+  if (!player.alive || player.invuln>0) return;
+  const lane=((player.lane%well.N)+well.N)%well.N;
+  if (spikes[lane] >= 0.985){
+    const p=well.pos(lane,1); burst(p.x,p.y,10,{speed:140,life:0.5,color:'#39ff9e',spark:true});
+    killPlayer();
+  }
+}
+
+//============================================================== floating score text
+const floats = makePool(()=>({x:0,y:0,vy:0,life:0,max:1,text:'',color:'#fff',size:14,alive:false}), 50);
+function floatScore(x,y,score,color){
+  const f=floats.spawn();
+  f.x=x;f.y=y;f.vy=-46;f.life=0.85;f.max=0.85;f.text='+'+score;f.color=color||pal.rim;f.size=13;
+}
+function updateFloats(dt){
+  for (const f of floats.active){ f.life-=dt; if(f.life<=0){f.alive=false;continue;} f.y+=f.vy*dt; f.vy*=0.94; }
+  floats.sweep();
+}
+function drawFloats(){
+  ctx.save(); ctx.textAlign='center';
+  for (const f of floats.active){
+    const k=f.life/f.max;
+    ctx.globalAlpha=clamp(k*1.4,0,1);
+    ctx.shadowBlur=10; ctx.shadowColor=f.color;
+    ctx.fillStyle=f.color; ctx.font='700 '+f.size+'px ui-monospace,monospace';
+    ctx.fillText(f.text, f.x, f.y);
+  }
+  ctx.restore();
+}
+
+//============================================================== superzapper
+function superzap(){
+  if (game.state!=='playing' || game.zappers<=0 || !player.alive) return;
+  game.zappers--;
+  updateZappers();
+  addShake(14); flash(0.55); Audio_.zap();
+  // kill every enemy (with a sweeping spark from rim inward)
+  const list = enemies.active.slice();
+  for (const e of list){ if (e.alive) killEnemy(e); }
+  // shave all spikes
+  for (let L=0;L<well.N;L++){ if (spikes[L]>0){ spikes[L]=Math.max(0,spikes[L]-0.5); } }
+  // big radial flash particles
+  for (let i=0;i<60;i++){
+    const a=rand(TAU), sp=rand(420,120);
+    spawnParticle(CX,CY,Math.cos(a)*sp,Math.sin(a)*sp, rand(0.7,0.3), rand(3,1.2), pal.rim, true, 0.96);
+  }
+  zapWave = 1;
+}
+let zapWave = 0;
+
+//============================================================== screen shake / flash / rim flash
+let shake=0, flashAmt=0, rimFlash=0;
+function addShake(v){ shake=Math.min(30, shake+v); }
+function flash(v){ flashAmt=Math.min(1, flashAmt+v); }
+
+//============================================================== game state / levels / spawning
+const game = {
+  state:'title',
+  score:0, displayScore:0,
+  level:1, lives:3, zappers:1,
+  best:0, cleared:0,
+  spawnTimer:0, toSpawn:0, killsThisWell:0,
+  speedMul:1,
+  diveT:0   // dive transition progress
+};
+function loadBest(){
+  try{ game.best=parseInt(localStorage.getItem('ws:best:gyre')||'0',10)||0; }catch(e){ game.best=0; }
+}
+function raiseBest(){
+  // ws: unlock breadcrumb — see /UNLOCK.md. Only raise it; harmless if storage is off.
+  try{
+    var k='ws:best:gyre', prev=+(localStorage.getItem(k)||0);
+    if(game.level>prev) localStorage.setItem(k,String(game.level));
+  }catch(e){}
+  if (game.level>game.best) game.best=game.level;
+  elBest.textContent=game.best;
+}
+
+// per-level setup
+function startLevel(lvl){
+  game.level=lvl;
+  pal = PALETTES[(lvl-1)%PALETTES.length];
+  document.documentElement.style.setProperty('--accent', pal.rim);
+  well = makeWell(lvl-1);
+  resetSpikes();
+  resetPlayer();
+  bullets.clear(); enemies.clear();
+  game.speedMul = 1 + (lvl-1)*0.12;
+  game.killsThisWell = 0;
+  game.toSpawn = 9 + Math.floor(lvl*2.2);     // enemies in this well
+  game.zappers = Math.min(3, 1 + Math.floor((lvl-1)/2));   // recharge zappers per level
+  game.spawnTimer = 0.5;
+  elLevel.textContent=lvl;
+  updateLives(); updateZappers();
+  raiseBest();
+}
+function pickEnemyType(){
+  const l=game.level, r=Math.random();
+  if (l>=3 && r<0.22) return 'fuseball';
+  if (l>=2 && r<0.5)  return 'spiker';
+  return 'flipper';
+}
+function spawnTick(dt){
+  if (game.toSpawn<=0) return;
+  game.spawnTimer -= dt;
+  if (game.spawnTimer<=0){
+    const interval = Math.max(0.45, 1.3 - game.level*0.06);
+    game.spawnTimer = interval * rand(1.2,0.7);
+    const lane = randi(0, well.N);
+    spawnEnemy(pickEnemyType(), lane);
+    game.toSpawn--;
+  }
+}
+function wellCleared(){
+  return game.toSpawn<=0 && enemies.active.length===0 &&
+         spikes.every(s=>s<0.04);
+}
+function beginDive(){
+  game.state='dive';
+  game.diveT=0;
+  Audio_.dive(); Audio_.clear();
+  game.cleared++;
+}
+function finishDive(){
+  startLevel(game.level+1);
+  game.state='playing';
+  last=performance.now();
+}
+
+//============================================================== HUD
+const elScore=document.getElementById('score');
+const elLevel=document.getElementById('level');
+const elBest=document.getElementById('best');
+const elLives=document.getElementById('lives');
+const elZapN=document.getElementById('zapn');
+const elZapDots=document.getElementById('zapdots');
+function updateLives(){
+  elLives.innerHTML='';
+  for (let i=0;i<Math.max(game.lives,0);i++){
+    const d=document.createElement('div'); d.className='pip'; elLives.appendChild(d);
+  }
+}
+function updateZappers(){
+  elZapN.textContent=game.zappers;
+  elZapDots.innerHTML='';
+  const cap=3;
+  for (let i=0;i<cap;i++){
+    const d=document.createElement('div'); d.className='zdot'+(i>=game.zappers?' spent':'');
+    elZapDots.appendChild(d);
+  }
+}
+
+//============================================================== input
+const keys={ left:false, right:false, fire:false };
+let moveCdL=0, moveCdR=0;   // step repeat timers for held movement
+function setMuteTag(){
+  document.getElementById('muteTag').textContent='M · sound '+(Audio_.muted?'off':'on');
+}
+window.addEventListener('keydown', e=>{
+  const k=e.key.toLowerCase();
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  switch(k){
+    case 'arrowleft': case 'a':
+      if (!keys.left){ keys.left=true; if(game.state==='playing') moveLane(+1); moveCdL=0.16; } break;
+    case 'arrowright': case 'd':
+      if (!keys.right){ keys.right=true; if(game.state==='playing') moveLane(-1); moveCdR=0.16; } break;
+    case ' ': case 'spacebar':
+      if (game.state==='title'||game.state==='gameover'){ startGame(); }
+      else keys.fire=true; break;
+    case 'z': case 'shift':
+      if (game.state==='playing') superzap(); break;
+    case 'p': case 'escape':
+      if (game.state==='playing'||game.state==='paused') togglePause(); break;
+    case 'enter':
+      if (game.state==='title'||game.state==='gameover') startGame(); break;
+    case 'm':
+      Audio_.init(); Audio_.muted=!Audio_.muted; setMuteTag();
+      if(!Audio_.muted) Audio_.resume(); break;
+  }
+}, {passive:false});
+window.addEventListener('keyup', e=>{
+  const k=e.key.toLowerCase();
+  switch(k){
+    case 'arrowleft': case 'a': keys.left=false; break;
+    case 'arrowright':case 'd': keys.right=false; break;
+    case ' ': case 'spacebar': keys.fire=false; break;
+  }
+});
+// held-movement repeat (Tempest-style: tap = one lane; hold = steady walk)
+function tickMoveRepeat(dt){
+  if (game.state!=='playing') return;
+  if (keys.left){ moveCdL-=dt; if(moveCdL<=0){ moveLane(+1); moveCdL=0.10; } }
+  if (keys.right){ moveCdR-=dt; if(moveCdR<=0){ moveLane(-1); moveCdR=0.10; } }
+}
+// optional mouse-to-rotate: nearest lane to the cursor angle
+let mouseActive=false;
+window.addEventListener('mousemove', e=>{
+  if (game.state!=='playing' || !well) return;
+  mouseActive=true;
+  const ang=Math.atan2(e.clientY-CY, e.clientX-CX);
+  // find nearest lane center
+  let best=0, bd=1e9;
+  for (let L=0;L<well.N;L++){
+    const d=Math.abs(angDiff(well.dir[L], ang));
+    if (d<bd){ bd=d; best=L; }
+  }
+  if (best!==player.lane){ player.lane=best; Audio_.move(); }
+});
+window.addEventListener('mousedown', ()=>{ if(game.state==='playing') keys.fire=true; });
+window.addEventListener('mouseup', ()=>{ keys.fire=false; });
+window.addEventListener('pointerdown', ()=>{ Audio_.init(); if(!Audio_.muted) Audio_.resume(); }, {once:true});
+document.addEventListener('visibilitychange', ()=>{ if (document.hidden && game.state==='playing') togglePause(); });
+// touch: tap left/right halves to move, tap center to fire
+window.addEventListener('touchstart', e=>{
+  if (game.state==='title'||game.state==='gameover'){ startGame(); return; }
+  const t=e.changedTouches[0]; if(!t) return;
+  if (game.state!=='playing') return;
+  const x=t.clientX;
+  if (x < W*0.33) moveLane(+1);
+  else if (x > W*0.67) moveLane(-1);
+  else keys.fire=true;
+}, {passive:true});
+window.addEventListener('touchend', ()=>{ keys.fire=false; }, {passive:true});
+
+//============================================================== collisions
+function handleCollisions(){
+  for (const b of bullets.active){
+    if (!b.alive) continue;
+    const bl=((b.lane%well.N)+well.N)%well.N;
+    for (const e of enemies.active){
+      if (!e.alive) continue;
+      // same lane (fuseball spans a boundary: match either neighbor) & overlapping depth
+      let laneMatch=false;
+      if (e.type==='fuseball'){
+        const lo=Math.floor(e.laneF), hi=Math.ceil(e.laneF);
+        laneMatch = (((lo%well.N)+well.N)%well.N===bl) || (((hi%well.N)+well.N)%well.N===bl);
+      } else {
+        laneMatch = (Math.round(((e.laneF%well.N)+well.N)%well.N)===bl);
+      }
+      if (!laneMatch) continue;
+      if (Math.abs(b.z - e.z) < 0.06){
+        const killed = damageEnemy(e);
+        b.alive=false;
+        break;
+      }
+    }
+  }
+}
+
+//============================================================== state transitions
+function startGame(){
+  game.state='playing';
+  game.score=0; game.displayScore=0; game.cleared=0;
+  game.lives=3;
+  startLevel(1);
+  shake=0; flashAmt=0; rimFlash=0; zapWave=0;
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('gameoverScreen').classList.add('hidden');
+  document.getElementById('hud').style.display='block';
+  document.getElementById('zapwrap').style.display='flex';
+  stage.classList.add('playing');
+  elScore.textContent='0';
+  Audio_.init(); if(!Audio_.muted) Audio_.resume();
+}
+function endGame(){
+  game.state='gameover';
+  stage.classList.remove('playing');
+  raiseBest();
+  document.getElementById('goScore').textContent=game.score.toLocaleString();
+  document.getElementById('goLevel').textContent=game.level;
+  document.getElementById('goCleared').textContent=game.cleared;
+  const isBest=game.level>=game.best && game.level>1;
+  document.getElementById('newHigh').style.display=isBest?'block':'none';
+  document.getElementById('gameoverScreen').classList.remove('hidden');
+}
+function togglePause(){
+  if (game.state==='playing'){
+    game.state='paused'; stage.classList.remove('playing');
+    document.getElementById('pauseScreen').classList.remove('hidden');
+  } else if (game.state==='paused'){
+    game.state='playing'; stage.classList.add('playing');
+    document.getElementById('pauseScreen').classList.add('hidden');
+    last=performance.now();
+  }
+}
+
+//============================================================== main loop
+let last=performance.now();
+let fpsTime=0, fpsCount=0, fpsValue=60;
+function frame(now){
+  let dt=(now-last)/1000; last=now;
+  if (dt>0.05) dt=0.05;
+  fpsTime+=dt; fpsCount++;
+  if (fpsTime>=0.5){ fpsValue=Math.round(fpsCount/fpsTime); fpsTime=0; fpsCount=0; }
+
+  if (game.state==='playing') update(dt);
+  else if (game.state==='dive') updateDive(dt);
+  else if (game.state==='paused'){ updateParticles(dt*0.4); updateFloats(dt*0.4); }
+  else if (game.state==='title'){ updateParticles(dt); }
+  render(now);
+  requestAnimationFrame(frame);
+}
+function update(dt){
+  tickMoveRepeat(dt);
+  spawnTick(dt);
+  updatePlayer(dt);
+  updateBullets(dt);
+  updateEnemies(dt);
+  updateSpikesShoot();
+  handleCollisions();
+  checkSpikeDeath();
+  enemies.sweep();
+  updateParticles(dt);
+  updateFloats(dt);
+
+  shake *= Math.pow(0.04, dt);
+  flashAmt *= Math.pow(0.02, dt);
+  rimFlash *= Math.pow(0.0006, dt);
+  if (zapWave>0){ zapWave -= dt*1.6; if (zapWave<0) zapWave=0; }
+
+  game.displayScore += (game.score-game.displayScore)*Math.min(1,dt*8);
+  elScore.textContent=Math.round(game.displayScore).toLocaleString();
+
+  // well cleared?
+  if (player.alive && wellCleared()){ beginDive(); }
+}
+function updateDive(dt){
+  game.diveT += dt*0.9;
+  updateParticles(dt);
+  // fountain of streaks rushing outward during the dive
+  if (Math.random()<0.9){
+    const a=rand(TAU), sp=rand(520,200);
+    spawnParticle(CX,CY,Math.cos(a)*sp,Math.sin(a)*sp, rand(0.5,0.2), rand(2.6,1), pal.rim, true, 0.97);
+  }
+  if (game.diveT>=1){ finishDive(); }
+}
+
+//============================================================== render
+function render(now){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  if (shake>0.3){ const a=rand(TAU); ctx.translate(Math.cos(a)*shake, Math.sin(a)*shake); }
+
+  if (game.state==='dive'){
+    // zoom the well outward as we rush down the tube, then it resets
+    const z = game.diveT;
+    drawWell(z*1.2);
+    drawParticles();
+  } else {
+    if (well) drawWell(0);
+    drawSpikes();
+    drawParticles();
+    // draw enemies far-to-near so nearer ones overlay
+    const list = enemies.active.slice().sort((a,b)=>a.z-b.z);
+    for (const e of list) if (e.alive) drawEnemy(e);
+    drawBullets();
+    if (game.state==='playing'||game.state==='paused') drawPlayer();
+    drawFloats();
+    // superzapper sweep ring
+    if (zapWave>0){
+      const z = 1-zapWave;
+      ctx.save();
+      ctx.globalAlpha=zapWave*0.8;
+      ctx.shadowBlur=24; ctx.shadowColor='#ffffff'; ctx.strokeStyle='#ffffff'; ctx.lineWidth=4;
+      ctx.beginPath();
+      for (let i=0;i<=well.N;i++){
+        const L=i%well.N; if(!well.closed&&i===well.N) break;
+        const p=well.pos(L, clamp(z,0.05,1));
+        if (i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+      }
+      if (well.closed) ctx.closePath();
+      ctx.stroke(); ctx.restore();
+    }
+  }
+  ctx.restore();
+
+  if (flashAmt>0.01){
+    ctx.fillStyle='rgba(200,240,255,'+(flashAmt*0.4)+')';
+    ctx.fillRect(0,0,W,H);
+  }
+}
+
+//============================================================== boot
+loadBest();
+resize();
+elBest.textContent=game.best;
+setMuteTag();
+// attract: a slow idle well behind the title
+well = makeWell(0);
+pal = PALETTES[0];
+(function attract(){
+  if (game.state==='title'){
+    // seed a couple of drifting enemies for ambiance (no grab in title state)
+    if (enemies.active.length<5 && Math.random()<0.04){
+      const e=spawnEnemy(['flipper','spiker','fuseball'][randi(0,3)], randi(0,well.N));
+      e.speed*=0.4;
+    }
+    for (const e of enemies.active){ e.z+=0.003; if(e.z>=1){ e.z=1; e.alive=false; } if(e.type==='flipper'){ e.flipT-=0.016; } }
+    enemies.sweep();
+    updateParticles(0.016);
+  }
+  setTimeout(attract, 16);
+})();
+
+requestAnimationFrame(frame);
+
+// verification hook
+window.__GYRE__ = {
+  get state(){return game.state;},
+  get score(){return game.score;},
+  get level(){return game.level;},
+  get lives(){return game.lives;},
+  get zappers(){return game.zappers;},
+  get best(){return game.best;},
+  get cleared(){return game.cleared;},
+  get playerLane(){return player.lane;},
+  get playerAlive(){return player.alive;},
+  get wellName(){return well?well.name:null;},
+  get wellLanes(){return well?well.N:0;},
+  get enemyCount(){return enemies.active.length;},
+  get bulletCount(){return bullets.active.length;},
+  get toSpawn(){return game.toSpawn;},
+  get particleCount(){return particles.active.length;},
+  get spikeMax(){return well?Math.max.apply(null,spikes.concat([0])):0;},
+  get fps(){return fpsValue;},
+  _start(){ startGame(); },
+  _move(d){ moveLane(d); },
+  _fire(){ shoot(); },
+  _zap(){ superzap(); },
+  _spawn(t,l){ return spawnEnemy(t||'flipper', l===undefined?randi(0,well.N):l); },
+  _spawnAt(t,l,z){ const e=spawnEnemy(t||'flipper', l); e.z=z===undefined?0.5:z; return e; },
+  _clearWell(){ game.toSpawn=0; enemies.clear(); resetSpikes(); },
+  _killAtRim(){ // force an enemy onto the player's lane at the rim to test death
+    const e=spawnEnemy('flipper', player.lane); e.z=1.0; tryGrabPlayer(e); },
+  _setLevel(l){ startLevel(l); }
+};
+
+})();
+</script>
+
+<!-- arc-back -->
+<style>
+  .arc-back{ position:fixed; left:18px; bottom:14px; z-index:9999; pointer-events:auto;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11.5px;
+    letter-spacing:.18em; text-transform:uppercase; text-decoration:none;
+    color:#e9f6ff; opacity:.40; transition:opacity .2s, text-shadow .2s;
+    text-shadow:0 0 8px rgba(55,247,224,.45); }
+  .arc-back:hover{ opacity:.95; text-shadow:0 0 12px rgba(55,247,224,.85); }
+</style>
+<a class="arc-back" href="../index.html" style="position:fixed;z-index:9999;pointer-events:auto">← arcade</a>
+</body>
+</html>

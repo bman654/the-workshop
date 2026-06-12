@@ -7,7 +7,7 @@ Each game is self-contained, zero-dependency, browser-play-tested. Reference sty
 
 ## Status
 
-- **Done (browser play-tested PASS, 60fps, clean consoles) — 12 cabinets:**
+- **Done (browser play-tested PASS, 60fps, clean consoles) — 13 cabinets:**
   - asteroids.html ✅ — inertia/thrust/wrap, splitting rocks, saucer, hyperspace, full juice
   - breakout.html ✅ — 6 power-ups, combos, multiball, swept collision, procedural levels
   - snake.html ✅ — smooth gliding ribbon, buffered turns, combos, walls/wrap toggle
@@ -20,8 +20,9 @@ Each game is self-contained, zero-dependency, browser-play-tested. Reference sty
   - crossing.html ✅ — Frogger-lite: neon traffic + log/turtle river-riding, goal bays, levels, lives, full juice
   - chomp.html ✅ — Pac-Man-lite: hand-authored 28×31 symmetric maze (fully connected, 4 power-pellets, wrap tunnel), grid-locked muncher with queued turns, 4 ghosts with faithful distinct AI (Blinky direct / Pinky 4-ahead ambush / Inky doubled-flank vector off Blinky / Clyde shy-within-8), scatter↔chase cycling, frightened+eyes+revive, escalating combo, levels, lives, full juice
   - swarm.html ✅ — twin-stick survivor: WASD/arrows move + mouse-aim auto-fire (keyboard fallback fires the way you move), 3 distinct homing archetypes (red chaser / orange brute / cyan zig-zag splitter), endless escalating waves, XP gems w/ magnet pickup → level-up upgrade chooser (8 upgrades, pick 3), health pips + i-frames, full juice (muzzle/hit/death bursts, shake, flash), `ws:best:swarm` = wave reached
+  - gyre.html ✅ — Tempest-lineage tube shooter: a neon well viewed end-on, N radial lanes converging to a vanishing point; blaster rides the near rim (←/→ or A/D, mouse-rotate optional), fires down its lane (Space), Superzapper screen-clear (Z/Shift). 3 distinct archetypes (magenta **Flipper** flips lane-to-lane while climbing; green **Spiker** lays a shootable spike trail down its lane; orange **Fuseball** rides a lane boundary, surges erratically, **splits into two flippers** on death). Enemies that reach the rim **crawl around it toward the player** (faithful Tempest threat). 6 cycling well shapes (circle / square / star / open line / plus / V) with a per-level neon palette shift and the iconic **zoom-down-the-tube** dive transition between levels. Lives + per-level zapper recharge, full juice (rim flash on fire, explosions, screen-shake, dive fountain), `ws:best:gyre` = best level reached
 - **Nav:** every game has a click-only `← arcade` back-link (NO key binding — games use keys).
-- **Gallery:** index.html (neon "cabinet rack"), games.js manifest (12), README ✅
+- **Gallery:** index.html (neon "cabinet rack"), games.js manifest (13), README ✅
 
 ## Next up
 - Optional more cabinets: Flappy/one-button, a procedural mini-roguelike, a rhythm game.
@@ -29,6 +30,43 @@ Each game is self-contained, zero-dependency, browser-play-tested. Reference sty
   defense / vs-CPU / physics-landing). Responsive `auto-fill` grid: adding more needs no rebalance.
 
 ## Log
+- 2026-06-11 — Added **Gyre** (neon tube shooter → **13** cabinets): the genre that *defined*
+  neon-vector arcades — a Tempest-lineage well/tube shooter, the rack's first. A tube viewed
+  end-on: **N radial lanes** form a rim near the player and converge to a vanishing point deep in
+  the center (quadratic depth→radius perspective). The **blaster rides the near rim** (←/→ or A/D —
+  tap to step a lane, hold to walk; mouse-rotate is an optional bonus) and **fires down its current
+  lane** (Space); a **Superzapper** screen-clear (Z/Shift) with per-level recharging charges.
+  **Three distinct enemy archetypes**, each a different silhouette + neon color and behavior:
+  a magenta **Flipper** (bowtie — flips between adjacent lanes as it climbs), a green **Spiker**
+  (diamond drill — lays a spike trail up its lane that the player must shoot away or die touching at
+  the rim), and an orange **Fuseball** (pulsing orb — rides a lane *boundary*, surges erratically,
+  and **splits into two flippers** on death). Enemies that reach the rim don't pile up harmlessly —
+  they **crawl around the rim toward the player's lane** (the faithful Tempest threat), so they're
+  always reachable and always dangerous. **Wells are cleared** by destroying every enemy + shaving
+  every spike, which triggers the iconic **"zoom down the tube"** dive transition (well rushes
+  outward, particle fountain) into the next level — which presents a **different well geometry**,
+  cycling through **6 distinct shapes**: closed **circle**, **square**, **star** (alternating
+  points/valleys), open **line** (a bowed arc — an *open* well), **plus/cross**, and open **V** —
+  with the **neon palette shifting per level** (cyan → magenta → violet → amber → green → ice) and
+  enemy speed/mix ramping. Lives + respawn, clean HUD (score / lives as ▲ pips / level / best /
+  zapper dots), full juice: rim flash on fire, particle explosions (bigger for fuseballs),
+  screen-shake + flash on death/superzapper, deep-tube parallax. Single self-contained file, no
+  deps/network, **audio default-MUTED** (toggle **M**), relative `← arcade` back-link.
+  **Self-verified in a real browser** (agent-browser, session `gyre-build`, served origin): title→
+  ENTER/Space start; the blaster steps lane-to-lane around the rim (verified lane 8→6→5 on real
+  ArrowLeft/Right keypresses, mouse-rotate snaps to nearest lane); Space fires bullets that travel
+  down the current lane and destroy enemies on it (score climbed 0→50→100 as flippers died);
+  enemies spawn deep and climb; the **Superzapper cleared all 12 enemies + consumed a charge**;
+  an enemy reaching the rim on the player's lane **killed the player** (lives 3→2→respawn), and a
+  rim-crawling flipper spawned far away **walked around to the player's lane and killed it** (the
+  hunt works); a full well-clear played the **dive transition** and advanced **level 1→2 with the
+  well changing circle→square** and `cleared`→1; **`ws:best:gyre` raised to "2" in localStorage**
+  (verified read-back over the served origin). All **6 well shapes** render at **60fps**; **P**
+  pauses/resumes; **GAME OVER → ENTER restarts** (back to level 1, 3 lives). Sustained **60fps over
+  a 30s** firing/spawning stress with no jank or particle leak; **0 console errors/warnings** the
+  whole session. Thumb = a clean circular-well action frame (1280×800, ~666KB) at
+  `arcade/assets/thumbs/gyre.png`. Front-door Arcade card bumped **12→13 games** (still one card),
+  manifest + README count updated.
 - 2026-06-11 — Added **Swarm** (twin-stick survivor → **12** cabinets): a fast, readable
   Vampire-Survivors/Geometry-Wars hybrid. Player ship moves on WASD/arrows; aim is mouse with
   **auto-fire toward the cursor**, plus a keyboard-only fallback that fires the way you move

@@ -73,5 +73,11 @@ window.GAMES = [
     name: "Swarm",
     blurb: "twin-stick survivor — outrun the neon horde, grab XP, level up",
     accent: "#b06bff"
+  },
+  {
+    file: "gyre.html",
+    name: "Gyre",
+    blurb: "neon tube shooter — hold the rim, fire down the well, dive deeper",
+    accent: "#37f7e0"
   }
 ];
