@@ -1,0 +1,1039 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Theogony · a generative mythology engine</title>
+<style>
+  :root{
+    /* Star-Chart (default) — Firmament-ish indigo + gold */
+    --bg:#0a0b16; --paper:#11132099; --ink:#ece8dc; --ink-soft:#c3bdac; --muted:#857f72;
+    --gold:#cba15a; --gold-soft:#e0bb78; --indigo:#7d8fd6; --indigo-soft:#9db4ff;
+    --line:rgba(157,180,255,.18); --node:#11142a; --node-line:rgba(203,161,90,.5);
+    --descent:rgba(157,180,255,.42); --consort:rgba(203,161,90,.62);
+    --glow1:rgba(125,143,214,.12); --glow2:rgba(203,161,90,.07); --glow3:rgba(120,90,160,.07);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  /* Illuminated — parchment + ink */
+  body.illum{
+    --bg:#efe6d2; --paper:#f6efdd; --ink:#2c2418; --ink-soft:#4e4332; --muted:#8a7c5f;
+    --gold:#9a6b1e; --gold-soft:#7a5212; --indigo:#3a3f6b; --indigo-soft:#2c315c;
+    --line:rgba(90,70,40,.28); --node:#f7f0de; --node-line:rgba(120,80,30,.55);
+    --descent:rgba(80,60,35,.45); --consort:rgba(150,90,20,.7);
+    --glow1:rgba(180,140,70,.16); --glow2:rgba(120,90,40,.08); --glow3:rgba(150,120,70,.1);
+  }
+  /* Stone — carved tablet */
+  body.stone{
+    --bg:#171715; --paper:#22221e; --ink:#d9d5c8; --ink-soft:#a8a293; --muted:#76716540;
+    --muted:#797367; --gold:#a99463; --gold-soft:#c7b07a; --indigo:#7f8b95; --indigo-soft:#9aa6b0;
+    --line:rgba(180,175,160,.16); --node:#26261f; --node-line:rgba(169,148,99,.5);
+    --descent:rgba(180,175,160,.34); --consort:rgba(169,148,99,.6);
+    --glow1:rgba(120,120,110,.1); --glow2:rgba(90,90,80,.08); --glow3:rgba(70,70,64,.08);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; min-height:100%; }
+  html{ background:var(--bg); }
+  body{
+    background:
+      radial-gradient(1200px 820px at 50% -14%, var(--glow1), transparent 60%),
+      radial-gradient(900px 700px at 10% 116%, var(--glow2), transparent 58%),
+      radial-gradient(820px 600px at 92% 110%, var(--glow3), transparent 56%),
+      var(--bg);
+    color:var(--ink); font-family:var(--serif);
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    min-height:100vh; display:flex; flex-direction:column; align-items:center;
+    transition:background .8s ease, color .8s ease;
+  }
+  a{ color:inherit; }
+
+  /* ---- top bar ---- */
+  .topbar{ width:100%; max-width:1180px; display:flex; align-items:center;
+    justify-content:space-between; padding:20px 28px 0; }
+  .back{ font:600 11px/1 var(--mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--muted); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--gold-soft); opacity:1; }
+  .topbar .right{ display:flex; align-items:center; gap:16px; }
+  .sib-link{ font:600 11px/1 var(--mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--gold); text-decoration:none; opacity:.78; transition:.25s;
+    border-bottom:1px solid transparent; padding-bottom:1px; }
+  .sib-link:hover{ opacity:1; color:var(--gold-soft); border-bottom-color:rgba(203,161,90,.4); }
+  .sib-link .dim{ color:var(--muted); letter-spacing:.04em; text-transform:none; font-weight:400; }
+  .mark{ font:600 11px/1 var(--mono); letter-spacing:.34em; text-transform:uppercase;
+    color:var(--muted); opacity:.62; }
+
+  /* ---- header ---- */
+  header.head{ width:100%; max-width:1180px; padding:18px 30px 4px; text-align:center; }
+  .kicker{ font:600 10px/1 var(--mono); letter-spacing:.42em; text-transform:uppercase;
+    color:var(--indigo-soft); opacity:.7; margin:0 0 12px; padding-left:.42em; }
+  h1.pantheon-name{ font-weight:500; font-size:clamp(26px,5vw,40px); line-height:1.1;
+    letter-spacing:.01em; margin:0 0 6px;
+    background:linear-gradient(180deg,var(--gold-soft),var(--gold));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  body.illum h1.pantheon-name, body.stone h1.pantheon-name{ -webkit-text-fill-color:currentColor; color:var(--gold); background:none; }
+  .pantheon-sub{ font:italic 400 15px/1.4 var(--serif); color:var(--muted); margin:0 0 4px; }
+
+  /* ---- stage ---- */
+  .stage{ flex:1 0 auto; width:100%; max-width:1180px; padding:6px 24px 30px;
+    display:flex; gap:22px; align-items:flex-start; }
+  .tree-wrap{ flex:1 1 auto; min-width:0; position:relative;
+    border:1px solid var(--line); border-radius:8px; background:var(--paper);
+    box-shadow:0 30px 90px -50px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.03);
+    overflow:hidden; }
+  #tree{ display:block; width:100%; height:auto; }
+
+  /* ---- read-a-god panel ---- */
+  .panel{ flex:0 0 312px; width:312px; border:1px solid var(--line); border-radius:8px;
+    background:var(--paper); padding:22px 22px 24px; min-height:300px;
+    box-shadow:0 30px 90px -50px rgba(0,0,0,.8); }
+  .panel .ph{ color:var(--muted); font-style:italic; font-size:14px; line-height:1.6;
+    text-align:center; padding:26px 6px; }
+  .panel .ornament{ text-align:center; color:var(--gold); opacity:.6; font-size:13px;
+    letter-spacing:.5em; margin:0 0 16px; padding-right:.5em; }
+  .panel .g-name{ font-weight:500; font-size:24px; line-height:1.12; margin:0 0 3px; color:var(--ink); }
+  .panel .g-domain{ font:600 10px/1 var(--mono); letter-spacing:.22em; text-transform:uppercase;
+    color:var(--gold); opacity:.82; margin:0 0 14px; }
+  .panel .g-epithets{ color:var(--ink-soft); font-style:italic; font-size:15px; line-height:1.5;
+    margin:0 0 18px; }
+  .panel .kin{ border-top:1px solid var(--line); padding-top:14px; margin-top:2px; }
+  .panel .kin-row{ display:flex; gap:10px; font-size:13.5px; line-height:1.5; margin:0 0 7px; }
+  .panel .kin-row .lbl{ flex:0 0 74px; font:600 9px/1.5 var(--mono); letter-spacing:.16em;
+    text-transform:uppercase; color:var(--muted); padding-top:2px; }
+  .panel .kin-row .val{ color:var(--ink-soft); }
+  .panel .kin-row .val a{ color:var(--indigo-soft); text-decoration:none;
+    border-bottom:1px dotted var(--line); cursor:pointer; }
+  .panel .kin-row .val a:hover{ color:var(--gold-soft); border-bottom-color:var(--gold); }
+  .panel .myth{ border-top:1px solid var(--line); padding-top:16px; margin-top:16px;
+    color:var(--ink-soft); font-size:15px; line-height:1.7; font-style:italic; }
+  .panel .myth .mark{ display:block; text-align:center; color:var(--gold); opacity:.5;
+    font-size:13px; letter-spacing:.4em; margin-bottom:10px; padding-right:.4em; text-transform:none; }
+
+  /* ---- controls ---- */
+  .controls{ width:100%; max-width:1180px; margin:4px auto 0; padding:0 30px;
+    display:flex; flex-wrap:wrap; gap:14px 16px; align-items:flex-end; justify-content:center; }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field label{ font:600 9.5px/1 var(--mono); letter-spacing:.2em; text-transform:uppercase;
+    color:var(--muted); opacity:.85; padding-left:2px; }
+  select, input[type=text]{
+    appearance:none; background:rgba(125,143,214,.05); color:var(--ink-soft);
+    border:1px solid var(--line); border-radius:5px; padding:9px 12px;
+    font:14px/1 var(--serif); letter-spacing:.01em; min-width:118px; transition:.2s; }
+  select{ background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'><path d='M1 1l4 4 4-4' fill='none' stroke='%23cba15a' stroke-width='1.4'/></svg>");
+    background-repeat:no-repeat; background-position:right 11px center; padding-right:30px; cursor:pointer; }
+  input[type=text]{ width:128px; }
+  select:hover, input:hover{ border-color:rgba(203,161,90,.4); }
+  select:focus, input:focus{ outline:none; border-color:var(--gold); background:rgba(203,161,90,.05); }
+  .btns{ display:flex; gap:11px; align-items:center; }
+  button{ font:600 11px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase;
+    cursor:pointer; border-radius:5px; padding:11px 18px; transition:.22s;
+    border:1px solid var(--line); background:rgba(125,143,214,.05); color:var(--ink-soft); }
+  button:hover{ border-color:rgba(203,161,90,.5); color:var(--ink); background:rgba(203,161,90,.06); }
+  button:active{ transform:translateY(1px); }
+  button.primary{ background:linear-gradient(180deg, var(--gold-soft), var(--gold));
+    color:#1a140a; border-color:transparent; box-shadow:0 8px 24px -10px rgba(203,161,90,.6); }
+  button.primary:hover{ filter:brightness(1.07); color:#160f06; }
+
+  /* ---- self-test chip + hint ---- */
+  .meta-row{ width:100%; max-width:1180px; margin:16px auto 8px; padding:0 30px;
+    display:flex; align-items:center; justify-content:center; gap:18px; flex-wrap:wrap; }
+  .chip{ display:inline-flex; align-items:center; gap:7px; font:600 10px/1 var(--mono);
+    letter-spacing:.14em; text-transform:uppercase; padding:7px 13px; border-radius:20px;
+    border:1px solid; transition:.3s; cursor:default; }
+  .chip.pass{ color:#7fd6a0; border-color:rgba(127,214,160,.4); background:rgba(127,214,160,.07); }
+  .chip.fail{ color:#ff8a8a; border-color:rgba(255,138,138,.5); background:rgba(255,138,138,.09); }
+  .chip .dot{ width:7px; height:7px; border-radius:50%; background:currentColor;
+    box-shadow:0 0 8px currentColor; }
+  .hint{ font:11px/1.6 var(--mono); letter-spacing:.06em; color:var(--muted); opacity:.6; }
+  .hint kbd{ font-family:var(--mono); border:1px solid var(--line); border-radius:3px;
+    padding:1px 6px; font-size:10px; color:var(--ink-soft); }
+
+  footer.foot{ width:100%; max-width:1180px; padding:6px 30px 34px; text-align:center;
+    color:var(--muted); font:11px/1.6 var(--mono); letter-spacing:.06em; opacity:.5; }
+
+  .toast{ position:fixed; bottom:26px; left:50%; transform:translate(-50%,16px);
+    background:rgba(17,19,32,.97); border:1px solid var(--line); color:var(--ink);
+    padding:10px 18px; border-radius:6px; font:600 11px/1 var(--mono); letter-spacing:.14em;
+    text-transform:uppercase; opacity:0; pointer-events:none; transition:.3s;
+    box-shadow:0 14px 40px -16px rgba(0,0,0,.8); z-index:50; }
+  .toast.show{ opacity:1; transform:translate(-50%,0); }
+
+  /* node hover/selection states applied via JS attributes on SVG groups */
+  .gnode{ cursor:pointer; }
+  .gnode .halo{ opacity:0; transition:opacity .2s; }
+  .gnode:hover .halo, .gnode.sel .halo{ opacity:1; }
+  .gnode .nlabel{ transition:fill .2s; }
+
+  @media(max-width:880px){
+    .stage{ flex-direction:column; }
+    .panel{ flex:1 1 auto; width:100%; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">← workshop</a>
+    <div class="right">
+      <a class="sib-link" href="../threshold/index.html" title="Threshold — a generative interactive fiction; each seed assembles a coherent strange place to wander, room by room">↗ Threshold <span class="dim">— the place such gods would make</span></a>
+      <div class="mark">Theogony</div>
+    </div>
+  </div>
+
+  <header class="head">
+    <div class="kicker">Theogony · a generative mythology</div>
+    <h1 class="pantheon-name" id="pname">—</h1>
+    <div class="pantheon-sub" id="psub"></div>
+  </header>
+
+  <main class="stage">
+    <div class="tree-wrap"><svg id="tree" xmlns="http://www.w3.org/2000/svg"></svg></div>
+    <aside class="panel" id="panel">
+      <div class="ph">Click a god in the genealogy to read its name, domain, epithets, kin, and origin-myth.</div>
+    </aside>
+  </main>
+
+  <div class="controls">
+    <div class="field">
+      <label for="seed">Seed</label>
+      <input type="text" id="seed" placeholder="random" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="field">
+      <label for="style">Style</label>
+      <select id="style">
+        <option value="star">Star-Chart</option>
+        <option value="illum">Illuminated</option>
+        <option value="stone">Stone</option>
+      </select>
+    </div>
+    <div class="btns">
+      <button class="primary" id="roll">⟳ Beget a pantheon</button>
+      <button id="export">Export PNG</button>
+    </div>
+  </div>
+
+  <div class="meta-row">
+    <span class="chip" id="chip"><span class="dot"></span><span id="chiptext">self-test…</span></span>
+    <span class="hint">click a node to read a god · <kbd>space</kbd> for a new pantheon · set a seed to keep one</span>
+  </div>
+
+  <footer class="foot">a coherent family of invented gods — acyclic kinship, referential prose — begotten from a seed</footer>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* =======================================================================
+   THEOGONY — a generative mythology engine.
+   From a seed: an invented pantheon (a coherent family of gods), rendered
+   as an illuminated celestial genealogy. The generator is PURE and
+   testable: buildPantheon(seed) -> pantheon, no DOM. A headless self-test
+   asserts (1) acyclic descent, (2) referential integrity of the prose,
+   (3) domain coherence, (4) seed purity / style-invariance.
+   House idiom inherited from verse/ + threshold/: mulberry32 over a hashed
+   string + curate-then-arrange.
+   ======================================================================= */
+
+/* ---------- seeded PRNG (mulberry32 over a hashed string) ---------- */
+function hashStr(s){ let h=1779033703^s.length;
+  for(let i=0;i<s.length;i++){ h=Math.imul(h^s.charCodeAt(i),3432918353); h=(h<<13)|(h>>>19); }
+  return (h^=h>>>16)>>>0; }
+function mulberry32(a){ return function(){ a|=0; a=(a+0x6D2B79F5)|0;
+  let t=Math.imul(a^(a>>>15),1|a); t=(t+Math.imul(t^(t>>>7),61|t))^t;
+  return ((t^(t>>>14))>>>0)/4294967296; }; }
+/* an RNG object so the generator is self-contained (no globals) */
+function makeRng(seedStr){
+  const r = mulberry32(hashStr(seedStr));
+  const rng = {
+    f: r,
+    next(){ return r(); },
+    int(n){ return (r()*n)|0; },
+    range(lo,hi){ return lo + ((r()*(hi-lo+1))|0); },
+    pick(arr){ return arr[(r()*arr.length)|0]; },
+    chance(p){ return r() < p; },
+    pickN(arr,n){ const a=arr.slice(), out=[]; n=Math.min(n,a.length);
+      while(out.length<n && a.length){ out.push(a.splice((r()*a.length)|0,1)[0]); } return out; },
+    shuffle(arr){ const a=arr.slice();
+      for(let i=a.length-1;i>0;i--){ const j=(r()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
+  };
+  return rng;
+}
+
+/* =======================================================================
+   PHONOLOGY — a per-pantheon sound-system, rolled from the seed.
+   Every god's name is generated from THIS system, so names share a family
+   resemblance (a la the workshop's invented constellation/poet names).
+   ======================================================================= */
+const SOUND = {
+  onsetPools:[
+    ["v","th","s","sh","l","m","n","r","ð","f","h","y"],
+    ["k","t","p","g","d","b","kr","tr","pr","gn","dr","z"],
+    ["s","st","sk","sp","sl","sn","sr","th","f","v","r","l","m","n","w"],
+    ["v","z","x","gh","zh","kh","s","th","r","l","m","n","y"],
+    ["t","k","p","'","h","r","l","m","n","w","y","s"]
+  ],
+  vowelPools:[
+    ["a","e","i","o","u","ae","ei","au"],
+    ["a","o","u","aa","oo","ou","ua","oa"],
+    ["e","i","y","ee","ie","ei","ea","ai"],
+    ["a","i","u","ai","au","ia","io","ua"],
+    ["a","e","o","ae","oe","eo","ea","oa"]
+  ],
+  codaPools:[
+    ["n","r","l","th","s","m",""],
+    ["n","k","t","r","s","x","",""],
+    ["l","r","n","sh","th","",""],
+    ["s","th","n","r","ne","",""],
+    ["","","n","r","s","l","th"]
+  ]
+};
+function rollPhonology(rng){
+  const ip = rng.int(SOUND.onsetPools.length);
+  const onsets = rng.shuffle(SOUND.onsetPools[ip]).slice(0, rng.range(5,8));
+  const vowels = rng.shuffle(SOUND.vowelPools[rng.int(SOUND.vowelPools.length)]).slice(0, rng.range(4,6));
+  const codas  = rng.shuffle(SOUND.codaPools[rng.int(SOUND.codaPools.length)]).slice(0, rng.range(4,7));
+  // a syllable-count tendency: mostly 2, some 1 or 3
+  return { onsets, vowels, codas, idx:ip };
+}
+function coinName(rng, phon){
+  const n = rng.pick([1,2,2,2,3,3]);
+  let s = "";
+  for(let i=0;i<n;i++){
+    s += rng.pick(phon.onsets) + rng.pick(phon.vowels);
+    // a coda mainly on the final syllable, sometimes mid
+    if(i===n-1 || rng.chance(.28)) s += rng.pick(phon.codas);
+  }
+  // cleanup: collapse triple letters, ensure not empty/too short
+  s = s.replace(/(.)\1\1+/g,"$1$1").replace(/''/g,"'");
+  if(s.length<2) s += rng.pick(phon.vowels);
+  // capitalize (handle a leading apostrophe gracefully)
+  const m = s.match(/[a-zðþ]/i);
+  if(m){ const idx=s.indexOf(m[0]); s = s.slice(0,idx) + s.charAt(idx).toUpperCase() + s.slice(idx+1); }
+  return s;
+}
+
+/* =======================================================================
+   DOMAINS — each carries an opposite. Principal gods hold DISTINCT primary
+   domains; a pantheon deliberately includes some opposing pairs.
+   ======================================================================= */
+const DOMAINS = [
+  {id:"sea",      name:"the sea",        opp:"flame",     adj:"tidal",    realm:"the salt deeps"},
+  {id:"flame",    name:"flame",          opp:"sea",       adj:"burning",  realm:"the first fire"},
+  {id:"dawn",     name:"the dawn",       opp:"dusk",      adj:"first-lit",realm:"the eastern gate"},
+  {id:"dusk",     name:"the dusk",       opp:"dawn",      adj:"failing",  realm:"the long evening"},
+  {id:"memory",   name:"memory",         opp:"forget",    adj:"remembered",realm:"the kept hours"},
+  {id:"forget",   name:"forgetting",     opp:"memory",    adj:"unremembered",realm:"the grey water"},
+  {id:"hearth",   name:"the hearth",     opp:"wild",      adj:"hearth-kept",realm:"the inmost room"},
+  {id:"wild",     name:"the wild",       opp:"hearth",    adj:"untamed",  realm:"the trackless wood"},
+  {id:"harvest",  name:"the harvest",    opp:"famine",    adj:"golden",   realm:"the laden fields"},
+  {id:"famine",   name:"famine",         opp:"harvest",   adj:"hollow",   realm:"the empty granary"},
+  {id:"making",   name:"making",         opp:"ruin",      adj:"wrought",  realm:"the forge"},
+  {id:"ruin",     name:"ruin",           opp:"making",    adj:"broken",   realm:"the fallen halls"},
+  {id:"loom",     name:"the loom",       opp:"knife",     adj:"woven",    realm:"the weaving-room"},
+  {id:"knife",    name:"the knife",      opp:"loom",      adj:"keen",     realm:"the whetstone"},
+  {id:"storm",    name:"the storm",      opp:"silence",   adj:"thundering",realm:"the high air"},
+  {id:"silence",  name:"silence",        opp:"storm",     adj:"soundless",realm:"the still places"},
+  {id:"deep",     name:"the deep",       opp:"height",    adj:"sunken",   realm:"the under-dark"},
+  {id:"height",   name:"the height",     opp:"deep",      adj:"lofted",   realm:"the cold peaks"},
+  {id:"threshold",name:"thresholds",     opp:"road",      adj:"in-between",realm:"the door of doors"},
+  {id:"road",     name:"the road",       opp:"threshold", adj:"wayfaring",realm:"the long way"},
+  {id:"dead",     name:"the dead",       opp:"birth",     adj:"shrouded", realm:"the quiet country"},
+  {id:"birth",    name:"birth",          opp:"dead",      adj:"quickening",realm:"the first cry"},
+  {id:"green",    name:"the green",      opp:"stone",     adj:"growing",  realm:"the wet earth"},
+  {id:"stone",    name:"stone",          opp:"green",     adj:"enduring", realm:"the old hills"}
+];
+const DOM_BY_ID = Object.fromEntries(DOMAINS.map(d=>[d.id,d]));
+function oppId(id){ return DOM_BY_ID[id].opp; }
+
+/* =======================================================================
+   EPITHET TEMPLATES — curate-then-arrange. Each template declares which
+   referents it needs (so we only pick a template the god can satisfy) and
+   returns {text, refs} where refs are the real ids/domains it named.
+   slot types: SELF-domain, parent, sibling, child, consort, opp-domain.
+   ======================================================================= */
+function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+/* generic epithet pools keyed by what they need; filled by builder */
+const EPITHET_DOMAIN = [
+  g=>({text:`the ${DOM_BY_ID[g.domain].adj}`, refs:[]}),
+  g=>({text:`Keeper of ${DOM_BY_ID[g.domain].name}`, refs:[]}),
+  g=>({text:`Lord of ${DOM_BY_ID[g.domain].realm}`, refs:[]}),
+  g=>({text:`who holds ${DOM_BY_ID[g.domain].name}`, refs:[]}),
+  g=>({text:`the ${DOM_BY_ID[g.domain].adj}-handed`, refs:[]})
+];
+const EPITHET_KIN = [
+  // mother/father of children
+  (g,P)=>{ if(!g.children.length) return null; const c=P.pickChild(g);
+    return {text:`${g.gender==='f'?'Mother':g.gender==='m'?'Father':'Parent'} of ${c.name}`, refs:[c.id]}; },
+  // child of a parent (by domain)
+  (g,P)=>{ if(!g.parents.length) return null; const pa=P.byId(g.parents[0]);
+    return {text:`born of ${DOM_BY_ID[pa.domain].name}`, refs:[pa.id]}; },
+  // the opposite of D (only if that god exists)
+  (g,P)=>{ const o=P.domGod(oppId(g.domain)); if(!o) return null;
+    return {text:`the Unmaker of ${DOM_BY_ID[o.domain].name}`, refs:[o.id]}; },
+  // consort
+  (g,P)=>{ if(g.consort==null) return null; const c=P.byId(g.consort);
+    return {text:`who is sworn to ${c.name}`, refs:[c.id]}; }
+];
+
+/* =======================================================================
+   MYTH TEMPLATES — one short line per god. Each returns {text, refs}.
+   We choose a template the god can satisfy from its real kin/domains, so
+   every referent is a real entity/domain in THIS pantheon (referential
+   integrity, "can't drift").
+   ======================================================================= */
+const MYTH = {
+  // primordial (gen 0)
+  primordial:[
+    g=>({text:`Before the others were, ${g.name} woke alone in ${DOM_BY_ID[g.domain].realm}, and named it ${DOM_BY_ID[g.domain].name}.`, refs:[]}),
+    g=>({text:`${g.name}, parentless and first, drew ${DOM_BY_ID[g.domain].name} up out of the unmade dark.`, refs:[]}),
+    g=>({text:`Of no womb and no maker, ${g.name} settled over ${DOM_BY_ID[g.domain].realm} and would not be moved.`, refs:[]})
+  ],
+  // single parent
+  oneParent:[
+    (g,P)=>{ const a=P.byId(g.parents[0]);
+      return {text:`${g.name}, begotten of ${a.name} alone, took up ${DOM_BY_ID[g.domain].name} as a child takes up a torch.`, refs:[a.id]}; },
+    (g,P)=>{ const a=P.byId(g.parents[0]);
+      return {text:`Out of ${a.name} came ${g.name}, who turned from ${DOM_BY_ID[a.domain].name} to keep ${DOM_BY_ID[g.domain].name} instead.`, refs:[a.id]}; }
+  ],
+  // two parents (a union)
+  twoParents:[
+    (g,P)=>{ const a=P.byId(g.parents[0]), b=P.byId(g.parents[1]);
+      return {text:`${g.name}, begotten of ${a.name} and ${b.name}, was given ${DOM_BY_ID[g.domain].name} to keep.`, refs:[a.id,b.id]}; },
+    (g,P)=>{ const a=P.byId(g.parents[0]), b=P.byId(g.parents[1]);
+      return {text:`Where ${DOM_BY_ID[a.domain].name} met ${DOM_BY_ID[b.domain].name}, ${g.name} was born, and ${DOM_BY_ID[g.domain].name} woke with the first cry.`, refs:[a.id,b.id]}; }
+  ],
+  // has a sibling -> a sibling rivalry / bond
+  sibling:[
+    (g,P)=>{ const s=P.sibling(g); if(!s) return null;
+      return {text:`${g.name} broke faith with ${s.name}, sibling and rival, and salted ${DOM_BY_ID[s.domain].realm} between them.`, refs:[s.id]}; },
+    (g,P)=>{ const s=P.sibling(g); if(!s) return null;
+      return {text:`${g.name} and ${s.name}, born of one house, kept ${DOM_BY_ID[g.domain].name} and ${DOM_BY_ID[s.domain].name} as a shared and quarrelled inheritance.`, refs:[s.id]}; }
+  ],
+  // opposing-domain rival exists
+  opposed:[
+    (g,P)=>{ const o=P.domGod(oppId(g.domain)); if(!o) return null;
+      return {text:`${g.name} keeps ${DOM_BY_ID[g.domain].name} against ${o.name}, keeper of ${DOM_BY_ID[o.domain].name}, and neither will yield.`, refs:[o.id]}; },
+    (g,P)=>{ const o=P.domGod(oppId(g.domain)); if(!o) return null;
+      return {text:`So long as ${o.name} holds ${DOM_BY_ID[o.domain].name}, ${g.name} must hold ${DOM_BY_ID[g.domain].name} — the one cannot end while the other endures.`, refs:[o.id]}; }
+  ],
+  // consort
+  consort:[
+    (g,P)=>{ if(g.consort==null) return null; const c=P.byId(g.consort);
+      return {text:`${g.name} is sworn to ${c.name}, and where ${DOM_BY_ID[g.domain].name} and ${DOM_BY_ID[c.domain].name} touch, the world is briefly whole.`, refs:[c.id]}; }
+  ],
+  // has children
+  parenting:[
+    (g,P)=>{ if(g.children.length<2) return null; const cs=g.children.slice(0,2).map(id=>P.byId(id));
+      return {text:`From ${g.name} came ${cs[0].name} and ${cs[1].name}, who scattered ${DOM_BY_ID[g.domain].name} into smaller, fiercer things.`, refs:cs.map(c=>c.id)}; },
+    (g,P)=>{ if(!g.children.length) return null; const c=P.byId(g.children[0]);
+      return {text:`${g.name} set ${DOM_BY_ID[g.domain].name} upon ${c.name}, its child, and stepped back into the older dark.`, refs:[c.id]}; }
+  ]
+};
+
+/* =======================================================================
+   PANTHEON NAME — a title plate for the whole family.
+   ======================================================================= */
+const PANTHEON_FORMS = [
+  (rng,phon)=>`The ${coinName(rng,phon)} Pantheon`,
+  (rng,phon)=>`The Gods of ${coinName(rng,phon)}`,
+  (rng,phon)=>`The House of ${coinName(rng,phon)}`,
+  (rng,phon)=>`The ${coinName(rng,phon)} Theogony`,
+  (rng,phon)=>`The Begotten of ${coinName(rng,phon)}`
+];
+const PANTHEON_SUBS = [
+  "a coherent family of invented gods, begotten from a seed",
+  "their kinship, their domains, and the quarrels between them",
+  "a celestial genealogy — primordials to the youngest gods",
+  "the gods that would make such a world, and the lines between them",
+  "an illuminated descent of gods, each holding one domain"
+];
+
+/* =======================================================================
+   THE GENERATOR — PURE. buildPantheon(seedStr) -> pantheon object.
+   No DOM access. Builds the DAG by construction (parents only from strictly
+   earlier generations), then attaches myths/epithets referencing only real
+   entities, then computes a deterministic fingerprint.
+   ======================================================================= */
+function buildPantheon(seedStr){
+  const rng = makeRng(seedStr);
+  const phon = rollPhonology(rng);
+
+  // ---- shape: number of generations and a per-generation god count ----
+  const nGen = rng.range(4,5);
+  const gens = [];                 // gens[g] = [godIndices]
+  const gods = [];
+  const usedNames = new Set();
+  const usedDomains = new Set();   // principal gods hold DISTINCT primary domains
+
+  function coinUniqueName(){
+    for(let t=0;t<40;t++){ const nm=coinName(rng,phon);
+      if(!usedNames.has(nm.toLowerCase())){ usedNames.add(nm.toLowerCase()); return nm; } }
+    // fallback: append a vowel to guarantee uniqueness
+    let nm=coinName(rng,phon)+rng.pick(phon.vowels);
+    usedNames.add(nm.toLowerCase()); return nm;
+  }
+  // domain pool: shuffle and draw distinct, but bias to include opposing pairs.
+  const domPool = rng.shuffle(DOMAINS.map(d=>d.id));
+  function drawDomain(){
+    while(domPool.length){ const id=domPool.shift(); if(!usedDomains.has(id)){ usedDomains.add(id); return id; } }
+    return null; // exhausted (won't happen for our sizes)
+  }
+
+  // gen 0 — primordials (2-3, parentless)
+  const nPrim = rng.range(2,3);
+  gens[0]=[];
+  for(let i=0;i<nPrim;i++){
+    const idx=gods.length;
+    gods.push(makeGod(idx, 0, coinUniqueName(), drawDomain(), rng));
+    gens[0].push(idx);
+  }
+  // gens 1..nGen-1
+  for(let g=1; g<nGen; g++){
+    const count = rng.range(3,4);
+    gens[g]=[];
+    // candidate parents: ALL gods in strictly-earlier generations
+    let earlier=[]; for(let e=0;e<g;e++) earlier=earlier.concat(gens[e]);
+    for(let i=0;i<count;i++){
+      if(usedDomains.size>=DOMAINS.length) break; // out of distinct domains
+      const idx=gods.length;
+      const nParents = (earlier.length>=2 && rng.chance(.62)) ? 2 : 1;
+      const parents = rng.pickN(earlier, nParents);
+      const god = makeGod(idx, g, coinUniqueName(), drawDomain(), rng);
+      god.parents = parents.slice();
+      gods.push(god);
+      parents.forEach(p=>gods[p].children.push(idx));
+      gens[g].push(idx);
+    }
+  }
+
+  // ---- consorts: pair up some gods in the same or adjacent generation, ----
+  // ---- never along an existing descent edge (so no cycle is implied).   ----
+  assignConsorts(gods, gens, rng);
+
+  // ---- attach epithets + myth (referential by construction) ----
+  const P = makeAccessor(gods);
+  for(const g of gods){ attachLore(g, P, rng); }
+
+  // ---- pantheon-level title ----
+  const name = rng.pick(PANTHEON_FORMS)(rng, phon);
+  const sub  = rng.pick(PANTHEON_SUBS);
+
+  const pantheon = { seed:seedStr, name, sub, gods, gens, phon, nGen };
+  pantheon.fingerprint = fingerprint(pantheon);
+  return pantheon;
+}
+
+function makeGod(idx, gen, name, domain, rng){
+  return { id:idx, gen, name, domain,
+    gender: rng.pick(['m','f','n','m','f']),
+    parents:[], children:[], consort:null,
+    epithets:[], epithetRefs:[], myth:"", mythRefs:[],
+    glyph: rng.range(0,0xFFFFFF) };
+}
+
+/* consort assignment — undirected pairs, avoiding parent/child links */
+function assignConsorts(gods, gens, rng){
+  const taken = new Set();
+  const isLineal = (a,b)=> gods[a].parents.includes(b) || gods[b].parents.includes(a);
+  // try a number of pairings proportional to size
+  const tries = Math.max(2, Math.floor(gods.length/3));
+  for(let t=0;t<tries;t++){
+    const a = rng.int(gods.length);
+    if(taken.has(a)) continue;
+    // candidate partners: same or adjacent generation, not lineal, not taken, not self
+    const cands=[];
+    for(let b=0;b<gods.length;b++){
+      if(b===a||taken.has(b)) continue;
+      if(Math.abs(gods[a].gen-gods[b].gen)>1) continue;
+      if(isLineal(a,b)) continue;
+      cands.push(b);
+    }
+    if(!cands.length) continue;
+    const b = rng.pick(cands);
+    gods[a].consort=b; gods[b].consort=a; taken.add(a); taken.add(b);
+  }
+}
+
+/* an accessor over a built god list — the only way lore reaches kin/domains */
+function makeAccessor(gods){
+  const domGod = (domId)=> gods.find(x=>x.domain===domId) || null;
+  return {
+    gods,
+    byId:(i)=>gods[i],
+    domGod,
+    pickChild:(g)=>gods[g.children[0]],
+    sibling:(g)=>{
+      // a sibling = a god sharing >=1 parent (and not the god itself)
+      if(!g.parents.length) return null;
+      const ps=new Set(g.parents);
+      const sibs = gods.filter(x=> x.id!==g.id && x.parents.some(p=>ps.has(p)));
+      return sibs.length? sibs[0] : null;
+    }
+  };
+}
+
+/* attach epithets + a myth line, choosing only templates the god satisfies */
+function attachLore(g, P, rng){
+  // ---- epithets: 1-2, from templates the god can fill ----
+  const epPool = [];
+  EPITHET_DOMAIN.forEach(fn=>{ const r=fn(g,P); if(r) epPool.push(r); });
+  EPITHET_KIN.forEach(fn=>{ const r=fn(g,P); if(r) epPool.push(r); });
+  const nEp = rng.pick([1,1,2]);
+  const chosen = rng.pickN(epPool, Math.min(nEp, epPool.length));
+  g.epithets = chosen.map(c=>c.text);
+  g.epithetRefs = chosen.flatMap(c=>c.refs);
+
+  // ---- myth: choose a category by the god's situation, prefer relational ----
+  const cats=[];
+  if(g.gen===0) cats.push('primordial');
+  if(g.parents.length===1) cats.push('oneParent');
+  if(g.parents.length===2) cats.push('twoParents');
+  if(P.sibling(g)) cats.push('sibling','sibling');           // bias toward sibling drama
+  if(P.domGod(oppId(g.domain))) cats.push('opposed','opposed'); // and opposition
+  if(g.consort!=null) cats.push('consort');
+  if(g.children.length) cats.push('parenting');
+  // every god has at least one valid category: gen0 -> primordial; others -> one/twoParents
+  // build candidate {text,refs} and pick one that is non-null
+  let line=null;
+  const order = rng.shuffle(cats);
+  for(const cat of order){
+    const fn = rng.pick(MYTH[cat]);
+    const r = fn(g,P);
+    if(r){ line=r; break; }
+  }
+  if(!line){ // ultimate fallback (domain-only, always valid, no refs)
+    line = {text:`${g.name} keeps ${DOM_BY_ID[g.domain].name}, and is named for it.`, refs:[]};
+  }
+  g.myth = line.text;
+  g.mythRefs = line.refs;
+}
+
+/* deterministic fingerprint over names + graph + lore (seed-purity test) */
+function fingerprint(p){
+  const parts=[p.name, p.sub];
+  for(const g of p.gods){
+    parts.push([g.id,g.gen,g.name,g.domain,g.gender,
+      g.parents.join(','), g.children.join(','), g.consort,
+      g.epithets.join('|'), g.myth].join('::'));
+  }
+  return hashStr(parts.join('␟')).toString(16);
+}
+
+/* =======================================================================
+   SELF-TEST — headless, runs on load. Asserts the four crux properties.
+   ======================================================================= */
+function selfTest(){
+  const checks=[];
+  const log=(name,pass,detail)=>{ checks.push({name,pass,detail});
+    console.log(`%c[self-test] ${pass?'PASS':'FAIL'} — ${name}${detail?': '+detail:''}`,
+      `color:${pass?'#7fd6a0':'#ff8a8a'}`); };
+
+  // sample several seeds for robustness
+  const seeds = ["theogony","aurelia","the deep dark","12345","x","Kr'thaun and the salt"];
+  let okAll=true;
+
+  // (1) ACYCLIC DESCENT — DAG + strictly-monotonic generations
+  let dagOk=true, dagDetail="";
+  for(const s of seeds){
+    const p=buildPantheon(s);
+    // (a) monotonic: child gen strictly > each parent gen
+    for(const g of p.gods){
+      for(const pa of g.parents){
+        if(!(g.gen > p.gods[pa].gen)){ dagOk=false; dagDetail=`gen not monotonic for ${g.name}`; }
+      }
+    }
+    // (b) no cycle: full ancestor walk finds no god reaching itself
+    for(const g of p.gods){
+      const seen=new Set(); const stack=[...g.parents];
+      while(stack.length){ const a=stack.pop();
+        if(a===g.id){ dagOk=false; dagDetail=`cycle: ${g.name} is its own ancestor`; break; }
+        if(seen.has(a)) continue; seen.add(a);
+        for(const pp of p.gods[a].parents) stack.push(pp);
+      }
+    }
+    // (c) consorts are not descent edges (don't connect lineal pairs)
+    for(const g of p.gods){
+      if(g.consort!=null){
+        const c=p.gods[g.consort];
+        if(g.parents.includes(c.id)||c.parents.includes(g.id)){ dagOk=false; dagDetail=`consort is also lineal: ${g.name}`; }
+        if(c.consort!==g.id){ dagOk=false; dagDetail=`consort not reciprocal: ${g.name}`; }
+      }
+    }
+  }
+  log("acyclic descent (DAG + monotonic generations)", dagOk, dagDetail); okAll=okAll&&dagOk;
+
+  // (2) REFERENTIAL INTEGRITY — every myth/epithet ref is a real entity/domain
+  let refOk=true, refDetail="";
+  for(const s of seeds){
+    const p=buildPantheon(s);
+    const ids=new Set(p.gods.map(g=>g.id));
+    const names=new Set(p.gods.map(g=>g.name));
+    const domNames=new Set(DOMAINS.map(d=>d.name).concat(DOMAINS.map(d=>d.realm)));
+    for(const g of p.gods){
+      // (a) declared refs all resolve to real gods
+      for(const r of g.mythRefs){ if(!ids.has(r)){ refOk=false; refDetail=`myth ref ${r} not a real god (${g.name})`; } }
+      for(const r of g.epithetRefs){ if(!ids.has(r)){ refOk=false; refDetail=`epithet ref ${r} not real (${g.name})`; } }
+      // (b) parse the prose back: every god-NAME mentioned (besides self) must be a
+      //     referenced, real god. Match WHOLE god-names only (a name can be a substring
+      //     of a longer name in the same pantheon — e.g. "Dreal" inside "Drealtriel" —
+      //     so we tokenize the myth and look for an exact token match, allowing the
+      //     name to begin a possessive ("Name's") or carry trailing punctuation).
+      const tokens = g.myth.split(/[\s.,;—]+/).map(t=>t.replace(/['’]s$/,'').replace(/^['’]+|['’]+$/g,''));
+      const tokSet = new Set(tokens);
+      const mentioned = p.gods.filter(o=> o.id!==g.id && tokSet.has(o.name));
+      for(const o of mentioned){
+        if(!g.mythRefs.includes(o.id)){ refOk=false; refDetail=`myth names ${o.name} without a declared ref (${g.name})`; }
+      }
+      // (c) the named referents are genuinely the god's kin/domain-rivals (not arbitrary)
+      for(const r of g.mythRefs){
+        const o=p.gods[r];
+        const related = g.parents.includes(r)||g.children.includes(r)||g.consort===r
+          || o.parents.some(pp=>g.parents.includes(pp))   // sibling
+          || DOM_BY_ID[g.domain].opp===o.domain;          // opposed
+        if(!related){ refOk=false; refDetail=`myth ref ${o.name} unrelated to ${g.name}`; }
+      }
+    }
+  }
+  log("referential integrity (prose names only real, related kin/domains)", refOk, refDetail); okAll=okAll&&refOk;
+
+  // (3) DOMAIN COHERENCE — distinct primaries; opposing pairs map to two real gods
+  let domOk=true, domDetail="";
+  for(const s of seeds){
+    const p=buildPantheon(s);
+    const seen=new Set();
+    for(const g of p.gods){ if(seen.has(g.domain)){ domOk=false; domDetail=`duplicate domain ${g.domain}`; } seen.add(g.domain); }
+    // every present opposing pair: two DIFFERENT real gods
+    for(const g of p.gods){
+      const o=p.gods.find(x=>x.domain===oppId(g.domain));
+      if(o && o.id===g.id){ domOk=false; domDetail=`a god is its own opposite (${g.name})`; }
+    }
+  }
+  log("domain coherence (distinct primaries, opposing pairs distinct)", domOk, domDetail); okAll=okAll&&domOk;
+
+  // (4) SEED PURITY / STYLE-INVARIANCE — same seed = identical fingerprint;
+  //     style never changes the pantheon.
+  let pureOk=true, pureDetail="";
+  for(const s of seeds){
+    const a=buildPantheon(s), b=buildPantheon(s);
+    if(a.fingerprint!==b.fingerprint){ pureOk=false; pureDetail=`fingerprint not stable for "${s}"`; }
+    // style-invariance: the renderer takes a style arg but buildPantheon ignores style;
+    // re-deriving under each style name (a no-op for the generator) must match.
+    for(const st of ["star","illum","stone"]){
+      const c=buildPantheon(s); // style does not enter generation
+      if(c.fingerprint!==a.fingerprint){ pureOk=false; pureDetail=`style ${st} changed pantheon for "${s}"`; }
+    }
+  }
+  // a different seed should (almost surely) differ
+  if(buildPantheon("seedA").fingerprint===buildPantheon("seedB").fingerprint){
+    pureOk=false; pureDetail="distinct seeds collided"; }
+  log("seed purity / style-invariance (identical fingerprint)", pureOk, pureDetail); okAll=okAll&&pureOk;
+
+  return { ok:okAll, checks };
+}
+
+/* =======================================================================
+   RENDER — SVG genealogy laid out by generation. Sigil nodes, descent
+   lines, consort bonds. Style only re-renders (no regeneration).
+   ======================================================================= */
+const NS="http://www.w3.org/2000/svg";
+let CURRENT=null, SELECTED=null;
+
+function styleColors(){
+  const cs=getComputedStyle(document.body);
+  return {
+    descent: cs.getPropertyValue('--descent').trim(),
+    consort: cs.getPropertyValue('--consort').trim(),
+    node:    cs.getPropertyValue('--node').trim(),
+    nodeLine:cs.getPropertyValue('--node-line').trim(),
+    gold:    cs.getPropertyValue('--gold').trim(),
+    goldSoft:cs.getPropertyValue('--gold-soft').trim(),
+    indigo:  cs.getPropertyValue('--indigo-soft').trim(),
+    ink:     cs.getPropertyValue('--ink').trim(),
+    inkSoft: cs.getPropertyValue('--ink-soft').trim(),
+    muted:   cs.getPropertyValue('--muted').trim(),
+    line:    cs.getPropertyValue('--line').trim()
+  };
+}
+
+/* a small seeded sigil per god: a domain mark + a couple of strokes from
+   its glyph bits. Returns an SVG <g> fragment string centered at (0,0). */
+function sigilPaths(g, R, col){
+  const b=g.glyph; const out=[];
+  // domain mark: a small symbol unique-ish per domain family
+  const domMarks={
+    sea:'~', flame:'△', dawn:'☼', dusk:'◐', memory:'❖', forget:'∅',
+    hearth:'⌂', wild:'✦', harvest:'✺', famine:'◇', making:'⚒', ruin:'⤬',
+    loom:'#', knife:'†', storm:'⚡', silence:'·', deep:'▽', height:'⌃',
+    threshold:'⊓', road:'⋯', dead:'☖', birth:'❀', green:'❦', stone:'◆'
+  };
+  // radial strokes from glyph bits (deterministic)
+  const n=4+(b&3);
+  for(let i=0;i<n;i++){
+    const a=(i/n)*Math.PI*2 + ((b>>3)&7)*0.2;
+    const r1=R*0.34, r2=R*(0.6+((b>>(i+4))&1)*0.16);
+    out.push(`<line x1="${(Math.cos(a)*r1).toFixed(1)}" y1="${(Math.sin(a)*r1).toFixed(1)}" x2="${(Math.cos(a)*r2).toFixed(1)}" y2="${(Math.sin(a)*r2).toFixed(1)}" stroke="${col}" stroke-width="1" opacity="0.5"/>`);
+  }
+  const mark = domMarks[g.domain]||'✷';
+  out.push(`<text x="0" y="0" text-anchor="middle" dominant-baseline="central" font-size="${(R*0.86).toFixed(0)}" fill="${col}" font-family="Georgia,serif">${mark}</text>`);
+  return out.join('');
+}
+
+function render(p, styleName){
+  // apply style class to body (only re-renders)
+  document.body.classList.remove('illum','stone');
+  if(styleName==='illum') document.body.classList.add('illum');
+  if(styleName==='stone') document.body.classList.add('stone');
+
+  const C=styleColors();
+  const svg=document.getElementById('tree');
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+
+  // ---- layout ----
+  const W=860;
+  const padX=64, padTop=56, padBot=44;
+  const rowH=Math.max(108, Math.min(150, 560/p.gens.length));
+  const H=padTop+padBot+(p.gens.length-1)*rowH;
+  const R=23;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+
+  // position each god: spread across its generation row
+  const pos={};
+  p.gens.forEach((row,gi)=>{
+    const y=padTop+gi*rowH;
+    const m=row.length;
+    row.forEach((idx,j)=>{
+      const x = m===1 ? W/2 : padX + (W-2*padX)*(j/(m-1));
+      pos[idx]={x,y};
+    });
+  });
+
+  // a soft starfield/parchment-grain backdrop layer (cheap, deterministic)
+  const bg=document.createElementNS(NS,'g');
+  const rngBg=makeRng(p.seed+'::bg');
+  for(let i=0;i<70;i++){
+    const cx=rngBg.next()*W, cy=rngBg.next()*H, rr=rngBg.next()*1.1+0.3;
+    const dot=document.createElementNS(NS,'circle');
+    dot.setAttribute('cx',cx.toFixed(1)); dot.setAttribute('cy',cy.toFixed(1));
+    dot.setAttribute('r',rr.toFixed(2)); dot.setAttribute('fill',C.indigo);
+    dot.setAttribute('opacity',(rngBg.next()*0.18+0.04).toFixed(2));
+    bg.appendChild(dot);
+  }
+  svg.appendChild(bg);
+
+  // ---- descent lines (parent -> child) ----
+  const linesG=document.createElementNS(NS,'g');
+  for(const g of p.gods){
+    for(const pa of g.parents){
+      const a=pos[pa], c=pos[g.id];
+      const path=document.createElementNS(NS,'path');
+      const my=(a.y+c.y)/2;
+      path.setAttribute('d',`M ${a.x} ${a.y+R} C ${a.x} ${my}, ${c.x} ${my}, ${c.x} ${c.y-R}`);
+      path.setAttribute('fill','none'); path.setAttribute('stroke',C.descent);
+      path.setAttribute('stroke-width','1.4');
+      linesG.appendChild(path);
+    }
+  }
+  svg.appendChild(linesG);
+
+  // ---- consort bonds (distinct: gold, dashed, a gentle arc above) ----
+  const consG=document.createElementNS(NS,'g');
+  const drawnC=new Set();
+  for(const g of p.gods){
+    if(g.consort!=null && !drawnC.has(g.id+'-'+g.consort) && !drawnC.has(g.consort+'-'+g.id)){
+      drawnC.add(g.id+'-'+g.consort);
+      const a=pos[g.id], c=pos[g.consort];
+      const path=document.createElementNS(NS,'path');
+      const lift = (a.y===c.y? 26 : 14);
+      const my=Math.min(a.y,c.y)-lift;
+      path.setAttribute('d',`M ${a.x} ${a.y} Q ${(a.x+c.x)/2} ${my}, ${c.x} ${c.y}`);
+      path.setAttribute('fill','none'); path.setAttribute('stroke',C.consort);
+      path.setAttribute('stroke-width','1.3'); path.setAttribute('stroke-dasharray','2 4');
+      path.setAttribute('stroke-linecap','round'); path.setAttribute('opacity','0.85');
+      consG.appendChild(path);
+    }
+  }
+  svg.appendChild(consG);
+
+  // ---- nodes ----
+  for(const g of p.gods){
+    const {x,y}=pos[g.id];
+    const node=document.createElementNS(NS,'g');
+    node.setAttribute('class','gnode'); node.setAttribute('transform',`translate(${x},${y})`);
+    node.dataset.id=g.id;
+
+    const halo=document.createElementNS(NS,'circle');
+    halo.setAttribute('class','halo'); halo.setAttribute('r',R+7);
+    halo.setAttribute('fill','none'); halo.setAttribute('stroke',C.gold);
+    halo.setAttribute('stroke-width','1.2'); halo.setAttribute('opacity','0');
+    node.appendChild(halo);
+
+    const disc=document.createElementNS(NS,'circle');
+    disc.setAttribute('r',R); disc.setAttribute('fill',C.node);
+    disc.setAttribute('stroke',C.nodeLine); disc.setAttribute('stroke-width','1.2');
+    node.appendChild(disc);
+
+    const sig=document.createElementNS(NS,'g');
+    sig.innerHTML=sigilPaths(g,R,C.goldSoft);
+    node.appendChild(sig);
+
+    const label=document.createElementNS(NS,'text');
+    label.setAttribute('class','nlabel'); label.setAttribute('x','0'); label.setAttribute('y',R+16);
+    label.setAttribute('text-anchor','middle'); label.setAttribute('font-size','12.5');
+    label.setAttribute('font-family','Georgia,serif'); label.setAttribute('fill',C.ink);
+    label.textContent=g.name;
+    node.appendChild(label);
+
+    node.addEventListener('click',()=>selectGod(g.id));
+    svg.appendChild(node);
+  }
+
+  // re-apply selection styling if a god is selected
+  if(SELECTED!=null){ markSelected(SELECTED); }
+}
+
+function markSelected(id){
+  document.querySelectorAll('.gnode').forEach(n=>{
+    n.classList.toggle('sel', +n.dataset.id===id);
+  });
+}
+
+/* =======================================================================
+   READ-A-GOD PANEL
+   ======================================================================= */
+function selectGod(id){
+  SELECTED=id; markSelected(id);
+  const p=CURRENT, g=p.gods[id];
+  const panel=document.getElementById('panel');
+  const domain=DOM_BY_ID[g.domain];
+  const link=(oid)=>`<a data-go="${oid}">${p.gods[oid].name}</a>`;
+
+  const parents = g.parents.length
+    ? g.parents.map(link).join(' &amp; ') : '<span style="opacity:.7">— primordial, parentless —</span>';
+  const children = g.children.length
+    ? g.children.map(link).join(', ') : '<span style="opacity:.6">none</span>';
+  const consort = g.consort!=null ? link(g.consort) : '<span style="opacity:.6">unsworn</span>';
+  // siblings (derived): share >=1 parent
+  const sibs = p.gods.filter(o=> o.id!==g.id && o.parents.length && g.parents.length
+    && o.parents.some(pp=>g.parents.includes(pp)));
+  const siblings = sibs.length ? sibs.map(o=>link(o.id)).join(', ') : '<span style="opacity:.6">none</span>';
+
+  panel.innerHTML = `
+    <div class="ornament">✦ ◆ ✦</div>
+    <div class="g-name">${g.name}</div>
+    <div class="g-domain">Keeper of ${domain.name}</div>
+    ${g.epithets.length?`<div class="g-epithets">${g.epithets.map(e=>'“'+e+'”').join('<br>')}</div>`:''}
+    <div class="kin">
+      <div class="kin-row"><span class="lbl">Domain</span><span class="val">${cap(domain.name)} — ${domain.realm}</span></div>
+      <div class="kin-row"><span class="lbl">Begotten</span><span class="val">${parents}</span></div>
+      <div class="kin-row"><span class="lbl">Siblings</span><span class="val">${siblings}</span></div>
+      <div class="kin-row"><span class="lbl">Consort</span><span class="val">${consort}</span></div>
+      <div class="kin-row"><span class="lbl">Children</span><span class="val">${children}</span></div>
+      <div class="kin-row"><span class="lbl">Generation</span><span class="val">${ordinal(g.gen)} born ${g.gen===0?'(primordial)':''}</span></div>
+    </div>
+    <div class="myth"><span class="mark">❧</span>${g.myth}</div>
+  `;
+  panel.querySelectorAll('a[data-go]').forEach(a=>{
+    a.addEventListener('click',()=>selectGod(+a.dataset.go));
+  });
+}
+function ordinal(n){ return ['first','second','third','fourth','fifth','sixth'][n]||`${n+1}th`; }
+
+/* =======================================================================
+   PNG EXPORT — rasterize the SVG at 2x onto a canvas with the bg color.
+   ======================================================================= */
+function exportPNG(){
+  const svg=document.getElementById('tree');
+  const vb=svg.getAttribute('viewBox').split(/\s+/).map(Number);
+  const w=vb[2], h=vb[3], scale=2;
+  const cs=getComputedStyle(document.body);
+  const bg=cs.getPropertyValue('--paper').trim();
+  // serialize a standalone copy with an opaque bg rect
+  const clone=svg.cloneNode(true);
+  clone.setAttribute('xmlns',NS);
+  const rect=document.createElementNS(NS,'rect');
+  rect.setAttribute('x','0'); rect.setAttribute('y','0');
+  rect.setAttribute('width',w); rect.setAttribute('height',h);
+  rect.setAttribute('fill',cs.getPropertyValue('--bg').trim()||'#0a0b16');
+  clone.insertBefore(rect, clone.firstChild);
+  const xml=new XMLSerializer().serializeToString(clone);
+  const blob=new Blob([xml],{type:'image/svg+xml;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const img=new Image();
+  img.onload=()=>{
+    const cv=document.createElement('canvas'); cv.width=w*scale; cv.height=h*scale;
+    const ctx=cv.getContext('2d'); ctx.scale(scale,scale); ctx.drawImage(img,0,0);
+    URL.revokeObjectURL(url);
+    cv.toBlob(b=>{
+      const a=document.createElement('a');
+      a.download=`theogony-${(CURRENT&&CURRENT.seed||'pantheon').replace(/[^a-z0-9]+/gi,'-')}.png`;
+      a.href=URL.createObjectURL(b); a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+      toast('PNG exported');
+    },'image/png');
+  };
+  img.onerror=()=>{ toast('export failed'); URL.revokeObjectURL(url); };
+  img.src=url;
+}
+
+/* =======================================================================
+   UI WIRING
+   ======================================================================= */
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg;
+  t.classList.add('show'); clearTimeout(toast._t);
+  toast._t=setTimeout(()=>t.classList.remove('show'),1600); }
+
+function randomSeed(){
+  const a=["aur","mor","vel","thal","kyr","ish","nor","sel","dra","umb","cael","oss","wyn","zar","lir"];
+  const b=["adne","ion","eth","mira","oth","ael","une","ys","wen","ara","oden","ix","esh","oria"];
+  return a[(Math.random()*a.length)|0]+b[(Math.random()*b.length)|0];
+}
+
+/* roll(fresh): if fresh, ignore any existing seed and beget a new random one
+   (⟳ / space); otherwise honour whatever's in the seed box (Enter / first load).
+   Either way the seed box ends up showing the seed actually used, so the
+   pantheon on screen is always reproducible/keepable. */
+function roll(fresh){
+  const box=document.getElementById('seed');
+  let seed = fresh ? randomSeed() : (box.value.trim() || randomSeed());
+  const style=document.getElementById('style').value;
+  CURRENT=buildPantheon(seed);
+  SELECTED=null;
+  box.value=CURRENT.seed;   // surface the seed so it can be kept
+  document.getElementById('pname').textContent=CURRENT.name;
+  document.getElementById('psub').textContent=CURRENT.sub;
+  render(CURRENT, style);
+  document.getElementById('panel').innerHTML=
+    '<div class="ph">Click a god in the genealogy to read its name, domain, epithets, kin, and origin-myth.</div>';
+}
+
+function restyle(){ if(CURRENT) render(CURRENT, document.getElementById('style').value); }
+
+document.getElementById('roll').addEventListener('click',()=>roll(true));
+document.getElementById('seed').addEventListener('keydown',e=>{ if(e.key==='Enter') roll(false); });
+document.getElementById('style').addEventListener('change',restyle);
+document.getElementById('export').addEventListener('click',exportPNG);
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space' && e.target.tagName!=='INPUT' && e.target.tagName!=='SELECT'){
+    e.preventDefault(); roll(true);
+  }
+});
+
+/* ---- breadcrumb (ws: namespace; see /UNLOCK.md) ---- */
+try{ if(!localStorage.getItem('ws:seen:theogony')) localStorage.setItem('ws:seen:theogony', String(Date.now())); }catch(e){}
+
+/* ---- run self-test, paint chip, then first roll ---- */
+(function init(){
+  let result;
+  try{ result=selfTest(); }
+  catch(err){ console.error('[self-test] threw',err); result={ok:false,checks:[{name:'harness',pass:false,detail:String(err)}]}; }
+  const chip=document.getElementById('chip'), txt=document.getElementById('chiptext');
+  const passN=result.checks.filter(c=>c.pass).length, total=result.checks.length;
+  if(result.ok){ chip.classList.add('pass'); txt.textContent=`self-test ✓ ${passN}/${total}`; }
+  else{ chip.classList.add('fail'); txt.textContent=`self-test ✗ ${passN}/${total}`; }
+  chip.title=result.checks.map(c=>`${c.pass?'✓':'✗'} ${c.name}${c.detail?' — '+c.detail:''}`).join('\n');
+
+  roll();
+})();
+</script>
+</body>
+</html>

@@ -12,10 +12,10 @@ HTML file: no build step, no dependencies, no network.*
 
 ## What's inside
 
-Eleven creative mediums across nine projects — plus six companions tucked behind their parent doors:
+Eleven creative mediums across nine projects — plus seven companions tucked behind their parent doors:
 the **Orrery** behind Firmament, **Blazon** behind Compositor, **Ariadne** behind Daedalus,
-**Bastion** behind Cartographer, **Scriptorium** behind The Oracle, and **Tessellarium** behind the
-Strange Garden. Click a live link, or open any `.html` in a browser.
+**Bastion** behind Cartographer, **Scriptorium** behind The Oracle, **Tessellarium** behind the
+Strange Garden, and **Theogony** behind Threshold. Click a live link, or open any `.html` in a browser.
 
 ### 🌿 [Strange Garden](https://bman654.github.io/the-workshop/strange-garden/)
 **34 *living* generative systems** — particle life, slime moulds, reaction–diffusion, boids,
@@ -109,6 +109,17 @@ A **generative interactive fiction** — each seed assembles a coherent *strange
 by room, in short evocative passages, toward its quiet heart: a drowned library, a winter terminus, a
 house that remembers. Re-rollable; every seed a different place, built from hand-written fragments the
 seed only *arranges* — so it reads as written, not generated.
+
+> ⚡ **Companion — [Theogony](https://bman654.github.io/the-workshop/theogony/):** *Threshold builds the
+> place; Theogony begets the gods of such a world.* A generative **mythology engine** — from a seed, an
+> invented **pantheon** rendered as an illuminated celestial **genealogy**: ~10–18 gods across 3–5
+> generations, each with a phonologically-consistent invented name, an epithet or two, a domain (with
+> *opposing pairs* — dawn↔dusk, sea↔flame, memory↔forgetting), parentage, consorts, and a short
+> **origin-myth** that references only that god's real kin and domains within this pantheon. A built-in
+> self-test proves it: the descent is a strict **DAG** (no god is its own ancestor; generations are
+> monotonic), and every line of myth is **referentially closed** — the prose and the family tree can
+> never disagree. Star-Chart / Illuminated / Stone, click a god to read it, reproducible by seed,
+> export PNG.
 
 ---
 
