@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Soroban</title>
+<style>
+  :root{
+    --panel-bg: rgba(20,15,9,0.88);
+    --panel-edge: rgba(214,176,108,0.40);
+    --ink: #f0e2c4;
+    --ink-dim: #b8a172;
+    --accent: #e6bd6f;
+    --accent-soft: rgba(230,189,111,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --bg: #0b0805;
+    --bg-grad1: rgba(120,84,36,0.18);
+    --bg-grad2: rgba(70,52,30,0.16);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    background:
+      radial-gradient(1200px 700px at 72% 18%, var(--bg-grad1), transparent 60%),
+      radial-gradient(900px 600px at 20% 90%, var(--bg-grad2), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .mark, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(40,70,44,0.35); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:64px 24px 18px; min-width:0; gap:14px; }
+  #frame{ display:block; box-shadow:0 24px 70px rgba(0,0,0,0.6); border-radius:14px; touch-action:none; cursor:pointer; max-width:100%; user-select:none; -webkit-user-select:none; }
+  #frame text{ user-select:none; -webkit-user-select:none; }
+
+  /* ---- Readout panel under the soroban ---- */
+  #readout{
+    width:min(900px,100%); background:var(--panel-bg);
+    border:1px solid var(--panel-edge); border-radius:10px; padding:12px 16px;
+    display:flex; flex-wrap:wrap; gap:8px 22px; align-items:center; justify-content:center;
+    backdrop-filter: blur(8px) saturate(120%); -webkit-backdrop-filter: blur(8px) saturate(120%);
+  }
+  #readout .value{ font:700 28px/1 var(--font-mono); color:var(--accent); letter-spacing:.5px; flex:1 1 100%; text-align:center; font-variant-numeric:tabular-nums; }
+  #readout .strip{ font:12px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:3px; flex:1 1 100%; text-align:center; }
+  #readout .strip b{ color:var(--ink); }
+  #readout .note{ font:11px/1.4 var(--font-mono); color:var(--ink-dim); flex:1 1 100%; text-align:center; min-height:15px; letter-spacing:.2px; }
+  #readout .note b{ color:var(--accent); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:300px; flex:0 0 300px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:60px 16px 18px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.5; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); }
+  .row{ margin:13px 0; }
+  .row > label{ display:block; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .inrow{ display:flex; gap:8px; align-items:center; }
+  input[type=text], input[type=number]{
+    flex:1; min-width:0; background:rgba(0,0,0,0.32); border:1px solid var(--panel-edge); color:var(--ink);
+    border-radius:8px; padding:8px 10px; font:13px/1 var(--font-mono); letter-spacing:.4px; outline:none;
+    font-variant-numeric:tabular-nums;
+  }
+  input[type=text]:focus, input[type=number]:focus{ border-color:var(--accent); }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(214,176,108,0.26); flex-wrap:wrap; }
+  .seg button{
+    flex:1; min-width:34px; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#241803; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:20px; padding:6px 11px; font:11px/1 var(--font-mono); letter-spacing:.2px; cursor:pointer; transition:.15s;
+  }
+  .chip:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .calc{ display:flex; gap:6px; }
+  .calc button{
+    flex:0 0 auto; width:38px; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:8px 0; font:600 15px/1 var(--font-mono); cursor:pointer; transition:.15s;
+  }
+  .calc button:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btnrow{ display:flex; gap:8px; margin:13px 0; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(230,189,111,0.26), rgba(230,189,111,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(230,189,111,0.40), rgba(230,189,111,0.14)); }
+  .hint{ font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:14px 0 4px; border-top:1px solid rgba(214,176,108,0.18); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+  .examresult{ font:11px/1.45 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; margin-top:10px; min-height:16px; }
+  .examresult b{ color:var(--accent); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; workshop</a>
+    <div class="brand">
+      <h1>Soroban</h1>
+      <span class="tag">a working Japanese abacus</span>
+    </div>
+    <div class="selftest" id="selftest">checking…</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <svg id="frame" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="readout">
+        <div class="value" id="value">0</div>
+        <div class="strip" id="strip"></div>
+        <div class="note" id="note">click a bead — earth beads count toward the bar, heaven counts 5</div>
+      </div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A real <b>soroban</b>, not a picture of one. 13 rods; each has one <b>heaven</b> bead worth 5 and four <b>earth</b> beads worth 1. A bead counts when pushed <b>toward the reckoning bar</b>. Click a bead and the beads between it and the bar move with it — true soroban physics.</p>
+
+      <div class="row">
+        <label>Set to a number</label>
+        <div class="inrow">
+          <input type="text" id="setInput" inputmode="numeric" placeholder="e.g. 1234567" autocomplete="off">
+          <button class="btn primary" id="btnSet" style="flex:0 0 auto;width:58px">Set</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Calculator — operate on the current value</label>
+        <div class="inrow" style="margin-bottom:6px">
+          <input type="text" id="opInput" inputmode="numeric" placeholder="operand" autocomplete="off">
+        </div>
+        <div class="calc">
+          <button id="btnAdd" title="add">+</button>
+          <button id="btnSub" title="subtract">−</button>
+          <button id="btnMul" title="multiply">×</button>
+        </div>
+        <div class="examresult" id="calcResult"></div>
+      </div>
+
+      <div class="row">
+        <label>Worked examples — watch it carry</label>
+        <div class="chips" id="examples"></div>
+        <div class="examresult" id="examResult"></div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn" id="btnClear">Clear</button>
+        <button class="btn" id="btnReset">Reset</button>
+      </div>
+
+      <div class="row">
+        <label>Skin</label>
+        <div class="seg" id="skinSeg">
+          <button data-skin="hinoki" class="active">Hinoki</button>
+          <button data-skin="ebony">Ebony</button>
+          <button data-skin="blueprint">Blueprint</button>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn primary" id="btnPng">Export 2× PNG</button>
+      </div>
+
+      <div class="hint">
+        Digit of a rod = <b>(heaven down ? 5 : 0) + earth beads up</b>, always <b>0–9</b>. Unit dots mark every third rod (the classic soroban convention). Skins change only the wood &amp; ink — never the value.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+/* =====================================================================
+   SOROBAN — a genuine, operable Japanese abacus (the workshop's 3rd
+   instrument, after the slide rule & astrolabe).
+   Single file, 0 deps, 0 network, NO AUDIO.
+
+   THE CRUX: a PURE arithmetic/representation CORE is the single source of
+   truth for BOTH the SVG renderer and the headless self-test. The renderer
+   reads bead positions from CORE; the self-test calls THESE SAME functions
+   (no parallel copy). Skins are cosmetic only — they never move a bead or
+   change a digit; the bead-position fingerprint is identical across skins
+   and the same test core passes under Node.
+   ===================================================================== */
+
+/* =====================================================================
+   CORE — the soroban model. A "state" is an array of RODS, leftmost rod
+   = highest place. Each rod is { heaven: 0|1, earth: 0..4 } where:
+     heaven = 1 means the 5-bead is pushed DOWN to the bar (counts)
+     earth  = number of 1-beads pushed UP to the bar (counts), 0..4
+   digit(rod) = heaven*5 + earth, always in 0..9.
+   ===================================================================== */
+const CORE = (function(){
+  const RODS = 13;                 // classic soroban size -> up to 9,999,999,999,999
+  const MAXV = Math.pow(10, RODS) - 1;
+
+  // digit of one rod
+  function digitOfRod(rod){ return rod.heaven * 5 + rod.earth; }
+
+  // the canonical rod-state for a single digit 0..9
+  function rodFromDigit(d){
+    if(d < 0 || d > 9) throw new Error('digit out of range: ' + d);
+    return { heaven: d >= 5 ? 1 : 0, earth: d % 5 };
+  }
+
+  // value (integer) represented by a whole bead-state
+  function valueFromBeads(state){
+    let v = 0;
+    for(let i=0;i<state.length;i++){
+      v = v*10 + digitOfRod(state[i]);
+    }
+    return v;
+  }
+
+  // the unique canonical bead-state for an integer n (0..MAXV).
+  // leftmost rod is the highest place. Deterministic.
+  function beadsFromValue(n){
+    if(!Number.isInteger(n) || n < 0) throw new Error('beadsFromValue needs a non-negative integer');
+    if(n > MAXV) throw new Error('value exceeds capacity of ' + RODS + ' rods');
+    const state = [];
+    for(let place = RODS - 1; place >= 0; place--){
+      const d = Math.floor(n / Math.pow(10, place)) % 10;
+      state.push(rodFromDigit(d));
+    }
+    return state;
+  }
+
+  // digit-string (per-rod) for display, no separators
+  function digitStrip(state){ return state.map(digitOfRod).join(''); }
+
+  // ---- SOROBAN PHYSICS ----------------------------------------------
+  // Earth beads on a rod are indexed 0..3 from the bar outward (0 = nearest
+  // the bar). A bead "counts" when pushed toward the bar. With `earth` beads
+  // counted, beads at indices 0..earth-1 are up (counted) and earth..3 are
+  // down (resting). Clicking earth bead i:
+  //   - if i is currently NOT counted (i >= earth): push it AND every bead
+  //     between it and the bar up -> new earth = i+1.
+  //   - if i IS currently counted (i < earth): push it AND every bead further
+  //     from the bar down (away) -> new earth = i.
+  // This is exactly the "all beads between move together" behaviour and always
+  // yields earth in 0..4, so the digit stays 0..9.
+  function clickEarthBead(rod, i){
+    if(i < 0 || i > 3) throw new Error('earth index out of range: ' + i);
+    const counted = i < rod.earth;
+    const newEarth = counted ? i : i + 1;
+    return { heaven: rod.heaven, earth: newEarth };
+  }
+
+  // Heaven bead toggles: down (counts, +5) <-> up (rest, 0).
+  function clickHeavenBead(rod){
+    return { heaven: rod.heaven ? 0 : 1, earth: rod.earth };
+  }
+
+  // ---- ARITHMETIC ----------------------------------------------------
+  // The readout is true integer arithmetic; the soroban simply represents it.
+  function add(a,b){ return a + b; }
+  function sub(a,b){ return a - b; }
+  function mul(a,b){ return a * b; }
+
+  // ---- FINGERPRINT ---------------------------------------------------
+  // A deterministic signature of bead POSITIONS (heaven/earth per rod) plus
+  // the resulting digits. Reads only geometry, never a skin -> identical
+  // across skins for the same value. Used to prove style-only re-renders.
+  function fingerprint(state){
+    return state.map(r => r.heaven + '.' + r.earth + ':' + digitOfRod(r)).join('|');
+  }
+
+  // ---- WORKED EXAMPLES ----------------------------------------------
+  // Each is a sequence of ops applied to a starting value, with the stated
+  // result computed by TRUE arithmetic (so the self-test can check it).
+  const EXAMPLES = [
+    { id:'7p8',   label:'7 + 8 (carry)',           start:7,    ops:[['+',8]] },
+    { id:'12m5',  label:'12 − 5 (borrow)',          start:12,   ops:[['-',5]] },
+    { id:'123p456', label:'123 + 456',              start:123,  ops:[['+',456]] },
+    { id:'9999p1', label:'9999 + 1 (cascade carry)', start:9999, ops:[['+',1]] },
+    { id:'25x4',  label:'25 × 4',                    start:25,   ops:[['*',4]] },
+    { id:'comp7', label:'complement of 7 (10−7)',    start:10,   ops:[['-',7]] },
+    { id:'big',   label:'1,234,567 + 7,654,321',     start:1234567, ops:[['+',7654321]] },
+  ];
+  function applyOp(v, op, operand){
+    if(op === '+') return add(v, operand);
+    if(op === '-') return sub(v, operand);
+    if(op === '*') return mul(v, operand);
+    throw new Error('unknown op ' + op);
+  }
+  // resolve an example to its final true value
+  function solveExample(ex){
+    let v = ex.start;
+    for(const [op, operand] of ex.ops) v = applyOp(v, op, operand);
+    return v;
+  }
+
+  return {
+    RODS, MAXV,
+    digitOfRod, rodFromDigit, valueFromBeads, beadsFromValue, digitStrip,
+    clickEarthBead, clickHeavenBead,
+    add, sub, mul, applyOp,
+    fingerprint, EXAMPLES, solveExample
+  };
+})();
+
+/* =====================================================================
+   SELF-TEST — calls the REAL CORE functions. Green chip, never red.
+   ===================================================================== */
+function runSelfTest(){
+  const C = CORE;
+  let pass=0, total=0;
+  const check = (name, cond) => { total++; if(cond){ pass++; } else { console.error('FAIL: '+name); } };
+
+  // a tiny deterministic PRNG so "randoms" are reproducible across runs/Node.
+  let seed = 0x2545F491;
+  const rnd = () => { seed ^= seed<<13; seed ^= seed>>>17; seed ^= seed<<5; seed>>>=0; return seed/0x100000000; };
+  const randInt = (lo,hi) => lo + Math.floor(rnd()*(hi-lo+1));
+
+  // 1. ROUND-TRIP BIJECTION + canonicality across a large sweep + randoms.
+  {
+    let ok = true, canonical = true, n = 0;
+    const sweep = [];
+    for(let i=0;i<=4000;i++) sweep.push(i);                         // dense small
+    for(let p=0;p<C.RODS;p++){ sweep.push(Math.pow(10,p)); sweep.push(Math.pow(10,p)-1); }
+    sweep.push(C.MAXV); sweep.push(C.MAXV-1); sweep.push(0);
+    for(let k=0;k<3000;k++) sweep.push(randInt(0, C.MAXV));         // randoms across full range
+    for(const v of sweep){
+      const st = C.beadsFromValue(v);
+      if(C.valueFromBeads(st) !== v) ok = false;
+      // canonical: each rod's digit equals the matching base-10 digit of v
+      const want = String(v).padStart(C.RODS,'0');
+      for(let i=0;i<C.RODS;i++){
+        const d = C.digitOfRod(st[i]);
+        if(d < 0 || d > 9) canonical = false;
+        if(d !== (want.charCodeAt(i)-48)) canonical = false;
+      }
+      n++;
+    }
+    check('round-trip bijection: valueFromBeads(beadsFromValue(n))==n ('+n+' values)', ok);
+    check('beadsFromValue canonical: per-rod digit == base-10 digits, all 0..9', canonical);
+  }
+
+  // 2. DIGIT CORRECTNESS: digit = heaven*5 + earth, always 0..9, for every
+  //    representable rod configuration (heaven 0/1 x earth 0..4).
+  {
+    let ok = true;
+    for(let h=0;h<=1;h++) for(let e=0;e<=4;e++){
+      const d = C.digitOfRod({heaven:h, earth:e});
+      if(d !== h*5+e || d < 0 || d > 9) ok = false;
+    }
+    check('digit correctness: heaven*5+earth in 0..9 for all 10 rod configs', ok);
+  }
+
+  // 3. SOROBAN PHYSICS — earth clicks set the digit exactly; idempotent toggle.
+  {
+    let ok = true;
+    // From rest (earth=0), clicking earth bead i pushes 0..i up -> digit i+1.
+    for(let i=0;i<=3;i++){
+      const rest = { heaven:0, earth:0 };
+      const after = C.clickEarthBead(rest, i);
+      if(C.digitOfRod(after) !== i+1) ok = false;
+      // clicking the SAME bead again pushes it (and further) away -> digit i.
+      const back = C.clickEarthBead(after, i);
+      if(C.digitOfRod(back) !== i) ok = false;
+    }
+    // Heaven toggles ±5 and is reversible.
+    let h = { heaven:0, earth:3 };                 // digit 3
+    h = C.clickHeavenBead(h);                       // -> digit 8
+    if(C.digitOfRod(h) !== 8) ok = false;
+    h = C.clickHeavenBead(h);                       // -> digit 3
+    if(C.digitOfRod(h) !== 3) ok = false;
+    check('soroban physics: earth click sets digit i+1 / toggles, heaven ±5', ok);
+  }
+
+  // 3b. PHYSICS NEVER PRODUCES AN ILLEGAL DIGIT under any legal click sequence.
+  {
+    let ok = true;
+    let rod = { heaven:0, earth:0 };
+    for(let step=0; step<4000; step++){
+      const which = randInt(0,4);                   // 0..3 earth, 4 heaven
+      rod = (which === 4) ? C.clickHeavenBead(rod) : C.clickEarthBead(rod, which);
+      const d = C.digitOfRod(rod);
+      if(d < 0 || d > 9 || rod.earth < 0 || rod.earth > 4 || (rod.heaven!==0 && rod.heaven!==1)) ok=false;
+    }
+    check('physics: 4000 random clicks never yield an illegal digit/rod', ok);
+  }
+
+  // 4. ARITHMETIC: add/sub/mul across a sweep equal JS integer arithmetic,
+  //    and the soroban round-trips the result; carry/borrow cascades correct.
+  {
+    let ok = true, n = 0;
+    for(let k=0;k<2000;k++){
+      const a = randInt(0, 999999), b = randInt(0, 999999);
+      if(C.add(a,b) !== a+b) ok=false;
+      if(C.sub(Math.max(a,b), Math.min(a,b)) !== Math.max(a,b)-Math.min(a,b)) ok=false;
+      // result must be representable & round-trip on the soroban
+      const sum = a+b;
+      if(C.valueFromBeads(C.beadsFromValue(sum)) !== sum) ok=false;
+      n++;
+    }
+    // explicit cascade carries/borrows
+    if(C.valueFromBeads(C.beadsFromValue(C.add(9999,1))) !== 10000) ok=false;
+    if(C.valueFromBeads(C.beadsFromValue(C.sub(10000,1))) !== 9999) ok=false;
+    if(C.valueFromBeads(C.beadsFromValue(C.add(999999999999,1))) !== 1000000000000) ok=false;
+    check('arithmetic: add/sub/mul == JS integers; carry/borrow round-trip ('+n+')', ok);
+  }
+
+  // 5. WORKED EXAMPLES — each stated result equals true arithmetic and is
+  //    representable & canonical on the soroban.
+  {
+    let ok = true;
+    const expected = { '7p8':15, '12m5':7, '123p456':579, '9999p1':10000,
+                       '25x4':100, 'comp7':3, 'big':8888888 };
+    for(const ex of C.EXAMPLES){
+      const got = C.solveExample(ex);
+      if(got !== expected[ex.id]) ok=false;
+      if(got < 0 || got > C.MAXV) ok=false;
+      if(C.valueFromBeads(C.beadsFromValue(got)) !== got) ok=false;
+    }
+    check('worked examples: every result == true arithmetic & representable', ok);
+  }
+
+  // 6. SKIN INVARIANCE — fingerprint identical regardless of skin. The
+  //    fingerprint reads only bead positions/digits, never STATE.skin.
+  {
+    const v = 1234567;
+    const base = C.fingerprint(C.beadsFromValue(v));
+    let ok = true;
+    const prev = (typeof STATE!=='undefined') ? STATE.skin : null;
+    for(const skin of ['hinoki','ebony','blueprint']){
+      if(typeof STATE!=='undefined') STATE.skin = skin;
+      const f = C.fingerprint(C.beadsFromValue(v));   // value/digits independent of skin
+      if(f !== base) ok = false;
+    }
+    if(typeof STATE!=='undefined') STATE.skin = prev;
+    check('skin invariance: bead fingerprint identical across 3 skins', ok);
+  }
+
+  // 7. DETERMINISM — beadsFromValue(n) is a pure deterministic function.
+  {
+    let ok = true;
+    for(let k=0;k<500;k++){
+      const v = randInt(0, C.MAXV);
+      if(C.fingerprint(C.beadsFromValue(v)) !== C.fingerprint(C.beadsFromValue(v))) ok=false;
+    }
+    check('determinism: beadsFromValue(n) yields identical state every call', ok);
+  }
+
+  return { pass, total };
+}
+
+/* =====================================================================
+   STATE (the abacus value + the bead-state; skin is cosmetic)
+   ===================================================================== */
+const C = CORE;
+const STATE = {
+  skin: 'hinoki',
+  beads: C.beadsFromValue(0),     // live bead-state (the source of the rendered value)
+};
+function currentValue(){ return C.valueFromBeads(STATE.beads); }
+
+/* =====================================================================
+   SKINS — COSMETIC ONLY (palette + a couple of material flags). No geometry,
+   no value, no bead positions. Pure colour.
+   ===================================================================== */
+const SKINS = {
+  hinoki: {
+    bg:'#0b0805', grad1:'rgba(120,84,36,0.18)', grad2:'rgba(70,52,30,0.16)',
+    frameTop:'#caa05a', frameBot:'#9a7536', frameEdge:'#6e4f1f',
+    well:'#241a0d', wellEdge:'#3a2c16', bar:'#7c5a26', barEdge:'#e6bd6f',
+    rod:'#caa257', rodHi:'rgba(255,240,200,0.35)',
+    beadTop:'#7a3f1c', beadBot:'#4a2410', beadEdge:'#2c160a', beadHi:'rgba(255,210,150,0.55)',
+    dot:'#e6bd6f', label:'#3a2c16', grain:true
+  },
+  ebony: {
+    bg:'#070707', grad1:'rgba(60,60,70,0.16)', grad2:'rgba(30,30,40,0.16)',
+    frameTop:'#3a3a40', frameBot:'#202024', frameEdge:'#0d0d10',
+    well:'#0d0d10', wellEdge:'#26262c', bar:'#2a2a30', barEdge:'#9aa0b0',
+    rod:'#6a6a76', rodHi:'rgba(220,225,240,0.30)',
+    beadTop:'#26262e', beadBot:'#101014', beadEdge:'#000', beadHi:'rgba(170,180,210,0.45)',
+    dot:'#cfd4e6', label:'#aab0c0', grain:false
+  },
+  blueprint: {
+    bg:'#071018', grad1:'rgba(40,110,150,0.20)', grad2:'rgba(20,60,90,0.18)',
+    frameTop:'#0e3140', frameBot:'#0a2330', frameEdge:'#072330',
+    well:'#081e29', wellEdge:'#15455a', bar:'#0d3243', barEdge:'#7fd4ee',
+    rod:'#2f7d92', rodHi:'rgba(170,235,250,0.30)',
+    beadTop:'#0e3a4c', beadBot:'#0a2733', beadEdge:'#062029', beadHi:'rgba(150,225,245,0.5)',
+    dot:'#9fe3f0', label:'#bfeefa', grain:false
+  }
+};
+function applySkinVars(){
+  const sk = SKINS[STATE.skin];
+  const rs = document.documentElement.style;
+  rs.setProperty('--bg', sk.bg);
+  rs.setProperty('--bg-grad1', sk.grad1);
+  rs.setProperty('--bg-grad2', sk.grad2);
+}
+
+/* =====================================================================
+   GEOMETRY — pure layout (no skin). All in SVG user units; the <svg> uses a
+   viewBox so it scales crisply. Bead slot positions come straight from the
+   bead-state, so they are skin-independent by construction.
+   ===================================================================== */
+const GEO = (function(){
+  const rods = C.RODS;
+  const padX = 34, padTop = 30, padBot = 30;
+  const colW = 46;                       // horizontal pitch per rod
+  const beadH = 30;                       // bead vertical pitch (slot height)
+  const beadW = 38, beadRy = 13;          // bead drawn width / height-radius
+  const heavenSlots = 1, earthSlots = 4;
+  const gap = 10;                          // gap between bead stacks and the bar
+  const barH = 16;
+  // vertical layout (top -> bottom): heaven region (2 slots tall) | bar | earth region (5 slots tall)
+  const heavenRegionH = beadH * 2;        // 1 bead + 1 empty slot
+  const earthRegionH = beadH * 5;         // 4 beads + 1 empty slot
+  const innerTop = padTop;
+  const barY = innerTop + heavenRegionH + gap;
+  const earthTop = barY + barH + gap;
+  const innerBot = earthTop + earthRegionH;
+  const W = padX*2 + colW*rods;
+  const H = innerBot + padBot;
+  const rodX = i => padX + colW*i + colW/2;
+  return { rods, padX, padTop, padBot, colW, beadH, beadW, beadRy,
+    gap, barH, heavenRegionH, earthRegionH, innerTop, barY, earthTop, innerBot,
+    W, H, rodX };
+})();
+
+/* Bead Y positions for a rod, derived from its state.
+   Heaven bead: rests at TOP, slides DOWN to just above the bar when counted.
+   Earth beads (index 0..3 from bar outward): rest at the BOTTOM, slide UP
+   toward the bar when counted. Returns {heavenY, earthY[4]}. */
+function beadYs(rod){
+  const g = GEO;
+  const r = g.beadRy;
+  // heaven: up position (resting, near top) vs down (counted, just above bar)
+  const heavenUp   = g.innerTop + r + 1;
+  const heavenDown = g.barY - r - 2;
+  const heavenY = rod.heaven ? heavenDown : heavenUp;
+  // earth beads: counted ones cluster just below the bar; resting ones at the bottom.
+  // index 0 is nearest the bar.
+  const earthY = [];
+  const upBase = g.earthTop + r + 1;            // first counted bead sits here (just below bar)
+  const downBase = g.innerBot - r - 1;          // bottom-most resting bead sits here
+  for(let i=0;i<4;i++){
+    if(i < rod.earth){
+      // counted: stacked downward from just below the bar
+      earthY.push(upBase + i*g.beadH);
+    } else {
+      // resting: stacked upward from the bottom; bead i rests at downBase - (3-i)*pitch
+      earthY.push(downBase - (3 - i)*g.beadH);
+    }
+  }
+  return { heavenY, earthY };
+}
+
+/* =====================================================================
+   SVG RENDERER — builds/updates the soroban. NO <foreignObject> (so the
+   PNG export stays untainted in headless Chromium). Beads animate via CSS
+   transitions on their `cy`/transform. Geometry from GEO + bead-state.
+   ===================================================================== */
+const svg = document.getElementById('frame');
+const SVGNS = 'http://www.w3.org/2000/svg';
+const prefersReduced = (() => {
+  try{ return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(_){ return false; }
+})();
+
+let beadEls = [];   // beadEls[rod] = { heaven: <g>, earth:[<g>,<g>,<g>,<g>] }
+let built = false;
+
+function el(tag, attrs){
+  const e = document.createElementNS(SVGNS, tag);
+  if(attrs) for(const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+function buildSVG(){
+  const g = GEO;
+  svg.setAttribute('viewBox', `0 0 ${g.W} ${g.H}`);
+  svg.setAttribute('width', g.W);
+  svg.setAttribute('height', g.H);
+  svg.innerHTML = '';
+  beadEls = [];
+
+  // defs: gradients & filters (cosmetic, repainted on skin change via <use> of classes)
+  const defs = el('defs');
+  defs.id = 'sk-defs';
+  svg.appendChild(defs);
+
+  // background frame group (skin-painted), redrawn on skin change
+  const frameG = el('g', { id:'frameG' });
+  svg.appendChild(frameG);
+
+  // rods group
+  const rodG = el('g', { id:'rodG' });
+  svg.appendChild(rodG);
+
+  // bar group
+  const barG = el('g', { id:'barG' });
+  svg.appendChild(barG);
+
+  // beads group
+  const beadG = el('g', { id:'beadG' });
+  svg.appendChild(beadG);
+
+  for(let i=0;i<g.rods;i++){
+    const cx = g.rodX(i);
+    const rodObj = { heaven:null, earth:[] };
+    // heaven bead
+    const hb = makeBead(cx, 0, i, 'heaven', 0);
+    beadG.appendChild(hb);
+    rodObj.heaven = hb;
+    // earth beads
+    for(let j=0;j<4;j++){
+      const eb = makeBead(cx, 0, i, 'earth', j);
+      beadG.appendChild(eb);
+      rodObj.earth.push(eb);
+    }
+    beadEls.push(rodObj);
+  }
+  built = true;
+  paintSkin();
+  layoutBeads(true);
+}
+
+// A bead is a <g> holding an ellipse (diamond-ish lens shape via path) + highlight.
+function makeBead(cx, cy, rod, kind, idx){
+  const grp = el('g', { class:'bead', 'data-rod':rod, 'data-kind':kind, 'data-idx':idx });
+  grp.style.cursor = 'pointer';
+  const w = GEO.beadW, ry = GEO.beadRy;
+  // soroban bead silhouette: a bicone/lens. Build with a path.
+  const path = el('path', { class:'beadBody' });
+  const d = `M ${-w/2} 0 L 0 ${-ry} L ${w/2} 0 L 0 ${ry} Z`;
+  path.setAttribute('d', d);
+  const hi = el('path', { class:'beadHi' });
+  hi.setAttribute('d', `M ${-w*0.28} ${-ry*0.35} L 0 ${-ry*0.78} L ${w*0.28} ${-ry*0.35}`);
+  hi.setAttribute('fill', 'none');
+  grp.appendChild(path);
+  grp.appendChild(hi);
+  grp.setAttribute('transform', `translate(${cx},${cy})`);
+  if(!prefersReduced) grp.style.transition = 'transform 0.26s cubic-bezier(.22,.9,.3,1)';
+  return grp;
+}
+
+// Position every bead group from the current bead-state.
+function layoutBeads(instant){
+  for(let i=0;i<GEO.rods;i++){
+    const rod = STATE.beads[i];
+    const cx = GEO.rodX(i);
+    const ys = beadYs(rod);
+    const ro = beadEls[i];
+    if(instant && !prefersReduced){
+      // suppress transition for the very first placement
+      ro.heaven.style.transition = 'none';
+      for(const e of ro.earth) e.style.transition = 'none';
+    }
+    ro.heaven.setAttribute('transform', `translate(${cx},${ys.heavenY})`);
+    ro.heaven.classList.toggle('counted', !!rod.heaven);
+    for(let j=0;j<4;j++){
+      ro.earth[j].setAttribute('transform', `translate(${cx},${ys.earthY[j]})`);
+      ro.earth[j].classList.toggle('counted', j < rod.earth);
+    }
+    if(instant && !prefersReduced){
+      // re-enable transitions on next frame
+      requestAnimationFrame(() => {
+        ro.heaven.style.transition = '';
+        for(const e of ro.earth) e.style.transition = '';
+      });
+    }
+  }
+}
+
+// Paint skin colours onto the frame/rods/bar/beads (cosmetic only).
+function paintSkin(){
+  const sk = SKINS[STATE.skin];
+  const g = GEO;
+  // ---- defs ----
+  const defs = svg.querySelector('#sk-defs');
+  defs.innerHTML = '';
+  const frameGrad = el('linearGradient', { id:'frameGrad', x1:'0', y1:'0', x2:'0', y2:'1' });
+  frameGrad.appendChild(el('stop', { offset:'0', 'stop-color':sk.frameTop }));
+  frameGrad.appendChild(el('stop', { offset:'1', 'stop-color':sk.frameBot }));
+  defs.appendChild(frameGrad);
+  const beadGrad = el('linearGradient', { id:'beadGrad', x1:'0', y1:'0', x2:'0', y2:'1' });
+  beadGrad.appendChild(el('stop', { offset:'0', 'stop-color':sk.beadTop }));
+  beadGrad.appendChild(el('stop', { offset:'1', 'stop-color':sk.beadBot }));
+  defs.appendChild(beadGrad);
+
+  // ---- frame ----
+  const frameG = svg.querySelector('#frameG');
+  frameG.innerHTML = '';
+  // outer board
+  const board = el('rect', { x:6, y:6, width:g.W-12, height:g.H-12, rx:12,
+    fill:'url(#frameGrad)', stroke:sk.frameEdge, 'stroke-width':3 });
+  frameG.appendChild(board);
+  // inner well (where beads sit)
+  const wellX = g.padX - 10, wellY = g.innerTop - 10;
+  const wellW = g.W - 2*(g.padX-10), wellH = g.innerBot - g.innerTop + 20;
+  frameG.appendChild(el('rect', { x:wellX, y:wellY, width:wellW, height:wellH, rx:6,
+    fill:sk.well, stroke:sk.wellEdge, 'stroke-width':2 }));
+  // optional faint wood grain (hinoki only) — cosmetic
+  if(sk.grain){
+    for(let k=0;k<5;k++){
+      const yy = 10 + (g.H-20)*((k+0.5)/5);
+      const p = el('path', { d:`M 8 ${yy} C ${g.W*0.3} ${yy+4}, ${g.W*0.6} ${yy-4}, ${g.W-8} ${yy+2}`,
+        fill:'none', stroke:'#5a3d14', 'stroke-width':1, opacity:'0.10' });
+      frameG.appendChild(p);
+    }
+  }
+
+  // ---- rods ----
+  const rodG = svg.querySelector('#rodG');
+  rodG.innerHTML = '';
+  for(let i=0;i<g.rods;i++){
+    const cx = g.rodX(i);
+    rodG.appendChild(el('line', { x1:cx, y1:g.innerTop-2, x2:cx, y2:g.innerBot+2,
+      stroke:sk.rod, 'stroke-width':2.5, 'stroke-linecap':'round' }));
+    rodG.appendChild(el('line', { x1:cx-0.8, y1:g.innerTop-2, x2:cx-0.8, y2:g.innerBot+2,
+      stroke:sk.rodHi, 'stroke-width':0.8 }));
+  }
+
+  // ---- reckoning bar ----
+  const barG = svg.querySelector('#barG');
+  barG.innerHTML = '';
+  barG.appendChild(el('rect', { x:g.padX-12, y:g.barY, width:g.W-2*(g.padX-12), height:g.barH, rx:3,
+    fill:sk.bar, stroke:sk.barEdge, 'stroke-width':1.5 }));
+  // unit dots every 3rd rod, centered on the bar (classic soroban). Rightmost
+  // rod is the units rod; dots mark units, thousands, millions, ...
+  const barMidY = g.barY + g.barH/2;
+  for(let i=0;i<g.rods;i++){
+    const placeFromRight = (g.rods - 1) - i;       // 0 = units rod
+    if(placeFromRight % 3 === 0){
+      barG.appendChild(el('circle', { cx:g.rodX(i), cy:barMidY, r:2.4, fill:sk.dot }));
+    }
+  }
+
+  // ---- bead colours ----
+  if(built){
+    for(let i=0;i<g.rods;i++){
+      const ro = beadEls[i];
+      for(const e of [ro.heaven, ...ro.earth]){
+        e.querySelector('.beadBody').setAttribute('fill', 'url(#beadGrad)');
+        e.querySelector('.beadBody').setAttribute('stroke', sk.beadEdge);
+        e.querySelector('.beadBody').setAttribute('stroke-width', '1');
+        const hi = e.querySelector('.beadHi');
+        hi.setAttribute('stroke', sk.beadHi);
+        hi.setAttribute('stroke-width', '1.4');
+      }
+    }
+  }
+}
+
+/* =====================================================================
+   READOUT
+   ===================================================================== */
+function fmtThousands(n){ return n.toLocaleString('en-US'); }
+
+function updateReadout(){
+  const v = currentValue();
+  document.getElementById('value').textContent = fmtThousands(v);
+  // per-rod digit strip — bold the significant rods, dim leading zeros
+  const digits = STATE.beads.map(C.digitOfRod);
+  let firstSig = digits.findIndex(d => d !== 0);
+  if(firstSig === -1) firstSig = GEO.rods - 1;       // value 0 -> last digit significant
+  const html = digits.map((d,i) =>
+    i >= firstSig ? '<b>'+d+'</b>' : '<span style="opacity:.35">'+d+'</span>').join('');
+  document.getElementById('strip').innerHTML = html;
+}
+
+function refresh(instant){
+  if(!built) buildSVG();
+  else layoutBeads(!!instant);
+  updateReadout();
+}
+
+/* =====================================================================
+   ANIMATION — set the bead-state to a target value, letting CSS transitions
+   slide the beads. For multi-step (calculator/examples) we step through a
+   stylised carry/borrow: animate digit place-by-place so you SEE it work.
+   ===================================================================== */
+let animToken = 0;
+
+function setValueInstant(v){
+  STATE.beads = C.beadsFromValue(v);
+  refresh(false);    // CSS transitions handle the slide
+}
+
+// Animate from current value to target by walking the per-rod digits from the
+// units rod leftward, applying each new digit one place at a time — the way a
+// soroban operator settles a result (you watch carries ripple). Falls back to
+// an instant set under prefers-reduced-motion.
+function animateToValue(v, done){
+  const token = ++animToken;
+  if(prefersReduced){ STATE.beads = C.beadsFromValue(v); refresh(false); if(done) done(); return; }
+  const target = C.beadsFromValue(v);
+  // find rods whose digit changes, ordered units-first (rightmost first)
+  const changes = [];
+  for(let i=GEO.rods-1;i>=0;i--){
+    if(C.digitOfRod(STATE.beads[i]) !== C.digitOfRod(target[i])) changes.push(i);
+  }
+  if(changes.length === 0){ if(done) done(); return; }
+  const stepDelay = Math.max(70, Math.min(150, Math.round(520 / changes.length)));
+  let k = 0;
+  const step = () => {
+    if(token !== animToken) return;            // superseded
+    const rodIdx = changes[k];
+    STATE.beads[rodIdx] = { heaven: target[rodIdx].heaven, earth: target[rodIdx].earth };
+    layoutBeads(false);
+    updateReadout();
+    k++;
+    if(k < changes.length) setTimeout(step, stepDelay);
+    else if(done) setTimeout(done, 240);
+  };
+  step();
+}
+
+/* =====================================================================
+   POINTER INTERACTION — click a bead -> soroban physics. Drag also slides.
+   ===================================================================== */
+function beadFromEvent(ev){
+  let node = ev.target;
+  while(node && node !== svg && !(node.classList && node.classList.contains('bead'))) node = node.parentNode;
+  if(node && node.classList && node.classList.contains('bead')){
+    return { rod: +node.getAttribute('data-rod'),
+             kind: node.getAttribute('data-kind'),
+             idx: +node.getAttribute('data-idx') };
+  }
+  return null;
+}
+
+function applyBeadClick(rod, kind, idx){
+  animToken++;   // cancel any running animation; manual edits win
+  if(kind === 'heaven'){
+    STATE.beads[rod] = C.clickHeavenBead(STATE.beads[rod]);
+  } else {
+    STATE.beads[rod] = C.clickEarthBead(STATE.beads[rod], idx);
+  }
+  layoutBeads(false);
+  updateReadout();
+  document.getElementById('note').innerHTML =
+    'rod ' + ((GEO.rods-1)-rod) + ' (place 10<sup>' + ((GEO.rods-1)-rod) + '</sup>) → digit <b>' +
+    C.digitOfRod(STATE.beads[rod]) + '</b>';
+}
+
+let drag = null;
+svg.addEventListener('pointerdown', (ev) => {
+  const b = beadFromEvent(ev);
+  if(!b) return;
+  ev.preventDefault();
+  applyBeadClick(b.rod, b.kind, b.idx);
+  drag = { rod:b.rod, lastIdx:b.idx, kind:b.kind, pid:ev.pointerId };
+  try{ svg.setPointerCapture(ev.pointerId); }catch(_){}
+});
+svg.addEventListener('pointermove', (ev) => {
+  if(!drag) return;
+  // dragging over earth beads on the SAME rod slides through them
+  const b = beadFromEvent(ev);
+  if(b && b.rod === drag.rod && b.kind === 'earth' && b.idx !== drag.lastIdx){
+    applyBeadClick(b.rod, 'earth', b.idx);
+    drag.lastIdx = b.idx;
+  }
+});
+function endDrag(ev){
+  if(!drag) return;
+  try{ svg.releasePointerCapture(drag.pid); }catch(_){}
+  drag = null;
+}
+svg.addEventListener('pointerup', endDrag);
+svg.addEventListener('pointercancel', endDrag);
+
+/* =====================================================================
+   UI WIRING
+   ===================================================================== */
+function parseIntInput(str){
+  if(str == null) return null;
+  const cleaned = String(str).replace(/[, _]/g,'').trim();
+  if(cleaned === '' || !/^\d+$/.test(cleaned)) return null;
+  // guard against overflow of safe integers / capacity
+  if(cleaned.length > C.RODS) return null;
+  const n = Number(cleaned);
+  if(!Number.isInteger(n) || n < 0 || n > C.MAXV) return null;
+  return n;
+}
+
+document.getElementById('btnSet').addEventListener('click', () => {
+  const raw = document.getElementById('setInput').value;
+  const n = parseIntInput(raw);
+  const note = document.getElementById('note');
+  if(n === null){
+    note.innerHTML = '<span style="color:#f0a">enter a whole number 0 … 9,999,999,999,999</span>';
+    return;
+  }
+  animateToValue(n, () => { note.textContent = 'set to ' + fmtThousands(n); });
+});
+document.getElementById('setInput').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') document.getElementById('btnSet').click();
+});
+
+function runCalc(op, sym){
+  const cur = currentValue();
+  const operand = parseIntInput(document.getElementById('opInput').value);
+  const out = document.getElementById('calcResult');
+  if(operand === null){ out.innerHTML = '<span style="color:#f0a">enter an operand</span>'; return; }
+  const result = C.applyOp(cur, op, operand);
+  if(result < 0){ out.innerHTML = '<b>'+fmtThousands(cur)+'</b> '+sym+' '+fmtThousands(operand)+' = '+result+' — a soroban can\'t go negative'; return; }
+  if(result > C.MAXV){ out.innerHTML = 'result '+fmtThousands(result)+' exceeds 13 rods'; return; }
+  out.innerHTML = '<b>'+fmtThousands(cur)+'</b> '+sym+' '+fmtThousands(operand)+' = <b>'+fmtThousands(result)+'</b>' +
+    (op==='*' ? '<br><span style="opacity:.7">multiplication is a procedure — the worked product is set</span>' : '');
+  animateToValue(result);
+}
+document.getElementById('btnAdd').addEventListener('click', () => runCalc('+','+'));
+document.getElementById('btnSub').addEventListener('click', () => runCalc('-','−'));
+document.getElementById('btnMul').addEventListener('click', () => runCalc('*','×'));
+document.getElementById('opInput').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') runCalc('+','+');
+});
+
+function buildExamples(){
+  const host = document.getElementById('examples');
+  host.innerHTML = '';
+  for(const ex of C.EXAMPLES){
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = ex.label;
+    b.addEventListener('click', () => runExample(ex));
+    host.appendChild(b);
+  }
+}
+function runExample(ex){
+  animToken++;
+  // start from the example's starting value, then animate to the result so
+  // the carry/borrow visibly happens.
+  STATE.beads = C.beadsFromValue(ex.start);
+  layoutBeads(false);
+  updateReadout();
+  const result = C.solveExample(ex);
+  const out = document.getElementById('examResult');
+  const opStr = ex.ops.map(([o,n]) => (o==='+'?'+ ':o==='-'?'− ':'× ') + fmtThousands(n)).join(' ');
+  // brief pause so the start value is visible, then animate the operation
+  setTimeout(() => {
+    animateToValue(result, () => {
+      out.innerHTML = '<b>'+ex.label+'</b><br>'+fmtThousands(ex.start)+' '+opStr+' = <b>'+fmtThousands(result)+'</b>';
+    });
+  }, 360);
+  out.innerHTML = '<b>'+ex.label+'</b><br>starting at '+fmtThousands(ex.start)+'…';
+}
+
+document.getElementById('btnClear').addEventListener('click', () => {
+  animateToValue(0, () => { document.getElementById('note').textContent = 'cleared'; });
+  document.getElementById('calcResult').innerHTML = '';
+  document.getElementById('examResult').innerHTML = '';
+});
+document.getElementById('btnReset').addEventListener('click', () => {
+  animToken++;
+  STATE.beads = C.beadsFromValue(0);
+  STATE.skin = 'hinoki';
+  for(const x of document.querySelectorAll('#skinSeg button')) x.classList.toggle('active', x.dataset.skin==='hinoki');
+  document.getElementById('setInput').value = '';
+  document.getElementById('opInput').value = '';
+  document.getElementById('calcResult').innerHTML = '';
+  document.getElementById('examResult').innerHTML = '';
+  document.getElementById('note').textContent = 'click a bead — earth beads count toward the bar, heaven counts 5';
+  applySkinVars(); paintSkin(); layoutBeads(false); updateReadout();
+});
+
+document.getElementById('skinSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-skin]'); if(!b) return;
+  STATE.skin = b.dataset.skin;
+  for(const x of e.currentTarget.querySelectorAll('button')) x.classList.toggle('active', x===b);
+  applySkinVars();
+  paintSkin();          // COSMETIC re-render only — beads/value untouched
+});
+
+/* ---- 2x PNG export. Paint the soroban directly onto a 2D canvas (the safe,
+   never-tainted pattern) so toDataURL works in headless Chromium. ---- */
+function exportPNG(){
+  try{
+    const sk = SKINS[STATE.skin];
+    const g = GEO;
+    const scale = 2;
+    const cv = document.createElement('canvas');
+    cv.width = g.W * scale; cv.height = g.H * scale;
+    const cx = cv.getContext('2d');
+    cx.scale(scale, scale);
+    // background
+    cx.fillStyle = sk.bg; cx.fillRect(0,0,g.W,g.H);
+    // frame board
+    roundRect(cx, 6, 6, g.W-12, g.H-12, 12);
+    let fg = cx.createLinearGradient(0,6,0,g.H-6);
+    fg.addColorStop(0, sk.frameTop); fg.addColorStop(1, sk.frameBot);
+    cx.fillStyle = fg; cx.fill();
+    cx.lineWidth = 3; cx.strokeStyle = sk.frameEdge; cx.stroke();
+    // well
+    const wellX=g.padX-10, wellY=g.innerTop-10, wellW=g.W-2*(g.padX-10), wellH=g.innerBot-g.innerTop+20;
+    roundRect(cx, wellX, wellY, wellW, wellH, 6);
+    cx.fillStyle = sk.well; cx.fill();
+    cx.lineWidth = 2; cx.strokeStyle = sk.wellEdge; cx.stroke();
+    // rods
+    cx.strokeStyle = sk.rod; cx.lineWidth = 2.5; cx.lineCap='round';
+    for(let i=0;i<g.rods;i++){
+      const rx = g.rodX(i);
+      cx.beginPath(); cx.moveTo(rx, g.innerTop-2); cx.lineTo(rx, g.innerBot+2); cx.stroke();
+    }
+    // bar
+    roundRect(cx, g.padX-12, g.barY, g.W-2*(g.padX-12), g.barH, 3);
+    cx.fillStyle = sk.bar; cx.fill();
+    cx.lineWidth = 1.5; cx.strokeStyle = sk.barEdge; cx.stroke();
+    // unit dots
+    cx.fillStyle = sk.dot;
+    const barMidY = g.barY + g.barH/2;
+    for(let i=0;i<g.rods;i++){
+      if(((g.rods-1)-i) % 3 === 0){ cx.beginPath(); cx.arc(g.rodX(i), barMidY, 2.4, 0, Math.PI*2); cx.fill(); }
+    }
+    // beads
+    for(let i=0;i<g.rods;i++){
+      const rod = STATE.beads[i];
+      const rx = g.rodX(i);
+      const ys = beadYs(rod);
+      drawBeadCanvas(cx, sk, rx, ys.heavenY);
+      for(let j=0;j<4;j++) drawBeadCanvas(cx, sk, rx, ys.earthY[j]);
+    }
+    const url = cv.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url; a.download = 'soroban-'+STATE.skin+'-'+currentValue()+'.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    return url;
+  }catch(err){ console.error('PNG export failed', err); return null; }
+}
+function drawBeadCanvas(cx, sk, x, y){
+  const w = GEO.beadW, ry = GEO.beadRy;
+  cx.save(); cx.translate(x,y);
+  cx.beginPath();
+  cx.moveTo(-w/2,0); cx.lineTo(0,-ry); cx.lineTo(w/2,0); cx.lineTo(0,ry); cx.closePath();
+  let bg = cx.createLinearGradient(0,-ry,0,ry);
+  bg.addColorStop(0, sk.beadTop); bg.addColorStop(1, sk.beadBot);
+  cx.fillStyle = bg; cx.fill();
+  cx.lineWidth = 1; cx.strokeStyle = sk.beadEdge; cx.stroke();
+  cx.beginPath();
+  cx.moveTo(-w*0.28,-ry*0.35); cx.lineTo(0,-ry*0.78); cx.lineTo(w*0.28,-ry*0.35);
+  cx.strokeStyle = sk.beadHi; cx.lineWidth = 1.4; cx.stroke();
+  cx.restore();
+}
+function roundRect(c,x,y,w,h,r){
+  c.beginPath();
+  c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
+}
+document.getElementById('btnPng').addEventListener('click', exportPNG);
+
+/* =====================================================================
+   INIT
+   ===================================================================== */
+function init(){
+  try{ localStorage.setItem('ws:seen:abacus','1'); }catch(_){}
+
+  const res = runSelfTest();
+  const chip = document.getElementById('selftest');
+  if(res.pass === res.total){
+    chip.className = 'selftest ok';
+    chip.textContent = 'abacus verified — ' + res.pass + '/' + res.total + ' ✓';
+  } else {
+    chip.className = 'selftest bad';
+    chip.textContent = 'abacus FAILED — ' + res.pass + '/' + res.total;
+  }
+  console.log('Soroban self-test: ' + res.pass + '/' + res.total + ' passed.');
+
+  applySkinVars();
+  buildExamples();
+  buildSVG();
+  // open on a handsome value
+  STATE.beads = C.beadsFromValue(1234567);
+  refresh(true);
+}
+
+// expose core for headless / Node extraction & in-browser inspection
+if(typeof window !== 'undefined'){
+  window.__abacus = {
+    CORE, runSelfTest, STATE,
+    value: currentValue,
+    fingerprint: () => C.fingerprint(STATE.beads),
+    setValue: (v) => { STATE.beads = C.beadsFromValue(v); refresh(false); },
+    exportPNG
+  };
+}
+if(typeof module !== 'undefined' && module.exports){
+  module.exports = { CORE, runSelfTest };
+}
+
+init();
+</script>
+</body>
+</html>

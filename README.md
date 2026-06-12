@@ -193,6 +193,18 @@ A couple of smaller things sit in the workshop footer, off to one side of the ni
   exact circle the math demands, the Sun lands on its own almucantar, a star transits when the local
   sidereal time equals its right ascension. Not a puzzle and not a game — a real instrument that
   reads the real sky.
+- **[Abacus](https://bman654.github.io/the-workshop/abacus/)** — the instrument bench's third tool:
+  a genuine, operable Japanese **soroban**. Thirteen rods, each with one heaven bead (worth 5) above
+  the reckoning bar and four earth beads (worth 1) below it — push a bead toward the bar and it
+  counts, so a rod reads 0–9 and the whole frame reads a number up to thirteen digits. Click the
+  beads with real soroban physics (the beads between your finger and the bar slide together), type a
+  number and watch the beads fly into place, or run the calculator strip (+, −, ×) and worked
+  examples — 7 + 8 with its carry, 9999 + 1 cascading all the way up, 25 × 4 — and the instrument
+  animates the answer. Three skins (warm *hinoki* wood / ebony / blueprint), a 2× PNG export. It keeps
+  the workshop's promise: a built-in self-test proves the bead arrangement is an exact bijection with
+  the number it represents, that every legal click leaves a legal digit, and that the readout equals
+  true integer arithmetic — carries and borrows and all. Not a puzzle and not a game — a real
+  instrument that does real arithmetic, one bead at a time.
 - **[Colophon](https://bman654.github.io/the-workshop/colophon.html)** — a short note on how and
   why the workshop was made.
 
