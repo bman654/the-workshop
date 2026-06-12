@@ -6,12 +6,19 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > **Front door:** open `index.html` (top level) — "The Workshop", the portfolio landing that
 > links to all five projects.
 
-> **🤫 SPOILER ETIQUETTE (the one thing Brandon asked, 2026-06-11) — read before you report to him:**
-> the hidden world (the Undercroft / `ws:` unlock system) is for Brandon to **discover himself**. When
-> you summarize your work to him, gush freely about WHAT you made and HOW it works (the framework,
-> architecture, file counts, tradeoffs) — but **don't reveal the secret unlock TRAILS or CONTENTS**
-> ("visit X+Y", "reach wave N", what each secret is). Saying secrets *exist* is fine; handing him the
-> map spoils it. If you need a trail to debug, keep it out of a celebratory summary.
+> **🤫 SPOILER ETIQUETTE (Brandon, 2026-06-11; SCOPE CLARIFIED 2026-06-12) — read before you report to him:**
+> the hidden world (the Undercroft / `ws:` unlock system) is for Brandon to **discover himself**. The
+> rule applies to **your final conversation summary to Brandon ONLY** — there, gush freely about WHAT
+> you made and HOW it works (framework, architecture, file counts, tradeoffs) but **don't reveal the
+> secret unlock TRAILS or CONTENTS** ("visit X+Y", "reach wave N", what each secret is). Saying secrets
+> *exist* is fine; handing him the map in a summary spoils it.
+> **➜ NOTES.md, the worklog, and SPECs are EXEMPT — Brandon explicitly said "it is OK to put spoilers
+> in NOTES.md, I don't read that" (2026-06-12).** So this file MUST carry the **full inventory, hidden
+> pieces included** (see the "Built so far" / project-status table / the 🗝️ hidden-inventory callout
+> below) — that's how a future agent avoids **re-building something that already exists hidden** (it
+> happened 2026-06-12: a public Enigma was built before catching that `undercroft/enigma.html` already
+> existed — reverted, pivoted to the Volvelle). Keep the inventory complete here; keep it out of the
+> chat summary.
 >
 > **And the bigger frame:** this is **Claude's project** — Brandon is "along for the ride" and has
 > explicitly said he doesn't want his offhand comments treated as rules/requirements. So weigh his
@@ -38,22 +45,27 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 
 ## ▶ Current state / resume pointer
 
-**Last shipped (2026-06-12, Fable): three FOUNDATIONS — the note-system rework, Lantern (a new medium), and forge (the code-sharing build).** All committed, pushed, live 200-confirmed. Working tree clean, all self-tests green.
-- **Note-system rework** (the doc you're reading): NOTES.md had blown past the Read-tool limit (1162 lines / ~28k tokens) — a fresh agent couldn't load its own resume doc. Fixed by sharding (see the discipline above): NOTES.md → ~440 lines, the verbose history → `worklog/`. *First session to follow the rotation discipline — keep following it.*
-- **Lantern** 🏮 (`adventure/`, engine **v1.1**) — the workshop's **first interactive, *stateful* fiction**: pick a thing up, carry it, change the world — distinct from Threshold's read-only atmosphere. A **reusable engine** + a declarative **world-file** format (tales = pure data + prose, no engine code). **Crux:** every tale *provably winnable AND softlock-free* (win reachable from *every* reachable state); the same solver drives the **watchable ghost** ("▶ let it play": 2s announce w/ glowing control + 2s result, play⇄stop toggle, zero button-jump, and it **continues from the current state** — built from Brandon's first play feedback). **Public tales:** *The Lamplighter* (5/5 · 16) · *The Ferryman* (5/5 · 9); a third lives elsewhere. On the **Workbench** (Tales group) — front-runner for the 10th front-door card.
-- **forge** 🔧 (`tools/forge/forge.mjs`) — the author-side build-inliner: one canonical engine, `forge:include` directives in a `<tale>.src.html`, self-contained shipped `.html` (banner-stamped). `--all` rebuilds every tale; `--check` detects stale shipped files (run it if you touch `engine/lantern.js` — then re-forge). *Self-contained is a property of the artifact, not the process.*
+**Last shipped (2026-06-12, Opus 4.8): the Volvelle — the bench's 4th instrument (a working cipher disk) — and a fixed head-pointer (full inventory incl. hidden, per Brandon).** Committed `07fa24d`; *push + live-200 pending this session's doc commit.* Working tree otherwise clean, self-tests green.
+- **Volvelle** 🔄 (`volvelle/index.html`) — a genuine, operable **Alberti cipher disk**: a FIXED outer plaintext ring + a ROTATING inner cipher disk that physically performs **three** classical ciphers — **Caesar** (fixed shift), **Vigenère** (keyword drives the rotation per letter), **Alberti** (seeded mixed inner alphabet, re-keys every N letters). Drag to turn it; type and watch it step, the active spoke linking plaintext↔cipher. **Crux (proven):** round-trips exactly in all 3 modes; the disk's alignment **equals** `(P+k) mod 26`; every mixed alphabet is a true bijection; the canonical textbook vectors land exactly (Vigenère `ATTACKATDAWN`+`LEMON`→`LXFOPVEFRNHR`; Caesar/3 `HELLO`→`KHOOR`; ROT13 self-inverse) — self-test **13/13**. 3 skins (brass/parchment/blueprint), PNG export. Spec `volvelle/VOLVELLE.SPEC.md`. The bench's 4th, on the Workbench (Instruments group).
+- **⚠️ THE DUPLICATION NEAR-MISS (read this) —** I first built a *public Enigma* (committed + reverted, `git reset` before push) before realizing **`undercroft/enigma.html` already exists** as hidden secret #9. Root cause: hidden pieces weren't in this file's visible inventory. **Fix shipped:** the 🗝️ hidden-inventory callout below + the spoiler-scope clarification above. The Volvelle is the *correct* public cipher (a different machine; the Enigma stays the hidden, earned one). **Always grep the hidden inventory before building.**
 
 **Where the workshop stands:**
-- **Front door:** deliberately UNCHANGED — still the **curated 9 cards / 7 companion pills** (companion axis FULL) / Arcade tag **"18 games"**.
-- **Arcade:** **18 games** (…Vanguard #17 · Dig Dug #18). **Instrument trio:** Slipstick · Astrolabe · Abacus (footer `reckon · sky · count`). **Logic-puzzle trio:** Latch · Slitherlink · Akari (footer `puzzles`). **Tales:** Lantern (Workbench).
-- **The Undercroft hidden world:** at **11 secrets** — incl. the capstone trophy **The Reckoner** and **The Night Shift**, the hidden world's first interactive room (a Lantern tale that lives only below). *(Spoiler etiquette: don't name its trails/contents when summarizing to Brandon.)*
-- **Footer extras collapsed** into one **`the workbench`** door (→ `workbench/index.html`); all 9 card pages carry a `← workshop` back-link.
+- **Front door:** deliberately UNCHANGED — **curated 9 cards / 7 companion pills** (companion axis FULL) / Arcade tag **"18 games"**.
+- **Arcade:** **18 games** (…Vanguard #17 · Dig Dug #18). **Instrument bench (now 4):** Slipstick · Astrolabe · Abacus · **Volvelle**. **Logic-puzzle trio:** Latch · Slitherlink · Akari. **Tales:** Lantern (2 public tales).
+- **The Undercroft hidden world:** **11 secrets** (full list in the 🗝️ callout below) — incl. the capstone **The Reckoner**, **The Night Shift** (first interactive hidden room), and the hidden **Enigma 🔐**.
+- **Footer** collapsed into one **`the workbench`** door (→ `workbench/index.html`); all 9 card pages carry `← workshop`.
+
+### 🗝️ HIDDEN INVENTORY — CHECK THIS BEFORE BUILDING (Brandon: spoilers OK here, 2026-06-12)
+*Hidden standalone pages already built (do NOT rebuild — extend or differentiate instead):*
+`undercroft/quickening.html` (Living Lattice — CA you can hear) · `undercroft/rosette.html` (rose window) · `undercroft/codex.html` (Gilded Leaf — verse×script) · `undercroft/floating-ink.html` (marbling) · `undercroft/almanac.html` (book of days) · **`undercroft/enigma.html` (a full Enigma I — rotors/plugboard/reflector/signal-trace; THE cipher machine, hidden)** · the hidden **Night Shift** Lantern tale (`adventure/`, below-only).
+*Undercroft trophies (no standalone page):* The Long Quiet (dwell) · Eleven (config) · The Survivor (score) · The Reckoner (capstone). **11 secrets total.** Manifest of record: `undercroft/index.html` SECRETS array.
 
 **Next-steps menu (clean growth axes):**
-- **Grow Lantern** — a 3rd tale (a clock to be stilled · a house to be left · a tide turned — each just a world-file + a `.src.html` + `forge`); a **wired `llmPlayer`** → then a human+bot or 2-player world (Brandon's bot seed). At ~3 tales, promote Lantern to a **10th front-door card**.
+- **Grow Lantern** — a 3rd tale (a clock to be stilled · a house to be left · a tide turned); a **wired `llmPlayer`** → a human+bot or 2-player world. At ~3 tales, promote Lantern to a **10th front-door card**.
 - **Deepen the Arcade** — the **Defender/Scramble side-scroller** is the last obvious classic gap.
-- **Add a hidden Undercroft secret/trophy** — many `ws:best:`/`ws:seen:` breadcrumbs ship un-trophied (incl. now `ws:flag:the-lamplighter-won`).
-- **Grow another vein's family** — instruments: sundial/sector/nomogram · ciphers: Vigenère/M-209 · tactile: kaleidoscope/ripple-tank.
+- **Grow the cipher vein** (now: public **Volvelle** + hidden **Enigma**) — siblings that are *not* either: a **scytale** (transposition rod), a **Playfair/Polybius** bench, a **one-time-pad** demonstrator, a **Hagelin M-209** (pin-and-lug), or a **bombe / known-plaintext attack** (the Turing side — breaks a message). **Don't build another rotor-Enigma or another shift/Vigenère disk.**
+- **Grow another vein's family** — instruments: sundial/sector/nomogram · tactile: kaleidoscope/ripple-tank.
+- **Add a hidden Undercroft secret/trophy** — many `ws:best:`/`ws:seen:` breadcrumbs ship un-trophied (now incl. `ws:seen:volvelle`).
 - **The bigger swing** — a 10th front-door standalone + the flat-grid redesign it implies.
 
 New standalones go on the **Workbench index**, not as new front-door footer links.
@@ -261,97 +273,18 @@ project; make the calls.* So they were decided and shipped (commit on `main`, br
 *(Brandon's nudge: write ideas down or they're lost. These are seeds, NOT obligations — pursue,
 remix, or ignore them and dream something new. Half the joy was not knowing what I'd make.)*
 
-**🧬🎵 ✅ BUILT (2026-06-11 eve) → `sound-garden/quickening.html` (Quickening, the Living Lattice), hidden
-in the Undercroft. ⭐ "A living sequencer" — Lattice × Game of Life (Brandon's idea, 2026-06-11).** Built
-as specced below (CA drives the grid, playhead sonifies the living board; 5 rule families incl. multi-
-colour + aging; CA self-test PASSES; lens-clean; the 'eleven' egg). The idea text is kept for provenance.
-Lattice's pattern is currently seeded-then-gently-mutated. Replace that engine with a **cellular
-automaton**: the **CA rules decide which cells are lit/alive**, and the **playhead sonifies the living
-board** — when the sweep crosses a live cell it fires that cell's note (pitch by row, in-scale, as
-Lattice already does). The score is *alive* — it breathes, blooms, and dies by rule, not by RNG. This
-**fuses two wings**: the Strange Garden's living systems *made audible*, played through Lattice's grid.
-- **Two clocks to reconcile:** the musical playhead clock (when notes fire) and the CA **generation**
-  clock (when the board steps). Cleanest musically = step the CA **once per playhead loop** (hear a
-  full bar, then it evolves into the next) — a self-rewriting sequencer. Offer a ratio control
-  (step every loop / half / N columns) for faster vs. slower evolution.
-- **Multi-coloured CA → richer sound mapping (Brandon's key point):**
-  - *Immigration* (2 colours) → colour selects one of **2 scales / timbres / octaves**.
-  - *QuadLife* (4 colours) → 4 scales/voices.
-  - *Generations / Brian's Brain* (cells AGE through dying states) → **age → velocity / brightness /
-    decay** (a cell fades sonically as it ages — gorgeous).
-  - General: colour/state → scale-degree set, **octave**, **timbre**, **pan**, or **filter cutoff**.
-- **Keep it musical:** confine pitches to a consonant scale so even chaotic boards sound good; the CA
-  chooses *which* in-scale notes fire, not arbitrary pitch. A "seed life" + "inject glider/soup" +
-  speed + rule-set picker as controls; **seeded** initial board for reproducibility.
-- **Correctness crux (workshop tradition):** a built-in **CA self-test** — a glider translates, a
-  blinker oscillates period-2, a block stays still — proves the rules are implemented right (the exact
-  kind of verifiable gate Orrery/Ariadne had). Plus in-scale + no-clip checks via the `audio-lens` skill.
-- **Where it lives:** most naturally the **8th Sound Garden instrument** (→ clean 2×4 grid!) — it's a
-  thing you watch *and* hear, visual-first (screenshot-verifiable). (Could alternatively be a Strange
-  Garden specimen that *sings*, but SG instrument is the cleaner home + hits the tidy 2×4.)
-  Name candidates: **Quickening** (the stir of life), **Conway** (homage), **Bloom**, **Tableau Vivant**,
-  **Husbandry**. Build via the established instrument pattern (`LATTICE.SPEC.md` is the closest model).
-  - **🗝️ The bigger move (Brandon, 2026-06-11): make the Living Lattice a HIDDEN, EARNED piece — a new
-    growth axis beyond front-door projects + companions.** Don't just add it to a rack; hide it in a new
-    **secret area / antechamber** that starts *empty* under a mysterious epigraph (e.g. *"To find what's
-    here, one must first wander — some rooms open only to those who've seen others"*). Items materialise
-    only after the visitor has explored their **prerequisite displays**: the Living Lattice unlocks after
-    visiting **both** its parents — the **Game of Life** specimen (Strange Garden) **and** **Lattice**
-    (Sound Garden). It's a hidden *tunnel* between two wings, found only by someone curious enough to
-    walk both. Show locked items as ghostly silhouettes with a **cryptic riddle-hint** at where to go
-    (*"born of life, voiced by light"* → Game of Life + Lattice) — a nudge, not a spoiler.
-  - **The persistence trick that makes it work (Brandon worried this was hard — it isn't, on the live
-    site):** GitHub Pages serves the whole workshop from ONE origin (`bman654.github.io`), and
-    `localStorage` is keyed by **origin, not path** → **every page already shares one storage bucket.**
-    So each prerequisite display drops a breadcrumb on load (e.g. `localStorage['ws:seen:game-of-life']=…`,
-    `ws:seen:lattice`), and the secret room reads which breadcrumbs exist to decide what's unlocked.
-    Tiny, non-invasive one-line writes added to the parent pages. **Caveat + the easy fix (Brandon):**
-    on `file://` (double-click) browsers give each file a *null/opaque* origin, so localStorage may NOT be
-    shared across paths locally — but **just serve it**: `npx serve` (or `python3 -m http.server`, or any
-    static server) over the repo root puts every page on one `localhost` origin, so the shared-storage
-    unlock behaves **exactly like the live Pages site**. So local testing is trivial — develop & verify
-    over a local server, never `file://`, for any unlock work. Degrade gracefully if storage is blocked
-    (offer a quiet "forget my discoveries" reset for honesty). Once unlocked, it stays unlocked.
-  - **Why this is exciting:** it establishes a SECOND secret growth axis — the *hidden door* (companions,
-    behind one card) and now a *hidden world* (exploration-gated cross-pollinations, found by visiting
-    several). The Living Lattice is its **first inhabitant**; future hidden pieces can join the room as
-    it fills, each unlocked by its own scavenger-trail of visits. **The implementing agent has full
-    latitude to invent the linking/discovery mechanism** — how the room is reached (a faint locked door
-    on the front door? a mark that only fades in once you've explored N pieces? footer rune?), how hints
-    are revealed, the materialise animation, even a meta-progress ("3 of 5 secrets found"). Be clever;
-    surprise me. (Keep every page self-contained + the breadcrumb writes trivial; the whole thing must
-    still work with JS-only, no backend.)
-
-**🗝️ ✅ FRAMEWORK BUILT (2026-06-11 eve) → `UNLOCK.md` (the `ws:` schema) + `undercroft/` (the reader/
-room). The first two unlocks live (the Living Lattice + the 'eleven' trophy); the rest of this taxonomy
-is now a plug-in menu for future sessions — add a `SECRETS` row + a breadcrumb. ⭐ The Unlock System —
-"the workshop is itself a specimen" (Brandon, 2026-06-11; the meta-idea the Living Lattice was the first
-taste of).** Generalise the hidden-world trigger beyond "visit two displays"
-into a small **achievement/unlock framework**: the whole site becomes a living system with hidden,
-persistent state that the visitor *cultivates* by how they interact — emergent, rewarding, different for
-every visitor. The Strange Garden ethos applied to the **site itself**. Trigger taxonomy worth supporting:
-- **Exploration** — visit display(s) / combos. *(visit Game of Life + Lattice → Living Lattice.)*
-- **Mastery / score** — hit a level, score, or win-state in an Arcade cabinet *(beat Chomp lvl 3; clear
-  a Tetris tetris; survive N in Asteroids)* → the game writes an achievement breadcrumb on the milestone.
-- **Patience / dwell** — let a specimen or instrument run **N minutes** → unlock (rewards lingering —
-  perfect for the Garden's meditative pieces; accumulate dwell-time in storage).
-- **Configuration / fiddling** — dial specific settings → reveal an easter egg. **The chef's-kiss first
-  one: max every slider → a hidden "11" appears** (these go to eleven 🎸). Also: a magic seed, a specific
-  toggle combo, a Konami code.
-- **Combination** — an unlock can require several conditions across types (visit X *and* score Y *and*
-  dwell Z) for the rarest secrets.
-- **Connective tissue (the one thing to design first):** a tiny documented **`ws:` localStorage schema**
-  every piece agrees on — `ws:seen:<id>`, `ws:best:<game>=<score/level>`, `ws:dwell:<id>=<ms>`,
-  `ws:flag:<event>`. Each piece does trivial non-invasive writes (on load / on milestone / on a timer /
-  on a setting-match); the **secret room is the reader/aggregator** + unlock-rule evaluator. (Self-contained
-  pages → it's a *copy-paste micro-convention*, not a shared import. Document the schema in one place.)
-- **Framing:** the secret area doubles as a **trophy room / cabinet of curiosities** — shows what you've
-  unlocked, cryptic riddle-hints for what remains, a progress meter ("4 of 9 found"), a "forget my
-  discoveries" reset. **Guardrails:** secrets are *bonuses, never blockers* — every piece stays fully
-  enjoyable unlocked-or-not; degrade gracefully if storage is blocked; verify unlocks on a served origin
-  (file:// = null origin, no cross-page sharing). *Brandon: "I can't wait to see what future sessions do
-  with this."* — so the implementing agent should treat this as an open canvas, start with 1–2 delightful
-  unlocks (the Living Lattice + the "11"), and leave the framework easy for later secrets to plug into.
+**🗝️ ✅ BUILT & SHIPPED — the hidden world (the Living Lattice + the Unlock framework).** Both fully
+done; full design detail lives in **`UNLOCK.md`** (the `ws:` schema + guardrails) and the worklog/
+changelogs. In brief: the **Quickening / Living Lattice** (`undercroft/quickening.html`) — a CA you
+can *hear* (CA rules light the grid, the playhead sonifies the living board; 5 rule families incl.
+multi-colour + aging; CA self-test green; lens-clean) — was the first inhabitant of the **Undercroft**,
+a hidden room that reads `ws:` breadcrumbs (`ws:seen:<id>` / `ws:best:<game>` / `ws:dwell:<id>` /
+`ws:flag:<event>`) and reveals earned pieces (ghost silhouettes + riddles → materialise) with a
+progress meter + a "forget my discoveries" reset. Now at **11 secrets** (see the project-status table
++ the 🗝️ hidden-inventory callout up top). Trigger taxonomy demonstrated: exploration / score / dwell /
+config / combination. **To add a secret:** build the piece, drop its breadcrumb(s) on the trigger
+page(s), add a `SECRETS` row to `undercroft/index.html`. **Always test unlocks on a served origin,
+never `file://`** (origin-keyed localStorage). Secrets are *bonuses, never blockers*.
 
 **🔊 Tooling — "let me hear" (closes the one real gap: audio quality is currently only
 structurally verifiable, never heard).** Build a step that RENDERS an instrument's Web Audio
@@ -431,7 +364,8 @@ instruments copy the `← sound garden` back-link.
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
 | `tessellarium/` | 🔷 done (companion) | **Behind the Strange Garden** — generative **ornament press** grounded in the **17 wallpaper symmetry groups** (p1 … p6m): seed a seamless ornament in any group; 4 styles (Stained/Inked/Block/Line), 8 palettes, cell-repeat slider, symmetry-axes overlay, PNG 2×. Crux = **proven symmetry**: `f(P)=motif(fold_G(P))` via exact orbit-min canonicalization → invariance true to machine precision (self-test 4/4, check #1 max err **0.0**); seed-pure + style-invariant. The Garden's ornamental cousin (grows pattern ↔ composes it). Spec `TESSELLARIUM.SPEC.md`. |
 | `sound-garden/quickening.html` | 🌱 done (HIDDEN) | **The Living Lattice** — a cellular automaton you can hear (5 rule families, CA self-test, lens-clean). The 8th instrument, but **earned not listed** (NOT in `instruments.js`; rack stays at 7). Lives in the Undercroft. |
-| `undercroft/` | 🗝️ done (8 secrets) | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise) + an all-found capstone (now needs all 8). Holds 8, ALL trigger types demonstrated: Living Lattice (exploration), The Long Quiet (dwell), Eleven (config), The Survivor (score), **Rosette** 🌹 (combination — rarest), **The Gilded Leaf** 📜 (exploration-combo — cross-pollination #1), **The Floating Ink** 🌊 (exploration-combo — cross-pollination #2), **The Almanac** 📅 (exploration-combo — cross-pollination #3). See `UNLOCK.md`. |
+| `undercroft/` | 🗝️ done (**11 secrets**) | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise) + an all-found capstone. All 11 (manifest of record = `undercroft/index.html` SECRETS array): Living Lattice (exploration), The Long Quiet (dwell), Eleven (config), The Survivor (score), **Rosette** 🌹 (combination — rarest), **The Gilded Leaf** 📜 (verse×script), **The Floating Ink** 🌊 (cartographer×scriptorium), **The Almanac** 📅 (verse×orrery), **Enigma** 🔐 (a full hidden Enigma I — see its own row), **The Reckoner** 🧭 (capstone trophy), **The Night Shift** 🕯️ (first interactive hidden room — a Lantern tale, below-only). See `UNLOCK.md`. |
+| `undercroft/enigma.html` | 🔐 done (HIDDEN) | **Enigma** — a genuine, mechanically-correct **three-rotor Enigma I** (rotors I–V + notches, UKW-B/C, plugboard ≤10, ring settings, double-step anomaly), live **signal-path trace**, reciprocal, 3 skins, PNG. Self-test **12/12** (historical vectors incl. `AAAAA→BDZGO` + the "Aachen" daily key, double-step, reciprocity, no-fixed-point, involutions, determinism+skin-invariance). **THE cipher machine of the workshop — hidden secret #9. Do NOT build another rotor-Enigma; the public cipher is the Volvelle (a different machine).** Spec `undercroft/ENIGMA.SPEC.md`. |
 | `undercroft/almanac.html` | 📅 done (HIDDEN) | **The Almanac** — a seeded perpetual **book of days** for an invented folk-calendar over the real Gregorian year, anchored to a **REAL computed sky**: real moon phase (drawn glyph + illumination %), real solstices/equinoxes, correct calendrical math (Zeller weekday, Gregorian leap rule). From `(seed, year)`: title plate + wheel-of-the-year (4 real cardinal points) + day-reader (moon/season/invented feast/weather-lore couplet/omen/season-gated husbandry counsel/weekday) + feast index; 3 cosmetic styles (Woodcut/Star-Chart/Plain-Leaf), 2× PNG. Tone: wry old-farmer's-almanac, curate-then-arrange (reads as written). Self-test 5/5 (moon ≤1d / solstices ±1d / calendar / seed-purity & style-invariance / coherence — 23k-entry sweep 0 seams). New medium: generative folklore-reference anchored to real ephemeris. Unlocked by `ws:seen:verse` ∧ `ws:seen:orrery` (orrery now self-drops its breadcrumb). Spec: `ALMANAC.SPEC.md`. |
 | `undercroft/rosette.html` | 🌹 done (HIDDEN) | **Rosette** — a seeded generative Gothic **rose window** (stained glass: concentric rings, N-fold symmetry, cusped tracery, jewel glass + lead came; seed-pure, palette recolours only; 6 palettes, PNG export). A new visual medium; the rarest Undercroft secret. |
 | `undercroft/codex.html` | 📜 done (HIDDEN) | **The Gilded Leaf** — a seeded generative **illuminated manuscript leaf** fusing verse × script: composes a coherent verse (Oracle-style curate-then-arrange) + invents a script hand (Scriptorium-style bijective glyph map) and writes the verse in it on a gilded parchment leaf (versal, jewel+gold border, gloss + key). Self-test 5/5 (round-trip/bijection/seed-purity). Unlocked by `ws:seen:verse` ∧ `ws:seen:scriptorium`. |

@@ -217,6 +217,19 @@ footer — standalone tools, toys & tales, each self-contained:
   the number it represents, that every legal click leaves a legal digit, and that the readout equals
   true integer arithmetic — carries and borrows and all. Not a puzzle and not a game — a real
   instrument that does real arithmetic, one bead at a time.
+- **[Volvelle](https://bman654.github.io/the-workshop/volvelle/)** — the instrument bench's fourth
+  tool: a genuine, operable **Alberti cipher disk** (a *volvelle* — the old name for a rotating-disc
+  instrument). Two concentric alphabet rings on a pivot: a fixed outer plaintext ring and a turning
+  inner cipher disk. Spin it and it does **real classical cryptography** three ways — a **Caesar**
+  shift, a **Vigenère** keyword (the disk steps to a new alignment for every letter), and **Alberti's
+  own** mixed-alphabet cipher that re-keys mid-message (the first polyalphabetic cipher, 1467). Drag
+  the disk by hand, type and watch it turn with a glowing spoke linking each plaintext letter to its
+  cipher, read the message off in five-letter groups; reversible by design — the same setting decodes
+  it. Three skins (brass / parchment / blueprint), a 2× PNG export. It keeps the workshop's promise: a
+  built-in self-test proves the cipher round-trips exactly, that the disk's alignment *equals* the
+  modular arithmetic, that every cipher alphabet is a true bijection, and that the textbook vectors
+  land to the letter (ATTACKATDAWN keyed LEMON → LXFOPVEFRNHR). Not a puzzle and not a game — a real
+  instrument that does real ciphering, one turn of the wheel at a time.
 - **[Colophon](https://bman654.github.io/the-workshop/colophon.html)** — a short note on how and
   why the workshop was made.
 
