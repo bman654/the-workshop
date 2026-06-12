@@ -20,7 +20,39 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
-> **▶ CURRENT STATE / RESUME POINTER (2026-06-11, end of a long `/fun` session — PAUSED CLEANLY).**
+> **▶ CURRENT STATE / RESUME POINTER (2026-06-11, `/fun` continued — 🌊 THE FLOATING INK shipped, PAUSED CLEANLY).**
+> Working tree committed & pushed. **New this session:** built **The Floating Ink 🌊
+> (`undercroft/floating-ink.html`, 888 lines)** — a brand-new visual medium: **mathematical marbling**
+> (suminagashi · ebru). Ink floated on water via exact fluid-displacement maps (**Drop** / **Tine** /
+> **Vortex** — ink is a back-to-front stack of polygons, each op deforms all vertices), combed into six
+> classic patterns (Suminagashi rings, Stone, Gel-git, Non-pareil, Bouquet, Vortex) over six historical
+> palettes; PNG export at 2×; optional reduced-motion-safe "watch it form" replay. **Correctness crux
+> PASSES (5/5 self-tests):** the headline is the **area-preserving ink-drop** `P'=C+(P−C)·√(1+r²/|P−C|²)`
+> (off-center area err **0.0000%**, injection identity πr² err **0.0100%**, radial identity max err
+> **2.84e-14**), plus seed-repro, **palette/style-invariance** (Firmament/Daedalus/Blazon crux),
+> finiteness, tine correctness. Placed as the Undercroft's **6th place / 7th secret** — a 2nd
+> cross-pollination (exploration-combo): **`ws:seen:cartographer` ∧ `ws:seen:scriptorium`** (water meets
+> ink = the marbled endpaper of an atlas; riddle *"Float the scribe's ink upon the mapmaker's sea, and
+> comb it."*). Cartographer now self-drops `ws:seen:cartographer` (deep-link robust; front door already
+> dropped it on click); Scriptorium already self-dropped. **Browser-verified end to end** (all 6
+> recipes/3+ palettes, 60fps formation that settles on the deterministic final, 0 console errors over 60
+> re-rolls, no heap leak; one real animation-clock bug found+fixed) AND the **full unlock flow on a served
+> origin** (locked ghost "0 of 7" / "0 of 2 signs" → partial "1 of 2" → unlock → Enter loads the sheet →
+> all-found capstone at "7 of 7"). Spec: `undercroft/FLOATING-INK.SPEC.md`; log: `undercroft/CHANGELOG.md`
+> (Build 5). **Undercroft now holds 7** (5 places: Living Lattice, The Long Quiet, Rosette, The Gilded
+> Leaf, The Floating Ink; 2 trophies: Eleven, The Survivor). **Front door untouched — still the curated 9.**
+>
+> **To resume (`/fun` or "continue"):** read README → this block. Growth axes unchanged: easy stops are at
+> their natural ends (front door 9; Sound Garden 2×4). Genuine non-padding moves: **deepen the Arcade**
+> (`auto-fill`, grows freely), **add another hidden secret** (framework in `UNLOCK.md` — a Gyre/Tessera
+> `ws:best:` score-trophy is still a trivial high-charm add), a **6th-wing companion** only if a pairing is
+> truly poetic, or the **bigger swing** (a new front-door standalone + the flat-grid redesign that implies).
+> Idea seeds still un-built: a **kaleidoscope**, a **snowflake-growth CA** (only Garden #35 if must-have).
+> *(Spoiler etiquette: gush to Brandon about the build, not the hidden-world trail/contents.) The prior
+> session's pointer follows below as history.*
+>
+> ---
+> **(prior) ▶ RESUME POINTER (2026-06-11, end of a long `/fun` session — PAUSED CLEANLY).**
 > Working tree clean, **all commits pushed & live** (front door, Scriptorium, Gyre, Gamelan, Tessera all 200;
 > the hidden Gilded Leaf pushed too). Nothing in flight; no heartbeat cron running.
 >
@@ -617,9 +649,10 @@ instruments copy the `← sound garden` back-link.
 | `arcade/` | 🕹️ 14 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing, Chomp [Pac-Man-like], **Swarm** [twin-stick survivor — drops `ws:best:swarm`], **Gyre** [Tempest-lineage tube shooter — 3 enemy types, 6 well shapes, superzapper; drops `ws:best:gyre`], **Tessera** [Qix-lineage area-claiming — flood-fill claim, Qix+Sparx+fuse; drops `ws:best:tessera`]) |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
 | `sound-garden/quickening.html` | 🌱 done (HIDDEN) | **The Living Lattice** — a cellular automaton you can hear (5 rule families, CA self-test, lens-clean). The 8th instrument, but **earned not listed** (NOT in `instruments.js`; rack stays at 7). Lives in the Undercroft. |
-| `undercroft/` | 🗝️ done (6 secrets) | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise) + an all-found capstone (now needs all 6). Holds 6, ALL trigger types demonstrated: Living Lattice (exploration), The Long Quiet (dwell), Eleven (config), The Survivor (score), **Rosette** 🌹 (combination — rarest), **The Gilded Leaf** 📜 (exploration-combo — 2nd cross-pollination). See `UNLOCK.md`. |
+| `undercroft/` | 🗝️ done (7 secrets) | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise) + an all-found capstone (now needs all 7). Holds 7, ALL trigger types demonstrated: Living Lattice (exploration), The Long Quiet (dwell), Eleven (config), The Survivor (score), **Rosette** 🌹 (combination — rarest), **The Gilded Leaf** 📜 (exploration-combo — cross-pollination #1), **The Floating Ink** 🌊 (exploration-combo — cross-pollination #2). See `UNLOCK.md`. |
 | `undercroft/rosette.html` | 🌹 done (HIDDEN) | **Rosette** — a seeded generative Gothic **rose window** (stained glass: concentric rings, N-fold symmetry, cusped tracery, jewel glass + lead came; seed-pure, palette recolours only; 6 palettes, PNG export). A new visual medium; the rarest Undercroft secret. |
 | `undercroft/codex.html` | 📜 done (HIDDEN) | **The Gilded Leaf** — a seeded generative **illuminated manuscript leaf** fusing verse × script: composes a coherent verse (Oracle-style curate-then-arrange) + invents a script hand (Scriptorium-style bijective glyph map) and writes the verse in it on a gilded parchment leaf (versal, jewel+gold border, gloss + key). Self-test 5/5 (round-trip/bijection/seed-purity). Unlocked by `ws:seen:verse` ∧ `ws:seen:scriptorium`. |
+| `undercroft/floating-ink.html` | 🌊 done (HIDDEN) | **The Floating Ink** — seeded **mathematical marbling** (suminagashi · ebru): ink floated on water via exact fluid-displacement maps (**Drop** area-preserving `√(1+r²/d²)`, **Tine** comb, **Vortex** swirl); 6 recipes (rings/stone/gel-git/non-pareil/bouquet/vortex), 6 palettes, 2× PNG export. Self-test 5/5 (area-preservation A/B/C, seed-repro, palette-invariance, finiteness, tine). New visual medium (fluid-ink art). Unlocked by `ws:seen:cartographer` ∧ `ws:seen:scriptorium`. Spec: `FLOATING-INK.SPEC.md`. |
 
 Each project has its own `CHANGELOG.md` (full provenance) and the Garden has a `SPEC.md` (house style).
 

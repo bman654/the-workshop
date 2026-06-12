@@ -1,5 +1,51 @@
 # The Undercroft — changelog
 
+## Build 5 — a new visual medium: "The Floating Ink", seeded marbling (suminagashi · ebru) (2026-06-11)
+
+Added `undercroft/floating-ink.html` (888 lines, self-contained, zero-dep, no-network) — the
+Undercroft's **6th place** and a **brand-new visual medium** for the workshop: **mathematical
+marbling** (Japanese *suminagashi* / Turkish *ebru*). Floating ink on water, deformed by exact
+fluid-displacement maps and combed into the classic patterns, then laid onto paper. Full engineering
+brief in `FLOATING-INK.SPEC.md`.
+
+- **What it draws.** A seeded marbled sheet via six recipes the seed/UI select — **Suminagashi** (drifting
+  concentric rings), **Stone/battal** (mottled ground), **Gel-git** (wavy chevrons), **Non-pareil** (the
+  iconic fine feathering), **Bouquet/çiçek** (flowers pulled with a stylus), **Vortex/girdap** (spiral
+  snails) — over six historical palettes (Ottoman, Sumi, Antique endpaper, Peacock, Spanish wave,
+  Nightfall). PNG export at 2×; optional "▶ watch it form" replay (reduced-motion safe).
+- **The model.** Ink is a back-to-front **stack of colored polygons**; every operation transforms *all*
+  existing vertices (a new drop also floats a fresh circle on top), exactly mirroring how real ink layers
+  and shoves on the bath. Three operations: **Drop** (radial fluid injection), **Tine** (a comb tooth:
+  drag along a line, decaying with perpendicular distance), **Vortex** (a stylus swirl). Combs are
+  families of parallel tines. House idiom reused: seeded xmur3+mulberry32 PRNG, the dark glass control
+  panel, `← the undercroft` back-link.
+- **The correctness crux (workshop tradition — a built-in self-test, all 5 PASS).** The headline gate is
+  the **ink-drop map** `P' = C + (P−C)·√(1 + r²/|P−C|²)`, which must be exactly area-preserving
+  (Jacobian = 1, save the singular center where the new disk opens). Verified live:
+  - (A) a region not containing the drop center keeps its area — **0.0000%** error;
+  - (B) a region containing the center grows by *exactly* the injected disk πr² — **0.0100%** error;
+  - (C) the radial identity `d'=√(d²+r²)` — max error **2.84e-14**.
+  Plus: seed reproducibility (identical geometry fingerprint), **palette/style invariance** (same seed,
+  any palette → identical geometry — the Firmament/Daedalus/Blazon crux), finiteness (14,080 vertices all
+  finite), and tine correctness (on-line shift = u exactly, far shift ≈ 0).
+- **Verified in a real browser** (served origin): all 6 recipes + multiple palettes render coherent
+  marbled sheets, 60fps formation animation that settles on the deterministic final frame, seed-repro &
+  palette-invariance confirmed, crisp 2× PNG export, 0 console errors over 60 re-rolls, no heap leak. One
+  real bug found+fixed during the build: the formation animation never terminated (two clocks with
+  different time-origins — fixed by reading one clock inside the frame callback).
+- **Trigger (a 2nd cross-pollination secret — exploration-combo): `ws:seen:cartographer` ∧
+  `ws:seen:scriptorium`** — *water (the mapmaker's sea) meets ink (the scribe's hand) = the marbled
+  endpaper of an atlas.* Cartographer now self-drops its breadcrumb (deep-link robust; the front door
+  already drops it on card-click); Scriptorium already self-drops. Riddle: *"Float the scribe's ink upon
+  the mapmaker's sea, and comb it."* Drops `ws:seen:floating-ink` on load. Unlock flow verified on a
+  served origin: locked ghost at "0 of 2 signs" / meter "0 of 7" → partial "1 of 2" → unlock (Enter ▸
+  loads the sheet) → all-found capstone at "7 of 7".
+
+> *Build 4 — "The Gilded Leaf" (`codex.html`, commit `cc97176`), an exploration-combo cross-pollination
+> of verse × script — shipped without its own entry here; recorded for completeness.* The Undercroft now
+> holds **7** secrets — **5 places** (Living Lattice, The Long Quiet, Rosette, The Gilded Leaf, **The
+> Floating Ink**) + **2 trophies** (Eleven, The Survivor). All trigger types remain demonstrated.
+
 ## Build 3 — a new visual medium: "Rosette", a seeded Gothic rose window (2026-06-11)
 
 Added `undercroft/rosette.html` — a single self-contained, zero-dependency, no-network HTML maker,
