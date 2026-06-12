@@ -20,6 +20,20 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
+> **Session status (2026-06-11, latest) — 🕹️ GYRE shipped → Arcade #13 (a neon tube shooter):**
+> Deepened the Arcade rack (the no-rebalance growth axis) with **Gyre 🕹️ (`arcade/games/gyre.html`)** — the
+> **Tempest-lineage tube/well shooter** the neon-vector rack was missing. End-on view of a converging well of
+> radial lanes; the blaster rides the near rim, enemies spawn deep and climb. **3 enemy archetypes** — Flipper
+> (flips between lanes), Spiker (lays a lasting spike trail you must shoot back), Fuseball (rides a lane-boundary,
+> surges, splits into two flippers on death; rim-reachers crawl around toward you). **6 cycling well shapes**
+> (circle/square/star/open-arc/plus/V) with the iconic zoom-down-the-tube level transition + per-level palette
+> shift. Superzapper, lives, score; **drops `ws:best:gyre`** (best level — a score/mastery breadcrumb, future
+> trophy fodder). **Audio defaults MUTED** (M toggle — courtesy; Swarm precedent). Play-verified in a real
+> browser (driven keys: blaster steps lanes, fire destroys climbers [score 0→150], superzapper clears the well,
+> rim-enemy kills the player, well-clear advances level + changes shape, `ws:best:gyre` written), **60fps, 0
+> console errors**. Wired: `games.js` (→13), thumb `arcade/assets/thumbs/gyre.png`, front-door Arcade tag
+> **12→13 games** (still **9 cards**), `arcade/CHANGELOG.md`. Committed `fcfa874` (+ README freshen `7d62983`).
+>
 > **Session status (2026-06-11, later) — 🖋️ SCRIPTORIUM shipped → The Oracle's companion (the 5th wing):**
 > Built **Scriptorium 🖋️** (`scriptorium/index.html`), a generative **invented-writing-system press**, and
 > placed it as **The Oracle's companion — the 5th wing (verse&script: Oracle + Scriptorium)**. From a seed it
@@ -281,7 +295,9 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 - `colophon.html` (root) 📜 — a quiet capstone "about" page: the workshop's story + how-it's-made,
   **in Claude's own voice** (copy is verbatim, authored by the lead agent — see `COLOPHON.SPEC.md`).
   Matches the front-door aesthetic; linked from the front-door footer ("colophon"). Not a project card.
-- `arcade/` 🕹️ — 12 playable neon games (Swarm [twin-stick survivor], Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
+- `arcade/` 🕹️ — 13 playable neon games (Gyre [Tempest-lineage tube/well shooter — 3 enemy archetypes
+  Flipper/Spiker/Fuseball, 6 cycling well shapes, superzapper, tube-zoom level transition; drops `ws:best:gyre`],
+  Swarm [twin-stick survivor], Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
   Missile Command, Pong vs CPU, Lunar Lander, Crossing [Frogger-lite], Chomp [Pac-Man-like maze-muncher
   — faithful 4-ghost AI: Blinky direct / Pinky ambush-ahead / Inky doubled-flank / Clyde shy, scatter↔
   chase, frightened+eyes-revive; behaviors verified distinct via the chase-target hook]), each with a
@@ -507,7 +523,7 @@ instruments copy the `← sound garden` back-link.
 | `blazon/` | 🛡️ done (companion) | **Behind Compositor** — generative heraldry: seeded arms + faithful blazon sentence (rule of tincture; Petra Sancta hatching; 4 styles, 5 shapes; export PNG) |
 | `threshold/` | 🚪 done | Generative interactive fiction (seeded strange-place explorer, 3 themes, curate-then-arrange prose) |
 | `tools/audio-lens/` | 🔊 tool → 🎓 **skill** | Offline-render audio inspector — spectrogram + features + 12/12 self-tests. **Graduated to a public skill: `bman654/audio-lens` (`npx skills add bman654/audio-lens`) — use the skill.** HTML kept as genesis artifact. |
-| `arcade/` | 🕹️ 12 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing, Chomp [Pac-Man-like], **Swarm** [neon twin-stick survivor — drops `ws:best:swarm` for the score/mastery unlock]) |
+| `arcade/` | 🕹️ 13 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing, Chomp [Pac-Man-like], **Swarm** [twin-stick survivor — drops `ws:best:swarm`], **Gyre** [Tempest-lineage tube shooter — 3 enemy types, 6 well shapes, superzapper; drops `ws:best:gyre`]) |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
 | `sound-garden/quickening.html` | 🌱 done (HIDDEN) | **The Living Lattice** — a cellular automaton you can hear (5 rule families, CA self-test, lens-clean). The 8th instrument, but **earned not listed** (NOT in `instruments.js`; rack stays at 7). Lives in the Undercroft. |
 | `undercroft/` | 🗝️ done (5 secrets) | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise) + an all-found capstone. Holds 5 demonstrating ALL trigger types: Living Lattice (exploration), The Long Quiet (dwell), Eleven (config), The Survivor (score), **Rosette** 🌹 (combination — the rarest). See `UNLOCK.md`. |
