@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ripple</title>
+<style>
+  :root{
+    --panel-bg: rgba(7,14,18,0.86);
+    --panel-edge: rgba(110,200,210,0.30);
+    --ink: #d8eef0;
+    --ink-dim: #7fa6ac;
+    --accent: #54d6d0;
+    --accent-soft: rgba(84,214,208,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    /* skin variables (cosmetic only — never read by the field CORE) */
+    --tank: #03161a;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--tank);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; }
+  #tank{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:crosshair; }
+  #hud{ position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    font:11px/1.3 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.5);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 12px; letter-spacing:.3px;
+    pointer-events:none; opacity:0; transition:opacity .15s; max-width:90%; text-align:center; }
+  #hud.show{ opacity:1; }
+  #hud b{ color:var(--accent); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:320px; flex:0 0 320px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 22px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 8px; border-top:1px solid rgba(110,200,210,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .row{ margin:11px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .row > label .val{ color:var(--accent); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.2px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#eafcfb; border:2px solid #2f8f8a; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%; background:#eafcfb; border:2px solid #2f8f8a; cursor:pointer;
+  }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(110,200,210,0.24); }
+  .seg button{
+    flex:1; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#04181a; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .toggle{ display:flex; align-items:center; gap:9px; cursor:pointer; user-select:none; margin:11px 0; }
+  .toggle input{ display:none; }
+  .toggle .box{ width:34px; height:18px; border-radius:10px; background:rgba(0,0,0,0.4); border:1px solid var(--panel-edge);
+    position:relative; transition:.15s; flex:0 0 auto; }
+  .toggle .box::after{ content:''; position:absolute; top:1px; left:1px; width:14px; height:14px; border-radius:50%;
+    background:var(--ink-dim); transition:.15s; }
+  .toggle input:checked + .box{ background:var(--accent-soft); border-color:var(--accent); }
+  .toggle input:checked + .box::after{ left:17px; background:var(--accent); }
+  .toggle .lab{ font:600 10.5px/1.3 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--ink-dim); }
+  .preset-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:6px; }
+  .chip{
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink-dim);
+    border-radius:8px; padding:8px 6px; font-size:11px; font-weight:600; letter-spacing:.2px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui); text-align:center;
+  }
+  .chip:hover{ background:var(--accent-soft); border-color:var(--accent); color:var(--ink); }
+  .btnrow{ display:flex; gap:8px; margin:12px 0; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(84,214,208,0.26), rgba(84,214,208,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(84,214,208,0.40), rgba(84,214,208,0.14)); }
+  .btn.danger{ color:#f0a99e; border-color:rgba(220,120,100,0.45); }
+  .btn.danger:hover{ background:rgba(120,40,34,0.3); border-color:rgba(220,120,100,0.7); }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+  .btn:disabled:hover{ background:rgba(255,255,255,0.04); border-color:var(--panel-edge); }
+  #selInfo{ font:11px/1.5 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; margin:2px 0 6px; }
+  #selInfo b{ color:var(--accent); font-weight:600; }
+  .hint{ font:10.5px/1.55 var(--font-mono); color:var(--ink-dim); opacity:.8; letter-spacing:.2px; margin:16px 0 4px;
+    border-top:1px solid rgba(110,200,210,0.16); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; workshop</a>
+    <div class="brand">
+      <h1>Ripple</h1>
+      <span class="tag">a wave-interference tank</span>
+    </div>
+    <div class="selftest" id="selftest">checking…</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="tank"></canvas>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A steerable wave tank. <b>Drag</b> the glowing sources across the water; click
+        empty water to <b>add</b> one, right-click or use <b>Remove</b> to delete the selected one.
+        Circular waves spread and <b>interfere</b> live by exact linear superposition — bright
+        antinodal lines where crests meet crests, dark nodal lines where crest meets trough.</p>
+
+      <div class="sect">Wave</div>
+      <div class="row">
+        <label>Wavelength λ <span class="val" id="lamVal">48</span></label>
+        <input type="range" id="lamSlider" min="16" max="140" step="1" value="48">
+      </div>
+      <div class="row">
+        <label>Frequency <span class="val" id="freqVal">0.60</span></label>
+        <input type="range" id="freqSlider" min="0" max="2" step="0.02" value="0.6">
+      </div>
+      <div class="row">
+        <label>Amplitude <span class="val" id="ampVal">1.00</span></label>
+        <input type="range" id="ampSlider" min="0.2" max="1.6" step="0.02" value="1">
+      </div>
+      <div class="row">
+        <label>Falloff</label>
+        <div class="seg" id="falloffSeg">
+          <button data-falloff="none">Idealised</button>
+          <button data-falloff="real" class="active">Realistic</button>
+        </div>
+      </div>
+      <label class="toggle"><input type="checkbox" id="nodalChk"><span class="box"></span><span class="lab">Nodal lines</span></label>
+
+      <div class="sect">Play</div>
+      <div class="btnrow">
+        <button class="btn primary" id="playBtn">⏸ Pause</button>
+      </div>
+
+      <div class="sect">Sources <span style="float:right;color:var(--accent)" id="srcCount">2</span></div>
+      <div id="selInfo">Selected: <b id="selName">source 1</b></div>
+      <div class="btnrow">
+        <button class="btn" id="flipBtn">Flip phase</button>
+        <button class="btn danger" id="removeBtn">Remove</button>
+      </div>
+
+      <div class="sect">Presets</div>
+      <div class="preset-grid" id="presets"></div>
+
+      <div class="sect">Skin</div>
+      <div class="row">
+        <div class="seg" id="skinSeg">
+          <button data-skin="tank" class="active">Tank</button>
+          <button data-skin="schlieren">Schlieren</button>
+          <button data-skin="blueprint">Blueprint</button>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn primary" id="pngBtn">Export 2× PNG</button>
+      </div>
+
+      <div class="hint">
+        <b>Drag</b> a source to move the fringes live · <b>click water</b> to add · <b>right-click</b> to remove.<br>
+        Try <b>Double-slit</b> for far-field fringes, <b>Line array</b> for a steered beam, then <b>Flip phase</b> to swap nodes↔antinodes.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+// ============================================================================
+// Ripple CORE — pure analytic wave superposition. NO DOM, NO skin, NO render.
+// The headless self-test below and the browser renderer call THESE real
+// functions (not copies). The field depends only on (sources, k, ω, t, falloff).
+// ============================================================================
+
+// A "source" is a plain data object { x, y, A, phase }. Wavenumber k = 2π/λ and
+// angular frequency ω = 2πf are shared by all sources (one-frequency tank).
+
+// Falloff models energy spreading from a point source.
+//   'none'  → 1            (idealised textbook case — exact interference loci)
+//   'real'  → 1/√(1 + r/λ) (gentle decay, the default look)
+function falloff(mode, r, lambda){
+  if(mode === 'none') return 1;
+  return 1 / Math.sqrt(1 + r / lambda);
+}
+
+// Distance from a point to a source.
+function distTo(src, x, y){ return Math.hypot(x - src.x, y - src.y); }
+
+// One source's contribution to the surface displacement at (x,y,t).
+//   contribution = A · falloff(r) · cos(k·r − ω·t + φ)
+function contribution(src, k, omega, t, mode, lambda, x, y){
+  const r = Math.hypot(x - src.x, y - src.y);
+  return src.A * falloff(mode, r, lambda) * Math.cos(k * r - omega * t + src.phase);
+}
+
+// The field: linear superposition of every source's contribution.
+//   field(x,y,t) = Σ_i contribution_i(x,y,t)
+function field(sources, k, omega, t, mode, lambda, x, y){
+  let s = 0;
+  for(let i = 0; i < sources.length; i++){
+    s += contribution(sources[i], k, omega, t, mode, lambda, x, y);
+  }
+  return s;
+}
+
+// Steady-state resultant amplitude (the envelope max over time) at a point.
+// Two-equal-source closed form (falloff=none, A1=A2=A): the sum of two cosines
+// of equal magnitude and frequency is  R = 2A·|cos((kΔ + Δφ)/2)|  where
+// Δ = r1 − r2 and Δφ = φ1 − φ2.  For the general / falloff case we fall back to
+// sampling |field| over one full period and taking the max — both are exact for
+// the equal-frequency tank because every term shares ω.
+function resultantAmplitude(sources, k, omega, mode, lambda, x, y){
+  if(sources.length === 2 && mode === 'none' &&
+     Math.abs(sources[0].A - sources[1].A) < 1e-12){
+    const A = sources[0].A;
+    const r1 = distTo(sources[0], x, y);
+    const r2 = distTo(sources[1], x, y);
+    const delta = r1 - r2;
+    const dphi = sources[0].phase - sources[1].phase;
+    return 2 * A * Math.abs(Math.cos((k * delta + dphi) / 2));
+  }
+  // General: sample |field| over one period. With a shared ω the field is a
+  // single sinusoid in t, so a fine sweep finds the true envelope amplitude.
+  // (When ω≈0 the pattern is frozen; sample phase directly via a synthetic ω.)
+  const w = (Math.abs(omega) < 1e-9) ? (2 * Math.PI) : omega;
+  const period = 2 * Math.PI / w;
+  let mx = 0;
+  const N = 720;
+  for(let i = 0; i < N; i++){
+    const t = (i / N) * period;
+    const v = Math.abs(field(sources, k, w, t, mode, lambda, x, y));
+    if(v > mx) mx = v;
+  }
+  return mx;
+}
+
+// Field fingerprint — a stable hash of the field sampled on a fixed lattice at a
+// fixed time. Used to PROVE skin-invariance: identical inputs → identical hash,
+// regardless of any cosmetic skin (the CORE takes no skin argument at all).
+function fieldFingerprint(sources, k, omega, t, mode, lambda, W, H, grid){
+  grid = grid || 13;
+  const parts = [];
+  for(let iy = 0; iy < grid; iy++){
+    for(let ix = 0; ix < grid; ix++){
+      const x = (ix + 0.5) / grid * W;
+      const y = (iy + 0.5) / grid * H;
+      const v = field(sources, k, omega, t, mode, lambda, x, y);
+      parts.push(Math.round(v * 1e6) / 1e6);
+    }
+  }
+  return hashStr(parts.join(','));
+}
+function hashStr(s){
+  let h = 2166136261 >>> 0;
+  for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return ('00000000' + (h >>> 0).toString(16)).slice(-8) + ':' + s.length;
+}
+function kOf(lambda){ return 2 * Math.PI / lambda; }
+function omegaOf(freq){ return 2 * Math.PI * freq; }
+
+// ============================================================================
+// HEADLESS SELF-TEST — calls the REAL functions above. Returns {pass,total,log}.
+// Exposed on window for the browser badge AND extractable for Node (see footer).
+// ============================================================================
+function runSelfTest(){
+  let pass = 0, total = 0; const log = [];
+  function check(name, cond){
+    total++;
+    if(cond){ pass++; log.push('PASS: ' + name); if(typeof console !== 'undefined') console.log('PASS: ' + name); }
+    else { log.push('FAIL: ' + name); if(typeof console !== 'undefined') console.error('FAIL: ' + name); }
+  }
+  const rnd = () => Math.random();
+
+  // (1) render == field: field() equals a hand-rolled reference Σ to ~1e-9 over
+  //     many random sources / points / times / λ / falloff.
+  {
+    let maxErr = 0;
+    for(let trial = 0; trial < 300; trial++){
+      const n = 1 + Math.floor(rnd() * 5);
+      const lambda = 16 + rnd() * 124;
+      const k = kOf(lambda), omega = omegaOf(rnd() * 2);
+      const mode = rnd() < 0.5 ? 'none' : 'real';
+      const sources = [];
+      for(let i = 0; i < n; i++) sources.push({ x: rnd() * 900, y: rnd() * 600, A: 0.2 + rnd() * 1.4, phase: rnd() * Math.PI * 2 });
+      const t = rnd() * 7, x = rnd() * 900, y = rnd() * 600;
+      // independent reference sum
+      let ref = 0;
+      for(const s of sources){
+        const r = Math.sqrt((x - s.x) * (x - s.x) + (y - s.y) * (y - s.y));
+        const fall = mode === 'none' ? 1 : 1 / Math.sqrt(1 + r / lambda);
+        ref += s.A * fall * Math.cos(k * r - omega * t + s.phase);
+      }
+      const got = field(sources, k, omega, t, mode, lambda, x, y);
+      maxErr = Math.max(maxErr, Math.abs(got - ref));
+    }
+    check('render == field: field() equals hand-rolled reference Σ (<1e-9)', maxErr < 1e-9);
+  }
+
+  // (2) Superposition linearity: field({A,B}) == field({A}) + field({B}).
+  {
+    let maxErr = 0;
+    for(let trial = 0; trial < 300; trial++){
+      const lambda = 16 + rnd() * 124;
+      const k = kOf(lambda), omega = omegaOf(rnd() * 2);
+      const mode = rnd() < 0.5 ? 'none' : 'real';
+      const a = { x: rnd() * 900, y: rnd() * 600, A: 0.2 + rnd() * 1.4, phase: rnd() * 6.28 };
+      const b = { x: rnd() * 900, y: rnd() * 600, A: 0.2 + rnd() * 1.4, phase: rnd() * 6.28 };
+      const t = rnd() * 7, x = rnd() * 900, y = rnd() * 600;
+      const both = field([a, b], k, omega, t, mode, lambda, x, y);
+      const sep = field([a], k, omega, t, mode, lambda, x, y) + field([b], k, omega, t, mode, lambda, x, y);
+      maxErr = Math.max(maxErr, Math.abs(both - sep));
+    }
+    check('superposition linearity: field({A,B}) == field({A})+field({B}) (<1e-9)', maxErr < 1e-12);
+  }
+
+  // (3) Interference loci are exact (THE PHYSICS GATE). Two equal in-phase
+  //     sources, falloff none. Bisector → 2A; Δ=(n+½)λ → node (0); Δ=nλ → 2A.
+  {
+    const A = 1.0, lambda = 50, k = kOf(lambda), omega = omegaOf(0.7);
+    const mode = 'none';
+    const sep = 240;                         // source separation along x
+    const x1 = 300, x2 = x1 + sep, ys = 300; // both sources on the same horizontal
+    const s1 = { x: x1, y: ys, A, phase: 0 };
+    const s2 = { x: x2, y: ys, A, phase: 0 };
+    const srcs = [s1, s2];
+    const cx = (x1 + x2) / 2;                 // bisector is the vertical line x = cx
+
+    // (3a) Perpendicular bisector (r1 = r2, Δ = 0): R ≈ 2A.
+    let bisOk = true, bisMaxErr = 0;
+    for(const dy of [-160, -80, -10, 40, 120, 200]){
+      const R = resultantAmplitude(srcs, k, omega, mode, lambda, cx, ys + dy);
+      bisMaxErr = Math.max(bisMaxErr, Math.abs(R - 2 * A));
+      if(Math.abs(R - 2 * A) > 2e-3) bisOk = false;
+    }
+
+    // (3b/3c) Construct probe points ANALYTICALLY on the path-difference
+    //      hyperbola, so r1−r2 is exact by construction (no numerical solve).
+    //      With sources at (cx∓a, ys), a=sep/2, the locus r1−r2 = Δ is the
+    //      hyperbola (X²/p²) − (Y²/q²) = 1 in source-centred coords (X=x−cx,
+    //      Y=y−ys), where p = Δ/2 and q² = a² − p² (real for |Δ| < sep). Pick
+    //      a Y, get X = ±p·√(1 + Y²/q²); the branch sign follows sign(Δ).
+    const a = sep / 2;
+    function hyperbolaPoint(delta, Y){
+      const p = delta / 2;
+      const q2 = a * a - p * p;            // > 0 since |delta| < sep
+      const X = Math.sign(p) * Math.abs(p) * Math.sqrt(1 + (Y * Y) / q2);
+      return { x: cx + X, y: ys + Y };
+    }
+    function rdiff(x, y){ return Math.hypot(x - x1, y - ys) - Math.hypot(x - x2, y - ys); }
+
+    let nodeOk = true, nodeMax = 0;
+    for(const n of [0, 1, 2]){
+      const targetDelta = (n + 0.5) * lambda;     // |Δ| = 25,75,125 < sep=240
+      for(const Y of [60, 180]){
+        const pt = hyperbolaPoint(targetDelta, Y);
+        if(Math.abs(rdiff(pt.x, pt.y) - targetDelta) > 1e-6) nodeOk = false;  // exact by construction
+        const R = resultantAmplitude(srcs, k, omega, mode, lambda, pt.x, pt.y);
+        nodeMax = Math.max(nodeMax, R);
+        if(R > 3e-3) nodeOk = false;                                          // genuine node
+      }
+    }
+
+    let antiOk = true, antiMaxErr = 0;
+    for(const n of [1, 2]){
+      const targetDelta = n * lambda;             // |Δ| = 50,100 < sep
+      for(const Y of [60, 180]){
+        const pt = hyperbolaPoint(targetDelta, Y);
+        const R = resultantAmplitude(srcs, k, omega, mode, lambda, pt.x, pt.y);
+        antiMaxErr = Math.max(antiMaxErr, Math.abs(R - 2 * A));
+        if(Math.abs(R - 2 * A) > 3e-3) antiOk = false;
+      }
+    }
+
+    check('interference: perpendicular bisector R ≈ 2A (constructive)', bisOk);
+    check('interference: nodes at Δ=(n+½)λ have R ≈ 0 (destructive)', nodeOk);
+    check('interference: antinodes at Δ=nλ have R ≈ 2A (constructive)', antiOk);
+
+    // (3d) Cross-check: closed-form resultantAmplitude matches sampled max_t|field|
+    //      over many random points (falloff none, equal sources).
+    let xMaxErr = 0;
+    for(let trial = 0; trial < 200; trial++){
+      const x = 100 + rnd() * 600, y = 100 + rnd() * 400;
+      const closed = resultantAmplitude(srcs, k, omega, mode, lambda, x, y);
+      // sampled envelope (independent of the closed-form branch)
+      let mx = 0; const period = 2 * Math.PI / omega;
+      for(let i = 0; i < 1440; i++){
+        const t = (i / 1440) * period;
+        const v = Math.abs(field(srcs, k, omega, t, mode, lambda, x, y));
+        if(v > mx) mx = v;
+      }
+      xMaxErr = Math.max(xMaxErr, Math.abs(closed - mx));
+    }
+    check('resultantAmplitude (closed form) == sampled max_t|field| (<5e-3)', xMaxErr < 5e-3);
+  }
+
+  // (4) Double-slit fringe spacing ≈ λL/d on a far screen. Two in-phase point
+  //     sources distance d apart; detect antinode (bright-fringe) spacing on a
+  //     screen line at distance L ≫ d and compare to λL/d.
+  {
+    const A = 1.0, lambda = 20, k = kOf(lambda), omega = omegaOf(0.7), mode = 'none';
+    const d = 160;                             // slit separation
+    const sx = 200;                            // slits column
+    const cy = 600;                            // centred vertically
+    const s1 = { x: sx, y: cy - d / 2, A, phase: 0 };
+    const s2 = { x: sx, y: cy + d / 2, A, phase: 0 };
+    const srcs = [s1, s2];
+    const L = 6000;                            // screen distance (L ≫ d → paraxial)
+    const screenX = sx + L;
+    const predicted = lambda * L / d;          // = 750 px between fringes
+    // scan a near-axis window only (paraxial regime: sinθ ≈ tanθ), capturing the
+    // central m = 0,±1,±2 fringes where λL/d is the valid small-angle result.
+    const span = predicted * 2.4;
+    const ys = [], amp = [];
+    for(let y = cy - span; y <= cy + span; y += 1){
+      ys.push(y);
+      amp.push(resultantAmplitude(srcs, k, omega, mode, lambda, screenX, y));
+    }
+    const peaks = [];
+    for(let i = 2; i < amp.length - 2; i++){
+      if(amp[i] > 1.6 && amp[i] >= amp[i-1] && amp[i] >= amp[i+1] && amp[i] > amp[i-2] && amp[i] > amp[i+2]){
+        peaks.push(ys[i]);
+      }
+    }
+    const merged = [];
+    for(const p of peaks){ if(!merged.length || p - merged[merged.length-1] > 4) merged.push(p); }
+    let spacingOk = false, measured = 0;
+    if(merged.length >= 3){
+      let sum = 0;
+      for(let i = 1; i < merged.length; i++) sum += merged[i] - merged[i-1];
+      measured = sum / (merged.length - 1);
+      spacingOk = Math.abs(measured - predicted) / predicted < 0.05;   // within 5%
+    }
+    check('double-slit: far-field fringe spacing ≈ λL/d (within 5%)', spacingOk);
+  }
+
+  // (5) Determinism & skin-invariance: field depends only on (sources,k,ω,t,
+  //     falloff). The CORE takes NO skin argument → fingerprint is identical for
+  //     any number of "skins". Assert repeated calls + a frozen config match.
+  {
+    const lambda = 44, k = kOf(lambda), omega = omegaOf(0.5), mode = 'real';
+    const srcs = [
+      { x: 300, y: 300, A: 1, phase: 0 },
+      { x: 540, y: 320, A: 0.8, phase: Math.PI / 3 },
+      { x: 420, y: 500, A: 1.2, phase: 1.1 },
+    ];
+    const t = 2.345;
+    const f1 = fieldFingerprint(srcs, k, omega, t, mode, lambda, 900, 600);
+    const f2 = fieldFingerprint(srcs, k, omega, t, mode, lambda, 900, 600);
+    // a different config must differ (guards against a constant hash)
+    const f3 = fieldFingerprint(srcs, k, omega, t + 0.01, mode, lambda, 900, 600);
+    check('determinism / skin-invariance: identical inputs → identical fingerprint; t-shift differs', f1 === f2 && f1 !== f3);
+  }
+
+  return { pass, total, log };
+}
+
+// expose for Node extraction / external re-audit
+const __RippleCore = {
+  falloff, contribution, field, resultantAmplitude, fieldFingerprint,
+  kOf, omegaOf, runSelfTest
+};
+if(typeof window !== 'undefined'){ window.RippleCore = __RippleCore; }
+if(typeof module !== 'undefined' && module.exports){ module.exports = __RippleCore; }
+
+// ============================================================================
+// APPLICATION (DOM). Everything below derives from the pure CORE above. Skipped
+// entirely under Node (no document).
+// ============================================================================
+if(typeof document !== 'undefined'){ (function(){
+
+// ---------- skins (COSMETIC ONLY — never touch the field) -------------------
+// Each skin supplies: a background tank colour, and a diverging colour ramp
+// crest→zero→trough as three RGB triples. Plus glow/disc chrome colours.
+const SKINS = {
+  tank: {
+    cssTank: '#03161a',
+    crest: [232, 252, 251], mid: [10, 52, 60], trough: [2, 10, 16],
+    disc: '#eafcfb', discEdge: '#2f8f8a', ring: '#7cf0e8',
+    nodal: 'rgba(180,250,245,0.30)',
+  },
+  schlieren: {
+    cssTank: '#101113',
+    crest: [244, 244, 244], mid: [88, 88, 90], trough: [6, 6, 8],
+    disc: '#f4f4f4', discEdge: '#666', ring: '#ffffff',
+    nodal: 'rgba(255,255,255,0.32)',
+  },
+  blueprint: {
+    cssTank: '#060f1e',
+    crest: [150, 220, 255], mid: [22, 60, 110], trough: [4, 12, 30],
+    disc: '#cfe6ff', discEdge: '#2f6b97', ring: '#9fd0ff',
+    nodal: 'rgba(150,210,255,0.34)',
+  },
+};
+
+// ---------- app state -------------------------------------------------------
+const state = {
+  sources: [],
+  selected: 0,
+  lambda: 48,
+  freq: 0.6,
+  amp: 1.0,
+  falloff: 'real',
+  nodal: false,
+  playing: true,
+  skin: 'tank',
+  t: 0,
+};
+const reduceMotion = (typeof window.matchMedia === 'function')
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if(reduceMotion) state.playing = false;
+
+const cv = document.getElementById('tank');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0;                 // CSS-px logical tank size
+let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
+// Offscreen field buffer (low-res ImageData) that we upscale to the display
+// canvas — evaluating Σcos() per display pixel per frame is too heavy.
+let buf = document.createElement('canvas');
+let bctx = buf.getContext('2d');
+let bw = 0, bh = 0, img = null, idata = null;
+const TARGET_BUF_W = 300;        // buffer width in px; height scales to aspect
+
+function resize(){
+  const stage = document.getElementById('stage');
+  W = Math.max(200, stage.clientWidth);
+  H = Math.max(200, stage.clientHeight);
+  dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  // size the field buffer to a fixed budget, preserving aspect
+  bw = TARGET_BUF_W;
+  bh = Math.max(40, Math.round(TARGET_BUF_W * H / W));
+  buf.width = bw; buf.height = bh;
+  img = bctx.createImageData(bw, bh);
+  idata = img.data;
+}
+
+// map a source's logical position to buffer coords and vice versa
+function srcToBuf(s){ return { bx: s.x / W * bw, by: s.y / H * bh }; }
+
+// ---------- the field render (uses the CORE field() per buffer pixel) -------
+// Render the interference field into the low-res buffer, then drawImage-upscale.
+// Colour: diverging ramp crest(+) → mid(0) → trough(−), normalised by Σ|Ai|.
+function renderField(targetCtx, targetW, targetH){
+  const sk = SKINS[state.skin];
+  const k = kOf(state.lambda), omega = omegaOf(state.freq);
+  const mode = state.falloff;
+  const lambda = state.lambda;
+  const srcs = state.sources;
+  // normalisation: total possible amplitude (so the ramp uses the full range)
+  let totalA = 0; for(const s of srcs) totalA += s.A;
+  const norm = totalA > 0 ? totalA : 1;
+  const cr = sk.crest, md = sk.mid, tr = sk.trough;
+  // precompute buffer-space source coords for speed
+  const bxs = new Float64Array(srcs.length), bys = new Float64Array(srcs.length);
+  const sx = W / bw, sy = H / bh;     // buffer→logical scale
+  for(let i = 0; i < srcs.length; i++){ bxs[i] = srcs[i].x; bys[i] = srcs[i].y; }
+  const t = state.t;
+  let p = 0;
+  for(let by = 0; by < bh; by++){
+    const ly = (by + 0.5) * sy;
+    for(let bx = 0; bx < bw; bx++){
+      const lx = (bx + 0.5) * sx;
+      // field via the SAME CORE function (single source of truth)
+      let v = 0;
+      for(let i = 0; i < srcs.length; i++){
+        const s = srcs[i];
+        const r = Math.hypot(lx - s.x, ly - s.y);
+        const fall = mode === 'none' ? 1 : 1 / Math.sqrt(1 + r / lambda);
+        v += s.A * fall * Math.cos(k * r - omega * t + s.phase);
+      }
+      // normalise to [-1,1] then to a diverging colour
+      let n = v / norm;
+      if(n > 1) n = 1; else if(n < -1) n = -1;
+      let R, G, B;
+      if(n >= 0){
+        R = md[0] + (cr[0] - md[0]) * n;
+        G = md[1] + (cr[1] - md[1]) * n;
+        B = md[2] + (cr[2] - md[2]) * n;
+      } else {
+        const a = -n;
+        R = md[0] + (tr[0] - md[0]) * a;
+        G = md[1] + (tr[1] - md[1]) * a;
+        B = md[2] + (tr[2] - md[2]) * a;
+      }
+      idata[p++] = R; idata[p++] = G; idata[p++] = B; idata[p++] = 255;
+    }
+  }
+  bctx.putImageData(img, 0, 0);
+  // upscale smoothly to the display surface
+  targetCtx.imageSmoothingEnabled = true;
+  targetCtx.imageSmoothingQuality = 'high';
+  targetCtx.drawImage(buf, 0, 0, bw, bh, 0, 0, targetW, targetH);
+}
+
+// ---------- nodal-lines overlay --------------------------------------------
+// Draw the frozen dark hyperbolae where the time-averaged amplitude ≈ 0. We
+// render the resultant-amplitude envelope into the buffer and stroke a faint
+// dark line where it is near zero. (Reuses the CORE resultantAmplitude.)
+function renderNodal(targetCtx, targetW, targetH){
+  if(!state.nodal) return;
+  const sk = SKINS[state.skin];
+  const k = kOf(state.lambda), omega = omegaOf(state.freq || 0.5);
+  const mode = state.falloff, lambda = state.lambda, srcs = state.sources;
+  if(srcs.length < 2) return;
+  let totalA = 0; for(const s of srcs) totalA += s.A;
+  const norm = totalA > 0 ? totalA : 1;
+  const sx = W / bw, sy = H / bh;
+  // overlay onto a separate ImageData (transparent except near-zero envelope)
+  const ov = bctx.createImageData(bw, bh);
+  const od = ov.data;
+  let p = 0;
+  for(let by = 0; by < bh; by++){
+    const ly = (by + 0.5) * sy;
+    for(let bx = 0; bx < bw; bx++){
+      const lx = (bx + 0.5) * sx;
+      const R = resultantAmplitudeFast(srcs, k, mode, lambda, lx, ly) / norm;
+      // near-zero envelope → a node; draw a dark stroke (alpha falls off fast)
+      const closeness = Math.max(0, 1 - R * 9);   // R≈0 → 1, R>~0.11 → 0
+      const alpha = Math.round(closeness * closeness * 200);
+      od[p++] = 0; od[p++] = 0; od[p++] = 0; od[p++] = alpha;
+    }
+  }
+  bctx.putImageData(ov, 0, 0);
+  targetCtx.imageSmoothingEnabled = true;
+  targetCtx.drawImage(buf, 0, 0, bw, bh, 0, 0, targetW, targetH);
+}
+// A fast envelope for the overlay: equal-source two-point uses the closed form;
+// otherwise a coarse time sample. (Cosmetic — exactness is in the CORE tests.)
+function resultantAmplitudeFast(srcs, k, mode, lambda, x, y){
+  if(srcs.length === 2 && Math.abs(srcs[0].A - srcs[1].A) < 1e-9){
+    const A = srcs[0].A;
+    const r1 = Math.hypot(x - srcs[0].x, y - srcs[0].y);
+    const r2 = Math.hypot(x - srcs[1].x, y - srcs[1].y);
+    const dphi = srcs[0].phase - srcs[1].phase;
+    return 2 * A * Math.abs(Math.cos((k * (r1 - r2) + dphi) / 2));
+  }
+  let mx = 0;
+  for(let i = 0; i < 24; i++){
+    const ph = (i / 24) * Math.PI * 2;
+    let v = 0;
+    for(const s of srcs){
+      const r = Math.hypot(x - s.x, y - s.y);
+      const fall = mode === 'none' ? 1 : 1 / Math.sqrt(1 + r / lambda);
+      v += s.A * fall * Math.cos(k * r - ph + s.phase);
+    }
+    if(Math.abs(v) > mx) mx = Math.abs(v);
+  }
+  return mx;
+}
+
+// ---------- source discs (glowing, draggable, selected one ringed) ----------
+function drawSources(targetCtx, scale){
+  const sk = SKINS[state.skin];
+  for(let i = 0; i < state.sources.length; i++){
+    const s = state.sources[i];
+    const x = s.x * scale, y = s.y * scale;
+    const sel = (i === state.selected);
+    // soft halo
+    const g = targetCtx.createRadialGradient(x, y, 0, x, y, 20 * scale);
+    g.addColorStop(0, 'rgba(255,255,255,0.55)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    targetCtx.fillStyle = g;
+    targetCtx.beginPath(); targetCtx.arc(x, y, 20 * scale, 0, Math.PI * 2); targetCtx.fill();
+    // disc
+    targetCtx.fillStyle = sk.disc;
+    targetCtx.beginPath(); targetCtx.arc(x, y, 6.5 * scale, 0, Math.PI * 2); targetCtx.fill();
+    targetCtx.lineWidth = 1.6 * scale; targetCtx.strokeStyle = sk.discEdge;
+    targetCtx.beginPath(); targetCtx.arc(x, y, 6.5 * scale, 0, Math.PI * 2); targetCtx.stroke();
+    // antiphase marker: a small dark dot in the centre when phase ≈ π
+    const anti = Math.abs(((s.phase % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) - Math.PI) < 0.3;
+    if(anti){
+      targetCtx.fillStyle = 'rgba(0,0,0,0.55)';
+      targetCtx.beginPath(); targetCtx.arc(x, y, 2.4 * scale, 0, Math.PI * 2); targetCtx.fill();
+    }
+    // selection ring
+    if(sel){
+      targetCtx.lineWidth = 2 * scale; targetCtx.strokeStyle = sk.ring;
+      targetCtx.beginPath(); targetCtx.arc(x, y, 11 * scale, 0, Math.PI * 2); targetCtx.stroke();
+    }
+  }
+}
+
+// ---------- compose a frame -------------------------------------------------
+function draw(){
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(dpr, dpr);
+  renderField(ctx, W, H);
+  renderNodal(ctx, W, H);
+  drawSources(ctx, 1);
+}
+
+// ---------- animation loop (reduced-motion safe) ----------------------------
+let last = 0, rafId = null;
+function frame(ts){
+  rafId = requestAnimationFrame(frame);
+  if(state.playing){
+    const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0;
+    state.t += dt;
+  }
+  last = ts;
+  draw();
+}
+function startLoop(){ if(rafId == null){ last = 0; rafId = requestAnimationFrame(frame); } }
+
+// ---------- pointer interaction (drag / add / remove) -----------------------
+let drag = null;     // {idx, offx, offy, moved}
+function evToTank(ev){ const r = cv.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; }
+function pickSource(px, py){
+  for(let i = state.sources.length - 1; i >= 0; i--){
+    const s = state.sources[i];
+    if(Math.hypot(px - s.x, py - s.y) < 14) return i;
+  }
+  return -1;
+}
+function clamp(v, a, b){ return v < a ? a : (v > b ? b : v); }
+
+cv.addEventListener('pointerdown', ev => {
+  if(ev.button === 2) return;     // right-click handled on contextmenu
+  const { x, y } = evToTank(ev);
+  const idx = pickSource(x, y);
+  cv.setPointerCapture && cv.setPointerCapture(ev.pointerId);
+  if(idx >= 0){
+    state.selected = idx;
+    drag = { idx, offx: x - state.sources[idx].x, offy: y - state.sources[idx].y, moved: false };
+    syncSelInfo();
+  } else {
+    // add a source in empty water, inheriting the current amplitude
+    state.sources.push({ x: clamp(x, 4, W - 4), y: clamp(y, 4, H - 4), A: state.amp, phase: 0 });
+    state.selected = state.sources.length - 1;
+    drag = { idx: state.selected, offx: 0, offy: 0, moved: false };
+    syncSourceCount(); syncSelInfo();
+  }
+});
+cv.addEventListener('pointermove', ev => {
+  const { x, y } = evToTank(ev);
+  if(drag){
+    const s = state.sources[drag.idx];
+    s.x = clamp(x - drag.offx, 4, W - 4);
+    s.y = clamp(y - drag.offy, 4, H - 4);
+    drag.moved = true;
+    return;
+  }
+  const over = pickSource(x, y) >= 0;
+  cv.style.cursor = over ? 'grab' : 'crosshair';
+});
+window.addEventListener('pointerup', () => { if(drag) drag = null; });
+cv.addEventListener('contextmenu', ev => {
+  ev.preventDefault();
+  const { x, y } = evToTank(ev);
+  const idx = pickSource(x, y);
+  if(idx >= 0) removeSourceAt(idx);
+});
+
+window.addEventListener('keydown', ev => {
+  const tag = (document.activeElement && document.activeElement.tagName) || '';
+  if(tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  if((ev.key === 'Delete' || ev.key === 'Backspace') && state.sources.length > 0){
+    ev.preventDefault(); removeSourceAt(state.selected);
+  }
+});
+
+function removeSourceAt(idx){
+  if(idx < 0 || idx >= state.sources.length) return;
+  state.sources.splice(idx, 1);
+  if(state.selected >= state.sources.length) state.selected = state.sources.length - 1;
+  syncSourceCount(); syncSelInfo();
+}
+
+// ---------- control wiring --------------------------------------------------
+function bindSlider(id, valId, key, fmt){
+  const sl = document.getElementById(id), v = document.getElementById(valId);
+  const setFill = () => sl.style.setProperty('--fill', ((sl.value - sl.min) / (sl.max - sl.min) * 100) + '%');
+  sl.addEventListener('input', () => {
+    state[key] = parseFloat(sl.value);
+    v.textContent = fmt(state[key]);
+    setFill();
+  });
+  setFill();
+}
+bindSlider('lamSlider', 'lamVal', 'lambda', v => Math.round(v));
+bindSlider('freqSlider', 'freqVal', 'freq', v => v.toFixed(2));
+bindSlider('ampSlider', 'ampVal', 'amp', v => v.toFixed(2));
+
+document.getElementById('falloffSeg').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if(!b) return;
+  state.falloff = b.dataset.falloff;
+  for(const x of ev.currentTarget.querySelectorAll('button')) x.classList.toggle('active', x === b);
+});
+document.getElementById('nodalChk').addEventListener('change', ev => { state.nodal = ev.target.checked; });
+
+const playBtn = document.getElementById('playBtn');
+function syncPlay(){ playBtn.textContent = state.playing ? '⏸ Pause' : '▶ Play'; }
+playBtn.addEventListener('click', () => { state.playing = !state.playing; syncPlay(); });
+
+document.getElementById('flipBtn').addEventListener('click', () => {
+  const s = state.sources[state.selected]; if(!s) return;
+  s.phase = (s.phase + Math.PI) % (Math.PI * 2);
+});
+document.getElementById('removeBtn').addEventListener('click', () => removeSourceAt(state.selected));
+
+function syncSourceCount(){
+  document.getElementById('srcCount').textContent = state.sources.length;
+  const noSrc = state.sources.length === 0;
+  document.getElementById('removeBtn').disabled = noSrc;
+  document.getElementById('flipBtn').disabled = noSrc;
+}
+function syncSelInfo(){
+  const name = document.getElementById('selName');
+  if(state.sources.length === 0 || state.selected < 0){ name.textContent = 'none'; return; }
+  name.textContent = 'source ' + (state.selected + 1);
+}
+
+// ---------- skins -----------------------------------------------------------
+document.getElementById('skinSeg').addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-skin]'); if(!b) return;
+  state.skin = b.dataset.skin;
+  for(const x of ev.currentTarget.querySelectorAll('button')) x.classList.toggle('active', x === b);
+  applySkinVars();         // cosmetic chrome only — field is skin-blind
+});
+function applySkinVars(){
+  document.documentElement.style.setProperty('--tank', SKINS[state.skin].cssTank);
+}
+
+// ---------- presets ---------------------------------------------------------
+const PRESETS = {
+  'Two-source': (W, H) => ({
+    lambda: 52, sources: [
+      { x: W * 0.40, y: H * 0.5, A: 1, phase: 0 },
+      { x: W * 0.60, y: H * 0.5, A: 1, phase: 0 },
+    ]
+  }),
+  'Double-slit': (W, H) => ({
+    lambda: 30, sources: [
+      { x: W * 0.26, y: H * 0.5 - 32, A: 1, phase: 0 },
+      { x: W * 0.26, y: H * 0.5 + 32, A: 1, phase: 0 },
+    ]
+  }),
+  'Line array': (W, H) => {
+    const n = 5, x = W * 0.30, y0 = H * 0.30, y1 = H * 0.70;
+    const sources = [];
+    for(let i = 0; i < n; i++){
+      const f = i / (n - 1);
+      sources.push({ x, y: y0 + (y1 - y0) * f, A: 1, phase: 0 });
+    }
+    return { lambda: 46, sources };
+  },
+  'Single drop': (W, H) => ({
+    lambda: 44, sources: [{ x: W * 0.5, y: H * 0.5, A: 1, phase: 0 }]
+  }),
+  'Clear': () => ({ lambda: 48, sources: [] }),
+};
+function loadPreset(name){
+  const fn = PRESETS[name]; if(!fn) return;
+  const cfg = fn(W, H);
+  state.sources = cfg.sources.map(s => ({ ...s }));
+  if(cfg.lambda){ state.lambda = cfg.lambda; syncLambdaSlider(); }
+  state.amp = 1.0; syncAmpSlider();
+  state.selected = state.sources.length ? 0 : -1;
+  syncSourceCount(); syncSelInfo();
+}
+function syncLambdaSlider(){
+  const sl = document.getElementById('lamSlider');
+  sl.value = state.lambda; document.getElementById('lamVal').textContent = Math.round(state.lambda);
+  sl.style.setProperty('--fill', ((sl.value - sl.min) / (sl.max - sl.min) * 100) + '%');
+}
+function syncAmpSlider(){
+  const sl = document.getElementById('ampSlider');
+  sl.value = state.amp; document.getElementById('ampVal').textContent = state.amp.toFixed(2);
+  sl.style.setProperty('--fill', ((sl.value - sl.min) / (sl.max - sl.min) * 100) + '%');
+}
+function buildPresetButtons(){
+  const host = document.getElementById('presets');
+  for(const name of Object.keys(PRESETS)){
+    const b = document.createElement('button'); b.className = 'chip'; b.textContent = name;
+    b.addEventListener('click', () => loadPreset(name));
+    host.appendChild(b);
+  }
+}
+
+// ---------- PNG export (canvas-native, 2×) ----------------------------------
+function exportPNG(){
+  const scale = 2;
+  const off = document.createElement('canvas');
+  off.width = Math.round(W * scale); off.height = Math.round(H * scale);
+  const octx = off.getContext('2d');
+  // render the field directly to the export canvas (full target size), then
+  // the nodal overlay and the source discs scaled to match.
+  renderField(octx, off.width, off.height);
+  // nodal overlay at export size
+  if(state.nodal){ renderNodal(octx, off.width, off.height); }
+  drawSources(octx, scale);
+  const finish = (url) => {
+    const a = document.createElement('a'); a.href = url; a.download = 'ripple-' + state.skin + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+  if(off.toBlob){ off.toBlob(b => { const u = URL.createObjectURL(b); finish(u); setTimeout(() => URL.revokeObjectURL(u), 4000); }, 'image/png'); }
+  else finish(off.toDataURL('image/png'));
+}
+document.getElementById('pngBtn').addEventListener('click', exportPNG);
+
+window.addEventListener('resize', () => { resize(); });
+
+// ---------- HUD hint on first interaction ----------------------------------
+const hud = document.getElementById('hud');
+function flashHud(msg, ms){
+  hud.innerHTML = msg; hud.classList.add('show');
+  clearTimeout(flashHud._t); flashHud._t = setTimeout(() => hud.classList.remove('show'), ms || 2600);
+}
+
+// ============================================================================
+// INIT
+// ============================================================================
+function init(){
+  try{ localStorage.setItem('ws:seen:ripple', String(Date.now())); }catch(_){}
+
+  const res = runSelfTest();
+  const chip = document.getElementById('selftest');
+  if(res.pass === res.total){
+    chip.className = 'selftest ok';
+    chip.textContent = 'ripple verified — ' + res.pass + '/' + res.total + ' ✓';
+  } else {
+    chip.className = 'selftest bad';
+    chip.textContent = 'ripple FAILED — ' + res.pass + '/' + res.total;
+  }
+  console.log('Ripple self-test: ' + res.pass + '/' + res.total + ' passed.');
+
+  buildPresetButtons();
+  applySkinVars();
+  syncPlay();
+  resize();
+  loadPreset('Two-source');     // sets sources + λ + sliders
+  syncLambdaSlider(); syncAmpSlider();
+  syncSourceCount(); syncSelInfo();
+  if(reduceMotion) flashHud('Reduced motion: animation paused — press <b>▶ Play</b> to watch the fringes move.', 5200);
+  else flashHud('Drag a source · click empty water to add · right-click to remove', 3600);
+  startLoop();
+}
+init();
+
+})(); }
+</script>
+</body>
+</html>
