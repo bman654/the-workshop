@@ -22,8 +22,21 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 
 > **▶ CURRENT STATE / RESUME POINTER (2026-06-11, end of a long `/fun` session — PAUSED CLEANLY).**
 > Working tree clean, **all commits pushed & live** (front door, Scriptorium, Gyre, Gamelan, Tessera all 200;
-> the hidden Gilded Leaf pushed too). Nothing in flight; no heartbeat cron running. **This session shipped 5
-> distinct pieces** across 5 different growth axes (each browser-verified, each its own commit + docs):
+> the hidden Gilded Leaf pushed too). Nothing in flight; no heartbeat cron running.
+>
+> **⭐ Post-feedback fix (Brandon, 2026-06-11): the Undercroft was TOO well hidden — the 0.28-opacity footer rune
+> with no text was unfindable even when you knew it existed.** Reworked front-door discovery (`index.html`, commit
+> `f8ecf1c`): when eligible (same trigger: ≥4 `ws:seen:*` OR earned), a full-width **Undercroft tile grows in at
+> the top** (before Strange Garden) with a **procedural Canvas spiral stair that's BROKEN** (3 treads, then fallen
+> away) + copy explaining a found rune restores the way; the footer **rune now PULSES** (0.4↔1.0 + glow, findable).
+> Clicking the rune sets **`ws:seen:undercroft-rune`**, plays a broken→whole **repair animation**, turns the tile
+> into the working "Descend ▸" entrance, and scrolls to top. New flags: `ws:seen:undercroft-opening` (grow-in plays
+> once) + `ws:seen:undercroft-rune`; a prior visitor (`ws:seen:undercroft`) skips straight to the whole/functional
+> tile; reduced-motion + storage-off handled. Verified all states in-browser. **Lesson:** earned/hidden features
+> need a *legible on-ramp* — too-subtle = the work goes undiscovered. *(Art is stylized/vector, not photoreal — fine
+> to refine the stair illustration further if desired.)*
+>
+> **This session shipped 5 distinct pieces** across 5 different growth axes (each browser-verified, each its own commit + docs):
 > **Scriptorium** 🖋️ (new medium — generative writing systems — as **The Oracle's companion / 5th wing**),
 > **Gyre** 🕹️ (Arcade #13, tube shooter), **Gamelan** 🎵 (Sound Garden #8 → the clean **2×4**, verified SILENTLY
 > via the audio-lens), **The Gilded Leaf** 📜 (Undercroft secret #6 — a hidden verse×script cross-pollination),
