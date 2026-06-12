@@ -65,17 +65,47 @@
   .card:hover .companion{ opacity:.95; border-color:color-mix(in srgb,var(--c) 32%,transparent); }
   footer{ margin-top:66px; text-align:center; color:var(--muted); opacity:.55;
     font:12px/1.7 ui-monospace,Menlo,monospace; letter-spacing:.04em; }
-  /* the hidden mark — fades into the footer once you've wandered enough; the way
-     down to the Undercroft. Absent (never in the DOM) until earned. See /UNLOCK.md */
-  .rune{ text-decoration:none; color:var(--muted); opacity:0; pointer-events:none;
-    transition:opacity 1.9s ease, color .3s; }
-  .rune::before{ content:"·"; margin:0 9px; opacity:.5; }
-  .rune.show{ opacity:.28; pointer-events:auto; }
-  .rune:hover{ opacity:.95; color:#dfe4ee; text-shadow:0 0 14px rgba(150,200,255,.35); }
-  .rune .gl{ font-size:13px; }
+  /* the hidden mark — once you've wandered enough it appears in the footer, no longer
+     a near-invisible ghost but a slow-pulsing, glowing rune that draws the eye. It is the
+     thing the Undercroft tile tells you to look for. Absent until earned. See /UNLOCK.md */
+  .rune{ text-decoration:none; color:#c9a24a; opacity:0; pointer-events:none;
+    transition:opacity .9s ease, color .3s, text-shadow .6s; }
+  .rune::before{ content:"·"; margin:0 9px; opacity:.5; color:var(--muted); }
+  .rune.show{ pointer-events:auto; animation:runepulse 2.4s ease-in-out infinite; }
+  @keyframes runepulse{
+    0%,100%{ opacity:.4; text-shadow:0 0 6px rgba(201,162,74,.25); }
+    50%{ opacity:1; text-shadow:0 0 16px rgba(201,162,74,.6), 0 0 30px rgba(201,162,74,.25); } }
+  .rune:hover{ opacity:1 !important; color:#f0d489; text-shadow:0 0 18px rgba(201,162,74,.7); }
+  /* found & repaired: a quiet, steady confirmation mark — no pulse */
+  .rune.found{ animation:none; opacity:.7; }
+  .rune .gl{ font-size:15px; }
   .rune .lbl{ font-size:11px; letter-spacing:.18em; text-transform:uppercase;
     opacity:0; transition:opacity .4s; }
-  .rune:hover .lbl{ opacity:.85; }
+  .rune:hover .lbl{ opacity:.9; }
+  @media(prefers-reduced-motion:reduce){
+    .rune.show{ animation:none; opacity:.8; text-shadow:0 0 10px rgba(201,162,74,.4); }
+  }
+  /* the Undercroft tile — a full-width banner like .card.feature, but its "thumb" is a
+     procedural canvas (a spiral stair into the dark) rather than an image. In its broken
+     state it is NOT navigable (no way down) and is a plain <div>; once the rune repairs the
+     stair it becomes a working <a> link. It carries .card.feature for shared visual styling.
+     The accent is candlelit stone (amber). */
+  .undercroft-tile{ --c:#c9a24a; opacity:1; transform:none; animation:none; }
+  .undercroft-tile .ucanvas{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+  /* the broken tile gets no hover lift (there is no way down to invite you) */
+  .undercroft-tile.broken{ cursor:default; }
+  .undercroft-tile.broken:hover{ transform:none;
+    border-color:rgba(255,255,255,.08); box-shadow:none; }
+  .undercroft-tile .lost{ color:var(--muted); opacity:.85; letter-spacing:.02em;
+    font:italic 12px/1 Georgia,serif; text-transform:none; }
+  /* grow-from-nothing reveal (first appearance only) */
+  .undercroft-tile.grow{ animation:ucgrow .9s cubic-bezier(.2,.7,.2,1) forwards;
+    overflow:hidden; }
+  @keyframes ucgrow{ from{ opacity:0; max-height:0; }
+    to{ opacity:1; max-height:560px; } }
+  @media(prefers-reduced-motion:reduce){
+    .undercroft-tile.grow{ animation:none; opacity:1; max-height:none; }
+  }
 </style>
 </head>
 <body>
@@ -146,12 +176,19 @@
     grid.appendChild(a);
   });
 
-  /* The hidden way down. Once you've wandered enough distinct pieces — or already
-     earned something below — a faint mark fades into the footer: the stair to the
-     Undercroft. It is added to the DOM only when earned (no spoiler for a first
-     visit), and degrades to "absent" if storage is unavailable. */
+  /* The hidden way down — now a small, legible quest. Once you've wandered enough distinct
+     pieces (or already earned something below), the front door grows an Undercroft tile at
+     the top of the grid: it tells you a path lies beneath, lost with time, and that a found
+     rune might restore the way. A pulsing rune appears in the footer; clicking it "repairs"
+     the broken spiral stair into a whole flight and turns the tile into a working entrance.
+     All of this is added only when earned (no spoiler for a first visit), and degrades to
+     "nothing shown" if storage is unavailable. See /UNLOCK.md. */
   (function revealUndercroft(){
-    let distinct = 0, alreadyEarned = false;
+    const UC = 'undercroft/index.html';
+    const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+    // ---- read storage (eligibility unchanged from the old rune) ----
+    let distinct = 0, alreadyEarned = false, runeFound = false, openingSeen = false;
     try{
       const seen = new Set();
       for (let i=0;i<localStorage.length;i++){
@@ -162,18 +199,309 @@
       alreadyEarned =
         (!!localStorage.getItem('ws:seen:game-of-life') && !!localStorage.getItem('ws:seen:lattice'))
         || !!localStorage.getItem('ws:flag:eleven');
-    }catch(e){ return; }                 // storage off → no mark (room still works if found directly)
+      // a returning visitor who has already reached the Undercroft (by either mechanism) is "found"
+      runeFound = !!localStorage.getItem('ws:seen:undercroft-rune')
+        || !!localStorage.getItem('ws:seen:undercroft');
+      openingSeen = !!localStorage.getItem('ws:seen:undercroft-opening');
+    }catch(e){ return; }   // storage off → show nothing (room still reachable by direct URL)
     if (distinct < 4 && !alreadyEarned) return;
+    const set = (k)=>{ try{ localStorage.setItem(k, String(Date.now())); }catch(e){} };
+
+    /* ============================================================
+       The spiral-stair art. A descending stone staircase that spirals
+       inward + down toward a near-black abyss, lit with a warm candle
+       accent. We draw N treads from a wide lit top step, each rotated
+       by a fixed angle and scaled+darkened as it recedes toward the
+       focal point. WHOLE = full flight + a warm glow rising from the
+       depths; BROKEN = only 3 intact treads, a fractured 4th, a couple
+       of falling fragments, then nothing but the abyss.
+       `progress` (0..1) drives the repair animation: at 0 only the
+       broken stair shows; at 1 the whole flight is materialised. */
+    function makeStair(canvas){
+      const ctx = canvas.getContext('2d');
+      let W=0, H=0, raf=0, flick=0;
+      const TOTAL = 22;        // treads in a whole flight (~28° of turn each → reads like real stairs)
+      const INTACT = 3;        // treads that survive in the broken stair
+
+      function resize(){
+        const dpr = Math.min(window.devicePixelRatio||1, 2);
+        const r = canvas.getBoundingClientRect();
+        W = Math.max(1, r.width); H = Math.max(1, r.height);
+        canvas.width = Math.round(W*dpr); canvas.height = Math.round(H*dpr);
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+      }
+
+      /* We draw the stair as a sequence of stone treads marching along a spiral PATH that
+         tightens inward + downward toward a focal point (the abyss). Each tread is a small
+         rectangular slab — a step you'd walk on — laid tangent to the spiral, with a lit
+         front lip and a shadowed riser dropping to the next. Treads shrink + darken as the
+         spiral winds into the depths. Drawn deepest→nearest so higher steps overlap lower
+         ones, the flight reads as a staircase curving down a dark well — not a pinwheel. */
+      const VTILT = 0.52;      // vertical foreshortening of the spiral (viewed from above-ish)
+
+      // centre of tread #s along the spiral, in screen px. s grows 0→1 down the flight.
+      // (cx,cy)=spiral centre, R=spiral radius in px, (fx,fy)=focal point of the abyss.
+      function pathPoint(cx, cy, R, fx, fy, s){
+        const turns = 1.7;                       // total revolutions from top to abyss
+        const ang = -2.35 + s*turns*2*Math.PI;   // winds clockwise as it descends
+        const rad = R*(1 - 0.82*Math.pow(s, 0.9));// radius shrinks toward the focal point
+        const drop = R*0.30*s;                   // every step descends a little from the very first
+        const px = cx + Math.cos(ang)*rad;
+        const py = cy + Math.sin(ang)*rad*VTILT + drop;
+        const pull = Math.pow(s, 1.35);          // and sinks toward the abyss as it deepens
+        return { x: px + (fx-px)*pull, y: py + (fy-py)*pull, ang: ang };
+      }
+
+      // one stone tread: a slab laid across the spiral, lit warm at its outward front edge
+      function tread(cx, cy, R, fx, fy, s, sz, light, opts){
+        opts = opts || {};
+        const P = pathPoint(cx, cy, R, fx, fy, s);
+        const tilt = opts.tilt || 0;
+        // local axes: "out" points radially outward (the front of the step), "side" is the tread width
+        const a = P.ang + tilt;
+        const ox = Math.cos(a), oy = Math.sin(a)*VTILT;            // outward (front) direction
+        const sx = -Math.sin(a), sy = Math.cos(a)*VTILT;          // along-tread (width) direction
+        const halfW = sz*0.60, depth = sz*0.92, drop = sz*0.46;   // tread width / depth / riser height
+        // four corners: inner-back, outer-back? — laid as (front-out) trapezoid
+        const fxo = P.x + ox*depth, fyo = P.y + oy*depth;         // front (outer) centre
+        const bxo = P.x - ox*depth*0.5, byo = P.y - oy*depth*0.5; // back (inner) centre
+        const fL = [fxo - sx*halfW, fyo - sy*halfW], fR = [fxo + sx*halfW, fyo + sy*halfW];
+        const bL = [bxo - sx*halfW*0.7, byo - sy*halfW*0.7], bR = [bxo + sx*halfW*0.7, byo + sy*halfW*0.7];
+        // riser (shadowed vertical face under the front lip)
+        ctx.beginPath();
+        ctx.moveTo(fL[0],fL[1]); ctx.lineTo(fR[0],fR[1]);
+        ctx.lineTo(fR[0],fR[1]+drop); ctx.lineTo(fL[0],fL[1]+drop); ctx.closePath();
+        ctx.fillStyle = 'rgba(5,6,10,'+(0.6+0.34*light)+')'; ctx.fill();
+        // tread top — cool stone at the back deepening to a warm candlelit front lip
+        ctx.beginPath();
+        ctx.moveTo(bL[0],bL[1]); ctx.lineTo(fL[0],fL[1]);
+        ctx.lineTo(fR[0],fR[1]); ctx.lineTo(bR[0],bR[1]); ctx.closePath();
+        const g = ctx.createLinearGradient(bxo,byo, fxo,fyo);
+        const v = Math.round(28 + 122*light);
+        g.addColorStop(0, 'rgb('+Math.round(v*0.42)+','+Math.round(v*0.44)+','+Math.round(v*0.54)+')');
+        g.addColorStop(0.65,'rgb('+Math.round(v*0.8)+','+Math.round(v*0.74)+','+Math.round(v*0.58)+')');
+        g.addColorStop(1, 'rgb('+Math.round(v*1.3)+','+Math.round(v*1.02)+','+Math.round(v*0.6)+')');
+        ctx.fillStyle = g; ctx.fill();
+        // candlelit lip along the front edge
+        ctx.beginPath(); ctx.moveTo(fL[0],fL[1]); ctx.lineTo(fR[0],fR[1]);
+        ctx.lineWidth = Math.max(1, sz*0.05);
+        ctx.strokeStyle = 'rgba(206,166,80,'+(0.14+0.7*light)+')'; ctx.stroke();
+      }
+
+      function draw(progress){
+        ctx.clearRect(0,0,W,H);
+        // the well: a deep radial gradient, darkest at the focal point (the depths)
+        const cx = W*0.52, top = H*0.30;        // newel axis x, and the top step's y
+        const fx = cx, fy = H*0.66;             // focal point of the abyss (where the stair vanishes)
+        const bg = ctx.createRadialGradient(fx,fy, 4, fx,fy, Math.max(W,H)*0.8);
+        bg.addColorStop(0, '#04050a'); bg.addColorStop(0.55, '#0a0c14'); bg.addColorStop(1, '#10131c');
+        ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+
+        // warm glow rising from the abyss — grows with repair progress (soft flicker)
+        const glow = progress * (0.82 + 0.18*Math.sin(flick));
+        if (glow > 0.01){
+          const gg = ctx.createRadialGradient(fx,fy, 2, fx,fy, Math.min(W,H)*0.5);
+          gg.addColorStop(0, 'rgba(214,168,86,'+(0.5*glow)+')');
+          gg.addColorStop(0.45, 'rgba(176,116,48,'+(0.18*glow)+')');
+          gg.addColorStop(1, 'rgba(201,162,74,0)');
+          ctx.fillStyle = gg; ctx.fillRect(0,0,W,H);
+        }
+
+        // spiral geometry: centre near the well, radius R; treads anchored around it.
+        const R = Math.min(W*0.27, H*0.62);
+        const ox0 = cx, oy0 = top + R*0.25;         // spiral centre (screen px)
+        const sizeAt = (s)=> R * (0.34 - 0.25*s);   // tread size shrinks with depth
+        const lightAt = (s)=> Math.max(0.035, 1 - 0.95*s);
+
+        if (isWhole){
+          // a full flight: draw deepest→topmost so nearer (higher) treads occlude lower ones
+          const shown = INTACT + Math.round((TOTAL-INTACT) * Math.max(0, Math.min(1, progress)));
+          for (let i = TOTAL-1; i >= 0; i--){
+            if (i >= shown) continue;
+            const s = i/(TOTAL-1);
+            ctx.save();
+            if (i >= INTACT && i === shown-1 && progress < 1)
+              ctx.globalAlpha = 0.4 + 0.6*progress;     // freshest step fades into place
+            tread(ox0, oy0, R, fx, fy, s, sizeAt(s), lightAt(s));
+            ctx.restore();
+          }
+        } else {
+          // BROKEN: only a short stub survives. We render the first INTACT treads of the SAME
+          // flight (so they sit exactly where the whole stair's top begins — the repair lines
+          // up), then a fractured, tilted, half-fallen 4th tread, then nothing but the void.
+          for (let i = INTACT-1; i >= 0; i--){
+            const s = i/(TOTAL-1);
+            tread(ox0, oy0, R, fx, fy, s, sizeAt(s), lightAt(s));
+          }
+          // the broken 4th tread: where the next step should be, fractured and tipping into the dark
+          const sb = INTACT/(TOTAL-1);
+          const Pb = pathPoint(ox0, oy0, R, fx, fy, sb);
+          ctx.save();
+          ctx.globalAlpha = 0.78;
+          tread(ox0, oy0, R, fx, fy, sb, sizeAt(sb)*0.82, lightAt(sb)*0.5, {tilt:0.55});
+          ctx.restore();
+          // a jagged broken edge along where the flight is sheared away
+          ctx.save();
+          ctx.translate(Pb.x, Pb.y);
+          ctx.beginPath();
+          const jw = sizeAt(sb)*1.1;
+          ctx.moveTo(-jw, 0);
+          for (let k=0;k<=6;k++){ const x=-jw + (2*jw)*(k/6); ctx.lineTo(x, (k%2?1:-1)*sizeAt(sb)*0.16); }
+          ctx.strokeStyle='rgba(150,120,60,0.4)'; ctx.lineWidth=Math.max(1,R*0.012); ctx.stroke();
+          ctx.restore();
+        }
+
+        // a deepening shadow pooled at the focal point, so the stair plainly vanishes into dark
+        const wg = ctx.createRadialGradient(fx,fy, 2, fx,fy, R*0.7);
+        wg.addColorStop(0,'rgba(3,4,7,0.85)'); wg.addColorStop(1,'rgba(3,4,7,0)');
+        ctx.fillStyle = wg; ctx.beginPath(); ctx.arc(fx,fy, R*0.7, 0, 2*Math.PI); ctx.fill();
+        // re-glow on top of the pooled shadow when repaired (so the candlelight still rises)
+        if (glow > 0.01){
+          const gg2 = ctx.createRadialGradient(fx,fy, 1, fx,fy, R*0.5);
+          gg2.addColorStop(0,'rgba(220,172,90,'+(0.42*glow)+')'); gg2.addColorStop(1,'rgba(220,172,90,0)');
+          ctx.fillStyle = gg2; ctx.beginPath(); ctx.arc(fx,fy, R*0.5, 0, 2*Math.PI); ctx.fill();
+        }
+
+        // broken stair: a couple of fallen fragments tumbling into the dark below the break
+        if (!isWhole){
+          const frags = [[0.46,0.56,0.5,0.12],[0.58,0.66,-0.7,0.09],[0.51,0.78,0.3,0.07]];
+          for(const [fxr,fyr,rr,sr] of frags){
+            ctx.save();
+            ctx.translate(W*fxr, H*fyr); ctx.rotate(rr);
+            const s = R*sr;
+            const fg = ctx.createLinearGradient(0,-s,0,s);
+            fg.addColorStop(0,'rgba(78,74,66,0.55)'); fg.addColorStop(1,'rgba(30,28,24,0.5)');
+            ctx.fillStyle = fg;
+            ctx.beginPath(); ctx.moveTo(-s,-s*0.4); ctx.lineTo(s,-s*0.55);
+            ctx.lineTo(s*0.7,s*0.5); ctx.lineTo(-s*0.8,s*0.45); ctx.closePath(); ctx.fill();
+            ctx.strokeStyle='rgba(201,162,74,0.12)'; ctx.lineWidth=1; ctx.stroke();
+            ctx.restore();
+          }
+        }
+      }
+
+      let isWhole = false, curProgress = 0;
+      function paint(){ draw(curProgress); }
+
+      // gentle ambient flicker on the glow (whole stair only); pauses when tab hidden
+      function loop(){
+        raf = 0;
+        if (!document.hidden && isWhole && !reduced){
+          flick += 0.05; paint(); raf = requestAnimationFrame(loop);
+        }
+      }
+      function startFlicker(){ if(!raf && isWhole && !reduced && !document.hidden) raf = requestAnimationFrame(loop); }
+      function stopFlicker(){ if(raf){ cancelAnimationFrame(raf); raf=0; } }
+      document.addEventListener('visibilitychange', ()=>{ if(document.hidden) stopFlicker(); else startFlicker(); });
+      window.addEventListener('resize', ()=>{ resize(); paint(); });
+
+      return {
+        renderBroken(){ isWhole=false; curProgress=0; stopFlicker(); resize(); paint(); },
+        renderWhole(){ isWhole=true; curProgress=1; resize(); paint(); startFlicker(); },
+        // animate broken → whole over ~1.35s, then settle into the flickering whole state
+        repair(done){
+          isWhole = true; resize();
+          if (reduced){ curProgress=1; paint(); startFlicker(); done&&done(); return; }
+          const t0 = performance.now(), DUR = 1350;
+          (function step(now){
+            const p = Math.min(1, (now-t0)/DUR);
+            // ease-out so the lower steps settle gently
+            curProgress = 1 - Math.pow(1-p, 2.2);
+            flick += 0.05; paint();
+            if (p < 1) requestAnimationFrame(step);
+            else { curProgress=1; paint(); startFlicker(); done&&done(); }
+          })(performance.now());
+        }
+      };
+    }
+
+    /* ============================================================
+       Build the tile element. `asLink` decides <a> vs <div>. */
+    function buildTile(asLink){
+      const el = document.createElement(asLink ? 'a' : 'div');
+      el.className = 'card feature undercroft-tile ' + (asLink ? 'whole' : 'broken');
+      if (asLink) el.href = UC;
+      el.style.setProperty('--c', '#c9a24a');
+      const tag  = asLink ? 'the way down' : 'the way is lost';
+      const blurb= asLink
+        ? 'Something is kept beneath the workshop. The way is open — descend, and see what it has kept for you.'
+        : 'Something is kept beneath the workshop — an old path, unused, lost with time. Perhaps a rune, once found, might restore the way down.';
+      const foot = asLink
+        ? '<span class="open">Descend ▸</span>'
+        : '<span class="lost">the way is lost</span>';
+      el.innerHTML =
+        '<div class="thumb"><canvas class="ucanvas"></canvas></div>'+
+        '<div class="badge">🕯️</div>'+
+        '<div class="meta">'+
+          '<h2>The Undercroft<small>'+tag+'</small></h2>'+
+          '<p>'+blurb+'</p>'+
+          '<div class="cardfoot">'+foot+'</div>'+
+        '</div>';
+      return el;
+    }
+
+    // place the tile at the very TOP of the grid (before Strange Garden)
+    let tile = buildTile(runeFound);
+    grid.insertBefore(tile, grid.firstChild);
+    let stair = makeStair(tile.querySelector('.ucanvas'));
+
+    if (runeFound){
+      // State B: whole stair, functional, steady. (Fresh load → render statically.)
+      requestAnimationFrame(()=> stair.renderWhole());
+    } else {
+      // State A: broken stair, not navigable.
+      requestAnimationFrame(()=> stair.renderBroken());
+      // first appearance → grow from nothing, then remember we've shown it
+      if (!openingSeen && !reduced){
+        tile.classList.add('grow');
+        tile.addEventListener('animationend', function once(ev){
+          if (ev.animationName !== 'ucgrow') return;
+          tile.removeEventListener('animationend', once);
+          tile.classList.remove('grow');
+          set('ws:seen:undercroft-opening');
+        });
+      } else {
+        // already opened before (or reduced motion) → static, just record the flag
+        set('ws:seen:undercroft-opening');
+      }
+    }
+
+    // ---- the footer rune ----
     const foot = document.querySelector('footer');
     if (!foot) return;
-    const a = document.createElement('a');
-    a.className = 'rune';
-    a.href = 'undercroft/index.html';
-    a.title = 'something is kept beneath the workshop';
-    a.innerHTML = '<span class="gl">✦</span><span class="lbl"> the undercroft</span>';
-    foot.appendChild(a);
-    // two rAFs so the 0→.28 opacity transition actually animates (gentle fade-in)
-    requestAnimationFrame(()=>requestAnimationFrame(()=>a.classList.add('show')));
+    const rune = document.createElement('a');
+    rune.className = 'rune';
+    rune.href = runeFound ? UC : '#';      // before repair it doesn't navigate; after, harmless
+    rune.title = runeFound ? 'the way down is open' : 'something glints in the dark — a rune';
+    rune.innerHTML = '<span class="gl">✦</span><span class="lbl"> the undercroft</span>';
+    foot.appendChild(rune);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      rune.classList.add('show');
+      if (runeFound) rune.classList.add('found');   // quiet steady mark, no pulse
+    }));
+
+    if (!runeFound){
+      rune.addEventListener('click', function(ev){
+        ev.preventDefault();
+        if (rune.dataset.done) return;
+        rune.dataset.done = '1';
+        set('ws:seen:undercroft-rune');               // (1) repair the stair (persist)
+        rune.classList.add('found');                  // rune settles to a quiet steady mark
+        // (2) play the repair animation on the canvas
+        stair.repair(function(){
+          // (3) turn the tile into a working link with "Descend ▸"
+          const link = buildTile(true);
+          tile.parentNode.replaceChild(link, tile);
+          tile = link;
+          rune.href = UC; rune.title = 'the way down is open';
+          stair = makeStair(tile.querySelector('.ucanvas'));
+          stair.renderWhole();   // render synchronously — the canvas state matches the just-finished repair, no flash
+        });
+        // (4) scroll back to the top so the healed stair is in view
+        try{ window.scrollTo({ top:0, behavior: reduced ? 'auto' : 'smooth' }); }
+        catch(e){ window.scrollTo(0,0); }
+      });
+    }
   })();
 </script>
 </body>
