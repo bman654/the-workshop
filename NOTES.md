@@ -20,6 +20,22 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
+> **Session status (2026-06-11, later) — 🖋️ SCRIPTORIUM shipped → The Oracle's companion (the 5th wing):**
+> Built **Scriptorium 🖋️** (`scriptorium/index.html`), a generative **invented-writing-system press**, and
+> placed it as **The Oracle's companion — the 5th wing (verse&script: Oracle + Scriptorium)**. From a seed it
+> invents a complete, internally-consistent script (alphabet / abugida / syllabary / abjad) drawn in **one
+> consistent "hand"** (shared nib, slant, x-height, stroke vocabulary, so glyphs read as a real script, not
+> scribbles), renders a coined line in that hand + a romanization key; Manuscript / Lapidary / Codex styles,
+> seed-reproducible, PNG export. **NEW medium: generative orthography/calligraphy** — distinct from the
+> Garden's Harmonograph/Chladni *and* from Compositor's type-setting (it invents the letterforms, doesn't set
+> existing ones). **Correctness crux = a built-in self-test (4 checks):** (A) **bijection** (phoneme↔glyph),
+> (B) **one-coherent-hand** (every glyph shares the same primitives/metrics), (C) **round-trip fidelity**
+> (`readBack(render(text))===text` — the "can't drift" crux à la Blazon), (D) **seed-purity / style-invariance**
+> (style only re-renders; geometry identical across Manuscript/Lapidary/Codex). Verified in a real browser
+> (0 console errors), already committed as **`5508f48`**; this wiring (front-door pill on the Oracle card,
+> the Oracle's `↗ Scriptorium` sib-link, README/NOTES) is a follow-up commit. The front door still shows the
+> curated **9** cards. *(Spoiler etiquette respected — hidden-world content untouched.)*
+>
 > **Session status (2026-06-11, evening) — ⭐ THE HIDDEN WORLD shipped (a THIRD growth axis):**
 > Built Brandon's starred "build next" idea — **the Living Lattice + the Unlock System**. Three new
 > commits, all verified on a *served origin* (localStorage is per-origin — see the caveat), pending push.
@@ -178,6 +194,16 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 ## Built so far (all self-contained, zero-dep, browser-verified) — art, games, maps, writing, sound, verse
 - `verse/` ✒️ — "The Oracle", a generative POETRY machine (5 forms × 6 themes, seeded, Copy).
   New medium: generative language. Verify the *text* reads as coherent, evocative poetry.
+- `scriptorium/` 🖋️ — **The Oracle's companion** (NOT a front-door card; reached via the Oracle's
+  `↗ Scriptorium` link + a "within" pill). A generative **invented-writing-system press**: from a seed it
+  invents a complete, internally-consistent script (alphabet / abugida / syllabary / abjad) drawn in **one
+  consistent hand** (shared nib/slant/x-height/stroke vocabulary → reads as a real script, not scribbles),
+  renders a coined line in the hand + a romanization key. New medium: **generative orthography/calligraphy**
+  (it invents letterforms — distinct from Compositor's *setting* of existing type). Crux = a built-in
+  **self-test (4 checks)**: bijection (phoneme↔glyph), one-coherent-hand (shared primitives/metrics),
+  round-trip fidelity (`readBack(render(text))===text` — "can't drift" à la Blazon), seed-purity /
+  style-invariance. Manuscript / Lapidary / Codex styles, seed-reproducible, PNG export. Done (v1, committed
+  `5508f48`).
 - `sound-garden/` 🎵 — generative AUDIO-visual instruments (Web Audio, synth only). A septet:
   Whitney (orbital polyrhythm), Drift (ambient pad), Euclid (Euclidean rhythm), Rain (in-scale rain
   on a tuned pool), Loom (evolving chord progressions on plucked Karplus-Strong strings), Carillon
@@ -279,10 +305,11 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 >    under its sub-title) + `← workshop`/`↗ <Parent>` back-links in the companion. The front door shows
 >    it as a subtle **"↳ <Name> within" pill** in the parent card's footer (data: `companion:{name,badge}`
 >    on the parent's PROJECTS entry; renderer adds the pill — an *indicator, not a link*, preserving the
->    "hidden room" charm). **Four wings exist:** celestial (Firmament+Orrery), design-press
->    (Compositor+Blazon), labyrinth&thread (Daedalus+Ariadne), realm&city (Cartographer+Bastion). A 5th
->    wing is fine **if the pairing is genuine, not forced** — The Oracle, Strange Garden, Threshold all
->    still lack a companion. Don't force one; only build it if the sibling link is poetic/true.
+>    "hidden room" charm). **Five wings exist:** celestial (Firmament+Orrery), design-press
+>    (Compositor+Blazon), labyrinth&thread (Daedalus+Ariadne), realm&city (Cartographer+Bastion), and
+>    verse&script (The Oracle+Scriptorium). A 6th wing is fine **if the pairing is genuine, not forced** —
+>    Strange Garden and Threshold still lack a companion. Don't force one; only build it if the sibling link
+>    is poetic/true.
 > 2. **Deepen the Arcade** (`auto-fill` grid) — drop a cabinet in `games/`, append to `games.js`, add a
 >    `assets/thumbs/<base>.png`, bump the front-door tag count + blurb. No rebalance. (→ 11 with Chomp.)
 > 3. **Deepen the Sound Garden** (`auto-fit` grid) — add an instrument (now **7**; 3+3+1 reflows fine
@@ -304,10 +331,9 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 - Add more **Sound Garden** instruments (now **7**; next clean stop is **8** = 2×4 — Rain/Loom/Carillon/
   Lattice are lens-verified). Verify via the **`audio-lens` skill** (`npx skills add bman654/audio-lens`);
   be courteous with audio (muted/lens path).
-- Build a **new companion** for a card that lacks one (Cartographer / The Oracle / Sound Garden /
-  Threshold) — but ONLY if the sibling pairing is genuine (see the growth playbook above). Seeds:
-  a *transit-diagram* generator (octolinear, à la Beck) as a Cartographer sibling; a *fable/almanac*
-  generator as an Oracle sibling; an *album-sleeve* press as a Compositor 2nd companion. Don't force it.
+- Build a **new companion** for a card that lacks one (Sound Garden / Threshold) — but ONLY if the
+  sibling pairing is genuine (see the growth playbook above). Seeds: an *album-sleeve* press as a
+  Compositor 2nd companion; a 2nd Oracle sibling (a *fable/almanac* generator). Don't force it.
 - The **Garden** is intentionally finished at 34 — only extend for a genuinely distinct, must-have
   specimen (then follow `strange-garden/SPEC.md`).
 
@@ -469,6 +495,7 @@ instruments copy the `← sound garden` back-link.
 | Project | Status | Description |
 |---|---|---|
 | `verse/` | ✒️ done | "The Oracle" — generative poetry machine (5 forms, 6 themes, seeded) |
+| `scriptorium/` | 🖋️ done (companion) | **Behind The Oracle** — generative invented-writing-system press: from a seed invents a complete script (alphabet/abugida/syllabary/abjad) in one consistent hand + a romanization key (self-test: bijection, one-hand, round-trip, seed-purity); Manuscript/Lapidary/Codex, seed-reproducible, export PNG |
 | `sound-garden/` | 🎵 7 | Web-Audio instruments — Whitney, Drift, Euclid, Rain, Loom, Carillon, Lattice [visual-first step-sequencer] (Rain/Loom/Carillon/Lattice lens-verified) |
 | `cartographer/` | 🗺️ done | Procedural fantasy-map generator (seeded, 4 styles, export PNG) |
 | `bastion/` | 🏰 done (companion) | **Behind Cartographer** — procedural city-plan generator (walls/gates/roads/districts/citadel/cathedral/river, named quarters; coherent-by-construction; seed-pure; 4 styles, export PNG) |

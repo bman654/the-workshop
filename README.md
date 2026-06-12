@@ -12,9 +12,10 @@ HTML file: no build step, no dependencies, no network.*
 
 ## What's inside
 
-Ten creative mediums across nine projects — plus four companions tucked behind their parent doors:
-the **Orrery** behind Firmament, **Blazon** behind Compositor, **Ariadne** behind Daedalus, and
-**Bastion** behind Cartographer. Click a live link, or open any `.html` in a browser.
+Eleven creative mediums across nine projects — plus five companions tucked behind their parent doors:
+the **Orrery** behind Firmament, **Blazon** behind Compositor, **Ariadne** behind Daedalus,
+**Bastion** behind Cartographer, and **Scriptorium** behind The Oracle. Click a live link, or open
+any `.html` in a browser.
 
 ### 🌿 [Strange Garden](https://bman654.github.io/the-workshop/strange-garden/)
 **34 *living* generative systems** — particle life, slime moulds, reaction–diffusion, boids,
@@ -71,6 +72,14 @@ browsers need a click before they'll make sound.)*
 ### ✒️ [The Oracle](https://bman654.github.io/the-workshop/verse/)
 A **generative poetry machine** — short, coherent, evocative poems in five forms across six
 themes, each with an invented poet and a seed you can keep. Press space for another.
+
+> 🖋️ **Companion — [Scriptorium](https://bman654.github.io/the-workshop/scriptorium/):** *The Oracle
+> speaks in verse; the Scriptorium gives its words a hand to be written in.* A generative
+> **invented-writing-system press** — from a seed it invents a complete, internally-consistent script
+> (alphabet · abugida · syllabary · abjad) drawn in one consistent **hand**: a shared nib, slant,
+> x-height and stroke vocabulary, so the glyphs read as a real script, not scribbles. It writes a
+> coined line in that hand and prints a **romanization key** beside it. Manuscript / Lapidary / Codex
+> styles, reproducible by seed, export PNG.
 
 ### 🔠 [Compositor](https://bman654.github.io/the-workshop/compositor/)
 A **generative type press** — seed a striking **typographic poster** from an evocative phrase, set in
