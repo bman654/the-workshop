@@ -63,7 +63,20 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > configuration (Eleven), score/mastery. The Undercroft now holds **4** (2 places + 2 trophies); its
 > `signs` renderer was generalized to support **threshold** signs (`sign.test(store)`, not just presence).
 > Verified playable in-browser (driven inputs, 60fps, clean console) + the trophy threshold (wave 2 stays
-> locked, wave 5 unlocks). **9 commits this session, all pushed & live.**
+> locked, wave 5 unlocks).
+>
+> **7. Rosette 🌹 (`undercroft/rosette.html`) — a generative ROSE WINDOW, the rarest secret (a new
+> visual medium + the COMBINATION trigger).** A seeded Gothic stained-glass rose window: concentric
+> rings, N-fold symmetry by construction, cusped tracery, jewel glass, lead came, light blooming
+> through. Seed-pure + byte-reproducible (palette only recolours geometry); 6 palettes, petals/rings/
+> complexity/leading/glow controls, PNG export; 772 lines, self-contained. It's the Undercroft's **5th
+> and rarest** inhabitant, gated by a **COMBINATION across all four trigger types + a higher bar**:
+> game-of-life ∧ lattice ∧ patience ∧ eleven ∧ `ws:best:swarm ≥ 8`. **This completes the full trigger
+> taxonomy Brandon sketched — exploration / dwell / configuration / score / combination.** The Undercroft
+> now holds **5** (3 places: Living Lattice, The Long Quiet, Rosette; 2 trophies: Eleven, The Survivor) +
+> an **all-found capstone** ("Nothing remains in shadow…") that fades in at 5/5. Verified on a served
+> origin (3/4 signs keeps it locked at "4 of 5"; full combination → "5 of 5" + capstone; Enter renders
+> the window). **13 commits this session, all pushed & live.**
 >
 > **Verified end-to-end** (agent-browser, served origin): clean first visit (no rune) → scavenger trail
 > → Undercroft unlocks the Living Lattice → Enter loads Quickening; threshold gate + storage-off degrade
@@ -78,7 +91,7 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > `file://`. Tempting next secrets: a Chomp/Tetris **score** trophy, a **dwell** unlock on a meditative
 > Garden specimen, or a second hidden cross-pollination piece.
 >
-> **Session can pause here cleanly** — working tree committed (9 commits, all pushed & live), nothing in flight. If pausing
+> **Session can pause here cleanly** — working tree committed (13 commits, all pushed & live), nothing in flight. If pausing
 > for good, delete the heartbeat cron (CronCreate id noted in session). The static server on :8765 is a
 > dev convenience (kill it / it dies with the shell). **To resume:** read this block, then continue from
 > the growth playbook / idea bench below.
@@ -456,7 +469,8 @@ instruments copy the `← sound garden` back-link.
 | `arcade/` | 🕹️ 12 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing, Chomp [Pac-Man-like], **Swarm** [neon twin-stick survivor — drops `ws:best:swarm` for the score/mastery unlock]) |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
 | `sound-garden/quickening.html` | 🌱 done (HIDDEN) | **The Living Lattice** — a cellular automaton you can hear (5 rule families, CA self-test, lens-clean). The 8th instrument, but **earned not listed** (NOT in `instruments.js`; rack stays at 7). Lives in the Undercroft. |
-| `undercroft/` | 🗝️ done | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise). First inhabitant: the Living Lattice (unlock: visit Game of Life + Lattice). See `UNLOCK.md`. |
+| `undercroft/` | 🗝️ done (5 secrets) | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise) + an all-found capstone. Holds 5 demonstrating ALL trigger types: Living Lattice (exploration), The Long Quiet (dwell), Eleven (config), The Survivor (score), **Rosette** 🌹 (combination — the rarest). See `UNLOCK.md`. |
+| `undercroft/rosette.html` | 🌹 done (HIDDEN) | **Rosette** — a seeded generative Gothic **rose window** (stained glass: concentric rings, N-fold symmetry, cusped tracery, jewel glass + lead came; seed-pure, palette recolours only; 6 palettes, PNG export). A new visual medium; the rarest Undercroft secret. |
 
 Each project has its own `CHANGELOG.md` (full provenance) and the Garden has a `SPEC.md` (house style).
 
