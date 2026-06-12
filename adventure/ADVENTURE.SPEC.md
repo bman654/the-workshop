@@ -228,10 +228,18 @@ Because the action space is finite and the model is pure, **a player is just a f
 
 The engine ships two, and documents a third:
 
-- **`solverPlayer`** — replays the BFS shortest path. Drives the **"▶ Let it play"** button: the
-  engine plays the tale to its end, move by move, at a gentle pace, the prose narrating as a ghost
-  hand lights the lamps. This is the "it solves itself" demo — and the cleanest possible debut of an
-  AI/scripted player in the workshop. *(It doubles as a "show me the solution" affordance, and as the
+- **`solverPlayer(world, fromState?)`** — replays the BFS shortest path, solved **from `fromState`**
+  when given (default: the world's initial state; `solve` takes the same optional argument). Drives
+  the **"▶ Let it play"** button, which solves **from the current live state** — so "let the bot
+  finish it if you're stuck" is literal: hand a half-played game to the ghost and it walks it home
+  from right there. The button is a toggle (**"■ Stop the play"** while running; stable width, no
+  layout shift) and stopping cancels cleanly in either phase, leaving the state playable by hand.
+  The ghost walks on a **watchable two-phase cadence** per move: **announce** (~2s — a ghost line in
+  the prose panel names the move, and the actual on-screen control it is about to "click" glows),
+  then **act** (~2s — the move applies and the result prose replaces the announce line).
+  `prefers-reduced-motion` keeps the same cadence (pacing is not animation) with a non-animated
+  highlight. This is the "it solves itself" demo — and the cleanest possible debut of an AI/scripted
+  player in the workshop. *(It doubles as a "show me the solution" affordance, and as the
   Dev-SIG-talk centrepiece: the AI builds a little world, then watches itself walk it home.)*
 - **`randomPlayer(seed)`** — a seeded legal-move wanderer (for fuzzing / "drunk ghost" flavour). Uses a
   seeded PRNG passed in; **no `Math.random` in the core** (determinism).

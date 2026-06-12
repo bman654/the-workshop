@@ -7,6 +7,60 @@ engine code. See `ADVENTURE.SPEC.md` for the contract.*
 
 ---
 
+## Build 4 — the ghost walks legibly (2026-06-12)
+
+**The first play-session feedback** (Brandon, after playing The Lamplighter) — two asks, both about
+"▶ Let it play": *(1)* the button should toggle to a stop, and shouldn't jump around vertically as
+the play-state content changes height; *(2)* at ~1 move/second you never see the bot's **move**,
+only its results — show the move, pause, then the result. All engine work in `engine/lantern.js`
+(now v1.1); zero world-file edits; all three tales re-forged.
+
+### Play ⇄ Stop toggle + solve-from-here
+- The same button toggles: idle → **"▶ Let it play"**; running → **"■ Stop the play"**. Both labels
+  live stacked in one grid cell (the inactive one invisible but still sizing the button), so the
+  flip never shifts layout. Stopping cancels cleanly in **either** phase — timer cleared, announce
+  line + highlight dropped, button back to idle — and leaves the state playable by hand. Any manual
+  click on the board while the ghost runs also halts it first (capture-phase guard), so the ghost
+  can never race a human move.
+- **Continue, don't restart:** `solve(world, fromState?)` / `solverPlayer(world, fromState?)` —
+  the BFS now starts from any state (default unchanged: `initState`). `letItPlay` solves **from the
+  current live state** and plays that path, so a stuck player hands the tale over mid-game and
+  watches it finish from right there (the no-softlock guarantee means this always succeeds on a
+  verified world). Already won → a graceful event line, no run. "Start over" keeps its reset job.
+
+### The legible cadence (watch the move, then the result)
+- Each ghost move is now two phases: **announce** (~2s) — an accent-tinted italic line in the prose
+  panel (`▸ the ghost reaches for — Take the tin of lamp-oil`; exits narrate the destination room
+  by name) AND the actual on-screen control it is about to "click" glows (the exit chip, or the
+  thing chip + verb/use-target button — the ghost drives the UI like a hand would: selecting the
+  thing, opening Use-on mode); then **act** (~2s) — the move applies, the result prose replaces the
+  announce line. 16-move lamplighter ≈ 64s — that's the point: watchable. `prefers-reduced-motion`
+  keeps the same cadence (pacing is not animation) with a non-animated outline highlight; the old
+  reduced-motion "snap to the end" is gone.
+
+### No vertical jumping
+- New engine-injected stylesheet (`#lantern-engine-style`, so no per-tale `.src.html` edits ever):
+  base min-heights reserve room for the variable-height rows (`#prose` 22em · `#exits` 35px ·
+  `#inv` 30px · `#actions` 60px), plus a **grow-only ratchet** (`stabilize()`) that pins each row's
+  min-height to the tallest content it has shown — the controls row can move down at most once on
+  an outlier, never up. The 22em prose reserve was sized **empirically**: the night-shift's wordiest
+  state needed 379px ≈ 21.7em.
+
+### Verification
+- **Node:** all four worlds still 5/5 (lamplighter 16 · ferryman 9 · night-shift 11 · _template 3);
+  `solve(world, midState)` after the lamplighter's first 5 path moves returns an 11-move path that
+  replays to the win; solve from a won state → winnable, empty path.
+- **Browser QA** (served origin `http://localhost:8983`, agent-browser, all three tales): the
+  **no-jump proof** — `playBtn.getBoundingClientRect().y` sampled every 200ms across each FULL ghost
+  run had **exactly one unique value per tale** (lamplighter 311 samples/62.2s; ferryman; night-shift);
+  cadence measured announce avg 2000ms (1999–2001) / act avg 2000ms; all runs end at their win cards;
+  **stop mid-announce** → halted, idle label back, state hand-playable; **continue-from-here** →
+  4 hand-played moves then play: the ghost announced exactly 12 moves to *Dawn* (16 total — the
+  optimal continuation, no restart); already-won click → graceful line, no crash; **0 console errors**
+  everywhere. `assets/ghost-play.png` — a mid-announce capture (ghost line + glowing exit chip +
+  stop label).
+- `forge --all` rebuilt all three tales; `--check --all` clean.
+
 ## Build 3 — The Night Shift, a HIDDEN tale (2026-06-12)
 
 **Shipped:** the third tale — and the first **hidden** one. It lives in the Undercroft
