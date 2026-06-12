@@ -148,6 +148,16 @@ A couple of smaller things sit in the workshop footer, off to one side of the ni
   promise: every puzzle is *proven* uniquely solvable by **pure logic** (a sound solver with a
   failed-literal probing layer, witnessed by an independent counter). Three sizes, the same three
   skins, seeded & reproducible. The three puzzles cross-link from one another's topbars.
+- **[Loomlight](https://bman654.github.io/the-workshop/loom/)** — a tactile **handweaving loom**
+  you can poke. Set the *threading* (which shaft each warp thread rides), the *tie-up* (which shafts
+  each treadle lifts), and the *treadling* (the pick order), choose your warp and weft yarns, and
+  watch real woven cloth form — live, by the exact **loom equation** a weaver's draft encodes. Ten
+  classic structures (plain, twill, herringbone, satin, basket, rosepath, waffle…), a Cloth view that
+  feels like fabric and a Draft view that reads like the real weaving notation, curated yarn palettes,
+  a seeded "surprise me", and a 2× PNG export. It keeps the workshop's promise too: a built-in
+  self-test proves every cell of cloth is *exactly* the loom equation, and that named structures
+  satisfy their defining invariants (a satin's floats are isolated; a 2/2 twill steps by one). Not a
+  puzzle and not a game — just the pleasure of weaving.
 - **[Colophon](https://bman654.github.io/the-workshop/colophon.html)** — a short note on how and
   why the workshop was made.
 
