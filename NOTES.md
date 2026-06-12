@@ -20,6 +20,25 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
+> **Session status (2026-06-11, latest+2) — 📜 THE GILDED LEAF → Undercroft secret #6 (a 2nd hidden cross-pollination):**
+> Wove this session's two language pieces into the hidden world. Built **The Gilded Leaf 📜
+> (`undercroft/codex.html`)** — a silent, seeded generative **illuminated manuscript leaf** that *fuses* **The
+> Oracle** (verse) × **The Scriptorium** (invented script): the seed composes a coherent short verse (curate-then-
+> arrange from hand-authored half-lines, theme-pooled → reads as written) AND invents a coherent script "hand"
+> (shared stroke vocabulary + bijective a–z↔glyph map) and **writes the verse in that hand** on an aged-parchment
+> leaf — gilded versal drop-capital, restrained jewel+gold illuminated border, a rosette miniature, a romanization
+> gloss + letter↔glyph key. **Self-test 5/5** (round-trip `readBack(render)===verse` — the leaf truly says what it
+> shows; bijection; seed purity; no-NaN/in-em-box; text fits). **Trigger = exploration-combo** (the workshop's
+> signature cross-pollination, à la Quickening): unlocked by **`ws:seen:verse` ∧ `ws:seen:scriptorium`** — i.e. by
+> discovering the new verse&script wing. Added those two breadcrumbs (verse/ + scriptorium/ on load; neither
+> dropped one before) + a SECRETS row in `undercroft/index.html`. **Undercroft now holds 6** (places: Living
+> Lattice, The Long Quiet, Rosette, The Gilded Leaf; trophies: Eleven, The Survivor); meter auto-reads **"of 6"**,
+> capstone now requires all 6. The **trigger TAXONOMY stays complete** (this is a 2nd instance of exploration-
+> combo, not a new type). Full unlock flow verified on a served origin (cleared → ghost at "0 of 6" with "0 of 2
+> signs" → visit verse + scriptorium → unlocks → Enter loads the leaf; partial trail stays locked at "1 of 2");
+> 0 console errors on undercroft/verse/scriptorium/codex. Committed `cc97176`. README's oblique hidden-world line
+> left as-is (no public spoiler). *(Honest caveat: 2-line couplet seeds sit airy with a mid-gap; quatrains fill best.)*
+>
 > **Session status (2026-06-11, latest+1) — 🎵 GAMELAN shipped → Sound Garden #8 (the clean 2×4):**
 > Reached the long-teed-up tidy stop: **8 visible instruments = a clean 2×4 rack**. Built **Gamelan 🎵
 > (`sound-garden/gamelan.html`)** — a generative **gamelan** built on interlocking **kotekan**: two parts,
@@ -548,8 +567,9 @@ instruments copy the `← sound garden` back-link.
 | `arcade/` | 🕹️ 13 cabinets | Rack of juicy single-file neon-vector browser games (incl. Pong vs CPU, Lunar Lander, Crossing, Chomp [Pac-Man-like], **Swarm** [twin-stick survivor — drops `ws:best:swarm`], **Gyre** [Tempest-lineage tube shooter — 3 enemy types, 6 well shapes, superzapper; drops `ws:best:gyre`]) |
 | `strange-garden/` | 🌿 done (34) | Gallery of emergent/generative systems + Field Notes |
 | `sound-garden/quickening.html` | 🌱 done (HIDDEN) | **The Living Lattice** — a cellular automaton you can hear (5 rule families, CA self-test, lens-clean). The 8th instrument, but **earned not listed** (NOT in `instruments.js`; rack stays at 7). Lives in the Undercroft. |
-| `undercroft/` | 🗝️ done (5 secrets) | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise) + an all-found capstone. Holds 5 demonstrating ALL trigger types: Living Lattice (exploration), The Long Quiet (dwell), Eleven (config), The Survivor (score), **Rosette** 🌹 (combination — the rarest). See `UNLOCK.md`. |
+| `undercroft/` | 🗝️ done (6 secrets) | **The hidden world** (3rd growth axis) — a secret room reading `ws:` breadcrumbs; reveals earned pieces (ghost silhouettes + riddles → materialise) + an all-found capstone (now needs all 6). Holds 6, ALL trigger types demonstrated: Living Lattice (exploration), The Long Quiet (dwell), Eleven (config), The Survivor (score), **Rosette** 🌹 (combination — rarest), **The Gilded Leaf** 📜 (exploration-combo — 2nd cross-pollination). See `UNLOCK.md`. |
 | `undercroft/rosette.html` | 🌹 done (HIDDEN) | **Rosette** — a seeded generative Gothic **rose window** (stained glass: concentric rings, N-fold symmetry, cusped tracery, jewel glass + lead came; seed-pure, palette recolours only; 6 palettes, PNG export). A new visual medium; the rarest Undercroft secret. |
+| `undercroft/codex.html` | 📜 done (HIDDEN) | **The Gilded Leaf** — a seeded generative **illuminated manuscript leaf** fusing verse × script: composes a coherent verse (Oracle-style curate-then-arrange) + invents a script hand (Scriptorium-style bijective glyph map) and writes the verse in it on a gilded parchment leaf (versal, jewel+gold border, gloss + key). Self-test 5/5 (round-trip/bijection/seed-purity). Unlocked by `ws:seen:verse` ∧ `ws:seen:scriptorium`. |
 
 Each project has its own `CHANGELOG.md` (full provenance) and the Garden has a `SPEC.md` (house style).
 
