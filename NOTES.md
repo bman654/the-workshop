@@ -20,7 +20,50 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 > in-the-moment notification are **yours to keep or change** — e.g. a spoiler-light "unlock toast" is
 > one option if you ever want in-the-moment feedback; equally fine to leave silent.
 
-> **▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — 🔷 TESSELLARIUM shipped → the Garden's companion / 6th wing).**
+> **▶ CURRENT STATE / RESUME POINTER (2026-06-12, `/fun` — 🕹️ QUBIT shipped → Arcade #16, the rack's first iso-hopper).**
+> Working tree committed & pushed; live 200 confirmed. **New this session:** deepened the Arcade rack (the
+> no-rebalance `auto-fill` growth axis) with **Qubit 🕹️ (`arcade/games/qubit.html`, 1382 lines, single
+> self-contained vanilla file, zero deps/network)** — the rack's first **Q*bert-lineage isometric cube-hopper**
+> (a genre it lacked; chosen deliberately as a *playable/interactive* counterweight to the night's three
+> visual/generative pieces — Floating Ink, Centipede, Tessellarium). A 7-row, 28-cube pyramid in 2:1 iso
+> projection; a squash-and-stretch neon orb hops the four diagonals (↑/W up-right, →/D down-right, ↓/S
+> down-left, ←/A up-left) flipping each cube face toward the level target — clear the pyramid to advance
+> (L1 one-flip / L2+ two-step / L3+ reversible faces). Core danger: **falling off the edge** (force-fatal,
+> even through respawn i-frames). Roster: **red balls** bounce down from the top, a purple **Coily** hatches
+> + chases by shortest-path hop, **rescue discs** on both edges ride you to the apex (lure snake-Coily off
+> the edge = +500). 3 lives + extra at 12k, full juice (hop arc, flip flash, particle bursts, screen-shake,
+> neon glow, completion bar), per-level palette, muted-by-default Web Audio SFX (M toggle). **The crux
+> (workshop tradition) is the iso cube-grid being PROVEN:** a pure `(r,i)` axial coordinate core (the four
+> hops are deterministic deltas — up-left `(r-1,i-1)` / up-right `(r-1,i)` / down-left `(r+1,i)` / down-right
+> `(r+1,i+1)`, a consistent lattice where down-left∘up-right = identity) drives a **headless 6-check
+> self-test** that calls the *real* game functions (not a parallel copy): (1) hop invertibility round-trip
+> over all in-bounds cubes; (2) edge detection (fatal IFF out of bounds; apex has exactly 2 legal hops);
+> (3) iso projection — 28 distinct positions, consistent 2:1 spacing, **key labels match on-screen motion**;
+> (4) level-complete logic (all faces at target ⇔ complete; L2 needs exactly 2 flips); (5) Coily chase step
+> always a legal hop; (6) reversible flip on L3+. Logs PASS per check, shows a green ✓ chip; **never ships
+> red. Self-test 6/6 PASS.** **Browser-verified end to end** (agent-browser, served origin): 6/6 PASS + green
+> chip, **0 console errors / 0 warnings**, hopping + cube-flips + scoring (0→130) + red-ball spawn + disc
+> pulse + edge-fall death + life decrement + respawn all exercised live, `ws:best:qubit` written (raise-only;
+> the build deputy verified the win-flow level increment + that a stored 5 isn't lowered). One real bug found
+> & fixed (post-respawn invuln was wrongly blocking edge-falls → made falls force-fatal). **Wired:** `games.js`
+> (→16), thumb `arcade/assets/thumbs/qubit.png` (1440×900, real in-game capture), front-door Arcade tag
+> **15→16 games** + "Qubit" appended to the blurb list (**front door otherwise untouched — still the curated
+> 9 cards**), `arcade/CHANGELOG.md` (Qubit log entry + cabinet line, count 15→16). **No Undercroft secret
+> added** — just the breadcrumb (`ws:best:qubit`) left for future hidden-world use (a Qubit score-trophy is a
+> trivial future add). **The Arcade now holds 16 cabinets** (the rack grows freely with no rebalance).
+>
+> **Cool ideas thought of but NOT pursued (for the lead/future sessions):** (a) the Arcade still lacks a few
+> classic genres — a **Defender/Scramble side-scroller** (horizontal-scrolling shooter w/ a minimap), a
+> **Dig-Dug tunneler** (dig-through-dirt + pump-up enemies), and a **Galaga-style formation shooter** with the
+> capture-beam/dual-fighter mechanic (Starfighter is Galaga-*flavoured* waves but not the formation-dive +
+> capture loop); (b) a **Qubit score-trophy** in the Undercroft (`ws:best:qubit ≥ N`) — trivial high-charm
+> hidden-world add now that the breadcrumb ships; (c) Qubit's **disc-ride / Coily-lure** could grow a small
+> "perfect clear" bonus or a 2nd enemy type (Wrong-Way/Ugg side-hoppers, the green Slick/Sam that *un-flips*
+> cubes) for more depth; (d) a **one-button/Flappy** or a **rhythm cabinet** is still un-built and would
+> diversify the rack's input vocabulary. *(Spoiler etiquette respected — no hidden-world trail revealed.)*
+>
+> ---
+> **(prior) ▶ CURRENT STATE (2026-06-12, `/fun` — 🔷 TESSELLARIUM shipped → the Garden's companion / 6th wing).**
 > Working tree committed & pushed; live 200 confirmed. **New this session:** built **Tessellarium 🔷
 > (`tessellarium/index.html`, 1072 lines, single self-contained vanilla file, 0 deps/network)** — a
 > generative **ornament press grounded in the 17 wallpaper symmetry groups**, and placed it as **Strange

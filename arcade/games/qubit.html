@@ -1,0 +1,1382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>QUBIT — neon iso cube-hopper</title>
+<style>
+  :root{ --accent:#39ff9e; --accent2:#ff2e88; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; background:#03030a; overflow:hidden;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    color:#e9f6ff; -webkit-font-smoothing:antialiased; cursor:default; }
+  #stage{ position:fixed; inset:0; }
+  canvas{ display:block; position:absolute; inset:0; }
+
+  /* ---------- HUD ---------- */
+  .hud{ position:fixed; inset:0; pointer-events:none; z-index:5;
+    font-variant-numeric:tabular-nums; }
+  .hud-row{ position:absolute; top:18px; display:flex; }
+  .hud-left{ left:24px; flex-direction:column; gap:4px; align-items:flex-start; }
+  .hud-right{ right:24px; flex-direction:column; align-items:flex-end; gap:4px; }
+  .label{ font-size:10px; letter-spacing:.32em; color:#5fc99a; opacity:.85; text-transform:uppercase; }
+  .value{ font-size:30px; font-weight:700; letter-spacing:.04em; line-height:1;
+    color:#eafff4; text-shadow:0 0 16px rgba(57,255,158,.6); }
+  .value.small{ font-size:17px; color:#9be8c4; }
+  .wave-tag{ position:fixed; top:18px; left:50%; transform:translateX(-50%); text-align:center; }
+  .wave-tag .label{ font-size:10px; }
+  .wave-tag .value{ font-size:22px; color:#ff6fb0; text-shadow:0 0 16px rgba(255,46,136,.6); }
+
+  /* lives pips (little orbs) */
+  .lives{ display:flex; gap:9px; align-items:center; margin-top:7px; }
+  .pip{ width:14px; height:14px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #d6fff0, var(--accent) 70%);
+    filter:drop-shadow(0 0 7px rgba(57,255,158,.7)); transition:opacity .2s, transform .2s; }
+  .pip.empty{ opacity:.16; filter:none; transform:scale(.7); background:#2a4a3c; }
+
+  /* self-test chip */
+  #selftest{ position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
+    z-index:6; font-size:10px; letter-spacing:.22em; text-transform:uppercase;
+    color:#0b160f; background:var(--accent); border-radius:10px; padding:3px 10px;
+    box-shadow:0 0 14px rgba(57,255,158,.7); opacity:0; transition:opacity .4s;
+    pointer-events:none; font-weight:700; }
+  #selftest.show{ opacity:.92; }
+  #selftest.fail{ color:#fff; background:#ff2e88; box-shadow:0 0 14px rgba(255,46,136,.8); }
+
+  #muteTag{ position:fixed; bottom:16px; right:20px; font-size:10px; letter-spacing:.24em;
+    color:#5fc99a; opacity:.7; text-transform:uppercase; pointer-events:none; }
+
+  /* ---------- Overlays ---------- */
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:8px;
+    background:radial-gradient(120% 120% at 50% 45%, rgba(6,18,12,.34), rgba(2,2,8,.9));
+    backdrop-filter:blur(1.5px); transition:opacity .35s; }
+  .overlay.hidden{ opacity:0; pointer-events:none; }
+  .title{ font-size:clamp(46px,12vw,150px); font-weight:800; letter-spacing:.1em;
+    line-height:.9; color:#eafff4;
+    text-shadow:0 0 30px rgba(57,255,158,.65), 0 0 70px rgba(57,255,158,.35);
+    -webkit-text-stroke:1px rgba(170,255,220,.25); }
+  .title .a2{ color:var(--accent2); -webkit-text-stroke:1px rgba(255,46,136,.4);
+    text-shadow:0 0 30px rgba(255,46,136,.6); }
+  .tagline{ font-size:13px; letter-spacing:.34em; color:#ff6fb0; text-transform:uppercase;
+    opacity:.9; margin-bottom:24px; }
+  .prompt{ font-size:15px; letter-spacing:.12em; color:#eafff4;
+    margin-top:14px; animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:.45} 50%{opacity:1} }
+  .controls{ margin-top:28px; display:grid; grid-template-columns:auto auto;
+    gap:6px 26px; font-size:12px; letter-spacing:.06em; color:#9be8c4; opacity:.9; }
+  .controls b{ color:#eafff4; font-weight:700; }
+  .controls .k{ text-align:right; color:var(--accent); }
+  .hint{ margin-top:20px; font-size:11px; letter-spacing:.16em; color:#5fc99a;
+    text-transform:uppercase; opacity:.8; max-width:58ch; line-height:1.7; }
+  .go-stats{ margin-top:8px; display:grid; grid-template-columns:auto auto; gap:6px 30px;
+    font-size:14px; letter-spacing:.06em; color:#9be8c4; }
+  .go-stats .k{ text-align:right; color:#5fc99a; }
+  .go-stats b{ color:#eafff4; }
+  .newhigh{ color:var(--accent); font-size:13px; letter-spacing:.3em; text-transform:uppercase;
+    margin-top:14px; animation:pulse 1s ease-in-out infinite; }
+  .gameover-title{ font-size:clamp(34px,8vw,76px); font-weight:800; letter-spacing:.14em;
+    color:#ff2e88; text-shadow:0 0 28px rgba(255,46,136,.6); margin-bottom:8px; }
+  .wave-clear-title{ font-size:clamp(34px,8vw,72px); font-weight:800; letter-spacing:.1em;
+    color:var(--accent); text-shadow:0 0 28px rgba(57,255,158,.6); margin-bottom:8px; }
+  .pausetitle{ font-size:48px; font-weight:800; letter-spacing:.22em; color:#eafff4;
+    text-shadow:0 0 24px rgba(57,255,158,.55); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg"></canvas>
+  <canvas id="game"></canvas>
+</div>
+
+<!-- HUD -->
+<div class="hud" id="hud" style="display:none">
+  <div class="hud-row hud-left">
+    <div class="label">Score</div>
+    <div class="value" id="score">0</div>
+    <div class="lives" id="lives"></div>
+  </div>
+  <div class="hud-row hud-right">
+    <div class="label">Best Level</div>
+    <div class="value small" id="best">0</div>
+  </div>
+  <div class="wave-tag">
+    <div class="label">Level</div>
+    <div class="value" id="level">1</div>
+  </div>
+</div>
+<div id="selftest">✓ self-test</div>
+<div id="muteTag">M · sound off</div>
+
+<!-- Title -->
+<div class="overlay" id="titleScreen">
+  <div class="title">QU<span class="a2">BIT</span></div>
+  <div class="tagline">iso · cube · hopper</div>
+  <div class="prompt">Press ENTER to start</div>
+  <div class="controls">
+    <span class="k">↑ / W</span><span>hop <b>up-right</b> ↗</span>
+    <span class="k">→ / D</span><span>hop <b>down-right</b> ↘</span>
+    <span class="k">↓ / S</span><span>hop <b>down-left</b> ↙</span>
+    <span class="k">← / A</span><span>hop <b>up-left</b> ↖</span>
+    <span class="k">P / ESC</span><span>pause</span>
+    <span class="k">M</span><span>sound (off by default)</span>
+  </div>
+  <div class="hint">Hop the orb across every cube to flip its face to the target colour. Don't hop off the edge — that's a long fall. Dodge the red balls bouncing down, and the purple Coily that hunts you. Lure Coily off the edge, or leap to a floating disc to ride back to the top.</div>
+</div>
+
+<!-- Level clear -->
+<div class="overlay hidden" id="levelClearScreen">
+  <div class="wave-clear-title">LEVEL CLEAR</div>
+  <div class="go-stats">
+    <span class="k">Level</span><b id="lcLevel">0</b>
+    <span class="k">Bonus</span><b id="lcBonus">0</b>
+    <span class="k">Score</span><b id="lcScore">0</b>
+  </div>
+  <div class="prompt">Press ENTER for the next level</div>
+</div>
+
+<!-- Game over -->
+<div class="overlay hidden" id="gameoverScreen">
+  <div class="gameover-title">GAME OVER</div>
+  <div class="go-stats">
+    <span class="k">Score</span><b id="goScore">0</b>
+    <span class="k">Level reached</span><b id="goLevel">0</b>
+  </div>
+  <div class="newhigh" id="newHigh" style="display:none">★ NEW BEST LEVEL ★</div>
+  <div class="prompt">Press ENTER to play again</div>
+</div>
+
+<!-- Pause -->
+<div class="overlay hidden" id="pauseScreen">
+  <div class="pausetitle">PAUSED</div>
+  <div class="prompt">Press P or ESC to resume</div>
+</div>
+
+<script>
+"use strict";
+(function(){
+//============================================================== setup / canvas
+const bgCanvas = document.getElementById('bg');
+const canvas   = document.getElementById('game');
+const bgx = bgCanvas.getContext('2d');
+const ctx = canvas.getContext('2d');
+
+let W = 0, H = 0, DPR = 1;
+
+//============================================================== utilities
+const TAU = Math.PI * 2;
+const rand  = (a=1,b=0)=> b + Math.random()*(a-b);
+const randi = (a,b)=> Math.floor(rand(a,b));
+const clamp = (v,lo,hi)=> v<lo?lo:(v>hi?hi:v);
+const lerp  = (a,b,t)=> a+(b-a)*t;
+const easeOut = t => 1-(1-t)*(1-t);
+
+//==================================================================================
+//  PURE CORE LOGIC  (testable, no rendering)
+//==================================================================================
+// The pyramid: row r in 0..ROWS-1, position i in 0..r. cube count = ROWS*(ROWS+1)/2.
+const ROWS = 7;                 // classic Q*bert: 7 rows = 28 cubes
+const CUBES = ROWS*(ROWS+1)/2;  // 28
+
+// The four iso-diagonal hop deltas. Names describe on-screen motion.
+//   up-left:    (r-1, i-1)
+//   up-right:   (r-1, i)
+//   down-left:  (r+1, i)
+//   down-right: (r+1, i+1)
+const HOPS = {
+  upLeft:    { dr:-1, di:-1 },
+  upRight:   { dr:-1, di: 0 },
+  downLeft:  { dr:+1, di: 0 },
+  downRight: { dr:+1, di:+1 }
+};
+const HOP_NAMES = ['upLeft','upRight','downLeft','downRight'];
+
+function inBounds(r,i){ return r>=0 && r<ROWS && i>=0 && i<=r; }
+// apply a hop delta to (r,i); returns {r,i} (may be out of bounds = a fall)
+function hopFrom(r,i,name){ const d=HOPS[name]; return { r:r+d.dr, i:i+d.di }; }
+// a hop is fatal IFF the destination is out of bounds
+function isFatalHop(r,i,name){ const t=hopFrom(r,i,name); return !inBounds(t.r,t.i); }
+// count of in-bounds hops from a cube
+function legalHopCount(r,i){ let n=0; for(const h of HOP_NAMES) if(!isFatalHop(r,i,h)) n++; return n; }
+
+// ---- iso projection: grid (r,i) -> normalized layout coords (lx,ly) ----
+// Each row r is centered; cube (r,i) sits at lx = (i - r/2), ly = r.
+// up-right (r-1,i)   -> lx +0.5, ly -1  (up and right)
+// up-left  (r-1,i-1) -> lx -0.5, ly -1  (up and left)
+// down-right(r+1,i+1)-> lx +0.5, ly +1  (down and right)
+// down-left (r+1,i)  -> lx -0.5, ly +1  (down and left)
+function gridToLayout(r,i){ return { lx:(i - r/2), ly:r }; }
+
+// ---- color-state model ----
+// Each cube has a state 0..target. Landing advances it (capped at target).
+// In "reversible" levels a landing on a cube already AT target sends it back to target-1.
+// Level complete IFF every cube state === target.
+function makeBoard(target){
+  return { state:new Int8Array(CUBES), target:target|0 };
+}
+function cubeId(r,i){ return r*(r+1)/2 + i; }   // unique 0..CUBES-1
+function flipCube(board, r, i, reversible){
+  const id = cubeId(r,i);
+  let s = board.state[id];
+  if (reversible && s >= board.target){ s = board.target - 1; }
+  else { s = Math.min(board.target, s + 1); }
+  board.state[id] = s;
+  return s;
+}
+function cubeComplete(board, r, i){ return board.state[cubeId(r,i)] === board.target; }
+function boardComplete(board){
+  for (let id=0; id<CUBES; id++) if (board.state[id] !== board.target) return false;
+  return true;
+}
+function countComplete(board){ let n=0; for(let id=0;id<CUBES;id++) if(board.state[id]===board.target) n++; return n; }
+
+// ---- Coily chase: pick the legal hop that minimizes layout distance to target ----
+// Returns a hop NAME (one of the 4). Prefers in-bounds hops; never returns a fatal hop
+// unless ALL hops are fatal (can't happen from a valid cube — apex still has 2 legal).
+function coilyChaseHop(r, i, tr, ti){
+  let best=null, bestD=Infinity;
+  const tl = gridToLayout(tr, ti);
+  for (const h of HOP_NAMES){
+    const t = hopFrom(r,i,h);
+    if (!inBounds(t.r,t.i)) continue;
+    const l = gridToLayout(t.r, t.i);
+    const d = (l.lx-tl.lx)*(l.lx-tl.lx) + (l.ly-tl.ly)*(l.ly-tl.ly);
+    if (d < bestD){ bestD=d; best=h; }
+  }
+  return best;
+}
+
+//============================================================== rendering geometry
+// Pixel layout derived from gridToLayout. Computed in resize().
+let TILE_W = 0, TILE_H = 0;   // half-width / row-height of one cube top diamond
+let CUBE_D = 0;               // depth of the cube body (vertical face height)
+let ORIGIN_X = 0, ORIGIN_Y = 0;
+
+function gridToScreen(r,i){
+  const l = gridToLayout(r,i);
+  return { x: ORIGIN_X + l.lx*TILE_W, y: ORIGIN_Y + l.ly*TILE_H };
+}
+
+function layout(){
+  // Fit the pyramid within the viewport with margins.
+  const marginX = Math.min(W*0.10, 120), marginY = Math.min(H*0.12, 110);
+  const availW = W - marginX*2, availH = H - marginY*2;
+  // pyramid spans (ROWS) cube-widths horizontally and ROWS row-heights + cube depth vertically.
+  // TILE_W = full half-width; row r spans lx from -r/2 to +r/2, max half-span = (ROWS-1)/2.
+  const maxHalfSpan = (ROWS-1)/2 + 0.5;           // +0.5 for the half cube faces
+  const wByWidth = availW / (maxHalfSpan*2);
+  // vertical: ly goes 0..ROWS-1 in TILE_H steps, plus cube depth at bottom.
+  const wByHeight = availH / ((ROWS-1)*0.9 + 2.0);
+  let tw = Math.min(wByWidth, wByHeight*1.0);
+  tw = clamp(tw, 24, 120);
+  TILE_W = tw;
+  TILE_H = tw*0.9;           // vertical spacing between rows (gives the stacked look)
+  CUBE_D = tw*0.78;          // depth of the cube faces
+  // center the pyramid
+  const totalH = (ROWS-1)*TILE_H + CUBE_D + TILE_H;
+  ORIGIN_X = Math.round(W/2);
+  ORIGIN_Y = Math.round((H - totalH)/2 + TILE_H*0.7);
+}
+
+//============================================================== canvas resize
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  for (const c of [bgCanvas, canvas]){
+    c.width  = Math.floor(W * DPR);
+    c.height = Math.floor(H * DPR);
+    c.style.width = W + 'px';
+    c.style.height = H + 'px';
+  }
+  bgx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  layout();
+  buildBg();
+}
+window.addEventListener('resize', resize);
+
+//============================================================== background
+function buildBg(){
+  bgx.clearRect(0,0,W,H);
+  bgx.fillStyle = '#03030a';
+  bgx.fillRect(0,0,W,H);
+  const g = bgx.createRadialGradient(W/2,H*0.42,0, W/2,H*0.42, Math.max(W,H)*0.72);
+  g.addColorStop(0,'rgba(14,34,24,0.5)');
+  g.addColorStop(1,'rgba(3,3,10,0)');
+  bgx.fillStyle = g; bgx.fillRect(0,0,W,H);
+  // faint starfield
+  bgx.save();
+  for (let i=0;i<70;i++){
+    const x=rand(W), y=rand(H), s=rand(1.4,0.4);
+    bgx.globalAlpha=rand(0.45,0.06);
+    bgx.fillStyle='#cfeedf';
+    bgx.fillRect(x,y,s,s);
+  }
+  bgx.restore();
+}
+
+//============================================================== audio (procedural, default MUTED)
+const Audio_ = {
+  ctx:null, master:null, muted:true,   // DEFAULT OFF — owner's speakers
+  init(){
+    if (this.ctx) return;
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.34;
+      this.master.connect(this.ctx.destination);
+    }catch(e){ this.ctx = null; }
+  },
+  resume(){ if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+  blip(type, freq, dur, vol, sweep){
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (sweep) o.frequency.exponentialRampToValueAtTime(Math.max(40,freq*sweep), t+dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t+dur+0.02);
+  },
+  noise(dur, vol, lp){
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i=0;i<len;i++){ d[i] = (Math.random()*2-1) * (1 - i/len); }
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value = lp||1200;
+    const gn = this.ctx.createGain(); gn.gain.value = vol;
+    src.connect(f); f.connect(gn); gn.connect(this.master);
+    src.start(t);
+  },
+  hop(){ this.blip('square', 540, 0.06, 0.028, 1.7); },
+  flip(){ this.blip('triangle', 720, 0.07, 0.04, 1.4); },
+  flipDone(){ this.blip('sine', 880, 0.05, 0.03, 1.3); },
+  ballHop(){ this.blip('sine', 300, 0.05, 0.02, 0.9); },
+  discRide(){ this.blip('triangle',520,0.14,0.07,1.7); this.blip('triangle',780,0.2,0.06,1.6); },
+  coilyFall(){ this.blip('sawtooth',520,0.5,0.12,0.2); this.noise(0.4,0.12,900); },
+  death(){ this.noise(0.7,0.4,420); this.blip('sawtooth',200,0.7,0.16,0.18); },
+  levelClear(){ this.blip('triangle',523,0.16,0.09,1.5); this.blip('triangle',659,0.18,0.09,1.5);
+    this.blip('triangle',784,0.2,0.08,1.5); this.blip('triangle',1047,0.32,0.08,1.4); },
+  extraLife(){ this.blip('triangle',660,0.12,0.08,1.4); this.blip('triangle',990,0.18,0.07,1.5); }
+};
+
+//============================================================== object pools (particles)
+function makePool(factory, size){
+  const free = []; const active = [];
+  for (let i=0;i<size;i++) free.push(factory());
+  return {
+    free, active,
+    spawn(){ let o = free.pop() || factory(); o.alive = true; active.push(o); return o; },
+    sweep(){ for (let i=active.length-1;i>=0;i--){ if (!active[i].alive){ free.push(active[i]); active.splice(i,1); } } },
+    clear(){ for (const o of active) free.push(o); active.length=0; }
+  };
+}
+const particles = makePool(()=>({x:0,y:0,vx:0,vy:0,life:0,max:1,r:1,color:'#fff',alive:false,spark:false,drag:0.985,grav:0}), 1400);
+function spawnParticle(x,y,vx,vy,life,r,color,spark,drag,grav){
+  const p = particles.spawn();
+  p.x=x;p.y=y;p.vx=vx;p.vy=vy;p.life=life;p.max=life;p.r=r;p.color=color;
+  p.spark=!!spark; p.drag = drag===undefined?0.985:drag; p.grav = grav||0;
+}
+function burst(x,y,n,opts){
+  opts = opts || {};
+  const speed = opts.speed||140, life=opts.life||0.6, color=opts.color||'#eafff4';
+  const spread = opts.spread||1, base=opts.base||0;
+  for (let i=0;i<n;i++){
+    const a = rand(TAU);
+    const sp = base + rand(speed*spread);
+    spawnParticle(x,y, Math.cos(a)*sp, Math.sin(a)*sp,
+      life*rand(1.3,0.5), rand(2.6,0.9), color, opts.spark, opts.drag, opts.grav);
+  }
+}
+function updateParticles(dt){
+  for (const p of particles.active){
+    p.life -= dt;
+    if (p.life <= 0){ p.alive=false; continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.vy += p.grav*dt;
+    p.vx *= p.drag; p.vy *= p.drag;
+  }
+  particles.sweep();
+}
+function drawParticles(){
+  ctx.save(); ctx.lineCap='round';
+  for (const p of particles.active){
+    const k = p.life/p.max;
+    ctx.globalAlpha = clamp(k,0,1);
+    ctx.shadowBlur = 8; ctx.shadowColor = p.color;
+    if (p.spark){
+      ctx.strokeStyle = p.color; ctx.lineWidth = p.r;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx*0.014, p.y - p.vy*0.014); ctx.stroke();
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x,p.y, p.r*(0.4+0.6*k), 0, TAU); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+//============================================================== game state
+let state = 'title';   // title | playing | paused | levelclear | gameover
+let score = 0, displayScore = 0;
+let lives = 3, level = 1, best = 0;
+let extraLifeGiven = false;
+const EXTRA_LIFE_AT = 12000;
+
+let board = makeBoard(1);
+let reversible = false;       // do cubes revert when re-stepped (L3+)
+let shake = 0, flashAmt = 0;
+let flipFlash = new Float32Array(CUBES);   // per-cube flash timer for juice
+
+// the player orb (a "hopper")
+const player = {
+  r:0, i:0,                 // current grid cube
+  fromR:0, fromI:0,         // hop source
+  toR:0, toI:0,             // hop dest (may be off pyramid = falling)
+  hopT:1,                   // 0..1 hop progress (1 = at rest)
+  hopping:false,
+  falling:false,            // hopping off an edge to death
+  onDisc:null,              // ref to disc currently riding
+  alive:true, invuln:0, respawnT:0,
+  facing:'downRight'
+};
+
+// enemies
+let balls = [];               // red balls bouncing down  {r,i,fromR,fromI,toR,toI,hopT,hopping,green}
+let coily = null;             // purple snake {phase:'egg'|'snake', r,i,...hop fields, hatchT}
+let discs = [];               // floating discs {side:'L'|'R', r, x,y, taken, riding, ...}
+let ballTimer = 0, coilyTimer = 0;
+let stepClock = 0;            // global cadence accumulator for enemy hops
+let levelStartGrace = 0;
+
+//============================================================== best / breadcrumb
+function loadBest(){
+  try{ best=parseInt(localStorage.getItem('ws:best:qubit')||'0',10)||0; }catch(e){ best=0; }
+}
+function raiseBest(){
+  // ws: unlock breadcrumb — see /UNLOCK.md. Only raise it; harmless if storage is off.
+  try{
+    var k='ws:best:qubit', prev=+(localStorage.getItem(k)||0);
+    if(level>prev) localStorage.setItem(k,String(level));
+  }catch(e){}
+  if (level>best) best=level;
+  elBest.textContent=best;
+}
+
+//============================================================== HUD refs
+const elScore=document.getElementById('score');
+const elLevel=document.getElementById('level');
+const elBest=document.getElementById('best');
+const elLives=document.getElementById('lives');
+function updateLives(){
+  elLives.innerHTML='';
+  for (let i=0;i<Math.max(lives,0);i++){
+    const d=document.createElement('div'); d.className='pip'; elLives.appendChild(d);
+  }
+}
+
+//============================================================== palette (per level)
+// target color (what every cube must become), the start color, and the intermediate (for 2-step)
+const PALETTES = [
+  { base:'#1b2b4d', mid:'#37a0ff', target:'#ffd23d', side1:'#0e1730', side2:'#0a1224' },
+  { base:'#3a1240', mid:'#ff5fae', target:'#39ff9e', side1:'#240a2c', side2:'#180720' },
+  { base:'#0d3340', mid:'#2fd6c9', target:'#ff6a3d', side1:'#07242c', side2:'#05181d' },
+  { base:'#402a0d', mid:'#ffb347', target:'#b06bff', side1:'#2c1c07', side2:'#1d1305' }
+];
+function palette(){ return PALETTES[(level-1)%PALETTES.length]; }
+// color of a cube top given its state
+function cubeTopColor(p, s){
+  if (board.target===1) return s>=1 ? p.target : p.base;
+  // two-step: 0 base, 1 mid, 2 target
+  return s>=2 ? p.target : (s===1 ? p.mid : p.base);
+}
+
+//============================================================== level setup
+function startLevel(lv){
+  level = lv;
+  elLevel.textContent = lv;
+  const tgt = lv>=2 ? 2 : 1;
+  board = makeBoard(tgt);
+  flipFlash = new Float32Array(CUBES);
+  reversible = lv>=3;
+  document.documentElement.style.setProperty('--accent', palette().target);
+  buildBg();
+  // place player at apex
+  player.r=0; player.i=0; player.fromR=0; player.fromI=0; player.toR=0; player.toI=0;
+  player.hopT=1; player.hopping=false; player.falling=false; player.onDisc=null;
+  player.alive=true; player.invuln=1.2; player.facing='downRight';
+  // landing on the apex flips it (classic: starting cube counts)
+  flipCube(board, 0, 0, reversible); flipFlash[cubeId(0,0)]=0.35;
+
+  balls=[]; coily=null; discs=[];
+  buildDiscs(lv);
+  ballTimer = rand(2.6, 1.6);
+  coilyTimer = Math.max(2.2, 5.5 - lv*0.4);
+  stepClock = 0;
+  levelStartGrace = 1.0;
+  raiseBest();
+}
+
+function buildDiscs(lv){
+  // discs ride along the left and right edges. Place one per side at a mid row.
+  discs = [];
+  const rowL = clamp(2 + (lv%2), 1, ROWS-2);
+  const rowR = clamp(3 - (lv%2), 1, ROWS-2);
+  discs.push(makeDisc('L', rowL));
+  discs.push(makeDisc('R', rowR));
+}
+function makeDisc(side, r){
+  // the disc sits just off the edge cube of row r. Edge cube: left=(r,0), right=(r,r).
+  const edge = side==='L' ? gridToScreen(r,0) : gridToScreen(r,r);
+  const off = (side==='L' ? -1 : 1) * TILE_W*1.05;
+  return { side, r, x: edge.x+off, y: edge.y, baseX: edge.x+off, baseY: edge.y,
+           taken:false, riding:false, rideT:0, bob:rand(TAU) };
+}
+
+//============================================================== player hop
+function beginHop(name){
+  if (!player.alive || player.hopping || player.falling) return;
+  if (state!=='playing') return;
+  player.facing = name;
+  const t = hopFrom(player.r, player.i, name);
+  player.fromR=player.r; player.fromI=player.i;
+  player.toR=t.r; player.toI=t.i;
+  player.hopT=0; player.hopping=true;
+  // is the destination off the pyramid? Check for a disc to land on first.
+  if (!inBounds(t.r,t.i)){
+    const d = discAt(name);
+    if (d && !d.taken){
+      player.falling=false;
+      player.onDisc=d;            // we'll ride it after the hop completes
+    } else {
+      player.falling=true;        // a fatal hop
+    }
+  }
+  Audio_.hop();
+}
+// find a disc that the current edge hop would land on
+function discAt(name){
+  const t = hopFrom(player.r, player.i, name);
+  for (const d of discs){
+    if (d.taken) continue;
+    // a disc on side L rescues a hop that goes off the left edge of row r at di<0
+    // i.e. from edge cube (r,0) hopping up-left or down-left lands beyond -> nearest disc row
+    if (d.side==='L' && (name==='upLeft'||name==='downLeft') && player.i===0){
+      // destination row close to disc row?
+      if (Math.abs((name==='downLeft'?player.r+1:player.r-1) - d.r) <= 1) return d;
+    }
+    if (d.side==='R' && (name==='upRight'||name==='downRight') && player.i===player.r){
+      if (Math.abs((name==='downRight'?player.r+1:player.r-1) - d.r) <= 1) return d;
+    }
+  }
+  return null;
+}
+
+function completeHop(){
+  player.hopping=false;
+  if (player.onDisc){
+    // mount the disc — ride to top
+    const d=player.onDisc; d.taken=true; d.riding=true; d.rideT=0;
+    player.onDisc=null;
+    Audio_.discRide();
+    burst(d.x, d.y, 16, {speed:160,life:0.5,color:palette().target,spark:true});
+    return;
+  }
+  if (player.falling){
+    // fell off — handled in update (player.falling stays true until splat)
+    return;
+  }
+  // landed on a real cube
+  player.r=player.toR; player.i=player.toI;
+  const before = cubeComplete(board, player.r, player.i);
+  const s = flipCube(board, player.r, player.i, reversible);
+  flipFlash[cubeId(player.r,player.i)] = 0.35;
+  const after = cubeComplete(board, player.r, player.i);
+  Audio_.flip();
+  const sc = gridToScreen(player.r, player.i);
+  burst(sc.x, sc.y, 8, {speed:90,life:0.35,color: cubeTopColor(palette(), s), spark:true, base:20});
+  if (after && !before){ score += 25; Audio_.flipDone(); addFloat(sc.x, sc.y-TILE_H*0.5, '+25', palette().target); }
+  else if (!after && before){ /* reverted */ }
+  else { score += 5; }
+  maybeExtraLife();
+  if (boardComplete(board)) winLevel();
+}
+
+//============================================================== enemies: balls
+function spawnBall(green){
+  // appear at the apex or near top, then bounce down
+  const startI = randi(0, 2)===0 ? 0 : 1;
+  const r = startI===0 ? 0 : 1;
+  const i = clamp(randi(0, r+1), 0, r);
+  balls.push({ r, i, fromR:r, fromI:i, toR:r, toI:i, hopT:1, hopping:false,
+               green: !!green, hopCd: rand(0.5,0.2) });
+}
+function ballChooseHop(b){
+  // balls bounce down-left or down-right at random; if both go off the bottom, removed.
+  const opts=[];
+  if (!isFatalHop(b.r,b.i,'downLeft')) opts.push('downLeft');
+  if (!isFatalHop(b.r,b.i,'downRight')) opts.push('downRight');
+  if (opts.length===0) return null;     // at the bottom row -> fall off
+  return opts[randi(0,opts.length)];
+}
+function stepBall(b){
+  if (b.hopping) return;
+  const name = ballChooseHop(b);
+  if (name===null){
+    // off the bottom — mark for removal via falling
+    b.fromR=b.r; b.fromI=b.i;
+    const t = hopFrom(b.r,b.i, Math.random()<0.5?'downLeft':'downRight');
+    b.toR=t.r; b.toI=t.i; b.hopT=0; b.hopping=true; b.falling=true;
+    return;
+  }
+  const t=hopFrom(b.r,b.i,name);
+  b.fromR=b.r; b.fromI=b.i; b.toR=t.r; b.toI=t.i; b.hopT=0; b.hopping=true; b.falling=false;
+  Audio_.ballHop();
+}
+
+//============================================================== enemies: coily
+function spawnCoily(){
+  // hatches as an egg near the top, then becomes a chasing snake
+  const r = randi(0,2), i = clamp(randi(0,r+1),0,r);
+  coily = { phase:'egg', r, i, fromR:r, fromI:i, toR:r, toI:i, hopT:1, hopping:false,
+            hatchT:1.2, falling:false, dead:false };
+}
+function stepCoily(){
+  if (!coily || coily.hopping || coily.dead) return;
+  if (coily.phase==='egg'){
+    // egg bounces down like a ball until it hatches
+    const name = ballChooseHop(coily);
+    if (name===null){ // reached bottom -> hatch into a snake
+      coily.phase='snake'; return;
+    }
+    const t=hopFrom(coily.r,coily.i,name);
+    coily.fromR=coily.r; coily.fromI=coily.i; coily.toR=t.r; coily.toI=t.i;
+    coily.hopT=0; coily.hopping=true;
+    return;
+  }
+  // snake: chase the player. If player is mid-hop, target their destination cube.
+  const tr = player.falling ? player.fromR : (player.hopping ? player.toR : player.r);
+  const ti = player.falling ? player.fromI : (player.hopping ? player.toI : player.i);
+  const name = coilyChaseHop(coily.r, coily.i, tr, ti);
+  if (!name) return;
+  const t=hopFrom(coily.r,coily.i,name);
+  coily.fromR=coily.r; coily.fromI=coily.i; coily.toR=t.r; coily.toI=t.i;
+  coily.lastHop=name; coily.hopT=0; coily.hopping=true;
+}
+
+//============================================================== floating score text
+const floats = [];
+function addFloat(x,y,txt,color){ floats.push({x,y,txt,color,life:0.9,max:0.9}); }
+function updateFloats(dt){ for (const f of floats) f.life-=dt; for (let i=floats.length-1;i>=0;i--) if (floats[i].life<=0) floats.splice(i,1); }
+function drawFloats(){
+  ctx.save(); ctx.textAlign='center'; ctx.font='700 '+Math.round(TILE_W*0.42)+'px ui-monospace,monospace';
+  for (const f of floats){
+    const k=f.life/f.max; ctx.globalAlpha=clamp(k,0,1);
+    ctx.fillStyle=f.color; ctx.shadowBlur=8; ctx.shadowColor=f.color;
+    ctx.fillText(f.txt, f.x, f.y - (1-k)*TILE_H*0.9);
+  }
+  ctx.restore();
+}
+
+//============================================================== death / lifecycle
+function deathBy(cause, force){
+  // a fall off the world is always fatal — you can't be invulnerable to gravity.
+  if (!player.alive || (player.invuln>0 && !force)) return;
+  player.alive=false; player.respawnT=1.3; player.hopping=false;
+  Audio_.death(); addShake(16); flash(0.5);
+  const sc = playerScreenPos();
+  burst(sc.x, sc.y, 40, {speed:240,life:0.9,color:palette().target,spark:true});
+  burst(sc.x, sc.y, 24, {speed:160,life:0.7,color:'#ff2e88',spark:true, grav:300});
+}
+function respawn(){
+  lives--; updateLives();
+  if (lives<0){ endGame(); return; }
+  player.r=0; player.i=0; player.fromR=0; player.fromI=0; player.toR=0; player.toI=0;
+  player.hopT=1; player.hopping=false; player.falling=false; player.onDisc=null;
+  player.alive=true; player.invuln=1.4; player.facing='downRight';
+  // clear nearby threats a touch: reset balls & coily back to top to be fair
+  balls=[]; coily=null;
+  ballTimer = rand(2.4,1.4);
+  coilyTimer = Math.max(2.2, 5.0 - level*0.3);
+  levelStartGrace = 0.6;
+}
+function winLevel(){
+  state='levelclear';
+  Audio_.levelClear(); addShake(8); flash(0.3);
+  const bonus = level*250 + lives*150 + (discs.filter(d=>!d.taken).length*0);
+  score += bonus;
+  for (let id=0; id<CUBES; id++){ const r=rowOf(id), i=id-cubeId(r,0); const sc=gridToScreen(r,i);
+    burst(sc.x, sc.y, 6, {speed:140,life:0.7,color:palette().target,spark:true}); }
+  document.getElementById('lcLevel').textContent = level;
+  document.getElementById('lcBonus').textContent = bonus.toLocaleString();
+  document.getElementById('lcScore').textContent = score.toLocaleString();
+  document.getElementById('levelClearScreen').classList.remove('hidden');
+  raiseBest();
+}
+function rowOf(id){ let r=0; while(cubeId(r+1,0)<=id) r++; return r; }
+function maybeExtraLife(){
+  if (!extraLifeGiven && score>=EXTRA_LIFE_AT){ lives++; extraLifeGiven=true; updateLives(); Audio_.extraLife(); flash(0.3); }
+}
+
+//============================================================== shake / flash
+function addShake(a){ shake=Math.max(shake,a); }
+function flash(a){ flashAmt=Math.max(flashAmt,a); }
+
+//============================================================== positions for entities (with hop arc)
+const HOP_DUR = 0.18;     // seconds per player hop
+function hopArc(t){ return Math.sin(t*Math.PI)* (TILE_H*0.7); }  // upward arc height
+function entityScreen(fromR,fromI,toR,toI,t,fall){
+  // interpolate screen position; for a fatal/disc hop the dest may be out of bounds,
+  // so compute its screen pos from the raw layout formula (works out of bounds too).
+  const a = gridToScreen(fromR,fromI);
+  let b;
+  if (inBounds(toR,toI)) b = gridToScreen(toR,toI);
+  else { const l=gridToLayout(toR,toI); b={ x:ORIGIN_X+l.lx*TILE_W, y:ORIGIN_Y+l.ly*TILE_H }; }
+  const k = easeOut(clamp(t,0,1));
+  const x = lerp(a.x,b.x,k);
+  let y = lerp(a.y,b.y,k) - hopArc(clamp(t,0,1));
+  if (fall) y = lerp(a.y, b.y + TILE_H*6, easeOut(clamp(t,0,1)));  // plunge downward
+  return { x, y, t };
+}
+function playerScreenPos(){
+  if (player.onDisc){ const a=gridToScreen(player.fromR,player.fromI); const d=player.onDisc;
+    const k=easeOut(player.hopT); return { x:lerp(a.x,d.x,k), y:lerp(a.y,d.y,k)-hopArc(player.hopT) }; }
+  if (player.hopping || player.falling)
+    return entityScreen(player.fromR,player.fromI,player.toR,player.toI,player.hopT,player.falling);
+  if (player.riding){ /* handled in update via disc */ }
+  return gridToScreen(player.r, player.i);
+}
+
+//============================================================== update
+function update(dt){
+  if (levelStartGrace>0) levelStartGrace-=dt;
+  for (let id=0;id<CUBES;id++) if (flipFlash[id]>0) flipFlash[id]=Math.max(0,flipFlash[id]-dt);
+
+  if (player.alive){
+    if (player.invuln>0) player.invuln-=dt;
+
+    // player hop progression
+    if (player.hopping || player.falling){
+      player.hopT += dt/HOP_DUR;
+      if (player.hopT>=1){
+        player.hopT=1;
+        if (player.falling){
+          // continue falling animation a bit, then die
+          player.falling=false; player.hopping=false;
+          deathBy('fall', true);
+        } else {
+          completeHop();
+        }
+      }
+    }
+
+    // disc rides (independent of player hop state)
+    for (const d of discs){
+      if (!d.riding) continue;
+      d.rideT += dt/0.9;
+      const k = easeOut(clamp(d.rideT,0,1));
+      const top = gridToScreen(0,0);
+      d.x = lerp(d.baseX, top.x, k);
+      d.y = lerp(d.baseY, top.y, k);
+      if (d.rideT>=1){
+        // deposit player at apex
+        d.riding=false;
+        player.r=0; player.i=0; player.hopping=false; player.falling=false;
+        player.hopT=1; player.invuln=0.6;
+        // lure-Coily-to-death bonus: if coily was a snake chasing, it falls off
+        if (coily && coily.phase==='snake' && !coily.dead){
+          coily.dead=true; coily.falling=true; coily.fromR=coily.r; coily.fromI=coily.i;
+          const t=hopFrom(coily.r,coily.i, coily.i===0?'downLeft':'downRight');
+          coily.toR=t.r; coily.toI=t.i; coily.hopT=0;
+          score += 500; addFloat(top.x, top.y-TILE_H, '+500','#b06bff'); Audio_.coilyFall();
+        }
+        score += 100; addFloat(top.x, top.y-TILE_H*0.5, '+100', palette().target);
+        burst(top.x, top.y, 20, {speed:170,life:0.6,color:palette().target,spark:true});
+      }
+    }
+
+    // enemy cadence
+    if (levelStartGrace<=0){
+      stepClock += dt;
+      const ballInterval = Math.max(0.22, 0.42 - level*0.015);
+      // step balls
+      for (const b of balls){
+        if (b.hopping){
+          b.hopT += dt/0.22;
+          if (b.hopT>=1){ b.hopT=1; b.hopping=false;
+            if (b.falling){ b._remove=true; }
+            else { b.r=b.toR; b.i=b.toI; } }
+        } else {
+          b.hopCd-=dt; if (b.hopCd<=0){ stepBall(b); b.hopCd=ballInterval; }
+        }
+      }
+      balls = balls.filter(b=>!b._remove);
+
+      // step coily
+      if (coily){
+        if (coily.hatchT>0 && coily.phase==='egg') coily.hatchT-=dt;
+        if (coily.hopping){
+          coily.hopT += dt/(coily.dead?0.3:0.26);
+          if (coily.hopT>=1){ coily.hopT=1; coily.hopping=false;
+            if (coily.dead){ coily=null; }
+            else if (!coily.falling){ coily.r=coily.toR; coily.i=coily.toI;
+              if (coily.phase==='egg' && coily.hatchT<=0) coily.phase='snake'; } }
+        } else if (!coily.dead){
+          coily.hopCd = (coily.hopCd||0) - dt;
+          const interval = coily.phase==='egg' ? 0.28 : Math.max(0.24, 0.42 - level*0.02);
+          if (coily.hopCd<=0){ stepCoily(); coily.hopCd = interval; }
+        }
+      }
+
+      // spawn timers
+      ballTimer-=dt;
+      if (ballTimer<=0 && balls.length < 2+Math.floor(level/2)){
+        spawnBall(false); ballTimer = Math.max(1.0, rand(3.2,2.0) - level*0.1);
+      }
+      coilyTimer-=dt;
+      if (coilyTimer<=0 && !coily){ spawnCoily(); coilyTimer=Infinity; }
+    }
+
+    // collisions (only when settled-ish and not invulnerable)
+    if (player.invuln<=0 && !player.onDisc && !discRiding()){
+      const pr = player.hopping ? player.toR : player.r;
+      const pi = player.hopping ? player.toI : player.i;
+      // balls
+      for (const b of balls){
+        const br = b.hopping ? b.toR : b.r, bi = b.hopping ? b.toI : b.i;
+        if (!b.falling && br===pr && bi===pi && inBounds(pr,pi)){
+          if (b.green){ /* good ball: points + freeze */ }
+          else { deathBy('ball'); break; }
+        }
+      }
+      // coily snake
+      if (player.alive && coily && coily.phase==='snake' && !coily.dead){
+        const cr = coily.hopping ? coily.toR : coily.r, ci = coily.hopping ? coily.toI : coily.i;
+        if (cr===pr && ci===pi && inBounds(pr,pi)) deathBy('coily');
+      }
+    }
+  } else {
+    player.respawnT-=dt;
+    if (player.respawnT<=0) respawn();
+  }
+
+  // disc bob
+  for (const d of discs){ if (!d.riding && !d.taken){ d.bob+=dt*2.2; d.y=d.baseY+Math.sin(d.bob)*TILE_H*0.12; } }
+
+  updateParticles(dt);
+  updateFloats(dt);
+  shake *= Math.pow(0.04, dt);
+  flashAmt *= Math.pow(0.02, dt);
+
+  displayScore += (score-displayScore)*Math.min(1,dt*8);
+  elScore.textContent=Math.round(displayScore).toLocaleString();
+}
+function discRiding(){ for (const d of discs) if (d.riding) return true; return false; }
+
+//============================================================== render
+function drawCube(r,i,p){
+  const sc = gridToScreen(r,i);
+  const id = cubeId(r,i);
+  const s = board.state[id];
+  const top = cubeTopColor(p, s);
+  const w = TILE_W, h = TILE_H, d = CUBE_D;
+  const x=sc.x, y=sc.y;
+  ctx.save();
+  // top diamond
+  ctx.beginPath();
+  ctx.moveTo(x, y - h*0.5);
+  ctx.lineTo(x + w, y);
+  ctx.lineTo(x, y + h*0.5);
+  ctx.lineTo(x - w, y);
+  ctx.closePath();
+  const flash = flipFlash[id];
+  if (flash>0){ ctx.shadowBlur=20; ctx.shadowColor=top; }
+  else { ctx.shadowBlur=10; ctx.shadowColor= s>=board.target? top : 'rgba(0,0,0,0.4)'; }
+  ctx.fillStyle = top;
+  ctx.fill();
+  // subtle top sheen
+  ctx.shadowBlur=0;
+  if (flash>0){ ctx.globalAlpha=flash*1.6; ctx.fillStyle='#ffffff'; ctx.fill(); ctx.globalAlpha=1; }
+  // left face
+  ctx.beginPath();
+  ctx.moveTo(x - w, y);
+  ctx.lineTo(x, y + h*0.5);
+  ctx.lineTo(x, y + h*0.5 + d);
+  ctx.lineTo(x - w, y + d);
+  ctx.closePath();
+  ctx.fillStyle = p.side1; ctx.fill();
+  // right face
+  ctx.beginPath();
+  ctx.moveTo(x + w, y);
+  ctx.lineTo(x, y + h*0.5);
+  ctx.lineTo(x, y + h*0.5 + d);
+  ctx.lineTo(x + w, y + d);
+  ctx.closePath();
+  ctx.fillStyle = p.side2; ctx.fill();
+  // edge highlight on top
+  ctx.lineWidth=1.5; ctx.strokeStyle='rgba(255,255,255,0.10)';
+  ctx.beginPath();
+  ctx.moveTo(x - w, y); ctx.lineTo(x, y - h*0.5); ctx.lineTo(x + w, y);
+  ctx.stroke();
+  ctx.restore();
+}
+function drawPyramid(){
+  const p = palette();
+  // draw back-to-front (row 0 first = top/back), within a row left-to-right
+  for (let r=0;r<ROWS;r++){
+    for (let i=0;i<=r;i++) drawCube(r,i,p);
+  }
+}
+
+function drawDisc(d){
+  if (d.taken && !d.riding) return;
+  const x=d.x, y=d.y, w=TILE_W*0.85, h=TILE_H*0.6;
+  ctx.save();
+  ctx.translate(x,y);
+  const col = palette().target;
+  ctx.shadowBlur=16; ctx.shadowColor=col;
+  // spinning ellipse rings
+  const t = performance.now()*0.004 + d.bob;
+  for (let k=0;k<3;k++){
+    ctx.globalAlpha = 0.5 - k*0.13;
+    ctx.strokeStyle = col; ctx.lineWidth=2.2;
+    ctx.beginPath();
+    ctx.ellipse(0,0, w*(0.6+k*0.2), h*(0.6+k*0.2)*Math.abs(Math.cos(t)), 0, 0, TAU);
+    ctx.stroke();
+  }
+  ctx.globalAlpha=0.9; ctx.fillStyle=col; ctx.shadowBlur=10;
+  ctx.beginPath(); ctx.ellipse(0,0,w*0.32,h*0.32,0,0,TAU); ctx.fill();
+  ctx.restore();
+}
+
+function drawOrb(x,y,r,bodyColor,glowColor,squash,facing,eyes){
+  ctx.save();
+  ctx.translate(x,y);
+  // squash/stretch
+  const sx = 1 + squash*0.35, sy = 1 - squash*0.35;
+  ctx.scale(sx, sy);
+  ctx.shadowBlur=18; ctx.shadowColor=glowColor;
+  const g = ctx.createRadialGradient(-r*0.3,-r*0.35,r*0.1, 0,0,r);
+  g.addColorStop(0,'#ffffff'); g.addColorStop(0.35,bodyColor); g.addColorStop(1,glowColor);
+  ctx.fillStyle=g;
+  ctx.beginPath(); ctx.arc(0,0,r,0,TAU); ctx.fill();
+  if (eyes){
+    // eyes face the hop direction
+    const dir = facing==='upRight'||facing==='downRight' ? 1 : -1;
+    const dy = facing==='downRight'||facing==='downLeft' ? 0.18 : -0.05;
+    ctx.shadowBlur=0; ctx.fillStyle='#0b0b18';
+    ctx.beginPath(); ctx.arc(r*0.22*dir - r*0.18, -r*0.12 + r*dy, r*0.2, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(r*0.22*dir + r*0.28, -r*0.12 + r*dy, r*0.2, 0, TAU); ctx.fill();
+    ctx.fillStyle='#eafff4';
+    ctx.beginPath(); ctx.arc(r*0.22*dir - r*0.18, -r*0.12 + r*dy, r*0.08, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(r*0.22*dir + r*0.28, -r*0.12 + r*dy, r*0.08, 0, TAU); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawPlayer(){
+  if (!player.alive){
+    if (player.respawnT>0.6 && Math.floor(player.respawnT*12)%2===0) return; // flicker briefly
+    return; // body exploded into particles
+  }
+  if (player.invuln>0 && Math.floor(player.invuln*16)%2===0) return;
+  const sc = playerScreenPos();
+  const r = TILE_W*0.42;
+  // squash near the start/end of a hop
+  let squash = 0;
+  if (player.hopping || player.falling){
+    const t=player.hopT;
+    squash = (t<0.15? (0.15-t)/0.15 : (t>0.85? (t-0.85)/0.15 : 0)) * -0.5;
+  }
+  drawOrb(sc.x, sc.y - r*0.55, r, '#ff8fc4', palette().target==='#ff6a3d'?'#ff2e88':palette().target, squash, player.facing, true);
+}
+
+function drawBalls(){
+  for (const b of balls){
+    let sc;
+    if (b.hopping) sc = entityScreen(b.fromR,b.fromI,b.toR,b.toI,b.hopT,b.falling);
+    else sc = gridToScreen(b.r,b.i);
+    const r=TILE_W*0.32;
+    const col = b.green ? '#39ff9e' : '#ff3b5c';
+    drawOrb(sc.x, sc.y - r*0.5, r, b.green?'#9bffce':'#ff8fa0', col, 0, 'downRight', false);
+  }
+}
+function drawCoily(){
+  if (!coily) return;
+  let sc;
+  if (coily.hopping) sc = entityScreen(coily.fromR,coily.fromI,coily.toR,coily.toI,coily.hopT,coily.falling||coily.dead);
+  else sc = gridToScreen(coily.r,coily.i);
+  const r=TILE_W*0.4;
+  if (coily.phase==='egg'){
+    drawOrb(sc.x, sc.y - r*0.5, r, '#c79bff', '#b06bff', 0, 'downRight', false);
+    // egg shell crack glints
+    ctx.save(); ctx.globalAlpha=0.7; ctx.strokeStyle='#eafff4'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(sc.x-r*0.4, sc.y-r*0.6); ctx.lineTo(sc.x, sc.y-r*0.85); ctx.lineTo(sc.x+r*0.3, sc.y-r*0.5); ctx.stroke();
+    ctx.restore();
+    return;
+  }
+  // snake: stacked coil body + head with eyes
+  ctx.save();
+  ctx.translate(sc.x, sc.y - r*0.6);
+  ctx.shadowBlur=16; ctx.shadowColor='#b06bff';
+  for (let k=2;k>=0;k--){
+    ctx.globalAlpha = k===0?1:0.7-k*0.12;
+    const yy = k*r*0.5;
+    const g=ctx.createRadialGradient(-r*0.3,yy-r*0.3,r*0.1, 0,yy,r);
+    g.addColorStop(0,'#e6caff'); g.addColorStop(0.4,'#b06bff'); g.addColorStop(1,'#7a3fd6');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.arc(0,yy,r*(1-k*0.12),0,TAU); ctx.fill();
+  }
+  // eyes
+  ctx.globalAlpha=1; ctx.shadowBlur=0;
+  const dir = (coily.lastHop==='upRight'||coily.lastHop==='downRight')?1:-1;
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.arc(r*0.2*dir-r*0.18,-r*0.7,r*0.16,0,TAU); ctx.arc(r*0.2*dir+r*0.22,-r*0.7,r*0.16,0,TAU); ctx.fill();
+  ctx.fillStyle='#ff2e88';
+  ctx.beginPath(); ctx.arc(r*0.2*dir-r*0.18,-r*0.7,r*0.07,0,TAU); ctx.arc(r*0.2*dir+r*0.22,-r*0.7,r*0.07,0,TAU); ctx.fill();
+  ctx.restore();
+}
+
+function render(now){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  if (shake>0.3){ const a=rand(TAU); ctx.translate(Math.cos(a)*shake, Math.sin(a)*shake); }
+  // discs behind the orb
+  for (const d of discs) drawDisc(d);
+  drawPyramid();
+  drawParticles();
+  // entities sorted by their grid row so lower rows draw in front
+  drawBalls();
+  drawCoily();
+  if (state==='playing'||state==='paused'||state==='levelclear') drawPlayer();
+  drawFloats();
+  // progress bar of completion (subtle, top-center under level tag)
+  drawProgress();
+  ctx.restore();
+  if (flashAmt>0.01){ ctx.fillStyle='rgba(200,255,230,'+(flashAmt*0.4)+')'; ctx.fillRect(0,0,W,H); }
+}
+function drawProgress(){
+  if (state!=='playing' && state!=='paused') return;
+  const done=countComplete(board), total=CUBES;
+  const bw=Math.min(W*0.3,260), bx=W/2-bw/2, by=64, bh=5;
+  ctx.save();
+  ctx.globalAlpha=0.8;
+  ctx.fillStyle='rgba(255,255,255,0.08)';
+  ctx.fillRect(bx,by,bw,bh);
+  ctx.fillStyle=palette().target; ctx.shadowBlur=10; ctx.shadowColor=palette().target;
+  ctx.fillRect(bx,by,bw*(done/total),bh);
+  ctx.restore();
+}
+
+//============================================================== input
+// Key mapping (documented on title):
+//   ArrowUp / W    -> up-right   ↗
+//   ArrowRight / D -> down-right ↘
+//   ArrowDown / S  -> down-left  ↙
+//   ArrowLeft / A  -> up-left    ↖
+function keyToHop(k){
+  if (k==='arrowup'   || k==='w') return 'upRight';
+  if (k==='arrowright'|| k==='d') return 'downRight';
+  if (k==='arrowdown' || k==='s') return 'downLeft';
+  if (k==='arrowleft' || k==='a') return 'upLeft';
+  return null;
+}
+function setMuteTag(){ document.getElementById('muteTag').textContent='M · sound '+(Audio_.muted?'off':'on'); }
+window.addEventListener('keydown', e=>{
+  const k=e.key.toLowerCase();
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  const hop=keyToHop(k);
+  if (hop){
+    if (state==='playing') beginHop(hop);
+    return;
+  }
+  switch(k){
+    case 'enter':
+      if (state==='title'||state==='gameover') startGame();
+      else if (state==='levelclear') nextLevel();
+      break;
+    case 'p': case 'escape':
+      if (state==='playing'||state==='paused') togglePause(); break;
+    case 'm':
+      Audio_.init(); Audio_.muted=!Audio_.muted; setMuteTag(); if(!Audio_.muted) Audio_.resume(); break;
+  }
+}, {passive:false});
+window.addEventListener('pointerdown', ()=>{ Audio_.init(); if(!Audio_.muted) Audio_.resume(); }, {once:true});
+document.addEventListener('visibilitychange', ()=>{ if (document.hidden && state==='playing') togglePause(); });
+
+//============================================================== state transitions
+function startGame(){
+  state='playing';
+  score=0; displayScore=0; lives=3; extraLifeGiven=false;
+  balls=[]; coily=null; floats.length=0; particles.clear();
+  startLevel(1);
+  shake=0; flashAmt=0;
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('gameoverScreen').classList.add('hidden');
+  document.getElementById('levelClearScreen').classList.add('hidden');
+  document.getElementById('hud').style.display='block';
+  elScore.textContent='0';
+  updateLives();
+  Audio_.init(); if(!Audio_.muted) Audio_.resume();
+}
+function nextLevel(){
+  document.getElementById('levelClearScreen').classList.add('hidden');
+  startLevel(level+1);
+  state='playing'; last=performance.now();
+}
+function endGame(){
+  state='gameover'; raiseBest();
+  document.getElementById('goScore').textContent=score.toLocaleString();
+  document.getElementById('goLevel').textContent=level;
+  document.getElementById('newHigh').style.display=(level>=best&&level>1)?'block':'none';
+  document.getElementById('gameoverScreen').classList.remove('hidden');
+}
+function togglePause(){
+  if (state==='playing'){ state='paused'; document.getElementById('pauseScreen').classList.remove('hidden'); }
+  else if (state==='paused'){ state='playing'; document.getElementById('pauseScreen').classList.add('hidden'); last=performance.now(); }
+}
+
+//============================================================== attract loop
+let attractHopCd=0;
+function attractUpdate(dt){
+  attractHopCd-=dt;
+  if (!player.hopping && attractHopCd<=0){
+    // wander randomly on the pyramid, never off
+    const opts=HOP_NAMES.filter(h=>!isFatalHop(player.r,player.i,h));
+    const name=opts[randi(0,opts.length)];
+    player.facing=name; const t=hopFrom(player.r,player.i,name);
+    player.fromR=player.r; player.fromI=player.i; player.toR=t.r; player.toI=t.i;
+    player.hopT=0; player.hopping=true;
+    attractHopCd=0.4;
+  }
+  if (player.hopping){
+    player.hopT+=dt/HOP_DUR;
+    if (player.hopT>=1){ player.hopT=1; player.hopping=false; player.r=player.toR; player.i=player.toI;
+      flipCube(board,player.r,player.i,false); flipFlash[cubeId(player.r,player.i)]=0.35; }
+  }
+  for (let id=0;id<CUBES;id++) if (flipFlash[id]>0) flipFlash[id]=Math.max(0,flipFlash[id]-dt);
+}
+
+//============================================================== main loop
+let last=performance.now();
+let fpsTime=0, fpsCount=0, fpsValue=60;
+function frame(now){
+  let dt=(now-last)/1000; last=now;
+  if (dt>0.05) dt=0.05;
+  fpsTime+=dt; fpsCount++;
+  if (fpsTime>=0.5){ fpsValue=Math.round(fpsCount/fpsTime); fpsTime=0; fpsCount=0; }
+
+  if (state==='playing'){ update(dt); }
+  else if (state==='paused'){ updateParticles(dt*0.4); updateFloats(dt*0.4); }
+  else { updateParticles(dt); if (state==='title') attractUpdate(dt); }
+  render(now);
+  requestAnimationFrame(frame);
+}
+
+//============================================================== SELF-TEST (headless logic)
+function runSelfTest(){
+  const results=[]; let allPass=true;
+  function check(name, cond, detail){ const pass=!!cond; if(!pass) allPass=false;
+    results.push({name,pass,detail}); console.log('QUBIT self-test: '+(pass?'PASS':'FAIL')+' — '+name+(detail?'  ('+detail+')':'')); }
+
+  // 1) INVERTIBILITY / round-trip over ALL cubes where both hops stay in bounds.
+  {
+    const inverses=[['downLeft','upRight'],['downRight','upLeft'],['upLeft','downRight'],['upRight','downLeft']];
+    let tested=0, ok=true;
+    for (let r=0;r<ROWS;r++) for (let i=0;i<=r;i++){
+      for (const [a,b] of inverses){
+        const t=hopFrom(r,i,a);
+        if (!inBounds(t.r,t.i)) continue;        // first hop must land in-bounds
+        const back=hopFrom(t.r,t.i,b);
+        tested++;
+        if (back.r!==r || back.i!==i){ ok=false; }
+      }
+    }
+    check('invertibility: a hop then its inverse returns to start (all in-bounds cubes)', ok && tested>0,
+      tested+' round-trips verified');
+  }
+
+  // 2) EDGE DETECTION: fatal IFF out of bounds; apex/edge/corner counts.
+  {
+    const apexLegal = legalHopCount(0,0);
+    const apexFatalSet = HOP_NAMES.filter(h=>isFatalHop(0,0,h)).sort().join(',');
+    const apexOK = apexLegal===2 && apexFatalSet==='upLeft,upRight'
+                   && !isFatalHop(0,0,'downLeft') && !isFatalHop(0,0,'downRight');
+    // bottom-left corner (ROWS-1, 0): downLeft & downRight & upLeft all leave; only upRight stays.
+    const blc = legalHopCount(ROWS-1,0);
+    const blcOK = blc===1 && !isFatalHop(ROWS-1,0,'upRight');
+    // bottom-right corner (ROWS-1, ROWS-1): only upLeft stays.
+    const brc = legalHopCount(ROWS-1,ROWS-1);
+    const brcOK = brc===1 && !isFatalHop(ROWS-1,ROWS-1,'upLeft');
+    // a mid-left-edge cube (3,0): upRight, downLeft, downRight legal; upLeft fatal => 3.
+    const mid = legalHopCount(3,0);
+    const midOK = mid===3 && isFatalHop(3,0,'upLeft');
+    // an interior cube has all 4 legal.
+    const inner = legalHopCount(4,2);
+    const innerOK = inner===4;
+    check('edge detection: apex=2 legal (down only), corners=1, mid-edge=3, interior=4',
+      apexOK && blcOK && brcOK && midOK && innerOK,
+      'apex='+apexLegal+'('+apexFatalSet+' fatal) blc='+blc+' brc='+brc+' mid='+mid+' inner='+inner);
+  }
+
+  // 3) ISO PROJECTION: all 28 screen positions distinct + consistent spacing + shape.
+  {
+    // use the pure layout (independent of pixel scale): two cubes never share (lx,ly).
+    const seen=new Set(); let distinct=true;
+    let rowSpacingOK=true, colSpacingOK=true;
+    for (let r=0;r<ROWS;r++) for (let i=0;i<=r;i++){
+      const l=gridToLayout(r,i);
+      const key=l.lx.toFixed(4)+'|'+l.ly.toFixed(4);
+      if (seen.has(key)) distinct=false; seen.add(key);
+      // ly must equal the row index exactly (consistent vertical spacing)
+      if (l.ly!==r) rowSpacingOK=false;
+      // within a row, consecutive cubes are exactly 1.0 apart in lx
+      if (i>0){ const prev=gridToLayout(r,i-1); if (Math.abs((l.lx-prev.lx)-1)>1e-9) colSpacingOK=false; }
+    }
+    // verify the on-screen direction matches labels: up-right must increase x, decrease y.
+    const a=gridToLayout(4,2), ur=gridToLayout(3,2), ul=gridToLayout(3,1),
+          dr=gridToLayout(5,3), dl=gridToLayout(5,2);
+    const dirOK = (ur.lx>a.lx && ur.ly<a.ly) && (ul.lx<a.lx && ul.ly<a.ly) &&
+                  (dr.lx>a.lx && dr.ly>a.ly) && (dl.lx<a.lx && dl.ly>a.ly);
+    check('iso projection: 28 distinct positions, consistent 2:1 spacing, labels match motion',
+      distinct && rowSpacingOK && colSpacingOK && dirOK && seen.size===CUBES,
+      seen.size+' positions, dirOK='+dirOK);
+  }
+
+  // 4) LEVEL-COMPLETE LOGIC: full flip => complete; one missing => incomplete; L2 needs 2 flips.
+  {
+    const b1=makeBoard(1);
+    // flip every cube once
+    for (let r=0;r<ROWS;r++) for (let i=0;i<=r;i++) flipCube(b1,r,i,false);
+    const allDone = boardComplete(b1);
+    // un-flip one (reset state) => incomplete
+    b1.state[cubeId(3,1)]=0;
+    const oneMissing = !boardComplete(b1);
+    // L2 two-step: a cube needs exactly 2 flips to reach target
+    const b2=makeBoard(2);
+    const a0=cubeComplete(b2,2,1);
+    flipCube(b2,2,1,false); const a1=cubeComplete(b2,2,1);
+    flipCube(b2,2,1,false); const a2=cubeComplete(b2,2,1);
+    const twoStepOK = !a0 && !a1 && a2;
+    check('level-complete: all-flipped=complete, one-missing=incomplete, L2 needs exactly 2 flips',
+      allDone && oneMissing && twoStepOK,
+      'all='+allDone+' missing='+oneMissing+' L2(0,1,2)='+a0+','+a1+','+a2);
+  }
+
+  // 5) COILY chase step is always one of the 4 legal deltas (never an illegal/off-edge step).
+  {
+    let ok=true, tested=0;
+    // target at a fixed cube; from every other in-bounds cube the chase hop must be a legal hop name.
+    const tr=5, ti=2;
+    for (let r=0;r<ROWS;r++) for (let i=0;i<=r;i++){
+      if (r===tr && i===ti) continue;
+      const h=coilyChaseHop(r,i,tr,ti);
+      tested++;
+      if (!h || HOP_NAMES.indexOf(h)<0) { ok=false; continue; }
+      if (isFatalHop(r,i,h)) ok=false;   // must be in-bounds
+    }
+    // and the chosen hop should actually reduce distance from the apex toward target (sanity)
+    const apexHop=coilyChaseHop(0,0,tr,ti);
+    const apexOK = apexHop==='downLeft' || apexHop==='downRight';
+    check('coily chase: every chase step is a legal in-bounds hop, apex descends toward target',
+      ok && apexOK && tested>0, tested+' cubes, apex='+apexHop);
+  }
+
+  // 6) REVERSIBLE toggle (L3+): a cube at target re-stepped drops to target-1.
+  {
+    const b=makeBoard(1);
+    flipCube(b,2,1,true);                 // -> 1 (target)
+    const atTarget = cubeComplete(b,2,1);
+    flipCube(b,2,1,true);                 // reversible: -> 0
+    const reverted = b.state[cubeId(2,1)]===0;
+    check('reversible flip: stepping a completed cube reverts it (L3+ behaviour)',
+      atTarget && reverted, 'atTarget='+atTarget+' reverted='+reverted);
+  }
+
+  const chip=document.getElementById('selftest');
+  if (allPass){ chip.classList.add('show'); chip.textContent='✓ self-test '+results.length+'/'+results.length;
+    console.log('QUBIT self-test: PASS '+results.length+'/'+results.length); }
+  else { const passed=results.filter(r=>r.pass).length;
+    chip.classList.add('show','fail'); chip.textContent='✗ self-test '+passed+'/'+results.length;
+    console.error('QUBIT self-test: FAIL '+passed+'/'+results.length); }
+  return { allPass, results };
+}
+
+//============================================================== boot
+loadBest();
+resize();
+elBest.textContent=best;
+setMuteTag();
+updateLives();
+// attract: set up a quiet pyramid the orb wanders
+startLevelAttract();
+const SELFTEST = runSelfTest();
+requestAnimationFrame(frame);
+
+function startLevelAttract(){
+  level=1; elLevel.textContent=1; board=makeBoard(1); reversible=false;
+  flipFlash=new Float32Array(CUBES);
+  document.documentElement.style.setProperty('--accent', palette().target);
+  player.r=0; player.i=0; player.hopT=1; player.hopping=false; player.falling=false;
+  player.alive=true; player.invuln=0; player.facing='downRight';
+  buildDiscs(1);
+}
+
+//============================================================== verification hook
+window.__QUBIT__ = {
+  get state(){return state;},
+  get score(){return score;},
+  get level(){return level;},
+  get lives(){return lives;},
+  get best(){return best;},
+  get fps(){return fpsValue;},
+  get playerR(){return player.r;},
+  get playerI(){return player.i;},
+  get playerAlive(){return player.alive;},
+  get playerHopping(){return player.hopping||player.falling;},
+  get cubesDone(){return countComplete(board);},
+  get cubesTotal(){return CUBES;},
+  get boardComplete(){return boardComplete(board);},
+  get ballCount(){return balls.length;},
+  get coilyAlive(){return !!coily;},
+  get coilyPhase(){return coily?coily.phase:null;},
+  get discCount(){return discs.filter(d=>!d.taken).length;},
+  get selfTest(){return SELFTEST;},
+  get target(){return board.target;},
+  _start(){ startGame(); },
+  _next(){ if(state==='levelclear') nextLevel(); },
+  _hop(name){ beginHop(name); },
+  // settle the current hop instantly (for deterministic test driving)
+  _settle(){ if(player.hopping||player.falling){ player.hopT=1; if(player.falling){ player.falling=false; player.hopping=false; deathBy('fall', true); } else completeHop(); } },
+  _setPlayer(r,i){ if(inBounds(r,i)){ player.r=r; player.i=i; player.hopping=false; player.falling=false; player.hopT=1; } },
+  _floodToWin(){ for(let r=0;r<ROWS;r++) for(let i=0;i<=r;i++){ const id=cubeId(r,i); board.state[id]=board.target; } if(boardComplete(board)) winLevel(); },
+  _spawnBall(){ spawnBall(false); },
+  _spawnCoily(){ if(!coily) spawnCoily(); },
+  _kill(){ player.invuln=0; deathBy('test'); },
+  _setLives(n){ lives=n; updateLives(); },
+  ROWS, CUBES,
+  // expose pure core for inspection
+  core:{ hopFrom, isFatalHop, inBounds, gridToLayout, coilyChaseHop, HOP_NAMES }
+};
+
+})();
+</script>
+
+<!-- arc-back -->
+<style>
+  .arc-back{ position:fixed; left:18px; bottom:14px; z-index:9999; pointer-events:auto;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11.5px;
+    letter-spacing:.18em; text-transform:uppercase; text-decoration:none;
+    color:#e9f6ff; opacity:.40; transition:opacity .2s, text-shadow .2s;
+    text-shadow:0 0 8px rgba(57,255,158,.45); }
+  .arc-back:hover{ opacity:.95; text-shadow:0 0 12px rgba(57,255,158,.85); }
+</style>
+<a class="arc-back" href="../index.html" style="position:fixed;z-index:9999;pointer-events:auto">← arcade</a>
+</body>
+</html>

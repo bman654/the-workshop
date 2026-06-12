@@ -91,5 +91,11 @@ window.GAMES = [
     name: "Centipede",
     blurb: "neon serpentine descent — split the chain, mind the spider, hold the garden",
     accent: "#39ff9e"
+  },
+  {
+    file: "qubit.html",
+    name: "Qubit",
+    blurb: "neon iso cube-hopper — flip every face, dodge the balls, lure Coily off the edge",
+    accent: "#ffd23d"
   }
 ];
