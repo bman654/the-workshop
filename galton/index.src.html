@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galton Board</title>
+<style>
+  :root{
+    --panel-bg: rgba(9,11,16,0.86);
+    --panel-edge: rgba(150,190,220,0.26);
+    --ink: #e7edf4;
+    --ink-dim: #8f9bb0;
+    --accent: #7fc7e8;
+    --accent-soft: rgba(127,199,232,0.16);
+    --curve: #f0b54a;      /* the theoretical binomial overlay */
+    --normal: #b48cff;     /* the normal approximation overlay */
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --bg: #08090d;
+    /* skin defaults (slate) */
+    --peg: #5a6b82;
+    --ball: #7fc7e8;
+    --ball-edge: #bfe6f7;
+    --bar: rgba(127,199,232,0.55);
+    --bar-edge: rgba(191,230,247,0.8);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-ui); overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; user-select:none; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #stage{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background: radial-gradient(1100px 820px at 56% 38%, #14151b 0%, #0c0d12 66%, #07080b 100%);
+    padding:18px;
+  }
+  #boardWrap{ position:relative; border-radius:16px;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.62), 0 0 0 1px rgba(150,190,220,0.08) inset; }
+  canvas#board{ display:block; border-radius:16px; background:linear-gradient(180deg,#0c0e14,#090a10); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    position:fixed; top:64px; left:18px; width:290px;
+    background:var(--panel-bg);
+    backdrop-filter: blur(12px) saturate(120%); -webkit-backdrop-filter: blur(12px) saturate(120%);
+    border:1px solid var(--panel-edge); border-radius:14px; padding:14px 15px 15px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.55); z-index:20;
+    transition: transform .35s cubic-bezier(.2,.8,.2,1), opacity .25s;
+    max-height: calc(100vh - 84px); overflow-y:auto;
+  }
+  #panel.collapsed{ transform: translateX(calc(-100% - 30px)); opacity:0; pointer-events:none; }
+  #reopen{ position:fixed; top:64px; left:18px; z-index:19; display:none;
+    font:600 11px/1 var(--font-mono); letter-spacing:.12em; color:var(--accent);
+    background:var(--panel-bg); border:1px solid var(--panel-edge); border-radius:10px;
+    padding:9px 12px; cursor:pointer; }
+  #panel.collapsed ~ #reopen{ display:block; }
+  .phead{ display:flex; justify-content:space-between; align-items:center; margin:0 0 10px; }
+  .phead .sub{ font-size:10px; color:var(--ink-dim); letter-spacing:1.1px; text-transform:uppercase; margin:0; }
+  .collapse{ background:none; border:none; color:var(--ink-dim); cursor:pointer; font-size:15px; line-height:1; padding:2px 4px; }
+  .collapse:hover{ color:var(--accent); }
+
+  .row{ margin:11px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline;
+    font-size:11.5px; color:var(--ink-dim); margin-bottom:6px; letter-spacing:.3px; }
+  .row label .val{ color:var(--accent); font-variant-numeric:tabular-nums; font-size:11px; font-family:var(--font-mono); }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#eaf6ff; border:2px solid #3f7fa0; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer; }
+  input[type=range]::-moz-range-thumb{ width:13px; height:13px; border-radius:50%;
+    background:#eaf6ff; border:2px solid #3f7fa0; cursor:pointer; }
+
+  .seedrow{ display:flex; gap:6px; align-items:center; }
+  .seedrow input[type=text]{ flex:1; min-width:0; background:rgba(0,0,0,0.32); border:1px solid var(--panel-edge);
+    color:var(--ink); border-radius:8px; padding:7px 9px; font-size:13px; font-family:var(--font-mono); letter-spacing:.5px; }
+  .seedrow input[type=text]:focus{ outline:none; border-color:var(--accent); }
+  .iconbtn{ flex:0 0 auto; width:34px; height:34px; border-radius:9px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.04); color:var(--ink); cursor:pointer; font-size:15px; line-height:1;
+    display:flex; align-items:center; justify-content:center; transition:.15s; }
+  .iconbtn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(150,190,220,0.18); }
+  .seg button{ flex:1 1 0; min-width:0; border:none; background:transparent; color:var(--ink-dim);
+    font-size:11px; padding:7px 4px; border-radius:6px; cursor:pointer; transition:.15s; letter-spacing:.2px; }
+  .seg button.active{ background:var(--accent); color:#06222d; font-weight:700; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+
+  .toggle{ display:flex; align-items:center; justify-content:space-between; gap:8px;
+    font-size:11.5px; color:var(--ink-dim); letter-spacing:.3px; cursor:pointer; user-select:none; }
+  .toggle .sw{ position:relative; width:38px; height:20px; border-radius:11px; flex:0 0 auto;
+    background:rgba(255,255,255,0.10); border:1px solid var(--panel-edge); transition:.18s; }
+  .toggle .sw::after{ content:""; position:absolute; top:1px; left:1px; width:16px; height:16px; border-radius:50%;
+    background:#cdd7e4; transition:.18s; }
+  .toggle.on .sw{ background:var(--accent-soft); border-color:var(--accent); }
+  .toggle.on .sw::after{ transform:translateX(18px); background:var(--accent); }
+
+  .btnrow{ display:flex; gap:8px; }
+  .btnrow button{ flex:1; padding:9px 6px; border-radius:9px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.05); color:var(--ink); font-size:11.5px; font-weight:600; cursor:pointer;
+    transition:.15s; letter-spacing:.2px; }
+  .btnrow button:hover{ border-color:var(--accent); background:var(--accent-soft); }
+
+  .actions{ display:flex; gap:8px; margin-top:13px; }
+  .actions button{ flex:1; padding:10px 8px; border-radius:10px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.05); color:var(--ink); font-size:12.5px; font-weight:600; cursor:pointer;
+    transition:.15s; letter-spacing:.3px; }
+  .actions button:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .actions button.primary{ background:linear-gradient(180deg, rgba(127,199,232,0.30), rgba(127,199,232,0.10)); border-color:rgba(127,199,232,0.5); }
+  .actions button.primary:hover{ background:linear-gradient(180deg, rgba(127,199,232,0.44), rgba(127,199,232,0.16)); }
+
+  hr.sep{ border:none; border-top:1px solid rgba(150,190,220,0.16); margin:13px 0 11px; }
+  .caption{ font-size:11px; color:var(--ink-dim); margin-top:12px; line-height:1.6; letter-spacing:.2px; }
+  .caption b{ color:var(--accent); font-weight:600; }
+  .legend{ display:flex; gap:14px; margin-top:9px; font:10.5px/1 var(--font-mono); color:var(--ink-dim); flex-wrap:wrap; }
+  .legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .legend i{ width:14px; height:3px; border-radius:2px; display:inline-block; }
+
+  /* ---- live stats readout (bottom-centre) ---- */
+  #stats{ position:fixed; left:50%; bottom:16px; transform:translateX(-50%);
+    font:11.5px/1.5 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.58);
+    border:1px solid var(--panel-edge); border-radius:10px; padding:9px 16px; letter-spacing:.2px;
+    pointer-events:none; max-width:92%; text-align:center; z-index:25; }
+  #stats b{ color:var(--accent); }
+  #stats .ok{ color:#8fd79a; } #stats .warn{ color:#f0b54a; }
+
+  #hud{ position:fixed; left:50%; top:60px; transform:translateX(-50%);
+    font:11px/1.4 var(--font-mono); color:var(--ink); background:rgba(0,0,0,0.7);
+    border:1px solid var(--panel-edge); border-radius:9px; padding:8px 13px; letter-spacing:.3px;
+    pointer-events:none; opacity:0; transition:opacity .2s; max-width:90%; text-align:center; z-index:26; }
+  #hud.show{ opacity:1; } #hud b{ color:var(--accent); }
+
+  @media (max-width: 760px){
+    #panel{ top:auto; bottom:0; left:0; right:0; width:auto; max-height:52vh; border-radius:14px 14px 0 0; }
+    #panel.collapsed{ transform: translateY(110%); }
+    #reopen{ top:auto; bottom:16px; left:50%; transform:translateX(-50%); }
+    .brand .tag{ display:none; }
+    #stats{ bottom:auto; top:58px; font-size:10.5px; padding:7px 11px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; workshop</a>
+    <div class="brand">
+      <h1>Galton Board</h1>
+      <span class="tag">probability, made visible</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for per-check detail">checking distribution&hellip;</div>
+  </div>
+
+  <div id="stage">
+    <div id="boardWrap"><canvas id="board"></canvas></div>
+  </div>
+
+  <div id="panel">
+    <div class="phead">
+      <p class="sub">Bean machine — a proven bell curve</p>
+      <button class="collapse" id="collapseBtn" title="Hide panel">&#10005;</button>
+    </div>
+
+    <div class="row">
+      <label>Rows of pegs <span class="val" id="rowsVal">12</span></label>
+      <input type="range" id="rows" min="4" max="16" step="1" value="12">
+    </div>
+
+    <div class="row">
+      <label>Left-probability p <span class="val" id="pVal">0.50</span></label>
+      <input type="range" id="p" min="5" max="95" step="1" value="50">
+    </div>
+
+    <div class="row">
+      <label>Drop speed <span class="val" id="speedVal">1.0&times;</span></label>
+      <input type="range" id="speed" min="10" max="400" step="1" value="100">
+    </div>
+
+    <div class="row">
+      <label>Seed</label>
+      <div class="seedrow">
+        <input type="text" id="seed" spellcheck="false" autocomplete="off">
+        <button class="iconbtn" id="reseed" title="New random run">&#9860;</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="btnrow">
+        <button id="drop100">+100 balls</button>
+        <button id="drop1k">+1,000</button>
+        <button id="drop10k">+10,000</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <label class="toggle" id="normalToggle"><span>Show normal overlay</span><span class="sw"></span></label>
+    </div>
+
+    <div class="row">
+      <label>Skin</label>
+      <div class="seg" id="skin">
+        <button data-skin="slate" class="active">slate</button>
+        <button data-skin="ember">ember</button>
+        <button data-skin="moss">moss</button>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="playBtn">&#9208; Pause</button>
+      <button id="resetBtn">Clear</button>
+      <button id="exportBtn" class="primary">2&times; PNG</button>
+    </div>
+
+    <hr class="sep">
+    <div class="caption" id="caption"></div>
+    <div class="legend">
+      <span><i style="background:var(--bar-edge)"></i> tally</span>
+      <span><i style="background:var(--curve)"></i> binomial PMF</span>
+      <span id="legNormal" style="display:none"><i style="background:var(--normal)"></i> normal</span>
+    </div>
+  </div>
+  <button id="reopen" title="Show controls">controls</button>
+
+  <div id="stats"></div>
+  <div id="hud"></div>
+
+<script>
+<!-- forge:include ../tools/galton/galton.js -->
+
+/* ===========================================================================
+   THE PAGE — drives the CORE (tools/galton/galton.js). The CORE is the proof:
+   the simulation, the EXACT binomial PMF, and the χ² goodness-of-fit. This page
+   is only chrome + canvas: it animates balls (drawn from the same seeded stream
+   the core uses) falling through the peg array into bins, grows the histogram,
+   and overlays binomialPMF (and optionally the normal approximation). The bars
+   rise to meet the curve as balls accumulate — that convergence is what the χ²
+   p-value in the stats line measures, live.
+   =========================================================================== */
+'use strict';
+
+var canvas = document.getElementById('board');
+var ctx = canvas.getContext('2d');
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+/* skin palettes — colour only; the simulation never reads them. */
+var SKINS = {
+  slate: { peg:'#5a6b82', ball:'#7fc7e8', ballEdge:'#cdeefd', bar:'rgba(127,199,232,0.50)', barEdge:'rgba(191,230,247,0.92)', accent:'#7fc7e8' },
+  ember: { peg:'#7a5a4a', ball:'#f08a4a', ballEdge:'#ffd2a0', bar:'rgba(240,138,74,0.46)', barEdge:'rgba(255,210,160,0.95)', accent:'#f0a35a' },
+  moss:  { peg:'#4d6a52', ball:'#7fd49a', ballEdge:'#c8f3d6', bar:'rgba(127,212,154,0.46)', barEdge:'rgba(200,243,214,0.95)', accent:'#8fd7a6' }
+};
+
+var state = {
+  rows: 12,
+  p: 0.5,
+  speed: 1.0,
+  seed: '',
+  skin: 'slate',
+  showNormal: false,
+  playing: true,
+  rng: null,            // the live seeded stream (Galton.makeRng)
+  hist: null,           // int[rows+1] — the growing tally
+  count: 0,             // balls landed
+  sumBin: 0, sumBinSq: 0,
+  active: [],           // balls currently animating
+  pending: 0,           // balls queued to drop but not yet spawned
+  pmf: null,            // cached binomialPMF for current (rows,p)
+  normal: null          // cached normalApprox
+};
+
+var reduceMotion = (typeof window.matchMedia === 'function')
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* geometry of the board, recomputed on resize/rows */
+var geo = { W:0, H:0, cx:0, pegTop:0, pegGap:0, pegR:0, binTop:0, binH:0, binW:0, x0:0 };
+
+/* ---- seed helpers ---- */
+function randomSeed(){
+  var alphabet = 'abcdefghijkmnpqrstuvwxyz23456789';
+  var s = '';
+  for (var i=0;i<6;i++) s += alphabet[Math.floor(Math.random()*alphabet.length)];
+  return s;
+}
+
+/* a fresh run: reset histogram + reseed the stream for current params */
+function resetRun(){
+  state.rng = Galton.makeRng(state.seed + '|' + state.rows + '|' + Math.round(state.p*1e6));
+  state.hist = new Array(state.rows + 1);
+  for (var b=0;b<=state.rows;b++) state.hist[b] = 0;
+  state.count = 0; state.sumBin = 0; state.sumBinSq = 0;
+  state.active = []; state.pending = 0;
+  recomputeTheory();
+}
+function recomputeTheory(){
+  state.pmf = Galton.binomialPMF(state.rows, state.p);
+  state.normal = Galton.normalApprox(state.rows, state.p);
+}
+
+/* ---- sizing / geometry ---- */
+function computeSize(){
+  var availW = window.innerWidth - (window.innerWidth > 760 ? 360 : 36);
+  var availH = window.innerHeight - 60;
+  var W = Math.max(300, Math.min(availW, 860));
+  var H = Math.max(360, Math.min(availH, 720));
+  // keep a pleasant aspect; board is a touch taller than wide
+  if (W / H > 1.15) W = H * 1.15;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  layoutGeometry(W, H);
+}
+
+/* lay out pegs + bins in CSS px space (we scale the ctx by DPR) */
+function layoutGeometry(W, H){
+  var rows = state.rows;
+  var padX = 26, padTop = 40, hopperH = 26;
+  var binTop = Math.round(H * 0.60);          // pegs above, bins below
+  var binH = H - binTop - 24;
+  var nBins = rows + 1;
+  // peg field is a triangle: row r has r+1 pegs. Fit horizontally + vertically.
+  var pegAreaH = binTop - padTop - hopperH;
+  var pegGapY = pegAreaH / (rows + 0.5);
+  // horizontal gap so the widest peg row (bottom) fits, aligned to bins
+  var usableW = W - 2*padX;
+  var pegGapX = usableW / (rows + 1);
+  var pegGap = Math.min(pegGapX, pegGapY * 1.25);
+  var pegR = Math.max(2.2, Math.min(5.5, pegGap * 0.13));
+
+  geo.W = W; geo.H = H;
+  geo.cx = W/2;
+  geo.pegTop = padTop + hopperH;
+  geo.pegGapY = pegGapY;
+  geo.pegGapX = pegGap;
+  geo.pegR = pegR;
+  geo.binTop = binTop;
+  geo.binH = binH;
+  geo.nBins = nBins;
+  geo.binW = usableW / nBins;
+  geo.x0 = W/2 - (usableW/2);          // left edge of bin field
+  geo.usableW = usableW;
+  geo.padX = padX;
+  geo.hopperY = padTop;
+}
+
+/* peg position (row r in 0..rows-1, index i in 0..r) — centred triangle */
+function pegPos(r, i){
+  var y = geo.pegTop + (r + 0.6) * geo.pegGapY;
+  var x = geo.cx + (i - r/2) * geo.pegGapX;
+  return { x:x, y:y };
+}
+/* x-centre of bin k (0..rows) */
+function binCenterX(k){ return geo.x0 + (k + 0.5) * geo.binW; }
+
+/* ---- ball factory: pull the next ball from the seeded stream ---- */
+function spawnBall(){
+  var ball = Galton.dropBall(state.rng, state.rows, state.p);
+  // precompute the polyline of (x,y) waypoints: hopper → through each peg row → bin
+  var pts = [];
+  pts.push({ x: geo.cx, y: geo.hopperY + 4 });
+  // simulate the lateral drift: start at centre column position 0, each step ±0.5 column
+  var col = 0; // fractional column offset in peg-gap units
+  pts.push({ x: geo.cx, y: geo.pegTop + 0.2*geo.pegGapY });
+  for (var r=0;r<state.rows;r++){
+    // the peg it grazes this row (nearest), then it deflects to col±0.5
+    var py = geo.pegTop + (r + 0.6) * geo.pegGapY;
+    var graze = { x: geo.cx + col*geo.pegGapX, y: py - geo.pegR*1.4 };
+    pts.push(graze);
+    col += (ball.steps[r] === 1 ? 0.5 : -0.5);
+  }
+  // final landing column: col == (rights - lefts)/2; bin == rights.
+  // bin index relates: bin = (rows + (rights-lefts))/2 ... but we track bin directly.
+  var bx = binCenterX(ball.bin);
+  // funnel from last peg into the bin slot
+  pts.push({ x: bx, y: geo.binTop - 6 });
+  return {
+    bin: ball.bin,
+    pts: pts,
+    seg: 0,            // current segment index
+    t: 0,              // 0..1 within segment
+    landed: false,
+    settleY: 0,        // y to rest at once landed (set on landing)
+    x: pts[0].x, y: pts[0].y
+  };
+}
+
+/* land a ball into the histogram */
+function landBall(b){
+  state.hist[b.bin]++;
+  state.count++;
+  state.sumBin += b.bin;
+  state.sumBinSq += b.bin * b.bin;
+}
+
+/* drop N balls. If animating, queue them; if reduced-motion or huge N, tally
+   instantly (still seeded → identical to the animated path order). */
+function dropN(n){
+  if (reduceMotion || n > 2000){
+    // tally directly from the stream — order-identical to spawning them
+    for (var i=0;i<n;i++){
+      var ball = Galton.dropBall(state.rng, state.rows, state.p);
+      landBall({ bin: ball.bin });
+    }
+    flashHud('Tallied <b>' + n.toLocaleString() + '</b> balls' + (reduceMotion ? ' (reduced motion)' : ' (fast)'));
+    if (!state.playing) draw();
+  } else {
+    state.pending += n;
+  }
+  paintStats();
+}
+
+/* ---- animation ---- */
+var MAX_ACTIVE = 90;        // cap simultaneous balls for perf
+function stepBalls(dt){
+  // spawn from pending up to the cap, staggered
+  var spawnRate = 26 * state.speed;          // balls/sec attempted
+  spawnBall._acc = (spawnBall._acc || 0) + spawnRate * dt;
+  while (state.pending > 0 && state.active.length < MAX_ACTIVE && spawnBall._acc >= 1){
+    state.active.push(spawnBall());
+    state.pending--; spawnBall._acc -= 1;
+  }
+  // advance each active ball along its polyline
+  var fallSpeed = 2.6 * state.speed;          // segments/sec
+  var still = [];
+  for (var i=0;i<state.active.length;i++){
+    var b = state.active[i];
+    b.t += fallSpeed * dt;
+    while (b.t >= 1 && b.seg < b.pts.length - 1){
+      b.t -= 1; b.seg++;
+    }
+    if (b.seg >= b.pts.length - 1){
+      // arrived at bin mouth → land
+      landBall(b);
+      continue;
+    }
+    var a = b.pts[b.seg], c = b.pts[b.seg+1];
+    var tt = b.t;
+    // ease the lateral move so the bounce reads as a little arc
+    var ex = a.x + (c.x - a.x) * tt;
+    var ey = a.y + (c.y - a.y) * tt;
+    // small parabolic bounce on the vertical between peg rows
+    if (b.seg >= 2){
+      ey -= Math.sin(tt * Math.PI) * geo.pegGapY * 0.14;
+    }
+    b.x = ex; b.y = ey;
+    still.push(b);
+  }
+  state.active = still;
+}
+
+/* ---- drawing ---- */
+function curScale(){
+  // bars + curve share a y-scale: the peak theoretical probability mapped to
+  // ~92% of the bin area height, plus headroom for empirical overshoot.
+  var maxP = 0;
+  for (var k=0;k<state.pmf.length;k++) if (state.pmf[k] > maxP) maxP = state.pmf[k];
+  // empirical max fraction
+  var maxF = 0;
+  if (state.count > 0){
+    for (var j=0;j<state.hist.length;j++){ var f = state.hist[j]/state.count; if (f>maxF) maxF=f; }
+  }
+  var top = Math.max(maxP, maxF) * 1.08;
+  if (top <= 0) top = 1;
+  return (geo.binH - 8) / top;        // px per unit-probability
+}
+
+function drawBoard(targetCtx, scale){
+  var c = targetCtx;
+  var sk = SKINS[state.skin];
+  c.clearRect(0,0,geo.W,geo.H);
+
+  // hopper (funnel at top)
+  c.save();
+  c.strokeStyle = 'rgba(150,190,220,0.30)';
+  c.lineWidth = 1.4;
+  c.beginPath();
+  c.moveTo(geo.cx - 26, geo.hopperY);
+  c.lineTo(geo.cx - 5, geo.hopperY + 22);
+  c.lineTo(geo.cx + 5, geo.hopperY + 22);
+  c.lineTo(geo.cx + 26, geo.hopperY);
+  c.stroke();
+  c.restore();
+
+  // pegs
+  c.fillStyle = sk.peg;
+  for (var r=0;r<state.rows;r++){
+    for (var i=0;i<=r;i++){
+      var p = pegPos(r,i);
+      c.beginPath(); c.arc(p.x, p.y, geo.pegR, 0, Math.PI*2); c.fill();
+    }
+  }
+
+  // bin separators (subtle)
+  c.strokeStyle = 'rgba(150,190,220,0.10)';
+  c.lineWidth = 1;
+  for (var s=0;s<=geo.nBins;s++){
+    var x = geo.x0 + s*geo.binW;
+    c.beginPath(); c.moveTo(x, geo.binTop); c.lineTo(x, geo.binTop + geo.binH); c.stroke();
+  }
+  // baseline
+  c.strokeStyle = 'rgba(150,190,220,0.28)';
+  c.beginPath(); c.moveTo(geo.x0, geo.binTop + geo.binH); c.lineTo(geo.x0 + geo.usableW, geo.binTop + geo.binH); c.stroke();
+
+  // histogram bars (empirical, as fractions)
+  if (state.count > 0){
+    var baseY = geo.binTop + geo.binH;
+    for (var k=0;k<state.hist.length;k++){
+      var frac = state.hist[k]/state.count;
+      var h = frac * scale;
+      if (h < 0.5) continue;
+      var bx = geo.x0 + k*geo.binW;
+      var bw = geo.binW - 2;
+      c.fillStyle = sk.bar;
+      c.fillRect(bx+1, baseY - h, bw, h);
+      c.strokeStyle = sk.barEdge;
+      c.lineWidth = 1.4;
+      c.beginPath(); c.moveTo(bx+1, baseY-h); c.lineTo(bx+1+bw, baseY-h); c.stroke();
+    }
+  }
+
+  // the EXACT binomial PMF overlay — a smooth marker+line over the bins
+  drawCurve(c, state.pmf, scale, getCSS('--curve'), true);
+  // the normal approximation (optional)
+  if (state.showNormal){
+    drawCurve(c, state.normal, scale, getCSS('--normal'), false);
+  }
+
+  // falling balls
+  c.save();
+  for (var bi=0;bi<state.active.length;bi++){
+    var b = state.active[bi];
+    var rr = geo.pegR * 1.35 + 1.2;
+    var grad = c.createRadialGradient(b.x - rr*0.3, b.y - rr*0.3, rr*0.2, b.x, b.y, rr);
+    grad.addColorStop(0, sk.ballEdge);
+    grad.addColorStop(1, sk.ball);
+    c.fillStyle = grad;
+    c.beginPath(); c.arc(b.x, b.y, rr, 0, Math.PI*2); c.fill();
+  }
+  c.restore();
+}
+
+/* draw a probability curve (array over bins) at the shared scale */
+function drawCurve(c, arr, scale, colour, withDots){
+  var baseY = geo.binTop + geo.binH;
+  c.save();
+  c.strokeStyle = colour;
+  c.lineWidth = 2.2;
+  c.lineJoin = 'round';
+  c.shadowColor = colour;
+  c.shadowBlur = 8;
+  c.beginPath();
+  for (var k=0;k<arr.length;k++){
+    var x = binCenterX(k);
+    var y = baseY - arr[k]*scale;
+    if (k===0) c.moveTo(x,y); else c.lineTo(x,y);
+  }
+  c.stroke();
+  c.shadowBlur = 0;
+  if (withDots){
+    c.fillStyle = colour;
+    for (var j=0;j<arr.length;j++){
+      var dx = binCenterX(j), dy = baseY - arr[j]*scale;
+      c.beginPath(); c.arc(dx, dy, 2.6, 0, Math.PI*2); c.fill();
+    }
+  }
+  c.restore();
+}
+
+function getCSS(name){
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function draw(){
+  var c = ctx;
+  c.save();
+  c.setTransform(DPR,0,0,DPR,0,0);
+  drawBoard(c, curScale());
+  c.restore();
+}
+
+/* ---- main loop ---- */
+var last = 0, rafId = null;
+function frame(now){
+  rafId = requestAnimationFrame(frame);
+  if (!last) last = now;
+  var dt = Math.min(0.05, (now - last)/1000);
+  last = now;
+  var animating = state.active.length > 0 || state.pending > 0;
+  if (state.playing && animating){
+    stepBalls(dt);
+    paintStats();
+  }
+  // always draw (cheap) so resizes / overlay toggles reflect immediately
+  draw();
+}
+function startLoop(){ if (rafId == null){ last = 0; rafId = requestAnimationFrame(frame); } }
+
+/* ---- self-test chip (calls the SAME core as the Node test) ---- */
+function runChip(){
+  var res = Galton.runSelfTest();
+  var el = document.getElementById('selftest');
+  var mark = res.pass ? '✓' : '✗';
+  el.className = 'selftest ' + (res.pass ? 'ok' : 'bad');
+  el.textContent = mark + ' galton verified — ' + res.n + '/' + res.total;
+  console.log('%cGalton board self-test', 'font-weight:bold');
+  res.results.forEach(function(r,i){
+    var line = '  check #' + (i+1) + ' [' + (r.pass?'PASS':'FAIL') + '] ' + r.name + ' — ' + r.note;
+    if (r.pass) console.log(line); else console.error(line);
+  });
+  console.log('Galton board self-test: ' + res.n + '/' + res.total + ' ' + (res.pass?'PASS':'FAIL'));
+  return res;
+}
+
+/* ---- live stats line: count, mean, σ, χ² + p-value vs binomial ---- */
+function paintStats(){
+  var el = document.getElementById('stats');
+  var n = state.count;
+  if (n === 0){
+    el.innerHTML = 'Drop some balls — the tally will rise to meet the <b>binomial</b> curve. ' +
+      'Theory: mean <b>' + Galton.binomialMean(state.rows, state.p).toFixed(2) +
+      '</b>, σ <b>' + Math.sqrt(Galton.binomialVar(state.rows, state.p)).toFixed(2) + '</b>.';
+    return;
+  }
+  var mean = state.sumBin / n;
+  var variance = state.sumBinSq / n - mean*mean;
+  var sd = Math.sqrt(Math.max(0, variance));
+  var muT = Galton.binomialMean(state.rows, state.p);
+  var sdT = Math.sqrt(Galton.binomialVar(state.rows, state.p));
+  var cs = Galton.chiSquare(state.hist, state.pmf);
+  var pv = Galton.chiSquarePValue(cs.stat, cs.df);
+  var verdict, cls;
+  if (n < 200){ verdict = 'gathering…'; cls = 'warn'; }
+  else if (pv >= 0.01){ verdict = 'consistent with binomial (p=' + pv.toFixed(3) + ')'; cls = 'ok'; }
+  else { verdict = 'χ² high — keep dropping (p=' + pv.toFixed(3) + ')'; cls = 'warn'; }
+  el.innerHTML =
+    'n <b>' + n.toLocaleString() + '</b> &nbsp;·&nbsp; ' +
+    'mean <b>' + mean.toFixed(3) + '</b> <span style="opacity:.6">(μ=' + muT.toFixed(2) + ')</span> &nbsp;·&nbsp; ' +
+    'σ <b>' + sd.toFixed(3) + '</b> <span style="opacity:.6">(' + sdT.toFixed(2) + ')</span> &nbsp;·&nbsp; ' +
+    'χ²(' + cs.df + ') <b>' + cs.stat.toFixed(1) + '</b> &nbsp;·&nbsp; ' +
+    '<span class="' + cls + '">' + verdict + '</span>';
+}
+
+/* ---- caption ---- */
+function paintCaption(){
+  var rows = state.rows, p = state.p, q = 1-p;
+  document.getElementById('caption').innerHTML =
+    'Each ball makes <b>' + rows + '</b> bounces, right with prob <b>' + q.toFixed(2) + '</b>; its bin is ' +
+    'its count of rights — so a bin is <b>Binomial(' + rows + ', ' + q.toFixed(2) + ')</b>. The amber ' +
+    'curve is that <b>exact</b> PMF; the bars are the running tally. The χ² p-value below measures, live, ' +
+    'whether the run is consistent with it.';
+}
+
+/* ---- UI ---- */
+function flashHud(html, ms){
+  var hud = document.getElementById('hud');
+  hud.innerHTML = html; hud.classList.add('show');
+  clearTimeout(flashHud._t);
+  flashHud._t = setTimeout(function(){ hud.classList.remove('show'); }, ms||2200);
+}
+function setRangeFill(input){
+  var min=+input.min, max=+input.max, v=+input.value;
+  input.style.setProperty('--fill', ((v-min)/(max-min)*100)+'%');
+}
+function applySkin(){
+  var sk = SKINS[state.skin];
+  document.documentElement.style.setProperty('--accent', sk.accent);
+}
+
+function bindUI(){
+  var rows = document.getElementById('rows'), rowsVal = document.getElementById('rowsVal');
+  rows.addEventListener('input', function(){
+    state.rows = Galton.clampRows(+rows.value);
+    rowsVal.textContent = state.rows;
+    setRangeFill(rows);
+    layoutGeometry(geo.W, geo.H);
+    resetRun(); paintCaption(); paintStats(); draw();
+  });
+
+  var pEl = document.getElementById('p'), pValEl = document.getElementById('pVal');
+  pEl.addEventListener('input', function(){
+    state.p = Galton.clampP((+pEl.value)/100);
+    pValEl.textContent = state.p.toFixed(2);
+    setRangeFill(pEl);
+    resetRun(); paintCaption(); paintStats(); draw();
+  });
+
+  var speed = document.getElementById('speed'), speedVal = document.getElementById('speedVal');
+  speed.addEventListener('input', function(){
+    state.speed = (+speed.value)/100;
+    speedVal.textContent = state.speed.toFixed(1) + '×';
+    setRangeFill(speed);
+  });
+
+  var seed = document.getElementById('seed');
+  seed.addEventListener('change', function(){
+    state.seed = seed.value.trim() || randomSeed();
+    seed.value = state.seed;
+    resetRun(); paintStats(); draw();
+  });
+  document.getElementById('reseed').addEventListener('click', function(){
+    state.seed = randomSeed(); seed.value = state.seed;
+    resetRun(); flashHud('New run · seed <b>' + state.seed + '</b>'); paintStats(); draw();
+  });
+
+  document.getElementById('drop100').addEventListener('click', function(){ dropN(100); });
+  document.getElementById('drop1k').addEventListener('click', function(){ dropN(1000); });
+  document.getElementById('drop10k').addEventListener('click', function(){ dropN(10000); });
+
+  var nt = document.getElementById('normalToggle');
+  nt.addEventListener('click', function(){
+    state.showNormal = !state.showNormal;
+    nt.classList.toggle('on', state.showNormal);
+    document.getElementById('legNormal').style.display = state.showNormal ? 'inline-flex' : 'none';
+    draw();
+  });
+
+  document.getElementById('skin').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return;
+    state.skin = b.dataset.skin;
+    Array.prototype.forEach.call(this.querySelectorAll('button'), function(x){ x.classList.toggle('active', x===b); });
+    applySkin(); draw();
+  });
+
+  var playBtn = document.getElementById('playBtn');
+  function syncPlay(){ playBtn.innerHTML = state.playing ? '&#9208; Pause' : '&#9654; Play'; }
+  playBtn.addEventListener('click', function(){ state.playing = !state.playing; syncPlay(); if(state.playing) last=0; });
+  syncPlay();
+
+  document.getElementById('resetBtn').addEventListener('click', function(){
+    resetRun(); flashHud('Cleared'); paintStats(); draw();
+  });
+  document.getElementById('exportBtn').addEventListener('click', exportPNG);
+  document.getElementById('collapseBtn').addEventListener('click', function(){ document.getElementById('panel').classList.add('collapsed'); });
+  document.getElementById('reopen').addEventListener('click', function(){ document.getElementById('panel').classList.remove('collapsed'); });
+  document.getElementById('selftest').addEventListener('click', function(){
+    flashHud('Proven by the SAME core the Node test runs — see the console.', 3400);
+  });
+
+  var rt=null;
+  window.addEventListener('resize', function(){ clearTimeout(rt); rt=setTimeout(function(){ computeSize(); draw(); }, 120); });
+
+  setRangeFill(rows); setRangeFill(pEl); setRangeFill(speed);
+}
+
+/* ---- 2× PNG export ---- */
+function exportPNG(){
+  var W = geo.W, H = geo.H, S = 2;
+  var off = document.createElement('canvas');
+  off.width = Math.round(W*S); off.height = Math.round(H*S);
+  var oc = off.getContext('2d');
+  oc.fillStyle = getCSS('--bg') || '#08090d';
+  oc.fillRect(0,0,off.width,off.height);
+  oc.setTransform(S,0,0,S,0,0);
+  drawBoard(oc, curScale());
+  off.toBlob(function(blob){
+    try{
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'galton_' + state.rows + 'rows_p' + state.p.toFixed(2) + '_n' + state.count + '_' + state.seed + '.png';
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 3000);
+      flashHud('Exported · <b>' + state.count.toLocaleString() + '</b> balls');
+    }catch(e){ console.error(e); }
+  }, 'image/png');
+}
+
+/* ===========================================================================
+   GO
+   =========================================================================== */
+state.seed = randomSeed();
+document.getElementById('seed').value = state.seed;
+computeSize();
+resetRun();
+bindUI();
+applySkin();
+paintCaption();
+runChip();                 // the crux — paints the chip, logs PASS/FAIL
+paintStats();
+draw();
+startLoop();
+// seed the curve with a satisfying opening pour
+if (reduceMotion){
+  dropN(2000);
+  flashHud('Reduced motion: balls tally instantly (no animation). The bars still meet the curve.', 5200);
+} else {
+  dropN(300);
+}
+
+/* ws: unlock breadcrumb — the shared module (one source of truth), inlined via
+   forge. See /UNLOCK.md and tools/ws/README.md. Defines WS, records this piece's
+   first-visit, and (via WS auto-init) fires the unlock cue. Harmless if storage off. */
+<!-- forge:include ../tools/ws/ws.js -->
+try { WS.seen('galton'); } catch (e) {}
+</script>
+</body>
+</html>
