@@ -2,9 +2,48 @@
 
 *The estate's physics laboratory, quarried into the hillside and kept underground "for safety."
 A front-door **wing** (the grand "Physics Lab" seed begun). Two drifts off a central shaft — a warm
-Newtonian one and a cold Einsteinian one — and now a third, the **Quantum Drift** (two benches deep),
+Newtonian one and a cold Einsteinian one — and now a third, the **Quantum Drift** (three benches deep),
 which opens once a visitor has walked both. Every bench is one self-contained vanilla HTML file that
 proves its own physics exact.*
+
+---
+
+## 2026-06-13 — the Quantum Drift deepens again (Particle in a Box ships · the 3rd Q-bench, 6th overall)
+
+**`cavern/box/index.html` — Particle in a Box 📦** (Quantum drift). The natural next quantum bench from
+`worklog/physics-lab-plan.md` §3, and the **foundation** of the wing's quantum story: confine a particle
+to an **infinite square well** (V=0 inside, V=∞ at two walls), and its energy becomes *quantized* — a
+ladder of states whose energies climb as **n²**, with no rung at zero (zero-point energy). One vanilla
+HTML file, ħ=m=1 natural units, box on [0,1]; the displayed eV/nm are a fixed labelling.
+
+- **The physics core (pure & deterministic):** the closed form `E_n = n²π²/2`, `ψ_n(x) = √2·sin(nπx)`
+  (exactly n half-waves, n−1 interior nodes). A time-dependent superposition `Ψ(x,t)=Σ c_n ψ_n e^{−iE_n t}`.
+- **The independent solve (the bench's spine):** the self-test discretizes the Schrödinger operator
+  `−½ d²/dx²` with Dirichlet walls into a symmetric tridiagonal matrix and finds its lowest eigenvalues
+  **from scratch by inverse-power iteration** (a Thomas tridiagonal solve per step + a Rayleigh quotient)
+  — a *different algebra* than the n²π²/2 formula — agreeing with the discrete-Toeplitz theory to **8.5e−14**,
+  and the discrete eigenvalues converge to the analytic ladder as the grid refines (rel err N=40 8.2e−3 →
+  N=1600 5.1e−6, clean O(h²)). So the ladder is corroborated, not asserted.
+- **Self-test 8/8** (headless-Node verified against the actual embedded code + live in-browser): (1) ladder
+  `E_n/E_1=n²` exact n=1..8 with E_1>0; (2) orthonormality `⟨ψ_m|ψ_n⟩=δ_mn` to **1.55e−15** (analytic vs
+  Simpson); (3) **node theorem** n−1 interior nodes n=1..7; (4) FD eigenvalues → closed ladder O(h²);
+  (5) from-scratch inverse-power == FD theory **8.5e−14**; (6) time evolution conserves probability
+  (∫|Ψ|²=1 to **2.5e−15**); (7) **selection rule** — ⟨x⟩ swings 0.357 for a *mixed-parity* (1+2)
+  superposition but is **frozen at ½** (4.9e−15) for same-parity (1+3), the quantum origin of which
+  transitions emit light; (8) deterministic.
+- **The bench (browser-verified, served origin, clean console):** an energy-ladder gauge (rungs n=1..8,
+  hot rung glows) beside the box; click a rung-chip to see its `|ψ|²` probability hump + optional signed
+  ψ with its **interior nodes marked**; a width-L slider sinks/raises the whole ladder; a **Mix** button
+  superposes rungs 1+2 and *evolves* it — the bound packet visibly **sloshes** side to side with a live
+  ⟨x⟩ marker (verified animating: ⟨x⟩ moved right→left between frames). Matches the violet Quantum-drift
+  styling (the same template as Tunnelling). Drops `ws:seen:box`.
+
+**Integration:** added a 3rd bench card to the Quantum Drift in `cavern/index.html` (📦, proof badge
+"ladder E_n ∝ n² == a from-scratch eigensolve · orthonormal to 1e−15") + two symmetric self-test checks
+(box link present-iff-unlocked + relative), so the Cavern landing self-test is now **19/19** (was 17/17).
+Browser-verified end-to-end: walked-both-drifts reveals the drift with all three benches; the box card
+links `box/index.html` (relative). `forge --check --all` clean; `--audit-seen` still 13/13 (the `box`
+breadcrumb is bench-internal, not a front-door PLACES id). **The Quantum Drift is now three benches deep.**
 
 ---
 

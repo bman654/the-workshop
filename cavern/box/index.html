@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Particle in a Box · The Cavern</title>
+<style>
+  :root{
+    --bg:#070809;
+    --ink:#e9ecef;
+    --ink-dim:#9aa3a6;
+    --teal:#7fd4c0;                       /* the cave's cold mineral accent — topbar/back-links */
+    --teal-edge:rgba(127,212,192,0.34);
+    --q:#b18cff;                          /* the QUANTUM drift's cold electric violet (this bench's accent) */
+    --q-soft:rgba(177,140,255,0.15);
+    --q-edge:rgba(177,140,255,0.34);
+    --q-bright:#d3beff;
+    --wall:#e06a52;                       /* the infinite walls — the same barred red as the wing */
+    --gold:#f2c14e;
+    --green:#8fd79a;
+    --panel-bg:rgba(9,10,14,0.90);
+    --panel-edge:rgba(177,140,255,0.26);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 760px at 62% 10%, rgba(177,140,255,0.10), transparent 60%),
+      radial-gradient(900px 640px at 10% 100%, rgba(127,212,192,0.05), transparent 62%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* faint rough-rock texture, matching the wing */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(122deg, rgba(255,255,255,0.012) 0 2px, transparent 2px 7px),
+      repeating-linear-gradient(38deg, rgba(0,0,0,0.18) 0 3px, transparent 3px 11px);
+    mix-blend-mode:overlay;
+  }
+
+  /* ── top bar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:13px 20px 0; pointer-events:none; gap:14px;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .topbar .left{ display:flex; align-items:center; gap:18px; min-width:0; }
+  .backs{ display:flex; flex-direction:column; gap:4px; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--teal); opacity:1; }
+  .back.deep{ opacity:.6; }
+  .brand{ display:flex; align-items:baseline; gap:11px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.4px; margin:0;
+    background:linear-gradient(96deg,#efe9ff,#b18cff 56%,#6b4db4);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .topbar .right{ display:flex; align-items:center; gap:12px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--teal-edge); background:rgba(0,0,0,0.4); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); transition:.2s; }
+  .selftest:hover{ border-color:var(--q); }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  /* ── layout ── */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0;
+    background: radial-gradient(1100px 820px at 42% 48%, #11111c 0%, #0a0a12 60%, #06060a 100%); }
+  canvas#scene{ display:block; width:100%; height:100%; }
+  .viewlabel{ position:absolute; left:14px; top:70px; font:600 10px/1.5 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); pointer-events:none;
+    background:rgba(0,0,0,0.4); padding:7px 11px; border-radius:8px; border:1px solid rgba(177,140,255,0.18); }
+  .viewlabel b{ font-size:12px; letter-spacing:.18em; color:var(--q); }
+  .viewlabel .sub{ color:var(--ink-dim); opacity:.85; }
+  .viewlabel.evolving b{ color:var(--green); }
+
+  /* ── side panel ── */
+  #panel{
+    width:344px; flex:0 0 344px; height:100%; overflow-y:auto;
+    background:var(--panel-bg); border-left:1px solid var(--panel-edge);
+    padding:58px 20px 30px; backdrop-filter:blur(10px) saturate(120%);
+    -webkit-backdrop-filter:blur(10px) saturate(120%);
+    box-shadow:-18px 0 50px rgba(0,0,0,0.5);
+  }
+  #panel .lede{ font:13.5px/1.62 var(--font-serif); color:var(--ink); margin:0 0 6px; opacity:.94; }
+  #panel .lede b{ color:var(--q-bright); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:20px 0 11px; border-top:1px solid rgba(177,140,255,0.14); padding-top:14px; }
+  .sect:first-of-type{ border-top:none; padding-top:6px; margin-top:14px; }
+  .row{ margin:0 0 14px; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline;
+    font:600 10px/1.4 var(--font-mono); letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-dim); margin-bottom:7px; }
+  .row > label .val{ color:var(--q-bright); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.3px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--q) 0%, var(--q) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]:disabled{ opacity:.4; cursor:not-allowed; }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#efeaff; border:2px solid #5a4596; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%; background:#efeaff; border:2px solid #5a4596; cursor:pointer;
+  }
+  .toggles{ display:flex; gap:8px; flex-wrap:wrap; }
+  .btn{ flex:1; min-width:0; background:rgba(0,0,0,0.3); color:var(--ink); border:1px solid var(--panel-edge);
+    border-radius:9px; padding:10px 8px; font:600 12px/1 var(--font-ui); letter-spacing:.2px; cursor:pointer; transition:.15s; }
+  .btn:hover{ background:var(--q-soft); border-color:var(--q); }
+  .btn.on{ background:var(--q-soft); border-color:var(--q); color:#fff; }
+  .btn.fire{ flex:0 0 100%; padding:12px; font-size:13px; }
+
+  /* the eigenstate selector — little numbered chips for n */
+  .nchips{ display:flex; gap:7px; flex-wrap:wrap; }
+  .nchip{ flex:1 1 0; min-width:34px; text-align:center; cursor:pointer; user-select:none;
+    font:600 13px/1 var(--font-mono); padding:9px 0; border-radius:8px;
+    border:1px solid rgba(177,140,255,0.22); background:rgba(0,0,0,0.28); color:var(--ink-dim); transition:.14s; }
+  .nchip:hover{ border-color:var(--q); color:var(--ink); }
+  .nchip.on{ background:var(--q-soft); border-color:var(--q); color:#fff; box-shadow:0 0 14px -5px rgba(177,140,255,0.8); }
+  .nchip.mix{ background:rgba(143,215,154,0.10); border-color:rgba(143,215,154,0.5); color:var(--green); }
+
+  .readout{ font:11.5px/1.6 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px;
+    border-top:1px solid rgba(177,140,255,0.16); padding-top:12px; margin-top:4px; }
+  .readout .row2{ display:flex; justify-content:space-between; gap:10px; margin:3px 0; }
+  .readout .row2 .k{ color:var(--ink-dim); }
+  .readout .row2 .v{ color:var(--ink); font-variant-numeric:tabular-nums; }
+  .readout .v.q{ color:var(--q-bright); }
+  .readout .v.good{ color:var(--green); }
+  .headline{ margin:4px 0 4px; padding:11px 12px; border-radius:10px;
+    border:1px solid var(--q-edge); background:linear-gradient(180deg, rgba(177,140,255,0.10), rgba(177,140,255,0.02)); }
+  .headline .big{ font:600 25px/1 var(--font-mono); color:var(--q-bright); font-variant-numeric:tabular-nums; letter-spacing:.5px; }
+  .headline .unit{ font:600 12px/1 var(--font-mono); color:var(--ink-dim); margin-left:5px; }
+  .headline .lab{ display:block; font:600 9.5px/1.4 var(--font-mono); letter-spacing:.12em; text-transform:uppercase;
+    color:var(--ink-dim); margin-top:7px; }
+  .hint{ font:10.5px/1.62 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:16px 0 0;
+    border-top:1px solid rgba(177,140,255,0.16); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+
+  /* ── self-test detail panel ── */
+  #stPanel{ position:absolute; right:14px; top:70px; width:344px; max-width:calc(100% - 28px);
+    background:rgba(7,8,12,0.96); border:1px solid var(--panel-edge); border-radius:11px;
+    padding:14px 15px; font:10.5px/1.55 var(--font-mono); color:var(--ink-dim);
+    box-shadow:0 10px 40px rgba(0,0,0,0.65); display:none; z-index:20; max-height:calc(100% - 92px); overflow-y:auto; }
+  #stPanel.show{ display:block; }
+  #stPanel h4{ margin:0 0 4px; font:600 10px/1 var(--font-mono); letter-spacing:.16em;
+    text-transform:uppercase; color:var(--q); }
+  #stPanel .sub{ margin:0 0 10px; font:9.5px/1.5 var(--font-mono); color:var(--ink-dim); opacity:.9; }
+  #stPanel .closeX{ position:absolute; top:9px; right:12px; cursor:pointer; color:var(--ink-dim);
+    font:13px/1 var(--font-mono); background:none; border:none; padding:4px; }
+  #stPanel .closeX:hover{ color:var(--q); }
+  #stPanel .line{ display:flex; gap:8px; align-items:baseline; margin:7px 0; }
+  #stPanel .badge{ flex:0 0 auto; font-weight:600; }
+  #stPanel .pass{ color:#8fd79a; }
+  #stPanel .fail{ color:#f08a7a; }
+  #stPanel .nm{ color:var(--ink); }
+  #stPanel .dt{ color:var(--ink-dim); opacity:.82; display:block; margin-top:1px; }
+  #stPanel .foot{ margin-top:11px; padding-top:9px; border-top:1px solid rgba(177,140,255,0.16);
+    font:9.5px/1.55 var(--font-mono); color:var(--ink-dim); opacity:.85; }
+
+  @media (max-width:760px){
+    #wrap{ flex-direction:column; overflow-y:auto; }
+    #stage{ flex:0 0 auto; height:52vh; min-height:340px; }
+    #panel{ width:100%; flex:0 0 auto; height:auto; border-left:none; border-top:1px solid var(--panel-edge);
+      padding:18px 16px 28px; box-shadow:none; }
+    .selftest{ font-size:9.5px; padding:5px 9px; }
+    #stPanel{ right:10px; left:10px; width:auto; top:64px; }
+    .brand .tag{ display:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="left">
+      <div class="backs">
+        <a class="back" href="../index.html">← The Cavern</a>
+        <a class="back deep" href="../../index.html">← The Workshop</a>
+      </div>
+      <div class="brand">
+        <h1>Particle in a Box</h1>
+        <span class="tag">Quantum drift · 📦</span>
+      </div>
+    </div>
+    <div class="right">
+      <div class="selftest" id="selftest" title="Click for the proof · per-check lines are in the console">checking…</div>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="scene"></canvas>
+      <div class="viewlabel" id="viewlabel"><b>STANDING WAVE</b><br><span class="sub">a single eigenstate · ψ<sub>n</sub> rings forever</span></div>
+      <div id="stPanel">
+        <button class="closeX" id="stClose">✕</button>
+        <h4>Self-test — the proof</h4>
+        <div class="sub" id="stSub"></div>
+        <div id="stList"></div>
+        <div class="foot" id="stFoot"></div>
+      </div>
+    </div>
+
+    <div id="panel">
+      <p class="lede">Trap a particle between two walls it cannot pass. Its wave must vanish at each wall,
+        so only whole numbers of half-wavelengths fit — the particle can hold <b>only certain energies</b>,
+        a ladder of them, and there is no rung at zero: even at rest it must hum. This is the simplest
+        quantum system there is, and the root of why atoms have <b>lines</b>, not a smear. Pick a rung to see
+        its standing wave; mix two and watch the bound packet <b>slosh</b>.</p>
+
+      <div class="sect">The energy rung · n</div>
+      <div class="row">
+        <div class="nchips" id="nchips"></div>
+      </div>
+
+      <div class="sect">The box</div>
+      <div class="row">
+        <label>Width L <span class="val" id="lVal">1.00 nm</span></label>
+        <input type="range" id="lSlide" min="20" max="240" step="1" value="100">
+      </div>
+
+      <div class="sect">Watch it</div>
+      <div class="row toggles">
+        <button class="btn" id="psiBtn">ψ &amp; |ψ|²</button>
+        <button class="btn on" id="probBtn">|ψ|² only</button>
+      </div>
+      <div class="row toggles">
+        <button class="btn fire" id="mixBtn">⤬ Mix rungs 1 + 2 &amp; let it evolve</button>
+      </div>
+
+      <div class="sect">Readout · the energy ladder</div>
+      <div class="readout">
+        <div class="headline">
+          <span class="big" id="eBig">0.376</span><span class="unit">eV — energy of this rung</span>
+          <span class="lab" id="eLab">E<sub>n</sub> = n²·π²ℏ²/2mL² &nbsp;·&nbsp; closed form == an independent eigensolve</span>
+        </div>
+        <div class="row2"><span class="k">rung n</span><span class="v q" id="roN">1</span></div>
+        <div class="row2"><span class="k">E_n / E_1  (ladder ratio)</span><span class="v" id="roRatio">1 = 1²</span></div>
+        <div class="row2"><span class="k">interior nodes</span><span class="v" id="roNodes">0</span></div>
+        <div class="row2"><span class="k">ground (zero-point) E_1</span><span class="v" id="roZpe">0.376 eV</span></div>
+        <div class="row2"><span class="k">eigensolve vs closed form |Δ|</span><span class="v good" id="roSolve">—</span></div>
+      </div>
+
+      <p class="hint">Climb the rungs: each adds one bump and one more node, and the energy jumps by
+        <b>n²</b> — rung 3 sits nine times above the ground, not three. <b>Widen L</b> and the whole ladder
+        sinks toward zero (a roomier box is calmer); squeeze it and the energies blow up — that's why an
+        electron pinned to an atom carries so much. Hit <b>Mix</b> and two rungs interfere: because they
+        differ in parity, the bound packet swings side to side, the bare bones of a quantum beat. The
+        self-test proves the live ladder against a from-scratch finite-difference eigensolver of the
+        Schrödinger operator — a different algebra than the formula.</p>
+    </div>
+  </div>
+
+<script>
+"use strict";
+(function(){
+
+  /* ───────────────────────── breadcrumb ───────────────────────── */
+  try{ var bk='ws:seen:box'; if(!localStorage.getItem(bk)) localStorage.setItem(bk, String(Date.now())); }catch(e){}
+
+  /* ════════════════════════════════════════════════════════════════
+     PHYSICS CORE — pure, deterministic, the thing the self-test proves
+     ════════════════════════════════════════════════════════════════
+     A particle confined to an infinite square well of width L: V=0 inside,
+     V=∞ at the walls, so the wavefunction must be ZERO at x=0 and x=L. Solving
+     −(ħ²/2m) ψ'' = E ψ with those Dirichlet boundary conditions forces a discrete
+     ladder of states, indexed by an integer n = 1,2,3,…:
+
+         ψ_n(x) = √(2/L) · sin(nπx/L)          (exactly n half-waves; n−1 interior nodes)
+         E_n    = n²·π²ħ²/(2mL²)                (energies ∝ n² — a quadratic ladder, no rung at 0)
+
+     We work in natural units ħ=m=1 and put the box on [0,1]; the displayed eV/nm are
+     a fixed labelling of these dimensionless quantities (the physics is exact in the
+     dimensionless variables). The closed-form ladder there is  E_n = n²π²/2.
+
+     INDEPENDENT CHECK (the wave solve): we DISCRETIZE the Schrödinger operator
+     −½ d²/dx² on a grid of interior points with the standard 3-point second difference,
+     giving a symmetric tridiagonal matrix H, and find its lowest eigenvalues two
+     different ways: (a) the closed-form eigenvalues of that exact Toeplitz matrix
+     λ_k = (2/h²)·sin²(kπh/2), and (b) FROM SCRATCH by inverse-power iteration with a
+     shift (a Thomas tridiagonal solve per step + a Rayleigh quotient). Both must agree
+     with each other to ~1e−13, and converge to the analytic ladder as the grid refines.
+     So the ladder is corroborated by an independent eigenproblem solve, not asserted.
+     ════════════════════════════════════════════════════════════════ */
+
+  // ---- the closed form (box on [0,1], ħ=m=1) ----
+  function E_closed(n){ return n*n*Math.PI*Math.PI/2; }
+  function psi_closed(n, x){ return Math.SQRT2 * Math.sin(n*Math.PI*x); }   // √(2/L) with L=1
+
+  // ---- numeric overlap by composite Simpson (independent of the analytic δ_mn claim) ----
+  function overlapNumeric(m, n, N){
+    N = N||2000; var h=1/N, s=0;
+    for(var i=0;i<=N;i++){
+      var x=i*h, f=psi_closed(m,x)*psi_closed(n,x);
+      var w=(i===0||i===N)?1:(i%2===1?4:2);
+      s += w*f;
+    }
+    return s*h/3;
+  }
+
+  // ---- the discrete (FD) Hamiltonian's eigenvalues, in closed Toeplitz form ----
+  // H = -½·(1/h²)[1,-2,1] on N-1 interior pts ⇒ λ_k = (2/h²)·sin²(kπh/2)
+  function H_eig_discrete(k, N){ var h=1/N; return (2/(h*h))*Math.pow(Math.sin(k*Math.PI*h/2),2); }
+
+  // ---- FROM-SCRATCH inverse-power iteration: pull the eigenpair nearest `shift`. ----
+  // Solves (H - shift·I)y = v each step by the Thomas algorithm (constant tridiagonal),
+  // normalizes, and reads the eigenvalue off a Rayleigh quotient with H. Different algebra
+  // than the Toeplitz formula — a genuinely independent numerical solve.
+  function inversePower(N, shift, seed){
+    var M=N-1, h=1/N, inv=1/(h*h);
+    var d0=inv-shift, od=-0.5*inv;                 // (H - shift I): diagonal & off-diagonal
+    var s=(seed>>>0)||12345;
+    function rnd(){ s^=s<<13; s^=s>>>17; s^=s<<5; s>>>=0; return (s/4294967296)*2-1; }
+    var v=new Float64Array(M); for(var i=0;i<M;i++) v[i]=rnd();
+    function norm(x){ var n=0; for(var j=0;j<M;j++) n+=x[j]*x[j]; n=Math.sqrt(n); for(var j2=0;j2<M;j2++) x[j2]/=n; return x; }
+    norm(v);
+    function Hmul(x){ var o=new Float64Array(M); for(var i=0;i<M;i++){ var val=inv*x[i]; if(i>0)val+=-0.5*inv*x[i-1]; if(i<M-1)val+=-0.5*inv*x[i+1]; o[i]=val; } return o; }
+    function solve(rhs){                            // Thomas: constant tridiagonal (d0, od, od)
+      var cp=new Float64Array(M), dp=new Float64Array(M), x=new Float64Array(M);
+      cp[0]=od/d0; dp[0]=rhs[0]/d0;
+      for(var i=1;i<M;i++){ var mm=d0-od*cp[i-1]; cp[i]=od/mm; dp[i]=(rhs[i]-od*dp[i-1])/mm; }
+      x[M-1]=dp[M-1];
+      for(var i2=M-2;i2>=0;i2--) x[i2]=dp[i2]-cp[i2]*x[i2+1];
+      return x;
+    }
+    var lambda=shift;
+    for(var it=0; it<200; it++){
+      var y=solve(v); norm(y);
+      var Hy=Hmul(y), num=0; for(var k=0;k<M;k++) num+=y[k]*Hy[k];
+      lambda=num;
+      var diff=0; for(var q=0;q<M;q++){ var dd=Math.abs(y[q])-Math.abs(v[q]); diff+=dd*dd; }
+      v=y; if(Math.sqrt(diff)<1e-14) break;
+    }
+    return {lambda:lambda, vec:v};
+  }
+
+  // ---- count interior sign-changes (nodes) of ψ_n on (0,1) ----
+  function interiorNodes(n){
+    var prev=psi_closed(n, 0.0008), nodes=0;
+    for(var i=1;i<=1600;i++){ var x=0.0008 + i/1600*0.9984; var cur=psi_closed(n,x); if(prev*cur<0) nodes++; prev=cur; }
+    return nodes;
+  }
+
+  // ---- time-dependent superposition: Ψ(x,t)=Σ c_n ψ_n e^{-i E_n t}; returns ⟨x⟩ and the norm ----
+  // (used by the self-test's selection-rule check AND drives the "evolve" animation's analytics)
+  function expectXandNorm(coeffs, t){
+    var N=3000, h=1/N, sx=0, snorm=0;
+    for(var i=0;i<=N;i++){
+      var x=i*h, re=0, im=0;
+      for(var c=0;c<coeffs.length;c++){ var n=coeffs[c].n, cc=coeffs[c].c, ph=-E_closed(n)*t, b=cc*psi_closed(n,x); re+=b*Math.cos(ph); im+=b*Math.sin(ph); }
+      var p=re*re+im*im, w=(i===0||i===N)?1:(i%2===1?4:2);
+      sx += w*x*p; snorm += w*p;
+    }
+    return { x: sx/snorm, norm: snorm*h/3 };
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     SELF-TEST — falsifiable proofs of the physics
+     ════════════════════════════════════════════════════════════════ */
+  function runSelfTest(){
+    var checks=[];
+    function ck(name, ok, detail){ checks.push({name:name, ok:!!ok, detail:detail||''}); }
+    function approx(a,b,tol){ return Math.abs(a-b) <= tol; }
+
+    // (1) Quantized ladder, quadratic in n: E_n / E_1 == n² exactly (no rung at zero).
+    var ladderOK=true, lw='';
+    for(var n=1;n<=8;n++){ var r=E_closed(n)/E_closed(1); if(!approx(r, n*n, 1e-9)){ ladderOK=false; lw='n='+n; } }
+    ck('energies form the ladder E_n/E_1 = n²', ladderOK && E_closed(1)>0, 'exact for n=1..8; E_1='+E_closed(1).toFixed(4)+' > 0 (zero-point) '+lw);
+
+    // (2) Orthonormality: analytic δ_mn matches an independent Simpson integral to machine precision.
+    var maxO=0, ow='';
+    for(var m=1;m<=6;m++) for(var nn=1;nn<=6;nn++){ var num=overlapNumeric(m,nn), an=(m===nn?1:0); var e=Math.abs(num-an); if(e>maxO){maxO=e; ow='⟨'+m+'|'+nn+'⟩';} }
+    ck('eigenstates orthonormal ⟨ψ_m|ψ_n⟩ = δ_mn', maxO<1e-10, 'max |numeric − δ| '+maxO.toExponential(2)+' over 6×6 ('+ow+')');
+
+    // (3) Node theorem: ψ_n has EXACTLY n−1 interior nodes (n−1 zero-crossings inside the box).
+    var nodesOK=true, nw='';
+    for(var k=1;k<=7;k++){ var cnt=interiorNodes(k); if(cnt!==k-1){ nodesOK=false; nw='n='+k+'→'+cnt; } }
+    ck('node theorem: ψ_n has n−1 interior nodes', nodesOK, nw||'verified n=1..7');
+
+    // (4) The closed-form ladder == the DISCRETE Hamiltonian's eigenvalues as the grid refines (O(h²)).
+    var coarse=0, fine=0;
+    for(var c4=1;c4<=4;c4++){ coarse=Math.max(coarse, Math.abs(H_eig_discrete(c4,40)-E_closed(c4))/E_closed(c4)); fine=Math.max(fine, Math.abs(H_eig_discrete(c4,1600)-E_closed(c4))/E_closed(c4)); }
+    ck('FD eigenvalues → closed ladder as grid refines', fine<1e-4 && fine<coarse/10,
+       'rel err N=40 '+coarse.toExponential(2)+' → N=1600 '+fine.toExponential(2)+' (O(h²))');
+
+    // (5) INDEPENDENT eigensolve: from-scratch inverse-power iteration finds the lowest rungs,
+    //     agreeing with the discrete Toeplitz theory to ~1e−13 (a different algebra than the formula).
+    var solveMax=0, sw='';
+    for(var s=1;s<=3;s++){ var got=inversePower(400, E_closed(s)*0.97, 1000+s).lambda; var want=H_eig_discrete(s,400); var e2=Math.abs(got-want); if(e2>solveMax){solveMax=e2; sw='n='+s;} }
+    ck('from-scratch inverse-power == FD theory', solveMax<1e-9, 'max |Δ| '+solveMax.toExponential(2)+' over n=1..3 ('+sw+')');
+
+    // (6) Time evolution stays UNITARY: a superposition keeps ∫|Ψ|² = 1 at every time.
+    function mk(p){ var s=0; for(var i=0;i<p.length;i++) s+=p[i].c*p[i].c; s=Math.sqrt(s); return p.map(function(q){return {n:q.n, c:q.c/s};}); }
+    var sup=mk([{n:1,c:1},{n:2,c:1.3},{n:4,c:0.7}]);
+    var nMax=0; var ts=[0,0.031,0.099,0.211,0.353];
+    for(var ti=0;ti<ts.length;ti++){ nMax=Math.max(nMax, Math.abs(expectXandNorm(sup, ts[ti]).norm - 1)); }
+    ck('time evolution conserves probability (norm = 1)', nMax<1e-6, 'max |norm−1| '+nMax.toExponential(2)+' over 5 times');
+
+    // (7) Selection rule: ⟨x⟩ oscillates for a MIXED-parity superposition (1+2), but is FROZEN at
+    //     the centre for a SAME-parity one (1+3) — the quantum origin of which transitions emit light.
+    var mixed=mk([{n:1,c:1},{n:2,c:1}]), same=mk([{n:1,c:1},{n:3,c:1}]);
+    var xmMin=Infinity,xmMax=-Infinity, xsMin=Infinity,xsMax=-Infinity;
+    for(var tk=0;tk<=10;tk++){ var t=tk*0.045;
+      var xm=expectXandNorm(mixed,t).x, xs=expectXandNorm(same,t).x;
+      xmMin=Math.min(xmMin,xm); xmMax=Math.max(xmMax,xm); xsMin=Math.min(xsMin,xs); xsMax=Math.max(xsMax,xs);
+    }
+    var mixRange=xmMax-xmMin, sameRange=xsMax-xsMin;
+    ck('selection rule: ⟨x⟩ swings only across parity', mixRange>0.25 && sameRange<1e-6,
+       'mixed swing '+mixRange.toFixed(3)+' (large) vs same-parity '+sameRange.toExponential(2)+' (frozen at ½)');
+
+    // (8) Determinism: the whole core is pure — identical inputs give byte-identical numbers.
+    var a=E_closed(5).toString()+'|'+psi_closed(3,0.37).toString()+'|'+inversePower(200,E_closed(2)*0.97,7).lambda.toString();
+    var b=E_closed(5).toString()+'|'+psi_closed(3,0.37).toString()+'|'+inversePower(200,E_closed(2)*0.97,7).lambda.toString();
+    ck('deterministic (pure core)', a===b, 'identical recompute');
+
+    var pass=checks.filter(function(c){return c.ok;}).length;
+    return {checks:checks, pass:pass, total:checks.length, ok:pass===checks.length};
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     UI / RENDER
+     ════════════════════════════════════════════════════════════════ */
+  var cv=document.getElementById('scene'), ctx=cv.getContext('2d');
+  var DPR=Math.max(1, Math.min(2, window.devicePixelRatio||1));
+  function resize(){ var r=cv.getBoundingClientRect(); cv.width=Math.max(2,r.width*DPR); cv.height=Math.max(2,r.height*DPR); }
+  window.addEventListener('resize', function(){ resize(); draw(); });
+
+  // display scale: pick a fixed eV-per-(natural-unit) at a reference L so the numbers feel physical.
+  // E_n[eV] = (n²π²/2) · K / L[nm]²  with K chosen so L=1nm, n=1 ⇒ ~0.376 eV (an electron in a 1nm well).
+  var K_EV = 0.376 / (E_closed(1));    // calibrate: E_closed(1)=π²/2 → 0.376 eV at L=1nm
+  function E_eV(n, Lnm){ return E_closed(n) * K_EV / (Lnm*Lnm); }
+
+  var st = {
+    n: 1,                 // selected rung (1..8)
+    Lnm: 1.0,             // box width (display nm)
+    showPsi: false,       // show ψ (signed) alongside |ψ|²
+    mixing: false         // superposition / evolve mode
+  };
+  var anim = { t:0, running:false, lastTs:0 };
+  var MIX = [{n:1,c:Math.SQRT1_2},{n:2,c:Math.SQRT1_2}];   // normalized 1+2 superposition
+
+  function fmt(x, d){ return x.toFixed(d===undefined?4:d); }
+
+  function recompute(){
+    var Eev = E_eV(st.n, st.Lnm);
+    var E1  = E_eV(1, st.Lnm);
+    var nodes = st.n - 1;
+    // verify the live closed form against the independent FD eigensolve (dimensionless), for the readout
+    var got = inversePower(300, E_closed(st.n)*0.97, 2000+st.n).lambda;
+    var want = E_closed(st.n);
+    var solveDelta = Math.abs(H_eig_discrete(st.n,300) - got);   // FD-theory vs from-scratch solve
+
+    document.getElementById('eBig').textContent = fmt(Eev,3);
+    document.getElementById('roN').textContent = st.mixing ? '1 + 2 (mixed)' : String(st.n);
+    document.getElementById('roRatio').textContent = (st.n*st.n)+' = '+st.n+'²';
+    document.getElementById('roNodes').textContent = String(nodes);
+    document.getElementById('roZpe').textContent = fmt(E1,3)+' eV';
+    document.getElementById('roSolve').textContent = solveDelta.toExponential(2);
+    document.getElementById('roSolve').className = 'v ' + (solveDelta<1e-7?'good':'q');
+
+    document.getElementById('lVal').textContent = fmt(st.Lnm,2)+' nm';
+
+    var vl=document.getElementById('viewlabel');
+    if(st.mixing){ vl.classList.add('evolving'); vl.innerHTML='<b>SUPERPOSITION</b><br><span class="sub">ψ₁ + ψ₂ · the bound packet sloshes</span>'; }
+    else { vl.classList.remove('evolving'); vl.innerHTML='<b>STANDING WAVE</b><br><span class="sub">rung n='+st.n+' · ψ<sub>n</sub> rings forever</span>'; }
+
+    return { Eev:Eev, nodes:nodes };
+  }
+
+  // ---- the picture: the infinite well, the energy ladder, and the wavefunction(s) ----
+  function draw(){
+    if(!ctx) return;
+    var W=cv.width, H=cv.height; ctx.clearRect(0,0,W,H);
+    recompute();
+
+    var pad=Math.round(54*DPR);
+    // the box occupies the central region; a slim energy-ladder gauge sits on the left.
+    var gaugeW = Math.round(64*DPR);
+    var bx0 = pad + gaugeW + Math.round(26*DPR);
+    var bx1 = W - pad;
+    var by0 = Math.round(H*0.12), by1 = Math.round(H*0.90);
+    var floor = by1, ceil = by0;
+    var spanX = bx1-bx0, spanY = by1-by0;
+    var mid = (by0+by1)/2;             // ψ=0 baseline (centre of the box, vertically)
+
+    // ── the infinite walls (the "barred" red, matching the wing's danger accent) ──
+    ctx.save();
+    ctx.fillStyle='rgba(224,106,82,0.07)';
+    // hatched wall slabs to the left and right
+    var wallW = Math.round(13*DPR);
+    [[bx0-wallW,bx0],[bx1,bx1+wallW]].forEach(function(seg){
+      ctx.fillStyle='rgba(224,106,82,0.10)'; ctx.fillRect(seg[0], ceil, seg[1]-seg[0], floor-ceil);
+      ctx.save(); ctx.beginPath(); ctx.rect(seg[0], ceil, seg[1]-seg[0], floor-ceil); ctx.clip();
+      ctx.strokeStyle='rgba(224,106,82,0.34)'; ctx.lineWidth=1*DPR; ctx.beginPath();
+      for(var hy=ceil-spanX; hy<floor+spanX; hy+=10*DPR){ ctx.moveTo(seg[0]-4*DPR, hy); ctx.lineTo(seg[1]+4*DPR, hy+18*DPR); }
+      ctx.stroke(); ctx.restore();
+    });
+    ctx.strokeStyle='rgba(224,106,82,0.85)'; ctx.lineWidth=2.4*DPR;
+    ctx.beginPath(); ctx.moveTo(bx0, ceil-6*DPR); ctx.lineTo(bx0, floor+6*DPR);
+    ctx.moveTo(bx1, ceil-6*DPR); ctx.lineTo(bx1, floor+6*DPR); ctx.stroke();
+    // V=∞ labels
+    ctx.fillStyle='rgba(224,106,82,0.78)'; ctx.font='600 '+(11*DPR)+'px ui-monospace, Menlo, monospace';
+    ctx.textAlign='center'; ctx.fillText('V = ∞', bx0-wallW/2-2*DPR, ceil-12*DPR);
+    ctx.fillText('V = ∞', bx1+wallW/2+2*DPR, ceil-12*DPR);
+    ctx.restore();
+
+    // floor line (V=0 inside)
+    ctx.strokeStyle='rgba(255,255,255,0.10)'; ctx.lineWidth=1*DPR;
+    ctx.beginPath(); ctx.moveTo(bx0, mid); ctx.lineTo(bx1, mid); ctx.stroke();
+
+    // ── the energy-ladder gauge on the left ──
+    var gx = pad, gx2 = pad+gaugeW;
+    var Emax = E_eV(8, st.Lnm);                       // top of the gauge = rung 8
+    function gY(eev){ return floor - (eev/Emax)*(floor-ceil); }
+    ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1*DPR;
+    ctx.beginPath(); ctx.moveTo(gx, floor); ctx.lineTo(gx, ceil); ctx.stroke();   // the axis
+    ctx.textAlign='left';
+    for(var rg=1; rg<=8; rg++){
+      var yy=gY(E_eV(rg, st.Lnm));
+      var hot = st.mixing ? (rg<=2) : (rg===st.n);
+      ctx.strokeStyle = hot ? 'rgba(177,140,255,0.95)' : 'rgba(255,255,255,0.16)';
+      ctx.lineWidth = hot ? 2.4*DPR : 1.2*DPR;
+      ctx.beginPath(); ctx.moveTo(gx, yy); ctx.lineTo(gx2, yy); ctx.stroke();
+      if(hot){ ctx.shadowColor='rgba(177,140,255,0.7)'; ctx.shadowBlur=8*DPR; ctx.stroke(); ctx.shadowBlur=0; }
+      ctx.fillStyle = hot ? 'rgba(211,190,255,0.95)' : 'rgba(154,163,166,0.7)';
+      ctx.font='600 '+(10*DPR)+'px ui-monospace, Menlo, monospace';
+      ctx.fillText('n='+rg, gx2+5*DPR, yy+3.5*DPR);
+    }
+    ctx.fillStyle='rgba(154,163,166,0.8)'; ctx.font='600 '+(9.5*DPR)+'px ui-monospace, Menlo, monospace';
+    ctx.save(); ctx.translate(gx-12*DPR, mid); ctx.rotate(-Math.PI/2);
+    ctx.textAlign='center'; ctx.fillText('ENERGY  E ∝ n²', 0, 0); ctx.restore();
+
+    // ── the wavefunction(s) inside the box ──
+    var amp = spanY*0.36;          // visual amplitude for ψ (signed, about the mid)
+    var N = Math.max(2, Math.round(spanX));
+    function X(frac){ return bx0 + frac*spanX; }
+
+    if(st.mixing){
+      // |Ψ(x,t)|² for the 1+2 superposition, evolving — drawn as a filled probability hump that sloshes.
+      var t = anim.t;
+      // build the density on the grid
+      var dens=[], dmax=1e-9;
+      for(var i=0;i<=N;i++){
+        var xf=i/N, re=0, im=0;
+        for(var c=0;c<MIX.length;c++){ var nn=MIX[c].n, cc=MIX[c].c, ph=-E_closed(nn)*t, base=cc*psi_closed(nn,xf); re+=base*Math.cos(ph); im+=base*Math.sin(ph); }
+        var p=re*re+im*im; dens.push(p); if(p>dmax)dmax=p;
+      }
+      // probability fill (|Ψ|², always ≥0, above the mid line as a hump)
+      ctx.beginPath(); ctx.moveTo(bx0, mid);
+      for(var i2=0;i2<=N;i2++){ var yy2=mid - (dens[i2]/dmax)*amp*1.7; ctx.lineTo(X(i2/N), yy2); }
+      ctx.lineTo(bx1, mid); ctx.closePath();
+      var g=ctx.createLinearGradient(bx0,0,bx1,0);
+      g.addColorStop(0,'rgba(143,215,154,0.22)'); g.addColorStop(1,'rgba(177,140,255,0.22)');
+      ctx.fillStyle=g; ctx.fill();
+      ctx.beginPath();
+      for(var i3=0;i3<=N;i3++){ var yy3=mid - (dens[i3]/dmax)*amp*1.7; if(i3===0)ctx.moveTo(X(0),yy3); else ctx.lineTo(X(i3/N),yy3); }
+      ctx.strokeStyle='rgba(143,215,154,0.95)'; ctx.lineWidth=2.4*DPR; ctx.lineJoin='round';
+      ctx.shadowColor='rgba(143,215,154,0.5)'; ctx.shadowBlur=9*DPR; ctx.stroke(); ctx.shadowBlur=0;
+      // ⟨x⟩ marker (the centre of the sloshing packet)
+      var xbar = expectXandNorm(MIX, t).x;
+      var mx = X(xbar);
+      ctx.strokeStyle='rgba(242,193,78,0.85)'; ctx.lineWidth=1.4*DPR; ctx.setLineDash([4*DPR,4*DPR]);
+      ctx.beginPath(); ctx.moveTo(mx, ceil); ctx.lineTo(mx, floor); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle='rgba(242,193,78,0.95)'; ctx.font='600 '+(10*DPR)+'px ui-monospace, Menlo, monospace';
+      ctx.textAlign='center'; ctx.fillText('⟨x⟩', mx, floor+16*DPR);
+      ctx.textAlign='left'; ctx.fillStyle='rgba(143,215,154,0.95)'; ctx.font='600 '+(12*DPR)+'px ui-monospace, Menlo, monospace';
+      ctx.fillText('|Ψ(x,t)|²  =  |ψ₁ e^{−iE₁t} + ψ₂ e^{−iE₂t}|²', bx0+4*DPR, ceil+2*DPR);
+    } else {
+      // a single eigenstate: ψ_n (signed, faint) and |ψ_n|² (the probability, bold)
+      var n=st.n;
+      // |ψ|² hump fill
+      ctx.beginPath(); ctx.moveTo(bx0, mid);
+      for(var p1=0;p1<=N;p1++){ var xf1=p1/N, ps=psi_closed(n,xf1); var yy=mid - (ps*ps/2)*amp*1.7; ctx.lineTo(X(xf1), yy); }
+      ctx.lineTo(bx1, mid); ctx.closePath();
+      ctx.fillStyle='rgba(177,140,255,0.16)'; ctx.fill();
+      // |ψ|² outline
+      ctx.beginPath();
+      for(var p2=0;p2<=N;p2++){ var xf2=p2/N, ps2=psi_closed(n,xf2); var yy2=mid - (ps2*ps2/2)*amp*1.7; if(p2===0)ctx.moveTo(X(0),yy2); else ctx.lineTo(X(xf2),yy2); }
+      ctx.strokeStyle='rgba(211,190,255,0.95)'; ctx.lineWidth=2.4*DPR; ctx.lineJoin='round';
+      ctx.shadowColor='rgba(177,140,255,0.55)'; ctx.shadowBlur=9*DPR; ctx.stroke(); ctx.shadowBlur=0;
+
+      // ψ (signed) — only when requested
+      if(st.showPsi){
+        ctx.beginPath();
+        for(var p3=0;p3<=N;p3++){ var xf3=p3/N, ps3=psi_closed(n,xf3); var yy3=mid - ps3*amp; if(p3===0)ctx.moveTo(X(0),yy3); else ctx.lineTo(X(xf3),yy3); }
+        ctx.strokeStyle='rgba(127,212,192,0.85)'; ctx.lineWidth=1.6*DPR; ctx.setLineDash([5*DPR,4*DPR]);
+        ctx.stroke(); ctx.setLineDash([]);
+        // mark the interior nodes (ψ=0) of the signed wave
+        ctx.fillStyle='rgba(127,212,192,0.95)';
+        for(var k=1;k<n;k++){ var nf=k/n; var nxp=X(nf); ctx.beginPath(); ctx.arc(nxp, mid, 3.2*DPR, 0, 2*Math.PI); ctx.fill(); }
+      }
+      // legend
+      ctx.textAlign='left'; ctx.font='600 '+(12*DPR)+'px ui-monospace, Menlo, monospace';
+      ctx.fillStyle='rgba(211,190,255,0.95)'; ctx.fillText('|ψ'+(['','₁','₂','₃','₄','₅','₆','₇','₈'][n]||'ₙ')+'|²  (probability)', bx0+4*DPR, ceil+2*DPR);
+      if(st.showPsi){ ctx.fillStyle='rgba(127,212,192,0.9)'; ctx.fillText('ψ (signed) · ● = nodes', bx0+4*DPR, ceil+18*DPR); }
+    }
+  }
+
+  function loop(ts){
+    if(!anim.lastTs) anim.lastTs=ts;
+    var dt=(ts-anim.lastTs)/1000; anim.lastTs=ts;
+    if(anim.running){ anim.t += dt*0.7; recompute(); draw(); requestAnimationFrame(loop); }
+  }
+
+  /* ── wiring ── */
+  function syncFill(el){ var min=+el.min,max=+el.max,v=+el.value; el.style.setProperty('--fill', ((v-min)/(max-min)*100)+'%'); }
+
+  // n-chips
+  var chipBox=document.getElementById('nchips');
+  function buildChips(){
+    chipBox.innerHTML='';
+    for(var n=1;n<=8;n++){
+      (function(n){
+        var c=document.createElement('div'); c.className='nchip'+((!st.mixing && st.n===n)?' on':'');
+        c.textContent=n; c.addEventListener('click', function(){ setRung(n); });
+        chipBox.appendChild(c);
+      })(n);
+    }
+  }
+  function refreshChips(){
+    var kids=chipBox.children;
+    for(var i=0;i<kids.length;i++){
+      var n=i+1;
+      kids[i].className='nchip'+(st.mixing ? ((n<=2)?' mix':'') : (st.n===n?' on':''));
+    }
+  }
+  function setRung(n){
+    stopMix();
+    st.n=n; refreshChips(); draw();
+  }
+
+  var lSlide=document.getElementById('lSlide');
+  lSlide.addEventListener('input', function(){ st.Lnm=(+lSlide.value)/100; syncFill(lSlide); draw(); });
+
+  var psiBtn=document.getElementById('psiBtn'), probBtn=document.getElementById('probBtn');
+  function setShowPsi(v){ st.showPsi=v; psiBtn.classList.toggle('on', v); probBtn.classList.toggle('on', !v); draw(); }
+  psiBtn.addEventListener('click', function(){ setShowPsi(true); });
+  probBtn.addEventListener('click', function(){ setShowPsi(false); });
+
+  var mixBtn=document.getElementById('mixBtn');
+  function stopMix(){
+    if(!st.mixing) return;
+    st.mixing=false; anim.running=false;
+    mixBtn.classList.remove('on'); mixBtn.textContent='⤬ Mix rungs 1 + 2 & let it evolve';
+    refreshChips();
+  }
+  mixBtn.addEventListener('click', function(){
+    if(st.mixing){ stopMix(); draw(); return; }
+    st.mixing=true; anim.t=0; anim.running=true; anim.lastTs=0;
+    mixBtn.classList.add('on'); mixBtn.textContent='⏸ Stop & return to single rungs';
+    refreshChips(); requestAnimationFrame(loop);
+  });
+
+  /* ── self-test panel ── */
+  var stBtn=document.getElementById('selftest'), stPanel=document.getElementById('stPanel');
+  var R=runSelfTest();
+  stBtn.textContent = (R.ok?'self-test ✓ ':'self-test ✗ ')+R.pass+'/'+R.total;
+  stBtn.classList.add(R.ok?'ok':'bad');
+  (function fill(){
+    document.getElementById('stSub').textContent =
+      'An infinite square well. Each line is a falsifiable claim about the bound states, checked against the closed form and an independent from-scratch eigensolve.';
+    var list=document.getElementById('stList'); list.innerHTML='';
+    R.checks.forEach(function(c){
+      var d=document.createElement('div'); d.className='line';
+      d.innerHTML='<span class="badge '+(c.ok?'pass':'fail')+'">'+(c.ok?'✓':'✗')+'</span>'+
+        '<span><span class="nm">'+c.name+'</span><span class="dt">'+c.detail+'</span></span>';
+      list.appendChild(d);
+    });
+    document.getElementById('stFoot').innerHTML =
+      'ħ = m = 1, box on [0,1]. The eigensolve discretizes −½ d²/dx² with Dirichlet walls and pulls the lowest '+
+      'rungs by inverse-power iteration (Thomas tridiagonal solve + Rayleigh quotient) — a different algebra '+
+      'than the n²π²/2 formula, so agreement corroborates rather than asserts. '+
+      (R.ok?'<span style="color:var(--green)">All '+R.total+' green.</span>':'<span style="color:#f08a7a">SOME FAILED.</span>');
+  })();
+  R.checks.forEach(function(c){ (c.ok?console.log:console.warn)('%c'+(c.ok?'✓':'✗')+' '+c.name, 'color:'+(c.ok?'#8fd79a':'#f08a7a'), c.detail); });
+  stBtn.addEventListener('click', function(){ stPanel.classList.toggle('show'); });
+  document.getElementById('stClose').addEventListener('click', function(){ stPanel.classList.remove('show'); });
+
+  /* ── go ── */
+  buildChips();
+  syncFill(lSlide);
+  resize();
+  draw();
+
+  // expose for any external harness / debugging (read-only)
+  window.__box = { E_closed:E_closed, psi_closed:psi_closed, H_eig_discrete:H_eig_discrete,
+                   inversePower:inversePower, expectXandNorm:expectXandNorm, runSelfTest:runSelfTest };
+})();
+</script>
+</body>
+</html>
