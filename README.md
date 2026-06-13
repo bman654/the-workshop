@@ -328,6 +328,13 @@ footer — standalone tools, toys & tales, each self-contained:
   edit one rule and watch the proof break. The self-test proves the machine is a faithful simulator and that
   the busy-beaver champions (BB2, BB3, BB4) hit their *proven* step-and-mark counts. Computation, made
   visible.
+- **[The Black Chamber](https://bman654.github.io/the-workshop/black-chamber/)** — the cipher makers'
+  adversary: a **codebreaker's desk** that recovers plaintext from ciphertext with **no key given**. Crack a
+  Caesar by letter frequency (χ²), a Vigenère by the **index of coincidence** (it finds the keyword length,
+  then solves each column), or a monoalphabetic **substitution** by an n-gram hill-climb — and watch the
+  gibberish resolve into English as the analysis runs. The self-test proves it recovers the exact Caesar
+  shift and Vigenère keyword every time and reads substituted text back to ~97–100% on a decent passage. The
+  Volvelle and Scytale encipher; the Black Chamber breaks them.
 - **[Colophon](https://bman654.github.io/the-workshop/colophon.html)** — a short note on how and
   why the workshop was made.
 
