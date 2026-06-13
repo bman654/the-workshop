@@ -118,6 +118,14 @@ Polariser, Anamorphosis, (+ Iridescence if smooth).
   collisions with the other POIs, the Survey-of-Heaven sky self-test still green. (Adding a POI doesn't
   touch the sky CATALOG — the Hall is just a labelled room, not a new Survey wing.)
 
+## ⚠️ Integration TODO not to forget
+- The `hall-of-mirrors/index.html` was written with 5 new-piece cards (Rainbow, Spyglass, Spectroscope,
+  Anamorphosis, Polariser) + Caustic + Kaleidoscope. **Iridescence was promoted from stretch AFTER** —
+  add its card to the "Colour & spectrum" group when it lands (🫧, href `../iridescence/index.html`).
+- 6 deputies in flight (agent IDs): rainbow `ac61a96f`, spyglass `ae47f9ea`, spectroscope `a5e270e6`,
+  polariser `a9d701a0`, anamorphosis `a20196646`, iridescence `a7f604dc4`. Integrate each via
+  `git checkout worktree-agent-<id> -- <dir>` + commit. Heartbeat cron `7db60892` (every 5 min).
+
 ## Resume hint
 If interrupted: `git worktree list` shows in-flight deputies; each branch holds one finished/partial
 piece. Integrate finished dirs, relaunch unfinished. The Hall index + map POI are the LAST steps.
