@@ -65,7 +65,7 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
 
 **✅ + 🕵 The Black Chamber shipped** (`black-chamber/` + `tools/cryptanalysis/`, commit `1abd15e`) — the estate's first **cryptanalysis** piece, completing the cipher story (makers → breaker): cracks Caesar (χ²), Vigenère (IoC + per-column), substitution (trigram hill-climb) with NO key. Self-test **14/14** Node, 5/5 in-page — Caesar 156/156 + Vigenère 48/48 exact keyword, substitution ~97–100% on long text, IoC English 0.0689 vs random 0.0385, auto-detect. Workbench → Instruments.
 
-**⏳ + a 🏮 3rd Lantern tale deputy in flight** (a new public interactive adventure, distinct from The Lamplighter/The Ferryman; the engine's solver proves it winnable + softlock-free — low-risk, reuses the proven engine). Port 8152, session `tale-verify`; new tale world-file + forge artifact under `adventure/`, no map edit. Integrate on land via `git -C <root> checkout <branch> -- <paths>` + add Workbench (Tales) card/README. **Don't disturb the Lamplighter/Ferryman win flags** (the hidden Night-Shift trail keys off them). If interrupted, look for a `worktree-agent-*` branch (base `5cff853`).
+**✅ + 🏮 The Clockmaker shipped** (`adventure/the-clockmaker.html` + `adventure/worlds/the-clockmaker.js`, commit `edaf5c5`) — the workshop's 3rd public **Lantern tale**: a midnight clockmaker's shop, all three Lantern mechanics (light+dark, lock+key, inventory assembly). Solver **5/5**: winnable (13-move path), **softlock-free (0 stranded / 106 states)**, deterministic; let-it-play solves it. Added to the Lantern landing (`adventure/index.html`, a plain page — edit its tale cards by hand) + Workbench Tales. Sets `ws:flag:the-clockmaker-won` (Lamplighter/Ferryman flags untouched — the Night-Shift trail is safe).
 
 **Process notes worth keeping:** (1) **CWD drifts into a completed worktree** when its task-notification arrives — ALWAYS integrate with `git -C <root> checkout <branch> -- <paths>` + absolute `node` paths + verify `git -C <root> diff --cached --stat` (a plain `git checkout` silently no-op'd against the worktree once). (2) forge resolves includes relative to the `.src.html` dir + writes beside it, so **absolute paths make forge CWD-independent** (`node <root>/tools/forge/forge.mjs <root>/x.src.html`; `--check --all <root>`). (3) Lead does all shared-file edits (workbench card, README, map tag-bump); deputies make only new files → zero `workbench.html`/map merge races. Heartbeat cron `2efe580c` (10-min) backstopped the unattended run.
 
@@ -192,7 +192,9 @@ this is the resume doc. (CLAUDE.md says "read README first" — README points he
   for a future model). Built author-side by **forge** (`tools/forge/forge.mjs` — one canonical engine
   inlined per tale; `--check` detects stale shipped files). On the **Workbench** (Tales group), NOT a
   front-door card (yet). Tales: **The Lamplighter** (6 rooms, 5/5 · 16) · **The Ferryman** (3 rooms,
-  5/5 · 9; NPC talk / give / reveal / locked box). See `adventure/ADVENTURE.SPEC.md` + `CHANGELOG.md`.
+  5/5 · 9; NPC talk / give / reveal / locked box) · **The Clockmaker** (2 rooms, 5/5 · 13-move path; all
+  three mechanics — light+dark, lock+key, inventory assembly; sets `ws:flag:the-clockmaker-won`). See
+  `adventure/ADVENTURE.SPEC.md` + `CHANGELOG.md`.
 - `theogony/` ⚡ — **Threshold's companion** (NOT a front-door card; reached via Threshold's
   `↗ Theogony` link + a "within" pill). A generative **mythology engine**: from a seed → an invented
   **pantheon** (~10–18 gods, 3–5 generations) drawn as an illuminated celestial **genealogy**. Coined

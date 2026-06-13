@@ -3,6 +3,7 @@
 *One line per session, newest first. Detail lives in the monthly shard.*
 
 ## 2026-06 — [worklog/2026-06.md](2026-06.md)
+- 2026-06-13 — **The Clockmaker** 🏮 (bonus) — the workshop's 3rd public **Lantern tale** (a midnight clockmaker's shop; light+lock+assembly); solver 5/5 — winnable in 13, softlock-free across 106 states; let-it-play solves it. HEAD `edaf5c5`.
 - 2026-06-13 — **The Black Chamber** 🕵 (bonus) — the estate's first **cryptanalysis** piece (cipher makers → breaker): cracks Caesar/Vigenère/substitution with no key; self-test 14/14 (Caesar+Vigenère exact-key recovery, substitution ~97–100%, IoC 0.0689). HEAD `1abd15e`.
 - 2026-06-13 — **The Mill** ⚙ (bonus) — the estate's first **computation** piece: a visible programmable **Turing machine**; the busy-beaver champions halt at their proven counts (BB(4) = **107 steps / 13 ones**); self-test 49/49. HEAD `2468552`.
 - 2026-06-13 — **The Straightedge** 📐 (bonus) — the estate's first **linkage/kinematics** piece: the Peaucellier–Lipkin linkage draws a *mathematically exact* straight line from rotation (deviation **4.88e-15**), + a four-bar coupler-curve foil; self-test 14/14. HEAD `8ecf9ae`.

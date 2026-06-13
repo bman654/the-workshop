@@ -140,7 +140,8 @@ footer — standalone tools, toys & tales, each self-contained:
   engine **play the tale itself** ("▶ let it play"). Each tale is authored as a declarative *world-file*
   (pure data + prose), so new tales are written without touching the engine. Tales so far: **The
   Lamplighter** (dusk has come with no lamps lit, and the morning waits on the round) and **The
-  Ferryman** (a river with no far side, and a toll to be found). Self-contained, no build, no network.
+  Ferryman** (a river with no far side, and a toll to be found), and **The Clockmaker** (a stopped clock at
+  midnight, to be set beating again). Self-contained, no build, no network.
 - **[Latch](https://bman654.github.io/the-workshop/latch/)** — the first of two **logic puzzles**:
   a generative **nonogram (picross) atelier**. From a seed it draws a little pixel picture, encodes
   it as row/column run-clues, and hands you the puzzle to solve by deduction. The twist (and the
