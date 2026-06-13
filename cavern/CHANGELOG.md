@@ -2,9 +2,57 @@
 
 *The estate's physics laboratory, quarried into the hillside and kept underground "for safety."
 A front-door **wing** (the grand "Physics Lab" seed begun). Two drifts off a central shaft — a warm
-Newtonian one and a cold Einsteinian one — and now a third, the **Quantum Drift** (four benches deep),
+Newtonian one and a cold Einsteinian one — and now a third, the **Quantum Drift** (five benches deep),
 which opens once a visitor has walked both. Every bench is one self-contained vanilla HTML file that
 proves its own physics exact.*
+
+---
+
+## 2026-06-13 — the Quantum Drift completes the bound-state trilogy (The Finite Well ships · 5th Q-bench, 8th overall)
+
+**`cavern/finite-well/index.html` — The Finite Well 🕳️** (Quantum drift). The realistic well that sits
+*between* the Box and the Bowl, and the third corner of the bound-state trilogy: give the box a **real,
+finite depth** `V₀` — walls a particle can climb if it has the energy — and two things break that the
+infinite box never let you see. One vanilla HTML file (~620 lines), ħ=m=1 natural units; displayed eV are
+a fixed labelling.
+
+- **The two headline breaks** (the soul of the bench):
+  - the ladder becomes **FINITE** — a well of strength `R = √(2V₀)·a` holds exactly `⌊R/(π/2)⌋+1` bound
+    states (always **at least one**, however shallow). Drag depth/width and rungs **snap into being** or
+    **evaporate** one by one — a state too shallow to bind simply ceases to exist. (The box's ladder was
+    infinite ∝ n²; the bowl's infinite & even ∝ n+½.)
+  - the wave **leaks OUT through the climbable walls** and **decays exponentially** with a length `1/κ`,
+    `κ = √(2(V₀−E))` — so the **shallowest** rung, clinging just below the rim, leaks the farthest. (The
+    box died dead at the hard wall; the bowl had Gaussian tails past soft turning points.)
+- **No closed-form ladder** — the bound energies solve a **transcendental match**: with `u=ka`, `v=κa` on
+  the circle `u²+v²=R²`, even-parity states satisfy `v = u·tan u` and odd-parity `v = −u·cot u`. The spine
+  finds each rung by **bisection** on the parity branch ∩ circle (residual 6.8e-14). Inside ψ is cos/sin,
+  outside a decaying exponential; ψ and ψ′/ψ matched at the wall (log-deriv mismatch 2.9e-13).
+- **The UI:** a **depth V₀ slider** + a **half-width a slider** (the count of rungs is the live headline);
+  **n-chips** for only the rungs that currently exist (odd parity italicized); a ψ/|ψ|² toggle that dots
+  the n nodes; a **"shade the leak beyond the walls"** toggle; a drawn finite-well box with the rim line
+  (above it = the unbound continuum) and the wall-crossing dots where the exponential tail begins.
+- **The independent spine:** the self-test discretizes the **actual stepped potential** `−½∂² + V(x)` on a
+  grid and pulls the rungs **from scratch by inverse-power iteration** (Thomas tridiagonal solve + Rayleigh
+  quotient) — a different algebra than the transcendental match. NB the **hard step** makes this converge at
+  honest **first order O(h)** on a uniform grid (not machine precision): N=800 2.3e-1 → N=1600 1.8e-2, a
+  per-rung **relative error 0.13%** — the test asserts this bounded, refining convergence rather than
+  pretending to 1e-14.
+- **Self-test 8/8** (proven two ways — headless-Node against the *actual embedded `runSelfTest()`* with
+  document/localStorage/window stubbed, AND live in-browser, served origin :8742, clean console, screenshots
+  reviewed): finite ladder count `⌊R/(π/2)⌋+1` (V0=20→5, V0=1.5→2, V0=200→13, V0=0.01→1, always ≥1) ·
+  every rung solves the transcendental match + lies on the circle (6.8e-14) · ψ & ψ′/ψ continuous across the
+  wall (2.9e-13) · node theorem (n-th state has n nodes) · **from-scratch FD eigensolve of the stepped V →
+  the transcendental ladder** (rel 0.13%, O(h)) · the wave leaks out, shallowest rung farthest
+  (n=0 0.6% < n=4 80.9%) · **box recovery** V₀→∞ ⇒ ladder → the infinite box `(n+1)²π²/(8a²)` (rel 3.2e-4) ·
+  deterministic. Reference well (V0=20,a=1): E = 0.92, 3.65, 8.09, 14.00, 19.97 — the top rung at 19.97 just
+  below the rim 20, an 80.9% leak: it barely binds.
+- **Integration:** 5th Quantum-drift card in `cavern/index.html` (🕳️) + 2 symmetric self-test checks →
+  Cavern landing **21/21 → 23/23** (verified headless AND in both locked & unlocked browser states). Drops
+  `ws:seen:finite-well` (bench-internal, not a front-door PLACES id). `forge --check --all` clean (29 files),
+  `--audit-seen` still 13/13. The bound-state corner of the Quantum Drift is now a complete trilogy:
+  **Box** (∞ ladder ∝ n², hard walls) · **Oscillator** (∞ even ladder ∝ n+½, Gaussian tails) ·
+  **Finite Well** (finite ladder, exponential leak) — the three model shapes of a trapped particle.
 
 ---
 
