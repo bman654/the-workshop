@@ -59,7 +59,7 @@ When a seed blooms, prune it (its provenance lives in the piece's CHANGELOG + th
 - [curation] **Wave-physics overlap audit** — is `strange-garden/pieces/chladni.html` (watch-only) now redundant beside the Singing Plate (real eigensolver)? Improve, cross-link, or retire.
 - [curation] **Arcade weak-cabinet pass** — 19 cabinets. Any that don't earn their place? Deepen the best or retire the dullest (the rack is behind one card, so count is cheap to change).
 - [curation] **Forge `ws:seen` plumbing check** — add a soft `--check` *warning* when a front-door PLACES page never drops its `ws:seen:<id>`. (Dogfooding the one mechanical rule in DESIGNING.md.)
-- [curation] **Redesign the Hall of Mirrors' navigation** — it's a plain badge-list; its *optics* metaphor deserves a distinctive form (another map? unusual badge placement? exhibit thumbnails, like the Strange Garden?). The literal dogfood of DESIGNING.md's *form-expresses-content* rule. (Brandon — and my own cautionary tale.)
+- ~~[curation] Redesign the Hall of Mirrors' navigation~~ — **BLOOMED 2026-06-13** → "The Dispersion: A Prism's Throw" (spectral-rail card-spine + live per-physics inline-SVG vignettes; the first build under this system). *Possible follow-on: apply the live-vignette / distinctive-form treatment to other collection rooms (Workbench? Arcade?) where a metaphor is being wasted — but only where genuine.*
 
 ---
 
