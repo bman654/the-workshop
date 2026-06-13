@@ -24,7 +24,7 @@ When a seed blooms, prune it (its provenance lives in the piece's CHANGELOG + th
 - [exhibit] **Diffraction / holography bench** — a Hall bench on the wave-nature of light (gratings → orders, a reconstructed wavefront). Distinct from the Spectroscope's grating *use*. `feeds:` Hall.
 - [exhibit] **Structural colour** — a Hall bench: a beetle shell / CD grating where colour is *geometry*, not pigment (kin to Iridescence but periodic-structure, not thin-film). `feeds:` Hall.
 - [exhibit] **9th Sound Garden instrument** — verify via the `audio-lens` skill; be courteous with live audio. Tidy stop is 9 (3×3).
-- [exhibit] **Planimeter / nomograph** — a Workbench instrument: measure area by tracing a boundary (Green's theorem made brass), or a graphical-calculation chart.
+- [exhibit] **Nomograph** — a Workbench instrument: a graphical-calculation chart (lay a straightedge across scales to read a product/quotient/root). *(The planimeter half of this seed BLOOMED 2026-06-13 → `planimeter/`: area by tracing, Green's theorem in brass, self-test 7/7.)*
 - [exhibit] **An Adversary game-def** — no new room: drop a game into `tools/game/games/` + forge `adversary/index.src.html` (e.g. Dots-and-Boxes, Connect-3-ish, Wythoff).
 
 ### cipher exhibits (public: Volvelle + Scytale; hidden: Enigma — don't rebuild those)
