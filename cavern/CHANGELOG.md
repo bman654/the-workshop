@@ -26,31 +26,39 @@ back-passage** rendered as a barred, draughty shaft — the legible on-ramp for 
 (structure: two drifts present, four benches linked + all relative, the breadcrumb dropped, the sealed
 vein present). Raw-rock danger-lab aesthetic, kept tonally distinct from the candlelit Undercroft.
 
-**The first benches** (built directly by the lead, each browser-verified on a served origin, self-test
-green, clean console, ~60fps):
+**The first benches** (each built in its own `bench-*` worktree by a per-bench deputy, browser-verified on
+a served origin, self-test green, clean console, ~60fps; 895 / 999 / 846 lines):
 
-- **The Light Clock** (`cavern/light-clock/`) ⏱️ — special relativity. A bouncing-photon clock; push the
-  velocity toward *c* and it slows. Two views (the clock side-by-side with a rest clock; a Spacetime panel).
-  Self-test **7/7**: **γ derived from the Pythagorean slant matches 1/√(1−β²)** to **0.00e+0** (the central
-  claim); the **interval s²=t²−x² is invariant** under boosts to **1.3e-13**; velocity addition stays ≤ c
-  (and c⊕v = c); tick = γ·t₀ and the photon's proper time = the rest tick (8.9e-16); length contraction
-  L′=L/γ reciprocal of dilation (1.1e-16); deterministic; falsifiable (a non-dilating clock ≠ geometry).
-- **Newton's Cradle** (`cavern/cradle/`) ⚙️ — elastic collisions; conservation of momentum AND kinetic
-  energy, with honest dissipation when restitution < 1. A swinging steel-ball cradle (3–7 balls, lift k,
-  restitution slider) with a live momentum / KE / total-E readout. Self-test **6/6**: **elastic (e=1)
-  conserves p AND KE** (1.8e-15 / 5.3e-15); equal masses swap velocities (4.4e-16); **lift k ⇒ exactly k
-  swing out** (all 8 (n,k) cases exact — the cradle theorem); **e<1: p still conserved, KE strictly drops,
-  (Δv_out)=e·(Δv_in)** (4.4e-16); falsifiable (e=0 sticks & loses KE, p held); deterministic. Live: total
-  energy drift over an 8-s elastic run stays **−0.13%** (bounded, no secular blow-up).
-- **Mercury's Precession** (`cavern/precession/`) ☿ — the GR perihelion advance; lands on the famous
-  43″/century, with the Newtonian control precessing exactly zero. Integrates the relativistic Binet orbit
-  equation `u″ = −u + GM/h² + (3GM/c²)u²` (RK4) and draws the walking rosette; a Newton/Einstein toggle, a
-  visual-exaggeration slider (real Mercury is 0.10″/orbit — invisibly small — so the *drawing* is amplified
-  while numbers + self-test use the **true** physics), eccentricity & semi-major-axis sliders, a Mercury
-  preset. Self-test **7/7**: **Mercury → 42.997″/century** (closed form, not baked); **pure Newtonian 1/r²
-  ⇒ zero precession** (integrated −6.9e-11 rad — the closed ellipse); the integrated GR advance matches
-  6πGM/(c²a(1−e²)) to **4.4e-4** rel (honest first-order); advance ∝ 1/(a(1−e²)) exact; Kepler III T²∝a³
-  honest; falsifiable (GR ≫ Newtonian by ~7000×); deterministic.
+- **The Light Clock** (`cavern/light-clock/`, 895 lines) ⏱️ — special relativity. A bouncing-photon clock;
+  push the velocity toward *c* and it slows. A clock view (moving vs rest) + a **Minkowski light-cone**
+  spacetime panel (tilting ct′/x′ axes, invariant hyperbola, event projections). Self-test **7/7**: **γ from
+  the photon-slant geometry == the closed form** — by bisection on T=√(L²+(β·T)²), independent of any
+  1/√(1−β²) algebra, across 501 β-values, to **2.38e-13**; the **interval s²=t²−x² is invariant** under 4000
+  random events × Lorentz boosts (|Δs²|<1e-12, tightest 3.11e-13); velocity addition stays strictly < c
+  (5000 sub-c pairs); boost∘inverse-boost == identity (4.48e-13); length contraction L/γ from boosted rod
+  endpoints (7.44e-15); **falsifiable control** — the Galilean transform wrecks the interval (error 7.23e+1
+  ≫ tol); limits & monotonicity (γ(0)=1 exactly; γ rises strictly with β). At 0.99c the rest clock shows
+  21 ticks vs the moving clock's 3.
+- **Newton's Cradle** (`cavern/cradle/`, 999 lines) ⚙️ — elastic collisions; conservation of momentum AND
+  kinetic energy, with honest dissipation when restitution < 1. A swinging brass-ball cradle (3–7 balls,
+  lift-k stepper, restitution + unequal-mass sliders, drag/click-to-lift) with a live momentum / KE /
+  total-E readout. Self-test **6/6**: **elastic pairwise collision conserves p AND KE** to <1e-12 over 4000
+  random pairs (tightest 5.68e-14); **lift k ⇒ exactly k swing out** for all N∈[3,7], k∈[1,N−1] at e=1 (the
+  cradle theorem); **inelastic is honest** — at e<1, p conserved but KE strictly decreases; equal-mass
+  head-on swaps velocities exactly; **falsifiable control** — the naive "both balls stop" rule is caught as
+  KE-destroying; unequal masses at e=1 break the tidy "k out" rule yet both ledgers stay closed (<1e-9).
+  Live: pulling e to 0.75 stair-steps total-E 3.13 → 0.63, momentum conserved at every click.
+- **Mercury's Precession** (`cavern/precession/`, 846 lines) ☿ — the GR perihelion advance; lands on the
+  famous 43″/century, with the Newtonian control precessing exactly zero. Integrates the relativistic Binet
+  orbit `u″ = −u + GM/h² + (3GM/c²)u²` (RK4) and draws the walking rosette; a Newton/Einstein toggle, a
+  visual-exaggeration slider (×1→×1M; real Mercury is 0.10″/orbit — invisibly small — so the *drawing* is
+  amplified while numbers + self-test use the **true** physics), a planet picker and e/a sliders. Self-test
+  **6/6**: **Mercury → 42.981″/century** (closed form 6πGM/(c²a(1−e²)) × 415.2 orbits/cy — computed, not
+  baked; |Δ from 43.0|=0.019″); **pure Newtonian 1/r² ⇒ precesses exactly 0** (RK4 drift 5.3e-14 rad/orbit —
+  the closed ellipse); **numerical drift == closed form** at true GR strength (rel err **1.3e-7**); **h
+  conserved** to 1.5e-14 over 2 orbits; **exaggeration linear & honest** (drift ×2 with ε, ratio 2.0004);
+  **advance ∝ 1/(a(1−e²))** (halving the semi-latus rectum doubles the creep; Icarus 10.06″/cy). Headline
+  reads 42.98 ″/century.
 
 **Integration & QA (served origin, `?v=N` cache-bust):** all 4 bench links resolve **200**; the Cavern
 index self-test stays **8/8** with `ws:seen:physics-lab` dropped; the front door places **12 POI labels,

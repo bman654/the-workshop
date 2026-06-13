@@ -13,8 +13,9 @@ map of a manor and its grounds** — every room a point on the plan.*
 
 ## What's inside
 
-Eleven creative mediums across nine projects — plus a new **Hall of Mirrors** wing of light (eleven
-optical benches and a laser puzzle) and seven companions tucked behind their parent doors:
+Eleven creative mediums across nine projects — plus two front-door wings, the **Hall of Mirrors** of light
+(eleven optical benches and a laser puzzle) and the new **Cavern** of physics (three benches, more to
+come), and seven companions tucked behind their parent doors:
 the **Orrery** behind Firmament, **Blazon** behind Compositor, **Ariadne** behind Daedalus,
 **Bastion** behind Cartographer, **Scriptorium** behind The Oracle, **Tessellarium** behind the
 Strange Garden, and **Theogony** behind Threshold. Click a live link, or open any `.html` in a browser.
@@ -215,6 +216,42 @@ keeps a tally of them, and the front-door sky draws a constellation that fills, 
 
 > *The hall's wave-cousin lives on the workbench — **Ripple**, a wave-interference tank where the same
 > superposition that paints these colours plays out, slowed down, on dark water.*
+
+---
+
+## ⚛️ The Cavern
+
+### ▶ Visit the Cavern → **https://bman654.github.io/the-workshop/cavern/**
+
+A cave cut into the lower grounds — **the estate's physics lab**, the dangerous experiments kept
+underground for safety. The shaft forks into two drifts: a warm, lamplit **Newtonian** gallery and a cold,
+star-lit **Einsteinian** one, with a third passage **sealed** at the back (something quantum, for later).
+Each bench keeps the workshop's promise — a built-in self-test that proves its physics *exact*:
+
+- **[The Light Clock](https://bman654.github.io/the-workshop/cavern/light-clock/)** — why a moving clock
+  runs slow, from one picture. A photon bounces between two mirrors; set the clock moving and the photon
+  must travel the **hypotenuse** of a right triangle (legs *L* and *v·Δt*) — so **γ falls straight out of
+  Pythagoras**, right on the canvas. A Minkowski light-cone panel shows the spacetime interval
+  *s² = t² − x²* holding fixed as the axes tilt. The self-test derives γ from the bouncing-photon geometry
+  alone — no algebra borrowed from 1/√(1−β²) — and matches the closed form, proves the interval invariant
+  under 4000 random Lorentz boosts, and (to show the test has teeth) watches the *Galilean* transform wreck
+  it. At 0.99c the still clock ticks 21 times for the moving clock's 3.
+- **[Newton's Cradle](https://bman654.github.io/the-workshop/cavern/cradle/)** — the desk toy that hides a
+  theorem. Lift *k* balls and exactly *k* swing out the far side — for any row of 3 to 7, every time. That
+  tidy rule is the only outcome that conserves **both momentum and kinetic energy** at once; the bench
+  proves it over thousands of random collisions, then turns honesty on: drop the restitution and the energy
+  ledger *visibly* stair-steps down while momentum stays exactly conserved. The falsifiable control catches
+  the "obvious" wrong rule — *both balls just stop* — as the energy-destroyer it is.
+- **[Mercury's Precession](https://bman654.github.io/the-workshop/cavern/precession/)** — the 43 arc-seconds
+  that announced general relativity. Newton's gravity draws a closed ellipse that never moves; the tiny GR
+  correction to the orbit equation makes that ellipse slowly **rosette**, its perihelion creeping forward.
+  Integrate the relativistic orbit and the creep lands on the famous **42.98″ per century** for Mercury —
+  *computed*, not baked — while the pure-Newtonian control precesses exactly zero. A slider exaggerates the
+  (invisibly small) real drift for the eye while the numbers stay true.
+
+> *The Newtonian drift also opens onto **[the Brachistochrone](https://bman654.github.io/the-workshop/brachistochrone/)**
+> — the curve of fastest descent — which lives on the workbench but belongs to both. And the sealed third
+> passage waits: walk both drifts, and someday it opens.*
 
 ---
 
