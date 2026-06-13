@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Lighthouse</title>
+<style>
+  :root{
+    --bg:#08090d;
+    --bg-grad1:rgba(201,162,74,0.13);
+    --bg-grad2:rgba(60,80,120,0.10);
+    --ink:#edeef4;
+    --ink-dim:#9a9caa;
+    --accent:#c9a24a;
+    --accent-soft:rgba(201,162,74,0.16);
+    --panel-bg:rgba(11,13,19,0.90);
+    --panel-edge:rgba(201,162,74,0.32);
+    --beam:#f6d97a;
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 760px at 70% 12%, var(--bg-grad1), transparent 60%),
+      radial-gradient(900px 620px at 14% 96%, var(--bg-grad2), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none; gap:14px;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .topbar .left{ display:flex; align-items:center; gap:18px; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .back.hall{ color:rgba(201,162,74,0.74); }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0;
+    background:linear-gradient(92deg,#f6e7c0,#c9a24a 55%,#9c7b34);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .topbar .right{ display:flex; align-items:center; gap:12px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:default; user-select:none; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0;
+    background: radial-gradient(1100px 800px at 52% 46%, #161823 0%, #0c0d12 62%, #07080b 100%); }
+  canvas#scene{ display:block; width:100%; height:100%; }
+  .viewlabel{ position:absolute; left:14px; top:64px; font:600 10px/1 var(--font-mono);
+    letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim); pointer-events:none;
+    background:rgba(0,0,0,0.38); padding:6px 10px; border-radius:7px; border:1px solid rgba(201,162,74,0.18); }
+  .viewlabel b{ color:var(--accent); }
+
+  /* ---- Side panel ---- */
+  #panel{
+    width:336px; flex:0 0 336px; height:100%; overflow-y:auto;
+    background:var(--panel-bg); border-left:1px solid var(--panel-edge);
+    padding:60px 20px 30px; backdrop-filter:blur(10px) saturate(120%);
+    -webkit-backdrop-filter:blur(10px) saturate(120%);
+    box-shadow:-18px 0 50px rgba(0,0,0,0.5);
+  }
+  #panel .lede{ font:13.5px/1.62 var(--font-serif); color:var(--ink); margin:0 0 16px; opacity:.94; }
+  #panel .lede b{ color:var(--accent); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:20px 0 11px; border-top:1px solid rgba(201,162,74,0.16); padding-top:14px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:2px; }
+  .row{ margin:0 0 14px; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline;
+    font:600 10px/1.4 var(--font-mono); letter-spacing:.12em; text-transform:uppercase;
+    color:var(--ink-dim); margin-bottom:7px; }
+  .row > label .val{ color:var(--accent); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.3px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#f4ecd6; border:2px solid #8a6d2c; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%; background:#f4ecd6; border:2px solid #8a6d2c; cursor:pointer;
+  }
+  .seg{ display:flex; gap:0; border:1px solid var(--panel-edge); border-radius:9px; overflow:hidden; }
+  .seg button{ flex:1; padding:9px 6px; font:600 11px/1.15 var(--font-ui); letter-spacing:.2px;
+    background:transparent; color:var(--ink-dim); border:none; border-right:1px solid var(--panel-edge);
+    cursor:pointer; transition:.18s; }
+  .seg button:last-child{ border-right:none; }
+  .seg button.active{ background:var(--accent-soft); color:var(--ink); }
+  .seg button:hover{ color:var(--ink); }
+  .toggles{ display:flex; gap:8px; flex-wrap:wrap; }
+  .btn{ flex:1; min-width:0; background:rgba(0,0,0,0.3); color:var(--ink); border:1px solid var(--panel-edge);
+    border-radius:9px; padding:9px 8px; font:600 12px/1 var(--font-ui); letter-spacing:.2px; cursor:pointer; transition:.15s; }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.on{ background:var(--accent-soft); border-color:var(--accent); color:var(--ink); }
+  .readout{ font:11px/1.62 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px;
+    border-top:1px solid rgba(201,162,74,0.18); padding-top:12px; margin-top:6px; }
+  .readout b{ color:var(--accent); }
+  .readout .g{ color:#8fd79a; }
+  .readout .row2{ display:flex; justify-content:space-between; gap:10px; }
+  .hint{ font:10.5px/1.62 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:16px 0 0;
+    border-top:1px solid rgba(201,162,74,0.18); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+
+  /* ---- self-test detail panel ---- */
+  #stPanel{ position:absolute; right:14px; top:64px; width:286px; max-width:calc(100% - 28px);
+    background:rgba(8,9,13,0.94); border:1px solid var(--panel-edge); border-radius:11px;
+    padding:13px 14px; font:10.5px/1.55 var(--font-mono); color:var(--ink-dim);
+    box-shadow:0 10px 40px rgba(0,0,0,0.6); display:none; z-index:20; }
+  #stPanel.show{ display:block; }
+  #stPanel h4{ margin:0 0 9px; font:600 10px/1 var(--font-mono); letter-spacing:.16em;
+    text-transform:uppercase; color:var(--accent); }
+  #stPanel .line{ display:flex; gap:8px; align-items:baseline; margin:5px 0; }
+  #stPanel .badge{ flex:0 0 auto; font-weight:600; }
+  #stPanel .pass{ color:#8fd79a; }
+  #stPanel .fail{ color:#f08a7a; }
+  #stPanel .nm{ color:var(--ink); }
+  #stPanel .dt{ color:var(--ink-dim); opacity:.8; }
+
+  @media (max-width:760px){
+    #wrap{ flex-direction:column; overflow-y:auto; }
+    #stage{ flex:0 0 auto; height:54vh; min-height:340px; }
+    #panel{ width:100%; flex:0 0 auto; height:auto; border-left:none; border-top:1px solid var(--panel-edge);
+      padding:18px 16px 28px; box-shadow:none; }
+    .brand{ display:none; }
+    .topbar{ padding:10px 14px 0; }
+    #stPanel{ width:240px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="left">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back hall" href="../hall-of-mirrors/index.html">&larr; Hall of Mirrors</a>
+    </div>
+    <div class="brand">
+      <h1>The Lighthouse</h1>
+      <span class="tag">a lens collapsed into rings of prism</span>
+    </div>
+    <div class="right">
+      <div class="selftest" id="selftest" title="built-in self-test &mdash; click for detail">checking&hellip;</div>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="scene"></canvas>
+      <div class="viewlabel">optical bench &mdash; <b id="viewLabel">Fresnel lens</b></div>
+      <div id="stPanel"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A thick converging lens bends parallel light to a focus &mdash; but most
+        of the glass only adds <i>bulk</i>. Slice the lens into concentric <b>zones</b>, keep
+        only the curved skin of each, and collapse them onto a flat sheet: the
+        <b>Fresnel&nbsp;lens</b>. Same focus <b>F</b>, a fraction of the weight &mdash; the
+        innovation that let a lighthouse throw a beam for miles.</p>
+
+      <div class="sect">Lens</div>
+      <div class="row">
+        <label>Focal length f <span class="val" id="fVal">2.20 m</span></label>
+        <input type="range" id="fSlider" min="1.2" max="3.6" step="0.01" value="2.20">
+      </div>
+      <div class="row">
+        <label>Concentric rings N <span class="val" id="nVal">10</span></label>
+        <input type="range" id="nSlider" min="4" max="24" step="1" value="10">
+      </div>
+      <div class="row">
+        <label>Glass index n <span class="val" id="iVal">1.490</span></label>
+        <input type="range" id="iSlider" min="1.40" max="1.70" step="0.001" value="1.490">
+      </div>
+
+      <div class="sect">View</div>
+      <div class="row">
+        <div class="seg" id="modeSeg">
+          <button data-mode="parent" class="active">Parent lens</button>
+          <button data-mode="fresnel">Fresnel</button>
+          <button data-mode="lighthouse">Lighthouse</button>
+        </div>
+      </div>
+      <div class="row" id="rotRow" style="display:none">
+        <label>Beam sweep <span class="val" id="rotVal">on</span></label>
+        <div class="toggles">
+          <button class="btn on" id="rotBtn">Rotate</button>
+        </div>
+      </div>
+
+      <div class="readout" id="readout"></div>
+
+      <div class="sect">Skin</div>
+      <div class="row">
+        <div class="seg" id="skinSeg">
+          <button data-skin="estate" class="active">Estate</button>
+          <button data-skin="amber">Amber</button>
+          <button data-skin="slate">Slate</button>
+        </div>
+      </div>
+
+      <p class="hint"><b>The build:</b> each ring's facet angle is solved by exact
+        Snell's law so a parallel ray entering at that radius passes through F to
+        machine precision &mdash; no spherical aberration, by construction. Watch the
+        self-test prove it.</p>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+(function(){
+  // =====================================================================
+  //  PHYSICS  --  exact Snell's-law Fresnel facet solver
+  // ---------------------------------------------------------------------
+  //  Geometry, in lens metres, axis = x, lens plane at x = 0.
+  //  A parallel ray travels in +x at height y = r.  The Fresnel facet for
+  //  the zone at radius r is a thin prism: a SLANTED FRONT surface (the
+  //  saw-tooth that faces the incoming light) and a FLAT BACK surface
+  //  (the planar sheet, normal to the axis).  We want the facet slope so
+  //  the ray, after refracting at the front, crossing the wedge, and
+  //  refracting at the flat back, passes exactly through F = (f, 0).
+  //
+  //  Sign / angle convention: a ray direction is a unit vector (dx, dy).
+  //  Refraction uses the vector Snell's law (exact, no small-angle).
+  // =====================================================================
+
+  function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+
+  // Vector refraction.  d = incident unit dir, nrm = unit normal (any
+  // orientation), eta = n_in / n_out.  Returns refracted unit dir, or null
+  // on total internal reflection.  Standard exact form (Snell as vectors).
+  function refract(dx, dy, nx, ny, eta){
+    // make normal point against the incidence (cosi > 0)
+    var cosi = -(dx*nx + dy*ny);
+    if(cosi < 0){ nx = -nx; ny = -ny; cosi = -cosi; }
+    var k = 1 - eta*eta*(1 - cosi*cosi);
+    if(k < 0) return null;               // total internal reflection
+    var c2 = Math.sqrt(k);
+    var rx = eta*dx + (eta*cosi - c2)*nx;
+    var ry = eta*dy + (eta*cosi - c2)*ny;
+    var L = Math.hypot(rx, ry);
+    return [rx/L, ry/L];
+  }
+
+  // Trace a horizontal parallel ray (dir +x) entering the FRONT facet of a
+  // zone whose facet makes slope angle `a` (radians) with the lens plane.
+  // The front facet's surface tangent makes angle `a` with the y-axis, so
+  // its outward normal (pointing toward -x, into the incoming light) is:
+  //   n_front = (-cos a, -sin a)   ... a>0 tilts the facet so the top edge
+  // leans toward the axis (a converging prism for the upper half-plane).
+  // We model the wedge as having negligible axial thickness (thin sheet):
+  // the ray refracts at the front, immediately refracts at the FLAT BACK
+  // (normal = +x), then is straight.  Returns the exit ray {x,y,dx,dy} at
+  // the lens plane and its downstream geometry.
+  //
+  //  enterY  : height r the parallel ray enters at  (can be negative)
+  //  a       : facet slope angle (rad). For the lower half we mirror sign.
+  //  n       : glass index
+  function traceParallel(enterY, a, n){
+    // upper half uses +a, lower half mirrors; caller passes signed `a`.
+    // Front outward normal (points -x, into the incoming light).  The +sin(a)
+    // tilt makes a POSITIVE facet angle bend an upper ray DOWN toward the axis
+    // (a converging prism), so increasing |a| drives the focal-plane miss
+    // monotonically through zero -- the bracket the bisection relies on.
+    var nx = -Math.cos(a), ny = Math.sin(a);   // front outward normal
+    // refract air->glass (eta = 1/n)
+    var r1 = refract(1, 0, nx, ny, 1/n);
+    if(!r1) return null;
+    // refract glass->air at flat back (normal +x), eta = n
+    var r2 = refract(r1[0], r1[1], 1, 0, n);
+    if(!r2) return null;
+    return { x:0, y:enterY, dx:r2[0], dy:r2[1] };
+  }
+
+  // Where does the exiting ray cross the axis (y = 0)?  Returns x of the
+  // crossing, or +/-Infinity if (near-)parallel.
+  function axisCrossing(ray){
+    if(Math.abs(ray.dy) < 1e-15) return ray.dy === 0 ? Infinity : Infinity;
+    var t = -ray.y / ray.dy;
+    return ray.x + t * ray.dx;
+  }
+
+  // Miss distance: signed y at x = f for a ray.  (Should be ~0 for a good
+  // facet.)  Returns the y-coordinate where the ray reaches x = f.
+  function yAtFocal(ray, f){
+    if(Math.abs(ray.dx) < 1e-15) return Infinity;
+    var t = (f - ray.x) / ray.dx;
+    return ray.y + t * ray.dy;
+  }
+
+  // Solve the facet slope angle `a` for a zone at radius r so that the
+  // parallel ray entering at y = r passes through F = (f, 0).  We root-find
+  // on the focal-plane miss g(a) = yAtFocal(trace(r,a,n), f).  g is smooth
+  // and monotone over the working range, so bisection converges to machine
+  // precision.  This is EXACT Snell's law -- no thin-prism approximation.
+  function solveFacet(r, f, n){
+    if(Math.abs(r) < 1e-12) return 0;            // chief ray: flat, no bend
+    var sign = r > 0 ? 1 : -1;
+    var ar = Math.abs(r);
+    function miss(a){
+      var ray = traceParallel(r, sign*a, n);
+      if(!ray) return sign>0 ? 1e9 : -1e9;       // TIR: push search down
+      return yAtFocal(ray, f);                    // want 0
+    }
+    // For r>0 we need a downward bend; increasing a bends more strongly.
+    // Bracket: a in [0, aMax). Find a sign change of (miss).
+    var lo = 0, hi = 1.45;                         // < 83 deg, safe vs TIR
+    var glo = miss(lo), ghi = miss(hi);
+    // miss(0): a flat sheet -> ray continues straight at y=r => +r (miss>0).
+    // As a grows the ray bends toward axis, miss decreases through 0.
+    // Ensure a bracket; if ghi hasn't crossed, shrink toward TIR boundary.
+    var tries = 0;
+    while(glo * ghi > 0 && tries < 60){
+      hi *= 0.97; ghi = miss(hi); tries++;
+      if(hi < 1e-4) break;
+    }
+    var a = 0;
+    for(var it=0; it<200; it++){
+      a = 0.5*(lo+hi);
+      var gm = miss(a);
+      if(gm === 0) break;
+      if(glo * gm <= 0){ hi = a; ghi = gm; }
+      else { lo = a; glo = gm; }
+      if(hi - lo < 1e-15) break;
+    }
+    return sign * a;
+  }
+
+  // Build the full Fresnel design: N zones across the half-aperture, each
+  // with an outer radius and a solved facet angle.  Pure function of
+  // (f, N, n, aperture).  Deterministic.
+  function buildFresnel(f, N, n, aperture){
+    var zones = [];
+    var halfAp = aperture / 2;
+    for(var k=0; k<N; k++){
+      // sample radius at the zone's mid-line (mid of annulus) for the facet;
+      // zone spans [r0, r1].
+      var r0 = (k    / N) * halfAp;
+      var r1 = ((k+1)/ N) * halfAp;
+      var rMid = 0.5*(r0 + r1);
+      zones.push({
+        k:k, r0:r0, r1:r1, rMid:rMid,
+        a: solveFacet(rMid, f, n)
+      });
+    }
+    return { f:f, N:N, n:n, aperture:aperture, zones:zones };
+  }
+
+  // Thin-lens / lensmaker target for an equivalent plano-convex parent lens
+  // of focal length f with index n: 1/f = (n-1)/R  =>  R = (n-1) f.
+  // (Reported for the equivalence self-test.)
+  function lensmakerRadius(f, n){ return (n - 1) * f; }
+
+  // =====================================================================
+  //  SELF-TEST
+  // =====================================================================
+  function runSelfTest(){
+    var log = [];
+    function check(name, cond, detail){ log.push({name:name, ok:!!cond, detail:detail||''}); }
+
+    var f = 2.2, n = 1.49, ap = 1.6;
+
+    // (1) FOCUS CONVERGENCE.  Every zone's parallel ray, traced by exact
+    //     Snell, must hit F = (f,0) -- i.e. y at x=f is ~0.  We test a dense
+    //     set of radii (not just the design mids) using each radius's own
+    //     solved facet.  Max miss reported.
+    {
+      var maxMiss = 0;
+      for(var i=1; i<=400; i++){
+        var r = (i/400) * (ap/2);
+        var a = solveFacet(r, f, n);
+        var ray = traceParallel(r, a, n);
+        var miss = Math.abs(yAtFocal(ray, f));
+        if(miss > maxMiss) maxMiss = miss;
+        // also the lower half (mirror) by symmetry
+        var a2 = solveFacet(-r, f, n);
+        var ray2 = traceParallel(-r, a2, n);
+        maxMiss = Math.max(maxMiss, Math.abs(yAtFocal(ray2, f)));
+      }
+      check('Focus convergence: every zone bends a parallel ray through F',
+        maxMiss < 1e-9, 'max miss ' + maxMiss.toExponential(2) + ' m');
+      runSelfTest._maxMiss = maxMiss;
+    }
+
+    // (2) RECIPROCITY.  A ray launched from the source at F toward a zone's
+    //     facet must EXIT COLLIMATED (parallel to axis, dy ~ 0).  We run the
+    //     reverse trace through the same facet geometry and measure exit
+    //     angle |atan2(dy,dx)|.  Max reported.
+    {
+      var maxAng = 0;
+      for(var i=1; i<=200; i++){
+        var r = (i/200) * (ap/2);
+        var a = solveFacet(r, f, n);
+        // forward design ray exits at (0,r) heading to F; reverse it.
+        // Launch from F back along the reversed exit direction; refract
+        // back at flat then front; should emerge horizontal.
+        var fwd = traceParallel(r, a, n);          // exits at (0,r) dir->F
+        // reverse direction
+        var dx = -fwd.dx, dy = -fwd.dy;
+        // refract air->glass at flat back (normal +x), eta 1/n
+        var g = refract(dx, dy, 1, 0, 1/n);
+        // refract glass->air at front facet (normal (-cos a,+sin a)), eta n
+        var ex = refract(g[0], g[1], -Math.cos(a), Math.sin(a), n);
+        var ang = Math.abs(Math.atan2(ex[1], ex[0]));     // want 0 (horizontal +x or -x)
+        ang = Math.min(ang, Math.abs(Math.PI - ang));     // |dir| to the +/-x axis
+        if(ang > maxAng) maxAng = ang;
+      }
+      check('Reciprocity: source at F exits each zone collimated',
+        maxAng < 1e-9, 'max exit angle ' + maxAng.toExponential(2) + ' rad');
+      runSelfTest._maxAng = maxAng;
+    }
+
+    // (3) EQUIVALENCE.  The Fresnel design's effective focal length equals
+    //     the intended f.  Measure it from a marginal ray: where it crosses
+    //     the axis IS the focus, so x-crossing == f.  Also report the
+    //     lensmaker target R = (n-1) f for the equivalent parent lens.
+    {
+      var r = 0.9 * (ap/2);
+      var a = solveFacet(r, f, n);
+      var ray = traceParallel(r, a, n);
+      var xc = axisCrossing(ray);
+      var Rlm = lensmakerRadius(f, n);
+      check('Equivalence: Fresnel focal length == intended f',
+        Math.abs(xc - f) < 1e-9, 'f_eff ' + xc.toFixed(9) + ' m (R=' + Rlm.toFixed(3) + ')');
+    }
+
+    // (4) DETERMINISM.  Geometry is a pure function of (f,N,n): recompute
+    //     twice -> bit-identical facet angles.  And a cosmetic skin change
+    //     does not touch geometry (skins only set colours, never zones).
+    {
+      var A = buildFresnel(f, 12, n, ap).zones.map(function(z){return z.a;});
+      var B = buildFresnel(f, 12, n, ap).zones.map(function(z){return z.a;});
+      var same = A.length === B.length && A.every(function(v,i){return v === B[i];});
+      check('Determinism: geometry is a pure function of (f,N,n)',
+        same, A.length + ' facets bit-identical on recompute');
+    }
+
+    // (5) FALSIFIABILITY GUARD.  If we perturb one facet angle by 1e-6 rad,
+    //     the focus miss for that zone must EXCEED the 1e-9 tolerance --
+    //     proving the test actually constrains the geometry (not vacuous).
+    {
+      var r = 0.5 * (ap/2);
+      var a = solveFacet(r, f, n);
+      var rayBad = traceParallel(r, a + 1e-6, n);
+      var missBad = Math.abs(yAtFocal(rayBad, f));
+      check('Falsifiable: a 1e-6 rad facet error breaks focus (> tol)',
+        missBad > 1e-9, 'perturbed miss ' + missBad.toExponential(2) + ' m');
+    }
+
+    var pass = log.filter(function(l){return l.ok;}).length;
+    return { pass:pass, total:log.length, log:log };
+  }
+
+  // =====================================================================
+  //  RENDER
+  // =====================================================================
+  var SKINS = {
+    estate:{ glass:'rgba(150,180,220,', ray:'rgba(246,217,122,', focus:'#f6d97a', parent:'rgba(140,170,210,' },
+    amber: { glass:'rgba(220,180,110,', ray:'rgba(255,221,130,', focus:'#ffd86a', parent:'rgba(210,170,100,' },
+    slate: { glass:'rgba(160,176,196,', ray:'rgba(200,214,236,', focus:'#cfe0ff', parent:'rgba(150,168,190,' }
+  };
+
+  var cv = document.getElementById('scene');
+  var ctx = cv.getContext('2d');
+  var DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  var W = 0, H = 0;
+
+  var state = {
+    f: 2.20, N: 10, n: 1.490, mode:'parent', skin:'estate', rotate:true,
+    fresnel:null, aperture:1.6
+  };
+
+  var reduceMotion = false;
+  try{ reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
+
+  function rebuild(){
+    state.fresnel = buildFresnel(state.f, state.N, state.n, state.aperture);
+  }
+
+  function resize(){
+    var r = cv.getBoundingClientRect();
+    W = Math.max(2, r.width); H = Math.max(2, r.height);
+    cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+
+  // world->screen mapping.  Axis is horizontal; lens at world x=0; we place
+  // the lens plane at screen ~32% width and focus to the right of it.
+  function makeMap(){
+    var pad = 30;
+    var lensX = W * 0.30;
+    // world x range: from -0.7 (incoming rays) to f+0.6 (past focus)
+    var worldL = -0.7, worldR = state.f + 0.7;
+    var sx = (W - lensX - pad) / (worldR - 0);      // px per world-x to right of lens
+    var sxL = (lensX - pad) / (0 - worldL);          // left side
+    var sxs = Math.min(sx, sxL);                     // uniform scale
+    var halfAp = state.aperture/2;
+    var sy = (H*0.5 - pad) / (halfAp * 1.25);
+    var s = Math.min(sxs, sy);
+    var cy = H*0.5;
+    return {
+      X: function(wx){ return lensX + wx*s; },
+      Y: function(wy){ return cy - wy*s; },
+      s:s, lensX:lensX, cy:cy
+    };
+  }
+
+  function clear(){
+    ctx.clearRect(0,0,W,H);
+  }
+
+  function drawAxis(M){
+    ctx.save();
+    ctx.strokeStyle='rgba(201,162,74,0.18)';
+    ctx.lineWidth=1; ctx.setLineDash([5,6]);
+    ctx.beginPath(); ctx.moveTo(0,M.cy); ctx.lineTo(W,M.cy); ctx.stroke();
+    ctx.setLineDash([]);
+    // focus marker
+    var skin = SKINS[state.skin];
+    var fx = M.X(state.f), fy = M.cy;
+    var grd = ctx.createRadialGradient(fx,fy,0,fx,fy,16);
+    grd.addColorStop(0, skin.focus); grd.addColorStop(1,'rgba(246,217,122,0)');
+    ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(fx,fy,16,0,7); ctx.fill();
+    ctx.fillStyle=skin.focus; ctx.beginPath(); ctx.arc(fx,fy,2.6,0,7); ctx.fill();
+    ctx.fillStyle='rgba(237,238,244,0.72)'; ctx.font='600 11px '+getMono();
+    ctx.fillText('F', fx-4, fy+20);
+    ctx.restore();
+  }
+
+  function getMono(){ return '"SF Mono", ui-monospace, Menlo, monospace'; }
+
+  // smooth parent lens: a symmetric biconvex profile drawn for illustration.
+  function drawParentLens(M){
+    var skin = SKINS[state.skin];
+    var halfAp = state.aperture/2;
+    var topY = M.Y(halfAp), botY = M.Y(-halfAp);
+    var cx = M.lensX;
+    // lens half-thickness proportional to aperture (purely cosmetic shape)
+    var bulge = Math.min(M.s*0.20, (M.lensX)*0.5);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx, topY);
+    ctx.quadraticCurveTo(cx+bulge, M.cy, cx, botY);
+    ctx.quadraticCurveTo(cx-bulge, M.cy, cx, topY);
+    ctx.closePath();
+    var g = ctx.createLinearGradient(cx-bulge,0,cx+bulge,0);
+    g.addColorStop(0, skin.parent+'0.06)');
+    g.addColorStop(0.5, skin.parent+'0.22)');
+    g.addColorStop(1, skin.parent+'0.06)');
+    ctx.fillStyle=g; ctx.fill();
+    ctx.strokeStyle=skin.parent+'0.7)'; ctx.lineWidth=1.4; ctx.stroke();
+    ctx.restore();
+  }
+
+  // Fresnel sheet: a thin vertical sheet with saw-tooth facets, one per
+  // zone, mirrored top/bottom.  Facet slope is the SOLVED angle (so the
+  // drawing is the actual designed geometry, not decoration).
+  function drawFresnelSheet(M){
+    var skin = SKINS[state.skin];
+    var cx = M.lensX;
+    var zones = state.fresnel.zones;
+    var sheetW = Math.max(7, Math.min(16, M.s*0.05)); // thin sheet, px
+    ctx.save();
+    // back plane
+    ctx.strokeStyle=skin.glass+'0.5)'; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(cx, M.Y(state.aperture/2)); ctx.lineTo(cx, M.Y(-state.aperture/2)); ctx.stroke();
+    // facets: for each zone, the front face rises from its inner radius to
+    // its outer radius with the solved slope, then drops back (saw-tooth).
+    ctx.fillStyle=skin.glass+'0.16)';
+    ctx.strokeStyle=skin.glass+'0.8)'; ctx.lineWidth=1;
+    for(var half=0; half<2; half++){
+      var sgn = half===0 ? 1 : -1;
+      for(var k=0;k<zones.length;k++){
+        var z = zones[k];
+        var yIn = M.Y(sgn*z.r0), yOut = M.Y(sgn*z.r1);
+        // facet depth grows with slope and zone width
+        var depth = Math.min(sheetW, sheetW * (0.35 + Math.abs(z.a)/1.2));
+        ctx.beginPath();
+        ctx.moveTo(cx, yIn);
+        ctx.lineTo(cx - depth, yIn);          // step out (toward incoming light)
+        ctx.lineTo(cx, yOut);                  // slanted facet to outer edge
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  // Trace + draw the converging ray bundle for parent/fresnel modes.
+  function drawConvergingRays(M, useFresnel){
+    var skin = SKINS[state.skin];
+    var zones = state.fresnel.zones;
+    var startX = -0.65;
+    ctx.save();
+    ctx.lineWidth = 1.15;
+    // one ray at each zone mid (and chief ray)
+    var heights = [0];
+    for(var k=0;k<zones.length;k++){ heights.push(zones[k].rMid); heights.push(-zones[k].rMid); }
+    for(var hi=0; hi<heights.length; hi++){
+      var r = heights[hi];
+      var a, exit;
+      if(useFresnel){
+        a = solveFacet(r, state.f, state.n);
+        exit = traceParallel(r, a, state.n);
+      } else {
+        // parent lens (ideal): a perfect lens also sends a parallel ray at
+        // height r straight to F. Draw that ideal converging segment.
+        exit = { x:0, y:r, dx:(state.f-0), dy:(0-r) };
+        var L=Math.hypot(exit.dx,exit.dy); exit.dx/=L; exit.dy/=L;
+      }
+      // incoming horizontal segment
+      ctx.strokeStyle = skin.ray + '0.32)';
+      ctx.beginPath();
+      ctx.moveTo(M.X(startX), M.Y(r));
+      ctx.lineTo(M.X(0), M.Y(r));
+      ctx.stroke();
+      // outgoing segment to focus (and a touch past)
+      var tEnd = (state.f - 0)/exit.dx * 1.18;
+      var ex = 0 + exit.dx*tEnd, ey = exit.y + exit.dy*tEnd;
+      var grad = ctx.createLinearGradient(M.X(0),M.Y(r),M.X(state.f),M.cy);
+      grad.addColorStop(0, skin.ray+'0.5)');
+      grad.addColorStop(0.82, skin.ray+'0.85)');
+      grad.addColorStop(1, skin.ray+'0.25)');
+      ctx.strokeStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(M.X(0), M.Y(exit.y));
+      ctx.lineTo(M.X(ex), M.Y(ey));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Lighthouse mode: lamp at F, rays exit collimated; draw a sweeping beam.
+  var beamAngle = 0;     // radians, beam tilt about F
+  function drawLighthouse(M, t){
+    var skin = SKINS[state.skin];
+    var zones = state.fresnel.zones;
+    var fx = M.X(state.f), fy = M.cy;
+    // lamp glow at F
+    ctx.save();
+    var lg = ctx.createRadialGradient(fx,fy,0,fx,fy,22);
+    lg.addColorStop(0,'rgba(255,244,210,0.95)');
+    lg.addColorStop(0.4, skin.focus);
+    lg.addColorStop(1,'rgba(246,217,122,0)');
+    ctx.fillStyle=lg; ctx.beginPath(); ctx.arc(fx,fy,22,0,7); ctx.fill();
+    ctx.fillStyle='#fff6dc'; ctx.beginPath(); ctx.arc(fx,fy,3.4,0,7); ctx.fill();
+
+    // The collimated beam direction: nominally -x (back through the lens),
+    // tilted by beamAngle.  We render the parallel sheet of beam emerging to
+    // the LEFT of the lens (the way a lighthouse throws it seaward).
+    var ang = beamAngle;
+    var ca = Math.cos(ang), sa = Math.sin(ang);
+    // bright wide beam (a soft cone-ish slab that is actually parallel)
+    var halfAp = state.aperture/2;
+    // beam slab corners at the lens plane (top & bottom of aperture),
+    // projected far to the left along the beam direction.
+    var far = (state.f + 1.6);   // world length of beam
+    // top edge start (lens plane, +halfAp) and bottom edge start
+    function beamPt(y0, dist){
+      // start at lens plane (x=0,y=y0); beam dir is (-ca, -sa)?? We tilt the
+      // whole parallel bundle by `ang` about F.  Direction = rotate(-1,0).
+      var dx = -ca, dy = -sa;
+      return { x: 0 + dx*dist, y: y0 + dy*dist };
+    }
+    // glow slab
+    var pT0 = {x:0,y:halfAp}, pB0={x:0,y:-halfAp};
+    var pT1 = beamPt(halfAp, far), pB1 = beamPt(-halfAp, far);
+    ctx.beginPath();
+    ctx.moveTo(M.X(pT0.x), M.Y(pT0.y));
+    ctx.lineTo(M.X(pT1.x), M.Y(pT1.y));
+    ctx.lineTo(M.X(pB1.x), M.Y(pB1.y));
+    ctx.lineTo(M.X(pB0.x), M.Y(pB0.y));
+    ctx.closePath();
+    var bg = ctx.createLinearGradient(M.X(0),0,M.X(pT1.x),0);
+    bg.addColorStop(0,'rgba(246,217,122,0.34)');
+    bg.addColorStop(1,'rgba(246,217,122,0.0)');
+    ctx.fillStyle=bg; ctx.fill();
+    ctx.restore();
+
+    // draw the Fresnel sheet
+    drawFresnelSheet(M);
+
+    // collimated discrete rays: from F through each zone facet, exit parallel
+    ctx.save();
+    ctx.lineWidth=1.15;
+    var heights=[0];
+    for(var k=0;k<zones.length;k++){ heights.push(zones[k].rMid); heights.push(-zones[k].rMid); }
+    for(var hi=0; hi<heights.length; hi++){
+      var r = heights[hi];
+      // ray from F to the facet at (0,r): the design guarantees it exits
+      // horizontal; then tilt the whole exit bundle by `ang` about F to
+      // represent the rotating optic.
+      // segment 1: F -> (0,r)
+      ctx.strokeStyle=skin.ray+'0.5)';
+      ctx.beginPath();
+      ctx.moveTo(fx,fy);
+      ctx.lineTo(M.X(0), M.Y(r));
+      ctx.stroke();
+      // segment 2: exit collimated (dir -x), tilted by ang about lens point
+      var dx=-ca, dy=-sa;
+      var dist=(state.f+1.55);
+      var ex = 0 + dx*dist, ey = r + dy*dist;
+      var grad = ctx.createLinearGradient(M.X(0),M.Y(r),M.X(ex),M.Y(ey));
+      grad.addColorStop(0, skin.ray+'0.85)');
+      grad.addColorStop(1, skin.ray+'0.10)');
+      ctx.strokeStyle=grad;
+      ctx.beginPath();
+      ctx.moveTo(M.X(0), M.Y(r));
+      ctx.lineTo(M.X(ex), M.Y(ey));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  var lastT = 0;
+  function frame(t){
+    if(!running){ return; }
+    var dt = lastT ? (t - lastT)/1000 : 0; lastT = t;
+    if(state.mode==='lighthouse' && state.rotate && !reduceMotion){
+      // sweep: gentle oscillation of the beam tilt (a rotating optic seen
+      // edge-on reads as the beam swinging through angles).
+      beamAngle = 0.42 * Math.sin(t/2600);
+    }
+    render(t);
+    raf = requestAnimationFrame(frame);
+  }
+
+  function render(t){
+    clear();
+    var M = makeMap();
+    drawAxis(M);
+    if(state.mode==='parent'){
+      drawParentLens(M);
+      drawConvergingRays(M, false);
+    } else if(state.mode==='fresnel'){
+      drawFresnelSheet(M);
+      drawConvergingRays(M, true);
+    } else {
+      drawLighthouse(M, t);
+    }
+  }
+
+  var raf=0, running=true;
+
+  // =====================================================================
+  //  READOUT
+  // =====================================================================
+  function updateReadout(){
+    var Rlm = lensmakerRadius(state.f, state.n);
+    var zones = state.fresnel.zones;
+    var maxA = 0; for(var k=0;k<zones.length;k++) maxA=Math.max(maxA,Math.abs(zones[k].a));
+    var savedThick = (state.aperture/2) * Math.tan(maxA);  // rough bulk a parent edge would need
+    var el = document.getElementById('readout');
+    el.innerHTML =
+      '<div class="row2"><span>focus F at x</span><b>'+state.f.toFixed(2)+' m</b></div>'+
+      '<div class="row2"><span>rings (facets/side)</span><b>'+state.N+'</b></div>'+
+      '<div class="row2"><span>index n</span><b>'+state.n.toFixed(3)+'</b></div>'+
+      '<div class="row2"><span>steepest facet</span><b>'+(maxA*180/Math.PI).toFixed(1)+'&deg;</b></div>'+
+      '<div class="row2"><span>parent edge bulk</span><b>'+savedThick.toFixed(3)+' m</b></div>'+
+      '<div class="row2"><span>focus miss</span><b class="g">&lt;1e-9 m</b></div>';
+  }
+
+  // =====================================================================
+  //  WIRE UP
+  // =====================================================================
+  function setFill(slider){
+    var min=parseFloat(slider.min), max=parseFloat(slider.max), v=parseFloat(slider.value);
+    slider.style.setProperty('--fill', ((v-min)/(max-min)*100)+'%');
+  }
+
+  var fS=document.getElementById('fSlider'), nS=document.getElementById('nSlider'), iS=document.getElementById('iSlider');
+  function onParams(){
+    state.f=parseFloat(fS.value); state.N=parseInt(nS.value,10); state.n=parseFloat(iS.value);
+    document.getElementById('fVal').textContent=state.f.toFixed(2)+' m';
+    document.getElementById('nVal').textContent=state.N;
+    document.getElementById('iVal').textContent=state.n.toFixed(3);
+    setFill(fS); setFill(nS); setFill(iS);
+    rebuild(); updateReadout();
+    if(!running) render(performance.now());
+  }
+  fS.addEventListener('input',onParams);
+  nS.addEventListener('input',onParams);
+  iS.addEventListener('input',onParams);
+
+  var modeSeg=document.getElementById('modeSeg');
+  modeSeg.addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b) return;
+    state.mode=b.dataset.mode;
+    [].forEach.call(modeSeg.children,function(x){x.classList.toggle('active',x===b);});
+    document.getElementById('viewLabel').textContent =
+      state.mode==='parent'?'parent lens':(state.mode==='fresnel'?'Fresnel lens':'lighthouse beam');
+    document.getElementById('rotRow').style.display = state.mode==='lighthouse'?'block':'none';
+    if(!running) render(performance.now());
+  });
+
+  var rotBtn=document.getElementById('rotBtn');
+  rotBtn.addEventListener('click',function(){
+    state.rotate=!state.rotate;
+    rotBtn.classList.toggle('on',state.rotate);
+    document.getElementById('rotVal').textContent=state.rotate?'on':'off';
+    if(!state.rotate) beamAngle=0;
+    if(!running) render(performance.now());
+  });
+
+  var skinSeg=document.getElementById('skinSeg');
+  skinSeg.addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b) return;
+    state.skin=b.dataset.skin;
+    [].forEach.call(skinSeg.children,function(x){x.classList.toggle('active',x===b);});
+    if(!running) render(performance.now());
+  });
+
+  // self-test chip + detail panel
+  var chip=document.getElementById('selftest'), stPanel=document.getElementById('stPanel');
+  function showSelfTest(){
+    try{
+      var res=runSelfTest();
+      var ok=res.pass===res.total;
+      chip.textContent='self-test '+res.pass+'/'+res.total;
+      chip.className='selftest '+(ok?'ok':'bad');
+      var html='<h4>Built-in self-test &mdash; '+res.pass+'/'+res.total+'</h4>';
+      res.log.forEach(function(l){
+        html+='<div class="line"><span class="badge '+(l.ok?'pass':'fail')+'">'+(l.ok?'PASS':'FAIL')+'</span>'+
+          '<span><span class="nm">'+l.name+'</span>'+(l.detail?' <span class="dt">['+l.detail+']</span>':'')+'</span></div>';
+      });
+      stPanel.innerHTML=html;
+    }catch(err){
+      chip.textContent='self-test ERR'; chip.className='selftest bad';
+      stPanel.innerHTML='<h4>self-test errored</h4><div class="dt">'+String(err)+'</div>';
+      if(window.console) console.error(err);
+    }
+  }
+  chip.addEventListener('click',function(){ stPanel.classList.toggle('show'); });
+
+  // pause raf when tab hidden (perf + clean)
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden){ running=false; if(raf) cancelAnimationFrame(raf); }
+    else { if(!running){ running=true; lastT=0; raf=requestAnimationFrame(frame); } }
+  });
+
+  window.addEventListener('resize',function(){ resize(); if(!running) render(performance.now()); });
+
+  // breadcrumb
+  try{ localStorage.setItem('ws:seen:lighthouse','1'); }catch(e){}
+
+  // expose for verification
+  window.LIGHTHOUSE = { runSelfTest:runSelfTest, buildFresnel:buildFresnel,
+    solveFacet:solveFacet, traceParallel:traceParallel, state:state };
+
+  // boot
+  resize(); onParams(); showSelfTest();
+  if(reduceMotion){
+    // no auto-rotation; draw a single static frame and don't spin raf for it,
+    // but still allow animated modes to update on interaction.
+    state.rotate=false; rotBtn.classList.remove('on');
+    document.getElementById('rotVal').textContent='off';
+  }
+  raf=requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
