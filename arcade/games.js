@@ -109,5 +109,11 @@ window.GAMES = [
     name: "Dig Dug",
     blurb: "neon tunneler — dig deep, pump enemies till they pop, drop rocks to crush",
     accent: "#ffa83d"
+  },
+  {
+    file: "bulwark.html",
+    name: "Bulwark",
+    blurb: "neon ring defender — thrust the wrap-around line, shoot the Lantern, catch the falling tender, bomb a depot to refuel",
+    accent: "#5fe6c4"
   }
 ];

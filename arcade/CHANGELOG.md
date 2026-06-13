@@ -35,6 +35,37 @@ Each game is self-contained, zero-dependency, browser-play-tested. Reference sty
   defense / vs-CPU / physics-landing). Responsive `auto-fill` grid: adding more needs no rebalance.
 
 ## Log
+- 2026-06-13 — Added **Bulwark** (neon ring defender → **19** cabinets): the rack's first
+  **horizontally-wrapping side-scroller** (a Defender rescue loop with a Scramble fuel loop laid
+  over it — mechanically distinct from every other cabinet). The whole simulation is a separate
+  **deterministic core** (`bulwark.core.js`, forge-inlined into the page with its module guard
+  stripped; required raw by a Node harness with the guard intact) that is a **pure function of
+  (seed, scripted input track)**: a seeded `mulberry32` seeds the terrain **and** every spawn (no
+  `Math.random`, no wall-clock `dt`), and time advances only in **fixed 1/120 s integer ticks**
+  drained from an accumulator — so the same seed + the same per-tick input yields a byte-identical
+  per-frame state hash, forever. The world is a **ring** of width 4096: x lives in [0,ringW),
+  collisions and the camera use the shortest signed **arc-delta** in [−ringW/2,+ringW/2], and a
+  **scanner strip** maps the whole ring (terrain, depots, tenders, enemies, ship, viewport window)
+  scaled to the screen width. The ship has real **thrust/inertia** (←/→ horizontal, ↑/↓ altitude,
+  Shift reverses facing) and burns **fuel** continuously — **bomb (Z) a depot** to refuel; kiss the
+  ridge or run dry and you crash. **Defender rescue loop:** a **Lantern** hunts a grounded **tender**,
+  grabs it and hauls it skyward; **shoot the Lantern** (+75) and the tender **falls** — fly under it
+  to **catch** it home (+250); let a tender reach the top and its Lantern **mutates** into a faster
+  strafing threat. **Divers** sweep the ring as a constant hazard. Three palette **skins** the sim
+  never reads (proven by the seed-purity check). Muted-by-default Web Audio (M toggle), full juice
+  (thrust trail, ridge glow, screen-shake/flash on crash/refuel, falling-tender help arrow), 3 lives,
+  touch controls on mobile. Ships a **headless 6-check self-test** the page shows as a green ✓ chip
+  and a `bulwark.test.cjs` Node harness re-runs (6 core + 6 harness checks): (1) **replay determinism**
+  — same seed + scripted track → identical 900-tick hash sequence, twice (and across 6 seeds at 1200
+  ticks); (2) **wrap continuity** — x stays in [0,ringW), the seam is crossed on a full lap, arc-delta
+  never jumps; (3) **rescue invariant** — shoot carrier → tender falls (+75 exactly); catch →
+  re-ground (+250 exactly); (4) **fuel monotonicity** — fuel only rises on a depot-bomb/respawn tick;
+  (5) **collision symmetry** — arcDist symmetric + a seam-spanning hit detected from both sides;
+  (6) **seed-purity** — terrain + the first 200 reinforcement spawns identical across skins. Plus
+  seed-sensitivity, wall-clock-invariance, and fixed-timestep (500 ticks ⇒ frame===500) cross-checks.
+  Verified Node-green BEFORE adding visual juice, then forged + `forge --check --all` green.
+  `ws:best:bulwark` = best **score** (raise-only, milestoned every 250). Accent `#5fe6c4` (sea-mint —
+  distinct from siblings).
 - 2026-06-12 — Added **Dig Dug** (neon grid tunneler → **18** cabinets): the rack's first
   **excavation + inflate-to-pop + gravity-rock** game — mechanically distinct from Chomp's
   maze-munching. Built on a pure, testable core: a `Uint8Array` dirt/open **grid** with

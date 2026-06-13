@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>BULWARK — neon ring defender</title>
+<style>
+  :root{ --accent:#5fe6c4; --accent2:#ff5ea8; --warn:#ffcd4d; --bg:#04070c; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; background:var(--bg); overflow:hidden;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    color:#dffaf2; -webkit-font-smoothing:antialiased; cursor:default; }
+  #stage{ position:fixed; inset:0; }
+  canvas{ display:block; position:absolute; inset:0; }
+
+  /* ---------- HUD ---------- */
+  .hud{ position:fixed; inset:0; pointer-events:none; z-index:5;
+    font-variant-numeric:tabular-nums; }
+  .hud-row{ position:absolute; top:16px; display:flex; }
+  .hud-left{ left:22px; flex-direction:column; gap:4px; align-items:flex-start; }
+  .hud-right{ right:22px; flex-direction:column; align-items:flex-end; gap:4px; }
+  .label{ font-size:10px; letter-spacing:.30em; color:#6fbfa8; opacity:.9; text-transform:uppercase; }
+  .value{ font-size:28px; font-weight:700; letter-spacing:.04em; line-height:1;
+    color:#eafff8; text-shadow:0 0 16px rgba(95,230,196,.6); }
+  .value.small{ font-size:16px; color:#bdeede; }
+
+  /* lives + tenders + fuel cluster (top center) */
+  .center-hud{ position:fixed; top:14px; left:50%; transform:translateX(-50%);
+    display:flex; flex-direction:column; align-items:center; gap:6px; z-index:5; pointer-events:none; }
+  .pips{ display:flex; gap:7px; align-items:center; }
+  .pip{ width:14px; height:14px; border-radius:50%;
+    border:2px solid var(--accent); background:rgba(95,230,196,.18);
+    box-shadow:0 0 8px rgba(95,230,196,.6); }
+  .pip.empty{ opacity:.18; background:transparent; box-shadow:none; transform:scale(.8); }
+  .tpip{ width:11px; height:14px; border-radius:3px 3px 4px 4px;
+    border:1.5px solid var(--accent2); background:rgba(255,94,168,.2);
+    box-shadow:0 0 7px rgba(255,94,168,.55); }
+  .tpip.lost{ opacity:.16; background:transparent; box-shadow:none; }
+  .clbl{ font-size:9px; letter-spacing:.28em; color:#6fbfa8; text-transform:uppercase; opacity:.75; }
+
+  /* fuel bar */
+  .fuelwrap{ display:flex; align-items:center; gap:8px; }
+  .fuelbar{ position:relative; width:200px; height:8px; border-radius:5px;
+    background:rgba(95,230,196,.10); border:1px solid rgba(95,230,196,.28); overflow:hidden; }
+  .fuelfill{ position:absolute; left:0; top:0; bottom:0; width:100%;
+    background:linear-gradient(90deg,var(--warn),var(--accent)); box-shadow:0 0 12px rgba(95,230,196,.6);
+    transition:width .08s linear; }
+  .fuelfill.low{ background:linear-gradient(90deg,#ff4d4d,#ff8a3d); box-shadow:0 0 12px rgba(255,77,77,.7); }
+  .ftag{ font-size:9px; letter-spacing:.24em; color:#6fbfa8; text-transform:uppercase; }
+
+  #muteTag{ position:fixed; bottom:14px; right:18px; font-size:10px; letter-spacing:.22em;
+    color:#6fbfa8; opacity:.7; text-transform:uppercase; pointer-events:none; }
+
+  /* self-test chip */
+  #selftest{ position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
+    z-index:6; font-size:10px; letter-spacing:.22em; text-transform:uppercase;
+    color:#04120d; background:var(--accent); border-radius:10px; padding:3px 10px;
+    box-shadow:0 0 14px rgba(95,230,196,.7); opacity:0; transition:opacity .4s;
+    pointer-events:none; font-weight:700; }
+  #selftest.show{ opacity:.92; }
+  #selftest.fail{ color:#fff; background:#ff2e88; box-shadow:0 0 14px rgba(255,46,136,.8); }
+
+  /* ---------- Overlays ---------- */
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:8px;
+    background:radial-gradient(120% 120% at 50% 38%, rgba(6,12,18,.4), rgba(2,4,8,.92));
+    backdrop-filter:blur(1.5px); transition:opacity .35s; }
+  .overlay.hidden{ opacity:0; pointer-events:none; }
+  .title{ font-size:clamp(54px,13vw,150px); font-weight:800; letter-spacing:.10em;
+    line-height:.9; color:#eafff8;
+    text-shadow:0 0 30px rgba(95,230,196,.6), 0 0 70px rgba(95,230,196,.3);
+    -webkit-text-stroke:1px rgba(160,255,230,.22); }
+  .title .a2{ color:var(--accent2); -webkit-text-stroke:1px rgba(255,94,168,.4);
+    text-shadow:0 0 30px rgba(255,94,168,.55); }
+  .tagline{ font-size:13px; letter-spacing:.32em; color:var(--accent); text-transform:uppercase;
+    opacity:.92; margin-bottom:22px; }
+  .prompt{ font-size:15px; letter-spacing:.12em; color:#eafff8;
+    margin-top:12px; animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:.45} 50%{opacity:1} }
+  .controls{ margin-top:24px; display:grid; grid-template-columns:auto auto;
+    gap:6px 26px; font-size:12px; letter-spacing:.05em; color:#bdeede; opacity:.92; }
+  .controls .k{ text-align:right; color:var(--accent); }
+  .controls b{ color:#eafff8; font-weight:700; }
+  .hint{ margin-top:18px; font-size:11px; letter-spacing:.14em; color:#6fbfa8;
+    text-transform:uppercase; opacity:.85; max-width:50ch; line-height:1.7; }
+  .go-stats{ margin-top:8px; display:grid; grid-template-columns:auto auto; gap:6px 30px;
+    font-size:14px; letter-spacing:.05em; color:#bdeede; }
+  .go-stats .k{ text-align:right; color:#6fbfa8; }
+  .go-stats b{ color:#eafff8; }
+  .newhigh{ color:var(--accent2); font-size:13px; letter-spacing:.28em; text-transform:uppercase;
+    margin-top:12px; animation:pulse 1s ease-in-out infinite; }
+  .gameover-title{ font-size:clamp(34px,8vw,72px); font-weight:800; letter-spacing:.12em;
+    color:var(--accent2); text-shadow:0 0 28px rgba(255,94,168,.6); margin-bottom:8px; }
+  .pausetitle{ font-size:46px; font-weight:800; letter-spacing:.2em; color:#eafff8;
+    text-shadow:0 0 24px rgba(95,230,196,.55); }
+
+  /* mobile touch controls */
+  #touch{ position:fixed; inset:0; z-index:7; display:none; pointer-events:none; }
+  .tbtn{ position:absolute; pointer-events:auto; border-radius:50%;
+    border:1.5px solid rgba(95,230,196,.4); background:rgba(95,230,196,.08);
+    color:#bdeede; font-size:22px; display:flex; align-items:center; justify-content:center;
+    width:62px; height:62px; box-shadow:0 0 16px rgba(95,230,196,.18); user-select:none;
+    -webkit-user-select:none; -webkit-tap-highlight-color:transparent; }
+  .tbtn:active{ background:rgba(95,230,196,.22); }
+  body.touch #touch{ display:block; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg"></canvas>
+  <canvas id="game"></canvas>
+</div>
+
+<!-- HUD -->
+<div class="hud" id="hud" style="display:none">
+  <div class="hud-row hud-left">
+    <div class="label">Score</div>
+    <div class="value" id="score">0</div>
+  </div>
+  <div class="hud-row hud-right">
+    <div class="label">Best</div>
+    <div class="value small" id="best">0</div>
+  </div>
+</div>
+<div class="center-hud" id="centerHud" style="display:none">
+  <div class="pips" id="lives"></div>
+  <div class="pips" id="tenders"></div>
+  <div class="clbl">tenders held</div>
+  <div class="fuelwrap">
+    <span class="ftag">Fuel</span>
+    <div class="fuelbar"><div class="fuelfill" id="fuelfill"></div></div>
+  </div>
+</div>
+<div id="muteTag">M · sound off</div>
+<div id="selftest">✓ self-test</div>
+
+<!-- Title -->
+<div class="overlay" id="titleScreen">
+  <div class="title">BUL<span class="a2">WARK</span></div>
+  <div class="tagline">defend the ring · rescue the tenders</div>
+  <div class="prompt">Press ENTER to launch</div>
+  <div class="controls">
+    <span class="k">← →</span><span>thrust (inertia)</span>
+    <span class="k">↑ ↓</span><span>altitude</span>
+    <span class="k">SPACE</span><span>fire</span>
+    <span class="k">Z</span><span>drop bomb (refuel a depot)</span>
+    <span class="k">SHIFT</span><span>reverse facing</span>
+    <span class="k">P</span><span>pause &nbsp; <b>R</b> restart &nbsp; <b>M</b> sound</span>
+  </div>
+  <div class="hint">A Lantern that grabs a tender hauls it skyward. Shoot the Lantern, the tender falls — fly under it to catch it home. Let one reach the top and the Lantern mutates. Watch your fuel: bomb a depot to top up. Don't kiss the ridge.</div>
+</div>
+
+<!-- Game over -->
+<div class="overlay hidden" id="gameoverScreen">
+  <div class="gameover-title">RING LOST</div>
+  <div class="go-stats">
+    <span class="k">Score</span><b id="goScore">0</b>
+    <span class="k">Tenders saved</span><b id="goSaved">0</b>
+    <span class="k">Tenders held</span><b id="goHeld">0</b>
+  </div>
+  <div class="newhigh" id="newHigh" style="display:none">★ NEW BEST ★</div>
+  <div class="prompt">Press ENTER to play again</div>
+</div>
+
+<!-- Pause -->
+<div class="overlay hidden" id="pauseScreen">
+  <div class="pausetitle">PAUSED</div>
+  <div class="prompt">Press P or ESC to resume</div>
+</div>
+
+<!-- touch controls -->
+<div id="touch">
+  <div class="tbtn" id="tLeft"  style="left:18px;  bottom:104px">◀</div>
+  <div class="tbtn" id="tRight" style="left:96px;  bottom:104px">▶</div>
+  <div class="tbtn" id="tUp"    style="left:57px;  bottom:178px">▲</div>
+  <div class="tbtn" id="tDown"  style="left:57px;  bottom:30px">▼</div>
+  <div class="tbtn" id="tFire"  style="right:18px; bottom:104px; border-color:rgba(95,230,196,.7)">✦</div>
+  <div class="tbtn" id="tBomb"  style="right:96px; bottom:48px;  border-color:rgba(255,94,168,.6); color:#ffd0e6">✸</div>
+</div>
+
+<script>
+"use strict";
+<!-- forge:include ../../tools/ws/ws.js -->
+</script>
+<script>
+"use strict";
+// ── the deterministic CORE (forge inlines bulwark.core.js here; its module guard
+//    is stripped, so makeWorld/stepTick/runSelfTest/… become page-scope globals). ──
+<!-- forge:include bulwark.core.js -->
+</script>
+<script>
+"use strict";
+(function(){
+//============================================================== canvas / view
+const bgCanvas = document.getElementById('bg');
+const canvas   = document.getElementById('game');
+const bgx = bgCanvas.getContext('2d');
+const ctx = canvas.getContext('2d');
+
+let W = 0, H = 0, DPR = 1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  for (const c of [bgCanvas, canvas]){
+    c.width = Math.floor(W*DPR); c.height = Math.floor(H*DPR);
+    c.style.width = W+'px'; c.style.height = H+'px';
+  }
+  bgx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  drawBackground();
+}
+window.addEventListener('resize', resize);
+
+const TAU = Math.PI*2;
+const clampN = (v,lo,hi)=> v<lo?lo:(v>hi?hi:v);
+
+//============================================================== skins (render-only)
+const SKINS = {
+  aurora: { sky1:'#04121a', sky2:'#0a0420', ridge:'#2bd6a6', ridgeGlow:'#5fe6c4',
+            ship:'#eafff8', shipGlow:'#5fe6c4', shot:'#aef7e6',
+            lantern:'#ffcd4d', mutant:'#ff5ea8', diver:'#7da6ff',
+            tender:'#ff9ad0', depot:'#9affc8', star:'#9fe9d6' },
+  ember:  { sky1:'#16060a', sky2:'#1c0a04', ridge:'#ff8a3d', ridgeGlow:'#ffb13d',
+            ship:'#fff0e0', shipGlow:'#ff8a3d', shot:'#ffd9b0',
+            lantern:'#ffe14d', mutant:'#ff4d6a', diver:'#ff7da6',
+            tender:'#ffd0a0', depot:'#ffcf6a', star:'#ffcaa0' },
+  ultra:  { sky1:'#0a0418', sky2:'#06021a', ridge:'#9a6bff', ridgeGlow:'#c08bff',
+            ship:'#f3eaff', shipGlow:'#c08bff', shot:'#e6d6ff',
+            lantern:'#5fe6c4', mutant:'#ff5ea8', diver:'#5ad6ff',
+            tender:'#c9b6ff', depot:'#9affe7', star:'#bfaff0' }
+};
+let skinName = 'aurora';
+let SK = SKINS[skinName];
+
+//============================================================== world / state
+let world = null;                  // the deterministic sim world
+let mode = 'title';                // title | playing | paused | gameover
+let acc = 0;                       // fixed-timestep accumulator (seconds)
+let best = 0;
+let tendersStart = N_TENDERS;
+let lastMilestone = 0;             // for WS.best throttling
+
+// camera (smoothed render-side; sim's camX is the truth)
+let viewX = 0;
+
+const input = blankInput();
+
+function loadBest(){ try{ best = parseInt(localStorage.getItem('ws:best:bulwark')||'0',10)||0; }catch(e){ best=0; } }
+function newWorld(){
+  // a fresh seed each launch (render-side only; the SIM stays a pure fn of it)
+  const seed = (Date.now() ^ (Math.floor(Math.random()*0x7fffffff))) >>> 0;
+  world = makeWorld(seed, skinName);
+  viewX = world.ship.x;
+  acc = 0;
+  tendersStart = world.tenders.length;
+}
+
+//============================================================== background (static art)
+function drawBackground(){
+  bgx.clearRect(0,0,W,H);
+  const g = bgx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0, SK.sky2); g.addColorStop(1, SK.sky1);
+  bgx.fillStyle = g; bgx.fillRect(0,0,W,H);
+  // a faint star field, deterministic so it doesn't shimmer
+  let s = 1337;
+  const rnd = ()=>{ s = (s*1103515245 + 12345) & 0x7fffffff; return s/0x7fffffff; };
+  bgx.fillStyle = SK.star;
+  for (let i=0;i<90;i++){
+    const x = rnd()*W, y = rnd()*H*0.78, r = rnd()*1.2+0.2;
+    bgx.globalAlpha = 0.12 + rnd()*0.28;
+    bgx.beginPath(); bgx.arc(x,y,r,0,TAU); bgx.fill();
+  }
+  bgx.globalAlpha = 1;
+}
+
+//============================================================== audio (procedural, MUTED by default)
+const Audio_ = {
+  ctx:null, master:null, muted:true,
+  init(){ if(this.ctx) return; try{
+    const AC = window.AudioContext||window.webkitAudioContext;
+    this.ctx = new AC(); this.master = this.ctx.createGain();
+    this.master.gain.value = 0.32; this.master.connect(this.ctx.destination);
+  }catch(e){ this.ctx=null; } },
+  resume(){ if(this.ctx && this.ctx.state==='suspended') this.ctx.resume(); },
+  blip(type,f,dur,vol,sweep){ if(!this.ctx||this.muted) return;
+    const t=this.ctx.currentTime, o=this.ctx.createOscillator(), g=this.ctx.createGain();
+    o.type=type; o.frequency.setValueAtTime(f,t);
+    if(sweep) o.frequency.exponentialRampToValueAtTime(Math.max(40,f*sweep),t+dur);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t+dur+0.02); },
+  noise(dur,vol,lp){ if(!this.ctx||this.muted) return;
+    const t=this.ctx.currentTime, len=Math.floor(this.ctx.sampleRate*dur);
+    const buf=this.ctx.createBuffer(1,len,this.ctx.sampleRate), d=buf.getChannelData(0);
+    for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len);
+    const src=this.ctx.createBufferSource(); src.buffer=buf;
+    const f=this.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=lp||1200;
+    const gn=this.ctx.createGain(); gn.gain.value=vol;
+    src.connect(f); f.connect(gn); gn.connect(this.master); src.start(t); },
+  fire(){ this.blip('square',720,0.05,0.04,0.55); },
+  bomb(){ this.blip('triangle',300,0.12,0.06,0.5); },
+  kill(){ this.noise(0.16,0.10,1500); },
+  free(){ this.blip('triangle',520,0.1,0.08,1.5); this.blip('triangle',760,0.12,0.07,1.4); },
+  caught(){ this.blip('triangle',640,0.09,0.09,1.6); this.blip('triangle',940,0.14,0.08,1.6); },
+  refuel(){ this.blip('sine',440,0.18,0.08,2.0); },
+  crash(){ this.noise(0.6,0.34,420); this.blip('sawtooth',150,0.6,0.14,0.25); }
+};
+
+//============================================================== event detection (render reads sim deltas → SFX/juice)
+let prevSnap = null;
+function snapshot(w){
+  return {
+    score: w.score,
+    shipAlive: w.ship.alive,
+    enemiesAlive: w.enemies.filter(e=>e.alive).length,
+    depotsAlive: w.depots.filter(d=>d.alive).length,
+    grounded: w.tenders.filter(t=>t.alive && t.grounded).length,
+    falling: w.tenders.filter(t=>t.alive && t.falling).length,
+    fuel: w.ship.fuel
+  };
+}
+function detectEvents(w){
+  const cur = snapshot(w);
+  if (prevSnap){
+    if (cur.score > prevSnap.score){
+      const d = cur.score - prevSnap.score;
+      if (d >= SCORE_CATCH) Audio_.caught();
+      else if (d >= SCORE_SHOOT_CARRIER) Audio_.free();
+      else if (d === SCORE_BOMB_DEPOT) Audio_.refuel();
+      else Audio_.kill();
+    }
+    if (!cur.shipAlive && prevSnap.shipAlive) { Audio_.crash(); addShake(16); flash(0.4); }
+    if (cur.depotsAlive < prevSnap.depotsAlive) { addShake(5); flash(0.12); }
+  }
+  prevSnap = cur;
+}
+
+//============================================================== screen shake & flash (render-only juice)
+let shake = 0, flashAmt = 0;
+function addShake(v){ shake = Math.min(28, shake+v); }
+function flash(v){ flashAmt = Math.min(1, flashAmt+v); }
+
+// drifting fire particles for thrust/explosions (render-only, off the sim)
+const parts = [];
+function spawnPart(x,y,vx,vy,life,r,color){ parts.push({x,y,vx,vy,life,max:life,r,color}); if(parts.length>500) parts.shift(); }
+function updateParts(dt){
+  for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.life-=dt;
+    if(p.life<=0){ parts.splice(i,1); continue; } p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.96; p.vy*=0.96; }
+}
+
+//============================================================== fixed-timestep advance
+function advance(dt){
+  // accumulate real time, drain it in fixed DT ticks (sim sees only whole ticks)
+  acc += dt;
+  let steps = 0;
+  while (acc >= DT && steps < 8){       // cap to avoid spiral-of-death after a stall
+    // gather input into the sim's input object (held state)
+    stepTick(world, input);
+    detectEvents(world);
+    acc -= DT; steps++;
+  }
+  if (steps === 8) acc = 0;             // shed backlog
+
+  // milestone best (throttled, try/catch — never let storage break the game)
+  if (world.score >= lastMilestone + 250){
+    lastMilestone = Math.floor(world.score/250)*250;
+    try{ WS.best('bulwark', world.score); }catch(e){}
+    if (world.score > best) best = world.score;
+  }
+
+  // engine trail when thrusting (render-only)
+  const s = world.ship;
+  if (s.alive && (input.left||input.right||input.up||input.down)){
+    const back = s.facing*-1;
+    spawnPart(s.x, s.y, back*120 + (Math.random()*40-20), (Math.random()*40-20),
+              0.3+Math.random()*0.2, 1.4+Math.random()*1.4,
+              Math.random()<0.5?SK.shipGlow:SK.shot);
+  }
+
+  // game over → flip UI
+  if (world.over && mode==='playing') endGame();
+}
+
+//============================================================== rendering
+function worldToScreen(x){
+  // shortest-arc offset from the camera, mapped to screen center
+  const d = arcDelta(viewX, x);
+  return W*0.5 + d;
+}
+function visible(x){ return Math.abs(arcDelta(viewX,x)) < W*0.5 + 80; }
+
+function render(){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  if (shake>0.3){ const a=Math.random()*TAU; ctx.translate(Math.cos(a)*shake, Math.sin(a)*shake); }
+
+  const scaleY = H / WORLD_H;         // map world-Y band to the screen height
+  const wy = (y)=> y*scaleY;
+
+  drawTerrain(wy);
+  drawDepots(wy);
+  drawParts();
+  drawTenders(wy);
+  drawEnemies(wy);
+  drawShots(wy);
+  if (mode!=='title') drawShip(wy);
+
+  ctx.restore();
+
+  drawScanner();
+
+  if (flashAmt>0.01){ ctx.fillStyle='rgba(180,255,236,'+(flashAmt*0.35)+')'; ctx.fillRect(0,0,W,H); }
+}
+
+function drawTerrain(wy){
+  const s = world.ship;
+  ctx.save();
+  ctx.beginPath();
+  const stepPx = 6;
+  let first = true;
+  for (let sx=-40; sx<=W+40; sx+=stepPx){
+    const worldX = viewX + (sx - W*0.5);
+    const gy = wy(terrainAt(world.terrain, worldX));
+    if (first){ ctx.moveTo(sx, gy); first=false; } else ctx.lineTo(sx, gy);
+  }
+  ctx.lineTo(W+40, H+40); ctx.lineTo(-40, H+40); ctx.closePath();
+  const grad = ctx.createLinearGradient(0, H*0.62, 0, H);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, SK.ridge.replace(')',',0.18)').replace('rgb','rgba'));
+  ctx.fillStyle = hexToRgba(SK.ridge, 0.12); ctx.fill();
+  // glowing ridge line
+  ctx.beginPath(); first=true;
+  for (let sx=-40; sx<=W+40; sx+=stepPx){
+    const worldX = viewX + (sx - W*0.5);
+    const gy = wy(terrainAt(world.terrain, worldX));
+    if (first){ ctx.moveTo(sx, gy); first=false; } else ctx.lineTo(sx, gy);
+  }
+  ctx.lineWidth = 2.2; ctx.strokeStyle = SK.ridgeGlow;
+  ctx.shadowBlur = 14; ctx.shadowColor = SK.ridgeGlow; ctx.stroke();
+  ctx.restore();
+}
+function drawDepots(wy){
+  ctx.save();
+  for (const d of world.depots){
+    if (!d.alive || !visible(d.x)) continue;
+    const x = worldToScreen(d.x), y = wy(d.y);
+    ctx.shadowBlur = 14; ctx.shadowColor = SK.depot;
+    ctx.strokeStyle = SK.depot; ctx.lineWidth = 2;
+    ctx.fillStyle = hexToRgba(SK.depot, 0.18);
+    ctx.beginPath();
+    ctx.moveTo(x-DEPOT_R, y+DEPOT_R*0.7);
+    ctx.lineTo(x-DEPOT_R*0.6, y-DEPOT_R*0.7);
+    ctx.lineTo(x+DEPOT_R*0.6, y-DEPOT_R*0.7);
+    ctx.lineTo(x+DEPOT_R, y+DEPOT_R*0.7);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = SK.depot; ctx.font='700 11px ui-monospace,monospace'; ctx.textAlign='center';
+    ctx.shadowBlur = 6; ctx.fillText('FUEL', x, y+2);
+  }
+  ctx.restore();
+}
+function drawTenders(wy){
+  ctx.save();
+  for (const t of world.tenders){
+    if (!t.alive || !visible(t.x)) continue;
+    const x = worldToScreen(t.x), y = wy(t.y);
+    const carried = t.carriedBy>=0, falling = t.falling;
+    ctx.shadowBlur = carried?16:(falling?14:10); ctx.shadowColor = SK.tender;
+    ctx.strokeStyle = SK.tender; ctx.lineWidth = 2;
+    ctx.fillStyle = hexToRgba(SK.tender, falling?0.4:0.22);
+    // a little person/capsule
+    ctx.beginPath(); ctx.arc(x, y-TENDER_R*0.5, TENDER_R*0.5, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x-TENDER_R*0.6, y+TENDER_R*0.7);
+    ctx.lineTo(x, y-TENDER_R*0.1);
+    ctx.lineTo(x+TENDER_R*0.6, y+TENDER_R*0.7);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (falling){ // a help arrow above a falling tender
+      ctx.globalAlpha = 0.6+0.4*Math.sin(Date.now()*0.012);
+      ctx.beginPath(); ctx.moveTo(x-6,y-TENDER_R-8); ctx.lineTo(x,y-TENDER_R-2); ctx.lineTo(x+6,y-TENDER_R-8);
+      ctx.stroke(); ctx.globalAlpha=1;
+    }
+  }
+  ctx.restore();
+}
+function drawEnemies(wy){
+  ctx.save();
+  for (const e of world.enemies){
+    if (!e.alive || !visible(e.x)) continue;
+    const x = worldToScreen(e.x), y = wy(e.y);
+    let col = e.kind==='lantern'?SK.lantern:(e.kind==='mutant'?SK.mutant:SK.diver);
+    ctx.shadowBlur = 14; ctx.shadowColor = col; ctx.strokeStyle = col; ctx.lineWidth = 2;
+    ctx.fillStyle = hexToRgba(col, 0.18);
+    if (e.kind==='lantern'){
+      // a diamond lantern
+      ctx.beginPath();
+      ctx.moveTo(x, y-ENEMY_R); ctx.lineTo(x+ENEMY_R, y);
+      ctx.lineTo(x, y+ENEMY_R); ctx.lineTo(x-ENEMY_R, y);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x,y,ENEMY_R*0.35,0,TAU); ctx.stroke();
+    } else if (e.kind==='mutant'){
+      // a jagged chevron (the escalated threat)
+      ctx.beginPath();
+      ctx.moveTo(x-ENEMY_R, y-ENEMY_R*0.5); ctx.lineTo(x, y-ENEMY_R*0.2);
+      ctx.lineTo(x+ENEMY_R, y-ENEMY_R*0.5); ctx.lineTo(x+ENEMY_R*0.4, y+ENEMY_R);
+      ctx.lineTo(x-ENEMY_R*0.4, y+ENEMY_R); ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else {
+      // a diver: forward dart in its travel direction
+      const dir = e.vx>=0?1:-1;
+      ctx.beginPath();
+      ctx.moveTo(x+dir*ENEMY_R, y); ctx.lineTo(x-dir*ENEMY_R*0.7, y-ENEMY_R*0.7);
+      ctx.lineTo(x-dir*ENEMY_R*0.3, y); ctx.lineTo(x-dir*ENEMY_R*0.7, y+ENEMY_R*0.7);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+function drawShots(wy){
+  ctx.save(); ctx.lineCap='round';
+  for (const sh of world.shots){
+    if (!sh.alive || !visible(sh.x)) continue;
+    const x = worldToScreen(sh.x), y = wy(sh.y);
+    ctx.shadowBlur=12; ctx.shadowColor=SK.shot; ctx.strokeStyle=SK.shot; ctx.lineWidth=3;
+    const dir = sh.vx>=0?1:-1;
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-dir*12,y); ctx.stroke();
+  }
+  // bombs
+  for (const b of world.bombs){
+    if (!b.alive || !visible(b.x)) continue;
+    const x = worldToScreen(b.x), y = wy(b.y);
+    ctx.shadowBlur=12; ctx.shadowColor=SK.depot; ctx.fillStyle=SK.depot;
+    ctx.beginPath(); ctx.arc(x,y,4,0,TAU); ctx.fill();
+  }
+  ctx.restore();
+}
+function drawShip(wy){
+  const s = world.ship;
+  if (!s.alive){ return; }
+  const x = worldToScreen(s.x), y = wy(s.y);
+  ctx.save(); ctx.translate(x,y); ctx.scale(s.facing,1);
+  ctx.shadowBlur=16; ctx.shadowColor=SK.shipGlow; ctx.strokeStyle=SK.ship; ctx.lineWidth=2.2;
+  ctx.fillStyle = hexToRgba(SK.shipGlow, 0.18);
+  ctx.beginPath();
+  ctx.moveTo(SHIP_R*1.4, 0);
+  ctx.lineTo(-SHIP_R*0.7, -SHIP_R*0.7);
+  ctx.lineTo(-SHIP_R*0.3, 0);
+  ctx.lineTo(-SHIP_R*0.7, SHIP_R*0.7);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+function drawParts(){
+  ctx.save();
+  const scaleY = H/WORLD_H;
+  for (const p of parts){
+    if (!visible(p.x)) continue;
+    const x = worldToScreen(p.x), y = p.y*scaleY;
+    ctx.globalAlpha = clampN(p.life/p.max,0,1)*0.8;
+    ctx.shadowBlur=8; ctx.shadowColor=p.color; ctx.fillStyle=p.color;
+    ctx.beginPath(); ctx.arc(x,y,p.r,0,TAU); ctx.fill();
+  }
+  ctx.globalAlpha=1; ctx.restore();
+}
+
+//============================================================== scanner strip (whole ring, scaled to width)
+function drawScanner(){
+  if (mode==='title') return;
+  const sh = 34, pad = 0, sy = 4;
+  const sx0 = pad, sw = W - pad*2;
+  ctx.save();
+  // panel
+  ctx.fillStyle = 'rgba(4,10,16,0.6)';
+  ctx.fillRect(sx0, sy, sw, sh);
+  ctx.strokeStyle = hexToRgba(SK.ridgeGlow,0.4); ctx.lineWidth=1;
+  ctx.strokeRect(sx0+0.5, sy+0.5, sw-1, sh-1);
+  const sxOf = (wx)=> sx0 + (wrapX(wx)/RING_W)*sw;
+  const syOf = (wy)=> sy + 3 + (wy/WORLD_H)*(sh-6);
+  // mini terrain
+  ctx.beginPath();
+  for (let i=0;i<=128;i++){
+    const wx = (i/128)*RING_W;
+    const gx = sxOf(wx), gy = syOf(terrainAt(world.terrain,wx));
+    if (i===0) ctx.moveTo(gx,gy); else ctx.lineTo(gx,gy);
+  }
+  ctx.strokeStyle = hexToRgba(SK.ridge,0.7); ctx.lineWidth=1; ctx.shadowBlur=0; ctx.stroke();
+  // depots
+  for (const d of world.depots){ if(!d.alive) continue;
+    ctx.fillStyle=SK.depot; ctx.fillRect(sxOf(d.x)-1, syOf(d.y)-3, 2, 4); }
+  // tenders
+  for (const t of world.tenders){ if(!t.alive) continue;
+    ctx.fillStyle=SK.tender; ctx.beginPath(); ctx.arc(sxOf(t.x), syOf(t.y), 1.6, 0, TAU); ctx.fill(); }
+  // enemies
+  for (const e of world.enemies){ if(!e.alive) continue;
+    ctx.fillStyle = e.kind==='lantern'?SK.lantern:(e.kind==='mutant'?SK.mutant:SK.diver);
+    ctx.fillRect(sxOf(e.x)-1, syOf(e.y)-1, 2.4, 2.4); }
+  // ship
+  ctx.fillStyle=SK.ship; ctx.shadowBlur=6; ctx.shadowColor=SK.shipGlow;
+  ctx.beginPath(); ctx.arc(sxOf(world.ship.x), syOf(world.ship.y), 2.4, 0, TAU); ctx.fill();
+  // viewport window
+  const vw = (W/RING_W)*sw;
+  ctx.strokeStyle = hexToRgba(SK.shipGlow,0.6); ctx.lineWidth=1; ctx.shadowBlur=0;
+  let vx = sxOf(viewX) - vw/2;
+  ctx.strokeRect(vx, sy+1, vw, sh-2);
+  if (vx<sx0) ctx.strokeRect(vx+sw, sy+1, vw, sh-2);
+  if (vx+vw>sx0+sw) ctx.strokeRect(vx-sw, sy+1, vw, sh-2);
+  ctx.restore();
+}
+
+function hexToRgba(hex, a){
+  const h = hex.replace('#',''); const n = parseInt(h.length===3? h.split('').map(c=>c+c).join('') : h, 16);
+  return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';
+}
+
+//============================================================== HUD
+const elScore=document.getElementById('score'), elBest=document.getElementById('best');
+const elLives=document.getElementById('lives'), elTenders=document.getElementById('tenders');
+const elFuel=document.getElementById('fuelfill');
+let displayScore = 0;
+function syncHud(){
+  displayScore += (world.score-displayScore)*0.25;
+  elScore.textContent = Math.round(displayScore).toLocaleString();
+  elBest.textContent = best.toLocaleString();
+  // lives
+  let lh=''; for(let i=0;i<SHIP_LIVES;i++) lh += '<div class="pip'+(i>=world.ship.lives?' empty':'')+'"></div>';
+  if (elLives.dataset.n!==String(world.ship.lives)){ elLives.innerHTML=lh; elLives.dataset.n=String(world.ship.lives); }
+  // tenders held (grounded + carried + falling still in play)
+  const held = world.tenders.filter(t=>t.alive).length;
+  let th=''; for(let i=0;i<tendersStart;i++) th += '<div class="tpip'+(i>=held?' lost':'')+'"></div>';
+  if (elTenders.dataset.n!==String(held)){ elTenders.innerHTML=th; elTenders.dataset.n=String(held); }
+  // fuel
+  const f = world.ship.fuel/FUEL_MAX;
+  elFuel.style.width = (f*100)+'%';
+  elFuel.classList.toggle('low', f<0.25);
+}
+
+//============================================================== input
+function setMuteTag(){ document.getElementById('muteTag').textContent='M · sound '+(Audio_.muted?'off':'on'); }
+function setKey(k,down){
+  switch(k){
+    case 'arrowleft': case 'a': input.left=down; break;
+    case 'arrowright': case 'd': input.right=down; break;
+    case 'arrowup': case 'w': input.up=down; break;
+    case 'arrowdown': case 's': input.down=down; break;
+    case ' ': case 'space': input.fire=down; break;
+    case 'z': input.bomb=down; break;
+    case 'shift': input.reverse=down; break;
+  }
+}
+window.addEventListener('keydown', e=>{
+  const k = e.key.toLowerCase();
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  if (k==='shift'){ input.reverse=true; return; }
+  switch(k){
+    case 'p': case 'escape': if(mode==='playing'||mode==='paused') togglePause(); return;
+    case 'enter': if(mode==='title'||mode==='gameover') startGame(); return;
+    case 'r': if(mode==='playing'||mode==='paused'||mode==='gameover') startGame(); return;
+    case 'm': Audio_.init(); Audio_.muted=!Audio_.muted; setMuteTag(); if(!Audio_.muted) Audio_.resume(); return;
+  }
+  setKey(k,true);
+}, {passive:false});
+window.addEventListener('keyup', e=>{ const k=e.key.toLowerCase(); if(k==='shift'){ input.reverse=false; return; } setKey(k,false); });
+window.addEventListener('blur', ()=>{ input.left=input.right=input.up=input.down=input.fire=input.bomb=input.reverse=false; });
+window.addEventListener('pointerdown', ()=>{ Audio_.init(); if(!Audio_.muted) Audio_.resume(); }, {once:true});
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden && mode==='playing') togglePause(); });
+
+// touch controls
+function bindTouch(id, key){
+  const el = document.getElementById(id);
+  const on = (e)=>{ e.preventDefault(); setKey(key,true); };
+  const off = (e)=>{ e.preventDefault(); setKey(key,false); };
+  el.addEventListener('touchstart', on, {passive:false});
+  el.addEventListener('touchend', off, {passive:false});
+  el.addEventListener('touchcancel', off, {passive:false});
+}
+if ('ontouchstart' in window || navigator.maxTouchPoints>0){
+  document.body.classList.add('touch');
+  bindTouch('tLeft','arrowleft'); bindTouch('tRight','arrowright');
+  bindTouch('tUp','arrowup'); bindTouch('tDown','arrowdown');
+  bindTouch('tFire',' '); bindTouch('tBomb','z');
+  // tap title/gameover to start
+  document.addEventListener('touchstart', ()=>{ if(mode==='title'||mode==='gameover') startGame(); }, {passive:true});
+}
+
+//============================================================== state transitions
+let savedTendersOnStart = N_TENDERS;
+function startGame(){
+  newWorld();
+  prevSnap = null; displayScore = 0; lastMilestone = 0;
+  shake=0; flashAmt=0; parts.length=0;
+  for (const k in input) input[k]=false;
+  mode='playing';
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('gameoverScreen').classList.add('hidden');
+  document.getElementById('pauseScreen').classList.add('hidden');
+  document.getElementById('hud').style.display='block';
+  document.getElementById('centerHud').style.display='flex';
+  elLives.dataset.n=''; elTenders.dataset.n='';
+  Audio_.init(); if(!Audio_.muted) Audio_.resume();
+}
+function endGame(){
+  mode='gameover';
+  try{ WS.best('bulwark', world.score); }catch(e){}
+  const isBest = world.score>best && world.score>0;
+  if (world.score>best) best = world.score;
+  const saved = Math.round(world.score / SCORE_CATCH);   // approx tenders rescued
+  document.getElementById('goScore').textContent = world.score.toLocaleString();
+  document.getElementById('goSaved').textContent = saved;
+  document.getElementById('goHeld').textContent = world.tenders.filter(t=>t.alive).length;
+  document.getElementById('newHigh').style.display = isBest?'block':'none';
+  document.getElementById('gameoverScreen').classList.remove('hidden');
+}
+function togglePause(){
+  if (mode==='playing'){ mode='paused'; document.getElementById('pauseScreen').classList.remove('hidden'); }
+  else if (mode==='paused'){ mode='playing'; document.getElementById('pauseScreen').classList.add('hidden'); }
+}
+
+//============================================================== main loop
+let last = performance.now();
+function frame(now){
+  let dt = (now-last)/1000; last = now;
+  if (dt>0.1) dt=0.1;             // clamp huge stalls
+
+  if (mode==='playing'){
+    advance(dt);
+    // smooth camera toward the ship along the ring
+    viewX = wrapX(viewX + arcDelta(viewX, world.ship.x) * Math.min(1, dt*9));
+  }
+  updateParts(dt);
+  shake *= Math.pow(0.05, dt);
+  flashAmt *= Math.pow(0.02, dt);
+
+  if (world) render();
+  if (mode==='playing'||mode==='paused'||mode==='gameover') syncHud();
+  requestAnimationFrame(frame);
+}
+
+//============================================================== boot
+loadBest();
+resize();
+setMuteTag();
+elBest.textContent = best.toLocaleString();
+
+// an attract-mode world ticks gently behind the title (no input → enemies hunt)
+newWorld();
+viewX = world.ship.x;
+(function attract(){
+  if (mode==='title' && world){
+    stepTick(world, blankInput());
+    viewX = wrapX(viewX + arcDelta(viewX, world.ship.x)*0.04 + 0.6);  // slow pan
+    if (world.over) newWorld();
+  }
+})();
+let attractTimer = setInterval(()=>{ if(mode==='title'&&world){ for(let i=0;i<2;i++) stepTick(world, blankInput()); if(world.over) newWorld(); viewX = wrapX(viewX + 1.1); } }, 33);
+
+requestAnimationFrame(frame);
+
+//============================================================== self-test (in-page chip + console)
+const SELFTEST = runSelfTest();
+(function showChip(){
+  const chip = document.getElementById('selftest');
+  const n = SELFTEST.results.length, pass = SELFTEST.results.filter(r=>r.pass).length;
+  for (const r of SELFTEST.results) console.log((r.pass?'PASS':'FAIL')+' — '+r.name+(r.detail?'  ('+r.detail+')':''));
+  if (SELFTEST.allPass){ chip.classList.add('show'); chip.textContent='✓ self-test '+pass+'/'+n;
+    console.log('BULWARK SELF-TEST: ALL PASS ('+n+' checks)'); }
+  else { chip.classList.add('show','fail'); chip.textContent='✗ self-test '+pass+'/'+n;
+    console.error('BULWARK SELF-TEST: FAILURES PRESENT'); }
+})();
+
+// verification hook (used only by the headless/browser verifier)
+window.__BULWARK__ = {
+  get mode(){ return mode; },
+  get score(){ return world?world.score:0; },
+  get fuel(){ return world?world.ship.fuel:0; },
+  get lives(){ return world?world.ship.lives:0; },
+  get seed(){ return world?world.seed:0; },
+  get frame(){ return world?world.frame:0; },
+  get shipX(){ return world?world.ship.x:0; },
+  get shipAlive(){ return world?world.ship.alive:false; },
+  get enemyCount(){ return world?world.enemies.filter(e=>e.alive).length:0; },
+  get groundedTenders(){ return world?world.tenders.filter(t=>t.alive&&t.grounded).length:0; },
+  get fallingTenders(){ return world?world.tenders.filter(t=>t.alive&&t.falling).length:0; },
+  get carriedTenders(){ return world?world.tenders.filter(t=>t.alive&&t.carriedBy>=0).length:0; },
+  get depotsAlive(){ return world?world.depots.filter(d=>d.alive).length:0; },
+  get selftest(){ return SELFTEST.allPass; },
+  get muted(){ return Audio_.muted; },
+  _start(){ startGame(); },
+  _key(name,down){ setKey(name,down); },
+  _setReverse(v){ input.reverse=!!v; },
+  // deterministic test rigs (drive the SIM directly, no rAF)
+  _forceRescueScenario(){
+    startGame();
+    const td = world.tenders[0];
+    td.grounded=true; td.carriedBy=-1; td.falling=false;
+    world.enemies=[{kind:'lantern',x:td.x,y:td.y-10,vx:0,vy:0,target:-1,cd:99,alive:true}];
+    world.spawnCd = 1e9;
+    return {tenderX:td.x};
+  },
+  _tick(n){ for(let i=0;i<(n||1);i++){ stepTick(world, input); detectEvents(world); } },
+  _shootCarrier(){ world.shots.push({x:world.enemies[0].x,y:world.enemies[0].y,vx:0,life:SHOT_LIFE,alive:true}); },
+  _placeShipOnTender(i){ const t=world.tenders[i||0]; world.ship.alive=true; world.ship.x=t.x; world.ship.y=t.y; },
+  _bombDepot(i){ const d=world.depots[i||0]; world.ship.x=d.x; world.bombs.push({x:d.x,y:d.y-100,alive:true}); }
+};
+
+})();
+</script>
+
+<!-- arc-back -->
+<style>
+  .arc-back{ position:fixed; left:18px; bottom:14px; z-index:9999; pointer-events:auto;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11.5px;
+    letter-spacing:.18em; text-transform:uppercase; text-decoration:none;
+    color:#dffaf2; opacity:.40; transition:opacity .2s, text-shadow .2s;
+    text-shadow:0 0 8px rgba(95,230,196,.45); }
+  .arc-back:hover{ opacity:.95; text-shadow:0 0 12px rgba(95,230,196,.85); }
+</style>
+<a class="arc-back" href="../index.html" style="position:fixed;z-index:9999;pointer-events:auto">← arcade</a>
+</body>
+</html>
