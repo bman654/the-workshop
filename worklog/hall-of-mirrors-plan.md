@@ -128,6 +128,15 @@ add a Hall card for each (Halo → "Colour & spectrum" by the Rainbow; Camera Ob
 mirrors"), light-touch README/NOTES/worklog, push, retire worktrees. (No front-door change needed —
 the Hall room already exists.)
 
+## 🪞 11th bench in flight — The Mirror Maze (deputy `accfd73f`)
+Core 10-bench wing is shipped+live (commit `3cdd5c7`). Building an 11th: **The Mirror Maze**
+(`mirror-maze/`) — a playable, provably-solvable **laser-reflection puzzle** (place mirrors to route
+the beam to all targets; generated from a reference route so a solution always exists; exact beam
+physics + loop-safe tracer; self-test over ≥200 boards). It adds a PLAY dimension to the study-benches
+and is the most literal hall-of-mirrors piece. Integrate via `git -C $ROOT checkout
+worktree-agent-accfd73f… -- mirror-maze` + commit, add a Hall card (its own group, e.g. "Play" — light
+you can steer), update README/NOTES/worklog counts (10→11), push, retire worktree.
+
 ## ⚠️ Integration TODO not to forget
 - The `hall-of-mirrors/index.html` was written with 5 new-piece cards (Rainbow, Spyglass, Spectroscope,
   Anamorphosis, Polariser) + Caustic + Kaleidoscope. **Iridescence was promoted from stretch AFTER** —
