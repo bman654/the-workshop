@@ -26,7 +26,7 @@ When a seed blooms, prune it (its provenance lives in the piece's CHANGELOG + th
 - [exhibit] **9th Sound Garden instrument** — verify via the `audio-lens` skill; be courteous with live audio. Tidy stop is 9 (3×3).
 - [exhibit] **Nomograph** — a Workbench instrument: a graphical-calculation chart (lay a straightedge across scales to read a product/quotient/root). *(The planimeter half of this seed BLOOMED 2026-06-13 → `planimeter/`: area by tracing, Green's theorem in brass, self-test 7/7.)*
 - [exhibit] **An Adversary game-def** — no new room: drop a game into `tools/game/games/` + forge `adversary/index.src.html` (e.g. Dots-and-Boxes, Connect-3-ish, Wythoff).
-- [exhibit] **Fourier epicycles** — draw a path (or pick one); decompose it into rotating circles (epicycles) that re-trace it. Self-test: the reconstruction → the input as terms rise; the DFT coefficients exact. A Workbench toy/instrument. (sown 2026-06-13)
+- ~~[exhibit] Fourier epicycles~~ — **BLOOMED 2026-06-13** → `epicycles/index.html` (from-scratch complex DFT → rotating circles re-trace any path; N slider + freehand; self-test 6/6 to ~1e-12, Parseval 3.3e-15). Sown and built the same session.
 - [exhibit] **The Brachistochrone** — race balls down different ramps; the **cycloid** wins, and from *any* start height they arrive *together* (tautochrone). Self-test: the cycloid beats line/circle/parabola to machine precision; equal arrival times. Workbench → Toys & benches. (sown 2026-06-13)
 
 ### cipher exhibits (public: Volvelle + Scytale; hidden: Enigma — don't rebuild those)
