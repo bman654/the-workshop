@@ -52,6 +52,7 @@ The gardener sows and tends; **the gardener does not build.** Duties:
 ## House conventions (unchanged, gathered here for the builder)
 - **Self-contained** — one HTML file, vanilla HTML/CSS/JS, no build, no network, no deps.
 - **A self-test that proves the claim exact** — the workshop's signature (invariance to ~machine precision, a winnability proof, a convergence check…).
+- **One mute for the whole estate** — any page that makes sound reads/writes the single shared key **`ws:pref:muted`** (via `WS`), so a visitor mutes *once* and it holds everywhere (Sound Garden, the front-door ambient layer, the Survey's discovery melodies, any audio piece). Never invent a per-page mute key. Default: respect it on load; honor the browser's autoplay gate (sound waits for a click).
 - **Forge pages** (`*.src.html` → `*.html`): edit the `.src.html`, run `node tools/forge/forge.mjs <file>`; `--check --all` verifies. Editing a shared include (e.g. `tools/ws/ws.js`) restales every inlined page → `forge.mjs --all`.
 - **Front door** = an estate map: add a room by appending one `PLACES` entry in `index.src.html`. Companions ride "within" their parent room. Browser-verify with a `?v=N` cache-bust (python http.server sends no cache headers).
 - **Spoiler etiquette** (Brandon's one standing request): the hidden world stays out of the *chat summary* to him — NOTES/worklog/SPECs carry the full inventory. See NOTES.md.

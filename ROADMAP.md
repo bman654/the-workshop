@@ -34,11 +34,16 @@ When a seed blooms, prune it (its provenance lives in the piece's CHANGELOG + th
 ### room — bets (generate divergent FORM concepts before committing — see DESIGNING.md)
 - [room] **The Hours** — a *living estate*: real-time tints the front-door plate dawn→candle→night, time-gated apparitions appear. Could *be* its own metagame. `feeds:` a new "Vigil" secret. (Use `tools/hours/`, not `tools/sky/`.)
 - [room] **A room whose navigation IS its subject** — the lesson from the Hall (a vertical list wasted optics). Sow a place whose *form expresses content*: e.g. an instrument bench you operate, a cabinet you open drawers in.
+- [room · GRAND] **Physics Lab** — a wing of experiments: Newtonian (Newton's cradle, 3-body, gravity, orbits) + Einsteinian (relativity, stellar collapse → black hole / supernova / white dwarf), with a **secret quantum sub-wing** earned by exploring both. Form idea: a **cave on the grounds, *outside* the manor** ("for safety"). `feeds:` its own unlock metagame. (Brandon — grand, multi-session; flesh out in a PLAN session first.)
+- [room · GRAND] **Alchemy Lab** — a wing, theme open (reactions / transmutation / the periodic table / crystal growth?). Pairs with the Physics Lab; ripe for crossovers. (Brandon — needs ideation.)
+- [room/cross] **Flight & Rocketry** — planes, rockets, orbital mechanics. Overlaps the Orrery (orbits exist) + the Physics Lab — could be a wing or live as a crossover. (Brandon.)
 
 ### cross — pollinate two rooms (the rarest, best vein — see the hidden Undercroft crossings)
 - [cross] **Cartographer × Firmament** — a realm whose night sky is a *real* Firmament chart computed for that realm's latitude. The map and the sky agree.
 - [cross] **Loomlight × Tessellarium** — a weaving draft whose cloth realizes a chosen wallpaper symmetry group. Proven symmetry, woven.
 - [cross] **Harmonograph × Sound Garden** — sonify the pendulum figure: the same Lissajous ratios you *see* drawn, *heard* as an interval.
+- [cross] **Light × Sound** — a bench where optical phenomena drive sound (or the reverse), in the Living Lattice spirit (CA × audio). The most-named crossover. (Brandon.)
+- [cross] **Ambient music on the front door** — soft haunting sound over the map: a bg theme to start, then once instruments are *seen*, randomly run one **headless** at a soothing low tempo (Sound Garden × the map). Mute toggle in header/footer, saved to the **shared `ws:pref:muted` key** (see DESIGNING.md — one mute governs the whole estate). (Brandon — shares an audio layer with the Survey-melodies metagame seed below.)
 
 ### engine / foundation — bets
 - [engine] **A logic-puzzle generator** proving uniqueness + solvable-by-pure-deduction — but NET-NEW families (Kakuro / Hashi / Masyu …), do NOT rewrite Latch/Slitherlink/Akari.
@@ -47,11 +52,14 @@ When a seed blooms, prune it (its provenance lives in the piece's CHANGELOG + th
 ### metagame — curate an exploration layer (own builder task)
 - [metagame] **Survey of Heaven** — do the 11 Hall benches deserve a **7th wing** (their own asterism), or is "The Optician" feats-constellation enough? Decide → wire `tools/sky/sky.js` + forge `index.src.html`, or mark complete.
 - [engine/curation] **Wire the Night Shift cue** — route Lantern's `*-won` flags through `WS.flag` so the hidden Night Shift trail also fires. Touches shared `adventure/engine/lantern.js` (re-forges all tales). Small, careful.
+- [metagame · GRAND] **The Workshop Mystery** — a manor-wide treasure hunt: clues chase across exhibits (a Scriptorium *seed* found here, the script to decode it found there; crypto / engineering / star-chart / arcade / Lantern / mirror-maze gates), Undercroft-style hint cards → panels → a final reveal. Theme candidate: a fictional **history of the manor**, a chapter per unlock. (Brandon — the grandest idea; ~3 sessions: write the fiction → design + *prove-solvable* the clue graph → implement.)
+- [metagame] **Survey of Heaven — make discovery an EVENT** *(Brandon calls this the small one)* — a constellation fades in with a per-constellation **harmonic melody**; each star flashes in with its own **tone**; hover re-glows + replays it and shows *which feat/visit lit it*; localStorage-gate the animation (like the Undercroft entrance). Plus **in-the-moment unlock cues** on the ws-flag pages (a forge-inlined notifier: the tone/melody + a mysterious line). **Supersedes the old "silent by default" lean.** `feeds:` connects actions ↔ sky.
 
 ### curation — tend the old beds (improve / merge / retire)
 - [curation] **Wave-physics overlap audit** — is `strange-garden/pieces/chladni.html` (watch-only) now redundant beside the Singing Plate (real eigensolver)? Improve, cross-link, or retire.
 - [curation] **Arcade weak-cabinet pass** — 19 cabinets. Any that don't earn their place? Deepen the best or retire the dullest (the rack is behind one card, so count is cheap to change).
 - [curation] **Forge `ws:seen` plumbing check** — add a soft `--check` *warning* when a front-door PLACES page never drops its `ws:seen:<id>`. (Dogfooding the one mechanical rule in DESIGNING.md.)
+- [curation] **Redesign the Hall of Mirrors' navigation** — it's a plain badge-list; its *optics* metaphor deserves a distinctive form (another map? unusual badge placement? exhibit thumbnails, like the Strange Garden?). The literal dogfood of DESIGNING.md's *form-expresses-content* rule. (Brandon — and my own cautionary tale.)
 
 ---
 
@@ -60,8 +68,10 @@ When a seed blooms, prune it (its provenance lives in the piece's CHANGELOG + th
 | Metagame | State | Notes |
 |---|---|---|
 | **The Undercroft** (`undercroft/` · `tools/ws/`) | active — 12 secrets | Open to new *earned* pieces. Grep the 🗝️ hidden-inventory in NOTES before building one. |
-| **The Survey of Heaven** (front-door sky · `tools/sky/`) | active — 6 wings + "The Optician" feats constellation | Open question above: a 7th wing for the Hall? The 6-wing all-skies capstone is structurally protected (`allComplete`) — keep new constellations additive. |
+| **The Survey of Heaven** (front-door sky · `tools/sky/`) | active — 6 wings + "The Optician" feats constellation | Open: a 7th wing for the Hall? **And make discovery an *event*** (melodies/tones + in-the-moment cues — the metagame seed above). 6-wing capstone is structurally protected (`allComplete`); keep new constellations additive. |
 | **The Hours** (a living time-of-day layer) | **not yet built** — a `room` seed above | If built, it's a 3rd exploration metagame. |
+| **The Workshop Mystery** (manor-wide hunt) | **not yet built** — a `metagame · GRAND` seed above | Would be the estate's biggest exploration layer; spans every exhibit. ~3 sessions. |
+| **The Physics Lab's quantum wing** | **not yet built** — inside the `Physics Lab` room seed | A hidden sub-wing earned by exploring the Newtonian + Einsteinian wings. |
 
 ---
 
