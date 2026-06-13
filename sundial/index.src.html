@@ -1,0 +1,901 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Gnomon</title>
+<style>
+  :root{
+    /* brass (default) skin — cosmetic only, never touches geometry */
+    --bg:#0b0805;
+    --bg-grad1:rgba(120,84,36,0.18);
+    --bg-grad2:rgba(70,52,30,0.16);
+    --ink:#f0e2c4;
+    --ink-dim:#b8a172;
+    --accent:#e6bd6f;
+    --accent-soft:rgba(230,189,111,0.16);
+    --panel-bg:rgba(20,15,9,0.88);
+    --panel-edge:rgba(214,176,108,0.40);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    background:
+      radial-gradient(1200px 700px at 72% 18%, var(--bg-grad1), transparent 60%),
+      radial-gradient(900px 600px at 20% 90%, var(--bg-grad2), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:default; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(40,70,44,0.35); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:62px 24px 16px; min-width:0; gap:12px; }
+  #dial{ display:block; box-shadow:0 24px 70px rgba(0,0,0,0.6); border-radius:14px; touch-action:none; cursor:ew-resize; max-width:100%; }
+  #dial.dragging{ cursor:grabbing; }
+
+  /* ---- Readout panel under the dial ---- */
+  #readout{
+    width:min(720px,100%); background:var(--panel-bg);
+    border:1px solid var(--panel-edge); border-radius:10px; padding:11px 16px;
+    display:flex; flex-wrap:wrap; gap:8px 22px; align-items:center; justify-content:center;
+    backdrop-filter: blur(8px) saturate(120%); -webkit-backdrop-filter: blur(8px) saturate(120%);
+  }
+  #readout .compute{ font:600 14.5px/1.4 var(--font-mono); color:var(--ink); letter-spacing:.3px; flex:1 1 100%; text-align:center; }
+  #readout .compute b{ color:var(--accent); }
+  #readout .compute .match{ color:#8fd79a; }
+  #readout .compute .miss{ color:#f0b27a; }
+  #readout .scaleval{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.3px; }
+  #readout .scaleval b{ color:var(--ink); font-variant-numeric:tabular-nums; }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:312px; flex:0 0 312px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 18px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.5; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); }
+  .row{ margin:13px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .row > label .val{ color:var(--accent); font-weight:700; letter-spacing:.04em; text-transform:none; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:rgba(214,176,108,0.25); outline:none; margin:0;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:16px; height:16px; border-radius:50%;
+    background:var(--accent); cursor:pointer; border:2px solid #241803; box-shadow:0 1px 4px rgba(0,0,0,0.5);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:16px; height:16px; border-radius:50%; background:var(--accent); cursor:pointer;
+    border:2px solid #241803; box-shadow:0 1px 4px rgba(0,0,0,0.5);
+  }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(214,176,108,0.26); flex-wrap:wrap; }
+  .seg button{
+    flex:1; min-width:34px; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#241803; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:20px; padding:6px 11px; font:11px/1 var(--font-mono); letter-spacing:.2px; cursor:pointer; transition:.15s;
+  }
+  .chip:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btnrow{ display:flex; gap:8px; margin:13px 0; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(230,189,111,0.26), rgba(230,189,111,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(230,189,111,0.40), rgba(230,189,111,0.14)); }
+  .toggle{ display:flex; align-items:center; gap:9px; margin:12px 0; cursor:pointer; user-select:none; }
+  .toggle .sw{ width:34px; height:18px; border-radius:10px; background:rgba(0,0,0,0.4); border:1px solid var(--panel-edge); position:relative; transition:.18s; flex:0 0 auto; }
+  .toggle .sw::after{ content:""; position:absolute; top:1px; left:1px; width:14px; height:14px; border-radius:50%; background:var(--ink-dim); transition:.18s; }
+  .toggle.on .sw{ background:var(--accent-soft); border-color:var(--accent); }
+  .toggle.on .sw::after{ left:17px; background:var(--accent); }
+  .toggle .lab{ font:11px/1.3 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; }
+  .toggle.on .lab{ color:var(--ink); }
+  .hint{ font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:14px 0 4px; border-top:1px solid rgba(214,176,108,0.18); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+
+  @media (max-width: 720px){
+    #wrap{ flex-direction:column; }
+    #panel{ width:100%; flex:0 0 auto; height:auto; border-left:none; border-top:1px solid var(--panel-edge);
+      padding:16px 16px 28px; box-shadow:0 -18px 50px rgba(0,0,0,0.5); }
+    #stage{ padding:58px 14px 12px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; workshop</a>
+    <div class="brand">
+      <h1>The Gnomon</h1>
+      <span class="tag">a sundial that tells true clock time</span>
+    </div>
+    <div class="selftest" id="selftest">checking…</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="dial"></canvas>
+      <div id="readout">
+        <div class="compute" id="compute">set your place &amp; the date — drag the dial to move time</div>
+      </div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A real instrument, not a picture of one. The <b>style</b> (the gnomon's edge) is cut to your latitude so it points at the celestial pole; its shadow falls on hour-lines laid out in <b>closed form</b> for the dial type. Read off <b>apparent</b> solar time, then add the longitude offset, the <b>equation of time</b>, and DST — and the dial agrees with your wall clock to the minute.</p>
+
+      <div class="row">
+        <label>Dial type</label>
+        <div class="seg" id="segType">
+          <button data-v="horizontal" class="active">Horizontal</button>
+          <button data-v="equatorial">Equatorial</button>
+          <button data-v="vertical-south">Vertical&nbsp;S</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Latitude <span class="val" id="vLat">40.0&deg; N</span></label>
+        <input type="range" id="rLat" min="-66" max="66" step="0.5" value="40">
+      </div>
+      <div class="row">
+        <label>Longitude <span class="val" id="vLon">71.0&deg; W</span></label>
+        <input type="range" id="rLon" min="-180" max="180" step="0.5" value="-71">
+      </div>
+      <div class="row">
+        <label>Time zone (std. meridian) <span class="val" id="vTz">UTC&minus;5</span></label>
+        <input type="range" id="rTz" min="-720" max="780" step="15" value="-300">
+      </div>
+      <div class="row">
+        <label>Day of year <span class="val" id="vDay">Jun 20</span></label>
+        <input type="range" id="rDay" min="0" max="364" step="1" value="170">
+      </div>
+      <div class="row">
+        <label>Local clock <span class="val" id="vTime">14:30</span></label>
+        <input type="range" id="rTime" min="0" max="1439" step="1" value="870">
+      </div>
+
+      <label class="toggle on" id="tEot"><span class="sw"></span><span class="lab">Equation of time (correct the dial)</span></label>
+      <label class="toggle" id="tDst"><span class="sw"></span><span class="lab">Daylight saving (+1 h)</span></label>
+
+      <div class="btnrow">
+        <button class="btn" id="btnNow">Set to now</button>
+        <button class="btn primary" id="btnAnalemma">Plot analemma</button>
+      </div>
+
+      <div class="row">
+        <label>Skin</label>
+        <div class="seg" id="segSkin">
+          <button data-v="brass" class="active">Brass</button>
+          <button data-v="blueprint">Blueprint</button>
+          <button data-v="stone">Stone</button>
+        </div>
+      </div>
+
+      <div class="chips" style="margin-top:10px">
+        <button class="chip" data-preset="boston">Boston</button>
+        <button class="chip" data-preset="quito">Quito</button>
+        <button class="chip" data-preset="london">London</button>
+        <button class="chip" data-preset="sydney">Sydney</button>
+        <button class="chip" data-preset="tokyo">Tokyo</button>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn" id="btnReset">Reset</button>
+        <button class="btn" id="btnPng">Save 2&times; PNG</button>
+      </div>
+
+      <p class="hint"><b>Drag the dial</b> left/right to move the clock. The bright wedge is the cast shadow; its tip rides the numbered hour-line. Toggle the <b>equation of time</b> and watch the civil readout snap onto the wall clock. <b>Plot analemma</b> traces a year of true noons — the figure-8.</p>
+    </aside>
+  </div>
+
+<script>
+/* The Gnomon — an operable sundial whose shadow tells true clock time.
+   The dial + solar CORE is forge-inlined below from tools/dial/dial.js, the ONE
+   source of truth the headless self-test (tools/dial/dial.test.cjs) also runs.
+   Skins are cosmetic. See sundial/SUNDIAL.SPEC.md §0 for the crux. */
+<!-- forge:include ../tools/dial/dial.js -->
+<!-- forge:include ../tools/ws/ws.js -->
+try { WS.seen('sundial'); } catch (e) {}   /* ws: unlock breadcrumb (see /UNLOCK.md) */
+
+(function(){
+'use strict';
+var D = Dial;
+var D2R = D.D2R, R2D = D.R2D;
+
+/* =====================================================================
+   STATE — geometry depends ONLY on place/date/time, never on skin.
+   ===================================================================== */
+var DEFAULTS = {
+  skin: 'brass',
+  dialType: 'horizontal',
+  latDeg: 40,
+  lonDeg: -71,
+  tzOffsetMin: -300,
+  dayOfYear: 170,
+  civilMin: 14*60+30,
+  dst: false,
+  eotOn: true,
+  year: 2026
+};
+var STATE = Object.assign({}, DEFAULTS);
+
+var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function dayLabel(doy){
+  var d = new Date(Date.UTC(STATE.year,0,1)+doy*86400000);
+  return MONTHS[d.getUTCMonth()]+' '+d.getUTCDate();
+}
+function fmtClock(mins){
+  mins = ((Math.round(mins)%1440)+1440)%1440;
+  var h = Math.floor(mins/60), m = mins%60;
+  return (h<10?'0':'')+h+':'+(m<10?'0':'')+m;
+}
+function fmtSigned(mins){
+  var s = mins<0?'−':'+';
+  var a = Math.abs(mins);
+  var m = Math.floor(a), sec = Math.round((a-m)*60);
+  if (sec===60){ m++; sec=0; }
+  return s+m+'m'+(sec<10?'0':'')+sec+'s';
+}
+
+/* derived solar quantities for the current STATE */
+function derive(){
+  var date = D.civilToDate(STATE.year, STATE.dayOfYear, STATE.civilMin, STATE.tzOffsetMin);
+  var jd = D.julianDate(date);
+  var eot = D.equationOfTimeMin(jd);
+  var sp = D.sunPosition(jd);
+  var phi = STATE.latDeg*D2R;
+  var ast = D.civilToAST(STATE.civilMin, STATE.lonDeg, STATE.tzOffsetMin, STATE.eotOn?eot:0, STATE.dst);
+  var H = D.hourAngleFromAST(ast);
+  var aa = D.sunAltAz(sp.dec, H, phi);
+  var civilBack = D.astToCivil(ast, STATE.lonDeg, STATE.tzOffsetMin, STATE.eotOn?eot:0, STATE.dst);
+  return { date:date, jd:jd, eot:eot, sp:sp, phi:phi, ast:ast, H:H, aa:aa,
+           lonCorr:D.lonCorrectionMin(STATE.lonDeg, STATE.tzOffsetMin), civilBack:civilBack };
+}
+
+/* =====================================================================
+   SKINS — palette only. Never moves a line.
+   ===================================================================== */
+var SKINS = {
+  brass: {
+    bg:'#0b0805', grad1:'rgba(120,84,36,0.18)', grad2:'rgba(70,52,30,0.16)',
+    face:'#19120a', faceEdge:'#caa256', faceRim:'#e6bd6f',
+    plateLine:'rgba(214,176,108,0.40)', hourLine:'rgba(230,189,111,0.85)', hourLineFaint:'rgba(214,176,108,0.30)',
+    label:'#e6dcc0', noon:'#ffd36b',
+    gnomon:'#f2d791', gnomonDark:'#7c5a22',
+    shadow:'rgba(8,6,3,0.62)', shadowEdge:'rgba(255,211,107,0.55)', tip:'#ffd36b', tipGlow:'rgba(255,211,107,0.6)',
+    sky:'#0a0d18', skyHi:'rgba(120,150,220,0.20)', sun:'#ffd36b', sunGlow:'rgba(255,211,107,0.5)', horizon:'rgba(230,189,111,0.5)',
+    analemma:'#7fd0ff', analemmaMark:'#ffe79a'
+  },
+  blueprint: {
+    bg:'#071018', grad1:'rgba(40,110,150,0.20)', grad2:'rgba(20,60,90,0.18)',
+    face:'#08161f', faceEdge:'#13455a', faceRim:'#7fd4ee',
+    plateLine:'rgba(120,210,235,0.40)', hourLine:'rgba(170,235,250,0.9)', hourLineFaint:'rgba(120,210,235,0.30)',
+    label:'#cdeffa', noon:'#ffe07a',
+    gnomon:'#bfeefa', gnomonDark:'#0a2b3a',
+    shadow:'rgba(3,10,18,0.6)', shadowEdge:'rgba(170,235,250,0.55)', tip:'#eafaff', tipGlow:'rgba(170,235,250,0.6)',
+    sky:'#04101e', skyHi:'rgba(90,170,220,0.22)', sun:'#ffe07a', sunGlow:'rgba(255,224,122,0.5)', horizon:'rgba(170,235,250,0.5)',
+    analemma:'#7fe0ff', analemmaMark:'#ffe07a'
+  },
+  stone: {
+    bg:'#15110b', grad1:'rgba(150,120,70,0.14)', grad2:'rgba(90,72,42,0.12)',
+    face:'#efe6cf', faceEdge:'#a78f5e', faceRim:'#7a5f2e',
+    plateLine:'rgba(74,58,30,0.42)', hourLine:'rgba(60,46,22,0.88)', hourLineFaint:'rgba(74,58,30,0.34)',
+    label:'#3a2d14', noon:'#9a5a1e',
+    gnomon:'#cdbb94', gnomonDark:'#6d5a30',
+    shadow:'rgba(40,32,18,0.30)', shadowEdge:'rgba(110,86,40,0.6)', tip:'#7a3f12', tipGlow:'rgba(154,90,30,0.5)',
+    sky:'#cdbf9c', skyHi:'rgba(120,150,200,0.18)', sun:'#b8801e', sunGlow:'rgba(184,128,30,0.45)', horizon:'rgba(90,68,32,0.6)',
+    analemma:'#3c4f8a', analemmaMark:'#9a5a1e'
+  }
+};
+function applySkinVars(){
+  var sk = SKINS[STATE.skin];
+  var rs = document.documentElement.style;
+  rs.setProperty('--bg', sk.bg);
+  rs.setProperty('--bg-grad1', sk.grad1);
+  rs.setProperty('--bg-grad2', sk.grad2);
+}
+
+/* =====================================================================
+   RENDERER — Canvas, dpr-aware. All geometry from CORE; skin = colour only.
+   ===================================================================== */
+var canvas = document.getElementById('dial');
+var ctx = canvas.getContext('2d');
+var dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+
+var GEO = { w:680, h:560, faceR:0, faceCx:0, faceCy:0, skyH:0 };
+var analemmaCache = null;   // computed points when "plot analemma" is on
+var analemmaOn = false;
+
+function computeGeo(){
+  var stage = document.getElementById('stage');
+  var availW = Math.max(320, Math.min(820, stage.clientWidth - 8));
+  var availH = Math.max(320, Math.min(640, stage.clientHeight - 132));
+  var w = Math.min(availW, availH*1.28);
+  var h = w/1.28;
+  GEO.w = w; GEO.h = h;
+  canvas.style.width = w+'px'; canvas.style.height = h+'px';
+  canvas.width = Math.round(w*dpr); canvas.height = Math.round(h*dpr);
+  GEO.skyH = Math.round(h*0.22);
+  var faceTop = GEO.skyH;
+  var faceH = h - faceTop;
+  GEO.faceCx = w/2;
+  // foot of the style sits low on the face so the fan of hour-lines opens upward
+  GEO.faceCy = faceTop + faceH*0.80;
+  GEO.faceR = Math.min(w*0.42, faceH*0.74);
+}
+
+/* dial-local (x right=afternoon, y up the noon line) → screen px */
+function toScreen(x, y, scale){
+  return { px: GEO.faceCx + x*scale, py: GEO.faceCy - y*scale };
+}
+
+function clear(sk){
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,GEO.w,GEO.h);
+}
+
+/* the sky strip with the Sun riding alt/az */
+function drawSky(sk, dyn){
+  var w=GEO.w, sh=GEO.skyH;
+  var g = ctx.createLinearGradient(0,0,0,sh);
+  g.addColorStop(0, sk.sky); g.addColorStop(1, sk.skyHi);
+  ctx.fillStyle = g; ctx.fillRect(0,0,w,sh);
+  // horizon line
+  ctx.strokeStyle = sk.horizon; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,sh-0.5); ctx.lineTo(w,sh-0.5); ctx.stroke();
+  // Sun: x by azimuth (S center, E left, W right — i.e. mirror so morning sun is east/left),
+  // y by altitude (0 at horizon, up). Below horizon → tuck under the strip.
+  var alt = dyn.aa.alt, az = dyn.aa.az;     // az from north, clockwise
+  // map azimuth: due south (az=180) → center; east (90) → left; west (270) → right.
+  var azFromS = az - Math.PI;               // (−π..π), + toward west
+  var sx = w/2 + (azFromS/Math.PI)*(w*0.46);
+  var altFrac = Math.max(-0.12, Math.min(1, alt/(Math.PI/2)));
+  var sy = sh - altFrac*(sh-14) - 7;
+  var night = alt <= 0;
+  // sun glow + disc
+  var R = 9;
+  if (!night){
+    var rg = ctx.createRadialGradient(sx,sy,1,sx,sy,R*3.4);
+    rg.addColorStop(0, sk.sunGlow); rg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(sx,sy,R*3.4,0,Math.PI*2); ctx.fill();
+  }
+  ctx.fillStyle = night ? 'rgba(90,90,120,0.55)' : sk.sun;
+  ctx.beginPath(); ctx.arc(sx,sy,R,0,Math.PI*2); ctx.fill();
+  // label
+  ctx.fillStyle = sk.label; ctx.globalAlpha=0.85;
+  ctx.font = '600 10px '+css('--font-mono');
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillText(night?'sun below horizon':('alt '+(alt*R2D).toFixed(0)+'°  az '+(az*R2D).toFixed(0)+'°'), 10, 8);
+  ctx.globalAlpha=1;
+  return { sx:sx, sy:sy, night:night };
+}
+
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v) || 'monospace'; }
+
+/* the dial face: plate, numbered hour-lines, gnomon, cast shadow + tip */
+function drawDial(sk, dyn){
+  var scale = GEO.faceR;          // dial-radius units → px
+  var cx = GEO.faceCx, cy = GEO.faceCy;
+  var type = STATE.dialType;
+  var phi = dyn.phi;
+
+  // ---- plate ----
+  ctx.save();
+  // face panel
+  var faceTop = GEO.skyH;
+  ctx.fillStyle = sk.face;
+  ctx.fillRect(0, faceTop, GEO.w, GEO.h-faceTop);
+  // a tasteful arc of the dial's working field
+  ctx.strokeStyle = sk.faceEdge; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.arc(cx, cy, scale*1.02, Math.PI, Math.PI*2); ctx.stroke();
+  ctx.strokeStyle = sk.plateLine; ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.arc(cx, cy, scale*0.66, Math.PI, Math.PI*2); ctx.stroke();
+
+  // ---- hour-lines + numerals (closed form per dial type) ----
+  ctx.lineCap='round';
+  for (var hr=4; hr<=20; hr++){
+    var H = D.hourAngleFromAST(hr*60);
+    // only draw lines whose Sun is above the horizon-ish band (cos H > small)
+    var theta = D.hourLineAngle(type, H, phi);   // from noon, + toward afternoon
+    // direction on screen: noon (theta=0) points straight up (−y screen).
+    var dx = Math.sin(theta), dy = Math.cos(theta);
+    var rOuter = scale*0.98;
+    var isNoon = (hr===12);
+    var c = Math.cos(H);
+    // For horizontal/vertical faces the morning/evening lines past 6/18 fold
+    // back; clamp drawing to where the shadow can physically fall (c>~0) unless
+    // equatorial (which is symmetric & uniform).
+    if (type!=='equatorial' && c <= 0.02) continue;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + dx*rOuter, cy - dy*rOuter);
+    ctx.strokeStyle = isNoon ? sk.noon : sk.hourLine;
+    ctx.lineWidth = isNoon ? 2.2 : 1.3;
+    ctx.globalAlpha = isNoon ? 1 : 0.92;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    // numeral at the end
+    var lr = scale*1.06;
+    var lx = cx + dx*lr, ly = cy - dy*lr;
+    ctx.fillStyle = isNoon ? sk.noon : sk.label;
+    ctx.font = (isNoon?'700 ':'600 ')+'12px '+css('--font-mono');
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    var h12 = ((hr+11)%12)+1;
+    ctx.fillText(String(h12), lx, ly);
+  }
+
+  // ---- gnomon (style) ---- a wedge rising from the foot toward the pole.
+  // style angle = gnomonAngle(type, phi) above the face, lying along the noon line.
+  var gA = D.gnomonAngle(type, phi);
+  var styleLen = scale*0.62;
+  // draw a side-on triangle: foot at (cx,cy), the style edge rising up the noon
+  // line at elevation gA (we render its projected height as styleLen*sin(gA) up
+  // the +y/noon direction, with a thin base of styleLen*cos(gA)).
+  var upLen = styleLen*Math.sin(gA);
+  var baseLen = styleLen*Math.cos(gA);
+  var apexX = cx, apexY = cy - upLen;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx, apexY);
+  ctx.lineTo(cx + 0, cy);        // (kept simple; fill the wedge below)
+  // a filled wedge for body
+  var gg = ctx.createLinearGradient(cx-6, cy, cx+6, apexY);
+  gg.addColorStop(0, sk.gnomonDark); gg.addColorStop(1, sk.gnomon);
+  ctx.fillStyle = gg;
+  ctx.beginPath();
+  ctx.moveTo(cx-3, cy+2);
+  ctx.lineTo(cx+3, cy+2);
+  ctx.lineTo(cx+1.2, apexY);
+  ctx.lineTo(cx-1.2, apexY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = sk.gnomon; ctx.lineWidth=1.1; ctx.stroke();
+  // tiny base mark
+  ctx.fillStyle = sk.faceEdge;
+  ctx.beginPath(); ctx.arc(cx, cy, 3.2, 0, Math.PI*2); ctx.fill();
+
+  // ---- cast shadow + tip ---- only when the Sun is up & on the lit side
+  var tip = D.shadowTip(type, dyn.H, phi, 1, dyn.sp.dec);   // physical projection
+  var sunUp = dyn.aa.alt > 0;
+  var lit = !tip.below && sunUp;
+  if (lit){
+    // shadow falls OPPOSITE the Sun: along the hour-line at angle theta_now.
+    var tlen = Math.min(scale*0.96, tip.r*styleLen*0.45);   // clamp to plate
+    // recompute direction from tip.theta (closed-form hour-line)
+    var th = tip.theta;
+    var tdx = Math.sin(th), tdy = Math.cos(th);
+    var ex = cx + tdx*tlen, ey = cy - tdy*tlen;
+    // shadow wedge from the style base (wide) to the tip (a point)
+    var nx = tdy, ny = tdx;             // unit normal to the shadow dir (screen)
+    var bw = 5.5;                       // half-width at the base
+    ctx.beginPath();
+    ctx.moveTo(cx + nx*bw, cy + ny*bw);
+    ctx.lineTo(cx - nx*bw, cy - ny*bw);
+    ctx.lineTo(ex - nx*1.4, ey - ny*1.4);
+    ctx.lineTo(ex + nx*1.4, ey + ny*1.4);
+    ctx.closePath();
+    ctx.fillStyle = sk.shadow; ctx.fill();
+    ctx.strokeStyle = sk.shadowEdge; ctx.lineWidth=1.2; ctx.stroke();
+    // a bright spine down the centre of the cast shadow
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(ex,ey);
+    ctx.strokeStyle = sk.shadowEdge; ctx.lineWidth=1.6; ctx.globalAlpha=0.85; ctx.stroke(); ctx.globalAlpha=1;
+    // glowing tip (the nodus shadow)
+    var tg = ctx.createRadialGradient(ex,ey,0,ex,ey,15);
+    tg.addColorStop(0, sk.tipGlow); tg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle = tg; ctx.beginPath(); ctx.arc(ex,ey,15,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = sk.tip; ctx.beginPath(); ctx.arc(ex,ey,4.5,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* the analemma overlay: a year of true noons, plotted as shadow-tips */
+function drawAnalemma(sk){
+  if (!analemmaOn) return;
+  if (!analemmaCache){
+    analemmaCache = D.analemmaPoints(STATE.dialType, STATE.latDeg*D2R,
+      STATE.lonDeg, STATE.tzOffsetMin, STATE.year, 1, 1);
+  }
+  var scale = GEO.faceR, cx=GEO.faceCx, cy=GEO.faceCy, styleLen=scale*0.62;
+  // map a point's (r,theta) to screen px with the SAME scaling the live shadow
+  // tip uses, so the analemma threads through the moving tip's path.
+  function ptScreen(p){
+    if (p.below) return null;
+    var tlen = Math.min(scale*0.98, p.r*styleLen*0.45);
+    var th = Math.atan2(p.x, p.y);
+    return { x: cx + Math.sin(th)*tlen, y: cy - Math.cos(th)*tlen };
+  }
+  ctx.save();
+  ctx.beginPath();
+  var started=false;
+  for (var i=0;i<analemmaCache.length;i++){
+    var s = ptScreen(analemmaCache[i]);
+    if (!s) { started=false; continue; }          // pen-up across the unlit gap
+    if (!started){ ctx.moveTo(s.x,s.y); started=true; } else ctx.lineTo(s.x,s.y); }
+  ctx.shadowColor = sk.analemma; ctx.shadowBlur = 8;
+  ctx.strokeStyle = sk.analemma; ctx.lineWidth=2.6; ctx.globalAlpha=0.96; ctx.stroke();
+  ctx.shadowBlur = 0; ctx.globalAlpha=1;
+  // mark the solstices (day ~171 summer, ~355 winter) & equinoxes (~79, ~265)
+  var marks = [{d:79,t:'equinox'},{d:171,t:'summer'},{d:265,t:'equinox'},{d:355,t:'winter'}];
+  for (var m=0;m<marks.length;m++){
+    var pt=null;
+    for (var k=0;k<analemmaCache.length;k++){ if (analemmaCache[k].day===marks[m].d){ pt=analemmaCache[k]; break; } }
+    if (!pt) continue;
+    var ms = ptScreen(pt); if (!ms) continue;
+    ctx.fillStyle = sk.analemmaMark;
+    ctx.beginPath(); ctx.arc(ms.x,ms.y,3.6,0,Math.PI*2); ctx.fill();
+    ctx.font='10px '+css('--font-mono'); ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(marks[m].t, ms.x+7, ms.y);
+  }
+  ctx.restore();
+}
+
+function render(){
+  var sk = SKINS[STATE.skin];
+  var dyn = derive();
+  clear(sk);
+  drawSky(sk, dyn);
+  drawDial(sk, dyn);
+  drawAnalemma(sk);
+  updateReadout(dyn);
+}
+
+/* =====================================================================
+   READOUT — the proof line: civil clock reconstructed from the dial.
+   ===================================================================== */
+function updateReadout(dyn){
+  var compute = document.getElementById('compute');
+  var astC = fmtClock(dyn.ast);
+  var civilC = fmtClock(STATE.civilMin);
+  var reconstructed = fmtClock(dyn.civilBack);
+  var matches = Math.abs(((dyn.civilBack-STATE.civilMin)%1440+1440)%1440) < 0.5
+             || Math.abs(((STATE.civilMin-dyn.civilBack)%1440+1440)%1440) < 0.5;
+  var cls = matches ? 'match' : 'miss';
+  var word = matches ? 'matches the wall clock ✓' : 'differs';
+  compute.innerHTML =
+    'shadow shows <b>'+astC+'</b> apparent solar &nbsp;→&nbsp; civil <b>'+reconstructed+'</b> '+
+    '<span class="'+cls+'">'+word+'</span>';
+  setVal('vAstOut', null);
+  // the small scale chips
+  var bar = document.getElementById('readout');
+  // remove old scaleval chips
+  var olds = bar.querySelectorAll('.scaleval'); for (var i=0;i<olds.length;i++) olds[i].remove();
+  function chip(label, val){
+    var s = document.createElement('span'); s.className='scaleval';
+    s.innerHTML = label+' <b>'+val+'</b>'; bar.appendChild(s);
+  }
+  chip('longitude', fmtSigned(dyn.lonCorr));
+  chip('eqn of time', fmtSigned(dyn.eot)+(STATE.eotOn?'':' (off)'));
+  chip('DST', STATE.dst?'+1h':'—');
+  chip('sun dec', (dyn.sp.dec*R2D).toFixed(1)+'°');
+}
+function setVal(){}
+
+/* =====================================================================
+   IN-PAGE SELF-TEST — runs the SAME Dial core the Node test runs, so the
+   chip count matches `node tools/dial/dial.test.cjs`. (Mirrors that file.)
+   ===================================================================== */
+function runSelfTest(){
+  var pass=0, total=0;
+  function check(cond){ total++; if(cond) pass++; }
+  var YEAR=2026, EPS=D.EPS;
+
+  // 1. round-trip clock
+  (function(){
+    var maxErr=0;
+    var lats=[-66,-33,0,19,40,51.5,66], lons=[-122,-71,0,13,139],
+        tzs=[-480,-300,0,60,540], days=[0,41,80,171,264,306,364],
+        civils=[360,557,720,942,1140];
+    for (var a=0;a<lats.length;a++) for (var b=0;b<lons.length;b++) for (var c=0;c<tzs.length;c++)
+      for (var e=0;e<days.length;e++) for (var f=0;f<civils.length;f++) for (var g=0;g<2;g++){
+        var dst=!!g;
+        var date=D.civilToDate(YEAR,days[e],civils[f],tzs[c]);
+        var eot=D.equationOfTimeMin(D.julianDate(date));
+        var ast=D.civilToAST(civils[f],lons[b],tzs[c],eot,dst);
+        var back=D.astToCivil(ast,lons[b],tzs[c],eot,dst);
+        maxErr=Math.max(maxErr,Math.abs(back-civils[f]));
+      }
+    check(maxErr < 1/60);
+  })();
+  // 2. shadow-tip on the hour-line
+  (function(){
+    var maxErr=0, types=['horizontal','equatorial','vertical-south'];
+    for (var t=0;t<types.length;t++) for (var p=-52;p<=60;p+=18){
+      var phi=p*D2R;
+      for (var hr=7;hr<=17;hr++){
+        var H=D.hourAngleFromAST(hr*60), th=D.hourLineAngle(types[t],H,phi);
+        var tip=D.shadowTip(types[t],H,phi,1);
+        var perp=Math.abs(tip.x*Math.cos(th)-tip.y*Math.sin(th));
+        var along=tip.x*Math.sin(th)+tip.y*Math.cos(th);
+        maxErr=Math.max(maxErr, perp/Math.max(1e-9,Math.abs(along)));
+      }
+    }
+    check(maxErr < 1e-5);
+  })();
+  // 3a horizontal closed form
+  (function(){
+    var maxErr=0, phis=[-60,-23.4,0,19,40,51.5,66];
+    for (var i=0;i<phis.length;i++){ var phi=phis[i]*D2R;
+      for (var hr=6.5;hr<=17.5;hr+=0.5){ var H=D.hourAngleFromAST(hr*60);
+        var got=D.hourLineAngle('horizontal',H,phi), want=Math.atan(Math.sin(phi)*Math.tan(H));
+        var dd=Math.abs(got-want); dd=Math.min(dd,Math.abs(dd-Math.PI)); maxErr=Math.max(maxErr,dd);
+      } }
+    check(maxErr<1e-9);
+  })();
+  // 3b vertical-south closed form
+  (function(){
+    var maxErr=0, phis=[10,19,35,45,51.5,60];
+    for (var i=0;i<phis.length;i++){ var phi=phis[i]*D2R;
+      for (var hr=8;hr<=16;hr+=0.5){ var H=D.hourAngleFromAST(hr*60);
+        var got=D.hourLineAngle('vertical-south',H,phi), want=Math.atan(Math.cos(phi)*Math.tan(H));
+        var dd=Math.abs(got-want); dd=Math.min(dd,Math.abs(dd-Math.PI)); maxErr=Math.max(maxErr,dd);
+      } }
+    check(maxErr<1e-9);
+  })();
+  // 3c equatorial uniform
+  (function(){
+    var maxErr=0, maxStep=0, phis=[-40,0,30,60];
+    for (var i=0;i<phis.length;i++){ var phi=phis[i]*D2R, prev=null;
+      for (var hr=6;hr<=18;hr++){ var H=D.hourAngleFromAST(hr*60); var got=D.hourLineAngle('equatorial',H,phi);
+        maxErr=Math.max(maxErr,Math.abs(got-H));
+        if (prev!==null) maxStep=Math.max(maxStep,Math.abs((got-prev)-15*D2R)); prev=got;
+      } }
+    check(maxErr<1e-12 && maxStep<1e-12);
+  })();
+  // 4a EoT extrema
+  var maxE=-1e9,maxD=-1,minE=1e9,minD=-1;
+  for (var d=0;d<365;d++){ var ee=D.equationOfTimeMin(D.julianDate(D.civilToDate(YEAR,d,720,0)));
+    if (ee>maxE){maxE=ee;maxD=d;} if (ee<minE){minE=ee;minD=d;} }
+  var maxDate=new Date(Date.UTC(YEAR,0,1)+maxD*86400000), minDate=new Date(Date.UTC(YEAR,0,1)+minD*86400000);
+  check(Math.abs(maxE-16.383)<0.5);
+  check(maxDate.getUTCMonth()===10);
+  check(Math.abs(minE-(-14.10))<0.5);
+  check(minDate.getUTCMonth()===1);
+  // 4b EoT zero-crossings
+  (function(){
+    function eotAt(d){ return D.equationOfTimeMin(D.julianDate(D.civilToDate(YEAR,d,720,0))); }
+    function near(t){ for (var d=t-5;d<=t+5;d++){ var a=eotAt(((d%365)+365)%365), b=eotAt((((d+1)%365)+365)%365); if((a<=0)!==(b<=0)) return true;} return false; }
+    check(near(105)); check(near(163)); check(near(244)); check(near(358));
+  })();
+  // 5. gnomon angle
+  (function(){
+    var ok=true, phis=[-66,-23.4,0,19,40,66];
+    for (var i=0;i<phis.length;i++){ var phi=phis[i]*D2R;
+      if (Math.abs(D.gnomonAngle('horizontal',phi)-Math.abs(phi))>1e-12) ok=false;
+      if (Math.abs(D.gnomonAngle('equatorial',phi)-(Math.PI/2-Math.abs(phi)))>1e-12) ok=false;
+      if (Math.abs(D.gnomonAngle('vertical-south',phi)-(Math.PI/2-Math.abs(phi)))>1e-12) ok=false;
+    }
+    check(ok);
+  })();
+  // 6. solar dec sanity
+  var sd=function(l){ return D.solarDec(l)*R2D; };
+  check(Math.abs(sd(0))<1e-9);
+  check(Math.abs(sd(Math.PI/2)-EPS*R2D)<1e-9);
+  check(Math.abs(sd(Math.PI))<1e-9);
+  check(Math.abs(sd(3*Math.PI/2)+EPS*R2D)<1e-9);
+  // 7. noon on the noon line
+  (function(){
+    var ok=true, types=['horizontal','equatorial','vertical-south'], phis=[-50,0,19,45,60];
+    for (var t=0;t<types.length;t++) for (var i=0;i<phis.length;i++){
+      var tip=D.shadowTip(types[t],0,phis[i]*D2R,1);
+      if (Math.abs(tip.theta)>1e-12 || Math.abs(tip.x)>1e-12) ok=false;
+    }
+    check(ok);
+  })();
+  // 8. determinism + skin invariance
+  (function(){
+    var st={ dialType:'horizontal', latDeg:40, lonDeg:-71, tzOffsetMin:-300,
+      dayOfYear:171, civilMin:870, dst:true, eotOn:true, year:YEAR };
+    var a=D.geometryFingerprint(st), b=D.geometryFingerprint(st);
+    check(a===b);
+    var skins=['brass','blueprint','stone'].map(function(s){ return D.geometryFingerprint(Object.assign({},st,{skin:s})); });
+    check(skins.every(function(f){ return f===a; }));
+  })();
+
+  return { pass:pass, total:total };
+}
+
+/* =====================================================================
+   CONTROLS
+   ===================================================================== */
+function syncLabels(){
+  var lat=STATE.latDeg;
+  document.getElementById('vLat').textContent = Math.abs(lat).toFixed(1)+'° '+(lat>=0?'N':'S');
+  var lon=STATE.lonDeg;
+  document.getElementById('vLon').textContent = Math.abs(lon).toFixed(1)+'° '+(lon>=0?'E':'W');
+  var tz=STATE.tzOffsetMin/60;
+  var tzs = (tz>=0?'+':'−')+Math.abs(tz);
+  document.getElementById('vTz').textContent = 'UTC'+tzs;
+  document.getElementById('vDay').textContent = dayLabel(STATE.dayOfYear);
+  document.getElementById('vTime').textContent = fmtClock(STATE.civilMin);
+  document.getElementById('rLat').value = STATE.latDeg;
+  document.getElementById('rLon').value = STATE.lonDeg;
+  document.getElementById('rTz').value = STATE.tzOffsetMin;
+  document.getElementById('rDay').value = STATE.dayOfYear;
+  document.getElementById('rTime').value = STATE.civilMin;
+  segActive('segType', STATE.dialType);
+  segActive('segSkin', STATE.skin);
+  toggleState('tEot', STATE.eotOn);
+  toggleState('tDst', STATE.dst);
+}
+function segActive(id, v){
+  var seg=document.getElementById(id);
+  var bs=seg.querySelectorAll('button');
+  for (var i=0;i<bs.length;i++) bs[i].classList.toggle('active', bs[i].getAttribute('data-v')===v);
+}
+function toggleState(id, on){ document.getElementById(id).classList.toggle('on', !!on); }
+
+function invalidateAnalemma(){ analemmaCache=null; }
+function refresh(){ syncLabels(); render(); }
+
+document.getElementById('rLat').addEventListener('input', function(e){ STATE.latDeg=+e.target.value; invalidateAnalemma(); refresh(); });
+document.getElementById('rLon').addEventListener('input', function(e){ STATE.lonDeg=+e.target.value; invalidateAnalemma(); refresh(); });
+document.getElementById('rTz').addEventListener('input', function(e){ STATE.tzOffsetMin=+e.target.value; invalidateAnalemma(); refresh(); });
+document.getElementById('rDay').addEventListener('input', function(e){ STATE.dayOfYear=+e.target.value; refresh(); });
+document.getElementById('rTime').addEventListener('input', function(e){ STATE.civilMin=+e.target.value; refresh(); });
+
+(function(){
+  var seg=document.getElementById('segType');
+  seg.addEventListener('click', function(e){ var b=e.target.closest('button'); if(!b) return;
+    STATE.dialType=b.getAttribute('data-v'); invalidateAnalemma(); refresh(); });
+})();
+(function(){
+  var seg=document.getElementById('segSkin');
+  seg.addEventListener('click', function(e){ var b=e.target.closest('button'); if(!b) return;
+    STATE.skin=b.getAttribute('data-v'); applySkinVars(); refresh(); });
+})();
+
+document.getElementById('tEot').addEventListener('click', function(){ STATE.eotOn=!STATE.eotOn; refresh(); });
+document.getElementById('tDst').addEventListener('click', function(){ STATE.dst=!STATE.dst; refresh(); });
+
+document.getElementById('btnNow').addEventListener('click', function(){
+  var now=new Date();
+  // use the browser's local clock + zone, and set dayOfYear/civilMin accordingly
+  STATE.year=now.getFullYear();
+  var jan1=new Date(now.getFullYear(),0,1,0,0,0,0);
+  STATE.dayOfYear=Math.floor((now-jan1)/86400000);
+  STATE.civilMin=now.getHours()*60+now.getMinutes();
+  STATE.tzOffsetMin=-now.getTimezoneOffset();   // JS: minutes BEHIND UTC; negate
+  STATE.dst=false;
+  invalidateAnalemma(); refresh();
+});
+
+document.getElementById('btnAnalemma').addEventListener('click', function(){
+  analemmaOn=!analemmaOn; if(analemmaOn) invalidateAnalemma();
+  this.textContent = analemmaOn ? 'Hide analemma' : 'Plot analemma';
+  render();
+});
+
+var PRESETS = {
+  boston:  { latDeg:42.36, lonDeg:-71.06, tzOffsetMin:-300, dst:true },
+  quito:   { latDeg:-0.18, lonDeg:-78.47, tzOffsetMin:-300, dst:false },
+  london:  { latDeg:51.51, lonDeg:-0.13,  tzOffsetMin:0,    dst:true },
+  sydney:  { latDeg:-33.87, lonDeg:151.21, tzOffsetMin:600, dst:false },
+  tokyo:   { latDeg:35.68, lonDeg:139.69, tzOffsetMin:540,  dst:false }
+};
+(function(){
+  var chips=document.querySelectorAll('.chip[data-preset]');
+  for (var i=0;i<chips.length;i++){
+    chips[i].addEventListener('click', function(e){
+      var p=PRESETS[e.target.getAttribute('data-preset')]; if(!p) return;
+      Object.assign(STATE, p); invalidateAnalemma(); refresh();
+    });
+  }
+})();
+
+document.getElementById('btnReset').addEventListener('click', function(){
+  Object.assign(STATE, DEFAULTS); analemmaOn=false;
+  document.getElementById('btnAnalemma').textContent='Plot analemma';
+  applySkinVars(); invalidateAnalemma(); refresh();
+});
+
+document.getElementById('btnPng').addEventListener('click', function(){
+  try{
+    var off=document.createElement('canvas');
+    off.width=GEO.w*2; off.height=GEO.h*2;
+    var octx=off.getContext('2d');
+    octx.fillStyle=SKINS[STATE.skin].bg; octx.fillRect(0,0,off.width,off.height);
+    octx.imageSmoothingEnabled=true; octx.imageSmoothingQuality='high';
+    octx.drawImage(canvas,0,0,off.width,off.height);
+    var a=document.createElement('a'); a.href=off.toDataURL('image/png');
+    a.download='gnomon-'+STATE.dialType+'-'+STATE.skin+'.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  }catch(err){ console.error('PNG export failed', err); }
+});
+
+/* ---- drag the dial to move time ---- */
+(function(){
+  var dragging=false, lastX=0;
+  function pos(e){ return (e.touches&&e.touches[0])?e.touches[0].clientX:e.clientX; }
+  canvas.addEventListener('mousedown', function(e){ dragging=true; lastX=pos(e); canvas.classList.add('dragging'); });
+  canvas.addEventListener('touchstart', function(e){ dragging=true; lastX=pos(e); }, {passive:true});
+  window.addEventListener('mousemove', function(e){ if(!dragging) return; step(pos(e)); });
+  window.addEventListener('touchmove', function(e){ if(!dragging) return; step(pos(e)); }, {passive:true});
+  window.addEventListener('mouseup', function(){ dragging=false; canvas.classList.remove('dragging'); });
+  window.addEventListener('touchend', function(){ dragging=false; });
+  function step(x){
+    var dx=x-lastX; lastX=x;
+    // 1 px ≈ 2 minutes of the civil clock
+    STATE.civilMin = (((STATE.civilMin + dx*2)%1440)+1440)%1440;
+    refresh();
+  }
+})();
+
+window.addEventListener('resize', function(){
+  dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
+  computeGeo(); render();
+});
+
+/* =====================================================================
+   INIT
+   ===================================================================== */
+function init(){
+  var res=runSelfTest();
+  var chip=document.getElementById('selftest');
+  if (res.pass===res.total){
+    chip.className='selftest ok';
+    chip.textContent='dial verified — '+res.pass+'/'+res.total+' ✓';
+  } else {
+    chip.className='selftest bad';
+    chip.textContent='dial FAILED — '+res.pass+'/'+res.total;
+  }
+  console.log('Gnomon self-test: '+res.pass+'/'+res.total+' passed.');
+  applySkinVars();
+  computeGeo();
+  syncLabels();
+  render();
+}
+
+/* expose for headless inspection */
+if (typeof window!=='undefined'){
+  window.__gnomon = {
+    Dial:D, runSelfTest:runSelfTest, STATE:STATE,
+    fingerprint:function(){ return D.geometryFingerprint(STATE); },
+    setState:function(s){ Object.assign(STATE,s); invalidateAnalemma(); refresh(); }
+  };
+}
+
+if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', init);
+else init();
+})();
+</script>
+</body>
+</html>
