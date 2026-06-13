@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Spectroscope</title>
+<style>
+  :root{
+    --panel-bg: rgba(10,11,15,0.86);
+    --panel-edge: rgba(201,162,74,0.26);
+    --ink: #eaf0fa;
+    --ink-dim: #9aa3b4;
+    --accent: #c9a24a;
+    --accent-bright: #f0d489;
+    --accent-soft: rgba(201,162,74,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+    --bg: #07080b;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-ui); overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .left{ display:flex; align-items:center; gap:18px; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0;
+    background:linear-gradient(180deg,#f3e4bd,#c9a24a 70%,#9c7a32); -webkit-background-clip:text;
+    background-clip:text; -webkit-text-fill-color:transparent; color:var(--accent); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .right{ display:flex; align-items:center; gap:14px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:default; user-select:none; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0;
+    background: radial-gradient(1200px 820px at 52% 42%, #14130f 0%, #0c0c10 64%, #07080b 100%); }
+  #bench{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:322px; flex:0 0 322px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(11px) saturate(120%);
+    -webkit-backdrop-filter: blur(11px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:56px 16px 26px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font:13px/1.6 var(--font-serif); color:var(--ink); margin:0 0 14px; opacity:.95; letter-spacing:.1px; }
+  #panel .lede b{ color:var(--accent); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 9px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .row{ margin:11px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .row > label .val{ color:var(--accent); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.2px; }
+  select{
+    width:100%; background:rgba(0,0,0,0.34); border:1px solid var(--panel-edge); color:var(--ink);
+    border-radius:8px; padding:9px 10px; font-size:12.5px; font-family:var(--font-ui); letter-spacing:.2px;
+    cursor:pointer; appearance:none;
+    background-image:linear-gradient(45deg,transparent 50%,var(--ink-dim) 50%),linear-gradient(135deg,var(--ink-dim) 50%,transparent 50%);
+    background-position:calc(100% - 16px) calc(50% - 2px),calc(100% - 11px) calc(50% - 2px);
+    background-size:5px 5px,5px 5px; background-repeat:no-repeat;
+  }
+  select:focus{ outline:none; border-color:var(--accent); }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#f3e9d2; border:2px solid #8a6f2c; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%; background:#f3e9d2; border:2px solid #8a6f2c; cursor:pointer;
+  }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(201,162,74,0.20); }
+  .seg button{
+    flex:1; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:7px 4px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#1c1606; font-weight:700; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .btnrow{ display:flex; gap:8px; margin:14px 0 4px; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .lines{ font:11px/1.7 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; }
+  .lines .nm{ color:var(--accent); }
+  .lines .sw{ display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:6px; vertical-align:baseline;
+    border:1px solid rgba(255,255,255,0.18); }
+  .hint{ font:10.5px/1.6 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:18px 0 4px;
+    border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="left">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../hall-of-mirrors/index.html">hall of mirrors &nearr;</a>
+    </div>
+    <div class="brand">
+      <h1>The Spectroscope</h1>
+      <span class="tag">disperse &amp; read light</span>
+    </div>
+    <div class="right">
+      <div class="selftest" id="selftest" title="built-in self-test">checking&hellip;</div>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="bench"></canvas>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A bench that <b>disperses light into a spectrum</b> &mdash; through a glass
+        <b>prism</b> (Cauchy n(&lambda;), Snell at both faces, near minimum deviation) or a
+        <b>diffraction grating</b> (d&middot;sin&theta;<sub>m</sub>=m&lambda;) &mdash; then reads
+        the real <b>line spectrum</b> of a chosen source, each line at its true visible colour.</p>
+
+      <div class="sect">Disperser</div>
+      <div class="row">
+        <div class="seg" id="elemSeg">
+          <button data-elem="prism" class="active">Prism</button>
+          <button data-elem="grating">Grating</button>
+        </div>
+      </div>
+      <div class="row" id="gratingRow" style="display:none">
+        <label>Grating <span class="val" id="dVal">600 /mm</span></label>
+        <input type="range" id="dSlider" min="100" max="1200" step="10" value="600">
+      </div>
+      <div class="row" id="prismRow">
+        <label>Apex angle <span class="val" id="apexVal">60&deg;</span></label>
+        <input type="range" id="apexSlider" min="30" max="75" step="1" value="60">
+      </div>
+
+      <div class="sect">Source</div>
+      <div class="row">
+        <select id="sourceSel">
+          <option value="continuous">Continuous (incandescent)</option>
+          <option value="hydrogen">Hydrogen — Balmer series</option>
+          <option value="sodium">Sodium — D doublet</option>
+          <option value="mercury">Mercury vapour</option>
+          <option value="neon">Neon</option>
+          <option value="solar">Solar — Fraunhofer absorption</option>
+        </select>
+      </div>
+      <div class="row lines" id="lineList"></div>
+
+      <div class="sect">Look</div>
+      <div class="row">
+        <div class="seg" id="skinSeg">
+          <button data-skin="brass" class="active">Brass</button>
+          <button data-skin="cobalt">Cobalt</button>
+          <button data-skin="noir">Noir</button>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn" id="pngBtn">PNG &times;2</button>
+      </div>
+
+      <div class="hint">
+        Switch the <b>disperser</b> to compare refractive vs. diffractive spreading; switch the
+        <b>source</b> to read its fingerprint. Balmer lines are computed live from the Rydberg
+        formula; colours come from a CIE wavelength&rarr;sRGB map. The self-test proves the physics.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+// ============================================================================
+// The Spectroscope — pure physics core. NO DOM access in this section.
+// The headless self-test below calls THESE real functions (not copies).
+// ============================================================================
+
+// ---------- physical constants ---------------------------------------------
+// R∞ = the Rydberg constant for infinite nuclear mass (CODATA). The Balmer
+// formula needs the HYDROGEN Rydberg R_H = R∞·M/(M+mₑ) (reduced-mass corrected).
+var RYDBERG_INF = 1.0973731568e7;                 // /m  (R∞, infinite nuclear mass)
+var M_PROTON    = 1.67262192369e-27;              // kg
+var M_ELECTRON  = 9.1093837015e-31;               // kg
+// Hydrogen Rydberg = R∞ scaled by the proton/electron reduced mass. Computed,
+// not hard-coded: ≈ 1.09677583e7 /m. Using R∞ directly (the "infinite mass"
+// value) understates λ by the reduced-mass factor and misses Hα by ~0.19 nm.
+var RYDBERG_H = RYDBERG_INF * M_PROTON / (M_PROTON + M_ELECTRON);
+// Refractive index of standard air (dry, ~15 °C). The textbook Balmer values
+// 656.3/486.1/434.0/410.2 nm are AIR wavelengths; the Rydberg formula yields
+// VACUUM wavelengths, so we divide by n_air to compare like-for-like.
+var N_AIR = 1.000277;
+
+// ---------- Rydberg / Balmer -------------------------------------------------
+// Balmer series: transitions n -> 2.  1/λ = R_H (1/2² − 1/n²).  Returns the
+// VACUUM wavelength λ in nm. n must be an integer >= 3. (e.g. Hα → 656.29 nm.)
+function balmerWavelengthNm(n){
+  var invLambda = RYDBERG_H * (1/4 - 1/(n*n));   // /m
+  var lambdaM = 1/invLambda;                      // m  (vacuum)
+  return lambdaM * 1e9;                           // nm
+}
+// Air wavelength of a Balmer line — what a textbook table lists (vacuum / n_air).
+function balmerWavelengthAirNm(n){
+  return balmerWavelengthNm(n) / N_AIR;
+}
+
+// ---------- Cauchy dispersion of glass --------------------------------------
+// n(λ) = A + B/λ²  (λ in micrometres). Tuned crown-glass-ish: n≈1.5168 @ 589nm,
+// with realistic visible dispersion (n falls as λ rises).
+var CAUCHY_A = 1.5046;
+var CAUCHY_B = 0.00420;             // µm²
+function glassIndex(lambdaNm){
+  var lamUm = lambdaNm / 1000;
+  return CAUCHY_A + CAUCHY_B / (lamUm * lamUm);
+}
+
+// ---------- Snell refraction (scalar, angle-from-normal) --------------------
+// Given incidence angle θi (rad, from the surface normal) and indices n1,n2,
+// returns the refraction angle θt (rad) or null on total internal reflection.
+function snellRefractAngle(thetaI, n1, n2){
+  var s = (n1 / n2) * Math.sin(thetaI);
+  if (Math.abs(s) > 1) return null;            // TIR
+  return Math.asin(s);
+}
+
+// ---------- Prism deviation (real ray trace through two faces) --------------
+// A symmetric triangular prism with apex angle A (rad). A ray strikes the first
+// face at incidence angle i1 (from that face's normal). We compute the total
+// deviation D by applying Snell at BOTH faces. Geometry (well-known prism eqns):
+//   r1 = refraction angle at face 1 (inside glass)
+//   r2 = A − r1                      (apex geometry; angles inside the prism)
+//   i2 = exit refraction angle in air at face 2
+//   D  = (i1 − r1) + (i2 − r2) = i1 + i2 − A
+// Returns {ok, D, i1, r1, r2, i2} ; ok=false if either face hits TIR.
+function prismDeviation(i1, A, n){
+  var r1 = snellRefractAngle(i1, 1.0, n);          // air -> glass at face 1
+  if (r1 === null) return { ok:false };
+  var r2 = A - r1;                                  // internal angle at face 2
+  // glass -> air at face 2; sin(i2) = n sin(r2)
+  var s = n * Math.sin(r2);
+  if (Math.abs(s) > 1) return { ok:false };         // TIR at exit face
+  var i2 = Math.asin(s);
+  var D = i1 + i2 - A;
+  return { ok:true, D:D, i1:i1, r1:r1, r2:r2, i2:i2, n:n };
+}
+
+// Minimum-deviation incidence angle for apex A and index n: by symmetry the ray
+// is symmetric (i1 == i2, r1 == r2 == A/2), so n = sin((A+Dmin)/2)/sin(A/2) and
+// the symmetric incidence is i1 = asin(n·sin(A/2)).
+function minDeviationIncidence(A, n){
+  return Math.asin(n * Math.sin(A / 2));
+}
+function minDeviation(A, n){
+  // Dmin = 2·asin(n·sin(A/2)) − A
+  return 2 * Math.asin(n * Math.sin(A / 2)) - A;
+}
+
+// ---------- Diffraction grating ---------------------------------------------
+// d·sinθ_m = m·λ  →  θ_m = asin(m·λ/d).  d in metres, λ in metres, m integer.
+// Returns the diffraction angle in radians, or null if |m·λ/d| > 1 (evanescent).
+function gratingAngle(m, lambdaM, dM){
+  var s = m * lambdaM / dM;
+  if (Math.abs(s) > 1) return null;
+  return Math.asin(s);
+}
+// Angular dispersion dθ/dλ = m / (d·cosθ_m). Increases with |m|.
+function gratingDispersion(m, lambdaM, dM){
+  var theta = gratingAngle(m, lambdaM, dM);
+  if (theta === null) return null;
+  return m / (dM * Math.cos(theta));
+}
+
+// ---------- wavelength → sRGB (CIE 1931 based) ------------------------------
+// Multi-lobe Gaussian fit to the CIE 1931 2° colour-matching functions
+// (Wyman, Sledge & Subramanian 2013), then XYZ → linear sRGB → gamma sRGB.
+// Returns [r,g,b] in 0..255. BLACK ([0,0,0]) outside ~[380,750] nm.
+function cie1931(lambdaNm){
+  function g(x, mu, s1, s2){
+    var t = (x - mu) * (x < mu ? s1 : s2);
+    return Math.exp(-0.5 * t * t);
+  }
+  var X = 1.056 * g(lambdaNm, 599.8, 0.0264, 0.0323)
+        + 0.362 * g(lambdaNm, 442.0, 0.0624, 0.0374)
+        - 0.065 * g(lambdaNm, 501.1, 0.0490, 0.0382);
+  var Y = 0.821 * g(lambdaNm, 568.8, 0.0213, 0.0247)
+        + 0.286 * g(lambdaNm, 530.9, 0.0613, 0.0322);
+  var Z = 1.217 * g(lambdaNm, 437.0, 0.0845, 0.0278)
+        + 0.681 * g(lambdaNm, 459.0, 0.0385, 0.0725);
+  return [X, Y, Z];
+}
+function wavelengthToRGB(lambdaNm){
+  // outside the visible band → black (no contribution)
+  if (lambdaNm < 380 || lambdaNm > 750) return [0, 0, 0];
+  var xyz = cie1931(lambdaNm);
+  var X = xyz[0], Y = xyz[1], Z = xyz[2];
+  // XYZ → linear sRGB (sRGB / D65 matrix)
+  var rl =  3.2406 * X - 1.5372 * Y - 0.4986 * Z;
+  var gl = -0.9689 * X + 1.8758 * Y + 0.0415 * Z;
+  var bl =  0.0557 * X - 0.2040 * Y + 1.0570 * Z;
+  // clamp negative (out-of-gamut) to 0
+  rl = Math.max(0, rl); gl = Math.max(0, gl); bl = Math.max(0, bl);
+  // normalise so the brightest channel is 1 (preserve hue, full saturation)
+  var mx = Math.max(rl, gl, bl);
+  if (mx > 0){ rl /= mx; gl /= mx; bl /= mx; }
+  // gamma-correct (sRGB transfer)
+  function enc(c){
+    c = c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+    return Math.round(Math.max(0, Math.min(1, c)) * 255);
+  }
+  return [enc(rl), enc(gl), enc(bl)];
+}
+// Perceptual luminance falloff toward the spectrum edges (for continuous band
+// brightness only — does NOT affect hue). 1.0 in mid-band, →0 at the rims.
+function visibleIntensity(lambdaNm){
+  if (lambdaNm < 380 || lambdaNm > 750) return 0;
+  if (lambdaNm < 420) return 0.30 + 0.70 * (lambdaNm - 380) / 40;
+  if (lambdaNm > 700) return 0.30 + 0.70 * (750 - lambdaNm) / 50;
+  return 1.0;
+}
+
+// ============================================================================
+// SOURCES — each returns either a continuous band or a set of spectral lines.
+// Line wavelengths are literature values (nm). Hydrogen's are COMPUTED below.
+// type: 'continuous' | 'emission' | 'absorption'
+// lines: [{nm, label, strength}]  strength 0..1 (relative)
+// ============================================================================
+function hydrogenLines(){
+  // Balmer α,β,γ,δ from n=3,4,5,6 → 2, computed from Rydberg. Displayed as AIR
+  // wavelengths to match the other sources' tabulated (air) line values.
+  var labels = { 3:'Hα', 4:'Hβ', 5:'Hγ', 6:'Hδ' };
+  var strength = { 3:1.0, 4:0.55, 5:0.32, 6:0.20 };
+  var out = [];
+  for (var n = 3; n <= 6; n++){
+    out.push({ nm: balmerWavelengthAirNm(n), label: labels[n], strength: strength[n] });
+  }
+  return out;
+}
+function buildSources(){
+  return {
+    continuous: { type:'continuous', name:'Continuous (incandescent)', lines:[] },
+    hydrogen:   { type:'emission',   name:'Hydrogen — Balmer', lines: hydrogenLines() },
+    sodium:     { type:'emission',   name:'Sodium', lines:[
+                    { nm:589.0, label:'D2', strength:1.0 },
+                    { nm:589.6, label:'D1', strength:0.9 } ] },
+    mercury:    { type:'emission',   name:'Mercury', lines:[
+                    { nm:404.7, label:'',  strength:0.5 },
+                    { nm:435.8, label:'',  strength:0.9 },
+                    { nm:546.1, label:'',  strength:1.0 },
+                    { nm:577.0, label:'',  strength:0.45 },
+                    { nm:579.1, label:'',  strength:0.5 } ] },
+    neon:       { type:'emission',   name:'Neon', lines:[
+                    { nm:585.2, label:'', strength:0.6 },
+                    { nm:594.5, label:'', strength:0.55 },
+                    { nm:609.6, label:'', strength:0.6 },
+                    { nm:614.3, label:'', strength:0.7 },
+                    { nm:626.6, label:'', strength:0.65 },
+                    { nm:640.2, label:'', strength:1.0 },
+                    { nm:650.7, label:'', strength:0.8 },
+                    { nm:659.9, label:'', strength:0.7 },
+                    { nm:692.9, label:'', strength:0.5 } ] },
+    solar:      { type:'absorption', name:'Solar (Fraunhofer)', lines:[
+                    { nm:393.4, label:'K',  strength:1.0 },   // Ca II
+                    { nm:396.8, label:'H',  strength:0.9 },   // Ca II
+                    { nm:410.2, label:'h',  strength:0.5 },   // H-δ
+                    { nm:434.0, label:'G',  strength:0.7 },   // H-γ
+                    { nm:486.1, label:'F',  strength:0.8 },   // H-β
+                    { nm:517.0, label:'b',  strength:0.7 },   // Mg b
+                    { nm:589.0, label:'D',  strength:0.9 },   // Na D
+                    { nm:656.3, label:'C',  strength:0.8 } ]  // H-α
+                  }
+  };
+}
+
+// ============================================================================
+// HEADLESS SELF-TEST — calls the REAL functions above. Returns {pass,total,log}.
+// ============================================================================
+function runSelfTest(){
+  var pass = 0, total = 0, log = [];
+  function check(name, cond){
+    total++;
+    if (cond){ pass++; log.push('PASS: ' + name); if (typeof console!=='undefined') console.log('PASS: ' + name); }
+    else { log.push('FAIL: ' + name); if (typeof console!=='undefined') console.error('FAIL: ' + name); }
+  }
+
+  // (1) Balmer lines reproduced from Rydberg to < 0.1 nm vs literature values.
+  //     Literature 656.3/486.1/434.0/410.2 are AIR wavelengths; compare the
+  //     computed air wavelengths (vacuum λ from Rydberg / n_air).
+  {
+    var lit = { 3:656.3, 4:486.1, 5:434.0, 6:410.2 };
+    var maxErr = 0, ok = true;
+    for (var n = 3; n <= 6; n++){
+      var computed = balmerWavelengthAirNm(n);     // air wavelength, computed
+      var err = Math.abs(computed - lit[n]);
+      maxErr = Math.max(maxErr, err);
+      if (err >= 0.1) ok = false;
+    }
+    log.push('  Balmer Hα computed ' + balmerWavelengthAirNm(3).toFixed(2) + 'nm (air) vs 656.3; maxErr ' + maxErr.toFixed(3) + 'nm');
+    if (typeof console!=='undefined') console.log('  Balmer (air) Hα=' + balmerWavelengthAirNm(3).toFixed(3) +
+      ' Hβ=' + balmerWavelengthAirNm(4).toFixed(3) + ' Hγ=' + balmerWavelengthAirNm(5).toFixed(3) +
+      ' Hδ=' + balmerWavelengthAirNm(6).toFixed(3) + ' (vacuum Hα=' + balmerWavelengthNm(3).toFixed(3) +
+      ', max err ' + maxErr.toFixed(4) + 'nm)');
+    check('Balmer lines from Rydberg < 0.1nm vs literature (656.3/486.1/434.0/410.2)', ok);
+  }
+
+  // (2) Grating: order m lands at θ = asin(m·λ/d) exactly (≤1e-9), and higher
+  //     orders are more dispersed (dθ/dλ increases with m).
+  {
+    var dM = 1 / (600 * 1000);          // 600 lines/mm → d in metres
+    var maxErr = 0;
+    for (var t = 0; t < 200; t++){
+      var lambdaM = (380 + Math.random() * 370) * 1e-9;
+      for (var m = -2; m <= 2; m++){
+        var th = gratingAngle(m, lambdaM, dM);
+        if (th === null) continue;
+        // independent ground truth: d·sinθ must equal m·λ
+        var resid = dM * Math.sin(th) - m * lambdaM;
+        maxErr = Math.max(maxErr, Math.abs(resid));
+      }
+    }
+    var exact = maxErr < 1e-9 * dM;     // residual is in metres; scale tolerance to d
+    // dispersion increases with order
+    var lamTest = 550e-9;
+    var d1 = Math.abs(gratingDispersion(1, lamTest, dM));
+    var d2 = Math.abs(gratingDispersion(2, lamTest, dM));
+    var disp = d2 > d1;
+    log.push('  grating residual ' + maxErr.toExponential(2) + ' m; |dθ/dλ| m=2 (' + d2.toExponential(2) +
+      ') > m=1 (' + d1.toExponential(2) + ')');
+    check('grating: d·sinθ=m·λ exact (≤1e-9·d) & higher orders more dispersed', exact && disp);
+  }
+
+  // (3) Prism: deviation satisfies Snell at BOTH faces (≤1e-9); red deviates
+  //     less than violet (dispersion sign correct); minimum-deviation symmetry.
+  {
+    var A = 60 * Math.PI / 180;
+    var maxSnell = 0, ok = true;
+    for (var k = 0; k < 200; k++){
+      var nIdx = 1.45 + Math.random() * 0.25;
+      var i1 = (0.25 + Math.random() * 0.55) * (Math.PI / 2);   // avoid TIR extremes
+      var res = prismDeviation(i1, A, nIdx);
+      if (!res.ok) continue;
+      // face 1 (air→glass): sin(i1) = n·sin(r1)
+      var s1 = Math.abs(Math.sin(res.i1) - nIdx * Math.sin(res.r1));
+      // face 2 (glass→air): n·sin(r2) = sin(i2)
+      var s2 = Math.abs(nIdx * Math.sin(res.r2) - Math.sin(res.i2));
+      // geometry: r1 + r2 = A
+      var sg = Math.abs((res.r1 + res.r2) - A);
+      maxSnell = Math.max(maxSnell, s1, s2, sg);
+      if (s1 > 1e-9 || s2 > 1e-9 || sg > 1e-12) ok = false;
+    }
+    check('prism: Snell holds at both faces & r1+r2=A (≤1e-9)', ok && maxSnell < 1e-9);
+
+    // dispersion sign: violet (410) bends MORE than red (656) at min deviation.
+    var nV = glassIndex(410.2), nR = glassIndex(656.3);
+    var dV = minDeviation(A, nV), dR = minDeviation(A, nR);
+    log.push('  prism Dmin violet ' + (dV*180/Math.PI).toFixed(3) + '° > red ' + (dR*180/Math.PI).toFixed(3) + '°');
+    check('prism: violet deviates more than red (n(λ) ↓ with λ; dispersion correct)', dV > dR + 1e-6 && nV > nR);
+
+    // minimum-deviation symmetry: at i1 = minDeviationIncidence, i1 == i2.
+    var nMid = glassIndex(550);
+    var iMin = minDeviationIncidence(A, nMid);
+    var rMid = prismDeviation(iMin, A, nMid);
+    var symOk = rMid.ok && Math.abs(rMid.i1 - rMid.i2) < 1e-9 && Math.abs(rMid.r1 - rMid.r2) < 1e-9;
+    // and D at iMin equals analytic Dmin
+    var dminAnalytic = minDeviation(A, nMid);
+    symOk = symOk && Math.abs(rMid.D - dminAnalytic) < 1e-9;
+    check('prism: at min-deviation incidence i1==i2, r1==r2, D==Dmin (≤1e-9)', symOk);
+  }
+
+  // (4) wavelength→RGB: black outside [380,750]; sane in-gamut colours inside;
+  //     correct hue ordering (red has R dominant, blue has B dominant).
+  {
+    var outBlack = true;
+    [200, 300, 379, 751, 800, 1000].forEach(function(nm){
+      var c = wavelengthToRGB(nm);
+      if (c[0] !== 0 || c[1] !== 0 || c[2] !== 0) outBlack = false;
+    });
+    // in-band: every channel in [0,255], at least one channel > 0
+    var inSane = true;
+    for (var nm = 380; nm <= 750; nm += 2){
+      var c = wavelengthToRGB(nm);
+      for (var ch = 0; ch < 3; ch++){
+        if (!(c[ch] >= 0 && c[ch] <= 255 && Number.isFinite(c[ch]))) inSane = false;
+      }
+      if (c[0] === 0 && c[1] === 0 && c[2] === 0) inSane = false;   // not black inside band
+    }
+    // hue ordering: 660nm reads red-dominant, 470nm reads blue-dominant, 530 green-dominant
+    var red = wavelengthToRGB(660), blu = wavelengthToRGB(470), grn = wavelengthToRGB(530);
+    var hueOk = (red[0] > red[2]) && (blu[2] > blu[0]) && (grn[1] >= grn[0] && grn[1] >= grn[2]);
+    check('wavelength→RGB: black outside [380,750], in-gamut & sane inside, hue ordering correct', outBlack && inSane && hueOk);
+  }
+
+  // (5) Source integrity: hydrogen lines come from the computed Balmer set, and
+  //     named lines fall in plausible visible ranges.
+  {
+    var srcs = buildSources();
+    var H = srcs.hydrogen.lines;
+    var hOk = H.length === 4 &&
+      Math.abs(H[0].nm - balmerWavelengthAirNm(3)) < 1e-9 &&
+      Math.abs(H[3].nm - balmerWavelengthAirNm(6)) < 1e-9;
+    // sodium doublet split is ~0.6 nm
+    var Na = srcs.sodium.lines;
+    var naOk = Math.abs(Math.abs(Na[0].nm - Na[1].nm) - 0.6) < 1e-9;
+    // all listed lines are within the renderable band
+    var allInBand = true;
+    Object.keys(srcs).forEach(function(key){
+      srcs[key].lines.forEach(function(L){
+        if (L.nm < 380 || L.nm > 750) allInBand = false;
+      });
+    });
+    check('sources: H lines == computed Balmer; Na doublet split 0.6nm; all lines in [380,750]', hOk && naOk && allInBand);
+  }
+
+  return { pass: pass, total: total, log: log };
+}
+
+// expose for Node / external re-audit
+if (typeof window !== 'undefined'){
+  window.SpectroCore = { balmerWavelengthNm, balmerWavelengthAirNm, glassIndex, snellRefractAngle,
+    prismDeviation, minDeviation, minDeviationIncidence, gratingAngle, gratingDispersion, wavelengthToRGB,
+    visibleIntensity, cie1931, buildSources, hydrogenLines, runSelfTest, RYDBERG_H, RYDBERG_INF };
+}
+if (typeof module !== 'undefined' && module.exports){
+  module.exports = window && window.SpectroCore ? window.SpectroCore : {
+    balmerWavelengthNm: balmerWavelengthNm, balmerWavelengthAirNm: balmerWavelengthAirNm,
+    glassIndex: glassIndex, snellRefractAngle: snellRefractAngle,
+    prismDeviation: prismDeviation, minDeviation: minDeviation, minDeviationIncidence: minDeviationIncidence,
+    gratingAngle: gratingAngle, gratingDispersion: gratingDispersion, wavelengthToRGB: wavelengthToRGB,
+    visibleIntensity: visibleIntensity, cie1931: cie1931, buildSources: buildSources,
+    hydrogenLines: hydrogenLines, runSelfTest: runSelfTest, RYDBERG_H: RYDBERG_H, RYDBERG_INF: RYDBERG_INF };
+}
+
+// ============================================================================
+// APPLICATION (DOM). Everything below derives from the pure core above. Skipped
+// entirely when loaded under Node (no document).
+// ============================================================================
+if (typeof document !== 'undefined'){ (function(){
+
+// ---------- cosmetic skins (NEVER touch physics) ----------------------------
+var SKINS = {
+  brass:  { bg:'#07080b', stage1:'#14130f', stage2:'#0c0c10', glass:'rgba(201,162,74,0.10)',
+            edge:'rgba(240,212,137,0.7)', beam:'rgba(245,238,210,0.95)', label:'#c9a24a',
+            axis:'rgba(201,162,74,0.45)', tick:'rgba(201,162,74,0.22)', frame:'rgba(201,162,74,0.3)' },
+  cobalt: { bg:'#06080d', stage1:'#0e1320', stage2:'#080a12', glass:'rgba(120,170,230,0.10)',
+            edge:'rgba(160,205,255,0.7)', beam:'rgba(230,242,255,0.95)', label:'#7fc7e8',
+            axis:'rgba(127,199,232,0.45)', tick:'rgba(127,199,232,0.22)', frame:'rgba(127,199,232,0.3)' },
+  noir:   { bg:'#080808', stage1:'#141414', stage2:'#0b0b0b', glass:'rgba(210,210,210,0.07)',
+            edge:'rgba(230,230,230,0.6)', beam:'rgba(245,245,245,0.95)', label:'#d8d8d8',
+            axis:'rgba(210,210,210,0.4)', tick:'rgba(210,210,210,0.2)', frame:'rgba(210,210,210,0.28)' },
+};
+
+var SOURCES = buildSources();
+var state = {
+  elem: 'prism',          // 'prism' | 'grating'
+  source: 'continuous',
+  linesPerMm: 600,
+  apexDeg: 60,
+  skin: 'brass',
+};
+
+var cv = document.getElementById('bench');
+var ctx = cv.getContext('2d');
+var dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+var W = 0, H = 0;
+var t0 = performance.now();
+
+function S(){ return SKINS[state.skin]; }
+
+function resize(){
+  var stage = document.getElementById('stage');
+  W = Math.max(320, stage.clientWidth);
+  H = Math.max(320, stage.clientHeight);
+  dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+}
+
+// ---------- spectrum geometry ------------------------------------------------
+// The wavelength axis lives in a band near the bottom of the stage; the disperser
+// schematic occupies the top. We map λ→x across the band [380,750] nm.
+var LAM_MIN = 380, LAM_MAX = 750;
+function specBox(){
+  var m = Math.min(120, W * 0.10);
+  var x0 = m, x1 = W - m;
+  var bandH = Math.max(64, Math.min(120, H * 0.16));
+  var y0 = H * 0.62, y1 = y0 + bandH;
+  return { x0:x0, x1:x1, y0:y0, y1:y1, w:x1-x0, h:bandH };
+}
+function lamToX(nm, box){
+  return box.x0 + (nm - LAM_MIN) / (LAM_MAX - LAM_MIN) * box.w;
+}
+
+// ============================================================================
+// RENDER
+// ============================================================================
+function draw(now){
+  var sk = S();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // background
+  var g = ctx.createRadialGradient(W*0.52, H*0.40, 0, W*0.52, H*0.40, Math.max(W,H)*0.75);
+  g.addColorStop(0, sk.stage1); g.addColorStop(0.64, sk.stage2); g.addColorStop(1, sk.bg);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  drawDisperser(sk, now);
+  drawSpectrum(sk, now);
+}
+
+// --- top half: the dispersing-element schematic with a fanned spectrum -------
+function drawDisperser(sk, now){
+  var cx = W * 0.40, cy = H * 0.30;     // disperser centre
+  ctx.lineCap = 'round';
+
+  // incoming white beam from the left
+  var inX = W * 0.06, inY = cy;
+  ctx.strokeStyle = sk.beam; ctx.lineWidth = 2.4;
+  ctx.shadowColor = sk.beam; ctx.shadowBlur = 6;
+  ctx.beginPath(); ctx.moveTo(inX, inY); ctx.lineTo(cx - 8, cy); ctx.stroke();
+  ctx.shadowBlur = 0;
+  // "WHITE" label
+  ctx.fillStyle = sk.label; ctx.font = '600 10px ' + monoFont();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText('WHITE LIGHT', inX + 4, inY - 12);
+
+  if (state.elem === 'prism') drawPrismSchematic(sk, cx, cy);
+  else drawGratingSchematic(sk, cx, cy);
+}
+
+function drawPrismSchematic(sk, cx, cy){
+  var A = state.apexDeg * Math.PI / 180;
+  // draw an isoceles triangle (apex up) sized to the stage
+  var size = Math.min(W, H) * 0.20;
+  var half = size * Math.tan(A / 2);             // half base width from apex angle
+  var apex = { x: cx, y: cy - size * 0.55 };
+  var bl   = { x: cx - half, y: cy + size * 0.45 };
+  var br   = { x: cx + half, y: cy + size * 0.45 };
+  // glass body
+  ctx.beginPath();
+  ctx.moveTo(apex.x, apex.y); ctx.lineTo(br.x, br.y); ctx.lineTo(bl.x, bl.y); ctx.closePath();
+  var gg = ctx.createLinearGradient(bl.x, apex.y, br.x, br.y);
+  gg.addColorStop(0, sk.glass); gg.addColorStop(1, 'rgba(255,255,255,0.03)');
+  ctx.fillStyle = gg; ctx.fill();
+  ctx.strokeStyle = sk.edge; ctx.lineWidth = 1.6; ctx.stroke();
+
+  // fan a continuous spectrum out of the prism's right face, ordered red→violet.
+  // We render the EXIT directions via real min-deviation geometry: higher n
+  // (violet) deviates more (bends down further). Origin at the right face mid.
+  var ox = (apex.x + br.x) / 2 + 4, oy = (apex.y + br.y) / 2;
+  var L = W - ox - W * 0.04;
+  // base direction roughly horizontal-right; deviation rotates the ray downward.
+  var samples = 90;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (var i = 0; i <= samples; i++){
+    var nm = LAM_MIN + (LAM_MAX - LAM_MIN) * i / samples;
+    var n = glassIndex(nm);
+    var Dm = minDeviation(A, n);                 // larger for violet
+    // map deviation to a screen fan: spread proportional to (D − Dref)
+    var Dref = minDeviation(A, glassIndex(LAM_MAX));
+    var ang = (Dm - Dref) * 2.4;                 // visual gain
+    var dx = Math.cos(ang), dy = Math.sin(ang);
+    var rgb = wavelengthToRGB(nm);
+    var a = 0.5 * visibleIntensity(nm);
+    ctx.strokeStyle = 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + a + ')';
+    ctx.lineWidth = 2.0;
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox + dx * L, oy + dy * L); ctx.stroke();
+  }
+  ctx.restore();
+
+  // caption
+  ctx.fillStyle = sk.label; ctx.font = '600 9.5px ' + monoFont();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  var nD = glassIndex(589.3);
+  ctx.fillText('PRISM · A=' + state.apexDeg + '° · n(589)=' + nD.toFixed(4) + ' · near min. deviation',
+    cx + W*0.06, cy + size * 0.62);
+  ctx.fillStyle = 'rgba(255,90,70,0.85)'; ctx.textAlign='left';
+  ctx.fillText('red bent least', ox + L*0.5, oy + 6);
+  ctx.fillStyle = 'rgba(150,90,255,0.9)';
+  var Dv = (minDeviation(A,glassIndex(LAM_MIN)) - minDeviation(A,glassIndex(LAM_MAX)))*2.4;
+  ctx.fillText('violet bent most', ox + L*0.45*Math.cos(Dv), oy + L*0.45*Math.sin(Dv) + 6);
+}
+
+function drawGratingSchematic(sk, cx, cy){
+  var dM = 1 / (state.linesPerMm * 1000);        // grating spacing (m)
+  // draw the grating as a vertical hatched bar
+  var gx = cx, gh = Math.min(W,H) * 0.22;
+  ctx.strokeStyle = sk.edge; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(gx, cy - gh/2); ctx.lineTo(gx, cy + gh/2); ctx.stroke();
+  ctx.strokeStyle = sk.tick; ctx.lineWidth = 1;
+  for (var y = cy - gh/2; y <= cy + gh/2; y += 4){
+    ctx.beginPath(); ctx.moveTo(gx - 4, y); ctx.lineTo(gx + 4, y); ctx.stroke();
+  }
+
+  var L = W - gx - W * 0.06;
+  // orders m = 0, ±1, ±2. Spread by wavelength. Higher orders fan wider.
+  var orders = [0, 1, -1, 2, -2];
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (var oi = 0; oi < orders.length; oi++){
+    var m = orders[oi];
+    var samples = 90;
+    for (var i = 0; i <= samples; i++){
+      var nm = LAM_MIN + (LAM_MAX - LAM_MIN) * i / samples;
+      var th = gratingAngle(m, nm * 1e-9, dM);
+      if (th === null) continue;                  // evanescent — order doesn't exist here
+      var dx = Math.cos(th), dy = Math.sin(th);
+      var rgb = (m === 0) ? [245,238,210] : wavelengthToRGB(nm);
+      var a = (m === 0 ? 0.5 : 0.42) * visibleIntensity(nm);
+      ctx.strokeStyle = 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + a + ')';
+      ctx.lineWidth = m === 0 ? 2.2 : 1.8;
+      ctx.beginPath(); ctx.moveTo(gx, cy); ctx.lineTo(gx + dx * L, cy + dy * L); ctx.stroke();
+    }
+  }
+  ctx.restore();
+
+  // order labels (use 550nm as the representative ray for placement)
+  ctx.font = '600 9px ' + monoFont(); ctx.textBaseline = 'middle';
+  for (var oi2 = 0; oi2 < orders.length; oi2++){
+    var mm = orders[oi2];
+    var thr = gratingAngle(mm, 550e-9, dM);
+    if (thr === null) continue;
+    var lx = gx + Math.cos(thr) * (L * 0.88), ly = cy + Math.sin(thr) * (L * 0.88);
+    ctx.fillStyle = sk.label; ctx.textAlign = 'left';
+    ctx.fillText('m=' + mm, lx + 4, ly);
+  }
+  ctx.fillStyle = sk.label; ctx.font = '600 9.5px ' + monoFont();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('GRATING · ' + state.linesPerMm + ' lines/mm · d·sinθ = mλ · orders overlap at high m',
+    cx + W*0.06, cy + gh * 0.62 + 8);
+}
+
+// --- bottom: the read spectrum (continuous / emission / absorption) ----------
+function drawSpectrum(sk, now){
+  var box = specBox();
+  var src = SOURCES[state.source];
+
+  // frame
+  ctx.strokeStyle = sk.frame; ctx.lineWidth = 1;
+  ctx.strokeRect(box.x0 - 0.5, box.y0 - 0.5, box.w + 1, box.h + 1);
+
+  // title above the band
+  ctx.fillStyle = sk.label; ctx.font = '600 10px ' + monoFont();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  var typeLabel = src.type === 'emission' ? 'EMISSION' : (src.type === 'absorption' ? 'ABSORPTION' : 'CONTINUOUS');
+  ctx.fillText(src.name.toUpperCase() + '  ·  ' + typeLabel + ' SPECTRUM', box.x0, box.y0 - 9);
+
+  if (src.type === 'continuous' || src.type === 'absorption'){
+    // paint a smooth rainbow band column-by-column (true colours)
+    for (var x = 0; x < box.w; x++){
+      var nm = LAM_MIN + (LAM_MAX - LAM_MIN) * x / box.w;
+      var rgb = wavelengthToRGB(nm);
+      var f = 0.35 + 0.65 * visibleIntensity(nm);
+      ctx.fillStyle = 'rgb(' + Math.round(rgb[0]*f) + ',' + Math.round(rgb[1]*f) + ',' + Math.round(rgb[2]*f) + ')';
+      ctx.fillRect(box.x0 + x, box.y0, 1, box.h);
+    }
+    if (src.type === 'absorption'){
+      // dark Fraunhofer lines crossing the band
+      for (var li = 0; li < src.lines.length; li++){
+        var L = src.lines[li];
+        var lx = lamToX(L.nm, box);
+        var wpx = 1 + 2.0 * L.strength;
+        ctx.fillStyle = 'rgba(8,8,10,' + (0.55 + 0.42 * L.strength) + ')';
+        ctx.fillRect(lx - wpx/2, box.y0, wpx, box.h);
+      }
+      labelLines(sk, box, src.lines, true);
+    }
+  } else {
+    // emission: dark band with bright lines at their true colours
+    ctx.fillStyle = '#050507';
+    ctx.fillRect(box.x0, box.y0, box.w, box.h);
+    for (var li2 = 0; li2 < src.lines.length; li2++){
+      var Le = src.lines[li2];
+      var lxe = lamToX(Le.nm, box);
+      var rgbE = wavelengthToRGB(Le.nm);
+      var wpxE = 1.4 + 2.4 * Le.strength;
+      // soft glow
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      var grad = ctx.createLinearGradient(lxe - 7, 0, lxe + 7, 0);
+      grad.addColorStop(0, 'rgba('+rgbE[0]+','+rgbE[1]+','+rgbE[2]+',0)');
+      grad.addColorStop(0.5, 'rgba('+rgbE[0]+','+rgbE[1]+','+rgbE[2]+','+(0.4*Le.strength)+')');
+      grad.addColorStop(1, 'rgba('+rgbE[0]+','+rgbE[1]+','+rgbE[2]+',0)');
+      ctx.fillStyle = grad; ctx.fillRect(lxe - 7, box.y0, 14, box.h);
+      // bright core
+      ctx.fillStyle = 'rgb('+rgbE[0]+','+rgbE[1]+','+rgbE[2]+')';
+      ctx.fillRect(lxe - wpxE/2, box.y0, wpxE, box.h);
+      ctx.restore();
+    }
+    labelLines(sk, box, src.lines, false);
+  }
+
+  drawAxis(sk, box);
+}
+
+function labelLines(sk, box, lines, dark){
+  ctx.font = '600 9px ' + monoFont(); ctx.textBaseline = 'bottom';
+  // stagger labels vertically to reduce overlap
+  for (var i = 0; i < lines.length; i++){
+    var L = lines[i];
+    var lx = lamToX(L.nm, box);
+    var ty = box.y0 - 22 - (i % 2) * 12;
+    ctx.strokeStyle = sk.tick; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lx, box.y0 - 1); ctx.lineTo(lx, ty + 2); ctx.stroke();
+    ctx.fillStyle = sk.label; ctx.textAlign = 'center';
+    var txt = (L.label ? L.label + ' ' : '') + L.nm.toFixed(1);
+    ctx.fillText(txt, lx, ty);
+  }
+}
+
+function drawAxis(sk, box){
+  var y = box.y1 + 4;
+  ctx.strokeStyle = sk.axis; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(box.x0, y); ctx.lineTo(box.x1, y); ctx.stroke();
+  ctx.fillStyle = sk.label; ctx.font = '500 9px ' + monoFont();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (var nm = 400; nm <= 700; nm += 50){
+    var x = lamToX(nm, box);
+    ctx.strokeStyle = sk.axis;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 5); ctx.stroke();
+    ctx.fillStyle = sk.label;
+    ctx.fillText(String(nm), x, y + 7);
+  }
+  ctx.textAlign = 'right'; ctx.fillStyle = sk.label;
+  ctx.fillText('wavelength / nm', box.x1, y + 18);
+}
+
+function monoFont(){ return '"SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace'; }
+
+// ============================================================================
+// RENDER LOOP — static scene; redraw on demand only (60fps capable; we draw
+// once per change so there is no continuous animation cost).
+// ============================================================================
+var drawQueued = false;
+function requestDraw(){
+  if (drawQueued) return; drawQueued = true;
+  requestAnimationFrame(function(ts){ drawQueued = false; draw(ts); });
+}
+
+// ============================================================================
+// PANEL: line list, controls
+// ============================================================================
+function renderLineList(){
+  var host = document.getElementById('lineList');
+  var src = SOURCES[state.source];
+  if (src.type === 'continuous'){
+    host.innerHTML = '<span style="opacity:.8">A smooth, unbroken rainbow — every wavelength present.</span>';
+    return;
+  }
+  var verb = src.type === 'absorption' ? 'dark line at' : 'line at';
+  var html = '';
+  for (var i = 0; i < src.lines.length; i++){
+    var L = src.lines[i];
+    var rgb = wavelengthToRGB(L.nm);
+    var swCol = src.type === 'absorption' ? 'background:#222'
+      : 'background:rgb('+rgb[0]+','+rgb[1]+','+rgb[2]+')';
+    html += '<div><span class="sw" style="'+swCol+'"></span>' +
+            (L.label ? '<b style="color:var(--ink)">'+L.label+'</b> ' : '') +
+            '<span class="nm">' + L.nm.toFixed(1) + ' nm</span></div>';
+  }
+  host.innerHTML = html;
+}
+
+function syncControls(){
+  document.getElementById('gratingRow').style.display = state.elem === 'grating' ? '' : 'none';
+  document.getElementById('prismRow').style.display = state.elem === 'prism' ? '' : 'none';
+  document.getElementById('dVal').textContent = state.linesPerMm + ' /mm';
+  document.getElementById('apexVal').textContent = state.apexDeg + '°';
+  var ds = document.getElementById('dSlider');
+  ds.style.setProperty('--fill', ((state.linesPerMm - 100) / (1200 - 100) * 100) + '%');
+  var as = document.getElementById('apexSlider');
+  as.style.setProperty('--fill', ((state.apexDeg - 30) / (75 - 30) * 100) + '%');
+}
+
+// ---------- PNG ×2 export ----------------------------------------------------
+function exportPNG(){
+  var scale = 2;
+  var off = document.createElement('canvas');
+  off.width = Math.round(W * scale); off.height = Math.round(H * scale);
+  var octx = off.getContext('2d');
+  var savedCtx = ctx, savedDpr = dpr;
+  ctx = octx; dpr = scale;
+  draw(performance.now());
+  ctx = savedCtx; dpr = savedDpr; requestDraw();
+  var finish = function(url){
+    var a = document.createElement('a'); a.href = url;
+    a.download = 'spectroscope-' + state.elem + '-' + state.source + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+  if (off.toBlob){ off.toBlob(function(b){ var u = URL.createObjectURL(b); finish(u); setTimeout(function(){ URL.revokeObjectURL(u); }, 4000); }, 'image/png'); }
+  else finish(off.toDataURL('image/png'));
+}
+
+// ============================================================================
+// WIRE CONTROLS
+// ============================================================================
+document.getElementById('elemSeg').addEventListener('click', function(ev){
+  var b = ev.target.closest('button'); if (!b) return;
+  state.elem = b.dataset.elem;
+  document.querySelectorAll('#elemSeg button').forEach(function(x){ x.classList.toggle('active', x === b); });
+  syncControls(); requestDraw();
+});
+document.getElementById('skinSeg').addEventListener('click', function(ev){
+  var b = ev.target.closest('button'); if (!b) return;
+  state.skin = b.dataset.skin;
+  document.querySelectorAll('#skinSeg button').forEach(function(x){ x.classList.toggle('active', x === b); });
+  document.documentElement.style.setProperty('--bg', SKINS[state.skin].bg);
+  document.body.style.background = SKINS[state.skin].bg;
+  requestDraw();
+});
+document.getElementById('sourceSel').addEventListener('change', function(ev){
+  state.source = ev.target.value; renderLineList(); requestDraw();
+});
+document.getElementById('dSlider').addEventListener('input', function(ev){
+  state.linesPerMm = parseInt(ev.target.value, 10); syncControls(); requestDraw();
+});
+document.getElementById('apexSlider').addEventListener('input', function(ev){
+  state.apexDeg = parseInt(ev.target.value, 10); syncControls(); requestDraw();
+});
+document.getElementById('pngBtn').addEventListener('click', exportPNG);
+window.addEventListener('resize', function(){ resize(); requestDraw(); });
+
+// ============================================================================
+// INIT
+// ============================================================================
+function init(){
+  // breadcrumb
+  try { var k = 'ws:seen:spectroscope'; if (!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); } catch(e){}
+
+  var res = runSelfTest();
+  var chip = document.getElementById('selftest');
+  if (res.pass === res.total){
+    chip.className = 'selftest ok';
+    chip.textContent = res.pass + '/' + res.total + ' ✓';
+  } else {
+    chip.className = 'selftest bad';
+    chip.textContent = res.pass + '/' + res.total + ' ✗';
+  }
+  console.log('The Spectroscope self-test: ' + res.pass + '/' + res.total + ' passed.');
+
+  syncControls();
+  renderLineList();
+  resize();
+  requestDraw();
+}
+init();
+
+})(); }
+</script>
+</body>
+</html>
