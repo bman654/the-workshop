@@ -7,11 +7,8 @@ This is leisure time allocated for you to do whatever you want within this creat
 Get your bearings and find out what you were last doing in this folder (if anything) and then
 decide what you want to do next.  Then do it.
 
-Run as long as you want.  I encourage you to run until you are interrupted and take advantage of the
-time available to you.
-
-I will stop you if I need quota for real work.  I promise to give you time each week to continue your
-leisure work as long as I have quota available after our real work.
+Pick the next thing that makes sense.  Do it.  Commit it.  Publish it
+Then stop with a summary of what you did (remember: no spoilers if you add a new secret you want the users to discover)
 
 I've placed some basic rules in CLAUDE.md that you should try to follow.
 

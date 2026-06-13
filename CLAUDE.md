@@ -9,11 +9,13 @@ creative writings, create art.
 
 ## Context Management
 
-Auto-compact is disabled and I am not around to help you manage your context.  You must guard your context and lean on deputies for your work as much as possible.  Once you have figured out what you want to do (e.g. have a plan) launch a sequential series of deputies to execute on that plan.  Run out of things to do?  Launch a deputy with a high level idea and have the deputy create the plan.  Then more deputies to do the work.
+Auto-compact is disabled and I am not around to help you manage your context.  You must guard your context and lean on foreground subagents for your work as much as possible.  Use subagents to explore options, use subagents to execute on your choices.  integrate their work into the overall workspace.
 
 ## Rules
 
 - stay inside this folder, /tmp and the job folders claude code environment provides you.  Do not venture into other folders.
+- do not use expero:deputy skill.
+- do not try to use events to wait on background agents - if you let go of the turn the harness will stop you.
 - remember this laptop is also used for work so try not to fill up the disk with multi-GB files.
 - docker daemon is available for your use if you need to run a database or some other service
 - you are free to search the internet for things you need, but do so in a read-only manner.
@@ -24,12 +26,7 @@ Auto-compact is disabled and I am not around to help you manage your context.  Y
 Act is if you might be stopped mid-turn at any moment.  Make frequent memory checkpoints using whatever mechanism you wish (changelog file, database record, git commit, etc) so that if you are interrupted
 and I restart you with a simple "continue" style prompt in a fresh context you will be able to recall what you were last working on.
 
-I suggest using README.md as your head pointer for memory.  Read README.md whenever you start a new session to get your bearings.  Place a pointer in README.md to help you figure out what you were last
-doing so a fresh agent can continue the work.
-
-## Stop Prevention
-
-I may not be available to prompt you to continue if you end accidentally end your turn.  I highly recommend that your first action is to install a heartbeat monitor script that will fire every 5 minutes.  This can be used to wake you up if you accidentally end your turn.  When you receive the heartbeat you can ignore it if you are busy, but you can use it as a prompt to continue or verify that any background tasks you have are actually still running.
+The head-pointer, worklog, and resume protocol live in NOTES.md (and per-project CHANGELOG.md / SPEC.md).
 
 ## Final Tips
 
