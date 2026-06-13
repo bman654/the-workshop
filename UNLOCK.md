@@ -5,10 +5,13 @@
 materialise only after a visitor has *earned* them by how they wander. The first of these is the
 **Living Lattice / Quickening**, found in **The Undercroft** (`undercroft/`).*
 
-This file is the **one canonical place** the convention lives. Each page stays fully
-self-contained (no shared import, no network) — so this is a **copy-paste micro-convention**, not
-a library. Every piece agrees on a tiny `localStorage` schema; pieces *write* trivial breadcrumbs,
-and the Undercroft *reads* them to decide what's unlocked.
+This file documents the convention; the **runnable source of truth** is the shared module
+[`tools/ws/ws.js`](tools/ws/ws.js). Every shipped page stays fully self-contained (no network,
+works on `file://`) — but the `ws:` logic is no longer copy-pasted. It lives in **one module,
+inlined into each page via forge** (`<!-- forge:include ../tools/ws/ws.js -->`): pages are now
+`*.src.html` → forge → `*.html`. Every piece agrees on a tiny `localStorage` schema; pieces
+*write* trivial breadcrumbs, and the Undercroft *reads* them to decide what's unlocked. The module
+also fires a tasteful in-the-moment **unlock cue** when a page's action newly satisfies a secret.
 
 ---
 
@@ -37,6 +40,7 @@ All keys are prefixed `ws:`. Values are strings (localStorage stores strings).
 | `ws:best:<game>` | Best score / level reached (number as string). | A game, on a milestone | `ws:best:chomp` = `3` |
 | `ws:dwell:<id>` | Accumulated dwell time in ms (rewards lingering). | A piece, on a timer / unload | `ws:dwell:drift` = `420000` |
 | `ws:flag:<event>` | A one-time event flag (presence ⇒ it happened). | A piece, on the event | `ws:flag:eleven` = `1` |
+| `ws:ann:<id>` | Cue bookkeeping: this secret's unlock has already been *announced* (so we never re-toast it). Also `ws:ann:bootstrap` = the feature has run once on this origin. | `ws.js`, automatically | `ws:ann:codex` = `1749…` |
 
 **`<id>` convention:** the page's basename without extension, lower-kebab
 (`game-of-life`, `lattice`, `quickening`, `chomp`, `drift`, …). Front-door **project** ids use the
@@ -56,43 +60,56 @@ project folder name (`strange-garden`, `arcade`, `sound-garden`, …).
 
 ---
 
-## The breadcrumb snippet (copy-paste into a piece)
+## The forge-module pattern (how a piece drops a breadcrumb)
 
-Drop this near the end of a piece's `<script>`. It's safe, silent, and degrades gracefully if
-storage is blocked (private mode / disabled). **Writing-only — a piece never *depends* on it.**
+No more copy-paste. A piece is authored as `index.src.html`; inside a `<script>` block (early
+enough that `WS` exists before you call it) add **one forge directive**, then write the
+breadcrumb synchronously at parse time:
 
-```js
-/* ws: unlock breadcrumb — see /UNLOCK.md. Records first-visit; harmless if storage is off. */
-(function(){
-  try {
-    var id = 'quickening';                         // <-- this piece's id
-    var k = 'ws:seen:' + id;
-    if (!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now()));
-  } catch (e) { /* storage blocked — secrets are a bonus, never a blocker */ }
-})();
+```html
+<!-- forge:include ../tools/ws/ws.js -->
+WS.seen('verse');     // <-- this piece's id
 ```
 
-Other write forms (same try/catch wrapper):
+Then build: `node tools/forge/forge.mjs verse/index.src.html` → `verse/index.html`. forge inlines
+the module and strips its dual-use guard, so the shipped `.html` is fully self-contained. The page
+needs nothing else — `ws.js` auto-inits on `DOMContentLoaded` and fires the cue (see below).
+
+The `WS` API (full reference: [`tools/ws/README.md`](tools/ws/README.md)) — all writers are wrapped,
+so storage-off is always harmless:
+
 ```js
-// milestone score (only raise it):
-var bk='ws:best:chomp', prev=+(localStorage.getItem(bk)||0); if(level>prev) localStorage.setItem(bk,String(level));
-// one-time flag:
-localStorage.setItem('ws:flag:eleven','1');
+WS.seen(id)                         // set ws:seen:<id>=now if absent; true if newly set
+WS.best(game, val)                  // raise ws:best:<game> only if val > current
+WS.flag(ev)                         // set ws:flag:<ev>='1'
+WS.dwellAdd(id, ms[, thresh, flag]) // add dwell ms, re-sum all ws:dwell:*, set patience at thresh
+WS.startDwell(id[, {tick,thresh,patienceFlag}]) // visible-only dwell ticker; returns an interval id
+WS.store()                          // {ok, has(k), get(k), all} snapshot over every ws: key
+WS.SECRETS                          // [{id, unlocked(s)}] — ids + predicates ONLY (no prose)
+WS.unlocked(id, store)              // is secret <id> unlocked? (guards store.ok)
 ```
 
-Dwell accumulator (drop in a meditative piece; accrues unhurried time, sets `ws:flag:patience` at a
-summed threshold across all `ws:dwell:*`). Only ticks while the tab is visible:
-```js
-(function(){ var id='lattice', TICK=5000, THRESH=150000;   // +5s/tick; ~2.5 min total
-  setInterval(function(){ if (document.hidden) return; try{
-    var k='ws:dwell:'+id; localStorage.setItem(k, String((+localStorage.getItem(k)||0)+TICK));
-    var total=0; for (var i=0;i<localStorage.length;i++){ var kk=localStorage.key(i);
-      if (kk && kk.indexOf('ws:dwell:')===0) total += (+localStorage.getItem(kk)||0); }
-    if (total>=THRESH && !localStorage.getItem('ws:flag:patience'))
-      localStorage.setItem('ws:flag:patience','1');
-  }catch(e){} }, TICK);
-})();
-```
+Examples: a game raising a milestone — `WS.best('swarm', wave)`; a one-time event —
+`WS.flag('eleven')`; a meditative piece accruing unhurried time — `WS.startDwell('lattice')`
+(sets `ws:flag:patience` once the summed `ws:dwell:*` total crosses ~2.5 min).
+
+### The unlock cue (announced-namespace `ws:ann:`)
+
+When a breadcrumb newly satisfies a secret's predicate, `ws.js` shows a tasteful, **spoiler-light**
+candlelit toast — "✦ Something stirs in the dark beneath the workshop." (a warmer line if the
+visitor has already found the Undercroft). It never names the secret. One toast even if several
+unlock at once; auto-dismisses (~7s); respects `prefers-reduced-motion`; an optional whisper chime
+plays *only* if an AudioContext is already running (never autoplay).
+
+Mechanics, all automatic on a converted page:
+- **`WS.bootstrap()`** — on the *first ever* run on this origin it silently marks `ws:ann:<id>` for
+  every already-satisfied secret (so a returning visitor who unlocked things *before* this feature
+  existed gets **no cue spam**), then sets `ws:ann:bootstrap`.
+- **`WS.checkUnlocks()`** — toasts each satisfied-but-unannounced secret exactly once, marking
+  `ws:ann:<id>` so it never re-fires.
+
+The Undercroft's "forget my discoveries" reset clears all `ws:` keys, which now includes
+`ws:ann:*` — so forgetting also re-arms the cue.
 
 ---
 
@@ -104,8 +121,12 @@ summed threshold across all `ws:dwell:*`). Only ticks while the tab is visible:
    locked with a calm note — it never errors.
 3. **Honesty.** The Undercroft offers a quiet **"forget my discoveries"** reset that clears the
    `ws:` keys (and only those).
-4. **Self-contained.** No shared JS import, no network. This convention is documented here and
-   pasted where needed.
+4. **Self-contained *artifact*, shared *source*.** Every shipped `.html` is fully self-contained
+   (no network, works on `file://`) — but that's a property of the SHIPPED file, not the process.
+   The `ws:` logic is **not** copy-pasted: it lives in the one module `tools/ws/ws.js`, inlined at
+   build time via forge. Pages are `*.src.html` → forge → `*.html`; never hand-edit a generated
+   `.html`. (Mild tradeoff: the unlock *predicates* now appear in each trigger page's source — that's
+   acceptable. Secret *names / blurbs / riddles* stay only in the Undercroft, so no prose leaks.)
 5. **Once unlocked, stays unlocked** (the timestamp persists).
 
 ---
@@ -113,10 +134,14 @@ summed threshold across all `ws:dwell:*`). Only ticks while the tab is visible:
 ## Adding a future secret
 
 1. Decide its **trigger** (exploration combo / score / dwell / configuration / a combination).
-2. Make the relevant piece(s) drop the breadcrumb(s) above (trivial, additive).
-3. Add the secret to the Undercroft's `SECRETS` table: its `id`, display, **riddle-hint**, the
-   `unlocked(store)` predicate, and where it lives once revealed.
-4. Test the trail **on a served origin** (see the caveat).
+2. Make the relevant piece(s) drop the breadcrumb(s) — add `WS.seen(...)` / `WS.flag(...)` /
+   `WS.best(...)` to each piece's `.src.html` and re-run forge (trivial, additive).
+3. Add the secret's **predicate** to `tools/ws/ws.js`'s `WS.SECRETS` (id + `unlocked(s)` only),
+   add an assertion to `tools/ws/ws.test.cjs`, and add its rich **display** row (name, badge,
+   blurb, riddle-hint, signs, where it lives) to the Undercroft's `SECRETS` table. The cue fires
+   automatically once the predicate is in the shared table.
+4. Re-run `node tools/ws/ws.test.cjs` and `node tools/forge/forge.mjs --check --all`, then test the
+   trail **on a served origin** (see the caveat).
 
-That's the whole framework. The Undercroft is the reader/aggregator + unlock-rule evaluator; every
-piece just leaves footprints.
+That's the whole framework. `tools/ws/ws.js` is the unlock-rule evaluator + cue; the Undercroft is
+the reader/aggregator + the rich display; every piece just leaves footprints.

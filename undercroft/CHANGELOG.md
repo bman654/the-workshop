@@ -1,5 +1,46 @@
 # The Undercroft — changelog
 
+## Build 10 — the `ws:` system becomes one shared, forged module + an in-the-moment unlock cue (2026-06-13)
+
+**Architectural refactor (foundation pass).** The `ws:` unlock convention — hand-rolled and
+copy-pasted into every page since Build 1 — is now **one source of truth**: the module
+`tools/ws/ws.js`, inlined into pages **via forge** (`<!-- forge:include ../tools/ws/ws.js -->`).
+Shipped `.html` files stay fully self-contained; the logic just no longer lives in eleven places.
+A Node self-test (`tools/ws/ws.test.cjs`, **36/36 PASS**) keeps the "a self-test proves it" promise.
+
+`WS` API: writers `seen/best/flag/dwellAdd/startDwell` (all storage-off-safe), reader `store()`
+(same `{ok,has,get,all}` shape as the old `makeStore`), the predicate table `WS.SECRETS`
+(**ids + `unlocked(s)` predicates only** — secret names/blurbs/riddles stay here in the Undercroft
+so no prose leaks into public page source), and `WS.unlocked(id, store)`.
+
+**New: an in-the-moment unlock cue** (announced-namespace `ws:ann:`). When a page's action newly
+satisfies a secret's predicate, a tasteful **candlelit toast** slides in — *"✦ Something stirs in
+the dark beneath the workshop."* (a warmer line if the visitor already found the cellar). It is
+**spoiler-light**: never names the secret; one toast even if several unlock at once; auto-dismisses
+(~7s); respects `prefers-reduced-motion`; an optional whisper chime plays *only* if an AudioContext
+is already running (never autoplay). `WS.bootstrap()` silently pre-marks every already-satisfied
+secret on the first run on an origin, so a **returning** visitor who unlocked things before this
+feature existed gets **no cue spam**; `WS.checkUnlocks()` toasts each newly-satisfied secret exactly
+once. Auto-fires on `DOMContentLoaded` — a converted page only needs the `forge:include` + a
+`WS.seen('…')` call.
+
+**This Undercroft page**: now forged from `undercroft/index.src.html` (inlines `ws.js`); `makeStore()`
+delegates to `WS.store()`; `render()`'s unlock decision is now `WS.unlocked(sec.id, store)` (the inline
+`unlocked:` closures were removed from the display rows — names/blurbs/riddles/signs are unchanged).
+The "forget my discoveries" reset already clears every `ws:` key, which now also sweeps `ws:ann:*`
+(re-arming the cue). Behavior is **identical** to Build 9.
+
+**Proof-of-cue pair converted** (the `codex` / "The Gilded Leaf" trail): `verse/index.src.html` and
+`scriptorium/index.src.html` now inline `ws.js` and call `WS.seen('verse')` / `WS.seen('scriptorium')`
+instead of a hand-rolled IIFE. Visiting both fires the cue once on the second page.
+
+`UNLOCK.md` rewritten to document the forge-module pattern, the `ws:ann:` namespace + bootstrap, and
+the cue; guardrail #4 revised (self-contained *artifact*, shared *source*; pages are `*.src.html` →
+forge → `*.html`). `node tools/forge/forge.mjs --check --all` exits 0. Verified on a served origin
+(never `file://`): cue fires once on the 2nd page, no re-fire on reload, no bootstrap spam for a
+pre-feature visitor, Undercroft parity, consoles clean. *(Phase-2 will convert the remaining trigger
+pages so the cue fires on every trail.)*
+
 ## Build 9 — "The Night Shift", the hidden world's first interactive room (2026-06-12)
 
 Added the Undercroft's **11th secret**: a `place` row, `id:'night-shift'`, **The Night Shift** (badge
