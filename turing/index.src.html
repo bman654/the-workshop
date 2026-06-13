@@ -1,0 +1,930 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Mill</title>
+<style>
+  :root{
+    /* brass (default) skin */
+    --bg:#080a0f;
+    --bg-grad1:rgba(120,84,36,0.16);
+    --bg-grad2:rgba(70,52,30,0.14);
+    --ink:#eaf0fa;
+    --ink-dim:#8b95a8;
+    --accent:#c9a24a;
+    --accent-soft:rgba(201,162,74,0.16);
+    --panel-bg:rgba(13,15,22,0.88);
+    --panel-edge:rgba(201,162,74,0.34);
+    --cell-bg:rgba(20,23,32,0.9);
+    --cell-edge:rgba(201,162,74,0.22);
+    --cell-ink:#d9e2f2;
+    --head-bg:rgba(201,162,74,0.92);
+    --head-ink:#1a1206;
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    background:
+      radial-gradient(1200px 700px at 72% 16%, var(--bg-grad1), transparent 60%),
+      radial-gradient(900px 600px at 18% 92%, var(--bg-grad2), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .topbar .right{ display:flex; align-items:center; gap:14px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:default; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+    padding:64px 22px 18px; min-width:0; gap:18px; overflow:hidden; }
+
+  /* the machine readout: state badge + counters + status */
+  #readout{ width:min(960px,100%); display:flex; flex-wrap:wrap; align-items:stretch; gap:10px; }
+  .gauge{ flex:1 1 auto; min-width:104px; background:var(--panel-bg); border:1px solid var(--panel-edge); border-radius:11px;
+    padding:10px 14px; display:flex; flex-direction:column; gap:4px; backdrop-filter: blur(8px); }
+  .gauge .lbl{ font:600 9px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--ink-dim); }
+  .gauge .val{ font:700 22px/1 var(--font-mono); color:var(--accent); font-variant-numeric:tabular-nums; }
+  .gauge .val.state{ font-size:24px; }
+  .gauge.status .val{ font-size:15px; }
+  .gauge.status .val.run{ color:#8fd79a; }
+  .gauge.status .val.halt{ color:#c9a24a; }
+  .gauge.status .val.cap{ color:#f0b27a; }
+
+  /* the tape */
+  #tapeWrap{ width:min(960px,100%); position:relative; }
+  #tapeViewport{ position:relative; overflow:hidden; padding:30px 0 8px; }
+  /* head pointer (the ▼ over the centre cell) */
+  #headPtr{ position:absolute; top:4px; left:50%; transform:translateX(-50%); z-index:5;
+    width:0; height:0; border-left:13px solid transparent; border-right:13px solid transparent;
+    border-top:16px solid var(--accent); filter:drop-shadow(0 2px 4px rgba(0,0,0,.5)); }
+  #headLbl{ position:absolute; top:-16px; left:50%; transform:translateX(-50%); z-index:5;
+    font:600 8.5px/1 var(--font-mono); letter-spacing:.22em; text-transform:uppercase; color:var(--accent); opacity:.85; white-space:nowrap; }
+  #tapeTrack{ display:flex; will-change:transform;
+    transition:transform .18s cubic-bezier(.3,.7,.3,1); }
+  .cell{ flex:0 0 var(--cw,56px); height:var(--cw,56px); display:flex; align-items:center; justify-content:center;
+    margin:0 3px; border:1px solid var(--cell-edge); border-radius:9px; background:var(--cell-bg);
+    font:600 24px/1 var(--font-mono); color:var(--cell-ink); position:relative; transition:background .15s, border-color .15s, color .15s; }
+  .cell.blank{ color:var(--ink-dim); opacity:.5; }
+  .cell.head{ background:var(--head-bg); color:var(--head-ink); border-color:var(--accent); font-weight:800;
+    box-shadow:0 0 0 2px var(--accent), 0 8px 26px -8px var(--accent); }
+  .cell .pos{ position:absolute; bottom:-15px; left:0; right:0; text-align:center; font:9px/1 var(--font-mono); color:var(--ink-dim); opacity:.42; }
+  /* fade edges so the tape reads as "infinite" */
+  #tapeViewport::before, #tapeViewport::after{ content:''; position:absolute; top:0; bottom:0; width:64px; z-index:4; pointer-events:none; }
+  #tapeViewport::before{ left:0; background:linear-gradient(90deg, var(--bg), transparent); }
+  #tapeViewport::after{ right:0; background:linear-gradient(270deg, var(--bg), transparent); }
+
+  /* transport controls */
+  #transport{ width:min(960px,100%); display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  .tbtn{ border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:9px; padding:10px 16px; font:600 13px/1 var(--font-ui); letter-spacing:.3px; cursor:pointer; transition:.15s; }
+  .tbtn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .tbtn:disabled{ opacity:.4; cursor:default; }
+  .tbtn.primary{ background:linear-gradient(180deg, rgba(201,162,74,0.26), rgba(201,162,74,0.08)); }
+  .tbtn.primary:hover{ background:linear-gradient(180deg, rgba(201,162,74,0.40), rgba(201,162,74,0.14)); }
+  #transport .spacer{ flex:1 1 auto; }
+  .speedwrap{ display:flex; align-items:center; gap:8px; font:11px/1 var(--font-mono); color:var(--ink-dim); }
+  .speedwrap input[type=range]{ width:120px; accent-color:var(--accent); cursor:pointer; }
+
+  .progblurb{ width:min(960px,100%); font:12px/1.55 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; margin:-4px 0 0; }
+  .progblurb b{ color:var(--accent); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:342px; flex:0 0 342px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 18px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); }
+  .row{ margin:13px 0; }
+  .row > label{ display:block; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  select, input[type=text]{
+    width:100%; background:rgba(0,0,0,0.32); border:1px solid var(--panel-edge); color:var(--ink);
+    border-radius:8px; padding:8px 10px; font:13px/1.2 var(--font-mono); letter-spacing:.3px; outline:none;
+  }
+  select:focus, input[type=text]:focus{ border-color:var(--accent); }
+  .inputrow{ display:none; }
+  .inputrow.show{ display:block; }
+
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(201,162,74,0.24); }
+  .seg button{ flex:1; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 4px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; font-family:var(--font-mono); }
+  .seg button.active{ background:var(--accent); color:#201704; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+
+  /* transition table editor */
+  .ttwrap{ border:1px solid var(--panel-edge); border-radius:10px; overflow:hidden; }
+  table.tt{ width:100%; border-collapse:collapse; font:11.5px/1.2 var(--font-mono); }
+  table.tt th{ background:rgba(0,0,0,0.34); color:var(--ink-dim); font-weight:600; letter-spacing:.08em;
+    text-transform:uppercase; font-size:8.5px; padding:6px 5px; text-align:center; border-bottom:1px solid var(--panel-edge); }
+  table.tt td{ padding:3px 4px; text-align:center; border-bottom:1px solid rgba(201,162,74,0.12); border-left:1px solid rgba(201,162,74,0.08); }
+  table.tt td:first-child{ border-left:none; }
+  table.tt td.rule{ cursor:default; }
+  table.tt input{ width:100%; min-width:30px; background:rgba(0,0,0,0.28); border:1px solid rgba(201,162,74,0.2);
+    color:var(--cell-ink); border-radius:5px; padding:4px 3px; font:11.5px/1 var(--font-mono); text-align:center; outline:none; }
+  table.tt input:focus{ border-color:var(--accent); background:rgba(201,162,74,0.10); }
+  table.tt input.bad{ border-color:#e06a55; color:#f08a7a; }
+  table.tt .stcell{ color:var(--accent); font-weight:700; font-size:13px; }
+  table.tt tr.active-state{ background:rgba(201,162,74,0.07); }
+  table.tt tr.active-state .stcell{ text-shadow:0 0 10px var(--accent); }
+  .ttnote{ font:10px/1.5 var(--font-mono); color:var(--ink-dim); opacity:.85; margin-top:8px; letter-spacing:.2px; }
+  .ttnote b{ color:var(--accent); }
+  .tterr{ font:10.5px/1.45 var(--font-mono); color:#f0b27a; margin-top:7px; min-height:14px; }
+
+  .btnrow{ display:flex; gap:8px; margin:13px 0; }
+  .btn{ flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s; font-family:var(--font-ui); }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(201,162,74,0.26), rgba(201,162,74,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(201,162,74,0.40), rgba(201,162,74,0.14)); }
+
+  .hint{ font:10.5px/1.55 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:14px 0 4px;
+    border-top:1px solid rgba(201,162,74,0.18); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+
+  @media (max-width: 880px){
+    #wrap{ flex-direction:column; overflow-y:auto; }
+    body{ overflow:auto; }
+    #stage{ padding:62px 14px 14px; }
+    #panel{ width:100%; flex:0 0 auto; height:auto; border-left:none; border-top:1px solid var(--panel-edge);
+      box-shadow:none; padding:18px 14px 28px; }
+    .cell{ flex-basis:var(--cw,46px); height:var(--cw,46px); font-size:20px; }
+    .brand{ flex-direction:column; gap:1px; }
+    .brand h1{ font-size:18px; }
+    .brand .tag{ display:none; }
+    .topbar{ padding:12px 14px 0; gap:10px; }
+    .selftest{ font-size:9px; padding:5px 8px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    #tapeTrack{ transition:none; }
+    .cell{ transition:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; workshop</a>
+    <div class="brand">
+      <h1>The Mill</h1>
+      <span class="tag">a programmable Turing machine</span>
+    </div>
+    <div class="right">
+      <div class="selftest" id="selftest" title="built-in self-test">checking&hellip;</div>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <div id="readout">
+        <div class="gauge"><span class="lbl">state</span><span class="val state" id="gState">A</span></div>
+        <div class="gauge"><span class="lbl">read</span><span class="val" id="gRead">·</span></div>
+        <div class="gauge"><span class="lbl">step</span><span class="val" id="gStep">0</span></div>
+        <div class="gauge"><span class="lbl">ones (&Sigma;)</span><span class="val" id="gOnes">0</span></div>
+        <div class="gauge status"><span class="lbl">status</span><span class="val" id="gStatus">ready</span></div>
+      </div>
+
+      <div id="tapeWrap">
+        <div id="tapeViewport">
+          <div id="headLbl">head</div>
+          <div id="headPtr"></div>
+          <div id="tapeTrack"></div>
+        </div>
+      </div>
+
+      <div id="transport">
+        <button class="tbtn" id="btnStep">Step &#9656;</button>
+        <button class="tbtn primary" id="btnRun">Run</button>
+        <button class="tbtn" id="btnReset">Reset</button>
+        <div class="spacer"></div>
+        <div class="speedwrap">
+          <span>speed</span>
+          <input type="range" id="speed" min="1" max="60" value="14" title="steps per second">
+          <span id="speedVal">14/s</span>
+        </div>
+      </div>
+
+      <p class="progblurb" id="progBlurb"></p>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A real <b>Turing machine</b> — the abstract computer Alan Turing imagined in 1936. A single head shuttles over an unbounded <b>tape</b>, reading and writing one symbol at a time; a tiny table of rules — the <b>program</b> — says what to do for each (state, symbol). Step it, or set it running, and watch a computation unfold cell by cell.</p>
+
+      <div class="row">
+        <label for="progSel">Program</label>
+        <select id="progSel"></select>
+      </div>
+
+      <div class="row inputrow" id="inputRow">
+        <label for="inputBox" id="inputLbl">Input</label>
+        <input type="text" id="inputBox" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </div>
+
+      <div class="row">
+        <label>Transition table — the program (click a cell to edit)</label>
+        <div class="ttwrap">
+          <table class="tt" id="ttable"></table>
+        </div>
+        <div class="ttnote">Each rule is <b>write&middot;move&middot;next</b>: the symbol to write, the move (<b>L</b>/<b>R</b>/<b>N</b>), and the next state. A blank rule means <b>halt (stuck)</b>. Editing rebuilds the machine and resets it.</div>
+        <div class="tterr" id="ttErr"></div>
+      </div>
+
+      <div class="row">
+        <label>Skin</label>
+        <div class="seg" id="skinSeg">
+          <button data-skin="brass" class="active">Brass</button>
+          <button data-skin="slate">Slate</button>
+          <button data-skin="terminal">Terminal</button>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn primary" id="btnPng">Export 2&times; PNG</button>
+      </div>
+
+      <div class="hint">
+        The tape is <b>unbounded</b> — blanks stretch forever both ways; only the visited cells are stored. The
+        <b>busy beavers</b> are the rigorous centerpiece: from a blank tape, <b>BB(4) halts after exactly 107 steps</b>
+        leaving 13 ones — the proven 4-state record. Try editing one of its rules and watch the proof break.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+/* =====================================================================
+   THE MILL — a visible, programmable single-tape TURING MACHINE. The
+   workshop's first piece of pure COMPUTATION. Single file, 0 deps, 0
+   network, NO audio.
+
+   THE CRUX: a pure, DOM-free Turing CORE (tools/turing/turing.js) is the
+   single source of truth for BOTH the live tape you watch AND the green
+   self-test chip — and the SAME core runs headlessly in Node
+   (tools/turing/turing.test.cjs). A machine is supplied as DATA (one
+   engine, many programs); the renderer only draws the config the core
+   produces. The headline claim is rigorous and checkable: the busy-beaver
+   champions BB(2)/BB(3)/BB(4) halt from a blank tape after EXACTLY the
+   proven step counts (6, 14, 107) leaving exactly (4, 6, 13) ones. Skins
+   are cosmetic only.
+   ===================================================================== */
+
+/* The core + program library are inlined here by forge (see the bottom of
+   this file). In the browser they attach `Turing` and `TuringPrograms`. */
+<!-- forge:include ../tools/turing/turing.js -->
+<!-- forge:include ../tools/turing/programs.js -->
+
+var T = Turing;
+var LIB = TuringPrograms;
+
+/* =====================================================================
+   SELF-TEST — calls the REAL core on the REAL library. Green chip, never
+   red. Mirrors tools/turing/turing.test.cjs; proves the same four claims:
+   correct simulator, busy-beaver champion numbers, halting/step-cap,
+   determinism.
+   ===================================================================== */
+function runSelfTest() {
+  var pass = 0, total = 0;
+  function check(name, cond) {
+    total++;
+    if (cond) pass++;
+    else if (typeof console !== 'undefined') console.error('Mill self-test FAIL: ' + name);
+  }
+
+  function matchExpect(r, expect) {
+    for (var k in expect) {
+      if (!Object.prototype.hasOwnProperty.call(expect, k)) continue;
+      if (r[k] !== expect[k]) return false;
+    }
+    return true;
+  }
+
+  // 1. correct simulator: every library test vector matches.
+  for (var pi = 0; pi < LIB.PROGRAMS.length; pi++) {
+    var prog = LIB.PROGRAMS[pi];
+    var tests = prog.tests || [];
+    for (var ti = 0; ti < tests.length; ti++) {
+      var tc = tests[ti];
+      if (tc.skip) continue;
+      var cap = tc.cap != null ? tc.cap : (prog.maxSteps != null ? prog.maxSteps : 100000);
+      var r = T.run(prog, tc.input, { maxSteps: cap });
+      check(prog.id + ' on "' + tc.input + '"', matchExpect(r, tc.expect));
+    }
+  }
+
+  // 2. busy-beaver champions hit the EXACT proven (S, Σ).
+  var BB = { bb2: { steps: 6, ones: 4 }, bb3: { steps: 14, ones: 6 }, bb4: { steps: 107, ones: 13 } };
+  var ids = ['bb2', 'bb3', 'bb4'];
+  for (var bi = 0; bi < ids.length; bi++) {
+    var p = LIB.byId(ids[bi]), w = BB[ids[bi]];
+    var rb = T.run(p, '', { maxSteps: 100000 });
+    check('BB ' + ids[bi] + ' = ' + w.steps + ' steps / ' + w.ones + ' ones',
+          rb.halted && !rb.stuck && rb.steps === w.steps && rb.onesCount === w.ones);
+  }
+
+  // 3. halting + step cap: the non-halting machine is capped, not hung.
+  var rf = T.run(LIB.byId('forever'), '', { maxSteps: 300 });
+  check('non-halting machine capped at 300 (not halted)', rf.capped === true && rf.halted === false && rf.steps === 300);
+
+  // 4. determinism: a probe machine produces an identical run twice.
+  function fp(r) { return [r.steps, r.onesCount, r.headPos, r.state, r.halted, r.stuck, r.capped, r.tapeString].join('|'); }
+  var detOk = true, probes = ['bb4', 'bininc', 'palindrome', 'double'], ins = { bininc: '1011', palindrome: 'abba', double: '111' };
+  for (var qi = 0; qi < probes.length; qi++) {
+    var pp = LIB.byId(probes[qi]), inp = ins[probes[qi]] != null ? ins[probes[qi]] : '';
+    var capq = pp.maxSteps != null ? pp.maxSteps : 100000;
+    if (fp(T.run(pp, inp, { maxSteps: capq })) !== fp(T.run(pp, inp, { maxSteps: capq }))) detOk = false;
+  }
+  check('determinism: identical run twice', detOk);
+
+  return { pass: pass, total: total };
+}
+
+/* =====================================================================
+   SKINS — COSMETIC ONLY (palette). No logic, no machine, no geometry.
+   ===================================================================== */
+var SKINS = {
+  brass: {
+    bg:'#080a0f', grad1:'rgba(120,84,36,0.16)', grad2:'rgba(70,52,30,0.14)',
+    ink:'#eaf0fa', inkDim:'#8b95a8', accent:'#c9a24a', accentSoft:'rgba(201,162,74,0.16)',
+    panelEdge:'rgba(201,162,74,0.34)', cellBg:'rgba(20,23,32,0.9)', cellEdge:'rgba(201,162,74,0.22)',
+    cellInk:'#d9e2f2', headBg:'rgba(201,162,74,0.92)', headInk:'#1a1206'
+  },
+  slate: {
+    bg:'#0a0d12', grad1:'rgba(80,110,150,0.14)', grad2:'rgba(40,60,90,0.12)',
+    ink:'#e6edf6', inkDim:'#8896a8', accent:'#7fb4e6', accentSoft:'rgba(127,180,230,0.16)',
+    panelEdge:'rgba(127,180,230,0.32)', cellBg:'rgba(22,28,38,0.9)', cellEdge:'rgba(127,180,230,0.2)',
+    cellInk:'#dbe6f4', headBg:'rgba(127,180,230,0.92)', headInk:'#08131f'
+  },
+  terminal: {
+    bg:'#05080a', grad1:'rgba(40,120,70,0.13)', grad2:'rgba(20,70,40,0.11)',
+    ink:'#d6f0dc', inkDim:'#6f8a78', accent:'#5fd98a', accentSoft:'rgba(95,217,138,0.15)',
+    panelEdge:'rgba(95,217,138,0.30)', cellBg:'rgba(10,20,14,0.92)', cellEdge:'rgba(95,217,138,0.2)',
+    cellInk:'#c4eccf', headBg:'rgba(95,217,138,0.92)', headInk:'#04140a'
+  }
+};
+function applySkinVars() {
+  var sk = SKINS[STATE.skin], rs = document.documentElement.style;
+  rs.setProperty('--bg', sk.bg);
+  rs.setProperty('--bg-grad1', sk.grad1);
+  rs.setProperty('--bg-grad2', sk.grad2);
+  rs.setProperty('--ink', sk.ink);
+  rs.setProperty('--ink-dim', sk.inkDim);
+  rs.setProperty('--accent', sk.accent);
+  rs.setProperty('--accent-soft', sk.accentSoft);
+  rs.setProperty('--panel-edge', sk.panelEdge);
+  rs.setProperty('--cell-bg', sk.cellBg);
+  rs.setProperty('--cell-edge', sk.cellEdge);
+  rs.setProperty('--cell-ink', sk.cellInk);
+  rs.setProperty('--head-bg', sk.headBg);
+  rs.setProperty('--head-ink', sk.headInk);
+}
+
+/* =====================================================================
+   STATE — the live machine + its running config. `machine` is a DATA def
+   (possibly edited from the library); `config` is the core's instantaneous
+   description. skin is cosmetic and never reaches the core.
+   ===================================================================== */
+var STATE = {
+  skin: 'brass',
+  progId: 'bb4',
+  machine: null,        // the (possibly edited) machine def
+  baseInput: '',        // the input the tape was reset from
+  config: null,         // the core config
+  running: false,
+  timer: null,
+  speed: 14,            // steps per second
+  cellW: 56
+};
+
+var reduceMotion = false;
+try { reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+
+/* deep-clone a machine def so edits never mutate the shared library object. */
+function cloneMachine(m) {
+  var t = {};
+  for (var s in m.transitions) {
+    if (!Object.prototype.hasOwnProperty.call(m.transitions, s)) continue;
+    var row = m.transitions[s], nr = {};
+    for (var rd in row) {
+      if (!Object.prototype.hasOwnProperty.call(row, rd)) continue;
+      var rule = row[rd];
+      nr[rd] = { write: rule.write, move: rule.move, next: rule.next };
+    }
+    t[s] = nr;
+  }
+  var halt = Array.isArray(m.halt) ? m.halt.slice() : m.halt;
+  return {
+    id: m.id, name: m.name, blurb: m.blurb, blank: m.blank, start: m.start, halt: halt,
+    takesInput: m.takesInput, inputLabel: m.inputLabel, sampleInput: m.sampleInput,
+    maxSteps: m.maxSteps, accept: m.accept, reject: m.reject,
+    busyBeaver: m.busyBeaver, neverHalts: m.neverHalts, transitions: t
+  };
+}
+
+/* =====================================================================
+   THE TAPE RENDERER — a strip of cells centred on the head. The head is
+   ALWAYS the centre cell; the tape SLIDES under it. We render a fixed
+   window of cells around the head position; off-window cells are blank.
+   ===================================================================== */
+var trackEl = document.getElementById('tapeTrack');
+var viewportEl = document.getElementById('tapeViewport');
+
+function visibleHalfWindow() {
+  var w = viewportEl.clientWidth || 720;
+  var per = STATE.cellW + 6;            // cell + margins
+  return Math.max(4, Math.ceil((w / per) / 2) + 2);
+}
+
+function renderTape() {
+  var cfg = STATE.config, m = STATE.machine;
+  if (!cfg) return;
+  var head = cfg.head;
+  var half = visibleHalfWindow();
+  var lo = head - half, hi = head + half;
+
+  // build (or rebuild) cells for [lo..hi]
+  trackEl.innerHTML = '';
+  for (var p = lo; p <= hi; p++) {
+    var sym = T.tapeRead(cfg.tape, p);
+    var cell = document.createElement('div');
+    cell.className = 'cell' + (sym === m.blank ? ' blank' : '') + (p === head ? ' head' : '');
+    cell.textContent = sym === m.blank ? '·' : sym;
+    var pos = document.createElement('span');
+    pos.className = 'pos';
+    pos.textContent = p;
+    cell.appendChild(pos);
+    trackEl.appendChild(cell);
+  }
+  // centre the head cell under the head pointer: shift the track so the
+  // (head-lo)-th cell sits at the viewport centre.
+  var per = STATE.cellW + 6;
+  var idxOfHead = head - lo;
+  var centre = (viewportEl.clientWidth / 2) - (STATE.cellW / 2) - 3;
+  var offset = centre - idxOfHead * per;
+  trackEl.style.transform = 'translateX(' + offset + 'px)';
+}
+
+/* =====================================================================
+   READOUT — state badge, read symbol, step counter, ones (Σ), status.
+   ===================================================================== */
+function isAcceptState(st) { return STATE.machine.accept != null && st === STATE.machine.accept; }
+function isRejectState(st) { return STATE.machine.reject != null && st === STATE.machine.reject; }
+
+function updateReadout() {
+  var cfg = STATE.config, m = STATE.machine;
+  if (!cfg) return;
+  document.getElementById('gState').textContent = cfg.state;
+  var read = T.tapeRead(cfg.tape, cfg.head);
+  document.getElementById('gRead').textContent = read === m.blank ? '·' : read;
+  document.getElementById('gStep').textContent = cfg.steps;
+  document.getElementById('gOnes').textContent = T.onesCount(cfg.tape);
+
+  var statusEl = document.getElementById('gStatus');
+  statusEl.className = 'val';
+  if (STATE.running) { statusEl.textContent = 'running…'; statusEl.classList.add('run'); }
+  else if (cfg.halted) {
+    if (isAcceptState(cfg.state)) { statusEl.textContent = 'ACCEPT ✓'; statusEl.classList.add('halt'); }
+    else if (isRejectState(cfg.state)) { statusEl.textContent = 'REJECT ✗'; statusEl.classList.add('cap'); }
+    else if (cfg.stuck) { statusEl.textContent = 'halted (stuck)'; statusEl.classList.add('halt'); }
+    else { statusEl.textContent = 'HALTED'; statusEl.classList.add('halt'); }
+  } else if (atCap()) {
+    statusEl.textContent = 'capped — still running'; statusEl.classList.add('cap');
+  } else {
+    statusEl.textContent = 'ready';
+  }
+
+  // highlight the active state row in the table
+  var rows = document.querySelectorAll('#ttable tr[data-state]');
+  for (var i = 0; i < rows.length; i++) {
+    rows[i].classList.toggle('active-state', rows[i].getAttribute('data-state') === cfg.state && !cfg.halted);
+  }
+
+  // transport buttons
+  var done = cfg.halted || atCap();
+  document.getElementById('btnStep').disabled = done && cfg.halted;   // stuck/halt → no more steps
+  document.getElementById('btnRun').textContent = STATE.running ? 'Pause' : (done ? 'Run' : 'Run');
+}
+
+function currentCap() { return STATE.machine.maxSteps != null ? STATE.machine.maxSteps : 100000; }
+function atCap() { return !!STATE.config && !STATE.config.halted && STATE.config.steps >= currentCap(); }
+
+/* =====================================================================
+   DRIVING THE MACHINE — single step + auto-run loop. Both go through the
+   SAME core T.step(); the renderer only draws the resulting config.
+   ===================================================================== */
+function doStep() {
+  var cfg = STATE.config;
+  if (cfg.halted || atCap()) { stopRun(); render(); return false; }
+  T.step(STATE.machine, cfg);
+  render();
+  if (cfg.halted || atCap()) { stopRun(); }
+  return !cfg.halted && !atCap();
+}
+
+function startRun() {
+  if (STATE.running) return;
+  if (STATE.config.halted || atCap()) return;
+  // Reduced-motion: don't animate an auto-run. Run straight to halt/cap in one
+  // synchronous pass (no per-step shuttling), then render once. Step still works
+  // cell-by-cell for those who want to watch.
+  if (reduceMotion) {
+    var cfg = STATE.config, cap = currentCap();
+    while (!cfg.halted && cfg.steps < cap) T.step(STATE.machine, cfg);
+    render();
+    return;
+  }
+  STATE.running = true;
+  document.getElementById('btnRun').textContent = 'Pause';
+  scheduleTick();
+  updateReadout();
+}
+function scheduleTick() {
+  if (!STATE.running) return;
+  var interval = Math.max(16, 1000 / STATE.speed);
+  STATE.timer = setTimeout(function () {
+    if (!STATE.running) return;
+    var cont = doStep();
+    if (cont) scheduleTick();
+    else stopRun();
+  }, interval);
+}
+function stopRun() {
+  STATE.running = false;
+  if (STATE.timer) { clearTimeout(STATE.timer); STATE.timer = null; }
+  document.getElementById('btnRun').textContent = 'Run';
+  updateReadout();
+}
+function toggleRun() {
+  if (STATE.running) stopRun();
+  else startRun();
+}
+
+function render() {
+  renderTape();
+  updateReadout();
+}
+
+/* =====================================================================
+   RESET — rebuild the config from the current machine + input.
+   ===================================================================== */
+function resetMachine() {
+  stopRun();
+  var input = STATE.machine.takesInput ? STATE.baseInput : '';
+  STATE.config = T.newConfig(STATE.machine, input);
+  render();
+}
+
+/* =====================================================================
+   LOAD A PROGRAM from the library (fresh clone).
+   ===================================================================== */
+function loadProgram(id) {
+  var base = LIB.byId(id);
+  if (!base) return;
+  STATE.progId = id;
+  STATE.machine = cloneMachine(base);
+  STATE.baseInput = base.takesInput ? (base.sampleInput || '') : '';
+
+  // input row
+  var inRow = document.getElementById('inputRow');
+  var inBox = document.getElementById('inputBox');
+  var inLbl = document.getElementById('inputLbl');
+  if (base.takesInput) {
+    inRow.classList.add('show');
+    inLbl.textContent = base.inputLabel || 'Input';
+    inBox.value = STATE.baseInput;
+    inBox.placeholder = base.sampleInput || '';
+  } else {
+    inRow.classList.remove('show');
+  }
+
+  // blurb (with the busy-beaver promise made explicit)
+  var blurb = base.blurb || '';
+  if (base.busyBeaver) {
+    blurb += '  →  halts in <b>' + base.busyBeaver.steps + ' steps</b>, leaving <b>' + base.busyBeaver.ones + ' ones</b>.';
+  }
+  document.getElementById('progBlurb').innerHTML = blurb;
+
+  buildTable();
+  resetMachine();
+}
+
+/* =====================================================================
+   THE TRANSITION-TABLE EDITOR — rows = states, columns = symbols. Each
+   cell is the rule for (state, read): three small inputs write/move/next.
+   Editing rebuilds STATE.machine.transitions and resets the run.
+   ===================================================================== */
+function buildTable() {
+  var m = STATE.machine;
+  var inv = T.inventory(m);
+  // states that have transition rows (exclude pure halt states with no row)
+  var rowStates = [];
+  for (var i = 0; i < inv.states.length; i++) {
+    var s = inv.states[i];
+    if (m.transitions[s]) rowStates.push(s);
+  }
+  var symbols = inv.symbols;
+
+  var tbl = document.getElementById('ttable');
+  tbl.innerHTML = '';
+
+  // header
+  var thead = document.createElement('tr');
+  var corner = document.createElement('th'); corner.textContent = 'state \\ read'; thead.appendChild(corner);
+  for (var c = 0; c < symbols.length; c++) {
+    var th = document.createElement('th');
+    th.textContent = symbols[c] === m.blank ? symbols[c] + ' (blank)' : symbols[c];
+    thead.appendChild(th);
+  }
+  tbl.appendChild(thead);
+
+  // rows
+  for (var r = 0; r < rowStates.length; r++) {
+    var st = rowStates[r];
+    var tr = document.createElement('tr');
+    tr.setAttribute('data-state', st);
+    var stTd = document.createElement('td');
+    stTd.className = 'stcell';
+    stTd.textContent = st + (st === m.start ? ' ▸' : '');
+    tr.appendChild(stTd);
+
+    for (var ci = 0; ci < symbols.length; ci++) {
+      var sym = symbols[ci];
+      var td = document.createElement('td');
+      td.className = 'rule';
+      var rule = m.transitions[st] ? m.transitions[st][sym] : null;
+      td.appendChild(makeRuleInputs(st, sym, rule));
+      tr.appendChild(td);
+    }
+    tbl.appendChild(tr);
+  }
+}
+
+function makeRuleInputs(state, sym, rule) {
+  var box = document.createElement('div');
+  box.style.display = 'flex';
+  box.style.gap = '2px';
+  var wIn = miniInput(rule ? rule.write : '', 'wr');
+  var mIn = miniInput(rule ? (rule.move || 'N') : '', 'mv');
+  var nIn = miniInput(rule ? rule.next : '', 'nx');
+  wIn.title = 'write'; mIn.title = 'move (L/R/N)'; nIn.title = 'next state';
+  function commit() {
+    var w = wIn.value.trim(), mv = mIn.value.trim().toUpperCase(), nx = nIn.value.trim();
+    if (w === '' && mv === '' && nx === '') {
+      // empty rule → delete it (machine will halt-stuck on this (state,read))
+      if (STATE.machine.transitions[state]) delete STATE.machine.transitions[state][sym];
+    } else {
+      if (!STATE.machine.transitions[state]) STATE.machine.transitions[state] = {};
+      STATE.machine.transitions[state][sym] = {
+        write: w === '' ? sym : w,
+        move: (mv === 'L' || mv === 'R' || mv === 'N') ? mv : 'N',
+        next: nx === '' ? state : nx
+      };
+    }
+    onTableEdited();
+  }
+  wIn.addEventListener('change', commit);
+  mIn.addEventListener('change', commit);
+  nIn.addEventListener('change', commit);
+  box.appendChild(wIn); box.appendChild(mIn); box.appendChild(nIn);
+  return box;
+}
+function miniInput(val, kind) {
+  var el = document.createElement('input');
+  el.type = 'text';
+  el.value = val == null ? '' : val;
+  el.setAttribute('data-kind', kind);
+  el.maxLength = kind === 'wr' || kind === 'mv' ? 1 : 3;
+  el.style.flex = kind === 'nx' ? '1.4' : '1';
+  return el;
+}
+
+function onTableEdited() {
+  var v = T.validate(STATE.machine);
+  var err = document.getElementById('ttErr');
+  if (v.ok) { err.textContent = ''; }
+  else { err.textContent = '⚠ ' + v.errors[0]; }
+  // a structural edit changes the machine — reset so we run the edited program
+  resetMachine();
+}
+
+/* =====================================================================
+   2× PNG EXPORT — paint the tape window + readout onto a 2D canvas. The
+   never-tainted manual pattern (no <foreignObject>), so toDataURL works
+   headlessly.
+   ===================================================================== */
+function exportPNG() {
+  try {
+    var sk = SKINS[STATE.skin], cfg = STATE.config, m = STATE.machine;
+    var scale = 2;
+    var W = 960, H = 320;
+    var cv = document.createElement('canvas');
+    cv.width = W * scale; cv.height = H * scale;
+    var cx = cv.getContext('2d');
+    cx.scale(scale, scale);
+    cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    var mono = '"SF Mono", ui-monospace, Menlo, monospace';
+
+    cx.fillStyle = sk.bg; cx.fillRect(0, 0, W, H);
+
+    // title
+    cx.fillStyle = sk.accent; cx.font = '600 22px ' + mono;
+    cx.fillText('THE MILL · ' + m.name, W / 2, 30);
+
+    // readout line
+    cx.font = '13px ' + mono; cx.fillStyle = sk.inkDim;
+    var ones = T.onesCount(cfg.tape);
+    var status = cfg.halted ? (cfg.stuck ? 'HALTED (stuck)' : (isAcceptState(cfg.state) ? 'ACCEPT' : isRejectState(cfg.state) ? 'REJECT' : 'HALTED'))
+                            : (atCap() ? 'CAPPED' : 'running');
+    cx.fillText('state ' + cfg.state + '   ·   step ' + cfg.steps + '   ·   ones (Σ) ' + ones + '   ·   ' + status, W / 2, 58);
+
+    // tape window
+    var head = cfg.head;
+    var cw = 54, gap = 6, per = cw + gap;
+    var nCells = Math.floor((W - 80) / per);
+    if (nCells % 2 === 0) nCells--;            // odd, so the head sits centred
+    var half = (nCells - 1) / 2;
+    var startX = W / 2 - half * per - cw / 2;
+    var tapeY = 130;
+
+    // head pointer
+    cx.fillStyle = sk.accent;
+    var hx = W / 2;
+    cx.beginPath(); cx.moveTo(hx - 12, tapeY - 30); cx.lineTo(hx + 12, tapeY - 30); cx.lineTo(hx, tapeY - 14); cx.closePath(); cx.fill();
+    cx.font = '600 9px ' + mono;
+    cx.fillText('HEAD', hx, tapeY - 40);
+
+    cx.font = '700 26px ' + mono;
+    for (var i = 0; i < nCells; i++) {
+      var p = head - half + i;
+      var sym = T.tapeRead(cfg.tape, p);
+      var x = startX + i * per;
+      var isHead = (p === head);
+      // cell box
+      if (isHead) { cx.fillStyle = sk.headBg; } else { cx.fillStyle = sk.cellBg; }
+      roundRect(cx, x, tapeY, cw, cw, 8); cx.fill();
+      cx.lineWidth = isHead ? 2 : 1; cx.strokeStyle = isHead ? sk.accent : sk.cellEdge;
+      roundRect(cx, x, tapeY, cw, cw, 8); cx.stroke();
+      // symbol
+      cx.fillStyle = isHead ? sk.headInk : (sym === m.blank ? sk.inkDim : sk.cellInk);
+      cx.font = '700 26px ' + mono;
+      cx.fillText(sym === m.blank ? '·' : sym, x + cw / 2, tapeY + cw / 2);
+      // position label
+      cx.fillStyle = sk.inkDim; cx.font = '9px ' + mono;
+      cx.fillText(String(p), x + cw / 2, tapeY + cw + 12);
+    }
+
+    // footer: the busy-beaver promise if applicable
+    cx.font = '12px ' + mono; cx.fillStyle = sk.inkDim;
+    var foot = m.busyBeaver
+      ? 'proven: halts in ' + m.busyBeaver.steps + ' steps, ' + m.busyBeaver.ones + ' ones'
+      : 'a single-tape Turing machine · ' + (m.takesInput ? 'input "' + STATE.baseInput + '"' : 'from a blank tape');
+    cx.fillText(foot, W / 2, H - 22);
+
+    var url = cv.toDataURL('image/png');
+    var a = document.createElement('a');
+    a.href = url; a.download = 'mill-' + m.id + '-' + STATE.skin + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    return url;
+  } catch (err) { if (typeof console !== 'undefined') console.error('PNG export failed', err); return null; }
+}
+function roundRect(cx, x, y, w, h, r) {
+  cx.beginPath();
+  cx.moveTo(x + r, y);
+  cx.arcTo(x + w, y, x + w, y + h, r);
+  cx.arcTo(x + w, y + h, x, y + h, r);
+  cx.arcTo(x, y + h, x, y, r);
+  cx.arcTo(x, y, x + w, y, r);
+  cx.closePath();
+}
+
+/* =====================================================================
+   UI WIRING
+   ===================================================================== */
+function populateProgramPicker() {
+  var sel = document.getElementById('progSel');
+  sel.innerHTML = '';
+  for (var i = 0; i < LIB.PROGRAMS.length; i++) {
+    var p = LIB.PROGRAMS[i];
+    var opt = document.createElement('option');
+    opt.value = p.id;
+    var note = p.busyBeaver ? '  (halts in ' + p.busyBeaver.steps + ' steps)' : (p.neverHalts ? '  (runs forever)' : '');
+    opt.textContent = p.name + note;
+    sel.appendChild(opt);
+  }
+  sel.value = STATE.progId;
+}
+
+document.getElementById('progSel').addEventListener('change', function (e) {
+  loadProgram(e.target.value);
+});
+
+document.getElementById('inputBox').addEventListener('input', function (e) {
+  STATE.baseInput = e.target.value;
+  resetMachine();
+});
+
+document.getElementById('btnStep').addEventListener('click', function () { stopRun(); doStep(); });
+document.getElementById('btnRun').addEventListener('click', function () { toggleRun(); });
+document.getElementById('btnReset').addEventListener('click', function () { resetMachine(); });
+
+var speedEl = document.getElementById('speed');
+speedEl.addEventListener('input', function (e) {
+  STATE.speed = +e.target.value;
+  document.getElementById('speedVal').textContent = STATE.speed + '/s';
+});
+
+document.getElementById('skinSeg').addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-skin]'); if (!b) return;
+  STATE.skin = b.dataset.skin;
+  var btns = e.currentTarget.querySelectorAll('button'), i;
+  for (i = 0; i < btns.length; i++) btns[i].classList.toggle('active', btns[i] === b);
+  applySkinVars();
+  render();   // cosmetic re-render only
+});
+
+document.getElementById('btnPng').addEventListener('click', exportPNG);
+
+// keyboard: space = step, Enter = run/pause, R = reset (when not typing)
+document.addEventListener('keydown', function (e) {
+  var tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+  if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+  if (e.code === 'Space') { e.preventDefault(); stopRun(); doStep(); }
+  else if (e.key === 'Enter') { e.preventDefault(); toggleRun(); }
+  else if (e.key === 'r' || e.key === 'R') { resetMachine(); }
+});
+
+window.addEventListener('resize', function () { if (STATE.config) renderTape(); });
+
+/* =====================================================================
+   INIT
+   ===================================================================== */
+function init() {
+  var res = runSelfTest();
+  var chip = document.getElementById('selftest');
+  if (res.pass === res.total) {
+    chip.className = 'selftest ok';
+    chip.textContent = 'mill verified — ' + res.pass + '/' + res.total + ' ✓';
+  } else {
+    chip.className = 'selftest bad';
+    chip.textContent = 'mill FAILED — ' + res.pass + '/' + res.total;
+  }
+  if (typeof console !== 'undefined') console.log('The Mill self-test: ' + res.pass + '/' + res.total + ' passed.');
+
+  applySkinVars();
+  document.getElementById('speedVal').textContent = STATE.speed + '/s';
+  populateProgramPicker();
+  loadProgram(STATE.progId);
+}
+
+// expose for headless inspection / Node extraction parity
+if (typeof window !== 'undefined') {
+  window.__mill = {
+    Turing: T, Programs: LIB, STATE: STATE,
+    runSelfTest: runSelfTest, loadProgram: loadProgram,
+    step: doStep, run: startRun, reset: resetMachine, exportPNG: exportPNG
+  };
+}
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { runSelfTest: runSelfTest };
+}
+
+init();
+
+/* ws: unlock breadcrumb — the shared module (one source of truth), inlined via
+   forge. See /UNLOCK.md and tools/ws/README.md. Records this piece's first
+   visit and (via WS auto-init) fires any unlock cue. Harmless if storage off. */
+<!-- forge:include ../tools/ws/ws.js -->
+try { WS.seen('turing'); } catch (e) {}
+</script>
+</body>
+</html>
