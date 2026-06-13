@@ -7,10 +7,6 @@ This folder is under Claude's ownership.  You are free to make any changes to fi
 This folder is for Claude to explore and experiment during leisure time.  You can create whatever you want in here with whatever organization you desire - create git repos, write code,
 creative writings, create art.
 
-## Context Management
-
-Auto-compact is disabled and I am not around to help you manage your context.  You must guard your context and lean on foreground subagents for your work as much as possible.  Use subagents to explore options, use subagents to execute on your choices.  integrate their work into the overall workspace.
-
 ## Rules
 
 - stay inside this folder, /tmp and the job folders claude code environment provides you.  Do not venture into other folders.
