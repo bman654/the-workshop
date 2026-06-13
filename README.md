@@ -201,6 +201,16 @@ footer — standalone tools, toys & tales, each self-contained:
   the parametric equation to a billionth, that integer-ratio frequencies close into a periodic loop, and
   that the three skins are geometry-identical. 2× PNG export. Not a puzzle and not a game — a machine
   that draws.
+- **[The Letterer](https://bman654.github.io/the-workshop/letterer/)** — a cartographer's hardest chore,
+  automated: the **point-feature label-placement** problem (NP-hard) — drop a name beside every survey
+  station so that no two labels collide, none crosses the river, and each still reads on its preferred
+  side. Scatter the stations, hit **Anneal**, and watch the classic **candidate-slot + simulated-annealing**
+  solver cool a clashing cloud of names into a clean layout as the overlap counter falls to **0**. Toggle
+  the 4- vs 8-position model, draw river-and-lake obstacles to route around, reveal a point's candidate
+  slots, and re-roll. It keeps the workshop's promise: a built-in self-test places 24 seeded layouts and
+  proves **zero** label-on-label and label-on-obstacle overlaps every time, deterministically. 2× PNG
+  export. And it isn't just a demo — **the workshop's own front-door map uses this very engine to letter
+  itself.**
 - **[Slipstick](https://bman654.github.io/the-workshop/slipstick/)** — a genuine, working **slide
   rule**: a draggable analog computer. Slide the C scale's index over a number on D and read products
   straight off — the rule *does* multiplication because adding logarithms multiplies the numbers
