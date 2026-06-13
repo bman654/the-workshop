@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fourier Epicycles</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.88);
+    --panel-edge: rgba(201,162,74,0.34);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --bg: #07080d;
+    --stage: #0a0c12;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; }
+  #board{ display:block; position:absolute; inset:0; width:100%; height:100%; cursor:crosshair; }
+  #hud{ position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    font:11px/1.4 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.55);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 12px; letter-spacing:.3px;
+    pointer-events:none; opacity:0; transition:opacity .15s; max-width:90%; text-align:center; z-index:10; }
+  #hud.show{ opacity:1; }
+  #hud b{ color:var(--accent); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:330px; flex:0 0 330px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 24px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 8px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .sect .rt{ float:right; color:var(--accent); text-transform:none; letter-spacing:.2px; font-variant-numeric:tabular-nums; }
+  .row{ margin:11px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .row > label .val{ color:var(--accent); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.2px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#f6f1e3; border:2px solid #8a6d28; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%; background:#f6f1e3; border:2px solid #8a6d28; cursor:pointer;
+  }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(201,162,74,0.24); flex-wrap:wrap; }
+  .seg button{
+    flex:1; min-width:30px; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#241803; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .preset-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:6px; }
+  .chip{
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink-dim);
+    border-radius:8px; padding:8px 6px; font-size:11px; font-weight:600; letter-spacing:.2px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui); text-align:center;
+  }
+  .chip:hover{ background:var(--accent-soft); border-color:var(--accent); color:var(--ink); }
+  .chip.active{ background:var(--accent-soft); border-color:var(--accent); color:var(--ink); }
+  .btnrow{ display:flex; gap:8px; margin:12px 0; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(201,162,74,0.26), rgba(201,162,74,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(201,162,74,0.40), rgba(201,162,74,0.14)); }
+  .toggle-row{ display:flex; gap:8px; margin:11px 0; }
+  .toggle{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.03); color:var(--ink-dim);
+    border-radius:8px; padding:7px 6px; font:600 10px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase;
+    cursor:pointer; transition:.15s; text-align:center;
+  }
+  .toggle.on{ color:var(--ink); border-color:var(--accent); background:var(--accent-soft); }
+  .hint{ font:10.5px/1.55 var(--font-mono); color:var(--ink-dim); opacity:.8; letter-spacing:.2px; margin:16px 0 4px;
+    border-top:1px solid rgba(201,162,74,0.16); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+  .hint code{ color:var(--accent); }
+
+  @media (max-width: 760px){
+    #wrap{ flex-direction:column; }
+    #panel{ width:100%; flex:0 0 auto; height:auto; border-left:none; border-top:1px solid var(--panel-edge);
+      padding:16px 16px 28px; box-shadow:0 -18px 50px rgba(0,0,0,0.5); }
+    #stage{ min-height:54vh; padding-top:54px; }
+    .topbar{ flex-wrap:wrap; gap:6px; padding:10px 14px 0; }
+    .brand .tag{ display:none; }
+    .backs{ gap:12px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../workbench/index.html">&larr; workbench</a>
+    </div>
+    <div class="brand">
+      <h1>Fourier Epicycles</h1>
+      <span class="tag">draw anything with rotating circles</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for detail · per-check PASS lines are in the console">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="board"></canvas>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">Any closed curve is a <b>sum of rotating vectors</b> — circles riding on circles,
+        each a single frequency. A real complex <b>DFT</b> turns your path into these vectors; chained
+        tip-to-tail and ordered by size, they re-trace the curve with a gold pen. Slide <b>N</b> from one
+        wobbly ellipse up to the exact figure. Pick a preset, or <b>draw your own</b> on the stage.</p>
+
+      <div class="sect">Motion</div>
+      <div class="btnrow">
+        <button class="btn primary" id="playBtn">⏸ Pause</button>
+        <button class="btn" id="restartBtn">↻ Restart</button>
+      </div>
+      <div class="row">
+        <label>Speed <span class="val" id="speedVal">1.0×</span></label>
+        <input type="range" id="speedSlider" min="0.1" max="3" step="0.05" value="1">
+      </div>
+
+      <div class="sect">Terms <span class="rt" id="termsTag">N / M</span></div>
+      <div class="row">
+        <label>Circles N <span class="val" id="nVal">1</span></label>
+        <input type="range" id="nSlider" min="1" max="2" step="1" value="1">
+      </div>
+      <div class="hint" style="border-top:none;padding-top:2px;margin:2px 0 0">
+        N=1 is a single circle. As N rises the reconstruction <b>snaps onto</b> your curve.
+        At N=M it is exact (≈ machine precision).
+      </div>
+
+      <div class="sect">Shape</div>
+      <div class="preset-grid" id="presets"></div>
+      <div class="btnrow">
+        <button class="btn" id="drawBtn">✎ Draw your own</button>
+      </div>
+
+      <div class="sect">Show</div>
+      <div class="toggle-row">
+        <button class="toggle on" id="tCircles">Circles</button>
+        <button class="toggle on" id="tTarget">Target path</button>
+        <button class="toggle on" id="tPen">Pen trace</button>
+      </div>
+
+      <div class="sect">Skin</div>
+      <div class="row">
+        <div class="seg" id="skinSeg">
+          <button data-skin="midnight" class="active">Midnight</button>
+          <button data-skin="blueprint">Blueprint</button>
+          <button data-skin="ember">Ember</button>
+        </div>
+      </div>
+
+      <div class="hint">
+        Pen position at time t: <code>Σ c[k]·e^(2πi·k·t)</code>, with
+        <code>c[k] = (1/M)·Σ z[m]·e^(−2πi·km/M)</code> — a genuine DFT, computed here, no FFT library.
+        Frequencies run <b>0, +1, −1, +2, −2…</b> so the biggest low circles lead. The badge proves the
+        round-trip is exact, energy is conserved (Parseval), and adding terms only ever <b>lowers</b> the error.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+// ============================================================================
+// Fourier Epicycles CORE — a genuine complex DFT. NO DOM, NO skin, NO render.
+//   A path is M complex samples z[m] = x[m] + i·y[m].
+//   Forward DFT:  c[k] = (1/M) Σ_m z[m] · e^(−2πi·k·m/M)
+//   Inverse DFT:  z[m] =        Σ_k c[k] · e^( 2πi·k·m/M)
+//   Each c[k] is a rotating vector: radius |c[k]|, angular speed k (cycles per
+//   period), initial phase arg(c[k]). The pen at continuous time t∈[0,1) is
+//   pen(t) = Σ_k c[k] · e^(2πi·k·t); at t=m/M it reproduces z[m] exactly.
+//   The SAME functions feed the renderer AND the headless self-test, so the
+//   curve the renderer paints can never drift from the transform.
+// ============================================================================
+var TWO_PI = Math.PI * 2;
+
+// Forward DFT of a complex signal given as parallel real/imag arrays.
+// Returns { re:[...], im:[...] } of length M (the Fourier coefficients c[k]).
+function dft(re, im){
+  var M = re.length, oRe = new Array(M), oIm = new Array(M), invM = 1 / M;
+  for(var k = 0; k < M; k++){
+    var sRe = 0, sIm = 0;
+    for(var m = 0; m < M; m++){
+      var ang = -TWO_PI * k * m / M;        // e^(−2πi km/M)
+      var c = Math.cos(ang), s = Math.sin(ang);
+      // (re+im·i)·(c+s·i) = (re·c − im·s) + (re·s + im·c)·i
+      sRe += re[m] * c - im[m] * s;
+      sIm += re[m] * s + im[m] * c;
+    }
+    oRe[k] = sRe * invM;
+    oIm[k] = sIm * invM;
+  }
+  return { re: oRe, im: oIm };
+}
+
+// Inverse DFT of coefficients { re, im } → reconstructed signal { re, im }.
+function idft(cRe, cIm){
+  var M = cRe.length, oRe = new Array(M), oIm = new Array(M);
+  for(var m = 0; m < M; m++){
+    var sRe = 0, sIm = 0;
+    for(var k = 0; k < M; k++){
+      var ang = TWO_PI * k * m / M;          // e^(+2πi km/M)
+      var c = Math.cos(ang), s = Math.sin(ang);
+      sRe += cRe[k] * c - cIm[k] * s;
+      sIm += cRe[k] * s + cIm[k] * c;
+    }
+    oRe[m] = sRe; oIm[m] = sIm;
+  }
+  return { re: oRe, im: oIm };
+}
+
+// Build the epicycle term list from DFT output, using the SIGNED frequency
+// ordering 0, +1, −1, +2, −2, … (frequency k is the bin index, where bins in
+// the upper half [M/2, M) alias to negative frequencies k−M). The returned
+// terms are then sorted by amplitude (descending), so the top-N partial sum is
+// the best N-term approximation. Each term = { freq, amp, phase, re, im }.
+function buildEpicycles(coef){
+  var M = coef.re.length, terms = new Array(M);
+  for(var i = 0; i < M; i++){
+    var k = signedFreqAtOrder(i, M);          // 0,+1,-1,+2,-2,...
+    var bin = ((k % M) + M) % M;              // bin index for this signed freq
+    var re = coef.re[bin], im = coef.im[bin];
+    terms[i] = {
+      freq: k,
+      amp: Math.hypot(re, im),
+      phase: Math.atan2(im, re),
+      re: re, im: im
+    };
+  }
+  // best N-term: sort by amplitude desc. Stable tiebreak on |freq| keeps it
+  // deterministic across identical amplitudes.
+  terms.sort(function(a, b){
+    if(b.amp !== a.amp) return b.amp - a.amp;
+    return Math.abs(a.freq) - Math.abs(b.freq);
+  });
+  return terms;
+}
+// The i-th signed frequency in the order 0,+1,−1,+2,−2,…
+function signedFreqAtOrder(i, M){
+  if(i === 0) return 0;
+  var pair = Math.ceil(i / 2);                // 1,1,2,2,3,3,...
+  return (i % 2 === 1) ? pair : -pair;        // odd→+, even→−
+}
+
+// Pen position summing the first N epicycle terms at continuous time t∈[0,1).
+// Returns { x, y } AND the chain of circle centres for rendering.
+function penChain(terms, N, t){
+  N = Math.min(N, terms.length);
+  var x = 0, y = 0, pts = new Array(N + 1);
+  pts[0] = { x: 0, y: 0 };
+  for(var i = 0; i < N; i++){
+    var tm = terms[i];
+    var ang = TWO_PI * tm.freq * t + tm.phase;   // arg(c[k]) + 2π·k·t
+    x += tm.amp * Math.cos(ang);
+    y += tm.amp * Math.sin(ang);
+    pts[i + 1] = { x: x, y: y };
+  }
+  return { x: x, y: y, pts: pts };
+}
+// Just the pen tip (no allocation of the chain) — used by the self-test.
+function penTip(terms, N, t){
+  N = Math.min(N, terms.length);
+  var x = 0, y = 0;
+  for(var i = 0; i < N; i++){
+    var tm = terms[i], ang = TWO_PI * tm.freq * t + tm.phase;
+    x += tm.amp * Math.cos(ang);
+    y += tm.amp * Math.sin(ang);
+  }
+  return { x: x, y: y };
+}
+
+// ---- path helpers (resample a polyline to M equally-spaced points) ---------
+function resampleClosed(pts, M){
+  // cumulative arc length around the closed loop (last → first segment included)
+  var n = pts.length, seg = new Array(n), total = 0;
+  for(var i = 0; i < n; i++){
+    var a = pts[i], b = pts[(i + 1) % n];
+    var d = Math.hypot(b.x - a.x, b.y - a.y);
+    seg[i] = d; total += d;
+  }
+  if(total === 0){ var out = []; for(var q = 0; q < M; q++) out.push({ x: pts[0].x, y: pts[0].y }); return out; }
+  var out2 = new Array(M), target = 0, acc = 0, si = 0;
+  for(var m = 0; m < M; m++){
+    target = total * m / M;
+    while(si < n - 1 && acc + seg[si] < target){ acc += seg[si]; si++; }
+    var f = seg[si] > 0 ? (target - acc) / seg[si] : 0;
+    var p0 = pts[si], p1 = pts[(si + 1) % n];
+    out2[m] = { x: p0.x + (p1.x - p0.x) * f, y: p0.y + (p1.y - p0.y) * f };
+  }
+  return out2;
+}
+
+// ---- deterministic PRNG (seedable) for the self-test's random paths --------
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ============================================================================
+// HEADLESS SELF-TEST — calls the REAL functions above. Returns {pass,total,log,...}.
+// ============================================================================
+function runSelfTest(){
+  var pass = 0, total = 0, log = [];
+  function check(name, cond){
+    total++;
+    if(cond){ pass++; log.push('PASS: ' + name); if(typeof console !== 'undefined') console.log('PASS: ' + name); }
+    else { log.push('FAIL: ' + name); if(typeof console !== 'undefined') console.error('FAIL: ' + name); }
+  }
+  var rnd = mulberry32(0x1CE901);                // fixed seed (no env entropy)
+  function randPath(M){
+    var re = new Array(M), im = new Array(M);
+    for(var m = 0; m < M; m++){ re[m] = (rnd() - 0.5) * 200; im[m] = (rnd() - 0.5) * 200; }
+    return { re: re, im: im };
+  }
+
+  // (1) ROUND-TRIP: idft(dft(z)) == z to ~1e-12 over several seeded paths.
+  var maxRT = 0;
+  for(var trial = 0; trial < 6; trial++){
+    var M = 24 + trial * 8;
+    var z = randPath(M);
+    var rec = idft(dft(z.re, z.im).re, dft(z.re, z.im).im);
+    for(var m = 0; m < M; m++){
+      maxRT = Math.max(maxRT, Math.abs(rec.re[m] - z.re[m]), Math.abs(rec.im[m] - z.im[m]));
+    }
+  }
+  check('round-trip: idft(dft(z)) == z (<1e-9, observed ' + maxRT.toExponential(2) + ')', maxRT < 1e-9);
+
+  // (2) FULL RECONSTRUCTION: summing ALL M epicycles at the sample times t=m/M
+  //     reproduces the input points to ~1e-12 (independent of the IDFT path —
+  //     this walks the rotating-vector model penTip(), not the matrix idft()).
+  var maxFull = 0;
+  {
+    var M2 = 40, z2 = randPath(M2);
+    var terms2 = buildEpicycles(dft(z2.re, z2.im));
+    for(var m2 = 0; m2 < M2; m2++){
+      var p = penTip(terms2, M2, m2 / M2);
+      maxFull = Math.max(maxFull, Math.abs(p.x - z2.re[m2]), Math.abs(p.y - z2.im[m2]));
+    }
+  }
+  check('full-recon: Σ all M epicycles at t=m/M == z[m] (<1e-9, observed ' + maxFull.toExponential(2) + ')', maxFull < 1e-9);
+
+  // (3) CONVERGENCE: top-N partial-sum RMS error is MONOTONICALLY non-increasing
+  //     as N grows, and → 0 at N=M. (Best-N-by-amplitude is the optimal least-
+  //     squares truncation, so each added term cannot raise the error.)
+  var convOk = true, errAt = {}, errN = 0;
+  {
+    var M3 = 64, z3 = randPath(M3);
+    var terms3 = buildEpicycles(dft(z3.re, z3.im));
+    var prevErr = Infinity;
+    for(var N = 1; N <= M3; N++){
+      var se = 0;
+      for(var mm = 0; mm < M3; mm++){
+        var pp = penTip(terms3, N, mm / M3);
+        var dx = pp.x - z3.re[mm], dy = pp.y - z3.im[mm];
+        se += dx * dx + dy * dy;
+      }
+      var rms = Math.sqrt(se / M3);
+      if(rms > prevErr + 1e-9){ convOk = false; }
+      prevErr = rms;
+      if(N === 1 || N === 8 || N === 32 || N === M3) errAt[N] = rms;
+      if(N === M3) errN = rms;
+    }
+    convOk = convOk && (errN < 1e-9);
+  }
+  check('convergence: top-N RMS error monotonically ↓, → 0 at N=M (N=M err ' + errN.toExponential(2) + ')', convOk);
+
+  // (4) PARSEVAL: time-domain energy Σ|z|²/M == frequency-domain energy Σ|c|².
+  //     An INDEPENDENT identity — not the round-trip recomputed.
+  var maxPars = 0;
+  {
+    for(var tt = 0; tt < 4; tt++){
+      var M4 = 28 + tt * 12, z4 = randPath(M4), cf = dft(z4.re, z4.im);
+      var eTime = 0, eFreq = 0;
+      for(var i4 = 0; i4 < M4; i4++){
+        eTime += (z4.re[i4] * z4.re[i4] + z4.im[i4] * z4.im[i4]);
+        eFreq += (cf.re[i4] * cf.re[i4] + cf.im[i4] * cf.im[i4]);
+      }
+      eTime /= M4;
+      maxPars = Math.max(maxPars, Math.abs(eTime - eFreq) / Math.max(1, eTime));
+    }
+  }
+  check('Parseval: Σ|z|²/M == Σ|c|² (rel <1e-9, observed ' + maxPars.toExponential(2) + ')', maxPars < 1e-9);
+
+  // (5) DETERMINISM: identical path → identical coefficients (bit-for-bit) and
+  //     identical epicycle ordering; a perturbed path differs.
+  var detOk = true;
+  {
+    var M5 = 32, base = randPath(M5);
+    var c1 = dft(base.re.slice(), base.im.slice());
+    var c2 = dft(base.re.slice(), base.im.slice());
+    for(var i5 = 0; i5 < M5; i5++){
+      if(c1.re[i5] !== c2.re[i5] || c1.im[i5] !== c2.im[i5]) detOk = false;
+    }
+    var t1 = buildEpicycles(c1), t2 = buildEpicycles(c2);
+    for(var j5 = 0; j5 < M5; j5++){
+      if(t1[j5].freq !== t2[j5].freq || t1[j5].amp !== t2[j5].amp) detOk = false;
+    }
+    var pert = { re: base.re.slice(), im: base.im.slice() };
+    pert.re[3] += 1e-3;
+    var c3 = dft(pert.re, pert.im);
+    var differs = false;
+    for(var k5 = 0; k5 < M5; k5++){ if(c3.re[k5] !== c1.re[k5]) differs = true; }
+    detOk = detOk && differs;
+  }
+  check('determinism: same path → identical coefficients & ordering; perturbed differs', detOk);
+
+  // (6) FALSIFIABILITY GUARD: mis-ordering frequencies (NOT amplitude-sorted)
+  //     gives a WORSE top-N error than the proper amplitude ordering — proving
+  //     the ordering matters and the convergence check is not vacuous.
+  var falsOk = false;
+  {
+    var M6 = 48, z6 = randPath(M6), cf6 = dft(z6.re, z6.im);
+    var good = buildEpicycles(cf6);
+    // bad ordering: natural bin order 0,1,2,... (NOT by amplitude)
+    var bad = new Array(M6);
+    for(var i6 = 0; i6 < M6; i6++){
+      var kk = signedFreqAtOrder(i6, M6), bn = ((kk % M6) + M6) % M6;
+      bad[i6] = { freq: kk, amp: Math.hypot(cf6.re[bn], cf6.im[bn]), phase: Math.atan2(cf6.im[bn], cf6.re[bn]) };
+    }
+    function rmsN(terms, N){
+      var se = 0;
+      for(var mm = 0; mm < M6; mm++){
+        var pp = penTip(terms, N, mm / M6), dx = pp.x - z6.re[mm], dy = pp.y - z6.im[mm];
+        se += dx * dx + dy * dy;
+      }
+      return Math.sqrt(se / M6);
+    }
+    var Nh = 8;
+    falsOk = rmsN(good, Nh) < rmsN(bad, Nh) - 1e-9;   // amplitude order strictly better
+  }
+  check('falsifiable: amplitude ordering beats bin ordering for top-N (else convergence is fake)', falsOk);
+
+  return { pass: pass, total: total, log: log, maxRT: maxRT, maxFull: maxFull, maxPars: maxPars, errAt: errAt, errN: errN };
+}
+
+// expose for Node extraction / external re-audit
+var __EpiCore = { dft: dft, idft: idft, buildEpicycles: buildEpicycles, signedFreqAtOrder: signedFreqAtOrder,
+  penChain: penChain, penTip: penTip, resampleClosed: resampleClosed, mulberry32: mulberry32, runSelfTest: runSelfTest };
+if(typeof window !== 'undefined'){ window.EpicyclesCore = __EpiCore; }
+if(typeof module !== 'undefined' && module.exports){ module.exports = __EpiCore; }
+
+// ============================================================================
+// APPLICATION (DOM). Everything below derives from the pure CORE above.
+// ============================================================================
+if(typeof document !== 'undefined'){ (function(){
+
+// ---------- skins (COSMETIC ONLY) -------------------------------------------
+var SKINS = {
+  midnight: {
+    stage: '#0a0c12', glow: 'rgba(40,60,110,0.10)',
+    circle: 'rgba(120,150,210,0.30)', vector: 'rgba(150,180,235,0.55)',
+    target: 'rgba(150,170,210,0.34)', pen: '#f2c45a', penGlow: 'rgba(242,196,90,0.55)',
+  },
+  blueprint: {
+    stage: '#0b2138', glow: 'rgba(70,140,200,0.12)',
+    circle: 'rgba(150,200,255,0.34)', vector: 'rgba(190,225,255,0.6)',
+    target: 'rgba(170,210,255,0.40)', pen: '#ffe39a', penGlow: 'rgba(255,227,154,0.6)',
+  },
+  ember: {
+    stage: '#120a08', glow: 'rgba(120,60,30,0.12)',
+    circle: 'rgba(200,130,90,0.30)', vector: 'rgba(235,170,120,0.55)',
+    target: 'rgba(220,150,110,0.36)', pen: '#ffd166', penGlow: 'rgba(255,209,102,0.6)',
+  },
+};
+
+// ---------- app state -------------------------------------------------------
+var M_SAMPLES = 256;                  // path samples / number of frequencies
+var state = {
+  shape: 'Star',
+  terms: [],                          // epicycle terms (amplitude-sorted)
+  centroid: { x: 0, y: 0 },           // model centre (dc term) for placing
+  modelScale: 1,                      // model-units → canvas scale (fit)
+  N: 1,
+  speed: 1.0,
+  playing: true,
+  skin: 'midnight',
+  t: 0,                               // animation time, model period ∈ [0,1)
+  show: { circles: true, target: true, pen: true },
+  drawing: false,                     // freehand capture in progress
+  rawStroke: [],                      // freehand raw points (canvas coords)
+  penPath: [],                        // accumulated pen trace in model coords (this period)
+  targetPts: [],                      // resampled input z[m] in model coords
+};
+var reduceMotion = (typeof window.matchMedia === 'function')
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if(reduceMotion){ state.playing = false; }
+
+var cv = document.getElementById('board');
+var ctx = cv.getContext('2d');
+var W = 0, H = 0, dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
+function resize(){
+  var stage = document.getElementById('stage');
+  W = Math.max(200, stage.clientWidth);
+  H = Math.max(200, stage.clientHeight);
+  dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  fitView();
+  draw();
+}
+
+// ---------- presets (closed parametric curves) ------------------------------
+// Each returns an array of {x,y} points in an arbitrary model space; they are
+// resampled to M points and DFT'd. Curves are centred near the origin.
+var PRESETS = {
+  'Star': function(){
+    var pts = [], spikes = 5, R = 1, r = 0.42;
+    for(var i = 0; i < spikes * 2; i++){
+      var rad = (i % 2 === 0) ? R : r;
+      var a = -Math.PI / 2 + i * Math.PI / spikes;
+      pts.push({ x: rad * Math.cos(a), y: rad * Math.sin(a) });
+    }
+    return densify(pts, 16);
+  },
+  'Heart': function(){
+    var pts = [], n = 220;
+    for(var i = 0; i < n; i++){
+      var t = i / n * TWO_PI;
+      var x = 16 * Math.pow(Math.sin(t), 3);
+      var y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+      pts.push({ x: x / 17, y: -y / 17 });
+    }
+    return pts;
+  },
+  'Treble': function(){ return TREBLE.slice(); },
+  'Letter A': function(){ return LETTER_A.slice(); },
+  'Gear': function(){
+    var pts = [], teeth = 12, n = 480;
+    for(var i = 0; i < n; i++){
+      var t = i / n * TWO_PI;
+      var rad = 0.78 + 0.16 * (Math.tanh(6 * Math.sin(teeth * t)) );
+      pts.push({ x: rad * Math.cos(t), y: rad * Math.sin(t) });
+    }
+    return pts;
+  },
+  'Infinity': function(){
+    var pts = [], n = 300;
+    for(var i = 0; i < n; i++){
+      var t = i / n * TWO_PI;
+      pts.push({ x: Math.cos(t), y: 0.6 * Math.sin(2 * t) });
+    }
+    return pts;
+  },
+};
+// Subdivide a polygon's edges so the DFT sees straight runs, not just corners.
+function densify(poly, per){
+  var out = [];
+  for(var i = 0; i < poly.length; i++){
+    var a = poly[i], b = poly[(i + 1) % poly.length];
+    for(var j = 0; j < per; j++){
+      var f = j / per;
+      out.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f });
+    }
+  }
+  return out;
+}
+// A treble-clef-ish single-stroke spiral squiggle (parametric, closed).
+var TREBLE = (function(){
+  var pts = [], n = 360;
+  for(var i = 0; i < n; i++){
+    var t = i / n * TWO_PI;
+    // a leaning spiral with a hook — visually clef-like
+    var r = 0.30 + 0.34 * (1 + Math.cos(t));
+    var x = r * Math.cos(3 * t) * 0.7 + 0.20 * Math.sin(t);
+    var y = (t / TWO_PI - 0.5) * 1.7 + 0.34 * Math.sin(2 * t);
+    pts.push({ x: x, y: -y });
+  }
+  return pts;
+})();
+// A capital 'A' as one closed outline (outer triangle + crossbar notch).
+var LETTER_A = (function(){
+  var poly = [
+    { x: 0.0, y: -0.95 }, { x: 0.34, y: 0.05 }, { x: 0.62, y: 0.95 },
+    { x: 0.40, y: 0.95 }, { x: 0.32, y: 0.55 }, { x: -0.32, y: 0.55 },
+    { x: -0.40, y: 0.95 }, { x: -0.62, y: 0.95 }, { x: -0.34, y: 0.05 },
+    // crossbar dip back up (single stroke; the notch reads as the bar)
+    { x: -0.22, y: 0.18 }, { x: 0.22, y: 0.18 }, { x: 0.0, y: -0.62 },
+  ];
+  return densify(poly, 14);
+})();
+
+// Build epicycles from a set of model-space points (used by presets + freehand).
+function setShapeFromPoints(pts, label){
+  var samples = resampleClosed(pts, M_SAMPLES);
+  state.targetPts = samples;
+  var re = new Array(M_SAMPLES), im = new Array(M_SAMPLES);
+  for(var m = 0; m < M_SAMPLES; m++){ re[m] = samples[m].x; im[m] = samples[m].y; }
+  state.terms = buildEpicycles(dft(re, im));
+  // dc term (centroid) is the freq-0 vector
+  var dc = null;
+  for(var i = 0; i < state.terms.length; i++){ if(state.terms[i].freq === 0){ dc = state.terms[i]; break; } }
+  state.centroid = dc ? { x: dc.re, y: dc.im } : { x: 0, y: 0 };
+  state.shape = label || 'Custom';
+  // N slider range now depends on M
+  var nSl = document.getElementById('nSlider');
+  nSl.max = String(state.terms.length);
+  if(state.N > state.terms.length) state.N = state.terms.length;
+  applyN(state.N);
+  fitView();
+  state.t = 0; state.penPath = [];
+}
+
+// Fit the target path into the stage with a margin.
+function fitView(){
+  var pts = state.targetPts;
+  if(!pts || !pts.length){ state.modelScale = 1; state.viewCx = W/2; state.viewCy = H/2; return; }
+  var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for(var i = 0; i < pts.length; i++){
+    if(pts[i].x < minX) minX = pts[i].x; if(pts[i].x > maxX) maxX = pts[i].x;
+    if(pts[i].y < minY) minY = pts[i].y; if(pts[i].y > maxY) maxY = pts[i].y;
+  }
+  var w = Math.max(1e-6, maxX - minX), h = Math.max(1e-6, maxY - minY);
+  var margin = 0.16;
+  var sw = W * (1 - 2 * margin), sh = H * (1 - 2 * margin);
+  state.modelScale = Math.min(sw / w, sh / h);
+  state.viewCx = W / 2 - (minX + maxX) / 2 * state.modelScale;
+  state.viewCy = H / 2 - (minY + maxY) / 2 * state.modelScale;
+}
+function toCanvas(mx, my){ return { X: state.viewCx + mx * state.modelScale, Y: state.viewCy + my * state.modelScale }; }
+function toModel(cx, cy){ return { x: (cx - state.viewCx) / state.modelScale, y: (cy - state.viewCy) / state.modelScale }; }
+
+// ---------- N handling ------------------------------------------------------
+function applyN(n){
+  state.N = Math.max(1, Math.min(state.terms.length, Math.round(n)));
+  var nSl = document.getElementById('nSlider');
+  nSl.value = String(state.N);
+  nSl.style.setProperty('--fill', ((state.N - nSl.min) / (Math.max(1, nSl.max - nSl.min)) * 100) + '%');
+  document.getElementById('nVal').textContent = String(state.N);
+  document.getElementById('termsTag').textContent = state.N + ' / ' + state.terms.length;
+  state.penPath = [];      // changing N restarts the pen trace
+}
+
+// ---------- render ----------------------------------------------------------
+function draw(){
+  var sk = SKINS[state.skin];
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // background
+  ctx.fillStyle = sk.stage;
+  ctx.fillRect(0, 0, W, H);
+  var g = ctx.createRadialGradient(W * 0.5, H * 0.42, 0, W * 0.5, H * 0.42, Math.max(W, H) * 0.7);
+  g.addColorStop(0, sk.glow); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  if(state.drawing || (state.rawStroke.length && state.shape === '__capturing')){
+    drawRawStroke(sk);
+    return;
+  }
+  if(!state.terms.length) return;
+
+  // faint target path underneath
+  if(state.show.target && state.targetPts.length){
+    ctx.beginPath();
+    for(var i = 0; i <= state.targetPts.length; i++){
+      var p = state.targetPts[i % state.targetPts.length];
+      var c = toCanvas(p.x, p.y);
+      if(i === 0) ctx.moveTo(c.X, c.Y); else ctx.lineTo(c.X, c.Y);
+    }
+    ctx.strokeStyle = sk.target; ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 5]); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  var chain = penChain(state.terms, state.N, state.t);
+
+  // epicycle circles + radius vectors
+  if(state.show.circles){
+    ctx.lineWidth = 1;
+    for(var k = 0; k < state.N; k++){
+      var ctr = chain.pts[k], tip = chain.pts[k + 1];
+      var cc = toCanvas(ctr.x, ctr.y), tc = toCanvas(tip.x, tip.y);
+      var rad = state.terms[k].amp * state.modelScale;
+      if(rad > 0.6){
+        ctx.beginPath(); ctx.arc(cc.X, cc.Y, rad, 0, TWO_PI);
+        ctx.strokeStyle = sk.circle; ctx.stroke();
+      }
+      ctx.beginPath(); ctx.moveTo(cc.X, cc.Y); ctx.lineTo(tc.X, tc.Y);
+      ctx.strokeStyle = sk.vector; ctx.stroke();
+    }
+  }
+
+  // pen trace (this period, accumulated)
+  if(state.show.pen && state.penPath.length > 1){
+    ctx.beginPath();
+    for(var j = 0; j < state.penPath.length; j++){
+      var pc = toCanvas(state.penPath[j].x, state.penPath[j].y);
+      if(j === 0) ctx.moveTo(pc.X, pc.Y); else ctx.lineTo(pc.X, pc.Y);
+    }
+    ctx.strokeStyle = sk.pen; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.shadowColor = sk.penGlow; ctx.shadowBlur = 8;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  // the pen tip
+  var pen = toCanvas(chain.x, chain.y);
+  var gg = ctx.createRadialGradient(pen.X, pen.Y, 0, pen.X, pen.Y, 8);
+  gg.addColorStop(0, sk.pen); gg.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(pen.X, pen.Y, 8, 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = sk.pen; ctx.beginPath(); ctx.arc(pen.X, pen.Y, 2.4, 0, TWO_PI); ctx.fill();
+}
+
+function drawRawStroke(sk){
+  if(state.rawStroke.length < 1) return;
+  ctx.beginPath();
+  for(var i = 0; i < state.rawStroke.length; i++){
+    var p = state.rawStroke[i];
+    if(i === 0) ctx.moveTo(p.X, p.Y); else ctx.lineTo(p.X, p.Y);
+  }
+  ctx.strokeStyle = sk.pen; ctx.lineWidth = 2.4; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.shadowColor = sk.penGlow; ctx.shadowBlur = 8; ctx.stroke(); ctx.shadowBlur = 0;
+}
+
+// ---------- animation loop --------------------------------------------------
+var rafId = null, last = 0;
+var PERIODS_PER_SEC = 0.16;     // one full retrace every ~6s at 1×
+function frame(ts){
+  rafId = requestAnimationFrame(frame);
+  if(state.playing && !state.drawing && state.terms.length){
+    var dt = last ? Math.min(0.05, (ts - last) / 1000) : 0;
+    var prevT = state.t;
+    state.t += dt * PERIODS_PER_SEC * state.speed;
+    if(state.t >= 1){ state.t -= 1; state.penPath = []; }   // wrap one period
+    // record pen position for the trace
+    var tip = penTip(state.terms, state.N, state.t);
+    state.penPath.push({ x: tip.x, y: tip.y });
+    if(state.penPath.length > 4000) state.penPath.shift();
+  }
+  last = ts;
+  draw();
+}
+function startLoop(){ if(rafId == null){ last = 0; rafId = requestAnimationFrame(frame); } }
+
+// Draw the FULL reconstructed curve statically (reduced-motion / paused entry).
+function drawStaticFull(){
+  state.penPath = [];
+  var steps = 1200;
+  for(var i = 0; i <= steps; i++){
+    var tip = penTip(state.terms, state.N, i / steps);
+    state.penPath.push({ x: tip.x, y: tip.y });
+  }
+  state.t = 0;
+  draw();
+}
+
+// ---------- controls --------------------------------------------------------
+var playBtn = document.getElementById('playBtn');
+function syncPlay(){ playBtn.textContent = state.playing ? '⏸ Pause' : '▶ Play'; }
+playBtn.addEventListener('click', function(){
+  state.playing = !state.playing;
+  if(state.playing){ flashHud('', 1); hud.classList.remove('show'); }
+  syncPlay();
+});
+document.getElementById('restartBtn').addEventListener('click', function(){
+  state.t = 0; state.penPath = []; if(reduceMotion && !state.playing) drawStaticFull(); else draw();
+});
+
+var speedSlider = document.getElementById('speedSlider'), speedVal = document.getElementById('speedVal');
+function setSpeedFill(){ speedSlider.style.setProperty('--fill', ((speedSlider.value - speedSlider.min) / (speedSlider.max - speedSlider.min) * 100) + '%'); }
+speedSlider.addEventListener('input', function(){
+  state.speed = parseFloat(speedSlider.value);
+  speedVal.textContent = state.speed.toFixed(2).replace(/0+$/, '').replace(/\.$/, '') + '×'; setSpeedFill();
+});
+setSpeedFill();
+
+var nSlider = document.getElementById('nSlider');
+nSlider.addEventListener('input', function(){
+  applyN(parseFloat(nSlider.value));
+  if(!state.playing || reduceMotion){ if(reduceMotion && !state.playing) drawStaticFull(); else draw(); }
+});
+
+// presets
+function buildPresets(){
+  var host = document.getElementById('presets');
+  Object.keys(PRESETS).forEach(function(name){
+    var b = document.createElement('button'); b.className = 'chip'; b.textContent = name;
+    b.dataset.name = name;
+    b.addEventListener('click', function(){ loadPreset(name); });
+    host.appendChild(b);
+  });
+}
+function markActiveChip(name){
+  var host = document.getElementById('presets');
+  Array.prototype.forEach.call(host.children, function(c){ c.classList.toggle('active', c.dataset.name === name); });
+}
+function loadPreset(name){
+  var fn = PRESETS[name]; if(!fn) return;
+  state.drawing = false; cv.style.cursor = 'crosshair';
+  setShapeFromPoints(fn(), name);
+  markActiveChip(name);
+  if(reduceMotion && !state.playing){ drawStaticFull(); }
+  else { draw(); }
+}
+
+// freehand draw
+var drawBtn = document.getElementById('drawBtn');
+drawBtn.addEventListener('click', function(){
+  state.drawing = true; state.rawStroke = []; markActiveChip('__none');
+  cv.style.cursor = 'crosshair';
+  state.terms = [];      // clear current so draw() shows blank stage
+  flashHud('Drag on the stage to draw a closed loop — release to transform it.', 5000);
+  draw();
+});
+function pointerPos(e){
+  var r = cv.getBoundingClientRect();
+  return { X: (e.clientX - r.left), Y: (e.clientY - r.top) };
+}
+cv.addEventListener('pointerdown', function(e){
+  if(!state.drawing) return;
+  cv.setPointerCapture(e.pointerId);
+  state.rawStroke = [pointerPos(e)];
+  e.preventDefault();
+});
+cv.addEventListener('pointermove', function(e){
+  if(!state.drawing || !state.rawStroke.length) return;
+  var p = pointerPos(e);
+  var last = state.rawStroke[state.rawStroke.length - 1];
+  if(Math.hypot(p.X - last.X, p.Y - last.Y) > 2){ state.rawStroke.push(p); state.shape = '__capturing'; draw(); }
+});
+cv.addEventListener('pointerup', function(e){
+  if(!state.drawing) return;
+  finishStroke();
+});
+function finishStroke(){
+  state.drawing = false; cv.style.cursor = 'crosshair';
+  if(state.rawStroke.length < 4){
+    flashHud('Stroke too short — draw a longer loop.', 2600);
+    loadPreset('Star'); return;
+  }
+  // convert canvas coords → model coords using current view (transform inverse)
+  var modelPts = state.rawStroke.map(function(p){ return toModel(p.X, p.Y); });
+  state.shape = 'Custom';
+  setShapeFromPoints(modelPts, 'Custom');
+  state.playing = !reduceMotion; syncPlay();
+  if(reduceMotion){ drawStaticFull(); } else { draw(); }
+  flashHud('Your curve, as <b>' + state.terms.length + '</b> rotating vectors. Slide <b>N</b> to watch it sharpen.', 4200);
+}
+
+// show toggles
+function wireToggle(id, key){
+  var el = document.getElementById(id);
+  el.addEventListener('click', function(){
+    state.show[key] = !state.show[key];
+    el.classList.toggle('on', state.show[key]);
+    draw();
+  });
+}
+wireToggle('tCircles', 'circles');
+wireToggle('tTarget', 'target');
+wireToggle('tPen', 'pen');
+
+// skins
+document.getElementById('skinSeg').addEventListener('click', function(ev){
+  var b = ev.target.closest('button[data-skin]'); if(!b) return;
+  state.skin = b.dataset.skin;
+  Array.prototype.forEach.call(ev.currentTarget.querySelectorAll('button'), function(x){ x.classList.toggle('active', x === b); });
+  draw();
+});
+
+// HUD
+var hud = document.getElementById('hud');
+function flashHud(msg, ms){
+  if(!msg){ return; }
+  hud.innerHTML = msg; hud.classList.add('show');
+  clearTimeout(flashHud._t); flashHud._t = setTimeout(function(){ hud.classList.remove('show'); }, ms || 2600);
+}
+
+// resize (debounced)
+var rt = null;
+window.addEventListener('resize', function(){ clearTimeout(rt); rt = setTimeout(resize, 120); });
+
+// self-test chip
+document.getElementById('selftest').addEventListener('click', function(){
+  flashHud('A real complex DFT computed here — proven exact (round-trip & full reconstruction), energy-conserving (Parseval), and each added term only lowers the error. See the console.', 5000);
+});
+
+// ============================================================================
+// INIT
+// ============================================================================
+function init(){
+  var res = runSelfTest();
+  var chip = document.getElementById('selftest');
+  if(res.pass === res.total){
+    chip.className = 'selftest ok';
+    chip.textContent = 'epicycles verified — ' + res.pass + '/' + res.total + ' ✓';
+  } else {
+    chip.className = 'selftest bad';
+    chip.textContent = 'epicycles FAILED — ' + res.pass + '/' + res.total;
+  }
+  chip.title = res.log.join('\n');
+  console.log('Fourier Epicycles self-test: ' + res.pass + '/' + res.total + ' passed. ' +
+              'round-trip max ' + res.maxRT.toExponential(3) +
+              ', Parseval rel ' + res.maxPars.toExponential(3) +
+              ', N=M recon ' + res.errN.toExponential(3) + '.');
+
+  buildPresets();
+  resize();                  // sizes canvas
+  loadPreset('Star');        // opening figure (also calls fitView)
+  syncPlay();
+  if(reduceMotion){
+    flashHud('Reduced motion: showing the full curve statically — press <b>▶ Play</b> to watch the circles turn.', 5600);
+    drawStaticFull();
+  } else {
+    flashHud('Watch the circles trace the star · slide <b>N</b> · or <b>Draw your own</b>', 4200);
+  }
+  startLoop();
+
+  // ws breadcrumb (additive, never clobbers other keys)
+  try{ localStorage.setItem('ws:seen:epicycles', '1'); }catch(e){}
+}
+init();
+
+})(); }
+</script>
+</body>
+</html>
