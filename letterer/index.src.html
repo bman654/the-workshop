@@ -1,0 +1,1071 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Letterer</title>
+<style>
+  :root{
+    --bg:#080a0f;
+    --bg-grad1:rgba(120,84,36,0.16);
+    --bg-grad2:rgba(70,52,30,0.14);
+    --ink:#eaf0fa;
+    --ink-dim:#8b95a8;
+    --accent:#c9a24a;
+    --accent-soft:rgba(201,162,74,0.16);
+    --panel-bg:rgba(13,15,22,0.88);
+    --panel-edge:rgba(201,162,74,0.34);
+    --good:#8fd79a;
+    --bad:#f08a7a;
+    --water:#1a4254;
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    background:
+      radial-gradient(1200px 700px at 72% 16%, var(--bg-grad1), transparent 60%),
+      radial-gradient(900px 600px at 18% 92%, var(--bg-grad2), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .topbar .right{ display:flex; align-items:center; gap:14px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:default; }
+  .selftest.ok{ color:var(--good); border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:var(--bad); border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:60px 22px 16px; min-width:0; gap:12px; }
+
+  /* the plate (a survey sheet) */
+  #plateWrap{ position:relative; width:min(960px,100%); display:flex; flex-direction:column; align-items:center; gap:8px; }
+  #plate{ display:block; width:100%; max-width:960px; max-height:74vh;
+    border-radius:8px;
+    filter:drop-shadow(0 22px 50px rgba(0,0,0,0.6));
+    user-select:none; -webkit-user-select:none; touch-action:none; cursor:crosshair; }
+  #plate text{ user-select:none; -webkit-user-select:none; }
+
+  #caption{ font:600 10px/1.4 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); opacity:.85; text-align:center; }
+  #caption b{ color:var(--accent); }
+
+  /* live status row under the plate */
+  #statline{
+    width:min(960px,100%); background:var(--panel-bg);
+    border:1px solid var(--panel-edge); border-radius:10px; padding:10px 14px;
+    display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+    backdrop-filter: blur(8px) saturate(120%); -webkit-backdrop-filter: blur(8px) saturate(120%);
+  }
+  .stat{ display:flex; align-items:baseline; gap:7px; }
+  .stat .k{ font:600 9.5px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); white-space:nowrap; }
+  .stat .v{ font:700 17px/1 var(--font-mono); color:var(--accent); font-variant-numeric:tabular-nums; min-width:18px; }
+  #ovCount.zero{ color:var(--good); }
+  #ovCount.nonzero{ color:var(--bad); }
+  .stat .vsmall{ font:600 12px/1 var(--font-mono); color:var(--ink); font-variant-numeric:tabular-nums; }
+  #phase{ font:600 10px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; padding:5px 10px;
+    border-radius:14px; border:1px solid var(--panel-edge); color:var(--ink-dim); white-space:nowrap; }
+  #phase.annealing{ color:var(--accent); border-color:var(--accent); }
+  #phase.settled{ color:var(--good); border-color:rgba(120,200,130,0.5); }
+  .statspacer{ flex:1 1 auto; }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:330px; flex:0 0 330px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 20px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.58; margin:0 0 16px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); }
+  .row{ margin:13px 0; }
+  .row > label{ display:block; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .inrow{ display:flex; gap:8px; align-items:center; }
+  input[type=range]{ flex:1; min-width:0; accent-color:var(--accent); cursor:pointer; }
+  .valbox{ flex:0 0 auto; width:42px; text-align:center; font:600 13px/1 var(--font-mono); color:var(--accent);
+    font-variant-numeric:tabular-nums; }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(201,162,74,0.24); }
+  .seg button{
+    flex:1; min-width:34px; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#201704; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .btnrow{ display:flex; gap:8px; margin:13px 0; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(201,162,74,0.26), rgba(201,162,74,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(201,162,74,0.40), rgba(201,162,74,0.14)); }
+  .toggle{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .toggle .desc{ font:11px/1.4 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; }
+  .switch{ position:relative; flex:0 0 auto; width:42px; height:23px; border-radius:14px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.35); cursor:pointer; transition:.2s; }
+  .switch::after{ content:""; position:absolute; top:2px; left:2px; width:17px; height:17px; border-radius:50%;
+    background:var(--ink-dim); transition:.2s; }
+  .switch.on{ background:var(--accent-soft); border-color:var(--accent); }
+  .switch.on::after{ left:21px; background:var(--accent); }
+  .hint{ font:10.5px/1.6 var(--font-mono); color:var(--ink-dim); opacity:.88; letter-spacing:.2px; margin:16px 0 4px;
+    border-top:1px solid rgba(201,162,74,0.18); padding-top:13px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+  .hint code{ color:var(--accent); }
+
+  /* mobile */
+  @media (max-width: 760px){
+    #wrap{ flex-direction:column; overflow-y:auto; }
+    #stage{ order:1; padding:78px 12px 10px; height:auto; min-height:54vh; }
+    #panel{ order:2; width:100%; flex:1 1 auto; height:auto; border-left:none;
+      border-top:1px solid var(--panel-edge); padding:18px 14px 26px; box-shadow:none; }
+    .topbar{ padding:9px 12px 0; flex-wrap:wrap; gap:6px 12px; align-items:center; }
+    .topbar .right{ order:3; flex-basis:100%; }
+    .brand{ order:2; }
+    .back{ order:1; }
+    .brand h1{ font-size:18px; }
+    .brand .tag{ display:none; }
+    .selftest{ font-size:9.5px; padding:5px 8px; max-width:100%; overflow:hidden;
+      text-overflow:ellipsis; white-space:nowrap; }
+    #plate{ max-height:46vh; }
+    body{ overflow:auto; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; workshop</a>
+    <div class="brand">
+      <h1>The Letterer</h1>
+      <span class="tag">a label-placement engine, watched as it anneals</span>
+    </div>
+    <div class="right">
+      <div class="selftest" id="selftest" title="built-in self-test">checking&hellip;</div>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <div id="plateWrap">
+        <svg id="plate" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700"></svg>
+        <div id="caption">&nbsp;</div>
+      </div>
+      <div id="statline">
+        <div class="stat"><span class="k">overlaps</span><span class="v" id="ovCount">—</span></div>
+        <div class="stat"><span class="k">points</span><span class="vsmall" id="ptCount">—</span></div>
+        <div class="stat"><span class="k">energy</span><span class="vsmall" id="enVal">—</span></div>
+        <div class="statspacer"></div>
+        <span id="phase">idle</span>
+      </div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A cartographer's hardest chore, automated. <b>Point-Feature Label Placement</b> is NP-hard: drop a name beside every survey station so that <b>no two labels collide</b>, none crosses the river, and all stay on the sheet &mdash; while still reading to each dot's preferred side. This is the classic <b>candidate-slot + simulated-annealing</b> solver (Christensen&ndash;Marks&ndash;Shieber, 1995). Hit <b>Anneal</b> and watch the cloud of clashing names cool into a clean layout.</p>
+
+      <div class="btnrow">
+        <button class="btn primary" id="btnAnneal">▶ Anneal</button>
+        <button class="btn" id="btnScatter" title="re-scatter labels to their overlapping start">Scatter</button>
+      </div>
+
+      <div class="row">
+        <label>Stations <span style="color:var(--ink)" id="ptLbl"></span></label>
+        <div class="inrow">
+          <input type="range" id="ptRange" min="6" max="64" step="1" value="34">
+          <span class="valbox" id="ptVal">34</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Candidate model</label>
+        <div class="seg" id="posSeg">
+          <button data-pos="4">4-position</button>
+          <button data-pos="8" class="active">8-position</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Anneal speed</label>
+        <div class="seg" id="speedSeg">
+          <button data-spd="slow">slow</button>
+          <button data-spd="med" class="active">medium</button>
+          <button data-spd="fast">fast</button>
+          <button data-spd="instant">instant</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="toggle">
+          <span class="desc">River &amp; lake <span style="opacity:.7">(no-go zones)</span></span>
+          <div class="switch" id="obsSwitch" role="button" tabindex="0" aria-label="toggle obstacles"></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="toggle">
+          <span class="desc">Show candidate slots <span style="opacity:.7">(for the lit point)</span></span>
+          <div class="switch on" id="slotSwitch" role="button" tabindex="0" aria-label="toggle candidate slots"></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Seed</label>
+        <div class="inrow">
+          <input type="range" id="seedRange" min="1" max="9999" step="1" value="2718">
+          <span class="valbox" id="seedVal">2718</span>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn" id="btnReseed">⟳ Reseed</button>
+        <button class="btn" id="btnPng">Export 2&times; PNG</button>
+      </div>
+
+      <p class="hint"><b>Reading the plate.</b> Each <span style="color:var(--accent)">●</span> is a survey station; its name sits in one of 4 or 8 slots around it, joined by a hair-thin leader. The faint dotted boxes show the candidate slots the engine chose between for the <b>lit</b> station &mdash; click any dot to light it. Red labels are still in conflict; the counter falls to <code>0</code> as it settles. <b>Click empty sheet</b> to add a station; the engine re-letters live.</p>
+    </aside>
+  </div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE LETTERER — a live demonstrator for the LabelPlacer engine.
+
+   The engine (tools/label/label.js) is the star; this page is its stage. We
+   scatter named survey stations on a plate, start every label at its most-
+   preferred slot (which overlaps badly), then run the SAME simulated annealer
+   the engine ships — but STEPPED, so you watch the cloud cool. The overlap
+   counter is recomputed from the engine's own geometry every frame and visibly
+   reaches 0. A faint candidate-slot overlay makes the algorithm legible.
+
+   Both shared modules are inlined by forge (directives at the very bottom).
+   ═══════════════════════════════════════════════════════════════════════════ */
+<!-- forge:include ../tools/label/label.js -->
+<!-- forge:include ../tools/ws/ws.js -->
+
+(function () {
+  'use strict';
+  var LP = LabelPlacer;
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  var VB = { w: 1000, h: 700 };
+  var MARGIN = 24;
+  var BOUNDS = { x: MARGIN, y: MARGIN, w: VB.w - 2 * MARGIN, h: VB.h - 2 * MARGIN };
+
+  /* invented survey-station names — evocative, varied lengths */
+  var NAMES = [
+    'Ashford', 'Belmoor', 'Cinderhowe', 'Dunwick', 'Elsmere', 'Farrowgate',
+    'Glimmerton', 'Hartsdale', 'Ironvale', 'Jessamy', 'Kelpie Reach', 'Larkholt',
+    'Marrowmere', 'Netherby', 'Oldcastle', 'Pinfold', 'Quarrenden', 'Ravenscar',
+    'Sablewood', 'Thornmere', 'Underhill', 'Vexley', 'Wardenfell', 'Yarrow',
+    'Aldermast', 'Brackenside', 'Coldharbour', 'Dewsbury', 'Eastmarch', 'Fenwillow',
+    'Greywater', 'Holloway', 'Innisfree', 'Kingsmere', 'Longstrand', 'Mossgill',
+    'Norwold', 'Overstrand', 'Pellmere', 'Riftholme', 'Saltmarsh', 'Tarnby',
+    'Westreach', 'Yewbarrow', 'Zephyr Cross', 'Brindlemoor', 'Cresswell', 'Drumlin',
+    'Ennerdale', 'Foxglove', 'Garrowby', 'Hexham', 'Ivybridge', 'Kestrelhowe',
+    'Lindholm', 'Mirefield', 'Nethercote', 'Oakhanger', 'Pondsworth', 'Quillgate',
+    'Rookhaven', 'Stillwater', 'Tidescar', 'Wraithmoor'
+  ];
+
+  /* ── state ────────────────────────────────────────────────────────────── */
+  var STATE = {
+    nPoints: 34,
+    seed: 2718,
+    positions: 8,
+    obstacles: false,
+    showSlots: true,
+    speed: 'med',
+    litId: null,           // station whose candidate slots are drawn
+    features: [],          // engine feature specs
+    obsRects: [],          // obstacle rects (river/lake)
+    slots: null,           // current slot index per free feature (anneal state)
+    candidates: null,      // per-feature candidate list
+    pinnedRects: [],       // none here, but kept for parity
+    placements: [],        // last rendered placements
+    overlaps: 0,
+    energy: 0,
+    running: false,
+    rafId: null
+  };
+
+  /* speed → SA schedule */
+  var SPEEDS = {
+    slow:    { stepsPerFrame: 30,  frames: 240 },
+    med:     { stepsPerFrame: 90,  frames: 150 },
+    fast:    { stepsPerFrame: 260, frames: 90 },
+    instant: { stepsPerFrame: 0,   frames: 0 }  // solve in one call
+  };
+
+  /* ── DOM ──────────────────────────────────────────────────────────────── */
+  var plate = document.getElementById('plate');
+  var caption = document.getElementById('caption');
+  var ovCount = document.getElementById('ovCount');
+  var ptCount = document.getElementById('ptCount');
+  var enVal = document.getElementById('enVal');
+  var phaseEl = document.getElementById('phase');
+
+  /* ── seeded helpers (mulberry32 from the engine) ───────────────────────── */
+  function makeRng(seed) { return LP.mulberry32(seed >>> 0); }
+
+  /* measure a label box for a name at our plate font. We approximate text
+     width with a per-char metric (the engine only needs a box); padding gives
+     the pill its breathing room. Deterministic — no DOM measurement needed. */
+  function measureLabel(name) {
+    var fs = 14;                       // px in viewBox units
+    var w = 0;
+    for (var i = 0; i < name.length; i++) {
+      var c = name.charCodeAt(i);
+      // rough proportional metric: caps/wide ~0.62em, narrow ~0.4em, space ~0.34em
+      var ch = name[i];
+      if (ch === ' ') w += fs * 0.34;
+      else if ('iIljt.!'.indexOf(ch) >= 0) w += fs * 0.36;
+      else if ('mwMW'.indexOf(ch) >= 0) w += fs * 0.86;
+      else if (c >= 65 && c <= 90) w += fs * 0.66; // uppercase
+      else w += fs * 0.54;
+    }
+    return { w: Math.round(w + 14), h: 21 };   // +pad, fixed pill height
+  }
+
+  /* ── build a fresh scatter for a seed/count ─────────────────────────────── */
+  function buildScatter() {
+    var rng = makeRng(STATE.seed);
+    var n = STATE.nPoints;
+
+    // Poisson-ish: rejection-sample points with a minimum separation so a
+    // feasible labeling reliably exists (this is a demo, not a stress test).
+    var pts = [];
+    var minSep = Math.max(44, Math.min(150, Math.sqrt((BOUNDS.w * BOUNDS.h) / Math.max(1, n)) * 0.62));
+    var guard = 0;
+    while (pts.length < n && guard < n * 400) {
+      guard++;
+      var x = BOUNDS.x + 30 + rng() * (BOUNDS.w - 60);
+      var y = BOUNDS.y + 30 + rng() * (BOUNDS.h - 60);
+      var ok = true;
+      for (var i = 0; i < pts.length; i++) {
+        var dx = pts[i].x - x, dy = pts[i].y - y;
+        if (dx * dx + dy * dy < minSep * minSep) { ok = false; break; }
+      }
+      if (ok) pts.push({ x: x, y: y });
+    }
+    // if rejection sampling fell short, relax and top up on a coarse grid
+    if (pts.length < n) {
+      var need = n - pts.length, gi = 0;
+      while (pts.length < n && gi < 2000) {
+        var gx = BOUNDS.x + 40 + (rng() * (BOUNDS.w - 80));
+        var gy = BOUNDS.y + 40 + (rng() * (BOUNDS.h - 80));
+        pts.push({ x: gx, y: gy }); gi++;
+      }
+    }
+
+    // obstacles: a sweeping river band + a lake, both inside bounds
+    STATE.obsRects = [];
+    if (STATE.obstacles) {
+      STATE.obsRects = makeRiverLake(rng);
+    }
+
+    // assign names + measured boxes + a ranked preference (upper-right reads best)
+    var prefer = ['ne', 'right', 'nw', 'left', 'se', 'top', 'sw', 'bottom'];
+    STATE.features = [];
+    for (var k = 0; k < pts.length; k++) {
+      var name = NAMES[k % NAMES.length];
+      var box = measureLabel(name);
+      STATE.features.push({
+        id: 'st' + k,
+        name: name,
+        anchor: { x: pts[k].x, y: pts[k].y },
+        label: { w: box.w, h: box.h },
+        gap: 9,
+        prefer: prefer
+      });
+    }
+    if (STATE.litId == null || !featById(STATE.litId)) {
+      STATE.litId = STATE.features.length ? STATE.features[0].id : null;
+    }
+    resetToInitial();
+  }
+
+  /* a thin river (a sinuous chain of slim rects) + a small lake blob — kept slim
+     so a feasible labeling reliably exists: labels just mustn't SIT ON the water,
+     they may bracket it on either bank. */
+  function makeRiverLake(rng) {
+    var rects = [];
+    // river: a gentle S sweeping left → right, as a chain of slim overlapping rects
+    var steps = 16;
+    var x0 = BOUNDS.x + 30, x1 = BOUNDS.x + BOUNDS.w - 30;
+    var bandH = 13;
+    var phase = 0.4 + rng() * 0.6;
+    for (var i = 0; i <= steps; i++) {
+      var t = i / steps;
+      var x = x0 + t * (x1 - x0);
+      var y = BOUNDS.y + BOUNDS.h * 0.56 + Math.sin(t * Math.PI * 1.7 + phase) * (BOUNDS.h * 0.22);
+      var segW = (x1 - x0) / steps + 10;
+      rects.push({ x: x - segW / 2, y: y - bandH / 2, w: segW, h: bandH, kind: 'river' });
+    }
+    // lake: a small clustered blob upper-right
+    var lx = BOUNDS.x + BOUNDS.w * 0.72, ly = BOUNDS.y + BOUNDS.h * 0.22;
+    rects.push({ x: lx - 52, y: ly - 30, w: 104, h: 60, kind: 'lake' });
+    rects.push({ x: lx - 34, y: ly - 42, w: 78, h: 38, kind: 'lake' });
+    return rects;
+  }
+
+  function featById(id) {
+    for (var i = 0; i < STATE.features.length; i++) if (STATE.features[i].id === id) return STATE.features[i];
+    return null;
+  }
+
+  /* ── annealer (stepped) ─────────────────────────────────────────────────
+     We mirror the engine's energy model exactly via LP.geom + LP.WEIGHTS so the
+     animated anneal and the engine's one-shot solve agree. State lives in
+     STATE.slots (slot index per feature). */
+  var ANNEAL = null;  // {rng, T, Tmin, cooling, candidates, obstacles}
+
+  function buildEngineSpec() {
+    return {
+      bounds: BOUNDS,
+      features: STATE.features.map(function (f) {
+        return { id: f.id, anchor: f.anchor, label: f.label, gap: f.gap, prefer: f.prefer };
+      }),
+      obstacles: STATE.obsRects.map(function (o) { return { x: o.x, y: o.y, w: o.w, h: o.h }; }),
+      seed: STATE.seed,
+      positions: STATE.positions
+    };
+  }
+
+  /* reset every label to its most-preferred slot (the overlapping START) */
+  function resetToInitial() {
+    var pos = STATE.positions;
+    STATE.candidates = STATE.features.map(function (f) {
+      return LP.geom.buildCandidates({ anchor: f.anchor, label: f.label, gap: f.gap, prefer: f.prefer }, pos);
+    });
+    STATE.slots = STATE.features.map(function () { return 0; });
+    recomputePlacements();
+  }
+
+  /* current rect for feature i given its slot */
+  function rectOf(i) { return STATE.candidates[i].slot ? null : STATE.candidates[i][STATE.slots[i]].rect; }
+  function candRect(i) { return STATE.candidates[i][STATE.slots[i]].rect; }
+  function candSide(i) { return STATE.candidates[i][STATE.slots[i]].side; }
+
+  var W = LP.WEIGHTS, GEO = LP.geom;
+
+  function softCost(i) {
+    var f = STATE.features[i], c = STATE.candidates[i][STATE.slots[i]];
+    var edge = GEO.nearestEdgePoint(f.anchor.x, f.anchor.y, c.rect);
+    var dx = edge[0] - f.anchor.x, dy = edge[1] - f.anchor.y;
+    return W.p * c.rank + W.d * Math.sqrt(dx * dx + dy * dy);
+  }
+  function soloHard(rect) {
+    var c = 0, o;
+    for (o = 0; o < STATE.obsRects.length; o++) c += W.lo * GEO.overlapArea(rect, STATE.obsRects[o]);
+    c += W.b * GEO.outOfBoundsArea(rect, BOUNDS);
+    return c;
+  }
+  function deltaEnergy(pick, newSlot) {
+    var oldRect = candRect(pick), oldS = STATE.slots[pick];
+    var newRect = STATE.candidates[pick][newSlot].rect;
+    var d = 0;
+    // soft
+    var f = STATE.features[pick];
+    var co = STATE.candidates[pick][oldS], cn = STATE.candidates[pick][newSlot];
+    var eo = GEO.nearestEdgePoint(f.anchor.x, f.anchor.y, co.rect);
+    var en = GEO.nearestEdgePoint(f.anchor.x, f.anchor.y, cn.rect);
+    d += (W.p * cn.rank + W.d * Math.hypot(en[0] - f.anchor.x, en[1] - f.anchor.y)) -
+         (W.p * co.rank + W.d * Math.hypot(eo[0] - f.anchor.x, eo[1] - f.anchor.y));
+    d += soloHard(newRect) - soloHard(oldRect);
+    for (var k = 0; k < STATE.features.length; k++) {
+      if (k === pick) continue;
+      d += W.ll * (GEO.overlapArea(newRect, candRect(k)) - GEO.overlapArea(oldRect, candRect(k)));
+    }
+    return d;
+  }
+
+  function startAnneal() {
+    if (STATE.speed === 'instant') {
+      // one-shot via the real engine, then sync slots back for the overlay
+      var spec = buildEngineSpec();
+      var res = LP.solve(spec);
+      syncSlotsFromPlacements(res.placements);
+      recomputePlacements();
+      setPhase('settled');
+      return;
+    }
+    var sched = SPEEDS[STATE.speed];
+    var rng = makeRng(STATE.seed ^ 0x5bd1e995);
+    var T = W.ll, Tmin = 1e-3;
+    var totalSteps = Math.max(1, sched.stepsPerFrame * sched.frames);
+    var cooling = Math.pow(Tmin / T, 1 / totalSteps);
+    ANNEAL = { rng: rng, T: T, Tmin: Tmin, cooling: cooling, stepsPerFrame: sched.stepsPerFrame, done: 0, totalSteps: totalSteps };
+    STATE.running = true;
+    setPhase('annealing');
+    cancelRaf();
+    STATE.rafId = requestAnimationFrame(annealFrame);
+  }
+
+  function annealFrame() {
+    if (!STATE.running || !ANNEAL) return;
+    var a = ANNEAL, n = STATE.features.length;
+    for (var s = 0; s < a.stepsPerFrame && a.done < a.totalSteps; s++, a.done++) {
+      if (n < 1) break;
+      var pick = (a.rng() * n) | 0;
+      var nslots = STATE.candidates[pick].length;
+      if (nslots < 2) { a.T *= a.cooling; continue; }
+      var newSlot = (a.rng() * nslots) | 0;
+      if (newSlot === STATE.slots[pick]) newSlot = (newSlot + 1) % nslots;
+      var dE = deltaEnergy(pick, newSlot);
+      if (dE <= 0 || a.rng() < Math.exp(-dE / a.T)) STATE.slots[pick] = newSlot;
+      a.T *= a.cooling;
+    }
+    recomputePlacements();
+    if (a.done >= a.totalSteps) {
+      greedyPolish();
+      recomputePlacements();
+      STATE.running = false;
+      setPhase(STATE.overlaps === 0 ? 'settled' : 'settled-residual');
+      ANNEAL = null;
+      return;
+    }
+    STATE.rafId = requestAnimationFrame(annealFrame);
+  }
+
+  /* final greedy local-improvement sweep (matches engine) */
+  function greedyPolish() {
+    var n = STATE.features.length, sweeps = 0, changed = true;
+    while (changed && sweeps < 24) {
+      changed = false; sweeps++;
+      for (var i = 0; i < n; i++) {
+        var best = STATE.slots[i], bestDelta = 0;
+        for (var c = 0; c < STATE.candidates[i].length; c++) {
+          if (c === STATE.slots[i]) continue;
+          var dd = deltaEnergy(i, c);
+          if (dd < bestDelta - 1e-9) { bestDelta = dd; best = c; }
+        }
+        if (best !== STATE.slots[i]) { STATE.slots[i] = best; changed = true; }
+      }
+    }
+  }
+
+  /* map engine placements back onto our slot indices (instant mode) */
+  function syncSlotsFromPlacements(placements) {
+    var byId = {};
+    for (var i = 0; i < placements.length; i++) byId[placements[i].id] = placements[i];
+    for (var k = 0; k < STATE.features.length; k++) {
+      var pl = byId[STATE.features[k].id];
+      if (!pl) continue;
+      var cs = STATE.candidates[k];
+      for (var c = 0; c < cs.length; c++) {
+        if (cs[c].side === pl.side) { STATE.slots[k] = c; break; }
+      }
+    }
+  }
+
+  /* ── recompute placements + overlap count from current slots ────────────── */
+  function recomputePlacements() {
+    var n = STATE.features.length;
+    var rects = [];
+    STATE.placements = [];
+    for (var i = 0; i < n; i++) {
+      var f = STATE.features[i], r = candRect(i);
+      var edge = GEO.nearestEdgePoint(f.anchor.x, f.anchor.y, r);
+      rects.push(r);
+      STATE.placements.push({
+        id: f.id, name: f.name, anchor: f.anchor,
+        x: r.x, y: r.y, side: candSide(i),
+        label: { x: r.x, y: r.y, w: r.w, h: r.h },
+        leader: [[f.anchor.x, f.anchor.y], [edge[0], edge[1]]],
+        overlapped: false
+      });
+    }
+    // count overlaps the same way the engine does
+    var overlaps = 0, energy = 0;
+    var flag = new Array(n); for (i = 0; i < n; i++) flag[i] = false;
+    for (i = 0; i < n; i++) {
+      for (var j = i + 1; j < n; j++) {
+        var oa = GEO.overlapArea(rects[i], rects[j]);
+        if (GEO.rectsOverlap(rects[i], rects[j])) { overlaps++; flag[i] = true; flag[j] = true; }
+        energy += W.ll * oa;
+      }
+    }
+    for (i = 0; i < n; i++) {
+      for (var o = 0; o < STATE.obsRects.length; o++) {
+        if (GEO.rectsOverlap(rects[i], STATE.obsRects[o])) { overlaps++; flag[i] = true; }
+      }
+      if (!GEO.rectInside(rects[i], BOUNDS, 1e-6)) { overlaps++; flag[i] = true; }
+      energy += softCost(i) + soloHard(rects[i]);
+    }
+    for (i = 0; i < n; i++) STATE.placements[i].overlapped = flag[i];
+    STATE.overlaps = overlaps;
+    STATE.energy = energy;
+    render();
+  }
+
+  /* ── phase pill ─────────────────────────────────────────────────────────── */
+  function setPhase(p) {
+    phaseEl.className = '';
+    if (p === 'annealing') { phaseEl.textContent = 'annealing…'; phaseEl.className = 'annealing'; }
+    else if (p === 'settled') { phaseEl.textContent = 'settled · 0 overlaps'; phaseEl.className = 'settled'; }
+    else if (p === 'settled-residual') { phaseEl.textContent = 'settled · ' + STATE.overlaps + ' residual'; }
+    else if (p === 'initial') { phaseEl.textContent = 'unplaced'; }
+    else phaseEl.textContent = p;
+  }
+
+  /* ── render the plate ───────────────────────────────────────────────────── */
+  function el(name, attrs, text) {
+    var e = document.createElementNS(SVGNS, name);
+    if (attrs) for (var k in attrs) if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function render() {
+    while (plate.firstChild) plate.removeChild(plate.firstChild);
+
+    // sheet background + graticule
+    plate.appendChild(el('rect', { x: 0, y: 0, width: VB.w, height: VB.h, rx: 8, fill: '#0c0f16' }));
+    plate.appendChild(el('rect', { x: 0, y: 0, width: VB.w, height: VB.h, rx: 8, fill: 'none',
+      stroke: 'rgba(201,162,74,0.22)', 'stroke-width': 1.5 }));
+    // graticule grid
+    var gstep = 50, gi;
+    for (gi = gstep; gi < VB.w; gi += gstep)
+      plate.appendChild(el('line', { x1: gi, y1: 0, x2: gi, y2: VB.h, stroke: 'rgba(201,162,74,0.05)', 'stroke-width': 1 }));
+    for (gi = gstep; gi < VB.h; gi += gstep)
+      plate.appendChild(el('line', { x1: 0, y1: gi, x2: VB.w, y2: gi, stroke: 'rgba(201,162,74,0.05)', 'stroke-width': 1 }));
+    // bounds frame (the printable area)
+    plate.appendChild(el('rect', { x: BOUNDS.x, y: BOUNDS.y, width: BOUNDS.w, height: BOUNDS.h, rx: 4,
+      fill: 'none', stroke: 'rgba(201,162,74,0.14)', 'stroke-width': 1, 'stroke-dasharray': '2 6' }));
+
+    // obstacles (river / lake)
+    for (var ob = 0; ob < STATE.obsRects.length; ob++) {
+      var o = STATE.obsRects[ob];
+      plate.appendChild(el('rect', { x: o.x, y: o.y, width: o.w, height: o.h, rx: o.kind === 'lake' ? 18 : 14,
+        fill: 'rgba(26,66,84,0.62)', stroke: 'rgba(90,170,200,0.5)', 'stroke-width': 1 }));
+    }
+
+    // candidate-slot overlay for the lit station
+    if (STATE.showSlots && STATE.litId != null) {
+      var li = -1;
+      for (var q = 0; q < STATE.features.length; q++) if (STATE.features[q].id === STATE.litId) li = q;
+      if (li >= 0) {
+        var cs = STATE.candidates[li];
+        for (var c = 0; c < cs.length; c++) {
+          var cr = cs[c].rect, chosen = (c === STATE.slots[li]);
+          plate.appendChild(el('rect', {
+            x: cr.x, y: cr.y, width: cr.w, height: cr.h, rx: 4,
+            fill: chosen ? 'rgba(201,162,74,0.10)' : 'none',
+            stroke: chosen ? 'rgba(201,162,74,0.65)' : 'rgba(201,162,74,0.28)',
+            'stroke-width': chosen ? 1.3 : 1,
+            'stroke-dasharray': chosen ? '' : '3 3'
+          }));
+        }
+      }
+    }
+
+    // leaders first (under labels)
+    for (var p = 0; p < STATE.placements.length; p++) {
+      var pl = STATE.placements[p];
+      plate.appendChild(el('line', {
+        x1: pl.leader[0][0], y1: pl.leader[0][1], x2: pl.leader[1][0], y2: pl.leader[1][1],
+        stroke: pl.overlapped ? 'rgba(240,138,122,0.6)' : 'rgba(201,162,74,0.45)', 'stroke-width': 1
+      }));
+    }
+
+    // labels + anchors
+    for (p = 0; p < STATE.placements.length; p++) {
+      pl = STATE.placements[p];
+      var lit = (pl.id === STATE.litId);
+      var fill = pl.overlapped ? 'rgba(70,30,26,0.92)' : 'rgba(13,18,26,0.92)';
+      var stroke = pl.overlapped ? 'rgba(240,138,122,0.85)' : (lit ? 'rgba(201,162,74,0.9)' : 'rgba(201,162,74,0.42)');
+      var tcol = pl.overlapped ? '#f3b3a8' : (lit ? '#f3e6c4' : '#dfe6f0');
+      var g = el('g', { 'data-id': pl.id, style: 'cursor:pointer' });
+      g.appendChild(el('rect', { x: pl.label.x, y: pl.label.y, width: pl.label.w, height: pl.label.h, rx: 4,
+        fill: fill, stroke: stroke, 'stroke-width': lit ? 1.4 : 1 }));
+      var t = el('text', {
+        x: pl.label.x + pl.label.w / 2, y: pl.label.y + pl.label.h / 2 + 0.5,
+        'text-anchor': 'middle', 'dominant-baseline': 'middle',
+        'font-family': 'var(--font-serif)', 'font-size': 14, fill: tcol
+      }, pl.name);
+      g.appendChild(t);
+      plate.appendChild(g);
+    }
+
+    // anchors on top
+    for (p = 0; p < STATE.placements.length; p++) {
+      pl = STATE.placements[p];
+      var litA = (pl.id === STATE.litId);
+      plate.appendChild(el('circle', {
+        cx: pl.anchor.x, cy: pl.anchor.y, r: litA ? 4 : 3,
+        fill: litA ? '#c9a24a' : 'rgba(201,162,74,0.8)',
+        stroke: '#0c0f16', 'stroke-width': 1
+      }));
+      if (litA) plate.appendChild(el('circle', { cx: pl.anchor.x, cy: pl.anchor.y, r: 8,
+        fill: 'none', stroke: 'rgba(201,162,74,0.5)', 'stroke-width': 1 }));
+    }
+
+    updateStats();
+  }
+
+  function updateStats() {
+    ovCount.textContent = STATE.overlaps;
+    ovCount.className = 'v ' + (STATE.overlaps === 0 ? 'zero' : 'nonzero');
+    ptCount.textContent = STATE.features.length;
+    enVal.textContent = (STATE.energy).toFixed(1);
+    var litF = featById(STATE.litId);
+    caption.innerHTML = STATE.positions + '-position model · ' +
+      (STATE.obstacles ? 'river &amp; lake active · ' : 'no obstacles · ') +
+      'lit station: <b>' + (litF ? litF.name : '—') + '</b>';
+  }
+
+  /* ── interactions ───────────────────────────────────────────────────────── */
+  function svgPoint(evt) {
+    var pt = plate.createSVGPoint();
+    var src = evt.touches ? evt.touches[0] : evt;
+    pt.x = src.clientX; pt.y = src.clientY;
+    var ctm = plate.getScreenCTM();
+    if (!ctm) return null;
+    var loc = pt.matrixTransform(ctm.inverse());
+    return { x: loc.x, y: loc.y };
+  }
+
+  plate.addEventListener('click', function (evt) {
+    var g = evt.target.closest ? evt.target.closest('g[data-id]') : null;
+    if (g) {
+      STATE.litId = g.getAttribute('data-id');
+      render();
+      return;
+    }
+    // also light a nearby anchor if clicked
+    var p = svgPoint(evt);
+    if (!p) return;
+    // click on an anchor?
+    var nearest = null, nd = 1e9;
+    for (var i = 0; i < STATE.features.length; i++) {
+      var f = STATE.features[i], dx = f.anchor.x - p.x, dy = f.anchor.y - p.y, d = dx * dx + dy * dy;
+      if (d < nd) { nd = d; nearest = f; }
+    }
+    if (nearest && nd < 14 * 14) { STATE.litId = nearest.id; render(); return; }
+    // otherwise: add a station at the click (if inside bounds and room left)
+    if (STATE.features.length >= 80) return;
+    if (p.x < BOUNDS.x + 8 || p.x > BOUNDS.x + BOUNDS.w - 8 || p.y < BOUNDS.y + 8 || p.y > BOUNDS.y + BOUNDS.h - 8) return;
+    addStationAt(p.x, p.y);
+  });
+
+  function addStationAt(x, y) {
+    var idx = STATE.features.length;
+    var name = NAMES[idx % NAMES.length];
+    var box = measureLabel(name);
+    var prefer = ['ne', 'right', 'nw', 'left', 'se', 'top', 'sw', 'bottom'];
+    STATE.features.push({
+      id: 'st' + (Date.now() % 100000) + '_' + idx,
+      name: name, anchor: { x: x, y: y }, label: { w: box.w, h: box.h }, gap: 9, prefer: prefer
+    });
+    STATE.nPoints = STATE.features.length;
+    syncPointRange();
+    // rebuild candidates incrementally
+    STATE.candidates.push(LP.geom.buildCandidates(
+      { anchor: { x: x, y: y }, label: { w: box.w, h: box.h }, gap: 9, prefer: prefer }, STATE.positions));
+    STATE.slots.push(0);
+    STATE.litId = STATE.features[idx].id;
+    recomputePlacements();
+    // give it a quick local solve so the new one isn't left clashing
+    greedyPolish();
+    recomputePlacements();
+    setPhase(STATE.overlaps === 0 ? 'settled' : 'settled-residual');
+  }
+
+  /* ── controls wiring ────────────────────────────────────────────────────── */
+  var ptRange = document.getElementById('ptRange'),
+      ptVal = document.getElementById('ptVal'),
+      seedRange = document.getElementById('seedRange'),
+      seedVal = document.getElementById('seedVal');
+
+  function syncPointRange() {
+    ptVal.textContent = STATE.nPoints;
+    if (+ptRange.value !== STATE.nPoints && STATE.nPoints <= +ptRange.max) ptRange.value = STATE.nPoints;
+  }
+
+  ptRange.addEventListener('input', function () {
+    STATE.nPoints = +ptRange.value; ptVal.textContent = STATE.nPoints;
+    stopAnneal(); buildScatter(); setPhase('initial');
+  });
+  seedRange.addEventListener('input', function () {
+    STATE.seed = +seedRange.value; seedVal.textContent = STATE.seed;
+    stopAnneal(); buildScatter(); setPhase('initial');
+  });
+
+  document.getElementById('posSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    setSeg('posSeg', b);
+    STATE.positions = +b.getAttribute('data-pos');
+    stopAnneal(); resetToInitial(); setPhase('initial');
+  });
+  document.getElementById('speedSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    setSeg('speedSeg', b);
+    STATE.speed = b.getAttribute('data-spd');
+  });
+  function setSeg(id, btn) {
+    var seg = document.getElementById(id);
+    var bs = seg.getElementsByTagName('button');
+    for (var i = 0; i < bs.length; i++) bs[i].className = '';
+    btn.className = 'active';
+  }
+
+  function wireSwitch(id, get, set) {
+    var sw = document.getElementById(id);
+    function toggle() { set(!get()); sw.className = 'switch' + (get() ? ' on' : ''); }
+    sw.addEventListener('click', toggle);
+    sw.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+  }
+  wireSwitch('obsSwitch',
+    function () { return STATE.obstacles; },
+    function (v) { STATE.obstacles = v; stopAnneal(); buildScatter(); setPhase('initial'); });
+  wireSwitch('slotSwitch',
+    function () { return STATE.showSlots; },
+    function (v) { STATE.showSlots = v; render(); });
+
+  document.getElementById('btnAnneal').addEventListener('click', function () {
+    if (STATE.running) { stopAnneal(); return; }
+    resetToInitial();           // always start from the overlapping initial layout
+    setPhase('initial'); render();
+    startAnneal();
+  });
+  document.getElementById('btnScatter').addEventListener('click', function () {
+    stopAnneal(); resetToInitial(); setPhase('initial');
+  });
+  document.getElementById('btnReseed').addEventListener('click', function () {
+    STATE.seed = 1 + Math.floor(Math.random() * 9999);
+    seedRange.value = STATE.seed; seedVal.textContent = STATE.seed;
+    stopAnneal(); buildScatter(); setPhase('initial');
+  });
+
+  function stopAnneal() { STATE.running = false; cancelRaf(); ANNEAL = null; }
+  function cancelRaf() { if (STATE.rafId != null) { cancelAnimationFrame(STATE.rafId); STATE.rafId = null; } }
+
+  /* ── PNG export (2×) ────────────────────────────────────────────────────── */
+  document.getElementById('btnPng').addEventListener('click', exportPNG);
+  function exportPNG() {
+    try {
+      var scale = 2, padBottom = 56;
+      var cv = document.createElement('canvas');
+      cv.width = VB.w * scale; cv.height = (VB.h + padBottom) * scale;
+      var cx = cv.getContext('2d');
+      cx.scale(scale, scale);
+
+      cx.fillStyle = '#080a0f'; cx.fillRect(0, 0, VB.w, VB.h + padBottom);
+      cx.fillStyle = '#0c0f16'; roundRect(cx, 0, 0, VB.w, VB.h, 8); cx.fill();
+      cx.strokeStyle = 'rgba(201,162,74,0.22)'; cx.lineWidth = 1.5; roundRect(cx, 0, 0, VB.w, VB.h, 8); cx.stroke();
+
+      // graticule
+      cx.strokeStyle = 'rgba(201,162,74,0.05)'; cx.lineWidth = 1;
+      var gi;
+      for (gi = 50; gi < VB.w; gi += 50) { cx.beginPath(); cx.moveTo(gi, 0); cx.lineTo(gi, VB.h); cx.stroke(); }
+      for (gi = 50; gi < VB.h; gi += 50) { cx.beginPath(); cx.moveTo(0, gi); cx.lineTo(VB.w, gi); cx.stroke(); }
+
+      // obstacles
+      for (var ob = 0; ob < STATE.obsRects.length; ob++) {
+        var o = STATE.obsRects[ob];
+        cx.fillStyle = 'rgba(26,66,84,0.62)'; cx.strokeStyle = 'rgba(90,170,200,0.5)'; cx.lineWidth = 1;
+        roundRect(cx, o.x, o.y, o.w, o.h, o.kind === 'lake' ? 18 : 14); cx.fill(); cx.stroke();
+      }
+
+      // leaders
+      for (var p = 0; p < STATE.placements.length; p++) {
+        var pl = STATE.placements[p];
+        cx.strokeStyle = pl.overlapped ? 'rgba(240,138,122,0.6)' : 'rgba(201,162,74,0.45)'; cx.lineWidth = 1;
+        cx.beginPath(); cx.moveTo(pl.leader[0][0], pl.leader[0][1]); cx.lineTo(pl.leader[1][0], pl.leader[1][1]); cx.stroke();
+      }
+      // labels
+      var serif = getComputedStyle(document.body).getPropertyValue('--font-serif') || 'Georgia, serif';
+      cx.textAlign = 'center'; cx.textBaseline = 'middle';
+      for (p = 0; p < STATE.placements.length; p++) {
+        pl = STATE.placements[p];
+        cx.fillStyle = pl.overlapped ? 'rgba(70,30,26,0.92)' : 'rgba(13,18,26,0.92)';
+        cx.strokeStyle = pl.overlapped ? 'rgba(240,138,122,0.85)' : 'rgba(201,162,74,0.42)'; cx.lineWidth = 1;
+        roundRect(cx, pl.label.x, pl.label.y, pl.label.w, pl.label.h, 4); cx.fill(); cx.stroke();
+        cx.fillStyle = pl.overlapped ? '#f3b3a8' : '#dfe6f0';
+        cx.font = '600 14px ' + serif;
+        cx.fillText(pl.name, pl.label.x + pl.label.w / 2, pl.label.y + pl.label.h / 2 + 0.5);
+      }
+      // anchors
+      for (p = 0; p < STATE.placements.length; p++) {
+        pl = STATE.placements[p];
+        cx.fillStyle = 'rgba(201,162,74,0.85)';
+        cx.beginPath(); cx.arc(pl.anchor.x, pl.anchor.y, 3, 0, Math.PI * 2); cx.fill();
+      }
+      // caption strip
+      cx.fillStyle = '#c9a24a'; cx.font = '700 16px ' + (getComputedStyle(document.body).getPropertyValue('--font-mono') || 'monospace');
+      cx.fillText('THE LETTERER · ' + STATE.features.length + ' stations · ' + STATE.overlaps + ' overlaps · ' +
+        STATE.positions + '-position', VB.w / 2, VB.h + padBottom / 2 + 2);
+
+      var url = cv.toDataURL('image/png');
+      var a = document.createElement('a');
+      a.href = url; a.download = 'letterer-' + STATE.features.length + 'pts-' + STATE.positions + 'pos.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      return url;
+    } catch (err) { if (typeof console !== 'undefined') console.error('PNG export failed', err); return null; }
+  }
+  function roundRect(cx, x, y, w, h, r) {
+    cx.beginPath();
+    cx.moveTo(x + r, y);
+    cx.arcTo(x + w, y, x + w, y + h, r);
+    cx.arcTo(x + w, y + h, x, y + h, r);
+    cx.arcTo(x, y + h, x, y, r);
+    cx.arcTo(x, y, x + w, y, r);
+    cx.closePath();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     SELF-TEST — the workshop signature. Runs a battery against the SAME engine
+     the page demonstrates and proves the core claim in the browser. Mirrors the
+     Node test's assertions; green chip when all pass.
+     ═══════════════════════════════════════════════════════════════════════ */
+  function rngFrom(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function sparseScatter(seed, count, withObstacles) {
+    var rnd = rngFrom(seed);
+    var bounds = { x: 0, y: 0, w: 1000, h: 700 };
+    var cols = Math.ceil(Math.sqrt(count * 1000 / 700));
+    var rows = Math.ceil(count / cols);
+    var pitchX = 1000 / cols, pitchY = 700 / rows;
+    var features = [], k = 0;
+    for (var r = 0; r < rows && k < count; r++) {
+      for (var c = 0; c < cols && k < count; c++) {
+        var cx = pitchX * (c + 0.5), cy = pitchY * (r + 0.5);
+        var jx = (rnd() - 0.5) * pitchX * 0.18, jy = (rnd() - 0.5) * pitchY * 0.18;
+        var lw = 30 + Math.floor(rnd() * 36), lh = 13 + Math.floor(rnd() * 5);
+        features.push({ id: 'p' + k, anchor: { x: cx + jx, y: cy + jy }, label: { w: lw, h: lh }, gap: 7, prefer: ['ne', 'right', 'nw', 'left'] });
+        k++;
+      }
+    }
+    var obstacles = [];
+    if (withObstacles) {
+      var nob = 1 + Math.floor(rnd() * 2);
+      for (var ob = 0; ob < nob; ob++) {
+        var oc = Math.floor(rnd() * (cols - 1)) + 1, orr = Math.floor(rnd() * (rows - 1)) + 1;
+        obstacles.push({ x: pitchX * oc - 14, y: pitchY * orr - 10, w: 28, h: 20 });
+      }
+    }
+    return { bounds: bounds, features: features, obstacles: obstacles };
+  }
+  function recount(spec, res) {
+    var ll = 0, lo = 0, oob = 0, ps = res.placements, g = LP.geom;
+    for (var i = 0; i < ps.length; i++) {
+      for (var j = i + 1; j < ps.length; j++) if (g.rectsOverlap(ps[i].label, ps[j].label)) ll++;
+      var obs = spec.obstacles || [];
+      for (var o = 0; o < obs.length; o++) if (g.rectsOverlap(ps[i].label, obs[o])) lo++;
+      if (spec.bounds && !g.rectInside(ps[i].label, spec.bounds, 1e-6)) oob++;
+    }
+    return ll + lo + oob;
+  }
+
+  function runSelfTest() {
+    var BATTERY = 24, clean = 0, pass = 0, total = 0;
+    function check(c) { total++; if (c) pass++; }
+
+    // determinism
+    var d1 = sparseScatter(42, 40, true); d1.seed = 12345;
+    check(JSON.stringify(LP.solve(d1)) === JSON.stringify(LP.solve(d1)));
+
+    // the feasible battery → 0 overlaps (the headline claim)
+    for (var t = 0; t < BATTERY; t++) {
+      var count = 8 + (t % 5) * 8, withObs = (t % 3) === 0;
+      var spec = sparseScatter(1000 + t * 17, count, withObs);
+      spec.seed = 50 + t; spec.positions = (t % 4 === 0) ? 4 : 8;
+      var res = LP.solve(spec);
+      if (res.overlaps === 0 && recount(spec, res) === 0) clean++;
+    }
+    check(clean === BATTERY);
+
+    // bounds containment
+    var allInside = true;
+    for (var s = 0; s < 6; s++) {
+      var sp = sparseScatter(100 + s, 24 + s, s % 2 === 0); sp.seed = 7 + s;
+      var rr = LP.solve(sp);
+      for (var p = 0; p < rr.placements.length; p++)
+        if (!LP.geom.rectInside(rr.placements[p].label, sp.bounds, 1e-6)) allInside = false;
+    }
+    check(allInside);
+
+    // pin honored
+    var pinSpec = sparseScatter(77, 20, false); pinSpec.seed = 4242;
+    pinSpec.features[0].pin = { x: 480, y: 330, side: 'pinned' };
+    var pres = LP.solve(pinSpec), pinned = null;
+    for (var pi = 0; pi < pres.placements.length; pi++) if (pres.placements[pi].id === pinSpec.features[0].id) pinned = pres.placements[pi];
+    check(pinned && pinned.x === 480 && pinned.y === 330 && pinned.side === 'pinned');
+
+    return { battery: BATTERY, clean: clean, pass: pass, total: total };
+  }
+
+  function showSelfTest() {
+    var chip = document.getElementById('selftest');
+    var r;
+    try { r = runSelfTest(); }
+    catch (e) { chip.className = 'selftest bad'; chip.textContent = 'self-test ERROR'; if (console) console.error(e); return; }
+    if (r.pass === r.total && r.clean === r.battery) {
+      chip.className = 'selftest ok';
+      chip.textContent = 'SELF-TEST ' + r.clean + '/' + r.battery + ' ✓ — 0 overlaps across ' + r.battery + ' seeded layouts';
+    } else {
+      chip.className = 'selftest bad';
+      chip.textContent = 'SELF-TEST FAILED — ' + r.clean + '/' + r.battery;
+    }
+    if (console) console.log('Letterer self-test: ' + r.pass + '/' + r.total + ' assertions, ' + r.clean + '/' + r.battery + ' clean layouts.');
+  }
+
+  /* ── boot ───────────────────────────────────────────────────────────────── */
+  function init() {
+    showSelfTest();
+    ptRange.value = STATE.nPoints; ptVal.textContent = STATE.nPoints;
+    seedRange.value = STATE.seed; seedVal.textContent = STATE.seed;
+    buildScatter();
+    setPhase('initial');
+    // auto-anneal once on load so a fresh visitor sees the cloud settle
+    setTimeout(function () { if (!STATE.running) { resetToInitial(); startAnneal(); } }, 500);
+  }
+
+  // expose for headless inspection / parity checks
+  if (typeof window !== 'undefined') {
+    window.__letterer = { STATE: STATE, runSelfTest: runSelfTest, exportPNG: exportPNG, solve: LP.solve, buildScatter: buildScatter };
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+
+/* ws: unlock breadcrumb — the shared module (one source of truth), inlined via
+   forge. Defines WS, records this piece's first-visit, and (via WS auto-init)
+   fires the unlock cue. Harmless if storage is off. */
+try { WS.seen('letterer'); } catch (e) {}
+</script>
+</body>
+</html>
