@@ -2,9 +2,58 @@
 
 *The estate's physics laboratory, quarried into the hillside and kept underground "for safety."
 A front-door **wing** (the grand "Physics Lab" seed begun). Two drifts off a central shaft — a warm
-Newtonian one and a cold Einsteinian one — and now a third, the **Quantum Drift** (three benches deep),
+Newtonian one and a cold Einsteinian one — and now a third, the **Quantum Drift** (four benches deep),
 which opens once a visitor has walked both. Every bench is one self-contained vanilla HTML file that
 proves its own physics exact.*
+
+---
+
+## 2026-06-13 — the Quantum Drift deepens again (The Harmonic Oscillator ships · the 4th Q-bench, 7th overall)
+
+**`cavern/oscillator/index.html` — The Harmonic Oscillator 🌀** (Quantum drift). The natural next quantum
+bench after the Box, and its deliberate *foil*: soften the box's infinite walls into a **parabolic bowl**
+`V(x) = ½ω²x²` — the potential of a perfect spring, the curve every stable system falls into near its
+minimum. Energy stays quantized, but the ladder changes shape, and the wavefunctions change character.
+One vanilla HTML file (~600 lines), ħ=m=1 natural units; the displayed eV are a fixed labelling.
+
+- **The headline contrast with the Box** (the soul of the bench):
+  - box ladder ∝ **n²** (uneven, spreading)  ↔  HO ladder = **ω(n+½)** (perfectly EVEN — spacing ℏω, ground ½ℏω > 0)
+  - box ψ **vanishes at hard walls**  ↔  HO ψ **leaks PAST the soft turning points** (the ground state spends ~15.7% of its time in the classically-forbidden region)
+  - box has **n−1** interior nodes  ↔  HO has exactly **n** nodes (counting from n=0)
+- **The physics core (pure & deterministic):** physicists' Hermite polynomials by the stable upward
+  recurrence `H_{k+1}=2xH_k−2kH_{k−1}`; the closed eigenstate `ψ_n(x)=(ω/π)^¼/√(2ⁿn!)·H_n(√ω·x)·e^{−ωx²/2}`;
+  the classically-forbidden tail `∫_{|x|>x_turn}|ψ_n|²` with the turning point `x_turn=√((2n+1)/ω)`; and a
+  **coherent state** `|α⟩` (a displaced ground state, `c_n=e^{−α²/2}αⁿ/√(n!)`) evolved as `Σ c_n ψ_n e^{−iE_n t}`.
+- **The independent solve (the bench's spine):** the self-test discretizes the Schrödinger operator
+  `−½ d²/dx² + ½ω²x²` on a truncated line into a symmetric tridiagonal matrix and pulls its lowest
+  eigenvalues **from scratch by inverse-power iteration** (a Thomas tridiagonal solve per step — variable
+  diagonal here, since the potential varies — + a Rayleigh quotient). It converges to the analytic even
+  ladder `ω(n+½)` as the grid refines (max |λ_solve−ω(n+½)| N=200 3.6e−3 → N=1400 7.5e−5, O(h²)) — a
+  *different algebra* than Hermite's formula, so agreement corroborates rather than asserts.
+- **The bench UI:** an even-ladder gauge with an ℏω spacing bracket; rung chips **0…7** (the HO starts at 0);
+  a |ψ|²/signed-ψ toggle (signed mode dots the n nodes); a **"show the classically-forbidden tail"** toggle
+  that shades `|x|>x_turn` red and marks the turning points; an ω slider (the bowl's stiffness); and a
+  **"Launch a coherent state & let it swing"** button — the crown jewel: a rigid, un-spreading Gaussian
+  packet that oscillates `⟨x⟩(t)=x₀cos(ωt)` like a classical marble, with a live ⟨x⟩ marker. Cold
+  electric-violet (`--q #b18cff`) accent, the warm bowl (`--bowl`) replacing the box's barred-red walls.
+- **Self-test 8/8**, proven two ways: (a) headless-Node against the **actual embedded `runSelfTest()`**
+  (extracted the inline script, stubbed document/localStorage/window), and (b) live in-browser
+  (agent-browser, served origin, clean console, screenshots reviewed — n=5 showed 5 nodes + 7.4% tail +
+  the wave poking into the shaded forbidden zone; the coherent packet visibly swung left→right between
+  frames while keeping its shape). The eight checks: **even ladder** `E_n=ω(n+½)` (max |gap−ω|=0) ·
+  each ψ_n **solves the Schrödinger ODE** (FD residual 1.5e−7) · **orthonormal** ⟨ψ_m|ψ_n⟩=δ_mn (2.3e−11) ·
+  **node theorem n nodes** (contrast box's n−1) · **from-scratch FD eigensolve → even ladder** O(h²) ·
+  **wave leaks past the walls and the leak shrinks with n** (n=0 15.7%==theory 15.73% > n=1 11.2% > n=5 7.4%) ·
+  **coherent state swings classically** ⟨x⟩=x₀cos(ωt) to 3.3e−15, norm=1 to 3.5e−15 · deterministic.
+- **A real bug the test caught:** the first node-counter used a naive `prev*cur<0` sign-change scan, which
+  *missed* the x=0 node of the odd states (ψ₇) when a grid sample landed exactly on x=0 (there ψ=−0, so
+  `0·anything = 0`, not `< 0`). Fixed to track the running **non-zero** sign so a zero straddled by ±
+  registers as exactly one crossing — a principled root-cause fix, not a tolerance fudge. 8/8 after.
+- **Integration:** a 4th Quantum-drift card in `cavern/index.html` (🌀) + 2 symmetric self-test checks →
+  the Cavern landing tally **19/19 → 21/21** (verified headless in BOTH the locked and unlocked states).
+  Drops `ws:seen:oscillator` (bench-internal, like `box` — not a front-door PLACES id). `forge --check
+  --all` clean (29 files current), `--audit-seen` still 13/13. The **Quantum Drift is now four benches
+  deep; the Cavern is seven benches overall.**
 
 ---
 
