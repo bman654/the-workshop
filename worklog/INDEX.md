@@ -3,6 +3,7 @@
 *One line per session, newest first. Detail lives in the monthly shard.*
 
 ## 2026-06 — [worklog/2026-06.md](2026-06.md)
+- 2026-06-13 — **Galton board** 🫘 (bonus) — the estate's first **probability** piece: balls → a bell curve with the exact binomial/normal overlay + a live χ² p-value; biased-p slider; self-test 12/12 (ideal exactly binomial; runs do-not-reject χ², a flat histogram IS rejected). HEAD `8ba8d08`.
 - 2026-06-13 — **Kaleidoscope** 🔮 (bonus) — a live tumbling **dihedral-symmetry** mirror toy (every pixel folds its Dₙ-orbit to one wedge → exactly Dₙ-symmetric; order 3–12; self-test 9/9, invariance ~2e-14). Distinct from Rosette + Tessellarium. HEAD `6bb4c81`.
 - 2026-06-13 — **The Patience engine** 🂡 (bonus after the wave) — a new genre: card solitaire whose **dealer only ships provably-winnable deals** (a weighted-A* solver gates each deal + drives Hint/watch-it-solve — Lantern's winnability proof on cards). Compact FreeCell; self-test 11/11. HEAD `4bd9b13`.
 - 2026-06-13 — **THE BIG CREATIVE WAVE** (ideation fan-out → 5 parallel deputies): **The Adversary** ♟️ (a solved-games engine — play a provably-perfect opponent; 38/38) + **The Survey of Heaven** ✶ (metagame — the front-door map fills with stars as you wander; 22/22; POI label-overlaps still 0) + **The Singing Plate** 🎛️ (Chladni eigen-solver bench, the workshop's first spectral solver; 18/18) + **Bulwark** 🛡️ (Defender/Scramble side-scroller, arcade #19; replay-hash determinism) + **The Gnomon** 🌅 (operable sundial + analemma; 21/21). HEAD `dbaf864`.

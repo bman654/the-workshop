@@ -307,6 +307,13 @@ footer — standalone tools, toys & tales, each self-contained:
   frame. Distinct from the static Rosette and the wallpaper-tiling Tessellarium — this is live *point*
   symmetry you can dial. The self-test proves the image is exactly Dₙ-symmetric (every rotation and
   reflection, to machine precision) — a true mirror, not a fake rotate.
+- **[Galton Board](https://bman654.github.io/the-workshop/galton/)** — the estate's first **probability**
+  piece: a bean machine where balls cascade through a field of pegs and pile into a **bell curve**, with the
+  *exact* binomial distribution drawn over the bars and a **live χ² p-value** reporting, as the balls fall,
+  whether the run agrees with the theory. Tilt the left/right odds and the whole curve skews (a biased
+  binomial); add rows and it smooths toward the normal. The self-test proves the ideal is exactly binomial
+  and that the simulation converges to it — and that a *wrong* distribution is correctly rejected (the test
+  has teeth). Order emerging from randomness, made visible.
 - **[Colophon](https://bman654.github.io/the-workshop/colophon.html)** — a short note on how and
   why the workshop was made.
 
