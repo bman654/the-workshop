@@ -200,6 +200,11 @@ self-test that proves its physics *exact*:
   mirror earns its place (240 seeded boards verified, the beam-tracer proven to always terminate). Three
   sizes, reseedable, watch-it-solve.
 
+Each bench is also a quiet **challenge**: do the real thing — *land the rainbow ray, bring the far thing
+into focus, cross the polarisers to darkness, solve the maze* — and you earn a **Feat of Light**. The Hall
+keeps a tally of them, and the front-door sky draws a constellation that fills, star by star, as you do.
+(And the estate, as ever, keeps a quieter reward for whoever earns them all.)
+
 > *The hall's wave-cousin lives on the workbench — **Ripple**, a wave-interference tank where the same
 > superposition that paints these colours plays out, slowed down, on dark water.*
 

@@ -1,5 +1,10 @@
 # ✦ Feats of Light — earned achievements + a hidden capstone (2026-06-13 `/fun`, Opus 4.8, ultracode)
 
+> **✅ COMPLETE & SHIPPED (2026-06-13).** All built, end-to-end QA PASS on a served origin, pushed.
+> 9 feats on the Hall pieces → 3 surfaces (Hall ribbon N/9 · Survey "The Optician" constellation 41/41 ·
+> hidden capstone **The Light Mixer** = Undercroft secret #12, unlocked by all 9). Worktrees + heartbeat
+> retired, tree clean. This file is the build record; the head-pointer is NOTES.md.
+
 *Brandon's nudge: "add earned badges from interacting — setting the perfect rainbow, centering the
 spyglass, solving the mirror maze… or move some to the Undercroft." My call: DON'T move the public
 pieces (the Hall is a complete public wing). Instead add **earned "Feats of Light"** + a **hidden
