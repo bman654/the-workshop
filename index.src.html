@@ -208,12 +208,55 @@
     font:600 9px/1 var(--mono); letter-spacing:.22em; text-transform:uppercase;
     color:var(--muted); opacity:.55; }
 
+  /* ---- THE SURVEY OF HEAVEN — a personal night sky in the plate's dark margins.
+     The <g.sky> is inserted as the FIRST child of #sheet, so the stars sit "in
+     the paper" behind the grid & footprints. A lit star is a small, softly
+     twinkling point; the asterism lines are hairlines that brighten to brass once
+     their wing is charted; the engraved names sit in the margin like surveyor's
+     marginalia. Monotone, cosmetic, never gated. See tools/sky/. ---- */
+  .sky{ pointer-events:none; }
+  /* a kindled star: a soft warm-white point with a faint halo, gently twinkling */
+  .sky-star{ fill:#eaf0fa; opacity:.78;
+    filter:drop-shadow(0 0 3px rgba(234,240,250,.5));
+    animation:skytwinkle 4s ease-in-out infinite; }
+  .sky-star.mag1{ fill:#fbf3df; opacity:.92;
+    filter:drop-shadow(0 0 5px rgba(240,212,137,.55)); }   /* a wing's bright lead */
+  .sky-star.mag3{ opacity:.6; }
+  @keyframes skytwinkle{ 0%,100%{ opacity:.85; } 46%{ opacity:.5; } 72%{ opacity:1; } }
+  /* asterism line: a faint cool hairline while partial; warms to brass when charted */
+  .asterism-line{ fill:none; stroke:var(--line); stroke-width:.7; opacity:.22;
+    stroke-linecap:round; stroke-linejoin:round;
+    transition:stroke .8s ease, opacity .8s ease, stroke-width .8s ease; }
+  .asterism-line.complete{ stroke:var(--brass); stroke-width:1; opacity:.62;
+    filter:drop-shadow(0 0 4px rgba(201,162,74,.4)); }
+  /* the engraved asterism NAME + its one-line myth, set as margin marginalia */
+  .asterism-name{ pointer-events:none; }
+  .asterism-name .an-name{ font:italic 12.5px/1 var(--serif); fill:var(--brass-bright);
+    letter-spacing:.01em; paint-order:stroke; stroke:rgba(6,8,13,.66); stroke-width:2.6px;
+    stroke-linejoin:round; }
+  .asterism-name .an-myth{ font:italic 8.5px/1.3 var(--serif); fill:#bcae8a;
+    paint-order:stroke; stroke:rgba(6,8,13,.55); stroke-width:1.8px; }
+  /* a small brass tick under the engraved name */
+  .asterism-name .an-rule{ stroke:var(--brass); stroke-width:.8; opacity:.5; }
+  /* the name fades+rises in the FIRST time its wing is charted (steady thereafter) */
+  .asterism-name.named-in{ animation:skyname 1.6s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes skyname{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:none; } }
+  /* the margin tally — quiet surveyor's mono, like the scale-bar ticks */
+  .sky-tally{ font:600 8.5px/1 var(--mono); letter-spacing:.2em; fill:var(--brass);
+    text-transform:uppercase; opacity:.5; }
+  /* the all-skies capstone: a whisper-faint warm lift over the charted plate */
+  .sky.all-charted .sky-tally{ opacity:.78; fill:var(--brass-bright); }
+
   @media (prefers-reduced-motion:reduce){
     .haze{ animation:none; }
     .fp-fill,.fp-line,.fp-fine,.fp-lit,.fp-floor,.fp-lamp,.roomrule,.leader,.leader-dot,.glyph-emoji,.within,#card,.focusring{ transition:none; }
     .undercroft.grow{ animation:none; opacity:1; transform:none; }
     .undercroft.repairing .fp-line{ animation:none; }
     .rune.show{ animation:none; opacity:.8; text-shadow:0 0 10px rgba(201,162,74,.4); }
+    /* a STATIC sky: no twinkle, no name-in animation, transitions off */
+    .sky-star{ animation:none; }
+    .asterism-line{ transition:none; }
+    .asterism-name.named-in{ animation:none; opacity:1; transform:none; }
   }
   @media (max-width:640px){
     .hint{ display:none; }
@@ -452,6 +495,19 @@
    estate lays out its OWN names. The map thus eats its own dog food — the same
    engine the /letterer page demonstrates. See tools/label/README.md. */
 <!-- forge:include tools/label/label.js -->
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   The Survey of Heaven module (inlined at build time by forge). Provides the
+   `Sky` global: a personal night sky drawn in the plate's dark margins that
+   records WHERE YOU HAVE BEEN. First visit to a room (read from the `ws:seen:<id>`
+   breadcrumb every page already drops) kindles a star; companion-pair "wings" are
+   joined by faint asterism lines that brighten to brass once both members are
+   visited, engraving a name + a one-line myth into the margin; charting every
+   wing fires an all-skies capstone. Always-visible, monotone, cosmetics-only —
+   it confers NO access and touches no existing predicate. See tools/sky/README.md. */
+<!-- forge:include tools/sky/sky.js -->
 </script>
 
 <script>
@@ -998,8 +1054,93 @@ function labelGap(r){
   return Math.max(b.w, b.h) / 2 + LABEL_GAP;
 }
 
-/* solve + apply labels for every present POI. Runs ONCE, after the Undercroft
-   reveal decision so a revealed cellar-stair label is part of the layout. */
+/* ── THE SURVEY OF HEAVEN: engraved-asterism-name labels ───────────────────────
+   The Sky module draws the stars, asterism lines, and the margin tally; the
+   ENGRAVED NAMES of charted asterisms are routed through the SAME LabelPlacer
+   pass as the POI labels, so a name can never collide with a room label, a
+   footprint, or the plan furniture. We build each charted asterism's name <g>
+   (typeset at a LOCAL origin like a roomname group), register it in SKY_LABELS,
+   and placeLabels() adds it as a solver feature anchored at the wing's star-pair
+   midpoint (out in the dark margin, beside its stars). */
+const SKY_LABELS = new Map();   // wingId → { group, anchor:{x,y}, prefer, firstTime }
+
+/* Curated BERTHS for the engraved asterism names: a roomy dark-margin anchor near
+   each wing's stars + an inward side preference (toward the open plate, away from
+   the frame). The names are margin marginalia — visually tied to their stars by
+   proximity + the shared brass, not a leader — so a deliberate berth reads as
+   engraving while letting the SAME solver keep every name clear of POI labels,
+   footprints, and furniture. Anchors chosen so a compact name box always has a
+   clean in-bounds slot; the solver still adapts the exact side. */
+const SKY_BERTH = {
+  celestial: { x:130, y:470, prefer:['bottom','se','right'] },  // left band, below the tower
+  letters:   { x:455, y:104, prefer:['top','left','bottom'] },  // top band, left of the manor
+  design:    { x:990, y:104, prefer:['top','right','bottom'] }, // top band, right of the manor
+  realm:     { x:120, y:560, prefer:['bottom','se','right'] },  // left band, below the map room
+  garden:    { x:560, y:806, prefer:['bottom','right','top'] }, // bottom band, right of the cartouche
+  labyrinth: { x:1316,y:500, prefer:['bottom','se','right'] }   // right band, above the maze
+};
+
+/* (re)build the engraved-name groups for the currently-charted asterisms from the
+   sky <g> the module produced (it carries __skyNamed + __skyState). Returns the
+   sky <g>, or null if no sky was drawn. */
+function buildSkyNames(skyG){
+  SKY_LABELS.clear();
+  if(!skyG || !skyG.__skyNamed || !skyG.__skyState) return skyG || null;
+  const named = skyG.__skyNamed;          // [{ ast, firstTime }]
+  named.forEach(({ ast, firstTime })=>{
+    // anchor: this wing's curated margin berth (fallback: the star-pair midpoint)
+    const berth = SKY_BERTH[ast.id];
+    let anchor, prefer;
+    if(berth){ anchor = { x:berth.x, y:berth.y }; prefer = berth.prefer; }
+    else {
+      let sx=0, sy=0, n=0;
+      ast.members.forEach(mid=>{ const c = Sky.CATALOG[mid]; if(c){ sx+=c.x; sy+=c.y; n++; } });
+      if(!n) return;
+      anchor = { x:sx/n, y:sy/n };
+    }
+    // the engraved name block, typeset at a local origin (name baseline at 0,0)
+    const lg = el("g",{ class:"asterism-name"+(firstTime?" named-in":""), "data-wing":ast.id });
+    const nm = el("text",{ x:0, y:0, "text-anchor":"start", class:"an-name" });
+    nm.textContent = ast.name;
+    lg.appendChild(nm);
+    const rule = el("line",{ x1:0, y1:5, x2:30, y2:5, class:"an-rule" });
+    lg.appendChild(rule);
+    const myth = el("text",{ x:0, y:18, "text-anchor":"start", class:"an-myth" });
+    myth.textContent = ast.myth;
+    lg.appendChild(myth);
+    skyG.appendChild(lg);                  // lives inside the sky layer (in the paper)
+    SKY_LABELS.set(ast.id, { group:lg, anchor, prefer, firstTime });
+  });
+  return skyG;
+}
+
+/* position ONE asterism-name group at a solved label-box {x,y} + side (anchor flip
+   only — no leader; the stars themselves are the asterism's anchor). */
+function applySkyName(parts, box, side){
+  const anchor = (side==="left"||side==="nw"||side==="sw") ? "end"
+               : (side==="right"||side==="ne"||side==="se") ? "start" : "middle";
+  parts.group.querySelectorAll("text").forEach(t=> t.setAttribute("text-anchor", anchor));
+  const rule = parts.group.querySelector(".an-rule");
+  if(rule){ if(anchor==="end"){ rule.setAttribute("x1",-30); rule.setAttribute("x2",0); }
+    else if(anchor==="middle"){ rule.setAttribute("x1",-15); rule.setAttribute("x2",15); }
+    else { rule.setAttribute("x1",0); rule.setAttribute("x2",30); } }
+  const bb = parts.group.getBBox();
+  const tx = box.x - (bb.x - LABEL_PAD), ty = box.y - (bb.y - LABEL_PAD);
+  parts.group.setAttribute("transform", `translate(${tx} ${ty})`);
+}
+
+/* solve + apply labels. TWO independent passes so the POI layout is INVARIANT to
+   sky state (adding sky features must never perturb a room label):
+
+     PASS 1 — the POI labels. EXACTLY the baseline solve (same features, obstacles,
+              seed) → byte-identical layout whether or not any asterism is charted.
+     PASS 2 — the engraved asterism names, solved SEPARATELY with the already-solved
+              POI label rects added as obstacles (plus footprints + furniture). The
+              names route cleanly around the fixed POI labels; they cannot disturb
+              them. Skipped entirely when no asterism is charted.
+
+   Runs once, after the Undercroft reveal so a revealed cellar-stair label is part
+   of pass 1. Returns the merged overlap count (pass1 + pass2). */
 function placeLabels(){
   if(typeof LabelPlacer === "undefined" || !LABELS.size) return;
   const entries = [];            // [{ a, parts, w, h }] — w/h inflated by 2*PAD
@@ -1021,26 +1162,58 @@ function placeLabels(){
     return f;
   });
 
+  // ── PASS 1: the POI labels (identical to baseline — sky state cannot touch this) ──
   const spec = { bounds:LABEL_BOUNDS, features, obstacles, seed:LABEL_SEED };
-  // try the richer 8-slot model first; if it can't reach a clean layout, fall back
-  // to the 4-slot model and keep whichever is cleaner (deterministic either way).
   let res = LabelPlacer.solve(Object.assign({ positions:8 }, spec));
   if(res.overlaps > 0){
     const alt = LabelPlacer.solve(Object.assign({ positions:4 }, spec));
     if(alt.overlaps < res.overlaps) res = alt;
   }
-
   const byId = {};
   entries.forEach(e=>{ byId[e.parts.r.id] = e; });
+  const poiLabelRects = [];        // the solved POI label boxes — obstacles for pass 2
   res.placements.forEach(p=>{
     const e = byId[p.id]; if(!e) return;
     SOLVED.set(p.id, { box:p.label, side:p.side });
     applyPlacement(e.parts, p.label, p.side);
+    poiLabelRects.push({ x:p.label.x, y:p.label.y, w:p.label.w, h:p.label.h });
   });
-  return res;
+  let totalOverlaps = res.overlaps;
+
+  // ── PASS 2: the engraved asterism names, around the now-fixed POI labels ──
+  if(SKY_LABELS.size){
+    const skyEntries = [];         // [{ wingId, parts, w, h }]
+    const skyFeatures = [];
+    SKY_LABELS.forEach((info, wingId)=>{
+      const bb = info.group.getBBox();
+      const w = bb.width + 2*LABEL_PAD, h = bb.height + 2*LABEL_PAD;
+      skyEntries.push({ wingId, parts:info, w, h });
+      const f = { id:"sky:"+wingId, anchor:info.anchor, label:{ w, h }, gap:14 };
+      if(info.prefer) f.prefer = info.prefer;
+      skyFeatures.push(f);
+    });
+    // obstacles for the names = footprints + furniture + every solved POI label
+    const skyObstacles = obstacles.concat(poiLabelRects);
+    const skySpec = { bounds:LABEL_BOUNDS, features:skyFeatures, obstacles:skyObstacles, seed:LABEL_SEED };
+    let skyRes = LabelPlacer.solve(Object.assign({ positions:8 }, skySpec));
+    if(skyRes.overlaps > 0){
+      const alt = LabelPlacer.solve(Object.assign({ positions:4 }, skySpec));
+      if(alt.overlaps < skyRes.overlaps) skyRes = alt;
+    }
+    const skyById = {};
+    skyEntries.forEach(e=>{ skyById["sky:"+e.wingId] = e; });
+    skyRes.placements.forEach(p=>{
+      const se = skyById[p.id]; if(!se) return;
+      applySkyName(se.parts, p.label, p.side);
+    });
+    totalOverlaps += skyRes.overlaps;
+  }
+
+  return { overlaps: totalOverlaps, placements: res.placements };
 }
 
 /* ── render: draw every non-locked place + the tree-lined survey avenues to the follies ── */
+const sheet = document.getElementById("sheet");
 function renderEstate(){
   PLACES.forEach(r=>{
     if(r.locked) return;                       // the Undercroft is gated; handled below
@@ -1053,6 +1226,22 @@ function renderEstate(){
       drawAvenue(MANOR_DOOR.x, MANOR_DOOR.y, cx, cy, midx, midy);
     }
   });
+  // ── THE SURVEY OF HEAVEN — kindle the personal night sky from the ws: breadcrumbs.
+  //    Bootstrap first (silence already-charted wings for returning visitors), then
+  //    draw the stars + asterism lines + tally as the first child of #sheet (in the
+  //    paper, behind the plan), and build the charted-asterism NAME groups so the
+  //    final placeLabels() pass solves them alongside the POI labels. Degrades to
+  //    nothing if storage is off (renderInto returns null). ──
+  if(typeof Sky !== "undefined" && sheet){
+    try{
+      // bootstrap FIRST (may set sky-<id>-named for wings already charted before this
+      // feature existed), THEN take a FRESH store snapshot so renderInto sees those
+      // flags — so a returning visitor gets NO retroactive name-in animation.
+      Sky.bootstrap(WS.store());
+      const skyG = Sky.renderInto(sheet, PLACES, WS.store());
+      buildSkyNames(skyG);
+    }catch(e){ /* the sky is cosmetic — never let it break the plan */ }
+  }
 }
 renderEstate();
 
