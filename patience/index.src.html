@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patience — the dealer that only deals winnable games</title>
+<style>
+  :root{
+    --bg:#06120c;
+    --felt1:rgba(28,96,58,0.55);
+    --felt2:rgba(10,46,28,0.65);
+    --ink:#eaf3ec;
+    --ink-dim:#8fb39c;
+    --accent:#c9a24a;
+    --accent-soft:rgba(201,162,74,0.16);
+    --panel-bg:rgba(8,20,14,0.86);
+    --panel-edge:rgba(201,162,74,0.30);
+    --card-bg:#f4efe2;
+    --card-edge:rgba(0,0,0,0.30);
+    --red:#b5392f;
+    --black:#1c2230;
+    --slot:rgba(255,255,255,0.06);
+    --slot-edge:rgba(255,255,255,0.13);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    color:var(--ink);
+    font-family:var(--font-ui);
+    background:
+      radial-gradient(1300px 800px at 50% 8%, var(--felt1), transparent 62%),
+      radial-gradient(1000px 700px at 18% 96%, var(--felt2), transparent 60%),
+      var(--bg);
+    -webkit-font-smoothing:antialiased;
+    min-height:100%;
+    overflow-x:hidden;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:sticky; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    gap:14px; padding:13px 20px; flex-wrap:wrap;
+    background:linear-gradient(180deg, rgba(4,10,7,0.86), rgba(4,10,7,0.0));
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); white-space:nowrap; }
+  .brand .tag{ font:11px/1.3 var(--font-mono); color:var(--ink-dim); letter-spacing:.3px; }
+  .topbar .right{ display:flex; align-items:center; gap:12px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:help; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(20,52,32,0.5); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ max-width:1180px; margin:0 auto; padding:6px 20px 60px; }
+
+  /* ---- Controls ---- */
+  .controls{ display:flex; flex-wrap:wrap; gap:9px; align-items:center; margin:6px 0 16px; }
+  button.btn{
+    font:600 12px/1 var(--font-ui); letter-spacing:.02em; color:var(--ink);
+    background:linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
+    border:1px solid var(--panel-edge); border-radius:9px; padding:10px 14px; cursor:pointer;
+    transition:.18s; display:inline-flex; align-items:center; gap:7px;
+  }
+  button.btn:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  button.btn:disabled{ opacity:.4; cursor:default; }
+  button.btn.primary{ color:#10240f; background:linear-gradient(180deg,#e7c873,#c9a24a); border-color:#c9a24a; font-weight:700; }
+  button.btn.primary:hover{ filter:brightness(1.06); }
+  .seedchip{ font:600 11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.04em;
+    padding:8px 11px; border:1px dashed var(--panel-edge); border-radius:8px; background:rgba(0,0,0,0.22); white-space:nowrap; }
+  .seedchip b{ color:var(--accent); }
+  .spacer{ flex:1 1 auto; }
+
+  /* ---- Status line ---- */
+  #status{ min-height:20px; font:13px/1.4 var(--font-serif); color:var(--ink-dim); margin:0 2px 12px; }
+  #status b{ color:var(--accent); }
+
+  /* ---- The board ---- */
+  #board{ display:flex; flex-direction:column; gap:18px; }
+  .upper{ display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+  .group{ display:flex; flex-direction:column; gap:6px; }
+  .group .lbl{ font:600 9.5px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--ink-dim); opacity:.8; }
+  .slots{ display:flex; gap:9px; }
+
+  .tableau{ display:flex; gap:12px; align-items:flex-start; justify-content:flex-start; flex-wrap:nowrap; overflow-x:auto; padding-bottom:6px; }
+  .col{ display:flex; flex-direction:column; align-items:center; gap:0; min-width:var(--cw); }
+  .colpile{ position:relative; width:var(--cw); }
+
+  /* card + slot metrics (overridable for mobile) */
+  :root{ --cw:74px; --ch:102px; --overlap:26px; }
+  .card, .slot{ width:var(--cw); height:var(--ch); border-radius:9px; }
+  .slot{
+    background:var(--slot); border:1.5px dashed var(--slot-edge);
+    display:flex; align-items:center; justify-content:center;
+    color:rgba(255,255,255,0.18); font:600 13px var(--font-mono);
+  }
+  .slot.found{ border-style:solid; border-color:rgba(201,162,74,0.28); }
+  .card{
+    position:relative; background:var(--card-bg);
+    border:1px solid var(--card-edge);
+    box-shadow:0 2px 5px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.7);
+    cursor:pointer; user-select:none; -webkit-user-select:none;
+    display:flex; flex-direction:column; justify-content:space-between;
+    padding:6px 7px; transition:transform .12s ease, box-shadow .12s ease, outline-color .12s;
+    outline:2px solid transparent; outline-offset:1px;
+  }
+  .card.red{ color:var(--red); }
+  .card.black{ color:var(--black); }
+  .card .corner{ font:700 16px/1 var(--font-serif); display:flex; align-items:center; gap:2px; }
+  .card .corner.bl{ align-self:flex-end; transform:rotate(180deg); }
+  .card .pip{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:26px; opacity:.5; }
+  .card:hover{ transform:translateY(-2px); }
+  .card.sel{ outline-color:var(--accent); box-shadow:0 6px 16px rgba(201,162,74,0.4), inset 0 1px 0 rgba(255,255,255,0.7); transform:translateY(-3px); }
+  .card.hintfrom{ outline-color:#5ec6ff; animation:pulseHint 1s ease-in-out infinite; }
+  .slot.hintto{ border-color:#5ec6ff; box-shadow:0 0 0 2px rgba(94,198,255,0.4); }
+  .card.hintto{ outline-color:#5ec6ff; box-shadow:0 0 0 2px rgba(94,198,255,0.45), 0 2px 5px rgba(0,0,0,0.42); }
+  .card.dim{ filter:brightness(0.72) saturate(0.7); }
+  @keyframes pulseHint{ 0%,100%{ outline-color:rgba(94,198,255,0.95);} 50%{ outline-color:rgba(94,198,255,0.25);} }
+
+  /* a stacked column: each card after the first overlaps upward */
+  .colpile .card{ position:absolute; left:0; }
+  .col .slot{ position:relative; }
+  .targetable{ cursor:pointer; }
+  .col.coltarget .slot, .colpile.coltarget::after{ }
+  .colpile.dropok::after{
+    content:''; position:absolute; left:-3px; right:-3px; top:-3px; bottom:-3px;
+    border:2px dashed rgba(94,198,255,0.55); border-radius:12px; pointer-events:none;
+  }
+  .slot.dropok{ border-color:rgba(94,198,255,0.6); box-shadow:0 0 0 2px rgba(94,198,255,0.35); }
+
+  /* ---- win overlay ---- */
+  #win{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:60;
+    background:radial-gradient(800px 600px at 50% 40%, rgba(201,162,74,0.16), rgba(2,8,5,0.86)); }
+  #win.show{ display:flex; animation:fadeIn .5s ease; }
+  #win .panel{ text-align:center; padding:34px 40px; border-radius:18px;
+    background:var(--panel-bg); border:1px solid var(--panel-edge);
+    box-shadow:0 30px 90px -30px rgba(0,0,0,0.9), 0 0 80px -30px rgba(201,162,74,0.6); }
+  #win h2{ font-family:var(--font-serif); font-size:34px; margin:0 0 8px; color:var(--accent); }
+  #win p{ margin:0 0 18px; color:var(--ink-dim); font:14px/1.5 var(--font-serif); max-width:360px; }
+  @keyframes fadeIn{ from{opacity:0} to{opacity:1} }
+  .confetti{ position:fixed; top:-12px; width:9px; height:14px; border-radius:2px; z-index:59; pointer-events:none; }
+
+  /* ---- footer note ---- */
+  .note{ margin-top:26px; font:12.5px/1.6 var(--font-serif); color:var(--ink-dim); max-width:760px; }
+  .note b{ color:var(--accent); }
+  .note code{ font:11.5px var(--font-mono); color:var(--ink); background:rgba(255,255,255,0.06); padding:1px 5px; border-radius:4px; }
+
+  /* ---- mobile ---- */
+  @media (max-width:680px){
+    :root{ --cw:54px; --ch:76px; --overlap:20px; }
+    .card .corner{ font-size:12px; }
+    .card .pip{ font-size:18px; }
+    .upper{ gap:14px; }
+    .tableau{ gap:7px; }
+    .brand .tag{ display:none; }
+    #wrap{ padding:6px 10px 50px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; workshop</a>
+    <div class="brand">
+      <h1>Patience</h1>
+      <span class="tag">a dealer that only deals <i>provably winnable</i> games</span>
+    </div>
+    <div class="right">
+      <div class="selftest" id="selftest" title="built-in self-test — the same proof node patience.test.cjs runs">checking&hellip;</div>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div class="controls">
+      <button class="btn primary" id="btnDeal">🂡 Deal (guaranteed winnable)</button>
+      <button class="btn" id="btnHint">Hint</button>
+      <button class="btn" id="btnUndo">Undo</button>
+      <button class="btn" id="btnSolve">▶ Watch it solve itself</button>
+      <button class="btn" id="btnStep" style="display:none">▶ Step</button>
+      <button class="btn" id="btnStop" style="display:none">■ Stop</button>
+      <span class="spacer"></span>
+      <span class="seedchip" id="seedchip">seed <b id="seedval">—</b></span>
+    </div>
+
+    <div id="status">Press <b>Deal</b> — the dealer rejection-samples until its solver has <i>already beaten</i> the board it hands you.</div>
+
+    <div id="board" aria-label="solitaire board"></div>
+
+    <p class="note">
+      This is the workshop's first <b>card piece</b>. The promise, applied to solitaire:
+      <b>every deal you are given is winnable</b> — true by construction. A headless solver searches each
+      dealt board for a winning line, and the dealer ships <i>only</i> deals the solver has already beaten
+      (rejection sampling), caching the line to power <b>Hint</b> and <b>Watch it solve itself</b>. The
+      variant is a compact FreeCell (a 28-card deck, A–7); the green chip up top runs the <i>same</i>
+      <code>runSelfTest</code> core as <code>node tools/patience/patience.test.cjs</code> — replaying every
+      shipped deal move-by-move to a win. (You can still strand yourself by bad play — that's what <b>Undo</b>
+      and <b>Hint</b> are for. The guarantee is about the <i>deal</i>, not the <i>play</i>.)
+    </p>
+  </div>
+
+  <div id="win" role="dialog" aria-modal="true" aria-label="you won">
+    <div class="panel">
+      <h2>🂡 Patience rewarded</h2>
+      <p id="winmsg">Every foundation built, A through 7. The deal was winnable — and you found the line.</p>
+      <button class="btn primary" id="btnDealAgain">Deal another</button>
+    </div>
+  </div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE ENGINE — inlined by forge from the canonical, Node-requireable source.
+   The page calls the SAME core the Node self-test does, so the green chip and
+   `node tools/patience/patience.test.cjs` are the same proof.
+   ═══════════════════════════════════════════════════════════════════════════ */
+<!-- forge:include ../tools/patience/patience.js -->
+</script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE PAGE — the felt-table demonstrator (browser-only chrome over the engine).
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  var P = window.Patience;
+  var V = P.makeVariant();              // compact FreeCell: 28 cards, 3 free, 6 cols
+
+  /* ── self-test chip: the same proof core the Node test runs ──────────────── */
+  function runChip() {
+    var chip = document.getElementById('selftest');
+    try {
+      var res = P.runSelfTest({ variant: V, battery: 24 });
+      if (res.pass === res.total) {
+        chip.className = 'selftest ok';
+        chip.textContent = 'patience verified — ' + res.pass + '/' + res.total + ' ✓';
+        chip.title = 'every one of ' + res.total + ' checks passed — including: every shipped deal replays to a win';
+      } else {
+        chip.className = 'selftest bad';
+        chip.textContent = 'patience FAILED — ' + res.pass + '/' + res.total;
+      }
+      if (typeof console !== 'undefined') console.log('Patience self-test: ' + res.pass + '/' + res.total + ' passed.');
+    } catch (e) {
+      chip.className = 'selftest bad';
+      chip.textContent = 'patience self-test error';
+      if (typeof console !== 'undefined') console.error('Patience self-test threw', e);
+    }
+  }
+
+  /* ── game state held by the page (the live board + the cached proof line) ── */
+  var G = {
+    seed: null,
+    deal: null,         // the original dealt state (for replay / restart)
+    state: null,        // the live state
+    solution: null,     // the cached winning line (atomic moves)
+    history: [],        // states for Undo
+    sel: null,          // current selection: {tok, card} or null
+    autoTimer: null,    // "watch it solve itself" interval
+    autoPlayer: null,   // linePlayer instance during auto-solve
+    won: false
+  };
+
+  var board = document.getElementById('board');
+  var statusEl = document.getElementById('status');
+
+  function setStatus(html) { statusEl.innerHTML = html; }
+
+  /* ── DEAL: rejection-sample a provably-winnable board ─────────────────────── */
+  function deal(seedHint) {
+    stopAuto();
+    hideWin();
+    // pick a fresh seed (deterministic if seedHint given; else time+counter, but
+    // the SOLVER itself never uses the clock — only the seed pick does).
+    var seed = seedHint != null ? (seedHint >>> 0) : (((Date.now() ^ (Math.floor(Math.random() * 0x7fffffff))) >>> 0) || 1);
+    setStatus('Dealing… the solver is proving a board winnable before you see it.');
+    // do the (fast) rejection-sampling deal
+    var res = P.dealWinnable(V, seed, {});
+    if (!res) { setStatus('The dealer could not find a winnable board — try again.'); return; }
+    G.seed = res.seed;
+    G.deal = P.cloneState(res.deal);
+    G.state = P.cloneState(res.deal);
+    G.solution = res.solution;
+    G.history = [];
+    G.sel = null;
+    G.won = false;
+    document.getElementById('seedval').textContent = String(res.seed);
+    setStatus('Dealt. This board <b>is winnable</b> — the solver beat it in <b>' + res.solution.length + '</b> moves before you saw it. Click a card, then where it goes.');
+    render();
+  }
+
+  /* ── card rendering ───────────────────────────────────────────────────────── */
+  function cardEl(card, opts) {
+    opts = opts || {};
+    var el = document.createElement('div');
+    el.className = 'card ' + (P.colourOf(card) === 0 ? 'red' : 'black');
+    var s = P.SUITS[P.suitOf(card)];
+    var r = P.rankOf(card);
+    var rl = r === 1 ? 'A' : String(r);
+    var tc = document.createElement('div'); tc.className = 'corner tl'; tc.textContent = rl + s;
+    var pip = document.createElement('div'); pip.className = 'pip'; pip.textContent = s;
+    var bc = document.createElement('div'); bc.className = 'corner bl'; bc.textContent = rl + s;
+    el.appendChild(tc); el.appendChild(pip); el.appendChild(bc);
+    el.dataset.card = String(card);
+    return el;
+  }
+
+  /* is `tok`/`card` a legal source to pick up right now? (it is a current top) */
+  function legalTargetsFor(tok, card) {
+    // build set of destinations from legalMoves for THIS source card
+    var moves = P.legalMoves(V, G.state);
+    var dests = {};
+    for (var i = 0; i < moves.length; i++) {
+      if (moves[i].from === tok && moves[i].card === card) dests[moves[i].to] = true;
+    }
+    return dests;
+  }
+
+  function clearSelection() {
+    G.sel = null;
+    render();
+  }
+
+  /* attempt to move the current selection to destination token `to` */
+  function tryMove(to) {
+    if (!G.sel) return;
+    var mv = { from: G.sel.tok, to: to, card: G.sel.card };
+    // is it legal?
+    var moves = P.legalMoves(V, G.state);
+    var ok = false;
+    for (var i = 0; i < moves.length; i++) {
+      if (moves[i].from === mv.from && moves[i].to === mv.to && moves[i].card === mv.card) { ok = true; break; }
+    }
+    if (!ok) {
+      // illegal — decline, flash status, keep selection
+      setStatus('That move isn\'t legal — ' + P.cardLabel(mv.card) + ' can\'t go there. (Pick a valid spot, or click the card again to deselect.)');
+      return;
+    }
+    pushHistory();
+    G.state = P.applyMove(V, G.state, mv);
+    G.sel = null;
+    afterMove();
+    if (!G.won) {
+      var onFound = 0; for (var i = 0; i < 4; i++) onFound += G.state.found[i];
+      setStatus('Moved <b>' + P.cardLabel(mv.card) + '</b> ' + toName(mv.to) + '. ' + onFound + ' of ' + V.deckSize + ' cards home. (<b>Hint</b> for the next proven move.)');
+    }
+  }
+
+  function pushHistory() { G.history.push(P.cloneState(G.state)); if (G.history.length > 500) G.history.shift(); }
+
+  function afterMove() {
+    render();
+    if (P.isWin(V, G.state)) { onWin(); }
+  }
+
+  function undo() {
+    stopAuto();
+    if (!G.history.length) { setStatus('Nothing to undo.'); return; }
+    G.state = G.history.pop();
+    G.sel = null;
+    G.won = false;
+    hideWin();
+    render();
+    setStatus('Undone.');
+  }
+
+  /* ── HINT: highlight the next move on the cached proven line ───────────────── */
+  function hint() {
+    stopAuto();
+    if (!G.solution) return;
+    var mv = P.hint(V, G.state, G.solution);
+    if (!mv) {
+      setStatus('No hint from here — the board has wandered off the proven line. <b>Undo</b> back toward it, or watch it solve itself from the original deal.');
+      return;
+    }
+    G.sel = { tok: mv.from, card: mv.card };
+    render(mv);   // render with the hint destination highlighted
+    setStatus('Hint: move <b>' + P.cardLabel(mv.card) + '</b> ' + fromName(mv.from) + ' → ' + toName(mv.to) + '. (Click the lit spot to play it.)');
+  }
+
+  function fromName(tok) {
+    if (tok.charAt(0) === 'f') return 'from a free cell';
+    return 'from column ' + (+tok.slice(1) + 1);
+  }
+  function toName(tok) {
+    if (tok === 'F') return 'up to a foundation';
+    if (tok.charAt(0) === 'f') return 'to a free cell';
+    return 'onto column ' + (+tok.slice(1) + 1);
+  }
+
+  /* ── WATCH IT SOLVE ITSELF: replay the recorded winning line from HERE ─────── */
+  function startAuto() {
+    stopAuto();
+    if (!G.solution) return;
+    // Replay from the current state if we're still on the line; else restart from
+    // the original deal so the watch always reaches a win.
+    if (P.hint(V, G.state, G.solution) == null && !P.isWin(V, G.state)) {
+      // diverged — reset to the dealt board so the line replays cleanly
+      G.state = P.cloneState(G.deal);
+      G.history = [];
+    }
+    G.sel = null;
+    G.autoPlayer = P.linePlayer(G.solution);
+    // fast-forward the player index to our current position by walking it against
+    // the dealt board up to the live state — simplest robust path: restart from
+    // the deal when auto-solving so the player and state agree.
+    G.state = P.cloneState(G.deal);
+    G.history = [];
+    document.getElementById('btnSolve').style.display = 'none';
+    document.getElementById('btnStep').style.display = '';
+    document.getElementById('btnStop').style.display = '';
+    setStatus('Watching the solver replay its <b>proven</b> winning line…');
+    render();
+    G.autoTimer = setInterval(autoStep, 420);
+  }
+  function autoStep() {
+    if (!G.autoPlayer) return;
+    if (P.isWin(V, G.state)) { stopAuto(); onWin(); return; }
+    var mv = G.autoPlayer(V, G.state);
+    if (!mv) { stopAuto(); if (P.isWin(V, G.state)) onWin(); return; }
+    G.state = P.applyMove(V, G.state, mv);
+    render(mv);
+    if (P.isWin(V, G.state)) { stopAuto(); onWin(); }
+  }
+  function stopAuto() {
+    if (G.autoTimer) { clearInterval(G.autoTimer); G.autoTimer = null; }
+    G.autoPlayer = null;
+    document.getElementById('btnSolve').style.display = '';
+    document.getElementById('btnStep').style.display = 'none';
+    document.getElementById('btnStop').style.display = 'none';
+  }
+
+  /* ── WIN ──────────────────────────────────────────────────────────────────── */
+  function onWin() {
+    if (G.won) return;
+    G.won = true;
+    setStatus('<b>Won.</b> Every foundation built A→7.');
+    showWin();
+    confettiBurst();
+  }
+  function showWin() { document.getElementById('win').classList.add('show'); }
+  function hideWin() { document.getElementById('win').classList.remove('show'); }
+  function confettiBurst() {
+    var colors = ['#c9a24a', '#e7c873', '#8fd79a', '#5ec6ff', '#f4efe2'];
+    for (var i = 0; i < 60; i++) {
+      (function (i) {
+        var c = document.createElement('div');
+        c.className = 'confetti';
+        c.style.left = (Math.random() * 100) + 'vw';
+        c.style.background = colors[i % colors.length];
+        c.style.transform = 'rotate(' + (Math.random() * 360) + 'deg)';
+        document.body.appendChild(c);
+        var dur = 1400 + Math.random() * 1200;
+        var dx = (Math.random() * 2 - 1) * 120;
+        c.animate([
+          { transform: 'translate(0,0) rotate(0deg)', opacity: 1 },
+          { transform: 'translate(' + dx + 'px,' + (window.innerHeight + 40) + 'px) rotate(' + (Math.random() * 720) + 'deg)', opacity: 0.9 }
+        ], { duration: dur, easing: 'cubic-bezier(.3,.6,.4,1)' });
+        setTimeout(function () { if (c.parentNode) c.parentNode.removeChild(c); }, dur + 60);
+      })(i);
+    }
+  }
+
+  /* ── RENDER ──────────────────────────────────────────────────────────────────
+     Build the board DOM from G.state. `hintMv` (optional) highlights a move. ── */
+  function render(hintMv) {
+    board.innerHTML = '';
+    if (!G.state) return;
+
+    // upper row: free cells + foundations
+    var upper = document.createElement('div'); upper.className = 'upper';
+
+    // free cells
+    var freeGroup = document.createElement('div'); freeGroup.className = 'group';
+    var fl = document.createElement('div'); fl.className = 'lbl'; fl.textContent = 'free cells'; freeGroup.appendChild(fl);
+    var freeSlots = document.createElement('div'); freeSlots.className = 'slots';
+    for (var f = 0; f < V.free; f++) {
+      var fc = G.state.free[f];
+      var tok = 'f' + f;
+      if (fc != null) {
+        var ce = cardEl(fc);
+        wireSource(ce, tok, fc);
+        if (G.sel && G.sel.tok === tok) ce.classList.add('sel');
+        if (hintMv && hintMv.from === tok) ce.classList.add('hintfrom');
+        freeSlots.appendChild(ce);
+      } else {
+        var sl = document.createElement('div'); sl.className = 'slot';
+        sl.textContent = '';
+        wireDest(sl, tok, hintMv);
+        freeSlots.appendChild(sl);
+      }
+    }
+    freeGroup.appendChild(freeSlots); upper.appendChild(freeGroup);
+
+    // foundations
+    var foundGroup = document.createElement('div'); foundGroup.className = 'group';
+    var fol = document.createElement('div'); fol.className = 'lbl'; fol.textContent = 'foundations'; foundGroup.appendChild(fol);
+    var foundSlots = document.createElement('div'); foundSlots.className = 'slots';
+    for (var su = 0; su < 4; su++) {
+      var topRank = G.state.found[su];
+      if (topRank > 0) {
+        var card = P.makeCard(su, topRank);
+        var fe = cardEl(card);
+        fe.style.cursor = 'default';
+        // foundations are a single destination token 'F'
+        if (hintMv && hintMv.to === 'F' && P.suitOf(hintMv.card) === su) fe.classList.add('hintto');
+        foundSlots.appendChild(fe);
+      } else {
+        var fsl = document.createElement('div'); fsl.className = 'slot found';
+        fsl.textContent = P.SUITS[su];
+        fsl.style.color = (su < 2) ? 'rgba(181,57,47,0.45)' : 'rgba(120,140,170,0.5)';
+        // a foundation slot is a destination ('F') when an ace of this suit is selected
+        wireFoundationDest(fsl, su, hintMv);
+        foundSlots.appendChild(fsl);
+      }
+    }
+    foundGroup.appendChild(foundSlots); upper.appendChild(foundGroup);
+    board.appendChild(upper);
+
+    // tableau
+    var tab = document.createElement('div'); tab.className = 'tableau';
+    var cw = getComputedStyle(document.documentElement).getPropertyValue('--cw');
+    var overlapPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--overlap')) || 26;
+    var chPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ch')) || 102;
+    for (var c = 0; c < V.cols; c++) {
+      var colWrap = document.createElement('div'); colWrap.className = 'col';
+      var pile = document.createElement('div'); pile.className = 'colpile';
+      var col = G.state.cols[c];
+      var tokTop = 'c' + c;
+      if (col.length === 0) {
+        // empty column slot — a destination
+        var esl = document.createElement('div'); esl.className = 'slot';
+        esl.textContent = '';
+        wireDest(esl, tokTop, hintMv);
+        pile.style.height = chPx + 'px';
+        pile.appendChild(esl);
+      } else {
+        var h = chPx + (col.length - 1) * overlapPx;
+        pile.style.height = h + 'px';
+        for (var k = 0; k < col.length; k++) {
+          var cc = col[k];
+          var ce2 = cardEl(cc);
+          ce2.style.top = (k * overlapPx) + 'px';
+          ce2.style.zIndex = String(k + 1);
+          var isTop = (k === col.length - 1);
+          if (isTop) {
+            wireSource(ce2, tokTop, cc);
+            if (G.sel && G.sel.tok === tokTop) ce2.classList.add('sel');
+            if (hintMv && hintMv.from === tokTop) ce2.classList.add('hintfrom');
+            // also: the top card is a click-destination when a selection can stack on it
+            wireColDest(ce2, tokTop, hintMv);
+          } else {
+            ce2.classList.add('dim');
+            ce2.style.cursor = 'default';
+          }
+          pile.appendChild(ce2);
+        }
+      }
+      colWrap.appendChild(pile);
+      tab.appendChild(colWrap);
+    }
+    board.appendChild(tab);
+  }
+
+  /* wire a card as a SOURCE (click to select / deselect) */
+  function wireSource(el, tok, card) {
+    el.classList.add('targetable');
+    el.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      if (G.autoTimer) return;
+      if (G.sel && G.sel.tok === tok && G.sel.card === card) { clearSelection(); return; }
+      // if something is selected and THIS top card is a valid destination, move onto it
+      if (G.sel) {
+        var dests = legalTargetsFor(G.sel.tok, G.sel.card);
+        if (dests[tok]) { tryMove(tok); return; }
+      }
+      G.sel = { tok: tok, card: card };
+      render();
+    });
+  }
+
+  /* wire an empty slot (free cell or empty column) as a DESTINATION */
+  function wireDest(el, tok, hintMv) {
+    el.classList.add('targetable');
+    if (G.sel) {
+      var dests = legalTargetsFor(G.sel.tok, G.sel.card);
+      if (dests[tok]) el.classList.add('dropok');
+    }
+    if (hintMv && hintMv.to === tok) el.classList.add('hintto');
+    el.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      if (G.autoTimer) return;
+      if (G.sel) tryMove(tok);
+    });
+  }
+
+  /* wire a column's top card as a stacking DESTINATION (token 'cN') */
+  function wireColDest(el, tok, hintMv) {
+    if (G.sel && G.sel.tok !== tok) {
+      var dests = legalTargetsFor(G.sel.tok, G.sel.card);
+      if (dests[tok]) el.classList.add('hintto'); // reuse the blue ring to mean "drop here"
+    }
+    if (hintMv && hintMv.to === tok) el.classList.add('hintto');
+    // click handled in wireSource (it checks dests before selecting)
+  }
+
+  /* wire a foundation slot as the 'F' destination (when an ace of that suit is up
+     next on the line, or selected card can go there) */
+  function wireFoundationDest(el, suit, hintMv) {
+    el.classList.add('targetable');
+    if (G.sel && P.suitOf(G.sel.card) === suit) {
+      var dests = legalTargetsFor(G.sel.tok, G.sel.card);
+      if (dests['F']) el.classList.add('dropok');
+    }
+    if (hintMv && hintMv.to === 'F' && P.suitOf(hintMv.card) === suit) el.classList.add('hintto');
+    el.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      if (G.autoTimer) return;
+      if (G.sel && P.suitOf(G.sel.card) === suit) tryMove('F');
+    });
+  }
+
+  // click truly-empty board area to deselect (NOT controls/cards/slots, whose
+  // own handlers stop propagation — but buttons don't, so gate on the target).
+  document.getElementById('wrap').addEventListener('click', function (ev) {
+    if (!G.sel || G.autoTimer) return;
+    var t = ev.target;
+    // ignore clicks that landed on an interactive control (button/input) or the
+    // hint/undo machinery — only a click on bare layout chrome deselects.
+    if (t.closest && t.closest('button, .card, .slot, .controls, .selftest')) return;
+    clearSelection();
+  });
+
+  /* ── wire controls ────────────────────────────────────────────────────────── */
+  document.getElementById('btnDeal').addEventListener('click', function () { deal(); });
+  document.getElementById('btnHint').addEventListener('click', hint);
+  document.getElementById('btnUndo').addEventListener('click', undo);
+  document.getElementById('btnSolve').addEventListener('click', startAuto);
+  document.getElementById('btnStep').addEventListener('click', function () {
+    // single step: pause the timer, do one step
+    if (!G.autoPlayer) { startAuto(); /* startAuto sets up; then immediately stop the timer for stepping */ if (G.autoTimer) { clearInterval(G.autoTimer); G.autoTimer = null; } return; }
+    if (G.autoTimer) { clearInterval(G.autoTimer); G.autoTimer = null; }
+    autoStep();
+  });
+  document.getElementById('btnStop').addEventListener('click', function () { stopAuto(); setStatus('Stopped. Click a card to play on, or <b>Deal</b> a fresh board.'); render(); });
+  document.getElementById('btnDealAgain').addEventListener('click', function () { deal(); });
+
+  // keyboard: H hint, U undo, D deal, S solve, Esc deselect/stop
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = e.key.toLowerCase();
+    if (k === 'd') deal();
+    else if (k === 'h') hint();
+    else if (k === 'u') undo();
+    else if (k === 's') startAuto();
+    else if (e.key === 'Escape') { if (G.autoTimer) stopAuto(); else clearSelection(); hideWin(); }
+  });
+
+  /* ── boot ─────────────────────────────────────────────────────────────────── */
+  runChip();
+  deal();  // deal an opening board so the table isn't empty
+})();
+</script>
+
+<script>
+/* ws: unlock breadcrumb — the shared module (one source of truth), inlined via
+   forge. See /UNLOCK.md and tools/ws/README.md. Defines WS, records this piece's
+   first-visit, and (via WS auto-init) fires the unlock cue. Harmless if storage off. */
+<!-- forge:include ../tools/ws/ws.js -->
+try { WS.seen('patience'); } catch (e) {}
+</script>
+</body>
+</html>
