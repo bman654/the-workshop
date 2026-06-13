@@ -17,11 +17,24 @@ let i = 0
 while (i < MAX_ITERS) {
   i++
 
-  // 1) A fresh agent drives itself entirely from the fun skill. No extra direction.
-  const summary = await agent('Run the `fun` skill via the Skill tool.', {
-    label: `fun #${i}`,
-    phase: 'Fun loop',
-  })
+  // 1) A fresh agent drives itself from the fun skill. The skill is the source of truth;
+  //    we restate the non-negotiables inline (belt-and-suspenders) because a workflow
+  //    subagent has NO foreground Agent/Task tool — so it must build in-turn, not delegate.
+  const summary = await agent(
+    [
+      'Run the `fun` skill via the Skill tool.',
+      'You have exactly ONE turn, and you are a subagent with NO subagent-dispatch tool',
+      '(no foreground Agent/Task here) — so do the work YOURSELF this turn, do not delegate.',
+      'Do NOT use the expero:deputy skill, do NOT launch background/--bg Claude sessions, and',
+      'do NOT arm a Monitor or release the turn to wait on a background agent — that ends your',
+      'run and loses all uncommitted work. Before you finish: git add + commit, then push if a',
+      'remote is reachable. Your summary must describe committed, pushed work, not a mid-flight status.',
+    ].join(' '),
+    {
+      label: `fun #${i}`,
+      phase: 'Fun loop',
+    },
+  )
 
   const body = (summary == null || String(summary).trim() === '')
     ? '(the fun agent returned no summary)'
