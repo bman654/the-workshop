@@ -14,7 +14,7 @@ map of a manor and its grounds** — every room a point on the plan.*
 ## What's inside
 
 Eleven creative mediums across nine projects — plus a new **Hall of Mirrors** wing of light (ten
-optical benches) and seven companions tucked behind their parent doors:
+optical benches and a laser puzzle) and seven companions tucked behind their parent doors:
 the **Orrery** behind Firmament, **Blazon** behind Compositor, **Ariadne** behind Daedalus,
 **Bastion** behind Cartographer, **Scriptorium** behind The Oracle, **Tessellarium** behind the
 Strange Garden, and **Theogony** behind Threshold. Click a live link, or open any `.html` in a browser.
@@ -131,8 +131,9 @@ seed only *arranges* — so it reads as written, not generated.
 ### ▶ Visit the Hall → **https://bman654.github.io/the-workshop/hall-of-mirrors/**
 
 A new wing on the estate's west grounds — **a gallery for all things light**: how it bends and reflects,
-how it splits into colour, and what it is when you look closely. Ten self-contained optical benches,
-each keeping the workshop's promise — a built-in self-test that proves its physics *exact*:
+how it splits into colour, and what it is when you look closely. Ten self-contained optical benches —
+and a laser puzzle to play with what they teach — each keeping the workshop's promise: a built-in
+self-test that proves its physics *exact*:
 
 - **[The Rainbow](https://bman654.github.io/the-workshop/rainbow/)** — the rainbow derived from a single
   raindrop. Trace sunlight refracting into a spherical droplet, reflecting once (or twice) inside, and
@@ -192,6 +193,12 @@ each keeping the workshop's promise — a built-in self-test that proves its phy
   translucent glass seen through an N-fold mirror; turn the order from 3 to 12 and the shards fold into a
   living rosette that holds perfect **dihedral symmetry** every frame — a true mirror, proven exactly
   Dₙ-symmetric to machine precision, not a fake rotate.
+- **[The Mirror Maze](https://bman654.github.io/the-workshop/mirror-maze/)** — the benches let you
+  *study* light; this lets you *play* with it. A laser enters a grid and you place mirrors to route the
+  beam through every gem — the literal hall of mirrors, made a puzzle. Like the workshop's other puzzles
+  it is **provably solvable**: the dealer ships only boards built from a real beam-route, pruned so every
+  mirror earns its place (240 seeded boards verified, the beam-tracer proven to always terminate). Three
+  sizes, reseedable, watch-it-solve.
 
 > *The hall's wave-cousin lives on the workbench — **Ripple**, a wave-interference tank where the same
 > superposition that paints these colours plays out, slowed down, on dark water.*
