@@ -445,11 +445,24 @@
 
 <script>
 /* ════════════════════════════════════════════════════════════════════════════
+   The shared LabelPlacer engine (inlined at build time by forge). Provides the
+   `LabelPlacer` global the plan uses to AUTO-PLACE every POI label: it solves the
+   cartographic point-feature label-placement problem (no label overlaps another
+   label, a footprint, or the plan furniture, and all stay on the sheet) so the
+   estate lays out its OWN names. The map thus eats its own dog food — the same
+   engine the /letterer page demonstrates. See tools/label/README.md. */
+<!-- forge:include tools/label/label.js -->
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
    THE PLACES TABLE — the single data array that drives the whole plan.
 
    THE ESTATE GROWS WITHOUT A REDESIGN: adding a future room = adding ONE entry
-   to PLACES (drop a coordinate, pick a footprint). No layout engine — hand-placed
-   coords are intentional. A future editor extends the estate by appending here.
+   to PLACES (drop a coordinate, pick a footprint). The plan PLACES ITS OWN LABELS
+   via the LabelPlacer engine (placeLabels(), below) — it measures each rendered
+   name and solves a clean, overlap-free layout. So a new POI needs only a
+   coordinate + footprint; NO hand label coordinates are required.
 
    Each entry:
      id        project folder name; WS.seen(id) breadcrumb is written on click
@@ -466,8 +479,17 @@
      footprint how the plan-view shape is drawn — one of the keys in DRAW below:
                'house-wing' | 'tower' | 'glasshouse' | 'maze' | 'arcade' | 'shed' | 'stair'
      w, h / r  footprint dimensions (w×h for rect-ish shapes; r for 'tower')
-     label     which side the leader-line + label sits: 'left'|'right'|'top'|'bottom'
-     lx, ly    the label anchor point (where the room name is typeset)
+
+     ── label placement is AUTOMATIC; the following are all OPTIONAL hints ──
+     prefer    a side or ranked list biasing the engine: 'left'|'right'|'top'|
+               'bottom'|'ne'|'nw'|'se'|'sw' (string) or an array of them. The
+               engine starts here and only moves the label if it must to clear a
+               collision. Curated `prefer` keeps a handsome composition; omit it
+               and the engine picks (upper-right reads best).
+     pin       { x, y, side } — FORCE a fixed label placement the engine honours
+               as-is (x,y = the label block's top-left in viewBox units). A pinned
+               label never moves and acts as an obstacle for the others. Rarely
+               needed; reserve for a label that must sit exactly somewhere.
      locked    (optional) marks the Undercroft — its visibility/state is gated by
                the ws: unlock logic in revealUndercroft(), NOT drawn unconditionally.
    ════════════════════════════════════════════════════════════════════════════ */
@@ -476,63 +498,63 @@ const PLACES = [
   { id:"verse", room:"The Study", piece:"The Oracle", glyph:"✒️",
     accent:"#cba15a", href:"verse/index.html", tag:"verse engine",
     companion:{ name:"Scriptorium", glyph:"🖋️" },
-    footprint:"house-wing", x:600, y:312, w:112, h:84, label:"left", lx:548, ly:340,
+    footprint:"house-wing", x:600, y:312, w:112, h:84, prefer:"left",
     blurb:"A generative poetry machine — conjures short, coherent, evocative poems in five forms across six themes, each with an invented poet and a seed you can keep." },
 
   { id:"compositor", room:"The Print Room", piece:"Compositor", glyph:"🔠",
     accent:"#e5484d", href:"compositor/index.html", tag:"type press",
     companion:{ name:"Blazon", glyph:"🛡️" },
-    footprint:"house-wing", x:730, y:312, w:112, h:84, label:"top", lx:786, ly:240,
+    footprint:"house-wing", x:730, y:312, w:112, h:84, prefer:"top",
     blurb:"A generative type press — seed a striking poster from an evocative phrase, set in Swiss, Bauhaus, Brutalist, Art Deco or Editorial style." },
 
   { id:"cartographer", room:"The Map Room", piece:"Cartographer", glyph:"🗺️",
     accent:"#d9b46a", href:"cartographer/index.html", tag:"map generator",
     companion:{ name:"Bastion", glyph:"🏰" },
-    footprint:"house-wing", x:600, y:408, w:112, h:84, label:"left", lx:548, ly:458,
+    footprint:"house-wing", x:600, y:408, w:112, h:84, prefer:"left",
     blurb:"Re-roll gorgeous fantasy atlas maps from any seed — coastlines, mountains, rivers, biomes and named realms in four styles." },
 
   { id:"sound-garden", room:"The Music Room", piece:"Sound Garden", glyph:"🎵",
     accent:"#cf7bff", href:"sound-garden/index.html", tag:"instruments",
     companion:null,
-    footprint:"house-wing", x:730, y:408, w:112, h:84, label:"bottom", lx:786, ly:566,
+    footprint:"house-wing", x:730, y:408, w:112, h:84, prefer:"bottom",
     blurb:"Generative Web-Audio instruments you can hear and watch — a polyrhythmic music box, an ambient drone, Euclidean rhythms, rain on a tuned pool, a loom of chord progressions, a carillon of bells, and a glowing step-lattice. (Press ▶ to listen.)" },
 
   { id:"threshold", room:"The East Wing · Threshold", piece:"Threshold", glyph:"🚪",
     accent:"#74b0a6", href:"threshold/index.html", tag:"interactive fiction",
     companion:{ name:"Theogony", glyph:"⚡" },
-    footprint:"east-wing", x:856, y:332, w:74, h:136, label:"right", lx:962, ly:398,
+    footprint:"east-wing", x:856, y:332, w:74, h:136, prefer:"right",
     blurb:"A generative interactive fiction — each seed assembles a coherent strange place to wander, room by room, in evocative prose, toward its quiet heart." },
 
   // ----- THE GROUNDS -----
   { id:"strange-garden", room:"The Gardens · Glasshouse", piece:"Strange Garden", glyph:"🌿",
     accent:"#7fd1c7", href:"strange-garden/index.html", tag:"34 specimens",
     companion:{ name:"Tessellarium", glyph:"🔷" },
-    footprint:"glasshouse", x:266, y:560, w:188, h:118, label:"bottom", lx:360, ly:712,
+    footprint:"glasshouse", x:266, y:560, w:188, h:118, prefer:"bottom",
     blurb:"A browsable catalogue of living generative systems — particle life, slime moulds, reaction-diffusion, flocks, fractals, chaos, cellular automata, crystal growth and more. Each set in motion, never the same twice." },
 
   { id:"firmament", room:"The Observatory", piece:"Firmament", glyph:"🌌",
     accent:"#9db4ff", href:"firmament/index.html", tag:"sky generator",
     companion:{ name:"Orrery", glyph:"🪐" },
-    footprint:"tower", x:300, y:238, r:76, label:"left", lx:188, ly:238,
+    footprint:"tower", x:300, y:238, r:76, prefer:"left",
     blurb:"Re-roll a whole night sky from any seed — star fields, a soft Milky Way, and invented constellations, each drawn as an asterism with its own name and one-line myth. Four chart styles." },
 
   { id:"daedalus", room:"The Hedge Maze", piece:"Daedalus", glyph:"🌀",
     accent:"#ff6ec7", href:"daedalus/index.html", tag:"maze generator",
     companion:{ name:"Ariadne", glyph:"🧵" },
-    footprint:"maze", x:1044, y:542, w:178, h:152, label:"right", lx:1248, ly:612,
+    footprint:"maze", x:1044, y:542, w:178, h:152, prefer:"right",
     blurb:"Re-roll a perfect labyrinth from any seed, then watch it solve itself — a distance wavefront floods the maze and traces the one true path. Four algorithms, four styles, export PNG." },
 
   { id:"arcade", room:"The Arcade", piece:"Arcade", glyph:"🕹️",
     accent:"#37f7e0", href:"arcade/index.html", tag:"18 games",
     companion:null,
-    footprint:"arcade", x:1018, y:244, w:224, h:88, label:"top", lx:1130, ly:206,
+    footprint:"arcade", x:1018, y:244, w:224, h:88, prefer:"top",
     blurb:"A rack of juicy neon-vector games: Asteroids, Breakout, Snake, Tetris, Starfighter, 2048, Missile Command, Pong, Lunar Lander, Crossing, Chomp, Swarm, Gyre, Tessera, Centipede, Qubit, Vanguard, Dig Dug. Insert coin." },
 
   // ----- OUTBUILDING -----
   { id:"workbench", room:"The Workshop · Maker's Shed", piece:"The Workbench", glyph:"🛠️",
     accent:"#c9a24a", href:"workbench/index.html", tag:"tools & benches",
     companion:null,
-    footprint:"shed", x:540, y:602, w:156, h:100, label:"bottom", lx:618, ly:736,
+    footprint:"shed", x:540, y:602, w:156, h:100, prefer:"bottom",
     blurb:"A wing of standalone tools, toys, instruments and tales — a slide rule, an astrolabe, an abacus, a cipher disk, a weaving loom, light & wave benches, puzzles, and hand-made adventures." },
 
   // ----- BENEATH (the locked way down — gated; see revealUndercroft) -----
@@ -542,7 +564,7 @@ const PLACES = [
   { id:"undercroft", room:"The Undercroft · Beneath", piece:"The Undercroft", glyph:"🕯️",
     accent:"#c9a24a", href:"undercroft/index.html", tag:"the way down",
     companion:null, locked:true,
-    footprint:"stair", x:702, y:524, w:38, h:50, label:"right", lx:792, ly:560,
+    footprint:"stair", x:702, y:524, w:38, h:50, prefer:"right",
     blurb:"A path lies beneath the workshop — an old cellar stair, lost with time. Find the rune that restores the way down." },
 ];
 
@@ -707,6 +729,11 @@ const card  = document.getElementById("card");
 const plan  = document.getElementById("plan");
 const stage = document.getElementById("stage");
 
+/* a registry mapping each POI element → its label-render parts, so placeLabels()
+   (which runs once after every present POI is built) can measure each label group,
+   move it to the engine-solved slot, set its text-anchor, and redraw its leader. */
+const LABELS = new Map();
+
 /* the manor's south door — where every survey path begins */
 const MANOR_DOOR = { x:721, y:530 };
 
@@ -746,38 +773,44 @@ function buildPoi(r, opts){
   gly.textContent = r.glyph;
   a.appendChild(gly);
 
-  // ---- elbow leader line + label ----
-  const [ex,ey] = footEdge(r, r.label);
-  const anchor = (r.label==="left")?"end":(r.label==="right")?"start":"middle";
-  let path;
-  if(r.label==="left") path=`M${ex} ${ey} H${r.lx+6}`;
-  else if(r.label==="right") path=`M${ex} ${ey} H${r.lx-6}`;
-  else if(r.label==="top") path=`M${ex} ${ey} V${r.ly+14}`;
-  else path=`M${ex} ${ey} V${r.ly-26}`;
-  a.appendChild(el("path",{ d:path, class:"leader" }));
-  a.appendChild(el("circle",{ cx:ex, cy:ey, r:2, class:"leader-dot" }));
+  // ---- leader line + label group ----
+  // The leader is drawn from the footprint edge to the label; the label sits in
+  // its own <g.labelgroup> typeset at a LOCAL origin (roomname baseline at 0,0)
+  // so placeLabels() can translate the whole block to the engine-solved slot and
+  // flip its text-anchor as one unit. The leader is (re)drawn from the footprint
+  // boundary to the label's nearest edge once the slot is known.
+  const leaderPath = el("path",{ class:"leader" });
+  const leaderDot  = el("circle",{ r:2, class:"leader-dot" });
+  a.appendChild(leaderPath);
+  a.appendChild(leaderDot);
 
-  // label block: room name + a faint accent kicker rule + sub (piece · tag) + companion
-  const nm = el("text",{ x:r.lx, y:r.ly, "text-anchor":anchor, class:"roomname" });
+  const lg = el("g",{ class:"labelgroup" });
+  // room name (local origin)
+  const nm = el("text",{ x:0, y:0, "text-anchor":"start", class:"roomname" });
   nm.textContent = r.room;
-  a.appendChild(nm);
-  // a short accent rule under the room name, on the label's anchor side
-  const ruleY = r.ly+5;
-  const rx1 = (anchor==="end") ? r.lx-26 : r.lx;
-  const rx2 = (anchor==="end") ? r.lx    : r.lx+26;
-  const rcx = (anchor==="middle") ? r.lx : (rx1+rx2)/2;
-  a.appendChild(el("line",{ x1:(anchor==="middle"?rcx-13:rx1), y1:ruleY,
-    x2:(anchor==="middle"?rcx+13:rx2), y2:ruleY, class:"roomrule" }));
-  const sub = el("text",{ x:r.lx, y:r.ly+18, "text-anchor":anchor, class:"roomsub" });
+  lg.appendChild(nm);
+  // a short accent kicker rule under the room name
+  const rule = el("line",{ x1:0, y1:5, x2:26, y2:5, class:"roomrule" });
+  lg.appendChild(rule);
+  // sub (piece · tag) — or the Undercroft's state line
+  const sub = el("text",{ x:0, y:18, "text-anchor":"start", class:"roomsub" });
   sub.textContent = r.locked
     ? (asLink ? "DESCEND ▾" : "THE WAY IS LOST")
     : (r.piece.toUpperCase()+" · "+r.tag);
-  a.appendChild(sub);
+  lg.appendChild(sub);
+  // optional companion "within" indicator
+  let within = null;
   if(r.companion){
-    const w = el("text",{ x:r.lx, y:r.ly+33, "text-anchor":anchor, class:"within" });
-    w.textContent = "↳ "+r.companion.name+" within";
-    a.appendChild(w);
+    within = el("text",{ x:0, y:33, "text-anchor":"start", class:"within" });
+    within.textContent = "↳ "+r.companion.name+" within";
+    lg.appendChild(within);
   }
+  a.appendChild(lg);
+
+  // hand the registry everything placeLabels() needs to measure, position the
+  // label group, set its text-anchor, and (re)draw the leader for this POI.
+  LABELS.set(a, { r, group:lg, leader:leaderPath, dot:leaderDot,
+                  texts:[nm, sub].concat(within?[within]:[]), rule });
 
   // ---- card behaviour ----
   const show = ()=> openCard(r, a);
@@ -853,6 +886,158 @@ function drawAvenue(x0,y0, cx,cy, mx,my, opts){
     pois && paths.appendChild(el("circle",{ cx:px+nx*off, cy:py+ny*off, r:2.6, class:"avenue-tree" }));
     paths.appendChild(el("circle",{ cx:px-nx*off, cy:py-ny*off, r:2.6, class:"avenue-tree" }));
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   AUTOMATIC LABEL PLACEMENT — the plan letters itself with the LabelPlacer engine.
+
+   Each POI's name is built (by buildPoi) into a <g.labelgroup> typeset at a local
+   origin; placeLabels() measures every such group, then asks LabelPlacer.solve()
+   for a layout in which no label overlaps another label, any footprint, or the
+   fixed plan furniture, and all stay inside the frame. The curated `prefer` side
+   on each PLACES entry SEEDS the solver, so the hand-composed look is the starting
+   point and only colliding labels move. A FIXED SEED makes the layout identical on
+   every visit. The viewBox scales uniformly, so we solve ONCE (never on resize).
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* the fixed plan furniture the labels must never cover (viewBox bboxes), beyond
+   the footprints themselves. Tuned against the static SVG above.
+   NOTE: the manor-house SHELL is deliberately NOT an obstacle here — the four wing
+   footprints inside it ARE obstacles, and they collectively guard the manor's
+   interior (an outward-pushed wing label that tried to fall inward would land on a
+   neighbouring wing and be rejected). Adding the whole 270×208 shell instead would
+   wall off the wings' own labels from ever escaping the house. */
+const FURNITURE = [
+  { x:74,  y:82,  w:92,  h:92  },   // the compass rose (top-left)
+  { x:1086,y:798, w:212, h:52  },   // the scale bar (bottom-right)
+  { x:100, y:686, w:384, h:148 },   // the engraved title cartouche ("The Workshop")
+  { x:631, y:252, w:180, h:18  },   // zone label · THE MANOR HOUSE ·
+  { x:1057,y:140, w:124, h:18  },   // zone label · THE GROUNDS ·
+];
+/* the inner frame, inset a little so no label kisses the ruled border. */
+const LABEL_BOUNDS = { x:46, y:52, w:1348, h:790 };
+/* solver params — a fixed seed → deterministic layout; LABEL_GAP is the constant
+   leader breathing-room margin ADDED to each footprint's half-extent (see labelGap)
+   so a label always clears the building it names. */
+const LABEL_SEED = 0x5EED;
+const LABEL_GAP  = 14;
+/* getBBox returns GEOMETRY only (no stroke); the roomname/sub carry a ~3px dark
+   backing stroke, so we inflate the measured box by PAD on every side to keep that
+   halo clear of neighbours, then translate accounting for the same inflation. */
+const LABEL_PAD  = 3;
+
+/* the per-POI solved placement, keyed by id, so a POI rebuilt after the solve
+   (the Undercroft on rune-click: broken→whole) can REUSE its placement. */
+const SOLVED = new Map();
+
+/* side → text-anchor: a label left of its dot right-aligns toward the plan; right
+   of its dot left-aligns; above/below reads centred. (Diagonals follow their E/W.) */
+function sideToAnchor(side){
+  if(side==="left"||side==="nw"||side==="sw") return "end";
+  if(side==="right"||side==="ne"||side==="se") return "start";
+  return "middle"; // top | bottom
+}
+
+/* lay out a label group's text + kicker rule for a chosen text-anchor, all about
+   the group's LOCAL x=0 (roomname baseline at local y=0). The box {w,h} is the
+   same whatever the anchor, so we can measure once and re-anchor freely. */
+function applyAnchor(parts, anchor){
+  parts.texts.forEach(t=> t.setAttribute("text-anchor", anchor));
+  let rx1, rx2;
+  if(anchor==="end"){ rx1=-26; rx2=0; }
+  else if(anchor==="middle"){ rx1=-13; rx2=13; }
+  else { rx1=0; rx2=26; }
+  parts.rule.setAttribute("x1", rx1);
+  parts.rule.setAttribute("x2", rx2);
+}
+
+/* position ONE label group at a solved label-box {x,y,w,h} + side, and (re)draw
+   its leader from the footprint boundary to the label's nearest edge. */
+function applyPlacement(parts, box, side){
+  const anchor = sideToAnchor(side);
+  applyAnchor(parts, anchor);
+  // measure the (re-anchored) block in local coords, then translate so the inflated
+  // box's top-left (geometry top-left minus PAD) lands on the solved rectangle.
+  const bb = parts.group.getBBox();
+  const tx = box.x - (bb.x - LABEL_PAD), ty = box.y - (bb.y - LABEL_PAD);
+  parts.group.setAttribute("transform", `translate(${tx} ${ty})`);
+  // the label rect in viewBox coords (what the leader must reach)
+  const rect = { x:box.x, y:box.y, w:box.w, h:box.h };
+  const fb = footBBox(parts.r);
+  const {cx,cy} = footCentre(parts.r);
+  // leader: from the footprint's boundary (toward the label) to the label's nearest
+  // edge — a clean straight draughting line, side-agnostic.
+  const lend = LabelPlacer.geom.nearestEdgePoint(cx, cy, rect);   // on the label
+  const fstart = LabelPlacer.geom.nearestEdgePoint(lend[0], lend[1], fb); // on the footprint
+  parts.leader.setAttribute("d", `M${fstart[0]} ${fstart[1]} L${lend[0]} ${lend[1]}`);
+  parts.dot.setAttribute("cx", fstart[0]);
+  parts.dot.setAttribute("cy", fstart[1]);
+}
+
+/* normalise a PLACES `prefer` hint (string | array | undefined) into a ranked list. */
+function preferList(r){
+  if(!r.prefer) return undefined;
+  return Array.isArray(r.prefer) ? r.prefer.slice() : [r.prefer];
+}
+
+/* The label ANCHOR is the footprint's CENTRE — the natural focus the leader points
+   back to. The engine's candidate slots sit `gap` away from the anchor on each
+   side, so to keep a label off its OWN footprint we size the gap to the footprint's
+   half-extent (below), letting every slot clear the building it names. */
+function labelAnchor(r){
+  const c = footCentre(r);
+  return { x:c.cx, y:c.cy };
+}
+
+/* Per-feature GAP: the breathing room between the anchor (footprint centre) and the
+   label box. Sized to clear the footprint's own half-extent on every side, plus a
+   constant margin — so a label seats just OUTSIDE the structure it names, with a
+   short, clean leader, whichever side the engine chooses. */
+function labelGap(r){
+  const b = footBBox(r);
+  return Math.max(b.w, b.h) / 2 + LABEL_GAP;
+}
+
+/* solve + apply labels for every present POI. Runs ONCE, after the Undercroft
+   reveal decision so a revealed cellar-stair label is part of the layout. */
+function placeLabels(){
+  if(typeof LabelPlacer === "undefined" || !LABELS.size) return;
+  const entries = [];            // [{ a, parts, w, h }] — w/h inflated by 2*PAD
+  LABELS.forEach((parts, a)=>{
+    const bb = parts.group.getBBox();
+    entries.push({ a, parts, w:bb.width + 2*LABEL_PAD, h:bb.height + 2*LABEL_PAD });
+  });
+
+  // obstacles = every present footprint + the fixed plan furniture
+  const footObstacles = entries.map(e=> footBBox(e.parts.r));
+  const obstacles = footObstacles.concat(FURNITURE);
+
+  const features = entries.map(e=>{
+    const r = e.parts.r;
+    const f = { id:r.id, anchor:labelAnchor(r), label:{ w:e.w, h:e.h }, gap:labelGap(r) };
+    const pref = preferList(r);
+    if(pref) f.prefer = pref;
+    if(r.pin) f.pin = r.pin;       // a forced placement the engine honours as-is
+    return f;
+  });
+
+  const spec = { bounds:LABEL_BOUNDS, features, obstacles, seed:LABEL_SEED };
+  // try the richer 8-slot model first; if it can't reach a clean layout, fall back
+  // to the 4-slot model and keep whichever is cleaner (deterministic either way).
+  let res = LabelPlacer.solve(Object.assign({ positions:8 }, spec));
+  if(res.overlaps > 0){
+    const alt = LabelPlacer.solve(Object.assign({ positions:4 }, spec));
+    if(alt.overlaps < res.overlaps) res = alt;
+  }
+
+  const byId = {};
+  entries.forEach(e=>{ byId[e.parts.r.id] = e; });
+  res.placements.forEach(p=>{
+    const e = byId[p.id]; if(!e) return;
+    SOLVED.set(p.id, { box:p.label, side:p.side });
+    applyPlacement(e.parts, p.label, p.side);
+  });
+  return res;
 }
 
 /* ── render: draw every non-locked place + the tree-lined survey avenues to the follies ── */
@@ -959,8 +1144,14 @@ centreManor();
       rune.classList.add("found");               // rune settles to a quiet steady mark
       // (2) replace the broken POI with a working, whole one (animate the repair)
       const fresh = buildPoi(data, { asLink:true, extraClass: reduced ? "" : "repairing" });
+      LABELS.delete(tile);                         // retire the broken tile's label parts
       tile.parentNode.replaceChild(fresh, tile);
       tile = fresh;
+      // reuse the cellar-stair's already-solved label slot so the whole stair's name
+      // lands exactly where the broken one's did (no re-solve, no layout shift).
+      const placed = SOLVED.get(data.id);
+      if(placed){ const fp = LABELS.get(fresh); if(fp) applyPlacement(fp, placed.box, placed.side); }
+      else { placeLabels(); }                      // fallback: solver hadn't run (shouldn't happen)
       rune.href = UC; rune.title = "the way down is open";
       if(!reduced){
         tile.addEventListener("animationend", function done(ev2){
@@ -972,6 +1163,11 @@ centreManor();
     });
   }
 })();
+
+/* ── all present POIs (manor wings, follies, the outbuilding, and — if revealed —
+   the cellar stair) are now in the DOM and registered; let the plan letter itself.
+   Solved ONCE: the viewBox scales uniformly, so the layout holds at every size. */
+placeLabels();
 </script>
 </body>
 </html>
