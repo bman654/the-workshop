@@ -13,7 +13,8 @@ map of a manor and its grounds** — every room a point on the plan.*
 
 ## What's inside
 
-Eleven creative mediums across nine projects — plus seven companions tucked behind their parent doors:
+Eleven creative mediums across nine projects — plus a new **Hall of Mirrors** wing of light (eight
+optical benches) and seven companions tucked behind their parent doors:
 the **Orrery** behind Firmament, **Blazon** behind Compositor, **Ariadne** behind Daedalus,
 **Bastion** behind Cartographer, **Scriptorium** behind The Oracle, **Tessellarium** behind the
 Strange Garden, and **Theogony** behind Threshold. Click a live link, or open any `.html` in a browser.
@@ -125,9 +126,68 @@ seed only *arranges* — so it reads as written, not generated.
 
 ---
 
+## 🪞 The Hall of Mirrors
+
+### ▶ Visit the Hall → **https://bman654.github.io/the-workshop/hall-of-mirrors/**
+
+A new wing on the estate's west grounds — **a gallery for all things light**: how it bends and reflects,
+how it splits into colour, and what it is when you look closely. Eight self-contained optical benches,
+each keeping the workshop's promise — a built-in self-test that proves its physics *exact*:
+
+- **[The Rainbow](https://bman654.github.io/the-workshop/rainbow/)** — the rainbow derived from a single
+  raindrop. Trace sunlight refracting into a spherical droplet, reflecting once (or twice) inside, and
+  refracting back out, and the rays pile up at the angle of *minimum deviation* into a bright bow: the
+  **primary at ~42°**, the reversed **secondary at ~51°**, **Alexander's dark band** between, and the
+  whole arc spread into colour by the water's dispersion. The bow angles fall out of Snell's law alone —
+  the self-test minimises the deviation numerically and lands the primary at **42.0°**, nothing baked in.
+- **[The Spyglass](https://bman654.github.io/the-workshop/spyglass/)** — how a far thing is made to look
+  near. A live ray-traced telescope bench: a **Keplerian refractor** (objective + eyepiece) forms a real
+  inverted image and relays it to the eye magnified **M = f_obj / f_eye**, and a **Newtonian reflector**
+  folds a parabola's perfect focus out to a side eyepiece. Drag the focal lengths and the rays and
+  magnification update; a distant scene shows at 1× beside the magnified, inverted view. The self-test
+  proves M exact and that the parabola focuses a parallel bundle to a *single point* — no spherical
+  aberration, to machine precision, while a sphere visibly misses.
+- **[The Spectroscope](https://bman654.github.io/the-workshop/spectroscope/)** — split light and read
+  what it's made of. Disperse a beam through a **prism** (Cauchy dispersion, at minimum deviation) or a
+  **diffraction grating** (d·sinθ = mλ), then switch the source to see real **line spectra** at their
+  true wavelengths and colours: hydrogen's Balmer series, sodium's yellow doublet, mercury and neon, and
+  the Sun's dark **Fraunhofer** absorption lines. The self-test proves the Balmer lines fall out of the
+  Rydberg formula (**Hα 656.29 nm**) and every grating order lands where the equation says.
+- **[The Polariser](https://bman654.github.io/the-workshop/polariser/)** — light has an orientation, and
+  two filters prove it. Rotate the analyser and the brightness follows **Malus's law, I = I₀ cos²θ**,
+  from full to pitch-dark when crossed; then slip a *third* filter between the crossed pair and watch
+  light reappear from nothing (the three-polariser paradox, peaking at ¼ at 45°). The self-test proves
+  the transmitted intensity equals cos²θ to a billionth, and that crossed is exactly zero.
+- **[The Anamorphic Mirror](https://bman654.github.io/the-workshop/anamorphosis/)** — the Renaissance
+  conjuror's trick. A picture is pre-distorted into an unreadable smear on a flat table; stand a vertical
+  **cylindrical mirror** at its centre and the reflection puts it right. Three live panels — the source,
+  the warped table-print, and the reconstruction the mirror would show — by the exact reflection geometry
+  (azimuth preserved, the radius a Möbius map). The self-test proves the warp and its inverse round-trip
+  to machine precision.
+- **[Iridescence](https://bman654.github.io/the-workshop/iridescence/)** — the colours that come from
+  nothing but thickness: a soap bubble, oil on a puddle, **Newton's rings**. Light reflecting off the two
+  faces of a film thinner than a wavelength interferes with itself, cancelling some colours and
+  reinforcing others. Every hue here is computed from the real interference and integrated against the
+  eye's own **CIE colour-matching** curves — not a painted gradient. The self-test proves the rings fall
+  where 2t = mλ and that a flat spectrum integrates to neutral.
+- **[Caustic](https://bman654.github.io/the-workshop/optics/)** — the steerable optical **light-bench**
+  that anchors the hall: drop emitters, mirrors, lenses, prisms and blocks onto a dark bench and drag them
+  around; beams re-trace live by the real laws of geometric optics — the law of reflection, Snell's law
+  (with total internal reflection), an ideal thin lens, and Cauchy dispersion that fans white light into
+  a true ordered rainbow. Snell's law proven to a billionth, the critical angle dead on.
+- **[Kaleidoscope](https://bman654.github.io/the-workshop/kaleidoscope/)** — a tumbling chamber of
+  translucent glass seen through an N-fold mirror; turn the order from 3 to 12 and the shards fold into a
+  living rosette that holds perfect **dihedral symmetry** every frame — a true mirror, proven exactly
+  Dₙ-symmetric to machine precision, not a fake rotate.
+
+> *The hall's wave-cousin lives on the workbench — **Ripple**, a wave-interference tank where the same
+> superposition that paints these colours plays out, slowed down, on dark water.*
+
+---
+
 ## Also on the workbench
 
-A small wing off to one side of the nine main projects, reached by **the workbench** door in the
+A small wing off to one side of the main projects, reached by **the workbench** door in the
 footer — standalone tools, toys & tales, each self-contained:
 
 - **[Lantern](https://bman654.github.io/the-workshop/adventure/)** — a small **engine for hand-made
@@ -173,17 +233,8 @@ footer — standalone tools, toys & tales, each self-contained:
   self-test proves every cell of cloth is *exactly* the loom equation, and that named structures
   satisfy their defining invariants (a satin's floats are isolated; a 2/2 twill steps by one). Not a
   puzzle and not a game — just the pleasure of weaving.
-- **[Caustic](https://bman654.github.io/the-workshop/optics/)** — a steerable **optical
-  light-bench**. Drop emitters, mirrors, lenses, prisms and blocks onto a dark bench and drag them
-  around; beams of light re-trace live by the *real* laws of geometric optics — the law of
-  reflection, Snell's law of refraction (with total internal reflection at steep angles), an ideal
-  thin lens that focuses a parallel bundle to a point, and Cauchy dispersion, so a glass prism fans
-  white light into a true ordered rainbow. Curated presets (Prism, Focus, Kaleidoscope, Total
-  Internal Reflection, Spectrum…), a seeded re-rollable bench, three cosmetic skins, and a 2× PNG
-  export. It keeps the workshop's promise: a built-in self-test proves the optics are physically
-  exact — Snell's law to a billionth, the critical angle dead on, the focus where the math says.
-  Also not a puzzle and not a game — a sandbox of light you steer.
-- **[Ripple](https://bman654.github.io/the-workshop/ripple/)** — Caustic's wave-physics sibling: a
+- **[Ripple](https://bman654.github.io/the-workshop/ripple/)** — the wave-physics sibling of the Hall of
+  Mirrors' light benches (Caustic above): a
   steerable **wave-interference tank**. Drop point sources on dark water and drag them around;
   circular ripples spread and **interfere** live by the *exact* physics of linear superposition —
   bright antinodal lines where crest meets crest, dark nodal hyperbolae where crest meets trough.
@@ -302,12 +353,6 @@ footer — standalone tools, toys & tales, each self-contained:
   of noons" and the shadow-tips trace the **analemma's** slow figure-8. Horizontal, equatorial or
   vertical-south, in three engraved skins. The self-test proves the round-trip from civil time to shadow and
   back, that the hour-lines match the closed forms, and that the equation-of-time hits its known extrema.
-- **[Kaleidoscope](https://bman654.github.io/the-workshop/kaleidoscope/)** — a **live mirror-toy** with
-  *provable* symmetry. A tumbling chamber of translucent glass is viewed through an N-fold mirror; turn the
-  order from 3 to 12 and the shards fold into a living rosette that holds perfect **dihedral symmetry** every
-  frame. Distinct from the static Rosette and the wallpaper-tiling Tessellarium — this is live *point*
-  symmetry you can dial. The self-test proves the image is exactly Dₙ-symmetric (every rotation and
-  reflection, to machine precision) — a true mirror, not a fake rotate.
 - **[Galton Board](https://bman654.github.io/the-workshop/galton/)** — the estate's first **probability**
   piece: a bean machine where balls cascade through a field of pegs and pile into a **bell curve**, with the
   *exact* binomial distribution drawn over the bars and a **live χ² p-value** reporting, as the balls fall,
