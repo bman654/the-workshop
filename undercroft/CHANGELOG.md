@@ -1,5 +1,33 @@
 # The Undercroft — changelog
 
+## Build 11 — The Light Mixer: the Spectroscope's inverse, recomposing light (2026-06-13)
+
+A new hidden piece, `undercroft/light-mixer.html` — the quiet capstone reward for a visitor who has
+mastered the Hall of Mirrors. Where the Hall's **Spectroscope** takes white light *apart* into
+wavelengths, the Light Mixer puts it back together by **additive colour synthesis**, all computed in
+**linear light** (radiometrically correct), never in gamma sRGB. Two linked instruments on one stage:
+
+- **Newton's disc** — a spectral wheel that spins (adjustable 0–14 rev/s); persistence of vision fuses
+  the segments toward a neutral grey. The reported fused colour is the **exact area-weighted average of
+  the segments in linear-light space**, re-encoded to sRGB (a full equal-area spectrum disc fuses to
+  `#b99c9b`, chromaticity within 0.030 of the D65 white point — *near white*). Three palettes (full CIE
+  spectrum / Newton's seven / painter's RYB) show how the fused colour shifts; RYB fuses *less* neutral
+  than the spectrum — a teaching contrast.
+- **Additive light mixing** — three draggable coloured spotlights (default R, G, B) on a dark stage;
+  overlaps add in linear light: **R+G→yellow, G+B→cyan, B+R→magenta, R+G+B→white**, with a live exact
+  readout per region. Per-light colour + intensity dials; half-intensity primaries demonstrate the
+  difference from naive sRGB averaging.
+
+Estate aesthetic (gilt `#c9a24a`, serif gradient `h1`, topbar `.selftest` chip), 3 recolour-only skins
+(Gilt / Cobalt / Noir), 2× PNG export, and the standard hidden-piece back-link + `ws:seen:light-mixer`
+breadcrumb. A **built-in self-test (7/7)** proves the physics EXACT: sRGB⇄linear round-trips ≤1e-9; the
+disc fusion equals the closed-form linear average ≤1e-9; the spectrum disc fuses near the white point;
+the additive laws are exact to ≤1e-9 with canonical secondaries/white; mixing is radiometric, not
+gamma-space; skins are colour-only. Verified on a served origin: green chip, zero console errors, disc
+spins and fuses, overlaps show Y/C/M/white, all controls + skins + PNG work. The pure colour-science
+core has **no DOM access** and the headless self-test calls those real functions (re-auditable in Node).
+(The lead wires the unlock in `undercroft/index.html` separately.)
+
 ## Build 10 — the `ws:` system becomes one shared, forged module + an in-the-moment unlock cue (2026-06-13)
 
 **Architectural refactor (foundation pass).** The `ws:` unlock convention — hand-rolled and
