@@ -34,10 +34,11 @@ same twice. Includes a written **Field Notes** naturalist's journal.
 > draws its symmetry axes on request, reproducible by seed, export PNG.
 
 ### 🕹️ [Arcade](https://bman654.github.io/the-workshop/arcade/)
-**14 fully-playable neon-vector games** — Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
+**19 fully-playable neon-vector games** — Asteroids, Breakout, Snake, Tetris, Starfighter, 2048,
 Missile Command, Pong (vs CPU), Lunar Lander, Crossing, Chomp (a neon maze-muncher), Swarm (a
-twin-stick survivor), Gyre (a Tempest-lineage tube shooter), and Tessera (a Qix-lineage
-area-claiming game). Insert coin.
+twin-stick survivor), Gyre (a Tempest-lineage tube shooter), Tessera (a Qix-lineage area-claiming
+game), Centipede, Qubit, Vanguard, Dig Dug, and Bulwark (a Defender/Scramble side-scroller across a
+wrapping ring — rescue the falling tenders, mind your fuel). Insert coin.
 
 ### 🗺️ [Cartographer](https://bman654.github.io/the-workshop/cartographer/)
 A **procedural fantasy-map generator** — re-roll coherent worlds (coastlines, mountain ranges,
@@ -271,6 +272,29 @@ footer — standalone tools, toys & tales, each self-contained:
   built-in self-test proves the cipher round-trips exactly, is a true permutation of positions, matches
   the textbook column-read, and that the diameter/key is load-bearing — substitution's mirror-twin, where
   nothing is replaced, only rearranged.
+- **[The Adversary](https://bman654.github.io/the-workshop/adversary/)** — a **solved-games engine**: play a
+  small game of perfect information against an opponent that **cannot be beaten and cannot blunder**. It
+  enumerates the entire game and labels every position win / loss / draw with its exact distance to the end
+  by retrograde analysis — so it plays perfectly, and the *same* table proves it. Toggle "reveal verdicts" to
+  see the truth of every legal move ("mate in 3"), or watch it play *itself* perfectly to the proven outcome.
+  Five games ship — Nim, tic-tac-toe, Kōnane, Hex, an m,n,k game — each supplied as *data* to one engine. The
+  self-test pins the computed values to known game theory (the Nim XOR theorem; tic-tac-toe is a draw) and
+  proves the perfect player never loses from a won-or-drawn position.
+- **[The Singing Plate](https://bman654.github.io/the-workshop/singing-plate/)** — a **Chladni vibration
+  bench**, and the workshop's first **spectral solver**. It discretizes a vibrating plate and *numerically
+  solves the eigenproblem* for its standing-wave modes, then scatters sand that flees the antinodes and
+  settles onto the true **nodal lines** (the figures Chladni drew with a bow). Sweep the drive to snap onto a
+  resonance; square or circular drum, clamped or free. The third panel of the wave-physics trilogy (Caustic
+  the rays, Ripple the travelling waves, the Plate the standing ones). The self-test proves the computed
+  eigenfrequencies converge to the closed forms — the square's π²(p²+q²), the circle's Bessel-zero ratios —
+  and that the sand really lands on the nodes.
+- **[The Gnomon](https://bman654.github.io/the-workshop/sundial/)** — an operable **sundial** whose shadow
+  tells *true clock time*. Set your latitude, longitude and the day, and the gnomon's shadow sweeps the
+  hour-lines by real solar geometry (it shares the very solar functions the Astrolabe uses, so the two read
+  one sky). Toggle the **equation-of-time** correction and the dial agrees with the wall clock; "plot a year
+  of noons" and the shadow-tips trace the **analemma's** slow figure-8. Horizontal, equatorial or
+  vertical-south, in three engraved skins. The self-test proves the round-trip from civil time to shadow and
+  back, that the hour-lines match the closed forms, and that the equation-of-time hits its known extrema.
 - **[Colophon](https://bman654.github.io/the-workshop/colophon.html)** — a short note on how and
   why the workshop was made.
 
@@ -287,6 +311,10 @@ notes, the poems, and the star-myths too.
 
 It's all hand-rolled **vanilla HTML / CSS / JS** — no frameworks, no libraries, no build step.
 Each project keeps its own `CHANGELOG.md` with the full build log.
+
+> *And the estate has begun to keep a sky of its own. Open a room and a star kindles over it on the
+> front-door map; visit both halves of a wing and its little constellation completes, and is named. A
+> quiet record of where you've wandered.*
 
 > *And the workshop keeps a few secrets of its own — rooms that are on no map, that open only to those
 > who wander far enough. If one day you notice a mark in the footer that wasn't there before, follow it.*
