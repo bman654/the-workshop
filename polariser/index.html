@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Polariser</title>
+<style>
+  :root{
+    --bg:#080a0f;
+    --bg-grad1:rgba(120,84,36,0.16);
+    --bg-grad2:rgba(70,52,30,0.14);
+    --ink:#eaf0fa;
+    --ink-dim:#8b95a8;
+    --accent:#c9a24a;
+    --accent-soft:rgba(201,162,74,0.16);
+    --panel-bg:rgba(13,15,22,0.88);
+    --panel-edge:rgba(201,162,74,0.34);
+    --beam:#cfe6ff;
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    background:
+      radial-gradient(1200px 700px at 72% 16%, var(--bg-grad1), transparent 60%),
+      radial-gradient(900px 600px at 18% 92%, var(--bg-grad2), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0;
+    background:linear-gradient(90deg,#e7d6a3,#c9a24a 55%,#a9842f); -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .topbar .right{ display:flex; align-items:center; gap:14px; }
+  .fwd{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .fwd:hover{ color:var(--accent); opacity:1; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:default; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; }
+  #bench{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:grab; }
+  #bench.dragging{ cursor:grabbing; }
+  #hud{ position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    font:11px/1.3 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.55);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 12px; letter-spacing:.3px;
+    pointer-events:none; opacity:0; transition:opacity .18s; max-width:90%; text-align:center; }
+  #hud.show{ opacity:1; }
+  #hud b{ color:var(--accent); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:320px; flex:0 0 320px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 22px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.6; margin:0 0 8px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 10px; border-top:1px solid rgba(201,162,74,0.18); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:2px; margin-top:6px; }
+  .row{ margin:12px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:8px; }
+  .row > label .val{ color:var(--accent); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.2px; font-size:11px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#f3e7c4; border:2px solid #8a6d28; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%; background:#f3e7c4; border:2px solid #8a6d28; cursor:pointer;
+  }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(201,162,74,0.24); }
+  .seg button{
+    flex:1; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:7px 4px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#160f02; font-weight:700; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .btnrow{ display:flex; gap:8px; margin:14px 0 4px; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(201,162,74,0.30), rgba(201,162,74,0.10)); border-color:rgba(201,162,74,0.5); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(201,162,74,0.44), rgba(201,162,74,0.16)); }
+
+  /* ---- readout meter ---- */
+  .meter{ margin:6px 0 2px; }
+  .meter .track{ position:relative; height:14px; border-radius:7px; background:rgba(0,0,0,0.45);
+    border:1px solid var(--panel-edge); overflow:hidden; }
+  .meter .fill{ position:absolute; left:0; top:0; bottom:0; width:0%;
+    background:linear-gradient(90deg, rgba(201,162,74,0.55), #f3e7c4); transition:width .05s linear; }
+  .meter .nums{ display:flex; justify-content:space-between; margin-top:7px;
+    font:600 11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; }
+  .meter .nums b{ color:var(--accent); font-variant-numeric:tabular-nums; }
+  .law{ font:11px/1.55 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; margin:10px 0 0;
+    background:rgba(0,0,0,0.28); border:1px solid rgba(201,162,74,0.18); border-radius:8px; padding:9px 11px; }
+  .law b{ color:var(--ink); }
+  .law .hi{ color:var(--accent); }
+  .hint{ font:10.5px/1.6 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:16px 0 2px;
+    border-top:1px solid rgba(201,162,74,0.18); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+  @media (max-width: 720px){
+    #panel{ width:280px; flex-basis:280px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; workshop</a>
+    <div class="brand">
+      <h1>The Polariser</h1>
+      <span class="tag">Malus&rsquo;s law &amp; the three-polariser paradox</span>
+    </div>
+    <div class="right">
+      <a class="fwd" href="../hall-of-mirrors/index.html">hall of mirrors &uarr;</a>
+      <div class="selftest" id="selftest" title="built-in self-test">checking&hellip;</div>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="bench"></canvas>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">Light is a <b>transverse</b> wave: its electric field oscillates across the
+        direction of travel. A <b>polariser</b> passes only the field component along its axis, so
+        through a rotated <b>analyser</b> the intensity follows <b>Malus&rsquo;s law</b>,
+        I = I<sub>0</sub>&middot;cos&sup2;&theta;. Drag the dial on the bench, or use the slider.</p>
+
+      <div class="sect">Bench</div>
+      <div class="row">
+        <div class="seg" id="modeSeg">
+          <button data-mode="malus" class="active">Two filters &middot; Malus</button>
+          <button data-mode="paradox">Three &middot; paradox</button>
+        </div>
+      </div>
+
+      <!-- MALUS controls -->
+      <div id="malusCtl">
+        <div class="row">
+          <label>Analyser angle &theta; <span class="val" id="thetaVal">0&deg;</span></label>
+          <input type="range" id="theta" min="0" max="180" step="0.5" value="0">
+        </div>
+        <div class="sect">Detector &mdash; transmitted intensity</div>
+        <div class="meter">
+          <div class="track"><div class="fill" id="fillMalus"></div></div>
+          <div class="nums">
+            <span>I / I<sub>0</sub> = <b id="iMalus">1.000</b></span>
+            <span>cos&sup2;&theta; = <b id="cosMalus">1.000</b></span>
+          </div>
+        </div>
+        <p class="law">
+          P1 fixed at 0&deg; polarises the unpolarised source &mdash; it transmits exactly
+          <span class="hi">&frac12;</span> the incident intensity. After P1 we call that
+          <b>I<sub>0</sub></b>. The analyser at &theta; then passes
+          <b>I<sub>0</sub>&middot;cos&sup2;&theta;</b>:
+          full at <span class="hi">0&deg;</span>, dark at <span class="hi">90&deg;</span>.
+        </p>
+      </div>
+
+      <!-- PARADOX controls -->
+      <div id="paradoxCtl" style="display:none">
+        <div class="row">
+          <label>Middle filter P2 angle &theta; <span class="val" id="theta2Val">45&deg;</span></label>
+          <input type="range" id="theta2" min="0" max="90" step="0.5" value="45">
+        </div>
+        <div class="sect">Detector &mdash; fraction of post-P1 intensity</div>
+        <div class="meter">
+          <div class="track"><div class="fill" id="fillPara"></div></div>
+          <div class="nums">
+            <span>I / I<sub>0</sub> = <b id="iPara">0.250</b></span>
+            <span>peak &frac14; @ 45&deg;</span>
+          </div>
+        </div>
+        <p class="law">
+          Two <b>crossed</b> filters (P1 0&deg;, P3 90&deg;) give darkness.
+          Insert P2 at &theta; between them and light <span class="hi">reappears</span>:
+          the transmitted fraction is cos&sup2;&theta;&middot;sin&sup2;&theta; =
+          <b>&frac14;&middot;sin&sup2;(2&theta;)</b>, peaking at
+          <span class="hi">&theta;=45&deg;</span> at exactly <span class="hi">&frac14;</span>
+          &mdash; one eighth of the original unpolarised light.
+        </p>
+      </div>
+
+      <div class="sect">Look</div>
+      <div class="row">
+        <div class="seg" id="skinSeg">
+          <button data-skin="brass" class="active">Brass</button>
+          <button data-skin="cyan">Cyan</button>
+          <button data-skin="rose">Rose</button>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn" id="animBtn">&#9654; Sweep</button>
+        <button class="btn primary" id="pngBtn">PNG &times;2</button>
+      </div>
+
+      <div class="hint">
+        <b>Drag</b> the analyser dial on the bench to rotate it &middot; or use the slider.
+        Hit <b>Sweep</b> to watch the screen breathe through a full rotation. The screen
+        brightness behind the last filter is the computed intensity, exactly.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+/* ============================================================================
+   THE POLARISER — pure polarization-optics CORE. NO DOM access in this section.
+   The self-test below calls THESE real functions (not copies). Closed-form
+   Malus's law is the single source of truth for every photon on the bench.
+   ============================================================================ */
+
+var DEG = Math.PI / 180;
+
+/* Malus's law. An ideal linear polariser passes the field component along its
+   axis; intensity ∝ amplitude², so a fully-polarised beam of intensity I0
+   meeting an analyser at angle θ (radians) relative to its polarisation emerges
+   at I0·cos²θ. This is exact, not sampled. */
+function malus(I0, thetaRad) {
+  var c = Math.cos(thetaRad);
+  return I0 * c * c;
+}
+
+/* The first ideal polariser acting on UNPOLARISED light. Averaging cos²θ over a
+   uniform distribution of incident polarisation angles gives ⟨cos²⟩ = ½, and the
+   emergent beam is fully polarised along the polariser's axis. So a unit
+   unpolarised input yields exactly ½. */
+function firstPolariser(I_unpolarised) {
+  return 0.5 * I_unpolarised;
+}
+
+/* A stack of ideal linear polarisers. axesDeg = absolute axis angles in degrees.
+   Input is UNPOLARISED with intensity I_in. Returns the intensity transmitted
+   through the whole stack. The first filter halves & polarises; each subsequent
+   filter applies Malus's law on the angle to the PREVIOUS filter's axis. */
+function stackTransmission(I_in, axesDeg) {
+  if (axesDeg.length === 0) return I_in;        // nothing in the path
+  var I = firstPolariser(I_in);                  // unpolarised → ½, now polarised along axes[0]
+  var prev = axesDeg[0] * DEG;
+  for (var k = 1; k < axesDeg.length; k++) {
+    var ax = axesDeg[k] * DEG;
+    I = malus(I, ax - prev);
+    prev = ax;
+  }
+  return I;
+}
+
+/* Convenience: the two-filter Malus bench. P1 fixed at 0°, analyser at θ°.
+   Returns intensity RELATIVE to the post-P1 intensity I0 (i.e. cos²θ), which is
+   what the detector bar reads. */
+function malusBench(thetaDeg) {
+  return malus(1, thetaDeg * DEG);               // I0 := 1 (post-P1)
+}
+
+/* The three-polariser paradox. P1=0°, P3=90° (crossed), P2 inserted at θ°.
+   Returns the transmitted fraction RELATIVE to the post-P1 intensity I0.
+   Closed form: cos²θ·cos²(90°−θ) = cos²θ·sin²θ = ¼·sin²(2θ). */
+function paradoxFraction(thetaDeg) {
+  var t = thetaDeg * DEG;
+  // honest chain: post-P1 (=1) → P2 at θ → P3 at 90°
+  var afterP2 = malus(1, t);                      // cos²θ
+  var afterP3 = malus(afterP2, (90 - thetaDeg) * DEG); // ·cos²(90-θ)=·sin²θ
+  return afterP3;
+}
+
+/* Closed-form ground truth for the paradox, for cross-checking the chain. */
+function paradoxClosed(thetaDeg) {
+  var s = Math.sin(2 * thetaDeg * DEG);
+  return 0.25 * s * s;
+}
+
+/* ============================================================================
+   HEADLESS SELF-TEST — calls the REAL functions above. Returns {pass,total,...}.
+   Asserts the computed physics against closed-form ground truth to ≤1e-9.
+   ============================================================================ */
+function runSelfTest() {
+  var results = [];
+  function check(name, ok, note) {
+    results.push({ name: name, pass: !!ok, note: note || '' });
+  }
+
+  // (1) Malus exact across a fine sweep 0..180°: malus(I0,θ) == I0·cos²θ.
+  (function () {
+    var maxErr = 0, I0 = 1.0;
+    for (var d = 0; d <= 180; d += 0.25) {
+      var th = d * DEG;
+      var got = malus(I0, th);
+      var truth = I0 * Math.cos(th) * Math.cos(th);
+      maxErr = Math.max(maxErr, Math.abs(got - truth));
+    }
+    check('Malus: I == I0·cos²θ over 0..180° (step 0.25°)', maxErr <= 1e-9,
+      'max |err| = ' + maxErr.toExponential(2));
+  })();
+
+  // (2) Crossed analyser (θ=90°): transmission is exactly 0.
+  (function () {
+    var v = malus(1, 90 * DEG);
+    check('crossed analyser θ=90° → exactly 0', Math.abs(v) <= 1e-9,
+      'I(90°) = ' + v.toExponential(2));
+  })();
+
+  // (3) Aligned (θ=0°): transmission == I0 (1.0) exactly.
+  (function () {
+    var v = malus(1, 0);
+    check('aligned θ=0° → I0 (==1)', Math.abs(v - 1) <= 1e-9,
+      'I(0°) = ' + v.toFixed(15));
+  })();
+
+  // (4) First polariser on unpolarised input transmits exactly ½.
+  (function () {
+    var v = firstPolariser(1.0);
+    // and the full stack with a single axis must equal the same ½ (no analyser yet)
+    var s = stackTransmission(1.0, [0]);
+    check('first polariser on unpolarised → exactly ½', Math.abs(v - 0.5) <= 1e-9 && Math.abs(s - 0.5) <= 1e-9,
+      '½ = ' + v + ', stack[0°] = ' + s);
+  })();
+
+  // (5) Two crossed polarisers (P1=0°, P3=90°) on unpolarised input → exactly 0.
+  (function () {
+    var v = stackTransmission(1.0, [0, 90]);
+    check('crossed pair (0°,90°) on unpolarised → 0', Math.abs(v) <= 1e-9,
+      'stack[0°,90°] = ' + v.toExponential(2));
+  })();
+
+  // (6) Three-polariser: chain == closed form ¼·sin²(2θ) over a fine sweep,
+  //     AND is 0 at θ=0° and θ=90°.
+  (function () {
+    var maxErr = 0;
+    for (var d = 0; d <= 90; d += 0.25) {
+      var chain = paradoxFraction(d);
+      var closed = paradoxClosed(d);
+      maxErr = Math.max(maxErr, Math.abs(chain - closed));
+    }
+    var z0 = paradoxFraction(0), z90 = paradoxFraction(90);
+    var ends = Math.abs(z0) <= 1e-9 && Math.abs(z90) <= 1e-9;
+    check('3-polariser: chain == ¼·sin²(2θ) & 0 at 0°/90°', maxErr <= 1e-9 && ends,
+      'max |err| = ' + maxErr.toExponential(2) + ', I(0°)=' + z0.toExponential(1) + ', I(90°)=' + z90.toExponential(1));
+  })();
+
+  // (7) Paradox peak: located at θ=45° with value exactly ¼ (rel. post-P1).
+  //     Verify by exhaustive fine scan that 45° is the unique argmax & equals ¼.
+  (function () {
+    var bestD = -1, bestV = -1;
+    for (var d = 0; d <= 90; d += 0.05) {
+      var v = paradoxFraction(d);
+      if (v > bestV) { bestV = v; bestD = d; }
+    }
+    var atPeak = paradoxFraction(45);
+    var ok = Math.abs(bestD - 45) <= 0.06            // argmax is 45° (within scan step)
+          && Math.abs(atPeak - 0.25) <= 1e-9         // value there is exactly ¼
+          && Math.abs(bestV - 0.25) <= 1e-9;
+    check('paradox peak: argmax θ=45°, value == ¼', ok,
+      'argmax ' + bestD.toFixed(2) + '°, peak value ' + atPeak.toFixed(15));
+  })();
+
+  // (8) Three-polariser absolute throughput from UNPOLARISED is ⅛ at θ=45°
+  //     (the ½ first-filter loss × ¼ paradox fraction).
+  (function () {
+    var abs45 = stackTransmission(1.0, [0, 45, 90]);
+    check('3-polariser absolute: unpolarised → ⅛ at 45°', Math.abs(abs45 - 0.125) <= 1e-9,
+      'stack[0,45,90] = ' + abs45.toFixed(15));
+  })();
+
+  // (9) Stack honesty: stackTransmission([0°,θ]) on unpolarised == ½·cos²θ for a
+  //     sweep — proves the general stack reduces to first-filter × Malus.
+  (function () {
+    var maxErr = 0;
+    for (var d = 0; d <= 180; d += 0.5) {
+      var got = stackTransmission(1.0, [0, d]);
+      var truth = 0.5 * Math.cos(d * DEG) * Math.cos(d * DEG);
+      maxErr = Math.max(maxErr, Math.abs(got - truth));
+    }
+    check('stack[0°,θ] on unpolarised == ½·cos²θ', maxErr <= 1e-9,
+      'max |err| = ' + maxErr.toExponential(2));
+  })();
+
+  var nPass = 0;
+  for (var i = 0; i < results.length; i++) if (results[i].pass) nPass++;
+  return { pass: nPass === results.length, n: nPass, total: results.length, results: results };
+}
+
+// dual-use exports (Node re-audit / browser chip)
+if (typeof window !== 'undefined') {
+  window.PolariserCore = {
+    malus: malus, firstPolariser: firstPolariser, stackTransmission: stackTransmission,
+    malusBench: malusBench, paradoxFraction: paradoxFraction, paradoxClosed: paradoxClosed,
+    runSelfTest: runSelfTest
+  };
+}
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    malus: malus, firstPolariser: firstPolariser, stackTransmission: stackTransmission,
+    malusBench: malusBench, paradoxFraction: paradoxFraction, paradoxClosed: paradoxClosed,
+    runSelfTest: runSelfTest
+  };
+}
+
+/* ============================================================================
+   THE PAGE — drives the CORE. The core above is the proof; this is chrome +
+   canvas. Every drawn intensity comes from the CORE functions, never hard-coded.
+   Skipped entirely under Node (no document).
+   ============================================================================ */
+if (typeof document !== 'undefined') { (function () {
+
+// ws: unlock breadcrumb
+try { var k = 'ws:seen:polariser'; if (!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); } catch (e) {}
+
+var canvas = document.getElementById('bench');
+var ctx = canvas.getContext('2d');
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+// cosmetic skins — recolour only; the physics CORE never reads these.
+var SKINS = {
+  brass: { beam: [207,230,255], axis: '#f3e7c4', screen: [243,231,196], glow: 'rgba(201,162,74,' },
+  cyan:  { beam: [180,236,255], axis: '#bdeaff', screen: [180,236,255], glow: 'rgba(120,200,235,' },
+  rose:  { beam: [255,206,224], axis: '#ffc7dc', screen: [255,196,214], glow: 'rgba(232,120,160,' }
+};
+
+var state = {
+  mode: 'malus',        // 'malus' | 'paradox'
+  theta: 0,             // analyser angle, deg (malus mode)
+  theta2: 45,           // P2 angle, deg (paradox mode)
+  skin: 'brass',
+  sweeping: false,
+  sweepT: 0,
+  w: 0, h: 0
+};
+
+var reduceMotion = (typeof window.matchMedia === 'function')
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---- sizing ---- */
+function resize() {
+  var stage = canvas.parentElement;
+  var w = stage.clientWidth, h = stage.clientHeight;
+  state.w = w; state.h = h;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  canvas.width = Math.round(w * DPR);
+  canvas.height = Math.round(h * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+
+/* ---- geometry of the bench (in CSS px) ---- */
+// Layout: source on the left, filters across the centre, screen on the right.
+function benchLayout() {
+  var w = state.w, h = state.h;
+  var cy = h * 0.5;
+  var margin = 64;
+  var x0 = margin + 30;                 // source
+  var xScreen = w - margin - 26;        // screen face
+  var span = xScreen - x0;
+  var n = (state.mode === 'malus') ? 2 : 3;  // number of filters drawn
+  var filters = [];
+  // evenly distribute filters between source and screen
+  for (var i = 0; i < n; i++) {
+    var f = (i + 1) / (n + 1);
+    filters.push({ x: x0 + f * span * 0.92 + span * 0.04, y: cy });
+  }
+  return { cy: cy, x0: x0, xScreen: xScreen, filters: filters, ringR: Math.min(60, Math.max(40, span * 0.07)) };
+}
+
+// which filter holds the user-draggable analyser dial, and its axis angle (deg)
+function activeDial(lay) {
+  if (state.mode === 'malus') {
+    return { idx: 1, angle: state.theta, label: 'analyser' };  // 2nd filter = analyser
+  } else {
+    return { idx: 1, angle: state.theta2, label: 'P2' };        // middle filter
+  }
+}
+
+// absolute axis angle (deg) of filter i for the current mode
+function filterAngle(i) {
+  if (state.mode === 'malus') {
+    return (i === 0) ? 0 : state.theta;       // P1=0, analyser=θ
+  } else {
+    return (i === 0) ? 0 : (i === 1) ? state.theta2 : 90;  // P1=0, P2=θ, P3=90
+  }
+}
+
+/* ---- the intensity the SCREEN must display (from the CORE) ---- */
+function screenIntensity() {
+  if (state.mode === 'malus') {
+    return PolariserCore.malusBench(state.theta);       // cos²θ (rel. post-P1)
+  } else {
+    return PolariserCore.paradoxFraction(state.theta2); // ¼·sin²(2θ)
+  }
+}
+
+/* ---- draw ---- */
+function draw() {
+  var w = state.w, h = state.h;
+  var skin = SKINS[state.skin];
+  ctx.clearRect(0, 0, w, h);
+
+  var lay = benchLayout();
+  var cy = lay.cy;
+  var I = screenIntensity();              // 0..1 from the CORE
+
+  // optical axis rail
+  ctx.strokeStyle = 'rgba(201,162,74,0.16)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(lay.x0, cy); ctx.lineTo(lay.xScreen, cy); ctx.stroke();
+
+  // ----- source: unpolarised light (random E-field vectors) -----
+  drawSource(lay.x0, cy, skin);
+
+  // ----- beam segments with intensity per stage -----
+  var beam = skin.beam;
+  // intensity entering each filter, drawn as beam alpha between stages.
+  // pre-P1 source beam: arbitrary "bright" unpolarised glow (display only)
+  var segX = [lay.x0];
+  for (var i = 0; i < lay.filters.length; i++) segX.push(lay.filters[i].x);
+  segX.push(lay.xScreen);
+
+  // compute display intensity of each beam segment from the CORE chain.
+  // seg 0 (source→P1): unpolarised, full brightness 1 (display).
+  // after P1: 0.5 ; then Malus per subsequent filter (relative scale ×2 so the
+  // post-P1 beam reads as "I0=1" visually — matches the detector's rel scale).
+  var segI = [1.0];
+  if (state.mode === 'malus') {
+    segI.push(1.0);                 // after P1 → call it I0=1 on screen
+    segI.push(PolariserCore.malusBench(state.theta));   // after analyser
+  } else {
+    segI.push(1.0);                                      // after P1 → I0=1
+    segI.push(PolariserCore.malus(1, state.theta2 * DEG)); // after P2 = cos²θ
+    segI.push(PolariserCore.paradoxFraction(state.theta2)); // after P3
+  }
+
+  for (var s = 0; s < segX.length - 1; s++) {
+    var a = Math.max(0, Math.min(1, segI[s]));
+    drawBeam(segX[s], segX[s + 1], cy, beam, a);
+  }
+
+  // ----- E-field markers along the beam -----
+  // after P1 the field is polarised along 0° (horizontal); after the analyser/P2
+  // it is polarised along that filter's axis, with amplitude cos θ of the prior.
+  drawFieldArrow((segX[0] + segX[1]) / 2, cy, 90, 1, beam, true);   // unpolarised cluster handled in source; show one wide
+  drawPolarisedField((segX[1] + segX[2]) / 2, cy, 0, 1, beam, skin); // after P1: along 0°
+  if (state.mode === 'malus') {
+    drawProjection((segX[1] + segX[2]) / 2 + 0, cy, 0, state.theta, beam, skin);
+  } else {
+    drawPolarisedField((segX[2] + segX[3]) / 2, cy, state.theta2, Math.abs(Math.cos(state.theta2 * DEG)), beam, skin);
+  }
+
+  // ----- filters (with rotating axis lines) -----
+  for (var fi = 0; fi < lay.filters.length; fi++) {
+    var ang = filterAngle(fi);
+    var fixed = isFixed(fi);
+    drawFilter(lay.filters[fi].x, cy, ang, lay.ringR, fixed, skin, fi);
+  }
+
+  // ----- the drag dial highlight on the active filter -----
+  var dial = activeDial(lay);
+  drawDial(lay.filters[dial.idx].x, cy, lay.ringR, skin);
+
+  // ----- screen (brightness == computed intensity) -----
+  drawScreen(lay.xScreen, cy, I, skin);
+
+  // ----- intensity arc / dial readout near the active filter -----
+  drawAngleReadout(lay.filters[dial.idx].x, cy, lay.ringR, dial.angle, skin);
+}
+
+function isFixed(i) {
+  if (state.mode === 'malus') return i === 0;          // P1 fixed
+  return i === 0 || i === 2;                            // P1, P3 fixed; P2 movable
+}
+
+function drawSource(x, cy, skin) {
+  // emitter housing
+  ctx.save();
+  ctx.fillStyle = 'rgba(20,24,34,0.9)';
+  ctx.strokeStyle = 'rgba(201,162,74,0.55)';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, x - 30, cy - 34, 30, 68, 7);
+  ctx.fill(); ctx.stroke();
+  // glow
+  var g = ctx.createRadialGradient(x - 4, cy, 2, x - 4, cy, 30);
+  g.addColorStop(0, 'rgba(255,250,235,0.9)');
+  g.addColorStop(1, 'rgba(255,250,235,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x - 4, cy, 26, 0, Math.PI * 2); ctx.fill();
+  // unpolarised E-field: random orientation spokes (the "unpolarised" cue)
+  ctx.strokeStyle = 'rgba(207,230,255,0.85)';
+  ctx.lineWidth = 1.4;
+  var spokes = 7, R = 15;
+  for (var k = 0; k < spokes; k++) {
+    var a = (k / spokes) * Math.PI + (k * 1.713 % Math.PI) * 0.18;
+    ctx.beginPath();
+    ctx.moveTo(x - 4 - R * Math.cos(a), cy - R * Math.sin(a));
+    ctx.lineTo(x - 4 + R * Math.cos(a), cy + R * Math.sin(a));
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(139,149,168,0.9)';
+  ctx.font = '600 9px ' + mono();
+  ctx.textAlign = 'center';
+  ctx.fillText('UNPOLARISED', x - 14, cy + 52);
+  ctx.restore();
+}
+
+function drawBeam(x1, x2, cy, rgb, intensity) {
+  if (x2 <= x1) return;
+  ctx.save();
+  var halfH = 16;
+  // core + soft halo, alpha scales with intensity (display brightness)
+  var aCore = 0.18 + 0.62 * intensity;
+  var grd = ctx.createLinearGradient(0, cy - halfH, 0, cy + halfH);
+  grd.addColorStop(0, 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',0)');
+  grd.addColorStop(0.5, 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + (aCore) + ')');
+  grd.addColorStop(1, 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',0)');
+  ctx.fillStyle = grd;
+  ctx.fillRect(x1, cy - halfH, x2 - x1, halfH * 2);
+  // bright centre line
+  ctx.strokeStyle = 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + (0.3 + 0.7 * intensity) + ')';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(x1, cy); ctx.lineTo(x2, cy); ctx.stroke();
+  ctx.restore();
+}
+
+// a single transverse E-field arrow at a point, oriented `angDeg` from horizontal,
+// amplitude `amp` (0..1) of the reference length.
+function drawFieldArrow(x, cy, angDeg, amp, rgb, faint) {
+  ctx.save();
+  var L = 22 * amp;
+  var a = angDeg * DEG;
+  var dx = Math.cos(a), dy = -Math.sin(a);
+  ctx.strokeStyle = 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + (faint ? 0.0 : 0.9) + ')';
+  ctx.lineWidth = 2;
+  if (!faint) {
+    ctx.beginPath();
+    ctx.moveTo(x - dx * L, cy - dy * L);
+    ctx.lineTo(x + dx * L, cy + dy * L);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// the polarised E-field after a filter: a clean double-headed arrow along axis.
+function drawPolarisedField(x, cy, angDeg, amp, rgb, skin) {
+  ctx.save();
+  var L = 24 * Math.max(0.06, amp);
+  var a = angDeg * DEG;
+  var dx = Math.cos(a), dy = -Math.sin(a);
+  ctx.strokeStyle = skin.axis;
+  ctx.lineWidth = 2.4;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - dx * L, cy - dy * L);
+  ctx.lineTo(x + dx * L, cy + dy * L);
+  ctx.stroke();
+  // arrowheads
+  arrowHead(x + dx * L, cy + dy * L, a, skin.axis);
+  arrowHead(x - dx * L, cy - dy * L, a + Math.PI, skin.axis);
+  ctx.restore();
+}
+
+// show the cos θ projection: the incoming axis (0°) and its component on the
+// analyser axis (θ), with a faint right-angle drop line.
+function drawProjection(x, cy, fromDeg, toDeg, rgb, skin) {
+  ctx.save();
+  var L = 24;
+  var aFrom = fromDeg * DEG, aTo = toDeg * DEG;
+  // incoming polarised vector (length L along 0°)
+  var fx = Math.cos(aFrom), fy = -Math.sin(aFrom);
+  // analyser axis unit
+  var tx = Math.cos(aTo), ty = -Math.sin(aTo);
+  // projection length = L·cosθ along analyser axis
+  var proj = L * Math.cos((toDeg - fromDeg) * DEG);
+  var px = x + tx * proj, py = cy + ty * proj;
+  // faint full incoming vector
+  ctx.strokeStyle = 'rgba(207,230,255,0.35)';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(x, cy); ctx.lineTo(x + fx * L, cy + fy * L); ctx.stroke();
+  // analyser axis guide
+  ctx.strokeStyle = 'rgba(201,162,74,0.35)';
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(x - tx * L, cy - ty * L); ctx.lineTo(x + tx * L, cy + ty * L); ctx.stroke();
+  ctx.setLineDash([]);
+  // drop line from vector tip to its projection (the cosθ component)
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.setLineDash([2, 3]);
+  ctx.beginPath(); ctx.moveTo(x + fx * L, cy + fy * L); ctx.lineTo(px, py); ctx.stroke();
+  ctx.setLineDash([]);
+  // the transmitted projection vector (bright)
+  ctx.strokeStyle = skin.axis;
+  ctx.lineWidth = 2.6;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x, cy); ctx.lineTo(px, py); ctx.stroke();
+  if (Math.abs(proj) > 4) arrowHead(px, py, Math.atan2(py - cy, px - x), skin.axis);
+  ctx.restore();
+}
+
+function arrowHead(x, y, ang, color) {
+  ctx.save();
+  ctx.fillStyle = color;
+  var s = 5;
+  ctx.translate(x, y); ctx.rotate(ang);
+  ctx.beginPath();
+  ctx.moveTo(0, 0); ctx.lineTo(-s, -s * 0.6); ctx.lineTo(-s, s * 0.6);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+// a filter: a glass-ish disk with hatch lines showing its transmission axis.
+function drawFilter(x, cy, angDeg, R, fixed, skin, idx) {
+  ctx.save();
+  // mount post
+  ctx.strokeStyle = 'rgba(201,162,74,0.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x, cy + R); ctx.lineTo(x, cy + R + 26); ctx.stroke();
+  ctx.fillStyle = 'rgba(201,162,74,0.5)';
+  ctx.fillRect(x - 14, cy + R + 24, 28, 5);
+  // glass disk
+  ctx.beginPath(); ctx.arc(x, cy, R, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(20,28,42,0.55)';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = fixed ? 'rgba(201,162,74,0.45)' : skin.axis;
+  ctx.stroke();
+  // polariser hatch lines along the transmission axis
+  var a = angDeg * DEG;
+  var dx = Math.cos(a), dy = -Math.sin(a);
+  var px = -dy, py = dx; // perpendicular
+  ctx.strokeStyle = 'rgba(207,230,255,0.30)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(x, cy, R, 0, Math.PI * 2); ctx.clip();
+  for (var t = -R; t <= R; t += 5) {
+    ctx.beginPath();
+    ctx.moveTo(x + px * t - dx * R, cy + py * t - dy * R);
+    ctx.lineTo(x + px * t + dx * R, cy + py * t + dy * R);
+    ctx.stroke();
+  }
+  ctx.restore();
+  // bright transmission-axis line
+  ctx.save();
+  ctx.strokeStyle = skin.axis;
+  ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - dx * R, cy - dy * R);
+  ctx.lineTo(x + dx * R, cy + dy * R);
+  ctx.stroke();
+  // label
+  ctx.fillStyle = 'rgba(234,240,250,0.85)';
+  ctx.font = '600 10px ' + mono();
+  ctx.textAlign = 'center';
+  var name = filterName(idx);
+  ctx.fillText(name + ' ' + Math.round(angDeg) + '°', x, cy - R - 12);
+  ctx.restore();
+}
+
+function filterName(idx) {
+  if (state.mode === 'malus') return idx === 0 ? 'P1' : 'ANALYSER';
+  return idx === 0 ? 'P1' : idx === 1 ? 'P2' : 'P3';
+}
+
+function drawDial(x, cy, R, skin) {
+  ctx.save();
+  ctx.strokeStyle = skin.glow + '0.9)';
+  ctx.lineWidth = 2.5;
+  ctx.setLineDash([4, 5]);
+  ctx.beginPath(); ctx.arc(x, cy, R + 8, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawAngleReadout(x, cy, R, angDeg, skin) {
+  ctx.save();
+  // arc from horizontal (0°) to the current axis
+  ctx.strokeStyle = skin.glow + '0.8)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(x, cy, R + 8, 0, -angDeg * DEG, angDeg > 0);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawScreen(x, cy, intensity, skin) {
+  ctx.save();
+  var halfH = 58, wScr = 16;
+  var rgb = skin.screen;
+  var I = Math.max(0, Math.min(1, intensity));
+  // dark frame
+  ctx.fillStyle = 'rgba(8,10,15,0.95)';
+  roundRect(ctx, x, cy - halfH - 6, wScr + 12, (halfH + 6) * 2, 6);
+  ctx.fill();
+  // luminous panel — brightness == computed intensity
+  var lum = I;
+  var r = Math.round(rgb[0] * lum), g = Math.round(rgb[1] * lum), b = Math.round(rgb[2] * lum);
+  ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
+  roundRect(ctx, x + 4, cy - halfH, wScr, halfH * 2, 4);
+  ctx.fill();
+  // glow proportional to intensity
+  if (I > 0.01) {
+    var gg = ctx.createRadialGradient(x + 4 + wScr / 2, cy, 2, x + 4 + wScr / 2, cy, halfH * 1.4);
+    gg.addColorStop(0, skin.glow + (0.5 * I) + ')');
+    gg.addColorStop(1, skin.glow + '0)');
+    ctx.fillStyle = gg;
+    ctx.beginPath(); ctx.arc(x + 4 + wScr / 2, cy, halfH * 1.4, 0, Math.PI * 2); ctx.fill();
+  }
+  // border
+  ctx.strokeStyle = 'rgba(201,162,74,0.5)';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, x + 4, cy - halfH, wScr, halfH * 2, 4);
+  ctx.stroke();
+  // label
+  ctx.fillStyle = 'rgba(139,149,168,0.95)';
+  ctx.font = '600 9px ' + mono();
+  ctx.textAlign = 'center';
+  ctx.fillText('SCREEN', x + 4 + wScr / 2, cy + halfH + 22);
+  ctx.fillStyle = skin.axis;
+  ctx.font = '700 12px ' + mono();
+  ctx.fillText(I.toFixed(3), x + 4 + wScr / 2, cy + halfH + 38);
+  ctx.restore();
+}
+
+function roundRect(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+
+function mono() {
+  return '"SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace';
+}
+
+/* ---- panel sync ---- */
+function syncPanel() {
+  if (state.mode === 'malus') {
+    var I = PolariserCore.malusBench(state.theta);
+    document.getElementById('thetaVal').textContent = state.theta.toFixed(1) + '°';
+    document.getElementById('iMalus').textContent = I.toFixed(3);
+    document.getElementById('cosMalus').textContent = (Math.cos(state.theta * DEG) ** 2).toFixed(3);
+    document.getElementById('fillMalus').style.width = (I * 100) + '%';
+  } else {
+    var Ip = PolariserCore.paradoxFraction(state.theta2);
+    document.getElementById('theta2Val').textContent = state.theta2.toFixed(1) + '°';
+    document.getElementById('iPara').textContent = Ip.toFixed(3);
+    document.getElementById('fillPara').style.width = (Ip / 0.25 * 100) + '%';
+  }
+}
+
+function setRangeFill(input) {
+  var min = +input.min, max = +input.max, v = +input.value;
+  input.style.setProperty('--fill', ((v - min) / (max - min) * 100) + '%');
+}
+
+/* ---- self-test chip ---- */
+function runChip() {
+  var res = PolariserCore.runSelfTest();
+  var el = document.getElementById('selftest');
+  el.className = 'selftest ' + (res.pass ? 'ok' : 'bad');
+  el.textContent = (res.pass ? '✓ ' : '✗ ') + res.n + '/' + res.total + ' verified';
+  console.log('%cThe Polariser — self-test', 'font-weight:bold');
+  res.results.forEach(function (r, i) {
+    var line = '  check #' + (i + 1) + ' [' + (r.pass ? 'PASS' : 'FAIL') + '] ' + r.name + (r.note ? ' — ' + r.note : '');
+    if (r.pass) console.log(line); else console.error(line);
+  });
+  console.log('The Polariser self-test: ' + res.n + '/' + res.total + ' ' + (res.pass ? 'PASS' : 'FAIL'));
+  return res;
+}
+
+/* ---- HUD ---- */
+function flashHud(html, ms) {
+  var hud = document.getElementById('hud');
+  hud.innerHTML = html; hud.classList.add('show');
+  clearTimeout(flashHud._t);
+  flashHud._t = setTimeout(function () { hud.classList.remove('show'); }, ms || 2400);
+}
+
+/* ---- interaction: drag the analyser dial ---- */
+var dragging = false;
+function pointerAngle(ev) {
+  var rect = canvas.getBoundingClientRect();
+  var x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+  var lay = benchLayout();
+  var dial = activeDial(lay);
+  var fx = lay.filters[dial.idx].x, fy = lay.cy;
+  var a = Math.atan2(-(y - fy), x - fx) / DEG;  // 0° = +x (horizontal), CCW positive
+  // fold to the filter's domain (axes are undirected, period 180°)
+  a = ((a % 180) + 180) % 180;
+  return a;
+}
+function nearDial(ev) {
+  var rect = canvas.getBoundingClientRect();
+  var x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+  var lay = benchLayout();
+  var dial = activeDial(lay);
+  var fx = lay.filters[dial.idx].x, fy = lay.cy;
+  var d = Math.hypot(x - fx, y - fy);
+  return d < lay.ringR + 26;
+}
+function applyDrag(ev) {
+  var a = pointerAngle(ev);
+  if (state.mode === 'malus') {
+    state.theta = a;                       // 0..180
+  } else {
+    state.theta2 = Math.max(0, Math.min(90, a > 90 ? a - 180 : a)); // P2 ∈ [0,90]
+    if (state.theta2 < 0) state.theta2 = 0;
+  }
+  syncPanel();
+  var sliderId = state.mode === 'malus' ? 'theta' : 'theta2';
+  var sl = document.getElementById(sliderId);
+  sl.value = state.mode === 'malus' ? state.theta : state.theta2;
+  setRangeFill(sl);
+  draw();
+}
+canvas.addEventListener('pointerdown', function (ev) {
+  if (nearDial(ev)) {
+    dragging = true; canvas.classList.add('dragging');
+    canvas.setPointerCapture(ev.pointerId);
+    state.sweeping = false; updateAnimBtn();
+    applyDrag(ev);
+  }
+});
+canvas.addEventListener('pointermove', function (ev) { if (dragging) applyDrag(ev); });
+canvas.addEventListener('pointerup', function (ev) {
+  dragging = false; canvas.classList.remove('dragging');
+  try { canvas.releasePointerCapture(ev.pointerId); } catch (e) {}
+});
+
+/* ---- UI wiring ---- */
+function bindUI() {
+  // mode toggle
+  document.getElementById('modeSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    state.mode = b.dataset.mode;
+    Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.classList.toggle('active', x === b); });
+    document.getElementById('malusCtl').style.display = state.mode === 'malus' ? '' : 'none';
+    document.getElementById('paradoxCtl').style.display = state.mode === 'paradox' ? '' : 'none';
+    syncPanel(); draw();
+  });
+
+  var theta = document.getElementById('theta');
+  theta.addEventListener('input', function () {
+    state.theta = +theta.value; setRangeFill(theta);
+    state.sweeping = false; updateAnimBtn();
+    syncPanel(); draw();
+  });
+  var theta2 = document.getElementById('theta2');
+  theta2.addEventListener('input', function () {
+    state.theta2 = +theta2.value; setRangeFill(theta2);
+    state.sweeping = false; updateAnimBtn();
+    syncPanel(); draw();
+  });
+
+  document.getElementById('skinSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    state.skin = b.dataset.skin;
+    Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.classList.toggle('active', x === b); });
+    draw();
+  });
+
+  document.getElementById('animBtn').addEventListener('click', function () {
+    state.sweeping = !state.sweeping; updateAnimBtn();
+    if (state.sweeping) { last = 0; }
+  });
+
+  document.getElementById('pngBtn').addEventListener('click', exportPNG);
+
+  var rt = null;
+  window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { resize(); draw(); }, 100); });
+
+  setRangeFill(theta); setRangeFill(theta2);
+}
+
+function updateAnimBtn() {
+  document.getElementById('animBtn').innerHTML = state.sweeping ? '⏸ Stop' : '▶ Sweep';
+}
+
+/* ---- sweep animation ---- */
+var last = 0, rafId = null;
+function frame(now) {
+  rafId = requestAnimationFrame(frame);
+  if (!state.sweeping) { last = 0; return; }
+  if (!last) last = now;
+  var dt = Math.min(0.05, (now - last) / 1000); last = now;
+  state.sweepT += dt;
+  // a smooth oscillation through the meaningful range
+  if (state.mode === 'malus') {
+    state.theta = (Math.sin(state.sweepT * 0.7) * 0.5 + 0.5) * 180;
+    document.getElementById('theta').value = state.theta;
+    setRangeFill(document.getElementById('theta'));
+  } else {
+    state.theta2 = (Math.sin(state.sweepT * 0.7) * 0.5 + 0.5) * 90;
+    document.getElementById('theta2').value = state.theta2;
+    setRangeFill(document.getElementById('theta2'));
+  }
+  syncPanel(); draw();
+}
+
+/* ---- 2× PNG export ---- */
+function exportPNG() {
+  var scale = 2;
+  var off = document.createElement('canvas');
+  off.width = Math.round(state.w * scale);
+  off.height = Math.round(state.h * scale);
+  var oc = off.getContext('2d');
+  // background gradient
+  oc.fillStyle = '#080a0f';
+  oc.fillRect(0, 0, off.width, off.height);
+  // re-render at scale by temporarily swapping ctx target
+  var realCtx = ctx, realW = state.w, realH = state.h;
+  ctx = oc;
+  oc.setTransform(scale, 0, 0, scale, 0, 0);
+  draw();
+  ctx = realCtx;
+  oc.setTransform(1, 0, 0, 1, 0, 0);
+  off.toBlob(function (blob) {
+    try {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      var tag = state.mode === 'malus' ? ('malus_' + Math.round(state.theta) + 'deg') : ('paradox_' + Math.round(state.theta2) + 'deg');
+      a.href = url; a.download = 'polariser_' + tag + '_' + state.skin + '.png';
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 3000);
+      flashHud('Exported <b>2&times;</b> PNG');
+    } catch (e) { console.error(e); }
+  }, 'image/png');
+}
+
+/* ===========================================================================
+   GO
+   =========================================================================== */
+resize();
+bindUI();
+syncPanel();
+runChip();             // the crux — paints the chip, logs PASS/FAIL
+draw();
+rafId = requestAnimationFrame(frame);
+if (!reduceMotion) {
+  flashHud('Drag the <b>dial</b> on the analyser, or hit <b>Sweep</b>. Try <b>Three &middot; paradox</b>.', 4200);
+}
+
+})(); }
+</script>
+</body>
+</html>
