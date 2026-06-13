@@ -2,7 +2,8 @@
 
 *A small workshop of things made for the joy of making them — generative art to watch, games to
 play, and maps, skies, mazes, type, sound, verse, and stories to wander through. Every piece is a single self-contained
-HTML file: no build step, no dependencies, no network.*
+HTML file: no build step, no dependencies, no network. The whole estate is entered through an **overhead
+map of a manor and its grounds** — every room a point on the plan.*
 
 ### ▶ Visit the live workshop → **https://bman654.github.io/the-workshop/**
 
@@ -191,6 +192,15 @@ footer — standalone tools, toys & tales, each self-contained:
   field is physically exact — the rendered tank *equals* the analytic superposition to a billionth,
   and the interference maxima and minima land precisely where the path-difference math demands. Where
   Caustic traces light as rays, Ripple is the wave story — a sandbox of waves you steer.
+- **[Harmonograph](https://bman654.github.io/the-workshop/harmonograph/)** — a Victorian **pendulum
+  drawing-machine**, kin to Caustic and Ripple. Two decaying pendulums per axis sway the pen, and their
+  combined motion traces the looping Lissajous-into-spiral figures that slowly settle to the centre. Set
+  each pendulum's frequency, amplitude, phase and damping (or roll a seeded *surprise*), choose a classic
+  ratio preset, and watch the figure draw itself live. Three skins (ink-on-paper / blueprint / phosphor)
+  that recolour only. It keeps the workshop's promise: a built-in self-test proves the painted curve *is*
+  the parametric equation to a billionth, that integer-ratio frequencies close into a periodic loop, and
+  that the three skins are geometry-identical. 2× PNG export. Not a puzzle and not a game — a machine
+  that draws.
 - **[Slipstick](https://bman654.github.io/the-workshop/slipstick/)** — a genuine, working **slide
   rule**: a draggable analog computer. Slide the C scale's index over a number on D and read products
   straight off — the rule *does* multiplication because adding logarithms multiplies the numbers
@@ -241,6 +251,16 @@ footer — standalone tools, toys & tales, each self-contained:
   modular arithmetic, that every cipher alphabet is a true bijection, and that the textbook vectors
   land to the letter (ATTACKATDAWN keyed LEMON → LXFOPVEFRNHR). Not a puzzle and not a game — a real
   instrument that does real ciphering, one turn of the wheel at a time.
+- **[Scytale](https://bman654.github.io/the-workshop/scytale/)** — the workshop's first **transposition**
+  cipher and the Volvelle's kin: the ancient Spartan rod. Wind a strip of parchment helically around a
+  rod of a chosen circumference, write the message along the rod, and unwind it — the letters scramble,
+  and only re-winding on a rod of the *same* circumference restores them (a scytale is exactly a columnar
+  transposition). Type and watch the strip wind; read it wound (plaintext) versus straight (ciphertext);
+  try the *wrong* rod and watch it turn to gibberish; or switch to a **keyed columnar** transposition
+  where a keyword permutes the column order. Three engraved skins, 2× PNG export. It keeps the promise: a
+  built-in self-test proves the cipher round-trips exactly, is a true permutation of positions, matches
+  the textbook column-read, and that the diameter/key is load-bearing — substitution's mirror-twin, where
+  nothing is replaced, only rearranged.
 - **[Colophon](https://bman654.github.io/the-workshop/colophon.html)** — a short note on how and
   why the workshop was made.
 
