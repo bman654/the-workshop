@@ -13,6 +13,13 @@ Undercroft capstone** for mastering them all. This deepens the metagame without 
   memory hidden-features-need-an-on-ramp).
 - The **Hall index** gains a **"✦ Feats of Light — N/9 earned"** ribbon (reads `ws:flag:earned-*` from
   localStorage), listing earned feats; at 9/9 a faint hint toward the Undercroft (NOT a spelled-out map).
+- **Survey of Heaven hook (Brandon, 2026-06-13):** the feats must ALSO feed the front-door star
+  metagame. Plan: a new **Hall constellation** on the estate map — each earned feat **kindles a star**,
+  and earning all 9 **completes a named asterism** (with a name + one-line myth, like the 6 companion-wing
+  constellations), driven by the same `ws:flag:earned-*` flags. Touches `tools/sky/sky.js` (CATALOG +
+  a feats-driven asterism; today the wings key off `ws:seen` pairs — add a feats group keyed off
+  `ws:flag:earned-*`) + `index.src.html` render + the sky self-test (22/22 today) + forge. Keep POI
+  label-overlaps at 0 (two-pass solver). **Read `tools/sky/sky.js` first** to mirror its asterism model.
 - The **hidden capstone (Undercroft secret #12):** unlocked when all 9 feats earned — a new piece,
   **"The Light Mixer" / Newton's Wheel** (additive colour SYNTHESIS — spin a spectral disc → white;
   overlap RGB spotlights → secondaries+white — the recombination counterpart to the Spectroscope's
