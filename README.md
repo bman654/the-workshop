@@ -301,6 +301,12 @@ footer — standalone tools, toys & tales, each self-contained:
   of noons" and the shadow-tips trace the **analemma's** slow figure-8. Horizontal, equatorial or
   vertical-south, in three engraved skins. The self-test proves the round-trip from civil time to shadow and
   back, that the hour-lines match the closed forms, and that the equation-of-time hits its known extrema.
+- **[Kaleidoscope](https://bman654.github.io/the-workshop/kaleidoscope/)** — a **live mirror-toy** with
+  *provable* symmetry. A tumbling chamber of translucent glass is viewed through an N-fold mirror; turn the
+  order from 3 to 12 and the shards fold into a living rosette that holds perfect **dihedral symmetry** every
+  frame. Distinct from the static Rosette and the wallpaper-tiling Tessellarium — this is live *point*
+  symmetry you can dial. The self-test proves the image is exactly Dₙ-symmetric (every rotation and
+  reflection, to machine precision) — a true mirror, not a fake rotate.
 - **[Colophon](https://bman654.github.io/the-workshop/colophon.html)** — a short note on how and
   why the workshop was made.
 
