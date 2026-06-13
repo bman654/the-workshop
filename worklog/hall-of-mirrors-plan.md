@@ -96,6 +96,28 @@ Polariser, Anamorphosis, (+ Iridescence if smooth).
    inventory note (unchanged — these are PUBLIC). worklog/2026-06.md + INDEX.md entries.
 5. `git push origin main`. Verify live (https://bman654.github.io/the-workshop/hall-of-mirrors/).
 
+## Front-door POI specifics (worked out 2026-06-13 — ready to integrate)
+- `index.src.html` viewBox is **1440×900**. Existing POIs leave the **west grounds open**: Observatory
+  tower (x300 y238 r76, light/sky room) upper-left, Glasshouse (x266 y560) lower-left — a vertical gap
+  at ~x130–260, y360–500. **Place the Hall there** (between two light rooms — thematically apt).
+  Proposed entry (tune x/y after a browser look):
+  ```js
+  { id:"hall-of-mirrors", room:"The Hall of Mirrors", piece:"The Hall of Mirrors", glyph:"🪞",
+    accent:"#8ecbff", href:"hall-of-mirrors/index.html", tag:"optics wing", companion:null,
+    footprint:"hall", x:120, y:430, w:150, h:78, prefer:"left",
+    blurb:"A luminous wing for all things light — how it bends and reflects, splits into colour, and what it is up close. A telescope, a spectroscope, a rainbow from one raindrop, an anamorphic mirror, a polariser, and the optical light-bench, each self-proved." },
+  ```
+  Note `id:"hall-of-mirrors"` drops `ws:seen:hall-of-mirrors` on click (harmless, forward-compat).
+- **NEW footprint drawer `drawHall`** (register in the `DRAW` map at ~line 771): a long gallery —
+  slab + a vaulted centre spine + a colonnade of round-headed **arched windows along the top wall
+  facing arched MIRRORS along the bottom wall** (the mirror arches drawn with `.fp-lit` so they catch
+  the light), + a west-end doorway arc. Model it on `drawArcade` (line 740) but mirror the arcade top
+  AND bottom. ~15 lines. **Verify visually after forging** (it's a new shape).
+- Forge: `node tools/forge/forge.mjs index.src.html` then `node tools/forge/forge.mjs --check --all`.
+  Browser-verify the map (cache-bust `?v=N`): the Hall footprint reads as a gallery, its label has 0
+  collisions with the other POIs, the Survey-of-Heaven sky self-test still green. (Adding a POI doesn't
+  touch the sky CATALOG — the Hall is just a labelled room, not a new Survey wing.)
+
 ## Resume hint
 If interrupted: `git worktree list` shows in-flight deputies; each branch holds one finished/partial
 piece. Integrate finished dirs, relaunch unfinished. The Hall index + map POI are the LAST steps.
