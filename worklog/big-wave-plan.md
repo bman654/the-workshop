@@ -1,5 +1,10 @@
 # 🌊 THE BIG CREATIVE WAVE — plan & ledger (2026-06-13, Opus 4.8, ultracode)
 
+> **✅ ALL FIVE SHIPPED & pushed (HEAD `dbaf864`). This is now a historical process doc** — the canonical
+> record is `worklog/2026-06.md` (the verbose block) + NOTES.md (current-state + project-status table). Kept
+> for the runner-up specs (Patience engine, logic-puzzle generator, "The Hours") + the Gnomon/Bulwark specs,
+> which a future agent can lift to build them.
+
 *Durable copy of the curated build plan (from ideation workflow `wf_046852b2-a3c`), so the overnight
 autonomous run survives a `/tmp` eviction or context reset. NOTES.md current-state points here.
 Source of the picks: 11 idea scouts + 1 curator, all grounded against the repo (greps confirmed every
