@@ -118,6 +118,16 @@ Polariser, Anamorphosis, (+ Iridescence if smooth).
   collisions with the other POIs, the Survey-of-Heaven sky self-test still green. (Adding a POI doesn't
   touch the sky CATALOG — the Hall is just a labelled room, not a new Survey wing.)
 
+## ✅ CORE WING SHIPPED + LIVE (2026-06-13) — commit `7e94564`, pushed; all 7 URLs return 200.
+The 6 core pieces + Caustic + Kaleidoscope are integrated, the front-door POI is placed, docs done,
+worktrees retired. **BONUS ROUND in flight:** 2 more pieces to round the Hall to 10 benches — **The
+Halo** ☀️ (`halo/`, deputy `ae2ea9c1`, ice-crystal optics: 22°/46° halos, sundogs, CZA — Rainbow's
+twin) and **The Camera Obscura** 📷 (`camera-obscura/`, deputy `ade68bdd`, pinhole imaging + optimal
+d=√(2.44λv)). Integrate each via `git -C $ROOT checkout worktree-agent-<id> -- <dir>` + commit, then:
+add a Hall card for each (Halo → "Colour & spectrum" by the Rainbow; Camera Obscura → "Rays, lenses &
+mirrors"), light-touch README/NOTES/worklog, push, retire worktrees. (No front-door change needed —
+the Hall room already exists.)
+
 ## ⚠️ Integration TODO not to forget
 - The `hall-of-mirrors/index.html` was written with 5 new-piece cards (Rainbow, Spyglass, Spectroscope,
   Anamorphosis, Polariser) + Caustic + Kaleidoscope. **Iridescence was promoted from stretch AFTER** —
