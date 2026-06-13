@@ -13,7 +13,7 @@ map of a manor and its grounds** — every room a point on the plan.*
 
 ## What's inside
 
-Eleven creative mediums across nine projects — plus a new **Hall of Mirrors** wing of light (eight
+Eleven creative mediums across nine projects — plus a new **Hall of Mirrors** wing of light (ten
 optical benches) and seven companions tucked behind their parent doors:
 the **Orrery** behind Firmament, **Blazon** behind Compositor, **Ariadne** behind Daedalus,
 **Bastion** behind Cartographer, **Scriptorium** behind The Oracle, **Tessellarium** behind the
@@ -131,7 +131,7 @@ seed only *arranges* — so it reads as written, not generated.
 ### ▶ Visit the Hall → **https://bman654.github.io/the-workshop/hall-of-mirrors/**
 
 A new wing on the estate's west grounds — **a gallery for all things light**: how it bends and reflects,
-how it splits into colour, and what it is when you look closely. Eight self-contained optical benches,
+how it splits into colour, and what it is when you look closely. Ten self-contained optical benches,
 each keeping the workshop's promise — a built-in self-test that proves its physics *exact*:
 
 - **[The Rainbow](https://bman654.github.io/the-workshop/rainbow/)** — the rainbow derived from a single
@@ -140,6 +140,12 @@ each keeping the workshop's promise — a built-in self-test that proves its phy
   **primary at ~42°**, the reversed **secondary at ~51°**, **Alexander's dark band** between, and the
   whole arc spread into colour by the water's dispersion. The bow angles fall out of Snell's law alone —
   the self-test minimises the deviation numerically and lands the primary at **42.0°**, nothing baked in.
+- **[The Halo](https://bman654.github.io/the-workshop/halo/)** — the rainbow's *frozen* twin. Where
+  water drops give rainbows, hexagonal **ice crystals** high in the air give halos: sunlight through
+  their 60° faces piles up at minimum deviation into the great **22° halo** around the sun, their 90°
+  faces give the fainter **46° halo**, drifting plate crystals throw bright **sundogs** to either side,
+  and a jewel-bright **circumzenithal arc** hangs near the zenith. The self-test proves every ring's
+  radius falls out of Snell's law and the ice's index — the **22° halo at 21.8°**, nothing baked.
 - **[The Spyglass](https://bman654.github.io/the-workshop/spyglass/)** — how a far thing is made to look
   near. A live ray-traced telescope bench: a **Keplerian refractor** (objective + eyepiece) forms a real
   inverted image and relays it to the eye magnified **M = f_obj / f_eye**, and a **Newtonian reflector**
@@ -147,6 +153,13 @@ each keeping the workshop's promise — a built-in self-test that proves its phy
   magnification update; a distant scene shows at 1× beside the magnified, inverted view. The self-test
   proves M exact and that the parabola focuses a parallel bundle to a *single point* — no spherical
   aberration, to machine precision, while a sphere visibly misses.
+- **[The Camera Obscura](https://bman654.github.io/the-workshop/camera-obscura/)** — the oldest optical
+  instrument, an image with no lens at all. A **pinhole** in a dark room's wall casts the world outside,
+  upside-down, on the far wall. Shrink the hole and the picture sharpens — until it doesn't: too small,
+  and **diffraction** blurs it back. The geometric and diffraction blurs trade off and meet at the
+  **optimal pinhole**, where the image is crispest. The self-test proves the magnification is exactly
+  v/u and that the best hole size lands where the two blurs cross (the exact optimum
+  d = √(2.44 λ·v·u/(u+v)), with the classic √(λf) rule shown alongside).
 - **[The Spectroscope](https://bman654.github.io/the-workshop/spectroscope/)** — split light and read
   what it's made of. Disperse a beam through a **prism** (Cauchy dispersion, at minimum deviation) or a
   **diffraction grating** (d·sinθ = mλ), then switch the source to see real **line spectra** at their
