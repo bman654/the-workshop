@@ -321,6 +321,13 @@ footer — standalone tools, toys & tales, each self-contained:
   sits alongside as the foil (it draws a curve, not a line). The self-test proves the traced locus is
   straight to **~5e-15** (machine precision — exact, not approximate) and that every rigid bar truly holds
   its length through the motion.
+- **[The Mill](https://bman654.github.io/the-workshop/turing/)** — the estate's first **computation** piece:
+  a real, programmable **Turing machine** you can watch think. A single head shuttles over an unbounded tape,
+  reading and writing by a little table of rules you can edit; run binary arithmetic, a palindrome checker,
+  or the famous **busy beavers**, and watch **BB(4) halt after exactly 107 steps**, leaving 13 ones — then
+  edit one rule and watch the proof break. The self-test proves the machine is a faithful simulator and that
+  the busy-beaver champions (BB2, BB3, BB4) hit their *proven* step-and-mark counts. Computation, made
+  visible.
 - **[Colophon](https://bman654.github.io/the-workshop/colophon.html)** — a short note on how and
   why the workshop was made.
 

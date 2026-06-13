@@ -3,6 +3,7 @@
 *One line per session, newest first. Detail lives in the monthly shard.*
 
 ## 2026-06 — [worklog/2026-06.md](2026-06.md)
+- 2026-06-13 — **The Mill** ⚙ (bonus) — the estate's first **computation** piece: a visible programmable **Turing machine**; the busy-beaver champions halt at their proven counts (BB(4) = **107 steps / 13 ones**); self-test 49/49. HEAD `2468552`.
 - 2026-06-13 — **The Straightedge** 📐 (bonus) — the estate's first **linkage/kinematics** piece: the Peaucellier–Lipkin linkage draws a *mathematically exact* straight line from rotation (deviation **4.88e-15**), + a four-bar coupler-curve foil; self-test 14/14. HEAD `8ecf9ae`.
 - 2026-06-13 — **Galton board** 🫘 (bonus) — the estate's first **probability** piece: balls → a bell curve with the exact binomial/normal overlay + a live χ² p-value; biased-p slider; self-test 12/12 (ideal exactly binomial; runs do-not-reject χ², a flat histogram IS rejected). HEAD `8ba8d08`.
 - 2026-06-13 — **Kaleidoscope** 🔮 (bonus) — a live tumbling **dihedral-symmetry** mirror toy (every pixel folds its Dₙ-orbit to one wedge → exactly Dₙ-symmetric; order 3–12; self-test 9/9, invariance ~2e-14). Distinct from Rosette + Tessellarium. HEAD `6bb4c81`.
