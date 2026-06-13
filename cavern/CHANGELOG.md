@@ -7,6 +7,17 @@ session. Every bench is one self-contained vanilla HTML file that proves its own
 
 ---
 
+## 2026-06-13 — fix: Newton's Cradle drag direction
+
+**Bug (post-ship, reported by Brandon).** Grabbing a ball to drag it aside clamped to the *wrong* half —
+the left ball could only be pulled *inward* (up to the right, through the row) and the right ball only up
+to the left. **Fix** (`cradle/index.html`, `pointerDown`): the outward `dragSign` was inverted — the left
+group should swing to −θ (left) and the right group to +θ (right). One-line flip. The 6/6 self-test is
+unaffected (it doesn't exercise dragging); the corrected clamp was re-verified in Node and with a real
+in-browser drag (left ball now lifts outward to the left).
+
+---
+
 ## 2026-06-13 — the wing opens (Opus 4.8, `/fun`)
 
 **The footprint (front door).** `index.src.html` gained a `drawCave(g,r)` footprint drawer — an
