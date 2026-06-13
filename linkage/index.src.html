@@ -1,0 +1,913 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Straightedge</title>
+<style>
+  :root{
+    /* drafting-table (default) skin — set fully per-skin in JS */
+    --bg:#080a0f;
+    --bg-grad1:rgba(120,84,36,0.16);
+    --bg-grad2:rgba(70,52,30,0.14);
+    --ink:#eaf0fa;
+    --ink-dim:#8b95a8;
+    --accent:#c9a24a;
+    --accent-soft:rgba(201,162,74,0.16);
+    --panel-bg:rgba(13,15,22,0.88);
+    --panel-edge:rgba(201,162,74,0.34);
+    --paper:#101521;
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    background:
+      radial-gradient(1200px 700px at 72% 16%, var(--bg-grad1), transparent 60%),
+      radial-gradient(900px 600px at 18% 92%, var(--bg-grad2), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .topbar .right{ display:flex; align-items:center; gap:14px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:default; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; }
+  #paper{ display:block; width:100%; height:100%;
+    filter:drop-shadow(0 22px 50px rgba(0,0,0,0.5)); }
+  #hud{
+    position:absolute; left:50%; bottom:18px; transform:translateX(-50%);
+    max-width:min(92%,560px); padding:10px 15px; border-radius:11px;
+    background:var(--panel-bg); border:1px solid var(--panel-edge);
+    color:var(--ink); font:13px/1.5 var(--font-ui); text-align:center;
+    backdrop-filter:blur(8px) saturate(120%); -webkit-backdrop-filter:blur(8px) saturate(120%);
+    opacity:0; transition:opacity .5s; pointer-events:none; z-index:20;
+  }
+  #hud.show{ opacity:1; }
+  #hud b{ color:var(--accent); }
+
+  /* ---- Side panel ---- */
+  #panel{
+    width:328px; flex:0 0 328px; height:100%; overflow-y:auto;
+    background:var(--panel-bg); border-left:1px solid var(--panel-edge);
+    padding:60px 20px 28px; backdrop-filter:blur(10px) saturate(120%);
+    -webkit-backdrop-filter:blur(10px) saturate(120%);
+  }
+  #panel .lede{ font:13.5px/1.6 var(--font-serif); color:var(--ink); margin:0 0 16px; opacity:.94; }
+  #panel .lede b{ color:var(--accent); font-weight:600; }
+  .row{ margin:0 0 15px; }
+  .row > label{ display:block; font:600 10px/1.4 var(--font-mono); letter-spacing:.12em;
+    text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .seg{ display:flex; gap:0; border:1px solid var(--panel-edge); border-radius:9px; overflow:hidden; }
+  .seg button{ flex:1; padding:8px 6px; font:600 11.5px/1 var(--font-ui); letter-spacing:.2px;
+    background:transparent; color:var(--ink-dim); border:none; border-right:1px solid var(--panel-edge);
+    cursor:pointer; transition:.18s; }
+  .seg button:last-child{ border-right:none; }
+  .seg button.active{ background:var(--accent-soft); color:var(--ink); }
+  .seg button:hover{ color:var(--ink); }
+  .inrow{ display:flex; align-items:center; gap:9px; }
+  input[type=range]{ flex:1; accent-color:var(--accent); height:3px; cursor:pointer; }
+  .valbox{ width:58px; font:12px/1 var(--font-mono); text-align:center; color:var(--ink);
+    background:rgba(0,0,0,0.3); border:1px solid var(--panel-edge); border-radius:7px; padding:6px 4px; }
+  .dialbtn{ width:30px; height:30px; flex:0 0 auto; font:600 15px/1 var(--font-mono); color:var(--ink-dim);
+    background:rgba(0,0,0,0.3); border:1px solid var(--panel-edge); border-radius:8px; cursor:pointer; transition:.15s; }
+  .dialbtn:hover{ color:var(--accent); border-color:var(--accent); }
+  .chips{ display:flex; flex-wrap:wrap; gap:7px; }
+  .chip{ padding:7px 11px; font:600 11px/1 var(--font-ui); color:var(--ink-dim);
+    background:rgba(0,0,0,0.28); border:1px solid var(--panel-edge); border-radius:18px; cursor:pointer; transition:.16s; }
+  .chip:hover{ color:var(--ink); border-color:var(--accent); }
+  .chip.active{ color:var(--ink); background:var(--accent-soft); border-color:var(--accent); }
+  .toggles{ display:flex; gap:8px; flex-wrap:wrap; }
+  .btn{ flex:1; min-width:0; background:rgba(0,0,0,0.3); color:var(--ink); border:1px solid var(--panel-edge);
+    border-radius:9px; padding:9px 8px; font:600 12px/1 var(--font-ui); letter-spacing:.2px; cursor:pointer; transition:.15s; }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(201,162,74,0.26), rgba(201,162,74,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(201,162,74,0.40), rgba(201,162,74,0.14)); }
+  .btn.on{ background:var(--accent-soft); border-color:var(--accent); color:var(--ink); }
+  .lenpanel{ display:none; }
+  .lenpanel.show{ display:block; }
+  .readout{ font:11px/1.5 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px;
+    border-top:1px solid rgba(201,162,74,0.18); padding-top:12px; margin-top:4px; }
+  .readout b{ color:var(--accent); }
+  .readout .dev{ color:#8fd79a; }
+  .hint{ font:10.5px/1.55 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:14px 0 0;
+    border-top:1px solid rgba(201,162,74,0.18); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+
+  /* ---- Mobile ---- */
+  @media (max-width: 820px){
+    #wrap{ flex-direction:column; }
+    #stage{ flex:1 1 auto; min-height:42vh; }
+    #panel{ width:100%; flex:0 0 auto; height:auto; max-height:54vh; border-left:none;
+      border-top:1px solid var(--panel-edge); padding:16px 16px 22px; }
+    .topbar{ padding:10px 14px 0; }
+    .brand .tag{ display:none; }
+  }
+  @media (max-width: 540px){
+    /* stop the chip colliding with the title on phones: drop it below */
+    .topbar{ flex-wrap:wrap; gap:6px 12px; }
+    .brand h1{ font-size:18px; }
+    .selftest{ font-size:9.5px; padding:5px 8px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    #hud{ transition:opacity .2s; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; workshop</a>
+    <div class="brand">
+      <h1>The Straightedge</h1>
+      <span class="tag">a linkage that draws a straight line from a turning crank</span>
+    </div>
+    <div class="right">
+      <div class="selftest" id="selftest" title="built-in self-test">checking&hellip;</div>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="paper"></canvas>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A <b>planar linkage</b> &mdash; fixed pivots, rigid rods, pin-joints &mdash; turned by a crank.
+        The <b>Peaucellier&ndash;Lipkin</b> (1864) was the first to convert pure rotation into a
+        <b>mathematically exact</b> straight line, by circle inversion. Drive the crank and watch the pen draw.</p>
+
+      <div class="row">
+        <label>Linkage</label>
+        <div class="seg" id="linkSeg">
+          <button data-link="peaucellier" class="active">Peaucellier</button>
+          <button data-link="fourbar">Four&#8209;bar</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Crank angle <span id="angReadout" style="float:right;color:var(--ink);font-weight:400"></span></label>
+        <div class="inrow">
+          <input type="range" id="angRange" min="0" max="360" step="0.5" value="120">
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Speed <span id="spdReadout" style="float:right;color:var(--ink);font-weight:400"></span></label>
+        <div class="inrow">
+          <input type="range" id="spdRange" min="0" max="2.5" step="0.05" value="0.7">
+        </div>
+      </div>
+
+      <!-- Peaucellier bar lengths -->
+      <div class="lenpanel show" id="lp-peaucellier">
+        <div class="row">
+          <label>Long bar L &mdash; the two equal arms from the pivot O</label>
+          <div class="inrow">
+            <button class="dialbtn" data-len="L-" title="shorter">&minus;</button>
+            <input type="range" id="pL" min="1.8" max="3.6" step="0.05" value="2.6">
+            <input type="number" id="pLnum" class="valbox" min="1.8" max="3.6" step="0.05" value="2.6">
+            <button class="dialbtn" data-len="L+" title="longer">+</button>
+          </div>
+        </div>
+        <div class="row">
+          <label>Rhombus side &#8467; &mdash; the four equal bars (must be &lt; L)</label>
+          <div class="inrow">
+            <button class="dialbtn" data-len="l-" title="shorter">&minus;</button>
+            <input type="range" id="pl" min="0.8" max="2.4" step="0.05" value="1.6">
+            <input type="number" id="plnum" class="valbox" min="0.8" max="2.4" step="0.05" value="1.6">
+            <button class="dialbtn" data-len="l+" title="longer">+</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Four-bar lengths -->
+      <div class="lenpanel" id="lp-fourbar">
+        <div class="row">
+          <label>Crank a</label>
+          <div class="inrow"><input type="range" id="fa" min="0.6" max="1.2" step="0.02" value="1.0">
+            <input type="number" id="fanum" class="valbox" min="0.6" max="1.2" step="0.02" value="1.0"></div>
+        </div>
+        <div class="row">
+          <label>Coupler offset (pen position on the coupler)</label>
+          <div class="inrow"><input type="range" id="fcy" min="-1.6" max="1.8" step="0.05" value="1.0">
+            <input type="number" id="fcynum" class="valbox" min="-1.6" max="1.8" step="0.05" value="1.0"></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Trace</label>
+        <div class="toggles">
+          <button class="btn on" id="btnTrace">&#9679; Trace on</button>
+          <button class="btn" id="btnClear">Clear</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Play</label>
+        <div class="toggles">
+          <button class="btn primary" id="btnPlay">&#10073;&#10073; Pause</button>
+          <button class="btn" id="btnPng">Export 2&times; PNG</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Presets</label>
+        <div class="chips" id="presets">
+          <button class="chip" data-preset="classic">Classic straight-line</button>
+          <button class="chip" data-preset="slim">Slim rhombus</button>
+          <button class="chip" data-preset="rocker">Four-bar rocker</button>
+          <button class="chip" data-preset="surprise">&#127922; Surprise</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Skin</label>
+        <div class="seg" id="skinSeg">
+          <button data-skin="table" class="active">Drafting</button>
+          <button data-skin="blueprint">Blueprint</button>
+          <button data-skin="brass">Brass</button>
+        </div>
+      </div>
+
+      <div class="readout" id="readout">&nbsp;</div>
+
+      <div class="hint">
+        The pen sits where the rhombus closes. O is the fixed pivot; the small crank spins the joint
+        <b>Q</b> on a circle that passes through O &mdash; and its circle-<b>inverse</b> <b>P</b> rides a
+        perfectly straight rail. Skins change only colour &amp; material, never the geometry.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+/* =====================================================================
+   THE STRAIGHTEDGE — a planar-linkage drawing bench. Single file, 0 deps,
+   0 network, NO audio. A genuinely new genre for the workshop: kinematics.
+
+   THE CRUX: the SAME pure kinematics CORE (Linkage, inlined below via forge)
+   drives BOTH the on-screen articulation AND the headless self-test. The
+   Peaucellier–Lipkin linkage converts pure circular motion into a
+   MATHEMATICALLY EXACT straight line via circle inversion: the pen P is the
+   inverse of the crank joint Q in the circle √(L²−ℓ²) about the fixed pivot O,
+   so |OP|·|OQ| is constant; when Q rides a circle through O, its inverse P
+   traces an exact straight line (max deviation ≈ machine epsilon, NOT an
+   approximation). The four-bar companion traces a rich coupler curve as a foil.
+   Skins are cosmetic only — the core never sees a skin, so geometry is invariant
+   across skins by construction, and the same core passes headlessly in Node.
+   ===================================================================== */
+
+/* ── the pure kinematics core (one source of truth), inlined via forge ──────── */
+<!-- forge:include ../tools/linkage/linkage.js -->
+
+/* =====================================================================
+   SKINS — colour & material ONLY. Never touch geometry. Each defines paper,
+   the page background washes, bar/joint/pen colours, and the trace ink.
+   ===================================================================== */
+var SKINS = {
+  table: {
+    bg:'#0b0c12', bg1:'rgba(120,84,36,0.16)', bg2:'rgba(70,52,30,0.14)',
+    paper:'#12161f', ink:'#eef2f8', inkDim:'#8b95a8', accent:'#c9a24a',
+    panelEdge:'rgba(201,162,74,0.34)',
+    grid:'rgba(201,162,74,0.07)', frame:'rgba(201,162,74,0.30)',
+    bar:'#d8c79a', barShade:'rgba(216,199,154,0.30)', fixedBar:'#caa24a',
+    joint:'#efe6cf', jointEdge:'#1a1305', pivot:'#c9a24a',
+    pen:'#ffd98a', trace:[255,205,120]
+  },
+  blueprint: {
+    bg:'#071626', bg1:'rgba(60,120,180,0.18)', bg2:'rgba(30,70,120,0.16)',
+    paper:'#0a2138', ink:'#dcefff', inkDim:'#7fa6c8', accent:'#7ec8ff',
+    panelEdge:'rgba(150,200,255,0.34)',
+    grid:'rgba(150,200,255,0.10)', frame:'rgba(150,200,255,0.40)',
+    bar:'#bfe0ff', barShade:'rgba(191,224,255,0.28)', fixedBar:'#7ec8ff',
+    joint:'#eaf6ff', jointEdge:'#06243f', pivot:'#7ec8ff',
+    pen:'#ffffff', trace:[180,225,255]
+  },
+  brass: {
+    bg:'#0a0805', bg1:'rgba(150,110,40,0.18)', bg2:'rgba(90,60,24,0.16)',
+    paper:'#15100a', ink:'#f3e7cf', inkDim:'#a08b66', accent:'#e0b84e',
+    panelEdge:'rgba(224,184,78,0.36)',
+    grid:'rgba(224,184,78,0.08)', frame:'rgba(224,184,78,0.32)',
+    bar:'#e8c878', barShade:'rgba(232,200,120,0.30)', fixedBar:'#e0b84e',
+    joint:'#fff1cf', jointEdge:'#1c1305', pivot:'#e0b84e',
+    pen:'#ffe9a8', trace:[255,220,140]
+  }
+};
+
+/* =====================================================================
+   STATE
+   ===================================================================== */
+var STATE = {
+  link: 'peaucellier',
+  skin: 'table',
+  theta: 120 * Math.PI / 180,   // current crank angle (rad)
+  speed: 0.7,                   // animation speed multiplier (rad/s)
+  playing: true,
+  traceOn: true,
+  // editable params per linkage (copied from core defaults, mutated by sliders)
+  pe: Linkage.peaucellierDefaults(),
+  fb: Linkage.fourbarDefaults()
+};
+
+var reduceMotion = (typeof window.matchMedia === 'function')
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (reduceMotion) STATE.playing = false;
+
+/* current params for the active linkage */
+function curParams() { return STATE.link === 'peaucellier' ? STATE.pe : STATE.fb; }
+
+/* the crank's angular range to sweep for the auto-drive + full-trace.
+   Peaucellier uses its closeable sub-arc; four-bar uses full 0..2π. */
+function curRange() {
+  if (STATE.link === 'peaucellier') return Linkage.peaucellierRange(STATE.pe);
+  return { lo: 0, hi: 2 * Math.PI };
+}
+
+/* clamp the live theta into the active linkage's valid range */
+function clampTheta(th) {
+  var r = curRange();
+  if (th < r.lo) return r.lo;
+  if (th > r.hi) return r.hi;
+  return th;
+}
+
+/* =====================================================================
+   CANVAS — two layers composited each frame: an accumulating "ink" canvas
+   for the pen trace, and the live linkage drawn on top. World→screen uses a
+   fit transform recomputed on resize / linkage change.
+   ===================================================================== */
+var cv = document.getElementById('paper');
+var ctx = cv.getContext('2d');
+var ink = document.createElement('canvas');
+var ictx = ink.getContext('2d');
+var W = 0, H = 0, dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+var VIEW = { cx: 0, cy: 0, sc: 100 };   // world→screen: screen = (cx,cy) + sc·(x,−y)
+var lastTracePt = null;
+
+function computeView() {
+  // Fit the whole reachable figure (sweep of every joint over the crank range)
+  // into the paper with a margin, so nothing clips as the crank turns.
+  var p = curParams(), r = curRange();
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  function eat(pt) {
+    if (pt.x < minX) minX = pt.x; if (pt.x > maxX) maxX = pt.x;
+    if (pt.y < minY) minY = pt.y; if (pt.y > maxY) maxY = pt.y;
+  }
+  var steps = 120, i, sol, k;
+  for (i = 0; i <= steps; i++) {
+    var th = r.lo + (r.hi - r.lo) * (i / steps);
+    sol = Linkage.solve(STATE.link, th, p);
+    for (k in sol.joints) if (sol.joints.hasOwnProperty(k)) eat(sol.joints[k]);
+  }
+  var padX = (maxX - minX) * 0.14 + 0.3, padY = (maxY - minY) * 0.14 + 0.3;
+  minX -= padX; maxX += padX; minY -= padY; maxY += padY;
+  var spanX = (maxX - minX) || 1, spanY = (maxY - minY) || 1;
+  var availW = W * 0.9, availH = H * 0.9;
+  VIEW.sc = Math.min(availW / spanX, availH / spanY);
+  VIEW.cx = W / 2 - VIEW.sc * (minX + maxX) / 2;
+  VIEW.cy = H / 2 + VIEW.sc * (minY + maxY) / 2; // +y up
+}
+function toScreen(pt) { return { X: VIEW.cx + VIEW.sc * pt.x, Y: VIEW.cy - VIEW.sc * pt.y }; }
+
+function resize() {
+  var stage = document.getElementById('stage');
+  W = Math.max(220, stage.clientWidth);
+  H = Math.max(220, stage.clientHeight);
+  dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  ink.width = cv.width; ink.height = cv.height;
+  computeView();
+  clearTrace();
+  draw();
+}
+
+function clearTrace() {
+  ictx.setTransform(1, 0, 0, 1, 0, 0);
+  ictx.clearRect(0, 0, ink.width, ink.height);
+  lastTracePt = null;
+}
+
+/* draw a faint engineering grid (1 world unit) onto a screen-space context */
+function paintGrid(c, w, h, sk, scaleK) {
+  var sc = VIEW.sc * scaleK;
+  if (sc < 8) return; // too dense
+  c.save();
+  c.strokeStyle = sk.grid; c.lineWidth = 1;
+  var ox = VIEW.cx * scaleK % sc, oy = VIEW.cy * scaleK % sc, x, y;
+  for (x = ox; x < w; x += sc) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
+  for (y = oy; y < h; y += sc) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+  c.restore();
+}
+
+/* =====================================================================
+   RENDER the linkage onto a context. `scaleK` maps world VIEW → this ctx's
+   pixel scale (dpr for the live canvas, the export scale for PNG). `T` maps a
+   world point to THIS context's pixels.
+   ===================================================================== */
+function rgba(arr, a) { return 'rgba(' + arr[0] + ',' + arr[1] + ',' + arr[2] + ',' + a + ')'; }
+
+function drawLinkage(c, sk, sol, scaleK) {
+  function T(pt) { return { X: (VIEW.cx + VIEW.sc * pt.x) * scaleK, Y: (VIEW.cy - VIEW.sc * pt.y) * scaleK }; }
+  var j = sol.joints, i, b, p0, p1;
+  c.lineCap = 'round'; c.lineJoin = 'round';
+
+  // the straight rail the pen rides (Peaucellier only) — a faint guide proving
+  // the locus is a line. Drawn from the trace's fit if we have enough points.
+  if (STATE.link === 'peaucellier' && railHint) {
+    var a0 = T(railHint.a), a1 = T(railHint.b);
+    c.save();
+    c.setLineDash([6 * scaleK, 7 * scaleK]);
+    c.strokeStyle = sk.frame; c.lineWidth = 1.2 * scaleK;
+    c.beginPath(); c.moveTo(a0.X, a0.Y); c.lineTo(a1.X, a1.Y); c.stroke();
+    c.restore();
+  }
+
+  // bars — shadow underlay then the bar; fixed (grounded) bars tinted differently
+  var fixedSet = {};
+  for (i = 0; i < sol.fixed.length; i++) fixedSet[sol.fixed[i]] = true;
+  for (i = 0; i < sol.bars.length; i++) {
+    b = sol.bars[i];
+    p0 = T(j[b[0]]); p1 = T(j[b[1]]);
+    var grounded = fixedSet[b[0]] && fixedSet[b[1]];
+    // shadow
+    c.strokeStyle = sk.barShade; c.lineWidth = 7.5 * scaleK;
+    c.beginPath(); c.moveTo(p0.X, p0.Y); c.lineTo(p1.X, p1.Y); c.stroke();
+    // bar
+    c.strokeStyle = grounded ? sk.fixedBar : sk.bar; c.lineWidth = 3.6 * scaleK;
+    c.beginPath(); c.moveTo(p0.X, p0.Y); c.lineTo(p1.X, p1.Y); c.stroke();
+  }
+
+  // pin joints
+  var seen = {};
+  for (i = 0; i < sol.bars.length; i++) {
+    [sol.bars[i][0], sol.bars[i][1]].forEach(function (name) {
+      if (seen[name]) return; seen[name] = true;
+      var s = T(j[name]);
+      var isFixed = fixedSet[name];
+      var isPen = (name === 'P');
+      if (isPen) return; // pen drawn last, on top
+      var rad = (isFixed ? 6.4 : 4.6) * scaleK;
+      c.beginPath(); c.arc(s.X, s.Y, rad, 0, 2 * Math.PI);
+      c.fillStyle = isFixed ? sk.pivot : sk.joint; c.fill();
+      c.lineWidth = 1.4 * scaleK; c.strokeStyle = sk.jointEdge; c.stroke();
+      if (isFixed) { // ground hatch under fixed pivots
+        c.save(); c.strokeStyle = sk.frame; c.lineWidth = 1.3 * scaleK;
+        var gw = 9 * scaleK;
+        c.beginPath(); c.moveTo(s.X - gw, s.Y + rad + 1.5 * scaleK); c.lineTo(s.X + gw, s.Y + rad + 1.5 * scaleK); c.stroke();
+        var hx;
+        for (hx = -gw; hx < gw; hx += 4 * scaleK) {
+          c.beginPath(); c.moveTo(s.X + hx, s.Y + rad + 1.5 * scaleK);
+          c.lineTo(s.X + hx - 4 * scaleK, s.Y + rad + 5.5 * scaleK); c.stroke();
+        }
+        c.restore();
+      }
+    });
+  }
+
+  // the pen P — a bright glowing nib
+  var pp = T(j.P);
+  c.save();
+  c.shadowColor = sk.pen; c.shadowBlur = 14 * scaleK;
+  c.beginPath(); c.arc(pp.X, pp.Y, 5.4 * scaleK, 0, 2 * Math.PI);
+  c.fillStyle = sk.pen; c.fill();
+  c.restore();
+  c.lineWidth = 1.5 * scaleK; c.strokeStyle = sk.jointEdge; c.stroke();
+
+  // label the fixed pivot O and pen P
+  c.save();
+  c.fillStyle = sk.inkDim; c.font = (12 * scaleK) + 'px ui-monospace, Menlo, monospace';
+  if (j.O) { var so = T(j.O); c.fillText('O', so.X + 9 * scaleK, so.Y + 4 * scaleK); }
+  c.fillStyle = sk.accent; c.fillText('P', pp.X + 9 * scaleK, pp.Y - 8 * scaleK);
+  c.restore();
+}
+
+/* extend the trace ink with the latest pen segment (live, dpr-scaled) */
+function extendTrace(sol, sk) {
+  if (!STATE.traceOn) { lastTracePt = null; return; }
+  var T = function (pt) { return { X: (VIEW.cx + VIEW.sc * pt.x) * dpr, Y: (VIEW.cy - VIEW.sc * pt.y) * dpr }; };
+  var cur = T(sol.penPoint);
+  if (lastTracePt) {
+    ictx.lineCap = 'round'; ictx.lineJoin = 'round';
+    ictx.strokeStyle = rgba(sk.trace, 0.92);
+    ictx.lineWidth = 2.0 * dpr;
+    ictx.beginPath(); ictx.moveTo(lastTracePt.X, lastTracePt.Y); ictx.lineTo(cur.X, cur.Y); ictx.stroke();
+  }
+  lastTracePt = cur;
+}
+
+/* a cached straight-rail hint (the best-fit line of the pen locus) so we can draw
+   the rail the Peaucellier pen rides. Recomputed when params change. */
+var railHint = null;
+function computeRailHint() {
+  railHint = null;
+  if (STATE.link !== 'peaucellier') return;
+  var r = curRange();
+  var pts = Linkage.trace('peaucellier', STATE.pe, r, 80);
+  var fit = Linkage.lineFit(pts);
+  if (!fit.ok) return;
+  // endpoints of the fit line across the locus extent
+  var lo = Infinity, hi = -Infinity, i, d;
+  for (i = 0; i < pts.length; i++) {
+    d = (pts[i].x - fit.point.x) * fit.dir.x + (pts[i].y - fit.point.y) * fit.dir.y;
+    if (d < lo) lo = d; if (d > hi) hi = d;
+  }
+  var pad = (hi - lo) * 0.12 + 0.2;
+  lo -= pad; hi += pad;
+  railHint = {
+    a: { x: fit.point.x + fit.dir.x * lo, y: fit.point.y + fit.dir.y * lo },
+    b: { x: fit.point.x + fit.dir.x * hi, y: fit.point.y + fit.dir.y * hi },
+    maxDev: fit.maxDev
+  };
+}
+
+/* full composite to the display */
+function draw() {
+  var sk = SKINS[STATE.skin];
+  var sol = Linkage.solve(STATE.link, STATE.theta, curParams());
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // paper
+  ctx.fillStyle = sk.paper; ctx.fillRect(0, 0, W, H);
+  paintGrid(ctx, W, H, sk, 1);
+  // accumulated trace (ink canvas is in device px → draw 1:1)
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(ink, 0, 0);
+  // live linkage (dpr scale)
+  drawLinkage(ctx, sk, sol, dpr);
+  updateReadout(sol);
+}
+
+/* =====================================================================
+   READOUT — live geometry numbers (the proof, on-screen)
+   ===================================================================== */
+function updateReadout(sol) {
+  var el = document.getElementById('readout');
+  if (STATE.link === 'peaucellier') {
+    var k2 = STATE.pe.L * STATE.pe.L - STATE.pe.ell * STATE.pe.ell;
+    var inv = sol.meta.OP * sol.meta.OQ;
+    var dev = railHint ? railHint.maxDev : 0;
+    el.innerHTML =
+      'pen locus: <span class="dev">straight to &plusmn;' + dev.toExponential(1) + ' units</span><br>' +
+      '|OP|&middot;|OQ| = <b>' + inv.toFixed(6) + '</b> &nbsp;(L&sup2;&minus;&#8467;&sup2; = ' + k2.toFixed(4) + ')<br>' +
+      '|OP| = ' + sol.meta.OP.toFixed(3) + ' &nbsp; |OQ| = ' + sol.meta.OQ.toFixed(3);
+  } else {
+    var lens = Linkage.barLengths(sol);
+    el.innerHTML =
+      'four-bar coupler curve<br>' +
+      'bars hold length: <b>' + lens.map(function (x) { return x.toFixed(2); }).join(' &middot; ') + '</b><br>' +
+      'Grashof crank-rocker &mdash; the crank fully rotates.';
+  }
+}
+
+/* =====================================================================
+   ANIMATION
+   ===================================================================== */
+var rafId = null, lastTs = 0;
+function frame(ts) {
+  rafId = null;
+  if (!lastTs) lastTs = ts;
+  var dt = Math.min(0.05, (ts - lastTs) / 1000);
+  lastTs = ts;
+  if (STATE.playing && STATE.speed > 0) {
+    var r = curRange();
+    // advance theta; ping-pong inside the Peaucellier sub-arc, wrap for four-bar
+    STATE.theta += STATE.speed * dt;
+    if (STATE.link === 'peaucellier') {
+      // sweep lo→hi→lo so the pen retraces the same straight rail back and forth
+      var span = r.hi - r.lo;
+      var phase = (STATE.theta - r.lo) % (2 * span);
+      if (phase < 0) phase += 2 * span;
+      STATE.theta = r.lo + (phase <= span ? phase : 2 * span - phase);
+    } else {
+      if (STATE.theta > r.hi) STATE.theta -= (r.hi - r.lo);
+    }
+    var sol = Linkage.solve(STATE.link, STATE.theta, curParams());
+    extendTrace(sol, SKINS[STATE.skin]);
+    syncAngleUI();
+    draw();
+  }
+  loop();
+}
+function loop() { if (rafId == null) rafId = requestAnimationFrame(frame); }
+function stopLoop() { if (rafId != null) { cancelAnimationFrame(rafId); rafId = null; } lastTs = 0; }
+
+/* =====================================================================
+   SELF-TEST — the SAME core the page renders with. Green chip ↔ Node count.
+   ===================================================================== */
+function runSelfTest() {
+  var L = Linkage, pass = 0, total = 0, headlineDev = 0;
+  function check(name, cond) { total++; if (cond) pass++; else if (typeof console !== 'undefined') console.error('FAIL: ' + name); }
+  var TWO_PI = 2 * Math.PI;
+
+  // 1. Peaucellier draws an EXACT straight line
+  var pp = L.peaucellierDefaults(), pr = L.peaucellierRange(pp);
+  var ppts = L.trace('peaucellier', pp, pr, 600);
+  var fit = L.lineFit(ppts);
+  headlineDev = fit.maxDev;
+  check('Peaucellier pen is straight to machine precision (maxDev < 1e-9)', fit.ok && fit.maxDev < 1e-9);
+  var extent = 0, i, d;
+  for (i = 0; i < ppts.length; i++) { d = (ppts[i].x - fit.point.x) * fit.dir.x + (ppts[i].y - fit.point.y) * fit.dir.y; if (Math.abs(d) > extent) extent = Math.abs(d); }
+  check('the straight line spans a real extent (not a point)', extent > 0.5);
+  check('the line is perpendicular to OC (vertical here), as inversion predicts', Math.abs(fit.dir.x) < 1e-6);
+
+  // 2. inversive invariant |OP|·|OQ| = L²−ℓ²
+  var k2 = pp.L * pp.L - pp.ell * pp.ell, maxErr = 0, maxCross = 0, th, s;
+  for (i = 0; i <= 400; i++) {
+    th = pr.lo + (pr.hi - pr.lo) * (i / 400); s = L.solve('peaucellier', th, pp);
+    maxErr = Math.max(maxErr, Math.abs(s.meta.OP * s.meta.OQ - k2));
+    var O = s.joints.O, Q = s.joints.Q, P = s.joints.P;
+    maxCross = Math.max(maxCross, Math.abs((Q.x - O.x) * (P.y - O.y) - (Q.y - O.y) * (P.x - O.x)));
+  }
+  check('|OP|·|OQ| = L²−ℓ² throughout the motion (err < 1e-12)', maxErr < 1e-12);
+  check('O, Q, P stay collinear (|cross| < 1e-12)', maxCross < 1e-12);
+
+  // 3. loop closure — bar lengths preserved
+  var ref = L.solve('peaucellier', pr.lo + 0.4, pp), refLens = L.barLengths(ref), maxDrift = 0, lens, kk;
+  for (i = 0; i <= 600; i++) {
+    th = pr.lo + (pr.hi - pr.lo) * (i / 600); lens = L.barLengths(L.solve('peaucellier', th, pp));
+    for (kk = 0; kk < lens.length; kk++) maxDrift = Math.max(maxDrift, Math.abs(lens[kk] - refLens[kk]));
+  }
+  check('Peaucellier: all 7 bars hold length across the rotation (drift < 1e-12)', maxDrift < 1e-12);
+  var rhombOk = true, longOk = true;
+  for (i = 0; i <= 100; i++) {
+    th = pr.lo + (pr.hi - pr.lo) * (i / 100); s = L.solve('peaucellier', th, pp); var jj = s.joints;
+    [[jj.A, jj.Q], [jj.Q, jj.B], [jj.B, jj.P], [jj.P, jj.A]].forEach(function (e) { if (Math.abs(L.vec.dist(e[0], e[1]) - pp.ell) > 1e-9) rhombOk = false; });
+    if (Math.abs(L.vec.dist(jj.O, jj.A) - pp.L) > 1e-9) longOk = false;
+    if (Math.abs(L.vec.dist(jj.O, jj.B) - pp.L) > 1e-9) longOk = false;
+  }
+  check('the rhombus stays a true rhombus and both long bars = L', rhombOk && longOk);
+
+  // 4. determinism + skin-invariance
+  var detOk = true;
+  for (i = 0; i < 50; i++) { th = (i / 50) * TWO_PI; if (L.fingerprint('peaucellier', th, L.peaucellierDefaults()) !== L.fingerprint('peaucellier', th, L.peaucellierDefaults())) detOk = false; }
+  check('deterministic: same params/θ → identical joint fingerprint', detOk);
+  var skinOk = true, base = L.peaucellierDefaults(), fpr = L.fingerprint('peaucellier', 2.37, base), si, sk2;
+  var skinList = ['table', 'blueprint', 'brass'];
+  for (si = 0; si < skinList.length; si++) {
+    var tinted = {}; for (var key in base) tinted[key] = base[key]; tinted.skin = skinList[si];
+    if (L.fingerprint('peaucellier', 2.37, tinted) !== fpr) skinOk = false;
+  }
+  check('skin-invariant: a skin never reaches the geometry (fingerprint stable)', skinOk);
+  var t1 = L.trace('peaucellier', base, pr, 120), t2 = L.trace('peaucellier', base, pr, 120), traceOk = t1.length === t2.length;
+  for (i = 0; i < t1.length && traceOk; i++) if (t1[i].x !== t2[i].x || t1[i].y !== t2[i].y) traceOk = false;
+  check('the full pen trace is reproducible bit-for-bit', traceOk);
+
+  // 5. four-bar companion
+  var fp = L.fourbarDefaults();
+  check('the default four-bar is a Grashof crank-rocker', L.fourbarGrashofCrank(fp));
+  var dead = 0;
+  for (i = 0; i < 720; i++) { th = TWO_PI * i / 720; var A = L.vec.fromAngle(fp.O0, fp.a, th); if (!L.circleCircle(A, fp.b, fp.O1, fp.c)) dead++; }
+  check('the four-bar closes at every crank angle (no dead spots)', dead === 0);
+  var fref = L.solve('fourbar', 0.5, fp), frefLens = L.barLengths(fref), fmaxDrift = 0;
+  for (i = 0; i <= 720; i++) { th = TWO_PI * i / 720; lens = L.barLengths(L.solve('fourbar', th, fp)); for (kk = 0; kk < lens.length; kk++) fmaxDrift = Math.max(fmaxDrift, Math.abs(lens[kk] - frefLens[kk])); }
+  check('four-bar: all five bars hold length through a full rotation (drift < 1e-12)', fmaxDrift < 1e-12);
+  var cpts = L.trace('fourbar', fp, { lo: 0, hi: TWO_PI }, 400), cfit = L.lineFit(cpts);
+  check('the coupler curve is genuinely 2-D (a foil to the line)', cfit.maxDev > 0.05);
+
+  return { pass: pass, total: total, headlineDev: headlineDev };
+}
+
+/* =====================================================================
+   PNG EXPORT — 2×, paper + trace + linkage, named per skin.
+   ===================================================================== */
+function exportPNG() {
+  try {
+    var scale = 2, sk = SKINS[STATE.skin];
+    var off = document.createElement('canvas');
+    off.width = Math.round(W * scale); off.height = Math.round(H * scale);
+    var oc = off.getContext('2d');
+    oc.fillStyle = sk.paper; oc.fillRect(0, 0, off.width, off.height);
+    paintGrid(oc, off.width, off.height, sk, scale);
+    // re-render the trace at export scale by replaying the full locus
+    var r = curRange();
+    var pts = Linkage.trace(STATE.link, curParams(), r, 700);
+    oc.lineCap = 'round'; oc.lineJoin = 'round';
+    oc.strokeStyle = rgba(sk.trace, 0.92); oc.lineWidth = 2.0 * scale;
+    var Tp = function (pt) { return { X: (VIEW.cx + VIEW.sc * pt.x) * scale, Y: (VIEW.cy - VIEW.sc * pt.y) * scale }; };
+    oc.beginPath();
+    for (var i = 0; i < pts.length; i++) { var p = Tp(pts[i]); if (i === 0) oc.moveTo(p.X, p.Y); else oc.lineTo(p.X, p.Y); }
+    oc.stroke();
+    // the linkage in its current pose
+    var sol = Linkage.solve(STATE.link, STATE.theta, curParams());
+    drawLinkage(oc, sk, sol, scale);
+    var name = 'straightedge-' + STATE.link + '-' + STATE.skin + '.png';
+    var finish = function (url) { var a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
+    if (off.toBlob) off.toBlob(function (b) { var u = URL.createObjectURL(b); finish(u); setTimeout(function () { URL.revokeObjectURL(u); }, 4000); }, 'image/png');
+    else finish(off.toDataURL('image/png'));
+    flashHud('Exported <b>' + name + '</b> at 2&times;.', 2600);
+  } catch (e) { if (typeof console !== 'undefined') console.error('PNG export failed', e); }
+}
+
+/* =====================================================================
+   CONTROLS
+   ===================================================================== */
+function syncAngleUI() {
+  var deg = (STATE.theta * 180 / Math.PI) % 360; if (deg < 0) deg += 360;
+  document.getElementById('angRange').value = deg.toFixed(1);
+  document.getElementById('angReadout').textContent = deg.toFixed(0) + '°';
+}
+function syncSpeedUI() {
+  document.getElementById('spdRange').value = STATE.speed;
+  document.getElementById('spdReadout').textContent = STATE.speed === 0 ? 'still' : STATE.speed.toFixed(2) + '×';
+}
+function syncPlayBtn() {
+  var b = document.getElementById('btnPlay');
+  b.innerHTML = STATE.playing ? '&#10073;&#10073; Pause' : '&#9654; Play';
+}
+function syncTraceBtn() {
+  var b = document.getElementById('btnTrace');
+  b.className = 'btn' + (STATE.traceOn ? ' on' : '');
+  b.innerHTML = STATE.traceOn ? '&#9679; Trace on' : '&#9675; Trace off';
+}
+function syncLenPanels() {
+  document.getElementById('lp-peaucellier').className = 'lenpanel' + (STATE.link === 'peaucellier' ? ' show' : '');
+  document.getElementById('lp-fourbar').className = 'lenpanel' + (STATE.link === 'fourbar' ? ' show' : '');
+}
+function syncLenInputs() {
+  document.getElementById('pL').value = STATE.pe.L; document.getElementById('pLnum').value = STATE.pe.L;
+  document.getElementById('pl').value = STATE.pe.ell; document.getElementById('plnum').value = STATE.pe.ell;
+  document.getElementById('fa').value = STATE.fb.a; document.getElementById('fanum').value = STATE.fb.a;
+  document.getElementById('fcy').value = STATE.fb.cy; document.getElementById('fcynum').value = STATE.fb.cy;
+}
+function applySkinVars() {
+  var sk = SKINS[STATE.skin], rs = document.documentElement.style;
+  rs.setProperty('--bg', sk.bg); rs.setProperty('--bg-grad1', sk.bg1); rs.setProperty('--bg-grad2', sk.bg2);
+  rs.setProperty('--ink', sk.ink); rs.setProperty('--ink-dim', sk.inkDim); rs.setProperty('--accent', sk.accent);
+  rs.setProperty('--accent-soft', rgba(sk.trace, 0.16)); rs.setProperty('--panel-edge', sk.panelEdge);
+  rs.setProperty('--paper', sk.paper);
+}
+
+/* when a Peaucellier length changes, re-validate (ℓ < L, keep |OC|=r straight-line
+   condition), recompute rail + view, clear & redraw. */
+function onPeaucellierLenChange() {
+  // enforce ℓ strictly < L for a closeable rhombus with k2>0
+  if (STATE.pe.ell >= STATE.pe.L - 0.1) STATE.pe.ell = STATE.pe.L - 0.1;
+  if (STATE.pe.ell < 0.4) STATE.pe.ell = 0.4;
+  // crank centre stays at distance r from O along −x → straight-line condition holds
+  STATE.pe.C = Linkage.V(STATE.pe.O.x - STATE.pe.r, STATE.pe.O.y);
+  STATE.theta = clampTheta(STATE.theta);
+  computeRailHint(); computeView(); clearTrace(); syncLenInputs(); draw();
+}
+function onFourbarLenChange() {
+  // keep it a Grashof crank-rocker by clamping; if the chosen `a` breaks it, nudge.
+  computeView(); clearTrace(); draw();
+}
+
+function flashHud(html, ms) {
+  var hud = document.getElementById('hud');
+  hud.innerHTML = html; hud.classList.add('show');
+  clearTimeout(flashHud._t);
+  flashHud._t = setTimeout(function () { hud.classList.remove('show'); }, ms || 3000);
+}
+
+/* ---- wire it all up ---- */
+document.getElementById('linkSeg').addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-link]'); if (!b) return;
+  STATE.link = b.getAttribute('data-link');
+  Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.classList.toggle('active', x === b); });
+  STATE.theta = clampTheta(STATE.link === 'peaucellier' ? Math.PI : 0.6);
+  syncLenPanels(); computeRailHint(); computeView(); clearTrace(); syncAngleUI(); draw();
+});
+
+document.getElementById('angRange').addEventListener('input', function () {
+  STATE.theta = clampTheta(parseFloat(this.value) * Math.PI / 180);
+  // scrubbing draws the trace too, even when paused / reduced-motion
+  var sol = Linkage.solve(STATE.link, STATE.theta, curParams());
+  extendTrace(sol, SKINS[STATE.skin]);
+  syncAngleUI(); draw();
+});
+
+document.getElementById('spdRange').addEventListener('input', function () {
+  STATE.speed = parseFloat(this.value); syncSpeedUI();
+});
+
+document.getElementById('btnPlay').addEventListener('click', function () {
+  STATE.playing = !STATE.playing; lastTs = 0; syncPlayBtn();
+});
+document.getElementById('btnTrace').addEventListener('click', function () {
+  STATE.traceOn = !STATE.traceOn; if (!STATE.traceOn) lastTracePt = null; syncTraceBtn();
+});
+document.getElementById('btnClear').addEventListener('click', function () { clearTrace(); draw(); });
+document.getElementById('btnPng').addEventListener('click', exportPNG);
+
+// Peaucellier length sliders + dial buttons
+function bindLen(rangeId, numId, get, set, onChange) {
+  var range = document.getElementById(rangeId), num = document.getElementById(numId);
+  range.addEventListener('input', function () { set(parseFloat(this.value)); num.value = get(); onChange(); });
+  num.addEventListener('change', function () { var v = parseFloat(this.value); if (!isNaN(v)) { set(v); range.value = get(); onChange(); } });
+}
+bindLen('pL', 'pLnum', function () { return STATE.pe.L; }, function (v) { STATE.pe.L = v; }, onPeaucellierLenChange);
+bindLen('pl', 'plnum', function () { return STATE.pe.ell; }, function (v) { STATE.pe.ell = v; }, onPeaucellierLenChange);
+bindLen('fa', 'fanum', function () { return STATE.fb.a; }, function (v) { STATE.fb.a = v; }, onFourbarLenChange);
+bindLen('fcy', 'fcynum', function () { return STATE.fb.cy; }, function (v) { STATE.fb.cy = v; }, onFourbarLenChange);
+
+document.querySelectorAll('.dialbtn[data-len]').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var which = this.getAttribute('data-len');
+    if (which === 'L-') STATE.pe.L = Math.max(1.8, STATE.pe.L - 0.1);
+    if (which === 'L+') STATE.pe.L = Math.min(3.6, STATE.pe.L + 0.1);
+    if (which === 'l-') STATE.pe.ell = Math.max(0.8, STATE.pe.ell - 0.1);
+    if (which === 'l+') STATE.pe.ell = Math.min(2.4, STATE.pe.ell + 0.1);
+    onPeaucellierLenChange();
+  });
+});
+
+document.getElementById('skinSeg').addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-skin]'); if (!b) return;
+  STATE.skin = b.getAttribute('data-skin');
+  Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.classList.toggle('active', x === b); });
+  applySkinVars(); clearTrace(); draw();
+});
+
+document.getElementById('presets').addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-preset]'); if (!b) return;
+  var p = b.getAttribute('data-preset');
+  if (p === 'classic') { STATE.link = 'peaucellier'; STATE.pe = Linkage.peaucellierDefaults(); }
+  else if (p === 'slim') { STATE.link = 'peaucellier'; STATE.pe = Linkage.peaucellierDefaults(); STATE.pe.L = 3.2; STATE.pe.ell = 1.1; STATE.pe.C = Linkage.V(-STATE.pe.r, 0); }
+  else if (p === 'rocker') { STATE.link = 'fourbar'; STATE.fb = Linkage.fourbarDefaults(); }
+  else if (p === 'surprise') {
+    if (Math.random() < 0.5) { STATE.link = 'peaucellier'; STATE.pe = Linkage.peaucellierDefaults();
+      STATE.pe.L = 2.0 + Math.random() * 1.4; STATE.pe.ell = 0.9 + Math.random() * Math.min(1.3, STATE.pe.L - 1.1);
+      STATE.pe.C = Linkage.V(-STATE.pe.r, 0); }
+    else { STATE.link = 'fourbar'; STATE.fb = Linkage.fourbarDefaults(); STATE.fb.cy = -1.2 + Math.random() * 2.6; }
+  }
+  // sync the linkage picker UI
+  Array.prototype.forEach.call(document.querySelectorAll('#linkSeg button'), function (x) { x.classList.toggle('active', x.getAttribute('data-link') === STATE.link); });
+  STATE.theta = clampTheta(STATE.link === 'peaucellier' ? Math.PI : 0.6);
+  syncLenPanels(); syncLenInputs(); computeRailHint(); computeView(); clearTrace(); syncAngleUI(); draw();
+});
+
+window.addEventListener('resize', resize);
+
+/* =====================================================================
+   INIT
+   ===================================================================== */
+function init() {
+  var res = runSelfTest();
+  var chip = document.getElementById('selftest');
+  if (res.pass === res.total) {
+    chip.className = 'selftest ok';
+    chip.textContent = 'straightedge verified — ' + res.pass + '/' + res.total + ' ✓';
+    chip.title = 'Peaucellier max line deviation ≈ ' + res.headlineDev.toExponential(2) + ' units (exact)';
+  } else {
+    chip.className = 'selftest bad';
+    chip.textContent = 'straightedge FAILED — ' + res.pass + '/' + res.total;
+  }
+  if (typeof console !== 'undefined') console.log('Straightedge self-test: ' + res.pass + '/' + res.total + ' passed. Peaucellier maxDev = ' + res.headlineDev.toExponential(3));
+
+  applySkinVars();
+  syncLenPanels(); syncLenInputs(); syncSpeedUI(); syncPlayBtn(); syncTraceBtn();
+  resize();
+  computeRailHint();
+  STATE.theta = clampTheta(STATE.theta);
+  syncAngleUI();
+  clearTrace(); draw();
+  loop();
+
+  if (reduceMotion) flashHud('Reduced motion: the crank is still &mdash; drag <b>Crank angle</b> to draw the line by hand.', 6000);
+  else flashHud('The crank turns. Watch <b>P</b> draw a perfectly straight line.', 4200);
+}
+
+// expose for headless inspection (Node imports the core directly via the .cjs test)
+if (typeof window !== 'undefined') {
+  window.__straightedge = { Linkage: Linkage, runSelfTest: runSelfTest, STATE: STATE, exportPNG: exportPNG };
+}
+
+init();
+
+/* ws: unlock breadcrumb — the shared module (one source of truth), inlined via
+   forge. Records this piece's first-visit and (via WS auto-init) fires the cue.
+   Wrapped so a storage-off browser is harmless. */
+try {
+<!-- forge:include ../tools/ws/ws.js -->
+WS.seen('linkage');
+} catch (e) { /* unlock breadcrumbs are a bonus, never a blocker */ }
+</script>
+</body>
+</html>
