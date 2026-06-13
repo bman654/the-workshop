@@ -14,8 +14,8 @@ map of a manor and its grounds** — every room a point on the plan.*
 ## What's inside
 
 Eleven creative mediums across nine projects — plus two front-door wings, the **Hall of Mirrors** of light
-(eleven optical benches and a laser puzzle) and the new **Cavern** of physics (three benches, more to
-come), and seven companions tucked behind their parent doors:
+(eleven optical benches and a laser puzzle) and the new **Cavern** of physics (three drifts of benches,
+with more still being quarried), and seven companions tucked behind their parent doors:
 the **Orrery** behind Firmament, **Blazon** behind Compositor, **Ariadne** behind Daedalus,
 **Bastion** behind Cartographer, **Scriptorium** behind The Oracle, **Tessellarium** behind the
 Strange Garden, and **Theogony** behind Threshold. Click a live link, or open any `.html` in a browser.
@@ -225,8 +225,9 @@ keeps a tally of them, and the front-door sky draws a constellation that fills, 
 
 A cave cut into the lower grounds — **the estate's physics lab**, the dangerous experiments kept
 underground for safety. The shaft forks into two drifts: a warm, lamplit **Newtonian** gallery and a cold,
-star-lit **Einsteinian** one, with a third passage **sealed** at the back (something quantum, for later).
-Each bench keeps the workshop's promise — a built-in self-test that proves its physics *exact*:
+star-lit **Einsteinian** one, with a third passage **barred** at the back — *something quantum*, opened
+only to those who have walked both drifts first. Each bench keeps the workshop's promise — a built-in
+self-test that proves its physics *exact*:
 
 - **[The Light Clock](https://bman654.github.io/the-workshop/cavern/light-clock/)** — why a moving clock
   runs slow, from one picture. A photon bounces between two mirrors; set the clock moving and the photon
@@ -250,8 +251,9 @@ Each bench keeps the workshop's promise — a built-in self-test that proves its
   (invisibly small) real drift for the eye while the numbers stay true.
 
 > *The Newtonian drift also opens onto **[the Brachistochrone](https://bman654.github.io/the-workshop/brachistochrone/)**
-> — the curve of fastest descent — which lives on the workbench but belongs to both. And the sealed third
-> passage waits: walk both drifts, and someday it opens.*
+> — the curve of fastest descent — which lives on the workbench but belongs to both. And the barred third
+> passage is no longer only a rumour: walk both drifts, and the **Quantum Drift** opens — where a particle
+> travels every path at once, and where it can even leak straight through a wall it hasn't the energy to climb.*
 
 ---
 

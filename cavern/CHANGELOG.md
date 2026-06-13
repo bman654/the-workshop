@@ -2,8 +2,50 @@
 
 *The estate's physics laboratory, quarried into the hillside and kept underground "for safety."
 A front-door **wing** (the grand "Physics Lab" seed begun). Two drifts off a central shaft — a warm
-Newtonian one and a cold Einsteinian one — and now a third, the **Quantum Drift**, which opens once a
-visitor has walked both. Every bench is one self-contained vanilla HTML file that proves its own physics exact.*
+Newtonian one and a cold Einsteinian one — and now a third, the **Quantum Drift** (two benches deep),
+which opens once a visitor has walked both. Every bench is one self-contained vanilla HTML file that
+proves its own physics exact.*
+
+---
+
+## 2026-06-13 — the Quantum Drift deepens (Quantum Tunnelling ships)
+
+*The Quantum Drift had one bench; the Newtonian and Einsteinian drifts each have two, so the new drift
+felt thin. This session built its second bench — **Quantum Tunnelling** — to give the deepest drift the
+same two-bench body as its siblings. Built directly in the main tree, browser-verified on a served origin
+(self-test 7/7, locked & unlocked cavern both 17/17), no forge needed (the Cavern is plain HTML).*
+
+**Quantum Tunnelling** (`cavern/tunnelling/index.html`, **712 lines**) ⛰️ — a particle rolls at a
+rectangular barrier it hasn't the energy to climb. Classically it always reflects; quantum-mechanically
+the wavefunction decays through the wall and a sliver transmits. The picture renders the iconic three
+regions — incident wave + reflection ripples (violet), exponential evanescent decay inside the barred
+(red, classically-forbidden) wall, and the small transmitted travelling wave on the far side — over an
+energy-level diagram with the dashed **E** line sitting below the **V₀** top.
+
+*The physics core is pure & dimensionless (ħ = m = 1).* Self-test **7/7**, falsifiable:
+1. **E < V₀ tunnels** — `0 < T < 1` where classical physics demands exactly 0 (T = 0.420 at E = ½V₀).
+2. **closed form == an independent transfer-matrix wave solve** — the textbook
+   `T = 1/(1 + V₀²sinh²(κL)/(4E(V₀−E)))` (branch-continued to `sin` for E > V₀) is corroborated, not
+   asserted, against a 2×2 complex transfer matrix that matches ψ and ψ′ at both walls by a different
+   algebra: **max |Δ| = 1.9e−14 over 56 configs** (E/V₀ from 0.10 to 9, two heights, three widths).
+3. **unitarity R + T = 1** to **3.3e−16** (probability conserved — nothing lost or made).
+4. **exponential fragility** — for a thick wall `d ln T/dL → −2κ` (measured −2.17 vs −2.19); this
+   exponential sensitivity to width is why α-decay half-lives span ~24 orders of magnitude.
+5. **resonant transparency** — above the barrier, when `qL = nπ` the wall is **perfectly clear, T = 1**
+   (T = 1.000000000000 at the first resonance).
+6. **high-energy limit** — E ≫ V₀ ⇒ the wall vanishes, T → 1 (0.999995 at E/V₀ = 200).
+7. **monotone in width** — at fixed sub-barrier energy, a wider wall strictly tunnels less.
+
+Drops `ws:seen:tunnelling`. Live readout shows T, R, R + T (unitarity, 7 digits), the regime
+(tunnelling / grazing / over-barrier), the decay rate κ inside the wall, and the closed-form-vs-numeric
+|Δ|. Controls: Energy E (as a fraction of V₀), barrier height V₀, width L, a **Send a wavepacket**
+animation, and a **Find a resonance** button that jumps E to the first `qL = π` transparency.
+
+**The drift card** (`cavern/index.html`) — a second `a.bench` was added to `#quantumDrift` (⛰️
+Quantum Tunnelling, proof line "transmission T closed-form == transfer-matrix solve · R + T = 1 exact").
+The landing's self-test is unchanged at **17/17** (the bench-enumeration checks are `every`/`allRelative`
+predicates, not a fixed count, so a second quantum bench passes cleanly); verified in a served browser
+that the unlock still reveals the drift and now shows **both** quantum benches.
 
 ---
 
