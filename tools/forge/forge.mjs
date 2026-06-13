@@ -178,6 +178,77 @@ function defaultRoot() {
   return process.cwd();
 }
 
+/* ── --audit-seen: dogfood the one mechanical rule in DESIGNING.md ───────────
+   Every front-door PLACES page MUST drop its own `ws:seen:<id>` breadcrumb, so
+   a DIRECT visit (deep-link / bookmark) registers for the Survey of Heaven and
+   the Undercroft — not only a click from the map. The front door drops the
+   breadcrumb on click, but that misses anyone who lands on a room page directly.
+
+   This audit parses the (id, href) pairs straight out of `index.src.html`'s
+   PLACES array (so it stays correct as the estate grows — no hardcoded map),
+   resolves each href to its target .html, and checks the file contains the
+   literal `ws:seen:<id>`. It is a SOFT warning: it reports offenders but exits 0
+   by default (pass `--strict` to exit 1 so CI can gate on it). */
+function parsePlaces(srcText) {
+  // Pull every `{ ... id:"x" ... href:"y/index.html" ... }` PLACES entry.
+  // PLACES entries are the only objects carrying BOTH an id: and an href:.
+  const places = [];
+  const re = /id\s*:\s*["']([^"']+)["'][^]*?href\s*:\s*["']([^"']+)["']/g;
+  let m;
+  while ((m = re.exec(srcText)) !== null) {
+    const id = m[1];
+    const href = m[2];
+    // skip external links + the colophon/source footer links (PLACES hrefs are
+    // local <folder>/index.html paths)
+    if (/^https?:/i.test(href)) continue;
+    places.push({ id, href });
+  }
+  return places;
+}
+
+function auditSeen(root, strict) {
+  const srcFile = path.join(root, 'index.src.html');
+  if (!fs.existsSync(srcFile)) {
+    console.error('forge --audit-seen: no index.src.html at ' + root);
+    return 1;
+  }
+  const src = readText(srcFile);
+  // Restrict to the PLACES array body so footer/anchor hrefs don't leak in.
+  const start = src.indexOf('const PLACES');
+  const slice = start >= 0 ? src.slice(start) : src;
+  const places = parsePlaces(slice);
+  if (!places.length) {
+    console.error('forge --audit-seen: parsed 0 PLACES entries — parser may be stale.');
+    return 1;
+  }
+
+  let bad = 0;
+  for (const { id, href } of places) {
+    const target = path.resolve(root, href);
+    if (!fs.existsSync(target)) {
+      console.error('  ✗ ' + id + ' — target page MISSING (' + href + ')');
+      bad++; continue;
+    }
+    const html = fs.readFileSync(target, 'utf8');
+    if (html.includes('ws:seen:' + id)) {
+      console.log('  ✓ ' + id + ' — drops ws:seen:' + id);
+    } else {
+      console.error('  ⚠ ' + id + ' — ' + href + ' never drops ws:seen:' + id +
+        '  (a direct visit will not register for the Survey of Heaven / Undercroft)');
+      bad++;
+    }
+  }
+  if (bad) {
+    console.error('\nforge --audit-seen: ' + bad + ' of ' + places.length +
+      ' front-door page(s) miss their ws:seen breadcrumb.' +
+      (strict ? '' : '  (soft warning — pass --strict to fail.)'));
+    return strict ? 1 : 0;
+  }
+  console.log('\nforge --audit-seen: all ' + places.length +
+    ' front-door page(s) drop their breadcrumb. ✓');
+  return 0;
+}
+
 const USAGE = `forge — the Lantern build-inliner (zero-dependency).
 
 Inlines a tale's engine + world into a self-contained, double-clickable .html.
@@ -194,6 +265,11 @@ Usage:
       Build in memory and compare to the on-disk .html. Reports drift and
       exits 1 if any shipped file is stale; exits 0 if all are current.
 
+  node tools/forge/forge.mjs --audit-seen [root] [--strict]
+      Check every front-door PLACES page drops its own ws:seen:<id> breadcrumb
+      (so direct visits register for the Survey of Heaven / Undercroft, not just
+      map clicks). Soft warning by default; --strict exits 1 on any offender.
+
   node tools/forge/forge.mjs --help
 
 Directive (one per line, inside a <script> block in the .src.html):
@@ -206,6 +282,15 @@ function main(argv) {
   if (!args.length || args[0] === '--help' || args[0] === '-h') {
     console.log(USAGE);
     return 0;
+  }
+
+  // --audit-seen mode: dogfood the ws:seen breadcrumb rule (DESIGNING.md).
+  if (args[0] === '--audit-seen') {
+    const rest = args.slice(1);
+    const strict = rest.includes('--strict');
+    const rootArg = rest.find(a => a !== '--strict');
+    const root = rootArg ? path.resolve(rootArg) : defaultRoot();
+    return auditSeen(root, strict);
   }
 
   // --check mode: build in memory, diff against the on-disk .html.
