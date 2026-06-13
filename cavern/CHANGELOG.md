@@ -2,8 +2,52 @@
 
 *The estate's physics laboratory, quarried into the hillside and kept underground "for safety."
 A front-door **wing** (the grand "Physics Lab" seed begun). Two drifts off a central shaft — a warm
-Newtonian one and a cold Einsteinian one — with a sealed Quantum back-passage teased for a future
-session. Every bench is one self-contained vanilla HTML file that proves its own physics exact.*
+Newtonian one and a cold Einsteinian one — and now a third, the **Quantum Drift**, which opens once a
+visitor has walked both. Every bench is one self-contained vanilla HTML file that proves its own physics exact.*
+
+---
+
+## 2026-06-13 — the Quantum Drift opens (the Double Slit ships)
+
+*The "deferred" back-passage from the wing-opening entry below is no longer deferred. The sealed shaft
+now opens — in-page, spatially — and its first bench is live. Built this session as a lead/deputy split
+(the lead wired the reveal in the main tree; a per-bench deputy built the bench in a `bench-double-slit`
+worktree), then integrated and re-verified end-to-end in a served browser.*
+
+**The unlock — a spatial, in-page reveal** (`cavern/index.html`). The barred quantum shaft opens once
+the cave "remembers those who walk both drifts": at least one **Newtonian** bench seen AND at least one
+**Einsteinian** bench seen, read from the `ws:seen:<id>` breadcrumbs the benches drop. The predicate is
+pure and self-contained — `walkedBothDrifts(store)` over a `{has(k)}` store (`NEWTONIAN_IDS =
+['cradle','brachistochrone']`, `EINSTEINIAN_IDS = ['light-clock','precession']`); storage-off stays
+harmlessly locked. When earned, the sealed `#vault` swaps out (`body.quantum-open #vault{display:none}`)
+and the `#quantumDrift` section reveals — a cold electric-violet drift, distinct from the Undercroft's
+cellar machinery (this reveal is spatial and stays inside the cave). The Cavern landing's self-test grew
+**8/8 → 17/17**: the 7 original structural checks plus the predicate proved exact over synthetic stores
+(empty→locked, only-Newtonian→locked, only-Einsteinian→locked, one-of-each→OPEN, brachistochrone counts
+as Newtonian, a non-drift breadcrumb→locked, storage-off→locked) and a "rendered reveal matches the live
+predicate" check (no drift between logic and DOM; Double-Slit link present iff unlocked, and relative).
+
+**The Double Slit** (`cavern/double-slit/index.html`, **917 lines**) 🎯 — the experiment Feynman called
+"the whole mystery of quantum mechanics." Fire particles one at a time at a pair of slits; each lands as a
+single dot, yet the dots pile into bright/dark fringes. Close a slit — or merely **watch** which one each
+particle takes — and the fringes wash out. Self-test **8/8**: **fringe spacing measured = λL/d** by
+root-finding the dark fringes from `dI/dy=0` (no reference to the closed form) → Δy = 5.000000000 mm vs
+λL/d = 5.000000000 mm, **rel err 1.73e-16**; maxima at `d·sinθ=mλ`, minima at `(m+½)λ` (dark orders
+`I/I₀ = 1.76e-30`, exact zeros); **interference == the cross term** `2Re(ψ₁ψ₂*)` proved equal to
+`4·sinc²(α)·cos²(β)` (max |Δ| = 8.88e-16 over 4000 pts); close-slit → envelope only (visibility
+1.0000 → 0.0238); **which-path detector → fringes wash out** (incoherent sum, cross term destroyed);
+**Born rule** — 300k seeded particles, 40 bins, reduced χ² = **1.029**; **falsifiable control** — the same
+counts reject a flat target at reduced χ² = **8399**; deterministic seed + exact λ,d,L scaling (×2→2.0,
+d×2→0.5, worst dev 0). Pure/deterministic core, validated byte-identical in Node and in the page. Honest
+far-field/Fraunhofer small-angle convention (stated in the readout), schematic barrier mask (µm slits are
+invisible at cm-fringe scale, commented as such). Fully self-contained — zero external URLs/CDN/deps.
+
+**Integration & QA (served origin, real browser):** the Cavern landing self-test holds **17/17** in both
+states; **locked** shows the sealed vault with the Quantum Drift hidden; dropping one Newtonian +
+one Einsteinian breadcrumb and reloading flips it **open** (vault `display:none`, drift revealed, the
+`double-slit/index.html` link present and relative); clicking through loads the bench, whose own self-test
+reads **8/8**. Zero console errors throughout. The `bench-double-slit` worktree was retired after the one
+new file was lifted into the main tree (nothing else touched).
 
 ---
 
@@ -80,7 +124,9 @@ can read them.
 The **Brachistochrone** (built earlier, lives on the Workbench) is cross-linked into the Newtonian drift
 — it genuinely belongs to both — rather than duplicated.
 
-**Deferred (a future session):** the hidden **Quantum sub-wing** (the Double Slit / Particle-in-a-Box /
-Tunnelling) and its `ws:` unlock predicate ("walked both drifts"), per `worklog/physics-lab-plan.md` §3.
+**Deferred (a future session):** the rest of the **Quantum Drift** — Particle-in-a-Box / Tunnelling, per
+`worklog/physics-lab-plan.md` §3. *(The Double Slit and the "walked both drifts" `ws:` unlock predicate
+shipped 2026-06-13 — see the top entry. The drift now exists, so new quantum benches just slot in beside
+the Double Slit behind the same unlock.)*
 Also deferred (a consideration, not a mandate): a Survey-of-Heaven "Experimenter" constellation for the
 cave — best wired once the wing has filled out and the Quantum unlock gives a reason to reward exploring it.
