@@ -239,13 +239,24 @@
       g.appendChild(pl);
     }
 
+    // member ids of every COMPLETED asterism — drawn as brighter "anchor" stars so a
+    // charted constellation reads as a NAMED LINE JOINING TWO VISIBLE STARS, not a
+    // hairline trailing off to faint points (the legibility fix of 2026-06-13).
+    var chartedIds = {};
+    for (i = 0; i < st.asterisms.length; i++) {
+      if (!st.asterisms[i].complete) continue;
+      var mm = st.asterisms[i].members || [];
+      for (j = 0; j < mm.length; j++) chartedIds[mm[j]] = true;
+    }
+
     // ── stars (twinkling circles; static under reduced-motion) ──
     for (i = 0; i < st.stars.length; i++) {
       var s = st.stars[i];
-      var rad = s.mag === 1 ? 2.6 : (s.mag === 2 ? 2.0 : 1.6);
+      var charted = !!chartedIds[s.id];
+      var rad = (s.mag === 1 ? 2.6 : (s.mag === 2 ? 2.0 : 1.6)) + (charted ? 0.8 : 0);
       var star = svg('circle', {
         cx: s.x, cy: s.y, r: rad,
-        'class': 'sky-star mag' + s.mag, 'data-id': s.id
+        'class': 'sky-star mag' + s.mag + (charted ? ' charted' : ''), 'data-id': s.id
       });
       if (!reduce) {
         // stagger the twinkle so the field shimmers rather than pulsing in unison

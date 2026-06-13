@@ -223,6 +223,10 @@
   .sky-star.mag1{ fill:#fbf3df; opacity:.92;
     filter:drop-shadow(0 0 5px rgba(240,212,137,.55)); }   /* a wing's bright lead */
   .sky-star.mag3{ opacity:.6; }
+  /* a CHARTED star (member of a completed asterism): warmed to brass with a stronger
+     halo, so the named constellation's line visibly terminates on two real stars */
+  .sky-star.charted{ fill:var(--brass-bright); opacity:1;
+    filter:drop-shadow(0 0 6px rgba(201,162,74,.75)); }
   @keyframes skytwinkle{ 0%,100%{ opacity:.85; } 46%{ opacity:.5; } 72%{ opacity:1; } }
   /* asterism line: a faint cool hairline while partial; warms to brass when charted */
   .asterism-line{ fill:none; stroke:var(--line); stroke-width:.7; opacity:.22;
@@ -230,6 +234,13 @@
     transition:stroke .8s ease, opacity .8s ease, stroke-width .8s ease; }
   .asterism-line.complete{ stroke:var(--brass); stroke-width:1; opacity:.62;
     filter:drop-shadow(0 0 4px rgba(201,162,74,.4)); }
+  /* a faint brass tie from an engraved name to its nearest charted star — the same
+     draughting idiom the room labels use (every POI label has a leader to its room),
+     so a named constellation reads as ONE unit instead of a label + a line that both
+     seem to point at nothing. Hairline, dashed, quiet; warms with the name. */
+  .an-leader{ fill:none; stroke:var(--brass); stroke-width:.7; opacity:.42;
+    stroke-dasharray:2.5 3; stroke-linecap:round;
+    filter:drop-shadow(0 0 2px rgba(201,162,74,.35)); }
   /* the engraved asterism NAME + its one-line myth, set as margin marginalia */
   .asterism-name{ pointer-events:none; }
   .asterism-name .an-name{ font:italic 12.5px/1 var(--serif); fill:var(--brass-bright);
@@ -1559,13 +1570,24 @@ var LabelPlacer = (function () {
       g.appendChild(pl);
     }
 
+    // member ids of every COMPLETED asterism — drawn as brighter "anchor" stars so a
+    // charted constellation reads as a NAMED LINE JOINING TWO VISIBLE STARS, not a
+    // hairline trailing off to faint points (the legibility fix of 2026-06-13).
+    var chartedIds = {};
+    for (i = 0; i < st.asterisms.length; i++) {
+      if (!st.asterisms[i].complete) continue;
+      var mm = st.asterisms[i].members || [];
+      for (j = 0; j < mm.length; j++) chartedIds[mm[j]] = true;
+    }
+
     // ── stars (twinkling circles; static under reduced-motion) ──
     for (i = 0; i < st.stars.length; i++) {
       var s = st.stars[i];
-      var rad = s.mag === 1 ? 2.6 : (s.mag === 2 ? 2.0 : 1.6);
+      var charted = !!chartedIds[s.id];
+      var rad = (s.mag === 1 ? 2.6 : (s.mag === 2 ? 2.0 : 1.6)) + (charted ? 0.8 : 0);
       var star = svg('circle', {
         cx: s.x, cy: s.y, r: rad,
-        'class': 'sky-star mag' + s.mag, 'data-id': s.id
+        'class': 'sky-star mag' + s.mag + (charted ? ' charted' : ''), 'data-id': s.id
       });
       if (!reduce) {
         // stagger the twinkle so the field shimmers rather than pulsing in unison
@@ -2178,11 +2200,12 @@ const SKY_LABELS = new Map();   // wingId → { group, anchor:{x,y}, prefer, fir
 
 /* Curated BERTHS for the engraved asterism names: a roomy dark-margin anchor near
    each wing's stars + an inward side preference (toward the open plate, away from
-   the frame). The names are margin marginalia — visually tied to their stars by
-   proximity + the shared brass, not a leader — so a deliberate berth reads as
-   engraving while letting the SAME solver keep every name clear of POI labels,
-   footprints, and furniture. Anchors chosen so a compact name box always has a
-   clean in-bounds slot; the solver still adapts the exact side. */
+   the frame). Each name is then tied to its constellation by a faint leader to the
+   nearest charted star (added 2026-06-13 — proximity + shared brass ALONE read as
+   "a label and a line both pointing at nothing", which fooled even the site's owner
+   into reporting a bug; the leader makes the named sky legible as one unit, matching
+   the leader every POI label already draws). The SAME solver keeps every name clear
+   of POI labels, footprints, and furniture; the solver still adapts the exact side. */
 const SKY_BERTH = {
   celestial: { x:130, y:470, prefer:['bottom','se','right'] },  // left band, below the tower
   letters:   { x:455, y:104, prefer:['top','left','bottom'] },  // top band, left of the manor
@@ -2210,6 +2233,12 @@ function buildSkyNames(skyG){
       if(!n) return;
       anchor = { x:sx/n, y:sy/n };
     }
+    // this wing's lit member-star coords — the leader ties the name to the nearest one
+    const stars = ast.members.map(mid=> Sky.CATALOG[mid]).filter(Boolean)
+                             .map(c=> ({ x:c.x, y:c.y }));
+    // a faint tie-line from the name to its constellation (drawn UNDER the name text)
+    const leader = el("path",{ class:"an-leader" });
+    skyG.appendChild(leader);
     // the engraved name block, typeset at a local origin (name baseline at 0,0)
     const lg = el("g",{ class:"asterism-name"+(firstTime?" named-in":""), "data-wing":ast.id });
     const nm = el("text",{ x:0, y:0, "text-anchor":"start", class:"an-name" });
@@ -2221,13 +2250,14 @@ function buildSkyNames(skyG){
     myth.textContent = ast.myth;
     lg.appendChild(myth);
     skyG.appendChild(lg);                  // lives inside the sky layer (in the paper)
-    SKY_LABELS.set(ast.id, { group:lg, anchor, prefer, firstTime });
+    SKY_LABELS.set(ast.id, { group:lg, leader, stars, anchor, prefer, firstTime });
   });
   return skyG;
 }
 
-/* position ONE asterism-name group at a solved label-box {x,y} + side (anchor flip
-   only — no leader; the stars themselves are the asterism's anchor). */
+/* position ONE asterism-name group at a solved label-box {x,y} + side (anchor flip),
+   then draw its faint leader to the nearest charted star so the name and its
+   constellation read as a single engraved unit. */
 function applySkyName(parts, box, side){
   const anchor = (side==="left"||side==="nw"||side==="sw") ? "end"
                : (side==="right"||side==="ne"||side==="se") ? "start" : "middle";
@@ -2239,6 +2269,25 @@ function applySkyName(parts, box, side){
   const bb = parts.group.getBBox();
   const tx = box.x - (bb.x - LABEL_PAD), ty = box.y - (bb.y - LABEL_PAD);
   parts.group.setAttribute("transform", `translate(${tx} ${ty})`);
+  // tie the name to its constellation: a faint leader from the name box's nearest edge
+  // to the NEAREST charted star, stopping just shy of the star's glow (the same
+  // draughting idiom every room label uses — so a named sky reads as one whole unit).
+  if(parts.leader && parts.stars && parts.stars.length){
+    const rect = { x:box.x, y:box.y, w:box.w, h:box.h };
+    const cx = box.x + box.w/2, cy = box.y + box.h/2;
+    let best = parts.stars[0], bestD = Infinity;
+    parts.stars.forEach(s=>{ const d=(s.x-cx)*(s.x-cx)+(s.y-cy)*(s.y-cy); if(d<bestD){ bestD=d; best=s; } });
+    const start = LabelPlacer.geom.nearestEdgePoint(best.x, best.y, rect);   // on the name box
+    const dx = best.x - start[0], dy = best.y - start[1], len = Math.hypot(dx,dy) || 1;
+    if(len < 14){
+      // the name already abuts its star — a stub would read as a glitch, so let the
+      // proximity + the brightened anchor-star carry the tie (no leader drawn).
+      parts.leader.setAttribute("d", "");
+    } else {
+      const end = [ best.x - dx/len*4, best.y - dy/len*4 ];   // 4px shy of the star centre
+      parts.leader.setAttribute("d", `M${start[0]} ${start[1]} L${end[0]} ${end[1]}`);
+    }
+  }
 }
 
 /* solve + apply labels. TWO independent passes so the POI layout is INVARIANT to

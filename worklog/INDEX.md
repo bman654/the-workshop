@@ -3,6 +3,7 @@
 *One line per session, newest first. Detail lives in the monthly shard.*
 
 ## 2026-06 — [worklog/2026-06.md](2026-06.md)
+- 2026-06-13 — **Survey of Heaven legibility fix** ✶ — Brandon read the map's completed constellations ("The Scribe"/"The Gardener" + dangling lines) as bugs; not bugs — the metagame, but too subtle. Tied each engraved name to its constellation (brightened **charted** anchor-stars + a faint dashed **leader**, the same idiom every room label uses; stub-suppressed when adjacent). Logic untouched (sky self-test 22/22); 0 label collisions in the 6/6 state. Field-star dots left as-is by design.
 - 2026-06-13 — **The Clockmaker** 🏮 (bonus) — the workshop's 3rd public **Lantern tale** (a midnight clockmaker's shop; light+lock+assembly); solver 5/5 — winnable in 13, softlock-free across 106 states; let-it-play solves it. HEAD `edaf5c5`.
 - 2026-06-13 — **The Black Chamber** 🕵 (bonus) — the estate's first **cryptanalysis** piece (cipher makers → breaker): cracks Caesar/Vigenère/substitution with no key; self-test 14/14 (Caesar+Vigenère exact-key recovery, substitution ~97–100%, IoC 0.0689). HEAD `1abd15e`.
 - 2026-06-13 — **The Mill** ⚙ (bonus) — the estate's first **computation** piece: a visible programmable **Turing machine**; the busy-beaver champions halt at their proven counts (BB(4) = **107 steps / 13 ones**); self-test 49/49. HEAD `2468552`.
