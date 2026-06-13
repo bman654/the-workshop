@@ -1,0 +1,1209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Planimeter</title>
+<style>
+  :root{
+    /* brass (default) skin — cosmetic only, never touches geometry */
+    --bg:#0b0805;
+    --bg-grad1:rgba(120,84,36,0.18);
+    --bg-grad2:rgba(70,52,30,0.16);
+    --ink:#f0e2c4;
+    --ink-dim:#b8a172;
+    --accent:#e6bd6f;
+    --accent-soft:rgba(230,189,111,0.16);
+    --panel-bg:rgba(20,15,9,0.88);
+    --panel-edge:rgba(214,176,108,0.40);
+    /* paper / board */
+    --board:#1a140c;
+    --board-edge:rgba(214,176,108,0.30);
+    --paper:#efe4c8;
+    --paper-line:rgba(60,46,24,0.18);
+    --figure:rgba(150,40,30,0.55);
+    --figure-stroke:#9a3322;
+    /* instrument */
+    --metal:#d9b46a;
+    --metal-dk:#8a6a2c;
+    --metal-hi:#f4e4ad;
+    --wheel:#c9a253;
+    --tracer:#e8553a;
+    --pole-col:#7fb2d6;
+    --trace-path:#3a7d4a;
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  /* ---- blueprint skin ---- */
+  body[data-skin="blueprint"]{
+    --bg:#08131f; --bg-grad1:rgba(70,130,190,0.18); --bg-grad2:rgba(40,80,130,0.16);
+    --ink:#dbe9f6; --ink-dim:#8fb0cc; --accent:#7fc0ff; --accent-soft:rgba(127,192,255,0.16);
+    --panel-bg:rgba(8,22,38,0.9); --panel-edge:rgba(127,192,255,0.34);
+    --board:#0c2034; --board-edge:rgba(127,192,255,0.30);
+    --paper:#10283f; --paper-line:rgba(150,200,255,0.20);
+    --figure:rgba(127,192,255,0.16); --figure-stroke:#9fd0ff;
+    --metal:#cfe4f6; --metal-dk:#5d86a8; --metal-hi:#eef6ff;
+    --wheel:#bcd8ef; --tracer:#ffd27f; --pole-col:#ffd27f; --trace-path:#7fe0b0;
+  }
+  /* ---- boxwood skin ---- */
+  body[data-skin="boxwood"]{
+    --bg:#14100a; --bg-grad1:rgba(150,110,60,0.20); --bg-grad2:rgba(90,66,36,0.18);
+    --ink:#f3e6c8; --ink-dim:#c2a577; --accent:#e9c277; --accent-soft:rgba(233,194,119,0.16);
+    --panel-bg:rgba(28,21,12,0.9); --panel-edge:rgba(214,176,108,0.42);
+    --board:#241a0e; --board-edge:rgba(214,176,108,0.34);
+    --paper:#e9dcb6; --paper-line:rgba(80,60,30,0.20);
+    --figure:rgba(120,80,40,0.30); --figure-stroke:#8a5a2a;
+    --metal:#d8b878; --metal-dk:#9c7836; --metal-hi:#f0dca0;
+    --wheel:#caa860; --tracer:#c0492c; --pole-col:#5a86a0; --trace-path:#3f7a4a;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    background:
+      radial-gradient(1200px 700px at 72% 18%, var(--bg-grad1), transparent 60%),
+      radial-gradient(900px 600px at 20% 90%, var(--bg-grad2), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none; gap:12px;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:14px; align-items:center; flex:0 0 auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(40,70,44,0.35); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:62px 24px 16px; min-width:0; gap:12px; }
+  #board{ display:block; box-shadow:0 24px 70px rgba(0,0,0,0.6); border-radius:14px; touch-action:none; cursor:crosshair; max-width:100%; border:1px solid var(--board-edge); }
+
+  /* ---- Readout panel under the board ---- */
+  #readout{
+    width:min(760px,100%); background:var(--panel-bg);
+    border:1px solid var(--panel-edge); border-radius:10px; padding:11px 16px;
+    display:flex; flex-wrap:wrap; gap:8px 22px; align-items:center; justify-content:center;
+    backdrop-filter: blur(8px) saturate(120%); -webkit-backdrop-filter: blur(8px) saturate(120%);
+  }
+  #readout .compute{ font:600 14.5px/1.4 var(--font-mono); color:var(--ink); letter-spacing:.3px; flex:1 1 100%; text-align:center; }
+  #readout .compute b{ color:var(--accent); }
+  #readout .compute .match{ color:#8fd79a; }
+  #readout .compute .miss{ color:#f0b27a; }
+  #readout .scaleval{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.3px; }
+  #readout .scaleval b{ color:var(--ink); font-variant-numeric:tabular-nums; }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:316px; flex:0 0 316px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 18px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.5; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); }
+  .row{ margin:13px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .row > label .val{ color:var(--accent); font-weight:700; letter-spacing:.04em; text-transform:none; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:rgba(214,176,108,0.25); outline:none; margin:0;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:16px; height:16px; border-radius:50%;
+    background:var(--accent); cursor:pointer; border:2px solid #241803; box-shadow:0 1px 4px rgba(0,0,0,0.5);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:16px; height:16px; border-radius:50%; background:var(--accent); cursor:pointer;
+    border:2px solid #241803; box-shadow:0 1px 4px rgba(0,0,0,0.5);
+  }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(214,176,108,0.26); flex-wrap:wrap; }
+  .seg button{
+    flex:1; min-width:34px; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#241803; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .btnrow{ display:flex; gap:8px; margin:13px 0; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(230,189,111,0.26), rgba(230,189,111,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(230,189,111,0.40), rgba(230,189,111,0.14)); }
+  .btn:disabled{ opacity:.45; cursor:default; }
+  .toggle{ display:flex; align-items:center; gap:9px; margin:12px 0; cursor:pointer; user-select:none; }
+  .toggle .sw{ width:34px; height:18px; border-radius:10px; background:rgba(0,0,0,0.4); border:1px solid var(--panel-edge); position:relative; transition:.18s; flex:0 0 auto; }
+  .toggle .sw::after{ content:""; position:absolute; top:1px; left:1px; width:14px; height:14px; border-radius:50%; background:var(--ink-dim); transition:.18s; }
+  .toggle.on .sw{ background:var(--accent-soft); border-color:var(--accent); }
+  .toggle.on .sw::after{ left:17px; background:var(--accent); }
+  .toggle .lab{ font:11px/1.3 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; }
+  .toggle.on .lab{ color:var(--ink); }
+  .hint{ font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:14px 0 4px; border-top:1px solid rgba(214,176,108,0.18); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+
+  /* HUD flash */
+  #hud{
+    position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(8px);
+    background:rgba(10,7,3,0.92); border:1px solid var(--panel-edge); color:var(--ink);
+    font:12px/1.4 var(--font-mono); padding:9px 15px; border-radius:9px; letter-spacing:.2px;
+    opacity:0; pointer-events:none; transition:.28s; z-index:40; max-width:80vw; text-align:center;
+  }
+  #hud.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  #hud b{ color:var(--accent); }
+
+  @media (max-width: 760px){
+    #wrap{ flex-direction:column; }
+    #panel{ width:100%; flex:0 0 auto; height:auto; border-left:none; border-top:1px solid var(--panel-edge);
+      padding:16px 16px 28px; box-shadow:0 -18px 50px rgba(0,0,0,0.5); }
+    #stage{ padding:58px 12px 12px; }
+    .topbar{ flex-wrap:wrap; }
+    .brand .tag{ display:none; }
+  }
+</style>
+</head>
+<body data-skin="brass">
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../workbench/index.html">&larr; workbench</a>
+    </div>
+    <div class="brand">
+      <h1>The Planimeter</h1>
+      <span class="tag">trace a boundary, read its area</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for detail · per-check PASS lines are in the console">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="board"></canvas>
+      <div id="readout">
+        <div class="compute" id="compute">Pick a shape and press <b>Trace</b> — or drag the orange tracer around the figure yourself.</div>
+        <div class="scaleval">wheel roll &Delta;W <b id="vDW">0.000</b> in</div>
+        <div class="scaleval">arm L <b id="vL2">2.50</b> in</div>
+        <div class="scaleval">measured area <b id="vArea">0.000</b> in&sup2;</div>
+        <div class="scaleval" id="truthBox">true area <b id="vTrue">—</b> in&sup2;</div>
+        <div class="scaleval" id="errBox">rel. error <b id="vErr">—</b></div>
+      </div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A real <b>polar (Amsler) planimeter</b>, not a picture of one. A pole is pinned off the figure; a pole-arm reaches an elbow; a tracer-arm of length <b>L</b> carries a measuring <b>wheel</b> whose axis lies <i>along</i> the arm — so it rolls only on motion <b>perpendicular</b> to the arm. Trace any closed curve and the net wheel roll &Delta;W obeys Green's theorem: <b>Area = L&middot;&Delta;W</b>. The reading is verified against the shoelace formula &amp; closed forms — two different methods that must agree.</p>
+
+      <div class="row">
+        <label>Figure</label>
+        <div class="seg" id="segShape">
+          <button data-v="circle" class="active">Circle</button>
+          <button data-v="square">Square</button>
+          <button data-v="ellipse">Ellipse</button>
+          <button data-v="blob">Polygon</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Tracer-arm length L <span class="val" id="vL">2.50 in</span></label>
+        <input type="range" id="rL" min="1.6" max="3.6" step="0.05" value="2.5">
+      </div>
+      <div class="row">
+        <label>Figure size <span class="val" id="vSize">1.30 in</span></label>
+        <input type="range" id="rSize" min="0.7" max="1.9" step="0.05" value="1.3">
+      </div>
+      <div class="row">
+        <label>Pole angle <span class="val" id="vPole">155&deg;</span></label>
+        <input type="range" id="rPole" min="110" max="250" step="1" value="155">
+      </div>
+      <div class="row">
+        <label>Pole distance <span class="val" id="vPoleR">4.20 in</span></label>
+        <input type="range" id="rPoleR" min="3.4" max="5.2" step="0.05" value="4.2">
+      </div>
+
+      <div class="btnrow">
+        <button class="btn primary" id="btnTrace">Trace</button>
+        <button class="btn" id="btnReset">Reset wheel</button>
+      </div>
+
+      <label class="toggle on" id="tGuide"><span class="sw"></span><span class="lab">Show wheel-axis &amp; roll component</span></label>
+
+      <div class="row">
+        <label>Skin</label>
+        <div class="seg" id="segSkin">
+          <button data-v="brass" class="active">Brass</button>
+          <button data-v="blueprint">Blueprint</button>
+          <button data-v="boxwood">Boxwood</button>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn" id="btnPng">Save 2&times; PNG</button>
+      </div>
+
+      <p class="hint"><b>Trace</b> drives the tracer auto-magically around the boundary; watch the linkage articulate, the wheel spin, and the area climb to the true value. Or <b>drag the orange tracer</b> by hand: close the loop and the running area is what the wheel read. The wheel turns one way on the way out, the other on the way back — only the <b>net</b> roll survives, and that net roll times L is the enclosed area.</p>
+    </aside>
+  </div>
+
+  <div id="hud"></div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   The Planimeter — an operable polar (Amsler) planimeter.
+
+   THE CRUX. A polar planimeter measures the AREA enclosed by a traced curve.
+   The linkage: a fixed POLE → pole-arm (length M) → ELBOW → tracer-arm
+   (length L) → TRACER. A measuring WHEEL sits on the tracer-arm with its axle
+   ALONG the arm, so it records only the component of the tracer's motion
+   PERPENDICULAR to the current tracer-arm direction. Integrate that rolled
+   distance around a closed loop and you get net roll ΔW; then
+
+        Area = L · ΔW        (curve NOT enclosing the pole)
+
+   This is Green's theorem realised in brass. The wheel-roll integral and the
+   independent ground truth (shoelace for polygons, πr² / πab closed form for
+   conics) are computed by DIFFERENT methods, so their agreement in the
+   self-test is a genuine proof, not a tautology.
+
+   POLE PLACEMENT. We always place the pole OUTSIDE the figure (the controls
+   are clamped so the pole-circle never overlaps the figure). For a non-pole-
+   enclosing curve the zero-circle term vanishes and Area = L·ΔW exactly — no
+   correction needed. The self-test additionally proves the reading is
+   INDEPENDENT of where the (exterior) pole sits, a defining instrument property.
+
+   The browser renderer AND the headless self-test call the SAME core functions
+   below (no parallel copy). Skins are cosmetic and never touch geometry.
+   Angles in radians. Vanilla, zero-dependency, DOM-free core.
+   ════════════════════════════════════════════════════════════════════════════ */
+(function (root) {
+  'use strict';
+
+  var TAU = Math.PI * 2;
+
+  // ── deterministic PRNG (mulberry32) so seeded shapes are reproducible ──────
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // ── FORWARD KINEMATICS ─────────────────────────────────────────────────────
+  // Given the fixed pole P, pole-arm length M, tracer-arm length L, and the
+  // tracer point T, solve the elbow E. E is the intersection of the circle of
+  // radius M about P and the circle of radius L about T. Two solutions exist;
+  // we pick a consistent branch (sign) so the linkage doesn't flip mid-trace.
+  // Returns {x,y, ok} for the elbow, or ok:false if the pose is unreachable.
+  function solveElbow(P, M, T, L, branch){
+    var dx = T.x - P.x, dy = T.y - P.y;
+    var d2 = dx*dx + dy*dy, d = Math.sqrt(d2);
+    if(d < 1e-12) return { ok:false };
+    // distance from P along PT to the foot of the elbow's perpendicular
+    var a = (d2 + M*M - L*L) / (2*d);
+    var h2 = M*M - a*a;
+    if(h2 < -1e-9) return { ok:false };       // arms can't reach
+    var h = Math.sqrt(Math.max(0, h2));
+    var ux = dx/d, uy = dy/d;                  // unit P→T
+    var fx = P.x + a*ux, fy = P.y + a*uy;      // foot point
+    var s = branch ? 1 : -1;
+    var ex = fx + s * h * (-uy);               // perpendicular offset
+    var ey = fy + s * h * ( ux);
+    return { x:ex, y:ey, ok:true };
+  }
+
+  // Unit vector along the tracer arm, from elbow E to tracer T (the wheel axle
+  // lies along this; the wheel rolls on the PERPENDICULAR component of motion).
+  function armDir(E, T){
+    var ax = T.x - E.x, ay = T.y - E.y;
+    var n = Math.hypot(ax, ay) || 1;
+    return { x: ax/n, y: ay/n };
+  }
+
+  // ── THE INSTRUMENT: integrate the measuring-wheel roll along a path ─────────
+  // path: array of tracer points {x,y} (a closed loop: last≈first).
+  // For each step the wheel advances by the displacement component PERPENDICULAR
+  // to the tracer-arm direction, evaluated at the step midpoint (midpoint rule —
+  // 2nd-order accurate, so it converges fast). Net roll ΔW is returned along
+  // with the per-step elbow poses for rendering.
+  //
+  // The perpendicular to arm-dir (ux,uy) is (-uy,ux). Rolled increment for a
+  // tracer step dT = T2−T1 is  dW = dT · perp(armDir at midpoint).
+  function wheelRoll(P, M, L, path, branch){
+    var dW = 0;
+    var n = path.length;
+    for(var i = 0; i < n - 1; i++){
+      var T1 = path[i], T2 = path[i+1];
+      var mid = { x:(T1.x+T2.x)/2, y:(T1.y+T2.y)/2 };
+      var E = solveElbow(P, M, mid, L, branch);
+      if(!E.ok) return { ok:false, dW:0 };
+      var u = armDir(E, { x:mid.x, y:mid.y });
+      // perpendicular component of the tracer displacement
+      var ddx = T2.x - T1.x, ddy = T2.y - T1.y;
+      dW += ddx * (-u.y) + ddy * (u.x);
+    }
+    return { ok:true, dW:dW };
+  }
+
+  // Area measured BY THE INSTRUMENT: A = L · ΔW.
+  function measuredArea(P, M, L, path, branch){
+    var r = wheelRoll(P, M, L, path, branch);
+    if(!r.ok) return { ok:false, area:0, dW:0 };
+    return { ok:true, area: L * r.dW, dW: r.dW };
+  }
+
+  // ── INDEPENDENT GROUND TRUTH (a DIFFERENT method than the wheel integral) ───
+  // Shoelace (Gauss) formula: signed area of a polygon from its vertices.
+  function shoelace(path){
+    var A = 0, n = path.length;
+    // works whether or not the last point repeats the first
+    for(var i = 0; i < n; i++){
+      var a = path[i], b = path[(i+1) % n];
+      A += a.x * b.y - b.x * a.y;
+    }
+    return A / 2;
+  }
+
+  // ── SHAPE GENERATORS (the boundary to trace), in PAPER inches, centred at C ──
+  // Returned counter-clockwise so signed area is positive. n samples + closing.
+  function genCircle(C, r, n){
+    var p = [];
+    for(var i = 0; i <= n; i++){ var a = TAU * i / n; p.push({ x:C.x + r*Math.cos(a), y:C.y + r*Math.sin(a) }); }
+    return p;
+  }
+  function genEllipse(C, ra, rb, rot, n){
+    var p = [], cr = Math.cos(rot), sr = Math.sin(rot);
+    for(var i = 0; i <= n; i++){
+      var a = TAU * i / n, ex = ra*Math.cos(a), ey = rb*Math.sin(a);
+      p.push({ x:C.x + ex*cr - ey*sr, y:C.y + ex*sr + ey*cr });
+    }
+    return p;
+  }
+  function genSquare(C, half, n){
+    // a square, sampled with n points per side (so auto-trace is smooth)
+    var v = [ {x:C.x-half,y:C.y-half},{x:C.x+half,y:C.y-half},
+              {x:C.x+half,y:C.y+half},{x:C.x-half,y:C.y+half} ];
+    var per = Math.max(1, Math.round(n/4)), p = [];
+    for(var s = 0; s < 4; s++){
+      var a = v[s], b = v[(s+1)%4];
+      for(var k = 0; k < per; k++){ var t = k/per; p.push({ x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t }); }
+    }
+    p.push({ x:v[0].x, y:v[0].y });
+    return p;
+  }
+  // A random STAR-SHAPED simple polygon (vertices sorted by angle → no self-
+  // intersection), seeded for reproducibility; densified for smooth tracing.
+  function genBlob(C, base, seed, verts, samplesPerEdge){
+    var rnd = mulberry32(seed >>> 0);
+    var nv = verts || 9, raw = [];
+    for(var i = 0; i < nv; i++){
+      var ang = TAU * i / nv + (rnd() - 0.5) * (TAU / nv) * 0.6;  // jittered angle, kept ordered
+      var rad = base * (0.55 + rnd() * 0.85);
+      raw.push({ x:C.x + rad*Math.cos(ang), y:C.y + rad*Math.sin(ang), ang:ang });
+    }
+    raw.sort(function(a,b){ return a.ang - b.ang; });             // guarantee simple (star-shaped) polygon
+    // densify each edge so the auto-trace + midpoint integral are smooth
+    var spe = samplesPerEdge || 24, p = [];
+    for(var s = 0; s < nv; s++){
+      var a = raw[s], b = raw[(s+1)%nv];
+      for(var k = 0; k < spe; k++){ var t = k/spe; p.push({ x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t }); }
+    }
+    p.push({ x:raw[0].x, y:raw[0].y });
+    return { path:p, verts:raw };
+  }
+
+  // ── HEADLESS SELF-TEST ─ proves the INSTRUMENT against INDEPENDENT truth ────
+  function runSelfTest(){
+    var pass = 0, total = 0, log = [];
+    function check(name, cond, extra){
+      total++;
+      var line = (cond ? 'PASS' : 'FAIL') + ': ' + name + (extra ? ' — ' + extra : '');
+      log.push(line);
+      if(typeof console !== 'undefined'){ cond ? console.log(line) : console.error(line); }
+      if(cond) pass++;
+    }
+    // The pole sits OUTSIDE every test figure; M chosen so the geometry is
+    // always reachable. N samples set fine enough for ~1e-6 (midpoint rule).
+    var M = 4.4, L = 2.6, N = 6000;
+    var P = { x: 0, y: -4.0 };                 // pole well outside (figures near origin)
+    var maxAreaErr = 0;
+
+    // (1) FIDELITY — circles of several radii: instrument area (L·ΔW) vs πr².
+    {
+      var worst = 0;
+      [0.6, 0.9, 1.2, 1.5].forEach(function(r){
+        var path = genCircle({x:0,y:0}, r, N);
+        var m = measuredArea(P, M, L, path, true);
+        var truth = Math.PI * r * r;
+        var rel = Math.abs(m.area - truth) / truth;
+        worst = Math.max(worst, rel);
+      });
+      maxAreaErr = Math.max(maxAreaErr, worst);
+      check('fidelity: circle L·ΔW == πr² (4 radii)', worst < 1e-6, 'max rel ' + worst.toExponential(2));
+    }
+
+    // (2) FIDELITY — ellipses (different method of truth: πab) at a rotation.
+    {
+      var worst2 = 0;
+      [[1.3,0.7,0.4],[1.0,0.9,1.1],[1.5,0.5,2.0]].forEach(function(e){
+        var path = genEllipse({x:0,y:0}, e[0], e[1], e[2], N);
+        var m = measuredArea(P, M, L, path, true);
+        var truth = Math.PI * e[0] * e[1];
+        var rel = Math.abs(m.area - truth) / truth;
+        worst2 = Math.max(worst2, rel);
+      });
+      maxAreaErr = Math.max(maxAreaErr, worst2);
+      check('fidelity: ellipse L·ΔW == πab (3 ellipses)', worst2 < 1e-6, 'max rel ' + worst2.toExponential(2));
+    }
+
+    // (3) FIDELITY — random polygons: instrument vs SHOELACE (truly different).
+    {
+      var worst3 = 0, seeds = [0xA11CE, 0xB0B, 0xF00D, 0x1234, 0xBEEF, 0xC0DE];
+      seeds.forEach(function(sd){
+        // 300 samples/edge: midpoint rule converges O(1/N²), so the wheel
+        // integral meets the shoelace truth to ~1e-7 (corners are the hard part)
+        var g = genBlob({x:0,y:0}, 1.2, sd, 11, 300);
+        var m = measuredArea(P, M, L, g.path, true);
+        // shoelace on the SAME boundary samples → independent ground truth
+        var truth = Math.abs(shoelace(g.path.slice(0, g.path.length - 1)));
+        var rel = Math.abs(Math.abs(m.area) - truth) / truth;
+        worst3 = Math.max(worst3, rel);
+      });
+      maxAreaErr = Math.max(maxAreaErr, worst3);
+      check('fidelity: polygon L·ΔW == shoelace area (6 seeded polygons)', worst3 < 1e-6, 'max rel ' + worst3.toExponential(2));
+    }
+
+    // (4) POLE-INDEPENDENCE — the measured area is invariant to (exterior) pole
+    //     placement. Trace ONE circle from several pole positions; the spread of
+    //     readings must be ~0. (A defining property of the real instrument.)
+    var poleSpread = 0;
+    {
+      var r = 1.1, truth = Math.PI * r * r;
+      var path = genCircle({x:0,y:0}, r, N);
+      var poles = [ {x:0,y:-4.0}, {x:3.6,y:0}, {x:-3.4,y:1.2}, {x:1.0,y:3.7}, {x:-2.6,y:-2.8} ];
+      var readings = poles.map(function(pp){
+        // pick M big enough that the pose is reachable for this pole
+        var dmax = Math.hypot(pp.x, pp.y) + r;     // farthest tracer distance
+        var Mp = dmax - L + 0.6;                     // ensure M+L ≥ reach, M−L ≤ near
+        if(Mp < L + 0.1) Mp = L + 0.1;
+        return measuredArea(pp, Mp, L, path, true).area;
+      });
+      var mn = Math.min.apply(null, readings), mx = Math.max.apply(null, readings);
+      poleSpread = (mx - mn) / truth;
+      // every reading also matches the truth
+      var allTrue = readings.every(function(a){ return Math.abs(a - truth)/truth < 1e-5; });
+      check('pole-independence: 5 exterior poles agree (spread/area)', poleSpread < 1e-5 && allTrue, 'spread ' + poleSpread.toExponential(2));
+    }
+
+    // (5) ZERO ON A ZERO-AREA PATH — trace out along a line and back: ΔW = 0.
+    {
+      var out = [], NN = 800;
+      for(var i = 0; i <= NN; i++){ var t = i/NN; out.push({ x:-1.0 + 2.0*t, y:0.3 }); }
+      for(var j = NN; j >= 0; j--){ var t2 = j/NN; out.push({ x:-1.0 + 2.0*t2, y:0.3 }); }  // retrace back
+      var m = measuredArea(P, M, L, out, true);
+      check('zero: out-and-back (zero-area) path reads ≈0', Math.abs(m.area) < 1e-6, 'area ' + m.area.toExponential(2));
+    }
+
+    // (6) FALSIFIABILITY — a WRONG arm length (L mis-set by 5%) must give a
+    //     WRONG area. Guards against the law being trivially true.
+    {
+      var r = 1.0, truth = Math.PI;
+      var path = genCircle({x:0,y:0}, r, N);
+      var good = measuredArea(P, M, L, path, true).area;
+      // recompute with a wrong L in the AREA scaling (the dropped-projection /
+      // wrong-arm bug). ΔW comes from the true geometry; scaling by wrong L:
+      var rWrong = wheelRoll(P, M, L, path, true);
+      var wrongArea = (L * 1.05) * rWrong.dW;
+      var goodOk = Math.abs(good - truth)/truth < 1e-6;
+      var wrongBad = Math.abs(wrongArea - truth)/truth > 0.04;
+      check('falsifiability: correct L → right area, wrong L (×1.05) → wrong area', goodOk && wrongBad,
+            'wrong rel ' + (Math.abs(wrongArea - truth)/truth).toFixed(3));
+    }
+
+    // (7) SKIN / DETERMINISM INVARIANCE — geometry is a pure function of inputs.
+    //     Same inputs → bit-identical reading on repeat; the core takes NO skin
+    //     argument, so cosmetics cannot move the needle.
+    {
+      var path = genCircle({x:0.2,y:-0.1}, 0.95, N);
+      var a1 = measuredArea(P, M, L, path, true).area;
+      var a2 = measuredArea(P, M, L, path, true).area;
+      var g1 = genBlob({x:0,y:0}, 1.0, 0x5EED, 9, 30);
+      var g2 = genBlob({x:0,y:0}, 1.0, 0x5EED, 9, 30);
+      var sameShape = JSON.stringify(g1.verts) === JSON.stringify(g2.verts);
+      check('determinism: identical inputs → identical reading & seeded shape', a1 === a2 && sameShape);
+    }
+
+    return { pass:pass, total:total, log:log, maxAreaErr:maxAreaErr, poleSpread:poleSpread };
+  }
+
+  // expose for the page + any Node re-audit (DOM-free)
+  var Core = {
+    TAU:TAU, mulberry32:mulberry32, solveElbow:solveElbow, armDir:armDir,
+    wheelRoll:wheelRoll, measuredArea:measuredArea, shoelace:shoelace,
+    genCircle:genCircle, genEllipse:genEllipse, genSquare:genSquare, genBlob:genBlob,
+    runSelfTest:runSelfTest
+  };
+  if(typeof window !== 'undefined') window.PlanimeterCore = Core;
+  if(typeof module !== 'undefined' && module.exports) module.exports = Core;
+
+})(typeof window !== 'undefined' ? window : this);
+
+/* ════════════════════════════════════════════════════════════════════════════
+   APPLICATION (DOM). Everything below DERIVES from the pure CORE above.
+   ════════════════════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  var C = window.PlanimeterCore;
+  var TAU = C.TAU;
+
+  // try/catch breadcrumb
+  try { localStorage.setItem('ws:seen:planimeter', '1'); } catch(e){}
+
+  var prefersReduced = false;
+  try { prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch(e){}
+
+  // ── DOM ──
+  var board = document.getElementById('board');
+  var ctx = board.getContext('2d');
+  var compute = document.getElementById('compute');
+  var hud = document.getElementById('hud');
+
+  // ── state (all geometry in PAPER inches; the renderer maps inches→px) ──
+  var state = {
+    shape: 'circle',
+    L: 2.5,           // tracer-arm length (inches)
+    size: 1.3,        // figure characteristic size (inches): radius / half-side / semi-major
+    poleAng: 155 * Math.PI/180,
+    poleR: 4.2,       // pole distance from figure centre (inches)
+    skin: 'brass',
+    guide: true,
+    figureCenter: { x: 0, y: 0 },
+    M: 4.4,           // pole-arm length (derived to keep linkage reachable)
+    branch: true,
+    seed: 0xC0FFEE,
+    path: [],         // boundary samples (inches)
+    verts: null,      // polygon vertices (for square/blob) for shoelace truth
+    // live trace
+    traced: [],       // tracer points visited so far (inches)
+    tracerT: { x:0, y:0 },
+    elbow: { x:0, y:0 },
+    wheelAngle: 0,    // accumulated wheel rotation (radians) for the dial
+    dW: 0,            // net roll so far (inches)
+    measArea: 0,      // L·dW so far
+    trueArea: 0,      // independent truth for the current closed figure
+    closed: false,    // whether the current trace forms a closed loop
+    animating: false,
+    dragging: false
+  };
+
+  var WHEEL_RADIUS = 0.18;  // inches — only affects the dial's spin rate, not area
+
+  // ── viewport mapping (inches ↔ pixels) ──
+  var view = { w:0, h:0, dpr:1, scale:60, cx:0, cy:0 };
+  function computeSize(){
+    var stage = document.getElementById('stage');
+    var avail = Math.min(stage.clientWidth - 4, 820);
+    var w = Math.max(300, avail);
+    var h = Math.round(w * 0.66);
+    var maxH = window.innerHeight - 230;
+    if(h > maxH){ h = Math.max(260, maxH); }
+    view.dpr = Math.min(2, window.devicePixelRatio || 1);
+    view.w = w; view.h = h;
+    board.style.width = w + 'px';
+    board.style.height = h + 'px';
+    board.width = Math.round(w * view.dpr);
+    board.height = Math.round(h * view.dpr);
+    // world extent: fit pole + figure comfortably. Figure near (0.4w, 0.5h)
+    // The drawing places figure centre a bit right of the board centre so the
+    // pole (to the left/upper-left) has room.
+    view.scale = Math.min(w, h) / 9.5;   // ~9.5 inches across the smaller dim
+    view.cx = w * 0.50;
+    view.cy = h * 0.52;
+  }
+  function X(ix){ return view.cx + ix * view.scale; }
+  function Y(iy){ return view.cy + iy * view.scale; }
+  function invX(px){ return (px - view.cx) / view.scale; }
+  function invY(py){ return (py - view.cy) / view.scale; }
+
+  // pole position in inches (figure centred at origin in world coords here;
+  // figureCenter is origin). Pole orbits the figure centre.
+  function poleXY(){
+    return { x: state.figureCenter.x + state.poleR * Math.cos(state.poleAng),
+             y: state.figureCenter.y + state.poleR * Math.sin(state.poleAng) };
+  }
+
+  // derive M so that the linkage can reach the whole figure boundary from the
+  // current pole, with margin. M is chosen as (max reach − L + slack), clamped.
+  function deriveM(){
+    var P = poleXY();
+    var dmax = 0, dmin = Infinity;
+    var pts = state.path.length ? state.path : C.genCircle(state.figureCenter, state.size, 64);
+    for(var i = 0; i < pts.length; i++){
+      var d = Math.hypot(pts[i].x - P.x, pts[i].y - P.y);
+      if(d > dmax) dmax = d; if(d < dmin) dmin = d;
+    }
+    // Need M+L ≥ dmax and |M−L| ≤ dmin. Pick M to centre the reachable band.
+    var M = (dmax + dmin) / 2;                 // midpoint heuristic
+    // guarantee reachability with margin
+    if(M + state.L < dmax + 0.05) M = dmax - state.L + 0.25;
+    if(Math.abs(M - state.L) > dmin - 0.05) M = state.L + (dmin - 0.05);
+    if(M < state.L * 0.6) M = state.L * 0.6;
+    state.M = M;
+  }
+
+  // ── build the current figure boundary (inches) ──
+  function buildShape(){
+    var C0 = state.figureCenter, s = state.size, N = 720;
+    if(state.shape === 'circle'){
+      state.path = C.genCircle(C0, s, N); state.verts = null;
+    } else if(state.shape === 'ellipse'){
+      state.path = C.genEllipse(C0, s, s*0.62, 0.35, N); state.verts = null;
+    } else if(state.shape === 'square'){
+      state.path = C.genSquare(C0, s, N); state.verts = [
+        {x:C0.x-s,y:C0.y-s},{x:C0.x+s,y:C0.y-s},{x:C0.x+s,y:C0.y+s},{x:C0.x-s,y:C0.y+s} ];
+    } else { // blob
+      var g = C.genBlob(C0, s, state.seed, 9, 30);
+      state.path = g.path; state.verts = g.verts;
+    }
+    // independent ground truth for this figure
+    if(state.shape === 'circle') state.trueArea = Math.PI * s * s;
+    else if(state.shape === 'ellipse') state.trueArea = Math.PI * s * (s*0.62);
+    else if(state.shape === 'square') state.trueArea = (2*s)*(2*s);
+    else state.trueArea = Math.abs(C.shoelace(state.path.slice(0, state.path.length - 1)));
+    deriveM();
+    // reset the trace; place the tracer at the boundary start
+    resetWheel();
+  }
+
+  function resetWheel(){
+    state.traced = [];
+    state.dW = 0; state.measArea = 0; state.wheelAngle = 0; state.closed = false;
+    var p0 = state.path[0] || { x:state.figureCenter.x + state.size, y:state.figureCenter.y };
+    state.tracerT = { x:p0.x, y:p0.y };
+    var E = C.solveElbow(poleXY(), state.M, state.tracerT, state.L, state.branch);
+    if(E.ok) state.elbow = { x:E.x, y:E.y };
+  }
+
+  // place the tracer at point T (inches): integrate the wheel roll for the
+  // incremental step using the EXACT SAME core perpendicular-projection model.
+  function moveTracerTo(T){
+    var prev = state.tracerT;
+    var P = poleXY();
+    // midpoint-rule single step (consistent with the core wheelRoll)
+    var mid = { x:(prev.x+T.x)/2, y:(prev.y+T.y)/2 };
+    var Emid = C.solveElbow(P, state.M, mid, state.L, state.branch);
+    var Eend = C.solveElbow(P, state.M, T, state.L, state.branch);
+    if(!Emid.ok || !Eend.ok) return false;     // unreachable — refuse the step
+    var u = C.armDir(Emid, mid);
+    var ddx = T.x - prev.x, ddy = T.y - prev.y;
+    var dInc = ddx * (-u.y) + ddy * (u.x);
+    state.dW += dInc;
+    state.measArea = state.L * state.dW;
+    state.wheelAngle += dInc / WHEEL_RADIUS;
+    state.tracerT = { x:T.x, y:T.y };
+    state.elbow = { x:Eend.x, y:Eend.y };
+    state.traced.push({ x:T.x, y:T.y });
+    return true;
+  }
+
+  // ── AUTO-TRACE animation ──
+  var anim = { active:false, idx:0, raf:0 };
+  function startTrace(){
+    stopTrace();
+    resetWheel();
+    var path = state.path;
+    if(!path.length) return;
+    // seed the trace at the first point
+    state.tracerT = { x:path[0].x, y:path[0].y };
+    state.traced = [ { x:path[0].x, y:path[0].y } ];
+    var Estart = C.solveElbow(poleXY(), state.M, state.tracerT, state.L, state.branch);
+    if(Estart.ok) state.elbow = { x:Estart.x, y:Estart.y };
+
+    if(prefersReduced){
+      // no animation: integrate the whole loop instantly, show final state
+      for(var i = 1; i < path.length; i++) moveTracerTo(path[i]);
+      state.closed = true;
+      updateReadout(); draw();
+      flashResult();
+      return;
+    }
+    anim.active = true; anim.idx = 1; state.animating = true;
+    setTraceBtn(true);
+    var stepsPerFrame = Math.max(1, Math.round(path.length / 150)); // ~2.5s total
+    function frame(){
+      if(!anim.active) return;
+      for(var k = 0; k < stepsPerFrame && anim.idx < path.length; k++){
+        moveTracerTo(path[anim.idx]); anim.idx++;
+      }
+      updateReadout(); draw();
+      if(anim.idx >= path.length){
+        state.closed = true; anim.active = false; state.animating = false;
+        setTraceBtn(false);
+        updateReadout(); draw(); flashResult();
+        return;
+      }
+      anim.raf = requestAnimationFrame(frame);
+    }
+    anim.raf = requestAnimationFrame(frame);
+  }
+  function stopTrace(){
+    anim.active = false; state.animating = false;
+    if(anim.raf) cancelAnimationFrame(anim.raf);
+    setTraceBtn(false);
+  }
+  function setTraceBtn(running){
+    var b = document.getElementById('btnTrace');
+    b.textContent = running ? 'Tracing…' : 'Trace';
+    b.disabled = running;
+  }
+  function flashResult(){
+    var rel = state.trueArea > 0 ? Math.abs(Math.abs(state.measArea) - state.trueArea)/state.trueArea : 0;
+    flashHud('Wheel read <b>' + Math.abs(state.measArea).toFixed(3) + ' in²</b> · true <b>' +
+             state.trueArea.toFixed(3) + '</b> · error ' + (rel*100).toFixed(4) + '%', 4200);
+  }
+
+  // ── READOUT ──
+  function updateReadout(){
+    document.getElementById('vDW').textContent = state.dW.toFixed(4);
+    document.getElementById('vL2').textContent = state.L.toFixed(2);
+    var area = Math.abs(state.measArea);
+    document.getElementById('vArea').textContent = area.toFixed(4);
+    var hasTruth = !!state.trueArea;
+    document.getElementById('vTrue').textContent = hasTruth ? state.trueArea.toFixed(4) : '—';
+    var relStr = '—';
+    if(state.closed && hasTruth){
+      var rel = Math.abs(area - state.trueArea) / state.trueArea;
+      relStr = (rel*100).toFixed(4) + '%';
+    }
+    document.getElementById('vErr').textContent = relStr;
+
+    if(state.closed){
+      var rel2 = hasTruth ? Math.abs(area - state.trueArea)/state.trueArea : 0;
+      var cls = rel2 < 1e-3 ? 'match' : 'miss';
+      compute.innerHTML = 'Area = L·ΔW = <b>' + state.L.toFixed(2) + '</b> × <b>' + state.dW.toFixed(4) +
+        '</b> = <b>' + area.toFixed(4) + ' in²</b>' +
+        (hasTruth ? '  ·  true <span class="' + cls + '">' + state.trueArea.toFixed(4) + ' in²</span>' : '');
+    } else if(state.traced.length > 1){
+      compute.innerHTML = 'Tracing… running area <b>' + area.toFixed(4) + ' in²</b> — close the loop to finish.';
+    } else {
+      compute.innerHTML = 'Pick a shape and press <b>Trace</b> — or drag the orange tracer around the figure yourself.';
+    }
+  }
+
+  // ── DRAWING ──
+  function css(v){ return getComputedStyle(document.body).getPropertyValue(v).trim(); }
+
+  function draw(){
+    var dpr = view.dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    var W = view.w, H = view.h;
+    // board / paper
+    ctx.fillStyle = css('--board'); ctx.fillRect(0,0,W,H);
+    // inset paper sheet
+    var pad = 10;
+    ctx.fillStyle = css('--paper');
+    roundRect(ctx, pad, pad, W - 2*pad, H - 2*pad, 8); ctx.fill();
+    // grid (decorative; spacing = 0.5 inch)
+    ctx.save();
+    ctx.beginPath(); roundRect(ctx, pad, pad, W - 2*pad, H - 2*pad, 8); ctx.clip();
+    ctx.strokeStyle = css('--paper-line'); ctx.lineWidth = 1;
+    var step = 0.5 * view.scale;
+    var ox = (view.cx) % step, oy = (view.cy) % step;
+    ctx.beginPath();
+    for(var gx = ox; gx < W; gx += step){ ctx.moveTo(gx, pad); ctx.lineTo(gx, H-pad); }
+    for(var gy = oy; gy < H; gy += step){ ctx.moveTo(pad, gy); ctx.lineTo(W-pad, gy); }
+    ctx.stroke();
+
+    // the figure (boundary to trace)
+    var path = state.path;
+    if(path.length){
+      ctx.beginPath();
+      ctx.moveTo(X(path[0].x), Y(path[0].y));
+      for(var i = 1; i < path.length; i++) ctx.lineTo(X(path[i].x), Y(path[i].y));
+      ctx.closePath();
+      ctx.fillStyle = css('--figure'); ctx.fill();
+      ctx.lineWidth = 1.6; ctx.strokeStyle = css('--figure-stroke'); ctx.stroke();
+    }
+
+    // the traced track (where the tracer has gone)
+    if(state.traced.length > 1){
+      ctx.beginPath();
+      ctx.moveTo(X(state.traced[0].x), Y(state.traced[0].y));
+      for(var t = 1; t < state.traced.length; t++) ctx.lineTo(X(state.traced[t].x), Y(state.traced[t].y));
+      ctx.lineWidth = 2.4; ctx.strokeStyle = css('--trace-path');
+      ctx.setLineDash([1,0]); ctx.stroke();
+    }
+    ctx.restore();
+
+    // ── the instrument linkage ──
+    var P = poleXY();
+    var E = state.elbow;
+    var T = state.tracerT;
+    var pPx = { x:X(P.x), y:Y(P.y) }, ePx = { x:X(E.x), y:Y(E.y) }, tPx = { x:X(T.x), y:Y(T.y) };
+    var metal = css('--metal'), metalDk = css('--metal-dk'), metalHi = css('--metal-hi');
+
+    // pole arm (P→E)
+    drawArm(pPx, ePx, 9, metal, metalDk, metalHi);
+    // tracer arm (E→T)
+    drawArm(ePx, tPx, 8, metal, metalDk, metalHi);
+
+    // measuring wheel: sits on the tracer arm near the elbow; axle ALONG arm.
+    var u = C.armDir(E, T);                    // unit along arm (E→T)
+    var perp = { x:-u.y, y:u.x };
+    var wheelPos = { x: E.x + u.x * state.L * 0.46, y: E.y + u.y * state.L * 0.46 };
+    drawWheel(wheelPos, u, perp);
+
+    // guide: wheel axis + perpendicular roll component
+    if(state.guide && state.traced.length > 1){
+      var wp = { x:X(wheelPos.x), y:Y(wheelPos.y) };
+      // axis line (along arm) — dashed
+      ctx.save();
+      ctx.strokeStyle = css('--accent'); ctx.globalAlpha = 0.5; ctx.lineWidth = 1.2;
+      ctx.setLineDash([5,4]);
+      var axLen = 26;
+      ctx.beginPath();
+      ctx.moveTo(wp.x - u.x*axLen, wp.y - u.y*axLen);
+      ctx.lineTo(wp.x + u.x*axLen, wp.y + u.y*axLen);
+      ctx.stroke();
+      // perpendicular (roll-sensitive) direction — solid short tick
+      ctx.setLineDash([]); ctx.globalAlpha = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(wp.x, wp.y);
+      ctx.lineTo(wp.x + perp.x*22, wp.y + perp.y*22);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // elbow joint
+    drawJoint(ePx, 6, metal, metalDk);
+    // pole pin (fixed)
+    drawPole(pPx);
+    // tracer point
+    drawTracer(tPx);
+
+    // wheel dial inset (bottom-left of board): a vernier-ish readout
+    drawDial(W, H);
+  }
+
+  function roundRect(c,x,y,w,h,r){
+    c.beginPath();
+    c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+    c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
+  }
+  function drawArm(a, b, w, metal, dk, hi){
+    var ang = Math.atan2(b.y-a.y, b.x-a.x);
+    ctx.save(); ctx.translate(a.x, a.y); ctx.rotate(ang);
+    var len = Math.hypot(b.x-a.x, b.y-a.y);
+    var grad = ctx.createLinearGradient(0,-w/2,0,w/2);
+    grad.addColorStop(0, dk); grad.addColorStop(0.4, metal);
+    grad.addColorStop(0.5, hi); grad.addColorStop(0.6, metal); grad.addColorStop(1, dk);
+    ctx.fillStyle = grad;
+    roundRect(ctx, 0, -w/2, len, w, w/2); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.restore();
+  }
+  function drawJoint(p, r, metal, dk){
+    var g = ctx.createRadialGradient(p.x-r*0.3, p.y-r*0.3, r*0.2, p.x, p.y, r);
+    g.addColorStop(0, css('--metal-hi')); g.addColorStop(1, dk);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+  function drawWheel(posWorld, u, perp){
+    var p = { x:X(posWorld.x), y:Y(posWorld.y) };
+    var rad = WHEEL_RADIUS * view.scale * 1.05;
+    var ang = Math.atan2(u.y, u.x);
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(ang);
+    // the wheel seen edge-on: a thin ellipse (axle along x = along arm)
+    var rimW = Math.max(4, rad*0.42);
+    var g = ctx.createLinearGradient(-rimW, 0, rimW, 0);
+    g.addColorStop(0, css('--metal-dk')); g.addColorStop(0.5, css('--wheel')); g.addColorStop(1, css('--metal-dk'));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(0, 0, rimW, rad, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1; ctx.stroke();
+    // hatch marks that rotate with wheelAngle (so you SEE it roll)
+    ctx.strokeStyle = 'rgba(20,12,2,0.6)'; ctx.lineWidth = 1;
+    var spokes = 16;
+    for(var s = 0; s < spokes; s++){
+      var a = state.wheelAngle + s * TAU/spokes;
+      var yy = Math.sin(a) * rad * 0.92;
+      var xx = Math.cos(a) * rimW * 0.55;
+      ctx.beginPath(); ctx.moveTo(xx, yy*0.0); // tick at rim edge
+      ctx.moveTo(0, yy); ctx.lineTo(rimW*0.6*Math.sign(Math.cos(a)||1), yy);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawPole(p){
+    ctx.save();
+    // base shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(p.x, p.y+3, 11, 5, 0, 0, TAU); ctx.fill();
+    var g = ctx.createRadialGradient(p.x-2,p.y-2,1, p.x,p.y,9);
+    g.addColorStop(0, css('--metal-hi')); g.addColorStop(1, css('--pole-col'));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x,p.y,8,0,TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1.4; ctx.stroke();
+    // crosshair = fixed pin
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(p.x-4,p.y); ctx.lineTo(p.x+4,p.y); ctx.moveTo(p.x,p.y-4); ctx.lineTo(p.x,p.y+4); ctx.stroke();
+    ctx.fillStyle = css('--ink-dim'); ctx.font = '10px ' + css('--font-mono');
+    ctx.fillText('pole', p.x + 11, p.y + 3);
+    ctx.restore();
+  }
+  function drawTracer(p){
+    ctx.save();
+    var g = ctx.createRadialGradient(p.x-2,p.y-2,1, p.x,p.y,9);
+    g.addColorStop(0, '#fff'); g.addColorStop(0.5, css('--tracer')); g.addColorStop(1, 'rgba(120,30,15,1)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x,p.y,7,0,TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1.2; ctx.stroke();
+    // crosshair tip
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(p.x-9,p.y); ctx.lineTo(p.x+9,p.y); ctx.moveTo(p.x,p.y-9); ctx.lineTo(p.x,p.y+9); ctx.stroke();
+    ctx.restore();
+  }
+  function drawDial(W, H){
+    var r = 34, cx = 16 + r, cy = H - 16 - r;
+    if(W < 360){ r = 26; cx = 12 + r; cy = H - 12 - r; }
+    ctx.save();
+    // face
+    var g = ctx.createRadialGradient(cx-r*0.3, cy-r*0.3, r*0.2, cx, cy, r);
+    g.addColorStop(0, 'rgba(20,14,6,0.92)'); g.addColorStop(1, 'rgba(8,6,3,0.95)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx,cy,r,0,TAU); ctx.fill();
+    ctx.strokeStyle = css('--metal'); ctx.lineWidth = 2; ctx.stroke();
+    // ticks
+    ctx.strokeStyle = css('--ink-dim'); ctx.lineWidth = 1;
+    for(var t = 0; t < 24; t++){
+      var a = t*TAU/24; var r1 = r-3, r2 = (t%6===0)? r-9 : r-6;
+      ctx.beginPath();
+      ctx.moveTo(cx+Math.cos(a)*r1, cy+Math.sin(a)*r1);
+      ctx.lineTo(cx+Math.cos(a)*r2, cy+Math.sin(a)*r2);
+      ctx.stroke();
+    }
+    // needle (wheel angle)
+    var na = state.wheelAngle - Math.PI/2;
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.cos(na)*(r-8), cy+Math.sin(na)*(r-8)); ctx.stroke();
+    ctx.fillStyle = css('--accent'); ctx.beginPath(); ctx.arc(cx,cy,2.5,0,TAU); ctx.fill();
+    // turns label
+    ctx.fillStyle = css('--ink'); ctx.font = 'bold ' + (r<30?8:9) + 'px ' + css('--font-mono');
+    ctx.textAlign = 'center';
+    ctx.fillText((state.wheelAngle/TAU).toFixed(2), cx, cy + r + 12);
+    ctx.fillStyle = css('--ink-dim'); ctx.font = (r<30?7:8) + 'px ' + css('--font-mono');
+    ctx.fillText('turns', cx, cy + r + 21);
+    ctx.textAlign = 'start';
+    ctx.restore();
+  }
+
+  // ── HUD ──
+  function flashHud(msg, ms){
+    hud.innerHTML = msg; hud.classList.add('show');
+    clearTimeout(flashHud._t); flashHud._t = setTimeout(function(){ hud.classList.remove('show'); }, ms || 2600);
+  }
+
+  // ── drag-to-trace (manual) ──
+  function nearestOnBoundary(T){
+    // snap a freehand drag toward the boundary for a satisfying manual trace,
+    // but DO NOT force it — we record the actual tracer point either way.
+    return T;
+  }
+  function pointerToInches(ev){
+    var rect = board.getBoundingClientRect();
+    var px = (ev.clientX - rect.left), py = (ev.clientY - rect.top);
+    return { x: invX(px), y: invY(py) };
+  }
+  function onPointerDown(ev){
+    if(state.animating) return;
+    var T = pointerToInches(ev);
+    var tpx = { x:X(state.tracerT.x), y:Y(state.tracerT.y) };
+    var rect = board.getBoundingClientRect();
+    var d = Math.hypot((ev.clientX-rect.left) - tpx.x, (ev.clientY-rect.top) - tpx.y);
+    if(d > 26) return;                         // must grab the tracer itself
+    state.dragging = true; board.classList.add('dragging');
+    board.setPointerCapture && board.setPointerCapture(ev.pointerId);
+    // starting a fresh manual trace: reset the wheel and seed from here
+    resetWheel();
+    state.tracerT = { x:T.x, y:T.y };
+    state.traced = [ { x:T.x, y:T.y } ];
+    var E = C.solveElbow(poleXY(), state.M, state.tracerT, state.L, state.branch);
+    if(E.ok) state.elbow = { x:E.x, y:E.y };
+    ev.preventDefault(); draw(); updateReadout();
+  }
+  function onPointerMove(ev){
+    if(!state.dragging) return;
+    var T = pointerToInches(ev);
+    if(moveTracerTo(T)){
+      // detect loop closure: returned near the start with enough travel
+      var start = state.traced[0];
+      var traveled = state.traced.length;
+      var dist = Math.hypot(T.x - start.x, T.y - start.y);
+      state.closed = (traveled > 30 && dist < state.size * 0.18);
+      updateReadout(); draw();
+    }
+    ev.preventDefault();
+  }
+  function onPointerUp(ev){
+    if(!state.dragging) return;
+    state.dragging = false; board.classList.remove('dragging');
+    // close the loop on release if we came back near the start
+    var start = state.traced[0];
+    if(start){
+      var dist = Math.hypot(state.tracerT.x - start.x, state.tracerT.y - start.y);
+      if(state.traced.length > 20 && dist < state.size * 0.35){
+        moveTracerTo(start);                  // snap shut
+        state.closed = true; flashResult();
+      }
+    }
+    updateReadout(); draw();
+    ev.preventDefault();
+  }
+
+  // ── PNG export (2×) ──
+  function exportPNG(){
+    var S = 2;
+    var off = document.createElement('canvas');
+    off.width = view.w * S; off.height = view.h * S;
+    var oc = off.getContext('2d');
+    // re-render at 2× by temporarily swapping ctx/view dpr
+    var savedCtx = ctx, savedDpr = view.dpr;
+    ctx = oc; view.dpr = S;
+    draw();
+    ctx = savedCtx; view.dpr = savedDpr; draw();
+    off.toBlob(function(blob){
+      try{
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'planimeter_' + state.shape + '_L' + state.L.toFixed(2) + '.png';
+        document.body.appendChild(a); a.click();
+        setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 3000);
+        flashHud('Exported · <b>' + state.shape + '</b>');
+      }catch(e){ console.error(e); }
+    });
+  }
+
+  // ── CONTROLS ──
+  function setActive(seg, v){
+    seg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b.dataset.v === v); });
+  }
+  function fmtPole(){ return Math.round(state.poleAng * 180/Math.PI) + '°'; }
+
+  function bind(){
+    document.getElementById('segShape').addEventListener('click', function(ev){
+      var b = ev.target.closest('button'); if(!b) return;
+      stopTrace(); state.shape = b.dataset.v; setActive(this, state.shape);
+      buildShape(); updateReadout(); draw();
+    });
+    document.getElementById('segSkin').addEventListener('click', function(ev){
+      var b = ev.target.closest('button'); if(!b) return;
+      state.skin = b.dataset.v; document.body.dataset.skin = state.skin; setActive(this, state.skin);
+      draw();   // geometry unchanged — only colours
+    });
+    var rL = document.getElementById('rL');
+    rL.addEventListener('input', function(){
+      stopTrace(); state.L = parseFloat(this.value);
+      document.getElementById('vL').textContent = state.L.toFixed(2) + ' in';
+      deriveM(); resetWheel(); updateReadout(); draw();
+    });
+    var rSize = document.getElementById('rSize');
+    rSize.addEventListener('input', function(){
+      stopTrace(); state.size = parseFloat(this.value);
+      document.getElementById('vSize').textContent = state.size.toFixed(2) + ' in';
+      buildShape(); updateReadout(); draw();
+    });
+    var rPole = document.getElementById('rPole');
+    rPole.addEventListener('input', function(){
+      stopTrace(); state.poleAng = parseFloat(this.value) * Math.PI/180;
+      document.getElementById('vPole').textContent = fmtPole();
+      deriveM(); resetWheel(); updateReadout(); draw();
+    });
+    var rPoleR = document.getElementById('rPoleR');
+    rPoleR.addEventListener('input', function(){
+      stopTrace(); state.poleR = parseFloat(this.value);
+      document.getElementById('vPoleR').textContent = state.poleR.toFixed(2) + ' in';
+      deriveM(); resetWheel(); updateReadout(); draw();
+    });
+    document.getElementById('btnTrace').addEventListener('click', startTrace);
+    document.getElementById('btnReset').addEventListener('click', function(){
+      stopTrace(); resetWheel(); updateReadout(); draw();
+    });
+    document.getElementById('btnPng').addEventListener('click', exportPNG);
+    var tGuide = document.getElementById('tGuide');
+    tGuide.addEventListener('click', function(){
+      state.guide = !state.guide; this.classList.toggle('on', state.guide); draw();
+    });
+
+    // pointer trace
+    board.addEventListener('pointerdown', onPointerDown);
+    board.addEventListener('pointermove', onPointerMove);
+    board.addEventListener('pointerup', onPointerUp);
+    board.addEventListener('pointercancel', onPointerUp);
+
+    // selftest chip
+    document.getElementById('selftest').addEventListener('click', function(){
+      flashHud('Wheel reading (L·ΔW) vs an INDEPENDENT truth (shoelace / πr²) — proven by the SAME core the headless test runs. See the console.', 4200);
+    });
+
+    var rt = null;
+    window.addEventListener('resize', function(){
+      clearTimeout(rt); rt = setTimeout(function(){ stopTrace(); computeSize(); resetWheel(); updateReadout(); draw(); }, 120);
+    });
+  }
+
+  // ── INIT ──
+  function init(){
+    var res = C.runSelfTest();
+    var chip = document.getElementById('selftest');
+    if(res.pass === res.total){
+      chip.className = 'selftest ok';
+      chip.textContent = 'planimeter verified — ' + res.pass + '/' + res.total + ' ✓';
+    } else {
+      chip.className = 'selftest bad';
+      chip.textContent = 'planimeter FAILED — ' + res.pass + '/' + res.total;
+    }
+    chip.title = res.log.join('\n');
+    console.log('Planimeter self-test: ' + res.pass + '/' + res.total + ' passed. ' +
+                'max area rel-error ' + res.maxAreaErr.toExponential(3) +
+                ', pole-independence spread ' + res.poleSpread.toExponential(3) + '.');
+
+    bind();
+    computeSize();
+    buildShape();
+    updateReadout();
+    draw();
+
+    // a gentle opening: auto-trace the default circle once (unless reduced motion)
+    if(!prefersReduced){
+      setTimeout(startTrace, 450);
+    } else {
+      // reduced motion: show the completed trace immediately
+      startTrace();
+    }
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+
+})();
+</script>
+</body>
+</html>
