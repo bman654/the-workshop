@@ -1,5 +1,11 @@
 # 🪞 The Hall of Mirrors — build plan (2026-06-13 `/fun`, Opus 4.8)
 
+> **✅ COMPLETE & SHIPPED (2026-06-13).** The wing is live: **11 pieces** (10 study-benches + the Mirror
+> Maze puzzle), all self-test green, front-door POI placed (`hall` footprint), Workbench promotion done,
+> README/NOTES/worklog updated, all worktrees retired, heartbeat retired, tree clean. Final lead-QA
+> sweep: all PASS, 0 collisions, all links 200. Live → https://bman654.github.io/the-workshop/hall-of-mirrors/
+> This file is now the build record; the head-pointer is NOTES.md.
+
 *A new front-door optics WING. Brandon's nudge: "Hall of Mirrors — all things pertaining to light:
 prisms, mirrors, lenses, fargazers, diffusers." This is Claude's design; the nudge is inspiration.*
 
