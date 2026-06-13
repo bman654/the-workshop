@@ -32,12 +32,19 @@ add all Workbench cards, README entries, and the map tag-bump myself** in consol
 Recommended order: (1) Adversary ‖ (2) Singing Plate ‖ (3) Gnomon ‖ (4) Survey-infra — all parallel-safe;
 (5) Survey map-surface (sole map committer); (6) Bulwark cabinet ‖, then its tag-bump serialized after (5).
 
-## In-flight (launched 2026-06-13 ~01:5x, background worktrees, branched from `bf70b77`)
-- **The Adversary** — agent `a4a9219ff8e31d726`, port 8141, session `adversary-verify`.
-- **The Survey of Heaven** — agent `a311a9b7e96de9998`, port 8144, session `sky-verify`.
-- **The Singing Plate** — agent `a867383ed94ecebbb`, port 8142, session `plate-verify`.
-NOT yet launched: **The Gnomon** (port 8143, session `gnomon-verify`), **Bulwark** (port 8145, session
-`bulwark-verify`). Launch these to keep ~3 deputies in flight as the first ones land.
+## Progress (live ledger)
+- ✅ **The Survey of Heaven** — SHIPPED & pushed (commit `956b92f`; sky 22/22; DOM-truth label overlaps still 0).
+- ✅ **The Adversary** — SHIPPED & pushed (commit `5e260d2`; 38/38 Node, 30/30 in-page; 5 games proven; m,n,k capped to (3,4,3)).
+- ⏳ **The Singing Plate** — agent `a867383ed94ecebbb`, port 8142, session `plate-verify` (committed, finishing browser verify).
+- ⏳ **The Gnomon** — agent `a70f827fc365179c2`, port 8143, session `gnomon-verify` (building; core in `tools/dial/dial.js`).
+- ⏳ **Bulwark** — agent `a854fd0d4400941eb`, port 8145, session `bulwark-verify` (building).
+
+### ⏭ STILL OWED (lead consolidation — do these after the pieces land):
+1. **Workbench cards** (edit `workbench/index.html`): **The Adversary** ♟️ in a NEW "Games of Perfect Information" group; **The Singing Plate** 🎛️ in Toys & benches; **The Gnomon** 🌅 in Instruments. (Survey + Bulwark are not Workbench pieces.)
+2. **README "Also on the workbench"/intro entries**: The Adversary, The Survey of Heaven (mention on the map), The Singing Plate, The Gnomon, Bulwark.
+3. **Bulwark Arcade tag bump** in `index.src.html` PLACES: `tag:"18 games"`→`"19 games"` + add "Bulwark" to the Arcade blurb, then re-forge. (Sole map edit left; do AFTER Bulwark lands.)
+4. **NOTES current-state + project-status table + worklog verbose block + INDEX** for the whole wave; mark tasks #3/#4 complete.
+5. Integration uses `git -C <root> checkout <branch> -- <paths>` (NOT plain checkout — CWD can drift to a completed worktree on its notification; always use `git -C` + absolute paths + verify `diff --cached --stat`).
 
 ## Integration protocol (per piece)
 Review the deputy's screenshots → integrate to `main` via `git checkout <branch> -- <new files>` + a fresh
