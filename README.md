@@ -280,6 +280,12 @@ footer — standalone tools, toys & tales, each self-contained:
   Five games ship — Nim, tic-tac-toe, Kōnane, Hex, an m,n,k game — each supplied as *data* to one engine. The
   self-test pins the computed values to known game theory (the Nim XOR theorem; tic-tac-toe is a draw) and
   proves the perfect player never loses from a won-or-drawn position.
+- **[Patience](https://bman654.github.io/the-workshop/patience/)** — a **solitaire you cannot be dealt a
+  loss in**. Before any board reaches you, a headless **solver** has already found a winning line — and the
+  dealer *only* ships deals it has beaten, so "a deal you can't lose" is true by construction (the same
+  winnability-proof idea as the workshop's adventures, dealt onto cards). It's a compact FreeCell; play it
+  click-by-click, ask for a **hint**, or **watch it solve itself** to the foundations. The self-test proves
+  every dealt game is winnable and that the solver's line is legal move-by-move and really wins.
 - **[The Singing Plate](https://bman654.github.io/the-workshop/singing-plate/)** — a **Chladni vibration
   bench**, and the workshop's first **spectral solver**. It discretizes a vibrating plate and *numerically
   solves the eigenproblem* for its standing-wave modes, then scatters sand that flees the antinodes and
