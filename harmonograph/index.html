@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harmonograph</title>
+<style>
+  :root{
+    /* ink-on-paper (default) skin — chrome colours, cosmetic only */
+    --panel-bg: rgba(14,12,9,0.88);
+    --panel-edge: rgba(201,162,74,0.34);
+    --ink: #eaf0fa;
+    --ink-dim: #8b95a8;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --bg: #080a0f;
+    /* stage (drawing surface) — set per skin in JS, read only by chrome */
+    --paper: #f4ecd8;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:default; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; }
+  #paper{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+  #hud{ position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    font:11px/1.3 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.5);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 12px; letter-spacing:.3px;
+    pointer-events:none; opacity:0; transition:opacity .15s; max-width:90%; text-align:center; }
+  #hud.show{ opacity:1; }
+  #hud b{ color:var(--accent); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:328px; flex:0 0 328px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 22px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 8px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .sect .rt{ float:right; color:var(--accent); text-transform:none; letter-spacing:.2px; font-variant-numeric:tabular-nums; }
+  .row{ margin:11px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .row > label .val{ color:var(--accent); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.2px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#f6f1e3; border:2px solid #8a6d28; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%; background:#f6f1e3; border:2px solid #8a6d28; cursor:pointer;
+  }
+  .pend{ border:1px solid rgba(201,162,74,0.18); border-radius:9px; padding:9px 10px 4px; margin:9px 0; background:rgba(255,255,255,0.018); }
+  .pend .ph{ font:600 9.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:3px; }
+  .pend .ph b{ color:var(--accent); }
+  .pend .mini{ margin:7px 0; }
+  .pend .mini > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 9px/1 var(--font-mono);
+    letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:5px; }
+  .pend .mini > label .val{ color:var(--accent); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.2px; }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(201,162,74,0.24); flex-wrap:wrap; }
+  .seg button{
+    flex:1; min-width:30px; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#241803; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .preset-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:6px; }
+  .chip{
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink-dim);
+    border-radius:8px; padding:8px 6px; font-size:11px; font-weight:600; letter-spacing:.2px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui); text-align:center;
+  }
+  .chip:hover{ background:var(--accent-soft); border-color:var(--accent); color:var(--ink); }
+  .btnrow{ display:flex; gap:8px; margin:12px 0; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(201,162,74,0.26), rgba(201,162,74,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(201,162,74,0.40), rgba(201,162,74,0.14)); }
+  .seedrow{ display:flex; gap:8px; align-items:center; margin:11px 0; }
+  .seedrow input[type=number]{
+    flex:1; min-width:0; background:rgba(0,0,0,0.32); border:1px solid var(--panel-edge); color:var(--ink);
+    border-radius:8px; padding:8px 10px; font:13px/1 var(--font-mono); letter-spacing:.4px; outline:none;
+    font-variant-numeric:tabular-nums;
+  }
+  .seedrow input[type=number]:focus{ border-color:var(--accent); }
+  .hint{ font:10.5px/1.55 var(--font-mono); color:var(--ink-dim); opacity:.8; letter-spacing:.2px; margin:16px 0 4px;
+    border-top:1px solid rgba(201,162,74,0.16); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; workshop</a>
+    <div class="brand">
+      <h1>Harmonograph</h1>
+      <span class="tag">a pendulum drawing machine</span>
+    </div>
+    <div class="selftest" id="selftest" title="">checking…</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="paper"></canvas>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A Victorian <b>harmonograph</b> — two decaying pendulums steer a pen across the
+        paper, and their combined swing traces the looping Lissajous webs that slowly <b>spiral inward
+        and die</b>. Near-integer frequency <b>ratios</b> with a hair of detune make the figure breathe;
+        the damping makes it settle. Watch it draw, then roll a fresh one.</p>
+
+      <div class="sect">Motion</div>
+      <div class="btnrow">
+        <button class="btn primary" id="playBtn">⏸ Pause</button>
+        <button class="btn" id="redrawBtn">↻ Again</button>
+      </div>
+      <div class="row">
+        <label>Draw speed <span class="val" id="speedVal">1.0×</span></label>
+        <input type="range" id="speedSlider" min="0.25" max="3" step="0.05" value="1">
+      </div>
+
+      <div class="sect">Pendulums <span class="rt" id="ratioTag">2:3</span></div>
+      <div id="pendHost"></div>
+
+      <div class="sect">Roll a figure</div>
+      <div class="seedrow">
+        <input type="number" id="seedInput" value="12345" min="0" step="1">
+        <button class="btn primary" id="surpriseBtn" style="flex:0 0 auto;padding:8px 14px;">Surprise me</button>
+      </div>
+
+      <div class="sect">Presets</div>
+      <div class="preset-grid" id="presets"></div>
+
+      <div class="sect">Skin</div>
+      <div class="row">
+        <div class="seg" id="skinSeg">
+          <button data-skin="ink" class="active">Ink</button>
+          <button data-skin="blueprint">Blueprint</button>
+          <button data-skin="phosphor">Phosphor</button>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn primary" id="pngBtn">Export 2× PNG</button>
+      </div>
+
+      <div class="hint">
+        Each axis is two pendulums: <b>x(t) = Σ Aᵢ·sin(2π·fᵢ·t+φᵢ)·e^(−dᵢ·t)</b>.
+        Try a <b>preset</b>, dial the per-pendulum frequency to detune the petals, then <b>Surprise me</b>
+        for a reproducible new web. The badge proves the pen never drifts from the math.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+// ============================================================================
+// Harmonograph CORE — pure parametric pen motion. NO DOM, NO skin, NO render.
+// The pen position is the sum of decaying sinusoids per axis:
+//   x(t) = Σ_i Ai · sin(2π·fi·t + φi) · e^(−di·t)
+//   y(t) = Σ_j Aj · sin(2π·fj·t + φj) · e^(−dj·t)
+// A "config" is { x:[term,...], y:[term,...] } where a term is
+//   { f, A, phase, d }  (f cycles/time, A amplitude, phase rad, d damping).
+// The SAME functions feed the browser renderer AND the headless self-test —
+// the curve the renderer paints can never drift from this math.
+// ============================================================================
+const TWO_PI = Math.PI * 2;
+
+// One decaying-sinusoid term's value at time t:  A·sin(2π·f·t + φ)·e^(−d·t)
+function termValue(term, t){
+  return term.A * Math.sin(TWO_PI * term.f * t + term.phase) * Math.exp(-term.d * t);
+}
+// Sum a list of terms (one axis) at time t.
+function axisValue(terms, t){
+  let s = 0;
+  for(let i = 0; i < terms.length; i++) s += termValue(terms[i], t);
+  return s;
+}
+// The pen position at time t: { x, y }.
+function penPos(config, t){
+  return { x: axisValue(config.x, t), y: axisValue(config.y, t) };
+}
+// The per-term decayed amplitude envelope of one axis: Σ|Ai|·e^(−di·t).
+// Bounds |axisValue| (since |sin|≤1) and is the quantity the damping test
+// proves is non-increasing (d>0) / constant (d=0).
+function axisEnvelope(terms, t){
+  let s = 0;
+  for(let i = 0; i < terms.length; i++) s += Math.abs(terms[i].A) * Math.exp(-terms[i].d * t);
+  return s;
+}
+
+// ---- rational period machinery (for the closed-curve law) -----------------
+function gcdInt(a, b){ a = Math.abs(a); b = Math.abs(b); while(b){ const t = b; b = a % b; a = t; } return a; }
+function lcmInt(a, b){ if(a === 0 || b === 0) return 0; return Math.abs(a / gcdInt(a, b) * b); }
+// Given integer cycle counts k_i over a base period T0, every component has
+// period T0/k_i; the combined motion's fundamental period is the LCM of those,
+// which equals T0/gcd(k_i). gcdOfList returns gcd(k_i) so T = T0/gcd.
+function gcdOfList(list){
+  let g = 0;
+  for(const v of list) g = gcdInt(g, Math.round(v));
+  return g;
+}
+
+// ---- deterministic PRNG (seedable) ----------------------------------------
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+// A pleasing reproducible config rolled from an integer seed: near-integer
+// frequency ratios with a tiny detune + gentle damping (the evolving-petal look).
+function configFromSeed(seed){
+  const r = mulberry32(seed >>> 0);
+  const pick = (arr) => arr[Math.floor(r() * arr.length)];
+  const ratios = [1, 2, 3, 4, 5, 3/2, 4/3, 5/4, 2/3, 3/4, 5/3, 5/2];
+  const base = 1.0;
+  const detune = () => (r() - 0.5) * 0.014;       // tiny detune → slow precession
+  const mk = (mult) => ({
+    f: base * mult + detune(),
+    A: 0.55 + r() * 0.45,
+    phase: r() * TWO_PI,
+    d: 0.012 + r() * 0.055,
+  });
+  return { x: [ mk(pick(ratios)), mk(pick(ratios)) ], y: [ mk(pick(ratios)), mk(pick(ratios)) ] };
+}
+// A random config for the fidelity / envelope tests (wide ranges).
+function randomConfig(r){
+  const mk = () => ({ f: 0.2 + r() * 5, A: 0.2 + r() * 1.4, phase: r() * TWO_PI, d: r() * 0.4 });
+  return { x: [ mk(), mk() ], y: [ mk(), mk() ] };
+}
+// Fingerprint a sampled polyline (proves seed byte-identity & skin-invariance).
+function pathFingerprint(config, dur, n){
+  const parts = [];
+  for(let i = 0; i <= n; i++){
+    const t = i / n * dur;
+    const p = penPos(config, t);
+    parts.push(Math.round(p.x * 1e6) / 1e6, Math.round(p.y * 1e6) / 1e6);
+  }
+  return hashStr(parts.join(','));
+}
+function hashStr(s){
+  let h = 2166136261 >>> 0;
+  for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return ('00000000' + (h >>> 0).toString(16)).slice(-8) + ':' + s.length;
+}
+
+// ============================================================================
+// HEADLESS SELF-TEST — calls the REAL functions above. Returns {pass,total,log}.
+// ============================================================================
+function runSelfTest(){
+  let pass = 0, total = 0; const log = [];
+  function check(name, cond){
+    total++;
+    if(cond){ pass++; log.push('PASS: ' + name); if(typeof console !== 'undefined') console.log('PASS: ' + name); }
+    else { log.push('FAIL: ' + name); if(typeof console !== 'undefined') console.error('FAIL: ' + name); }
+  }
+  const rnd = mulberry32(0xC0FFEE);
+
+  // (1) FIDELITY: penPos() EQUALS the parametric equation to <1e-9 over many
+  //     random configs/times (renderer derives from penPos, never a copy).
+  {
+    let maxErr = 0;
+    for(let trial = 0; trial < 500; trial++){
+      const cfg = randomConfig(rnd);
+      const t = rnd() * 24;
+      let rx = 0, ry = 0;
+      for(const tm of cfg.x) rx += tm.A * Math.sin(TWO_PI * tm.f * t + tm.phase) * Math.exp(-tm.d * t);
+      for(const tm of cfg.y) ry += tm.A * Math.sin(TWO_PI * tm.f * t + tm.phase) * Math.exp(-tm.d * t);
+      const p = penPos(cfg, t);
+      maxErr = Math.max(maxErr, Math.abs(p.x - rx), Math.abs(p.y - ry));
+    }
+    check('fidelity: penPos() == hand-rolled parametric Σ (<1e-9)', maxErr < 1e-9);
+  }
+
+  // (2) DAMPING ENVELOPE: d>0 → envelope monotonically non-increasing;
+  //     d=0 → envelope exactly constant.
+  {
+    const damped = randomConfig(rnd);
+    for(const tm of damped.x) tm.d = 0.05 + rnd() * 0.3;
+    for(const tm of damped.y) tm.d = 0.05 + rnd() * 0.3;
+    let monoOk = true, prevX = Infinity, prevY = Infinity;
+    for(let t = 0; t <= 30; t += 0.25){
+      const ex = axisEnvelope(damped.x, t), ey = axisEnvelope(damped.y, t);
+      if(ex > prevX + 1e-12 || ey > prevY + 1e-12) monoOk = false;
+      prevX = ex; prevY = ey;
+    }
+    const undamped = randomConfig(rnd);
+    for(const tm of undamped.x) tm.d = 0;
+    for(const tm of undamped.y) tm.d = 0;
+    const e0x = axisEnvelope(undamped.x, 0), e0y = axisEnvelope(undamped.y, 0);
+    let constOk = true;
+    for(let t = 0; t <= 30; t += 0.5){
+      if(Math.abs(axisEnvelope(undamped.x, t) - e0x) > 1e-12) constOk = false;
+      if(Math.abs(axisEnvelope(undamped.y, t) - e0y) > 1e-12) constOk = false;
+    }
+    check('damping: envelope non-increasing for d>0, constant for d=0', monoOk && constOk);
+  }
+
+  // (3) CLOSED-CURVE LAW: integer-ratio frequencies, zero detune & zero damping
+  //     ⇒ closed periodic curve. With integer cycle counts k_i over a base unit
+  //     T0, the pen returns to its start at T = T0 / gcd(k_i) (the LCM of the
+  //     component periods). Verify position AND velocity realign — and that a
+  //     non-period time is NOT closed (guards a trivial pass).
+  {
+    let closeOk = true, worst = 0;
+    const ratios = [
+      [[1,1],[1,1]], [[2,3],[1,1]], [[3,4],[2,3]], [[5,4],[3,2]], [[2,1],[3,1]],
+    ];
+    const T0 = 1;
+    for(const r of ratios){
+      const [kx1, kx2] = r[0], [ky1, ky2] = r[1];
+      const cfg = {
+        x: [ { f: kx1 / T0, A: 1.0, phase: 0.3, d: 0 }, { f: kx2 / T0, A: 0.7, phase: 1.1, d: 0 } ],
+        y: [ { f: ky1 / T0, A: 0.9, phase: 0.7, d: 0 }, { f: ky2 / T0, A: 0.6, phase: 2.0, d: 0 } ],
+      };
+      const g = gcdOfList([kx1, kx2, ky1, ky2]);
+      const T = T0 / g;                 // exact fundamental period (LCM of periods)
+      for(const t0 of [0, 0.37 * T, 1.91 * T]){
+        const a = penPos(cfg, t0), b = penPos(cfg, t0 + T);
+        const e = Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+        worst = Math.max(worst, e);
+        if(e > 1e-9) closeOk = false;
+        const h = 1e-6;
+        const va = penPos(cfg, t0 + h), vb = penPos(cfg, t0 + T + h);
+        if(Math.abs(((va.x - a.x) - (vb.x - b.x)) / h) > 1e-3) closeOk = false;
+        if(Math.abs(((va.y - a.y) - (vb.y - b.y)) / h) > 1e-3) closeOk = false;
+      }
+      const a0 = penPos(cfg, 0), aOff = penPos(cfg, T / 3 + 0.013);
+      if(Math.max(Math.abs(a0.x - aOff.x), Math.abs(a0.y - aOff.y)) < 1e-6) closeOk = false;
+    }
+    check('closed-curve: integer ratios (d=0) close at t=period=T0/gcd (pos+vel, <1e-9)', closeOk && worst < 1e-9);
+  }
+
+  // (4) SEED REPRODUCIBILITY & SKIN-INVARIANCE: same seed → byte-identical
+  //     figure (identical sampled fingerprint); different seed differs; the
+  //     three skins produce identical geometry (CORE takes NO skin argument).
+  {
+    const fpA1 = pathFingerprint(configFromSeed(12345), 24, 4000);
+    const fpA2 = pathFingerprint(configFromSeed(12345), 24, 4000);
+    const fpB  = pathFingerprint(configFromSeed(12346), 24, 4000);
+    const cfg = configFromSeed(12345);
+    const skinHashes = ['ink','blueprint','phosphor'].map(() => pathFingerprint(cfg, 24, 4000));
+    const skinSame = skinHashes.every(h => h === fpA1);
+    check('reproducibility: same seed → identical fingerprint; different seed differs', fpA1 === fpA2 && fpA1 !== fpB);
+    check('skin-invariance: geometry fingerprint identical across 3 skins', skinSame);
+  }
+
+  return { pass, total, log };
+}
+
+// expose for Node extraction / external re-audit
+const __HgCore = { termValue, axisValue, penPos, axisEnvelope, gcdInt, lcmInt, gcdOfList,
+  configFromSeed, randomConfig, pathFingerprint, mulberry32, runSelfTest };
+if(typeof window !== 'undefined'){ window.HarmonographCore = __HgCore; }
+if(typeof module !== 'undefined' && module.exports){ module.exports = __HgCore; }
+
+// ============================================================================
+// APPLICATION (DOM). Everything below derives from the pure CORE above.
+// ============================================================================
+if(typeof document !== 'undefined'){ (function(){
+
+// ---------- skins (COSMETIC ONLY — never touch penPos) ----------------------
+// Each skin supplies a paper/background colour and an ink stroke. The trace is
+// drawn with a slow hue shift along its length for life; the skin sets the base.
+const SKINS = {
+  ink: {
+    paper: '#f4ecd8',
+    bg1: 'rgba(120,96,40,0.10)', bg2: 'rgba(60,48,24,0.10)',
+    inkA: [40, 26, 14], inkB: [120, 38, 24],   // sepia → faded crimson
+    frame: 'rgba(120,96,50,0.5)',
+  },
+  blueprint: {
+    paper: '#0b2138',
+    bg1: 'rgba(60,120,180,0.16)', bg2: 'rgba(30,70,120,0.14)',
+    inkA: [180, 222, 255], inkB: [120, 188, 240], // pale cyan lines on navy
+    frame: 'rgba(150,200,255,0.42)',
+  },
+  phosphor: {
+    paper: '#05100a',
+    bg1: 'rgba(40,160,90,0.10)', bg2: 'rgba(20,90,50,0.10)',
+    inkA: [120, 255, 170], inkB: [80, 220, 255],  // green→cyan CRT glow
+    frame: 'rgba(120,255,170,0.4)',
+  },
+};
+
+// ---------- app state -------------------------------------------------------
+const state = {
+  config: null,         // the live { x:[t,t], y:[t,t] } harmonograph config
+  seed: 12345,
+  speed: 1.0,           // draw-speed multiplier
+  playing: true,
+  skin: 'ink',
+  t: 0,                 // current model time
+  dur: 28,              // total model time to draw before the figure has died
+};
+const reduceMotion = (typeof window.matchMedia === 'function')
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if(reduceMotion) state.playing = false;
+
+const cv = document.getElementById('paper');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
+// We draw the trace incrementally onto an offscreen "ink" canvas so it
+// accumulates (the figure builds up over time), then composite paper + ink +
+// the live pen to the display each frame. On redraw/skin/config we clear it.
+let ink = document.createElement('canvas');
+let ictx = ink.getContext('2d');
+
+function resize(){
+  const stage = document.getElementById('stage');
+  W = Math.max(200, stage.clientWidth);
+  H = Math.max(200, stage.clientHeight);
+  dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  ink.width = cv.width; ink.height = cv.height;
+  redraw();                 // recompute fit + replay trace at new size
+}
+
+// Fit the whole undamped figure into the paper: the max excursion per axis is
+// Σ|Ai| (each |sin·e^−dt| ≤ 1). Map model coords → canvas with a margin.
+function transform(){
+  let mx = 0, my = 0;
+  for(const tm of state.config.x) mx += Math.abs(tm.A);
+  for(const tm of state.config.y) my += Math.abs(tm.A);
+  mx = mx || 1; my = my || 1;
+  const margin = 0.10;
+  const sw = W * (1 - 2 * margin), sh = H * (1 - 2 * margin);
+  const sc = Math.min(sw / (2 * mx), sh / (2 * my));
+  return { cx: W / 2, cy: H / 2, sc };
+}
+function toCanvas(p, tr){ return { X: tr.cx + p.x * tr.sc, Y: tr.cy - p.y * tr.sc }; }
+
+// ---------- the accumulated ink trace ---------------------------------------
+// We resample the polyline densely (fixed step) so the curve the renderer paints
+// IS penPos() at sampled t — the fidelity the self-test guarantees. Colour
+// shifts inkA→inkB along the trace for a sense of the pen ageing.
+const SAMPLES_PER_UNIT = 220;     // polyline density (×dur ≈ total samples)
+function strokeColor(sk, frac){
+  const a = sk.inkA, b = sk.inkB;
+  const R = Math.round(a[0] + (b[0] - a[0]) * frac);
+  const G = Math.round(a[1] + (b[1] - a[1]) * frac);
+  const B = Math.round(a[2] + (b[2] - a[2]) * frac);
+  return 'rgb(' + R + ',' + G + ',' + B + ')';
+}
+let inkDrawnTo = 0;     // model-time already committed to the ink canvas
+function clearInk(){
+  ictx.setTransform(1, 0, 0, 1, 0, 0);
+  ictx.clearRect(0, 0, ink.width, ink.height);
+  inkDrawnTo = 0;
+}
+// Commit trace from inkDrawnTo → tEnd onto the ink canvas (incremental).
+function commitInk(tEnd){
+  if(tEnd <= inkDrawnTo) return;
+  const sk = SKINS[state.skin];
+  const tr = transform();
+  ictx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ictx.lineJoin = 'round'; ictx.lineCap = 'round';
+  ictx.lineWidth = 1.15;
+  const step = 1 / SAMPLES_PER_UNIT;
+  let t = Math.max(0, inkDrawnTo - step);     // one sample back to connect cleanly
+  let prev = toCanvas(penPos(state.config, t), tr);
+  for(t = t + step; t <= tEnd + 1e-9; t += step){
+    const cur = toCanvas(penPos(state.config, t), tr);
+    ictx.strokeStyle = strokeColor(sk, Math.min(1, t / state.dur));
+    ictx.globalAlpha = 0.85;
+    ictx.beginPath();
+    ictx.moveTo(prev.X, prev.Y);
+    ictx.lineTo(cur.X, cur.Y);
+    ictx.stroke();
+    prev = cur;
+  }
+  ictx.globalAlpha = 1;
+  inkDrawnTo = tEnd;
+}
+
+// ---------- paint a display frame -------------------------------------------
+function paintBackground(targetCtx, tw, th){
+  const sk = SKINS[state.skin];
+  targetCtx.fillStyle = sk.paper;
+  targetCtx.fillRect(0, 0, tw, th);
+  const g = targetCtx.createRadialGradient(tw * 0.5, th * 0.42, 0, tw * 0.5, th * 0.42, Math.max(tw, th) * 0.7);
+  g.addColorStop(0, sk.bg1); g.addColorStop(1, sk.bg2);
+  targetCtx.fillStyle = g; targetCtx.fillRect(0, 0, tw, th);
+}
+function drawPen(targetCtx, tr, scale){
+  if(state.t <= 0) return;
+  const sk = SKINS[state.skin];
+  const p = toCanvas(penPos(state.config, state.t), tr);
+  const X = p.X * scale, Y = p.Y * scale;
+  const g = targetCtx.createRadialGradient(X, Y, 0, X, Y, 9 * scale);
+  g.addColorStop(0, strokeColor(sk, Math.min(1, state.t / state.dur)));
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  targetCtx.globalAlpha = 0.9;
+  targetCtx.fillStyle = g;
+  targetCtx.beginPath(); targetCtx.arc(X, Y, 9 * scale, 0, TWO_PI); targetCtx.fill();
+  targetCtx.globalAlpha = 1;
+  targetCtx.fillStyle = sk.paper;
+  targetCtx.beginPath(); targetCtx.arc(X, Y, 1.6 * scale, 0, TWO_PI); targetCtx.fill();
+}
+function draw(){
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  paintBackground(ctx, cv.width, cv.height);
+  ctx.drawImage(ink, 0, 0);     // accumulated trace (already DPR-scaled)
+  const tr = transform();
+  drawPen(ctx, tr, dpr);
+}
+
+// rebuild the figure from scratch (config or size changed): clear ink, replay
+function redraw(){
+  if(!state.config) return;
+  clearInk();
+  commitInk(state.t);     // re-lay the trace already elapsed at the new size/skin
+  draw();
+}
+// restart the drawing animation from t=0 ("Again")
+function restart(){
+  state.t = 0;
+  clearInk();
+  draw();
+}
+
+// ---------- animation loop (reduced-motion safe) ----------------------------
+let last = 0, rafId = null;
+const BASE_TIME_RATE = 4.2;     // model-time units advanced per wall-second at 1×
+function frame(ts){
+  rafId = requestAnimationFrame(frame);
+  if(state.playing && state.t < state.dur){
+    const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0;
+    state.t = Math.min(state.dur, state.t + dt * BASE_TIME_RATE * state.speed);
+    commitInk(state.t);
+    if(state.t >= state.dur) syncPlay();
+  }
+  last = ts;
+  draw();
+}
+function startLoop(){ if(rafId == null){ last = 0; rafId = requestAnimationFrame(frame); } }
+
+// ---------- per-pendulum controls (4 pendulums: X1,X2,Y1,Y2) ----------------
+const PEND_DEFS = [
+  { axis: 'x', idx: 0, label: 'X · 1' },
+  { axis: 'x', idx: 1, label: 'X · 2' },
+  { axis: 'y', idx: 0, label: 'Y · 1' },
+  { axis: 'y', idx: 1, label: 'Y · 2' },
+];
+function buildPendControls(){
+  const host = document.getElementById('pendHost');
+  host.innerHTML = '';
+  for(const def of PEND_DEFS){
+    const wrap = document.createElement('div'); wrap.className = 'pend';
+    wrap.innerHTML =
+      '<div class="ph">Pendulum <b>' + def.label + '</b></div>' +
+      mini(def, 'f', 'Frequency', 0.2, 5, 0.001) +
+      mini(def, 'A', 'Amplitude', 0.1, 1.4, 0.01) +
+      mini(def, 'phase', 'Phase', 0, 6.283, 0.01) +
+      mini(def, 'd', 'Damping', 0, 0.18, 0.001);
+    host.appendChild(wrap);
+  }
+  for(const def of PEND_DEFS){
+    wireMini(def, 'f', v => v.toFixed(3));
+    wireMini(def, 'A', v => v.toFixed(2));
+    wireMini(def, 'phase', v => v.toFixed(2));
+    wireMini(def, 'd', v => v.toFixed(3));
+  }
+}
+function mini(def, prop, name, min, max, step){
+  const id = def.axis + def.idx + '_' + prop;
+  return '<div class="mini"><label>' + name + ' <span class="val" id="' + id + '_v">0</span></label>' +
+    '<input type="range" id="' + id + '" min="' + min + '" max="' + max + '" step="' + step + '"></div>';
+}
+function wireMini(def, prop, fmt){
+  const id = def.axis + def.idx + '_' + prop;
+  const sl = document.getElementById(id), v = document.getElementById(id + '_v');
+  const setFill = () => sl.style.setProperty('--fill', ((sl.value - sl.min) / (sl.max - sl.min) * 100) + '%');
+  sl.addEventListener('input', () => {
+    state.config[def.axis][def.idx][prop] = parseFloat(sl.value);
+    v.textContent = fmt(parseFloat(sl.value));
+    setFill();
+    updateRatioTag();
+    restart(); state.playing = true; syncPlay();   // changing the rig redraws from start
+  });
+}
+function syncPendControls(){
+  for(const def of PEND_DEFS){
+    for(const prop of ['f','A','phase','d']){
+      const id = def.axis + def.idx + '_' + prop;
+      const sl = document.getElementById(id), v = document.getElementById(id + '_v');
+      const val = state.config[def.axis][def.idx][prop];
+      sl.value = val;
+      sl.style.setProperty('--fill', ((sl.value - sl.min) / (sl.max - sl.min) * 100) + '%');
+      const dec = (prop === 'A' || prop === 'phase') ? 2 : 3;
+      v.textContent = parseFloat(val).toFixed(dec);
+    }
+  }
+  updateRatioTag();
+}
+function updateRatioTag(){
+  const fx = state.config.x[0].f, fy = state.config.y[0].f;
+  document.getElementById('ratioTag').textContent = approxRatio(fx, fy);
+}
+function approxRatio(a, b){
+  if(b === 0) return '—';
+  let best = '1:1', bestErr = Infinity;
+  for(let p = 1; p <= 6; p++) for(let q = 1; q <= 6; q++){
+    const err = Math.abs(a / b - p / q);
+    if(err < bestErr){ bestErr = err; best = p + ':' + q; }
+  }
+  return best;
+}
+
+const speedSlider = document.getElementById('speedSlider'), speedVal = document.getElementById('speedVal');
+function setSpeedFill(){ speedSlider.style.setProperty('--fill', ((speedSlider.value - speedSlider.min) / (speedSlider.max - speedSlider.min) * 100) + '%'); }
+speedSlider.addEventListener('input', () => { state.speed = parseFloat(speedSlider.value); speedVal.textContent = state.speed.toFixed(2).replace(/0+$/, '').replace(/\.$/, '') + '×'; setSpeedFill(); });
+setSpeedFill();
+
+const playBtn = document.getElementById('playBtn');
+function syncPlay(){ playBtn.textContent = state.playing ? '⏸ Pause' : (state.t >= state.dur ? '↻ Replay' : '▶ Play'); }
+playBtn.addEventListener('click', () => {
+  if(state.t >= state.dur){ restart(); state.playing = true; }
+  else state.playing = !state.playing;
+  syncPlay();
+});
+document.getElementById('redrawBtn').addEventListener('click', () => { restart(); state.playing = true; syncPlay(); });
+
+// ---------- seed + surprise -------------------------------------------------
+const seedInput = document.getElementById('seedInput');
+function loadSeed(seed){
+  state.seed = seed >>> 0;
+  state.config = configFromSeed(state.seed);
+  seedInput.value = state.seed;
+  syncPendControls();
+  restart(); state.playing = true; syncPlay();
+}
+seedInput.addEventListener('change', () => {
+  let v = parseInt(seedInput.value, 10); if(!isFinite(v) || v < 0) v = 0;
+  loadSeed(v);
+});
+document.getElementById('surpriseBtn').addEventListener('click', () => {
+  loadSeed((Math.random() * 0xFFFFFFFF) >>> 0);
+});
+
+// ---------- presets (named classic ratios) ----------------------------------
+// Each builds an explicit lateral+rotary rig: two near-integer terms per axis
+// with a tiny detune for evolution and gentle damping for the spiral-in.
+function rig(fx1, fx2, fy1, fy2, opts){
+  opts = opts || {};
+  const det = opts.detune == null ? 0.008 : opts.detune;
+  const dmp = opts.damp == null ? 0.028 : opts.damp;
+  return {
+    x: [ { f: fx1, A: 1.0, phase: 0.0, d: dmp }, { f: fx2 + det, A: 0.55, phase: Math.PI / 2, d: dmp * 1.2 } ],
+    y: [ { f: fy1, A: 1.0, phase: opts.yphase == null ? Math.PI / 6 : opts.yphase, d: dmp },
+         { f: fy2 - det, A: 0.55, phase: 1.1, d: dmp * 1.2 } ],
+  };
+}
+const PRESETS = {
+  'Unison 1:1':  () => rig(1, 1, 1, 1, { yphase: Math.PI / 2, detune: 0.01 }),
+  'Fifth 2:3':   () => rig(2, 2, 3, 3, { detune: 0.009 }),
+  'Octave 1:2':  () => rig(1, 2, 2, 4, { detune: 0.008 }),
+  'Fourth 3:4':  () => rig(3, 3, 4, 4, { detune: 0.01 }),
+  'Major 4:5':   () => rig(4, 5, 5, 4, { detune: 0.007, damp: 0.022 }),
+  'Sirens 5:6':  () => rig(5, 6, 6, 5, { detune: 0.012, damp: 0.02 }),
+};
+function loadPreset(name){
+  const fn = PRESETS[name]; if(!fn) return;
+  state.config = fn();
+  syncPendControls();
+  restart(); state.playing = true; syncPlay();
+}
+function buildPresetButtons(){
+  const host = document.getElementById('presets');
+  for(const name of Object.keys(PRESETS)){
+    const b = document.createElement('button'); b.className = 'chip'; b.textContent = name;
+    b.addEventListener('click', () => loadPreset(name));
+    host.appendChild(b);
+  }
+}
+
+// ---------- skins -----------------------------------------------------------
+document.getElementById('skinSeg').addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-skin]'); if(!b) return;
+  state.skin = b.dataset.skin;
+  for(const x of ev.currentTarget.querySelectorAll('button')) x.classList.toggle('active', x === b);
+  applySkinVars();
+  redraw();          // re-lay the SAME geometry in the new palette (skin-blind)
+});
+function applySkinVars(){
+  document.documentElement.style.setProperty('--paper', SKINS[state.skin].paper);
+}
+
+// ---------- PNG export (canvas-native, 2×) ----------------------------------
+function exportPNG(){
+  const scale = 2;
+  const off = document.createElement('canvas');
+  off.width = Math.round(W * scale); off.height = Math.round(H * scale);
+  const octx = off.getContext('2d');
+  paintBackground(octx, off.width, off.height);
+  const sk = SKINS[state.skin];
+  let mx = 0, my = 0;
+  for(const tm of state.config.x) mx += Math.abs(tm.A);
+  for(const tm of state.config.y) my += Math.abs(tm.A);
+  mx = mx || 1; my = my || 1;
+  const margin = 0.10;
+  const sw = off.width * (1 - 2 * margin), sh = off.height * (1 - 2 * margin);
+  const sc = Math.min(sw / (2 * mx), sh / (2 * my));
+  const cx = off.width / 2, cy = off.height / 2;
+  const toC = (p) => ({ X: cx + p.x * sc, Y: cy - p.y * sc });
+  octx.lineJoin = 'round'; octx.lineCap = 'round'; octx.lineWidth = 1.15 * scale;
+  const step = 1 / SAMPLES_PER_UNIT;
+  let prev = toC(penPos(state.config, 0));
+  for(let t = step; t <= state.t + 1e-9; t += step){
+    const cur = toC(penPos(state.config, t));
+    octx.strokeStyle = strokeColor(sk, Math.min(1, t / state.dur));
+    octx.globalAlpha = 0.85;
+    octx.beginPath(); octx.moveTo(prev.X, prev.Y); octx.lineTo(cur.X, cur.Y); octx.stroke();
+    prev = cur;
+  }
+  octx.globalAlpha = 1;
+  const finish = (url) => {
+    const a = document.createElement('a'); a.href = url; a.download = 'harmonograph-' + state.skin + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+  if(off.toBlob){ off.toBlob(b => { const u = URL.createObjectURL(b); finish(u); setTimeout(() => URL.revokeObjectURL(u), 4000); }, 'image/png'); }
+  else finish(off.toDataURL('image/png'));
+}
+document.getElementById('pngBtn').addEventListener('click', exportPNG);
+
+window.addEventListener('resize', () => { resize(); });
+
+// ---------- HUD hint --------------------------------------------------------
+const hud = document.getElementById('hud');
+function flashHud(msg, ms){
+  hud.innerHTML = msg; hud.classList.add('show');
+  clearTimeout(flashHud._t); flashHud._t = setTimeout(() => hud.classList.remove('show'), ms || 2600);
+}
+
+// ============================================================================
+// INIT
+// ============================================================================
+function init(){
+  const res = runSelfTest();
+  const chip = document.getElementById('selftest');
+  if(res.pass === res.total){
+    chip.className = 'selftest ok';
+    chip.textContent = 'harmonograph verified — ' + res.pass + '/' + res.total + ' ✓';
+  } else {
+    chip.className = 'selftest bad';
+    chip.textContent = 'harmonograph FAILED — ' + res.pass + '/' + res.total;
+  }
+  chip.title = res.log.join('\n');
+  console.log('Harmonograph self-test: ' + res.pass + '/' + res.total + ' passed.');
+
+  buildPendControls();
+  buildPresetButtons();
+  applySkinVars();
+  state.config = PRESETS['Fifth 2:3']();   // a lovely opening figure
+  syncPendControls();
+  syncPlay();
+  resize();                                 // sizes canvases + initial redraw
+  if(reduceMotion) flashHud('Reduced motion: drawing paused — press <b>▶ Play</b> to watch the pen trace.', 5200);
+  else flashHud('Watch the pen trace · <b>Again</b> to redraw · <b>Surprise me</b> for a fresh figure', 3800);
+  startLoop();
+
+  // ws breadcrumb (additive, never clobbers other keys)
+  (function(){ try{ var k='ws:seen:harmonograph'; if(!localStorage.getItem(k)) localStorage.setItem(k,String(Date.now())); }catch(e){} })();
+}
+init();
+
+})(); }
+</script>
+</body>
+</html>
