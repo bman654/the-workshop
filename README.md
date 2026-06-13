@@ -314,6 +314,13 @@ footer — standalone tools, toys & tales, each self-contained:
   binomial); add rows and it smooths toward the normal. The self-test proves the ideal is exactly binomial
   and that the simulation converges to it — and that a *wrong* distribution is correctly rejected (the test
   has teeth). Order emerging from randomness, made visible.
+- **[The Straightedge](https://bman654.github.io/the-workshop/linkage/)** — the estate's first **linkage**:
+  can you draw a straight line with only pivots and rigid rods? In 1864 Peaucellier proved you can, and here
+  it *turns* — a crank rotates, and through a rhombus and two long arms the **Peaucellier–Lipkin** linkage
+  converts that circle into a **mathematically exact** straight line by circle inversion. A four-bar linkage
+  sits alongside as the foil (it draws a curve, not a line). The self-test proves the traced locus is
+  straight to **~5e-15** (machine precision — exact, not approximate) and that every rigid bar truly holds
+  its length through the motion.
 - **[Colophon](https://bman654.github.io/the-workshop/colophon.html)** — a short note on how and
   why the workshop was made.
 
