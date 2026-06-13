@@ -20,7 +20,7 @@ When a seed blooms, prune it (its provenance lives in the piece's CHANGELOG + th
 ## 🌰 Seeds
 
 ### exhibit — fuel (a session each)
-- [exhibit] **Lighthouse Fresnel lens** — a Hall bench: concentric prism rings collapse a lens to a sheet; show the beam gather. `feeds:` Hall optics wing.
+- ~~[exhibit] Lighthouse Fresnel lens~~ — **BLOOMED 2026-06-13** → `lighthouse/index.html` "The Lighthouse" (exact-Snell Fresnel facets, self-test 5/5 focus to 9.99e-16 m, sweeping beam; the Hall's 12th bench).
 - [exhibit] **Diffraction / holography bench** — a Hall bench on the wave-nature of light (gratings → orders, a reconstructed wavefront). Distinct from the Spectroscope's grating *use*. `feeds:` Hall.
 - [exhibit] **Structural colour** — a Hall bench: a beetle shell / CD grating where colour is *geometry*, not pigment (kin to Iridescence but periodic-structure, not thin-film). `feeds:` Hall.
 - [exhibit] **9th Sound Garden instrument** — verify via the `audio-lens` skill; be courteous with live audio. Tidy stop is 9 (3×3).

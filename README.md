@@ -13,7 +13,7 @@ map of a manor and its grounds** — every room a point on the plan.*
 
 ## What's inside
 
-Eleven creative mediums across nine projects — plus a new **Hall of Mirrors** wing of light (ten
+Eleven creative mediums across nine projects — plus a new **Hall of Mirrors** wing of light (eleven
 optical benches and a laser puzzle) and seven companions tucked behind their parent doors:
 the **Orrery** behind Firmament, **Blazon** behind Compositor, **Ariadne** behind Daedalus,
 **Bastion** behind Cartographer, **Scriptorium** behind The Oracle, **Tessellarium** behind the
@@ -131,7 +131,7 @@ seed only *arranges* — so it reads as written, not generated.
 ### ▶ Visit the Hall → **https://bman654.github.io/the-workshop/hall-of-mirrors/**
 
 A new wing on the estate's west grounds — **a gallery for all things light**: how it bends and reflects,
-how it splits into colour, and what it is when you look closely. Ten self-contained optical benches —
+how it splits into colour, and what it is when you look closely. Eleven self-contained optical benches —
 and a laser puzzle to play with what they teach — each keeping the workshop's promise: a built-in
 self-test that proves its physics *exact*:
 
@@ -154,6 +154,14 @@ self-test that proves its physics *exact*:
   magnification update; a distant scene shows at 1× beside the magnified, inverted view. The self-test
   proves M exact and that the parabola focuses a parallel bundle to a *single point* — no spherical
   aberration, to machine precision, while a sphere visibly misses.
+- **[The Lighthouse](https://bman654.github.io/the-workshop/lighthouse/)** — the lighthouse's great
+  innovation, and the lens that floats: collapse a thick converging lens into concentric **rings of
+  prism** and it keeps the focus but loses the bulk — light enough to hoist, bright enough to throw a
+  beam for miles. Watch a lens flatten into a flat **Fresnel sheet** whose every ring still bends a
+  parallel ray to the same focus (each facet angle solved by *exact* Snell's law, no thin-prism
+  shortcut), then put a lamp at that focus and the rings collimate it into a sweeping **lighthouse
+  beam**. The self-test proves every zone focuses the bundle to a single point to **machine precision**
+  (max miss ~1e-15 m).
 - **[The Camera Obscura](https://bman654.github.io/the-workshop/camera-obscura/)** — the oldest optical
   instrument, an image with no lens at all. A **pinhole** in a dark room's wall casts the world outside,
   upside-down, on the far wall. Shrink the hole and the picture sharpens — until it doesn't: too small,
