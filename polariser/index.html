@@ -41,7 +41,7 @@
     display:flex; align-items:center; justify-content:space-between;
     padding:14px 20px 0; pointer-events:none;
   }
-  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .topbar a, .topbar .brand, .topbar .selftest, .topbar .feat-chip{ pointer-events:auto; }
   .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
     color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
   .back:hover{ color:var(--accent); opacity:1; }
@@ -136,6 +136,22 @@
   .hint{ font:10.5px/1.6 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:16px 0 2px;
     border-top:1px solid rgba(201,162,74,0.18); padding-top:12px; }
   .hint b{ color:var(--ink); font-weight:600; }
+  /* ---- Feats of Light — shared gilt UX (verbatim colours across all pieces) ---- */
+  .feat-toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,12px);z-index:9999;
+    background:rgba(20,18,14,0.95);border:1px solid rgba(201,162,74,0.6);border-radius:12px;
+    padding:11px 18px;color:#f0e6cf;font:500 13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    text-align:center;box-shadow:0 8px 30px rgba(0,0,0,0.5),0 0 24px rgba(201,162,74,0.25);opacity:0;
+    transition:opacity .5s ease,transform .5s ease;pointer-events:none;max-width:80vw}
+  .feat-toast.show{opacity:1;transform:translate(-50%,0)}
+  .feat-toast .feat-star{color:#e9c46a;font-size:15px}
+  .feat-toast b{color:#ffe9b0;font-weight:600}
+  .feat-chip{display:inline-flex;align-items:center;gap:5px;font:600 10px/1 ui-monospace,Menlo,monospace;
+    letter-spacing:.04em;padding:6px 10px;border-radius:20px;border:1px solid rgba(201,162,74,0.35);
+    background:rgba(40,34,22,0.4);color:#b9a571;white-space:nowrap;transition:all .35s ease}
+  .feat-chip.earned{color:#ffe3a0;border-color:rgba(233,196,106,0.85);background:rgba(70,56,24,0.55);
+    box-shadow:0 0 14px rgba(233,196,106,0.3)}
+  .feat-chip .fc-star{color:#e9c46a}
+
   @media (max-width: 720px){
     #panel{ width:280px; flex-basis:280px; }
   }
@@ -150,6 +166,7 @@
     </div>
     <div class="right">
       <a class="fwd" href="../hall-of-mirrors/index.html">hall of mirrors &uarr;</a>
+      <div class="feat-chip" id="featChip"><span class="fc-star">&#10022;</span> Feat: cross them to darkness</div>
       <div class="selftest" id="selftest" title="built-in self-test">checking&hellip;</div>
     </div>
   </div>
@@ -600,6 +617,9 @@ function draw() {
 
   // ----- intensity arc / dial readout near the active filter -----
   drawAngleReadout(lay.filters[dial.idx].x, cy, lay.ringR, dial.angle, skin);
+
+  // ----- check the earned feat (transition into full extinction) -----
+  checkFeat();
 }
 
 function isFixed(i) {
@@ -912,6 +932,35 @@ function flashHud(html, ms) {
   flashHud._t = setTimeout(function () { hud.classList.remove('show'); }, ms || 2400);
 }
 
+/* Hall of Mirrors — "Feats of Light": a quiet, earned achievement.
+   Drops a raise-only breadcrumb the Survey/Undercroft can read, + a consistent gilt toast. */
+function earnFeat(id,label){var k='ws:flag:earned-'+id,fresh=false;
+  try{if(!localStorage.getItem(k)){localStorage.setItem(k,String(Date.now()));fresh=true;}}catch(e){}
+  var chip=document.getElementById('featChip'); if(chip){chip.classList.add('earned');}
+  if(fresh)showFeatToast(label);}
+function showFeatToast(label){var t=document.createElement('div');t.className='feat-toast';
+  t.innerHTML='<span class="feat-star">&#10022;</span> Feat of Light earned<br><b>'+label+'</b>';
+  document.body.appendChild(t);requestAnimationFrame(function(){t.classList.add('show');});
+  setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove();},600);},3800);}
+function initFeatChip(id){try{if(localStorage.getItem('ws:flag:earned-'+id)){var c=document.getElementById('featChip');if(c)c.classList.add('earned');}}catch(e){}}
+
+/* ---- the feat: rotate the analyser to FULL EXTINCTION (crossed) ---- */
+// Genuine, detectable from live state: malus mode, θ within ~2° of 90°, and the
+// transmitted intensity (from the CORE) within epsilon of 0. Fire on the TRANSITION
+// into the satisfied state, never every frame.
+var featSatisfied = false;
+function checkFeat() {
+  // Only an intentional, user-driven rotation counts — not the automated Sweep.
+  var satisfied = (state.mode === 'malus')
+    && !state.sweeping
+    && (Math.abs(state.theta - 90) <= 2)
+    && (PolariserCore.malusBench(state.theta) <= 0.0015);
+  if (satisfied && !featSatisfied) {
+    earnFeat('polariser', 'Crossed them to darkness');
+  }
+  featSatisfied = satisfied;
+}
+
 /* ---- interaction: drag the analyser dial ---- */
 var dragging = false;
 function pointerAngle(ev) {
@@ -1069,6 +1118,7 @@ function exportPNG() {
 resize();
 bindUI();
 syncPanel();
+initFeatChip('polariser');   // reflect any previously-earned Feat of Light
 runChip();             // the crux — paints the chip, logs PASS/FAIL
 draw();
 rafId = requestAnimationFrame(frame);

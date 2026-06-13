@@ -36,7 +36,8 @@
     display:flex; align-items:center; justify-content:space-between;
     padding:14px 20px 0; pointer-events:none; gap:14px;
   }
-  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .topbar a, .topbar .brand, .topbar .selftest, .topbar .feat-chip{ pointer-events:auto; }
+  .topbar .status{ display:flex; align-items:center; gap:10px; }
   .navwrap{ display:flex; gap:18px; align-items:center; }
   .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
     color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
@@ -105,6 +106,22 @@
   .hint{ font:10.5px/1.6 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:18px 0 4px;
     border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
   .hint b{ color:var(--ink); font-weight:600; }
+
+  /* ---- Feats of Light (shared gilt UX — literal colours intentionally shared) ---- */
+  .feat-toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,12px);z-index:9999;
+    background:rgba(20,18,14,0.95);border:1px solid rgba(201,162,74,0.6);border-radius:12px;
+    padding:11px 18px;color:#f0e6cf;font:500 13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    text-align:center;box-shadow:0 8px 30px rgba(0,0,0,0.5),0 0 24px rgba(201,162,74,0.25);opacity:0;
+    transition:opacity .5s ease,transform .5s ease;pointer-events:none;max-width:80vw}
+  .feat-toast.show{opacity:1;transform:translate(-50%,0)}
+  .feat-toast .feat-star{color:#e9c46a;font-size:15px}
+  .feat-toast b{color:#ffe9b0;font-weight:600}
+  .feat-chip{display:inline-flex;align-items:center;gap:5px;font:600 10px/1 ui-monospace,Menlo,monospace;
+    letter-spacing:.04em;padding:6px 10px;border-radius:20px;border:1px solid rgba(201,162,74,0.35);
+    background:rgba(40,34,22,0.4);color:#b9a571;white-space:nowrap;transition:all .35s ease}
+  .feat-chip.earned{color:#ffe3a0;border-color:rgba(233,196,106,0.85);background:rgba(70,56,24,0.55);
+    box-shadow:0 0 14px rgba(233,196,106,0.3)}
+  .feat-chip .fc-star{color:#e9c46a}
 </style>
 </head>
 <body>
@@ -117,7 +134,10 @@
       <h1>The Camera Obscura</h1>
       <span class="tag">the dark room</span>
     </div>
-    <div class="selftest" id="selftest">checking&hellip;</div>
+    <div class="status">
+      <div class="feat-chip" id="featChip"><span class="fc-star">&#10022;</span> Feat: find the sharpest pinhole</div>
+      <div class="selftest" id="selftest">checking&hellip;</div>
+    </div>
   </div>
 
   <div id="wrap">
@@ -511,6 +531,18 @@ const state = Object.assign({}, DEFAULTS);
 
 function lamMM(){ return state.lam * 1e-6; }       // nm → mm
 
+/* Hall of Mirrors — "Feats of Light": a quiet, earned achievement.
+   Drops a raise-only breadcrumb the Survey/Undercroft can read, + a consistent gilt toast. */
+function earnFeat(id,label){var k='ws:flag:earned-'+id,fresh=false;
+  try{if(!localStorage.getItem(k)){localStorage.setItem(k,String(Date.now()));fresh=true;}}catch(e){}
+  var chip=document.getElementById('featChip'); if(chip){chip.classList.add('earned');}
+  if(fresh)showFeatToast(label);}
+function showFeatToast(label){var t=document.createElement('div');t.className='feat-toast';
+  t.innerHTML='<span class="feat-star">&#10022;</span> Feat of Light earned<br><b>'+label+'</b>';
+  document.body.appendChild(t);requestAnimationFrame(function(){t.classList.add('show');});
+  setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove();},600);},3800);}
+function initFeatChip(id){try{if(localStorage.getItem('ws:flag:earned-'+id)){var c=document.getElementById('featChip');if(c)c.classList.add('earned');}}catch(e){}}
+
 function resize(){
   const stage = document.getElementById('stage');
   W = Math.max(320, stage.clientWidth);
@@ -710,6 +742,22 @@ function drawScene(){
     ['√(2.44λv) rule', dOptDistant.toFixed(3) + ' mm', false],
     ['your d', d.toFixed(3) + ' mm', false],
   ]);
+
+  // --- Feat of Light: the user found the sharpest pinhole. Fire EXACTLY when
+  //     the chosen hole diameter sits within tolerance of the marked d_opt (the
+  //     minimum-total-blur sweet spot the page already computes). Fire only on the
+  //     TRANSITION into the satisfied state, not every frame. ---
+  checkSharpestPinhole(d, dOpt);
+}
+
+// Feat trigger: |d − d_opt| within FEAT_TOL (relative) of the exact optimum.
+const FEAT_TOL = 0.03;                 // within 3% of d_opt — real aiming, never trivial
+let _featSatisfied = false;            // edge-detector so we fire once per entry
+function checkSharpestPinhole(d, dOpt){
+  if (!(dOpt > 0)) return;
+  const within = Math.abs(d - dOpt) / dOpt <= FEAT_TOL;
+  if (within && !_featSatisfied) earnFeat('camera', 'Found the sharpest pinhole');
+  _featSatisfied = within;
 }
 
 // front wall as two bars leaving a gap = the pinhole, sized (visibly exaggerated)
@@ -946,6 +994,7 @@ function init(){
 
   buildSceneStrip();
   wire();
+  initFeatChip('camera');
   applySkinVars();
   resize();
   requestDraw();

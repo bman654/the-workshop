@@ -31,7 +31,7 @@
     display:flex; align-items:center; justify-content:space-between;
     padding:14px 20px 0; pointer-events:none;
   }
-  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .topbar a, .topbar .brand, .topbar .selftest, .topbar .feat-chip{ pointer-events:auto; }
   .left{ display:flex; align-items:center; gap:18px; }
   .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
     color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
@@ -115,6 +115,22 @@
   .hint{ font:10.5px/1.6 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:18px 0 4px;
     border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
   .hint b{ color:var(--ink); font-weight:600; }
+
+  /* ---- Feats of Light (shared UX) ---- */
+  .feat-toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,12px);z-index:9999;
+    background:rgba(20,18,14,0.95);border:1px solid rgba(201,162,74,0.6);border-radius:12px;
+    padding:11px 18px;color:#f0e6cf;font:500 13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    text-align:center;box-shadow:0 8px 30px rgba(0,0,0,0.5),0 0 24px rgba(201,162,74,0.25);opacity:0;
+    transition:opacity .5s ease,transform .5s ease;pointer-events:none;max-width:80vw}
+  .feat-toast.show{opacity:1;transform:translate(-50%,0)}
+  .feat-toast .feat-star{color:#e9c46a;font-size:15px}
+  .feat-toast b{color:#ffe9b0;font-weight:600}
+  .feat-chip{display:inline-flex;align-items:center;gap:5px;font:600 10px/1 ui-monospace,Menlo,monospace;
+    letter-spacing:.04em;padding:6px 10px;border-radius:20px;border:1px solid rgba(201,162,74,0.35);
+    background:rgba(40,34,22,0.4);color:#b9a571;white-space:nowrap;transition:all .35s ease}
+  .feat-chip.earned{color:#ffe3a0;border-color:rgba(233,196,106,0.85);background:rgba(70,56,24,0.55);
+    box-shadow:0 0 14px rgba(233,196,106,0.3)}
+  .feat-chip .fc-star{color:#e9c46a}
 </style>
 </head>
 <body>
@@ -128,6 +144,7 @@
       <span class="tag">disperse &amp; read light</span>
     </div>
     <div class="right">
+      <div class="feat-chip" id="featChip" title="Feat of Light"><span class="fc-star">&#10022;</span> Feat: read a spectral line</div>
       <div class="selftest" id="selftest" title="built-in self-test">checking&hellip;</div>
     </div>
   </div>
@@ -189,6 +206,8 @@
         Switch the <b>disperser</b> to compare refractive vs. diffractive spreading; switch the
         <b>source</b> to read its fingerprint. Balmer lines are computed live from the Rydberg
         formula; colours come from a CIE wavelength&rarr;sRGB map. The self-test proves the physics.
+        <br><br><b>Feat of Light:</b> a reading mark sits on the band at <b>H&alpha;</b> &mdash;
+        choose a source whose line falls under it to <b>read the spectrum</b>.
       </div>
     </aside>
   </div>
@@ -602,6 +621,26 @@ function resize(){
 // The wavelength axis lives in a band near the bottom of the stage; the disperser
 // schematic occupies the top. We map λ→x across the band [380,750] nm.
 var LAM_MIN = 380, LAM_MAX = 750;
+// ---- Feat of Light: "read a spectral line" -------------------------------
+// A reading reticle sits on the band at Hα (656.3 nm, air). The user must pick
+// a source whose spectral line falls under the mark — the genuine skill of
+// identifying H-alpha. Tolerance ±2.5 nm: hydrogen Hα and the solar C line
+// (which IS H-alpha in absorption) qualify; neon's 659.9 line does not.
+var FEAT_TARGET_NM = balmerWavelengthAirNm(3);   // ≈ 656.3 nm — Hα (air)
+var FEAT_TOL_NM = 2.5;
+// Returns the matching line (within tolerance of the reticle) for the current
+// source, or null. Continuous sources have no lines, so always null.
+function featMatchedLine(){
+  var src = SOURCES[state.source];
+  if (!src || src.type === 'continuous') return null;
+  for (var i = 0; i < src.lines.length; i++){
+    if (Math.abs(src.lines[i].nm - FEAT_TARGET_NM) <= FEAT_TOL_NM) return src.lines[i];
+  }
+  return null;
+}
+function checkFeat(){
+  if (featMatchedLine()) earnFeat('spectroscope', 'Read the spectrum');
+}
 function specBox(){
   var m = Math.min(120, W * 0.10);
   var x0 = m, x1 = W - m;
@@ -812,6 +851,35 @@ function drawSpectrum(sk, now){
   }
 
   drawAxis(sk, box);
+  drawReticle(sk, box);
+}
+
+// The Feat reticle: a small reading mark on the band at Hα. Turns gilt-bright
+// when the chosen source has a line under it (the feat condition is satisfied).
+function drawReticle(sk, box){
+  var rx = lamToX(FEAT_TARGET_NM, box);
+  var matched = !!featMatchedLine();
+  var col = matched ? '233,196,106' : '201,162,74';
+  var top = box.y0 - 7;
+  ctx.save();
+  ctx.lineWidth = matched ? 2 : 1.4;
+  ctx.strokeStyle = 'rgba(' + col + ',' + (matched ? 0.95 : 0.6) + ')';
+  if (matched){ ctx.shadowColor = 'rgba(233,196,106,0.8)'; ctx.shadowBlur = 8; }
+  // a downward caret + a hairline through the band marking the reading position
+  ctx.beginPath();
+  ctx.moveTo(rx - 5, top - 7); ctx.lineTo(rx, top); ctx.lineTo(rx + 5, top - 7);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.setLineDash(matched ? [] : [3, 3]);
+  ctx.moveTo(rx, box.y0); ctx.lineTo(rx, box.y1);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(' + col + ',' + (matched ? 1 : 0.85) + ')';
+  ctx.font = '600 8.5px ' + monoFont();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText(matched ? 'Hα ✓ READ' : 'READING · Hα?', rx, top - 9);
+  ctx.restore();
 }
 
 function labelLines(sk, box, lines, dark){
@@ -847,6 +915,18 @@ function drawAxis(sk, box){
 }
 
 function monoFont(){ return '"SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace'; }
+
+/* Hall of Mirrors — "Feats of Light": a quiet, earned achievement.
+   Drops a raise-only breadcrumb the Survey/Undercroft can read, + a consistent gilt toast. */
+function earnFeat(id,label){var k='ws:flag:earned-'+id,fresh=false;
+  try{if(!localStorage.getItem(k)){localStorage.setItem(k,String(Date.now()));fresh=true;}}catch(e){}
+  var chip=document.getElementById('featChip'); if(chip){chip.classList.add('earned');}
+  if(fresh)showFeatToast(label);}
+function showFeatToast(label){var t=document.createElement('div');t.className='feat-toast';
+  t.innerHTML='<span class="feat-star">&#10022;</span> Feat of Light earned<br><b>'+label+'</b>';
+  document.body.appendChild(t);requestAnimationFrame(function(){t.classList.add('show');});
+  setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove();},600);},3800);}
+function initFeatChip(id){try{if(localStorage.getItem('ws:flag:earned-'+id)){var c=document.getElementById('featChip');if(c)c.classList.add('earned');}}catch(e){}}
 
 // ============================================================================
 // RENDER LOOP — static scene; redraw on demand only (60fps capable; we draw
@@ -931,6 +1011,7 @@ document.getElementById('skinSeg').addEventListener('click', function(ev){
 });
 document.getElementById('sourceSel').addEventListener('change', function(ev){
   state.source = ev.target.value; renderLineList(); requestDraw();
+  checkFeat();   // fire the Feat when the chosen source lands a line under the reticle
 });
 document.getElementById('dSlider').addEventListener('input', function(ev){
   state.linesPerMm = parseInt(ev.target.value, 10); syncControls(); requestDraw();
@@ -958,6 +1039,8 @@ function init(){
     chip.textContent = res.pass + '/' + res.total + ' ✗';
   }
   console.log('The Spectroscope self-test: ' + res.pass + '/' + res.total + ' passed.');
+
+  initFeatChip('spectroscope');   // reflect prior earned state on the goal chip
 
   syncControls();
   renderLineList();

@@ -129,6 +129,22 @@
   .hint{ font:10.5px/1.55 var(--font-mono); color:var(--ink-dim); opacity:.8; letter-spacing:.2px; margin:16px 0 4px;
     border-top:1px solid rgba(201,162,74,0.16); padding-top:12px; }
   .hint b{ color:var(--ink); font-weight:600; }
+
+  /* ---- Feats of Light (shared gilt UX — literal colours intentionally shared) ---- */
+  .feat-toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,12px);z-index:9999;
+    background:rgba(20,18,14,0.95);border:1px solid rgba(201,162,74,0.6);border-radius:12px;
+    padding:11px 18px;color:#f0e6cf;font:500 13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    text-align:center;box-shadow:0 8px 30px rgba(0,0,0,0.5),0 0 24px rgba(201,162,74,0.25);opacity:0;
+    transition:opacity .5s ease,transform .5s ease;pointer-events:none;max-width:80vw}
+  .feat-toast.show{opacity:1;transform:translate(-50%,0)}
+  .feat-toast .feat-star{color:#e9c46a;font-size:15px}
+  .feat-toast b{color:#ffe9b0;font-weight:600}
+  .feat-chip{display:inline-flex;align-items:center;gap:5px;font:600 10px/1 ui-monospace,Menlo,monospace;
+    letter-spacing:.04em;padding:6px 10px;border-radius:20px;border:1px solid rgba(201,162,74,0.35);
+    background:rgba(40,34,22,0.4);color:#b9a571;white-space:nowrap;transition:all .35s ease}
+  .feat-chip.earned{color:#ffe3a0;border-color:rgba(233,196,106,0.85);background:rgba(70,56,24,0.55);
+    box-shadow:0 0 14px rgba(233,196,106,0.3)}
+  .feat-chip .fc-star{color:#e9c46a}
 </style>
 </head>
 <body>
@@ -141,7 +157,10 @@
       <h1>Iridescence</h1>
       <span class="tag">thin-film interference</span>
     </div>
-    <div class="selftest" id="selftest">checking…</div>
+    <div style="display:flex;align-items:center;gap:10px;pointer-events:auto;">
+      <div class="feat-chip" id="featChip"><span class="fc-star">&#10022;</span> Feat: match the colour</div>
+      <div class="selftest" id="selftest">checking…</div>
+    </div>
   </div>
 
   <div id="wrap">
@@ -196,6 +215,12 @@
         <div id="colorChip"></div>
       </div>
       <div class="reading" id="reading">Hover the film to read its thickness &amp; reflected spectrum.</div>
+
+      <div class="sect">Feat — match the colour</div>
+      <div class="swatchrow">
+        <div id="targetChip" title="Target colour" style="width:36px;height:30px;border-radius:6px;border:1px solid var(--panel-edge);flex:0 0 auto;"></div>
+        <div class="reading" id="matchReading" style="flex:1;margin:0;">In <b>white light</b>, hover the film to find the spot whose colour matches this swatch.</div>
+      </div>
 
       <div class="sect">Skin</div>
       <div class="row">
@@ -561,6 +586,18 @@ if(typeof module !== 'undefined' && module.exports){ module.exports = __Iridesce
 // ============================================================================
 if(typeof document !== 'undefined'){ (function(){
 
+/* Hall of Mirrors — "Feats of Light": a quiet, earned achievement.
+   Drops a raise-only breadcrumb the Survey/Undercroft can read, + a consistent gilt toast. */
+function earnFeat(id,label){var k='ws:flag:earned-'+id,fresh=false;
+  try{if(!localStorage.getItem(k)){localStorage.setItem(k,String(Date.now()));fresh=true;}}catch(e){}
+  var chip=document.getElementById('featChip'); if(chip){chip.classList.add('earned');}
+  if(fresh)showFeatToast(label);}
+function showFeatToast(label){var t=document.createElement('div');t.className='feat-toast';
+  t.innerHTML='<span class="feat-star">&#10022;</span> Feat of Light earned<br><b>'+label+'</b>';
+  document.body.appendChild(t);requestAnimationFrame(function(){t.classList.add('show');});
+  setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove();},600);},3800);}
+function initFeatChip(id){try{if(localStorage.getItem('ws:flag:earned-'+id)){var c=document.getElementById('featChip');if(c)c.classList.add('earned');}}catch(e){}}
+
 // ---------- skins (COSMETIC ONLY — never touch the physics) -----------------
 // Each skin only recolours the stage backdrop + the surrounding chrome. The
 // film colours come strictly from the spectral pipeline above.
@@ -812,6 +849,61 @@ stripCv.width = STRIP_W; stripCv.height = 1;
 const colorChip = document.getElementById('colorChip');
 const reading = document.getElementById('reading');
 
+// ---------- Feat target: "match the colour" ---------------------------------
+// A genuine perceptual skill: present a TARGET film colour (the colour of a
+// specific air-gap thickness under D65 white light) as a swatch, and ask the
+// user to hover the Newton's-rings film until the colour under the cursor
+// matches it within a CIELAB ΔE tolerance. The match is computed from live
+// state (thicknessAt → reflectance spectrum → CIE Lab), so it's real and
+// transitions exactly once into the satisfied state.
+const FEAT_TARGET_T = 305;          // nm air gap — a vivid second-order gold/amber
+const FEAT_DELTAE_TOL = 8;          // CIELAB ΔE76 tolerance — close but non-trivial
+let featTargetLab = null, featMatched = false;
+const targetChip = document.getElementById('targetChip');
+const matchReading = document.getElementById('matchReading');
+
+// XYZ → CIELAB (D65 white point), for a perceptual colour distance.
+function xyzToLab(X, Y, Z){
+  // D65 reference white (same scale as the core's Y-normalised output: white≈1)
+  const Xn = 0.95047, Yn = 1.0, Zn = 1.08883;
+  const f = (v) => v > 0.008856 ? Math.cbrt(v) : (7.787 * v + 16 / 116);
+  const fx = f(X / Xn), fy = f(Y / Yn), fz = f(Z / Zn);
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+function filmLab(n, t){
+  const spd = __IridescenceCore.illuminantD65();
+  const xyz = __IridescenceCore.spectrumToXYZ(__IridescenceCore.filmSpectrum(n, t, 1.0, 1.0), spd);
+  return xyzToLab(xyz.X, xyz.Y, xyz.Z);
+}
+function deltaE76(a, b){
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+function initFeatTarget(){
+  // the target colour is the air-gap (n=1) film colour at FEAT_TARGET_T under D65
+  featTargetLab = filmLab(1.0, FEAT_TARGET_T);
+  const rgb = __IridescenceCore.filmColor(1.0, FEAT_TARGET_T, 1.0, __IridescenceCore.illuminantD65(), 1.0);
+  if(targetChip) targetChip.style.background = 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')';
+}
+// Evaluate the cursor colour against the target; fire the feat on first match.
+function checkFeatMatch(n, t){
+  // the skill is defined in white light against an air-gap film (Newton mode):
+  // require white light so the target swatch is meaningful and reachable.
+  if(state.light !== 'white' || !featTargetLab) return;
+  const lab = filmLab(n, t);
+  const de = deltaE76(lab, featTargetLab);
+  if(matchReading){
+    if(de <= FEAT_DELTAE_TOL){
+      matchReading.innerHTML = 'Matched! ΔE = <b>' + de.toFixed(1) + '</b> ≤ ' + FEAT_DELTAE_TOL + '.';
+    } else {
+      matchReading.innerHTML = 'ΔE to target = <b>' + de.toFixed(1) + '</b> · keep hovering toward the swatch (≤ ' + FEAT_DELTAE_TOL + ' to earn).';
+    }
+  }
+  if(de <= FEAT_DELTAE_TOL && !featMatched){
+    featMatched = true;
+    earnFeat('iridescence', 'Matched the colour');
+  }
+}
+
 // Render the visible-spectrum strip tinted by the film's reflectance at t: each
 // column is wavelength 380..780, its brightness = reflectance there.
 function drawSpectrumStrip(n, t, spd){
@@ -857,6 +949,7 @@ function updateReadout(bx, by){
     label = 'film <b>t = ' + t.toFixed(0) + ' nm</b> · optical path 2nt = <b>' + opt.toFixed(0) + ' nm</b>';
   }
   reading.innerHTML = label;
+  checkFeatMatch(n, t);
 }
 
 cv.addEventListener('pointermove', ev => {
@@ -1026,6 +1119,8 @@ function init(){
   console.log('Iridescence self-test: ' + res.pass + '/' + res.total + ' passed.');
 
   applySkin();
+  initFeatChip('iridescence');
+  initFeatTarget();
   syncLam();
   syncModeUI();
   resize();
