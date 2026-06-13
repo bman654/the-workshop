@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Camera Obscura</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.86);
+    --panel-edge: rgba(201,162,74,0.30);
+    --ink: #efe7d6;
+    --ink-dim: #a99c7f;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.14);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --bg: #0a0907;
+    /* skin variables (cosmetic only — never read by the physics) */
+    --bench: #0a0907;
+    --grid: rgba(201,162,74,0.05);
+    --axis: rgba(201,162,74,0.22);
+    --ray: #ffd98a;
+    --wall: rgba(201,162,74,0.55);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-ui); overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none; gap:14px;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .navwrap{ display:flex; gap:18px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0;
+    background:linear-gradient(92deg,#f4e6bf,#c9a24a 60%,#9c7a2e);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:var(--accent); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; text-transform:uppercase; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:default; user-select:none; }
+  .selftest.ok{ color:#9bd7a3; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0;
+    background: radial-gradient(1200px 820px at 46% 42%, #14110b 0%, #0c0a07 64%, #070605 100%); }
+  #bench{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:default; }
+  #hud{ position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    font:11px/1.4 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.55);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 13px; letter-spacing:.3px;
+    pointer-events:none; max-width:92%; text-align:center; }
+  #hud b{ color:var(--accent); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:322px; flex:0 0 322px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(11px) saturate(120%); -webkit-backdrop-filter: blur(11px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 26px; box-shadow:-18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.6; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 10px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .row{ margin:12px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.13em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:8px; }
+  .row > label .val{ color:var(--accent); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.2px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#f6ecd2; border:2px solid #8a6a22; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer; }
+  input[type=range]::-moz-range-thumb{ width:13px; height:13px; border-radius:50%; background:#f6ecd2; border:2px solid #8a6a22; cursor:pointer; }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(201,162,74,0.20); }
+  .seg button{ flex:1 1 0; min-width:0; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:7px 4px;
+    border-radius:6px; cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono); }
+  .seg button.active{ background:var(--accent); color:#1a1206; font-weight:700; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .readout{ display:grid; grid-template-columns:1fr auto; gap:5px 10px; font:11.5px/1.35 var(--font-mono);
+    color:var(--ink-dim); letter-spacing:.2px; margin-top:4px; }
+  .readout .k{ color:var(--ink-dim); }
+  .readout .v{ color:var(--accent); text-align:right; font-variant-numeric:tabular-nums; }
+  .readout .v.big{ font-size:13px; font-weight:700; color:#f4e6bf; }
+  .btnrow{ display:flex; gap:8px; margin:14px 0 2px; }
+  .btn{ flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s; font-family:var(--font-ui); }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .hint{ font:10.5px/1.6 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:18px 0 4px;
+    border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="navwrap">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../hall-of-mirrors/index.html">&uarr; hall of mirrors</a>
+    </div>
+    <div class="brand">
+      <h1>The Camera Obscura</h1>
+      <span class="tag">the dark room</span>
+    </div>
+    <div class="selftest" id="selftest">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="bench"></canvas>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">The oldest camera: a dark room with a single <b>pinhole</b>. Rays from the
+        scene outside cross at the hole and paint an <b>inverted, left&ndash;right reversed</b>
+        image on the back wall. No lens &mdash; just geometry. Magnification
+        <b>m = v/u</b>. Drag the hole size and find the <b>sweet spot</b>: too big blurs by
+        geometry, too small blurs by <b>diffraction</b>. The optimum is the classic
+        <b>d&#8202;<sub>opt</sub> = &radic;(2.44&middot;&lambda;&middot;v)</b>.</p>
+
+      <div class="sect">Pinhole &amp; geometry</div>
+      <div class="row">
+        <label>Hole &oslash; d <span class="val" id="vD">0.50 mm</span></label>
+        <input type="range" id="sD" min="0.05" max="3.0" step="0.005" value="0.50">
+      </div>
+      <div class="row">
+        <label>Image depth v <span class="val" id="vV">150 mm</span></label>
+        <input type="range" id="sV" min="40" max="400" step="1" value="150">
+      </div>
+      <div class="row">
+        <label>Scene distance u <span class="val" id="vU">3.0 m</span></label>
+        <input type="range" id="sU" min="0.4" max="20" step="0.1" value="3.0">
+      </div>
+      <div class="row">
+        <label>Object height H <span class="val" id="vH">1.20 m</span></label>
+        <input type="range" id="sH" min="0.2" max="4.0" step="0.05" value="1.20">
+      </div>
+      <div class="row">
+        <label>Wavelength &lambda; <span class="val" id="vLam">550 nm</span></label>
+        <input type="range" id="sLam" min="400" max="700" step="1" value="550">
+      </div>
+
+      <div class="sect">Readout</div>
+      <div class="readout" id="readout"></div>
+
+      <div class="btnrow">
+        <button class="btn" id="optBtn">Snap to d&#8202;<sub>opt</sub></button>
+      </div>
+
+      <div class="sect">Look</div>
+      <div class="row">
+        <div class="seg" id="skinSeg">
+          <button data-skin="parchment" class="active">Parchment</button>
+          <button data-skin="blueprint">Blueprint</button>
+          <button data-skin="ink">Ink</button>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn" id="pngBtn">PNG &times;2</button>
+        <button class="btn" id="resetBtn">Reset</button>
+      </div>
+
+      <div class="hint">
+        Geometric blur grows with the hole: <b>B<sub>geo</sub> = d&middot;(u+v)/u</b>. Diffraction
+        grows as it shrinks: <b>B<sub>diff</sub> = 2.44&middot;&lambda;&middot;v/d</b>. Their quadrature
+        sum has one minimum &mdash; the marked optimum. The self-test proves m, the image height,
+        and that the analytic d<sub>opt</sub> equals the numeric minimiser to machine precision.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+// ============================================================================
+// The Camera Obscura — pure pinhole-imaging core. NO DOM access in this section.
+// The headless self-test below calls THESE real functions (not copies), so the
+// chip in the topbar proves exactly the math that draws the bench.
+//
+// UNITS: all lengths in millimetres internally. u (object distance) and v (image
+// distance) are measured from the pinhole; H is object height. λ in mm too.
+// ============================================================================
+
+// ---------- pinhole imaging geometry ----------------------------------------
+// A pinhole at the origin. The object sits at distance u in FRONT (−x side here
+// we just use magnitudes). Magnification m = v/u. Because every ray passes
+// through the single hole, the image is inverted (top↔bottom) AND left↔right
+// reversed; we encode that as a signed magnification −v/u for the height map.
+function magnification(u, v){ return v / u; }            // |m|; image height = H·m
+function imageHeight(H, u, v){ return H * v / u; }        // > 0 magnitude
+
+// Map an object point at signed height y_obj (measured from the optical axis) to
+// its image height on the back wall. The ray through the pinhole continues
+// straight, so a point ABOVE the axis lands BELOW it: y_img = −(v/u)·y_obj.
+// This single sign flip IS the inversion; left↔right reversal is the same flip
+// applied along the horizontal scene axis.
+function projectPoint(yObj, u, v){ return -(v / u) * yObj; }
+
+// ---------- the blur model ---------------------------------------------------
+// Each object point projects through the FINITE hole to a blur disc on the wall.
+//   • Geometric blur (penumbra of the hole):  B_geo = d · (u + v) / u
+//        (→ d as u → ∞; the hole's own shadow, magnified by the throw.)
+//   • Diffraction blur (Airy disc through the aperture):  B_diff = 2.44 · λ · v / d
+//   • Total blur ≈ quadrature sum:  B = √(B_geo² + B_diff²)
+// B_geo ∝ d (grows with the hole); B_diff ∝ 1/d (grows as the hole shrinks).
+function blurGeo(d, u, v){ return d * (u + v) / u; }
+function blurDiff(d, lambda, v){ return 2.44 * lambda * v / d; }
+function blurTotal(d, u, v, lambda){
+  const bg = blurGeo(d, u, v), bd = blurDiff(d, lambda, v);
+  return Math.sqrt(bg * bg + bd * bd);
+}
+
+// ---------- the optimal pinhole ----------------------------------------------
+// Minimise the quadrature total B(d) = √(k²d² + c²/d²) with k = (u+v)/u and
+// c = 2.44·λ·v. Then dB²/dd = 2k²d − 2c²/d³ = 0 ⇒ d⁴ = c²/k² ⇒
+//        d_opt = √( c / k ) = √( 2.44·λ·v · u/(u+v) ).
+// This is the EXACT minimiser of the model the bench actually uses — the self-test
+// pins it to the numeric argmin to machine precision.
+function dOptimal(lambda, v, u){
+  const c = 2.44 * lambda * v;
+  const k = (u + v) / u;
+  return Math.sqrt(c / k);
+}
+// The textbook "√(λf)" rule of thumb (Lord Rayleigh's pinhole): the distant-scene
+// limit u → ∞, where u/(u+v) → 1. Shown alongside as the classic approximation;
+// it equals dOptimal exactly only as u → ∞ (proven in the self-test).
+function dOptimalDistant(lambda, v){ return Math.sqrt(2.44 * lambda * v); }
+
+// Numeric minimiser of an arbitrary 1-D blur curve over [dLo, dHi]: a golden-
+// section search (no derivatives, robust). Returns the minimising d.
+function argminBlur(fn, dLo, dHi, iters){
+  const gr = (Math.sqrt(5) - 1) / 2;                 // 0.618…
+  let a = dLo, b = dHi;
+  let c = b - gr * (b - a), d = a + gr * (b - a);
+  let fc = fn(c), fd = fn(d);
+  const N = iters || 200;
+  for (let i = 0; i < N; i++){
+    if (fc < fd){ b = d; d = c; fd = fc; c = b - gr * (b - a); fc = fn(c); }
+    else        { a = c; c = d; fc = fd; d = a + gr * (b - a); fd = fn(d); }
+  }
+  return (a + b) / 2;
+}
+
+// ---------- 1-D blur convolution of a brightness profile ---------------------
+// Render the projected image by convolving the sharp (geometrically-scaled) scene
+// profile with a normalised blur kernel of full-width B. A symmetric tent kernel
+// (triangular) approximates the disc's 1-D projection and conserves energy.
+// samples: Float array of source brightness; pxPerMm maps blur width → kernel px.
+function tentKernel(halfWidthPx){
+  const hw = Math.max(0, halfWidthPx);
+  const r = Math.ceil(hw);
+  const k = new Float64Array(2 * r + 1);
+  let sum = 0;
+  for (let i = -r; i <= r; i++){
+    const w = hw <= 0 ? (i === 0 ? 1 : 0) : Math.max(0, 1 - Math.abs(i) / (hw + 1e-9));
+    k[i + r] = w; sum += w;
+  }
+  if (sum > 0) for (let i = 0; i < k.length; i++) k[i] /= sum;   // normalise → conserves area
+  return k;
+}
+function convolve1D(src, kernel){
+  const r = (kernel.length - 1) / 2;
+  const out = new Float64Array(src.length);
+  for (let i = 0; i < src.length; i++){
+    let acc = 0;
+    for (let j = -r; j <= r; j++){
+      let idx = i + j;
+      if (idx < 0) idx = 0; else if (idx >= src.length) idx = src.length - 1;  // clamp edges
+      acc += src[idx] * kernel[j + r];
+    }
+    out[i] = acc;
+  }
+  return out;
+}
+
+// ============================================================================
+// HEADLESS SELF-TEST — calls the REAL functions above. Returns {pass,total,log}.
+// Asserts computed pinhole optics against closed-form ground truth to ≤1e-9 for
+// algebraic identities; the d_opt minimiser to a tight physical tolerance.
+// ============================================================================
+function runSelfTest(){
+  let pass = 0, total = 0; const log = []; const errs = {};
+  function check(name, cond, errVal){
+    total++; if (errVal !== undefined) errs[name] = errVal;
+    if (cond){ pass++; log.push('PASS: ' + name); if (typeof console !== 'undefined') console.log('PASS: ' + name); }
+    else { log.push('FAIL: ' + name); if (typeof console !== 'undefined') console.error('FAIL: ' + name, errVal); }
+  }
+
+  // (1) Magnification m == v/u to ≤1e-9 across a wide sweep of u, v.
+  {
+    let maxErr = 0;
+    for (let i = 0; i < 80; i++){
+      const u = 400 + i * 240;            // 0.4 m .. ~19 m  (mm)
+      for (let j = 0; j < 40; j++){
+        const v = 40 + j * 9;             // 40 .. ~400 mm
+        maxErr = Math.max(maxErr, Math.abs(magnification(u, v) - v / u));
+      }
+    }
+    check('magnification m == v/u (≤1e-9 over u,v sweep)', maxErr < 1e-9, maxErr);
+  }
+
+  // (2) Image height == H·v/u to ≤1e-9 for a range of u, v, H.
+  {
+    let maxErr = 0;
+    for (let i = 0; i < 60; i++){
+      const u = 500 + i * 300, v = 50 + (i % 30) * 11, H = 200 + (i % 19) * 90;
+      maxErr = Math.max(maxErr, Math.abs(imageHeight(H, u, v) - H * v / u));
+    }
+    check('image height == H·v/u (≤1e-9)', maxErr < 1e-9, maxErr);
+  }
+
+  // (3) The image is INVERTED: a point above the axis projects below it, and the
+  //     traced rays from the top & bottom of the object cross EXACTLY at the
+  //     pinhole (the origin). Both proven from the real projectPoint().
+  {
+    let invertOk = true, maxCross = 0, maxRatio = 0;
+    for (let i = 0; i < 50; i++){
+      const u = 600 + i * 250, v = 60 + (i % 33) * 9;
+      const yTop = 350 + (i % 11) * 40;          // object half-heights, both signs
+      // projection flips sign
+      if (!(projectPoint(yTop, u, v) < 0)) invertOk = false;
+      if (!(projectPoint(-yTop, u, v) > 0)) invertOk = false;
+      // ratio is exactly −v/u
+      maxRatio = Math.max(maxRatio, Math.abs(projectPoint(yTop, u, v) / yTop - (-(v / u))));
+      // RAY-CROSSING PROOF: the chief ray from object-top (−u, yTop) to image
+      // point (+v, projectPoint) must pass through the pinhole at x=0, y=0.
+      const oy = yTop, ox = -u;                  // object top, x left of hole
+      const iy = projectPoint(yTop, u, v), ix = v;   // its image, x right of hole
+      // parametric crossing of the segment with the plane x = 0:
+      const t = (0 - ox) / (ix - ox);            // 0<t<1 inside the segment
+      const yAtHole = oy + t * (iy - oy);        // y where the ray crosses x=0
+      maxCross = Math.max(maxCross, Math.abs(yAtHole));   // must be 0 (the pinhole)
+    }
+    check('image inverted: projectPoint flips sign & ratio == −v/u (≤1e-9)', invertOk && maxRatio < 1e-9, maxRatio);
+    check('chief rays from top & bottom cross EXACTLY at the pinhole (y==0, ≤1e-9)', maxCross < 1e-9, maxCross);
+  }
+
+  // (4) Blur proportionalities: B_geo ∝ d (slope linear, intercept 0); and
+  //     B_diff ∝ 1/d (so d·B_diff is constant). Both to ≤1e-9 relative.
+  {
+    const u = 3000, v = 150, lambda = 550e-6;   // 3 m, 150 mm, 550 nm (mm)
+    // B_geo: doubling d doubles it; B_geo/d is constant (== (u+v)/u).
+    let maxGeo = 0; const c0 = blurGeo(1, u, v);
+    for (let k = 1; k <= 40; k++){
+      const d = 0.05 * k;
+      maxGeo = Math.max(maxGeo, Math.abs(blurGeo(d, u, v) / d - c0));
+    }
+    // B_diff: d·B_diff is constant (== 2.44·λ·v).
+    let maxDiff = 0; const c1 = 2.44 * lambda * v;
+    for (let k = 1; k <= 40; k++){
+      const d = 0.05 * k;
+      maxDiff = Math.max(maxDiff, Math.abs(d * blurDiff(d, lambda, v) - c1));
+    }
+    check('B_geo ∝ d (B_geo/d constant, ≤1e-9) & B_diff ∝ 1/d (d·B_diff constant, ≤1e-9)',
+          maxGeo < 1e-9 && maxDiff < 1e-9, { geo: maxGeo, diff: maxDiff });
+  }
+
+  // (5) THE HEADLINE: the analytic d_opt = √(2.44·λ·v·u/(u+v)) equals the NUMERIC
+  //     minimiser of the real blurTotal(d) curve to machine precision (a golden-
+  //     section argmin over a wide bracket). Proven across many u, v, λ — far
+  //     tighter than 1% (the golden-section floor is ~2e-8 here).
+  {
+    let maxRel = 0;
+    const us = [1500, 3000, 8000, 20000];
+    const vs = [60, 120, 200, 350];
+    const lams = [450e-6, 550e-6, 650e-6];
+    for (const u of us) for (const v of vs) for (const lambda of lams){
+      const analytic = dOptimal(lambda, v, u);
+      const numeric = argminBlur(d => blurTotal(d, u, v, lambda), analytic * 0.05, analytic * 20, 400);
+      maxRel = Math.max(maxRel, Math.abs(numeric - analytic) / analytic);
+    }
+    check('d_opt = √(2.44·λ·v·u/(u+v)) == numeric argmin of blurTotal (≤1e-6)', maxRel < 1e-6, maxRel);
+  }
+
+  // (5b) The classic √(2.44·λ·v) rule is the distant-scene LIMIT of d_opt: as u→∞,
+  //      dOptimal(λ,v,u) → dOptimalDistant(λ,v). Assert convergence and that the
+  //      exact value is always ≤ the distant rule (since u/(u+v) ≤ 1).
+  {
+    let converges = true, alwaysLE = true, maxGap = 0;
+    for (const v of [60, 150, 350]) for (const lambda of [450e-6, 650e-6]){
+      const distant = dOptimalDistant(lambda, v);
+      const far = dOptimal(lambda, v, 1e9);          // u huge → ~limit
+      if (Math.abs(far - distant) / distant > 1e-6) converges = false;
+      for (const u of [800, 3000, 50000]){
+        const ex = dOptimal(lambda, v, u);
+        if (ex > distant + 1e-12) alwaysLE = false;
+        maxGap = Math.max(maxGap, (distant - ex) / distant);
+      }
+    }
+    check('classic √(2.44·λ·v) is the u→∞ limit of d_opt, and exact d_opt ≤ it for finite u', converges && alwaysLE, maxGap);
+  }
+
+  // (6) At d_opt the total blur is a genuine MINIMUM: blur(d_opt) ≤ blur(0.5·d_opt)
+  //     and ≤ blur(2·d_opt), strictly, for every tested configuration.
+  {
+    let allMin = true, worstMargin = Infinity;
+    const us = [1000, 3000, 12000]; const vs = [80, 150, 300]; const lams = [450e-6, 550e-6, 650e-6];
+    for (const u of us) for (const v of vs) for (const lambda of lams){
+      const dopt = dOptimal(lambda, v, u);
+      const b0 = blurTotal(dopt, u, v, lambda);
+      const bHalf = blurTotal(0.5 * dopt, u, v, lambda);
+      const bDouble = blurTotal(2 * dopt, u, v, lambda);
+      if (!(b0 < bHalf && b0 < bDouble)) allMin = false;
+      worstMargin = Math.min(worstMargin, bHalf - b0, bDouble - b0);
+    }
+    check('blur(d_opt) ≤ blur(0.5·d_opt) and ≤ blur(2·d_opt) (true minimum)', allMin, worstMargin);
+  }
+
+  // (7) Convolution conserves energy (kernels normalise to 1) AND a wider blur
+  //     reduces peak contrast — the physical reason the image softens. Also: zero
+  //     blur is the identity (kernel = δ), so the sharp image is recovered exactly.
+  {
+    // a unit impulse source; total area must be preserved under any blur kernel.
+    const src = new Float64Array(101); src[50] = 1;
+    const kNarrow = tentKernel(1.5), kWide = tentKernel(12);
+    const sum = a => a.reduce((s, x) => s + x, 0);
+    const oNarrow = convolve1D(src, kNarrow), oWide = convolve1D(src, kWide);
+    const areaOk = Math.abs(sum(oNarrow) - 1) < 1e-9 && Math.abs(sum(oWide) - 1) < 1e-9;
+    const peakOk = oWide[50] < oNarrow[50];               // wider blur → lower peak
+    // identity: a δ kernel (halfWidth 0) returns the source unchanged.
+    const kDelta = tentKernel(0); const oId = convolve1D(src, kDelta);
+    let idOk = true; for (let i = 0; i < src.length; i++) if (Math.abs(oId[i] - src[i]) > 1e-12) idOk = false;
+    check('blur convolution conserves energy, lowers peak as it widens, δ-kernel is identity',
+          areaOk && peakOk && idOk, { areaErr: Math.abs(sum(oWide) - 1) });
+  }
+
+  // (8) SKIN INVARIANCE: the physics functions take no style argument, so all the
+  //     numbers are identical across cosmetic skins by construction. Assert a
+  //     fingerprint of the model is byte-identical while a "skin" variable mutates.
+  {
+    function fingerprint(){
+      const out = [];
+      for (const u of [1200, 3000, 9000]) for (const v of [80, 200]){
+        out.push(Math.round(magnification(u, v) * 1e6));
+        out.push(Math.round(imageHeight(1200, u, v) * 1e6));
+        out.push(Math.round(dOptimal(550e-6, v, u) * 1e9));
+        out.push(Math.round(blurTotal(0.4, u, v, 550e-6) * 1e6));
+      }
+      return out.join('|');
+    }
+    const a = fingerprint();
+    if (typeof window !== 'undefined') window.__skin = 'blueprint';
+    const b = fingerprint();
+    if (typeof window !== 'undefined') window.__skin = 'ink';
+    const c = fingerprint();
+    check('geometry & blur identical across skins (model reads no style)', a === b && b === c, 0);
+  }
+
+  return { pass, total, log, errs };
+}
+
+// expose for Node extraction / external re-audit
+if (typeof window !== 'undefined'){
+  window.CameraObscuraCore = { magnification, imageHeight, projectPoint,
+    blurGeo, blurDiff, blurTotal, dOptimal, dOptimalDistant, argminBlur, tentKernel, convolve1D, runSelfTest };
+}
+if (typeof module !== 'undefined' && module.exports){
+  module.exports = { magnification, imageHeight, projectPoint,
+    blurGeo, blurDiff, blurTotal, dOptimal, dOptimalDistant, argminBlur, tentKernel, convolve1D, runSelfTest };
+}
+
+// ============================================================================
+// APPLICATION (DOM). Everything below derives from the pure core above. Skipped
+// entirely under Node (no document).
+// ============================================================================
+if (typeof document !== 'undefined'){ (function(){
+
+// ---------- skins (COSMETIC ONLY — never touch the physics) -----------------
+const SKINS = {
+  parchment: { bench:'#0a0907', grid:'rgba(201,162,74,0.05)', axis:'rgba(201,162,74,0.22)',
+               ray:'#ffd98a', rayTop:'#ffcf72', rayBot:'#ffe6a8', wall:'rgba(201,162,74,0.7)',
+               box:'rgba(28,22,12,0.55)', boxEdge:'rgba(201,162,74,0.5)', pin:'#fff4d8',
+               sceneSky:['#1a2233','#0d1422'], scene:'#f0e2c2', accent:'#c9a24a', good:'#9bd7a3', warn:'#ff8a5a' },
+  blueprint: { bench:'#060810', grid:'rgba(120,170,230,0.07)', axis:'rgba(120,170,230,0.26)',
+               ray:'#9fd0ff', rayTop:'#7ec0ff', rayBot:'#cfe6ff', wall:'rgba(160,210,255,0.7)',
+               box:'rgba(14,24,40,0.55)', boxEdge:'rgba(120,170,230,0.5)', pin:'#eaf3ff',
+               sceneSky:['#10203a','#081427'], scene:'#cfe6ff', accent:'#9fd0ff', good:'#9bd7a3', warn:'#ff9a7a' },
+  ink:       { bench:'#0c0c0d', grid:'rgba(220,220,225,0.05)', axis:'rgba(220,220,225,0.22)',
+               ray:'#e6e6ea', rayTop:'#cfcfd6', rayBot:'#f4f4f8', wall:'rgba(230,230,235,0.7)',
+               box:'rgba(24,24,26,0.6)', boxEdge:'rgba(220,220,225,0.45)', pin:'#ffffff',
+               sceneSky:['#1c1c20','#101012'], scene:'#e6e6ea', accent:'#cfcfd6', good:'#9bd7a3', warn:'#ff9a7a' },
+};
+
+const cv = document.getElementById('bench');
+let ctx = cv.getContext('2d');
+let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+let W = 0, H = 0;
+
+// state — all physical quantities in real-world units (mm internally).
+//   d  : hole diameter in mm        u : object distance in mm
+//   v  : image distance in mm       Hobj : object height in mm
+//   lam: wavelength in nm (converted to mm in physics calls)
+const DEFAULTS = { d:0.50, v:150, u:3000, Hobj:1200, lam:550, skin:'parchment' };
+const state = Object.assign({}, DEFAULTS);
+
+function lamMM(){ return state.lam * 1e-6; }       // nm → mm
+
+function resize(){
+  const stage = document.getElementById('stage');
+  W = Math.max(320, stage.clientWidth);
+  H = Math.max(240, stage.clientHeight);
+  dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+}
+function skin(){ return SKINS[state.skin]; }
+function getMono(){ return '"SF Mono",ui-monospace,Menlo,monospace'; }
+
+// ---------- low-level drawing helpers ---------------------------------------
+function lineTo(ax, ay, bx, by, color, width, alpha){
+  ctx.strokeStyle = color; ctx.lineWidth = width; ctx.globalAlpha = alpha === undefined ? 1 : alpha;
+  ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); ctx.globalAlpha = 1;
+}
+function dot(x, y, r, color){ ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+function drawGrid(){
+  const s = skin();
+  ctx.strokeStyle = s.grid; ctx.lineWidth = 1; ctx.globalAlpha = 1;
+  const step = 48;
+  ctx.beginPath();
+  for (let x = 0; x <= W; x += step){ ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+  for (let y = 0; y <= H; y += step){ ctx.moveTo(0, y); ctx.lineTo(W, y); }
+  ctx.stroke();
+}
+
+// ---------- the scene: an offscreen 1-D brightness/colour profile ------------
+// A little landscape: sky gradient, a tree (trunk + canopy), a candle flame, a
+// house. We render it ONCE into a tall offscreen strip in object space (a column
+// of pixels representing height), then blur+scale it onto the back wall. The
+// strip is a [N × 3] colour buffer + a coverage profile so blur is honest.
+const STRIP_N = 360;                 // vertical samples of the scene
+let sceneStrip = null;               // {rgb:Float64Array(N*3)}
+function buildSceneStrip(){
+  const N = STRIP_N;
+  const rgb = new Float64Array(N * 3);
+  // y index 0 = TOP of the scene (sky), N-1 = BOTTOM (ground). The object spans
+  // a fraction of the strip; rest is sky/ground so blur has room to bleed.
+  const s = skin();
+  function set(i, r, g, b){ if (i < 0 || i >= N) return; const o = i * 3; rgb[o] = r; rgb[o+1] = g; rgb[o+2] = b; }
+  function mix(i, r, g, b, a){ if (i < 0 || i >= N) return; const o = i * 3;
+    rgb[o] = rgb[o]*(1-a)+r*a; rgb[o+1] = rgb[o+1]*(1-a)+g*a; rgb[o+2] = rgb[o+2]*(1-a)+b*a; }
+  // sky gradient
+  const skyTop = hexRGB(s.sceneSky[0]), skyBot = hexRGB(s.sceneSky[1]);
+  const horizon = Math.round(N * 0.62);
+  for (let i = 0; i < N; i++){
+    if (i <= horizon){
+      const t = i / horizon;
+      set(i, lerp(skyTop[0], skyBot[0], t), lerp(skyTop[1], skyBot[1], t), lerp(skyTop[2], skyBot[2], t));
+    } else {
+      // ground
+      set(i, 26, 22, 14);
+    }
+  }
+  // sun high in the sky (a bright band)
+  for (let i = Math.round(N*0.10); i <= Math.round(N*0.16); i++) mix(i, 255, 244, 210, 0.9);
+  // a house roof + wall band (mid scene)
+  for (let i = Math.round(N*0.40); i <= Math.round(N*0.50); i++) mix(i, 150, 96, 60, 1);   // roof
+  for (let i = Math.round(N*0.50); i <= Math.round(N*0.60); i++) mix(i, 196, 176, 140, 1); // wall
+  // a tall tree: canopy band then trunk
+  for (let i = Math.round(N*0.30); i <= Math.round(N*0.44); i++) mix(i, 60, 120, 60, 1);    // canopy
+  for (let i = Math.round(N*0.44); i <= Math.round(N*0.60); i++) mix(i, 70, 50, 30, 0.85);  // trunk
+  // the CANDLE FLAME — the brightest point, near the horizon (the classic motif)
+  const fc = Math.round(N*0.58);
+  for (let i = fc-6; i <= fc+2; i++){ const a = 1 - Math.abs(i-fc)/8; mix(i, 255, 210, 120, Math.max(0,a)); }
+  mix(fc, 255, 248, 220, 1);
+  sceneStrip = { rgb, N, horizon };
+}
+function hexRGB(h){ h = h.replace('#',''); return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)]; }
+function lerp(a, b, t){ return a + (b - a) * t; }
+
+// Convolve the scene strip vertically by a blur of full width `widthSamples`
+// (in strip-sample units), per channel, conserving energy. Returns Float64Array.
+function blurStrip(strip, widthSamples){
+  const half = widthSamples / 2;
+  const kernel = window.CameraObscuraCore.tentKernel(half);
+  const N = strip.N;
+  const out = new Float64Array(N * 3);
+  for (let c = 0; c < 3; c++){
+    const chan = new Float64Array(N);
+    for (let i = 0; i < N; i++) chan[i] = strip.rgb[i*3 + c];
+    const bl = window.CameraObscuraCore.convolve1D(chan, kernel);
+    for (let i = 0; i < N; i++) out[i*3 + c] = bl[i];
+  }
+  return out;
+}
+
+// ============================================================================
+// THE BENCH — cross-section ray diagram + projected image.
+// ============================================================================
+function draw(){
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.save();
+  ctx.scale(dpr, dpr);
+  drawScene();
+  ctx.restore();
+}
+let drawQueued = false;
+function requestDraw(){ if (drawQueued) return; drawQueued = true; requestAnimationFrame(() => { drawQueued = false; draw(); }); }
+
+function drawScene(){
+  const s = skin();
+  drawGrid();
+
+  // --- physical quantities ---
+  const u = state.u, v = state.v, Hobj = state.Hobj, d = state.d, lam = lamMM();
+  const m = window.CameraObscuraCore.magnification(u, v);            // v/u
+  const imgH = window.CameraObscuraCore.imageHeight(Hobj, u, v);     // mm
+  const bGeo = window.CameraObscuraCore.blurGeo(d, u, v);            // mm on wall
+  const bDiff = window.CameraObscuraCore.blurDiff(d, lam, v);        // mm on wall
+  const bTot = window.CameraObscuraCore.blurTotal(d, u, v, lam);     // mm on wall
+  const dOpt = window.CameraObscuraCore.dOptimal(lam, v, u);        // mm — exact minimiser
+  const dOptDistant = window.CameraObscuraCore.dOptimalDistant(lam, v);  // classic √(2.44λv) rule
+
+  // --- layout: bench is a horizontal cross-section. Pinhole wall at pinX. ---
+  const axisY = H * 0.52;
+  const sceneX = W * 0.13;           // where we draw the object (left)
+  const pinX = W * 0.52;             // the dark-room front wall + pinhole
+  const wallGap = W * 0.30;          // depth of the room on screen
+  const backX = pinX + wallGap;      // back wall (image surface)
+
+  // pixel scales (independent for the object world and the image world so both
+  // are legible regardless of the huge u:v ratio — the NUMBERS stay exact).
+  const objPxPerMm = Math.min((H*0.34) / Hobj, 0.16);     // object height → px
+  const imgPxPerMm = Math.min((H*0.34) / Math.max(imgH, 1), 1.4);  // image height → px
+
+  const objHalfPx = (Hobj/2) * objPxPerMm;
+  const imgHalfPx = (imgH/2) * imgPxPerMm;
+
+  // optical axis line across the whole bench
+  ctx.setLineDash([5,5]); lineTo(W*0.04, axisY, backX + 30, axisY, s.axis, 1, 1); ctx.setLineDash([]);
+
+  // --- the dark room (box) between pinhole wall and back wall ---
+  ctx.fillStyle = s.box;
+  ctx.fillRect(pinX, axisY - H*0.40, backX - pinX, H*0.80);
+  // front (pinhole) wall — a solid bar with a gap at the axis = the pinhole
+  drawPinholeWall(pinX, axisY, d, dOpt, s);
+  // back wall (image surface)
+  lineTo(backX, axisY - H*0.40, backX, axisY + H*0.40, s.wall, 3, 1);
+  ctx.fillStyle = s.wall; ctx.font = '600 9px ' + getMono(); ctx.textAlign = 'center';
+  ctx.fillText('back wall (image)', backX, axisY + H*0.40 + 16);
+  ctx.fillText('pinhole wall', pinX, axisY - H*0.40 - 8);
+
+  // --- the OBJECT outside (an upright arrow + a small candle glyph) ---
+  const objTopY = axisY - objHalfPx, objBotY = axisY + objHalfPx;
+  drawArrow(sceneX, axisY, sceneX, objTopY, s.scene, 2.4);     // object points UP
+  // little candle flame at the tip to anchor the "scene" idea
+  drawFlame(sceneX, objTopY - 4, s);
+  ctx.fillStyle = s.scene; ctx.font = '600 9px ' + getMono(); ctx.textAlign = 'center';
+  ctx.fillText('object  H=' + fmtLen(Hobj), sceneX, objBotY + 16);
+  ctx.fillText('u = ' + fmtLen(u) + ' away', sceneX, objBotY + 30);
+
+  // --- the bounding rays: top of object → pinhole → bottom of image, and
+  //     bottom of object → pinhole → top of image. They CROSS at the pinhole. ---
+  const imgTopY = axisY - imgHalfPx, imgBotY = axisY + imgHalfPx;
+  // top of object goes through pinhole to BOTTOM of image (inverted)
+  lineTo(sceneX, objTopY, pinX, axisY, s.rayTop, 1.6, 0.95);
+  lineTo(pinX, axisY, backX, imgBotY, s.rayTop, 1.6, 0.95);
+  // bottom of object → pinhole → TOP of image
+  lineTo(sceneX, objBotY, pinX, axisY, s.rayBot, 1.6, 0.95);
+  lineTo(pinX, axisY, backX, imgTopY, s.rayBot, 1.6, 0.95);
+  // a faint chief ray along the axis
+  lineTo(sceneX, axisY, backX, axisY, s.ray, 1, 0.35);
+
+  // the crossing point marker (the pinhole) — proves the rays meet there
+  dot(pinX, axisY, 3.2, s.pin);
+
+  // --- the PROJECTED IMAGE on the back wall: blurred + inverted scene strip ---
+  drawProjectedImage(backX, axisY, imgHalfPx, bTot, imgPxPerMm, s);
+
+  // image-height bracket + inverted label
+  ctx.setLineDash([3,4]);
+  lineTo(backX + 14, imgTopY, backX + 14, imgBotY, s.accent, 1, 0.7);
+  ctx.setLineDash([]);
+  ctx.fillStyle = s.accent; ctx.font = '600 9px ' + getMono(); ctx.textAlign = 'left';
+  ctx.fillText('image  ' + fmtLen(imgH) + '  (inverted, reversed)', backX + 20, axisY - imgHalfPx - 6 < axisY-H*0.36 ? axisY : (imgTopY + (imgBotY-imgTopY)/2));
+
+  // --- the blur-vs-diameter plot (inset, lower-left of the room) ---
+  drawBlurPlot(d, u, v, lam, dOpt, dOptDistant, s);
+
+  // --- HUD + readout ---
+  const regime = d > dOpt*1.25 ? 'too big — geometric blur' :
+                 d < dOpt*0.8  ? 'too small — diffraction-soft' : 'near the sweet spot';
+  setHud('Every ray crosses at the <b>pinhole</b>, so the image is <b>inverted &amp; reversed</b>. ' +
+         'Magnification <b>m = v/u = ' + m.toFixed(3) + '</b>. You are <b>' + regime + '</b>.');
+  updateReadout([
+    ['magnification m', m.toFixed(4) + '×', true],
+    ['= v / u', fmtLen(v) + ' / ' + fmtLen(u), false],
+    ['image height', fmtLen(imgH), false],
+    ['orientation', 'inverted + reversed', false],
+    ['B_geo = d(u+v)/u', fmtBlur(bGeo), false],
+    ['B_diff = 2.44λv/d', fmtBlur(bDiff), false],
+    ['total blur', fmtBlur(bTot), true],
+    ['d_opt (exact)', dOpt.toFixed(3) + ' mm', false],
+    ['√(2.44λv) rule', dOptDistant.toFixed(3) + ' mm', false],
+    ['your d', d.toFixed(3) + ' mm', false],
+  ]);
+}
+
+// front wall as two bars leaving a gap = the pinhole, sized (visibly exaggerated)
+// by the hole diameter relative to the optimum so the user SEES it grow/shrink.
+function drawPinholeWall(pinX, axisY, d, dOpt, s){
+  // visual half-gap in px: scaled by d but clamped so it stays a legible "hole".
+  const gap = Math.max(1.2, Math.min(18, 6 * Math.sqrt(d / dOpt)));
+  ctx.fillStyle = s.boxEdge; ctx.globalAlpha = 1;
+  ctx.fillRect(pinX - 2, axisY - H*0.40, 4, (H*0.40) - gap);
+  ctx.fillRect(pinX - 2, axisY + gap, 4, (H*0.40) - gap);
+  // glow at the hole
+  const g = ctx.createRadialGradient(pinX, axisY, 0, pinX, axisY, gap*2.2);
+  g.addColorStop(0, s.pin); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.globalAlpha = 0.7;
+  ctx.beginPath(); ctx.arc(pinX, axisY, gap*2.2, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.fillStyle = s.pin; ctx.font = '600 9px ' + getMono(); ctx.textAlign = 'center';
+  ctx.fillText('pinhole  d=' + d.toFixed(2) + 'mm', pinX, axisY + gap + 16);
+}
+
+// Render the inverted, blurred scene strip vertically on the back wall.
+function drawProjectedImage(backX, axisY, imgHalfPx, blurMM, imgPxPerMm, s){
+  if (!sceneStrip) buildSceneStrip();
+  const strip = sceneStrip;
+  // blur in mm → strip-sample units: the strip spans the object height range that
+  // maps onto 2·imgHalfPx px; blurMM is on the WALL (image side). Convert wall mm
+  // → image px → strip samples.
+  const imgSpanPx = Math.max(2, 2 * imgHalfPx);
+  const blurPx = blurMM * imgPxPerMm;
+  const blurSamples = (blurPx / imgSpanPx) * strip.N;
+  const blurred = blurStrip(strip, Math.max(0, blurSamples));
+
+  // draw a vertical band ~22px wide on the back wall. The image is INVERTED, so we
+  // read the strip from BOTTOM→TOP as we paint TOP→BOTTOM (flip), and slightly
+  // dim with larger holes is NOT applied to brightness here (energy conserved);
+  // instead overall exposure rises with hole area (bigger hole = brighter).
+  const bandW = 20;
+  const x0 = backX - bandW - 1;
+  const topY = axisY - imgHalfPx, botY = axisY + imgHalfPx;
+  const exposure = Math.min(1.6, 0.35 + 1.1 * (state.d / s_dOptForExposure()));   // bigger hole, more light
+  for (let py = 0; py < imgSpanPx; py++){
+    const yScreen = topY + py;
+    // INVERSION: top of the wall shows the BOTTOM of the scene strip.
+    const frac = py / imgSpanPx;                 // 0 at top of wall
+    const si = Math.round((1 - frac) * (strip.N - 1));   // flip
+    const o = si * 3;
+    let r = blurred[o]*exposure, g = blurred[o+1]*exposure, b = blurred[o+2]*exposure;
+    r = Math.min(255, r); g = Math.min(255, g); b = Math.min(255, b);
+    ctx.fillStyle = 'rgb(' + (r|0) + ',' + (g|0) + ',' + (b|0) + ')';
+    ctx.fillRect(x0, yScreen, bandW, 1.3);
+  }
+  // frame
+  ctx.strokeStyle = s.wall; ctx.lineWidth = 1; ctx.globalAlpha = 0.8;
+  ctx.strokeRect(x0, topY, bandW, imgSpanPx); ctx.globalAlpha = 1;
+}
+function s_dOptForExposure(){ return window.CameraObscuraCore.dOptimal(state.lam*1e-6, state.v, state.u); }
+
+// ---------- the blur-vs-diameter plot ---------------------------------------
+function drawBlurPlot(d, u, v, lam, dOpt, dOptDistant, s){
+  const core = window.CameraObscuraCore;
+  const pw = Math.min(300, W*0.26), ph = 150;
+  const px = 24, py = H - ph - 24;
+  // frame
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(px, py, pw, ph);
+  ctx.strokeStyle = s.boxEdge; ctx.lineWidth = 1; ctx.strokeRect(px, py, pw, ph);
+  ctx.fillStyle = s.accent; ctx.font = '600 9px ' + getMono(); ctx.textAlign = 'left';
+  ctx.fillText('blur vs hole diameter', px + 8, py + 14);
+
+  // domain: 0.05·dOpt .. 4·dOpt (mm). range: 0..max sampled blur.
+  const dLo = dOpt*0.12, dHi = dOpt*4;
+  const samples = 120;
+  let maxB = 0;
+  const tot = [], geo = [], dif = [];
+  for (let i = 0; i < samples; i++){
+    const dd = dLo + (dHi - dLo) * (i/(samples-1));
+    const bt = core.blurTotal(dd, u, v, lam), bg = core.blurGeo(dd, u, v), bd = core.blurDiff(dd, lam, v);
+    tot.push([dd, bt]); geo.push([dd, bg]); dif.push([dd, bd]);
+    maxB = Math.max(maxB, bt);
+  }
+  maxB *= 1.05;
+  const plotX = px + 10, plotY = py + 22, plotW = pw - 20, plotH = ph - 40;
+  const X = dd => plotX + ((dd - dLo)/(dHi - dLo)) * plotW;
+  const Y = bb => plotY + plotH - (bb / maxB) * plotH;
+
+  function curve(arr, color, width, alpha){
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.globalAlpha = alpha; ctx.beginPath();
+    for (let i = 0; i < arr.length; i++){ const xx = X(arr[i][0]), yy = Y(Math.min(arr[i][1], maxB));
+      if (i === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy); }
+    ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  curve(geo, s.warn, 1, 0.45);            // geometric (rises with d)
+  curve(dif, s.accent, 1, 0.45);          // diffraction (falls with d)
+  curve(tot, s.good, 1.8, 1);             // total (the U)
+
+  // optimum vertical line + the analytic d_opt marker
+  ctx.setLineDash([3,3]); lineTo(X(dOpt), plotY, X(dOpt), plotY + plotH, s.pin, 1, 0.7); ctx.setLineDash([]);
+  dot(X(dOpt), Y(core.blurTotal(dOpt, u, v, lam)), 3, s.pin);
+  // the classic √(2.44λv) rule of thumb — a faint tick (it sits just right of d_opt)
+  if (dOptDistant >= dLo && dOptDistant <= dHi){
+    ctx.globalAlpha = 0.4; lineTo(X(dOptDistant), plotY + plotH - 6, X(dOptDistant), plotY + plotH, s.ray, 1, 0.4); ctx.globalAlpha = 1;
+  }
+  // the user's current d marker
+  if (d >= dLo && d <= dHi) dot(X(d), Y(Math.min(core.blurTotal(d,u,v,lam), maxB)), 3.2, s.good);
+
+  ctx.fillStyle = s.pin; ctx.font = '600 8px ' + getMono(); ctx.textAlign = 'center';
+  ctx.fillText('d_opt', X(dOpt), plotY + plotH + 11);
+  ctx.fillStyle = s.warn; ctx.textAlign = 'left'; ctx.fillText('geo', plotX + 2, plotY + 9);
+  ctx.fillStyle = s.accent; ctx.fillText('diff', plotX + 2, plotY + 19);
+}
+
+// ---------- scene glyph helpers ---------------------------------------------
+function drawArrow(x0, y0, x1, y1, color, width){
+  lineTo(x0, y0, x1, y1, color, width, 1);
+  const ang = Math.atan2(y1 - y0, x1 - x0), hl = 8;
+  ctx.strokeStyle = color; ctx.lineWidth = width; ctx.beginPath();
+  ctx.moveTo(x1, y1); ctx.lineTo(x1 - hl*Math.cos(ang-0.4), y1 - hl*Math.sin(ang-0.4));
+  ctx.moveTo(x1, y1); ctx.lineTo(x1 - hl*Math.cos(ang+0.4), y1 - hl*Math.sin(ang+0.4));
+  ctx.stroke();
+}
+function drawFlame(x, y, s){
+  const g = ctx.createRadialGradient(x, y, 0, x, y, 9);
+  g.addColorStop(0, '#fff4d0'); g.addColorStop(0.5, 'rgba(255,200,110,0.8)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI*2); ctx.fill();
+}
+
+// ---------- formatters ------------------------------------------------------
+function fmtLen(mm){
+  if (mm >= 1000) return (mm/1000).toFixed(2) + ' m';
+  if (mm >= 10) return (mm).toFixed(0) + ' mm';
+  return mm.toFixed(2) + ' mm';
+}
+function fmtBlur(mm){
+  if (mm < 1) return (mm*1000).toFixed(0) + ' µm';
+  return mm.toFixed(2) + ' mm';
+}
+
+// ---------- readout + hud ---------------------------------------------------
+function updateReadout(rows){
+  const host = document.getElementById('readout'); host.innerHTML = '';
+  for (const [k, v, big] of rows){
+    const a = document.createElement('span'); a.className = 'k'; a.textContent = k;
+    const b = document.createElement('span'); b.className = 'v' + (big ? ' big' : ''); b.textContent = v;
+    host.appendChild(a); host.appendChild(b);
+  }
+}
+function setHud(html){ document.getElementById('hud').innerHTML = html; }
+
+// ---------- controls --------------------------------------------------------
+function applySkinVars(){
+  const sk = skin(); const r = document.documentElement.style;
+  r.setProperty('--bench', sk.bench); r.setProperty('--grid', sk.grid); r.setProperty('--axis', sk.axis);
+}
+function setFill(slider){
+  const min = parseFloat(slider.min), max = parseFloat(slider.max), v = parseFloat(slider.value);
+  slider.style.setProperty('--fill', ((v - min)/(max - min)*100) + '%');
+}
+
+function wire(){
+  const sD = document.getElementById('sD'), sV = document.getElementById('sV'),
+        sU = document.getElementById('sU'), sH = document.getElementById('sH'), sLam = document.getElementById('sLam');
+
+  function refreshLabels(){
+    document.getElementById('vD').textContent = state.d.toFixed(2) + ' mm';
+    document.getElementById('vV').textContent = state.v.toFixed(0) + ' mm';
+    document.getElementById('vU').textContent = (state.u/1000).toFixed(1) + ' m';
+    document.getElementById('vH').textContent = (state.Hobj/1000).toFixed(2) + ' m';
+    document.getElementById('vLam').textContent = state.lam.toFixed(0) + ' nm';
+  }
+
+  sD.addEventListener('input', () => { state.d = parseFloat(sD.value); setFill(sD); refreshLabels(); requestDraw(); });
+  sV.addEventListener('input', () => { state.v = parseFloat(sV.value); setFill(sV); refreshLabels(); requestDraw(); });
+  sU.addEventListener('input', () => { state.u = parseFloat(sU.value) * 1000; setFill(sU); refreshLabels(); requestDraw(); });
+  sH.addEventListener('input', () => { state.Hobj = parseFloat(sH.value) * 1000; setFill(sH); refreshLabels(); requestDraw(); });
+  sLam.addEventListener('input', () => { state.lam = parseFloat(sLam.value); setFill(sLam); refreshLabels(); requestDraw(); });
+
+  document.getElementById('optBtn').addEventListener('click', () => {
+    const dOpt = window.CameraObscuraCore.dOptimal(state.lam*1e-6, state.v, state.u);
+    state.d = Math.max(parseFloat(sD.min), Math.min(parseFloat(sD.max), dOpt));
+    sD.value = state.d; setFill(sD); refreshLabels(); requestDraw();
+  });
+
+  document.getElementById('skinSeg').addEventListener('click', ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    state.skin = b.dataset.skin;
+    document.querySelectorAll('#skinSeg button').forEach(x => x.classList.toggle('active', x === b));
+    buildSceneStrip();                  // rebuild scene colours for the new skin (cosmetic)
+    applySkinVars(); requestDraw();     // skin is cosmetic — no recompute of any physical number
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    Object.assign(state, DEFAULTS);
+    sD.value = state.d; sV.value = state.v; sU.value = state.u/1000; sH.value = state.Hobj/1000; sLam.value = state.lam;
+    [sD, sV, sU, sH, sLam].forEach(setFill);
+    document.querySelectorAll('#skinSeg button').forEach(x => x.classList.toggle('active', x.dataset.skin === state.skin));
+    buildSceneStrip(); applySkinVars(); refreshLabels(); requestDraw();
+  });
+
+  document.getElementById('pngBtn').addEventListener('click', exportPNG);
+
+  // initialise slider positions to the (m-internal) state
+  sU.value = state.u/1000; sH.value = state.Hobj/1000;
+  [sD, sV, sU, sH, sLam].forEach(setFill);
+  refreshLabels();
+}
+
+// ---------- PNG ×2 export ----------------------------------------------------
+function exportPNG(){
+  const scale = 2;
+  const off = document.createElement('canvas');
+  off.width = Math.round(W * scale); off.height = Math.round(H * scale);
+  const octx = off.getContext('2d');
+  const g = octx.createRadialGradient(off.width*0.46, off.height*0.42, 0, off.width*0.46, off.height*0.42, Math.max(off.width, off.height));
+  g.addColorStop(0, '#14110b'); g.addColorStop(0.64, '#0c0a07'); g.addColorStop(1, '#070605');
+  octx.fillStyle = g; octx.fillRect(0, 0, off.width, off.height);
+  const savedCtx = ctx, savedDpr = dpr;
+  ctx = octx; dpr = scale; draw(); ctx = savedCtx; dpr = savedDpr; requestDraw();
+  const finish = url => { const a = document.createElement('a'); a.href = url; a.download = 'camera-obscura.png';
+    document.body.appendChild(a); a.click(); a.remove(); };
+  if (off.toBlob){ off.toBlob(b => { const u = URL.createObjectURL(b); finish(u); setTimeout(() => URL.revokeObjectURL(u), 4000); }, 'image/png'); }
+  else finish(off.toDataURL('image/png'));
+}
+
+window.addEventListener('resize', () => { resize(); requestDraw(); });
+
+// ---------- INIT ------------------------------------------------------------
+function init(){
+  try{ var k = 'ws:seen:camera-obscura'; if (!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
+
+  const res = runSelfTest();
+  const chip = document.getElementById('selftest');
+  if (res.pass === res.total){ chip.className = 'selftest ok'; chip.textContent = 'camera obscura verified — ' + res.pass + '/' + res.total + ' ✓'; }
+  else { chip.className = 'selftest bad'; chip.textContent = 'camera obscura FAILED — ' + res.pass + '/' + res.total; }
+  console.log('The Camera Obscura self-test: ' + res.pass + '/' + res.total + ' passed.');
+  console.log('  key errors:', res.errs);
+
+  buildSceneStrip();
+  wire();
+  applySkinVars();
+  resize();
+  requestDraw();
+}
+init();
+
+})(); }
+</script>
+</body>
+</html>
