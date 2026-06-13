@@ -27,7 +27,7 @@ When a seed blooms, prune it (its provenance lives in the piece's CHANGELOG + th
 - [exhibit] **Nomograph** — a Workbench instrument: a graphical-calculation chart (lay a straightedge across scales to read a product/quotient/root). *(The planimeter half of this seed BLOOMED 2026-06-13 → `planimeter/`: area by tracing, Green's theorem in brass, self-test 7/7.)*
 - [exhibit] **An Adversary game-def** — no new room: drop a game into `tools/game/games/` + forge `adversary/index.src.html` (e.g. Dots-and-Boxes, Connect-3-ish, Wythoff).
 - ~~[exhibit] Fourier epicycles~~ — **BLOOMED 2026-06-13** → `epicycles/index.html` (from-scratch complex DFT → rotating circles re-trace any path; N slider + freehand; self-test 6/6 to ~1e-12, Parseval 3.3e-15). Sown and built the same session.
-- [exhibit] **The Brachistochrone** — race balls down different ramps; the **cycloid** wins, and from *any* start height they arrive *together* (tautochrone). Self-test: the cycloid beats line/circle/parabola to machine precision; equal arrival times. Workbench → Toys & benches. (sown 2026-06-13)
+- ~~[exhibit] The Brachistochrone~~ — **BLOOMED 2026-06-13** → `brachistochrone/index.html` (cycloid wins the race; tautochrone arrival spread 0.00e+0 / dev 9.44e-15; self-test 7/7, falsifiable). Sown and built the same day.
 
 ### cipher exhibits (public: Volvelle + Scytale; hidden: Enigma — don't rebuild those)
 - [exhibit] **A cipher of a new family** — Playfair / Polybius / one-time-pad / Hagelin M-209 / the **M-94 cylinder**. Pick the one with the best *visual* story.

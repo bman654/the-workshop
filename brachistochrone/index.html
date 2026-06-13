@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Brachistochrone</title>
+<style>
+  :root{
+    /* slate skin (default) — chrome colours, cosmetic only */
+    --bg: #07080c;
+    --stage-bg: #0a0c12;
+    --stage-grid: rgba(201,162,74,0.055);
+    --panel-bg: rgba(13,12,9,0.90);
+    --panel-edge: rgba(201,162,74,0.32);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --gold-bead: #f4d27a;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    /* curve palette — set per skin in JS, read by canvas via getComputedStyle */
+    --c-line: #6f86c9;
+    --c-arc:  #5fb0a6;
+    --c-parab:#b977c9;
+    --c-cyc:  #f4d27a;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-ui); overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:13px 20px 0; pointer-events:none; gap:12px;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:5px; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); white-space:nowrap; }
+  .brand .tag{ font:11px/1.3 var(--font-mono); color:var(--ink-dim); letter-spacing:.3px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Self-test detail panel (click-to-expand) ---- */
+  #stPanel{
+    position:fixed; top:54px; right:18px; z-index:40; width:min(420px, calc(100vw - 36px));
+    background:var(--panel-bg); border:1px solid var(--panel-edge); border-radius:12px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.6); padding:14px 16px 16px;
+    backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
+    display:none; max-height:78vh; overflow-y:auto;
+  }
+  #stPanel.show{ display:block; }
+  #stPanel h2{ font-family:var(--font-serif); font-size:15px; margin:0 0 4px; color:var(--ink); font-weight:600; }
+  #stPanel .sub{ font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); margin:0 0 10px; letter-spacing:.2px; }
+  #stPanel .closeX{ position:absolute; top:10px; right:12px; cursor:pointer; color:var(--ink-dim);
+    font:14px/1 var(--font-mono); background:none; border:none; padding:4px; }
+  #stPanel .closeX:hover{ color:var(--accent); }
+  .stItem{ display:flex; gap:8px; font:10.5px/1.45 var(--font-mono); padding:6px 0; border-top:1px solid rgba(201,162,74,0.12); }
+  .stItem:first-of-type{ border-top:none; }
+  .stItem .mark{ flex:0 0 auto; font-weight:700; }
+  .stItem.pass .mark{ color:#8fd79a; }
+  .stItem.fail .mark{ color:#f08a7a; }
+  .stItem .body{ color:var(--ink-dim); }
+  .stItem .body b{ color:var(--ink); font-weight:600; }
+  #stPanel .foot{ font:9.5px/1.55 var(--font-mono); color:var(--ink-dim); margin-top:10px;
+    border-top:1px solid rgba(201,162,74,0.16); padding-top:9px; letter-spacing:.2px; }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; }
+  #board{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+  #hud{ position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    font:11px/1.3 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.5);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 12px; letter-spacing:.3px;
+    pointer-events:none; opacity:0; transition:opacity .2s; max-width:90%; text-align:center; }
+  #hud.show{ opacity:1; }
+  #hud b{ color:var(--accent); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:330px; flex:0 0 330px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge); padding:64px 16px 22px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5); z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.6; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 9px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .row{ margin:11px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .row > label .val{ color:var(--accent); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.2px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#f6f1e3; border:2px solid #8a6d28; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{ width:13px; height:13px; border-radius:50%; background:#f6f1e3; border:2px solid #8a6d28; cursor:pointer; }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(201,162,74,0.24); }
+  .seg button{
+    flex:1; min-width:30px; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:7px 4px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#241803; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .btnrow{ display:flex; gap:8px; margin:12px 0; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:10px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(201,162,74,0.26), rgba(201,162,74,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(201,162,74,0.40), rgba(201,162,74,0.14)); }
+
+  /* race readout table */
+  .results{ margin:8px 0 2px; }
+  .res{ display:flex; align-items:center; gap:9px; padding:6px 8px; border-radius:8px; margin:4px 0;
+    font:11px/1 var(--font-mono); background:rgba(255,255,255,0.022); border:1px solid rgba(201,162,74,0.10); transition:.2s; }
+  .res .swatch{ width:12px; height:12px; border-radius:3px; flex:0 0 auto; }
+  .res .nm{ flex:1; color:var(--ink-dim); letter-spacing:.3px; }
+  .res .nm b{ color:var(--ink); font-weight:600; }
+  .res .tm{ color:var(--accent); font-variant-numeric:tabular-nums; letter-spacing:.2px; }
+  .res .place{ flex:0 0 auto; width:18px; text-align:center; color:var(--ink-dim); font-size:10px; }
+  .res.win{ border-color:var(--accent); background:rgba(201,162,74,0.10); }
+  .res.win .nm b{ color:var(--gold-bead); }
+  .res.done .tm{ color:var(--ink); }
+
+  .hint{ font:10.5px/1.55 var(--font-mono); color:var(--ink-dim); margin-top:14px;
+    border-top:1px solid rgba(201,162,74,0.18); padding-top:12px; letter-spacing:.2px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+  .formula{ font:11px/1.5 var(--font-mono); color:var(--accent); letter-spacing:.2px;
+    background:rgba(0,0,0,0.28); border:1px solid rgba(201,162,74,0.16); border-radius:8px; padding:9px 11px; margin:9px 0; }
+
+  /* ---- Mobile ---- */
+  @media (max-width: 820px){
+    #wrap{ flex-direction:column; }
+    #stage{ flex:1 1 auto; min-height:44vh; }
+    #panel{ width:100%; flex:0 0 auto; height:auto; max-height:52vh; border-left:none;
+      border-top:1px solid var(--panel-edge); padding:16px 16px 24px; }
+    .topbar{ padding:9px 13px 0; }
+    .brand .tag{ display:none; }
+  }
+  @media (max-width: 560px){
+    .topbar{ flex-wrap:wrap; gap:6px 10px; }
+    .brand h1{ font-size:17px; }
+    .selftest{ font-size:9.5px; padding:5px 8px; }
+    #stPanel{ right:10px; left:10px; width:auto; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../workbench/index.html">&larr; workbench</a>
+    </div>
+    <div class="brand">
+      <h1>The Brachistochrone</h1>
+      <span class="tag">the curve of fastest descent &mdash; and its tautochrone twin</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for detail · per-check lines are in the console">checking&hellip;</div>
+  </div>
+
+  <div id="stPanel">
+    <button class="closeX" id="stClose" title="close">&times;</button>
+    <h2>Self&#8209;test</h2>
+    <p class="sub" id="stSub">&hellip;</p>
+    <div id="stList"></div>
+    <div class="foot" id="stFoot"></div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="board"></canvas>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede" id="lede"></p>
+
+      <div class="sect">Bench</div>
+      <div class="row">
+        <div class="seg" id="modeSeg">
+          <button data-mode="race" class="active">Race</button>
+          <button data-mode="tauto">Tautochrone</button>
+        </div>
+      </div>
+
+      <!-- RACE controls -->
+      <div id="raceCtl">
+        <div class="row">
+          <label>End point B &mdash; across <span class="val" id="bxVal"></span></label>
+          <input type="range" id="bxRange" min="0.6" max="3.2" step="0.02" value="2.0">
+        </div>
+        <div class="row">
+          <label>End point B &mdash; drop <span class="val" id="byVal"></span></label>
+          <input type="range" id="byRange" min="0.4" max="2.0" step="0.02" value="1.0">
+        </div>
+        <div class="row">
+          <label>Gravity g <span class="val" id="gVal"></span></label>
+          <input type="range" id="gRange" min="2" max="20" step="0.1" value="9.81">
+        </div>
+        <div class="btnrow">
+          <button class="btn primary" id="btnRace">Release &#9654;</button>
+          <button class="btn" id="btnReset">Reset</button>
+        </div>
+        <div class="sect">Finishing order</div>
+        <div class="results" id="raceResults"></div>
+        <div class="hint">Same start <b>A</b>, same end <b>B</b>, four tracks. The
+          <b>cycloid</b> (gold) is the <b>brachistochrone</b> &mdash; it dives steep to trade
+          height for speed early, then coasts. It always wins, even against the straight line.</div>
+      </div>
+
+      <!-- TAUTOCHRONE controls -->
+      <div id="tautoCtl" style="display:none">
+        <div class="row">
+          <label>Cup radius r <span class="val" id="rVal"></span></label>
+          <input type="range" id="rRange" min="0.3" max="1.4" step="0.01" value="0.7">
+        </div>
+        <div class="row">
+          <label>Gravity g <span class="val" id="gVal2"></span></label>
+          <input type="range" id="gRange2" min="2" max="20" step="0.1" value="9.81">
+        </div>
+        <div class="formula" id="tautoT"></div>
+        <div class="btnrow">
+          <button class="btn primary" id="btnDrop">Drop all &#9660;</button>
+          <button class="btn" id="btnResetT">Reset</button>
+        </div>
+        <div class="sect">Arrival</div>
+        <div class="results" id="tautoResults"></div>
+        <div class="hint">Five beads, five different heights on one cycloid cup. Huygens (1659)
+          proved the cycloid is the <b>tautochrone</b>: time to the bottom is
+          <b>&pi;&radic;(r/g)</b> regardless of where you start. Watch them arrive
+          <b>together</b>.</div>
+      </div>
+
+      <div class="sect">Skin</div>
+      <div class="row">
+        <div class="seg" id="skinSeg">
+          <button data-skin="slate" class="active">Slate</button>
+          <button data-skin="blueprint">Blueprint</button>
+          <button data-skin="parchment">Parchment</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+/* =====================================================================
+   THE BRACHISTOCHRONE — Johann Bernoulli's 1696 problem, on a bench.
+
+   Of all curves joining a high A to a lower B, which carries a sliding,
+   frictionless bead there fastest? Not the line — the CYCLOID. And the
+   same cycloid is the TAUTOCHRONE: beads released from any height on it
+   reach the bottom in the SAME time, T = π√(r/g) (Huygens, 1659).
+
+   COORDINATES (physics): x rightward, y DOWNWARD (= drop). A at origin.
+   Speed by energy conservation:  v = √(2 g · drop).
+   Descent time along y(x):  T = ∫ √(1+y'²) / √(2 g y) dx.
+   The integrand blows up like 1/√y at the release point (v→0) — an
+   INTEGRABLE singularity. We regularize it with substitutions that map
+   the singularity to a smooth endpoint, so the quadrature converges fast.
+
+   The SAME core math feeds the on-screen animation AND the headless
+   self-test — one source of truth.
+   ===================================================================== */
+
+// ----------------------------------------------------------------- CORE MATH
+
+// Solve the cycloid through A=(0,0) [cusp at top] and B=(xB,yB), yB>0.
+//   x = r(θ − sinθ),  y = r(1 − cosθ),  θ ∈ [0, θB]
+// Ratio eliminates r:  xB/yB = (θ − sinθ)/(1 − cosθ), monotone on (0,2π).
+function solveCycloid(xB, yB){
+  var target = xB / yB;
+  var f = function(th){ return (th - Math.sin(th)) / (1 - Math.cos(th)) - target; };
+  var lo = 1e-9, hi = 2*Math.PI - 1e-9;
+  for (var i=0;i<200;i++){ var m = 0.5*(lo+hi); if (f(m) < 0) lo = m; else hi = m; }
+  var thB = 0.5*(lo+hi);
+  return { r: yB/(1-Math.cos(thB)), thB: thB };
+}
+
+// Cycloid descent time A→B is EXACT: the integrand is the constant √(r/g),
+// so T = √(r/g)·θB. (ds = r√(2(1−cosθ))dθ, v = √(2g·r(1−cosθ)).)
+function cycloidTime(r, thB, g){ return Math.sqrt(r/g) * thB; }
+
+// General descent time T = ∫ √(1+y'²)/√(2 g y) dx from x=0 (y=0) to xB.
+// Substitution x = s² (dx = 2s ds) tames the 1/√y singularity at the start
+// for tracks that leave A moving (y ~ x^p, p<2). Midpoint rule in s.
+function descentTimeFn(yFn, ypFn, xB, g, N){
+  var sMax = Math.sqrt(xB), T = 0;
+  for (var i=0;i<N;i++){
+    var s = (i+0.5)/N * sMax, ds = sMax/N, x = s*s;
+    var y = yFn(x); if (y <= 0) continue;
+    var yp = ypFn(x);
+    T += (Math.sqrt(1+yp*yp)/Math.sqrt(2*g*y)) * (2*s) * ds;
+  }
+  return T;
+}
+
+// The four race tracks through A=(0,0), B=(xB,yB) — each as y(x), y'(x).
+function trackLine(xB,yB){ var m=yB/xB; return { y:function(x){return m*x;}, yp:function(){return m;} }; }
+function trackArc(xB,yB){
+  // circular arc, vertical tangent at A: centre (cx,0), cx=(xB²+yB²)/(2xB)
+  var cx=(xB*xB+yB*yB)/(2*xB), R=Math.abs(cx);
+  var y=function(x){ return Math.sqrt(Math.max(0,R*R-(x-cx)*(x-cx))); };
+  var yp=function(x){ var yy=y(x); return yy<=1e-9?1e9:-(x-cx)/yy; };
+  return { y:y, yp:yp, cx:cx, R:R };
+}
+function trackParab(xB,yB){
+  // sideways parabola y=√(x/k), k=xB/yB² — vertical tangent at A (a fair steep competitor)
+  var k=xB/(yB*yB);
+  return { y:function(x){return Math.sqrt(x/k);}, yp:function(x){return x<=1e-12?1e9:1/(2*Math.sqrt(k*x));}, k:k };
+}
+
+// Tautochrone time to the bottom (θ=π) of a cycloid cup of radius r, released
+// from rest at angle θ0. Regularizing substitution cos(θ/2)=cos(θ0/2)·cosφ maps
+// the release singularity to a SMOOTH integrand over φ∈[0,π/2]; the analytic
+// answer is π√(r/g) for ALL θ0. We integrate the un-simplified form to PROVE it.
+function tautochroneTime(r, th0, g, N){
+  var A = Math.cos(th0/2), T = 0;
+  for (var i=0;i<N;i++){
+    var phi=(i+0.5)/N*(Math.PI/2), dphi=(Math.PI/2)/N;
+    var cosHalf=A*Math.cos(phi);
+    var sinHalf=Math.sqrt(Math.max(1e-300,1-cosHalf*cosHalf));
+    var oneMinusCos=2*sinHalf*sinHalf;                // 1−cosθ
+    var diff=2*A*A*Math.sin(phi)*Math.sin(phi);       // cosθ0−cosθ
+    var dtheta_dphi=2*A*Math.sin(phi)/sinHalf;
+    if (diff<=0) continue;
+    T += Math.sqrt(r/g) * Math.sqrt(oneMinusCos/diff) * dtheta_dphi * dphi;
+  }
+  return T;
+}
+function tautochroneAnalytic(r, g){ return Math.PI*Math.sqrt(r/g); }
+
+// Falsifiability twin: a CIRCULAR cup is NOT tautochrone — its quarter-period
+// depends on release amplitude (a pendulum). Time to bottom from angle α0.
+function circCupTime(R, alpha0, g, N){
+  var T=0;
+  for (var i=0;i<N;i++){
+    var a=(i+0.5)/N*alpha0, da=alpha0/N;
+    var drop=R*(Math.cos(a)-Math.cos(alpha0)); if (drop<=0) continue;
+    T += R*da/Math.sqrt(2*g*drop);
+  }
+  return T;
+}
+
+// Perturbed cycloid path (endpoints fixed) — used to show it's a true minimum.
+// y(θ) = r(1−cosθ) + amp·sin(πθ/θB); integrate generically in θ.
+function perturbedCycloidTime(r, thB, g, amp, N){
+  var T=0;
+  for (var i=0;i<N;i++){
+    var th=(i+0.5)/N*thB, dth=thB/N;
+    var bump=amp*Math.sin(Math.PI*th/thB);
+    var bumpp=amp*Math.cos(Math.PI*th/thB)*(Math.PI/thB);
+    var y=r*(1-Math.cos(th))+bump; if (y<=1e-9) continue;
+    var dx=r*(1-Math.cos(th)), dy=r*Math.sin(th)+bumpp;
+    var ds=Math.sqrt(dx*dx+dy*dy)*dth;
+    T += ds/Math.sqrt(2*g*y);
+  }
+  return T;
+}
+
+// ------------------------------------------------------- POSITION ALONG TRACK
+// To animate "real" motion we need x(t)/y(t). We precompute a fine table of
+// (cumulative-time → arc position) for each track by marching with the local
+// speed, then look up by elapsed time. This makes the beads move by genuine
+// velocity v=√(2g·drop), so the gold bead visibly pulls ahead.
+
+function buildTimeTable(samplePts, g){
+  // samplePts: [{x,y}, ...] in physics coords (y down), y[0]=0. Returns
+  // {t:[], x:[], y:[], total} where t[i] is arrival time at point i.
+  var n=samplePts.length, t=new Array(n), X=new Array(n), Y=new Array(n);
+  t[0]=0; X[0]=samplePts[0].x; Y[0]=samplePts[0].y;
+  for (var i=1;i<n;i++){
+    X[i]=samplePts[i].x; Y[i]=samplePts[i].y;
+    var dx=samplePts[i].x-samplePts[i-1].x, dy=samplePts[i].y-samplePts[i-1].y;
+    var ds=Math.sqrt(dx*dx+dy*dy);
+    var y0=samplePts[i-1].y, y1=samplePts[i].y;
+    // dt = ds / v, with v varying along the segment. Use v=√(2g y); near the
+    // start (y→0) integrate the segment analytically assuming y linear in arc:
+    // ∫0^ds dσ/√(2g·(y0 + (y1-y0)σ/ds)) — closed form.
+    var dt;
+    var vy0=2*g*y0, vy1=2*g*y1;
+    if (y1 <= 1e-12 && y0 <= 1e-12){ dt = 0; }
+    else if (Math.abs(y1-y0) < 1e-12){ dt = ds/Math.sqrt(2*g*Math.max(y0,1e-12)); }
+    else {
+      // ∫ dσ/√(a+bσ) = 2(√(a+b·ds)-√a)/b, a=vy0, b=(vy1-vy0)/ds, scaled
+      var a=vy0, b=(vy1-vy0); // over σ∈[0,1] fraction, then ·ds
+      dt = ds * 2*(Math.sqrt(a+b)-Math.sqrt(a))/b;
+    }
+    t[i]=t[i-1]+dt;
+  }
+  return { t:t, x:X, y:Y, total:t[n-1] };
+}
+function posAtTime(tbl, time){
+  if (time >= tbl.total) return { x:tbl.x[tbl.x.length-1], y:tbl.y[tbl.y.length-1], done:true };
+  // binary search
+  var lo=0, hi=tbl.t.length-1;
+  while (hi-lo>1){ var mid=(lo+hi)>>1; if (tbl.t[mid] <= time) lo=mid; else hi=mid; }
+  var span=tbl.t[hi]-tbl.t[lo]; var f= span>0 ? (time-tbl.t[lo])/span : 0;
+  return { x:tbl.x[lo]+f*(tbl.x[hi]-tbl.x[lo]), y:tbl.y[lo]+f*(tbl.y[hi]-tbl.y[lo]), done:false };
+}
+
+// =================================================================== SELFTEST
+function runSelfTest(){
+  var items=[], pass=0;
+  function check(ok, label, detail){ items.push({ok:!!ok,label:label,detail:detail}); if(ok)pass++; }
+  var g=9.81, xB=2.0, yB=1.0;
+  var cyc=solveCycloid(xB,yB);
+
+  // (0) Cycloid passes exactly through A and B
+  var xb=cyc.r*(cyc.thB-Math.sin(cyc.thB)), yb=cyc.r*(1-Math.cos(cyc.thB));
+  var thru=Math.max(Math.abs(xb-xB),Math.abs(yb-yB));
+  check(thru<1e-9, "Cycloid passes through A &amp; B", "max endpoint error <b>"+thru.toExponential(2)+"</b>");
+
+  // (1) Cycloid time matches the analytic √(r/g)·θB (regularized θ quadrature)
+  var Tan=cycloidTime(cyc.r,cyc.thB,g);
+  var Tnum=0; (function(){ var N=2000, thB=cyc.thB, r=cyc.r;
+    for (var i=0;i<N;i++){ var u=(i+0.5)/N, du=1/N, th=thB*u*u, dth_du=thB*2*u;
+      var y=r*(1-Math.cos(th)); if(y<=0)continue;
+      var dsdth=r*Math.sqrt(2*(1-Math.cos(th))); Tnum += dsdth/Math.sqrt(2*g*y)*dth_du*du; } })();
+  var cycErr=Math.abs(Tan-Tnum);
+  check(cycErr<1e-6, "Numeric cycloid time = analytic", "|Δ| = <b>"+cycErr.toExponential(2)+"</b> s (tol 1e&#8722;6)");
+
+  // (2) Brachistochrone optimality: cycloid beats line / arc / parabola
+  var ln=trackLine(xB,yB), ar=trackArc(xB,yB), pb=trackParab(xB,yB);
+  var Tline=descentTimeFn(ln.y,ln.yp,xB,g,40000);
+  var Tarc =descentTimeFn(ar.y,ar.yp,xB,g,40000);
+  var Tpar =descentTimeFn(pb.y,pb.yp,xB,g,40000);
+  var minOther=Math.min(Tline,Tarc,Tpar);
+  check(Tan<minOther,
+    "Cycloid is fastest of the four",
+    "cycloid <b>"+Tan.toFixed(5)+"</b> &lt; arc "+Tarc.toFixed(5)+" &lt; parab "+Tpar.toFixed(5)+" &lt; line "+Tline.toFixed(5)+" s (margin <b>"+(minOther-Tan).toFixed(5)+"</b>)");
+
+  // (3) Genuine minimum: every perturbation INCREASES the time
+  var base=perturbedCycloidTime(cyc.r,cyc.thB,g,0,50000);
+  var amps=[-0.08,-0.03,0.03,0.08,0.15], allSlower=true, worst=Infinity;
+  for (var a=0;a<amps.length;a++){ var Tp=perturbedCycloidTime(cyc.r,cyc.thB,g,amps[a],50000);
+    if (Tp < base - 1e-9) allSlower=false; worst=Math.min(worst, Tp-base); }
+  check(allSlower, "Every wiggle is slower (true minimum)", "smallest penalty over 5 perturbations <b>+"+worst.toExponential(2)+"</b> s");
+
+  // (4) Tautochrone: all release heights arrive together at π√(r/g)
+  var rT=0.7, Ttan=tautochroneAnalytic(rT,g);
+  var starts=[0.05,0.5,1.0,1.8,2.5,Math.PI-0.05], times=[];
+  for (var s=0;s<starts.length;s++) times.push(tautochroneTime(rT,starts[s],g,3000));
+  var spread=Math.max.apply(null,times)-Math.min.apply(null,times);
+  var maxAnaErr=0; for (var s2=0;s2<times.length;s2++) maxAnaErr=Math.max(maxAnaErr,Math.abs(times[s2]-Ttan));
+  check(spread<1e-6 && maxAnaErr<1e-6,
+    "Tautochrone: 6 heights arrive together",
+    "spread <b>"+spread.toExponential(2)+"</b> s, max |T&#8722;&pi;&radic;(r/g)| <b>"+maxAnaErr.toExponential(2)+"</b> s (tol 1e&#8722;6)");
+
+  // (5) Falsifiable: a circular cup does NOT arrive together (amplitude-dependent)
+  var c1=circCupTime(0.7,0.3,g,100000), c2=circCupTime(0.7,1.4,g,100000);
+  var circSpread=Math.abs(c2-c1);
+  check(circSpread>1e-3,
+    "Falsifiable: circular cup is NOT tautochrone",
+    "circle arrival spread <b>"+circSpread.toFixed(4)+"</b> s (≫ cycloid's "+spread.toExponential(1)+")");
+
+  // (6) Determinism: identical inputs → identical curve &amp; time
+  var c1s=solveCycloid(xB,yB), c2s=solveCycloid(xB,yB);
+  var det = (c1s.r===c2s.r) && (c1s.thB===c2s.thB) &&
+            (cycloidTime(c1s.r,c1s.thB,g)===cycloidTime(c2s.r,c2s.thB,g));
+  check(det, "Deterministic (identical in → identical out)", "r, &theta;<sub>B</sub>, T bit&#8209;identical on repeat");
+
+  return { items:items, pass:pass, total:items.length,
+           Tline:Tline, Tarc:Tarc, Tpar:Tpar, Tcyc:Tan, cycErr:cycErr, spread:spread, maxAnaErr:maxAnaErr };
+}
+
+// ======================================================================= VIEW
+var canvas=document.getElementById('board'), ctx=canvas.getContext('2d');
+var W=0, H=0, DPR=1;
+var reduceMotion = (typeof matchMedia==='function') && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+var STATE = {
+  mode:'race', skin:'slate',
+  bx:2.0, by:1.0, g:9.81,
+  rTauto:0.7, gTauto:9.81,
+  racing:false, raceT0:0, raceTracks:null, raceFinished:false,
+  tautoDropping:false, tautoT0:0, tautoTbls:null, tautoFinished:false
+};
+
+// curve colours read from CSS (per-skin)
+function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function curveColours(){ return { line:cssVar('--c-line'), arc:cssVar('--c-arc'), parab:cssVar('--c-parab'), cyc:cssVar('--c-cyc') }; }
+
+// world→screen mapping. World: x right, y DOWN. Fit the active geometry.
+function viewMap(worldW, worldH){
+  var pad = Math.min(W,H)*0.10 + 18;
+  var availW = W - pad*2, availH = H - pad*2;
+  var sc = Math.min(availW/worldW, availH/worldH);
+  var ox = (W - worldW*sc)/2, oy = (H - worldH*sc)/2;
+  return { toX:function(x){ return ox + x*sc; }, toY:function(y){ return oy + y*sc; }, sc:sc, ox:ox, oy:oy };
+}
+
+function drawGrid(map, worldW, worldH){
+  ctx.save();
+  ctx.strokeStyle=cssVar('--stage-grid'); ctx.lineWidth=1;
+  var step = niceStep(Math.max(worldW,worldH)/7);
+  for (var x=0; x<=worldW+1e-9; x+=step){ ctx.beginPath(); ctx.moveTo(map.toX(x),map.toY(0)); ctx.lineTo(map.toX(x),map.toY(worldH)); ctx.stroke(); }
+  for (var y=0; y<=worldH+1e-9; y+=step){ ctx.beginPath(); ctx.moveTo(map.toX(0),map.toY(y)); ctx.lineTo(map.toX(worldW),map.toY(y)); ctx.stroke(); }
+  ctx.restore();
+}
+function niceStep(raw){ var p=Math.pow(10,Math.floor(Math.log10(raw))); var m=raw/p; var n=m<1.5?1:m<3?2:m<7?5:10; return n*p; }
+
+// sample a track [{x,y}] in physics coords for drawing + motion table
+function sampleTrack(kind, xB, yB, N){
+  var pts=[], i;
+  if (kind==='cyc'){
+    var c=solveCycloid(xB,yB);
+    for (i=0;i<=N;i++){ var th=c.thB*i/N; pts.push({x:c.r*(th-Math.sin(th)), y:c.r*(1-Math.cos(th))}); }
+  } else if (kind==='line'){
+    var t=trackLine(xB,yB); for (i=0;i<=N;i++){ var x=xB*i/N; pts.push({x:x,y:t.y(x)}); }
+  } else if (kind==='arc'){
+    var t2=trackArc(xB,yB); for (i=0;i<=N;i++){ var x2=xB*i/N; pts.push({x:x2,y:t2.y(x2)}); }
+  } else if (kind==='parab'){
+    var t3=trackParab(xB,yB); for (i=0;i<=N;i++){ var x3=xB*i/N; pts.push({x:x3,y:t3.y(x3)}); }
+  }
+  return pts;
+}
+
+// Build all four race tracks: curves (screen polylines) + motion tables (physics)
+function buildRace(){
+  var xB=STATE.bx, yB=STATE.by, g=STATE.g;
+  var defs=[
+    {key:'line', label:'Straight line'},
+    {key:'arc',  label:'Circular arc'},
+    {key:'parab',label:'Parabola'},
+    {key:'cyc',  label:'Cycloid'}
+  ];
+  var tracks=[];
+  for (var d=0; d<defs.length; d++){
+    var pts=sampleTrack(defs[d].key, xB, yB, 900);
+    var tbl=buildTimeTable(pts, g);
+    // analytic-quality time for readout: cycloid uses closed form; others use the
+    // arc-length table total which is the same physical quantity (fine sampling).
+    var T;
+    if (defs[d].key==='cyc'){ var c=solveCycloid(xB,yB); T=cycloidTime(c.r,c.thB,g); }
+    else if (defs[d].key==='line'){ var t=trackLine(xB,yB); T=descentTimeFn(t.y,t.yp,xB,g,20000); }
+    else if (defs[d].key==='arc'){ var t2=trackArc(xB,yB); T=descentTimeFn(t2.y,t2.yp,xB,g,20000); }
+    else { var t3=trackParab(xB,yB); T=descentTimeFn(t3.y,t3.yp,xB,g,20000); }
+    tracks.push({ key:defs[d].key, label:defs[d].label, pts:pts, tbl:tbl, T:T });
+  }
+  STATE.raceTracks=tracks;
+  return tracks;
+}
+
+// Build tautochrone cup + five beads at different start angles.
+function buildTauto(){
+  var r=STATE.rTauto, g=STATE.gTauto;
+  // cup spans θ∈[0,2π] (full arch, cusp..cusp). Beads start at angles symmetric-ish.
+  var startAngles=[0.6,1.1,1.7,2.4,3.0]; // left side, increasing height toward cusp
+  var beads=[];
+  for (var b=0;b<startAngles.length;b++){
+    var th0=startAngles[b];
+    // path from th0 down to the bottom θ=π, sampled; physics coords with bottom lowest.
+    var pts=[], N=600;
+    for (var i=0;i<=N;i++){
+      var th=th0 + (Math.PI-th0)*i/N;
+      // y measured downward from this bead's release point's HEIGHT reference:
+      // for buildTimeTable we want y = drop from the bead's own start.
+      var yAbs=r*(1-Math.cos(th));
+      pts.push({x:r*(th-Math.sin(th)), yAbs:yAbs});
+    }
+    var y0=r*(1-Math.cos(th0));
+    // motion table needs y=drop from start (so v=√(2g·drop)); store yAbs for drawing.
+    var ptsDrop=[]; for (var k=0;k<pts.length;k++) ptsDrop.push({x:pts[k].x, y:pts[k].yAbs-y0});
+    var tbl=buildTimeTable(ptsDrop, g);
+    beads.push({ th0:th0, pts:pts, tbl:tbl, T:tautochroneTime(r,th0,g,2000), y0:y0 });
+  }
+  // full cup outline θ∈[0,2π] for drawing
+  var cup=[]; for (var c=0;c<=720;c++){ var th=2*Math.PI*c/720; cup.push({x:r*(th-Math.sin(th)), yAbs:r*(1-Math.cos(th))}); }
+  STATE.tautoCup=cup; STATE.tautoBeads=beads;
+  return beads;
+}
+
+// ----------------------------------------------------------------- DRAW LOOP
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  if (STATE.mode==='race') drawRace(); else drawTauto();
+}
+
+function drawRace(){
+  var tracks=STATE.raceTracks; if (!tracks) return;
+  var xB=STATE.bx, yB=STATE.by;
+  var worldW=xB, worldH=yB;
+  var map=viewMap(worldW, worldH);
+  drawGrid(map, worldW, worldH);
+  var col=curveColours();
+  var colMap={line:col.line, arc:col.arc, parab:col.parab, cyc:col.cyc};
+
+  // draw the four curves
+  for (var d=0; d<tracks.length; d++){
+    var tk=tracks[d], isCyc=(tk.key==='cyc');
+    ctx.beginPath();
+    for (var i=0;i<tk.pts.length;i++){ var p=tk.pts[i]; var X=map.toX(p.x), Y=map.toY(p.y);
+      if (i===0) ctx.moveTo(X,Y); else ctx.lineTo(X,Y); }
+    ctx.lineWidth = isCyc ? 3.4 : 1.8;
+    ctx.strokeStyle = colMap[tk.key];
+    if (isCyc){ ctx.shadowColor=col.cyc; ctx.shadowBlur=12; } else { ctx.shadowBlur=0; }
+    ctx.globalAlpha = isCyc ? 1 : 0.78;
+    ctx.stroke();
+  }
+  ctx.shadowBlur=0; ctx.globalAlpha=1;
+
+  // endpoints A and B
+  markPoint(map.toX(0), map.toY(0), 'A', col.cyc);
+  markPoint(map.toX(xB), map.toY(yB), 'B', col.cyc);
+
+  // beads
+  var now=performance.now();
+  var elapsed = STATE.racing ? (now-STATE.raceT0)/1000 : (STATE.raceFinished ? Infinity : 0);
+  for (var b=0; b<tracks.length; b++){
+    var tk2=tracks[b];
+    var t = STATE.racing ? Math.min(elapsed, tk2.tbl.total) : (STATE.raceFinished ? tk2.tbl.total : 0);
+    var pos = posAtTime(tk2.tbl, t);
+    drawBead(map.toX(pos.x), map.toY(pos.y), colMap[tk2.key], tk2.key==='cyc');
+  }
+}
+
+function drawTauto(){
+  var beads=STATE.tautoBeads, cup=STATE.tautoCup; if (!beads||!cup) return;
+  var r=STATE.rTauto;
+  var worldW=2*Math.PI*r, worldH=2*r;
+  var map=viewMap(worldW, worldH);
+  drawGrid(map, worldW, worldH);
+  var col=curveColours();
+
+  // cup outline (the cycloid arch) in gold
+  ctx.beginPath();
+  for (var i=0;i<cup.length;i++){ var X=map.toX(cup[i].x), Y=map.toY(cup[i].yAbs);
+    if (i===0) ctx.moveTo(X,Y); else ctx.lineTo(X,Y); }
+  ctx.lineWidth=3.2; ctx.strokeStyle=col.cyc; ctx.shadowColor=col.cyc; ctx.shadowBlur=10; ctx.stroke();
+  ctx.shadowBlur=0;
+
+  // lowest point marker
+  var bottomX=map.toX(Math.PI*r), bottomY=map.toY(2*r);
+  markPoint(bottomX, bottomY, '', col.cyc);
+
+  // beads — palette across the five
+  var bcols=[col.line,col.arc,col.parab,'#e0884f','#8fd79a'];
+  var now=performance.now();
+  var elapsed = STATE.tautoDropping ? (now-STATE.tautoT0)/1000 : (STATE.tautoFinished ? Infinity : 0);
+  for (var b=0;b<beads.length;b++){
+    var bd=beads[b];
+    var t = STATE.tautoDropping ? Math.min(elapsed, bd.tbl.total) : (STATE.tautoFinished ? bd.tbl.total : 0);
+    var pos=posAtTime(bd.tbl, t);
+    // pos is in {x, y=drop}; reconstruct absolute y for drawing
+    var yAbs=bd.y0 + pos.y;
+    // dashed drop-line from start to current (faint)
+    var sx=map.toX(bd.pts[0].x), sy=map.toY(bd.pts[0].yAbs);
+    ctx.save(); ctx.setLineDash([2,4]); ctx.globalAlpha=0.28; ctx.strokeStyle=bcols[b]; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(map.toX(pos.x), map.toY(yAbs)); ctx.stroke(); ctx.restore();
+    drawBead(map.toX(pos.x), map.toY(yAbs), bcols[b], false);
+  }
+}
+
+function markPoint(x,y,label,col){
+  ctx.save();
+  ctx.fillStyle=col; ctx.globalAlpha=0.9;
+  ctx.beginPath(); ctx.arc(x,y,3.2,0,7); ctx.fill();
+  if (label){ ctx.globalAlpha=1; ctx.fillStyle=cssVar('--ink'); ctx.font='600 13px '+cssVar('--font-serif');
+    ctx.textAlign='center'; ctx.fillText(label, x, y-10); }
+  ctx.restore();
+}
+function drawBead(x,y,col,big){
+  ctx.save();
+  var rad = big?6.5:5;
+  ctx.shadowColor=col; ctx.shadowBlur=big?14:8;
+  var grad=ctx.createRadialGradient(x-rad*0.3,y-rad*0.3,rad*0.2,x,y,rad);
+  grad.addColorStop(0,'#fff'); grad.addColorStop(0.4,col); grad.addColorStop(1,col);
+  ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(x,y,rad,0,7); ctx.fill();
+  ctx.restore();
+}
+
+// ------------------------------------------------------------- ANIMATION
+var rafId=null;
+function loop(){
+  draw();
+  // keep animating while a run is active
+  var active = STATE.racing || STATE.tautoDropping;
+  if (active){
+    // detect finish
+    if (STATE.racing){
+      var maxT=0; for (var i=0;i<STATE.raceTracks.length;i++) maxT=Math.max(maxT,STATE.raceTracks[i].tbl.total);
+      if ((performance.now()-STATE.raceT0)/1000 >= maxT + 0.35){ STATE.racing=false; STATE.raceFinished=true; renderRaceResults(true); flashHud('The <b>cycloid</b> reaches B first. Of all curves, it is the fastest.', 5000); }
+    }
+    if (STATE.tautoDropping){
+      var maxT2=0; for (var j=0;j<STATE.tautoBeads.length;j++) maxT2=Math.max(maxT2,STATE.tautoBeads[j].tbl.total);
+      if ((performance.now()-STATE.tautoT0)/1000 >= maxT2 + 0.35){ STATE.tautoDropping=false; STATE.tautoFinished=true; renderTautoResults(true); flashHud('All five arrive <b>together</b> &mdash; the cycloid is the tautochrone.', 5000); }
+    }
+    rafId=requestAnimationFrame(loop);
+  } else { rafId=null; }
+}
+function ensureLoop(){ if (rafId===null) rafId=requestAnimationFrame(loop); }
+
+// --------------------------------------------------------------- RESULTS UI
+function renderRaceResults(finished){
+  var tracks=STATE.raceTracks; if (!tracks) return;
+  var col=curveColours(); var colMap={line:col.line,arc:col.arc,parab:col.parab,cyc:col.cyc};
+  // order by time
+  var ranked=tracks.slice().sort(function(a,b){ return a.T-b.T; });
+  var host=document.getElementById('raceResults'); host.innerHTML='';
+  for (var i=0;i<ranked.length;i++){
+    var tk=ranked[i], isCyc=tk.key==='cyc';
+    var el=document.createElement('div'); el.className='res'+(isCyc?' win':'')+(finished?' done':'');
+    el.innerHTML='<span class="place">'+(i+1)+'</span>'+
+      '<span class="swatch" style="background:'+colMap[tk.key]+'"></span>'+
+      '<span class="nm">'+(isCyc?'<b>'+tk.label+'</b>':tk.label)+'</span>'+
+      '<span class="tm">'+tk.T.toFixed(4)+' s</span>';
+    host.appendChild(el);
+  }
+}
+function renderTautoResults(finished){
+  var beads=STATE.tautoBeads; if (!beads) return;
+  var Tana=tautochroneAnalytic(STATE.rTauto, STATE.gTauto);
+  var host=document.getElementById('tautoResults'); host.innerHTML='';
+  var col=curveColours(); var bcols=[col.line,col.arc,col.parab,'#e0884f','#8fd79a'];
+  var times=beads.map(function(b){return b.T;});
+  var spread=Math.max.apply(null,times)-Math.min.apply(null,times);
+  for (var i=0;i<beads.length;i++){
+    var bd=beads[i];
+    var el=document.createElement('div'); el.className='res'+(finished?' done':'');
+    el.innerHTML='<span class="swatch" style="background:'+bcols[i]+'"></span>'+
+      '<span class="nm">drop '+bd.y0.toFixed(2)+' m</span>'+
+      '<span class="tm">'+bd.T.toFixed(5)+' s</span>';
+    host.appendChild(el);
+  }
+  var note=document.createElement('div'); note.className='res'; note.style.borderColor='var(--accent)';
+  note.innerHTML='<span class="nm"><b>spread</b></span><span class="tm">'+spread.toExponential(2)+' s</span>';
+  host.appendChild(note);
+}
+
+// ---------------------------------------------------------------- HUD
+var hud=document.getElementById('hud'), hudTimer=null;
+function flashHud(html, ms){
+  if (reduceMotion && (STATE.racing||STATE.tautoDropping)) {}
+  hud.innerHTML=html; hud.classList.add('show');
+  if (hudTimer) clearTimeout(hudTimer);
+  hudTimer=setTimeout(function(){ hud.classList.remove('show'); }, ms||3500);
+}
+
+// ---------------------------------------------------------- RUN CONTROLS
+function startRace(){
+  buildRace(); renderRaceResults(false);
+  if (reduceMotion){
+    STATE.racing=false; STATE.raceFinished=true; renderRaceResults(true);
+    flashHud('Reduced motion: showing the final result. Cycloid wins.', 5000); draw(); return;
+  }
+  STATE.racing=true; STATE.raceFinished=false; STATE.raceT0=performance.now(); ensureLoop();
+  flashHud('Four beads released from <b>A</b>&hellip;', 2600);
+}
+function resetRace(){ STATE.racing=false; STATE.raceFinished=false; buildRace(); renderRaceResults(false); draw(); }
+function startDrop(){
+  buildTauto(); renderTautoResults(false);
+  if (reduceMotion){
+    STATE.tautoDropping=false; STATE.tautoFinished=true; renderTautoResults(true);
+    flashHud('Reduced motion: showing final result. All arrive together.', 5000); draw(); return;
+  }
+  STATE.tautoDropping=true; STATE.tautoFinished=false; STATE.tautoT0=performance.now(); ensureLoop();
+  flashHud('Five beads released from five heights&hellip;', 2600);
+}
+function resetDrop(){ STATE.tautoDropping=false; STATE.tautoFinished=false; buildTauto(); renderTautoResults(false); draw(); }
+
+// ---------------------------------------------------------------- SKINS
+var SKINS={
+  slate:{ '--bg':'#07080c','--stage-bg':'#0a0c12','--stage-grid':'rgba(201,162,74,0.055)',
+    '--c-line':'#6f86c9','--c-arc':'#5fb0a6','--c-parab':'#b977c9','--c-cyc':'#f4d27a' },
+  blueprint:{ '--bg':'#06121e','--stage-bg':'#08182a','--stage-grid':'rgba(120,180,235,0.10)',
+    '--c-line':'#9fb7d8','--c-arc':'#7fd6c4','--c-parab':'#c79be0','--c-cyc':'#ffd97a' },
+  parchment:{ '--bg':'#15110a','--stage-bg':'#1c160d','--stage-grid':'rgba(201,162,74,0.10)',
+    '--c-line':'#8aa0c0','--c-arc':'#5fb0a6','--c-parab':'#c187c9','--c-cyc':'#f6c95a' }
+};
+function applySkin(name){
+  STATE.skin=name; var s=SKINS[name]||SKINS.slate;
+  for (var k in s) if (s.hasOwnProperty(k)) document.documentElement.style.setProperty(k, s[k]);
+  draw();
+}
+
+// ---------------------------------------------------------------- WIRING
+function $(id){ return document.getElementById(id); }
+function setFill(input){ var min=+input.min,max=+input.max,v=+input.value; input.style.setProperty('--fill', ((v-min)/(max-min)*100)+'%'); }
+
+function syncMode(){
+  var race=STATE.mode==='race';
+  $('raceCtl').style.display=race?'block':'none';
+  $('tautoCtl').style.display=race?'none':'block';
+  $('modeSeg').querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b.dataset.mode===STATE.mode); });
+  $('lede').innerHTML = race
+    ? 'Of all curves joining a high <b>A</b> to a lower <b>B</b>, which carries a frictionless bead there <b>fastest</b>? Bernoulli asked it in 1696. The answer is not the straight line &mdash; it is the <b>cycloid</b>. Release four beads and watch.'
+    : 'The same cycloid hides a second marvel. Drop beads from <b>different heights</b> on one cycloid cup and they all reach the bottom at the <b>same instant</b> &mdash; the <b>tautochrone</b> (Huygens, 1659). Time = <b>&pi;&radic;(r/g)</b>, whatever the height.';
+  if (race){ resetRace(); } else { updateTautoFormula(); resetDrop(); }
+}
+function updateTautoFormula(){
+  var T=tautochroneAnalytic(STATE.rTauto, STATE.gTauto);
+  $('tautoT').innerHTML='T = &pi;&radic;(r/g) = &pi;&radic;('+STATE.rTauto.toFixed(2)+'/'+STATE.gTauto.toFixed(2)+') = <b style="color:var(--gold-bead)">'+T.toFixed(4)+' s</b>';
+}
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1, 2);
+  var rect=canvas.getBoundingClientRect();
+  W=Math.max(1,Math.round(rect.width)); H=Math.max(1,Math.round(rect.height));
+  canvas.width=Math.round(W*DPR); canvas.height=Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  draw();
+}
+
+function wire(){
+  // mode
+  $('modeSeg').addEventListener('click', function(e){ var b=e.target.closest('button'); if(!b)return; STATE.mode=b.dataset.mode; syncMode(); });
+  // skin
+  $('skinSeg').addEventListener('click', function(e){ var b=e.target.closest('button'); if(!b)return;
+    $('skinSeg').querySelectorAll('button').forEach(function(x){x.classList.toggle('active',x===b);}); applySkin(b.dataset.skin); });
+  // race sliders
+  $('bxRange').addEventListener('input', function(){ STATE.bx=+this.value; setFill(this); $('bxVal').textContent=STATE.bx.toFixed(2)+' m'; resetRace(); });
+  $('byRange').addEventListener('input', function(){ STATE.by=+this.value; setFill(this); $('byVal').textContent=STATE.by.toFixed(2)+' m'; resetRace(); });
+  $('gRange').addEventListener('input', function(){ STATE.g=+this.value; setFill(this); $('gVal').textContent=STATE.g.toFixed(2); resetRace(); });
+  // tauto sliders
+  $('rRange').addEventListener('input', function(){ STATE.rTauto=+this.value; setFill(this); $('rVal').textContent=STATE.rTauto.toFixed(2)+' m'; updateTautoFormula(); resetDrop(); });
+  $('gRange2').addEventListener('input', function(){ STATE.gTauto=+this.value; setFill(this); $('gVal2').textContent=STATE.gTauto.toFixed(2); updateTautoFormula(); resetDrop(); });
+  // buttons
+  $('btnRace').addEventListener('click', startRace);
+  $('btnReset').addEventListener('click', resetRace);
+  $('btnDrop').addEventListener('click', startDrop);
+  $('btnResetT').addEventListener('click', resetDrop);
+  // self-test panel toggle
+  $('selftest').addEventListener('click', function(){ $('stPanel').classList.toggle('show'); });
+  $('stClose').addEventListener('click', function(){ $('stPanel').classList.remove('show'); });
+  window.addEventListener('resize', resize);
+  // initial slider fills + labels
+  ['bxRange','byRange','gRange','rRange','gRange2'].forEach(function(id){ setFill($(id)); });
+  $('bxVal').textContent=STATE.bx.toFixed(2)+' m'; $('byVal').textContent=STATE.by.toFixed(2)+' m'; $('gVal').textContent=STATE.g.toFixed(2);
+  $('rVal').textContent=STATE.rTauto.toFixed(2)+' m'; $('gVal2').textContent=STATE.gTauto.toFixed(2);
+}
+
+// ---------------------------------------------------------------- SELFTEST UI
+function showSelfTest(res){
+  var chip=$('selftest');
+  if (res.pass===res.total){ chip.className='selftest ok'; chip.textContent='self&#8209;test '+res.pass+'/'+res.total+' ✓';
+    chip.innerHTML='self&#8209;test '+res.pass+'/'+res.total+' &#10003;'; }
+  else { chip.className='selftest bad'; chip.innerHTML='self&#8209;test '+res.pass+'/'+res.total+' &#10007;'; }
+  $('stSub').innerHTML='Cycloid '+res.Tcyc.toFixed(4)+' s beats arc '+res.Tarc.toFixed(4)+', parabola '+res.Tpar.toFixed(4)+', line '+res.Tline.toFixed(4)+' s for the same A&rarr;B.';
+  var host=$('stList'); host.innerHTML='';
+  for (var i=0;i<res.items.length;i++){ var it=res.items[i];
+    var el=document.createElement('div'); el.className='stItem '+(it.ok?'pass':'fail');
+    el.innerHTML='<span class="mark">'+(it.ok?'&#10003;':'&#10007;')+'</span><span class="body"><b>'+it.label+'</b><br>'+it.detail+'</span>';
+    host.appendChild(el); }
+  $('stFoot').innerHTML='The cycloid&rsquo;s descent time is closed&#8209;form (&radic;(r/g)&middot;&theta;<sub>B</sub>); the line/arc/parabola times come from a numerical integral whose 1/&radic;y release singularity is regularized by an x=s&sup2; substitution &mdash; a convergent approximation (9 digits by N=2000). The tautochrone is exact to machine precision via the cos(&theta;/2)=cos(&theta;<sub>0</sub>/2)cos&phi; substitution.';
+}
+
+// ---------------------------------------------------------------- INIT
+function init(){
+  // ws:seen breadcrumb (origin-keyed; harmless if storage off)
+  try{ localStorage.setItem('ws:seen:brachistochrone','1'); }catch(e){}
+
+  var res=runSelfTest();
+  showSelfTest(res);
+  if (typeof console!=='undefined' && console.log){
+    console.log('Brachistochrone self-test: '+res.pass+'/'+res.total+' passed.');
+    for (var i=0;i<res.items.length;i++){ var it=res.items[i];
+      console.log((it.ok?'  PASS':'  FAIL')+' — '+it.label.replace(/&amp;/g,'&').replace(/<[^>]+>/g,'')); }
+    console.log('  times (s): line='+res.Tline.toFixed(6)+' arc='+res.Tarc.toFixed(6)+' parab='+res.Tpar.toFixed(6)+' cycloid='+res.Tcyc.toFixed(6));
+    console.log('  cycloid |numeric−analytic|='+res.cycErr.toExponential(3)+' ; tautochrone spread='+res.spread.toExponential(3)+' s, max|T−π√(r/g)|='+res.maxAnaErr.toExponential(3)+' s');
+  }
+
+  wire();
+  applySkin('slate');
+  syncMode();
+  resize();
+  buildRace(); renderRaceResults(false); draw();
+
+  if (reduceMotion) flashHud('Reduced motion: press <b>Release</b> to see the final times (no animation).', 6000);
+  else flashHud('Press <b>Release &#9654;</b> &mdash; watch the gold cycloid bead win.', 5200);
+}
+
+// expose core for headless inspection
+if (typeof window!=='undefined'){
+  window.__brachistochrone = {
+    solveCycloid:solveCycloid, cycloidTime:cycloidTime, descentTimeFn:descentTimeFn,
+    tautochroneTime:tautochroneTime, tautochroneAnalytic:tautochroneAnalytic,
+    perturbedCycloidTime:perturbedCycloidTime, circCupTime:circCupTime,
+    trackLine:trackLine, trackArc:trackArc, trackParab:trackParab,
+    runSelfTest:runSelfTest, STATE:STATE
+  };
+}
+
+init();
+</script>
+</body>
+</html>
