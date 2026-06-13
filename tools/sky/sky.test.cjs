@@ -26,6 +26,7 @@
 const Sky = require('./sky.js');
 const CATALOG = Sky.CATALOG;
 const WINGS = Sky.WINGS;
+const FEATS = Sky.FEATS;   // the BONUS feats constellation (NOT a wing; never gates the capstone)
 
 /* ── tiny assert harness ──────────────────────────────────────────────────── */
 let pass = 0, fail = 0;
@@ -52,7 +53,8 @@ const FOOTPRINTS = [
   { id: 'daedalus',       x: 1044, y: 542, w: 178, h: 152 },
   { id: 'arcade',         x: 1018, y: 244, w: 224, h: 88 },
   { id: 'workbench',      x: 540,  y: 602, w: 156, h: 100 },
-  { id: 'undercroft',     x: 702,  y: 524, w: 38,  h: 50 }
+  { id: 'undercroft',     x: 702,  y: 524, w: 38,  h: 50 },
+  { id: 'hall-of-mirrors', x: 124, y: 430, w: 148, h: 74 }  // the optics wing — the feat-stars cluster beside it
 ];
 const FURNITURE = [
   { id: 'compass',      x: 74,   y: 82,  w: 92,  h: 92 },
@@ -131,33 +133,34 @@ function inViewBox(s) {
 
 /* ── (3) COMPLETION-IFF — complete === members.every(visited); battery sweep ── */
 (function () {
-  // full set: every asterism complete, allComplete true (capstone)
+  // full set: every asterism (wings AND the feats constellation) complete, capstone on
   const full = Object.keys(CATALOG);
-  const sFull = Sky.state(full, CATALOG, WINGS);
+  const sFull = Sky.state(full, CATALOG, WINGS, FEATS);
   let allComp = true;
   sFull.asterisms.forEach(a => { if (!a.complete) allComp = false; });
-  ok(allComp, 'COMPLETION: full visit-set completes every asterism');
+  ok(allComp, 'COMPLETION: full visit-set completes every asterism (incl. the feats constellation)');
   eq(sFull.allComplete, true, 'COMPLETION: allComplete true on the full set (capstone)');
 
   // empty set: nothing complete, allComplete false
-  const sEmpty = Sky.state([], CATALOG, WINGS);
+  const sEmpty = Sky.state([], CATALOG, WINGS, FEATS);
   ok(sEmpty.asterisms.every(a => !a.complete), 'COMPLETION: empty set completes nothing');
   eq(sEmpty.allComplete, false, 'COMPLETION: allComplete false on the empty set');
 
   // member-minus-one: for EACH wing, drop ONE member from the full set → that
   // wing (and only that wing) must be incomplete; allComplete must be false.
+  const allGroups = WINGS.concat([FEATS]);
   let iffOK = true, noFalseComplete = true;
   for (const wing of WINGS) {
     for (const drop of wing.members) {
       const visited = full.filter(id => id !== drop);
-      const st = Sky.state(visited, CATALOG, WINGS);
+      const st = Sky.state(visited, CATALOG, WINGS, FEATS);
       const target = st.asterisms.find(a => a.id === wing.id);
       if (target.complete) noFalseComplete = false;     // missing a member ⇒ must NOT complete
       if (st.allComplete) iffOK = false;                 // a hole ⇒ capstone must NOT fire
-      // and the IFF must hold for every asterism in this state
+      // and the IFF must hold for EVERY asterism in this state (wings + feats)
       st.asterisms.forEach(a => {
-        const w = WINGS.find(x => x.id === a.id);
-        const everVisited = w.members.every(m => visited.indexOf(m) >= 0);
+        const g = allGroups.find(x => x.id === a.id);
+        const everVisited = g.members.every(m => visited.indexOf(m) >= 0);
         if (a.complete !== everVisited) iffOK = false;
       });
     }
@@ -166,6 +169,62 @@ function inViewBox(s) {
   ok(iffOK, 'COMPLETION-IFF: complete === members.every(visited) across the member-minus-one battery');
   eq(sFull.allComplete, WINGS.every(w => w.members.every(m => full.indexOf(m) >= 0)),
      'COMPLETION-IFF: allComplete <=> every wing complete');
+})();
+
+/* ── (3b) THE FEATS CONSTELLATION IS A BONUS — it draws/names/completes like a wing
+   but is ADDITIVE: it NEVER gates the all-skies capstone (allComplete = the six
+   companion-wings only). Its completion is keyed off the earned-flag pseudo-ids. ── */
+(function () {
+  const featIds = FEATS.members.slice();              // the 9 feat-<X> pseudo-ids
+  const wingIds = [];
+  WINGS.forEach(w => w.members.forEach(m => wingIds.push(m)));
+
+  // (a) all six wings complete but ZERO feats → capstone fires, feats incomplete.
+  const sWingsOnly = Sky.state(wingIds, CATALOG, WINGS, FEATS);
+  eq(sWingsOnly.allComplete, true, 'FEATS: completing the six wings fires the capstone with NO feats earned');
+  const featAstWO = sWingsOnly.asterisms.find(a => a.id === FEATS.id);
+  ok(featAstWO && !featAstWO.complete, 'FEATS: with no feats earned the feats constellation is incomplete');
+
+  // (b) all nine feats earned but NO wings → feats complete, capstone does NOT fire.
+  const sFeatsOnly = Sky.state(featIds, CATALOG, WINGS, FEATS);
+  eq(sFeatsOnly.allComplete, false, 'FEATS: completing the feats constellation does NOT fire the capstone');
+  const featAstFO = sFeatsOnly.asterisms.find(a => a.id === FEATS.id);
+  ok(featAstFO && featAstFO.complete, 'FEATS: all nine feats earned ⇒ the feats constellation completes');
+  ok(featIds.every(id => sFeatsOnly.stars.some(s => s.id === id)),
+     'FEATS: all nine feat-stars kindle when their flags are earned');
+
+  // (c) completion-iff for the feats group: dropping ANY one feat un-completes it,
+  //     and never touches the (still-false) capstone.
+  let featIffOK = true;
+  for (const drop of featIds) {
+    const visited = featIds.filter(id => id !== drop);
+    const st = Sky.state(visited, CATALOG, WINGS, FEATS);
+    const fa = st.asterisms.find(a => a.id === FEATS.id);
+    if (fa.complete) featIffOK = false;                 // missing one feat ⇒ must NOT complete
+    if (st.allComplete) featIffOK = false;              // feats never gate the capstone
+  }
+  ok(featIffOK, 'FEATS-IFF: dropping any one of the nine feats un-completes the constellation (no false completion)');
+
+  // (d) the partial-kindle path: a SUBSET of feats lights only those stars, draws a
+  //     partial (incomplete) line, and never completes.
+  const someFeats = featIds.slice(0, 4);
+  const sPartial = Sky.state(someFeats, CATALOG, WINGS, FEATS);
+  ok(someFeats.every(id => sPartial.stars.some(s => s.id === id)), 'FEATS: a subset of feats kindles exactly those stars');
+  ok(!featIds.slice(4).some(id => sPartial.stars.some(s => s.id === id)), 'FEATS: unearned feats stay dark');
+  const fline = sPartial.lines.find(l => l.wing === FEATS.id);
+  ok(fline && fline.complete === false, 'FEATS: a partial feats set draws an INCOMPLETE line');
+
+  // (e) visitedFromStore maps ws:flag:earned-<X> → feat-<X> and keeps ws:seen rooms.
+  const fakeStore = { ok: true, all: {
+    'ws:seen:firmament': '1', 'ws:seen:orrery': '1',
+    'ws:flag:earned-rainbow': '1', 'ws:flag:earned-maze': '1',
+    'ws:flag:sky-bootstrap': '1'   // a non-earned, non-seen flag must be IGNORED
+  } };
+  const v = Sky.visitedFromStore(fakeStore);
+  ok(v['firmament'] && v['orrery'], 'visitedFromStore: ws:seen rooms still map (regression)');
+  ok(v['feat-rainbow'] && v['feat-maze'], 'visitedFromStore: ws:flag:earned-<X> ⇒ feat-<X> visited');
+  ok(!v['feat-halo'], 'visitedFromStore: an un-earned feat is NOT visited');
+  ok(!v['sky-bootstrap'] && !v['feat-bootstrap'], 'visitedFromStore: unrelated flags are ignored');
 })();
 
 /* ── (4) CATALOG INTEGRITY — every star inside the viewBox & outside obstacles ── */
@@ -225,6 +284,25 @@ function inViewBox(s) {
   // exactly six wings, each a pair (the companion-pair structure the mission fixes)
   eq(WINGS.length, 6, 'BIJECTION: there are exactly six wings');
   ok(WINGS.every(w => w.members.length === 2), 'BIJECTION: every wing is a companion-pair (2 members)');
+
+  // ── the feats constellation: nine distinct feat-<X> members, each a valid catalog
+  //    id, none shared with any wing, none a front-door PLACES id, and it carries a
+  //    name + a myth (so it can be engraved like the wings). ──
+  eq(FEATS.members.length, 9, 'BIJECTION: the feats constellation has exactly nine members');
+  eq(FEATS.members.length, new Set(FEATS.members).size, 'BIJECTION: the nine feat members are distinct');
+  let featOrphanOK = true, featDisjointOK = true, featNotPlacesOK = true;
+  for (const m of FEATS.members) {
+    if (!CATALOG[m]) { featOrphanOK = false; console.error('    · feat member "' + m + '" is not a catalog id'); }
+    if (m.indexOf('feat-') !== 0) { featOrphanOK = false; console.error('    · feat member "' + m + '" lacks the feat- prefix'); }
+    if (memberWing[m] != null) { featDisjointOK = false; console.error('    · feat "' + m + '" is also a wing member'); }
+    if (PLACES_IDS.indexOf(m) >= 0) { featNotPlacesOK = false; console.error('    · feat "' + m + '" collides with a PLACES id'); }
+  }
+  ok(featOrphanOK, 'BIJECTION: every feat member is a valid feat-<X> catalog id (no orphan)');
+  ok(featDisjointOK, 'BIJECTION: no feat member is also a companion-wing member (disjoint)');
+  ok(featNotPlacesOK, 'BIJECTION: no feat pseudo-id collides with a front-door PLACES id');
+  ok(FEATS.id === 'feats' && typeof FEATS.name === 'string' && FEATS.name.length > 0
+     && typeof FEATS.myth === 'string' && FEATS.myth.length > 0,
+     'BIJECTION: the feats constellation carries an id, an engraved name, and a myth');
 })();
 
 /* ── report ─────────────────────────────────────────────────────────────────── */

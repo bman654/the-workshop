@@ -65,7 +65,24 @@
     'theogony':       { x: 1000, y: 840, mag: 2 },
     'arcade':         { x: 1330, y: 220, mag: 1 },
     'workbench':      { x: 780,  y: 860, mag: 1 },
-    'undercroft':     { x: 880,  y: 850, mag: 2 }
+    'undercroft':     { x: 880,  y: 850, mag: 2 },
+    // ── the feats constellation: nine "Feats of Light" earned in the Hall of Mirrors,
+    //    laid out as a vertical LENS (a pointed oval) threading the WEST GROUNDS left
+    //    margin beside the Hall footprint (x124 y430 w148 h74). These are PSEUDO-ids
+    //    (no room/POI of their own); each kindles iff its `ws:flag:earned-<X>` is set.
+    //    Positioned to clear every footprint/furniture box, the manor pool, and every
+    //    existing catalog star (proven by the self-test). The lens RIM goes clockwise
+    //    from the top apex (rainbow); anamorphosis is the lens axis/centre. mag1 = the
+    //    two apices (the lens points), mag2 = the rim & axis. ──
+    'feat-rainbow':      { x: 60,  y: 338, mag: 1 }, // top apex
+    'feat-iridescence':  { x: 96,  y: 388, mag: 2 }, // upper-right flank
+    'feat-spyglass':     { x: 98,  y: 462, mag: 2 }, // mid-right flank
+    'feat-spectroscope': { x: 98,  y: 588, mag: 2 }, // lower-right flank
+    'feat-maze':         { x: 62,  y: 648, mag: 1 }, // bottom apex (the focus)
+    'feat-polariser':    { x: 26,  y: 580, mag: 2 }, // lower-left flank
+    'feat-camera':       { x: 20,  y: 470, mag: 2 }, // mid-left flank
+    'feat-halo':         { x: 22,  y: 398, mag: 2 }, // upper-left flank
+    'feat-anamorphosis': { x: 60,  y: 520, mag: 2 }  // lens centre / optical axis
   };
 
   /* ── DATA: the six wings (companion-pairs), each an asterism ────────────────
@@ -87,8 +104,22 @@
       myth: 'Tends the tile till the pattern comes true.' }
   ];
 
+  /* ── DATA: the feats constellation (a BONUS asterism, NOT a wing) ───────────────
+     The Hall of Mirrors' nine "Feats of Light" form their OWN charted constellation,
+     drawn + named by the SAME asterism machinery as the six wings — but kept SEPARATE
+     so the all-skies capstone (allComplete) stays the original six companion-wings
+     ONLY. Earning all nine completes this constellation (brass lines + an engraved
+     name + a one-line myth) without ever gating the capstone. Each member is a
+     `feat-<X>` pseudo-id, "visited" iff the store holds `ws:flag:earned-<X>`. */
+  var FEATS = {
+    id: 'feats', name: 'The Optician', myth: 'Bends every ray to its purpose.',
+    members: ['feat-rainbow', 'feat-iridescence', 'feat-spyglass', 'feat-spectroscope',
+              'feat-maze', 'feat-polariser', 'feat-camera', 'feat-halo', 'feat-anamorphosis']
+  };
+
   Sky.CATALOG = CATALOG;
   Sky.WINGS = WINGS;
+  Sky.FEATS = FEATS;
 
   /* ── PURE CORE ──────────────────────────────────────────────────────────────
      Sky.state(visited, catalog, wings) — deterministic, ORDER-INDEPENDENT,
@@ -119,9 +150,14 @@
     return set;
   }
 
-  Sky.state = function (visited, catalog, wings) {
+  Sky.state = function (visited, catalog, wings, feats) {
     catalog = catalog || CATALOG;
     wings = wings || WINGS;
+    // `feats` may be a single group object, an array of groups, or omitted. It draws
+    // + names exactly like a wing, but is kept SEPARATE so it NEVER feeds allComplete.
+    if (feats === undefined) feats = FEATS;
+    var featGroups = !feats ? [] :
+      (Object.prototype.toString.call(feats) === '[object Array]' ? feats : [feats]);
     var vset = toSet(visited);
     var has = function (id) { return !!vset[id]; };
 
@@ -137,12 +173,9 @@
       stars.push({ id: id, x: c.x, y: c.y, mag: c.mag });
     }
 
-    var lines = [];
-    var asterisms = [];
-    var allComplete = wings.length > 0;
-    for (var w = 0; w < wings.length; w++) {
-      var wing = wings[w];
-      var members = wing.members || [];
+    // compute one group's line + asterism record (shared by wings and feats)
+    function group(g) {
+      var members = g.members || [];
       var complete = members.length > 0;
       var pts = [];
       for (var m = 0; m < members.length; m++) {
@@ -151,13 +184,28 @@
         var mc = catalog[mid];
         if (mc) pts.push([mc.x, mc.y]);
       }
-      if (!complete) allComplete = false;
-      // a line is drawable once >=2 of its members are lit (partial asterism)
-      if (pts.length >= 2) lines.push({ wing: wing.id, points: pts, complete: complete });
-      asterisms.push({
-        id: wing.id, name: wing.name, myth: wing.myth, members: members,
-        complete: complete
-      });
+      var line = (pts.length >= 2)
+        ? { wing: g.id, points: pts, complete: complete } : null;
+      var ast = { id: g.id, name: g.name, myth: g.myth, members: members, complete: complete };
+      return { line: line, ast: ast, complete: complete };
+    }
+
+    var lines = [];
+    var asterisms = [];
+    // ── the six wings: these (and ONLY these) feed the all-skies capstone ──
+    var allComplete = wings.length > 0;
+    for (var w = 0; w < wings.length; w++) {
+      var gw = group(wings[w]);
+      if (!gw.complete) allComplete = false;
+      if (gw.line) lines.push(gw.line);
+      asterisms.push(gw.ast);
+    }
+    // ── the feats constellation(s): drawn + named the SAME way, but ADDITIVE — they
+    //    do NOT touch allComplete, so the original capstone is unchanged. ──
+    for (var f = 0; f < featGroups.length; f++) {
+      var gf = group(featGroups[f]);
+      if (gf.line) lines.push(gf.line);
+      asterisms.push(gf.ast);
     }
 
     return { stars: stars, lines: lines, asterisms: asterisms, allComplete: allComplete };
@@ -173,15 +221,18 @@
   function lsGet(store, k) { return store && store.has(k) ? store.get(k) : null; }
   function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
 
-  /* Build the visited set from a WS store snapshot (keys `ws:seen:<id>`). */
+  /* Build the visited set from a WS store snapshot. Room stars come from the
+     `ws:seen:<id>` breadcrumb every page drops; the feats constellation's `feat-<X>`
+     pseudo-stars come from the raise-only `ws:flag:earned-<X>` Hall-of-Mirrors flags
+     (e.g. `ws:flag:earned-rainbow` → `feat-rainbow`). Both are additive. */
   Sky.visitedFromStore = function (store) {
     var v = {};
     if (!store || !store.ok || !store.all) return v;
-    var P = 'ws:seen:';
+    var SEEN = 'ws:seen:', EARNED = 'ws:flag:earned-';
     for (var k in store.all) {
-      if (Object.prototype.hasOwnProperty.call(store.all, k) && k.indexOf(P) === 0) {
-        v[k.slice(P.length)] = true;
-      }
+      if (!Object.prototype.hasOwnProperty.call(store.all, k)) continue;
+      if (k.indexOf(SEEN) === 0) v[k.slice(SEEN.length)] = true;
+      else if (k.indexOf(EARNED) === 0) v['feat-' + k.slice(EARNED.length)] = true;
     }
     return v;
   };
@@ -283,17 +334,36 @@
     g.__skyNamed = named;
     g.__skyState = st;
 
-    // ── the margin tally: "Survey of Heaven — N/6 skies charted" ──
-    var charted = 0;
-    for (i = 0; i < st.asterisms.length; i++) if (st.asterisms[i].complete) charted++;
+    // ── the margin tally: "Survey of Heaven — N/6 skies charted". The denominator is
+    //    the SIX companion-wings only; the feats constellation is a separate bonus and
+    //    is NOT counted here (it gets its own sub-tally below). ──
+    var wingIds = {};
+    for (i = 0; i < WINGS.length; i++) wingIds[WINGS[i].id] = true;
+    var charted = 0, wingTotal = WINGS.length, featsComplete = false;
+    for (i = 0; i < st.asterisms.length; i++) {
+      var ai = st.asterisms[i];
+      if (ai.id === FEATS.id) { if (ai.complete) featsComplete = true; continue; }
+      if (wingIds[ai.id] && ai.complete) charted++;
+    }
     var tally = svg('text', {
       x: 1414, y: 862, 'text-anchor': 'end', 'class': 'sky-tally'
     });
-    tally.textContent = 'Survey of Heaven — ' + charted + '/' + st.asterisms.length + ' skies charted';
+    tally.textContent = 'Survey of Heaven — ' + charted + '/' + wingTotal + ' skies charted';
     g.appendChild(tally);
 
-    // ── capstone: when ALL wings are complete, set the firmament-survey flag once
-    //    and add a faint all-skies glow band. ──
+    // ── the feats sub-tally: once the Hall of Mirrors' nine Feats of Light are all
+    //    charted, a brass bonus line appears just above the main tally. ──
+    if (featsComplete) {
+      var ftally = svg('text', {
+        x: 1414, y: 848, 'text-anchor': 'end', 'class': 'sky-tally sky-tally-feats'
+      });
+      ftally.textContent = 'Feats of Light — the Optician charted';
+      g.appendChild(ftally);
+    }
+
+    // ── capstone: when ALL SIX WINGS are complete, set the firmament-survey flag once
+    //    and add a faint all-skies glow band. This is the ORIGINAL capstone, unaffected
+    //    by the feats constellation (allComplete is wings-only). ──
     if (st.allComplete) {
       if (lsGet(store, 'ws:flag:firmament-survey') == null) lsSet('ws:flag:firmament-survey', '1');
       g.classList.add('all-charted');
