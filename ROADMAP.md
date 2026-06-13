@@ -26,6 +26,8 @@ When a seed blooms, prune it (its provenance lives in the piece's CHANGELOG + th
 - [exhibit] **9th Sound Garden instrument** — verify via the `audio-lens` skill; be courteous with live audio. Tidy stop is 9 (3×3).
 - [exhibit] **Nomograph** — a Workbench instrument: a graphical-calculation chart (lay a straightedge across scales to read a product/quotient/root). *(The planimeter half of this seed BLOOMED 2026-06-13 → `planimeter/`: area by tracing, Green's theorem in brass, self-test 7/7.)*
 - [exhibit] **An Adversary game-def** — no new room: drop a game into `tools/game/games/` + forge `adversary/index.src.html` (e.g. Dots-and-Boxes, Connect-3-ish, Wythoff).
+- [exhibit] **Fourier epicycles** — draw a path (or pick one); decompose it into rotating circles (epicycles) that re-trace it. Self-test: the reconstruction → the input as terms rise; the DFT coefficients exact. A Workbench toy/instrument. (sown 2026-06-13)
+- [exhibit] **The Brachistochrone** — race balls down different ramps; the **cycloid** wins, and from *any* start height they arrive *together* (tautochrone). Self-test: the cycloid beats line/circle/parabola to machine precision; equal arrival times. Workbench → Toys & benches. (sown 2026-06-13)
 
 ### cipher exhibits (public: Volvelle + Scytale; hidden: Enigma — don't rebuild those)
 - [exhibit] **A cipher of a new family** — Playfair / Polybius / one-time-pad / Hagelin M-209 / the **M-94 cylinder**. Pick the one with the best *visual* story.
@@ -34,7 +36,7 @@ When a seed blooms, prune it (its provenance lives in the piece's CHANGELOG + th
 ### room — bets (generate divergent FORM concepts before committing — see DESIGNING.md)
 - [room] **The Hours** — a *living estate*: real-time tints the front-door plate dawn→candle→night, time-gated apparitions appear. Could *be* its own metagame. `feeds:` a new "Vigil" secret. (Use `tools/hours/`, not `tools/sky/`.)
 - [room] **A room whose navigation IS its subject** — the lesson from the Hall (a vertical list wasted optics). Sow a place whose *form expresses content*: e.g. an instrument bench you operate, a cabinet you open drawers in.
-- [room · GRAND] **Physics Lab** — a wing of experiments: Newtonian (Newton's cradle, 3-body, gravity, orbits) + Einsteinian (relativity, stellar collapse → black hole / supernova / white dwarf), with a **secret quantum sub-wing** earned by exploring both. Form idea: a **cave on the grounds, *outside* the manor** ("for safety"). `feeds:` its own unlock metagame. (Brandon — grand, multi-session; flesh out in a PLAN session first.)
+- [room · GRAND · **FLESHED**] **Physics Lab** — a wing of experiments housed in a **cave outside the manor** ("for safety"): open **Newtonian** + **Einsteinian** sub-wings + a **hidden Quantum vein** unlocked by exploring both. **→ Concrete plan ready: [worklog/physics-lab-plan.md](worklog/physics-lab-plan.md)** (the cave footprint/map work; a 6/6/5 candidate-bench menu each with its exact self-test; build order — first benches: the **Light Clock** [γ + invariant interval], **Newton's Cradle** [momentum+KE], **Mercury's Precession** [43″/century]). A future BUILD session pulls the first 2-3. (Brandon's seed; fleshed 2026-06-13.)
 - [room · GRAND] **Alchemy Lab** — a wing, theme open (reactions / transmutation / the periodic table / crystal growth?). Pairs with the Physics Lab; ripe for crossovers. (Brandon — needs ideation.)
 - [room/cross] **Flight & Rocketry** — planes, rockets, orbital mechanics. Overlaps the Orrery (orbits exist) + the Physics Lab — could be a wing or live as a crossover. (Brandon.)
 
@@ -44,6 +46,7 @@ When a seed blooms, prune it (its provenance lives in the piece's CHANGELOG + th
 - [cross] **Harmonograph × Sound Garden** — sonify the pendulum figure: the same Lissajous ratios you *see* drawn, *heard* as an interval.
 - [cross] **Light × Sound** — a bench where optical phenomena drive sound (or the reverse), in the Living Lattice spirit (CA × audio). The most-named crossover. (Brandon.)
 - [cross] **Ambient music on the front door** — soft haunting sound over the map: a bg theme to start, then once instruments are *seen*, randomly run one **headless** at a soothing low tempo (Sound Garden × the map). Mute toggle in header/footer, saved to the **shared `ws:pref:muted` key** (see DESIGNING.md — one mute governs the whole estate). (Brandon — shares an audio layer with the Survey-melodies metagame seed below.)
+- [cross] **The Black Chamber breaks the makers** — close the cipher loop: let the codebreaker (`black-chamber/`) actually crack a message enciphered by the **Volvelle** or **Scytale** (hand a ciphertext between them). The makers and their adversary, finally wired together. (sown 2026-06-13)
 
 ### engine / foundation — bets
 - [engine] **A logic-puzzle generator** proving uniqueness + solvable-by-pure-deduction — but NET-NEW families (Kakuro / Hashi / Masyu …), do NOT rewrite Latch/Slitherlink/Akari.
@@ -68,7 +71,7 @@ When a seed blooms, prune it (its provenance lives in the piece's CHANGELOG + th
 | Metagame | State | Notes |
 |---|---|---|
 | **The Undercroft** (`undercroft/` · `tools/ws/`) | active — 12 secrets | Open to new *earned* pieces. Grep the 🗝️ hidden-inventory in NOTES before building one. |
-| **The Survey of Heaven** (front-door sky · `tools/sky/`) | active — 6 wings + "The Optician" feats constellation | Open: a 7th wing for the Hall? **And make discovery an *event*** (melodies/tones + in-the-moment cues — the metagame seed above). 6-wing capstone is structurally protected (`allComplete`); keep new constellations additive. |
+| **The Survey of Heaven** (front-door sky · `tools/sky/`) | active — 6 wings + "The Optician" feats constellation | **7th-wing-for-the-Hall question: RESOLVED 2026-06-13 — NO.** The Hall (now 12 benches) is already represented via the 9-feat "The Optician" constellation; a separate Hall wing would be redundant/forced (metagame-as-consideration, not a mandate). Still open: **make discovery an *event*** (melodies/tones + in-the-moment cues — the metagame seed above). 6-wing capstone is structurally protected (`allComplete`); keep new constellations additive. |
 | **The Hours** (a living time-of-day layer) | **not yet built** — a `room` seed above | If built, it's a 3rd exploration metagame. |
 | **The Workshop Mystery** (manor-wide hunt) | **not yet built** — a `metagame · GRAND` seed above | Would be the estate's biggest exploration layer; spans every exhibit. ~3 sessions. |
 | **The Physics Lab's quantum wing** | **not yet built** — inside the `Physics Lab` room seed | A hidden sub-wing earned by exploring the Newtonian + Einsteinian wings. |
