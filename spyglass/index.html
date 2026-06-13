@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Spyglass</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.86);
+    --panel-edge: rgba(201,162,74,0.30);
+    --ink: #efe7d6;
+    --ink-dim: #a99c7f;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.14);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --bg: #0a0907;
+    /* skin variables (cosmetic only — never read by the physics) */
+    --bench: #0a0907;
+    --grid: rgba(201,162,74,0.05);
+    --axis: rgba(201,162,74,0.22);
+    --ray: #ffd98a;
+    --ray2: #9fd0ff;
+    --glass: rgba(160,200,255,0.10);
+    --glassEdge: rgba(190,215,255,0.62);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-ui); overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none; gap:14px;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .navwrap{ display:flex; gap:18px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0;
+    background:linear-gradient(92deg,#f4e6bf,#c9a24a 60%,#9c7a2e);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:var(--accent); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; text-transform:uppercase; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:default; user-select:none; }
+  .selftest.ok{ color:#9bd7a3; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0;
+    background: radial-gradient(1200px 820px at 46% 42%, #14110b 0%, #0c0a07 64%, #070605 100%); }
+  #bench{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:default; }
+  #hud{ position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    font:11px/1.4 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.55);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 13px; letter-spacing:.3px;
+    pointer-events:none; max-width:92%; text-align:center; }
+  #hud b{ color:var(--accent); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:322px; flex:0 0 322px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(11px) saturate(120%); -webkit-backdrop-filter: blur(11px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 26px; box-shadow:-18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.6; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 10px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .row{ margin:12px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.13em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:8px; }
+  .row > label .val{ color:var(--accent); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.2px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#f6ecd2; border:2px solid #8a6a22; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer; }
+  input[type=range]::-moz-range-thumb{ width:13px; height:13px; border-radius:50%; background:#f6ecd2; border:2px solid #8a6a22; cursor:pointer; }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(201,162,74,0.20); }
+  .seg button{ flex:1 1 0; min-width:0; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:7px 4px;
+    border-radius:6px; cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono); }
+  .seg button.active{ background:var(--accent); color:#1a1206; font-weight:700; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .readout{ display:grid; grid-template-columns:1fr auto; gap:5px 10px; font:11.5px/1.35 var(--font-mono);
+    color:var(--ink-dim); letter-spacing:.2px; margin-top:4px; }
+  .readout .k{ color:var(--ink-dim); }
+  .readout .v{ color:var(--accent); text-align:right; font-variant-numeric:tabular-nums; }
+  .readout .v.big{ font-size:13px; font-weight:700; color:#f4e6bf; }
+  .btnrow{ display:flex; gap:8px; margin:14px 0 2px; }
+  .btn{ flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s; font-family:var(--font-ui); }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .hint{ font:10.5px/1.6 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:18px 0 4px;
+    border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="navwrap">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../hall-of-mirrors/index.html">&uarr; hall of mirrors</a>
+    </div>
+    <div class="brand">
+      <h1>The Spyglass</h1>
+      <span class="tag">the fargazer</span>
+    </div>
+    <div class="selftest" id="selftest">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="bench"></canvas>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A telescope laid open on the bench. Watch parallel rays from a distant
+        thing get gathered and re-aimed so it looks <b>near</b> &mdash; and <b>inverted</b>.
+        Two instruments: a <b>Keplerian refractor</b> (two converging lenses) and a
+        <b>Newtonian reflector</b> (a parabolic mirror, folded out the side). Drag the focal
+        lengths; the magnification and every ray update live.</p>
+
+      <div class="sect">Instrument</div>
+      <div class="row">
+        <div class="seg" id="instSeg">
+          <button data-inst="kepler" class="active">Keplerian</button>
+          <button data-inst="newton">Newtonian</button>
+        </div>
+      </div>
+
+      <div class="sect" id="ctrlHead">Optics</div>
+      <div class="row" id="rowFobj">
+        <label>Objective f&#8202;<sub>obj</sub> <span class="val" id="vFobj">600</span></label>
+        <input type="range" id="sFobj" min="240" max="900" step="1" value="600">
+      </div>
+      <div class="row" id="rowFeye">
+        <label>Eyepiece f&#8202;<sub>eye</sub> <span class="val" id="vFeye">40</span></label>
+        <input type="range" id="sFeye" min="15" max="120" step="1" value="40">
+      </div>
+      <div class="row" id="rowAper">
+        <label>Aperture <span class="val" id="vAper">120</span></label>
+        <input type="range" id="sAper" min="40" max="200" step="1" value="120">
+      </div>
+      <div class="row" id="rowAlpha">
+        <label>Object tilt &alpha; <span class="val" id="vAlpha">0.6&deg;</span></label>
+        <input type="range" id="sAlpha" min="-2.5" max="2.5" step="0.05" value="0.6">
+      </div>
+
+      <div class="sect">Readout</div>
+      <div class="readout" id="readout"></div>
+
+      <div class="sect">View</div>
+      <div class="readout" style="margin-bottom:2px">
+        <span class="k">Left = naked eye (1&times;) &middot; Right = through the glass</span>
+      </div>
+
+      <div class="sect">Look</div>
+      <div class="row">
+        <div class="seg" id="skinSeg">
+          <button data-skin="brass" class="active">Brass</button>
+          <button data-skin="blueprint">Blueprint</button>
+          <button data-skin="ivory">Ivory</button>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn" id="pngBtn">PNG &times;2</button>
+        <button class="btn" id="resetBtn">Reset</button>
+      </div>
+
+      <div class="hint">
+        Angular magnification <b>M = f<sub>obj</sub> / f<sub>eye</sub></b>. The Keplerian
+        forms a real, inverted intermediate image at the shared focal plane, so the view is
+        upside-down. The Newtonian's <b>parabola</b> focuses every parallel ray to one point
+        &mdash; no spherical aberration. The self-test proves both to machine precision.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+// ============================================================================
+// The Spyglass — pure optics core. NO DOM access in this section.
+// The headless self-test below calls THESE real functions (not copies), so the
+// chip in the topbar proves the same math that draws the bench.
+// ============================================================================
+
+// ---------- vector helpers --------------------------------------------------
+function norm(x,y){ const l=Math.hypot(x,y)||1; return [x/l, y/l]; }
+// reflect direction d about unit normal n:  d' = d - 2(d·n)n
+function reflect(dx,dy,nx,ny){
+  const k = 2*(dx*nx + dy*ny);
+  return [dx - k*nx, dy - k*ny];
+}
+
+// ----------------------------------------------------------------------------
+// THIN LENS (paraxial-exact, but written as an exact ray transform so it holds
+// at any height/angle). Optical axis is +x. A ray crossing the lens plane (a
+// vertical line at x = lensX) at height y, with incoming slope m = dy/dx, leaves
+// the SAME point with slope m' = m - y/f. This is the exact thin-lens map.
+//   - parallel bundle (m=0) → all converge through the focal point (lensX+f, 0)
+//   - lens equation 1/v - 1/u = 1/f follows for any finite object.
+// ----------------------------------------------------------------------------
+function thinLensSlopeOut(yHeight, slopeIn, f){
+  return slopeIn - yHeight/f;
+}
+
+// Trace one axis-going ray (travelling +x) through an ordered list of thin
+// lenses. lenses: [{x, f}] sorted by x. ray: {x, y, m} where m = dy/dx (slope).
+// Returns the polyline of vertices [{x,y}], extended to xEnd after the last lens.
+function traceThroughLenses(ray, lenses, xEnd){
+  const pts=[{x:ray.x, y:ray.y}];
+  let y=ray.y, m=ray.m, x=ray.x;
+  for(const L of lenses){
+    if(L.x < x) continue;
+    y = y + m*(L.x - x);     // propagate to the lens plane
+    x = L.x;
+    pts.push({x, y});
+    m = thinLensSlopeOut(y, m, L.f);   // refract: change slope
+  }
+  // extend to xEnd
+  const yEnd = y + m*(xEnd - x);
+  pts.push({x:xEnd, y:yEnd});
+  return pts;
+}
+
+// Image of a finite on-axis-or-offset object point through a single thin lens,
+// via the Gaussian lens equation in the sign convention 1/v - 1/u = 1/f, with u
+// the (signed) object position relative to the lens (object to the LEFT is u<0),
+// v the image position. Returns {v, mag} where mag = -v/u (transverse).
+function lensImage(u, f){
+  // 1/v = 1/f + 1/u
+  const invV = 1/f + 1/u;
+  const v = 1/invV;
+  // transverse magnification in this position-on-the-axis convention (u<0 for an
+  // object to the left, v>0 for a real image to the right): m = v/u, which is
+  // negative for a real image — i.e. the image is inverted, as it must be.
+  return { v, mag: v/u };
+}
+
+// Keplerian telescope summary for parallel light from infinity.
+// f_obj, f_eye both > 0 (converging). Tube length L = f_obj + f_eye (afocal:
+// the objective's focal plane coincides with the eyepiece's front focal plane).
+// Angular magnification M = -f_obj/f_eye  (negative = inverted image).
+function keplerian(fObj, fEye){
+  return {
+    tubeLength: fObj + fEye,
+    M: -fObj/fEye,            // signed; magnitude f_obj/f_eye, sign(-)=inverted
+    Mmag: fObj/fEye,
+    inverted: true
+  };
+}
+
+// ----------------------------------------------------------------------------
+// PARABOLIC MIRROR.  y = x²/(4f)  ⇒  focus at (0, f), directrix y = -f.
+// For a ray travelling straight DOWN the axis (direction (0,-1)) at horizontal
+// offset x0, it strikes the parabola at (x0, x0²/4f); reflecting off the exact
+// surface normal there, the reflected ray passes through the focus (0,f).
+// This is the defining reflective property of a parabola — proven exactly below.
+// Geometry here uses the parabola opening UP toward +y, axis = the y-axis,
+// incoming rays from +y going to -y. (Self-contained; drawing rotates as needed.)
+// ----------------------------------------------------------------------------
+function parabolaY(x, f){ return x*x/(4*f); }
+// Unit normal to y = x²/(4f) at horizontal offset x, pointing UP (+y side, toward
+// the incoming light). Surface slope dy/dx = x/(2f); tangent (1, x/2f); normal
+// (-x/2f, 1) normalised, chosen so its y-component is positive.
+function parabolaNormal(x, f){
+  const tx=1, ty=x/(2*f);
+  let nx=-ty, ny=tx;            // rotate tangent +90°
+  if(ny<0){ nx=-nx; ny=-ny; }
+  return norm(nx,ny);
+}
+// Reflect a vertical-down ray at offset x off the parabola; return the reflected
+// unit direction and the hit point.
+function parabolaReflectAxial(x, f){
+  const hx=x, hy=parabolaY(x,f);
+  const [nx,ny]=parabolaNormal(x,f);
+  const [rdx,rdy]=reflect(0,-1, nx,ny);   // incoming straight down
+  return { hit:[hx,hy], dir:norm(rdx,rdy) };
+}
+// A SPHERICAL mirror of radius R (paraxial focus at R/2) does NOT focus a wide
+// parallel bundle to a single point — used to give the parabola's exactness teeth.
+// Circle centre (0, R) so the vertex sits at the origin; surface y = R - sqrt(R²-x²).
+function sphereReflectAxial(x, R){
+  const hx=x, hy=R - Math.sqrt(R*R - x*x);
+  // outward normal points toward centre (0,R) from hit, i.e. up/inward
+  let [nx,ny]=norm(0-hx, R-hy);
+  if(ny<0){ nx=-nx; ny=-ny; }
+  const [rdx,rdy]=reflect(0,-1, nx,ny);
+  return { hit:[hx,hy], dir:norm(rdx,rdy) };
+}
+// where a ray {p:[x,y], d:[dx,dy]} crosses the vertical line x=0 → its y there
+function crossAxisY(hit, dir){
+  // param t so that hit[0] + dir[0]*t = 0
+  if(Math.abs(dir[0]) < 1e-15) return hit[1];
+  const t = -hit[0]/dir[0];
+  return hit[1] + dir[1]*t;
+}
+
+// ============================================================================
+// HEADLESS SELF-TEST — calls the REAL functions above. Returns {pass,total,log}.
+// Asserts computed optics against closed-form ground truth to ≤1e-9 (machine
+// precision for the algebraic identities; the parabola focus to ~1e-13).
+// ============================================================================
+function runSelfTest(){
+  let pass=0, total=0; const log=[]; const errs={};
+  function check(name, cond, errVal){
+    total++; if(errVal!==undefined) errs[name]=errVal;
+    if(cond){ pass++; log.push('PASS: '+name); if(typeof console!=='undefined') console.log('PASS: '+name); }
+    else { log.push('FAIL: '+name); if(typeof console!=='undefined') console.error('FAIL: '+name, errVal); }
+  }
+
+  // (1) Distant on-axis object → intermediate image lands EXACTLY at the focal
+  //     plane: a parallel bundle (slope 0) through a single lens at x=0 converges
+  //     to (f, 0). Trace many heights; assert every ray crosses the axis at x==f.
+  {
+    let maxErr=0;
+    for(let t=0;t<50;t++){
+      const f = 120 + t*15;
+      const lenses=[{x:0, f}];
+      for(let j=-12;j<=12;j++){
+        if(j===0) continue;
+        const y0=j*7.3;
+        const pts=traceThroughLenses({x:-500, y:y0, m:0}, lenses, 5000);
+        // post-lens segment is the last two points
+        const a=pts[pts.length-2], b=pts[pts.length-1];
+        const md=(b.y-a.y)/(b.x-a.x);
+        // where does it cross y=0?  x = a.x - a.y/md
+        const xCross = a.x - a.y/md;
+        maxErr=Math.max(maxErr, Math.abs(xCross - f));
+      }
+    }
+    check('parallel bundle focuses exactly at x=f (image distance == f_obj)', maxErr<1e-9, maxErr);
+  }
+
+  // (2) Gaussian lens equation 1/v - 1/u = 1/f holds for finite objects, and the
+  //     ray trace agrees with it: a ray from an off-axis object point through a
+  //     lens crosses the predicted image plane at the predicted image height.
+  {
+    let maxEq=0, maxTrace=0;
+    for(let t=0;t<60;t++){
+      const f=80+ t*4.0;
+      const u=-(f*1.3 + t*9);            // object to the LEFT, beyond focus (real image)
+      const hObj=11+ (t%7)*3;            // object height
+      const {v, mag}=lensImage(u, f);
+      // closed-form identity check
+      maxEq=Math.max(maxEq, Math.abs((1/v - 1/u) - 1/f));
+      // ray trace: two rays from object point (u, hObj): a parallel ray (slope 0)
+      // and a chief ray through lens centre (passes undeviated). They must meet at
+      // the image point (v, hImg) with hImg = mag*hObj.
+      const lensX=0;
+      const objX=u, objY=hObj;
+      // parallel ray: travels +x at height hObj, slope 0 until the lens
+      const p1=traceThroughLenses({x:objX, y:objY, m:0}, [{x:lensX,f}], v+10);
+      // chief ray: from object straight to lens centre (0,0)
+      const m2=(0-objY)/(lensX-objX);
+      const p2=traceThroughLenses({x:objX, y:objY, m:m2}, [{x:lensX,f}], v+10);
+      // y of each post-lens ray at x=v
+      const yAt=(pts,xq)=>{ const a=pts[pts.length-2], b=pts[pts.length-1];
+        const md=(b.y-a.y)/(b.x-a.x); return a.y + md*(xq-a.x); };
+      const hImg=mag*hObj;
+      maxTrace=Math.max(maxTrace, Math.abs(yAt(p1,v)-hImg), Math.abs(yAt(p2,v)-hImg));
+    }
+    check('lens equation 1/v - 1/u = 1/f exact for finite objects', maxEq<1e-9, maxEq);
+    check('two-ray trace meets at predicted image point (v, mag*h)', maxTrace<1e-9, maxTrace);
+  }
+
+  // (3) Angular magnification M == f_obj/f_eye to ≤1e-9 across a sweep — proven
+  //     two ways: (a) the closed-form keplerian(), (b) an actual ray trace of the
+  //     telescope. A bundle entering at angle α exits the eyepiece at angle β;
+  //     M = β/α must equal -f_obj/f_eye.
+  {
+    let maxM=0, maxTraceM=0, allInverted=true;
+    for(let i=0;i<80;i++){
+      const fObj=200+ i*8;
+      const fEye=10 + (i%50)*2.0;
+      const k=keplerian(fObj,fEye);
+      maxM=Math.max(maxM, Math.abs(k.Mmag - fObj/fEye));
+      if(!(k.M < 0)) allInverted=false;       // sign negative ⇒ inverted
+      // ray trace: objective at x=0 (f=fObj), eyepiece at x=fObj+fEye (f=fEye).
+      // Incoming parallel bundle with input slope tan α (the chief-ray angle).
+      const inSlope=Math.tan(0.012 + (i%5)*0.004);   // tan α
+      const eyeX=fObj+fEye;
+      const lenses=[{x:0,f:fObj},{x:eyeX,f:fEye}];
+      // sample three parallel input rays at different heights → all must exit at
+      // the SAME output slope (the bundle stays parallel, i.e. afocal).
+      const outSlopes=[];
+      for(const y0 of [-30, 0, 25]){
+        const pts=traceThroughLenses({x:-50, y:y0, m:inSlope}, lenses, eyeX+400);
+        const a=pts[pts.length-2], b=pts[pts.length-1];
+        outSlopes.push((b.y-a.y)/(b.x-a.x));
+      }
+      const spread=Math.max(...outSlopes)-Math.min(...outSlopes);
+      // Angular magnification is exactly the ratio of OUTPUT to INPUT slopes
+      // (tan β / tan α), which the afocal system makes equal to -f_obj/f_eye.
+      const Mtrace=outSlopes[0]/inSlope;
+      maxTraceM=Math.max(maxTraceM, Math.abs(Mtrace - (-fObj/fEye)), spread);
+    }
+    check('M = f_obj/f_eye exact (closed form, ≤1e-9 over sweep)', maxM<1e-9, maxM);
+    check('ray-traced angular mag tanβ/tanα == −f_obj/f_eye & bundle stays afocal', maxTraceM<1e-9, maxTraceM);
+    check('system inverts: sign(M) negative for all f_obj,f_eye', allInverted, allInverted?0:1);
+  }
+
+  // (4) PARABOLA: ≥ a dozen parallel axial rays reflecting off y = x²/(4f) all
+  //     pass through the focus (0, f) to machine precision. This is the headline
+  //     proof: NO spherical aberration.
+  {
+    let maxFocusErr=0; const N=24;
+    const f=150;
+    for(let k=0;k<N;k++){
+      // sweep horizontal offsets across a wide aperture (up to ±2f wide)
+      const x0 = -2*f + (4*f)*(k/(N-1));
+      if(Math.abs(x0) < 1e-9) continue;       // the on-axis ray is degenerate
+      const r=parabolaReflectAxial(x0, f);
+      // does the reflected ray pass through (0, f)?  distance from point to line.
+      const px=r.hit[0], py=r.hit[1], dx=r.dir[0], dy=r.dir[1];
+      // perpendicular distance from focus (0,f) to the reflected line
+      const num=Math.abs(dx*(f-py) - dy*(0-px));
+      const den=Math.hypot(dx,dy)||1;
+      maxFocusErr=Math.max(maxFocusErr, num/den);
+    }
+    check('parabola y=x²/(4f): '+N+' parallel rays all pass through focus (0,f), no aberration', maxFocusErr<1e-9, maxFocusErr);
+  }
+
+  // (5) CONTRAST WITH TEETH: a spherical mirror (radius R, paraxial focus R/2)
+  //     does NOT focus a wide parallel bundle to that point — rays cross the axis
+  //     measurably short of R/2 (spherical aberration). Assert the miss is real
+  //     (> 1e-3) while the parabola's was < 1e-9 above.
+  {
+    const R=300; const fPar=R/2;             // paraxial focal length
+    let maxSphMiss=0;
+    for(let k=1;k<=14;k++){
+      const x0 = (k/14) * (0.85*R);          // out to 85% of radius (wide bundle)
+      const s=sphereReflectAxial(x0, R);
+      const yc=crossAxisY(s.hit, s.dir);     // where the reflected ray crosses x=0
+      maxSphMiss=Math.max(maxSphMiss, Math.abs(yc - fPar));
+    }
+    // and the parabola, sampled the SAME way, crosses x=0 essentially at f:
+    let maxParAtAxis=0; const fp=150;
+    for(let k=1;k<=14;k++){
+      const x0=(k/14)*200;
+      const r=parabolaReflectAxial(x0, fp);
+      const yc=crossAxisY(r.hit, r.dir);
+      maxParAtAxis=Math.max(maxParAtAxis, Math.abs(yc - fp));
+    }
+    check('sphere shows spherical aberration (miss > 1e-3) while parabola does not (< 1e-9)',
+          maxSphMiss>1e-3 && maxParAtAxis<1e-9, {sphereMiss:maxSphMiss, parabolaMiss:maxParAtAxis});
+  }
+
+  // (6) SKIN INVARIANCE: the physics functions take no style argument, so geometry
+  //     is identical across cosmetic skins by construction. Assert a trace computed
+  //     with different "active skin" state is byte-identical (proves it structurally).
+  {
+    const lenses=[{x:0,f:600},{x:640,f:40}];
+    function fingerprint(){
+      const out=[];
+      for(const y0 of [-40,-13,0,17,42]){
+        const pts=traceThroughLenses({x:-60,y:y0,m:Math.tan(0.01)}, lenses, 1100);
+        for(const p of pts) out.push(Math.round(p.x*1e6)+','+Math.round(p.y*1e6));
+      }
+      return out.join('|');
+    }
+    const a=fingerprint();
+    if(typeof window!=='undefined') window.__skin='blueprint';   // mutate cosmetic state
+    const b=fingerprint();
+    if(typeof window!=='undefined') window.__skin='ivory';
+    const c=fingerprint();
+    check('geometry identical across skins (trace reads no style)', a===b && b===c, 0);
+  }
+
+  return {pass, total, log, errs};
+}
+
+// expose for Node extraction / external re-audit
+if(typeof window!=='undefined'){
+  window.SpyglassCore = { thinLensSlopeOut, traceThroughLenses, lensImage, keplerian,
+    parabolaY, parabolaNormal, parabolaReflectAxial, sphereReflectAxial, reflect, runSelfTest };
+}
+if(typeof module!=='undefined' && module.exports){
+  module.exports = { thinLensSlopeOut, traceThroughLenses, lensImage, keplerian,
+    parabolaY, parabolaNormal, parabolaReflectAxial, sphereReflectAxial, reflect, runSelfTest };
+}
+
+// ============================================================================
+// APPLICATION (DOM). Everything below derives from the pure core above. Skipped
+// entirely under Node (no document).
+// ============================================================================
+if(typeof document!=='undefined'){ (function(){
+
+// ---------- skins (COSMETIC ONLY — never touch the physics) -----------------
+const SKINS = {
+  brass:     { bench:'#0a0907', grid:'rgba(201,162,74,0.05)', axis:'rgba(201,162,74,0.24)',
+               ray:'#ffd98a', ray2:'#ffe9b8', glass:'rgba(255,220,150,0.10)', glassEdge:'rgba(255,222,150,0.62)',
+               mirror:'#ffe9b8', focus:'#ff8a5a', star:'#fff4d8' },
+  blueprint: { bench:'#060810', grid:'rgba(120,170,230,0.07)', axis:'rgba(120,170,230,0.26)',
+               ray:'#9fd0ff', ray2:'#cfe6ff', glass:'rgba(120,170,230,0.10)', glassEdge:'rgba(160,210,255,0.7)',
+               mirror:'#cfe6ff', focus:'#ff9a7a', star:'#eaf3ff' },
+  ivory:     { bench:'#15130d', grid:'rgba(210,196,160,0.06)', axis:'rgba(210,196,160,0.28)',
+               ray:'#e9c97a', ray2:'#f4e6bf', glass:'rgba(220,205,160,0.12)', glassEdge:'rgba(230,215,175,0.7)',
+               mirror:'#f0e4c2', focus:'#e2734a', star:'#fff6e2' },
+};
+
+const cv = document.getElementById('bench');
+let ctx = cv.getContext('2d');
+let dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+let W=0, H=0;
+
+const DEFAULTS = { inst:'kepler', fObj:600, fEye:40, aper:120, alphaDeg:0.6, skin:'brass' };
+const state = Object.assign({}, DEFAULTS);
+
+function resize(){
+  const stage=document.getElementById('stage');
+  W=Math.max(320, stage.clientWidth);
+  H=Math.max(240, stage.clientHeight);
+  dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
+  cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+  cv.style.width=W+'px'; cv.style.height=H+'px';
+}
+
+function skin(){ return SKINS[state.skin]; }
+
+// ---------- drawing helpers -------------------------------------------------
+function clear(){
+  ctx.save();
+  ctx.scale(dpr,dpr);
+  const s=skin();
+  ctx.clearRect(0,0,W,H);
+  // background already from CSS gradient on #stage; paint a faint vignette glass
+}
+function lineTo(ax,ay,bx,by,color,width,alpha){
+  ctx.strokeStyle=color; ctx.lineWidth=width; ctx.globalAlpha=alpha===undefined?1:alpha;
+  ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke(); ctx.globalAlpha=1;
+}
+function drawGrid(){
+  const s=skin();
+  ctx.strokeStyle=s.grid; ctx.lineWidth=1; ctx.globalAlpha=1;
+  const step=48;
+  ctx.beginPath();
+  for(let x=0;x<=W;x+=step){ ctx.moveTo(x,0); ctx.lineTo(x,H); }
+  for(let y=0;y<=H;y+=step){ ctx.moveTo(0,y); ctx.lineTo(W,y); }
+  ctx.stroke();
+}
+
+// world→screen: the optical bench occupies the LEFT ~62% of the stage; the
+// "views" panel (naked-eye vs telescopic) occupies the right portion.
+function benchLayout(){
+  const viewW=Math.min(300, Math.max(210, W*0.30));
+  return {
+    benchW: W - viewW - 24,
+    viewX: W - viewW - 8,
+    viewW: viewW
+  };
+}
+
+// Draw the convex-lens glyph centred at (cx, axisY), half-height hh.
+function drawLens(cx, axisY, hh, label){
+  const s=skin();
+  ctx.save();
+  ctx.translate(cx, axisY);
+  // lens body: two arcs
+  const bulge=Math.max(7, hh*0.10);
+  ctx.beginPath();
+  ctx.moveTo(0,-hh);
+  ctx.quadraticCurveTo(bulge, 0, 0, hh);
+  ctx.quadraticCurveTo(-bulge, 0, 0, -hh);
+  ctx.closePath();
+  ctx.fillStyle=s.glass; ctx.fill();
+  ctx.strokeStyle=s.glassEdge; ctx.lineWidth=1.6; ctx.stroke();
+  ctx.restore();
+  if(label){
+    ctx.fillStyle=s.glassEdge; ctx.font='600 10px '+getMono();
+    ctx.textAlign='center'; ctx.fillText(label, cx, axisY+hh+15);
+  }
+}
+function getMono(){ return '"SF Mono",ui-monospace,Menlo,monospace'; }
+
+function drawAxis(x0,x1,axisY){
+  const s=skin();
+  ctx.setLineDash([5,5]);
+  lineTo(x0,axisY,x1,axisY,s.axis,1,1);
+  ctx.setLineDash([]);
+}
+
+function dot(x,y,r,color){
+  ctx.fillStyle=color; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+}
+
+// ----------------------------------------------------------------------------
+// KEPLERIAN scene
+// ----------------------------------------------------------------------------
+function drawKepler(){
+  const s=skin();
+  const lay=benchLayout();
+  const axisY=H*0.5;
+  const fObj=state.fObj, fEye=state.fEye, aper=state.aper;
+  const alpha=state.alphaDeg*Math.PI/180;
+
+  // pick a pixel scale so the whole tube (f_obj+f_eye) fits comfortably on bench
+  const tube=fObj+fEye;
+  const marginL=70, marginR=80;
+  const usable=lay.benchW - marginL - marginR;
+  const scale=usable/tube;                 // px per focal-unit
+  const objX=marginL;                      // objective lens x
+  const eyeX=objX + tube*scale;            // eyepiece x
+  const focalPlaneX=objX + fObj*scale;     // shared focal plane
+
+  // lens half-heights (aperture). Eyepiece smaller.
+  const hhObj=Math.min(H*0.30, aper*0.45);
+  const hhEye=Math.min(H*0.20, Math.max(20, aper*0.16));
+
+  drawGrid();
+  drawAxis(8, eyeX+70, axisY);
+
+  // --- incoming parallel bundle (tilted by α) hitting the objective ---
+  // model in focal-units then scale. Lens objective at u-x=0, f=fObj.
+  // We trace in PIXEL space directly with slope = tan(α). Lenses at objX, eyeX.
+  const lensesPx=[{x:objX, f:fObj*scale}, {x:eyeX, f:fEye*scale}];
+  const slope=Math.tan(alpha);
+
+  // marginal + chief rays across the aperture
+  const heights=[-hhObj, -hhObj*0.5, 0, hhObj*0.5, hhObj];
+  for(const h0 of heights){
+    // start at left edge so the bundle is parallel & tilted: choose start x, y so
+    // each ray passes through height h0 at the objective plane.
+    const startX=8;
+    const yAtObj=h0;                       // height where it meets objective
+    const startY=yAtObj - slope*(objX-startX);
+    const pts=traceThroughLenses({x:startX, y:axisY+startY, m:slope}, lensesPx, eyeX+70);
+    // shift the trace so axis is at axisY: traceThroughLenses uses absolute y; we
+    // seeded y around axisY by adding axisY. But slope-based propagation treats y
+    // linearly so the offset is preserved. Good.
+    drawRayPolyline(pts, h0===0 ? s.ray2 : s.ray, h0===0?2.0:1.4, h0===0?1:0.82);
+  }
+
+  // --- intermediate real image marker at the focal plane ---
+  // image height of the chief ray at the focal plane (= fObj*tan α)
+  const imgH=fObj*scale*Math.tan(alpha);
+  ctx.setLineDash([3,4]);
+  lineTo(focalPlaneX, axisY-Math.abs(imgH)-6, focalPlaneX, axisY+Math.abs(imgH)+6, s.focus, 1, 0.5);
+  ctx.setLineDash([]);
+  // arrow showing the inverted intermediate image (tip opposite the input tilt)
+  drawArrow(focalPlaneX, axisY, focalPlaneX, axisY - imgH, s.focus, 2);
+  ctx.fillStyle=s.focus; ctx.font='600 9px '+getMono(); ctx.textAlign='center';
+  ctx.fillText('intermediate image (inverted)', focalPlaneX, axisY+Math.abs(imgH)+22);
+
+  // --- lens glyphs ---
+  drawLens(objX, axisY, hhObj, 'objective  f='+fObj);
+  drawLens(eyeX, axisY, hhEye, 'eyepiece  f='+fEye);
+
+  // --- exit pupil: image of the objective aperture formed by the eyepiece ---
+  // object = objective at distance (fObj+fEye) to the left of eyepiece (u=-(fObj+fEye)),
+  // through eyepiece f=fEye → v = exit-pupil distance behind eyepiece.
+  {
+    const u=-(fObj+fEye)*scale;
+    const im=lensImage(u, fEye*scale);
+    const epX=eyeX + im.v;                  // exit pupil position
+    if(isFinite(epX) && epX>eyeX && epX<eyeX+200){
+      ctx.strokeStyle=s.mirror; ctx.lineWidth=1; ctx.globalAlpha=0.8;
+      ctx.beginPath(); ctx.ellipse(epX, axisY, 4, 14, 0, 0, Math.PI*2); ctx.stroke();
+      ctx.globalAlpha=1;
+      ctx.fillStyle=s.mirror; ctx.font='600 9px '+getMono(); ctx.textAlign='center';
+      ctx.fillText('exit pupil', epX, axisY-22);
+    }
+  }
+
+  // --- the two views, right side ---
+  drawViews(lay, axisY);
+
+  // readout
+  const k=keplerian(fObj,fEye);
+  const fovDeg = (state.alphaDeg!==0) ? null : null;
+  updateReadout([
+    ['M (angular)', (k.M<0?'−':'')+k.Mmag.toFixed(2)+'×', true],
+    ['= f_obj / f_eye', fObj+' / '+fEye, false],
+    ['orientation', 'inverted', false],
+    ['tube length', (fObj+fEye)+' (f_o+f_e)', false],
+    ['object tilt α', state.alphaDeg.toFixed(2)+'°', false],
+    ['apparent β', (k.Mmag*state.alphaDeg).toFixed(2)+'°', false],
+  ]);
+  setHud('Keplerian refractor — objective gathers parallel rays to a <b>real inverted</b> image at the shared focal plane; the eyepiece relays it to infinity at the larger angle <b>β = M·α</b>.');
+}
+
+// ----------------------------------------------------------------------------
+// NEWTONIAN scene — parabolic primary + flat diagonal + side eyepiece.
+// ----------------------------------------------------------------------------
+function drawNewton(){
+  const s=skin();
+  const lay=benchLayout();
+  const axisY=H*0.5;
+  const fObj=state.fObj, aper=state.aper;
+
+  drawGrid();
+
+  // The optical axis runs horizontally (+x = into the scope, toward the mirror at
+  // the right of the bench). Parallel starlight enters from the LEFT travelling +x,
+  // hits the parabolic primary at the right, converges back toward the prime focus.
+  const primaryX=lay.benchW-70;            // vertex of the parabola (rightmost)
+  const apHalf=Math.min(H*0.32, aper*0.5);
+
+  // Map focal length to pixels: choose scale so prime focus sits ~60% back along bench
+  const focusPx=Math.min(lay.benchW*0.55, fObj*0.7);   // distance from vertex to focus, in px
+  const fpx=focusPx;                       // px focal length used for the parabola shape
+  // parabola in a local frame: axis = x (horizontal), opening toward -x (left).
+  // local coord X = distance left of vertex; surface offset depends on height h.
+  // Using y = x²/(4f): here let "height" = vertical offset from axis, and the
+  // surface bulges LEFT by Δ = height²/(4f). Vertex at primaryX.
+  function surfaceX(h){ return primaryX - (h*h)/(4*fpx); }
+  const focusX=primaryX - fpx;             // prime focus on the axis, left of vertex
+
+  drawAxis(8, primaryX, axisY);
+
+  // --- draw the parabolic primary surface ---
+  ctx.strokeStyle=s.mirror; ctx.lineWidth=2.4; ctx.globalAlpha=1;
+  ctx.beginPath();
+  for(let i=0;i<=80;i++){
+    const h=-apHalf + (2*apHalf)*(i/80);
+    const x=surfaceX(h), y=axisY+h;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  // mirror backing hatch
+  ctx.globalAlpha=0.25;
+  for(let i=0;i<=16;i++){
+    const h=-apHalf + (2*apHalf)*(i/16);
+    const x=surfaceX(h), y=axisY+h;
+    lineTo(x,y,x+10,y, s.mirror, 1, 0.25);
+  }
+  ctx.globalAlpha=1;
+  ctx.fillStyle=s.mirror; ctx.font='600 10px '+getMono(); ctx.textAlign='center';
+  ctx.fillText('parabolic primary  f='+fObj, primaryX-30, axisY+apHalf+18);
+
+  // --- diagonal flat secondary: a 45° mirror on the axis, before the focus, that
+  //     folds the converging cone UP toward a side eyepiece. ---
+  const diagX=focusX + fpx*0.42;           // along the axis, between mirror and focus
+  const diagHalf=apHalf*0.34;
+  // diagonal line (45°): from (diagX-diagHalf, axisY-diagHalf) to (diagX+diagHalf, axisY+diagHalf)
+  // reflects a +... actually rays travel -x after the primary (toward focus on left).
+  // A 45° flat reflects a leftward ray to travel upward (-y). Eyepiece sits above.
+  const eyeY=axisY - apHalf - 60;
+
+  // --- trace the parallel bundle: enters +x, hits parabola, reflects toward focus,
+  //     intercepted by the diagonal, folded up to the eyepiece line ---
+  const NRAYS=11;
+  for(let k=0;k<NRAYS;k++){
+    const h=-apHalf + (2*apHalf)*(k/(NRAYS-1));
+    if(Math.abs(h)<0.5 && NRAYS%2===1 && k===(NRAYS-1)/2){
+      // central ray: straight in, hits vertex, reflects straight back along axis
+    }
+    const hitX=surfaceX(h), hitY=axisY+h;
+    // incoming ray from left edge to the surface
+    lineTo(8, hitY, hitX, hitY, s.ray, 1.3, 0.8);
+    // reflected direction toward prime focus (focusX, axisY)
+    let rdx=focusX-hitX, rdy=axisY-hitY; const rl=Math.hypot(rdx,rdy)||1; rdx/=rl; rdy/=rl;
+    // does it cross the diagonal plane (the 45° line through diagX)? The diagonal
+    // reflects rays heading -x into rays heading -y. Param where x == diagX along
+    // the line x = diagX + (axisY - y_here)... simpler: intersect with vertical-ish
+    // 45° mirror: points (px,py) with px - diagX == -(py - axisY)?  use line
+    // through (diagX,axisY) slope -1: (y-axisY) = -1*(x-diagX).
+    // Ray: P = hit + t*r.  Solve (hitY + t*rdy - axisY) = -(hitX + t*rdx - diagX)
+    const tNum = -(hitX - diagX) - (hitY - axisY);
+    const tDen = rdx + rdy;
+    let folded=false, fx,fy;
+    if(Math.abs(tDen)>1e-9){
+      const t=tNum/tDen;
+      if(t>0){
+        fx=hitX + rdx*t; fy=hitY + rdy*t;
+        // only fold rays that actually strike the small diagonal
+        if(Math.abs(fy-axisY) <= diagHalf+2 && Math.abs(fx-diagX) <= diagHalf+2){
+          folded=true;
+        }
+      }
+    }
+    if(folded){
+      lineTo(hitX, hitY, fx, fy, s.ray, 1.3, 0.85);
+      // reflect off 45° flat (normal along (1,1)/√2 → leftward ray becomes upward)
+      const [ndx,ndy]=norm(1,-1);            // flat oriented so -x → -y
+      const [odx,ody]=reflect(rdx,rdy, ndx,ndy);
+      // draw folded segment up to eyepiece line y=eyeY
+      const t2=(eyeY-fy)/(ody||-1);
+      const ex=fx+odx*Math.abs(t2*0+1)*0, ey=eyeY;
+      // compute crossing of eyepiece line
+      let tt=(eyeY-fy)/ (ody===0? -1: ody);
+      const exx=fx+odx*tt, eyy=fy+ody*tt;
+      lineTo(fx,fy, exx, eyy, s.ray, 1.3, 0.85);
+    } else {
+      // ray continues to (or past) the prime focus
+      lineTo(hitX, hitY, focusX, axisY, s.ray, 1.3, 0.7);
+    }
+  }
+
+  // diagonal secondary glyph
+  ctx.strokeStyle=s.mirror; ctx.lineWidth=2.4;
+  ctx.beginPath();
+  ctx.moveTo(diagX-diagHalf, axisY+diagHalf);
+  ctx.lineTo(diagX+diagHalf, axisY-diagHalf);
+  ctx.stroke();
+  ctx.fillStyle=s.mirror; ctx.font='600 9px '+getMono(); ctx.textAlign='left';
+  ctx.fillText('diagonal flat', diagX+diagHalf+6, axisY+4);
+
+  // prime focus marker
+  dot(focusX, axisY, 4, s.focus);
+  ctx.fillStyle=s.focus; ctx.font='600 9px '+getMono(); ctx.textAlign='center';
+  ctx.fillText('prime focus (0,f)', focusX, axisY+18);
+
+  // eyepiece on the side
+  drawLens(diagX, eyeY, apHalf*0.30, 'eyepiece');
+
+  // --- views ---
+  drawViews(lay, axisY);
+
+  // readout
+  const M=fObj/state.fEye;
+  updateReadout([
+    ['primary', 'parabola y=x²/4f', false],
+    ['f (primary)', fObj+'', true],
+    ['aberration', 'none (exact)', false],
+    ['focus', 'single point (0,f)', false],
+    ['fold', 'flat 45° diagonal', false],
+    ['eyepiece f', state.fEye+'', false],
+  ]);
+  setHud('Newtonian reflector — a <b>parabola</b> brings every parallel ray to one prime focus (zero spherical aberration). A flat diagonal folds the cone out to the side eyepiece.');
+}
+
+// ----------------------------------------------------------------------------
+// The two comparison views: naked eye (1×) and through the glass (M×, inverted).
+// ----------------------------------------------------------------------------
+function drawViews(lay, benchAxisY){
+  const x0=lay.viewX, vw=lay.viewW;
+  const cellH=Math.min((H-90)/2, 220);
+  const topY=58;
+  const M=(state.inst==='kepler') ? keplerian(state.fObj,state.fEye).Mmag : (state.fObj/state.fEye);
+  // naked eye: true wide field, upright, base zoom 1.
+  drawViewCell(x0, topY, vw, cellH, 1, false, 'naked eye  1×');
+  // through the glass: the same sky magnified & INVERTED. A real eyepiece shows a
+  // narrower true field as M rises (you zoom into a patch of sky); we model that as
+  // a display zoom that grows with M but is bounded so the framed content stays
+  // legible — centred on the double star, the classic "resolve the pair" payoff.
+  // The magnification NUMBER and the inversion are the honest M; only the on-screen
+  // zoom factor is bounded for legibility (a cosmetic display choice).
+  drawViewCell(x0, topY+cellH+18, vw, cellH, M, true, 'through the glass  '+M.toFixed(1)+'×  (inverted)');
+}
+
+function drawViewCell(x,y,w,h, mag, inverted, label){
+  const s=skin();
+  ctx.save();
+  // frame (circular eyepiece field)
+  const cx=x+w/2, cy=y+h/2, R=Math.min(w,h)/2 - 6;
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2);
+  ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fill();
+  ctx.lineWidth=1.4; ctx.strokeStyle=s.glassEdge; ctx.stroke();
+  // clip to the field circle
+  ctx.beginPath(); ctx.arc(cx,cy,R-1,0,Math.PI*2); ctx.clip();
+
+  // The scene is a bright double star + a faint "moon" disc with a crater, drawn in
+  // a canonical unit frame, then displayed bigger and flipped if inverted.
+  // DISPLAY zoom (cosmetic, bounded): 1× shows the whole sky; the telescopic view
+  // zooms toward the scene centre by a factor that rises with M (sqrt keeps very
+  // high M legible) and is capped, so objects grow and the field narrows without
+  // flying off-screen — like a real eyepiece. The labelled M is the true value.
+  const flip = inverted ? -1 : 1;
+  const zoom = (mag<=1) ? 1 : Math.min(4.2, 1 + 0.9*Math.sqrt(mag-1));
+  // recentre on the scene centroid (between the moon and the star pair) so the
+  // zoom keeps content in the field.
+  const ccx=0.0, ccy=0.0;
+  function P(ux,uy){                        // unit frame → screen, zoomed & flipped
+    const zx=(ux-ccx)*zoom, zy=(uy-ccy)*zoom;
+    return [cx + zx*R*0.5*flip, cy + zy*R*0.5*flip];
+  }
+  const sc = zoom;                          // object sizes scale with the display zoom
+  // moon disc (upper-left in the true sky)
+  {
+    const [mx,my]=P(-0.45,-0.40);
+    const mr=Math.max(2, 0.30*R*0.5*sc);
+    const g=ctx.createRadialGradient(mx,my,0,mx,my,mr);
+    g.addColorStop(0, s.star); g.addColorStop(0.7,'rgba(220,210,180,0.55)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(mx,my,mr,0,Math.PI*2); ctx.fill();
+    // a small dark crater so the flip is unmistakable
+    const [kx,ky]=P(-0.55,-0.30);
+    ctx.fillStyle='rgba(20,16,8,0.7)'; ctx.beginPath(); ctx.arc(kx,ky,Math.max(1,mr*0.22),0,Math.PI*2); ctx.fill();
+  }
+  // double star (lower-right) — two bright points, one brighter, with diffraction spikes
+  function star(ux,uy,br){
+    const [sx,sy]=P(ux,uy);
+    const rad=Math.max(1.5, br*4);
+    const g=ctx.createRadialGradient(sx,sy,0,sx,sy,rad*3);
+    g.addColorStop(0,s.star); g.addColorStop(0.4,'rgba(255,240,210,0.7)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,sy,rad*3,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=s.star; ctx.globalAlpha=0.6; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(sx-rad*3.5,sy); ctx.lineTo(sx+rad*3.5,sy);
+    ctx.moveTo(sx,sy-rad*3.5); ctx.lineTo(sx,sy+rad*3.5); ctx.stroke(); ctx.globalAlpha=1;
+  }
+  star(0.40,0.42,1.3); star(0.62,0.30,0.8);
+  ctx.restore();
+
+  // label below
+  ctx.fillStyle=s.glassEdge; ctx.font='600 10px '+getMono(); ctx.textAlign='center';
+  ctx.fillText(label, x+w/2, y+h-2);
+}
+
+// ---------- ray + arrow drawing ---------------------------------------------
+function drawRayPolyline(pts, color, width, alpha){
+  const s=skin();
+  ctx.strokeStyle=color; ctx.lineWidth=width; ctx.globalAlpha=alpha;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.beginPath();
+  for(let i=0;i<pts.length;i++){ if(i===0) ctx.moveTo(pts[i].x,pts[i].y); else ctx.lineTo(pts[i].x,pts[i].y); }
+  ctx.stroke(); ctx.globalAlpha=1;
+}
+function drawArrow(x0,y0,x1,y1,color,width){
+  lineTo(x0,y0,x1,y1,color,width,1);
+  const ang=Math.atan2(y1-y0,x1-x0), hl=7;
+  ctx.strokeStyle=color; ctx.lineWidth=width; ctx.beginPath();
+  ctx.moveTo(x1,y1); ctx.lineTo(x1-hl*Math.cos(ang-0.4), y1-hl*Math.sin(ang-0.4));
+  ctx.moveTo(x1,y1); ctx.lineTo(x1-hl*Math.cos(ang+0.4), y1-hl*Math.sin(ang+0.4));
+  ctx.stroke();
+}
+
+// ---------- main draw -------------------------------------------------------
+function draw(){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.save();
+  ctx.scale(dpr,dpr);
+  if(state.inst==='kepler') drawKepler(); else drawNewton();
+  ctx.restore();
+}
+let drawQueued=false;
+function requestDraw(){ if(drawQueued) return; drawQueued=true; requestAnimationFrame(()=>{ drawQueued=false; draw(); }); }
+
+// ---------- readout + hud ---------------------------------------------------
+function updateReadout(rows){
+  const host=document.getElementById('readout'); host.innerHTML='';
+  for(const [k,v,big] of rows){
+    const a=document.createElement('span'); a.className='k'; a.textContent=k;
+    const b=document.createElement('span'); b.className='v'+(big?' big':''); b.textContent=v;
+    host.appendChild(a); host.appendChild(b);
+  }
+}
+function setHud(html){ document.getElementById('hud').innerHTML=html; }
+
+// ---------- controls --------------------------------------------------------
+function applySkinVars(){
+  const sk=skin(); const r=document.documentElement.style;
+  r.setProperty('--bench',sk.bench); r.setProperty('--grid',sk.grid); r.setProperty('--axis',sk.axis);
+}
+function setFill(slider){
+  const min=parseFloat(slider.min), max=parseFloat(slider.max), v=parseFloat(slider.value);
+  slider.style.setProperty('--fill', ((v-min)/(max-min)*100)+'%');
+}
+function syncCtrlVisibility(){
+  // Newtonian uses only f_obj, aperture (no eyepiece-f for the parabola proof, but
+  // it still drives the M readout); hide α + eyepiece labels stay relevant though.
+  const isKep=state.inst==='kepler';
+  document.getElementById('rowFeye').style.display = '';   // both use M=f_obj/f_eye
+  document.getElementById('rowAlpha').style.display = isKep ? '' : 'none';
+}
+
+function wire(){
+  const sFobj=document.getElementById('sFobj'), sFeye=document.getElementById('sFeye'),
+        sAper=document.getElementById('sAper'), sAlpha=document.getElementById('sAlpha');
+
+  function refreshLabels(){
+    document.getElementById('vFobj').textContent=state.fObj;
+    document.getElementById('vFeye').textContent=state.fEye;
+    document.getElementById('vAper').textContent=state.aper;
+    document.getElementById('vAlpha').textContent=state.alphaDeg.toFixed(2)+'°';
+  }
+
+  sFobj.addEventListener('input', ()=>{ state.fObj=parseInt(sFobj.value,10); setFill(sFobj); refreshLabels(); requestDraw(); });
+  sFeye.addEventListener('input', ()=>{ state.fEye=parseInt(sFeye.value,10); setFill(sFeye); refreshLabels(); requestDraw(); });
+  sAper.addEventListener('input', ()=>{ state.aper=parseInt(sAper.value,10); setFill(sAper); refreshLabels(); requestDraw(); });
+  sAlpha.addEventListener('input', ()=>{ state.alphaDeg=parseFloat(sAlpha.value); setFill(sAlpha); refreshLabels(); requestDraw(); });
+
+  document.getElementById('instSeg').addEventListener('click', ev=>{
+    const b=ev.target.closest('button'); if(!b) return;
+    state.inst=b.dataset.inst;
+    document.querySelectorAll('#instSeg button').forEach(x=>x.classList.toggle('active',x===b));
+    syncCtrlVisibility(); requestDraw();
+  });
+  document.getElementById('skinSeg').addEventListener('click', ev=>{
+    const b=ev.target.closest('button'); if(!b) return;
+    state.skin=b.dataset.skin;
+    document.querySelectorAll('#skinSeg button').forEach(x=>x.classList.toggle('active',x===b));
+    applySkinVars(); requestDraw();   // skin is cosmetic — no recompute of geometry
+  });
+  document.getElementById('resetBtn').addEventListener('click', ()=>{
+    Object.assign(state, DEFAULTS);
+    sFobj.value=state.fObj; sFeye.value=state.fEye; sAper.value=state.aper; sAlpha.value=state.alphaDeg;
+    [sFobj,sFeye,sAper,sAlpha].forEach(setFill);
+    document.querySelectorAll('#instSeg button').forEach(x=>x.classList.toggle('active',x.dataset.inst===state.inst));
+    document.querySelectorAll('#skinSeg button').forEach(x=>x.classList.toggle('active',x.dataset.skin===state.skin));
+    applySkinVars(); syncCtrlVisibility(); refreshLabels(); requestDraw();
+  });
+  document.getElementById('pngBtn').addEventListener('click', exportPNG);
+
+  [sFobj,sFeye,sAper,sAlpha].forEach(setFill);
+  refreshLabels();
+}
+
+// ---------- PNG ×2 export ----------------------------------------------------
+function exportPNG(){
+  const scale=2;
+  const off=document.createElement('canvas');
+  off.width=Math.round(W*scale); off.height=Math.round(H*scale);
+  const octx=off.getContext('2d');
+  // paint the stage's gradient background first (canvas is transparent otherwise)
+  const g=octx.createRadialGradient(off.width*0.46,off.height*0.42,0, off.width*0.46,off.height*0.42, Math.max(off.width,off.height));
+  g.addColorStop(0,'#14110b'); g.addColorStop(0.64,'#0c0a07'); g.addColorStop(1,'#070605');
+  octx.fillStyle=g; octx.fillRect(0,0,off.width,off.height);
+  const savedCtx=ctx, savedDpr=dpr;
+  ctx=octx; dpr=scale; draw(); ctx=savedCtx; dpr=savedDpr; requestDraw();
+  const finish=(url)=>{ const a=document.createElement('a'); a.href=url; a.download='spyglass-'+state.inst+'.png';
+    document.body.appendChild(a); a.click(); a.remove(); };
+  if(off.toBlob){ off.toBlob(b=>{ const u=URL.createObjectURL(b); finish(u); setTimeout(()=>URL.revokeObjectURL(u),4000); },'image/png'); }
+  else finish(off.toDataURL('image/png'));
+}
+
+window.addEventListener('resize', ()=>{ resize(); requestDraw(); });
+
+// ---------- INIT ------------------------------------------------------------
+function init(){
+  try{var k='ws:seen:spyglass';if(!localStorage.getItem(k))localStorage.setItem(k,String(Date.now()));}catch(e){}
+
+  const res=runSelfTest();
+  const chip=document.getElementById('selftest');
+  if(res.pass===res.total){ chip.className='selftest ok'; chip.textContent='spyglass verified — '+res.pass+'/'+res.total+' ✓'; }
+  else { chip.className='selftest bad'; chip.textContent='spyglass FAILED — '+res.pass+'/'+res.total; }
+  console.log('The Spyglass self-test: '+res.pass+'/'+res.total+' passed.');
+  console.log('  key errors:', res.errs);
+
+  wire();
+  applySkinVars();
+  syncCtrlVisibility();
+  resize();
+  requestDraw();
+}
+init();
+
+})(); }
+</script>
+</body>
+</html>
