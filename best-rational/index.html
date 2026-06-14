@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Best Rational</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.88);
+    --panel-edge: rgba(201,162,74,0.34);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --ink-faint: #6b6e7e;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --conv: #6fd3c4;        /* convergents */
+    --conv2: #6fb4d3;       /* alt convergent (below) */
+    --mediant: #c98ad3;     /* stern-brocot mediants */
+    --target: #f0c674;      /* the target number */
+    --phi: #e0a44f;         /* golden / phi accent */
+    --bad: #e0664f;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --bg: #06080c;
+    --stage: #080b11;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+  /* ---- topbar ---- */
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    justify-content:space-between; padding:14px 20px 0; pointer-events:none; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; display:flex; flex-direction:column; padding:64px 24px 16px; gap:14px; overflow:hidden; }
+
+  /* number readout / CF ladder strip across the top */
+  #cfstrip{ flex:0 0 auto; background:var(--stage); border:1px solid var(--panel-edge); border-radius:12px;
+    padding:14px 18px; display:flex; align-items:center; gap:20px; min-height:0; }
+  #cfReadout{ font-family:var(--font-serif); }
+  #cfReadout .xname{ font-size:24px; color:var(--target); display:block; line-height:1.1; }
+  #cfReadout .xval{ font:12px/1.4 var(--font-mono); color:var(--ink-dim); }
+  #cfBox{ flex:1; min-width:0; }
+  #cfBox .lbl{ font:600 9.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:5px; }
+  #cfTerms{ font:16px/1.5 var(--font-serif); color:var(--ink); white-space:nowrap; overflow-x:auto; padding-bottom:3px; }
+  #cfTerms .a0{ color:var(--target); font-weight:600; }
+  #cfTerms .ai{ color:var(--conv); }
+  #cfTerms .punct{ color:var(--ink-faint); }
+  #cfTerms .big{ color:var(--phi); font-weight:600; }
+
+  /* two panes below: tree (left) + table+plot (right) */
+  #lower{ flex:1 1 auto; display:flex; gap:14px; min-height:0; }
+  #treePane{ flex:1 1 56%; position:relative; min-width:0; background:var(--stage);
+    border:1px solid var(--panel-edge); border-radius:12px; overflow:hidden; }
+  #treeCanvas{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+  #treeLabel{ position:absolute; left:14px; top:12px; z-index:4; pointer-events:none;
+    font:600 10px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
+  #treeHint{ position:absolute; left:14px; bottom:12px; right:14px; z-index:4; pointer-events:none;
+    font:11px/1.5 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.45);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 10px; }
+  #treeHint b{ color:var(--mediant); }
+  #treeHint .cv{ color:var(--conv); }
+
+  #rightPane{ flex:1 1 44%; min-width:300px; display:flex; flex-direction:column; gap:14px; min-height:0; }
+  .panel{ background:var(--stage); border:1px solid var(--panel-edge); border-radius:12px; padding:12px 14px; }
+  #tablePanel{ flex:0 0 auto; overflow:auto; max-height:46%; }
+  #tablePanel .lbl, #plotPanel .lbl{ font:600 9.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+  table{ width:100%; border-collapse:collapse; font:12.5px/1 var(--font-mono); }
+  th{ text-align:right; font:600 9.5px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink-faint); padding:0 8px 7px; border-bottom:1px solid rgba(201,162,74,0.18); }
+  th:first-child{ text-align:left; }
+  td{ text-align:right; padding:6px 8px; color:var(--ink); }
+  td:first-child{ text-align:left; color:var(--ink-dim); }
+  tr.cv td .frac{ color:var(--conv); font-weight:600; font-size:13.5px; }
+  td .best{ color:#8fd79a; font-weight:600; }
+  td .err{ color:var(--ink-dim); }
+  td .qq{ color:var(--phi); }
+  tr.hl td{ background:var(--accent-soft); }
+
+  #plotPanel{ flex:1 1 auto; position:relative; min-height:0; display:flex; flex-direction:column; }
+  #plotWrap{ flex:1 1 auto; position:relative; min-height:120px; }
+  #plotCanvas{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+  #plotLegend{ font:11px/1.5 var(--font-mono); color:var(--ink-dim); margin-top:6px; }
+  #plotLegend .sw{ display:inline-block; width:10px; height:10px; border-radius:2px; vertical-align:-1px; margin-right:5px; }
+
+  /* ---- side controls ---- */
+  #side{ width:268px; flex:0 0 268px; background:var(--panel-bg); border-left:1px solid var(--panel-edge);
+    padding:64px 18px 18px; overflow-y:auto; display:flex; flex-direction:column; gap:16px; }
+  .group{ display:flex; flex-direction:column; gap:8px; }
+  .group > .ghead{ font:600 9.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{ font:600 12px/1 var(--font-mono); padding:8px 11px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink-dim); transition:.18s; }
+  .chip:hover{ color:var(--ink); border-color:var(--accent); }
+  .chip.on{ color:#06080c; background:var(--accent); border-color:var(--accent); font-weight:700; }
+  .chip.phi.on{ background:var(--phi); border-color:var(--phi); }
+  .customrow{ display:flex; gap:6px; }
+  .customrow input{ flex:1; min-width:0; background:rgba(0,0,0,0.4); border:1px solid var(--panel-edge);
+    color:var(--ink); border-radius:8px; padding:8px 10px; font:13px/1 var(--font-mono); }
+  .customrow input:focus{ outline:none; border-color:var(--accent); }
+  .customrow button, .pngbtn{ background:var(--accent-soft); border:1px solid var(--panel-edge); color:var(--accent);
+    border-radius:8px; padding:8px 12px; font:600 11px/1 var(--font-mono); letter-spacing:.06em; cursor:pointer; transition:.18s; }
+  .customrow button:hover, .pngbtn:hover{ background:var(--accent); color:#06080c; }
+  .note{ font:11.5px/1.6 var(--font-ui); color:var(--ink-dim); }
+  .note b{ color:var(--ink); }
+  .note .k{ font-family:var(--font-mono); color:var(--phi); }
+  .factline{ font:11.5px/1.55 var(--font-mono); color:var(--ink-dim); border-left:2px solid var(--panel-edge); padding-left:10px; }
+  .factline b{ color:var(--conv); }
+  .factline .g{ color:var(--phi); }
+  hr.sep{ border:none; border-top:1px solid rgba(201,162,74,0.14); margin:2px 0; }
+
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(201,162,74,0.25); border-radius:5px; }
+
+  @media (max-width: 900px){
+    #wrap{ flex-direction:column; overflow:auto; }
+    #side{ width:auto; flex:none; border-left:none; border-top:1px solid var(--panel-edge); padding-top:18px; }
+    #lower{ flex-direction:column; }
+    #treePane{ min-height:300px; }
+    #stage{ overflow:visible; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../workbench/index.html">&larr; workbench</a>
+    </div>
+    <div class="brand">
+      <h1>The Best Rational</h1>
+      <span class="tag">continued fractions &amp; the Stern–Brocot tree</span>
+    </div>
+    <div id="selftest" class="selftest" title="Run the falsifiability self-test">self-test …</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <!-- the continued-fraction ladder -->
+      <div id="cfstrip">
+        <div id="cfReadout">
+          <span class="xname" id="xName">φ</span>
+          <span class="xval" id="xVal">1.6180339887…</span>
+        </div>
+        <div id="cfBox">
+          <div class="lbl">continued fraction  [a₀; a₁, a₂, …]</div>
+          <div id="cfTerms">…</div>
+        </div>
+      </div>
+
+      <div id="lower">
+        <div id="treePane">
+          <canvas id="treeCanvas"></canvas>
+          <div id="treeLabel">the Stern–Brocot descent</div>
+          <div id="treeHint">Every positive fraction lives once in this tree, already in lowest terms.
+            Each node is the <b>mediant</b> of its neighbours — <b>(a+c)/(b+d)</b>. The descent toward the
+            target turns left/right; the steps where it <span class="cv">changes direction</span> are exactly the
+            <span class="cv">convergents</span> — the best rational approximations.</div>
+        </div>
+
+        <div id="rightPane">
+          <div id="tablePanel" class="panel">
+            <div class="lbl"><span>convergents pₙ/qₙ — the best rationals</span><span id="bestBadge"></span></div>
+            <table id="convTable"><thead>
+              <tr><th>aₙ</th><th>pₙ/qₙ</th><th>value</th><th>|x − p/q|</th><th>q²·err</th><th>best ≤ q?</th></tr>
+            </thead><tbody id="convBody"></tbody></table>
+          </div>
+
+          <div id="plotPanel" class="panel">
+            <div class="lbl"><span>how fast does it close in?  q²·|x − pₙ/qₙ|</span></div>
+            <div id="plotWrap"><canvas id="plotCanvas"></canvas></div>
+            <div id="plotLegend">
+              <span class="sw" style="background:var(--conv)"></span>this number &nbsp;
+              <span class="sw" style="background:var(--phi)"></span>φ (the floor, 1/√5) &nbsp;
+              <span style="color:var(--ink-faint)">— lower = a better deal per denominator</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="side">
+      <div class="group">
+        <span class="ghead">choose a number</span>
+        <div class="chips" id="presetChips"></div>
+        <div class="customrow">
+          <input id="customInput" type="text" placeholder="e.g. 1.4142  or  355/113" spellcheck="false">
+          <button id="customGo">set</button>
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <span class="ghead">what you're seeing</span>
+        <div class="note">
+          A <b>convergent</b> pₙ/qₙ is the truncation of the continued fraction after n terms. The
+          <b>best-approximation theorem</b>: it is the <b>closest</b> fraction to x of <b>any</b> denominator
+          up to qₙ. This bench checks that twice over — the recurrence vs. a brute-force search of every
+          denominator, and the <span class="k">mediant</span> descent of the Stern–Brocot tree.
+        </div>
+      </div>
+
+      <div class="group">
+        <span class="ghead">the punchlines</span>
+        <div class="factline" id="factGap"></div>
+        <div class="factline" id="factPhi">
+          <b>φ = [1;1,1,1,…]</b> — every term is the smallest one can be, so its convergents (the
+          <span class="g">Fibonacci ratios</span> 1,2,3,5,8,13…) crawl in slowest. That makes φ
+          <b>the most irrational number</b> — and the reason sunflower seeds sit at the golden angle:
+          it's the angle hardest to approximate by a tidy fraction, so the seeds never line up into gaps.
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <button class="pngbtn" id="pngBtn">⤓ save tree as PNG</button>
+        <div class="note" style="font-size:10.5px;color:var(--ink-faint)">
+          The cross-link: φ is why <a href="../strange-garden/pieces/phyllotaxis.html" style="color:var(--phi)">phyllotaxis</a>
+          packs seeds the way it does.
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script type="module">
+// ============================================================================
+//  INLINED CORE — byte-identical in spirit to ./core.mjs (the Node-tested twin).
+//  Keep these two in sync; core.test.mjs is the falsifiability harness.
+// ============================================================================
+const PHI   = (1 + Math.sqrt(5)) / 2;
+const SQRT2 = Math.SQRT2;
+const E  = Math.E;
+const PI = Math.PI;
+
+function cfExpand(x, maxTerms = 20, eps = 1e-12) {
+  const a = []; let r = x;
+  for (let i = 0; i < maxTerms; i++) {
+    const ai = Math.floor(r); a.push(ai);
+    const frac = r - ai;
+    if (frac < eps) break;
+    r = 1 / frac;
+    if (!isFinite(r) || r > 1e15) break;
+  }
+  return a;
+}
+function cfOfRational(p, q) {
+  if (q < 0) { p = -p; q = -q; }
+  const a = [];
+  while (q !== 0) { const ai = Math.floor(p / q); a.push(ai); const t = p - ai * q; p = q; q = t; }
+  return a;
+}
+function convergents(a) {
+  const out = []; let pm1 = 1, pm2 = 0, qm1 = 0, qm2 = 1;
+  for (let n = 0; n < a.length; n++) {
+    const p = a[n] * pm1 + pm2, q = a[n] * qm1 + qm2;
+    out.push({ a: a[n], p, q, value: p / q, n });
+    pm2 = pm1; pm1 = p; qm2 = qm1; qm1 = q;
+  }
+  return out;
+}
+function convergentsOf(x, maxTerms = 20){ return convergents(cfExpand(x, maxTerms)); }
+function bruteBest(x, Qmax) {
+  let best = null, bestErr = Infinity;
+  for (let q = 1; q <= Qmax; q++) {
+    const p = Math.round(x * q), err = Math.abs(x - p / q);
+    if (err < bestErr - 1e-18) { bestErr = err; best = { p, q, value: p / q, err }; }
+  }
+  return best;
+}
+function sternBrocotPath(x, maxSteps = 200) {
+  let lo = { p: 0, q: 1 }, hi = { p: 1, q: 0 }; const path = [];
+  for (let i = 0; i < maxSteps; i++) {
+    const med = { p: lo.p + hi.p, q: lo.q + hi.q }; path.push(med);
+    const mv = med.p / med.q;
+    if (Math.abs(mv - x) < 1e-15) break;
+    if (x < mv) hi = med; else lo = med;
+  }
+  return { path };
+}
+function sternBrocotTurningPoints(x, maxSteps = 200) {
+  const { path } = sternBrocotPath(x, maxSteps); const turns = []; let prevDir = null;
+  for (let i = 0; i < path.length; i++) {
+    const v = path[i].p / path[i].q; const dir = (v < x) ? 'L' : 'R';
+    if (prevDir !== null && dir !== prevDir) turns.push(path[i - 1]);
+    prevDir = dir;
+  }
+  if (path.length) turns.push(path[path.length - 1]);
+  return turns;
+}
+function convergentError(x, p, q){ return Math.abs(x - p / q); }
+function gcd(a, b){ a = Math.abs(a); b = Math.abs(b); while (b) { [a, b] = [b, a % b]; } return a; }
+function fib(n){ let a = 0, b = 1; for (let i = 0; i < n; i++) [a, b] = [b, a + b]; return a; }
+
+function runSelfTest() {
+  const lines = [];
+  const approx = (a, b, tol = 1e-9) => Math.abs(a - b) <= tol;
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+  { const a = cfExpand(PHI, 25); T('φ = [1;1,1,…]', a.every(ai => ai === 1)); }
+  { const c = convergentsOf(PHI, 18); let ok = true;
+    for (let n = 0; n < c.length; n++) if (c[n].p !== fib(n + 2) || c[n].q !== fib(n + 1)) { ok = false; break; }
+    T('φ convergents = Fibonacci ratios', ok); }
+  { let ok = true; const xs = [PHI, PI, E, SQRT2, Math.cbrt(2), 0.30102999566];
+    outer: for (const x of xs) { const c = convergentsOf(x, 16);
+      for (const cv of c) { if (cv.q < 1 || cv.q > 4000 || cv.n === 0) continue;
+        const bf = bruteBest(x, cv.q); const g = gcd(bf.p, bf.q);
+        if (bf.p / g !== cv.p || bf.q / g !== cv.q)
+          if (!approx(bf.err, convergentError(x, cv.p, cv.q), 1e-15)) { ok = false; break outer; } } }
+    T('best-approximation: convergent = brute-force closest (6 reals)', ok); }
+  { let ok = true; const xs = [PHI, SQRT2, PI, 0.6180339887];
+    o4: for (const x of xs) { const c = convergentsOf(x, 12).filter(cv => cv.q >= 1 && cv.q <= 5000);
+      const turns = sternBrocotTurningPoints(x, 4000);
+      for (const cv of c) { if (cv.n === 0) continue;
+        if (!turns.some(t => t.p === cv.p && t.q === cv.q)) { ok = false; break o4; } } }
+    T('Stern–Brocot turning points = convergents (4 reals)', ok); }
+  { let ok = true; for (const x of [PHI, PI, E, SQRT2, 1/3, 22/7])
+      for (const cv of convergentsOf(x, 16)) if (cv.q !== 0 && gcd(cv.p, cv.q) !== 1) ok = false;
+    T('every convergent is in lowest terms (gcd=1)', ok); }
+  { let ok = true; for (const x of [PI, E, SQRT2, Math.cbrt(2)]) {
+      const c = convergentsOf(x, 14).filter(cv => cv.n >= 1); let prev = Infinity;
+      for (const cv of c) { const err = convergentError(x, cv.p, cv.q);
+        if (err > prev + 1e-18) ok = false;
+        if (err >= 1 / (cv.q * cv.q) + 1e-15) ok = false; prev = err; } }
+    T('errors shrink AND obey |x−p/q| < 1/q²', ok); }
+  { const c = convergentsOf(PHI, 14).find(c => c.n === 11);
+    const v = c.q * c.q * convergentError(PHI, c.p, c.q);
+    const cpi = convergentsOf(PI, 8); const c355 = cpi.find(c => c.p === 355 && c.q === 113);
+    const piN = c355.q * c355.q * convergentError(PI, c355.p, c355.q);
+    T('φ most irrational: q²·err → 1/√5≈0.447 (π’s 355/113 = ' + piN.toFixed(4) + ')',
+      approx(v, 1 / Math.sqrt(5), 0.005) && piN < 0.01); }
+  { const a = cfExpand(PI, 6); const c = convergentsOf(PI, 6);
+    T('π = [3;7,15,1,292,…] → 22/7 and 355/113',
+      a[0] === 3 && a[1] === 7 && a[2] === 15 && a[3] === 1 && a[4] === 292 &&
+      c.some(cv => cv.p === 22 && cv.q === 7) && c.some(cv => cv.p === 355 && cv.q === 113)); }
+  { const exact = cfOfRational(22, 7); const bf = bruteBest(22 / 7, 20); const g = gcd(bf.p, bf.q);
+    T('negative control: 22/7 terminates ([3;7]) & approximates itself',
+      exact.length === 2 && exact[0] === 3 && exact[1] === 7 &&
+      bf.p / g === 22 && bf.q / g === 7 && bf.err < 1e-12); }
+  { let ok = true; for (const [p, q] of [[355, 113], [1, 7], [13, 8], [100, 3], [21, 13]]) {
+      const c = convergents(cfOfRational(p, q)); const last = c[c.length - 1]; const g = gcd(p, q);
+      if (last.p !== p / g || last.q !== q / g) ok = false; }
+    T('finite CF reconstructs its rational exactly (5 cases)', ok); }
+  const pass = lines.filter(l => l.ok).length;
+  return { pass, total: lines.length, lines };
+}
+
+// ============================================================================
+//  UI / RENDERING
+// ============================================================================
+const PRESETS = [
+  { key: 'phi',  name: 'φ',   label: 'golden ratio',  x: PHI,  phi: true },
+  { key: 'pi',   name: 'π',   label: 'pi',            x: PI },
+  { key: 'e',    name: 'e',   label: "Euler's number",x: E },
+  { key: 'sqrt2',name: '√2',  label: 'root two',      x: SQRT2 },
+  { key: 'sqrt3',name: '√3',  label: 'root three',    x: Math.sqrt(3) },
+  { key: 'cbrt2',name: '∛2',  label: 'cube root two', x: Math.cbrt(2) },
+  { key: 'pi2',  name: 'π²/6',label: 'ζ(2)',          x: PI * PI / 6 },
+  { key: 'sqrt5',name: '√5',  label: 'root five',     x: Math.sqrt(5) },
+];
+
+const state = {
+  x: PHI,
+  name: 'φ',
+  isPhi: true,
+  conv: [],
+  cf: [],
+  hover: -1,         // hovered convergent index for table↔tree link
+};
+
+const els = {
+  presetChips: document.getElementById('presetChips'),
+  customInput: document.getElementById('customInput'),
+  customGo:    document.getElementById('customGo'),
+  xName:  document.getElementById('xName'),
+  xVal:   document.getElementById('xVal'),
+  cfTerms:document.getElementById('cfTerms'),
+  convBody:document.getElementById('convBody'),
+  bestBadge:document.getElementById('bestBadge'),
+  factGap:document.getElementById('factGap'),
+  treeCanvas:document.getElementById('treeCanvas'),
+  plotCanvas:document.getElementById('plotCanvas'),
+  selftest:document.getElementById('selftest'),
+  pngBtn:document.getElementById('pngBtn'),
+};
+
+// ---- build preset chips ----
+for (const p of PRESETS) {
+  const b = document.createElement('div');
+  b.className = 'chip' + (p.phi ? ' phi' : '');
+  b.textContent = p.name;
+  b.title = p.label;
+  b.dataset.key = p.key;
+  b.addEventListener('click', () => setNumber(p.x, p.name, !!p.phi));
+  els.presetChips.appendChild(b);
+}
+
+function fmtNum(x){
+  // pretty-print up to 12 sig figs with an ellipsis if irrational-ish
+  let s = x.toPrecision(12).replace(/0+$/,'').replace(/\.$/,'');
+  return s + '…';
+}
+
+function setNumber(x, name, isPhi){
+  state.x = x; state.name = name; state.isPhi = !!isPhi; state.hover = -1;
+  state.cf = cfExpand(x, 16);
+  state.conv = convergentsOf(x, 16);
+  // mark active chip
+  [...els.presetChips.children].forEach(c => c.classList.toggle('on', c.dataset.key &&
+    PRESETS.find(p => p.key === c.dataset.key).x === x));
+  render();
+}
+
+function render(){
+  els.xName.textContent = state.name;
+  els.xVal.textContent  = fmtNum(state.x);
+
+  // CF ladder
+  renderCF();
+
+  // convergent table
+  renderTable();
+
+  // facts
+  renderFacts();
+
+  // canvases
+  resizeAndDraw();
+}
+
+function renderCF(){
+  const cf = state.cf;
+  let html = '<span class="punct">[</span>';
+  cf.forEach((a, i) => {
+    if (i === 0) html += `<span class="a0">${a}</span><span class="punct">;</span> `;
+    else {
+      const big = a >= 30;
+      html += `<span class="${big ? 'big' : 'ai'}">${a}</span>`;
+      if (i < cf.length - 1) html += '<span class="punct">,</span> ';
+    }
+  });
+  // if it looks non-terminating (irrational), add an ellipsis
+  if (cf.length >= 16) html += '<span class="punct">, …</span>';
+  html += '<span class="punct">]</span>';
+  els.cfTerms.innerHTML = html;
+}
+
+function renderTable(){
+  const body = els.convBody;
+  body.innerHTML = '';
+  // verify the best-approximation theorem live (brute-force) for displayed rows
+  let allBest = true, checked = 0;
+  const rows = state.conv.filter(c => c.n >= 1 && c.q <= 200000);
+  rows.forEach(cv => {
+    const err = convergentError(state.x, cv.p, cv.q);
+    const qq = cv.q * cv.q * err;
+    let isBest = '—';
+    if (cv.q <= 50000) {
+      const bf = bruteBest(state.x, cv.q);
+      const g = gcd(bf.p, bf.q);
+      const same = (bf.p / g === cv.p && bf.q / g === cv.q) ||
+                   Math.abs(bf.err - err) < 1e-15;
+      isBest = same ? '✓' : '✗';
+      if (!same) allBest = false;
+      checked++;
+    }
+    const tr = document.createElement('tr');
+    tr.className = 'cv';
+    tr.dataset.n = cv.n;
+    tr.innerHTML =
+      `<td>${cv.a}</td>` +
+      `<td><span class="frac">${cv.p}/${cv.q}</span></td>` +
+      `<td>${cv.value.toPrecision(9)}</td>` +
+      `<td class="err">${err < 1e-9 ? err.toExponential(2) : err.toPrecision(3)}</td>` +
+      `<td class="qq">${qq.toFixed(4)}</td>` +
+      `<td><span class="${isBest === '✓' ? 'best' : (isBest === '✗' ? 'err' : '')}">${isBest}</span></td>`;
+    tr.addEventListener('mouseenter', () => { state.hover = cv.n; drawTree(); highlightRow(); });
+    tr.addEventListener('mouseleave', () => { state.hover = -1; drawTree(); highlightRow(); });
+    body.appendChild(tr);
+  });
+  els.bestBadge.innerHTML = checked
+    ? `<span style="color:${allBest ? '#8fd79a' : '#e0664f'};font-weight:700">${allBest ? '✓ theorem holds (' + checked + ' verified)' : '✗ mismatch!'}</span>`
+    : '';
+}
+
+function highlightRow(){
+  [...els.convBody.children].forEach(tr =>
+    tr.classList.toggle('hl', +tr.dataset.n === state.hover));
+}
+
+function renderFacts(){
+  // the "gap" punchline — find the best convergent (most accurate small fraction)
+  const conv = state.conv.filter(c => c.n >= 1 && c.q <= 1e6);
+  // find the convergent with the biggest jump in accuracy (a large next term)
+  let bestJump = null, bestRatio = 0;
+  for (let i = 1; i < conv.length; i++){
+    const a = conv[i].a;
+    if (a > bestRatio){ bestRatio = a; bestJump = conv[i]; }
+  }
+  const c = state.conv;
+  let line = '';
+  if (state.name === 'π'){
+    line = `π's term <span class="g">292</span> is huge — so <b>355/113</b> is freakishly good: ` +
+           `right to <b>6 decimals</b> with a 3-digit denominator. The Chinese astronomer Zǔ Chōngzhī ` +
+           `knew it in the 5th century.`;
+  } else if (bestJump && bestRatio >= 7){
+    line = `Big term <span class="g">${bestRatio}</span> ⇒ <b>${bestJump.p}/${bestJump.q}</b> is an ` +
+           `unusually good deal — a large partial quotient means the convergent just before it was ` +
+           `already very close.`;
+  } else if (state.isPhi){
+    line = `Every term is <span class="g">1</span> — the smallest possible — so no convergent is ever a ` +
+           `"bargain". φ closes in as slowly as a number can. It is the <b>worst-approximable</b> number.`;
+  } else {
+    const big = c.reduce((m, cv) => cv.a > m ? cv.a : m, 0);
+    line = `Its largest partial quotient so far is <span class="g">${big}</span> — the bigger a term, the ` +
+           `better the bargain the convergent just before it strikes.`;
+  }
+  els.factGap.innerHTML = line;
+}
+
+// ---- canvas helpers ----
+function fitCanvas(canvas){
+  const dpr = window.devicePixelRatio || 1;
+  const r = canvas.getBoundingClientRect();
+  canvas.width = Math.max(1, Math.round(r.width * dpr));
+  canvas.height = Math.max(1, Math.round(r.height * dpr));
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: r.width, h: r.height };
+}
+
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+// ---- the Stern–Brocot descent ----
+function drawTree(){
+  const { ctx, w, h } = fitCanvas(els.treeCanvas);
+  ctx.clearRect(0, 0, w, h);
+  const x = state.x;
+  const { path } = sternBrocotPath(x, 5000);
+  // determine the convergents among the path (turning points)
+  const turns = sternBrocotTurningPoints(x, 5000);
+  const isConv = new Set(turns.map(t => t.p + '/' + t.q));
+
+  // We draw the descent as a left/right zig-zag ladder: each step descends a row,
+  // offset left (x below mediant ⇒ go up/right next) or right. The horizontal
+  // axis is the real line near x; the vertical axis is depth.
+  const padTop = 44, padBot = 18, padL = 28, padR = 28;
+  const top = padTop, bot = h - padBot;
+  // limit visible depth so deep tails don't crush the layout
+  const maxRows = Math.min(path.length, Math.floor((bot - top) / 16) || 18, 60);
+  const rowH = (bot - top) / Math.max(1, maxRows);
+
+  // map a fraction value to an x-pixel: center on the target, span a window that
+  // shrinks as we know x better. Use a fixed window around x.
+  const span = Math.max(0.5, 1.5);     // window half-width in value units (start wide)
+  // we'll actually map by the bracketing interval, recomputed per step for clarity:
+  // simpler: position by value, clamped to [x-span, x+span]
+  const cx = w / 2;
+  const valToX = (v) => {
+    const t = (v - x) / span;          // -1..1 within the window
+    const tc = Math.max(-1, Math.min(1, t));
+    return cx + tc * (w / 2 - padL);
+  };
+
+  // target line
+  ctx.strokeStyle = 'rgba(240,198,116,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(cx, top - 8); ctx.lineTo(cx, bot + 4); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = css('--target');
+  ctx.font = `600 12px ${css('--font-mono')}`;
+  ctx.textAlign = 'center';
+  ctx.fillText(state.name + ' = ' + x.toPrecision(7), cx, top - 16);
+
+  // draw the descent polyline + nodes
+  let prevX = cx, prevY = top - 4;
+  ctx.lineWidth = 1.4;
+  for (let i = 0; i < maxRows; i++){
+    const node = path[i];
+    const v = node.p / node.q;
+    const px = valToX(v);
+    const py = top + (i + 0.5) * rowH;
+    const conv = isConv.has(node.p + '/' + node.q);
+    const hovHL = (state.hover >= 0) && (() => {
+      const cvn = state.conv.find(c => c.n === state.hover);
+      return cvn && cvn.p === node.p && cvn.q === node.q;
+    })();
+
+    // connector from previous
+    ctx.strokeStyle = conv ? 'rgba(111,211,196,0.55)' : 'rgba(201,138,211,0.30)';
+    ctx.beginPath(); ctx.moveTo(prevX, prevY); ctx.lineTo(px, py); ctx.stroke();
+
+    // node
+    const rad = conv ? 5.5 : 3;
+    ctx.beginPath();
+    ctx.fillStyle = hovHL ? css('--accent') : (conv ? css('--conv') : css('--mediant'));
+    if (hovHL){ ctx.shadowColor = css('--accent'); ctx.shadowBlur = 10; }
+    ctx.arc(px, py, hovHL ? 7 : rad, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // label convergents (and the hovered one)
+    if (conv || hovHL){
+      ctx.fillStyle = hovHL ? css('--accent') : css('--conv');
+      ctx.font = `600 ${hovHL ? 12 : 11}px ${css('--font-mono')}`;
+      ctx.textAlign = px < cx ? 'right' : 'left';
+      const off = px < cx ? -9 : 9;
+      ctx.fillText(`${node.p}/${node.q}`, px + off, py + 4);
+    }
+    prevX = px; prevY = py;
+    if (conv && Math.abs(v - x) < 1e-12) break;
+  }
+
+  // footnote: how deep
+  ctx.fillStyle = css('--ink-faint');
+  ctx.font = `10px ${css('--font-mono')}`;
+  ctx.textAlign = 'right';
+  ctx.fillText(`mediants shown: ${maxRows}`, w - padR, bot + 12);
+}
+
+// ---- the q²·error plot (log-x by denominator, the closing-in rate) ----
+function drawPlot(){
+  const { ctx, w, h } = fitCanvas(els.plotCanvas);
+  ctx.clearRect(0, 0, w, h);
+  const padL = 36, padR = 12, padT = 10, padB = 22;
+  const x0 = padL, x1 = w - padR, y0 = h - padB, y1 = padT;
+
+  // data: convergents of this number and of φ, q in [1, qmax], qq = q²·err
+  const mk = (x) => convergentsOf(x, 13).filter(c => c.n >= 1 && c.q <= 5000 && c.q >= 1)
+    .map(c => ({ q: c.q, qq: c.q * c.q * convergentError(x, c.p, c.q) }));
+  const dThis = mk(state.x);
+  const dPhi  = mk(PHI);
+  const all = dThis.concat(dPhi);
+  if (!all.length) return;
+  const qMax = Math.max(...all.map(d => d.q), 10);
+  const yMaxRaw = Math.max(...all.map(d => d.qq), 0.5);
+  const yMax = Math.max(0.55, Math.min(1.2, yMaxRaw * 1.1));
+
+  const QX = (q) => x0 + (Math.log10(q) / Math.log10(qMax)) * (x1 - x0);
+  const QY = (v) => y0 - Math.min(1, v / yMax) * (y0 - y1);
+
+  // grid: the 1/√5 floor line (φ's limit) and the 1/(2√2) line
+  const floors = [
+    { v: 1 / Math.sqrt(5), c: 'rgba(224,164,79,0.6)', lbl: '1/√5 ≈ 0.447  (φ’s floor)' },
+  ];
+  ctx.font = `10px ${css('--font-mono')}`;
+  for (const f of floors){
+    const y = QY(f.v);
+    ctx.strokeStyle = f.c; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = css('--phi'); ctx.textAlign = 'left';
+    ctx.fillText(f.lbl, x0 + 4, y - 4);
+  }
+
+  // axes labels
+  ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+  ctx.fillText('denominator q  (log)', (x0 + x1) / 2, h - 5);
+
+  // φ line
+  const drawSeries = (data, color, glow) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.beginPath();
+    data.forEach((d, i) => { const px = QX(d.q), py = QY(d.qq); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+    ctx.stroke();
+    data.forEach(d => { ctx.beginPath(); ctx.fillStyle = color;
+      if (glow){ ctx.shadowColor = color; ctx.shadowBlur = 6; }
+      ctx.arc(QX(d.q), QY(d.qq), 2.6, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; });
+  };
+  if (!state.isPhi) drawSeries(dPhi, css('--phi'), false);
+  drawSeries(dThis, state.isPhi ? css('--phi') : css('--conv'), true);
+}
+
+function resizeAndDraw(){ drawTree(); drawPlot(); }
+
+window.addEventListener('resize', () => { clearTimeout(window.__rz); window.__rz = setTimeout(resizeAndDraw, 80); });
+
+// ---- custom input ----
+function applyCustom(){
+  const raw = els.customInput.value.trim();
+  if (!raw) return;
+  let x = NaN, name = raw;
+  if (/^-?\d+\s*\/\s*-?\d+$/.test(raw)){
+    const [p, q] = raw.split('/').map(s => parseInt(s, 10));
+    if (q !== 0){ x = p / q; name = `${p}/${q}`; }
+  } else {
+    x = parseFloat(raw);
+    name = raw;
+  }
+  if (isFinite(x) && x > 0 && x < 1e9){
+    setNumber(x, name, false);
+  } else {
+    els.customInput.style.borderColor = css('--bad');
+    setTimeout(() => els.customInput.style.borderColor = '', 600);
+  }
+}
+els.customGo.addEventListener('click', applyCustom);
+els.customInput.addEventListener('keydown', e => { if (e.key === 'Enter') applyCustom(); });
+
+// ---- PNG export of the tree ----
+els.pngBtn.addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.href = els.treeCanvas.toDataURL('image/png');
+  a.download = 'best-rational-' + state.name.replace(/[^\w]/g, '') + '-stern-brocot.png';
+  a.click();
+});
+
+// ---- self-test pill ----
+function runTestUI(){
+  const r = runSelfTest();
+  els.selftest.classList.toggle('ok', r.pass === r.total);
+  els.selftest.classList.toggle('bad', r.pass !== r.total);
+  els.selftest.textContent = `self-test ${r.pass}/${r.total} ✓`;
+  els.selftest.title = r.lines.map(l => (l.ok ? '✓ ' : '✗ ') + l.name).join('\n');
+}
+els.selftest.addEventListener('click', runTestUI);
+
+// ---- boot ----
+runTestUI();
+setNumber(PHI, 'φ', true);
+</script>
+</body>
+</html>
