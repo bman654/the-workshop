@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Brownian Ratchet · The Engine Room</title>
+<style>
+  :root{
+    --bg:#0b0908;            /* warm coal-black ground */
+    --plate:#141010;         /* iron plate */
+    --plate2:#0e0b0a;
+    --ink:#f0e7dc;
+    --ink-dim:#a7988a;
+    --brass:#d9a441;         /* the wing's brass accent */
+    --brass-soft:rgba(217,164,65,0.14);
+    --brass-edge:rgba(217,164,65,0.4);
+    --firebox:#e8703a;       /* the hot axis — the gas drum, Θ_gas */
+    --firebox-soft:rgba(232,112,58,0.16);
+    --condenser:#5fa8d3;     /* the cold axis — the pawl, Θ_pawl */
+    --condenser-soft:rgba(95,168,211,0.16);
+    --gold:#e7c66b;          /* the work / efficiency */
+    --danger:#e0503a;        /* the irreversible red */
+    --green:#8fd79a;
+    --amber:#e8b24a;
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1200px 720px at 22% -10%, rgba(232,112,58,0.10), transparent 60%),
+      radial-gradient(1000px 640px at 86% 110%, rgba(95,168,211,0.07), transparent 64%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.014) 0 1px, transparent 1px 28px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.014) 0 1px, transparent 1px 28px),
+      radial-gradient(circle at 14px 14px, rgba(217,164,65,0.05) 0 1.2px, transparent 1.6px);
+    background-size:auto, auto, 28px 28px;
+    mix-blend-mode:overlay;
+  }
+
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 20px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(11,9,8,0.94), rgba(11,9,8,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .crumbs{ display:flex; gap:16px; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--brass); opacity:1; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--brass-edge); background:rgba(0,0,0,0.45); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); }
+  .selftest.ok{ color:var(--green); border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.5); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.5); }
+
+  .wrap{ position:relative; z-index:1; max-width:1320px; margin:0 auto; padding:64px 20px 56px; }
+  header.hero{ text-align:center; margin-bottom:14px; }
+  .eyebrow{ font:600 11px/1 var(--font-mono); letter-spacing:.3em; text-transform:uppercase; color:var(--firebox);
+    opacity:.9; margin-bottom:12px; }
+  h1{ font-family:var(--font-serif); font-weight:600; margin:0; font-size:clamp(32px,6vw,54px); letter-spacing:.4px;
+    background:linear-gradient(176deg, #fbe9c8, #d9a441 58%, #9a6e25);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .lede{ max-width:790px; margin:14px auto 0; font:15.5px/1.6 var(--font-serif); color:var(--ink); opacity:.9; }
+  .lede b{ color:var(--brass); font-weight:600; }
+  .lede .hot{ color:var(--firebox); } .lede .cold{ color:var(--condenser); }
+
+  /* the honesty banner — this is the reduced rate model, stated plainly */
+  .banner{ max-width:820px; margin:14px auto 0; font:11.5px/1.55 var(--font-ui); color:var(--ink-dim);
+    border:1px solid rgba(217,164,65,0.18); border-radius:9px; padding:10px 14px; background:rgba(217,164,65,0.04); }
+  .banner b{ color:var(--brass); } .banner code{ font-family:var(--font-mono); color:var(--gold); font-size:11px; }
+
+  /* ── explanation cards ── */
+  .cards{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:18px 0 4px; }
+  .ecard{ border:1px solid rgba(217,164,65,0.14); border-radius:11px; padding:13px 15px;
+    background:linear-gradient(180deg, var(--plate), var(--plate2)); }
+  .ecard .yr{ font:600 9.5px/1 var(--font-mono); letter-spacing:.14em; color:var(--firebox); margin-bottom:7px; }
+  .ecard h4{ font-family:var(--font-serif); font-size:14.5px; font-weight:600; margin:0 0 6px; color:var(--brass); }
+  .ecard p{ font:12px/1.55 var(--font-ui); color:var(--ink-dim); margin:0; }
+  .ecard p code{ font-family:var(--font-mono); color:var(--gold); font-size:11px; }
+
+  /* ── the working floor ── */
+  .floor{ display:grid; grid-template-columns: minmax(0,1.55fr) minmax(280px,1fr); gap:18px; margin-top:18px; align-items:start; }
+  .leftcol{ display:flex; flex-direction:column; gap:14px; }
+  .panel{ position:relative; border:1px solid rgba(217,164,65,0.16); border-radius:12px; overflow:hidden;
+    background:linear-gradient(180deg, var(--plate), var(--plate2));
+    box-shadow:inset 0 1px 0 rgba(217,164,65,0.07), 0 14px 36px rgba(0,0,0,0.42); }
+  .panel h2{ font-family:var(--font-serif); font-size:15px; font-weight:600; margin:0; padding:11px 14px 2px; letter-spacing:.3px; color:var(--brass); }
+  .panel .sub{ font:10px/1.4 var(--font-mono); letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim); padding:0 14px 8px; }
+  .panel canvas{ display:block; width:100%; height:auto; touch-action:none; }
+  .panel.drift h2{ color:var(--condenser); }
+
+  /* ── sidebar cards ── */
+  .side{ display:flex; flex-direction:column; gap:14px; }
+  .card{ border:1px solid rgba(217,164,65,0.16); border-radius:12px; padding:14px;
+    background:linear-gradient(180deg, var(--plate), var(--plate2));
+    box-shadow:inset 0 1px 0 rgba(217,164,65,0.06), 0 10px 28px rgba(0,0,0,0.36); }
+  .card h3{ font:600 10px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase; color:var(--ink-dim); margin:0 0 12px; }
+
+  /* instruments */
+  .omegawrap{ display:block; width:100%; }
+  .odometer{ display:flex; align-items:baseline; justify-content:center; gap:6px; margin-top:10px;
+    font-family:var(--font-mono); }
+  .odometer .digits{ font:700 22px/1 var(--font-mono); letter-spacing:1px; color:var(--ink); }
+  .odometer .digits.fwd{ color:var(--firebox); } .odometer .digits.rev{ color:var(--condenser); }
+  .odometer .lab{ font:9.5px/1 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--ink-dim); }
+  .band{ margin-top:9px; font:10.5px/1.4 var(--font-mono); color:var(--ink-dim); text-align:center; }
+  .band .ci{ color:var(--green); }
+
+  /* the η-vs-ceiling bar (reuses .smeter idiom) */
+  .smeter{ position:relative; height:14px; border-radius:7px; overflow:hidden; margin-top:8px;
+    background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); }
+  .smeter .bar{ position:absolute; left:0; top:0; bottom:0; width:0;
+    background:linear-gradient(90deg, #6a5320, var(--gold)); transition:width .15s ease; }
+  .smeter .tick{ position:absolute; top:-3px; bottom:-3px; width:0; border-left:2px dashed var(--danger); }
+  .smeter-lbl{ display:flex; justify-content:space-between; font:10px/1.3 var(--font-mono); margin-top:6px; color:var(--ink-dim); }
+  .smeter-lbl .v{ color:var(--gold); font-weight:600; } .smeter-lbl .c{ color:var(--danger); }
+  .etarow{ display:none; }   /* shown only under load */
+
+  .verdict{ margin-top:11px; font:12px/1.5 var(--font-serif); color:var(--ink-dim); }
+  .verdict b{ color:var(--brass); } .verdict .red{ color:var(--danger); } .verdict .grn{ color:var(--green); }
+  .verdict .hot{ color:var(--firebox); } .verdict .cold{ color:var(--condenser); }
+
+  /* controls */
+  .ctl{ display:flex; flex-direction:column; gap:5px; margin-top:4px; }
+  .ctl .row{ display:flex; align-items:center; gap:9px; }
+  .ctl label{ font:10px/1.2 var(--font-mono); letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim); flex:0 0 70px; }
+  .ctl input[type=range]{ flex:1; min-height:24px; }
+  .ctl input.hot{ accent-color:var(--firebox); } .ctl input.cold{ accent-color:var(--condenser); } .ctl input.brass{ accent-color:var(--brass); }
+  .ctl .v{ font:600 11px/1 var(--font-mono); min-width:60px; text-align:right; }
+  .ctl .v.hot{ color:var(--firebox); } .ctl .v.cold{ color:var(--condenser); } .ctl .v.brass{ color:var(--brass); }
+  .dtread{ margin-top:11px; font:11.5px/1.45 var(--font-serif); text-align:center; color:var(--ink-dim);
+    border:1px solid rgba(217,164,65,0.14); border-radius:8px; padding:8px 10px; background:rgba(255,255,255,0.015); }
+  .dtread.equil{ color:var(--ink); } .dtread.fwd{ color:var(--firebox); border-color:rgba(232,112,58,0.3); }
+  .dtread.rev{ color:var(--condenser); border-color:rgba(95,168,211,0.3); }
+  .dtread b{ font-weight:600; }
+
+  /* buttons */
+  button{ font:600 11px/1 var(--font-mono); letter-spacing:.04em; color:var(--ink);
+    background:rgba(217,164,65,0.08); border:1px solid rgba(217,164,65,0.28); border-radius:7px;
+    padding:9px 11px; cursor:pointer; transition:.18s; min-height:40px; }
+  button:hover:not(:disabled){ background:rgba(217,164,65,0.16); border-color:var(--brass-edge); }
+  button.on{ background:rgba(217,164,65,0.22); border-color:var(--brass); color:#fff; }
+  button:disabled, button[aria-disabled="true"]{ opacity:.34; cursor:not-allowed; }
+  button.act{ flex:1 1 30%; }
+  button.warn-btn{ border-color:rgba(224,80,58,0.4); color:#f0a08e; background:rgba(224,80,58,0.06); }
+  button.warn-btn.on{ background:rgba(224,80,58,0.2); border-color:var(--danger); color:#ffd9cf; }
+  button.reset{ border-color:rgba(143,215,154,0.4); color:var(--green); }
+  .seg{ display:flex; gap:6px; margin-top:4px; }
+  .transport{ display:flex; gap:7px; margin-bottom:10px; }
+  .presetgrid{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .presetgrid button{ font-size:10.5px; }
+  @keyframes hintpulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(95,168,211,0); } 50%{ box-shadow:0 0 0 4px rgba(95,168,211,0.35); } }
+  button.hint-pulse{ animation:hintpulse 1.3s ease-in-out 3; }
+  .togglerow{ display:flex; gap:6px; margin-top:10px; }
+  .togglerow button{ flex:1; font-size:10px; padding:8px 6px; }
+
+  /* live headline */
+  .headline{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin:2px 0 8px;
+    font:600 12px/1 var(--font-mono); }
+  .headline .om{ font:700 16px/1 var(--font-mono); color:var(--ink); }
+  .headline .om.fwd{ color:var(--firebox); } .headline .om.rev{ color:var(--condenser); } .headline .om.null{ color:var(--green); }
+
+  /* footer bridges */
+  .bridges{ display:grid; grid-template-columns:1fr 1fr; gap:14px; max-width:1040px; margin:28px auto 0; }
+  .bridges a{ display:flex; align-items:center; gap:14px; text-decoration:none; color:inherit;
+    border-radius:13px; padding:16px 18px; overflow:hidden;
+    border:1px solid var(--brass-edge); background:linear-gradient(110deg, var(--brass-soft), rgba(15,11,10,0.9));
+    transition:transform .2s ease, border-color .2s ease; }
+  .bridges a:hover{ transform:translateY(-2px); border-color:var(--brass); }
+  .bridges a.coldward{ border-color:rgba(95,168,211,0.34); background:linear-gradient(110deg, var(--condenser-soft), rgba(15,11,10,0.9)); }
+  .bridges a.coldward:hover{ border-color:var(--condenser); }
+  .bridges a.full{ grid-column:1 / -1; }
+  .bridges .ic{ flex:0 0 46px; width:46px; height:46px; border-radius:10px; display:grid; place-items:center; font-size:23px;
+    border:1px solid var(--brass-edge); background:rgba(0,0,0,0.3); }
+  .bridges a.coldward .ic{ border-color:rgba(95,168,211,0.3); }
+  .bridges .nm{ font-family:var(--font-serif); font-size:16px; font-weight:600; color:var(--brass); margin:0 0 3px; }
+  .bridges a.coldward .nm{ color:var(--condenser); }
+  .bridges .bl{ font:12px/1.5 var(--font-ui); color:var(--ink-dim); }
+  .bridges code{ font-family:var(--font-mono); color:var(--brass); font-size:11px; }
+
+  .coda{ margin:26px auto 0; max-width:880px; text-align:center; font:13.5px/1.66 var(--font-serif); color:var(--ink-dim); }
+  .coda b{ color:var(--brass); } .coda .g{ color:var(--gold); } .coda .h{ color:var(--firebox); } .coda .c{ color:var(--condenser); }
+  .coda .kick{ display:block; margin-top:12px; font:11px/1.6 var(--font-mono); letter-spacing:.04em; color:var(--ink-dim); }
+  .coda .kick b{ color:var(--brass); }
+  .foot{ max-width:880px; margin:24px auto 0; padding-top:18px; border-top:1px solid rgba(217,164,65,0.12);
+    text-align:center; font:11.5px/1.6 var(--font-serif); color:var(--ink-dim); }
+  .foot b{ color:var(--brass); } .foot code{ font-family:var(--font-mono); color:var(--brass); font-size:11px; }
+
+  @media (max-width:880px){
+    .floor{ grid-template-columns:1fr; }
+    .side{ flex-direction:row; flex-wrap:wrap; } .side .card{ flex:1 1 280px; }
+  }
+  @media (max-width:680px){
+    .cards{ grid-template-columns:1fr; } .bridges{ grid-template-columns:1fr; }
+    .side{ flex-direction:column; }
+  }
+  @media (max-width:430px){
+    /* keep the fixed topbar within narrow viewports: let it wrap and the pill shrink */
+    .topbar{ flex-wrap:wrap; row-gap:8px; padding:10px 14px; }
+    .crumbs{ flex:1 1 auto; gap:12px; }
+    .selftest{ flex:0 0 auto; max-width:100%; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .smeter .bar, button, .bridges a{ transition:none; }
+    button.hint-pulse{ animation:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="crumbs">
+      <a class="back" href="../index.html">← The Engine Room</a>
+      <a class="back" href="../../index.html">↑ The Workshop</a>
+    </div>
+    <div class="selftest" id="selftest" title="The four-claim proof, re-run live. Click for the console detail.">checking…</div>
+  </div>
+
+  <div class="wrap">
+    <header class="hero">
+      <div class="eyebrow">The Engine Room · the third bench</div>
+      <h1>The Brownian Ratchet</h1>
+      <p class="lede">In <b>1912</b> Smoluchowski imagined a microscopic <b>ratchet and pawl</b> — a toothed wheel that
+        could only turn one way, jostled by the random thermal kicks of a gas. Surely it would slowly wind itself up,
+        making <b>useful work out of pure noise</b>. In <b>1963</b> Feynman dismantled the dream in
+        <i>Lectures I·46</i>: the pawl is in the bath too. At <b>equal temperature</b> the thermal jiggle lifts the pawl
+        exactly as often as the gas pushes the wheel — it twitches, but it <b>does not turn</b>. Heat one end
+        (<span class="hot">gas</span>) hotter than the other (<span class="cold">pawl</span>) and it <i>becomes</i> a real
+        engine — bounded by the very same Carnot wall every machine here obeys.</p>
+      <p class="banner">This bench runs a <b>reduced, dimensionless RATE model</b>: forward/backward hop rates are
+        Arrhenius factors <code>exp(−ΔE/Θ_eff)</code> with geometry-weighted effective temperatures (the core OWNS
+        this — it is not a from-first-principles Kramers derivation). We <b>MEASURE</b> the null with honest Poisson
+        error bars; we do not claim to "prove" the Second Law. The model is built so the null falls out of detailed
+        balance — and the self-test would catch it if the geometry ever rectified the symmetric case.</p>
+    </header>
+
+    <div class="cards">
+      <div class="ecard"><div class="yr">1912 · SMOLUCHOWSKI</div><h4>The temptation</h4>
+        <p>A tiny wheel with asymmetric teeth, a spring-loaded pawl that blocks the backward step. Random gas kicks can
+          only ratchet it forward… can't they? <code>⟨ω⟩ &gt; 0</code> from nothing but noise would be a perpetual-motion
+          machine of the second kind.</p></div>
+      <div class="ecard"><div class="yr">1963 · FEYNMAN</div><h4>The pawl is in the bath too</h4>
+        <p>The pawl is just as small and just as warm. At <code>Θ_pawl = Θ_gas</code> it lifts on its own thermal
+          fluctuations exactly often enough to let the wheel slip back. Forward and backward hops <b>detail-balance</b>:
+          net rotation is <code>0</code> for <i>any</i> tooth shape.</p></div>
+    </div>
+
+    <div class="floor">
+      <div class="leftcol">
+        <div class="panel app">
+          <h2>The apparatus · gas drum → line-shaft → escapement</h2>
+          <div class="sub">hot gas (left) jiggles a vane · the shaft carries it · the pawl gates the toothed wheel (right)</div>
+          <canvas id="app" width="560" height="360"></canvas>
+        </div>
+        <div class="panel drift">
+          <h2>Drift vs ΔΘ · the money chart</h2>
+          <div class="sub">⟨ω⟩ traced as the temperature difference sweeps · the curve passes through the origin</div>
+          <canvas id="drift" width="560" height="220"></canvas>
+        </div>
+      </div>
+
+      <div class="side">
+        <!-- INSTRUMENTS -->
+        <div class="card">
+          <h3>Instruments · the net drift ⟨ω⟩</h3>
+          <div class="headline"><span class="lab" style="font:600 9.5px/1 var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim)">net rotation rate</span><span class="om null" id="omHead">0.00e+0</span></div>
+          <canvas id="omega" class="omegawrap" width="240" height="120"></canvas>
+          <div class="band" id="band">needle inside the <span class="ci">±KSIG·σ</span> band — consistent with zero</div>
+          <div class="odometer"><span class="digits" id="odo">+0</span><span class="lab">net teeth</span></div>
+          <div class="etarow" id="etarow">
+            <div class="smeter-lbl"><span>η (work / heat-in)</span><span><span class="v" id="etaV">0.000</span> · ceiling <span class="c" id="ceilV">—</span></span></div>
+            <div class="smeter"><div class="bar" id="etaBar"></div><div class="tick" id="etaTick"></div></div>
+          </div>
+          <div class="verdict" id="verdict">Paused at equilibrium. Press <b>Run</b> — at ΔΘ = 0 it will twitch, but never progress.</div>
+        </div>
+
+        <!-- CONTROLS: two reservoirs -->
+        <div class="card">
+          <h3>Two reservoirs · the tilt</h3>
+          <div class="ctl">
+            <div class="row"><label>Θ gas</label><input id="sTg" class="hot" type="range" min="120" max="600" value="300" step="5"><span class="v hot" id="vTg">300 K</span></div>
+            <div class="row"><label>Θ pawl</label><input id="sTp" class="cold" type="range" min="120" max="600" value="300" step="5"><span class="v cold" id="vTp">300 K</span></div>
+            <div class="row" id="rowLoad"><label>Load τ</label><input id="sLoad" class="brass" type="range" min="0" max="100" value="0" step="1"><span class="v brass" id="vLoad">0</span></div>
+            <div class="row"><label>Seeds N</label><input id="sSeeds" class="brass" type="range" min="1" max="8" value="3" step="1"><span class="v brass" id="vSeeds">3</span></div>
+          </div>
+          <div class="dtread equil" id="dtread">ΔΘ = 0 K · <b>at equilibrium</b> — the null lives here</div>
+        </div>
+
+        <!-- CONTROLS: run the ratchet -->
+        <div class="card">
+          <h3>Run the ratchet</h3>
+          <div class="transport">
+            <button class="act" id="bRun">▶ Run</button>
+            <button class="act" id="bPause" disabled>⏸ Pause</button>
+            <button class="act" id="bStep">⏭ +10k</button>
+          </div>
+          <button class="reset" id="bReset" style="width:100%">↺ Reset</button>
+          <div class="togglerow">
+            <button id="wSaw" class="on" title="Asymmetric sawtooth teeth (the ratchet)">sawtooth</button>
+            <button id="wSym" title="Symmetric teeth — the negative control (rectifies nothing)">symmetric</button>
+            <button id="wNoPawl" title="Remove the pawl — one bath, detailed balance">no pawl</button>
+          </div>
+        </div>
+
+        <!-- CONTROLS: staged moments -->
+        <div class="card">
+          <h3>Staged moments · the four claims</h3>
+          <div class="presetgrid">
+            <button id="pEquil" title="Θ_gas = Θ_pawl: the null. Twitches, never progresses.">① equilibrium</button>
+            <button id="pCold" title="Cold pawl: the wheel turns forward.">② cold pawl</button>
+            <button id="pRev" class="warn-btn" title="Cold gas: the wheel turns backward.">③ reverse</button>
+            <button id="pSym" class="warn-btn" title="Symmetric wheel under ΔΘ: rectifies nothing.">④ symmetric</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="coda">Watch the trail ring around the wheel: at <span class="c">ΔΘ = 0</span> the
+      <span class="h">forward</span> and <span class="c">backward</span> twitches paint the wheel <b>equally both ways</b> —
+      it rocks around its datum line and never leaves. Cool the pawl and the <span class="h">forward</span> tint wins; the
+      wheel ratchets. Load it, and it does work against the torque — but the efficiency stays pinned under the
+      <span class="g">Carnot ceiling</span>, the same wall the Carnot bench proves. Make the teeth symmetric, or pull the
+      pawl, and a real ΔΘ rectifies <b>nothing</b>. You cannot win, and you cannot break even.</p>
+
+    <p class="coda" style="margin-top:18px"><b>The demon and the pawl are the same machine in two languages · one fact
+      wearing two coats.</b>
+      <span class="kick"><b>Carnot:</b> the ceiling. &nbsp;·&nbsp; <b>Demon:</b> the receipt. &nbsp;·&nbsp;
+        <b>Ratchet:</b> the ceiling, with teeth.</span></p>
+
+    <section class="bridges">
+      <a class="info-twin full" href="../demon/index.html">
+        <span class="ic">👹</span>
+        <span class="bd">
+          <div class="nm">↔ The same impossibility, told in information</div>
+          <div class="bl">The Demon's Ledger — a sorting demon that seems to make order for free, until you count the
+            <i>bit</i>. The demon and the pawl are one fact in two languages: you cannot rectify thermal noise without a
+            real temperature difference to pay for it. Information there; geometry here.</div>
+        </span>
+      </a>
+      <a href="../carnot/index.html">
+        <span class="ic">♨️</span>
+        <span class="bd">
+          <div class="nm">↑ The ceiling it obeys</div>
+          <div class="bl">The Carnot Engine — where <code>η = 1 − T_c/T_h</code> is proven the wall no cycle can cross.
+            This bench imports that very <code>carnotEfficiency()</code> to bound the loaded ratchet — never redrawn,
+            never beaten.</div>
+        </span>
+      </a>
+      <a class="coldward full" href="../../cavern/maxwell-boltzmann/index.html">
+        <span class="ic">🔥</span>
+        <span class="bd">
+          <div class="nm">↓ The gas whose jiggle drives the wheel</div>
+          <div class="bl">The Maxwell–Boltzmann gas — hundreds of discs whose random collisions <i>are</i> temperature.
+            The ratchet's drum is that gas, banging on a vane; the pawl's bath is the same chaos, one wing over in the
+            Cavern.</div>
+        </span>
+      </a>
+    </section>
+
+    <p class="foot">Four claims, one ledger, re-run live in the <b>self-test</b> badge above: <b>(1)</b> the net drift is
+      zero at <code>Θ_pawl = Θ_gas</code> within the measured <code>±KSIG·σ</code> error bars, for any tooth shape — the
+      heart; <b>(2)</b> <code>sign(⟨ω⟩)</code> flips with <code>sign(ΔΘ)</code> and vanishes as <code>ΔΘ → 0</code>;
+      <b>(3)</b> the loaded efficiency <code>η = W/Q_h</code> never crosses the <code>carnotEfficiency()</code> imported
+      from the Carnot bench; and <b>(4)</b> a symmetric wheel and a removed pawl each rectify nothing. The page's core is
+      the byte-twin of <code>core.mjs</code> — the Node test re-extracts it and proves the page === the module === the
+      Carnot sibling.</p>
+  </div>
+
+<script>
+"use strict";
+/* drop the front-door breadcrumb (folder-name convention; the wing landing drops
+   ws:seen:engine-room, each bench drops its own). */
+try{ var _k='ws:seen:brownian'; if(!localStorage.getItem(_k)) localStorage.setItem(_k, String(Date.now())); }catch(e){}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   The inlined core is the byte-twin of core.mjs. Because a page cannot ES-import,
+   the carnotEfficiency() body is PASTED VERBATIM under the banner (the Node test
+   re-extracts this block, re-runs it, and asserts the inline carnotEfficiency()
+   is char-for-char the imported one — proving the page core == the module == the
+   Carnot sibling). If the sibling's formatting ever changes, re-paste; the
+   re-extraction test catches the drift.
+   ════════════════════════════════════════════════════════════════════════════ */
+// ===== BROWNIAN CORE (inlined byte-twin of core.mjs) BEGIN =====
+function carnotEfficiency(T_h, T_c) { return 1 - T_c / T_h; }
+
+const K_B = 1.380649e-23;
+const E_B = 1.0;
+const ASYM = 0.2;
+const T_SCALE = 300;
+function makeRng(seed = 1) {
+  let s = (0x2545F491 ^ (seed >>> 0)) >>> 0;
+  return function () {
+    s ^= s << 13; s ^= s >>> 17; s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+}
+function sawU(x, Eb = E_B, a = ASYM) {
+  let t = x - Math.floor(x);
+  if (t < a) return Eb * (t / a);
+  return Eb * (1 - (t - a) / (1 - a));
+}
+function sawForce(x, Eb = E_B, a = ASYM) {
+  let t = x - Math.floor(x);
+  if (t < a) return -Eb / a;
+  return Eb / (1 - a);
+}
+function ratchetRates(Tg, Tp, tau = 0, Eb = E_B, a = ASYM) {
+  const Teff_f = (1 - a) * Tg + a * Tp;
+  const Teff_b = a * Tg + (1 - a) * Tp;
+  return { r_fwd: Math.exp(-(Eb + tau) / Teff_f), r_bwd: Math.exp(-(Eb - tau) / Teff_b) };
+}
+function symmetricRates(T, tau = 0, Eb = E_B) {
+  return { r_fwd: Math.exp(-(Eb + tau) / T), r_bwd: Math.exp(-(Eb - tau) / T) };
+}
+function simulate(opts = {}) {
+  const Tg = opts.Tg, Tp = opts.Tp, tau = opts.tau != null ? opts.tau : 0,
+    a = opts.a != null ? opts.a : ASYM, hasPawl = opts.hasPawl != null ? opts.hasPawl : true,
+    steps = opts.steps != null ? opts.steps : 2000000, seed = opts.seed != null ? opts.seed : 1,
+    dtRate = opts.dtRate != null ? opts.dtRate : 0.5;
+  const rr = hasPawl ? ratchetRates(Tg, Tp, tau, E_B, a) : symmetricRates(Tg, tau, E_B);
+  const r_fwd = rr.r_fwd, r_bwd = rr.r_bwd;
+  const pF = r_fwd * dtRate, pB = r_bwd * dtRate;
+  if (!(pF + pB < 1)) throw new Error('pF+pB must be < 1 (got ' + (pF + pB).toFixed(4) + '); lower dtRate');
+  const rng = makeRng(seed);
+  let net = 0, fwd = 0, bwd = 0;
+  const pFB = pF + pB;
+  for (let i = 0; i < steps; i++) {
+    const u = rng();
+    if (u < pF) { net++; fwd++; }
+    else if (u < pFB) { net--; bwd++; }
+  }
+  return {
+    omega: net / steps, net: net, fwd: fwd, bwd: bwd,
+    sigmaOmega: Math.sqrt(fwd + bwd) / steps,
+    steps: steps, r_fwd: r_fwd, r_bwd: r_bwd, pF: pF, pB: pB,
+  };
+}
+function simulateLangevin(opts = {}) {
+  const Theta = opts.Theta != null ? opts.Theta : 1.0, n = opts.n != null ? opts.n : 64,
+    dt = opts.dt != null ? opts.dt : 0.02, seed = opts.seed != null ? opts.seed : 7,
+    a = opts.a != null ? opts.a : ASYM, Eb = opts.Eb != null ? opts.Eb : E_B;
+  const rng = makeRng(seed);
+  const gauss = function () {
+    const u1 = Math.max(1e-12, rng()), u2 = rng();
+    return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  };
+  const D = Math.max(0, Theta);
+  let x = 0; const traj = [];
+  for (let i = 0; i < n; i++) {
+    const drift = sawForce(x, Eb, a) * dt * 0.04;
+    x += drift + Math.sqrt(2 * D * dt) * gauss() * 0.06;
+    traj.push(x);
+  }
+  return traj;
+}
+function stallLoad(Tg, Tp, a = ASYM, Eb = E_B) {
+  const Tf = (1 - a) * Tg + a * Tp, Tb = a * Tg + (1 - a) * Tp;
+  return Eb * (Tf - Tb) / (Tf + Tb);
+}
+const KSIG = 4;
+function compute(state = {}) {
+  const Tg = state.Tg != null ? state.Tg : 1.0;
+  const Tp = state.Tp != null ? state.Tp : 1.0;
+  const load = state.load != null ? state.load : 0;
+  const a = state.a != null ? state.a : ASYM;
+  const hasPawl = state.hasPawl != null ? state.hasPawl : true;
+  const seeds = state.seeds && state.seeds.length ? state.seeds : [1, 2, 3];
+  const steps = state.steps != null ? state.steps : 300000;
+  const dtRate = state.dtRate != null ? state.dtRate : 0.5;
+  const teeth = state.teeth != null ? state.teeth : 18;
+  let omegaSum = 0, fwdSum = 0, bwdSum = 0, sig2 = 0, r_fwd = 0, r_bwd = 0;
+  for (const s of seeds) {
+    const r = simulate({ Tg: Tg, Tp: Tp, tau: load, a: a, hasPawl: hasPawl, steps: steps, seed: s, dtRate: dtRate });
+    omegaSum += r.omega; fwdSum += r.fwd; bwdSum += r.bwd;
+    sig2 += r.sigmaOmega * r.sigmaOmega;
+    r_fwd = r.r_fwd; r_bwd = r.r_bwd;
+  }
+  const N = seeds.length;
+  const omega = omegaSum / N;
+  const omegaSigma = Math.sqrt(sig2) / N;
+  const netRevs = omega;
+  let driftClass = 'null';
+  if (Math.abs(omega) > KSIG * omegaSigma) driftClass = omega > 0 ? 'fwd' : 'rev';
+  let eta = null, etaCeil = null, stall = null;
+  if (load > 0 && Tg > Tp && Tp > 0) {
+    const W_out = omega * load;
+    const fwdRevs = (fwdSum / N) / steps;
+    const Qh = fwdRevs * E_B;
+    eta = Qh > 0 ? W_out / Qh : 0;
+    etaCeil = carnotEfficiency(Tg * T_SCALE, Tp * T_SCALE);
+    stall = stallLoad(Tg, Tp, a);
+  }
+  const theta = omega;
+  const pawlLifted = hasPawl;
+  return {
+    Tg: Tg, Tp: Tp, load: load, a: a, hasPawl: hasPawl, seeds: seeds, steps: steps, teeth: teeth,
+    omega: omega, omegaSigma: omegaSigma, netRevs: netRevs, eta: eta, etaCeil: etaCeil, stall: stall,
+    driftClass: driftClass, r_fwd: r_fwd, r_bwd: r_bwd, pawlLifted: pawlLifted, theta: theta,
+  };
+}
+function runCoreTests(opts = {}) {
+  const steps = opts.steps || 300000;
+  const seeds = opts.seeds || [1, 2, 3];
+  const checks = [];
+  const add = (name, ok, info, star) => checks.push({ name: name, ok: !!ok, info: info || '', star: !!star });
+  {
+    let allPerSeed = true, worst = '';
+    for (const T of [0.5, 1.0]) {
+      let om = 0, sig2 = 0;
+      for (const s of seeds) {
+        const r = simulate({ Tg: T, Tp: T, tau: 0, a: 0.2, hasPawl: true, steps: steps, seed: s });
+        if (Math.abs(r.omega) > KSIG * r.sigmaOmega) { allPerSeed = false; worst = 'T=' + T + ' seed=' + s + ': |ω|=' + Math.abs(r.omega).toExponential(2) + ' > ' + KSIG + 'σ=' + (KSIG * r.sigmaOmega).toExponential(2); }
+        om += r.omega; sig2 += r.sigmaOmega * r.sigmaOmega;
+      }
+      const mean = om / seeds.length, pooledSig = Math.sqrt(sig2) / seeds.length;
+      if (Math.abs(mean) > KSIG * pooledSig) { allPerSeed = false; worst = 'T=' + T + ' pooled: |mean ω|=' + Math.abs(mean).toExponential(2) + ' > ' + KSIG + '·rms(σ)/√M=' + (KSIG * pooledSig).toExponential(2); }
+    }
+    add('(1)★ NULL: ⟨ω⟩ == 0 at Θ_pawl == Θ_gas within ±KSIG·σ (per-seed AND pooled), τ=0',
+        allPerSeed, allPerSeed ? 'all seeds & pooled means inside the ' + KSIG + 'σ band at Θ∈{0.5,1.0}' : worst, true);
+  }
+  {
+    const Tbar = 0.6;
+    const dthetas = [-0.4, -0.2, -0.05, 0, 0.05, 0.2, 0.4];
+    let signOk = true, nullOk = true, monoOk = true, worst = '', prev = -Infinity;
+    for (const d of dthetas) {
+      const Tg = Tbar + d / 2, Tp = Tbar - d / 2;
+      const c = compute({ Tg: Tg, Tp: Tp, load: 0, a: 0.2, hasPawl: true, steps: steps, seeds: seeds });
+      if (d === 0) {
+        if (Math.abs(c.omega) > KSIG * c.omegaSigma) { nullOk = false; worst = 'ΔΘ=0: |ω|=' + Math.abs(c.omega).toExponential(2) + ' > ' + KSIG + 'σ'; }
+      } else {
+        const clear = Math.abs(c.omega) > KSIG * c.omegaSigma;
+        if (clear && Math.sign(c.omega) !== Math.sign(d)) { signOk = false; worst = 'ΔΘ=' + d + ': sign(ω)=' + Math.sign(c.omega) + ' != sign(ΔΘ)=' + Math.sign(d); }
+      }
+      if (c.omega < prev - KSIG * c.omegaSigma) { monoOk = false; worst = 'monotonicity broke at ΔΘ=' + d + ': ω=' + c.omega.toExponential(2) + ' < prev ' + prev.toExponential(2); }
+      prev = c.omega;
+    }
+    add('(2)★ TILT: sign(⟨ω⟩)==sign(ΔΘ) (clear of noise), ==0 at ΔΘ=0, monotone in ΔΘ',
+        signOk && nullOk && monoOk, (signOk && nullOk && monoOk) ? '7-pt sweep about Θ̄=0.6: sign-flips with ΔΘ, null at 0, monotone' : worst, true);
+  }
+  {
+    const TOL_CEIL = 5e-3;
+    let allBelow = true, worst = '', maxEta = 0;
+    for (const pair of [[0.6, 0.5], [1.0, 0.6], [0.8, 0.4]]) {
+      const Tg = pair[0], Tp = pair[1];
+      const ceil = carnotEfficiency(Tg * T_SCALE, Tp * T_SCALE);
+      const stall = stallLoad(Tg, Tp, 0.2);
+      for (const frac of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+        const load = frac * stall;
+        const c = compute({ Tg: Tg, Tp: Tp, load: load, a: 0.2, hasPawl: true, steps: steps, seeds: seeds });
+        if (c.eta != null) {
+          if (c.eta > c.etaCeil + TOL_CEIL) { allBelow = false; worst = 'Tg=' + Tg + ' Tp=' + Tp + ' load=' + load.toFixed(3) + ': η=' + c.eta.toFixed(4) + ' > ceil ' + c.etaCeil.toFixed(4); }
+          if (c.eta > maxEta) maxEta = c.eta;
+          if (Math.abs(c.etaCeil - (1 - Tp / Tg)) > 1e-9) { allBelow = false; worst = 'etaCeil != 1−Tp/Tg @ Tg=' + Tg + ' Tp=' + Tp; }
+        }
+      }
+      const cStall = compute({ Tg: Tg, Tp: Tp, load: stall, a: 0.2, hasPawl: true, steps: steps, seeds: seeds });
+      if (cStall.omega > KSIG * cStall.omegaSigma) { allBelow = false; worst = 'at stall Tg=' + Tg + ' Tp=' + Tp + ': ω=' + cStall.omega.toExponential(2) + ' still forward'; }
+    }
+    add('(3)★ CEILING: η = W/Q_h ≤ carnotEfficiency(Θg,Θp) IMPORTED (never redefined); stall ⇒ W→0',
+        allBelow, allBelow ? 'all loaded η ≤ Carnot ceiling (max η=' + maxEta.toFixed(4) + '); ceiling == 1−Θp/Θg' : worst, true);
+  }
+  {
+    const sym = compute({ Tg: 1.0, Tp: 0.4, load: 0, a: 0.5, hasPawl: true, steps: steps, seeds: seeds });
+    const ok4a = Math.abs(sym.omega) <= KSIG * sym.omegaSigma;
+    const nopawl = compute({ Tg: 1.0, Tp: 0.4, load: 0, a: 0.2, hasPawl: false, steps: steps, seeds: seeds });
+    const ok4b = Math.abs(nopawl.omega) <= KSIG * nopawl.omegaSigma;
+    add('(4)★ CONTROLS: (4a) symmetric wheel a=0.5 under ΔΘ rectifies nothing; (4b) no-pawl ⇒ ⟨ω⟩=0',
+        ok4a && ok4b,
+        '4a: |ω|=' + Math.abs(sym.omega).toExponential(2) + ' ≤ ' + KSIG + 'σ=' + (KSIG * sym.omegaSigma).toExponential(2) + ' · 4b: |ω|=' + Math.abs(nopawl.omega).toExponential(2) + ' ≤ ' + KSIG + 'σ=' + (KSIG * nopawl.omegaSigma).toExponential(2), true);
+  }
+  const passed = checks.filter(c => c.ok).length;
+  return { checks: checks, passed: passed, total: checks.length };
+}
+// ===== BROWNIAN CORE END =====
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE BENCH — the apparatus + drift chart + instruments + controls + engine.
+   Draws are PURE READERS of model(); the sim owns the stepper. The visualization
+   can NEVER fake a result the sim didn't produce.
+   ════════════════════════════════════════════════════════════════════════════ */
+const REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = id => document.getElementById(id);
+
+// reduced ↔ kelvin: the sliders read kelvin; the model runs in reduced Θ (Θ = K/T_SCALE).
+const toTheta = K => K / T_SCALE;
+
+// the live UI state — model knobs PLUS the running accumulator + animation phase.
+const ui = {
+  Tg: 300, Tp: 300,          // kelvin (sliders)
+  loadPct: 0,                // 0..100 → dimensionless τ (scaled to a fraction of E_B)
+  seedsN: 3,
+  a: ASYM, hasPawl: true, symmetric: false,
+  running: false,
+  // the running odometer: integrate ⟨ω⟩ over wall steps so it slowly ticks
+  netTeeth: 0,               // accumulated net teeth (the odometer)
+  stepsRun: 0,
+  // cached model() snapshot (recomputed when a control changes or a chunk runs)
+  m: null,
+  // cosmetic display angle the wheel rocks around; trail ring-buffer
+  theta: 0, thetaDatum: 0,
+  trail: [],                 // {dir:+1|-1} ring-buffer ≤ 90
+  vanePhase: 0,
+  pawlLift: 0,               // 0..1 cosmetic pawl-lift pulse
+  spark: 0,
+  driftPts: [],              // {dt, omega, sigma} for the drift chart
+};
+const TRAIL_MAX = 90;
+const TEETH = 18;
+
+// load percent → dimensionless τ: 0..100 maps to 0..(0.4·E_B), a useful range below
+// most stall loads. The model's W ledger uses this τ directly.
+function loadTau(){ return (ui.loadPct / 100) * 0.4 * E_B; }
+
+// the model knobs as the core wants them (reduced Θ).
+function modelState(){
+  return {
+    Tg: toTheta(ui.Tg), Tp: toTheta(ui.Tp),
+    load: loadTau(),
+    a: ui.symmetric ? 0.5 : ASYM,
+    hasPawl: ui.hasPawl,
+    seeds: Array.from({length: ui.seedsN}, (_,i)=>i+1),
+    steps: 120000,            // per compute() — kept modest so the live recompute is snappy
+    teeth: TEETH,
+  };
+}
+// recompute the ONE ledger (every facet reads ui.m).
+function recompute(){ ui.m = compute(modelState()); seedDriftPoint(); return ui.m; }
+
+// canvases
+const app = $('app'), ax = app.getContext('2d');
+const drift = $('drift'), dx = drift.getContext('2d');
+const omega = $('omega'), ox = omega.getContext('2d');
+function fitDPR(cv, ctx){
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const cssW = cv.clientWidth || cv.width, cssH = cv.height * (cssW / cv.width);
+  cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
+  cv.style.height = cssH + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { w: cssW, h: cssH };
+}
+let APP={w:560,h:360}, DRF={w:560,h:220}, OMG={w:240,h:120};
+
+// speed→colour (lifted from the M–B / demon bench): cold→teal→amber→hot.
+function speedColor(v, vref){
+  var t=Math.max(0, Math.min(1, v/(2.4*vref)));
+  var stops=[[0x6f,0xb3,0xff],[0x7f,0xd4,0xc0],[0xe6,0xb0,0x66],[0xf0,0x8a,0x5d]];
+  var seg=t*(stops.length-1), i=Math.min(stops.length-2, Math.floor(seg)), f=seg-i;
+  var a=stops[i], b=stops[i+1];
+  var r=Math.round(a[0]+(b[0]-a[0])*f), g=Math.round(a[1]+(b[1]-a[1])*f), bl=Math.round(a[2]+(b[2]-a[2])*f);
+  return 'rgb('+r+','+g+','+bl+')';
+}
+function mono(){ return '"SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace'; }
+
+/* ── 16 jiggling gas discs in the drum ── */
+const discs = [];
+(function initDiscs(){
+  const rng = makeRng(99);
+  for(let i=0;i<16;i++){ discs.push({ x:rng(), y:rng(), vx:(rng()-0.5)*2, vy:(rng()-0.5)*2 }); }
+})();
+function stepDiscs(h, jig){
+  for(const d of discs){
+    d.x += d.vx * h * jig; d.y += d.vy * h * jig;
+    if(d.x<0.05){ d.x=0.05; d.vx=Math.abs(d.vx); } else if(d.x>0.95){ d.x=0.95; d.vx=-Math.abs(d.vx); }
+    if(d.y<0.05){ d.y=0.05; d.vy=Math.abs(d.vy); } else if(d.y>0.95){ d.y=0.95; d.vy=-Math.abs(d.vy); }
+  }
+}
+
+/* ── the drift-vs-ΔΘ data: record (ΔΘ, ⟨ω⟩) as the dials move ── */
+function seedDriftPoint(){
+  const m = ui.m; if(!m) return;
+  const dT = (ui.Tg - ui.Tp);  // kelvin ΔT for the x-axis
+  // replace the point at this dT (so sweeping the slider traces a curve, not a cloud)
+  const key = Math.round(dT/5)*5;
+  const idx = ui.driftPts.findIndex(p => p.key === key);
+  const pt = { key, dt: dT, omega: m.omega, sigma: m.omegaSigma };
+  if(idx>=0) ui.driftPts[idx] = pt; else ui.driftPts.push(pt);
+  ui.driftPts.sort((a,b)=>a.dt-b.dt);
+  if(ui.driftPts.length>80) ui.driftPts.shift();
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DRAW: the apparatus — gas drum → line-shaft → escapement wheel + pawl.
+   PURE READER of m = model().
+   ════════════════════════════════════════════════════════════════════════════ */
+function drawApp(m){
+  APP = fitDPR(app, ax); const c = ax, f = APP;
+  c.clearRect(0,0,f.w,f.h);
+  const cy = f.h*0.5;
+  drawDrum(c, f, m, cy);
+  drawShaft(c, f, m, cy);
+  drawWheel(c, f, m, cy);
+}
+
+function drawDrum(c, f, m, cy){
+  // the gas drum on the left: brass ring, jiggling discs, a paddle-vane, firebox glow.
+  const cx = f.w*0.18, R = Math.min(f.h*0.34, f.w*0.15);
+  const Tg = ui.Tg;
+  // firebox radial glow ∝ Θ_gas
+  if(!REDUCE){
+    const glow = c.createRadialGradient(cx, cy, R*0.2, cx, cy, R*2.0);
+    const gi = Math.max(0, Math.min(0.5, (Tg-120)/900));
+    glow.addColorStop(0, 'rgba(232,112,58,'+gi+')'); glow.addColorStop(1, 'rgba(232,112,58,0)');
+    c.fillStyle = glow; c.fillRect(0,0,f.w*0.4,f.h);
+  }
+  // the drum ring
+  c.save();
+  c.strokeStyle='rgba(217,164,65,0.5)'; c.lineWidth=3;
+  c.beginPath(); c.arc(cx, cy, R, 0, 7); c.stroke();
+  c.strokeStyle='rgba(217,164,65,0.22)'; c.lineWidth=1;
+  c.beginPath(); c.arc(cx, cy, R*1.12, 0, 7); c.stroke();
+  c.restore();
+  // the jiggling discs (∝ √Θg)
+  const jig = Math.sqrt(Math.max(0.001, toTheta(Tg)));
+  if(!REDUCE) stepDiscs(0.02, jig*1.1);
+  const vref=1.0;
+  for(const d of discs){
+    const px = cx + (d.x*2-1)*R*0.78, py = cy + (d.y*2-1)*R*0.78;
+    const sp = Math.hypot(d.vx, d.vy)*jig;
+    c.save();
+    c.shadowColor = speedColor(sp, vref); c.shadowBlur = REDUCE?0:7;
+    c.beginPath(); c.arc(px, py, 4.5, 0, 7);
+    c.fillStyle = speedColor(sp, vref); c.fill();
+    c.restore();
+  }
+  // the paddle-vane (4 blades) — rocks with the wheel's display-θ (it drives the shaft)
+  c.save();
+  c.translate(cx, cy); c.rotate(ui.theta*0.6 + (REDUCE?0:ui.vanePhase));
+  c.strokeStyle='rgba(217,164,65,0.85)'; c.lineWidth=3.2; c.lineCap='round';
+  for(let k=0;k<4;k++){
+    c.rotate(Math.PI/2);
+    c.beginPath(); c.moveTo(0,0); c.lineTo(R*0.6, 0); c.stroke();
+    c.fillStyle='rgba(217,164,65,0.32)';
+    c.fillRect(R*0.42, -5, R*0.2, 10);
+  }
+  c.beginPath(); c.arc(0,0,5,0,7); c.fillStyle='var(--brass)'; c.fillStyle='#d9a441'; c.fill();
+  c.restore();
+  // label
+  c.fillStyle='rgba(232,112,58,0.9)'; c.font='600 11px '+mono(); c.textAlign='center';
+  c.fillText('gas Θ='+(toTheta(Tg)).toFixed(2)+'  ('+Tg+' K)', cx, cy+R+22);
+}
+
+function drawShaft(c, f, m, cy){
+  // the brass line-shaft connecting drum to wheel, with bearing pips + tick marks
+  const x0 = f.w*0.30, x1 = f.w*0.62;
+  c.save();
+  c.strokeStyle='rgba(217,164,65,0.4)'; c.lineWidth=4;
+  c.beginPath(); c.moveTo(x0, cy); c.lineTo(x1, cy); c.stroke();
+  // bearing pips
+  c.strokeStyle='rgba(217,164,65,0.5)'; c.lineWidth=1.4;
+  for(const bx of [x0+ (x1-x0)*0.32, x0+(x1-x0)*0.7]){
+    c.strokeRect(bx-5, cy-7, 10, 14);
+  }
+  // rotating tick-marks on the shaft (so rotation reads even at ~zero net)
+  const tickN = 7;
+  for(let i=0;i<tickN;i++){
+    const baseAng = ui.theta*1.2 + i*(2*Math.PI/tickN);
+    const tx = x0 + (x1-x0)*( (i+0.5)/tickN );
+    const off = Math.sin(baseAng)*5;
+    c.strokeStyle = off>0 ? 'rgba(232,112,58,0.7)' : 'rgba(95,168,211,0.7)';
+    c.lineWidth=2;
+    c.beginPath(); c.moveTo(tx, cy-7); c.lineTo(tx, cy-7+off+5); c.stroke();
+  }
+  c.restore();
+}
+
+function drawWheel(c, f, m, cy){
+  // the escapement wheel + pawl on the right.
+  const cx = f.w*0.78, R = Math.min(f.h*0.36, f.w*0.16);
+  const Tp = ui.Tp;
+  // condenser glow ∝ cold (the colder the pawl, the bluer)
+  if(!REDUCE){
+    const cold = Math.max(0, Math.min(0.45, (600-Tp)/900));
+    const glow = c.createRadialGradient(cx, cy, R*0.2, cx, cy, R*2.0);
+    glow.addColorStop(0, 'rgba(95,168,211,'+cold+')'); glow.addColorStop(1, 'rgba(95,168,211,0)');
+    c.fillStyle = glow; c.fillRect(f.w*0.6,0,f.w*0.4,f.h);
+  }
+  const a = ui.symmetric ? 0.5 : ASYM;
+  const teeth = TEETH;
+
+  // ── the TWITCH-TRAIL ring around the wheel (forward brass, backward blue) ──
+  drawTrail(c, cx, cy, R*1.22);
+
+  // ── the pinned start-θ DATUM line the wheel rocks around ──
+  c.save();
+  c.strokeStyle='rgba(167,152,138,0.5)'; c.lineWidth=1; c.setLineDash([4,4]);
+  c.beginPath(); c.moveTo(cx, cy-R*1.3); c.lineTo(cx, cy-R*0.9); c.stroke();
+  c.setLineDash([]); c.restore();
+
+  // ── the toothed wheel, rotated by the cosmetic display-θ ──
+  c.save();
+  c.translate(cx, cy); c.rotate(ui.theta);
+  // wheel body
+  c.beginPath(); c.arc(0,0,R*0.62,0,7);
+  c.fillStyle='rgba(217,164,65,0.10)'; c.fill();
+  c.strokeStyle='rgba(217,164,65,0.5)'; c.lineWidth=2; c.stroke();
+  // teeth from the model geometry (asymmetric sawtooth, or symmetric)
+  c.beginPath();
+  for(let i=0;i<teeth;i++){
+    const base = i/teeth, peak = (i+a)/teeth, next=(i+1)/teeth;
+    const ab = base*2*Math.PI, ap = peak*2*Math.PI, an = next*2*Math.PI;
+    const rIn = R*0.62, rOut = R*0.92;
+    if(i===0) c.moveTo(rIn*Math.cos(ab), rIn*Math.sin(ab));
+    c.lineTo(rOut*Math.cos(ap), rOut*Math.sin(ap));   // up the (steep) face to the peak
+    c.lineTo(rIn*Math.cos(an), rIn*Math.sin(an));     // down the (gentle) ramp
+  }
+  c.closePath();
+  c.strokeStyle='rgba(217,164,65,0.85)'; c.lineWidth=2; c.stroke();
+  c.fillStyle='rgba(217,164,65,0.06)'; c.fill();
+  // hub
+  c.beginPath(); c.arc(0,0,5,0,7); c.fillStyle='#d9a441'; c.fill();
+  c.restore();
+
+  // ── the spring-loaded pawl (top), lifting when model says so ──
+  drawPawl(c, cx, cy, R, m);
+
+  // label
+  c.fillStyle='rgba(95,168,211,0.9)'; c.font='600 11px '+mono(); c.textAlign='center';
+  c.fillText((ui.hasPawl? (ui.symmetric?'symmetric wheel':'pawl Θ=')+(ui.symmetric?'':(toTheta(Tp)).toFixed(2)) : 'no pawl')+(ui.symmetric||!ui.hasPawl?'':'  ('+Tp+' K)'), cx, cy+R+22);
+}
+
+function drawTrail(c, cx, cy, R){
+  // ring of recent twitches: forward tinted brass/firebox, backward tinted blue.
+  const n = ui.trail.length; if(n===0) return;
+  c.save();
+  for(let i=0;i<n;i++){
+    const t = ui.trail[i];
+    const ang = -Math.PI/2 + (i/TRAIL_MAX)*2*Math.PI;
+    const col = t.dir>0 ? 'rgba(232,112,58,' : 'rgba(95,168,211,';
+    const alpha = 0.18 + 0.5*(i/n);
+    c.fillStyle = col + alpha + ')';
+    c.beginPath(); c.arc(cx + R*Math.cos(ang), cy + R*Math.sin(ang), 2.4, 0, 7); c.fill();
+  }
+  c.restore();
+}
+
+function drawPawl(c, cx, cy, R, m){
+  // the pawl rides on the wheel's top tooth; lifts (cosmetically) on the thermal pulse.
+  const lift = REDUCE ? 0.5 : ui.pawlLift;   // frozen mid-lift under reduced motion
+  const px = cx, py = cy - R*0.92 - 6 - lift*9;
+  c.save();
+  // spring
+  c.strokeStyle='rgba(167,152,138,0.6)'; c.lineWidth=1.4;
+  c.beginPath();
+  const sx = cx, sy0 = cy - R*1.42, sy1 = py-6;
+  const coils=5;
+  for(let i=0;i<=coils*2;i++){ const yy = sy0 + (sy1-sy0)*i/(coils*2); const xx = sx + ((i%2)?6:-6); i?c.lineTo(xx,yy):c.moveTo(xx,yy); }
+  c.stroke();
+  // the pawl arm
+  c.strokeStyle = lift>0.3 ? 'rgba(232,200,107,0.95)' : 'rgba(217,164,65,0.8)';
+  c.lineWidth=3.4; c.lineCap='round';
+  c.beginPath(); c.moveTo(px-14, py-9); c.lineTo(px, py); c.stroke();
+  // the pawl tip
+  c.fillStyle = lift>0.3 ? '#e7c66b' : '#d9a441';
+  c.beginPath(); c.arc(px, py, 4, 0, 7); c.fill();
+  // spark when it lifts
+  if(!REDUCE && ui.spark>0.01){
+    c.fillStyle='rgba(255,230,180,'+(0.8*ui.spark)+')';
+    for(let k=0;k<4;k++){ const aa=Math.random()*7; c.beginPath(); c.arc(px+Math.cos(aa)*6, py+Math.sin(aa)*6, 1.4, 0, 7); c.fill(); }
+  }
+  c.restore();
+  // pawl caption under reduced motion (so the frozen lift reads)
+  if(REDUCE){
+    c.fillStyle='rgba(167,152,138,0.85)'; c.font='9px '+mono(); c.textAlign='center';
+    c.fillText('thermal fluctuations lift the pawl —', cx, cy - R*1.5);
+    c.fillText('at equal T, equally often', cx, cy - R*1.5 + 11);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DRAW: the drift-vs-ΔΘ chart. PURE READER of ui.driftPts (each from a model()).
+   ════════════════════════════════════════════════════════════════════════════ */
+function drawDrift(m){
+  DRF = fitDPR(drift, dx); const c = dx, f = DRF;
+  c.clearRect(0,0,f.w,f.h);
+  const mgn={l:48,r:14,t:14,b:28}, ix=f.w-mgn.l-mgn.r, iy=f.h-mgn.t-mgn.b;
+  const dtMax=480; // kelvin span ±
+  // find omega scale from the data (symmetric)
+  let omMax=0.02;
+  for(const p of ui.driftPts) omMax=Math.max(omMax, Math.abs(p.omega)+p.sigma*4);
+  const X = dt => mgn.l + ( (dt+dtMax)/(2*dtMax) )*ix;
+  const Y = om => mgn.t + (1 - (om+omMax)/(2*omMax))*iy;
+  // axes
+  c.strokeStyle='rgba(217,164,65,0.2)'; c.lineWidth=1;
+  c.beginPath(); c.moveTo(mgn.l,mgn.t); c.lineTo(mgn.l,f.h-mgn.b); c.lineTo(f.w-mgn.r,f.h-mgn.b); c.stroke();
+  // zero lines
+  c.strokeStyle='rgba(167,152,138,0.35)'; c.setLineDash([3,3]);
+  c.beginPath(); c.moveTo(X(0),mgn.t); c.lineTo(X(0),f.h-mgn.b); c.stroke();   // ΔΘ=0
+  c.beginPath(); c.moveTo(mgn.l,Y(0)); c.lineTo(f.w-mgn.r,Y(0)); c.stroke();   // ω=0
+  c.setLineDash([]);
+  // labels
+  c.fillStyle='rgba(167,152,138,0.75)'; c.font='9px '+mono();
+  c.textAlign='center'; c.fillText('ΔΘ = Θ_gas − Θ_pawl  (K)', f.w/2, f.h-mgn.b+20);
+  c.fillText('cold pawl →', X(dtMax*0.55), Y(0)-6);
+  c.save(); c.translate(13, f.h/2); c.rotate(-Math.PI/2); c.fillText('⟨ω⟩  net rotation rate', 0,0); c.restore();
+  // origin annotation
+  c.fillStyle='rgba(143,215,154,0.9)'; c.font='9px '+mono(); c.textAlign='left';
+  c.fillText('null', X(0)+5, Y(0)-6);
+  // the curve through the recorded points, with σ error bars
+  if(ui.driftPts.length){
+    // error bars
+    for(const p of ui.driftPts){
+      c.strokeStyle='rgba(167,152,138,0.4)'; c.lineWidth=1;
+      c.beginPath(); c.moveTo(X(p.dt), Y(p.omega-4*p.sigma)); c.lineTo(X(p.dt), Y(p.omega+4*p.sigma)); c.stroke();
+    }
+    // the line
+    c.strokeStyle='rgba(217,164,65,0.85)'; c.lineWidth=2; c.shadowColor='rgba(217,164,65,0.35)'; c.shadowBlur=REDUCE?0:5;
+    c.beginPath();
+    ui.driftPts.forEach((p,i)=>{ const x=X(p.dt), y=Y(p.omega); i?c.lineTo(x,y):c.moveTo(x,y); });
+    c.stroke(); c.shadowBlur=0;
+    // points, tinted by sign
+    for(const p of ui.driftPts){
+      const col = Math.abs(p.omega)<=4*p.sigma ? '#8fd79a' : (p.omega>0?'#e8703a':'#5fa8d3');
+      c.fillStyle=col; c.beginPath(); c.arc(X(p.dt), Y(p.omega), 3, 0, 7); c.fill();
+    }
+    // highlight the current point
+    const dtNow = ui.Tg-ui.Tp;
+    c.strokeStyle='#fff'; c.lineWidth=1.4;
+    c.beginPath(); c.arc(X(dtNow), Y(m.omega), 5.5, 0, 7); c.stroke();
+  } else {
+    c.fillStyle='rgba(167,152,138,0.5)'; c.textAlign='center'; c.font='11px '+mono();
+    c.fillText('move the Θ dials to trace ⟨ω⟩ vs ΔΘ', f.w/2, f.h/2);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DRAW: the ⟨ω⟩ needle meter (half-dial, ±KSIG·σ wedge straddling zero).
+   ════════════════════════════════════════════════════════════════════════════ */
+function drawOmega(m){
+  OMG = fitDPR(omega, ox); const c = ox, f = OMG;
+  c.clearRect(0,0,f.w,f.h);
+  const cx=f.w/2, cy=f.h*0.92, R=f.h*0.78;
+  // omega full-scale: a bit beyond the current |omega| and the band
+  const omMax = Math.max(0.01, Math.abs(m.omega)*1.4, KSIG*m.omegaSigma*2.5);
+  // half-dial from -135° (left) to -45° (right) → map omega [-omMax,+omMax]
+  const a0 = Math.PI*1.18, a1 = -Math.PI*0.18;   // left to right (over the top)
+  const angOf = om => a0 + (Math.max(-1,Math.min(1, om/omMax))+1)/2*(a1-a0);
+  // dial arcs: left tinted condenser, right firebox
+  c.lineWidth=8; c.lineCap='round';
+  c.strokeStyle='rgba(95,168,211,0.3)';
+  c.beginPath(); c.arc(cx,cy,R, a0, angOf(0), true); c.stroke();
+  c.strokeStyle='rgba(232,112,58,0.3)';
+  c.beginPath(); c.arc(cx,cy,R, angOf(0), a1, true); c.stroke();
+  // the ±KSIG·σ wedge straddling zero
+  const aw0 = angOf(-KSIG*m.omegaSigma), aw1 = angOf(KSIG*m.omegaSigma);
+  c.fillStyle='rgba(143,215,154,0.22)';
+  c.beginPath(); c.moveTo(cx,cy);
+  c.arc(cx,cy,R, aw0, aw1, true); c.closePath(); c.fill();
+  // zero tick
+  c.strokeStyle='rgba(167,152,138,0.6)'; c.lineWidth=1.5;
+  c.beginPath(); c.moveTo(cx+(R-8)*Math.cos(angOf(0)), cy+(R-8)*Math.sin(angOf(0)));
+  c.lineTo(cx+(R+3)*Math.cos(angOf(0)), cy+(R+3)*Math.sin(angOf(0))); c.stroke();
+  // the needle to m.omega
+  const inWedge = Math.abs(m.omega) <= KSIG*m.omegaSigma;
+  const na = angOf(m.omega);
+  c.strokeStyle = inWedge ? '#8fd79a' : (m.omega>0?'#e8703a':'#5fa8d3');
+  c.lineWidth=3; c.lineCap='round'; c.shadowColor=c.strokeStyle; c.shadowBlur=REDUCE?0:6;
+  c.beginPath(); c.moveTo(cx,cy); c.lineTo(cx+R*0.92*Math.cos(na), cy+R*0.92*Math.sin(na)); c.stroke();
+  c.shadowBlur=0;
+  // hub
+  c.fillStyle='#d9a441'; c.beginPath(); c.arc(cx,cy,4,0,7); c.fill();
+  // labels
+  c.fillStyle='rgba(95,168,211,0.8)'; c.font='9px '+mono(); c.textAlign='left'; c.fillText('− rev', 6, f.h-4);
+  c.fillStyle='rgba(232,112,58,0.8)'; c.textAlign='right'; c.fillText('+ fwd', f.w-6, f.h-4);
+  c.fillStyle = inWedge ? 'rgba(143,215,154,0.95)':'rgba(232,178,74,0.95)'; c.textAlign='center'; c.font='600 9.5px '+mono();
+  c.fillText(inWedge?'consistent with 0':'real tilt', cx, 13);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   the DOM instruments: headline, odometer, η bar, band caption, verdict.
+   ════════════════════════════════════════════════════════════════════════════ */
+function drawInstruments(m){
+  // headline ⟨ω⟩
+  const oh = $('omHead');
+  oh.textContent = (m.omega>=0?'+':'') + m.omega.toExponential(2);
+  oh.className = 'om ' + m.driftClass;
+  // band caption
+  const band = $('band');
+  if(m.driftClass==='null'){
+    band.innerHTML = 'needle inside the <span class="ci">±'+KSIG+'σ</span> band — consistent with zero · σ='+m.omegaSigma.toExponential(1);
+  } else {
+    band.innerHTML = '⟨ω⟩ outside ±'+KSIG+'σ — a <b>'+(m.driftClass==='fwd'?'forward':'reverse')+'</b> tilt (σ='+m.omegaSigma.toExponential(1)+')';
+  }
+  // odometer
+  const odo = $('odo');
+  const nt = Math.round(ui.netTeeth);
+  odo.textContent = (nt>=0?'+':'') + nt;
+  odo.className = 'digits ' + (Math.abs(ui.netTeeth)<1 ? 'null' : (ui.netTeeth>0?'fwd':'rev'));
+  // η bar — only under load with Tg>Tp
+  const er = $('etarow');
+  if(m.eta!=null && m.etaCeil!=null && m.etaCeil>0){
+    er.style.display='block';
+    const frac = Math.max(0, Math.min(1, m.eta/Math.max(m.etaCeil,1e-9)));
+    $('etaBar').style.width = (frac*100)+'%';
+    $('etaTick').style.left = '100%';   // the ceiling is the full bar (η normalized to it)
+    $('etaV').textContent = m.eta.toFixed(3);
+    $('ceilV').textContent = m.etaCeil.toFixed(3);
+  } else {
+    er.style.display='none';
+  }
+  // verdict
+  drawVerdict(m);
+}
+
+function drawVerdict(m){
+  const v=$('verdict');
+  if(!ui.hasPawl){
+    v.innerHTML='No pawl — one bath, plain <b>detailed balance</b>. Forward and backward hops are equal at every τ=0; <span class="grn">⟨ω⟩ = 0</span>. A real ΔΘ rectifies nothing without the asymmetry.';
+  } else if(ui.symmetric){
+    v.innerHTML='Symmetric teeth. Even with a real <span class="hot">ΔΘ</span>, the two faces are identical — there is no basis to rectify, so <span class="grn">⟨ω⟩ stays at zero</span>. The asymmetry is necessary; it is not sufficient.';
+  } else if(m.eta!=null){
+    v.innerHTML='Loaded against τ. It still turns forward and does work — but η = '+m.eta.toFixed(3)+' stays <span class="grn">under the Carnot ceiling</span> '+m.etaCeil.toFixed(3)+', the same wall the <b>Carnot bench</b> proves. Push the load to stall and ⟨ω⟩ → 0, W → 0.';
+  } else if(m.driftClass==='null'){
+    v.innerHTML='ΔΘ = 0 — <b>the null</b>. The pawl is in the bath too: it lifts on its own jiggle exactly as often as the gas pushes. It <span class="grn">twitches, but never progresses</span>. This is the heart of it.';
+  } else if(m.driftClass==='fwd'){
+    v.innerHTML='The pawl is <span class="cold">colder</span> than the gas — a real temperature difference. The wheel ratchets <span class="hot">forward</span>. It is a genuine engine now, burning a ΔΘ like every engine in this wing.';
+  } else {
+    v.innerHTML='The gas is <span class="cold">colder</span> than the pawl — ΔΘ reversed. The wheel turns <span class="cold">backward</span>. The direction is set by the sign of the temperature difference, nothing else.';
+  }
+}
+
+/* ── the dial readout (the emotional spine) ── */
+function drawDtRead(){
+  const dt = ui.Tg - ui.Tp;
+  const el=$('dtread');
+  if(Math.abs(dt)<1){ el.className='dtread equil'; el.innerHTML='ΔΘ = 0 K · <b>at equilibrium</b> — the null lives here'; }
+  else if(dt>0){ el.className='dtread fwd'; el.innerHTML='ΔΘ = +'+dt+' K · <b>pawl colder → forward</b>'; }
+  else { el.className='dtread rev'; el.innerHTML='ΔΘ = '+dt+' K · <b>gas colder → reverse</b>'; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   the MASTER RENDER — every facet reads ui.m (one ledger). Draws are read-only.
+   ════════════════════════════════════════════════════════════════════════════ */
+let needsDraw=false;
+function render(){
+  needsDraw=false;
+  const m = ui.m || recompute();
+  drawApp(m); drawDrift(m); drawOmega(m); drawInstruments(m); drawDtRead();
+}
+function requestRender(){ if(!needsDraw){ needsDraw=true; requestAnimationFrame(render); } }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE ENGINE — the rAF pump. The SIM owns the stepper; draws are read-only.
+   Cosmetic θ/jiggle is driven by simulateLangevin (a faithful down-sampled sample),
+   NEVER by the statistics. The odometer integrates the REAL ⟨ω⟩ from model().
+   ════════════════════════════════════════════════════════════════════════════ */
+let rafId=null;
+function animate(){
+  rafId=null;
+  const m = ui.m || recompute();
+  // advance the cosmetic display-θ: the wheel rocks around its datum (Langevin jiggle)
+  // PLUS a slow net drift equal to the REAL ⟨ω⟩ (so what you SEE matches what's measured).
+  if(!REDUCE){
+    ui.vanePhase += 0.04;
+    // a cosmetic rock around the datum from the Langevin sample
+    const traj = simulateLangevin({ Theta: toTheta((ui.Tg+ui.Tp)/2), n: 2, dt: 0.05, seed: (ui.stepsRun|0)+1, a: ui.symmetric?0.5:ASYM });
+    const jiggle = (traj[1]-traj[0]);
+    // the net drift the wheel actually shows = the measured ⟨ω⟩ (scaled to read)
+    ui.theta = ui.thetaDatum + jiggle*0.5;
+    if(ui.running){
+      // integrate the REAL omega into the datum + odometer
+      const drift = m.omega * 18;          // teeth per displayed frame chunk
+      ui.thetaDatum += m.omega * 2.2;
+      ui.netTeeth += m.omega * (m.steps/8000); // accumulate net teeth from real ⟨ω⟩
+      ui.stepsRun += m.steps/8000;
+      // push a twitch into the trail (sign weighted by the real rates so the ring is
+      // EQUAL both ways at ΔΘ=0 — it reads the model, never fakes)
+      const pF = m.r_fwd, pB = m.r_bwd, tot=pF+pB;
+      const dir = Math.random() < (tot>0? pF/tot : 0.5) ? 1 : -1;
+      ui.trail.push({dir}); if(ui.trail.length>TRAIL_MAX) ui.trail.shift();
+      // cosmetic pawl-lift pulse + spark on a backward-allowing twitch
+      ui.pawlLift = 0.5 + 0.5*Math.sin(ui.vanePhase*2.3);
+      if(dir<0) ui.spark = 1;
+    }
+  }
+  // decay spark
+  if(ui.spark>0.01) ui.spark*=0.88; else ui.spark=0;
+  render();
+  if(!REDUCE) rafId=requestAnimationFrame(animate);
+}
+function kickAnim(){ if(rafId==null && !REDUCE) rafId=requestAnimationFrame(animate); }
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden){ if(rafId!=null){ cancelAnimationFrame(rafId); rafId=null; } }
+  else { if(!REDUCE) kickAnim(); else render(); }
+});
+
+/* ════════════════════════════════════════════════════════════════════════════
+   the "+10k" transport: run a chunk of REAL steps synchronously and fold them in.
+   ════════════════════════════════════════════════════════════════════════════ */
+function runChunk(stepsEach){
+  // run a real, seeded MC chunk and integrate its net into the odometer.
+  const st = modelState(); st.steps = stepsEach;
+  const m2 = compute(st);
+  ui.netTeeth += m2.omega * stepsEach / 8000;
+  ui.thetaDatum += m2.omega * 2.2;
+  // push a proportional batch of twitches into the trail
+  const pF=m2.r_fwd, pB=m2.r_bwd, tot=pF+pB;
+  for(let k=0;k<6;k++){ const dir = Math.random() < (tot>0?pF/tot:0.5)?1:-1; ui.trail.push({dir}); if(ui.trail.length>TRAIL_MAX) ui.trail.shift(); }
+  ui.m = m2;
+  if(REDUCE) render(); else requestRender();
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   INTERACTION — sliders, transport, wheel/pawl toggles, presets.
+   ════════════════════════════════════════════════════════════════════════════ */
+function setRunning(on){
+  ui.running=on;
+  $('bRun').disabled=on; $('bPause').disabled=!on;
+  if(on) kickAnim();
+}
+function onControlChange(){ recompute(); if(REDUCE) render(); else requestRender(); }
+
+$('sTg').addEventListener('input', e=>{ ui.Tg=+e.target.value; $('vTg').textContent=ui.Tg+' K'; clearPresetActive(); onControlChange(); });
+$('sTp').addEventListener('input', e=>{ ui.Tp=+e.target.value; $('vTp').textContent=ui.Tp+' K'; clearPresetActive(); onControlChange(); });
+$('sLoad').addEventListener('input', e=>{ ui.loadPct=+e.target.value; $('vLoad').textContent=String(ui.loadPct); clearPresetActive(); onControlChange(); });
+$('sSeeds').addEventListener('input', e=>{ ui.seedsN=+e.target.value; $('vSeeds').textContent=String(ui.seedsN); onControlChange(); });
+
+$('bRun').addEventListener('click', ()=>setRunning(true));
+$('bPause').addEventListener('click', ()=>setRunning(false));
+$('bStep').addEventListener('click', ()=>{ runChunk(10000); });
+$('bReset').addEventListener('click', ()=>resetAll());
+
+// wheel/pawl toggles
+function setWheel(mode){
+  ui.symmetric = (mode==='sym');
+  ui.hasPawl = (mode!=='nopawl');
+  $('wSaw').classList.toggle('on', mode==='saw');
+  $('wSym').classList.toggle('on', mode==='sym');
+  $('wNoPawl').classList.toggle('on', mode==='nopawl');
+  // no-pawl disables the load row (no work without rectification)
+  $('rowLoad').style.opacity = ui.hasPawl ? '1' : '0.4';
+  $('sLoad').disabled = !ui.hasPawl;
+  clearPresetActive(); onControlChange();
+}
+$('wSaw').addEventListener('click', ()=>setWheel('saw'));
+$('wSym').addEventListener('click', ()=>setWheel('sym'));
+$('wNoPawl').addEventListener('click', ()=>setWheel('nopawl'));
+
+// presets — 1:1 with the four claims
+function clearPresetActive(){ ['pEquil','pCold','pRev','pSym'].forEach(id=>$(id).classList.remove('on')); }
+function applyPreset(id, Tg, Tp, wheel, load){
+  ui.Tg=Tg; ui.Tp=Tp; ui.loadPct=load||0;
+  $('sTg').value=Tg; $('vTg').textContent=Tg+' K';
+  $('sTp').value=Tp; $('vTp').textContent=Tp+' K';
+  $('sLoad').value=ui.loadPct; $('vLoad').textContent=String(ui.loadPct);
+  setWheel(wheel);               // (clears preset-active + recomputes)
+  ui.netTeeth=0; ui.thetaDatum=0; ui.trail=[];
+  clearPresetActive(); $(id).classList.add('on');
+  setRunning(true);
+  recompute(); requestRender();
+}
+$('pEquil').addEventListener('click', ()=>applyPreset('pEquil', 300, 300, 'saw', 0));
+$('pCold').addEventListener('click', ()=>applyPreset('pCold', 400, 180, 'saw', 0));
+$('pRev').addEventListener('click', ()=>applyPreset('pRev', 180, 400, 'saw', 0));
+$('pSym').addEventListener('click', ()=>applyPreset('pSym', 400, 180, 'sym', 0));
+
+function resetAll(){
+  ui.Tg=300; ui.Tp=300; ui.loadPct=0; ui.seedsN=3; ui.symmetric=false; ui.hasPawl=true;
+  ui.netTeeth=0; ui.thetaDatum=0; ui.theta=0; ui.trail=[]; ui.stepsRun=0; ui.driftPts=[];
+  $('sTg').value=300; $('vTg').textContent='300 K';
+  $('sTp').value=300; $('vTp').textContent='300 K';
+  $('sLoad').value=0; $('vLoad').textContent='0';
+  $('sSeeds').value=3; $('vSeeds').textContent='3';
+  $('sLoad').disabled=false; $('rowLoad').style.opacity='1';
+  $('wSaw').classList.add('on'); $('wSym').classList.remove('on'); $('wNoPawl').classList.remove('on');
+  clearPresetActive();
+  setRunning(false);
+  recompute(); render();
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE SELF-TEST PILL — re-runs the inlined core LIVE (the four claims).
+   ════════════════════════════════════════════════════════════════════════════ */
+function runSelfTest(){
+  let res;
+  try{ res = runCoreTests({ steps: 300000, seeds: [1,2,3] }); }
+  catch(err){ res = { checks:[{name:'core threw: '+err.message, ok:false, info:''}], passed:0, total:1 }; }
+  const el=$('selftest');
+  const green = res.passed===res.total;
+  el.className='selftest '+(green?'ok':'bad');
+  el.textContent='self-test '+res.passed+'/'+res.total+(green?' ✓':' ✗');
+  el.title=res.checks.map(c=>(c.ok?'✓':'✗')+' '+c.name).join('\n');
+  console.log('%cThe Brownian Ratchet — in-page self-test', 'color:#d9a441;font-weight:bold');
+  for(const c of res.checks) console.log((c.ok?'  ✓ ':'  ✗ ')+c.name+(c.info?'  ·  '+c.info:''));
+  console.log(res.passed+'/'+res.total+' '+(green?'✓ ALL GREEN':'✗ FAILURES'));
+  return res;
+}
+window.__brownianSelfTest = runSelfTest;
+$('selftest').addEventListener('click', ()=>runSelfTest());
+
+/* ── boot ── (order EXACTLY the demon's: render → self-test → kick anim) ── */
+function boot(){
+  // seed a few drift points so the money chart isn't empty on first paint, AND so the
+  // reduced-motion frozen state has a curve. Each is a real model() at that ΔΘ.
+  for(const dt of [-300,-150,-60,0,60,150,300]){
+    const Tg=300+dt/2, Tp=300-dt/2;
+    const m = compute({ Tg: toTheta(Tg), Tp: toTheta(Tp), load:0, a:ASYM, hasPawl:true, seeds:[1,2,3], steps:120000, teeth:TEETH });
+    ui.driftPts.push({ key: Math.round(dt/5)*5, dt, omega:m.omega, sigma:m.omegaSigma });
+  }
+  ui.driftPts.sort((a,b)=>a.dt-b.dt);
+  recompute();
+  render();
+  runSelfTest();
+  // the cold-pawl preset pulses once as the on-ramp (spoiler-light teaser of the tilt)
+  if(!REDUCE) $('pCold').classList.add('hint-pulse');
+  if(!REDUCE) kickAnim();
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+window.addEventListener('resize', requestRender);
+</script>
+</body>
+</html>
