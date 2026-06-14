@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Road Into Chaos</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.88);
+    --panel-edge: rgba(201,162,74,0.34);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --orbit: #6fd3c4;       /* the attractor points */
+    --order: #6fb4d3;       /* periodic (order) */
+    --chaos: #e0664f;       /* chaos */
+    --cursor: #f0c674;      /* the r cursor */
+    --ladder: #c98ad3;      /* the cascade ladder marks */
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --bg: #06080c;
+    --stage: #080b11;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    justify-content:space-between; padding:14px 20px 0; pointer-events:none; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; display:flex; flex-direction:column; }
+  #diagramWrap{ flex:1 1 64%; position:relative; min-height:0; cursor:ew-resize; }
+  #lyapWrap{ flex:0 0 26%; position:relative; border-top:1px solid rgba(201,162,74,0.18);
+    background:rgba(0,0,0,0.22); cursor:ew-resize; }
+  canvas{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+  #diagLabel{ position:absolute; left:16px; top:60px; font:600 11px/1.4 var(--font-mono);
+    letter-spacing:.06em; color:var(--ink-dim); background:rgba(0,0,0,0.5);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 11px; z-index:6; pointer-events:none;
+    max-width:52%; }
+  #diagLabel b{ color:var(--orbit); }
+  #lyapLabel{ position:absolute; left:14px; top:10px; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); z-index:6; pointer-events:none; }
+  #verdict{ position:absolute; right:16px; top:60px; z-index:7; pointer-events:none;
+    font:600 11px/1.5 var(--font-mono); text-align:right; }
+  #verdict .big{ font-family:var(--font-serif); font-size:30px; color:var(--ladder); display:block;
+    font-variant-numeric:tabular-nums; line-height:1.05; }
+  #verdict .sub{ color:var(--ink-dim); font-size:10.5px; letter-spacing:.04em; }
+  #verdict .sub b{ color:var(--accent); }
+  #verdict .match{ display:inline-block; margin-top:5px; padding:3px 8px; border-radius:12px;
+    font:600 9.5px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; }
+  #verdict .match.good{ color:#8fd79a; border:1px solid rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  #verdict .match.warn{ color:#f0b07a; border:1px solid rgba(220,150,90,0.5); background:rgba(60,42,22,0.4); }
+  #rReadout{ position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:7;
+    pointer-events:none; font:600 11px/1.3 var(--font-mono); color:var(--cursor); text-align:center;
+    background:rgba(0,0,0,0.55); border:1px solid var(--panel-edge); border-radius:8px; padding:5px 12px;
+    letter-spacing:.03em; white-space:nowrap; }
+  #rReadout .state{ font-size:9.5px; letter-spacing:.12em; text-transform:uppercase; display:block; margin-top:2px; }
+  #rReadout .state.order{ color:var(--order); }
+  #rReadout .state.chaos{ color:var(--chaos); }
+
+  #panel{ width:344px; flex:0 0 344px; height:100%; background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge); padding:58px 16px 24px;
+    box-shadow:-18px 0 50px rgba(0,0,0,0.5); z-index:20; overflow-y:auto; }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 8px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .row{ margin:11px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.04em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:6px; }
+  .row > label .val{ color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:3px; border-radius:3px;
+    background:rgba(201,162,74,0.22); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:15px; height:15px;
+    border-radius:50%; background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  input[type=range]::-moz-range-thumb{ width:15px; height:15px; border:none; border-radius:50%;
+    background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  .presets{ display:grid; grid-template-columns:1fr; gap:7px; }
+  .preset{ font:600 10.5px/1.2 var(--font-ui); padding:9px 10px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; transition:.16s; text-align:left; }
+  .preset:hover{ border-color:var(--accent); color:var(--ink); }
+  .preset.on{ border-color:rgba(201,162,74,0.7); background:var(--accent-soft); color:var(--ink); }
+  .preset b{ display:block; color:var(--ink); font-weight:600; margin-bottom:2px; font-size:11px; }
+  .preset span{ font:9.5px/1.25 var(--font-mono); color:var(--ink-dim); letter-spacing:.01em; }
+  .btnrow{ display:flex; gap:8px; margin:12px 0 2px; flex-wrap:wrap; }
+  .btn{ flex:1 1 auto; min-width:0; font:600 11px/1 var(--font-ui); letter-spacing:.02em; padding:10px 10px;
+    border-radius:8px; border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink);
+    cursor:pointer; transition:.18s; white-space:nowrap; }
+  .btn:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .btn.primary{ background:rgba(201,162,74,0.16); border-color:rgba(201,162,74,0.5); color:var(--accent); }
+  .btn.primary:hover{ background:rgba(201,162,74,0.26); }
+  .checkbox{ display:flex; align-items:center; gap:9px; margin:10px 0; font:600 10.5px/1.3 var(--font-mono);
+    color:var(--ink-dim); cursor:pointer; letter-spacing:.02em; }
+  .checkbox input{ accent-color:var(--accent); width:14px; height:14px; }
+  .facts{ margin-top:8px; font:11px/1.6 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  .facts .frow{ display:flex; justify-content:space-between; gap:10px; padding:2px 0; }
+  .facts .frow b{ color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums; }
+  .facts .frow b.set{ color:var(--ladder); }
+  .ladder{ margin-top:8px; font:10px/1.5 var(--font-mono); color:var(--ink-dim); }
+  .ladder .lrow{ display:flex; justify-content:space-between; gap:8px; padding:1.5px 0;
+    border-bottom:1px solid rgba(201,162,74,0.07); }
+  .ladder .lrow b{ color:var(--ladder); font-weight:600; font-variant-numeric:tabular-nums; }
+  .ladder .lrow .d{ color:var(--accent); }
+  .facts .eqn{ margin-top:10px; padding:9px 11px; border-radius:8px; border:1px solid rgba(201,162,74,0.16);
+    background:rgba(0,0,0,0.28); color:var(--ink-dim); font-size:10.5px; line-height:1.62; }
+  .facts .eqn b{ color:var(--ink); } .facts .eqn i{ color:var(--orbit); font-style:normal; }
+  .foot{ margin-top:20px; font:10px/1.55 var(--font-mono); color:rgba(154,156,170,0.6); letter-spacing:.02em; }
+  .foot a{ color:var(--ink-dim); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../workbench/index.html">&larr; workbench</a>
+    </div>
+    <div class="brand">
+      <h1>The Road Into Chaos</h1>
+      <span class="tag">the period-doubling cascade &middot; Feigenbaum's &delta;</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for detail · per-check PASS lines are in the console">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <div id="diagramWrap">
+        <canvas id="diagCanvas"></canvas>
+        <div id="diagLabel">&mdash;</div>
+        <div id="verdict"></div>
+        <div id="rReadout"></div>
+      </div>
+      <div id="lyapWrap">
+        <canvas id="lyapCanvas"></canvas>
+        <div id="lyapLabel">the Lyapunov exponent &lambda;(r) &middot; the witness for chaos &mdash; &lambda;&gt;0 is sensitive dependence</div>
+      </div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">Turn one knob, <b>r</b>, and a single equation &mdash; <b>x &rarr; r&middot;x(1&minus;x)</b> &mdash;
+        walks the whole road from order into chaos. A stable point splits into a 2-cycle, then a 4-cycle, an
+        8-cycle &hellip; the <b>period-doubling cascade</b>. The windows between doublings shrink by a
+        <b>universal ratio</b>, the same for <i>any</i> single-hump map: <b>Feigenbaum's &delta; &approx; 4.6692</b>.
+        This bench doesn't draw that number &mdash; it <b>measures</b> it from the cascade and proves it.
+        Drag across the diagram to move the cursor.</p>
+
+      <div class="sect">The map</div>
+      <div class="presets" id="mapPresets"></div>
+
+      <div class="sect">Jump to a landmark</div>
+      <div class="presets" id="rPresets"></div>
+
+      <div class="sect">The parameter r</div>
+      <div class="row">
+        <label>r <span class="val" id="rVal">3.5700</span></label>
+        <input type="range" id="rSlider" min="0" max="4" step="0.0005" value="3.57">
+      </div>
+      <label class="checkbox"><input type="checkbox" id="ladderChk" checked> mark the cascade ladder on the diagram</label>
+      <label class="checkbox"><input type="checkbox" id="lyapChk" checked> draw the Lyapunov curve &lambda;(r)</label>
+
+      <div class="sect">Measured from the cascade</div>
+      <div class="facts" id="facts"></div>
+      <div class="ladder" id="ladderBox"></div>
+
+      <div class="btnrow">
+        <button class="btn primary" id="pngBtn">Save PNG</button>
+      </div>
+
+      <p class="foot">The logistic map. The superstable parameters R<sub>n</sub> of each 2<sup>n</sup>-cycle are
+        root-found to machine precision (the critical point x=&frac12; sits on the cycle), and their ratios
+        <b>converge to &delta;</b>. The Lyapunov exponent &lambda; = &langle;log|f&prime;|&rangle; is the honest
+        test for chaos &mdash; &lambda;&lt;0 is order, &lambda;&gt;0 is sensitive dependence. A self-test proves
+        &delta; from two different maps, &lambda;=ln2 at r=4, and that a linear map fakes no cascade.
+        &middot; part of <a href="../workbench/index.html">the Workbench</a>.</p>
+    </aside>
+  </div>
+
+<script type="module">
+// ======================== CORE (inlined twin of core.mjs) =====================
+const FEIGENBAUM_DELTA = 4.669201609102990;
+const MAPS = {
+  logistic: { lo:0, hi:4,  f:(r,x)=>r*x*(1-x),                  xmax:0.5, label:'logistic  x → r·x(1−x)' },
+  sine:     { lo:0, hi:1,  f:(r,x)=>r*Math.sin(Math.PI*x),      xmax:0.5, label:'sine  x → r·sin(πx)' },
+  cosine:   { lo:0, hi:2,  f:(r,x)=>r*(1-Math.cos(Math.PI*x))/2,xmax:1,   label:'cosine  x → r·(1−cos πx)/2' },
+};
+function iterate(map,r,x0,n){ let x=x0; for(let i=0;i<n;i++) x=map.f(r,x); return x; }
+function superstableResidual(map,r,n){ return iterate(map,r,map.xmax,1<<n)-map.xmax; }
+function bisect(g,a,b,iters=80){ let ga=g(a),gb=g(b); if(ga===0)return a; if(gb===0)return b;
+  if(ga*gb>0)return NaN;
+  for(let i=0;i<iters;i++){ const m=0.5*(a+b),gm=g(m); if(gm===0)return m;
+    if(ga*gm<0){b=m;gb=gm;}else{a=m;ga=gm;} } return 0.5*(a+b); }
+function superstablePoint(map,n,lowerBound,scanStep=1e-4){ const g=(r)=>superstableResidual(map,r,n);
+  let a=lowerBound+1e-7,ga=g(a),r=a;
+  for(r=a+scanStep;r<=map.hi+1e-9;r+=scanStep){ const gr=g(r); if(!isFinite(gr))continue;
+    if(ga*gr<0)return bisect(g,r-scanStep,r); ga=gr;a=r; } return NaN; }
+function superstableLadder(map,N,scanStep=2e-5){ const R=[]; let lower=map.lo;
+  for(let n=0;n<=N;n++){ const step=scanStep/Math.pow(1.9,Math.max(0,n-2));
+    const rn=superstablePoint(map,n,n===0?map.lo:R[n-1],step); if(!isFinite(rn))break; R.push(rn); lower=rn; }
+  return R; }
+function feigenbaumRatios(R){ const ratios=[]; for(let n=2;n<R.length;n++){
+    ratios.push((R[n-1]-R[n-2])/(R[n]-R[n-1])); }
+  return { ratios, best: ratios.length?ratios[ratios.length-1]:NaN }; }
+function attractor(map,r,transient=600,keep=400){ let x=map.xmax; for(let i=0;i<transient;i++)x=map.f(r,x);
+  const pts=new Array(keep); for(let i=0;i<keep;i++){x=map.f(r,x);pts[i]=x;} return pts; }
+function lyapunov(map,r,transient=500,steps=8000){ let x=0.1+0.3*(map.xmax||0.5);
+  if(x<=0||x>=1)x=0.137; for(let i=0;i<transient;i++)x=map.f(r,x);
+  let sum=0,counted=0; const h=1e-7;
+  for(let i=0;i<steps;i++){ const d=(map.f(r,x+h)-map.f(r,x-h))/(2*h); const a=Math.abs(d);
+    if(a>1e-12&&isFinite(a)){sum+=Math.log(a);counted++;} x=map.f(r,x); }
+  return counted?sum/counted:-Infinity; }
+function periodOf(map,r,cap=64,tol=1e-4){ const pts=attractor(map,r,1500,600);
+  const s=pts.slice().sort((a,b)=>a-b); let bands=1;
+  for(let i=1;i<s.length;i++){ if(s[i]-s[i-1]>tol)bands++; if(bands>cap)return 0; } return bands; }
+function accumulationPoint(R,delta=FEIGENBAUM_DELTA){ if(R.length<2)return NaN; const n=R.length-1;
+  return R[n]+(R[n]-R[n-1])/(delta-1); }
+
+// ======================== SELF-TEST (in-page, same claims) ===================
+function runSelfTest(){
+  const checks=[]; const add=(n,c,i)=>checks.push({n,c,i});
+  const L=MAPS.logistic;
+  const R=superstableLadder(L,8);
+  const {best,ratios}=feigenbaumRatios(R);
+  add('R₀=2.000', Math.abs(R[0]-2)<1e-6, R[0].toFixed(6));
+  add('R₁=1+√5', Math.abs(R[1]-(1+Math.sqrt(5)))<1e-6, R[1].toFixed(6));
+  add('δ measured → 4.6692', Math.abs(best-FEIGENBAUM_DELTA)<0.02, 'δ='+best.toFixed(5));
+  add('δ estimates converge', Math.abs(ratios[ratios.length-1]-FEIGENBAUM_DELTA)<Math.abs(ratios[0]-FEIGENBAUM_DELTA), '');
+  const Rs=superstableLadder(MAPS.sine,7); const bs=feigenbaumRatios(Rs).best;
+  add('universality: sine map → same δ', Math.abs(bs-FEIGENBAUM_DELTA)<0.05, 'δ='+bs.toFixed(4));
+  add('λ<0 in order (r=3.2)', lyapunov(L,3.2)<-0.01, '');
+  add('λ≈ln2 in chaos (r=4)', Math.abs(lyapunov(L,4.0)-Math.LN2)<0.02, '');
+  add('period-3 window (r=3.83) is order', lyapunov(L,3.83)<0 && periodOf(L,3.83)===3, '');
+  add('period 1→2→4 across doublings', periodOf(L,2.8)===1&&periodOf(L,3.2)===2&&periodOf(L,3.5)===4, '');
+  add('r_∞ ≈ 3.5699456', Math.abs(accumulationPoint(R)-3.5699456)<0.001, '');
+  add('linear map fakes no cascade', superstableLadder({lo:0,hi:0.99,f:(r,x)=>r*x,xmax:0.5},4).length<=1, '');
+  add('δ≠2 (refutes "windows halve")', Math.abs(best-2)>2, '');
+  const passed=checks.filter(c=>c.c).length;
+  return { passed, total:checks.length, checks };
+}
+
+// ============================ STATE & ELEMENTS ===============================
+const diag=document.getElementById('diagCanvas'), dctx=diag.getContext('2d');
+const lyap=document.getElementById('lyapCanvas'), lctx=lyap.getContext('2d');
+let DPR=Math.min(2,window.devicePixelRatio||1);
+const state={ mapKey:'logistic', r:3.57, showLadder:true, showLyap:true };
+let LADDER=[], DELTA=NaN, RINF=NaN, ALPHA_R=[]; // measured per-map
+let diagImage=null;  // cached orbit-diagram ImageData (expensive to recompute)
+
+const $=(id)=>document.getElementById(id);
+
+// ============================ MEASURE THE CASCADE ============================
+function measureCascade(){
+  const map=MAPS[state.mapKey];
+  LADDER=superstableLadder(map,9);
+  const fr=feigenbaumRatios(LADDER);
+  DELTA=fr.best; ALPHA_R=fr.ratios;
+  RINF=accumulationPoint(LADDER);
+}
+
+// ============================ ORBIT DIAGRAM (raster) =========================
+// For each column (a value of r), iterate past the transient and plot the kept
+// orbit points as faint dots — the classic bifurcation diagram.
+function renderDiagram(){
+  const map=MAPS[state.mapKey];
+  const W=diag.clientWidth, H=diag.clientHeight;
+  diag.width=Math.round(W*DPR); diag.height=Math.round(H*DPR);
+  const pw=diag.width, ph=diag.height;
+  const img=dctx.createImageData(pw,ph);
+  const data=img.data;
+  // background fill
+  for(let i=0;i<data.length;i+=4){ data[i]=8; data[i+1]=11; data[i+2]=17; data[i+3]=255; }
+  // y-domain: the attractor lives in [ymin,ymax]; logistic/sine in [0,1], cosine in [0,~1.6]
+  const ymax = state.mapKey==='cosine' ? 1.05 : 1.0;
+  const ymin = 0;
+  const rlo=map.lo, rhi=map.hi;
+  const transient=Math.max(250, Math.floor(ph*0.12));
+  const keep=Math.max(180, Math.floor(ph*0.5));
+  const r_infCol = isFinite(RINF) ? Math.round((RINF-rlo)/(rhi-rlo)*(pw-1)) : -1;
+  for(let px=0; px<pw; px++){
+    const r = rlo + (px/(pw-1))*(rhi-rlo);
+    // colour by side of the chaos onset: before r_∞ ordered (blue), after warm
+    const chaotic = px > r_infCol;
+    let x = map.xmax;
+    for(let i=0;i<transient;i++) x=map.f(r,x);
+    for(let i=0;i<keep;i++){
+      x=map.f(r,x);
+      if(x<ymin||x>ymax||!isFinite(x)) continue;
+      const py = Math.round((1-(x-ymin)/(ymax-ymin))*(ph-1));
+      const idx=(py*pw+px)*4;
+      // additive accumulation so dense bands glow
+      if(chaotic){ data[idx]=Math.min(255,data[idx]+70); data[idx+1]=Math.min(255,data[idx+1]+34); data[idx+2]=Math.min(255,data[idx+2]+26); }
+      else       { data[idx]=Math.min(255,data[idx]+38); data[idx+1]=Math.min(255,data[idx+1]+92); data[idx+2]=Math.min(255,data[idx+2]+86); }
+      data[idx+3]=255;
+    }
+  }
+  diagImage=img;
+  dctx.putImageData(img,0,0);
+  drawDiagramOverlay();
+}
+
+function drawDiagramOverlay(){
+  if(!diagImage) return;
+  dctx.putImageData(diagImage,0,0);
+  const map=MAPS[state.mapKey];
+  const W=diag.clientWidth, H=diag.clientHeight;
+  dctx.save();
+  dctx.scale(DPR,DPR);
+  const rlo=map.lo, rhi=map.hi;
+  const xOf=(r)=> (r-rlo)/(rhi-rlo)*W;
+  // the cascade ladder marks (superstable parameters) + the r_∞ wall
+  if(state.showLadder){
+    dctx.font='9px '+getMono();
+    for(let n=0;n<Math.min(LADDER.length,8);n++){
+      const x=xOf(LADDER[n]);
+      dctx.strokeStyle='rgba(201,138,211,'+(0.55-n*0.045)+')';
+      dctx.lineWidth=1; dctx.setLineDash([3,4]);
+      dctx.beginPath(); dctx.moveTo(x,18); dctx.lineTo(x,H); dctx.stroke();
+      dctx.setLineDash([]);
+      if(n<=5){ dctx.fillStyle='rgba(201,138,211,0.85)'; dctx.fillText('2^'+n, x+3, 30+n*0); }
+    }
+    if(isFinite(RINF)){
+      const x=xOf(RINF);
+      dctx.strokeStyle='rgba(224,102,79,0.8)'; dctx.lineWidth=1.4; dctx.setLineDash([2,3]);
+      dctx.beginPath(); dctx.moveTo(x,18); dctx.lineTo(x,H); dctx.stroke(); dctx.setLineDash([]);
+      dctx.fillStyle='rgba(224,102,79,0.95)'; dctx.font='600 9px '+getMono();
+      dctx.fillText('r∞ — chaos begins', x+4, 16);
+    }
+  }
+  // the live r cursor
+  const cx=xOf(state.r);
+  dctx.strokeStyle='rgba(240,198,116,0.95)'; dctx.lineWidth=1.5;
+  dctx.beginPath(); dctx.moveTo(cx,14); dctx.lineTo(cx,H); dctx.stroke();
+  dctx.fillStyle='rgba(240,198,116,0.95)';
+  dctx.beginPath(); dctx.moveTo(cx,14); dctx.lineTo(cx-5,5); dctx.lineTo(cx+5,5); dctx.closePath(); dctx.fill();
+  // axis labels
+  dctx.fillStyle='rgba(154,156,170,0.7)'; dctx.font='10px '+getMono();
+  dctx.fillText('r = '+rlo.toFixed(0), 6, H-6);
+  dctx.fillText('r = '+rhi.toFixed(0), W-44, H-6);
+  dctx.save(); dctx.translate(11, H*0.5); dctx.rotate(-Math.PI/2);
+  dctx.fillText('long-term x', 0, 0); dctx.restore();
+  dctx.restore();
+}
+
+// ============================ LYAPUNOV CURVE ================================
+let lyapCurve=null;
+function computeLyapunovCurve(){
+  const map=MAPS[state.mapKey];
+  const W=lyap.clientWidth;
+  const N=Math.max(140,Math.floor(W*0.85));
+  const arr=new Array(N);
+  for(let i=0;i<N;i++){
+    const r=map.lo+(i/(N-1))*(map.hi-map.lo);
+    arr[i]={ r, lam:lyapunov(map,r,300,2500) };
+  }
+  lyapCurve=arr;
+}
+function renderLyapunov(){
+  const map=MAPS[state.mapKey];
+  const W=lyap.clientWidth, H=lyap.clientHeight;
+  lyap.width=Math.round(W*DPR); lyap.height=Math.round(H*DPR);
+  lctx.setTransform(DPR,0,0,DPR,0,0);
+  lctx.clearRect(0,0,W,H);
+  lctx.fillStyle='rgba(0,0,0,0.22)'; lctx.fillRect(0,0,W,H);
+  if(!state.showLyap || !lyapCurve){ return; }
+  const rlo=map.lo, rhi=map.hi;
+  const xOf=(r)=> (r-rlo)/(rhi-rlo)*W;
+  const lamMin=-2.2, lamMax=1.0;
+  const yOf=(l)=>{ const c=Math.max(lamMin,Math.min(lamMax,l)); return (1-(c-lamMin)/(lamMax-lamMin))*H; };
+  // zero line — the order/chaos boundary
+  const y0=yOf(0);
+  lctx.strokeStyle='rgba(201,162,74,0.4)'; lctx.lineWidth=1; lctx.setLineDash([4,4]);
+  lctx.beginPath(); lctx.moveTo(0,y0); lctx.lineTo(W,y0); lctx.stroke(); lctx.setLineDash([]);
+  lctx.fillStyle='rgba(201,162,74,0.7)'; lctx.font='9px '+getMono();
+  lctx.fillText('λ = 0', 4, y0-4);
+  // the curve, coloured by sign (order=blue, chaos=red)
+  for(let i=1;i<lyapCurve.length;i++){
+    const a=lyapCurve[i-1], b=lyapCurve[i];
+    const xa=xOf(a.r), ya=yOf(a.lam), xb=xOf(b.r), yb=yOf(b.lam);
+    lctx.strokeStyle = (b.lam>0) ? 'rgba(224,102,79,0.92)' : 'rgba(111,180,211,0.85)';
+    lctx.lineWidth=1.4;
+    lctx.beginPath(); lctx.moveTo(xa,ya); lctx.lineTo(xb,yb); lctx.stroke();
+  }
+  // r cursor on the lyapunov plot too
+  const cx=xOf(state.r);
+  lctx.strokeStyle='rgba(240,198,116,0.95)'; lctx.lineWidth=1.5;
+  lctx.beginPath(); lctx.moveTo(cx,0); lctx.lineTo(cx,H); lctx.stroke();
+}
+
+// ============================ READOUT / FACTS ===============================
+function getMono(){ return getComputedStyle(document.body).getPropertyValue('--font-mono'); }
+
+function updateReadout(){
+  const map=MAPS[state.mapKey];
+  const lam=lyapunov(map,state.r,400,3000);
+  const per=periodOf(map,state.r);
+  let stateName, cls;
+  if(lam>0.0005){ stateName='CHAOS · λ>0'; cls='chaos'; }
+  else if(per===0){ stateName='aperiodic'; cls='chaos'; }
+  else { stateName=(per===1?'fixed point':('period '+per)); cls='order'; }
+  $('rReadout').innerHTML='r = '+state.r.toFixed(4)+
+    ' &nbsp;·&nbsp; λ = '+(isFinite(lam)?lam.toFixed(4):'−∞')+
+    '<span class="state '+cls+'">'+stateName+'</span>';
+
+  // verdict: the headline δ measurement
+  const dErr=Math.abs(DELTA-FEIGENBAUM_DELTA);
+  const good=dErr<0.01;
+  $('verdict').innerHTML=
+    '<span class="big">δ = '+(isFinite(DELTA)?DELTA.toFixed(5):'—')+'</span>'+
+    '<span class="sub">measured Feigenbaum constant<br>known: <b>'+FEIGENBAUM_DELTA.toFixed(5)+'</b></span><br>'+
+    '<span class="match '+(good?'good':'warn')+'">'+(good?'✓ universal':'~ converging')+'</span>';
+
+  // diagram label
+  $('diagLabel').innerHTML='<b>'+map.label+'</b><br>'+
+    'each column is one r; the dots are where x settles after the transient — '+
+    'one band = a fixed point, two = a 2-cycle, a smear = chaos.';
+
+  // facts panel
+  $('facts').innerHTML=
+    fr('measured δ', isFinite(DELTA)?DELTA.toFixed(6):'—', true)+
+    fr('known δ (Feigenbaum)', FEIGENBAUM_DELTA.toFixed(6))+
+    fr('chaos onset r∞', isFinite(RINF)?RINF.toFixed(6):'—')+
+    fr('at this r: λ', isFinite(lam)?lam.toFixed(5):'−∞')+
+    fr('at this r: period', lam>0.0005?'∞ (chaos)':(per===0?'aperiodic':per))+
+    '<div class="eqn">δ is the limit of the window ratios <i>(R<sub>n−1</sub>−R<sub>n−2</sub>) / (R<sub>n</sub>−R<sub>n−1</sub>)</i>. '+
+    'It is <b>universal</b>: the very same 4.6692 governs the sine map, dripping faucets, and convecting fluids — '+
+    'the deep reason the route into chaos looks alike everywhere.</div>';
+
+  // the ladder of measured ratios
+  let lb='<div class="lrow"><span>n</span><span>R<sub>n</sub> (superstable)</span><span>δ<sub>n</sub></span></div>';
+  for(let n=0;n<Math.min(LADDER.length,9);n++){
+    const ratio = n>=2 ? ALPHA_R[n-2] : null;
+    lb+='<div class="lrow"><span>2^'+n+'</span><b>'+LADDER[n].toFixed(6)+'</b>'+
+        '<span class="d">'+(ratio!=null?ratio.toFixed(4):'—')+'</span></div>';
+  }
+  $('ladderBox').innerHTML=lb;
+}
+function fr(k,v,set){ return '<div class="frow"><span>'+k+'</span><b'+(set?' class="set"':'')+'>'+v+'</b></div>'; }
+
+// ============================ INTERACTION ===================================
+function setR(r){ const map=MAPS[state.mapKey];
+  state.r=Math.max(map.lo,Math.min(map.hi,r));
+  $('rSlider').value=state.r; $('rVal').textContent=state.r.toFixed(4);
+  drawDiagramOverlay(); renderLyapunov(); updateReadout(); }
+
+function setMap(key){
+  state.mapKey=key;
+  const map=MAPS[key];
+  $('rSlider').min=map.lo; $('rSlider').max=map.hi;
+  $('rSlider').step=((map.hi-map.lo)/8000).toPrecision(2);
+  // pick a sensible default r near the chaos onset of the new map
+  measureCascade();
+  const def = isFinite(RINF) ? Math.min(map.hi, RINF+ (map.hi-RINF)*0.0) : (map.lo+map.hi)/2;
+  state.r=def;
+  buildMapPresets(); buildRPresets();
+  renderDiagram(); computeLyapunovCurve(); renderLyapunov();
+  $('rSlider').value=state.r; $('rVal').textContent=state.r.toFixed(4);
+  updateReadout();
+}
+
+function buildMapPresets(){
+  const box=$('mapPresets'); box.innerHTML='';
+  const items=[
+    ['logistic','Logistic map','x → r·x(1−x)  ·  the classic, r∈[0,4]'],
+    ['sine','Sine map','x → r·sin(πx)  ·  a different formula, same δ'],
+    ['cosine','Cosine hump','x → r·(1−cos πx)/2  ·  universality, again'],
+  ];
+  for(const [key,title,sub] of items){
+    const b=document.createElement('button');
+    b.className='preset'+(state.mapKey===key?' on':'');
+    b.innerHTML='<b>'+title+'</b><span>'+sub+'</span>';
+    b.onclick=()=>setMap(key);
+    box.appendChild(b);
+  }
+}
+function buildRPresets(){
+  const box=$('rPresets'); box.innerHTML='';
+  const map=MAPS[state.mapKey];
+  let items;
+  if(state.mapKey==='logistic'){
+    items=[
+      ['1st doubling 1→2', 3.05, 'a stable point splits into a 2-cycle'],
+      ['into the cascade 4→8', 3.55, 'doublings crowding together'],
+      ['onset of chaos r∞', isFinite(RINF)?RINF:3.5699, 'the cascade accumulates — chaos begins'],
+      ['period-3 window', 3.83, 'order, astonishingly, inside chaos'],
+      ['full chaos', 4.0, 'λ = ln 2 — maximal sensitivity'],
+    ];
+  } else {
+    items=[
+      ['onset of chaos r∞', isFinite(RINF)?RINF:map.hi*0.9, 'where the cascade accumulates'],
+      ['deep chaos', map.hi*0.995, 'past the onset'],
+      ['a stable 2-cycle', LADDER[1]||map.lo, 'the first doubling'],
+    ];
+  }
+  for(const [title,r,sub] of items){
+    const b=document.createElement('button');
+    b.className='preset';
+    b.innerHTML='<b>'+title+'</b><span>r = '+(+r).toFixed(4)+' · '+sub+'</span>';
+    b.onclick=()=>setR(+r);
+    box.appendChild(b);
+  }
+}
+
+function dragHandler(canvas){
+  let dragging=false;
+  const map=()=>MAPS[state.mapKey];
+  const toR=(clientX)=>{ const rect=canvas.getBoundingClientRect();
+    const f=Math.max(0,Math.min(1,(clientX-rect.left)/rect.width));
+    return map().lo + f*(map().hi-map().lo); };
+  canvas.addEventListener('pointerdown',e=>{ dragging=true; canvas.setPointerCapture(e.pointerId); setR(toR(e.clientX)); });
+  canvas.addEventListener('pointermove',e=>{ if(dragging) setR(toR(e.clientX)); });
+  canvas.addEventListener('pointerup',()=>dragging=false);
+  canvas.addEventListener('pointercancel',()=>dragging=false);
+}
+
+// ============================ PNG EXPORT ====================================
+function savePNG(){
+  const W=diag.clientWidth, H=diag.clientHeight+lyap.clientHeight;
+  const out=document.createElement('canvas');
+  out.width=Math.round(W*DPR); out.height=Math.round(H*DPR);
+  const o=out.getContext('2d');
+  o.fillStyle='#06080c'; o.fillRect(0,0,out.width,out.height);
+  o.drawImage(diag,0,0);
+  o.drawImage(lyap,0,Math.round(diag.clientHeight*DPR));
+  out.toBlob(b=>{ const a=document.createElement('a');
+    a.href=URL.createObjectURL(b); a.download='road-into-chaos-'+state.mapKey+'-r'+state.r.toFixed(3)+'.png';
+    a.click(); URL.revokeObjectURL(a.href); });
+}
+
+// ============================ WIRING ========================================
+$('rSlider').addEventListener('input',e=>setR(+e.target.value));
+$('ladderChk').addEventListener('change',e=>{ state.showLadder=e.target.checked; drawDiagramOverlay(); });
+$('lyapChk').addEventListener('change',e=>{ state.showLyap=e.target.checked; renderLyapunov(); });
+$('pngBtn').addEventListener('click',savePNG);
+dragHandler(diag); dragHandler(lyap);
+
+let resizeTimer=null;
+window.addEventListener('resize',()=>{ clearTimeout(resizeTimer); resizeTimer=setTimeout(()=>{
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  renderDiagram(); computeLyapunovCurve(); renderLyapunov(); updateReadout();
+},160); });
+
+// self-test badge
+(function(){
+  const r=runSelfTest();
+  const el=$('selftest');
+  el.textContent=(r.passed===r.total?'✓ ':'✗ ')+r.passed+'/'+r.total+' self-test';
+  el.className='selftest '+(r.passed===r.total?'ok':'bad');
+  console.log('The Road Into Chaos — self-test '+r.passed+'/'+r.total);
+  for(const c of r.checks) console.log('  '+(c.c?'✓':'✗')+' '+c.n+(c.i?'  ·  '+c.i:''));
+  el.onclick=()=>{ alert('Self-test '+r.passed+'/'+r.total+'\n\n'+
+    r.checks.map(c=>(c.c?'✓ ':'✗ ')+c.n+(c.i?'  ('+c.i+')':'')).join('\n')+
+    '\n\nFull per-check detail is in the console.'); };
+})();
+
+// boot
+setMap('logistic');
+setR(3.57);
+</script>
+</body>
+</html>
