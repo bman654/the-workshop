@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Plumbline — the Least Squares bench</title>
+<!-- a standalone Workbench bench (NOT a front-door page, NO ws:seen). -->
+<style>
+  /* ── COLOR-MEANING CONTRACT (state it once; siblings must not drift) ──────────
+     slate-blue  = the L2 answer (the line + UI accent)   --accent
+     amber       = an irreducible bound — the Σr² floor    --floor  (REUSED from
+                   the Shannon Limit's H; in Computation, amber == a floor)
+     warm red    = a residual and its square               --residual
+     violet      = the L1 / LAD line (a different CHOICE)   --l1
+     dotted grey = the mean baseline ȳ (the SS_tot null)    --mean
+     green/red   = RESERVED for the self-test pill ONLY     --good / --bad
+  */
+  :root{
+    --panel-bg: rgba(14,12,9,0.88);
+    --panel-edge: rgba(127,178,230,0.30);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --ink-faint: #6b6e7e;
+    --accent: #7fb2e6;          /* the L2 best-fit line + UI accent (slate/chalk blue) */
+    --accent-soft: rgba(127,178,230,0.16);
+    --bg: #06080c;
+    --stage: #080b11;
+    --floor: #f0c674;           /* the Σr² floor / the squares (amber — Computation's "bound" hue) */
+    --floor-soft: rgba(240,198,116,0.16);
+    --residual: #e0664f;        /* a residual segment + its square (warm red) */
+    --residual-soft: rgba(224,102,79,0.18);
+    --l1: #b08fd3;              /* the L1/LAD line (a different choice, violet) */
+    --meanline: #6b6e7e;        /* the mean baseline ȳ (dotted dim grey) */
+    /* green/red are RESERVED exclusively for the self-test pill */
+    --good: #8fd79a;
+    --good-soft: rgba(120,200,130,0.5);
+    --bad: #e0664f;
+    --bad-soft: rgba(220,120,100,0.6);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+  /* ---- topbar ---- */
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    justify-content:space-between; padding:14px 20px 0; pointer-events:none; gap:12px; flex-wrap:nowrap; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:var(--good); border-color:var(--good-soft); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:var(--bad-soft); background:rgba(70,30,26,0.4); }
+
+  /* ---- layout: stage (canvas) + side panel ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; display:flex; flex-direction:column;
+    padding:52px 0 0; overflow:hidden; }
+  #canvasHost{ flex:1 1 auto; position:relative; min-height:0; background:var(--stage);
+    border-top:1px solid var(--panel-edge); overflow:hidden; }
+  #c{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:crosshair; }
+  /* floating GD/teeth badge — top-center */
+  #badge{ position:absolute; left:50%; top:14px; transform:translateX(-50%); z-index:7; pointer-events:none;
+    font:600 11px/1.4 var(--font-mono); text-align:center; background:rgba(0,0,0,0.5);
+    border:1px solid var(--panel-edge); border-radius:10px; padding:7px 15px; backdrop-filter:blur(4px);
+    max-width:88%; opacity:0; transition:opacity .25s; }
+  #badge.show{ opacity:1; }
+  #badge b{ font-family:var(--font-serif); font-size:14px; color:var(--floor); }
+  /* hint line bottom-left */
+  #hint{ position:absolute; left:14px; bottom:12px; z-index:6; pointer-events:none; max-width:62%;
+    font:11px/1.5 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.42);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 11px; }
+  #hint b{ color:var(--accent); }
+  #hint .g{ color:var(--floor); }
+  #sumLabel{ position:absolute; right:14px; bottom:12px; z-index:6; pointer-events:none;
+    font:600 11px/1.5 var(--font-mono); color:var(--floor); background:rgba(0,0,0,0.42);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 11px; text-align:right; }
+
+  /* ---- side panel ---- */
+  #side{ width:308px; flex:0 0 308px; background:var(--panel-bg); border-left:1px solid var(--panel-edge);
+    padding:58px 16px 22px; overflow-y:auto; display:flex; flex-direction:column; gap:13px;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  #side .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0; letter-spacing:.2px; }
+  #side .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:6px 0 -2px; border-top:1px solid rgba(127,178,230,0.16); padding-top:13px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .chip{ font:600 11.5px/1 var(--font-mono); padding:7px 10px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink-dim); transition:.15s; user-select:none; }
+  .chip:hover{ color:var(--ink); border-color:var(--accent); }
+  .chip.on{ color:#06080c; background:var(--accent); border-color:var(--accent); font-weight:700; }
+  .chip.sm{ font-size:10.5px; padding:6px 8px; }
+  /* segmented L2/L1 toggle */
+  .seg{ display:flex; gap:2px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-edge); border-radius:9px; padding:3px; }
+  .seg .opt{ flex:1; text-align:center; font:600 11px/1 var(--font-mono); padding:8px 6px; border-radius:6px;
+    color:var(--ink-dim); cursor:pointer; transition:.15s; user-select:none; }
+  .seg .opt.on{ color:#06080c; font-weight:700; }
+  .seg .opt.l2.on{ background:var(--accent); }
+  .seg .opt.l1.on{ background:var(--l1); }
+  .seg .opt.both.on{ background:linear-gradient(90deg,var(--accent),var(--l1)); }
+  .toggle{ display:flex; align-items:center; justify-content:space-between; gap:10px;
+    font:600 11px/1.3 var(--font-mono); color:var(--ink-dim); cursor:pointer; padding:2px 0; user-select:none; }
+  .toggle:hover{ color:var(--ink); }
+  .toggle .sw{ width:34px; height:18px; border-radius:10px; background:rgba(0,0,0,0.4); border:1px solid var(--panel-edge);
+    position:relative; flex:0 0 auto; transition:.18s; }
+  .toggle .sw::after{ content:''; position:absolute; top:1px; left:1px; width:14px; height:14px; border-radius:50%;
+    background:var(--ink-faint); transition:.18s; }
+  .toggle.on .sw{ background:var(--accent-soft); border-color:var(--accent); }
+  .toggle.on .sw::after{ left:17px; background:var(--accent); }
+  .note{ font:11px/1.5 var(--font-mono); color:var(--ink-faint); margin:0; }
+  .note b{ color:var(--ink-dim); }
+  .note.caveat{ border-left:2px solid var(--l1); padding-left:9px; }
+
+  /* ── the readouts ─────────────────────────────────────────────────────────── */
+  /* Σr² floor gauge */
+  .gauge{ position:relative; height:26px; border-radius:7px; background:rgba(0,0,0,0.36);
+    border:1px solid var(--panel-edge); overflow:hidden; }
+  .gauge .fill{ position:absolute; left:0; top:0; bottom:0; background:var(--floor-soft);
+    border-right:2px solid var(--floor); transition:width .12s cubic-bezier(.22,1,.36,1); }
+  .gauge .floortick{ position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--floor);
+    box-shadow:0 0 0 0 var(--floor); }
+  .gauge.above .floortick{ box-shadow:0 0 7px 1px var(--floor); }
+  .gauge .lbl{ position:absolute; left:8px; top:50%; transform:translateY(-50%); z-index:2;
+    font:600 10px/1 var(--font-mono); color:var(--ink); text-shadow:0 1px 2px #000; }
+  .gauge.grey{ opacity:.42; }
+  /* variance bar (R² as geometry) */
+  .vbar{ position:relative; height:22px; border-radius:6px; overflow:hidden;
+    background:var(--residual-soft); border:1px solid var(--panel-edge); }
+  .vbar .expl{ position:absolute; left:0; top:0; bottom:0; background:var(--floor-soft);
+    border-right:1px solid var(--floor); transition:width .14s ease; }
+  .vbar .lbl{ position:absolute; right:7px; top:50%; transform:translateY(-50%); z-index:2;
+    font:600 10px/1 var(--font-mono); color:var(--ink); text-shadow:0 1px 2px #000; }
+  .vbar .lbl.l{ right:auto; left:7px; }
+  /* the two-route identity */
+  .ident{ font:11px/1.5 var(--font-mono); color:var(--ink-dim); }
+  .ident .row{ display:flex; justify-content:space-between; gap:8px; }
+  .ident .v{ color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums; }
+  .badge2{ display:inline-block; font:600 9.5px/1 var(--font-mono); padding:4px 7px; border-radius:6px;
+    border:1px solid var(--good-soft); color:var(--good); background:rgba(30,58,38,0.4); margin-top:5px; }
+  .badge2.no{ border-color:var(--bad-soft); color:#f08a7a; background:rgba(70,30,26,0.4); }
+  .readrow{ display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+    font:600 11px/1.4 var(--font-mono); }
+  .readrow .k{ color:var(--ink-dim); font-weight:600; }
+  .readrow .v{ color:var(--accent); font-variant-numeric:tabular-nums; }
+  .readrow .v.r{ color:var(--l1); }
+
+  .legend{ display:flex; flex-direction:column; gap:5px; font:10.5px/1.3 var(--font-mono); color:var(--ink-dim); }
+  .legend .li{ display:flex; align-items:center; gap:7px; }
+  .legend .sw2{ width:16px; height:0; border-top-width:2px; border-top-style:solid; flex:0 0 auto; }
+  .legend .sq{ width:12px; height:12px; border-radius:2px; flex:0 0 auto; }
+
+  @media (max-width:760px){
+    #wrap{ flex-direction:column; }
+    #stage{ flex:1 1 54%; padding-top:48px; }
+    #side{ width:auto; flex:1 1 46%; border-left:none; border-top:1px solid var(--panel-edge);
+      padding:14px 14px 18px; }
+    .brand h1{ font-size:18px; }
+    #hint{ max-width:54%; }
+  }
+  /* keep the topbar from colliding the brand title with the pill on narrow phones:
+     drop the tag first, then the title (restated in the lede). Scoped ≤430px. */
+  @media (max-width:520px){ .brand .tag{ display:none; } .brand h1{ font-size:16px; } }
+  @media (max-width:430px){ .brand{ display:none; } }
+  @media (prefers-reduced-motion: reduce){
+    .gauge .fill, .vbar .expl{ transition:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../workbench/index.html">← workbench</a>
+    </div>
+    <div class="brand">
+      <h1>The Plumbline</h1>
+      <span class="tag">the line is not an opinion</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for the per-claim detail (also printed to the console)">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <div id="canvasHost">
+        <canvas id="c"></canvas>
+        <div id="badge"></div>
+        <div id="hint"></div>
+        <div id="sumLabel"></div>
+      </div>
+    </div>
+
+    <aside id="side">
+      <p class="lede" id="lede"><b>The line is forced.</b> Punish error by its <b>square</b> and exactly one line is best — and three strangers who share no code (the normal equations, a from-scratch gradient descent, a perturbation jury) all swear to the same slope. Drag the cloud; Σr² falls to a floor no nudge can get under.</p>
+
+      <div class="sect">The cloud</div>
+      <div class="chips">
+        <span class="chip sm" id="bScatter">Scatter</span>
+        <span class="chip sm" id="bNoise">Add noise</span>
+        <span class="chip sm" id="bTidy">Tidy</span>
+        <span class="chip sm" id="bGD">Watch GD converge</span>
+        <span class="chip sm" id="bOutlier">Drag an outlier</span>
+      </div>
+      <p class="note"><b>Drag</b> a point to re-snap the line live · <b>click</b> empty space to add · <b>right-click</b> a point to remove. The line always equals the closed form — it is recomputed every frame.</p>
+
+      <div class="sect">Σr² — the floor</div>
+      <div class="gauge" id="gauge">
+        <div class="fill" id="gaugeFill"></div>
+        <div class="floortick" id="gaugeFloor"></div>
+        <div class="lbl" id="gaugeLbl">Σr² —</div>
+      </div>
+      <p class="note">The gold fill is the total squared error — the sum of the literal <span style="color:var(--floor)">squares</span> on the plane. The tick is the analytic minimum. At rest the fill sits <b>on</b> the floor; nudge the line and it can only rise above it.</p>
+
+      <div class="sect">R² as geometry</div>
+      <div class="vbar">
+        <div class="expl" id="vbarExpl"></div>
+        <div class="lbl l" id="vbarLblL">explained</div>
+        <div class="lbl" id="vbarLbl">R² —</div>
+      </div>
+      <p class="note">One bar = the total variance SS_tot. The gilt fraction is the variance the line <b>explains</b> — that gilt fraction literally <b>is</b> R². The red remainder is what's left unexplained (SS_res).</p>
+      <div class="ident" id="ident">
+        <div class="row"><span>R² = 1 − SS_res/SS_tot</span><span class="v" id="rA">—</span></div>
+        <div class="row"><span>&nbsp;&nbsp;&nbsp;= r² (Pearson²)</span><span class="v" id="rB">—</span></div>
+      </div>
+      <span class="badge2" id="identBadge">✓ identical</span>
+      <div class="readrow" style="margin-top:6px"><span class="k">Pearson r (signed)</span><span class="v r" id="pearson">—</span></div>
+      <div class="readrow"><span class="k">best-fit line</span><span class="v" id="lineEq">—</span></div>
+
+      <div class="sect">The teeth — best is a choice</div>
+      <div class="seg" id="seg">
+        <div class="opt l2 on" data-mode="l2">L2 · Σr²</div>
+        <div class="opt l1" data-mode="l1">L1 · Σ|r|</div>
+        <div class="opt both" data-mode="both">both</div>
+      </div>
+      <p class="note caveat" id="caveat"><b>'Best' was a choice.</b> The square is what makes the line unique and gives the closed form — but it is not robust. Flip to L1 (Σ|r|) and the line moves; drag an outlier and L2 chases it while robust L1 holds.</p>
+
+      <div class="sect">Show</div>
+      <div class="chips">
+        <div class="toggle on" id="tSquares" style="flex:1 1 100%"><span>The literal squares</span><span class="sw"></span></div>
+        <div class="toggle on" id="tResid" style="flex:1 1 100%"><span>Residual stems</span><span class="sw"></span></div>
+        <div class="toggle" id="tMean" style="flex:1 1 100%"><span>Mean baseline ȳ (SS_tot)</span><span class="sw"></span></div>
+        <div class="toggle" id="tVar" style="flex:1 1 100%"><span>Variance ghosts</span><span class="sw"></span></div>
+      </div>
+
+      <div class="sect">Legend</div>
+      <div class="legend">
+        <div class="li"><span class="sw2" style="border-top-color:var(--accent)"></span> L2 best-fit (solid slate) — the answer</div>
+        <div class="li"><span class="sw2" style="border-top-color:var(--l1); border-top-style:dashed"></span> L1 / LAD (dashed violet) — a choice</div>
+        <div class="li"><span class="sw2" style="border-top-color:var(--meanline); border-top-style:dotted"></span> mean ȳ (dotted grey) — the null</div>
+        <div class="li"><span class="sq" style="background:var(--floor-soft); border:1px solid var(--floor)"></span> a squared residual — Σ of these is the floor</div>
+        <div class="li"><span class="sw2" style="border-top-color:var(--residual)"></span> a residual (vertical: point→line)</div>
+      </div>
+      <p class="note" style="margin-top:4px">Residuals are <b>vertical</b> — OLS minimises vertical error, x is assumed known (this is not perpendicular/Deming regression). Each squared residual is hung as a true square; the total gold area <b>is</b> Σr².</p>
+    </aside>
+  </div>
+
+<script>
+// ===== PLUMBLINE CORE (inlined byte-twin) BEGIN =====
+// ── THE PRIMITIVE ATOMS — the ONLY shared helpers (sum / mean over an accessor). ─
+// These are the "adjacent swap" of this bench: every estimator needs a sum and a
+// mean, and sharing them is not sharing a fit. fitL2, gdFit and the perturbation
+// jury each call THESE and nothing else of each other's — that disjointness is the
+// whole point (the closed form and gradient descent agreeing must be a theorem,
+// not a copy). Integer-free, pure, no rounding.
+function sum(xs){ let s = 0; for (let i = 0; i < xs.length; i++) s += xs[i]; return s; }
+function mean(xs){ return xs.length ? sum(xs) / xs.length : 0; }
+
+// ── distinctXCount(points) — the vertical-data guard's witness. ───────────────
+// Counts how many DISTINCT x-values the cloud has. With < 2 the least-squares
+// slope is undefined (Σ(x−x̄)² = 0 → divide-by-zero → a vertical line). Both the
+// core and the page consult this so a degenerate cloud greys out, never NaNs.
+function distinctXCount(points){
+  const seen = new Set();
+  for (let i = 0; i < points.length; i++) seen.add(points[i].x);
+  return seen.size;
+}
+
+// ── sse(points, m, b) — the score being minimised: Σ(vertical residual)². ──────
+// A residual is VERTICAL: r_i = y_i − (m·x_i + b) (x is assumed known; this is
+// ordinary least squares, NOT perpendicular/Deming regression). The square of the
+// vertical distance, summed. This is the ONE number the whole bench is about.
+function sse(points, m, b){
+  let s = 0;
+  for (let i = 0; i < points.length; i++){
+    const r = points[i].y - (m * points[i].x + b);
+    s += r * r;
+  }
+  return s;
+}
+
+// ── ESTIMATOR 1 — THE NORMAL EQUATIONS (closed form). ─────────────────────────
+// Differentiate Σ(y−mx−b)² w.r.t. m and b, set both to zero, and the optimum is
+// the solution of the 2×2 "normal equations":
+//     m = Σ(x−x̄)(y−ȳ) / Σ(x−x̄)²        (covariance over x-variance)
+//     b = ȳ − m·x̄                         (the line passes through the centroid)
+// Then r² (Pearson²) and R² (1−SS_res/SS_tot) are reported off the same fit. With
+// < 2 distinct x the denominator is 0 → {ok:false} (the guard, never a NaN line).
+// References ONLY the sum/mean atoms and sse — NO other estimator (anti-circularity).
+function fitL2(points){
+  const n = points.length;
+  if (n < 2 || distinctXCount(points) < 2){
+    return { ok: false, m: 0, b: 0, sse: 0, r2: 0, r: 0, n };
+  }
+  const xs = points.map(p => p.x), ys = points.map(p => p.y);
+  const xbar = mean(xs), ybar = mean(ys);
+  let Sxx = 0, Sxy = 0, Syy = 0;
+  for (let i = 0; i < n; i++){
+    const dx = xs[i] - xbar, dy = ys[i] - ybar;
+    Sxx += dx * dx; Sxy += dx * dy; Syy += dy * dy;
+  }
+  const m = Sxy / Sxx;
+  const b = ybar - m * xbar;
+  const ssRes = sse(points, m, b);
+  const ssTot = Syy;                              // Σ(y−ȳ)² = SS_tot
+  const r2 = ssTot === 0 ? 1 : 1 - ssRes / ssTot;
+  const r = Syy === 0 ? 0 : Sxy / Math.sqrt(Sxx * Syy);   // Pearson correlation (signed)
+  return { ok: true, m, b, sse: ssRes, r2, r, n, xbar, ybar, ssTot };
+}
+
+// ── ESTIMATOR 2 — GRADIENT DESCENT (from scratch, totally separate code). ─────
+// Start at a deliberately-WRONG flat line (m=0, b=ȳ) and step downhill along the
+// analytic gradient of Σr²:
+//     ∂Σr²/∂m = −2 Σ x·r ,   ∂Σr²/∂b = −2 Σ r ,   r = y − (m x + b)
+// The learning rate is scaled by 1/Σx² so the same lr behaves across clouds. It
+// returns the full per-iteration trace (the page animates the ghost along it).
+// Knows NOTHING of the normal equations — yet converges to the same (m,b) to ≤1e-9.
+// References ONLY the sum/mean atoms — NO fitL2, NO closed-form machinery.
+function gdFit(points, opts){
+  const maxIters = (opts && opts.maxIters) || 4000;
+  const n = points.length;
+  if (n < 2 || distinctXCount(points) < 2){
+    return { ok: false, m: 0, b: 0, trace: [] };
+  }
+  const xs = points.map(p => p.x), ys = points.map(p => p.y);
+  const ybar = mean(ys);
+  const sumXX = sum(xs.map(x => x * x)) || 1;
+  // Each coordinate gets a step scaled by its own curvature: ∂²Σr²/∂m² = 2Σx²,
+  // ∂²Σr²/∂b² = 2n. Dividing each gradient by its Hessian diagonal makes a single
+  // lr converge on every cloud (a diagonal-preconditioned descent) — and lets b
+  // (the slow-mixing coordinate when Σx²≫n) reach the floor in the same budget.
+  const baseLr = (opts && opts.lr) || 0.5;
+  const lrM = baseLr / sumXX;
+  const lrB = baseLr / n;
+  let m = 0, b = ybar;                            // the deliberately-wrong flat start
+  const trace = [{ m, b, sse: sse(points, m, b) }];
+  for (let it = 0; it < maxIters; it++){
+    let gm = 0, gb = 0;
+    for (let i = 0; i < n; i++){
+      const r = ys[i] - (m * xs[i] + b);          // residual
+      gm += -2 * xs[i] * r;
+      gb += -2 * r;
+    }
+    m -= lrM * gm;
+    b -= lrB * gb;
+    trace.push({ m, b, sse: sse(points, m, b) });
+  }
+  return { ok: true, m, b, trace };
+}
+
+// ── ESTIMATOR 3 — THE PERTURBATION JURY (a third stranger). ───────────────────
+// Take the closed-form line and nudge (m,b) by random ±ε in every direction; EVERY
+// nudge must score worse (higher Σr²). If even one perturbation beat the fit, the
+// "minimum" would be a lie. Returns {ok, worst, tested} where ok means no nudge
+// won. This proves the floor is a strict minimum WITHOUT touching gdFit's code or
+// fitL2's solve — it only reads sse. References ONLY sse and a seeded rng.
+function perturbAllWorse(points, fit, seed, trials, eps){
+  const T = trials || 400;
+  const E = eps || 0.25;
+  const rng = makeRng(seed || 1);
+  const base = fit.sse;
+  let worst = Infinity, beaten = 0;               // worst = smallest margin seen
+  for (let t = 0; t < T; t++){
+    const dm = (rng() * 2 - 1) * E;
+    const db = (rng() * 2 - 1) * E;
+    if (dm === 0 && db === 0) continue;
+    const s = sse(points, fit.m + dm, fit.b + db);
+    const margin = s - base;                       // must be ≥ 0
+    if (margin < worst) worst = margin;
+    if (margin < 0) beaten++;                       // a nudge that BEAT the fit (a bug)
+  }
+  return { ok: beaten === 0, worst, beaten, tested: T };
+}
+
+// ── ESTIMATOR 4 — LEAST ABSOLUTE DEVIATIONS (the teeth; DETERMINISTIC). ───────
+// Minimise Σ|residual| instead of Σ(residual)² via IRLS (iteratively reweighted
+// least squares): repeatedly solve a WEIGHTED normal-equations fit with weight
+// w_i = 1/max(|r_i|, δ). Fixed iteration count + a floor δ → a stable, repeatable
+// {m,b} (the teeth caption must not jitter). It lands on a DIFFERENT line than L2
+// on a noisy cloud, and — the honest caveat — it barely moves when L2 lurches at an
+// outlier (squared loss is unique but NOT robust). Uses the weighted closed form
+// internally (its own machinery); references the sum/mean atoms, never fitL2/gdFit.
+function fitL1(points){
+  const n = points.length;
+  if (n < 2 || distinctXCount(points) < 2){
+    return { ok: false, m: 0, b: 0, sad: 0, n };
+  }
+  const xs = points.map(p => p.x), ys = points.map(p => p.y);
+  // seed from the unweighted (uniform-weight) normal-equations solution.
+  let m = 0, b = 0;
+  {
+    const xbar = mean(xs), ybar = mean(ys);
+    let Sxx = 0, Sxy = 0;
+    for (let i = 0; i < n; i++){ const dx = xs[i] - xbar; Sxx += dx * dx; Sxy += dx * (ys[i] - ybar); }
+    m = Sxy / Sxx; b = ybar - m * xbar;
+  }
+  const DELTA = 1e-7;
+  for (let it = 0; it < 60; it++){                 // fixed cap → deterministic
+    let Sw = 0, Swx = 0, Swy = 0, Swxx = 0, Swxy = 0;
+    for (let i = 0; i < n; i++){
+      const r = ys[i] - (m * xs[i] + b);
+      const w = 1 / Math.max(Math.abs(r), DELTA);  // IRLS weight → L1 in the limit
+      Sw += w; Swx += w * xs[i]; Swy += w * ys[i];
+      Swxx += w * xs[i] * xs[i]; Swxy += w * xs[i] * ys[i];
+    }
+    // weighted normal equations: [Swxx Swx; Swx Sw] [m;b] = [Swxy; Swy]
+    const det = Swxx * Sw - Swx * Swx;
+    if (Math.abs(det) < 1e-300) break;
+    m = (Swxy * Sw - Swx * Swy) / det;
+    b = (Swxx * Swy - Swx * Swxy) / det;
+  }
+  let sad = 0;
+  for (let i = 0; i < n; i++) sad += Math.abs(ys[i] - (m * xs[i] + b));
+  return { ok: true, m, b, sad, n };
+}
+
+// ── SEEDED RNG + GAUSSIAN — reproducibility (page & Node twin make the SAME cloud).
+// mulberry32; gauss via Box–Muller. The Scatter button and the Node twin both call
+// THESE with a seed, so a cloud generated in the browser is reproduced bit-for-bit
+// headless. This is the ONLY randomness in the bench (everything else is exact).
+function makeRng(seed){
+  let a = (seed >>> 0) || 1;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function gauss(rng){
+  let u = 0, v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+// ── scatterCloud(seed, opts) — a fresh seeded cloud around a hidden true line. ──
+// ~12 points: x on a grid across the WORLD, y = trueM·x + trueB + Gaussian noise,
+// all clamped into the world box. Deterministic from the seed (same seed → same
+// cloud, browser or Node). The "hidden true line" is just where the noise is hung;
+// the FIT recovers its own line from the points, never peeks at trueM/trueB.
+function scatterCloud(seed, opts){
+  const o = opts || {};
+  const n = o.n || 12;
+  const W = o.world || 10;
+  const margin = 1.2;
+  const rng = makeRng(seed || 1);
+  const trueM = (o.m !== undefined) ? o.m : (rng() * 1.4 - 0.7);
+  const trueB = (o.b !== undefined) ? o.b : (W * 0.5 + (rng() * 2 - 1) * 1.5);
+  const noise = (o.noise !== undefined) ? o.noise : 0.9;
+  const pts = [];
+  for (let i = 0; i < n; i++){
+    const x = margin + (i + 0.5) * (W - 2 * margin) / n + (rng() - 0.5) * 0.3;
+    let y = trueM * x + trueB + gauss(rng) * noise;
+    y = Math.max(margin * 0.5, Math.min(W - margin * 0.5, y));
+    pts.push({ x: round2(x), y: round2(y) });
+  }
+  return pts;
+}
+function round2(v){ return Math.round(v * 100) / 100; }
+
+// ── THE SOLE AUTHORITATIVE ORACLE — runSelfTest(). ────────────────────────────
+// Runs the four numbered claims. Returns { pass, total, lines:[{name,ok,detail}] }.
+// The in-page pill and the Node twin both call THIS — one verdict, no second
+// opinion. Every detail carries LIVE numbers, never a hardcoded echo.
+function runSelfTest(){
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+
+  // 1. CLOSED FORM == GRADIENT DESCENT to ≤1e-9 over many seeds (source-disjoint).
+  {
+    let worstM = 0, worstB = 0, firstBad = -1, tested = 0;
+    for (let s = 1; s <= 60; s++){
+      const pts = scatterCloud(s * 2654435761 >>> 0, { n: 14, noise: 1.0 });
+      const cf = fitL2(pts);
+      const gd = gdFit(pts, { maxIters: 8000, lr: 0.5 });
+      tested++;
+      const dM = Math.abs(cf.m - gd.m), dB = Math.abs(cf.b - gd.b);
+      if (dM > worstM) worstM = dM;
+      if (dB > worstB) worstB = dB;
+      if ((dM > 1e-9 || dB > 1e-9) && firstBad < 0) firstBad = s;
+    }
+    const ok = worstM <= 1e-9 && worstB <= 1e-9;
+    T('CLAIM 1 — closed form == gradient descent (≤1e-9, source-disjoint): the normal equations and a from-scratch GD that share no fit code land on the SAME (m,b)',
+      ok, ok ? `${tested} seeds · worst Δm=${worstM.toExponential(2)} Δb=${worstB.toExponential(2)} ≤ 1e-9` :
+        `worst Δm=${worstM.toExponential(2)} Δb=${worstB.toExponential(2)} (first @seed ${firstBad})`);
+  }
+
+  // 1b. ANTI-CIRCULARITY — fitL2 and gdFit name no shared FIT helper (only atoms).
+  {
+    const f = fitL2.toString(), g = gdFit.toString();
+    const fOk = !f.includes('gdFit') && !f.includes('.trace');
+    const gOk = !g.includes('fitL2') && !g.includes('normal') && !g.includes('Sxy');
+    const atoms = f.includes('mean(') && g.includes('mean(');
+    const ok = fOk && gOk && atoms;
+    T('CLAIM 1 (anti-circularity) — fitL2 names no GD machinery and gdFit names no closed-form solve; they share only the sum/mean atoms (the agreement is a theorem, not a copy)',
+      ok, ok ? 'fitL2 ⟂ gdFit at the source level; both reference only the primitive atoms' :
+        `fitClean=${fOk} gdClean=${gOk} bothUseAtoms=${atoms}`);
+  }
+
+  // 2. THE ANALYTIC Σr² IS THE STRICT FLOOR — every perturbation scores worse.
+  {
+    let beaten = 0, worstMargin = Infinity, firstBad = -1, tested = 0;
+    for (let s = 1; s <= 40; s++){
+      const pts = scatterCloud(s * 40503 >>> 0, { n: 12, noise: 1.1 });
+      const cf = fitL2(pts);
+      const jury = perturbAllWorse(pts, cf, s * 7 + 1, 400, 0.3);
+      tested++;
+      if (!jury.ok) beaten += jury.beaten;
+      if (jury.worst < worstMargin) worstMargin = jury.worst;
+      if (!jury.ok && firstBad < 0) firstBad = s;
+    }
+    const ok = beaten === 0 && worstMargin >= 0;
+    T('CLAIM 2 — the analytic Σr² is the STRICT floor: across 40 seeds × 400 random ±ε nudges of (m,b), NOT ONE perturbation beats the closed-form line',
+      ok, ok ? `${tested} seeds × 400 nudges · 0 beat the fit · smallest worse-margin ${worstMargin.toExponential(2)} ≥ 0` :
+        `${beaten} nudge(s) beat the fit (first @seed ${firstBad})`);
+  }
+
+  // 3. THE R² TRIPLE IDENTITY — 1−SS_res/SS_tot == r² (Pearson²) to ~1e-12, AND ==1 on collinear.
+  {
+    let worst = 0, firstBad = -1, tested = 0;
+    for (let s = 1; s <= 60; s++){
+      const pts = scatterCloud(s * 22695477 >>> 0, { n: 13, noise: 1.0 });
+      const cf = fitL2(pts);
+      const d = Math.abs(cf.r2 - cf.r * cf.r);     // route A (SS) vs route B (Pearson²)
+      tested++;
+      if (d > worst) worst = d;
+      if (d > 1e-12 && firstBad < 0) firstBad = s;
+    }
+    // collinear: y = 2x + 1 exactly → R² must be 1.0 EXACTLY.
+    const coll = [];
+    for (let i = 0; i < 8; i++) coll.push({ x: i + 1, y: 2 * (i + 1) + 1 });
+    const cc = fitL2(coll);
+    const collOk = cc.ok && Math.abs(cc.r2 - 1) < 1e-12 && Math.abs(cc.r * cc.r - 1) < 1e-12 && cc.sse < 1e-18;
+    const ok = worst <= 1e-12 && collOk;
+    T('CLAIM 3 — the R² triple identity: 1−SS_res/SS_tot == r² (Pearson)² to ~1e-12 over 60 seeds (two independent routes), AND == 1.0 EXACTLY on collinear points',
+      ok, ok ? `${tested} seeds · worst |ΔR²|=${worst.toExponential(2)} ≤ 1e-12 · collinear R²=${cc.r2.toFixed(15)} (Σr²=${cc.sse.toExponential(1)})` :
+        `worst |ΔR²|=${worst.toExponential(2)} collinearOK=${collOk}`);
+  }
+
+  // 4. THE L1 TEETH — L1 ≠ L2 on a cloud, AND L2 lurches at an outlier while L1 holds.
+  {
+    // a non-trivial noisy cloud: L1 and L2 must give a DIFFERENT best.
+    const cloud = scatterCloud(1234567, { n: 12, noise: 1.4 });
+    const l2 = fitL2(cloud), l1 = fitL1(cloud);
+    const differ = Math.abs(l2.m - l1.m) > 1e-3 || Math.abs(l2.b - l1.b) > 1e-3;
+    // the outlier contrast: take a tame near-collinear cloud, then yank ONE
+    // HIGH-LEVERAGE point (the far-right edge — leverage grows with |x−x̄|) far off
+    // the line and measure each slope's MOVE. L2 (squared) lurches toward it; the
+    // robust L1 barely twitches. A point near the centroid wouldn't show it — the
+    // lesson lives at the edge, so the test drags the LAST (rightmost) point.
+    const tame = scatterCloud(20260614, { n: 12, noise: 0.35, m: 0.5, b: 5 });
+    const l2a = fitL2(tame), l1a = fitL1(tame);
+    const last = tame.length - 1;
+    const dragged = tame.map((p, i) => i === last ? { x: p.x, y: -6 } : p);  // yank the edge point far DOWN
+    const l2b = fitL2(dragged), l1b = fitL1(dragged);
+    const l2move = Math.abs(l2b.m - l2a.m);
+    const l1move = Math.abs(l1b.m - l1a.m);
+    // squared loss is NOT robust: L2 must move strictly, and far more than L1.
+    const robust = l2move > l1move * 3 && l2move > 0.1;
+    // the NEGATIVE CONTROL (the teeth must bite where expected AND not where not):
+    // on a perfectly collinear cloud, L1 and L2 must AGREE (both hit the exact line).
+    const coll = [];
+    for (let i = 0; i < 8; i++) coll.push({ x: i + 1, y: 1.3 * (i + 1) - 0.7 });
+    const cl2 = fitL2(coll), cl1 = fitL1(coll);
+    const agreeOnLine = Math.abs(cl2.m - cl1.m) < 1e-3 && Math.abs(cl2.b - cl1.b) < 1e-2;
+    const ok = differ && robust && agreeOnLine;
+    T('CLAIM 4 — the L1 teeth (control + robustness): L1 ≠ L2 on a noisy cloud, an outlier moves L2 ≫ L1 (squared loss is unique but NOT robust), AND L1 == L2 on a collinear cloud',
+      ok, ok ? `Δslope(L2,L1)=${Math.abs(l2.m - l1.m).toFixed(3)}≠0 · outlier moved L2 ${l2move.toFixed(3)} vs L1 ${l1move.toFixed(3)} · collinear: L1==L2 ✓` :
+        `differ=${differ} robust=${robust}(L2 ${l2move.toFixed(3)}/L1 ${l1move.toFixed(3)}) agreeOnLine=${agreeOnLine}`);
+  }
+
+  const pass = lines.filter(l => l.ok).length;
+  return { pass, total: lines.length, lines };
+}
+// ===== PLUMBLINE CORE END =====
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE PAGE — render + interaction. The render module CALLS the core
+   (fitL2/fitL1/gdFit) and never re-derives a fit (anti-circularity holds for the
+   page too: the only fit math here lives in the inlined core above). All drawing
+   is in WORLD coordinates mapped through ONE equal-aspect scale.
+   ════════════════════════════════════════════════════════════════════════════ */
+const WORLD = 10;                 // the continuous plane is [0,WORLD]×[0,WORLD]
+const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = id => document.getElementById(id);
+
+const canvas = $('c'), ctx = canvas.getContext('2d');
+let DPR = 1, PLOT = { x:0, y:0, w:0, h:0, s:1 };   // plot frame + the ONE shared scale s (px/unit)
+
+// the live cloud + UI state
+let points = scatterCloud((Date.now() & 0x7fffffff) >>> 0, { n: 12, noise: 0.9 });
+let mode = 'l2';                  // 'l2' | 'l1' | 'both'
+let show = { squares:true, resid:true, mean:false, variance:false };
+let dragIdx = -1;
+// the GD ghost animation state
+let ghost = null;                 // {trace, i, target:{m,b}, alive, m, b}
+
+// ── fitDPR + plotFrame (lifted from the Carnot/Shannon framing helpers) ───────
+function fitDPR(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const host = $('canvasHost');
+  const w = host.clientWidth, h = host.clientHeight;
+  canvas.width = Math.round(w * DPR); canvas.height = Math.round(h * DPR);
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+  // EQUAL ASPECT: one px-per-unit scale s = min over both axes, centered padding
+  // on the slack axis. The same s sizes the plane AND the square sides → a
+  // residual square is a TRUE square. This is the make-or-break invariant.
+  const pad = 30;
+  const availW = w - pad * 2, availH = h - pad * 2;
+  const s = Math.min(availW / WORLD, availH / WORLD);
+  const plotW = s * WORLD, plotH = s * WORLD;
+  PLOT = { x: (w - plotW) / 2, y: (h - plotH) / 2, w: plotW, h: plotH, s };
+}
+// world → screen (y flips: world y up, screen y down)
+const sx = wx => PLOT.x + wx * PLOT.s;
+const sy = wy => PLOT.y + (WORLD - wy) * PLOT.s;
+// screen → world (for pointer hit-testing / dragging)
+const wxOf = px => (px - PLOT.x) / PLOT.s;
+const wyOf = py => WORLD - (py - PLOT.y) / PLOT.s;
+
+// ── the draw spine ────────────────────────────────────────────────────────────
+function draw(){
+  const w = canvas.width / DPR, h = canvas.height / DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const fit = fitL2(points);
+  const l1 = fitL1(points);
+  const guarded = !fit.ok;
+
+  drawGrid();
+  drawMeanBaseline(fit);
+  if (show.variance) drawVarianceGhosts(fit);
+  if (fit.ok && show.squares && (mode === 'l2' || mode === 'both')) drawSquares(fit);
+  if (fit.ok && show.resid) drawResiduals(fit);
+  // lines, back-to-front: L1 (subordinate) under L2 (the answer)
+  if (l1.ok && (mode === 'l1' || mode === 'both')) drawLine(l1.m, l1.b, getCss('--l1'), 'dash', mode === 'l1' ? 2.4 : 2.0);
+  if (fit.ok && (mode === 'l2' || mode === 'both')) drawLine(fit.m, fit.b, getCss('--accent'), 'solid', 2.6, true);
+  // the GD ghost (violet dashed, while converging)
+  if (ghost && ghost.alive) drawLine(ghost.m, ghost.b, getCss('--l1'), 'dash', 2.0);
+  drawPoints(fit);
+  if (fit.ok) drawSumLabel(fit);
+
+  updateReadouts(fit, l1, guarded);
+}
+
+function getCss(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+function drawGrid(){
+  ctx.save();
+  // plot frame
+  ctx.strokeStyle = 'rgba(127,178,230,0.14)'; ctx.lineWidth = 1;
+  ctx.strokeRect(PLOT.x, PLOT.y, PLOT.w, PLOT.h);
+  // unit grid
+  ctx.strokeStyle = 'rgba(127,178,230,0.07)';
+  ctx.beginPath();
+  for (let i = 1; i < WORLD; i++){
+    ctx.moveTo(sx(i), sy(0)); ctx.lineTo(sx(i), sy(WORLD));
+    ctx.moveTo(sx(0), sy(i)); ctx.lineTo(sx(WORLD), sy(i));
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawMeanBaseline(fit){
+  if (!show.mean || !fit.ok) return;
+  ctx.save();
+  ctx.strokeStyle = getCss('--meanline'); ctx.lineWidth = 1.4; ctx.setLineDash([1.5, 4]);
+  ctx.beginPath(); ctx.moveTo(sx(0), sy(fit.ybar)); ctx.lineTo(sx(WORLD), sy(fit.ybar)); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = getCss('--meanline'); ctx.font = '11px ' + getCss('--font-mono');
+  ctx.fillText('ȳ', sx(WORLD) - 16, sy(fit.ybar) - 5);
+  ctx.restore();
+}
+
+// variance ghosts: the (y−ȳ) deviation each point owns (faded; the SS_tot picture)
+function drawVarianceGhosts(fit){
+  if (!fit.ok) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(154,156,170,0.30)'; ctx.lineWidth = 1.2; ctx.setLineDash([2, 3]);
+  ctx.beginPath();
+  for (const p of points){ ctx.moveTo(sx(p.x), sy(p.y)); ctx.lineTo(sx(p.x), sy(fit.ybar)); }
+  ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+}
+
+// the literal squares: each squared residual as a TRUE axis-aligned gold square,
+// hung off the vertical residual toward +x (mirrored to −x near the right wall).
+function drawSquares(fit){
+  ctx.save();
+  ctx.fillStyle = getCss('--floor') + '2e';   // ~0.18 alpha
+  ctx.strokeStyle = 'rgba(240,198,116,0.5)'; ctx.lineWidth = 1;
+  for (const p of points){
+    const yhat = fit.m * p.x + fit.b;
+    const rData = p.y - yhat;                  // signed residual in DATA units
+    const sidePx = Math.abs(rData) * PLOT.s;   // side length = |residual| · s → a TRUE square
+    if (sidePx < 0.6) continue;
+    const px = sx(p.x);
+    const yTop = sy(Math.max(p.y, yhat));      // screen-top of the residual segment
+    // hang toward +x; mirror to −x if it would spill past the right wall
+    let dir = 1;
+    if (px + sidePx > sx(WORLD)) dir = -1;
+    const rx = dir === 1 ? px : px - sidePx;
+    ctx.fillRect(rx, yTop, sidePx, sidePx);
+    ctx.strokeRect(rx, yTop, sidePx, sidePx);
+  }
+  ctx.restore();
+}
+
+function drawResiduals(fit){
+  ctx.save();
+  ctx.lineWidth = 1.6;
+  for (const p of points){
+    const yhat = fit.m * p.x + fit.b;
+    // color by sign: warm/red above the line, cool/blue below (sign is pedagogy)
+    ctx.strokeStyle = (p.y >= yhat) ? getCss('--residual') : 'rgba(127,178,230,0.85)';
+    ctx.beginPath(); ctx.moveTo(sx(p.x), sy(p.y)); ctx.lineTo(sx(p.x), sy(yhat)); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawLine(m, b, color, style, width, glow){
+  // clip the infinite line to the plot box
+  const x0 = 0, x1 = WORLD;
+  let y0 = m * x0 + b, y1 = m * x1 + b;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(PLOT.x, PLOT.y, PLOT.w, PLOT.h); ctx.clip();
+  ctx.strokeStyle = color; ctx.lineWidth = width;
+  if (style === 'dash') ctx.setLineDash([7, 5]);
+  if (glow && !REDUCE){ ctx.shadowColor = color; ctx.shadowBlur = 8; }
+  ctx.beginPath(); ctx.moveTo(sx(x0), sy(y0)); ctx.lineTo(sx(x1), sy(y1)); ctx.stroke();
+  ctx.restore();
+}
+
+function drawPoints(fit){
+  ctx.save();
+  for (let i = 0; i < points.length; i++){
+    const p = points[i];
+    const px = sx(p.x), py = sy(p.y);
+    if (i === dragIdx && !REDUCE){
+      ctx.beginPath(); ctx.arc(px, py, 9, 0, Math.PI * 2);
+      ctx.strokeStyle = getCss('--floor'); ctx.lineWidth = 2; ctx.stroke();   // brass halo
+    }
+    ctx.beginPath(); ctx.arc(px, py, 4.4, 0, Math.PI * 2);
+    ctx.fillStyle = '#eef1f8'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = '#0a0d14'; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawSumLabel(fit){
+  $('sumLabel').textContent = 'Σr² = ' + fit.sse.toFixed(2) + (mode !== 'l2' ? '  ·  Σ|r| = ' + fitL1(points).sad.toFixed(2) : '');
+}
+
+// ── readouts (the gauge, the variance bar, the two-route identity) ────────────
+// the analytic floor for the gauge: the closed-form Σr² is the minimum; the gauge
+// shows the CURRENT line's Σr² against it. We track a session-max to scale the bar.
+let gaugeMax = 1;
+function updateReadouts(fit, l1, guarded){
+  const gauge = $('gauge');
+  if (guarded){
+    gauge.classList.add('grey');
+    $('gaugeLbl').textContent = 'need ≥2 points with distinct x';
+    $('gaugeFill').style.width = '0%';
+    $('vbarExpl').style.width = '0%'; $('vbarLbl').textContent = 'R² —';
+    $('rA').textContent = '—'; $('rB').textContent = '—'; $('pearson').textContent = '—';
+    $('lineEq').textContent = '—';
+    $('identBadge').className = 'badge2 no'; $('identBadge').textContent = '✗ undefined (vertical data)';
+    $('sumLabel').textContent = '';
+    return;
+  }
+  gauge.classList.remove('grey');
+
+  // the floor = the closed-form Σr² (the true minimum). The displayed line's Σr²
+  // is fit.sse for L2; for L1 the line scores HIGHER on Σr² (above the L2 floor).
+  const floorSse = fit.sse;
+  const shownM = (mode === 'l1') ? l1.m : fit.m;
+  const shownB = (mode === 'l1') ? l1.b : fit.b;
+  const shownSse = sse(points, shownM, shownB);
+  gaugeMax = Math.max(gaugeMax * 0.96, floorSse * 1.6, shownSse * 1.15, 1);   // ease the ceiling
+  const floorPct = Math.min(100, floorSse / gaugeMax * 100);
+  const fillPct = Math.min(100, shownSse / gaugeMax * 100);
+  $('gaugeFill').style.width = fillPct + '%';
+  $('gaugeFloor').style.left = floorPct + '%';
+  const above = shownSse > floorSse * (1 + 1e-9);
+  gauge.classList.toggle('above', above);
+  $('gaugeLbl').textContent = 'Σr² = ' + shownSse.toFixed(2) + '  ·  floor ' + floorSse.toFixed(2);
+
+  // the variance bar: gilt fraction = R² (explained / SS_tot). Always L2's R²
+  // (R² is defined off the least-squares fit).
+  const r2 = Math.max(0, Math.min(1, fit.r2));
+  $('vbarExpl').style.width = (r2 * 100) + '%';
+  $('vbarLbl').textContent = 'R² = ' + fit.r2.toFixed(4);
+
+  // the two-route identity
+  const routeA = fit.r2, routeB = fit.r * fit.r;
+  $('rA').textContent = routeA.toFixed(6);
+  $('rB').textContent = routeB.toFixed(6);
+  const same = Math.abs(routeA - routeB) < 1e-12;
+  $('identBadge').className = 'badge2' + (same ? '' : ' no');
+  $('identBadge').textContent = same ? '✓ identical (Δ ≤ 1e-12)' : '✗ differ';
+  $('pearson').textContent = fit.r.toFixed(4) + (fit.r >= 0 ? '  (↗)' : '  (↘)');
+  $('lineEq').textContent = 'ŷ = ' + fit.m.toFixed(3) + 'x ' + (fit.b >= 0 ? '+ ' : '− ') + Math.abs(fit.b).toFixed(3);
+}
+
+// ── interaction ───────────────────────────────────────────────────────────────
+const SNAP = 0.25;                // grid-snap the dragged point (reproducibility)
+function pointerWorld(ev){
+  const r = canvas.getBoundingClientRect();
+  return { x: wxOf(ev.clientX - r.left), y: wyOf(ev.clientY - r.top) };
+}
+function nearestPoint(wx, wy){
+  let best = -1, bestD = Infinity;
+  for (let i = 0; i < points.length; i++){
+    const dx = (points[i].x - wx) * PLOT.s, dy = (points[i].y - wy) * PLOT.s;
+    const d = dx * dx + dy * dy;
+    if (d < bestD){ bestD = d; best = i; }
+  }
+  return (bestD <= 13 * 13) ? best : -1;
+}
+const clampW = v => Math.max(0, Math.min(WORLD, v));
+const snap = v => Math.round(v / SNAP) * SNAP;
+
+canvas.addEventListener('pointerdown', ev => {
+  if (ev.button === 2) return;     // right-click handled by contextmenu
+  ev.preventDefault();
+  const { x, y } = pointerWorld(ev);
+  const hit = nearestPoint(x, y);
+  if (hit >= 0){ dragIdx = hit; canvas.setPointerCapture(ev.pointerId); }
+  else { points.push({ x: round2(snap(clampW(x))), y: round2(snap(clampW(y))) }); }
+  killGhost(); draw();
+});
+canvas.addEventListener('pointermove', ev => {
+  if (dragIdx < 0) return;
+  const { x, y } = pointerWorld(ev);
+  points[dragIdx] = { x: round2(snap(clampW(x))), y: round2(snap(clampW(y))) };
+  draw();                          // SYNCHRONOUS recompute → the line re-snaps THIS frame
+});
+const endDrag = ev => { if (dragIdx >= 0){ dragIdx = -1; draw(); } };
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('contextmenu', ev => {
+  ev.preventDefault();
+  const { x, y } = pointerWorld(ev);
+  const hit = nearestPoint(x, y);
+  if (hit >= 0 && points.length > 2){ points.splice(hit, 1); killGhost(); draw(); }
+});
+
+// ── the controls ──────────────────────────────────────────────────────────────
+function setMode(m){
+  mode = m;
+  document.querySelectorAll('#seg .opt').forEach(o => o.classList.toggle('on', o.dataset.mode === m));
+  draw();
+}
+document.querySelectorAll('#seg .opt').forEach(o => o.addEventListener('click', () => setMode(o.dataset.mode)));
+
+function bindToggle(id, key){
+  const el = $(id);
+  el.addEventListener('click', () => { show[key] = !show[key]; el.classList.toggle('on', show[key]); draw(); });
+}
+bindToggle('tSquares', 'squares');
+bindToggle('tResid', 'resid');
+bindToggle('tMean', 'mean');
+bindToggle('tVar', 'variance');
+
+$('bScatter').addEventListener('click', () => {
+  points = scatterCloud((Date.now() & 0x7fffffff) >>> 0, { n: 12, noise: 0.9 });
+  startGhost(); draw();
+});
+$('bNoise').addEventListener('click', () => {
+  // jitter existing points → the floor RISES, R² drops (the inverse demo).
+  const rng = makeRng((Date.now() & 0x7fffffff) >>> 0);
+  points = points.map(p => ({ x: p.x, y: round2(clampW(p.y + gauss(rng) * 0.8)) }));
+  startGhost(); draw();
+});
+$('bTidy').addEventListener('click', () => {
+  // ease every point 60% toward the L2 line → the cloud collapses, Σr²→0, R²→1.
+  const fit = fitL2(points);
+  if (!fit.ok) return;
+  points = points.map(p => ({ x: p.x, y: round2(clampW(p.y * 0.4 + (fit.m * p.x + fit.b) * 0.6)) }));
+  killGhost(); draw();
+});
+$('bGD').addEventListener('click', () => { startGhost(); draw(); });
+$('bOutlier').addEventListener('click', () => {
+  // fly the rightmost point far off the line — L2 lurches, robust L1 holds.
+  if (points.length < 3) return;
+  let li = 0; for (let i = 1; i < points.length; i++) if (points[i].x > points[li].x) li = i;
+  const fit = fitL2(points);
+  const yhat = fit.ok ? fit.m * points[li].x + fit.b : WORLD / 2;
+  points[li] = { x: points[li].x, y: round2(clampW(yhat > WORLD / 2 ? 0.6 : WORLD - 0.6)) };
+  if (mode === 'l2') setMode('both'); else killGhost();
+  draw();
+  flashOutlierBadge();
+});
+
+// ── the GD ghost animation (the centerpiece) ──────────────────────────────────
+function startGhost(){
+  const gd = gdFit(points, { maxIters: 4000, lr: 0.5 });
+  const cf = fitL2(points);
+  if (!gd.ok || !cf.ok || gd.trace.length < 3){
+    // degrade gracefully to a static badge
+    showBadge('<b>GD = closed form ✓</b>', 2400);
+    ghost = null; return;
+  }
+  ghost = { trace: gd.trace, i: 0, target: { m: cf.m, b: cf.b }, alive: true, m: gd.trace[0].m, b: gd.trace[0].b };
+  if (REDUCE){ ghost.alive = false; showBadge('<b>GD = closed form ✓</b>', 2400); return; }
+  showBadge('watching gradient descent converge&hellip;', 99999);
+  requestAnimationFrame(stepGhost);
+}
+function stepGhost(){
+  if (!ghost || !ghost.alive) return;
+  ghost.i = Math.min(ghost.trace.length - 1, ghost.i + 80);   // ~80 GD steps per frame
+  const snap = ghost.trace[ghost.i];
+  ghost.m += (snap.m - ghost.m) * 0.5;                         // lerp toward the snapshot
+  ghost.b += (snap.b - ghost.b) * 0.5;
+  const dM = Math.abs(ghost.m - ghost.target.m), dB = Math.abs(ghost.b - ghost.target.b);
+  draw();
+  if ((ghost.i >= ghost.trace.length - 1 && dM < 1e-3 && dB < 1e-3) || (dM < 1e-6 && dB < 1e-6)){
+    const cf = fitL2(points), gd = gdFit(points, { maxIters: 8000, lr: 0.5 });
+    const adM = Math.abs(cf.m - gd.m), adB = Math.abs(cf.b - gd.b);
+    ghost.alive = false; draw();
+    showBadge(`<b>the same line, from two strangers' code</b><br>Δslope ${adM.toExponential(1)} · Δintercept ${adB.toExponential(1)}`, 4200);
+    return;
+  }
+  requestAnimationFrame(stepGhost);
+}
+function killGhost(){ if (ghost){ ghost.alive = false; ghost = null; } hideBadge(); }
+
+let badgeTimer = null;
+function showBadge(html, ms){
+  const b = $('badge'); b.innerHTML = html; b.classList.add('show');
+  clearTimeout(badgeTimer);
+  if (ms < 90000) badgeTimer = setTimeout(hideBadge, ms);
+}
+function hideBadge(){ $('badge').classList.remove('show'); }
+function flashOutlierBadge(){
+  const tame = points.slice();
+  // measure the live contrast for the caption
+  showBadge('<b>squared loss is NOT robust</b><br>L2 chases the outlier; robust L1 barely twitches', 4200);
+}
+
+// ── the self-test pill (calls the SAME runSelfTest the Node twin calls) ────────
+function runPill(){
+  let r;
+  try { r = runSelfTest(); }
+  catch (e){ console.error('[plumbline] self-test threw:', e); r = { pass: 0, total: 1, lines: [{ name: 'self-test threw', ok: false, detail: String(e) }] }; }
+  const el = $('selftest');
+  const green = r.pass === r.total;
+  el.classList.toggle('ok', green); el.classList.toggle('bad', !green);
+  el.textContent = green ? 'line is the minimum ✓' : 'line is NOT the minimum ✗';
+  el.title = r.lines.map(l => (l.ok ? '✓ ' : '✗ ') + l.name + (l.detail ? '  (' + l.detail + ')' : '')).join('\n\n');
+  if (!green){
+    console.error('[plumbline] SELF-TEST FAILED — ' + r.pass + '/' + r.total);
+    for (const l of r.lines) if (!l.ok) console.error('  ✗ ' + l.name + '  ·  ' + l.detail);
+  } else {
+    console.log('[plumbline] self-test ' + r.pass + '/' + r.total + ' ✓ — line is the minimum (closed form == GD ≤1e-9 · Σr² is the floor · R² two ways == r² == 1 on collinear · teeth: L1 ≠ L2 + outlier moves L2 ≫ L1)');
+  }
+  return r;
+}
+$('selftest').addEventListener('click', runPill);
+window.__plumblineSelfTest = runSelfTest;   // exposed for headless/browser verification
+
+// ── boot ───────────────────────────────────────────────────────────────────────
+$('hint').innerHTML = '<b>drag</b> a dot · <b>click</b> to add · <b>right-click</b> to remove — the <span class="g">Σr²</span> floor follows';
+function onResize(){ fitDPR(); draw(); }
+window.addEventListener('resize', onResize);
+fitDPR();
+runPill();
+draw();
+</script>
+</body>
+</html>
