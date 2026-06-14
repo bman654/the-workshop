@@ -8,9 +8,21 @@ speed, reseed, toggle a normal-approximation overlay, switch palette-only skins,
 export a 2× PNG. The workshop's signature: a built-in self-test that **proves** the ideal is exactly
 binomial and that a large seeded run is statistically consistent with it.*
 
-Folder: `galton/`. Forge page: `galton/index.src.html` → `galton/index.html` (no network, no deps,
-**NO audio**). DOM-free core: `tools/galton/galton.js`. Node self-test: `tools/galton/galton.test.cjs`.
+Folder: `galton/`. Forge page: `galton/index.src.html` → `galton/index.html` (no network, no deps).
+DOM-free core: `tools/galton/galton.js`. Node self-test: `tools/galton/galton.test.cjs`.
 Build log: `galton/CHANGELOG.md`.
+
+> **Audio (added 2026-06-13, the Sound Garden crossing).** A `♪ Listen` toggle voices the pour —
+> each landing ball plucks a note whose **pitch is its bin** (`binToPitch`, a strictly-monotonic
+> **bijection** bin↔Hz over a minor-pentatonic), each peg bounce a soft tick (`pegClickHz`). Because
+> the map is a bijection, the histogram of the pitches you *hear* IS the bin histogram → the
+> note-density across pitch is the binomial PMF: **the bell curve, heard**, thickening at the centre
+> where most balls land. The mapping is pure CORE (`binToPitch` / `pegClickHz` / `voiceGainFor` /
+> `pitchProfile`), re-audited headless by the self-test (now **9 checks**, four of them audio); the
+> page only renders it through Web Audio (lazy graph in a user gesture, compressor + headroom-safe
+> master gain → no clip, polyphony cap, honors the shared `ws:pref:muted` estate key). The
+> instant-tally path stays **silent** (you can't hear 10k instant balls — the animated drops are the
+> audible ones). See §1 (the SONIFICATION block) and the CHANGELOG.
 
 > **A new genre for the estate.** The workshop had nothing on probability/statistics. The Strange
 > Garden's emergent specimens (Game of Life, Kuramoto, L-systems) are *deterministic dynamical
@@ -85,7 +97,8 @@ battery the Node test runs, so the browser proof and the headless proof are the 
 | `simulate(seed, rows, p, n[, opts])` | a seeded run → `{ hist, n, rows, p, mean, variance, paths? }` |
 | `chiSquare(hist, pmf)` | `{ stat, df, n }` goodness-of-fit (drops theoretical-zero cells) |
 | `gammaP`, `chiSquareCDF`, `chiSquarePValue`, `chiSquareCritical` | the χ² distribution (regularized incomplete gamma) |
-| `runSelfTest()` | the 5-check battery the in-page chip runs (mirrored by the Node test) |
+| `binToPitch`, `pegClickHz`, `voiceGainFor`, `pitchProfile`, `PENTATONIC`, `AUDIO_ROOT_HZ`, `pentatonicSemitone` | **SONIFICATION** — bin→Hz bijection, peg-tick pitch, headroom-safe master gain, expected note-density profile (DOM-free, Web-Audio-free) |
+| `runSelfTest()` | the **9-check** battery the in-page chip runs (5 probability + 4 audio; mirrored by the Node test) |
 
 Conventions: a ball goes **left** with `p` (the slider's "left-probability"), **right** with `q=1−p`;
 **bin = right-count**, so the distribution is `Binomial(rows, q)`. Raising `p` skews the pile toward
@@ -108,14 +121,15 @@ Controls: **rows** (4–16), **left-probability `p`** (0.05–0.95), **drop spee
 die**, **+100 / +1,000 / +10,000 balls**, **show-normal toggle**, **3 palette-only skins** (slate ·
 ember · moss — geometry-identical), **pause**, **clear**, **2× PNG export**, and a `← workshop`
 back-link. A live stats line shows count, empirical mean & σ (with the theory in parentheses), and the
-**χ²(df)** statistic + a verdict driven by its **p-value**. Forge-includes `../tools/galton/galton.js`
-+ `../tools/ws/ws.js`; drops `ws:seen:galton`. **No audio.**
+**χ²(df)** statistic + a verdict driven by its **p-value**. A `♪ Listen` toggle (top bar, beside the chip)
+voices the pour through Web Audio — see the audio callout above. Forge-includes
+`../tools/galton/galton.js` + `../tools/ws/ws.js`; drops `ws:seen:galton`.
 
 ---
 
 ## §3 — Verification
 
-- `node tools/galton/galton.test.cjs` → **12/12 PASS**, exit 0 (5 shared-core checks + 7 hardening),
+- `node tools/galton/galton.test.cjs` → **16/16 PASS**, exit 0 (9 shared-core checks [5 probability + 4 audio] + 7 hardening),
   including the χ² evidence table (four ≥100k runs, fair + biased, all do-not-reject at α=0.01) and a
   power check (a wrong/flat histogram **is** rejected). Runtime ~0.25 s.
 - `node tools/forge/forge.mjs galton/index.src.html` clean; `node tools/forge/forge.mjs --check --all`

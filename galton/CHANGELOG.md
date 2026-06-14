@@ -1,5 +1,77 @@
 # Galton Board — changelog
 
+## 2026-06-13 — "Hear the bell curve" (the Sound Garden crossing) — audio added
+
+Wired the long-sown `cross` seed **Galton × Sound Garden — "hear the bell curve."**
+A new **♪ Listen** toggle (top bar, beside the self-test chip) voices the pour:
+every landing ball sounds a soft **pluck** whose **pitch is its bin**, and each peg
+bounce ticks a quiet pitched click. Because a bin is Binomial, more balls land in
+the centre → more notes there → the audible texture **thickens at the centre**
+exactly where the curve peaks. **Probability, made audible** — the χ² fit you can
+*hear* settle. Honors the shared estate-wide `ws:pref:muted` key (one mute governs
+the whole estate; syncs across tabs via the `storage` event).
+
+### What I built
+- **Extended the pure CORE** (`tools/galton/galton.js`) with a DOM-free,
+  Web-Audio-FREE sonification mapping (so the self-test re-audits it headless):
+  - `binToPitch(bin, rows)` — bin `k` is the k-th rung up a **minor-pentatonic**
+    scale from a 220 Hz (A3) root → a **strictly-monotonic bijection** bin↔Hz, so
+    the histogram of the *pitches you hear* is identical to the bin histogram (the
+    sound can't drift from the distribution). `PENTATONIC` / `AUDIO_ROOT_HZ` /
+    `pentatonicSemitone` exposed.
+  - `pegClickHz(row, rows)` — the soft tick pitch, rising ~1 octave top→bottom,
+    bounded in `[200, 6000]` Hz (a shimmer, never shrill / sub-audible).
+  - `voiceGainFor(activeVoices, perVoiceAmp, ceiling)` — a headroom-safe master
+    gain that keeps a dense burst of simultaneous plucks under a hard 0.9 ceiling
+    (no clip; mirrors the Harmonograph's `masterGainFor`).
+  - `pitchProfile(rows, p)` — `[{hz, prob}]`, the expected note-density across
+    pitch; because the map is a bijection, this profile's shape over pitch **IS the
+    binomial PMF** (the bell curve, sounded).
+- **`runSelfTest()` grew 5 → 9 checks** — four new AUDIO checks: (#6) pitch is a
+  strictly-monotonic bijection of bin across rows 4..16; (#7) note-density across
+  pitch **== the binomial PMF** (peaks at the centre pitch, Σ=1, rises-then-falls —
+  the bell curve, heard); (#8) the master gain keeps a ≤64-voice burst under 0.9
+  (no clip, a single voice never gated silent); (#9) peg-ticks bounded in
+  `[200,6000]` Hz and rising with depth. The in-page chip now reads **9/9**.
+- **Node self-test** (`tools/galton/galton.test.cjs`) → **16/16 PASS** (9 shared
+  core + 7 hardening), exit 0.
+- **Page** (`galton/index.src.html` → `index.html`) — added a Web-Audio layer that
+  renders the CORE: lazy graph built only inside a user gesture (autoplay-safe),
+  master gain + compressor, two sub-buses (plucks loud-ish, ticks quiet), a
+  polyphony cap (MAX_POLY=14) so a burst can't spawn thousands of nodes, and a
+  tick throttle (~55/s). `stepBalls` voices a pluck on each ball's bin arrival and
+  a tick on peg-row crossings; the **instant-tally path stays silent** (you can't
+  hear 10k instant balls — the visible thickening is that path's story; the
+  animated +100 is the audible one). A live "sounding" read-out shows the bin→Hz
+  mapping. Same `ws:pref:muted` pattern as the Harmonograph cross.
+
+### Verified
+- `node tools/galton/galton.test.cjs` → **16/16 PASS**, exit 0.
+- `node tools/forge/forge.mjs galton/index.src.html` clean; `--check --all` green
+  (29 files current).
+- **Audio-lens (the silent offline render)** — rendered a deterministic 220-ball
+  pour through the REAL `binToPitch` + pluck envelope to a WAV; lens self-test
+  12/12; the render is **not clipping** (0%, peak −11.2 dB) and **not silent**
+  (silenceRatio 0.08); its top spectral peaks cluster at the **centre pitches**
+  (D5 585 Hz, C5 522 Hz, A4 436 Hz) — the energy concentrates in the central
+  register where most balls land, i.e. **the bell curve, heard**; the spectrogram
+  shows a dense band of note-lines in the centre with sparse high lines (the rare
+  edge bins) and discrete onset streaks.
+- **Real-browser pass** (served origin :8752, agent-browser, cache-busted): chip
+  **9/9**, `ws:seen:galton` written; Listen flips to "Listening" and a real click
+  **resumes the AudioContext to `running`** (autoplay-safe); an animated +100 pour
+  ran with the master gain ramped to 1, the pluck-bus at the headroom-safe 0.352,
+  live voices capped at 12; the χ² verdict settled to "consistent with binomial";
+  **0 console errors**; the shared-mute `storage` sync flips the engine to
+  "🔇 Muted" and ramps the master to 0.
+
+### Notes
+- `binToPitch` is **strictly increasing** in bin, so the heard-pitch histogram ==
+  the bin histogram **exactly** — that bijection is what makes "note-density across
+  pitch == the binomial PMF" an exact identity (check #7), not a hand-wave.
+- The mapping is musical by construction (a pentatonic; adjacent bins are always a
+  pleasant step apart) so a pour reads as music, not noise.
+
 ## 2026-06-13 — Initial build (bean machine; a proven bell curve)
 
 Built `galton/` — a live **Galton board** (bean machine / quincunx): balls cascade

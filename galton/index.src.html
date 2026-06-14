@@ -50,6 +50,15 @@
   .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
   .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
 
+  /* ♪ Listen — the Sound Garden crossing toggle (lives next to the chip) */
+  .listenbtn{ pointer-events:auto; font:600 10.5px/1 var(--font-mono); letter-spacing:.3px;
+    padding:6px 11px; border-radius:20px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.35); color:var(--ink-dim); white-space:nowrap; cursor:pointer;
+    user-select:none; transition:.18s; }
+  .listenbtn:hover{ color:var(--ink); border-color:var(--accent); }
+  .listenbtn.on{ color:#06222d; background:var(--accent); border-color:var(--accent); }
+  .chips{ display:flex; align-items:center; gap:8px; pointer-events:none; }
+
   /* ---- Layout ---- */
   #stage{
     position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
@@ -168,7 +177,10 @@
       <h1>Galton Board</h1>
       <span class="tag">probability, made visible</span>
     </div>
-    <div class="selftest" id="selftest" title="Click for per-check detail">checking distribution&hellip;</div>
+    <div class="chips">
+      <button class="listenbtn" id="listenBtn" title="Hear the bell curve — each ball a note, the centre thickens">&#9834; Listen</button>
+      <div class="selftest" id="selftest" title="Click for per-check detail">checking distribution&hellip;</div>
+    </div>
   </div>
 
   <div id="stage">
@@ -238,6 +250,7 @@
       <span><i style="background:var(--curve)"></i> binomial PMF</span>
       <span id="legNormal" style="display:none"><i style="background:var(--normal)"></i> normal</span>
     </div>
+    <div class="caption" id="soundRead" style="margin-top:9px"></div>
   </div>
   <button id="reopen" title="Show controls">controls</button>
 
@@ -255,6 +268,12 @@
    and overlays binomialPMF (and optionally the normal approximation). The bars
    rise to meet the curve as balls accumulate — that convergence is what the χ²
    p-value in the stats line measures, live.
+
+   The ♪ Listen toggle adds the Sound Garden crossing: each landing ball sounds
+   its bin as a note (the self-tested binToPitch bijection), so the audible
+   note-density across pitch IS the bell curve — the texture thickens at the
+   centre where most balls land. The audio mapping is pure CORE; this page only
+   renders it through Web Audio, honoring the shared ws:pref:muted estate key.
    =========================================================================== */
 'use strict';
 
@@ -446,10 +465,15 @@ function stepBalls(dt){
     b.t += fallSpeed * dt;
     while (b.t >= 1 && b.seg < b.pts.length - 1){
       b.t -= 1; b.seg++;
+      // seg≥2 are the peg-graze waypoints (0=hopper,1=top of field) → tick.
+      if (b.seg >= 2 && b.seg < b.pts.length - 1){
+        tick(Galton.pegClickHz(b.seg - 2, state.rows));
+      }
     }
     if (b.seg >= b.pts.length - 1){
-      // arrived at bin mouth → land
+      // arrived at bin mouth → land (and voice its bin as a note)
       landBall(b);
+      pluck(Galton.binToPitch(b.bin, state.rows));
       continue;
     }
     var a = b.pts[b.seg], c = b.pts[b.seg+1];
@@ -589,6 +613,121 @@ function getCSS(name){
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+/* ===========================================================================
+   AUDIO — "hear the bell curve" (the Sound Garden crossing). Every landing ball
+   is voiced as a soft pluck whose PITCH is its bin (Galton.binToPitch — the
+   self-tested bijection), and each peg bounce ticks a quiet pitched click. More
+   balls land centre → more notes there → the texture THICKENS where the curve
+   peaks. The mapping math (binToPitch / pegClickHz / voiceGainFor) is the pure,
+   self-tested CORE in tools/galton/galton.js; this layer only renders it through
+   Web Audio. Honors the shared estate-wide ws:pref:muted key (see DESIGNING.md).
+   =========================================================================== */
+var PER_VOICE_AMP = 0.32;                 // pre-master amplitude per pluck
+var MAX_VOICE_GAIN = Galton.voiceGainFor(8, PER_VOICE_AMP, 0.9); // headroom for ~8 dense
+var Audio = {
+  ctx:null, master:null, comp:null, pluckBus:null, tickBus:null,
+  on:false, muted:readMutePref(), live:0, lastTick:0
+};
+function readMutePref(){ try{ return localStorage.getItem('ws:pref:muted') === '1'; }catch(e){ return false; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v ? '1' : '0'); }catch(e){} }
+
+/* Build the graph lazily inside a user gesture (autoplay-safe). */
+function ensureAudio(){
+  if (Audio.ctx) return Audio.ctx;
+  var AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  var ctx = new AC();
+  var comp = ctx.createDynamicsCompressor();        // a gentle safety net
+  comp.threshold.value = -8; comp.knee.value = 14; comp.ratio.value = 4;
+  comp.attack.value = 0.003; comp.release.value = 0.25;
+  var master = ctx.createGain(); master.gain.value = 0;   // ramped on enable
+  // two sub-buses: plucks (the notes) loud-ish, ticks (peg shimmer) quiet.
+  var pluckBus = ctx.createGain(); pluckBus.gain.value = MAX_VOICE_GAIN;
+  var tickBus = ctx.createGain();  tickBus.gain.value = 0.12;
+  pluckBus.connect(master); tickBus.connect(master);
+  master.connect(comp); comp.connect(ctx.destination);
+  Audio.ctx = ctx; Audio.comp = comp; Audio.master = master;
+  Audio.pluckBus = pluckBus; Audio.tickBus = tickBus;
+  return ctx;
+}
+function sounding(){ return Audio.on && !Audio.muted && Audio.ctx; }
+var MAX_POLY = 14;                                   // cap simultaneous plucks
+/* a soft plucked note at hz (a quick exponential-decay sine+triangle blend) */
+function pluck(hz, vel){
+  if (!sounding() || Audio.live >= MAX_POLY) return;
+  var ctx = Audio.ctx, now = ctx.currentTime;
+  var osc = ctx.createOscillator(); osc.type = 'triangle'; osc.frequency.value = hz;
+  var osc2 = ctx.createOscillator(); osc2.type = 'sine'; osc2.frequency.value = hz * 2; // a little shimmer
+  var g = ctx.createGain(), g2 = ctx.createGain();
+  var a = PER_VOICE_AMP * (vel == null ? 1 : vel);
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(a, now + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0008, now + 0.42);
+  g2.gain.setValueAtTime(0, now);
+  g2.gain.linearRampToValueAtTime(a * 0.28, now + 0.004);
+  g2.gain.exponentialRampToValueAtTime(0.0004, now + 0.22);
+  osc.connect(g); osc2.connect(g2); g.connect(Audio.pluckBus); g2.connect(Audio.pluckBus);
+  Audio.live++;
+  osc.start(now); osc2.start(now);
+  osc.stop(now + 0.45); osc2.stop(now + 0.25);
+  osc.onended = function(){ Audio.live--; try{ osc.disconnect(); osc2.disconnect(); g.disconnect(); g2.disconnect(); }catch(e){} };
+}
+/* a tiny pitched tick when a ball grazes a peg (throttled so a cascade shimmers
+   rather than buzzes) */
+function tick(hz){
+  if (!sounding()) return;
+  var ctx = Audio.ctx, now = ctx.currentTime;
+  if (now - Audio.lastTick < 0.018) return;          // ~55 ticks/s ceiling
+  Audio.lastTick = now;
+  var osc = ctx.createOscillator(); osc.type = 'sine'; osc.frequency.value = hz;
+  var g = ctx.createGain();
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(0.5, now + 0.001);
+  g.gain.exponentialRampToValueAtTime(0.0005, now + 0.05);
+  osc.connect(g); g.connect(Audio.tickBus);
+  osc.start(now); osc.stop(now + 0.06);
+  osc.onended = function(){ try{ osc.disconnect(); g.disconnect(); }catch(e){} };
+}
+function setMasterGain(target){
+  if (!Audio.ctx) return;
+  var g = Audio.master.gain, now = Audio.ctx.currentTime;
+  g.cancelScheduledValues(now); g.setValueAtTime(g.value, now);
+  g.linearRampToValueAtTime(target, now + 0.18);
+}
+function syncListenBtn(){
+  var btn = document.getElementById('listenBtn');
+  var snd = Audio.on && !Audio.muted;
+  btn.classList.toggle('on', snd);
+  btn.textContent = Audio.muted ? '🔇 Muted' : (Audio.on ? 'Listening' : '♪ Listen');
+  btn.title = Audio.muted
+    ? 'Audio is muted estate-wide — click to unmute and hear the bell curve'
+    : (Audio.on ? 'Stop the sound' : 'Hear the bell curve — each ball a note, the centre thickens');
+  paintSoundRead();
+}
+function paintSoundRead(){
+  var el = document.getElementById('soundRead'); if (!el) return;
+  if (Audio.muted){ el.innerHTML = '<b>♪</b> muted estate-wide'; return; }
+  if (!Audio.on){ el.innerHTML = '<b>♪</b> press <b>Listen</b> — each ball sounds its bin as a note; the centre, where most land, <b>thickens</b> into a busy chord.'; return; }
+  var lo = Galton.binToPitch(0, state.rows).toFixed(0);
+  var mid = Galton.binToPitch(Math.round(state.rows/2), state.rows).toFixed(0);
+  var hi = Galton.binToPitch(state.rows, state.rows).toFixed(0);
+  el.innerHTML = '<b>♪</b> sounding · bin 0 → <b>' + lo + ' Hz</b>, centre → <b>' + mid + ' Hz</b>, bin ' + state.rows + ' → <b>' + hi + ' Hz</b> · density peaks at the centre note (the bell curve, heard).';
+}
+function toggleListen(){
+  if (Audio.muted){ Audio.muted = false; writeMutePref(false); Audio.on = true; }
+  else { Audio.on = !Audio.on; }
+  if (Audio.on){
+    var ctx = ensureAudio();
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    setMasterGain(1);
+    if (ctx){ flashHud('♪ Listening — each ball is a note; the centre thickens'); }
+    else { Audio.on = false; flashHud('Web Audio unavailable in this browser'); }
+  } else {
+    setMasterGain(0);
+  }
+  syncListenBtn();
+}
+
 function draw(){
   var c = ctx;
   c.save();
@@ -692,7 +831,7 @@ function bindUI(){
     rowsVal.textContent = state.rows;
     setRangeFill(rows);
     layoutGeometry(geo.W, geo.H);
-    resetRun(); paintCaption(); paintStats(); draw();
+    resetRun(); paintCaption(); paintStats(); paintSoundRead(); draw();
   });
 
   var pEl = document.getElementById('p'), pValEl = document.getElementById('pVal');
@@ -755,6 +894,16 @@ function bindUI(){
     flashHud('Proven by the SAME core the Node test runs — see the console.', 3400);
   });
 
+  // ♪ Listen — the Sound Garden crossing
+  document.getElementById('listenBtn').addEventListener('click', toggleListen);
+  // honor another estate page toggling the shared mute pref while we're open
+  window.addEventListener('storage', function(e){
+    if (e.key !== 'ws:pref:muted') return;
+    Audio.muted = readMutePref();
+    if (Audio.muted) setMasterGain(0); else if (Audio.on) setMasterGain(1);
+    syncListenBtn();
+  });
+
   var rt=null;
   window.addEventListener('resize', function(){ clearTimeout(rt); rt=setTimeout(function(){ computeSize(); draw(); }, 120); });
 
@@ -795,6 +944,7 @@ bindUI();
 applySkin();
 paintCaption();
 runChip();                 // the crux — paints the chip, logs PASS/FAIL
+syncListenBtn();           // ♪ the Sound Garden crossing (silent until pressed)
 paintStats();
 draw();
 startLoop();

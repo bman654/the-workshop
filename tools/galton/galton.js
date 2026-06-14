@@ -195,6 +195,91 @@
     return out;
   };
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     SONIFICATION — "hear the bell curve" (the Sound Garden crossing).
+     ────────────────────────────────────────────────────────────────────────────
+     Every landing ball is voiced as a soft pluck whose PITCH is its BIN, and
+     each peg bounce ticks a quiet pitched click. Because a bin is Binomial, more
+     balls land in the centre bins → more notes sound there → the audible texture
+     THICKENS at the centre exactly where the curve peaks. Probability, heard.
+
+     This block is the pure, DOM-free, Web-Audio-FREE mapping math, so the
+     self-test re-audits it headless (the page only renders it through Web Audio).
+     The load-bearing audible claim, made falsifiable:
+
+       • binToPitch is a STRICTLY MONOTONIC bijection bin↔Hz. So the histogram of
+         the PITCHES you hear is the SAME histogram as the bins — i.e. the
+         note-density across pitch IS the binomial PMF (the bell curve), to
+         machine precision. That is "the χ² fit you can hear settle."
+       • every pitch stays inside a comfortable audible band (never shrill /
+         sub-audible), across the full rows range.
+       • the summed-voice master gain keeps the peak under a hard ceiling → the
+         cascade can never clip however many balls fall at once.
+     ──────────────────────────────────────────────────────────────────────────── */
+
+  /* A two-octave MINOR-PENTATONIC scale (semitone offsets from a root), the
+     consonant five-note set — adjacent bins are always a pleasant step apart, so
+     a pour reads as music, not noise. Repeated each octave so any bin range maps
+     cleanly across as many octaves as it needs. */
+  Galton.PENTATONIC = [0, 3, 5, 7, 10];   // minor pentatonic semitone classes
+  Galton.AUDIO_ROOT_HZ = 220;             // A3 — bin 0 sits here (the low anchor)
+  var SEMITONE = Math.pow(2, 1 / 12);
+
+  /* The scale degree (0,1,2,…) for the k-th step up the pentatonic, walking
+     octaves: degree d → octave ⌊d/5⌋, class PENTATONIC[d mod 5]. */
+  function pentatonicSemitone(d) {
+    d = Math.round(d);
+    var oct = Math.floor(d / 5), cls = ((d % 5) + 5) % 5;
+    return oct * 12 + Galton.PENTATONIC[cls];
+  }
+  Galton.pentatonicSemitone = pentatonicSemitone;
+
+  /* binToPitch(bin, rows[, opts]) → Hz. Bin k is the k-th rung up the pentatonic
+     from the root, so pitch is a STRICTLY INCREASING function of bin (a bijection
+     onto its image). Higher bin = higher note; the most-populated centre bins are
+     the busy middle register. Deterministic, no DOM, no Web Audio. */
+  Galton.binToPitch = function (bin, rows, opts) {
+    opts = opts || {};
+    var root = opts.rootHz || Galton.AUDIO_ROOT_HZ;
+    bin = Math.round(bin);
+    var semis = pentatonicSemitone(bin);
+    return root * Math.pow(SEMITONE, semis);
+  };
+
+  /* pegClickHz(row, rows[, baseHz]) → Hz for the soft tick when a ball grazes a
+     peg in row r (0=top). Deeper rows tick slightly higher → a descending-into-
+     ascending shimmer as the ball falls. Bounded, deterministic. */
+  Galton.pegClickHz = function (row, rows, baseHz) {
+    baseHz = baseHz || 1200;
+    rows = Math.max(1, Math.round(rows));
+    var frac = Math.max(0, Math.min(1, row / rows));
+    // a gentle ~1 octave rise top→bottom, kept well inside the audible band
+    return baseHz * Math.pow(2, frac * 0.9);
+  };
+
+  /* voiceGainFor(activeVoices, perVoiceAmp, ceiling) → master gain that keeps the
+     summed peak of `activeVoices` simultaneous plucks under `ceiling` (≤1) so the
+     output can never clip when a burst of balls lands together. (Mirrors the
+     Harmonograph's masterGainFor; the same headroom proof.) */
+  Galton.voiceGainFor = function (activeVoices, perVoiceAmp, ceiling) {
+    ceiling = ceiling == null ? 0.9 : ceiling;
+    var peak = Math.max(1, activeVoices) * perVoiceAmp;
+    return peak <= 1e-9 ? 1 : Math.min(1, ceiling / peak);
+  };
+
+  /* pitchProfile(rows, p) → [{ hz, prob }] — the EXPECTED note-density across the
+     sounded pitches: each bin's pitch carries its binomial probability. Because
+     binToPitch is a bijection, this profile's shape over pitch IS the binomial
+     PMF — the bell curve you hear. Handy for the page's "pitch spectrum" readout
+     and for the self-test. */
+  Galton.pitchProfile = function (rows, p) {
+    rows = Math.round(rows);
+    var pmf = Galton.binomialPMF(rows, p);
+    var out = new Array(rows + 1);
+    for (var k = 0; k <= rows; k++) out[k] = { hz: Galton.binToPitch(k, rows), prob: pmf[k] };
+    return out;
+  };
+
   /* ── A single ball's path ──────────────────────────────────────────────────
      dropBall(rng, rows, p) → { bin, steps } where steps is an array of length
      `rows` of -1 (left) / +1 (right). bin = count of +1 steps = right-bounces.
@@ -472,6 +557,98 @@
       }
       results.push({ name: 'empirical mean/variance track rows·q & rows·p·q (tightening with N)', pass: ok,
         note: ok ? ('N=200k: mean-err ' + meanErrBig.toExponential(1) + ', var-err ' + varErrBig.toExponential(1) + ' vs μ=' + muT + ', σ²=' + varT) : fail });
+      allPass = allPass && ok;
+    })();
+
+    /* Check #6 — AUDIO · PITCH IS A MONOTONIC BIJECTION OF BIN. binToPitch is
+       strictly increasing in bin and one-to-one across the full UI row range, so
+       the histogram of the pitches you HEAR is identical to the histogram of the
+       bins — the sound can't drift from the distribution. (Guards against a
+       collapsed/duplicated mapping that would mash bins onto one note.) */
+    (function () {
+      var ok = true, fail = '', minHz = Infinity, maxHz = 0;
+      for (var rows = Galton.ROWS_MIN; rows <= Galton.ROWS_MAX && ok; rows++) {
+        var prev = -Infinity, seen = {};
+        for (var k = 0; k <= rows && ok; k++) {
+          var hz = Galton.binToPitch(k, rows);
+          if (!(hz > prev + 1e-9)) { ok = false; fail = 'rows=' + rows + ' bin ' + k + ' not strictly above ' + k + '−1 (' + hz.toFixed(2) + '≤' + prev.toFixed(2) + ')'; break; }
+          var key = hz.toFixed(6);
+          if (seen[key]) { ok = false; fail = 'rows=' + rows + ' duplicate pitch at bin ' + k; break; }
+          seen[key] = 1; prev = hz;
+          if (hz < minHz) minHz = hz; if (hz > maxHz) maxHz = hz;
+        }
+      }
+      results.push({ name: 'audio: pitch is a strictly-monotonic bijection of bin (heard histogram == bin histogram)', pass: ok,
+        note: ok ? ('rows 4..16: every bin → a distinct, rising pitch ∈ [' + minHz.toFixed(0) + ', ' + maxHz.toFixed(0) + '] Hz') : fail });
+      allPass = allPass && ok;
+    })();
+
+    /* Check #7 — AUDIO · THE HEARD NOTE-DENSITY IS THE BELL CURVE. Because the
+       pitch↔bin map is a bijection, the expected density of notes across pitch
+       (pitchProfile) carries exactly the binomial PMF per pitch, peaks at the
+       distribution's mode, sums to 1, and rises into the centre then falls —
+       i.e. the bell curve, sounded. This is the χ²-fit-you-can-hear, as an
+       EXACT identity (the profile's probs ARE the PMF). */
+    (function () {
+      var ok = true, fail = '';
+      var rows = 12, p = 0.5;
+      var prof = Galton.pitchProfile(rows, p);
+      var pmf = Galton.binomialPMF(rows, p);
+      var s = 0, modeK = 0, modeHz = 0, maxProb = -1;
+      for (var k = 0; k <= rows; k++) {
+        if (Math.abs(prof[k].prob - pmf[k]) > 1e-15) { ok = false; fail = 'profile prob ≠ PMF at bin ' + k; break; }
+        if (Math.abs(prof[k].hz - Galton.binToPitch(k, rows)) > 1e-9) { ok = false; fail = 'profile hz wrong at bin ' + k; break; }
+        s += prof[k].prob;
+        if (prof[k].prob > maxProb) { maxProb = prof[k].prob; modeK = k; modeHz = prof[k].hz; }
+      }
+      if (ok && Math.abs(s - 1) > 1e-12) { ok = false; fail = 'profile does not sum to 1 (Σ=' + s + ')'; }
+      // unimodal & symmetric for p=0.5: the mode is the central bin (rows/2).
+      if (ok && modeK !== rows / 2) { ok = false; fail = 'pitch-density mode at bin ' + modeK + ', expected ' + (rows / 2); }
+      // honestly rises into the centre then falls (the bell shape, in pitch order)
+      if (ok) {
+        for (var j = 1; j <= rows / 2; j++) if (!(pmf[j] > pmf[j - 1])) { ok = false; fail = 'not rising into centre at bin ' + j; break; }
+        if (ok) for (var m = rows / 2 + 1; m <= rows; m++) if (!(pmf[m] < pmf[m - 1])) { ok = false; fail = 'not falling past centre at bin ' + m; break; }
+      }
+      results.push({ name: 'audio: note-density across pitch == binomial PMF (the bell curve, heard — peaks at centre, Σ=1)', pass: ok,
+        note: ok ? ('rows=12 p=.5: density peaks at the centre pitch (' + modeHz.toFixed(0) + ' Hz, P=' + maxProb.toFixed(3) + '), Σ=1, rises-then-falls') : fail });
+      allPass = allPass && ok;
+    })();
+
+    /* Check #8 — AUDIO · NO CLIP. The summed-voice master gain keeps even a dense
+       burst of simultaneous plucks under the 0.9 ceiling, so the cascade can
+       never clip; and a single voice is never gated to silence. */
+    (function () {
+      var ok = true, fail = '', amp = 0.32;
+      for (var v = 1; v <= 64; v++) {
+        var g = Galton.voiceGainFor(v, amp, 0.9);
+        var peak = v * amp * g;
+        if (peak > 0.9 + 1e-12) { ok = false; fail = v + ' voices peak ' + peak.toFixed(4) + ' > 0.9'; break; }
+        if (g <= 0) { ok = false; fail = v + ' voices gated to silence'; break; }
+      }
+      var g1 = Galton.voiceGainFor(1, amp, 0.9);
+      if (ok && !(g1 > 0)) { ok = false; fail = 'a single voice is silent'; }
+      results.push({ name: 'audio: master gain keeps a dense burst (≤64 voices) under the 0.9 ceiling (no clip)', pass: ok,
+        note: ok ? '1..64 simultaneous plucks all peak ≤ 0.9; a single voice still sounds' : fail });
+      allPass = allPass && ok;
+    })();
+
+    /* Check #9 — AUDIO · PEG TICKS BOUNDED & RISING. The peg-bounce click pitch
+       stays well inside the audible band over the full row range and rises with
+       depth (top→bottom), so the cascade shimmers without ever going shrill or
+       sub-audible. */
+    (function () {
+      var ok = true, fail = '', lo = Infinity, hi = 0;
+      for (var rows = Galton.ROWS_MIN; rows <= Galton.ROWS_MAX && ok; rows++) {
+        var prev = -Infinity;
+        for (var r = 0; r < rows; r++) {
+          var hz = Galton.pegClickHz(r, rows);
+          if (!(hz >= prev - 1e-9)) { ok = false; fail = 'rows=' + rows + ' tick not non-decreasing at row ' + r; break; }
+          if (hz < 200 || hz > 6000) { ok = false; fail = 'rows=' + rows + ' row ' + r + ' tick ' + hz.toFixed(0) + ' Hz outside [200,6000]'; break; }
+          prev = hz; if (hz < lo) lo = hz; if (hz > hi) hi = hz;
+        }
+      }
+      results.push({ name: 'audio: peg-tick pitch bounded in [200,6000] Hz and rises with depth (a shimmer, never shrill)', pass: ok,
+        note: ok ? ('rows 4..16: ticks ∈ [' + lo.toFixed(0) + ', ' + hi.toFixed(0) + '] Hz, non-decreasing top→bottom') : fail });
       allPass = allPass && ok;
     })();
 
