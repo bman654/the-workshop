@@ -2,9 +2,49 @@
 
 *The estate's physics laboratory, quarried into the hillside and kept underground "for safety."
 A front-door **wing** (the grand "Physics Lab" seed begun). Two drifts off a central shaft — a warm
-Newtonian one and a cold Einsteinian one — and now a third, the **Quantum Drift** (six benches deep),
+Newtonian one and a cold Einsteinian one — and now a third, the **Quantum Drift** (seven benches deep),
 which opens once a visitor has walked both. Every bench is one self-contained vanilla HTML file that
 proves its own physics exact.*
+
+---
+
+## 2026-06-13 — the Sound Garden meets the Cavern: Hear the Ladder ships (7th Q-bench, 10th overall)
+
+**`cavern/hear-the-ladder/index.html` — Hear the Ladder 🔔** (Quantum drift). The Box and the
+Oscillator each *show* a ladder of allowed energies; this bench is the first to make the difference
+**audible** — and it's the workshop's first bridge between the **Sound Garden** and the **Cavern**.
+Map each energy ladder to a stack of tones (`f ∝ E`) and the truth lands in one second: the
+oscillator's *evenly-spaced* rungs become the **overtone series of a single note**, so they fuse into
+one pure pitch — *that is why it is called harmonic*; the box's `n²` rungs stretch apart, so the stack
+never lines up and rings like a **struck bell** (a clang with no single pitch). One vanilla HTML file
+(~430 lines of app over a ~120-line pure CORE), ħ=m=1.
+
+- **The headline physics:** the *same* two ladders the neighbouring benches prove — box `Eₙ = n²π²/2`
+  (ratios `1,4,9,16,…`, spreading) and oscillator `Eₙ = ω(n+½)` (even, spacing `ω`). Voiced as partials
+  of one fundamental, the oscillator gives the **harmonic series** `1,2,3,4,…` and the box gives the
+  **stretched** `1,4,9,16,…`. The ear hears a stack as *one pitch* only when its partials are evenly
+  spaced (a single periodic waveform); the box's spacing widens, so it has no single period — a bell.
+- **The falsifiable spine (the pure, self-tested CORE):** an **inharmonicity** metric = the relative
+  spread of the gaps between consecutive partials. It is **exactly 0** for the oscillator (perfectly
+  even ⇒ one tone) and **provably large** for the box (≈38% at 8 partials, climbing as you stack more).
+  The mapping/voicing/no-clip math is DOM-free and Web-Audio-free, locked headless in Node first.
+- **Self-test 7/7**, proven *both* headless-Node against the actual embedded page code *and* live
+  in-browser (badge 7/7, console clean): (1) ladders reproduce the benches' exact formulas; (2) partials
+  are the harmonic series vs the stretched `n²`; (3) **the headline** — osc inharmonicity == 0, box ≫ 0
+  ⇒ bell; (4) the box partial always sits at/above its harmonic counterpart and the gap grows monotonically;
+  (5) voicing keeps the fundamental and drops (never aliases) high box partials past a 7 kHz ceiling, the
+  box dropping more; (6) the 1/k roll-off keeps the summed peak under a 0.9 no-clip ceiling.
+- **Audio-Lens cross-check (silent offline render of the exact CORE):** the oscillator WAV reads a clean
+  **A2** with overtone peaks `A2·A3·E4` (110·220·330 Hz) and a low **180 Hz centroid** (warm, fused);
+  the box WAV reads stretched peaks `A2·A4·B5` (110·440·990 Hz) and a high **442 Hz centroid** (bright,
+  clangorous) — neither clips. Spectrograms show the oscillator's even comb vs the box's widening gaps.
+- **Estate-wide mute:** plays only inside a user gesture (autoplay-safe, lazy graph); honours the shared
+  **`ws:pref:muted`** (read on load, live via the `storage` event; a muted user's click unmutes + plays).
+  An **A–B** button plays the pure tone then the bell back-to-back. Drops `ws:seen:physics-lab` on a
+  direct visit. Wired into the Quantum-drift card list on the wing index (🔔).
+
+The Quantum Drift is now **seven benches**; the "curve machines" cousins aside, the Sound Garden had
+*never* touched the Cavern before this — a fresh cross axis opened.
 
 ---
 
