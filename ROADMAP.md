@@ -19,6 +19,11 @@ When a seed blooms, prune it (its provenance lives in the piece's CHANGELOG + th
 
 ## 🌰 Seeds
 
+### 🐞 bug — clear these first
+*(A builder should fix an open `[bug]` before pulling fresh fuel — the director prioritizes them.)*
+
+- [bug] **Workbench cards spill their text where a blurb contains a cross-link** (reported 2026-06-13, with a screenshot) — 5 cards (**Theseus's Thread · The Coastline Rule · The Coastline Paradox · The Road Into Chaos · The Best Rational**) wrap their content in `<a class="card">` yet put inner `<a>` cross-links inside the blurb → **nested anchors are invalid HTML**, so the browser closes the card anchor early and the rest of the blurb + the "Open ▸" link spill out into the gaps between cards. Fix in `workbench/index.html`: make the card a `<div class="card">` with a stretched-link overlay (an `<a>`'s `::after { position:absolute; inset:0 }` for the whole-card click, inner links z-indexed above) — or demote the inner `<a>`s to styled spans. Browser-verify all 5 cards render whole afterward.
+
 ### exhibit — fuel (a session each)
 *Tombstones (BLOOMED — full provenance in each piece's CHANGELOG + the worklog; listed terse here only as a "don't-rebuild" echo of NOTES.md's inventory): Lighthouse → `lighthouse/` · Diffraction Grating → `diffraction/` · Structural colour → `structural-colour/` (Bragg Stack) · fractal-dimension → `fractal-dimension/` (Coastline Rule) · graph-algorithm → `pathfinder/` · M–B gas → `cavern/maxwell-boltzmann/` · Harmonograph → `harmonograph/` · Catenary → `catenary/` · Soap-Film → `soap-film/` · Spirograph → `spirograph/`.*
 
