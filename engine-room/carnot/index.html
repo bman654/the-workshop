@@ -58,6 +58,20 @@
   }
   .topbar a, .topbar .selftest{ pointer-events:auto; }
   .crumbs{ display:flex; gap:16px; }
+  /* the chip cluster: self-test pill + the ♪ Listen toggle, Galton pattern */
+  .chips{ display:flex; align-items:center; gap:10px; pointer-events:none; }
+  .topbar .chips>*{ pointer-events:auto; }
+  /* ♪ Listen — the Sound Garden crossing toggle (lives next to the pill) */
+  .listenbtn{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px;
+    padding:6px 11px; border-radius:20px; border:1px solid var(--brass-edge);
+    background:rgba(0,0,0,0.45); color:var(--ink-dim); white-space:nowrap; cursor:pointer;
+    user-select:none; transition:.18s; }
+  .listenbtn:hover{ color:var(--ink); border-color:var(--brass); }
+  .listenbtn.on{ color:#1a1206; background:var(--brass); border-color:var(--brass); }
+  /* the audible-bend caption under the leak control (the on-ramp) */
+  .caption{ font:11px/1.6 var(--font-serif); color:var(--ink-dim); margin-top:10px; letter-spacing:.2px; }
+  .caption b{ color:var(--brass); font-weight:600; }
+  .caption .sharp{ color:var(--danger); font-weight:600; }
   .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
     color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
   .back:hover{ color:var(--brass); opacity:1; }
@@ -169,6 +183,7 @@
     /* keep the fixed topbar within narrow viewports: let it wrap and the pill shrink */
     .topbar{ flex-wrap:wrap; row-gap:8px; padding:10px 14px; }
     .crumbs{ flex:1 1 auto; gap:12px; }
+    .chips{ flex:0 0 auto; flex-wrap:wrap; gap:8px; max-width:100%; }
     .selftest{ flex:0 0 auto; max-width:100%; }
   }
   @media (prefers-reduced-motion: reduce){
@@ -182,7 +197,10 @@
       <a class="back" href="../index.html">← The Engine Room</a>
       <a class="back" href="../../index.html">↑ The Workshop</a>
     </div>
-    <div class="selftest" id="selftest" title="The two-path proof, re-run live. Click for the console detail.">checking…</div>
+    <div class="chips">
+      <button class="listenbtn" id="listenBtn" title="Hear the heat die — a reversible loop sings A3 in unison; a leak detunes one voice irreversibly up">&#9834; Listen</button>
+      <div class="selftest" id="selftest" title="The two-path proof, re-run live. Click for the console detail.">checking…</div>
+    </div>
   </div>
 
   <div class="wrap">
@@ -267,6 +285,8 @@
           <div class="smeter-lbl" id="smeterLbl"><span>ΔS<sub>universe</sub></span><span class="v" id="dSuniv">0.000 J/K</span></div>
           <button class="reset" id="reset" style="margin-top:10px; width:100%">↺ reset to Carnot</button>
           <div class="verdict" id="verdict">A true Carnot cycle — the efficiency bar <b>kisses the ceiling</b> and the universe's entropy stays at zero.</div>
+          <div class="caption" id="soundRead"></div>
+          <div class="caption" style="margin-top:7px; opacity:.78">&#9834; This bench borrows its ear from the <a href="../../sound-garden/" style="color:var(--brass); text-decoration:none; border-bottom:1px solid rgba(217,164,65,.3)">Sound Garden</a>.</div>
         </div>
       </div>
     </div>
@@ -411,6 +431,33 @@ function irreversibleLedger(cyc,dT=0){
   const W_lost=Tc_res*dS_universe;
   return {dS_universe,W_lost,Th_res,Tc_res};
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   HEAT-VOICE — the entropy→pitch mapping, BYTE-TWIN of heat-voice-core.mjs.
+   The region between the sentinels is inlined byte-for-byte from the module; a
+   .test parity grep asserts the two slices are identical. The ♪ Listen audio
+   path CALLS these (it does NOT re-implement the curve — Demon/Plumbline pattern).
+   ─────────────────────────────────────────────────────────────────────────── */
+// ===== HEAT-VOICE (byte-twin of heat-voice-core.mjs) BEGIN =====
+// ── CALIBRATION (empirically anchored to the REAL ledger) ───────────────────
+//  carnotStates(500,300,3) at ΔT=30 has a real ΔS_universe ≈ 1.532 J/K. With
+//  CENTS_PER_JK = 90 that maps to ≈ 137.9 cents — a clean semitone-ish bend,
+//  audible but not a shriek. The 1-octave clamp keeps the drift voice ≤ 440 Hz.
+const HOME_HZ = 220;        // A3 — matches Galton's AUDIO_ROOT_HZ Sound-Garden anchor
+const CENTS_PER_JK = 90;    // cents of upward drift per J/K of ΔS_universe
+const MAX_CENTS = 1200;     // 1-octave clamp (anti-alias / register sanity)
+const TOL_EXACT = 1e-12;
+
+// ── THE MAPPING (pure, inline — sees only numbers) ──────────────────────────
+//  entropy can only RAISE the pitch: floored at home (0 cents) so a reversible
+//  loop sits in unison and no input can tune below home.
+function entropyToCents(dS, centsPerJK = CENTS_PER_JK){
+  if(!(dS >= 0)) return 0;                  // floor at home: entropy can't un-tune
+  return Math.min(MAX_CENTS, dS * centsPerJK);
+}
+function centsToHz(cents, baseHz = HOME_HZ){ return baseHz * Math.pow(2, cents / 1200); }
+// ===== HEAT-VOICE (byte-twin of heat-voice-core.mjs) END =====
+
 function runCoreTests(opts={}){
   const grid=opts.grid||4000, triples=opts.triples||200, checks=[];
   const add=(name,ok,info,star)=>checks.push({name,ok:!!ok,info:info||'',star:!!star});
@@ -472,6 +519,20 @@ function runCoreTests(opts={}){
   { const wa=workByArea(base,grid), closes=Math.abs(wa.adiabatEnds.T1-base.T_h)<1e-6, clockwisePositive=wa.W>0;
     add('(12) closure & determinism: loop returns to T_h, clockwise ⇒ W>0', closes&&clockwisePositive,
         `T₁_traced=${wa.adiabatEnds.T1.toFixed(6)} K, W=${wa.W.toFixed(3)} J > 0`); }
+  // (13)★ ♪ reversible ⇒ home/unison; the audible pitch is anchored to ΔS=0
+  { const c0=entropyToCents(0), hz0=centsToHz(c0);
+    add('(13)★ ♪ reversible ⇒ 0 cents, driftHz === HOME (A3 unison, zero beat)',
+        c0===0 && Math.abs(hz0-HOME_HZ)<=TOL_EXACT, `cents=${c0}, driftHz=${hz0.toFixed(6)} Hz`, true); }
+  // (14)★ ♪ a leak detunes the voice UP, strictly & monotonically (you can't tune back)
+  { const irr=irreversibleLedger(base,30), cLeak=entropyToCents(irr.dS_universe);
+    let mono=true,prev=-1; for(let dT=2;dT<=70;dT+=4){ const c=entropyToCents(irreversibleLedger(base,dT).dS_universe); if(!(c>prev))mono=false; prev=c; }
+    add('(14)★ ♪ heat leak ⇒ cents>0 strictly & monotone up over a ΔT sweep (the arrow, audible)',
+        cLeak>0 && mono, `ΔT=30 ⇒ ${cLeak.toFixed(1)} cents (→ ${centsToHz(cLeak).toFixed(1)} Hz); monotone=${mono}`, true); }
+  // (15)★ ♪ the pitch is a pure fn of the SAME dS the meter reads (round-trip exact, no physics leak)
+  { const irr=irreversibleLedger(base,30), cents=entropyToCents(irr.dS_universe), rt=centsToHz(cents);
+    const src=entropyToCents.toString(); const noPhys=!/T_h|T_c|Q_|carnotStates|irreversibleLedger/.test(src);
+    add('(15)★ ♪ driftHz === centsToHz(entropyToCents(meter dS)) & mapping sees only a number',
+        rt===centsToHz(entropyToCents(irr.dS_universe)) && noPhys, `pure fn of dS=${irr.dS_universe.toFixed(4)}; source-disjoint=${noPhys}`, true); }
   const pass=checks.filter(c=>c.ok).length;
   return {checks,pass,total:checks.length};
 }
@@ -882,6 +943,9 @@ function render(){
   const m = compute();
   m.mode = state.mode; m.leak = state.leak;
   drawPV(m); drawTS(m); drawSankey(m); drawTower(m); drawReadouts(m);
+  // ♪ the Sound Garden crossing: sonify the ALREADY-COMPUTED m (no recompute —
+  // the ear reads the exact same ledger figure the meter just drew). Frame-locked.
+  if(sounding()) updateVoice(m);
 }
 function requestRender(){ if(!needsDraw){ needsDraw = true; requestAnimationFrame(render); } }
 
@@ -970,12 +1034,117 @@ function fmt(x, dp){ if(!isFinite(x)) return '—'; const v = Math.abs(x)>=10000
 function getMono(){ return '"SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace'; }
 
 /* ════════════════════════════════════════════════════════════════════════════
+   ♪ THE HEAT VOICE — the Sound Garden crossing. Two perpetual oscillators (NOT
+   plucks): a home drone at A3 and a drift voice whose detune is a pure function
+   of the SAME ΔS_universe the meter reads (entropyToCents → centsToHz, the inlined
+   byte-twin core above). A reversible loop is unison; a leak detunes the drift
+   voice up, monotonically, and you cannot tune it back. The arrow of time, heard.
+   Scaffolding lifted from Galton's proven path; honors the shared ws:pref:muted.
+   ════════════════════════════════════════════════════════════════════════════ */
+const Audio = { ctx:null, master:null, comp:null, droneBus:null, homeOsc:null, driftOsc:null,
+  on:false, muted:readMutePref(), lastRequestedCents:null };
+function readMutePref(){ try{ return localStorage.getItem('ws:pref:muted') === '1'; }catch(e){ return false; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v ? '1' : '0'); }catch(e){} }
+
+/* Build the graph lazily inside a user gesture (autoplay-safe). Two oscillators,
+   started ONCE and never stopped; the master gain (0 at rest) is ramped to toggle. */
+function ensureAudio(){
+  if (Audio.ctx) return Audio.ctx;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  const ctx = new AC();
+  const comp = ctx.createDynamicsCompressor();          // catches unison transients
+  comp.threshold.value = -8; comp.knee.value = 14; comp.ratio.value = 4;
+  comp.attack.value = 0.003; comp.release.value = 0.25;
+  const master = ctx.createGain(); master.gain.value = 0; // ramped on enable
+  const droneBus = ctx.createGain(); droneBus.gain.value = 0.5;
+  droneBus.connect(master); master.connect(comp); comp.connect(ctx.destination);
+  // the home drone — A3 sine at HOME_HZ; the drift voice — a triangle, detuned by cents.
+  const homeOsc = ctx.createOscillator(); homeOsc.type = 'sine'; homeOsc.frequency.value = HOME_HZ;
+  const hg = ctx.createGain(); hg.gain.value = 0.5; homeOsc.connect(hg); hg.connect(droneBus);
+  const driftOsc = ctx.createOscillator(); driftOsc.type = 'triangle';
+  driftOsc.frequency.value = HOME_HZ; driftOsc.detune.value = 0;
+  const dg = ctx.createGain(); dg.gain.value = 0.42; driftOsc.connect(dg); dg.connect(droneBus);
+  homeOsc.start(); driftOsc.start();                     // perpetual — never stopped
+  Audio.ctx = ctx; Audio.comp = comp; Audio.master = master; Audio.droneBus = droneBus;
+  Audio.homeOsc = homeOsc; Audio.driftOsc = driftOsc;
+  return ctx;
+}
+function sounding(){ return Audio.on && !Audio.muted && Audio.ctx; }
+
+/* updateVoice(m): reads the ALREADY-COMPUTED m from render() (no recompute — the
+   ear and the eye share one ledger). Ramps the drift detune to the entropy-mapped
+   cents over 90ms (no zipper noise), stashes the request for the pill's D2 check. */
+function updateVoice(m){
+  if (!Audio.ctx) return;
+  const cents = entropyToCents(m.dSuniv);                // the SAME dS the meter drew
+  const now = Audio.ctx.currentTime, det = Audio.driftOsc.detune;
+  det.cancelScheduledValues(now); det.setValueAtTime(det.value, now);
+  det.linearRampToValueAtTime(cents, now + 0.09);
+  Audio.lastRequestedCents = cents;
+  paintSoundRead(m.dSuniv, cents);
+}
+function setMasterGain(target){
+  if (!Audio.ctx) return;
+  const g = Audio.master.gain, now = Audio.ctx.currentTime;
+  g.cancelScheduledValues(now); g.setValueAtTime(g.value, now);
+  g.linearRampToValueAtTime(target, now + 0.18);         // 0.18s ramp, no clicks
+}
+function syncListenBtn(){
+  const btn = document.getElementById('listenBtn');
+  const snd = Audio.on && !Audio.muted;
+  btn.classList.toggle('on', snd);
+  btn.textContent = Audio.muted ? '🔇 Muted' : (Audio.on ? 'Listening' : '♪ Listen');
+  btn.title = Audio.muted
+    ? 'Audio is muted estate-wide — click to unmute and hear the heat die'
+    : (Audio.on ? 'Stop the sound' : 'Hear the heat die — a reversible loop sings A3 unison; a leak detunes one voice irreversibly up');
+}
+function paintSoundRead(dSuniv, cents){
+  const el = document.getElementById('soundRead'); if (!el) return;
+  if (Audio.muted){ el.innerHTML = '<b>♪</b> muted estate-wide'; return; }
+  if (!Audio.on){ el.innerHTML = '<b>♪</b> press <b>Listen</b> — a reversible loop sings <b>A3</b> in unison; a heat leak detunes one voice <span class="sharp">irreversibly upward</span>, and you cannot tune it back.'; return; }
+  if (dSuniv == null){ dSuniv = 0; cents = 0; }
+  if (cents == null) cents = entropyToCents(dSuniv);
+  if (cents < 1e-6){
+    el.innerHTML = '<b>♪</b> home — ΔS=0, two voices in <b>unison</b>, it comes home.';
+  } else {
+    el.innerHTML = '<b>♪</b> drifting <span class="sharp">+' + cents.toFixed(0) + '¢ sharp</span> · ΔS=' + dSuniv.toFixed(2) +
+      ' J/K — the leak detunes one voice up, and you cannot tune it back.';
+  }
+}
+function toggleListen(){
+  if (Audio.muted){ Audio.muted = false; writeMutePref(false); Audio.on = true; }   // a click un-mutes the estate
+  else { Audio.on = !Audio.on; }
+  if (Audio.on){
+    const ctx = ensureAudio();
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    if (ctx){ setMasterGain(1); render(); }              // render() taps updateVoice for the current state
+    else { Audio.on = false; }
+  } else {
+    setMasterGain(0);
+  }
+  syncListenBtn();
+  paintSoundRead(Audio.on ? null : 0, Audio.on ? null : 0);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
    THE SELF-TEST PILL — re-runs the inlined core LIVE, all assertions, class 'ok'.
    ════════════════════════════════════════════════════════════════════════════ */
 function runSelfTest(){
   let res;
   try{ res = runCoreTests({ grid: 4000, triples: 200, seed: 3 }); }
   catch(err){ res = { checks:[{name:'core threw: '+err.message, ok:false, info:''}], pass:0, total:1 }; }
+  // ── DOM CHECKS (the ♪ audio path is wired right, cardioid pattern) ──────────
+  const addD = (name, ok, info, star)=>{ res.checks.push({name,ok:!!ok,info:info||'',star:!!star}); res.total++; if(ok)res.pass++; };
+  // D1 the Listen button exists
+  addD('(D1) #listenBtn present in the DOM', !!$('listenBtn'), $('listenBtn')?'wired':'MISSING');
+  // D2 the audio path's tone == entropyToCents(the SAME dS the meter reads) — VACUOUSLY green on fresh load
+  { const dS = compute().dSuniv, want = entropyToCents(dS), got = Audio.lastRequestedCents;
+    const ok = got==null || Math.abs(got - want) < 1e-9;
+    addD('(D2)★ audio detune == entropyToCents(meter dS) — ear & eye read one ledger (vacuous until pressed)',
+      ok, got==null ? 'no tone requested yet (fresh load)' : `requested ${got.toFixed(3)}¢ == meter ${want.toFixed(3)}¢`, true); }
+  // D3 reversible ⇒ home (the floor)
+  addD('(D3) entropyToCents(0) === 0 — a reversible loop maps to home (A3)', entropyToCents(0)===0, 'reversible ⇒ 0 cents');
   const el = $('selftest');
   const green = res.pass === res.total;
   el.className = 'selftest ' + (green ? 'ok' : 'bad');
@@ -995,6 +1164,17 @@ function boot(){
   setMode('carnot');
   render();
   runSelfTest();
+  // ♪ wire the Sound Garden crossing (silent until pressed — autoplay-safe)
+  $('listenBtn').addEventListener('click', toggleListen);
+  syncListenBtn();
+  paintSoundRead(0, 0);
+  // one mute for the whole estate: react to ws:pref:muted changes from any tab
+  window.addEventListener('storage', function(e){
+    if (e.key !== 'ws:pref:muted') return;
+    Audio.muted = readMutePref();
+    if (Audio.muted) setMasterGain(0); else if (Audio.on) setMasterGain(1);
+    syncListenBtn();
+  });
   if(!REDUCE) requestAnimationFrame(pulseLoop);
 }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);

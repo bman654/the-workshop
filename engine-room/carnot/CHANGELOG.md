@@ -4,6 +4,88 @@ The Engine Room's first bench. Operate the most efficient heat engine that can
 possibly exist, on coupled **P–V** and **T–S** diagrams, and feel the wall that
 no machine can cross: **η = 1 − T_c/T_h**.
 
+## v2 (2026-06-14) — ♪ Listen: hear the heat die (the Engine Room × Sound Garden crossing)
+
+**What it is.** The bench gains a working **"♪ Listen"** voice in the topbar, beside
+the self-test pill. A **reversible** loop (no leak) sings **A3 (220 Hz) in unison** —
+two voices, zero beat, "it comes home". Dial the **heat leak ΔT** and one voice
+**detunes strictly upward**, monotonically with `ΔS_universe`, and **you cannot tune
+it back**: entropy only rises, and so does the pitch. The arrow of time, made audible.
+The bend is anchored to the **same `ΔS_universe` the visual meter reads** — the ear
+and the eye read one ledger object.
+
+**Anti-theatre (the falsifiable seam).** A new importable core,
+**`heat-voice-core.mjs`** (~210L), **IMPORTS the bench's own `irreversibleLedger`**
+from `core.mjs` (the Demon pattern — the import *is* the single source of truth):
+- `voiceState(cyc, leak)` returns the **one** ledger object both the page and the
+  harness read; `voiceState().led` is **byte-identical** to `irreversibleLedger()`
+  and `dS_universe` is strict `===`.
+- `entropyToCents(dS)` → `centsToHz(cents)` maps that one number to a pitch. It sees
+  **only a number** — a source-disjointness grep asserts `entropyToCents.toString()`
+  never mentions `T_h`/`T_c`/`Q_`/`carnotStates`/`irreversibleLedger`. So the pitch
+  **cannot** secretly re-derive the physics; it can only sonify the meter's `ΔS`.
+- Calibration (`CENTS_PER_JK = 90`, `HOME_HZ = 220` to match Galton's Sound-Garden
+  anchor, 1-octave clamp at `MAX_CENTS = 1200`): `carnotStates(500,300,3)` at ΔT=30
+  has a **real** `ΔS_universe = 1.532 J/K` ⇒ **137.9 cents** (a clean semitone-ish
+  bend, audible but never a shriek; the drift voice tops out at 440 Hz).
+
+**The in-page audio path** lifts Galton's proven Web-Audio scaffolding: a compressor
+→ master gain (ramped, no clicks) → a 0.5 droneBus; a **home sine @ A3** and a
+**drift triangle** whose `detune` ramps to the entropy-mapped cents over 90 ms; both
+oscillators `.start()` **once**, never stopped. It **calls the inlined byte-twin core**
+(between `// ===== HEAT-VOICE … BEGIN/END =====` sentinels — a `.test` parity grep
+asserts the page slice `===` the module slice, **1079 bytes byte-identical**); it does
+**not** re-implement the curve. `updateVoice(m)` reads the **already-computed** `m`
+from `render()` (no recompute — resolves the double-quadrature risk) and rides the
+existing render cadence (frame-locked to the meter). Mute respects the shared
+**`ws:pref:muted`** estate key, with a **cross-tab `storage` listener** so one mute
+holds estate-wide. Silent until pressed (autoplay-safe).
+
+**Self-test.** The pill now reads **17/17 ✓** — the 14 core checks (the original
+12 Carnot proofs + **3 new ♪ heat-voice checks**: reversible⇒home/unison;
+leak⇒cents>0 strict & monotone up; pitch is a pure fn of the meter's `ΔS` &
+source-disjoint) plus **3 DOM checks** (`#listenBtn` present · audio detune ==
+`entropyToCents(meter dS)`, vacuous-green until pressed · `entropyToCents(0)===0`).
+The **Node twin** `heat-voice-core.test.mjs` runs the same shared set **plus**
+exhaustive sweeps over **4000** `(Th,Tc,r,γ,leak)` configs (ledger byte-identical,
+pitch a pure fn of dS), a fine 400-step ΔT monotonicity sweep × 4 base cycles, a
+negative-control sweep over `dS∈[−5,55]`, the clamp/calibration anchors, the
+no-clip renderer bound, and the byte-twin parity grep → **23/23 ✓ ALL GREEN**.
+
+**Audio-lens recipe (reproducible — the only way to "hear" headlessly).**
+`node tools/carnot/carnot-render.cjs` renders three WAVs to `/tmp/carnot/` driving
+the **REAL** core + `carnotVoiceSamples` with `dS` from the **REAL**
+`irreversibleLedger`, then asserts via the audio-lens. Measured (2026-06-14):
+
+```
+$ node tools/carnot/carnot-render.cjs
+  REAL ledger: dS(leak=0)=0.0000  dS(ΔT=30)=1.5320 J/K
+  cents: home=0.00  small=137.88  big(×600)=919.18
+  home : f0=220.6 Hz  note=A3 (4c)   peakDb=-9.37  clips=false  silence=0.0025
+  small: f0=230.1 Hz  note=A#3 (-22c) peakDb=-9.37  clips=false
+  big  : f0=374.4 Hz  note=F#4 (20c)  peakDb=-9.37  clips=false
+  ✓ home NOT silent (silenceRatio 0.0025 < 0.2)
+  ✓ home NOT clipping (clips=false, peakDb -9.37 ≤ -9)
+  ✓ home note === A3 within ±25 cents (A3 +4c)
+  ✓ leak_big detectably sharper than home (374.4 Hz > 220.6·1.01)
+  ✓ leak_big NOT clipping
+  ✓ 0→80K leak sweep monotone non-decreasing in f0
+      0K→220.6  16K→290.1  32K→388.5  48K→440.1  64K→440.1  80K→440.1   (clamps at 1 octave)
+  ✓ ALL GREEN
+```
+
+Spectrogram pair: `/tmp/carnot/home_spec.png` · `/tmp/carnot/leak_spec.png`.
+(The `home`/`leak_small` renders play the page's actual beating *pair*; `leak_big`
+and the sweep isolate the bent voice — `driftMix=1` — so the monophonic pitch
+detector reads the drift frequency unambiguously, same `fDrift`, same physics.)
+
+**Files.** NEW `engine-room/carnot/heat-voice-core.mjs`, `heat-voice-core.test.mjs`,
+`tools/carnot/carnot-render.cjs`; MODIFIED `engine-room/carnot/index.html`
+(topbar `.chips` + ♪ Listen button, the inlined HEAT-VOICE byte-twin slice, the
+3 core + 3 DOM checks, the Web-Audio path, the `soundRead` caption + the reciprocal
+Sound-Garden teaser). No `ws:seen` drop (a bench extension; carnot already drops
+`ws:seen:carnot`). A `[cross]`, not an `[exhibit]`.
+
 ## v1 (2026-06-14) — first build
 
 **What it is.** A single self-contained, zero-dependency HTML bench. Two linked
