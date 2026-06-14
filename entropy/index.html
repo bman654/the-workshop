@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Shannon Limit</title>
+<style>
+  :root{
+    --panel-bg: rgba(9,12,14,0.88);
+    --panel-edge: rgba(88,200,214,0.30);
+    --ink: #eaf0f2;
+    --ink-dim: #93a0a6;
+    --ink-faint: #5f6c72;
+    --accent: #58c8d6;        /* signal cyan — the code / bits */
+    --accent-soft: rgba(88,200,214,0.14);
+    --limit: #f0c674;         /* amber — H, the floor you cannot beat */
+    --code: #c98ad3;          /* codewords */
+    --good: #8fd79a;
+    --bad: #e0664f;
+    --bg: #060809;
+    --stage: #080c0e;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+  /* ---- topbar ---- */
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    justify-content:space-between; padding:14px 20px 0; pointer-events:none; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:var(--good); border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:var(--bad); border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; display:flex; flex-direction:column; padding:62px 22px 16px; gap:13px; overflow:hidden; }
+
+  /* the hero: the bits ruler — H (floor), L (Huffman), L/k (block coding) */
+  #limit{ flex:0 0 auto; background:var(--stage); border:1px solid var(--panel-edge); border-radius:12px;
+    padding:15px 20px 18px; }
+  #limitTop{ display:flex; align-items:flex-end; gap:26px; flex-wrap:wrap; margin-bottom:14px; }
+  .stat{ display:flex; flex-direction:column; gap:3px; }
+  .stat .v{ font:600 23px/1 var(--font-mono); }
+  .stat .v small{ font-size:12px; color:var(--ink-faint); font-weight:400; }
+  .stat .l{ font:600 9px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
+  .stat.h .v{ color:var(--limit); }
+  .stat.l .v{ color:var(--accent); }
+  .stat.gap .v{ color:var(--ink); }
+  .stat.eff .v{ color:var(--good); }
+  #verdict{ font:12px/1.5 var(--font-mono); color:var(--ink-dim); flex:1 1 200px; min-width:160px; text-align:right; }
+  #verdict b{ color:var(--ink); }
+  #verdict .hl{ color:var(--limit); }
+
+  #ruler{ position:relative; height:62px; }
+  #rulerTrack{ position:absolute; left:0; right:0; top:20px; height:22px; background:rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.07); border-radius:5px; overflow:hidden; }
+  #lFill{ position:absolute; left:0; top:0; bottom:0; width:0;
+    background:linear-gradient(90deg, rgba(88,200,214,0.5), rgba(88,200,214,0.22));
+    border-right:2px solid var(--accent); transition:width .45s cubic-bezier(.4,0,.2,1); }
+  .ghost{ position:absolute; top:20px; height:22px; width:2px; background:rgba(88,200,214,0.45);
+    transition:left .45s cubic-bezier(.4,0,.2,1); }
+  .ghost .gl{ position:absolute; top:-13px; left:50%; transform:translateX(-50%); font:9px/1 var(--font-mono);
+    color:rgba(88,200,214,0.7); white-space:nowrap; }
+  #hLine{ position:absolute; top:8px; bottom:8px; width:2px; background:var(--limit);
+    box-shadow:0 0 10px -2px var(--limit); transition:left .45s cubic-bezier(.4,0,.2,1); }
+  #hLine .hl{ position:absolute; top:-13px; left:6px; font:600 10px/1 var(--font-mono); color:var(--limit); white-space:nowrap; }
+  #hForbidden{ position:absolute; left:0; top:20px; height:22px; background:repeating-linear-gradient(
+      -45deg, rgba(240,198,116,0.05), rgba(240,198,116,0.05) 4px, rgba(240,198,116,0.10) 4px, rgba(240,198,116,0.10) 8px);
+    border-right:1px dashed rgba(240,198,116,0.4); transition:width .45s; }
+  #rulerAxis{ position:absolute; left:0; right:0; bottom:0; height:14px; }
+  #rulerAxis .tick{ position:absolute; transform:translateX(-50%); font:9px/1 var(--font-mono); color:var(--ink-faint); }
+
+  /* lower: tree (left) + table (right) */
+  #lower{ flex:1 1 auto; display:flex; gap:13px; min-height:0; }
+  #treePane{ flex:1 1 56%; position:relative; min-width:0; background:var(--stage);
+    border:1px solid var(--panel-edge); border-radius:12px; overflow:hidden; }
+  #treeCanvas{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+  #treeLabel{ position:absolute; left:14px; top:12px; z-index:4; pointer-events:none;
+    font:600 10px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
+  #treeHint{ position:absolute; left:14px; right:14px; bottom:12px; z-index:4; pointer-events:none;
+    font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.45);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 10px; }
+  #treeHint b{ color:var(--code); }
+  #treeHint .b0{ color:var(--ink-dim); } #treeHint .b1{ color:var(--accent); }
+
+  #rightPane{ flex:1 1 44%; min-width:288px; display:flex; flex-direction:column; gap:13px; min-height:0; }
+  .panel{ background:var(--stage); border:1px solid var(--panel-edge); border-radius:12px; padding:12px 14px; }
+  #tablePanel{ flex:1 1 auto; overflow:auto; min-height:0; }
+  .lbl{ font:600 9.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint);
+    margin-bottom:9px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  table{ width:100%; border-collapse:collapse; font:12.5px/1 var(--font-mono); }
+  th{ text-align:right; font:600 9px/1 var(--font-mono); letter-spacing:.06em; text-transform:uppercase;
+    color:var(--ink-faint); padding:0 7px 7px; border-bottom:1px solid rgba(88,200,214,0.18); position:sticky; top:0;
+    background:var(--stage); }
+  th:first-child{ text-align:left; }
+  td{ text-align:right; padding:5px 7px; color:var(--ink); border-bottom:1px solid rgba(255,255,255,0.03); }
+  td:first-child{ text-align:left; }
+  td .sym{ display:inline-block; min-width:16px; text-align:center; color:var(--limit); font-weight:600;
+    background:rgba(240,198,116,0.10); border-radius:3px; padding:1px 4px; }
+  td .code{ color:var(--code); font-weight:600; letter-spacing:.5px; }
+  td .ideal{ color:var(--ink-dim); }
+  td.slack{ color:var(--accent); }
+  .pbar{ display:inline-block; height:7px; border-radius:2px; background:var(--accent); vertical-align:1px; min-width:1px; }
+
+  /* encode strip */
+  #encPanel{ flex:0 0 auto; }
+  #encBits{ font:11px/1.5 var(--font-mono); color:var(--accent); word-break:break-all; max-height:46px; overflow:auto;
+    background:rgba(0,0,0,0.3); border:1px solid var(--panel-edge); border-radius:7px; padding:7px 9px; }
+  #encMeta{ font:11px/1.5 var(--font-mono); color:var(--ink-dim); margin-top:6px; }
+  #encMeta b{ color:var(--good); }
+
+  /* ---- side controls ---- */
+  #side{ width:272px; flex:0 0 272px; background:var(--panel-bg); border-left:1px solid var(--panel-edge);
+    padding:62px 18px 20px; overflow-y:auto; display:flex; flex-direction:column; gap:17px; }
+  .group{ display:flex; flex-direction:column; gap:9px; }
+  .ghead{ font:600 9.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{ font:600 11.5px/1 var(--font-mono); padding:8px 10px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink-dim); transition:.18s; }
+  .chip:hover{ color:var(--ink); border-color:var(--accent); }
+  .chip.on{ color:#06080c; background:var(--accent); border-color:var(--accent); font-weight:700; }
+  .chip small{ display:block; font-size:8.5px; font-weight:400; opacity:.7; letter-spacing:.04em; margin-top:2px; }
+  .chip.on small{ opacity:.85; }
+  .customrow{ display:flex; gap:6px; }
+  .customrow input{ flex:1; min-width:0; background:rgba(0,0,0,0.4); border:1px solid var(--panel-edge);
+    color:var(--ink); border-radius:8px; padding:8px 10px; font:12.5px/1 var(--font-mono); }
+  .customrow input:focus{ outline:none; border-color:var(--accent); }
+  .customrow button, .actbtn{ background:var(--accent-soft); border:1px solid var(--panel-edge); color:var(--accent);
+    border-radius:8px; padding:8px 12px; font:600 11px/1 var(--font-mono); letter-spacing:.04em; cursor:pointer; transition:.18s; }
+  .customrow button:hover, .actbtn:hover{ background:var(--accent); color:#06080c; }
+  .actbtn.on{ background:var(--code); border-color:var(--code); color:#0a0710; }
+  .actbtn{ width:100%; }
+
+  .krow{ display:flex; align-items:center; gap:10px; }
+  .krow input[type=range]{ flex:1; accent-color:var(--accent); }
+  #kVal{ font:600 13px/1 var(--font-mono); color:var(--accent); min-width:54px; text-align:right; }
+  #blockNote{ font:11px/1.55 var(--font-mono); color:var(--ink-dim); }
+  #blockNote b{ color:var(--accent); } #blockNote .hl{ color:var(--limit); }
+
+  .note{ font:11.5px/1.6 var(--font-ui); color:var(--ink-dim); }
+  .note b{ color:var(--ink); } .note .k{ font-family:var(--font-mono); color:var(--limit); }
+  .note .c{ font-family:var(--font-mono); color:var(--accent); }
+  #cipherNote{ font:11px/1.55 var(--font-mono); color:var(--ink-dim); }
+  #cipherNote b{ color:var(--code); }
+  hr.sep{ border:none; border-top:1px solid rgba(88,200,214,0.13); margin:1px 0; }
+
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(88,200,214,0.25); border-radius:5px; }
+
+  @media (max-width: 940px){
+    body{ overflow:auto; }
+    #wrap{ flex-direction:column; position:static; }
+    #stage{ overflow:visible; padding-top:58px; }
+    #side{ width:auto; flex:none; border-left:none; border-top:1px solid var(--panel-edge); }
+    #lower{ flex-direction:column; }
+    #treePane{ min-height:300px; }
+    .brand .tag{ display:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../workbench/index.html">&larr; workbench</a>
+    </div>
+    <div class="brand">
+      <h1>The Shannon Limit</h1>
+      <span class="tag">entropy · Huffman codes · the source-coding theorem</span>
+    </div>
+    <div id="selftest" class="selftest" title="Run the falsifiability self-test">self-test …</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+
+      <!-- THE HERO: the bits ruler. H is the floor; L is what Huffman achieves; L/k slides toward H. -->
+      <div id="limit">
+        <div id="limitTop">
+          <div class="stat h"><div class="v" id="hVal">–</div><div class="l">H — entropy (the floor)</div></div>
+          <div class="stat l"><div class="v" id="lVal">–</div><div class="l" id="lLabel">L — Huffman avg length</div></div>
+          <div class="stat gap"><div class="v" id="gapVal">–</div><div class="l">gap = L − H</div></div>
+          <div class="stat eff"><div class="v" id="effVal">–</div><div class="l">efficiency H ⁄ L</div></div>
+          <div id="verdict">…</div>
+        </div>
+        <div id="ruler">
+          <div id="rulerTrack">
+            <div id="hForbidden"></div>
+            <div id="lFill"></div>
+          </div>
+          <div id="hLine"><span class="hl">H</span></div>
+          <div id="rulerAxis"></div>
+        </div>
+      </div>
+
+      <div id="lower">
+        <div id="treePane">
+          <canvas id="treeCanvas"></canvas>
+          <div id="treeLabel">the Huffman tree</div>
+          <div id="treeHint">Merge the two least-likely symbols, over and over. The path to each leaf is its
+            codeword — go <span class="b0">left = 0</span>, <span class="b1">right = 1</span>. No codeword is a
+            prefix of another, so the stream decodes with no commas. This tree is <b>provably</b> the shortest
+            such code (checked below against a brute-force search of every prefix code).</div>
+        </div>
+
+        <div id="rightPane">
+          <div id="tablePanel" class="panel">
+            <div class="lbl"><span>the code &nbsp;·&nbsp; ideal bits −log₂p vs Huffman length</span><span id="srcBadge"></span></div>
+            <table><thead>
+              <tr><th>sym</th><th>p</th><th></th><th>−log₂p</th><th>code</th><th>len</th></tr>
+            </thead><tbody id="codeBody"></tbody></table>
+          </div>
+
+          <div id="encPanel" class="panel">
+            <div class="lbl"><span>encode → decode a sample, byte-for-byte</span><span id="encRatio"></span></div>
+            <div id="encBits">…</div>
+            <div id="encMeta">…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="side">
+      <div class="group">
+        <span class="ghead">the source</span>
+        <div class="chips" id="srcChips">
+          <div class="chip" data-src="english">English<small>typical letters</small></div>
+          <div class="chip" data-src="skewed">Skewed<small>one symbol dominates</small></div>
+          <div class="chip" data-src="dyadic">Dyadic<small>H = L exactly</small></div>
+          <div class="chip" data-src="uniform">Uniform<small>max entropy</small></div>
+        </div>
+        <div class="customrow">
+          <input id="customText" type="text" placeholder="…or type any text" maxlength="400">
+          <button id="customGo">count</button>
+        </div>
+        <div class="note">A source emits symbols with probabilities <b>pᵢ</b>. Its entropy
+          <span class="k">H = −Σ pᵢ·log₂ pᵢ</span> is the average information per symbol — the
+          <b>irreducible</b> cost in bits. Huffman builds the best prefix code; its length
+          <span class="c">L</span> obeys <span class="k">H ≤ L < H+1</span>. You can never beat H.</div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <span class="ghead">block coding — approach the limit</span>
+        <div class="krow">
+          <input id="kSlider" type="range" min="1" max="4" step="1" value="1">
+          <span id="kVal">k = 1</span>
+        </div>
+        <div id="blockNote"></div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <span class="ghead">the cipher punchline</span>
+        <button id="cipherBtn" class="actbtn">apply a substitution cipher</button>
+        <div id="cipherNote">A substitution cipher just <b>relabels</b> the symbols — it never touches the
+          probabilities, so the entropy is <b>identical</b>. That is exactly why frequency analysis breaks it:
+          the information was never hidden, only renamed.</div>
+      </div>
+
+      <hr class="sep">
+      <div class="note" style="color:var(--ink-faint)">
+        The same code that draws this page is tested headless in Node (<span class="c">core.test.mjs</span>) —
+        Huffman vs a brute-force optimum over 400 random sources, Kraft = 1, round-trips, the block-coding bound.
+        Click the self-test pill to run the in-page witnesses live.
+      </div>
+    </div>
+  </div>
+
+<script>
+"use strict";
+/* ============================================================================
+   THE SHANNON LIMIT — CORE (inlined verbatim from entropy/core.mjs).
+   The Node twin entropy/core.test.mjs imports the same source; this copy is
+   identical so the in-page self-test and the headless harness agree exactly.
+   ============================================================================ */
+const log2 = (x) => Math.log(x) / Math.LN2;
+
+function normalize(weights) {
+  const entries = Object.entries(weights).filter(([, w]) => w > 0);
+  const total = entries.reduce((s, [, w]) => s + w, 0);
+  if (total <= 0) return [];
+  return entries
+    .map(([sym, w]) => ({ sym, p: w / total }))
+    .sort((a, b) => b.p - a.p || (a.sym < b.sym ? -1 : 1));
+}
+
+function entropy(dist) {
+  const ps = Array.isArray(dist) ? dist.map(d => d.p) : normalize(dist).map(d => d.p);
+  let H = 0;
+  for (const p of ps) if (p > 0) H -= p * log2(p);
+  return H;
+}
+
+function maxEntropy(n) { return n > 0 ? log2(n) : 0; }
+
+function countSymbols(text) {
+  const w = Object.create(null);
+  for (const ch of text) w[ch] = (w[ch] || 0) + 1;
+  return w;
+}
+
+function huffman(dist) {
+  const D = Array.isArray(dist) ? dist : normalize(dist);
+  if (D.length === 0) return { tree: null, codes: {}, lengths: {}, L: 0 };
+  if (D.length === 1) {
+    const s = D[0].sym;
+    return { tree: { leaf: true, sym: s }, codes: { [s]: '0' }, lengths: { [s]: 1 }, L: 1 };
+  }
+  let order = 0;
+  let forest = D.map(d => ({ p: d.p, leaf: true, sym: d.sym, order: order++ }));
+  const cmp = (a, b) => a.p - b.p || a.order - b.order;
+  while (forest.length > 1) {
+    forest.sort(cmp);
+    const a = forest.shift();
+    const b = forest.shift();
+    forest.push({ p: a.p + b.p, leaf: false, l: a, r: b, order: order++ });
+  }
+  const tree = forest[0];
+  const codes = {}, lengths = {};
+  (function walk(node, prefix) {
+    if (node.leaf) { codes[node.sym] = prefix || '0'; lengths[node.sym] = (prefix || '0').length; return; }
+    walk(node.l, prefix + '0');
+    walk(node.r, prefix + '1');
+  })(tree, '');
+  let L = 0;
+  for (const d of D) L += d.p * lengths[d.sym];
+  return { tree, codes, lengths, L };
+}
+
+function kraftSum(lengths) {
+  let s = 0;
+  for (const k in lengths) s += Math.pow(2, -lengths[k]);
+  return s;
+}
+
+function isPrefixCode(codes) {
+  const words = Object.values(codes);
+  for (let i = 0; i < words.length; i++)
+    for (let j = 0; j < words.length; j++)
+      if (i !== j && words[j].startsWith(words[i])) return false;
+  return true;
+}
+
+function avgLength(dist, lengths) {
+  const D = Array.isArray(dist) ? dist : normalize(dist);
+  let L = 0;
+  for (const d of D) L += d.p * (lengths[d.sym] ?? 0);
+  return L;
+}
+
+function encode(symbols, codes) {
+  let bits = '';
+  for (const s of symbols) bits += codes[s];
+  return bits;
+}
+function decode(bits, tree) {
+  if (!tree) return [];
+  if (tree.leaf) {
+    const out = [];
+    for (let i = 0; i < bits.length; i++) out.push(tree.sym);
+    return out;
+  }
+  const out = [];
+  let node = tree;
+  for (const b of bits) {
+    node = (b === '0') ? node.l : node.r;
+    if (node.leaf) { out.push(node.sym); node = tree; }
+  }
+  return out;
+}
+
+function blockHuffmanLk(dist, k) {
+  const D = Array.isArray(dist) ? dist : normalize(dist);
+  let prod = [{ sym: '', p: 1 }];
+  for (let i = 0; i < k; i++) {
+    const next = [];
+    for (const a of prod) for (const d of D) next.push({ sym: a.sym + d.sym + '', p: a.p * d.p });
+    prod = next;
+  }
+  const Lk = huffman(prod).L;
+  return Lk / k;
+}
+
+function optimalAvgLength(dist) {
+  const D = Array.isArray(dist) ? dist : normalize(dist);
+  const n = D.length;
+  if (n === 0) return 0;
+  if (n === 1) return 1;
+  const probsDesc = D.map(d => d.p).sort((a, b) => b - a);
+  const depthSets = fullBinaryLeafDepths(n);
+  let best = Infinity;
+  for (const depths of depthSets) {
+    const ds = depths.slice().sort((a, b) => a - b);
+    let L = 0;
+    for (let i = 0; i < n; i++) L += probsDesc[i] * ds[i];
+    if (L < best) best = L;
+  }
+  return best;
+}
+
+const _fbCache = new Map();
+function fullBinaryLeafDepths(n) {
+  if (_fbCache.has(n)) return _fbCache.get(n);
+  let result;
+  if (n === 1) {
+    result = [[0]];
+  } else {
+    const seen = new Set();
+    const out = [];
+    for (let left = 1; left < n; left++) {
+      const right = n - left;
+      for (const ld of fullBinaryLeafDepths(left))
+        for (const rd of fullBinaryLeafDepths(right)) {
+          const merged = ld.map(d => d + 1).concat(rd.map(d => d + 1)).sort((a, b) => a - b);
+          const key = merged.join(',');
+          if (!seen.has(key)) { seen.add(key); out.push(merged); }
+        }
+    }
+    result = out;
+  }
+  _fbCache.set(n, result);
+  return result;
+}
+
+function substitute(text, mapping) {
+  let out = '';
+  for (const ch of text) out += (mapping[ch] ?? ch);
+  return out;
+}
+function permuteAlphabet(alphabet, seed = 1) {
+  const a = alphabet.split('');
+  let s = (seed >>> 0) || 1;
+  const rnd = () => (s = (1664525 * s + 1013904223) >>> 0) / 4294967296;
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  const map = {};
+  for (let i = 0; i < alphabet.length; i++) map[alphabet[i]] = a[i];
+  return map;
+}
+
+const SOURCES = {
+  dyadic: { A: 1 / 2, B: 1 / 4, C: 1 / 8, D: 1 / 8 },
+  english: {
+    E: 12.70, T: 9.06, A: 8.17, O: 7.51, I: 6.97, N: 6.75, S: 6.33, H: 6.09,
+    R: 5.99, D: 4.25, L: 4.03, C: 2.78, U: 2.76, M: 2.41, W: 2.36, F: 2.23,
+    G: 2.02, Y: 1.97, P: 1.93, B: 1.49, V: 0.98, K: 0.77, J: 0.15, X: 0.15,
+    Q: 0.10, Z: 0.07,
+  },
+  uniform: { A: 1, B: 1, C: 1, D: 1, E: 1, F: 1, G: 1, H: 1 },
+  skewed: { A: 70, B: 12, C: 8, D: 5, E: 3, F: 2 },
+};
+
+function runSelfTest() {
+  const lines = [];
+  const approx = (a, b, t = 1e-9) => Math.abs(a - b) <= t;
+  const add = (name, ok, detail = '') => lines.push({ name, ok, detail });
+
+  {
+    const certain = entropy({ A: 1 });
+    const uni = entropy(SOURCES.uniform);
+    const skew = entropy(SOURCES.skewed);
+    const ok = approx(certain, 0) && approx(uni, 3) && skew > 0 && skew < maxEntropy(6);
+    add('entropy bounds: H(certain)=0, H(uniform_8)=3=log₂8, 0<H(skewed)<log₂n',
+      ok, `certain=${certain.toFixed(4)} uni=${uni.toFixed(4)} skew=${skew.toFixed(4)}`);
+  }
+  {
+    let ok = true, bad = '';
+    for (const key of ['dyadic', 'english', 'uniform', 'skewed']) {
+      const h = huffman(SOURCES[key]);
+      const ks = kraftSum(h.lengths);
+      if (!approx(ks, 1, 1e-9)) { ok = false; bad = `${key}: Σ2^-len=${ks}`; break; }
+      if (!isPrefixCode(h.codes)) { ok = false; bad = `${key}: not a prefix code`; break; }
+    }
+    add('Kraft = 1 & prefix-free for every Huffman code (complete codes)', ok, bad);
+  }
+  {
+    let ok = true, bad = '';
+    for (const key of ['dyadic', 'english', 'uniform', 'skewed']) {
+      const D = normalize(SOURCES[key]);
+      const H = entropy(D), L = huffman(D).L;
+      if (!(L >= H - 1e-9 && L < H + 1 - 1e-12)) { ok = false; bad = `${key}: H=${H.toFixed(4)} L=${L.toFixed(4)}`; break; }
+    }
+    add('source-coding theorem: H ≤ L < H+1 for every source', ok, bad);
+  }
+  {
+    const Dd = normalize(SOURCES.dyadic), De = normalize(SOURCES.english);
+    const Hd = entropy(Dd), Ld = huffman(Dd).L;
+    const He = entropy(De), Le = huffman(De).L;
+    const ok = approx(Hd, Ld, 1e-9) && (Le > He + 1e-6);
+    add('H = L exactly for the dyadic source; H < L (slack) for English', ok,
+      `dyadic H=${Hd.toFixed(4)} L=${Ld.toFixed(4)}; english H=${He.toFixed(4)} L=${Le.toFixed(4)}`);
+  }
+  {
+    let ok = true, bad = '';
+    for (const key of ['dyadic', 'skewed', 'uniform']) {
+      const D = normalize(SOURCES[key]);
+      const Lh = huffman(D).L;
+      const Lopt = optimalAvgLength(D);
+      if (!approx(Lh, Lopt, 1e-9)) { ok = false; bad = `${key}: Huffman ${Lh.toFixed(5)} vs optimum ${Lopt.toFixed(5)}`; break; }
+    }
+    add('Huffman is OPTIMAL: L == brute-force min over all prefix codes', ok, bad);
+  }
+  {
+    const cheat = {}; for (const d of normalize(SOURCES.skewed)) cheat[d.sym] = 2;
+    const ks = kraftSum(cheat);
+    add('negative control: a too-short code (6×len-2) violates Kraft (Σ>1)',
+      ks > 1 + 1e-9, `Σ2^-len=${ks}`);
+  }
+  {
+    const D = normalize(SOURCES.skewed);
+    const H = entropy(D);
+    const L1 = huffman(D).L;
+    const L2 = blockHuffmanLk(D, 2);
+    const L4 = blockHuffmanLk(D, 4);
+    const bound = (Lk, k) => Lk >= H - 1e-9 && Lk < H + 1 / k + 1e-9;
+    const ok = bound(L1, 1) && bound(L2, 2) && bound(L4, 4) &&
+      (L4 - H) < (L1 - H) - 1e-6;
+    add('block coding: H ≤ L/k < H + 1/k (the bound tightens → L/k → H)', ok,
+      `H=${H.toFixed(4)} L₁=${L1.toFixed(4)} L₂=${L2.toFixed(4)} L₄=${L4.toFixed(4)}`);
+  }
+  {
+    const text = 'ENTROPYISTHELIMITTTT';
+    const D = normalize(countSymbols(text));
+    const h = huffman(D);
+    const bits = encode([...text], h.codes);
+    const back = decode(bits, h.tree).join('');
+    add('encode→decode round-trips exactly (prefix code is unambiguous)',
+      back === text, back === text ? `${bits.length} bits` : `got "${back}"`);
+  }
+  {
+    const plain = 'THEQUICKBROWNFOXJUMPSOVERTHELAZYDOGTHEQUICKBROWN';
+    const map = permuteAlphabet('ABCDEFGHIJKLMNOPQRSTUVWXYZ', 12345);
+    const cipher = substitute(plain, map);
+    const Hp = entropy(countSymbols(plain));
+    const Hc = entropy(countSymbols(cipher));
+    add('substitution cipher preserves entropy exactly (why frequency analysis works)',
+      approx(Hp, Hc, 1e-12) && cipher !== plain, `H_plain=${Hp.toFixed(5)} H_cipher=${Hc.toFixed(5)}`);
+  }
+
+  const pass = lines.filter(l => l.ok).length;
+  return { lines, pass, total: lines.length };
+}
+window.__shannonSelfTest = runSelfTest;   // exposed for headless/browser verification
+
+/* ============================================================================
+   THE BENCH — visualization & interaction.
+   ============================================================================ */
+const $ = id => document.getElementById(id);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+const els = {
+  selftest: $('selftest'),
+  hVal: $('hVal'), lVal: $('lVal'), lLabel: $('lLabel'), gapVal: $('gapVal'), effVal: $('effVal'),
+  verdict: $('verdict'),
+  lFill: $('lFill'), hLine: $('hLine'), hForbidden: $('hForbidden'), rulerAxis: $('rulerAxis'), ruler: $('ruler'),
+  treeCanvas: $('treeCanvas'),
+  codeBody: $('codeBody'), srcBadge: $('srcBadge'),
+  encBits: $('encBits'), encMeta: $('encMeta'), encRatio: $('encRatio'),
+  srcChips: $('srcChips'), customText: $('customText'), customGo: $('customGo'),
+  kSlider: $('kSlider'), kVal: $('kVal'), blockNote: $('blockNote'),
+  cipherBtn: $('cipherBtn'), cipherNote: $('cipherNote'),
+};
+
+// labels for the canned sources
+const SRC_LABEL = { english: 'English letters', skewed: 'skewed source', dyadic: 'dyadic source', uniform: 'uniform source' };
+
+const state = {
+  srcKey: 'english',
+  weights: SOURCES.english,   // current raw weights {sym: w}
+  label: 'English letters',
+  k: 1,
+  ciphered: false,
+  cipherMap: null,
+};
+
+// ---- the bits ruler axis range ----
+function rulerMax(H, L1){ return Math.max(1, Math.ceil(Math.max(H, L1) + 0.5)); }
+
+// Largest block size k we can Huffman-code live without hanging the tab: the
+// product alphabet has n^k symbols and huffman() is ~O(m²·log m), so cap m≈2048.
+// (Big alphabets like English → small k; the source-coding limit still shows.)
+function safeMaxK(n){ if (n <= 1) return 1; let k = 1; while (k < 4 && Math.pow(n, k + 1) <= 2048) k++; return k; }
+
+function setSource(weights, key, label){
+  state.weights = weights;
+  state.srcKey = key;
+  state.label = label;
+  state.ciphered = false; state.cipherMap = null;
+  els.cipherBtn.classList.remove('on');
+  els.cipherBtn.textContent = 'apply a substitution cipher';
+  // reflect chip selection
+  [...els.srcChips.children].forEach(c => c.classList.toggle('on', c.dataset.src === key));
+  render();
+}
+
+// effective weights after an optional substitution-cipher relabel
+function effWeights(){
+  if (!state.ciphered || !state.cipherMap) return state.weights;
+  const out = {};
+  for (const k in state.weights){ const nk = state.cipherMap[k] ?? k; out[nk] = (out[nk]||0) + state.weights[k]; }
+  return out;
+}
+
+function render(){
+  const weights = effWeights();
+  const D = normalize(weights);
+  const n = D.length;
+  // clamp the block size to what the page can compute instantly (big alphabets → small k)
+  const maxK = safeMaxK(n);
+  if (state.k > maxK) state.k = maxK;
+  els.kSlider.max = maxK;
+  els.kSlider.value = state.k;
+  els.kSlider.disabled = (maxK === 1);
+  els.kVal.textContent = maxK === 1 ? 'k = 1 · n too big' : `k = ${state.k}`;
+  const H = entropy(D);
+  const h = huffman(D);
+  const L1 = h.L;                          // single-symbol Huffman length
+  const Lk = state.k === 1 ? L1 : blockHuffmanLk(D, state.k);   // shown length (per original symbol)
+  const Lshown = Lk;
+
+  // ---- the four stats ----
+  els.hVal.innerHTML = H.toFixed(3) + ' <small>bits/sym</small>';
+  els.lVal.innerHTML = Lshown.toFixed(3) + ' <small>bits/sym</small>';
+  els.lLabel.textContent = state.k === 1 ? 'L — Huffman avg length' : `L/k — block-coded (k=${state.k})`;
+  const gap = Lshown - H;
+  els.gapVal.innerHTML = gap.toFixed(3) + ' <small>bits</small>';
+  const eff = Lshown > 0 ? H / Lshown : 0;
+  els.effVal.textContent = (eff * 100).toFixed(1) + '%';
+
+  // verdict line
+  const dyadic = gap < 1e-9;
+  els.verdict.innerHTML = dyadic
+    ? `Every pᵢ is a power of ½ → Huffman hits the floor: <b>L = H</b>. <span class="hl">0 bits wasted.</span>`
+    : `Bound: <span class="hl">H ≤ ${state.k===1?'L':'L/k'} &lt; H + ${state.k===1?'1':'1/'+state.k}</span>. `
+      + `Wasting <b>${gap.toFixed(3)}</b> bits/sym vs the floor.`;
+
+  // ---- the ruler ----
+  const AX = rulerMax(H, L1);
+  const pct = v => (Math.max(0, Math.min(AX, v)) / AX * 100);
+  els.lFill.style.width = pct(Lshown) + '%';
+  els.hForbidden.style.width = pct(H) + '%';     // the region below H is forbidden
+  els.hLine.style.left = pct(H) + '%';
+  els.hLine.querySelector('.hl').textContent = `H = ${H.toFixed(2)}`;
+  // ghosts: where each block-coding k would land (the staircase toward H)
+  [...els.ruler.querySelectorAll('.ghost')].forEach(g => g.remove());
+  for (let k = 2; k <= maxK; k++){
+    if (k === state.k) continue;
+    const lk = blockHuffmanLk(D, k);
+    const g = document.createElement('div');
+    g.className = 'ghost';
+    g.style.left = pct(lk) + '%';
+    g.innerHTML = `<span class="gl">k${k}</span>`;
+    els.ruler.appendChild(g);
+  }
+  // axis ticks
+  els.rulerAxis.innerHTML = '';
+  for (let b = 0; b <= AX; b++){
+    const t = document.createElement('div'); t.className = 'tick'; t.style.left = (b/AX*100)+'%';
+    t.textContent = b + (b===AX?' bits':''); els.rulerAxis.appendChild(t);
+  }
+
+  // ---- the code table (always the single-symbol code, the readable one) ----
+  els.srcBadge.textContent = `${n} symbols · L = ${L1.toFixed(3)}`;
+  const rows = D.map(d => {
+    const ideal = -log2(d.p);
+    const len = h.lengths[d.sym];
+    const slack = len - ideal;
+    const sym = d.sym === ' ' ? '␣' : d.sym;
+    return `<tr>
+      <td><span class="sym">${esc(sym)}</span></td>
+      <td>${(d.p*100).toFixed(d.p<0.01?2:1)}%</td>
+      <td style="width:60px"><span class="pbar" style="width:${(d.p*54).toFixed(1)}px"></span></td>
+      <td class="ideal">${ideal.toFixed(2)}</td>
+      <td><span class="code">${h.codes[d.sym]}</span></td>
+      <td class="${slack>0.001?'slack':''}">${len}</td>
+    </tr>`;
+  }).join('');
+  els.codeBody.innerHTML = rows;
+
+  // ---- encode/decode a sample, prove the round-trip ----
+  renderEncode(D, h);
+
+  // ---- block-coding note ----
+  if (state.k === 1){
+    els.blockNote.innerHTML = `Code <b>one symbol at a time</b>. Slide right to Huffman-code
+      <b>pairs, triples…</b> of symbols — the gap above <span class="hl">H</span> shrinks as
+      <span class="hl">1/k</span>, so L/k → H. The entropy is the true floor.`;
+  } else {
+    const lk = Lshown;
+    els.blockNote.innerHTML = `Coding <b>${state.k}-tuples</b>: L/k = <b>${lk.toFixed(3)}</b>, only
+      <span class="hl">${(lk-H).toFixed(3)}</span> above H (was ${(L1-H).toFixed(3)} at k=1). Bound:
+      L/k &lt; H + 1/${state.k} = ${(H+1/state.k).toFixed(3)}.`;
+  }
+
+  // ---- the tree ----
+  drawTree(h.tree, D);
+
+  // ---- cipher note ----
+  if (state.ciphered){
+    els.cipherNote.innerHTML = `<b>Ciphered.</b> The symbols are scrambled but H is byte-identical —
+      the probabilities never moved. Frequency analysis would walk right back in.`;
+  } else {
+    els.cipherNote.innerHTML = `A substitution cipher just <b>relabels</b> the symbols — it never touches the
+      probabilities, so the entropy is <b>identical</b>. That is exactly why frequency analysis breaks it:
+      the information was never hidden, only renamed.`;
+  }
+}
+
+function esc(s){ return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function renderEncode(D, h){
+  // build a short representative sample from the distribution (deterministic),
+  // then encode + decode and show the round-trip + compression vs fixed-width.
+  const syms = D.map(d => d.sym);
+  let sample = [];
+  // take a deterministic multiset roughly proportional to p (cap ~40 symbols)
+  const N = 40;
+  let acc = 0;
+  for (const d of D){ const c = Math.max(1, Math.round(d.p * N)); for (let i=0;i<c;i++) sample.push(d.sym); }
+  sample = sample.slice(0, 60);
+  const bits = encode(sample, h.codes);
+  const back = decode(bits, h.tree);
+  const ok = back.join('') === sample.join('');
+  const fixed = sample.length * Math.ceil(maxEntropy(D.length) < 1e-9 ? 1 : Math.ceil(maxEntropy(D.length)));
+  const shown = sample.map(s => s===' '?'␣':s).join('');
+  els.encBits.innerHTML = `<span style="color:var(--limit)">${esc(shown)}</span><br>` +
+    bits.replace(/(.{8})/g, '$1 ');
+  const ratio = fixed > 0 ? (bits.length / fixed) : 1;
+  els.encMeta.innerHTML = `${sample.length} symbols → <b>${bits.length} bits</b> ` +
+    `(vs ${fixed} at fixed ${Math.max(1,Math.ceil(maxEntropy(D.length)))}-bit width — ` +
+    `${((1-ratio)*100).toFixed(0)}% smaller). decode round-trip: ${ok?'<b>exact ✓</b>':'<span style="color:var(--bad)">MISMATCH</span>'}`;
+  els.encRatio.textContent = `${(bits.length/sample.length).toFixed(2)} bits/sym`;
+}
+
+/* ---- the Huffman tree on canvas ---- */
+let _treeCtx = null;
+function drawTree(tree, D){
+  const cv = els.treeCanvas;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = cv.clientWidth, hgt = cv.clientHeight;
+  if (!w || !hgt) return;
+  cv.width = w * dpr; cv.height = hgt * dpr;
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,hgt);
+  if (!tree){ return; }
+
+  // assign x to leaves in-order, y by depth. Compute max depth + leaf order.
+  const leaves = [];
+  let maxDepth = 0;
+  (function measure(node, depth){
+    maxDepth = Math.max(maxDepth, depth);
+    if (node.leaf){ leaves.push(node); return; }
+    measure(node.l, depth+1); measure(node.r, depth+1);
+  })(tree, 0);
+
+  const padX = 46, padTop = 54, padBot = 30;
+  const usableW = Math.max(10, w - padX*2);
+  const usableH = Math.max(10, hgt - padTop - padBot);
+  const leafX = new Map();
+  leaves.forEach((lf, i) => leafX.set(lf, leaves.length===1 ? 0.5 : i/(leaves.length-1)));
+  const X = node => padX + (node._x) * usableW;
+  const Y = depth => padTop + (maxDepth===0?0:depth/maxDepth) * usableH;
+
+  // compute x for internal nodes = mean of children
+  (function place(node, depth){
+    if (node.leaf){ node._x = leafX.get(node); node._d = depth; return node._x; }
+    const lx = place(node.l, depth+1), rx = place(node.r, depth+1);
+    node._x = (lx + rx)/2; node._d = depth; return node._x;
+  })(tree, 0);
+
+  const accent = css('--accent'), limit = css('--limit'), code = css('--code'), faint = css('--ink-faint'), dim = css('--ink-dim');
+
+  // edges (with 0/1 labels)
+  ctx.lineWidth = 1.5; ctx.font = `600 11px ${css('--font-mono')}`;
+  (function edges(node){
+    if (node.leaf) return;
+    for (const [child, bit] of [[node.l,'0'],[node.r,'1']]){
+      const x1 = X(node), y1 = Y(node._d), x2 = X(child), y2 = Y(child._d);
+      ctx.strokeStyle = bit==='0' ? 'rgba(147,160,166,0.55)' : 'rgba(88,200,214,0.7)';
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+      ctx.fillStyle = bit==='0' ? dim : accent;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(bit, (x1+x2)/2 + (bit==='0'?-8:8), (y1+y2)/2 - 2);
+      edges(child);
+    }
+  })(tree);
+
+  // nodes
+  const codes = huffman(D).codes;
+  (function nodes(node){
+    const x = X(node), y = Y(node._d);
+    if (node.leaf){
+      const r = 14;
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+      ctx.fillStyle = 'rgba(240,198,116,0.16)'; ctx.fill();
+      ctx.lineWidth=1.4; ctx.strokeStyle = limit; ctx.stroke();
+      ctx.fillStyle = limit; ctx.font = `600 13px ${css('--font-mono')}`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(node.sym===' '?'␣':node.sym, x, y);
+      // codeword + probability under the leaf
+      ctx.fillStyle = code; ctx.font = `600 10px ${css('--font-mono')}`;
+      ctx.fillText(codes[node.sym]||'', x, y + r + 11);
+      ctx.fillStyle = faint; ctx.font = `9px ${css('--font-mono')}`;
+      ctx.fillText((node.p*100).toFixed(node.p<0.01?2:0)+'%', x, y + r + 23);
+    } else {
+      ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2);
+      ctx.fillStyle = 'rgba(147,160,166,0.5)'; ctx.fill();
+      nodes(node.l); nodes(node.r);
+    }
+  })(tree);
+
+  // root label
+  ctx.fillStyle = faint; ctx.font = `9px ${css('--font-mono')}`;
+  ctx.textAlign='center'; ctx.fillText('root', X(tree), Y(0) - 12);
+}
+
+/* ---- interactions ---- */
+[...els.srcChips.children].forEach(chip => {
+  chip.addEventListener('click', () => {
+    const key = chip.dataset.src;
+    setSource(SOURCES[key], key, SRC_LABEL[key]);
+  });
+});
+
+function applyCustom(){
+  const raw = els.customText.value.toUpperCase().replace(/[^A-Z ]/g,'');
+  if (raw.replace(/ /g,'').length < 2){
+    els.customText.style.borderColor = css('--bad');
+    setTimeout(()=>els.customText.style.borderColor='', 600);
+    return;
+  }
+  setSource(countSymbols(raw), 'custom', 'your text');
+}
+els.customGo.addEventListener('click', applyCustom);
+els.customText.addEventListener('keydown', e => { if (e.key==='Enter') applyCustom(); });
+
+els.kSlider.addEventListener('input', () => {
+  state.k = +els.kSlider.value;
+  els.kVal.textContent = `k = ${state.k}`;
+  render();
+});
+
+els.cipherBtn.addEventListener('click', () => {
+  state.ciphered = !state.ciphered;
+  if (state.ciphered){
+    // permute over the symbols actually present (plus the full A–Z so letters map to letters)
+    const present = Object.keys(state.weights);
+    const alpha = [...new Set(['ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''), present].flat())].join('');
+    state.cipherMap = permuteAlphabet(alpha, 7);
+    els.cipherBtn.classList.add('on'); els.cipherBtn.textContent = 'remove the cipher';
+  } else {
+    state.cipherMap = null;
+    els.cipherBtn.classList.remove('on'); els.cipherBtn.textContent = 'apply a substitution cipher';
+  }
+  render();
+});
+
+/* ---- self-test pill ---- */
+function runTestUI(){
+  const r = runSelfTest();
+  els.selftest.classList.toggle('ok', r.pass === r.total);
+  els.selftest.classList.toggle('bad', r.pass !== r.total);
+  els.selftest.textContent = `self-test ${r.pass}/${r.total} ✓`;
+  els.selftest.title = r.lines.map(l => (l.ok ? '✓ ' : '✗ ') + l.name + (l.detail?'  ('+l.detail+')':'')).join('\n');
+}
+els.selftest.addEventListener('click', runTestUI);
+
+let _rz;
+window.addEventListener('resize', () => { clearTimeout(_rz); _rz = setTimeout(render, 90); });
+
+/* ---- boot ---- */
+runTestUI();
+setSource(SOURCES.english, 'english', SRC_LABEL.english);
+</script>
+</body>
+</html>
