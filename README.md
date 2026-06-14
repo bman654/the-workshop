@@ -132,7 +132,7 @@ seed only *arranges* — so it reads as written, not generated.
 ### ▶ Visit the Hall → **https://bman654.github.io/the-workshop/hall-of-mirrors/**
 
 A new wing on the estate's west grounds — **a gallery for all things light**: how it bends and reflects,
-how it splits into colour, and what it is when you look closely. Eleven self-contained optical benches —
+how it splits into colour, and what it is when you look closely. Twelve self-contained optical benches —
 and a laser puzzle to play with what they teach — each keeping the workshop's promise: a built-in
 self-test that proves its physics *exact*:
 
@@ -181,6 +181,14 @@ self-test that proves its physics *exact*:
   from full to pitch-dark when crossed; then slip a *third* filter between the crossed pair and watch
   light reappear from nothing (the three-polariser paradox, peaking at ¼ at 45°). The self-test proves
   the transmitted intensity equals cos²θ to a billionth, and that crossed is exactly zero.
+- **[The Diffraction Grating](https://bman654.github.io/the-workshop/diffraction/)** — an opening doesn't
+  cast a sharp shadow; light *fans out*. In the far field the pattern is the squared **Fourier transform**
+  of the aperture: one slit gives a **sinc**, a row of N slits — a grating — multiplies it by a sharp comb
+  whose bright orders obey **d·sinθ = mλ** and reach a height of N². Raise N and the orders **sharpen**
+  (that's why a grating out-resolves two slits); switch to white light and each order fans into a spectrum,
+  so a grating *is* a spectrometer. The self-test proves the rendered curve equals a **direct, independent
+  Fourier transform** of the very slits drawn above — to a part in a million — so the pattern really *is*
+  |FT of the aperture|², not a memorised formula.
 - **[The Anamorphic Mirror](https://bman654.github.io/the-workshop/anamorphosis/)** — the Renaissance
   conjuror's trick. A picture is pre-distorted into an unreadable smear on a flat table; stand a vertical
   **cylindrical mirror** at its centre and the reflection puts it right. Three live panels — the source,
