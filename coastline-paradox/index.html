@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Coastline Paradox</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.9);
+    --panel-edge: rgba(201,162,74,0.34);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --coast: #e8d8a8;      /* the shoreline stroke */
+    --land: #c9b888;       /* land tint */
+    --box: #c98a4a;        /* box-counting grid */
+    --ruler: #6fd3c4;      /* divider/ruler estimator */
+    --theory: #b07ad0;     /* the slider's predicted 2−H */
+    --sea: #16263a;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --bg: #06080c;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    justify-content:space-between; padding:14px 20px 0; pointer-events:none; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; display:flex; flex-direction:column; }
+  #mapWrap{ flex:1 1 62%; position:relative; min-height:0; }
+  #plotWrap{ flex:0 0 38%; position:relative; border-top:1px solid rgba(201,162,74,0.18);
+    background:rgba(0,0,0,0.24); }
+  canvas{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+  #mapLabel{ position:absolute; left:16px; top:60px; font:600 11px/1.45 var(--font-mono);
+    letter-spacing:.04em; color:var(--ink-dim); background:rgba(0,0,0,0.52);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:8px 11px; z-index:6; pointer-events:none;
+    max-width:50%; }
+  #mapLabel b{ color:var(--coast); }
+  #plotLabel{ position:absolute; left:14px; top:10px; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); z-index:6; pointer-events:none; }
+  #verdict{ position:absolute; right:16px; top:58px; z-index:7; pointer-events:none;
+    font:600 11px/1.5 var(--font-mono); text-align:right; }
+  #verdict .big{ font-family:var(--font-serif); font-size:30px; color:var(--coast); display:block;
+    font-variant-numeric:tabular-nums; line-height:1.05; }
+  #verdict .triple{ margin-top:8px; font:600 11px/1.7 var(--font-mono); }
+  #verdict .triple span.k{ color:var(--ink-dim); }
+  #verdict .triple .box{ color:var(--box); } #verdict .triple .ruler{ color:var(--ruler); }
+  #verdict .triple .theory{ color:var(--theory); }
+  #verdict .match{ display:inline-block; margin-top:7px; padding:3px 8px; border-radius:12px;
+    font:600 9.5px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; }
+  #verdict .match.good{ color:#8fd79a; border:1px solid rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  #verdict .match.warn{ color:#f0b07a; border:1px solid rgba(220,150,90,0.5); background:rgba(60,42,22,0.4); }
+
+  #panel{ width:352px; flex:0 0 352px; height:100%; background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge); padding:58px 16px 28px;
+    box-shadow:-18px 0 50px rgba(0,0,0,0.5); z-index:20; overflow-y:auto; }
+  .sib-link{ display:inline-flex; align-items:center; gap:5px; font:600 11px/1 var(--font-mono);
+    color:var(--accent); text-decoration:none; opacity:.85; margin:0 0 12px; letter-spacing:.02em;
+    border-bottom:1px solid transparent; transition:.18s; }
+  .sib-link:hover{ opacity:1; border-bottom-color:var(--accent-soft); }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.58; margin:0 0 6px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  #panel .lede i{ color:var(--coast); font-style:normal; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 9px; border-top:1px solid rgba(201,162,74,0.16); padding-top:14px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:6px; }
+  .row{ margin:12px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.04em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .row > label .val{ color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:3px; border-radius:3px;
+    background:rgba(201,162,74,0.22); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:15px; height:15px;
+    border-radius:50%; background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  input[type=range]::-moz-range-thumb{ width:15px; height:15px; border:none; border-radius:50%;
+    background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  .seedrow{ display:flex; gap:7px; }
+  .seedrow input[type=text]{ flex:1; min-width:0; background:rgba(0,0,0,0.32); border:1px solid var(--panel-edge);
+    color:var(--ink); border-radius:7px; padding:8px 9px; font-size:13px; font-family:var(--font-serif); letter-spacing:.5px; }
+  .seedrow input[type=text]:focus{ outline:none; border-color:var(--accent); }
+  .iconbtn{ flex:0 0 auto; width:36px; height:36px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; font-size:16px; transition:.16s; }
+  .iconbtn:hover{ background:var(--accent-soft); border-color:var(--accent); color:var(--ink); }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.25); padding:3px; border-radius:9px; border:1px solid rgba(120,98,66,0.3); }
+  .seg button{ flex:1; border:none; background:transparent; color:var(--ink-dim); font:600 11px/1 var(--font-ui);
+    padding:7px 4px; border-radius:6px; cursor:pointer; transition:.15s; }
+  .seg button.on{ background:var(--accent-soft); color:var(--ink); }
+  .presets{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .preset{ font:600 10.5px/1.25 var(--font-ui); padding:9px 9px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; transition:.16s; text-align:left; }
+  .preset:hover{ border-color:var(--accent); color:var(--ink); }
+  .preset b{ display:block; color:var(--ink); font-size:11px; margin-bottom:2px; }
+  .preset span{ color:var(--ink-dim); font:10px/1.3 var(--font-mono); }
+  .note{ font-size:10.5px; color:var(--ink-dim); line-height:1.55; margin:11px 0 0; letter-spacing:.2px; }
+  .note b{ color:var(--ink); } .note .box{ color:var(--box); } .note .ruler{ color:var(--ruler); }
+  .note .theory{ color:var(--theory); }
+  .actions{ display:flex; gap:8px; margin-top:14px; }
+  .actions button{ flex:1; padding:10px 8px; border-radius:9px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.03); color:var(--ink-dim); font:600 11px/1 var(--font-ui); cursor:pointer; transition:.16s; }
+  .actions button:hover{ color:var(--ink); border-color:var(--accent); background:var(--accent-soft); }
+  ::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-thumb{background:rgba(201,162,74,.3);border-radius:4px}
+  .legend{ position:absolute; right:14px; bottom:12px; z-index:6; pointer-events:none;
+    font:600 9.5px/1.7 var(--font-mono); letter-spacing:.04em; text-align:right; }
+  .legend i{ display:inline-block; width:18px; height:0; border-top:2px solid; vertical-align:middle; margin-left:6px; }
+  .legend .box{ color:var(--box); } .legend .ruler{ color:var(--ruler); } .legend .theory{ color:var(--theory); }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="backs">
+    <a class="back" href="../index.html">← Workshop</a>
+    <a class="back" href="../cartographer/index.html">↗ Cartographer</a>
+  </div>
+  <div class="brand">
+    <h1>The Coastline Paradox</h1>
+    <span class="tag">how long is a coast? · D measured 2 ways</span>
+  </div>
+  <div class="selftest" id="selftest">self-test…</div>
+</div>
+
+<div id="wrap">
+  <div id="stage">
+    <div id="mapWrap">
+      <canvas id="map"></canvas>
+      <div id="mapLabel">Drawing realm…</div>
+      <div id="verdict"></div>
+    </div>
+    <div id="plotWrap">
+      <canvas id="plot"></canvas>
+      <div id="plotLabel">log–log: the measurement</div>
+      <div class="legend">
+        <div class="box">box-counting N(ε) <i class="box"></i></div>
+        <div class="ruler">ruler / divider L(ε) <i class="ruler"></i></div>
+        <div class="theory">slider's 2−H <i class="theory"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel">
+    <a class="sib-link" href="../cartographer/index.html">↗ from the Cartographer</a>
+    <p class="lede">The Cartographer draws its realms from a seeded <b>fBm heightmap</b> whose
+      <i>roughness</i> slider is the noise's persistence. Its coast is the line where that height
+      crosses sea level. Here we take that <b>exact</b> coast and ask Richardson's 1961 question:
+      <i>how long is it?</i></p>
+    <p class="lede">Measure with a smaller ruler and the answer keeps <b>growing</b> — that's the
+      paradox. The growth rate <i>is</i> a fractal dimension <b>D</b>, and we measure it two unrelated
+      ways that must agree.</p>
+
+    <div class="sect">The realm</div>
+    <div class="row seedrow">
+      <input type="text" id="seed" value="Aethelmark" spellcheck="false" autocomplete="off">
+      <button class="iconbtn" id="dice" title="Roll a new realm">⚄</button>
+    </div>
+    <div class="row">
+      <div class="seg" id="landSeg">
+        <button data-land="pangaea">Pangaea</button>
+        <button data-land="continents" class="on">Continents</button>
+        <button data-land="archipelago">Isles</button>
+      </div>
+    </div>
+
+    <div class="sect">Roughness ⟶ dimension</div>
+    <div class="row">
+      <label>fBm persistence (gain) <span class="val" id="gainV">0.60</span></label>
+      <input type="range" id="gain" min="0.42" max="0.80" step="0.01" value="0.60">
+      <p class="note">Higher gain keeps more fine detail ⇒ a crinklier coast. In theory the level set of
+        an fBm has dimension <span class="theory">D = 2 − H</span> with <span class="theory">H = −log₂(gain)</span>.</p>
+    </div>
+
+    <div class="sect">Presets</div>
+    <div class="presets" id="presets">
+      <button class="preset" data-seed="Cornwall" data-gain="0.46" data-land="continents"><b>Smooth strand</b><span>low D · a tame coast</span></button>
+      <button class="preset" data-seed="Britannia" data-gain="0.60" data-land="continents"><b>Real coast</b><span>D≈1.2 · like Britain</span></button>
+      <button class="preset" data-seed="Fjordheim" data-gain="0.74" data-land="continents"><b>Fjord country</b><span>high D · ragged inlets</span></button>
+      <button class="preset" data-seed="Myriadisle" data-gain="0.78" data-land="archipelago"><b>Ten thousand isles</b><span>islands explode</span></button>
+    </div>
+
+    <div class="sect">Two rulers, one D</div>
+    <p class="note"><span class="box">Box-counting</span> tiles the plane with boxes of side ε and counts
+      those the coast touches: <b>N(ε) ∝ (1/ε)<sup>D</sup></b>. <span class="ruler">The divider</span>
+      walks the shore with a compass of opening ε; the length <b>L(ε) ∝ ε<sup>1−D</sup></b> diverges.
+      Two methods, no shared code — they land on the same D.</p>
+    <p class="note">The <span class="theory">slider's predicted 2−H</span> is the <i>idealized</i> fBm value;
+      the real realm is warped, masked &amp; islanded, so the measured D runs tamer — but <b>tracks the
+      slider</b>, and lands right where real coasts do (D≈1.15–1.25).</p>
+
+    <div class="actions">
+      <button id="png">Export PNG</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =====================================================================
+   THE CORE — inlined from core.mjs (the Node-tested twin). Keep in sync.
+   ===================================================================== */
+function xmur3(str){
+  let h = 1779033703 ^ str.length;
+  for (let i=0;i<str.length;i++){ h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
+  return function(){ h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16; return h >>> 0; };
+}
+function mulberry32(a){
+  return function(){ a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+function makeRng(seedStr){ const s = xmur3(String(seedStr)); return mulberry32(s()); }
+
+class ValueNoise{
+  constructor(rng){
+    const N = 256; this.perm = new Uint8Array(N*2); this.grad = new Float32Array(N);
+    const p = new Uint8Array(N);
+    for (let i=0;i<N;i++){ p[i]=i; this.grad[i]=rng(); }
+    for (let i=N-1;i>0;i--){ const j=(rng()*(i+1))|0; const t=p[i]; p[i]=p[j]; p[j]=t; }
+    for (let i=0;i<N*2;i++) this.perm[i]=p[i&(N-1)];
+  }
+  _smooth(t){ return t*t*t*(t*(t*6-15)+10); }
+  _val(ix,iy){ return this.grad[(this.perm[(ix & 255) + this.perm[iy & 255]])]; }
+  noise(x,y){
+    const ix=Math.floor(x), iy=Math.floor(y); const fx=x-ix, fy=y-iy;
+    const u=this._smooth(fx), v=this._smooth(fy);
+    const a=this._val(ix,iy), b=this._val(ix+1,iy), c=this._val(ix,iy+1), d=this._val(ix+1,iy+1);
+    const top=a+(b-a)*u, bot=c+(d-c)*u; return top+(bot-top)*v;
+  }
+  fbm(x,y,oct,lac,gain){
+    let amp=1, freq=1, sum=0, norm=0;
+    for(let i=0;i<oct;i++){ sum += amp * (this.noise(x*freq, y*freq)*2-1); norm += amp; amp *= gain; freq *= lac; }
+    return (sum/norm)*0.5 + 0.5;
+  }
+  ridged(x,y,oct,lac,gain){
+    let amp=1, freq=1, sum=0, norm=0;
+    for(let i=0;i<oct;i++){ let n = this.noise(x*freq, y*freq)*2-1; n = 1 - Math.abs(n); n *= n; sum += amp*n; norm += amp; amp *= gain; freq *= lac; }
+    return sum/norm;
+  }
+}
+
+const LAND_PRESETS = {
+  pangaea:     { maskPow:2.0, maskStrength:0.78, baseFreq:2.0, landBias:0.10, blobAmp:0.30, nBlobs:1, blobR:[0.40,0.62], target:0.55 },
+  continents:  { maskPow:2.6, maskStrength:0.98, baseFreq:3.0, landBias:0.0,  blobAmp:0.42, nBlobs:3, blobR:[0.20,0.42], target:0.44 },
+  archipelago: { maskPow:3.0, maskStrength:1.30, baseFreq:6.0, landBias:-0.14, blobAmp:0.22, nBlobs:9, blobR:[0.07,0.16], target:0.30 },
+};
+
+function generateHeight(seedStr, gain, land='continents', GW=360, GH=240){
+  const rng = makeRng(seedStr);
+  const hN = new ValueNoise(makeRng(seedStr + "::height"));
+  const warpN = new ValueNoise(makeRng(seedStr+"::warp"));
+  const oct = 7, lac = 2.0;
+  const P = LAND_PRESETS[land] || LAND_PRESETS.continents;
+  const { maskPow, maskStrength, baseFreq, landBias, blobAmp, nBlobs, blobR } = P;
+  const aspect = GW/GH;
+  const blobs = [];
+  for(let i=0;i<nBlobs;i++){
+    blobs.push({ x: 0.5 + (rng()-0.5)*(land==="archipelago"?0.86:0.7),
+      y: 0.5 + (rng()-0.5)*(land==="archipelago"?0.72:0.55),
+      r: blobR[0] + rng()*(blobR[1]-blobR[0]) });
+  }
+  const N = GW*GH; const height = new Float32Array(N);
+  let hMin=Infinity, hMax=-Infinity;
+  for(let y=0;y<GH;y++){ const ny=y/GH;
+    for(let x=0;x<GW;x++){ const nx=x/GW; const i=y*GW+x;
+      const wfx = warpN.fbm(nx*3+11.3, ny*3+5.7, 3, 2, 0.5);
+      const wfy = warpN.fbm(nx*3+31.1, ny*3+17.2, 3, 2, 0.5);
+      const sx = nx*baseFreq + (wfx-0.5)*0.55, sy = ny*baseFreq + (wfy-0.5)*0.55;
+      let h = hN.fbm(sx, sy, oct, lac, gain);
+      const ridge = hN.ridged(sx*1.7+3.3, sy*1.7+1.1, 5, 2, 0.55);
+      h = h*0.72 + ridge*0.42;
+      const dx=(nx-0.5)*aspect, dy=(ny-0.5);
+      let d = Math.sqrt(dx*dx+dy*dy)/(0.5*Math.sqrt(aspect*aspect+1));
+      let mask = 1 - Math.pow(Math.min(1,d), maskPow);
+      let blobBias = 0;
+      for(const b of blobs){ const bdx=(nx-b.x)*aspect, bdy=(ny-b.y); const bd=Math.sqrt(bdx*bdx+bdy*bdy);
+        blobBias = Math.max(blobBias, 1 - Math.min(1, bd/b.r)); }
+      h = h*maskStrength + (mask-0.5)*0.6 + (blobBias-0.35)*blobAmp + landBias;
+      height[i]=h; if(h<hMin)hMin=h; if(h>hMax)hMax=h;
+    }
+  }
+  const hr=(hMax-hMin)||1; for(let i=0;i<N;i++) height[i]=(height[i]-hMin)/hr;
+  return { height, GW, GH, target:P.target };
+}
+function seaLevel(height, targetLand){
+  const copy=Float32Array.from(height); copy.sort();
+  let idx=Math.floor((1-targetLand)*(copy.length-1));
+  if(idx<0)idx=0; if(idx>=copy.length)idx=copy.length-1; return copy[idx];
+}
+function interp(va, vb, iso){ if(Math.abs(va-vb)<1e-12) return 0.5; return (iso-va)/(vb-va); }
+function marchingSquares(height, GW, GH, iso){
+  const segs=[]; const H=(x,y)=>height[y*GW+x];
+  for(let y=0;y<GH-1;y++) for(let x=0;x<GW-1;x++){
+    const tl=H(x,y), tr=H(x+1,y), bl=H(x,y+1), br=H(x+1,y+1);
+    let c=0; if(tl>iso)c|=8; if(tr>iso)c|=4; if(br>iso)c|=2; if(bl>iso)c|=1;
+    if(c===0||c===15) continue;
+    const top=[x+interp(tl,tr,iso),y], right=[x+1,y+interp(tr,br,iso)];
+    const bottom=[x+interp(bl,br,iso),y+1], left=[x,y+interp(tl,bl,iso)];
+    const push=(p,q)=>segs.push([p[0],p[1],q[0],q[1]]);
+    switch(c){
+      case 1: push(left,bottom); break; case 2: push(bottom,right); break; case 3: push(left,right); break;
+      case 4: push(top,right); break;
+      case 5: { const m=(tl+tr+bl+br)/4; if(m>iso){push(left,top);push(bottom,right);} else {push(left,bottom);push(top,right);} break; }
+      case 6: push(top,bottom); break; case 7: push(left,top); break; case 8: push(top,left); break;
+      case 9: push(top,bottom); break;
+      case 10:{ const m=(tl+tr+bl+br)/4; if(m>iso){push(top,right);push(left,bottom);} else {push(top,left);push(bottom,right);} break; }
+      case 11: push(top,right); break; case 12: push(right,left); break; case 13: push(bottom,right); break; case 14: push(left,bottom); break;
+    }
+  }
+  const sx=1/(GW-1), sy=1/(GH-1);
+  return segs.map(s=>[s[0]*sx,s[1]*sy,s[2]*sx,s[3]*sy]);
+}
+function stitch(segs, eps=1e-6){
+  const key=(x,y)=>Math.round(x/eps)+','+Math.round(y/eps);
+  const adj=new Map(); const used=new Uint8Array(segs.length);
+  const add=(k,rec)=>{ if(!adj.has(k))adj.set(k,[]); adj.get(k).push(rec); };
+  segs.forEach((s,i)=>{ const a=[s[0],s[1]], b=[s[2],s[3]];
+    add(key(a[0],a[1]),{i,from:a,to:b}); add(key(b[0],b[1]),{i,from:b,to:a}); });
+  const polylines=[];
+  for(let i=0;i<segs.length;i++){ if(used[i]) continue; used[i]=1; const s=segs[i];
+    let pts=[[s[0],s[1]],[s[2],s[3]]];
+    for(let dir=0;dir<2;dir++){ let grow=true;
+      while(grow){ grow=false; const tail=pts[pts.length-1]; const cands=adj.get(key(tail[0],tail[1]))||[];
+        for(const r of cands){ if(used[r.i])continue; if(key(r.from[0],r.from[1])!==key(tail[0],tail[1]))continue;
+          used[r.i]=1; pts.push([r.to[0],r.to[1]]); grow=true; break; } }
+      pts.reverse(); }
+    const flat=[]; for(const [x,y] of pts) flat.push(x,y); polylines.push(flat);
+  }
+  return polylines;
+}
+function mainCoast(polylines){
+  let best=null, bestLen=-1;
+  for(const pl of polylines){ let L=0; for(let i=0;i<pl.length-2;i+=2) L+=Math.hypot(pl[i+2]-pl[i],pl[i+3]-pl[i+1]);
+    if(L>bestLen){ bestLen=L; best=pl; } }
+  return best||[];
+}
+function dividerLength(poly, eps){
+  if(poly.length<4 || eps<=0) return {L:0, steps:0};
+  let steps=0; let cx=poly[0], cy=poly[1]; let i=0; let fx=poly[0], fy=poly[1];
+  const last=poly.length-2; let guard=0;
+  while(i<last && guard++ < poly.length*4){
+    let placed=false; let px=fx, py=fy, j=i;
+    while(j<last){
+      const nx=poly[j+2], ny=poly[j+3]; const dEnd=Math.hypot(nx-cx, ny-cy);
+      if(dEnd>=eps){
+        const dx=nx-px, dy=ny-py; const ox=px-cx, oy=py-cy;
+        const A=dx*dx+dy*dy, B=2*(ox*dx+oy*dy), Cc=ox*ox+oy*oy-eps*eps;
+        const disc=B*B-4*A*Cc; let t=1;
+        if(A>1e-18 && disc>=0){ const sd=Math.sqrt(disc); const t1=(-B-sd)/(2*A), t2=(-B+sd)/(2*A);
+          t = (t1>1e-9 && t1<=1) ? t1 : ((t2>1e-9 && t2<=1) ? t2 : 1); }
+        const hx=px+dx*t, hy=py+dy*t; cx=hx; cy=hy; fx=hx; fy=hy; i=j; steps++; placed=true; break;
+      }
+      px=nx; py=ny; j+=2;
+    }
+    if(!placed){ const tailLen=Math.hypot(poly[last]-cx, poly[last+1]-cy); steps += tailLen/eps; break; }
+  }
+  return {L:steps*eps, steps};
+}
+function dividerDimension(poly, nScales=10){
+  let total=0; for(let i=0;i<poly.length-2;i+=2) total+=Math.hypot(poly[i+2]-poly[i],poly[i+3]-poly[i+1]);
+  const epsMax=total/8, epsMin=total/400;
+  const xs=[], ys=[], pts=[];
+  for(let k=0;k<nScales;k++){ const f=k/(nScales-1); const eps=epsMax*Math.pow(epsMin/epsMax,f);
+    const {L}=dividerLength(poly,eps); if(L>0){ xs.push(Math.log(eps)); ys.push(Math.log(L)); pts.push({eps,L,logEps:Math.log(eps),logL:Math.log(L)}); } }
+  const n=xs.length; let sx=0,sy=0,sxx=0,sxy=0;
+  for(let i=0;i<n;i++){ sx+=xs[i]; sy+=ys[i]; sxx+=xs[i]*xs[i]; sxy+=xs[i]*ys[i]; }
+  const slope=(n*sxy-sx*sy)/(n*sxx-sx*sx); const intercept=(sy-slope*sx)/n;
+  const ybar=sy/n; let ssR=0,ssT=0;
+  for(let i=0;i<n;i++){ const pr=slope*xs[i]+intercept; ssR+=(ys[i]-pr)**2; ssT+=(ys[i]-ybar)**2; }
+  return { D:1-slope, slope, intercept, r2: ssT>0?1-ssR/ssT:1, points:pts };
+}
+function rasteriseSegs(segs, RES){
+  const grid=new Uint8Array(RES*RES);
+  const set=(x,y)=>{ const gx=Math.floor(x*RES), gy=Math.floor(y*RES); if(gx>=0&&gy>=0&&gx<RES&&gy<RES) grid[gy*RES+gx]=1; };
+  for(const s of segs){ const ax=s[0],ay=s[1],bx=s[2],by=s[3]; const dist=Math.hypot(bx-ax,by-ay)*RES;
+    const steps=Math.max(1, Math.ceil(dist*1.6)); for(let k=0;k<=steps;k++){ const t=k/steps; set(ax+(bx-ax)*t, ay+(by-ay)*t); } }
+  return grid;
+}
+function boxCount(grid, RES, nScales=12){
+  const ks=[]; const kmax=Math.max(4, Math.floor(RES/4)), kmin=2;
+  for(let i=0;i<nScales;i++){ const f=i/(nScales-1); let k=Math.round(kmin*Math.pow(kmax/kmin,f)); if(ks.length===0||k>ks[ks.length-1]) ks.push(k); }
+  const boxSizes=[], counts=[];
+  for(const k of ks){ const nb=Math.ceil(RES/k); const touched=new Uint8Array(nb*nb);
+    for(let gy=0;gy<RES;gy++){ const row=gy*RES, by=(gy/k)|0; for(let gx=0;gx<RES;gx++){ if(grid[row+gx]) touched[by*nb+((gx/k)|0)]=1; } }
+    let c=0; for(let i=0;i<touched.length;i++) c+=touched[i]; if(c>0){ boxSizes.push(k); counts.push(c); } }
+  return { boxSizes, counts, RES };
+}
+function lineFit(xs, ys, lo, hi){
+  const n=hi-lo; let sx=0,sy=0,sxx=0,sxy=0;
+  for(let i=lo;i<hi;i++){ sx+=xs[i]; sy+=ys[i]; sxx+=xs[i]*xs[i]; sxy+=xs[i]*ys[i]; }
+  const slope=(n*sxy-sx*sy)/(n*sxx-sx*sx); const intercept=(sy-slope*sx)/n;
+  const ybar=sy/n; let ssR=0,ssT=0;
+  for(let i=lo;i<hi;i++){ const pr=slope*xs[i]+intercept; ssR+=(ys[i]-pr)**2; ssT+=(ys[i]-ybar)**2; }
+  return { slope, intercept, r2: ssT>0?1-ssR/ssT:1, n };
+}
+function fitDimension(bc){
+  const { boxSizes, counts, RES }=bc; const xs=[], ys=[], points=[];
+  for(let i=0;i<boxSizes.length;i++){ const eps=boxSizes[i]/RES; xs.push(Math.log(1/eps)); ys.push(Math.log(counts[i]));
+    points.push({ logInvEps:Math.log(RES/boxSizes[i]), logN:Math.log(counts[i]), boxSize:boxSizes[i], count:counts[i], inWindow:true }); }
+  const N=xs.length; let satEnd=0;
+  for(let i=0;i<N-1;i++){ const local=(ys[i+1]-ys[i])/(xs[i+1]-xs[i]); if(local<0.35) satEnd=i+1; else break; }
+  let lo=satEnd, hi=N; const minWin=Math.min(5, N-satEnd); let best=null;
+  for(let a=satEnd;a<=N-minWin;a++) for(let b=a+minWin;b<=N;b++){ const f=lineFit(xs,ys,a,b);
+    if(!isFinite(f.slope)) continue; const score=f.r2 + 0.006*(b-a); if(!best||score>best.score) best={a,b,score,f}; }
+  if(best){ lo=best.a; hi=best.b; }
+  for(let i=0;i<N;i++) points[i].inWindow=(i>=lo && i<hi);
+  const f=lineFit(xs,ys,lo,hi);
+  return { D:f.slope, intercept:f.intercept, r2:f.r2, points, window:{lo,hi} };
+}
+function boxDimension(segs, RES=768, nScales=14){ return fitDimension(boxCount(rasteriseSegs(segs,RES),RES,nScales)); }
+function hurstFromGain(gain){ return -Math.log2(gain); }
+function predictedCoastD(gain){ const H=hurstFromGain(gain); return Math.max(1, Math.min(2, 2-H)); }
+function measureCoast(seedStr, gain, land='continents', GW=360, GH=240){
+  const { height, target } = generateHeight(seedStr, gain, land, GW, GH);
+  const sea = seaLevel(height, target);
+  const segs = marchingSquares(height, GW, GH, sea);
+  const polys = stitch(segs); const main = mainCoast(polys);
+  const box = boxDimension(segs); const div = dividerDimension(main); const predicted = predictedCoastD(gain);
+  return { height, GW, GH, sea, segs, polys, main, box, div, predicted, H:hurstFromGain(gain), nLoops:polys.length };
+}
+
+/* =====================================================================
+   IN-PAGE SELF-TEST (mirrors the Node harness — runs on load)
+   ===================================================================== */
+function runSelfTest(){
+  let pass=0, total=0; const fails=[];
+  const ok=(name,cond)=>{ total++; if(cond) pass++; else fails.push(name); };
+  // 1 PRNG determinism
+  { const r=makeRng('atlas'); const a=r(),b=r(); const r2=makeRng('atlas'); ok('prng', a===r2()&&b===r2()); }
+  // 2 fbm in range & varies
+  { const vn=new ValueNoise(makeRng('x::height')); let inR=true, varied=false, prev=null;
+    for(let i=0;i<40;i++){ const v=vn.fbm(i*0.37,i*0.21,7,2,0.5); if(v<0||v>1)inR=false; if(prev!==null&&Math.abs(v-prev)>1e-6)varied=true; prev=v; } ok('fbm', inR&&varied); }
+  // 3 marching squares closes a circle of the right radius
+  { const GW=100,GH=100,h=new Float32Array(GW*GH); const cx=50,cy=50,R=24;
+    for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){ const d=Math.hypot(x-cx,y-cy); h[y*GW+x]=1-Math.min(1,d/R); }
+    const main=mainCoast(stitch(marchingSquares(h,GW,GH,0.5)));
+    const closed=main.length>8 && Math.hypot(main[0]-main[main.length-2],main[1]-main[main.length-1])<0.04;
+    let mnx=1,mxx=0; for(let i=0;i<main.length;i+=2){ mnx=Math.min(mnx,main[i]); mxx=Math.max(mxx,main[i]); }
+    ok('march-circle', closed && Math.abs((mxx-mnx)/2-0.12)<0.04); }
+  // 4 theory anchors exact
+  { ok('theory', Math.abs(predictedCoastD(0.5)-1)<1e-9 && Math.abs(predictedCoastD(1)-2)<1e-9 && Math.abs(predictedCoastD(Math.SQRT1_2)-1.5)<1e-9); }
+  // 5 box ≈ ruler on the same coast
+  { const m=measureCoast('Verdania',0.62,'continents'); ok('box≈ruler', Math.abs(m.box.D-m.div.D)<0.22 && m.box.D>1 && m.box.D<2 && m.div.D>1 && m.div.D<2); }
+  // 6 D rises with roughness slider
+  { const s=measureCoast('Tideholm',0.45,'continents'), r=measureCoast('Tideholm',0.70,'continents');
+    ok('rises', r.box.D>s.box.D && r.predicted>s.predicted); }
+  // 7 the paradox — fine ruler longer than coarse
+  { const m=measureCoast('Mistral',0.66,'continents'); const p=m.div.points; ok('paradox', p[p.length-1].L>p[0].L*1.15); }
+  // 8 negative control — circle is 1-D both ways
+  { const n=1600,R=0.4,poly=[],segs=[]; for(let i=0;i<=n;i++){ const t=2*Math.PI*i/n; poly.push(0.5+R*Math.cos(t),0.5+R*Math.sin(t)); }
+    for(let i=0;i<poly.length-2;i+=2) segs.push([poly[i],poly[i+1],poly[i+2],poly[i+3]]);
+    ok('circle-1d', Math.abs(boxDimension(segs).D-1)<0.08 && Math.abs(dividerDimension(poly).D-1)<0.08); }
+  // 9 seed purity
+  { ok('seed-pure', measureCoast('Replica',0.6,'continents').box.D===measureCoast('Replica',0.6,'continents').box.D); }
+  // 10 measured D in the real-coast band & both in (1,2)
+  { const m=measureCoast('Britannia',0.60,'continents'); ok('realistic', m.box.D>1.05 && m.box.D<1.6); }
+  return { pass, total, fails };
+}
+
+/* =====================================================================
+   APP — rendering, controls, the live measurement.
+   ===================================================================== */
+const $=id=>document.getElementById(id);
+const mapC=$('map'), plotC=$('plot'), mctx=mapC.getContext('2d'), pctx=plotC.getContext('2d');
+const state = { seed:'Aethelmark', gain:0.60, land:'continents', cur:null };
+
+function sizeCanvas(c, ctx){
+  const r=c.getBoundingClientRect(), dpr=Math.min(2, window.devicePixelRatio||1);
+  c.width=Math.max(1,Math.round(r.width*dpr)); c.height=Math.max(1,Math.round(r.height*dpr));
+  ctx.setTransform(dpr,0,0,dpr,0,0); return {w:r.width, h:r.height};
+}
+
+// height shading → a parchment land / muted-sea look, fitted into the map canvas
+function shadeLand(height, GW, GH, sea, w, h){
+  const img=mctx.createImageData(GW,GH); const d=img.data;
+  for(let i=0;i<GW*GH;i++){
+    const v=height[i]; const o=i*4;
+    if(v<sea){ // sea: depth-shaded blue
+      const t=Math.max(0,Math.min(1,(sea-v)/(sea+1e-6)));
+      d[o]=Math.round(18+ (1-t)*26); d[o+1]=Math.round(34+(1-t)*40); d[o+2]=Math.round(58+(1-t)*52); d[o+3]=255;
+    } else { // land: parchment shaded by elevation (lighter & warmer with height)
+      const t=Math.max(0,Math.min(1,(v-sea)/(1-sea+1e-6)));
+      const base=176+ t*44;
+      d[o]=Math.round(base*1.00); d[o+1]=Math.round(base*0.92 - t*8); d[o+2]=Math.round(base*0.66 - t*20); d[o+3]=255;
+    }
+  }
+  // draw scaled into the canvas via an offscreen buffer
+  const off=document.createElement('canvas'); off.width=GW; off.height=GH;
+  off.getContext('2d').putImageData(img,0,0);
+  // fit the GW×GH grid (aspect 1.5) into the canvas, centred
+  const ga=GW/GH, ca=w/h; let dw,dh,dx,dy;
+  if(ca>ga){ dh=h; dw=h*ga; dx=(w-dw)/2; dy=0; } else { dw=w; dh=w/ga; dx=0; dy=(h-dh)/2; }
+  mctx.imageSmoothingEnabled=true; mctx.drawImage(off,dx,dy,dw,dh);
+  return {dx,dy,dw,dh};
+}
+
+function renderMap(){
+  const {w,h}=sizeCanvas(mapC, mctx);
+  mctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#06080c';
+  mctx.fillRect(0,0,w,h);
+  const m=state.cur; if(!m) return;
+  const box=shadeLand(m.height, m.GW, m.GH, m.sea, w, h);
+  // map unit-square coords → the same fitted box
+  const X=u=>box.dx + u*box.dw, Y=v=>box.dy + v*box.dh;
+  // every shoreline loop, faint
+  mctx.lineWidth=1; mctx.strokeStyle='rgba(232,216,168,0.30)';
+  mctx.beginPath();
+  for(const pl of m.polys){ for(let i=0;i<pl.length-2;i+=2){ mctx.moveTo(X(pl[i]),Y(pl[i+1])); mctx.lineTo(X(pl[i+2]),Y(pl[i+3])); } }
+  mctx.stroke();
+  // the MAIN coast, bright
+  mctx.lineWidth=1.8; mctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--coast').trim();
+  mctx.shadowColor='rgba(232,216,168,0.55)'; mctx.shadowBlur=4;
+  mctx.beginPath();
+  const mp=m.main; for(let i=0;i<mp.length-2;i+=2){ mctx.moveTo(X(mp[i]),Y(mp[i+1])); mctx.lineTo(X(mp[i+2]),Y(mp[i+3])); }
+  mctx.stroke(); mctx.shadowBlur=0;
+
+  // overlay the box-counting grid for ONE illustrative ε (the coarse end of the window)
+  const bw=m.box; const wpt=bw.points.filter(p=>p.inWindow);
+  if(wpt.length){ const showBox=wpt[Math.max(0,wpt.length-3)].boxSize; const RES=768; const epsU=showBox/RES;
+    const cell=epsU; // in unit coords
+    mctx.strokeStyle='rgba(201,138,74,0.16)'; mctx.lineWidth=0.6; mctx.beginPath();
+    for(let gx=0; gx<=1.0001; gx+=cell){ mctx.moveTo(X(gx),Y(0)); mctx.lineTo(X(gx),Y(1)); }
+    for(let gy=0; gy<=1.0001; gy+=cell){ mctx.moveTo(X(0),Y(gy)); mctx.lineTo(X(1),Y(gy)); }
+    mctx.stroke();
+  }
+
+  // label
+  $('mapLabel').innerHTML = `<b>${escapeHtml(state.seed)}</b> &nbsp;·&nbsp; ${m.nLoops} shoreline loop${m.nLoops===1?'':'s'}` +
+    `<br>sea level ${m.sea.toFixed(3)} &nbsp;·&nbsp; the gold line is the mainland coast`;
+}
+
+function renderVerdict(){
+  const m=state.cur; if(!m) return;
+  const matchGap=Math.abs(m.box.D-m.div.D);
+  const cls = matchGap<0.18 ? 'good' : 'warn';
+  const word = matchGap<0.18 ? 'two rulers agree' : 'rulers within '+matchGap.toFixed(2);
+  $('verdict').innerHTML =
+    `<span class="big">D ≈ ${m.box.D.toFixed(3)}</span>` +
+    `<div class="triple">` +
+      `<span class="k">box-count</span> <span class="box">${m.box.D.toFixed(3)}</span><br>` +
+      `<span class="k">divider</span> <span class="ruler">${m.div.D.toFixed(3)}</span><br>` +
+      `<span class="k">slider 2−H</span> <span class="theory">${m.predicted.toFixed(2)}</span>` +
+    `</div>` +
+    `<span class="match ${cls}">${word}</span>`;
+}
+
+function renderPlot(){
+  const {w,h}=sizeCanvas(plotC, pctx);
+  pctx.clearRect(0,0,w,h);
+  const m=state.cur; if(!m) return;
+  const padL=46, padR=16, padT=30, padB=30;
+  const PW=w-padL-padR, PH=h-padT-padB;
+  // We plot TWO normalised log-log curves on one axis with a shared 0..1 vertical:
+  //  box-counting   (x = log(1/ε) rising →,  y = log N rising)
+  //  divider/ruler  (x = log(1/ε) rising →,  y = log L rising)  [we flip ε so both share "finer to the right"]
+  // Normalise each curve's x to [0,1] over its own ε-range; draw on a shared frame.
+  pctx.strokeStyle='rgba(201,162,74,0.18)'; pctx.lineWidth=1;
+  pctx.strokeRect(padL,padT,PW,PH);
+  // axis labels
+  pctx.fillStyle='rgba(154,156,170,0.85)'; pctx.font='10px '+mono();
+  pctx.textAlign='center'; pctx.fillText('coarse ruler', padL+PW*0.16, h-10);
+  pctx.fillText('fine ruler  ⟶  (1/ε grows)', padL+PW*0.7, h-10);
+  pctx.save(); pctx.translate(13, padT+PH/2); pctx.rotate(-Math.PI/2);
+  pctx.textAlign='center'; pctx.fillText('log measurement', 0, 0); pctx.restore();
+
+  // helper to plot a {points, value:fn, slopeLine} normalised over its own x,y
+  function plotSeries(pts, getX, getY, color, inWin, fitD, fitInfo){
+    if(!pts.length) return;
+    let xmin=Infinity,xmax=-Infinity,ymin=Infinity,ymax=-Infinity;
+    for(const p of pts){ const x=getX(p), y=getY(p); xmin=Math.min(xmin,x); xmax=Math.max(xmax,x); ymin=Math.min(ymin,y); ymax=Math.max(ymax,y); }
+    const xr=(xmax-xmin)||1, yr=(ymax-ymin)||1;
+    const PX=p=>padL + ((getX(p)-xmin)/xr)*PW;
+    const PY=p=>padT + PH - ((getY(p)-ymin)/yr)*PH;
+    // the fitted regression line through the in-window points (drawn faint, full width)
+    if(fitInfo){
+      const winPts = pts.filter((p,i)=> inWin ? inWin(p,i) : true);
+      if(winPts.length>=2){
+        pctx.strokeStyle=color.replace('1)','0.34)'); pctx.lineWidth=1.4; pctx.setLineDash([5,4]);
+        pctx.beginPath(); pctx.moveTo(PX(winPts[0]),PY(winPts[0])); pctx.lineTo(PX(winPts[winPts.length-1]),PY(winPts[winPts.length-1])); pctx.stroke();
+        pctx.setLineDash([]);
+      }
+    }
+    // the data polyline
+    pctx.strokeStyle=color; pctx.lineWidth=1.6; pctx.beginPath();
+    pts.forEach((p,i)=>{ const x=PX(p),y=PY(p); i?pctx.lineTo(x,y):pctx.moveTo(x,y); }); pctx.stroke();
+    // points (filled if in-window)
+    pts.forEach((p,i)=>{ const x=PX(p),y=PY(p); const on = inWin ? inWin(p,i) : true;
+      pctx.fillStyle = on ? color : 'rgba(120,120,140,0.5)'; pctx.beginPath(); pctx.arc(x,y, on?3:2.2, 0, 2*Math.PI); pctx.fill(); });
+  }
+  // box-counting: x = log(1/ε) [already rising], y = log N
+  plotSeries(m.box.points, p=>p.logInvEps, p=>p.logN, 'rgba(201,138,74,1)',
+    (p)=>p.inWindow, m.box.D, true);
+  // divider: x = -log(ε) = log(1/ε), y = log L
+  plotSeries(m.div.points, p=>-p.logEps, p=>p.logL, 'rgba(111,211,196,1)', null, m.div.D, true);
+
+  // a small annotation in the plot corner
+  pctx.textAlign='left'; pctx.fillStyle='rgba(201,138,74,0.95)'; pctx.font='600 10px '+mono();
+  pctx.fillText(`N(ε): slope = D = ${m.box.D.toFixed(3)}  (R²=${m.box.r2.toFixed(3)})`, padL+8, padT+14);
+  pctx.fillStyle='rgba(111,211,196,0.95)';
+  pctx.fillText(`L(ε): D = 1−slope = ${m.div.D.toFixed(3)}  (R²=${m.div.r2.toFixed(3)})`, padL+8, padT+28);
+}
+
+function mono(){ return getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim() || 'monospace'; }
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function recompute(){
+  state.cur = measureCoast(state.seed, state.gain, state.land);
+  renderMap(); renderPlot(); renderVerdict();
+}
+
+/* ---- controls ---- */
+$('gain').addEventListener('input', e=>{ state.gain=parseFloat(e.target.value); $('gainV').textContent=state.gain.toFixed(2); recompute(); });
+$('seed').addEventListener('change', e=>{ state.seed=e.target.value||'realm'; recompute(); });
+$('seed').addEventListener('keydown', e=>{ if(e.key==='Enter'){ state.seed=e.target.value||'realm'; recompute(); e.target.blur(); } });
+$('dice').addEventListener('click', ()=>{
+  const syl=['ae','mar','dor','vale','thal','wyn','mor','gad','rin','sel','tor','keth','bryn','lor','fen','dun','oss','varn','el','quor'];
+  let s=''; const n=2+((Math.random()*2)|0); for(let i=0;i<n;i++) s+=syl[(Math.random()*syl.length)|0];
+  s=s.charAt(0).toUpperCase()+s.slice(1); state.seed=s; $('seed').value=s; recompute();
+});
+$('landSeg').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return;
+  [...$('landSeg').children].forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  state.land=b.dataset.land; recompute(); });
+$('presets').addEventListener('click', e=>{ const b=e.target.closest('.preset'); if(!b) return;
+  state.seed=b.dataset.seed; state.gain=parseFloat(b.dataset.gain); state.land=b.dataset.land;
+  $('seed').value=state.seed; $('gain').value=state.gain; $('gainV').textContent=state.gain.toFixed(2);
+  [...$('landSeg').children].forEach(x=>x.classList.toggle('on', x.dataset.land===state.land));
+  recompute(); });
+$('png').addEventListener('click', ()=>{
+  // compose the two canvases stacked into one export image
+  const dpr=Math.min(2, window.devicePixelRatio||1);
+  const out=document.createElement('canvas'); out.width=mapC.width; out.height=mapC.height+plotC.height;
+  const o=out.getContext('2d'); o.fillStyle='#06080c'; o.fillRect(0,0,out.width,out.height);
+  o.drawImage(mapC,0,0); o.drawImage(plotC,0,mapC.height);
+  const a=document.createElement('a'); a.download=`coastline-paradox-${state.seed}.png`; a.href=out.toDataURL('image/png'); a.click();
+});
+window.addEventListener('resize', ()=>{ if(state.cur){ renderMap(); renderPlot(); } });
+
+/* ---- self-test badge + boot ---- */
+(function boot(){
+  const st=$('selftest');
+  try{ const r=runSelfTest();
+    if(r.pass===r.total){ st.textContent=`self-test ${r.pass}/${r.total} ✓`; st.classList.add('ok'); }
+    else { st.textContent=`self-test ${r.pass}/${r.total} ✗`; st.classList.add('bad'); st.title='failed: '+r.fails.join(', '); }
+  }catch(err){ st.textContent='self-test error'; st.classList.add('bad'); st.title=String(err); }
+  // drop the front-door breadcrumb (direct-visit registration for the Survey/Undercroft)
+  try{ localStorage.setItem('ws:seen:coastline-paradox','1'); }catch(e){}
+  recompute();
+})();
+</script>
+</body>
+</html>
