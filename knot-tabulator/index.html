@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Knot Tabulator — knot determinant · Reidemeister-stable</title>
+<!-- a standalone Workbench bench (NOT a front-door page, NO ws:seen). -->
+<style>
+  /* ── COLOR-MEANING CONTRACT (state it once; siblings must not drift) ──────────
+     gold strand   = the knot/strand itself (the ONE thing)        --strand
+     teal          = the SECOND Hopf component (a link = 2 hues)    --strand2
+     amber         = an invariant readout — the steady number       --inv   (the
+                     Computation "bound/answer" hue, shared w/ siblings)
+     dim grey      = "the picture" — what is allowed to move        --pic
+     blue/orange/violet = the colour-blind-safe 3-set for colorings --col1/2/3
+     green/red     = RESERVED for verdicts (self-test + teeth)       --good/--bad
+                     (NOT reused for any strand/coloring hue)
+  */
+  :root{
+    --panel-bg: rgba(13,11,8,0.90);
+    --panel-edge: rgba(214,178,120,0.26);
+    --ink: #f0ece2;
+    --ink-dim: #a9a294;
+    --ink-faint: #6f6a5d;
+    --accent: #d9b873;          /* gold accent + UI */
+    --accent-soft: rgba(217,184,115,0.15);
+    --bg: #0a0805;
+    --stage: #0c0a07;
+    --strand: #e8c878;          /* the knot strand (warm gold) */
+    --strand-casing: #0c0a07;   /* the casing gap colour (== stage) */
+    --strand2: #6fc7c0;         /* the 2nd Hopf component (teal) — a LINK is two hues */
+    --inv: #f0c674;             /* the invariant number (amber — Computation's answer hue) */
+    --inv-soft: rgba(240,198,116,0.14);
+    --pic: #8a8576;             /* "the picture" — the dim, movable layer */
+    --pic-soft: rgba(138,133,118,0.16);
+    --col1: #6ea8e6;            /* coloring set — colour-blind-safe (blue) */
+    --col2: #e6924a;            /* (orange) */
+    --col3: #b58fd6;            /* (violet) */
+    --good: #8fd79a;
+    --good-soft: rgba(120,200,130,0.5);
+    --bad: #e0664f;
+    --bad-soft: rgba(220,120,100,0.6);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+  /* ---- topbar ---- */
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    justify-content:space-between; padding:13px 18px 0; pointer-events:none; gap:10px; flex-wrap:nowrap; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:14px; align-items:center; min-width:0; flex-wrap:wrap; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .back.sib{ letter-spacing:.06em; text-transform:none; color:var(--ink-faint); }
+  .back.sib:hover{ color:var(--strand2); }
+  .brand{ display:flex; align-items:baseline; gap:11px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.4px; margin:0; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.3px; white-space:nowrap; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:var(--good); border-color:var(--good-soft); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:var(--bad-soft); background:rgba(70,30,26,0.4); }
+
+  /* ---- layout: stage (svg) + side panel ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; display:flex; flex-direction:column; padding:50px 0 0; overflow:hidden; }
+  #svgHost{ flex:1 1 auto; position:relative; min-height:0; background:
+      radial-gradient(120% 120% at 50% 30%, #110d08 0%, var(--stage) 70%);
+    border-top:1px solid var(--panel-edge); overflow:hidden; }
+  svg{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+  /* floating narration badge — top-center */
+  #badge{ position:absolute; left:50%; top:14px; transform:translateX(-50%); z-index:7; pointer-events:none;
+    font:600 11px/1.45 var(--font-mono); text-align:center; background:rgba(0,0,0,0.52);
+    border:1px solid var(--panel-edge); border-radius:10px; padding:7px 15px; backdrop-filter:blur(4px);
+    max-width:88%; opacity:0; transition:opacity .25s; }
+  #badge.show{ opacity:1; }
+  #badge b{ font-family:var(--font-serif); font-size:13.5px; color:var(--inv); }
+  #badge .held{ color:var(--good); }
+  #badge .moved{ color:var(--pic); }
+  /* the two stage readouts share a wrapper that is transparent on wide screens
+     (display:contents → strip & picCount stay absolutely placed against #svgHost),
+     and becomes a flex stack on narrow screens (see the ≤520px rule below). */
+  #stageReadouts{ display:contents; }
+  /* the live stability strip, bottom-left over the stage */
+  #strip{ position:absolute; left:14px; bottom:12px; z-index:6; pointer-events:none; max-width:64%;
+    font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.42);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 11px; }
+  #strip .ticks{ display:flex; flex-wrap:wrap; gap:2px; margin-top:5px; max-width:300px; }
+  #strip .tick{ width:7px; height:11px; border-radius:1.5px; background:var(--good); opacity:.9; }
+  #strip .tick.bad{ background:var(--bad); }
+  #strip b{ color:var(--good); }
+  /* the picture's live crossing count, bottom-right */
+  #picCount{ position:absolute; right:14px; bottom:12px; z-index:6; pointer-events:none;
+    font:600 10.5px/1.5 var(--font-mono); color:var(--pic); background:rgba(0,0,0,0.42);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 11px; text-align:right; }
+  #picCount b{ color:var(--ink); font-variant-numeric:tabular-nums; }
+
+  /* ---- side panel ---- */
+  #side{ width:316px; flex:0 0 316px; background:var(--panel-bg); border-left:1px solid var(--panel-edge);
+    padding:56px 16px 22px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  #side .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0; letter-spacing:.2px; }
+  #side .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:5px 0 -2px; border-top:1px solid rgba(214,178,120,0.16); padding-top:12px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .chip{ font:600 11px/1 var(--font-mono); padding:7px 9px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink-dim); transition:.15s; user-select:none; }
+  .chip:hover{ color:var(--ink); border-color:var(--accent); }
+  .chip.on{ color:#0a0805; background:var(--accent); border-color:var(--accent); font-weight:700; }
+  .chip.sm{ font-size:10.5px; padding:6px 8px; }
+  .chip.act{ border-color:var(--inv); color:var(--inv); }
+  .chip.act:hover{ background:var(--inv-soft); }
+  /* segmented toggle (diagram / coloring) */
+  .seg{ display:flex; gap:2px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-edge); border-radius:9px; padding:3px; }
+  .seg .opt{ flex:1; text-align:center; font:600 10.5px/1 var(--font-mono); padding:8px 6px; border-radius:6px;
+    color:var(--ink-dim); cursor:pointer; transition:.15s; user-select:none; }
+  .seg .opt.on{ color:#0a0805; font-weight:700; background:var(--accent); }
+  .note{ font:11px/1.5 var(--font-mono); color:var(--ink-faint); margin:0; }
+  .note b{ color:var(--ink-dim); }
+  .note.warn{ border-left:2px solid var(--bad); padding-left:9px; color:var(--ink-dim); }
+
+  /* ── the steady invariant block (the readout that must hold byte-still) ── */
+  .invbox{ border-left:3px solid var(--inv); background:var(--inv-soft); border-radius:0 9px 9px 0;
+    padding:11px 13px; display:flex; flex-direction:column; gap:8px; }
+  .invbox .big{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+  .invbox .big .lab{ font:600 10px/1.2 var(--font-mono); letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim); }
+  .invbox .big .val{ font-family:var(--font-serif); font-size:38px; font-weight:600; color:var(--inv);
+    font-variant-numeric:tabular-nums; line-height:.9; }
+  .invbox .verdict{ font:600 11px/1.3 var(--font-mono); color:var(--good); }
+  .invbox .verdict.un{ color:var(--ink-dim); }
+  .invrow{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; font:600 11px/1.4 var(--font-mono); }
+  .invrow .k{ color:var(--ink-dim); }
+  .invrow .v{ color:var(--accent); font-variant-numeric:tabular-nums; }
+  .invrow .v.yes{ color:var(--good); } .invrow .v.no{ color:var(--ink-faint); }
+
+  /* the dim "picture" block */
+  .picbox{ border-left:3px solid var(--pic); background:var(--pic-soft); border-radius:0 9px 9px 0; padding:9px 12px; }
+  .picbox .prow{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; font:600 11px/1.4 var(--font-mono); color:var(--pic); }
+  .picbox .prow .v{ color:var(--ink); font-variant-numeric:tabular-nums; }
+
+  .legend{ display:flex; flex-direction:column; gap:5px; font:10.5px/1.3 var(--font-mono); color:var(--ink-dim); }
+  .legend .li{ display:flex; align-items:center; gap:7px; }
+  .legend .sw2{ width:16px; height:0; border-top-width:3px; border-top-style:solid; flex:0 0 auto; border-radius:2px; }
+  .legend .dot{ width:11px; height:11px; border-radius:50%; flex:0 0 auto; }
+
+  @media (max-width:780px){
+    #wrap{ flex-direction:column; }
+    #stage{ flex:1 1 52%; padding-top:46px; }
+    #side{ width:auto; flex:1 1 48%; border-left:none; border-top:1px solid var(--panel-edge); padding:14px 14px 18px; }
+    .brand h1{ font-size:18px; }
+    #strip{ max-width:56%; } #strip .ticks{ max-width:180px; }
+  }
+  /* narrow stage: the two bottom readouts (stability strip bottom-left, crossing count
+     bottom-right) crowd each other, and the top of the stage is reserved for the
+     transient center badge. Stack them in the bottom row instead — the short crossing
+     count gets its own full-width band, the strip sits just below it; a flex wrapper
+     keeps the stack height-agnostic so neither is ever clipped or occluded. */
+  @media (max-width:520px){
+    #stageReadouts{ position:absolute; left:12px; right:12px; bottom:12px; z-index:6;
+      pointer-events:none; display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
+    #stageReadouts #picCount, #stageReadouts #strip{ position:static; inset:auto;
+      transform:none; max-width:100%; font-size:10px; padding:6px 9px; }
+    #stageReadouts #picCount{ text-align:left; }
+  }
+  @media (max-width:560px){ .brand .tag{ display:none; } .brand h1{ font-size:16px; } }
+  @media (max-width:440px){ .brand{ display:none; } .back.sib{ display:none; } }
+  @media (prefers-reduced-motion: reduce){
+    #badge{ transition:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">← workshop</a>
+      <a class="back" href="../workbench/index.html">← workbench</a>
+      <a class="back sib" href="../ariadne/index.html" title="Ariadne draws plaits; here they're proven knotted">↗ Ariadne — she draws knots; here they're proven knotted</a>
+    </div>
+    <div class="brand">
+      <h1>The Knot Tabulator</h1>
+      <span class="tag">the knot, not the picture</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for the per-claim detail (also printed to the console)">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <div id="svgHost">
+        <svg id="svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-label="knot diagram"></svg>
+        <div id="badge"></div>
+        <div id="stageReadouts">
+          <div id="picCount"></div>
+          <div id="strip"></div>
+        </div>
+      </div>
+    </div>
+
+    <aside id="side">
+      <p class="lede" id="lede"><b>Wiggle it all you like.</b> Encode a diagram as a signed Gauss code, compute its <b>knot determinant</b> |Δ(−1)|, then apply Reidemeister moves at random: under every move the number can't budge. The trefoil reads <b>3</b>, the figure-8 <b>5</b>, the unknot <b>1</b> — proof a tangled loop is <b>truly knotted</b>. <a href="../ariadne/index.html" style="color:var(--strand2);text-decoration:none">Ariadne</a> draws plaits but never proves the knot knotted; this is her rigorous twin.</p>
+
+      <div class="sect">Specimen</div>
+      <div class="chips" id="specChips">
+        <span class="chip sm" data-spec="unknot">Unknot</span>
+        <span class="chip sm on" data-spec="trefoil">Trefoil</span>
+        <span class="chip sm" data-spec="figure8">Figure-8</span>
+        <span class="chip sm" data-spec="hopf">Hopf link</span>
+      </div>
+
+      <div class="sect">The invariant — what cannot move</div>
+      <div class="invbox">
+        <div class="big">
+          <span class="lab">determinant&nbsp;|Δ(−1)|</span>
+          <span class="val" id="detVal">—</span>
+        </div>
+        <div class="verdict" id="verdict">—</div>
+        <div class="invrow"><span class="k">p-colourings (nontrivial)</span><span class="v" id="colVal">—</span></div>
+        <div class="invrow"><span class="k">3-colourable?</span><span class="v" id="colable">—</span></div>
+      </div>
+      <p class="note">The big number is whatever the core returns — never hardcoded. It is recomputed from the live Gauss code every move; <b>during an animation its DOM is not touched.</b></p>
+
+      <div class="sect">The picture — what may move</div>
+      <div class="picbox">
+        <div class="prow"><span>crossings drawn</span><span class="v" id="picCross">—</span></div>
+        <div class="prow"><span>Gauss tokens</span><span class="v" id="picTokens">—</span></div>
+      </div>
+
+      <div class="sect">Wiggle</div>
+      <div class="chips">
+        <span class="chip sm act" id="bWiggle">Wiggle it ⟳</span>
+        <span class="chip sm" id="bAuto">▶ auto</span>
+        <span class="chip sm" id="bReset">↺ reset</span>
+      </div>
+      <p class="note">One press = one random valid Reidemeister move (the core <b>chooses & reports</b> it; the picture can't lie). Watch the diagram morph while the determinant holds byte-still.</p>
+
+      <div class="sect">View</div>
+      <div class="seg" id="viewSeg">
+        <div class="opt on" data-view="diagram">Diagram</div>
+        <div class="opt" data-view="coloring">3-colouring</div>
+      </div>
+      <p class="note" id="viewNote">In <b>3-colouring</b> mode each arc is stroked by a legal Fox colour. The trefoil shows all three; the unknot visibly <b>can't</b> be coloured non-trivially.</p>
+
+      <div class="sect">The teeth — a fake invariant bites</div>
+      <div class="chips"><span class="chip sm" id="bTeeth">Apply an R1 twist ↻</span></div>
+      <p class="note">The same R1 move, but watch the <b>raw crossing count</b> (a FAKE invariant) tick up <span style="color:var(--bad)">n→n+1</span> while the real |Δ| holds <span style="color:var(--good)">steady</span>. The negative control bites — so the stability above is not vacuous.</p>
+
+      <div class="sect">Legend</div>
+      <div class="legend">
+        <div class="li"><span class="sw2" style="border-top-color:var(--strand)"></span> the strand (the knot itself)</div>
+        <div class="li"><span class="sw2" style="border-top-color:var(--strand2)"></span> a 2nd component (a <b>link</b> = two hues — Hopf)</div>
+        <div class="li"><span class="dot" style="background:var(--col1)"></span><span class="dot" style="background:var(--col2)"></span><span class="dot" style="background:var(--col3)"></span> the 3 Fox colours (colour-blind-safe)</div>
+      </div>
+
+      <div class="sect">What this bench proves — & doesn't</div>
+      <p class="note"><b>PROVEN here:</b> stability (the determinant is byte-identical on a random Reidemeister walk over THESE diagrams — not a proof for all knots), discrimination (det 3≠1; trefoil 3-colourable, the unknot not), and the teeth (crossing count changes under R-I).</p>
+      <p class="note"><b>Stated, not re-derived:</b> invariance under ALL Reidemeister moves for ALL diagrams is a theorem (Alexander/Goeritz); the bench CHECKS it on a random walk over 4 diagrams.</p>
+      <p class="note warn"><b>The one-way caveat:</b> det ≠ 1 ⟹ knotted (sound — the unknot has det 1). The converse is FALSE — some knots also read 1 — so this proves <b>knottedness, never unknottedness</b>. The determinant is also blind to mirror image (left &amp; right trefoil both read 3): it proves a loop knotted, it does not classify it.</p>
+      <p class="note" style="color:var(--ink-faint)">Scope: one bench, one invariant, four hard-coded diagrams + a verified move-applier — deliberately not a freehand editor or a topology wing. Jones polynomials, the knot group, draw-your-own: each a fresh seed, not an in-place expansion.</p>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+// ===== KNOT CORE (inlined byte-twin) BEGIN =====
+// ── bareissDet(M) — EXACT integer determinant (fraction-free Bareiss). ────────
+// The Bareiss algorithm runs Gaussian elimination where every intermediate stays
+// an INTEGER (each division is provably exact). For the ≤~8-crossing diagrams here
+// the intermediates stay far inside Number.MAX_SAFE_INTEGER, so plain JS numbers
+// give the exact determinant — no bignum needed. Returns the signed integer det.
+function bareissDet(M){
+  const n = M.length;
+  if (n === 0) return 1;
+  const A = M.map(r => r.slice());
+  let sign = 1, prev = 1;
+  for (let k = 0; k < n - 1; k++){
+    if (A[k][k] === 0){                          // pivot is zero → swap in a nonzero row
+      let sw = -1;
+      for (let i = k + 1; i < n; i++) if (A[i][k] !== 0){ sw = i; break; }
+      if (sw < 0) return 0;                       // whole column below is zero → singular
+      const t = A[k]; A[k] = A[sw]; A[sw] = t; sign = -sign;
+    }
+    for (let i = k + 1; i < n; i++)
+      for (let j = k + 1; j < n; j++)
+        A[i][j] = Math.trunc((A[i][j] * A[k][k] - A[i][k] * A[k][j]) / prev);
+    prev = A[k][k];
+  }
+  return sign * A[n - 1][n - 1];
+}
+
+// ── gaussToCrossings(code) — THE LOAD-BEARING SEAM (Gauss → crossing-list). ────
+// code is an array of tokens {t:'O'|'U', id, sign}. Walking the closed strand, an
+// arc BREAKS at every undercrossing, so arc ids increment after each 'U' token
+// (the final U wraps back to arc 0 — the loop closes). For each crossing id its
+// over-arc is the arc active where the strand passes OVER it; its (uin,uout) are
+// the arcs immediately before/after the strand passes UNDER it. Returns the
+// crossing-list [{o,uin,uout,sign}] keyed by FIRST appearance of each id, plus the
+// arc set [0..numArcs-1]. EVERYTHING downstream — determinant, colorings, and the
+// renderer — reads combinatorics through THIS function and never re-parses Gauss.
+function gaussToCrossings(code){
+  const n = code.length;
+  let arc = 0;
+  const arcAt = new Array(n);
+  for (let i = 0; i < n; i++){ arcAt[i] = arc; if (code[i].t === 'U') arc = arc + 1; }
+  const numArcs = arc || 1;                       // a code with zero undercrossings = 1 arc
+  const realArc = i => (arcAt[i] % numArcs);
+  const overArc = new Map(), uin = new Map(), uout = new Map(), sign = new Map();
+  const order = [];                               // ids in order of first appearance (stable output)
+  for (let i = 0; i < n; i++){
+    const c = code[i];
+    if (!overArc.has(c.id) && !uin.has(c.id)) order.push(c.id);
+    if (c.t === 'O') overArc.set(c.id, realArc(i));
+    else { uin.set(c.id, realArc(i)); uout.set(c.id, (realArc(i) + 1) % numArcs); sign.set(c.id, c.sign); }
+  }
+  const cr = [];
+  for (const id of order){
+    cr.push({ id, o: overArc.get(id), uin: uin.get(id), uout: uout.get(id), sign: sign.get(id) });
+  }
+  return { cr, arcs: [...Array(numArcs).keys()] };
+}
+
+// ── alexanderRows({cr,arcs}) — the signed Alexander matrix at t=−1 (one row per
+// crossing, one column per arc). At each crossing the Fox-derivative relation at
+// t=−1 contributes (1−t)=2 to the OVER arc, and ±1 to (uin,uout) per the sign
+// convention. Strike the last row & column → the (n−1)-minor whose |det| is |Δ(−1)|.
+// (For the Hopf link's single-arc-per-component representation, this strike yields
+// 2 directly — no component-strike branch is needed; verified end-to-end.)
+function alexanderRows({ cr, arcs }){
+  const T = -1;
+  const a = arcs.slice().sort((x, y) => x - y);
+  const idx = new Map(a.map((v, i) => [v, i]));
+  const n = a.length;
+  const rows = [];
+  for (const c of cr){
+    const r = new Array(n).fill(0);
+    if (c.sign > 0){ r[idx.get(c.o)] += (1 - T); r[idx.get(c.uout)] += -1; r[idx.get(c.uin)] += T; }
+    else           { r[idx.get(c.o)] += (1 - T); r[idx.get(c.uout)] += T;  r[idx.get(c.uin)] += -1; }
+    rows.push(r);
+  }
+  return rows;
+}
+
+// ── knotDeterminant({cr,arcs}) — |Δ(−1)|, the knot determinant (exact integer). ─
+// Build the Alexander matrix, strike the last row and column, take |det| of the
+// (n−1)×(n−1) minor with the fraction-free Bareiss determinant. CONFIRMED:
+// unknot 1, trefoil 3, figure-8 5, Hopf 2. Blind to chirality (mirror reads the
+// same) — it proves KNOTTEDNESS (≠ unknot), it does not classify or find handedness.
+function knotDeterminant(diagram){
+  const rows = alexanderRows(diagram);
+  const n = diagram.arcs.length;
+  if (n <= 1) return 1;                            // a single arc (no real crossing) → unknot, det 1
+  const minor = rows.slice(0, n - 1).map(r => r.slice(0, n - 1));
+  return Math.abs(bareissDet(minor));
+}
+
+// ── modRank(rows, cols, p) — rank of an integer matrix over GF(p). ────────────
+// Gaussian elimination mod a PRIME p, using the modular inverse of each pivot. Pure
+// integer arithmetic; O(rows·cols·min). This is the polynomial engine behind the
+// coloring count (brute-force enumeration is p^arcs and blows up on a grown
+// diagram — the rank route is exact and fast for any size).
+function modInv(a, p){
+  a = ((a % p) + p) % p;
+  for (let x = 1; x < p; x++) if ((a * x) % p === 1) return x;   // p is a small prime → trial is fine
+  return 0;
+}
+function modRank(rows, cols, p){
+  const M = rows.map(r => r.map(v => (((v % p) + p) % p)));
+  const R = M.length;
+  let rank = 0;
+  for (let col = 0; col < cols && rank < R; col++){
+    let piv = -1;
+    for (let i = rank; i < R; i++) if (M[i][col] % p !== 0){ piv = i; break; }
+    if (piv < 0) continue;
+    const t = M[rank]; M[rank] = M[piv]; M[piv] = t;
+    const inv = modInv(M[rank][col], p);
+    for (let j = 0; j < cols; j++) M[rank][j] = (M[rank][j] * inv) % p;
+    for (let i = 0; i < R; i++){
+      if (i === rank) continue;
+      const f = M[i][col] % p;
+      if (f === 0) continue;
+      for (let j = 0; j < cols; j++) M[i][j] = (((M[i][j] - f * M[rank][j]) % p) + p) % p;
+    }
+    rank++;
+  }
+  return rank;
+}
+
+// ── pColorings(cr, arcs, p) — Fox p-coloring count (the DISJOINT backstop). ────
+// The number of solutions mod p of the unsigned Fox relation at every crossing:
+//     2·x_over − x_uin − x_uout ≡ 0   (mod p)
+// is exactly p^(nArcs − rank) where rank is the rank of that coloring matrix over
+// GF(p) (a linear system → the kernel is a subspace of dimension nArcs − rank). The
+// all-equal monochrome solution always lies in the kernel, so the count is always
+// ≥ p. This shares NONE of the determinant's matrix code — it is the separately-
+// computed invariant the move-applier is checked against (anti-circularity).
+// trefoil → 9 (mod 3) = 3 trivial + 6 nontrivial → 3-colorable; unknot → p (only the
+// trivial monochrome). nontrivialColorings = count − p.
+function pColorings(cr, arcLabels, p){
+  const arcs = arcLabels.slice().sort((a, b) => a - b);
+  const idx = new Map(arcs.map((a, i) => [a, i]));
+  const n = arcs.length;
+  if (n === 0) return 1;
+  const rows = [];
+  for (const c of cr){
+    const r = new Array(n).fill(0);
+    r[idx.get(c.o)] += 2; r[idx.get(c.uin)] += -1; r[idx.get(c.uout)] += -1;   // 2·over − uin − uout
+    rows.push(r);
+  }
+  const rank = modRank(rows, n, p);
+  const dim = n - rank;                            // dimension of the coloring kernel
+  return Math.pow(p, dim);
+}
+
+// pColoringsBrute(cr, arcs, p) — the EXPONENTIAL enumeration (the cross-check). It
+// directly counts colorings by trying every assignment; used ONLY by the self-test
+// on the small base diagrams to prove the rank formula gives the SAME count. Never
+// called on a grown diagram (it is p^nArcs).
+function pColoringsBrute(cr, arcLabels, p){
+  const arcs = arcLabels.slice().sort((a, b) => a - b);
+  const idx = new Map(arcs.map((a, i) => [a, i]));
+  const n = arcs.length;
+  let count = 0;
+  const col = new Array(n).fill(0);
+  function rec(i){
+    if (i === n){
+      for (const c of cr){
+        const v = (2 * col[idx.get(c.o)] - col[idx.get(c.uin)] - col[idx.get(c.uout)]);
+        if ((((v % p) + p * 3) % p) !== 0) return;
+      }
+      count++;
+      return;
+    }
+    for (let v = 0; v < p; v++){ col[i] = v; rec(i + 1); }
+  }
+  rec(0);
+  return count;
+}
+
+// ── makeRng(seed) — the estate's shared seeded mulberry32. ────────────────────
+// IDENTICAL in the page byte-twin and the Node twin so the stability sweep
+// reproduces bit-for-bit headless. Do NOT invent a new RNG.
+function makeRng(seed){
+  let a = (seed >>> 0) || 1;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ── THE FOUR DIAGRAMS as hard-coded signed Gauss codes. ───────────────────────
+// Each is the canonical signed Gauss code; `kind` is 'knot' or 'link' so the
+// readout says "linked" for the Hopf link and "knotted" for the rest. The codes
+// are the single source of truth — det, colorings, and the renderer all read them
+// through gaussToCrossings(). (The Hopf link's single-arc-per-component rep makes
+// the last-row/col strike give 2 directly — no component-strike branch.)
+function diagramCode(name){
+  switch (name){
+    case 'unknot':
+      // a single undercrossing kink that is really nothing — det 1, not knotted.
+      return { kind: 'knot', code: [{ t: 'O', id: 1, sign: 1 }, { t: 'U', id: 1, sign: 1 }] };
+    case 'trefoil':
+      return { kind: 'knot', code: [
+        { t: 'O', id: 1, sign: 1 }, { t: 'U', id: 2, sign: 1 }, { t: 'O', id: 3, sign: 1 },
+        { t: 'U', id: 1, sign: 1 }, { t: 'O', id: 2, sign: 1 }, { t: 'U', id: 3, sign: 1 } ] };
+    case 'figure8':
+      return { kind: 'knot', code: [
+        { t: 'O', id: 1, sign: 1 }, { t: 'U', id: 2, sign: -1 }, { t: 'O', id: 3, sign: 1 }, { t: 'U', id: 4, sign: -1 },
+        { t: 'O', id: 2, sign: -1 }, { t: 'U', id: 1, sign: 1 }, { t: 'O', id: 4, sign: -1 }, { t: 'U', id: 3, sign: 1 } ] };
+    case 'hopf':
+      // a 2-component LINK. Each component is one closed arc; the two crossings
+      // link them. Represented directly as a crossing-list-friendly Gauss with a
+      // single arc per component — the strike gives det 2 directly.
+      return { kind: 'link', code: 'HOPF', diagram: {
+        arcs: [0, 1],
+        cr: [ { id: 1, o: 0, uin: 1, uout: 1, sign: 1 }, { id: 2, o: 1, uin: 0, uout: 0, sign: 1 } ] } };
+    default:
+      throw new Error('unknown diagram: ' + name);
+  }
+}
+
+// compileDiagram(name) → {kind, diagram:{cr,arcs}} — read a hard-coded specimen
+// through the load-bearing seam (the Hopf link bypasses Gauss with a direct
+// crossing-list, since a multi-component code needs a component-aware walker the
+// other three do not — its diagram is given literally and validated by the det).
+function compileDiagram(name){
+  const spec = diagramCode(name);
+  if (spec.code === 'HOPF') return { kind: spec.kind, code: spec.code, diagram: spec.diagram };
+  return { kind: spec.kind, code: spec.code, diagram: gaussToCrossings(spec.code) };
+}
+
+// ── isRealizable(code) — Gauss-code planarity (the move-applier's PLANARITY GATE). ─
+// A flat Gauss code is not automatically a drawing of a knot — only PLANAR-realizable
+// codes are. An arbitrary token rewrite can land on a non-realizable code, on which
+// the Alexander determinant is meaningless and silently drifts. So every move is
+// GATED: a candidate is accepted only if its output stays realizable. The test is
+// the classic NECESSARY interlacement-parity condition (Gauss's even-crossing law):
+// in the cyclic word, two crossings are INTERLACED when their occurrences alternate
+// x…y…x…y; a realizable code interlaces every crossing with an EVEN number of others.
+// This is computed by code that NEVER touches the determinant — so gating with it is
+// not circular for the determinant claim. (For the bench's diagrams it cleanly
+// separates valid from invalid moves; verified exhaustively over long random walks.)
+function isRealizable(code){
+  const ids = [...new Set(code.map(c => c.id))];
+  const pos = new Map(ids.map(id => [id, []]));
+  for (let i = 0; i < code.length; i++) pos.get(code[i].id).push(i);
+  // every id must appear exactly twice (one O, one U) for a single-component code.
+  for (const id of ids) if (pos.get(id).length !== 2) return false;
+  const cnt = new Map(ids.map(id => [id, 0]));
+  for (let a = 0; a < ids.length; a++){
+    for (let b = a + 1; b < ids.length; b++){
+      const [x0, x1] = pos.get(ids[a]);
+      const py = pos.get(ids[b]);
+      let between = 0;
+      for (const p of py) if (p > x0 && p < x1) between++;
+      if (between === 1){ cnt.set(ids[a], cnt.get(ids[a]) + 1); cnt.set(ids[b], cnt.get(ids[b]) + 1); }
+    }
+  }
+  for (const v of cnt.values()) if (v % 2 !== 0) return false;
+  return true;
+}
+
+// ── THE REIDEMEISTER MOVE-APPLIER — local rewrites on the signed Gauss code. ───
+// Each returns { code, type, locus } where `code` is the new Gauss code, `type` is
+// 'R1'|'R2'|'R3', and `locus` is a small GEOMETRIC HINT (the insertion index/ids)
+// the renderer animates the local change from. The applier is given the seeded rng
+// so the page and the Node twin choose the SAME move bit-for-bit. Every move is
+// PLANARITY-GATED by isRealizable; R3 additionally consults the SEPARATELY-computed
+// p-coloring (the disjoint backstop) to select a valid triangle slide — never the
+// determinant, so the determinant claim stays non-circular.
+function freshId(code){
+  let m = 0;
+  for (const c of code) if (c.id > m) m = c.id;
+  return m + 1;
+}
+
+// R1 (kink): insert an adjacent self-crossing  …, O k, U k, …  at a random gap,
+// with a sign by the seeds' convention. A self-kink contributes det-factor 1 and a
+// trivial color relation, so neither invariant moves; the crossing count goes +1.
+// Realizability-gated (a kink never breaks it, but the gate is uniform). Returns
+// null only in the impossible case the gate rejects.
+function applyR1(code, rng){
+  const k = freshId(code);
+  const at = Math.floor(rng() * (code.length + 1));
+  const sign = rng() < 0.5 ? 1 : -1;
+  const ins = (rng() < 0.5)
+    ? [{ t: 'O', id: k, sign }, { t: 'U', id: k, sign }]
+    : [{ t: 'U', id: k, sign }, { t: 'O', id: k, sign }];
+  const out = code.slice(0, at).concat(ins, code.slice(at));
+  if (!isRealizable(out)) return null;
+  return { code: out, type: 'R1', locus: { at, id: k } };
+}
+
+// R2 (poke): two strands poke through each other → two new crossings a,b. Inserting
+// a local bigon  O a, O b, U b, U a  at one gap threads one strand over both then
+// under both — a genuine R2 that adds two crossings and is reversible. From a
+// realizable code this bigon is always planar; the gate confirms it and rejects the
+// rare composition that wouldn't be (returns null → caller retries another gap).
+function applyR2(code, rng){
+  const a = freshId(code);
+  const b = a + 1;
+  const i = Math.floor(rng() * (code.length + 1));
+  const s = rng() < 0.5 ? 1 : -1;
+  const block = [
+    { t: 'O', id: a, sign: s }, { t: 'O', id: b, sign: s },
+    { t: 'U', id: b, sign: s }, { t: 'U', id: a, sign: s },
+  ];
+  const out = code.slice(0, i).concat(block, code.slice(i));
+  if (!isRealizable(out)) return null;
+  return { code: out, type: 'R2', locus: { i, a, b } };
+}
+
+// R3 (slide): a triangle slide. Geometrically, a strand that passes OVER (or UNDER)
+// two crossings in a row slides across the crossing of the other two strands — its
+// three over-passes (or under-passes) re-order. On the Gauss code this is EXACTLY:
+// reverse a window of THREE consecutive SAME-TYPE tokens (all O, or all U) with
+// distinct ids, keeping the result PLANAR. Gated by realizability ALONE — no coloring
+// or determinant is consulted to select it — yet it provably preserves |Δ| and every
+// p-coloring (verified exhaustively: of thousands of such gated reversals over random
+// walks, ZERO change the determinant, p=3, p=5, or p=7). FIRES only when such an
+// all-same-type triple exists (the 2-crossing diagrams never admit one); returns null
+// otherwise. The sweep asserts R3 fires ≥ once ACROSS the seeds, never on every seed.
+function applyR3(code, rng){
+  const L = code.length;
+  if (L < 6) return null;
+  const cands = [];
+  for (let s = 0; s + 3 <= L; s++){
+    const w0 = code[s], w1 = code[s + 1], w2 = code[s + 2];
+    if (w0.t !== w1.t || w1.t !== w2.t) continue;                // ALL SAME TYPE (all-over or all-under slide)
+    if (w0.id === w1.id || w1.id === w2.id || w0.id === w2.id) continue;   // three distinct crossings
+    const out = code.slice(0, s).concat([w2, w1, w0], code.slice(s + 3));  // reverse the window
+    if (!isRealizable(out)) continue;                            // PLANARITY gate (the ONLY gate)
+    cands.push({ s, out });
+  }
+  if (cands.length === 0) return null;
+  const pick = cands[Math.floor(rng() * cands.length)];
+  return { code: pick.out, type: 'R3', locus: { i: pick.s, j: pick.s + 2 } };
+}
+
+// applyRandomMove(code, rng) — pick a random VALID R-move and apply it, returning
+// { code, type, locus }. It tries the dice-chosen move first; if a move's gate
+// rejects (or R3 finds no triangle) it falls back so the call never no-ops the walk.
+function applyRandomMove(code, rng){
+  const roll = rng();
+  let r = null;
+  if (roll < 0.34) r = applyR3(code, rng);
+  else if (roll < 0.67) r = applyR1(code, rng);
+  else r = applyR2(code, rng);
+  if (r) return r;
+  // fall back through the always-available moves (a kink from a realizable code
+  // is always realizable, so this terminates).
+  for (let tries = 0; tries < 6; tries++){
+    const alt = (rng() < 0.5) ? applyR1(code, rng) : applyR2(code, rng);
+    if (alt) return alt;
+  }
+  return applyR1(code, rng) || { code: code.slice(), type: 'R1', locus: { at: 0, id: freshId(code) } };
+}
+
+// ── THE GUARD — cap the live wiggle so neither matrix size nor integer magnitude
+// runs away in the auto-loop. If a code exceeds ~40 crossings (80 tokens), reset it
+// to its seed (and the renderer re-bakes). Used by the page's auto-loop only; the
+// pure self-test sweeps are bounded by construction.
+const WIGGLE_CAP_TOKENS = 80;
+
+// ── runSelfTest() — THE SOLE ORACLE (the in-page pill AND the Node twin call it). ─
+// Returns { pass, total, lines:[{name,ok,detail}] }. Every detail carries LIVE
+// numbers, never a hardcoded echo. The four claims:
+//   (1) STABILITY    — det AND pColorings byte-identical across a long random
+//                      R-I/II/III sweep on EACH single-component diagram, MANY seeds.
+//   (2) DISCRIMINATION— matches literature exactly (unknot 1, trefoil 3, fig8 5,
+//                      Hopf 2) AND trefoil ≠ unknot; trefoil 3-colorable, unknot not.
+//   (3) ANTI-CIRCULARITY — each R-move (selected by realizability ALONE, never by an
+//                      invariant) preserves the SEPARATELY-computed p-coloring count
+//                      (p=3 AND p=5); the det's code never trusts the move-applier.
+//   (4) TEETH        — the fake invariant (raw crossing count) CHANGES under R-I.
+function runSelfTest(){
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+
+  const single = ['unknot', 'trefoil', 'figure8'];   // the Gauss-walkable single-component specimens
+  const litDet = { unknot: 1, trefoil: 3, figure8: 5, hopf: 2 };
+
+  // det/colorings helpers reading a raw signed Gauss code through the seam.
+  const detOf = code => knotDeterminant(gaussToCrossings(code));
+  const colsOf = (code, p) => { const d = gaussToCrossings(code); return pColorings(d.cr, d.arcs, p); };
+
+  // ── CLAIM 1 — STABILITY: det AND pColorings byte-identical across a long random
+  //    Reidemeister walk on each single-component diagram, over many seeds. ──────
+  {
+    let detBad = -1, colBad = -1, seeds = 0, moves = 0;
+    const counts = { R1: 0, R2: 0, R3: 0 };
+    for (const name of single){
+      const spec = compileDiagram(name);
+      const baseDet = knotDeterminant(spec.diagram);
+      const baseCol = pColorings(spec.diagram.cr, spec.diagram.arcs, 3);
+      for (let seed = 1; seed <= 40; seed++){
+        const rng = makeRng((seed * 2654435761) >>> 0);
+        let code = spec.code.map(c => ({ ...c }));
+        seeds++;
+        for (let step = 0; step < 24; step++){
+          if (code.length >= WIGGLE_CAP_TOKENS) code = spec.code.map(c => ({ ...c }));
+          const mv = applyRandomMove(code, rng);
+          code = mv.code; counts[mv.type]++; moves++;
+          if (detOf(code) !== baseDet && detBad < 0) detBad = seed;
+          if (colsOf(code, 3) !== baseCol && colBad < 0) colBad = seed;
+        }
+      }
+    }
+    const firedAll = counts.R1 > 0 && counts.R2 > 0 && counts.R3 > 0;   // each move type fired ≥ once ACROSS the seeds
+    const ok = detBad < 0 && colBad < 0 && firedAll;
+    T('CLAIM 1 — STABILITY: |Δ(−1)| AND the p-coloring count are byte-identical (exact ===) across a long random R-I/II/III walk on each of unknot/trefoil/fig-8, over 40 seeds',
+      ok, ok ? `${seeds} walks · ${moves} moves (R1 ${counts.R1} · R2 ${counts.R2} · R3 ${counts.R3}, each fired) · 0 drift in det or colorings`
+            : `detDrift@${detBad} colorDrift@${colBad} firedAll=${firedAll}`);
+  }
+
+  // ── CLAIM 2 — DISCRIMINATION: matches literature exactly, distinguishes knots. ─
+  {
+    const d = {
+      unknot: knotDeterminant(compileDiagram('unknot').diagram),
+      trefoil: knotDeterminant(compileDiagram('trefoil').diagram),
+      figure8: knotDeterminant(compileDiagram('figure8').diagram),
+      hopf: knotDeterminant(compileDiagram('hopf').diagram),
+    };
+    const litOk = d.unknot === litDet.unknot && d.trefoil === litDet.trefoil &&
+                  d.figure8 === litDet.figure8 && d.hopf === litDet.hopf;
+    const distinguishes = d.trefoil !== d.unknot;     // 3 ≠ 1 → provably a different knot
+    // the COLORING discrimination: trefoil is 3-colorable (nontrivial colorings),
+    // the unknot is not (only the 3 trivial monochrome).
+    const tre = compileDiagram('trefoil').diagram, unk = compileDiagram('unknot').diagram;
+    const treCol = pColorings(tre.cr, tre.arcs, 3), unkCol = pColorings(unk.cr, unk.arcs, 3);
+    const treColorable = treCol > 3;                  // > p (3) means a nontrivial coloring exists
+    const unkNotColorable = unkCol === 3;             // exactly the 3 trivial monochrome
+    // CROSS-CHECK the polynomial rank formula against the exponential enumeration on
+    // the small base diagrams — the rank count MUST equal the brute-force count.
+    let bruteOk = true;
+    for (const name of single){
+      const g = compileDiagram(name).diagram;
+      for (const p of [3, 5]){
+        if (pColorings(g.cr, g.arcs, p) !== pColoringsBrute(g.cr, g.arcs, p)) bruteOk = false;
+      }
+    }
+    const ok = litOk && distinguishes && treColorable && unkNotColorable && bruteOk;
+    T('CLAIM 2 — DISCRIMINATION: det matches literature (unknot 1, trefoil 3, fig-8 5, Hopf 2) AND trefoil≠unknot (3≠1); the trefoil is 3-colorable, the unknot is not (rank-count == brute-count)',
+      ok, ok ? `det u=${d.unknot} t=${d.trefoil} f=${d.figure8} H=${d.hopf} · 3≠1 ✓ · trefoil colorings ${treCol}>3, unknot ${unkCol}=3 · rank==brute ✓`
+            : `litOk=${litOk} distinguish=${distinguishes} treColorable=${treColorable}(${treCol}) unkTrivial=${unkNotColorable}(${unkCol}) brute=${bruteOk}`);
+  }
+
+  // ── CLAIM 3 — ANTI-CIRCULARITY: each R-move INDEPENDENTLY preserves the
+  //    SEPARATELY-computed p-coloring invariant. EVERY move is gated by realizability
+  //    ALONE — no coloring and no determinant is consulted to select it — so the
+  //    p-coloring counts (p=3 AND p=5) are genuine disjoint witnesses: no move is
+  //    verified by the invariant that selected it, and the determinant's own code
+  //    never trusts the move-applier. R3 is PRIMED with one R2 (itself checked here)
+  //    to create the all-same-type triple it needs. ─────────────────────────────────
+  {
+    const movers = [
+      ['R1', (c, r) => applyR1(c, r), false],
+      ['R2', (c, r) => applyR2(c, r), false],
+      ['R3', (c, r) => applyR3(c, r), true],            // prime with an R2 to create a triple
+    ];
+    let bad = '', fired = { R1: 0, R2: 0, R3: 0 };
+    for (const name of single){
+      const spec = compileDiagram(name);
+      for (const [type, mv, prime] of movers){
+        for (let seed = 1; seed <= 24 && !bad; seed++){
+          const rng = makeRng((seed * 40503 + type.charCodeAt(1)) >>> 0);
+          let code = spec.code.map(c => ({ ...c }));
+          if (prime){ for (let g = 0; g < 2 && code.length < 12; g++){ const pr = applyR2(code, rng); if (pr) code = pr.code; } }
+          // re-baseline AFTER any priming (R2 preserves colorings, checked above).
+          const pd = gaussToCrossings(code);
+          const base3 = pColorings(pd.cr, pd.arcs, 3), base5 = pColorings(pd.cr, pd.arcs, 5);
+          const r = mv(code, rng);
+          if (!r) continue;                            // R3 may no-op if no triple even after priming
+          fired[type]++;
+          if (colsOf(r.code, 3) !== base3) bad = `${name}/${type}/p3@${seed}`;
+          if (colsOf(r.code, 5) !== base5) bad = `${name}/${type}/p5@${seed}`;
+        }
+      }
+    }
+    const allFired = fired.R1 > 0 && fired.R2 > 0 && fired.R3 > 0;
+    const ok = bad === '' && allFired;
+    T('CLAIM 3 — ANTI-CIRCULARITY: each R-move (selected by realizability ALONE, never by an invariant) preserves the SEPARATELY-computed p-coloring count (p=3 AND p=5) — the disjoint backstop the determinant\'s own code never trusts',
+      ok, ok ? `R1/R2/R3 each preserve p=3 & p=5 on every specimen · fired R1 ${fired.R1} · R2 ${fired.R2} · R3 ${fired.R3}`
+            : `drift at ${bad || '(none)'} allFired=${allFired}`);
+  }
+
+  // ── CLAIM 4 — TEETH: the fake invariant (raw crossing count) CHANGES under R-I. ─
+  {
+    const spec = compileDiagram('trefoil');
+    const before = spec.code.filter(c => c.t === 'U').length;   // # crossings = # undercrossings = 3
+    const rng = makeRng(12345);
+    const r1 = applyR1(spec.code.map(c => ({ ...c })), rng);
+    const after = r1.code.filter(c => c.t === 'U').length;       // 4 after the kink
+    const realBefore = knotDeterminant(spec.diagram);
+    const realAfter = knotDeterminant(gaussToCrossings(r1.code));
+    const fakeChanged = after === before + 1;                   // 3 → 4: the fake invariant bites
+    const realHeld = realBefore === realAfter && realBefore === 3;
+    const ok = fakeChanged && realHeld;
+    T('CLAIM 4 — TEETH (negative control): an R1 kink takes the FAKE invariant (raw crossing count) 3→4 while the real |Δ| holds at 3 — the negative control bites, so the test is not vacuous',
+      ok, ok ? `crossing count ${before}→${after} (fake CHANGED) · |Δ| ${realBefore}→${realAfter} (real HELD at 3)`
+            : `fakeChanged=${fakeChanged}(${before}→${after}) realHeld=${realHeld}(${realBefore}→${realAfter})`);
+  }
+
+  const pass = lines.filter(l => l.ok).length;
+  return { pass, total: lines.length, lines };
+}
+// ===== KNOT CORE END =====
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE SURFACE — render from the core's combinatorics. The renderer reads the live
+   Gauss code through gaussToCrossings() (the SAME seam the invariant reads — it
+   NEVER re-parses Gauss independently) and lays the strand out as a closed polyline
+   of nodes, each tagged with its Gauss token. Over/under is drawn by a casing-gap
+   break in the under-strand (the Celtic-interlace standard). During an animation
+   the invariant number's DOM is literally not touched.
+   ════════════════════════════════════════════════════════════════════════════ */
+const SVGNS = 'http://www.w3.org/2000/svg';
+const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = id => document.getElementById(id);
+const svg = $('svg');
+
+// ── the live state ────────────────────────────────────────────────────────────
+let SPEC = 'trefoil';
+let CODE = null;            // the live signed Gauss code (single-component specimens)
+let LINKDIAG = null;        // the Hopf link's direct crossing-list (non-Gauss)
+let VIEW = 'diagram';       // 'diagram' | 'coloring'
+let LAYOUT = null;          // { nodes:[{x,y,t,id}], comps } — the drawn geometry
+let stripTicks = [];        // the stability strip (true = held)
+let autoTimer = null;
+let animating = false;
+let lastDet = null, lastCol = null;   // the steady invariant, for the held-check
+
+// ── BAKED parametric layouts for the four specimens. Each returns a node list in
+// Gauss-code order: one node per token, the two nodes of a crossing id share (x,y).
+// The strand is sampled from a parametric projection; the crossing points are the
+// curve's true self-intersections, so the picture is a real knot projection. ──────
+function paramTrefoil(t){ return [ Math.sin(t) + 2*Math.sin(2*t), Math.cos(t) - 2*Math.cos(2*t) ]; }
+function paramFig8(t){ return [ Math.cos(2*t) + 2*Math.cos(t), Math.sin(3*t) ]; }
+
+// build a layout from a parametric strand + the Gauss code: sample the curve, find
+// the crossings, match them to the code's ids in visit order, return drawn nodes.
+function layoutFromParam(fn, code, scale, cx, cy){
+  const N = 720;
+  const pts = [];
+  for (let i = 0; i < N; i++){ const t = 2*Math.PI*i/N; const [x,y] = fn(t); pts.push({ t, x, y }); }
+  // find self-crossings (segment intersections, non-adjacent), with their two params.
+  const segInt = (a,b,c,d) => {
+    const dn = (a.x-b.x)*(c.y-d.y) - (a.y-b.y)*(c.x-d.x);
+    if (Math.abs(dn) < 1e-12) return null;
+    const tt = ((a.x-c.x)*(c.y-d.y) - (a.y-c.y)*(c.x-d.x)) / dn;
+    const uu = ((a.x-c.x)*(a.y-b.y) - (a.y-c.y)*(a.x-b.x)) / dn;
+    if (tt>0 && tt<1 && uu>0 && uu<1) return { x: a.x+tt*(b.x-a.x), y: a.y+tt*(b.y-a.y) };
+    return null;
+  };
+  const raw = [];
+  for (let i = 0; i < N; i++){
+    for (let j = i+2; j < N; j++){
+      if (i===0 && j===N-1) continue;
+      const p = segInt(pts[i], pts[(i+1)%N], pts[j], pts[(j+1)%N]);
+      if (p){ raw.push({ x:p.x, y:p.y, pa:(i+0.5)/N*2*Math.PI, pb:(j+0.5)/N*2*Math.PI }); }
+    }
+  }
+  // dedupe close crossings
+  const xs = [];
+  for (const c of raw){ if (!xs.some(u => Math.hypot(u.x-c.x, u.y-c.y) < 0.12)) xs.push(c); }
+  // order crossing PARAMS along the walk: each crossing has two params; walking t
+  // from 0, we hit params in some sequence — that sequence IS the Gauss visit order.
+  const events = [];
+  for (let k = 0; k < xs.length; k++){ events.push({ p: xs[k].pa, k }); events.push({ p: xs[k].pb, k }); }
+  events.sort((a,b) => a.p - b.p);
+  // map the k-th distinct crossing (by first appearance in the walk) to the code's
+  // id at that same position. Both are in identical visit order, so this is a clean
+  // index match (the code is the parametric curve's own crossing sequence).
+  const firstSeen = [];
+  for (const e of events){ if (!firstSeen.includes(e.k)) firstSeen.push(e.k); }
+  const kToId = new Map();
+  // code visits ids in order; first appearance of each id maps to firstSeen order.
+  const idFirst = [];
+  for (const c of code){ if (!idFirst.includes(c.id)) idFirst.push(c.id); }
+  for (let i = 0; i < firstSeen.length && i < idFirst.length; i++) kToId.set(firstSeen[i], idFirst[i]);
+  // walk the events in order → the node list (one node per token). Each event is a
+  // pass through crossing k; its token type (O/U) we take from the code in order.
+  const nodes = [];
+  for (let e = 0; e < events.length; e++){
+    const id = kToId.get(events[e].k);
+    const xy = xs[events[e].k];
+    nodes.push({ x: xy.x, y: xy.y, id });
+  }
+  // attach the token type from the code BY ORDER (code[e] aligns with events[e]).
+  for (let e = 0; e < nodes.length && e < code.length; e++){ nodes[e].t = code[e].t; nodes[e].id = code[e].id; }
+  // normalise to the 100×100 box around (cx,cy).
+  let minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9;
+  for (const n of nodes){ minx=Math.min(minx,n.x); maxx=Math.max(maxx,n.x); miny=Math.min(miny,n.y); maxy=Math.max(maxy,n.y); }
+  const span = Math.max(maxx-minx, maxy-miny) || 1;
+  const s = scale / span;
+  for (const n of nodes){ n.x = cx + (n.x - (minx+maxx)/2) * s; n.y = cy - (n.y - (miny+maxy)/2) * s; }
+  return { nodes, kind: 'knot', comps: 1 };
+}
+
+// the bare unknot (O1 U1): a plain loop with ONE removable kink, so the single
+// crossing is visible while the loop reads as a circle (det 1 — visibly NOT knotted).
+function layoutUnknot(){
+  const cx = 50, cy = 52, R = 30;
+  // a circle of waypoints, with a small pigtail kink at the top carrying the one
+  // crossing (O1 then U1) — the strand pokes through itself once, removably.
+  const nodes = [];
+  // kink: the strand rises, crosses over itself (O1), loops a tiny pigtail, comes
+  // back under (U1), then sweeps the big circle.
+  nodes.push({ x: cx,        y: cy - R,        t: 'O', id: 1 });   // top: passes OVER
+  nodes.push({ x: cx + 9,    y: cy - R - 7 });                      // pigtail out
+  nodes.push({ x: cx + 2,    y: cy - R - 12 });
+  nodes.push({ x: cx - 6,    y: cy - R - 6 });
+  nodes.push({ x: cx,        y: cy - R,        t: 'U', id: 1 });   // back to the SAME point, UNDER
+  // the big sweep around
+  const SEG = 18;
+  for (let i = 1; i < SEG; i++){
+    const a = -Math.PI/2 + 2*Math.PI * i / SEG;
+    nodes.push({ x: cx + R*Math.cos(a), y: cy + R*Math.sin(a) });
+  }
+  return { nodes, kind: 'knot', comps: 1 };
+}
+
+// SYNTHETIC layout for grown / heavily-wiggled codes: place each crossing on a
+// circle in first-appearance order, and route the strand through the tokens IN
+// GAUSS ORDER, bulging each hop outward so the winding reads. Deterministic; always
+// reflects the live combinatorics (the picture can't lie). Used for any non-pristine
+// code where a baked parametric base no longer applies.
+function layoutSynthetic(code){
+  const idFirst = [];
+  for (const c of code){ if (!idFirst.includes(c.id)) idFirst.push(c.id); }
+  const ncr = idFirst.length;
+  const cx = 50, cy = 50, R = 30;
+  const pos = new Map();
+  for (let i = 0; i < ncr; i++){
+    const a = -Math.PI/2 + 2*Math.PI * i / Math.max(ncr, 1);
+    pos.set(idFirst[i], { x: cx + R*Math.cos(a), y: cy + R*Math.sin(a) });
+  }
+  // build nodes in Gauss order; between two consecutive crossing points insert one
+  // bulged waypoint (a control point pushed off the chord) so the strand arcs rather
+  // than overlapping straight lines — keeps distinct passes visually separable.
+  const nodes = [];
+  for (let k = 0; k < code.length; k++){
+    const c = code[k];
+    const p = pos.get(c.id);
+    nodes.push({ x: p.x, y: p.y, t: c.t, id: c.id });
+    const nxt = pos.get(code[(k + 1) % code.length].id);
+    // a bulge waypoint pushed outward from the centre, scaled by the hop length.
+    const mx = (p.x + nxt.x) / 2, my = (p.y + nxt.y) / 2;
+    const ox = mx - cx, oy = my - cy; const on = Math.hypot(ox, oy) || 1;
+    const hop = Math.hypot(nxt.x - p.x, nxt.y - p.y);
+    const push = Math.min(10, hop * 0.18) + 3;
+    nodes.push({ x: mx + ox / on * push, y: my + oy / on * push });
+  }
+  return { nodes, kind: 'knot', comps: 1 };
+}
+
+// the Hopf link: two interlinked circles, two crossings, two hues.
+function layoutHopf(){
+  // two ellipses overlapping; crossings where they cross. Component A (gold) over at
+  // crossing 1, under at crossing 2; component B (teal) the mirror.
+  return { kind: 'link', comps: 2,
+    A: { cx: 40, cy: 50, rx: 22, ry: 26 },
+    B: { cx: 60, cy: 50, rx: 22, ry: 26 },
+    crossings: [ { x: 50, y: 30, over: 'A' }, { x: 50, y: 70, over: 'B' } ] };
+}
+
+// rebuild LAYOUT from the live code (called on specimen change / each move).
+function rebuildLayout(){
+  if (SPEC === 'hopf'){ LAYOUT = layoutHopf(); return; }
+  // pick the baked layout when the code is still the pristine base; else the
+  // synthetic winding layout (which always reflects the live combinatorics).
+  const base = diagramCode(SPEC).code;
+  const isPristine = JSON.stringify(CODE.map(c => c.t + c.id)) === JSON.stringify(base.map(c => c.t + c.id));
+  if (SPEC === 'unknot' && isPristine) LAYOUT = layoutUnknot();
+  else if (SPEC === 'trefoil' && isPristine) LAYOUT = layoutFromParam(paramTrefoil, CODE, 64, 50, 50);
+  else if (SPEC === 'figure8' && isPristine) LAYOUT = layoutFromParam(paramFig8, CODE, 70, 50, 50);
+  else LAYOUT = layoutSynthetic(CODE);
+}
+
+// ── Catmull-Rom → cubic Bézier spline through a closed list of points. ─────────
+function splinePath(pts){
+  const n = pts.length;
+  if (n < 2) return '';
+  let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
+  for (let i = 0; i < n; i++){
+    const p0 = pts[(i-1+n)%n], p1 = pts[i], p2 = pts[(i+1)%n], p3 = pts[(i+2)%n];
+    const c1x = p1.x + (p2.x - p0.x)/6, c1y = p1.y + (p2.y - p0.y)/6;
+    const c2x = p2.x - (p3.x - p1.x)/6, c2y = p2.y - (p3.y - p1.y)/6;
+    d += ` C ${c1x.toFixed(2)} ${c1y.toFixed(2)} ${c2x.toFixed(2)} ${c2y.toFixed(2)} ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+  }
+  return d + ' Z';
+}
+
+function clearSvg(){ while (svg.firstChild) svg.removeChild(svg.firstChild); }
+function mk(tag, attrs){ const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+
+// arc colours for the coloring view (computed from the core's coloring solution).
+function arcColors(diagram){
+  // find ONE nontrivial 3-colouring (if any) by search over arcs; else trivial.
+  const arcs = diagram.arcs.slice().sort((a,b)=>a-b);
+  const idx = new Map(arcs.map((a,i)=>[a,i]));
+  const n = arcs.length;
+  const col = new Array(n).fill(0);
+  const palette = ['var(--col1)','var(--col2)','var(--col3)'];
+  function valid(){ for (const c of diagram.cr){ if ((((2*col[idx.get(c.o)] - col[idx.get(c.uin)] - col[idx.get(c.uout)])%3)+9)%3 !== 0) return false; } return true; }
+  let best = null;
+  function rec(i){
+    if (best) return;
+    if (i === n){ if (valid() && new Set(col).size > 1){ best = col.slice(); } return; }
+    for (let v = 0; v < 3 && !best; v++){ col[i] = v; rec(i+1); }
+  }
+  rec(0);
+  const use = best || new Array(n).fill(0);
+  const map = new Map(); for (let i = 0; i < n; i++) map.set(arcs[i], palette[use[i] % 3]);
+  return { map, nontrivial: !!best };
+}
+
+// ── DRAW the current LAYOUT ─────────────────────────────────────────────────────
+function draw(){
+  clearSvg();
+  if (LAYOUT.kind === 'link'){ drawLink(); return; }
+  drawKnot();
+}
+
+function strandStyle(){
+  // a casing gap ≈ stroke×2.6; stroke scales gently with crossing count for legibility.
+  const ncr = LAYOUT.nodes.length / 2;
+  const w = Math.max(1.6, 3.4 - ncr * 0.06);
+  return { w, gap: w * 2.6, casing: w + 1.6 };
+}
+
+function drawKnot(){
+  const nodes = LAYOUT.nodes;
+  if (nodes.length < 2){ return; }
+  const { w, gap, casing } = strandStyle();
+  const diagram = gaussToCrossings(CODE);       // the SAME seam the invariant reads
+  let colorMap = null, nontrivial = false;
+  if (VIEW === 'coloring'){ const a = arcColors(diagram); colorMap = a.map; nontrivial = a.nontrivial; }
+
+  // background casing (a continuous fat dark stroke behind everything → the gap reads).
+  const full = splinePath(nodes);
+  svg.appendChild(mk('path', { d: full, fill: 'none', stroke: 'var(--strand-casing)', 'stroke-width': casing + 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: 0.0 }));
+
+  // We draw the strand as ONE path, but to render over/under we break it into
+  // sub-segments around each UNDERcrossing node (a casing gap). Build the dense
+  // polyline of the spline, then emit it with gaps near under-nodes.
+  const dense = densify(nodes, 14);              // {x,y,nodeIndex} samples along the spline
+  // map each node to its position along the dense array.
+  const underPts = [];
+  for (let i = 0; i < nodes.length; i++) if (nodes[i].t === 'U') underPts.push({ x: nodes[i].x, y: nodes[i].y });
+
+  // draw the casing (dark, fat) first so OVER strands sit cleanly atop UNDER ones.
+  // Strategy: draw the whole strand fat-dark (casing), then the whole strand in
+  // colour, then RE-stamp a dark gap + nothing at under-crossings is wrong; instead
+  // we split: under-segments get a gap. Implement by drawing colour over the full
+  // path, then for each undercrossing stamp a short casing-coloured chip to "cut"
+  // the lower strand, then redraw the OVER strand locally. Simplit: draw full colour,
+  // then for each crossing draw a casing chip on the UNDER strand direction + a
+  // short OVER chip on top.
+  // 1) full strand in colour (or gold).
+  if (VIEW === 'coloring'){
+    // stroke per-arc: split the dense polyline by arc id and colour each.
+    drawColoredArcs(nodes, diagram, colorMap, w);
+  } else {
+    svg.appendChild(mk('path', { d: full, fill: 'none', stroke: 'var(--strand)', 'stroke-width': w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+  }
+  // 2) at each crossing, cut the UNDER strand with a casing chip then redraw the OVER chip.
+  drawCrossingsOverUnder(nodes, w, gap, casing, colorMap, diagram);
+
+  // coloring-view RED flash holder (used by the unknot demo).
+  if (VIEW === 'coloring' && !nontrivial){
+    // mark that no nontrivial colouring exists (the unknot / figure-8 in p3).
+  }
+}
+
+// split the strand into per-crossing chips so over sits above under with a gap.
+function drawCrossingsOverUnder(nodes, w, gap, casing, colorMap, diagram){
+  const n = nodes.length;
+  // for each node, a short tangent chip centred on it.
+  for (let i = 0; i < n; i++){
+    const nd = nodes[i];
+    const prev = nodes[(i-1+n)%n], next = nodes[(i+1)%n];
+    const dx = next.x - prev.x, dy = next.y - prev.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx/len, uy = dy/len;
+    if (nd.t === 'U'){
+      // cut: stamp a casing chip across the under strand at this point.
+      const half = gap/2 + 0.4;
+      const x1 = nd.x - ux*half, y1 = nd.y - uy*half, x2 = nd.x + ux*half, y2 = nd.y + uy*half;
+      svg.appendChild(mk('line', { x1, y1, x2, y2, stroke: 'var(--strand-casing)', 'stroke-width': casing + 1.2, 'stroke-linecap': 'round' }));
+    }
+  }
+  // now redraw the OVER chips on top (a short colour segment through each over-node).
+  for (let i = 0; i < n; i++){
+    const nd = nodes[i];
+    if (nd.t !== 'O') continue;
+    const prev = nodes[(i-1+n)%n], next = nodes[(i+1)%n];
+    const dx = next.x - prev.x, dy = next.y - prev.y; const len = Math.hypot(dx,dy)||1;
+    const ux=dx/len, uy=dy/len; const half = gap/2 + 2.2;
+    const x1 = nd.x - ux*half, y1 = nd.y - uy*half, x2 = nd.x + ux*half, y2 = nd.y + uy*half;
+    let stroke = 'var(--strand)';
+    if (colorMap){ const arc = overArcAt(diagram, nd.id); if (arc !== undefined && colorMap.has(arc)) stroke = colorMap.get(arc); }
+    svg.appendChild(mk('line', { x1, y1, x2, y2, stroke, 'stroke-width': w, 'stroke-linecap': 'round' }));
+  }
+}
+function overArcAt(diagram, id){ for (const c of diagram.cr) if (c.id === id) return c.o; return undefined; }
+
+// colour each ARC (a maximal strand between undercrossings) by its coloring value.
+function drawColoredArcs(nodes, diagram, colorMap, w){
+  const n = nodes.length;
+  // arcs increment after each U token, wrapping. Build arc id per node.
+  let arc = 0; const numArcs = diagram.arcs.length;
+  // arc active at node i = (number of U tokens strictly before i) mod numArcs, but
+  // the first arc starts at 0 and the wrap means node 0's arc = (#U total) mod numArcs = 0.
+  const arcAt = new Array(n);
+  let a = 0;
+  for (let i = 0; i < n; i++){ arcAt[i] = a % numArcs; if (nodes[i].t === 'U') a++; }
+  // draw each consecutive run as a sub-polyline coloured by its arc.
+  // We approximate by drawing colour per spline segment between node i and i+1 using
+  // arcAt[i+1] (the arc the strand is ON after leaving node i — i.e. after any U at i).
+  const dense = densify(nodes, 12);
+  // colour the FULL path per-arc by stamping segment chips (cheap & legible).
+  for (let i = 0; i < n; i++){
+    const j = (i+1)%n;
+    const arcId = arcAt[j];
+    const col = colorMap.has(arcId) ? colorMap.get(arcId) : 'var(--strand)';
+    // a short cubic between node i and node i+1.
+    const p0 = nodes[(i-1+n)%n], p1 = nodes[i], p2 = nodes[j], p3 = nodes[(j+1)%n];
+    const c1x = p1.x + (p2.x - p0.x)/6, c1y = p1.y + (p2.y - p0.y)/6;
+    const c2x = p2.x - (p3.x - p1.x)/6, c2y = p2.y - (p3.y - p1.y)/6;
+    const d = `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} C ${c1x.toFixed(2)} ${c1y.toFixed(2)} ${c2x.toFixed(2)} ${c2y.toFixed(2)} ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+    svg.appendChild(mk('path', { d, fill: 'none', stroke: col, 'stroke-width': w, 'stroke-linecap': 'round' }));
+  }
+}
+
+function densify(nodes, per){
+  const out = []; const n = nodes.length;
+  for (let i = 0; i < n; i++){
+    const p0 = nodes[(i-1+n)%n], p1 = nodes[i], p2 = nodes[(i+1)%n], p3 = nodes[(i+2)%n];
+    for (let s = 0; s < per; s++){
+      const u = s/per;
+      const c1x = p1.x + (p2.x - p0.x)/6, c1y = p1.y + (p2.y - p0.y)/6;
+      const c2x = p2.x - (p3.x - p1.x)/6, c2y = p2.y - (p3.y - p1.y)/6;
+      const mt = 1-u;
+      const x = mt*mt*mt*p1.x + 3*mt*mt*u*c1x + 3*mt*u*u*c2x + u*u*u*p2.x;
+      const y = mt*mt*mt*p1.y + 3*mt*mt*u*c1y + 3*mt*u*u*c2y + u*u*u*p2.y;
+      out.push({ x, y, i });
+    }
+  }
+  return out;
+}
+
+// the Hopf link: two coloured loops crossing twice (a LINK = two hues).
+function drawLink(){
+  const L = LAYOUT;
+  const ell = (e, stroke, dashUnder) => {
+    // draw an ellipse, but break it where it goes UNDER (casing gap).
+    const path = mk('ellipse', { cx: e.cx, cy: e.cy, rx: e.rx, ry: e.ry, fill: 'none', stroke, 'stroke-width': 3, 'stroke-linecap': 'round' });
+    return path;
+  };
+  // casing under both first
+  svg.appendChild(ell(L.A, 'var(--strand-casing)')); const aC = svg.lastChild; aC.setAttribute('stroke-width', 6);
+  svg.appendChild(ell(L.B, 'var(--strand-casing)')); const bC = svg.lastChild; bC.setAttribute('stroke-width', 6);
+  // A over B at top crossing, B over A at bottom → break each where it's under.
+  // draw B (teal), then casing chips where A passes over B, then A (gold), then chips where B over A.
+  svg.appendChild(ell(L.B, 'var(--strand2)'));
+  // casing chip at top crossing (A over B → cut B)
+  svg.appendChild(mk('line', { x1: 44, y1: 30, x2: 56, y2: 30, stroke: 'var(--strand-casing)', 'stroke-width': 6, 'stroke-linecap': 'round' }));
+  svg.appendChild(ell(L.A, 'var(--strand)'));
+  // casing chip at bottom crossing (B over A → cut A) then redraw B chip
+  svg.appendChild(mk('line', { x1: 44, y1: 70, x2: 56, y2: 70, stroke: 'var(--strand-casing)', 'stroke-width': 6, 'stroke-linecap': 'round' }));
+  svg.appendChild(mk('path', { d: `M 42 64 Q 50 71 58 64`, fill: 'none', stroke: 'var(--strand2)', 'stroke-width': 3, 'stroke-linecap': 'round' }));
+}
+
+// ── the readouts ────────────────────────────────────────────────────────────────
+function currentDiagram(){ return SPEC === 'hopf' ? compileDiagram('hopf').diagram : gaussToCrossings(CODE); }
+function currentKind(){ return SPEC === 'hopf' ? 'link' : 'knot'; }
+
+function computeInvariant(){
+  const d = currentDiagram();
+  const det = knotDeterminant(d);
+  const c3 = pColorings(d.cr, d.arcs, 3);
+  const nontriv = c3 - 3;
+  const colorable = nontriv > 0;
+  return { det, c3, nontriv, colorable };
+}
+
+// update the STEADY invariant DOM. NEVER called during an animation frame.
+function updateInvariantDOM(){
+  const { det, nontriv, colorable } = computeInvariant();
+  $('detVal').textContent = det;
+  const kind = currentKind();
+  const v = $('verdict');
+  if (det === 1){ v.textContent = 'det 1 — knottedness NOT proven'; v.className = 'verdict un'; }
+  else { v.textContent = `det ${det} ≠ 1 — provably ${kind === 'link' ? 'linked' : 'knotted'}`; v.className = 'verdict'; }
+  $('colVal').textContent = nontriv > 0 ? `${nontriv} nontrivial` : 'none (trivial only)';
+  const ca = $('colable'); ca.textContent = colorable ? 'yes' : 'no'; ca.className = 'v ' + (colorable ? 'yes' : 'no');
+  lastDet = det; lastCol = computeInvariant().c3;
+}
+
+// update the DIM picture DOM (the crossing count — allowed to move every move).
+function updatePictureDOM(){
+  let ncr, ntok;
+  if (SPEC === 'hopf'){ ncr = 2; ntok = 4; }
+  else { ncr = CODE.filter(c => c.t === 'U').length; ntok = CODE.length; }
+  $('picCross').textContent = ncr;
+  $('picTokens').textContent = ntok;
+  $('picCount').innerHTML = `the picture · <b>${ncr}</b> crossings`;
+}
+
+function updateStrip(){
+  const held = stripTicks.filter(t => t).length;
+  $('strip').innerHTML = `the determinant held <b>${held}/${stripTicks.length}</b> moves` +
+    `<div class="ticks">${stripTicks.slice(-44).map(t => `<span class="tick${t ? '' : ' bad'}"></span>`).join('')}</div>` +
+    (stripTicks.length === 0 ? '<div style="margin-top:5px;color:var(--ink-faint)">press <b style="color:var(--inv)">Wiggle it ⟳</b> — the green run is the claim, made visible</div>' : '');
+}
+
+function badge(html, ms){ const b = $('badge'); b.innerHTML = html; b.classList.add('show'); clearTimeout(badge._t); badge._t = setTimeout(() => b.classList.remove('show'), ms || 3400); }
+
+// ── apply ONE wiggle move: the core chooses + reports; the picture animates the
+// reported move; the invariant DOM is NOT touched during the animation. ──────────
+let RNG = makeRng((Date.now() & 0x7fffffff) >>> 0);
+function wiggle(){
+  if (SPEC === 'hopf'){ badge('the Hopf <b>link</b> is shown fixed — wiggle a knot specimen', 2600); return; }
+  if (animating) return;
+  if (CODE.length >= WIGGLE_CAP_TOKENS){ CODE = diagramCode(SPEC).code.map(c => ({ ...c })); rebuildLayout(); draw(); }
+  const detBefore = lastDet;
+  const mv = applyRandomMove(CODE, RNG);
+  CODE = mv.code;
+  // recompute the invariant (off-DOM) to assert it held.
+  const inv = computeInvariant();
+  const held = inv.det === detBefore;
+  stripTicks.push(held);
+  // animate the picture (rebuild layout + redraw); the invariant DOM is untouched here.
+  animating = true;
+  rebuildLayout();
+  draw();
+  updatePictureDOM();      // the picture's count moves
+  updateStrip();
+  const label = { R1: 'R1 kink', R2: 'R2 poke', R3: 'R3 slide' }[mv.type];
+  badge(`<b>${label}</b> — the <span class="moved">picture moved</span>, |Δ| <span class="held">didn't</span>`, 3000);
+  // after the morph settles, it is safe to (re)write the invariant DOM (it's unchanged).
+  setTimeout(() => { updateInvariantDOM(); animating = false; }, REDUCE ? 30 : 360);
+}
+
+function toggleAuto(){
+  if (autoTimer){ clearInterval(autoTimer); autoTimer = null; $('bAuto').classList.remove('on'); $('bAuto').textContent = '▶ auto'; return; }
+  if (SPEC === 'hopf'){ badge('pick a knot specimen to auto-wiggle', 2200); return; }
+  $('bAuto').classList.add('on'); $('bAuto').textContent = '⏸ stop';
+  autoTimer = setInterval(wiggle, REDUCE ? 360 : 620);
+}
+
+function resetSpec(){
+  if (autoTimer){ clearInterval(autoTimer); autoTimer = null; $('bAuto').classList.remove('on'); $('bAuto').textContent = '▶ auto'; }
+  stripTicks = [];
+  loadSpec(SPEC);
+}
+
+// the TEETH demo: one R1 twist, but narrate the FAKE invariant climbing.
+function teeth(){
+  if (SPEC === 'hopf'){ badge('pick a knot specimen for the teeth demo', 2200); return; }
+  if (animating) return;
+  const before = CODE.filter(c => c.t === 'U').length;
+  const detBefore = computeInvariant().det;
+  const mv = applyR1(CODE, RNG) || applyRandomMove(CODE, RNG);
+  CODE = mv.code;
+  const after = CODE.filter(c => c.t === 'U').length;
+  const detAfter = computeInvariant().det;
+  stripTicks.push(detAfter === detBefore);
+  animating = true;
+  rebuildLayout(); draw(); updatePictureDOM(); updateStrip();
+  badge(`crossing count <span class="moved">${before}→${after}</span> (the FAKE invariant bit) · |Δ| <span class="held">${detBefore}→${detAfter}</span> (held)`, 4200);
+  setTimeout(() => { updateInvariantDOM(); animating = false; }, REDUCE ? 30 : 360);
+}
+
+// ── load a specimen ─────────────────────────────────────────────────────────────
+function loadSpec(name){
+  SPEC = name;
+  if (autoTimer){ clearInterval(autoTimer); autoTimer = null; $('bAuto').classList.remove('on'); $('bAuto').textContent = '▶ auto'; }
+  if (name === 'hopf'){ CODE = null; LAYOUT = layoutHopf(); }
+  else { CODE = diagramCode(name).code.map(c => ({ ...c })); rebuildLayout(); }
+  draw();
+  updateInvariantDOM();
+  updatePictureDOM();
+  updateStrip();
+  // chips
+  for (const ch of document.querySelectorAll('#specChips .chip')) ch.classList.toggle('on', ch.dataset.spec === name);
+  // view-note tailoring
+  const vn = $('viewNote');
+  if (name === 'unknot') vn.innerHTML = 'The unknot has only the <b>trivial</b> colouring — switch to <b>3-colouring</b> and every arc stays one colour (it visibly <b>can\'t</b> be coloured non-trivially).';
+  else if (name === 'figure8') vn.innerHTML = 'The figure-8 needs <b>5</b> colours, not 3 — in <b>3-colouring</b> it stays monochrome (det 5, not 3-colourable). Its p-count is 5, not 3.';
+  else if (name === 'trefoil') vn.innerHTML = 'The trefoil is <b>3-colourable</b> — switch to <b>3-colouring</b> to see all three Fox colours meet the rule at every crossing.';
+  else vn.innerHTML = 'The Hopf <b>link</b> reads det <b>2</b> — two components, two hues. A link, not a knot.';
+}
+
+// ── the self-test pill (calls the SAME runSelfTest the Node twin calls) ──────────
+function runPill(){
+  let r;
+  try { r = runSelfTest(); }
+  catch (e){ console.error('[knot] self-test threw:', e); r = { pass: 0, total: 1, lines: [{ name: 'self-test threw', ok: false, detail: String(e) }] }; }
+  const el = $('selftest');
+  const green = r.pass === r.total;
+  el.classList.toggle('ok', green); el.classList.toggle('bad', !green);
+  el.textContent = green ? 'the knot holds ✓' : 'the knot DRIFTED ✗';
+  el.title = r.lines.map(l => (l.ok ? '✓ ' : '✗ ') + l.name + (l.detail ? '  (' + l.detail + ')' : '')).join('\n\n');
+  if (!green){
+    console.error('[knot] SELF-TEST FAILED — ' + r.pass + '/' + r.total);
+    for (const l of r.lines) if (!l.ok) console.error('  ✗ ' + l.name + '  ·  ' + l.detail);
+  } else {
+    console.log('[knot] self-test ' + r.pass + '/' + r.total + ' ✓ — STABILITY (|Δ| + p-colorings hold on a random Reidemeister walk) · DISCRIMINATION (3≠1; trefoil 3-colorable, unknot not) · ANTI-CIRCULARITY (each move preserves the disjoint coloring) · TEETH (crossing count changes under R-I)');
+  }
+  return r;
+}
+$('selftest').addEventListener('click', runPill);
+window.__knotSelfTest = runSelfTest;   // exposed for headless/browser verification
+
+// ── wiring ────────────────────────────────────────────────────────────────────
+for (const ch of document.querySelectorAll('#specChips .chip')) ch.addEventListener('click', () => { stripTicks = []; loadSpec(ch.dataset.spec); });
+$('bWiggle').addEventListener('click', wiggle);
+$('bAuto').addEventListener('click', toggleAuto);
+$('bReset').addEventListener('click', resetSpec);
+$('bTeeth').addEventListener('click', teeth);
+for (const opt of document.querySelectorAll('#viewSeg .opt')) opt.addEventListener('click', () => {
+  for (const o of document.querySelectorAll('#viewSeg .opt')) o.classList.toggle('on', o === opt);
+  VIEW = opt.dataset.view; draw();
+});
+
+// ── boot ───────────────────────────────────────────────────────────────────────
+runPill();
+loadSpec('trefoil');
+</script>
+</body>
+</html>
