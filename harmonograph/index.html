@@ -133,6 +133,12 @@
   .hint{ font:10.5px/1.55 var(--font-mono); color:var(--ink-dim); opacity:.8; letter-spacing:.2px; margin:16px 0 4px;
     border-top:1px solid rgba(201,162,74,0.16); padding-top:12px; }
   .hint b{ color:var(--ink); font-weight:600; }
+  #listenBtn.on{ color:#0d1b12; background:linear-gradient(180deg,#9fe6b0,#5fc784); border-color:#5fc784; }
+  #listenBtn.on::before{ content:'♪ '; }
+  .intervalRead{ flex:1; display:flex; align-items:center; justify-content:flex-end;
+    font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; color:var(--ink-dim);
+    font-variant-numeric:tabular-nums; }
+  .intervalRead b{ color:var(--accent); font-weight:700; }
 </style>
 </head>
 <body>
@@ -155,12 +161,18 @@
       <p class="lede">A Victorian <b>harmonograph</b> — two decaying pendulums steer a pen across the
         paper, and their combined swing traces the looping Lissajous webs that slowly <b>spiral inward
         and die</b>. Near-integer frequency <b>ratios</b> with a hair of detune make the figure breathe;
-        the damping makes it settle. Watch it draw, then roll a fresh one.</p>
+        the damping makes it settle. Watch it draw, then roll a fresh one.
+        Press <b>♪ Listen</b> to <i>hear</i> the figure's ratio — a 2:3 is a perfect fifth, a
+        1:2 an octave — and the detune you see breathing becomes a slow beating you hear.</p>
 
       <div class="sect">Motion</div>
       <div class="btnrow">
         <button class="btn primary" id="playBtn">⏸ Pause</button>
         <button class="btn" id="redrawBtn">↻ Again</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="listenBtn" title="Hear the figure's ratio as a musical interval">♪ Listen</button>
+        <span class="intervalRead" id="intervalRead">— silent —</span>
       </div>
       <div class="row">
         <label>Draw speed <span class="val" id="speedVal">1.0×</span></label>
@@ -196,6 +208,10 @@
         Each axis is two pendulums: <b>x(t) = Σ Aᵢ·sin(2π·fᵢ·t+φᵢ)·e^(−dᵢ·t)</b>.
         Try a <b>preset</b>, dial the per-pendulum frequency to detune the petals, then <b>Surprise me</b>
         for a reproducible new web. The badge proves the pen never drifts from the math.
+        <br><br>The same ratio you <b>see</b> you can <b>hear</b>: <b>♪ Listen</b> voices the
+        figure's fundamental fy/fx as two pure tones — a <a href="../sound-garden/index.html" style="color:var(--accent);text-decoration:none;">Sound&nbsp;Garden</a>
+        crossing. Consonant figures (octave, fifth) sound consonant; the detune that makes the
+        petals breathe is heard as a slow beat. One mute governs the whole workshop.
       </div>
     </aside>
   </div>
@@ -293,6 +309,42 @@ function hashStr(s){
   let h = 2166136261 >>> 0;
   for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return ('00000000' + (h >>> 0).toString(16)).slice(-8) + ':' + s.length;
+}
+
+// ---- AUDIO MAPPING (pure) --------------------------------------------------
+// The cross with the Sound Garden: the Lissajous figure you SEE is the same
+// frequency ratio you can HEAR. The fundamental x:y ratio of the live config
+// becomes a musical interval — 2:3 a perfect fifth, 1:2 an octave, and the tiny
+// visual detune (which makes the petals "breathe") becomes a slow audible BEAT.
+// These are DOM-free and Web-Audio-free so the self-test re-audits them headless.
+const AUDIO_BASE_HZ = 220;        // A3 — the x-axis voice's pitch
+
+// Reduce a figure's fundamental ratio (fy/fx) to the nearest small p:q interval.
+function intervalFromRatio(fx, fy){
+  if(fx === 0) return { p: 1, q: 1 };
+  let bp = 1, bq = 1, bestErr = Infinity;
+  for(let p = 1; p <= 6; p++) for(let q = 1; q <= 6; q++){
+    const err = Math.abs(fy / fx - q / p);
+    if(err < bestErr){ bestErr = err; bp = p; bq = q; }
+  }
+  const g = gcdInt(bp, bq) || 1;
+  return { p: bp / g, q: bq / g };
+}
+// The two audible voice frequencies. The y-voice rides the RAW fy/fx ratio
+// (detune included → beats survive), folded into ~[1,2] so it stays in one
+// comfortable octave and never gets shrill or sub-audible.
+function voiceFreqs(fx, fy, base){
+  base = base || AUDIO_BASE_HZ;
+  let r = (fx === 0) ? 1 : fy / fx;
+  while(r > 2.001) r /= 2;
+  while(r < 0.999) r *= 2;
+  return { fxHz: base, fyHz: base * r };
+}
+// Master gain that keeps the summed voice peak under a hard ceiling (no clip).
+function masterGainFor(nVoices, perVoiceAmp, ceiling){
+  ceiling = ceiling == null ? 0.9 : ceiling;
+  const peak = nVoices * perVoiceAmp;
+  return peak <= 1e-9 ? 1 : Math.min(1, ceiling / peak);
 }
 
 // ============================================================================
@@ -396,12 +448,64 @@ function runSelfTest(){
     check('skin-invariance: geometry fingerprint identical across 3 skins', skinSame);
   }
 
+  // (5) AUDIO — INTERVAL RECOVERY: the figure's fundamental ratio reduces to the
+  //     musical interval you'd hear (2:3 fifth, 1:2 octave, …) — the SAME ratio
+  //     the renderer draws, so the sound can't drift from the sight.
+  {
+    const cases = [
+      [1,1,1,1], [2,3,2,3], [1,2,1,2], [3,4,3,4], [4,5,4,5], [5,6,5,6],
+      [1,3,1,3], [2,5,2,5], [3,5,3,5], [3,2,3,2],
+    ];
+    let ok = true;
+    for(const [fx,fy,ep,eq] of cases){
+      const { p, q } = intervalFromRatio(fx, fy);
+      if(p !== ep || q !== eq) ok = false;
+    }
+    check('audio: figure ratio fy/fx reduces to the heard interval p:q (10 cases)', ok);
+  }
+
+  // (6) AUDIO — VOICE FOLDING: the two voice frequencies realise fy/fx folded
+  //     into ~[1,2], so the heard ratio equals the seen ratio (mod octave) and
+  //     stays inside a comfortable band (never shrill / sub-audible).
+  {
+    let ok = true, maxR = 0, minR = Infinity;
+    for(const [fx,fy] of [[1,1],[2,3],[1,2],[3,4],[4,5],[5,6],[3,2],[5,3],[2,5]]){
+      const { fxHz, fyHz } = voiceFreqs(fx, fy, AUDIO_BASE_HZ);
+      const r = fyHz / fxHz;
+      let want = fy / fx; while(want > 2.001) want /= 2; while(want < 0.999) want *= 2;
+      if(Math.abs(r - want) > 1e-9) ok = false;
+      if(r < 0.998 || r > 2.003) ok = false;
+      maxR = Math.max(maxR, r); minR = Math.min(minR, r);
+      if(fxHz !== AUDIO_BASE_HZ) ok = false;
+    }
+    check('audio: voice ratio == folded fy/fx, inside ~[1,2] (' + minR.toFixed(3) + '–' + maxR.toFixed(3) + ')', ok);
+  }
+
+  // (7) AUDIO — DETUNE → BEAT: a near-integer ratio with the engine's small
+  //     detune produces a small nonzero beat against the exact interval — the
+  //     visual "breathing" of the petals, heard as a slow throb.
+  {
+    const fx = 2.0, fy = 3.0 + 0.008;     // a 2:3 fifth with a hair of detune
+    const { fyHz } = voiceFreqs(fx, fy, AUDIO_BASE_HZ);
+    const beat = Math.abs(fyHz - AUDIO_BASE_HZ * 1.5);   // vs the exact fifth
+    check('audio: detune → audible beat (small & nonzero: ' + beat.toFixed(3) + ' Hz)', beat > 0 && beat < 5);
+  }
+
+  // (8) AUDIO — HEADROOM: the master gain keeps the summed two-voice peak under
+  //     the 0.9 ceiling, so the output can never clip however the figure rolls.
+  {
+    const amp = 0.5, g = masterGainFor(2, amp, 0.9);
+    const peak = 2 * amp * g;
+    check('audio: 2 voices · amp · masterGain ≤ 0.9 (peak ' + peak.toFixed(4) + ', no clip)', peak <= 0.9 + 1e-12);
+  }
+
   return { pass, total, log };
 }
 
 // expose for Node extraction / external re-audit
 const __HgCore = { termValue, axisValue, penPos, axisEnvelope, gcdInt, lcmInt, gcdOfList,
-  configFromSeed, randomConfig, pathFingerprint, mulberry32, runSelfTest };
+  configFromSeed, randomConfig, pathFingerprint, mulberry32, runSelfTest,
+  intervalFromRatio, voiceFreqs, masterGainFor, AUDIO_BASE_HZ };
 if(typeof window !== 'undefined'){ window.HarmonographCore = __HgCore; }
 if(typeof module !== 'undefined' && module.exports){ module.exports = __HgCore; }
 
@@ -649,6 +753,7 @@ function syncPendControls(){
 function updateRatioTag(){
   const fx = state.config.x[0].f, fy = state.config.y[0].f;
   document.getElementById('ratioTag').textContent = approxRatio(fx, fy);
+  retuneAudio();          // keep the heard interval in lock-step with the seen one
 }
 function approxRatio(a, b){
   if(b === 0) return '—';
@@ -659,6 +764,126 @@ function approxRatio(a, b){
   }
   return best;
 }
+
+// ============================================================================
+// AUDIO — the Sound Garden crossing. Voice the live figure's fundamental
+// ratio (fy/fx) as two pure tones so the consonance you SEE is consonance you
+// HEAR; the detune that makes petals breathe becomes a slow audible beat. The
+// mapping math (intervalFromRatio / voiceFreqs / masterGainFor) is the pure,
+// self-tested CORE — this layer only renders it through Web Audio.
+// ============================================================================
+// Named simple intervals → a label for the readout.
+const INTERVAL_NAMES = {
+  '1:1':'unison', '1:2':'octave', '2:3':'perfect fifth', '3:4':'perfect fourth',
+  '4:5':'major third', '5:6':'minor third', '2:5':'major tenth', '3:5':'major sixth',
+  '1:3':'octave + fifth', '3:2':'perfect fifth', '5:4':'major third', '4:3':'perfect fourth',
+  '5:3':'major sixth', '2:1':'octave', '5:2':'octave + major third',
+};
+const PER_VOICE_AMP = 0.5;                       // pre-master amplitude / voice
+const AudioEngine = {
+  ctx: null, master: null, comp: null,
+  oscX: null, oscY: null, gX: null, gY: null,
+  on: false,                                     // the Listen toggle
+  muted: readMutePref(),                         // shared estate-wide pref
+};
+function readMutePref(){ try{ return localStorage.getItem('ws:pref:muted') === '1'; }catch(e){ return false; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v ? '1' : '0'); }catch(e){} }
+
+// Build the graph lazily, only inside a user gesture (autoplay-safe).
+function ensureAudio(){
+  if(AudioEngine.ctx) return AudioEngine.ctx;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if(!AC) return null;
+  const ctx = new AC();
+  const comp = ctx.createDynamicsCompressor();   // a gentle safety net
+  comp.threshold.value = -10; comp.knee.value = 12; comp.ratio.value = 4;
+  comp.attack.value = 0.003; comp.release.value = 0.25;
+  const master = ctx.createGain();
+  master.gain.value = 0;                          // silent until enabled (ramped)
+  const g = masterGainFor(2, PER_VOICE_AMP, 0.9); // headroom-safe ceiling (self-tested)
+  const mk = (type) => {
+    const osc = ctx.createOscillator(); osc.type = type;
+    const gn = ctx.createGain(); gn.gain.value = PER_VOICE_AMP * g;
+    osc.connect(gn); gn.connect(master); osc.start();
+    return { osc, gn };
+  };
+  const vx = mk('triangle'), vy = mk('sine');     // x warm, y pure
+  master.connect(comp); comp.connect(ctx.destination);
+  AudioEngine.ctx = ctx; AudioEngine.comp = comp; AudioEngine.master = master;
+  AudioEngine.oscX = vx.osc; AudioEngine.gX = vx.gn;
+  AudioEngine.oscY = vy.osc; AudioEngine.gY = vy.gn;
+  return ctx;
+}
+
+// Read the live config → set/ramp the two voice frequencies + the readout label.
+function retuneAudio(){
+  const read = document.getElementById('intervalRead');
+  const cfg = state.config; if(!cfg) return;
+  const fx = cfg.x[0].f, fy = cfg.y[0].f;
+  const { p, q } = intervalFromRatio(fx, fy);
+  const name = INTERVAL_NAMES[p + ':' + q] || '';
+  const sounding = AudioEngine.on && !AudioEngine.muted;
+  if(read){
+    if(AudioEngine.muted) read.innerHTML = '— muted —';
+    else if(!AudioEngine.on) read.innerHTML = '— silent —';
+    else read.innerHTML = '<b>' + p + ':' + q + '</b>' + (name ? ' · ' + name : '');
+  }
+  if(!AudioEngine.ctx || !sounding) return;
+  const { fxHz, fyHz } = voiceFreqs(fx, fy, AUDIO_BASE_HZ);
+  const now = AudioEngine.ctx.currentTime;
+  // glide to the new pitches so changing a preset slurs between intervals
+  AudioEngine.oscX.frequency.cancelScheduledValues(now);
+  AudioEngine.oscY.frequency.cancelScheduledValues(now);
+  AudioEngine.oscX.frequency.setTargetAtTime(fxHz, now, 0.05);
+  AudioEngine.oscY.frequency.setTargetAtTime(fyHz, now, 0.05);
+}
+
+// Fade the master up (enable) or down (disable / mute) smoothly.
+function setAudioGain(target){
+  if(!AudioEngine.ctx) return;
+  const g = AudioEngine.master.gain, now = AudioEngine.ctx.currentTime;
+  g.cancelScheduledValues(now);
+  g.setValueAtTime(g.value, now);
+  g.linearRampToValueAtTime(target, now + 0.18);
+}
+
+function syncListenBtn(){
+  const btn = document.getElementById('listenBtn');
+  const sounding = AudioEngine.on && !AudioEngine.muted;
+  btn.classList.toggle('on', sounding);
+  btn.textContent = AudioEngine.muted ? '🔇 Muted' : (AudioEngine.on ? 'Listening' : '♪ Listen');
+  btn.title = AudioEngine.muted
+    ? 'Audio is muted estate-wide — click to unmute and hear the interval'
+    : (AudioEngine.on ? 'Stop the tone' : "Hear the figure's ratio as a musical interval");
+  retuneAudio();
+}
+
+function toggleListen(){
+  if(AudioEngine.muted){
+    // a muted user pressing Listen means "unmute & play"
+    AudioEngine.muted = false; writeMutePref(false);
+    AudioEngine.on = true;
+  } else {
+    AudioEngine.on = !AudioEngine.on;
+  }
+  if(AudioEngine.on){
+    const ctx = ensureAudio();
+    if(ctx && ctx.state === 'suspended') ctx.resume();
+    retuneAudio();
+    setAudioGain(1);
+  } else {
+    setAudioGain(0);
+  }
+  syncListenBtn();
+}
+document.getElementById('listenBtn').addEventListener('click', toggleListen);
+// honor another tab/page toggling the shared mute pref while we're open
+window.addEventListener('storage', (e) => {
+  if(e.key !== 'ws:pref:muted') return;
+  AudioEngine.muted = readMutePref();
+  if(AudioEngine.muted) setAudioGain(0); else if(AudioEngine.on) setAudioGain(1);
+  syncListenBtn();
+});
 
 const speedSlider = document.getElementById('speedSlider'), speedVal = document.getElementById('speedVal');
 function setSpeedFill(){ speedSlider.style.setProperty('--fill', ((speedSlider.value - speedSlider.min) / (speedSlider.max - speedSlider.min) * 100) + '%'); }
@@ -807,6 +1032,8 @@ function init(){
   state.config = PRESETS['Fifth 2:3']();   // a lovely opening figure
   syncPendControls();
   syncPlay();
+  AudioEngine.muted = readMutePref();       // pick up the estate-wide mute pref
+  syncListenBtn();                          // initial Listen label + interval readout
   resize();                                 // sizes canvases + initial redraw
   if(reduceMotion) flashHud('Reduced motion: drawing paused — press <b>▶ Play</b> to watch the pen trace.', 5200);
   else flashHud('Watch the pen trace · <b>Again</b> to redraw · <b>Surprise me</b> for a fresh figure', 3800);
