@@ -2,9 +2,52 @@
 
 *The estate's physics laboratory, quarried into the hillside and kept underground "for safety."
 A front-door **wing** (the grand "Physics Lab" seed begun). Two drifts off a central shaft — a warm
-Newtonian one and a cold Einsteinian one — and now a third, the **Quantum Drift** (five benches deep),
+Newtonian one and a cold Einsteinian one — and now a third, the **Quantum Drift** (six benches deep),
 which opens once a visitor has walked both. Every bench is one self-contained vanilla HTML file that
 proves its own physics exact.*
+
+---
+
+## 2026-06-13 — the Quantum Drift goes from one atom to a CRYSTAL (The Lattice ships · 6th Q-bench, 9th overall)
+
+**`cavern/lattice/index.html` — The Lattice ⛓️** (Quantum drift). The bound-state trilogy answered "one
+trapped particle"; this bench takes the next, bigger step — **line the wells up in a row, repeated
+forever** (the Kronig–Penney model of an electron in a crystal) — and watches the atom's sharp levels
+**smear into bands** separated by **forbidden gaps**. This is where band structure (and therefore the
+entire metal / semiconductor / insulator distinction) is *born*. One vanilla HTML file (~640 lines),
+ħ=m=1; displayed eV are a fixed labelling.
+
+- **The headline physics:** a periodic δ-comb `V(x) = U·Σδ(x−n·a)` (period `a`, dimensionless strength
+  `P = U·a`) gives the **dispersion relation** `cos(qa) = cos(ka) + P·sin(ka)/(ka) ≡ f(E)`, `k=√(2E)`.
+  Because `cos(qa) ∈ [−1,1]`, an energy is **ALLOWED** only where `|f(E)| ≤ 1` — those intervals are the
+  **bands**; everywhere else `|f| > 1` is a **forbidden gap**, an energy no electron in the crystal may
+  have. Band **edges** are exactly `f = ±1`, i.e. `qa = nπ` (zone centre / zone boundary).
+- **The two limits — the soul of the bench:** crank `P → ∞` (atoms held far apart) and every band
+  **narrows onto an isolated atomic level** `Eₙ = n²π²/(2a²)` (the crystal becomes a row of separate
+  wells — the bridge back to the Finite Well next door); drop `P → 0` (the free electron) and the **gaps
+  slam shut** to a continuous `E = q²/2`. The punchline the prose draws out: fill the bands with
+  electrons and a **half-filled band conducts (metal)**, a band **filled exactly to a gap insulates**,
+  a thin gap is a **semiconductor** — *why matter is the way it is.*
+- **Two views:** the **dispersion** `f(E)` graph (the violet curve threading the green `|f|≤1` corridor,
+  amber gap strips between bands) and the **band diagram** `E(q)` over the reduced zone `q: 0 → π/a`
+  (the textbook plot — band curves climbing, forbidden gaps as amber bands). Plus band chips (one per
+  band, the count is the headline), `P` and `a` sliders, and a periodic-potential overlay sketch.
+- **The spine = two INDEPENDENT cross-checks** (Cavern house discipline — closed form vs a different
+  algebra): (1) the **transfer matrix** `M = F·D` over one cell (free drift `F` × δ-kick `D`) gives
+  `½·tr M(E) == f(E)` to **4.4e-16** over 4000 energies, with `det M = 1` (symplectic) to **8.9e-16** —
+  a 2×2 matrix product landing on the same dispersion; (2) a **from-scratch eigensolve of a finite ring
+  of N cells** (deflated inverse-power iteration on a cyclic-tridiagonal Sherman–Morrison solve) puts
+  **exactly N states in each band** — the one-state-per-atom counting law behind metals vs insulators.
+- **Self-test 8/8** (headless-Node against the *actual embedded `runSelfTest()`* + live in-browser,
+  served origin :8743, clean console, both views + mobile screenshots reviewed): dispersion == ½·tr M &
+  det M = 1 · band edges land on `|f|=1` (max 8.5e-14) · gaps are truly forbidden `|f|>1` · free limit
+  shrinks the gap to ~0 · **atomic limit narrows band 1 onto `π²/(2a²)` (rel 0.00%)** · **a ring of N=8
+  atoms holds exactly 8 states per band (independent eigensolve)** · `E(q)` spans the band, `f(E)=cos(qa)`
+  round-trips (1.1e-9) · deterministic.
+- **Integration:** 6th Quantum-drift card in `cavern/index.html` (⛓️) + 2 symmetric self-test checks →
+  Cavern landing **23/23 → 25/25** (verified live in BOTH locked and unlocked states). Drops
+  `ws:seen:lattice` (bench-internal breadcrumb, not a front-door PLACES id; `forge --audit-seen` still
+  13/13). `forge --check --all` clean (29 files).
 
 ---
 
