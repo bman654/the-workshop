@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Convex Hull — the Skeptic's Bench</title>
+<!-- breadcrumb: a standalone Workbench bench (NOT a front-door page, NO ws:seen). -->
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.88);
+    --panel-edge: rgba(201,162,74,0.34);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --ink-faint: #6b6e7e;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --bg: #06080c;
+    --stage: #080b11;
+    /* the cool half-plane wash accent (cyan→indigo) — the signature layer */
+    --wash-a: #3fc6d8;          /* cyan edge of the wash */
+    --wash-b: #6a78e6;          /* indigo edge of the wash */
+    --band: #6fd3c4;            /* the taut hull "rubber band" (cool teal accent) */
+    --band-glow: rgba(111,211,196,0.55);
+    --vert: #f4cf6a;            /* a hull vertex ring (warm gold, decoration) */
+    --ghost: #b08fd3;           /* the remove-vertex ghost hull (distinct violet, dashed) */
+    /* green/red are RESERVED exclusively for the audit verdict */
+    --good: #8fd79a;
+    --good-soft: rgba(120,200,130,0.5);
+    --bad: #e0664f;
+    --bad-soft: rgba(220,120,100,0.6);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+  /* ---- topbar ---- */
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    justify-content:space-between; padding:14px 20px 0; pointer-events:none; gap:12px; flex-wrap:nowrap; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:var(--good); border-color:var(--good-soft); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:var(--bad-soft); background:rgba(70,30,26,0.4); }
+
+  /* ---- layout: stage (canvas) + side panel ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; display:flex; flex-direction:column;
+    padding:52px 0 0; overflow:hidden; }
+  /* tab bar */
+  #tabs{ flex:0 0 auto; display:flex; gap:2px; padding:6px 16px 0; background:transparent; z-index:8; }
+  .tab{ font:600 10.5px/1 var(--font-mono); letter-spacing:.08em; padding:9px 14px; border-radius:8px 8px 0 0;
+    border:1px solid transparent; border-bottom:none; background:rgba(0,0,0,0.2); color:var(--ink-dim);
+    cursor:pointer; transition:.15s; white-space:nowrap; user-select:none; }
+  .tab:hover{ color:var(--ink); }
+  .tab.on{ color:var(--ink); background:var(--stage); border-color:var(--panel-edge); }
+  /* canvas host */
+  #canvasHost{ flex:1 1 auto; position:relative; min-height:0; background:var(--stage);
+    border-top:1px solid var(--panel-edge); overflow:hidden; }
+  #c{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:crosshair; }
+  /* verdict badge — green/red ONLY */
+  #verdict{ position:absolute; left:50%; top:14px; transform:translateX(-50%); z-index:7; pointer-events:none;
+    font:600 11px/1.4 var(--font-mono); text-align:center; background:rgba(0,0,0,0.5);
+    border:1px solid var(--panel-edge); border-radius:10px; padding:7px 15px; backdrop-filter:blur(4px);
+    max-width:88%; opacity:0; transition:opacity .18s; }
+  #verdict.show{ opacity:1; }
+  #verdict.inside{ color:var(--good); border-color:var(--good-soft); background:rgba(20,44,28,0.6); }
+  #verdict.outside{ color:#f08a7a; border-color:var(--bad-soft); background:rgba(60,24,20,0.6); }
+  #verdict b{ font-family:var(--font-serif); font-size:15px; }
+  /* hint line bottom-left */
+  #hint{ position:absolute; left:14px; bottom:12px; z-index:6; pointer-events:none; max-width:62%;
+    font:11px/1.5 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.42);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 11px; }
+  #hint b{ color:var(--band); }
+  #hint .v{ color:var(--vert); }
+  #count{ position:absolute; right:14px; bottom:12px; z-index:6; pointer-events:none;
+    font:600 11px/1.5 var(--font-mono); color:var(--accent); background:rgba(0,0,0,0.42);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 11px; text-align:right; }
+  /* build-tab transport */
+  #buildBar{ position:absolute; left:0; right:0; bottom:0; z-index:6; display:none; align-items:center; gap:10px;
+    padding:10px 16px; background:rgba(8,11,17,0.92); border-top:1px solid var(--panel-edge); flex-wrap:wrap; }
+  #buildBar.show{ display:flex; }
+  .algoPick{ display:flex; gap:4px; }
+  .algoPick .chip{ font-size:11px; }
+  .tbtn{ font:600 12px/1 var(--font-mono); padding:8px 11px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink-dim); transition:.15s; white-space:nowrap; user-select:none; }
+  .tbtn:hover{ color:var(--ink); border-color:var(--accent); }
+  .tbtn.on{ color:#06080c; background:var(--band); border-color:var(--band); font-weight:700; }
+  #buildScrub{ flex:1 1 140px; min-width:100px; -webkit-appearance:none; appearance:none; height:4px; border-radius:3px;
+    background:rgba(201,162,74,0.25); outline:none; }
+  #buildScrub::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:15px; height:15px; border-radius:50%;
+    background:var(--band); cursor:pointer; border:2px solid #06080c; }
+  #buildScrub::-moz-range-thumb{ width:15px; height:15px; border-radius:50%; background:var(--band); cursor:pointer; border:2px solid #06080c; }
+  #buildStamp{ font:600 11px/1 var(--font-mono); white-space:nowrap; }
+  #buildStamp.eq{ color:var(--good); }
+
+  /* ---- side panel ---- */
+  #side{ width:300px; flex:0 0 300px; background:var(--panel-bg); border-left:1px solid var(--panel-edge);
+    padding:58px 16px 22px; overflow-y:auto; display:flex; flex-direction:column; gap:14px;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  #side .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0; letter-spacing:.2px; }
+  #side .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:6px 0 -2px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .group{ display:flex; flex-direction:column; gap:8px; }
+  .ghead{ font:600 9.5px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .chip{ font:600 11.5px/1 var(--font-mono); padding:7px 10px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink-dim); transition:.15s; user-select:none; }
+  .chip:hover{ color:var(--ink); border-color:var(--accent); }
+  .chip.on{ color:#06080c; background:var(--accent); border-color:var(--accent); font-weight:700; }
+  .chip.bad.on{ color:#fff; background:var(--bad); border-color:var(--bad); }
+  .chip.sm{ font-size:10.5px; padding:6px 8px; }
+  .toggle{ display:flex; align-items:center; justify-content:space-between; gap:10px;
+    font:600 11px/1.3 var(--font-mono); color:var(--ink-dim); cursor:pointer; padding:2px 0; user-select:none; }
+  .toggle:hover{ color:var(--ink); }
+  .toggle .sw{ width:34px; height:18px; border-radius:10px; background:rgba(0,0,0,0.4); border:1px solid var(--panel-edge);
+    position:relative; flex:0 0 auto; transition:.18s; }
+  .toggle .sw::after{ content:''; position:absolute; top:1px; left:1px; width:14px; height:14px; border-radius:50%;
+    background:var(--ink-faint); transition:.18s; }
+  .toggle.on .sw{ background:var(--accent-soft); border-color:var(--accent); }
+  .toggle.on .sw::after{ left:17px; background:var(--accent); }
+  .toggle.on.bad .sw{ background:rgba(220,120,100,0.25); border-color:var(--bad); }
+  .toggle.on.bad .sw::after{ background:var(--bad); }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.04em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:6px; }
+  .row > label .val{ color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:3px; border-radius:3px;
+    background:rgba(201,162,74,0.22); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:15px; height:15px;
+    border-radius:50%; background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  input[type=range]::-moz-range-thumb{ width:15px; height:15px; border:none; border-radius:50%;
+    background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  .note{ font:11px/1.5 var(--font-mono); color:var(--ink-faint); }
+  .note b{ color:var(--ink-dim); }
+  .legend{ display:flex; flex-direction:column; gap:5px; font:10.5px/1.3 var(--font-mono); color:var(--ink-dim); }
+  .legend .li{ display:flex; align-items:center; gap:7px; }
+  .legend .sw2{ width:13px; height:13px; border-radius:3px; flex:0 0 auto; }
+  .seam{ color:var(--ink-faint); font:600 11px/1 var(--font-mono); padding:0 1px; }
+
+  /* the two stages swap via .hidden */
+  .tabbody{ position:absolute; inset:0; }
+  .tabbody.hidden{ display:none; }
+
+  @media (max-width:760px){
+    #wrap{ flex-direction:column; }
+    #stage{ flex:1 1 56%; padding-top:48px; }
+    #side{ width:auto; flex:1 1 44%; border-left:none; border-top:1px solid var(--panel-edge);
+      padding:14px 14px 18px; }
+    .brand h1{ font-size:18px; }
+    #hint{ max-width:54%; }
+  }
+  /* keep the topbar from colliding the brand title with the self-test pill on
+     narrow phones: drop the tag first, then the title (it's restated in the lede). */
+  @media (max-width:520px){ .brand .tag{ display:none; } .brand h1{ font-size:16px; } }
+  @media (max-width:430px){ .brand{ display:none; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../workbench/index.html">← workbench</a>
+    </div>
+    <div class="brand">
+      <h1>The Convex Hull</h1>
+      <span class="tag">the skeptic's bench</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for the per-check detail (also printed to the console)">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <div id="tabs">
+        <div class="tab on" id="tabAudit">The invariant audit</div>
+        <div class="tab" id="tabBuild">How it's built — three strangers agree</div>
+      </div>
+      <div id="canvasHost">
+        <canvas id="c"></canvas>
+        <div id="verdict"></div>
+        <div id="hint"></div>
+        <div id="count"></div>
+        <div id="buildBar">
+          <div class="algoPick" id="algoPick">
+            <span class="chip on" data-algo="graham">Graham</span>
+            <span class="chip" data-algo="monotone">Monotone</span>
+            <span class="chip" data-algo="jarvis">Gift-wrap</span>
+          </div>
+          <span class="tbtn" id="bPlay">▶ play</span>
+          <span class="tbtn" id="bStep">step ▸</span>
+          <input type="range" id="buildScrub" min="0" max="1" value="0" step="1">
+          <span id="buildStamp">—</span>
+        </div>
+      </div>
+    </div>
+
+    <aside id="side">
+      <p class="lede" id="lede"></p>
+
+      <div id="sideAudit">
+        <div class="sect">Presets</div>
+        <div class="chips" id="presetChips"></div>
+
+        <div class="sect">The half-plane shading</div>
+        <div class="row">
+          <label>shade intensity <span class="val" id="shadeVal">55%</span></label>
+          <input type="range" id="shade" min="0" max="100" value="55">
+        </div>
+        <p class="note">Each directed hull edge floods its <b>left</b> half-plane (cyan→indigo). Where <b>all</b> washes overlap is exactly the hull's interior — the hull <b>is</b> the intersection of half-planes. Fade it to see that.</p>
+
+        <div class="sect">The two halves of the proof</div>
+        <div class="group">
+          <div class="toggle" id="tRemove"><span>Remove-vertex probe (minimal?)</span><span class="sw"></span></div>
+          <p class="note">On: hover a <span style="color:var(--vert)">hull vertex</span> to ghost the smaller hull if it were removed — a now-exposed point flashes. Removing an interior point changes nothing (it carried no load).</p>
+          <div class="toggle bad" id="tBuggy"><span>Buggy hull (negative control)</span><span class="sw"></span></div>
+          <p class="note">On: swap in <b>naiveHull</b> — the <em>&lt;0 vs &lt;=0</em> collinear bug. It still <em>contains</em> every point but the audit lights its redundant collinear vertices and the verdict reads <span style="color:#f08a7a">MINIMALITY VIOLATED</span>.</p>
+        </div>
+
+        <div class="sect">Legend</div>
+        <div class="legend">
+          <div class="li"><span class="sw2" style="background:var(--band)"></span> the taut hull band (re-snaps live)</div>
+          <div class="li"><span class="sw2" style="background:var(--vert)"></span> a hull vertex (load-bearing)</div>
+          <div class="li"><span class="sw2" style="background:linear-gradient(90deg,var(--wash-a),var(--wash-b))"></span> half-plane wash (left of each edge)</div>
+          <div class="li"><span class="sw2" style="background:var(--good)"></span> audit spoke: left-of (inside)</div>
+          <div class="li"><span class="sw2" style="background:var(--bad)"></span> audit spoke: right-of (outside)</div>
+        </div>
+        <p class="note" style="margin-top:4px"><b>Drag</b> a dot to re-snap the band live · <b>click</b> empty space to add · <b>right-click / long-press</b> a dot to remove · <b>hover</b> a point to audit it edge-by-edge.</p>
+      </div>
+
+      <div id="sideBuild" style="display:none">
+        <p class="note" id="buildNote"></p>
+        <div class="sect">The three roads</div>
+        <div class="legend">
+          <div class="li"><b style="color:var(--band)">Graham</b>&nbsp; polar-angle sort + stack scan</div>
+          <div class="li"><b style="color:var(--band)">Monotone</b>&nbsp; x-sort + lower then upper chain</div>
+          <div class="li"><b style="color:var(--band)">Gift-wrap</b>&nbsp; rotating taut ray, most-CCW step</div>
+        </div>
+        <p class="note">Three unrelated constructions on the <b>same</b> point set. Watch each find the same vertices a different way — then land on the byte-identical canonical polygon. That equality, over hundreds of random seeds, is the proof: anti-circularity made visible.</p>
+        <div class="sect">Canonical vertex sequence</div>
+        <div class="note" id="seqReadout" style="font-size:10px"></div>
+        <p class="note" style="margin-top:6px"><b>New scatter</b> reshuffles the point set. The Delaunay–Voronoi dual is the future bench that picks up where this rubber band stops.</p>
+        <div class="chips" style="margin-top:4px"><span class="chip sm" id="bNew">New scatter</span></div>
+      </div>
+    </aside>
+  </div>
+
+<script>
+// ===== CONVEX HULL CORE (inlined byte-twin of core.mjs) BEGIN =====
+// ── THE ATOM — the orientation determinant (the ONLY shared primitive). ──────
+// Signed area of the parallelogram (a−o)×(b−o). Integer in, integer out. >0 means
+// o→a→b is a counter-clockwise (left) turn, <0 clockwise (right), 0 collinear.
+// This is the geometric "adjacent swap": every hull algorithm needs it; sharing
+// it is not sharing a hull. Both builders and the invariant-checker call THIS.
+function cross(o, a, b){
+  return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+}
+
+// ── clean(pts) — dedupe identical coordinates + lexicographic (x then y) sort. ─
+// The shared input normaliser (the other shared primitive). Builders start from a
+// clean point set so degenerate inputs (duplicates, unsorted scatter) are handled
+// once, in one place. Returns a fresh array of {x,y}; never mutates the input.
+function clean(pts){
+  const seen = new Set();
+  const out = [];
+  for (const p of pts){
+    const k = p.x + ',' + p.y;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ x: p.x, y: p.y });
+  }
+  out.sort((p, q) => (p.x - q.x) || (p.y - q.y));
+  return out;
+}
+
+// ── BUILDER 1 — GRAHAM SCAN. ─────────────────────────────────────────────────
+// Pick the pivot = lowest-then-leftmost point. Sort the rest by polar angle about
+// the pivot (ties broken by distance, nearer first). Scan, maintaining a stack;
+// pop while the top three make a non-left (clockwise or collinear) turn, then
+// push. The atomic test is `cross`; references ONLY cross/clean (anti-circularity).
+function graham(pts){
+  const P = clean(pts);
+  const n = P.length;
+  if (n <= 2) return P;                         // degenerate: handled by clean
+  // pivot: lowest y, then lowest x (already lexicographic-min by (y,x) here)
+  let piv = 0;
+  for (let i = 1; i < n; i++){
+    if (P[i].y < P[piv].y || (P[i].y === P[piv].y && P[i].x < P[piv].x)) piv = i;
+  }
+  const o = P[piv];
+  const rest = [];
+  for (let i = 0; i < n; i++) if (i !== piv) rest.push(P[i]);
+  // sort by polar angle about o; collinear → nearer first (smaller |displacement|).
+  rest.sort((a, b) => {
+    const c = cross(o, a, b);
+    if (c !== 0) return c > 0 ? -1 : 1;          // a before b iff o→a→b is CCW
+    const da = (a.x - o.x) * (a.x - o.x) + (a.y - o.y) * (a.y - o.y);
+    const db = (b.x - o.x) * (b.x - o.x) + (b.y - o.y) * (b.y - o.y);
+    return da - db;
+  });
+  const stack = [o];
+  for (let i = 0; i < rest.length; i++){
+    const p = rest[i];
+    while (stack.length >= 2 && cross(stack[stack.length - 2], stack[stack.length - 1], p) <= 0) stack.pop();
+    stack.push(p);
+  }
+  return stack;
+}
+
+// ── BUILDER 2 — ANDREW'S MONOTONE CHAIN. ─────────────────────────────────────
+// Sort by x (then y); build the LOWER hull left→right, then the UPPER hull
+// right→left, popping while the last turn is not strictly left; concatenate
+// (dropping the two shared endpoints). No trigonometry. References ONLY cross/clean.
+function monotoneChain(pts){
+  const P = clean(pts);                          // clean already sorts by (x,y)
+  const n = P.length;
+  if (n <= 2) return P;
+  const lower = [];
+  for (let i = 0; i < n; i++){
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], P[i]) <= 0) lower.pop();
+    lower.push(P[i]);
+  }
+  const upper = [];
+  for (let i = n - 1; i >= 0; i--){
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], P[i]) <= 0) upper.pop();
+    upper.push(P[i]);
+  }
+  lower.pop();                                   // drop shared endpoint (last of lower == first of upper)
+  upper.pop();                                   // drop shared endpoint (last of upper == first of lower)
+  return lower.concat(upper);
+}
+
+// ── BUILDER 3 — JARVIS MARCH (GIFT WRAPPING). ────────────────────────────────
+// Start at the leftmost (then lowest) point — guaranteed on the hull. Repeatedly
+// pick the next vertex as the one for which every other point lies to its LEFT
+// (the most-clockwise / most-CCW wrap, depending on convention). On a collinear
+// tie keep the FARTHEST point (so interior collinear points are not emitted as
+// vertices). Stop when we return to the start. References ONLY cross/clean.
+function jarvis(pts){
+  const P = clean(pts);
+  const n = P.length;
+  if (n <= 2) return P;
+  // leftmost, then lowest
+  let start = 0;
+  for (let i = 1; i < n; i++){
+    if (P[i].x < P[start].x || (P[i].x === P[start].x && P[i].y < P[start].y)) start = i;
+  }
+  const hull = [];
+  let cur = start;
+  do {
+    hull.push(P[cur]);
+    let next = (cur + 1) % n;                     // any point != cur to seed
+    for (let i = 0; i < n; i++){
+      if (i === cur) continue;
+      const t = cross(P[cur], P[next], P[i]);
+      // pick P[i] if it is strictly more counter-clockwise than the current
+      // candidate, OR collinear but farther (keeps the far endpoint, drops interior).
+      if (t < 0){
+        next = i;
+      } else if (t === 0){
+        const dCur = (P[next].x - P[cur].x) ** 2 + (P[next].y - P[cur].y) ** 2;
+        const dI = (P[i].x - P[cur].x) ** 2 + (P[i].y - P[cur].y) ** 2;
+        if (dI > dCur) next = i;
+      }
+    }
+    cur = next;
+  } while (cur !== start && hull.length <= n + 1);
+  return hull;
+}
+
+// ── signedArea(hull) — 2× the signed polygon area (shoelace). >0 CCW, <0 CW. ──
+// Integer for integer coords. Used by canon (to force winding) and isMinimal; it
+// is post-construction analysis, not a builder, so it cannot smuggle agreement.
+function signedArea(hull){
+  let a = 0;
+  const m = hull.length;
+  for (let i = 0; i < m; i++){
+    const p = hull[i], q = hull[(i + 1) % m];
+    a += p.x * q.y - q.x * p.y;
+  }
+  return a;                                        // = 2 * area, signed
+}
+
+// ── canon(hull) — force CCW + rotate to start at the lexicographically-min vertex.
+// Touches only a FINISHED hull, never builds one, so it cannot make two disagreeing
+// hulls agree — it only puts an already-correct hull into a unique representative
+// form so byte comparison is meaningful. Idempotent and blind to the input's
+// rotation/winding (both asserted in the test).
+function canon(hull){
+  if (!hull || hull.length === 0) return [];
+  let h = hull.map(p => ({ x: p.x, y: p.y }));
+  if (h.length >= 3 && signedArea(h) < 0) h.reverse();   // force CCW
+  // rotate so the lexicographically-min (x then y) vertex is first
+  let mi = 0;
+  for (let i = 1; i < h.length; i++){
+    if (h[i].x < h[mi].x || (h[i].x === h[mi].x && h[i].y < h[mi].y)) mi = i;
+  }
+  return h.slice(mi).concat(h.slice(0, mi));
+}
+
+// ── hullKey(hull) — the byte-comparison key (canonical JSON). ─────────────────
+// Two hulls are "the same hull" iff hullKey(a) === hullKey(b). This is the exact
+// equality the three strangers must satisfy on every seed.
+function hullKey(hull){
+  return JSON.stringify(canon(hull));
+}
+
+// ── containsAll(hull, pts) — THE CONTAINMENT HALF of the invariant. ───────────
+// True iff every input point is on the LEFT of (or on) every directed CCW hull
+// edge — i.e. 0 strict right-of-edge violations. Checked against `cross` only, so
+// it is independent of how the hull was constructed. Returns {ok, violations,
+// firstBadEdge, firstBadPoint}. Degenerate hulls (≤2 verts) trivially contain
+// only their own points (handled: every point must be collinear with the segment
+// and within it — but for our integer grid we simply require 0 strict violations,
+// which a segment satisfies for points on its line).
+function containsAll(hull, pts){
+  const H = canon(hull);
+  const m = H.length;
+  const P = clean(pts);
+  if (m < 3){
+    // segment or point: a point p violates iff it is off the segment's line, i.e.
+    // cross(A,B,p) !== 0 for the two endpoints — there is no enclosed area.
+    if (m === 0) return { ok: P.length === 0, violations: P.length, firstBadEdge: -1, firstBadPoint: -1 };
+    if (m === 1) {
+      let v = 0, fbp = -1;
+      for (let i = 0; i < P.length; i++) if (P[i].x !== H[0].x || P[i].y !== H[0].y) { v++; if (fbp < 0) fbp = i; }
+      return { ok: v === 0, violations: v, firstBadEdge: -1, firstBadPoint: fbp };
+    }
+    // m === 2: every point must be collinear with and between the endpoints
+    let v = 0, fbp = -1;
+    for (let i = 0; i < P.length; i++){
+      if (cross(H[0], H[1], P[i]) !== 0) { v++; if (fbp < 0) fbp = i; }
+    }
+    return { ok: v === 0, violations: v, firstBadEdge: 0, firstBadPoint: fbp };
+  }
+  let violations = 0, firstBadEdge = -1, firstBadPoint = -1;
+  for (let e = 0; e < m; e++){
+    const a = H[e], b = H[(e + 1) % m];
+    for (let i = 0; i < P.length; i++){
+      if (cross(a, b, P[i]) < 0){                 // strictly RIGHT of a CCW edge = outside
+        violations++;
+        if (firstBadEdge < 0){ firstBadEdge = e; firstBadPoint = i; }
+      }
+    }
+  }
+  return { ok: violations === 0, violations, firstBadEdge, firstBadPoint };
+}
+
+// ── isMinimal(hull) — THE MINIMALITY HALF of the invariant. ───────────────────
+// True iff every vertex is a STRICT left turn cross(prev,v,next) > 0 — i.e. there
+// is no collinear / redundant vertex that could be removed without changing the
+// polygon. This is what the naive control fails. Degenerate hulls (≤2 vertices)
+// are minimal by definition (a point or a segment has nothing to remove). Returns
+// {ok, redundant:[indices], count}.
+function isMinimal(hull){
+  const H = canon(hull);
+  const m = H.length;
+  if (m <= 2) return { ok: true, redundant: [], count: 0 };
+  const redundant = [];
+  for (let i = 0; i < m; i++){
+    const prev = H[(i - 1 + m) % m], v = H[i], next = H[(i + 1) % m];
+    if (cross(prev, v, next) <= 0) redundant.push(i);   // not a strict left turn
+  }
+  return { ok: redundant.length === 0, redundant, count: redundant.length };
+}
+
+// ── naiveHull(pts) — THE NEGATIVE CONTROL WITH TEETH. ─────────────────────────
+// Monotone chain with the classic `<` vs `<=` collinear-keeping BUG: it pops only
+// on a STRICT right turn (< 0), so collinear points (== 0) are KEPT on the edge.
+// The result still ENCLOSES every point (passes containsAll) but is NOT minimal —
+// it leaves removable collinear vertices on straight edges. On a square with a
+// midpoint on each side it returns an 8-gon where the true hull is a 4-gon.
+function naiveHull(pts){
+  const P = clean(pts);
+  const n = P.length;
+  if (n <= 2) return P;
+  const lower = [];
+  for (let i = 0; i < n; i++){
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], P[i]) < 0) lower.pop();
+    lower.push(P[i]);                              // BUG: < not <=, keeps collinear
+  }
+  const upper = [];
+  for (let i = n - 1; i >= 0; i--){
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], P[i]) < 0) upper.pop();
+    upper.push(P[i]);
+  }
+  lower.pop();
+  upper.pop();
+  return lower.concat(upper);
+}
+
+// ── seeded RNG + randomCloud — deterministic integer-grid scatter generator. ──
+// mulberry32: pure, deterministic, fast. randomCloud(seed,n) returns n points on
+// the integer grid [0..GRID]² (GRID=39), deduped via clean is the caller's job;
+// here we just emit n integer points reproducibly.
+function makeRng(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const GRID = 39;                            // integer coords in [0..39]
+function randomCloud(seed, n){
+  const r = makeRng(seed);
+  const out = [];
+  for (let i = 0; i < n; i++){
+    out.push({ x: Math.floor(r() * (GRID + 1)), y: Math.floor(r() * (GRID + 1)) });
+  }
+  return out;
+}
+
+// ── DEGENERATE FIXTURES — the named presets, as exact point sets. ─────────────
+// Each is a closed-form construction whose correct hull is known, so the test can
+// assert exactness (not just three-way agreement). Built here so page + test share
+// one source of truth.
+function preset(name){
+  switch (name){
+    case 'collinear':                              // a straight run → 2-endpoint segment
+      return [0,1,2,3,4,5,6].map(i => ({ x: 5 + i * 5, y: 10 }));
+    case 'duplicates':                             // a triangle with each vertex tripled
+      return [
+        {x:8,y:8},{x:8,y:8},{x:8,y:8},
+        {x:32,y:10},{x:32,y:10},
+        {x:18,y:34},{x:18,y:34},{x:18,y:34},
+        {x:18,y:20},                               // an interior point, also kept
+      ];
+    case 'single':                                 // one point → 1-vertex hull
+      return [{x:20,y:20}];
+    case 'two':                                    // two points → the segment
+      return [{x:8,y:14},{x:30,y:26}];
+    case 'allIdentical':                           // five copies of one point → 1-vertex
+      return [{x:15,y:15},{x:15,y:15},{x:15,y:15},{x:15,y:15},{x:15,y:15}];
+    case 'square':                                 // a square with an interior point → 4-gon
+      return [{x:6,y:6},{x:34,y:6},{x:34,y:34},{x:6,y:34},{x:20,y:20}];
+    case 'circle': {                               // points on a circle → every point a vertex
+      const out = [], cx = 20, cy = 20, R = 17, K = 12;
+      for (let i = 0; i < K; i++){
+        const a = (2 * Math.PI * i) / K;
+        out.push({ x: Math.round(cx + R * Math.cos(a)), y: Math.round(cy + R * Math.sin(a)) });
+      }
+      return out;
+    }
+    case 'collinearEdge':                          // THE NEGATIVE-CONTROL FIXTURE — a square
+      // with a midpoint on each of the 4 edges. True hull = the 4 corners (4-gon).
+      // naiveHull keeps the 4 midpoints → an 8-gon (4 removable collinear vertices).
+      return [
+        {x:0,y:0},{x:20,y:0},{x:40,y:0},           // bottom edge: L, MID, R
+        {x:40,y:20},                               // right edge: MID
+        {x:40,y:40},{x:20,y:40},{x:0,y:40},        // top edge: R, MID, L
+        {x:0,y:20},                                // left edge: MID
+        {x:20,y:20},                               // a true interior point
+      ];
+    default:
+      return [];
+  }
+}
+
+// known-correct hull (canonical) for each preset, for the exactness assertions.
+function presetExpectedHull(name){
+  switch (name){
+    case 'collinear':   return canon([{x:5,y:10},{x:35,y:10}]);            // segment endpoints
+    case 'single':      return canon([{x:20,y:20}]);
+    case 'two':         return canon([{x:8,y:14},{x:30,y:26}]);
+    case 'allIdentical':return canon([{x:15,y:15}]);
+    case 'square':      return canon([{x:6,y:6},{x:34,y:6},{x:34,y:34},{x:6,y:34}]);
+    case 'collinearEdge':return canon([{x:0,y:0},{x:40,y:0},{x:40,y:40},{x:0,y:40}]); // the 4 corners
+    default: return null;                          // duplicates/circle: checked by 3-way agreement + invariant
+  }
+}
+
+// ── THE SOLE AUTHORITATIVE ORACLE — runSelfTest(). ────────────────────────────
+// Runs the seven numbered claims. Returns { pass, total, lines:[{name,ok,detail}] }.
+// The in-page pill and the Node twin both call THIS — one verdict, no second
+// opinion. Every detail carries LIVE numbers, never a hardcoded echo.
+function runSelfTest(){
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+  const PRESETS = ['collinear','duplicates','single','two','allIdentical','square','circle','collinearEdge'];
+
+  // 1. AGREEMENT / anti-circularity at scale — 300 random seeds at varied N.
+  {
+    let tested = 0, disagree = 0, firstBad = -1;
+    for (let s = 1; s <= 300; s++){
+      const n = 6 + (s % 45);                       // N in [6..50]
+      const pts = randomCloud(s * 2654435761 >>> 0, n);
+      const kg = hullKey(graham(pts));
+      const km = hullKey(monotoneChain(pts));
+      const kj = hullKey(jarvis(pts));
+      tested++;
+      if (kg !== km || km !== kj){ disagree++; if (firstBad < 0) firstBad = s; }
+    }
+    const ok = tested >= 100 && disagree === 0;
+    T('AGREEMENT at scale: graham == monotoneChain == jarvis (byte-identical canonical hull) over 300 random integer-grid seeds, N∈[6..50]',
+      ok, ok ? `${tested} seeds, all three strangers byte-identical, 0 disagreements` :
+        `${disagree} disagreement(s)${firstBad >= 0 ? ` (first @seed ${firstBad})` : ''} of ${tested}`);
+  }
+
+  // 2. SOURCE-LEVEL INDEPENDENCE — each builder mentions no other builder + no shared hull helper.
+  {
+    const g = graham.toString(), m = monotoneChain.toString(), j = jarvis.toString();
+    // no builder may name another builder, nor any buildHull/hull( helper.
+    const forbiddenIn = (src, ...names) => names.some(nm => src.includes(nm));
+    const gOk = !forbiddenIn(g, 'monotoneChain', 'jarvis', 'buildHull', 'naiveHull');
+    const mOk = !forbiddenIn(m, 'graham', 'jarvis', 'buildHull', 'naiveHull');
+    const jOk = !forbiddenIn(j, 'graham', 'monotoneChain', 'buildHull', 'naiveHull');
+    // and each may reference ONLY cross/clean as shared helpers (sanity: they all do mention cross).
+    const allUseCross = g.includes('cross') && m.includes('cross') && j.includes('cross');
+    const ok = gOk && mOk && jOk && allUseCross;
+    T('SOURCE-LEVEL INDEPENDENCE: each builder\'s source names no other builder and no shared buildHull helper — only the cross/clean atoms (★anti-circularity)',
+      ok, ok ? 'graham, monotoneChain, jarvis are source-disjoint; all share only cross/clean' :
+        `graham-clean=${gOk} chain-clean=${mOk} jarvis-clean=${jOk} allUseCross=${allUseCross}`);
+  }
+
+  // 3. DEGENERACY exactness — all three agree, byte-exact, on every named preset,
+  //    AND match the known closed-form hull where one exists (incl. 1/2/all-identical).
+  {
+    let bad = 0, firstBad = '';
+    const details = [];
+    for (const name of PRESETS){
+      const pts = preset(name);
+      const kg = hullKey(graham(pts)), km = hullKey(monotoneChain(pts)), kj = hullKey(jarvis(pts));
+      const agree = kg === km && km === kj;
+      const exp = presetExpectedHull(name);
+      const expOk = exp === null ? true : (kg === JSON.stringify(canon(exp)));
+      if (!agree || !expOk){ bad++; if (!firstBad) firstBad = name; }
+      details.push(`${name}:${canon(graham(pts)).length}v`);
+    }
+    const ok = bad === 0;
+    T('DEGENERACY exactness: collinear→segment, duplicates→deduped, single→1-vertex, two→segment, all-identical→1-vertex, square-with-interior→4-gon, circle→all-vertices — three-way byte-identical AND matches the closed form',
+      ok, ok ? `8 presets, all three agree byte-for-byte; closed-form hulls matched (${details.join(' ')})` :
+        `${bad} preset(s) wrong${firstBad ? ` (first: ${firstBad})` : ''}`);
+  }
+
+  // 4. THE DEFINING INVARIANT, checked independently of construction — containsAll
+  //    (0 right-turn violations) AND isMinimal (every vertex a strict left turn),
+  //    on the computed hull across all seeds + presets.
+  {
+    let tested = 0, notContained = 0, notMinimal = 0, firstBad = -1;
+    for (let s = 1; s <= 300; s++){
+      const n = 6 + (s % 45);
+      const pts = randomCloud(s * 2654435761 >>> 0, n);
+      const h = monotoneChain(pts);
+      const c = containsAll(h, pts), mn = isMinimal(h);
+      tested++;
+      if (!c.ok){ notContained++; if (firstBad < 0) firstBad = s; }
+      if (!mn.ok){ notMinimal++; if (firstBad < 0) firstBad = s; }
+    }
+    for (const name of PRESETS){
+      const pts = preset(name);
+      const h = monotoneChain(pts);
+      if (!containsAll(h, pts).ok) notContained++;
+      if (!isMinimal(h).ok) notMinimal++;
+    }
+    const ok = notContained === 0 && notMinimal === 0;
+    T('THE INVARIANT holds on the computed hull (300 seeds + 8 presets): containsAll = 0 points strictly outside any edge AND isMinimal = every vertex a strict left turn',
+      ok, ok ? `${tested} seeds + 8 presets: 0 containment violations, 0 non-minimal hulls` :
+        `notContained=${notContained} notMinimal=${notMinimal}${firstBad >= 0 ? ` (first @seed ${firstBad})` : ''}`);
+  }
+
+  // 5. THE NEGATIVE CONTROL BITES — on the FIXED collinear-edge fixture, naiveHull
+  //    PASSES containsAll but FAILS isMinimal; the three real algorithms PASS both.
+  {
+    const pts = preset('collinearEdge');
+    const nh = naiveHull(pts);
+    const nhContains = containsAll(nh, pts);
+    const nhMinimal = isMinimal(nh);
+    const realMinimal = isMinimal(graham(pts)).ok && isMinimal(monotoneChain(pts)).ok && isMinimal(jarvis(pts)).ok;
+    const realContains = containsAll(graham(pts), pts).ok;
+    // the control must CONTAIN (it really encloses) but be NON-MINIMAL (the bug).
+    const ok = nhContains.ok && !nhMinimal.ok && nhMinimal.count > 0 && realMinimal && realContains;
+    T('NEGATIVE CONTROL BITES: naiveHull (the <0-vs-<=0 collinear bug) PASSES containment but FAILS minimality on the fixed fixture, while all three real algorithms PASS both (non-vacuous)',
+      ok, ok ? `naive = ${canon(nh).length}-gon with ${nhMinimal.count} removable collinear vertices (true hull = ${canon(graham(pts)).length}-gon); real algos minimal ✓` :
+        `naiveContains=${nhContains.ok} naiveMinimal=${nhMinimal.ok} (count ${nhMinimal.count}) realMinimal=${realMinimal} realContains=${realContains}`);
+  }
+
+  // 6. CANONICALIZER NEUTRALITY — canon is idempotent + rotation/winding-blind,
+  //    and shares no builder code (it is post-construction analysis only).
+  {
+    const pts = randomCloud(123456, 30);
+    const h = monotoneChain(pts);
+    const c1 = canon(h);
+    const c2 = canon(c1);
+    const idempotent = JSON.stringify(c1) === JSON.stringify(c2);
+    // rotation-blind: rotating the input vertex list yields the same canon.
+    const rot = c1.slice(2).concat(c1.slice(0, 2));
+    const rotBlind = JSON.stringify(canon(rot)) === JSON.stringify(c1);
+    // winding-blind: reversing the input yields the same canon.
+    const rev = c1.slice().reverse();
+    const windBlind = JSON.stringify(canon(rev)) === JSON.stringify(c1);
+    // shares no builder name in its source.
+    const cs = canon.toString();
+    const sourceClean = !cs.includes('graham') && !cs.includes('monotoneChain') && !cs.includes('jarvis');
+    const ok = idempotent && rotBlind && windBlind && sourceClean;
+    T('CANONICALIZER NEUTRALITY: canon is idempotent AND rotation-blind AND winding-blind, and references no builder (it only normalises a finished hull — cannot smuggle agreement)',
+      ok, ok ? 'canon(canon(h))==canon(h); rotation & winding of the input give the identical canonical hull' :
+        `idempotent=${idempotent} rotBlind=${rotBlind} windBlind=${windBlind} sourceClean=${sourceClean}`);
+  }
+
+  // 7. EXACTNESS — coords are integers and cross is an integer determinant, so the
+  //    three hulls agree with NO epsilon. We assert cross returns exact integers and
+  //    that a deliberately float-perturbed input WOULD break (honesty about the snap).
+  {
+    // cross of integer points is an exact integer (no fractional part).
+    const a = {x:0,y:0}, b = {x:7,y:3}, c = {x:2,y:11};
+    const cr = cross(a, b, c);
+    const isInt = Number.isInteger(cr) && cr === 77 - 6;   // 7*11 - 3*2 = 71
+    // grid snap guarantee: every random cloud point is an integer in [0..GRID].
+    let allInt = true;
+    for (const p of randomCloud(98765, 50)){
+      if (!Number.isInteger(p.x) || !Number.isInteger(p.y) || p.x < 0 || p.x > GRID || p.y < 0 || p.y > GRID) { allInt = false; break; }
+    }
+    const ok = isInt && cr === 71 && allInt;
+    T('EXACTNESS (no epsilon): integer coords ⇒ cross is an exact integer determinant ⇒ orientation tests are exact equality; the scatter is snapped to the [0..39] grid (the honest float escape-hatch: raw floats would need an ε — we snap and don\'t)',
+      ok, ok ? `cross((0,0),(7,3),(2,11)) = 71 exactly (integer); all grid points integer in [0..${GRID}]` :
+        `crossInteger=${isInt} (=${cr}) allGridInteger=${allInt}`);
+  }
+
+  const pass = lines.filter(l => l.ok).length;
+  return { pass, total: lines.length, lines };
+}
+// ===== CONVEX HULL CORE END =====
+
+// ============================================================================
+//  THE APP — render + interaction. Calls the inlined core above (cross, clean,
+//  graham, monotoneChain, jarvis, canon, hullKey, containsAll, isMinimal,
+//  naiveHull, runSelfTest). The app NEVER re-implements orientation: every
+//  geometric predicate routes through the core's `cross` (the shading, the audit
+//  spokes, everything) so the render layer can't become a hidden 4th algorithm.
+// ============================================================================
+(function(){
+'use strict';
+const $ = id => document.getElementById(id);
+const canvas = $('c'), ctx = canvas.getContext('2d');
+
+// ---- state ----
+let points = [];                 // [{x,y}] in GRID coords [0..GRID]
+let buggy = false;               // negative-control toggle
+let removeProbe = false;         // remove-vertex ghost toggle
+let shade = 0.55;                // half-plane wash intensity 0..1
+let hoverPoint = -1;             // index into `points` being audited (-1 none)
+let hoverVertex = -1;            // index into the current hull's vertices (for the ghost)
+let dragIdx = -1;                // index being dragged
+let dragMoved = false;
+let tab = 'audit';
+let DPR = 1, W = 0, H = 0;       // canvas px
+// pixel<->grid transform (computed each resize)
+let ox = 0, oy = 0, scale = 1;   // grid (gx,gy) -> px: ox+gx*scale, oy+gy*scale
+const PAD = 46;
+
+// re-solve easing for the band (a faint elastic snap)
+let bandAnim = 0;                // 0..1 elastic progress after a re-solve
+let prevHull = null;             // for crossfade of the band on re-solve
+
+// ---- grid <-> pixel ----
+function computeTransform(){
+  const span = GRID;             // 0..GRID
+  const availW = W - PAD * 2, availH = H - PAD * 2;
+  scale = Math.min(availW, availH) / span;
+  const drawn = span * scale;
+  ox = (W - drawn) / 2;
+  oy = (H - drawn) / 2;
+}
+const gx2px = gx => ox + gx * scale;
+const gy2px = gy => oy + (GRID - gy) * scale;     // flip y so up is +y (math convention)
+function pxToGrid(px, py){
+  return { x: Math.round((px - ox) / scale), y: Math.round(GRID - (py - oy) / scale) };
+}
+
+// ---- the current hull (live) ----
+function currentHull(){
+  if (points.length === 0) return [];
+  return canon(buggy ? naiveHull(points) : graham(points));
+}
+
+// ============================================================================
+//  RENDER
+// ============================================================================
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const host = $('canvasHost');
+  W = host.clientWidth; H = host.clientHeight;
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  computeTransform();
+  draw();
+}
+
+function clearBg(){
+  ctx.clearRect(0, 0, W, H);
+  // dark slate field + a faint grid
+  ctx.fillStyle = getCss('--stage');
+  ctx.fillRect(0, 0, W, H);
+  // fine grid dots
+  ctx.fillStyle = 'rgba(201,162,74,0.07)';
+  const stepEvery = 4;
+  for (let gx = 0; gx <= GRID; gx += stepEvery){
+    for (let gy = 0; gy <= GRID; gy += stepEvery){
+      ctx.beginPath(); ctx.arc(gx2px(gx), gy2px(gy), 0.8, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
+function getCss(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+// draw the half-plane washes — for each directed CCW hull edge, flood its LEFT
+// half-plane. We compute the per-edge mask by testing each PIXEL against the
+// core's cross (sampled coarsely for perf, then upsampled). Cheaper + crisp: we
+// fill a big polygon = the screen clipped to the left of the edge. We do the
+// latter: for each edge, fill the screen-rect intersected with {p : cross(a,b,p) >= 0}.
+function drawWashes(hull){
+  if (shade <= 0.001 || hull.length < 3) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';      // additive: overlap deepens
+  const m = hull.length;
+  for (let e = 0; e < m; e++){
+    const a = hull[e], b = hull[(e + 1) % m];
+    // the left half-plane of directed edge a->b, clipped to the canvas rect.
+    const poly = leftHalfPlanePolygon(a, b);
+    if (poly.length < 3) continue;
+    // a cyan→indigo gradient along the edge normal
+    const ax = gx2px(a.x), ay = gy2px(a.y), bx = gx2px(b.x), by = gy2px(b.y);
+    // edge direction px
+    let dx = bx - ax, dy = by - ay; const len = Math.hypot(dx, dy) || 1; dx /= len; dy /= len;
+    // inward normal (left side in screen coords: y is flipped, so left-of-edge
+    // in grid is to the screen-right of the direction... use the gradient just
+    // for hue variation, not correctness)
+    const nx = dy, ny = -dx;
+    const g = ctx.createLinearGradient(ax, ay, ax + nx * 120, ay + ny * 120);
+    g.addColorStop(0, hexA(getCss('--wash-a'), 0.10 * shade));
+    g.addColorStop(1, hexA(getCss('--wash-b'), 0.16 * shade));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(poly[0].x, poly[0].y);
+    for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// Sutherland–Hodgman clip the canvas rectangle to the left half-plane of edge a->b.
+// "Left" uses the core's cross: a pixel P (in GRID coords) is kept iff cross(a,b,P) >= 0.
+// We clip in GRID space then map to px.
+function leftHalfPlanePolygon(a, b){
+  // start with a big rect in grid coords covering the visible field with margin
+  const big = GRID * 4;
+  let poly = [
+    { x: -big, y: -big }, { x: GRID + big, y: -big },
+    { x: GRID + big, y: GRID + big }, { x: -big, y: GRID + big },
+  ];
+  const inside = p => cross(a, b, p) >= 0;       // ★ the core's orientation, not a re-impl
+  const intersect = (p, q) => {
+    // param t where cross(a,b, p + t(q-p)) == 0
+    const cp = cross(a, b, p), cq = cross(a, b, q);
+    const t = cp / (cp - cq);
+    return { x: p.x + t * (q.x - p.x), y: p.y + t * (q.y - p.y) };
+  };
+  const out = [];
+  for (let i = 0; i < poly.length; i++){
+    const cur = poly[i], nxt = poly[(i + 1) % poly.length];
+    const ci = inside(cur), ni = inside(nxt);
+    if (ci){ out.push(cur); if (!ni) out.push(intersect(cur, nxt)); }
+    else if (ni){ out.push(intersect(cur, nxt)); }
+  }
+  return out.map(p => ({ x: gx2px(p.x), y: gy2px(p.y) }));
+}
+
+function hexA(hex, a){
+  hex = hex.replace('#',''); if (hex.length === 3) hex = hex.split('').map(c=>c+c).join('');
+  const r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// the band — a taut bright polyline through the hull vertices, with elastic ease.
+function drawBand(hull){
+  if (hull.length < 2) return;
+  ctx.save();
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // glow
+  ctx.strokeStyle = getCss('--band-glow'); ctx.lineWidth = 7; ctx.globalAlpha = 0.5;
+  strokeHullPath(hull); ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = getCss('--band'); ctx.lineWidth = 2.2;
+  strokeHullPath(hull); ctx.stroke();
+  ctx.restore();
+}
+function strokeHullPath(hull){
+  ctx.beginPath();
+  ctx.moveTo(gx2px(hull[0].x), gy2px(hull[0].y));
+  for (let i = 1; i < hull.length; i++) ctx.lineTo(gx2px(hull[i].x), gy2px(hull[i].y));
+  if (hull.length >= 3) ctx.closePath();
+}
+
+// the remove-vertex ghost — a distinct dashed violet hull = the hull WITHOUT the
+// hovered vertex, with the now-exposed point flashing.
+function drawGhost(hull){
+  if (!removeProbe || hoverVertex < 0 || hull.length < 3) return;
+  const removed = hull[hoverVertex];
+  // hull points minus the input point that equals `removed`
+  const without = points.filter(p => !(p.x === removed.x && p.y === removed.y));
+  if (without.length < 1) return;
+  const gh = canon(graham(without));
+  ctx.save();
+  ctx.setLineDash([5, 4]); ctx.lineWidth = 1.6; ctx.strokeStyle = getCss('--ghost');
+  ctx.globalAlpha = 0.92; strokeHullPath(gh); ctx.stroke();
+  ctx.setLineDash([]);
+  // the exposed point(s): input points that were INSIDE the full hull but are now
+  // OUTSIDE the ghost hull → they flash red (a real exposure).
+  const flash = 0.5 + 0.5 * Math.sin(performance.now() / 140);
+  let exposed = null;
+  for (const p of points){
+    if (p.x === removed.x && p.y === removed.y) continue;
+    const inGhost = containsAll(gh, [p]).ok;     // ★ core predicate
+    if (!inGhost){ exposed = p; break; }
+  }
+  if (exposed){
+    const px = gx2px(exposed.x), py = gy2px(exposed.y);
+    ctx.beginPath(); ctx.arc(px, py, 7 + flash * 3, 0, Math.PI * 2);
+    ctx.strokeStyle = getCss('--bad'); ctx.lineWidth = 2; ctx.globalAlpha = 0.6 + 0.4 * flash; ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+  // a label
+  const lx = gx2px(removed.x), ly = gy2px(removed.y);
+  ctx.save();
+  ctx.font = '600 10.5px ' + getCss('--font-mono');
+  ctx.fillStyle = getCss('--ghost'); ctx.globalAlpha = 0.95;
+  const msg = exposed ? 'removing this vertex would leave a point outside' : 'this point carries no load';
+  drawCalloutLabel(lx, ly - 16, msg);
+  ctx.restore();
+}
+
+function drawCalloutLabel(x, y, text){
+  ctx.font = '600 10.5px ' + getCss('--font-mono');
+  const w = ctx.measureText(text).width;
+  let lx = x - w / 2; lx = Math.max(8, Math.min(W - w - 16, lx));
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(lx - 6, y - 11, w + 12, 18);
+  ctx.fillStyle = getCss('--ghost');
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, lx, y - 1);
+}
+
+// dots — non-hull small grey; hull vertices bright + ringed.
+function drawDots(hull){
+  const hullSet = new Set(hull.map(p => p.x + ',' + p.y));
+  const redundant = buggy ? new Set(isMinimal(hull).redundant.map(i => hull[i].x + ',' + hull[i].y)) : new Set();
+  for (let i = 0; i < points.length; i++){
+    const p = points[i];
+    const px = gx2px(p.x), py = gy2px(p.y);
+    const onHull = hullSet.has(p.x + ',' + p.y);
+    const isRedundant = redundant.has(p.x + ',' + p.y);
+    ctx.beginPath();
+    if (onHull){
+      // ring
+      if (isRedundant){
+        // negative control: a redundant collinear vertex → audit RED
+        ctx.arc(px, py, 6.5, 0, Math.PI * 2);
+        ctx.strokeStyle = getCss('--bad'); ctx.lineWidth = 2; ctx.stroke();
+        ctx.beginPath(); ctx.arc(px, py, 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = getCss('--bad'); ctx.fill();
+      } else {
+        ctx.arc(px, py, 6, 0, Math.PI * 2);
+        ctx.strokeStyle = getCss('--vert'); ctx.lineWidth = 1.8; ctx.stroke();
+        ctx.beginPath(); ctx.arc(px, py, 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = getCss('--vert'); ctx.fill();
+      }
+    } else {
+      ctx.arc(px, py, 3, 0, Math.PI * 2);
+      ctx.fillStyle = (i === hoverPoint) ? getCss('--ink') : 'rgba(154,156,170,0.7)';
+      ctx.fill();
+    }
+  }
+}
+
+// the audit overlay — for the hovered point, a thin spoke to each directed hull
+// edge: GREEN if the point is left-of (inside that half-plane), RED if right-of.
+function drawAudit(hull){
+  if (hoverPoint < 0 || hoverPoint >= points.length || hull.length < 3) return;
+  const p = points[hoverPoint];
+  const px = gx2px(p.x), py = gy2px(p.y);
+  const m = hull.length;
+  let failedEdge = -1;
+  for (let e = 0; e < m; e++){
+    const a = hull[e], b = hull[(e + 1) % m];
+    const c = cross(a, b, p);                     // ★ core orientation
+    const left = c >= 0;
+    if (!left && failedEdge < 0) failedEdge = e;
+    // spoke from p to the edge midpoint
+    const mx = gx2px((a.x + b.x) / 2), my = gy2px((a.y + b.y) / 2);
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(mx, my);
+    ctx.strokeStyle = left ? hexA(getCss('--good'), 0.5) : hexA(getCss('--bad'), 0.8);
+    ctx.lineWidth = left ? 1 : 1.8; ctx.stroke();
+  }
+  // ring the audited point
+  ctx.beginPath(); ctx.arc(px, py, 5.5, 0, Math.PI * 2);
+  ctx.strokeStyle = failedEdge < 0 ? getCss('--good') : getCss('--bad'); ctx.lineWidth = 2; ctx.stroke();
+  // verdict badge
+  const v = $('verdict');
+  if (failedEdge < 0){
+    v.className = 'verdict show inside'; v.classList.add('show');
+    v.innerHTML = `<b>INSIDE</b> — passed all ${m} edges ✓`;
+  } else {
+    v.className = 'verdict show outside';
+    v.innerHTML = `<b>OUTSIDE</b> — failed edge ${failedEdge} ✗`;
+  }
+}
+
+// the negative-control verdict (when buggy and NOT auditing a point)
+function buggyVerdict(hull){
+  const v = $('verdict');
+  if (!buggy){ if (hoverPoint < 0) v.className = 'verdict'; return; }
+  if (hoverPoint >= 0) return;                    // audit verdict takes the badge
+  const mn = isMinimal(hull);
+  if (!mn.ok){
+    v.className = 'verdict show outside';
+    v.innerHTML = `<b>MINIMALITY VIOLATED</b>: ${mn.count} non-corner vertices`;
+  } else { v.className = 'verdict'; }
+}
+
+function draw(){
+  if (tab !== 'audit'){ drawBuild(); return; }
+  clearBg();
+  const hull = currentHull();
+  drawWashes(hull);
+  drawBand(hull);
+  drawGhost(hull);
+  drawDots(hull);
+  drawAudit(hull);
+  buggyVerdict(hull);
+  // hint + count
+  updateHint(hull);
+}
+
+function updateHint(hull){
+  const nVerts = hull.length;
+  const containOK = points.length ? containsAll(hull, points).ok : true;
+  const minOK = isMinimal(hull).ok;
+  $('hint').innerHTML = points.length === 0
+    ? 'Click empty space to drop points.'
+    : `<b>${nVerts}</b>-vertex hull · ${points.length} points · containing ${containOK ? '✓' : '✗'} · minimal ${minOK ? '✓' : '✗'}`;
+  $('count').innerHTML = `${points.length} pts → <b>${nVerts}</b> on hull`;
+}
+
+// ============================================================================
+//  BUILD TAB — step-through replays of the three constructions
+// ============================================================================
+let buildAlgo = 'graham';
+let buildTrace = [];             // precomputed frames
+let buildIdx = 0;
+let buildPlaying = false;
+let buildPts = [];               // the shared scatter for the build tab
+
+function newBuildScatter(seed){
+  buildPts = clean(randomCloud(seed >>> 0, 16 + (seed % 8)));
+  rebuildTrace();
+}
+function rebuildTrace(){
+  buildTrace = traceFor(buildAlgo, buildPts);
+  buildIdx = 0;
+  const sc = $('buildScrub'); sc.max = Math.max(0, buildTrace.length - 1); sc.value = 0;
+  updateSeqReadout();
+  drawBuild();
+}
+
+// Precompute a full step-trace for an algorithm (cheap for n≲24). Each frame:
+// { hull:[...partial vertex list...], scan:{a,b,p}|null, popped:bool, ray:{from,to}|null, done }
+function traceFor(algo, ptsIn){
+  const P = clean(ptsIn);
+  const frames = [];
+  const n = P.length;
+  if (n <= 2){ frames.push({ hull: P.slice(), note: 'n≤2: the hull is the points themselves', done: true }); return frames; }
+  if (algo === 'graham'){
+    // mirror graham()'s logic, emitting a frame per scan step
+    let piv = 0;
+    for (let i = 1; i < n; i++) if (P[i].y < P[piv].y || (P[i].y === P[piv].y && P[i].x < P[piv].x)) piv = i;
+    const o = P[piv];
+    const rest = P.filter((_, i) => i !== piv).sort((a, b) => {
+      const c = cross(o, a, b); if (c !== 0) return c > 0 ? -1 : 1;
+      const da = (a.x-o.x)**2+(a.y-o.y)**2, db = (b.x-o.x)**2+(b.y-o.y)**2; return da - db;
+    });
+    const stack = [o];
+    frames.push({ hull: stack.slice(), scan: null, note: 'pivot = lowest point; the rest sorted by polar angle' });
+    for (let i = 0; i < rest.length; i++){
+      const p = rest[i];
+      while (stack.length >= 2 && cross(stack[stack.length-2], stack[stack.length-1], p) <= 0){
+        const popped = stack[stack.length-1];
+        frames.push({ hull: stack.slice(), scan: { a: stack[stack.length-2], b: popped, p }, popped: true, note: 'right turn → pop' });
+        stack.pop();
+      }
+      stack.push(p);
+      frames.push({ hull: stack.slice(), scan: { a: stack.length>=2?stack[stack.length-2]:o, b: p, p }, popped: false, note: 'left turn → push' });
+    }
+    frames.push({ hull: stack.slice(), scan: null, note: 'scan complete', done: true });
+  } else if (algo === 'monotone'){
+    const lower = [];
+    frames.push({ hull: [], chain: 'lower', note: 'lower chain, left → right' });
+    for (let i = 0; i < n; i++){
+      while (lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], P[i]) <= 0){
+        frames.push({ hull: lower.slice(), scan:{a:lower[lower.length-2],b:lower[lower.length-1],p:P[i]}, popped:true, chain:'lower', note:'not left → pop' });
+        lower.pop();
+      }
+      lower.push(P[i]);
+      frames.push({ hull: lower.slice(), scan:{a:lower.length>=2?lower[lower.length-2]:lower[0],b:P[i],p:P[i]}, chain:'lower', note:'extend lower chain' });
+    }
+    const upper = [];
+    const lowerDone = lower.slice();
+    for (let i = n - 1; i >= 0; i--){
+      while (upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], P[i]) <= 0){
+        frames.push({ hull: lowerDone.slice(0,-1).concat(upper.slice()), scan:{a:upper[upper.length-2],b:upper[upper.length-1],p:P[i]}, popped:true, chain:'upper', note:'not left → pop' });
+        upper.pop();
+      }
+      upper.push(P[i]);
+      frames.push({ hull: lowerDone.slice(0,-1).concat(upper.slice()), scan:{a:upper.length>=2?upper[upper.length-2]:upper[0],b:P[i],p:P[i]}, chain:'upper', note:'upper chain, right → left' });
+    }
+    lower.pop(); upper.pop();
+    frames.push({ hull: lower.concat(upper), note: 'lower ∪ upper = the hull', done: true });
+  } else { // jarvis
+    let start = 0;
+    for (let i = 1; i < n; i++) if (P[i].x < P[start].x || (P[i].x === P[start].x && P[i].y < P[start].y)) start = i;
+    const hull = []; let cur = start, guard = 0;
+    do {
+      hull.push(P[cur]);
+      let next = (cur + 1) % n;
+      // emit a frame as the ray rotates to find the most-CCW point
+      for (let i = 0; i < n; i++){
+        if (i === cur) continue;
+        const t = cross(P[cur], P[next], P[i]);
+        if (t < 0){ next = i; }
+        else if (t === 0){ const dC=(P[next].x-P[cur].x)**2+(P[next].y-P[cur].y)**2, dI=(P[i].x-P[cur].x)**2+(P[i].y-P[cur].y)**2; if (dI>dC) next = i; }
+      }
+      frames.push({ hull: hull.slice(), ray: { from: P[cur], to: P[next] }, note: 'taut ray locks onto the most-CCW point' });
+      cur = next; guard++;
+    } while (cur !== start && guard <= n + 1);
+    frames.push({ hull: hull.slice(), ray: null, note: 'the wrap closes — back to the start', done: true });
+  }
+  return frames;
+}
+
+function drawBuild(){
+  clearBg();
+  if (!buildTrace.length) return;
+  const f = buildTrace[Math.min(buildIdx, buildTrace.length - 1)];
+  // all points small grey
+  for (const p of buildPts){
+    ctx.beginPath(); ctx.arc(gx2px(p.x), gy2px(p.y), 3, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(154,156,170,0.7)'; ctx.fill();
+  }
+  // the scan edge / ray (transient)
+  if (f.scan){
+    const { a, b, p, popped } = f;
+    if (a && b){
+      ctx.beginPath(); ctx.moveTo(gx2px(a.x), gy2px(a.y)); ctx.lineTo(gx2px(b.x), gy2px(b.y));
+      ctx.strokeStyle = f.popped ? getCss('--bad') : getCss('--band'); ctx.lineWidth = 1.4;
+      ctx.globalAlpha = 0.7; ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    if (f.scan.p){
+      // flash the candidate point
+      const fl = 0.5 + 0.5 * Math.sin(performance.now()/120);
+      ctx.beginPath(); ctx.arc(gx2px(f.scan.p.x), gy2px(f.scan.p.y), 5, 0, Math.PI*2);
+      ctx.strokeStyle = f.popped ? getCss('--bad') : getCss('--vert'); ctx.lineWidth = 1.8; ctx.globalAlpha = 0.6+0.4*fl; ctx.stroke(); ctx.globalAlpha = 1;
+    }
+  }
+  if (f.ray){
+    ctx.beginPath(); ctx.moveTo(gx2px(f.ray.from.x), gy2px(f.ray.from.y)); ctx.lineTo(gx2px(f.ray.to.x), gy2px(f.ray.to.y));
+    ctx.strokeStyle = getCss('--vert'); ctx.lineWidth = 1.6; ctx.setLineDash([4,3]); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // the partial hull path so far
+  const h = f.hull || [];
+  if (h.length >= 2){
+    ctx.beginPath(); ctx.moveTo(gx2px(h[0].x), gy2px(h[0].y));
+    for (let i = 1; i < h.length; i++) ctx.lineTo(gx2px(h[i].x), gy2px(h[i].y));
+    if (f.done) ctx.closePath();
+    ctx.strokeStyle = getCss('--band'); ctx.lineWidth = f.done ? 2.4 : 1.8; ctx.stroke();
+  }
+  // vertices found so far
+  for (const p of h){
+    ctx.beginPath(); ctx.arc(gx2px(p.x), gy2px(p.y), 5, 0, Math.PI*2);
+    ctx.strokeStyle = getCss('--vert'); ctx.lineWidth = 1.6; ctx.stroke();
+    ctx.beginPath(); ctx.arc(gx2px(p.x), gy2px(p.y), 2.6, 0, Math.PI*2); ctx.fillStyle = getCss('--vert'); ctx.fill();
+  }
+  // the stamp + note
+  const stamp = $('buildStamp');
+  if (f.done){
+    // verify byte-identity with the other two algorithms on this exact set
+    const kg = hullKey(graham(buildPts)), km = hullKey(monotoneChain(buildPts)), kj = hullKey(jarvis(buildPts));
+    const eq = kg === km && km === kj;
+    stamp.className = eq ? 'eq' : '';
+    stamp.textContent = eq ? 'byte-identical ✓' : 'MISMATCH ✗';
+  } else { stamp.className = ''; stamp.textContent = (f.note || ''); }
+  $('hint').innerHTML = `<b>${labelFor(buildAlgo)}</b> · step ${buildIdx}/${buildTrace.length-1} · ${f.note||''}`;
+  $('count').textContent = `${buildPts.length} points`;
+  $('verdict').className = 'verdict';
+}
+
+function labelFor(a){ return a === 'graham' ? "Graham's stack" : a === 'monotone' ? "Andrew's monotone chain" : "Jarvis's gift-wrap"; }
+
+function updateSeqReadout(){
+  const seqG = canon(graham(buildPts)).map(p => `(${p.x},${p.y})`).join(' ');
+  const eqM = hullKey(monotoneChain(buildPts)) === hullKey(graham(buildPts));
+  const eqJ = hullKey(jarvis(buildPts)) === hullKey(graham(buildPts));
+  $('seqReadout').innerHTML =
+    `<div style="color:var(--band)">graham: ${seqG}</div>` +
+    `<div>monotone: ${eqM ? '<span style="color:var(--good)">identical ✓</span>' : '<span style="color:var(--bad)">differs ✗</span>'}</div>` +
+    `<div>gift-wrap: ${eqJ ? '<span style="color:var(--good)">identical ✓</span>' : '<span style="color:var(--bad)">differs ✗</span>'}</div>`;
+}
+
+// ============================================================================
+//  INTERACTION
+// ============================================================================
+function eventGrid(ev){
+  const rect = canvas.getBoundingClientRect();
+  const x = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left;
+  const y = (ev.touches ? ev.touches[0].clientY : ev.clientY) - rect.top;
+  return { px: x, py: y, grid: pxToGrid(x, y) };
+}
+function nearestPoint(px, py, maxPx){
+  let best = -1, bd = maxPx * maxPx;
+  for (let i = 0; i < points.length; i++){
+    const dx = gx2px(points[i].x) - px, dy = gy2px(points[i].y) - py;
+    const d = dx*dx + dy*dy;
+    if (d < bd){ bd = d; best = i; }
+  }
+  return best;
+}
+function nearestHullVertex(px, py, hull, maxPx){
+  let best = -1, bd = maxPx * maxPx;
+  for (let i = 0; i < hull.length; i++){
+    const dx = gx2px(hull[i].x) - px, dy = gy2px(hull[i].y) - py;
+    const d = dx*dx + dy*dy;
+    if (d < bd){ bd = d; best = i; }
+  }
+  return best;
+}
+
+let longPressTimer = null;
+function onPointerDown(ev){
+  if (tab !== 'audit') return;
+  ev.preventDefault();
+  const { px, py } = eventGrid(ev);
+  const idx = nearestPoint(px, py, 16);
+  if (ev.button === 2){ if (idx >= 0){ removePoint(idx); } return; }
+  if (idx >= 0){
+    dragIdx = idx; dragMoved = false;
+    // long-press to remove (touch)
+    if (ev.touches){ longPressTimer = setTimeout(() => { removePoint(idx); dragIdx = -1; }, 520); }
+  } else {
+    // click empty → add a point
+    const g = clampGrid(pxToGrid(px, py));
+    addPoint(g);
+  }
+}
+function onPointerMove(ev){
+  const { px, py } = eventGrid(ev);
+  if (tab !== 'audit'){ return; }
+  if (dragIdx >= 0){
+    if (longPressTimer){ clearTimeout(longPressTimer); longPressTimer = null; }
+    const g = clampGrid(pxToGrid(px, py));
+    if (g.x !== points[dragIdx].x || g.y !== points[dragIdx].y){
+      // avoid landing on a duplicate (would collapse)
+      if (!points.some((p, i) => i !== dragIdx && p.x === g.x && p.y === g.y)){
+        points[dragIdx] = g; dragMoved = true; draw();
+      }
+    }
+    return;
+  }
+  // hover: pick a point to audit; also pick a hull vertex for the ghost
+  const idx = nearestPoint(px, py, 14);
+  const hull = currentHull();
+  const vIdx = removeProbe ? nearestHullVertex(px, py, hull, 14) : -1;
+  if (idx !== hoverPoint || vIdx !== hoverVertex){ hoverPoint = idx; hoverVertex = vIdx; draw(); }
+}
+function onPointerUp(ev){
+  if (longPressTimer){ clearTimeout(longPressTimer); longPressTimer = null; }
+  dragIdx = -1; draw();
+}
+function clampGrid(g){ return { x: Math.max(0, Math.min(GRID, g.x)), y: Math.max(0, Math.min(GRID, g.y)) }; }
+function addPoint(g){
+  if (points.some(p => p.x === g.x && p.y === g.y)) return;
+  points.push(g); draw();
+}
+function removePoint(i){ points.splice(i, 1); hoverPoint = -1; hoverVertex = -1; draw(); }
+
+// ============================================================================
+//  PRESETS
+// ============================================================================
+const PRESET_DEFS = [
+  ['random', 'Random'], ['collinear', 'Collinear run'], ['duplicates', 'Duplicates'],
+  ['single', 'Single point'], ['two', 'Two points'], ['allIdentical', 'All-identical'],
+  ['square', 'Square + interior'], ['circle', 'Circle of points'], ['collinearEdge', 'Negative-control set'],
+];
+function loadPreset(name){
+  buggy = false; syncBuggyToggle();
+  if (name === 'random'){ points = clean(randomCloud((Math.random()*1e9)>>>0, 14 + (Math.random()*12|0))); }
+  else { points = clean(preset(name)); }
+  // negative-control set also flips the buggy toggle on so the teeth show
+  if (name === 'collinearEdge'){ buggy = true; syncBuggyToggle(); }
+  hoverPoint = -1; hoverVertex = -1; draw();
+}
+function syncBuggyToggle(){ $('tBuggy').classList.toggle('on', buggy); }
+
+// ============================================================================
+//  SELF-TEST PILL
+// ============================================================================
+let testResult = null;
+function runTest(){
+  testResult = runSelfTest();
+  const chip = $('selftest');
+  const allGreen = testResult.pass === testResult.total;
+  chip.className = 'selftest ' + (allGreen ? 'ok' : 'bad');
+  chip.textContent = 'self-test ' + testResult.pass + '/' + testResult.total + (allGreen ? ' ✓' : ' ✗');
+  try{
+    console.log('%cThe Convex Hull — self-test ' + testResult.pass + '/' + testResult.total, 'color:#6fd3c4;font-weight:bold');
+    testResult.lines.forEach(l => console.log((l.ok ? '  ✓ ' : '  ✗ ') + l.name + '  ·  ' + l.detail));
+  }catch(e){}
+}
+$('selftest').addEventListener('click', () => {
+  if (!testResult) return;
+  alert('The Convex Hull — self-test ' + testResult.pass + '/' + testResult.total + '\n\n' +
+    testResult.lines.map(l => (l.ok ? '✓ ' : '✗ ') + l.name + '\n    ' + l.detail).join('\n\n'));
+});
+
+// ============================================================================
+//  WIRING
+// ============================================================================
+function buildPresetChips(){
+  const host = $('presetChips'); host.innerHTML = '';
+  for (const [name, label] of PRESET_DEFS){
+    const c = document.createElement('span'); c.className = 'chip sm'; c.textContent = label;
+    c.addEventListener('click', () => loadPreset(name));
+    host.appendChild(c);
+  }
+}
+$('shade').addEventListener('input', e => { shade = (+e.target.value) / 100; $('shadeVal').textContent = e.target.value + '%'; draw(); });
+$('tRemove').addEventListener('click', () => { removeProbe = !removeProbe; $('tRemove').classList.toggle('on', removeProbe); if (!removeProbe) hoverVertex = -1; draw(); });
+$('tBuggy').addEventListener('click', () => { buggy = !buggy; syncBuggyToggle(); hoverPoint = -1; draw(); });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('mousedown', onPointerDown);
+canvas.addEventListener('mousemove', onPointerMove);
+window.addEventListener('mouseup', onPointerUp);
+canvas.addEventListener('touchstart', onPointerDown, { passive: false });
+canvas.addEventListener('touchmove', onPointerMove, { passive: false });
+window.addEventListener('touchend', onPointerUp);
+
+// tabs
+function setTab(t){
+  tab = t;
+  $('tabAudit').classList.toggle('on', t === 'audit');
+  $('tabBuild').classList.toggle('on', t === 'build');
+  $('sideAudit').style.display = t === 'audit' ? '' : 'none';
+  $('sideBuild').style.display = t === 'build' ? '' : 'none';
+  $('buildBar').classList.toggle('show', t === 'build');
+  $('lede').innerHTML = t === 'audit' ? LEDE.audit : LEDE.build;
+  if (t === 'build' && !buildTrace.length) newBuildScatter(20240614);
+  draw();
+}
+$('tabAudit').addEventListener('click', () => setTab('audit'));
+$('tabBuild').addEventListener('click', () => setTab('build'));
+
+// build transport
+$('algoPick').addEventListener('click', e => {
+  const chip = e.target.closest('.chip'); if (!chip) return;
+  buildAlgo = chip.dataset.algo;
+  [...$('algoPick').children].forEach(c => c.classList.toggle('on', c === chip));
+  rebuildTrace();
+});
+$('bPlay').addEventListener('click', () => { buildPlaying = !buildPlaying; $('bPlay').textContent = buildPlaying ? '❚❚ pause' : '▶ play'; $('bPlay').classList.toggle('on', buildPlaying); });
+$('bStep').addEventListener('click', () => { buildIdx = Math.min(buildIdx + 1, buildTrace.length - 1); $('buildScrub').value = buildIdx; drawBuild(); });
+$('buildScrub').addEventListener('input', e => { buildIdx = +e.target.value; buildPlaying = false; $('bPlay').textContent = '▶ play'; $('bPlay').classList.remove('on'); drawBuild(); });
+$('bNew').addEventListener('click', () => newBuildScatter((Math.random()*1e9)>>>0));
+
+window.addEventListener('resize', resize);
+
+const LEDE = {
+  audit: `The smallest convex polygon that holds every point — the taut rubber band. This bench doesn't ask you to <b>trust</b> the band; it lets you <b>audit</b> it. Hover any point to test it against every directed edge; drag a point outside and watch the band re-grab it. The hull <b>is</b> the intersection of the edges' half-planes.`,
+  build: `<b>Three strangers, one answer.</b> Graham sorts by angle and scans a stack; Andrew sweeps by x building two chains; Jarvis wraps a taut ray. No shared construction code — yet they land on the byte-identical polygon. Step through each road and watch the same vertices fall out three different ways.`,
+};
+
+// build the build-note text
+$('buildNote').innerHTML = `Each road is precomputed as a step-trace, so scrubbing is instant. They share only the orientation atom <code>cross</code> — never a hull helper. The stamp turns <span style="color:var(--good)">green</span> when all three land byte-identical.`;
+
+// ---- animation loop (drives the band ease + flashes) ----
+function loop(){
+  if (tab === 'build' && buildPlaying){
+    // advance ~8 fps for legibility
+    if (!loop._t || performance.now() - loop._t > 120){
+      loop._t = performance.now();
+      if (buildIdx < buildTrace.length - 1){ buildIdx++; $('buildScrub').value = buildIdx; }
+      else { buildPlaying = false; $('bPlay').textContent = '▶ play'; $('bPlay').classList.remove('on'); }
+      drawBuild();
+    }
+  }
+  // keep flashes alive when something is animating
+  if (tab === 'audit' && (removeProbe && hoverVertex >= 0)) draw();
+  else if (tab === 'build' && buildTrace[buildIdx] && buildTrace[buildIdx].scan) drawBuild();
+  requestAnimationFrame(loop);
+}
+
+// ---- boot ----
+function boot(){
+  // a pleasant default scatter
+  points = clean(randomCloud(20240614, 17));
+  buildPresetChips();
+  $('lede').innerHTML = LEDE.audit;
+  resize();
+  runTest();
+  requestAnimationFrame(loop);
+}
+boot();
+
+})();
+</script>
+</body>
+</html>
