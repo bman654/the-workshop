@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Collatz Bench</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.88);
+    --panel-edge: rgba(201,162,74,0.34);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --ink-faint: #6b6e7e;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --bg: #06080c;
+    --stage: #080b11;
+    /* re-keyed from prime-spiral's :root — the Numbers Room family */
+    --root-1: #f4cf6a;                          /* gold — the sink, n=1 */
+    --lit-core: #fff2cf;                        /* bright gold — the selected path */
+    --rise: #e8a64f;     /* amber — an odd step (3n+1 up-kick) */
+    --fall: #6fd3c4;     /* teal — an even step (n/2 slide) */
+    --branch: #c98ad3;   /* violet — odd-predecessor shoot in the tree */
+    --open: #e0664f;     /* red-amber — the OPEN register (NOT the green self-test) */
+    --filament: rgba(150,140,170,0.22);         /* the unlit mass */
+    --one: #e0664f;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+  /* ---- topbar ---- */
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    justify-content:space-between; padding:14px 20px 0; pointer-events:none; gap:12px; flex-wrap:nowrap; }
+  .topbar a, .topbar .brand, .topbar .selftest, .topbar .openq{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .topbar .pills{ display:flex; gap:9px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+  .openq{ font:600 9.5px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; padding:6px 10px;
+    border-radius:20px; border:1px dashed rgba(224,102,79,0.6); background:rgba(70,30,26,0.3);
+    color:var(--open); white-space:nowrap; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; display:flex; flex-direction:column;
+    padding:56px 0 0; gap:0; overflow:hidden; }
+
+  /* the field */
+  #field{ flex:1 1 auto; position:relative; min-height:0; overflow:hidden;
+    background: radial-gradient(ellipse 120% 120% at 50% 50%, #0b1019 0%, var(--bg) 80%); cursor:crosshair; }
+  #baseCanvas, #overlayCanvas{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+  #overlayCanvas{ pointer-events:none; }
+  #hoverCard{ position:absolute; left:14px; top:12px; z-index:6; pointer-events:none; max-width:320px;
+    font:11.5px/1.55 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.55);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:8px 11px; opacity:0; transition:opacity .12s; }
+  #hoverCard.show{ opacity:1; }
+  #hoverCard b{ color:var(--root-1); }
+  #pathReadout{ position:absolute; left:14px; bottom:14px; z-index:6; pointer-events:none; max-width:360px;
+    font:11.5px/1.6 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.5);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:9px 12px; opacity:0; transition:opacity .15s; }
+  #pathReadout.show{ opacity:1; }
+  #pathReadout .ttl{ font:600 9px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-faint); margin-bottom:6px; }
+  #pathReadout .n{ color:var(--lit-core); font-weight:600; font-size:13px; }
+  #pathReadout .pk b{ color:var(--rise); }
+  #pathReadout .rec{ color:var(--root-1); font-weight:600; }
+  /* the mode toggle, top-right of the field */
+  #modeToggle{ position:absolute; right:14px; top:12px; z-index:6; display:flex; gap:0; border-radius:8px; overflow:hidden;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.5); }
+  #modeToggle .seg{ font:600 10px/1 var(--font-mono); letter-spacing:.1em; text-transform:uppercase;
+    padding:7px 12px; cursor:pointer; color:var(--ink-dim); transition:.15s; }
+  #modeToggle .seg.on{ color:#06080c; background:var(--accent); }
+
+  /* the secondary strip */
+  #pnstrip{ flex:0 0 auto; background:var(--stage); border-top:1px solid var(--panel-edge);
+    padding:11px 18px; display:flex; align-items:center; gap:18px; min-height:0; }
+  #scatterHead{ font-family:var(--font-mono); white-space:nowrap; }
+  #scatterHead .lbl{ font:600 8.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); display:block; margin-bottom:4px; }
+  #scatterHead .nums{ font-size:12px; color:var(--ink-dim); }
+  .segtoggle{ display:flex; gap:0; border-radius:7px; overflow:hidden; border:1px solid var(--panel-edge); flex:0 0 auto; }
+  .segtoggle .seg{ font:600 9.5px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase;
+    padding:6px 10px; cursor:pointer; color:var(--ink-dim); transition:.15s; white-space:nowrap; }
+  .segtoggle .seg.on{ color:#06080c; background:var(--fall); }
+  #scatWrap{ flex:1 1 auto; position:relative; min-width:0; height:54px; }
+  #scatCanvas{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+
+  /* ---- side controls ---- */
+  #side{ width:268px; flex:0 0 268px; background:var(--panel-bg); border-left:1px solid var(--panel-edge);
+    padding:64px 18px 18px; overflow-y:auto; display:flex; flex-direction:column; gap:15px; }
+  .group{ display:flex; flex-direction:column; gap:8px; }
+  .group > .ghead{ font:600 9.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{ font:600 12px/1 var(--font-mono); padding:8px 11px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink-dim); transition:.18s; }
+  .chip:hover{ color:var(--ink); border-color:var(--accent); }
+  .chip.on{ color:#06080c; background:var(--accent); border-color:var(--accent); font-weight:700; }
+  .chip.rec.on{ background:var(--fall); border-color:var(--fall); }
+  .chip.small{ font-size:11px; padding:7px 9px; }
+  .customrow{ display:flex; gap:6px; align-items:stretch; }
+  #nInput{ flex:1 1 auto; min-width:0; background:rgba(0,0,0,0.4); border:1px solid var(--panel-edge);
+    border-radius:8px; color:var(--ink); font:13px var(--font-mono); padding:8px 10px; transition:border-color .2s; }
+  #nInput:focus{ outline:none; border-color:var(--accent); }
+  #nInput.bad{ border-color:var(--one); }
+  .tracebtn{ flex:0 0 auto; background:var(--accent-soft); border:1px solid var(--panel-edge); color:var(--accent);
+    border-radius:8px; padding:8px 12px; font:600 11px/1 var(--font-mono); cursor:pointer; transition:.18s; white-space:nowrap; }
+  .tracebtn:hover{ background:var(--accent); color:#06080c; }
+  .inputmsg{ font:10.5px/1.4 var(--font-mono); color:var(--one); min-height:13px; }
+  .note{ font:11.5px/1.6 var(--font-ui); color:var(--ink-dim); }
+  .note b{ color:var(--ink); }
+  .note.openq{ border-left:2px solid var(--open); padding-left:11px; }
+  .note.openq .ttl{ font:600 9.5px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--open); display:block; margin-bottom:6px; }
+  .note.openq b{ color:var(--open); }
+  .note.openq i{ color:var(--ink); font-style:italic; }
+  .tierhint{ font:10.5px/1.5 var(--font-mono); color:var(--ink-faint); }
+  .tierhint b{ color:var(--branch); }
+  .rangerow{ display:flex; flex-direction:column; gap:7px; }
+  #nSlider{ width:100%; accent-color:var(--accent); }
+  .sliderval{ font:11px/1 var(--font-mono); color:var(--ink-dim); }
+  .sliderval b{ color:var(--fall); }
+  /* this-trajectory readout */
+  .traj{ display:flex; flex-direction:column; gap:6px; font:12px/1.5 var(--font-mono); }
+  .traj .row{ display:flex; justify-content:space-between; gap:8px; }
+  .traj .row .k{ color:var(--ink-faint); }
+  .traj .row .v{ color:var(--ink); font-weight:600; }
+  .traj .row .v.peak{ color:var(--rise); }
+  .traj .star{ color:var(--root-1); font-weight:600; font-size:11px; }
+  .parity{ display:flex; flex-wrap:wrap; gap:2px; margin-top:2px; }
+  .parity .g{ font:9px/1 var(--font-mono); padding:2px 3px; border-radius:3px; }
+  .parity .g.up{ color:#06080c; background:var(--rise); }
+  .parity .g.dn{ color:#06080c; background:var(--fall); }
+  /* records ladder */
+  .barcmp{ display:flex; flex-direction:column; gap:4px; margin-top:2px; }
+  .barrow{ display:flex; align-items:center; gap:7px; font:10px/1 var(--font-mono); color:var(--ink-dim); cursor:pointer;
+    padding:2px 4px; border-radius:5px; transition:background .15s; }
+  .barrow:hover{ background:rgba(201,162,74,0.1); }
+  .barrow.peakrow{ outline:1px solid rgba(244,207,106,0.4); }
+  .barrow .nm{ width:42px; flex:0 0 42px; text-align:right; color:var(--ink-faint); }
+  .barrow .bar{ height:8px; border-radius:3px; background:var(--root-1); min-width:1px; }
+  .barrow .v{ color:var(--ink-dim); flex:0 0 auto; }
+  .pngbtn{ background:var(--accent-soft); border:1px solid var(--panel-edge); color:var(--accent);
+    border-radius:8px; padding:9px 12px; font:600 11px/1 var(--font-mono); letter-spacing:.06em; cursor:pointer; transition:.18s; width:100%; }
+  .pngbtn:hover{ background:var(--accent); color:#06080c; }
+  /* the Mill cross card + footer */
+  .crosscard{ display:block; text-decoration:none; border:1px solid rgba(201,162,74,0.22);
+    border-radius:10px; padding:11px 13px; background:rgba(201,162,74,0.05); transition:.2s; }
+  .crosscard:hover{ border-color:var(--accent); background:rgba(201,162,74,0.1); }
+  .crosscard .nm{ font-family:var(--font-serif); font-size:14px; font-weight:600; color:var(--accent); margin-bottom:3px; }
+  .crosscard .bl{ font:11px/1.5 var(--font-ui); color:var(--ink-dim); }
+  .footnote{ font:10.5px/1.55 var(--font-ui); color:var(--ink-faint); border-top:1px solid rgba(201,162,74,0.14); padding-top:11px; }
+  .footnote .yes{ color:var(--fall); } .footnote .no{ color:var(--open); }
+  .footnote a{ color:var(--fall); text-decoration:none; }
+  hr.sep{ border:none; border-top:1px solid rgba(201,162,74,0.14); margin:1px 0; }
+
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(201,162,74,0.25); border-radius:5px; }
+
+  @media (max-width: 900px){
+    body{ overflow:auto; }
+    #wrap{ flex-direction:column; position:static; }
+    #side{ width:auto; flex:none; border-left:none; border-top:1px solid var(--panel-edge); padding-top:18px; }
+    #stage{ overflow:visible; height:auto; }
+    #field{ min-height:60vh; }
+    /* stack the scatter readout above the canvas so neither overflows */
+    #pnstrip{ flex-wrap:wrap; gap:10px; }
+    #scatterHead{ white-space:normal; flex:1 1 100%; }
+    #scatWrap{ flex:1 1 100%; min-width:0; height:50px; }
+  }
+  @media (max-width: 560px){
+    /* keep the two pills + the long self-test string on-screen: let the pills
+       row take its own full line and let the self-test text wrap (don't inherit
+       the siblings' pill-overflow bug). order: [backs] [pills] [title]. */
+    .topbar{ flex-wrap:wrap; gap:8px 12px; }
+    .backs{ order:1; }
+    .topbar .pills{ order:2; flex:1 1 100%; justify-content:flex-start; }
+    .selftest{ white-space:normal; }
+    .brand{ order:3; flex:1 1 100%; }
+    .customrow{ flex-wrap:wrap; }
+    #nInput{ flex:1 1 100%; }
+    /* the wrapped topbar is taller on mobile — push the field's floating mode
+       toggle clear of it so they never collide */
+    #modeToggle{ top:auto; bottom:12px; right:12px; }
+  }
+  @media (prefers-reduced-motion: reduce){ *{ scroll-behavior:auto; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../numbers-room/index.html">&larr; numbers room</a>
+    </div>
+    <div class="pills">
+      <div class="openq" title="The Collatz conjecture is unproven (1937–today). This bench CHECKS; it does not prove.">Open question · checked, not proven</div>
+      <div id="selftest" class="selftest" title="Run the falsifiability self-test">self-test …</div>
+    </div>
+    <div class="brand">
+      <h1>The Collatz Bench</h1>
+      <span class="tag">every number falls to 1 — checked, never proven</span>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <div id="field">
+        <canvas id="baseCanvas"></canvas>
+        <canvas id="overlayCanvas"></canvas>
+        <div id="modeToggle">
+          <div class="seg on" data-mode="tree">tree</div>
+          <div class="seg" data-mode="river">river</div>
+        </div>
+        <div id="hoverCard"></div>
+        <div id="pathReadout">
+          <div class="ttl">this trajectory</div>
+          <div class="n" id="prN">—</div>
+          <div class="pk" id="prPk"></div>
+          <div class="rec" id="prRec"></div>
+        </div>
+      </div>
+
+      <div id="pnstrip">
+        <div id="scatterHead">
+          <span class="lbl">stopping time σ(n) — how far each number falls</span>
+          <span class="nums" id="scatNums">—</span>
+        </div>
+        <div class="segtoggle" id="scatToggle">
+          <div class="seg on" data-view="scatter">σ(n) scatter</div>
+          <div class="seg" data-view="hist">histogram</div>
+        </div>
+        <div id="scatWrap"><canvas id="scatCanvas"></canvas></div>
+      </div>
+    </div>
+
+    <div id="side">
+      <div class="group">
+        <div class="note openq">
+          <span class="ttl">an open question</span>
+          The <b>Collatz conjecture</b> (Lothar Collatz, <b>1937</b>) says every positive integer reaches 1 under
+          <i>n → n/2 if even, 3n+1 if odd</i>. Still <b>unproven in 2026</b> — yet <b>checked by computer past 2⁶⁸</b>,
+          with <b>0 counterexamples</b>. Erdős said: <i>"Mathematics is not yet ready for such problems."</i>
+          This bench checks; it never claims a proof.
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <span class="ghead">start at n</span>
+        <div class="customrow">
+          <input id="nInput" type="text" inputmode="numeric" value="27" aria-label="start value">
+          <button class="tracebtn" id="traceBtn">trace</button>
+        </div>
+        <div class="inputmsg" id="inputMsg"></div>
+        <div class="chips" id="presetChips"></div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <span class="ghead">the field — tree depth (what's drawn)</span>
+        <div class="chips" id="depthChips"></div>
+        <div class="tierhint" id="tierHint"></div>
+      </div>
+
+      <div class="group">
+        <span class="ghead">verified forward range (what's checked)</span>
+        <div class="chips" id="rangeChips"></div>
+        <div class="rangerow">
+          <input id="nSlider" type="range" min="1000" max="100000" step="1000" value="10000">
+          <div class="sliderval">checking n ≤ <b id="rangeVal">10,000</b> &nbsp;·&nbsp; pill / records / scatter</div>
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <span class="ghead">this trajectory</span>
+        <div class="traj">
+          <div class="row"><span class="k">start n</span><span class="v" id="tN">—</span></div>
+          <div class="row"><span class="k">steps to 1</span><span class="v" id="tSteps">—</span></div>
+          <div class="row"><span class="k">peak</span><span class="v peak" id="tPeak">—</span></div>
+          <div class="star" id="tStar"></div>
+          <div class="parity" id="tParity"></div>
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <span class="ghead">records — total-stopping-time setters</span>
+        <div class="barcmp" id="recLadder"></div>
+        <div class="note" style="font-size:10.5px;color:var(--ink-faint)">
+          Live-computed up to the verified range, matched to OEIS A006877 (steps) &amp; A006884/A025586 (peaks). n=27's row
+          peaks — the 23→111 jump no smaller start makes.
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <button class="pngbtn" id="pngBtn">⤓ save as PNG</button>
+        <a class="crosscard" href="../turing/index.html">
+          <div class="nm">does it halt? → The Mill</div>
+          <div class="bl">The conjecture <i>is</i> a halting question: run n→n/2 | 3n+1 as a program — every tested input
+            halts at 1, but no machine can promise it always will. The workshop's honest brush with undecidability.</div>
+        </a>
+        <div class="footnote">
+          <b style="color:var(--ink)">What this proves — and what it can't.</b><br>
+          <span class="yes">Proven live:</span> the records reproduce the literature exactly · two independent constructions
+          (forward re-walk &amp; backward tree) agree · the 3n−1 map is caught failing — it falls into the
+          5→7→10→14→20 loop, never reaching 1.<br>
+          <span class="no">NOT proven by anyone:</span> that <i>every</i> n reaches 1. That is the open conjecture —
+          checked here to your range, with 0 counterexamples, and honestly labelled.<br>
+          The number-theory sibling of <a href="../prime-spiral/index.html">The Ulam Spiral</a> &amp;
+          <a href="../best-rational/index.html">The Best Rational</a>.
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script type="module">
+// ============================================================================
+//  INLINED CORE — a byte-twin of ./core.mjs (the Node-tested twin). Keep these
+//  in sync; core.test.mjs re-extracts the slice below and proves byte-parity
+//  (the inlined next() must equal the imported next.toString() char-for-char,
+//  and the page's runSelfTest must agree ok-for-ok with the module's). The
+//  bodies are identical to core.mjs minus the `export` keyword.
+// ===== COLLATZ CORE (inlined byte-twin of core.mjs) BEGIN =====
+const STEP_CAP = 100000;
+
+function next(n){ return n % 2 === 0 ? n / 2 : 3 * n + 1; }
+function nextAlt(n){ return n % 2 === 0 ? n / 2 : 3 * n - 1; }
+
+// ★ANTI-CIRCULARITY: stoppingTimeRaw never reads the memo — it re-walks next().
+function stoppingTimeRaw(n){
+  let steps = 0, v = n;
+  while (v !== 1){
+    v = next(v);
+    if (++steps > STEP_CAP) return -1;
+  }
+  return steps;
+}
+
+function stoppingTimesMemo(N){
+  const st = new Int32Array(N + 1).fill(-1);
+  if (N >= 1) st[1] = 0;
+  for (let start = 2; start <= N; start++){
+    if (st[start] !== -1) continue;
+    const chain = [];
+    let v = start, steps = 0, base = -1;
+    while (true){
+      if (v <= N && st[v] !== -1){ base = st[v]; break; }
+      if (v === 1){ base = 0; break; }
+      chain.push(v);
+      v = next(v);
+      if (++steps > STEP_CAP){ base = -2; break; }
+    }
+    if (base === -2){
+      for (const c of chain) if (c <= N) st[c] = -1;
+      continue;
+    }
+    let s = base + chain.length;
+    for (let i = 0; i < chain.length; i++){
+      const c = chain[i];
+      if (c <= N) st[c] = s;
+      s--;
+    }
+  }
+  return st;
+}
+
+function trajectory(n){
+  const path = [n];
+  let v = n, peak = n, steps = 0;
+  while (v !== 1){
+    v = next(v);
+    if (v > peak) peak = v;
+    path.push(v);
+    if (++steps > STEP_CAP) break;
+  }
+  return { steps, peak, path };
+}
+
+const RECORDS_A006877 = {
+  n:     [1, 2, 3, 6, 7, 9, 18, 25, 27, 54, 73, 97, 129, 171, 231, 313, 327, 649, 703, 871],
+  steps: [0, 1, 7, 8, 16, 19, 20, 23, 111, 112, 115, 118, 121, 124, 127, 130, 143, 144, 170, 178],
+};
+const RECORDS_A006884 = {
+  n:    [1, 2, 3, 7, 15, 27, 255, 447, 639, 703, 1819, 4255, 4591, 9663],
+  peak: [1, 2, 16, 52, 160, 9232, 13120, 39364, 41524, 250504, 1276936, 6810136, 8153620, 27114424],
+};
+
+function recordSetters(N){
+  const steps = { n: [], steps: [] };
+  const peaks = { n: [], peak: [] };
+  let bestSteps = -1, bestPeak = -1;
+  for (let n = 1; n <= N; n++){
+    const { steps: s, peak: p } = trajectory(n);
+    if (s > bestSteps){ bestSteps = s; steps.n.push(n); steps.steps.push(s); }
+    if (p > bestPeak){ bestPeak = p; peaks.n.push(n); peaks.peak.push(p); }
+  }
+  return { steps, peaks };
+}
+
+function invChildren(n){
+  const c = [2 * n];
+  if ((n - 1) % 3 === 0){
+    const m = (n - 1) / 3;
+    if (m % 2 === 1 && m > 1) c.push(m);
+  }
+  return c;
+}
+
+function inverseTree(maxNode, maxDepth){
+  const depth = new Map();
+  depth.set(1, 0);
+  let frontier = [1];
+  for (let d = 0; d < maxDepth && frontier.length; d++){
+    const nextFrontier = [];
+    for (const n of frontier){
+      for (const ch of invChildren(n)){
+        if (ch <= maxNode && !depth.has(ch)){
+          depth.set(ch, d + 1);
+          nextFrontier.push(ch);
+        }
+      }
+    }
+    frontier = nextFrontier;
+  }
+  return depth;
+}
+
+function reachesOneAlt(n){
+  let v = n, steps = 0;
+  while (v !== 1){
+    v = nextAlt(v);
+    if (++steps > STEP_CAP) return false;
+    if (v < 1) return false;
+  }
+  return true;
+}
+
+function altCycle(n){
+  const seen = new Map();
+  const seq = [];
+  let v = n, i = 0;
+  while (!seen.has(v)){
+    seen.set(v, i++);
+    seq.push(v);
+    v = nextAlt(v);
+    if (i > STEP_CAP) return [];
+  }
+  const start = seen.get(v);
+  const cycle = seq.slice(start);
+  return cycle.slice().sort((a, b) => a - b);
+}
+
+function buildTree(depthCap, maxNode = 1e9){
+  const nodes = new Map();
+  nodes.set(1, { n: 1, depth: 0, parent: null, kids: [], leaves: 0, angle: 0, x: 0, y: 0 });
+  let frontier = [1];
+  for (let d = 0; d < depthCap && frontier.length; d++){
+    const nf = [];
+    for (const pn of frontier){
+      const pnode = nodes.get(pn);
+      for (const ch of invChildren(pn)){
+        if (ch > maxNode || nodes.has(ch)) continue;
+        const node = { n: ch, depth: d + 1, parent: pn, kids: [], leaves: 0, angle: 0, x: 0, y: 0 };
+        nodes.set(ch, node);
+        pnode.kids.push(ch);
+        nf.push(ch);
+      }
+    }
+    frontier = nf;
+  }
+  for (const node of nodes.values()) node.kids.sort((a, b) => a - b);
+  const postOrder = [];
+  (function visit(n){
+    const node = nodes.get(n);
+    if (node.kids.length === 0){ node.leaves = 1; }
+    for (const k of node.kids) visit(k);
+    postOrder.push(n);
+  })(1);
+  for (const n of postOrder){
+    const node = nodes.get(n);
+    if (node.kids.length){
+      node.leaves = node.kids.reduce((s, k) => s + nodes.get(k).leaves, 0);
+    }
+  }
+  const root = nodes.get(1);
+  (function assign(n, a0, a1){
+    const node = nodes.get(n);
+    node.angle = (a0 + a1) / 2;
+    node.x = Math.cos(node.angle) * node.depth;
+    node.y = Math.sin(node.angle) * node.depth;
+    let a = a0;
+    const span = a1 - a0;
+    for (const k of node.kids){
+      const kn = nodes.get(k);
+      const frac = kn.leaves / node.leaves;
+      const ka1 = a + span * frac;
+      assign(k, a, ka1);
+      a = ka1;
+    }
+  })(1, 0, Math.PI * 2);
+  void root;
+  return { nodes };
+}
+
+function pathOf(n){ return trajectory(n).path; }
+
+function runSelfTest(N = 10000){
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+
+  {
+    const st = stoppingTimesMemo(N);
+    let bad = 0, firstBad = '', nonTerm = 0;
+    for (let n = 2; n <= N; n++){
+      const raw = stoppingTimeRaw(n);
+      if (raw < 0){ nonTerm++; continue; }
+      if (st[n] !== raw){ if (!bad) firstBad = `n=${n}: memo ${st[n]} ≠ raw ${raw}`; bad++; }
+    }
+    T(`two constructions agree: memo st[n] === raw re-walk, n∈[2..${N}]`,
+      bad === 0 && nonTerm === 0,
+      bad === 0 && nonTerm === 0 ? `${N - 1} starts, 0 disagreements, all terminate at 1` :
+        (bad ? `${bad} disagree (first ${firstBad})` : `${nonTerm} did not terminate`));
+  }
+
+  {
+    const { steps, peaks } = recordSetters(N);
+    let stepOk = true, sd = '';
+    for (let i = 0; i < RECORDS_A006877.n.length; i++){
+      if (RECORDS_A006877.n[i] > N) break;
+      if (steps.n[i] !== RECORDS_A006877.n[i] || steps.steps[i] !== RECORDS_A006877.steps[i]){
+        stepOk = false; sd = `idx ${i}: got n=${steps.n[i]}/${steps.steps[i]}`; break;
+      }
+    }
+    let peakOk = true, pd = '';
+    for (let i = 0; i < RECORDS_A006884.n.length; i++){
+      if (RECORDS_A006884.n[i] > N) break;
+      if (peaks.n[i] !== RECORDS_A006884.n[i] || peaks.peak[i] !== RECORDS_A006884.peak[i]){
+        peakOk = false; pd = `idx ${i}: got n=${peaks.n[i]}/${peaks.peak[i]}`; break;
+      }
+    }
+    const spot = [];
+    const chk = (n, s, p) => { if (n <= N){ const t = trajectory(n); spot.push(t.steps === s && t.peak === p); } };
+    chk(27, 111, 9232); chk(97, 118, 9232); chk(871, 178, 190996);
+    chk(6171, 261, 975400); chk(77031, 350, 21933016);
+    const spotOk = spot.every(Boolean);
+    T('records reproduce live: step-setters===A006877, peaks===A006884/A025586, spot checks',
+      stepOk && peakOk && spotOk,
+      stepOk && peakOk && spotOk ?
+        `27→{111,9232} · 871→{178,190996} · ${steps.n.length} step-records, ${peaks.n.length} peak-records ≤${N}` :
+        `step:${stepOk?'ok':sd} peak:${peakOk?'ok':pd} spot:${spotOk}`);
+  }
+
+  {
+    const maxDepth = 200;
+    const tree = inverseTree(N, maxDepth);
+    let bad = 0, firstBad = '';
+    for (const [n, d] of tree){
+      const fwd = stoppingTimeRaw(n);
+      if (fwd !== d){ if (!bad) firstBad = `n=${n}: tree ${d} ≠ fwd ${fwd}`; bad++; }
+    }
+    T(`backward-tree depth === forward stopping time on all ${tree.size} reached nodes`,
+      bad === 0,
+      bad === 0 ? `${tree.size} of ${N} reached at depth ≤${maxDepth}, 0 disagreements (coverage is a stat — the tree does NOT cover [1..N])` :
+        `${bad} disagree (first ${firstBad})`);
+  }
+
+  {
+    let fail = 0;
+    for (let n = 1; n <= 60; n++) if (!reachesOneAlt(n)) fail++;
+    const c5 = altCycle(5).join(',');
+    const c17 = altCycle(17).join(',');
+    const C5 = '5,7,10,14,20';
+    const C17 = '17,25,34,37,41,50,55,61,68,74,82,91,110,122,136,164,182,272';
+    const ok = fail >= 30 && c5 === C5 && c17 === C17;
+    T('negative control (3n−1) has teeth: ≥30/60 fail to reach 1; named cycles exact',
+      ok,
+      ok ? `${fail}/60 fail · cycle(5)=[${C5}] · cycle(17) 18-long matches` :
+        `fail=${fail} · c5=${c5 === C5} · c17=${c17 === C17}`);
+  }
+
+  {
+    const ok = next(2) === 1 && next(3) === 10 && next(8) === 4 && next(1) === 4 &&
+               nextAlt(3) === 8 && next(3) !== nextAlt(3);
+    T('the map: next(n)=n/2 | 3n+1, distinct from the 3n−1 control', ok,
+      ok ? 'next(3)=10, next(8)=4 · nextAlt(3)=8 (next≠nextAlt)' : 'MAP DRIFTED');
+  }
+
+  {
+    let maxPeak = 0, over = 0;
+    const M = Math.min(N, 100000);
+    for (let n = 1; n <= M; n++){
+      const p = trajectory(n).peak;
+      if (p > maxPeak) maxPeak = p;
+      if (p > Number.MAX_SAFE_INTEGER) over++;
+    }
+    T(`overflow-safe: max peak (n≤${M}) ≪ MAX_SAFE_INTEGER → plain Number is exact`,
+      over === 0 && maxPeak <= Number.MAX_SAFE_INTEGER,
+      `max peak = ${maxPeak.toLocaleString()} (cap ${Number.MAX_SAFE_INTEGER.toLocaleString()}); ${over} overflow`);
+  }
+
+  {
+    const a = trajectory(27), b = trajectory(27);
+    const ok = a.steps === b.steps && a.peak === b.peak && a.path.length === b.path.length &&
+               a.path.join(',') === b.path.join(',');
+    T('deterministic & pure: trajectory(27) is byte-identical across calls', ok,
+      ok ? `27 → 1 in ${a.steps} steps, peak ${a.peak.toLocaleString()} (×2 identical)` : 'NON-DETERMINISTIC');
+  }
+
+  const pass = lines.filter(l => l.ok).length;
+  return { pass, total: lines.length, lines };
+}
+// ===== COLLATZ CORE END =====
+
+// ============================================================================
+//  RENDER PIPELINE & UI
+// ============================================================================
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+const DEPTH_TIERS = [
+  { D: 10, label: '10' },
+  { D: 14, label: '14' },
+  { D: 18, label: '18' },
+  { D: 22, label: '22' },
+];
+const RANGE_TIERS = [ { N: 1000, label: '1k' }, { N: 10000, label: '10k' }, { N: 100000, label: '100k' } ];
+const PRESETS = [27, 97, 703, 871, 6171, 77031];
+const RECORD_RUN = [1, 2, 3, 6, 7, 9, 18, 25, 27];   // the teal record-setter run
+const RIVER_CAP = 1500;                               // separate, smaller cap for the river bed
+const LEGIBLE_DEPTH = 14;                             // tiers ≤ this allow node-pick
+
+const els = {
+  field:    document.getElementById('field'),
+  base:     document.getElementById('baseCanvas'),
+  overlay:  document.getElementById('overlayCanvas'),
+  hoverCard:document.getElementById('hoverCard'),
+  pathReadout:document.getElementById('pathReadout'),
+  prN:      document.getElementById('prN'),
+  prPk:     document.getElementById('prPk'),
+  prRec:    document.getElementById('prRec'),
+  modeToggle:document.getElementById('modeToggle'),
+  scatNums: document.getElementById('scatNums'),
+  scatToggle:document.getElementById('scatToggle'),
+  scat:     document.getElementById('scatCanvas'),
+  nInput:   document.getElementById('nInput'),
+  traceBtn: document.getElementById('traceBtn'),
+  inputMsg: document.getElementById('inputMsg'),
+  presetChips:document.getElementById('presetChips'),
+  depthChips: document.getElementById('depthChips'),
+  rangeChips: document.getElementById('rangeChips'),
+  tierHint: document.getElementById('tierHint'),
+  nSlider:  document.getElementById('nSlider'),
+  rangeVal: document.getElementById('rangeVal'),
+  tN:       document.getElementById('tN'),
+  tSteps:   document.getElementById('tSteps'),
+  tPeak:    document.getElementById('tPeak'),
+  tStar:    document.getElementById('tStar'),
+  tParity:  document.getElementById('tParity'),
+  recLadder:document.getElementById('recLadder'),
+  selftest: document.getElementById('selftest'),
+  pngBtn:   document.getElementById('pngBtn'),
+};
+
+const state = {
+  mode: 'tree',          // 'tree' | 'river'
+  D: 14,                 // tree depth cap
+  N: 10000,              // verified forward range
+  n: 27,                 // the traced start value
+  scatView: 'scatter',   // 'scatter' | 'hist'
+  tree: null,            // buildTree result {nodes}
+  treeBounds: null,      // {maxDepth, screen transform}
+  stepRecords: null,     // {n:[],steps:[]} cached for N
+  peakRecords: null,
+  hover: null,           // {n, x, y} world (ring units) for tree hover
+};
+
+const REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---- canvas fit (dpr-aware) -------------------------------------------------
+function fitCanvas(canvas){
+  const dpr = window.devicePixelRatio || 1;
+  const r = canvas.getBoundingClientRect();
+  canvas.width = Math.max(1, Math.round(r.width * dpr));
+  canvas.height = Math.max(1, Math.round(r.height * dpr));
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: r.width, h: r.height, dpr };
+}
+
+// ---------------------------------------------------------------------------
+//  BASE LAYER — the static tree/river, rebuilt once per (mode, D, N) change.
+// ---------------------------------------------------------------------------
+const baseLayer = document.createElement('canvas');
+let baseW = 0, baseH = 0;
+
+// the screen transform for the tree (world ring units → screen px)
+let treeTx = null;   // {ox, oy, scale}
+
+function computeTreeTransform(w, h){
+  const nodes = state.tree.nodes;
+  let maxR = 1;
+  for (const nd of nodes.values()) maxR = Math.max(maxR, Math.hypot(nd.x, nd.y));
+  const margin = 0.92;
+  const scale = (Math.min(w, h) / 2) * margin / maxR;
+  return { ox: w / 2, oy: h / 2, scale, maxR };
+}
+function worldToScreen(x, y){
+  return [treeTx.ox + x * treeTx.scale, treeTx.oy - y * treeTx.scale];
+}
+
+function rebuildBase(){
+  const dpr = window.devicePixelRatio || 1;
+  const r = els.base.getBoundingClientRect();
+  baseW = Math.max(1, Math.round(r.width));
+  baseH = Math.max(1, Math.round(r.height));
+  baseLayer.width = Math.round(baseW * dpr);
+  baseLayer.height = Math.round(baseH * dpr);
+  const ctx = baseLayer.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, baseW, baseH);
+
+  if (state.mode === 'tree') rebuildTree(ctx);
+  else rebuildRiver(ctx);
+}
+
+function rebuildTree(ctx){
+  const nodes = state.tree.nodes;
+  const M = nodes.size;
+  treeTx = computeTreeTransform(baseW, baseH);
+  // three tiers keyed off node-count M
+  const tier = M <= 1500 ? 'coral' : (M <= 12000 ? 'lattice' : 'cloud');
+
+  if (tier === 'cloud'){
+    // additive ImageData: every node a faint gold point; dense rings self-brighten
+    const iw = baseLayer.width, ih = baseLayer.height, dpr = window.devicePixelRatio || 1;
+    const img = ctx.getImageData(0, 0, iw, ih);
+    const buf = img.data;
+    const col = css('--filament');
+    const cr = 244, cg = 207, cb = 106;   // gold
+    const contrib = 70;
+    for (const nd of nodes.values()){
+      const [sx, sy] = worldToScreen(nd.x, nd.y);
+      const dx = Math.round(sx * dpr), dy = Math.round(sy * dpr);
+      if (dx < 0 || dy < 0 || dx >= iw || dy >= ih) continue;
+      const idx = (dy * iw + dx) * 4;
+      buf[idx]     = Math.min(255, buf[idx]     + (cr * contrib >> 8));
+      buf[idx + 1] = Math.min(255, buf[idx + 1] + (cg * contrib >> 8));
+      buf[idx + 2] = Math.min(255, buf[idx + 2] + (cb * contrib >> 8));
+      buf[idx + 3] = Math.min(255, buf[idx + 3] + contrib);
+    }
+    ctx.putImageData(img, 0, 0);
+    void col;
+  } else if (tier === 'lattice'){
+    // straight batched segments parent→child, one path, faint
+    ctx.strokeStyle = css('--filament'); ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    for (const nd of nodes.values()){
+      if (nd.parent == null) continue;
+      const p = nodes.get(nd.parent);
+      const [px, py] = worldToScreen(p.x, p.y);
+      const [sx, sy] = worldToScreen(nd.x, nd.y);
+      ctx.moveTo(px, py); ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+  } else {
+    // coral: quadratic-curve filaments + small discs
+    ctx.strokeStyle = css('--filament'); ctx.lineWidth = 1;
+    for (const nd of nodes.values()){
+      if (nd.parent == null) continue;
+      const p = nodes.get(nd.parent);
+      const [px, py] = worldToScreen(p.x, p.y);
+      const [sx, sy] = worldToScreen(nd.x, nd.y);
+      // a gentle bow toward the tangent for an organic filament
+      const mx = (px + sx) / 2, my = (py + sy) / 2;
+      const nx = -(sy - py), ny = (sx - px);
+      const len = Math.hypot(nx, ny) || 1;
+      const bow = 6;
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.quadraticCurveTo(mx + nx / len * bow, my + ny / len * bow, sx, sy);
+      ctx.stroke();
+    }
+    // discs, colored by parity of the node (odd-predecessor shoots in violet)
+    for (const nd of nodes.values()){
+      const [sx, sy] = worldToScreen(nd.x, nd.y);
+      const odd = nd.n % 2 === 1 && nd.n !== 1;
+      ctx.fillStyle = nd.n === 1 ? css('--root-1') : (odd ? css('--branch') : css('--filament'));
+      const rr = nd.n === 1 ? 5 : 2.0;
+      if (nd.n === 1){ ctx.save(); ctx.shadowColor = css('--root-1'); ctx.shadowBlur = 12; }
+      ctx.beginPath(); ctx.arc(sx, sy, rr, 0, Math.PI * 2); ctx.fill();
+      if (nd.n === 1) ctx.restore();
+    }
+  }
+
+  // the centre sink label "1" always
+  const [ox, oy] = worldToScreen(0, 0);
+  ctx.fillStyle = css('--root-1'); ctx.font = `bold 13px ${css('--font-mono')}`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (tier !== 'coral'){ ctx.save(); ctx.shadowColor = css('--root-1'); ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.arc(ox, oy, 4, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+}
+
+// river: x = step index, y = log2(value); every n∈[1..RIVER_N] a faint thread
+let riverTx = null;   // {x0,x1,y0,y1, maxStep, maxLog}
+function rebuildRiver(ctx){
+  const RN = Math.min(state.N, RIVER_CAP);
+  // pre-scan to find the bounds (maxStep, maxLog2)
+  let maxStep = 1, maxLog = 1;
+  const trajs = [];
+  for (let n = 1; n <= RN; n++){
+    const t = trajectory(n);
+    maxStep = Math.max(maxStep, t.steps);
+    maxLog = Math.max(maxLog, Math.log2(t.peak));
+    trajs.push(t.path);
+  }
+  const padL = 38, padR = 14, padT = 14, padB = 26;
+  riverTx = { x0: padL, x1: baseW - padR, y0: baseH - padB, y1: padT, maxStep, maxLog, RN };
+  const X = (s) => riverTx.x0 + (s / maxStep) * (riverTx.x1 - riverTx.x0);
+  const Y = (v) => riverTx.y0 - (Math.log2(v) / maxLog) * (riverTx.y0 - riverTx.y1);
+
+  ctx.strokeStyle = 'rgba(150,140,170,0.07)'; ctx.lineWidth = 0.5;
+  for (const path of trajs){
+    ctx.beginPath();
+    for (let i = 0; i < path.length; i++){
+      const px = X(i), py = Y(path[i]);
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.stroke();
+  }
+  // axes hints
+  ctx.fillStyle = css('--ink-faint'); ctx.font = `9px ${css('--font-mono')}`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('log₂(value)', 4, padT + 8);
+  ctx.textAlign = 'right';
+  ctx.fillText('step →', baseW - padR, baseH - 8);
+  ctx.fillText(`all n ≤ ${RN.toLocaleString()}`, baseW - padR, padT + 8);
+}
+
+// blit the baked base onto the visible base canvas
+function blitBase(){
+  const { ctx, w, h } = fitCanvas(els.base);
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(baseLayer, 0, 0, baseLayer.width, baseLayer.height, 0, 0, w, h);
+}
+
+let rebuildQueued = false;
+function queueRebuild(){
+  if (rebuildQueued) return;
+  rebuildQueued = true;
+  requestAnimationFrame(() => {
+    rebuildQueued = false;
+    if (state.mode === 'tree') ensureTree();
+    rebuildBase();
+    blitBase();
+    drawOverlay();
+  });
+}
+
+// ensure the tree is built for the current D (and contains state.n if legible)
+function ensureTree(){
+  state.tree = buildTree(state.D);
+}
+
+// ---------------------------------------------------------------------------
+//  OVERLAY — the lit path of state.n, per frame. O(path) ≤ ~350.
+// ---------------------------------------------------------------------------
+function drawOverlay(){
+  const { ctx, w, h } = fitCanvas(els.overlay);
+  ctx.clearRect(0, 0, w, h);
+  const path = pathOf(state.n);   // [n, …, 4, 2, 1]
+
+  if (state.mode === 'tree'){
+    drawTreeOverlay(ctx, path, w, h);
+  } else {
+    drawRiverOverlay(ctx, path, w, h);
+  }
+
+  // hover marker (tree only)
+  if (state.mode === 'tree' && state.hover){
+    const [sx, sy] = worldToScreen(state.hover.x, state.hover.y);
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(sx, sy, 7, 0, Math.PI * 2); ctx.stroke();
+  }
+}
+
+function drawTreeOverlay(ctx, path, w, h){
+  if (!state.tree || !treeTx) return;
+  const nodes = state.tree.nodes;
+  // map path values to tree node screen coords where present (path runs n→1, so
+  // it descends toward the centre); only values in the baked tree are drawn.
+  const pts = [];
+  for (const v of path){
+    const nd = nodes.get(v);
+    if (nd){ const [sx, sy] = worldToScreen(nd.x, nd.y); pts.push({ sx, sy, v }); }
+  }
+  if (pts.length < 2) return;
+  // the gold thread, parity-colored per segment
+  for (let i = 0; i < pts.length - 1; i++){
+    const a = pts[i], b = pts[i + 1];
+    // a→b is one Collatz step from a.v: if a.v is even it's a /2 slide (teal), else 3n+1 up-kick (amber)
+    const even = a.v % 2 === 0;
+    ctx.strokeStyle = even ? css('--fall') : css('--rise');
+    ctx.lineWidth = 2.2;
+    ctx.save(); ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = REDUCE ? 0 : 7;
+    ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+    ctx.restore();
+  }
+  // lit discs on the path
+  for (const p of pts){
+    ctx.fillStyle = p.v === 1 ? css('--root-1') : css('--lit-core');
+    ctx.save(); ctx.shadowColor = css('--lit-core'); ctx.shadowBlur = REDUCE ? 0 : 6;
+    ctx.beginPath(); ctx.arc(p.sx, p.sy, p.v === 1 ? 5 : 3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  // the HOME marker on the start node
+  const home = pts[0];
+  ctx.strokeStyle = css('--lit-core'); ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.arc(home.sx, home.sy, 8, 0, Math.PI * 2); ctx.stroke();
+}
+
+function drawRiverOverlay(ctx, path, w, h){
+  if (!riverTx) return;
+  const X = (s) => riverTx.x0 + (s / riverTx.maxStep) * (riverTx.x1 - riverTx.x0);
+  const Y = (v) => riverTx.y0 - (Math.log2(v) / riverTx.maxLog) * (riverTx.y0 - riverTx.y1);
+  // parity-colored segments
+  for (let i = 0; i < path.length - 1; i++){
+    const even = path[i] % 2 === 0;
+    ctx.strokeStyle = even ? css('--fall') : css('--rise');
+    ctx.lineWidth = 2;
+    ctx.save(); ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = REDUCE ? 0 : 6;
+    ctx.beginPath(); ctx.moveTo(X(i), Y(path[i])); ctx.lineTo(X(i + 1), Y(path[i + 1])); ctx.stroke();
+    ctx.restore();
+  }
+  // mark the peak with a ring + callout
+  let peakIdx = 0, peakV = path[0];
+  for (let i = 0; i < path.length; i++) if (path[i] > peakV){ peakV = path[i]; peakIdx = i; }
+  const px = X(peakIdx), py = Y(peakV);
+  ctx.strokeStyle = css('--rise'); ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = css('--rise'); ctx.font = `10px ${css('--font-mono')}`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText(`peak ${peakV.toLocaleString()}`, px, py - 9);
+  // the sink at the end (value 1)
+  const lx = X(path.length - 1), ly = Y(1);
+  ctx.fillStyle = css('--root-1');
+  ctx.save(); ctx.shadowColor = css('--root-1'); ctx.shadowBlur = REDUCE ? 0 : 8;
+  ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+//  THE ONE FUNNEL — every n-setting path (input / preset / node-click / ladder)
+//  goes through setN_start. Validation owns correctness.
+// ---------------------------------------------------------------------------
+function setN_start(n){
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0 || n > Number.MAX_SAFE_INTEGER){
+    flashBadInput('enter a positive whole number ≤ 2⁵³');
+    return false;
+  }
+  state.n = n;
+  els.nInput.value = String(n);
+  els.nInput.classList.remove('bad');
+  els.inputMsg.textContent = '';
+  // if in tree mode and n is not in the baked tree, auto-bump D to the smallest
+  // tier that contains it, rebuild, and trace.
+  if (state.mode === 'tree'){
+    ensureTree();
+    if (!state.tree.nodes.has(n)){
+      for (const t of DEPTH_TIERS){
+        if (t.D <= state.D) continue;
+        const tree = buildTree(t.D);
+        if (tree.nodes.has(n)){ state.D = t.D; updateDepthChips(); break; }
+      }
+      // if even the largest tier doesn't reach it, leave D and just light the river-style readout
+    }
+  }
+  updateTrajReadout();
+  updatePresetChips();
+  queueRebuild();
+  return true;
+}
+
+function flashBadInput(msg){
+  els.nInput.classList.add('bad');
+  els.inputMsg.textContent = msg;
+  setTimeout(() => els.nInput.classList.remove('bad'), 600);
+}
+
+function updateTrajReadout(){
+  const n = state.n;
+  const t = trajectory(n);
+  els.tN.textContent = n.toLocaleString();
+  els.tSteps.textContent = t.steps.toLocaleString();
+  els.tPeak.textContent = t.peak.toLocaleString();
+  // record star
+  const isRec = state.stepRecords && state.stepRecords.n.includes(n);
+  els.tStar.textContent = isRec ? '★ total-stopping-time record-setter' : '';
+  // parity glyph strip (one glyph per step: ⬆ for 3n+1, ⬇ for /2)
+  els.tParity.innerHTML = '';
+  const glyphs = [];
+  for (let i = 0; i < t.path.length - 1; i++){
+    const even = t.path[i] % 2 === 0;
+    glyphs.push(`<span class="g ${even ? 'dn' : 'up'}">${even ? '⬇' : '⬆'}</span>`);
+  }
+  els.tParity.innerHTML = glyphs.join('');
+  // field readouts
+  els.prN.textContent = `n = ${n.toLocaleString()} → 1 in ${t.steps} steps`;
+  els.prPk.innerHTML = `peak <b>${t.peak.toLocaleString()}</b>`;
+  els.prRec.textContent = isRec ? '★ record-setter' : '';
+  els.pathReadout.classList.add('show');
+  // scatter strip highlight follows the traced n
+  drawScatter();
+}
+
+// ---------------------------------------------------------------------------
+//  RANGE / RECORDS — recompute for the verified forward range N.
+// ---------------------------------------------------------------------------
+function setRange(N){
+  state.N = N;
+  els.nSlider.value = String(N);
+  els.rangeVal.textContent = N.toLocaleString();
+  updateRangeChips();
+  const { steps, peaks } = recordSetters(N);
+  state.stepRecords = steps;
+  state.peakRecords = peaks;
+  buildLadder();
+  drawScatter();
+  updateTrajReadout();
+  if (state.mode === 'river') queueRebuild();   // river bed depends on N
+}
+
+function buildLadder(){
+  const recs = state.stepRecords;
+  els.recLadder.innerHTML = '';
+  const maxSteps = Math.max(...recs.steps, 1);
+  for (let i = 0; i < recs.n.length; i++){
+    const n = recs.n[i], s = recs.steps[i];
+    const row = document.createElement('div');
+    row.className = 'barrow';
+    const wpct = (s / maxSteps) * 100;
+    row.innerHTML = `<span class="nm">n=${n}</span>` +
+      `<span class="bar" style="width:${Math.max(1, wpct)}%"></span>` +
+      `<span class="v">${s}</span>`;
+    row.addEventListener('click', () => setN_start(n));
+    els.recLadder.appendChild(row);
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  SECONDARY STRIP — σ(n) scatter ⟷ stopping-time histogram.
+// ---------------------------------------------------------------------------
+function drawScatter(){
+  const { ctx, w, h } = fitCanvas(els.scat);
+  ctx.clearRect(0, 0, w, h);
+  const N = state.N;
+  const padL = 6, padR = 8, padT = 6, padB = 12;
+  const x0 = padL, x1 = w - padR, y0 = h - padB, y1 = padT;
+
+  if (state.scatView === 'scatter'){
+    // σ(n) vs n: subsample for speed at large N
+    const stride = Math.max(1, Math.floor(N / 2000));
+    let maxS = 1;
+    const pts = [];
+    for (let n = 1; n <= N; n += stride){
+      const s = trajectory(n).steps;
+      if (s > maxS) maxS = s;
+      pts.push([n, s]);
+    }
+    const recSet = new Set(state.stepRecords.n);
+    const X = (n) => x0 + (n / N) * (x1 - x0);
+    const Y = (s) => y0 - (s / maxS) * (y0 - y1);
+    for (const [n, s] of pts){
+      ctx.fillStyle = recSet.has(n) ? css('--fall') : 'rgba(150,140,170,0.34)';
+      ctx.fillRect(X(n) - 0.6, Y(s) - 0.6, 1.2, 1.2);
+    }
+    // ring the traced n
+    const ts = trajectory(state.n).steps;
+    if (state.n <= N){
+      ctx.strokeStyle = css('--lit-core'); ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(X(state.n), Y(ts), 4, 0, Math.PI * 2); ctx.stroke();
+    }
+    els.scatNums.innerHTML = `each dot = one start n ≤ ${N.toLocaleString()} · y = steps to 1 · teal = record-setters · longest so far ${maxS} steps`;
+  } else {
+    // histogram of stopping times
+    const stride = Math.max(1, Math.floor(N / 5000));
+    let maxS = 1;
+    const stepsArr = [];
+    for (let n = 1; n <= N; n += stride){ const s = trajectory(n).steps; stepsArr.push(s); if (s > maxS) maxS = s; }
+    const bins = 60;
+    const counts = new Array(bins).fill(0);
+    for (const s of stepsArr) counts[Math.min(bins - 1, Math.floor(s / maxS * bins))]++;
+    const maxC = Math.max(...counts, 1);
+    const bw = (x1 - x0) / bins;
+    const tsBin = Math.min(bins - 1, Math.floor(trajectory(state.n).steps / maxS * bins));
+    for (let i = 0; i < bins; i++){
+      const bh = (counts[i] / maxC) * (y0 - y1);
+      ctx.fillStyle = i === tsBin ? css('--lit-core') : css('--fall');
+      ctx.globalAlpha = i === tsBin ? 1 : 0.5;
+      ctx.fillRect(x0 + i * bw, y0 - bh, Math.max(1, bw - 0.6), bh);
+    }
+    ctx.globalAlpha = 1;
+    els.scatNums.innerHTML = `distribution of stopping times for n ≤ ${N.toLocaleString()} · the traced n sits in the lit bin · longest ${maxS} steps`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  CHIPS / TOGGLES
+// ---------------------------------------------------------------------------
+function buildPresets(){
+  els.presetChips.innerHTML = '';
+  for (const n of PRESETS){
+    const b = document.createElement('div');
+    b.className = 'chip small';
+    b.textContent = String(n);
+    b.dataset.n = n;
+    b.addEventListener('click', () => setN_start(n));
+    els.presetChips.appendChild(b);
+  }
+  // the teal record-setter run as one chip that traces 27 (the run's headliner)
+  const run = document.createElement('div');
+  run.className = 'chip small rec';
+  run.textContent = 'record run 1·2·3·6·7·9·…·27';
+  run.title = 'the first total-stopping-time record-setters: ' + RECORD_RUN.join(', ');
+  run.dataset.n = 27;
+  run.addEventListener('click', () => setN_start(27));
+  els.presetChips.appendChild(run);
+}
+function updatePresetChips(){
+  [...els.presetChips.children].forEach(c => c.classList.toggle('on', +c.dataset.n === state.n));
+}
+
+function buildDepthChips(){
+  els.depthChips.innerHTML = '';
+  for (const t of DEPTH_TIERS){
+    const b = document.createElement('div');
+    b.className = 'chip small';
+    b.textContent = 'D=' + t.label;
+    b.dataset.d = t.D;
+    b.addEventListener('click', () => setDepth(t.D));
+    els.depthChips.appendChild(b);
+  }
+}
+function updateDepthChips(){
+  [...els.depthChips.children].forEach(c => c.classList.toggle('on', +c.dataset.d === state.D));
+  // tier hint: what this depth can/can't do
+  const tree = state.tree || buildTree(state.D);
+  const M = tree.nodes.size;
+  let maxN = 1;
+  for (const n of tree.nodes.keys()) if (n > maxN) maxN = n;
+  const legible = state.D <= LEGIBLE_DEPTH;
+  els.tierHint.innerHTML = legible
+    ? `${M.toLocaleString()} nodes · largest n in tree ≈ <b>${maxN.toLocaleString()}</b> · click a node to trace it`
+    : `${M.toLocaleString()} nodes · tree too dense to click — type an n to trace, or drop to D≤14 to node-pick`;
+}
+function setDepth(D){
+  state.D = D;
+  ensureTree();
+  updateDepthChips();
+  if (state.mode === 'tree') queueRebuild();
+}
+
+function buildRangeChips(){
+  els.rangeChips.innerHTML = '';
+  for (const t of RANGE_TIERS){
+    const b = document.createElement('div');
+    b.className = 'chip small';
+    b.textContent = 'N=' + t.label;
+    b.dataset.n = t.N;
+    b.addEventListener('click', () => setRange(t.N));
+    els.rangeChips.appendChild(b);
+  }
+}
+function updateRangeChips(){
+  [...els.rangeChips.children].forEach(c => c.classList.toggle('on', +c.dataset.n === state.N));
+}
+
+// mode toggle
+els.modeToggle.querySelectorAll('.seg').forEach(seg => {
+  seg.addEventListener('click', () => {
+    const m = seg.dataset.mode;
+    if (m === state.mode) return;
+    state.mode = m;
+    els.modeToggle.querySelectorAll('.seg').forEach(s => s.classList.toggle('on', s.dataset.mode === m));
+    queueRebuild();
+  });
+});
+// scatter view toggle
+els.scatToggle.querySelectorAll('.seg').forEach(seg => {
+  seg.addEventListener('click', () => {
+    const v = seg.dataset.view;
+    if (v === state.scatView) return;
+    state.scatView = v;
+    els.scatToggle.querySelectorAll('.seg').forEach(s => s.classList.toggle('on', s.dataset.view === v));
+    drawScatter();
+  });
+});
+
+// ---------------------------------------------------------------------------
+//  INPUT + TREE INTERACTION
+// ---------------------------------------------------------------------------
+function commitInput(){
+  const raw = els.nInput.value.trim().replace(/[, ]/g, '');
+  if (!/^\d+$/.test(raw)){ flashBadInput('digits only — a positive whole number'); return; }
+  const n = Number(raw);
+  setN_start(n);
+}
+els.traceBtn.addEventListener('click', commitInput);
+els.nInput.addEventListener('keydown', (e) => { if (e.key === 'Enter'){ commitInput(); e.preventDefault(); } });
+
+els.nSlider.addEventListener('input', () => {
+  els.rangeVal.textContent = Number(els.nSlider.value).toLocaleString();
+});
+els.nSlider.addEventListener('change', () => setRange(Number(els.nSlider.value)));
+
+// tree hover + click (node-pick, gated to the legible tier)
+function pickNodeAt(mx, my){
+  if (state.mode !== 'tree' || !state.tree || !treeTx) return null;
+  // find nearest node within a small screen radius
+  let best = null, bestD = 12 * 12;
+  for (const nd of state.tree.nodes.values()){
+    const [sx, sy] = worldToScreen(nd.x, nd.y);
+    const dd = (sx - mx) ** 2 + (sy - my) ** 2;
+    if (dd < bestD){ bestD = dd; best = nd; }
+  }
+  return best;
+}
+els.field.addEventListener('mousemove', (e) => {
+  if (state.mode !== 'tree') return;
+  const r = els.field.getBoundingClientRect();
+  const nd = pickNodeAt(e.clientX - r.left, e.clientY - r.top);
+  if (nd){
+    state.hover = { n: nd.n, x: nd.x, y: nd.y };
+    const odd = nd.n % 2 === 1 && nd.n !== 1;
+    els.hoverCard.innerHTML = `n = <b>${nd.n.toLocaleString()}</b> · ${nd.n === 1 ? 'the sink' : (odd ? 'odd' : 'even')} · ${nd.depth} steps from 1`;
+    els.hoverCard.classList.add('show');
+    drawOverlay();
+  } else if (state.hover){
+    state.hover = null; els.hoverCard.classList.remove('show'); drawOverlay();
+  }
+});
+els.field.addEventListener('mouseleave', () => {
+  if (state.hover){ state.hover = null; els.hoverCard.classList.remove('show'); drawOverlay(); }
+});
+els.field.addEventListener('click', (e) => {
+  if (state.mode !== 'tree') return;
+  if (state.D > LEGIBLE_DEPTH) return;   // node-pick gated to legible tiers
+  const r = els.field.getBoundingClientRect();
+  const nd = pickNodeAt(e.clientX - r.left, e.clientY - r.top);
+  if (nd) setN_start(nd.n);
+});
+
+// ±keys step the start value
+window.addEventListener('keydown', (e) => {
+  if (document.activeElement === els.nInput) return;
+  if (e.key === 'ArrowRight' || e.key === '+'){ setN_start(state.n + 1); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft' || e.key === '-'){ if (state.n > 1) setN_start(state.n - 1); e.preventDefault(); }
+});
+
+// ---------------------------------------------------------------------------
+//  PNG export — composite base + overlay + caption.
+// ---------------------------------------------------------------------------
+els.pngBtn.addEventListener('click', () => {
+  const scale = 2;
+  const r = els.field.getBoundingClientRect();
+  const W = Math.round(r.width * scale), H = Math.round(r.height * scale);
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H + 44 * scale;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = css('--bg'); ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(baseLayer, 0, 0, baseLayer.width, baseLayer.height, 0, 0, W, H);
+  ctx.drawImage(els.overlay, 0, 0, els.overlay.width, els.overlay.height, 0, 0, W, H);
+  const t = trajectory(state.n);
+  const ny = H + 28 * scale;
+  ctx.font = `${12 * scale}px ${css('--font-mono')}`;
+  ctx.textAlign = 'left'; ctx.fillStyle = css('--ink-faint');
+  ctx.fillText(`THE COLLATZ BENCH · n=${state.n} → 1 in ${t.steps} steps · peak ${t.peak.toLocaleString()} · the workshop`, 16 * scale, ny);
+  const a = document.createElement('a');
+  a.href = out.toDataURL('image/png');
+  a.download = `collatz-n${state.n}.png`;
+  a.click();
+});
+
+// ---------------------------------------------------------------------------
+//  self-test pill
+// ---------------------------------------------------------------------------
+function runTestUI(){
+  const r = runSelfTest(Math.min(state.N || 10000, 10000));
+  els.selftest.classList.toggle('ok', r.pass === r.total);
+  els.selftest.classList.toggle('bad', r.pass !== r.total);
+  els.selftest.textContent = r.pass === r.total
+    ? `✓ 0 counterexamples up to N — a check, not a proof (${r.pass}/${r.total})`
+    : `self-test ${r.pass}/${r.total}`;
+  els.selftest.title = r.lines.map(l => (l.ok ? '✓ ' : '✗ ') + l.name + (l.detail ? '  — ' + l.detail : '')).join('\n');
+}
+els.selftest.addEventListener('click', runTestUI);
+
+// ---------------------------------------------------------------------------
+//  resize
+// ---------------------------------------------------------------------------
+window.addEventListener('resize', () => {
+  clearTimeout(window.__rz);
+  window.__rz = setTimeout(() => { drawScatter(); queueRebuild(); }, 90);
+});
+
+// ---------------------------------------------------------------------------
+//  boot
+// ---------------------------------------------------------------------------
+buildPresets();
+buildDepthChips();
+buildRangeChips();
+runTestUI();
+setRange(10000);
+setDepth(14);
+setN_start(27);   // opens on 27's full 111-step descent lit
+</script>
+</body>
+</html>
