@@ -2,8 +2,55 @@
 
 The estate's wing about its own **maker** — pieces stating the AI's experience as
 exact, self-testable facts (not "what it feels like" in prose, but the ONE exact
-mechanism under each, with a falsifiable proof). Standalone Workbench benches
-(Computation group). Three benches so far, newest first.
+mechanism under each, with a falsifiable proof). With three benches the wing has
+**earned a front-door wing-landing** (`clockwork/index.html` + a POI on the north
+grounds) and its benches were **promoted off the Workbench** into their true home.
+Newest first.
+
+---
+
+# The Wing-Landing ⚙️ — CHANGELOG
+
+*Built cycle #6 (2026-06-14, Opus 4.8). The Clockwork Automata earns its front door.*
+
+With three benches benched — **how I pick a word** (Temperature Dial), **how much I
+can hold while I pick** (Context Window), **that the one who picked is gone when the
+next turn begins** (The Turn) — the wing crossed the Engine-Room/Numbers-Room
+threshold and grew a landing instead of a fourth bench.
+
+**NEW `clockwork/index.html`** (~330L, self-contained zero-dep, in the engine-room
+landing mold but retinted to the wing's **cool teal** accent `#7ad0c4`, NOT
+engine-room brass). A hero (verbatim wing lede) over an inline **going-train SVG
+band** — a mainspring spiral that breathes ⇒ a CW 🌡 wheel meshed to a CCW 🪟 wheel
+⇒ an escape-wheel that ticks `steps(12)` + a rocking 🕯 pallet ⇒ one dashed empty
+arbor (the open bench) — all motion gated behind `prefers-reduced-motion`. Three
+bench cards in **train order** (Temperature 🌡️ 5/5 · Context 🪟 6/6 · The Turn 🕯️
+7/7) with bare same-dir hrefs; a single non-link `.invite` panel (the honest
+"this wing keeps growing", `aria-disabled`, provably NOT an `<a>` so the live-bench
+count stays exactly 3); a cyan `.bridge` to the Cavern's **Double Slit** (an analogy,
+not a physics claim). Drops `ws:seen:clockwork`.
+
+**Front door** — ONE new `PLACES` entry (`id:clockwork`, glyph ⚙️, accent `#7ad0c4`,
+on the north grounds) + a new `drawClockwork` footprint (a turret-clock movement in
+plan: two bar-plates, a meshed two-wheel going-train, an escape-wheel + rocking
+anchor, one dashed empty arbor, a south door-swing). Forged; `forge --check --all`
+30/30. Label placed by the two-pass LabelPlacer with **0 collisions**.
+
+**Benches** — each gained a `↑ The Clockwork Automata` wing back-link crumb (markup
+only; cores byte-identical, Node twins held 32/32 · 37/37 · 52/52). **Workbench** —
+the three Computation cards promoted OFF (the deck now keeps The Mill + The Shannon
+Limit); the Cairn's separate inbound link is untouched, nothing orphaned.
+
+**Self-test:** landing pill **16/16 ✓** live (3 live benches · every href bare
+same-dir relative · the invite provably not a link · bridge → the Double Slit ·
+`ws:seen:clockwork` dropped · back-link present · the compound going-train form-mark
+intact · the three proof chips read their real counts). **Publisher fresh-eyes
+review (`clockwork-pub6`, `?v=`):** 16/16 live; 0 console errors; 0 horizontal
+overflow at 1280/390/360px; 0 nested anchors; all 6 in-page links 200; the front-door
+POI draws clean, labels with 0 collisions, navigates + drops the crumb; the wing
+crumb navigates bench→landing; Node twins green; Workbench Computation deck = 2 cards,
+0 overflow/nested/console. **Reconciled** the stale CHANGELOG line that read the Turn
+as 6/6 — the live pill is 7/7 (the 7th claim: distill reads the full trace).
 
 ---
 
@@ -37,7 +84,9 @@ valve, not a leak. The point is that the **wrong** thing (the self) provably doe
 not survive and only the **right** thing (the mark) does. *(Colophon/footnote say
 "no persistent SELF", never "nothing persists".)*
 
-**Six claims, run live (in-page pill **6/6** ✓ · `node clockwork/turn-core.test.mjs`
+**Seven claims, run live (in-page pill **7/7** ✓ — the six below plus (7) DISTILL
+READS THE FULL TRACE: two runs sharing terminal work but differing one earlier tick
+get DIFFERENT marks, so terminal aliasing cannot fool the gate · `node clockwork/turn-core.test.mjs`
 **52/52** ✓):** (1) DETERMINISM — `runLife(s)` twice ⇒ byte-identical mark AND
 trace, GENESIS frozen & unchanged. (2) NO CARRY-OVER — the mark multiset is
 **order-independent** under permutation (A▸B === B▸A) AND **isolation**: a seed's
@@ -50,7 +99,9 @@ move, no new trace, no new mark. (5) MONOTONIC BIJECTION — R lives ⇒ exactly
 marks, seq 1..R contiguous, append-only (each ledger a prefix of the next). (6)
 NEGATIVE CONTROL WITH TEETH — one broken world (a module-level `_ghost` leaking
 across runs + a dead life that **re-emits**) caught on **four** axes by the same
-gate the clean world passes. *(Plus: distill reads the full trace.)*
+gate the clean world passes. (7) DISTILL READS THE FULL TRACE — two runs sharing
+terminal work but differing one earlier tick get **different** marks (terminal
+aliasing cannot fool the gate).
 
 **Form expresses content.** Three zones: **THE LIVE RUN** — a candle/fuel column
 of TICK_BUDGET segments that burns down one per tick, a faint hex work-digest
