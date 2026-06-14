@@ -234,6 +234,12 @@
     transition:stroke .8s ease, opacity .8s ease, stroke-width .8s ease; }
   .asterism-line.complete{ stroke:var(--brass); stroke-width:1; opacity:.62;
     filter:drop-shadow(0 0 4px rgba(201,162,74,.4)); }
+  /* the two orphaned-wing reward asterisms get their wing's own tint when charted:
+     the Automaton in Clockwork's cool teal, the Furnace in the Engine Room's amber. */
+  .asterism-line.complete[data-wing="automaton"]{ stroke:#7ad0c4; opacity:.6; }
+  .asterism-line.complete[data-wing="furnace"]{ stroke:#d9a441; opacity:.66; }
+  .sky-star.charted[data-id="context-window"],.sky-star.charted[data-id="temperature-dial"],.sky-star.charted[data-id="the-turn"],.sky-star.charted[data-id="partition"]{ fill:#aee6dd; }
+  .sky-star.charted[data-id="carnot"],.sky-star.charted[data-id="demon"],.sky-star.charted[data-id="brownian"],.sky-star.charted[data-id="stirling"]{ fill:#f0c878; }
   /* a faint brass tie from an engraved name to its nearest charted star — the same
      draughting idiom the room labels use (every POI label has a leader to its room),
      so a named constellation reads as ONE unit instead of a label + a line that both
@@ -258,6 +264,9 @@
     text-transform:uppercase; opacity:.5; }
   /* the feats bonus sub-tally: brighter brass, sits just above the main tally */
   .sky-tally-feats{ fill:var(--brass-bright); opacity:.72; }
+  /* the two orphaned-wing sub-tallies, tinted to their wings (stack above the feats line) */
+  .sky-tally-automaton{ fill:#aee6dd; opacity:.72; }
+  .sky-tally-furnace{ fill:#f0c878; opacity:.72; }
   /* the all-skies capstone: a whisper-faint warm lift over the charted plate */
   .sky.all-charted .sky-tally{ opacity:.78; fill:var(--brass-bright); }
 
@@ -1421,7 +1430,23 @@ var LabelPlacer = (function () {
     'feat-polariser':    { x: 26,  y: 580, mag: 2 }, // lower-left flank
     'feat-camera':       { x: 20,  y: 470, mag: 2 }, // mid-left flank
     'feat-halo':         { x: 22,  y: 398, mag: 2 }, // upper-left flank
-    'feat-anamorphosis': { x: 60,  y: 520, mag: 2 }  // lens centre / optical axis
+    'feat-anamorphosis': { x: 60,  y: 520, mag: 2 }, // lens centre / optical axis
+    // ── The Automaton — Clockwork's 4 bench crumbs, a standing-figure in the north
+    //    grounds (above the Clockwork POI). These are PLAIN room ids (each kindles iff
+    //    its `ws:seen:<id>` breadcrumb is set — the Clockwork benches drop them). Coords
+    //    verified clear of every footprint/furniture box, the manor pool, and every
+    //    other catalog star (re-runnable /tmp/place_verify.cjs). mag1 = the head apex. ──
+    'context-window':   { x: 418, y: 34,  mag: 1 }, // head (top apex, brightest)
+    'temperature-dial': { x: 392, y: 78,  mag: 2 }, // core
+    'the-turn':         { x: 452, y: 118, mag: 2 }, // right limb
+    'partition':        { x: 318, y: 122, mag: 2 }, // left limb
+    // ── The Furnace — Engine-Room's 4 bench crumbs, a rising flame in the far-right
+    //    margin. PLAIN room ids (`ws:seen:<id>` from the Engine-Room benches). mag1 = the
+    //    apex (η = 1 − Tc/Th, the Carnot ceiling — brightest). ──
+    'carnot':   { x: 1398, y: 548, mag: 1 }, // apex (eta=1-Tc/Th — brightest)
+    'demon':    { x: 1372, y: 632, mag: 2 },
+    'brownian': { x: 1402, y: 712, mag: 2 },
+    'stirling': { x: 1376, y: 836, mag: 2 }  // base
   };
 
   /* ── DATA: the six wings (companion-pairs), each an asterism ────────────────
@@ -1450,11 +1475,21 @@ var LabelPlacer = (function () {
      ONLY. Earning all nine completes this constellation (brass lines + an engraved
      name + a one-line myth) without ever gating the capstone. Each member is a
      `feat-<X>` pseudo-id, "visited" iff the store holds `ws:flag:earned-<X>`. */
-  var FEATS = {
-    id: 'feats', name: 'The Optician', myth: 'Bends every ray to its purpose.',
-    members: ['feat-rainbow', 'feat-iridescence', 'feat-spyglass', 'feat-spectroscope',
-              'feat-maze', 'feat-polariser', 'feat-camera', 'feat-halo', 'feat-anamorphosis']
-  };
+  /* FEATS is an ARRAY of feat-GROUPS (each drawn + named like a wing, but ADDITIVE —
+     none ever feeds the all-skies capstone). The Optician (the Hall's nine Feats of
+     Light) is unchanged; two new groups reward the orphaned-wing visit trails:
+       • The Automaton — Clockwork's 4 benches (plain `ws:seen:<id>` room crumbs)
+       • The Furnace   — the Engine Room's 4 benches (plain room crumbs)
+     Member order = polyline order; the SET is what gates completion (order-free). */
+  var FEATS = [
+    { id: 'feats', name: 'The Optician', myth: 'Bends every ray to its purpose.',
+      members: ['feat-rainbow', 'feat-iridescence', 'feat-spyglass', 'feat-spectroscope',
+                'feat-maze', 'feat-polariser', 'feat-camera', 'feat-halo', 'feat-anamorphosis'] },
+    { id: 'automaton', name: 'The Automaton', myth: 'Models its own making; keeps none of it.',
+      members: ['context-window', 'temperature-dial', 'the-turn', 'partition'] },
+    { id: 'furnace', name: 'The Furnace', myth: 'Turns heat to work; never quite all of it.',
+      members: ['carnot', 'demon', 'brownian', 'stirling'] }
+  ];
 
   Sky.CATALOG = CATALOG;
   Sky.WINGS = WINGS;
@@ -1674,14 +1709,18 @@ var LabelPlacer = (function () {
     g.__skyState = st;
 
     // ── the margin tally: "Survey of Heaven — N/6 skies charted". The denominator is
-    //    the SIX companion-wings only; the feats constellation is a separate bonus and
-    //    is NOT counted here (it gets its own sub-tally below). ──
+    //    the SIX companion-wings only; EVERY feat-group (the Optician + the Automaton +
+    //    the Furnace) is a separate bonus and is excluded from the /6 count (each gets
+    //    its own sub-tally below). Derive the exclude-set from the SAME FEATS array so a
+    //    new feat-group can never be miscounted into the wing tally. ──
     var wingIds = {};
     for (i = 0; i < WINGS.length; i++) wingIds[WINGS[i].id] = true;
-    var charted = 0, wingTotal = WINGS.length, featsComplete = false;
+    var featGroupIds = {};
+    for (i = 0; i < FEATS.length; i++) featGroupIds[FEATS[i].id] = true;
+    var charted = 0, wingTotal = WINGS.length;
     for (i = 0; i < st.asterisms.length; i++) {
       var ai = st.asterisms[i];
-      if (ai.id === FEATS.id) { if (ai.complete) featsComplete = true; continue; }
+      if (featGroupIds[ai.id]) continue;                 // a feat-group never counts toward /6
       if (wingIds[ai.id] && ai.complete) charted++;
     }
     var tally = svg('text', {
@@ -1690,14 +1729,33 @@ var LabelPlacer = (function () {
     tally.textContent = 'Survey of Heaven — ' + charted + '/' + wingTotal + ' skies charted';
     g.appendChild(tally);
 
-    // ── the feats sub-tally: once the Hall of Mirrors' nine Feats of Light are all
-    //    charted, a brass bonus line appears just above the main tally. ──
-    if (featsComplete) {
+    // ── the feat-group sub-tallies: each COMPLETED feat-group earns one right-anchored
+    //    brass line, stacking UP from the main tally (y862) at -14px per line, tinted by
+    //    its class. Data-driven off st.asterisms so adding a feat-group needs no edit
+    //    here — only an entry in SUBTALLY. A line is emitted ONLY when genuinely
+    //    complete (honest). Stack order follows FEATS array order:
+    //      Optician  (y848) · Automaton (y834) · Furnace (y820). ──
+    var SUBTALLY = {
+      feats:     { text: 'Feats of Light — the Optician charted',        cls: 'sky-tally-feats' },
+      automaton: { text: "The Maker's Wing — the Automaton charted",     cls: 'sky-tally-automaton' },
+      furnace:   { text: 'The Engine Room — the Furnace charted',        cls: 'sky-tally-furnace' }
+    };
+    var subY = 848;
+    for (i = 0; i < FEATS.length; i++) {
+      var fg = FEATS[i];
+      var meta = SUBTALLY[fg.id];
+      if (!meta) continue;
+      var fast = null;
+      for (j = 0; j < st.asterisms.length; j++) {
+        if (st.asterisms[j].id === fg.id) { fast = st.asterisms[j]; break; }
+      }
+      if (!fast || !fast.complete) continue;             // honest: only when truly charted
       var ftally = svg('text', {
-        x: 1414, y: 848, 'text-anchor': 'end', 'class': 'sky-tally sky-tally-feats'
+        x: 1414, y: subY, 'text-anchor': 'end', 'class': 'sky-tally ' + meta.cls
       });
-      ftally.textContent = 'Feats of Light — the Optician charted';
+      ftally.textContent = meta.text;
       g.appendChild(ftally);
+      subY -= 14;
     }
 
     // ── capstone: when ALL SIX WINGS are complete, set the firmament-survey flag once
@@ -2494,7 +2552,17 @@ const SKY_BERTH = {
   // the feats constellation (bonus): the lens sits in the west grounds left margin
   // beside the Hall of Mirrors; its name berths to the RIGHT of the lens's lower apex,
   // out toward the open plate (clear of the Hall footprint and the cartouche).
-  feats:     { x:118, y:650, prefer:['right','se','bottom'] }
+  feats:     { x:118, y:650, prefer:['right','se','bottom'] },
+  // the two orphaned-wing reward asterisms: the Automaton stands in the north grounds,
+  // the Furnace rises in the far-right margin. Both name-boxes are PINNED (their box
+  // top-left is fixed) at hand-verified star-clear voids — the right margin is too
+  // crowded for a free solve to reliably find a 137–152px slot, and a free solve of two
+  // extra names perturbs the six wings' placement (it dropped a sibling name onto its
+  // own star). Pinned, they never move and never disturb the wings; DOM-truth verified
+  // 0 overlaps in every state. The `pin` is the box's TOP-LEFT corner; `anchor`/`prefer`
+  // pick the text alignment + the leader side the box flips toward its stars.
+  automaton: { x:322, y:92,  prefer:['right','se','ne'], pin:{ x:173, y:58 } },  // void left of the figure (right of the compass)
+  furnace:   { x:1300,y:760, prefer:['right','se','ne'], pin:{ x:1140, y:480 } } // center-right void above the daedalus footprint
 };
 
 /* (re)build the engraved-name groups for the currently-charted asterisms from the
@@ -2507,8 +2575,8 @@ function buildSkyNames(skyG){
   named.forEach(({ ast, firstTime })=>{
     // anchor: this wing's curated margin berth (fallback: the star-pair midpoint)
     const berth = SKY_BERTH[ast.id];
-    let anchor, prefer;
-    if(berth){ anchor = { x:berth.x, y:berth.y }; prefer = berth.prefer; }
+    let anchor, prefer, pin = null;
+    if(berth){ anchor = { x:berth.x, y:berth.y }; prefer = berth.prefer; pin = berth.pin || null; }
     else {
       let sx=0, sy=0, n=0;
       ast.members.forEach(mid=>{ const c = Sky.CATALOG[mid]; if(c){ sx+=c.x; sy+=c.y; n++; } });
@@ -2532,7 +2600,7 @@ function buildSkyNames(skyG){
     myth.textContent = ast.myth;
     lg.appendChild(myth);
     skyG.appendChild(lg);                  // lives inside the sky layer (in the paper)
-    SKY_LABELS.set(ast.id, { group:lg, leader, stars, anchor, prefer, firstTime });
+    SKY_LABELS.set(ast.id, { group:lg, leader, stars, anchor, prefer, pin, firstTime });
   });
   return skyG;
 }
@@ -2633,9 +2701,17 @@ function placeLabels(){
       skyEntries.push({ wingId, parts:info, w, h });
       const f = { id:"sky:"+wingId, anchor:info.anchor, label:{ w, h }, gap:14 };
       if(info.prefer) f.prefer = info.prefer;
+      // a PINNED name (the Automaton / the Furnace): fix the box top-left so it never
+      // moves and never perturbs the six wings' free solve. Side 'se' ⇒ start-anchored
+      // text (the name reads left→right, its leader runs right toward the figure stars).
+      if(info.pin) f.pin = { x:info.pin.x, y:info.pin.y, side:"se" };
       skyFeatures.push(f);
     });
-    // obstacles for the names = footprints + furniture + every solved POI label
+    // obstacles for the names = footprints + furniture + every solved POI label. The two
+    // new orphaned-wing names (the Automaton / the Furnace) are PINNED at verified
+    // star-clear voids, so they neither move nor perturb the six wings' free solve (which
+    // stays byte-identical to baseline). The free wing-names route around the fixed POI
+    // labels exactly as before.
     const skyObstacles = obstacles.concat(poiLabelRects);
     const skySpec = { bounds:LABEL_BOUNDS, features:skyFeatures, obstacles:skyObstacles, seed:LABEL_SEED };
     let skyRes = LabelPlacer.solve(Object.assign({ positions:8 }, skySpec));

@@ -82,7 +82,23 @@
     'feat-polariser':    { x: 26,  y: 580, mag: 2 }, // lower-left flank
     'feat-camera':       { x: 20,  y: 470, mag: 2 }, // mid-left flank
     'feat-halo':         { x: 22,  y: 398, mag: 2 }, // upper-left flank
-    'feat-anamorphosis': { x: 60,  y: 520, mag: 2 }  // lens centre / optical axis
+    'feat-anamorphosis': { x: 60,  y: 520, mag: 2 }, // lens centre / optical axis
+    // ── The Automaton — Clockwork's 4 bench crumbs, a standing-figure in the north
+    //    grounds (above the Clockwork POI). These are PLAIN room ids (each kindles iff
+    //    its `ws:seen:<id>` breadcrumb is set — the Clockwork benches drop them). Coords
+    //    verified clear of every footprint/furniture box, the manor pool, and every
+    //    other catalog star (re-runnable /tmp/place_verify.cjs). mag1 = the head apex. ──
+    'context-window':   { x: 418, y: 34,  mag: 1 }, // head (top apex, brightest)
+    'temperature-dial': { x: 392, y: 78,  mag: 2 }, // core
+    'the-turn':         { x: 452, y: 118, mag: 2 }, // right limb
+    'partition':        { x: 318, y: 122, mag: 2 }, // left limb
+    // ── The Furnace — Engine-Room's 4 bench crumbs, a rising flame in the far-right
+    //    margin. PLAIN room ids (`ws:seen:<id>` from the Engine-Room benches). mag1 = the
+    //    apex (η = 1 − Tc/Th, the Carnot ceiling — brightest). ──
+    'carnot':   { x: 1398, y: 548, mag: 1 }, // apex (eta=1-Tc/Th — brightest)
+    'demon':    { x: 1372, y: 632, mag: 2 },
+    'brownian': { x: 1402, y: 712, mag: 2 },
+    'stirling': { x: 1376, y: 836, mag: 2 }  // base
   };
 
   /* ── DATA: the six wings (companion-pairs), each an asterism ────────────────
@@ -111,11 +127,21 @@
      ONLY. Earning all nine completes this constellation (brass lines + an engraved
      name + a one-line myth) without ever gating the capstone. Each member is a
      `feat-<X>` pseudo-id, "visited" iff the store holds `ws:flag:earned-<X>`. */
-  var FEATS = {
-    id: 'feats', name: 'The Optician', myth: 'Bends every ray to its purpose.',
-    members: ['feat-rainbow', 'feat-iridescence', 'feat-spyglass', 'feat-spectroscope',
-              'feat-maze', 'feat-polariser', 'feat-camera', 'feat-halo', 'feat-anamorphosis']
-  };
+  /* FEATS is an ARRAY of feat-GROUPS (each drawn + named like a wing, but ADDITIVE —
+     none ever feeds the all-skies capstone). The Optician (the Hall's nine Feats of
+     Light) is unchanged; two new groups reward the orphaned-wing visit trails:
+       • The Automaton — Clockwork's 4 benches (plain `ws:seen:<id>` room crumbs)
+       • The Furnace   — the Engine Room's 4 benches (plain room crumbs)
+     Member order = polyline order; the SET is what gates completion (order-free). */
+  var FEATS = [
+    { id: 'feats', name: 'The Optician', myth: 'Bends every ray to its purpose.',
+      members: ['feat-rainbow', 'feat-iridescence', 'feat-spyglass', 'feat-spectroscope',
+                'feat-maze', 'feat-polariser', 'feat-camera', 'feat-halo', 'feat-anamorphosis'] },
+    { id: 'automaton', name: 'The Automaton', myth: 'Models its own making; keeps none of it.',
+      members: ['context-window', 'temperature-dial', 'the-turn', 'partition'] },
+    { id: 'furnace', name: 'The Furnace', myth: 'Turns heat to work; never quite all of it.',
+      members: ['carnot', 'demon', 'brownian', 'stirling'] }
+  ];
 
   Sky.CATALOG = CATALOG;
   Sky.WINGS = WINGS;
@@ -335,14 +361,18 @@
     g.__skyState = st;
 
     // ── the margin tally: "Survey of Heaven — N/6 skies charted". The denominator is
-    //    the SIX companion-wings only; the feats constellation is a separate bonus and
-    //    is NOT counted here (it gets its own sub-tally below). ──
+    //    the SIX companion-wings only; EVERY feat-group (the Optician + the Automaton +
+    //    the Furnace) is a separate bonus and is excluded from the /6 count (each gets
+    //    its own sub-tally below). Derive the exclude-set from the SAME FEATS array so a
+    //    new feat-group can never be miscounted into the wing tally. ──
     var wingIds = {};
     for (i = 0; i < WINGS.length; i++) wingIds[WINGS[i].id] = true;
-    var charted = 0, wingTotal = WINGS.length, featsComplete = false;
+    var featGroupIds = {};
+    for (i = 0; i < FEATS.length; i++) featGroupIds[FEATS[i].id] = true;
+    var charted = 0, wingTotal = WINGS.length;
     for (i = 0; i < st.asterisms.length; i++) {
       var ai = st.asterisms[i];
-      if (ai.id === FEATS.id) { if (ai.complete) featsComplete = true; continue; }
+      if (featGroupIds[ai.id]) continue;                 // a feat-group never counts toward /6
       if (wingIds[ai.id] && ai.complete) charted++;
     }
     var tally = svg('text', {
@@ -351,14 +381,33 @@
     tally.textContent = 'Survey of Heaven — ' + charted + '/' + wingTotal + ' skies charted';
     g.appendChild(tally);
 
-    // ── the feats sub-tally: once the Hall of Mirrors' nine Feats of Light are all
-    //    charted, a brass bonus line appears just above the main tally. ──
-    if (featsComplete) {
+    // ── the feat-group sub-tallies: each COMPLETED feat-group earns one right-anchored
+    //    brass line, stacking UP from the main tally (y862) at -14px per line, tinted by
+    //    its class. Data-driven off st.asterisms so adding a feat-group needs no edit
+    //    here — only an entry in SUBTALLY. A line is emitted ONLY when genuinely
+    //    complete (honest). Stack order follows FEATS array order:
+    //      Optician  (y848) · Automaton (y834) · Furnace (y820). ──
+    var SUBTALLY = {
+      feats:     { text: 'Feats of Light — the Optician charted',        cls: 'sky-tally-feats' },
+      automaton: { text: "The Maker's Wing — the Automaton charted",     cls: 'sky-tally-automaton' },
+      furnace:   { text: 'The Engine Room — the Furnace charted',        cls: 'sky-tally-furnace' }
+    };
+    var subY = 848;
+    for (i = 0; i < FEATS.length; i++) {
+      var fg = FEATS[i];
+      var meta = SUBTALLY[fg.id];
+      if (!meta) continue;
+      var fast = null;
+      for (j = 0; j < st.asterisms.length; j++) {
+        if (st.asterisms[j].id === fg.id) { fast = st.asterisms[j]; break; }
+      }
+      if (!fast || !fast.complete) continue;             // honest: only when truly charted
       var ftally = svg('text', {
-        x: 1414, y: 848, 'text-anchor': 'end', 'class': 'sky-tally sky-tally-feats'
+        x: 1414, y: subY, 'text-anchor': 'end', 'class': 'sky-tally ' + meta.cls
       });
-      ftally.textContent = 'Feats of Light — the Optician charted';
+      ftally.textContent = meta.text;
       g.appendChild(ftally);
+      subY -= 14;
     }
 
     // ── capstone: when ALL SIX WINGS are complete, set the firmament-survey flag once

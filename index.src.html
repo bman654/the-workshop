@@ -233,6 +233,12 @@
     transition:stroke .8s ease, opacity .8s ease, stroke-width .8s ease; }
   .asterism-line.complete{ stroke:var(--brass); stroke-width:1; opacity:.62;
     filter:drop-shadow(0 0 4px rgba(201,162,74,.4)); }
+  /* the two orphaned-wing reward asterisms get their wing's own tint when charted:
+     the Automaton in Clockwork's cool teal, the Furnace in the Engine Room's amber. */
+  .asterism-line.complete[data-wing="automaton"]{ stroke:#7ad0c4; opacity:.6; }
+  .asterism-line.complete[data-wing="furnace"]{ stroke:#d9a441; opacity:.66; }
+  .sky-star.charted[data-id="context-window"],.sky-star.charted[data-id="temperature-dial"],.sky-star.charted[data-id="the-turn"],.sky-star.charted[data-id="partition"]{ fill:#aee6dd; }
+  .sky-star.charted[data-id="carnot"],.sky-star.charted[data-id="demon"],.sky-star.charted[data-id="brownian"],.sky-star.charted[data-id="stirling"]{ fill:#f0c878; }
   /* a faint brass tie from an engraved name to its nearest charted star — the same
      draughting idiom the room labels use (every POI label has a leader to its room),
      so a named constellation reads as ONE unit instead of a label + a line that both
@@ -257,6 +263,9 @@
     text-transform:uppercase; opacity:.5; }
   /* the feats bonus sub-tally: brighter brass, sits just above the main tally */
   .sky-tally-feats{ fill:var(--brass-bright); opacity:.72; }
+  /* the two orphaned-wing sub-tallies, tinted to their wings (stack above the feats line) */
+  .sky-tally-automaton{ fill:#aee6dd; opacity:.72; }
+  .sky-tally-furnace{ fill:#f0c878; opacity:.72; }
   /* the all-skies capstone: a whisper-faint warm lift over the charted plate */
   .sky.all-charted .sky-tally{ opacity:.78; fill:var(--brass-bright); }
 
@@ -1295,7 +1304,17 @@ const SKY_BERTH = {
   // the feats constellation (bonus): the lens sits in the west grounds left margin
   // beside the Hall of Mirrors; its name berths to the RIGHT of the lens's lower apex,
   // out toward the open plate (clear of the Hall footprint and the cartouche).
-  feats:     { x:118, y:650, prefer:['right','se','bottom'] }
+  feats:     { x:118, y:650, prefer:['right','se','bottom'] },
+  // the two orphaned-wing reward asterisms: the Automaton stands in the north grounds,
+  // the Furnace rises in the far-right margin. Both name-boxes are PINNED (their box
+  // top-left is fixed) at hand-verified star-clear voids — the right margin is too
+  // crowded for a free solve to reliably find a 137–152px slot, and a free solve of two
+  // extra names perturbs the six wings' placement (it dropped a sibling name onto its
+  // own star). Pinned, they never move and never disturb the wings; DOM-truth verified
+  // 0 overlaps in every state. The `pin` is the box's TOP-LEFT corner; `anchor`/`prefer`
+  // pick the text alignment + the leader side the box flips toward its stars.
+  automaton: { x:322, y:92,  prefer:['right','se','ne'], pin:{ x:173, y:58 } },  // void left of the figure (right of the compass)
+  furnace:   { x:1300,y:760, prefer:['right','se','ne'], pin:{ x:1140, y:480 } } // center-right void above the daedalus footprint
 };
 
 /* (re)build the engraved-name groups for the currently-charted asterisms from the
@@ -1308,8 +1327,8 @@ function buildSkyNames(skyG){
   named.forEach(({ ast, firstTime })=>{
     // anchor: this wing's curated margin berth (fallback: the star-pair midpoint)
     const berth = SKY_BERTH[ast.id];
-    let anchor, prefer;
-    if(berth){ anchor = { x:berth.x, y:berth.y }; prefer = berth.prefer; }
+    let anchor, prefer, pin = null;
+    if(berth){ anchor = { x:berth.x, y:berth.y }; prefer = berth.prefer; pin = berth.pin || null; }
     else {
       let sx=0, sy=0, n=0;
       ast.members.forEach(mid=>{ const c = Sky.CATALOG[mid]; if(c){ sx+=c.x; sy+=c.y; n++; } });
@@ -1333,7 +1352,7 @@ function buildSkyNames(skyG){
     myth.textContent = ast.myth;
     lg.appendChild(myth);
     skyG.appendChild(lg);                  // lives inside the sky layer (in the paper)
-    SKY_LABELS.set(ast.id, { group:lg, leader, stars, anchor, prefer, firstTime });
+    SKY_LABELS.set(ast.id, { group:lg, leader, stars, anchor, prefer, pin, firstTime });
   });
   return skyG;
 }
@@ -1434,9 +1453,17 @@ function placeLabels(){
       skyEntries.push({ wingId, parts:info, w, h });
       const f = { id:"sky:"+wingId, anchor:info.anchor, label:{ w, h }, gap:14 };
       if(info.prefer) f.prefer = info.prefer;
+      // a PINNED name (the Automaton / the Furnace): fix the box top-left so it never
+      // moves and never perturbs the six wings' free solve. Side 'se' ⇒ start-anchored
+      // text (the name reads left→right, its leader runs right toward the figure stars).
+      if(info.pin) f.pin = { x:info.pin.x, y:info.pin.y, side:"se" };
       skyFeatures.push(f);
     });
-    // obstacles for the names = footprints + furniture + every solved POI label
+    // obstacles for the names = footprints + furniture + every solved POI label. The two
+    // new orphaned-wing names (the Automaton / the Furnace) are PINNED at verified
+    // star-clear voids, so they neither move nor perturb the six wings' free solve (which
+    // stays byte-identical to baseline). The free wing-names route around the fixed POI
+    // labels exactly as before.
     const skyObstacles = obstacles.concat(poiLabelRects);
     const skySpec = { bounds:LABEL_BOUNDS, features:skyFeatures, obstacles:skyObstacles, seed:LABEL_SEED };
     let skyRes = LabelPlacer.solve(Object.assign({ positions:8 }, skySpec));

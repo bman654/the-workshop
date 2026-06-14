@@ -26,7 +26,15 @@
 const Sky = require('./sky.js');
 const CATALOG = Sky.CATALOG;
 const WINGS = Sky.WINGS;
-const FEATS = Sky.FEATS;   // the BONUS feats constellation (NOT a wing; never gates the capstone)
+// Sky.FEATS is now an ARRAY of feat-GROUPS (each a BONUS asterism — drawn + named like a
+// wing, but NONE ever gates the all-skies capstone). Tolerate the legacy single-object
+// shape so this battery is robust either way.
+const FEAT_GROUPS = Array.isArray(Sky.FEATS) ? Sky.FEATS : [Sky.FEATS];
+const OPTICIAN  = FEAT_GROUPS.find(g => g.id === 'feats');     // the Hall's nine Feats of Light
+const AUTOMATON = FEAT_GROUPS.find(g => g.id === 'automaton'); // Clockwork's 4 bench crumbs
+const FURNACE   = FEAT_GROUPS.find(g => g.id === 'furnace');   // the Engine Room's 4 bench crumbs
+// the legacy Optician sub-suite (174-228) refers to `FEATS` as the single Optician group.
+const FEATS = OPTICIAN;
 
 /* ── tiny assert harness ──────────────────────────────────────────────────── */
 let pass = 0, fail = 0;
@@ -131,33 +139,35 @@ function inViewBox(s) {
   ok(ptMonoOK, 'MONOTONICITY: a superset of visits never shrinks a wing line');
 })();
 
-/* ── (3) COMPLETION-IFF — complete === members.every(visited); battery sweep ── */
+/* ── (3) COMPLETION-IFF — complete === members.every(visited); battery sweep ──
+   Pass the FULL feat-group ARRAY (the Optician + the Automaton + the Furnace) so the
+   battery exercises every group exactly as the renderer's default does. ── */
 (function () {
-  // full set: every asterism (wings AND the feats constellation) complete, capstone on
+  // full set: every asterism (wings AND every feat-group) complete, capstone on
   const full = Object.keys(CATALOG);
-  const sFull = Sky.state(full, CATALOG, WINGS, FEATS);
+  const sFull = Sky.state(full, CATALOG, WINGS, FEAT_GROUPS);
   let allComp = true;
   sFull.asterisms.forEach(a => { if (!a.complete) allComp = false; });
-  ok(allComp, 'COMPLETION: full visit-set completes every asterism (incl. the feats constellation)');
+  ok(allComp, 'COMPLETION: full visit-set completes every asterism (incl. all three feat-groups)');
   eq(sFull.allComplete, true, 'COMPLETION: allComplete true on the full set (capstone)');
 
   // empty set: nothing complete, allComplete false
-  const sEmpty = Sky.state([], CATALOG, WINGS, FEATS);
+  const sEmpty = Sky.state([], CATALOG, WINGS, FEAT_GROUPS);
   ok(sEmpty.asterisms.every(a => !a.complete), 'COMPLETION: empty set completes nothing');
   eq(sEmpty.allComplete, false, 'COMPLETION: allComplete false on the empty set');
 
   // member-minus-one: for EACH wing, drop ONE member from the full set → that
   // wing (and only that wing) must be incomplete; allComplete must be false.
-  const allGroups = WINGS.concat([FEATS]);
+  const allGroups = WINGS.concat(FEAT_GROUPS);
   let iffOK = true, noFalseComplete = true;
   for (const wing of WINGS) {
     for (const drop of wing.members) {
       const visited = full.filter(id => id !== drop);
-      const st = Sky.state(visited, CATALOG, WINGS, FEATS);
+      const st = Sky.state(visited, CATALOG, WINGS, FEAT_GROUPS);
       const target = st.asterisms.find(a => a.id === wing.id);
       if (target.complete) noFalseComplete = false;     // missing a member ⇒ must NOT complete
       if (st.allComplete) iffOK = false;                 // a hole ⇒ capstone must NOT fire
-      // and the IFF must hold for EVERY asterism in this state (wings + feats)
+      // and the IFF must hold for EVERY asterism in this state (wings + every feat-group)
       st.asterisms.forEach(a => {
         const g = allGroups.find(x => x.id === a.id);
         const everVisited = g.members.every(m => visited.indexOf(m) >= 0);
@@ -227,6 +237,106 @@ function inViewBox(s) {
   ok(!v['sky-bootstrap'] && !v['feat-bootstrap'], 'visitedFromStore: unrelated flags are ignored');
 })();
 
+/* ── the WINGS-ONLY capstone predicate. allComplete MUST equal exactly this — the
+   feat-groups (Optician/Automaton/Furnace) are ADDITIVE and can never move it. ── */
+function capstoneShouldBe(visited) {
+  const vs = Array.isArray(visited) ? new Set(visited) : visited;
+  const has = id => (vs.has ? vs.has(id) : !!vs[id]);
+  return WINGS.length > 0 && WINGS.every(w => w.members.every(m => has(m)));
+}
+const ALL_WING_MEMBERS = [];
+WINGS.forEach(w => w.members.forEach(m => ALL_WING_MEMBERS.push(m)));
+
+/* ── (3c) THE TWO NEW REWARD-WING ASTERISMS (the Automaton + the Furnace) ─────────
+   Each is a bonus feat-group built on PLAIN room ids (the wing's bench crumbs), drawn
+   + named like a wing but NEVER feeding the capstone. For each: it EXISTS, has exactly
+   four members, every member is a catalog id, carries a non-empty name + myth, matches
+   the EXACT member SET (order-free), completes only on the full set, and completing it
+   leaves the wings-only capstone untouched. ── */
+[AUTOMATON, FURNACE].forEach(GRP => {
+  const NAME = GRP ? GRP.id : '(missing)';
+  ok(!!GRP, 'NEWGRP ' + NAME + ': the feat-group exists in Sky.FEATS');
+  if (!GRP) return;
+  eq(GRP.members.length, 4, 'NEWGRP ' + NAME + ': has exactly four members');
+  ok(GRP.members.every(m => !!CATALOG[m]), 'NEWGRP ' + NAME + ': every member is a catalog id');
+  ok(typeof GRP.name === 'string' && GRP.name.length > 0
+     && typeof GRP.myth === 'string' && GRP.myth.length > 0,
+     'NEWGRP ' + NAME + ': carries a non-empty name + myth');
+
+  // EXACT member set (sorted compare so polyline order is not brittle)
+  const expected = { automaton: ['context-window','partition','temperature-dial','the-turn'],
+                     furnace:   ['brownian','carnot','demon','stirling'] }[GRP.id];
+  eq(JSON.stringify(GRP.members.slice().sort()), JSON.stringify(expected),
+     'NEWGRP ' + NAME + ': the EXACT member set matches (order-free)');
+
+  // group-only completes but NEVER fires the capstone (no wings visited)
+  const sGrp = Sky.state(GRP.members, CATALOG, WINGS, FEAT_GROUPS);
+  const ast = sGrp.asterisms.find(a => a.id === GRP.id);
+  ok(ast && ast.complete, 'NEWGRP ' + NAME + ': its four crumbs complete the asterism');
+  eq(sGrp.allComplete, false, 'NEWGRP ' + NAME + ': completing it NEVER fires the wings-only capstone');
+  eq(sGrp.allComplete, capstoneShouldBe(GRP.members),
+     'NEWGRP ' + NAME + ': allComplete == the wings-only predicate (group-only)');
+
+  // CAPSTONE-BYTE-INVARIANCE: six wings + ZERO new crumbs ⇒ capstone TRUE & group incomplete
+  const sWingsNoGrp = Sky.state(ALL_WING_MEMBERS, CATALOG, WINGS, FEAT_GROUPS);
+  eq(sWingsNoGrp.allComplete, true, 'NEWGRP ' + NAME + ': six wings + zero new crumbs ⇒ capstone TRUE');
+  const astWO = sWingsNoGrp.asterisms.find(a => a.id === GRP.id);
+  ok(astWO && !astWO.complete, 'NEWGRP ' + NAME + ': with no crumbs the group is incomplete (capstone stands alone)');
+
+  // completion-IFF drop-one sweep: dropping ANY one of the group's crumbs un-completes
+  // it, leaves allComplete == the wings-only predicate, and never touches the OTHER
+  // feat-groups (the Optician + the sibling new group).
+  const OTHERS = FEAT_GROUPS.filter(g => g.id !== GRP.id);
+  let dropOK = true, siblingsUntouched = true;
+  for (const drop of GRP.members) {
+    const visited = ALL_WING_MEMBERS.concat(GRP.members).filter(id => id !== drop);
+    const st = Sky.state(visited, CATALOG, WINGS, FEAT_GROUPS);
+    const t = st.asterisms.find(a => a.id === GRP.id);
+    if (t.complete) dropOK = false;                       // missing one crumb ⇒ NOT complete
+    if (st.allComplete !== capstoneShouldBe(visited)) dropOK = false;
+    if (st.allComplete !== true) dropOK = false;          // the six wings are all present ⇒ TRUE
+    OTHERS.forEach(o => {
+      const oa = st.asterisms.find(a => a.id === o.id);
+      const should = o.members.every(m => visited.indexOf(m) >= 0);
+      if (oa.complete !== should) siblingsUntouched = false;
+    });
+  }
+  ok(dropOK, 'NEWGRP ' + NAME + ': drop-one un-completes it; allComplete == wings-only predicate (stays TRUE)');
+  ok(siblingsUntouched, 'NEWGRP ' + NAME + ': dropping a crumb never touches the OTHER feat-groups');
+});
+
+/* ── (A5) THE GLOBAL CAPSTONE SWEEP — allComplete is byte-invariant: wings-only.
+   Full catalog ⇒ TRUE; drop each WING member ⇒ FALSE and == predicate; drop each NEW
+   crumb ⇒ stays TRUE; empty ⇒ FALSE. One named ok. ── */
+(function () {
+  const full = Object.keys(CATALOG);
+  let capInvariant = true;
+  const check = (visited, why) => {
+    const got = Sky.state(visited, CATALOG, WINGS, FEAT_GROUPS).allComplete;
+    const want = capstoneShouldBe(visited);
+    if (got !== want) { capInvariant = false; console.error('    · capstone drift (' + why + '): got ' + got + ' want ' + want); }
+    return got;
+  };
+  // full catalog ⇒ TRUE
+  if (check(full, 'full') !== true) capInvariant = false;
+  // empty ⇒ FALSE
+  if (check([], 'empty') !== false) capInvariant = false;
+  // drop each WING member ⇒ FALSE (and == predicate)
+  for (const m of ALL_WING_MEMBERS) {
+    if (check(full.filter(id => id !== m), 'drop wing ' + m) !== false) capInvariant = false;
+  }
+  // drop each NEW crumb (Automaton + Furnace members) ⇒ stays TRUE (wings still whole)
+  const NEW_CRUMBS = [].concat(AUTOMATON.members, FURNACE.members);
+  for (const m of NEW_CRUMBS) {
+    if (check(full.filter(id => id !== m), 'drop crumb ' + m) !== true) capInvariant = false;
+  }
+  // drop each OPTICIAN feat ⇒ stays TRUE (the Optician never gated the capstone either)
+  for (const m of OPTICIAN.members) {
+    if (check(full.filter(id => id !== m), 'drop optician ' + m) !== true) capInvariant = false;
+  }
+  ok(capInvariant, 'CAPSTONE BYTE-INVARIANCE: allComplete == the wings-only predicate across full/empty/drop-wing/drop-crumb/drop-feat');
+})();
+
 /* ── (4) CATALOG INTEGRITY — every star inside the viewBox & outside obstacles ── */
 (function () {
   let inOK = true, clearOK = true;
@@ -242,6 +352,23 @@ function inViewBox(s) {
   }
   ok(inOK, 'CATALOG INTEGRITY: every star lies inside the 1440×900 viewBox');
   ok(clearOK, 'CATALOG INTEGRITY: every star clears every footprint, furniture box, and the manor pool');
+
+  // ── star-vs-star clearance: no two stars sit within 2*STAR_PAD on BOTH axes (so a
+  //    kindled disc never touches another). This is the genuinely-missing assertion —
+  //    the per-id integrity loop covers stars-vs-bboxes, this covers stars-vs-stars. ──
+  const ids = Object.keys(CATALOG);
+  let starClearOK = true;
+  for (let a = 0; a < ids.length; a++) {
+    for (let b = a + 1; b < ids.length; b++) {
+      const ca = CATALOG[ids[a]], cb = CATALOG[ids[b]];
+      if (Math.abs(ca.x - cb.x) < 2 * STAR_PAD && Math.abs(ca.y - cb.y) < 2 * STAR_PAD) {
+        starClearOK = false;
+        console.error('    · ' + ids[a] + ' overlaps ' + ids[b] +
+          ' (Δx=' + Math.abs(ca.x - cb.x) + ', Δy=' + Math.abs(ca.y - cb.y) + ')');
+      }
+    }
+  }
+  ok(starClearOK, 'CATALOG INTEGRITY: no two stars are within 2*STAR_PAD on both axes (star-vs-star clearance)');
 })();
 
 /* ── (5) BIJECTION — PLACES↔catalog + wing membership exactly-once ──────────── */
@@ -285,24 +412,64 @@ function inViewBox(s) {
   eq(WINGS.length, 6, 'BIJECTION: there are exactly six wings');
   ok(WINGS.every(w => w.members.length === 2), 'BIJECTION: every wing is a companion-pair (2 members)');
 
-  // ── the feats constellation: nine distinct feat-<X> members, each a valid catalog
-  //    id, none shared with any wing, none a front-door PLACES id, and it carries a
-  //    name + a myth (so it can be engraved like the wings). ──
-  eq(FEATS.members.length, 9, 'BIJECTION: the feats constellation has exactly nine members');
-  eq(FEATS.members.length, new Set(FEATS.members).size, 'BIJECTION: the nine feat members are distinct');
-  let featOrphanOK = true, featDisjointOK = true, featNotPlacesOK = true;
-  for (const m of FEATS.members) {
-    if (!CATALOG[m]) { featOrphanOK = false; console.error('    · feat member "' + m + '" is not a catalog id'); }
-    if (m.indexOf('feat-') !== 0) { featOrphanOK = false; console.error('    · feat member "' + m + '" lacks the feat- prefix'); }
-    if (memberWing[m] != null) { featDisjointOK = false; console.error('    · feat "' + m + '" is also a wing member'); }
-    if (PLACES_IDS.indexOf(m) >= 0) { featNotPlacesOK = false; console.error('    · feat "' + m + '" collides with a PLACES id'); }
+  // ── the feat-GROUPS: a group-agnostic disjointness sweep (replaces the old
+  //    `feat-`-prefix-hardcoded block, which would FALSE-FAIL on plain room-id members).
+  //    There are exactly three feat-groups with distinct ids; EVERY member belongs to
+  //    exactly one group across WINGS + FEAT_GROUPS (no dupe); each NEW-group member is a
+  //    PLAIN room id (NOT feat-), a valid catalog id, and NOT a PLACES_ID. The `feat-`
+  //    prefix assertion is kept, scoped to the OPTICIAN only. ──
+  eq(FEAT_GROUPS.length, 3, 'BIJECTION: there are exactly three feat-groups');
+  eq(FEAT_GROUPS.length, new Set(FEAT_GROUPS.map(g => g.id)).size, 'BIJECTION: the three feat-group ids are distinct');
+  ok(!!OPTICIAN && !!AUTOMATON && !!FURNACE, 'BIJECTION: the three feat-groups are Optician + Automaton + Furnace');
+
+  // every member belongs to exactly one group across WINGS + FEAT_GROUPS (no dupe across
+  // the whole catalog of asterisms). memberWing already holds the wing assignments.
+  const memberGroup = {};            // id → group id (wings + feat-groups)
+  let oneGroupOK = true;
+  for (const wing of WINGS) for (const m of wing.members) memberGroup[m] = wing.id;
+  for (const grp of FEAT_GROUPS) {
+    for (const m of grp.members) {
+      if (memberGroup[m] != null) { oneGroupOK = false; console.error('    · "' + m + '" is in two groups: ' + memberGroup[m] + ' & ' + grp.id); }
+      memberGroup[m] = grp.id;
+    }
   }
-  ok(featOrphanOK, 'BIJECTION: every feat member is a valid feat-<X> catalog id (no orphan)');
-  ok(featDisjointOK, 'BIJECTION: no feat member is also a companion-wing member (disjoint)');
-  ok(featNotPlacesOK, 'BIJECTION: no feat pseudo-id collides with a front-door PLACES id');
-  ok(FEATS.id === 'feats' && typeof FEATS.name === 'string' && FEATS.name.length > 0
-     && typeof FEATS.myth === 'string' && FEATS.myth.length > 0,
-     'BIJECTION: the feats constellation carries an id, an engraved name, and a myth');
+  ok(oneGroupOK, 'BIJECTION: every member belongs to exactly one group across WINGS + FEAT_GROUPS (no dupe)');
+
+  // each feat-group carries name + myth + distinct, all-catalog members
+  let grpShapeOK = true;
+  for (const grp of FEAT_GROUPS) {
+    if (!(typeof grp.id === 'string' && grp.id.length > 0
+          && typeof grp.name === 'string' && grp.name.length > 0
+          && typeof grp.myth === 'string' && grp.myth.length > 0)) {
+      grpShapeOK = false; console.error('    · feat-group "' + grp.id + '" missing id/name/myth');
+    }
+    if (grp.members.length !== new Set(grp.members).size) { grpShapeOK = false; console.error('    · feat-group "' + grp.id + '" has duplicate members'); }
+    if (!grp.members.every(m => !!CATALOG[m])) { grpShapeOK = false; console.error('    · feat-group "' + grp.id + '" has a non-catalog member'); }
+  }
+  ok(grpShapeOK, 'BIJECTION: every feat-group carries id/name/myth + distinct, all-catalog members');
+
+  // the OPTICIAN keeps its nine feat-<X> pseudo-id contract (prefix scoped HERE only)
+  eq(OPTICIAN.members.length, 9, 'BIJECTION: the Optician has exactly nine members');
+  ok(OPTICIAN.members.every(m => m.indexOf('feat-') === 0),
+     'BIJECTION: every Optician member carries the feat- prefix (pseudo-id)');
+  ok(OPTICIAN.members.every(m => PLACES_IDS.indexOf(m) < 0),
+     'BIJECTION: no Optician pseudo-id collides with a front-door PLACES id');
+
+  // each NEW-group member is a PLAIN room id (NOT feat-), a valid catalog id, NOT a PLACES_ID
+  let newPlainOK = true, newCatOK = true, newNotPlacesOK = true;
+  for (const grp of [AUTOMATON, FURNACE]) {
+    for (const m of grp.members) {
+      if (m.indexOf('feat-') === 0) { newPlainOK = false; console.error('    · new-group member "' + m + '" wrongly carries the feat- prefix'); }
+      if (!CATALOG[m]) { newCatOK = false; console.error('    · new-group member "' + m + '" is not a catalog id'); }
+      if (PLACES_IDS.indexOf(m) >= 0) { newNotPlacesOK = false; console.error('    · new-group member "' + m + '" collides with a PLACES id'); }
+    }
+  }
+  ok(newPlainOK, 'BIJECTION: every Automaton/Furnace member is a PLAIN room id (no feat- prefix)');
+  ok(newCatOK, 'BIJECTION: every Automaton/Furnace member is a valid catalog id');
+  ok(newNotPlacesOK, 'BIJECTION: no Automaton/Furnace member collides with a front-door PLACES id');
+
+  // still exactly six wings, each a pair (regression — re-asserted after the reshape)
+  eq(WINGS.length, 6, 'BIJECTION: still exactly six wings after the reshape');
 })();
 
 /* ── report ─────────────────────────────────────────────────────────────────── */
