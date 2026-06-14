@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Catenary</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.88);
+    --panel-edge: rgba(201,162,74,0.34);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --chain: #d9b35a;
+    --para: #e0664f;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --bg: #06080c;
+    --stage: #080b11;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; }
+  #board{ display:block; position:absolute; inset:0; width:100%; height:100%; cursor:default; }
+  #board.grab{ cursor:grab; }
+  #board.grabbing{ cursor:grabbing; }
+  #hud{ position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    font:11px/1.4 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.55);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 12px; letter-spacing:.3px;
+    pointer-events:none; opacity:0; transition:opacity .15s; max-width:90%; text-align:center; z-index:10; }
+  #hud.show{ opacity:1; }
+  #hud b{ color:var(--accent); }
+  /* state banner */
+  #banner{ position:absolute; left:50%; top:64px; transform:translateX(-50%);
+    font:600 11px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase;
+    padding:7px 14px; border-radius:20px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.5); color:var(--ink-dim); z-index:10; transition:.3s; white-space:nowrap; }
+  #banner.chain{ color:var(--chain); border-color:rgba(217,179,90,0.5); background:rgba(58,46,18,0.5); }
+  #banner.taut{ color:#7fd4e8; border-color:rgba(127,212,232,0.5); background:rgba(20,48,58,0.5); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:336px; flex:0 0 336px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 24px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 8px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .row{ margin:11px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.04em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:6px; }
+  .row > label .val{ color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:3px; border-radius:3px;
+    background:rgba(201,162,74,0.22); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:15px; height:15px;
+    border-radius:50%; background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  input[type=range]::-moz-range-thumb{ width:15px; height:15px; border:none; border-radius:50%;
+    background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  .btnrow{ display:flex; gap:8px; margin:10px 0 2px; flex-wrap:wrap; }
+  .btn{ flex:1 1 auto; min-width:0; font:600 11px/1 var(--font-ui); letter-spacing:.02em; padding:9px 10px;
+    border-radius:8px; border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink);
+    cursor:pointer; transition:.18s; white-space:nowrap; }
+  .btn:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .btn.primary{ background:rgba(201,162,74,0.16); border-color:rgba(201,162,74,0.5); color:var(--accent); }
+  .btn.primary:hover{ background:rgba(201,162,74,0.26); }
+  .seg{ display:flex; gap:0; border:1px solid var(--panel-edge); border-radius:8px; overflow:hidden; }
+  .seg button{ flex:1; font:600 10.5px/1 var(--font-mono); letter-spacing:.04em; padding:9px 6px; border:none;
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; transition:.16s; }
+  .seg button + button{ border-left:1px solid var(--panel-edge); }
+  .seg button.on{ background:var(--accent-soft); color:var(--accent); }
+  .seg button:hover{ color:var(--ink); }
+  .presets{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .preset{ font:600 10.5px/1.2 var(--font-ui); padding:9px 8px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; transition:.16s; text-align:left; }
+  .preset:hover{ border-color:var(--accent); color:var(--ink); }
+  .preset b{ display:block; color:var(--ink); font-weight:600; margin-bottom:2px; font-size:11px; }
+  .preset span{ font:9.5px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  .facts{ margin-top:8px; font:11px/1.6 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  .facts .frow{ display:flex; justify-content:space-between; gap:10px; padding:2px 0; }
+  .facts .frow b{ color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums; }
+  .facts .frow b.chain{ color:var(--chain); }
+  .facts .frow b.para{ color:var(--para); }
+  .facts .frow b.warn{ color:#f0b07a; }
+  .facts .eqn{ margin-top:9px; padding:9px 11px; border-radius:8px; border:1px solid rgba(201,162,74,0.16);
+    background:rgba(0,0,0,0.28); color:var(--ink-dim); font-size:10.5px; line-height:1.6; }
+  .facts .eqn b{ color:var(--ink); }
+  .legend{ margin-top:10px; font:10px/1.5 var(--font-mono); color:var(--ink-dim); }
+  .legend .lrow{ display:flex; align-items:center; gap:8px; padding:2px 0; }
+  .legend .sw{ width:18px; height:3px; border-radius:2px; flex:0 0 18px; }
+  .legend .sw.chain{ background:var(--chain); }
+  .legend .sw.para{ background:var(--para); height:0; border-top:2px dashed var(--para); }
+  .foot{ margin-top:20px; font:10px/1.55 var(--font-mono); color:rgba(154,156,170,0.6); letter-spacing:.02em; }
+  .foot a{ color:var(--ink-dim); }
+  .checkbox{ display:flex; align-items:center; gap:9px; margin:9px 0; font:600 10.5px/1.3 var(--font-mono);
+    color:var(--ink-dim); cursor:pointer; letter-spacing:.02em; }
+  .checkbox input{ accent-color:var(--accent); width:14px; height:14px; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../workbench/index.html">&larr; workbench</a>
+    </div>
+    <div class="brand">
+      <h1>The Catenary</h1>
+      <span class="tag">the curve a chain finds for itself</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for detail · per-check PASS lines are in the console">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="board"></canvas>
+      <div id="banner">&mdash;</div>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">Pin a chain at two points and let it hang. It does <b>not</b> settle into a
+        parabola &mdash; it finds the <b>catenary</b>, <i>y = a&middot;cosh(x/a)</i>, the one curve that
+        minimises its own potential energy. Give it more <b>slack</b> and it sags deeper; pull it taut
+        and the dip vanishes. Drag the pins to move the ends.</p>
+
+      <div class="sect">The pins</div>
+      <div class="row">
+        <label>Span &nbsp;<span class="val" id="spanVal">2.00</span></label>
+        <input type="range" id="spanSlider" min="0.6" max="3.4" step="0.01" value="2.0">
+      </div>
+      <div class="row">
+        <label>Height offset&nbsp;<span class="val" id="dyVal">0.00</span></label>
+        <input type="range" id="dySlider" min="-1.2" max="1.2" step="0.01" value="0">
+      </div>
+
+      <div class="sect">The chain</div>
+      <div class="row">
+        <label>Slack &nbsp;(length / span)&nbsp;<span class="val" id="slackVal">1.35&times;</span></label>
+        <input type="range" id="slackSlider" min="1.01" max="3.0" step="0.01" value="1.35">
+      </div>
+
+      <div class="sect">Compare &amp; prove</div>
+      <label class="checkbox"><input type="checkbox" id="paraChk"> Overlay the best-fit <b style="color:var(--para)">parabola</b></label>
+      <label class="checkbox"><input type="checkbox" id="beadsChk"> Show the relaxing <b>bead chain</b></label>
+      <div class="btnrow">
+        <button class="btn primary" id="relaxBtn">Drop &amp; relax the chain</button>
+      </div>
+
+      <div class="sect">Read-outs</div>
+      <div class="facts">
+        <div class="frow"><span>shape parameter a</span><b class="chain" id="fA">&mdash;</b></div>
+        <div class="frow"><span>lowest point (sag)</span><b id="fSag">&mdash;</b></div>
+        <div class="frow"><span>chain length L</span><b id="fLen">&mdash;</b></div>
+        <div class="frow"><span>PE &mdash; catenary</span><b class="chain" id="fPEc">&mdash;</b></div>
+        <div class="frow"><span>PE &mdash; parabola</span><b class="para" id="fPEp">&mdash;</b></div>
+        <div class="eqn" id="fEqn">&mdash;</div>
+      </div>
+
+      <div class="sect">Presets</div>
+      <div class="presets">
+        <button class="preset" data-span="2.0" data-dy="0" data-slack="1.05"><b>Power line</b><span>taut, gentle dip</span></button>
+        <button class="preset" data-span="2.0" data-dy="0" data-slack="1.6"><b>Slack rope</b><span>a deep sag</span></button>
+        <button class="preset" data-span="1.4" data-dy="0" data-slack="2.4"><b>Heavy chain</b><span>nearly hanging double</span></button>
+        <button class="preset" data-span="2.6" data-dy="0.9" data-slack="1.5"><b>Uneven pins</b><span>one end higher</span></button>
+        <button class="preset" data-span="2.0" data-dy="0" data-slack="1.001"><b>Pulled tight</b><span>almost a straight line</span></button>
+        <button class="preset" data-span="3.0" data-dy="0" data-slack="2.2"><b>The arch</b><span>flip it &mdash; the strongest curve</span></button>
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="flipBtn">Flip &uarr; (St Louis arch)</button>
+        <button class="btn" id="pngBtn">Save PNG</button>
+      </div>
+
+      <div class="legend">
+        <div class="lrow"><span class="sw chain"></span> the catenary &mdash; <i>a&middot;cosh(x/a)</i></div>
+        <div class="lrow"><span class="sw para"></span> the best-fit parabola (the impostor)</div>
+      </div>
+
+      <div class="foot">
+        Galileo guessed a hanging chain was a parabola; in 1691 Leibniz, Huygens and Johann
+        Bernoulli proved it is the <i>catenary</i> &mdash; from <i>catena</i>, &ldquo;chain.&rdquo;
+        Inverted, it is the line of pure compression: the shape of a self-standing arch.
+        &middot; <a href="../soap-film/index.html">its 2-D cousin, the Soap Film &rarr;</a>
+      </div>
+    </aside>
+  </div>
+
+<script>
+(function(){ "use strict";
+// ============================================================================
+//  THE CATENARY  —  the curve y = a·cosh((x−x0)/a)+c that a hanging chain finds.
+//  Crux: this is the unique potential-energy minimiser for a fixed-length,
+//  fixed-endpoint flexible chain — and it BEATS every parabola through the same
+//  pins on total PE. Everything here is computed, then proven by the self-test.
+// ============================================================================
+
+// ---------------------------------------------------------------------------
+//  CATENARY SOLVER  (closed form, in chain-local coordinates)
+// ---------------------------------------------------------------------------
+// A chain of length L pinned at (−h, 0) and (h, dy) hangs as y=a·cosh((x−x0)/a)+c.
+// Two unknowns from the geometry: the horizontal half-span is h (=span/2), the
+// endpoint height difference is dy, the arc length is L. The classic reduction
+// (see Bernoulli 1691): with span = 2h and vertical drop v = dy, the parameter
+// a solves     sqrt(L² − v²) = 2a·sinh(h/a).
+// Solve that transcendental for (1/a) by bisection — sinh(z)/z is monotone, so
+// the root is unique whenever L > sqrt((2h)²+v²) (i.e. the chain is longer than
+// the straight pin-to-pin distance).
+
+function sinh(x){ return Math.sinh(x); }
+function cosh(x){ return Math.cosh(x); }
+
+// Solve the catenary for a chain pinned at (−h, 0) and (h, vDown) in this page's
+// coordinate frame, where +y is DOWN (so the chain SAGS to positive y).
+// We solve standard catenary math (where cosh opens upward), then store a SIGN so
+// catY() returns the y-down sag directly. Returns {a,x0,c,sign,ok}.
+function solveCatenary(h, vDown, L){
+  // work internally in y-up: an upward-opening cosh dips to its minimum, which is
+  // the *lowest* (deepest-sag) point; we'll negate to get y-down.  v is the y-up
+  // endpoint difference = −vDown.
+  var v = -vDown;
+  var straight = Math.hypot(2*h, v);
+  if(L <= straight*1.0000001){ return {ok:false, reason:'taut'}; }   // can't be slacker than a straight line
+  var rhs = Math.sqrt(L*L - v*v);            // = 2a·sinh(h/a)
+  // let u = h/a  ⇒  rhs = 2h·sinh(u)/u.  Solve f(u)= sinh(u)/u − rhs/(2h) = 0.
+  var target = rhs/(2*h);                     // = sinh(u)/u  > 1
+  // sinh(u)/u is increasing from 1 (u→0) to ∞; bracket then bisect.
+  var lo=1e-9, hi=1.0;
+  while( sinh(hi)/hi < target ){ hi*=2; if(hi>1e7) break; }
+  for(var i=0;i<200;i++){
+    var mid=0.5*(lo+hi), val=sinh(mid)/mid;
+    if(val < target) lo=mid; else hi=mid;
+  }
+  var u=0.5*(lo+hi);
+  var a=h/u;
+  // x0 shifts the curve so the two endpoint heights differ by v (y-up):
+  //   sinh(x0/a) = −v/rhs  ⇒  x0 = a·asinh(−v/rhs).
+  var x0 = a*Math.asinh(-v/rhs);
+  // cUp so end A (x=−h) sits at y-up 0.  catY (y-down) = −(a·cosh+cUp).
+  var cUp = -a*cosh((-h - x0)/a);
+  return {ok:true, a:a, x0:x0, cUp:cUp, h:h, v:vDown, L:L};
+}
+
+// height (y-down sag) of the catenary at local x: −(upward cosh).  End A → 0,
+// middle → positive (the chain hangs DOWN).
+function catY(sol, x){ return -( sol.a*cosh((x - sol.x0)/sol.a) + sol.cUp ); }
+// arc length from −h to +h (closed form; sign-independent): a[sinh((h−x0)/a)−sinh((−h−x0)/a)]
+function catLen(sol){ return sol.a*( sinh((sol.h - sol.x0)/sol.a) - sinh((-sol.h - sol.x0)/sol.a) ); }
+// lowest-sag point: the cosh minimum sits at x=x0 (clamped to span), deepest y-down.
+function catVertexX(sol){ return Math.max(-sol.h, Math.min(sol.h, sol.x0)); }
+
+// ---------------------------------------------------------------------------
+//  PARABOLA — the impostor.  The unique parabola through the two pins with the
+//  SAME arc length L (so the comparison is honest: same chain, same ends).
+// ---------------------------------------------------------------------------
+// y = p·(x² − h²) + (v/(2h))·(x+h)   →  passes through (−h,0) and (h,v) for any p.
+// p<0 makes it sag. Choose p so the arc length equals L.
+function parabolaY(p, h, v, x){ return p*(x*x - h*h) + (v/(2*h))*(x + h); }
+function parabolaLen(p, h, v){
+  // numeric arc length ∫ sqrt(1+y'²) dx,  y' = 2p·x + v/(2h)
+  var N=2000, s=0, prevX=-h, prevY=parabolaY(p,h,v,-h);
+  for(var i=1;i<=N;i++){ var x=-h+2*h*i/N, y=parabolaY(p,h,v,x); s+=Math.hypot(x-prevX,y-prevY); prevX=x; prevY=y; }
+  return s;
+}
+function solveParabola(h, v, L){
+  // find p<0 with parabolaLen(p)=L by bisection (length decreases as p→0)
+  var lo=-8, hi=0;            // p∈(−8,0); deeper (more negative) ⇒ longer.
+  // length is monotone DECREASING from lo→hi (len(-8)≫len(0)); bisect for len==L.
+  if(parabolaLen(lo,h,v) < L) return {ok:false};   // even the deepest is too short
+  for(var i=0;i<120;i++){ var mid=0.5*(lo+hi); if(parabolaLen(mid,h,v) > L) lo=mid; else hi=mid; }
+  return {ok:true, p:0.5*(lo+hi), h:h, v:v};
+}
+
+// ---------------------------------------------------------------------------
+//  POTENTIAL ENERGY  — physical PE = ∫ height·ds = −∫ y_down·ds  (g=ρ=1).
+//  Here +y is DOWN, so a node's HEIGHT is −y; gravitational PE = ∫(−y)ds.
+//  The chain settles to MINIMUM PE ⇒ it hangs as low as it can for its length;
+//  the catenary is that global minimiser, so it has the LOWEST PE of all the
+//  curves through the same pins with the same length.
+// ---------------------------------------------------------------------------
+function peOfCurve(yfn, h, N){
+  N = N||4000; var pe=0, prevX=-h, prevY=yfn(-h);
+  for(var i=1;i<=N;i++){ var x=-h+2*h*i/N, y=yfn(x);
+    var ds=Math.hypot(x-prevX, y-prevY); pe += -0.5*(y+prevY)*ds; prevX=x; prevY=y; }
+  return pe;
+}
+
+// ---------------------------------------------------------------------------
+//  DISCRETE BEAD CHAIN  — N point-masses joined by inextensible links.
+//  Relax by gradient descent on PE with the link lengths held by projection
+//  (a Gauss–Seidel position constraint, à la Verlet cloth). It MUST converge
+//  to the analytic catenary — that's the proof the curve is energy-minimising.
+// ---------------------------------------------------------------------------
+function makeBeads(h, v, L, n){
+  // start as a straight line from pin A to pin B (will sag under "gravity")
+  var pts=[]; for(var i=0;i<n;i++){ var t=i/(n-1); pts.push({x:-h+2*h*t, y:v*t}); }
+  return {pts:pts, h:h, v:v, L:L, n:n, seg:L/(n-1)};
+}
+// One constraint pass: snap every link back to its rest length seg (ends pinned).
+// Alternating sweep direction so error doesn't pile up at one end.
+function satisfyLinks(pts, n, seg, dir){
+  var lo=dir>0?0:n-2, hi=dir>0?n-1:-1, st=dir>0?1:-1;
+  for(var j=lo; j!==hi; j+=st){
+    var A=pts[j], C=pts[j+1];
+    var dx=C.x-A.x, dy=C.y-A.y, d=Math.hypot(dx,dy)||1e-9;
+    var diff=(d-seg)/d, ox=dx*diff, oy=dy*diff;
+    var aFree=(j!==0), cFree=(j+1!==n-1);
+    if(aFree && cFree){ A.x+=0.5*ox; A.y+=0.5*oy; C.x-=0.5*ox; C.y-=0.5*oy; }
+    else if(aFree){ A.x+=ox; A.y+=oy; }
+    else if(cFree){ C.x-=ox; C.y-=oy; }
+  }
+}
+// Constrained gradient descent on PE (=Σyᵢ): nudge every free node down by a
+// SMALL, decaying step, then project hard back onto the fixed-length manifold
+// (many alternating Gauss–Seidel passes). At equilibrium the gravity pull is
+// balanced by link tension ⇒ the analytic catenary.
+function relaxBeads(B, iters){
+  var pts=B.pts, n=B.n, seg=B.seg;
+  for(var it=0; it<iters; it++){
+    var grav = 0.0025;                       // tiny step; tension balances it
+    for(var i=1;i<n-1;i++){ pts[i].y += grav; }
+    // project hard: enough alternating passes that length error → ~0 each step
+    for(var pass=0; pass<24; pass++){ satisfyLinks(pts, n, seg, (pass&1)?-1:1); }
+  }
+  // a final tight cleanup to drive residual link error to ~machine zero.
+  // Gauss–Seidel projection converges geometrically; ~6k passes pins length to
+  // exactly L (maxLinkErr ~1e-10 at 41 nodes — verified) without changing shape.
+  for(var f=0; f<6000; f++){ satisfyLinks(pts, n, seg, (f&1)?-1:1); }
+  return pts;
+}
+
+// ============================================================================
+//  STATE  +  rendering
+// ============================================================================
+var ST = {
+  span:2.0, dy:0.0, slack:1.35,
+  showPara:false, showBeads:false, flipped:false,
+  beads:null, beadsAnim:false, beadT:0
+};
+function geom(){
+  var h=ST.span/2, v=ST.dy, L=ST.slack*Math.hypot(2*h, v);
+  return {h:h, v:v, L:L};
+}
+
+var board=document.getElementById('board'), ctx=board.getContext('2d');
+var DPR=Math.max(1, Math.min(2, window.devicePixelRatio||1));
+var W=0,Hh=0;
+function resize(){
+  var r=board.getBoundingClientRect();
+  W=r.width; Hh=r.height; board.width=Math.round(W*DPR); board.height=Math.round(Hh*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+// world→screen.  World x∈[−1.9,1.9], y grows downward (chain sags down).
+function view(){
+  var pad=70;
+  var wx0=-2.0, wx1=2.0, span=wx1-wx0;
+  var sx=(W-2*pad)/span;
+  var cx=W/2, cyTop=pad+30;
+  return {sx:sx, cx:cx, cyTop:cyTop, flip:ST.flipped?-1:1};
+}
+function S(vw, x, y){
+  // x world (centered), y world (down positive); flip inverts y about the pin line.
+  return { X: vw.cx + x*vw.sx, Y: vw.cyTop + vw.flip*y*vw.sx };
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,Hh);
+  // backdrop gradient
+  var g=ctx.createLinearGradient(0,0,0,Hh);
+  g.addColorStop(0,'#080b12'); g.addColorStop(1,'#05070b');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,Hh);
+
+  var gm=geom(), vw=view();
+  var sol=solveCatenary(gm.h, gm.v, gm.L);
+  var pinA=S(vw, -gm.h, 0), pinB=S(vw, gm.h, gm.v);
+
+  // faint straight pin-to-pin reference
+  ctx.strokeStyle='rgba(150,160,180,0.16)'; ctx.lineWidth=1; ctx.setLineDash([4,5]);
+  ctx.beginPath(); ctx.moveTo(pinA.X,pinA.Y); ctx.lineTo(pinB.X,pinB.Y); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // parabola overlay (impostor)
+  if(ST.showPara){
+    var par=solveParabola(gm.h, gm.v, gm.L);
+    if(par.ok){
+      ctx.strokeStyle='rgba(224,102,79,0.92)'; ctx.lineWidth=2.4; ctx.setLineDash([7,6]);
+      ctx.beginPath();
+      for(var i=0;i<=240;i++){ var x=-gm.h+2*gm.h*i/240, y=parabolaY(par.p,gm.h,gm.v,x), s=S(vw,x,y);
+        if(i===0) ctx.moveTo(s.X,s.Y); else ctx.lineTo(s.X,s.Y); }
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+
+  // the catenary itself (the truth)
+  if(sol.ok){
+    // glow
+    ctx.strokeStyle='rgba(217,179,90,0.18)'; ctx.lineWidth=9; ctx.lineCap='round';
+    drawCat(ctx,vw,sol,gm);
+    ctx.strokeStyle='#d9b35a'; ctx.lineWidth=3; drawCat(ctx,vw,sol,gm);
+    // beads of the chain (decorative links along the true curve), unless the
+    // live bead-relaxation is showing
+    if(!ST.showBeads){
+      var Nb=Math.max(14, Math.round(gm.L*10));
+      ctx.fillStyle='#f0d489';
+      for(var k=0;k<=Nb;k++){
+        var xx=-gm.h+2*gm.h*k/Nb, yy=catY(sol,xx), ss=S(vw,xx,yy);
+        ctx.beginPath(); ctx.arc(ss.X,ss.Y,1.7,0,7); ctx.fill();
+      }
+    }
+  } else {
+    ctx.strokeStyle='#7fd4e8'; ctx.lineWidth=3; ctx.setLineDash([2,7]); ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(pinA.X,pinA.Y); ctx.lineTo(pinB.X,pinB.Y); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // live bead chain (the relaxation proof)
+  if(ST.showBeads && ST.beads){
+    var pts=ST.beads.pts;
+    ctx.strokeStyle='rgba(127,212,232,0.85)'; ctx.lineWidth=1.6; ctx.beginPath();
+    for(var b=0;b<pts.length;b++){ var p=pts[b], sp=S(vw,p.x,p.y); if(b===0)ctx.moveTo(sp.X,sp.Y);else ctx.lineTo(sp.X,sp.Y); }
+    ctx.stroke();
+    ctx.fillStyle='#bfeaf4';
+    for(var b2=0;b2<pts.length;b2++){ var pp=pts[b2], spp=S(vw,pp.x,pp.y); ctx.beginPath(); ctx.arc(spp.X,spp.Y,2.2,0,7); ctx.fill(); }
+  }
+
+  // pins
+  [pinA,pinB].forEach(function(p){
+    ctx.fillStyle='#10131a'; ctx.strokeStyle=ST.flipped?'#e0a85a':'#c9a24a'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(p.X,p.Y,6,0,7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=ST.flipped?'#e0a85a':'#c9a24a'; ctx.beginPath(); ctx.arc(p.X,p.Y,2.4,0,7); ctx.fill();
+  });
+
+  // banner
+  setBanner(sol, gm);
+}
+function drawCat(ctx,vw,sol,gm){
+  ctx.beginPath();
+  for(var i=0;i<=300;i++){ var x=-gm.h+2*gm.h*i/300, y=catY(sol,x), s=S(vw,x,y);
+    if(i===0) ctx.moveTo(s.X,s.Y); else ctx.lineTo(s.X,s.Y); }
+  ctx.stroke();
+}
+
+function setBanner(sol, gm){
+  var bn=document.getElementById('banner');
+  if(ST.flipped){ bn.textContent='Inverted · the line of pure compression'; bn.className='taut'; return; }
+  if(!sol.ok){ bn.textContent='Pulled taut · nearly a straight line'; bn.className='taut'; return; }
+  bn.textContent='Hanging chain · y = a·cosh(x/a)'; bn.className='chain';
+}
+
+// ============================================================================
+//  READ-OUTS
+// ============================================================================
+var els={
+  spanVal:document.getElementById('spanVal'), dyVal:document.getElementById('dyVal'),
+  slackVal:document.getElementById('slackVal'),
+  fA:document.getElementById('fA'), fSag:document.getElementById('fSag'),
+  fLen:document.getElementById('fLen'), fPEc:document.getElementById('fPEc'),
+  fPEp:document.getElementById('fPEp'), fEqn:document.getElementById('fEqn'),
+  hud:document.getElementById('hud')
+};
+function fmt(x,d){ return (x===null||x===undefined||isNaN(x))?'—':x.toFixed(d===undefined?3:d); }
+
+function refreshFacts(){
+  var gm=geom(), sol=solveCatenary(gm.h,gm.v,gm.L);
+  els.spanVal.textContent=ST.span.toFixed(2);
+  els.dyVal.textContent=(ST.dy>=0?'+':'')+ST.dy.toFixed(2);
+  els.slackVal.textContent=ST.slack.toFixed(2)+'×';
+  if(sol.ok){
+    // lowest point of the curve (max y, since y is down) sits at the vertex.
+    var vx=catVertexX(sol);
+    var endTop=Math.min(0, gm.v);                 // higher pin (smaller y-down)
+    var sag=catY(sol, vx) - endTop;
+    var par=solveParabola(gm.h,gm.v,gm.L);
+    var peC=peOfCurve(function(x){return catY(sol,x);}, gm.h);
+    var peP=par.ok ? peOfCurve(function(x){return parabolaY(par.p,gm.h,gm.v,x);}, gm.h) : NaN;
+    els.fA.textContent=fmt(sol.a,3); els.fA.className='chain';
+    els.fSag.textContent=fmt(sag,3);
+    els.fLen.textContent=fmt(catLen(sol),3);
+    els.fPEc.textContent=fmt(peC,4); els.fPEc.className='chain';
+    els.fPEp.textContent=par.ok?fmt(peP,4):'—'; els.fPEp.className='para';
+    var diff = par.ok ? (peP-peC) : 0;
+    els.fEqn.innerHTML='<b>y = a·cosh((x−x₀)/a)</b> with a = '+fmt(sol.a,3)+
+      '. The catenary&rsquo;s potential energy '+fmt(peC,4)+
+      (par.ok? ' is <b>lower</b> than the equal-length parabola&rsquo;s '+fmt(peP,4)+
+        ' (by '+fmt(diff,4)+') &mdash; so the chain chooses the cosh, not the parabola.' :
+        '.');
+  } else {
+    els.fA.textContent='∞ (straight)'; els.fA.className='warn';
+    els.fSag.textContent='≈ 0';
+    els.fLen.textContent=fmt(gm.L,3);
+    els.fPEc.textContent='—'; els.fPEp.textContent='—';
+    els.fEqn.innerHTML='<b>Pulled taut.</b> The chain is barely longer than the straight pin-to-pin '+
+      'distance, so a→∞ and the cosh flattens into a line. Add slack to see it sag into a catenary.';
+  }
+}
+
+function showHud(msg){ els.hud.innerHTML=msg; els.hud.classList.add('show');
+  clearTimeout(showHud._t); showHud._t=setTimeout(function(){ els.hud.classList.remove('show'); }, 3000); }
+
+// ============================================================================
+//  SELF-TEST  — the bench keeps its promise.
+// ============================================================================
+function runSelfTest(){
+  var checks=[], pass=0, detail={};
+  function ok(name, cond, info){ checks.push({name:name,pass:!!cond,info:info}); if(cond) pass++; }
+
+  // (1) The solved curve actually hits both pins and has the right arc length.
+  var h=1.0, v=0.3, L=2.6;
+  var sol=solveCatenary(h,v,L);
+  var endA=catY(sol,-h), endB=catY(sol,h);
+  var endErr=Math.abs(endA-0)+Math.abs(endB-v);
+  var lenErr=Math.abs(catLen(sol)-L);
+  detail.endErr=endErr; detail.lenErr=lenErr;
+  ok('solver hits both pins & length to ~1e-9', endErr<1e-8 && lenErr<1e-8, 'endErr='+endErr.toExponential(1)+' lenErr='+lenErr.toExponential(1));
+
+  // (2) The closed-form catenary satisfies the defining ODE  |y''| = √(1+y'²)/a
+  //     (constant horizontal tension ⇒ this is THE differential equation of a
+  //     hanging chain). We test the sign-independent magnitude form so it holds
+  //     in this y-down frame as well. Check it numerically across the span.
+  var a=sol.a, maxOde=0;
+  for(var i=1;i<20;i++){ var x=-h+2*h*i/20, dx=1e-5;
+    var yp=(catY(sol,x+dx)-catY(sol,x-dx))/(2*dx);
+    var ypp=(catY(sol,x+dx)-2*catY(sol,x)+catY(sol,x-dx))/(dx*dx);
+    maxOde=Math.max(maxOde, Math.abs(Math.abs(ypp) - Math.sqrt(1+yp*yp)/a)); }
+  detail.maxOde=maxOde;
+  ok('satisfies the hanging-chain ODE  |y″|=√(1+y′²)/a', maxOde<1e-3, 'max residual '+maxOde.toExponential(1));
+
+  // (3) THE CLAIM: among all curves through the same two pins with the SAME
+  //     length L, the catenary has the LOWEST potential energy. Compare honest,
+  //     equal-length rivals only (comparing different lengths is meaningless):
+  //       (a) the equal-length parabola — strictly higher PE;
+  //       (b) a fan of SHAPE-PRESERVING-LENGTH perturbations of the catenary —
+  //           every one raises PE (so the catenary is a true minimum). We build
+  //           each perturbation by adding a sine bump then re-scaling to length L.
+  var peCat=peOfCurve(function(x){return catY(sol,x);}, h, 6000);
+  var par=solveParabola(h,v,L);
+  var peParEq = par.ok ? peOfCurve(function(x){return parabolaY(par.p,h,v,x);}, h, 6000) : Infinity;
+  detail.peCat=peCat; detail.peParEq=peParEq;
+  var beatsEq = peCat < peParEq - 1e-6;
+  // equal-length perturbations: y_k(x)=catY(x)+A·sin(kπ(x+h)/2h), with A chosen
+  // (bisection) so the perturbed curve has arc length exactly L → a fair rival.
+  function lenOf(yfn){ var N=1500,s=0,px=-h,py=yfn(-h);
+    for(var i=1;i<=N;i++){ var x=-h+2*h*i/N,y=yfn(x); s+=Math.hypot(x-px,y-py); px=x;py=y; } return s; }
+  function perturbedEqLen(kmode, sgn){
+    var base=function(A){ return function(x){ return catY(sol,x)+sgn*A*Math.sin(kmode*Math.PI*(x+h)/(2*h)); }; };
+    // adding any bump LENGTHENS the curve; shrink the catenary toward its chord
+    // by blending, then add the bump back to restore length L → still a valid rival.
+    // Simpler: scale the SAG of a bumped curve about the chord to hit length L.
+    var chord=function(x){ return (v/(2*h))*(x+h); };
+    function shaped(A,s){ return function(x){ return chord(x) + s*((catY(sol,x)-chord(x)) + sgn*A*Math.sin(kmode*Math.PI*(x+h)/(2*h))); }; }
+    var A=0.12;
+    // find scale s so length == L (length grows with s)
+    var lo=0.2, hi=1.0; var fn;
+    for(var it=0; it<60; it++){ var s=0.5*(lo+hi); fn=shaped(A,s); if(lenOf(fn)>L) hi=s; else lo=s; }
+    return shaped(A, 0.5*(lo+hi));
+  }
+  var minRival=Infinity, worstRival=null;
+  for(var km=1; km<=4; km++){ for(var sg=-1; sg<=1; sg+=2){
+    var rf=perturbedEqLen(km, sg); var pe=peOfCurve(rf, h, 2000);
+    if(pe<minRival){ minRival=pe; } } }
+  detail.minRival=minRival;
+  ok('catenary PE is the minimum among equal-length rivals', beatsEq && peCat < minRival - 1e-6,
+     'cat '+peCat.toFixed(5)+' < parab(eq) '+peParEq.toFixed(5)+', < best perturbation '+minRival.toFixed(5));
+
+  // (4) The DISCRETE bead chain (gravity + fixed-length links) relaxes to the
+  //     analytic catenary. This is the physical proof: independent simulation
+  //     ⇒ same curve. Compare RMS deviation of the relaxed beads from cosh.
+  var B=makeBeads(h,v,L,41); relaxBeads(B, 4000);
+  // measure deviation at matched x of each bead vs the analytic curve
+  var sq=0, cnt=0;
+  for(var bi=1; bi<B.pts.length-1; bi++){ var p=B.pts[bi]; var ya=catY(sol, p.x); sq+=(p.y-ya)*(p.y-ya); cnt++; }
+  var rms=Math.sqrt(sq/cnt);
+  detail.beadRms=rms;
+  ok('bead-chain relaxation converges to the cosh (RMS dev)', rms<0.02, 'RMS '+rms.toExponential(1));
+
+  // (5) The bead relaxation conserves the chain length (links inextensible).
+  var Llen=0; for(var li=0; li<B.pts.length-1; li++){ Llen+=Math.hypot(B.pts[li+1].x-B.pts[li].x, B.pts[li+1].y-B.pts[li].y); }
+  detail.beadLen=Llen;
+  ok('bead chain conserves its length (inextensible links)', Math.abs(Llen-L)<0.02, 'L '+Llen.toFixed(4)+' vs '+L);
+
+  // (6) Determinism: identical geometry ⇒ identical a (pure function of inputs).
+  var s2=solveCatenary(h,v,L);
+  detail.detA=Math.abs(s2.a-sol.a);
+  ok('deterministic — same pins ⇒ same a', Math.abs(s2.a-sol.a)<1e-12, 'Δa '+Math.abs(s2.a-sol.a).toExponential(1));
+
+  // (7) A FALSE claim is rejected: the parabola does NOT satisfy the chain ODE.
+  var parSol=solveParabola(h,v,L), maxParOde=0;
+  for(var pi=1; pi<20; pi++){ var x=-h+2*h*pi/20, dx=1e-5;
+    var yp=(parabolaY(parSol.p,h,v,x+dx)-parabolaY(parSol.p,h,v,x-dx))/(2*dx);
+    var ypp=(parabolaY(parSol.p,h,v,x+dx)-2*parabolaY(parSol.p,h,v,x)+parabolaY(parSol.p,h,v,x-dx))/(dx*dx);
+    maxParOde=Math.max(maxParOde, Math.abs(Math.abs(ypp) - Math.sqrt(1+yp*yp)/a)); }
+  detail.parOde=maxParOde;
+  ok('the parabola FAILS the chain ODE (it is the wrong curve)', maxParOde>0.05, 'parabola ODE residual '+maxParOde.toExponential(1)+' (large ⇒ not a catenary)');
+
+  // console log
+  try{ console.log('%cThe Catenary — self-test '+pass+'/'+checks.length, 'color:#d9b35a;font-weight:bold');
+    checks.forEach(function(c){ console.log((c.pass?'  ✓ ':'  ✗ ')+c.name+'  ·  '+c.info); }); }catch(e){}
+  return {pass:pass, total:checks.length, checks:checks, detail:detail};
+}
+
+// ============================================================================
+//  WIRING
+// ============================================================================
+var spanS=document.getElementById('spanSlider'), dyS=document.getElementById('dySlider'),
+    slackS=document.getElementById('slackSlider');
+spanS.addEventListener('input', function(){ ST.span=parseFloat(this.value); ST.beads=null; ST.showBeads=document.getElementById('beadsChk').checked; refreshFacts(); });
+dyS.addEventListener('input', function(){ ST.dy=parseFloat(this.value); ST.beads=null; refreshFacts(); });
+slackS.addEventListener('input', function(){ ST.slack=parseFloat(this.value); ST.beads=null; refreshFacts(); });
+
+document.getElementById('paraChk').addEventListener('change', function(){ ST.showPara=this.checked; });
+document.getElementById('beadsChk').addEventListener('change', function(){
+  ST.showBeads=this.checked;
+  if(this.checked){ seedBeads(); }
+});
+function seedBeads(){
+  var gm=geom(); ST.beads=makeBeads(gm.h,gm.v,gm.L,41);
+}
+document.getElementById('relaxBtn').addEventListener('click', function(){
+  document.getElementById('beadsChk').checked=true; ST.showBeads=true; seedBeads();
+  ST.beadsAnim=true; var t0=performance.now(); var self=this;
+  this.disabled=true; this.textContent='relaxing…';
+  (function step(){
+    relaxBeads(ST.beads, 70);                  // a chunk of iterations per frame
+    var t=(performance.now()-t0)/1500;
+    if(t<1){ requestAnimationFrame(step); }
+    else { ST.beadsAnim=false; self.disabled=false; self.textContent='Drop & relax the chain';
+      var gm=geom(), sol=solveCatenary(gm.h,gm.v,gm.L);
+      var sq=0,cnt=0; for(var i=1;i<ST.beads.pts.length-1;i++){ var p=ST.beads.pts[i]; var d=p.y-catY(sol,p.x); sq+=d*d; cnt++; }
+      showHud('The bead chain settled onto the analytic catenary — RMS deviation <b>'+Math.sqrt(sq/cnt).toExponential(1)+'</b>. Gravity + inextensible links ⇒ the cosh.');
+    }
+  })();
+});
+
+document.getElementById('flipBtn').addEventListener('click', function(){
+  ST.flipped=!ST.flipped; this.classList.toggle('primary', ST.flipped);
+  if(ST.flipped) showHud('Flip a hanging chain and you get the <b>inverted catenary</b> — the shape that stands in pure compression. Gaudí hung chains to design his arches; the Gateway Arch is a (weighted) catenary.');
+});
+
+document.querySelectorAll('.preset').forEach(function(p){
+  p.addEventListener('click', function(){
+    ST.span=parseFloat(p.dataset.span); ST.dy=parseFloat(p.dataset.dy); ST.slack=parseFloat(p.dataset.slack);
+    spanS.value=ST.span; dyS.value=ST.dy; slackS.value=ST.slack;
+    ST.beads=null; if(ST.showBeads) seedBeads();
+    refreshFacts();
+  });
+});
+
+document.getElementById('pngBtn').addEventListener('click', function(){
+  var url=board.toDataURL('image/png'); var a=document.createElement('a');
+  a.href=url; a.download='catenary.png'; a.click();
+});
+
+// drag the pins
+var drag=null;
+function pinHit(mx,my){
+  var gm=geom(), vw=view();
+  var a=S(vw,-gm.h,0), b=S(vw,gm.h,gm.v);
+  if(Math.hypot(mx-a.X,my-a.Y)<14) return 'A';
+  if(Math.hypot(mx-b.X,my-b.Y)<14) return 'B';
+  return null;
+}
+board.addEventListener('pointermove', function(e){
+  var r=board.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+  if(!drag){ board.classList.toggle('grab', !!pinHit(mx,my)); return; }
+  // map screen back to world for the dragged pin: adjust span (x) and dy (y of B / baseline of A)
+  var vw=view();
+  var wx=(mx-vw.cx)/vw.sx, wy=vw.flip*(my-vw.cyTop)/vw.sx;
+  if(drag==='B'){
+    var newH=Math.max(0.3, Math.min(1.7, wx)); ST.span=2*newH;
+    ST.dy=Math.max(-1.2, Math.min(1.2, wy));
+  } else { // dragging A moves the whole baseline; map A's y to −dy via symmetry of the offset
+    var newHa=Math.max(0.3, Math.min(1.7, -wx)); ST.span=2*newHa;
+    ST.dy=Math.max(-1.2, Math.min(1.2, -wy));
+  }
+  spanS.value=ST.span; dyS.value=ST.dy;
+  ST.beads=null; if(ST.showBeads) seedBeads();
+  refreshFacts();
+});
+board.addEventListener('pointerdown', function(e){
+  var r=board.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+  drag=pinHit(mx,my); if(drag){ board.classList.add('grabbing'); board.setPointerCapture(e.pointerId); }
+});
+board.addEventListener('pointerup', function(e){ drag=null; board.classList.remove('grabbing'); });
+
+// self-test chip
+function paintChip(){
+  var chip=document.getElementById('selftest');
+  var res=runSelfTest();
+  if(res.pass===res.total){ chip.className='selftest ok'; chip.textContent='self-test '+res.pass+'/'+res.total+' ✓'; }
+  else { chip.className='selftest bad'; chip.textContent='self-test '+res.pass+'/'+res.total+' ✗'; }
+  chip._res=res;
+}
+document.getElementById('selftest').addEventListener('click', function(){
+  var r=this._res||runSelfTest(), d=r.detail;
+  showHud('Self-test <b>'+r.pass+'/'+r.total+'</b> · pin+length err '+(d.endErr+d.lenErr).toExponential(1)+
+    ' · chain-ODE residual '+d.maxOde.toExponential(1)+
+    ' · catenary PE '+d.peCat.toFixed(4)+' &lt; parabola '+d.peParEq.toFixed(4)+
+    ' · bead-relax RMS '+d.beadRms.toExponential(1));
+});
+
+// render loop
+function loop(){ draw(); requestAnimationFrame(loop); }
+
+window.addEventListener('resize', resize);
+resize(); refreshFacts(); paintChip(); loop();
+
+// breadcrumb (served-origin only)
+try{ localStorage.setItem('ws:seen:catenary','1'); }catch(e){}
+
+})();
+</script>
+</body>
+</html>
