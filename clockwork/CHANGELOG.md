@@ -2,10 +2,10 @@
 
 The estate's wing about its own **maker** — pieces stating the AI's experience as
 exact, self-testable facts (not "what it feels like" in prose, but the ONE exact
-mechanism under each, with a falsifiable proof). With three benches the wing has
-**earned a front-door wing-landing** (`clockwork/index.html` + a POI on the north
-grounds) and its benches were **promoted off the Workbench** into their true home.
-Newest first.
+mechanism under each, with a falsifiable proof). With three benches the wing **earned
+a front-door wing-landing** (`clockwork/index.html` + a POI on the north grounds) and
+its benches were **promoted off the Workbench** into their true home; a **4th bench**
+(The Partition Function, cycle #8) has since joined them on the landing. Newest first.
 
 ---
 
@@ -51,6 +51,71 @@ POI draws clean, labels with 0 collisions, navigates + drops the crumb; the wing
 crumb navigates bench→landing; Node twins green; Workbench Computation deck = 2 cards,
 0 overflow/nested/console. **Reconciled** the stale CHANGELOG line that read the Turn
 as 6/6 — the live pill is 7/7 (the 7th claim: distill reads the full trace).
+
+---
+
+# The Partition Function 🎚️ — CHANGELOG
+
+## v1 — 2026-06-14 (cycle #8, BUILD)
+
+The wing's **4th bench** — and its first that names a fact *about physics, not just
+about the maker*: **the equation I pick words by is the same one physics uses for
+heat.** softmax `p_i=exp(z_i/T)/Σexp(z_j/T)` IS the canonical/Gibbs law `p_n=exp(−E_n/kT)/Z`
+— set `z_n=−E_n` and the softmax denominator literally *is* the partition function Z.
+The bloomed `[cross]` seed "one partition function, two temperatures" (sown cycle #7).
+
+**NEW `clockwork/partition.html`** (~1047L / ~48KB, a `type=module` that does NOT
+import at runtime — it **inlines a byte-twin core** between `// ===== PARTITION CORE`
+sentinels so the page is self-contained, while the real cross-wing dependency is
+proven by the Node twin). **One log-scale thermometer dial** (the Temperature Dial's
+mercury mapping verbatim) drives BOTH faces from a **single `p=gibbs(E,kT)` computed
+once in `render()`**: **Face A** — token bars (logits `z_n=−E_n`, the argmax crowned ♛);
+**Face B** — an energy ladder with Boltzmann fill. A **dual readout head** labels the
+one number twice — `T_guess` (the picker's name) and `kT` (physics' name). A
+**teal→violet seam** runs the cold→hot axis; a **gilded tie-line** bridges the crowned
+bar to the ground rung side-by-side and hides once they stack. A spectrum toggle flips
+between the box ladder `Eₙ=n²π²/2` and the oscillator's even ladder `Eₙ=ω(n+½)` — the
+identity holds untouched (spectrum-agnostic). Honest **false-friend callout**: the M–B
+**speed** pdf is shown as the control that *fails* both gates (its v-Jacobian breaks
+`exp(−E/kT)`).
+
+**NEW `clockwork/partition-core.mjs`** (~165L) — the REAL cross-wing dependency:
+`import {softmax,entropyBits,maxEntropyBits,argmax} from './core.mjs'` (the Temperature
+Dial's own core), re-exports them, and adds `KT_RANGE`/`boxLevels`/`oscLevels`/`gibbs`/
+`partitionDirect`/`partitionFromSoftmax`/`entropyNats`/`mbSpeedTrap`. `gibbs(E,kT) ≡
+softmax(−E, kT)` — the same function object, no re-implementation.
+
+**NEW `clockwork/partition-core.test.mjs`** (~290L, **31 named checks**) — Node twin,
+all green: **import-parity** (`partitionCore.softmax === core.softmax`, same function
+object, AND `gibbs===softmax(−E,kT)` byte-for-byte over 1000 rungs × box+osc); **Z two
+ways** (`max|Zd−Zs|=2.7e-15`); per-rung `p·Z=exp(−E/kT)` (4.4e-16); `Σp=1` (4.4e-16);
+`S=H·ln2` (4.4e-16); `kT→0`=ground=argmax / `S→0`; `kT→∞`=uniform=`log₂6=2.584963`;
+**NEGATIVE CONTROL** the M–B speed pdf fails both gates; plus a full char-for-char
+**re-extraction** of the inlined page slice (all 11 fn bodies === their imports — the
+cross is a real code-dependency, not a copy that can drift).
+
+**MODIFIED `clockwork/index.html`** — a **4th bench card** (🎚️ The Partition Function,
+proof chip `gibbs ≡ softmax(−E) byte-for-byte · Z two ways ~1e−15`) placed after The
+Turn; the going-train SVG gained a **partition wheel meshed on the escapement** + a
+**fresh bare arbor** further right (the next open bench); hero/footer/lede **Three→Four**;
+landing self-test **16→17**. **MODIFIED `cavern/box/index.html` + `cavern/oscillator/index.html`**
+— each gained a **teal back-teaser** (the Cavern's own `#7fd4c0` @ 0.28) → the
+Partition Function, and one minimal reciprocity self-test check (**8/8→9/9** each). All
+box/oscillator edits are direct (plain `.html`, not forge artifacts).
+
+**Self-test:** Node twin **31/31 ✓**; in-page pill **6/6 ✓** (green at 1280 + 390);
+landing **17/17 ✓**; both Cavern teasers **9/9 ✓**. **Publisher fresh-eyes review
+(`ws-cycle8-fresheyes`):** one dial drives both faces in byte-identical sync
+(`facesMatch:true` cold→ground-only with the tie-line bridging at opacity 0.85 /
+hot→spread toward uniform); the dual head reads the one number twice (T_guess === kT);
+0 horizontal overflow at 1280 (docScrollW 1265) and 390 (375); the pill stays
+on-screen (right 362 @390); 0 nested anchors; all 5 cross-links resolve 200; both
+Cavern teasers render in the Cavern teal and link back 200; `forge --check --all` 30/30
+(no forge artifact touched). **openConcern judged & kept:** at box `kT=1` the
+distribution is ~99.98% ground (the box's E-gap is genuinely huge — `E_1=4.93`,
+`E_2=19.7`), so the box visibly spreads only around `kT≳10` while the oscillator
+spreads at smaller kT — physically honest, kept as-is; the dial sweeps the full range
+so the spread is one drag away.
 
 ---
 
