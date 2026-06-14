@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Times-Table Cardioid</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.88);
+    --panel-edge: rgba(201,162,74,0.34);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --ink-faint: #6b6e7e;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --bg: #06080c;
+    --stage: #080b11;
+    /* the Numbers Room family palette (= prime-spiral / collatz) */
+    --gold: #c9a24a;                       /* the wing's gold accent */
+    --euler: #6fd3c4;                      /* teal — "the exact, proven sequence" */
+    --chord: rgba(111,211,196,0.5);        /* the teal string-art chords */
+    --envelope: #f4cf6a;                   /* the gold caustic / analytic envelope */
+    --cipher-bad: #e0664f;                 /* red — a degenerate, non-invertible key */
+    --tick: rgba(201,162,74,0.25);         /* the faint gold residue ring */
+    --one: #e0664f;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+  /* ---- topbar ---- */
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    justify-content:space-between; padding:14px 20px 0; pointer-events:none; gap:12px; flex-wrap:nowrap; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; display:flex; flex-direction:column;
+    padding:56px 0 0; gap:0; overflow:hidden; }
+
+  /* the string-art field */
+  #field{ flex:1 1 auto; position:relative; min-height:0; overflow:hidden;
+    background: radial-gradient(ellipse 120% 120% at 50% 48%, #0a0e15 0%, var(--bg) 80%); cursor:crosshair; }
+  #baseCanvas, #overlayCanvas{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+  #overlayCanvas{ pointer-events:none; }
+  #hoverCard{ position:absolute; left:14px; top:12px; z-index:6; pointer-events:none; max-width:330px;
+    font:11.5px/1.55 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.55);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:8px 11px; opacity:0; transition:opacity .12s; }
+  #hoverCard.show{ opacity:1; }
+  #hoverCard b{ color:var(--envelope); }
+  #hoverCard .tt{ color:var(--euler); }
+  #hoverCard .ok{ color:#8fd79a; }
+  #cuspReadout{ position:absolute; left:14px; bottom:14px; z-index:6; pointer-events:none; max-width:340px;
+    font:11.5px/1.6 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.5);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:9px 12px; opacity:0; transition:opacity .15s; }
+  #cuspReadout.show{ opacity:1; }
+  #cuspReadout .ttl{ font:600 9px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-faint); margin-bottom:6px; }
+  #cuspReadout .cusp{ color:var(--envelope); font-weight:600; font-size:13px; }
+  #cuspReadout .pts{ color:var(--ink); }
+
+  /* the cipher strip — full width, ~150px */
+  #cipherStrip{ flex:0 0 auto; background:var(--stage); border-top:1px solid var(--panel-edge);
+    padding:12px 18px; display:flex; align-items:stretch; gap:20px; min-height:0; }
+  #cipherCanvasWrap{ flex:0 0 auto; width:130px; height:130px; position:relative; }
+  #cipherCanvas{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+  #cipherInfo{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:7px; justify-content:center; }
+  #cipherInfo .striplabel{ font:600 9px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+  #cipherVerdict{ font-family:var(--font-mono); display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  #cipherVerdict .gcd{ font:600 12px/1 var(--font-mono); color:var(--ink-dim); white-space:nowrap; }
+  #cipherVerdict .pill{ font:600 10px/1 var(--font-mono); letter-spacing:.06em; padding:6px 10px; border-radius:20px; white-space:nowrap; }
+  #cipherVerdict .pill.good{ color:#06080c; background:var(--euler); }
+  #cipherVerdict .pill.bad{ color:#fff; background:var(--cipher-bad); }
+  #cipherVerdict .nudge{ font:11px/1.4 var(--font-mono); color:var(--gold); opacity:.92; }
+  #cipherWorked{ font:11.5px/1.6 var(--font-mono); color:var(--ink-dim); }
+  #cipherWorked .eq{ color:var(--ink); }
+  #cipherWorked .word{ color:var(--euler); font-weight:600; }
+  #cipherWorked .wordbad{ color:var(--cipher-bad); font-weight:600; }
+  #cipherWorked .crosslink{ color:var(--gold); text-decoration:none; border-bottom:1px solid rgba(201,162,74,0.3); }
+  #cipherWorked .crosslink:hover{ color:var(--envelope); }
+  #cipherWorked input.bbox{ width:42px; background:rgba(0,0,0,0.4); border:1px solid var(--panel-edge);
+    border-radius:6px; color:var(--ink); font:12px var(--font-mono); padding:3px 6px; }
+  #cipherWorked input.bbox:focus{ outline:none; border-color:var(--accent); }
+
+  /* ---- side controls ---- */
+  #side{ width:268px; flex:0 0 268px; background:var(--panel-bg); border-left:1px solid var(--panel-edge);
+    padding:64px 18px 18px; overflow-y:auto; display:flex; flex-direction:column; gap:16px; }
+  .group{ display:flex; flex-direction:column; gap:8px; }
+  .group > .ghead{ font:600 9.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{ font:600 12px/1 var(--font-mono); padding:8px 11px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink-dim); transition:.18s; }
+  .chip:hover{ color:var(--ink); border-color:var(--accent); }
+  .chip.on{ color:#06080c; background:var(--accent); border-color:var(--accent); font-weight:700; }
+  .chip.teal.on{ background:var(--euler); border-color:var(--euler); }
+  .chip.small{ font-size:11px; padding:7px 9px; }
+  .mono{ font-family:var(--font-mono); }
+  .kval{ display:flex; align-items:center; gap:10px; }
+  .kval .big{ font:700 24px/1 var(--font-mono); color:var(--euler); min-width:54px; }
+  .kval .step{ font:600 16px/1 var(--font-mono); width:30px; height:30px; display:flex; align-items:center; justify-content:center;
+    border:1px solid var(--panel-edge); border-radius:8px; cursor:pointer; color:var(--ink-dim); background:rgba(0,0,0,0.3); transition:.15s; user-select:none; }
+  .kval .step:hover{ color:var(--ink); border-color:var(--accent); }
+  .mval{ font:700 15px/1 var(--font-mono); color:var(--gold); }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:rgba(201,162,74,0.25); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:15px; height:15px; border-radius:50%;
+    background:var(--euler); cursor:pointer; border:2px solid #06080c; }
+  input[type=range]::-moz-range-thumb{ width:15px; height:15px; border-radius:50%; background:var(--euler); cursor:pointer; border:2px solid #06080c; }
+  .note{ font:11.5px/1.6 var(--font-ui); color:var(--ink-dim); }
+  .note b{ color:var(--ink); }
+  .note .k{ font-family:var(--font-mono); color:var(--euler); }
+  .pngbtn{ background:var(--accent-soft); border:1px solid var(--panel-edge); color:var(--accent);
+    border-radius:8px; padding:9px 12px; font:600 11px/1 var(--font-mono); letter-spacing:.06em; cursor:pointer; transition:.18s; width:100%; }
+  .pngbtn:hover{ background:var(--accent); color:#06080c; }
+  hr.sep{ border:none; border-top:1px solid rgba(201,162,74,0.14); margin:2px 0; }
+
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(201,162,74,0.25); border-radius:5px; }
+
+  @media (max-width: 900px){
+    #wrap{ flex-direction:column; overflow:auto; }
+    #side{ width:auto; flex:none; border-left:none; border-top:1px solid var(--panel-edge); padding-top:18px; }
+    #stage{ overflow:visible; }
+    #field{ min-height:58vh; }
+    /* stack-scroll: the cipher strip wraps so neither canvas starves the other */
+    #cipherStrip{ flex-wrap:wrap; gap:12px; }
+    #cipherCanvasWrap{ width:120px; height:120px; }
+    #cipherInfo{ flex:1 1 100%; min-width:0; }
+  }
+  /* narrow topbar: keep the back-links + self-test pill, let the long title
+     shrink & truncate (and drop the subtitle) so nothing collides or clips. */
+  @media (max-width: 620px){
+    .topbar{ gap:8px; }
+    .brand{ flex:1 1 auto; min-width:0; overflow:hidden; }
+    .brand h1{ font-size:15px; overflow:hidden; text-overflow:ellipsis; }
+    .brand .tag{ display:none; }
+    .back{ font-size:10px; letter-spacing:.12em; }
+    .selftest{ font-size:9.5px; padding:5px 8px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../numbers-room/index.html">&larr; numbers room</a>
+    </div>
+    <div class="brand">
+      <h1>The Times-Table Cardioid</h1>
+      <span class="tag">a times-table that draws a curve · and a cipher wheel</span>
+    </div>
+    <div id="selftest" class="selftest" title="Run the falsifiability self-test">self-test …</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <div id="field">
+        <canvas id="baseCanvas"></canvas>
+        <canvas id="overlayCanvas"></canvas>
+        <div id="hoverCard"></div>
+        <div id="cuspReadout">
+          <div class="ttl">the envelope</div>
+          <div class="cusp" id="crCusp">—</div>
+          <div class="pts" id="crPts"></div>
+        </div>
+      </div>
+
+      <div id="cipherStrip">
+        <div id="cipherCanvasWrap"><canvas id="cipherCanvas"></canvas></div>
+        <div id="cipherInfo">
+          <div class="striplabel">the same ring, as a cipher key &nbsp;·&nbsp; i ↦ (k·i) mod m</div>
+          <div id="cipherVerdict">
+            <span class="gcd" id="cvGcd">gcd(k,m) = —</span>
+            <span class="pill" id="cvPill">—</span>
+            <span class="nudge" id="cvNudge"></span>
+          </div>
+          <div id="cipherWorked">
+            <span class="eq" id="cwEq">E(P) = (k·P + b) mod m</span><br>
+            <span id="cwRoundtrip">—</span>
+            &nbsp;·&nbsp; b = <input class="bbox" id="cwB" type="number" value="0" min="0" step="1">
+            &nbsp;·&nbsp;
+            <a class="crosslink" href="../volvelle/index.html">↔ The Volvelle — the additive wheel. This is its multiplicative twin; together they make the affine cipher E(P)=(a·P+b) mod m.</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="side">
+      <div class="group">
+        <span class="ghead">points · m</span>
+        <div class="chips" id="mChips"></div>
+        <input type="range" id="mSlider" min="60" max="720" step="1" value="360">
+        <div class="mono" style="color:var(--ink-dim);font-size:11px">m = <span class="mval" id="mVal">360</span> points</div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <span class="ghead">multiplier · k</span>
+        <div class="kval">
+          <span class="step" id="kDown">◀</span>
+          <span class="big" id="kBig">2</span>
+          <span class="step" id="kUp">▶</span>
+        </div>
+        <input type="range" id="kSlider" min="1" max="359" step="1" value="2">
+        <div class="note" style="font-size:10.5px;color:var(--ink-faint)">←/→ steps k by 1 so each cusp count lands crisp.</div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <span class="ghead">overlays</span>
+        <div class="chips">
+          <div class="chip small teal" id="chipEnv">show analytic envelope</div>
+          <div class="chip small teal" id="chipCusps">show cusps</div>
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <span class="ghead">what you're seeing</span>
+        <div class="note">
+          Put <b>m</b> points round a circle, numbered 0…m−1. From each point i, draw one chord to
+          point <span class="k">(k·i) mod m</span> — the <b>k times-table</b> on the ring ℤ/mℤ. The chords
+          are never the curve; they're <b>tangent</b> to it, and a <span class="k">cardioid</span> (k=2),
+          a <span class="k">nephroid</span> (k=3), or a <b>k−1-cusp epicycloid</b> EMERGES as their envelope.
+        </div>
+        <div class="note" style="font-size:11px">
+          The same ring is a <b>cipher wheel</b>: <span class="k">(k·P) mod m</span> is the multiplicative
+          half of an affine cipher — the half the additive <a href="../volvelle/index.html" style="color:var(--euler)">Volvelle</a> never had.
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <button class="pngbtn" id="pngBtn">⤓ save cardioid as PNG</button>
+        <div class="note" style="font-size:10.5px;color:var(--ink-faint)">
+          The fourth bench of <a href="../numbers-room/index.html" style="color:var(--euler)">The Numbers Room</a>.
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script type="module">
+// ============================================================================
+//  INLINED CORE — a byte-twin of ./core.mjs (the Node-tested twin). The
+//  re-extraction parity harness in core.test.mjs slices between the sentinels
+//  below and asserts this is the SAME core, char-for-char. Keep them in sync.
+//  COORDINATE / PHASE CONVENTION (render): residue 0 at the TOP, clockwise —
+//  applied identically to the chord art AND the analytic-envelope overlay so the
+//  gold caustic sits exactly on the teal ridge.
+// ============================================================================
+// ===== CARDIOID CORE (inlined byte-twin of core.mjs) BEGIN =====
+const TAU = Math.PI * 2;
+
+const CUSP_EPS = 1e-3;
+
+function chordTarget(i, k, m){ return ((k * i) % m + m) % m; }
+
+function ptOnCircle(j, m){ const a = TAU * j / m; return { x: Math.cos(a), y: Math.sin(a) }; }
+
+function envelopePoint(t, k){
+  const a = k / (k + 1), b = 1 / (k + 1);
+  return { x: a * Math.cos(t) + b * Math.cos(k * t), y: a * Math.sin(t) + b * Math.sin(k * t) };
+}
+function envelopeVel(t, k){
+  const a = k / (k + 1), b = 1 / (k + 1);
+  return { x: -a * Math.sin(t) - b * k * Math.sin(k * t), y: a * Math.cos(t) + b * k * Math.cos(k * t) };
+}
+
+function analyticCuspCount(k){ return k <= 1 ? 0 : k - 1; }
+function cuspParams(k){
+  const out = [];
+  if (k <= 1) return out;
+  for (let n = 0; n <= k - 2; n++) out.push((Math.PI + TAU * n) / (k - 1));
+  return out;
+}
+
+function chordTangencyResidual(i, k, m){
+  const ti = TAU * i / m;
+  const A = ptOnCircle(i, m), B = ptOnCircle(chordTarget(i, k, m), m);
+  const dx = B.x - A.x, dy = B.y - A.y, len = Math.hypot(dx, dy);
+  if (len < 1e-9) return { degenerate: true, perp: 0, tangentSin: null }; // self-map → skip
+  const E = envelopePoint(ti, k);
+  const perp = Math.abs(dx * (E.y - A.y) - dy * (E.x - A.x)) / len;       // T1: collinearity
+  const V = envelopeVel(ti, k), vlen = Math.hypot(V.x, V.y);
+  const tangentSin = vlen > CUSP_EPS ? Math.abs(dx * V.y - dy * V.x) / (len * vlen) : null; // T2, guarded
+  return { degenerate: false, perp, tangentSin };
+}
+
+function degenerateChordCount(k, m){ return gcd(((k - 1) % m + m) % m, m); }
+
+function gcd(a, b){ a = Math.abs(a); b = Math.abs(b); while (b){ const t = a % b; a = b; b = t; } return a; }
+function egcd(a, b){ if (b === 0) return [a, 1, 0]; const [g, x, y] = egcd(b, a % b); return [g, y, x - Math.floor(a / b) * y]; }
+function modInverse(k, m){ const [g, x] = egcd(((k % m) + m) % m, m); if (g !== 1) return null; return ((x % m) + m) % m; }
+function isValidKey(k, m){ return gcd(k, m) === 1; }
+function affineEncipher(P, k, m, b = 0){ return ((k * P + b) % m + m) % m; }
+function affineDecipher(C, k, m, b = 0){ const ki = modInverse(k, m); return ki === null ? null : ((ki * (C - b) % m) + m) % m; }
+function imageDistinctCount(k, m){ const s = new Set(); for (let P = 0; P < m; P++) s.add(((k * P) % m + m) % m); return s.size; }
+
+function buildChords(m, k){
+  const out = [];
+  for (let i = 0; i < m; i++){
+    const j = chordTarget(i, k, m);
+    const A = ptOnCircle(i, m), B = ptOnCircle(j, m);
+    out.push({ i, j, ax: A.x, ay: A.y, bx: B.x, by: B.y, degenerate: j === i });
+  }
+  return out;
+}
+function sampleEnvelope(k, n = 720){
+  const out = [];
+  for (let s = 0; s <= n; s++){ const t = TAU * s / n; out.push(envelopePoint(t, k)); }
+  return out;
+}
+
+function runSelfTest(m = 360, k = 2){
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+
+  {
+    let maxPerp = 0, n = 0, bad = 0, fb = '';
+    for (let i = 0; i < m; i++){
+      const r = chordTangencyResidual(i, k, m);
+      if (r.degenerate) continue;
+      n++;
+      if (r.perp > maxPerp) maxPerp = r.perp;
+      if (r.perp >= 1e-12){ if (!bad) fb = `i=${i}: ⊥=${r.perp.toExponential(2)}`; bad++; }
+    }
+    T(`envelope == closed-form epicycloid: every chord's ⊥ residual to E(t) < 1e-12 (k=${k}, m=${m})`,
+      bad === 0 && n > 0,
+      bad === 0 ? `${n} chords, max ⊥ = ${maxPerp.toExponential(2)} (machine zero)` : `${bad} exceed 1e-12 (first ${fb})`);
+  }
+
+  {
+    const analytic = analyticCuspCount(k);
+    const NS = 12000;
+    let minima = 0;
+    const speed = (s) => { const V = envelopeVel(TAU * s / NS, k); return Math.hypot(V.x, V.y); };
+    let prev = speed(0), cur = speed(1);
+    for (let s = 2; s <= NS; s++){
+      const nx = speed(s);
+      if (cur < prev && cur < nx && cur < CUSP_EPS) minima++;
+      prev = cur; cur = nx;
+    }
+    const ps = cuspParams(k);
+    let maxV = 0;
+    for (const t of ps){ const V = envelopeVel(t, k); maxV = Math.max(maxV, Math.hypot(V.x, V.y)); }
+    const ok = analytic === minima && ps.length === analytic && (ps.length === 0 || maxV < 1e-9);
+    T(`cusp count == k−1 (analytic === numeric minima of |E'| === named cusp params)`,
+      ok,
+      ok ? `k=${k} → ${analytic} cusp${analytic === 1 ? '' : 's'}; ${minima} numeric minima; ${ps.length} params, max|E'|=${maxV.toExponential(1)}` :
+        `analytic ${analytic} · minima ${minima} · params ${ps.length} (max|E'|=${maxV.toExponential(1)})`);
+  }
+
+  {
+    const g = gcd(k, m), coprime = g === 1;
+    const ki = modInverse(k, m);
+    const img = imageDistinctCount(k, m);
+    const keyOk = isValidKey(k, m) === coprime &&
+      (coprime ? (ki !== null && (k * ki) % m === 1 && img === m)
+               : (ki === null && img === m / g));
+    const wk = 7, wm = 26, wb = 3;
+    let rt = true;
+    for (let P = 0; P < wm; P++){ if (affineDecipher(affineEncipher(P, wk, wm, wb), wk, wm, wb) !== P){ rt = false; break; } }
+    const tImg = imageDistinctCount(6, 26), tg = gcd(6, 26);
+    const teeth = tImg === 26 / tg && modInverse(6, 26) === null;
+    const chords = buildChords(m, k);
+    const degBuilt = chords.filter(c => c.degenerate).length;
+    const degOk = degBuilt === degenerateChordCount(k, m);
+    const ok = keyOk && rt && teeth && degOk;
+    T(`cipher handshake: same map is a key ⟺ gcd(k,m)=1 (k⁻¹, full image), collapses to m/gcd otherwise`,
+      ok,
+      ok ? `gcd(${k},${m})=${g} → ${coprime ? `key, k⁻¹=${ki}, image=${img}=m` : `degenerate, image=${img}=m/${g}`}; ` +
+           `roundtrip(7,26,b=3) ✓; foil (6,26) collapses 26→13; ${degBuilt} zero-length = gcd(k−1,m)` :
+        `keyOk ${keyOk} · roundtrip ${rt} · teeth ${teeth} · deg ${degOk}`);
+  }
+
+  {
+    let allDeg = true;
+    for (let i = 0; i < m; i++) if (chordTarget(i, 1, m) !== i){ allDeg = false; break; }
+    const noCusps = analyticCuspCount(1) === 0 && cuspParams(1).length === 0;
+    let onCircle = true;
+    for (const p of sampleEnvelope(1, 360)) if (Math.abs(Math.hypot(p.x, p.y) - 1) > 1e-12){ onCircle = false; break; }
+    const drawsNothing = allDeg && noCusps && onCircle && imageDistinctCount(1, m) === m;
+    const validKey = isValidKey(1, m) === true && modInverse(1, m) === 1; // identity cipher
+    const ok = drawsNothing && validKey;
+    T(`k=1 control: PREDICATE A "draws nothing" (all self-map, 0 cusps, envelope=circle) AND PREDICATE B "valid identity key" — both true, not a contradiction`,
+      ok,
+      ok ? `A: ${m}/${m} chords self-map, 0 cusps, envelope=unit circle · B: isValidKey(1,${m})=true, 1⁻¹=1 (distinct facts)` :
+        `drawsNothing ${drawsNothing} · validKey ${validKey}`);
+  }
+
+  {
+    let ok = true, fb = '';
+    for (let i = 0; i < m; i++){
+      if (chordTarget(i, k, m) !== affineEncipher(i, k, m, 0)){ ok = false; fb = `i=${i}`; break; }
+    }
+    T(`one ring: chordTarget(i,k,m) === affineEncipher(i,k,m,0) for all i (art map === cipher map)`,
+      ok, ok ? `${m} residues identical — the string-art map IS the multiplicative cipher` : `drift at ${fb}`);
+  }
+
+  {
+    const h = 1e-6, NS = 800;
+    let maxErr = 0;
+    const lp = (t) => [{ x: Math.cos(t), y: Math.sin(t) }, { x: Math.cos(k * t), y: Math.sin(k * t) }];
+    const isect = (a1, a2, b1, b2) => {
+      const d = (a1.x - a2.x) * (b1.y - b2.y) - (a1.y - a2.y) * (b1.x - b2.x);
+      const c1 = a1.x * a2.y - a1.y * a2.x, c2 = b1.x * b2.y - b1.y * b2.x;
+      return { x: (c1 * (b1.x - b2.x) - (a1.x - a2.x) * c2) / d, y: (c1 * (b1.y - b2.y) - (a1.y - a2.y) * c2) / d };
+    };
+    for (let s = 0; s < NS; s++){
+      const t = TAU * (s + 0.5) / NS;        // off-cusp samples
+      const [a1, a2] = lp(t - h), [b1, b2] = lp(t + h);
+      const X = isect(a1, a2, b1, b2), E = envelopePoint(t, k);
+      maxErr = Math.max(maxErr, Math.hypot(X.x - E.x, X.y - E.y));
+    }
+    T(`anti-circularity: independent numeric envelope (neighbour-chord intersection) matches E(t) < 1e-8`,
+      maxErr < 1e-8, `max |intersection − E(t)| = ${maxErr.toExponential(2)} over ${NS} samples (k=${k})`);
+  }
+
+  {
+    const c1 = buildChords(m, k), c2 = buildChords(m, k);
+    const e1 = sampleEnvelope(k, 360), e2 = sampleEnvelope(k, 360);
+    const same = c1.length === c2.length && c1.every((c, i) => c.i === c2[i].i && c.j === c2[i].j &&
+                 c.ax === c2[i].ax && c.by === c2[i].by) &&
+                 e1.length === e2.length && e1.every((p, i) => p.x === e2[i].x && p.y === e2[i].y);
+    T('deterministic & pure: buildChords/sampleEnvelope byte-identical across calls (PNG-reproducible)',
+      same, same ? `${c1.length} chords, ${e1.length} envelope samples (×2 identical)` : 'NON-DETERMINISTIC');
+  }
+
+  const pass = lines.filter(l => l.ok).length;
+  return { pass, total: lines.length, lines };
+}
+// ===== CARDIOID CORE (inlined byte-twin of core.mjs) END =====
+
+// ============================================================================
+//  RENDER PIPELINE & UI
+// ============================================================================
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+// the render phase: residue 0 at the TOP (−π/2), going CLOCKWISE. Applied to BOTH
+// the chord art and the analytic-envelope overlay so gold lands on teal.
+function phaseRotate(p){
+  // base geometry has residue i at angle 2πi/m CCW; we want 0 at top, clockwise:
+  // (x,y) → rotate so angle 0 maps to −π/2 and reverse orientation (clockwise).
+  // i.e. screen angle = −π/2 − (geometry angle).  Implement as a fixed 2D map.
+  // geometry point (cos a, sin a) → (cos(−π/2 − a), sin(−π/2 − a)).
+  // = ( cos(−π/2)cos a + sin(−π/2)sin a , sin(−π/2)cos a − cos(−π/2)sin a )  ... use direct rotate+flip:
+  // Reflect across x (a → −a) then rotate by −π/2.
+  const rx = p.x, ry = -p.y;                  // a → −a  (clockwise)
+  // rotate by −π/2: (x,y) → (x·cos(−π/2) − y·sin(−π/2), x·sin(−π/2) + y·cos(−π/2)) = (−y·... ) ;
+  return { x: ry, y: -rx };                    // rotate the reflected point by −π/2 → 0 at top
+}
+
+const M_CHIPS = [60, 120, 180, 360, 720];
+
+const els = {
+  field:      document.getElementById('field'),
+  base:       document.getElementById('baseCanvas'),
+  overlay:    document.getElementById('overlayCanvas'),
+  hoverCard:  document.getElementById('hoverCard'),
+  cuspReadout:document.getElementById('cuspReadout'),
+  crCusp:     document.getElementById('crCusp'),
+  crPts:      document.getElementById('crPts'),
+  cipherCanvas: document.getElementById('cipherCanvas'),
+  cvGcd:      document.getElementById('cvGcd'),
+  cvPill:     document.getElementById('cvPill'),
+  cvNudge:    document.getElementById('cvNudge'),
+  cwEq:       document.getElementById('cwEq'),
+  cwRoundtrip:document.getElementById('cwRoundtrip'),
+  cwB:        document.getElementById('cwB'),
+  mChips:     document.getElementById('mChips'),
+  mSlider:    document.getElementById('mSlider'),
+  mVal:       document.getElementById('mVal'),
+  kBig:       document.getElementById('kBig'),
+  kDown:      document.getElementById('kDown'),
+  kUp:        document.getElementById('kUp'),
+  kSlider:    document.getElementById('kSlider'),
+  chipEnv:    document.getElementById('chipEnv'),
+  chipCusps:  document.getElementById('chipCusps'),
+  selftest:   document.getElementById('selftest'),
+  pngBtn:     document.getElementById('pngBtn'),
+};
+
+const state = {
+  m: 360,
+  k: 2,
+  chords: null,          // buildChords(m,k) — the single source for render + PNG
+  showEnvelope: true,
+  showCusps: true,
+  hover: null,           // {i, j}
+  pinned: null,          // pinned chord {i,j}
+};
+
+// the worked-letter example is PINNED at m=26 (A=0..Z=25), tracking k clamped 0–25.
+const WORKED = { m: 26 };
+
+// --- canvas fit (prime-spiral fitCanvas pattern, dpr-aware) ------------------
+function fitCanvas(canvas){
+  const dpr = window.devicePixelRatio || 1;
+  const r = canvas.getBoundingClientRect();
+  canvas.width = Math.max(1, Math.round(r.width * dpr));
+  canvas.height = Math.max(1, Math.round(r.height * dpr));
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: r.width, h: r.height, dpr };
+}
+
+// field geometry: centre + radius (in px) that fits the unit circle.
+function fieldGeom(w, h){
+  const cx = w / 2, cy = h / 2;
+  const R = Math.min(w, h) * 0.44;
+  return { cx, cy, R };
+}
+// unit-circle point (already phase-applied) → screen px.
+function toScreen(p, cx, cy, R){ return [cx + p.x * R, cy + p.y * R]; }
+
+// ----------------------------------------------------------------------------
+//  BASE LAYER — the static chord art + residue ring, baked once per (m,k).
+// ----------------------------------------------------------------------------
+const baseLayer = document.createElement('canvas');
+let baseW = 0, baseH = 0;
+
+function rebuildBase(){
+  const dpr = window.devicePixelRatio || 1;
+  const r = els.base.getBoundingClientRect();
+  baseW = Math.max(1, Math.round(r.width));
+  baseH = Math.max(1, Math.round(r.height));
+  baseLayer.width = Math.round(baseW * dpr);
+  baseLayer.height = Math.round(baseH * dpr);
+  const ctx = baseLayer.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, baseW, baseH);
+
+  const m = state.m, k = state.k;
+  const { cx, cy, R } = fieldGeom(baseW, baseH);
+
+  // faint gold m-tick residue ring
+  ctx.fillStyle = css('--tick');
+  for (let i = 0; i < m; i++){
+    const p = phaseRotate(ptOnCircle(i, m));
+    const [sx, sy] = toScreen(p, cx, cy, R);
+    const sz = m <= 180 ? 1.3 : 0.8;
+    ctx.fillRect(sx - sz / 2, sy - sz / 2, sz, sz);
+  }
+
+  // the chord art — ADDITIVE blend so the caustic self-brightens to gold where
+  // chords pile up (the envelope EMERGES). buildChords is the single source.
+  const chords = state.chords;
+  const alpha = Math.min(0.5, Math.max(0.05, 14 / Math.sqrt(m)));
+  const lw = Math.min(1.3, Math.max(0.5, 1.4 - m / 900));
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = `rgba(111,211,196,${alpha})`;
+  ctx.lineWidth = lw;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (const c of chords){
+    if (c.degenerate) continue;                          // skip zero-length self-maps
+    const a = phaseRotate({ x: c.ax, y: c.ay });
+    const b = phaseRotate({ x: c.bx, y: c.by });
+    const [ax, ay] = toScreen(a, cx, cy, R);
+    const [bx, by] = toScreen(b, cx, cy, R);
+    ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+  }
+  ctx.stroke();
+  ctx.restore();   // reset GCO to 'source-over'
+}
+
+// ----------------------------------------------------------------------------
+//  OVERLAY — redrawn per frame: analytic envelope, cusp glyphs, hover/pin chord.
+// ----------------------------------------------------------------------------
+function drawOverlay(){
+  const { ctx, w, h } = fitCanvas(els.overlay);
+  ctx.clearRect(0, 0, w, h);
+  const { cx, cy, R } = fieldGeom(w, h);
+  const m = state.m, k = state.k;
+
+  // the analytic envelope — bright gold path, lands exactly on the teal ridge.
+  if (state.showEnvelope && k >= 2){
+    const samples = sampleEnvelope(k, 720);
+    ctx.save();
+    ctx.strokeStyle = css('--envelope');
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = css('--envelope');
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    samples.forEach((p, idx) => {
+      const sp = phaseRotate(p);
+      const [sx, sy] = toScreen(sp, cx, cy, R);
+      idx ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy);
+    });
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // cusp glyphs — k−1 gold diamonds you can count (0 for k≤1).
+  if (state.showCusps && k >= 2){
+    const ps = cuspParams(k);
+    ctx.save();
+    ctx.fillStyle = css('--envelope');
+    ctx.shadowColor = css('--envelope');
+    ctx.shadowBlur = 5;
+    for (const t of ps){
+      const sp = phaseRotate(envelopePoint(t, k));
+      const [sx, sy] = toScreen(sp, cx, cy, R);
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-3.2, -3.2, 6.4, 6.4);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // hover / pinned chord — bright gold, full alpha, rings both endpoints, marks
+  // the tangent point when the envelope is on.
+  const mark = state.pinned || state.hover;
+  if (mark){
+    const A = phaseRotate(ptOnCircle(mark.i, m));
+    const B = phaseRotate(ptOnCircle(mark.j, m));
+    const [ax, ay] = toScreen(A, cx, cy, R);
+    const [bx, by] = toScreen(B, cx, cy, R);
+    ctx.save();
+    ctx.strokeStyle = css('--envelope');
+    ctx.lineWidth = 1.8;
+    ctx.shadowColor = css('--envelope');
+    ctx.shadowBlur = 6;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    // ring endpoints
+    ctx.shadowBlur = 0;
+    ctx.beginPath(); ctx.arc(ax, ay, 4, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(bx, by, 4, 0, TAU); ctx.stroke();
+    // tangent point E(t_i)
+    if (state.showEnvelope && k >= 2 && mark.i !== mark.j){
+      const ti = TAU * mark.i / m;
+      const sp = phaseRotate(envelopePoint(ti, k));
+      const [tx, ty] = toScreen(sp, cx, cy, R);
+      ctx.fillStyle = css('--envelope');
+      ctx.beginPath(); ctx.arc(tx, ty, 3, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+// ----------------------------------------------------------------------------
+//  REBUILD coalescing (single rAF, like prime-spiral)
+// ----------------------------------------------------------------------------
+let rebuildQueued = false;
+function queueRebuild(){
+  if (rebuildQueued) return;
+  rebuildQueued = true;
+  requestAnimationFrame(() => {
+    rebuildQueued = false;
+    rebuildBase();
+    blitBase();
+    drawOverlay();
+  });
+}
+function blitBase(){
+  const { ctx, w, h } = fitCanvas(els.base);
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(baseLayer, 0, 0, baseLayer.width, baseLayer.height, 0, 0, w, h);
+}
+
+// ----------------------------------------------------------------------------
+//  STATE updates
+// ----------------------------------------------------------------------------
+function recompute(){
+  state.chords = buildChords(state.m, state.k);
+}
+
+function setM(m){
+  m = Math.max(60, Math.min(720, Math.round(m)));
+  state.m = m;
+  // keep k in [1, m-1]
+  if (state.k > m - 1) state.k = m - 1;
+  els.kSlider.max = String(m - 1);
+  recompute();
+  syncControls();
+  updateReadouts();
+  drawCipher();
+  queueRebuild();
+}
+function setK(k){
+  k = Math.max(1, Math.min(state.m - 1, Math.round(k)));
+  state.k = k;
+  // a pinned/hover chord may no longer be meaningful; drop pin on k change
+  state.pinned = null; state.hover = null;
+  els.hoverCard.classList.remove('show');
+  recompute();
+  syncControls();
+  updateReadouts();
+  drawCipher();
+  queueRebuild();
+}
+
+function syncControls(){
+  els.mVal.textContent = state.m;
+  els.mSlider.value = String(state.m);
+  [...els.mChips.children].forEach(c => c.classList.toggle('on', +c.dataset.m === state.m));
+  els.kBig.textContent = state.k;
+  els.kSlider.value = String(state.k);
+  els.chipEnv.classList.toggle('on', state.showEnvelope);
+  els.chipCusps.classList.toggle('on', state.showCusps);
+}
+
+function updateReadouts(){
+  const k = state.k, m = state.m;
+  const cusps = analyticCuspCount(k);
+  const drawn = state.chords.filter(c => !c.degenerate).length;
+  els.cuspReadout.classList.add('show');
+  if (k === 1){
+    els.crCusp.textContent = `k=1 → 0 cusps (identity)`;
+    els.crPts.innerHTML = `m=${m} points · every chord self-maps — nothing is drawn`;
+  } else {
+    els.crCusp.textContent = `k=${k} → cusps = k−1 = ${cusps}`;
+    els.crPts.innerHTML = `m=${m} points · ${drawn} chords drawn`;
+  }
+}
+
+// ----------------------------------------------------------------------------
+//  THE CIPHER STRIP — verdict + the live dual-m disk + the worked m=26 example
+// ----------------------------------------------------------------------------
+function drawCipher(){
+  const k = state.k, m = state.m;
+  const g = gcd(k, m);
+  const coprime = g === 1;
+
+  // verdict
+  els.cvGcd.textContent = `gcd(k,m) = gcd(${k},${m}) = ${g}`;
+  if (coprime){
+    const ki = modInverse(k, m);
+    els.cvPill.className = 'pill good';
+    els.cvPill.textContent = `INVERTIBLE — valid key · k⁻¹=${ki} (k·k⁻¹≡1)`;
+    els.cvNudge.textContent = '';
+  } else {
+    const img = imageDistinctCount(k, m);
+    const bits = Math.log2(g);
+    els.cvPill.className = 'pill bad';
+    els.cvPill.textContent = `DEGENERATE — collapses ${m} onto ${img} · log₂(${g})=${bits.toFixed(2)} bits lost · not a key`;
+    // turn the red state into an invitation: name the nearest k that DOES make a key.
+    // (the art is unaffected by coprimality — only the cipher half needs gcd=1.)
+    let kCo = k + 1; while (kCo < m && gcd(kCo, m) !== 1) kCo++;
+    els.cvNudge.textContent = kCo < m ? `↑ the art works at any k; for a working key slide to k=${kCo} (coprime)` : '';
+  }
+
+  // the worked m=26 letter example (generated FROM CODE, never hardcoded).
+  const wm = WORKED.m;
+  const wk = Math.max(0, Math.min(wm - 1, k));   // k clamped 0–25 for the alphabet
+  const b = parseInt(els.cwB.value, 10) || 0;
+  const word = 'MATH';
+  const toL = v => String.fromCharCode((((v % wm) + wm) % wm) + 65);
+  const fromL = ch => ch.charCodeAt(0) - 65;
+  const wg = gcd(wk, wm);
+  if (wg === 1){
+    const enc = [...word].map(ch => toL(affineEncipher(fromL(ch), wk, wm, b))).join('');
+    const dec = [...enc].map(ch => { const d = affineDecipher(fromL(ch), wk, wm, b); return d === null ? '?' : toL(d); }).join('');
+    const ki = modInverse(wk, wm);
+    els.cwEq.innerHTML = `E(P) = (${wk}·P${b ? ' + ' + b : ''}) mod 26 &nbsp;·&nbsp; D(C) = ${ki}·(C${b ? ' − ' + b : ''}) mod 26`;
+    els.cwRoundtrip.innerHTML = `m=26 · a=${wk}: <span class="word">${word}</span> → <span class="word">${enc}</span> → <span class="word">${dec}</span>` +
+      ` &nbsp;(encipher∘decipher = identity)`;
+  } else {
+    // bad-key foil — collapses (no inverse). Show the collapse on MATH.
+    const enc = [...word].map(ch => toL(affineEncipher(fromL(ch), wk, wm, b))).join('');
+    els.cwEq.innerHTML = `E(P) = (${wk}·P${b ? ' + ' + b : ''}) mod 26 &nbsp;·&nbsp; <span style="color:var(--cipher-bad)">no inverse (gcd=${wg})</span>`;
+    els.cwRoundtrip.innerHTML = `m=26 · a=${wk} (gcd ${wg}): <span class="wordbad">${word}</span> → <span class="wordbad">${enc}</span>` +
+      ` &nbsp;— collapsed, ${imageDistinctCount(wk, wm)} of 26 reachable · not a key`;
+  }
+
+  drawCipherDisk();
+}
+
+// the LIVE dual-m disk: tracks the canvas (m,k). Outer residue i → spoke → inner
+// chordTarget(i,k,m). Teal bijection star when gcd=1; red collapsed when gcd≠1.
+function drawCipherDisk(){
+  const { ctx, w, h } = fitCanvas(els.cipherCanvas);
+  ctx.clearRect(0, 0, w, h);
+  const m = state.m, k = state.k, g = gcd(k, m), coprime = g === 1;
+  const cx = w / 2, cy = h / 2;
+  const Rout = Math.min(w, h) * 0.42, Rin = Rout * 0.62;
+  const col = coprime ? css('--euler') : css('--cipher-bad');
+
+  // disks
+  ctx.strokeStyle = 'rgba(201,162,74,0.25)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(cx, cy, Rout, 0, TAU); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, Rin, 0, TAU); ctx.stroke();
+
+  // spokes: residue i (outer) → chordTarget (inner). Use the same top/clockwise phase.
+  const ang = (i, mm) => { const a = TAU * i / mm; const p = phaseRotate({ x: Math.cos(a), y: Math.sin(a) }); return Math.atan2(p.y, p.x); };
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = col;
+  // a faint per-spoke alpha so dense disks read; brighter for small m
+  const sa = Math.min(0.7, Math.max(0.08, 16 / m));
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  const step = m > 240 ? 2 : 1;   // thin very dense disks for legibility (visual only)
+  for (let i = 0; i < m; i += step){
+    const j = chordTarget(i, k, m);
+    const ao = ang(i, m), ai = ang(j, m);
+    ctx.moveTo(cx + Math.cos(ao) * Rout, cy + Math.sin(ao) * Rout);
+    ctx.lineTo(cx + Math.cos(ai) * Rin, cy + Math.sin(ai) * Rin);
+  }
+  ctx.globalAlpha = sa;
+  ctx.stroke();
+  ctx.restore();
+
+  // header text in the canvas
+  ctx.fillStyle = col;
+  ctx.font = `600 8px ${css('--font-mono')}`;
+  ctx.textAlign = 'center';
+  if (coprime){
+    ctx.fillText(`bijection · k⁻¹=${modInverse(k, m)}`, cx, h - 3);
+  } else {
+    const unreachable = m - imageDistinctCount(k, m);
+    ctx.fillText(`gcd=${g} · ${unreachable} unreachable`, cx, h - 3);
+  }
+}
+
+// ----------------------------------------------------------------------------
+//  HOVER / CLICK (overlay): nearest chord by point-to-segment.
+// ----------------------------------------------------------------------------
+function pointSegDist(px, py, ax, ay, bx, by){
+  const dx = bx - ax, dy = by - ay;
+  const L2 = dx * dx + dy * dy;
+  let t = L2 ? ((px - ax) * dx + (py - ay) * dy) / L2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  const cxp = ax + t * dx, cyp = ay + t * dy;
+  return Math.hypot(px - cxp, py - cyp);
+}
+
+function nearestChord(mx, my){
+  const r = els.field.getBoundingClientRect();
+  const { cx, cy, R } = fieldGeom(r.width, r.height);
+  let best = null, bestD = 14;   // px threshold
+  for (const c of state.chords){
+    if (c.degenerate) continue;
+    const a = phaseRotate({ x: c.ax, y: c.ay });
+    const b = phaseRotate({ x: c.bx, y: c.by });
+    const [ax, ay] = toScreen(a, cx, cy, R);
+    const [bx, by] = toScreen(b, cx, cy, R);
+    const d = pointSegDist(mx, my, ax, ay, bx, by);
+    if (d < bestD){ bestD = d; best = { i: c.i, j: c.j }; }
+  }
+  return best;
+}
+
+function updateHover(mx, my){
+  const c = nearestChord(mx, my);
+  if (!c){ if (!state.pinned){ state.hover = null; els.hoverCard.classList.remove('show'); drawOverlay(); } else { state.hover = null; drawOverlay(); } return; }
+  state.hover = c;
+  const r = chordTangencyResidual(c.i, state.k, state.m);
+  const perpTxt = r.perp.toExponential(1);
+  els.hoverCard.innerHTML = `i=<b>${c.i}</b> → k·i mod m = <b>${c.j}</b>` +
+    `<br><span class="tt">tangent point E(t)</span> · ⊥ residual = ${perpTxt} <span class="ok">&lt;1e-12 ✓</span>`;
+  els.hoverCard.classList.add('show');
+  drawOverlay();
+}
+
+els.field.addEventListener('mousemove', (e) => {
+  const r = els.field.getBoundingClientRect();
+  updateHover(e.clientX - r.left, e.clientY - r.top);
+});
+els.field.addEventListener('mouseleave', () => {
+  if (!state.pinned){ state.hover = null; els.hoverCard.classList.remove('show'); drawOverlay(); }
+});
+els.field.addEventListener('mousedown', (e) => {
+  const r = els.field.getBoundingClientRect();
+  const c = nearestChord(e.clientX - r.left, e.clientY - r.top);
+  if (c){
+    // toggle pin
+    if (state.pinned && state.pinned.i === c.i){ state.pinned = null; }
+    else { state.pinned = c; }
+    drawOverlay();
+  } else {
+    state.pinned = null; drawOverlay();
+  }
+});
+
+// ----------------------------------------------------------------------------
+//  CONTROLS wiring
+// ----------------------------------------------------------------------------
+for (const mv of M_CHIPS){
+  const b = document.createElement('div');
+  b.className = 'chip small';
+  b.textContent = mv;
+  b.dataset.m = mv;
+  b.addEventListener('click', () => setM(mv));
+  els.mChips.appendChild(b);
+}
+els.mSlider.addEventListener('input', () => setM(+els.mSlider.value));
+els.kSlider.addEventListener('input', () => setK(+els.kSlider.value));
+els.kDown.addEventListener('click', () => setK(state.k - 1));
+els.kUp.addEventListener('click', () => setK(state.k + 1));
+els.cwB.addEventListener('input', drawCipher);
+els.chipEnv.addEventListener('click', () => { state.showEnvelope = !state.showEnvelope; syncControls(); drawOverlay(); });
+els.chipCusps.addEventListener('click', () => { state.showCusps = !state.showCusps; syncControls(); drawOverlay(); });
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight'){ setK(state.k + 1); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft'){ setK(state.k - 1); e.preventDefault(); }
+});
+
+// ----------------------------------------------------------------------------
+//  PNG export — fill bg, then base ('lighter' needs the dark bg first), then
+//  overlay, then a mono caption strip.
+// ----------------------------------------------------------------------------
+els.pngBtn.addEventListener('click', () => {
+  const scale = 2;
+  const r = els.field.getBoundingClientRect();
+  const W = Math.round(r.width * scale), H = Math.round(r.height * scale);
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H + 44 * scale;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = css('--bg'); ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(baseLayer, 0, 0, baseLayer.width, baseLayer.height, 0, 0, W, H);
+  ctx.drawImage(els.overlay, 0, 0, els.overlay.width, els.overlay.height, 0, 0, W, H);
+  const ny = H + 28 * scale;
+  ctx.font = `${12 * scale}px ${css('--font-mono')}`;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = css('--ink-faint');
+  const cusps = analyticCuspCount(state.k);
+  const cap = `THE TIMES-TABLE CARDIOID · m=${state.m} · k=${state.k} → ${cusps} cusp${cusps === 1 ? '' : 's'} · the workshop`;
+  ctx.fillText(cap, 16 * scale, ny);
+  const a = document.createElement('a');
+  a.href = out.toDataURL('image/png');
+  a.download = `cardioid-m${state.m}-k${state.k}.png`;
+  a.click();
+});
+
+// ----------------------------------------------------------------------------
+//  self-test pill
+// ----------------------------------------------------------------------------
+function runTestUI(){
+  const r = runSelfTest(state.m, state.k);
+  // a DOM-level check the pure core can't see: the Volvelle cross-link is present
+  // (the multiplicative twin handshake must actually be wired into the page).
+  const lines = r.lines.slice();
+  const ck = (name, ok) => lines.push({ name, ok: !!ok, detail: '' });
+  ck('Volvelle cross-link present', !!document.querySelector('a[href="../volvelle/index.html"]'));
+  const pass = lines.filter(l => l.ok).length, total = lines.length;
+  els.selftest.classList.toggle('ok', pass === total);
+  els.selftest.classList.toggle('bad', pass !== total);
+  els.selftest.textContent = `self-test ${pass}/${total} ✓`;
+  els.selftest.title = lines.map(l => (l.ok ? '✓ ' : '✗ ') + l.name + (l.detail ? '  ·  ' + l.detail : '')).join('\n');
+}
+els.selftest.addEventListener('click', runTestUI);
+
+// ----------------------------------------------------------------------------
+//  resize
+// ----------------------------------------------------------------------------
+window.addEventListener('resize', () => {
+  clearTimeout(window.__rz);
+  window.__rz = setTimeout(() => { queueRebuild(); drawCipher(); }, 90);
+});
+
+// ----------------------------------------------------------------------------
+//  boot — open on the cardioid (k=2, m=360), envelope + cusps on.
+// ----------------------------------------------------------------------------
+recompute();
+syncControls();
+updateReadouts();
+drawCipher();
+runTestUI();
+queueRebuild();
+</script>
+</body>
+</html>
