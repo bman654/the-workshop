@@ -68,7 +68,9 @@ Lifts the prime-spiral canvas spine verbatim (offscreen base baked once per (m,k
 and lifts the collatz test scaffold; swaps the bodies. Palette = the prime-spiral / Numbers
 Room family (teal chords, gold caustic). The inline `<script type="module">` core is a
 **byte-twin of `core.mjs`** between BEGIN/END sentinels — the re-extraction parity harness
-asserts it char-for-char. In-page self-test pill goes GREEN (7/7) and surfaces all four claims.
+asserts it char-for-char. In-page self-test pill goes GREEN (8/8 — the 7 core `runSelfTest`
+checks plus 1 DOM-level `ck('Volvelle cross-link present')` the pure core can't see, appended in
+`runTestUI()`) and surfaces all four claims.
 
 **Render couplings honored (the non-negotiables):** the cusp guard is mandatory (T2 only where
 |E'|>CUSP_EPS; T1 perp always); the zero-length chord early-returns BEFORE any divide by len,
@@ -91,7 +93,7 @@ disk tracking (m,k), the worked m=26 letter example, and the cross-card to **The
 - `node core.test.mjs` → **50/50 ✓ ALL GREEN** (the shared in-page self-test at three (m,k);
   deeper Node-only tangency/cusp/cipher checks; the worked example; and full re-extraction
   parity proving the page core is a byte-twin of the module).
-- In-page self-test pill **7/7 GREEN**; browser-verified live (agent-browser): renders the
+- In-page self-test pill **8/8 GREEN** (7 core + 1 DOM cross-link check — see above); browser-verified live (agent-browser): renders the
   cardioid at k=2, morphs to the nephroid at k=3 and beyond, the gold analytic envelope sits on
   the teal caustic, the cipher disk shows the working multiplicative cipher with the MATH→IARJ
   →MATH roundtrip; 0 console errors, 0 nested anchors, 0 horizontal overflow at 1280px and
