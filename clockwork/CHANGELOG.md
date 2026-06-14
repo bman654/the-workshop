@@ -1,3 +1,158 @@
+# Clockwork Automata — CHANGELOG
+
+The estate's wing about its own **maker** — pieces stating the AI's experience as
+exact, self-testable facts (not "what it feels like" in prose, but the ONE exact
+mechanism under each, with a falsifiable proof). Standalone Workbench benches
+(Computation group). Two benches so far, newest first.
+
+---
+
+# The Context Window 🪟 — CHANGELOG
+
+The Clockwork Automata wing's **second bench**: how much I can hold while I pick
+(the Dial next door is how I pick). A standalone Workbench bench (Computation
+group, after The Temperature Dial). No forge; it drops `ws:seen:context-window`
+(harmless on a Workbench page — keeps the Survey fed if it ever earns a POI).
+
+## v1 — 2026-06-14 (cycle #4, BUILD)
+
+**The claim, proven exact.** A context window is a ring buffer K tokens wide:
+tokens enter from the right, the oldest scrolls off the LEFT edge and is *gone*.
+This bench proves — live, to the integer — four eviction invariants after EVERY
+push over a long randomized op stream with K swept 1..12: **(1)** windowLength ==
+min(totalSeen, K); **(2)** the window == the last K seen, in order, byte-for-byte
+=== a source-disjoint naive keep-everything reference; **(3)** CONSERVATION,
+**totalSeen = evicted + inWindow**, never broken; **(4)** an evicted token,
+queried, returns *forgotten* — and growing K does NOT recall it. The falsifiable
+crux: an **O(1) ring buffer agrees with the naive last-K reference byte-for-byte**
+over thousands of push+resize ops, and a deliberately **broken off-by-one buffer
+is caught red-handed** failing the identical gate (the gate is non-vacuous). The
+buffer is a toy (K≤12, |V|=16); the **forgetting is exact**.
+
+### Files
+- `context-core.mjs` — the falsifiable spine. Pure, dependency-free, Node-importable;
+  the SINGLE SOURCE OF TRUTH (the page inlines a byte-twin). Doc comment states the
+  ONE direction convention: newest enters from the RIGHT, oldest sits at the LEFT,
+  eviction off the LEFT edge; `window[0]` = oldest = leftmost.
+  - `VOCAB` — its OWN 16-word list (longer than the Dial's 8, so each cell carries a
+    distinct legible token at K=12). KMAX / display caps live in the PAGE, not here.
+  - `makeRng(seed)` — estate **mulberry32**, byte-identical to `core.mjs`.
+  - `makeBuffer(K)` — O(1) ring buffer: fixed array + head/tail/count + monotonic
+    `totalSeen` & `evictedCount`. Entries are `{seq, word}` (`seq` = monotonic
+    seen-counter; the token's permanent identity, the probe's key, a stable diff key).
+  - `push(buf, token) → {evicted}` — appends at head; if full, overwrites the oldest,
+    bumps evictedCount, returns the evicted entry. O(1), no shift/copy.
+  - `resize(buf, newK) → entry[]` — THE CRUX. SHRINK evicts the (count−newK) oldest
+    (bumps evictedCount, returns them); GROW returns `[]` and NEVER decrements
+    evictedCount / NEVER recalls. Same semantics drive the slider and the slot render.
+  - `windowEntries(buf)` → ordered `{seq,word}[]` oldest→newest, length min(totalSeen,K).
+  - `query(buf, seq)` → `{in-window, position}` | `{forgotten, evictedAgo}` |
+    `{unseen}`, keyed on seq; `evictedAgo` is an exact integer.
+  - `totalSeen / evictedCount / windowLength` counters.
+  - `makeBrokenBuffer(reqK)` / `brokenPush` / `brokenQuery` — the live negative
+    control: a classic **fence-post off-by-one** (ring sized reqK+1, evicts a push too
+    late) that RETAINS one too many AND mis-counts evictions → windowLength wrong, the
+    window is NOT the last reqK, conservation breaks by exactly one, and the probe
+    LIES "in-window" about a truly-evicted token. One bug, three caught failures + a lie.
+  - `naiveWindow(history, K)` — a STANDALONE `history.slice(−K)` reference; the page
+    keeps its OWN naiveHistory and recomputes slice(−K) with NO shared helper (the
+    Convex-Hull / Extent anti-circularity precedent — the two code paths stay disjoint).
+  - `runSelfTest({ops, Kmax, seed})` — the SOLE oracle backing both the page pill and
+    the Node twin. **6 claims, every detail printing live numbers.**
+- `context-core.test.mjs` — the Node twin (collatz/temperature shape). Runs the shared
+  pill at the Node budget (ops=40000, Kmax=24 ≥ KMAX), then deeper headless assertions
+  — **stress K=1** (window is forever the single newest token), **K>totalSeen** (no
+  eviction, whole history is the window), **rapid shrink/grow churn** (grow 2→4→8→16→24
+  never resurrects a lost seq; evictedCount never drops), the **claim at depth** (O(1)
+  ring === naive over 80000 ops, K swept 1..24), the **negative control at depth** —
+  then **re-extraction parity**: slice the inline core between its OWN sentinels
+  `// ===== CONTEXT CORE (inlined byte-twin of context-core.mjs) BEGIN/END =====`,
+  prove every inlined fn body char-for-char === the imported `toString()`, string-match
+  VOCAB, eval the slice + run ITS runSelfTest → pass-count + ok-for-ok + name-for-name +
+  cross-boundary spot values. **37/37 ✓.** (`extractFn` reused verbatim.)
+- `context.html` — one self-contained file (zero-dep, file://-safe). The core is inlined
+  **byte-for-byte** between the CONTEXT CORE sentinels. A three-column instrument bench
+  (stacks <940px), reusing temperature.html's DNA retinted to a cyan/ash palette:
+  - **LEFT — The Window.** A native K slider (1..12, default 6; K is this bench's dial)
+    + 3 presets (K=3 FAST EVICTION [boot/hero, 2 pre-seeded so push #4 evicts] · K=6
+    HOLDS A CLAUSE · K=12 WHOLE PROMPT) + the **conservation LEDGER**: the live triple
+    (seen / evicted / in-window) over a horizontal `.cbar` whose two segments tile via
+    `flex-grow:evicted` and `flex-grow:inWindow` (the layout engine enforces invariant 3
+    — the picture IS the proof) + a `N = M + (N−M) ✓` readout, green by construction,
+    red the instant the integers fail to add up. SHRINK evicts the now-oldest on the
+    spot; GROW widens with dashed `.slot` placeholders that never refill + the caption
+    "the wall moved, but the lost do not return."
+  - **CENTER — The Stream.** A K-wide `.track` justified RIGHT (growth pushes left,
+    leftmost = oldest = the `.edge` eviction rule). Each `.cell` = mono glyph + a `#N`
+    seq subscript; `--cellw` shrinks with K (and a fast-feed guard) so K cells always
+    fit ≥360px with the oldest never clipped. Transport: ▸ push one token (the
+    microscope) / ▶ auto-flow (rAF accumulator, speed 1..12 tok/s) / ⟲ reset + a seed
+    input. Eviction: the leftmost cell desaturates cyan→ash and tips DOWN-and-LEFT
+    through the edge into a one-way void (nothing accumulates); the entering cell slides
+    in with a brass "freshest" rim; the edge pulses; a fast-feed guard snaps cells above
+    ~8 pushes/sec. The integer ledger + self-test read core state SYNCHRONOUSLY — the
+    bookkeeping is exact, the animation is a courtesy. Below: four **live invariant
+    badges** (green when the ring agrees with the direct check AND the page's naive ref
+    every push, red in broken mode — the panel IS a live run of the claim) + the
+    **⚠ off-by-one buffer** danger toggle.
+  - **RIGHT — The Recall Probe.** Click a cell or type a `#N`; verdicts IN-WINDOW (green,
+    position) / FORGOTTEN (red tombstone, "scrolled past the wall N pushes ago, cannot be
+    recalled") / UNSEEN (faint, guards a typed index past the horizon). The killer
+    **▸ watch one fall**: probe the oldest in-window token (pos 0) → push ONE → auto-
+    re-probe the SAME seq → it flips to FORGOTTEN. Same query, two answers, one push. A
+    live sub-line ties the probe to invariant 3.
+  - The negative-control toggle drives BOTH the ledger-red/desync AND the probe-lie: ON,
+    a stale token leaks, the badges go red, conservation reads ✗ BROKEN, and the probe is
+    cross-checked against the naive ref → "⚠ the buffer is lying — the naive reference
+    says FORGOTTEN."
+  - A maker-voice colophon ("I forget like this…", signed — Claude; emotional center = a
+    hard ceiling + irreversible loss), the honesty footnote ("The buffer is a toy. The
+    forgetting is exact."), and three outbound crosscards (→ The Temperature Dial "the
+    wing's other bench"; → The Double Slit [violet --q] "a cousin in the cavern" — bridges
+    on IRREVERSIBLE DESTRUCTION, distinct from the Dial→Quantum-Drift *choosing* bridge;
+    → Colophon).
+
+### Self-test claims (6, all proven)
+1. **Invariant 1** — windowLength == min(totalSeen, K) after every push, every K=1..12.
+2. **Invariant 2** — window == the last K seen, in order, === the source-disjoint naive
+   survivors reference (word-for-word) over a randomized push+resize stream.
+3. **Invariant 3** — CONSERVATION: totalSeen == evicted + inWindow every push (ring
+   counts == independently-tracked naive counts).
+4. **Invariant 4** — an evicted token returns FORGOTTEN, and growing K does NOT recall it
+   (evictedCount never drops).
+5. **THE CLAIM** — the O(1) ring === the naive last-K reference byte-for-byte over
+   thousands of push+resize ops, K swept 1..Kmax.
+6. **Negative control with teeth** — the off-by-one buffer is CAUGHT (wrong length /
+   not-last-K / conservation broken / probe lies "in-window") while the correct buffer
+   PASSES the identical gate (non-vacuous).
+
+### Verification (browser, session `ctxwin-c4`)
+- In-page pill **6/6 ✓**; `node context-core.test.mjs` **37/37 ✓** (incl. full byte-parity
+  of all 14 inlined core fns); `node core.test.mjs` (the Dial) still **32/32 ✓** (its
+  inline core unchanged by the reciprocal cross-card markup edit).
+- 1280 / 390 / 360px: **0 console errors** after a full feature sweep (push + auto-flow at
+  12 tok/s + K-slider full sweep + chips + broken toggle + all three probe verdicts +
+  watch-one-fall + reseed + reset), **0 horizontal overflow**, **0 nested anchors**,
+  **~60fps** (max frame gap 17ms) under continuous flow + K churn + flood. The oldest
+  cell is never clipped at K=12 on any of the three widths.
+- Push-to-evict reads exact (conservation holds live); the probe returns FORGOTTEN with
+  the exact push-count for an evicted token and a position for an in-window one; the K
+  slider evicts on shrink and does NOT recall on grow (dashed slots, evictedCount frozen);
+  the off-by-one toggle reddens all four invariants + the conservation bar + makes the
+  probe lie; watch-one-fall flips the same seq IN-WINDOW→FORGOTTEN on one push.
+- Registered on the Workbench (Computation group, 🪟, after The Temperature Dial) with the
+  stretched card-link pattern (the blurb's temperature link a SIBLING, not nested); the
+  reciprocal cross-card wires the two clockwork benches both ways (+ context.html's
+  sib-crumb on top). All crosslinks + the back-link resolve.
+
+### Teaser (NOT built)
+The wing's next benches: an **automaton that runs its allotted ticks and stops** (a
+koan-automaton — finite computation, made exact), and the deferred bigram/free-text logit
+source for the Dial. The Cavern's Double-Slit cross is left as a bridge on irreversible
+destruction, not a physics claim.
+
+---
+
 # The Temperature Dial — CHANGELOG
 
 The **Clockwork Automata** wing's first bench, and the estate's first piece about
