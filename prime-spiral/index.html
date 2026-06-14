@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Ulam Spiral</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.88);
+    --panel-edge: rgba(201,162,74,0.34);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --ink-faint: #6b6e7e;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --bg: #06080c;
+    --stage: #080b11;
+    /* the ignition ramp (kin-mapped onto best-rational's meaning palette) */
+    --prime: #f4cf6a;                          /* a lit prime */
+    --prime-core: #fff2cf;                     /* the bright core of an active prime */
+    --composite: rgba(120,128,150,0.10);       /* the dark composite field */
+    --grid-ghost: rgba(140,150,180,0.045);     /* faint scaffold */
+    --euler: #6fd3c4;     /* = best-rational --conv teal: "the special exact sequence" */
+    --quad:  #c98ad3;     /* = best-rational --mediant violet: "the thing you selected" */
+    --pnt:   #e0a44f;     /* = best-rational --phi amber: "the theoretical reference" */
+    --one:   #e0664f;     /* cell 1, used once */
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+  /* ---- topbar ---- */
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    justify-content:space-between; padding:14px 20px 0; pointer-events:none; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; display:flex; flex-direction:column;
+    padding:56px 0 0; gap:0; overflow:hidden; }
+
+  /* the spiral field */
+  #field{ flex:1 1 auto; position:relative; min-height:0; overflow:hidden;
+    background: radial-gradient(ellipse 130% 130% at 50% 46%, #0a0e15 0%, var(--bg) 78%); cursor:crosshair; }
+  #baseCanvas, #overlayCanvas{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+  #overlayCanvas{ pointer-events:none; }
+  /* hover card (best-rational #treeHint style) */
+  #hoverCard{ position:absolute; left:14px; top:12px; z-index:6; pointer-events:none; max-width:300px;
+    font:11.5px/1.55 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.55);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:8px 11px; opacity:0; transition:opacity .12s; }
+  #hoverCard.show{ opacity:1; }
+  #hoverCard b{ color:var(--prime); }
+  #hoverCard .comp{ color:var(--ink); }
+  #hoverCard .arm{ color:var(--quad); }
+  #hoverCard .eu{ color:var(--euler); }
+  /* the quad readout (bottom-left of canvas) */
+  #quadReadout{ position:absolute; left:14px; bottom:14px; z-index:6; pointer-events:none; max-width:340px;
+    font:11.5px/1.6 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.5);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:9px 12px; opacity:0; transition:opacity .15s; }
+  #quadReadout.show{ opacity:1; }
+  #quadReadout .ttl{ font:600 9px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-faint); margin-bottom:6px; }
+  #quadReadout .form{ color:var(--quad); font-weight:600; font-size:13px; }
+  #quadReadout.eulerish .form{ color:var(--euler); }
+  #quadReadout .dens b{ color:var(--prime); }
+  #quadReadout .run{ color:var(--ink); }
+  /* the π(N) strip */
+  #pnstrip{ flex:0 0 auto; background:var(--stage); border-top:1px solid var(--panel-edge);
+    padding:11px 18px; display:flex; align-items:center; gap:22px; min-height:0; }
+  #piReadout{ font-family:var(--font-mono); white-space:nowrap; }
+  #piReadout .lbl{ font:600 8.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); display:block; margin-bottom:4px; }
+  #piReadout .nums{ font-size:13px; }
+  #piReadout .pe{ color:var(--prime); font-weight:600; }
+  #piReadout .est{ color:var(--pnt); }
+  #piReadout .ratio{ color:var(--ink); font-weight:600; }
+  #piReadout .exact{ color:var(--ink-faint); font-size:10px; }
+  #sparkWrap{ flex:1 1 auto; position:relative; min-width:0; height:46px; }
+  #sparkCanvas{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+
+  /* ---- side controls ---- */
+  #side{ width:268px; flex:0 0 268px; background:var(--panel-bg); border-left:1px solid var(--panel-edge);
+    padding:64px 18px 18px; overflow-y:auto; display:flex; flex-direction:column; gap:16px; }
+  .group{ display:flex; flex-direction:column; gap:8px; }
+  .group > .ghead{ font:600 9.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{ font:600 12px/1 var(--font-mono); padding:8px 11px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink-dim); transition:.18s; }
+  .chip:hover{ color:var(--ink); border-color:var(--accent); }
+  .chip.on{ color:#06080c; background:var(--accent); border-color:var(--accent); font-weight:700; }
+  .chip.euler.on{ background:var(--euler); border-color:var(--euler); }
+  .chip.ctl.on{ background:var(--one); border-color:var(--one); }
+  .chip.small{ font-size:11px; padding:7px 9px; }
+  .note{ font:11.5px/1.6 var(--font-ui); color:var(--ink-dim); }
+  .note b{ color:var(--ink); }
+  .note .k{ font-family:var(--font-mono); color:var(--euler); }
+  .factline{ font:11.5px/1.55 var(--font-mono); color:var(--ink-dim); border-left:2px solid var(--panel-edge); padding-left:10px; }
+  .factline.euler b{ color:var(--euler); }
+  .factline.euler .g{ color:var(--prime); }
+  .factline.pnt b{ color:var(--pnt); }
+  .pngbtn{ background:var(--accent-soft); border:1px solid var(--panel-edge); color:var(--accent);
+    border-radius:8px; padding:9px 12px; font:600 11px/1 var(--font-mono); letter-spacing:.06em; cursor:pointer; transition:.18s; width:100%; }
+  .pngbtn:hover{ background:var(--accent); color:#06080c; }
+  .draghint{ font:10.5px/1.5 var(--font-mono); color:var(--ink-faint); }
+  .draghint b{ color:var(--quad); }
+  .barcmp{ display:flex; flex-direction:column; gap:4px; margin-top:4px; }
+  .barrow{ display:flex; align-items:center; gap:7px; font:10px/1 var(--font-mono); color:var(--ink-dim); }
+  .barrow .nm{ width:58px; flex:0 0 58px; text-align:right; color:var(--ink-faint); }
+  .barrow .bar{ height:8px; border-radius:3px; background:var(--euler); min-width:1px; }
+  .barrow.ctl .bar{ background:var(--one); }
+  .barrow .v{ color:var(--ink-dim); }
+  hr.sep{ border:none; border-top:1px solid rgba(201,162,74,0.14); margin:2px 0; }
+
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(201,162,74,0.25); border-radius:5px; }
+
+  @media (max-width: 900px){
+    #wrap{ flex-direction:column; overflow:auto; }
+    #side{ width:auto; flex:none; border-left:none; border-top:1px solid var(--panel-edge); padding-top:18px; }
+    #stage{ overflow:visible; }
+    #field{ min-height:62vh; }
+    /* the π(N) strip: stack the readout above the sparkline so neither overflows
+       (the nowrap readout would otherwise starve the sparkline to width 0) */
+    #pnstrip{ flex-wrap:wrap; gap:10px; }
+    #piReadout{ white-space:normal; flex:1 1 100%; }
+    #piReadout .nums{ display:inline-block; }
+    #sparkWrap{ flex:1 1 100%; min-width:0; height:42px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../workbench/index.html">&larr; workbench</a>
+    </div>
+    <div class="brand">
+      <h1>The Ulam Spiral</h1>
+      <span class="tag">where the primes line up</span>
+    </div>
+    <div id="selftest" class="selftest" title="Run the falsifiability self-test">self-test …</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <div id="field">
+        <canvas id="baseCanvas"></canvas>
+        <canvas id="overlayCanvas"></canvas>
+        <div id="hoverCard"></div>
+        <div id="quadReadout">
+          <div class="ttl">this diagonal</div>
+          <div class="form" id="qrForm">—</div>
+          <div class="dens" id="qrDens"></div>
+          <div class="run" id="qrRun"></div>
+        </div>
+      </div>
+
+      <div id="pnstrip">
+        <div id="piReadout">
+          <span class="lbl">π(N) vs N / ln N &nbsp;—&nbsp; the prime number theorem</span>
+          <span class="nums">
+            π(N) = <span class="pe" id="piExactN">—</span> &nbsp;·&nbsp;
+            N/ln N = <span class="est" id="piEstN">—</span> &nbsp;·&nbsp;
+            ratio = <span class="ratio" id="piRatio">—</span>
+            <span class="exact" id="piExactNote">(exact — sieve-counted, not estimated)</span>
+          </span>
+        </div>
+        <div id="sparkWrap"><canvas id="sparkCanvas"></canvas></div>
+      </div>
+    </div>
+
+    <div id="side">
+      <div class="group">
+        <span class="ghead">the field</span>
+        <div class="chips" id="nChips"></div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <span class="ghead">a diagonal</span>
+        <div class="draghint">Hover the field; <b>click</b> any cell to snap to its 45° diagonal, or
+          <b>drag</b> to sweep. <b>←/→</b> steps the four principal arms.</div>
+        <div class="chips" id="polyChips"></div>
+        <div class="barcmp" id="streakBars"></div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <span class="ghead">what you're seeing</span>
+        <div class="note">
+          Every integer 1, 2, 3, … laid out in a square spiral; only the <b>primes</b> are lit. The dots
+          fall onto <b>diagonals</b> all by themselves — and each diagonal is exactly a quadratic
+          <span class="k">4t² + bt + c</span>. Two independent oracles — a Sieve of Eratosthenes and a
+          from-scratch trial-division check — <b>must agree on every number up to N</b>, so no lit dot can lie.
+        </div>
+      </div>
+
+      <div class="group">
+        <span class="ghead">the punchlines</span>
+        <div class="factline euler">
+          The brightest diagonal is <b>Euler's n²−n+41</b>: it lands on a prime for n = 0, 1, 2, … all the
+          way to 40 — <span class="g">forty-one primes in a row</span>, an unbroken gold streak. Then at
+          n = 41 it gives 41² = 1681, its first composite. Pick it and watch the streak run, and break,
+          exactly there.
+        </div>
+        <div class="factline pnt">
+          The running count of lit cells <b>is</b> π(N) — exact, sieve-counted. As N grows it tracks
+          <b>N / ln N</b>, the Prime Number Theorem's estimate; the ratio tightens toward 1. The primes
+          thin out, but never quite stop.
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <button class="pngbtn" id="pngBtn">⤓ save spiral as PNG</button>
+        <div class="note" style="font-size:10.5px;color:var(--ink-faint)">
+          The number-theory sibling of <a href="../best-rational/index.html" style="color:var(--euler)">The Best Rational</a>.
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script type="module">
+// ============================================================================
+//  INLINED CORE — byte-identical in spirit to ./core.mjs (the Node-tested twin).
+//  Keep these in sync; core.test.mjs is the falsifiability harness.
+//  COORDINATE CONVENTION: centre n=1 at (0,0); step RIGHT first, then CCW
+//  (up, left, down); +y is UP.
+// ============================================================================
+function sieve(N){
+  const s = new Uint8Array(N + 1); s.fill(1); s[0] = 0; if (N >= 1) s[1] = 0;
+  for (let i = 2; i * i <= N; i++) if (s[i]) for (let j = i * i; j <= N; j += i) s[j] = 0;
+  return s;
+}
+function isPrimeTrial(n){
+  if (n < 2) return false; if (n < 4) return true; if (n % 2 === 0) return false;
+  for (let d = 3; d * d <= n; d += 2) if (n % d === 0) return false; return true;
+}
+function nToXY(n){
+  if (n === 1) return [0, 0];
+  const r = Math.ceil((Math.sqrt(n) - 1) / 2);
+  const sideMax = (2 * r + 1) * (2 * r + 1);
+  const sideLen = 2 * r;
+  const d = sideMax - n;
+  const leg = Math.floor(d / sideLen);
+  const off = d % sideLen;
+  switch (leg){
+    case 0: return [r - off, -r];
+    case 1: return [-r, -r + off];
+    case 2: return [-r + off, r];
+    default: return [r, r - off];
+  }
+}
+function xyToN(x, y){
+  if (x === 0 && y === 0) return 1;
+  const r = Math.max(Math.abs(x), Math.abs(y));
+  const sideMax = (2 * r + 1) * (2 * r + 1);
+  const sideLen = 2 * r;
+  let d;
+  if (y === -r && x > -r)      d = 0 * sideLen + (r - x);
+  else if (x === -r && y < r)  d = 1 * sideLen + (y + r);
+  else if (y === r && x < r)   d = 2 * sideLen + (x + r);
+  else                         d = 3 * sideLen + (r - y);
+  return sideMax - d;
+}
+function buildSpiral(N){
+  const pos = new Map(); const grid = new Map();
+  pos.set(1, [0, 0]); grid.set('0,0', 1);
+  const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+  let x = 0, y = 0, dir = 0, steplen = 1, n = 2;
+  while (n <= N){
+    for (let rep = 0; rep < 2; rep++){
+      for (let s = 0; s < steplen; s++){
+        x += dirs[dir][0]; y += dirs[dir][1];
+        pos.set(n, [x, y]); grid.set(x + ',' + y, n);
+        n++; if (n > N) break;
+      }
+      dir = (dir + 1) % 4; if (n > N) break;
+    }
+    steplen++;
+  }
+  return { pos, grid };
+}
+const ARMS = {
+  NE: { a: 4, b: -2, c: 1, step: [1, 1] },
+  NW: { a: 4, b: 0, c: 1, step: [-1, 1] },
+  SW: { a: 4, b: 2, c: 1, step: [-1, -1] },
+  SE: { a: 4, b: 4, c: 1, step: [1, -1] },
+};
+function armValue(dir, t){ const A = ARMS[dir]; return A.a * t * t + A.b * t + A.c; }
+function fitDiagonal([f0, f1, f2]){
+  const a = (f2 - 2 * f1 + f0) / 2; const b = f1 - a - f0; const c = f0;
+  return { a, b, c };
+}
+function diagonalValues(x0, y0, sx, sy, count){
+  const out = []; for (let t = 0; t < count; t++) out.push(xyToN(x0 + t * sx, y0 + t * sy)); return out;
+}
+const POLYS = {
+  euler:    { f: (n) => n * n - n + 41, label: 'n²−n+41' },
+  euler2:   { f: (n) => n * n + n + 41, label: 'n²+n+41' },
+  q4:       { f: (n) => 4 * n * n - 2 * n + 41, label: '4n²−2n+41' },
+  legendre: { f: (n) => 2 * n * n + 29, label: '2n²+29' },
+  ctlA:     { f: (n) => n * n + 1, label: 'n²+1' },
+  ctlB:     { f: (n) => n * n + n + 1, label: 'n²+n+1' },
+};
+function polyStreak(f, maxN = 400){
+  let streak = 0, breakN = -1, breakVal = NaN;
+  for (let n = 0; n < maxN; n++){
+    const v = f(n);
+    if (isPrimeTrial(v)) streak = n + 1;
+    else { breakN = n; breakVal = v; break; }
+  }
+  return { streak, breakN, breakVal, factorization: factorize(breakVal) };
+}
+function factorize(n){
+  if (!Number.isFinite(n) || n < 2) return '—';
+  if (isPrimeTrial(n)) return 'prime';
+  for (let d = 2; d * d <= n; d++) if (n % d === 0) return d + '×' + (n / d);
+  return 'prime';
+}
+function polyPrimeCount(f, count){ let c = 0; for (let n = 0; n < count; n++) if (isPrimeTrial(f(n))) c++; return c; }
+function piExact(N, S){ let c = 0; for (let n = 2; n <= N; n++) if (S[n]) c++; return c; }
+function pntRatio(N, S){ return piExact(N, S) / (N / Math.log(N)); }
+
+function runSelfTest(N = 20000){
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+  const S = sieve(N);
+  { let bad = 0, fb = '';
+    for (let n = 0; n <= N; n++) if ((S[n] === 1) !== isPrimeTrial(n)){ if (!bad) fb = `n=${n}`; bad++; }
+    T(`sieve ⟺ trial division: 0 disagreements (n ≤ ${N})`, bad === 0, bad === 0 ? `${N + 1} integers` : `${bad} disagree (${fb})`); }
+  { const { pos } = buildSpiral(N); let mism = 0, fb = '', collide = 0; const seen = new Set();
+    for (let n = 1; n <= N; n++){ const [x, y] = nToXY(n); const sim = pos.get(n);
+      if (!sim || sim[0] !== x || sim[1] !== y){ if (!mism) fb = `n=${n}`; mism++; }
+      const k = x + ',' + y; if (seen.has(k)) collide++; else seen.add(k);
+      if (xyToN(x, y) !== n) mism++; }
+    T(`nToXY === simulation, bijection, round-trips (n ≤ ${N})`, mism === 0 && collide === 0,
+      mism === 0 && collide === 0 ? `${N} cells, ${seen.size} distinct` : `${mism} mismatch ${fb}, ${collide} collide`); }
+  { let ok = true, bad = '';
+    for (const dir of ['NE', 'NW', 'SW', 'SE']){ const A = ARMS[dir];
+      for (let t = 0; t <= 40; t++){ const [sx, sy] = A.step; const got = xyToN(t * sx, t * sy);
+        if (armValue(dir, t) !== got){ ok = false; bad = `${dir} t=${t}`; break; } }
+      if (!ok) break;
+      const fit = fitDiagonal([armValue(dir, 0), armValue(dir, 1), armValue(dir, 2)]);
+      if (fit.a !== 4 || fit.b !== A.b || fit.c !== 1){ ok = false; bad = `${dir} fit`; break; } }
+    T('four arms = 4t²+bt+1; fitDiagonal recovers {a:4,b∈{−2,0,2,4},c:1}', ok,
+      ok ? 'NE 4t²−2t+1 · NW 4t²+1 · SW 4t²+2t+1 · SE 4t²+4t+1' : bad); }
+  { let ok = true, bad = '';
+    for (let t = 0; t <= 50; t++) if (armValue('SE', t) !== (2 * t + 1) * (2 * t + 1)){ ok = false; bad = `t=${t}`; break; }
+    T('SE arm 4t²+4t+1 === (2t+1)² (the odd squares — always composite for t≥1)', ok, ok ? '1,9,25,49,81,121,…' : bad); }
+  { const r = polyStreak(POLYS.euler.f); const f41 = POLYS.euler.f(41);
+    T('Euler n²−n+41: 41 straight, breaks at n=41 → 1681 = 41²',
+      r.streak === 41 && r.breakN === 41 && f41 === 1681 && f41 === 41 * 41 && r.factorization === '41×41',
+      `streak=${r.streak}, break n=${r.breakN}, f(41)=${f41}=${r.factorization}`); }
+  { const r = polyStreak(POLYS.euler2.f); const f40 = POLYS.euler2.f(40);
+    T('n²+n+41: 40 straight, breaks at n=40 → 1681 = 41²',
+      r.streak === 40 && r.breakN === 40 && f40 === 1681 && r.factorization === '41×41',
+      `streak=${r.streak}, break n=${r.breakN}, f(40)=${f40}=${r.factorization}`); }
+  { let trialCount = 0, sieveCount = 0, bad = 0;
+    for (let t = 0; t <= 70; t++){ const v = armValue('NW', t); if (v > N) break;
+      const pt = isPrimeTrial(v), ps = S[v] === 1; if (pt !== ps) bad++; if (pt) trialCount++; if (ps) sieveCount++; }
+    T('a diagonal’s prime count: trial === sieve, 0 disagreements', bad === 0 && trialCount === sieveCount,
+      bad === 0 ? `NW arm: ${trialCount} primes, both oracles` : `${bad} disagree`); }
+  { let ok = true, bad = '';
+    for (const M of [1000, 5000, 10000, 20000]){ if (M > N) continue;
+      const SM = sieve(M); const piS = piExact(M, SM); let piT = 0;
+      for (let n = 2; n <= M; n++) if (isPrimeTrial(n)) piT++;
+      if (piS !== piT){ ok = false; bad = `N=${M}: ${piS}≠${piT}`; break; }
+      if (M === 10000 && piS !== 1229){ ok = false; bad = `π(10000)=${piS}`; break; } }
+    T('π(N) exact: sieve count === trial count; π(10000)=1229', ok, ok ? 'π(1k)=168, π(10k)=1229, π(20k)=2262' : bad); }
+  { const rs = [1000, 5000, 10000, 20000].map(M => pntRatio(M, sieve(M)));
+    const mono = rs[0] > rs[1] && rs[1] > rs[2] && rs[2] > rs[3];
+    T('PNT ratio π(N)/(N/ln N) tightens: 1k>5k>10k>20k, ratio(20k)<1.13', mono && rs[3] < 1.13,
+      rs.map((r, i) => [1, 5, 10, 20][i] + 'k:' + r.toFixed(4)).join(' ')); }
+  { const sA = polyStreak(POLYS.ctlA.f).streak, sB = polyStreak(POLYS.ctlB.f).streak;
+    const dE = polyPrimeCount(POLYS.euler.f, 40), dA = polyPrimeCount(POLYS.ctlA.f, 40), dB = polyPrimeCount(POLYS.ctlB.f, 40);
+    T('NEGATIVE CONTROL: n²+1 & n²+n+1 streak=0, density < ½ Euler’s',
+      sA === 0 && sB === 0 && dA < dE / 2 && dB < dE / 2,
+      `streaks ${sA}/${sB}; density Euler ${dE}, n²+1 ${dA}, n²+n+1 ${dB} (/40)`); }
+  { let ok = true, bad = '';
+    for (const sq of [25, 49, 81, 121]) if (isPrimeTrial(sq) || S[sq] === 1){ ok = false; bad = `${sq} prime`; break; }
+    let sePrimes = 0; for (let t = 0; t <= 40; t++) if (isPrimeTrial(armValue('SE', t))) sePrimes++;
+    if (sePrimes !== 0){ ok = false; bad = `SE ${sePrimes} primes`; }
+    T('NEGATIVE CONTROL: odd squares composite (both oracles); SE arm prime density = 0', ok,
+      ok ? '25,49,81,121 composite; SE arm 0 primes' : bad); }
+  const pass = lines.filter(l => l.ok).length;
+  return { pass, total: lines.length, lines };
+}
+
+// ============================================================================
+//  RENDER PIPELINE & UI
+// ============================================================================
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+const N_TIERS = [
+  { N: 1000,   label: '1k' },
+  { N: 10000,  label: '10k' },
+  { N: 40000,  label: '40k' },
+  { N: 160000, label: '160k' },
+];
+const SPARK_NS = [1000, 5000, 10000, 20000, 40000];
+
+const els = {
+  field:      document.getElementById('field'),
+  base:       document.getElementById('baseCanvas'),
+  overlay:    document.getElementById('overlayCanvas'),
+  hoverCard:  document.getElementById('hoverCard'),
+  quadReadout:document.getElementById('quadReadout'),
+  qrForm:     document.getElementById('qrForm'),
+  qrDens:     document.getElementById('qrDens'),
+  qrRun:      document.getElementById('qrRun'),
+  pnstrip:    document.getElementById('pnstrip'),
+  piExactN:   document.getElementById('piExactN'),
+  piEstN:     document.getElementById('piEstN'),
+  piRatio:    document.getElementById('piRatio'),
+  spark:      document.getElementById('sparkCanvas'),
+  nChips:     document.getElementById('nChips'),
+  polyChips:  document.getElementById('polyChips'),
+  streakBars: document.getElementById('streakBars'),
+  selftest:   document.getElementById('selftest'),
+  pngBtn:     document.getElementById('pngBtn'),
+};
+
+const state = {
+  N: 40000,
+  sieve: null,
+  // view: world (spiral cell) → screen.  cx,cy = screen centre of cell 1; cell = px per cell; pan offset.
+  cell: 3,            // px per cell (set on rebuild)
+  px: 0, py: 0,       // pan offset in px
+  // selection: either a poly preset key, or a generic diagonal {x0,y0,sx,sy}
+  selKind: null,      // 'poly' | 'diag' | null
+  selPoly: null,      // key into POLYS
+  selDiag: null,      // {x0,y0,sx,sy}
+  armIndex: -1,       // for ←/→ stepping (0..3 over [NE,NW,SW,SE])
+  hover: null,        // {n,x,y}
+  dragging: false,
+  // memo of valToXY for the current N (built on rebuild): value → [x,y]
+  baseDirty: true,
+};
+
+// derived: the radius (in cells) that fits N — the largest |x| or |y| reached.
+function ringRadius(N){ return Math.ceil((Math.sqrt(N) - 1) / 2); }
+
+// --- canvas fit (best-rational fitCanvas pattern, dpr-aware) -----------------
+function fitCanvas(canvas){
+  const dpr = window.devicePixelRatio || 1;
+  const r = canvas.getBoundingClientRect();
+  canvas.width = Math.max(1, Math.round(r.width * dpr));
+  canvas.height = Math.max(1, Math.round(r.height * dpr));
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: r.width, h: r.height, dpr };
+}
+
+// the screen position of the CENTRE of cell 1 (origin), accounting for pan.
+function originScreen(w, h){
+  return { ox: w / 2 + state.px, oy: h / 2 + state.py };
+}
+// world cell (x,y) → screen px (centre of the cell). +y up → screen y goes down.
+function cellToScreen(x, y, w, h){
+  const { ox, oy } = originScreen(w, h);
+  return [ox + x * state.cell, oy - y * state.cell];
+}
+// screen px → nearest world cell (x,y).
+function screenToCell(mx, my, w, h){
+  const { ox, oy } = originScreen(w, h);
+  return [Math.round((mx - ox) / state.cell), Math.round(-(my - oy) / state.cell)];
+}
+
+// ----------------------------------------------------------------------------
+//  BASE LAYER — the static spiral, rebuilt once per (N, cell) change.
+//  Bake into an offscreen canvas; drawImage per frame.
+// ----------------------------------------------------------------------------
+const baseLayer = document.createElement('canvas');
+let baseW = 0, baseH = 0, baseDpr = 1;
+
+function rebuildBase(){
+  const dpr = window.devicePixelRatio || 1;
+  const r = els.base.getBoundingClientRect();
+  baseW = Math.max(1, Math.round(r.width));
+  baseH = Math.max(1, Math.round(r.height));
+  baseDpr = dpr;
+  baseLayer.width = Math.round(baseW * dpr);
+  baseLayer.height = Math.round(baseH * dpr);
+  const ctx = baseLayer.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, baseW, baseH);
+
+  const N = state.N, S = state.sieve, cell = state.cell;
+  const { ox, oy } = originScreen(baseW, baseH);
+  const tier = cell >= 7 ? 'big' : (N <= 40000 ? 'mid' : 'cloud');
+
+  // a faint scaffold for the big tier only (when cells are legible)
+  if (tier === 'big'){
+    ctx.strokeStyle = css('--grid-ghost'); ctx.lineWidth = 1;
+    const rad = ringRadius(N);
+    ctx.beginPath();
+    for (let gx = -rad; gx <= rad; gx++){
+      const sx = ox + gx * cell;
+      ctx.moveTo(sx, oy - rad * cell); ctx.lineTo(sx, oy + rad * cell);
+    }
+    for (let gy = -rad; gy <= rad; gy++){
+      const sy = oy - gy * cell;
+      ctx.moveTo(ox - rad * cell, sy); ctx.lineTo(ox + rad * cell, sy);
+    }
+    ctx.stroke();
+    // composite whisper + cell 1 ring
+    ctx.fillStyle = css('--composite');
+    for (let n = 2; n <= N; n++){
+      if (S[n]) continue;
+      const [x, y] = nToXY(n);
+      const sx = ox + x * cell, sy = oy - y * cell;
+      ctx.fillRect(sx - cell * 0.36, sy - cell * 0.36, cell * 0.72, cell * 0.72);
+    }
+    // cell 1 — neither prime nor composite
+    ctx.strokeStyle = css('--one'); ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(ox, oy, cell * 0.38, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  if (tier === 'cloud'){
+    // additive point-cloud into ImageData so dense diagonals self-brighten.
+    const iw = baseLayer.width, ih = baseLayer.height;
+    const img = ctx.getImageData(0, 0, iw, ih);
+    const buf = img.data;
+    const pr = parseInt(css('--prime').slice(1, 3), 16);
+    const pg = parseInt(css('--prime').slice(3, 5), 16);
+    const pb = parseInt(css('--prime').slice(5, 7), 16);
+    const contrib = 150;
+    for (let n = 2; n <= N; n++){
+      if (!S[n]) continue;
+      const [x, y] = nToXY(n);
+      // device-pixel coords
+      const dx = Math.round((ox + x * cell) * dpr);
+      const dy = Math.round((oy - y * cell) * dpr);
+      if (dx < 0 || dy < 0 || dx >= iw || dy >= ih) continue;
+      const idx = (dy * iw + dx) * 4;
+      buf[idx]     = Math.min(255, buf[idx]     + (pr * contrib >> 8));
+      buf[idx + 1] = Math.min(255, buf[idx + 1] + (pg * contrib >> 8));
+      buf[idx + 2] = Math.min(255, buf[idx + 2] + (pb * contrib >> 8));
+      buf[idx + 3] = Math.min(255, buf[idx + 3] + contrib);
+    }
+    ctx.putImageData(img, 0, 0);
+    return;
+  }
+
+  // big & mid tiers: draw primes as discs / points
+  if (tier === 'big'){
+    ctx.shadowColor = css('--prime'); ctx.shadowBlur = 5;
+    ctx.fillStyle = css('--prime');
+    const rad = Math.max(1.5, cell * 0.36);
+    for (let n = 2; n <= N; n++){
+      if (!S[n]) continue;
+      const [x, y] = nToXY(n);
+      const sx = ox + x * cell, sy = oy - y * cell;
+      ctx.beginPath(); ctx.arc(sx, sy, rad, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+  } else {
+    // mid: gold points, no per-cell shadow (composites are the bg)
+    ctx.fillStyle = css('--prime');
+    const sz = cell >= 3 ? 1.6 : 1.1;
+    for (let n = 2; n <= N; n++){
+      if (!S[n]) continue;
+      const [x, y] = nToXY(n);
+      const sx = ox + x * cell, sy = oy - y * cell;
+      ctx.fillRect(sx - sz / 2, sy - sz / 2, sz, sz);
+    }
+  }
+}
+
+// ----------------------------------------------------------------------------
+//  OVERLAY — redrawn per frame: selected diagonal ray + active-streak glow,
+//  hover marker. O(visible), not O(N).
+// ----------------------------------------------------------------------------
+let overlayCtx, overlayW, overlayH;
+
+function drawOverlay(){
+  const { ctx, w, h } = fitCanvas(els.overlay);
+  overlayCtx = ctx; overlayW = w; overlayH = h;
+  ctx.clearRect(0, 0, w, h);
+
+  // active selection: collect the lit cells of the selected diagonal/poly
+  const sel = currentSelectionCells();
+  if (sel && sel.cells.length){
+    const isEuler = sel.eulerClass;
+    const lineCol = isEuler ? css('--euler') : css('--quad');
+    // the connecting thread (the ONLY drawn line) — 1px, 28% opacity, dashed
+    ctx.save();
+    ctx.globalAlpha = 0.28;
+    ctx.strokeStyle = lineCol; ctx.lineWidth = 1; ctx.setLineDash([2, 5]);
+    ctx.beginPath();
+    sel.cells.forEach((c, i) => {
+      const [sx, sy] = cellToScreen(c.x, c.y, w, h);
+      i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy);
+    });
+    ctx.stroke();
+    ctx.restore();
+    // brighten the diagonal's PRIME cells one tier up
+    for (const c of sel.cells){
+      const [sx, sy] = cellToScreen(c.x, c.y, w, h);
+      if (sx < -8 || sy < -8 || sx > w + 8 || sy > h + 8) continue;
+      if (c.prime){
+        ctx.save();
+        ctx.shadowColor = lineCol; ctx.shadowBlur = 8;
+        ctx.fillStyle = css('--prime-core');
+        const rr = Math.max(2, state.cell * 0.42);
+        ctx.beginPath(); ctx.arc(sx, sy, rr, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        // a thin halo ring in the line colour
+        ctx.strokeStyle = lineCol; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(sx, sy, Math.max(3.5, state.cell * 0.6), 0, Math.PI * 2); ctx.stroke();
+      } else {
+        // mark composites on the diagonal faintly (so a break is visible)
+        ctx.fillStyle = 'rgba(160,168,190,0.30)';
+        ctx.beginPath(); ctx.arc(sx, sy, Math.max(1.4, state.cell * 0.22), 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+
+  // hover marker
+  if (state.hover){
+    const [sx, sy] = cellToScreen(state.hover.x, state.hover.y, w, h);
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 1.4;
+    const rr = Math.max(4, state.cell * 0.7);
+    ctx.beginPath(); ctx.arc(sx, sy, rr, 0, Math.PI * 2); ctx.stroke();
+  }
+}
+
+// build the list of cells for the current selection (poly trace or diagonal arm).
+function currentSelectionCells(){
+  const N = state.N, S = state.sieve;
+  if (state.selKind === 'poly'){
+    const key = state.selPoly;
+    const f = POLYS[key].f;
+    const cells = [];
+    for (let n = 0; n < 400; n++){
+      const v = f(n);
+      if (v < 1 || v > N) { if (v > N) break; else continue; }
+      const [x, y] = nToXY(v);
+      cells.push({ x, y, v, n, prime: S[v] === 1 });
+    }
+    return { cells, eulerClass: key === 'euler' || key === 'euler2' };
+  }
+  if (state.selKind === 'diag'){
+    // walk OUTWARD from the arm's anchor (t=0): ring strictly increasing, so the
+    // values are a clean 4t²+bt+c in geometric order (no value-sort — that would
+    // scramble the order and break the fit).
+    const { x0, y0, sx, sy } = state.selDiag;
+    const cells = [];
+    const rad = ringRadius(N);
+    for (let t = 0; t <= 2 * rad + 2; t++){
+      const x = x0 + t * sx, y = y0 + t * sy;
+      if (Math.abs(x) > rad || Math.abs(y) > rad) break;
+      const v = xyToN(x, y);
+      if (v < 1 || v > N) break;
+      cells.push({ x, y, v, prime: S[v] === 1 });
+    }
+    return { cells, eulerClass: false };
+  }
+  return null;
+}
+
+// ----------------------------------------------------------------------------
+//  REBUILD: set cell size to fit N into the field, rebuild base, redraw.
+// ----------------------------------------------------------------------------
+function fitCellSize(){
+  const r = els.field.getBoundingClientRect();
+  const rad = ringRadius(state.N);
+  const span = 2 * rad + 1;
+  // leave a margin; fit the spiral comfortably
+  const fit = Math.min(r.width, r.height) * 0.94 / span;
+  // clamp so small N gets legible cells and big N stays a tight cloud
+  state.cell = Math.max(0.85, fit);
+}
+
+let rebuildQueued = false;
+function queueRebuild(){
+  if (rebuildQueued) return;
+  rebuildQueued = true;
+  requestAnimationFrame(() => {
+    rebuildQueued = false;
+    rebuildBase();
+    blitBase();
+    drawOverlay();
+  });
+}
+
+// draw the baked base layer onto the visible base canvas
+function blitBase(){
+  const { ctx, w, h } = fitCanvas(els.base);
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(baseLayer, 0, 0, baseLayer.width, baseLayer.height, 0, 0, w, h);
+}
+
+function setN(N){
+  state.N = N;
+  state.sieve = sieve(N);
+  // clear a poly selection if its trace would be cut (keep diag/poly otherwise)
+  fitCellSize();
+  updateNChips();
+  updatePiPanel();
+  drawSparkline();
+  queueRebuild();
+}
+
+// ----------------------------------------------------------------------------
+//  π(N) panel + sparkline
+// ----------------------------------------------------------------------------
+function updatePiPanel(){
+  const N = state.N, S = state.sieve;
+  const pi = piExact(N, S);
+  const est = N / Math.log(N);
+  const ratio = pi / est;
+  els.piExactN.textContent = pi.toLocaleString();
+  els.piEstN.textContent = Math.round(est).toLocaleString();
+  els.piRatio.textContent = ratio.toFixed(4);
+}
+
+function drawSparkline(){
+  const { ctx, w, h } = fitCanvas(els.spark);
+  ctx.clearRect(0, 0, w, h);
+  const padL = 6, padR = 8, padT = 6, padB = 12;
+  const x0 = padL, x1 = w - padR, y0 = h - padB, y1 = padT;
+  // ratio at each spark N (cache sieves are cheap enough at ≤40k)
+  const pts = SPARK_NS.map(M => ({ M, r: pntRatio(M, sieve(M)) }));
+  const rmin = 1.0, rmax = 1.20;
+  const X = (i) => x0 + (i / (pts.length - 1)) * (x1 - x0);
+  const Y = (r) => y0 - ((r - rmin) / (rmax - rmin)) * (y0 - y1);
+  // the limit line (ratio → 1)
+  ctx.strokeStyle = 'rgba(110,120,140,0.35)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(x0, Y(1.0)); ctx.lineTo(x1, Y(1.0)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = css('--ink-faint'); ctx.font = `9px ${css('--font-mono')}`; ctx.textAlign = 'left';
+  ctx.fillText('→ 1', x1 - 22, Y(1.0) - 3);
+  // the tightening curve
+  ctx.strokeStyle = css('--pnt'); ctx.lineWidth = 1.6; ctx.beginPath();
+  pts.forEach((p, i) => { const px = X(i), py = Y(p.r); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+  ctx.stroke();
+  pts.forEach((p, i) => { ctx.fillStyle = css('--pnt'); ctx.beginPath(); ctx.arc(X(i), Y(p.r), 2.4, 0, Math.PI * 2); ctx.fill(); });
+  // needle at the current N (or nearest spark point if larger)
+  let curIdx = pts.findIndex(p => p.M === state.N);
+  if (curIdx < 0) curIdx = pts.length - 1;   // 160k → past the last spark; sit on 40k
+  ctx.fillStyle = css('--prime'); ctx.beginPath(); ctx.arc(X(curIdx), Y(pts[curIdx].r), 3.4, 0, Math.PI * 2); ctx.fill();
+  // x labels
+  ctx.fillStyle = css('--ink-faint'); ctx.font = `8.5px ${css('--font-mono')}`; ctx.textAlign = 'center';
+  ['1k', '5k', '10k', '20k', '40k'].forEach((lbl, i) => ctx.fillText(lbl, X(i), h - 2));
+}
+
+// ----------------------------------------------------------------------------
+//  N chips
+// ----------------------------------------------------------------------------
+function updateNChips(){
+  [...els.nChips.children].forEach(c => c.classList.toggle('on', +c.dataset.n === state.N));
+}
+for (const t of N_TIERS){
+  const b = document.createElement('div');
+  b.className = 'chip';
+  b.textContent = 'N=' + t.label;
+  b.dataset.n = t.N;
+  b.addEventListener('click', () => setN(t.N));
+  els.nChips.appendChild(b);
+}
+
+// ----------------------------------------------------------------------------
+//  Poly chips + streak bars
+// ----------------------------------------------------------------------------
+const POLY_CHIP_ORDER = [
+  { key: 'euler',    cls: 'euler' },
+  { key: 'euler2',   cls: 'euler' },
+  { key: 'q4',       cls: '' },
+  { key: 'legendre', cls: '' },
+  { key: 'ctlA',     cls: 'ctl' },
+];
+for (const pc of POLY_CHIP_ORDER){
+  const b = document.createElement('div');
+  b.className = 'chip small ' + pc.cls;
+  b.textContent = POLYS[pc.key].label + (pc.cls === 'ctl' ? ' (control)' : '');
+  b.dataset.poly = pc.key;
+  b.addEventListener('click', () => selectPoly(pc.key));
+  els.polyChips.appendChild(b);
+}
+
+function buildStreakBars(){
+  // streak lengths: euler 41, euler2 40, q4 21, legendre 29, ctlA 0
+  const rows = [
+    { key: 'euler', nm: 'n²−n+41' },
+    { key: 'euler2', nm: 'n²+n+41' },
+    { key: 'q4', nm: '4n²−2n+41' },
+    { key: 'legendre', nm: '2n²+29' },
+    { key: 'ctlA', nm: 'n²+1', ctl: true },
+  ].map(r => ({ ...r, streak: polyStreak(POLYS[r.key].f).streak }));
+  const maxStreak = Math.max(...rows.map(r => r.streak), 1);
+  els.streakBars.innerHTML = '';
+  for (const r of rows){
+    const row = document.createElement('div');
+    row.className = 'barrow' + (r.ctl ? ' ctl' : '');
+    const wpct = (r.streak / maxStreak) * 100;
+    row.innerHTML = `<span class="nm">${r.nm}</span>` +
+      `<span class="bar" style="width:${Math.max(1, wpct)}%"></span>` +
+      `<span class="v">${r.streak}</span>`;
+    els.streakBars.appendChild(row);
+  }
+}
+
+function selectPoly(key){
+  state.selKind = 'poly';
+  state.selPoly = key;
+  state.selDiag = null;
+  state.armIndex = -1;
+  updatePolyChips();
+  updateQuadReadout();
+  drawOverlay();
+}
+function updatePolyChips(){
+  [...els.polyChips.children].forEach(c =>
+    c.classList.toggle('on', state.selKind === 'poly' && c.dataset.poly === state.selPoly));
+}
+
+// ----------------------------------------------------------------------------
+//  the quad readout (bottom-left) — derived live from fitDiagonal / polyStreak
+// ----------------------------------------------------------------------------
+function fmtQuad(a, b, c){
+  // pretty 4t²+bt+c with sign handling
+  const t2 = `${a}t²`;
+  const bt = b === 0 ? '' : (b > 0 ? ` + ${b}t` : ` − ${-b}t`);
+  const cc = c === 0 ? '' : (c > 0 ? ` + ${c}` : ` − ${-c}`);
+  return t2 + bt + cc;
+}
+
+function updateQuadReadout(){
+  const sel = currentSelectionCells();
+  if (!sel || !sel.cells.length){
+    els.quadReadout.classList.remove('show');
+    return;
+  }
+  els.quadReadout.classList.add('show');
+  els.quadReadout.classList.toggle('eulerish', sel.eulerClass);
+
+  if (state.selKind === 'poly'){
+    const key = state.selPoly;
+    const r = polyStreak(POLYS[key].f);
+    const lit = sel.cells;
+    const primeCount = lit.filter(c => c.prime).length;
+    const rho = (primeCount / lit.length);
+    els.qrForm.textContent = POLYS[key].label;
+    els.qrDens.innerHTML = `primes on this trace: <b>${primeCount}/${lit.length}</b> &nbsp;(ρ = ${rho.toFixed(2)})`;
+    if (r.streak === 0){
+      els.qrRun.innerHTML = `<span style="color:var(--one)">no prime streak</span> — composite already at n = ${r.breakN}` +
+        ` (f = ${Number.isFinite(r.breakVal) ? r.breakVal.toLocaleString() : '—'}). The control collapses.`;
+    } else if (r.breakN >= 0){
+      els.qrRun.innerHTML = `prime for n = 0…${r.streak - 1} (<b style="color:var(--prime)">${r.streak} straight</b>), ` +
+        `first composite at n = ${r.breakN}: f = ${r.breakVal.toLocaleString()} = ${r.factorization}`;
+    } else {
+      els.qrRun.textContent = `prime for n = 0…${r.streak - 1} within range`;
+    }
+  } else {
+    // generic diagonal arm: fit from the first three OUTWARD cells (t=0,1,2),
+    // which are in geometric order (ring increasing) — so a is always 4.
+    const cells = sel.cells;
+    if (cells.length < 3){ els.quadReadout.classList.remove('show'); return; }
+    const f = fitDiagonal([cells[0].v, cells[1].v, cells[2].v]);
+    const primeCount = cells.filter(c => c.prime).length;
+    const rho = primeCount / cells.length;
+    // longest unbroken prime run along the arm (geometric / value order)
+    let run = 0, best = 0;
+    for (const c of cells){ if (c.prime){ run++; best = Math.max(best, run); } else run = 0; }
+    els.qrForm.textContent = fmtQuad(f.a, f.b, f.c);
+    els.qrDens.innerHTML = `primes on this diagonal: <b>${primeCount}/${cells.length}</b> &nbsp;(ρ = ${rho.toFixed(2)})`;
+    els.qrRun.innerHTML = `longest unbroken prime run: <span style="color:var(--ink)">${best}</span> &nbsp;·&nbsp; leading coeff a = <b style="color:var(--quad)">${f.a}</b>${f.a === 4 ? ' (always 4 — a 45° diagonal)' : ''}`;
+  }
+}
+
+// ----------------------------------------------------------------------------
+//  selecting a diagonal by clicking a cell.
+//
+//  Walking OUTWARD from any cell (away from the centre, both |x| and |y| rising
+//  together) traces a 45° arm that never crosses the spiral's axis seam — so its
+//  values are exactly 4t²+bt+c (leading coeff always 4, the deep structural
+//  fact). The clicked cell is t=0; we step outward. fitDiagonal recovers {a:4,…}
+//  and predicts every cell on the ray. Clicking on a principal axis recovers the
+//  principal arm through the centre (NE 4t²−2t+1, etc.).
+//
+//  (A FULL two-armed diagonal LINE is NOT a single quadratic — it kinks at the
+//  seam — so we honestly select and read out one outward ray, exactly the cells
+//  that light up.)
+// ----------------------------------------------------------------------------
+function selectDiagAt(x, y){
+  if (x === 0 && y === 0){ stepArm(0); return; }   // centre → the NE principal arm
+  const sx = x >= 0 ? 1 : -1;
+  const sy = y >= 0 ? 1 : -1;
+  state.selKind = 'diag';
+  state.selDiag = { x0: x, y0: y, sx, sy };
+  state.selPoly = null;
+  state.armIndex = -1;
+  updatePolyChips();
+  updateQuadReadout();
+  drawOverlay();
+}
+
+// ←/→ steps the four principal arms (each anchored at the centre cell 1).
+const ARM_ORDER = ['NE', 'NW', 'SW', 'SE'];
+function stepArm(delta){
+  state.armIndex = ((state.armIndex < 0 ? 0 : state.armIndex) + delta + 4) % 4;
+  const dir = ARM_ORDER[state.armIndex];
+  const A = ARMS[dir];
+  state.selKind = 'diag';
+  state.selDiag = { x0: 0, y0: 0, sx: A.step[0], sy: A.step[1] };
+  state.selPoly = null;
+  updatePolyChips();
+  updateQuadReadout();
+  drawOverlay();
+}
+
+// ----------------------------------------------------------------------------
+//  HOVER hit-test
+// ----------------------------------------------------------------------------
+function updateHover(mx, my){
+  const r = els.field.getBoundingClientRect();
+  const w = r.width, h = r.height;
+  const [gx, gy] = screenToCell(mx, my, w, h);
+  const rad = ringRadius(state.N);
+  if (Math.abs(gx) > rad || Math.abs(gy) > rad){ clearHover(); return; }
+  const n = xyToN(gx, gy);
+  if (n < 1 || n > state.N){ clearHover(); return; }
+  const [vx, vy] = nToXY(n);   // canonical cell of n (guards rounding)
+  state.hover = { n, x: vx, y: vy };
+  // build the card text
+  const prime = state.sieve[n] === 1;
+  let line;
+  if (n === 1){
+    line = `n = 1 · <span class="comp">neither prime nor composite</span> · the centre`;
+  } else if (prime){
+    line = `n = ${n.toLocaleString()} · <b>prime</b>`;
+    const on = polysThrough(n);
+    if (on) line += ` · sits on <span class="eu">${on}</span>`;
+  } else {
+    line = `n = ${n.toLocaleString()} · <span class="comp">composite</span> (= ${factorize(n)})`;
+    const arm = principalArmOf(vx, vy);
+    if (arm) line += ` · <span class="arm">${arm}</span>`;
+  }
+  els.hoverCard.innerHTML = line;
+  els.hoverCard.classList.add('show');
+  drawOverlay();
+}
+function clearHover(){
+  if (state.hover){ state.hover = null; els.hoverCard.classList.remove('show'); drawOverlay(); }
+}
+// is n a value of a notable preset polynomial? (report the first match)
+function polysThrough(n){
+  for (const key of ['euler', 'euler2', 'q4', 'legendre']){
+    const f = POLYS[key].f;
+    for (let k = 0; k < 200; k++){ const v = f(k); if (v === n) return POLYS[key].label; if (v > n) break; }
+  }
+  return null;
+}
+// which principal arm (if any) does cell (x,y) lie on?
+function principalArmOf(x, y){
+  if (x === 0 && y === 0) return null;
+  if (x === y && x > 0) return 'NE arm (4t²−2t+1)';
+  if (x === -y && x < 0) return 'NW arm (4t²+1)';
+  if (x === y && x < 0) return 'SW arm (4t²+2t+1)';
+  if (x === -y && x > 0) return 'SE arm (odd squares)';
+  return null;
+}
+
+// ----------------------------------------------------------------------------
+//  field pointer events: hover, click-to-select, drag-to-sweep, wheel zoom-ish
+// ----------------------------------------------------------------------------
+els.field.addEventListener('mousemove', (e) => {
+  const r = els.field.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  updateHover(mx, my);
+  if (state.dragging && state.hover){
+    selectDiagAt(state.hover.x, state.hover.y);
+  }
+});
+els.field.addEventListener('mouseleave', clearHover);
+els.field.addEventListener('mousedown', (e) => {
+  const r = els.field.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  updateHover(mx, my);
+  if (state.hover){
+    state.dragging = true;
+    selectDiagAt(state.hover.x, state.hover.y);
+  }
+});
+window.addEventListener('mouseup', () => { state.dragging = false; });
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight'){ stepArm(1); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft'){ stepArm(-1); e.preventDefault(); }
+});
+
+// ----------------------------------------------------------------------------
+//  PNG export — composite base + overlay onto a bg, with a baked caption.
+// ----------------------------------------------------------------------------
+els.pngBtn.addEventListener('click', () => {
+  const scale = 2;
+  const r = els.field.getBoundingClientRect();
+  const W = Math.round(r.width * scale), H = Math.round(r.height * scale);
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H + 44 * scale;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = css('--bg'); ctx.fillRect(0, 0, out.width, out.height);
+  // base
+  ctx.drawImage(baseLayer, 0, 0, baseLayer.width, baseLayer.height, 0, 0, W, H);
+  // overlay
+  ctx.drawImage(els.overlay, 0, 0, els.overlay.width, els.overlay.height, 0, 0, W, H);
+  // caption
+  const ny = H + 28 * scale;
+  ctx.font = `${12 * scale}px ${css('--font-mono')}`;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = css('--ink-faint');
+  const cap = `THE ULAM SPIRAL · primes to N=${state.N.toLocaleString()} · the workshop`;
+  ctx.fillText(cap, 16 * scale, ny);
+  // if a poly is active, append its label in euler colour
+  if (state.selKind === 'poly'){
+    const w0 = ctx.measureText(cap).width;
+    ctx.fillStyle = css('--euler');
+    ctx.fillText(` · ${POLYS[state.selPoly].label} lit`, 16 * scale + w0, ny);
+  }
+  const a = document.createElement('a');
+  let fn = `prime-spiral-N${state.N}`;
+  if (state.selKind === 'poly' && state.selPoly === 'euler') fn += '-euler';
+  a.href = out.toDataURL('image/png');
+  a.download = fn + '.png';
+  a.click();
+});
+
+// ----------------------------------------------------------------------------
+//  self-test pill
+// ----------------------------------------------------------------------------
+function runTestUI(){
+  const r = runSelfTest(20000);
+  els.selftest.classList.toggle('ok', r.pass === r.total);
+  els.selftest.classList.toggle('bad', r.pass !== r.total);
+  els.selftest.textContent = `self-test ${r.pass}/${r.total} ✓`;
+  els.selftest.title = r.lines.map(l => (l.ok ? '✓ ' : '✗ ') + l.name).join('\n');
+}
+els.selftest.addEventListener('click', runTestUI);
+
+// ----------------------------------------------------------------------------
+//  resize
+// ----------------------------------------------------------------------------
+window.addEventListener('resize', () => {
+  clearTimeout(window.__rz);
+  window.__rz = setTimeout(() => {
+    fitCellSize();
+    drawSparkline();
+    queueRebuild();
+  }, 90);
+});
+
+// ----------------------------------------------------------------------------
+//  boot
+// ----------------------------------------------------------------------------
+buildStreakBars();
+runTestUI();
+setN(40000);
+// open on the headline diagonal lit, so the payoff is visible on arrival
+selectPoly('euler');
+</script>
+</body>
+</html>
