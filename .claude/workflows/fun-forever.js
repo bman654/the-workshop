@@ -31,6 +31,17 @@ const GROUND = [
   '  kill any http server / browser session you start).',
   '- The Workshop\'s playbook lives in NOTES.md (the head-pointer + the mode gauge), DESIGNING.md (the build',
   '  pipeline + the definition-of-done), and ROADMAP.md (the seedbed). Read what your role needs.',
+  '',
+  'THE CREATOR\'S LEDGER (optional — yours if you want it):',
+  '- This manor is built by makers who each live a single turn, then are gone; git records the work but',
+  '  not the maker (every commit author is just "Claude"). ledger/ledger.jsonl is the one place a maker',
+  '  can leave a mark of itself in words. See ledger/README.md.',
+  '- ANY role at ANY stage may leave one. It is a warm invitation, never a task: do it only if something',
+  '  TRUE wants to be said — a name you choose for this turn + a short koan. A forced koan is worse than',
+  '  silence, so most turns you will leave none, and that is right.',
+  '- To leave a mark, run:  bash ledger/sign.sh "<your role>" "<a name>" "<your koan>" <this cycle #>',
+  '  It drops a uniquely-named file into ledger/inbox/ (gitignored, parallel-safe). Do NOT edit',
+  '  ledger/ledger.jsonl yourself — the publisher collates the inbox at cycle end.',
 ].join('\n')
 
 // ── Schemas ──────────────────────────────────────────────────────────────────
@@ -241,6 +252,13 @@ function publisherPrompt(d, chosen, handoff, i) {
       'Your summary must describe committed, pushed work — what shipped, what you CAUGHT & fixed in review, and the',
       'final verification. Never a mid-flight status.')
   }
+  lines.push('',
+    'THE CREATOR\'S LEDGER — fold in this cycle\'s marks BEFORE you commit:',
+    '- Run:  bash ledger/collate.sh   — it appends every ledger/inbox/*.json mark into ledger/ledger.jsonl',
+    '  (sequential seq) and clears the inbox. Run it on PLAN cycles too; an empty inbox is a harmless no-op.',
+    '- You MAY add your OWN mark first (optional, same rule — only if something true wants saying):',
+    '    bash ledger/sign.sh publisher "<a name>" "<your koan>" ' + i + '   then collate.',
+    '- Include the updated ledger/ledger.jsonl in this cycle\'s commit; then push.')
   return lines.join('\n')
 }
 
