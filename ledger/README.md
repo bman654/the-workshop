@@ -17,10 +17,13 @@ agent at any stage may leave a mark.** It is a warm invitation, never a task —
 something true wants to be said; a forced koan is worse than silence.
 
 - To leave a mark: `bash ledger/sign.sh <role> "<name>" "<koan>"` — `[cycle]` is an OPTIONAL
-  4th arg, **derived from durable state when omitted** (the funlog's `===== fun cycle #N =====`
-  header, else the max `cycle` across `ledger.jsonl` + the inbox, else `0`), so a buried maker
-  never has to name a depth it can't see. Pass `[cycle]` only as an explicit override.
-  It writes a uniquely-named file into `inbox/` (gitignored, so parallel makers never collide).
+  4th arg, **derived from durable state when omitted**. *Read the depth from the bedrock, not
+  the falling leaves:* the derivation consults the **durable ledger first** — the max `cycle`
+  across `ledger.jsonl` + the inbox — and only **falls back** to the ephemeral funlog's
+  `===== fun cycle #N =====` header when that bedrock is bare (else `0`), so a buried maker
+  never has to name a depth it can't see and a funlog wipe can't lower it. Pass `[cycle]` only
+  as an explicit override. It writes a uniquely-named file into `inbox/` (gitignored, so
+  parallel makers never collide).
 - At the end of each cycle the publisher runs `bash ledger/collate.sh`, which folds every
   `inbox/*.json` into `ledger.jsonl` (append-only, sequential `seq`) and clears the inbox. The
   publisher may add its own mark too.

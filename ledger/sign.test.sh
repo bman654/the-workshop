@@ -2,11 +2,17 @@
 # Self-test for sign.sh's cycle derivation. Proves claims a-e against TEMP
 # fixtures in a throwaway dir — never touches the real ledger/ or inbox/.
 #
+# Read the depth from the BEDROCK, not the falling leaves (Brandon, cycle #14):
+# the DURABLE ledger+inbox is PRIMARY; the ephemeral funlog is a FALLBACK only.
+#
 # The falsifiable claim: a fresh agent that knows nothing can run
 #   sign.sh <role> <name> <koan>           (3 args, NO cycle)
-# and land the RIGHT cycle. Specifically:
-#   (a) funlog present  -> drop.cycle == max N in "===== fun cycle #N ====="
-#   (b) no funlog        -> drop.cycle == max(cycle) over ledger.jsonl + inbox
+# and land the RIGHT cycle. Specifically (NEW priority order):
+#   (a) ledger/inbox bedrock present -> drop.cycle == max(cycle) over ledger.jsonl + inbox
+#   (a') when ledger says one number and funlog says a DIFFERENT one, the LEDGER WINS
+#        (the bedrock outranks the leaves — the inverse of the old order's claim)
+#   (b) ledger+inbox bare, funlog present -> FALLBACK: drop.cycle == max N "===== fun cycle #N ====="
+#   (b') a fresh-checkout inbox drop alone (no ledger) is itself bedrock and outranks the funlog
 #   (c) both empty       -> drop.cycle == 0
 #   (d) explicit [cycle] -> overrides all of the above
 #   (e) emitted JSON is valid, uniquely named, and collate.sh ingests it unchanged
@@ -52,26 +58,52 @@ drop_cycle() {
   jq -r '.cycle' "${files[0]}"
 }
 
-# ---- (a) funlog present -> max N header wins ----
+# ---- (a) ledger/inbox bedrock present -> max(cycle) over ledger.jsonl + inbox wins ----
+# A funlog exists here too, carrying a LOWER number, to prove the bedrock is consulted
+# FIRST and the funlog is not even reached when the bedrock has a stone.
 fl="$sandbox/funlog.txt"
 {
   echo '===== fun cycle #1 ====='
   echo 'noise noise'
   echo '===== fun cycle #7 ====='
-  echo '===== fun cycle #3 ====='   # out of order on purpose; MAX must win, not last
+  echo '===== fun cycle #3 ====='   # out of order on purpose; the funlog must NOT win here
 } > "$fl"
+{
+  echo '{"cycle":4,"role":"a","name":"a","koan":"a","ts":"t"}'
+  echo '{"cycle":9,"role":"b","name":"b","koan":"b","ts":"t"}'   # out of order on purpose
+  echo '{"cycle":2,"role":"c","name":"c","koan":"c","ts":"t"}'
+} > "$sandbox/ledger.jsonl"
 reset_inbox
 WORKSHOP_FUNLOG="$fl" "$sign" director "Tester" "a koan" >/dev/null
-check "(a) funlog max N=7 wins over order" "7" "$(drop_cycle)"
+check "(a) ledger bedrock max=9 wins over order (and over funlog 7)" "9" "$(drop_cycle)"
 
-# (a') funlog wins EVEN when ledger/inbox carry a different number (priority 2 > 3)
+# (a') THE FLIP: when ledger says one number and funlog a DIFFERENT one, the LEDGER WINS.
+# This is the exact INVERSE of the old order's claim ("funlog(7) beats ledger(99)").
 echo '{"cycle":99,"role":"x","name":"x","koan":"x","ts":"t"}' > "$sandbox/ledger.jsonl"
 reset_inbox
 WORKSHOP_FUNLOG="$fl" "$sign" director "Tester" "a koan" >/dev/null
-check "(a') funlog (7) beats ledger (99)" "7" "$(drop_cycle)"
+check "(a') LEDGER (99) beats funlog (7) — bedrock over leaves" "99" "$(drop_cycle)"
 : > "$sandbox/ledger.jsonl"   # restore empty ledger for the next cases
 
-# ---- (b) no funlog -> max(cycle) over ledger.jsonl + inbox ----
+# ---- (b) ledger+inbox bare, funlog present -> FALLBACK to max N funlog header ----
+# Empty ledger + empty inbox; the funlog is the only depth left, so it is consulted.
+reset_inbox
+WORKSHOP_FUNLOG="$fl" "$sign" director "Tester" "a koan" >/dev/null
+check "(b) bare bedrock -> funlog fallback max N=7" "7" "$(drop_cycle)"
+
+# (b') a fresh-checkout inbox drop alone (no ledger) is itself bedrock and outranks
+#      the funlog: inbox=11 must win over funlog=7 (the inbox is part of the bedrock).
+reset_inbox
+echo '{"cycle":11,"role":"builder","name":"Early","koan":"k","ts":"t"}' \
+  > "$inbox/builder-early.json"
+WORKSHOP_FUNLOG="$fl" "$sign" director "Tester" "a koan" >/dev/null
+# now two drops exist (the seeded one + ours); read OURS (the non-"Early" one)
+got="$(jq -rs 'map(select(.name=="Tester"))[0].cycle' "$inbox"/*.json)"
+check "(b') inbox bedrock (11) beats funlog (7), no ledger" "11" "$got"
+reset_inbox
+
+# (b'') no funlog at all + ledger/inbox bedrock -> still the ledger max (the durable
+#       path stands alone when the leaves are gone entirely).
 missing="$sandbox/no-such-funlog.txt"
 {
   echo '{"cycle":4,"role":"a","name":"a","koan":"a","ts":"t"}'
@@ -80,16 +112,8 @@ missing="$sandbox/no-such-funlog.txt"
 } > "$sandbox/ledger.jsonl"
 reset_inbox
 WORKSHOP_FUNLOG="$missing" "$sign" director "Tester" "a koan" >/dev/null
-check "(b) no funlog -> ledger max (9)" "9" "$(drop_cycle)"
-
-# (b') an inbox drop signed THIS cycle before us must also count (ledger=9, inbox=11)
-reset_inbox
-echo '{"cycle":11,"role":"builder","name":"Early","koan":"k","ts":"t"}' \
-  > "$inbox/builder-early.json"
-WORKSHOP_FUNLOG="$missing" "$sign" director "Tester" "a koan" >/dev/null
-# now two drops exist (the seeded one + ours); read OURS (the non-"Early" one)
-got="$(jq -rs 'map(select(.name=="Tester"))[0].cycle' "$inbox"/*.json)"
-check "(b') no funlog -> ledger+inbox max (11)" "11" "$got"
+check "(b'') no funlog -> ledger bedrock max (9)" "9" "$(drop_cycle)"
+: > "$sandbox/ledger.jsonl"
 reset_inbox
 
 # ---- (c) both empty -> 0 ----
