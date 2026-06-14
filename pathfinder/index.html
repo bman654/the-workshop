@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Provably Shortest Path</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.88);
+    --panel-edge: rgba(201,162,74,0.34);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --path: #6fd3c4;       /* the proven shortest path */
+    --astar: #e0b04f;      /* A* frontier */
+    --dijk: #6f8fd3;       /* Dijkstra frontier */
+    --wall: #1a1d27;
+    --start: #8fd79a;
+    --goal: #e0664f;
+    --open-site: #6fd3c4;  /* percolation: open cluster */
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --bg: #06080c;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    justify-content:space-between; padding:14px 20px 0; pointer-events:none; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; display:flex; align-items:center; justify-content:center;
+    padding:54px 18px 18px; }
+  canvas{ display:block; image-rendering:pixelated; box-shadow:0 18px 60px rgba(0,0,0,0.55);
+    border:1px solid rgba(201,162,74,0.18); border-radius:4px; background:#080b11; max-width:100%; max-height:100%; }
+  #verdict{ position:absolute; left:50%; top:60px; transform:translateX(-50%); z-index:7; pointer-events:none;
+    font:600 11px/1.5 var(--font-mono); text-align:center; background:rgba(0,0,0,0.42);
+    border:1px solid var(--panel-edge); border-radius:10px; padding:8px 16px; backdrop-filter:blur(4px); }
+  #verdict .big{ font-family:var(--font-serif); font-size:22px; color:var(--path); display:inline-block;
+    font-variant-numeric:tabular-nums; line-height:1.05; }
+  #verdict .sub{ color:var(--ink-dim); font-size:10.5px; letter-spacing:.04em; display:block; margin-top:3px; }
+  #verdict .sub b{ color:var(--accent); }
+  #verdict .match{ display:inline-block; margin-top:5px; padding:3px 9px; border-radius:12px;
+    font:600 9.5px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; }
+  #verdict .match.good{ color:#8fd79a; border:1px solid rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  #verdict .match.warn{ color:#f0b07a; border:1px solid rgba(220,150,90,0.5); background:rgba(60,42,22,0.4); }
+
+  #panel{ width:344px; flex:0 0 344px; height:100%; background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge); padding:58px 16px 24px;
+    box-shadow:-18px 0 50px rgba(0,0,0,0.5); z-index:20; overflow-y:auto; }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 8px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .row{ margin:11px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.04em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:6px; }
+  .row > label .val{ color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:3px; border-radius:3px;
+    background:rgba(201,162,74,0.22); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:15px; height:15px;
+    border-radius:50%; background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  input[type=range]::-moz-range-thumb{ width:15px; height:15px; border:none; border-radius:50%;
+    background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  .modes{ display:flex; gap:7px; margin-bottom:6px; }
+  .mode{ flex:1; font:600 10.5px/1.2 var(--font-ui); padding:9px 8px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; transition:.16s; text-align:center; }
+  .mode:hover{ border-color:var(--accent); color:var(--ink); }
+  .mode.on{ border-color:rgba(201,162,74,0.7); background:var(--accent-soft); color:var(--ink); }
+  .algos{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .algo{ font:600 10.5px/1.2 var(--font-ui); padding:9px 8px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; transition:.16s; text-align:left; }
+  .algo:hover{ border-color:var(--accent); color:var(--ink); }
+  .algo.on{ border-color:rgba(201,162,74,0.7); background:var(--accent-soft); color:var(--ink); }
+  .algo b{ display:block; color:var(--ink); font-weight:600; margin-bottom:2px; font-size:11px; }
+  .algo span{ font:9.5px/1.25 var(--font-mono); color:var(--ink-dim); letter-spacing:.01em; }
+  .btnrow{ display:flex; gap:8px; margin:12px 0 2px; flex-wrap:wrap; }
+  .btn{ flex:1 1 auto; min-width:0; font:600 11px/1 var(--font-ui); letter-spacing:.02em; padding:10px 10px;
+    border-radius:8px; border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink);
+    cursor:pointer; transition:.18s; white-space:nowrap; }
+  .btn:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .btn.primary{ background:rgba(201,162,74,0.16); border-color:rgba(201,162,74,0.5); color:var(--accent); }
+  .btn.primary:hover{ background:rgba(201,162,74,0.26); }
+  .checkbox{ display:flex; align-items:center; gap:9px; margin:10px 0; font:600 10.5px/1.3 var(--font-mono);
+    color:var(--ink-dim); cursor:pointer; letter-spacing:.02em; }
+  .checkbox input{ accent-color:var(--accent); width:14px; height:14px; }
+  .facts{ margin-top:8px; font:11px/1.6 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  .facts .frow{ display:flex; justify-content:space-between; gap:10px; padding:2px 0; }
+  .facts .frow b{ color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums; }
+  .facts .frow b.path{ color:var(--path); } .facts .frow b.astar{ color:var(--astar); } .facts .frow b.dijk{ color:var(--dijk); }
+  .facts .eqn{ margin-top:10px; padding:9px 11px; border-radius:8px; border:1px solid rgba(201,162,74,0.16);
+    background:rgba(0,0,0,0.28); color:var(--ink-dim); font-size:10.5px; line-height:1.62; }
+  .facts .eqn b{ color:var(--ink); } .facts .eqn i{ color:var(--path); font-style:normal; }
+  .legend{ display:flex; flex-wrap:wrap; gap:9px 14px; margin-top:10px; font:10px/1 var(--font-mono); color:var(--ink-dim); }
+  .legend span{ display:flex; align-items:center; gap:5px; }
+  .legend i{ width:11px; height:11px; border-radius:3px; display:inline-block; }
+  .foot{ margin-top:20px; font:10px/1.55 var(--font-mono); color:rgba(154,156,170,0.6); letter-spacing:.02em; }
+  .foot a{ color:var(--ink-dim); }
+  .hide{ display:none !important; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../workbench/index.html">&larr; workbench</a>
+    </div>
+    <div class="brand">
+      <h1>The Provably Shortest Path</h1>
+      <span class="tag">A* · Dijkstra · percolation</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for detail · per-check PASS lines are in the console">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="cv"></canvas>
+      <div id="verdict"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede" id="lede"></p>
+
+      <div class="sect">Mode</div>
+      <div class="modes">
+        <div class="mode on" data-mode="path">Pathfinding</div>
+        <div class="mode" data-mode="perc">Percolation</div>
+      </div>
+
+      <!-- PATHFINDING controls -->
+      <div id="pathCtl">
+        <div class="sect">Algorithm</div>
+        <div class="algos">
+          <div class="algo on" data-algo="astar"><b>A*</b><span>admissible h · optimal &amp; focused</span></div>
+          <div class="algo" data-algo="dijkstra"><b>Dijkstra</b><span>h = 0 · optimal, floods all</span></div>
+          <div class="algo" data-algo="greedy"><b>Greedy (h×2.5)</b><span>inadmissible · can overshoot</span></div>
+          <div class="algo" data-algo="race"><b>Race ⇄</b><span>A* vs Dijkstra, same goal</span></div>
+        </div>
+
+        <div class="row">
+          <label>Grid size <span class="val" id="sizeVal"></span></label>
+          <input type="range" id="size" min="16" max="56" step="4" value="36">
+        </div>
+        <div class="row">
+          <label>Wall density <span class="val" id="wallVal"></span></label>
+          <input type="range" id="wall" min="0" max="40" step="2" value="22">
+        </div>
+        <div class="row">
+          <label>Terrain weight <span class="val" id="terrVal"></span></label>
+          <input type="range" id="terr" min="1" max="14" step="1" value="9">
+        </div>
+        <div class="row">
+          <label>Animation speed <span class="val" id="spdVal"></span></label>
+          <input type="range" id="spd" min="1" max="40" step="1" value="14">
+        </div>
+        <label class="checkbox"><input type="checkbox" id="showCost" checked> shade terrain cost</label>
+      </div>
+
+      <!-- PERCOLATION controls -->
+      <div id="percCtl" class="hide">
+        <div class="row">
+          <label>Lattice size N <span class="val" id="pNVal"></span></label>
+          <input type="range" id="pN" min="20" max="120" step="10" value="60">
+        </div>
+        <div class="row">
+          <label>Site probability p <span class="val" id="pVal"></span></label>
+          <input type="range" id="p" min="30" max="85" step="1" value="59">
+        </div>
+        <div class="btnrow">
+          <button class="btn" id="sweepBtn">Sweep p &amp; find p<sub>c</sub></button>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn primary" id="runBtn">Solve</button>
+        <button class="btn" id="newBtn">New ↻</button>
+      </div>
+
+      <div class="facts" id="facts"></div>
+      <div class="legend" id="legend"></div>
+
+      <div class="foot">
+        Built in the Workshop. The path that looks short isn't a proof — so we prove it: A* (admissible),
+        Dijkstra, and an independent Bellman-Ford oracle must agree on the minimum cost, every time, or the
+        self-test goes red. <br>
+        <a href="../workbench/index.html">&larr; back to the Workbench</a>
+      </div>
+    </aside>
+  </div>
+
+<script type="module">
+// ============================================================================
+//  CORE — inlined verbatim from core.mjs (the Node-testable twin). Keep in sync.
+// ============================================================================
+function rng(seed){ let a=seed>>>0; return function(){ a|=0; a=(a+0x6D2B79F5)|0;
+  let t=Math.imul(a^(a>>>15),1|a); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
+const WALL=-1;
+function makeGrid(W,H,seed,opts={}){
+  const wallP=opts.wallP??0.24, maxCost=opts.maxCost??9;
+  const r=rng((seed|0)^0x9e3779b9); const cost=new Int16Array(W*H); const idx=(x,y)=>y*W+x;
+  const oct=(sx,sy)=>{ const g=[]; const gw=Math.ceil(W/sx)+2, gh=Math.ceil(H/sy)+2;
+    for(let j=0;j<gh;j++){ g.push([]); for(let i=0;i<gw;i++) g[j].push(r()); }
+    return (x,y)=>{ const fx=x/sx, fy=y/sy, ix=Math.floor(fx), iy=Math.floor(fy);
+      const tx=fx-ix, ty=fy-iy; const a=g[iy][ix],b=g[iy][ix+1],c=g[iy+1][ix],d=g[iy+1][ix+1];
+      const sx2=tx*tx*(3-2*tx), sy2=ty*ty*(3-2*ty);
+      return (a*(1-sx2)+b*sx2)*(1-sy2)+(c*(1-sx2)+d*sx2)*sy2; }; };
+  const n1=oct(7,7), n2=oct(3,3);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const n=0.65*n1(x,y)+0.35*n2(x,y);
+    let c=1+Math.round(n*(maxCost-1)); if(r()<wallP) c=WALL; cost[idx(x,y)]=c; }
+  const start={x:0,y:(H>>1)}, goal={x:W-1,y:(H>>1)};
+  for(const p of [start,goal]){ cost[idx(p.x,p.y)]=1;
+    for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){ const nx=p.x+dx,ny=p.y+dy;
+      if(nx>=0&&nx<W&&ny>=0&&ny<H&&cost[idx(nx,ny)]===WALL) cost[idx(nx,ny)]=1; } }
+  return {W,H,cost,start,goal,idx};
+}
+function enterCost(g,x,y){ if(x<0||y<0||x>=g.W||y>=g.H) return Infinity;
+  const c=g.cost[g.idx(x,y)]; return c===WALL?Infinity:c; }
+const DIRS=[[1,0],[-1,0],[0,1],[0,-1]];
+class MinHeap{ constructor(){ this.a=[]; } get size(){ return this.a.length; }
+  push(k,v){ const a=this.a; a.push({k,v}); let i=a.length-1;
+    while(i>0){ const p=(i-1)>>1; if(a[p].k<=a[i].k)break; [a[p],a[i]]=[a[i],a[p]]; i=p; } }
+  pop(){ const a=this.a; const top=a[0], last=a.pop();
+    if(a.length){ a[0]=last; let i=0; const n=a.length;
+      for(;;){ let l=2*i+1,r=l+1,m=i; if(l<n&&a[l].k<a[m].k)m=l; if(r<n&&a[r].k<a[m].k)m=r;
+        if(m===i)break; [a[m],a[i]]=[a[i],a[m]]; i=m; } } return top; } }
+function manhattan(a,b){ return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
+function search(g, h=manhattan, hWeight=1){
+  const {W,H,start,goal,idx}=g;
+  const gScore=new Float64Array(W*H).fill(Infinity); const came=new Int32Array(W*H).fill(-1);
+  const settled=new Uint8Array(W*H); const order=[];
+  const sId=idx(start.x,start.y), gId=idx(goal.x,goal.y);
+  const heur=(x,y)=>hWeight*h({x,y},goal);
+  gScore[sId]=0; const open=new MinHeap(); open.push(heur(start.x,start.y),sId);
+  while(open.size){ const {v:cur}=open.pop(); if(settled[cur])continue; settled[cur]=1; order.push(cur);
+    if(cur===gId)break; const cx=cur%W, cy=(cur/W)|0;
+    for(const[dx,dy]of DIRS){ const nx=cx+dx,ny=cy+dy; const ec=enterCost(g,nx,ny); if(!isFinite(ec))continue;
+      const nId=idx(nx,ny); if(settled[nId])continue; const tentative=gScore[cur]+ec;
+      if(tentative<gScore[nId]){ gScore[nId]=tentative; came[nId]=cur; open.push(tentative+heur(nx,ny),nId); } } }
+  if(!isFinite(gScore[gId])) return {cost:Infinity,path:[],order,reachable:false,gScore};
+  const path=[]; for(let c=gId;c!==-1;c=came[c]) path.push({x:c%W,y:(c/W)|0}); path.reverse();
+  return {cost:gScore[gId],path,order,reachable:true,gScore};
+}
+function dijkstra(g){ return search(g,()=>0,1); }
+function astar(g){ return search(g,manhattan,1); }
+function greedyAstar(g,w){ return search(g,manhattan,w); }
+function bellmanFord(g){ const {W,H,start,goal,idx}=g; const dist=new Float64Array(W*H).fill(Infinity);
+  dist[idx(start.x,start.y)]=0; let changed=true,rounds=0,maxRounds=W*H+5;
+  while(changed&&rounds++<maxRounds){ changed=false;
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const cur=idx(x,y); if(!isFinite(dist[cur]))continue;
+      for(const[dx,dy]of DIRS){ const nx=x+dx,ny=y+dy; const ec=enterCost(g,nx,ny); if(!isFinite(ec))continue;
+        const nId=idx(nx,ny); if(dist[cur]+ec<dist[nId]){ dist[nId]=dist[cur]+ec; changed=true; } } } }
+  return dist[idx(goal.x,goal.y)]; }
+function verifyPath(g,path){ if(!path.length) return {ok:false,why:'empty',cost:Infinity};
+  const a=path[0],b=path[path.length-1];
+  if(a.x!==g.start.x||a.y!==g.start.y) return {ok:false,why:'bad-start',cost:Infinity};
+  if(b.x!==g.goal.x||b.y!==g.goal.y) return {ok:false,why:'bad-goal',cost:Infinity};
+  let cost=0; for(let i=1;i<path.length;i++){ const p=path[i-1],q=path[i];
+    const md=Math.abs(p.x-q.x)+Math.abs(p.y-q.y); if(md!==1) return {ok:false,why:'non-adjacent',cost:Infinity};
+    const ec=enterCost(g,q.x,q.y); if(!isFinite(ec)) return {ok:false,why:'through-wall',cost:Infinity}; cost+=ec; }
+  return {ok:true,cost}; }
+function percolates(N,p,seedRand){ const open=new Uint8Array(N*N);
+  for(let i=0;i<N*N;i++) open[i]=seedRand()<p?1:0;
+  const seen=new Uint8Array(N*N); const stack=[];
+  for(let x=0;x<N;x++){ if(open[x]){ stack.push(x); seen[x]=1; } }
+  let spans=false;
+  while(stack.length){ const c=stack.pop(); const x=c%N,y=(c/N)|0; if(y===N-1) spans=true;
+    for(const[dx,dy]of DIRS){ const nx=x+dx,ny=y+dy; if(nx<0||ny<0||nx>=N||ny>=N)continue;
+      const id=ny*N+nx; if(open[id]&&!seen[id]){ seen[id]=1; stack.push(id); } } }
+  return {spans,open,seen}; }
+function spanProbability(N,p,trials,seed){ const r=rng((seed|0)^Math.round(p*1e6)^(N*2654435761));
+  let hits=0; for(let t=0;t<trials;t++) if(percolates(N,p,r).spans) hits++; return hits/trials; }
+function findThreshold(N,trials,seed){ let lo=0.40,hi=0.80;
+  for(let it=0;it<14;it++){ const mid=(lo+hi)/2; const P=spanProbability(N,mid,trials,seed+it);
+    if(P<0.5) lo=mid; else hi=mid; } return (lo+hi)/2; }
+const PC_SQUARE_SITE=0.5927;
+
+// ============================================================================
+//  APP
+// ============================================================================
+const $=id=>document.getElementById(id);
+const cv=$('cv'), ctx=cv.getContext('2d');
+const C = getComputedStyle(document.documentElement);
+const COL = {
+  path:C.getPropertyValue('--path').trim(), astar:C.getPropertyValue('--astar').trim(),
+  dijk:C.getPropertyValue('--dijk').trim(), wall:C.getPropertyValue('--wall').trim(),
+  start:C.getPropertyValue('--start').trim(), goal:C.getPropertyValue('--goal').trim(),
+  open:C.getPropertyValue('--open-site').trim(), accent:C.getPropertyValue('--accent').trim(),
+};
+
+const ST = {
+  mode:'path', algo:'astar', size:36, wallP:0.22, terr:9, spd:14, showCost:true, seed:7,
+  pN:60, p:0.59,
+};
+
+let grid=null, result=null, raceB=null, anim=null, lastSolve=null;
+
+const LEDE = {
+  path:'A path that <b>looks</b> short isn\'t a proof. So we don\'t trust the picture — we prove it. ' +
+       'A* explores fewer cells than Dijkstra (its admissible heuristic <b>focuses</b> the flood toward the goal), ' +
+       'yet returns the <b>identical minimum cost</b>. Watch the frontier fill; the teal line is the proven optimum.',
+  perc:'Open each lattice site with probability <b>p</b>. Below a critical <b>p<sub>c</sub></b> the open cells stay ' +
+       'in islands; above it, a single cluster <b>spans</b> top to bottom. For the square lattice that threshold is ' +
+       '<b>p<sub>c</sub> ≈ 0.5927</b> — a measurable constant of nature. Sweep p and watch the bench find it.',
+};
+
+// ---------- pathfinding ----------
+function buildGrid(){
+  const W=ST.size, H=Math.round(ST.size*0.62)|0;
+  grid=makeGrid(W,H, ST.seed, {wallP:ST.wallP, maxCost:ST.terr});
+}
+function fitCanvas(cols, rows){
+  const stage=$('stage'); const availW=stage.clientWidth-36, availH=stage.clientHeight-72;
+  const cell=Math.max(4, Math.floor(Math.min(availW/cols, availH/rows)));
+  cv.width=cols*cell; cv.height=rows*cell; return cell;
+}
+
+function drawGrid(cell, frontierA, frontierB, pathCells){
+  const {W,H,cost,start,goal,idx}=grid;
+  ctx.fillStyle='#080b11'; ctx.fillRect(0,0,cv.width,cv.height);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const c=cost[idx(x,y)];
+    let fill;
+    if(c===WALL){ fill=COL.wall; }
+    else if(ST.showCost){ const t=(c-1)/Math.max(1,(ST.terr-1)); // 0..1
+      const g=Math.round(18+t*26); fill=`rgb(${Math.round(14+t*8)},${g},${Math.round(28+t*16)})`; }
+    else fill='#0c1018';
+    ctx.fillStyle=fill; ctx.fillRect(x*cell,y*cell,cell-1>=1?cell:cell, cell);
+    ctx.fillRect(x*cell,y*cell,cell,cell);
+  }
+  // frontier shading (settled cells)
+  const paint=(set,color,alpha)=>{ if(!set) return; ctx.fillStyle=color; ctx.globalAlpha=alpha;
+    for(const id of set){ const x=id%W,y=(id/W)|0; ctx.fillRect(x*cell,y*cell,cell,cell); } ctx.globalAlpha=1; };
+  if(frontierB) paint(frontierB, COL.dijk, 0.30);
+  paint(frontierA, frontierB?COL.astar:COL.accent, frontierB?0.34:0.22);
+  // path
+  if(pathCells&&pathCells.length){
+    ctx.strokeStyle=COL.path; ctx.lineWidth=Math.max(2,cell*0.34); ctx.lineJoin='round'; ctx.lineCap='round';
+    ctx.shadowColor=COL.path; ctx.shadowBlur=cell*0.6;
+    ctx.beginPath();
+    pathCells.forEach((p,i)=>{ const cx=p.x*cell+cell/2, cy=p.y*cell+cell/2; i?ctx.lineTo(cx,cy):ctx.moveTo(cx,cy); });
+    ctx.stroke(); ctx.shadowBlur=0;
+  }
+  // endpoints
+  const dot=(p,color)=>{ ctx.fillStyle=color; ctx.beginPath();
+    ctx.arc(p.x*cell+cell/2,p.y*cell+cell/2, Math.max(2.5,cell*0.42),0,7); ctx.fill(); };
+  dot(start, COL.start); dot(goal, COL.goal);
+}
+
+function solvePath(){
+  cancelAnim();
+  buildGrid();
+  const cell=fitCanvas(grid.W, grid.H);
+  // compute the references for the verdict
+  const dd=dijkstra(grid), da=astar(grid), bf=bellmanFord(grid);
+  let chosen, second=null, label;
+  if(ST.algo==='astar'){ chosen=da; label='A*'; }
+  else if(ST.algo==='dijkstra'){ chosen=dd; label='Dijkstra'; }
+  else if(ST.algo==='greedy'){ chosen=greedyAstar(grid,2.5); label='Greedy (h×2.5)'; }
+  else { chosen=da; second=dd; label='A* vs Dijkstra'; }
+  result=chosen; raceB=second; lastSolve={dd,da,bf,chosen,label};
+  animateSolve(cell);
+}
+
+function animateSolve(cell){
+  const orderA=result.order, orderB=raceB?raceB.order:null;
+  const total=Math.max(orderA.length, orderB?orderB.length:0);
+  let i=0; const step=Math.max(1, Math.round(total/(60*Math.max(0.2,ST.spd/14))));
+  const settledA=[], settledB=[];
+  function frame(){
+    for(let k=0;k<step && i<total;k++,i++){
+      if(i<orderA.length) settledA.push(orderA[i]);
+      if(orderB && i<orderB.length) settledB.push(orderB[i]);
+    }
+    const done=i>=total;
+    drawGrid(cell, settledA, orderB?settledB:null, done?result.path:null);
+    updateFacts(done);
+    if(!done) anim=requestAnimationFrame(frame); else { anim=null; finishVerdict(); }
+  }
+  frame();
+}
+function cancelAnim(){ if(anim){ cancelAnimationFrame(anim); anim=null; } }
+
+function updateFacts(done){
+  const f=$('facts'); if(!lastSolve){ f.innerHTML=''; return; }
+  const {dd,da,bf,chosen,label}=lastSolve;
+  const reach=chosen.reachable;
+  const rows=[];
+  rows.push(['cells settled — A*', `<b class="astar">${da.order.length}</b>`]);
+  rows.push(['cells settled — Dijkstra', `<b class="dijk">${dd.order.length}</b>`]);
+  if(reach){
+    rows.push(['A* path cost', `<b class="path">${da.cost}</b>`]);
+    rows.push(['Dijkstra cost', `<b class="dijk">${dd.cost}</b>`]);
+    rows.push(['Bellman-Ford oracle', `<b>${bf}</b>`]);
+    if(ST.algo==='greedy') rows.push(['Greedy (h×2.5) cost', `<b>${chosen.cost}</b>`]);
+  } else {
+    rows.push(['result', `<b>unreachable</b>`]);
+  }
+  f.innerHTML = rows.map(([k,v])=>`<div class="frow"><span>${k}</span>${v}</div>`).join('') +
+    `<div class="eqn">A* score: <b>f(n) = g(n) + h(n)</b> — true cost so far <i>plus</i> an admissible estimate to the goal.
+     With h = Manhattan distance (≤ true cost, since every step costs ≥ 1), A* <i>never over-estimates</i> ⇒ the cost
+     it returns is provably minimal — the same number Dijkstra and Bellman-Ford get.</div>`;
+}
+
+function finishVerdict(){
+  const v=$('verdict'); const {dd,da,bf,chosen,label}=lastSolve;
+  if(!chosen.reachable){ v.innerHTML=`<span class="big">unreachable</span><span class="sub">no open path from start to goal</span>
+    <span class="match warn">reported, not faked</span>`; updateFacts(true); return; }
+  const agree = (da.cost===dd.cost) && (da.cost===bf);
+  if(ST.algo==='greedy'){
+    const opt = chosen.cost===dd.cost;
+    v.innerHTML=`<span class="big">${chosen.cost}</span><span class="sub">greedy cost · optimum is <b>${dd.cost}</b></span>` +
+      (opt ? `<span class="match good">happened to be optimal here</span>`
+           : `<span class="match warn">over-estimating ⇒ ${chosen.cost-dd.cost} too costly</span>`);
+  } else if(ST.algo==='race'){
+    v.innerHTML=`<span class="big">${da.cost}</span><span class="sub">same cost · A* settled <b>${da.order.length}</b>, Dijkstra <b>${dd.order.length}</b></span>` +
+      `<span class="match ${agree?'good':'warn'}">${agree?'A* = Dijkstra = Bellman-Ford ✓':'DISAGREEMENT'}</span>`;
+  } else {
+    v.innerHTML=`<span class="big">${chosen.cost}</span><span class="sub">proven shortest · settled <b>${chosen.order.length}</b> of ${grid.W*grid.H} cells</span>` +
+      `<span class="match ${agree?'good':'warn'}">${agree?'matches Dijkstra & Bellman-Ford ✓':'DISAGREEMENT'}</span>`;
+  }
+  updateFacts(true);
+}
+
+// ---------- percolation ----------
+function drawPercolation(N, open, seen, spans){
+  const cell=fitCanvas(N,N);
+  ctx.fillStyle='#080b11'; ctx.fillRect(0,0,cv.width,cv.height);
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){ const id=y*N+x;
+    if(!open[id]) continue;
+    ctx.fillStyle = seen[id] ? COL.open : 'rgba(154,156,170,0.25)';
+    ctx.fillRect(x*cell,y*cell,cell,cell);
+  }
+  if(spans){ ctx.strokeStyle=COL.path; ctx.lineWidth=2; ctx.strokeRect(1,1,cv.width-2,cv.height-2); }
+}
+function runPercolation(){
+  cancelAnim();
+  const N=ST.pN, p=ST.p;
+  const r=rng((ST.seed|0)^Math.round(p*1e6)^(N*2654435761));
+  const res=percolates(N,p,r);
+  drawPercolation(N,res.open,res.seen,res.spans);
+  const f=$('facts');
+  let openCount=0; for(let i=0;i<N*N;i++) if(res.open[i]) openCount++;
+  f.innerHTML =
+    `<div class="frow"><span>lattice</span><b>${N} × ${N}</b></div>`+
+    `<div class="frow"><span>site probability p</span><b>${p.toFixed(2)}</b></div>`+
+    `<div class="frow"><span>open fraction</span><b>${(openCount/(N*N)).toFixed(2)}</b></div>`+
+    `<div class="frow"><span>spans top→bottom?</span><b class="${res.spans?'path':''}">${res.spans?'YES':'no'}</b></div>`+
+    `<div class="eqn">The teal cluster is connected to the <i>top row</i>. It <i>spans</i> when it reaches the bottom.
+     The crossover from "never" to "always" sharpens around <b>p<sub>c</sub> ≈ ${PC_SQUARE_SITE}</b> for the square lattice.</div>`;
+  const v=$('verdict');
+  v.innerHTML=`<span class="big" style="color:${res.spans?COL.path:COL.dijk}">${res.spans?'SPANS':'islands'}</span>`+
+    `<span class="sub">p = <b>${p.toFixed(2)}</b> · p<sub>c</sub> ≈ ${PC_SQUARE_SITE}</span>`;
+}
+function sweepThreshold(){
+  cancelAnim();
+  const N=Math.min(60, ST.pN);
+  const v=$('verdict'); v.innerHTML=`<span class="big">measuring…</span><span class="sub">sweeping p, 40 trials each</span>`;
+  setTimeout(()=>{
+    const pc=findThreshold(N, 40, 4242);
+    const err=Math.abs(pc-PC_SQUARE_SITE);
+    const good=err<0.04;
+    v.innerHTML=`<span class="big">${pc.toFixed(4)}</span><span class="sub">measured p<sub>c</sub> · literature <b>${PC_SQUARE_SITE}</b></span>`+
+      `<span class="match ${good?'good':'warn'}">Δ ${err.toFixed(4)} ${good?'✓ matches' : ''}</span>`;
+    // draw a sample lattice right at p_c
+    const r=rng(99); const res=percolates(N, pc, r); drawPercolation(N,res.open,res.seen,res.spans);
+    const f=$('facts'); f.innerHTML=
+      `<div class="frow"><span>measured p<sub>c</sub></span><b class="path">${pc.toFixed(4)}</b></div>`+
+      `<div class="frow"><span>literature p<sub>c</sub></span><b>${PC_SQUARE_SITE}</b></div>`+
+      `<div class="frow"><span>error</span><b>${err.toFixed(4)}</b></div>`+
+      `<div class="eqn">Found by <i>bisection</i> on the spanning probability = ½ crossing, 40 random lattices per probe.
+       It converges to the literature value — a constant <i>measured</i>, not drawn.</div>`;
+  }, 30);
+}
+
+// ---------- legend ----------
+function setLegend(){
+  const L=$('legend');
+  if(ST.mode==='path'){
+    L.innerHTML =
+      `<span><i style="background:${COL.start}"></i>start</span>`+
+      `<span><i style="background:${COL.goal}"></i>goal</span>`+
+      `<span><i style="background:${COL.path}"></i>shortest path</span>`+
+      `<span><i style="background:${COL.astar}"></i>A* settled</span>`+
+      (ST.algo==='race'?`<span><i style="background:${COL.dijk}"></i>Dijkstra settled</span>`:'')+
+      `<span><i style="background:${COL.wall}"></i>wall</span>`;
+  } else {
+    L.innerHTML =
+      `<span><i style="background:${COL.open}"></i>spanning cluster</span>`+
+      `<span><i style="background:rgba(154,156,170,0.25)"></i>other open</span>`;
+  }
+}
+
+// ---------- wiring ----------
+function syncLabels(){
+  $('sizeVal').textContent=ST.size+'×'+(Math.round(ST.size*0.62)|0);
+  $('wallVal').textContent=Math.round(ST.wallP*100)+'%';
+  $('terrVal').textContent='1–'+ST.terr;
+  $('spdVal').textContent=ST.spd>=34?'instant':(ST.spd<=4?'slow':'normal');
+  $('pNVal').textContent=ST.pN+'×'+ST.pN;
+  $('pVal').textContent=ST.p.toFixed(2);
+}
+function setMode(m){
+  ST.mode=m;
+  document.querySelectorAll('.mode').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));
+  $('pathCtl').classList.toggle('hide', m!=='path');
+  $('percCtl').classList.toggle('hide', m!=='path'?false:true);
+  $('lede').innerHTML=LEDE[m];
+  $('runBtn').textContent = m==='path'?'Solve':'Drop sites';
+  setLegend();
+  if(m==='path') solvePath(); else runPercolation();
+}
+function run(){ ST.mode==='path' ? solvePath() : runPercolation(); setLegend(); }
+
+document.querySelectorAll('.mode').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+document.querySelectorAll('.algo').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.algo').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  ST.algo=b.dataset.algo; setLegend(); solvePath(); });
+$('size').oninput=e=>{ ST.size=+e.target.value; syncLabels(); };
+$('size').onchange=()=>solvePath();
+$('wall').oninput=e=>{ ST.wallP=(+e.target.value)/100; syncLabels(); };
+$('wall').onchange=()=>solvePath();
+$('terr').oninput=e=>{ ST.terr=+e.target.value; syncLabels(); };
+$('terr').onchange=()=>solvePath();
+$('spd').oninput=e=>{ ST.spd=+e.target.value; syncLabels(); };
+$('showCost').onchange=e=>{ ST.showCost=e.target.checked; if(result) drawGrid(fitCanvas(grid.W,grid.H), result.order, raceB?raceB.order:null, result.path); };
+$('pN').oninput=e=>{ ST.pN=+e.target.value; syncLabels(); };
+$('pN').onchange=()=>runPercolation();
+$('p').oninput=e=>{ ST.p=(+e.target.value)/100; syncLabels(); };
+$('p').onchange=()=>runPercolation();
+$('runBtn').onclick=run;
+$('newBtn').onclick=()=>{ ST.seed=(ST.seed*1103515245+12345)>>>0; run(); };
+$('sweepBtn').onclick=sweepThreshold;
+window.addEventListener('resize', ()=>{ if(ST.mode==='path'){ if(grid&&result) drawGrid(fitCanvas(grid.W,grid.H), result.order, raceB?raceB.order:null, result.path);} else runPercolation(); });
+
+// ============================================================================
+//  SELF-TEST (in-page) — the same falsifiability harness as core.test.mjs.
+// ============================================================================
+function runSelfTest(){
+  const checks=[]; const ok=(name,cond,info)=>checks.push({name,pass:!!cond,info:info||''});
+  // 1. A* == Dijkstra over many grids
+  { let mism=0,tested=0,focused=0;
+    for(let s=1;s<=240;s++){ const g=makeGrid(30,18,s); const da=astar(g),dd=dijkstra(g);
+      if(!da.reachable||!dd.reachable)continue; tested++; if(da.cost!==dd.cost)mism++;
+      if(da.order.length<dd.order.length)focused++; }
+    ok('A* cost == Dijkstra cost on every solvable grid (240 seeds)', mism===0&&tested>180, tested+' solvable, '+mism+' mismatches');
+    ok("A*'s admissible heuristic FOCUSES the search (fewer cells than Dijkstra)", focused>tested*0.8, focused+'/'+tested+' grids A* did less work'); }
+  // 2. independent Bellman-Ford oracle agrees
+  { let mism=0,tested=0; for(let s=1000;s<1080;s++){ const g=makeGrid(22,14,s); const da=astar(g);
+      if(!da.reachable)continue; tested++; if(da.cost!==bellmanFord(g))mism++; }
+    ok('A* cost == an independent Bellman-Ford oracle (80 seeds)', mism===0&&tested>55, tested+' solvable, '+mism+' mismatches'); }
+  // 3. paths are well-formed & re-summed cost matches
+  { let bad=0,tested=0; for(let s=5;s<=155;s++){ const g=makeGrid(26,16,s); const da=astar(g);
+      if(!da.reachable)continue; tested++; const v=verifyPath(g,da.path); if(!v.ok||v.cost!==da.cost)bad++; }
+    ok('every A* path is well-formed AND re-summed cost == reported cost', bad===0&&tested>110, tested+' paths, '+bad+' malformed'); }
+  // 4. inadmissible heuristic is sometimes suboptimal (proves WHY admissibility matters)
+  { let sub=0,tested=0; for(let s=1;s<=240;s++){ const g=makeGrid(30,18,s); const dd=dijkstra(g);
+      if(!dd.reachable)continue; tested++; if(greedyAstar(g,2.5).cost>dd.cost)sub++; }
+    ok('an INADMISSIBLE (over-weighted) heuristic returns a SUBOPTIMAL path on some grids', sub>0, sub+'/'+tested+' grids overshot the optimum'); }
+  // 5. admissible A* is NEVER worse than Dijkstra
+  { let worse=0,tested=0; for(let s=1;s<=360;s++){ const g=makeGrid(24,15,s); const dd=dijkstra(g);
+      if(!dd.reachable)continue; tested++; if(astar(g).cost>dd.cost)worse++; }
+    ok('admissible A* is NEVER costlier than Dijkstra (360 seeds)', worse===0&&tested>270, tested+' solvable, '+worse+' worse'); }
+  // 6. seed purity
+  { const a=astar(makeGrid(28,17,777)), b=astar(makeGrid(28,17,777));
+    const same=a.cost===b.cost&&a.path.length===b.path.length&&a.path.every((p,i)=>p.x===b.path[i].x&&p.y===b.path[i].y);
+    ok('seed-pure: identical seed ⇒ identical cost AND identical path', same, 'cost='+a.cost+', len='+a.path.length); }
+  // 7. unreachable reported, not faked
+  { const g=makeGrid(20,12,9); for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){ const nx=g.goal.x+dx,ny=g.goal.y+dy;
+      if(nx>=0&&nx<g.W&&ny>=0&&ny<g.H) g.cost[g.idx(nx,ny)]=WALL; } const da=astar(g);
+    ok('a walled-off goal is reported UNREACHABLE (∞, empty path), never faked', !da.reachable&&da.cost===Infinity&&da.path.length===0, 'reachable='+da.reachable); }
+  // 8. percolation threshold ≈ 0.5927
+  { const pc=findThreshold(40,30,4242); const err=Math.abs(pc-PC_SQUARE_SITE);
+    ok('measured site-percolation threshold ≈ p_c = 0.5927 (square lattice)', err<0.045, 'p_c='+pc.toFixed(4)+' (Δ'+err.toFixed(4)+')'); }
+  // 9. percolation monotonicity
+  { const lo=spanProbability(40,0.45,40,11), hi=spanProbability(40,0.75,40,11);
+    ok('spanning probability low below p_c, high above it', lo<0.25&&hi>0.85, 'P(.45)='+lo.toFixed(2)+', P(.75)='+hi.toFixed(2)); }
+
+  let pass=0; checks.forEach(c=>{ if(c.pass)pass++; });
+  try{ console.log('%cThe Provably Shortest Path — self-test '+pass+'/'+checks.length,'color:#6fd3c4;font-weight:bold');
+    checks.forEach(c=>console.log((c.pass?'  ✓ ':'  ✗ ')+c.name+'  ·  '+c.info)); }catch(e){}
+  return {pass,total:checks.length,checks};
+}
+let testResult=null;
+function showTest(){ const chip=$('selftest'); if(!testResult)return;
+  chip.className='selftest '+(testResult.pass===testResult.total?'ok':'bad');
+  chip.textContent='self-test '+testResult.pass+'/'+testResult.total+(testResult.pass===testResult.total?' ✓':' ✗'); }
+$('selftest').addEventListener('click', ()=>{ if(!testResult)return;
+  alert('The Provably Shortest Path — self-test '+testResult.pass+'/'+testResult.total+'\n\n'+
+    testResult.checks.map(c=>(c.pass?'✓ ':'✗ ')+c.name+'\n    '+c.info).join('\n')); });
+
+// ---------- boot ----------
+$('lede').innerHTML=LEDE.path;
+syncLabels(); setLegend();
+solvePath();
+setTimeout(()=>{ testResult=runSelfTest(); showTest(); }, 80);
+
+// breadcrumb for the Survey of Heaven / the Undercroft
+try{ localStorage.setItem('ws:seen:pathfinder','1'); }catch(e){}
+</script>
+</body>
+</html>
