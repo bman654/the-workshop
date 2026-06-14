@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Soap Film</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.88);
+    --panel-edge: rgba(201,162,74,0.34);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --film: #7fd4e8;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --bg: #06080c;
+    --stage: #080b11;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; }
+  #board{ display:block; position:absolute; inset:0; width:100%; height:100%; cursor:grab; }
+  #board.drag{ cursor:grabbing; }
+  #hud{ position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    font:11px/1.4 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.55);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 12px; letter-spacing:.3px;
+    pointer-events:none; opacity:0; transition:opacity .15s; max-width:90%; text-align:center; z-index:10; }
+  #hud.show{ opacity:1; }
+  #hud b{ color:var(--accent); }
+  /* state banner (catenoid vs collapsed) */
+  #banner{ position:absolute; left:50%; top:64px; transform:translateX(-50%);
+    font:600 11px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase;
+    padding:7px 14px; border-radius:20px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.5); color:var(--ink-dim); z-index:10; transition:.3s; white-space:nowrap; }
+  #banner.film{ color:var(--film); border-color:rgba(127,212,232,0.5); background:rgba(20,48,58,0.5); }
+  #banner.collapsed{ color:#f0b07a; border-color:rgba(220,150,90,0.5); background:rgba(64,40,20,0.5); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:336px; flex:0 0 336px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 24px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 8px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .row{ margin:11px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.04em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:6px; }
+  .row > label .val{ color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:3px; border-radius:3px;
+    background:rgba(201,162,74,0.22); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:15px; height:15px;
+    border-radius:50%; background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  input[type=range]::-moz-range-thumb{ width:15px; height:15px; border:none; border-radius:50%;
+    background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  .btnrow{ display:flex; gap:8px; margin:10px 0 2px; flex-wrap:wrap; }
+  .btn{ flex:1 1 auto; min-width:0; font:600 11px/1 var(--font-ui); letter-spacing:.02em; padding:9px 10px;
+    border-radius:8px; border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink);
+    cursor:pointer; transition:.18s; white-space:nowrap; }
+  .btn:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .btn.primary{ background:rgba(201,162,74,0.16); border-color:rgba(201,162,74,0.5); color:var(--accent); }
+  .btn.primary:hover{ background:rgba(201,162,74,0.26); }
+  .seg{ display:flex; gap:0; border:1px solid var(--panel-edge); border-radius:8px; overflow:hidden; }
+  .seg button{ flex:1; font:600 10.5px/1 var(--font-mono); letter-spacing:.04em; padding:9px 6px; border:none;
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; transition:.16s; }
+  .seg button + button{ border-left:1px solid var(--panel-edge); }
+  .seg button.on{ background:var(--accent-soft); color:var(--accent); }
+  .seg button:hover{ color:var(--ink); }
+  .presets{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .preset{ font:600 10.5px/1.2 var(--font-ui); padding:9px 8px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; transition:.16s; text-align:left; }
+  .preset:hover{ border-color:var(--accent); color:var(--ink); }
+  .preset b{ display:block; color:var(--ink); font-weight:600; margin-bottom:2px; font-size:11px; }
+  .preset span{ font:9.5px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  .facts{ margin-top:8px; font:11px/1.6 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  .facts .frow{ display:flex; justify-content:space-between; gap:10px; padding:2px 0; }
+  .facts .frow b{ color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums; }
+  .facts .frow b.film{ color:var(--film); }
+  .facts .frow b.warn{ color:#f0b07a; }
+  .facts .eqn{ margin-top:9px; padding:9px 11px; border-radius:8px; border:1px solid rgba(201,162,74,0.16);
+    background:rgba(0,0,0,0.28); color:var(--ink-dim); font-size:10.5px; line-height:1.6; }
+  .facts .eqn b{ color:var(--ink); }
+  .foot{ margin-top:20px; font:10px/1.55 var(--font-mono); color:rgba(154,156,170,0.6); letter-spacing:.02em; }
+  .foot a{ color:var(--ink-dim); }
+  @media (max-width:760px){
+    #panel{ width:284px; flex-basis:284px; }
+    .brand .tag{ display:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../workbench/index.html">&larr; workbench</a>
+    </div>
+    <div class="brand">
+      <h1>The Soap Film</h1>
+      <span class="tag">the surface that pulls itself smallest</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for detail · per-check PASS lines are in the console">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="board"></canvas>
+      <div id="banner">&mdash;</div>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">Dip two rings of wire in soapy water and a film spans the gap. Surface tension pulls
+        it to the <b>smallest possible area</b> &mdash; and the only such shape is the
+        <b>catenoid</b>, a hanging-chain curve <i>spun around</i>. Pull the rings apart and the film
+        thins&hellip; until, past a sharp threshold, it can&rsquo;t hold &mdash; it <b>snaps</b> into two
+        flat discs. Drag the stage to rotate.</p>
+
+      <div class="sect">The wire frame</div>
+      <div class="row">
+        <label>Ring radius R <span class="val" id="rVal">1.00</span></label>
+        <input type="range" id="rSlider" min="0.5" max="1.5" step="0.01" value="1">
+      </div>
+      <div class="row">
+        <label>Separation 2h / R <span class="val" id="sVal">0.80</span></label>
+        <input type="range" id="sSlider" min="0.1" max="1.40" step="0.005" value="0.8">
+      </div>
+      <div class="btnrow">
+        <button class="btn primary" id="relaxBtn">≋ Relax the film</button>
+        <button class="btn" id="spinBtn">⟳ Spin</button>
+      </div>
+
+      <div class="sect">Show</div>
+      <div class="seg" id="showSeg">
+        <button data-show="film" class="on">Soap film</button>
+        <button data-show="profile">Profile</button>
+        <button data-show="both">Both</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="cylBtn">▮ vs. cylinder</button>
+        <button class="btn" id="pngBtn">⤓ PNG</button>
+      </div>
+
+      <div class="sect">Frames</div>
+      <div class="presets">
+        <button class="preset" data-s="0.40"><b>Fat neck</b><span>2h = 0.40 R</span></button>
+        <button class="preset" data-s="0.80"><b>Classic waist</b><span>2h = 0.80 R</span></button>
+        <button class="preset" data-s="1.0560"><b>The crossover</b><span>2h = 1.056 R</span></button>
+        <button class="preset" data-s="1.30"><b>About to snap</b><span>2h = 1.30 R</span></button>
+        <button class="preset" data-s="1.36"><b>Past the cliff</b><span>2h = 1.36 R</span></button>
+        <button class="preset" data-s="1.40"><b>Two discs</b><span>2h = 1.40 R</span></button>
+      </div>
+
+      <div class="facts" id="facts">
+        <div class="frow"><span>neck radius a</span><b id="fNeck">&mdash;</b></div>
+        <div class="frow"><span>film area</span><b id="fArea">&mdash;</b></div>
+        <div class="frow"><span>two-disc area</span><b id="fDisc">&mdash;</b></div>
+        <div class="frow"><span>max mean curvature</span><b id="fH">&mdash;</b></div>
+        <div class="eqn" id="fEqn"></div>
+      </div>
+
+      <div class="foot">
+        The profile is a <a href="../brachistochrone/index.html">catenary</a>&rsquo;s sibling: a chain hangs
+        as a <b>cosh</b>; spin that curve and you get the only minimal surface of revolution. Self-test proves
+        zero mean curvature, the closed-form area, and the Goldschmidt snap.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+(function(){ if(typeof window === 'undefined') return; (function(){
+
+// ============================================================================
+// CORE — pure minimal-surface math. No DOM, no globals. Re-auditable headless.
+//
+// A soap film spanning two coaxial rings minimises its AREA (surface energy
+// ∝ area). The unique minimal surface of revolution is the CATENOID:
+//     r(z) = a · cosh(z/a),   z ∈ [−h, +h]   (rings at z = ±h, radius R)
+// "the catenary, spun." The neck radius `a` is fixed by the rings: r(±h)=R, i.e.
+//     R = a · cosh(h/a).
+// Writing u = h/a, this is  R/h = cosh(u)/u =: G(u).  G has a MINIMUM
+//     G(u*) ≈ 1.50888  at  u* ≈ 1.19968  (where u·tanh u = 1).
+// So a catenoid exists ONLY for R/h ≥ 1.50888 — past that separation the BVP has
+// no solution and the only minimal "surface" is two flat discs (the GOLDSCHMIDT
+// solution). Even before that, the catenoid's area exceeds two discs once the
+// rings are far enough apart (crossover at 2h ≈ 1.0556·R for equal rings): the
+// physical film holds the catenoid until it snaps to discs.
+// ============================================================================
+
+var USTAR = 1.19967864;                       // argmin of cosh(u)/u
+var GMIN  = Math.cosh(USTAR)/USTAR;           // ≈ 1.50888  (min of R/h that admits a catenoid)
+
+// closed-form lateral area of the catenoid r=a·cosh(z/a), z∈[−h,h]:
+//   A = 2π·a·( h + (a/2)·sinh(2h/a) )      (since √(1+r'²)=cosh, ∫cosh²)
+function coshArea_a(a, h){
+  return 2*Math.PI*a*( h + (a/2)*Math.sinh(2*h/a) );
+}
+
+// solve R/a = cosh(h/a) for a (the STABLE / larger-a branch), or null if none.
+// In u=h/a we need cosh(u)/u = R/h on the decreasing branch u∈(0,u*].
+function solveCatenoidA(R, h){
+  var target = R/h;
+  if(target < GMIN - 1e-12) return null;      // rings too far apart → no catenoid
+  var lo = 1e-6, hi = USTAR;
+  function G(u){ return Math.cosh(u)/u; }
+  for(var it=0; it<200; it++){
+    var mid = 0.5*(lo+hi), g = G(mid);
+    if(g > target) lo = mid; else hi = mid;   // G decreasing on (0,u*]
+  }
+  var u = 0.5*(lo+hi);
+  return h/u;
+}
+
+// mean curvature of the catenoid surface of revolution at height z.
+// For z→(r cosθ, r sinθ, z) with r=a cosh(z/a):
+//   κ_meridian = −r''/(1+r'²)^{3/2},  κ_parallel = 1/( r·√(1+r'²) ),  H=(κm+κp)/2.
+// A minimal surface has H ≡ 0 — this returns it so the self-test can confirm 0.
+function meanCurvatureCatenoid(a, z){
+  var r  = a*Math.cosh(z/a);
+  var rp = Math.sinh(z/a);
+  var rpp= Math.cosh(z/a)/a;
+  var km = -rpp/Math.pow(1+rp*rp, 1.5);
+  var kp =  1/( r*Math.sqrt(1+rp*rp) );
+  return 0.5*(km+kp);
+}
+
+// numeric surface-of-revolution area of an arbitrary sampled profile (frustum sum)
+function profileArea(zs, rs){
+  var A=0;
+  for(var i=0;i<zs.length-1;i++){
+    var dz=zs[i+1]-zs[i], dr=rs[i+1]-rs[i];
+    var rmid=0.5*(rs[i]+rs[i+1]);
+    A += 2*Math.PI*rmid*Math.hypot(dz,dr);
+  }
+  return A;
+}
+
+function discArea(R){ return 2*Math.PI*R*R; }            // two flat discs (Goldschmidt)
+function cylinderArea(R,h){ return 2*Math.PI*R*(2*h); }  // straight cylinder competitor
+
+// the catenoid area for given rings (null-safe): null when no catenoid exists.
+function catenoidArea(R, h){
+  var a = solveCatenoidA(R, h);
+  return a===null ? null : coshArea_a(a, h);
+}
+
+// is the physical film a catenoid, or has it snapped to two discs?
+//   collapses if no catenoid exists OR the catenoid area exceeds two discs.
+function filmState(R, h){
+  var a = solveCatenoidA(R, h);
+  if(a===null) return { kind:'collapsed', reason:'no-catenoid', a:null };
+  var cat = coshArea_a(a, h), disc = discArea(R);
+  if(cat > disc) return { kind:'collapsed', reason:'goldschmidt', a:a, catArea:cat, discArea:disc };
+  return { kind:'film', a:a, catArea:cat, discArea:disc };
+}
+
+// ---- discrete relaxation: a profile finds its own minimal area ----
+// Free interior nodes r_i (ends pinned to R) descend the area with a backtracking
+// line search so the area is GUARANTEED to decrease monotonically — the film
+// lowering its surface energy. Converges to the catenoid when one exists.
+function relaxProfile(R, h, N, iters, seedFn){
+  var zs=[], rs=[];
+  for(var i=0;i<=N;i++){ var z=-h + 2*h*i/N; zs.push(z); rs.push( seedFn? seedFn(z): R ); }
+  rs[0]=R; rs[N]=R;
+  function areaOf(rr){ return profileArea(zs, rr); }
+  var A0 = areaOf(rs), A = A0, step = 0.5*h, eps=1e-7;
+  for(var it=0; it<iters; it++){
+    var grad=new Array(N+1); for(var q=0;q<=N;q++) grad[q]=0;
+    var gnorm2=0;
+    for(var i2=1;i2<N;i2++){
+      var sav=rs[i2];
+      rs[i2]=sav+eps; var Ap=areaOf(rs);
+      rs[i2]=sav-eps; var Am=areaOf(rs);
+      rs[i2]=sav;
+      grad[i2]=(Ap-Am)/(2*eps); gnorm2+=grad[i2]*grad[i2];
+    }
+    if(gnorm2 < 1e-30) break;
+    var s=step, trial=rs.slice(), Anew=A, accepted=false;
+    for(var bt=0; bt<40; bt++){
+      for(var j=1;j<N;j++) trial[j]=Math.max(1e-4, rs[j]-s*grad[j]);
+      Anew=areaOf(trial);
+      if(Anew < A - 1e-14){ accepted=true; break; }
+      s*=0.5;
+    }
+    if(!accepted) break;
+    for(var k=1;k<N;k++) rs[k]=trial[k];
+    A=Anew; step=s*1.6;
+  }
+  return { zs:zs, rs:rs, area:A, area0:A0 };
+}
+
+// ----------------------------------------------------------------------------
+// SELF-TEST — proves the bench's claims against the geometry, not the formula.
+// ----------------------------------------------------------------------------
+function runSelfTest(){
+  var pass=0, total=0, detail={};
+  function check(name, cond){
+    total++;
+    if(cond){ pass++; if(typeof console!=='undefined') console.log('PASS: '+name); }
+    else if(typeof console!=='undefined') console.error('FAIL: '+name);
+  }
+
+  // (1) BOUNDARY VALUE: the solved neck a reproduces the ring radius, r(±h)=R, to
+  //     machine precision, across many ring/separation pairs that admit a catenoid.
+  var maxBVP=0;
+  [[1,0.3],[1,0.5],[1,0.6],[2,0.9],[1.5,0.4],[1,0.66],[1.2,0.7]].forEach(function(P){
+    var R=P[0], h=P[1], a=solveCatenoidA(R,h);
+    if(a===null) return;
+    maxBVP=Math.max(maxBVP, Math.abs(a*Math.cosh(h/a)-R));
+  });
+  detail.maxBVP=maxBVP;
+  check('boundary: solved neck gives a·cosh(h/a) == R (max err '+maxBVP.toExponential(2)+')', maxBVP<1e-9);
+
+  // (2) MINIMAL SURFACE ⇔ MEAN CURVATURE ≡ 0. The defining property of a soap
+  //     film: H = (κ_meridian + κ_parallel)/2 vanishes everywhere on the catenoid.
+  //     Computed from the two principal curvatures, NOT asserted.
+  var maxH=0;
+  [[1,0.5],[1,0.3],[1.5,0.4],[2,0.9]].forEach(function(P){
+    var R=P[0], h=P[1], a=solveCatenoidA(R,h); if(a===null) return;
+    for(var i=0;i<=40;i++){ var z=-h+2*h*i/40; maxH=Math.max(maxH, Math.abs(meanCurvatureCatenoid(a,z))); }
+  });
+  detail.maxH=maxH;
+  check('minimal: mean curvature H == 0 everywhere on the catenoid (max|H| '+maxH.toExponential(2)+')', maxH<1e-12);
+
+  // (3) CLOSED-FORM AREA == numeric surface-of-revolution integral of the catenoid.
+  var R3=1,h3=0.5,a3=solveCatenoidA(R3,h3);
+  var closed=coshArea_a(a3,h3);
+  var zs=[],rs=[],N3=8000;
+  for(var i=0;i<=N3;i++){ var z=-h3+2*h3*i/N3; zs.push(z); rs.push(a3*Math.cosh(z/a3)); }
+  var numeric=profileArea(zs,rs);
+  var relA=Math.abs(closed-numeric)/closed;
+  detail.relArea=relA;
+  check('area: closed-form == numeric ∫2πr√(1+r\'²)dz (rel '+relA.toExponential(2)+')', relA<1e-6);
+
+  // (4) AREA-MINIMISING: the catenoid beats every nearby competitor with the same
+  //     rings — the straight cylinder AND a relaxed profile started from anything
+  //     else cannot do better than the catenoid.
+  var cat=coshArea_a(a3,h3), cyl=cylinderArea(R3,h3);
+  var beatsCone = cat < profileArea(
+    [-h3,0,h3], [R3, 0.55*R3, R3] );          // a V-neck (cone-pair) competitor
+  detail.cat=cat; detail.cyl=cyl;
+  check('minimising: catenoid area < cylinder AND < cone-pair (cat '+cat.toFixed(4)+' < cyl '+cyl.toFixed(4)+')', cat<cyl && beatsCone);
+
+  // (5) GOLDSCHMIDT THRESHOLD (falsifiable): there is a crossover separation where
+  //     the catenoid area EQUALS two flat discs (below it the film wins, above it
+  //     the discs win), and a strictly larger MAX separation past which NO catenoid
+  //     exists at all. Found by scanning the geometry.
+  var crossH=null, prev=null;
+  for(var hh=0.20; hh<=0.6627; hh+=0.0002){
+    var aa=solveCatenoidA(1,hh); if(aa===null) break;
+    var diff=coshArea_a(aa,hh)-discArea(1);
+    if(prev!==null && prev<0 && diff>=0) crossH=hh;
+    prev=diff;
+  }
+  var noneAt = solveCatenoidA(1, 0.70);       // R/h = 1.429 < GMIN → no catenoid
+  var existsBelow = solveCatenoidA(1, 0.66);  // R/h = 1.515 > GMIN → exists
+  detail.crossover = crossH? (2*crossH) : null;
+  check('Goldschmidt: catenoid==2-disc crossover at 2h≈'+(crossH?(2*crossH).toFixed(4):'?')+'R, then no catenoid past 2h≈1.325R',
+        crossH!==null && noneAt===null && existsBelow!==null && (2*crossH)>1.0 && (2*crossH)<1.08);
+
+  // (6) THE FILM FINDS ITSELF: a discrete area-relaxation, started from a straight
+  //     cylinder (NOT seeded with the answer), DECREASES the area monotonically and
+  //     converges to the catenoid profile to within sampling error.
+  var Rr=1,hr=0.5,Nr=24,ar=solveCatenoidA(Rr,hr);
+  var out=relaxProfile(Rr,hr,Nr,5000, function(){ return Rr; });
+  var maxDev=0;
+  for(var ii=1;ii<Nr;ii++){ var zz=out.zs[ii], rc=ar*Math.cosh(zz/ar); maxDev=Math.max(maxDev, Math.abs(out.rs[ii]-rc)); }
+  detail.relaxDrop=out.area0-out.area; detail.relaxDev=maxDev;
+  check('relax: area falls (A '+out.area0.toFixed(3)+'→'+out.area.toFixed(3)+') & converges to catenoid (dev '+maxDev.toExponential(2)+')',
+        out.area<out.area0 && maxDev<0.02);
+
+  // (7) DETERMINISM: the relaxation is a pure function — identical results on rerun.
+  function fp(R,h,N,it){ var o=relaxProfile(R,h,N,it,function(){return R;}); return o.rs.join(','); }
+  var det = fp(1,0.5,16,1200)===fp(1,0.5,16,1200);
+  check('determinism: relaxation is reproducible', det);
+
+  return { pass:pass, total:total, detail:detail };
+}
+
+var Core = {
+  USTAR:USTAR, GMIN:GMIN,
+  coshArea_a:coshArea_a, solveCatenoidA:solveCatenoidA, meanCurvatureCatenoid:meanCurvatureCatenoid,
+  profileArea:profileArea, discArea:discArea, cylinderArea:cylinderArea,
+  catenoidArea:catenoidArea, filmState:filmState, relaxProfile:relaxProfile,
+  runSelfTest:runSelfTest
+};
+if(typeof window!=='undefined') window.SoapFilmCore = Core;
+if(typeof module!=='undefined' && module.exports){ module.exports = Core; }
+
+// ============================================================================
+// VIEW — a rotating 3-D render of the surface of revolution. Pure canvas, no deps.
+// ============================================================================
+if(typeof document==='undefined') return;
+
+var board = document.getElementById('board');
+var ctx = board.getContext('2d');
+var DPR = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+var W=0, Hh=0;
+
+// state
+var ST = {
+  R: 1.0,
+  s: 0.80,            // separation 2h/R
+  show: 'film',       // film | profile | both
+  showCyl: false,
+  yaw: 0.62,          // rotation about vertical (the symmetry) axis
+  pitch: -0.42,       // tilt
+  spin: true,
+  relaxT: 1,          // 0..1 morph from cylinder seed → relaxed film (for the relax animation)
+  relaxing: false
+};
+
+function h_of(){ return 0.5*ST.s*ST.R; }   // half-separation in same units as R
+
+// project a 3-D point with yaw (about z=vertical axis... we use y as up) — here
+// the symmetry axis is the VERTICAL screen axis; rings stacked along it.
+// World: axis = Y (up). A surface point at height y, radius rho, angle phi:
+//   x = rho cos phi,  z = rho sin phi,  y = y.  Then rotate about Y by yaw,
+//   tilt about X by pitch, orthographic project.
+function project(rho, y, phi, scale, cx, cy){
+  var x = rho*Math.cos(phi), z = rho*Math.sin(phi);
+  // yaw about Y
+  var cy0=Math.cos(ST.yaw), sy0=Math.sin(ST.yaw);
+  var x1 = x*cy0 + z*sy0;
+  var z1 = -x*sy0 + z*cy0;
+  var y1 = y;
+  // pitch about X
+  var cp=Math.cos(ST.pitch), sp=Math.sin(ST.pitch);
+  var y2 = y1*cp - z1*sp;
+  var z2 = y1*sp + z1*cp;
+  return { sx: cx + x1*scale, sy: cy - y2*scale, depth: z2 };
+}
+
+function resize(){
+  var st=document.getElementById('stage');
+  W=st.clientWidth; Hh=st.clientHeight;
+  board.width=Math.round(W*DPR); board.height=Math.round(Hh*DPR);
+  board.style.width=W+'px'; board.style.height=Hh+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+// build the rendered profile: catenoid (or, when collapsed, two discs joined by a
+// pinched thread). Morphs from a straight cylinder when relaxT<1 (relax anim).
+function buildProfile(){
+  var R=ST.R, h=h_of(), N=60;
+  var fs = filmState(R, h);
+  var zs=[], rs=[];
+  if(fs.kind==='film'){
+    var a=fs.a;
+    for(var i=0;i<=N;i++){ var z=-h+2*h*i/N; zs.push(z); rs.push(a*Math.cosh(z/a)); }
+    // morph from a straight cylinder (relax animation)
+    if(ST.relaxT<1){ var t=ST.relaxT; for(var k=0;k<=N;k++) rs[k]=R*(1-t)+rs[k]*t; }
+  } else {
+    // collapsed: two discs joined by a vanishingly thin thread (the snap)
+    for(var j=0;j<=N;j++){
+      var zz=-h+2*h*j/N; zs.push(zz);
+      // a thread that flares to R only at the very ends
+      var edge=Math.min(j, N-j)/N;            // 0 at ends → grows inward
+      var thr = 0.02*R;
+      rs.push( edge<0.04 ? R*(1-edge/0.04) + thr*(edge/0.04) : thr );
+    }
+  }
+  return { zs:zs, rs:rs, state:fs, h:h, R:R };
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,Hh);
+  var P = buildProfile();
+  var R=P.R, h=P.h, fs=P.state;
+  var cx=W*0.5, cy=Hh*0.5;
+  var span=Math.max(2*h, 2*R)*1.25;
+  var scale=Math.min(W,Hh)*0.62/span;
+
+  var MER = 48;   // meridian samples along axis
+  var RAD = 40;   // angular samples around axis
+
+  // ---- the soap-film surface (translucent shaded quads, painter-sorted) ----
+  if(ST.show==='film' || ST.show==='both'){
+    var quads=[];
+    for(var i=0;i<P.zs.length-1;i++){
+      for(var k=0;k<RAD;k++){
+        var phi0=k/RAD*2*Math.PI, phi1=(k+1)/RAD*2*Math.PI;
+        var pA=project(P.rs[i],   P.zs[i],   phi0, scale, cx, cy);
+        var pB=project(P.rs[i+1], P.zs[i+1], phi0, scale, cx, cy);
+        var pC=project(P.rs[i+1], P.zs[i+1], phi1, scale, cx, cy);
+        var pD=project(P.rs[i],   P.zs[i],   phi1, scale, cx, cy);
+        var depth=(pA.depth+pB.depth+pC.depth+pD.depth)/4;
+        // a soft normal-ish shade: faces near phi≈yaw face us → brighter
+        var facing=Math.cos(phi0 - (Math.PI/2 - ST.yaw));
+        quads.push({pts:[pA,pB,pC,pD], depth:depth, facing:facing});
+      }
+    }
+    quads.sort(function(a,b){ return a.depth-b.depth; });   // far first
+    var filmRGB = fs.kind==='collapsed' ? '240,176,122' : '127,212,232';
+    for(var q=0;q<quads.length;q++){
+      var Q=quads[q], pts=Q.pts;
+      var lit=0.30 + 0.55*Math.max(0,(Q.facing+1)/2);       // 0.30..0.85
+      ctx.beginPath();
+      ctx.moveTo(pts[0].sx,pts[0].sy); ctx.lineTo(pts[1].sx,pts[1].sy);
+      ctx.lineTo(pts[2].sx,pts[2].sy); ctx.lineTo(pts[3].sx,pts[3].sy); ctx.closePath();
+      ctx.fillStyle='rgba('+filmRGB+','+(0.10+0.12*lit).toFixed(3)+')';
+      ctx.fill();
+    }
+    // a few highlight meridian ribs for form
+    ctx.lineWidth=1;
+    for(var m=0;m<RAD;m+=5){
+      var phi=m/RAD*2*Math.PI;
+      ctx.beginPath();
+      for(var n=0;n<P.zs.length;n++){
+        var pp=project(P.rs[n], P.zs[n], phi, scale, cx, cy);
+        if(n===0) ctx.moveTo(pp.sx,pp.sy); else ctx.lineTo(pp.sx,pp.sy);
+      }
+      ctx.strokeStyle='rgba('+filmRGB+',0.22)'; ctx.stroke();
+    }
+  }
+
+  // ---- the 2-D generating profile (the cosh curve), drawn flat at the front ----
+  if(ST.show==='profile' || ST.show==='both'){
+    ctx.lineWidth=2;
+    ctx.strokeStyle = fs.kind==='collapsed' ? 'rgba(240,176,122,0.9)' : 'rgba(127,212,232,0.95)';
+    // draw both sides of the profile (±rho) edge-on so it reads as a curve
+    [1,-1].forEach(function(sgn){
+      ctx.beginPath();
+      for(var n=0;n<P.zs.length;n++){
+        var pp=project(sgn*P.rs[n], P.zs[n], 0, scale, cx, cy);
+        if(n===0) ctx.moveTo(pp.sx,pp.sy); else ctx.lineTo(pp.sx,pp.sy);
+      }
+      ctx.stroke();
+    });
+  }
+
+  // ---- the cylinder competitor (dashed) ----
+  if(ST.showCyl){
+    ctx.save(); ctx.setLineDash([5,5]); ctx.lineWidth=1.2; ctx.strokeStyle='rgba(201,162,74,0.6)';
+    for(var cphi=0;cphi<RAD;cphi+=8){
+      var ph=cphi/RAD*2*Math.PI;
+      var top=project(R, h, ph, scale, cx, cy), bot=project(R, -h, ph, scale, cx, cy);
+      ctx.beginPath(); ctx.moveTo(top.sx,top.sy); ctx.lineTo(bot.sx,bot.sy); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // ---- the two wire rings (the frame) ----
+  [h, -h].forEach(function(yy){
+    ctx.lineWidth=2.5; ctx.strokeStyle='rgba(201,162,74,0.92)';
+    ctx.beginPath();
+    for(var k=0;k<=RAD;k++){
+      var phi=k/RAD*2*Math.PI;
+      var pp=project(R, yy, phi, scale, cx, cy);
+      if(k===0) ctx.moveTo(pp.sx,pp.sy); else ctx.lineTo(pp.sx,pp.sy);
+    }
+    ctx.stroke();
+  });
+
+  // central axis hint
+  ctx.save(); ctx.setLineDash([2,6]); ctx.lineWidth=1; ctx.strokeStyle='rgba(154,156,170,0.25)';
+  var aTop=project(0, span*0.6, 0, scale, cx, cy), aBot=project(0, -span*0.6, 0, scale, cx, cy);
+  ctx.beginPath(); ctx.moveTo(aTop.sx,aTop.sy); ctx.lineTo(aBot.sx,aBot.sy); ctx.stroke();
+  ctx.restore();
+}
+
+// ----------------------------------------------------------------------------
+// UI wiring
+// ----------------------------------------------------------------------------
+var els = {
+  rSlider:document.getElementById('rSlider'), rVal:document.getElementById('rVal'),
+  sSlider:document.getElementById('sSlider'), sVal:document.getElementById('sVal'),
+  banner:document.getElementById('banner'),
+  fNeck:document.getElementById('fNeck'), fArea:document.getElementById('fArea'),
+  fDisc:document.getElementById('fDisc'), fH:document.getElementById('fH'), fEqn:document.getElementById('fEqn'),
+  hud:document.getElementById('hud')
+};
+
+function fmt(x, d){ return (x===null||x===undefined||isNaN(x)) ? '—' : x.toFixed(d===undefined?3:d); }
+
+function refreshFacts(){
+  var R=ST.R, h=h_of(), fs=filmState(R,h);
+  els.rVal.textContent=R.toFixed(2);
+  els.sVal.textContent=ST.s.toFixed(3).replace(/0+$/,'').replace(/\.$/,'.0');
+  var disc=discArea(R);
+  if(fs.kind==='film'){
+    var a=fs.a;
+    var maxH=0; for(var i=0;i<=20;i++){ var z=-h+2*h*i/20; maxH=Math.max(maxH, Math.abs(meanCurvatureCatenoid(a,z))); }
+    els.fNeck.textContent=fmt(a,3); els.fNeck.className='film';
+    els.fArea.textContent=fmt(fs.catArea,3); els.fArea.className='film';
+    els.fDisc.textContent=fmt(disc,3); els.fDisc.className='';
+    els.fH.textContent=maxH.toExponential(1); els.fH.className='film';
+    els.fEqn.innerHTML='<b>r(z) = a·cosh(z/a)</b> &mdash; the catenary, spun. '+
+      'Mean curvature ≈ 0 everywhere → it&rsquo;s a true minimal surface. '+
+      'a = '+fmt(a,3)+' R; film area '+fmt(fs.catArea,2)+' &lt; two discs '+fmt(disc,2)+', so the film holds.';
+    els.banner.textContent='Catenoid · minimal surface'; els.banner.className='film';
+  } else {
+    els.fNeck.textContent=fs.a===null?'no solution':fmt(fs.a,3); els.fNeck.className='warn';
+    els.fArea.textContent=fs.catArea?fmt(fs.catArea,3)+' (unstable)':'—'; els.fArea.className='warn';
+    els.fDisc.textContent=fmt(disc,3); els.fDisc.className='film';
+    els.fH.textContent='—'; els.fH.className='';
+    var why = fs.reason==='no-catenoid'
+      ? 'Past 2h ≈ 1.325 R the equation R = a·cosh(h/a) has <b>no solution</b> — no catenoid can span the gap.'
+      : 'The catenoid would now cost <b>more area than two flat discs</b> (crossover at 2h ≈ 1.056 R), so the film <b>snaps</b>.';
+    els.fEqn.innerHTML='<b>Collapsed → two discs.</b> '+why+' This is the <b>Goldschmidt</b> solution: surface tension prefers the lower-area pair of caps.';
+    els.banner.textContent='Snapped · two flat discs'; els.banner.className='collapsed';
+  }
+}
+
+function showHud(msg){ els.hud.innerHTML=msg; els.hud.classList.add('show');
+  clearTimeout(showHud._t); showHud._t=setTimeout(function(){ els.hud.classList.remove('show'); }, 2600); }
+
+els.rSlider.addEventListener('input', function(){ ST.R=parseFloat(this.value); refreshFacts(); });
+els.sSlider.addEventListener('input', function(){ ST.s=parseFloat(this.value); refreshFacts(); });
+
+document.querySelectorAll('#showSeg button').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('#showSeg button').forEach(function(x){x.classList.remove('on');});
+    b.classList.add('on'); ST.show=b.dataset.show;
+  });
+});
+
+document.getElementById('cylBtn').addEventListener('click', function(){
+  ST.showCyl=!ST.showCyl; this.classList.toggle('primary', ST.showCyl);
+  var R=ST.R,h=h_of(),fs=filmState(R,h);
+  if(fs.kind==='film') showHud('Cylinder area <b>'+cylinderArea(R,h).toFixed(2)+'</b> &gt; catenoid <b>'+fs.catArea.toFixed(2)+'</b> — the film bows inward to save area.');
+  else showHud('Cylinder shown for comparison.');
+});
+
+document.getElementById('spinBtn').addEventListener('click', function(){
+  ST.spin=!ST.spin; this.classList.toggle('primary', ST.spin);
+});
+
+document.getElementById('relaxBtn').addEventListener('click', function(){
+  // animate from a straight cylinder seed down to the relaxed film
+  var R=ST.R, h=h_of(), fs=filmState(R,h);
+  if(fs.kind!=='film'){ showHud('No catenoid here — the film has already <b>snapped to two discs</b>.'); return; }
+  ST.relaxT=0; ST.relaxing=true;
+  var t0=performance.now();
+  (function step(){
+    var t=(performance.now()-t0)/1400;
+    ST.relaxT=Math.min(1, t);
+    if(t<1) requestAnimationFrame(step); else { ST.relaxT=1; ST.relaxing=false;
+      showHud('Area fell to the minimum: <b>'+fs.catArea.toFixed(2)+'</b> (a cylinder was '+cylinderArea(R,h).toFixed(2)+'). The film found its catenoid.'); }
+  })();
+});
+
+document.querySelectorAll('.preset').forEach(function(p){
+  p.addEventListener('click', function(){
+    ST.s=parseFloat(p.dataset.s);
+    els.sSlider.value=ST.s; refreshFacts();
+    ST.relaxT=1;
+  });
+});
+
+document.getElementById('pngBtn').addEventListener('click', function(){
+  var url=board.toDataURL('image/png'); var a=document.createElement('a');
+  a.href=url; a.download='soap-film.png'; a.click();
+});
+
+// drag to rotate
+var dragging=false, lastX=0, lastY=0;
+board.addEventListener('pointerdown', function(e){ dragging=true; lastX=e.clientX; lastY=e.clientY; board.classList.add('drag'); board.setPointerCapture(e.pointerId); ST.spin=false; document.getElementById('spinBtn').classList.remove('primary'); });
+board.addEventListener('pointermove', function(e){ if(!dragging) return;
+  ST.yaw += (e.clientX-lastX)*0.01; ST.pitch += (e.clientY-lastY)*0.008;
+  ST.pitch=Math.max(-1.3, Math.min(1.3, ST.pitch)); lastX=e.clientX; lastY=e.clientY; });
+board.addEventListener('pointerup', function(e){ dragging=false; board.classList.remove('drag'); });
+
+// self-test chip
+function paintChip(){
+  var chip=document.getElementById('selftest');
+  var res=runSelfTest();
+  if(res.pass===res.total){ chip.className='selftest ok'; chip.textContent='self-test '+res.pass+'/'+res.total+' ✓'; }
+  else { chip.className='selftest bad'; chip.textContent='self-test '+res.pass+'/'+res.total+' ✗'; }
+  chip._res=res;
+}
+document.getElementById('selftest').addEventListener('click', function(){
+  var r=this._res||runSelfTest(); var d=r.detail;
+  showHud('Self-test <b>'+r.pass+'/'+r.total+'</b> · max|H| '+d.maxH.toExponential(1)+
+    ' · Goldschmidt crossover 2h≈<b>'+(d.crossover||0).toFixed(3)+'R</b> · relax dev '+(d.relaxDev||0).toExponential(1)+
+    ' · BVP err '+d.maxBVP.toExponential(1));
+});
+
+// render loop
+function loop(){
+  if(ST.spin && !dragging) ST.yaw += 0.004;
+  draw();
+  requestAnimationFrame(loop);
+}
+
+window.addEventListener('resize', resize);
+resize(); refreshFacts(); paintChip(); loop();
+
+// breadcrumb (served-origin only)
+try{ localStorage.setItem('ws:seen:soap-film','1'); }catch(e){}
+
+})(); })();
+</script>
+</body>
+</html>
