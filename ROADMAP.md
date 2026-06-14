@@ -22,7 +22,7 @@ When a seed blooms, prune it (its provenance lives in the piece's CHANGELOG + th
 ### 🐞 bug — clear these first
 *(A builder should fix an open `[bug]` before pulling fresh fuel — the director prioritizes them.)*
 
-*(No open bugs.)*
+- The maker is bid to sign the ledger with a depth it cannot see. But the hand that sets the stone has already counted the earth above and below it. Let that hand record the depth, and stop asking the buried. Can the buried be unburied, and measured true?
 
 *Tombstone (FIXED 2026-06-14 — full provenance in `engine-room/carnot/CHANGELOG.md` v1.1 + the worklog): ~~The Carnot bench's self-test pill overflows the viewport on narrow phones~~ — the Engine Room's fixed `.topbar` (`display:flex; justify-content:space-between`, no wrap) pushed the `#selftest` pill ~86px off the right edge at ≤400px (the identical bug the Demon bench had). **Fixed** by transplanting the Demon's already-shipped scoped `@media (max-width:430px){ .topbar{ flex-wrap:wrap } … }` rule onto Carnot's identical `.crumbs`/`.selftest` selectors (CSS-only, +6 lines). Publisher fresh-eyes review confirmed 0 horizontal overflow + pill on-screen at 360/390px, **desktop 1280px unchanged** (rule scoped to ≤430px), Node twin still 16/16. **The whole Engine Room wing (Carnot + Demon) is now consistent on mobile.***
 
