@@ -1,19 +1,20 @@
 export const meta = {
   name: 'fun-forever',
-  description: 'The Workshop\'s creative-cycle loop: each iteration a director plans (PLAN or BUILD per the gauge), explorers diverge, a judge selects/synthesizes (and may reject-all → one refined re-round), and a builder ships to done in-turn. Each cycle\'s summary appends to /tmp/funlog.txt until cancelled.',
+  description: 'The Workshop\'s creative-cycle loop: each iteration a director plans (PLAN or BUILD per the gauge), explorers diverge, a judge selects/synthesizes (and may reject-all → one refined re-round), a builder ships+self-verifies, and a publisher does the fresh-eyes review, cleanup, bookkeeping & publish. Each cycle\'s summary appends to /tmp/funlog.txt until cancelled.',
   phases: [
-    { title: 'Direct', detail: 'one director reads the gauge + bearings and plans the cycle' },
+    { title: 'Direct', detail: 'one director reads the gauge + bearings (incl. git status) and plans the cycle' },
     { title: 'Explore', detail: 'K parallel explorers diverge — competing approaches, complementary facets, or idea-scouting' },
     { title: 'Judge', detail: 'one judge selects / integrates / synthesizes (may reject-all → one refined re-round)' },
-    { title: 'Build', detail: 'one builder ships to the definition-of-done in-turn: self-test, browser-verify, commit + push' },
+    { title: 'Build', detail: 'one builder builds the exhibit + self-verifies its own page (BUILD cycles only; does not commit)' },
+    { title: 'Publish', detail: 'one publisher reviews every touched surface in a browser, polishes/fixes, does the bookkeeping, commits + pushes' },
   ],
 }
 
 // ── Tuning ───────────────────────────────────────────────────────────────────
 // Worst case per cycle ≈ 1 director + (K×rounds) explorers + (rounds) judges +
-// 1 builder + 1 writer ≈ 13 agents (K=4, 2 rounds). 70 cycles stays under the
-// 1000-agent backstop. Re-launch fun-forever to keep going past the cap.
-const MAX_ITERS = 70
+// 1 builder + 1 publisher + 1 writer ≈ 14 agents (K=4, 2 rounds). 60 cycles
+// stays under the 1000-agent backstop. Re-launch fun-forever to keep going.
+const MAX_ITERS = 60
 const MAX_JUDGE_ROUNDS = 2        // the judge may reject the whole batch and demand ONE refined re-round
 const FUNLOG = '/tmp/funlog.txt'
 
@@ -38,7 +39,7 @@ const DIRECTOR_SCHEMA = {
   required: ['mode', 'rationale', 'headline'],
   properties: {
     mode: { enum: ['BUILD', 'PLAN', 'TRIVIAL'], description: 'Read the gauge in NOTES.md; PLAN if fuel ≲ 4 OR builds ≥ 4, else BUILD. TRIVIAL only for a tiny edit you already did inline this turn.' },
-    rationale: { type: 'string', description: 'Why this and why now — quote the gauge read, and (for BUILD) why this piece over alternatives.' },
+    rationale: { type: 'string', description: 'Why this and why now — quote the gauge read, note any orphaned work you found in git status, and (for BUILD) why this piece.' },
     headline: { type: 'string', description: 'One line naming the cycle, e.g. "BUILD: the Carnot engine — first bench of the Engine Room bet".' },
     // BUILD
     title: { type: 'string' }, where: { type: 'string', description: 'Where it lives + how it is reached (Workbench group / which wing).' },
@@ -80,6 +81,17 @@ const JUDGE_SCHEMA = {
   },
 }
 
+const BUILD_HANDOFF_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['built', 'selfTest', 'surfacesToReview'],
+  properties: {
+    built: { type: 'string', description: 'what you built + key files + line counts (e.g. "entropy/index.html ~712 lines; inlined core; Node twin core.test.mjs").' },
+    selfTest: { type: 'string', description: 'the self-test result you verified in-browser (e.g. "9/9 in-page, 17/17 Node, 0 console errors, session shz").' },
+    surfacesToReview: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['label', 'path'], properties: { label: { type: 'string' }, path: { type: 'string', description: 'served path the publisher should open, e.g. "/entropy/index.html" or "/workbench/index.html"' } } }, description: 'EVERY page you created OR touched — the new exhibit AND each page where you registered it (Workbench index, front-door map, sibling cross-links). The publisher reviews them all with fresh eyes.' },
+    openConcerns: { type: 'string', description: 'anything you are unsure about or want the publisher to double-check.' },
+  },
+}
+
 // ── Prompt builders ──────────────────────────────────────────────────────────
 function directorPrompt(i) {
   return [
@@ -87,9 +99,15 @@ function directorPrompt(i) {
     'ROLE: DIRECTOR of creative cycle #' + i + '. Get your bearings, then plan this ONE cycle. Build nothing yet.',
     '',
     'STEPS:',
-    '1) Read the gauge + current state in NOTES.md, skim ROADMAP.md (the seedbed) and the newest worklog entries.',
-    '2) Decide MODE from the 🎲 gauge: PLAN if fuel ≲ 4 OR builds-since-plan ≥ 4, else BUILD. You may override with a stated reason.',
-    '   • If ROADMAP holds any [bug] seed, PRIORITIZE it — a bug fix is a BUILD cycle that jumps the queue.',
+    '1) Get your bearings: read the gauge + current state in NOTES.md, skim ROADMAP.md (the seedbed) and the newest',
+    '   worklog entries. THEN run git status — and if the tree is DIRTY (uncommitted or untracked files), a prior cycle',
+    '   was likely stopped mid-run. INVESTIGATE before anything else: read those files, run any self-test / Node twin,',
+    '   and JUDGE whether the work is worth SALVAGING (make this cycle finish + publish it — mode BUILD whose basicDesign',
+    '   is "complete the orphaned X", noting what is already done so the builder resumes rather than restarts) or is a',
+    '   dead-end worth TOSSING (clean it). Either way the tree MUST be clean before you start anything new — the',
+    '   head-pointer can be silently behind reality after a mid-run stop, so trust git status over NOTES here.',
+    '2) Decide MODE from the 🎲 gauge: PLAN if fuel ≲ 4 OR builds-since-plan ≥ 4, else BUILD. You may override with reason.',
+    '   • If ROADMAP holds any [bug] seed, clear it first — a bug fix is a BUILD cycle that jumps the queue.',
     '3) If BUILD: pick whatever piece genuinely calls to you — this is your garden and the choice is entirely yours',
     '   (weigh the seedbed, the wings, your own taste). The only thing this cycle changes is REACH: a GRAND room bet\'s',
     '   first bench, a wing-extension, or a competing-prototype bake-off are all now doable in a single cycle, so the',
@@ -171,35 +189,63 @@ function judgePrompt(d, explorers, feedback, i, round) {
   return lines.join('\n')
 }
 
-function builderPrompt(d, chosen, i) {
-  const lines = [GROUND, '', 'ROLE: BUILDER of cycle #' + i + '. Execute to DONE, in this single turn, then commit + push.', '']
+function buildPrompt(d, chosen, i) {
+  return [GROUND, '',
+    'ROLE: BUILDER of cycle #' + i + '. Build the exhibit and self-verify it. A PUBLISHER runs after you to review,',
+    'polish, do the bookkeeping and publish — so you do NOT commit, and you do NOT write the worklog / NOTES / gauge.',
+    '',
+    'DESIGN: ' + (chosen.finalDesign || d.basicDesign),
+    (chosen.startFromPrototype ? 'START FROM the winning prototype at: ' + chosen.startFromPrototype + ' (lift + finalize it to production bar; it was a throwaway draft).' : ''),
+    'DONE (your part): ' + (d.definitionOfDone || '(self-test green · browser-verified · registered)'),
+    '',
+    'Follow DESIGNING.md: one self-contained HTML file (vanilla JS, no deps); a self-test that proves the claim EXACT',
+    '(and a Node twin core.test.mjs if there is a logic core — inline the SAME core into the page); serve it and',
+    'browser-verify with agent-browser in a UNIQUELY-named session (self-test green, clean console, ~60fps); a new',
+    'front-door page MUST drop its ws:seen:<id>; register it where it belongs (the right Workbench group / wing /',
+    'front-door map). Leave your changes UNCOMMITTED in the working tree for the publisher.',
+    '',
+    'Return the handoff: what you built, the self-test result, and surfacesToReview = EVERY page you created OR touched',
+    '(the new exhibit AND each page where you registered it) so the publisher can review them all with fresh eyes.',
+  ].join('\n')
+}
+
+function publisherPrompt(d, chosen, handoff, i) {
+  const lines = [GROUND, '', 'ROLE: PUBLISHER of cycle #' + i + '. You own the fresh-eyes review, final cleanup, bookkeeping, and publishing.', '']
   if (d.mode === 'PLAN') {
-    lines.push('This is a PLAN (gardener) cycle. Apply it:',
+    lines.push('This is a PLAN (gardener) cycle — no exhibit to review. Apply it, then publish:',
       '1) Housekeeping: ' + (d.housekeeping || 'survey (forge --check --all), spot-run a twin, prune bloomed seeds, keep docs lean.'),
       '2) Sow these curated seeds into ROADMAP.md in house style:', JSON.stringify(chosen.curatedSeeds || [], null, 1),
-      '3) Refresh the metagame table + RESET THE GAUGE in NOTES.md (builds→0, adjust fuel for what was sown), and REPLACE',
-      '   the NOTES current-state block with this session\'s. Write the worklog block (newest-first) + an INDEX line.',
+      '3) Refresh the metagame table + RESET THE GAUGE in NOTES.md (builds→0, adjust fuel for what was sown), REPLACE',
+      '   the NOTES current-state block, write the worklog block (newest-first) + an INDEX line.',
       '4) git add + commit + push. Your summary must describe committed, pushed work — never a mid-flight status.')
   } else {
-    lines.push('Build this design to the Workshop\'s definition-of-done (see DESIGNING.md):',
-      '', 'DESIGN: ' + (chosen.finalDesign || d.basicDesign),
-      (chosen.startFromPrototype ? 'START FROM the winning prototype at: ' + chosen.startFromPrototype + ' (lift + finalize it; it is a throwaway draft, hold it to production bar).' : ''),
-      '', 'DONE means: ' + (d.definitionOfDone || '(self-test green · browser-verified · registered · docs · committed)'),
+    lines.push('A builder just built a new exhibit and left it UNCOMMITTED in the working tree. Your job, in order:',
       '',
-      'The contract: one self-contained HTML file (vanilla JS, no deps); a self-test that proves the claim EXACT (and a Node',
-      'twin core.test.mjs if there is a logic core — inline the SAME core into the page); serve it and browser-verify with',
-      'agent-browser (self-test green, clean console, ~60fps) in a UNIQUELY-named session; a new front-door page MUST drop its',
-      'ws:seen:<id> breadcrumb; register it where it belongs (Workbench group / the right wing); update docs (worklog block',
-      'newest-first + INDEX line + REPLACE the NOTES current-state + decrement the gauge fuel / bump builds + prune the grown',
-      'seed to a bloomed tombstone). If you started a server/browser, stop it. Then git add + commit + push (push if a remote',
-      'is reachable). If you hit a real wall, commit what is solid and state plainly what remains — never leave it uncommitted.',
-      '', 'Your summary must describe committed, pushed work, not a mid-flight status.')
+      'BUILDER HANDOFF: ' + (handoff ? JSON.stringify(handoff) : '(none — run git status to see what changed)'),
+      '',
+      '1) FRESH-EYES REVIEW (the point of this role): serve the site and open EVERY surface in surfacesToReview with',
+      '   agent-browser in a uniquely-named session — the new exhibit AND every page where it was registered (the',
+      '   Workbench index, the front-door map, sibling cross-links). Look hard for what the heads-down builder would',
+      '   miss: layout breaks, text or content spilling OUT of its container, broken or NESTED markup (e.g. an <a>',
+      '   inside an <a class="card">), console errors, broken or wrong links, mis-sized / inconsistent cards, bad',
+      '   spacing, mobile/responsive breakage. Re-run the exhibit self-test to confirm it is green.',
+      '2) POLISH + FIX: make it as BEAUTIFUL as it can be and consistent with its siblings; fix small polish and real',
+      '   bugs alike. If you find a bug too big to fix safely now, fix what you can and file it as a [bug] seed in',
+      '   ROADMAP.md so a future cycle clears it — never silently ship something visibly broken.',
+      '3) BOOKKEEPING: worklog block (newest-first) + INDEX line + REPLACE the NOTES current-state block + decrement the',
+      '   gauge fuel / bump builds + prune the grown seed to a bloomed tombstone.',
+      '4) CLEANUP: stop any http server / browser session; delete stray /tmp prototypes; if a .src.html was touched run',
+      '   forge --check --all; confirm the working tree has nothing stray.',
+      '5) PUBLISH: git add + commit + push (push if a remote is reachable).',
+      '',
+      'Your summary must describe committed, pushed work — what shipped, what you CAUGHT & fixed in review, and the',
+      'final verification. Never a mid-flight status.')
   }
   return lines.join('\n')
 }
 
 function writerPrompt(i, summary) {
-  const body = (summary == null || String(summary).trim() === '') ? '(the builder returned no summary)' : String(summary)
+  const body = (summary == null || String(summary).trim() === '') ? '(the publisher returned no summary)' : String(summary)
   return [
     'Append text to the file ' + FUNLOG + '. Create it if absent. APPEND ONLY — never overwrite or truncate.',
     'Use a bash heredoc with a QUOTED delimiter so the body is written byte-for-byte:',
@@ -220,57 +266,65 @@ while (i < MAX_ITERS) {
   if (d == null) { log('cycle #' + i + ': director returned nothing — skipping'); continue }
   log('cycle #' + i + ' — ' + d.mode + ': ' + d.headline)
 
-  let summary
   if (d.mode === 'TRIVIAL') {
-    summary = d.rationale
-  } else {
-    const briefs = (d.briefs || []).slice(0, d.K || (d.briefs || []).length || 2)
-    let chosen = null
-
-    if (d.mode === 'BUILD' && d.exploreMode === 'none') {
-      chosen = { finalDesign: d.basicDesign }           // design is clear → straight to builder
-    } else if (briefs.length === 0) {
-      chosen = { finalDesign: d.basicDesign, curatedSeeds: [] }
-    } else {
-      let feedback = null, round = 0
-      while (!chosen && round < MAX_JUDGE_ROUNDS) {
-        phase('Explore')
-        const explorers = (await parallel(briefs.map((b, idx) => () => {
-          const protoPath = (d.mode === 'BUILD' && d.prototype && d.exploreMode === 'compete')
-            ? '/tmp/ws-explore-' + i + '-' + round + '-' + idx + '-' + String(b.label || idx).replace(/[^a-z0-9]+/gi, '-') + '.html'
-            : null
-          return agent(explorerPrompt(d, b, feedback, i, round, protoPath), {
-            label: 'explore #' + i + '.' + round + ':' + (b.label || idx), phase: 'Explore', schema: EXPLORER_SCHEMA,
-          })
-        }))).filter(Boolean)
-
-        if (explorers.length === 0) { break }
-
-        phase('Judge')
-        const v = await agent(judgePrompt(d, explorers, feedback, i, round), {
-          label: 'judge #' + i + '.' + round, phase: 'Judge', schema: JUDGE_SCHEMA,
-        })
-        if (v == null) { chosen = { finalDesign: explorers[0].proposal }; break }   // judge died → take the first viable
-
-        if (v.decision === 'reject-all' && round + 1 < MAX_JUDGE_ROUNDS) {
-          feedback = v.feedback || 'none of these were viable — try a materially different direction.'
-          round++
-          log('cycle #' + i + ': judge rejected round ' + (round - 1) + ' → refining (' + (v.nextK || briefs.length) + ' more)')
-        } else {
-          chosen = v                                     // accept / synthesize (or reject on the last allowed round → take best)
-          if (v.decision === 'reject-all') chosen = { finalDesign: '(judge still unsatisfied; build the strongest attempt) ' + (v.reasoning || ''), curatedSeeds: [] }
-          break
-        }
-      }
-      if (!chosen) chosen = { finalDesign: d.basicDesign, curatedSeeds: [] }
-    }
-
-    phase('Build')
-    summary = await agent(builderPrompt(d, chosen, i), { label: 'build #' + i, phase: 'Build' })
+    await agent(writerPrompt(i, d.rationale), { label: 'log #' + i, phase: 'Publish', model: 'sonnet' })
+    log('cycle #' + i + ' (trivial) appended to ' + FUNLOG)
+    continue
   }
 
+  // ── Explore → Judge (skipped for BUILD exploreMode 'none') ──
+  let chosen = null
+  const briefs = (d.briefs || []).slice(0, d.K || (d.briefs || []).length || 2)
+  if (d.mode === 'BUILD' && d.exploreMode === 'none') {
+    chosen = { finalDesign: d.basicDesign }
+  } else if (briefs.length === 0) {
+    chosen = { finalDesign: d.basicDesign, curatedSeeds: [] }
+  } else {
+    let feedback = null, round = 0
+    while (!chosen && round < MAX_JUDGE_ROUNDS) {
+      phase('Explore')
+      const explorers = (await parallel(briefs.map((b, idx) => () => {
+        const protoPath = (d.mode === 'BUILD' && d.prototype && d.exploreMode === 'compete')
+          ? '/tmp/ws-explore-' + i + '-' + round + '-' + idx + '-' + String(b.label || idx).replace(/[^a-z0-9]+/gi, '-') + '.html'
+          : null
+        return agent(explorerPrompt(d, b, feedback, i, round, protoPath), {
+          label: 'explore #' + i + '.' + round + ':' + (b.label || idx), phase: 'Explore', schema: EXPLORER_SCHEMA,
+        })
+      }))).filter(Boolean)
+
+      if (explorers.length === 0) break
+
+      phase('Judge')
+      const v = await agent(judgePrompt(d, explorers, feedback, i, round), {
+        label: 'judge #' + i + '.' + round, phase: 'Judge', schema: JUDGE_SCHEMA,
+      })
+      if (v == null) { chosen = { finalDesign: explorers[0].proposal }; break }
+
+      if (v.decision === 'reject-all' && round + 1 < MAX_JUDGE_ROUNDS) {
+        feedback = v.feedback || 'none of these were viable — try a materially different direction.'
+        round++
+        log('cycle #' + i + ': judge rejected round ' + (round - 1) + ' → refining (' + (v.nextK || briefs.length) + ' more)')
+      } else {
+        chosen = v
+        if (v.decision === 'reject-all') chosen = { finalDesign: '(judge still unsatisfied; build the strongest attempt) ' + (v.reasoning || ''), curatedSeeds: [] }
+        break
+      }
+    }
+    if (!chosen) chosen = { finalDesign: d.basicDesign, curatedSeeds: [] }
+  }
+
+  // ── Build (BUILD only — builder self-verifies, does NOT commit) → Publish ──
+  let handoff = null
+  if (d.mode === 'BUILD') {
+    phase('Build')
+    handoff = await agent(buildPrompt(d, chosen, i), { label: 'build #' + i, phase: 'Build', schema: BUILD_HANDOFF_SCHEMA })
+  }
+
+  phase('Publish')
+  const summary = await agent(publisherPrompt(d, chosen, handoff, i), { label: 'publish #' + i, phase: 'Publish' })
+
   // A lightweight writer appends the cycle summary to the funlog (the script sandbox has no filesystem).
-  await agent(writerPrompt(i, summary), { label: 'log #' + i, phase: 'Build', model: 'sonnet' })
+  await agent(writerPrompt(i, summary), { label: 'log #' + i, phase: 'Publish', model: 'sonnet' })
   log('cycle #' + i + ' appended to ' + FUNLOG)
 }
 
