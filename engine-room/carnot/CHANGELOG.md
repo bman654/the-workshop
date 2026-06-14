@@ -117,3 +117,31 @@ and "↑ The Workshop" → the front door.
 
 **Files:** `index.html` (self-contained bench + inlined core + pill) · `core.mjs`
 (the pure source of truth) · `core.test.mjs` (the Node twin).
+
+## v1.1 (2026-06-14) — mobile topbar fix (CSS-only)
+
+Cleared the open `[bug]` seed filed by the Demon publisher: the fixed `.topbar`
+(`display:flex; justify-content:space-between`, **no wrap**) overflowed horizontally
+on narrow phones — the `#selftest` pill was pushed ~86px off the right edge at ≤400px
+(DOM-measured at 360px: pill `right=446`). Added the **same scoped `@media
+(max-width:430px)`** block the sibling Demon bench already ships (the markup uses the
+identical `.crumbs` / `.selftest` selectors), placed just before the
+`prefers-reduced-motion` block:
+
+```css
+@media (max-width:430px){
+  .topbar{ flex-wrap:wrap; row-gap:8px; padding:10px 14px; }
+  .crumbs{ flex:1 1 auto; gap:12px; }
+  .selftest{ flex:0 0 auto; max-width:100%; }
+}
+```
+
+Now the topbar wraps cleanly: crumbs on line 1, the green pill on its own line 2,
+both in-bounds. **Verified** (publisher fresh-eyes review, `?v=N` cache-bust, session
+`carnot-pub-cyc4`): at 360px and 390px horizontal overflow **0** (was ~86px), pill
+`right=151` on-screen, still reads "self-test 11/11 ✓" / class `selftest ok`; **desktop
+1280px unchanged** (`flex-wrap:nowrap`, `justify-content:space-between`, pill hugging the
+right edge at `right=1245`, 0 overflow — the rule is scoped to ≤430px). The core math
+is untouched: Node twin `node core.test.mjs` still **16/16 ✓**. 6 insertions, CSS-only,
+no JS / no logic / no inlined-core bytes touched. The whole Engine Room wing is now
+consistent on mobile (Carnot + Demon share the rule).
