@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Theseus's Thread</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.88);
+    --panel-edge: rgba(201,162,74,0.34);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --thread: #6fd3c4;     /* Theseus's proven-shortest thread */
+    --astar: #e0b04f;      /* A* frontier (settled) */
+    --dijk: #6f8fd3;       /* Dijkstra frontier (settled) */
+    --wall: #161a24;
+    --corridor: #0c0f16;
+    --start: #8fd79a;
+    --goal: #e0664f;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --bg: #06080c;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    justify-content:space-between; padding:14px 20px 0; pointer-events:none; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; display:flex; align-items:center; justify-content:center;
+    padding:54px 18px 18px; }
+  canvas{ display:block; box-shadow:0 18px 60px rgba(0,0,0,0.55);
+    border:1px solid rgba(201,162,74,0.18); border-radius:4px; background:#080b11; max-width:100%; max-height:100%; }
+  #verdict{ position:absolute; left:50%; top:60px; transform:translateX(-50%); z-index:7; pointer-events:none;
+    font:600 11px/1.5 var(--font-mono); text-align:center; background:rgba(0,0,0,0.42);
+    border:1px solid var(--panel-edge); border-radius:10px; padding:8px 16px; backdrop-filter:blur(4px); }
+  #verdict .big{ font-family:var(--font-serif); font-size:22px; color:var(--thread); display:inline-block;
+    font-variant-numeric:tabular-nums; line-height:1.05; }
+  #verdict .sub{ color:var(--ink-dim); font-size:10.5px; letter-spacing:.04em; display:block; margin-top:3px; }
+  #verdict .sub b{ color:var(--accent); }
+  #verdict .match{ display:inline-block; margin-top:5px; padding:3px 9px; border-radius:12px;
+    font:600 9.5px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; }
+  #verdict .match.good{ color:#8fd79a; border:1px solid rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  #verdict .match.warn{ color:#f0b07a; border:1px solid rgba(220,150,90,0.5); background:rgba(60,42,22,0.4); }
+
+  #panel{ width:346px; flex:0 0 346px; height:100%; background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge); padding:58px 16px 24px;
+    box-shadow:-18px 0 50px rgba(0,0,0,0.5); z-index:20; overflow-y:auto; }
+  #panel .sib{ font:600 10px/1 var(--font-mono); letter-spacing:.04em; margin:0 0 12px; }
+  #panel .sib a{ color:var(--thread); text-decoration:none; border-bottom:1px dotted rgba(111,211,196,0.4); }
+  #panel .sib a:hover{ color:#9fe7db; }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  #panel .lede i{ color:var(--thread); font-style:normal; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 8px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .row{ margin:11px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.04em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:6px; }
+  .row > label .val{ color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:3px; border-radius:3px;
+    background:rgba(201,162,74,0.22); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:15px; height:15px;
+    border-radius:50%; background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  input[type=range]::-moz-range-thumb{ width:15px; height:15px; border:none; border-radius:50%;
+    background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  .algos{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .algo{ font:600 10.5px/1.2 var(--font-ui); padding:9px 8px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; transition:.16s; text-align:left; }
+  .algo:hover{ border-color:var(--accent); color:var(--ink); }
+  .algo.on{ border-color:rgba(201,162,74,0.7); background:var(--accent-soft); color:var(--ink); }
+  .algo b{ display:block; color:var(--ink); font-weight:600; margin-bottom:2px; font-size:11px; }
+  .algo span{ font:9px/1.25 var(--font-mono); color:var(--ink-dim); letter-spacing:.01em; }
+  .btnrow{ display:flex; gap:8px; margin:12px 0 2px; flex-wrap:wrap; }
+  .btn{ flex:1 1 auto; min-width:0; font:600 11px/1 var(--font-ui); letter-spacing:.02em; padding:10px 10px;
+    border-radius:8px; border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink);
+    cursor:pointer; transition:.18s; white-space:nowrap; }
+  .btn:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .btn.primary{ background:rgba(201,162,74,0.16); border-color:rgba(201,162,74,0.5); color:var(--accent); }
+  .btn.primary:hover{ background:rgba(201,162,74,0.26); }
+  .checkbox{ display:flex; align-items:center; gap:9px; margin:10px 0; font:600 10.5px/1.3 var(--font-mono);
+    color:var(--ink-dim); cursor:pointer; letter-spacing:.02em; }
+  .checkbox input{ accent-color:var(--accent); width:14px; height:14px; }
+  .facts{ margin-top:8px; font:11px/1.6 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  .facts .frow{ display:flex; justify-content:space-between; gap:10px; padding:2px 0; }
+  .facts .frow b{ color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums; }
+  .facts .frow b.thread{ color:var(--thread); } .facts .frow b.astar{ color:var(--astar); } .facts .frow b.dijk{ color:var(--dijk); }
+  .facts .eqn{ margin-top:10px; padding:9px 11px; border-radius:8px; border:1px solid rgba(201,162,74,0.16);
+    background:rgba(0,0,0,0.28); color:var(--ink-dim); font-size:10.5px; line-height:1.62; }
+  .facts .eqn b{ color:var(--ink); } .facts .eqn i{ color:var(--thread); font-style:normal; }
+  .legend{ display:flex; flex-wrap:wrap; gap:9px 14px; margin-top:12px; font:10px/1 var(--font-mono); color:var(--ink-dim); }
+  .legend span{ display:flex; align-items:center; gap:5px; }
+  .legend i{ width:11px; height:11px; border-radius:3px; display:inline-block; }
+  .foot{ margin-top:20px; font:10px/1.55 var(--font-mono); color:rgba(154,156,170,0.6); letter-spacing:.02em; }
+  .foot a{ color:var(--ink-dim); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../workbench/index.html">&larr; workbench</a>
+    </div>
+    <div class="brand">
+      <h1>Theseus&rsquo;s Thread</h1>
+      <span class="tag">the maze, provably solved</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for detail · per-check PASS lines are in the console">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <div id="verdict"></div>
+      <canvas id="cv"></canvas>
+    </div>
+
+    <aside id="panel">
+      <p class="sib"><a href="../daedalus/index.html">&#8599; Daedalus</a> &mdash; where this labyrinth was carved</p>
+      <p class="lede">
+        Daedalus builds the labyrinth; here Theseus walks out of it &mdash; <b>provably</b>. A perfect
+        maze is a tree, so its one path is trivially shortest. So we <b>braid</b> it (open dead-ends &rarr;
+        loops &rarr; many routes) and <b>weight</b> the corridors (some slow, some quick) until the route
+        that <i>looks</i> shortest is no longer the one that <i>costs</i> least. Then we don&rsquo;t trust
+        the picture &mdash; we prove the thread minimal with <b>three unrelated witnesses</b>.
+      </p>
+
+      <div class="sect">The labyrinth</div>
+      <div class="row">
+        <label>Size <span class="val" id="sizeV">22</span></label>
+        <input type="range" id="size" min="10" max="40" step="2" value="22">
+      </div>
+      <div class="row">
+        <label>Braiding <span class="val" id="braidV">0.55</span></label>
+        <input type="range" id="braid" min="0" max="0.95" step="0.05" value="0.55">
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="reroll">New seed</button>
+        <button class="btn" id="replay">Re-trace</button>
+      </div>
+
+      <div class="sect">The thread-finder</div>
+      <div class="algos">
+        <button class="algo on" data-algo="astar"><b>A&#42;</b><span>admissible h &middot; focused</span></button>
+        <button class="algo" data-algo="dijkstra"><b>Dijkstra</b><span>h = 0 &middot; floods all</span></button>
+        <button class="algo" data-algo="greedy"><b>Inadmissible</b><span>h &times; 8 &middot; can overshoot</span></button>
+        <button class="algo" data-algo="race"><b>Race A&#42; &#8644; Dijkstra</b><span>same cost, less work</span></button>
+      </div>
+      <label class="checkbox"><input type="checkbox" id="showFlood" checked> show the flood (settled cells)</label>
+      <label class="checkbox"><input type="checkbox" id="showCost"> tint corridors by terrain cost</label>
+
+      <div class="sect">The proof</div>
+      <div class="facts" id="facts"></div>
+
+      <div class="legend">
+        <span><i style="background:var(--thread)"></i> the thread</span>
+        <span><i style="background:var(--astar)"></i> A&#42; settled</span>
+        <span><i style="background:var(--dijk)"></i> Dijkstra settled</span>
+        <span><i style="background:var(--start)"></i> entrance</span>
+        <span><i style="background:var(--goal)"></i> heart</span>
+      </div>
+
+      <div class="foot">
+        Three witnesses must agree on the cost, or the badge above goes red: <b>A&#42;</b> (heuristic =
+        Manhattan &times; cheapest corridor &rArr; admissible), <b>Dijkstra</b> (the heuristic-free optimum),
+        and an independent <b>Bellman&ndash;Ford</b> relaxation that shares no code with the heap search.
+        The thread is also re-summed step-by-step through real open passages: the drawing cannot lie.
+        &middot; a workshop cross &mdash; <a href="../pathfinder/index.html">Pathfinder</a> &times; <a href="../daedalus/index.html">Daedalus</a>.
+      </div>
+    </aside>
+  </div>
+
+<script type="module">
+// ============================================================================
+//  THE CORE — inlined verbatim from core.mjs (the Node twin the self-test runs
+//  against). Keep the two in sync; the headless harness is the source of truth.
+// ============================================================================
+function rng(seed){ let a=seed>>>0; return function(){ a|=0; a=(a+0x6D2B79F5)|0;
+  let t=Math.imul(a^(a>>>15),1|a); t=(t+Math.imul(t^(t>>>7),61|t))^t;
+  return ((t^(t>>>14))>>>0)/4294967296; }; }
+const N=1,E=2,S=4,W=8;
+const DIRS=[[0,-1,N,S],[1,0,E,W],[0,1,S,N],[-1,0,W,E]];
+function popcount(b){ let c=0; while(b){ c+=b&1; b>>=1; } return c; }
+
+function makeMaze(Wd,Hd,seed,opts={}){
+  const braid=opts.braid??0.45, maxCost=opts.maxCost??9, NN=Wd*Hd, idx=(x,y)=>y*Wd+x;
+  const r=rng((seed|0)^0x1d872b41), cells=new Uint8Array(NN);
+  const visited=new Uint8Array(NN), stack=[0]; visited[0]=1;
+  while(stack.length){ const c=stack[stack.length-1], cx=c%Wd, cy=(c/Wd)|0;
+    const order=[0,1,2,3];
+    for(let i=3;i>0;i--){ const j=(r()*(i+1))|0; const t=order[i]; order[i]=order[j]; order[j]=t; }
+    let advanced=false;
+    for(const di of order){ const [dx,dy,bit,opp]=DIRS[di], nx=cx+dx, ny=cy+dy;
+      if(nx<0||ny<0||nx>=Wd||ny>=Hd) continue; const n=idx(nx,ny); if(visited[n]) continue;
+      cells[c]|=bit; cells[n]|=opp; visited[n]=1; stack.push(n); advanced=true; break; }
+    if(!advanced) stack.pop(); }
+  for(let y=0;y<Hd;y++) for(let x=0;x<Wd;x++){ const c=idx(x,y);
+    if(popcount(cells[c])!==1) continue; if(r()>=braid) continue;
+    const cands=[];
+    for(const [dx,dy,bit,opp] of DIRS){ if(cells[c]&bit) continue; const nx=x+dx, ny=y+dy;
+      if(nx<0||ny<0||nx>=Wd||ny>=Hd) continue; cands.push([dx,dy,bit,opp,nx,ny]); }
+    if(!cands.length) continue;
+    const [dx,dy,bit,opp,nx,ny]=cands[(r()*cands.length)|0];
+    cells[c]|=bit; cells[idx(nx,ny)]|=opp; }
+  const cost=new Int16Array(NN);
+  const oct=(sx,sy)=>{ const gw=Math.ceil(Wd/sx)+2, gh=Math.ceil(Hd/sy)+2, g=[];
+    for(let j=0;j<gh;j++){ g.push([]); for(let i=0;i<gw;i++) g[j].push(r()); }
+    return (x,y)=>{ const fx=x/sx, fy=y/sy, ix=Math.floor(fx), iy=Math.floor(fy);
+      const tx=fx-ix, ty=fy-iy, a=g[iy][ix], b=g[iy][ix+1], c2=g[iy+1][ix], d=g[iy+1][ix+1];
+      const u=tx*tx*(3-2*tx), v=ty*ty*(3-2*ty);
+      return (a*(1-u)+b*u)*(1-v)+(c2*(1-u)+d*u)*v; }; };
+  const n1=oct(5,5), n2=oct(2,2);
+  for(let y=0;y<Hd;y++) for(let x=0;x<Wd;x++){ const n=0.6*n1(x,y)+0.4*n2(x,y);
+    cost[idx(x,y)]=1+Math.round(n*(maxCost-1)); }
+  const start={x:0,y:0}, goal={x:Wd-1,y:Hd-1};
+  cost[idx(start.x,start.y)]=1;
+  return { W:Wd, H:Hd, cells, cost, start, goal, idx };
+}
+function minCost(m){ let lo=Infinity; for(let i=0;i<m.cost.length;i++) if(m.cost[i]<lo) lo=m.cost[i]; return lo; }
+function neighbours(m,x,y){ const out=[], here=m.cells[m.idx(x,y)];
+  for(const [dx,dy,bit] of DIRS){ if(!(here&bit)) continue; const nx=x+dx, ny=y+dy;
+    if(nx<0||ny<0||nx>=m.W||ny>=m.H) continue; out.push({x:nx,y:ny,w:m.cost[m.idx(nx,ny)]}); } return out; }
+class MinHeap{ constructor(){ this.a=[]; } get size(){ return this.a.length; }
+  push(k,v){ const a=this.a; a.push({k,v}); let i=a.length-1;
+    while(i>0){ const p=(i-1)>>1; if(a[p].k<=a[i].k) break; [a[p],a[i]]=[a[i],a[p]]; i=p; } }
+  pop(){ const a=this.a, top=a[0], last=a.pop(); if(a.length){ a[0]=last; let i=0; const n=a.length;
+    for(;;){ let l=2*i+1, rr=l+1, mn=i; if(l<n&&a[l].k<a[mn].k) mn=l; if(rr<n&&a[rr].k<a[mn].k) mn=rr;
+      if(mn===i) break; [a[mn],a[i]]=[a[i],a[mn]]; i=mn; } } return top; } }
+function manhattan(a,b){ return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
+function search(m,{hScale=0,hWeight=1}={}){ const {W,H,start,goal,idx}=m;
+  const g=new Float64Array(W*H).fill(Infinity), came=new Int32Array(W*H).fill(-1);
+  const settled=new Uint8Array(W*H), order=[];
+  const sId=idx(start.x,start.y), gId=idx(goal.x,goal.y);
+  const heur=(x,y)=>hWeight*hScale*manhattan({x,y},goal);
+  g[sId]=0; const open=new MinHeap(); open.push(heur(start.x,start.y),sId);
+  while(open.size){ const {v:cur}=open.pop(); if(settled[cur]) continue; settled[cur]=1; order.push(cur);
+    if(cur===gId) break; const cx=cur%W, cy=(cur/W)|0;
+    for(const nb of neighbours(m,cx,cy)){ const nId=idx(nb.x,nb.y); if(settled[nId]) continue;
+      const tentative=g[cur]+nb.w; if(tentative<g[nId]){ g[nId]=tentative; came[nId]=cur;
+        open.push(tentative+heur(nb.x,nb.y),nId); } } }
+  if(!isFinite(g[gId])) return { cost:Infinity, path:[], order, reachable:false };
+  const path=[]; for(let c=gId;c!==-1;c=came[c]) path.push({x:c%W,y:(c/W)|0}); path.reverse();
+  return { cost:g[gId], path, order, reachable:true }; }
+const astar=m=>search(m,{hScale:minCost(m),hWeight:1});
+const dijkstra=m=>search(m,{hScale:0,hWeight:1});
+const greedy=(m,w)=>search(m,{hScale:minCost(m),hWeight:w});
+function bellmanFord(m){ const {W,H,start,goal,idx}=m, dist=new Float64Array(W*H).fill(Infinity);
+  dist[idx(start.x,start.y)]=0; let changed=true, rounds=0, maxRounds=W*H+5;
+  while(changed && rounds++<maxRounds){ changed=false;
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){ const cur=idx(x,y); if(!isFinite(dist[cur])) continue;
+      for(const nb of neighbours(m,x,y)){ const nId=idx(nb.x,nb.y);
+        if(dist[cur]+nb.w<dist[nId]){ dist[nId]=dist[cur]+nb.w; changed=true; } } } }
+  return dist[idx(goal.x,goal.y)]; }
+function verifyThread(m,path){ if(!path.length) return {ok:false,why:'empty',cost:Infinity};
+  const a=path[0], b=path[path.length-1];
+  if(a.x!==m.start.x||a.y!==m.start.y) return {ok:false,why:'bad-start',cost:Infinity};
+  if(b.x!==m.goal.x||b.y!==m.goal.y) return {ok:false,why:'bad-goal',cost:Infinity};
+  let cost=0;
+  for(let i=1;i<path.length;i++){ const p=path[i-1], q=path[i], dx=q.x-p.x, dy=q.y-p.y;
+    if(Math.abs(dx)+Math.abs(dy)!==1) return {ok:false,why:'non-adjacent',cost:Infinity};
+    let bit=0,opp=0; if(dx===1){bit=E;opp=W;} else if(dx===-1){bit=W;opp=E;}
+    else if(dy===1){bit=S;opp=N;} else {bit=N;opp=S;}
+    if(!(m.cells[m.idx(p.x,p.y)]&bit)||!(m.cells[m.idx(q.x,q.y)]&opp))
+      return {ok:false,why:'through-wall',cost:Infinity};
+    cost+=m.cost[m.idx(q.x,q.y)]; }
+  return {ok:true,cost}; }
+function connectedCount(m){ const seen=new Uint8Array(m.W*m.H), stack=[m.idx(m.start.x,m.start.y)];
+  seen[stack[0]]=1; let count=1;
+  while(stack.length){ const c=stack.pop(), x=c%m.W, y=(c/m.W)|0;
+    for(const nb of neighbours(m,x,y)){ const id=m.idx(nb.x,nb.y); if(!seen[id]){ seen[id]=1; count++; stack.push(id); } } }
+  return count; }
+
+// ============================================================================
+//  STATE + RENDER
+// ============================================================================
+const $=id=>document.getElementById(id);
+const cv=$('cv'), ctx=cv.getContext('2d');
+const state={ size:22, braid:0.55, seed:7, algo:'astar', maze:null,
+  showFlood:true, showCost:false, anim:null, animStep:0, raceStep:0 };
+
+let CELL=22, WALLT=2, OX=0, OY=0;
+function layout(){
+  const stage=$('stage');
+  const availW=stage.clientWidth-36, availH=stage.clientHeight-72;
+  CELL=Math.max(8, Math.floor(Math.min(availW/state.size, availH/state.size)));
+  WALLT=Math.max(1, Math.round(CELL*0.12));
+  const px=state.size*CELL;
+  cv.width=px; cv.height=px;
+  cv.style.width=px+'px'; cv.style.height=px+'px';
+}
+
+function costColour(c, maxC){
+  // dark cool (cheap) → warm amber (slow). Subtle, so walls/thread stay legible.
+  const t=(c-1)/Math.max(1,(maxC-1));
+  const r=Math.round(18+t*70), g=Math.round(22+t*44), b=Math.round(34-t*10);
+  return `rgb(${r},${g},${b})`;
+}
+
+function draw(reveal){
+  const m=state.maze; if(!m) return;
+  const px=cv.width;
+  ctx.clearRect(0,0,px,px);
+  ctx.fillStyle='#080b11'; ctx.fillRect(0,0,px,px);
+  let maxC=1; for(let i=0;i<m.cost.length;i++) if(m.cost[i]>maxC) maxC=m.cost[i];
+
+  // corridors (cell fills)
+  for(let y=0;y<m.H;y++) for(let x=0;x<m.W;x++){
+    ctx.fillStyle = state.showCost ? costColour(m.cost[m.idx(x,y)], maxC) : 'var(--corridor)';
+    if(!state.showCost) ctx.fillStyle='#0c0f16';
+    ctx.fillRect(x*CELL, y*CELL, CELL, CELL);
+  }
+
+  // flood (settled cells), drawn under the walls
+  if(state.showFlood && reveal){
+    const order=reveal.order, upTo=reveal.upTo;
+    for(let i=0;i<upTo && i<order.length;i++){
+      const c=order[i], x=c%m.W, y=(c/m.W)|0;
+      ctx.fillStyle=reveal.floodColour;
+      const pad=Math.max(1,Math.round(CELL*0.18));
+      ctx.globalAlpha=0.5;
+      ctx.fillRect(x*CELL+pad, y*CELL+pad, CELL-2*pad, CELL-2*pad);
+      ctx.globalAlpha=1;
+    }
+  }
+  if(reveal && reveal.order2){      // race: second flood
+    const order=reveal.order2, upTo=reveal.upTo2;
+    for(let i=0;i<upTo && i<order.length;i++){
+      const c=order[i], x=c%m.W, y=(c/m.W)|0;
+      ctx.fillStyle=reveal.floodColour2;
+      const pad=Math.max(1,Math.round(CELL*0.30));
+      ctx.globalAlpha=0.55;
+      ctx.fillRect(x*CELL+pad, y*CELL+pad, CELL-2*pad, CELL-2*pad);
+      ctx.globalAlpha=1;
+    }
+  }
+
+  // walls — draw a wall on each closed side of each cell
+  ctx.strokeStyle='#1b2030'; ctx.lineWidth=WALLT; ctx.lineCap='round';
+  ctx.beginPath();
+  for(let y=0;y<m.H;y++) for(let x=0;x<m.W;x++){
+    const c=m.cells[m.idx(x,y)], X=x*CELL, Y=y*CELL;
+    if(!(c&N)){ ctx.moveTo(X,Y); ctx.lineTo(X+CELL,Y); }
+    if(!(c&W)){ ctx.moveTo(X,Y); ctx.lineTo(X,Y+CELL); }
+    if(!(c&E)){ ctx.moveTo(X+CELL,Y); ctx.lineTo(X+CELL,Y+CELL); }
+    if(!(c&S)){ ctx.moveTo(X,Y+CELL); ctx.lineTo(X+CELL,Y+CELL); }
+  }
+  ctx.stroke();
+  // outer frame with an opening at entrance and heart
+  ctx.strokeStyle='rgba(201,162,74,0.30)'; ctx.lineWidth=WALLT;
+  ctx.strokeRect(0,0,px,px);
+
+  // the thread (animated)
+  if(reveal && reveal.path && reveal.threadUpTo>0){
+    const path=reveal.path, n=Math.min(reveal.threadUpTo, path.length);
+    ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--thread').trim();
+    ctx.lineWidth=Math.max(2,Math.round(CELL*0.34)); ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.shadowColor=ctx.strokeStyle; ctx.shadowBlur=Math.max(4,CELL*0.4);
+    ctx.beginPath();
+    for(let i=0;i<n;i++){ const p=path[i], cx=p.x*CELL+CELL/2, cy=p.y*CELL+CELL/2;
+      if(i===0) ctx.moveTo(cx,cy); else ctx.lineTo(cx,cy); }
+    ctx.stroke(); ctx.shadowBlur=0;
+  }
+
+  // entrance + heart markers
+  const mark=(p,col)=>{ const cx=p.x*CELL+CELL/2, cy=p.y*CELL+CELL/2;
+    ctx.fillStyle=col; ctx.beginPath(); ctx.arc(cx,cy,Math.max(3,CELL*0.26),0,Math.PI*2); ctx.fill(); };
+  mark(m.start, getComputedStyle(document.documentElement).getPropertyValue('--start').trim());
+  mark(m.goal,  getComputedStyle(document.documentElement).getPropertyValue('--goal').trim());
+}
+
+// ============================================================================
+//  SOLVE + ANIMATE
+// ============================================================================
+let current=null;     // current solve result for the facts panel
+function solveAndShow(animate){
+  const m=state.maze;
+  const A=astar(m), D=dijkstra(m), bf=bellmanFord(m);
+  const v=verifyThread(m, A.path);
+  current={A,D,bf,v};
+
+  // facts
+  const agree = (A.cost===D.cost && D.cost===bf && v.ok && v.cost===A.cost);
+  let primary, floodColour, order, sub;
+  const css=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+  if(state.algo==='dijkstra'){ primary=D; floodColour=css('--dijk'); order=D.order; }
+  else if(state.algo==='greedy'){ primary=greedy(m,8); floodColour=css('--astar'); order=primary.order; }
+  else { primary=A; floodColour=css('--astar'); order=A.order; }
+
+  // verdict banner
+  const vd=$('verdict');
+  if(state.algo==='greedy'){
+    const over=primary.cost-A.cost;
+    vd.innerHTML = `<span class="big">${primary.cost}</span>`
+      + `<span class="sub">inadmissible heuristic &middot; optimum is <b>${A.cost}</b></span>`
+      + (over>0 ? `<span class="match warn">overshot by ${over} &mdash; not a proof</span>`
+                : `<span class="match good">matched optimum (this maze)</span>`);
+  } else {
+    vd.innerHTML = `<span class="big">${A.cost}</span>`
+      + `<span class="sub">proven-minimum cost &middot; ${A.path.length} cells</span>`
+      + (agree ? `<span class="match good">A&#42; = Dijkstra = Bellman&ndash;Ford</span>`
+               : `<span class="match warn">witnesses disagree!</span>`);
+  }
+
+  // facts panel
+  const f=$('facts');
+  const aWork=A.order.length, dWork=D.order.length;
+  f.innerHTML =
+    `<div class="frow"><span>thread cost (proven min)</span><b class="thread">${A.cost}</b></div>`+
+    `<div class="frow"><span>thread length</span><b class="thread">${A.path.length} cells</b></div>`+
+    `<div class="frow"><span>A&#42; settled</span><b class="astar">${aWork}</b></div>`+
+    `<div class="frow"><span>Dijkstra settled</span><b class="dijk">${dWork}</b></div>`+
+    `<div class="frow"><span>A&#42; saved</span><b>${dWork-aWork} cells (${Math.round(100*(1-aWork/dWork))}%)</b></div>`+
+    `<div class="frow"><span>Bellman&ndash;Ford oracle</span><b>${bf}</b></div>`+
+    `<div class="frow"><span>re-summed thread</span><b>${v.ok?v.cost:'INVALID'}</b></div>`+
+    `<div class="frow"><span>witnesses agree</span><b style="color:${agree?'#8fd79a':'#f08a7a'}">${agree?'YES — proven':'NO'}</b></div>`+
+    `<div class="eqn">three witnesses agree on <b>${A.cost}</b>. A&#42; touched <i>${aWork}</i> cells,
+      Dijkstra <i>${dWork}</i> &mdash; in a maze the heuristic prunes little (the corridors snake away from
+      the goal), so the win here isn&rsquo;t speed: it&rsquo;s that the thread is <b>provably</b> the cheapest.</div>`;
+
+  // animation
+  if(state.anim){ cancelAnimationFrame(state.anim); state.anim=null; }
+  const race = state.algo==='race';
+  const reveal = {
+    order, upTo:0, path:primary.path, threadUpTo:0,
+    floodColour, floodColour2:css('--dijk'),
+    order2: race ? D.order : null, upTo2:0,
+  };
+  if(race){ reveal.order=A.order; reveal.floodColour=css('--astar'); reveal.path=A.path; }
+
+  if(!animate){
+    reveal.upTo=reveal.order.length; reveal.upTo2=reveal.order2?reveal.order2.length:0;
+    reveal.threadUpTo=reveal.path.length; draw(reveal); return;
+  }
+  const floodFrames=race ? Math.max(A.order.length,D.order.length) : reveal.order.length;
+  const stepF=Math.max(1, Math.round(floodFrames/64));   // ~64 flood frames
+  let phase=0;   // 0 flood, 1 thread
+  function tick(){
+    if(phase===0){
+      reveal.upTo=Math.min(reveal.upTo+stepF, reveal.order.length);
+      if(reveal.order2) reveal.upTo2=Math.min(reveal.upTo2+stepF, reveal.order2.length);
+      draw(reveal);
+      const done = reveal.upTo>=reveal.order.length && (!reveal.order2 || reveal.upTo2>=reveal.order2.length);
+      if(done) phase=1;
+    } else {
+      reveal.threadUpTo=Math.min(reveal.threadUpTo+Math.max(1,Math.round(reveal.path.length/40)), reveal.path.length);
+      draw(reveal);
+      if(reveal.threadUpTo>=reveal.path.length){ state.anim=null; return; }
+    }
+    state.anim=requestAnimationFrame(tick);
+  }
+  state.anim=requestAnimationFrame(tick);
+}
+
+function rebuild(animate=true){
+  state.maze=makeMaze(state.size, state.size, state.seed, { braid:state.braid });
+  layout();
+  solveAndShow(animate);
+}
+
+// ============================================================================
+//  WIRING
+// ============================================================================
+$('size').addEventListener('input', e=>{ state.size=+e.target.value; $('sizeV').textContent=state.size; rebuild(); });
+$('braid').addEventListener('input', e=>{ state.braid=+e.target.value; $('braidV').textContent=state.braid.toFixed(2); rebuild(); });
+$('reroll').addEventListener('click', ()=>{ state.seed=(Math.random()*1e9)|0; rebuild(); });
+$('replay').addEventListener('click', ()=>{ solveAndShow(true); });
+$('showFlood').addEventListener('change', e=>{ state.showFlood=e.target.checked; solveAndShow(false); });
+$('showCost').addEventListener('change', e=>{ state.showCost=e.target.checked; solveAndShow(false); });
+document.querySelectorAll('.algo').forEach(b=>b.addEventListener('click', ()=>{
+  document.querySelectorAll('.algo').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); state.algo=b.dataset.algo; solveAndShow(true);
+}));
+let rT; window.addEventListener('resize', ()=>{ clearTimeout(rT); rT=setTimeout(()=>{ layout(); solveAndShow(false); },120); });
+
+// ============================================================================
+//  SELF-TEST (the page's own falsifiability badge; full harness = core.test.mjs)
+// ============================================================================
+function runSelfTest(){
+  const checks=[]; const push=(ok,label)=>checks.push({ok,label});
+  // 1) A* == Dijkstra == Bellman-Ford over many mazes
+  { let mism=0, aless=0; for(let s=1;s<=120;s++){ const m=makeMaze(14,14,s,{braid:0.5});
+      const A=astar(m),D=dijkstra(m),bf=bellmanFord(m); if(!(A.cost===D.cost&&D.cost===bf)) mism++;
+      if(A.order.length<D.order.length) aless++; }
+    push(mism===0, `A* = Dijkstra = Bellman-Ford over 120 mazes (${mism} mismatches)`);
+    push(aless>72, `A* settled fewer cells than Dijkstra on most (${aless}/120)`); }
+  // 2) threads well-formed + cost re-sums
+  { let bad=0,cm=0; for(let s=1;s<=120;s++){ const m=makeMaze(13,13,s*7+3,{braid:0.4});
+      const A=astar(m), v=verifyThread(m,A.path); if(!v.ok) bad++; if(v.ok&&v.cost!==A.cost) cm++; }
+    push(bad===0, `every thread well-formed (real passages, start→goal) over 120`);
+    push(cm===0, `re-summed thread cost = reported cost over 120`); }
+  // 3) the negative: inadmissible overshoots on some mazes
+  { let over=0; for(let s=1;s<=200;s++){ const m=makeMaze(18,18,s*3+1,{braid:0.9});
+      if(greedy(m,6).cost > astar(m).cost+1e-9) over++; }
+    push(over>=6, `inadmissible heuristic overshoots the optimum (${over}/200)`); }
+  // 4) admissible never worse than Dijkstra
+  { let worse=0; for(let s=1;s<=200;s++){ const m=makeMaze(15,15,s*11+5,{braid:0.5});
+      if(astar(m).cost>dijkstra(m).cost+1e-9) worse++; }
+    push(worse===0, `admissible A* never costlier than Dijkstra over 200`); }
+  // 5) perfect maze is a tree; braiding adds passages & removes dead-ends
+  { const m0=makeMaze(20,20,99,{braid:0}), m1=makeMaze(20,20,99,{braid:0.8});
+    const edges=m=>{ let e=0; for(let i=0;i<m.cells.length;i++) e+=popcount(m.cells[i]); return e/2; };
+    push(edges(m0)===20*20-1, `un-braided maze is a perfect tree (N-1 = ${20*20-1} edges)`);
+    push(edges(m1)>edges(m0), `braiding adds passages (${edges(m0)} → ${edges(m1)})`); }
+  // 6) braided maze stays fully connected; goal reachable
+  { let bad=0; for(let s=1;s<=120;s++){ const m=makeMaze(16,16,s,{braid:0.7});
+      if(connectedCount(m)!==m.W*m.H) bad++; if(!astar(m).reachable) bad++; }
+    push(bad===0, `every braided maze connected & goal reachable over 120`); }
+  // 7) seed-purity
+  { let drift=0; for(let s=1;s<=60;s++){ const a=makeMaze(17,13,s,{braid:0.5}), b=makeMaze(17,13,s,{braid:0.5});
+      let same=a.cells.every((v,i)=>v===b.cells[i])&&a.cost.every((v,i)=>v===b.cost[i]);
+      const pa=astar(a).path, pb=astar(b).path;
+      same=same&&pa.length===pb.length&&pa.every((p,i)=>p.x===pb[i].x&&p.y===pb[i].y); if(!same) drift++; }
+    push(drift===0, `same seed → identical maze AND thread over 60 (reproducible)`); }
+
+  const pass=checks.filter(c=>c.ok).length;
+  console.log(`%cTheseus's Thread — self-test ${pass}/${checks.length}`,'color:#6fd3c4;font-weight:bold');
+  checks.forEach(c=>console.log(`  ${c.ok?'ok  ':'FAIL'} ${c.label}`));
+  return { pass, total:checks.length, checks };
+}
+let testResult=null;
+function showTest(){ const chip=$('selftest'); if(!testResult) return;
+  chip.className='selftest '+(testResult.pass===testResult.total?'ok':'bad');
+  chip.textContent='self-test '+testResult.pass+'/'+testResult.total+(testResult.pass===testResult.total?' ✓':' ✗'); }
+$('selftest').addEventListener('click', ()=>{ if(!testResult) return;
+  alert('Theseus\'s Thread — self-test '+testResult.pass+'/'+testResult.total+'\n\n'+
+    testResult.checks.map(c=>(c.ok?'✓ ':'✗ ')+c.label).join('\n')); });
+
+// boot
+rebuild(true);
+try{ testResult=runSelfTest(); showTest(); }catch(e){ console.error(e);
+  const chip=$('selftest'); chip.className='selftest bad'; chip.textContent='self-test error'; }
+
+// breadcrumb for the Survey of Heaven / the Undercroft
+try{ localStorage.setItem('ws:seen:labyrinth','1'); }catch(e){}
+</script>
+</body>
+</html>
