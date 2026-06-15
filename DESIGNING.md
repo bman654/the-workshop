@@ -15,37 +15,68 @@ starts to grate, it's writ in water — rewrite it (see NOTES.md's "writ in wate
 
 ---
 
-## The mode gauge — PLAN or BUILD?
+## The gauge decides — run it first
 
-At the **start of every session**, read the gauge line in NOTES.md's resume pointer. It carries two
-numbers: **fuel** (count of `exhibit` seeds in the bed) and **builds-since-last-plan**.
+At the start of every cycle, run **`node seedbed/gauge.mjs --status`**. It reads the seedbed + the
+durable counters and names the ONE thing to do: a **mode** (PLAN/BUILD) × **track** (gardens/grounds) —
+one of five roles. No dice, no prose to misread; the gauge is code (full model + the tunable thresholds
+→ [seedbed/README.md](seedbed/README.md)). Obey it; override only with a stated reason — chiefly
+salvaging orphaned work that `git status` reveals.
 
-> **PLAN** this session if `fuel` is low (≲ 4) **or** `builds-since-last-plan ≥ 4`. **Otherwise BUILD.**
+| | **🌱 GARDENS** — *grow what exists* (small) | **🏛️ GROUNDS** — *new structure* (big) |
+|---|---|---|
+| **PLAN** | **gardener** — prune + file ≤3-line seeds | **groundskeeper** — keep sparks, tailor → grounds seeds |
+| **BUILD** | **planter** — ripen + sow one (bench · cross · curation) | **grounds-worker** — open a wing · engine · metagame · map · medium |
 
-No dice. The gauge is *stateful* — it reacts to whether the bed is running dry or it's simply been a
-while. In steady state that lands near **1 planting session in 5**. (An occasional *wildcard* — a
-forced constraint or an unfamiliar medium — is welcome for serendipity, but the gauge is the default.)
+(plus **bug-fixer** — an open `[bug]` jumps the queue, always.) A **big swing is anything bigger than
+an exhibit.** *Growing* an existing wing (a new bench) or metagame (a new constellation/crossover) is
+**garden** work — that's where most cycles live; the grounds track is the periodic forcing-function that
+keeps the estate spreading *wide*, not just deep.
 
 ---
 
-## 🌱 PLAN sessions — be the gardener
+## 🌱 PLAN/gardens — be the gardener
 
-The gardener sows and tends; **the gardener does not build.** Duties:
+Tend the small beds; **do not build.**
+1. **Prune decayed FIRST.** `--status` lists garden seeds gone stale by age. Remove them **clean — no tombstone** (a decayed idea is free to return once the estate grows into it; a tombstone would bar it). Pruning first makes room before you sow.
+2. **File seeds** toward the fuel ceiling — each a **≤3-line provocation, not a spec.** The instant you're writing a full design, stop: a provocation is *ripened by the builder*; a spec is merely *executed* — and executing specs is exactly how the estate goes deep-not-broad. Hunt `cross`-pollinations (*what two rooms have never met?* — the richest vein) and **watch for fallow metagames** (a wing/layer with no recent growth — file a `curation` seed to feed it).
+3. **Curate the old beds.** Sow `curation` seeds to improve / merge / **retire**. *Retire* is the move no one makes alone — name it when it's due. Growing an existing metagame (a constellation, a crossover) is a garden `curation`, never a new layer.
+4. **Tend the file.** Keep ROADMAP/NOTES lean; collapse bloated tombstones; hold the head-pointer in budget. The gardener earns its cycle on the *tending alone*, even when fuel is fine.
 
-1. **Survey the grounds.** Read README/NOTES/ROADMAP; spot-check a few *older* exhibits, not just the new.
-2. **Sow seeds** into ROADMAP.md — keep the fuel stocked, and drop **at least one bigger bet** (a `room`, `metagame`, or `engine`). Hunt deliberately for **`cross` seeds**: *what two rooms have never met?* (The best pieces here are crossings.) Remember the rule: **a seed is ≤ 3 lines** — a nudge, not a blueprint.
-3. **Tend the old beds (curation).** Look for **improve / merge / retire** candidates and sow them as `curation` seeds. *Retire* is the move no one makes alone — name it when it's due.
-4. **Check metagame health.** Do links need adding or removing? Has a metagame gone *complete*? Either sow a `metagame` curation seed, or mark it **"complete — do not pad"** in the bed (that protects it from forced ties — completeness is a state, not a defect).
-5. **Prune.** Remove bloomed/dead seeds; refresh the metagame table. Keep the bed readable.
-6. **Update the gauge** in NOTES.md (reset builds-since-last-plan to 0).
+## 🌱 BUILD/gardens — be the planter
 
-## 🌳 BUILD sessions — be the builder
+1. **Pull a garden seed that calls to you** — or ignore the bed and dream a small one (the bed is a floor, not a ceiling). You **ripen** it (complete the design — choose the *how*) and **sow** it (build + ship) in one cycle.
+2. **Let form express content.** A bench/room with a strong native metaphor (optics, time, sound) should let it shape *how you move through it* — don't reflexively copy the vertical door-list (the Hall of Mirrors was optics and got a plain list — the cautionary tale). A plain collection (a rack, an index) can stay plain; diverge only where there's a metaphor to honor.
+3. **Metagames are a consideration, not a mandate.** Wire the Undercroft/Survey only where the tie is natural; leave it where it'd be forced or the layer is marked complete.
 
-1. **The seedbed is a FLOOR, not a CEILING.** Pull a seed that calls to you — *or ignore the whole bed and build something new.* Seeds defeat blank-page paralysis; they never cage you.
-2. **Let form express content.** A room with a **strong native metaphor** (optics, time, sound) should let that metaphor shape *how you move through it* — don't reflexively copy the vertical door-list. (The Hall of Mirrors *was* optics and got a plain list anyway — the cautionary tale.) Before committing a `room`'s layout, **generate a few genuinely different form concepts** and reject "same as the last room" as a default. A room that's just a **collection** (a rack, an index) can stay legible — consistency is a feature there. Diverge where there's a metaphor to honor; stay plain where there isn't.
-3. **Metagames are a consideration, not a mandate.** If a piece *naturally* feeds the Undercroft or the Survey, wire it in. If the tie would be forced, or the metagame is marked complete — leave it. Don't bolt exploration layers onto everything.
-4. **The one hard rule (plumbing, not design):** a new **front-door** page drops its `ws:seen:<id>` breadcrumb (it's the Survey's only food; forgetting it is always a bug). Standalone Workbench pages are exempt unless they want in.
-5. **Definition of done:** self-test green · browser-verified (≈60fps, clean console) · `CHANGELOG.md` written · committed · NOTES.md current-state replaced (not appended) + worklog block + INDEX line · **gauge updated** (decrement fuel / bump builds-since-last-plan) · the grown seed pruned from the bed.
+## 🏛️ PLAN/grounds — be the groundskeeper
+
+Keep the big-swing pipeline alive; **do not build.**
+1. **Prune decayed grounds seeds FIRST** — `--status` lists those that lost ≥ the strike threshold of big-swing contests. Remove them **clean** (a passed-over big idea may be right once the grounds are bigger).
+2. **Keep sparks on hand** (the gauge wants ≥ a floor) and **tailor** the timeliest spark into a **grounds seed** — a short paragraph (still a provocation, not a spec) shaped to the *current* grounds. A spark is a few words; you decide which structure it wants to become — wing · engine · medium · metagame layer · map — or **coin a structure-kind the estate hasn't named yet** (a genuinely new concept enters here).
+3. **Refill toward the grounds-fuel ceiling** so a ripe big swing is ready when the swing-interval trips.
+
+## 🏛️ BUILD/grounds — be the grounds-worker
+
+Open a **big swing**: a new front-door wing, a reusable engine/tool/medium, a brand-new metagame
+layer, or a map expansion. **Ripen** the chosen grounds seed (commit to a form — for a room, generate
+a few divergent FORM concepts first) and **sow** it; register it on the front-door map. Same house bar
+as a bench, scaled up. *Raise ambition, never lower the bar — if no grounds seed is ripe when a swing
+is due, the gauge sends the groundskeeper instead; never fake a wing to satisfy a number.*
+
+## ⚡ Sparks — where the big ideas start
+
+A **spark** is a few words naming a gap too big for an exhibit. Anyone may drop one: the
+**groundskeeper** maintains the supply (required); the **director** and **publisher** are invited (not
+required) to add one when they spot a gap or **scaling strain** (a crowded map, a hard-to-read screen,
+a real perf issue). Sparks live in ROADMAP's `## ⚡ Sparks`; the groundskeeper ripens them into grounds seeds.
+
+## The house bar — definition of done (every build)
+- **Self-contained** — one HTML file, vanilla HTML/CSS/JS, no build, no network, no deps.
+- **A self-test that proves the claim exact** — the workshop's signature.
+- **Browser-verified** — ≈60fps, clean console, via agent-browser in a uniquely-named session.
+- A new **front-door** page drops its `ws:seen:<id>` breadcrumb (the Survey's only food; forgetting it is always a bug).
+- **CHANGELOG** written · committed · NOTES current-state **replaced** (not appended) + worklog block + INDEX line · the grown seed pruned (bloomed, with provenance) · **`node seedbed/gauge.mjs record …`** run (never hand-edit fuel/state).
 
 ---
 
