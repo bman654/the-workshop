@@ -194,6 +194,207 @@ function shellSpread(Enl, n){
 }
 
 // ============================================================================
+//  THE ANGULAR HALF — real (tesseral) spherical harmonics Y_lm, the full ψ_nlm,
+//  and a deterministic two-stage sampler that turns |ψ|² into a point cloud you
+//  can rotate. The radial half above proves the ENERGY ladder; this half draws the
+//  SHAPE — together ψ_nlm = R_nl(r)·Y_lm(θ,φ). The angular pieces are closed-form
+//  (standard normalised tesseral harmonics, ∫|Y_lm|²dΩ=1), so they are EXACT, not
+//  a from-scratch solve — the honest register is: radial solved, angular cited &
+//  self-checked for orthonormality + node count.
+// ============================================================================
+
+// ---- real (tesseral) spherical harmonics Y_lm(θ,φ), l=0..3, m=−l..l ----------
+// Normalised so ∫|Y_lm|² dΩ = 1 (the √(N_lm) prefactors are folded into the
+// hardcoded constants). Argument is (l, m, cosθ, φ) — passing cosθ avoids a re-acos.
+// l=0: the sphere · l=1: the {p_z,p_x,p_y} dumbbells · l=2: the five d-forms
+// (the √(15/π) family) · l=3: the seven f-forms.
+function ylm(l, m, ct, phi){
+  var st = Math.sqrt(Math.max(0, 1 - ct*ct));      // sinθ ≥ 0
+  var c1 = Math.cos(phi),  s1 = Math.sin(phi);
+  var c2 = Math.cos(2*phi), s2 = Math.sin(2*phi);
+  var c3 = Math.cos(3*phi), s3 = Math.sin(3*phi);
+  var PI = Math.PI;
+  if(l===0){ return 0.5*Math.sqrt(1/PI); }
+  if(l===1){
+    var k1 = Math.sqrt(3/(4*PI));
+    if(m===0)  return k1*ct;                         // p_z ∝ cosθ
+    if(m===1)  return k1*st*c1;                      // p_x ∝ sinθ cosφ
+    return k1*st*s1;                                  // p_y ∝ sinθ sinφ  (m=−1)
+  }
+  if(l===2){
+    if(m===0)  return 0.25*Math.sqrt(5/PI)*(3*ct*ct-1);          // d_z²
+    if(m===1)  return 0.5*Math.sqrt(15/PI)*st*ct*c1;            // d_xz
+    if(m===-1) return 0.5*Math.sqrt(15/PI)*st*ct*s1;           // d_yz
+    if(m===2)  return 0.25*Math.sqrt(15/PI)*st*st*c2;          // d_x²−y²
+    return 0.25*Math.sqrt(15/PI)*st*st*s2;                      // d_xy  (m=−2)
+  }
+  // l===3 : the seven f-forms (standard real tesseral set)
+  if(m===0)  return 0.25*Math.sqrt(7/PI)*(5*ct*ct*ct - 3*ct);                 // f_z³
+  if(m===1)  return 0.125*Math.sqrt(42/PI)*st*(5*ct*ct-1)*c1;               // f_xz²
+  if(m===-1) return 0.125*Math.sqrt(42/PI)*st*(5*ct*ct-1)*s1;              // f_yz²
+  if(m===2)  return 0.25*Math.sqrt(105/PI)*st*st*ct*c2;                     // f_z(x²−y²)
+  if(m===-2) return 0.25*Math.sqrt(105/PI)*st*st*ct*s2;                    // f_xyz
+  if(m===3)  return 0.125*Math.sqrt(70/PI)*st*st*st*c3;                     // f_x(x²−3y²)
+  return 0.125*Math.sqrt(70/PI)*st*st*st*s3;                                 // f_y(3x²−y²)  (m=−3)
+}
+
+// ---- enumerate every (l,m) for principal number n → exactly n² entries --------
+// n=1→1, n=2→4, n=3→9, n=4→16 (the orbital count Σ_{l=0}^{n−1}(2l+1) = n²).
+function orbitalsAt(n){
+  var out = [];
+  for(var l=0;l<n;l++) for(var m=-l;m<=l;m++) out.push({ l:l, m:m });
+  return out;
+}
+
+// ---- the radial wavefunction R_nl(r) = u_nl(r)/r, interpolated off the grid -----
+// u lives on the interior grid r_i = i·h; R = u/r. CLAMP to 0 below grid.r[0] and
+// above R_max (the u/r cusp guard — the interior grid never hits r=0).
+function radialR(sol, n, l, r){
+  var g = sol.grid, gr = g.r, N = g.N, h = g.h;
+  var u = sol.uByNL[n][l];
+  if(!u) return 0;
+  if(r <= gr[0]) return 0;                            // below the first grid point: clamp
+  if(r >= gr[N-1]) return 0;                          // beyond R_max: the wave has decayed
+  var t = r/h - 1;                                    // r = (i+1)·h  ⇒  i = r/h − 1
+  var i = Math.floor(t);
+  if(i < 0) return 0;
+  if(i >= N-1) return 0;
+  var f = t - i;                                       // linear interpolation weight
+  var ui = u[i]*(1-f) + u[i+1]*f;
+  return ui / r;                                       // R = u/r
+}
+
+// ---- the peak |Y_lm| over the sphere (the rejection-sampler ceiling) -----------
+// A fine scan of (cosθ,φ) for the max magnitude — cached per (l,m) by the caller.
+function angularMax(l, m){
+  var mx = 0;
+  for(var a=0;a<=64;a++){
+    var ct = -1 + 2*a/64;
+    for(var b=0;b<96;b++){
+      var phi = 2*Math.PI*b/96;
+      var y = Math.abs(ylm(l, m, ct, phi));
+      if(y > mx) mx = y;
+    }
+  }
+  return mx*1.02 + 1e-9;                               // a hair of headroom for the rejection bound
+}
+
+// ---- the angular antinode directions (unit vectors) of Y_lm --------------------
+// Best-effort "click a lobe": the directions where |Y_lm| peaks. Found by the same
+// scan as angularMax, keeping local maxima above 0.6·peak (deduped by direction).
+function lobeDirections(l, m){
+  if(l===0) return [];                                 // s has no lobes
+  var peak = angularMax(l, m)/1.02;
+  var cand = [];
+  for(var a=0;a<=72;a++){
+    var ct = -1 + 2*a/72;
+    var st = Math.sqrt(Math.max(0,1-ct*ct));
+    for(var b=0;b<144;b++){
+      var phi = 2*Math.PI*b/144;
+      var y = Math.abs(ylm(l, m, ct, phi));
+      if(y > 0.78*peak){
+        var v = { x:st*Math.cos(phi), y:st*Math.sin(phi), z:ct };
+        var dup = false;
+        for(var c=0;c<cand.length;c++){
+          var d = v.x*cand[c].x + v.y*cand[c].y + v.z*cand[c].z;
+          if(d > 0.94){ dup = true; break; }
+        }
+        if(!dup) cand.push(v);
+      }
+    }
+  }
+  return cand;
+}
+
+// ---- Gauss–Legendre nodes/weights on [-1,1] (Newton iteration on P_k) ----------
+// Used by angularGram for the cosθ quadrature so ∫|Y_lm|²dΩ is exact to quadrature.
+function gaussLegendre(k){
+  var x = new Float64Array(k), w = new Float64Array(k);
+  for(var i=0;i<k;i++){
+    var z = Math.cos(Math.PI*(i+0.75)/(k+0.5)), z1, p1, p2, pp;
+    do{
+      p1 = 1; p2 = 0;
+      for(var j=0;j<k;j++){ var p3=p2; p2=p1; p1=((2*j+1)*z*p2-j*p3)/(j+1); }
+      pp = k*(z*p1-p2)/(z*z-1);
+      z1 = z; z = z1 - p1/pp;
+    } while(Math.abs(z-z1) > 1e-14);
+    x[i] = z; w[i] = 2/((1-z*z)*pp*pp);
+  }
+  return { x:x, w:w };
+}
+
+// ---- ⟨Y_l1m1 | Y_l2m2⟩ over the sphere by tensor quadrature --------------------
+// Gauss–Legendre in cosθ × uniform (trapezoid-exact for trig) in φ. Returns the
+// inner product ∫ Y·Y dΩ — should be 1 on the diagonal, 0 off it (orthonormality).
+// nC = cosθ nodes, nP = φ nodes (defaults 48×96; a 2nd resolution shows the residual shrink).
+function angularGram(l1, m1, l2, m2, nC, nP){
+  nC = nC || 48; nP = nP || 96;
+  var gl = gaussLegendre(nC);
+  var sum = 0;
+  var dphi = 2*Math.PI/nP;
+  for(var i=0;i<nC;i++){
+    var ct = gl.x[i], wC = gl.w[i];
+    var inner = 0;
+    for(var j=0;j<nP;j++){
+      var phi = j*dphi;
+      inner += ylm(l1, m1, ct, phi) * ylm(l2, m2, ct, phi);
+    }
+    sum += wC * inner * dphi;                          // ∫dφ over [0,2π) by the uniform rule
+  }
+  return sum;
+}
+
+// ---- sample |ψ_nlm|² as a point cloud (the touchable hero) ----------------------
+// Deterministic two-stage inverse-transform + rejection sampler keyed by seed.
+//   (a) RADIAL ∝ u(r)² : a CDF of u² over grid.r, inverse-transformed by binary search
+//       (this nails the radial nodes as dark shells — the same u_nl the inset draws).
+//   (b) ANGULAR ∝ Y_lm² : rejection on S² (cosθ=2u−1, φ uniform; accept w.p. Y²/peak²,
+//       cap 64 attempts/point). Then (x,y,z) = r·(sinθcosφ, sinθsinφ, cosθ).
+//   Per-point sgn = sign(R)·sign(Y) is stored (cheap; enables an optional two-tone tint).
+// Uses the core's makeRng (it returns [-1,1]; we derive u01=(rng()+1)/2).
+function sampleCloud(sol, n, l, m, count, seed){
+  var g = sol.grid, gr = g.r, N = g.N;
+  var u = sol.uByNL[n][l];
+  var xs = new Float32Array(count), ys = new Float32Array(count), zs = new Float32Array(count);
+  var sgn = new Int8Array(count);
+  if(!u) return { xs:xs, ys:ys, zs:zs, sgn:sgn, count:0 };
+  // radial CDF of u² (probability of finding the electron at radius r ∝ u² for this u=rR).
+  var cdf = new Float64Array(N), acc = 0;
+  for(var i=0;i<N;i++){ acc += u[i]*u[i]; cdf[i] = acc; }
+  var tot = acc;
+  if(tot <= 0) return { xs:xs, ys:ys, zs:zs, sgn:sgn, count:0 };
+  for(var i2=0;i2<N;i2++) cdf[i2] /= tot;             // normalise to [0,1]
+  var yPeak = angularMax(l, m);
+  var rng = makeRng(seed>>>0 || 1);
+  var written = 0;
+  for(var p=0;p<count;p++){
+    var u01 = (rng()+1)/2;
+    // (a) inverse-transform the radial CDF by binary search → a grid index
+    var lo=0, hi=N-1;
+    while(lo<hi){ var mid=(lo+hi)>>>1; if(cdf[mid] < u01) lo=mid+1; else hi=mid; }
+    var r = gr[lo];
+    var rSgn = u[lo] >= 0 ? 1 : -1;                    // sign(R) = sign(u) at this radius (r>0)
+    // (b) rejection-sample the direction ∝ Y_lm²
+    var ct=0, phi=0, yVal=0, ok=false;
+    for(var att=0; att<64; att++){
+      ct = 2*((rng()+1)/2) - 1;                         // cosθ uniform in [-1,1]
+      phi = 2*Math.PI*((rng()+1)/2);                    // φ uniform in [0,2π)
+      yVal = ylm(l, m, ct, phi);
+      var prob = (yVal*yVal)/(yPeak*yPeak);
+      if((rng()+1)/2 < prob){ ok = true; break; }
+    }
+    if(!ok) continue;                                   // (vanishingly rare; a capped-attempt skip)
+    var stt = Math.sqrt(Math.max(0,1-ct*ct));
+    xs[written] = r*stt*Math.cos(phi);
+    ys[written] = r*stt*Math.sin(phi);
+    zs[written] = r*ct;
+    sgn[written] = (rSgn * (yVal>=0?1:-1)) | 0;
+    written++;
+  }
+  return { xs:xs, ys:ys, zs:zs, sgn:sgn, count:written };
+}
+
+// ============================================================================
 //  SELF-TEST — the falsifiable claim, to a STATED honesty bar (no false machine ε).
 // ============================================================================
 function runSelfTest(){
@@ -254,6 +455,84 @@ function runSelfTest(){
   ck('deterministic (seeded inverse-power; two runs byte-identical)',
      a === b, a === b ? 'identical recompute' : 'DIFFER');
 
+  // ── THE ANGULAR HALF — three claims about the SHAPE you can now rotate ──────
+
+  // (f) ANGULAR ORTHONORMALITY: ∫|Y_lm|²dΩ = 1 and ∫Y_lm·Y_l'm'dΩ = 0 (distinct),
+  //     all l,l'≤3, by Gauss-Legendre(cosθ)×uniform(φ) quadrature. Y_lm² is a polynomial
+  //     of degree ≤2l≤6 in cosθ, so GL-24 (exact to degree 47) integrates it EXACTLY to
+  //     quadrature — the residual sits at machine ε at every resolution, NOT an O(h²)
+  //     approximation. The honest register: the radial half is a tolerance solve, the
+  //     angular half is closed-form & exact. (Cross-checked at two resolutions: both ~ε.)
+  var allOrb = [];
+  for(var ln=0;ln<=3;ln++) for(var mn=-ln;mn<=ln;mn++) allOrb.push({l:ln,m:mn});
+  var diagErr = 0, offErr = 0;
+  for(var oi=0;oi<allOrb.length;oi++) for(var oj=0;oj<allOrb.length;oj++){
+    var gAB = angularGram(allOrb[oi].l, allOrb[oi].m, allOrb[oj].l, allOrb[oj].m, 24, 64);
+    if(oi===oj){ var de = Math.abs(gAB - 1); if(de>diagErr) diagErr = de; }
+    else { var oe = Math.abs(gAB); if(oe>offErr) offErr = oe; }
+  }
+  var diagHi = Math.abs(angularGram(3,0,3,0,48,96) - 1);       // a 2nd (higher) resolution
+  ck('angular orthonormality: ∫|Y_lm|²dΩ=1, ∫Y·Y′dΩ=0 for distinct (l,m), l,l′≤3',
+     diagErr < 3e-3 && offErr < 3e-3 && diagHi < 3e-3,
+     'max |∫|Y|²−1| ' + diagErr.toExponential(2) + ' · max |⟨Y,Y′⟩| ' + offErr.toExponential(2) +
+     ' (closed-form; GL quadrature EXACT to ~ε, not O(h²) — tol 3e-3 with huge margin)');
+
+  // (g) NODES MATCH THE PICTURE: angular nodal surfaces = l (counted as sign changes of
+  //     Y_lm along fine θ- and φ-sweeps), radial nodes = n−l−1 (claim c), total = n−1.
+  //     The integer IS the dark gaps + dark surfaces you can see in the rotated cloud.
+  function angularNodes(l, m){
+    // POLAR (θ) nodal CONES = l−|m|: count interior sign changes of Y along a meridian
+    // (θ∈(0,π)) at a generic azimuth where the cos(mφ)/sin(mφ) factor is non-zero, so the
+    // crossings we see are the P_l^|m|(cosθ) zeros (the latitude circles where Y flips).
+    var phi0 = 0.37;                                   // a generic azimuth (off m's φ-nodes)
+    var prev = 0, started = false, polar = 0;
+    for(var a=1;a<2000;a++){
+      var th = Math.PI*a/2000, ct = Math.cos(th);
+      var y = ylm(l, m, ct, phi0);
+      if(Math.abs(y) < 1e-9) continue;
+      if(started && prev*y < 0) polar++;
+      prev = y; started = true;
+    }
+    // AZIMUTHAL (φ) nodal PLANES = |m|: count sign changes of Y around a full loop of the
+    // equator at a generic colatitude, then halve (each plane through the z-axis is crossed
+    // twice per revolution). For m=0 there are no φ-nodes → 0 planes.
+    var prev2 = 0, started2 = false, az2 = 0, ct0 = Math.cos(1.07);  // a generic colatitude
+    for(var b=0;b<3600;b++){
+      var ph = 2*Math.PI*b/3600;
+      var y2 = ylm(l, m, ct0, ph);
+      if(Math.abs(y2) < 1e-9) continue;
+      if(started2 && prev2*y2 < 0) az2++;
+      prev2 = y2; started2 = true;
+    }
+    var azim = Math.round(az2/2);                      // crossings → planes (2 crossings per plane)
+    return polar + azim;
+  }
+  var nodeSol = solveShells(0, FINE);
+  var nodesPicOK = true, npw = '';
+  for(var nn=1;nn<=4;nn++) for(var ll=0;ll<nn;ll++){
+    for(var mm=-ll;mm<=ll;mm++){
+      var ang = angularNodes(ll, mm);
+      if(ang !== ll){ nodesPicOK = false; npw = 'Y l='+ll+',m='+mm+' → '+ang+' angular (want '+ll+')'; }
+    }
+    var rad = nodeSol.nodes[nn][ll];
+    if(rad + ll !== nn - 1){ nodesPicOK = false; npw = 'n='+nn+',l='+ll+' total '+(rad+ll)+' (want '+(nn-1)+')'; }
+  }
+  ck('nodes match the picture: l angular surfaces + (n−l−1) radial = n−1 total',
+     nodesPicOK, npw || 'all (n,l,m) n≤4: angular nodal surfaces = l, total nodes = n−1');
+
+  // (h) DEGENERACY = n²: orbitalsAt(n) enumerates exactly n² states (1,4,9,16) AND
+  //     independently Σ_{l=0}^{n−1}(2l+1) = n². (An HONEST cross-thread to the box:
+  //     the box proves a 1-D ladder E_n∝n²; here n² is the ORBITAL COUNT — same
+  //     integer, different mechanism, not a conflation.)
+  var degOK = true, dw = '';
+  for(var dn=1;dn<=4;dn++){
+    var got = orbitalsAt(dn).length;
+    var sumL = 0; for(var dl=0;dl<dn;dl++) sumL += 2*dl+1;
+    if(got !== dn*dn || sumL !== dn*dn){ degOK = false; dw = 'n='+dn+' → '+got+'/'+sumL+' (want '+(dn*dn)+')'; }
+  }
+  ck('degeneracy = n²: orbitalsAt(n).length == n² == Σ(2l+1)  (1,4,9,16)',
+     degOK, dw || 'n=1..4 → 1,4,9,16 orbitals (the orbital count, not the box energy ladder)');
+
   var pass = checks.filter(function(c){ return c.ok; }).length;
   return { checks:checks, pass:pass, total:checks.length, ok:pass===checks.length };
 }
@@ -262,5 +541,7 @@ function runSelfTest(){
 export {
   rydberg, vEff, makeRng, buildRadialH, makeGrid,
   lowestEigenpairs, interiorNodes, solveShells, shellSpread,
+  ylm, orbitalsAt, radialR, angularMax, lobeDirections,
+  gaussLegendre, angularGram, sampleCloud,
   runSelfTest,
 };

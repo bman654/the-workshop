@@ -1,9 +1,70 @@
 # The Hydrogen Atom — CHANGELOG
 
 The Cavern Quantum-Drift's first **central** potential: curve the flat particle-in-a-box
-into a real atom — the Coulomb funnel −1/r plus the centrifugal wall ℓ(ℓ+1)/2r². The
-bench's claim is the **degeneracy accident**: under the bare 1/r law the s, p, d shapes of
-a shell sit on the *exact same energy*, and a Yukawa screen splits them.
+into a real atom — the Coulomb funnel −1/r plus the centrifugal wall ℓ(ℓ+1)/2r². As of the
+cycle #36 re-soul the bench **LEADS with the thing you can touch**: a rotatable 3-D
+|ψ_nlm|² point cloud — the actual cloud of where the electron is. The s/p/d *shapes* are the
+hero; the energy ladder + the degeneracy accident demote to a quiet side gauge.
+
+## Re-soul — cycle #36 (2026-06-15, Opus 4.8 · PLANTER)
+
+**The graph-pocket becomes a touchable orbital.** The old bench led with three plots (the
+energy ladder, the radial wave, the V_eff inset). The re-soul makes the hero a **rotatable
+|ψ_nlm|² point cloud** — drag to orbit it (mouse/touch/pen, one Pointer-Events path), and the
+1s sphere · 2p dumbbell · 2s node-shell · 3d clover emerge as *shapes you can see*, the dark
+gaps being the nodes. The three old plots demote: the energy ladder → a thin left **rail**
+(still the degeneracy story, now a click-a-rung target), the radial wave → a small
+bottom-right **inset** (faint vertical guides at each node radius), and the V_eff why-engine →
+an **optional** third view-toggle (default off). No route or `ws:seen` change — re-souled in
+place; the Cavern Quantum-Drift stays 8 Q-benches + 1 sonifier.
+
+**The angular half — new math INSIDE the sentinels (parity-covered):**
+- `ylm(l,m,cosθ,φ)` — closed-form real (tesseral) spherical harmonics, l=0..3, normalised so
+  ∫|Y_lm|²dΩ=1 (the standard N_lm folded into the hardcoded coefficients): the sphere, the
+  {p_z,p_x,p_y}, the five √(15/π) d-forms, the seven f-forms.
+- `orbitalsAt(n)` → the n² (l,m) states (1,4,9,16); `radialR(sol,n,l,r)` = u/r interpolated off
+  the grid (cusp-clamped); `angularMax`/`lobeDirections` for the sampler ceiling + click-a-lobe;
+  `gaussLegendre(k)` + `angularGram(l1,m1,l2,m2)` (GL-in-cosθ × uniform-φ) for orthonormality.
+- `sampleCloud(sol,n,l,m,count,seed)` — a **deterministic two-stage sampler**: inverse-transform
+  the radial CDF of u² (nails the dark node shells) × rejection-sample the direction ∝ Y_lm²
+  (the angular nodes appear as empty surfaces for free). Per-point `sgn` stored. ~6000 pts
+  desktop / 2500 mobile, keyed by seed → byte-identical clouds.
+
+**Three new self-test claims (in-page badge 5→8, appended to runSelfTest):**
+- (f) **angular orthonormality** — ∫|Y_lm|²dΩ=1 and ∫Y_lm·Y_l'm'dΩ=0 for distinct (l,m), l,l'≤3,
+  to 3e-3 (measured ~1e-14). Honest register correction: the angular half is **closed-form** and
+  Gauss–Legendre is **EXACT to quadrature** for Y_lm² (a degree-≤2l polynomial in cosθ) — so this
+  carries **no O(h²) tolerance**; only the radial eigensolve does. The radial-spine honesty bar is
+  unchanged.
+- (g) **nodes match the picture** — l angular nodal surfaces (|m| φ-planes + (l−|m|) θ-cones,
+  counted by independent sign-change scans) + (n−l−1) radial nodes = n−1 total. The integer = the
+  dark gaps + dark surfaces visible in the cloud; the live view-label says how many to expect.
+- (h) **degeneracy = n²** — orbitalsAt(n).length == n² == Σ_{l=0}^{n−1}(2l+1) (1,4,9,16). An honest
+  cross-thread to the box exhibit: the box proves a 1-D energy ladder E_n∝n²; HERE n² is the
+  **orbital count** — the same integer, a different mechanism, not a conflation.
+
+`core.test.mjs` grows 26 → **36** green (the bundled 8-claim self-test + independent
+re-derivations of f/g/h: every ⟨Y_lm,Y_l'm'⟩, hand-checked N_lm constants, the cone/plane node
+decomposition, the n² double-derivation, sampler determinism, and a dumbbell test rms|z|>rms(xy)
+for 2p_z). **Re-extraction parity holds byte-identical** — all new math lives between the
+sentinels, mirrored character-for-character into the page. The radial 6-claim spine + the
+26-baseline are unchanged.
+
+**Interaction (OUTSIDE the sentinels, the UI block):** drag-to-orbit (region-gated: rail strip
+→ pick-a-rung, cloud zone → orbit), an `(n,ℓ,m)` picker (the triangular grid + an m-strip that
+reveals only when ℓ>0, ℓ-coloured, labelled by `tesseralName`), click-a-rung on the rail,
+best-effort click-a-lobe, a ~420ms cross-dissolve **morph** between two cached clouds (no
+per-point solve), depth-binned additive-blend rendering (~6k fillRects/frame, no per-frame sort),
+a ghost rms sphere + axis triad, and a **reduced-motion** switch (one static 3/4 frame, instant
+morph, no idle spin — drag still works). Non-RM gets momentum (0.94 decay) + a slow idle
+auto-spin (~0.0009 rad/frame after 4s) that announces the 3D and dies on first input. The
+`rWin(n)` window is **hoisted** to feed BOTH the sampler's radial extent and the inset, so the
+cloud's dark gaps provably ARE the inset's u(r) zeros ("the dark gaps in the cloud ARE these
+zeros"). Verified green: in-page badge 8/8, `core.test.mjs` 36/36, 0 console errors over the full
+n/l/m·toggle·κ battery, 0 nested anchors, 0 overflow @1280 & @390, cloud orbits + picking morphs
+the shape, the 2p_z dumbbell node reads at ~1.8× lobe/node brightness contrast.
+
+---
 
 ## Build — cycle #20 (2026-06-14, Opus 4.8 · BUILD)
 

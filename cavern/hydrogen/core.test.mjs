@@ -9,6 +9,8 @@
 import {
   rydberg, vEff, makeRng, buildRadialH, makeGrid,
   lowestEigenpairs, interiorNodes, solveShells, shellSpread,
+  ylm, orbitalsAt, radialR, angularMax, lobeDirections,
+  gaussLegendre, angularGram, sampleCloud,
   runSelfTest,
 } from './core.mjs';
 import { readFileSync } from 'node:fs';
@@ -181,6 +183,104 @@ const FINE = { N: 2400, Rmax: 100 };
   const u2 = solveShells(0, { N: 600, Rmax: 60 }).uByNL[2][1];
   let d = 0; for (let i = 0; i < u1.length; i++) d = Math.max(d, Math.abs(u1[i] - u2[i]));
   check('eigenvectors are byte-identical across runs (deterministic picture)', d === 0, 'max |Δu| = ' + d);
+}
+
+// (I) ANGULAR ORTHONORMALITY, re-derived independently (a different φ-resolution and a
+//     hand spot-check of two coefficients): the real tesseral Y_lm are orthonormal over
+//     the sphere. Y_lm² is a polynomial of degree ≤2l in cosθ, so Gauss–Legendre is
+//     EXACT to quadrature — the angular half carries NO O(h²) tolerance (only the radial
+//     solve does). This is the honest pairing the bench now shows.
+{
+  // every ⟨Y_lm,Y_l'm'⟩ for l,l'≤3: 1 on the diagonal, 0 off it.
+  const orb = [];
+  for (let l = 0; l <= 3; l++) for (let m = -l; m <= l; m++) orb.push([l, m]);
+  let diag = 0, off = 0;
+  for (let i = 0; i < orb.length; i++) for (let j = 0; j < orb.length; j++) {
+    const g = angularGram(orb[i][0], orb[i][1], orb[j][0], orb[j][1], 32, 72);
+    if (i === j) diag = Math.max(diag, Math.abs(g - 1));
+    else off = Math.max(off, Math.abs(g));
+  }
+  check('every ⟨Y_lm,Y_l′m′⟩ (l,l′≤3) is δ to <1e−6 (GL exact to quadrature, not O(h²))',
+        diag < 1e-6 && off < 1e-6, 'max |diag−1| ' + diag.toExponential(2) + ' · max |off| ' + off.toExponential(2));
+  // hand spot-check the NORMALISATION constants of two harmonics at a known direction:
+  //   Y_00 = ½√(1/π) everywhere ;  Y_1,0(θ=0) = √(3/4π)·cos0 = √(3/4π).
+  check('Y_00 = ½√(1/π) (the constant) and Y_1,0(ẑ) = √(3/4π) (hand-checked constants)',
+        Math.abs(ylm(0, 0, 1, 0) - 0.5 * Math.sqrt(1 / Math.PI)) < 1e-12 &&
+        Math.abs(ylm(1, 0, 1, 0) - Math.sqrt(3 / (4 * Math.PI))) < 1e-12,
+        'Y00=' + ylm(0, 0, 1, 0).toFixed(6) + ' · Y10(ẑ)=' + ylm(1, 0, 1, 0).toFixed(6));
+}
+
+// (J) THE ANGULAR + RADIAL NODE COUNT, re-derived by an INDEPENDENT scan here (not the
+//     core's): angular nodal surfaces of Y_lm = l (|m| φ-planes + (l−|m|) θ-cones), and
+//     radial nodes of u_nl = n−l−1, so the TOTAL = n−1 — the integer you can SEE as dark
+//     gaps + dark surfaces in the rotated cloud.
+{
+  function polarCones(l, m) {            // sign changes of Y along a meridian (θ∈(0,π))
+    let prev = 0, started = false, c = 0;
+    for (let a = 1; a < 4000; a++) {
+      const th = Math.PI * a / 4000, y = ylm(l, m, Math.cos(th), 0.41);
+      if (Math.abs(y) < 1e-9) continue;
+      if (started && prev * y < 0) c++;
+      prev = y; started = true;
+    }
+    return c;                            // = l − |m|
+  }
+  function azimPlanes(l, m) {            // sign changes of Y around the equator, halved
+    let prev = 0, started = false, c = 0;
+    for (let b = 0; b < 7200; b++) {
+      const ph = 2 * Math.PI * b / 7200, y = ylm(l, m, Math.cos(1.03), ph);
+      if (Math.abs(y) < 1e-9) continue;
+      if (started && prev * y < 0) c++;
+      prev = y; started = true;
+    }
+    return Math.round(c / 2);            // = |m|
+  }
+  let ok = true, where = '';
+  for (let l = 0; l <= 3; l++) for (let m = -l; m <= l; m++) {
+    const pc = polarCones(l, m), ap = azimPlanes(l, m);
+    if (pc !== l - Math.abs(m) || ap !== Math.abs(m)) { ok = false; where = 'l=' + l + ',m=' + m + '→cones ' + pc + '/planes ' + ap; }
+  }
+  check('Y_lm angular nodes: l−|m| polar cones + |m| azimuthal planes = l (independent scan)',
+        ok, where || 'all (l,m) l≤3: cones+planes = l');
+  // and the TOTAL with the radial nodes: (l) + (n−l−1) = n−1, all (n,l).
+  const sol = solveShells(0, FINE);
+  let totalOK = true, tw = '';
+  for (let n = 1; n <= 4; n++) for (let l = 0; l < n; l++) {
+    const rad = sol.nodes[n][l];
+    if (rad + l !== n - 1) { totalOK = false; tw = 'n=' + n + ',l=' + l + '→' + (rad + l); }
+  }
+  check('total nodes (l angular + n−l−1 radial) = n−1 for all (n,l)', totalOK, tw || 'all (n,l) n≤4');
+}
+
+// (K) DEGENERACY = n², re-derived two independent ways: orbitalsAt enumerates n² real
+//     (l,m) states, and the closed-form sum Σ_{l=0}^{n−1}(2l+1) = n². An HONEST
+//     cross-thread to the box exhibit: the box proves a 1-D energy ladder E_n∝n²; HERE
+//     n² is the ORBITAL COUNT — the SAME integer from a DIFFERENT mechanism, not a
+//     conflation. The sampler also returns the right shape: a 2p cloud is a dumbbell.
+{
+  let ok = true, w = '';
+  for (let n = 1; n <= 4; n++) {
+    const cnt = orbitalsAt(n).length;
+    let s = 0; for (let l = 0; l < n; l++) s += 2 * l + 1;
+    if (cnt !== n * n || s !== n * n) { ok = false; w = 'n=' + n + '→' + cnt + '/' + s; }
+  }
+  check('degeneracy = n²: orbitalsAt(n).length == Σ(2l+1) == n² (1,4,9,16)',
+        ok, w || 'n=1..4 → 1,4,9,16');
+  // the sampler is deterministic AND draws the SHAPE: a 2p_z cloud has its mass split
+  // along ±z (a dumbbell), with almost none in the xy-plane (the angular node).
+  const sol = solveShells(0, { N: 1200, Rmax: 60 });
+  const a = sampleCloud(sol, 2, 1, 0, 4000, 777);
+  const b = sampleCloud(sol, 2, 1, 0, 4000, 777);
+  let identical = a.count === b.count;
+  for (let i = 0; i < a.count && identical; i++) if (a.zs[i] !== b.zs[i]) identical = false;
+  check('sampleCloud is deterministic (same seed → byte-identical cloud)', identical,
+        a.count + ' pts, byte-identical recompute');
+  // dumbbell test: the rms |z| should dominate the rms in-plane radius for 2p_z.
+  let zz = 0, pp = 0;
+  for (let i = 0; i < a.count; i++) { zz += a.zs[i] * a.zs[i]; pp += a.xs[i] * a.xs[i] + a.ys[i] * a.ys[i]; }
+  const rmsZ = Math.sqrt(zz / a.count), rmsXY = Math.sqrt(pp / a.count);
+  check('the 2p_z cloud is a dumbbell: rms|z| > rms(xy) (mass on the ±z axis, node in xy)',
+        rmsZ > rmsXY, 'rms z = ' + rmsZ.toFixed(2) + ' vs rms xy = ' + rmsXY.toFixed(2));
 }
 
 // ---------------------------------------------------------------------------
