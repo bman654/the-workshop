@@ -8,6 +8,7 @@ import {
   P, hawkDoveMatrix, rpsMatrix, matrixFor, payoff, meanPayoff, field,
   essFixedPoint, relEntropy, simplexSum, minCoord, rk4Step, eulerStep,
   trace, runSelfTest,
+  ARENA_N, agentMeanField, stepAgentCounts, headlessRun, ensembleCensus, runAgentSelfTest,
 } from './core.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -161,6 +162,66 @@ console.log('\n— Independent re-derivations (this file, not the bundled self-t
   check('two full self-test runs are byte-identical (deterministic)', a === bb);
 }
 
+// ===========================================================================
+//  THE ARENA BRIDGE — the agent crowd RECOVERS the proven law, EXACT & seeded.
+// ===========================================================================
+console.log('\n— The agent-arena self-test (the crowd recovers the law) —');
+{
+  const ar = runAgentSelfTest();
+  for (const c of ar.checks) check(c.name, c.pass, c.info);
+  check('agent self-test reports all green', ar.pass === ar.total, ar.pass + '/' + ar.total);
+}
+
+console.log('\n— Independent agent re-derivations (this file, not the bundled agent test) —');
+
+// THE MEAN-FIELD IDENTITY — agentMeanField == field() to literal 0 (independent states).
+{
+  const Ahd = hawkDoveMatrix(), Arps = rpsMatrix();
+  let maxErr = 0;
+  for (const x of [[0.1, 0.9], [0.5, 0.5], [0.73, 0.27], [0.92, 0.08]]) {
+    const a = agentMeanField(Ahd, x), b = field(Ahd, x);
+    maxErr = Math.max(maxErr, Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]));
+  }
+  for (const x of [[0.2, 0.3, 0.5], [1 / 3, 1 / 3, 1 / 3], [0.5, 0.25, 0.25]]) {
+    const a = agentMeanField(Arps, x), b = field(Arps, x);
+    for (let i = 0; i < 3; i++) maxErr = Math.max(maxErr, Math.abs(a[i] - b[i]));
+  }
+  check('agent mean-field increment == field() to literal 0 (independent HD+RPS states)',
+        maxErr === 0, 'max|Δ| = ' + maxErr);
+}
+
+// THE POPULATION IS CONSERVED — stepAgentCounts keeps Σcounts = N exactly, every step.
+{
+  const A = hawkDoveMatrix();
+  const rnd = (() => { let s = 99; return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; })();
+  let counts = [Math.round(0.3 * ARENA_N), ARENA_N - Math.round(0.3 * ARENA_N)];
+  let conserved = true;
+  for (let i = 0; i < 300; i++) {
+    counts = stepAgentCounts(A, counts, 0.1, rnd).counts;
+    if (counts[0] + counts[1] !== ARENA_N || counts[0] < 0 || counts[1] < 0) { conserved = false; break; }
+  }
+  check('Moran step conserves the population Σcounts = N = ' + ARENA_N + ' exactly (no agent created or lost)',
+        conserved, conserved ? 'N held over 300 steps' : 'BROKEN');
+}
+
+// THE PHASE-LOCKED CENSUS lands on the EXACT ESS 2/3 (re-measured here, not via the bundle).
+{
+  const cen = ensembleCensus([0.12, 0.88], 150, 30, 0.1, 9000001, { game: 'hawkdove', N: ARENA_N });
+  const hawk = cen.mx.map((v) => v[0]);
+  const start = Math.floor(hawk.length * 0.6);
+  let tm = 0, c = 0; for (let i = start; i < hawk.length; i++) { tm += hawk[i]; c++; } tm /= c;
+  check('Hawk–Dove ensemble census tail-mean → ESS x*=V/C=2/3 within 1.5e-2 (the law from a crowd)',
+        Math.abs(tm - 2 / 3) < 1.5e-2, '⟨x_H⟩=' + tm.toFixed(5) + ' err=' + Math.abs(tm - 2 / 3).toExponential(2));
+}
+
+// DETERMINISM of the count engine — same seed ⇒ identical headless run.
+{
+  const a = headlessRun(2024, [0.4, 0.6], 12, 0.1, { game: 'hawkdove', N: ARENA_N });
+  const b = headlessRun(2024, [0.4, 0.6], 12, 0.1, { game: 'hawkdove', N: ARENA_N });
+  check('headlessRun deterministic — same seed ⇒ identical fraction history',
+        JSON.stringify(a.xs) === JSON.stringify(b.xs), JSON.stringify(a.xs) === JSON.stringify(b.xs) ? 'identical' : 'DIFFER');
+}
+
 // ---------------------------------------------------------------------------
 //  RE-EXTRACTION PARITY — the core inlined in index.html is byte-identical to
 //  core.mjs (between the // ===== REPLICATOR-CORE sentinels), indentation-normalised.
@@ -176,14 +237,30 @@ console.log('\n— Independent re-derivations (this file, not the bundled self-t
     .slice(modSrc.indexOf('const P = {'), modSrc.indexOf('export {'))
     .trim();
   const pi = pageSrc.indexOf(START), pj = pageSrc.indexOf(END);
+  const norm = (s) => s.replace(/^\s+/gm, '').replace(/\r/g, '').trim();
   check('index.html contains the REPLICATOR-CORE sentinels', pi >= 0 && pj > pi);
   if (pi >= 0 && pj > pi) {
     const pageBody = pageSrc.slice(pi + START.length, pj).trim();
-    const norm = (s) => s.replace(/^\s+/gm, '').replace(/\r/g, '').trim();
     check('inlined core matches core.mjs (function bodies, indentation-normalised)',
           norm(pageBody) === norm(modBody),
           norm(pageBody) === norm(modBody) ? 'byte-identical' :
             'DIFFER (page ' + norm(pageBody).length + ' vs mod ' + norm(modBody).length + ' chars)');
+  }
+
+  // ----- the AGENT-CORE block is inlined byte-identical too -----
+  const A_START = '// ===== AGENT-CORE (byte-identical to core.mjs) =====';
+  const A_END = '// ===== END AGENT-CORE =====';
+  const mi = modSrc.indexOf(A_START), mj = modSrc.indexOf(A_END);
+  const ai = pageSrc.indexOf(A_START), aj = pageSrc.indexOf(A_END);
+  check('core.mjs & index.html both contain the AGENT-CORE sentinels',
+        mi >= 0 && mj > mi && ai >= 0 && aj > ai);
+  if (mi >= 0 && mj > mi && ai >= 0 && aj > ai) {
+    const modAgent = modSrc.slice(mi + A_START.length, mj).trim();
+    const pageAgent = pageSrc.slice(ai + A_START.length, aj).trim();
+    check('inlined AGENT-CORE matches core.mjs (indentation-normalised)',
+          norm(pageAgent) === norm(modAgent),
+          norm(pageAgent) === norm(modAgent) ? 'byte-identical' :
+            'DIFFER (page ' + norm(pageAgent).length + ' vs mod ' + norm(modAgent).length + ' chars)');
   }
 }
 

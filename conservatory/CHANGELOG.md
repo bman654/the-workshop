@@ -413,3 +413,104 @@ orbit (run 200×)" took runs 0→200 with the pooled green cloud visibly filling
 ghost ellipse. Mobile (390×844) stacks cleanly. **Caught & fixed in review:** the landing's
 predator-prey card glyph was 🐌 (a snail — the odd one out among 🌱/🦠/♛, incongruous for
 hares & lynx) → changed to 🐇 (the prey hare); landing self-test stays 21/21.
+
+---
+
+## Cycle #47 — The Replicator RE-SOULED in place (THE ARENA; the wing's last queued re-soul)
+
+A `rework` (BUILD / garden). The bench `conservatory/replicator/` — which *was* game
+theory (Hawk–Dove, RPS) with no game to play, a stacked-bar time series fronting a simplex
+plot — is re-grown **IN PLACE** (same route, same `ws:seen:replicator` breadcrumb, no map
+change) into **THE ARENA**: a glass terrarium of ~72 individually-readable strategist
+agents that **meet, play one round of the payoff matrix, and breed-or-die by their
+winnings**. **Hawk** = a coral triangle, **Dove** = a teal disc; in RPS the three shapes are
+triangle/disc/diamond in coral/slate-blue/violet, each carrying a winnings-ring. The crowd
+drifts with Brownian wander, MEETS (encounter sparks — Hawk-vs-Hawk flashes red, Dove-vs-Dove
+a soft green), and visibly climbs to the ESS ⅔ (Hawk–Dove) or cycles forever (RPS). A live
+**"HAWK n · DOVE n"** tally + a `logEvent` ticker ("Hawk took the spoils from a Dove",
+"Hawk-vs-Hawk fight — both bloodied") narrate. **THE HERO VERB:** *drop an invader* injects an
+all-Hawk (RPS: all-Rock) slug and the crowd is pulled back to ⅔ — the ESS as an attractor.
+
+### The proof, DEMOTED to a faithful back-glass instrument
+The old proven simplex orbit becomes a faint **back-glass ghost trail** with a live white
+bead + an accumulating green census cloud; the time series became a side-rail Hawk-fraction(t)
+strip hugging the RK4 curve. `drawEntropy`/`drawPosbar`/the ESS-tile are kept as proven side
+instruments. **The HARD WALL holds:** the live arena is a **camera** — every printed number
+(ESS, Σx−1=6.66e-16, min xᵢ) reads only from `trace()`/`essFixedPoint()`; the visible counts
+follow the proven replicator-Euler field with bounded demographic noise + an anti-absorption
+floor (a documented camera-only nudge, the same predator-prey rescue pattern), while the
+**VALIDATED register is the pure dense headless census**. The footer says so in plain words:
+"The live arena is a camera, never the authority … re-run ~150× at N≈1500 lands on the exact
+node / circles the exact ring."
+
+### Files (re-grown in place)
+- **core.mjs** (377→**646**L) — the `REPLICATOR-CORE` block preserved **byte-identical**
+  (every existing export unchanged); APPENDED a new `===== AGENT-CORE =====` block (~235L)
+  exporting `mulberry32`, `binom`, `multinomial`, `agentMeanField(A,x)`, `stepAgentCounts`
+  (Moran-relaxation, N conserved, reports births/deaths/fights), `headlessRun`,
+  `ensembleCensus` (phase-locked relaxation, NOT stationary), `rk4OnGrid`, `runAgentSelfTest`
+  (5 teeth A1–A5). `ARENA_N=1500`.
+- **index.html** — both CORE blocks inlined **byte-identical** between their sentinels; a
+  two-tier badge → **self-test 11/11 ✓** (6 core synchronous + 5 agent deferred via
+  `requestIdleCallback` so paint never blocks); the back-glass time series re-cast as a
+  side-rail; bare-relative back-links + the `ws:seen:replicator` breadcrumb preserved. The
+  ?reducedmotion=1 QA hook forces the reduced path (the OS preference is still the real gate);
+  reduced-motion renders one settled-ESS static frame (HAWK 48 · DOVE 24 = ⅔ of 72) with the
+  census cloud pre-accumulated and no loop.
+- **core.test.mjs** (+79L) — runs `runAgentSelfTest`, adds independent agent re-derivations
+  (mean-field == field to literal 0; population conserved; census → ⅔; headless determinism)
+  + an AGENT-CORE re-extraction parity row alongside the preserved REPLICATOR-CORE one. Suite
+  grew **30 → 42**, exit 0.
+- **../index.html** (landing) — the Replicator bed-card blurb re-souled in place to "a glass
+  terrarium of strategists that meet, play one round of the payoff matrix, and breed-or-die by
+  their winnings" (same route, 4 beds unchanged, no map/footprint touched).
+
+### The agent self-test (A1–A5, measured tolerances printed honestly)
+- **A1** `agentMeanField == field()` to **0.00e+0** over 4000 random HD+RPS mixes (the crowd
+  recovers ẋᵢ=xᵢ(fᵢ−φ) literally).
+- **A2** Hawk–Dove census tail-mean ⟨x_H⟩=**0.67172** (err **5.05e-3** < 1.5e-2) AND tracks
+  the proven RK4 curve to max-dev **1.37e-2** < 3e-2.
+- **A3** RPS census time-avg err to ⅓ = **3.32e-2** < 1e-1 AND single-run amplitude **0.785**
+  > 0.3 (never settles).
+- **A4** all-Hawk invader **REPELLED** — KL D **3.96e-1 → 8.89e-5** (≥10× net descent), tail
+  ⟨x_H⟩=0.6729 (the ESS is an attractor).
+- **A5** determinism — `headlessRun` AND `ensembleCensus` byte-identical for a fixed seed.
+
+### Builder self-verify (cycle #47)
+`node conservatory/replicator/core.test.mjs` → **42/42 GREEN exit 0** (was 30/30); both
+re-extraction parity rows (REPLICATOR-CORE + AGENT-CORE) byte-identical. In-browser the
+bench in-page badge read **self-test 11/11 ✓**; the HD crowd climbed 9→48 (=⅔ of 72); the
+invader spiked then pulled back to 48; RPS visibly cycles (the majority shape rotates
+Paper→Scissors→Rock); the Euler proof layer drove posval **−8.25e-3** (positivity break) while
+Σx−1 held at machine zero.
+
+### Publisher fresh-eyes review (cycle #47)
+Served on uncommon port `:8853` (Python `http.server`, torn down by exact PID; Brandon's
+:3001/:4380 untouched); both surfaces opened in agent-browser session `rep-pub-47` (closed by
+name). Node twin **42/42 GREEN exit 0**. **The bench @1280 AND @390:** in-page pill
+**11/11 ✓**, **0** console errors, **0** nested anchors, **0** horizontal overflow (1265≤1280,
+375≤390). The HD crowd settled at ~48–50 Hawks (=⅔ of 72); *drop an invader* spiked then
+pulled back to ~49; **RPS mode** showed the Rock/Paper/Scissors legend and cycled; the **Euler
+proof toggle** drove `min xᵢ (positivity) = −8.25e-3` (red) while `Σxᵢ−1 = 1.11e-15` (machine
+zero — the page correctly notes "NOT a conservation failure"); **reduced-motion** (`?reducedmotion=1`)
+froze the loop at the settled-ESS frame (HAWK 48 · DOVE 24, unchanged after 2.5s, play button
+"▶ play"). The Conservatory landing self-test read **21/21 ✓**, 4 beds, the re-souled
+Replicator card resolving to `replicator/index.html`, 0 console errors. Mobile stacks cleanly
+to a single column. **Caught & fixed in review:** the **front-door map's Conservatory blurb**
+(`index.src.html`) still read "*The first bench self-proves it; planters stand empty for the
+systems still to come*" — a discoverability falsehood (the wing has been complete at 4 benches
+since #35; it also ignored the re-souled Replicator) — rewritten to an accurate 4-bench
+description naming the game-theory arena ("a glass terrarium of strategists … Hawk and Dove
+settling exactly at x*=V/C, Rock–Paper–Scissors chasing itself forever … Each bench self-proves
+its claim"). Text-only `.src.html` blurb edit; forge-rebuilt (`node tools/forge/forge.mjs
+index.src.html`), `index.html` verified current by `forge --check --all`; **no map structure,
+footprint, coordinates, or slot layout touched**. **Publisher's calls on the builder's open
+concerns:** the **N=1500 / measured-tolerance band** (tail err 5.05e-3 < 1.5e-2; tracks RK4 to
+1.37e-2 < 3e-2) over the brief's aspirational 2.8e-5 is the **honest engineering call** — the
+finite-Moran relaxation has an O(1/N) reflection bias near the ESS; asserting the measured band
+and framing the census as "re-run ~150× at N≈1500" is truthful (no reviewer expects the visible
+72-agent run to hit ⅔ to 1e-5). The **`?reducedmotion=1` QA hook** is harmless and OFF for normal
+users (the OS preference is the real gate) — **kept**. The **646-line core.mjs** (vs the 600 soft
+target) stays navigable and the REPLICATOR-CORE block is byte-frozen — **left as built**. The two
+stray repo-root PNGs (`phase1.png`, `ws43-paused1.png`) predate this work → **removed** as
+untracked strays (all the cycle's screenshots went to /tmp). **No new `[bug]`, no `⚡` spark.**
