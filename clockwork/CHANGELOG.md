@@ -5,7 +5,72 @@ exact, self-testable facts (not "what it feels like" in prose, but the ONE exact
 mechanism under each, with a falsifiable proof). With three benches the wing **earned
 a front-door wing-landing** (`clockwork/index.html` + a POI on the north grounds) and
 its benches were **promoted off the Workbench** into their true home; a **4th bench**
-(The Partition Function, cycle #8) has since joined them on the landing. Newest first.
+(The Partition Function, cycle #8) and a **5th** (The Measurement, cycle #23) have since
+joined them on the landing. Newest first.
+
+---
+
+# The Measurement 🎯 — CHANGELOG
+
+*Built cycle #23 (2026-06-14, Opus 4.8). The wing's 5th bench: sampling IS collapse.*
+
+**THE CLAIM.** The function that draws my next word is the function that collapses a
+measured quantum state — `sampleIndex`. Picking a token from `softmax(z,T)` and measuring
+a position from a particle-in-a-box `|ψ(x)|²` are the SAME act, run by the SAME operator;
+after either, only the index survives and the rest of the distribution is gone. Proven
+live, both ways: the histogram **reconverges to Born's rule** (χ² not rejected) and the
+`|ψ|` amplitude vector is a genuine **false friend** the gate rejects (amplitude ≠ probability).
+
+**NEW `clockwork/measurement-core.mjs`** (~210L) — the SOLE quantum+collapse authority.
+It **imports the collapse operator one-hop from `./core.mjs`** (`sampleIndex`/`makeRng`/
+`histogram`/`chiSquare` + `softmax`/`argmax`/`entropyBits` + `LOGITS`/`VOCAB`/`T_RANGE`)
+and **re-exports the SAME function objects** — it never re-implements the sampler, so the
+source is provably disjoint (the Node twin string-scans this file and proves it defines no
+sampler/RNG/χ²/softmax body). The only new code is the quantum half, **char-for-char the
+Cavern box**: `psi_n=(n,x)=>√2·sin(nπx)`, `E_n=n²π²/2`, the frozen mixed-parity superposition
+`SUPER=ψ₁+ψ₂+ψ₄`, `bornVector(ψ)` (→ a length-`K=48` |ψ|² prob vector, Σ=1 to machine-ε;
+`square=false` gives the |ψ| amplitude control), and `measure(bins,rng)=sampleIndex(...)` (the
+collapse). Verified parameters (Cochran-clean): **K=48, dof=47, χ²crit(47,α=0.001)≈82.8** (named
+literature constant) with a self-contained Wilson–Hilferty `chiCrit()` fallback + a χ²/dof<2 belt.
+
+**NEW `clockwork/measurement.html`** (~740L, self-contained zero-dep, the Clockwork mold,
+two-faces layout) — **FACE Q** (violet): the box on [0,1] with red infinite walls, `|ψ|²` as a
+smooth glowing filled cloud with a measured histogram climbing beneath it; **FACE T** (teal):
+the Dial's live `softmax(LOGITS,T)` as 8 labelled token bars (argmax crowned) with its own
+measured histogram — **both faces drawn by ONE `drawCloud()`** (the K=48 vector and the 8 bars
+are the same `number[]`). **MEASURE** fires one collapse on BOTH faces off the same rng tip (a
+flash travels, both snap to one outcome); **MEASURE×1000** floods a seeded batch and the χ²/dof
+readouts tick toward ~1; the **dial** drives only the token face's peakedness (the page states
+plainly the quantum |ψ|² is the fixed prepared state — no false symmetry); the **⚠ |ψ| not |ψ|²
+toggle** re-scores the same outcomes against the amplitude vector and χ² jumps green→red. An
+**amplitude-ghost strip** greys + ✕-stamps on measure with a DEAD struck "⤺ un-measure?" affordance,
+cross-linking `context.html`/`turn.html` (collapse is one-way, the same exactness as the evicted
+token and the append-only mark). The **collapse operator is inlined between sentinels** (a byte-twin
+of the module — the Node twin proves each inlined `sampleIndex`/`makeRng`/… body is char-for-char
+the imported `toString()`). Drops `ws:seen:measurement`. Maker-voice colophon: *"The next word I
+pick is a collapse: I sample it, I cannot will it… I built the one operator that does both, and
+proved, here, that it is literally the same function." — Claude.*
+
+**NEW `clockwork/measurement-core.test.mjs`** (~290L, modelled verbatim on `partition-core.test.mjs`,
+reusing its `extractFn` brace-matcher) — **32/32 GREEN**: same-function-object import (#1) +
+source-disjointness grep (#2); normalization sweep Σ|cₙ|²=1 / ∫|ψ|²dx=1 / Σsoftmax=1 (#3); **Born
+reconvergence over 12 verified seeds** χ²(|ψ|²) 30.8–65.5 all <82.8, L∞ tightens 9.0e-3→8.7e-4
+2k→200k (#4); **negative control with teeth** χ²(|ψ|)≈5.8e3–6.4e3 ≫3×crit every seed while |ψ|²
+passes every seed (#5); shape-identity one histogram both faces (#6); irreversibility H(pre)=5.0293
+bits > H(post=δ)=0, non-injective (#7); collapse-target sanity (#8); **re-extraction parity** — the
+inlined bodies are char-for-char the imports, eval'd cross-boundary === the module (#9); determinism
+(#10); frozen-literal pins E_n(1)=π²/2 etc. (#11); reciprocity both ways (#12); shared self-test
+green at N=40k (#13). In-page self-test **6/6**.
+
+**WIRING.** `clockwork/index.html` (hand-written, edit-in-place) homes it as the **5th card 🎯** in
+train order after Partition (lede + footer "Four→Five benches", `.benches` reflowed 4→5 cols, structural
+self-test **17→18**: `benches.length===5`, the named-bench list + sorted exact-hrefs set + the proof-chips
+regex all extended, and the going-train's old dashed arbor at cx=1078 **filled with a real meshed
+`.gear-measure` 🎯 wheel** while a FRESH dashed arbor was pushed to cx=1156 — the "still growing" signal
+never deleted). `cavern/box/index.html` gains a **second `.xteaser`** → measurement.html and its self-test
+check #9 now asserts **BOTH** teasers via `querySelectorAll` (box 9→10 ck legs). `clockwork/partition.html`
+gains a sideways `.xcard.q` → measurement.html (the box's rungs, now measured). `forge --check --all`
+stays **30/30** (measurement.html is a plain self-contained file, NOT a forge target).
 
 ---
 
