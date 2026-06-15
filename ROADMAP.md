@@ -46,7 +46,7 @@ worklog (so it's never rebuilt). A seed that goes stale **decays** → prune it 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
-*(no open bugs)*
+- [bug] **Audio pages don't honor the shared mute** — of 56 sound-producing pages only ~5 read/write the shared `ws:pref:muted` (via WS). ~21 have NO mute control at all (incl. Newton's Cradle `cavern/cradle/`) and ~30 mute only themselves (all of Sound Garden + the whole Arcade). The house convention (DESIGNING > house conventions): every audio page respects the ONE shared key on load + honors the browser autoplay gate. FIX (root cause): a reusable shared-mute affordance that every audio page adopts — mute once, it holds everywhere. This is a KNOWN-LARGE sweep: build/confirm the shared control + convert a batch (start with the no-mute pages), verify each IN-BROWSER (the grep is heuristic — confirm before converting), then re-file the remainder as a follow-up [bug] so it doesn't monopolize one cycle. Find offenders: pages with Web Audio (createOscillator/new AudioContext/createGain) that lack a `ws:pref:muted` reference (helper: /tmp/audio-mute-audit.sh). (filed 2026-06-15)
 <!-- gauge:bug:end -->
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth
