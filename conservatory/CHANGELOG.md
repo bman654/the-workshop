@@ -107,3 +107,68 @@ console. Bench: self-test 6/6, ~60fps (91 frames/1.5s), RK4 needle dead-still
 
 Each a level-set / fixed-point / Lyapunov story in the same terrarium frame and the
 same self-test discipline.
+
+---
+
+## Cycle #33 — the Logistic-growth bench (the first planter blooms)
+
+The first empty planter is now a live bench: **Logistic Growth**, the explicit foil
+to the predator–prey CENTER next door. One colony against a carrying capacity K.
+
+### Built (`conservatory/logistic/`)
+- **core.mjs** — the pure single-source math (no RNG/DOM/network): locked `r=0.6,
+  K=100`; `field`, `fPrime` (the stability slope), exact `closed(t,N0)` (the sigmoid),
+  `fixedPoints` (0 unstable +r / K stable −r), the **conditional** `inflection`,
+  `Vlyap`/`Vprime` (the Lyapunov bowl), `rk4Step` (truth), `leakyStep` (= the logistic
+  MAP; the negative control), `trace`, `runSelfTest` (6 checks). ~232 lines.
+- **core.test.mjs** — green under `node`: 30/30, the in-page self-test + independent
+  re-derivations + the **re-extraction parity** check (the inlined core is byte-
+  identical to core.mjs between the `LOGISTIC-CORE` sentinels, indentation-normalised).
+- **index.html** — the terrarium with the core inlined byte-identical. The integrated
+  A+B visual: **BACK GLASS** = the 1-D phase line (arrows length=|f(N)| converging on
+  K, the field profile peaking at K/2, hollow dot at 0 / filled disc at K with tangent
+  stubs ±r, K-line + K/2 caret, a live bead); **FRONT HERO** = the S-curve N-vs-t with
+  the closed-form ghost drawn first and the live integrator ridden on top (peels off
+  and rings under leaky), the inflection dot (only when `inflection(N0)!==null`), the
+  K water-line + N=0 floor hairline; **LYAPUNOV NEEDLE** = V=(N−K)² sliding to 0.
+  Controls: the load-bearing `RK4 · truth ⟷ leaky step` toggle, r/K/N₀ sliders, a dt
+  slider showing live `a=dt·r` with a warn tick at a≥1.6, crank, pause. Reduced-motion
+  static frame. ~640 lines.
+
+### The proven claim (measured)
+- **STABILITY**: f'(K)=−r=−0.6<0 ⇒ N*=K **stable**; f'(0)=+r=+0.6>0 ⇒ N=0 **unstable**
+  (the eigenvalues ARE the 1-D field slope, byte-exact ∓r).
+- **CLOSED-FORM ⟷ RK4**: max|N_rk4 − N_exact| = **2.97e-10** at dt=0.01 (< 1e-9), and
+  it's **4th-order** (dt→dt/4 shrinks the error ≥10×).
+- **NEGATIVE CONTROL**: the leaky step IS the logistic map in a=dt·r; at a=1.6 it
+  **provably overshoots** K (maxN=**100.84**, ≥1 K-crossing) and rings, growing worse
+  monotonically (a=2.0→109.62, a=2.4→120.37); the true RK4 NEVER overshoots (0
+  crossings). The tainted control fails conservation-of-monotonicity, as it must.
+- **INFLECTION**: exact at N=K/2, growth-rate f(K/2)=**15**=r·K/4, f'(K/2)=0; t*=
+  ln((K−N₀)/N₀)/r=**4.907398** lands N(t*)=50.000000000; and inflection(N₀≥K/2)=**null**
+  (the conditional guard — the mark won't lie past the bend).
+- **MONOTONE APPROACH + LYAPUNOV**: N₀=5 climbs / N₀=150 descends, both monotone under
+  RK4; V=(N−K)² falls monotonically to 0 for N₀∈{5,40,99,150,200}; V̇(K/2)=−1500≤0,
+  V̇(K)=0. **predator-prey's V stays FLAT on its ring; here V must FALL — that IS
+  stability.**
+
+### The dt-coupled toggle (the on-ramp that makes the lesson visible)
+Selecting **leaky** PRESETS a coarse dt (a≈1.8, dt=3.0) so the S-curve rings
+immediately; selecting **rk4** restores a fine dt (0.01, a≈0.006). A viewer can never
+flip to leaky at a small dt and see nothing — the bifurcation is always on display.
+
+### Landing promotion (`conservatory/index.html`)
+The Logistic planter became a SECOND live `.bed` link (`logistic/index.html`, bare-
+relative) with a planter-light: a mini S-curve climbing to the K-line, driven by the
+SAME imported `closed()`. The landing now imports BOTH cores and its structural self-
+test grew from 8/8 → **13/13** (two live beds + two empty planters; both bench links
+bare-relative; both cores all-green). Planters grid + foot copy reconciled to two.
+
+### Verified
+agent-browser, uniquely-named sessions, port `:8843`, torn down by exact PID. Bench:
+self-test **6/6**, 0 console errors, 0 nested anchors, 0 overflow @1280 & @390; the
+RK4⟷leaky toggle flips the S-curve from hugging-the-ghost (V slides down) →
+overshoot/ringing (V ticks up, colony N=101.45 over the K-line) and BACK reversibly;
+the S-curve settles at K. Landing: self-test **13/13**, both live beds + the planter-
+light render, 0 console errors, 0 overflow. Server + sessions torn down by exact
+PID/name only (Brandon's :3001/:4380 untouched).

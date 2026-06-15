@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logistic Growth &middot; The Conservatory</title>
+<style>
+  :root{
+    --bg:#10141f;
+    --glass:#86d39a;            /* glasshouse green (the colony) */
+    --glass-soft:rgba(134,211,154,0.14);
+    --amber:#d9a441;            /* leaky/overshoot amber (the bad integrator) */
+    --amber-soft:rgba(217,164,65,0.16);
+    --iron:#b29a64;             /* cast-iron warm */
+    --ink:#eef2ee;
+    --ink-dim:#9fb0a4;
+    --panel:rgba(12,18,16,0.86);
+    --edge:rgba(134,211,154,0.30);
+    --bad:#f08a7a;
+    --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
+    --font-serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; color:var(--ink); font-family:var(--font-ui);
+    background:
+      radial-gradient(120% 80% at 50% -10%, rgba(134,211,154,0.10), transparent 60%),
+      radial-gradient(90% 60% at 80% 110%, rgba(217,164,65,0.06), transparent 60%),
+      var(--bg);
+    -webkit-font-smoothing:antialiased; min-height:100%;
+    display:flex; flex-direction:column;
+  }
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
+    padding:13px 20px 11px; flex-wrap:wrap; border-bottom:1px solid rgba(134,211,154,0.14);
+  }
+  .backs{ display:flex; gap:15px; align-items:center; flex-wrap:wrap; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.2s; }
+  .back:hover{ color:var(--glass); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:11px; flex:1 1 auto; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.3px; margin:0; white-space:nowrap; }
+  .brand .tag{ font:11px/1.3 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:var(--glass); border-color:rgba(134,211,154,0.55); background:rgba(28,52,38,0.45); }
+  .selftest.bad{ color:var(--bad); border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  .lede{ text-align:center; padding:16px 20px 4px; max-width:880px; margin:0 auto; }
+  .lede p{ font:12.5px/1.6 var(--font-ui); color:var(--ink-dim); margin:0; }
+  .lede b{ color:var(--ink); font-weight:600; }
+  .lede .eqn{ display:inline-block; font:600 13px/1 var(--font-mono); color:var(--glass);
+    background:var(--glass-soft); border:1px solid var(--edge); border-radius:8px;
+    padding:7px 12px; margin:10px 0 2px; letter-spacing:.4px; }
+
+  /* ---- the instrument ---- */
+  .stage{ max-width:1180px; margin:0 auto; width:100%; padding:14px 20px 6px; }
+  .terrarium{
+    position:relative; width:100%; border-radius:14px; overflow:hidden;
+    border:1px solid var(--edge);
+    background:linear-gradient(180deg, rgba(20,30,26,0.6), rgba(10,14,18,0.9));
+    box-shadow:inset 0 0 60px rgba(134,211,154,0.06), 0 8px 30px rgba(0,0,0,0.4);
+  }
+  .terrarium canvas{ display:block; width:100%; height:auto; }
+  /* glass sheen overlay (cosmetic) */
+  .terrarium::after{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(115deg, rgba(255,255,255,0.05) 0%, transparent 22%, transparent 78%, rgba(255,255,255,0.03) 100%);
+  }
+  .panes{ display:grid; grid-template-columns:1.55fr 1fr; gap:14px; margin-top:14px; }
+  @media (max-width:820px){ .panes{ grid-template-columns:1fr; } }
+  .pane{ background:var(--panel); border:1px solid rgba(134,211,154,0.18); border-radius:12px; padding:12px 13px 11px; }
+  .pane h2{ font:600 10px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin:0 0 9px; }
+  .pane canvas{ display:block; width:100%; height:auto; border-radius:8px; background:#0a0f0d; }
+
+  /* the V-meter (the Lyapunov needle) */
+  .vmeter{ display:flex; flex-direction:column; gap:8px; }
+  .vrow{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+  .vrow .k{ font:600 10px/1.3 var(--font-mono); color:var(--ink-dim); letter-spacing:.04em; }
+  .vrow .v{ font:700 13px/1 var(--font-mono); color:var(--glass); font-variant-numeric:tabular-nums; }
+  .vrow .v.bad{ color:var(--bad); }
+  .vdesc{ font:10px/1.5 var(--font-mono); color:rgba(159,176,164,0.8); margin-top:2px; }
+  .vdesc b{ color:var(--ink); font-weight:600; }
+
+  /* ---- controls ---- */
+  .controls{ max-width:1180px; margin:0 auto; width:100%; padding:14px 20px 4px;
+    display:flex; flex-wrap:wrap; gap:16px 22px; align-items:flex-end; }
+  .ctl{ display:flex; flex-direction:column; gap:6px; }
+  .ctl label{ font:600 9.5px/1 var(--font-mono); letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim); }
+  .ctl .val{ color:var(--glass); }
+  .ctl .val.warn{ color:var(--amber); }
+  .toggle{ display:inline-flex; border:1px solid var(--edge); border-radius:9px; overflow:hidden; }
+  .toggle button{ font:600 11px/1 var(--font-mono); padding:9px 14px; background:rgba(0,0,0,0.3);
+    color:var(--ink-dim); border:0; cursor:pointer; transition:.16s; letter-spacing:.02em; }
+  .toggle button.on{ background:var(--glass-soft); color:var(--glass); }
+  .toggle button.on.leaky{ background:rgba(217,164,65,0.20); color:var(--amber); }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:170px; height:4px; border-radius:3px;
+    background:rgba(134,211,154,0.25); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:15px; height:15px;
+    border-radius:50%; background:var(--glass); border:2px solid #0a0f0d; cursor:pointer; box-shadow:0 0 6px rgba(134,211,154,0.5); }
+  input[type=range]::-moz-range-thumb{ width:15px; height:15px; border-radius:50%; background:var(--glass);
+    border:2px solid #0a0f0d; cursor:pointer; }
+  .btn{ font:600 11px/1 var(--font-mono); padding:9px 14px; border-radius:9px; border:1px solid var(--edge);
+    background:rgba(0,0,0,0.3); color:var(--ink); cursor:pointer; transition:.16s; letter-spacing:.02em; }
+  .btn:hover{ border-color:var(--glass); background:var(--glass-soft); }
+  .crankwrap{ display:flex; flex-direction:column; gap:6px; }
+  .crank{ width:170px; }
+
+  .verdict{ max-width:1180px; margin:8px auto 0; width:100%; padding:0 20px;
+    font:11px/1.6 var(--font-mono); color:var(--ink-dim); }
+  .verdict.leak{ color:var(--amber); }
+  .verdict b{ color:var(--ink); font-weight:600; }
+
+  .foot{ max-width:900px; margin:0 auto; width:100%; text-align:center;
+    padding:20px 20px 28px; font:11px/1.7 var(--font-mono); color:rgba(159,176,164,0.7); letter-spacing:.02em; }
+  .foot a{ color:var(--ink-dim); }
+  .foot a:hover{ color:var(--glass); }
+  .foot .links{ margin-top:10px; display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
+  .foot .links a{ text-decoration:none; }
+  .legend{ display:flex; gap:18px; justify-content:center; margin-top:6px; font:10.5px/1 var(--font-mono); flex-wrap:wrap; }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; color:var(--ink-dim); }
+  .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .dot.live{ background:var(--glass); } .dot.ghost{ background:rgba(159,176,164,0.7); }
+  .spacer{ flex:1 0 auto; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; the conservatory</a>
+      <a class="back" href="../../index.html">&larr; workshop</a>
+    </div>
+    <div class="brand">
+      <h1>Logistic Growth</h1>
+      <span class="tag">the S-curve &middot; a stable node, proven</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for per-check detail (also printed to the console)">checking&hellip;</div>
+  </div>
+
+  <div class="lede">
+    <p>A single colony grows against a <b>carrying capacity K</b>: fast while there is room, stalling as it
+    crowds, settling <b>exactly</b> at K. The S-curve has an exact closed form.</p>
+    <div class="eqn">N&prime; = r&middot;N&middot;(1 &minus; N/K) &nbsp;&rarr;&nbsp; N(t) = K / (1 + ((K&minus;N&#8320;)/N&#8320;)&middot;e<sup>&minus;rt</sup>)</div>
+    <p style="margin-top:8px">Trace it with the truthful integrator (RK4) and the live line sits <b>dead on</b> the closed form;
+    flip to a careless coarse step and it <b>provably overshoots</b> K and rings &mdash; and the Lyapunov needle
+    V=(N&minus;K)&sup2;, which only ever <b>falls</b> under RK4, ticks back up.</p>
+  </div>
+
+  <div class="stage">
+    <div class="terrarium">
+      <canvas id="cv" width="1180" height="500"></canvas>
+    </div>
+    <div class="panes">
+      <div class="pane">
+        <h2>The colony over time &mdash; the S-curve rides the closed form (ghost)</h2>
+        <canvas id="scurve" width="700" height="210"></canvas>
+      </div>
+      <div class="pane vmeter">
+        <h2>The Lyapunov needle V = (N&minus;K)&sup2;</h2>
+        <canvas id="needle" width="440" height="100"></canvas>
+        <div class="vrow"><span class="k">V = (N &minus; K)&sup2;</span><span class="v" id="vval">&mdash;</span></div>
+        <div class="vrow"><span class="k">integrator</span><span class="v" id="vmethod">RK4</span></div>
+        <div class="vdesc" id="vnote">Under RK4 the needle only ever <b>slides down</b> to 0 &mdash; that fall IS stability.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="ctl">
+      <label>integrator</label>
+      <div class="toggle" id="methodToggle">
+        <button data-m="rk4" class="on">RK4 &middot; truth</button>
+        <button data-m="leaky">leaky step</button>
+      </div>
+    </div>
+    <div class="ctl">
+      <label>growth rate r <span class="val" id="rVal">0.60</span></label>
+      <input type="range" id="rate" min="0.2" max="1.2" step="0.01" value="0.6">
+    </div>
+    <div class="ctl">
+      <label>carrying capacity K <span class="val" id="kVal">100</span></label>
+      <input type="range" id="cap" min="40" max="160" step="1" value="100">
+    </div>
+    <div class="ctl">
+      <label>start N&#8320; <span class="val" id="n0Val">5</span></label>
+      <input type="range" id="n0" min="1" max="190" step="1" value="5">
+    </div>
+    <div class="ctl">
+      <label>time step dt <span class="val" id="dtVal">0.010</span> &middot; a=dt&middot;r <span class="val" id="aVal">0.006</span></label>
+      <input type="range" id="dt" min="0.01" max="4.2" step="0.01" value="0.01">
+    </div>
+    <div class="ctl crankwrap">
+      <label>crank time by hand <span class="val" id="crankHint">(drag)</span></label>
+      <input type="range" id="crank" class="crank" min="0" max="1000" step="1" value="0">
+    </div>
+    <div class="ctl">
+      <label>&nbsp;</label>
+      <button class="btn" id="playBtn">&#10073;&#10073; pause</button>
+    </div>
+  </div>
+
+  <div class="verdict" id="verdict">&mdash;</div>
+
+  <div class="foot">
+    <p>The back glass is the 1-D <b>phase line</b>: arrows on the N-axis whose length is |f(N)| and whose
+    direction is the sign of f(N) &mdash; every one points toward K. The front pane is the same state drawn
+    as height-over-time. The bead is the exact colony size in both views at once.</p>
+    <div class="legend">
+      <span><i class="dot live"></i> live integrator</span>
+      <span><i class="dot ghost"></i> closed form N(t) (ghost)</span>
+      <span>&#9679; the state, sliding to N&#42; = K</span>
+    </div>
+    <div class="links">
+      <a href="../index.html">&larr; back to the glasshouse</a>
+      <a href="../predator-prey/index.html">the foil next door &mdash; a closed-orbit center &rarr;</a>
+    </div>
+  </div>
+  <div class="spacer"></div>
+
+<script type="module">
+// This bench drops its own ws:seen:logistic breadcrumb (every bench drops one).
+// The wing landing (../index.html) owns ws:seen:conservatory.
+try{ var _k='ws:seen:logistic'; if(!localStorage.getItem(_k)) localStorage.setItem(_k, String(Date.now())); }catch(e){}
+
+// ===== LOGISTIC-CORE (byte-identical to core.mjs) =====
+const P = { r: 0.6, K: 100 };
+
+// the scalar logistic field  N ↦ N' = r·N·(1 − N/K).
+function field(N, p = P) {
+  return p.r * N * (1 - N / p.K);
+}
+
+// the slope of the field — the STABILITY eigenvalue at any N.
+//   f'(K) = −r (stable node) ;  f'(0) = +r (unstable) ;  f'(K/2) = 0 (growth peak).
+function fPrime(N, p = P) {
+  return p.r * (1 - 2 * N / p.K);
+}
+
+// the EXACT closed-form solution N(t) through N₀ — the sigmoid the bench draws.
+function closed(t, N0, p = P) {
+  return p.K / (1 + ((p.K - N0) / N0) * Math.exp(-p.r * t));
+}
+
+// the two fixed points with their stability classification (eigenvalue = f' there).
+function fixedPoints(p = P) {
+  return [{ N: 0, stable: false, eig: p.r }, { N: p.K, stable: true, eig: -p.r }];
+}
+
+// the inflection of the S-curve — CONDITIONAL: only when the colony starts BELOW
+// the bend (N₀ < K/2).  Returns the time t*, the height K/2, and the peak slope
+// r·K/4; returns null when N₀ ≥ K/2 (the curve is already concave — no bend).
+function inflection(N0, p = P) {
+  return N0 < p.K / 2 ? { t: Math.log((p.K - N0) / N0) / p.r, N: p.K / 2, slope: p.r * p.K / 4 } : null;
+}
+
+// the Lyapunov function  V = (N − K)²  — a bowl with its floor at the stable node.
+function Vlyap(N, p = P) {
+  return (N - p.K) ** 2;
+}
+
+// its time-derivative along the field:  V̇ = 2(N−K)·field = −(2r/K)·N·(N−K)² ≤ 0,
+// zero ONLY at N = K (and the unstable N = 0).  V falls ⇒ N → K is the attractor.
+function Vprime(N, p = P) {
+  return -2 * p.r / p.K * N * (N - p.K) ** 2;
+}
+
+// ---------------------------------------------------------------------------
+//  THE TWO INTEGRATORS — one truthful (RK4), one naive (the leaky/coarse step).
+//  Both advance the SAME scalar field by one step dt; this is the load-bearing
+//  contrast.  The leaky step IS the logistic MAP; a = dt·r is its bifurcation knob.
+// ---------------------------------------------------------------------------
+
+// classical 4th-order Runge–Kutta of the scalar field — hugs the closed form.
+function rk4Step(N, dt, p = P) {
+  const k1 = field(N, p);
+  const k2 = field(N + (dt / 2) * k1, p);
+  const k3 = field(N + (dt / 2) * k2, p);
+  const k4 = field(N + dt * k3, p);
+  return N + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4);
+}
+
+// forward (explicit) Euler: N ← N + dt·f(N).  This IS the logistic MAP; at coarse
+// dt (a = dt·r ≥ 1.6) it OVERSHOOTS K and rings.  Cheap, naive, and the negative
+// control.  (At small a ≤ 0.8 it is clean — that dt-dependence drives the UI.)
+function leakyStep(N, dt, p = P) {
+  return N + dt * field(N, p);
+}
+
+// pick a stepper by name (the page's RK4 ⟷ leaky toggle uses this).
+function stepper(method) {
+  return method === 'leaky' ? leakyStep : rk4Step;
+}
+
+// ---------------------------------------------------------------------------
+//  THE TRACER — integrate from N₀ for `steps` steps of size dt with `method`,
+//  recording N(t), the worst |N − N_exact| vs the closed form, whether the
+//  Lyapunov V = (N−K)² falls monotonically, whether N ever overshoots K, and how
+//  many times the trajectory crosses K.  The S-curve, the Lyapunov panel, and the
+//  negative control all read off this.
+// ---------------------------------------------------------------------------
+function trace(N0, dt, steps, method = 'rk4', p = P) {
+  let N = N0;
+  const step = stepper(method);
+  const ts = [0], Ns = [N0], errs = [0];
+  let maxErr = 0;
+  let V0 = Vlyap(N0, p), prevV = V0, vMonotoneDown = true;
+  let overshoot = false, kCross = 0, prevSide = Math.sign(N0 - p.K);
+  let t = 0;
+  for (let i = 0; i < steps; i++) {
+    N = step(N, dt, p);
+    t += dt;
+    const e = Math.abs(N - closed(t, N0, p));
+    if (e > maxErr) maxErr = e;
+    const v = Vlyap(N, p);
+    // a step UP in V (beyond float jitter) means it is NOT monotone-down.
+    if (v > prevV + 1e-9) vMonotoneDown = false;
+    prevV = v;
+    if (N > p.K + 1e-9) overshoot = true;
+    const side = Math.sign(N - p.K);
+    if (side !== 0 && prevSide !== 0 && side !== prevSide) kCross++;
+    if (side !== 0) prevSide = side;
+    ts.push(t); Ns.push(N); errs.push(e);
+  }
+  return { ts, Ns, errs, N0, V0, maxErr, vMonotoneDown, overshoot, kCross,
+           endN: N, endV: Vlyap(N, p) };
+}
+
+// ============================================================================
+//  THE SELF-TEST — proves the falsifiable claim EXACT.  These are the SIX checks
+//  the in-page badge asserts; core.test.mjs runs this plus independent witnesses.
+// ============================================================================
+function runSelfTest(p = P) {
+  const checks = [];
+  const detail = {};
+  function ok(name, cond, info) { checks.push({ name, pass: !!cond, info }); }
+
+  const fp = fixedPoints(p);
+  detail.fixedPoints = fp;
+
+  // (1) STABILITY — f'(K) = −r < 0 ⇒ N* = K STABLE ; f'(0) = +r > 0 ⇒ N = 0
+  //     UNSTABLE.  The eigenvalues ARE the field's slope (a 1-D system): ±r exact.
+  {
+    const eigK = fPrime(p.K, p), eig0 = fPrime(0, p);
+    detail.eigK = eigK; detail.eig0 = eig0;
+    const okStable = eigK === -p.r && fp[1].stable === true && fp[1].N === p.K;
+    const okUnstable = eig0 === p.r && fp[0].stable === false && fp[0].N === 0;
+    ok('Stability: f\'(K)=−r=' + eigK + '<0 ⇒ N*=K STABLE; f\'(0)=+r=' + eig0 + '>0 ⇒ N=0 UNSTABLE',
+       okStable && okUnstable,
+       'eig@K=' + eigK + '  eig@0=' + eig0 + '  (byte-exact ∓r)');
+  }
+
+  // (2) CLOSED-FORM ⟷ RK4 to ~machine precision, AND it is 4th-ORDER (dt→dt/4
+  //     shrinks the error ≥10×) — proving the agreement is the method's ORDER,
+  //     not luck.  HONEST bar: at dt=0.01 max|N_rk4 − N_exact| ≈ 3e-10 (< 1e-9).
+  {
+    const N0 = 5, T = 40;
+    const measure = (dt) => {
+      let N = N0, t = 0, m = 0;
+      const steps = Math.round(T / dt);
+      for (let i = 0; i < steps; i++) { N = rk4Step(N, dt, p); t += dt; m = Math.max(m, Math.abs(N - closed(t, N0, p))); }
+      return m;
+    };
+    const eCoarse = measure(0.01), eFine = measure(0.0025);
+    const ratio = eCoarse / Math.max(eFine, 1e-300);
+    detail.rk4Err = eCoarse; detail.rk4FineErr = eFine; detail.orderRatio = ratio;
+    ok('RK4 and the closed form are visually one line; error ' + eCoarse.toExponential(2) +
+       ' at dt=0.01; and it\'s 4th-order (dt→dt/4 shrinks it ' + ratio.toFixed(0) + '×)',
+       eCoarse < 1e-9 && ratio >= 10,
+       'max|N_rk4−N_exact|=' + eCoarse.toExponential(2) + ' (<1e-9)  ·  /4 ratio ' +
+       ratio.toFixed(0) + '× (4th order predicts ~256×)');
+  }
+
+  // (3) NEGATIVE CONTROL — the leaky step PROVABLY overshoots.  The naive step is
+  //     the logistic MAP in a = dt·r: at a ≥ 1.6 it overshoots K (maxN > K, ≥1
+  //     K-crossing); the true RK4 NEVER does.  The tainted control that MUST fail.
+  {
+    const a = 1.6, dt = a / p.r, N0 = 5, T = 60, steps = Math.round(T / dt);
+    const leak = trace(N0, dt, steps, 'leaky', p);
+    const rk4 = trace(N0, dt, steps, 'rk4', p);
+    detail.leakyMaxN = Math.max(...leak.Ns);
+    detail.leakyCross = leak.kCross;
+    detail.rk4Overshoot = rk4.overshoot;
+    detail.rk4Cross = rk4.kCross;
+    ok('Negative control: leaky@a=1.6 PROVABLY overshoots K (maxN>K, ≥1 crossing); RK4 never does',
+       leak.overshoot === true && leak.kCross >= 1 && rk4.overshoot === false,
+       'leaky maxN=' + detail.leakyMaxN.toFixed(2) + ' crossings=' + leak.kCross +
+       '  ·  rk4 overshoot=' + rk4.overshoot + ' crossings=' + rk4.kCross);
+  }
+
+  // (4) INFLECTION exact at N = K/2 with growth-rate r·K/4 — and CONDITIONAL: it is
+  //     null when the colony starts past the bend (N₀ ≥ K/2).  The mark won't lie.
+  {
+    const peak = field(p.K / 2, p);           // = r·K/4 = 15
+    const slopeAtPeak = fPrime(p.K / 2, p);   // = 0 (growth-rate extremum)
+    const inf = inflection(5, p);
+    const landed = closed(inf.t, 5, p);       // N(t*) must be exactly K/2
+    const past = inflection(p.K / 2 + 10, p); // N₀ ≥ K/2 ⇒ null
+    detail.peakGrowth = peak; detail.inflectT = inf.t; detail.inflectLanded = landed;
+    detail.inflectPast = past;
+    ok('Inflection: f(K/2)=' + peak + '=r·K/4, f\'(K/2)=0; t*=' + inf.t.toFixed(6) +
+       ' lands N=K/2; and inflection(N₀≥K/2)=null',
+       Math.abs(peak - p.r * p.K / 4) < 1e-12 && Math.abs(slopeAtPeak) < 1e-12 &&
+       Math.abs(landed - p.K / 2) < 1e-9 && past === null,
+       'f(K/2)=' + peak + '  t*=' + inf.t.toFixed(6) + '  N(t*)=' + landed.toFixed(9) +
+       '  ·  past-bend=' + past);
+  }
+
+  // (5) MONOTONE APPROACH from BOTH sides (climb from below, descend from above)
+  //     under RK4, AND the Lyapunov V = (N−K)² falls monotonically to 0 for many
+  //     starts.  predator-prey's V stays FLAT on its ring; here V must FALL — that
+  //     IS stability.  Also V̇(K/2) ≤ 0 and V̇(K) = 0.
+  {
+    const dt = 0.01, T = 60;
+    const climb = trace(5, dt, Math.round(T / dt), 'rk4', p);
+    const descend = trace(150, dt, Math.round(T / dt), 'rk4', p);
+    const climbMono = monotoneApproach(5, dt, T, p);
+    const descMono = monotoneApproach(150, dt, T, p);
+    let allVDown = true;
+    for (const N0 of [5, 40, 99, 150, 200]) {
+      const r = trace(N0, dt, Math.round(T / dt), 'rk4', p);
+      if (!r.vMonotoneDown) allVDown = false;
+    }
+    detail.climbMono = climbMono; detail.descMono = descMono; detail.allVDown = allVDown;
+    detail.VprimeHalf = Vprime(p.K / 2, p); detail.VprimeK = Vprime(p.K, p);
+    ok('Monotone approach from both sides (N₀=5 climbs, N₀=150 descends) & V=(N−K)² falls to 0 — V must FALL (vs prey\'s flat ring)',
+       climbMono && descMono && allVDown && Vprime(p.K / 2, p) <= 0 && Vprime(p.K, p) === 0,
+       'climb↑=' + climbMono + ' descend↓=' + descMono + ' V↓(all)=' + allVDown +
+       '  ·  V̇(K/2)=' + Vprime(p.K / 2, p) + ' V̇(K)=' + Vprime(p.K, p));
+  }
+
+  // (6) DETERMINISM — same inputs ⇒ byte-identical trajectory across two runs.
+  {
+    const r1 = trace(5, 0.01, 2000, 'rk4', p);
+    const r2 = trace(5, 0.01, 2000, 'rk4', p);
+    const a = JSON.stringify([r1.Ns, r1.errs]);
+    const bb = JSON.stringify([r2.Ns, r2.errs]);
+    detail.deterministic = a === bb;
+    ok('Deterministic — identical inputs ⇒ byte-identical trajectory',
+       a === bb, a === bb ? 'two runs byte-identical' : 'DIFFER');
+  }
+
+  const pass = checks.filter((c) => c.pass).length;
+  return { pass, total: checks.length, checks, detail };
+}
+
+// helper: does the true (RK4) solution approach K monotonically from N₀'s side?
+function monotoneApproach(N0, dt, T, p = P) {
+  let N = N0, prev = N0;
+  const dir = N0 < p.K ? 1 : -1;       // below K climbs (+), above K descends (−)
+  const steps = Math.round(T / dt);
+  for (let i = 0; i < steps; i++) {
+    N = rk4Step(N, dt, p);
+    if (dir * (N - prev) < -1e-9) return false;
+    prev = N;
+  }
+  return true;
+}
+// ===== END LOGISTIC-CORE =====
+
+// ============================================================================
+//  THE INSTRUMENT — the glass terrarium (back-glass PHASE LINE, FACET A), the
+//  S-curve hero pane (FACET B), the Lyapunov needle.  All driven by the SAME core.
+// ============================================================================
+(function(){
+  'use strict';
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---- self-test badge ----
+  const chip = document.getElementById('selftest');
+  const res = runSelfTest();
+  if (res.pass === res.total) { chip.className = 'selftest ok'; chip.textContent = 'self-test ' + res.pass + '/' + res.total + ' ✓'; }
+  else { chip.className = 'selftest bad'; chip.textContent = 'self-test ' + res.pass + '/' + res.total + ' ✗'; }
+  console.log('%cLogistic Growth — self-test ' + res.pass + '/' + res.total, 'color:#86d39a;font-weight:bold');
+  for (const c of res.checks) console.log((c.pass ? '  ✓ ' : '  ✗ ') + c.name + (c.info ? '  ·  ' + c.info : ''));
+  chip.addEventListener('click', function(){
+    const d = res.detail;
+    console.log('%cdetail', 'color:#d9a441;font-weight:bold', d);
+    alert('Self-test ' + res.pass + '/' + res.total +
+      '\n\nstability: f\'(K)=' + d.eigK + ' (stable)  f\'(0)=' + d.eig0 + ' (unstable)' +
+      '\nRK4 vs closed form: ' + d.rk4Err.toExponential(2) + '  (4th order, ' + d.orderRatio.toFixed(0) + '×)' +
+      '\nleaky a=1.6: maxN=' + d.leakyMaxN.toFixed(2) + '  (overshoots, ' + d.leakyCross + ' crossings)' +
+      '\nRK4 same step: overshoot=' + d.rk4Overshoot + '  (' + d.rk4Cross + ' crossings)' +
+      '\ninflection: t*=' + d.inflectT.toFixed(4) + '  lands N=' + d.inflectLanded.toFixed(6) +
+      '\nV̇(K/2)=' + d.VprimeHalf + '  V̇(K)=' + d.VprimeK + '  (V falls — stability)' +
+      '\n\n(Full per-check lines are in the console.)');
+  });
+
+  // ---- DOM ----
+  const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  const sc = document.getElementById('scurve'), sctx = sc.getContext('2d');
+  const nd = document.getElementById('needle'), nctx = nd.getContext('2d');
+  const methodToggle = document.getElementById('methodToggle');
+  const rateEl = document.getElementById('rate'), rVal = document.getElementById('rVal');
+  const capEl = document.getElementById('cap'), kVal = document.getElementById('kVal');
+  const n0El = document.getElementById('n0'), n0Val = document.getElementById('n0Val');
+  const dtEl = document.getElementById('dt'), dtVal = document.getElementById('dtVal'), aVal = document.getElementById('aVal');
+  const crankEl = document.getElementById('crank'), crankHint = document.getElementById('crankHint');
+  const playBtn = document.getElementById('playBtn');
+  const vval = document.getElementById('vval'), vmethod = document.getElementById('vmethod'),
+        vnote = document.getElementById('vnote'), verdict = document.getElementById('verdict');
+
+  // ---- HiDPI sizing ----
+  const DPR = Math.min(2, window.devicePixelRatio || 1);
+  function fit(canvas, c, cssW, cssH){
+    canvas.style.height = cssH + 'px';
+    canvas.width = Math.round(cssW * DPR); canvas.height = Math.round(cssH * DPR);
+    c.setTransform(DPR, 0, 0, DPR, 0, 0);
+    return { w: cssW, h: cssH };
+  }
+  let GEO = {};
+  function layout(){
+    const W = cv.clientWidth || 1180;
+    GEO.cv = fit(cv, ctx, W, Math.max(300, Math.min(500, W * 0.42)));
+    GEO.sc = fit(sc, sctx, sc.clientWidth || 700, 210);
+    GEO.nd = fit(nd, nctx, nd.clientWidth || 440, 100);
+  }
+
+  // ---- state ----
+  let pr = { r: 0.6, K: 100 };     // live params (the r/K sliders write here)
+  let method = 'rk4';
+  let N0 = 5;                       // start colony size
+  let dt = 0.01;                    // step size; a = dt·r is the bifurcation knob
+  let playing = !reduce;
+  let crankMode = false;
+
+  // the running simulation state + a rolling time-series of the LIVE integrator.
+  let sN = N0;                      // current colony size
+  let tsim = 0;                     // current time
+  let series = [];                  // [t, N] of the live integrator, for the S-curve
+  const T_WINDOW = 28;             // seconds of t shown across the S-curve pane
+  const NMAX_FACTOR = 1.35;        // data window so overshoot stays on-glass
+
+  function reseed(){
+    sN = N0; tsim = 0; series = [[0, N0]];
+  }
+  reseed();
+
+  // advance the live state by `realDt` seconds of sim-time using the CHOSEN method,
+  // taking whole user-dt steps (the dt slider is the ACTUAL method step — the point).
+  function advance(realDt){
+    const step = stepper(method);
+    let budget = realDt, guard = 0;
+    while (budget > 1e-9 && guard < 4000){
+      const h = Math.min(dt, budget);
+      sN = step(sN, h, pr);
+      tsim += h; budget -= h; guard++;
+      // record samples sparsely enough to keep the series light
+      const last = series[series.length-1];
+      if (tsim - last[0] >= dt*0.999 || guard===1){ series.push([tsim, sN]); }
+    }
+    // clamp the DISPLAY only (the leaky map can fling far); keep math honest above.
+    if (!isFinite(sN)) sN = pr.K;
+    // trim the series to the visible window
+    const cutoff = tsim - T_WINDOW;
+    while (series.length > 2 && series[0][0] < cutoff && series[1][0] < cutoff) series.shift();
+  }
+
+  // ============================================================================
+  //  FACET A — the BACK GLASS: the 1-D PHASE LINE on the N-axis.  Arrows whose
+  //  length=|f(N)| and direction=sign f(N), all converging on K; the field
+  //  PROFILE f(N) above the axis (peaks at K/2); the two fixed points (hollow at
+  //  0, filled at K) with a tangent-slope stub; the K-line and K/2 caret; a live
+  //  BEAD that slides to rest at K.
+  // ============================================================================
+  function phaseMap(geo){
+    const pad = 18;
+    const pw = geo.w * 0.5, ph = geo.h * 0.66;
+    const px = geo.w - pw - pad, py = pad + 8;
+    const NMAX = pr.K * NMAX_FACTOR;
+    const axisY = py + ph * 0.62;                 // the N-axis line
+    return {
+      px, py, pw, ph, NMAX, axisY,
+      X: (N) => px + (N / NMAX) * pw,             // N → x along the axis
+      // f(N) → a height above the axis (profile); scaled to the field's own peak.
+      Fy: (f) => axisY - (f / (pr.r * pr.K / 4)) * (ph * 0.30),
+    };
+  }
+
+  function drawPhaseLine(){
+    const g = GEO.cv; const m = phaseMap(g);
+    ctx.save();
+    ctx.fillStyle = 'rgba(8,14,11,0.72)';
+    roundRect(ctx, m.px, m.py, m.pw, m.ph, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(178,154,100,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.clip();
+
+    ctx.font = '600 9px var(--font-mono, monospace)';
+    ctx.fillStyle = 'rgba(159,176,164,0.72)';
+    ctx.fillText('phase line  N  →', m.px + 8, m.py + m.ph - 7);
+    ctx.fillText('f(N)', m.px + 8, m.py + 14);
+
+    const axisY = m.axisY;
+    // --- the N-axis ---
+    ctx.strokeStyle = 'rgba(159,176,164,0.4)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(m.X(0), axisY); ctx.lineTo(m.X(m.NMAX), axisY); ctx.stroke();
+
+    // --- the K-line ceiling (vertical glass water-line at N=K) ---
+    const kx = m.X(pr.K);
+    ctx.strokeStyle = 'rgba(217,164,65,0.5)'; ctx.lineWidth = 1; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(kx, m.py + 6); ctx.lineTo(kx, m.py + m.ph - 6); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(217,164,65,0.9)'; ctx.fillText('K', kx - 3, m.py + m.ph - 20);
+
+    // --- the K/2 inflection caret ---
+    const hx = m.X(pr.K/2);
+    ctx.strokeStyle = 'rgba(134,211,154,0.35)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(hx, axisY-4); ctx.lineTo(hx-4, axisY+4); ctx.moveTo(hx, axisY-4); ctx.lineTo(hx+4, axisY+4); ctx.stroke();
+    ctx.fillStyle = 'rgba(134,211,154,0.7)'; ctx.fillText('K/2', hx - 8, axisY + 16);
+
+    // --- the faint field PROFILE curve f(N) above the axis (peaks at K/2) ---
+    ctx.strokeStyle = 'rgba(134,211,154,0.45)'; ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    let started = false;
+    for (let N = 0; N <= m.NMAX; N += m.NMAX/160){
+      const x = m.X(N), y = m.Fy(field(N, pr));
+      if (!started){ ctx.moveTo(x,y); started = true; } else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+
+    // --- the converging ARROWS along the axis (length=|f|, direction=sign f) ---
+    const NMAXa = m.NMAX;
+    for (let i = 1; i <= 13; i++){
+      const N = (i/14) * NMAXa;
+      const f = field(N, pr);
+      const x0 = m.X(N);
+      // arrow length ∝ |f|, capped; below K points right (→K), above K points left.
+      const len = Math.min(m.pw*0.10, Math.abs(f)/(pr.r*pr.K/4) * m.pw*0.11) + 3;
+      const dir = Math.sign(f) || 0;
+      const x1 = x0 + dir * len;
+      const conv = Math.abs(N - pr.K) < pr.K*0.06;
+      ctx.strokeStyle = conv ? 'rgba(217,164,65,0.65)' : 'rgba(159,176,164,0.55)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(x0, axisY); ctx.lineTo(x1, axisY); ctx.stroke();
+      // arrowhead
+      if (dir !== 0){
+        ctx.beginPath();
+        ctx.moveTo(x1, axisY);
+        ctx.lineTo(x1 - dir*4, axisY - 3);
+        ctx.lineTo(x1 - dir*4, axisY + 3);
+        ctx.closePath(); ctx.fillStyle = ctx.strokeStyle; ctx.fill();
+      }
+    }
+
+    // --- the two FIXED POINTS: hollow at 0 (unstable), filled disc at K (stable) ---
+    // N=0 — OPEN hollow dot, with a +slope tangent stub (λ=+r, repelling).
+    const z0 = m.X(0);
+    ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(240,138,122,0.9)';
+    ctx.beginPath(); ctx.arc(z0, axisY, 4.2, 0, Math.PI*2); ctx.stroke();
+    drawTangentStub(z0, axisY, fPrime(0, pr), 'rgba(240,138,122,0.7)', '+r');
+    // N=K — FILLED disc (stable), with a −slope tangent stub (λ=−r, attracting).
+    ctx.fillStyle = 'rgba(134,211,154,0.95)';
+    ctx.beginPath(); ctx.arc(kx, axisY, 4.6, 0, Math.PI*2); ctx.fill();
+    drawTangentStub(kx, axisY, fPrime(pr.K, pr), 'rgba(134,211,154,0.7)', '−r');
+
+    // --- the live BEAD on the phase line (the colony's current size) ---
+    const bx = m.X(Math.max(0, Math.min(m.NMAX, sN)));
+    const leak = method === 'leaky';
+    const bc = leak ? '217,164,65' : '255,247,200';
+    const halo = ctx.createRadialGradient(bx, axisY, 0, bx, axisY, 12);
+    halo.addColorStop(0, 'rgba('+bc+',0.85)'); halo.addColorStop(1, 'rgba('+bc+',0)');
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(bx, axisY, 12, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgb('+bc+')'; ctx.beginPath(); ctx.arc(bx, axisY, 3.4, 0, Math.PI*2); ctx.fill();
+
+    ctx.restore();
+    return { axisY, X: m.X, beadX: bx };   // hand the bead anchor to the S-curve guide
+  }
+
+  // a short tangent stub through (x,y) at the field's slope there.  The phase line
+  // runs left→right (increasing N); a +slope repels (line rises to the right),
+  // a −slope attracts (line falls to the right).  Screen-y is down, so negate.
+  function drawTangentStub(x, y, slope, color, label){
+    const L = 13;
+    const dy = -slope * L * 0.6;          // rise over the half-width L (screen coords)
+    ctx.strokeStyle = color; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(x - L, y - dy); ctx.lineTo(x + L, y + dy); ctx.stroke();
+    ctx.font = '600 8px var(--font-mono, monospace)';
+    ctx.fillStyle = color; ctx.fillText(label, x - 5, y - 9);
+  }
+
+  // ---- the whole back glass (the terrarium frame + the phase line) ----
+  function drawTerrarium(){
+    const g = GEO.cv, W = g.w, H = g.h;
+    ctx.clearRect(0,0,W,H);
+
+    // iron-and-glass vault feel: faint mullion bars + an arch across the top
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = 'rgba(178,154,100,0.22)'; ctx.lineWidth = 1;
+    for (let i=0;i<=8;i++){ const x=W*i/8; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x, H); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(0, H*0.12);
+    ctx.bezierCurveTo(W*0.5, -H*0.06, W*0.5, -H*0.06, W, H*0.12); ctx.stroke();
+    ctx.restore();
+
+    // the colony, drawn as a growing glass column on the LEFT (a literal "fill to K")
+    drawColony(W, H);
+
+    // readouts
+    ctx.font = '600 12px var(--font-mono, monospace)';
+    ctx.fillStyle = 'rgba(134,211,154,0.92)'; ctx.fillText('N = ' + sN.toFixed(2), W*0.04, H*0.93);
+    ctx.fillStyle = 'rgba(217,164,65,0.85)'; ctx.fillText('K = ' + pr.K.toFixed(0), W*0.04, H*0.97 > H-8 ? H-8 : H*0.97);
+
+    // the back glass: the phase line
+    return drawPhaseLine();
+  }
+
+  // a glass column on the left that fills to N/K — the colony "rising to the water-line".
+  function drawColony(W, H){
+    const cx = W*0.085, cw = W*0.07, top = H*0.16, bot = H*0.86, colH = bot - top;
+    // the vessel
+    ctx.strokeStyle = 'rgba(178,154,100,0.4)'; ctx.lineWidth = 1.2;
+    ctx.strokeRect(cx, top, cw, colH);
+    // the K water-line (where the colony settles)
+    ctx.strokeStyle = 'rgba(217,164,65,0.6)'; ctx.setLineDash([3,3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx-4, top); ctx.lineTo(cx+cw+4, top); ctx.stroke(); ctx.setLineDash([]);
+    // the fill (clamped 0..1.35 for display so overshoot peeks above the line)
+    const frac = Math.max(0, Math.min(NMAX_FACTOR, sN/pr.K));
+    const fillTop = bot - Math.min(colH, frac*colH);
+    const over = frac > 1;
+    const grd = ctx.createLinearGradient(0, bot, 0, top);
+    grd.addColorStop(0, over ? 'rgba(217,164,65,0.45)' : 'rgba(134,211,154,0.42)');
+    grd.addColorStop(1, over ? 'rgba(217,164,65,0.12)' : 'rgba(134,211,154,0.10)');
+    ctx.fillStyle = grd; ctx.fillRect(cx, fillTop, cw, bot-fillTop);
+  }
+
+  // ============================================================================
+  //  FACET B — the S-CURVE HERO: N-vs-t, ghost (closed form) drawn first, the
+  //  live integrator ridden on top; the K water-line; the N=0 floor hairline; the
+  //  inflection dot+tangent when inflection(N0)!==null.  PEELS OFF under leaky.
+  // ============================================================================
+  function scurveMap(geo){
+    const padL = 30, padR = 12, padT = 12, padB = 20;
+    const NMAX = pr.K * NMAX_FACTOR;
+    const t0 = Math.max(0, tsim - T_WINDOW);
+    return {
+      t0, NMAX, padL, padR, padT, padB,
+      X: (t) => padL + ((t - t0)/T_WINDOW) * (geo.w - padL - padR),
+      Y: (N) => geo.h - padB - (Math.max(0,Math.min(NMAX,N))/NMAX) * (geo.h - padT - padB),
+    };
+  }
+
+  function drawScurve(){
+    const g = GEO.sc, W = g.w, H = g.h;
+    sctx.clearRect(0,0,W,H);
+    sctx.fillStyle = '#0a0f0d'; sctx.fillRect(0,0,W,H);
+    const m = scurveMap(g);
+
+    // the N=0 floor hairline (the unstable equilibrium)
+    sctx.strokeStyle = 'rgba(240,138,122,0.3)'; sctx.lineWidth = 1; sctx.setLineDash([2,3]);
+    sctx.beginPath(); sctx.moveTo(m.X(m.t0), m.Y(0)); sctx.lineTo(m.X(tsim), m.Y(0)); sctx.stroke(); sctx.setLineDash([]);
+    sctx.font = '600 8px var(--font-mono, monospace)'; sctx.fillStyle = 'rgba(240,138,122,0.6)';
+    sctx.fillText('N=0 (unstable)', m.X(m.t0)+2, m.Y(0)-3);
+
+    // the K asymptote — the glass water-line
+    sctx.strokeStyle = 'rgba(217,164,65,0.5)'; sctx.lineWidth = 1; sctx.setLineDash([4,3]);
+    sctx.beginPath(); sctx.moveTo(m.X(m.t0), m.Y(pr.K)); sctx.lineTo(m.X(tsim), m.Y(pr.K)); sctx.stroke(); sctx.setLineDash([]);
+    sctx.fillStyle = 'rgba(217,164,65,0.85)'; sctx.fillText('K = '+pr.K.toFixed(0), m.X(tsim)-46, m.Y(pr.K)-4);
+
+    // the GHOST: closed form N(t) through N0, drawn FAINT/DASHED first (analytic truth)
+    sctx.strokeStyle = 'rgba(159,176,164,0.55)'; sctx.lineWidth = 1.4; sctx.setLineDash([5,4]);
+    sctx.beginPath();
+    let started = false;
+    for (let t = m.t0; t <= tsim + 0.001; t += T_WINDOW/240){
+      const N = closed(t, N0, pr);
+      const x = m.X(t), y = m.Y(N);
+      if (!started){ sctx.moveTo(x,y); started = true; } else sctx.lineTo(x,y);
+    }
+    sctx.stroke(); sctx.setLineDash([]);
+
+    // the INFLECTION dot + short tangent (only when inflection(N0) !== null and in-window)
+    const inf = inflection(N0, pr);
+    if (inf && inf.t >= m.t0 && inf.t <= tsim){
+      const ix = m.X(inf.t), iy = m.Y(inf.N);
+      // tangent of slope r·K/4 (dN/dt) mapped to screen slope
+      const dtp = T_WINDOW*0.06;
+      const dN = inf.slope * dtp;
+      sctx.strokeStyle = 'rgba(134,211,154,0.55)'; sctx.lineWidth = 1.2;
+      sctx.beginPath(); sctx.moveTo(m.X(inf.t-dtp), m.Y(inf.N-dN)); sctx.lineTo(m.X(inf.t+dtp), m.Y(inf.N+dN)); sctx.stroke();
+      sctx.fillStyle = 'rgba(134,211,154,0.9)';
+      sctx.beginPath(); sctx.arc(ix, iy, 3, 0, Math.PI*2); sctx.fill();
+      sctx.font = '600 8px var(--font-mono, monospace)'; sctx.fillStyle = 'rgba(134,211,154,0.7)';
+      sctx.fillText('inflection N=K/2', ix+5, iy-4);
+    }
+
+    // the LIVE integrator line ridden on top
+    const leak = method === 'leaky';
+    sctx.strokeStyle = leak ? '#d9a441' : '#86d39a'; sctx.lineWidth = 1.9;
+    sctx.beginPath();
+    let s2 = false;
+    for (let i=0;i<series.length;i++){
+      const [t,N] = series[i];
+      if (t < m.t0 - 0.001) continue;
+      const x = m.X(t), y = m.Y(N);
+      if (!s2){ sctx.moveTo(x,y); s2 = true; } else sctx.lineTo(x,y);
+    }
+    sctx.stroke();
+
+    // the bead's height marker on the right edge (links to the phase-line bead)
+    const by = m.Y(sN);
+    sctx.fillStyle = leak ? '#d9a441' : '#fff7c8';
+    sctx.beginPath(); sctx.arc(m.X(tsim), by, 3.2, 0, Math.PI*2); sctx.fill();
+    return { Y: m.Y, beadY: by, Xnow: m.X(tsim) };
+  }
+
+  // ============================================================================
+  //  THE LYAPUNOV NEEDLE — V=(N−K)² over time, a monotone slide to 0 under RK4;
+  //  under leaky it can tick UP (K is no longer a clean attractor for the map).
+  // ============================================================================
+  let vHist = [];
+  function drawNeedle(){
+    const g = GEO.nd, W = g.w, H = g.h;
+    nctx.clearRect(0,0,W,H);
+    nctx.fillStyle = '#0a0f0d'; nctx.fillRect(0,0,W,H);
+    const V = Vlyap(sN, pr);
+    const Vstart = Vlyap(N0, pr) || 1;
+    // log-ish scale: show V as a fraction of its starting value, bottom=0 top=Vstart.
+    const padB = 14, padT = 10;
+    vHist.push(V); if (vHist.length > 240) vHist.shift();
+    // axis labels
+    nctx.font='600 8px var(--font-mono,monospace)'; nctx.fillStyle='rgba(159,176,164,0.7)';
+    nctx.fillText('V₀', 4, padT+4); nctx.fillText('0 (at K)', 4, H-4);
+    const mapY = (v) => H - padB - (Math.min(1, Math.max(0, v/Vstart))) * (H - padT - padB);
+    // the descent trace
+    const leak = method === 'leaky';
+    nctx.strokeStyle = leak ? '#d9a441' : '#86d39a'; nctx.lineWidth = 1.8;
+    nctx.beginPath();
+    for (let i=0;i<vHist.length;i++){
+      const x = 30 + (i/(240-1))*(W-40), y = mapY(vHist[i]);
+      if (i===0) nctx.moveTo(x,y); else nctx.lineTo(x,y);
+    }
+    nctx.stroke();
+    // the current-V dot
+    const cx = 30 + ((vHist.length-1)/(240-1))*(W-40), cy = mapY(V);
+    nctx.fillStyle = leak ? '#d9a441' : '#86d39a'; nctx.beginPath(); nctx.arc(cx,cy,3,0,Math.PI*2); nctx.fill();
+    return V;
+  }
+
+  function roundRect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r);
+    c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+
+  // the faint guide linking the phase-line bead and the S-curve bead height
+  // (drawn on the main canvas overlay region is hard cross-canvas; we instead draw
+  //  a subtle "same N" tick on the S-curve at the phase-line bead's N — done above).
+
+  // ---- readouts ----
+  function updateReadouts(V){
+    const leak = method === 'leaky';
+    vval.textContent = (V < 1e-3 ? V.toExponential(2) : V.toFixed(2));
+    vval.className = 'v' + (leak ? ' bad' : '');
+    vmethod.textContent = leak ? 'leaky step' : 'RK4';
+    vmethod.className = 'v' + (leak ? ' bad' : '');
+    if (leak){
+      vnote.innerHTML = 'The needle can <b>tick back up</b> &mdash; the coarse map overshoots K, so V=(N&minus;K)&sup2; is no longer driven monotonically to 0. K is no longer a clean attractor for the discrete map.';
+      verdict.className = 'verdict leak';
+      verdict.innerHTML = '<b>leaky step &mdash; the tainted control.</b> At a = dt&middot;r &ge; 1.6 the forward-Euler step IS the logistic <b>map</b>: it overshoots K and rings. Shrink dt (a &lt; 1) and it settles &mdash; but only RK4 is clean at <i>any</i> step.';
+    } else {
+      vnote.innerHTML = 'Under RK4 the needle only ever <b>slides down</b> to 0 &mdash; V=(N&minus;K)&sup2; falls; that fall IS stability. (Next door the predator&ndash;prey V stays <b>flat</b> on its ring.)';
+      verdict.className = 'verdict';
+      verdict.innerHTML = '<b>RK4 &mdash; the truth.</b> The live line sits on the closed-form ghost (error ~3e&minus;10 at dt=0.01); the colony climbs through the K/2 inflection and settles at K. N&#42;=K is stable: f&prime;(K)=&minus;r&lt;0.';
+    }
+  }
+
+  // ============================ LOOP ============================
+  let last = performance.now();
+  function frame(now){
+    const realDt = Math.min(0.05, (now - last)/1000); last = now;
+    if (playing && !crankMode){
+      advance(realDt * 2.2);     // ~2.2 sim-seconds per real second
+      // gently recycle so the demo loops: once settled near K (or far past), reseed.
+      if (tsim > T_WINDOW*1.6) reseed();
+    }
+    drawTerrarium();
+    drawScurve();
+    const V = drawNeedle();
+    updateReadouts(V);
+    raf = requestAnimationFrame(frame);
+  }
+  let raf = 0;
+
+  // ---- reduced motion: render ONE static frame ----
+  function renderStatic(){
+    // build a full one-window series of the LIVE method from N0, frozen mid-climb.
+    reseed();
+    const step = stepper(method);
+    let N = N0, t = 0;
+    series = [[0, N0]];
+    while (t < T_WINDOW){ N = step(N, dt, pr); t += dt; series.push([t, N]); }
+    tsim = T_WINDOW;
+    // freeze the bead ~0.7·K mid-climb: a step past the inflection (t*+1.3 ≈ 0.69·K).
+    const frozen = closed(Math.log((pr.K-N0)/N0)/pr.r + 1.3, N0, pr);
+    sN = Math.min(pr.K*NMAX_FACTOR, frozen);
+    vHist = []; for (let tt=0; tt<=T_WINDOW; tt+=T_WINDOW/120) vHist.push(Vlyap(closed(tt,N0,pr),pr));
+    drawTerrarium(); drawScurve(); const V = drawNeedle(); updateReadouts(V);
+  }
+
+  // ============================ CONTROLS ============================
+  // CRITICAL dt-coupling: leaky PRESETS a coarse dt (a≈1.8) so ringing shows at once;
+  // rk4 restores a fine dt (0.01) so a viewer never flips to leaky and sees nothing.
+  function setDt(v){ dt = v; dtEl.value = String(v); dtVal.textContent = v.toFixed(3); refreshA(); }
+  function refreshA(){
+    const a = dt * pr.r;
+    aVal.textContent = a.toFixed(3);
+    aVal.className = 'val' + (a >= 1.6 ? ' warn' : '');
+  }
+
+  methodToggle.addEventListener('click', function(e){
+    const b = e.target.closest('button'); if(!b) return;
+    method = b.dataset.m;
+    [...methodToggle.children].forEach(x=>{ x.classList.toggle('on', x===b); x.classList.toggle('leaky', x===b && method==='leaky'); });
+    if (method === 'leaky'){ setDt(Math.round((1.8/pr.r)*100)/100); }  // a≈1.8 → ringing
+    else { setDt(0.01); }                                              // a≈0.006 → clean
+    vHist = []; reseed();
+    if (reduce) renderStatic();
+  });
+  rateEl.addEventListener('input', function(){
+    pr.r = parseFloat(rateEl.value); rVal.textContent = pr.r.toFixed(2);
+    refreshA(); vHist = []; reseed(); if (reduce) renderStatic();
+  });
+  capEl.addEventListener('input', function(){
+    pr.K = parseInt(capEl.value,10); kVal.textContent = pr.K.toFixed(0);
+    // keep N0 sane vs the new K
+    if (N0 > pr.K*1.9){ N0 = Math.round(pr.K*1.9); n0El.value = String(N0); n0Val.textContent = String(N0); }
+    vHist = []; reseed(); if (reduce) renderStatic();
+  });
+  n0El.addEventListener('input', function(){
+    N0 = parseInt(n0El.value,10); n0Val.textContent = String(N0);
+    vHist = []; reseed(); if (reduce) renderStatic();
+  });
+  dtEl.addEventListener('input', function(){
+    dt = parseFloat(dtEl.value); dtVal.textContent = dt.toFixed(3); refreshA();
+    if (reduce) renderStatic();
+  });
+  playBtn.addEventListener('click', function(){
+    playing = !playing; crankMode = false;
+    playBtn.innerHTML = playing ? '&#10073;&#10073; pause' : '&#9654; play';
+  });
+  // the crank: dragging it advances time BY HAND (you scrub t along the curve).
+  let lastCrank = 0;
+  crankEl.addEventListener('input', function(){
+    crankMode = true; playing = false; playBtn.innerHTML = '&#9654; play';
+    const v = parseInt(crankEl.value,10);
+    let delta = v - lastCrank; lastCrank = v;
+    if (delta < -500) delta += 1001; if (delta > 500) delta -= 1001;
+    if (delta !== 0) advance(delta * 0.06);
+    crankHint.textContent = '(driving)';
+    drawTerrarium(); drawScurve(); const V = drawNeedle(); updateReadouts(V);
+  });
+  crankEl.addEventListener('change', function(){ crankHint.textContent = '(drag)'; });
+
+  // ---- boot ----
+  refreshA();
+  window.addEventListener('resize', function(){ layout(); if (reduce) renderStatic(); }, { passive:true });
+  layout();
+  if (reduce){
+    playBtn.innerHTML = '&#9654; play'; playing = false;
+    renderStatic();
+  } else {
+    raf = requestAnimationFrame(frame);
+  }
+})();
+</script>
+</body>
+</html>
