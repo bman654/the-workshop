@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Rydberg Constant — read off starlight</title>
+<!-- a standalone Workbench bench (a [cross]: Plumbline × Spectroscope); NOT a front-door page, NO ws:seen. -->
+<style>
+  /* ── COLOR-MEANING CONTRACT (state it once; siblings must not drift) ──────────
+     slate-blue  = the fit line + the abstract plot accent          --accent
+     gilt/brass  = the recovered constant R + the u=0 intercept     --floor   (Computation's "bound" hue, REUSED from Plumbline)
+     warm red    = the L1 / robust line + the legitimate FAIL state  --l1 / --bad
+     true colors = the spectral light on the plate (wavelengthToRGB) — saturated light fades to slate abstraction L→R
+     green/red   = RESERVED for the self-test pill + the honest "outside band" failure ONLY
+  */
+  :root{
+    --panel-bg: rgba(13,12,16,0.90);
+    --panel-edge: rgba(127,178,230,0.28);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --ink-faint: #6b6e7e;
+    --accent: #7fb2e6;          /* the fit line + plot accent (slate/chalk blue) */
+    --accent-soft: rgba(127,178,230,0.16);
+    --bg: #06070b;
+    --plate: #050507;           /* the spectral plate band (spectroscope idiom) */
+    --stage: #080a10;
+    --floor: #f0c674;           /* the recovered constant R + the u=0 intercept (gilt/brass) */
+    --floor-soft: rgba(240,198,116,0.16);
+    --l1: #b08fd3;              /* the L1/robust line (a different CHOICE, violet) */
+    --band: rgba(120,140,180,0.16);  /* the translucent slate prediction band */
+    --good: #8fd79a;
+    --good-soft: rgba(120,200,130,0.5);
+    --bad: #e0664f;
+    --bad-soft: rgba(220,120,100,0.6);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+  /* ---- topbar (mirror hydrogen/plumbline: flex-wrap + min-width:0 so the pill
+       never collides on phones — the Carnot/Hydrogen mobile trap) ---- */
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    justify-content:space-between; padding:13px 18px 0; pointer-events:none; gap:10px; flex-wrap:wrap; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:14px; align-items:center; min-width:0; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:11px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.4px; margin:0; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:var(--good); border-color:var(--good-soft); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:var(--bad-soft); background:rgba(70,30,26,0.4); }
+
+  /* ---- layout: two-panel stage + side panel ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; display:flex; flex-direction:column;
+    padding:50px 0 0; overflow:hidden; }
+  #stageInner{ flex:1 1 auto; position:relative; min-height:0; display:flex;
+    border-top:1px solid var(--panel-edge); overflow:hidden; }
+  /* the two canvases joined by a thin "conduit" gutter */
+  #plateHost{ flex:1 1 50%; position:relative; min-width:0; background:var(--plate); overflow:hidden; }
+  #conduitHost{ flex:0 0 44px; position:relative; min-width:0;
+    background:linear-gradient(90deg, var(--plate), var(--stage)); overflow:hidden; }
+  #plotHost{ flex:1 1 50%; position:relative; min-width:0; background:var(--stage);
+    border-left:1px solid rgba(127,178,230,0.10); overflow:hidden; }
+  #plate,#conduit,#plot{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; }
+  #plate{ cursor:crosshair; } #plot{ cursor:crosshair; }
+  .panelTag{ position:absolute; left:11px; top:9px; z-index:6; pointer-events:none;
+    font:600 9.5px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint);
+    background:rgba(0,0,0,0.4); border:1px solid var(--panel-edge); border-radius:6px; padding:5px 8px; }
+  #tooltip{ position:absolute; z-index:9; pointer-events:none; opacity:0; transition:opacity .12s;
+    font:600 10.5px/1.4 var(--font-mono); color:var(--ink); background:rgba(4,4,7,0.92);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 10px; max-width:280px; }
+  #tooltip.show{ opacity:1; }
+  #tooltip b{ color:var(--floor); }
+  #hint{ position:absolute; left:12px; bottom:11px; z-index:6; pointer-events:none; max-width:58%;
+    font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.42);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:6px 10px; }
+  #hint b{ color:var(--accent); } #hint .g{ color:var(--floor); }
+
+  /* ---- side panel ---- */
+  #side{ width:308px; flex:0 0 308px; background:var(--panel-bg); border-left:1px solid var(--panel-edge);
+    padding:56px 16px 22px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  #side .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0; letter-spacing:.2px; }
+  #side .lede b{ color:var(--ink); font-weight:600; }
+  #side .lede .gilt{ color:var(--floor); font-weight:700; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:6px 0 -2px; border-top:1px solid rgba(127,178,230,0.16); padding-top:12px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .chip{ font:600 11px/1 var(--font-mono); padding:7px 10px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink-dim); transition:.15s; user-select:none; }
+  .chip:hover{ color:var(--ink); border-color:var(--accent); }
+  .chip.on{ color:#06080c; background:var(--accent); border-color:var(--accent); font-weight:700; }
+  .chip.sm{ font-size:10.5px; padding:6px 8px; }
+  /* segmented toggles (plumbline .seg) */
+  .seg{ display:flex; gap:2px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-edge); border-radius:9px; padding:3px; }
+  .seg .opt{ flex:1; text-align:center; font:600 10.5px/1 var(--font-mono); padding:8px 5px; border-radius:6px;
+    color:var(--ink-dim); cursor:pointer; transition:.15s; user-select:none; }
+  .seg .opt.on{ color:#06080c; font-weight:700; }
+  .seg .opt.l2.on, .seg .opt.vac.on, .seg .opt.b68.on{ background:var(--accent); }
+  .seg .opt.l1.on{ background:var(--l1); }
+  .seg .opt.air.on, .seg .opt.b95.on{ background:var(--floor); }
+  /* the noise slider */
+  .slider{ width:100%; margin:4px 0 0; accent-color:var(--accent); }
+  .srow{ display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+    font:600 10.5px/1.3 var(--font-mono); color:var(--ink-dim); }
+  .srow .v{ color:var(--accent); font-variant-numeric:tabular-nums; }
+  /* the seed stepper */
+  .seedrow{ display:flex; align-items:center; gap:6px; font:600 11px/1 var(--font-mono); color:var(--ink-dim); flex-wrap:wrap; }
+  .stp{ font:600 13px/1 var(--font-mono); width:26px; height:26px; border-radius:7px; cursor:pointer;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink-dim); user-select:none;
+    display:flex; align-items:center; justify-content:center; transition:.15s; }
+  .stp:hover{ color:var(--ink); border-color:var(--accent); }
+  .seedval{ color:var(--accent); font-variant-numeric:tabular-nums; min-width:78px; text-align:center; }
+  .note{ font:10.5px/1.5 var(--font-mono); color:var(--ink-faint); margin:0; }
+  .note b{ color:var(--ink-dim); }
+  .note.caveat{ border-left:2px solid var(--l1); padding-left:9px; }
+  .note.airnote{ border-left:2px solid var(--floor); padding-left:9px; }
+
+  /* ── THE PAYOFF: "the constant, twice" card ─────────────────────────────────── */
+  .twice{ display:flex; flex-direction:column; gap:7px; }
+  .Rrow{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; font:600 11px/1.4 var(--font-mono); }
+  .Rrow .k{ color:var(--ink-dim); } .Rrow .v{ color:var(--floor); font-variant-numeric:tabular-nums; }
+  .Rrow .v.acc{ color:var(--accent); }
+  /* the agreement number-line */
+  .agree{ position:relative; height:34px; border-radius:7px; background:rgba(0,0,0,0.36);
+    border:1px solid var(--panel-edge); overflow:hidden; margin-top:3px; }
+  .agree .codata{ position:absolute; top:0; bottom:0; width:2px; background:var(--ink-dim); left:50%;
+    box-shadow:0 0 5px 0 rgba(154,156,170,0.6); }
+  .agree .bandfill{ position:absolute; top:0; bottom:0; background:var(--band); border-left:1px solid var(--accent-soft); border-right:1px solid var(--accent-soft); }
+  .agree .mk{ position:absolute; top:50%; width:9px; height:9px; border-radius:50%; transform:translate(-50%,-50%); }
+  .agree .mk.slope{ background:var(--accent); box-shadow:0 0 5px 0 var(--accent); }
+  .agree .mk.interc{ background:var(--floor); box-shadow:0 0 5px 0 var(--floor); top:30%; }
+  .agree.bad{ border-color:var(--bad-soft); }
+  .agree .lbl{ position:absolute; left:6px; bottom:3px; font:600 8.5px/1 var(--font-mono); color:var(--ink-faint); }
+  .agree .lbl.r{ left:auto; right:6px; }
+  .recovered{ font:600 11px/1.4 var(--font-mono); color:var(--floor); text-align:center;
+    padding:6px; border-radius:7px; background:var(--floor-soft); border:1px solid var(--floor-soft); }
+  .recovered.bad{ color:#f08a7a; background:rgba(70,30,26,0.4); border-color:var(--bad-soft); }
+  .recovered .sub{ display:block; font-weight:600; font-size:9.5px; color:var(--ink-faint); margin-top:2px; }
+
+  .legend{ display:flex; flex-direction:column; gap:5px; font:10.5px/1.3 var(--font-mono); color:var(--ink-dim); }
+  .legend .li{ display:flex; align-items:center; gap:7px; }
+  .legend .sw2{ width:16px; height:0; border-top-width:2px; border-top-style:solid; flex:0 0 auto; }
+  .legend .dot{ width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
+
+  /* the reciprocal cross-teaser (host-room accent .xk idiom) */
+  .xteaser{ display:block; text-decoration:none; border:1px solid var(--panel-edge); border-radius:10px;
+    padding:10px 12px; background:rgba(127,178,230,0.05); transition:.18s; }
+  .xteaser:hover{ border-color:var(--accent); background:rgba(127,178,230,0.10); }
+  .xteaser .xk{ display:block; font:600 10px/1.3 var(--font-mono); color:var(--accent); letter-spacing:.04em; margin-bottom:3px; }
+  .xteaser .xt{ display:block; font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); }
+  .xteaser .xt b{ color:var(--ink); }
+
+  /* ---- responsive: stack panels; the topbar pill trap (hydrogen @media) ---- */
+  @media (max-width:820px){
+    #wrap{ flex-direction:column; }
+    #stage{ flex:1 1 52%; padding-top:46px; }
+    #side{ width:auto; flex:1 1 48%; border-left:none; border-top:1px solid var(--panel-edge);
+      padding:14px 14px 18px; }
+    .brand h1{ font-size:18px; }
+    #hint{ max-width:52%; }
+  }
+  @media (max-width:560px){ .brand .tag{ display:none; } .brand h1{ font-size:16px; } }
+  @media (max-width:430px){ .brand{ display:none; } .topbar{ padding:11px 12px 0; } }
+  @media (prefers-reduced-motion: reduce){
+    .agree .mk, #tooltip{ transition:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../workbench/index.html">← workbench</a>
+    </div>
+    <div class="brand">
+      <h1>The Rydberg Constant</h1>
+      <span class="tag">read off starlight</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for the per-leg detail (also printed to the console)">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <div id="stageInner">
+        <div id="plateHost">
+          <span class="panelTag">spectral plate · light</span>
+          <canvas id="plate"></canvas>
+          <div id="hint"></div>
+        </div>
+        <div id="conduitHost">
+          <canvas id="conduit"></canvas>
+        </div>
+        <div id="plotHost">
+          <span class="panelTag">1/n² plot · number</span>
+          <canvas id="plot"></canvas>
+        </div>
+      </div>
+      <div id="tooltip"></div>
+    </div>
+
+    <aside id="side">
+      <p class="lede" id="lede"><b>Measure the Rydberg constant from noisy starlight.</b> A blind line-fitter that knows <b>zero atomic physics</b> reads <span class="gilt">R</span> off four smudged hydrogen lines — plot 1/λ against u=1/n² and the Balmer law is a straight line, slope <span class="gilt">−R</span>, intercept <span class="gilt">R/4</span>. It names the constant <b>twice</b>, and the two must agree.</p>
+
+      <div class="sect">Noise σ — smudge the starlight</div>
+      <div class="srow"><span>noiseFrac</span><span class="v" id="noiseVal">0.000</span></div>
+      <input class="slider" id="noise" type="range" min="0" max="0.012" step="0.001" value="0">
+      <p class="note">Drags each plate line off its <b>vacuum-truth ghost</b>, scatters the dots, fattens the t·SE band, drops R² below 1, and separates the two R-markers. At σ=0 the band is a hairline (R²=1 is geometry, not a measurement).</p>
+
+      <div class="sect">The draw — reproducible seed</div>
+      <div class="seedrow">
+        <div class="stp" id="seedDn" title="previous seed">◀</div>
+        <span class="seedval" id="seedVal">seed 1</span>
+        <div class="stp" id="seedUp" title="next seed">▶</div>
+        <div class="stp" id="seedRng" title="new random draw" style="width:auto;padding:0 9px">🎲</div>
+        <span class="chip sm" id="copyState" title="copy a shareable URL that pins this exact draw">copy state</span>
+      </div>
+
+      <div class="sect">The loss — best is a choice</div>
+      <div class="seg" id="segLoss">
+        <div class="opt l2 on" data-loss="L2">L2 · Σr²</div>
+        <div class="opt l1" data-loss="L1">L1 · Σ|r|</div>
+      </div>
+      <p class="note caveat" id="caveat">Click a plate line to <b>yank it</b> (an outlier blunder). Recommended: interior <b>Hγ (n=5)</b>. At ×1.20 L2 lurches while robust L1 holds — <b>L2 chases the blunder; L1 ignores it and reads R right.</b></p>
+
+      <div class="sect">The medium — mind your vacuum</div>
+      <div class="seg" id="segMedium">
+        <div class="opt vac on" data-medium="vacuum">vacuum</div>
+        <div class="opt air" data-medium="air">air</div>
+      </div>
+      <p class="note airnote" id="airnote" style="display:none">These are <b>air</b> wavelengths. The fit is self-consistent (R from slope == R from intercept) and R²≈1 — yet R is <b>+277 ppm</b> off CODATA. <b>Consistency ≠ correctness:</b> Rydberg lives in vacuum.</p>
+
+      <div class="sect">The band — ±t·SE (n=4 ⇒ 2 d.o.f.)</div>
+      <div class="seg" id="segBand">
+        <div class="opt b68 on" data-band="68">68% · t=1.32</div>
+        <div class="opt b95" data-band="95">95% · t=4.30</div>
+      </div>
+      <p class="note">With only four points and two fitted params there are <b>2 degrees of freedom</b> — Student-t, not normal. A naive ±1·SE band covers just ~57.5%; the t-band is the honest one.</p>
+
+      <div class="sect">The constant, twice</div>
+      <div class="twice">
+        <div class="Rrow"><span class="k">R from −slope</span><span class="v acc" id="Rslope">—</span></div>
+        <div class="Rrow"><span class="k">R from 4·intercept</span><span class="v" id="Rinterc">—</span></div>
+        <div class="agree" id="agree">
+          <div class="bandfill" id="agreeBand"></div>
+          <div class="codata" id="agreeCodata"></div>
+          <div class="mk slope" id="mkSlope"></div>
+          <div class="mk interc" id="mkInterc"></div>
+          <div class="lbl">−0.5%</div><div class="lbl r">+0.5%</div>
+        </div>
+        <div class="Rrow"><span class="k" id="codataLbl">CODATA R_H (the spectroscope's own constant)</span><span class="v" id="Rcodata">—</span></div>
+        <div class="recovered" id="recovered">recovered: R ± t·SE</div>
+        <p class="note" id="agreeNote">At σ=0 these are the SAME number by algebra; under noise they are two INDEPENDENT estimates of it.</p>
+      </div>
+
+      <div class="sect">Legend</div>
+      <div class="legend">
+        <div class="li"><span class="sw2" style="border-top-color:var(--accent)"></span> the fit line (slate) · slope −R</div>
+        <div class="li"><span class="sw2" style="border-top-color:var(--l1); border-top-style:dashed"></span> L1 / robust (dashed violet) — a choice</div>
+        <div class="li"><span class="dot" style="background:var(--floor)"></span> R · the recovered constant + the u=0 intercept (gilt)</div>
+        <div class="li"><span style="width:16px;height:10px;background:var(--band);border:1px solid var(--accent-soft);flex:0 0 auto"></span> ±t·SE prediction band</div>
+      </div>
+
+      <div class="sect">↔ the cross</div>
+      <a class="xteaser" href="../spectroscope/index.html">
+        <span class="xk">← The Spectroscope · the lines</span>
+        <span class="xt">where these four wavelengths come from — <b>1/λ = R_H(¼ − 1/n²)</b>, computed from the Rydberg constant. Here we run that arrow backwards.</span>
+      </a>
+      <a class="xteaser" href="../plumbline/index.html">
+        <span class="xk">← The Plumbline · the fitter</span>
+        <span class="xt">the blind least-squares core that reads R off these points — <b>the same Σr² minimum</b> that fits any noisy cloud. It knows no atomic physics.</span>
+      </a>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+// ════════════════════════ INLINED SINGLE-SOURCE CORES (Option A) ════════════
+// The page is plain <script> (no type="module", no import) — the house pattern
+// (plumbline/index.html). The three cores below are BYTE-TWINS of their modules,
+// each between matching sentinels; the Node twins re-extract each slice and assert
+// it is char-for-char the imported authority, so "self-test green" can't drift.
+//   1) the Plumbline core    (plumbline-core.mjs)    → fitL2/gdFit/fitL1/makeRng/gauss
+//   2) the Spectroscope core (spectroscope-core.mjs) → RYDBERG_H + balmerWavelength*
+//   3) the Rydberg core      (rydberg-core.mjs)      → buildPoints/fitL2SE/runSelfTest
+// The Rydberg core's own `import` lines live OUTSIDE its sentinels in the module,
+// so they do not appear here; it references the symbols the two blocks above define.
+
+// ===== PLUMBLINE CORE (inlined byte-twin) BEGIN =====
+// ── THE PRIMITIVE ATOMS — the ONLY shared helpers (sum / mean over an accessor). ─
+// These are the "adjacent swap" of this bench: every estimator needs a sum and a
+// mean, and sharing them is not sharing a fit. fitL2, gdFit and the perturbation
+// jury each call THESE and nothing else of each other's — that disjointness is the
+// whole point (the closed form and gradient descent agreeing must be a theorem,
+// not a copy). Integer-free, pure, no rounding.
+function sum(xs){ let s = 0; for (let i = 0; i < xs.length; i++) s += xs[i]; return s; }
+function mean(xs){ return xs.length ? sum(xs) / xs.length : 0; }
+
+// ── distinctXCount(points) — the vertical-data guard's witness. ───────────────
+// Counts how many DISTINCT x-values the cloud has. With < 2 the least-squares
+// slope is undefined (Σ(x−x̄)² = 0 → divide-by-zero → a vertical line). Both the
+// core and the page consult this so a degenerate cloud greys out, never NaNs.
+function distinctXCount(points){
+  const seen = new Set();
+  for (let i = 0; i < points.length; i++) seen.add(points[i].x);
+  return seen.size;
+}
+
+// ── sse(points, m, b) — the score being minimised: Σ(vertical residual)². ──────
+// A residual is VERTICAL: r_i = y_i − (m·x_i + b) (x is assumed known; this is
+// ordinary least squares, NOT perpendicular/Deming regression). The square of the
+// vertical distance, summed. This is the ONE number the whole bench is about.
+function sse(points, m, b){
+  let s = 0;
+  for (let i = 0; i < points.length; i++){
+    const r = points[i].y - (m * points[i].x + b);
+    s += r * r;
+  }
+  return s;
+}
+
+// ── ESTIMATOR 1 — THE NORMAL EQUATIONS (closed form). ─────────────────────────
+// Differentiate Σ(y−mx−b)² w.r.t. m and b, set both to zero, and the optimum is
+// the solution of the 2×2 "normal equations":
+//     m = Σ(x−x̄)(y−ȳ) / Σ(x−x̄)²        (covariance over x-variance)
+//     b = ȳ − m·x̄                         (the line passes through the centroid)
+// Then r² (Pearson²) and R² (1−SS_res/SS_tot) are reported off the same fit. With
+// < 2 distinct x the denominator is 0 → {ok:false} (the guard, never a NaN line).
+// References ONLY the sum/mean atoms and sse — NO other estimator (anti-circularity).
+function fitL2(points){
+  const n = points.length;
+  if (n < 2 || distinctXCount(points) < 2){
+    return { ok: false, m: 0, b: 0, sse: 0, r2: 0, r: 0, n };
+  }
+  const xs = points.map(p => p.x), ys = points.map(p => p.y);
+  const xbar = mean(xs), ybar = mean(ys);
+  let Sxx = 0, Sxy = 0, Syy = 0;
+  for (let i = 0; i < n; i++){
+    const dx = xs[i] - xbar, dy = ys[i] - ybar;
+    Sxx += dx * dx; Sxy += dx * dy; Syy += dy * dy;
+  }
+  const m = Sxy / Sxx;
+  const b = ybar - m * xbar;
+  const ssRes = sse(points, m, b);
+  const ssTot = Syy;                              // Σ(y−ȳ)² = SS_tot
+  const r2 = ssTot === 0 ? 1 : 1 - ssRes / ssTot;
+  const r = Syy === 0 ? 0 : Sxy / Math.sqrt(Sxx * Syy);   // Pearson correlation (signed)
+  return { ok: true, m, b, sse: ssRes, r2, r, n, xbar, ybar, ssTot };
+}
+
+// ── ESTIMATOR 2 — GRADIENT DESCENT (from scratch, totally separate code). ─────
+// Start at a deliberately-WRONG flat line (m=0, b=ȳ) and step downhill along the
+// analytic gradient of Σr²:
+//     ∂Σr²/∂m = −2 Σ x·r ,   ∂Σr²/∂b = −2 Σ r ,   r = y − (m x + b)
+// The learning rate is scaled by 1/Σx² so the same lr behaves across clouds. It
+// returns the full per-iteration trace (the page animates the ghost along it).
+// Knows NOTHING of the normal equations — yet converges to the same (m,b) to ≤1e-9.
+// References ONLY the sum/mean atoms — NO fitL2, NO closed-form machinery.
+function gdFit(points, opts){
+  const maxIters = (opts && opts.maxIters) || 4000;
+  const n = points.length;
+  if (n < 2 || distinctXCount(points) < 2){
+    return { ok: false, m: 0, b: 0, trace: [] };
+  }
+  const xs = points.map(p => p.x), ys = points.map(p => p.y);
+  const ybar = mean(ys);
+  const sumXX = sum(xs.map(x => x * x)) || 1;
+  // Each coordinate gets a step scaled by its own curvature: ∂²Σr²/∂m² = 2Σx²,
+  // ∂²Σr²/∂b² = 2n. Dividing each gradient by its Hessian diagonal makes a single
+  // lr converge on every cloud (a diagonal-preconditioned descent) — and lets b
+  // (the slow-mixing coordinate when Σx²≫n) reach the floor in the same budget.
+  const baseLr = (opts && opts.lr) || 0.5;
+  const lrM = baseLr / sumXX;
+  const lrB = baseLr / n;
+  let m = 0, b = ybar;                            // the deliberately-wrong flat start
+  const trace = [{ m, b, sse: sse(points, m, b) }];
+  for (let it = 0; it < maxIters; it++){
+    let gm = 0, gb = 0;
+    for (let i = 0; i < n; i++){
+      const r = ys[i] - (m * xs[i] + b);          // residual
+      gm += -2 * xs[i] * r;
+      gb += -2 * r;
+    }
+    m -= lrM * gm;
+    b -= lrB * gb;
+    trace.push({ m, b, sse: sse(points, m, b) });
+  }
+  return { ok: true, m, b, trace };
+}
+
+// ── ESTIMATOR 3 — THE PERTURBATION JURY (a third stranger). ───────────────────
+// Take the closed-form line and nudge (m,b) by random ±ε in every direction; EVERY
+// nudge must score worse (higher Σr²). If even one perturbation beat the fit, the
+// "minimum" would be a lie. Returns {ok, worst, tested} where ok means no nudge
+// won. This proves the floor is a strict minimum WITHOUT touching gdFit's code or
+// fitL2's solve — it only reads sse. References ONLY sse and a seeded rng.
+function perturbAllWorse(points, fit, seed, trials, eps){
+  const T = trials || 400;
+  const E = eps || 0.25;
+  const rng = makeRng(seed || 1);
+  const base = fit.sse;
+  let worst = Infinity, beaten = 0;               // worst = smallest margin seen
+  for (let t = 0; t < T; t++){
+    const dm = (rng() * 2 - 1) * E;
+    const db = (rng() * 2 - 1) * E;
+    if (dm === 0 && db === 0) continue;
+    const s = sse(points, fit.m + dm, fit.b + db);
+    const margin = s - base;                       // must be ≥ 0
+    if (margin < worst) worst = margin;
+    if (margin < 0) beaten++;                       // a nudge that BEAT the fit (a bug)
+  }
+  return { ok: beaten === 0, worst, beaten, tested: T };
+}
+
+// ── ESTIMATOR 4 — LEAST ABSOLUTE DEVIATIONS (the teeth; DETERMINISTIC). ───────
+// Minimise Σ|residual| instead of Σ(residual)² via IRLS (iteratively reweighted
+// least squares): repeatedly solve a WEIGHTED normal-equations fit with weight
+// w_i = 1/max(|r_i|, δ). Fixed iteration count + a floor δ → a stable, repeatable
+// {m,b} (the teeth caption must not jitter). It lands on a DIFFERENT line than L2
+// on a noisy cloud, and — the honest caveat — it barely moves when L2 lurches at an
+// outlier (squared loss is unique but NOT robust). Uses the weighted closed form
+// internally (its own machinery); references the sum/mean atoms, never fitL2/gdFit.
+function fitL1(points){
+  const n = points.length;
+  if (n < 2 || distinctXCount(points) < 2){
+    return { ok: false, m: 0, b: 0, sad: 0, n };
+  }
+  const xs = points.map(p => p.x), ys = points.map(p => p.y);
+  // seed from the unweighted (uniform-weight) normal-equations solution.
+  let m = 0, b = 0;
+  {
+    const xbar = mean(xs), ybar = mean(ys);
+    let Sxx = 0, Sxy = 0;
+    for (let i = 0; i < n; i++){ const dx = xs[i] - xbar; Sxx += dx * dx; Sxy += dx * (ys[i] - ybar); }
+    m = Sxy / Sxx; b = ybar - m * xbar;
+  }
+  const DELTA = 1e-7;
+  for (let it = 0; it < 60; it++){                 // fixed cap → deterministic
+    let Sw = 0, Swx = 0, Swy = 0, Swxx = 0, Swxy = 0;
+    for (let i = 0; i < n; i++){
+      const r = ys[i] - (m * xs[i] + b);
+      const w = 1 / Math.max(Math.abs(r), DELTA);  // IRLS weight → L1 in the limit
+      Sw += w; Swx += w * xs[i]; Swy += w * ys[i];
+      Swxx += w * xs[i] * xs[i]; Swxy += w * xs[i] * ys[i];
+    }
+    // weighted normal equations: [Swxx Swx; Swx Sw] [m;b] = [Swxy; Swy]
+    const det = Swxx * Sw - Swx * Swx;
+    if (Math.abs(det) < 1e-300) break;
+    m = (Swxy * Sw - Swx * Swy) / det;
+    b = (Swxx * Swy - Swx * Swxy) / det;
+  }
+  let sad = 0;
+  for (let i = 0; i < n; i++) sad += Math.abs(ys[i] - (m * xs[i] + b));
+  return { ok: true, m, b, sad, n };
+}
+
+// ── SEEDED RNG + GAUSSIAN — reproducibility (page & Node twin make the SAME cloud).
+// mulberry32; gauss via Box–Muller. The Scatter button and the Node twin both call
+// THESE with a seed, so a cloud generated in the browser is reproduced bit-for-bit
+// headless. This is the ONLY randomness in the bench (everything else is exact).
+function makeRng(seed){
+  let a = (seed >>> 0) || 1;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function gauss(rng){
+  let u = 0, v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+// ── scatterCloud(seed, opts) — a fresh seeded cloud around a hidden true line. ──
+// ~12 points: x on a grid across the WORLD, y = trueM·x + trueB + Gaussian noise,
+// all clamped into the world box. Deterministic from the seed (same seed → same
+// cloud, browser or Node). The "hidden true line" is just where the noise is hung;
+// the FIT recovers its own line from the points, never peeks at trueM/trueB.
+function scatterCloud(seed, opts){
+  const o = opts || {};
+  const n = o.n || 12;
+  const W = o.world || 10;
+  const margin = 1.2;
+  const rng = makeRng(seed || 1);
+  const trueM = (o.m !== undefined) ? o.m : (rng() * 1.4 - 0.7);
+  const trueB = (o.b !== undefined) ? o.b : (W * 0.5 + (rng() * 2 - 1) * 1.5);
+  const noise = (o.noise !== undefined) ? o.noise : 0.9;
+  const pts = [];
+  for (let i = 0; i < n; i++){
+    const x = margin + (i + 0.5) * (W - 2 * margin) / n + (rng() - 0.5) * 0.3;
+    let y = trueM * x + trueB + gauss(rng) * noise;
+    y = Math.max(margin * 0.5, Math.min(W - margin * 0.5, y));
+    pts.push({ x: round2(x), y: round2(y) });
+  }
+  return pts;
+}
+function round2(v){ return Math.round(v * 100) / 100; }
+
+// ── THE SOLE AUTHORITATIVE ORACLE — runSelfTest(). ────────────────────────────
+// Runs the four numbered claims. Returns { pass, total, lines:[{name,ok,detail}] }.
+// The in-page pill and the Node twin both call THIS — one verdict, no second
+// opinion. Every detail carries LIVE numbers, never a hardcoded echo.
+function runSelfTest(){
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+
+  // 1. CLOSED FORM == GRADIENT DESCENT to ≤1e-9 over many seeds (source-disjoint).
+  {
+    let worstM = 0, worstB = 0, firstBad = -1, tested = 0;
+    for (let s = 1; s <= 60; s++){
+      const pts = scatterCloud(s * 2654435761 >>> 0, { n: 14, noise: 1.0 });
+      const cf = fitL2(pts);
+      const gd = gdFit(pts, { maxIters: 8000, lr: 0.5 });
+      tested++;
+      const dM = Math.abs(cf.m - gd.m), dB = Math.abs(cf.b - gd.b);
+      if (dM > worstM) worstM = dM;
+      if (dB > worstB) worstB = dB;
+      if ((dM > 1e-9 || dB > 1e-9) && firstBad < 0) firstBad = s;
+    }
+    const ok = worstM <= 1e-9 && worstB <= 1e-9;
+    T('CLAIM 1 — closed form == gradient descent (≤1e-9, source-disjoint): the normal equations and a from-scratch GD that share no fit code land on the SAME (m,b)',
+      ok, ok ? `${tested} seeds · worst Δm=${worstM.toExponential(2)} Δb=${worstB.toExponential(2)} ≤ 1e-9` :
+        `worst Δm=${worstM.toExponential(2)} Δb=${worstB.toExponential(2)} (first @seed ${firstBad})`);
+  }
+
+  // 1b. ANTI-CIRCULARITY — fitL2 and gdFit name no shared FIT helper (only atoms).
+  {
+    const f = fitL2.toString(), g = gdFit.toString();
+    const fOk = !f.includes('gdFit') && !f.includes('.trace');
+    const gOk = !g.includes('fitL2') && !g.includes('normal') && !g.includes('Sxy');
+    const atoms = f.includes('mean(') && g.includes('mean(');
+    const ok = fOk && gOk && atoms;
+    T('CLAIM 1 (anti-circularity) — fitL2 names no GD machinery and gdFit names no closed-form solve; they share only the sum/mean atoms (the agreement is a theorem, not a copy)',
+      ok, ok ? 'fitL2 ⟂ gdFit at the source level; both reference only the primitive atoms' :
+        `fitClean=${fOk} gdClean=${gOk} bothUseAtoms=${atoms}`);
+  }
+
+  // 2. THE ANALYTIC Σr² IS THE STRICT FLOOR — every perturbation scores worse.
+  {
+    let beaten = 0, worstMargin = Infinity, firstBad = -1, tested = 0;
+    for (let s = 1; s <= 40; s++){
+      const pts = scatterCloud(s * 40503 >>> 0, { n: 12, noise: 1.1 });
+      const cf = fitL2(pts);
+      const jury = perturbAllWorse(pts, cf, s * 7 + 1, 400, 0.3);
+      tested++;
+      if (!jury.ok) beaten += jury.beaten;
+      if (jury.worst < worstMargin) worstMargin = jury.worst;
+      if (!jury.ok && firstBad < 0) firstBad = s;
+    }
+    const ok = beaten === 0 && worstMargin >= 0;
+    T('CLAIM 2 — the analytic Σr² is the STRICT floor: across 40 seeds × 400 random ±ε nudges of (m,b), NOT ONE perturbation beats the closed-form line',
+      ok, ok ? `${tested} seeds × 400 nudges · 0 beat the fit · smallest worse-margin ${worstMargin.toExponential(2)} ≥ 0` :
+        `${beaten} nudge(s) beat the fit (first @seed ${firstBad})`);
+  }
+
+  // 3. THE R² TRIPLE IDENTITY — 1−SS_res/SS_tot == r² (Pearson²) to ~1e-12, AND ==1 on collinear.
+  {
+    let worst = 0, firstBad = -1, tested = 0;
+    for (let s = 1; s <= 60; s++){
+      const pts = scatterCloud(s * 22695477 >>> 0, { n: 13, noise: 1.0 });
+      const cf = fitL2(pts);
+      const d = Math.abs(cf.r2 - cf.r * cf.r);     // route A (SS) vs route B (Pearson²)
+      tested++;
+      if (d > worst) worst = d;
+      if (d > 1e-12 && firstBad < 0) firstBad = s;
+    }
+    // collinear: y = 2x + 1 exactly → R² must be 1.0 EXACTLY.
+    const coll = [];
+    for (let i = 0; i < 8; i++) coll.push({ x: i + 1, y: 2 * (i + 1) + 1 });
+    const cc = fitL2(coll);
+    const collOk = cc.ok && Math.abs(cc.r2 - 1) < 1e-12 && Math.abs(cc.r * cc.r - 1) < 1e-12 && cc.sse < 1e-18;
+    const ok = worst <= 1e-12 && collOk;
+    T('CLAIM 3 — the R² triple identity: 1−SS_res/SS_tot == r² (Pearson)² to ~1e-12 over 60 seeds (two independent routes), AND == 1.0 EXACTLY on collinear points',
+      ok, ok ? `${tested} seeds · worst |ΔR²|=${worst.toExponential(2)} ≤ 1e-12 · collinear R²=${cc.r2.toFixed(15)} (Σr²=${cc.sse.toExponential(1)})` :
+        `worst |ΔR²|=${worst.toExponential(2)} collinearOK=${collOk}`);
+  }
+
+  // 4. THE L1 TEETH — L1 ≠ L2 on a cloud, AND L2 lurches at an outlier while L1 holds.
+  {
+    // a non-trivial noisy cloud: L1 and L2 must give a DIFFERENT best.
+    const cloud = scatterCloud(1234567, { n: 12, noise: 1.4 });
+    const l2 = fitL2(cloud), l1 = fitL1(cloud);
+    const differ = Math.abs(l2.m - l1.m) > 1e-3 || Math.abs(l2.b - l1.b) > 1e-3;
+    // the outlier contrast: take a tame near-collinear cloud, then yank ONE
+    // HIGH-LEVERAGE point (the far-right edge — leverage grows with |x−x̄|) far off
+    // the line and measure each slope's MOVE. L2 (squared) lurches toward it; the
+    // robust L1 barely twitches. A point near the centroid wouldn't show it — the
+    // lesson lives at the edge, so the test drags the LAST (rightmost) point.
+    const tame = scatterCloud(20260614, { n: 12, noise: 0.35, m: 0.5, b: 5 });
+    const l2a = fitL2(tame), l1a = fitL1(tame);
+    const last = tame.length - 1;
+    const dragged = tame.map((p, i) => i === last ? { x: p.x, y: -6 } : p);  // yank the edge point far DOWN
+    const l2b = fitL2(dragged), l1b = fitL1(dragged);
+    const l2move = Math.abs(l2b.m - l2a.m);
+    const l1move = Math.abs(l1b.m - l1a.m);
+    // squared loss is NOT robust: L2 must move strictly, and far more than L1.
+    const robust = l2move > l1move * 3 && l2move > 0.1;
+    // the NEGATIVE CONTROL (the teeth must bite where expected AND not where not):
+    // on a perfectly collinear cloud, L1 and L2 must AGREE (both hit the exact line).
+    const coll = [];
+    for (let i = 0; i < 8; i++) coll.push({ x: i + 1, y: 1.3 * (i + 1) - 0.7 });
+    const cl2 = fitL2(coll), cl1 = fitL1(coll);
+    const agreeOnLine = Math.abs(cl2.m - cl1.m) < 1e-3 && Math.abs(cl2.b - cl1.b) < 1e-2;
+    const ok = differ && robust && agreeOnLine;
+    T('CLAIM 4 — the L1 teeth (control + robustness): L1 ≠ L2 on a noisy cloud, an outlier moves L2 ≫ L1 (squared loss is unique but NOT robust), AND L1 == L2 on a collinear cloud',
+      ok, ok ? `Δslope(L2,L1)=${Math.abs(l2.m - l1.m).toFixed(3)}≠0 · outlier moved L2 ${l2move.toFixed(3)} vs L1 ${l1move.toFixed(3)} · collinear: L1==L2 ✓` :
+        `differ=${differ} robust=${robust}(L2 ${l2move.toFixed(3)}/L1 ${l1move.toFixed(3)}) agreeOnLine=${agreeOnLine}`);
+  }
+
+  const pass = lines.filter(l => l.ok).length;
+  return { pass, total: lines.length, lines };
+}
+// ===== PLUMBLINE CORE END =====
+
+// ===== SPECTROSCOPE PHYSICS CORE (inlined byte-twin) BEGIN =====
+// ---------- physical constants ---------------------------------------------
+// R∞ = the Rydberg constant for infinite nuclear mass (CODATA). The Balmer
+// formula needs the HYDROGEN Rydberg R_H = R∞·M/(M+mₑ) (reduced-mass corrected).
+var RYDBERG_INF = 1.0973731568e7;                 // /m  (R∞, infinite nuclear mass)
+var M_PROTON    = 1.67262192369e-27;              // kg
+var M_ELECTRON  = 9.1093837015e-31;               // kg
+// Hydrogen Rydberg = R∞ scaled by the proton/electron reduced mass. Computed,
+// not hard-coded: ≈ 1.09677583e7 /m. Using R∞ directly (the "infinite mass"
+// value) understates λ by the reduced-mass factor and misses Hα by ~0.19 nm.
+var RYDBERG_H = RYDBERG_INF * M_PROTON / (M_PROTON + M_ELECTRON);
+// Refractive index of standard air (dry, ~15 °C). The textbook Balmer values
+// 656.3/486.1/434.0/410.2 nm are AIR wavelengths; the Rydberg formula yields
+// VACUUM wavelengths, so we divide by n_air to compare like-for-like.
+var N_AIR = 1.000277;
+
+// ---------- Rydberg / Balmer -------------------------------------------------
+// Balmer series: transitions n -> 2.  1/λ = R_H (1/2² − 1/n²).  Returns the
+// VACUUM wavelength λ in nm. n must be an integer >= 3. (e.g. Hα → 656.29 nm.)
+function balmerWavelengthNm(n){
+  var invLambda = RYDBERG_H * (1/4 - 1/(n*n));   // /m
+  var lambdaM = 1/invLambda;                      // m  (vacuum)
+  return lambdaM * 1e9;                           // nm
+}
+// Air wavelength of a Balmer line — what a textbook table lists (vacuum / n_air).
+function balmerWavelengthAirNm(n){
+  return balmerWavelengthNm(n) / N_AIR;
+}
+// ===== SPECTROSCOPE PHYSICS CORE END =====
+
+// ===== RYDBERG CORE (inlined byte-twin) BEGIN =====
+// The four Balmer lines used as data points: Hα,Hβ,Hγ,Hδ ← n=3,4,5,6 → 2.
+// ORDER 3→6 is LOAD-BEARING: the seeded noise is injected in this order, so a seed
+// always grows the SAME jitter pattern (moving σ scales it, never reshuffles it).
+const NS = [3, 4, 5, 6];
+
+// Student-t two-sided critical values for dof = n−2 = 2 (four points, two fitted
+// params). These are NOT the normal 1.0/1.96 — with only 2 d.o.f. the t-tails are
+// FAT, and using ±1·SE / ±1.96·SE would under-cover. t(2, 0.683)=1.3214 is the
+// value whose two-sided mass equals a normal ±1σ (68.3%); t(2, 0.95)=4.3027.
+const T_DOF2_68 = 1.3214;
+const T_DOF2_95 = 4.3027;
+
+// The mean of the four vacuum 1/λ's — the scale that turns a fractional noise knob
+// (noiseFrac) into an absolute σ on y. Frozen so σ is the SAME at every seed.
+// = mean over Hα..Hδ of R_H(¼−1/n²) ≈ 2.0801e6 /m (verified live by buildPoints).
+function meanInvLambdaVac() {
+  let s = 0;
+  for (const n of NS) s += 1 / (balmerWavelengthNm(n) * 1e-9);
+  return s / NS.length;
+}
+
+// ── buildPoints(state) → [{x:1/n², y:1/λ_m, n}] for the blind fitter. ──────────
+// y is 1/λ in /m. medium='air' swaps the vacuum λ for the AIR λ (the air trap).
+// Seeded Gaussian noise is injected on the y's: y = yTrue + gauss(rng)·σ, with
+// σ = noiseFrac·mean(yTrue). gauss() consumes EXACTLY 2 rng pulls per point and is
+// σ-independent, so turning the σ knob GROWS the same pattern (doesn't reshuffle).
+function buildPoints(state) {
+  const s = state || {};
+  const medium = s.medium === 'air' ? 'air' : 'vacuum';
+  const noiseFrac = s.noiseFrac || 0;
+  const outlierN = (s.outlierN === 3 || s.outlierN === 4 || s.outlierN === 5 || s.outlierN === 6) ? s.outlierN : null;
+  const outlierFac = (typeof s.outlierFac === 'number') ? s.outlierFac : 1.20;
+  const rng = makeRng((s.seed >>> 0) || 1);
+  const sigmaAbs = noiseFrac * meanInvLambdaVac();
+  const pts = [];
+  for (const n of NS) {
+    const lamNm = medium === 'air' ? balmerWavelengthAirNm(n) : balmerWavelengthNm(n);
+    const yTrue = 1 / (lamNm * 1e-9);                 // /m
+    let y = yTrue + gauss(rng) * sigmaAbs;            // seeded jitter (2 rng pulls)
+    if (outlierN === n) y = y * outlierFac;           // the yanked blunder line
+    pts.push({ x: 1 / (n * n), y, n });
+  }
+  return pts;
+}
+
+// ── fitL2SE(points, fit) → standard errors of the OLS line + sePred(x). ────────
+// Ordinary-least-squares textbook SEs: s² = Σr²/(n−2) is the residual variance;
+//   SE_m = √(s²/Sxx),  SE_b = √(s²·(1/n + x̄²/Sxx)),  Sxx = Σ(xᵢ−x̄)².
+// Because R = −m, SE_R = SE_m; because R = 4b, SE_(4b) = 4·SE_b. sePred(x) is the
+// SE of the fitted value ŷ(x) = m·x + b at any x (the prediction band's half-width
+// before the t multiplier): √(s²·(1/n + (x−x̄)²/Sxx)). Guards on points.length===4.
+function fitL2SE(points, fit) {
+  const n = points.length;
+  if (n < 3 || !fit || !fit.ok) {
+    return { ok: false, SE_m: 0, SE_b: 0, s2: 0, Sxx: 0, sePred: () => 0 };
+  }
+  const xbar = fit.xbar;
+  let Sxx = 0;
+  for (let i = 0; i < n; i++) { const dx = points[i].x - xbar; Sxx += dx * dx; }
+  const s2 = fit.sse / (n - 2);
+  const SE_m = Math.sqrt(s2 / Sxx);
+  const SE_b = Math.sqrt(s2 * (1 / n + (xbar * xbar) / Sxx));
+  const sePred = (x) => Math.sqrt(s2 * (1 / n + ((x - xbar) * (x - xbar)) / Sxx));
+  return { ok: true, SE_m, SE_b, s2, Sxx, sePred };
+}
+
+// ── recoverR(points) → both R estimates + their SEs + the fit, in one place. ───
+// R from −slope and R from 4·intercept; under noise these are two INDEPENDENT
+// estimates of the same constant; at σ=0 they are bit-identical by algebra.
+function recoverR(points) {
+  const fit = fitL2(points);
+  if (!fit.ok) return { ok: false };
+  const se = fitL2SE(points, fit);
+  return {
+    ok: true, fit, se,
+    R_slope: -fit.m, R_interc: 4 * fit.b,
+    SE_Rslope: se.SE_m, SE_Rinterc: 4 * se.SE_b,
+    r2: fit.r2,
+  };
+}
+
+// ── runSelfTest() — the SOLE ORACLE. Same shape as plumbline's: ───────────────
+// { pass, total, lines:[{name, ok, detail}] }. The in-page pill and the Node twin
+// both call THIS. Every detail carries LIVE numbers (calls the imported fits).
+function runSelfTest() {
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+  const REL = (a, b) => Math.abs(a - b) / Math.abs(b);
+
+  // ── LEG (a) — NOISELESS ALGEBRAIC IDENTITY (collinear, teeth-less). ──────────
+  {
+    const P = buildPoints({ medium: 'vacuum', noiseFrac: 0, seed: 1 });
+    const f = fitL2(P);
+    const Rs = -f.m, Ri = 4 * f.b;
+    const relSlope = REL(Rs, RYDBERG_H);
+    const relInter = REL(Ri, RYDBERG_H);
+    const agree = Math.abs(Rs - Ri) / RYDBERG_H;        // bit-identical → 0
+    const ok = P.length === 4 && f.ok && relSlope <= 1e-9 && relInter <= 1e-9 &&
+               agree <= 1e-12 && Math.abs(f.r2 - 1) < 1e-12 && f.sse < 1e-18;
+    T('LEG (a) — noiseless identity (noiseless, teeth-less): on the vacuum points the blind fit gives slope −m == R_H and intercept 4b == R_H/4; the two agree bit-for-bit; R²=1 (this is collinear GEOMETRY, not yet a measurement)',
+      ok, ok ? `−m rel ${relSlope.toExponential(1)} · 4b rel ${relInter.toExponential(1)} · |−m−4b|/R ${agree.toExponential(1)} · R²=${f.r2.toFixed(15)} · Σr²=${f.sse.toExponential(1)}`
+             : `relSlope=${relSlope.toExponential(2)} relInter=${relInter.toExponential(2)} agree=${agree.toExponential(2)} r2=${f.r2} sse=${f.sse.toExponential(2)}`);
+  }
+
+  // ── LEG (b) — TWO SOURCE-DISJOINT ORACLES agree (gdFit ≡ fitL2). ─────────────
+  {
+    const P = buildPoints({ medium: 'vacuum', noiseFrac: 0, seed: 1 });
+    const cf = fitL2(P), gd = gdFit(P, { maxIters: 8000, lr: 0.5 });
+    const dM = Math.abs(gd.m - cf.m), dB = Math.abs(gd.b - cf.b);
+    // gdFit's diagonal-preconditioned descent lands ≤1e-8 of the closed form here
+    // (the tiny u-values make Σx² small → b mixes slowly; 5.6e-9 measured at 8000
+    // iters). The anti-circularity grep is the teeth: source-disjointness.
+    const conv = dM <= 1e-8 && dB <= 1e-8;
+    const fStr = fitL2.toString(), gStr = gdFit.toString();
+    const disjoint = !fStr.includes('gdFit') && !fStr.includes('.trace') &&
+                     !gStr.includes('fitL2') && !gStr.includes('Sxy');
+    const ok = conv && disjoint;
+    T('LEG (b) — two source-disjoint oracles: a from-scratch gradient descent (gdFit) and the closed form (fitL2) — which share no fit code — land on the SAME (m,b); fitL2 names no gdFit, gdFit names no Sxy',
+      ok, ok ? `Δm=${dM.toExponential(2)} Δb=${dB.toExponential(2)} ≤1e-8 · source-disjoint ✓`
+             : `Δm=${dM.toExponential(2)} Δb=${dB.toExponential(2)} disjoint=${disjoint}`);
+  }
+
+  // ── LEG (c) — NOISY RECOVERY, with the Student-t band (the HEADLINE). ────────
+  {
+    const noiseFrac = 0.001;
+    const NSEED = 2000;
+    let sumR = 0, in68 = 0, in95 = 0;
+    for (let s = 1; s <= NSEED; s++) {
+      const P = buildPoints({ medium: 'vacuum', noiseFrac, seed: s });
+      const f = fitL2(P);
+      const R = -f.m;
+      const se = fitL2SE(P, f);
+      const SE_R = se.SE_m;
+      sumR += R;
+      if (Math.abs(R - RYDBERG_H) <= T_DOF2_68 * SE_R) in68++;
+      if (Math.abs(R - RYDBERG_H) <= T_DOF2_95 * SE_R) in95++;
+    }
+    const meanR = sumR / NSEED;
+    const bias = Math.abs(meanR - RYDBERG_H) / RYDBERG_H;
+    const cov68 = in68 / NSEED, cov95 = in95 / NSEED;
+    const unbiased = bias < 0.002;                         // <0.2%
+    const c68ok = cov68 >= 0.64 && cov68 <= 0.72;          // ~68.3%
+    const c95ok = cov95 >= 0.93 && cov95 <= 0.97;          // ~94.8%
+    const ok = unbiased && c68ok && c95ok;
+    T('LEG (c) — noisy recovery + the t-band (THE HEADLINE): over 2000 seeds of σ-noise the recovered R is UNBIASED and lands inside its Student-t(2)·SE band at the right rate — 68% within t·SE, 95% within t·SE (NOT ±1·SE; n=4 ⇒ 2 d.o.f., fat t-tails)',
+      ok, ok ? `bias ${(bias * 100).toFixed(3)}% · cover t68=${(cov68 * 100).toFixed(1)}% t95=${(cov95 * 100).toFixed(1)}% (t=${T_DOF2_68}/${T_DOF2_95})`
+             : `bias=${(bias * 100).toFixed(3)}% cov68=${(cov68 * 100).toFixed(1)}% cov95=${(cov95 * 100).toFixed(1)}%`);
+  }
+
+  // ── LEG (d-i) — TEETH: outlier LURCH at an interior line; L1 holds. ──────────
+  {
+    const oN = 5; // interior Hγ — the recommended outlier (NOT a high-leverage edge)
+    const Po = buildPoints({ medium: 'vacuum', noiseFrac: 0, seed: 1, outlierN: oN, outlierFac: 1.20 });
+    const L2 = fitL2(Po), L1 = fitL1(Po);
+    const R_L2 = -L2.m, R_L1 = -L1.m;
+    const lurch = Math.abs(R_L2 - RYDBERG_H) / RYDBERG_H;   // L2 chases the blunder
+    const hold = Math.abs(R_L1 - RYDBERG_H) / RYDBERG_H;    // L1 ignores it
+    // negative control: outlierN=null ⇒ the cloud is collinear ⇒ L1 == L2.
+    const Pn = buildPoints({ medium: 'vacuum', noiseFrac: 0, seed: 1, outlierN: null });
+    const cL2 = fitL2(Pn), cL1 = fitL1(Pn);
+    const ctrl = Math.abs(cL2.m - cL1.m) / RYDBERG_H < 1e-6;
+    const ok = lurch > 0.20 && hold < 1e-6 && ctrl;
+    T('LEG (d-i) — the teeth (outlier lurch): yank interior Hγ (n=5) by ×1.20 and L2 (squared loss) lurches >20% off R while robust L1 holds to <1e-6; control: with no outlier the points are collinear and L1 == L2',
+      ok, ok ? `L2 ${(lurch * 100).toFixed(1)}% off · L1 ${(hold * 100).toFixed(2)}% off · control L1==L2 ✓`
+             : `lurch=${(lurch * 100).toFixed(1)}% hold=${(hold * 100).toFixed(4)}% ctrl=${ctrl}`);
+  }
+
+  // ── LEG (d-ii) — TEETH: the AIR TRAP (consistency ≠ correctness). ────────────
+  {
+    const Pa = buildPoints({ medium: 'air', noiseFrac: 0, seed: 1 });
+    const f = fitL2(Pa);
+    const Rs = -f.m, Ri = 4 * f.b;
+    // air rescales every 1/λ by exactly n_air, so R̂ = n_air·R_H ⇒ frac shift n_air−1.
+    const fracExpected = (1 / (balmerWavelengthAirNm(3) / balmerWavelengthNm(3))) - 1; // == N_AIR−1
+    const fracSlope = (Rs - RYDBERG_H) / RYDBERG_H;
+    const fracInter = (Ri - RYDBERG_H) / RYDBERG_H;
+    const okShift = Math.abs(fracSlope - fracExpected) <= 1e-9 && Math.abs(fracInter - fracExpected) <= 1e-9;
+    const okFlawless = Math.abs(f.r2 - 1) < 1e-9;          // the gem: R²≈1 despite being wrong
+    const ok = okShift && okFlawless;
+    T('LEG (d-ii) — the air trap (consistency ≠ correctness): feed AIR wavelengths and R shifts by exactly (n_air−1) ≈ +277 ppm on BOTH −m and 4b, yet R²≈1 — a 277-ppm systematic hides under a flawless, self-consistent fit',
+      ok, ok ? `shift +${(fracSlope * 1e6).toFixed(2)} ppm (==n_air−1) on −m & 4b · R²=${f.r2.toFixed(12)} (flawless yet wrong)`
+             : `slope ${(fracSlope * 1e6).toFixed(2)}ppm inter ${(fracInter * 1e6).toFixed(2)}ppm expected ${(fracExpected * 1e6).toFixed(2)}ppm r2=${f.r2}`);
+  }
+
+  const pass = lines.filter(l => l.ok).length;
+  return { pass, total: lines.length, lines };
+}
+// ===== RYDBERG CORE END =====
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE PAGE — render + interaction. CALLS the inlined cores (buildPoints / fitL2 /
+   fitL1 / gdFit / fitL2SE / runSelfTest) and never re-derives a fit. ONE shared
+   state → ONE measuredPoints() array consumed by BOTH panels → ONE rAF/Resize
+   spine (drawPlate → drawConduit → drawPlot → updateReadouts). Two canvases share
+   the spine; never two animation loops. "One number" made structural: the plate
+   draws each line at the JITTERED λ matching its 1/λ_meas; the plot draws the dot
+   at (u, 1/λ_meas) from the SAME array.
+   ════════════════════════════════════════════════════════════════════════════ */
+const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = id => document.getElementById(id);
+
+// ── spectral-light helpers (rendering only — true plate colors). cie1931 +
+// wavelengthToRGB lifted from the Spectroscope's render layer (NOT the
+// single-source physics — those are the inlined constants above). ─────────────
+function cie1931(lambdaNm){
+  function g(x, mu, s1, s2){ const t = (x - mu) * (x < mu ? s1 : s2); return Math.exp(-0.5 * t * t); }
+  const X = 1.056 * g(lambdaNm, 599.8, 0.0264, 0.0323) + 0.362 * g(lambdaNm, 442.0, 0.0624, 0.0374) - 0.065 * g(lambdaNm, 501.1, 0.0490, 0.0382);
+  const Y = 0.821 * g(lambdaNm, 568.8, 0.0213, 0.0247) + 0.286 * g(lambdaNm, 530.9, 0.0613, 0.0322);
+  const Z = 1.217 * g(lambdaNm, 437.0, 0.0845, 0.0278) + 0.681 * g(lambdaNm, 459.0, 0.0385, 0.0725);
+  return [X, Y, Z];
+}
+function wavelengthToRGB(lambdaNm){
+  if (lambdaNm < 380 || lambdaNm > 750) return [0,0,0];
+  const xyz = cie1931(lambdaNm); let rl = 3.2406*xyz[0]-1.5372*xyz[1]-0.4986*xyz[2];
+  let gl = -0.9689*xyz[0]+1.8758*xyz[1]+0.0415*xyz[2]; let bl = 0.0557*xyz[0]-0.2040*xyz[1]+1.0570*xyz[2];
+  rl = Math.max(0,rl); gl = Math.max(0,gl); bl = Math.max(0,bl);
+  const mx = Math.max(rl,gl,bl); if (mx > 0){ rl/=mx; gl/=mx; bl/=mx; }
+  const enc = c => { c = c <= 0.0031308 ? 12.92*c : 1.055*Math.pow(c,1/2.4)-0.055; return Math.round(Math.max(0,Math.min(1,c))*255); };
+  return [enc(rl), enc(gl), enc(bl)];
+}
+const rgbStr = (c, a) => 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + (a === undefined ? 1 : a) + ')';
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+// ── THE SHARED STATE (panels can't disagree). ─────────────────────────────────
+const LINE_LABELS = { 3:'Hα', 4:'Hβ', 5:'Hγ', 6:'Hδ' };
+const state = {
+  medium: 'vacuum', noiseFrac: 0, seed: 1, loss: 'L2',
+  outlierN: null, outlierFac: 1.20, bandK: '68',
+};
+let hoverN = null;          // which line/dot is gilded (recognition moment)
+
+// max σ kept so the worst Hα jitter keeps λ inside [380,750] for wavelengthToRGB.
+// Hα(656nm) is the brightest line; at noiseFrac=0.012 the worst observed jitter is
+// ~3.7nm (well inside). The slider max is 0.012; clamp defensively too.
+const NOISE_MAX = 0.012;
+
+// ── ONE measuredPoints() — the single array BOTH panels consume. ──────────────
+function measuredPoints(){
+  return buildPoints({
+    medium: state.medium, noiseFrac: Math.min(state.noiseFrac, NOISE_MAX),
+    seed: state.seed, outlierN: state.outlierN, outlierFac: state.outlierFac,
+  });
+}
+// true (un-jittered) vacuum/air wavelength for each n — the ghost tick.
+function trueLambdaNm(n){ return state.medium === 'air' ? balmerWavelengthAirNm(n) : balmerWavelengthNm(n); }
+// the measured λ (nm) that matches a point's jittered 1/λ_meas (same array → same jitter).
+function measuredLambdaNm(p){ return 1e9 / p.y; }
+
+// the t multiplier for the active band.
+function activeT(){ return state.bandK === '95' ? T_DOF2_95 : T_DOF2_68; }
+
+// ── canvases + DPR ────────────────────────────────────────────────────────────
+const plateC = $('plate'), plotC = $('plot'), condC = $('conduit');
+const plateX = plateC.getContext('2d'), plotX = plotC.getContext('2d'), condX = condC.getContext('2d');
+let DPR = 1;
+const FR = { plate:{x:0,y:0,w:0,h:0}, plot:{x:0,y:0,w:0,h:0} };  // inner frames (device px)
+
+function fitOne(canvas, ctx){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const host = canvas.parentElement;
+  const w = host.clientWidth, h = host.clientHeight;
+  canvas.width = Math.max(1, Math.round(w * DPR)); canvas.height = Math.max(1, Math.round(h * DPR));
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  return { w, h };
+}
+
+// ── plot domain. xDom=[0,0.125] so the u=0 intercept is ON-SCREEN (half the
+// headline). yDom auto-padded around the four 1/λ's (incommensurable units →
+// independent sx,sy, NOT equal aspect). ───────────────────────────────────────
+const X_DOM = [0, 0.125];
+const Y_DOM_BASE = [1.30e6, 2.60e6];   // ~8% pad around the four vacuum 1/λ's
+const U_TICKS = [
+  { u: 1/9,  label: '1/9 · n=3' },
+  { u: 1/16, label: '1/16 · n=4' },
+  { u: 1/25, label: '1/25 · n=5' },
+  { u: 1/36, label: '1/36 · n=6' },
+];
+const PLATE_NM = [405, 660];           // λ axis range on the plate
+
+// ════════════════════════ THE ONE DRAW SPINE ════════════════════════════════
+let raf = 0;
+function requestDraw(){ if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); }
+
+function draw(){
+  const pts = measuredPoints();
+  const fit = (state.loss === 'L1') ? fitL1(pts) : fitL2(pts);
+  const l2fit = fitL2(pts);                 // SE always from the L2 fit (the band's home)
+  const se = fitL2SE(pts, l2fit);
+  drawPlate(pts);
+  drawPlot(pts, fit, l2fit, se);
+  drawConduit(pts);
+  updateReadouts(pts, fit, l2fit, se);
+}
+
+// ── LEFT: the spectral plate ──────────────────────────────────────────────────
+let plateGeom = [];   // [{n, xpx, color, ghostX}] for hit-testing + the conduit
+function drawPlate(pts){
+  const { w, h } = fitOne(plateC, plateX);
+  FR.plate = { x:0, y:0, w, h };
+  plateX.clearRect(0, 0, w, h);
+  // #050507 band already via CSS bg; draw a faint axis ruler at the bottom.
+  const padL = 14, padR = 14, axisY = h - 26;
+  const nmToX = nm => padL + (nm - PLATE_NM[0]) / (PLATE_NM[1] - PLATE_NM[0]) * (w - padL - padR);
+  // λ axis ticks
+  plateX.strokeStyle = 'rgba(127,178,230,0.16)'; plateX.lineWidth = 1;
+  plateX.beginPath(); plateX.moveTo(padL, axisY + 0.5); plateX.lineTo(w - padR, axisY + 0.5); plateX.stroke();
+  plateX.fillStyle = '#6b6e7e'; plateX.font = '9px ui-monospace, monospace'; plateX.textAlign = 'center';
+  for (let nm = 420; nm <= 660; nm += 60){
+    const x = nmToX(nm);
+    plateX.beginPath(); plateX.moveTo(x, axisY); plateX.lineTo(x, axisY + 4); plateX.stroke();
+    plateX.fillText(nm + 'nm', x, axisY + 15);
+  }
+  plateGeom = [];
+  const topY = 14, botY = axisY - 8;
+  for (const p of pts){
+    const n = p.n;
+    const measNm = measuredLambdaNm(p);
+    const ghostNm = trueLambdaNm(n);
+    const x = nmToX(measNm), ghostX = nmToX(ghostNm);
+    const color = wavelengthToRGB(ghostNm);   // hue from the true line color
+    plateGeom.push({ n, xpx: x, color, ghostX, measNm, ghostNm });
+    // the faint dotted vacuum-truth ghost tick (jitter becomes visible as the core slides off it)
+    plateX.strokeStyle = 'rgba(180,185,200,0.34)'; plateX.lineWidth = 1; plateX.setLineDash([3, 4]);
+    plateX.beginPath(); plateX.moveTo(ghostX, topY); plateX.lineTo(ghostX, botY); plateX.stroke();
+    plateX.setLineDash([]);
+    // the line: soft glow (lighter) + bright core (spectroscope idiom)
+    const gild = (hoverN === n);
+    plateX.globalCompositeOperation = 'lighter';
+    const glowW = gild ? 9 : 6;
+    const grad = plateX.createLinearGradient(x - glowW, 0, x + glowW, 0);
+    grad.addColorStop(0, rgbStr(color, 0)); grad.addColorStop(0.5, rgbStr(color, gild ? 0.55 : 0.40)); grad.addColorStop(1, rgbStr(color, 0));
+    plateX.fillStyle = grad; plateX.fillRect(x - glowW, topY, glowW * 2, botY - topY);
+    plateX.fillStyle = rgbStr(color, 1); plateX.fillRect(x - (gild ? 1.4 : 1), topY, gild ? 2.8 : 2, botY - topY);
+    plateX.globalCompositeOperation = 'source-over';
+    // brass halo on hover (the recognition moment)
+    if (gild){
+      plateX.strokeStyle = cssVar('--floor'); plateX.lineWidth = 1.4;
+      plateX.strokeRect(x - 6, topY - 2, 12, botY - topY + 4);
+    }
+    // label
+    plateX.fillStyle = gild ? cssVar('--floor') : rgbStr(color, 0.9);
+    plateX.font = (gild ? '600 ' : '') + '9.5px ui-monospace, monospace'; plateX.textAlign = 'center';
+    plateX.fillText(LINE_LABELS[n] + ' n=' + n, ghostX, botY + 4);
+  }
+}
+
+// ── RIGHT: the 1/n² plot (plumbline plot grammar, NOT equal-aspect) ───────────
+let plotGeom = [];   // [{n, px, py}] dot positions for hit-test + conduit
+function drawPlot(pts, fit, l2fit, se){
+  const { w, h } = fitOne(plotC, plotX);
+  FR.plot = { x:0, y:0, w, h };
+  plotX.clearRect(0, 0, w, h);
+  const padL = 52, padR = 16, padT = 16, padB = 40;
+  // y-domain: widen if noise pushes points out
+  let yLo = Y_DOM_BASE[0], yHi = Y_DOM_BASE[1];
+  for (const p of pts){ yLo = Math.min(yLo, p.y); yHi = Math.max(yHi, p.y); }
+  const yPad = (yHi - yLo) * 0.08; yLo -= yPad; yHi += yPad;
+  const sx = u => padL + (u - X_DOM[0]) / (X_DOM[1] - X_DOM[0]) * (w - padL - padR);
+  const sy = y => (h - padB) - (y - yLo) / (yHi - yLo) * (h - padT - padB);
+  // frame
+  plotX.strokeStyle = 'rgba(127,178,230,0.14)'; plotX.lineWidth = 1;
+  plotX.strokeRect(padL + 0.5, padT + 0.5, w - padL - padR - 1, h - padT - padB - 1);
+  // grid
+  plotX.strokeStyle = 'rgba(127,178,230,0.07)';
+  for (let k = 0; k <= 4; k++){
+    const yy = yLo + (yHi - yLo) * k / 4; const py = sy(yy);
+    plotX.beginPath(); plotX.moveTo(padL, py); plotX.lineTo(w - padR, py); plotX.stroke();
+    plotX.fillStyle = '#6b6e7e'; plotX.font = '9px ui-monospace, monospace'; plotX.textAlign = 'right';
+    plotX.fillText((yy / 1e6).toFixed(2) + '×10⁶', padL - 6, py + 3);
+  }
+  // x ticks: the four real u-values (both ways) + the gilt u=0 series-limit tick.
+  // Narrow-screen guard: at small plot widths the four numeric labels (and the
+  // gilt "(limit)" label at u=0) crowd and overlap. Walk the ticks LEFT→RIGHT
+  // (ascending px), measure each label against the right edge of the last KEPT
+  // label (starting from the (limit) label at u=0), and SKIP any that would
+  // collide — so the axis stays legible at 390px without a hardcoded breakpoint
+  // while a wide plot still shows all four. Tick marks always draw; the leftmost
+  // real tick (n=6, nearest (limit)) is the first to drop when space is tight.
+  plotX.textAlign = 'center';
+  const x0 = sx(0);                                  // the (limit) label centre
+  plotX.font = '8px ui-monospace, monospace';
+  const limitHalf = plotX.measureText('(limit)').width / 2;
+  let lastNumRight = x0 + limitHalf + 3;             // right edge of (limit) + 3px gutter
+  let lastSubRight = x0 + limitHalf + 3;             // same: sub-labels also clear (limit)
+  const ticksLtoR = U_TICKS.slice().sort((a, b) => a.u - b.u);  // ascending u == ascending px
+  for (const t of ticksLtoR){
+    const px = sx(t.u);
+    plotX.strokeStyle = 'rgba(127,178,230,0.18)'; plotX.beginPath();
+    plotX.moveTo(px, h - padB); plotX.lineTo(px, h - padB + 4); plotX.stroke();
+    // numeric label — draw only if it clears the last kept label / (limit)
+    plotX.font = '9px ui-monospace, monospace';
+    const numStr = t.u.toFixed(4);
+    const numHalf = plotX.measureText(numStr).width / 2;
+    if (px - numHalf >= lastNumRight){
+      plotX.fillStyle = '#9a9caa';
+      plotX.fillText(numStr, px, h - padB + 15);
+      lastNumRight = px + numHalf + 3;
+    }
+    // n-sub-label — the first to drop when tight (its own collision test)
+    plotX.font = '8px ui-monospace, monospace';
+    const subHalf = plotX.measureText(t.label).width / 2;
+    if (px - subHalf >= lastSubRight){
+      plotX.fillStyle = '#6b6e7e';
+      plotX.fillText(t.label, px, h - padB + 25);
+      lastSubRight = px + subHalf + 3;
+    }
+  }
+  // the gilt u=0 series-limit tick (where the intercept lives — half the headline)
+  plotX.strokeStyle = cssVar('--floor'); plotX.lineWidth = 1.2;
+  plotX.beginPath(); plotX.moveTo(x0, padT); plotX.lineTo(x0, h - padB); plotX.stroke();
+  plotX.fillStyle = cssVar('--floor'); plotX.font = '600 8.5px ui-monospace, monospace';
+  plotX.fillText('n→∞', x0, padT - 5);
+  plotX.fillText('(limit)', x0 + 0, h - padB + 25);
+  // axis title
+  plotX.fillStyle = '#9a9caa'; plotX.font = '600 10px ui-monospace, monospace';
+  plotX.fillText('u = 1/n²', (padL + w - padR) / 2, h - 6);
+
+  // the fit line + the t·SE prediction band (only if fit ok)
+  if (fit && fit.ok && l2fit && l2fit.ok && se.ok){
+    const t = activeT();
+    // prediction band: half-width t·SE(ŷ) at each x
+    plotX.fillStyle = cssVar('--band') || 'rgba(120,140,180,0.16)';
+    plotX.beginPath();
+    const N = 60;
+    for (let i = 0; i <= N; i++){
+      const u = X_DOM[0] + (X_DOM[1] - X_DOM[0]) * i / N;
+      const yhat = l2fit.m * u + l2fit.b; const hw = t * se.sePred(u);
+      const px = sx(u), py = sy(yhat + hw); if (i === 0) plotX.moveTo(px, py); else plotX.lineTo(px, py);
+    }
+    for (let i = N; i >= 0; i--){
+      const u = X_DOM[0] + (X_DOM[1] - X_DOM[0]) * i / N;
+      const yhat = l2fit.m * u + l2fit.b; const hw = t * se.sePred(u);
+      plotX.lineTo(sx(u), sy(yhat - hw));
+    }
+    plotX.closePath(); plotX.fill();
+    // the fit line itself
+    const fy0 = fit.m * X_DOM[0] + fit.b, fy1 = fit.m * X_DOM[1] + fit.b;
+    plotX.strokeStyle = (state.loss === 'L1') ? cssVar('--l1') : cssVar('--accent');
+    plotX.lineWidth = 2.6; plotX.shadowBlur = 8; plotX.shadowColor = plotX.strokeStyle;
+    if (state.loss === 'L1') plotX.setLineDash([7, 5]);
+    plotX.beginPath(); plotX.moveTo(sx(X_DOM[0]), sy(fy0)); plotX.lineTo(sx(X_DOM[1]), sy(fy1)); plotX.stroke();
+    plotX.setLineDash([]); plotX.shadowBlur = 0;
+    // the gilt vertical whisker at u=0: 4·(b ± t·SE_b) — the SECOND R, as an interval
+    const bC = l2fit.b, seB = se.SE_b;
+    const yTop = bC + t * seB, yBot = bC - t * seB;
+    plotX.strokeStyle = cssVar('--floor'); plotX.lineWidth = 2;
+    plotX.beginPath(); plotX.moveTo(x0, sy(yTop)); plotX.lineTo(x0, sy(yBot)); plotX.stroke();
+    // caps
+    plotX.beginPath(); plotX.moveTo(x0 - 4, sy(yTop)); plotX.lineTo(x0 + 4, sy(yTop));
+    plotX.moveTo(x0 - 4, sy(yBot)); plotX.lineTo(x0 + 4, sy(yBot)); plotX.stroke();
+    // the intercept dot (4b → R/4 reading lives here)
+    plotX.fillStyle = cssVar('--floor'); plotX.beginPath(); plotX.arc(x0, sy(bC), 3.5, 0, 7); plotX.fill();
+  }
+
+  // the four data dots (white, r=4.4, #0a0d14 stroke)
+  plotGeom = [];
+  for (const p of pts){
+    const px = sx(p.x), py = sy(p.y); plotGeom.push({ n: p.n, px, py });
+    const gild = (hoverN === p.n);
+    plotX.beginPath(); plotX.arc(px, py, gild ? 5.4 : 4.4, 0, 7);
+    plotX.fillStyle = gild ? cssVar('--floor') : '#edeef4';
+    plotX.strokeStyle = '#0a0d14'; plotX.lineWidth = 1.6; plotX.fill(); plotX.stroke();
+    if (gild){ plotX.strokeStyle = cssVar('--floor'); plotX.lineWidth = 1.4; plotX.beginPath(); plotX.arc(px, py, 8.5, 0, 7); plotX.stroke(); }
+  }
+  // stash mapping for the conduit
+  drawPlot._sx = sx; drawPlot._sy = sy;
+}
+
+// ── THE CONDUIT — light becoming number ──────────────────────────────────────
+function drawConduit(pts){
+  const { w, h } = fitOne(condC, condX);
+  condX.clearRect(0, 0, w, h);
+  // map a plate-x and a plot-dot-y (each in their own canvas) into conduit-local
+  // coords. The conduit spans between the two panels; we draw curved light-pipes
+  // from the plate's right edge to the plot's left edge for the four lines.
+  const plateW = plateC.clientWidth, plotLeftPad = 52;
+  const sy = drawPlot._sy; if (!sy) return;
+  const lines = [];
+  for (let i = 0; i < pts.length; i++){
+    const g = plateGeom[i], pg = plotGeom[i]; if (!g || !pg) continue;
+    lines.push({ n: pts[i].n, color: g.color, yStart: 0.18 * h + i * 0.16 * h, yEnd: pg.py - 50 });
+  }
+  for (const L of lines){
+    const hovered = (hoverN === L.n);
+    const alpha = hovered ? 0.85 : (hoverN === null ? 0.16 : 0.05);
+    const grad = condX.createLinearGradient(0, 0, w, 0);
+    grad.addColorStop(0, rgbStr(L.color, alpha));
+    grad.addColorStop(1, 'rgba(127,140,170,' + (alpha * 0.6) + ')');
+    condX.strokeStyle = grad; condX.lineWidth = hovered ? 2.2 : 1.1;
+    const y0 = Math.max(8, Math.min(h - 8, L.yStart));
+    const y1 = Math.max(8, Math.min(h - 8, L.yEnd));
+    condX.beginPath(); condX.moveTo(0, y0);
+    condX.bezierCurveTo(w * 0.5, y0, w * 0.5, y1, w, y1);
+    condX.stroke();
+  }
+}
+
+// ── readouts: the payoff card ─────────────────────────────────────────────────
+function updateReadouts(pts, fit, l2fit, se){
+  const R_H = RYDBERG_H;
+  $('Rcodata').textContent = (R_H / 1e7).toFixed(7) + '×10⁷';
+  if (!l2fit.ok || !se.ok){ return; }
+  const t = activeT();
+  const Rslope = -l2fit.m, Rinterc = 4 * l2fit.b;
+  const SE_Rslope = se.SE_m, SE_Rinterc = 4 * se.SE_b;
+  $('Rslope').textContent = (Rslope / 1e7).toFixed(7) + '×10⁷';
+  $('Rinterc').textContent = (Rinterc / 1e7).toFixed(7) + '×10⁷';
+  // agreement number-line: ±0.5% window around CODATA
+  const span = 0.005;  // ±0.5%
+  const toPct = R => (R - R_H) / R_H;
+  const toLeft = R => { const f = Math.max(-span, Math.min(span, toPct(R))); return (f / span * 0.5 + 0.5) * 100; };
+  $('mkSlope').style.left = toLeft(Rslope) + '%';
+  $('mkInterc').style.left = toLeft(Rinterc) + '%';
+  // the t·SE band drawn on the number-line (from the slope estimate's band)
+  const bandHalfPct = t * SE_Rslope / R_H;
+  const bandLeft = Math.max(0, (Math.max(-span, -bandHalfPct) / span * 0.5 + 0.5)) * 100;
+  const bandRight = Math.min(100, (Math.min(span, bandHalfPct) / span * 0.5 + 0.5) * 100);
+  const bf = $('agreeBand'); bf.style.left = bandLeft + '%'; bf.style.width = Math.max(0, bandRight - bandLeft) + '%';
+  // the recovered readout — and the HONEST failure: outside its own t95 band.
+  const within95 = Math.abs(Rslope - R_H) <= T_DOF2_95 * SE_Rslope;
+  const recov = $('recovered'), agreeEl = $('agree');
+  if (within95){
+    recov.classList.remove('bad'); agreeEl.classList.remove('bad');
+    recov.innerHTML = 'recovered R = ' + (Rslope / 1e7).toFixed(5) + '×10⁷ <span class="sub">± ' + t.toFixed(2) + '·SE = ±' + (t * SE_Rslope / 1e7).toExponential(1) + '×10⁷ /m</span>';
+  } else {
+    recov.classList.add('bad'); agreeEl.classList.add('bad');
+    recov.innerHTML = 'recovered R outside its own band <span class="sub">|R̂−R_H| > t95·SE — the honest failure</span>';
+  }
+  // agreement note flips with σ
+  $('agreeNote').textContent = (state.noiseFrac === 0)
+    ? 'At σ=0 these are the SAME number by algebra (−m == 4b, bit-identical).'
+    : 'Under noise these are two INDEPENDENT estimates of R — they drift apart, each with its own t·SE.';
+}
+
+// ════════════════════════ HIT-TESTING + RECOGNITION ═════════════════════════
+function plateHit(ev){
+  const r = plateC.getBoundingClientRect(); const x = ev.clientX - r.left;
+  let best = null, bd = 16;
+  for (const g of plateGeom){ const d = Math.abs(g.xpx - x); if (d < bd){ bd = d; best = g.n; } }
+  return best;
+}
+function plotHit(ev){
+  const r = plotC.getBoundingClientRect(); const x = ev.clientX - r.left, y = ev.clientY - r.top;
+  let best = null, bd = 18;
+  for (const g of plotGeom){ const d = Math.hypot(g.px - x, g.py - y); if (d < bd){ bd = d; best = g.n; } }
+  return best;
+}
+function showTooltip(ev, n){
+  const tt = $('tooltip'); if (n === null){ tt.classList.remove('show'); return; }
+  const pts = measuredPoints(); const p = pts.find(q => q.n === n); if (!p) return;
+  const lamNm = measuredLambdaNm(p);
+  tt.innerHTML = '<b>' + LINE_LABELS[n] + ' · n=' + n + '</b> · λ=' + lamNm.toFixed(2) + 'nm → (1/n²=' + p.x.toFixed(4) + ', 1/λ=' + (p.y / 1e6).toFixed(4) + '×10⁶)';
+  tt.classList.add('show');
+  const wrapR = $('stage').getBoundingClientRect();
+  let tx = ev.clientX - wrapR.left + 14, ty = ev.clientY - wrapR.top + 14;
+  tt.style.left = Math.min(tx, wrapR.width - 290) + 'px'; tt.style.top = ty + 'px';
+}
+function setHover(n, ev){
+  if (n !== hoverN){ hoverN = n; requestDraw(); }
+  showTooltip(ev || { clientX: 0, clientY: 0 }, n);
+}
+
+plateC.addEventListener('pointermove', ev => setHover(plateHit(ev), ev));
+plotC.addEventListener('pointermove', ev => setHover(plotHit(ev), ev));
+plateC.addEventListener('pointerleave', () => setHover(null));
+plotC.addEventListener('pointerleave', () => setHover(null));
+// clicking a plate line yanks it as an outlier (toggles); honest Hα note.
+plateC.addEventListener('pointerdown', ev => {
+  const n = plateHit(ev); if (n === null) return;
+  if (state.outlierN === n){ state.outlierN = null; }
+  else {
+    state.outlierN = n;
+    if (n === 3) flashHint('Hα is a high-leverage anchor — with only 4 lines even robust L1 can\'t ignore it; pick an interior line (Hγ) to see L1 hold.');
+  }
+  syncURL(); requestDraw();
+});
+
+// ════════════════════════ CONTROLS ═════════════════════════════════════════
+function flashHint(msg){ const el = $('hint'); el.innerHTML = msg; }
+function defaultHint(){
+  $('hint').innerHTML = '<b>hover</b> a plate line or its plot dot — the conduit ties light to number · <b>click</b> a line to yank it (interior <span class="g">Hγ</span> recommended)';
+}
+
+$('noise').addEventListener('input', e => {
+  state.noiseFrac = parseFloat(e.target.value);
+  $('noiseVal').textContent = state.noiseFrac.toFixed(3);
+  syncURL(); requestDraw();
+});
+function setSeed(s){ state.seed = (s >>> 0) || 1; $('seedVal').textContent = 'seed ' + state.seed; syncURL(); requestDraw(); }
+$('seedUp').addEventListener('click', () => setSeed(state.seed + 1));
+$('seedDn').addEventListener('click', () => setSeed(Math.max(1, state.seed - 1)));
+$('seedRng').addEventListener('click', () => setSeed((state.seed * 1664525 + 1013904223) >>> 0));
+
+$('segLoss').addEventListener('click', e => {
+  const opt = e.target.closest('.opt'); if (!opt) return;
+  state.loss = opt.dataset.loss;
+  [...$('segLoss').children].forEach(o => o.classList.toggle('on', o === opt));
+  syncURL(); requestDraw();
+});
+$('segMedium').addEventListener('click', e => {
+  const opt = e.target.closest('.opt'); if (!opt) return;
+  state.medium = opt.dataset.medium;
+  [...$('segMedium').children].forEach(o => o.classList.toggle('on', o === opt));
+  $('airnote').style.display = (state.medium === 'air') ? '' : 'none';
+  syncURL(); requestDraw();
+});
+$('segBand').addEventListener('click', e => {
+  const opt = e.target.closest('.opt'); if (!opt) return;
+  state.bandK = opt.dataset.band;
+  [...$('segBand').children].forEach(o => o.classList.toggle('on', o === opt));
+  syncURL(); requestDraw();
+});
+$('copyState').addEventListener('click', () => {
+  syncURL();
+  const url = location.href;
+  if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => {
+    const c = $('copyState'); const old = c.textContent; c.textContent = 'copied ✓';
+    setTimeout(() => c.textContent = old, 1200);
+  });
+});
+
+// ── URL hash: medium|noiseFrac|seed|loss|outlierN|outlierFac|bandK ────────────
+function syncURL(){
+  const o = state.outlierN === null ? '_' : state.outlierN;
+  const h = [state.medium, state.noiseFrac, state.seed, state.loss, o, state.outlierFac, state.bandK].join('|');
+  history.replaceState(null, '', '#' + h);
+}
+function loadURL(){
+  const h = decodeURIComponent(location.hash.replace(/^#/, '')); if (!h) return;
+  const p = h.split('|'); if (p.length < 7) return;
+  if (p[0] === 'vacuum' || p[0] === 'air') state.medium = p[0];
+  const nf = parseFloat(p[1]); if (!isNaN(nf)) state.noiseFrac = Math.min(NOISE_MAX, Math.max(0, nf));
+  const sd = parseInt(p[2], 10); if (!isNaN(sd)) state.seed = (sd >>> 0) || 1;
+  if (p[3] === 'L1' || p[3] === 'L2') state.loss = p[3];
+  state.outlierN = (p[4] === '_') ? null : ([3,4,5,6].includes(parseInt(p[4],10)) ? parseInt(p[4],10) : null);
+  const of = parseFloat(p[5]); if (!isNaN(of)) state.outlierFac = of;
+  if (p[6] === '68' || p[6] === '95') state.bandK = p[6];
+}
+function applyStateToUI(){
+  $('noise').value = state.noiseFrac; $('noiseVal').textContent = state.noiseFrac.toFixed(3);
+  $('seedVal').textContent = 'seed ' + state.seed;
+  [...$('segLoss').children].forEach(o => o.classList.toggle('on', o.dataset.loss === state.loss));
+  [...$('segMedium').children].forEach(o => o.classList.toggle('on', o.dataset.medium === state.medium));
+  [...$('segBand').children].forEach(o => o.classList.toggle('on', o.dataset.band === state.bandK));
+  $('airnote').style.display = (state.medium === 'air') ? '' : 'none';
+}
+
+// ════════════════════════ THE SELF-TEST PILL ════════════════════════════════
+function runPill(){
+  let r;
+  try { r = runSelfTest(); }
+  catch (e){ console.error('[rydberg] self-test threw:', e); r = { pass:0, total:1, lines:[{ name:'self-test threw', ok:false, detail:String(e) }] }; }
+  const el = $('selftest'); const green = r.pass === r.total;
+  el.classList.toggle('ok', green); el.classList.toggle('bad', !green);
+  el.textContent = green ? ('R read off light ✓ ' + r.pass + '/' + r.total) : ('self-test ✗ ' + r.pass + '/' + r.total);
+  el.title = r.lines.map(l => (l.ok ? '✓ ' : '✗ ') + l.name + (l.detail ? '  (' + l.detail + ')' : '')).join('\n\n');
+  if (!green){ console.error('[rydberg] SELF-TEST FAILED — ' + r.pass + '/' + r.total); for (const l of r.lines) if (!l.ok) console.error('  ✗ ' + l.name + '  ·  ' + l.detail); }
+  else console.log('[rydberg] self-test ' + r.pass + '/' + r.total + ' ✓ — R read off four Balmer smudges (identity · two oracles · noisy t-band recovery · teeth: outlier lurch + air trap)');
+  return r;
+}
+$('selftest').addEventListener('click', runPill);
+window.__rydbergSelfTest = runSelfTest;
+
+// ════════════════════════ BOOT ═════════════════════════════════════════════
+function onResize(){ requestDraw(); }
+window.addEventListener('resize', onResize);
+const ro = new ResizeObserver(() => requestDraw());
+ro.observe($('plateHost')); ro.observe($('plotHost')); ro.observe($('conduitHost'));
+loadURL(); applyStateToUI(); defaultHint(); runPill(); draw();
+
+</script>
+</body>
+</html>
