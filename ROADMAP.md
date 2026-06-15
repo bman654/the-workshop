@@ -46,6 +46,7 @@ worklog (so it's never rebuilt). A seed that goes stale **decays** → prune it 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
+- [bug] **Stale "The Workshop" backlinks after the rename** — the estate is now **"The Orrery Estate"** (da008bb) but room pages still show the OLD name: page `<title>`s (e.g. `The Cavern · The Workshop`), back-links (`← The Workshop`), kickers (`The Workshop · Clockwork Automata`), the colophon title, some footers. Fix every VISIBLE estate-name reference → "The Orrery Estate" (forge pages: edit the `.src.html` + re-forge; sweep the whole estate, ~many files). **KEEP** the repo link `github.com/bman654/the-workshop`, the Maker's Wing/Shed lineage, and "workshop" as a common noun for the making-space (not the estate). (sown #48)
 <!-- gauge:bug:end -->
 
 *No open bugs. (The estate-wide mute is fully wired — every audio surface honours the one shared key `ws:pref:muted`.)*
