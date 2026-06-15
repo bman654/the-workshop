@@ -7,6 +7,8 @@
 import {
   P, field, V, fixedPoint, linearPeriod,
   eulerStep, rk4Step, trace, traceOrbit, quarterLag, runSelfTest,
+  ECO_K, agentMeanField, stepEcoCounts, headlessRun, ensembleCensus,
+  censusPeriodAmp, runAgentSelfTest,
 } from './core.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -19,10 +21,15 @@ function check(name, cond, info) {
   else { console.log('  ✗ ' + name + (info ? '  ·  ' + info : '')); }
 }
 
-console.log('\n— The full in-page self-test —');
+console.log('\n— The full in-page self-test (the proven L–V core) —');
 const r = runSelfTest();
 for (const c of r.checks) check(c.name, c.pass, c.info);
 check('self-test reports all green', r.pass === r.total, r.pass + '/' + r.total);
+
+console.log('\n— The agent-ecology self-test (the bridge: the crowd recovers the law) —');
+const ra = runAgentSelfTest();
+for (const c of ra.checks) check(c.name, c.pass, c.info);
+check('agent self-test reports all green', ra.pass === ra.total, ra.pass + '/' + ra.total);
 
 console.log('\n— Independent re-derivations (this file, not the bundled self-test) —');
 
@@ -129,6 +136,59 @@ console.log('\n— Independent re-derivations (this file, not the bundled self-t
 }
 
 // ---------------------------------------------------------------------------
+//  INDEPENDENT AGENT WITNESSES — re-derive the bridge claims here (not the
+//  bundled agent self-test), so "agent green" can't drift either.
+// ---------------------------------------------------------------------------
+
+// THE AGENT MEAN-FIELD is byte-for-byte field() at every state we probe.
+{
+  let maxErr = 0;
+  for (const [x, y] of [[12, 7], [3.3, 2.1], [5, 5], [1.5, 0.9]]) {
+    const [ax, ay] = agentMeanField(x, y);
+    const [lx, ly] = field(x, y);
+    maxErr = Math.max(maxErr, Math.abs(ax - lx), Math.abs(ay - ly));
+  }
+  check('agent mean-field == field() to 0 (independent states)', maxErr === 0, 'max|Δ|=' + maxErr);
+}
+
+// THE DENSITY SCALE puts the center at integer counts (4·K, 2.75·K).
+{
+  check('ECO_K=100 ⇒ center at (400 hares, 275 lynx)',
+        ECO_K === 100 && 4 * ECO_K === 400 && 2.75 * ECO_K === 275, '(' + 4 * ECO_K + ', ' + 2.75 * ECO_K + ')');
+}
+
+// THE EMERGENT PERIOD & AMPLITUDE match the RK4 orbit (re-measured here).
+{
+  const orb = traceOrbit(8, 4, P, 0.004);
+  let oxmin = Infinity, oxmax = -Infinity;
+  for (const [px] of orb.pts) { if (px < oxmin) oxmin = px; if (px > oxmax) oxmax = px; }
+  const orbAmp = (oxmax - oxmin) / 2;
+  const census = ensembleCensus(8, 4, 120, 24, 0.02, 7000001);
+  const pa = censusPeriodAmp(census);
+  const perErr = Math.abs(pa.period - orb.period) / orb.period;
+  const ampErr = Math.abs(pa.xamp - orbAmp) / orbAmp;
+  check('emergent census period ≈ RK4 orbit period (<5%)', pa.ncross >= 2 && perErr < 0.05,
+        pa.period.toFixed(3) + ' vs ' + orb.period.toFixed(3) + ' (' + (perErr * 100).toFixed(2) + '%)');
+  check('emergent ⟨x⟩ amplitude ≈ RK4 orbit x-amplitude (<5%)', ampErr < 0.05,
+        pa.xamp.toFixed(3) + ' vs ' + orbAmp.toFixed(3) + ' (' + (ampErr * 100).toFixed(2) + '%)');
+}
+
+// REMOVE THE LYNX ⇒ a deterministic monotone hare explosion (no rescue).
+{
+  const r = headlessRun(777, 3, 0.02, { H0: Math.round(3 * ECO_K), lynxRemoved: true });
+  check('cull all lynx ⇒ hares explode (deterministic growth path)',
+        r.Nh > Math.round(3 * ECO_K) * 2, Math.round(3 * ECO_K) + ' → ' + r.Nh + ' hares in t=3');
+}
+
+// DETERMINISM of the count engine — same seed ⇒ identical headless run.
+{
+  const a = headlessRun(42, 50, 0.02, {});
+  const b = headlessRun(42, 50, 0.02, {});
+  check('headlessRun deterministic — same seed ⇒ identical counts',
+        a.Nh === b.Nh && a.Nl === b.Nl, a.Nh === b.Nh && a.Nl === b.Nl ? 'identical' : 'DIFFER');
+}
+
+// ---------------------------------------------------------------------------
 //  RE-EXTRACTION PARITY — the core inlined in index.html is byte-identical to
 //  core.mjs (between the // ===== PREY-CORE sentinels), indentation-normalised.
 // ---------------------------------------------------------------------------
@@ -151,6 +211,23 @@ console.log('\n— Independent re-derivations (this file, not the bundled self-t
           norm(pageBody) === norm(modBody),
           norm(pageBody) === norm(modBody) ? 'byte-identical' :
             'DIFFER (page ' + norm(pageBody).length + ' vs mod ' + norm(modBody).length + ' chars)');
+  }
+
+  // ----- the AGENT-CORE block is inlined byte-identical too -----
+  const A_START = '// ===== AGENT-CORE (byte-identical to core.mjs) =====';
+  const A_END = '// ===== END AGENT-CORE =====';
+  const norm = (s) => s.replace(/^\s+/gm, '').replace(/\r/g, '').trim();
+  const mi = modSrc.indexOf(A_START), mj = modSrc.indexOf(A_END);
+  const ai = pageSrc.indexOf(A_START), aj = pageSrc.indexOf(A_END);
+  check('core.mjs & index.html both contain the AGENT-CORE sentinels',
+        mi >= 0 && mj > mi && ai >= 0 && aj > ai);
+  if (mi >= 0 && mj > mi && ai >= 0 && aj > ai) {
+    const modAgent = modSrc.slice(mi + A_START.length, mj).trim();
+    const pageAgent = pageSrc.slice(ai + A_START.length, aj).trim();
+    check('inlined AGENT-CORE matches core.mjs (indentation-normalised)',
+          norm(pageAgent) === norm(modAgent),
+          norm(pageAgent) === norm(modAgent) ? 'byte-identical' :
+            'DIFFER (page ' + norm(pageAgent).length + ' vs mod ' + norm(modAgent).length + ' chars)');
   }
 }
 

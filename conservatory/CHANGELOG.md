@@ -358,3 +358,58 @@ toggle is reversible: Euler forces the clean RPS spiral-out (dt→1.2, posval sh
 holds), and RK4 restores dt=0.05 + a positive min-xᵢ. A coarse-Euler trace cap (560 steps
 when dt≥0.6) keeps the on-bench spiral-out faithful — it punctures the edge with Σxᵢ still
 exact, before the far-outside-the-simplex blow-up would corrupt the float sum.
+
+---
+
+## Cycle #37 — Predator & Prey RE-SOULED in place (the wing's first `rework`)
+
+A `rework` (BUILD / garden). The bench `conservatory/predator-prey/` — whose own
+footer once confessed its dot-clouds were "a rendering of the ODE, not an agent sim" —
+is re-grown **IN PLACE** (same route, no new front-door footprint) into a **living
+agent ecology**. It now LEADS with a glass terrarium of tens of individually-readable
+animals: **green hares** (with ears) graze and breed; **amber lynx** (with ears) prowl,
+**flash red** on a catch and **fade** on starvation. An **event ticker** narrates single
+events ("a lynx caught a hare", "a hare litter ×N", "a lynx starved"). The plotted
+dot-cloud is no longer the star — the animals are.
+
+### The proof, drawn BY the animals
+On the back glass a phase portrait carries the **proven dashed RK4 ghost ring**
+(V conserved to ~1e−11), the center cross at **(4, 2.75)**, a **live white bead**, and an
+**accumulating green cloud** the animals draw. The stochastic birth–death–predation rule
+has a **mean-field that is exactly the Lotka–Volterra field** (a=1.1, b=0.4, c=0.4, d=0.1) —
+`agentMeanField == field()` to 0. The **emergent census period 10.35 vs RK4 10.04 (3.0%)**
+and **x-amplitude 4.32 vs 4.23 (2.3%)**, both inside a stated 5% tolerance, are measured
+from the **phase-locked ensemble mean** (seeds=120, K=100): a single stochastic LV run
+random-walks across orbits, so the ensemble mean is the honest way to recover a stable
+emergent loop. **Remove the lynx → hares flood to the ceiling** (the predators were the
+only brake); **re-seed** restores a fresh loop.
+
+### Files (re-grown in place)
+- `core.mjs` (310→**542**L) — the PREY-CORE block preserved **byte-identical** (every
+  existing export unchanged); ADDED the AGENT-CORE block between new sentinels: `ECO_K=100`,
+  `mulberry32`, `binom`, `agentMeanField`, `stepEcoCounts` (mean-field IS `field()` exactly),
+  deterministic count-only `headlessRun`, phase-locked `ensembleCensus`, `censusPeriodAmp`,
+  `runAgentSelfTest` (5 new exact/seeded claims).
+- `index.html` (rebuilt instrument) — both CORE blocks inlined **byte-identical** between
+  their sentinels; a two-tier badge (`core 6/6 ✓ · bridge…` → **self-test 11/11 ✓**), the
+  heavier agent ensemble deferred via `requestIdleCallback` so paint never blocks; the footer
+  confession REPLACED with the truthful "it IS an agent ecology" account; bare-relative
+  back-links + the `ws:seen:predator-prey` breadcrumb preserved.
+- `core.test.mjs` (31→**45** checks) — runs the agent self-test, adds independent agent
+  witnesses, and adds the AGENT-CORE re-extraction parity test alongside the preserved
+  PREY-CORE parity test.
+- `../index.html` (landing) — predator-prey card blurb refreshed to "a living agent ecology
+  that draws its own L–V orbit"; the card glyph corrected 🐌→🐇 (a hare, the prey).
+
+### Self-verify (cycle #37)
+`node conservatory/predator-prey/core.test.mjs` → **45/45** (was 31/31), incl. both
+byte-identical re-extraction parity tests. Publisher RE-PROVED live (uncommon port `:8794`,
+torn down by exact PID; agent-browser `ws37-predprey` / `ws37-conslanding`, closed by name;
+Brandon's :3001/:4380 untouched): bench badge **11/11 ✓** (after waiting ~2s for the deferred
+ensemble), landing **21/21 ✓**; **0** console errors, **0** nested anchors, **0** overflow
+@1280 (1265) & @390 (375) on both surfaces. The cull fired reliably in one press
+(lynx→0, hares→1400 ceiling, ⚠ banner lit), re-seed reset to a fresh loop, and "prove the
+orbit (run 200×)" took runs 0→200 with the pooled green cloud visibly filling the dashed
+ghost ellipse. Mobile (390×844) stacks cleanly. **Caught & fixed in review:** the landing's
+predator-prey card glyph was 🐌 (a snail — the odd one out among 🌱/🦠/♛, incongruous for
+hares & lynx) → changed to 🐇 (the prey hare); landing self-test stays 21/21.
