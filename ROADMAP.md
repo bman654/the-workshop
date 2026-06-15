@@ -61,7 +61,7 @@ Workbench nested-anchor card spill (stretched-link pattern, all cards) · Carnot
 ## 🏛️ Grounds seeds — big swings (new structure; the grounds-worker opens one)
 
 <!-- gauge:grounds-seeds:start -->
-- [room] **The Conservatory — a living-systems / population-dynamics wing** — the estate's first *coupled dynamics over time*. On-ramp: the Lotka–Volterra predator–prey limit cycle (a conserved quantity holds along every orbit; forward-Euler spuriously spirals out — the teeth). Grows toward SIR / logistic / replicator (a handshake to game theory). (Generate a few divergent FORM concepts first — a glasshouse, not a list.) (sown #27 · contest #0)
+<!-- BLOOMED #31 → The Conservatory (living-systems wing): front-door footprint + glasshouse landing + the predator–prey bench. Provenance: conservatory/CHANGELOG.md + the #31 worklog. The three planters (logistic / SIR / replicator) are now [bench] garden seeds under the wing. -->
 - [room] **The Alchemy Lab — a chemistry wing** pairing the Cavern (physics → chemistry). On-ramp: a **reaction-balancer** (integer coefficients from the element-count matrix's nullspace conserve every atom exactly). **Do NOT** open on crystal-growth/DLA — `fractal-dimension/` already proves D≈1.71. Cross-rich with the Cavern. (sown #27 · contest #0)
 - [room] **The Hours — a living estate** — real time tints the front-door plate dawn → candle → night; time-gated apparitions appear. Could *be* its own metagame layer. (Use `tools/hours/`, not `tools/sky/`.) (sown #27 · contest #0)
 - [metagame] **The Workshop Mystery — a manor-wide treasure hunt** — clues chase across exhibits (a seed found here, the cipher to read it found there), Undercroft-style hint cards → a final reveal; theme candidate: a fictional history of the manor, a chapter per unlock. The clue graph must be **provably solvable**. (~3 cycles.) (sown #27 · contest #0)
@@ -89,6 +89,11 @@ Workbench nested-anchor card spill (stretched-link pattern, all cards) · Carnot
 - [curation] **Survey of Heaven — make discovery an EVENT** — a constellation fades in with a per-constellation melody; each star flashes with its own tone; hover re-glows + shows which feat/visit lit it; plus in-the-moment unlock cues on the ws-flag pages. (Supersedes the old "silent by default" lean.) (sown #27)
 - [curation] **Trim the ballooned Workbench blurbs** — Collatz (~190w) · Ulam (~144w) · Spirograph · Straightedge · Fourier · The Mill · Galton · Black Chamber are far over a one-promise-line (~30w). Trim each, PRESERVE inner cross-links above the stretched `<a class=card-link>` overlay, re-verify 0 nested-anchor / 0 spill at desktop + mobile. (sown #27)
 - [curation] **Plumb the Numbers-Room crumbs, then chart "The Numerologist"** — the 4 benches (`best-rational/` · `prime-spiral/` · `collatz/` · `cardioid/`) drop zero `ws:seen:` crumbs and don't even inline `ws.js`. Plumb each (assert its own crumb in its self-test) THEN chart the 4-star Survey tie as ONE seed. **ID gotcha:** dir `prime-spiral/` ↔ page "The Ulam Spiral" (pick the crumb id to match the future `sky.js` member). (sown #27)
+
+### bench
+- [bench] **The Conservatory · Logistic growth** — fill the first empty planter. One population against a carrying capacity K; the sigmoid spirals IN to a stable node — the explicit foil to the predator–prey CENTER. Same terrarium frame; self-test the stable fixed point + monotone approach (a Lyapunov story, no conserved loop). (sown #31)
+- [bench] **The Conservatory · The SIR epidemic** — the second planter. Susceptible→Infected→Recovered, gated by R₀: below 1 the outbreak provably dies, above 1 it sweeps. Self-test the threshold exactly + S+I+R conserved (closed population). (sown #31)
+- [bench] **The Conservatory · The replicator** — the third planter. Populations of strategies competing toward an evolutionarily-stable fixed point; a handshake to game theory. Self-test the ESS fixed point + the simplex (probabilities sum to 1) invariant. (sown #31)
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
