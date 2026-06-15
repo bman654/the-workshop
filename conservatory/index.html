@@ -92,8 +92,7 @@
   .bed:hover .enter{ text-decoration:underline; }
 
   /* ===== THE EMPTY PLANTERS ===== */
-  .planters{ display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-top:14px; }
-  @media (max-width:760px){ .planters{ grid-template-columns:1fr; } }
+  .planters{ display:grid; grid-template-columns:1fr; gap:14px; margin-top:14px; }
   .planter{ border:1px dashed rgba(178,154,100,0.4); border-radius:13px; padding:18px 16px;
     background:rgba(255,255,255,0.012); min-height:128px; display:flex; flex-direction:column; }
   .planter .ptitle{ font-family:var(--font-serif); font-size:16px; color:rgba(238,242,238,0.72); margin:0 0 6px; }
@@ -213,16 +212,24 @@
       </div>
     </a>
 
-    <!-- ===== THE EMPTY PLANTERS ===== -->
-    <p class="sec-label" style="margin-top:30px">Planters awaiting &mdash; the systems still to come</p>
-    <div class="planters">
-      <div class="planter">
-        <div class="seedling">&#127793;</div>
-        <p class="ptitle">The SIR epidemic</p>
-        <p class="pdesc">Susceptible &rarr; infected &rarr; recovered, gated by a threshold R&#8320;:
-        below it the outbreak dies, above it it sweeps.</p>
-        <div class="ptag">planter awaiting</div>
+    <a class="bed" href="sir/index.html" style="margin-top:14px">
+      <div class="bedgrid">
+        <div class="bedglass"><canvas id="bedsir" width="520" height="460"></canvas></div>
+        <div class="bedbody">
+          <div class="tagrow"><span class="glyph">&#129440;</span><span class="kind">the SIR epidemic</span></div>
+          <h2>The SIR Epidemic</h2>
+          <p>Susceptible&rarr;infected&rarr;recovered, gated by R&#8320;: <b>below 1 the outbreak dies</b>,
+          above 1 it sweeps to a peak at S=&gamma;/&beta;. The open arc next to the closed ring and the stable node.</p>
+          <div class="proof">S+I+R=N to ~1e&minus;15 under RK4; the threshold flips the peak count 1&harr;0 at
+          R&#8320;=1; coarse Euler provably drives I&lt;0.</div>
+          <span class="enter">&#8627; enter the bed</span>
+        </div>
       </div>
+    </a>
+
+    <!-- ===== THE EMPTY PLANTER ===== -->
+    <p class="sec-label" style="margin-top:30px">Planter awaiting &mdash; the system still to come</p>
+    <div class="planters">
       <div class="planter">
         <div class="seedling">&#127793;</div>
         <p class="ptitle">The replicator</p>
@@ -242,9 +249,9 @@
   </div>
 
   <div class="foot">
-    <p>The Conservatory &mdash; the estate's living-systems wing. Two benches self-prove their claim
-    exact &mdash; a closed-orbit center and an S-curve settling at K; two planters still stand empty for
-    the systems to come.</p>
+    <p>The Conservatory &mdash; the estate's living-systems wing. Three benches self-prove their claim
+    exact &mdash; a closed-orbit center, an S-curve settling at K, and an outbreak gated by R&#8320;; one
+    planter still stands empty for the system to come.</p>
     <p style="margin-top:8px">
       <a href="../index.html">&larr; back to the workshop</a> &nbsp;&middot;&nbsp;
       <a href="../orrery/index.html">the Orrery, where other closed orbits turn &rarr;</a>
@@ -257,6 +264,8 @@ import { fixedPoint, linearPeriod, traceOrbit, rk4Step, V, P, runSelfTest as cor
   from './predator-prey/core.mjs';
 import { runSelfTest as logisticSelfTest, closed as logClosed, fixedPoints as logFixed, P as logP }
   from './logistic/core.mjs';
+import { trace as sirTrace, P as sirP, peakS as sirPeakS, runSelfTest as sirSelfTest }
+  from './sir/core.mjs';
 
 // ---- breadcrumb: matches the front-door id EXACTLY (the Survey's food) ----
 try{ var k='ws:seen:conservatory'; if(!localStorage.getItem(k)) localStorage.setItem(k,String(Date.now())); }catch(e){}
@@ -403,25 +412,80 @@ function drawBedLog(t){
   lctx.fillStyle='#fff7c8'; lctx.beginPath(); lctx.arc(bx,by,3,0,Math.PI*2); lctx.fill();
 }
 
+// ============================================================================
+//  THE SIR BED GLASS — faint S↓ / R↑ with a bright filled I-bell, a moving bead and
+//  a dashed vertical at the peak (S=γ/β).  Driven by trace() from the SAME imported
+//  SIR core, so the planter-light and the bench can never drift apart.
+// ============================================================================
+const bedsir = document.getElementById('bedsir');
+const sctx = bedsir.getContext('2d');
+let sgeo;
+const SIR_TR = sirTrace(sirP.N - sirP.I0, sirP.I0, 0.05, 4200, 'rk4', sirP);  // the hero outbreak
+const SIR_K = sirPeakS(sirP);                                                  // γ/β, the apex S
+function sirIwin(){ let mx=0; for (let i=0;i<SIR_TR.Is.length;i++){ const v=SIR_TR.Is[i]; if(v>mx)mx=v; } return Math.max(0.02, mx*1.12); }
+const SIR_IWIN = sirIwin();
+function drawBedSir(t){
+  const W = sgeo.w, H = sgeo.h, padL = 16, padR = 14, padT = 18, padB = 18;
+  sctx.clearRect(0,0,W,H);
+  // inner glow
+  const gl=sctx.createRadialGradient(W*0.5,H*0.5,0,W*0.5,H*0.5,H*0.7);
+  gl.addColorStop(0,'rgba(240,121,90,0.08)'); gl.addColorStop(1,'rgba(240,121,90,0)');
+  sctx.fillStyle=gl; sctx.fillRect(0,0,W,H);
+  const Tspan = SIR_TR.ts[SIR_TR.ts.length-1];
+  const X=(tt)=> padL + (tt/Tspan)*(W-padL-padR);
+  const Yunit=(v)=> H-padB - Math.max(0,Math.min(1,v))*(H-padT-padB);
+  const Ybell=(v)=> H-padB - Math.max(0,Math.min(1.1, v/SIR_IWIN))*(H-padT-padB);
+  // faint S↓ and R↑
+  sctx.strokeStyle='rgba(134,211,154,0.4)'; sctx.lineWidth=1.3;
+  sctx.beginPath(); for(let i=0;i<SIR_TR.Ss.length;i++){ const x=X(SIR_TR.ts[i]),y=Yunit(SIR_TR.Ss[i]); if(i===0)sctx.moveTo(x,y);else sctx.lineTo(x,y);} sctx.stroke();
+  sctx.strokeStyle='rgba(122,168,217,0.4)'; sctx.lineWidth=1.3;
+  sctx.beginPath(); for(let i=0;i<SIR_TR.Rs.length;i++){ const x=X(SIR_TR.ts[i]),y=Yunit(SIR_TR.Rs[i]); if(i===0)sctx.moveTo(x,y);else sctx.lineTo(x,y);} sctx.stroke();
+  // the bright filled I-bell
+  sctx.beginPath();
+  for(let i=0;i<SIR_TR.Is.length;i++){ const x=X(SIR_TR.ts[i]),y=Ybell(SIR_TR.Is[i]); if(i===0){sctx.moveTo(x,Ybell(0));sctx.lineTo(x,y);}else sctx.lineTo(x,y);}
+  sctx.lineTo(X(Tspan),Ybell(0)); sctx.closePath();
+  sctx.fillStyle='rgba(240,121,90,0.14)'; sctx.fill();
+  sctx.strokeStyle='rgba(240,121,90,0.95)'; sctx.lineWidth=2.0;
+  sctx.beginPath(); for(let i=0;i<SIR_TR.Is.length;i++){ const x=X(SIR_TR.ts[i]),y=Ybell(SIR_TR.Is[i]); if(i===0)sctx.moveTo(x,y);else sctx.lineTo(x,y);} sctx.stroke();
+  // dashed vertical at the peak (S=γ/β)
+  if (SIR_TR.peaks >= 1){
+    const px=X(SIR_TR.peakT);
+    sctx.strokeStyle='rgba(217,164,65,0.6)'; sctx.lineWidth=1; sctx.setLineDash([4,3]);
+    sctx.beginPath(); sctx.moveTo(px,padT-4); sctx.lineTo(px,H-padB); sctx.stroke(); sctx.setLineDash([]);
+    sctx.font='600 9px var(--font-mono, monospace)'; sctx.fillStyle='rgba(217,164,65,0.85)';
+    sctx.fillText('S=γ/β', px+4, padT+6);
+  }
+  // the moving bead riding the I-bell
+  let n = SIR_TR.Is.length;
+  const idx = Math.floor(t % n);
+  const bx=X(SIR_TR.ts[idx]), by=Ybell(SIR_TR.Is[idx]);
+  const halo=sctx.createRadialGradient(bx,by,0,bx,by,11);
+  halo.addColorStop(0,'rgba(255,247,200,0.85)'); halo.addColorStop(1,'rgba(255,247,200,0)');
+  sctx.fillStyle=halo; sctx.beginPath(); sctx.arc(bx,by,11,0,Math.PI*2); sctx.fill();
+  sctx.fillStyle='#fff7c8'; sctx.beginPath(); sctx.arc(bx,by,3,0,Math.PI*2); sctx.fill();
+}
+
 // ---- layout + loop ----
 function layout(){
   fgeo = fitCanvas(floor, fctx); fmap = floorMap(fgeo, ORB);
   bgeo = fitCanvas(bedcv, bctx); bmap = floorMap(bgeo, bedOrb);
   lgeo = fitCanvas(bedlog, lctx);
+  sgeo = fitCanvas(bedsir, sctx);
 }
 let tphase = 0;
 function loop(){
-  // step both orbits forward a few samples per frame (downsampled, slow drift)
+  // step the orbits forward a few samples per frame (downsampled, slow drift)
   tphase += 1.1;
   drawFloor(tphase);
   drawBed(tphase * 1.3);
   drawBedLog(tphase * 0.09);
+  drawBedSir(tphase * 12);
   raf = requestAnimationFrame(loop);
 }
 let raf = 0;
-window.addEventListener('resize', function(){ layout(); if(reduce){ drawFloor(0); drawBed(0); drawBedLog(LOG_TMAX*0.62);} }, {passive:true});
+window.addEventListener('resize', function(){ layout(); if(reduce){ drawFloor(0); drawBed(0); drawBedLog(LOG_TMAX*0.62); drawBedSir(SIR_TR.peakT/SIR_TR.ts[SIR_TR.ts.length-1]*SIR_TR.Is.length);} }, {passive:true});
 layout();
-if (reduce){ drawFloor(ORB.pts.length*0.12); drawBed(bedOrb.pts.length*0.3); drawBedLog(LOG_TMAX*0.62); }
+if (reduce){ drawFloor(ORB.pts.length*0.12); drawBed(bedOrb.pts.length*0.3); drawBedLog(LOG_TMAX*0.62); drawBedSir(SIR_TR.peakT/SIR_TR.ts[SIR_TR.ts.length-1]*SIR_TR.Is.length); }
 else raf = requestAnimationFrame(loop);
 
 // ============================================================================
@@ -445,14 +509,21 @@ function runSelfTest(){
   ok('logistic bench link present', !!benchLog);
   ok('logistic bench link is bare-relative (no leading slash)', benchLog && !/^\//.test(benchLog.getAttribute('href')) && !/^\.\.\//.test(benchLog.getAttribute('href')));
 
-  // two live beds + two empty planters (SIR + replicator)
-  ok('two live beds present (.bed)', document.querySelectorAll('.bed').length === 2);
-  ok('two empty planters (SIR + replicator) present', document.querySelectorAll('.planter').length === 2);
+  // the SIR bench link is present and BARE-RELATIVE (no leading slash)
+  const benchSir = [...document.querySelectorAll('a')].find(a=>/^sir\/index\.html$/.test(a.getAttribute('href')||''));
+  ok('SIR bench link present', !!benchSir);
+  ok('SIR bench link is bare-relative (no leading slash)', benchSir && !/^\//.test(benchSir.getAttribute('href')) && !/^\.\.\//.test(benchSir.getAttribute('href')));
+
+  // three live beds + one empty planter (replicator)
+  ok('three live beds present (.bed)', document.querySelectorAll('.bed').length === 3);
+  ok('one empty planter (replicator) present', document.querySelectorAll('.planter').length === 1);
 
   // the orbit-light canvas is mounted and sized
   ok('orbit-light canvas mounted', floor instanceof HTMLCanvasElement && floor.width > 0);
   // the logistic planter-light canvas is mounted and sized
   ok('logistic planter-light canvas mounted', bedlog instanceof HTMLCanvasElement && bedlog.width > 0);
+  // the SIR planter-light canvas is mounted and sized
+  ok('SIR planter-light canvas mounted', bedsir instanceof HTMLCanvasElement && bedsir.width > 0);
 
   // the cross-wing bridge points to ../first-integral/index.html
   const bridge = [...document.querySelectorAll('a')].find(a=>(a.getAttribute('href')||'')==='../first-integral/index.html');
@@ -467,6 +538,8 @@ function runSelfTest(){
   ok('predator-prey core self-test all green ('+core.pass+'/'+core.total+')', core.pass === core.total);
   const logCore = logisticSelfTest();
   ok('logistic core self-test all green ('+logCore.pass+'/'+logCore.total+')', logCore.pass === logCore.total);
+  const sirCore = sirSelfTest();
+  ok('sir core self-test all green ('+sirCore.pass+'/'+sirCore.total+')', sirCore.pass === sirCore.total);
 
   const pass = checks.filter(c=>c.pass).length;
   return { pass, total: checks.length, checks };

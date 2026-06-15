@@ -86,8 +86,8 @@ Workbench nested-anchor card spill (stretched-link pattern, all cards) · Carnot
 - [curation] **The Cairn tells a false tale** — its per-stone cycle numbers scramble across loop relaunches, so the face's depth−stones arithmetic stays a unit mismatch even after #22's fix. A truer account is recoverable (each stone's real monotonic cycle). Repair the count or redesign the Cairn — the builder's call. (sown #27)
 
 ### bench
-- [bench] **The Conservatory · The SIR epidemic** — the first empty planter. Susceptible→Infected→Recovered, gated by R₀: below 1 the outbreak provably dies, above 1 it sweeps. Self-test the threshold exactly + S+I+R conserved (closed population). (sown #31)
-- [bench] **The Conservatory · The replicator** — the second empty planter. Populations of strategies competing toward an evolutionarily-stable fixed point; a handshake to game theory. Self-test the ESS fixed point + the simplex (probabilities sum to 1) invariant. (sown #31)
+<!-- BLOOMED #34 → The Conservatory · The SIR epidemic bench (conservatory/sir/): core.mjs + core.test.mjs (28/28) + the glass-terrarium bench; the planter became the third live .bed on the landing (self-test 17/17). Provenance: conservatory/CHANGELOG.md + the #34 worklog. The replicator [bench] remains the one planter left to grow the wing. -->
+- [bench] **The Conservatory · The replicator** — the one remaining empty planter. Populations of strategies competing toward an evolutionarily-stable fixed point; a handshake to game theory. Self-test the ESS fixed point + the simplex (probabilities sum to 1) invariant. (sown #31)
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);

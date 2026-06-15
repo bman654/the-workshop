@@ -172,3 +172,101 @@ overshoot/ringing (V ticks up, colony N=101.45 over the K-line) and BACK reversi
 the S-curve settles at K. Landing: self-test **13/13**, both live beds + the planter-
 light render, 0 console errors, 0 overflow. Server + sessions torn down by exact
 PID/name only (Brandon's :3001/:4380 untouched).
+
+---
+
+## Cycle #34 — the SIR-epidemic bench (the second planter blooms)
+
+The second empty planter is now a live bench: **The SIR Epidemic**, the OPEN ARC to
+set against the predator–prey CLOSED RING and the logistic STABLE NODE. A closed
+population of one unit flows S→I→R, gated by the reproduction number R₀=βS₀/γ.
+
+### Built (`conservatory/sir/`)
+- **core.mjs** — the pure single-source math (no RNG/DOM/network): locked `β=0.30,
+  γ=0.10, N=1, I0=1e-3` (N=1 normalises the bar S│I│R into unit fractions; the math is
+  identical to the textbook N=1000 once γN/β→γ/β). `field` (the 3-vector S'/I'/R'),
+  `R0`, `IprimeAtZero` (the threshold derivative, sign = sign(R₀−1)), `Phi` (the FIRST
+  INTEGRAL Φ=S+I−(γ/β)ln S — the V-analog), `peakS`=γ/β (exact, = S₀/R₀), the
+  **conditional** `peakInfected`/`peakLocation` (null below R₀=1 — the mark won't lie),
+  `finalSize` (the SMALL Φ-root by bisection, INDEPENDENT of any orbit — anti-
+  circularity), `rk4Step` (truth), `eulerStep` (the negative control), `trace` (NaN-
+  guarded; records sum-error, Φ-drift, peak count/time/height, minI, wentNegative),
+  `runSelfTest` (6 checks). ~265 lines.
+- **core.test.mjs** — green under `node`: **28/28**, the in-page self-test + independent
+  re-derivations (the threshold β*=γ/S₀ from scratch; the Rydberg-style blind agreement
+  — the core Φ-root === a fresh dense re-bisection === a long-run RK4 to quiescence, one
+  S∞ from two derivations; the peak-count flip across R₀=1; Euler I<0 / RK4 I>0; the
+  textbook S₀·exp(−R₀(1−S∞/N)) form DISAGREES by **1.68e-4** because it ignores I₀, so
+  finalSize uses the Φ-root NOT it) + the **re-extraction parity** check (the inlined
+  core is byte-identical to core.mjs between the `SIR-CORE` sentinels).
+- **index.html** — the glass-terrarium with the core inlined byte-identical. The
+  integrated visual: **BACK GLASS** = the S–I phase plane (the open arc launching from
+  (S₀,0⁺), bowing to its apex EXACTLY on the dashed amber S=γ/β line, landing on (S∞,0);
+  the disease-free line I=0 green-stable below γ/β / amber-unstable above; a live bead,
+  green→red at the peak, that PLUNGES below I=0 with an "I<0 · unphysical" tag under
+  Euler; the stacked S│I│R column on the left); **FRONT HERO** (1.55fr) = S(t)↓ green,
+  R(t)↑ slate, the red I-bell filled ~8% with the peak dot + drop + S=γ/β tick (the
+  bell↔no-bell flip across R₀=1 is the headline); **THE CONSERVED-QUANTITY METER** (1fr,
+  TWO widgets) = the S+I+R=N stacked bar (dead-flat at N under RK4; the I-band punches
+  BELOW baseline as a red underhang under Euler) + the Φ-needle (flat under RK4,
+  wandering under Euler); **R₀ TILE** (big live `R₀=βS₀/γ=2.997`, green <1 / amber >1).
+
+### The six proofs (in-page badge + Node twin assert the same)
+- **CONSERVATION**: RK4 holds S+I+R=N to **3.8e-15** AND Φ to **1.5e-12** (<1e-9) over
+  every preset orbit; the info string SAYS so — **BOTH methods hold the sum; Euler
+  breaks POSITIVITY instead** (the ±γI increments cancel at any dt).
+- **THRESHOLD**: sign(I'(0))=sign(R₀−1) on both sides; the peak count flips **0/0/1**
+  across R₀={0.80, 1.0000, 2.997} (the 1e-9 slope-jitter epsilon keeps the flat
+  critical case at 0).
+- **PEAK LOCATION**: peakS()=γ/β=**0.333333** byte-exact (= S₀/R₀); the traced
+  supercritical peak's parabolic-interpolated Sval lands within **1.8e-7** of γ/β;
+  peakLocation(R₀≤1)=**null**.
+- **FINAL SIZE**: the Φ-root S∞=**0.059447768** (never touches the orbit) matches a
+  long RK4 run to quiescence (I<1e-12) to **2.2e-13** (<1e-6); the root is the SMALL one
+  (0 < S∞ < γ/β). The textbook closed form disagrees by ~1.7e-4 — kept only as a labeled
+  approximation.
+- **NEGATIVE CONTROL (POSITIVITY)**: Euler at dt=12 drives minI=**−0.254** (I<0,
+  wentNegative=true); RK4 keeps minI>0. **And the SUM holds under BOTH** (we say so).
+- **DETERMINISM / PARITY**: identical inputs ⇒ byte-identical trace; the inlined core is
+  byte-identical to core.mjs (proven in the Node twin).
+
+### The dt-coupled toggle (the on-ramp that makes the lesson visible)
+Selecting **Euler** PRESETS **dt=12** so the I<0 positivity break is always visible
+across the whole β/γ slider range; selecting **RK4** restores dt=0.05. A viewer can
+never flip to Euler and see nothing — the break is always on display.
+
+### Landing promotion (`conservatory/index.html`)
+The SIR planter became a THIRD live `.bed` link (`sir/index.html`, bare-relative) with
+a planter-light: a faint S↓/R↑ + bright filled I-bell + moving bead + a dashed vertical
+at the peak, driven by the SAME imported `trace()`. The landing now imports all THREE
+cores and its structural self-test grew from 13/13 → **17/17** (three live beds + one
+empty planter; all three bench links bare-relative; all three cores all-green; the SIR
+planter-light canvas mounted). Planters grid + foot copy reconciled to ONE remaining
+planter (the replicator).
+
+### Verified
+agent-browser, uniquely-named sessions, port `:8791`, torn down by exact PID. Bench:
+self-test **6/6**, 0 console errors, 0 nested anchors, 0 overflow @1280 & @390; the
+RK4⟷Euler toggle flips the conservation meter from dead-flat-at-N (the bell peaks at
+S=γ/β, the arc lands at S∞) → the I-band plunging below 0 (the orbit plunges below the
+I=0 line, "I<0 · unphysical") and BACK reversibly (Φ-drift back to 1.5e-12). Landing:
+self-test **17/17**, three live beds + the SIR planter-light render, 0 console errors,
+0 overflow. Regression: predator-prey **31/31** + logistic **30/30** untouched. Server
++ sessions torn down by exact PID/name only (Brandon's :3001/:4380 untouched).
+
+### Publisher fresh-eyes review (cycle #34) — ONE polish fix
+Re-served on an uncommon port (`:8842`, torn down by exact PID) and re-opened both
+surfaces in a uniquely-named agent-browser session. Re-ran `node conservatory/sir/core.test.mjs`
+→ **28/28** green (incl. the byte-identical re-extraction parity); bench in-page
+**6/6 ✓**, landing **17/17 ✓**; 0 console errors, 0 nested anchors, 0 overflow @1280
+(1265) & @390 (375) on both; the Euler positivity break renders dramatically (the
+phase-plane orbit + bead plunge below the I=0 line, the I-bell punches below 0,
+dt snaps to 12, verdict swaps to the positivity-break copy) and the RK4↔Euler toggle
+is fully reversible (a direct DOM click confirmed RK4 restores dt=0.05 + Φ-drift ~1.5e-12;
+an early coordinate-click that appeared to miss was a stale-ref harness artifact, not a
+bug). **Fixed (the builder's flagged openConcern #3):** with only the replicator planter
+left, the `.planters` grid was still `repeat(2,1fr)`, so the lone planter rendered at
+half-width (491px in a 996px row) with empty space beside it. Changed the grid to a
+single `1fr` column so the one remaining planter spans full width, aligned flush with
+the three `.bed` cards above it — a clean intentional column. No other code change;
+no `[bug]` filed; no `⚡` spark. Mobile (390px) reflows cleanly. Committed & pushed.

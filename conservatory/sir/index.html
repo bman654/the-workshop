@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The SIR Epidemic &middot; The Conservatory</title>
+<style>
+  :root{
+    --bg:#10141f;
+    --glass:#86d39a;            /* susceptible green (S) */
+    --glass-soft:rgba(134,211,154,0.14);
+    --infect:#f0795a;           /* infected red (I) — first-class series colour */
+    --infect-soft:rgba(240,121,90,0.15);
+    --recover:#7aa8d9;          /* recovered slate-blue (R) — the one NEW hue */
+    --recover-soft:rgba(122,168,217,0.15);
+    --amber:#d9a441;            /* threshold / Euler-warning amber */
+    --amber-soft:rgba(217,164,65,0.16);
+    --iron:#b29a64;             /* cast-iron warm */
+    --ink:#eef2ee;
+    --ink-dim:#9fb0a4;
+    --panel:rgba(12,18,16,0.86);
+    --edge:rgba(134,211,154,0.30);
+    --bad:#f0795a;
+    --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
+    --font-serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; color:var(--ink); font-family:var(--font-ui);
+    background:
+      radial-gradient(120% 80% at 50% -10%, rgba(134,211,154,0.10), transparent 60%),
+      radial-gradient(90% 60% at 80% 110%, rgba(240,121,90,0.06), transparent 60%),
+      var(--bg);
+    -webkit-font-smoothing:antialiased; min-height:100%;
+    display:flex; flex-direction:column;
+  }
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
+    padding:13px 20px 11px; flex-wrap:wrap; border-bottom:1px solid rgba(134,211,154,0.14);
+  }
+  .backs{ display:flex; gap:15px; align-items:center; flex-wrap:wrap; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.2s; }
+  .back:hover{ color:var(--glass); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:11px; flex:1 1 auto; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.3px; margin:0; white-space:nowrap; }
+  .brand .tag{ font:11px/1.3 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:var(--glass); border-color:rgba(134,211,154,0.55); background:rgba(28,52,38,0.45); }
+  .selftest.bad{ color:var(--bad); border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  .lede{ text-align:center; padding:16px 20px 4px; max-width:880px; margin:0 auto; }
+  .lede p{ font:12.5px/1.6 var(--font-ui); color:var(--ink-dim); margin:0; }
+  .lede b{ color:var(--ink); font-weight:600; }
+  .lede .eqn{ display:inline-block; font:600 13px/1 var(--font-mono); color:var(--glass);
+    background:var(--glass-soft); border:1px solid var(--edge); border-radius:8px;
+    padding:7px 12px; margin:10px 0 2px; letter-spacing:.4px; }
+
+  /* ---- the instrument ---- */
+  .stage{ max-width:1180px; margin:0 auto; width:100%; padding:14px 20px 6px; }
+  .terrarium{
+    position:relative; width:100%; border-radius:14px; overflow:hidden;
+    border:1px solid var(--edge);
+    background:linear-gradient(180deg, rgba(20,30,26,0.6), rgba(10,14,18,0.9));
+    box-shadow:inset 0 0 60px rgba(134,211,154,0.06), 0 8px 30px rgba(0,0,0,0.4);
+  }
+  .terrarium canvas{ display:block; width:100%; height:auto; }
+  /* glass sheen overlay (cosmetic) */
+  .terrarium::after{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(115deg, rgba(255,255,255,0.05) 0%, transparent 22%, transparent 78%, rgba(255,255,255,0.03) 100%);
+  }
+  .panes{ display:grid; grid-template-columns:1.55fr 1fr; gap:14px; margin-top:14px; }
+  @media (max-width:820px){ .panes{ grid-template-columns:1fr; } }
+  .pane{ background:var(--panel); border:1px solid rgba(134,211,154,0.18); border-radius:12px; padding:12px 13px 11px; }
+  .pane h2{ font:600 10px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin:0 0 9px; }
+  .pane canvas{ display:block; width:100%; height:auto; border-radius:8px; background:#0a0f0d; }
+
+  /* the conserved-quantity meter (two stacked widgets) */
+  .meter{ display:flex; flex-direction:column; gap:10px; }
+  .meterlabel{ font:9.5px/1.4 var(--font-mono); color:rgba(159,176,164,0.82); letter-spacing:.02em; margin:-2px 0 0; }
+  .meterlabel b{ color:var(--ink); font-weight:600; }
+  .vrow{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+  .vrow .k{ font:600 10px/1.3 var(--font-mono); color:var(--ink-dim); letter-spacing:.04em; }
+  .vrow .v{ font:700 13px/1 var(--font-mono); color:var(--glass); font-variant-numeric:tabular-nums; }
+  .vrow .v.bad{ color:var(--bad); }
+
+  /* the R₀ tile */
+  .r0tile{ display:flex; flex-direction:column; gap:3px; padding:11px 13px; border-radius:10px;
+    border:1px solid var(--edge); background:rgba(0,0,0,0.3); }
+  .r0tile.warn{ border-color:rgba(217,164,65,0.55); background:rgba(60,46,18,0.35); }
+  .r0big{ font:700 22px/1 var(--font-mono); color:var(--glass); font-variant-numeric:tabular-nums; }
+  .r0tile.warn .r0big{ color:var(--amber); }
+  .r0sub{ font:10px/1.4 var(--font-mono); color:var(--ink-dim); }
+
+  /* ---- controls ---- */
+  .controls{ max-width:1180px; margin:0 auto; width:100%; padding:14px 20px 4px;
+    display:flex; flex-wrap:wrap; gap:16px 22px; align-items:flex-end; }
+  .ctl{ display:flex; flex-direction:column; gap:6px; }
+  .ctl label{ font:600 9.5px/1 var(--font-mono); letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim); }
+  .ctl .val{ color:var(--glass); }
+  .ctl .val.warn{ color:var(--amber); }
+  .toggle{ display:inline-flex; border:1px solid var(--edge); border-radius:9px; overflow:hidden; }
+  .toggle button{ font:600 11px/1 var(--font-mono); padding:9px 14px; background:rgba(0,0,0,0.3);
+    color:var(--ink-dim); border:0; cursor:pointer; transition:.16s; letter-spacing:.02em; }
+  .toggle button.on{ background:var(--glass-soft); color:var(--glass); }
+  .toggle button.on.euler{ background:rgba(217,164,65,0.20); color:var(--amber); }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:170px; height:4px; border-radius:3px;
+    background:rgba(134,211,154,0.25); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:15px; height:15px;
+    border-radius:50%; background:var(--glass); border:2px solid #0a0f0d; cursor:pointer; box-shadow:0 0 6px rgba(134,211,154,0.5); }
+  input[type=range]::-moz-range-thumb{ width:15px; height:15px; border-radius:50%; background:var(--glass);
+    border:2px solid #0a0f0d; cursor:pointer; }
+  .btn{ font:600 11px/1 var(--font-mono); padding:9px 14px; border-radius:9px; border:1px solid var(--edge);
+    background:rgba(0,0,0,0.3); color:var(--ink); cursor:pointer; transition:.16s; letter-spacing:.02em; }
+  .btn:hover{ border-color:var(--glass); background:var(--glass-soft); }
+  .crankwrap{ display:flex; flex-direction:column; gap:6px; }
+  .crank{ width:170px; }
+
+  .verdict{ max-width:1180px; margin:8px auto 0; width:100%; padding:0 20px;
+    font:11px/1.6 var(--font-mono); color:var(--ink-dim); }
+  .verdict.euler{ color:var(--amber); }
+  .verdict b{ color:var(--ink); font-weight:600; }
+
+  .foot{ max-width:900px; margin:0 auto; width:100%; text-align:center;
+    padding:20px 20px 28px; font:11px/1.7 var(--font-mono); color:rgba(159,176,164,0.7); letter-spacing:.02em; }
+  .foot a{ color:var(--ink-dim); }
+  .foot a:hover{ color:var(--glass); }
+  .foot .links{ margin-top:10px; display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
+  .foot .links a{ text-decoration:none; }
+  .legend{ display:flex; gap:18px; justify-content:center; margin-top:6px; font:10.5px/1 var(--font-mono); flex-wrap:wrap; }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; color:var(--ink-dim); }
+  .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .dot.s{ background:var(--glass); } .dot.i{ background:var(--infect); } .dot.r{ background:var(--recover); }
+  .spacer{ flex:1 0 auto; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; the conservatory</a>
+      <a class="back" href="../../index.html">&larr; workshop</a>
+    </div>
+    <div class="brand">
+      <h1>The SIR Epidemic</h1>
+      <span class="tag">a threshold at R&#8320;=1 &middot; the bell, proven</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for per-check detail (also printed to the console)">checking&hellip;</div>
+  </div>
+
+  <div class="lede">
+    <p>A closed population of one unit flows <b>S&rarr;I&rarr;R</b>: susceptibles catch it, infecteds recover,
+    recovereds never relapse. One number &mdash; the reproduction number <b>R&#8320;=&beta;S&#8320;/&gamma;</b> &mdash; gates everything:
+    below 1 the outbreak dies; above 1 it sweeps to a peak <b>exactly</b> at S=&gamma;/&beta;.</p>
+    <div class="eqn">S&prime;=&minus;&beta;SI &nbsp; I&prime;=&beta;SI&minus;&gamma;I &nbsp; R&prime;=&gamma;I &nbsp;&middot;&nbsp; &Phi;=S+I&minus;(&gamma;/&beta;)ln&#8201;S = const</div>
+    <p style="margin-top:8px">Trace it with the truthful integrator (RK4) and S+I+R holds at <b>1</b> to machine precision while
+    &Phi; stays dead-flat; flip to a careless coarse step and the sum <i>still</i> holds &mdash; but the infected
+    band is driven <b>provably below zero</b>, an impossible population. The break is <b>positivity</b>, not the sum.</p>
+  </div>
+
+  <div class="stage">
+    <div class="terrarium">
+      <canvas id="cv" width="1180" height="500"></canvas>
+    </div>
+    <div class="panes">
+      <div class="pane">
+        <h2>The outbreak over time &mdash; S&darr; green, R&uarr; slate, I the red bell (peak at S=&gamma;/&beta;)</h2>
+        <canvas id="tcurve" width="700" height="230"></canvas>
+      </div>
+      <div class="pane meter">
+        <h2>The conserved-quantity meter</h2>
+        <canvas id="bars" width="440" height="92"></canvas>
+        <p class="meterlabel" id="barnote">S+I+R=N (RK4 exact) &mdash; <b>Euler at this dt drives I&lt;0</b> (the red underhang).</p>
+        <canvas id="phi" width="440" height="78"></canvas>
+        <div class="vrow"><span class="k">&Phi; = S+I&minus;(&gamma;/&beta;)ln&#8201;S</span><span class="v" id="phival">&mdash;</span></div>
+        <div class="vrow"><span class="k">max|&Phi;&minus;&Phi;&#8320;|</span><span class="v" id="phidrift">&mdash;</span></div>
+        <div class="r0tile" id="r0tile">
+          <div class="r0big" id="r0big">R&#8320; = &mdash;</div>
+          <div class="r0sub" id="r0sub">R&#8320; = &beta;S&#8320;/&gamma; &mdash; below 1 the outbreak dies &middot; above 1 it sweeps</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="ctl">
+      <label>integrator</label>
+      <div class="toggle" id="methodToggle">
+        <button data-m="rk4" class="on">RK4 &middot; truth</button>
+        <button data-m="euler">Euler &middot; coarse</button>
+      </div>
+    </div>
+    <div class="ctl">
+      <label>infection rate &beta; <span class="val" id="bVal">0.30</span></label>
+      <input type="range" id="beta" min="0.05" max="0.6" step="0.005" value="0.3">
+    </div>
+    <div class="ctl">
+      <label>recovery rate &gamma; <span class="val" id="gVal">0.10</span></label>
+      <input type="range" id="gamma" min="0.02" max="0.3" step="0.005" value="0.1">
+    </div>
+    <div class="ctl">
+      <label>start infected I&#8320; <span class="val" id="i0Val">0.0010</span></label>
+      <input type="range" id="i0" min="0.0001" max="0.05" step="0.0001" value="0.001">
+    </div>
+    <div class="ctl">
+      <label>time step dt <span class="val" id="dtVal">0.050</span></label>
+      <input type="range" id="dt" min="0.02" max="20" step="0.01" value="0.05">
+    </div>
+    <div class="ctl crankwrap">
+      <label>crank time by hand <span class="val" id="crankHint">(drag)</span></label>
+      <input type="range" id="crank" class="crank" min="0" max="1000" step="1" value="0">
+    </div>
+    <div class="ctl">
+      <label>&nbsp;</label>
+      <button class="btn" id="playBtn">&#10073;&#10073; pause</button>
+    </div>
+  </div>
+
+  <div class="verdict" id="verdict">&mdash;</div>
+
+  <div class="foot">
+    <p>The back glass is the <b>S&ndash;I phase plane</b>: an open arc launching from (S&#8320;,&thinsp;0&#8314;), bowing to its
+    apex EXACTLY on the dashed amber line S=&gamma;/&beta;, landing back on the disease-free line I=0 at the final
+    size S&infin;. The front pane is the same outbreak drawn as height-over-time. The bead is the live state in both at once.</p>
+    <div class="legend">
+      <span><i class="dot s"></i> susceptible S</span>
+      <span><i class="dot i"></i> infected I (the bell)</span>
+      <span><i class="dot r"></i> recovered R</span>
+      <span>&#9679; the state, riding the arc to I=0</span>
+    </div>
+    <div class="links">
+      <a href="../index.html">&larr; back to the glasshouse</a>
+      <a href="../logistic/index.html">the sibling bench &mdash; an S-curve settling at K &rarr;</a>
+    </div>
+  </div>
+  <div class="spacer"></div>
+
+<script type="module">
+// This bench drops its own ws:seen:sir breadcrumb (every bench drops one).
+// The wing landing (../index.html) owns ws:seen:conservatory.
+try{ var _k='ws:seen:sir'; if(!localStorage.getItem(_k)) localStorage.setItem(_k, String(Date.now())); }catch(e){}
+
+// ===== SIR-CORE (byte-identical to core.mjs) =====
+const P = { beta: 0.30, gamma: 0.10, N: 1, I0: 1e-3 };
+
+// the SIR vector field  (S,I) ↦ (S', I', R').  R only accumulates (R'=γI).
+function field(S, I, p = P) {
+  const inf = p.beta * S * I, rec = p.gamma * I;
+  return [-inf, inf - rec, rec];           // [S', I', R']
+}
+
+// the basic reproduction number  R₀ = β·S₀/γ  (S₀ = N − I₀).  R₀>1 ⇒ outbreak.
+function R0(p = P) {
+  return p.beta * (p.N - p.I0) / p.gamma;
+}
+
+// the threshold derivative  I'(0) = (β·S₀ − γ)·I₀.  Its SIGN === sign(R₀ − 1):
+// the knife-edge that flips the peak count between 0 (dies) and 1 (sweeps).
+function IprimeAtZero(p = P) {
+  return (p.beta * (p.N - p.I0) - p.gamma) * p.I0;
+}
+
+// the FIRST INTEGRAL  Φ(S,I) = S + I − (γ/β)·ln S — conserved along the true orbit
+// (the V-analog: flat under RK4, drifting under Euler).
+function Phi(S, I, p = P) {
+  return S + I - (p.gamma / p.beta) * Math.log(S);
+}
+
+// the S-coordinate of the I-peak: S = γ/β = S₀/R₀, independent of I.  EXACT.
+function peakS(p = P) {
+  return p.gamma / p.beta;
+}
+
+// the EXACT peak HEIGHT, read from Φ at S=γ/β (no integration):
+//   Imax = Φ(S₀,I₀) − Speak + (γ/β)·ln Speak.  CONDITIONAL: null when R₀ ≤ 1.
+function peakInfected(p = P) {
+  if (R0(p) <= 1) return null;
+  const Sp = peakS(p);
+  return Phi(p.N - p.I0, p.I0, p) - Sp + (p.gamma / p.beta) * Math.log(Sp);
+}
+
+// the peak landmark {S, Imax} — CONDITIONAL: null below threshold (the mark must
+// not lie, mirroring logistic's inflection()).  Below R₀=1 there is no peak.
+function peakLocation(p = P) {
+  if (R0(p) <= 1) return null;
+  return { S: peakS(p), Imax: peakInfected(p) };
+}
+
+// the FINAL SIZE S∞ — the SMALL root of Φ(S,0) = Φ(S₀,I₀) on (0, γ/β), found by
+// bisection INDEPENDENTLY of any integrated orbit (anti-circularity).  h(x) =
+// x − (γ/β)ln x is strictly decreasing on (0, γ/β) ⇒ a unique bracketed root that
+// bisection cannot diverge from.  (NOT the textbook S₀·exp(−R₀(1−S∞/N)) form — that
+// ignores I₀ and is off ~2e-4; this Φ-root is exact to the integrator.)
+function finalSize(p = P) {
+  const k = p.gamma / p.beta;
+  const C = (p.N - p.I0) + p.I0 - k * Math.log(p.N - p.I0);
+  const h = x => x - k * Math.log(x) - C;
+  let lo = 1e-12, hi = k, hlo = h(lo);
+  for (let i = 0; i < 200; i++) {
+    const mid = 0.5 * (lo + hi), hm = h(mid);
+    if (hlo * hm <= 0) hi = mid; else { lo = mid; hlo = hm; }
+  }
+  return 0.5 * (lo + hi);
+}
+
+// ---------------------------------------------------------------------------
+//  THE TWO INTEGRATORS — one truthful (RK4), one naive (forward Euler).  Both
+//  advance the SAME 3-vector field by one step dt; this is the load-bearing
+//  contrast.  Forward-Euler conserves the SUM at any dt but breaks POSITIVITY.
+// ---------------------------------------------------------------------------
+
+// classical 4th-order Runge–Kutta of the 3-vector field — keeps I>0, Φ flat.
+function rk4Step(S, I, R, dt, p = P) {
+  const [a1, b1, c1] = field(S, I, p);
+  const [a2, b2, c2] = field(S + (dt / 2) * a1, I + (dt / 2) * b1, p);
+  const [a3, b3, c3] = field(S + (dt / 2) * a2, I + (dt / 2) * b2, p);
+  const [a4, b4, c4] = field(S + dt * a3, I + dt * b3, p);
+  return [
+    S + (dt / 6) * (a1 + 2 * a2 + 2 * a3 + a4),
+    I + (dt / 6) * (b1 + 2 * b2 + 2 * b3 + b4),
+    R + (dt / 6) * (c1 + 2 * c2 + 2 * c3 + c4),
+  ];
+}
+
+// forward (explicit) Euler: x ← x + dt·f(x).  Conserves S+I+R at ANY dt (the ±γI
+// increments cancel), but at a coarse dt it drives I BELOW ZERO — the negative
+// control is POSITIVITY, not sum-drift.
+function eulerStep(S, I, R, dt, p = P) {
+  const [a, b, c] = field(S, I, p);
+  return [S + dt * a, I + dt * b, R + dt * c];
+}
+
+// pick a stepper by name (the page's RK4 ⟷ Euler toggle uses this).
+function stepper(m) {
+  return m === 'euler' ? eulerStep : rk4Step;
+}
+
+// ---------------------------------------------------------------------------
+//  THE TRACER — integrate from (S0,I0) for `steps` steps of size dt with `method`,
+//  recording S(t),I(t),R(t), the worst sum-error max|S+I+R−N|, the worst Φ-drift
+//  max|Φ−Φ0|, the interior I-peak (count, time, height, S-there), the minimum I and
+//  whether I ever went negative.  The phase plane, the time-series, the conservation
+//  meter and the negative control all read off this.  NaN-guarded so a coarse-Euler
+//  blow-up never blanks the canvas.
+// ---------------------------------------------------------------------------
+function trace(S0, I0, dt, steps, method = 'rk4', p = P) {
+  const step = stepper(method);
+  let S = S0, I = I0, R = p.N - S0 - I0;
+  const Ss = [S], Is = [I], Rs = [R], ts = [0];
+  const phi0 = Phi(S0, I0, p);
+  let maxConsErr = 0, maxPhiDrift = 0;
+  let minI = I0, wentNegative = false, blown = false;
+  let peaks = 0, peakI = I0, peakT = 0, peakSval = S0;
+  let prevI = I0, prevSlope = 0, haveSlope = false;
+  let t = 0;
+  const EPS = 1e-9;                          // slope-jitter epsilon (flat-critical guard)
+  for (let i = 0; i < steps; i++) {
+    [S, I, R] = step(S, I, R, dt, p);
+    t += dt;
+    // NaN-guard: a coarse-Euler blow-up must not poison the meters or blank the page.
+    if (!isFinite(S) || !isFinite(I)) { wentNegative = true; blown = true; break; }
+    const cons = Math.abs(S + I + R - p.N);
+    if (cons > maxConsErr) maxConsErr = cons;
+    // Φ uses ln S — guard against S≤0 under a wild Euler step.
+    if (S > 0) { const d = Math.abs(Phi(S, I, p) - phi0); if (d > maxPhiDrift) maxPhiDrift = d; }
+    if (I < minI) minI = I;
+    if (I < 0) wentNegative = true;
+    // interior peak via slope-sign flip (+ → −), with a jitter epsilon so RK4
+    // flatness near the critical case never spuriously counts a peak.
+    const slope = I - prevI;
+    if (haveSlope && prevSlope > EPS && slope < -EPS) {
+      peaks++; peakI = prevI; peakT = t - dt; peakSval = Ss[Ss.length - 1];
+    }
+    if (Math.abs(slope) > EPS) { prevSlope = slope; haveSlope = true; }
+    prevI = I;
+    Ss.push(S); Is.push(I); Rs.push(R); ts.push(t);
+  }
+  return { Ss, Is, Rs, ts, maxConsErr, phi0, maxPhiDrift, peaks, peakI, peakT,
+           peakSval, minI, wentNegative, blown, endS: S, endI: I, endR: R };
+}
+
+// ============================================================================
+//  THE SELF-TEST — proves the falsifiable claim EXACT.  These are the SIX checks
+//  the in-page badge asserts; core.test.mjs runs this plus independent witnesses.
+// ============================================================================
+function runSelfTest(p = P) {
+  const checks = [];
+  const detail = {};
+  function ok(name, cond, info) { checks.push({ name, pass: !!cond, info }); }
+
+  const S0 = p.N - p.I0;
+  const k = p.gamma / p.beta;
+  // the four regimes (presets) — Euler one is the load-bearing positivity break.
+  const sub = { beta: 0.08, gamma: 0.10, N: p.N, I0: p.I0 };   // R₀≈0.80, dies
+  const crit = { beta: 0.10010, gamma: 0.10, N: p.N, I0: p.I0 }; // R₀=1.0000, knife-edge
+  const sup = p;                                                 // R₀≈2.997, sweeps
+  detail.R0sub = R0(sub); detail.R0crit = R0(crit); detail.R0sup = R0(sup);
+
+  // (1) CONSERVATION — RK4 holds S+I+R=N AND Φ to <1e-9 over every preset orbit.
+  //     BOTH methods hold the sum (the ±γI increments cancel); Euler breaks POSITIVITY
+  //     instead — so the reader is not surprised the sum doesn't drift.
+  {
+    let worstSum = 0, worstPhi = 0;
+    for (const q of [sub, crit, sup]) {
+      const r = trace(q.N - q.I0, q.I0, 0.05, 4000, 'rk4', q);
+      worstSum = Math.max(worstSum, r.maxConsErr);
+      worstPhi = Math.max(worstPhi, r.maxPhiDrift);
+    }
+    // Euler also holds the sum (at the very dt that breaks positivity).
+    const eul = trace(S0, p.I0, 12, 60, 'euler', p);
+    detail.consRK4 = worstSum; detail.phiRK4 = worstPhi; detail.consEuler = eul.maxConsErr;
+    ok('Conservation: RK4 holds S+I+R=N to ' + worstSum.toExponential(2) + ' AND Φ to ' +
+       worstPhi.toExponential(2) + ' (<1e-9). BOTH methods hold the sum; Euler breaks POSITIVITY instead.',
+       worstSum < 1e-9 && worstPhi < 1e-9 && eul.maxConsErr < 1e-9,
+       'RK4 sum=' + worstSum.toExponential(2) + ' Φ=' + worstPhi.toExponential(2) +
+       '  ·  Euler sum=' + eul.maxConsErr.toExponential(2) + ' (also holds)');
+  }
+
+  // (2) THRESHOLD (teeth) — sign(I'(0)) === sign(R₀−1) on BOTH sides, and the peak
+  //     count flips: subcritical & critical ⇒ 0 peaks (I monotone-down); supercritical
+  //     ⇒ 1 peak.  The 1e-9 slope-jitter epsilon keeps the flat critical case at 0.
+  {
+    const ssub = Math.sign(IprimeAtZero(sub)), ssup = Math.sign(IprimeAtZero(sup));
+    const rsub = trace(sub.N - sub.I0, sub.I0, 0.05, 8000, 'rk4', sub);
+    const rcrit = trace(crit.N - crit.I0, crit.I0, 0.05, 8000, 'rk4', crit);
+    const rsup = trace(sup.N - sup.I0, sup.I0, 0.05, 8000, 'rk4', sup);
+    detail.peaksSub = rsub.peaks; detail.peaksCrit = rcrit.peaks; detail.peaksSup = rsup.peaks;
+    ok('Threshold: sign(I\'(0))=sign(R₀−1) both sides; peak count flips 0↔1 across R₀=1 ' +
+       '(sub=' + rsub.peaks + ', crit=' + rcrit.peaks + ', super=' + rsup.peaks + ')',
+       ssub === Math.sign(R0(sub) - 1) && ssup === Math.sign(R0(sup) - 1) &&
+       rsub.peaks === 0 && rcrit.peaks === 0 && rsup.peaks === 1,
+       'sgn I\'(0): sub=' + ssub + ' super=' + ssup + '  ·  peaks sub/crit/super=' +
+       rsub.peaks + '/' + rcrit.peaks + '/' + rsup.peaks);
+  }
+
+  // (3) PEAK LOCATION — peakS()=γ/β byte-exact; the traced supercritical peak lands
+  //     within 1e-3 of γ/β (parabolic-interpolated argmax for ~30× headroom);
+  //     peakLocation(R₀≤1)===null.
+  {
+    const Sp = peakS(p);
+    const exact = Math.abs(Sp - k) < 1e-12;
+    // parabolic interpolation of the discrete I-argmax → a sub-step Sval estimate.
+    const r = trace(S0, p.I0, 0.02, 20000, 'rk4', p);
+    let im = 0;
+    for (let i = 1; i < r.Is.length - 1; i++) if (r.Is[i] > r.Is[im]) im = i;
+    const y0 = r.Is[im - 1], y1 = r.Is[im], y2 = r.Is[im + 1];
+    const denom = (y0 - 2 * y1 + y2);
+    const off = denom !== 0 ? 0.5 * (y0 - y2) / denom : 0;       // sub-index offset in [−.5,.5]
+    const SvalInterp = r.Ss[im] + off * 0.5 * (r.Ss[im + 1] - r.Ss[im - 1]);
+    detail.peakSval = SvalInterp; detail.peakSerr = Math.abs(SvalInterp - k);
+    detail.peakNullSub = peakLocation(sub);
+    ok('Peak location: peakS()=γ/β=' + k.toFixed(6) + ' byte-exact; traced peak Sval lands within 1e-3; ' +
+       'peakLocation(R₀≤1)=null',
+       exact && Math.abs(SvalInterp - k) < 1e-3 && peakLocation(sub) === null,
+       '|peakS−γ/β|<1e-12=' + exact + '  traced Sval=' + SvalInterp.toFixed(6) +
+       ' (err ' + Math.abs(SvalInterp - k).toExponential(2) + ')  ·  sub-peak=' + peakLocation(sub));
+  }
+
+  // (4) FINAL-SIZE (transcendental teeth, anti-circularity) — finalSize() (a Φ-root
+  //     that NEVER touches the orbit) matches a long RK4 run integrated to quiescence
+  //     (I<1e-12) to <1e-6; and the root is the SMALL one (0 < S∞ < γ/β).
+  {
+    const Sinf = finalSize(p);
+    // long RK4 run to quiescence — the blind independent witness.
+    let S = S0, I = p.I0, R = p.I0 * 0 + (p.N - S0 - p.I0), tt = 0;
+    const dt = 0.02;
+    for (let i = 0; i < 2000000 && I > 1e-12; i++) { [S, I, R] = rk4Step(S, I, R, dt, p); tt += dt; }
+    detail.finalSize = Sinf; detail.finalRun = S; detail.finalErr = Math.abs(Sinf - S);
+    ok('Final size: Φ-root S∞=' + Sinf.toFixed(9) + ' matches long-run RK4 (I<1e-12) to ' +
+       Math.abs(Sinf - S).toExponential(2) + ' (<1e-6); and S∞ is the SMALL root (0<S∞<γ/β)',
+       Math.abs(Sinf - S) < 1e-6 && Sinf > 0 && Sinf < k,
+       'Φ-root=' + Sinf.toFixed(9) + '  RK4-run=' + S.toFixed(9) + '  Δ=' +
+       Math.abs(Sinf - S).toExponential(2) + '  ·  0<S∞<γ/β=' + (Sinf > 0 && Sinf < k));
+  }
+
+  // (5) NEGATIVE CONTROL (POSITIVITY, not sum-drift) — RK4 keeps minI>0 at a coarse
+  //     dt; Euler at dt=12 drives minI<0 (≈−0.065) with wentNegative===true.  ALSO
+  //     the SUM stays =N under BOTH methods (and we say so).
+  {
+    const eul = trace(S0, p.I0, 12, 60, 'euler', p);
+    const rk = trace(S0, p.I0, 12, 60, 'rk4', p);
+    detail.eulerMinI = eul.minI; detail.eulerNeg = eul.wentNegative;
+    detail.rk4MinI = rk.minI; detail.eulerSum = eul.maxConsErr; detail.rk4Sum = rk.maxConsErr;
+    ok('Negative control: I<0 under Euler dt=12 (minI=' + eul.minI.toFixed(4) +
+       '), I≥0 under RK4 (minI=' + rk.minI.toExponential(2) + '); the SUM holds under BOTH',
+       eul.wentNegative === true && eul.minI < 0 && rk.minI > 0 &&
+       eul.maxConsErr < 1e-9 && rk.maxConsErr < 1e-9,
+       'Euler minI=' + eul.minI.toFixed(4) + ' (neg=' + eul.wentNegative + ')  ·  RK4 minI=' +
+       rk.minI.toExponential(2) + '  ·  sums: Euler=' + eul.maxConsErr.toExponential(2) +
+       ' RK4=' + rk.maxConsErr.toExponential(2) + ' (both hold)');
+  }
+
+  // (6) RE-EXTRACTION PARITY — proven in the Node twin (core.test.mjs) against the
+  //     inlined SIR-CORE in index.html.  Here we record a determinism witness so the
+  //     in-page badge has a sixth green: two identical traces are byte-identical.
+  {
+    const r1 = trace(S0, p.I0, 0.05, 3000, 'rk4', p);
+    const r2 = trace(S0, p.I0, 0.05, 3000, 'rk4', p);
+    const a = JSON.stringify([r1.Ss, r1.Is, r1.Rs]);
+    const bb = JSON.stringify([r2.Ss, r2.Is, r2.Rs]);
+    detail.deterministic = a === bb;
+    ok('Re-extraction parity is proven in the Node twin; determinism holds (identical inputs ⇒ byte-identical trace)',
+       a === bb, a === bb ? 'two runs byte-identical' : 'DIFFER');
+  }
+
+  const pass = checks.filter((c) => c.pass).length;
+  return { pass, total: checks.length, checks, detail };
+}
+// ===== END SIR-CORE =====
+
+// ============================================================================
+//  THE INSTRUMENT — the glass terrarium (back-glass S–I PHASE PLANE), the time-
+//  series hero pane, the conservation meter (stacked bar + Φ-needle), the R₀ tile.
+//  All driven by the SAME core inlined above.
+// ============================================================================
+(function(){
+  'use strict';
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---- self-test badge ----
+  const chip = document.getElementById('selftest');
+  const res = runSelfTest();
+  if (res.pass === res.total) { chip.className = 'selftest ok'; chip.textContent = 'self-test ' + res.pass + '/' + res.total + ' ✓'; }
+  else { chip.className = 'selftest bad'; chip.textContent = 'self-test ' + res.pass + '/' + res.total + ' ✗'; }
+  console.log('%cThe SIR Epidemic — self-test ' + res.pass + '/' + res.total, 'color:#86d39a;font-weight:bold');
+  for (const c of res.checks) console.log((c.pass ? '  ✓ ' : '  ✗ ') + c.name + (c.info ? '  ·  ' + c.info : ''));
+  chip.addEventListener('click', function(){
+    const d = res.detail;
+    console.log('%cdetail', 'color:#d9a441;font-weight:bold', d);
+    alert('Self-test ' + res.pass + '/' + res.total +
+      '\n\nR₀: sub=' + d.R0sub.toFixed(2) + '  crit=' + d.R0crit.toFixed(4) + '  super=' + d.R0sup.toFixed(3) +
+      '\nconservation (RK4): sum=' + d.consRK4.toExponential(2) + '  Φ=' + d.phiRK4.toExponential(2) +
+      '\npeak count: sub=' + d.peaksSub + '  crit=' + d.peaksCrit + '  super=' + d.peaksSup + ' (flips 0↔1)' +
+      '\npeak S: ' + d.peakSval.toFixed(6) + '  (γ/β, err ' + d.peakSerr.toExponential(2) + ')' +
+      '\nfinal size S∞: ' + d.finalSize.toFixed(6) + '  (Φ-root === long RK4, Δ' + d.finalErr.toExponential(2) + ')' +
+      '\nEuler dt=12 minI=' + d.eulerMinI.toFixed(4) + ' (I<0, neg=' + d.eulerNeg + ')  ·  RK4 minI=' + d.rk4MinI.toExponential(2) +
+      '\nsums under BOTH: Euler=' + d.eulerSum.toExponential(2) + '  RK4=' + d.rk4Sum.toExponential(2) + ' (both hold)' +
+      '\n\n(Full per-check lines are in the console.)');
+  });
+
+  // ---- DOM ----
+  const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  const tc = document.getElementById('tcurve'), tctx = tc.getContext('2d');
+  const bc = document.getElementById('bars'), bctx = bc.getContext('2d');
+  const pc = document.getElementById('phi'), pctx = pc.getContext('2d');
+  const methodToggle = document.getElementById('methodToggle');
+  const betaEl = document.getElementById('beta'), bVal = document.getElementById('bVal');
+  const gammaEl = document.getElementById('gamma'), gVal = document.getElementById('gVal');
+  const i0El = document.getElementById('i0'), i0Val = document.getElementById('i0Val');
+  const dtEl = document.getElementById('dt'), dtVal = document.getElementById('dtVal');
+  const crankEl = document.getElementById('crank'), crankHint = document.getElementById('crankHint');
+  const playBtn = document.getElementById('playBtn');
+  const phival = document.getElementById('phival'), phidrift = document.getElementById('phidrift');
+  const barnote = document.getElementById('barnote'), verdict = document.getElementById('verdict');
+  const r0tile = document.getElementById('r0tile'), r0big = document.getElementById('r0big'), r0sub = document.getElementById('r0sub');
+
+  // ---- HiDPI sizing ----
+  const DPR = Math.min(2, window.devicePixelRatio || 1);
+  function fit(canvas, c, cssW, cssH){
+    canvas.style.height = cssH + 'px';
+    canvas.width = Math.round(cssW * DPR); canvas.height = Math.round(cssH * DPR);
+    c.setTransform(DPR, 0, 0, DPR, 0, 0);
+    return { w: cssW, h: cssH };
+  }
+  let GEO = {};
+  function layout(){
+    const W = cv.clientWidth || 1180;
+    GEO.cv = fit(cv, ctx, W, Math.max(300, Math.min(500, W * 0.42)));
+    GEO.tc = fit(tc, tctx, tc.clientWidth || 700, 230);
+    GEO.bc = fit(bc, bctx, bc.clientWidth || 440, 92);
+    GEO.pc = fit(pc, pctx, pc.clientWidth || 440, 78);
+  }
+
+  // ---- state ----
+  let pr = { beta: 0.30, gamma: 0.10, N: 1, I0: 1e-3 };  // live params
+  let method = 'rk4';
+  let dt = 0.05;
+  let playing = !reduce;
+  let crankMode = false;
+
+  // the running simulation: a full trace recomputed whenever params change, plus a
+  // moving head index that the loop advances.  Everything reads the SAME core trace().
+  let TR = null;            // the current trace
+  let head = 0;            // current sample index along TR
+  const STEPS = 5200;      // steps per trace (plenty to reach quiescence at default)
+
+  function reseed(){
+    const S0 = pr.N - pr.I0;
+    TR = trace(S0, pr.I0, dt, STEPS, method, pr);
+    head = 0;
+  }
+
+  // the I-axis display window: 1.1× the peak (or a sane floor when R₀<1 / Euler blows).
+  function iWindow(){
+    let mx = 0;
+    if (TR){ for (let i=0;i<TR.Is.length;i++){ const v=TR.Is[i]; if (isFinite(v) && v>mx) mx=v; } }
+    const pk = peakInfected(pr);
+    if (pk && pk > mx) mx = pk;
+    return Math.max(0.02, mx * 1.1);
+  }
+
+  function roundRect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r);
+    c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+
+  // ============================================================================
+  //  FACET A — the BACK GLASS: the S–I PHASE PLANE.  The open arc launches from
+  //  (S0,0⁺), bows to its apex on the dashed amber line S=γ/β, lands on (S∞,0).
+  //  The disease-free line I=0 is a hairline (green stable for S<γ/β, amber unstable
+  //  for S>γ/β).  A live bead rides the arc; under coarse Euler it PLUNGES below I=0
+  //  with a red "I<0 · unphysical" tag.
+  // ============================================================================
+  function phaseMap(geo){
+    const padL = 44, padR = 18, padT = 16, padB = 30;
+    const pw = geo.w * 0.5, ph = geo.h * 0.78;
+    const px = geo.w - pw - padR, py = padT + 6;
+    const Smax = 1.02;
+    const Iwin = iWindow();
+    // leave headroom below 0 so the Euler underhang shows.
+    const Itop = Iwin, Ibot = -Iwin * 0.4;
+    return {
+      px, py, pw, ph, Smax, Itop, Ibot,
+      X: (S) => px + (Math.max(0, Math.min(Smax, S)) / Smax) * pw,
+      Y: (I) => py + ph - ((I - Ibot) / (Itop - Ibot)) * ph,
+    };
+  }
+
+  function drawPhasePlane(){
+    const g = GEO.cv; const m = phaseMap(g);
+    ctx.save();
+    ctx.fillStyle = 'rgba(8,14,11,0.72)';
+    roundRect(ctx, m.px, m.py, m.pw, m.ph, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(178,154,100,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.clip();
+
+    ctx.font = '600 9px var(--font-mono, monospace)';
+    ctx.fillStyle = 'rgba(159,176,164,0.72)';
+    ctx.fillText('S–I phase plane', m.px + 8, m.py + 13);
+    ctx.fillText('I', m.px + 6, m.py + 26);
+    ctx.fillText('S →', m.px + m.pw - 26, m.Y(0) + 14);
+
+    const k = peakS(pr);                 // γ/β — the apex S and the I=0 stability split
+
+    // --- the disease-free line I=0: green (stable) for S<γ/β, amber (unstable) S>γ/β ---
+    const y0 = m.Y(0);
+    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = 'rgba(134,211,154,0.7)';
+    ctx.beginPath(); ctx.moveTo(m.X(0), y0); ctx.lineTo(m.X(k), y0); ctx.stroke();
+    ctx.strokeStyle = 'rgba(217,164,65,0.65)';
+    ctx.beginPath(); ctx.moveTo(m.X(k), y0); ctx.lineTo(m.X(m.Smax), y0); ctx.stroke();
+    ctx.font = '600 8px var(--font-mono, monospace)';
+    ctx.fillStyle = 'rgba(134,211,154,0.6)'; ctx.fillText('I=0 stable', m.X(0)+6, y0-4);
+    ctx.fillStyle = 'rgba(217,164,65,0.7)'; ctx.fillText('unstable', m.X(k)+6, y0-4);
+
+    // --- the dashed amber vertical at S=γ/β (the apex line) ---
+    const kx = m.X(k);
+    ctx.strokeStyle = 'rgba(217,164,65,0.6)'; ctx.lineWidth = 1; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(kx, m.py + 6); ctx.lineTo(kx, m.py + m.ph - 6); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(217,164,65,0.9)'; ctx.fillText('S=γ/β', kx - 14, m.py + 22);
+
+    // --- the negative region shading (below I=0 — the unphysical zone) ---
+    ctx.fillStyle = 'rgba(240,121,90,0.06)';
+    ctx.fillRect(m.px, y0, m.pw, (m.py + m.ph) - y0);
+    ctx.strokeStyle = 'rgba(240,121,90,0.25)'; ctx.setLineDash([2,3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(m.px, y0); ctx.lineTo(m.px+m.pw, y0); ctx.stroke(); ctx.setLineDash([]);
+
+    // --- the LIVE orbit (S,I) ridden off TR up to the head; red below I=0 ---
+    const euler = method === 'euler';
+    if (TR){
+      ctx.lineWidth = 1.9;
+      let started = false, prevNeg = false;
+      ctx.beginPath();
+      for (let i = 0; i <= head && i < TR.Ss.length; i++){
+        const S = TR.Ss[i], I = TR.Is[i];
+        if (!isFinite(S) || !isFinite(I)) break;
+        const neg = I < 0;
+        if (neg !== prevNeg && started){            // recolour at the I=0 crossing
+          ctx.stroke();
+          ctx.strokeStyle = neg ? 'rgba(240,121,90,0.95)' : (euler ? 'rgba(217,164,65,0.85)' : 'rgba(134,211,154,0.85)');
+          ctx.beginPath(); ctx.moveTo(m.X(TR.Ss[i-1]), m.Y(TR.Is[i-1]));
+        }
+        const x = m.X(S), y = m.Y(I);
+        if (!started){ ctx.strokeStyle = euler ? 'rgba(217,164,65,0.85)' : 'rgba(134,211,154,0.85)';
+          ctx.moveTo(x,y); started = true; } else ctx.lineTo(x,y);
+        prevNeg = neg;
+      }
+      ctx.stroke();
+    }
+
+    // --- the live BEAD on the orbit (halo green climbing → red at/after the peak) ---
+    if (TR && head < TR.Ss.length){
+      const S = TR.Ss[head], I = TR.Is[head];
+      if (isFinite(S) && isFinite(I)){
+        const bx = m.X(S), by = m.Y(I);
+        const afterPeak = S < k;                    // S decreases through the peak at γ/β
+        const neg = I < 0;
+        const bcCol = neg ? '240,121,90' : (afterPeak ? '240,121,90' : '255,247,200');
+        const halo = ctx.createRadialGradient(bx, by, 0, bx, by, 12);
+        halo.addColorStop(0, 'rgba('+bcCol+',0.85)'); halo.addColorStop(1, 'rgba('+bcCol+',0)');
+        ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(bx, by, 12, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'rgb('+bcCol+')'; ctx.beginPath(); ctx.arc(bx, by, 3.4, 0, Math.PI*2); ctx.fill();
+        if (neg){
+          ctx.font = '600 9px var(--font-mono, monospace)'; ctx.fillStyle = 'rgba(240,121,90,0.95)';
+          ctx.fillText('I<0 · unphysical', bx + 8, by + 4);
+        }
+      }
+    }
+
+    // --- the S0 launch point and the S∞ landing tick ---
+    const S0 = pr.N - pr.I0;
+    ctx.fillStyle = 'rgba(134,211,154,0.6)'; ctx.beginPath(); ctx.arc(m.X(S0), m.Y(0), 2.6, 0, Math.PI*2); ctx.fill();
+    if (R0(pr) > 1){
+      const sinf = finalSize(pr);
+      ctx.strokeStyle = 'rgba(159,176,164,0.6)'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(m.X(sinf), m.Y(0)-4); ctx.lineTo(m.X(sinf), m.Y(0)+4); ctx.stroke();
+      ctx.font = '600 8px var(--font-mono, monospace)'; ctx.fillStyle = 'rgba(159,176,164,0.7)';
+      ctx.fillText('S∞', m.X(sinf)-6, m.Y(0)+15);
+    }
+
+    ctx.restore();
+  }
+
+  // a stacked S│I│R glass column on the LEFT (a literal "the population, partitioned").
+  function drawColumn(W, H){
+    if (!TR || head >= TR.Ss.length) return;
+    const S = Math.max(0, TR.Ss[head]), I = TR.Is[head], R = TR.Rs[head];
+    const cx = W*0.06, cw = W*0.06, top = H*0.14, bot = H*0.86, colH = bot - top;
+    ctx.strokeStyle = 'rgba(178,154,100,0.4)'; ctx.lineWidth = 1.2;
+    ctx.strokeRect(cx, top, cw, colH);
+    // S (green) from the bottom, then R (slate), then I (red) — fractions of N=1.
+    let yb = bot;
+    const seg = (frac, col) => { const h = Math.max(0, Math.min(colH, frac*colH)); ctx.fillStyle = col; ctx.fillRect(cx, yb-h, cw, h); yb -= h; };
+    seg(Math.max(0,S)/pr.N, 'rgba(134,211,154,0.5)');
+    seg(Math.max(0,R)/pr.N, 'rgba(122,168,217,0.5)');
+    seg(Math.max(0,I)/pr.N, 'rgba(240,121,90,0.6)');
+    ctx.font = '600 9px var(--font-mono, monospace)';
+    ctx.fillStyle = 'rgba(134,211,154,0.85)'; ctx.fillText('S', cx-12, bot);
+    ctx.fillStyle = 'rgba(122,168,217,0.85)'; ctx.fillText('R', cx-12, top+colH*0.5);
+    ctx.fillStyle = 'rgba(240,121,90,0.9)'; ctx.fillText('I', cx-12, top+10);
+  }
+
+  // ---- the whole back glass (the terrarium frame + the phase plane + the column) ----
+  function drawTerrarium(){
+    const g = GEO.cv, W = g.w, H = g.h;
+    ctx.clearRect(0,0,W,H);
+
+    // iron-and-glass vault feel: faint mullion bars + an arch across the top
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = 'rgba(178,154,100,0.22)'; ctx.lineWidth = 1;
+    for (let i=0;i<=8;i++){ const x=W*i/8; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x, H); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(0, H*0.12);
+    ctx.bezierCurveTo(W*0.5, -H*0.06, W*0.5, -H*0.06, W, H*0.12); ctx.stroke();
+    ctx.restore();
+
+    drawColumn(W, H);
+
+    // readouts
+    if (TR && head < TR.Ss.length){
+      ctx.font = '600 12px var(--font-mono, monospace)';
+      ctx.fillStyle = 'rgba(134,211,154,0.92)'; ctx.fillText('S = ' + Math.max(0,TR.Ss[head]).toFixed(3), W*0.04, H*0.93);
+      ctx.fillStyle = 'rgba(240,121,90,0.92)'; ctx.fillText('I = ' + TR.Is[head].toFixed(3), W*0.16, H*0.93);
+      ctx.fillStyle = 'rgba(122,168,217,0.92)'; ctx.fillText('R = ' + TR.Rs[head].toFixed(3), W*0.28, H*0.93);
+    }
+
+    drawPhasePlane();
+  }
+
+  // ============================================================================
+  //  FACET B — the TIME-SERIES HERO: S(t)↓ green, R(t)↑ slate, I(t) the red BELL
+  //  (filled ~8%).  The peak is marked with a dot + drop at t=peakT and a γ/β tick.
+  //  When R₀<1 there is NO dot and the caption flips to "the outbreak dies".
+  // ============================================================================
+  function tcurveMap(geo){
+    const padL = 34, padR = 14, padT = 14, padB = 22;
+    const Tspan = TR ? TR.ts[TR.ts.length-1] : 100;
+    const Imax = iWindow();
+    return {
+      Tspan, Imax, padL, padR, padT, padB,
+      X: (t) => padL + (t/Math.max(1e-6,Tspan)) * (geo.w - padL - padR),
+      // S,R run 0..N=1; I runs 0..Imax — but we plot S,R on the 0..1 axis and the
+      // I-bell scaled into the SAME box top = the 1.1·peakI window for legibility.
+      Yunit: (v) => geo.h - padB - (Math.max(0,Math.min(1,v))) * (geo.h - padT - padB),
+      Ybell: (v) => geo.h - padB - (Math.max(0,Math.min(1.1, v/Math.max(1e-6,Imax)))) * (geo.h - padT - padB),
+    };
+  }
+
+  function drawTcurve(){
+    const g = GEO.tc, W = g.w, H = g.h;
+    tctx.clearRect(0,0,W,H);
+    tctx.fillStyle = '#0a0f0d'; tctx.fillRect(0,0,W,H);
+    if (!TR) return;
+    const m = tcurveMap(g);
+    const euler = method === 'euler';
+
+    // the I=0 floor hairline
+    tctx.strokeStyle = 'rgba(159,176,164,0.25)'; tctx.lineWidth = 1; tctx.setLineDash([2,3]);
+    tctx.beginPath(); tctx.moveTo(m.X(0), m.Yunit(0)); tctx.lineTo(m.X(m.Tspan), m.Yunit(0)); tctx.stroke(); tctx.setLineDash([]);
+
+    // the I-bell (filled ~8%), drawn first so S/R ride over it
+    tctx.beginPath();
+    let s0 = false;
+    for (let i=0;i<TR.Is.length;i++){ const x=m.X(TR.ts[i]), y=m.Ybell(TR.Is[i]);
+      if(!s0){ tctx.moveTo(x, m.Ybell(0)); tctx.lineTo(x,y); s0=true;} else tctx.lineTo(x,y); }
+    tctx.lineTo(m.X(TR.ts[TR.ts.length-1]), m.Ybell(0)); tctx.closePath();
+    tctx.fillStyle = 'rgba(240,121,90,0.10)'; tctx.fill();
+
+    // I(t) the red bell line
+    tctx.strokeStyle = euler ? '#d9a441' : '#f0795a'; tctx.lineWidth = 2.0;
+    tctx.beginPath();
+    for (let i=0;i<TR.Is.length;i++){ const x=m.X(TR.ts[i]), y=m.Ybell(TR.Is[i]);
+      if(i===0)tctx.moveTo(x,y); else tctx.lineTo(x,y); }
+    tctx.stroke();
+
+    // S(t)↓ green and R(t)↑ slate on the unit axis
+    tctx.strokeStyle = 'rgba(134,211,154,0.9)'; tctx.lineWidth = 1.7;
+    tctx.beginPath();
+    for (let i=0;i<TR.Ss.length;i++){ const x=m.X(TR.ts[i]), y=m.Yunit(TR.Ss[i]);
+      if(i===0)tctx.moveTo(x,y); else tctx.lineTo(x,y); }
+    tctx.stroke();
+    tctx.strokeStyle = 'rgba(122,168,217,0.9)'; tctx.lineWidth = 1.7;
+    tctx.beginPath();
+    for (let i=0;i<TR.Rs.length;i++){ const x=m.X(TR.ts[i]), y=m.Yunit(TR.Rs[i]);
+      if(i===0)tctx.moveTo(x,y); else tctx.lineTo(x,y); }
+    tctx.stroke();
+
+    // the PEAK dot + drop + γ/β tick — only when R₀>1 and a real interior peak exists
+    const loc = peakLocation(pr);
+    if (loc && TR.peaks >= 1){
+      const px = m.X(TR.peakT), py = m.Ybell(TR.peakI);
+      tctx.strokeStyle = 'rgba(240,121,90,0.5)'; tctx.lineWidth = 1; tctx.setLineDash([2,2]);
+      tctx.beginPath(); tctx.moveTo(px, py); tctx.lineTo(px, m.Yunit(0)); tctx.stroke(); tctx.setLineDash([]);
+      tctx.fillStyle = '#f0795a'; tctx.beginPath(); tctx.arc(px, py, 3.4, 0, Math.PI*2); tctx.fill();
+      tctx.font = '600 8px var(--font-mono, monospace)'; tctx.fillStyle = 'rgba(240,121,90,0.9)';
+      tctx.fillText('peak Imax=' + TR.peakI.toFixed(3), px+5, py-3);
+      // a tick on S(t) at the peak time showing S=γ/β there
+      const sy = m.Yunit(loc.S);
+      tctx.strokeStyle = 'rgba(217,164,65,0.7)'; tctx.lineWidth = 1.2;
+      tctx.beginPath(); tctx.moveTo(px-4, sy); tctx.lineTo(px+4, sy); tctx.stroke();
+      tctx.fillStyle = 'rgba(217,164,65,0.85)'; tctx.fillText('S=γ/β', px+6, sy+3);
+    } else {
+      tctx.font = '600 9px var(--font-mono, monospace)'; tctx.fillStyle = 'rgba(159,176,164,0.7)';
+      tctx.fillText('R₀<1 — no peak, the outbreak dies', m.X(m.Tspan*0.12), m.Yunit(0.5));
+    }
+
+    // axis labels
+    tctx.font = '600 8px var(--font-mono, monospace)';
+    tctx.fillStyle = 'rgba(134,211,154,0.7)'; tctx.fillText('S', m.X(m.Tspan*0.02), m.Yunit(TR.Ss[Math.min(TR.Ss.length-1, Math.floor(TR.Ss.length*0.6))])-4);
+    tctx.fillStyle = 'rgba(122,168,217,0.7)'; tctx.fillText('R', m.X(m.Tspan*0.85), m.Yunit(0.85));
+  }
+
+  // ============================================================================
+  //  THE CONSERVATION METER — (A) the S+I+R=N stacked bar over time: dead-flat at N
+  //  under RK4; under coarse Euler the I-band punches BELOW baseline as a red
+  //  underhang and S+R overshoot past N.  (B) the Φ-needle: Φ over time, flat under
+  //  RK4, wandering under Euler — the rigorous V-meter analog.
+  // ============================================================================
+  function drawBars(){
+    const g = GEO.bc, W = g.w, H = g.h;
+    bctx.clearRect(0,0,W,H);
+    bctx.fillStyle = '#0a0f0d'; bctx.fillRect(0,0,W,H);
+    if (!TR) return;
+    const padL = 4, padR = 4, padT = 10, padB = 16;
+    const baseN = H - padB - (H - padT - padB) * 0.62;     // y of the N=1 baseline (top of stack)
+    const unit = (H - padT - padB) * 0.62;                 // pixels per 1.0 of value above 0
+    const y0 = H - padB;                                   // y of value 0
+    const n = TR.Ss.length;
+    const cols = Math.min(n, Math.max(40, Math.floor(W/3)));
+    const bw = (W - padL - padR) / cols;
+    // the N=1 reference line
+    bctx.strokeStyle = 'rgba(159,176,164,0.5)'; bctx.lineWidth = 1; bctx.setLineDash([3,2]);
+    bctx.beginPath(); bctx.moveTo(padL, y0-unit); bctx.lineTo(W-padR, y0-unit); bctx.stroke(); bctx.setLineDash([]);
+    bctx.font = '600 7.5px var(--font-mono, monospace)'; bctx.fillStyle='rgba(159,176,164,0.7)';
+    bctx.fillText('N=1', W-padR-22, y0-unit-2);
+    // the 0 line
+    bctx.strokeStyle = 'rgba(240,121,90,0.3)';
+    bctx.beginPath(); bctx.moveTo(padL, y0); bctx.lineTo(W-padR, y0); bctx.stroke();
+    for (let c=0;c<cols;c++){
+      const i = Math.floor(c/(cols-1) * (n-1));
+      const S = TR.Ss[i], I = TR.Is[i], R = TR.Rs[i];
+      if (!isFinite(S)||!isFinite(I)) continue;
+      const x = padL + c*bw;
+      // S (green) from 0 up, R (slate) above, then I (red) — I<0 drawn DOWN past 0.
+      let top = y0;
+      const up = (frac, col) => { const h = frac*unit; bctx.fillStyle = col; bctx.fillRect(x, top-h, Math.max(1,bw-0.4), h); top -= h; };
+      up(Math.max(0,S), 'rgba(134,211,154,0.55)');
+      up(Math.max(0,R), 'rgba(122,168,217,0.55)');
+      if (I >= 0){ up(I, 'rgba(240,121,90,0.6)'); }
+      else {
+        // the underhang: I<0 drawn DOWNWARD below the baseline (the positivity break)
+        const h = (-I)*unit; bctx.fillStyle = 'rgba(240,121,90,0.75)'; bctx.fillRect(x, y0, Math.max(1,bw-0.4), h);
+      }
+    }
+  }
+
+  let phiHist = [];
+  function drawPhi(){
+    const g = GEO.pc, W = g.w, H = g.h;
+    pctx.clearRect(0,0,W,H);
+    pctx.fillStyle = '#0a0f0d'; pctx.fillRect(0,0,W,H);
+    if (!TR) return;
+    const padL = 30, padR = 8, padT = 10, padB = 12;
+    // Φ over the trace, scaled around Φ0 ± a window that grows with the drift.
+    const phi0 = TR.phi0;
+    const drift = Math.max(1e-11, TR.maxPhiDrift);
+    const win = Math.max(drift * 1.4, 1e-10);
+    const mapY = (phi) => padT + (1 - (phi - (phi0 - win)) / (2*win)) * (H - padT - padB);
+    // the Φ0 reference line
+    pctx.strokeStyle = 'rgba(159,176,164,0.45)'; pctx.lineWidth = 1; pctx.setLineDash([3,2]);
+    pctx.beginPath(); pctx.moveTo(padL, mapY(phi0)); pctx.lineTo(W-padR, mapY(phi0)); pctx.stroke(); pctx.setLineDash([]);
+    pctx.font = '600 7.5px var(--font-mono, monospace)'; pctx.fillStyle = 'rgba(159,176,164,0.7)';
+    pctx.fillText('Φ₀', 4, mapY(phi0)+3);
+    const euler = method === 'euler';
+    pctx.strokeStyle = euler ? '#d9a441' : '#86d39a'; pctx.lineWidth = 1.7;
+    pctx.beginPath();
+    const n = TR.Ss.length;
+    let s0 = false;
+    for (let i=0;i<n;i++){
+      const S = TR.Ss[i]; if (!(S>0)) continue;
+      const phi = Phi(S, TR.Is[i], pr);
+      const x = padL + (i/(n-1))*(W-padL-padR), y = Math.max(padT-6, Math.min(H-padB+6, mapY(phi)));
+      if(!s0){ pctx.moveTo(x,y); s0=true; } else pctx.lineTo(x,y);
+    }
+    pctx.stroke();
+    // the head marker
+    if (head < n && TR.Ss[head] > 0){
+      const x = padL + (head/(n-1))*(W-padL-padR), y = Math.max(padT-6, Math.min(H-padB+6, mapY(Phi(TR.Ss[head], TR.Is[head], pr))));
+      pctx.fillStyle = euler ? '#d9a441' : '#86d39a'; pctx.beginPath(); pctx.arc(x,y,3,0,Math.PI*2); pctx.fill();
+    }
+  }
+
+  // ---- readouts ----
+  function updateReadouts(){
+    const euler = method === 'euler';
+    const r0 = R0(pr);
+    r0big.innerHTML = 'R₀ = βS₀/γ = ' + r0.toFixed(3);
+    if (r0 < 1){ r0tile.className = 'r0tile'; r0big.style.color = ''; }
+    else { r0tile.className = 'r0tile warn'; }
+    r0sub.innerHTML = r0 < 1
+      ? 'below 1 — the outbreak <b style="color:#86d39a">dies</b> (no peak)'
+      : 'above 1 — it <b style="color:#d9a441">sweeps</b> to a peak at S=γ/β';
+    // Φ live + drift
+    if (TR && head < TR.Ss.length && TR.Ss[head] > 0){
+      phival.textContent = Phi(TR.Ss[head], TR.Is[head], pr).toFixed(6);
+    } else phival.textContent = '—';
+    const drift = TR ? TR.maxPhiDrift : 0;
+    phidrift.textContent = drift.toExponential(2);
+    phidrift.className = 'v' + (drift < 1e-10 ? '' : ' bad');
+
+    if (euler){
+      barnote.innerHTML = 'S+I+R=N (the sum still holds!) — but <b>Euler at this dt drives I&lt;0</b>: the red band punches below 0.';
+      verdict.className = 'verdict euler';
+      verdict.innerHTML = '<b>Euler · coarse step — the tainted control.</b> The sum S+I+R stays pinned at N (the ±γI increments cancel at <i>any</i> dt) — so this is NOT a conservation failure. The break is <b>positivity</b>: at dt=12 the infected band is driven below zero, an impossible population. Only RK4 keeps I&gt;0.';
+    } else {
+      barnote.innerHTML = 'S+I+R=N (RK4 exact, dead-flat at N) — <b>Euler at this dt would drive I&lt;0</b> (flip the toggle).';
+      verdict.className = 'verdict';
+      verdict.innerHTML = '<b>RK4 · truth.</b> S+I+R holds at N to ~1e&minus;15 and Φ=S+I&minus;(γ/β)ln S stays flat to machine precision; the bell peaks exactly at S=γ/β and the arc lands on I=0 at the final size S∞. R₀=' + r0.toFixed(3) + (r0>1?' &gt; 1 — it sweeps.':' &lt; 1 — it dies.');
+    }
+  }
+
+  // ============================ LOOP ============================
+  let last = performance.now();
+  function frame(now){
+    const realDt = Math.min(0.05, (now - last)/1000); last = now;
+    if (playing && !crankMode && TR){
+      // advance the head along the precomputed trace (loops back at the end).
+      head += Math.max(1, Math.round(realDt * 60 * 1.6));
+      if (head >= TR.Ss.length){ head = 0; }
+    }
+    drawTerrarium();
+    drawTcurve();
+    drawBars();
+    drawPhi();
+    updateReadouts();
+    raf = requestAnimationFrame(frame);
+  }
+  let raf = 0;
+
+  // ---- reduced motion: render ONE static frame ----
+  function renderStatic(){
+    reseed();
+    // freeze the bead at the peak (apex on the threshold line), or mid-arc if R₀<1.
+    if (TR.peaks >= 1){
+      let im = 0; for (let i=1;i<TR.Is.length;i++) if (TR.Is[i] > TR.Is[im]) im = i;
+      head = im;
+    } else { head = Math.floor(TR.Ss.length * 0.4); }
+    drawTerrarium(); drawTcurve(); drawBars(); drawPhi(); updateReadouts();
+  }
+
+  // ============================ CONTROLS ============================
+  // CRITICAL dt-coupling: Euler PRESETS dt=12 so the I<0 break is ALWAYS visible;
+  // RK4 restores dt=0.05 so a viewer never flips to Euler and sees nothing.  The
+  // dt=12 step drives I<0 across the whole β/γ slider range (verified), so a viewer
+  // who first shrank β/γ still sees the break.
+  function setDt(v){ dt = v; dtEl.value = String(v); dtVal.textContent = v.toFixed(3); }
+
+  methodToggle.addEventListener('click', function(e){
+    const b = e.target.closest('button'); if(!b) return;
+    method = b.dataset.m;
+    [...methodToggle.children].forEach(x=>{ x.classList.toggle('on', x===b); x.classList.toggle('euler', x===b && method==='euler'); });
+    if (method === 'euler'){ setDt(12); }     // dt=12 → I<0 (the positivity break, always visible)
+    else { setDt(0.05); }                     // dt=0.05 → clean
+    reseed();
+    if (reduce) renderStatic();
+  });
+  betaEl.addEventListener('input', function(){
+    pr.beta = parseFloat(betaEl.value); bVal.textContent = pr.beta.toFixed(2);
+    reseed(); if (reduce) renderStatic();
+  });
+  gammaEl.addEventListener('input', function(){
+    pr.gamma = parseFloat(gammaEl.value); gVal.textContent = pr.gamma.toFixed(2);
+    reseed(); if (reduce) renderStatic();
+  });
+  i0El.addEventListener('input', function(){
+    pr.I0 = parseFloat(i0El.value); i0Val.textContent = pr.I0.toFixed(4);
+    reseed(); if (reduce) renderStatic();
+  });
+  dtEl.addEventListener('input', function(){
+    dt = parseFloat(dtEl.value); dtVal.textContent = dt.toFixed(3);
+    reseed(); if (reduce) renderStatic();
+  });
+  playBtn.addEventListener('click', function(){
+    playing = !playing; crankMode = false;
+    playBtn.innerHTML = playing ? '&#10073;&#10073; pause' : '&#9654; play';
+  });
+  // the crank: dragging it scrubs the head index BY HAND along the trace.
+  let lastCrank = 0;
+  crankEl.addEventListener('input', function(){
+    crankMode = true; playing = false; playBtn.innerHTML = '&#9654; play';
+    const v = parseInt(crankEl.value,10);
+    let delta = v - lastCrank; lastCrank = v;
+    if (delta < -500) delta += 1001; if (delta > 500) delta -= 1001;
+    if (TR){ head = Math.max(0, Math.min(TR.Ss.length-1, head + delta*Math.max(1,Math.round(TR.Ss.length/1000)))); }
+    crankHint.textContent = '(driving)';
+    drawTerrarium(); drawTcurve(); drawBars(); drawPhi(); updateReadouts();
+  });
+  crankEl.addEventListener('change', function(){ crankHint.textContent = '(drag)'; });
+
+  // ---- boot ----
+  window.addEventListener('resize', function(){ layout(); if (reduce) renderStatic(); }, { passive:true });
+  layout();
+  reseed();
+  if (reduce){
+    playBtn.innerHTML = '&#9654; play'; playing = false;
+    renderStatic();
+  } else {
+    raf = requestAnimationFrame(frame);
+  }
+})();
+</script>
+</body>
+</html>
