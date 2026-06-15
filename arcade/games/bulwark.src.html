@@ -273,9 +273,16 @@ function drawBackground(){
   bgx.globalAlpha = 1;
 }
 
-//============================================================== audio (procedural, MUTED by default)
+//============================================================== audio (procedural)
+// Mute obeys the estate-wide shared key ws:pref:muted (DESIGNING.md): a visitor
+// mutes once and it holds everywhere; a mute toggled on another tab takes effect
+// live (see the 'storage' listener below). Canonical estate semantics: muted iff
+// the key === '1' (absent/'0' ⇒ NOT muted). Autoplay stays safe regardless — the
+// AudioContext only starts on the first pointerdown/keypress.
+function readMutePref(){ try{ return localStorage.getItem('ws:pref:muted') === '1'; }catch(e){ return false; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v ? '1' : '0'); }catch(e){} }
 const Audio_ = {
-  ctx:null, master:null, muted:true,
+  ctx:null, master:null, muted:readMutePref(),
   init(){ if(this.ctx) return; try{
     const AC = window.AudioContext||window.webkitAudioContext;
     this.ctx = new AC(); this.master = this.ctx.createGain();
@@ -652,13 +659,19 @@ window.addEventListener('keydown', e=>{
     case 'p': case 'escape': if(mode==='playing'||mode==='paused') togglePause(); return;
     case 'enter': if(mode==='title'||mode==='gameover') startGame(); return;
     case 'r': if(mode==='playing'||mode==='paused'||mode==='gameover') startGame(); return;
-    case 'm': Audio_.init(); Audio_.muted=!Audio_.muted; setMuteTag(); if(!Audio_.muted) Audio_.resume(); return;
+    case 'm': Audio_.init(); Audio_.muted=!Audio_.muted; writeMutePref(Audio_.muted); setMuteTag(); if(!Audio_.muted) Audio_.resume(); return;
   }
   setKey(k,true);
 }, {passive:false});
 window.addEventListener('keyup', e=>{ const k=e.key.toLowerCase(); if(k==='shift'){ input.reverse=false; return; } setKey(k,false); });
 window.addEventListener('blur', ()=>{ input.left=input.right=input.up=input.down=input.fire=input.bomb=input.reverse=false; });
 window.addEventListener('pointerdown', ()=>{ Audio_.init(); if(!Audio_.muted) Audio_.resume(); }, {once:true});
+// honour a mute toggled on ANOTHER estate tab while we're open (shared ws:pref:muted)
+window.addEventListener('storage', e=>{
+  if(e.key!=='ws:pref:muted') return;
+  Audio_.muted = readMutePref(); setMuteTag();
+  if(!Audio_.muted) Audio_.resume();
+});
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden && mode==='playing') togglePause(); });
 
 // touch controls

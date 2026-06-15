@@ -31,6 +31,37 @@
     try { localStorage.removeItem(k); } catch (e) { /* nothing to forget */ }
   }
 
+  /* ── Shared estate-wide MUTE (the single key ws:pref:muted) ─────────────────
+     House convention (DESIGNING.md): any page that makes sound reads/writes ONE
+     shared key, so a visitor mutes once and it holds everywhere — and a mute
+     toggled on another estate tab takes effect live. A page's audio gates on
+     WS.muted(); a control writes via WS.setMuted(); WS.onMuteChange(fn) fires on
+     any change (this tab OR another). */
+  var MUTE_KEY = 'ws:pref:muted';
+  var muteSubs = [];
+  WS.muted = function () { return lsGet(MUTE_KEY) === '1'; };
+  WS.setMuted = function (v) {
+    var on = !!v;
+    lsSet(MUTE_KEY, on ? '1' : '0');
+    for (var i = 0; i < muteSubs.length; i++) {
+      try { muteSubs[i](on); } catch (e) {}
+    }
+    return on;
+  };
+  WS.onMuteChange = function (fn) {
+    if (typeof fn === 'function') muteSubs.push(fn);
+  };
+  // cross-tab: a mute set on ANOTHER estate tab fires our subscribers live.
+  if (root && root.addEventListener) {
+    root.addEventListener('storage', function (e) {
+      if (!e || e.key !== MUTE_KEY) return;
+      var on = WS.muted();
+      for (var i = 0; i < muteSubs.length; i++) {
+        try { muteSubs[i](on); } catch (e2) {}
+      }
+    });
+  }
+
   /* ── Writers ──────────────────────────────────────────────────────────────
      All wrapped so storage-off is harmless. */
 
@@ -232,6 +263,10 @@
         'background:none;border:none;color:#8a8472;font:600 15px/1 ui-monospace,Menlo,monospace;' +
         'border-radius:8px;transition:color .25s,background .25s;}' +
         '.wscue .wscue-x:hover{color:#c9a24a;background:rgba(201,162,74,.08);}' +
+        '.wscue .wscue-mute{flex:0 0 auto;margin:-4px 0 0 2px;padding:4px 6px;cursor:pointer;' +
+        'background:none;border:none;color:#8a8472;font:600 14px/1 ui-monospace,Menlo,monospace;' +
+        'border-radius:8px;transition:color .25s,background .25s;}' +
+        '.wscue .wscue-mute:hover{color:#c9a24a;background:rgba(201,162,74,.08);}' +
         '@keyframes wscue-flicker{0%,100%{opacity:.92;}45%{opacity:.66;}70%{opacity:1;}}' +
         '@media (prefers-reduced-motion: reduce){' +
         '.wscue{transition:opacity .4s ease;transform:translateX(-50%) translateY(0);}' +
@@ -266,6 +301,20 @@
     bodyWrap.appendChild(kick);
     bodyWrap.appendChild(txt);
 
+    // estate-wide mute toggle — writes the shared key ws:pref:muted, so muting
+    // here (the chime sounds from this toast) holds across every estate page.
+    var mute = doc.createElement('button');
+    mute.className = 'wscue-mute';
+    function syncMuteBtn() {
+      var m = WS.muted();
+      mute.textContent = m ? '🔇' : '🔊';
+      mute.setAttribute('aria-label', m ? 'unmute the estate' : 'mute the estate');
+      mute.title = m ? 'Muted estate-wide — click to unmute' : 'Mute sound across the whole estate';
+    }
+    syncMuteBtn();
+    mute.addEventListener('click', function () { WS.setMuted(!WS.muted()); syncMuteBtn(); });
+    WS.onMuteChange(syncMuteBtn);
+
     var x = doc.createElement('button');
     x.className = 'wscue-x';
     x.setAttribute('aria-label', 'dismiss');
@@ -273,6 +322,7 @@
 
     toast.appendChild(rune);
     toast.appendChild(bodyWrap);
+    toast.appendChild(mute);
     toast.appendChild(x);
     body.appendChild(toast);
 
@@ -301,10 +351,14 @@
     }
 
     // whisper-soft chime — ONLY if an AudioContext is ALREADY running. Never
-    // create/resume one (respect the workshop's audio-courtesy rule).
+    // create/resume one (respect the workshop's audio-courtesy rule). Honours the
+    // estate-wide mute: if ws:pref:muted === '1', the chime stays silent (read at
+    // fire-time, so a mute toggled on ANY estate tab takes effect immediately).
     try {
+      var __wsMuted = false;
+      try { __wsMuted = WS.muted(); } catch (e) {}
       var AC = root.__wsAudioCtx || root.audioCtx || null;
-      if (AC && AC.state === 'running' && AC.createOscillator) {
+      if (!__wsMuted && AC && AC.state === 'running' && AC.createOscillator) {
         var now = AC.currentTime;
         var osc = AC.createOscillator();
         var g = AC.createGain();

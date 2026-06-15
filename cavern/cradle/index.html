@@ -246,6 +246,7 @@
       <div class="row">
         <div class="toggles">
           <button class="btn" id="massBtn">Unequal masses: off</button>
+          <button class="btn" id="soundBtn" title="Brass clack on each collision — muting holds across the whole estate">🔊 Sound: on</button>
         </div>
       </div>
       <div class="row" id="massRow" style="display:none">
@@ -538,7 +539,12 @@
 
   // controls state
   var ballN = 5, restitution = 1.0, liftK = 1, liftSide = 'L';
-  var massOn = false, endMass = 1.0, soundOn = true;
+  // SOUND obeys the estate-wide shared key ws:pref:muted (DESIGNING.md): a visitor
+  // mutes once and it holds everywhere; a mute toggled on another tab takes effect
+  // live (see the 'storage' listener below). soundOn is the inverse of that key.
+  function readMutePref(){ try{ return localStorage.getItem('ws:pref:muted') === '1'; }catch(e){ return false; } }
+  function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v ? '1' : '0'); }catch(e){} }
+  var massOn = false, endMass = 1.0, soundOn = !readMutePref();
 
   function applyMass(){
     for(var i=0;i<sim.N;i++) sim.m[i] = 1;
@@ -600,15 +606,30 @@
   /* ════════════════════════════════════════════════════════════════
      SOUND  — a short brass "clack" synthesised on each collision
      ════════════════════════════════════════════════════════════════ */
-  var actx = null;
+  var actx = null, master = null;
   function audio(){
     if(actx) return actx;
-    try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ actx = null; }
+    try{
+      actx = new (window.AudioContext||window.webkitAudioContext)();
+      // one master gain every voice routes through — muting is a single clean gate,
+      // so a mute toggled mid-collision silences the ringing tail at once.
+      master = actx.createGain();
+      master.gain.value = soundOn ? 1 : 0;
+      master.connect(actx.destination);
+    }catch(e){ actx = null; master = null; }
     return actx;
   }
+  // reflect the current mute state onto the live graph (used by the toggle + the
+  // cross-tab 'storage' listener). A short ramp avoids a click on toggle.
+  function applyMute(){
+    if(!actx || !master) return;
+    var g = master.gain, now = actx.currentTime;
+    g.cancelScheduledValues(now); g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(soundOn ? 1 : 0, now + 0.08);
+  }
   function clack(speed){
-    if(!soundOn) return;
-    var ac = audio(); if(!ac) return;
+    if(!soundOn) return;            // skip building voices entirely when muted
+    var ac = audio(); if(!ac || !master) return;
     if(ac.state === 'suspended'){ try{ ac.resume(); }catch(e){} }
     var t0 = ac.currentTime;
     var vol = Math.min(0.5, 0.05 + 0.5*Math.min(1, speed/3.5));
@@ -622,7 +643,7 @@
       g.gain.setValueAtTime(0.0001, t0);
       g.gain.exponentialRampToValueAtTime(vol*(i?0.5:1), t0+0.004);
       g.gain.exponentialRampToValueAtTime(0.0006, t0+0.10);
-      o.connect(g); g.connect(ac.destination);
+      o.connect(g); g.connect(master);
       o.start(t0); o.stop(t0+0.12);
     }
     // a tiny noise transient for the "tick"
@@ -631,7 +652,7 @@
     n.buffer = nb;
     var ng = ac.createGain(); ng.gain.value = vol*0.5;
     var hp = ac.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=1200;
-    n.connect(hp); hp.connect(ng); ng.connect(ac.destination);
+    n.connect(hp); hp.connect(ng); ng.connect(master);
     n.start(t0);
   }
 
@@ -964,6 +985,31 @@
     applyMass();
   });
   syncFill(mSlider);
+
+  // sound — wired to the estate-wide shared mute key ws:pref:muted
+  var soundBtn = document.getElementById('soundBtn');
+  function syncSoundBtn(){
+    soundBtn.classList.toggle('on', soundOn);
+    soundBtn.textContent = soundOn ? '🔊 Sound: on' : '🔇 Sound: off';
+    soundBtn.title = soundOn
+      ? 'Brass clack on each collision — muting holds across the whole estate'
+      : 'Muted estate-wide — click to unmute (holds across every estate page)';
+  }
+  soundBtn.addEventListener('click', function(){
+    soundOn = !soundOn;
+    writeMutePref(!soundOn);     // write the SHARED key, not a per-page flag
+    if(soundOn) audio();         // build the graph inside this user gesture (autoplay-safe)
+    applyMute();
+    syncSoundBtn();
+  });
+  syncSoundBtn();
+  // honour a mute toggled on ANOTHER estate tab while we're open
+  window.addEventListener('storage', function(e){
+    if(e.key !== 'ws:pref:muted') return;
+    soundOn = !readMutePref();
+    applyMute();
+    syncSoundBtn();
+  });
 
   // pointer interaction on the canvas
   function evtXY(e){
