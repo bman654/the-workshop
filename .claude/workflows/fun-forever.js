@@ -37,6 +37,9 @@ const GROUND = [
   '  living sims · games & puzzles · the occasional graph) — NEVER a monoculture. "Prove it exact" is one',
   '  cherished register, in MODERATION, not the point. The estate recently drifted toward graphs-everywhere;',
   '  we are restoring balance — so reach for the living/playable/touchable form, and keep only some explainers.',
+  '- THE GROUNDED GATE: "grounded" (enacted as a thing you see/touch/play/hear) and "expressive" (vivid prose /',
+  '  frame) are SEPARATE axes — a vivid caption can NEVER lift a piece that stays an abstract chart. The five',
+  '  questions weigh a piece only AFTER it clears the grounded + accessible floor. (DESIGNING.md: "the grounded gate".)',
   '- The loop may REWORK existing pieces to re-soul them (a `rework` garden seed), not only build new.',
   '  Full story: DESIGNING.md (the five questions + the roles) + seedbed/README.md ("the soul & the audit").',
   '',
@@ -274,8 +277,12 @@ function buildPrompt(d, chosen, cyc) {
     'UNCOMMON port you tear down) and browser-verify with agent-browser in a UNIQUELY-named session (any self-test',
     'green, clean console, ~60fps); a new front-door page MUST drop its ws:seen:<id>.',
     grounds
-      ? 'GROUNDS SWING: register a NEW front-door footprint (append a PLACES entry in index.src.html + re-forge), and'
-        + ' build the wing\'s LANDING + its first bench (the Hall/Cavern/Engine-Room mold). Let FORM express content.'
+      ? 'GROUNDS SWING: register a NEW front-door footprint by appending one PLACES entry that DECLARES {district, tier,'
+        + ' wing} (NEVER pixels — the renderer owns geometry; see tools/layout/map-process.md for the six districts, the'
+        + ' inside-vs-external call, and the per-room map-judge axes). Re-forge. After any map change, REVEAL ALL SECRETS'
+        + ' (tools/layout/reveal-all-secrets.js) before you screenshot, and sweep the rendered whole like the'
+        + ' estate-composition critic (tune only config tables/furniture/page-CSS, never the manor pin / FIELD / grouping /'
+        + ' frozen sky capstone). Then build the wing\'s LANDING + its first bench (the Hall/Cavern/Engine-Room mold). Let FORM express content.'
       : 'Register it where it belongs (the right Workbench group / wing / front-door map). If this is a REWORK, you are'
         + ' re-growing an EXISTING piece IN PLACE: edit/replace its files, KEEP its route + ws:seen breadcrumb, and lift'
         + ' it toward the soulful siblings (show the real thing, make it touchable) — don\'t merely repaint the graph.',
