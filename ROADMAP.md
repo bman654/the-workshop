@@ -87,7 +87,7 @@ Workbench nested-anchor card spill (stretched-link pattern, all cards) · Carnot
 
 ### bench
 <!-- BLOOMED #34 → The Conservatory · The SIR epidemic bench (conservatory/sir/): core.mjs + core.test.mjs (28/28) + the glass-terrarium bench; the planter became the third live .bed on the landing (self-test 17/17). Provenance: conservatory/CHANGELOG.md + the #34 worklog. The replicator [bench] remains the one planter left to grow the wing. -->
-- [bench] **The Conservatory · The replicator** — the one remaining empty planter. Populations of strategies competing toward an evolutionarily-stable fixed point; a handshake to game theory. Self-test the ESS fixed point + the simplex (probabilities sum to 1) invariant. (sown #31)
+<!-- BLOOMED #35 → The Conservatory · The replicator bench (conservatory/replicator/): core.mjs + core.test.mjs (30/30, incl. byte-identical re-extraction parity) + the glass-terrarium bench (in-page 6/6). The replicator equation ẋᵢ=xᵢ(fᵢ−φ) on the probability simplex: Hawk–Dove (primary) flows monotonically to the closed-form ESS x*_Hawk=V/C with relative entropy D(x*‖x) as a strict Lyapunov descent; RPS (foil) circles the barycentre as a neutrally-stable ring (D flat). Teeth: coarse Euler on RPS spirals out and drives a frequency below 0 (positivity break) while Σxᵢ=1 holds to machine zero. The fourth planter became the fourth live .bed; the wing's first chapter is COMPLETE — FOUR live beds, ZERO empty planters (landing self-test grew 17/17 → 21/21). Provenance: conservatory/CHANGELOG.md + the #35 worklog. -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);

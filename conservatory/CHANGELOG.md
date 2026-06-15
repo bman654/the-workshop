@@ -270,3 +270,91 @@ half-width (491px in a 996px row) with empty space beside it. Changed the grid t
 single `1fr` column so the one remaining planter spans full width, aligned flush with
 the three `.bed` cards above it — a clean intentional column. No other code change;
 no `[bug]` filed; no `⚡` spark. Mobile (390px) reflows cleanly. Committed & pushed.
+
+---
+
+## Cycle #35 — the Replicator bench (the fourth planter blooms; the wing's first chapter closes)
+
+The last empty planter is now a live bench: **The Replicator**, the SIMPLEX FLOW to set
+beside the predator–prey CLOSED RING, the logistic STABLE NODE, and the SIR OPEN ARC. A
+population of competing strategies evolves by the replicator equation; the mix lives on
+the probability simplex and always sums to 1.
+
+### The conceit
+With payoff matrix A, per-strategy payoff `fᵢ=(A·x)ᵢ`, mean payoff `φ=xᵀAx`, the field is
+
+    ẋᵢ = xᵢ·(fᵢ − φ)      (above-average GROWS, below-average SHRINKS)
+
+Summing it gives the structural law **Σẋᵢ = φ − φ·Σxᵢ = 0 ANALYTICALLY**, so **Σxᵢ ≡ 1**
+to machine zero along every orbit — the replicator's analog of S+I+R=N and the V-ring.
+Two locked games: **Hawk–Dove** (primary, V=2, C=3 ⇒ C>V) has a unique interior ESS at
+`x*_Hawk = V/C = 2/3`, reached MONOTONICALLY (the node); **Rock–Paper–Scissors** (foil,
+zero-sum antisymmetric) circles the barycentre `(⅓,⅓,⅓)` forever (the neutrally-stable
+ring). The relative entropy `D(x*‖x) = Σx*ᵢ ln(x*ᵢ/xᵢ)` is the discriminator: it falls
+strictly to 0 for Hawk–Dove (a Lyapunov function), stays FLAT for RPS.
+
+### Built (`conservatory/replicator/`)
+- **core.mjs** — pure single-source math (no RNG/DOM/network): locked `P={V:2,C:3,
+  game:'hawkdove'}`, `hawkDoveMatrix`/`rpsMatrix`/`matrixFor`, `payoff` (A·x), `meanPayoff`
+  (xᵀAx), `field` (the replicator ẋ), `essFixedPoint` (closed-form x*_Hawk=V/C, RPS
+  barycentre — NO integration, anti-circularity), `relEntropy` (the KL Lyapunov function),
+  `simplexSum`/`minCoord` (the positivity probes), `rk4Step` (truth) / `eulerStep` (the
+  negative control) of the length-agnostic field, `trace` (NaN-guarded; records sum-error,
+  minX, wentNegative, the D-history + worst D-uptick, the mix history), `runSelfTest`
+  (6 checks). ~300 lines.
+- **core.test.mjs** — green under `node`: **30/30**, the in-page self-test + independent
+  re-derivations (Σẋ=0 at a dense interior scatter on both games; x*_Hawk=V/C re-derived
+  blind from f_H=f_D; long RK4 from 3 interior starts → x* to **8.3e-15**; Hawk–Dove D
+  descends with worst uptick **1.9e-16** while RPS D-swing is **2.5e-12** flat AND the
+  orbit genuinely cycles |x_R−⅓|=0.186; RPS zero-sum φ≡0; the boundary teeth) + the
+  **re-extraction parity** check (the inlined core is byte-identical to core.mjs between
+  the `REPLICATOR-CORE` sentinels).
+- **index.html** — the glass-terrarium with the core inlined byte-identical. **BACK GLASS**
+  = the SIMPLEX phase portrait (Hawk–Dove: the 1-simplex segment [Dove↔Hawk] with flow
+  arrows and the glowing ESS dot at x*=V/C; RPS: the triangle [R,P,S] with the orbit
+  circling the centre, recoloured red and tagged "xᵢ<0 · off-simplex" where it punctures
+  an edge; the stacked strategy column on the left); **FRONT HERO** (1.55fr) = the
+  stacked-share time series (each strategy a coloured band tiling Σ=1, with the [0,1]
+  reference box); **THE DESCENT & POSITIVITY METER** (1fr) = the D(x*‖x) curve (falls to 0
+  for the node, flat for the ring) + the min-xᵢ positivity bar (green above 0, red
+  underhang below) + the `min xᵢ` and `max|Σx−1|` readouts; **ESS TILE** (big live
+  `x*_Hawk=V/C` or the RPS barycentre). Toggles: RK4↔Euler and Hawk–Dove↔RPS.
+
+### The six proofs (in-page badge + Node twin assert the same)
+- **SIMPLEX INVARIANT** (load-bearing): Σẋ=0 analytically ⇒ Σxᵢ≡1 to **3.8e-15** along
+  every RK4 orbit on BOTH games; the field sums to **6.9e-17** at a scatter of points.
+- **ESS FIXED POINT**: closed-form x*_Hawk=V/C=0.6667 with ẋ(x*)=**3.7e-17**≈0; a long RK4
+  run from 3 interior starts converges to it to **8.3e-15** (<1e-9) — no integration needed
+  for the root.
+- **LYAPUNOV**: D(x*‖x) descends monotonically (worst uptick **1.9e-16**≈0) to the
+  Hawk–Dove ESS; RPS keeps D flat (swing **2.0e-12**) — the node-vs-ring distinction.
+- **PAYOFF IDENTITY**: φ=xᵀAx=Σxᵢfᵢ exact; at the interior ESS every played strategy earns
+  φ (|fᵢ−φ|=**5.6e-17**).
+- **NEGATIVE CONTROL (positivity/boundary, NOT sum-drift)**: on the RPS ring, coarse Euler
+  dt=1.2 spirals OUTWARD and drives min xᵢ to **−8.1e-3** (wentNegative), while RK4 holds
+  the ring inside the simplex (min xᵢ=0.195) — and the SUM Σxᵢ=1 holds under BOTH (the
+  predator–prey "Euler spirals out" teeth, transplanted onto the 2-simplex).
+- **RE-EXTRACTION PARITY**: proven in the Node twin; in-page determinism witness green.
+
+### The landing — the wing closes
+The fourth planter became the fourth live `.bed`; the landing imports the replicator core
+for a planter-light (the Hawk│Dove stacked-share glass climbing to the dashed x*=V/C line,
+its own moving bead) and the structural self-test grew **17/17 → 21/21** (added the
+replicator bench-link×2 + bare-relative checks, bumped the bed-count assertion 3→4,
+replaced the empty-planter assertion with a zero-planters assertion, added the replicator
+planter-light canvas-mount + core-all-green checks). The "planter awaiting" section is
+gone; the foot prose now reads "now fully planted … every planter has bloomed; the wing's
+first chapter is complete."
+
+### Builder self-verify (cycle #35)
+`node conservatory/replicator/core.test.mjs` → **30/30** (incl. the byte-identical
+re-extraction parity). Regression untouched: predator-prey **31/31**, logistic **30/30**,
+SIR **28/28**. Served on an uncommon port (`:8793`, torn down by exact PID 28058) and
+opened both surfaces in a uniquely-named agent-browser session (`rep-verify-35`, closed by
+name). Bench in-page **6/6 ✓**, landing **21/21 ✓**; **0** console errors/warnings, **0**
+nested anchors, **0** overflow @1280 (1265) & @390 (375) on both surfaces. The RK4↔Euler
+toggle is reversible: Euler forces the clean RPS spiral-out (dt→1.2, posval shows
+**−8.25e-3** red while the simplex sum stays **1.11e-15** — the boundary breaks, the sum
+holds), and RK4 restores dt=0.05 + a positive min-xᵢ. A coarse-Euler trace cap (560 steps
+when dt≥0.6) keeps the on-bench spiral-out faithful — it punctures the edge with Σxᵢ still
+exact, before the far-outside-the-simplex blow-up would corrupt the float sum.
