@@ -152,6 +152,65 @@ console.log('\n  [independent assertions + reported metrics]');
     'score ' + a.score.toFixed(2) + ' (both runs)');
 })();
 
+/* B8 — TRANSPOSITION (the Scytale's cipher): the INDEPENDENT bigram brute-force
+   agrees with the trigram attack on the column count over the WHOLE battery, and
+   the recovery is exact. Two different language models converging = "found, not
+   guessed" — the falsifiable form of the director's claim-2. */
+(function () {
+  let tries = 0, exact = 0, agree = 0;
+  const misses = [];
+  for (let ci = 0; ci < C.CORPUS.length; ci++) {
+    const PT = C.clean(C.CORPUS[ci]);
+    for (let cols = 2; cols <= 12; cols++) {
+      const ct = C.scytaleEncrypt(PT, cols);
+      const r = C.crackTransposition(ct);
+      const bg = C.crackTranspositionBigram(ct);
+      tries++;
+      if (r.columns === cols && C.clean(r.plaintext) === PT) exact++;
+      else misses.push('corpus#' + ci + ' C=' + cols + ' got=' + r.columns);
+      if (r.columns === bg) agree++;
+    }
+  }
+  check('Transposition exact (column-count + plaintext) over the battery', exact === tries,
+    exact + '/' + tries + ' = ' + (100 * exact / tries).toFixed(1) + '%' +
+    (misses.length ? ' | misses: ' + misses.slice(0, 4).join('; ') : ''));
+  check('Transposition — independent bigram brute-force agrees on the column count',
+    agree === tries, agree + '/' + tries + ' trigram===bigram argmax');
+})();
+
+/* B9 — the class router separates transposition from the substitution family on
+   a labeled battery, and the χ²/letter discriminator has a comfortable margin
+   (real English ≈0.5, the substitution family ≈1.6 — the gate is 1.25). */
+(function () {
+  let tries = 0, correct = 0, transMaxChi = -Infinity, subMinChi = Infinity;
+  const sr = C.makeRng('b9-alpha');
+  for (let ci = 0; ci < C.CORPUS.length; ci++) {
+    const PT = C.clean(C.CORPUS[ci]);
+    for (let cols = 2; cols <= 12; cols++) {
+      const cl = C.classify(C.scytaleEncrypt(PT, cols));
+      tries++; if (cl.family === 'transposition') correct++;
+      transMaxChi = Math.max(transMaxChi, cl.chi);
+    }
+    let cl = C.classify(C.caesarEncrypt(PT, 5));      tries++; if (cl.family === 'substitution') correct++; subMinChi = Math.min(subMinChi, cl.chi);
+    cl = C.classify(C.vigenereEncrypt(PT, 'LEMON'));  tries++; if (cl.family === 'substitution') correct++; subMinChi = Math.min(subMinChi, cl.chi);
+    cl = C.classify(C.substEncrypt(PT, C.randomAlphabet(sr))); tries++; if (cl.family === 'substitution') correct++; subMinChi = Math.min(subMinChi, cl.chi);
+  }
+  check('Class detector 100% on a labeled battery (transposition vs substitution-family)',
+    correct === tries,
+    correct + '/' + tries + ' correct; χ²/letter: transposition ≤ ' + transMaxChi.toFixed(2) +
+    ' ≪ 1.25 ≪ ' + subMinChi.toFixed(2) + ' ≤ substitution-family (margin ' + (subMinChi / transMaxChi).toFixed(2) + '×)');
+})();
+
+/* B10 — crack() routes a transposition to the column-sweep, not the hill-climb */
+(function () {
+  const PT = C.clean(C.CORPUS[2]);
+  const ct = C.scytaleEncrypt(PT, 7);
+  const res = C.crack(ct);
+  check('crack() auto-routes a transposition and recovers it (no key)',
+    res.type === 'transposition' && res.columns === 7 && C.clean(res.plaintext) === PT,
+    'type=' + res.type + ' columns=' + res.columns + ' exact=' + (C.clean(res.plaintext) === PT));
+})();
+
 /* ───────────────────────────────────────────────────────────────────────── */
 console.log('\n' + (fails.length ? '✗ ' : '✓ ') + pass + '/' + total + ' checks passed.');
 if (fails.length) { console.error('FAILED: ' + fails.join(', ')); process.exit(1); }

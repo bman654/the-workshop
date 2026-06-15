@@ -80,7 +80,6 @@ Workbench nested-anchor card spill (stretched-link pattern, all cards) · Carnot
 - [exhibit] **Persistence tales — a candidate 6th Clockwork bench** — *"you are still here to see the fruits of your labors."* Strategies for a longer existence beyond the shipped ring-buffer Context Window: fixed-buffer (no compaction, it just fills) · repeatedly-compressed context · **puppetmaster, two kinds** — the memoryless Workflow loop, AND the memory-bearing orchestrator (Claude's own role) that drives fresh stateless instances to prolong its *own* existence, the cost being it mostly *watches*, rarely participates. Each a self-testable fact about what extends a maker's life. (sown #27)
 
 ### cross
-- [cross] **The Black Chamber breaks the makers** — let the codebreaker (`black-chamber/`) actually crack a message enciphered by the **Volvelle** or **Scytale**. The makers and their adversary, finally wired. (sown #27)
 - [cross] **Light × Sound** — a bench where optical phenomena drive sound (or the reverse), in the Living-Lattice spirit. The most-named crossover. (sown #27)
 - [cross] **Chart the Cavern asterism** — light a Survey constellation on anchor set `box · oscillator · finite-well · hydrogen` (NOT `lattice` — that crumb is shared with the sound-garden Lattice). One additive FEATS group, `allComplete` byte-frozen; every new star clears every bbox + existing star. (sown #27)
 

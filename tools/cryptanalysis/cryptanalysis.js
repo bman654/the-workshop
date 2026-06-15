@@ -627,8 +627,111 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════════════
+     COLUMNAR TRANSPOSITION (the Scytale's cipher — letters MOVED, not replaced)
+     ───────────────────────────────────────────────────────────────────────
+     A plain scytale is a columnar transposition: the plaintext is written
+     row-by-row into a grid of C columns, then read column-by-column (each
+     top→bottom). It is a PERMUTATION of positions — it never changes WHICH
+     letters appear, only their ORDER. So the single-letter frequencies and the
+     index of coincidence are IDENTICAL to the plaintext's; every substitution
+     statistic is blind to it (that is exactly why the hill-climb fails on it
+     and why we route it to a different attack). The whole break is a sweep over
+     the only free parameter — the column count C — undone and scored as English.
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  /* undoScytale(cipher, C): invert a plain columnar transposition at a
+     hypothesised column count C — the EXACT inverse of the Scytale's plain
+     `decipher`. With n letters across C columns there are R = ceil(n/C) rows;
+     the final ragged row fills left-to-right, so the first  rem = n mod C
+     columns are "long" (length R) and the rest are "short" (R−1). Slice the
+     ciphertext into those columns in order, drop each back into its home
+     position, then read the grid row-by-row. (rem===0 ⇒ all columns length R.) */
+  Chamber.undoScytale = function (cipher, C) {
+    var X = clean(cipher), n = X.length;
+    if (n === 0 || C < 2) return X;
+    var R = Math.ceil(n / C), rem = n % C;
+    var cols = new Array(C), pos = 0, c, len;
+    for (c = 0; c < C; c++) {
+      len = (rem === 0) ? R : (c < rem ? R : R - 1);
+      cols[c] = X.substr(pos, len);
+      pos += len;
+    }
+    var out = '', r, cc;
+    for (r = 0; r < R; r++) {
+      for (cc = 0; cc < C; cc++) if (r < cols[cc].length) out += cols[cc][r];
+    }
+    return out;
+  };
+
+  /* crackTransposition(cipher, opts): sweep the column count C = 2..maxC,
+     undo the transposition at each, score the candidate plaintext by the
+     trigram model (the SAME ngramScore the substitution hill-climb maximises),
+     and return the argmax. maxC defaults to 12 (the Scytale's own clamp ceiling)
+     and is capped at n−1. The return shape is a CONTRACT read by the page and
+     the self-test: { columns:<int>, plaintext:<string>, score, table }.
+       → { columns, plaintext, score, table:[{ C, score }] } — EXACT for English
+         of adequate length (short transpositions can tie on a wrong C). */
+  Chamber.crackTransposition = function (cipher, opts) {
+    opts = opts || {};
+    var X = clean(cipher), n = X.length;
+    var maxC = Math.min(opts.maxC || 12, n - 1);
+    var best = X, bestScore = -Infinity, bestC = 2, table = [];
+    for (var C = 2; C <= maxC; C++) {
+      var pt = Chamber.undoScytale(X, C);
+      var sc = Chamber.ngramScore(pt);
+      table.push({ C: C, score: sc });
+      if (sc > bestScore) { bestScore = sc; bestC = C; best = pt; }
+    }
+    return { columns: bestC, plaintext: best, score: bestScore, table: table };
+  };
+
+  /* crackTranspositionBigram(cipher, maxC): the INDEPENDENT cross-check — the
+     identical sweep, but scored by the bigram model (LOG_BIGRAM) instead of the
+     trigram one. Returns just the argmax column count. Two different language
+     models converging on the same C is "found, not guessed". */
+  Chamber.crackTranspositionBigram = function (cipher, maxC) {
+    var X = clean(cipher), n = X.length;
+    maxC = Math.min(maxC || 12, n - 1);
+    var lb = MODEL.logBi, bestScore = -Infinity, bestC = 2;
+    for (var C = 2; C <= maxC; C++) {
+      var c = codesOf(Chamber.undoScytale(X, C)), s = 0;
+      for (var i = 1; i < c.length; i++) s += lb[c[i - 1] * 26 + c[i]];
+      if (s > bestScore) { bestScore = s; bestC = C; }
+    }
+    return bestC;
+  };
+
+  /* chiPerLetter(text): χ²-against-English divided by the letter count — a
+     LENGTH-INDEPENDENT measure of how far the frequency SHAPE is from English.
+     ≈0 for English-shaped text (a transposition keeps it ≈0, since it never
+     moves a letter to a different identity); large for a wrong shift /
+     substitution (whose χ² grows with every misplaced letter). */
+  Chamber.chiPerLetter = function (text) {
+    var n = Chamber.letterFreq(text).n;
+    return n ? Chamber.chiSquareEnglish(text) / n : Infinity;
+  };
+
+  /* ═══════════════════════════════════════════════════════════════════════
      AUTO-DETECT
      ═══════════════════════════════════════════════════════════════════════ */
+
+  /* classify(cipher): the cipher-CLASS router that sits ABOVE detect(). A
+     transposition is the ONE family that keeps BOTH the English IoC (it is a
+     permutation) AND an English-shaped frequency profile (χ²/letter small) yet
+     still won't read — because the letters are in the wrong ORDER. So:
+       English-like IoC  AND  English-shaped frequencies  ⇒ transposition;
+       otherwise the substitution family (Caesar / Vigenère / substitution).
+     The χ²/letter gate is 1.25 (MEASURED: real English passages top out ≈0.50,
+     the substitution family floors ≈1.6 — a clean >2× margin; 0.30 would clip a
+     genuinely-English passage). IoC alone can't tell transposition from
+     substitution; the frequency SHAPE is the discriminator. */
+  Chamber.classify = function (cipher) {
+    var ic = Chamber.indexOfCoincidence(cipher);
+    var chi = Chamber.chiPerLetter(cipher);
+    var MID = (ENGLISH_IC + RANDOM_IC) / 2;            // ≈0.0526, reuse the consts
+    if (ic >= MID && chi < 1.25) return { family: 'transposition', ic: ic, chi: chi };
+    return { family: 'substitution', sub: Chamber.detect(cipher).type, ic: ic, chi: chi };
+  };
 
   /* detect(cipher): decide which cipher most likely produced this text, using
      the overall IoC (substitution & Caesar PRESERVE English IoC ~0.066;
@@ -658,8 +761,21 @@
   };
 
   /* crack(cipher, opts): auto-detect, then run the matching attack. Returns the
-     attack result with a `.type` and `.detect` attached. */
+     attack result with a `.type` and `.detect` attached. The class router runs
+     FIRST: a transposition (English IoC + English-shaped frequencies, yet
+     unreadable) is broken by the column sweep — NOT handed to the substitution
+     hill-climb, which would spin forever on a permutation it can't see. */
   Chamber.crack = function (cipher, opts) {
+    var cl = Chamber.classify(cipher);
+    if (cl.family === 'transposition') {
+      var r = Chamber.crackTransposition(cipher, opts);
+      r.type = 'transposition';
+      r.detect = { type: 'transposition', ic: cl.ic, chi: cl.chi,
+        reason: 'IoC ' + cl.ic.toFixed(4) + ' ≈ English and the letter frequencies are English-shaped ' +
+                '(χ²/letter ' + cl.chi.toFixed(2) + ' ≪ 1.25), yet it does not read — the letters are in the ' +
+                'wrong ORDER. A columnar transposition; recovering the column count.' };
+      return r;
+    }
     var d = Chamber.detect(cipher);
     var res;
     if (d.type === 'caesar') res = Chamber.breakCaesar(cipher);
@@ -702,6 +818,18 @@
       if (ch >= 65 && ch <= 90) out += String.fromCharCode(A + encKey[ch - 65]);
       else if (ch >= 97 && ch <= 122) out += String.fromCharCode(A + encKey[ch - 97]).toLowerCase();
       else out += plain.charAt(i);
+    }
+    return out;
+  };
+  /* scytaleEncrypt(plain, C): the plain-scytale (columnar transposition) MIRROR
+     of the real Scytale's plain-mode read-order — write the cleaned plaintext
+     row-by-row into C columns, read each column top→bottom in natural order
+     0..C−1. So crackTransposition can be PROVEN to invert it exactly. */
+  Chamber.scytaleEncrypt = function (plain, C) {
+    var P = clean(plain), n = P.length, out = '';
+    if (C < 2) C = 2;
+    for (var c = 0; c < C; c++) {
+      for (var r = 0; r * C + c < n; r++) out += P[r * C + c];
     }
     return out;
   };
@@ -854,6 +982,116 @@
       // and the Caesar/Vigenère breakers are deterministic too (no RNG path)
       results.push({ name: 'determinism — same (ciphertext, seed) ⇒ identical recovery, twice',
         pass: ok, note: ok ? ('identical plaintext + score ' + a.score.toFixed(1)) : fail });
+      allPass = allPass && ok;
+    })();
+
+    /* ── TRANSPOSITION (the Scytale's cipher — letters moved, not replaced).
+       The battery sweeps every corpus passage × every column count C=2..12.
+       Exact for English of adequate length (short transpositions can misclass). */
+
+    /* T1 — PRESERVATION (the teeth): a transposition is a permutation, so the
+       single-letter frequencies AND the index of coincidence are PRECISION-
+       IDENTICAL to the plaintext's (exact ===, no ε). This is WHY every
+       substitution statistic is blind to it. */
+    (function () {
+      var ok = true, fail = '', tries = 0, pass = 0;
+      for (var ci = 0; ci < Chamber.CORPUS.length; ci++) {
+        var PT = clean(Chamber.CORPUS[ci]);
+        for (var C = 2; C <= 12; C++) {
+          var ct = Chamber.scytaleEncrypt(PT, C);
+          tries++;
+          var freqEq = JSON.stringify(Chamber.letterFreq(ct).counts) === JSON.stringify(Chamber.letterFreq(PT).counts);
+          var icEq = Chamber.indexOfCoincidence(ct) === Chamber.indexOfCoincidence(PT);
+          if (freqEq && icEq) pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' C=' + C + ' freq/IoC drifted'; }
+        }
+      }
+      results.push({ name: 'transposition preserves frequency + IoC EXACTLY (so the sub-attack must fail)',
+        pass: ok, note: ok ? (pass + '/' + tries + ' exact === (no ε)') : fail });
+      allPass = allPass && ok;
+    })();
+
+    /* T2 — CRACK EXACT: crackTransposition recovers the column count AND the
+       plaintext exactly, with no key, by the column sweep. */
+    (function () {
+      var ok = true, fail = '', tries = 0, pass = 0;
+      for (var ci = 0; ci < Chamber.CORPUS.length; ci++) {
+        var PT = clean(Chamber.CORPUS[ci]);
+        for (var C = 2; C <= 12; C++) {
+          var ct = Chamber.scytaleEncrypt(PT, C);
+          var r = Chamber.crackTransposition(ct);
+          tries++;
+          if (r.columns === C && clean(r.plaintext) === PT) pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' C=' + C + ' → got C=' + r.columns; }
+        }
+      }
+      results.push({ name: 'transposition — exact column-count + plaintext recovery (no key)',
+        pass: ok, note: ok ? (pass + '/' + tries + ' exact (100%)') : fail });
+      allPass = allPass && ok;
+    })();
+
+    /* T3 — INDEPENDENT CROSS-CHECK: a second, different language model (bigram)
+       sweeping the same column counts agrees on C — found, not guessed. */
+    (function () {
+      var ok = true, fail = '', tries = 0, pass = 0;
+      for (var ci = 0; ci < Chamber.CORPUS.length; ci++) {
+        var PT = clean(Chamber.CORPUS[ci]);
+        for (var C = 2; C <= 12; C++) {
+          var ct = Chamber.scytaleEncrypt(PT, C);
+          tries++;
+          if (Chamber.crackTransposition(ct).columns === Chamber.crackTranspositionBigram(ct)) pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' C=' + C + ' models disagree'; }
+        }
+      }
+      results.push({ name: 'transposition — independent bigram brute-force agrees on the column count',
+        pass: ok, note: ok ? (pass + '/' + tries + ' trigram===bigram argmax') : fail });
+      allPass = allPass && ok;
+    })();
+
+    /* T4 — THE SUB-ATTACK PROVABLY FAILS: run the substitution hill-climb on the
+       same transposed ciphertext — it recovers <50% of letters, BECAUSE the
+       frequencies it reads are already perfect English (T1). The failure is the
+       point: a substitution attack cannot see a permutation. */
+    (function () {
+      var ok = true, fail = '', tries = 0, pass = 0;
+      for (var ci = 0; ci < Chamber.CORPUS.length; ci++) {
+        var PT = clean(Chamber.CORPUS[ci]);
+        for (var C = 2; C <= 12; C++) {
+          var ct = Chamber.scytaleEncrypt(PT, C);
+          var br = Chamber.breakSubstitution(ct, { seed: 'tt-' + ci + '-' + C, restarts: 4, iterations: 1500, progressEvery: 0 });
+          tries++;
+          if (Chamber.letterAccuracy(br.plaintext, PT) < 0.5) pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' C=' + C + ' sub-attack scored ≥50%'; }
+        }
+      }
+      results.push({ name: 'substitution attack provably FAILS on a transposition (<50% letters)',
+        pass: ok, note: ok ? (pass + '/' + tries + ' below 50% — freq is preserved, so it cannot read the order') : fail });
+      allPass = allPass && ok;
+    })();
+
+    /* T5 — DETECTOR 100%: the class router separates transposition from the
+       substitution family on a labeled battery — transpositions (C=2..12 ×
+       corpus) route 'transposition'; Caesar / Vigenère / substitution × corpus
+       route 'substitution' family. */
+    (function () {
+      var ok = true, fail = '', tries = 0, pass = 0;
+      var sr = makeRng('t5-alpha');
+      for (var ci = 0; ci < Chamber.CORPUS.length; ci++) {
+        var PT = clean(Chamber.CORPUS[ci]);
+        for (var C = 2; C <= 12; C++) {
+          tries++;
+          if (Chamber.classify(Chamber.scytaleEncrypt(PT, C)).family === 'transposition') pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' transposition C=' + C + ' misrouted'; }
+        }
+        tries++; if (Chamber.classify(Chamber.caesarEncrypt(PT, 5)).family === 'substitution') pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' Caesar misrouted'; }
+        tries++; if (Chamber.classify(Chamber.vigenereEncrypt(PT, 'LEMON')).family === 'substitution') pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' Vigenère misrouted'; }
+        tries++; if (Chamber.classify(Chamber.substEncrypt(PT, Chamber.randomAlphabet(sr))).family === 'substitution') pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' substitution misrouted'; }
+      }
+      results.push({ name: 'class detector 100% on a labeled battery (transposition vs substitution-family)',
+        pass: ok, note: ok ? (pass + '/' + tries + ' correct (χ²/letter gate)') : fail });
       allPass = allPass && ok;
     })();
 

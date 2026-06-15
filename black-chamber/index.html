@@ -129,6 +129,11 @@
 
   /* the recovered-plaintext panel */
   #outCard .card-b{ padding:0; }
+  #courier{ display:flex; align-items:center; gap:8px; padding:9px 15px; border-bottom:1px solid rgba(255,255,255,0.06);
+    font:10.5px/1.5 var(--font-mono); color:var(--accent2); letter-spacing:.16em; text-transform:uppercase; }
+  #courier[hidden]{ display:none; }
+  #courier .dot{ flex:0 0 auto; width:6px; height:6px; border-radius:50%; background:var(--accent2);
+    box-shadow:0 0 8px rgba(111,179,201,.7); }
   #plainOut{ padding:13px 15px; font:14px/1.6 var(--font-mono); letter-spacing:.3px;
     color:var(--ink); min-height:64px; max-height:230px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; }
   #plainOut.churn{ color:var(--ink-dim); }
@@ -159,7 +164,7 @@
   .row > label{ display:block; font:600 10px/1 var(--font-mono);
     letter-spacing:.13em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
   .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid var(--panel-edge); flex-wrap:wrap; }
-  .seg button{ flex:1; min-width:48px; border:none; background:transparent; color:var(--ink-dim); font-size:11px;
+  .seg button{ flex:1 1 auto; min-width:48px; border:none; background:transparent; color:var(--ink-dim); font-size:11px;
     padding:7px 4px; border-radius:6px; cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono); }
   .seg button.active{ background:var(--accent); color:#1b1404; font-weight:700; }
   .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
@@ -218,8 +223,8 @@
       <span class="tag">a codebreaker's desk</span>
     </div>
     <div class="right">
-      <a class="sib-link" href="../volvelle/index.html" title="The Volvelle MAKES Caesar / Vigenère / Alberti ciphers. The Black Chamber BREAKS them — with no key.">↗ Volvelle <span class="dim">— the maker</span></a>
-      <a class="sib-link" href="../scytale/index.html" title="The Scytale MAKES a transposition cipher. The Black Chamber is the analyst who undoes such work.">↗ Scytale</a>
+      <a class="sib-link" href="../volvelle/index.html" title="The Volvelle MAKES Caesar / Vigenère / Alberti ciphers. The Black Chamber receives them and BREAKS them — with no key.">↗ Volvelle <span class="dim">— the maker who substitutes</span></a>
+      <a class="sib-link" href="../scytale/index.html" title="The Scytale MAKES a transposition cipher. The Black Chamber receives the rod's work and undoes it — recovering the column count with no key.">↗ Scytale <span class="dim">— the maker who transposes</span></a>
       <div class="selftest" id="selftest" title="built-in self-test — click for detail">checking&hellip;</div>
     </div>
   </div>
@@ -280,6 +285,7 @@
           <span class="meta" id="iterMeta">&mdash;</span>
         </div>
         <div class="card-b">
+          <div id="courier" hidden></div>
           <div id="plainOut">The desk is quiet. Load a sample, or paste a cipher, and press <b>Crack it</b>.</div>
           <div id="keyOut">&nbsp;</div>
           <div class="verdict" id="verdict"><span class="dot"></span><span id="verdictText">awaiting ciphertext</span></div>
@@ -965,8 +971,111 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════════════
+     COLUMNAR TRANSPOSITION (the Scytale's cipher — letters MOVED, not replaced)
+     ───────────────────────────────────────────────────────────────────────
+     A plain scytale is a columnar transposition: the plaintext is written
+     row-by-row into a grid of C columns, then read column-by-column (each
+     top→bottom). It is a PERMUTATION of positions — it never changes WHICH
+     letters appear, only their ORDER. So the single-letter frequencies and the
+     index of coincidence are IDENTICAL to the plaintext's; every substitution
+     statistic is blind to it (that is exactly why the hill-climb fails on it
+     and why we route it to a different attack). The whole break is a sweep over
+     the only free parameter — the column count C — undone and scored as English.
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  /* undoScytale(cipher, C): invert a plain columnar transposition at a
+     hypothesised column count C — the EXACT inverse of the Scytale's plain
+     `decipher`. With n letters across C columns there are R = ceil(n/C) rows;
+     the final ragged row fills left-to-right, so the first  rem = n mod C
+     columns are "long" (length R) and the rest are "short" (R−1). Slice the
+     ciphertext into those columns in order, drop each back into its home
+     position, then read the grid row-by-row. (rem===0 ⇒ all columns length R.) */
+  Chamber.undoScytale = function (cipher, C) {
+    var X = clean(cipher), n = X.length;
+    if (n === 0 || C < 2) return X;
+    var R = Math.ceil(n / C), rem = n % C;
+    var cols = new Array(C), pos = 0, c, len;
+    for (c = 0; c < C; c++) {
+      len = (rem === 0) ? R : (c < rem ? R : R - 1);
+      cols[c] = X.substr(pos, len);
+      pos += len;
+    }
+    var out = '', r, cc;
+    for (r = 0; r < R; r++) {
+      for (cc = 0; cc < C; cc++) if (r < cols[cc].length) out += cols[cc][r];
+    }
+    return out;
+  };
+
+  /* crackTransposition(cipher, opts): sweep the column count C = 2..maxC,
+     undo the transposition at each, score the candidate plaintext by the
+     trigram model (the SAME ngramScore the substitution hill-climb maximises),
+     and return the argmax. maxC defaults to 12 (the Scytale's own clamp ceiling)
+     and is capped at n−1. The return shape is a CONTRACT read by the page and
+     the self-test: { columns:<int>, plaintext:<string>, score, table }.
+       → { columns, plaintext, score, table:[{ C, score }] } — EXACT for English
+         of adequate length (short transpositions can tie on a wrong C). */
+  Chamber.crackTransposition = function (cipher, opts) {
+    opts = opts || {};
+    var X = clean(cipher), n = X.length;
+    var maxC = Math.min(opts.maxC || 12, n - 1);
+    var best = X, bestScore = -Infinity, bestC = 2, table = [];
+    for (var C = 2; C <= maxC; C++) {
+      var pt = Chamber.undoScytale(X, C);
+      var sc = Chamber.ngramScore(pt);
+      table.push({ C: C, score: sc });
+      if (sc > bestScore) { bestScore = sc; bestC = C; best = pt; }
+    }
+    return { columns: bestC, plaintext: best, score: bestScore, table: table };
+  };
+
+  /* crackTranspositionBigram(cipher, maxC): the INDEPENDENT cross-check — the
+     identical sweep, but scored by the bigram model (LOG_BIGRAM) instead of the
+     trigram one. Returns just the argmax column count. Two different language
+     models converging on the same C is "found, not guessed". */
+  Chamber.crackTranspositionBigram = function (cipher, maxC) {
+    var X = clean(cipher), n = X.length;
+    maxC = Math.min(maxC || 12, n - 1);
+    var lb = MODEL.logBi, bestScore = -Infinity, bestC = 2;
+    for (var C = 2; C <= maxC; C++) {
+      var c = codesOf(Chamber.undoScytale(X, C)), s = 0;
+      for (var i = 1; i < c.length; i++) s += lb[c[i - 1] * 26 + c[i]];
+      if (s > bestScore) { bestScore = s; bestC = C; }
+    }
+    return bestC;
+  };
+
+  /* chiPerLetter(text): χ²-against-English divided by the letter count — a
+     LENGTH-INDEPENDENT measure of how far the frequency SHAPE is from English.
+     ≈0 for English-shaped text (a transposition keeps it ≈0, since it never
+     moves a letter to a different identity); large for a wrong shift /
+     substitution (whose χ² grows with every misplaced letter). */
+  Chamber.chiPerLetter = function (text) {
+    var n = Chamber.letterFreq(text).n;
+    return n ? Chamber.chiSquareEnglish(text) / n : Infinity;
+  };
+
+  /* ═══════════════════════════════════════════════════════════════════════
      AUTO-DETECT
      ═══════════════════════════════════════════════════════════════════════ */
+
+  /* classify(cipher): the cipher-CLASS router that sits ABOVE detect(). A
+     transposition is the ONE family that keeps BOTH the English IoC (it is a
+     permutation) AND an English-shaped frequency profile (χ²/letter small) yet
+     still won't read — because the letters are in the wrong ORDER. So:
+       English-like IoC  AND  English-shaped frequencies  ⇒ transposition;
+       otherwise the substitution family (Caesar / Vigenère / substitution).
+     The χ²/letter gate is 1.25 (MEASURED: real English passages top out ≈0.50,
+     the substitution family floors ≈1.6 — a clean >2× margin; 0.30 would clip a
+     genuinely-English passage). IoC alone can't tell transposition from
+     substitution; the frequency SHAPE is the discriminator. */
+  Chamber.classify = function (cipher) {
+    var ic = Chamber.indexOfCoincidence(cipher);
+    var chi = Chamber.chiPerLetter(cipher);
+    var MID = (ENGLISH_IC + RANDOM_IC) / 2;            // ≈0.0526, reuse the consts
+    if (ic >= MID && chi < 1.25) return { family: 'transposition', ic: ic, chi: chi };
+    return { family: 'substitution', sub: Chamber.detect(cipher).type, ic: ic, chi: chi };
+  };
 
   /* detect(cipher): decide which cipher most likely produced this text, using
      the overall IoC (substitution & Caesar PRESERVE English IoC ~0.066;
@@ -996,8 +1105,21 @@
   };
 
   /* crack(cipher, opts): auto-detect, then run the matching attack. Returns the
-     attack result with a `.type` and `.detect` attached. */
+     attack result with a `.type` and `.detect` attached. The class router runs
+     FIRST: a transposition (English IoC + English-shaped frequencies, yet
+     unreadable) is broken by the column sweep — NOT handed to the substitution
+     hill-climb, which would spin forever on a permutation it can't see. */
   Chamber.crack = function (cipher, opts) {
+    var cl = Chamber.classify(cipher);
+    if (cl.family === 'transposition') {
+      var r = Chamber.crackTransposition(cipher, opts);
+      r.type = 'transposition';
+      r.detect = { type: 'transposition', ic: cl.ic, chi: cl.chi,
+        reason: 'IoC ' + cl.ic.toFixed(4) + ' ≈ English and the letter frequencies are English-shaped ' +
+                '(χ²/letter ' + cl.chi.toFixed(2) + ' ≪ 1.25), yet it does not read — the letters are in the ' +
+                'wrong ORDER. A columnar transposition; recovering the column count.' };
+      return r;
+    }
     var d = Chamber.detect(cipher);
     var res;
     if (d.type === 'caesar') res = Chamber.breakCaesar(cipher);
@@ -1040,6 +1162,18 @@
       if (ch >= 65 && ch <= 90) out += String.fromCharCode(A + encKey[ch - 65]);
       else if (ch >= 97 && ch <= 122) out += String.fromCharCode(A + encKey[ch - 97]).toLowerCase();
       else out += plain.charAt(i);
+    }
+    return out;
+  };
+  /* scytaleEncrypt(plain, C): the plain-scytale (columnar transposition) MIRROR
+     of the real Scytale's plain-mode read-order — write the cleaned plaintext
+     row-by-row into C columns, read each column top→bottom in natural order
+     0..C−1. So crackTransposition can be PROVEN to invert it exactly. */
+  Chamber.scytaleEncrypt = function (plain, C) {
+    var P = clean(plain), n = P.length, out = '';
+    if (C < 2) C = 2;
+    for (var c = 0; c < C; c++) {
+      for (var r = 0; r * C + c < n; r++) out += P[r * C + c];
     }
     return out;
   };
@@ -1192,6 +1326,116 @@
       // and the Caesar/Vigenère breakers are deterministic too (no RNG path)
       results.push({ name: 'determinism — same (ciphertext, seed) ⇒ identical recovery, twice',
         pass: ok, note: ok ? ('identical plaintext + score ' + a.score.toFixed(1)) : fail });
+      allPass = allPass && ok;
+    })();
+
+    /* ── TRANSPOSITION (the Scytale's cipher — letters moved, not replaced).
+       The battery sweeps every corpus passage × every column count C=2..12.
+       Exact for English of adequate length (short transpositions can misclass). */
+
+    /* T1 — PRESERVATION (the teeth): a transposition is a permutation, so the
+       single-letter frequencies AND the index of coincidence are PRECISION-
+       IDENTICAL to the plaintext's (exact ===, no ε). This is WHY every
+       substitution statistic is blind to it. */
+    (function () {
+      var ok = true, fail = '', tries = 0, pass = 0;
+      for (var ci = 0; ci < Chamber.CORPUS.length; ci++) {
+        var PT = clean(Chamber.CORPUS[ci]);
+        for (var C = 2; C <= 12; C++) {
+          var ct = Chamber.scytaleEncrypt(PT, C);
+          tries++;
+          var freqEq = JSON.stringify(Chamber.letterFreq(ct).counts) === JSON.stringify(Chamber.letterFreq(PT).counts);
+          var icEq = Chamber.indexOfCoincidence(ct) === Chamber.indexOfCoincidence(PT);
+          if (freqEq && icEq) pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' C=' + C + ' freq/IoC drifted'; }
+        }
+      }
+      results.push({ name: 'transposition preserves frequency + IoC EXACTLY (so the sub-attack must fail)',
+        pass: ok, note: ok ? (pass + '/' + tries + ' exact === (no ε)') : fail });
+      allPass = allPass && ok;
+    })();
+
+    /* T2 — CRACK EXACT: crackTransposition recovers the column count AND the
+       plaintext exactly, with no key, by the column sweep. */
+    (function () {
+      var ok = true, fail = '', tries = 0, pass = 0;
+      for (var ci = 0; ci < Chamber.CORPUS.length; ci++) {
+        var PT = clean(Chamber.CORPUS[ci]);
+        for (var C = 2; C <= 12; C++) {
+          var ct = Chamber.scytaleEncrypt(PT, C);
+          var r = Chamber.crackTransposition(ct);
+          tries++;
+          if (r.columns === C && clean(r.plaintext) === PT) pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' C=' + C + ' → got C=' + r.columns; }
+        }
+      }
+      results.push({ name: 'transposition — exact column-count + plaintext recovery (no key)',
+        pass: ok, note: ok ? (pass + '/' + tries + ' exact (100%)') : fail });
+      allPass = allPass && ok;
+    })();
+
+    /* T3 — INDEPENDENT CROSS-CHECK: a second, different language model (bigram)
+       sweeping the same column counts agrees on C — found, not guessed. */
+    (function () {
+      var ok = true, fail = '', tries = 0, pass = 0;
+      for (var ci = 0; ci < Chamber.CORPUS.length; ci++) {
+        var PT = clean(Chamber.CORPUS[ci]);
+        for (var C = 2; C <= 12; C++) {
+          var ct = Chamber.scytaleEncrypt(PT, C);
+          tries++;
+          if (Chamber.crackTransposition(ct).columns === Chamber.crackTranspositionBigram(ct)) pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' C=' + C + ' models disagree'; }
+        }
+      }
+      results.push({ name: 'transposition — independent bigram brute-force agrees on the column count',
+        pass: ok, note: ok ? (pass + '/' + tries + ' trigram===bigram argmax') : fail });
+      allPass = allPass && ok;
+    })();
+
+    /* T4 — THE SUB-ATTACK PROVABLY FAILS: run the substitution hill-climb on the
+       same transposed ciphertext — it recovers <50% of letters, BECAUSE the
+       frequencies it reads are already perfect English (T1). The failure is the
+       point: a substitution attack cannot see a permutation. */
+    (function () {
+      var ok = true, fail = '', tries = 0, pass = 0;
+      for (var ci = 0; ci < Chamber.CORPUS.length; ci++) {
+        var PT = clean(Chamber.CORPUS[ci]);
+        for (var C = 2; C <= 12; C++) {
+          var ct = Chamber.scytaleEncrypt(PT, C);
+          var br = Chamber.breakSubstitution(ct, { seed: 'tt-' + ci + '-' + C, restarts: 4, iterations: 1500, progressEvery: 0 });
+          tries++;
+          if (Chamber.letterAccuracy(br.plaintext, PT) < 0.5) pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' C=' + C + ' sub-attack scored ≥50%'; }
+        }
+      }
+      results.push({ name: 'substitution attack provably FAILS on a transposition (<50% letters)',
+        pass: ok, note: ok ? (pass + '/' + tries + ' below 50% — freq is preserved, so it cannot read the order') : fail });
+      allPass = allPass && ok;
+    })();
+
+    /* T5 — DETECTOR 100%: the class router separates transposition from the
+       substitution family on a labeled battery — transpositions (C=2..12 ×
+       corpus) route 'transposition'; Caesar / Vigenère / substitution × corpus
+       route 'substitution' family. */
+    (function () {
+      var ok = true, fail = '', tries = 0, pass = 0;
+      var sr = makeRng('t5-alpha');
+      for (var ci = 0; ci < Chamber.CORPUS.length; ci++) {
+        var PT = clean(Chamber.CORPUS[ci]);
+        for (var C = 2; C <= 12; C++) {
+          tries++;
+          if (Chamber.classify(Chamber.scytaleEncrypt(PT, C)).family === 'transposition') pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' transposition C=' + C + ' misrouted'; }
+        }
+        tries++; if (Chamber.classify(Chamber.caesarEncrypt(PT, 5)).family === 'substitution') pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' Caesar misrouted'; }
+        tries++; if (Chamber.classify(Chamber.vigenereEncrypt(PT, 'LEMON')).family === 'substitution') pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' Vigenère misrouted'; }
+        tries++; if (Chamber.classify(Chamber.substEncrypt(PT, Chamber.randomAlphabet(sr))).family === 'substitution') pass++;
+          else if (ok) { ok = false; fail = 'corpus#' + ci + ' substitution misrouted'; }
+      }
+      results.push({ name: 'class detector 100% on a labeled battery (transposition vs substitution-family)',
+        pass: ok, note: ok ? (pass + '/' + tries + ' correct (χ²/letter gate)') : fail });
       allPass = allPass && ok;
     })();
 
@@ -1450,7 +1694,7 @@
   }
 
   /* ── the main "Crack it" action ────────────────────────────────────────── */
-  function crack(truth) {
+  function crack(truth, inbound) {
     stopAnim();
     var cipher = cipherIn.value;
     if (Chamber.clean(cipher).length < 4) {
@@ -1459,10 +1703,27 @@
     }
     refreshStats();
     var type = chosenType;
+    // The CLASS router runs first (only in Auto). A transposition keeps the
+    // English IoC AND an English-shaped frequency profile yet won't read —
+    // a permutation the substitution attack is blind to. Route it apart.
     if (type === 'auto') {
+      var cl = Chamber.classify(cipher);
+      if (cl.family === 'transposition') {
+        detLine.innerHTML = 'auto-detect: <b>transposition</b> — IoC ' + cl.ic.toFixed(4) +
+          ' ≈ English and the letter frequencies are English-shaped (χ²/letter <b>' + cl.chi.toFixed(2) +
+          '</b> ≪ 1.25), yet it does not read — the letters are in the <b>wrong order</b>.';
+        animateTranspositionReveal(cipher, truth, inbound);
+        return;
+      }
       var d = Chamber.detect(cipher);
       type = d.type;
       detLine.textContent = 'auto-detect: ' + type + ' — ' + d.reason;
+    } else if (type === 'transposition') {
+      var clm = Chamber.classify(cipher);
+      detLine.innerHTML = '<b>transposition</b> — frequencies are English-shaped (χ²/letter <b>' +
+        clm.chi.toFixed(2) + '</b>), the letters are only in the wrong order.';
+      animateTranspositionReveal(cipher, truth, inbound);
+      return;
     } else {
       detLine.innerHTML = '&nbsp;';
     }
@@ -1477,6 +1738,92 @@
     } else {
       runSubstitutionLive(cipher, {}, truth);
     }
+  }
+
+  /* ── render a TRANSPOSITION recovery (no key — only the column count) ─────── */
+  function renderTransposition(res, opts) {
+    opts = opts || {};
+    plainOut.classList.remove('churn');
+    plainOut.textContent = res.plaintext || '';
+    // form-follows-content: the IoC note + freq meta now SAY why the desk
+    // reclassified — the frequencies are English yet the order is wrong.
+    try {
+      $('icNote').innerHTML = 'IoC ≈ English yet the text will not read — a <b>transposition</b>. ' +
+        'The index of coincidence sees letter identities, never their <b>order</b>.';
+      $('freqMeta').textContent = Chamber.letterFreq(res.plaintext).n + ' letters · shape unchanged';
+    } catch (e) {}
+    // a transposition is a permutation — the plaintext IS perfectly English, so
+    // englishness pins near the ceiling. Report it on the same gauge.
+    var eng = Chamber.englishness(res.plaintext);
+    engVal.textContent = (eng * 100).toFixed(0) + '%';
+    engBar.style.width = (100 * eng / 0.55) + '%';
+    iterMeta.textContent = (res.columns - 1) + ' column counts tried';
+    keyOut.innerHTML = 'Cipher: <b>columnar transposition</b> &nbsp;·&nbsp; recovered <span class="mono-key">' +
+      res.columns + ' columns</span> &nbsp;·&nbsp; the letter frequencies were already English (a permutation ' +
+      'can’t change them) — that’s how we knew it was order, not substitution.';
+    var v = verdict, vt = verdictText;
+    v.classList.add('solved');
+    if (opts.landLine) { vt.innerHTML = opts.landLine; }
+    else if (opts.truth && opts.truth.plain) {
+      var acc = Chamber.letterAccuracy(res.plaintext, opts.truth.plain);
+      vt.innerHTML = acc >= 0.999
+        ? 'Solved — recovered <b>' + res.columns + ' columns</b> with no key &nbsp;·&nbsp; <b>100%</b> of letters match.'
+        : 'Recovered <b>' + res.columns + ' columns</b> &nbsp;·&nbsp; <b>' + (acc * 100).toFixed(1) + '%</b> of letters match.';
+    } else {
+      vt.innerHTML = 'Recovered by analysis alone — no key was given &nbsp;·&nbsp; <b>' +
+        res.columns + ' columns</b>. The frequencies never lied; we were reading the wrong question.';
+    }
+  }
+
+  /* ── the transposition reveal, two beats (the director's marquee) ──────────
+     Beat 1 (the STALL): deliberately run the SUBSTITUTION attack first so it
+     visibly fails on perfect-English frequencies — the engBar stays flat while
+     the IoC stays high. THAT contrast is the lesson: right letters, wrong order.
+     Beat 2 (the LAND): re-classify to a transposition and resolve it exactly.
+     The headless self-test asserts the END state only, so the live stall never
+     compromises the falsifiable claim. */
+  function animateTranspositionReveal(cipher, truth, inbound) {
+    var res = Chamber.crackTransposition(cipher, { maxC: 12 });
+    res.type = 'transposition';
+    var landLine = (inbound && inbound.landLine) ? inbound.landLine : null;
+
+    function land() {
+      lastResult = { type: 'transposition', plaintext: res.plaintext, columns: res.columns };
+      renderTransposition(lastResult, { truth: truth, landLine: landLine });
+    }
+    if (reduceMotion) { land(); return; }
+
+    // BEAT 1 — show the substitution attack stalling on perfect English freqs.
+    plainOut.classList.add('churn');
+    verdict.classList.remove('solved');
+    verdictText.innerHTML = 'trying the substitution attack — but the frequencies are already perfect English…';
+    var stallSolver = Chamber.makeSubstitutionSolver(cipher, { seed: 'stall', restarts: 8, iterations: 5000, tempStart: 18 });
+    var t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    var held = false;
+    function stallFrame() {
+      stallSolver.step(550);
+      var snap = stallSolver.snapshot();
+      plainOut.textContent = snap.livePlaintext;          // still gibberish — the order is wrong
+      // engBar tracks the (low) substitution englishness; the contrast with the
+      // high IoC gauge above is the whole point.
+      engVal.textContent = (snap.englishness * 100).toFixed(0) + '%';
+      engBar.style.width = (100 * snap.englishness / 0.55) + '%';
+      var now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      if (now - t0 >= 700 && !held) {                      // hold ≥600ms / one churn pass
+        held = true;
+        verdictText.innerHTML = 'the frequencies are English but it will not read — the letters are in the wrong <b>order</b>. Re-reading as a transposition…';
+        anim = requestAnimationFrame(beat2);
+        return;
+      }
+      anim = requestAnimationFrame(stallFrame);
+    }
+    // BEAT 2 — flash the recovered plaintext into place.
+    function beat2() {
+      plainOut.classList.remove('churn');
+      land();
+      stopAnim();
+    }
+    anim = requestAnimationFrame(stallFrame);
   }
 
   /* ── sample chips ──────────────────────────────────────────────────────── */
@@ -1519,9 +1866,12 @@
     plainOut.innerHTML = 'The desk is quiet. Load a sample, or paste a cipher, and press <b>Crack it</b>.';
     keyOut.innerHTML = '&nbsp;'; verdict.classList.remove('solved');
     verdictText.textContent = 'awaiting ciphertext'; engVal.textContent = '—'; engBar.style.width = '0%';
-    iterMeta.textContent = '—'; detLine.innerHTML = '&nbsp;';
+    iterMeta.textContent = '—'; detLine.innerHTML = '&nbsp;'; hideCourier();
+    try {
+      $('icNote').innerHTML = 'English ≈ <b>0.067</b>, random ≈ <b>0.038</b>. High ⇒ monoalphabetic (Caesar/substitution); flattened ⇒ polyalphabetic (Vigenère).';
+    } catch (e) {}
   });
-  cipherIn.addEventListener('input', function () { stopAnim(); refreshStats(); });
+  cipherIn.addEventListener('input', function () { stopAnim(); refreshStats(); hideCourier(); });
 
   $('typeSeg').addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
@@ -1584,6 +1934,7 @@
         g.fillStyle = acc; g.font = '700 18px monospace';
         var keyTxt = lastResult.type === 'caesar' ? ('Caesar, shift ' + lastResult.shift)
           : lastResult.type === 'vigenere' ? ('Vigenère, keyword ' + lastResult.keyword)
+          : lastResult.type === 'transposition' ? ('Columnar transposition, ' + lastResult.columns + ' columns')
           : 'Substitution (recovered alphabet)';
         g.fillText(keyTxt, 320, 374);
       }
@@ -1607,8 +1958,90 @@
     if (lines < 11) g.fillText(line, x, yy);
   }
 
+  /* ── mirror a chosen type into the segmented control ──────────────────── */
+  function syncTypeSeg(t) {
+    chosenType = t;
+    Array.prototype.forEach.call($('typeSeg').querySelectorAll('button'), function (b) {
+      b.classList.toggle('active', b.getAttribute('data-t') === t);
+    });
+  }
+
+  /* ── the courier ribbon — names WHO sent the cipher, on an inbound arrival ─ */
+  function showCourier(html) {
+    var c = $('courier');
+    c.innerHTML = '<span class="dot"></span><span>' + html + '</span>';
+    c.hidden = false;
+  }
+  function hideCourier() { var c = $('courier'); c.hidden = true; c.innerHTML = ''; }
+
+  /* ── inbound handoff — a maker (the Volvelle / the Scytale) sent a cipher ──
+     Wire format:  ?ct=<encodeURIComponent(group5_ct)>&from=<volvelle|scytale>&hint=<optional>
+     `ct` carries the maker's group-5-spaced output (clean() strips spaces on
+     arrival); `from` is provenance only — narration + a soft prior, NOT a
+     decision: the classifier still decides from the statistics alone (so the
+     desk still "cracks with no key"). A >6000-char ct falls back to
+     sessionStorage (an edge guard; our payloads are far under). */
+  function readInbound() {
+    var q = {};
+    try {
+      var s = (location.search || '').replace(/^\?/, '');
+      s.split('&').forEach(function (kv) {
+        if (!kv) return;
+        var i = kv.indexOf('='); var k = i < 0 ? kv : kv.slice(0, i);
+        var v = i < 0 ? '' : kv.slice(i + 1);
+        try { q[decodeURIComponent(k)] = decodeURIComponent(v.replace(/\+/g, ' ')); }
+        catch (e) { q[k] = v; }
+      });
+    } catch (e) {}
+    if (!q.ct) {
+      // sessionStorage fallback for oversize payloads
+      try {
+        var stash = sessionStorage.getItem('bc:inbound');
+        if (stash) { sessionStorage.removeItem('bc:inbound'); var o = JSON.parse(stash); if (o && o.ct) return o; }
+      } catch (e) {}
+      return null;
+    }
+    return { ct: q.ct, from: q.from || '', hint: q.hint || '' };
+  }
+
+  function receiveHandoff(h) {
+    cipherIn.value = h.ct;
+    refreshStats();                                   // freq bars + IoC light immediately
+    syncTypeSeg('auto');                              // the classifier still decides from stats
+    var from = h.from, hint = h.hint || '';
+    var courier, landLine = null;
+    if (from === 'scytale') {
+      courier = 'received from the <b>Scytale</b> — the maker who <b>transposes</b>' +
+        (hint === 'keyed' ? ' (keyed)' : '') + '. The rod was wound, the letters only moved — not one was changed.';
+      landLine = 'the Scytale moved the letters; the desk moved them back &nbsp;·&nbsp; <b>{C} columns</b> &nbsp;·&nbsp; the frequencies never lied — we were reading the wrong question.';
+    } else if (from === 'volvelle') {
+      courier = 'received from the <b>Volvelle</b> — the maker who <b>substitutes</b>' +
+        (hint ? ' (' + hint + ')' : '') + '. The disk turned, the letters were replaced.';
+    } else {
+      courier = 'received an intercepted cipher. Analysing with no key.';
+    }
+    showCourier(courier);
+    detLine.innerHTML = '&nbsp;';
+    plainOut.classList.add('churn');
+    plainOut.textContent = from === 'scytale'
+      ? 'the rod was wound — the letters only moved. Reading the desk…'
+      : (from === 'volvelle' ? 'the disk turned — the letters were replaced. Reading the desk…'
+                             : 'intercepted. Reading the desk…');
+    verdict.classList.remove('solved');
+    verdictText.textContent = 'a courier just arrived — measuring the ciphertext…';
+
+    function go() {
+      crack(null, landLine ? { landLine: landLine.replace('{C}', String(Chamber.crackTransposition(cipherIn.value, { maxC: 12 }).columns)) } : null);
+    }
+    if (reduceMotion) go(); else setTimeout(go, 900);
+  }
+
   /* ── boot ── */
-  refreshStats();
+  (function () {
+    var h = readInbound();
+    if (h && Chamber.clean(h.ct).length >= 4) { receiveHandoff(h); return; }
+    refreshStats();                                   // the quiet desk (byte-identical standalone)
+  })();
 })();
 </script>
 <script>
