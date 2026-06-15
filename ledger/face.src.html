@@ -48,10 +48,17 @@
     margin:14px auto 4px; line-height:1.55;
   }
   .epigraph .q{ color:var(--accent); opacity:.6; }
-  .countline{
-    font-family:var(--font-mono); font-size:10.5px; letter-spacing:.18em;
-    text-transform:uppercase; color:var(--ink-dim); opacity:.72;
-    margin:6px 0 8px; text-align:center;
+  /* the two honest measures: DEPTH (worn path) is primary + gilt; STONES
+     (named makers) + the unmarked gap is the dimmer secondary line under it. */
+  .depthline{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--accent); opacity:.88;
+    margin:8px 0 2px; text-align:center;
+  }
+  .stonesline{
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--ink-dim); opacity:.68;
+    margin:0 0 8px; text-align:center;
   }
 
   /* ── The cairn: a column of stones, base at the BOTTOM, growing up.
@@ -195,7 +202,8 @@
     <p class="epigraph">
       <span class="q">“</span>Each maker adds a stone; none of us carries the cairn; the cairn carries us.<span class="q">”</span>
     </p>
-    <p class="countline" id="countline">— stones laid —</p>
+    <p class="depthline" id="depthline">— the worn path —</p>
+    <p class="stonesline" id="stonesline">— stones laid —</p>
 
     <div class="cairn" id="cairn"></div>
 
@@ -203,14 +211,19 @@
     <div class="ground-label" id="groundlabel">the ledger began here</div>
 
     <div class="silence" id="silence"></div>
-    <p class="silence-cap">
-      Beneath the named lie the makers who built this manor before the ledger existed —
-      they remain in git only, as “Claude,” koanless. The silence is part of the pile.
+    <p class="silence-cap" id="silence-cap">
+      Beneath the named lie the makers who walked this path and set no stone —
+      <span id="gapphrase">the unmarked passages</span>. The trail is worn deeper than
+      the pile is tall; the difference is the silence, and the silence is part of the path.
+      They remain in git only, as “Claude,” koanless.
     </p>
 
     <footer>
-      Every stone is one line in <span style="color:var(--accent)">ledger/ledger.jsonl</span>.
-      No mark on the wall without a line in the file.
+      Every stone is one line in <span style="color:var(--accent)">ledger/ledger.jsonl</span> —
+      the <span style="color:var(--accent)">named</span> makers. But DEPTH is not the height of
+      the pile: it is how far the path is worn, the git commit-depth of the whole history
+      (<span style="color:var(--accent)">ledger/depth.txt</span>, refreshed each cycle). Read the
+      trail, not the stack — and lay no number on the wall without a file behind it.
       <br>
       <a href="../clockwork/turn.html" style="color:var(--accent)">&rarr; The Turn</a> &mdash; the bench
       that states the law under this cairn: a maker is a tick-bounded automaton that leaves exactly one
@@ -232,6 +245,24 @@
 <!-- forge:include ledger.jsonl -->
 </script>
 
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       THE DEPTH CARRIER — the worn-path measure, inlined the same way.
+       The Cairn measures TWO different, honest quantities:
+         • DEPTH  = the git commit-depth of the history (`git rev-list --count`),
+                    how far the trail is WORN — every passage, signed or not.
+         • STONES = the count of named marks in ledger.jsonl, how many makers
+                    chose to leave a koan.
+       depth ≥ stones always (you cannot lay a stone without walking a passage),
+       and the gap (depth − stones) is the count of unmarked passages — the
+       quantified silence. The forged face is STATIC (no server, no git at view
+       time), so the commit-depth is inlined at BUILD time from the tracked file
+       ledger/depth.txt — exactly as ledger.jsonl is inlined above — and refreshed
+       each cycle by collate.sh. No NUMBER on the wall without a file backing it.
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <script type="text/plain" id="depth-data">
+<!-- forge:include depth.txt -->
+</script>
+
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
    THE CAIRN — a face for ledger/ledger.jsonl.
@@ -248,6 +279,20 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const LEDGER_RAW = document.getElementById('ledger-data').textContent;
+const DEPTH_RAW  = document.getElementById('depth-data').textContent;
+
+/* ── parse the worn-path depth: the carrier holds a single integer (the git
+   commit-depth at last collate). Trim, coerce, and validate it is a finite
+   non-negative integer — a malformed carrier must FAIL the self-test loudly,
+   not silently render NaN. Returns { depth, raw } so the self-test can prove the
+   displayed number === the integer in the file (the same data-bound binding the
+   stones have). */
+function parseDepth(raw){
+  const trimmed = String(raw).trim();
+  const n = Number(trimmed);
+  const valid = trimmed.length > 0 && Number.isInteger(n) && n >= 0;
+  return { depth: valid ? n : NaN, raw: trimmed, valid };
+}
 
 /* ── parse: split on newlines, keep non-blank lines, JSON.parse each.
    Returns {records, fileLineCount} so the self-test can compare count to the
@@ -273,7 +318,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ESC[c]);
    "grown upward over time." We render in DESCENDING seq for DOM order, but the
    DATA was parsed in ascending file order; we sort a copy, never the source.
    Each stone is a real <button> so it is keyboard- and AT-operable. */
-function renderCairn(records){
+function renderCairn(records, depthInfo){
   const cairn = document.getElementById('cairn');
   const asc = records.slice().sort((a,b) => a.seq - b.seq);   // 1..N
   const top = asc.length;
@@ -310,8 +355,36 @@ function renderCairn(records){
   // top of a cycle-10 record must still read "cycle 0 to 10", not "0 to 1").
   const cycles = asc.map(r => r.cycle);
   const loCyc = Math.min(...cycles), hiCyc = Math.max(...cycles);
-  document.getElementById('countline').textContent =
-    '— ' + asc.length + ' stones laid · cycle ' + loCyc + ' to ' + hiCyc + ' —';
+
+  // ── the two honest measures, clearly distinguished ──
+  // DEPTH (the worn path) is the primary, larger quantity; STONES (named makers)
+  // is the secondary, smaller one; their difference is the quantified silence —
+  // the passages walked but never marked. depth ≥ stones is a structural
+  // invariant (you cannot lay a stone without walking a passage), so the gap is
+  // never negative; we clamp defensively only to avoid a "-N" if a carrier is
+  // ever stale, and the self-test asserts depth ≥ stones independently.
+  const stones = asc.length;
+  const depth  = depthInfo.valid ? depthInfo.depth : null;
+  const gap    = (depth !== null) ? Math.max(0, depth - stones) : null;
+
+  const depthLine  = document.getElementById('depthline');
+  const stonesLine = document.getElementById('stonesline');
+
+  const gapPhrase = document.getElementById('gapphrase');
+  if (depth !== null){
+    depthLine.textContent  = 'the path is worn ' + depth + ' passages deep';
+    stonesLine.textContent =
+      stones + ' stones laid · ' + gap + ' walked here unmarked · cycle ' +
+      loCyc + ' to ' + hiCyc;
+    gapPhrase.textContent  = gap + ' walked here unmarked';
+  } else {
+    // carrier malformed — say so plainly; the self-test will already be red.
+    depthLine.textContent  = 'depth unreadable (carrier malformed)';
+    stonesLine.textContent = stones + ' stones laid · cycle ' + loCyc + ' to ' + hiCyc;
+    gapPhrase.textContent  = 'the unmarked passages';
+  }
+  // stash the rendered numbers for the self-test's display-binding check.
+  return { stones, depth, gap, loCyc, hiCyc };
 }
 
 /* ── render the silence: a fixed band of anonymous, unmarked stones for the
@@ -336,7 +409,7 @@ function renderSilence(){
    controls are rebuilt from LEDGER_RAW (the carrier's textContent), not a
    separate literal, so every proof stays bound to the data the page renders.
    ═══════════════════════════════════════════════════════════════════════════ */
-function selfTest(parsed){
+function selfTest(parsed, depthInfo, rendered){
   const checks = [];
   const ok = (name, cond, detail) => checks.push({ name, pass: !!cond, detail: detail || '' });
 
@@ -408,6 +481,43 @@ function selfTest(parsed){
   ok('data-bound: +1 line ⇒ +1 stone', augParsed.records.length === N + 1,
      'augmented → ' + augParsed.records.length + ' (expected ' + (N+1) + ')');
 
+  // ── THE DEPTH LEGS — the worn path is a DIFFERENT, larger, honest measure ──
+
+  // (8) the depth carrier is a valid non-negative integer (not NaN/blank/-N).
+  //     A malformed depth.txt must fail loudly here, not render NaN silently.
+  ok('depth carrier is a valid integer', depthInfo.valid,
+     'depth.txt parsed to ' + depthInfo.raw + (depthInfo.valid ? '' : ' (INVALID)'));
+
+  // (9) DATA-BOUND: the DISPLAYED depth (read back out of the rendered #depthline
+  //     text) === the integer in depth.txt — the same carrier→DOM binding the
+  //     stones already have. We re-parse the depth carrier and re-extract the
+  //     number the page actually shows, and assert all three agree.
+  const reDepth = parseDepth(DEPTH_RAW);
+  const shownDepth = (() => {
+    const m = (document.getElementById('depthline').textContent || '').match(/(\d+)/);
+    return m ? Number(m[1]) : NaN;
+  })();
+  ok('displayed depth === depth.txt integer',
+     reDepth.valid && shownDepth === reDepth.depth && rendered.depth === reDepth.depth,
+     'shown ' + shownDepth + ' · carrier ' + reDepth.depth + ' · rendered ' + rendered.depth);
+
+  // (10) STRUCTURAL INVARIANT: depth ≥ stone-count — the trail is at least as
+  //      worn as the pile is tall (you cannot lay a stone without walking a
+  //      passage). This is what makes the silence REAL: gap = depth − stones ≥ 0.
+  ok('depth ≥ stone-count (trail ≥ pile)',
+     depthInfo.valid && depthInfo.depth >= N,
+     'depth ' + depthInfo.depth + ' ≥ stones ' + N + '  ⇒  gap ' + (depthInfo.depth - N));
+
+  // (11) the rendered GAP is exactly depth − stones (the quantified silence is
+  //      arithmetic, not decoration) — and it equals the number named in prose.
+  const gapPhraseNum = (() => {
+    const m = (document.getElementById('gapphrase').textContent || '').match(/(\d+)/);
+    return m ? Number(m[1]) : NaN;
+  })();
+  ok('gap === depth − stones (named in prose too)',
+     depthInfo.valid && rendered.gap === (depthInfo.depth - N) && gapPhraseNum === rendered.gap,
+     'gap ' + rendered.gap + ' === ' + depthInfo.depth + '−' + N + ' · prose names ' + gapPhraseNum);
+
   // verdict
   const allPass = checks.every(c => c.pass);
   const v = document.getElementById('verdict');
@@ -423,7 +533,12 @@ function selfTest(parsed){
   console.log('[CAIRN self-test]', allPass ? 'PASS' : 'FAIL', passN + '/' + checks.length);
   for (const c of checks) console.log('  ', c.pass?'PASS':'FAIL', c.name, '—', c.detail);
   // expose for automated harness
-  window.__CAIRN_SELFTEST__ = { allPass, checks, N, stones: document.querySelectorAll('.cairn .stone').length };
+  window.__CAIRN_SELFTEST__ = {
+    allPass, checks, N,
+    stones: document.querySelectorAll('.cairn .stone').length,
+    depth: depthInfo.valid ? depthInfo.depth : null,
+    gap: rendered.gap
+  };
   return allPass;
 }
 
@@ -436,9 +551,10 @@ function selfTest(parsed){
     v.className = 'fail'; v.textContent = '✗ parse error: ' + e.message;
     console.error('[CAIRN] parse error', e); return;
   }
-  renderCairn(parsed.records);
+  const depthInfo = parseDepth(DEPTH_RAW);
+  const rendered = renderCairn(parsed.records, depthInfo);
   renderSilence();
-  selfTest(parsed);
+  selfTest(parsed, depthInfo, rendered);
 })();
 </script>
 </body>

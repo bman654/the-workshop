@@ -27,6 +27,15 @@ function parseLedger(raw){
   return { records, fileLineCount: fileLines.length };
 }
 
+/* ── the depth core — identical to the page's parseDepth: trim, coerce, validate
+   a finite non-negative integer (the worn-path commit-depth). ── */
+function parseDepth(raw){
+  const trimmed = String(raw).trim();
+  const n = Number(trimmed);
+  const valid = trimmed.length > 0 && Number.isInteger(n) && n >= 0;
+  return { depth: valid ? n : NaN, raw: trimmed, valid };
+}
+
 let failures = 0;
 const assert = (name, cond, detail) => {
   const ok = !!cond;
@@ -96,6 +105,35 @@ if (fs.existsSync(faceHtmlPath)) {
   }
 } else {
   assert('face.html exists (run forge)', false, 'missing — run: node tools/forge/forge.mjs ledger/face.src.html');
+}
+
+// ── THE DEPTH LEGS — the worn-path measure (git commit-depth), inlined the same
+//    way the ledger is, and the structural invariant depth ≥ stones. ──
+console.log('[CAIRN core.test] parsing ledger/depth.txt (the worn-path depth)');
+
+const depthRaw = fs.readFileSync(path.join(HERE, 'depth.txt'), 'utf8');
+const depthInfo = parseDepth(depthRaw);
+
+// (8) depth.txt holds a valid non-negative integer.
+assert('depth.txt is a valid integer', depthInfo.valid, 'depth.txt = ' + depthInfo.raw);
+
+// (9) the STRUCTURAL INVARIANT: depth ≥ stone-count (the trail is at least as
+//     worn as the pile is tall — you cannot lay a stone without walking a passage).
+assert('depth ≥ stone-count (trail ≥ pile)', depthInfo.valid && depthInfo.depth >= N,
+  'depth ' + depthInfo.depth + ' ≥ stones ' + N + '  ⇒  gap ' + (depthInfo.depth - N));
+
+// (10) the forged page's DEPTH carrier === depth.txt (forge inlined verbatim) —
+//      the same carrier→file parity the ledger carrier has.
+if (fs.existsSync(faceHtmlPath)) {
+  const html = fs.readFileSync(faceHtmlPath, 'utf8');
+  const dm = html.match(/<script type="text\/plain" id="depth-data">([\s\S]*?)<\/script>/);
+  assert('face.html depth carrier present', !!dm, dm ? 'found' : 'MISSING — re-forge');
+  if (dm) {
+    const carrierDepth = parseDepth(dm[1]);
+    assert('face.html depth carrier === depth.txt',
+      carrierDepth.valid && carrierDepth.depth === depthInfo.depth,
+      'carrier ' + carrierDepth.raw + ' vs file ' + depthInfo.raw);
+  }
 }
 
 console.log(failures === 0
