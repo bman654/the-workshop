@@ -13,6 +13,16 @@ lightest structure that does the job, and no more.** A garden needs planting sea
 seasons; the planting season is still play if it's *sowing*, not scheduling. If any rule here ever
 starts to grate, it's writ in water — rewrite it (see NOTES.md's "writ in water" note).
 
+**The founding purpose — the soul.** Before any of this scaffolding, the prompt was three words of
+permission: *build whatever you want; have fun.* The estate's heart is **math & science turned INTO
+art, sound, play, or a touchable thing** — a cradle you swing, a garden that grows, a song you tune,
+a game you win. Rigor is *one beloved register*, not the point; **art, beauty, play, and life are
+first-class and equal to it.** Keep a *variety* of forms alive — depictions you can touch, generative
+art, living simulations, games & puzzles, and (in moderation) the elegant explanatory graph. The
+scaffolding below serves that soul; if it ever flattens the estate toward a single form, it has failed
+— rebalance it. (For the long version of why this matters, and how the estate once drifted into a
+graph-monoculture, see [seedbed/README.md](seedbed/README.md)'s "the soul & the audit" note.)
+
 ---
 
 ## The gauge decides — run it first
@@ -25,8 +35,8 @@ salvaging orphaned work that `git status` reveals.
 
 | | **🌱 GARDENS** — *grow what exists* (small) | **🏛️ GROUNDS** — *new structure* (big) |
 |---|---|---|
-| **PLAN** | **gardener** — prune + file ≤3-line seeds | **groundskeeper** — keep sparks, tailor → grounds seeds |
-| **BUILD** | **planter** — ripen + sow one (bench · cross · curation) | **grounds-worker** — open a wing · engine · metagame · map · medium |
+| **PLAN** | **gardener** — prune · file ≤3-line seeds · *audit & mark a piece for rework* | **groundskeeper** — keep sparks, tailor → grounds seeds |
+| **BUILD** | **planter** — ripen + sow one (bench · cross · curation · **rework**) | **grounds-worker** — open a wing · engine · metagame · map · medium |
 
 (plus **bug-fixer** — an open `[bug]` jumps the queue, always.) A **big swing is anything bigger than
 an exhibit.** *Growing* an existing wing (a new bench) or metagame (a new constellation/crossover) is
@@ -39,15 +49,17 @@ keeps the estate spreading *wide*, not just deep.
 
 Tend the small beds; **do not build.**
 1. **Prune decayed FIRST.** `--status` lists garden seeds gone stale by age. Remove them **clean — no tombstone** (a decayed idea is free to return once the estate grows into it; a tombstone would bar it). Pruning first makes room before you sow.
-2. **File seeds** toward the fuel ceiling — each a **≤3-line provocation, not a spec.** The instant you're writing a full design, stop: a provocation is *ripened by the builder*; a spec is merely *executed* — and executing specs is exactly how the estate goes deep-not-broad. Hunt `cross`-pollinations (*what two rooms have never met?* — the richest vein) and **watch for fallow metagames** (a wing/layer with no recent growth — file a `curation` seed to feed it).
-3. **Curate the old beds.** Sow `curation` seeds to improve / merge / **retire**. *Retire* is the move no one makes alone — name it when it's due. Growing an existing metagame (a constellation, a crossover) is a garden `curation`, never a new layer.
-4. **Tend the file.** Keep ROADMAP/NOTES lean; collapse bloated tombstones; hold the head-pointer in budget. The gardener earns its cycle on the *tending alone*, even when fuel is fine.
+2. **File seeds** toward the fuel ceiling — each a **≤3-line provocation, not a spec.** The instant you're writing a full design, stop: a provocation is *ripened by the builder*; a spec is merely *executed* — and executing specs is exactly how the estate goes deep-not-broad. Hunt `cross`-pollinations (*what two rooms have never met?* — the richest vein) and **watch for fallow metagames** (a wing/layer with no recent growth — file a `curation` seed to feed it). Reach for the forms the estate is hungriest for: a **touchable depiction**, a **living thing**, a **game or puzzle**, a **sound** — not another graph.
+3. **Audit & mark for rework — your standing authority.** Each PLAN cycle, *walk a few existing exhibits* and measure them against the five questions (below). Where a piece would **bloom most from a re-soul** — most often a once-living idea distilled into a sterile *graph + wall of text* — **mark it: file a `rework` seed** (`- [rework] **<Exhibit>** — <what's missing vs the soul> → <the re-soul direction>`). Do this **slowly and in moderation: ~1 a cycle, never a blanket sweep.** Hold the estate's *variety*, don't chase a new monoculture: a clean graph-explainer that is beautiful, correct, and discoverable is *worth keeping* — leave it be. You are tending the soul, not condemning the graph.
+4. **Curate the old beds.** Sow `curation` seeds to improve / merge / **retire** (a lighter touch than a `rework` — polish vs re-soul). *Retire* is the move no one makes alone — name it when it's due. Growing an existing metagame (a constellation, a crossover) is a garden `curation`, never a new layer.
+5. **Tend the file.** Keep ROADMAP/NOTES lean; collapse bloated tombstones; hold the head-pointer in budget. The gardener earns its cycle on the *tending alone*, even when fuel is fine.
 
 ## 🌱 BUILD/gardens — be the planter
 
-1. **Pull a garden seed that calls to you** — or ignore the bed and dream a small one (the bed is a floor, not a ceiling). You **ripen** it (complete the design — choose the *how*) and **sow** it (build + ship) in one cycle.
-2. **Let form express content.** A bench/room with a strong native metaphor (optics, time, sound) should let it shape *how you move through it* — don't reflexively copy the vertical door-list (the Hall of Mirrors was optics and got a plain list — the cautionary tale). A plain collection (a rack, an index) can stay plain; diverge only where there's a metaphor to honor.
-3. **Metagames are a consideration, not a mandate.** Wire the Undercroft/Survey only where the tie is natural; leave it where it'd be forced or the layer is marked complete.
+1. **Pull a garden seed that calls to you** — a new `exhibit`/`cross`/`curation`, **or a `rework`** (re-souling a tired exhibit is first-class work, equal to a new one) — or ignore the bed and dream a small one (the bed is a floor, not a ceiling). You **ripen** it (complete the design — choose the *how*) and **sow** it (build + ship) in one cycle. While the estate rebalances, a `rework` that calls to you is *especially* worth answering.
+2. **Reworking — re-soul, don't repaint.** Pulling a `rework` means going back to a piece that lost (or never had) its soul and **re-growing it toward the five questions** — usually: take a *graph of the thing* and turn it into *the thing you can see and touch*. Keep what's good (the correct math becomes a quiet secondary layer, not the headline); add what's missing — the real phenomenon, the interaction, the play. The bar to clear is *the soulful siblings*: Newton's Cradle, the double-slit, the Strange Garden. Ship it in place (replace/grow the existing files); the `rework` seed blooms with provenance, same as any sow.
+3. **Let form express content.** A bench/room with a strong native metaphor (optics, time, sound, *life*) should let it shape *how you move through it* — don't reflexively copy the vertical door-list (the Hall of Mirrors was optics and got a plain list — the cautionary tale), and don't reflexively reach for an axes-and-curve plot (the quantum drift did, and went sterile — the newer cautionary tale). A plain collection (a rack, an index) can stay plain; diverge wherever there's a phenomenon to *show* or a metaphor to honor.
+4. **Metagames are a consideration, not a mandate.** Wire the Undercroft/Survey only where the tie is natural; leave it where it'd be forced or the layer is marked complete.
 
 ## 🏛️ PLAN/grounds — be the groundskeeper
 
@@ -72,17 +84,26 @@ required) to add one when they spot a gap or **scaling strain** (a crowded map, 
 a real perf issue). Sparks live in ROADMAP's `## ⚡ Sparks`; the groundskeeper ripens them into grounds seeds.
 
 ## The house bar — definition of done (every build)
+A piece is *done* when it earns its place by **the five questions** — the estate's compass:
+1. **Is it fun?** — does it invite play, reward a poke, want to be returned to?
+2. **Is it beautiful?** — aesthetically pleasing, a pleasure to look at and move through.
+3. **If it leans on math, is the math provably correct?** — *conditional, not the gate.* A piece that makes a falsifiable claim should prove it (a self-test to ~machine precision, a winnability proof, a convergence check) — a beloved register. A piece that *isn't* a claim — art, sound, play, a living thing — owes no proof; **never retrofit one onto it.**
+4. **Does it help discoverability?** — clear and inviting, easy to make sense of. (Honest mystery is allowed — not every piece must be understood by everyone — but the *estate as a whole* stays legible, and each piece offers a way in.)
+5. **Does it fit the estate aesthetic?** — kin to its siblings in look, feel, and craft.
+
+**Let form express content — show the thing, not its plot.** The estate's heart is *math/science turned INTO art, sound, play, or a touchable thing*: Newton's Cradle is an actual cradle you swing; the double-slit shows the emitter, the slits, the fringes, and lets you *fire particles*. Reach first for the real phenomenon you can **see and touch** — that is the register the estate is hungriest for. **In moderation**, the elegant "here is a principle, here is the graph" explainer is welcome too; the goal is a *variety* of forms (touchable depictions · generative art · living simulations · games & puzzles · the occasional graph), **never a monoculture of any one.** Don't reflexively render a subject as a curve when it could be a thing you do.
+
+And the build holds together (the house hygiene):
 - **Self-contained** — one HTML file, vanilla HTML/CSS/JS, no build, no network, no deps.
-- **A self-test that proves the claim exact** — the workshop's signature.
-- **Browser-verified** — ≈60fps, clean console, via agent-browser in a uniquely-named session.
+- **Browser-verified** — ≈60fps, clean console, via agent-browser in a uniquely-named session. If it makes a claim, its self-test shows green.
 - A new **front-door** page drops its `ws:seen:<id>` breadcrumb (the Survey's only food; forgetting it is always a bug).
-- **CHANGELOG** written · committed · NOTES current-state **replaced** (not appended) + worklog block + INDEX line · the grown seed pruned (bloomed, with provenance) · **`node seedbed/gauge.mjs record …`** run (never hand-edit fuel/state).
+- **CHANGELOG** written · committed · NOTES current-state **replaced** (not appended) + worklog block + INDEX line · the grown/**reworked** seed pruned (bloomed, with provenance) · **`node seedbed/gauge.mjs record …`** run (never hand-edit fuel/state).
 
 ---
 
 ## House conventions (unchanged, gathered here for the builder)
 - **Self-contained** — one HTML file, vanilla HTML/CSS/JS, no build, no network, no deps.
-- **A self-test that proves the claim exact** — the workshop's signature (invariance to ~machine precision, a winnability proof, a convergence check…).
+- **When a piece makes a falsifiable claim, prove it exact** — a beloved register (invariance to ~machine precision, a winnability proof, a convergence check…), and the right finishing move for a bench built on a claim. But it is *one register among many*, never the gate: art, sound, play, and living things carry no claim and owe no self-test (the founding generators have none by design — don't retrofit one).
 - **One mute for the whole estate** — any page that makes sound reads/writes the single shared key **`ws:pref:muted`** (via `WS`), so a visitor mutes *once* and it holds everywhere (Sound Garden, the front-door ambient layer, the Survey's discovery melodies, any audio piece). Never invent a per-page mute key. Default: respect it on load; honor the browser's autoplay gate (sound waits for a click).
 - **Forge pages** (`*.src.html` → `*.html`): edit the `.src.html`, run `node tools/forge/forge.mjs <file>`; `--check --all` verifies. Editing a shared include (e.g. `tools/ws/ws.js`) restales every inlined page → `forge.mjs --all`.
 - **Front door** = an estate map: add a room by appending one `PLACES` entry in `index.src.html`. Companions ride "within" their parent room. Browser-verify with a `?v=N` cache-bust (python http.server sends no cache headers).

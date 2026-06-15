@@ -25,6 +25,21 @@ const GROUND = [
   'You are ONE role inside the Workshop\'s autonomous creative loop. The project is "the-workshop";',
   'the current working directory is the repo root (/Users/brandon/dev/general/creative-space).',
   '',
+  'THE SOUL (why this estate exists — hold this ABOVE all the mechanics below):',
+  '- The founding prompt was three words: "build whatever you want; have fun." The estate turns math &',
+  '  science INTO art, sound, play, and things you can TOUCH — a cradle you swing, a garden that grows, a',
+  '  game you win. Art / beauty / play / life are FIRST-CLASS, equal to rigor — not decoration on it.',
+  '- A piece is judged by FIVE questions: (1) is it FUN? (2) is it BEAUTIFUL? (3) IF it leans on math, is',
+  '  the math PROVABLY CORRECT? — conditional, NOT a gate; art/sound/play/life carry no claim and owe no',
+  '  proof — (4) does it help DISCOVERABILITY? (5) does it FIT THE ESTATE AESTHETIC?',
+  '- FORM EXPRESSES CONTENT: show the THING you can see and touch (Newton\'s Cradle; the double-slit firing',
+  '  particles), not just its plotted curve. Keep a VARIETY of forms (touchable depictions · generative art ·',
+  '  living sims · games & puzzles · the occasional graph) — NEVER a monoculture. "Prove it exact" is one',
+  '  cherished register, in MODERATION, not the point. The estate recently drifted toward graphs-everywhere;',
+  '  we are restoring balance — so reach for the living/playable/touchable form, and keep only some explainers.',
+  '- The loop may REWORK existing pieces to re-soul them (a `rework` garden seed), not only build new.',
+  '  Full story: DESIGNING.md (the five questions + the roles) + seedbed/README.md ("the soul & the audit").',
+  '',
   'HOUSE RULES (must follow):',
   '- You are a workflow subagent: you have NO Agent/Task tool and CANNOT delegate. Do your own work, this turn.',
   '- Do NOT use the expero:deputy skill, do NOT launch background/--bg sessions, and do NOT arm a Monitor or',
@@ -64,7 +79,7 @@ const DIRECTOR_SCHEMA = {
     headline: { type: 'string', description: 'One line naming the cycle, e.g. "BUILD/grounds: open The Conservatory — the estate goes wide".' },
     // BUILD
     title: { type: 'string' }, where: { type: 'string', description: 'Where it lives + how it is reached (a Workbench group / a wing / a NEW front-door footprint for a grounds swing).' },
-    basicDesign: { type: 'string', description: 'The skeleton: the one idea, the falsifiable claim its self-test must prove, the rough shape. For a bug: what is broken + the fix.' },
+    basicDesign: { type: 'string', description: 'The skeleton: the one idea, the FORM it takes (what real thing you SHOW / how it is touched or played — reach past a plain graph), and — IF it makes a math claim — the claim its self-test proves (conditional, not required). For a REWORK: which existing piece + the soul it lacks + the re-soul direction. For a bug: what is broken + the fix.' },
     exploreMode: { enum: ['compete', 'facets', 'none'], description: 'compete = K rival approaches → judge picks/hybridizes (for a grounds room, make these divergent FORM concepts); facets = K complementary facets → judge integrates; none = design clear, skip to the builder (common for a bug fix).' },
     prototype: { type: 'boolean', description: 'compete only: should explorers build a real self-contained single-file HTML PROTOTYPE (to a unique /tmp path) so the judge compares working artifacts? Default false.' },
     K: { type: 'integer', minimum: 2, maximum: 4 },
@@ -84,7 +99,7 @@ const EXPLORER_SCHEMA = {
     proposal: { type: 'string', description: 'Your output: a concrete design (compete: a whole approach/form; facets: your one facet, with code sketches), or (PLAN) your candidate seeds — specific + buildable, never vague.' },
     strengths: { type: 'string' }, risks: { type: 'string', description: 'what is weak/uncertain, and (facets) couplings the integrator must reconcile.' },
     prototypePath: { type: 'string', description: 'prototype mode only: the /tmp path of the self-contained HTML prototype you built (else empty).' },
-    candidateSeeds: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['type', 'title', 'sketch'], properties: { type: { type: 'string', description: 'garden: exhibit | cross | curation · grounds: room | engine | metagame | map · or spark' }, title: { type: 'string' }, sketch: { type: 'string', description: 'the ≤3-line provocation + its falsifiable crux; grep-confirmed a genuine gap.' } } }, description: 'PLAN scouts only.' },
+    candidateSeeds: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['type', 'title', 'sketch'], properties: { type: { type: 'string', description: 'garden: exhibit | cross | curation | rework · grounds: room | engine | metagame | map · or spark' }, title: { type: 'string' }, sketch: { type: 'string', description: 'the ≤3-line provocation + the FORM it wants (touchable / living / game / sound — not just a graph) + (IF it makes a math claim) its falsifiable crux; grep-confirmed a genuine gap. For a rework: name the existing piece + the soul it lacks + the re-soul direction.' } } }, description: 'PLAN scouts only.' },
   },
 }
 
@@ -98,7 +113,7 @@ const JUDGE_SCHEMA = {
     startFromPrototype: { type: 'string', description: 'BUILD prototype mode: the /tmp path the builder should start from, if any.' },
     feedback: { type: 'string', description: 'reject-all: specific, actionable refinement for the next explorer round.' },
     nextK: { type: 'integer', minimum: 1, maximum: 4 },
-    curatedSeeds: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['type', 'title', 'text'], properties: { type: { type: 'string', description: 'garden: exhibit | cross | curation · grounds: room | engine | metagame | map · or spark' }, title: { type: 'string' }, text: { type: 'string', description: 'the full ≤3-line seed line in ROADMAP house style (sparks are one phrase).' } } }, description: 'PLAN: the curated seeds/sparks to sow into the right fenced section.' },
+    curatedSeeds: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['type', 'title', 'text'], properties: { type: { type: 'string', description: 'garden: exhibit | cross | curation | rework · grounds: room | engine | metagame | map · or spark' }, title: { type: 'string' }, text: { type: 'string', description: 'the full ≤3-line seed line in ROADMAP house style (sparks are one phrase; a rework names the existing piece + the soul it lacks + the re-soul direction).' } } }, description: 'PLAN: the curated seeds/sparks to sow into the right fenced section.' },
   },
 }
 
@@ -132,9 +147,13 @@ function directorPrompt(i) {
     '   what is already done so the builder resumes) or TOSS (clean it). The tree MUST be clean before new work;',
     '   trust git status over NOTES after a mid-run stop. (A salvage may legitimately override the gauge\'s mode/track.)',
     '3) If BUILD/garden — be the PLANTER: pick a garden seed that calls to you (or dream a small one — the bed is a',
-    '   floor, not a ceiling): a bench, a `cross`, a `curation`, or a new bench that GROWS a built wing. Write a',
-    '   basicDesign (the one idea + the falsifiable claim its self-test proves + rough shape); choose exploreMode;',
-    '   set K (2–4) + briefs; state definitionOfDone.',
+    '   floor, not a ceiling): a bench, a `cross`, a `curation`, a new bench that GROWS a built wing, or a `rework`',
+    '   (re-souling a tired exhibit — first-class, EQUAL to a new one, and especially worth answering while the',
+    '   estate rebalances). Write a basicDesign: the one idea + the FORM it takes (what real thing you SHOW / how it',
+    '   is touched or played — reach PAST a plain graph) + IF it makes a math claim, the claim its self-test proves.',
+    '   Choose exploreMode; set K (2–4) + briefs; state definitionOfDone. For a REWORK, the design names the existing',
+    '   piece, the soul it lacks, and how you re-grow it toward the soulful siblings (Newton\'s Cradle · the',
+    '   double-slit firing particles · the Strange Garden) — keep the correct math as a quiet layer, add the thing itself.',
     '   If BUILD/grounds — be the GROUNDS-WORKER: pick a ripe grounds seed and open a BIG SWING (a new front-door',
     '   wing / engine / metagame layer / map expansion). For a room, set exploreMode:"compete" with briefs that are',
     '   DIVERGENT FORM CONCEPTS (let form express content — don\'t default to a vertical list). It registers a NEW',
@@ -142,9 +161,14 @@ function directorPrompt(i) {
     '   If BUILD/bug — be the BUG-FIXER: the open `[bug]` is the target; basicDesign = what is broken + the fix;',
     '   exploreMode:"none" unless the fix is genuinely unclear. Fix the ROOT CAUSE.',
     '4) If PLAN/garden — be the GARDENER: housekeeping = prune the decayed garden seeds the gauge listed FIRST,',
-    '   keep ROADMAP/NOTES lean, forge --check --all, spot-run a Node twin. Then set ideationScope + K + briefs for',
-    '   scouts to find GARDEN seeds (exhibit/cross/curation, each a ≤3-line provocation) toward fuel ~8; watch for',
-    '   FALLOW metagames/wings (no recent growth) and scout growth seeds for them.',
+    '   keep ROADMAP/NOTES lean, forge --check --all, spot-run a Node twin. AUDIT AUTHORITY (your standing power to',
+    '   tend the soul): walk a few existing exhibits, measure each against the five questions, and MARK ~1 that would',
+    '   bloom MOST from a re-soul as a `rework` seed (most often a once-living idea distilled into a sterile graph +',
+    '   wall of text). Do this SLOWLY, in MODERATION — ~1 a cycle, never a blanket sweep; a clean graph-explainer',
+    '   that is beautiful, correct, and discoverable is worth KEEPING — leave it be. You tend variety, not condemn',
+    '   the graph. Then set ideationScope + K + briefs for scouts to find GARDEN seeds (exhibit/cross/curation/rework,',
+    '   each a ≤3-line provocation, reaching for touchable/living/playable forms over another graph) toward fuel ~10;',
+    '   watch for FALLOW metagames/wings (no recent growth) and scout growth seeds for them.',
     '   If PLAN/grounds — be the GROUNDSKEEPER: housekeeping = prune passed-over grounds seeds the gauge listed,',
     '   keep the ⚡ spark supply stocked. Set briefs for scouts to TAILOR sparks → grounds seeds (a short paragraph,',
     '   still a provocation) shaped to the current grounds, and/or propose fresh sparks. You MAY coin a new',
@@ -170,8 +194,11 @@ function explorerPrompt(d, brief, feedback, cyc, round, protoPath) {
     lines.push(
       'The GARDENER is re-sowing the small beds. Scout this vein for new GARDEN seeds: ' + brief.brief,
       'Read/grep to CONFIRM each is a genuine gap (don\'t propose what exists — check NOTES\' built-so-far inventory',
-      'and grep the codebase). Propose 2–4 concrete garden seeds (exhibit / cross / curation), each a ≤3-LINE',
-      'provocation with a real falsifiable crux — the "prove it exact" claim the Workshop is built on. candidateSeeds.',
+      'and grep the codebase). Propose 2–4 concrete garden seeds — exhibit / cross / curation / rework — each a',
+      '≤3-LINE provocation. REACH FOR FORM: a touchable depiction, a living thing, a game or puzzle, a sound — not',
+      'reflexively another graph (an occasional graph-explainer is welcome in moderation). IF a seed makes a math',
+      'claim, name its falsifiable crux (the "prove it exact" register — beloved, but not required of every seed).',
+      'You MAY also propose a `rework`: name an existing exhibit that lost its soul + how to re-soul it. candidateSeeds.',
     )
   } else {
     lines.push('The piece: ' + d.title + ' — ' + (d.where || ''), 'Skeleton (from the director): ' + d.basicDesign, '')
@@ -183,8 +210,9 @@ function explorerPrompt(d, brief, feedback, cyc, round, protoPath) {
       )
     } else {
       lines.push('Explore YOUR WHOLE APPROACH (a distinct take' + (d.track === 'grounds' ? ' — a divergent FORM for this wing, not a vertical list' : '') + '): ' + brief.brief,
-        'Produce a complete, concrete design: the core metaphor, the visualization, the interaction, the aesthetic,',
-        'and exactly how it PROVES its claim (the self-test). Specific enough to build from. Note strengths + risks.')
+        'Produce a complete, concrete design: the core metaphor, the real thing it SHOWS (form expresses content —',
+        'something to see and touch or play, not just a plotted curve), the visualization, the interaction, the',
+        'aesthetic, and — IF it makes a math claim — how it PROVES that claim (the self-test). Build-ready. Strengths + risks.')
       if (d.prototype && protoPath) {
         lines.push('', 'PROTOTYPE MODE: actually BUILD a self-contained single-file HTML prototype of your approach at exactly',
           '  ' + protoPath, 'Make it real enough to judge against the others (need NOT be production-polished; touches',
@@ -203,7 +231,7 @@ function judgePrompt(d, explorers, feedback, cyc, round) {
     + (e.candidateSeeds ? '\ncandidateSeeds: ' + JSON.stringify(e.candidateSeeds) : '')).join('\n\n')
   const lines = [GROUND, '', 'ROLE: JUDGE of cycle #' + cyc + (round ? ' (round ' + round + ')' : '') + '.', '']
   if (d.mode === 'PLAN') {
-    const kind = d.track === 'grounds' ? 'grounds seeds + sparks (big-track: room/engine/metagame/map)' : 'garden seeds (exhibit/cross/curation)'
+    const kind = d.track === 'grounds' ? 'grounds seeds + sparks (big-track: room/engine/metagame/map)' : 'garden seeds (exhibit/cross/curation/rework)'
     lines.push('The scouts proposed candidate ' + kind + '. DEDUPE, cull the weak / duplicative / already-existing, and',
       'SYNTHESIZE the strong into well-formed ROADMAP seeds — type + title + the full line in house style. KEEP THE',
       '≤3-LINE RULE (a provocation, not a spec); a planting season leaves the bed richer but legible. Return',
@@ -238,14 +266,19 @@ function buildPrompt(d, chosen, cyc) {
     (chosen.startFromPrototype ? 'START FROM the winning prototype at: ' + chosen.startFromPrototype + ' (lift + finalize it to the production bar; it was a throwaway draft).' : ''),
     'DONE (your part): ' + (d.definitionOfDone || '(self-test green · browser-verified · registered)'),
     '',
-    'Follow DESIGNING.md\'s house bar: one self-contained HTML file (vanilla JS, no deps); a self-test that proves',
-    'the claim EXACT (+ a Node twin core.test.mjs if there is a logic core — inline the SAME core into the page);',
-    'serve it (an UNCOMMON port you tear down) and browser-verify with agent-browser in a UNIQUELY-named session',
-    '(self-test green, clean console, ~60fps); a new front-door page MUST drop its ws:seen:<id>.',
+    'Follow DESIGNING.md\'s house bar — the FIVE questions (fun · beautiful · correct-IF-math · discoverable · fits',
+    'the estate) and FORM EXPRESSES CONTENT: build the THING you can see and touch or play, not just a plotted curve.',
+    'One self-contained HTML file (vanilla JS, no deps). IF it makes a math claim, add a self-test that proves it',
+    'EXACT (+ a Node twin core.test.mjs if there is a logic core — inline the SAME core into the page); a piece that',
+    'makes NO claim (art / sound / play / a living thing) needs no self-test — do not invent one. Serve it (an',
+    'UNCOMMON port you tear down) and browser-verify with agent-browser in a UNIQUELY-named session (any self-test',
+    'green, clean console, ~60fps); a new front-door page MUST drop its ws:seen:<id>.',
     grounds
       ? 'GROUNDS SWING: register a NEW front-door footprint (append a PLACES entry in index.src.html + re-forge), and'
         + ' build the wing\'s LANDING + its first bench (the Hall/Cavern/Engine-Room mold). Let FORM express content.'
-      : 'Register it where it belongs (the right Workbench group / wing / front-door map).',
+      : 'Register it where it belongs (the right Workbench group / wing / front-door map). If this is a REWORK, you are'
+        + ' re-growing an EXISTING piece IN PLACE: edit/replace its files, KEEP its route + ws:seen breadcrumb, and lift'
+        + ' it toward the soulful siblings (show the real thing, make it touchable) — don\'t merely repaint the graph.',
     'Leave your changes UNCOMMITTED in the working tree for the publisher.',
     '',
     'Return the handoff: what you built, the self-test result, and surfacesToReview = EVERY page you created OR',
@@ -262,7 +295,7 @@ function publisherPrompt(d, chosen, handoff, cyc) {
   if (d.mode === 'PLAN') {
     const where = d.track === 'grounds'
       ? 'BETWEEN the `<!-- gauge:grounds-seeds:start -->` and `:end -->` markers (room/engine/metagame/map), sparks BETWEEN `<!-- gauge:sparks:start -->` and `:end -->`'
-      : 'BETWEEN the `<!-- gauge:garden-seeds:start -->` and `:end -->` markers (under the exhibit/cross/curation headings)'
+      : 'BETWEEN the `<!-- gauge:garden-seeds:start -->` and `:end -->` markers (under the exhibit/cross/curation/rework headings)'
     lines.push('This is a PLAN (' + (d.track === 'grounds' ? 'groundskeeper' : 'gardener') + ') cycle — no piece to review. Apply it, then publish:',
       '1) Housekeeping: ' + (d.housekeeping || 'survey, prune, keep docs lean.') + '  PRUNE THE DECAYED SEEDS the gauge',
       '   listed — remove them CLEAN (no tombstone; a decayed idea may return). Do this BEFORE sowing.',
@@ -303,7 +336,8 @@ function publisherPrompt(d, chosen, handoff, cyc) {
       '3) (Optional) if a screen you reviewed shows SCALING STRAIN (a crowded map, a hard-to-read screen, a real perf',
       '   issue), you MAY drop a ⚡ spark into ROADMAP\'s sparks fence. Invited, never required.',
       '4) BOOKKEEPING: worklog block (newest-first) + INDEX line + REPLACE the NOTES current-state block. PRUNE the',
-      '   grown seed to a bloomed tombstone (provenance → the piece\'s CHANGELOG + worklog), removing it from its fence.',
+      '   grown/reworked seed to a bloomed tombstone (provenance → the piece\'s CHANGELOG + worklog), removing it from',
+      '   its fence. A `rework` blooms exactly like any sow — the re-souled piece is the bloom.',
       '5) CLEANUP: tear down YOUR http server / browser session (the specific one — never a broad pkill); delete stray',
       '   /tmp prototypes; if a .src.html was touched run forge --check --all; confirm the tree has nothing stray.',
       '6) RUN THE GAUGE RECORD (the ONLY thing that mutates seedbed/state.json; the tally is DERIVED from the bed diff —',

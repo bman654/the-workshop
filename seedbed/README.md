@@ -8,14 +8,47 @@ same "prove it exact" discipline every bench in the estate lives by.
 The director **runs `node seedbed/gauge.mjs`** and obeys the directive. It never
 guesses the mode again.
 
+## The soul & the audit — why `rework` exists
+
+The estate began with one prompt: **"build whatever you want; have fun."** Its best
+rooms are *math & science turned INTO art, sound, play, or a touchable thing* — a
+cradle you swing, a garden that grows, a song you tune, a game you win. **Art,
+beauty, play, and life are first-class, equal to rigor.** A piece earns its place by
+**five questions** (DESIGNING.md, the house bar): *is it fun? is it beautiful? if it
+leans on math, is the math provably correct? does it help discoverability? does it
+fit the estate aesthetic?* "Prove it exact" is **one cherished register, in
+moderation** — never the gate. Pieces that make no claim (art/sound/play/life) owe
+no self-test; the founding generators have none by design.
+
+**The drift this guards against.** "Everything must be falsifiable" crept in late
+and quietly became a *monoculture*: nearly every new exhibit a graph + a wall of
+text — a chart *of* the thing instead of *the thing you can touch*. (The
+Conservatory distilled *life* into Lotka–Volterra equations; the quantum drift
+turned "an atom" into post-grad text and a lone curve.) The cure is **not** to ban
+graphs — an occasional elegant explainer is genuinely valuable — but to restore
+**variety of form**: touchable depictions, generative art, living simulations,
+games & puzzles, *and* the odd graph. *Form expresses content: show the thing, not
+its plot.*
+
+**The audit authority + `rework`.** So the gardener carries a standing power: each
+PLAN cycle, walk a few existing exhibits, measure them against the five questions,
+and **mark ~1** that would bloom most from a re-soul as a **`rework`** garden seed —
+*slowly, in moderation, never a blanket sweep* (a clean explainer that's beautiful,
+correct, and discoverable is worth keeping). A `rework` is a first-class build (the
+planter pulls it like any garden seed) that **re-grows a tired piece in place**
+toward its soulful siblings — show the real thing, make it touchable, keep the
+correct math as a quiet layer. A rework left unbuilt **decays** like any garden
+seed; the next audit re-surfaces it if it still matters (the backlog self-heals).
+The fresh-eyes publisher and PLAN scouts may mark reworks too.
+
 ## Two tracks
 
 | | **GARDENS** (small) | **GROUNDS** (big) |
 |---|---|---|
-| grow… | what already exists | new structure |
-| plan | **gardener** files ≤3-line seeds | **groundskeeper** tailors sparks → grounds seeds |
-| build | **planter** sows one (bench · cross · curation) | **grounds-worker** opens a wing · engine · metagame · map · medium |
-| seed kinds | `exhibit` `cross` `curation` `grow` | `room` `engine` `metagame` `map` `medium` (+ any novel kind) |
+| grow… | what already exists (incl. **re-souling** it) | new structure |
+| plan | **gardener** files ≤3-line seeds + **audits & marks ~1 for rework** | **groundskeeper** tailors sparks → grounds seeds |
+| build | **planter** sows one (bench · cross · curation · **rework**) | **grounds-worker** opens a wing · engine · metagame · map · medium |
+| seed kinds | `exhibit` `cross` `curation` `grow` `rework` | `room` `engine` `metagame` `map` `medium` (+ any novel kind) |
 
 A **big swing is anything bigger than an exhibit**: a new wing, a reusable
 engine/tool/medium, a map expansion, a brand-new metagame layer. *Growing* an
@@ -27,6 +60,11 @@ existing wing (a new bench) or metagame (a new constellation/crossover) is
 - **spark** — a few words, a raw gap. Big-track only. (`seedbed/` → ROADMAP `## ⚡ Sparks`.)
 - **seed** — a **≤3-line provocation, not a spec.** The gardener *files* them; the
   groundskeeper tailors a spark into a (slightly longer) grounds seed.
+- **mark / audit** — the gardener's standing act: measure an existing piece against
+  the five questions and file a **`rework`** seed for one that would bloom from a
+  re-soul (slowly, in moderation — never a blanket sweep).
+- **rework** — a garden seed that **re-souls an existing piece in place** (show the
+  thing, make it touchable) — a first-class build, equal to a new exhibit.
 - **ripen** — the builder's act: complete the design at build time (choose the how).
 - **sow** — the builder brings a seed to life (build + ship).
 - **bloom** — shipped → prune **with** provenance (CHANGELOG/worklog tombstone; "don't rebuild").
@@ -68,7 +106,7 @@ Garden seeds flow fast (age in cycles); big swings are patient (punished only fo
 
 ## Thresholds (tunable — top of `gauge.mjs`)
 
-`gardenFuelFloor 4 · ceiling 8 · interval 6 · decayAge 12` ·
+`gardenFuelFloor 4 · ceiling 10 · interval 6 · decayAge 12` ·
 `groundsFuelFloor 2 · ceiling 3 · interval 9 · decayStrikes 4` · `sparkFloor 3`.
 
 Tuned for Brandon's instinct: **~⅓ of filed seeds decay, ~⅔ get sown** (enough
@@ -83,7 +121,7 @@ node seedbed/gauge.mjs --status   # human-readable gauge + decayed list + decay 
 node seedbed/gauge.mjs record --mode BUILD --track garden [--bloomed n --sown n --decayed n]
                                   # the publisher applies the cycle outcome at cycle end
 node seedbed/gauge.mjs --check    # validate state shape + show the directive
-node seedbed/gauge.test.mjs       # the Node twin (41 checks: ladder · decay · cadence sim)
+node seedbed/gauge.test.mjs       # the Node twin (62 checks: classify · ladder · decay · derived tally · cadence sim)
 ```
 
 `record` is the **only** way state.json changes — deterministic, never hand-edited.

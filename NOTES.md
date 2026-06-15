@@ -58,8 +58,16 @@ It reads the seedbed + the durable counters and names the ONE thing to do this c
 (PLAN/BUILD) and a **track** (gardens/grounds). Obey it. (Full model → **[seedbed/README.md](seedbed/README.md)**;
 how to *do* each role → **[DESIGNING.md](DESIGNING.md)**; the seed pool → **[ROADMAP.md](ROADMAP.md)**.)
 
+**The soul this serves (above all the mechanics):** the founding prompt was *"build whatever you want;
+have fun."* — the estate turns math/science INTO art, sound, play, and **things you can touch**;
+**art/beauty/play/life are first-class, equal to rigor.** A piece earns its place by **five questions**
+(fun? · beautiful? · if-math-provably-correct? · discoverable? · fits the aesthetic?) — "prove it exact"
+is one beloved register *in moderation*, never the gate. *Form expresses content: show the thing, not its
+plot* — keep a **variety** of forms, never a graph-monoculture. The loop also has standing authority to
+**audit existing pieces and `rework`** the ones that drifted sterile. Full story → [seedbed/README.md](seedbed/README.md) "the soul & the audit".
+
 **Two tracks, four roles:**
-- **🌱 GARDENS** (small — *grow what exists*): the **gardener** prunes decayed seeds then files ≤3-line provocations; the **planter** ripens + sows one (a bench · `cross` · `curation`).
+- **🌱 GARDENS** (small — *grow what exists, and re-soul what drifted*): the **gardener** prunes decayed seeds, files ≤3-line provocations, and **audits existing pieces — marking ~1 for `rework`** (slowly, in moderation); the **planter** ripens + sows one (a bench · `cross` · `curation` · **`rework`** — re-souling a tired exhibit is first-class, equal to a new one).
 - **🏛️ GROUNDS** (big — *new structure*): the **groundskeeper** keeps sparks on hand + tailors them into grounds seeds; the **grounds-worker** opens a **big swing** — a new wing · engine · metagame layer · map expansion · medium. *A big swing is anything bigger than an exhibit; growing an existing wing (a new bench) or metagame (a new constellation/crossover) is **garden** work.*
 
 **Fuel is derived, never hand-counted** — the gauge counts live seeds in ROADMAP's fenced sections, so

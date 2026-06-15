@@ -4,8 +4,9 @@
 // gauge is code, with a self-test (gauge.test.mjs), in the house "prove it exact"
 // spirit. See seedbed/README.md for the full model.
 //
-//   GARDENS (small track) — grow what exists. gardener files ≤3-line seeds;
-//     planter ripens+sows one (a bench / cross / curation).
+//   GARDENS (small track) — grow what exists, and RE-SOUL what drifted. gardener
+//     files ≤3-line seeds + AUDITS existing pieces, marking ~1 for `rework`;
+//     planter ripens+sows one (a bench / cross / curation / rework).
 //   GROUNDS (big track) — new structure. groundskeeper tailors sparks→grounds
 //     seeds; grounds-worker opens a wing / engine / metagame / map / medium.
 //
@@ -34,7 +35,7 @@ const STATE = fileURLToPath(new URL('./state.json', import.meta.url))
 // (the bed grows a tail), lower them or trim the ceiling.
 export const TH = {
   gardenFuelFloor: 4,     // PLAN/garden when gardenFuel <= this (bed running dry)
-  gardenFuelCeiling: 8,   // the gardener refills toward this (advisory)
+  gardenFuelCeiling: 10,  // the gardener refills toward this (advisory; raised 8→10 for a richer, more varied bed incl. rework)
   gardenInterval: 6,      // PLAN/garden when gardenBuilds >= this (time-based backstop)
   gardenDecayAge: 12,     // a garden seed decays when (cycle - sown) >= this
   groundsFuelFloor: 2,    // PLAN/grounds when groundsFuel < this (keep big swings ready)
@@ -47,7 +48,7 @@ export const TH = {
 // ── Classify a seed kind into a track ─────────────────────────────────────────
 // Garden = grow what exists. Grounds = new structure. Unknown → grounds (a
 // spark-coined NEW concept defaults to the big track). bug jumps the queue.
-const GARDEN_KINDS = new Set(['exhibit', 'cross', 'curation', 'grow'])
+const GARDEN_KINDS = new Set(['exhibit', 'cross', 'curation', 'grow', 'rework'])
 const GROUNDS_KINDS = new Set(['room', 'engine', 'metagame', 'map', 'medium', 'wing'])
 export function classify(kind) {
   const k = String(kind || '').toLowerCase().split(/[\/·\s]/)[0]

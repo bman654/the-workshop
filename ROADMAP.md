@@ -12,14 +12,24 @@ seeds here, reads the durable counters, and tells you this cycle's mode × track
 
 ## Schema
 
-**Two tracks.** **🌱 GARDENS** (small — grow what exists): `exhibit` · `cross` (pollinate two rooms —
-the richest vein) · `curation` (improve / merge / **retire** / grow an existing metagame). **🏛️
-GROUNDS** (big — new structure): `room` (a new front-door wing) · `engine` (a new reusable
-foundation/tool/medium) · `metagame` (a brand-new exploration layer) · `map` (expand the grounds).
-A **big swing is anything bigger than an exhibit**; growing a built wing (a new bench) is a garden
-`exhibit`, growing a metagame (a constellation/crossover) is a garden `curation`.
+**Two tracks.** **🌱 GARDENS** (small — grow what exists, and re-soul what drifted): `exhibit` · `cross`
+(pollinate two rooms — the richest vein) · `curation` (improve / merge / **retire** / grow an existing
+metagame) · `rework` (**re-soul a piece that went sterile** — show the real thing, make it touchable; a
+first-class build, equal to a new exhibit). **🏛️ GROUNDS** (big — new structure): `room` (a new
+front-door wing) · `engine` (a new reusable foundation/tool/medium) · `metagame` (a brand-new
+exploration layer) · `map` (expand the grounds). A **big swing is anything bigger than an exhibit**;
+growing a built wing (a new bench) is a garden `exhibit`, growing a metagame (a constellation/crossover)
+is a garden `curation`.
 
 **Sparks** (big-track only) are a few words; the groundskeeper tailors one into a grounds seed.
+
+**The soul the bed serves.** The estate turns math/science INTO art, sound, play, and **things you can
+touch** — judged by *five questions* (fun? · beautiful? · if-math, provably-correct? · discoverable? ·
+fits the aesthetic?), with "prove it exact" one beloved register *in moderation*, never the gate. Sow
+for **variety of form** (touchable depictions · generative art · living sims · games & puzzles · the
+occasional graph) — *show the thing, not its plot* — never a graph-monoculture. The gardener also
+**audits** the estate and marks ~1 piece a cycle for `rework`. Full story →
+[seedbed/README.md](seedbed/README.md) "the soul & the audit".
 
 **Stamps** (the gauge reads these for decay — keep them on every live seed):
 `(sown #N)` for garden seeds · `(sown #N · contest #M)` for grounds seeds (M = `bigSwingsBuilt` at birth).
@@ -88,6 +98,9 @@ Workbench nested-anchor card spill (stretched-link pattern, all cards) · Carnot
 - [curation] **The Cairn tells a false tale** — its per-stone cycle numbers scramble across loop relaunches, so the face's depth−stones arithmetic stays a unit mismatch even after #22's fix. A truer account is recoverable (each stone's real monotonic cycle). Repair the count or redesign the Cairn — the builder's call. (sown #27)
 - [curation] **Trim the ballooned Workbench blurbs** — Collatz (~190w) · Ulam (~144w) · Spirograph · Straightedge · Fourier · The Mill · Galton · Black Chamber are far over a one-promise-line (~30w). Comprehension + beauty matter; trim each, PRESERVE inner cross-links above the stretched `<a class=card-link>` overlay, re-verify 0 spill at desktop + mobile. (sown #35)
 - [curation] **Survey of Heaven — make discovery an EVENT** — a constellation fades in with its own melody; each star flashes with its own tone; hover re-glows + shows which feat/visit lit it; plus in-the-moment unlock cues on the ws-flag pages. Play + beauty + delight — there is nothing to "prove" here, and that is the point. (Brandon's seed — honest review) (sown #35)
+
+### rework
+<!-- Re-soul an existing piece that drifted sterile — a graph + wall of text where the real thing wants to be SHOWN and TOUCHED. The gardener AUDITS the estate and marks ~1 per PLAN cycle (slowly, in moderation — a clean explainer worth keeping is left be); the planter pulls one like any garden seed and re-grows it IN PLACE toward the soulful siblings (Newton's Cradle · the double-slit firing particles · the Strange Garden), keeping the correct math as a quiet layer. Counts as garden fuel + decays like any garden seed (the next audit re-surfaces it if it still matters). See seedbed/README.md "the soul & the audit". -->
 
 ### bench
 <!-- BLOOMED #34 → The Conservatory · The SIR epidemic bench (conservatory/sir/): core.mjs + core.test.mjs (28/28) + the glass-terrarium bench; the planter became the third live .bed on the landing (self-test 17/17). Provenance: conservatory/CHANGELOG.md + the #34 worklog. The replicator [bench] remains the one planter left to grow the wing. -->
