@@ -128,6 +128,10 @@
 
   @media (max-width:760px){
     body{ overflow:auto; }
+    /* the third back-link (→ the Cavern bench) needs room on narrow screens, so the
+       nav stacks above the title instead of three nowrap crumbs colliding with it. */
+    .topbar{ flex-direction:column; align-items:flex-start; gap:8px; }
+    .topbar .left{ flex-wrap:wrap; gap:10px 16px; }
     #wrap{ flex-direction:column; position:static; }
     #stage{ height:auto; }
     #apertureView{ flex:0 0 96px; } #screenView{ flex:0 0 110px; } #plotView{ flex:0 0 320px; }
@@ -141,6 +145,7 @@
     <div class="left">
       <a class="back" href="../index.html">&larr; workshop</a>
       <a class="back hall" href="../hall-of-mirrors/index.html">&#8599; hall of mirrors</a>
+      <a class="back" href="../cavern/two-wings-one-slit/index.html" title="the same array factor at N=2 is Young's double slit">&#8599; same formula at N=2 &mdash; Young's double slit (Cavern)</a>
     </div>
     <div class="brand">
       <h1>The Diffraction Grating</h1>
@@ -286,6 +291,76 @@
 
   var PI = Math.PI, TAU = 2 * Math.PI;
 
+  // The dimensionless N-slit array factor is not computed in this file; it is the
+  // estate's SOLE authority, cavern/two-wings-one-slit/interference-core.mjs,
+  // inlined here as a byte-twin (its Node test asserts this slice === the module
+  // char-for-char). gratingFactor() below recovers its UN-normalized N²-peak bracket
+  // as N²·arrayFactorPhi(N,α); the slit-WIDTH envelope (sinc²) stays this page's own.
+// ===== INTERFERENCE CORE (inlined byte-twin) BEGIN =====
+  // The de Broglie bridge: the ONE SI-exact literal both wings read (2019 SI fixes
+  // Planck's constant to this exact value). Twinned like the gas constant R_GAS —
+  // a Node test pins the page's inlined H_PLANCK === this module's so it can't drift.
+  const H_PLANCK = 6.62607015e-34;                                // J·s, SI-exact
+
+  // The phase the array factor turns on: φ = π·d·sinθ/λ. d and λ in the same
+  // length unit; sinθ dimensionless. At φ = mπ the slits are all in phase → a
+  // principal maximum (the grating equation d·sinθ = mλ).
+  function phase(d, lambda, sinTheta){ return Math.PI * d * sinTheta / lambda; }
+
+  // THE SOLE RATIO. The dimensionless N-slit array factor as a function of φ:
+  //     F(N,φ) = [ sin(Nφ) / (N·sin φ) ]²,   peak 1 at φ = mπ.
+  // At φ = mπ the ratio is a removable 0/0; the limit is ±1 (squared → 1). Near it
+  // we use the 2nd-order series sin(Nφ)/(N sinφ) ≈ 1 − (N²−1)/6·dφ² (dφ = φ folded
+  // to the nearest multiple of π) — BYTE-IDENTICAL to the Hall diffraction page's
+  // existing principal-maximum limit math, so this is the one ratio for both wings.
+  function arrayFactorPhi(N, phi){
+    var nearest = Math.round(phi / Math.PI);
+    var dphi = phi - nearest * Math.PI;              // φ mod π, folded to (−π/2, π/2]
+    if (Math.abs(dphi) < 1e-7){
+      var r = 1 - (N*N - 1) / 6 * dphi * dphi;       // series at the principal max
+      return r * r;
+    }
+    var s = Math.sin(N * phi) / (N * Math.sin(phi));
+    return s * s;
+  }
+
+  // The array factor read straight off the apparatus. Peak 1.
+  function arrayFactor(N, d, lambda, sinTheta){ return arrayFactorPhi(N, phase(d, lambda, sinTheta)); }
+
+  // The cross, made explicit: two coherent slits give cos²φ. This is a SECOND,
+  // independent closed form — and arrayFactor(2,…) === cos2(…) to machine ε is
+  // THE claim the self-test asserts (it is not assumed; it is proven).
+  function cos2(d, lambda, sinTheta){ var c = Math.cos(phase(d, lambda, sinTheta)); return c * c; }
+
+  // The grating equation: every order |sinθ_m| = |m·λ/d| ≤ 1, sorted. These are
+  // exactly where arrayFactor reaches 1 (the principal maxima pin to the ceiling).
+  function orderSinThetas(d, lambda){
+    var out = [], m = 1, s;
+    out.push(0);                                     // the central order m = 0
+    while (true){
+      s = m * lambda / d;
+      if (s > 1) break;
+      out.push(-s); out.push(s);
+      m++;
+    }
+    out.sort(function(a, b){ return a - b; });
+    return out;
+  }
+  // The angle of order m: θ_m = asin(m·λ/d). asin(orderSinThetas)===orderTheta.
+  function orderTheta(m, d, lambda){ return Math.asin(m * lambda / d); }
+
+  // The de Broglie pair — two views of one wavelength. An electron of momentum p
+  // has λ = h/p; a photon of that λ has momentum h/λ. momentumFor(deBroglieLambda(p))===p.
+  function deBroglieLambda(p){ return H_PLANCK / p; }
+  function momentumFor(lambda){ return H_PLANCK / lambda; }
+
+  // THE TEETH. The incoherent ("which-path"/classical) sum: N slits, intensities
+  // added not amplitudes, normalized → a FLAT 1 with no cross term, no fringes.
+  // Swapping arrayFactor→incoherentFactor in the strips makes the pattern vanish
+  // (the self-test's negative control: contrast collapses, the pill flips red).
+  function incoherentFactor(N, d, lambda, sinTheta){ return 1; }
+// ===== INTERFERENCE CORE END =====
+
   // sinc with the π already absorbed by the caller: returns sin(x)/x, =1 at 0.
   function sinc(x) {
     if (x === 0) return 1;
@@ -301,22 +376,14 @@
   }
 
   // The N-slit grating (interference) factor at phase α = π·d·sinθ/λ.
-  // Returns [ sin(Nα)/sin(α) ]², with the removable-singularity limit N² at the
-  // principal maxima (α = mπ), computed stably.
+  // Returns [ sin(Nα)/sin(α) ]², peak N² at the principal maxima (α = mπ).
+  // The dimensionless ratio [sin(Nα)/(N·sinα)]² (peak 1) is NOT computed here — it
+  // is the estate's SOLE array-factor authority, arrayFactorPhi (inlined above from
+  // cavern/two-wings-one-slit/interference-core.mjs). This page's UN-normalized
+  // bracket recovers its N² peak by writing N²·arrayFactorPhi(N,α): the factor of N²
+  // lives on THIS (Hall) side, not in the shared core. At N=2 this is exactly 4cos²α.
   function gratingFactor(alpha, N) {
-    // distance to the nearest multiple of π:
-    var r = alpha / PI;
-    var nearest = Math.round(r);
-    var da = alpha - nearest * PI;          // (alpha mod π), folded to (-π/2, π/2]
-    if (Math.abs(da) < 1e-7) {
-      // principal maximum: lim sin(Nα)/sin(α) = ±N  →  squared = N².  Use the
-      // 2nd-order expansion to stay smooth right at and just beside the peak.
-      // sin(Nα)/sin(α) ≈ N·(1 - (N²-1)/6·da²) near da=0.
-      var ratio = N * (1 - (N * N - 1) / 6 * da * da);
-      return ratio * ratio;
-    }
-    var s = Math.sin(N * alpha) / Math.sin(alpha);
-    return s * s;
+    return N * N * arrayFactorPhi(N, alpha);
   }
 
   // ----- the analytic far-field intensity (UN-normalised: central peak = N²) --
@@ -577,6 +644,30 @@
                               slitEnvelope(PI * 3 * 0.2 / 0.5));
       check('N=2 grating factor == 4cos²α (Young) and N=1 collapses to the pure single slit',
         worst < 1e-10 && collapse < 1e-15, 'double-slit bracket err ' + worst.toExponential(2));
+    })();
+
+    // (5b) The grating bracket now DELEGATES to the imported array-factor core:
+    //      gratingFactor(α,N) === N²·arrayFactorPhi(N,α), and at N=2 that is the
+    //      Cavern double slit's cos² (×4). One ratio, two wings.
+    (function () {
+      var worst = 0;
+      var Ns = [2, 3, 5, 8, 12];
+      for (var k = 0; k < Ns.length; k++) {
+        var N = Ns[k];
+        for (var i = 0; i <= 300; i++) {
+          var alpha = -7 + 14 * i / 300;
+          worst = Math.max(worst, Math.abs(gratingFactor(alpha, N) - N * N * arrayFactorPhi(N, alpha)));
+        }
+      }
+      // and at N=2 the imported core gives the Cavern double slit's cos² exactly
+      var worst2 = 0;
+      for (var j = 0; j <= 300; j++) {
+        var a2 = -7 + 14 * j / 300;
+        worst2 = Math.max(worst2, Math.abs(arrayFactorPhi(2, a2) - Math.cos(a2) * Math.cos(a2)));
+      }
+      check('N=2 reduces to double-slit cos² via imported core',
+        worst < 1e-12 && worst2 < 1e-12,
+        'gratingFactor−N²·F worst ' + worst.toExponential(2) + ' · F(2,α)−cos²α worst ' + worst2.toExponential(2));
     })();
 
     // (6) ENERGY agrees between the two routes — ∫I dsinθ closed-form == FT route

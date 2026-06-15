@@ -81,7 +81,6 @@ Workbench nested-anchor card spill (stretched-link pattern, all cards) · Carnot
 
 ### cross
 - [cross] **The Black Chamber breaks the makers** — let the codebreaker (`black-chamber/`) actually crack a message enciphered by the **Volvelle** or **Scytale**. The makers and their adversary, finally wired. (sown #27)
-- [cross] **One slit-formula, two wings** — the Cavern's quantum **Double Slit** and the Hall's **Diffraction Grating** share zero code; the grating == double-slit interference at N=2. Wire them (one imports the other) + add **de Broglie λ=h/p** so an electron and a photon drop the same fringes. (Check the interference factor extracts cleanly first.) (sown #27)
 - [cross] **Light × Sound** — a bench where optical phenomena drive sound (or the reverse), in the Living-Lattice spirit. The most-named crossover. (sown #27)
 - [cross] **Chart the Cavern asterism** — light a Survey constellation on anchor set `box · oscillator · finite-well · hydrogen` (NOT `lattice` — that crumb is shared with the sound-garden Lattice). One additive FEATS group, `allComplete` byte-frozen; every new star clears every bbox + existing star. (sown #27)
 
