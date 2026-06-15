@@ -280,7 +280,10 @@ const P = {
   evoIdx: 2,         // index into EVO_BARS — default = 1 bar
   reverb: 0.45,
   volume: 0.7,
-  muted: false,
+  // Mute obeys the shared estate key ws:pref:muted via the inlined ws.js (WS.muted()):
+  // absent ⇒ false = this page's own default (sound-on, autoplay-gated). WS.onMuteChange
+  // (registered below) keeps us in sync in-tab AND cross-tab; mute once → holds everywhere.
+  muted: (function(){ try{ return WS.muted(); }catch(e){ return false; } })(),
 };
 // "Evolve every" maps to bars between CA generations, where one bar = one full
 // playhead loop (COLS columns). ¼/½-bar values evolve MID-loop (a fast,
@@ -1109,6 +1112,7 @@ $('bDice').onclick   = ()=>{ applySeed(String((Math.random()*999999)|0)); };
 
 $('bPlay').onclick   = togglePlay;
 $('bMute').onclick   = toggleMute;
+syncMuteBtn();   // reflect the shared ws:pref:muted state (via WS.muted) on first load
 $('bReseed').onclick = ()=>{ buildLadder(); seedSoup(); colsSinceEvolve=0; };
 $('bClear').onclick  = clearBoard;
 $('bGlider').onclick = injectGlider;
@@ -1130,11 +1134,18 @@ function togglePlay(){
   $('bPlay').textContent = playing?'Pause':'Play';
   $('bPlay').classList.toggle('on', !playing);
 }
-function toggleMute(){
-  P.muted=!P.muted; if(engine) engine.setVolume(P.volume,P.muted);
+function syncMuteBtn(){
   $('bMute').textContent = P.muted?'Unmute':'Mute';
   $('bMute').classList.toggle('on', P.muted);
 }
+function toggleMute(){
+  // write through the shared estate key; WS.onMuteChange (below) re-applies + syncs.
+  try{ WS.setMuted(!WS.muted()); }catch(e){ P.muted=!P.muted; if(engine) engine.setVolume(P.volume,P.muted); syncMuteBtn(); }
+}
+// shared estate-wide mute: WS.onMuteChange fires on an in-tab WS.setMuted AND on a
+// cross-tab storage change. Re-apply our own engine mute + sync the button; never
+// force-resume audio (autoplay courtesy — sound starts only on a genuine gesture).
+try{ WS.onMuteChange(function(on){ P.muted=on; if(engine) engine.setVolume(P.volume,P.muted); syncMuteBtn(); }); }catch(e){}
 
 addEventListener('keydown', e=>{
   const t=e.target;

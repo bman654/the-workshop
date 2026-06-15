@@ -209,6 +209,11 @@ const ROMAN = ['I','II','III','IV','V','VI','VII'];
 const ROOT_OCTAVE = -1;        // base octave relative to middle C (C4) → C3
 function semiToFreq(semi){ return 261.625565 * Math.pow(2, semi/12); }
 
+// ----- shared estate-wide mute (the single key ws:pref:muted, DESIGNING.md) -----
+// Key is source of truth WHEN PRESENT; absent ⇒ keep this page's own default.
+function readMutePref(def){ try{ var v=localStorage.getItem('ws:pref:muted'); return v==='1'?true:v==='0'?false:!!def; }catch(e){ return !!def; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v?'1':'0'); }catch(e){} }
+
 /* ===================== parameters ======================================== */
 const P = {
   seed: 1618,
@@ -221,7 +226,7 @@ const P = {
   reverb: 0.5,
   volume: 0.7,
   pad: false,
-  muted: false,
+  muted: readMutePref(false),   // shared ws:pref:muted (absent ⇒ page default: sound-on)
 };
 const VOICE_CAP = 16;          // polyphony cap (voice-stealing beyond this)
 
@@ -1089,6 +1094,7 @@ $('bDice').onclick  = ()=>{ applySeed(String((Math.random()*999999)|0)); };
 
 $('bPlay').onclick = togglePlay;
 $('bMute').onclick = toggleMute;
+syncMuteBtn();   // reflect the shared ws:pref:muted state on first load
 $('bPad').onclick  = togglePad;
 
 function applySeed(raw){
@@ -1112,10 +1118,19 @@ function togglePlay(){
   $('bPlay').classList.toggle('on', !playing);
 }
 function toggleMute(){
-  P.muted=!P.muted; if(engine) engine.setVolume(P.volume,P.muted);
+  P.muted=!P.muted; writeMutePref(P.muted); if(engine) engine.setVolume(P.volume,P.muted);
   $('bMute').textContent = P.muted?'Unmute':'Mute';
   $('bMute').classList.toggle('on', P.muted);
 }
+function syncMuteBtn(){
+  $('bMute').textContent = P.muted?'Unmute':'Mute';
+  $('bMute').classList.toggle('on', P.muted);
+}
+// honour a mute toggled on ANOTHER estate tab (shared ws:pref:muted); never force-resume.
+addEventListener('storage', function(e){
+  if(e.key!=='ws:pref:muted') return;
+  P.muted=readMutePref(P.muted); if(engine) engine.setVolume(P.volume,P.muted); syncMuteBtn();
+});
 function togglePad(){
   P.pad=!P.pad;
   if (engine && started){

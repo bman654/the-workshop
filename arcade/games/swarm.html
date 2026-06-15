@@ -639,7 +639,7 @@ function buildGrid(){
 
 //============================================================== audio (procedural, default MUTED)
 const Audio_ = {
-  ctx:null, master:null, muted:true,   // DEFAULT OFF — owner's speakers
+  ctx:null, master:null, muted:readMutePref(true),   // shared ws:pref:muted (absent ⇒ page default: OFF — owner's speakers)
   init(){
     if (this.ctx) return;
     try{
@@ -1294,9 +1294,21 @@ function updateXP(){
 
 //============================================================== input
 const keys = { left:false,right:false,up:false,down:false };
+// ----- shared estate-wide mute (the single key ws:pref:muted, DESIGNING.md) -----
+// Key is source of truth WHEN PRESENT; absent ⇒ keep this page's own default (OFF).
+// Mute once → holds everywhere + cross-tab live. Storage/onMuteChange update state+tag
+// only; they NEVER force-resume audio (autoplay courtesy — sound waits for a gesture).
+function readMutePref(def){ try{ var v=localStorage.getItem('ws:pref:muted'); return v==='1'?true:v==='0'?false:!!def; }catch(e){ return !!def; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v?'1':'0'); }catch(e){} }
 function setMuteTag(){
   document.getElementById('muteTag').textContent = 'M · sound ' + (Audio_.muted?'off':'on');
 }
+window.addEventListener('storage', function(e){
+  if(!e || e.key!=='ws:pref:muted') return;
+  Audio_.muted = readMutePref(Audio_.muted); setMuteTag();
+  // sound is gated at emit time, so an unmute simply lets the NEXT gesture-driven
+  // sound through; we never resume the context here.
+});
 window.addEventListener('keydown', e=>{
   const k=e.key.toLowerCase();
   if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
@@ -1310,7 +1322,7 @@ window.addEventListener('keydown', e=>{
     case 'enter':
       if (game.state==='title'||game.state==='gameover') startGame(); break;
     case 'm':
-      Audio_.init(); Audio_.muted=!Audio_.muted; setMuteTag();
+      Audio_.init(); Audio_.muted=!Audio_.muted; writeMutePref(Audio_.muted); setMuteTag();
       if(!Audio_.muted) Audio_.resume();
       break;
     case '1': if (game.state==='levelup') chooseUpgrade(0); break;

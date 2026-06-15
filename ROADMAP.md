@@ -46,13 +46,17 @@ worklog (so it's never rebuilt). A seed that goes stale **decays** → prune it 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
-- [bug] **Audio pages with a LOCAL-only mute don't sync to the shared key** (follow-up to the cycle-#39 BUG-A batch). The house convention (DESIGNING > house conventions): every audio page reads/writes the ONE shared key `ws:pref:muted`, so a visitor mutes once and it holds everywhere (+ a cross-tab `storage` listener so a mute on another estate tab takes effect live). ~~The BUG-A batch — 20 pages that made Web Audio sound with NO mute control at all (incl. Newton's Cradle `cavern/cradle/`, the front-door `index.html`, the arcade's `bulwark`) — is RESOLVED in cycle #39: the shared WS-cue chime is now mute-gated in `tools/ws/ws.js` (+ a 🔊/🔇 toggle on the cue toast writing the shared key, + a cross-tab listener), the cradle + bulwark got the full canonical treatment, and the audit's ✅ shared-wired bucket rose from 7 → 27.~~ REMAINING (this bug) = the **29 BUG-B pages** that already have a WORKING local mute a visitor CAN silence, but it writes a per-page flag instead of the shared key — lower urgency, hence split out so it doesn't monopolize one cycle. The 29: the **9 Sound Garden instruments** (carillon, drift, euclid, gamelan, lattice, loom, quickening, rain, whitney), the **18 Arcade games except bulwark** (2048, asteroids, breakout, centipede, chomp, crossing, digdug, gyre, lunar-lander, missile-command, pong, qubit, snake, starfighter, swarm, tessera, tetris, vanguard), plus **scytale** and **undercroft**. FIX: route each page's existing mute through the shared `WS.muted()`/`WS.setMuted()` API now in `tools/ws/ws.js` (+ subscribe via `WS.onMuteChange`), keeping the page's own affordance. Verify each IN-BROWSER (the grep is heuristic — confirm before converting). Helper: /tmp/audio-mute-audit.sh. (filed 2026-06-15; BUG-A resolved + re-filed 2026-06-15 cycle #39)
 <!-- gauge:bug:end -->
+
+*No open bugs. (The estate-wide mute is fully wired — every audio surface honours the one shared key `ws:pref:muted`.)*
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth
 unit-mismatch (cycle #22 — face now reads commit-DEPTH from `ledger/depth.txt` over a STONES line, the
 gap = quantified silence) · `ledger/sign.sh` self-derives its cycle, durable-ledger-first (#12, #14) ·
-Workbench nested-anchor card spill (stretched-link pattern, all cards) · Carnot mobile pill overflow.*
+Workbench nested-anchor card spill (stretched-link pattern, all cards) · Carnot mobile pill overflow ·
+the estate-wide mute, finished (#39 BUG-A: 20 no-mute pages root-fixed via `tools/ws/ws.js`; #40 BUG-B:
+the last 27 local-only-mute pages — 18 arcade games + 9 Sound Garden instruments — routed through the
+one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-verified).*
 
 ---
 
