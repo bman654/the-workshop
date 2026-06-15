@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Butterfly's Voice — a note's pitch IS its FFT bin</title>
+<!-- a standalone Workbench bench (a [cross]: The Butterfly × the Sound Garden); NOT a front-door page, NO ws:seen. -->
+<style>
+  /* ── COLOR-MEANING CONTRACT (state it once; siblings must not drift) ──────────
+     slate-blue  = the waveform + the abstract plot accent            --accent
+     gilt/brass  = the recovered number — pitch f, bin c, the period-comb  --floor (Computation's "bound" hue, REUSED)
+     violet      = the leakage / device-rate teeth state              --teeth
+     green/red   = RESERVED for the self-test pill + the EXACT / leakage verdict ONLY
+  */
+  :root{
+    --panel-bg: rgba(13,12,16,0.90);
+    --panel-edge: rgba(127,178,230,0.28);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --ink-faint: #6b6e7e;
+    --accent: #7fb2e6;          /* the waveform + plot accent (slate/chalk blue) */
+    --accent-soft: rgba(127,178,230,0.16);
+    --bg: #06070b;
+    --plate: #050507;           /* the score/waveform band (left) */
+    --stage: #080a10;           /* the spectrum band (right) */
+    --floor: #f0c674;           /* the recovered number: pitch f, bin c, the period-comb (gilt/brass) */
+    --floor-soft: rgba(240,198,116,0.16);
+    --teeth: #b08fd3;           /* the device-rate / leakage state (violet) */
+    --teeth-soft: rgba(176,143,211,0.16);
+    --good: #8fd79a;
+    --good-soft: rgba(120,200,130,0.5);
+    --bad: #e0664f;
+    --bad-soft: rgba(220,120,100,0.6);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+  /* ---- topbar (flex-wrap + min-width:0 so the pill never collides on phones) ---- */
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    justify-content:space-between; padding:13px 18px 0; pointer-events:none; gap:10px; flex-wrap:wrap; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:14px; align-items:center; min-width:0; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:11px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.4px; margin:0; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:var(--good); border-color:var(--good-soft); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:var(--bad-soft); background:rgba(70,30,26,0.4); }
+
+  /* ---- layout: two-panel stage + side panel (rydberg skeleton) ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; display:flex; flex-direction:column;
+    padding:50px 0 0; overflow:hidden; }
+  #stageInner{ flex:1 1 auto; position:relative; min-height:0; display:flex;
+    border-top:1px solid var(--panel-edge); overflow:hidden; }
+  #scoreHost{ flex:1 1 50%; position:relative; min-width:0; background:var(--plate); overflow:hidden; }
+  #conduitHost{ flex:0 0 44px; position:relative; min-width:0;
+    background:linear-gradient(90deg, var(--plate), var(--stage)); overflow:hidden; }
+  #spectrumHost{ flex:1 1 50%; position:relative; min-width:0; background:var(--stage);
+    border-left:1px solid rgba(127,178,230,0.10); overflow:hidden; }
+  #score,#conduit,#spectrum{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; }
+  #score{ cursor:pointer; } #spectrum{ cursor:crosshair; }
+  .panelTag{ position:absolute; left:11px; top:9px; z-index:6; pointer-events:none;
+    font:600 9.5px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint);
+    background:rgba(0,0,0,0.4); border:1px solid var(--panel-edge); border-radius:6px; padding:5px 8px; }
+  #tooltip{ position:absolute; z-index:9; pointer-events:none; opacity:0; transition:opacity .12s;
+    font:600 10.5px/1.4 var(--font-mono); color:var(--ink); background:rgba(4,4,7,0.92);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 10px; max-width:280px; }
+  #tooltip.show{ opacity:1; }
+  #tooltip b{ color:var(--floor); }
+  #hint{ position:absolute; left:12px; bottom:11px; z-index:6; pointer-events:none; max-width:58%;
+    font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.42);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:6px 10px; }
+  #hint b{ color:var(--accent); } #hint .g{ color:var(--floor); }
+
+  /* ---- side panel ---- */
+  #side{ width:308px; flex:0 0 308px; background:var(--panel-bg); border-left:1px solid var(--panel-edge);
+    padding:56px 16px 22px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  #side .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0; letter-spacing:.2px; }
+  #side .lede b{ color:var(--ink); font-weight:600; }
+  #side .lede .gilt{ color:var(--floor); font-weight:700; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:6px 0 -2px; border-top:1px solid rgba(127,178,230,0.16); padding-top:12px; }
+  /* segmented toggles (rydberg .seg) */
+  .seg{ display:flex; gap:2px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-edge); border-radius:9px; padding:3px; }
+  .seg .opt{ flex:1; text-align:center; font:600 10.5px/1 var(--font-mono); padding:8px 5px; border-radius:6px;
+    color:var(--ink-dim); cursor:pointer; transition:.15s; user-select:none; }
+  .seg .opt.on{ color:#06080c; font-weight:700; }
+  .seg .opt.coh.on, .seg .opt.n.on{ background:var(--accent); }
+  .seg .opt.dev.on{ background:var(--teeth); }
+  .note{ font:10.5px/1.5 var(--font-mono); color:var(--ink-faint); margin:0; }
+  .note b{ color:var(--ink-dim); }
+  .note.caveat{ border-left:2px solid var(--teeth); padding-left:9px; }
+  .note.pure{ border-left:2px solid var(--floor); padding-left:9px; }
+
+  /* ── THE DUAL HEAD: "one number, three faces" card ──────────────────────────── */
+  .twice{ display:flex; flex-direction:column; gap:7px; }
+  .Rrow{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; font:600 11px/1.4 var(--font-mono); }
+  .Rrow .k{ color:var(--ink-dim); } .Rrow .v{ color:var(--floor); font-variant-numeric:tabular-nums; }
+  .Rrow .v.acc{ color:var(--accent); }
+  .Rrow.div{ border-top:1px dashed rgba(127,178,230,0.22); padding-top:6px; margin-top:1px; }
+  /* the agreement micro-track: k_pred diamond + k_meas dot land on the same px */
+  .agree{ position:relative; height:30px; border-radius:7px; background:rgba(0,0,0,0.36);
+    border:1px solid var(--panel-edge); overflow:hidden; margin-top:3px; }
+  .agree .mk{ position:absolute; top:50%; transform:translate(-50%,-50%); }
+  .agree .mk.pred{ width:11px; height:11px; background:var(--floor); box-shadow:0 0 5px 0 var(--floor);
+    transform:translate(-50%,-50%) rotate(45deg); top:42%; }
+  .agree .mk.meas{ width:8px; height:8px; border-radius:50%; background:var(--ink-dim); box-shadow:0 0 5px 0 var(--ink-dim); top:62%; }
+  .agree .lbl{ position:absolute; left:6px; bottom:2px; font:600 8.5px/1 var(--font-mono); color:var(--ink-faint); }
+  .agree .lbl.r{ left:auto; right:6px; }
+  .recovered{ font:600 11px/1.4 var(--font-mono); color:var(--floor); text-align:center;
+    padding:6px; border-radius:7px; background:var(--floor-soft); border:1px solid var(--floor-soft); }
+  .recovered.teeth{ color:#c9aee4; background:var(--teeth-soft); border-color:var(--teeth-soft); }
+  .recovered .sub{ display:block; font-weight:600; font-size:9.5px; color:var(--ink-faint); margin-top:2px; }
+  .verdict{ font:700 10.5px/1.3 var(--font-mono); text-align:center; padding:5px; border-radius:6px; letter-spacing:.04em; }
+  .verdict.exact{ color:var(--good); background:rgba(30,58,38,0.4); border:1px solid var(--good-soft); }
+  .verdict.leak{ color:#c9aee4; background:var(--teeth-soft); border:1px solid var(--teeth-soft); }
+
+  .legend{ display:flex; flex-direction:column; gap:5px; font:10.5px/1.3 var(--font-mono); color:var(--ink-dim); }
+  .legend .li{ display:flex; align-items:center; gap:7px; }
+  .legend .sw2{ width:16px; height:0; border-top-width:2px; border-top-style:solid; flex:0 0 auto; }
+  .legend .dot{ width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
+  .legend .dia{ width:9px; height:9px; flex:0 0 auto; transform:rotate(45deg); }
+
+  /* the reciprocal cross-teaser */
+  .xteaser{ display:block; text-decoration:none; border:1px solid var(--panel-edge); border-radius:10px;
+    padding:10px 12px; background:rgba(127,178,230,0.05); transition:.18s; }
+  .xteaser:hover{ border-color:var(--accent); background:rgba(127,178,230,0.10); }
+  .xteaser .xk{ display:block; font:600 10px/1.3 var(--font-mono); color:var(--accent); letter-spacing:.04em; margin-bottom:3px; }
+  .xteaser .xt{ display:block; font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); }
+  .xteaser .xt b{ color:var(--ink); }
+
+  /* ---- responsive: stack panels; the topbar pill trap ---- */
+  @media (max-width:820px){
+    #wrap{ flex-direction:column; }
+    #stage{ flex:1 1 52%; padding-top:46px; }
+    #side{ width:auto; flex:1 1 48%; border-left:none; border-top:1px solid var(--panel-edge);
+      padding:14px 14px 18px; }
+    .brand h1{ font-size:18px; }
+    #hint{ max-width:52%; }
+  }
+  @media (max-width:560px){ .brand .tag{ display:none; } .brand h1{ font-size:16px; } }
+  @media (max-width:430px){ .brand{ display:none; } .topbar{ padding:11px 12px 0; }
+    /* the score panel is short here — the hint box would sit ON the busy waveform.
+       The sidebar lede + "pick a pitch" note already carry the same instruction, so
+       drop the overlay at the narrowest rung (the rydberg @430 idiom). */
+    #hint{ display:none; } }
+  @media (prefers-reduced-motion: reduce){
+    .agree .mk, #tooltip{ transition:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../workbench/index.html">&larr; workbench</a>
+    </div>
+    <div class="brand">
+      <h1>The Butterfly's Voice</h1>
+      <span class="tag">a note's pitch IS its FFT bin</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for the per-leg detail (also printed to the console)">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <div id="stageInner">
+        <div id="scoreHost">
+          <span class="panelTag">keyboard + waveform · sound</span>
+          <canvas id="score"></canvas>
+          <div id="hint"></div>
+        </div>
+        <div id="conduitHost">
+          <canvas id="conduit"></canvas>
+        </div>
+        <div id="spectrumHost">
+          <span class="panelTag">|X[k]| spectrum · number</span>
+          <canvas id="spectrum"></canvas>
+        </div>
+      </div>
+      <div id="tooltip"></div>
+    </div>
+
+    <aside id="side">
+      <p class="lede" id="lede"><b>A note's pitch IS the exact FFT bin its spectrum peaks in.</b> Pick a note: the pitch that <span class="gilt">names</span> it — <b>semiToFreq(s)</b>, the same function that voices the Carillon's bells — predicts the integer bin <span class="gilt">c</span> where the imported <b>radix-2 FFT</b> places its peak. Under <b>coherent sampling</b> the line lands in <span class="gilt">one bin</span>: k<sub>measured</sub> = k<sub>predicted</sub> = c, <b>exactly</b>.</p>
+
+      <div class="sect">The note — pick a pitch</div>
+      <p class="note">Click a key on the strip (or use ◀ ▶ / the arrow keys). The picked key gilds; the waveform and the spectrum both update from the SAME synthesised buffer. Default: <b>middle C</b> (s=0).</p>
+
+      <div class="sect">The sampling — break it yourself</div>
+      <div class="seg" id="segMode">
+        <div class="opt coh on" data-mode="coherent">Coherent</div>
+        <div class="opt dev" data-mode="device">Device-rate (48kHz)</div>
+      </div>
+      <p class="note caveat" id="modeNote">In <b>coherent</b> mode we DERIVE the sample rate so exactly c whole cycles fit the window — the tone IS the DFT basis vector at bin c, so the match is geometry, not luck. Flip to <b>device-rate</b> and the cycles don't close: the line LEAKS across bins, the peak is only the NEAREST bin, and k·Δf recovers f to ±Δf/2, not exactly.</p>
+
+      <div class="sect">The window — N (power of two)</div>
+      <div class="seg" id="segN">
+        <div class="opt n" data-n="1024">1024</div>
+        <div class="opt n on" data-n="4096">4096</div>
+        <div class="opt n" data-n="16384">16384</div>
+      </div>
+      <p class="note">Exactness is (f, N, fs) <b>aligning</b>, not "more samples." Every choice here is a power of two — the butterfly's radix-2 requirement. A non-power-of-two N makes the transform throw (self-test LEG D).</p>
+
+      <div class="sect">The audio — muted by default</div>
+      <div class="seg" id="segAudio">
+        <div class="opt coh" data-audio="off">Sound off</div>
+        <div class="opt coh on" data-audio="on">Sound on</div>
+      </div>
+      <p class="note pure" id="pureNote">This is a <b>PURE tone</b> at the note's fundamental — not the Carillon's bell timbre (a real bell is inharmonic; its FFT peak isn't its fundamental). What you HEAR is the SAME buffer the FFT analyses. Honours the estate-wide <b>ws:pref:muted</b> key; first sound waits for a click.</p>
+
+      <div class="sect">One number, three faces</div>
+      <div class="twice">
+        <div class="Rrow"><span class="k">note</span><span class="v" id="hNote">—</span></div>
+        <div class="Rrow"><span class="k">f = semiToFreq(s)</span><span class="v acc" id="hFreq">—</span></div>
+        <div class="Rrow"><span class="k">c = predicted bin</span><span class="v" id="hPred">—</span></div>
+        <div class="agree" id="agree">
+          <div class="mk pred" id="mkPred"></div>
+          <div class="mk meas" id="mkMeas"></div>
+          <div class="lbl" id="agreeL">bin c</div><div class="lbl r" id="agreeR"></div>
+        </div>
+        <div class="Rrow div"><span class="k">measured peak k</span><span class="v" id="hMeas">—</span></div>
+        <div class="Rrow"><span class="k">recovered k·Δf</span><span class="v acc" id="hRec">—</span></div>
+        <div class="verdict exact" id="verdict">k = c — EXACT</div>
+        <div class="recovered" id="recovered">recovered f</div>
+        <p class="note" id="agreeNote">Coherent: k·Δf IS the note's pitch f, to machine precision — the bin the transform places it in is the frequency that names it.</p>
+      </div>
+
+      <div class="sect">Legend</div>
+      <div class="legend">
+        <div class="li"><span class="sw2" style="border-top-color:var(--accent)"></span> the synthesised waveform (slate)</div>
+        <div class="li"><span class="dot" style="background:var(--floor)"></span> the period-comb · bin c · pitch f (gilt)</div>
+        <div class="li"><span class="dia" style="background:var(--floor)"></span> k<sub>predicted</sub> = c (gilt diamond, drawn first)</div>
+        <div class="li"><span class="dot" style="background:var(--ink-dim)"></span> k<sub>measured</sub> (slate dot — lands ON c when coherent)</div>
+        <div class="li"><span class="sw2" style="border-top-color:var(--teeth)"></span> device-rate / leakage (violet)</div>
+      </div>
+
+      <div class="sect">&harr; the cross</div>
+      <a class="xteaser" href="../butterfly/index.html">
+        <span class="xk">&larr; The Butterfly &middot; the transform</span>
+        <span class="xt">the radix-2 <b>FFT</b> this bench runs on the note — <b>imported, no re-typed math</b>; here pointed at a single pure pitch.</span>
+      </a>
+      <a class="xteaser" href="../sound-garden/carillon.html">
+        <span class="xk">&larr; The Carillon &middot; the voice</span>
+        <span class="xt">where this note's pitch is BORN: <b>semiToFreq(semi)</b>, the same generating fn the bells ring.</span>
+      </a>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+// ════════════════════════ INLINED SINGLE-SOURCE CORES (the house pattern) ═════
+// The page is plain <script> (no type="module", no import) — the verified rydberg/
+// plumbline file:// pattern. The THREE cores below are BYTE-TWINS of their modules,
+// each between matching sentinels; the Node twin re-extracts each slice and asserts
+// it is char-for-char the imported authority, so "self-test green" can't drift.
+//   1) the PITCH core     (sound-garden/pitch-core.mjs) → semiToFreq / noteName
+//   2) the BUTTERFLY core (butterfly/core.mjs)          → fft / toComplex / isPow2
+//   3) the VOICE core     (voice-core.mjs)              → voiceSpectrum / deviceSpectrum / PLAYABLE / runSelfTest
+// The voice core's own `import` lines live OUTSIDE its sentinels in the module, so
+// they do not appear here; it references the symbols the two blocks above define.
+
+// ===== PITCH CORE (inlined byte-twin) BEGIN =====
+const MIDDLE_C_HZ = 261.625565;            // the ONE pitch anchor literal
+function semiToFreq(semi){ return MIDDLE_C_HZ * Math.pow(2, semi/12); }
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function noteName(semi){ const o=4+Math.floor(semi/12); const i=((semi%12)+12)%12; return NOTE_NAMES[i]+o; }
+// ===== PITCH CORE END =====
+
+// ===== BUTTERFLY CORE (byte-identical to core.mjs) =====
+function cx(re, im) { return { re: re, im: im === undefined ? 0 : im }; }
+function cAdd(a, b) { return { re: a.re + b.re, im: a.im + b.im }; }
+function cSub(a, b) { return { re: a.re - b.re, im: a.im - b.im }; }
+function cMul(a, b) {
+  return { re: a.re * b.re - a.im * b.im, im: a.re * b.im + a.im * b.re };
+}
+// e^(iθ) as a complex number.
+function cExp(theta) { return { re: Math.cos(theta), im: Math.sin(theta) }; }
+// worst-case (max) magnitude of the difference between two complex arrays.
+function maxDiff(a, b) {
+  let m = 0;
+  for (let i = 0; i < a.length; i++) {
+    const dr = a[i].re - b[i].re, di = a[i].im - b[i].im;
+    m = Math.max(m, Math.hypot(dr, di));
+  }
+  return m;
+}
+
+// ---------------------------------------------------------------------------
+//  IS-POWER-OF-TWO and the next power of two ≥ n.
+// ---------------------------------------------------------------------------
+function isPow2(n) { return n >= 1 && (n & (n - 1)) === 0; }
+function nextPow2(n) {
+  let p = 1;
+  while (p < n) p *= 2;
+  return p;
+}
+
+// ---------------------------------------------------------------------------
+//  THE FAST PATH — recursive radix-2 Cooley–Tukey FFT.
+//
+//  This is a pure decimation-in-time recursion: split into even/odd index
+//  halves, transform each (recursively), and butterfly back together with the
+//  twiddle W_N^k = e^(sign·2πi·k/N).  `sign` is −1 for the forward transform
+//  (fft) and +1 for the inverse (ifft).  N MUST be a power of two.
+//
+//  CRITICAL: this function NEVER calls `dft`.  Its only dependencies are the
+//  complex helpers and itself.  That source-disjointness is what makes the
+//  fft==dft agreement a real cross-check, not a tautology.
+// ---------------------------------------------------------------------------
+function fftRadix2(x, sign) {
+  const N = x.length;
+  if (N === 1) return [{ re: x[0].re, im: x[0].im }];
+  if (!isPow2(N)) throw new Error('radix-2 FFT needs a power-of-two length, got ' + N);
+  const half = N / 2;
+  const even = new Array(half), odd = new Array(half);
+  for (let i = 0; i < half; i++) {
+    even[i] = x[2 * i];
+    odd[i] = x[2 * i + 1];
+  }
+  const E = fftRadix2(even, sign);
+  const O = fftRadix2(odd, sign);
+  const out = new Array(N);
+  for (let k = 0; k < half; k++) {
+    // twiddle factor W_N^k = e^(sign·2πi·k/N)
+    const tw = cExp(sign * 2 * Math.PI * k / N);
+    const t = cMul(tw, O[k]);
+    out[k] = cAdd(E[k], t);          // top wing
+    out[k + half] = cSub(E[k], t);   // bottom wing
+  }
+  return out;
+}
+
+// Forward FFT (no normalisation, sign = −1).
+function fft(x) { return fftRadix2(x, -1); }
+
+// Inverse FFT (sign = +1, then divide by N).
+function ifft(X) {
+  const N = X.length;
+  const y = fftRadix2(X, +1);
+  return y.map(function (v) { return { re: v.re / N, im: v.im / N }; });
+}
+
+// ---------------------------------------------------------------------------
+//  THE SLOW PATH — naive O(N²) DFT, a SEPARATE code path.
+//
+//  Direct evaluation of  X[k] = Σ_n x[n]·e^(−2πi·kn/N).  This shares NO code
+//  with the FFT recursion (only the complex helpers).  It exists solely so the
+//  self-test can assert fft(x) == dft(x): two strangers' code, the same answer.
+//  This is INTENTIONALLY the naive double loop — do not "optimise" it into the
+//  FFT, or the agreement check loses its meaning.
+// ---------------------------------------------------------------------------
+function dft(x) {
+  const N = x.length;
+  const out = new Array(N);
+  for (let k = 0; k < N; k++) {
+    let re = 0, im = 0;
+    for (let n = 0; n < N; n++) {
+      const ang = -2 * Math.PI * k * n / N;
+      const c = Math.cos(ang), s = Math.sin(ang);
+      // x[n] · (c + i·s)
+      re += x[n].re * c - x[n].im * s;
+      im += x[n].re * s + x[n].im * c;
+    }
+    out[k] = { re: re, im: im };
+  }
+  return out;
+}
+
+// Naive inverse DFT (the slow counterpart of ifft) — also a separate path,
+// used to round-trip-check the slow transform on its own.
+function idft(X) {
+  const N = X.length;
+  const out = new Array(N);
+  for (let n = 0; n < N; n++) {
+    let re = 0, im = 0;
+    for (let k = 0; k < N; k++) {
+      const ang = 2 * Math.PI * k * n / N;
+      const c = Math.cos(ang), s = Math.sin(ang);
+      re += X[k].re * c - X[k].im * s;
+      im += X[k].re * s + X[k].im * c;
+    }
+    out[n] = { re: re / N, im: im / N };
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+//  THE SCHOOLBOOK CONVOLUTION — O(n²) coefficient multiplication of two
+//  polynomials a, b (real coefficient arrays, ascending powers).  Result length
+//  is len(a)+len(b)−1.  This is the GROUND TRUTH the FFT must reproduce.  It
+//  shares NO code with the transforms.
+// ---------------------------------------------------------------------------
+function conv(a, b) {
+  const out = new Array(a.length + b.length - 1).fill(0);
+  for (let i = 0; i < a.length; i++) {
+    for (let j = 0; j < b.length; j++) {
+      out[i + j] += a[i] * b[j];
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+//  CONVOLUTION VIA THE FFT.  Real coefficient arrays a, b.  When `pad` is true
+//  (the LINEAR convolution) we zero-pad both to N = nextPow2(len(a)+len(b)−1),
+//  so the cyclic FFT convolution has room and reproduces the linear answer.
+//  When `pad` is false (the CIRCULAR convolution — the TEETH) we force both to a
+//  common length WITHOUT the headroom, so wraparound aliasing corrupts the tail.
+//
+//  Returns the real parts of ifft(fft(â)·fft(b̂)), trimmed to `outLen`.
+// ---------------------------------------------------------------------------
+function toComplex(arr) { return arr.map(function (v) { return { re: v, im: 0 }; }); }
+
+function fftConvolve(a, b, pad) {
+  const linLen = a.length + b.length - 1;
+  let N;
+  if (pad) {
+    N = nextPow2(linLen);            // headroom ⇒ linear convolution
+  } else {
+    N = nextPow2(Math.max(a.length, b.length)); // no headroom ⇒ circular (aliased)
+  }
+  const A = toComplex(a.concat(new Array(N - a.length).fill(0)));
+  const B = toComplex(b.concat(new Array(N - b.length).fill(0)));
+  const FA = fft(A), FB = fft(B);
+  const prod = new Array(N);
+  for (let k = 0; k < N; k++) prod[k] = cMul(FA[k], FB[k]);
+  const y = ifft(prod);
+  const outLen = pad ? linLen : N;
+  const out = new Array(outLen);
+  for (let i = 0; i < outLen; i++) out[i] = y[i].re;
+  return out;
+}
+
+// Round a real array to a small number of decimals — used so the convolution
+// theorem can be asserted BYTE-IDENTICAL (the residual is pure float noise).
+function roundArr(arr, decimals) {
+  const f = Math.pow(10, decimals === undefined ? 6 : decimals);
+  return arr.map(function (v) {
+    const r = Math.round(v * f) / f;
+    return r === 0 ? 0 : r; // normalise −0 to 0
+  });
+}
+
+// max absolute difference between two real arrays (length-padded with 0).
+function maxAbsDiff(a, b) {
+  const n = Math.max(a.length, b.length);
+  let m = 0;
+  for (let i = 0; i < n; i++) m = Math.max(m, Math.abs((a[i] || 0) - (b[i] || 0)));
+  return m;
+}
+
+// ---------------------------------------------------------------------------
+//  A small deterministic PRNG (mulberry32) so the self-test's "many seeds" are
+//  reproducible — the transforms themselves never touch it.
+// ---------------------------------------------------------------------------
+function makeRng(seed) {
+  let s = seed >>> 0;
+  return function () {
+    s |= 0; s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+// a random complex signal of length N with components in [−1, 1).
+function randomSignal(rng, N) {
+  const out = new Array(N);
+  for (let i = 0; i < N; i++) out[i] = { re: 2 * rng() - 1, im: 2 * rng() - 1 };
+  return out;
+}
+// a random integer-coefficient polynomial of length len, coeffs in [−lo, hi].
+function randomPoly(rng, len, lo, hi) {
+  const out = new Array(len);
+  for (let i = 0; i < len; i++) out[i] = lo + Math.floor(rng() * (hi - lo + 1));
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+//  THE BUTTERFLY-DIAGRAM TRACE — for the animated view.  Returns, for a length-N
+//  signal, the per-STAGE state of an iterative (bit-reversed) radix-2 FFT so the
+//  page can draw the lanes splitting and the butterflies recombining.  This is a
+//  RENDER aid; it is verified to agree with the recursive fft() so the picture
+//  is not lying.  N must be a power of two.
+// ---------------------------------------------------------------------------
+function bitReverse(i, bits) {
+  let r = 0;
+  for (let b = 0; b < bits; b++) { r = (r << 1) | (i & 1); i >>= 1; }
+  return r;
+}
+function fftStages(x, sign) {
+  const N = x.length;
+  if (!isPow2(N)) throw new Error('fftStages needs a power-of-two length');
+  const bits = Math.round(Math.log2(N));
+  // permute into bit-reversed order
+  const a = new Array(N);
+  for (let i = 0; i < N; i++) a[i] = x[bitReverse(i, bits)];
+  const stages = [{ data: a.map(function (v) { return { re: v.re, im: v.im }; }), butterflies: [] }];
+  for (let len = 2; len <= N; len *= 2) {
+    const half = len / 2;
+    const butterflies = [];
+    for (let start = 0; start < N; start += len) {
+      for (let k = 0; k < half; k++) {
+        const tw = cExp((sign === undefined ? -1 : sign) * 2 * Math.PI * k / len);
+        const i = start + k, j = start + k + half;
+        const t = cMul(tw, a[j]);
+        const top = cAdd(a[i], t), bot = cSub(a[i], t);
+        butterflies.push({ i: i, j: j, k: k, len: len, tw: tw });
+        a[i] = top; a[j] = bot;
+      }
+    }
+    stages.push({ data: a.map(function (v) { return { re: v.re, im: v.im }; }), butterflies: butterflies });
+  }
+  return stages;
+}
+// the iterative result (last stage) — used to prove the staged path matches fft().
+function fftIterative(x) {
+  const stages = fftStages(x, -1);
+  return stages[stages.length - 1].data;
+}
+
+// ============================================================================
+//  THE SELF-TEST — proves the 3-part falsifiable claim EXACT.
+// ============================================================================
+function runSelfTest() {
+  const checks = [];
+  const detail = {};
+  function ok(name, cond, info) { checks.push({ name: name, pass: !!cond, info: info }); }
+
+  // ----- CLAIM (1): FAST == SLOW, over many seeds -----
+  {
+    let worst = 0, worstRt = 0;
+    const sizes = [2, 4, 8, 16, 32, 64];
+    const rng = makeRng(0x1234abcd);
+    for (let trial = 0; trial < 60; trial++) {
+      const N = sizes[trial % sizes.length];
+      const x = randomSignal(rng, N);
+      const fast = fft(x);
+      const slow = dft(x);                 // SOURCE-DISJOINT path
+      worst = Math.max(worst, maxDiff(fast, slow));
+      const back = ifft(fft(x));           // round-trip
+      worstRt = Math.max(worstRt, maxDiff(back, x));
+    }
+    detail.fftVsDft = worst;
+    detail.roundTrip = worstRt;
+    ok('FAST == SLOW: fft(x) == naive dft(x) to <1e-12 over 60 seeds',
+       worst < 1e-12, 'worst |Δ| = ' + worst.toExponential(2));
+    ok('ifft(fft(x)) == x round-trips to <1e-12',
+       worstRt < 1e-12, 'worst |Δ| = ' + worstRt.toExponential(2));
+  }
+
+  // ----- CLAIM (1b): the FFT path is SOURCE-DISJOINT from the DFT -----
+  // The function bodies that make up the fast path must never mention `dft`.
+  {
+    const fftBodies = [fftRadix2, fft, ifft, fftStages, fftIterative]
+      .map(function (f) { return f.toString(); }).join('\n');
+    const callsDft = /\bdft\s*\(/.test(fftBodies) || /\bidft\s*\(/.test(fftBodies);
+    detail.fftCallsDft = callsDft;
+    ok('source-disjoint: the FFT path never calls dft/idft (the agreement is load-bearing)',
+       !callsDft, callsDft ? 'FFT references dft — NOT disjoint!' : 'fast path is independent of the slow path');
+  }
+
+  // ----- CLAIM (1c): the staged (drawable) FFT matches the recursive fft() -----
+  {
+    let worst = 0;
+    const rng = makeRng(0x55aa55aa);
+    for (let trial = 0; trial < 20; trial++) {
+      const N = [2, 4, 8, 16][trial % 4];
+      const x = randomSignal(rng, N);
+      worst = Math.max(worst, maxDiff(fftIterative(x), fft(x)));
+    }
+    detail.stagedVsRecursive = worst;
+    ok('the animated staged FFT == the recursive fft() (the picture is not lying)',
+       worst < 1e-12, 'worst |Δ| = ' + worst.toExponential(2));
+  }
+
+  // ----- CLAIM (1d): the slow path round-trips on its own (idft∘dft == id) -----
+  {
+    let worst = 0;
+    const rng = makeRng(0x0f0f0f0f);
+    for (let trial = 0; trial < 12; trial++) {
+      const N = [2, 4, 8, 16][trial % 4];
+      const x = randomSignal(rng, N);
+      worst = Math.max(worst, maxDiff(idft(dft(x)), x));
+    }
+    detail.dftRoundTrip = worst;
+    ok('the slow path round-trips too: idft(dft(x)) == x to <1e-12',
+       worst < 1e-12, 'worst |Δ| = ' + worst.toExponential(2));
+  }
+
+  // ----- CLAIM (2): THE CONVOLUTION THEOREM, EXACT (linear, zero-padded) -----
+  {
+    let worstResidual = 0, allByteIdentical = true, firstBad = null;
+    const rng = makeRng(0x9e3779b9);
+    for (let trial = 0; trial < 40; trial++) {
+      const la = 2 + (trial % 7), lb = 3 + ((trial * 3) % 6);
+      const a = randomPoly(rng, la, -9, 9);
+      const b = randomPoly(rng, lb, -9, 9);
+      const slow = conv(a, b);                       // SOURCE-DISJOINT schoolbook
+      const fast = fftConvolve(a, b, true);          // zero-padded ⇒ linear
+      worstResidual = Math.max(worstResidual, maxAbsDiff(slow, fast));
+      // after the rounding the test states, the two are byte-identical:
+      const sR = JSON.stringify(roundArr(slow, 6));
+      const fR = JSON.stringify(roundArr(fast, 6));
+      if (sR !== fR) { allByteIdentical = false; if (!firstBad) firstBad = { a: a, b: b, slow: slow, fast: fast }; }
+    }
+    detail.convResidual = worstResidual;
+    detail.convByteIdentical = allByteIdentical;
+    ok('convolution theorem: ifft(fft·fft) == schoolbook conv to <1e-9 (40 random polys)',
+       worstResidual < 1e-9, 'worst |Δ| = ' + worstResidual.toExponential(2));
+    ok('convolution theorem: rounded(6dp) coefficient vectors are BYTE-IDENTICAL',
+       allByteIdentical, allByteIdentical ? 'every pair char-for-char equal' : 'a pair differed!');
+  }
+
+  // ----- CLAIM (3): TEETH — circular (un-padded) PROVABLY DIFFERS from linear -----
+  {
+    // A wraparound-nontrivial case: two polys whose linear product is longer than
+    // the circular length, so the tail MUST alias back onto the head.
+    const a = [1, 2, 3, 4];      // length 4
+    const b = [5, 6, 7, 8];      // length 4 ⇒ linear length 7, circular length 4
+    const linear = conv(a, b);                  // length 7
+    const circular = fftConvolve(a, b, false);  // length 4 (aliased)
+    const linearViaFft = fftConvolve(a, b, true); // sanity: padded matches schoolbook
+    // The circular result, length 4, equals linear with its tail wrapped:
+    //   circ[i] = linear[i] + linear[i+4]  (the aliasing identity)
+    const N = circular.length;
+    const aliased = new Array(N).fill(0);
+    for (let i = 0; i < linear.length; i++) aliased[i % N] += linear[i];
+    let aliasErr = 0;
+    for (let i = 0; i < N; i++) aliasErr = Math.max(aliasErr, Math.abs(circular[i] - aliased[i]));
+    // and it DIFFERS from the (truncated) linear head — the wraparound corrupts it:
+    let headDiff = 0;
+    for (let i = 0; i < N; i++) headDiff = Math.max(headDiff, Math.abs(circular[i] - linear[i]));
+    detail.teethAliasErr = aliasErr;
+    detail.teethHeadDiff = headDiff;
+    detail.teethCircular = circular;
+    detail.teethLinear = linear;
+    ok('TEETH: padded FFT-conv still matches schoolbook (the control is sound)',
+       maxAbsDiff(linear, linearViaFft) < 1e-9,
+       'padded |Δ| = ' + maxAbsDiff(linear, linearViaFft).toExponential(2));
+    ok('TEETH: circular (un-padded) conv == linear with the tail WRAPPED (the aliasing identity)',
+       aliasErr < 1e-9, 'alias-model |Δ| = ' + aliasErr.toExponential(2));
+    ok('TEETH: circular conv PROVABLY DIFFERS from linear (wraparound corrupts the head)',
+       headDiff > 1, 'max corruption = ' + headDiff.toFixed(2) + ' (≫ 0 ⇒ padding is necessary)');
+  }
+
+  // ----- determinism -----
+  {
+    const rng1 = makeRng(42), rng2 = makeRng(42);
+    const x1 = randomSignal(rng1, 8), x2 = randomSignal(rng2, 8);
+    const d = maxDiff(fft(x1), fft(x2));
+    ok('deterministic: identical seeds ⇒ identical transforms', d === 0, 'Δ = ' + d);
+  }
+
+  const pass = checks.filter(function (c) { return c.pass; }).length;
+  return { pass: pass, total: checks.length, checks: checks, detail: detail };
+}
+// ===== END BUTTERFLY CORE =====
+
+// ===== VOICE CORE (inlined byte-twin) BEGIN =====
+// The window size N is fixed to a power of two — the radix-2 FFT's only hard
+// requirement. fsRef is the device rate used ONLY to choose the integer cycle-count
+// c; the synthesised tone never samples at fsRef in coherent mode (it samples at the
+// DERIVED fs). Two octaves about middle C are playable; the keyboard exposes exactly
+// the semitones whose c lands a clean isolated peak (2 ≤ c ≤ N/2−2).
+const N = 4096;
+const FS_REF = 48000;
+
+// PLAYABLE — the semitones (relative to middle C, s=0) whose coherent cycle-count c
+// gives a clean isolated peak. Computed once from the cycle-count bound, not hard
+// coded: c = round(semiToFreq(s)·N/FS_REF) must satisfy 2 ≤ c ≤ N/2−2.
+const PLAYABLE = (function () {
+  const out = [];
+  for (let s = -24; s <= 24; s++) {
+    const f = semiToFreq(s);
+    const c = Math.round(f * N / FS_REF);
+    if (c >= 2 && c <= N / 2 - 2) out.push(s);
+  }
+  return out;
+})();
+
+// argmaxMag(mag) — the index of the largest magnitude bin (the measured peak).
+function argmaxMag(mag) {
+  let kMax = 0, peak = -Infinity;
+  for (let k = 0; k < mag.length; k++) { if (mag[k] > peak) { peak = mag[k]; kMax = k; } }
+  return kMax;
+}
+// secondToPeak(mag, kPeak) — the ratio (second-largest magnitude)/(peak), the
+// leakage meter. ~0 for a coherent line (one tower), > 0.1 for a leaking one.
+function secondToPeak(mag, kPeak) {
+  let peak = mag[kPeak], second = 0;
+  for (let k = 0; k < mag.length; k++) { if (k !== kPeak && mag[k] > second) second = mag[k]; }
+  return peak > 0 ? second / peak : 0;
+}
+
+// ── voiceSpectrum(s, {N}) — THE COHERENT PANEL. One call feeds BOTH panels and the
+// head, so they CANNOT disagree. Picks c = round(f·N/fsRef), DERIVES fs = f·N/c so
+// exactly c whole cycles fit the window, synthesises the pure tone at the TRUE f,
+// and runs the imported fft. Returns one shared-state object whose kMeas == c
+// (machine-exact) and whose fRecovered == f (machine-exact). df = fs/N is the bin
+// resolution; kMeas·df is the recovered pitch.
+function voiceSpectrum(s, opts) {
+  const NN = (opts && opts.N) || N;
+  const f = semiToFreq(s);
+  const name = noteName(s);
+  const cPred = Math.round(f * NN / FS_REF);        // integer cycle-count (uses fsRef)
+  const fs = f * NN / cPred;                          // DERIVE fs so c cycles fit exactly
+  const df = fs / NN;
+  const buf = new Array(NN);
+  for (let n = 0; n < NN; n++) buf[n] = { re: Math.cos(2 * Math.PI * f * n / fs), im: 0 };
+  const X = fft(buf);                                // the imported radix-2 FFT
+  const half = NN / 2;
+  const mag = new Array(half + 1);
+  for (let k = 0; k <= half; k++) mag[k] = Math.hypot(X[k].re, X[k].im);
+  const kMeas = argmaxMag(mag);
+  return {
+    s, f, name, c: cPred, fs, df,
+    fUsed: f, kMeas, fRecovered: kMeas * df,
+    mode: 'coherent', buf, mag, X,
+  };
+}
+
+// ── deviceSpectrum(s, {N, fs}) — THE TEETH. Pin fs = 48000 instead of deriving it:
+// c = f·N/fs is now fractional, the cycles don't close, the line LEAKS. The peak is
+// only the NEAREST bin; recovery is within ±Δf/2, not exact. Returns the same shape
+// plus {cFractional, leakage}. The visitor flips this to break coherence themselves.
+function deviceSpectrum(s, opts) {
+  const NN = (opts && opts.N) || N;
+  const fs = (opts && opts.fs) || 48000;
+  const f = semiToFreq(s);
+  const name = noteName(s);
+  const cFractional = f * NN / fs;                   // NON-integer ⇒ leakage
+  const df = fs / NN;
+  const buf = new Array(NN);
+  for (let n = 0; n < NN; n++) buf[n] = { re: Math.cos(2 * Math.PI * f * n / fs), im: 0 };
+  const X = fft(buf);
+  const half = NN / 2;
+  const mag = new Array(half + 1);
+  for (let k = 0; k <= half; k++) mag[k] = Math.hypot(X[k].re, X[k].im);
+  const kMeas = argmaxMag(mag);
+  return {
+    s, f, name, c: Math.round(cFractional), fs, df,
+    fUsed: f, kMeas, fRecovered: kMeas * df,
+    mode: 'device', buf, mag, X,
+    cFractional, leakage: secondToPeak(mag, kMeas),
+  };
+}
+
+// ── runSelfTest() — the SOLE ORACLE. Same shape as the rydberg/plumbline bench:
+// { pass, total, lines:[{name, ok, detail}] }. The in-page pill and the Node twin
+// both call THIS — one verdict, no second opinion. Every detail carries LIVE
+// numbers, never a hardcoded echo.
+function runSelfTest() {
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+
+  // ── LEG A — EXACT bin: every playable note lands in its predicted bin. ───────
+  {
+    let worst = 0, mislocated = 0, first = null;
+    for (const s of PLAYABLE) {
+      const r = voiceSpectrum(s);
+      const d = Math.abs(r.kMeas - r.c);
+      if (d > worst) worst = d;
+      if (r.kMeas !== r.c) { mislocated++; if (first === null) first = s; }
+    }
+    const ok = mislocated === 0 && worst === 0;
+    T('LEG A — exact bin (coherent): for EVERY playable note, the measured FFT peak bin k_measured === the predicted cycle-count c, to the integer (zero tolerance) — synthesis and transform agree on the SAME number',
+      ok, ok ? `${PLAYABLE.length}/${PLAYABLE.length} notes land in their predicted bin (worst |k−c| = 0)`
+             : `${mislocated} mislocated (first @ s=${first}); worst |k−c| = ${worst}`);
+  }
+
+  // ── LEG B — EXACT pitch: k·Δf recovers the TRUE semiToFreq pitch to machine tol.
+  // This is the leg a FIXED fs=N could NOT make exact (it leaves a ~10.8-cent
+  // residual); Approach B derives fs so the recovered Hz IS the note's true Hz.
+  {
+    let worst = 0, first = null;
+    for (const s of PLAYABLE) {
+      const r = voiceSpectrum(s);
+      const d = Math.abs(r.fRecovered - semiToFreq(s));
+      if (d > worst) { worst = d; }
+      if (d >= 1e-9 && first === null) first = s;
+    }
+    const ok = worst < 1e-9;
+    T('LEG B — exact pitch (coherent): k·Δf recovers the note\'s TRUE frequency f = semiToFreq(s) to < 1e-9 Hz across all playable notes — the recovered Hz IS the pitch (a fixed fs=N leaves a ~10.8-cent residual; deriving fs removes it)',
+      ok, ok ? `worst |k·Δf − f| = ${worst.toExponential(2)} Hz (< 1e-9 — machine-exact, no tuning residual)`
+             : `worst |k·Δf − f| = ${worst.toExponential(2)} Hz (first @ s=${first})`);
+  }
+
+  // ── LEG C — clean spike: the coherent line is ONE tower (no leakage). ────────
+  {
+    let worstDb = -Infinity, first = null;   // worst = the LEAST-negative (closest to 0)
+    for (const s of PLAYABLE) {
+      const r = voiceSpectrum(s);
+      const ratio = secondToPeak(r.mag, r.kMeas);
+      const db = 20 * Math.log10(ratio > 0 ? ratio : 1e-300);
+      if (db > worstDb) worstDb = db;
+      if (db > -40 && first === null) first = s;
+    }
+    const ok = worstDb <= -40;
+    T('LEG C — clean spike (coherent): the second-largest bin is ≥ 40 dB below the peak for EVERY playable note — the coherent line is a single tower with no leakage (this backs the visual)',
+      ok, ok ? `worst 2nd/peak = ${worstDb.toFixed(1)} dB below peak (≤ −40 dB — one clean spike)`
+             : `worst 2nd/peak = ${worstDb.toFixed(1)} dB (first leaker @ s=${first})`);
+  }
+
+  // ── LEG D — TEETH-1 (non-power-of-two N): the imported fft THROWS. ───────────
+  {
+    let threw = false, msg = '';
+    try { fft(toComplex(new Array(1000).fill(0))); }
+    catch (e) { threw = true; msg = String(e.message || e); }
+    const ok = threw && /power-of-two/.test(msg) && /1000/.test(msg);
+    T('LEG D — teeth (non-power-of-two N): fft(toComplex(1000 zeros)) THROWS "radix-2 FFT needs a power-of-two length, got 1000" — the transform refuses a window it cannot split (the radix-2 contract is real, not assumed)',
+      ok, ok ? `threw as designed: "${msg}"` : `did NOT throw the expected error (threw=${threw}, msg="${msg}")`);
+  }
+
+  // ── LEG E — TEETH-2 (device-rate, the visitor's negative control): at fs=48000
+  // the line LEAKS and recovery is only within ±Δf/2 — green = "leakage behaves as
+  // predicted," NOT "exact." ───────────────────────────────────────────────────
+  {
+    const r = deviceSpectrum(0, { fs: 48000 });    // middle C at a real device rate
+    const off = Math.abs(r.fRecovered - r.f);
+    const halfBin = r.df / 2;
+    const leaks = r.leakage > 0.1;                  // a non-integer c MUST leak
+    const nearest = off <= halfBin + 1e-9;          // peak is the NEAREST bin, within ±Δf/2
+    const nonInteger = Math.abs(r.cFractional - Math.round(r.cFractional)) > 1e-6;
+    const ok = leaks && nearest && nonInteger;
+    T('LEG E — teeth (device-rate, the visitor-operated negative control): at fs=48000 the cycle-count c is NON-integer, the line LEAKS (2nd/peak > 0.1), and k·Δf recovers f only within ±Δf/2 — green means "leakage behaves as predicted," NOT exact',
+      ok, ok ? `c=${r.cFractional.toFixed(3)} (non-integer) · leakage 2nd/peak = ${r.leakage.toFixed(3)} > 0.1 · off ${off.toFixed(2)} Hz ≤ Δf/2 = ${halfBin.toFixed(2)} Hz`
+             : `leaks=${leaks}(${r.leakage.toFixed(3)}) nearest=${nearest}(${off.toFixed(2)}≤${halfBin.toFixed(2)}) nonInteger=${nonInteger}`);
+  }
+
+  // ── LEG F — single-source: both the generator and the transform are IMPORTED. ─
+  {
+    const ok = typeof semiToFreq === 'function' && typeof noteName === 'function' &&
+               typeof fft === 'function' && typeof toComplex === 'function';
+    T('LEG F — single-source: semiToFreq (the generator) and fft/toComplex (the transform) are both IMPORTED functions — the pitch that names the note and the transform that places it are not re-typed here',
+      ok, ok ? 'semiToFreq + noteName + fft + toComplex all imported (the cross is two authorities meeting, not a copy)'
+             : `semiToFreq=${typeof semiToFreq} fft=${typeof fft} toComplex=${typeof toComplex}`);
+  }
+
+  const pass = lines.filter(l => l.ok).length;
+  return { pass, total: lines.length, lines };
+}
+// ===== VOICE CORE END =====
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE PAGE — render + interaction. CALLS the inlined cores (voiceSpectrum /
+   deviceSpectrum / PLAYABLE / runSelfTest) and never re-derives the transform.
+   ONE shared state → ONE current() spectrum object consumed by BOTH panels + the
+   head (they CANNOT disagree) → ONE rAF/Resize spine (drawScore → drawConduit →
+   drawSpectrum → updateHead). Two canvases share the spine; never two loops.
+   ════════════════════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+// ── THE SHARED STATE (panels can't disagree). ─────────────────────────────────
+const state = { semi: 0, mode: 'coherent', N: 4096 };
+
+// ── the ONE spectrum object BOTH panels + the head consume. ───────────────────
+function current(){
+  return (state.mode === 'device')
+    ? deviceSpectrum(state.semi, { N: state.N, fs: 48000 })
+    : voiceSpectrum(state.semi, { N: state.N });
+}
+
+// ── canvases + DPR ────────────────────────────────────────────────────────────
+const scoreC = $('score'), specC = $('spectrum'), condC = $('conduit');
+const scoreX = scoreC.getContext('2d'), specX = specC.getContext('2d'), condX = condC.getContext('2d');
+let DPR = 1;
+function fitOne(canvas, ctx){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const host = canvas.parentElement;
+  const w = host.clientWidth, h = host.clientHeight;
+  canvas.width = Math.max(1, Math.round(w * DPR)); canvas.height = Math.max(1, Math.round(h * DPR));
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  return { w, h };
+}
+
+// ════════════════════════ THE ONE DRAW SPINE ════════════════════════════════
+let raf = 0;
+function requestDraw(){ if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); }
+function draw(){
+  const sp = current();
+  drawScore(sp);
+  drawSpectrum(sp);
+  drawConduit(sp);
+  updateHead(sp);
+}
+
+// ── LEFT: keyboard strip (top ⅓) + synthesised waveform (bottom ⅔). ───────────
+let keyGeom = [];   // [{semi, x0, x1, cx}] for hit-testing
+function drawScore(sp){
+  const { w, h } = fitOne(scoreC, scoreX);
+  scoreX.clearRect(0, 0, w, h);
+  const padL = 12, padR = 12;
+  const kbBot = Math.round(h * 0.34);     // top third: the keyboard
+  // ── the keyboard strip over PLAYABLE semitones ──
+  keyGeom = [];
+  const nKeys = PLAYABLE.length;
+  const kw = (w - padL - padR) / nKeys;
+  const kbTop = 14;
+  for (let i = 0; i < nKeys; i++){
+    const semi = PLAYABLE[i];
+    const x0 = padL + i * kw, x1 = x0 + kw, cx = x0 + kw / 2;
+    keyGeom.push({ semi, x0, x1, cx });
+    const isSharp = ['C#','D#','F#','G#','A#'].some(t => keyName(semi).startsWith(t));
+    const picked = (semi === state.semi);
+    // key body
+    scoreX.fillStyle = picked ? cssVar('--floor')
+                     : isSharp ? 'rgba(127,178,230,0.07)' : 'rgba(255,255,255,0.04)';
+    scoreX.fillRect(x0 + 0.5, kbTop, kw - 1, kbBot - kbTop);
+    scoreX.strokeStyle = picked ? cssVar('--floor') : 'rgba(127,178,230,0.16)';
+    scoreX.lineWidth = picked ? 1.6 : 1;
+    scoreX.strokeRect(x0 + 0.5, kbTop, kw - 1, kbBot - kbTop);
+    // octave-C marker (a faint baseline tick under each C)
+    if (semi % 12 === 0){
+      scoreX.fillStyle = 'rgba(240,198,116,0.5)';
+      scoreX.fillRect(cx - 0.5, kbBot - 3, 1, 3);
+    }
+    // label only where it fits (collision-thinned: every key if wide enough, else Cs)
+    const showLbl = kw >= 16 || (semi % 12 === 0);
+    if (showLbl){
+      scoreX.fillStyle = picked ? '#06080c' : (isSharp ? '#6b6e7e' : '#9a9caa');
+      scoreX.font = (picked ? '600 ' : '') + (kw >= 22 ? '8.5px' : '7px') + ' ui-monospace, monospace';
+      scoreX.textAlign = 'center';
+      scoreX.save();
+      // rotate the label vertically when keys are narrow
+      if (kw < 22){ scoreX.translate(cx, (kbTop + kbBot) / 2); scoreX.rotate(-Math.PI / 2); scoreX.fillText(keyName(semi), 0, 3); }
+      else scoreX.fillText(keyName(semi), cx, (kbTop + kbBot) / 2 + 3);
+      scoreX.restore();
+    }
+  }
+  // ── the synthesised waveform (bottom ⅔) with the gilt period-comb ──
+  const wfTop = kbBot + 16, wfBot = h - 30;
+  const midY = (wfTop + wfBot) / 2, amp = (wfBot - wfTop) / 2 * 0.92;
+  // baseline
+  scoreX.strokeStyle = 'rgba(127,178,230,0.14)'; scoreX.lineWidth = 1;
+  scoreX.beginPath(); scoreX.moveTo(padL, midY + 0.5); scoreX.lineTo(w - padR, midY + 0.5); scoreX.stroke();
+  const NN = sp.buf.length;
+  const wfW = w - padL - padR;
+  const xOf = n => padL + n / (NN - 1) * wfW;
+  // the GILT period-comb at i = j·(N−1)/c — last tick lands flush on the right edge
+  // (coherent: c whole cycles, window closes flush; device: it visibly does NOT).
+  const c = (sp.mode === 'device') ? sp.cFractional : sp.c;
+  // thin the comb at high c but ALWAYS keep first + last (flush closure is the point).
+  let step = 1; if (c > 60) step = 4; else if (c > 28) step = 2;
+  scoreX.strokeStyle = 'rgba(240,198,116,0.30)'; scoreX.lineWidth = 1;
+  for (let j = 0; j <= Math.floor(c); j++){
+    if (j !== 0 && j !== Math.floor(c) && (j % step) !== 0) continue;
+    const xi = padL + (j * (NN - 1) / c) / (NN - 1) * wfW;
+    if (xi > w - padR + 0.5) continue;
+    scoreX.beginPath(); scoreX.moveTo(xi, wfTop); scoreX.lineTo(xi, wfBot); scoreX.stroke();
+  }
+  // the right-edge "window close" marker — gilt if flush (coherent), violet if not.
+  const lastTickX = padL + (Math.floor(c) * (NN - 1) / c) / (NN - 1) * wfW;
+  const flush = Math.abs(lastTickX - (w - padR)) < 2 && Math.abs(c - Math.round(c)) < 1e-9;
+  scoreX.strokeStyle = flush ? cssVar('--floor') : cssVar('--teeth'); scoreX.lineWidth = 2;
+  scoreX.beginPath(); scoreX.moveTo(w - padR, wfTop - 2); scoreX.lineTo(w - padR, wfBot + 2); scoreX.stroke();
+  // the waveform itself (decimate to ~2px/sample max for speed)
+  scoreX.strokeStyle = cssVar('--accent'); scoreX.lineWidth = 1.6;
+  scoreX.shadowBlur = 6; scoreX.shadowColor = cssVar('--accent');
+  scoreX.beginPath();
+  const px = Math.max(1, Math.floor(NN / wfW / 2));   // samples per pixel-ish
+  let started = false;
+  for (let n = 0; n < NN; n += px){
+    const x = xOf(n), y = midY - sp.buf[n].re * amp;
+    if (!started){ scoreX.moveTo(x, y); started = true; } else scoreX.lineTo(x, y);
+  }
+  scoreX.stroke(); scoreX.shadowBlur = 0;
+  // caption
+  scoreX.fillStyle = '#6b6e7e'; scoreX.font = '9px ui-monospace, monospace'; scoreX.textAlign = 'left';
+  scoreX.fillText(flush ? ('c = ' + Math.round(c) + ' cycles · window closes flush') :
+                          ('c = ' + c.toFixed(3) + ' cycles · window does NOT close → leakage'),
+                  padL, wfBot + 16);
+  // stash the waveform's right edge for the conduit
+  drawScore._edgeX = w - padR; drawScore._edgeY = midY;
+}
+// note name for a key WITHOUT touching the single-source noteName slice's output
+// formatting (we just need C/C#/... for sharp detection + key labels). Mirror it.
+function keyName(semi){
+  const NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const o = 4 + Math.floor(semi / 12), i = ((semi % 12) + 12) % 12;
+  return NAMES[i] + o;
+}
+
+// ── RIGHT: |X[k]| magnitude bars, zoomed to k∈[0,2c] around the peak. ─────────
+function drawSpectrum(sp){
+  const { w, h } = fitOne(specC, specX);
+  specX.clearRect(0, 0, w, h);
+  const padL = 30, padR = 14, padT = 18, padB = 40;
+  const c = (sp.mode === 'device') ? sp.cFractional : sp.c;
+  const kHi = Math.max(8, Math.min(sp.mag.length - 1, Math.ceil(2 * c) + 2));  // zoom to [0,2c]
+  const kLo = 0;
+  const sx = k => padL + (k - kLo) / (kHi - kLo) * (w - padL - padR);
+  // peak magnitude for normalisation
+  let peak = 0; for (let k = kLo; k <= kHi; k++) peak = Math.max(peak, sp.mag[k]);
+  if (peak <= 0) peak = 1;
+  const barTop = padT, barBot = h - padB;
+  const sy = m => barBot - (m / peak) * (barBot - barTop);
+  // frame
+  specX.strokeStyle = 'rgba(127,178,230,0.14)'; specX.lineWidth = 1;
+  specX.strokeRect(padL + 0.5, padT + 0.5, w - padL - padR - 1, barBot - padT - 1);
+
+  // ── the GILT ghost-tick at k_pred = c, drawn FIRST UNDER the bars (the
+  // prediction pre-committed) ──
+  const cPredX = sx(sp.c);    // predicted bin (rounded) — gilt
+  specX.strokeStyle = 'rgba(240,198,116,0.5)'; specX.lineWidth = 1.4; specX.setLineDash([3, 3]);
+  specX.beginPath(); specX.moveTo(cPredX, barTop); specX.lineTo(cPredX, barBot); specX.stroke();
+  specX.setLineDash([]);
+  specX.fillStyle = cssVar('--floor'); specX.font = '600 8.5px ui-monospace, monospace'; specX.textAlign = 'center';
+  specX.fillText('k_pred = c', cPredX, barTop - 6);
+
+  // ── the magnitude bars ──
+  const barW = Math.max(1, (w - padL - padR) / (kHi - kLo) * 0.7);
+  let barX = cPredX, barY = barBot;
+  for (let k = kLo; k <= kHi; k++){
+    const x = sx(k), y = sy(sp.mag[k]);
+    const isPeak = (k === sp.kMeas);
+    specX.fillStyle = isPeak ? cssVar('--floor') : (sp.mode === 'device' ? 'rgba(176,143,211,0.55)' : 'rgba(127,178,230,0.5)');
+    specX.fillRect(x - barW / 2, y, barW, barBot - y);
+    if (isPeak){ barX = x; barY = y;
+      // a gilt glow on the measured peak
+      specX.save(); specX.shadowBlur = 10; specX.shadowColor = cssVar('--floor');
+      specX.fillRect(x - barW / 2, y, barW, barBot - y); specX.restore();
+    }
+  }
+
+  // ── the agreement-ring where prediction + measurement meet ──
+  if (sp.mode === 'coherent'){
+    specX.strokeStyle = cssVar('--floor'); specX.lineWidth = 1.6;
+    specX.beginPath(); specX.arc(barX, barY, 8, 0, 7); specX.stroke();
+  } else {
+    // device: separate the markers, label the leakage
+    specX.fillStyle = cssVar('--teeth'); specX.font = '600 8.5px ui-monospace, monospace'; specX.textAlign = 'left';
+    specX.fillText('leak ' + (sp.leakage * 100).toFixed(0) + '%', sx(sp.kMeas) + 8, barY + 4);
+  }
+
+  // ── frequency axis: dual ticks (bin k mono top, k·Δf Hz dimmer below),
+  // collision-walk thinning; ALWAYS keep the c / f label gilt. ──
+  specX.textAlign = 'center';
+  // candidate bins to label: 0, c (always), and a sweep
+  const cand = [];
+  const tickStep = Math.max(1, Math.round((kHi - kLo) / 8));
+  for (let k = kLo; k <= kHi; k += tickStep) cand.push(k);
+  if (!cand.includes(sp.kMeas)) cand.push(sp.kMeas);
+  cand.sort((a, b) => a - b);
+  // draw the gilt c/f label FIRST so it's never dropped, seed the collision walls.
+  const cx0 = sx(sp.kMeas);
+  specX.font = '600 9px ui-monospace, monospace';
+  const kStr = 'k=' + sp.kMeas;
+  let lastKRight = cx0 + specX.measureText(kStr).width / 2 + 3;
+  let lastKLeft = cx0 - specX.measureText(kStr).width / 2 - 3;
+  specX.fillStyle = cssVar('--floor');
+  specX.fillText(kStr, cx0, barBot + 14);
+  specX.font = '600 8px ui-monospace, monospace';
+  const hzStr = (sp.kMeas * sp.df).toFixed(0) + 'Hz';
+  let lastHzRight = cx0 + specX.measureText(hzStr).width / 2 + 3;
+  let lastHzLeft = cx0 - specX.measureText(hzStr).width / 2 - 3;
+  specX.fillStyle = 'rgba(240,198,116,0.75)';
+  specX.fillText(hzStr, cx0, barBot + 25);
+  // now the rest, dropping any that collide with a KEPT label (Hz row drops first)
+  for (const k of cand){
+    if (k === sp.kMeas) continue;
+    const x = sx(k);
+    specX.strokeStyle = 'rgba(127,178,230,0.18)'; specX.lineWidth = 1;
+    specX.beginPath(); specX.moveTo(x, barBot); specX.lineTo(x, barBot + 4); specX.stroke();
+    // bin label (mono top)
+    specX.font = '9px ui-monospace, monospace';
+    const ks = String(k), kh = specX.measureText(ks).width / 2;
+    if (x + kh < lastKLeft || x - kh > lastKRight){
+      specX.fillStyle = '#9a9caa'; specX.fillText(ks, x, barBot + 14);
+      if (x > cx0){ lastKRight = x + kh + 3; } else { lastKLeft = x - kh - 3; }
+    }
+    // Hz label (dimmer below) — drops first
+    specX.font = '8px ui-monospace, monospace';
+    const hs = (k * sp.df).toFixed(0), hh = specX.measureText(hs).width / 2;
+    if (x + hh < lastHzLeft || x - hh > lastHzRight){
+      specX.fillStyle = '#6b6e7e'; specX.fillText(hs, x, barBot + 25);
+      if (x > cx0){ lastHzRight = x + hh + 3; } else { lastHzLeft = x - hh - 3; }
+    }
+  }
+  // axis title
+  specX.fillStyle = '#9a9caa'; specX.font = '600 9px ui-monospace, monospace'; specX.textAlign = 'center';
+  specX.fillText('bin k  (Δf = ' + sp.df.toFixed(2) + ' Hz)', (padL + w - padR) / 2, h - 6);
+
+  // stash the measured peak bar position for the conduit
+  drawSpectrum._barX = barX; drawSpectrum._barY = barY;
+}
+
+// ── THE CONDUIT — the sound becoming the number (ONE shared light-pipe). ──────
+function drawConduit(sp){
+  const { w, h } = fitOne(condC, condX);
+  condX.clearRect(0, 0, w, h);
+  const y0 = drawScore._edgeY, x1 = drawSpectrum._barX, y1 = drawSpectrum._barY;
+  if (y0 == null || x1 == null) return;
+  // the pipe runs from the waveform's right edge (conduit-local x=0) to the
+  // measured peak bar (mapped from the spectrum canvas into conduit-local coords).
+  const specLeftInCond = w;             // the spectrum starts at the conduit's right edge
+  const startY = Math.max(8, Math.min(h - 8, y0));
+  const endY = Math.max(8, Math.min(h - 8, y1));
+  const coherent = (sp.mode === 'coherent');
+  const col = coherent ? cssVar('--floor') : cssVar('--teeth');
+  const grad = condX.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0, coherent ? 'rgba(127,178,230,0.7)' : 'rgba(176,143,211,0.7)');
+  grad.addColorStop(1, col);
+  condX.strokeStyle = grad; condX.lineWidth = 2.2;
+  condX.shadowBlur = 8; condX.shadowColor = col;
+  condX.beginPath(); condX.moveTo(0, startY);
+  condX.bezierCurveTo(w * 0.5, startY, w * 0.5, endY, w, endY);
+  condX.stroke(); condX.shadowBlur = 0;
+}
+
+// ── THE DUAL HEAD — one number, three faces. ──────────────────────────────────
+function updateHead(sp){
+  $('hNote').textContent = sp.name;
+  $('hFreq').textContent = sp.f.toFixed(3) + ' Hz';
+  $('hPred').textContent = (sp.mode === 'device')
+    ? ('round(' + sp.cFractional.toFixed(3) + ') = ' + sp.c)
+    : String(sp.c);
+  $('hMeas').textContent = 'k = ' + sp.kMeas;
+  $('hRec').textContent = sp.fRecovered.toFixed(3) + ' Hz';
+  // the agreement micro-track: k_pred diamond + k_meas dot.
+  // map bins onto [0..1] across a small window around c.
+  const lo = sp.c - 2, hi = sp.c + 2;
+  const toPct = k => Math.max(2, Math.min(98, (k - lo) / (hi - lo) * 100));
+  $('mkPred').style.left = toPct(sp.c) + '%';
+  $('mkMeas').style.left = toPct(sp.kMeas) + '%';
+  $('agreeL').textContent = 'bin ' + lo;
+  $('agreeR').textContent = 'bin ' + hi;
+  // verdict + recovered + note flip with mode
+  const v = $('verdict'), recov = $('recovered'), agreeNote = $('agreeNote');
+  if (sp.mode === 'coherent'){
+    const exact = (sp.kMeas === sp.c) && Math.abs(sp.fRecovered - sp.f) < 1e-9;
+    v.className = 'verdict exact'; v.textContent = exact ? 'k = c — EXACT' : 'k ≠ c (unexpected!)';
+    recov.className = 'recovered';
+    recov.innerHTML = 'recovered f = ' + sp.fRecovered.toFixed(3) + ' Hz <span class="sub">= semiToFreq(' + sp.s + ') to machine precision · Δ = ' + Math.abs(sp.fRecovered - sp.f).toExponential(1) + ' Hz</span>';
+    agreeNote.textContent = 'Coherent: k·Δf IS the note\'s pitch f, to machine precision — we CHOSE fs so the DFT basis vector at bin c IS this tone (geometry, not a lucky measurement).';
+  } else {
+    const off = Math.abs(sp.fRecovered - sp.f), half = sp.df / 2;
+    v.className = 'verdict leak'; v.textContent = 'leaks — NEAREST bin only';
+    recov.className = 'recovered teeth';
+    recov.innerHTML = 'recovered f = ' + sp.fRecovered.toFixed(2) + ' Hz <span class="sub">off ' + off.toFixed(2) + ' Hz ≤ Δf/2 = ' + half.toFixed(2) + ' Hz · leakage ' + (sp.leakage * 100).toFixed(0) + '%</span>';
+    agreeNote.textContent = 'Device-rate: the cycles don\'t close, the line LEAKS across bins — the peak is only the NEAREST bin and k·Δf recovers f to ±Δf/2, not exactly.';
+  }
+}
+
+// ════════════════════════ HIT-TESTING + INTERACTION ═════════════════════════
+function keyHit(ev){
+  const r = scoreC.getBoundingClientRect(); const x = ev.clientX - r.left, y = ev.clientY - r.top;
+  const kbBot = scoreC.clientHeight * 0.34;
+  if (y > kbBot + 4) return null;        // only the keyboard strip is clickable
+  for (const k of keyGeom){ if (x >= k.x0 && x < k.x1) return k.semi; }
+  return null;
+}
+function pickSemi(semi){
+  if (semi === null || semi === undefined) return;
+  // clamp to the playable set
+  if (!PLAYABLE.includes(semi)) return;
+  state.semi = semi;
+  if (Audio.on && !Audio.muted) playTone();
+  syncURL(); requestDraw();
+}
+scoreC.addEventListener('pointerdown', ev => { const s = keyHit(ev); if (s !== null){ pickSemi(s); } });
+scoreC.addEventListener('pointermove', ev => {
+  const s = keyHit(ev);
+  if (s === null){ $('tooltip').classList.remove('show'); return; }
+  const tt = $('tooltip');
+  tt.innerHTML = '<b>' + keyName(s) + '</b> · s=' + s + ' · f=' + (function(){ const sp = (state.mode==='device')?deviceSpectrum(s,{N:state.N,fs:48000}):voiceSpectrum(s,{N:state.N}); return sp.f.toFixed(2); })() + 'Hz';
+  tt.classList.add('show');
+  const wrapR = $('stage').getBoundingClientRect();
+  tt.style.left = Math.min(ev.clientX - wrapR.left + 14, wrapR.width - 230) + 'px';
+  tt.style.top = (ev.clientY - wrapR.top + 14) + 'px';
+});
+scoreC.addEventListener('pointerleave', () => $('tooltip').classList.remove('show'));
+// arrow keys step the picked note across PLAYABLE
+window.addEventListener('keydown', ev => {
+  const idx = PLAYABLE.indexOf(state.semi); if (idx < 0) return;
+  if (ev.key === 'ArrowRight' || ev.key === 'ArrowUp'){ pickSemi(PLAYABLE[Math.min(PLAYABLE.length - 1, idx + 1)]); ev.preventDefault(); }
+  else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowDown'){ pickSemi(PLAYABLE[Math.max(0, idx - 1)]); ev.preventDefault(); }
+});
+
+// ════════════════════════ CONTROLS ═════════════════════════════════════════
+function defaultHint(){
+  $('hint').innerHTML = '<b>click</b> a key (or <b>← →</b>) to pick a note · the gilt <span class="g">comb</span> shows c cycles closing flush · flip to <b>device-rate</b> to break it';
+}
+$('segMode').addEventListener('click', e => {
+  const opt = e.target.closest('.opt'); if (!opt) return;
+  state.mode = opt.dataset.mode;
+  [...$('segMode').children].forEach(o => o.classList.toggle('on', o === opt));
+  if (Audio.on && !Audio.muted) playTone();
+  syncURL(); requestDraw();
+});
+$('segN').addEventListener('click', e => {
+  const opt = e.target.closest('.opt'); if (!opt) return;
+  state.N = parseInt(opt.dataset.n, 10);
+  [...$('segN').children].forEach(o => o.classList.toggle('on', o === opt));
+  if (Audio.on && !Audio.muted) playTone();
+  syncURL(); requestDraw();
+});
+
+// ════════════════════════ AUDIO (muted-by-default, ws:pref:muted) ═══════════
+// Web Audio, osc.type='sine', freq=f — the SAME pure pitch the FFT analyses (what
+// you HEAR provably == what the transform measures). Honours the canonical estate
+// key ws:pref:muted (read on load; not invented here). First sound waits for a
+// user gesture (AudioContext.resume). The self-test is AUDIO-INDEPENDENT.
+function readMutePref(){ try{ return localStorage.getItem('ws:pref:muted') === '1'; }catch(e){ return false; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v ? '1' : '0'); }catch(e){} }
+// MUTED BY DEFAULT: on load the page is silent (Audio.on=false) — sound starts ONLY
+// after the visitor clicks "Sound on" (a user gesture, autoplay-safe). The shared
+// estate key ws:pref:muted is still authoritative: if it says muted, "Sound on" is
+// suppressed and the toggle reflects that even mid-session (the storage listener).
+const Audio = { ctx: null, osc: null, gain: null, on: false, muted: readMutePref() };
+function ensureCtx(){
+  if (Audio.ctx) return;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  Audio.ctx = new AC();
+  Audio.gain = Audio.ctx.createGain(); Audio.gain.gain.value = 0; Audio.gain.connect(Audio.ctx.destination);
+  Audio.osc = Audio.ctx.createOscillator(); Audio.osc.type = 'sine'; Audio.osc.frequency.value = 440;
+  Audio.osc.connect(Audio.gain); Audio.osc.start();
+}
+function playTone(){
+  ensureCtx(); if (!Audio.ctx) return;
+  if (Audio.ctx.state === 'suspended') Audio.ctx.resume();
+  const sp = current();
+  const now = Audio.ctx.currentTime;
+  Audio.osc.frequency.setValueAtTime(sp.f, now);   // f = semiToFreq(s), the analysed pitch
+  // a short gated note so it doesn't drone
+  Audio.gain.gain.cancelScheduledValues(now);
+  Audio.gain.gain.setValueAtTime(0, now);
+  Audio.gain.gain.linearRampToValueAtTime(Audio.muted ? 0 : 0.16, now + 0.01);
+  Audio.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+}
+$('segAudio').addEventListener('click', e => {
+  const opt = e.target.closest('.opt'); if (!opt) return;
+  const wantOn = opt.dataset.audio === 'on';
+  Audio.on = wantOn;
+  // "Sound on" maps to NOT muted; honours the shared key both ways.
+  Audio.muted = !wantOn;
+  writeMutePref(Audio.muted);
+  [...$('segAudio').children].forEach(o => o.classList.toggle('on', o === opt));
+  if (wantOn) playTone();
+});
+// honour another tab/page toggling the shared mute pref
+window.addEventListener('storage', e => {
+  if (e.key !== 'ws:pref:muted') return;
+  Audio.muted = readMutePref();
+  syncAudioUI();
+});
+function syncAudioUI(){
+  // "Sound on" is lit ONLY when THIS page is actively sounding (Audio.on) AND the
+  // shared pref isn't muted. Muted-by-default: on load Audio.on=false ⇒ "Sound off"
+  // lit, regardless of whether ws:pref:muted is absent or '0'. A mid-session mute
+  // (another tab sets ws:pref:muted=1) forces "Sound off" lit here too.
+  if (Audio.muted) Audio.on = false;
+  const showOn = Audio.on && !Audio.muted;
+  [...$('segAudio').children].forEach(o => o.classList.toggle('on', (o.dataset.audio === 'on') === showOn));
+}
+
+// ── URL hash: semi|mode|N ─────────────────────────────────────────────────────
+function syncURL(){ history.replaceState(null, '', '#' + [state.semi, state.mode, state.N].join('|')); }
+function loadURL(){
+  const h = decodeURIComponent(location.hash.replace(/^#/, '')); if (!h) return;
+  const p = h.split('|'); if (p.length < 3) return;
+  const s = parseInt(p[0], 10); if (!isNaN(s) && PLAYABLE.includes(s)) state.semi = s;
+  if (p[1] === 'coherent' || p[1] === 'device') state.mode = p[1];
+  const n = parseInt(p[2], 10); if ([1024, 4096, 16384].includes(n)) state.N = n;
+}
+function applyStateToUI(){
+  [...$('segMode').children].forEach(o => o.classList.toggle('on', o.dataset.mode === state.mode));
+  [...$('segN').children].forEach(o => o.classList.toggle('on', parseInt(o.dataset.n, 10) === state.N));
+  syncAudioUI();
+}
+
+// ════════════════════════ THE SELF-TEST PILL ════════════════════════════════
+function runPill(){
+  let r;
+  try { r = runSelfTest(); }
+  catch (e){ console.error('[butterfly-voice] self-test threw:', e); r = { pass:0, total:1, lines:[{ name:'self-test threw', ok:false, detail:String(e) }] }; }
+  const el = $('selftest'); const green = r.pass === r.total;
+  el.classList.toggle('ok', green); el.classList.toggle('bad', !green);
+  el.textContent = green ? ('pitch IS its bin ✓ ' + r.pass + '/' + r.total) : ('self-test ✗ ' + r.pass + '/' + r.total);
+  el.title = r.lines.map(l => (l.ok ? '✓ ' : '✗ ') + l.name + (l.detail ? '  (' + l.detail + ')' : '')).join('\n\n');
+  if (!green){ console.error('[butterfly-voice] SELF-TEST FAILED — ' + r.pass + '/' + r.total); for (const l of r.lines) if (!l.ok) console.error('  ✗ ' + l.name + '  ·  ' + l.detail); }
+  else console.log('[butterfly-voice] self-test ' + r.pass + '/' + r.total + ' ✓ — a note\'s pitch IS its FFT bin (exact bin · exact pitch · clean spike · teeth: non-pow2 throw + device-rate leakage · single-source)');
+  return r;
+}
+$('selftest').addEventListener('click', runPill);
+window.__voiceSelfTest = runSelfTest;
+
+// ════════════════════════ BOOT ═════════════════════════════════════════════
+window.addEventListener('resize', requestDraw);
+const ro = new ResizeObserver(() => requestDraw());
+ro.observe($('scoreHost')); ro.observe($('spectrumHost')); ro.observe($('conduitHost'));
+loadURL(); applyStateToUI(); defaultHint(); runPill(); draw();
+
+</script>
+</body>
+</html>
