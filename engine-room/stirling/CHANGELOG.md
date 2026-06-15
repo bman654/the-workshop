@@ -5,6 +5,64 @@ Thesis: **the same ceiling, a different machine.** Carnot joins its two isotherm
 Stirling joins them with two *isochores* (constant volume) plus a *regenerator*, and with an ideal
 regenerator (effectiveness ε = 1) it reaches the very same wall, η = 1 − T_c/T_h.
 
+## v2 — 2026-06-15 (cycle #45 — RE-SOULED in place: the bench now LEADS with the machine)
+
+The estate-wide soul audit flagged this bench as graph-first: two P–V/T–S curves as the hero, the engine
+itself nowhere to be seen. **The re-soul shows the THING.** The bench now leads with a live, animated
+**brass-and-glass Stirling cross-section** running the four-stroke cycle; the two curves are **demoted** to
+a side-gauge ("the loop is the engine's shadow") with a colored **bead** walking them phase-locked to the
+strokes. **Same route, same `ws:seen:stirling` breadcrumb, no map change.**
+
+**What you now watch (canvas `#engine`, drawn each frame from θ + the ledger):** a domed firebox hot cap
+(T_h); a riveted brass bore with a glass-cutaway sheen; a translucent **gas body** whose height tracks the
+current volume and whose color lerps condenser↔firebox with the gas temperature (drifting particle dots
+sell "gas"); a loose **displacer** slug with side-clearance gaps (visually distinct from the sealed
+**power piston** disc+rod); a fixed **regenerator mesh** band whose bloom = ε × storedFraction (charges on
+the cooling isochore, drains on the warming isochore) with a faint **red leak shimmer** at the cold fins
+of opacity ∝ (1−ε); a spinning **crank + flywheel** whose two con-rods make the standard **90° displacer/
+piston phase** literal (not asserted); a θ-dial and a **stroke nameplate** naming the live leg.
+
+**The bridge (no new physics).** All thermo verdicts still come ONLY from the preserved STIRLING-CORE via
+`compute()→m` — the animation **reads, never computes**. The stroke = `legOf(θ)` (an ordered 0→1→2→3
+quadrant partition); gas T/V at θ come from the SAME `sampleLeg`/`traceLoop` the loops use, sampled by a
+shared `beadAt(traced, θ)` so the bead and the verdicts share **one parameterization and cannot drift**.
+The four strokes are color-keyed to the four legs with one shared palette (hot-expand `--firebox` ·
+cool-isochore `--regen` teal [mesh charging] · cold-compress `--condenser` · warm-isochore `--regen` teal
+[mesh discharging]); the current-leg color tints the active engine element AND the active loop bead at the
+same instant — "this corner of the curve IS this stroke," taught by color, no prose.
+
+**The kinematics are PRESENTATION-ONLY** (commented as carrying no physics claim): `kin(θ)` places the
+metal on the smooth real linkage (`yPiston = ½(1−cos θ)`, `yDisplacer = ½(1−cos(θ+π/2))`), while gas T/V,
+mesh charge, and the bead **snap to the idealized core legs by quadrant** — the nameplate + the bead
+snapping cleanly to each leg corner mark it as a clearly-labeled idealization.
+
+**Interaction.** The ε slider stays the hero knob (unchanged wiring) — drag it and the mesh dims, the cold
+fins leak red, and the tower/Sankey/ΔS/η all sink, in lockstep. A run/pause + speed control (crank idles
+~0.4 Hz); **pause → drag the flywheel to scrub θ** by hand (the touchable hook); a "step ¼-cycle" button
+parks θ at a clean leg corner; the ε-sweep button stays. **One RAF:** the θ-advancing crank loop is folded
+into the existing `pulseLoop`/`requestRender` model and coordinates with the ε-sweep guard — no two RAFs
+fighting. **Reduced-motion:** no auto-spin — one correct static frame at θ=π/4 (mid hot-expansion) with
+mesh + bead placed; the ε slider still updates the static picture AND the verdicts; scrub remains available.
+
+**Preservation contract held.** The STIRLING-CORE slice between the `// === BEGIN/END ===` sentinels is
+**untouched** — `node engine-room/stirling/core.test.mjs` → **17/17 GREEN, exit 0**, the `[parity]★` row
+still reads **6053 bytes byte-identical**. The kinematics live OUTSIDE the sentinels and cannot enter the
+core slice. The in-page pill went **9/9 → 11/11** with two new **SYNCHRONY** pins (labeled `(D…)`, never
+masquerading as ★ physics): **(D3)** `legOf(θ)` partitions [0,2π) into the four core legs in order;
+**(D4)** the mesh-bloom ceiling `=== state.eps` (the picture reads the SAME ε the ΔS-meter reads).
+
+**Fresh-eyes verified** (served on `:8753`, agent-browser session `stirling45`, torn down by exact PID):
+0 console errors, 0 nested anchors, 0 horizontal overflow @1280 AND @390, breadcrumb present, the engine
+animates (θ 2.18→5.70 over ~0.9s), the bead leg matches the engine leg at every quadrant, ε=0.4 drives
+η 50%→35.5% (below the ceiling) and ΔS 0→3.74 J/K, the ε-sweep coordinates with the crank without fighting,
+step parks θ exactly at π/2, the reduced-motion static frame is verified by its code path.
+
+The prose (`.tag` / `.foot`) was rewritten to describe the machine you now watch (gas shoved through the
+glowing sponge, the mesh banking/returning heat, the crank's no-claim 90° phase); the "P–V plane · the
+work / T–S plane · the why" headline framing is gone, replaced by the quiet "the engine's shadow" caption.
+The Carnot bridge card is unchanged. File: `index.html` 969 → ~1452 lines (the engine renderer is the bulk;
+acceptable for this single integrated bench, per the design's file-size note).
+
 ## v1 — 2026-06-14 (cycle #11 of the fun-forever loop)
 
 **The four falsifiable claims (re-run live in the pill + the Node twin):**
