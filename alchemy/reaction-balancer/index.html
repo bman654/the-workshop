@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Reaction Balancer · The Alchemy Lab</title>
+<style>
+  :root{
+    --bg:#0f0c14;
+    --gold:#dca74a;            /* alchemical brass/gold accent (the lab's own identity) */
+    --gold-bright:#f4cf7a;
+    --gold-soft:rgba(220,167,74,0.14);
+    --reagent:#7be0d0;         /* glowing reagent cyan-green */
+    --reagent-bright:#b6f0e6;
+    --reagent-edge:rgba(123,224,208,0.5);
+    --ember:#e2683f;           /* furnace ember (the products' warm side) */
+    --ink:#f1ece2;
+    --ink-dim:#a99e88;
+    --panel:rgba(18,14,22,0.86);
+    --edge:rgba(220,167,74,0.28);
+    --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
+    --font-serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; color:var(--ink); font-family:var(--font-ui);
+    background:
+      radial-gradient(1200px 700px at 50% -10%, rgba(220,167,74,0.11), transparent 60%),
+      radial-gradient(900px 500px at 82% 112%, rgba(123,224,208,0.07), transparent 60%),
+      var(--bg);
+    -webkit-font-smoothing:antialiased; min-height:100%; overflow-x:hidden; }
+  a{ color:inherit; }
+
+  .topbar{ display:flex; align-items:center; gap:14px; padding:13px 18px 12px;
+    border-bottom:1px solid rgba(220,167,74,0.14); }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.2s; white-space:nowrap; flex:0 0 auto; }
+  .back:hover{ color:var(--gold); opacity:1; }
+  /* crumbs take the slack but must be shrinkable (min-width:0) or they push the badge off-screen */
+  .crumbs{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim); opacity:.6; }
+  .selftest{ flex:0 0 auto; font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer;
+    color:var(--ink-dim); user-select:none; }
+  .selftest.ok{ color:var(--reagent); border-color:var(--reagent-edge); background:rgba(20,48,42,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  .wrap{ max-width:1000px; margin:0 auto; padding:26px 22px 60px; }
+  .kicker{ font:600 11px/1 var(--font-mono); letter-spacing:.28em; text-transform:uppercase; color:var(--gold);
+    opacity:.92; }
+  h1{ font-family:var(--font-serif); font-size:clamp(30px,5vw,46px); font-weight:600; margin:8px 0 6px;
+    letter-spacing:.4px;
+    background:linear-gradient(176deg,#f7ead0,var(--gold) 64%,#a4762a);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .lede{ font:14.5px/1.62 var(--font-serif); color:var(--ink); opacity:.9; max-width:660px; margin:0 0 8px; }
+  .lede b{ color:var(--reagent-bright); font-weight:600; }
+
+  /* ===== CONTROLS (reaction chips) ===== */
+  .controls{ display:flex; flex-wrap:wrap; gap:9px; margin:20px 0 6px; align-items:center; }
+  .rx-btn{ font:600 11px/1 var(--font-mono); letter-spacing:.02em; padding:9px 12px; border-radius:9px;
+    border:1px solid var(--edge); background:rgba(0,0,0,0.3); color:var(--ink-dim); cursor:pointer; transition:.16s; }
+  .rx-btn:hover{ color:var(--ink); border-color:rgba(220,167,74,0.55); }
+  .rx-btn.active{ color:#1a1410; background:var(--gold); border-color:var(--gold); }
+  .rx-btn.neg{ border-style:dashed; }
+  .rx-btn.neg.active{ background:var(--ember); border-color:var(--ember); color:#fff; }
+
+  /* ===== THE BALANCE APPARATUS ===== */
+  .stage{ position:relative; margin:16px 0 8px; border:1px solid var(--edge); border-radius:16px;
+    background:linear-gradient(180deg, rgba(20,15,24,0.72), rgba(10,8,14,0.92)); overflow:hidden; }
+  .stage svg{ display:block; width:100%; height:auto; }
+
+  .equation{ text-align:center; font-family:var(--font-serif); font-size:clamp(18px,3.4vw,28px);
+    padding:14px 16px 4px; letter-spacing:.5px; min-height:46px; }
+  .equation .coef{ color:var(--gold-bright); font-weight:700; }
+  .equation .arrow{ color:var(--reagent); margin:0 .35em; }
+  .equation .species sub{ font-size:.62em; }
+  .verdict{ text-align:center; font:600 11px/1.4 var(--font-mono); letter-spacing:.1em; text-transform:uppercase;
+    padding:0 16px 14px; }
+  .verdict.balanced{ color:var(--reagent); }
+  .verdict.unbalanceable{ color:#f08a7a; }
+
+  /* ===== the two secondary layers (each its own toggle, beneath the balance) ===== */
+  .layers{ display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-end; margin-top:12px; }
+  .toggle{ font:600 10.5px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink-dim); cursor:pointer; padding:8px 12px; border:1px solid var(--edge); border-radius:8px; background:rgba(0,0,0,0.3); }
+  .toggle:hover{ color:var(--ink); }
+  .toggle.on{ color:var(--reagent); border-color:var(--reagent-edge); }
+
+  /* per-element conservation gauges (grafted; secondary) */
+  .gauges{ display:none; margin:14px 0; padding:16px 18px; border:1px solid var(--edge); border-radius:12px;
+    background:rgba(0,0,0,0.3); }
+  .gauges.show{ display:block; }
+  .gauges h3{ font:600 10px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--gold); margin:0 0 4px; }
+  .gauges .sub{ font:11px/1.5 var(--font-mono); color:var(--ink-dim); margin:0 0 14px; }
+  .gauge-row{ display:grid; grid-template-columns:34px 1fr 1fr 56px; align-items:center; gap:10px; margin:9px 0; }
+  .gauge-row .el{ font:700 13px/1 var(--font-mono); color:var(--ink); text-align:center; }
+  .gauge-track{ position:relative; height:18px; border-radius:5px; background:rgba(255,255,255,0.05);
+    border:1px solid rgba(255,255,255,0.06); overflow:hidden; }
+  .gauge-track.left .fill{ position:absolute; right:0; top:0; bottom:0; background:var(--reagent);
+    opacity:.55; transition:width .5s cubic-bezier(.4,0,.2,1); }
+  .gauge-track.right .fill{ position:absolute; left:0; top:0; bottom:0; background:var(--ember);
+    opacity:.55; transition:width .5s cubic-bezier(.4,0,.2,1); }
+  .gauge-row.locked .gauge-track .fill{ opacity:.85; background:var(--reagent); }
+  .gauge-row .verd{ font:700 11px/1 var(--font-mono); text-align:center; }
+  .gauge-row.locked .verd{ color:var(--reagent); }
+  .gauge-row.broken .verd{ color:var(--ember); }
+  .gauge-row .lab{ font:9px/1 var(--font-mono); letter-spacing:.1em; color:var(--ink-dim); text-transform:uppercase; }
+
+  /* the matrix inset (the quiet optional proof layer) */
+  .matrix{ display:none; margin:14px 0; padding:16px 18px; border:1px solid var(--edge); border-radius:12px;
+    background:rgba(0,0,0,0.32); font-family:var(--font-mono); font-size:12px; color:var(--ink-dim); }
+  .matrix.show{ display:block; }
+  .matrix h3{ font:600 10px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--gold); margin:0 0 4px; }
+  .matrix .sub{ font:11px/1.5 var(--font-mono); color:var(--ink-dim); margin:0 0 12px; }
+  .matrix table{ border-collapse:collapse; margin:6px 0; }
+  .matrix td,.matrix th{ padding:3px 9px; text-align:center; }
+  .matrix th{ color:var(--reagent); font-weight:600; }
+  .matrix th.prod{ color:var(--ember); }
+  .matrix .rowlabel{ color:var(--gold-bright); text-align:right; padding-right:14px; }
+  .matrix .prod{ color:var(--ember); }
+  .matrix .nullspace{ margin-top:12px; color:var(--ink); line-height:1.6; }
+  .matrix .nullspace b{ color:var(--gold-bright); }
+
+  .lawnote{ margin:26px 0 0; font:12.5px/1.7 var(--font-serif); color:var(--ink-dim); }
+  .lawnote b{ color:var(--gold); font-weight:600; }
+  .footer{ margin-top:40px; padding-top:18px; border-top:1px solid rgba(220,167,74,0.12);
+    font:11px/1.7 var(--font-mono); color:var(--ink-dim); opacity:.7; text-align:center; }
+  .footer a{ color:var(--gold); text-decoration:none; border-bottom:1px solid rgba(220,167,74,0.3); }
+
+  @media (prefers-reduced-motion: reduce){
+    .gauge-track .fill{ transition:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">‹ The Alchemy Lab</a>
+    <span class="crumbs">The Reaction Balancer</span>
+    <div class="selftest" id="selftest" title="Click for per-check detail">core checking…</div>
+  </div>
+
+  <div class="wrap">
+    <div class="kicker">Conservation of Matter · exact integer linear algebra</div>
+    <h1>The Reaction Balancer</h1>
+    <p class="lede">Atoms are never made or destroyed across the arrow. The whole-number coefficients
+      that make a reaction true are not <i>guessed</i> — they are <b>read off the nullspace</b> of the
+      element-count matrix. Pick a reaction; watch the molecules build on the two pans of the balance,
+      and the beam settle <b>level</b> only when every element's atom-tally is equal, left and right.</p>
+
+    <div class="controls" id="controls"></div>
+
+    <div class="stage">
+      <svg id="balance" viewBox="0 0 1000 460" preserveAspectRatio="xMidYMid meet" aria-label="the two-pan balance apparatus"></svg>
+      <div class="equation" id="equation"></div>
+      <div class="verdict" id="verdict"></div>
+    </div>
+
+    <div class="layers">
+      <span class="toggle" id="gaugeToggle">per-element gauges</span>
+      <span class="toggle" id="matrixToggle">show the matrix</span>
+    </div>
+
+    <div class="gauges" id="gauges"></div>
+    <div class="matrix" id="matrix"></div>
+
+    <p class="lawnote">The two pans never weigh grams — they weigh <b>atoms, element by element</b>. A
+      reaction balances exactly when, for every element, the count on the left equals the count on the
+      right. That is one linear equation per element, and the coefficients are the kernel they all share.
+      Some species genuinely cannot be reconciled — the <b>negative control</b> tips the beam and the
+      solver returns nothing rather than fake a level. The atoms you reassemble here are the same ones
+      the <a class="" href="../../cavern/index.html" style="color:var(--reagent);text-decoration:none;border-bottom:1px solid var(--reagent-edge)">Cavern</a> takes apart.</p>
+
+    <div class="footer">
+      The math lives in <b>core.mjs</b>, inlined byte-identical between sentinels &amp; self-tested in Node.
+      &nbsp;·&nbsp; <a href="../index.html">Back to the Alchemy Lab</a>
+    </div>
+  </div>
+
+<script>
+"use strict";
+// ===== BALANCER-CORE (byte-identical to core.mjs) =====
+/* ============================================================================
+   THE REACTION BALANCER — core.mjs   (the SOLE math authority for the bench)
+
+   A balanced chemical equation is a statement about CONSERVATION OF MATTER:
+   no atom is created or destroyed across the arrow. Encode it as a matrix.
+
+     • Let the species be  s_1 … s_n  (reactants then products).
+     • Build A: rows = elements, cols = species, where A[e][j] = (# of element e
+       in species j), and PRODUCT COLUMNS ARE NEGATED.
+     • A coefficient vector c (one whole number per species) balances the
+       reaction  ⇔  A · c = 0  (every element's atoms on the left equal those on
+       the right). That is conservation of matter, written as a kernel condition.
+
+   So balancing IS finding the NULLSPACE of A. For a chemically-meaningful single
+   reaction that nullspace is 1-dimensional; we read off its one direction and
+   clear it to the SMALLEST POSITIVE INTEGERS. There is no guessing and no search.
+
+   EXACTNESS: every number here is an integer or an exact BigInt rational [n/d]
+   reduced by gcd. There is ZERO floating point anywhere in the solve — the claim
+   "these coefficients balance" is machine-exact, not "close enough".
+
+   This module is the single source of truth. index.html INLINES this file
+   byte-identical between sentinels; core.test.mjs runs it in Node. If the page's
+   inline ever drifts from this file, the page's re-extraction parity check fails.
+   ============================================================================ */
+
+// ── exact rational on BigInt (num/den, den>0, fully reduced) ─────────────────
+function gcdBig(a, b){ a = a < 0n ? -a : a; b = b < 0n ? -b : b;
+  while(b){ [a, b] = [b, a % b]; } return a; }
+function ilcm(a, b){ a = a < 0n ? -a : a; b = b < 0n ? -b : b;
+  if(a === 0n || b === 0n) return 0n; return a / gcdBig(a, b) * b; }
+
+function R(n, d = 1n){ n = BigInt(n); d = BigInt(d);
+  if(d === 0n) throw new Error('zero denominator');
+  if(d < 0n){ n = -n; d = -d; }
+  const g = gcdBig(n, d) || 1n; return { n: n / g, d: d / g };
+}
+const rAdd = (a, b) => R(a.n * b.d + b.n * a.d, a.d * b.d);
+const rSub = (a, b) => R(a.n * b.d - b.n * a.d, a.d * b.d);
+const rMul = (a, b) => R(a.n * b.n, a.d * b.d);
+const rDiv = (a, b) => R(a.n * b.d, a.d * b.n);
+const rIsZero = a => a.n === 0n;
+
+// ── parse a chemical formula → element→count map (nested parens, multi-letter) ─
+// Grafted from the Ledger's nested-group parser: proven to handle Ca(OH)2 →
+// {Ca:1,O:2,H:2}, Fe2(SO4)3 → {Fe:2,S:3,O:12}, and multi-letter symbols, so the
+// wing can grow toward harder species. Recursive descent: a group's multiplier
+// distributes over every element it contains.
+function parseFormula(f){
+  let i = 0;
+  function atoms(){
+    const counts = {};
+    while(i < f.length){
+      const c = f[i];
+      if(c === '('){ i++; const inner = atoms();
+        if(f[i] !== ')') throw new Error('unbalanced parens in ' + f); i++;
+        const m = number();
+        for(const k in inner) counts[k] = (counts[k] || 0) + inner[k] * m; }
+      else if(c === ')'){ break; }
+      else if(/[A-Z]/.test(c)){ let sym = c; i++;
+        while(i < f.length && /[a-z]/.test(f[i])){ sym += f[i]; i++; }
+        const m = number(); counts[sym] = (counts[sym] || 0) + m; }
+      else throw new Error('bad char "' + c + '" in ' + f);
+    }
+    return counts;
+  }
+  function number(){ let s = '';
+    while(i < f.length && /[0-9]/.test(f[i])){ s += f[i]; i++; }
+    return s === '' ? 1 : parseInt(s, 10); }
+  const out = atoms();
+  if(i < f.length) throw new Error('unbalanced parens in ' + f);
+  return out;
+}
+
+// ── build the element-count matrix A: rows=elements, cols=species (products -) ─
+function buildMatrix(reactants, products){
+  const species = [...reactants.map(s => ({ f: s, sign: 1n })),
+                   ...products.map(s => ({ f: s, sign: -1n }))];
+  const parsed = species.map(s => parseFormula(s.f));
+  const elems = []; const seen = new Set();
+  for(const p of parsed) for(const e of Object.keys(p)) if(!seen.has(e)){ seen.add(e); elems.push(e); }
+  const A = elems.map(e => species.map((s, j) => R(BigInt(parsed[j][e] || 0) * s.sign)));
+  return { A, elems, species, parsed };
+}
+
+// ── solve A·c = 0 for the 1-D integer nullspace → smallest positive ints, or null ─
+// Fraction-free over exact rationals (Gaussian elimination to reduced echelon),
+// then clear denominators by lcm and divide by gcd. We DEMAND exactly one free
+// column (a 1-D nullspace) so "THE balanced equation" is honest — a 2-D nullspace
+// returns the "ambiguous" reason rather than a fabricated single answer.
+function solve(reactants, products){
+  const { A, elems, species, parsed } = buildMatrix(reactants, products);
+  const rows = A.length, cols = species.length;
+  const M = A.map(r => r.map(x => R(x.n, x.d)));            // mutable copy
+  const pivotCol = []; let pr = 0;
+  for(let c = 0; c < cols && pr < rows; c++){
+    let piv = -1; for(let r = pr; r < rows; r++) if(!rIsZero(M[r][c])){ piv = r; break; }
+    if(piv === -1) continue;
+    [M[pr], M[piv]] = [M[piv], M[pr]];
+    const inv = M[pr][c];
+    for(let c2 = 0; c2 < cols; c2++) M[pr][c2] = rDiv(M[pr][c2], inv);   // normalise pivot → 1
+    for(let r = 0; r < rows; r++){ if(r === pr) continue; const factor = M[r][c];
+      if(rIsZero(factor)) continue;
+      for(let c2 = 0; c2 < cols; c2++) M[r][c2] = rSub(M[r][c2], rMul(factor, M[pr][c2])); }
+    pivotCol.push(c); pr++;
+  }
+  const pivotSet = new Set(pivotCol);
+  const freeCols = []; for(let c = 0; c < cols; c++) if(!pivotSet.has(c)) freeCols.push(c);
+  // exactly one free column ⇒ a 1-D nullspace (the chemically-meaningful case)
+  if(freeCols.length !== 1) return { ok: false,
+    reason: freeCols.length === 0
+      ? 'no free variable (over-determined / only the trivial solution)'
+      : 'nullspace dimension ' + freeCols.length + ' (ambiguous — not a single balanced equation)',
+    elems, species, A, parsed };
+  const free = freeCols[0];
+  const sol = new Array(cols).fill(null);
+  sol[free] = R(1n);                                          // set the free var = 1
+  for(let k = 0; k < pivotCol.length; k++){ const c = pivotCol[k];
+    sol[c] = R(-M[k][free].n, M[k][free].d); }                // each pivot = -(its free-col entry)
+  // clear denominators by lcm, force first coef positive, divide out the gcd
+  let lcm = 1n; for(const x of sol) lcm = ilcm(lcm, x.d);
+  let ints = sol.map(x => x.n * (lcm / x.d));
+  if(ints[0] < 0n) ints = ints.map(v => -v);
+  let g = 0n; for(const v of ints) g = gcdBig(g, v); if(g === 0n) g = 1n;
+  ints = ints.map(v => v / g);
+  const allPos = ints.every(v => v > 0n);
+  if(!allPos) return { ok: false,
+    reason: 'no all-positive nullspace vector (these species cannot balance)',
+    elems, species, A, parsed, raw: ints };
+  return { ok: true, coef: ints.map(v => Number(v)), coefBig: ints, elems, species, A, parsed };
+}
+
+// ── verify a candidate coefficient vector: A·c = 0 exactly, gcd=1, all > 0 ─────
+function verify(reactants, products, coef){
+  const { A } = buildMatrix(reactants, products);
+  const c = coef.map(v => BigInt(v));
+  for(let r = 0; r < A.length; r++){                          // every element conserved exactly
+    let acc = R(0n);
+    for(let j = 0; j < A[r].length; j++) acc = rAdd(acc, rMul(A[r][j], R(c[j])));
+    if(!rIsZero(acc)) return false;
+  }
+  let g = 0n; for(const v of c) g = gcdBig(g, v);
+  if(g !== 1n) return false;                                  // not the SMALLEST integers
+  if(!c.every(v => v > 0n)) return false;                     // a real reaction is all-positive
+  return true;
+}
+
+// ── per-side, per-element tally: {element: totalAtoms} for species × coefficients ─
+function tally(formulas, coefs){
+  const t = {};
+  formulas.forEach((f, i) => { const p = parseFormula(f);
+    for(const e in p) t[e] = (t[e] || 0) + p[e] * coefs[i]; });
+  return t;
+}
+
+/* ============================================================================
+   THE REACTION LIBRARY  — real, curated single-solution reactions + 1 control.
+   Each is kept to a 1-D nullspace so "THE balanced equation" stays honest.
+   The 7 the prototype proves, extended toward 10 with the Ledger's harder
+   nested-group species (slaked lime, gypsum, the tarnishing of silver).
+   ============================================================================ */
+const LIBRARY = [
+  { id: 'water',     name: 'Synthesis of water',        cat: 'classic',
+    reactants: ['H2', 'O2'],            products: ['H2O'],          expect: [2, 1, 2] },
+  { id: 'methane',   name: 'Combustion of methane',     cat: 'classic',
+    reactants: ['CH4', 'O2'],           products: ['CO2', 'H2O'],   expect: [1, 2, 1, 2] },
+  { id: 'ammonia',   name: 'Haber process (ammonia)',   cat: 'classic',
+    reactants: ['N2', 'H2'],            products: ['NH3'],          expect: [1, 3, 2] },
+  { id: 'rust',      name: 'Rusting of iron',           cat: 'classic',
+    reactants: ['Fe', 'O2'],            products: ['Fe2O3'],        expect: [4, 3, 2] },
+  { id: 'glucose',   name: 'Respiration (glucose)',     cat: 'classic',
+    reactants: ['C6H12O6', 'O2'],       products: ['CO2', 'H2O'],   expect: [1, 6, 6, 6] },
+  { id: 'thermite',  name: 'Thermite',                  cat: 'classic',
+    reactants: ['Fe2O3', 'Al'],         products: ['Fe', 'Al2O3'],  expect: [1, 2, 2, 1] },
+  { id: 'slaked',    name: 'Slaked lime + acid gas',    cat: 'groups',
+    reactants: ['Ca(OH)2', 'CO2'],      products: ['CaCO3', 'H2O'], expect: [1, 1, 1, 1] },
+  // ── extended with the Ledger's harder nested-group species (toward 10) ──
+  { id: 'gypsum',    name: 'Gypsum from quicklime',     cat: 'groups',
+    reactants: ['Ca(OH)2', 'H2SO4'],    products: ['CaSO4', 'H2O'], expect: [1, 1, 1, 2] },
+  { id: 'phosphate', name: 'Calcium phosphate',         cat: 'groups',
+    reactants: ['Ca(OH)2', 'H3PO4'],    products: ['Ca3(PO4)2', 'H2O'], expect: [3, 2, 1, 6] },
+  { id: 'tarnish',   name: 'Tarnishing of silver',      cat: 'groups',
+    reactants: ['Ag', 'H2S', 'O2'],     products: ['Ag2S', 'H2O'],  expect: [4, 2, 1, 2, 2] },
+  // ── NEGATIVE CONTROL: cannot balance (Na appears on neither side's partner) ──
+  { id: 'bogus',     name: 'Negative control (impossible)', cat: 'control', negative: true,
+    reactants: ['H2', 'O2'],            products: ['H2O', 'Na'] },
+];
+// ===== END BALANCER-CORE =====
+
+/* ============================================================================
+   THE BENCH — everything below is presentation. It calls the core above; it
+   adds no chemistry of its own. The headline is the brass-and-glass two-pan
+   apparatus; the gauges and the matrix are quiet secondary layers.
+   ============================================================================ */
+
+// CPK-ish atom palette (white H, ember-orange O, slate C, blue N, copper Fe…)
+const ELEM_COLOR = { H:'#e9eef2', O:'#e2683f', C:'#3a3f4a', N:'#6f8fe0', Fe:'#c8915b',
+  Al:'#b8c0cc', Ca:'#74c46a', Na:'#d6b24a', S:'#e7c84a', P:'#e08a4a', Ag:'#cdd4da', K:'#b06fd0' };
+const ELEM_R = { H:7, O:11, C:11, N:10, Fe:13, Al:12, Ca:13, Na:12, S:12, P:12, Ag:12, K:13 };
+const ELEM_DARKLABEL = new Set(['H','O','N','Al','Ca','Na','S','P','Ag','K']); // dark glyph text on light fills
+const elemColor = e => ELEM_COLOR[e] || '#9fb0a4';
+const elemR     = e => ELEM_R[e] || 10;
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+function svg(tag, attrs){ const n = document.createElementNS(SVGNS, tag);
+  for(const k in attrs) n.setAttribute(k, attrs[k]); return n; }
+
+/* ── TIDY FIXED MOLECULE LAYOUTS ─────────────────────────────────────────────
+   Each species gets a hand-laid relative layout (dx,dy in px from the molecule
+   centre) so atom glyphs never clip behind one another — water is bent H–O–H,
+   CO2 linear, etc. Anything not listed falls back to a non-overlapping ring.
+   Returns { atoms:[{e,dx,dy}], w } so the pan layout can space molecules. ── */
+const LAYOUT = {
+  'H2':   [['H',-8,0],['H',8,0]],
+  'O2':   [['O',-10,0],['O',10,0]],
+  'N2':   [['N',-9,0],['N',9,0]],
+  'H2O':  [['O',0,0],['H',-13,9],['H',13,9]],                 // bent
+  'CO2':  [['C',0,0],['O',-19,0],['O',19,0]],                 // linear
+  'CH4':  [['C',0,0],['H',-15,-11],['H',15,-11],['H',-15,11],['H',15,11]],
+  'NH3':  [['N',0,0],['H',-14,9],['H',14,9],['H',0,-13]],
+  'Fe':   [['Fe',0,0]],
+  'Fe2O3':[['Fe',-17,-8],['Fe',17,-8],['O',0,-12],['O',-12,11],['O',12,11]],
+  'Al':   [['Al',0,0]],
+  'Al2O3':[['Al',-17,-8],['Al',17,-8],['O',0,-12],['O',-12,11],['O',12,11]],
+  'CO':   [['C',-10,0],['O',10,0]],
+  'C':    [['C',0,0]],
+  'Ag':   [['Ag',0,0]],
+};
+// build a non-overlapping fallback ring for any species not in LAYOUT
+function ringLayout(atoms){
+  const n = atoms.length;
+  if(n === 1) return [[atoms[0],0,0]];
+  const out = []; const rad = Math.max(15, n * 3.2);
+  for(let i = 0; i < n; i++){ const a = (i / n) * Math.PI * 2 - Math.PI/2;
+    out.push([atoms[i], Math.cos(a)*rad, Math.sin(a)*rad*0.78]); }
+  return out;
+}
+function speciesAtomList(formula){
+  const p = parseFormula(formula); const list = [];
+  // deterministic order: heavy/central first looks better, but keep parse order
+  for(const e of Object.keys(p)) for(let k = 0; k < p[e]; k++) list.push(e);
+  return list;
+}
+function moleculeLayout(formula){
+  if(LAYOUT[formula]) return LAYOUT[formula].map(([e,dx,dy]) => ({ e, dx, dy }));
+  return ringLayout(speciesAtomList(formula)).map(([e,dx,dy]) => ({ e, dx, dy }));
+}
+function layoutWidth(lay){
+  let min = 0, max = 0;
+  for(const a of lay){ min = Math.min(min, a.dx - elemR(a.e)); max = Math.max(max, a.dx + elemR(a.e)); }
+  return max - min;
+}
+
+// state
+let current = null;
+let tipPhase = 0;      // 0 (tipped) → 1 (settled) animation parameter
+let animRAF = null;
+const MAX_COPIES = 4;  // cap displayed molecule copies; big species get a "×n" badge
+
+function drawMolecule(root, cx, cy, lay, scale){
+  const g = svg('g', {});
+  for(const a of lay){
+    const ax = cx + a.dx*scale, ay = cy + a.dy*scale;
+    g.appendChild(svg('circle', { cx:ax, cy:ay, r:elemR(a.e)*scale, fill:elemColor(a.e),
+      stroke:'rgba(0,0,0,0.4)', 'stroke-width':1 }));
+    const t = svg('text', { x:ax, y:ay+3.5*scale, 'font-size':9*scale, 'text-anchor':'middle',
+      fill: ELEM_DARKLABEL.has(a.e) ? 'rgba(20,16,10,0.82)' : '#fff',
+      'font-family':'var(--font-mono)', 'font-weight':'700' });
+    t.textContent = a.e; g.appendChild(t);
+  }
+  root.appendChild(g);
+}
+
+function text(x, y, str, fill, size, anchor){
+  const t = svg('text', { x, y, fill, 'font-size':size, 'font-family':'var(--font-mono)',
+    'text-anchor':anchor||'middle', 'letter-spacing':'0.1em' });
+  t.textContent = str; return t;
+}
+
+function drawBalance(rx, res){
+  const root = document.getElementById('balance');
+  root.innerHTML = '';
+  const W = 1000, H = 460, cx = W/2, beamY = 116, postTop = 64, baseY = 416;
+
+  let balanced = false, tilt;
+  if(res.ok){ balanced = true; tilt = (1 - tipPhase) * -0.14; }   // settles from tipped to level
+  else { tilt = 0.20; }                                           // unbalanceable: jammed down-left, no resolution
+
+  // base column + plinth
+  root.appendChild(svg('rect', { x:cx-9, y:postTop, width:18, height:baseY-postTop, fill:'rgba(220,167,74,0.16)',
+    stroke:'rgba(220,167,74,0.42)', 'stroke-width':1.5, rx:3 }));
+  root.appendChild(svg('path', { d:`M${cx-48} ${baseY} L${cx+48} ${baseY} L${cx+30} ${baseY-26} L${cx-30} ${baseY-26} Z`,
+    fill:'rgba(220,167,74,0.12)', stroke:'rgba(220,167,74,0.35)', 'stroke-width':1.5 }));
+  // fulcrum knife-edge
+  root.appendChild(svg('path', { d:`M${cx-12} ${beamY+12} L${cx+12} ${beamY+12} L${cx} ${beamY-2} Z`, fill:'var(--gold)', opacity:0.82 }));
+
+  // the beam, rotated about the fulcrum
+  const halfL = 340;
+  const lx = cx - halfL*Math.cos(tilt), ly = beamY - halfL*Math.sin(tilt);
+  const rxp = cx + halfL*Math.cos(tilt), ry = beamY + halfL*Math.sin(tilt);
+  root.appendChild(svg('line', { x1:lx, y1:ly, x2:rxp, y2:ry, stroke:'var(--gold-bright)', 'stroke-width':6, 'stroke-linecap':'round' }));
+  // pointer needle (turns reagent-cyan at equilibrium)
+  const atEq = balanced && tipPhase > 0.92;
+  root.appendChild(svg('line', { x1:cx, y1:beamY, x2:cx+92*Math.sin(tilt), y2:beamY+92*Math.cos(tilt),
+    stroke: atEq ? 'var(--reagent)' : 'var(--gold)', 'stroke-width':2.4 }));
+  // the level tick (where the needle rests when equal)
+  root.appendChild(svg('line', { x1:cx, y1:beamY+74, x2:cx, y2:beamY+98, stroke:'rgba(255,255,255,0.18)', 'stroke-width':1 }));
+
+  // hang the two pans
+  const drop = 124;
+  const rCoef = res.ok ? res.coef.slice(rx.reactants.length) : rx.products.map(() => 1);
+  const lCoef = res.ok ? res.coef.slice(0, rx.reactants.length) : rx.reactants.map(() => 1);
+  drawPan(root, lx, ly, drop, rx.reactants, lCoef, 'reactants');
+  drawPan(root, rxp, ry, drop, rx.products, rCoef, 'products');
+
+  // side labels
+  root.appendChild(text(132, 40, 'LEFT PAN · reactants', 'var(--reagent)', 11, 'start'));
+  root.appendChild(text(W-132, 40, 'products · RIGHT PAN', 'var(--ember)', 11, 'end'));
+}
+
+function drawPan(root, hx, hy, drop, formulas, coefs, kind){
+  const panY = hy + drop, panW = 232;
+  // chains
+  root.appendChild(svg('line', { x1:hx, y1:hy, x2:hx-panW*0.30, y2:panY, stroke:'rgba(220,167,74,0.4)', 'stroke-width':1 }));
+  root.appendChild(svg('line', { x1:hx, y1:hy, x2:hx+panW*0.30, y2:panY, stroke:'rgba(220,167,74,0.4)', 'stroke-width':1 }));
+  // pan dish
+  const dishStroke = kind === 'products' ? 'rgba(226,104,63,0.6)' : 'rgba(123,224,208,0.55)';
+  root.appendChild(svg('path', { d:`M${hx-panW/2} ${panY} Q${hx} ${panY+32} ${hx+panW/2} ${panY}`,
+    fill:'rgba(123,224,208,0.05)', stroke:dishStroke, 'stroke-width':2 }));
+
+  // ── lay molecules across the dish: one cell per species, each cell shows up to
+  //    MAX_COPIES molecule clusters, with a ×n badge if the coefficient exceeds it ──
+  const cellTop = panY - 30;
+  const innerL = hx - panW/2 + 16, innerR = hx + panW/2 - 16, innerW = innerR - innerL;
+  // total molecule clusters to draw across all species (capped per species)
+  const drawCounts = coefs.map(c => Math.min(c, MAX_COPIES));
+  const totalClusters = drawCounts.reduce((a,b) => a+b, 0) || 1;
+  // a uniform horizontal slot per cluster; scale down a touch if crowded
+  let slot = innerW / totalClusters;
+  const scale = Math.min(1, Math.max(0.62, slot / 46));
+  let mx = innerL + slot/2;
+  formulas.forEach((f, i) => {
+    const lay = moleculeLayout(f);
+    const copies = drawCounts[i];
+    for(let c = 0; c < copies; c++){
+      drawMolecule(root, mx, cellTop, lay, scale);
+      mx += slot;
+    }
+    // a ×n badge when the real coefficient exceeds what we drew
+    if(coefs[i] > MAX_COPIES){
+      const bx = mx - slot/2, by = cellTop + 24*scale;
+      root.appendChild(text(bx, by, '×' + coefs[i], 'var(--gold-bright)', 11, 'middle'));
+    }
+  });
+
+  // per-element TALLY chip below the pan (must read identically on both sides when balanced)
+  const t = tally(formulas, coefs);
+  const elems = Object.keys(t).sort();
+  const chip = svg('text', { x:hx, y:panY+54, 'font-size':12.5, 'text-anchor':'middle',
+    fill: kind === 'products' ? 'var(--ember)' : 'var(--reagent)', 'font-family':'var(--font-mono)', 'letter-spacing':'0.04em' });
+  chip.textContent = elems.map(e => e + ':' + t[e]).join('   ');
+  root.appendChild(chip);
+}
+
+function speciesHTML(f){ return '<span class="species">' + f.replace(/([A-Za-z\)])(\d+)/g, '$1<sub>$2</sub>') + '</span>'; }
+
+function renderEquation(rx, res){
+  const eqDiv = document.getElementById('equation');
+  if(res.ok){
+    const fmt = (f, c) => (c > 1 ? `<span class="coef">${c}</span>` : '') + speciesHTML(f);
+    const left = rx.reactants.map((f, i) => fmt(f, res.coef[i])).join(' + ');
+    const right = rx.products.map((f, i) => fmt(f, res.coef[rx.reactants.length + i])).join(' + ');
+    eqDiv.innerHTML = `${left} <span class="arrow">→</span> ${right}`;
+  } else {
+    eqDiv.innerHTML = `<span style="color:#f08a7a">${rx.reactants.map(speciesHTML).join(' + ')} <span class="arrow">→</span> ${rx.products.map(speciesHTML).join(' + ')}</span>`;
+  }
+  const v = document.getElementById('verdict');
+  if(res.ok){ v.className = 'verdict balanced'; v.textContent = 'balanced · both pans level · every element equal'; }
+  else { v.className = 'verdict unbalanceable'; v.textContent = 'unbalanceable · the solver returns nothing, not a fake level'; }
+}
+
+/* ── the GRAFTED secondary view: per-element conservation gauges ──
+   Twin L/R bars per element. They rise to each side's atom count and SNAP
+   equal & green when the element is conserved; on the negative control the
+   offending element stays unequal & ember. Beneath the balance, never the headline. */
+function renderGauges(rx, res){
+  const box = document.getElementById('gauges');
+  const lCoef = res.ok ? res.coef.slice(0, rx.reactants.length) : rx.reactants.map(() => 1);
+  const rCoef = res.ok ? res.coef.slice(rx.reactants.length) : rx.products.map(() => 1);
+  const tl = tally(rx.reactants, lCoef), tr = tally(rx.products, rCoef);
+  const elems = Array.from(new Set([...Object.keys(tl), ...Object.keys(tr)])).sort();
+  const maxCount = Math.max(1, ...elems.map(e => Math.max(tl[e]||0, tr[e]||0)));
+  let html = '<h3>per-element conservation</h3>' +
+    '<p class="sub">twin bars: left-pan atoms vs right-pan atoms, element by element. ' +
+    'Each row goes green and reads LOCKED when the two sides match exactly.</p>';
+  for(const e of elems){
+    const L = tl[e]||0, Rt = tr[e]||0, locked = (L === Rt);
+    const lw = Math.round(100*L/maxCount), rw = Math.round(100*Rt/maxCount);
+    html += `<div class="gauge-row ${locked?'locked':'broken'}">
+      <div class="el">${e}</div>
+      <div class="gauge-track left"><div class="fill" style="width:${lw}%"></div></div>
+      <div class="gauge-track right"><div class="fill" style="width:${rw}%"></div></div>
+      <div class="verd">${locked ? L+'='+Rt : L+'≠'+Rt}</div>
+    </div>`;
+  }
+  html += '<div class="gauge-row"><div class="el"></div><div class="lab" style="text-align:right">left pan</div><div class="lab">right pan</div><div></div></div>';
+  box.innerHTML = html;
+}
+
+function renderMatrix(rx, res){
+  const m = document.getElementById('matrix');
+  const { A, elems, species } = buildMatrix(rx.reactants, rx.products);
+  let html = '<h3>the element-count matrix A</h3>' +
+    '<p class="sub">rows = elements · columns = species · product columns negated, ' +
+    'so A·c = 0 <i>is</i> conservation of matter. The coefficients are the integer nullspace.</p>';
+  html += '<table><tr><th></th>';
+  species.forEach((s, j) => { const isProd = j >= rx.reactants.length; html += `<th class="${isProd?'prod':''}">${s.f}</th>`; });
+  html += '</tr>';
+  elems.forEach((e, r) => { html += `<tr><td class="rowlabel">${e}</td>`;
+    A[r].forEach((x, j) => { const v = Number(x.n); const isProd = j >= rx.reactants.length;
+      html += `<td class="${isProd?'prod':''}">${v>=0?(' '+v):v}</td>`; });
+    html += '</tr>'; });
+  html += '</table>';
+  if(res.ok){
+    html += `<div class="nullspace">A·c = 0 has a 1-D integer nullspace. Cleared to smallest positive integers:
+      <b>c = (${res.coef.join(', ')})</b> · gcd = 1 · every element balances exactly.</div>`;
+  } else {
+    html += `<div class="nullspace" style="color:#f08a7a">No all-positive integer nullspace vector exists →
+      <b>unbalanceable</b> (${res.reason}).</div>`;
+  }
+  m.innerHTML = html;
+}
+
+function renderReaction(id){
+  current = id;
+  const rx = LIBRARY.find(r => r.id === id);
+  const res = solve(rx.reactants, rx.products);
+
+  tipPhase = 0;
+  if(animRAF) cancelAnimationFrame(animRAF);
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(res.ok && !reduceMotion){
+    const t0 = performance.now();
+    (function frame(t){
+      const raw = Math.min(1, (t - t0) / 900);
+      tipPhase = 1 - Math.pow(1 - raw, 3);     // cubic ease-out
+      drawBalance(rx, res);
+      if(raw < 1) animRAF = requestAnimationFrame(frame); else { tipPhase = 1; drawBalance(rx, res); }
+    })(performance.now());
+  } else {
+    tipPhase = res.ok ? 1 : 1;
+    drawBalance(rx, res);
+  }
+
+  renderEquation(rx, res);
+  renderGauges(rx, res);
+  renderMatrix(rx, res);
+  paintControls();
+}
+
+function paintControls(){
+  const c = document.getElementById('controls'); c.innerHTML = '';
+  for(const rx of LIBRARY){
+    const b = document.createElement('button');
+    b.className = 'rx-btn' + (rx.negative ? ' neg' : '') + (rx.id === current ? ' active' : '');
+    b.textContent = rx.name;
+    b.onclick = () => renderReaction(rx.id);
+    c.appendChild(b);
+  }
+}
+
+/* ── toggles for the two secondary layers ── */
+document.getElementById('gaugeToggle').onclick = function(){
+  const g = document.getElementById('gauges'); g.classList.toggle('show');
+  this.classList.toggle('on'); this.textContent = g.classList.contains('show') ? 'hide gauges' : 'per-element gauges';
+};
+document.getElementById('matrixToggle').onclick = function(){
+  const m = document.getElementById('matrix'); m.classList.toggle('show');
+  this.classList.toggle('on'); this.textContent = m.classList.contains('show') ? 'hide the matrix' : 'show the matrix';
+};
+
+/* ============================================================================
+   THE SELF-TEST  (in-page badge) — the same library proofs core.test.mjs runs,
+   PLUS a RE-EXTRACTION PARITY CHECK: fetch this page's own source, pull the text
+   between the // ===== BALANCER-CORE … and // ===== END BALANCER-CORE sentinels,
+   fetch core.mjs, strip its leading `export ` keywords line-by-line, and assert
+   the two are byte-identical. So the inline can never silently drift from core.mjs.
+   ============================================================================ */
+async function runSelfTest(){
+  const checks = [];
+  const ck = (name, ok, info) => checks.push({ name, ok: !!ok, info });
+
+  // (1) the library: coefficients exact, A·c=0 exact, gcd=1, all>0
+  for(const rx of LIBRARY){
+    if(rx.negative){
+      const res = solve(rx.reactants, rx.products);
+      ck(rx.name + ' → unbalanceable (solve returns nothing)', res.ok === false, res.ok ? 'got ' + JSON.stringify(res.coef) : res.reason);
+      continue;
+    }
+    const res = solve(rx.reactants, rx.products);
+    const got = res.ok ? res.coef : null;
+    const match = got && got.length === rx.expect.length && got.every((v, i) => v === rx.expect[i]);
+    ck(rx.name + ' → c = ' + (got ? got.join(',') : '∅'), match, match ? '' : 'expected ' + rx.expect.join(','));
+    ck(rx.name + ' → A·c = 0 exact, gcd=1, all>0', got && verify(rx.reactants, rx.products, got));
+  }
+  // (2) perturbation guard
+  ck('perturbed water (2,1,3) → verify rejects', verify(['H2','O2'], ['H2O'], [2,1,3]) === false);
+  // (3) grafted nested-group parser
+  ck('parser: Ca(OH)2 → {Ca:1,O:2,H:2}', JSON.stringify(parseFormula('Ca(OH)2')) === JSON.stringify({Ca:1,O:2,H:2}));
+  ck('parser: Fe2(SO4)3 → {Fe:2,S:3,O:12}', JSON.stringify(parseFormula('Fe2(SO4)3')) === JSON.stringify({Fe:2,S:3,O:12}));
+
+  // (4) RE-EXTRACTION PARITY CHECK — the inline core IS core.mjs
+  let parityOk = false, parityInfo = '';
+  try{
+    const [pageSrc, coreSrc] = await Promise.all([
+      fetch(location.href).then(r => r.text()),
+      fetch('core.mjs').then(r => r.text())
+    ]);
+    const START = '// ===== BALANCER-CORE (byte-identical to core.mjs) =====';
+    const END = '// ===== END BALANCER-CORE =====';
+    const si = pageSrc.indexOf(START), ei = pageSrc.indexOf(END);
+    if(si < 0 || ei < 0) throw new Error('sentinels not found in page');
+    // the inline block = everything strictly between the two sentinel lines
+    const inline = pageSrc.slice(si + START.length, ei).replace(/^\n/, '').replace(/\n[ \t]*$/, '');
+    // the expected block = core.mjs with each leading `export ` stripped (modules export; the inline can't)
+    const expected = coreSrc.split('\n').map(l => l.replace(/^export /, '')).join('\n').replace(/\n$/, '');
+    parityOk = (inline === expected);
+    if(!parityOk){
+      // find first differing line for a useful message
+      const a = inline.split('\n'), b = expected.split('\n');
+      let d = -1; for(let i = 0; i < Math.max(a.length, b.length); i++){ if(a[i] !== b[i]){ d = i; break; } }
+      parityInfo = 'first diff at line ' + (d+1) + ' (inline ' + a.length + ' lines, core ' + b.length + ')';
+    }
+  }catch(e){ parityInfo = 'parity fetch failed: ' + e.message + ' (serve over http to run this check)'; }
+  ck('re-extraction parity: inline core === core.mjs (export-stripped)', parityOk, parityInfo);
+
+  const pass = checks.filter(c => c.ok).length, total = checks.length;
+  const chip = document.getElementById('selftest');
+  const allOk = pass === total;
+  chip.className = 'selftest ' + (allOk ? 'ok' : 'bad');
+  chip.textContent = 'self-test ' + pass + '/' + total + (allOk ? ' ✓' : ' ✗');
+  console.log('%cReaction Balancer — self-test ' + pass + '/' + total, 'color:#dca74a;font-weight:bold');
+  for(const c of checks) console.log((c.ok ? '  ✓ ' : '  ✗ ') + c.name + (c.info ? '  ·  ' + c.info : ''));
+  chip.onclick = () => alert('Reaction Balancer self-test ' + pass + '/' + total + '\n\n' +
+    checks.map(c => (c.ok ? '✓ ' : '✗ ') + c.name + (c.info ? '\n     ' + c.info : '')).join('\n'));
+  window.__balancerSelfTest = { pass, total, checks };
+  return { pass, total, checks };
+}
+
+/* ── boot ── */
+(function boot(){
+  // the bench drops the wing breadcrumb too (the Survey's only food) + a per-bench crumb
+  try{ for(const k of ['ws:seen:alchemy', 'ws:seen:reaction-balancer']){ if(!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); } }catch(e){}
+  renderReaction('water');
+  runSelfTest();
+})();
+</script>
+</body>
+</html>
