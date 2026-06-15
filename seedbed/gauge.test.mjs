@@ -144,6 +144,40 @@ console.log('record — state transitions:')
   eq(applyRecord(base, { mode: 'PLAN', track: 'garden', sown: '<#seeds>' }).tally.gardenSown, 0, 'non-numeric count → 0 (no NaN in state)')
 }
 
+console.log('derived tally — record diffs the bed (the agent can NOT mis-count):')
+{
+  const base = st({ cycle: 40, lastGardenPlan: 38, lastBigSwing: 30, bigSwingsBuilt: 2, tally: {},
+    fence: { garden: ['A', 'B', 'C', 'D'], grounds: ['W', 'V'] } })
+
+  // PLAN/garden: removed C,D + added E → 1 sown, 2 decayed, 0 bloomed (no build)
+  let r = applyRecord(base, { mode: 'PLAN', track: 'garden' }, { garden: ['A', 'B', 'E'], grounds: ['W', 'V'] })
+  eq(r.tally.gardenSown, 1, 'PLAN derives sown from the added title')
+  eq(r.tally.gardenDecayed, 2, 'PLAN derives decayed from removed titles (no bloom)')
+  eq(r.tally.gardenBloomed, 0, 'PLAN blooms nothing')
+  eq(r.fence.garden.join(','), 'A,B,E', 'fence snapshot updated')
+
+  // BUILD/garden: removed C (the built seed bloomed) → 1 bloomed, 0 decayed
+  r = applyRecord(base, { mode: 'BUILD', track: 'garden' }, { garden: ['A', 'B', 'D'], grounds: ['W', 'V'] })
+  eq(r.tally.gardenBloomed, 1, 'BUILD in-fence blooms exactly the one built')
+  eq(r.tally.gardenDecayed, 0, 'BUILD with one removal decays nothing')
+
+  // BUILD/grounds that also sows garden planters: grounds W bloomed, garden +2 sown
+  r = applyRecord(base, { mode: 'BUILD', track: 'grounds' }, { garden: ['A', 'B', 'C', 'D', 'P1', 'P2'], grounds: ['V'] })
+  eq(r.tally.groundsBloomed, 1, 'grounds build blooms the opened wing')
+  eq(r.tally.gardenSown, 2, 'a grounds build can sow garden planters (both fences diffed)')
+  eq(r.tally.gardenBloomed, 0, 'no garden bloom on a grounds build')
+
+  // compress in place (title unchanged) → counts as nothing
+  r = applyRecord(base, { mode: 'PLAN', track: 'garden' }, { garden: ['A', 'B', 'C', 'D'], grounds: ['W', 'V'] })
+  eq(r.tally.gardenSown + r.tally.gardenDecayed + r.tally.gardenBloomed, 0, 'editing a seed in place counts as nothing')
+
+  // the cycle-32 reality: 8 pruned, 3 sown on a PLAN — derived correctly regardless of any agent report
+  const big = st({ cycle: 32, tally: {}, fence: { garden: ['a','b','c','d','e','f','g','h','i','j','k'], grounds: [] } })
+  r = applyRecord(big, { mode: 'PLAN', track: 'garden' }, { garden: ['a','b','c','x','y','z'], grounds: [] })
+  eq(r.tally.gardenDecayed, 8, 'cycle-32 case: 8 decayed derived (agent had claimed 3)')
+  eq(r.tally.gardenSown, 3, 'cycle-32 case: 3 sown derived (agent had claimed 1)')
+}
+
 console.log('cadence simulation — 24 cycles, builds dominate, swings periodic:')
 {
   // A planter pulls 1 garden seed/build; the gardener refills to ceiling; a

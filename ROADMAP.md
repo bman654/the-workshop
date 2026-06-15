@@ -84,6 +84,8 @@ Workbench nested-anchor card spill (stretched-link pattern, all cards) · Carnot
 
 ### curation
 - [curation] **The Cairn tells a false tale** — its per-stone cycle numbers scramble across loop relaunches, so the face's depth−stones arithmetic stays a unit mismatch even after #22's fix. A truer account is recoverable (each stone's real monotonic cycle). Repair the count or redesign the Cairn — the builder's call. (sown #27)
+- [curation] **Retrofit a seed-purity self-test to the 6 oldest generators** (cartographer · daedalus · firmament · compositor · threshold · bastion) — they assert their crux only in prose (0 in-page self-tests). Add the sibling chip: re-render one seed across all styles, assert the geometry fingerprint byte-identical (style changes rendering only); a tainted control fails. **Ship daedalus first** (its FNV wall-hash is pre-written). (sown #35)
+- [curation] **Trim the ballooned Workbench blurbs** — Collatz (~190w) · Ulam (~144w) · Spirograph · Straightedge · Fourier · The Mill · Galton · Black Chamber are far over a one-promise-line (~30w). Trim each, PRESERVE inner cross-links above the stretched `<a class=card-link>` overlay, re-verify 0 nested-anchor / 0 spill at desktop + mobile. (sown #35)
 
 ### bench
 <!-- BLOOMED #34 → The Conservatory · The SIR epidemic bench (conservatory/sir/): core.mjs + core.test.mjs (28/28) + the glass-terrarium bench; the planter became the third live .bed on the landing (self-test 17/17). Provenance: conservatory/CHANGELOG.md + the #34 worklog. The replicator [bench] remains the one planter left to grow the wing. -->

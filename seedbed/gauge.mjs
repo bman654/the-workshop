@@ -173,20 +173,44 @@ function saveState(s) { writeFileSync(STATE, JSON.stringify(s, null, 2) + '\n') 
 // (a forgotten "--sown N" placeholder must not crash the cycle bump or poison the tally).
 const MODES = { BUILD: 'BUILD', PLAN: 'PLAN', TRIVIAL: 'TRIVIAL' }
 const TRACKS = { garden: 'garden', gardens: 'garden', grounds: 'grounds', ground: 'grounds', bug: 'bug', bugs: 'bug' }
-export function applyRecord(state, { mode, track, bloomed = 0, sown = 0, decayed = 0 }) {
+// currentBed (optional) = { garden: [seed-title, …], grounds: [seed-title, …] } — the
+// bed AFTER this cycle's edits. When given, the tally is DERIVED by diffing it against
+// the snapshot in state.fence (like fuel — the bed is the source of truth, so a sloppy
+// or dishonest agent report can't poison the decay-ratio metric). When omitted, falls
+// back to the explicit --bloomed/--sown/--decayed counts (manual / tests only).
+export function applyRecord(state, { mode, track, bloomed, sown, decayed } = {}, currentBed = null) {
   const m = MODES[String(mode).toUpperCase()]
   const t = TRACKS[String(track).toLowerCase()]
   if (!m) throw new Error(`record: unknown --mode "${mode}" (want BUILD | PLAN | TRIVIAL)`)
   if (!t) throw new Error(`record: unknown --track "${track}" (want garden | grounds | bug)`)
-  const num = x => { const n = Number(x); return Number.isFinite(n) ? n : 0 }
   const s = { ...state }
   s.cycle = state.cycle + 1 // every completed cycle advances the durable clock
   if (m === 'PLAN' && t === 'garden') s.lastGardenPlan = s.cycle
   if (m === 'BUILD' && t === 'grounds') { s.lastBigSwing = s.cycle; s.bigSwingsBuilt = state.bigSwingsBuilt + 1 }
   const tally = { ...(state.tally || {}) }
-  const bump = (k, n) => { tally[k] = (tally[k] || 0) + num(n) }
-  const ns = t === 'grounds' ? 'grounds' : 'garden'
-  bump(`${ns}Sown`, sown); bump(`${ns}Bloomed`, bloomed); bump(`${ns}Decayed`, decayed)
+  const bump = (k, n) => { tally[k] = (tally[k] || 0) + n }
+
+  if (currentBed) {
+    // DERIVED: diff the fence (by seed title) vs the last snapshot. A seed that left
+    // the bed BLOOMED (a BUILD in its own fence ships exactly one) or else DECAYED (pruned).
+    // A seed edited IN PLACE keeps its title → in neither set → correctly counted as nothing.
+    const old = state.fence || { garden: [], grounds: [] }
+    for (const fence of ['garden', 'grounds']) {
+      const cur = new Set(currentBed[fence] || [])
+      const prev = new Set(old[fence] || [])
+      const sownN = [...cur].filter(x => !prev.has(x)).length
+      const goneN = [...prev].filter(x => !cur.has(x)).length
+      const bloomsHere = (m === 'BUILD' && t === fence) ? Math.min(1, goneN) : 0
+      bump(`${fence}Sown`, sownN)
+      bump(`${fence}Bloomed`, bloomsHere)
+      bump(`${fence}Decayed`, goneN - bloomsHere)
+    }
+    s.fence = { garden: [...(currentBed.garden || [])], grounds: [...(currentBed.grounds || [])] }
+  } else {
+    const num = x => { const n = Number(x); return Number.isFinite(n) ? n : 0 }
+    const ns = t === 'grounds' ? 'grounds' : 'garden'
+    bump(`${ns}Sown`, num(sown)); bump(`${ns}Bloomed`, num(bloomed)); bump(`${ns}Decayed`, num(decayed))
+  }
   s.tally = tally
   return s
 }
@@ -211,11 +235,15 @@ function main() {
     const f = flags(rest)
     if (!f.mode || !f.track) { console.error('record needs --mode and --track'); process.exit(2) }
     const state = loadState()
+    const bed = parseBed(readFileSync(ROADMAP, 'utf8'))
+    const currentBed = { garden: bed.gardenSeeds.map(s => s.pitch), grounds: bed.groundsSeeds.map(s => s.pitch) }
     let ns
-    try { ns = applyRecord(state, { mode: f.mode, track: f.track, bloomed: f.bloomed, sown: f.sown, decayed: f.decayed }) }
+    try { ns = applyRecord(state, { mode: f.mode, track: f.track }, currentBed) } // tally DERIVED from the bed diff
     catch (e) { console.error(e.message); process.exit(2) }
     saveState(ns)
-    console.log(`recorded ${f.mode}/${f.track}: cycle ${state.cycle} → ${ns.cycle}`)
+    const dt = ns.tally, ot = state.tally || {}
+    const delta = (k) => (dt[k] || 0) - (ot[k] || 0)
+    console.log(`recorded ${f.mode}/${f.track}: cycle ${state.cycle} → ${ns.cycle}  ·  garden +${delta('gardenSown')} sown / ${delta('gardenBloomed')} bloomed / ${delta('gardenDecayed')} decayed · grounds +${delta('groundsSown')} sown / ${delta('groundsBloomed')} bloomed / ${delta('groundsDecayed')} decayed`)
     console.log(JSON.stringify(ns, null, 2))
     return
   }
