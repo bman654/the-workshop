@@ -258,8 +258,8 @@ function publisherPrompt(d, chosen, handoff, cyc) {
     'swings-built (read it: `node seedbed/gauge.mjs --status`). Put each seed INSIDE its fenced ROADMAP section.', '']
   if (d.mode === 'PLAN') {
     const where = d.track === 'grounds'
-      ? 'the `<!-- gauge:grounds-seeds -->` fence (room/engine/metagame/map) and ⚡ `<!-- gauge:sparks -->` fence'
-      : 'the `<!-- gauge:garden-seeds -->` fence (under exhibit/cross/curation)'
+      ? 'BETWEEN the `<!-- gauge:grounds-seeds:start -->` and `:end -->` markers (room/engine/metagame/map), sparks BETWEEN `<!-- gauge:sparks:start -->` and `:end -->`'
+      : 'BETWEEN the `<!-- gauge:garden-seeds:start -->` and `:end -->` markers (under the exhibit/cross/curation headings)'
     lines.push('This is a PLAN (' + (d.track === 'grounds' ? 'groundskeeper' : 'gardener') + ') cycle — no piece to review. Apply it, then publish:',
       '1) Housekeeping: ' + (d.housekeeping || 'survey, prune, keep docs lean.') + '  PRUNE THE DECAYED SEEDS the gauge',
       '   listed — remove them CLEAN (no tombstone; a decayed idea may return). Do this BEFORE sowing.',
@@ -267,7 +267,8 @@ function publisherPrompt(d, chosen, handoff, cyc) {
       '   ' + JSON.stringify(chosen.curatedSeeds || []),
       '3) REPLACE the NOTES.md current-state block (don\'t append), write the worklog block (newest-first) + an INDEX line.',
       '4) RUN THE GAUGE RECORD (this is the ONLY thing that mutates seedbed/state.json — never hand-edit it):',
-      '     node seedbed/gauge.mjs record --mode ' + d.mode + ' --track ' + d.track + ' --sown <#seeds you filed> --decayed <#you pruned-decayed>',
+      '     node seedbed/gauge.mjs record --mode ' + d.mode + ' --track ' + d.track + ' --sown N --decayed M',
+      '     (replace N + M with INTEGERS: N = how many seeds you filed, M = how many decayed seeds you pruned — do not leave a placeholder)',
       '5) git add + commit + push. Your summary must describe committed, pushed work — never a mid-flight status.')
   } else {
     const grounds = d.track === 'grounds'
@@ -282,8 +283,9 @@ function publisherPrompt(d, chosen, handoff, cyc) {
       '   or NESTED markup (an <a> inside an <a class="card">), console errors, broken/wrong links, mis-sized cards,',
       '   bad spacing, mobile/responsive breakage. Re-run the piece\'s self-test to confirm it is green.',
       '2) POLISH + FIX: make it as BEAUTIFUL + consistent with its siblings as it can be; fix small polish and real',
-      '   bugs alike. If a bug is too big to fix safely now, fix what you can and file it as a `- [bug]` line INSIDE',
-      '   ROADMAP\'s `<!-- gauge:bug -->` fence so the next cycle clears it (the gauge counts that fence) — never',
+      '   bugs alike. If a bug is too big to fix safely now, fix what you can and file it as a `- [bug] **…** (sown #' + cyc + ')`',
+      '   line BETWEEN ROADMAP\'s `<!-- gauge:bug:start -->` and `:end -->` markers so the next cycle clears it (the gauge',
+      '   counts that fence and routes it BUILD/bug ahead of everything) — never',
       '   silently ship something visibly broken.',
       '3) (Optional) if a screen you reviewed shows SCALING STRAIN (a crowded map, a hard-to-read screen, a real perf',
       '   issue), you MAY drop a ⚡ spark into ROADMAP\'s sparks fence. Invited, never required.',

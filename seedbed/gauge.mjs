@@ -167,16 +167,27 @@ export function loadState() {
 function saveState(s) { writeFileSync(STATE, JSON.stringify(s, null, 2) + '\n') }
 
 // ── record: the publisher applies the cycle outcome (deterministic) ───────────
+// record is the SOLE state-mutation surface, so it validates HARD: an unknown
+// mode/track throws (a silent miss would desync the cadence forever). Plurals are
+// tolerated (the prose says "gardens"/"grounds"); counts coerce non-numbers → 0
+// (a forgotten "--sown N" placeholder must not crash the cycle bump or poison the tally).
+const MODES = { BUILD: 'BUILD', PLAN: 'PLAN', TRIVIAL: 'TRIVIAL' }
+const TRACKS = { garden: 'garden', gardens: 'garden', grounds: 'grounds', ground: 'grounds', bug: 'bug', bugs: 'bug' }
 export function applyRecord(state, { mode, track, bloomed = 0, sown = 0, decayed = 0 }) {
+  const m = MODES[String(mode).toUpperCase()]
+  const t = TRACKS[String(track).toLowerCase()]
+  if (!m) throw new Error(`record: unknown --mode "${mode}" (want BUILD | PLAN | TRIVIAL)`)
+  if (!t) throw new Error(`record: unknown --track "${track}" (want garden | grounds | bug)`)
+  const num = x => { const n = Number(x); return Number.isFinite(n) ? n : 0 }
   const s = { ...state }
   s.cycle = state.cycle + 1 // every completed cycle advances the durable clock
-  if (mode === 'PLAN' && track === 'garden') s.lastGardenPlan = s.cycle
-  if (mode === 'BUILD' && track === 'grounds') { s.lastBigSwing = s.cycle; s.bigSwingsBuilt = state.bigSwingsBuilt + 1 }
-  const t = { ...(state.tally || {}) }
-  const bump = (k, n) => { t[k] = (t[k] || 0) + n }
-  const ns = track === 'grounds' ? 'grounds' : 'garden'
+  if (m === 'PLAN' && t === 'garden') s.lastGardenPlan = s.cycle
+  if (m === 'BUILD' && t === 'grounds') { s.lastBigSwing = s.cycle; s.bigSwingsBuilt = state.bigSwingsBuilt + 1 }
+  const tally = { ...(state.tally || {}) }
+  const bump = (k, n) => { tally[k] = (tally[k] || 0) + num(n) }
+  const ns = t === 'grounds' ? 'grounds' : 'garden'
   bump(`${ns}Sown`, sown); bump(`${ns}Bloomed`, bloomed); bump(`${ns}Decayed`, decayed)
-  s.tally = t
+  s.tally = tally
   return s
 }
 
@@ -200,7 +211,9 @@ function main() {
     const f = flags(rest)
     if (!f.mode || !f.track) { console.error('record needs --mode and --track'); process.exit(2) }
     const state = loadState()
-    const ns = applyRecord(state, { mode: f.mode, track: f.track, bloomed: Number(f.bloomed || 0), sown: Number(f.sown || 0), decayed: Number(f.decayed || 0) })
+    let ns
+    try { ns = applyRecord(state, { mode: f.mode, track: f.track, bloomed: f.bloomed, sown: f.sown, decayed: f.decayed }) }
+    catch (e) { console.error(e.message); process.exit(2) }
     saveState(ns)
     console.log(`recorded ${f.mode}/${f.track}: cycle ${state.cycle} → ${ns.cycle}`)
     console.log(JSON.stringify(ns, null, 2))
@@ -211,6 +224,9 @@ function main() {
   const bed = parseBed(text)
   const d = decide(state, bed)
   const missing = SECTIONS.filter(s => !bed.sectionsPresent.includes(s))
+  // an unstamped live seed counts as fuel but can NEVER decay — flag it loudly
+  const unstamped = bed.gardenSeeds.filter(s => s.sown == null).map(s => s.pitch)
+    .concat(bed.groundsSeeds.filter(s => s.contest == null).map(s => s.pitch))
 
   if (cmd === '--status' || cmd === '--check') {
     const g = d.gauges
@@ -225,12 +241,16 @@ function main() {
       for (const s of d.decayed) console.log(`   · [${s.track}] ${s.pitch}${s.age != null ? `  (age ${s.age})` : `  (${s.strikes} contests lost)`}`)
     }
     if (missing.length) console.log(`\n⚠ ROADMAP missing gauge sections: ${missing.join(', ')} (fuel counted as 0 there)`)
+    if (unstamped.length) console.log(`\n⚠ ${unstamped.length} UNSTAMPED seed(s) — they count as fuel but can NEVER decay; add (sown #N) / (· contest #M):\n   · ${unstamped.join('\n   · ')}`)
     console.log(`\n${ratio(state.tally, 'garden')}\n${ratio(state.tally, 'grounds')}`)
     if (cmd === '--check') console.log('\nstate shape OK ✓')
     return
   }
   // default: the machine directive
-  if (missing.length) d.warning = `ROADMAP missing gauge sections: ${missing.join(', ')}`
+  const warns = []
+  if (missing.length) warns.push(`missing gauge sections: ${missing.join(', ')}`)
+  if (unstamped.length) warns.push(`${unstamped.length} unstamped seed(s) (count as fuel but can never decay)`)
+  if (warns.length) d.warning = warns.join('; ')
   console.log(JSON.stringify(d, null, 2))
 }
 

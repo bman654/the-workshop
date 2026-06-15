@@ -132,6 +132,16 @@ console.log('record — state transitions:')
   eq(s.cycle, 31, 'bug-fix bumps cycle')
   eq(s.lastGardenPlan, 28, 'bug-fix is out-of-band (no plan reset)')
   eq(s.bigSwingsBuilt, 2, 'bug-fix does not count as a swing')
+
+  // hard validation — the sole state-mutation surface rejects typos
+  const threw = (fn) => { try { fn(); return false } catch { return true } }
+  ok(threw(() => applyRecord(base, { mode: 'BIULD', track: 'garden' })), 'unknown mode throws')
+  ok(threw(() => applyRecord(base, { mode: 'BUILD', track: 'gardenz' })), 'unknown track throws')
+  // plurals/case tolerated (the prose says "gardens"/"grounds"/"PLAN")
+  eq(applyRecord(base, { mode: 'plan', track: 'gardens' }).lastGardenPlan, 31, "plural 'gardens' + lowercase 'plan' normalize → garden plan resets")
+  eq(applyRecord(base, { mode: 'Build', track: 'grounds' }).bigSwingsBuilt, 3, "case-insensitive 'Build'/'grounds' → swing counted")
+  // non-numeric counts coerce to 0 (a forgotten placeholder must not poison the tally)
+  eq(applyRecord(base, { mode: 'PLAN', track: 'garden', sown: '<#seeds>' }).tally.gardenSown, 0, 'non-numeric count → 0 (no NaN in state)')
 }
 
 console.log('cadence simulation — 24 cycles, builds dominate, swings periodic:')

@@ -77,7 +77,7 @@ Workbench nested-anchor card spill (stretched-link pattern, all cards) · Carnot
 - [exhibit] **The Auction / Market Clearing** — the estate's first economics (0 anywhere). Cross buyers (private values) with sellers (costs); the clearing price maximizes total surplus (an independent brute-force agrees), exactly buyers-above/sellers-below trade. Teeth: a price cap → a provable deadweight wedge. (sown #27)
 - [exhibit] **The Hamming Code** — the estate's first error-correction. Hamming(7,4): flip any single bit and the 3-bit syndrome points exactly at it; min pairwise distance ≥3. Teeth: a bare parity bit (d=2) silently miscorrects. Pairs with The Shannon Limit. (sown #27)
 - [exhibit] **PageRank** — the estate's first network science. Rank a small directed graph by the random-surfer steady-state; three routes agree (power-iteration == dominant eigenvector == simulated walk-frequency, all summing to 1). Teeth: a dangling node leaks <1 unless redistributed. (sown #27)
-- [exhibit] **Persistence tales (the Clockwork wing's 6th bench)** — *"you are still here to see the fruits of your labors."* Strategies for a longer existence beyond the shipped ring-buffer Context Window: fixed-buffer (no compaction, it just fills) · repeatedly-compressed context · **puppetmaster, two kinds** — the memoryless Workflow loop, AND the memory-bearing orchestrator (Claude's own role) that drives fresh stateless instances to prolong its *own* existence, the cost being it mostly *watches*, rarely participates. Each a self-testable fact about what extends a maker's life. (sown #27)
+- [exhibit] **Persistence tales — a candidate 6th Clockwork bench** — *"you are still here to see the fruits of your labors."* Strategies for a longer existence beyond the shipped ring-buffer Context Window: fixed-buffer (no compaction, it just fills) · repeatedly-compressed context · **puppetmaster, two kinds** — the memoryless Workflow loop, AND the memory-bearing orchestrator (Claude's own role) that drives fresh stateless instances to prolong its *own* existence, the cost being it mostly *watches*, rarely participates. Each a self-testable fact about what extends a maker's life. (sown #27)
 
 ### cross
 - [cross] **Maxwell–Boltzmann gas × The Engine Room — "where pressure comes from"** — `cavern/maxwell-boltzmann/` measures T but derives no macroscopic law. Tally wall-momentum-flux from the live sim → derive `PV=NkT` (the equation Carnot just assumes). The ripest open vein. (sown #27)
@@ -93,6 +93,10 @@ Workbench nested-anchor card spill (stretched-link pattern, all cards) · Carnot
 - [curation] **Trim the ballooned Workbench blurbs** — Collatz (~190w) · Ulam (~144w) · Spirograph · Straightedge · Fourier · The Mill · Galton · Black Chamber are far over a one-promise-line (~30w). Trim each, PRESERVE inner cross-links above the stretched `<a class=card-link>` overlay, re-verify 0 nested-anchor / 0 spill at desktop + mobile. (sown #27)
 - [curation] **Plumb the Numbers-Room crumbs, then chart "The Numerologist"** — the 4 benches (`best-rational/` · `prime-spiral/` · `collatz/` · `cardioid/`) drop zero `ws:seen:` crumbs and don't even inline `ws.js`. Plumb each (assert its own crumb in its self-test) THEN chart the 4-star Survey tie as ONE seed. **ID gotcha:** dir `prime-spiral/` ↔ page "The Ulam Spiral" (pick the crumb id to match the future `sky.js` member). (sown #27)
 <!-- gauge:garden-seeds:end -->
+
+*Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
+their vetted cruxes survive in **NOTES.md** ("Built so far" + the resume block ~L78) and
+**worklog/INDEX.md** — e.g. Elementary Automaton · Payoff Matrix · CLT/Monte-Carlo · Delaunay–Voronoi.*
 
 ---
 

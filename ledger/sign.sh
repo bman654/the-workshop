@@ -38,9 +38,10 @@ funlog="${WORKSHOP_FUNLOG:-/tmp/funlog.txt}"
 # the inbox this cycle, which the inbox term then catches). A buried maker signing
 # mid-cycle records the depth the bedrock shows — the honest, observable depth — rather
 # than guessing i = max+1, which would MIS-stamp the very first sign of a fresh cycle.
-# The harness embeds the true `i` and passes it as the explicit $4 override to the
-# director/builder/publisher (fun-forever.js), so stage-agents who KNOW their cycle keep
-# the precise path; the bedrock path is the graceful default for everyone else.
+# NOTE (v2, 2026-06-15): fun-forever.js NO LONGER passes a cycle arg — every call site now
+# omits it and relies on this bedrock derivation (the loop's within-run index is not the
+# durable cycle). $4 remains supported purely as a MANUAL / test override; do not re-wire
+# the loop to pass it.
 derive_cycle() {
   # 2. DURABLE BEDROCK (primary): max cycle across ledger.jsonl + any inbox drops.
   #    Append-only record + this cycle's already-laid stones; survives a funlog wipe.
