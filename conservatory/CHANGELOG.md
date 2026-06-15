@@ -514,3 +514,107 @@ users (the OS preference is the real gate) — **kept**. The **646-line core.mjs
 target) stays navigable and the REPLICATOR-CORE block is byte-frozen — **left as built**. The two
 stray repo-root PNGs (`phase1.png`, `ws43-paused1.png`) predate this work → **removed** as
 untracked strays (all the cycle's screenshots went to /tmp). **No new `[bug]`, no `⚡` spark.**
+
+---
+
+## Cycle #48 — Logistic Growth RE-SOULED in place (a colony under glass; the wing's 4th re-soul)
+
+A `rework` (BUILD / garden). The bench `conservatory/logistic/` — which *led* with an
+S-curve plot in a wing whose mold is a **living terrarium** (predator–prey, the Arena) — is
+re-grown **IN PLACE** (same route, same `ws:seen:logistic` breadcrumb, no front-door
+map/footprint change) into **a colony under glass**: a circular glass petri dish of
+**countable green cells** that bud/divide (inner→outer on a stable jittered hex lattice) and
+crowd toward a visible carrying capacity **K**, until no cell has room left to bud. Three
+coupled crowd cues read the same crowding — packing density, an amber colour/jostle as cells
+press, and a clockwise rim crowd-meter. The S-curve is **DEMOTED** to a faint back-glass
+ghost + a **census-cloud "shadow" pane** where the crowd's own census paints the proven
+sigmoid up to the K asymptote.
+
+### The three hero verbs (touchable, discoverable)
+- **Resize the dish (K):** drag K 100→60 and the colony re-packs to the new ceiling **live**.
+- **⤓ overcrowd (N₀=1.6 K):** one tap seeds the dish too tight (160 = 1.6·K) — it starts
+  packed and **thins toward K**, no inflection drawn (N₀≥K/2, the load-bearing guard).
+- **greedy batch:** presets a coarse dt (a≈1.8) — the amber banner lights, the rim glows, the
+  ticker narrates "overcrowded"/"rebounds", and the **coarse dish rings** past the rim.
+
+### The proof, DEMOTED to a faithful back-glass instrument
+The proven sigmoid lives on as (a) a faint **back-glass ghost** and (b) a **census cloud**
+that accumulates from a deterministic `headlessRun` and paints the exact closed-form S-curve;
+the phase-line is a compact side-gauge and the Lyapunov needle a shrunk re-labelled
+**V=(N−K)²** ("how far from full"). **The HARD WALL holds:** the live dish is a **camera** —
+the on-screen `sN` advances ONLY on the proven `rk4Step`/`leakyStep` over `field()`; every
+printed number reads the core; the **validated census stays pure** (only the on-screen
+camera-run gets a bounded display clamp + a stray-founder reseed).
+
+### Files (re-grown in place)
+- **core.mjs** (287→**511**L) — the `LOGISTIC-CORE` block + its 30/30 tests preserved
+  **byte-identical**; APPENDED an `===== AGENT-CORE =====` block exporting `DISH_CAP=1500`,
+  `mulberry32`, `binom`, `agentMeanField(N)=r·N−r·N·(N/K)`, `stepDish` (**two registers** — a
+  truthful per-cell binomial bud/pinch that pins at the cap = the validated census path; and a
+  **coarse integer logistic map** `r·dt·m·(1−m/cap)` that genuinely rings past the rim),
+  `headlessRun`, `ensembleCensus`, `censusDeviation`, `runAgentSelfTest` (4 rungs).
+- **index.html** (→**1314**L) — AGENT-CORE inlined **byte-identical** between its sentinels;
+  the instrument IIFE replaced with the living dish (`drawDish`), the census-shadow pane, the
+  compact phase side-gauge, the shrunk V-needle, a deferred two-tier self-test badge
+  (sync proven-core + `requestIdleCallback` agent tier), and the bud/full/die/epoch ticker.
+- **core.test.mjs** (→**274**L) — runs `runAgentSelfTest` (4/4), adds the CAP
+  1500→3000→6000 **shrinkage witness** (dev 2.46→1.65→1.26, monotone-down — a 1/√CAP
+  demographic stall, not model error), the coarse-dish ring witness, and a second
+  sentinel-pair parity row for AGENT-CORE beside the preserved LOGISTIC-CORE one. **46/46.**
+- **../index.html** (landing) — the Logistic bed-card blurb + proof line re-souled in place
+  ("a few cells, dividing fast … crowd toward the carrying capacity K, until no cell has room
+  left to bud … the crowd's own census paints the proven sigmoid"); 4 beds, no map touched.
+
+### The agent self-test (A1–A4, measured tolerances printed honestly)
+- **A1** `agentMeanField == field()` to **max|Δ|=5.33e-15** over N∈{0..120} (the colony's
+  mean-field recovers the proven logistic drift to machine zero).
+- **A2** ensemble census tracks the EXACT closed-form sigmoid within **2.463** colony-units
+  (< 3.0) — the crowd draws the S-curve.
+- **A3** the truthful binomial register pins at the cap (= N=K) and **cannot overshoot** (the
+  per-cell birth clamp stalls it); the **coarse integer-map register rings** — a=1.6 ⇒
+  maxN=**100.80** > K with 27 K-crossings, growing monotonically in a (100.80<109.53<120.40).
+- **A4** determinism — same seed ⇒ byte-identical colony series.
+
+### Design call (owned by the builder, ratified in review)
+The brief's literal single-formula `stepDish` (per-cell binomial) **provably cannot ring** —
+the birth clamp stalls it at the cap. The builder **split** `stepDish`: the binomial body is
+kept verbatim for the **truthful register** (drives A1/A2/the census), and the **coarse
+register** is the genuine integer logistic map (it rings, a documented overshoot witness). The
+overshoot PROOF still rests on the proven `leakyStep@a=1.6` claim verbatim; the coarse dish is
+an *additional* honest witness. The AGENT-CORE comment documents both registers and the
+camera-only floor. **Publisher's call: kept** — it is the honest, soul-faithful choice and
+every tooth stays green.
+
+### Builder self-verify (cycle #48)
+`node conservatory/logistic/core.test.mjs` → **46/46 GREEN exit 0** (30 preserved logistic core
++ agent self-test 4/4 + independent witnesses incl. shrinkage + coarse-ring + both parity rows
+byte-identical). In-page badge **self-test 10/10 ✓** (6 core + 4 bridge); @1280 and @390 both 0
+console errors, 0 nested anchors, 0 horizontal overflow. All three hero verbs verified live
+(resize K re-packs · ⤓ overcrowd thins toward K · greedy batch rings, amber banner lights).
+Smooth mode: the census cloud paints the ghost sigmoid up to the K asymptote.
+
+### Publisher fresh-eyes review (cycle #48)
+Served on uncommon port `:8771` (Python `http.server`, torn down by exact PID; Brandon's
+:3001/:4380 untouched); both surfaces opened in agent-browser session `ws-pub-48` (closed by
+name). Node twin **46/46 GREEN exit 0** (both parity rows byte-identical). **The bench @1280
+AND @390:** in-page pill **self-test 10/10 ✓**, **0** console errors (the console carried only
+the green self-test logs), **0** nested anchors, **0** horizontal overflow (1265≤1280, 375≤390).
+The living dish reads beautifully — a circular glass petri of countable green cells crowding
+toward K with the amber crowd-meter; the S-curve is properly demoted to ghost + census-shadow.
+**Drove all three hero verbs:** resize K re-packs the colony live; *⤓ overcrowd* packs the dish
+too tight then thins; *greedy batch* lights the amber banner, glows the rim, and rings the
+colony. The Conservatory landing self-test read **21/21 ✓**, 4 beds, all bench links
+bare-relative and resolving (all surfaces 200), the re-souled Logistic card sitting between
+Predator&Prey and SIR and rendering consistently with its siblings; mobile stacks cleanly to a
+single column. **Publisher's calls on the builder's open concerns:** (1) the **reduced-motion
+static frame** is verified by construction — `renderStatic` pins the dish full, pre-accumulates
+the census cloud from a deterministic `headlessRun(20260615,N0,…)` (verified in Node: climbs
+5→~97.5→100 and pins at K), lights every honeycomb slot, flattens the V-needle, logs one ticker
+line, and draws all panes once with no rAF; the `reduce` guard wires it into every interaction
+handler exactly as predator-prey's verified `renderStatic` does. The only gap is **tooling**:
+agent-browser's CDP `set media reduced-motion` does not propagate to the page's `matchMedia` in
+this Chrome build (the builder hit the same wall) — a tooling limitation, **not a piece bug**.
+(2) the **two-register `stepDish` split** — ratified above. **No real bug to fix, none too big
+to file. No new `[bug]`, no `⚡` spark.** **Net: the Logistic bench's S-curve becomes a colony
+under glass you watch bud, crowd, and saturate toward K; the proven sigmoid lives on as the
+crowd's own census; every printed number still reads from the one proven core.**

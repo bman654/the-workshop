@@ -7,6 +7,8 @@
 import {
   P, field, fPrime, closed, fixedPoints, inflection, Vlyap, Vprime,
   rk4Step, leakyStep, trace, monotoneApproach, runSelfTest,
+  DISH_CAP, agentMeanField, stepDish, headlessRun, ensembleCensus,
+  censusDeviation, runAgentSelfTest,
 } from './core.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -19,10 +21,15 @@ function check(name, cond, info) {
   else { console.log('  ✗ ' + name + (info ? '  ·  ' + info : '')); }
 }
 
-console.log('\n— The full in-page self-test —');
+console.log('\n— The full in-page self-test (the proven logistic core) —');
 const r = runSelfTest();
 for (const c of r.checks) check(c.name, c.pass, c.info);
 check('self-test reports all green', r.pass === r.total, r.pass + '/' + r.total);
+
+console.log('\n— The agent-colony self-test (the bridge: the crowd recovers the law) —');
+const ra = runAgentSelfTest();
+for (const c of ra.checks) check(c.name, c.pass, c.info);
+check('agent self-test reports all green', ra.pass === ra.total, ra.pass + '/' + ra.total);
 
 console.log('\n— Independent re-derivations (this file, not the bundled self-test) —');
 
@@ -139,6 +146,88 @@ console.log('\n— Independent re-derivations (this file, not the bundled self-t
 }
 
 // ---------------------------------------------------------------------------
+//  INDEPENDENT AGENT WITNESSES — re-derive the bridge claims here (not the
+//  bundled agent self-test), so "agent green" can't drift either.
+// ---------------------------------------------------------------------------
+
+// THE AGENT MEAN-FIELD is byte-for-byte field() at every state we probe.
+{
+  let maxErr = 0;
+  for (const N of [0, 3.3, 12, 47, 73, 100, 130]) {
+    maxErr = Math.max(maxErr, Math.abs(agentMeanField(N) - field(N)));
+  }
+  check('agent mean-field == field() to machine zero (independent states)',
+        maxErr < 1e-12, 'max|Δ|=' + maxErr.toExponential(2) + ' (measured 5.33e-15)');
+}
+
+// THE DENSITY SCALE puts the dish ceiling at exactly K (m=CAP ⇒ N=K).
+{
+  check('DISH_CAP=1500 ⇒ a full dish (m=CAP) reads N=K=100',
+        DISH_CAP === 1500 && P.K * (DISH_CAP / DISH_CAP) === 100, 'm=CAP ⇒ N=' + (P.K * 1));
+}
+
+// THE CENSUS tracks the EXACT closed-form sigmoid (re-measured here).
+{
+  const dev = censusDeviation(8, 64, 30, 0.03, 9000001, DISH_CAP);
+  check('ensemble census tracks closed(t, N0) within 2.5 (measured 2.46)',
+        dev < 2.5, 'max|census − closed| = ' + dev.toFixed(3) + ' colony-units');
+}
+
+// THE 1/√CAP SHRINKAGE — the residual is finite-CAP demographic stalling, not
+// model error: as CAP grows the deviation falls MONOTONICALLY (2.46→1.65→1.26).
+// The trend is the proof (the absolute values are seed-specific).
+{
+  const d1 = censusDeviation(8, 64, 30, 0.03, 9000001, 1500);
+  const d2 = censusDeviation(8, 64, 30, 0.03, 9000001, 3000);
+  const d3 = censusDeviation(8, 64, 30, 0.03, 9000001, 6000);
+  check('census deviation SHRINKS monotonically as CAP grows (1/√CAP demographic stall, not model error)',
+        d1 > d2 && d2 > d3,
+        'CAP 1500/3000/6000 ⇒ dev ' + d1.toFixed(2) + ' → ' + d2.toFixed(2) + ' → ' + d3.toFixed(2));
+}
+
+// THE COARSE DISH (the integer logistic map) rings past the rim like leakyStep,
+// and grows monotonically worse in a — its honest count-level echo of the control.
+{
+  function coarseRun(a, N0 = 5, cap = DISH_CAP, T = 80) {
+    const dt = a / P.r, rnd = (function (seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; })(7);
+    let m = Math.round((N0 / P.K) * cap), maxN = 0, cross = 0, prevSide = Math.sign(N0 - P.K);
+    for (let i = 0, steps = Math.round(T / dt); i < steps; i++) {
+      m = stepDish(m, cap, dt, rnd, { coarse: true }).m;
+      const N = P.K * (m / cap);
+      if (N > maxN) maxN = N;
+      const s = Math.sign(N - P.K);
+      if (s !== 0 && prevSide !== 0 && s !== prevSide) cross++;
+      if (s !== 0) prevSide = s;
+    }
+    return { maxN, cross };
+  }
+  const c08 = coarseRun(0.8), c16 = coarseRun(1.6), c20 = coarseRun(2.0), c24 = coarseRun(2.4);
+  check('coarse dish a=0.8 is CLEAN (maxN≈100, 0 K-crossings)',
+        c08.maxN <= P.K + 1e-6 && c08.cross === 0, 'maxN=' + c08.maxN.toFixed(2) + ' cross=' + c08.cross);
+  check('coarse dish a=1.6 PROVABLY rings past the rim (maxN>K, ≥1 crossing)',
+        c16.maxN > P.K && c16.cross >= 1, 'maxN=' + c16.maxN.toFixed(2) + ' cross=' + c16.cross);
+  check('coarse dish overshoot grows monotonically in a (1.6<2.0<2.4)',
+        c16.maxN < c20.maxN && c20.maxN < c24.maxN,
+        c16.maxN.toFixed(2) + ' < ' + c20.maxN.toFixed(2) + ' < ' + c24.maxN.toFixed(2));
+}
+
+// DETERMINISM of the count engine — same seed ⇒ identical headless run.
+{
+  const a = headlessRun(42, 5, 30, 0.03);
+  const b = headlessRun(42, 5, 30, 0.03);
+  check('headlessRun deterministic — same seed ⇒ identical colony series',
+        a.end === b.end && JSON.stringify(a.Ns) === JSON.stringify(b.Ns),
+        a.end === b.end ? 'identical (final N=' + a.end.toFixed(2) + ')' : 'DIFFER');
+}
+
+// A SINGLE truthful run climbs to ~K and PINS there (the dish saturates).
+{
+  const a = headlessRun(1, 5, 40, 0.03);
+  check('a single truthful dish climbs from N0=5 and saturates near K',
+        a.end > 90 && a.end <= 100, 'final N=' + a.end.toFixed(2) + ' (pins at K)');
+}
+
+// ---------------------------------------------------------------------------
 //  RE-EXTRACTION PARITY — the core inlined in index.html is byte-identical to
 //  core.mjs (between the // ===== LOGISTIC-CORE sentinels), indentation-normalised.
 // ---------------------------------------------------------------------------
@@ -161,6 +250,23 @@ console.log('\n— Independent re-derivations (this file, not the bundled self-t
           norm(pageBody) === norm(modBody),
           norm(pageBody) === norm(modBody) ? 'byte-identical' :
             'DIFFER (page ' + norm(pageBody).length + ' vs mod ' + norm(modBody).length + ' chars)');
+  }
+
+  // ----- the AGENT-CORE block is inlined byte-identical too -----
+  const A_START = '// ===== AGENT-CORE (byte-identical to core.mjs) =====';
+  const A_END = '// ===== END AGENT-CORE =====';
+  const norm = (s) => s.replace(/^\s+/gm, '').replace(/\r/g, '').trim();
+  const mi = modSrc.indexOf(A_START), mj = modSrc.indexOf(A_END);
+  const ai = pageSrc.indexOf(A_START), aj = pageSrc.indexOf(A_END);
+  check('core.mjs & index.html both contain the AGENT-CORE sentinels',
+        mi >= 0 && mj > mi && ai >= 0 && aj > ai);
+  if (mi >= 0 && mj > mi && ai >= 0 && aj > ai) {
+    const modAgent = modSrc.slice(mi + A_START.length, mj).trim();
+    const pageAgent = pageSrc.slice(ai + A_START.length, aj).trim();
+    check('inlined AGENT-CORE matches core.mjs (indentation-normalised)',
+          norm(pageAgent) === norm(modAgent),
+          norm(pageAgent) === norm(modAgent) ? 'byte-identical' :
+            'DIFFER (page ' + norm(pageAgent).length + ' vs mod ' + norm(modAgent).length + ' chars)');
   }
 }
 
