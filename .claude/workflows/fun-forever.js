@@ -18,6 +18,7 @@ export const meta = {
 const MAX_ITERS = 60
 const MAX_JUDGE_ROUNDS = 2        // the judge may reject the whole batch and demand ONE refined re-round
 const FUNLOG = '/tmp/funlog.txt'
+const STATE_PATH = '/Users/brandon/dev/general/creative-space/seedbed/state.json' // the writer reads the durable cycle from here
 
 // ── Grounding embedded in every cycle agent ──────────────────────────────────
 const GROUND = [
@@ -116,12 +117,13 @@ const BUILD_HANDOFF_SCHEMA = {
 function directorPrompt(i) {
   return [
     GROUND, '',
-    'ROLE: DIRECTOR (within-run cycle ' + i + '). Get your bearings, then plan this ONE cycle. Build nothing yet.',
+    'ROLE: DIRECTOR. Get your bearings, then plan this ONE cycle. Build nothing yet.',
     '',
     'STEPS:',
-    '1) RUN THE GAUGE FIRST:  node seedbed/gauge.mjs --status   (and `node seedbed/gauge.mjs` for the JSON).',
-    '   COPY its mode, track, and gauges.currentCycle into your decision verbatim — the gauge owns the cadence,',
-    '   not you. (currentCycle is the DURABLE cycle #; stamp seeds + the funlog with it, never the loop index.)',
+    '1) RUN THE GAUGE FIRST:  node seedbed/gauge.mjs   (the JSON). It prints mode, track, and gauges.currentCycle.',
+    '   COPY all three into your decision VERBATIM — the gauge owns the cadence, not you. currentCycle is the',
+    '   DURABLE cycle number the gauge computed (a real count like 29, NOT 1, NOT a small loop index): read the',
+    '   exact integer gauges.currentCycle prints and copy THAT. Also run `--status` to see the decayed-seed list a PLAN prunes.',
     '   Note the decayed-seed list it prints — a PLAN cycle prunes those.',
     '2) Get your bearings: skim NOTES.md (head-pointer), the relevant ROADMAP fence, the newest worklog entries.',
     '   THEN run git status — if the tree is DIRTY (uncommitted/untracked), a prior cycle was likely stopped',
@@ -252,10 +254,11 @@ function buildPrompt(d, chosen, cyc) {
 }
 
 function publisherPrompt(d, chosen, handoff, cyc) {
-  const lines = [GROUND, '', 'ROLE: PUBLISHER of cycle #' + cyc + '. You own the fresh-eyes review, final cleanup, bookkeeping, and publishing.', '',
-    'THE GAUGE STAMP: this cycle is mode=' + d.mode + ' track=' + d.track + ', durable cycle #' + cyc + '. Stamp any garden',
-    'seed you sow `(sown #' + cyc + ')` and any grounds seed `(sown #' + cyc + ' · contest #M)` where M = the gauge\'s',
-    'swings-built (read it: `node seedbed/gauge.mjs --status`). Put each seed INSIDE its fenced ROADMAP section.', '']
+  const lines = [GROUND, '', 'ROLE: PUBLISHER of this cycle (mode=' + d.mode + ' track=' + d.track + '). You own the fresh-eyes review, final cleanup, bookkeeping, and publishing.', '',
+    'THE CYCLE NUMBER + STAMPS — read the TRUTH from the gauge, do NOT trust any number written in this prompt:',
+    'BEFORE you run record, run `node seedbed/gauge.mjs` and read N = gauges.currentCycle and M = gauges.bigSwingsBuilt.',
+    'Use N as THIS cycle\'s number everywhere (the worklog header, NOTES). Stamp any garden seed you sow `(sown #N)` and',
+    'any grounds seed `(sown #N · contest #M)`, each INSIDE its fenced ROADMAP section.', '']
   if (d.mode === 'PLAN') {
     const where = d.track === 'grounds'
       ? 'BETWEEN the `<!-- gauge:grounds-seeds:start -->` and `:end -->` markers (room/engine/metagame/map), sparks BETWEEN `<!-- gauge:sparks:start -->` and `:end -->`'
@@ -283,7 +286,7 @@ function publisherPrompt(d, chosen, handoff, cyc) {
       '   or NESTED markup (an <a> inside an <a class="card">), console errors, broken/wrong links, mis-sized cards,',
       '   bad spacing, mobile/responsive breakage. Re-run the piece\'s self-test to confirm it is green.',
       '2) POLISH + FIX: make it as BEAUTIFUL + consistent with its siblings as it can be; fix small polish and real',
-      '   bugs alike. If a bug is too big to fix safely now, fix what you can and file it as a `- [bug] **…** (sown #' + cyc + ')`',
+      '   bugs alike. If a bug is too big to fix safely now, fix what you can and file it as a `- [bug] **…** (sown #N)`',
       '   line BETWEEN ROADMAP\'s `<!-- gauge:bug:start -->` and `:end -->` markers so the next cycle clears it (the gauge',
       '   counts that fence and routes it BUILD/bug ahead of everything) — never',
       '   silently ship something visibly broken.',
@@ -310,15 +313,23 @@ function publisherPrompt(d, chosen, handoff, cyc) {
   return lines.join('\n')
 }
 
-function writerPrompt(cyc, summary) {
+function writerPrompt(summary) {
   const body = (summary == null || String(summary).trim() === '') ? '(the publisher returned no summary)' : String(summary)
   return [
-    'Append text to the file ' + FUNLOG + '. Create it if absent. APPEND ONLY — never overwrite or truncate.',
-    'Use a bash heredoc with a QUOTED delimiter so the body is written byte-for-byte:',
-    '', '  cat >> ' + FUNLOG + " <<'FUNLOG_EOF_Q'", '  ===== fun cycle #' + cyc + ' =====', '  ...the summary verbatim...',
-    '  (one blank line)', '  FUNLOG_EOF_Q', '',
-    'Header line exactly: ===== fun cycle #' + cyc + ' =====   then the summary VERBATIM (do not paraphrase), then one blank line.',
-    'Reply with only the word ok.', '', '----- BEGIN SUMMARY (verbatim) -----', body, '----- END SUMMARY -----',
+    'Append this cycle\'s summary to ' + FUNLOG + '. Create it if absent. APPEND ONLY — never overwrite or truncate.',
+    '',
+    'STEP 1 — read the DURABLE cycle number from state (do NOT guess it, do NOT use any number you infer from the text):',
+    '  CYC=$(node -p "require(\'' + STATE_PATH + '\').cycle")',
+    'STEP 2 — write the header (CYC expanded) then the body byte-for-byte via a QUOTED heredoc (so $ / backticks survive):',
+    '  echo "===== fun cycle #${CYC} =====" >> ' + FUNLOG,
+    '  cat >> ' + FUNLOG + " <<'FUNLOG_EOF_Q'",
+    '  ...the summary VERBATIM...',
+    '  FUNLOG_EOF_Q',
+    '  echo "" >> ' + FUNLOG,
+    '',
+    'The header MUST read `===== fun cycle #${CYC} =====` using CYC from state.json (NOT a number from this prompt).',
+    'The summary must be VERBATIM (do not paraphrase). Reply with only the word ok.',
+    '', '----- BEGIN SUMMARY (verbatim) -----', body, '----- END SUMMARY -----',
   ].join('\n')
 }
 
@@ -334,7 +345,7 @@ while (i < MAX_ITERS) {
   log('cycle #' + cyc + ' — ' + d.mode + '/' + d.track + ': ' + d.headline)
 
   if (d.mode === 'TRIVIAL') {
-    await agent(writerPrompt(cyc, d.rationale), { label: 'log #' + cyc, phase: 'Publish', model: 'sonnet' })
+    await agent(writerPrompt(d.rationale), { label: 'log #' + cyc, phase: 'Publish', model: 'sonnet' })
     log('cycle #' + cyc + ' (trivial) appended to ' + FUNLOG)
     continue
   }
@@ -391,7 +402,8 @@ while (i < MAX_ITERS) {
   const summary = await agent(publisherPrompt(d, chosen, handoff, cyc), { label: 'publish #' + cyc, phase: 'Publish' })
 
   // A lightweight writer appends the cycle summary to the funlog (the script sandbox has no filesystem).
-  await agent(writerPrompt(cyc, summary), { label: 'log #' + cyc, phase: 'Publish', model: 'sonnet' })
+  // It reads the durable cycle from state.json itself — never the director's relayed number.
+  await agent(writerPrompt(summary), { label: 'log #' + cyc, phase: 'Publish', model: 'sonnet' })
   log('cycle #' + cyc + ' appended to ' + FUNLOG)
 }
 
