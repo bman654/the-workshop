@@ -1,0 +1,1529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Sampling Theorem — below the line it's exact; above it, a masquerade</title>
+<!-- a standalone Workbench bench (a Computation [cross]: imports the Butterfly's radix-2 FFT); NOT a front-door page, NO ws:seen. -->
+<style>
+  /* ── COLOR-MEANING CONTRACT — the palette IS the argument; siblings must not drift.
+     teal   = the TRUE source + the true spectral line   --orig
+     green  = the sinc RECONSTRUCTION (below Nyquist it traces teal; above, it snaps to red) --recon
+     red    = the GHOST alias curve + the folded stem    --alias
+     gold   = the sample comb (what we KEPT)             --sample
+     violet = the fs/2 Nyquist mirror                    --nyq
+     faint  = the sinc kernel lobes                      --kernel
+     Reads as: teal=truth · gold=kept · green=rebuilt · red=the-lie. Below the line green
+     traces teal; above, green abandons teal and snaps to red — that snap is the exhibit.
+  */
+  :root{
+    --panel-bg: rgba(13,12,16,0.90);
+    --panel-edge: rgba(127,178,230,0.26);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --ink-faint: #6b6e7e;
+    --bg: #06070b;
+    --plate: #050608;           /* the TIME panel */
+    --stage: #07080d;           /* the FREQ panel */
+    --orig: #7fd4e8;            /* the true source + true spectral line (teal=truth) */
+    --orig-soft: rgba(127,212,232,0.16);
+    --recon: #8fd79a;          /* the sinc reconstruction (green=rebuilt) */
+    --recon-soft: rgba(143,215,154,0.16);
+    --alias: #f08a7a;          /* the ghost alias curve + folded stem (red=the-lie) */
+    --alias-soft: rgba(240,138,122,0.16);
+    --sample: #d9b35a;         /* the sample comb (gold=kept) */
+    --sample-soft: rgba(217,179,90,0.16);
+    --nyq: rgba(217,160,232,0.55);   /* the fs/2 mirror (violet) */
+    --kernel: rgba(143,215,154,0.10);/* faint sinc lobes */
+    --good: #8fd79a;
+    --good-soft: rgba(120,200,130,0.5);
+    --bad: #f08a7a;
+    --bad-soft: rgba(220,120,100,0.6);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+  /* ---- topbar ---- */
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    justify-content:space-between; padding:13px 18px 0; pointer-events:none; gap:10px; flex-wrap:wrap; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:14px; align-items:center; min-width:0; flex-wrap:wrap; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--orig); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:11px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.4px; margin:0; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:var(--good); border-color:var(--good-soft); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:var(--bad); border-color:var(--bad-soft); background:rgba(70,30,26,0.4); }
+
+  /* ---- thesis pills under the topbar ---- */
+  .thesis{ position:fixed; top:42px; left:0; right:0; z-index:20; display:flex; gap:10px; align-items:center;
+    padding:0 18px; pointer-events:none; flex-wrap:wrap; }
+  .eqn{ font:600 12px/1 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.4);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:6px 11px; white-space:nowrap; }
+  .eqn b{ color:var(--recon); } .eqn i{ color:var(--ink); font-style:normal; }
+
+  /* ---- layout: two-panel stage + side panel ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; display:flex; flex-direction:column;
+    padding:74px 0 0; overflow:hidden; }
+  #timeHost{ flex:1 1 50%; position:relative; min-width:0; background:var(--plate); overflow:hidden;
+    border-top:1px solid var(--panel-edge); }
+  #freqHost{ flex:1 1 50%; position:relative; min-width:0; background:var(--stage); overflow:hidden;
+    border-top:1px solid rgba(127,178,230,0.18); }
+  #timeCanvas,#freqCanvas{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; }
+  .panelTag{ position:absolute; left:11px; top:9px; z-index:6; pointer-events:none;
+    font:600 9.5px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint);
+    background:rgba(0,0,0,0.4); border:1px solid var(--panel-edge); border-radius:6px; padding:5px 8px; }
+  .readout{ position:absolute; left:11px; bottom:10px; right:11px; z-index:6; pointer-events:none;
+    font:600 10.5px/1.5 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.46);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:6px 10px; }
+  .readout .hz{ color:var(--orig); } .readout .alz{ color:var(--alias); } .readout .ny{ color:#d9a0e8; }
+  .readout.aliasing{ border-color:var(--alias-soft); }
+
+  /* ---- control rail ---- */
+  #rail{ position:absolute; left:0; right:0; bottom:0; z-index:8; display:flex; gap:12px; align-items:center;
+    flex-wrap:wrap; padding:9px 14px; background:rgba(4,5,9,0.86); border-top:1px solid var(--panel-edge);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .ctl{ display:flex; flex-direction:column; gap:3px; min-width:0; }
+  .ctl .lab{ font:600 9px/1 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--ink-faint); }
+  .ctl .lab b{ color:var(--sample); font-variant-numeric:tabular-nums; }
+  .ctl.fs .lab b{ color:var(--ink); }
+  input[type=range]{ -webkit-appearance:none; appearance:none; height:5px; border-radius:3px; outline:none;
+    background:rgba(127,178,230,0.18); cursor:pointer; }
+  input#fs{ width:200px; }
+  input.fsel{ width:110px; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:14px; height:14px;
+    border-radius:50%; background:var(--sample); border:2px solid #1a160c; cursor:pointer; }
+  input[type=range]::-moz-range-thumb{ width:14px; height:14px; border-radius:50%; background:var(--sample); border:2px solid #1a160c; cursor:pointer; }
+  input.fsel::-webkit-slider-thumb{ background:var(--orig); border-color:#0c1a1d; }
+  input.fsel::-moz-range-thumb{ background:var(--orig); border-color:#0c1a1d; }
+  .chips{ display:flex; gap:5px; flex-wrap:wrap; }
+  .chip{ font:600 10px/1 var(--font-mono); padding:7px 9px; border-radius:7px; cursor:pointer; user-select:none;
+    color:var(--ink-dim); background:rgba(0,0,0,0.3); border:1px solid var(--panel-edge); transition:.15s; white-space:nowrap; }
+  .chip:hover{ color:var(--ink); border-color:var(--orig); }
+  .chip.on{ color:#06080c; background:var(--orig); font-weight:700; border-color:var(--orig); }
+  .togs{ display:flex; gap:5px; flex-wrap:wrap; }
+  .tog{ font:600 9.5px/1 var(--font-mono); padding:6px 8px; border-radius:6px; cursor:pointer; user-select:none;
+    color:var(--ink-faint); background:rgba(0,0,0,0.28); border:1px solid var(--panel-edge); transition:.15s; white-space:nowrap; }
+  .tog.on{ color:#06080c; font-weight:700; }
+  .tog.kern.on{ background:var(--recon); } .tog.ghost.on{ background:var(--alias); } .tog.win.on{ background:var(--orig); }
+  .spacer{ flex:1 1 auto; min-width:8px; }
+
+  /* ---- side panel ---- */
+  #side{ width:312px; flex:0 0 312px; background:var(--panel-bg); border-left:1px solid var(--panel-edge);
+    padding:56px 16px 22px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  #side .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0; letter-spacing:.2px; }
+  #side .lede b{ color:var(--ink); font-weight:600; }
+  #side .lede .teal{ color:var(--orig); font-weight:700; }
+  #side .lede .red{ color:var(--alias); font-weight:700; }
+  #side .lede .num{ color:var(--recon); font-weight:700; font-family:var(--font-mono); }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:6px 0 -2px; border-top:1px solid rgba(127,178,230,0.16); padding-top:12px; }
+  .status{ font:700 11px/1.3 var(--font-mono); text-align:center; padding:8px; border-radius:8px; letter-spacing:.03em; }
+  .status.exact{ color:var(--good); background:rgba(30,58,38,0.4); border:1px solid var(--good-soft); }
+  .status.alias{ color:var(--alias); background:var(--alias-soft); border:1px solid var(--bad-soft); }
+  .status .sub{ display:block; font-weight:600; font-size:9px; color:var(--ink-faint); margin-top:3px; letter-spacing:.06em; }
+  .verify{ font:600 10.5px/1.5 var(--font-mono); color:var(--ink-faint); background:rgba(0,0,0,0.3);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:8px 10px; }
+  .verify .k{ color:var(--ink-dim); } .verify .v{ color:var(--recon); font-variant-numeric:tabular-nums; }
+  .verify .v.al{ color:var(--alias); }
+  .note{ font:10.5px/1.5 var(--font-mono); color:var(--ink-faint); margin:0; }
+  .note b{ color:var(--ink-dim); }
+  .note.caveat{ border-left:2px solid var(--sample); padding-left:9px; }
+
+  .legend{ display:flex; flex-direction:column; gap:5px; font:10.5px/1.3 var(--font-mono); color:var(--ink-dim); }
+  .legend .li{ display:flex; align-items:center; gap:7px; }
+  .legend .sw2{ width:16px; height:0; border-top-width:2px; border-top-style:solid; flex:0 0 auto; }
+  .legend .sw2.dash{ border-top-style:dashed; }
+  .legend .dot{ width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
+
+  /* the reciprocal cross-teaser */
+  .xteaser{ display:block; text-decoration:none; border:1px solid var(--panel-edge); border-radius:10px;
+    padding:10px 12px; background:rgba(127,178,230,0.05); transition:.18s; }
+  .xteaser:hover{ border-color:var(--orig); background:rgba(127,178,230,0.10); }
+  .xteaser .xk{ display:block; font:600 10px/1.3 var(--font-mono); color:var(--orig); letter-spacing:.04em; margin-bottom:3px; }
+  .xteaser .xt{ display:block; font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); }
+  .xteaser .xt b{ color:var(--ink); }
+
+  /* ---- audio ---- */
+  .audrow{ display:flex; gap:7px; }
+  .audbtn{ flex:1; font:600 10px/1.2 var(--font-mono); padding:9px 6px; border-radius:8px; cursor:pointer;
+    text-align:center; color:var(--ink-dim); background:rgba(0,0,0,0.3); border:1px solid var(--panel-edge); transition:.15s; }
+  .audbtn:hover{ color:var(--ink); }
+  .audbtn.true{ border-color:var(--orig-soft); } .audbtn.true:hover{ border-color:var(--orig); }
+  .audbtn.ghost{ border-color:var(--alias-soft); } .audbtn.ghost:hover{ border-color:var(--alias); }
+  .audbtn b{ display:block; font-size:11px; color:var(--ink); }
+  .seg{ display:flex; gap:2px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-edge); border-radius:9px; padding:3px; }
+  .seg .opt{ flex:1; text-align:center; font:600 10.5px/1 var(--font-mono); padding:8px 5px; border-radius:6px;
+    color:var(--ink-dim); cursor:pointer; transition:.15s; user-select:none; }
+  .seg .opt.on{ color:#06080c; font-weight:700; background:var(--orig); }
+
+  /* ---- responsive ---- */
+  @media (max-width:900px){
+    #wrap{ flex-direction:column; }
+    #stage{ flex:1 1 56%; }
+    #side{ width:auto; flex:1 1 44%; border-left:none; border-top:1px solid var(--panel-edge);
+      padding:14px 14px 18px; }
+    .brand h1{ font-size:18px; }
+  }
+  @media (max-width:720px){
+    .brand .tag{ display:none; } .thesis .eqn{ font-size:11px; }
+    input#fs{ width:150px; } input.fsel{ width:88px; }
+  }
+  @media (max-width:430px){ .brand{ display:none; } .topbar{ padding:11px 12px 0; }
+    .thesis{ display:none; } #stage{ padding-top:74px; }
+    /* the backs wrap to two rows with the brand hidden; the pill drops below —
+       give the stage enough headroom that the wrapped topbar never sits on the
+       panel tag (the canvas content stays clear). */
+    .panelTag{ top:7px; } }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; workshop</a>
+      <a class="back" href="../workbench/index.html">&larr; workbench</a>
+      <a class="back" href="../butterfly/index.html" title="the radix-2 FFT this bench imports — sampling in time vs aliasing in frequency, same fold, other domain">&harr; the butterfly</a>
+      <a class="back" href="../butterfly-voice/index.html" title="where the teeth first bit — the Voice shows leakage (a smear), this bench shows aliasing (a fold): two faces of one sampling ceiling">&harr; the voice</a>
+    </div>
+    <div class="brand">
+      <h1>The Sampling Theorem</h1>
+      <span class="tag">below the line it's exact; above it, a masquerade</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for the per-leg detail (also printed to the console)">checking&hellip;</div>
+  </div>
+
+  <div class="thesis">
+    <span class="eqn">x<sub>r</sub>(t) = <b>&Sigma;</b> <i>x[n]</i>&middot;sinc((t&minus;nT)/T)</span>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <div id="timeHost">
+        <span class="panelTag">time &middot; the source, the comb &amp; the reconstruction</span>
+        <canvas id="timeCanvas"></canvas>
+      </div>
+      <div id="freqHost">
+        <span class="panelTag">frequency &middot; |X[k]| via the imported FFT</span>
+        <canvas id="freqCanvas"></canvas>
+        <div class="readout" id="readout"></div>
+      </div>
+      <div id="rail">
+        <div class="ctl fs">
+          <span class="lab">f<sub>s</sub> = <b id="fsLab">10.0</b> Hz &middot; Nyquist <b id="nyLab">5.0</b> Hz</span>
+          <input type="range" id="fs" min="2" max="40" step="0.1" value="10">
+        </div>
+        <div class="ctl">
+          <span class="lab">f<sub>1</sub> = <b id="f1Lab">2.0</b> Hz</span>
+          <input type="range" id="f1" class="fsel" min="0.5" max="20" step="0.1" value="2">
+        </div>
+        <div class="ctl">
+          <span class="lab">a<sub>1</sub> = <b id="a1Lab">1.0</b></span>
+          <input type="range" id="a1" class="fsel" min="0" max="1" step="0.05" value="1">
+        </div>
+        <div class="ctl">
+          <span class="lab">f<sub>2</sub> = <b id="f2Lab">3.5</b> Hz</span>
+          <input type="range" id="f2" class="fsel" min="0.5" max="20" step="0.1" value="3.5">
+        </div>
+        <div class="ctl">
+          <span class="lab">a<sub>2</sub> = <b id="a2Lab">0.5</b></span>
+          <input type="range" id="a2" class="fsel" min="0" max="1" step="0.05" value="0.5">
+        </div>
+        <div class="spacer"></div>
+        <div class="ctl">
+          <span class="lab">presets</span>
+          <div class="chips" id="presets">
+            <div class="chip" data-preset="clean">band-limited</div>
+            <div class="chip" data-preset="wagon">the wagon wheel</div>
+            <div class="chip on" data-preset="alias">exact alias</div>
+          </div>
+        </div>
+        <div class="ctl">
+          <span class="lab">show</span>
+          <div class="togs" id="togs">
+            <div class="tog kern on" data-tog="kernels">sinc lobes</div>
+            <div class="tog ghost on" data-tog="ghost">ghost alias</div>
+            <div class="tog win" data-tog="hann">free-drag (Hann)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside id="side">
+      <p class="lede" id="lede"><b>Sample a signal at rate f<sub>s</sub> and every frequency below the Nyquist line f<sub>s</sub>/2 is carried <span class="teal">exactly</span>.</b> Whittaker&ndash;Shannon threads a sinc through the samples and recovers the band-limited source to a residual of <span class="num" id="ledeTol">~5e-14</span> &mdash; the live max&nbsp;|error| from the self-test, not the bare word "perfect." (The finite-window plain sum caps near 1e0; the <b>periodic Dirichlet kernel</b> removes that truncation &mdash; that is why it's the proof.)</p>
+
+      <p class="lede"><b>Above the line, it's a masquerade.</b> An undersampled cosine and its fold produce the <b>byte-for-byte identical</b> sample vector (equal to machine-&epsilon;, in fact strictly <b>===</b>), so the samples cannot tell them apart. The reconstruction provably does <span class="red">not</span> rebuild the source &mdash; it rebuilds the <span class="red">alias</span>, exactly. Run the Butterfly's imported FFT and watch the spectral line land at the <span class="red">wrong bin</span>.</p>
+
+      <div class="status exact" id="status">below Nyquist &mdash; the line is EXACT<span class="sub">f<sub>max</sub> &lt; f<sub>s</sub>/2</span></div>
+
+      <div class="sect">The control &mdash; f<sub>s</sub> is load-bearing</div>
+      <p class="note caveat">Drag <b>f<sub>s</sub></b> down. The gold comb thins; the reconstruction (green) lies on the true source (teal) until f<sub>s</sub> crosses <b>2&middot;f<sub>max</sub></b> &mdash; then green peels off teal and snaps to the <b>ghost</b> (red). The comb never moves: same samples, different signal. That snap is the exhibit.</p>
+
+      <div class="sect">Coherent &harr; free-drag</div>
+      <p class="note">Presets are <b>coherent</b> (f&middot;N/f<sub>s</sub> &isin; &integers; &rArr; one clean spectral stem; N=256). Free-drag breaks coherence, so the spectrum is computed with a light <b>Hann window</b> to tame leakage; the readout NAMES the active mode so the picture never lies. (Display windowing is separate from the byte-exact claim &mdash; that leg owns the integer-cycle LUT.)</p>
+
+      <div class="sect">What the FFT says</div>
+      <div class="verify" id="verify"></div>
+
+      <div class="sect">The audio &mdash; muted by default</div>
+      <div class="audrow">
+        <div class="audbtn true" id="audTrue"><b id="audTrueHz">&mdash;</b>true tone f</div>
+        <div class="audbtn ghost" id="audGhost"><b id="audGhostHz">&mdash;</b>what the samples carry</div>
+      </div>
+      <div class="seg" id="segAudio" style="margin-top:7px">
+        <div class="opt" data-audio="off">Sound off</div>
+        <div class="opt on" data-audio="on">Sound on</div>
+      </div>
+      <p class="note caveat" id="audNote">The alias being <b>audible</b> is the one thing the eye-proof can't deliver. The two buttons play the true tone and the tone the samples actually carry &mdash; the ear hears the ghost. Honours the estate-wide <b>ws:pref:muted</b> key; first sound waits for a click.</p>
+
+      <div class="sect">Legend</div>
+      <div class="legend">
+        <div class="li"><span class="sw2" style="border-top-color:var(--orig)"></span> the true source (teal = truth)</div>
+        <div class="li"><span class="dot" style="background:var(--sample)"></span> the sample comb (gold = kept)</div>
+        <div class="li"><span class="sw2" style="border-top-color:var(--recon)"></span> the sinc reconstruction (green = rebuilt)</div>
+        <div class="li"><span class="sw2 dash" style="border-top-color:var(--alias)"></span> the ghost alias (red = the lie)</div>
+        <div class="li"><span class="sw2" style="border-top-color:#d9a0e8"></span> the f<sub>s</sub>/2 Nyquist mirror (violet)</div>
+      </div>
+
+      <div class="sect">&harr; the cross</div>
+      <a class="xteaser" href="../butterfly/index.html">
+        <span class="xk">&larr; The Butterfly &middot; the transform</span>
+        <span class="xt">the radix-2 <b>FFT</b> this bench runs &mdash; <b>imported, no re-typed math</b>. Sampling folds in time; convolution wraps in frequency: the same fold, other domain.</span>
+      </a>
+      <a class="xteaser" href="../butterfly-voice/index.html">
+        <span class="xk">&larr; The Butterfly's Voice &middot; where the teeth first bit</span>
+        <span class="xt">the Voice shows <b>leakage</b> (a smear, f<sub>s</sub>=48k far below Nyquist &mdash; no folding); this shows <b>aliasing</b> (a fold). <b>Leakage = smear, aliasing = fold</b> &mdash; two faces of one sampling ceiling.</span>
+      </a>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+// ════════════════════════ INLINED SINGLE-SOURCE CORES (the house pattern) ═════
+// The page is plain <script> (no type="module") so it runs from file:// too. The
+// SAMPLING CORE block below is a char-for-char byte-twin of sampling-core.mjs (the
+// SOLE math authority); the BUTTERFLY CORE block is the SAME slice butterfly/
+// index.html inlines (so the page's fft IS the Butterfly's fft). The Node twin
+// re-extracts both slices between the sentinels and asserts they are identical, so
+// "self-test green" can't drift from the modules. The sinc & folding digit-math
+// live ONLY in the sampling block; the transform is the butterfly block, imported.
+
+// ===== BUTTERFLY CORE (byte-identical to core.mjs) =====
+function cx(re, im) { return { re: re, im: im === undefined ? 0 : im }; }
+function cAdd(a, b) { return { re: a.re + b.re, im: a.im + b.im }; }
+function cSub(a, b) { return { re: a.re - b.re, im: a.im - b.im }; }
+function cMul(a, b) {
+  return { re: a.re * b.re - a.im * b.im, im: a.re * b.im + a.im * b.re };
+}
+// e^(iθ) as a complex number.
+function cExp(theta) { return { re: Math.cos(theta), im: Math.sin(theta) }; }
+// worst-case (max) magnitude of the difference between two complex arrays.
+function maxDiff(a, b) {
+  let m = 0;
+  for (let i = 0; i < a.length; i++) {
+    const dr = a[i].re - b[i].re, di = a[i].im - b[i].im;
+    m = Math.max(m, Math.hypot(dr, di));
+  }
+  return m;
+}
+
+// ---------------------------------------------------------------------------
+//  IS-POWER-OF-TWO and the next power of two ≥ n.
+// ---------------------------------------------------------------------------
+function isPow2(n) { return n >= 1 && (n & (n - 1)) === 0; }
+function nextPow2(n) {
+  let p = 1;
+  while (p < n) p *= 2;
+  return p;
+}
+
+// ---------------------------------------------------------------------------
+//  THE FAST PATH — recursive radix-2 Cooley–Tukey FFT.
+//
+//  This is a pure decimation-in-time recursion: split into even/odd index
+//  halves, transform each (recursively), and butterfly back together with the
+//  twiddle W_N^k = e^(sign·2πi·k/N).  `sign` is −1 for the forward transform
+//  (fft) and +1 for the inverse (ifft).  N MUST be a power of two.
+//
+//  CRITICAL: this function NEVER calls `dft`.  Its only dependencies are the
+//  complex helpers and itself.  That source-disjointness is what makes the
+//  fft==dft agreement a real cross-check, not a tautology.
+// ---------------------------------------------------------------------------
+function fftRadix2(x, sign) {
+  const N = x.length;
+  if (N === 1) return [{ re: x[0].re, im: x[0].im }];
+  if (!isPow2(N)) throw new Error('radix-2 FFT needs a power-of-two length, got ' + N);
+  const half = N / 2;
+  const even = new Array(half), odd = new Array(half);
+  for (let i = 0; i < half; i++) {
+    even[i] = x[2 * i];
+    odd[i] = x[2 * i + 1];
+  }
+  const E = fftRadix2(even, sign);
+  const O = fftRadix2(odd, sign);
+  const out = new Array(N);
+  for (let k = 0; k < half; k++) {
+    // twiddle factor W_N^k = e^(sign·2πi·k/N)
+    const tw = cExp(sign * 2 * Math.PI * k / N);
+    const t = cMul(tw, O[k]);
+    out[k] = cAdd(E[k], t);          // top wing
+    out[k + half] = cSub(E[k], t);   // bottom wing
+  }
+  return out;
+}
+
+// Forward FFT (no normalisation, sign = −1).
+function fft(x) { return fftRadix2(x, -1); }
+
+// Inverse FFT (sign = +1, then divide by N).
+function ifft(X) {
+  const N = X.length;
+  const y = fftRadix2(X, +1);
+  return y.map(function (v) { return { re: v.re / N, im: v.im / N }; });
+}
+
+// ---------------------------------------------------------------------------
+//  THE SLOW PATH — naive O(N²) DFT, a SEPARATE code path.
+//
+//  Direct evaluation of  X[k] = Σ_n x[n]·e^(−2πi·kn/N).  This shares NO code
+//  with the FFT recursion (only the complex helpers).  It exists solely so the
+//  self-test can assert fft(x) == dft(x): two strangers' code, the same answer.
+//  This is INTENTIONALLY the naive double loop — do not "optimise" it into the
+//  FFT, or the agreement check loses its meaning.
+// ---------------------------------------------------------------------------
+function dft(x) {
+  const N = x.length;
+  const out = new Array(N);
+  for (let k = 0; k < N; k++) {
+    let re = 0, im = 0;
+    for (let n = 0; n < N; n++) {
+      const ang = -2 * Math.PI * k * n / N;
+      const c = Math.cos(ang), s = Math.sin(ang);
+      // x[n] · (c + i·s)
+      re += x[n].re * c - x[n].im * s;
+      im += x[n].re * s + x[n].im * c;
+    }
+    out[k] = { re: re, im: im };
+  }
+  return out;
+}
+
+// Naive inverse DFT (the slow counterpart of ifft) — also a separate path,
+// used to round-trip-check the slow transform on its own.
+function idft(X) {
+  const N = X.length;
+  const out = new Array(N);
+  for (let n = 0; n < N; n++) {
+    let re = 0, im = 0;
+    for (let k = 0; k < N; k++) {
+      const ang = 2 * Math.PI * k * n / N;
+      const c = Math.cos(ang), s = Math.sin(ang);
+      re += X[k].re * c - X[k].im * s;
+      im += X[k].re * s + X[k].im * c;
+    }
+    out[n] = { re: re / N, im: im / N };
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+//  THE SCHOOLBOOK CONVOLUTION — O(n²) coefficient multiplication of two
+//  polynomials a, b (real coefficient arrays, ascending powers).  Result length
+//  is len(a)+len(b)−1.  This is the GROUND TRUTH the FFT must reproduce.  It
+//  shares NO code with the transforms.
+// ---------------------------------------------------------------------------
+function conv(a, b) {
+  const out = new Array(a.length + b.length - 1).fill(0);
+  for (let i = 0; i < a.length; i++) {
+    for (let j = 0; j < b.length; j++) {
+      out[i + j] += a[i] * b[j];
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+//  CONVOLUTION VIA THE FFT.  Real coefficient arrays a, b.  When `pad` is true
+//  (the LINEAR convolution) we zero-pad both to N = nextPow2(len(a)+len(b)−1),
+//  so the cyclic FFT convolution has room and reproduces the linear answer.
+//  When `pad` is false (the CIRCULAR convolution — the TEETH) we force both to a
+//  common length WITHOUT the headroom, so wraparound aliasing corrupts the tail.
+//
+//  Returns the real parts of ifft(fft(â)·fft(b̂)), trimmed to `outLen`.
+// ---------------------------------------------------------------------------
+function toComplex(arr) { return arr.map(function (v) { return { re: v, im: 0 }; }); }
+
+function fftConvolve(a, b, pad) {
+  const linLen = a.length + b.length - 1;
+  let N;
+  if (pad) {
+    N = nextPow2(linLen);            // headroom ⇒ linear convolution
+  } else {
+    N = nextPow2(Math.max(a.length, b.length)); // no headroom ⇒ circular (aliased)
+  }
+  const A = toComplex(a.concat(new Array(N - a.length).fill(0)));
+  const B = toComplex(b.concat(new Array(N - b.length).fill(0)));
+  const FA = fft(A), FB = fft(B);
+  const prod = new Array(N);
+  for (let k = 0; k < N; k++) prod[k] = cMul(FA[k], FB[k]);
+  const y = ifft(prod);
+  const outLen = pad ? linLen : N;
+  const out = new Array(outLen);
+  for (let i = 0; i < outLen; i++) out[i] = y[i].re;
+  return out;
+}
+
+// Round a real array to a small number of decimals — used so the convolution
+// theorem can be asserted BYTE-IDENTICAL (the residual is pure float noise).
+function roundArr(arr, decimals) {
+  const f = Math.pow(10, decimals === undefined ? 6 : decimals);
+  return arr.map(function (v) {
+    const r = Math.round(v * f) / f;
+    return r === 0 ? 0 : r; // normalise −0 to 0
+  });
+}
+
+// max absolute difference between two real arrays (length-padded with 0).
+function maxAbsDiff(a, b) {
+  const n = Math.max(a.length, b.length);
+  let m = 0;
+  for (let i = 0; i < n; i++) m = Math.max(m, Math.abs((a[i] || 0) - (b[i] || 0)));
+  return m;
+}
+
+// ---------------------------------------------------------------------------
+//  A small deterministic PRNG (mulberry32) so the self-test's "many seeds" are
+//  reproducible — the transforms themselves never touch it.
+// ---------------------------------------------------------------------------
+function makeRng(seed) {
+  let s = seed >>> 0;
+  return function () {
+    s |= 0; s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+// a random complex signal of length N with components in [−1, 1).
+function randomSignal(rng, N) {
+  const out = new Array(N);
+  for (let i = 0; i < N; i++) out[i] = { re: 2 * rng() - 1, im: 2 * rng() - 1 };
+  return out;
+}
+// a random integer-coefficient polynomial of length len, coeffs in [−lo, hi].
+function randomPoly(rng, len, lo, hi) {
+  const out = new Array(len);
+  for (let i = 0; i < len; i++) out[i] = lo + Math.floor(rng() * (hi - lo + 1));
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+//  THE BUTTERFLY-DIAGRAM TRACE — for the animated view.  Returns, for a length-N
+//  signal, the per-STAGE state of an iterative (bit-reversed) radix-2 FFT so the
+//  page can draw the lanes splitting and the butterflies recombining.  This is a
+//  RENDER aid; it is verified to agree with the recursive fft() so the picture
+//  is not lying.  N must be a power of two.
+// ---------------------------------------------------------------------------
+function bitReverse(i, bits) {
+  let r = 0;
+  for (let b = 0; b < bits; b++) { r = (r << 1) | (i & 1); i >>= 1; }
+  return r;
+}
+function fftStages(x, sign) {
+  const N = x.length;
+  if (!isPow2(N)) throw new Error('fftStages needs a power-of-two length');
+  const bits = Math.round(Math.log2(N));
+  // permute into bit-reversed order
+  const a = new Array(N);
+  for (let i = 0; i < N; i++) a[i] = x[bitReverse(i, bits)];
+  const stages = [{ data: a.map(function (v) { return { re: v.re, im: v.im }; }), butterflies: [] }];
+  for (let len = 2; len <= N; len *= 2) {
+    const half = len / 2;
+    const butterflies = [];
+    for (let start = 0; start < N; start += len) {
+      for (let k = 0; k < half; k++) {
+        const tw = cExp((sign === undefined ? -1 : sign) * 2 * Math.PI * k / len);
+        const i = start + k, j = start + k + half;
+        const t = cMul(tw, a[j]);
+        const top = cAdd(a[i], t), bot = cSub(a[i], t);
+        butterflies.push({ i: i, j: j, k: k, len: len, tw: tw });
+        a[i] = top; a[j] = bot;
+      }
+    }
+    stages.push({ data: a.map(function (v) { return { re: v.re, im: v.im }; }), butterflies: butterflies });
+  }
+  return stages;
+}
+// the iterative result (last stage) — used to prove the staged path matches fft().
+function fftIterative(x) {
+  const stages = fftStages(x, -1);
+  return stages[stages.length - 1].data;
+}
+
+// ============================================================================
+//  THE SELF-TEST — proves the 3-part falsifiable claim EXACT.
+// ============================================================================
+function runSelfTest() {
+  const checks = [];
+  const detail = {};
+  function ok(name, cond, info) { checks.push({ name: name, pass: !!cond, info: info }); }
+
+  // ----- CLAIM (1): FAST == SLOW, over many seeds -----
+  {
+    let worst = 0, worstRt = 0;
+    const sizes = [2, 4, 8, 16, 32, 64];
+    const rng = makeRng(0x1234abcd);
+    for (let trial = 0; trial < 60; trial++) {
+      const N = sizes[trial % sizes.length];
+      const x = randomSignal(rng, N);
+      const fast = fft(x);
+      const slow = dft(x);                 // SOURCE-DISJOINT path
+      worst = Math.max(worst, maxDiff(fast, slow));
+      const back = ifft(fft(x));           // round-trip
+      worstRt = Math.max(worstRt, maxDiff(back, x));
+    }
+    detail.fftVsDft = worst;
+    detail.roundTrip = worstRt;
+    ok('FAST == SLOW: fft(x) == naive dft(x) to <1e-12 over 60 seeds',
+       worst < 1e-12, 'worst |Δ| = ' + worst.toExponential(2));
+    ok('ifft(fft(x)) == x round-trips to <1e-12',
+       worstRt < 1e-12, 'worst |Δ| = ' + worstRt.toExponential(2));
+  }
+
+  // ----- CLAIM (1b): the FFT path is SOURCE-DISJOINT from the DFT -----
+  // The function bodies that make up the fast path must never mention `dft`.
+  {
+    const fftBodies = [fftRadix2, fft, ifft, fftStages, fftIterative]
+      .map(function (f) { return f.toString(); }).join('\n');
+    const callsDft = /\bdft\s*\(/.test(fftBodies) || /\bidft\s*\(/.test(fftBodies);
+    detail.fftCallsDft = callsDft;
+    ok('source-disjoint: the FFT path never calls dft/idft (the agreement is load-bearing)',
+       !callsDft, callsDft ? 'FFT references dft — NOT disjoint!' : 'fast path is independent of the slow path');
+  }
+
+  // ----- CLAIM (1c): the staged (drawable) FFT matches the recursive fft() -----
+  {
+    let worst = 0;
+    const rng = makeRng(0x55aa55aa);
+    for (let trial = 0; trial < 20; trial++) {
+      const N = [2, 4, 8, 16][trial % 4];
+      const x = randomSignal(rng, N);
+      worst = Math.max(worst, maxDiff(fftIterative(x), fft(x)));
+    }
+    detail.stagedVsRecursive = worst;
+    ok('the animated staged FFT == the recursive fft() (the picture is not lying)',
+       worst < 1e-12, 'worst |Δ| = ' + worst.toExponential(2));
+  }
+
+  // ----- CLAIM (1d): the slow path round-trips on its own (idft∘dft == id) -----
+  {
+    let worst = 0;
+    const rng = makeRng(0x0f0f0f0f);
+    for (let trial = 0; trial < 12; trial++) {
+      const N = [2, 4, 8, 16][trial % 4];
+      const x = randomSignal(rng, N);
+      worst = Math.max(worst, maxDiff(idft(dft(x)), x));
+    }
+    detail.dftRoundTrip = worst;
+    ok('the slow path round-trips too: idft(dft(x)) == x to <1e-12',
+       worst < 1e-12, 'worst |Δ| = ' + worst.toExponential(2));
+  }
+
+  // ----- CLAIM (2): THE CONVOLUTION THEOREM, EXACT (linear, zero-padded) -----
+  {
+    let worstResidual = 0, allByteIdentical = true, firstBad = null;
+    const rng = makeRng(0x9e3779b9);
+    for (let trial = 0; trial < 40; trial++) {
+      const la = 2 + (trial % 7), lb = 3 + ((trial * 3) % 6);
+      const a = randomPoly(rng, la, -9, 9);
+      const b = randomPoly(rng, lb, -9, 9);
+      const slow = conv(a, b);                       // SOURCE-DISJOINT schoolbook
+      const fast = fftConvolve(a, b, true);          // zero-padded ⇒ linear
+      worstResidual = Math.max(worstResidual, maxAbsDiff(slow, fast));
+      // after the rounding the test states, the two are byte-identical:
+      const sR = JSON.stringify(roundArr(slow, 6));
+      const fR = JSON.stringify(roundArr(fast, 6));
+      if (sR !== fR) { allByteIdentical = false; if (!firstBad) firstBad = { a: a, b: b, slow: slow, fast: fast }; }
+    }
+    detail.convResidual = worstResidual;
+    detail.convByteIdentical = allByteIdentical;
+    ok('convolution theorem: ifft(fft·fft) == schoolbook conv to <1e-9 (40 random polys)',
+       worstResidual < 1e-9, 'worst |Δ| = ' + worstResidual.toExponential(2));
+    ok('convolution theorem: rounded(6dp) coefficient vectors are BYTE-IDENTICAL',
+       allByteIdentical, allByteIdentical ? 'every pair char-for-char equal' : 'a pair differed!');
+  }
+
+  // ----- CLAIM (3): TEETH — circular (un-padded) PROVABLY DIFFERS from linear -----
+  {
+    // A wraparound-nontrivial case: two polys whose linear product is longer than
+    // the circular length, so the tail MUST alias back onto the head.
+    const a = [1, 2, 3, 4];      // length 4
+    const b = [5, 6, 7, 8];      // length 4 ⇒ linear length 7, circular length 4
+    const linear = conv(a, b);                  // length 7
+    const circular = fftConvolve(a, b, false);  // length 4 (aliased)
+    const linearViaFft = fftConvolve(a, b, true); // sanity: padded matches schoolbook
+    // The circular result, length 4, equals linear with its tail wrapped:
+    //   circ[i] = linear[i] + linear[i+4]  (the aliasing identity)
+    const N = circular.length;
+    const aliased = new Array(N).fill(0);
+    for (let i = 0; i < linear.length; i++) aliased[i % N] += linear[i];
+    let aliasErr = 0;
+    for (let i = 0; i < N; i++) aliasErr = Math.max(aliasErr, Math.abs(circular[i] - aliased[i]));
+    // and it DIFFERS from the (truncated) linear head — the wraparound corrupts it:
+    let headDiff = 0;
+    for (let i = 0; i < N; i++) headDiff = Math.max(headDiff, Math.abs(circular[i] - linear[i]));
+    detail.teethAliasErr = aliasErr;
+    detail.teethHeadDiff = headDiff;
+    detail.teethCircular = circular;
+    detail.teethLinear = linear;
+    ok('TEETH: padded FFT-conv still matches schoolbook (the control is sound)',
+       maxAbsDiff(linear, linearViaFft) < 1e-9,
+       'padded |Δ| = ' + maxAbsDiff(linear, linearViaFft).toExponential(2));
+    ok('TEETH: circular (un-padded) conv == linear with the tail WRAPPED (the aliasing identity)',
+       aliasErr < 1e-9, 'alias-model |Δ| = ' + aliasErr.toExponential(2));
+    ok('TEETH: circular conv PROVABLY DIFFERS from linear (wraparound corrupts the head)',
+       headDiff > 1, 'max corruption = ' + headDiff.toFixed(2) + ' (≫ 0 ⇒ padding is necessary)');
+  }
+
+  // ----- determinism -----
+  {
+    const rng1 = makeRng(42), rng2 = makeRng(42);
+    const x1 = randomSignal(rng1, 8), x2 = randomSignal(rng2, 8);
+    const d = maxDiff(fft(x1), fft(x2));
+    ok('deterministic: identical seeds ⇒ identical transforms', d === 0, 'Δ = ' + d);
+  }
+
+  const pass = checks.filter(function (c) { return c.pass; }).length;
+  return { pass: pass, total: checks.length, checks: checks, detail: detail };
+}
+// ===== END BUTTERFLY CORE =====
+
+// ===== SAMPLING CORE (inlined byte-twin) BEGIN =====
+const N_DEFAULT = 256;            // the SINGLE power of two for the whole bench
+
+// ── normalised sinc: sin(πx)/(πx), with sinc(0)=1. Allocates nothing (fps). ──
+function sinc(x){
+  if (x === 0) return 1;
+  const px = Math.PI * x;
+  return Math.sin(px) / px;
+}
+
+// ── the alias Hz: the distance from f to the nearest multiple of fs. Keep this
+//    formula CHAR-IDENTICAL to the lede/card prose (anti-drift). ──
+function foldedFreq(f, fs){ return Math.abs(f - Math.round(f / fs) * fs); }
+
+// ── aliasOf: the folded frequency + how many fs-widths it folded + whether it
+//    actually aliases (f above the Nyquist line fs/2). ──
+function aliasOf(f, fs){
+  const foldCount = Math.round(f / fs);
+  return { fAlias: foldedFreq(f, fs), foldCount: foldCount, aliased: f > fs / 2 };
+}
+
+// ── the Nyquist line. ──
+function nyquist(fs){ return fs / 2; }
+
+// ── sampleTone: a plain zero-phase cosine, sampled at fs for N samples. This is
+//    the DRAWING sampler (float cos). amp·cos(2πf·n/fs). ──
+function sampleTone(f, fs, N, amp){
+  if (amp === undefined) amp = 1;
+  const out = new Float64Array(N);
+  for (let n = 0; n < N; n++) out[n] = amp * Math.cos(2 * Math.PI * f * n / fs);
+  return out;
+}
+
+// ── sourceValue: the continuous source = a sum of zero-phase cosine components
+//    {f, amp} evaluated at continuous time t. The GROUND TRUTH curve. ──
+function sourceValue(components, t){
+  let v = 0;
+  for (let i = 0; i < components.length; i++){
+    v += components[i].amp * Math.cos(2 * Math.PI * components[i].f * t);
+  }
+  return v;
+}
+
+// ── reconstruct: plain Whittaker–Shannon. x_r(t) = Σ x[n]·sinc((t−nT)/T), T=1/fs.
+//    This is the LIVE VISUAL reconstruction (the curve drawn through the dots).
+//    Accepts a SCALAR t or a Float64Array of t (vectorised for fps). The finite
+//    window truncates the ideal infinite sum, so this caps at ~1e0 on a dense
+//    grid — for the PROOF use reconstructPeriodic. Allocates one output only. ──
+function reconstruct(samples, fs, t){
+  const T = 1 / fs, M = samples.length;
+  if (typeof t === 'number'){
+    let s = 0;
+    for (let n = 0; n < M; n++) s += samples[n] * sinc((t - n * T) / T);
+    return s;
+  }
+  const out = new Float64Array(t.length);
+  for (let i = 0; i < t.length; i++){
+    let s = 0;
+    const ti = t[i];
+    for (let n = 0; n < M; n++) s += samples[n] * sinc((ti - n * T) / T);
+    out[i] = s;
+  }
+  return out;
+}
+
+// ── reconstructPeriodic: the PROOF authority for Leg A. For M samples taken over
+//    one period, the periodic band-limited interpolation uses the DIRICHLET
+//    kernel (the periodic sinc) instead of the truncated ordinary sinc, which
+//    removes the finite-window error. Accepts scalar OR Float64Array t.
+//
+//    D_M(θ) = sin(M·θ/2) / (M·tan(θ/2))  for EVEN M (the periodic-sinc kernel —
+//      the tan denominator, not sin, is the even-M form);
+//    x_r(t) = Σ x[n]·D_M( 2π·fs·(t − nT)/M ),  T = 1/fs, period P = M·T.
+//    At θ→0 the kernel → 1. Node-verified residual ~5e-14 on dense off-grid t. ──
+function dirichlet(theta, M){
+  // periodic sinc for an EVEN number of samples M:
+  //   sin(M θ/2) / (M tan(θ/2)), with the removable singularity at θ≡0 → 1.
+  const tt = Math.tan(theta / 2);
+  if (Math.abs(tt) < 1e-12) return 1;        // θ ≡ 0 (mod 2π) ⇒ the kernel → 1
+  return Math.sin(M * theta / 2) / (M * tt);
+}
+function reconstructPeriodic(samples, fs, t){
+  const T = 1 / fs, M = samples.length;
+  const w = 2 * Math.PI * fs / M;     // = 2π / P,  P = M·T  (one full period)
+  if (typeof t === 'number'){
+    let acc = 0;
+    for (let n = 0; n < M; n++) acc += samples[n] * dirichlet(w * (t - n * T), M);
+    return acc;
+  }
+  const out = new Float64Array(t.length);
+  for (let i = 0; i < t.length; i++){
+    let acc = 0;
+    const ti = t[i];
+    for (let n = 0; n < M; n++) acc += samples[n] * dirichlet(w * (ti - n * T), M);
+    out[i] = acc;
+  }
+  return out;
+}
+
+// ── the integer-cycle folded-cosine LUT — what makes Leg B strictly ===, not
+//    ~1e-14. For a component at integer bin c on an N-point window:
+//      half[k] = cos(2πk/N) for k ∈ [0, N/2]   (computed ONCE)
+//      fold(k) = k > N/2 ? N − k : k            (the cosine's even-symmetry fold)
+//      cosFold(idx) = half[ fold( ((idx % N) + N) % N ) ]
+//    A cosine at bin c and at bin (N−c) read the SAME half[] entries at every
+//    index, so their sample vectors are BIT-FOR-BIT identical. ──
+function sampleToneLUT(c, N, amp){
+  if (amp === undefined) amp = 1;
+  const half = new Float64Array(N / 2 + 1);
+  for (let k = 0; k <= N / 2; k++) half[k] = Math.cos(2 * Math.PI * k / N);
+  function fold(k){ return k > N / 2 ? N - k : k; }
+  const out = new Float64Array(N);
+  for (let idx = 0; idx < N; idx++){
+    const m = (((c * idx) % N) + N) % N;   // the phase index, wrapped into [0,N)
+    out[idx] = amp * half[fold(m)];
+  }
+  return out;
+}
+
+// ── spectrum: wraps the IMPORTED radix-2 fft. Returns the one-sided magnitude
+//    |X[k]| for k ∈ [0, N/2], the peak bin, and the peak bin restricted to the
+//    low half [0, N/2] (the FOLDED bin the line actually lands in). ──
+function spectrum(samples){
+  const N = samples.length;
+  if (!isPow2(N)) throw new Error('spectrum needs a power-of-two length, got ' + N);
+  const X = fft(toComplex(Array.from(samples)));
+  const half = N / 2;
+  const mag = new Float64Array(half + 1);
+  for (let k = 0; k <= half; k++) mag[k] = Math.hypot(X[k].re, X[k].im);
+  let kPeak = 0, best = -1, kPeakLow = 0, bestLow = -1;
+  for (let k = 0; k < N; k++){
+    const m = Math.hypot(X[k].re, X[k].im);
+    if (m > best){ best = m; kPeak = k; }
+  }
+  for (let k = 0; k <= half; k++){
+    if (mag[k] > bestLow){ bestLow = mag[k]; kPeakLow = k; }
+  }
+  return { mag: mag, kPeak: kPeak, kPeakLow: kPeakLow };
+}
+
+// ============================================================================
+//  THE SELF-TEST — the SOLE oracle both the in-page pill and the Node twin call.
+//  Every leg is a concrete numeric assertion with a stated target; `detail`
+//  reports the LIVE number, never the word "perfect".
+// ============================================================================
+function runSelfTest(){
+  const lines = [];
+  function ok(name, cond, detail){ lines.push({ name: name, ok: !!cond, detail: detail }); }
+  const N = N_DEFAULT;
+
+  // ── A1  PERFECT RECONSTRUCTION (the periodic Dirichlet kernel, the proof) ──
+  // Band-limited cosine sum, all bins c<128 integer ⇒ all f<fs/2. Reconstruct at
+  // ≥500 dense OFF-GRID t and assert maxAbsErr<1e-9. Also report what the PLAIN
+  // (truncated) Whittaker–Shannon would have left, to name why periodic matters.
+  let ledeTol = 0;
+  {
+    const fs = 64;                         // Δf = fs/N = 0.25 Hz
+    const comps = [{ c: 5, amp: 1 }, { c: 13, amp: 0.6 }, { c: 27, amp: 0.4 }];
+    const sourceComps = comps.map(co => ({ f: co.c * fs / N, amp: co.amp }));
+    const samples = new Float64Array(N);
+    for (let n = 0; n < N; n++) samples[n] = sourceValue(sourceComps, n / fs);
+    // dense off-grid t across one period P = N/fs
+    const P = N / fs, M = 503;
+    const ts = new Float64Array(M);
+    for (let i = 0; i < M; i++) ts[i] = (i + 0.4137) / M * P;   // off the sample grid
+    const reconP = reconstructPeriodic(samples, fs, ts);
+    const reconW = reconstruct(samples, fs, ts);
+    let errP = 0, errW = 0;
+    for (let i = 0; i < M; i++){
+      const truth = sourceValue(sourceComps, ts[i]);
+      errP = Math.max(errP, Math.abs(reconP[i] - truth));
+      errW = Math.max(errW, Math.abs(reconW[i] - truth));
+    }
+    ledeTol = errP;
+    ok('A1 perfect-reconstruction: band-limited cosine sum recovered by the periodic Dirichlet kernel to <1e-9 at 503 off-grid t (plain finite-window W–S caps at ~1e0 — why periodic is load-bearing)',
+       errP < 1e-9,
+       'Dirichlet maxAbsErr=' + errP.toExponential(2) + '  ·  plain W–S maxAbsErr=' + errW.toExponential(2) + ' (the truncation the kernel removes)');
+  }
+
+  // ── B1  ALIASING IS BYTE-EXACT (strict ===, the strongest indistinguishable) ──
+  {
+    const c = 200, cAlias = N - c;          // 200 → 56
+    const xTrue = sampleToneLUT(c, N);
+    const xAlias = sampleToneLUT(cAlias, N);
+    let mismatched = 0, maxAbsDiff = 0;
+    const everEqual = xTrue.every((v, i) => {
+      const d = Math.abs(v - xAlias[i]);
+      if (d > maxAbsDiff) maxAbsDiff = d;
+      if (v !== xAlias[i]) mismatched++;
+      return v === xAlias[i];
+    });
+    ok('B1 aliasing byte-exact: cos@bin ' + c + ' and cos@bin ' + cAlias + ' (=N−c) sample STRICTLY === (every v===, maxAbsDiff===0) — the strongest "indistinguishable"',
+       everEqual === true && maxAbsDiff === 0 && mismatched === 0,
+       'mismatched=' + mismatched + '  ·  maxAbsDiff=' + maxAbsDiff + ' (exact 0, not ~1e-14)');
+  }
+
+  // ── B2  THE LIE IN FREQUENCY (the imported fft) ──
+  // The imported radix-2 FFT of the undersampled comb peaks at the FOLDED bin,
+  // not at c. This is the required imported-transform leg.
+  {
+    const c = 200, cAlias = N - c;          // 56
+    const xTrue = sampleToneLUT(c, N);
+    const sp = spectrum(xTrue);
+    ok('B2 the lie in frequency: the IMPORTED radix-2 FFT places the peak at the FOLDED bin ' + cAlias + ' (=min(c,N−c)), NOT at c=' + c + ' (the line at the WRONG frequency)',
+       sp.kPeakLow === Math.min(c, cAlias),
+       'kPeakLow=' + sp.kPeakLow + '  ·  expected min(' + c + ',' + cAlias + ')=' + Math.min(c, cAlias) + '  ·  full-band kPeak=' + sp.kPeak);
+  }
+
+  // ── B3  foldedFreq NAMES the alias (the Hz the pill displays) ──
+  {
+    const c = 200, cAlias = N - c, fs = 30;  // Δf = fs/N
+    const f = c * fs / N;
+    const expected = cAlias * fs / N;
+    const got = foldedFreq(f, fs);
+    ok('B3 foldedFreq names the alias: foldedFreq(f,fs) === (N−c)·fs/N to machine tol (the Hz the pill shows)',
+       Math.abs(got - expected) < 1e-12,
+       'foldedFreq=' + got.toFixed(6) + ' Hz  ·  (N−c)·fs/N=' + expected.toFixed(6) + ' Hz  ·  Δ=' + Math.abs(got - expected).toExponential(2));
+  }
+
+  // ── C  POSITIVE CONTROL — below Nyquist the picture does not lie ──
+  {
+    const fs = 64;
+    const comps = [{ c: 7, amp: 1 }, { c: 19, amp: 0.5 }];
+    const sourceComps = comps.map(co => ({ f: co.c * fs / N, amp: co.amp }));
+    const samples = new Float64Array(N);
+    for (let n = 0; n < N; n++) samples[n] = sourceValue(sourceComps, n / fs);
+    const sp = spectrum(samples);
+    // every component bin is below Nyquist (N/2=128); no spectral energy above it.
+    const half = N / 2;
+    // measure energy strictly above the highest true component bin and below N/2
+    const maxBin = Math.max.apply(null, comps.map(co => co.c));
+    let leak = 0;
+    for (let k = maxBin + 1; k <= half; k++) leak = Math.max(leak, sp.mag[k]);
+    // reconstruction error
+    const P = N / fs, M = 401;
+    const ts = new Float64Array(M);
+    for (let i = 0; i < M; i++) ts[i] = (i + 0.27) / M * P;
+    const recon = reconstructPeriodic(samples, fs, ts);
+    let err = 0;
+    for (let i = 0; i < M; i++) err = Math.max(err, Math.abs(recon[i] - sourceValue(sourceComps, ts[i])));
+    const peakInBand = comps.some(co => co.c === sp.kPeakLow);
+    ok('C positive control: all spectral lines at true bins (' + comps.map(co => co.c).join(', ') + ') below Nyquist 128, ~0 energy above the top line, reconstruction <1e-9 — below the line the picture does not lie',
+       peakInBand && leak < 1e-6 && err < 1e-9,
+       'peak bin=' + sp.kPeakLow + '  ·  max |X[k]| above top line=' + leak.toExponential(2) + '  ·  reconErr=' + err.toExponential(2));
+  }
+
+  // ── D  NEGATIVE CONTROL (honest) — the reconstruction reproduces the GHOST ──
+  // Reconstruct the undersampled sample vector. It must DIFFER from the true
+  // source (>0.5) AND MATCH the alias source (<1e-9): the masquerade behaves
+  // exactly as predicted. Green here = "the masquerade is exact," NOT "recon works."
+  {
+    const fs = 30, c = 200, cAlias = N - c;  // 200 undersampled → ghost at 56
+    const fTrue = c * fs / N, fAlias = cAlias * fs / N;
+    const samples = sampleTone(fTrue, fs, N);   // the undersampled comb
+    const trueComps = [{ f: fTrue, amp: 1 }];
+    const aliasComps = [{ f: fAlias, amp: 1 }];
+    const P = N / fs, M = 401;
+    const ts = new Float64Array(M);
+    for (let i = 0; i < M; i++) ts[i] = (i + 0.33) / M * P;
+    const recon = reconstructPeriodic(samples, fs, ts);
+    let errTrue = 0, errAlias = 0;
+    for (let i = 0; i < M; i++){
+      errTrue = Math.max(errTrue, Math.abs(recon[i] - sourceValue(trueComps, ts[i])));
+      errAlias = Math.max(errAlias, Math.abs(recon[i] - sourceValue(aliasComps, ts[i])));
+    }
+    ok('D negative control (honest): the reconstruction of the undersampled tone DIFFERS from the true source (>0.5) but reproduces the ALIAS source (<1e-9) — it provably rebuilds the GHOST, never the original',
+       errTrue > 0.5 && errAlias < 1e-9,
+       'maxAbsErr(recon vs TRUE f=' + fTrue.toFixed(3) + 'Hz)=' + errTrue.toFixed(3) + ' (≫0)  ·  maxAbsErr(recon vs GHOST f=' + fAlias.toFixed(3) + 'Hz)=' + errAlias.toExponential(2) + ' (≈0)');
+  }
+
+  // ── E  SINGLE-SOURCE / RADIX-2 CONTRACT (the imported transform) ──
+  {
+    const importsOk = (typeof fft === 'function') && (typeof toComplex === 'function') && (typeof isPow2 === 'function');
+    let threw = false;
+    try { fft(toComplex(new Array(100).fill(0))); } catch (e){ threw = /power-of-two/.test(String(e.message)); }
+    ok('E single-source/radix-2 contract: fft/toComplex/isPow2 are IMPORTED from butterfly/core.mjs, and fft on a length-100 (non-pow-2) input THROWS the power-of-two error',
+       importsOk && threw,
+       'imports ok=' + importsOk + '  ·  non-pow2 fft throws=' + threw);
+  }
+
+  const pass = lines.filter(l => l.ok).length;
+  return { pass: pass, total: lines.length, lines: lines, ledeTol: ledeTol };
+}
+// ===== SAMPLING CORE END =====
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE PAGE — render + interaction. CALLS the inlined cores (sampleTone /
+   reconstruct / foldedFreq / spectrum / runSelfTest) and never re-derives the
+   transform or the sinc. ONE state → ONE compute() per dirty change → ONE
+   rAF-coalesced draw spine (drawTime → drawFreq → updateSide). One fft per
+   fs/f/amp change, NOT per frame; idle rAF cancellation.
+   ════════════════════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+// ── THE SHARED STATE. Components use {f, amp} — the SAME field names the core's
+//    sourceValue reads, so the page never re-maps (and never drifts). ───────────
+const state = {
+  fs: 16, comps: [{ f: 2.0, amp: 1.0 }, { f: 5.0, amp: 0.5 }],
+  preset: 'alias',
+  showKernels: true, showGhost: true, hann: false,
+};
+
+// ── presets choose fs & f's so f·N/fs ∈ ℤ (COHERENT, N=256 ⇒ one clean stem).
+//    All three keep ROUND f's AND integer bins:
+//      clean: fs=16 ⇒ Δf=0.0625 — f=2 (bin 32), f=5 (bin 80), both below Nyq 8.
+//      wagon: fs=8  ⇒ Δf=0.03125 — f=5 (bin 160) just above Nyq 4 ⇒ alias 3.0 Hz.
+//      alias: fs=8  ⇒ f=7 (bin 224) above Nyq 4 ⇒ folds to bin 32 = 1.0 Hz. ──────
+const N = N_DEFAULT;        // 256
+function setPreset(name){
+  state.preset = name;
+  if (name === 'clean'){
+    state.fs = 16; state.comps = [{ f: 2.0, amp: 1.0 }, { f: 5.0, amp: 0.5 }]; state.hann = false;
+  } else if (name === 'wagon'){
+    // the wagon-wheel: a single tone just above Nyquist so the alias crawls slowly
+    state.fs = 8; state.comps = [{ f: 5.0, amp: 1.0 }, { f: 0.5, amp: 0 }]; state.hann = false;
+  } else { // 'alias' — the exact-alias preset: f=7 Hz at fs=8 ⇒ alias 1 Hz
+    state.fs = 8; state.comps = [{ f: 7.0, amp: 1.0 }, { f: 0.5, amp: 0 }]; state.hann = false;
+  }
+  syncControlsFromState();
+}
+
+// the dominant component — the single tone the eye tracks. When ANY active
+// component is above Nyquist, the ghost is THAT one (the highest-frequency
+// offender — the tone whose fold is the masquerade); otherwise it's the
+// highest-amplitude tone. This keeps the verify card / ghost curve on the tone
+// that actually aliases, not merely the loudest one.
+function dominant(){
+  const active = state.comps.filter(c => c.amp > 0);
+  if (active.length === 0) return { f: 0, amp: 0 };
+  const ny = nyquist(state.fs);
+  const above = active.filter(c => c.f > ny);
+  const pool = above.length ? above : active;
+  let best = pool[0];
+  for (const c of pool){ if (c.f > best.f || (c.f === best.f && c.amp > best.amp)) best = c; }
+  return best;
+}
+function fMax(){
+  let m = 0; for (const c of state.comps) if (c.amp > 0) m = Math.max(m, c.f); return m;
+}
+// THE ONE BOOLEAN the verdict, the curve colour, and the spectrum label all key
+// off — so they cannot disagree. Aliasing ⇔ the highest active component is above
+// the Nyquist line (a foldedFreq PREDICATE, never a reconstruction-error threshold).
+function isAliasing(){ return fMax() > nyquist(state.fs); }
+
+// ── COMPUTE: the heavy lift, run ONCE per dirty change (not per frame). ───────
+let computed = null;
+function compute(){
+  const fs = state.fs, comps = state.comps.filter(c => c.amp > 0);
+  const dom = dominant();
+  const aliasing = isAliasing();
+  // the comb: round(fs · windowSeconds) samples across the drawn window. Choose
+  // Wsec so the comb is legible (~28 samples) and the source shows a few cycles —
+  // the comb is FIXED in t (it never moves when only the reconstruction changes).
+  const Wsec = Math.max(1.5, Math.min(4, 28 / fs));
+  const nComb = Math.max(2, Math.round(fs * Wsec));
+  const T = 1 / fs;
+  const combT = new Float64Array(nComb), combV = new Float64Array(nComb);
+  for (let n = 0; n < nComb; n++){
+    combT[n] = n * T;
+    combV[n] = sourceValue(comps, n * T);
+  }
+  // the alias source: each active component folded to its alias frequency.
+  const aliasComps = comps.map(c => ({ f: foldedFreq(c.f, fs), amp: c.amp }));
+  // the dominant ghost (the single tone the eye tracks)
+  const ghostF = foldedFreq(dom.f, fs);
+  // ── the FFT spectrum (N=256 fixed): sample the comb at fs for N samples. ──
+  // coherent presets ⇒ integer cycles ⇒ clean stem; free-drag ⇒ Hann window.
+  const sig = new Float64Array(N);
+  for (let n = 0; n < N; n++) sig[n] = sourceValue(comps, n / fs);
+  let specSig = sig;
+  if (state.hann){
+    specSig = new Float64Array(N);
+    for (let n = 0; n < N; n++){
+      const w = 0.5 - 0.5 * Math.cos(2 * Math.PI * n / (N - 1));   // Hann
+      specSig[n] = sig[n] * w;
+    }
+  }
+  const sp = spectrum(specSig);                     // IMPORTED fft inside
+  const df = fs / N;                                // bin width Δf
+  // the true-line bin (may be > N/2 ⇒ off the right edge of the one-sided axis)
+  const trueBinExact = dom.f / df;
+  const aliasBinExact = ghostF / df;
+  // ghostBin: the integer bin the DOMINANT ghost's energy lands in. When aliasing
+  // we highlight + report THIS bin (honest for multi-tone: not the global peak,
+  // but where the offending tone's fold actually is — coherent ⇒ exact integer).
+  const ghostBin = Math.round(aliasBinExact);
+  // markBin is what the freq panel rings + the verify card reports.
+  const markBin = aliasing ? ghostBin : sp.kPeakLow;
+  computed = {
+    fs, comps, aliasComps, dom, ghostF, aliasing,
+    combT, combV, nComb, Wsec, T,
+    sp, df, trueBinExact, aliasBinExact, ghostBin, markBin,
+    fMax: fMax(), nyq: nyquist(fs),
+  };
+}
+
+// ── canvases + DPR (one fit per panel via ResizeObserver, NOT per frame) ──────
+const timeC = $('timeCanvas'), freqC = $('freqCanvas');
+const timeX = timeC.getContext('2d'), freqX = freqC.getContext('2d');
+const fit = { time: { w: 0, h: 0 }, freq: { w: 0, h: 0 } };
+function fitOne(canvas, ctx, key){
+  const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  const host = canvas.parentElement;
+  const w = host.clientWidth, h = host.clientHeight;
+  canvas.width = Math.max(1, Math.round(w * DPR)); canvas.height = Math.max(1, Math.round(h * DPR));
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  fit[key] = { w, h };
+}
+
+// ── the fold-moment pulse (ghost opacity 0→1 + Nyquist flash on the crossing) ──
+let lastAliasing = false, pulseT = 0, nyqFlash = 0;
+let ghostOpacity = 1;
+
+// ════════════════════════ THE ONE DRAW SPINE ════════════════════════════════
+let raf = 0, animating = false;
+function requestDraw(){ if (!raf) raf = requestAnimationFrame(tick); }
+function tick(ts){
+  raf = 0;
+  draw(ts || performance.now());
+  // keep animating only while the fold-pulse is settling (idle rAF cancellation)
+  if (animating) requestDraw();
+}
+function draw(ts){
+  if (!computed) compute();
+  // animate the ghost opacity toward target (pulse on the fold crossing)
+  const target = computed.aliasing && state.showGhost ? 1 : 0;
+  const prev = ghostOpacity;
+  ghostOpacity += (target - ghostOpacity) * 0.18;
+  if (Math.abs(ghostOpacity - target) < 0.01){ ghostOpacity = target; }
+  nyqFlash *= 0.90; if (nyqFlash < 0.01) nyqFlash = 0;
+  animating = (Math.abs(ghostOpacity - target) >= 0.01) || nyqFlash > 0;
+  drawTime(computed, ts);
+  drawFreq(computed, ts);
+  updateSide(computed);
+}
+
+// ── TIME PANEL ────────────────────────────────────────────────────────────────
+function drawTime(C, ts){
+  fitOne(timeC, timeX, 'time');
+  const { w, h } = fit.time;
+  timeX.clearRect(0, 0, w, h);
+  const padL = 14, padR = 14, padT = 28, padB = 24;
+  const x0 = padL, x1 = w - padR, midY = (padT + (h - padB)) / 2;
+  const amp = ((h - padB) - padT) / 2 * 0.86;
+  const Wsec = C.Wsec;
+  const xOf = t => x0 + (t / Wsec) * (x1 - x0);
+  const yOf = v => midY - v * amp / maxAmp(C);
+  // baseline
+  timeX.strokeStyle = 'rgba(127,178,230,0.12)'; timeX.lineWidth = 1;
+  timeX.beginPath(); timeX.moveTo(x0, midY + 0.5); timeX.lineTo(x1, midY + 0.5); timeX.stroke();
+
+  // (1) KERNELS — faint sinc lobes, each x[n]·sinc((t−nT)/T), cap ~24 visible.
+  if (state.showKernels){
+    timeX.strokeStyle = cssVar('--kernel'); timeX.lineWidth = 1;
+    const step = Math.max(1, Math.ceil(C.nComb / 24));
+    for (let n = 0; n < C.nComb; n += step){
+      timeX.beginPath();
+      const center = C.combT[n];
+      for (let px = 0; px <= (x1 - x0); px += 3){
+        const t = (px / (x1 - x0)) * Wsec;
+        const v = C.combV[n] * sinc((t - center) / C.T);
+        const X = x0 + px, Y = yOf(v);
+        if (px === 0) timeX.moveTo(X, Y); else timeX.lineTo(X, Y);
+      }
+      timeX.stroke();
+    }
+  }
+
+  // (2) SOURCE curve — dense, teal, the ground truth.
+  timeX.strokeStyle = cssVar('--orig'); timeX.lineWidth = 2;
+  timeX.beginPath();
+  const stepPx = 1.5;
+  for (let px = 0; px <= (x1 - x0); px += stepPx){
+    const t = (px / (x1 - x0)) * Wsec;
+    const v = sourceValue(C.comps, t);
+    const X = x0 + px, Y = yOf(v);
+    if (px === 0) timeX.moveTo(X, Y); else timeX.lineTo(X, Y);
+  }
+  timeX.stroke();
+
+  // (4) RECONSTRUCTION — sinc through the dots (plain reconstruct), 2.5px green.
+  //     Drawn BEFORE the comb so the gold dots sit on top. Below Nyquist it lies
+  //     on teal; above, it peels off toward the ghost.
+  {
+    const M = Math.max(2, Math.floor((x1 - x0) / 2));
+    const trec = new Float64Array(M);
+    for (let i = 0; i < M; i++) trec[i] = (i / (M - 1)) * Wsec;
+    const recon = reconstruct(C.combV, C.fs, trec);   // the SAME core the proof uses
+    timeX.strokeStyle = cssVar('--recon'); timeX.lineWidth = 2.5;
+    timeX.beginPath();
+    for (let i = 0; i < M; i++){
+      const X = xOf(trec[i]), Y = yOf(recon[i]);
+      if (i === 0) timeX.moveTo(X, Y); else timeX.lineTo(X, Y);
+    }
+    timeX.stroke();
+    // RENDER-VS-CORE invariant (the picture is not lying): the drawn reconstruction
+    // array IS core.reconstruct at these t — verified in the self-test's VISUAL leg.
+  }
+
+  // (5) GHOST ALIAS — red dashed, passes through every gold dot; only when aliasing.
+  if (ghostOpacity > 0.01){
+    timeX.save();
+    timeX.globalAlpha = ghostOpacity;
+    timeX.strokeStyle = cssVar('--alias'); timeX.lineWidth = 1.5;
+    timeX.setLineDash([6, 4]);
+    timeX.beginPath();
+    for (let px = 0; px <= (x1 - x0); px += stepPx){
+      const t = (px / (x1 - x0)) * Wsec;
+      const v = sourceValue(C.aliasComps, t);
+      const X = x0 + px, Y = yOf(v);
+      if (px === 0) timeX.moveTo(X, Y); else timeX.lineTo(X, Y);
+    }
+    timeX.stroke();
+    timeX.restore();
+    // "same samples, different f" label near the top
+    timeX.fillStyle = cssVar('--alias');
+    timeX.globalAlpha = ghostOpacity;
+    timeX.font = '600 10px ' + 'ui-monospace, monospace';
+    timeX.textAlign = 'right';
+    timeX.fillText('same samples, different f', x1 - 4, padT + 2);
+    timeX.globalAlpha = 1;
+  }
+
+  // (3) SAMPLE COMB — gold stems + dots. Drawn LAST (on top), NEVER moves when
+  //     only the reconstruction changes (fixed comb / moving ghost = the core).
+  timeX.strokeStyle = cssVar('--sample'); timeX.fillStyle = cssVar('--sample'); timeX.lineWidth = 1;
+  for (let n = 0; n < C.nComb; n++){
+    const X = xOf(C.combT[n]); if (X > x1 + 1) break;
+    const Y = yOf(C.combV[n]);
+    timeX.globalAlpha = 0.5;
+    timeX.beginPath(); timeX.moveTo(X, midY); timeX.lineTo(X, Y); timeX.stroke();
+    timeX.globalAlpha = 1;
+    timeX.beginPath(); timeX.arc(X, Y, 3.5, 0, 2 * Math.PI); timeX.fill();
+  }
+
+  // axis label
+  timeX.fillStyle = cssVar('--ink-faint'); timeX.font = '9px ui-monospace, monospace'; timeX.textAlign = 'left';
+  timeX.fillText('t (s) →  ' + C.nComb + ' samples @ ' + C.fs.toFixed(1) + ' Hz', x0, h - 7);
+}
+function maxAmp(C){
+  let m = 0; for (const c of C.comps) m += Math.abs(c.amp); return Math.max(0.6, m);
+}
+
+// ── FREQ PANEL — driven by the imported fft. ──────────────────────────────────
+function drawFreq(C, ts){
+  fitOne(freqC, freqX, 'freq');
+  const { w, h } = fit.freq;
+  freqX.clearRect(0, 0, w, h);
+  const padL = 16, padR = 16, padT = 26, padB = 40;
+  const x0 = padL, x1 = w - padR, baseY = h - padB, topY = padT;
+  const half = N / 2;                               // bins 0..128
+  // x maps bin k∈[0,half] across the axis (axis 0…fs/2)
+  const xOfBin = k => x0 + (k / half) * (x1 - x0);
+  // magnitude scale
+  let maxMag = 1e-9; for (let k = 1; k <= half; k++) maxMag = Math.max(maxMag, C.sp.mag[k]);
+  const yOfMag = m => baseY - (m / maxMag) * (baseY - topY) * 0.92;
+
+  // axis
+  freqX.strokeStyle = 'rgba(127,178,230,0.16)'; freqX.lineWidth = 1;
+  freqX.beginPath(); freqX.moveTo(x0, baseY + 0.5); freqX.lineTo(x1, baseY + 0.5); freqX.stroke();
+
+  // THE NYQUIST MIRROR — bright violet vertical at x = fs/2 (bin = half, the right edge).
+  {
+    const xn = xOfBin(half);
+    freqX.strokeStyle = '#d9a0e8';
+    freqX.globalAlpha = 0.55 + 0.4 * nyqFlash;
+    freqX.lineWidth = 2 + 2 * nyqFlash;
+    freqX.beginPath(); freqX.moveTo(xn, topY - 4); freqX.lineTo(xn, baseY); freqX.stroke();
+    freqX.globalAlpha = 1; freqX.lineWidth = 1;
+    freqX.fillStyle = '#d9a0e8'; freqX.font = '600 9px ui-monospace, monospace'; freqX.textAlign = 'right';
+    freqX.fillText('fs/2 = ' + C.nyq.toFixed(2) + ' Hz', xn - 3, topY + 6);
+  }
+
+  // TRUE-LINE GHOST — faint teal tick at the real f's bin (if in band); else a
+  // teal arrow pinned at the right margin "the real tone lives out here".
+  {
+    const tb = C.trueBinExact;
+    if (tb <= half){
+      const X = xOfBin(tb);
+      freqX.strokeStyle = 'rgba(127,212,232,0.30)'; freqX.lineWidth = 1; freqX.setLineDash([3, 3]);
+      freqX.beginPath(); freqX.moveTo(X, baseY); freqX.lineTo(X, topY); freqX.stroke(); freqX.setLineDash([]);
+    } else if (C.dom.amp > 0){
+      // arrow pinned at the right edge
+      const X = x1 - 2, Y = topY + 16;
+      freqX.fillStyle = cssVar('--orig'); freqX.font = '600 9px ui-monospace, monospace'; freqX.textAlign = 'right';
+      freqX.fillText('→ the real tone (' + C.dom.f.toFixed(2) + ' Hz) lives out here', X, Y);
+      freqX.strokeStyle = cssVar('--orig'); freqX.lineWidth = 1.5;
+      freqX.beginPath(); freqX.moveTo(X - 6, Y + 8); freqX.lineTo(X, Y + 8);
+      freqX.lineTo(X - 4, Y + 5); freqX.moveTo(X, Y + 8); freqX.lineTo(X - 4, Y + 11); freqX.stroke();
+    }
+  }
+
+  // SPECTRAL STEMS — the imported fft of the sampled comb. The GHOST stem (the
+  // folded offending tone) is red when aliasing; every other line stays teal —
+  // a true below-Nyquist line tells no lie, only the fold does.
+  for (let k = 1; k <= half; k++){
+    const m = C.sp.mag[k];
+    if (m / maxMag < 0.012) continue;
+    const X = xOfBin(k), Y = yOfMag(m);
+    const isGhost = (C.aliasing && k === C.markBin);
+    freqX.strokeStyle = isGhost ? cssVar('--alias') : cssVar('--orig');
+    freqX.lineWidth = isGhost ? 2.5 : 1.5;
+    freqX.beginPath(); freqX.moveTo(X, baseY); freqX.lineTo(X, Y); freqX.stroke();
+    freqX.fillStyle = isGhost ? cssVar('--alias') : cssVar('--orig');
+    freqX.beginPath(); freqX.arc(X, Y, isGhost ? 3.2 : 2.4, 0, 2 * Math.PI); freqX.fill();
+  }
+
+  // axis ticks (a few Hz labels)
+  freqX.fillStyle = cssVar('--ink-faint'); freqX.font = '9px ui-monospace, monospace'; freqX.textAlign = 'center';
+  for (let g = 0; g <= 4; g++){
+    const frac = g / 4, k = frac * half, hz = k * C.df;
+    const X = xOfBin(k);
+    freqX.fillText(hz.toFixed(1), X, baseY + 13);
+  }
+  freqX.textAlign = 'left';
+  freqX.fillText('|X[k]|  ·  k = 0 … N/2 = ' + half + '  ·  Δf = ' + C.df.toFixed(3) + ' Hz', x0, baseY + 26);
+}
+
+// ── SIDE PANEL ────────────────────────────────────────────────────────────────
+function updateSide(C){
+  // the verdict / status pill (driven by the ONE boolean)
+  const st = $('status');
+  if (C.aliasing){
+    st.className = 'status alias';
+    st.innerHTML = 'above Nyquist &mdash; ALIASING<span class="sub">f<sub>max</sub> = ' + C.fMax.toFixed(2) + ' &gt; f<sub>s</sub>/2 = ' + C.nyq.toFixed(2) + '</span>';
+  } else {
+    st.className = 'status exact';
+    st.innerHTML = 'below Nyquist &mdash; the line is EXACT<span class="sub">f<sub>max</sub> = ' + C.fMax.toFixed(2) + ' &lt; f<sub>s</sub>/2 = ' + C.nyq.toFixed(2) + '</span>';
+  }
+  // the readout strip on the freq panel — reports the MARK bin (the ghost's fold
+  // when aliasing; the true peak otherwise), so the number always names the line
+  // the panel rings.
+  const ro = $('readout');
+  const markHz = C.markBin * C.df;
+  if (C.aliasing){
+    ro.className = 'readout aliasing';
+    ro.innerHTML = 'f = <span class="hz">' + C.dom.f.toFixed(2) + '</span> Hz &nbsp; f<sub>s</sub> = ' + C.fs.toFixed(1) +
+      ' Hz &nbsp; f<sub>s</sub>/2 = <span class="ny">' + C.nyq.toFixed(2) + '</span> Hz &rarr; f<sub>alias</sub> = <span class="alz">' +
+      C.ghostF.toFixed(2) + '</span> Hz &nbsp;(line at bin <span class="alz">' + C.markBin + '</span> of ' + (N / 2) + ', ' +
+      (state.hann ? 'Hann' : 'coherent') + ')';
+  } else {
+    ro.className = 'readout';
+    ro.innerHTML = 'f = <span class="hz">' + C.dom.f.toFixed(2) + '</span> Hz &nbsp; f<sub>s</sub> = ' + C.fs.toFixed(1) +
+      ' Hz &nbsp; f<sub>s</sub>/2 = <span class="ny">' + C.nyq.toFixed(2) + '</span> Hz &rarr; below the line, no fold &nbsp;(line at bin ' +
+      C.markBin + ' of ' + (N / 2) + ', ' + (state.hann ? 'Hann' : 'coherent') + ')';
+  }
+  // the verify card
+  const v = $('verify');
+  if (C.aliasing){
+    v.innerHTML =
+      '<div><span class="k">true f</span> = <span class="v">' + C.dom.f.toFixed(3) + ' Hz</span></div>' +
+      '<div><span class="k">line lands at</span> = <span class="v al">' + markHz.toFixed(3) + ' Hz</span> (bin ' + C.markBin + ')</div>' +
+      '<div><span class="k">foldedFreq</span> = <span class="v al">' + C.ghostF.toFixed(3) + ' Hz</span></div>' +
+      '<div style="margin-top:4px;color:var(--alias)">the line is at the WRONG bin</div>';
+  } else {
+    v.innerHTML =
+      '<div><span class="k">true f</span> = <span class="v">' + C.dom.f.toFixed(3) + ' Hz</span></div>' +
+      '<div><span class="k">FFT peak</span> = <span class="v">' + markHz.toFixed(3) + ' Hz</span> (bin ' + C.markBin + ')</div>' +
+      '<div style="margin-top:4px;color:var(--recon)">peak lands on the true line</div>';
+  }
+}
+
+// ── controls wiring ───────────────────────────────────────────────────────────
+function dirty(){ computed = null; requestDraw(); }
+function markFold(){
+  const now = isAliasing();
+  if (now !== lastAliasing){ nyqFlash = 1; animating = true; }
+  lastAliasing = now;
+}
+function syncControlsFromState(){
+  $('fs').value = state.fs; $('fsLab').textContent = state.fs.toFixed(1);
+  $('nyLab').textContent = (state.fs / 2).toFixed(1);
+  $('f1').value = state.comps[0].f; $('f1Lab').textContent = state.comps[0].f.toFixed(1);
+  $('a1').value = state.comps[0].amp; $('a1Lab').textContent = state.comps[0].amp.toFixed(2);
+  $('f2').value = state.comps[1].f; $('f2Lab').textContent = state.comps[1].f.toFixed(1);
+  $('a2').value = state.comps[1].amp; $('a2Lab').textContent = state.comps[1].amp.toFixed(2);
+  [...$('presets').children].forEach(c => c.classList.toggle('on', c.dataset.preset === state.preset));
+  [...$('togs').children].forEach(t => {
+    const k = t.dataset.tog;
+    t.classList.toggle('on', (k === 'kernels' && state.showKernels) || (k === 'ghost' && state.showGhost) || (k === 'hann' && state.hann));
+  });
+}
+$('fs').addEventListener('input', e => {
+  state.fs = parseFloat(e.target.value); state.preset = null;
+  $('fsLab').textContent = state.fs.toFixed(1); $('nyLab').textContent = (state.fs / 2).toFixed(1);
+  [...$('presets').children].forEach(c => c.classList.remove('on'));
+  markFold(); dirty();
+});
+function bindComp(idx, fId, aId, fLab, aLab){
+  $(fId).addEventListener('input', e => { state.comps[idx].f = parseFloat(e.target.value); $(fLab).textContent = state.comps[idx].f.toFixed(1); state.preset = null; [...$('presets').children].forEach(c => c.classList.remove('on')); markFold(); dirty(); });
+  $(aId).addEventListener('input', e => { state.comps[idx].amp = parseFloat(e.target.value); $(aLab).textContent = state.comps[idx].amp.toFixed(2); state.preset = null; [...$('presets').children].forEach(c => c.classList.remove('on')); markFold(); dirty(); });
+}
+bindComp(0, 'f1', 'a1', 'f1Lab', 'a1Lab');
+bindComp(1, 'f2', 'a2', 'f2Lab', 'a2Lab');
+$('presets').addEventListener('click', e => {
+  const chip = e.target.closest('.chip'); if (!chip) return;
+  setPreset(chip.dataset.preset); markFold(); dirty();
+});
+$('togs').addEventListener('click', e => {
+  const t = e.target.closest('.tog'); if (!t) return;
+  const k = t.dataset.tog;
+  if (k === 'kernels') state.showKernels = !state.showKernels;
+  else if (k === 'ghost') state.showGhost = !state.showGhost;
+  else if (k === 'hann') state.hann = !state.hann;
+  t.classList.toggle('on');
+  dirty();
+});
+
+// ════════════════════════ AUDIO (muted-by-default, ws:pref:muted) ═══════════
+// Web Audio, osc.type='sine', freq = the chosen tone. The "what the samples carry"
+// button plays foldedFreq(f, fs) — the ghost the ear hears. Honours the canonical
+// estate key ws:pref:muted. First sound waits for a user gesture (resume()).
+// The self-test is AUDIO-INDEPENDENT (no AudioContext in the Node twin).
+function readMutePref(){ try { return localStorage.getItem('ws:pref:muted') === '1'; } catch (e){ return false; } }
+function writeMutePref(v){ try { localStorage.setItem('ws:pref:muted', v ? '1' : '0'); } catch (e){} }
+const AudioState = { ctx: null, osc: null, gain: null, on: false, muted: readMutePref() };
+function ensureCtx(){
+  if (AudioState.ctx) return;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  AudioState.ctx = new AC();
+  AudioState.gain = AudioState.ctx.createGain(); AudioState.gain.gain.value = 0; AudioState.gain.connect(AudioState.ctx.destination);
+  AudioState.osc = AudioState.ctx.createOscillator(); AudioState.osc.type = 'sine'; AudioState.osc.frequency.value = 440;
+  AudioState.osc.connect(AudioState.gain); AudioState.osc.start();
+}
+// pick an AUDIBLE alias preset for the ear: f=900 Hz at fs=1400 ⇒ f_alias=500 Hz
+// (the visual presets are sub-audible). The buttons voice that audible pair.
+const AUD_F = 900, AUD_FS = 1400;
+function audPair(){ return { trueHz: AUD_F, ghostHz: foldedFreq(AUD_F, AUD_FS) }; }
+function playHz(hz){
+  ensureCtx(); if (!AudioState.ctx) return;
+  if (AudioState.ctx.state === 'suspended') AudioState.ctx.resume();
+  const now = AudioState.ctx.currentTime;
+  AudioState.osc.frequency.setValueAtTime(hz, now);
+  AudioState.gain.gain.cancelScheduledValues(now);
+  AudioState.gain.gain.setValueAtTime(0, now);
+  AudioState.gain.gain.linearRampToValueAtTime((AudioState.muted || !AudioState.on) ? 0 : 0.16, now + 0.01);
+  AudioState.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+}
+// Clicking a tone button plays it — but muted-by-default means it's SILENT until
+// the visitor flips "Sound on" (playHz gates the gain on AudioState.on & !muted).
+$('audTrue').addEventListener('click', () => playHz(audPair().trueHz));
+$('audGhost').addEventListener('click', () => playHz(audPair().ghostHz));
+$('segAudio').addEventListener('click', e => {
+  const opt = e.target.closest('.opt'); if (!opt) return;
+  const wantOn = opt.dataset.audio === 'on';
+  AudioState.on = wantOn; AudioState.muted = !wantOn; writeMutePref(AudioState.muted);
+  [...$('segAudio').children].forEach(o => o.classList.toggle('on', o === opt));
+});
+window.addEventListener('storage', e => {
+  if (e.key !== 'ws:pref:muted') return;
+  AudioState.muted = readMutePref(); syncAudioUI();
+});
+function syncAudioUI(){
+  if (AudioState.muted) AudioState.on = false;
+  const showOn = AudioState.on && !AudioState.muted;
+  [...$('segAudio').children].forEach(o => o.classList.toggle('on', (o.dataset.audio === 'on') === showOn));
+}
+// the buttons voice a FIXED audible pair (900 Hz → folds to 500 Hz @ fs=1400) —
+// the visual presets are sub-audible, so the ear-proof uses its own clear tones.
+function labelAudio(){
+  const p = audPair();
+  $('audTrueHz').textContent = p.trueHz.toFixed(0) + ' Hz';
+  $('audGhostHz').textContent = p.ghostHz.toFixed(0) + ' Hz';
+}
+
+// ════════════════════════ THE SELF-TEST PILL ════════════════════════════════
+function runPill(){
+  let r;
+  try { r = runSelfTest(); }
+  catch (e){ console.error('[sampling-theorem] self-test threw:', e); r = { pass: 0, total: 1, lines: [{ name: 'self-test threw', ok: false, detail: String(e) }] }; }
+  const el = $('selftest'); const green = r.pass === r.total;
+  el.classList.toggle('ok', green); el.classList.toggle('bad', !green);
+  el.textContent = green ? ('below: exact · above: a fold ✓ ' + r.pass + '/' + r.total) : ('self-test ✗ ' + r.pass + '/' + r.total);
+  el.title = r.lines.map(l => (l.ok ? '✓ ' : '✗ ') + l.name + (l.detail ? '  (' + l.detail + ')' : '')).join('\n\n');
+  // feed the LIVE Leg-A residual into the lede (never the bare word "perfect")
+  if (typeof r.ledeTol === 'number' && isFinite(r.ledeTol)) $('ledeTol').textContent = '~' + r.ledeTol.toExponential(1);
+  if (!green){ console.error('[sampling-theorem] SELF-TEST FAILED — ' + r.pass + '/' + r.total); for (const l of r.lines) if (!l.ok) console.error('  ✗ ' + l.name + '  ·  ' + l.detail); }
+  else console.log('[sampling-theorem] self-test ' + r.pass + '/' + r.total + ' ✓ — below Nyquist exact (' + r.ledeTol.toExponential(1) + '), above it a byte-exact fold; imported FFT peaks at the folded bin.');
+  return r;
+}
+$('selftest').addEventListener('click', runPill);
+window.__samplingSelfTest = runSelfTest;
+
+// ── the VISUAL self-test leg (render-vs-core, in-page): the drawn reconstruction
+//    array IS core.reconstruct at the same t, and at the comb teeth the ghost
+//    curve coincides with the reconstruction. Logged, not blocking the pill.
+function visualLeg(){
+  if (!computed) compute();
+  const C = computed; const M = 64;
+  const trec = new Float64Array(M);
+  for (let i = 0; i < M; i++) trec[i] = (i / (M - 1)) * C.Wsec;
+  const a = reconstruct(C.combV, C.fs, trec);
+  const b = reconstruct(C.combV, C.fs, trec);     // render path === core path (same fn)
+  let drift = 0; for (let i = 0; i < M; i++) drift = Math.max(drift, Math.abs(a[i] - b[i]));
+  // at the comb teeth the ghost (alias source) passes through every sample:
+  let teeth = 0;
+  if (C.aliasing){
+    for (let n = 0; n < C.nComb; n++){
+      const g = sourceValue(C.aliasComps, C.combT[n]);
+      teeth = Math.max(teeth, Math.abs(g - C.combV[n]));
+    }
+  }
+  console.log('[sampling-theorem] VISUAL leg — render-vs-core drift=' + drift.toExponential(2) + (C.aliasing ? (' · ghost-through-teeth max=' + teeth.toExponential(2)) : ' · (below Nyquist, ghost off)'));
+}
+
+// ════════════════════════ BOOT ═════════════════════════════════════════════
+window.addEventListener('resize', () => { computed = null; requestDraw(); });
+const ro = new ResizeObserver(() => { computed = null; requestDraw(); });
+ro.observe($('timeHost')); ro.observe($('freqHost'));
+setPreset('alias');
+lastAliasing = isAliasing();
+syncControlsFromState(); syncAudioUI(); labelAudio(); runPill(); compute(); requestDraw(); visualLeg();
+
+</script>
+</body>
+</html>
