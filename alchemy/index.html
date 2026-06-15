@@ -136,8 +136,8 @@
     <h1>The Alchemy Lab</h1>
     <p class="lede">The estate's first <b>chemistry</b> wing. Each bench is a <b>hanging balance</b> on the
       laboratory wall — a law of matter you can feel as weight and level. The atoms the Cavern's physics
-      drift takes apart are the ones you put back together here. The <b>Reaction Balancer</b> hangs lit and
-      level; the empty cradles tip in gold, naming where the wing grows next.</p>
+      drift takes apart are the ones you put back together here. The <b>Reaction Balancer</b> and
+      <b>Titration</b> hang lit and level; the empty cradles tip in gold, naming where the wing grows next.</p>
     <span class="glowline"></span>
   </header>
 
@@ -163,9 +163,9 @@
   </section>
 
   <footer class="foot">
-    One balance hangs level; four cradles wait. Each bench keeps the workshop's promise — where it makes a
-    claim, a built-in <b>self-test</b> proves it to machine precision. Here the claim is exact integer linear
-    algebra: the coefficients are <b>read off the nullspace</b>, never guessed. &nbsp;·&nbsp;
+    Two balances hang level; three cradles wait. Each bench keeps the workshop's promise — where it makes a
+    claim, a built-in <b>self-test</b> proves it to machine precision. The Reaction Balancer reads coefficients
+    <b>off the nullspace</b>; Titration roots the equivalence pH from <b>charge balance</b>, exact. &nbsp;·&nbsp;
     <a href="../index.html">Back to the estate map</a>
   </footer>
 
@@ -177,8 +177,9 @@
      can read "1 bench · N/N ✓" and can never claim the wing is sound while the
      bench math is broken. (A dynamic import keeps the page usable off file://,
      where ES-module fetch is blocked — the pill then attests structure only.) */
-  let CORE = null;
+  let CORE = null, TITR = null;
   try{ CORE = await import('./reaction-balancer/core.mjs'); }catch(e){ /* file:// or fetch blocked */ }
+  try{ TITR = await import('./titration/core.mjs'); }catch(e){ /* file:// or fetch blocked — degrade to structural-only */ }
 
   /* ── the front-door breadcrumb (the Survey of Heaven's only food) ── */
   try{ var k = 'ws:seen:alchemy'; if(!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
@@ -212,9 +213,9 @@
     { title:'Stoichiometry & the Limiting Reagent', bench:false, href:null,
       tag:'planter · next', proof:null,
       desc:'How much product, and which reactant runs out first? The pan that empties — and stops the reaction the instant it does.' },
-    { title:'pH & Titration', bench:false, href:null,
-      tag:'planter · next', proof:null,
-      desc:'Drop by drop to the equivalence point — the balance between acid and base, watched as it tips through neutral.' },
+    { title:'pH & Titration', bench:true, href:'titration/index.html',
+      tag:'live bench', proof:'pH(V) from charge balance · self-test 15/15 ✓',
+      desc:'Pour NaOH into HCl drop by drop and chase the equivalence point by feel — the flask flips pink a hair past pH 7, the curve in the rail is only its shadow, and every claim is proven exact.' },
     { title:'Equilibrium · Le Chatelier', bench:false, href:null,
       tag:'planter · next', proof:null,
       desc:'A reaction that runs both ways at once, settling where the forward and the back rates exactly cancel.' },
@@ -244,8 +245,8 @@
        imports the one live bench's core and re-runs the same curated library proofs
        the bench badge + the Node twin run, so the pill attests the wing's MATH, not
        just its frame. Pill reads "1 bench · N/N ✓". ── */
-  function benchMathProof(){
-    // the curated reactions + their known smallest-integer coefficients (the bench's LIBRARY)
+  // ── bench #1: the Reaction Balancer's curated library (coefficients exact, A·c=0, gcd=1, all>0) ──
+  function balancerProof(){
     if(!CORE) return { ran:false, pass:0, total:0 };
     var pass = 0, total = 0;
     var lib = CORE.LIBRARY;
@@ -256,7 +257,6 @@
         total++; if(res.ok === false) pass++;            // the negative control must NOT balance
         continue;
       }
-      // coefficients == the known smallest integers, and A·c=0 exact + gcd=1 + all>0
       total++;
       var got = res.ok ? res.coef : null;
       var eq = got && rx.expect && got.length === rx.expect.length && got.every(function(v, k){ return v === rx.expect[k]; });
@@ -268,19 +268,57 @@
     return { ran:true, pass:pass, total:total };
   }
 
+  // ── bench #2: the Titration core's headline claims (V_eq exact · pH(V_eq)=7 · the leap
+  //    across equivalence · the exact root residual · the anti-circularity indicator gap) ──
+  function titrationProof(){
+    if(!TITR) return { ran:false, pass:0, total:0 };
+    var pass = 0, total = 0;
+    var P = TITR.preset('M01'), ve = TITR.Veq(P), KW = TITR.KW, D = TITR.DROP_ML;
+    function chk(c){ total++; if(c) pass++; }
+    chk(Math.abs(ve - 25.0) <= 1e-12);                                   // V_eq exact
+    chk(Math.abs(TITR.pH(ve, P) - 7) <= 1e-9);                           // pH at equivalence = 7.000…
+    chk(TITR.pH(ve - D, P) < 7);                                         // one drop before < 7
+    chk(TITR.pH(ve + D, P) > 9.9 && TITR.pH(ve + D, P) < 10);            // one drop after, honest leap
+    // the true machine-class identity: the quadratic residual is ~0 over the whole curve
+    var worst = 0;
+    for(var V = 0; V <= 50; V += 0.5){ var h = TITR.hPlus(V, P); var d = (P.Ca*P.Va - P.Cb*V)/(P.Va+V);
+      worst = Math.max(worst, Math.abs(h*h - d*h - KW)); }
+    chk(worst <= 5e-18);
+    // anti-circularity: the indicator endpoint is past V_eq and depends on 8.2 ≠ 7
+    var endp = TITR.endpointV(P), endp7 = TITR.endpointV(P, 7);
+    chk(endp > ve && (endp - ve) > 1e-4 && Math.abs(endp7 - ve) < (endp - ve)/100);
+    chk(TITR.INDICATOR_PH !== 7);
+    // the grade cannot lie: back-solve at a true endpoint recovers Ca to machine ε
+    chk(Math.abs(TITR.backSolveCa({ Vend: ve, Cb: P.Cb, Va: P.Va }) - P.Ca) <= 1e-12);
+    return { ran:true, pass:pass, total:total };
+  }
+
+  // combine both live benches into the wing-level math attestation
+  function benchMathProof(){
+    var b = balancerProof(), t = titrationProof();
+    var ranCount = (b.ran ? 1 : 0) + (t.ran ? 1 : 0);
+    return { ran: b.ran || t.ran, benches: ranCount,
+      pass: b.pass + t.pass, total: b.total + t.total };
+  }
+
   function runSelfTest(){
     var checks = [];
     function ck(name, ok){ checks.push({ name: name, ok: !!ok }); }
 
     var benches = Array.from(document.querySelectorAll('a.vial.bench'));
-    ck('exactly one live bench card', benches.length === 1);
-    var href = benches.length ? benches[0].getAttribute('href') : null;
-    ck('bench link is bare-relative (no leading "/", no scheme)',
-       !!href && href.charAt(0) !== '/' && !/^[a-z]+:/i.test(href) && href.indexOf('index.html') >= 0);
-    ck('bench link points at the Reaction Balancer', href === 'reaction-balancer/index.html');
+    ck('exactly two live bench cards', benches.length === 2);
+    // every live bench link is bare-relative (no leading "/", no scheme) + points at an index.html
+    ck('every bench link is bare-relative (no leading "/", no scheme)',
+       benches.every(function(b){ var h = b.getAttribute('href');
+         return !!h && h.charAt(0) !== '/' && !/^[a-z]+:/i.test(h) && h.indexOf('index.html') >= 0; }));
+    var hrefs = benches.map(function(b){ return b.getAttribute('href'); });
+    ck('the Reaction Balancer bench link points at reaction-balancer/index.html',
+       hrefs.indexOf('reaction-balancer/index.html') >= 0);
+    ck('the Titration bench link is bare-relative & points at titration/index.html',
+       hrefs.indexOf('titration/index.html') >= 0);
 
     var planters = Array.from(document.querySelectorAll('.vial.empty'));
-    ck('four empty planters for the next chapters', planters.length === 4);
+    ck('three empty planters for the next chapters', planters.length === 3);
     ck('every planter names where the wing grows',
        planters.every(function(p){ var t = p.querySelector('.vtitle'); return t && t.textContent.trim().length > 0; }));
 
@@ -301,18 +339,18 @@
     // no nested anchors anywhere (the front-door survey is strict about <a a>)
     ck('no nested anchors', document.querySelectorAll('a a').length === 0);
 
-    // ── the WING-LEVEL math claim: the live bench's core proves its library ──
+    // ── the WING-LEVEL math claim: each live bench's core proves its own claims ──
     var bench = benchMathProof();
-    if(bench.ran) ck('the Reaction Balancer core proves its library (' + bench.pass + '/' + bench.total + ')',
+    if(bench.ran) ck('both live benches’ cores prove their claims (' + bench.pass + '/' + bench.total + ')',
                      bench.pass === bench.total && bench.total > 0);
 
     var pass = checks.filter(function(c){ return c.ok; }).length, total = checks.length;
     var node = document.getElementById('selftest');
     var allOk = pass === total;
     node.className = 'selftest ' + (allOk ? 'ok' : 'bad');
-    // the pill speaks the wing's shape: "1 bench · N/N ✓" when the bench math is attested,
+    // the pill speaks the wing's shape: "2 benches · M/M ✓" when the bench math is attested,
     // else just the structural tally (off file://, where the module import is blocked).
-    node.textContent = (bench.ran ? '1 bench · ' + bench.pass + '/' + bench.total : pass + '/' + total) + (allOk ? ' ✓' : ' ✗');
+    node.textContent = (bench.ran ? bench.benches + ' bench' + (bench.benches === 1 ? '' : 'es') + ' · ' + bench.pass + '/' + bench.total : pass + '/' + total) + (allOk ? ' ✓' : ' ✗');
     node.title = (allOk ? 'The Alchemy Lab is whole: ' : 'Failing: ') +
       checks.filter(function(c){ return allOk || !c.ok; }).map(function(c){ return c.name; }).join(' · ');
     node.onclick = function(){ alert('The Alchemy Lab — landing self-test ' + pass + '/' + total + '\n\n' +
