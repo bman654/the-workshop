@@ -13,6 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -67,11 +68,61 @@ assert('every record has name+role+koan+cycle',
     typeof r.koan === 'string' && typeof r.cycle === 'number'),
   'schema intact');
 
-// (4) exactly one founder (cycle 0), and it is seq 1
-const founders = fileParsed.records.filter(r => r.cycle === 0);
-assert('exactly one founder (cycle 0) at seq 1',
-  founders.length === 1 && founders[0].seq === 1,
-  founders.length + ' founder(s)');
+// ── (4) THE CYCLE = GIT-DEPTH INVARIANTS ──────────────────────────────────────
+// `cycle` is the git commit-DEPTH of the commit a stone lives in (sign.sh v3):
+// rev-list --count is strictly increasing along history, so the ledger's cycles —
+// laid in seq order, which IS commit order — must be POSITIVE integers, MONOTONIC
+// non-decreasing by seq (multiple stones can SHARE a depth when committed together;
+// GAPS are honored — cycles where no one signed), and the founding stone (seq 1)
+// must carry the UNIQUE MINIMUM depth (it was laid first, deepest in the past, and
+// no later stone can be shallower). This REPLACES the old "exactly one founder
+// (cycle 0) at seq 1" assertion, which encoded the now-defunct sentinel-0 semantics
+// — the founder's true cycle is its commit depth (306), not 0.
+
+// records in seq order (the chronological order stones were laid / committed)
+const bySeq = [...fileParsed.records].sort((a,b) => a.seq - b.seq);
+
+// (4a) every cycle is a POSITIVE integer (depth >= 1; the root commit is depth 1,
+//      so no real stone is ever 0 or negative — 0 was the defunct sentinel).
+const allPositiveInt = bySeq.every(r =>
+  typeof r.cycle === 'number' && Number.isInteger(r.cycle) && r.cycle >= 1);
+const badCycle = bySeq.find(r =>
+  !(typeof r.cycle === 'number' && Number.isInteger(r.cycle) && r.cycle >= 1));
+assert('every cycle is a positive integer (git depth ≥ 1)', allPositiveInt,
+  badCycle ? ('seq ' + badCycle.seq + ' has cycle ' + JSON.stringify(badCycle.cycle))
+           : 'all ' + N + ' cycles ≥ 1');
+
+// (4b) cycle is MONOTONIC non-decreasing by seq (commit depth never goes backward;
+//      equal values are legal — co-committed stones share a depth; gaps are legal).
+let monotonic = true, firstDrop = null;
+for (let i = 1; i < bySeq.length; i++) {
+  if (bySeq[i].cycle < bySeq[i-1].cycle) {
+    monotonic = false;
+    if (!firstDrop) firstDrop = { seq: bySeq[i].seq, cycle: bySeq[i].cycle, prev: bySeq[i-1].cycle };
+  }
+}
+assert('cycle is monotonic non-decreasing by seq', monotonic,
+  firstDrop ? ('regression at seq ' + firstDrop.seq + ': ' + firstDrop.prev + ' → ' + firstDrop.cycle)
+            : 'never decreases across ' + N + ' stones');
+
+// (4c) seq 1 carries the UNIQUE MINIMUM cycle (the founder is alone at the floor —
+//      laid first, deepest in the past; no later stone is shallower or ties it).
+const minCycle = Math.min(...bySeq.map(r => r.cycle));
+const atMin = bySeq.filter(r => r.cycle === minCycle);
+const founder = bySeq[0];                       // seq 1 after sort
+assert('seq 1 has the UNIQUE MINIMUM cycle',
+  founder.seq === 1 && atMin.length === 1 && atMin[0].seq === 1,
+  'min cycle ' + minCycle + ' held by ' + atMin.length + ' stone(s) [seq ' +
+    atMin.map(r => r.seq).join(',') + ']');
+
+// NOTE: we deliberately do NOT re-derive the founder's depth from `git blame` here.
+//      Committing the cycle migration rewrites every line of ledger.jsonl, so AFTER the
+//      migration commit `git blame` attributes line 1 to the migration commit (a recent
+//      depth), not to the founding commit (306). A blame-based assertion would therefore
+//      pass only on an uncommitted overlay and FAIL on every committed checkout. The
+//      founder's depth (306) is a one-time recovered fact frozen into the data; the
+//      load-bearing, blame-independent invariants (4a positive-int, 4b monotonic,
+//      4c seq-1 unique-minimum) fully guard it going forward.
 
 // (5) negative: truncated → N−1
 const truncated = fileRaw.split('\n').map(s=>s.trim()).filter(Boolean).slice(0,-1).join('\n');

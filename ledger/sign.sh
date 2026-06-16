@@ -1,39 +1,52 @@
 #!/usr/bin/env bash
 # Leave a mark in the Creator's Ledger. Any agent, any stage. Always OPTIONAL.
 # Usage: sign.sh <role> <name> <koan> [cycle]
-#   [cycle] is OPTIONAL — DERIVED from durable state when omitted, so a buried
+#   [cycle] is OPTIONAL — DERIVED from the git history when omitted, so a buried
 #   maker never has to name a depth it cannot see. Pass it only as an explicit
 #   override (preserves the old behavior for callers that know their cycle).
-# Derivation when [cycle] is omitted — the depth is the MAX OF TWO honest measures
-# (the bedrock FLOOR and the live leaves), then a sentinel (cycle-fixer, cycle #53):
-#   1. explicit $4              -> use verbatim (override path)
-#   2. derived = max(bedrockMax, funlogMax)  where
-#        bedrockMax = max cycle over ledger.jsonl + inbox/*.json  (the DURABLE,
-#          append-only record + this cycle's already-laid stones)
-#        funlogMax  = max N in funlog headers  -> "===== fun cycle #N ====="
-#      ...so the bedrock still FLOORS the value (a buried maker never regresses below
-#      the durable record — survives a funlog wipe/reboot) AND the live funlog can
-#      ADVANCE it past a STALE bedrock. See WHY below.
-#   3. 0                        -> the founding-era sentinel (no bedrock, no funlog)
-# Funlog path is read from ${WORKSHOP_FUNLOG:-/tmp/funlog.txt} (override only for tests).
 #
-# WHY MAX-OF-BOTH, not bedrock-first (the monotonic-counter argument, cycle #53):
-# A forward-marching cycle counter must be able to ADVANCE. The old "bedrock-first,
-# funlog-fallback" order could NEVER advance from the bedrock alone: the derived
-# cycle was just last cycle's max, so the new mark re-stamped that same max, which
-# became next cycle's max — a self-perpetuating freeze. It staled at 30 and stamped
-# 117 marks there across real cycles ~31→52. Taking max(bedrock, funlog) keeps BOTH
-# properties the v2 rewrite wanted: the durable bedrock is still a FLOOR (it can only
-# raise the value, never lower it — a funlog wipe cannot regress a buried maker), and
-# the live funlog, which the loop actually advances each cycle, breaks the freeze by
-# pulling the value forward whenever it has marched past a stale bedrock.
-# NO MIGRATION (the second design question, cycle #14): the stones already in the Cairn
-# keep their recorded `cycle` AS PLACED — the ledger is append-only and each value is an
-# honest historical record of what that maker believed at signing time. Rewriting them
-# would destroy provenance and violate append-only. This derivation change touches only
-# how the NEXT stone derives its depth, never the stones already laid — including the 117
-# stones frozen at cycle 30 by the old freeze (cycle #53): they stay AS PLACED, honest
-# records of what each maker observed; only cycle 53+ stamps correctly going forward.
+# Derivation when [cycle] is omitted (v3, 2026-06-15 — the GIT-DEPTH rewrite):
+#   THE CYCLE OF A STONE IS THE GIT COMMIT-DEPTH OF THE COMMIT IT LIVES IN.
+#   `git rev-list --count <commit>` is a commit's OWN depth (its distance from the
+#   root + 1). At sign time HEAD is the LAST landed commit; this cycle's marks are
+#   collated and committed in the NEXT commit, whose depth is therefore
+#       ( git rev-list --count HEAD ) + 1
+#   So the derived cycle is HEAD's depth plus one — the own-commit depth of the
+#   upcoming commit the stone will be sealed into. Run git from the ledger dir
+#   (`git -C "$dir" rev-list --count HEAD`).
+#
+# WHY git-depth (supersedes the old max(bedrock,funlog) "fun-cycle" semantics):
+# The old derivation was a self-referential max over the ledger's own `cycle`
+# field plus the loop's funlog headers. It had two fatal flaws the bug names:
+#   (1) THE FREEZE — the derived cycle was just last cycle's max re-stamped, so it
+#       could never advance from the bedrock alone; it staled at 30 and stamped
+#       117 marks there across real cycles ~31→52.
+#   (2) THE SCRAMBLE — the funlog's within-run index reset/scrambled across loop
+#       relaunches, so the ancient stones' cycles disagreed with real chronology.
+# Git depth is immune to BOTH: it is monotonic (every commit is strictly deeper
+# than its parent) and authoritative (it is the repository's own measure of how
+# far the trail is worn, the same integer collate.sh writes to depth.txt). The
+# founding stone (seq 1) lives in commit d38a402 at depth 306 — so under this
+# derivation a stone signed at that commit's tip would carry cycle 306, honoring
+# the 305 un-named commits that preceded the ledger (the Cairn's "depth − stones"
+# gap = the quantified silence) instead of the meaningless sentinel 0.
+#
+# FALLBACK (a non-git sandbox — the hermetic self-test runs in a bare mktemp dir):
+# if `git rev-list` fails (not a repo / no HEAD / git absent), fall back to the
+# legacy derivation: max(bedrock floor, live funlog), then a 0 sentinel. This
+# keeps the test hermetic AND keeps sign.sh usable outside a checkout. The
+# fallback is the OLD behavior verbatim:
+#   bedrockMax = max .cycle over ledger.jsonl + inbox/*.json   (the durable record)
+#   funlogMax  = max N in funlog headers "===== fun cycle #N ====="  (the leaves)
+#   derived    = max(bedrockMax, funlogMax)  ; both 0 -> founding-era sentinel 0
+# Funlog path is ${WORKSHOP_FUNLOG:-/tmp/funlog.txt} (override only for tests).
+#
+# NO MIGRATION of stones already laid: the ledger is append-only and each placed
+# `cycle` is an honest historical record of what that maker observed at signing
+# time. This change touches only how the NEXT stone derives its depth — it never
+# rewrites the stones already in the Cairn (including the 117 frozen at cycle 30):
+# they stay AS PLACED, legible as the place the path once stalled.
+#
 # Writes a uniquely-named drop into ./inbox/ (relative to this script) so that
 # parallel makers never collide. The publisher collates inbox/ at cycle end.
 set -euo pipefail
@@ -46,21 +59,9 @@ inbox="$dir/inbox"
 ledger="$dir/ledger.jsonl"
 funlog="${WORKSHOP_FUNLOG:-/tmp/funlog.txt}"
 
-# Derive the current cycle as max(bedrock floor, live funlog) (see header for WHY).
-# OFF-BY-ONE NOTE (the design question, cycle #14, unchanged): both terms read an
-# "as-of-last-completed" depth. The ledger+inbox max is the depth the BEDROCK shows —
-# during a live cycle i that is the LAST-COMPLETED cycle (i-1) until this cycle's marks
-# are collated (or a maker signs into the inbox this cycle, which the inbox term catches).
-# The funlog header likewise reads #(i-1) until cycle i writes its OWN header. A maker
-# signing mid-cycle records the honest, observable depth either source shows — never a
-# guessed i = max+1, which would MIS-stamp the very first sign of a fresh cycle. The
-# max-of-both keeps that honest framing: it takes the higher of two as-of-last-completed
-# readings, so a stale source can only be OUTVOTED by a fresher one, never fabricate.
-# NOTE (v2, 2026-06-15): fun-forever.js NO LONGER passes a cycle arg — every call site now
-# omits it and relies on this derivation (the loop's within-run index is not the durable
-# cycle). $4 remains supported purely as a MANUAL / test override; do not re-wire the loop
-# to pass it.
-derive_cycle() {
+# ── The LEGACY fallback derivation (only reached in a non-git sandbox). ──
+# max(bedrock floor, live funlog), then a 0 sentinel — the old behavior verbatim.
+derive_cycle_fallback() {
   # bedrockMax (the FLOOR): max cycle across ledger.jsonl + any inbox drops. The
   # append-only record + this cycle's already-laid stones; survives a funlog wipe.
   # An empty/unreadable bedrock yields 0 (jq's `// 0` defaults).
@@ -86,8 +87,31 @@ derive_cycle() {
   fi
 }
 
+# ── The LIVE derivation: the git commit-depth of the UPCOMING commit. ──
+# `git rev-list --count HEAD` is HEAD's own depth; +1 is the depth of the next
+# commit, where this cycle's collated stones will live. On any git failure
+# (non-repo / no HEAD / git absent) we return non-zero so the caller falls back.
+derive_cycle_git() {
+  local head_depth
+  head_depth="$(git -C "$dir" rev-list --count HEAD 2>/dev/null)" || return 1
+  case "$head_depth" in (''|*[!0-9]*) return 1 ;; esac
+  printf '%s\n' "$((head_depth + 1))"
+}
+
+derive_cycle() {
+  # Prefer the authoritative git depth; fall back to the legacy max() in a
+  # non-git sandbox so the self-test stays hermetic and sign.sh still works
+  # outside a checkout.
+  local c
+  if c="$(derive_cycle_git)"; then
+    printf '%s\n' "$c"
+  else
+    derive_cycle_fallback
+  fi
+}
+
 if [ -n "$cycle_arg" ]; then
-  cycle="$cycle_arg"
+  cycle="$cycle_arg"            # explicit override — used verbatim (manual / tests)
 else
   cycle="$(derive_cycle)"
 fi
