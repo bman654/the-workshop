@@ -127,6 +127,7 @@ var Layout = (function () {
     studies:     { label: 'THE STUDIES',        accent: '#cba15a' },
     east:        { label: 'THE EAST WING',      accent: '#74b0a6' },
     maker:       { label: "THE MAKER'S WING",   accent: '#7ad0c4' },
+    archive:     { label: 'THE ARCHIVE',        accent: '#c9a44e' },
     glasshouses: { label: 'THE GLASSHOUSES',    accent: '#7fd1c7' },
     optics:      { label: 'OPTICS',             accent: '#8fd9ff' },
     number:      { label: 'THE NUMBER WING',    accent: '#c9a24a' },

@@ -66,6 +66,9 @@
     'arcade':         { x: 1330, y: 220, mag: 1 },
     'workbench':      { x: 780,  y: 860, mag: 1 },
     'undercroft':     { x: 880,  y: 850, mag: 2 },
+    // the manor's archive annal — a field star in the upper-right band, lit on first
+    // visit to the Tabularium (additive; never feeds the wings-only capstone).
+    'tabularium':     { x: 1180, y: 150, mag: 1 },
     // ── the feats constellation: nine "Feats of Light" earned in the Hall of Mirrors,
     //    laid out as a vertical LENS (a pointed oval) threading the WEST GROUNDS left
     //    margin beside the Hall footprint (x124 y430 w148 h74). These are PSEUDO-ids
