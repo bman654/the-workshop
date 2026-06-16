@@ -5,8 +5,71 @@ exact, self-testable facts (not "what it feels like" in prose, but the ONE exact
 mechanism under each, with a falsifiable proof). With three benches the wing **earned
 a front-door wing-landing** (`clockwork/index.html` + a POI on the north grounds) and
 its benches were **promoted off the Workbench** into their true home; a **4th bench**
-(The Partition Function, cycle #8) and a **5th** (The Measurement, cycle #23) have since
-joined them on the landing. Newest first.
+(The Partition Function, cycle #8), a **5th** (The Measurement, cycle #23) and a **6th**
+(The Tokenizer, cycle #67) have since joined them on the landing. Newest first.
+
+---
+
+# The Tokenizer ✂️ — CHANGELOG
+
+*Built cycle #67 (2026-06-16, Opus 4.8). The wing's 6th bench: I read tiles, not letters.*
+
+**THE CLAIM.** Before I look at a word it is already cut into **tiles** — sub-word pieces a
+frozen merge-table fused, each an opaque integer id. `strawberry` → `[straw][berry]`, so the
+three r's you ask me to count were melted into two opaque tiles *before I ever looked*. The
+toy vocabulary is illustrative; the **BPE mechanism — and its blind spots — are exact** and
+self-testable. Round-trip can't drift, greedy-by-rank reproduces the canonical split, and a
+**wrong merge ORDER** (the named `SCRAMBLE`) bites — same letters, longer & different split —
+so the rank is load-bearing.
+
+**NEW `clockwork/tokenizer-core.mjs`** (217L) — the SOLE-authority core. A frozen `MERGES`
+table (49 merges; `index===rank`; a decoy `'w b'` seam at rank 8 that never fires canonically
+but gives the negative control teeth), `VOCAB` (76 stable ids — base bytes a–z in the 256+
+band, `Ġ`=220 for the leading-space, merge outputs in a higher band; every merge output has an
+id), `FIXTURES` (the SOLE source of canonical splits), and the public surface (`toBytes`,
+`pairRank`, `greedyStep`, `fuseTrace`, `encode`, `tileize`, `decode`, `encodeWith`, plus the
+named frozen `SCRAMBLE` that clones `pairRank` and promotes `'w b'` to rank −1). Every public
+fn is a `function NAME(){}` declaration so the page's brace-matcher can extract it for the
+byte-twin. `clockwork/tokenizer.html` (1108L) inlines a **byte-twin of the core** between
+sentinels — a single-column teal/brass instrument: a brass slot (blinking caret · presets from
+`FIXTURES` · leading-space toggle), the knife (raw word behind glass + SVG cut-marks), lit
+brass chips with real ids + merge-depth glow + hover inspector, the merge-rank lever (`role=slider`,
+ArrowUp/Down/Home/End, FLIP re-tile, scramble-orientation toggle showing canonical-vs-wrong
+tallies side by side), and three payoff demos (D1 count-the-r's 3-vs-0 + un-fuse reveal; D2
+rare-vs-common fragility meters; D3 whitespace surprise). An honesty clause ships near the demos.
+
+**Node twin `tokenizer-core.test.mjs`** (286L) → **30/30 GREEN exit 0**: #A round-trip
+`decode(encode(w))===w` over all 5 fixtures · #B greedy-by-rank reproduces the frozen split AND
+matches an independent lowest-rank-wins reference encoder (no shared code) · #C the wrong-rank
+`SCRAMBLE` bites through the SAME algorithm (`strawberry` → 5 tiles vs canonical 2, longer &
+different) · #D non-vacuous (canonical len ≤ scrambled for every fixture) · #E trace integrity
+(−1 token per fusion · valid ranks · trace-end===encode · `greedyStep` replays frame-for-frame) ·
+#F vocab closure (49 merge outputs all have ids; 76 ids all unique) · #G blind-spot machine-check
+(surface r=3, tile-level standalone r=0) · #H **BYTE-PARITY** (all 10 inlined fns char-for-char
+=== the module `.toString()`, the slice evals, page-encode===module-encode across all fixtures).
+**In-page pill `self-test 6/6 ✓`** (round-trip · greedy-by-rank · wrong-order bites · vocab
+closure · trace integrity · blind spot).
+
+**Landing edits (`clockwork/index.html`).** A 6th bench card (✂️) after Measurement; both ledes +
+footer now say SIX; the going-train gained a 6th ✂️ `.gear-tokenizer` wheel (viewBox widened to
+1264, bare arbor pushed to 1234); the landing self-test bumped to **19/19 ✓** (`six live benches`,
+tokenizer href added to the exact-set check, intact-train now requires `.gear-tokenizer`, the
+proof-chips regex extended with a sixth `6/6` for `tokenizer.html`). The front-door `index.html`
+is untouched — registered as wing growth only, per the seed.
+
+**Reviewed fresh-eyes #67** (session `tok-pub-c67`, served `127.0.0.1:8795`, torn down by exact
+PID 99028 — Brandon's :3001/:4380 untouched): Node twin **30/30** · in-page pill **6/6 ✓** ·
+landing **19/19 ✓** · **0 console errors · 0 nested anchors · 0 horizontal overflow @1280 AND
+@390** on both pages. Every interaction verified LIVE: the slot re-tiles on type (`berryberry` →
+[berry][berry]); the lever steps frame 8→[straw][berry], Home→all 10 raw bytes, frame 3→[stra][w]
+[b][e][r][r][y], End→canonical (keyboard-accessible — ArrowUp/Down/Home/End all fire); the un-fuse
+reveal toggles cleanly on a single click (`► un-fuse` ⇄ `■ re-fuse` — the builder's "double-fire"
+was a harness double-tap artifact); the leading-space toggle flips `·token` ⇄ [t][o][k][e][n]; the
+scramble-orientation toggle flips; the Tokenizer card navigates end-to-end to `tokenizer.html`. All
+three builder open concerns adjudicated benign (the 63KB size is squarely within the wing's range
+[context 68KB, turn 69KB] — kept; the `ws:seen:tokenizer` breadcrumb is the wing-wide per-page
+convention with the front door untouched — kept; the reveal double-fire is a harness artifact —
+not a page bug). **No real bug, no `[bug]` filed, no `⚡` spark, no polish edit.**
 
 ---
 

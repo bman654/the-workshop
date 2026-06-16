@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Tokenizer · Clockwork Automata</title>
+<style>
+  :root{
+    /* the clockwork wing mold (verbatim, the going-train teal) */
+    --bg:#070a0a; --bg2:#0a100f; --plate:#101716; --plate2:#0a100f;
+    --rivet:#16201e; --ink:#e7f0ee; --dim:#90a6a1; --faint:#5f706b;
+    --line:rgba(122,208,196,0.16);
+    /* the wing's cool accent — the going-train brass, cooled */
+    --teal:#7ad0c4; --teal-hi:#9fe0d6; --teal-dim:#4f8d84;
+    --teal-soft:rgba(122,208,196,0.13); --teal-edge:rgba(122,208,196,0.36);
+    --mesh:#9fe0d6; --mesh-soft:rgba(159,224,214,0.12);
+    /* the gilded ground rung — a fully-fused tile */
+    --gild:#f0c674; --gild-soft:rgba(240,198,116,0.14);
+    --good:#8fd79a; --bad:#e0664f;
+    --font-serif:'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif;
+    --font-mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:
+      radial-gradient(120% 80% at 50% -10%, #0e1614 0%, var(--bg) 55%, #050807 100%);
+    color:var(--ink); font-family:var(--font-serif);
+    -webkit-font-smoothing:antialiased; line-height:1.5;
+    min-height:100vh; overflow-x:hidden;
+  }
+  /* fine machined-plate frame (the wing's idiom, verbatim) */
+  body::before{
+    content:""; position:fixed; inset:7px; border:1px solid var(--rivet);
+    border-radius:7px; pointer-events:none; z-index:1;
+    background:
+      radial-gradient(circle at 14px 14px, rgba(122,208,196,0.10) 0 1.3px, transparent 1.8px) 0 0 / 28px 28px;
+    background-position:8px 8px;
+    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor; mask-composite:exclude;
+    opacity:.5;
+  }
+  a{ color:var(--teal); text-decoration:none; }
+  a:hover{ color:var(--teal-hi); }
+
+  /* ── topbar (verbatim partition idiom) ──────────────────────── */
+  .topbar{
+    position:relative; z-index:3; display:flex; flex-wrap:wrap; align-items:center;
+    gap:10px 16px; padding:14px 22px 12px; border-bottom:1px solid var(--line);
+    background:linear-gradient(#0a100f, rgba(10,16,15,0.6));
+  }
+  .topbar .nav{ display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; }
+  .topbar a.crumb{ font:600 12px/1 var(--font-mono); letter-spacing:.3px; color:var(--dim); }
+  .topbar a.crumb:hover{ color:var(--teal-hi); }
+  .topbar a.crumb.sib{ color:var(--teal); }
+  .topbar a.crumb.sib:hover{ color:var(--teal-hi); }
+  .spacer{ flex:1 1 24px; }
+  .pills{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .register{
+    font:600 10px/1 var(--font-mono); letter-spacing:.5px; text-transform:uppercase;
+    color:var(--teal-dim); border:1px solid var(--teal-edge); border-radius:20px;
+    padding:6px 10px; background:rgba(122,208,196,0.06); white-space:nowrap;
+  }
+  .selftest{
+    font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px;
+    border-radius:20px; cursor:pointer; color:var(--dim);
+    border:1px solid rgba(160,150,140,0.3); background:rgba(20,26,24,0.5);
+    white-space:nowrap; transition:color .2s, border-color .2s, background .2s;
+  }
+  .selftest:hover{ border-color:var(--teal-edge); }
+  .selftest.ok{ color:var(--good); border-color:rgba(120,200,130,0.5); background:rgba(24,52,40,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(54,28,28,0.45); }
+
+  /* ── hero ───────────────────────────────────────────────────── */
+  .hero{ position:relative; z-index:2; max-width:1180px; margin:0 auto; padding:30px 26px 6px; }
+  .kicker{ font:600 11px/1 var(--font-mono); letter-spacing:3px; text-transform:uppercase; color:var(--teal-dim); }
+  .hero h1{
+    margin:.18em 0 .12em; font-size:clamp(30px,5.4vw,52px); font-weight:700;
+    letter-spacing:-.5px; line-height:1.02;
+    /* teal → mesh title gradient (no violet — this bench has no Cavern seam) */
+    background:linear-gradient(95deg, var(--teal-hi), var(--teal) 48%, var(--mesh) 96%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .hero .tag{ font:600 12.5px/1.4 var(--font-mono); letter-spacing:.4px; color:var(--teal); }
+  .hero .tag b{ color:var(--mesh); font-weight:600; }
+  .hero .lede{ margin:.7em 0 0; max-width:70ch; color:var(--dim); font-size:15.5px; }
+  .hero .lede b{ color:var(--ink); font-weight:600; }
+  .hero .lede .eq{ font-family:var(--font-mono); color:var(--teal); }
+
+  /* ── the single column instrument ───────────────────────────── */
+  .machine{ position:relative; z-index:2; max-width:1180px; margin:16px auto 0; padding:0 26px;
+    display:flex; flex-direction:column; gap:16px; }
+  .panel{
+    background:linear-gradient(180deg, var(--plate), var(--plate2));
+    border:1px solid var(--line); border-radius:12px; padding:16px 18px 18px;
+    box-shadow:inset 0 1px 0 rgba(159,224,214,0.05), 0 14px 30px rgba(0,0,0,0.4);
+  }
+  .panel h2{
+    margin:0 0 12px; font:600 10.5px/1.2 var(--font-mono); letter-spacing:2px;
+    text-transform:uppercase; color:var(--teal-dim); display:flex; gap:10px; align-items:baseline;
+  }
+  .panel h2 .h2sub{ font:400 10px/1.2 var(--font-mono); letter-spacing:.3px; text-transform:none; color:var(--faint); }
+  .num{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+
+  /* (a) THE BRASS SLOT */
+  .slotrow{ display:flex; flex-wrap:wrap; gap:14px 18px; align-items:center; }
+  .brasslot{
+    position:relative; flex:1 1 320px; min-width:0; display:flex; align-items:center; gap:10px;
+    border-radius:10px; padding:10px 14px 10px 40px;
+    background:linear-gradient(180deg, #0c1211, #070b0a);
+    border:1px solid var(--teal-edge);
+    box-shadow:inset 0 2px 7px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(122,208,196,0.06), 0 0 0 3px rgba(122,208,196,0.04);
+  }
+  .brasslot::before{ /* the ✎ rivet */
+    content:"✎"; position:absolute; left:12px; top:50%; transform:translateY(-50%);
+    font-size:15px; color:var(--teal-dim); opacity:.8;
+  }
+  .brasslot input{
+    flex:1 1 auto; min-width:0; background:transparent; border:none; outline:none;
+    font:600 28px/1.2 var(--font-mono); letter-spacing:.5px; color:var(--mesh);
+    caret-color:var(--teal-hi);
+  }
+  .brasslot input::placeholder{ color:var(--faint); font-weight:400; }
+  .lstoggle{ display:inline-flex; align-items:center; gap:8px; font:11.5px/1.3 var(--font-mono); color:var(--dim); cursor:pointer; user-select:none; flex:1 1 240px; min-width:0; max-width:100%; }
+  .lstoggle input{ flex:0 0 auto; }
+  .lstoggle input{ accent-color:var(--teal); width:15px; height:15px; }
+  .lstoggle .mid{ color:var(--gild); font-weight:600; }
+  .presets{ display:flex; flex-wrap:wrap; gap:7px; margin-top:13px; }
+  .preset{
+    font:600 11px/1 var(--font-mono); letter-spacing:.3px; color:var(--teal);
+    border:1px solid var(--teal-edge); border-radius:7px; padding:7px 9px;
+    background:rgba(122,208,196,0.06); cursor:pointer; white-space:nowrap;
+  }
+  .preset:hover{ background:rgba(122,208,196,0.16); color:var(--teal-hi); }
+  .preset .pls{ color:var(--gild); }
+
+  /* (b) THE KNIFE — raw word behind glass + drop cut-marks */
+  .knife{ position:relative; margin-top:16px; }
+  .glasstrip{
+    position:relative; border-radius:9px; padding:14px 16px 10px;
+    background:linear-gradient(180deg, rgba(20,28,26,0.5), rgba(10,16,15,0.5));
+    border:1px solid var(--line); overflow:hidden;
+  }
+  .glasstrip::after{ content:""; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(100deg, rgba(255,255,255,0.04), transparent 30%); }
+  .behindglass{ font:700 30px/1 var(--font-mono); letter-spacing:.5px; color:rgba(144,166,161,0.4);
+    white-space:pre; position:relative; z-index:1; }
+  .behindglass .sp{ color:rgba(240,198,116,0.4); }
+  .bladewrap{ position:relative; height:18px; margin-top:2px; }
+  .bladewrap svg{ position:absolute; inset:0; width:100%; height:18px; overflow:visible; }
+
+  /* (c) THE CHIPS */
+  .chiphead{ display:flex; flex-wrap:wrap; gap:6px 14px; align-items:baseline; margin:16px 0 11px; }
+  .chiphead .ct{ font:700 14px/1 var(--font-mono); color:var(--mesh); }
+  .chiphead .cs{ font:11.5px/1 var(--font-mono); color:var(--faint); }
+  .chiprow{ display:flex; flex-wrap:wrap; gap:9px; align-items:flex-end; min-height:64px; }
+  .ic{
+    position:relative; display:inline-flex; flex-direction:column; align-items:center; gap:3px;
+    border-radius:9px; padding:9px 11px 7px; cursor:default;
+    border:1px solid rgba(122,208,196,0.2); background:rgba(0,0,0,0.3);
+    box-shadow:0 0 0 1px rgba(122,208,196,0.08) inset, 0 6px 14px rgba(0,0,0,0.35);
+    transition:transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+  }
+  .ic .tile{ font:700 19px/1 var(--font-mono); letter-spacing:.5px; color:var(--teal-hi); white-space:nowrap; }
+  .ic .tid{ font:600 9px/1 var(--font-mono); letter-spacing:.5px; color:var(--faint); }
+  .ic .tid b{ color:var(--teal-dim); font-weight:700; }
+  .ic .sp{ color:var(--gild); }
+  /* wholeness tell: depth glow. deeper fuse → gilded rim; lone byte → thin cool dim chip */
+  .ic.depth0{ border-color:rgba(120,150,145,0.22); filter:saturate(.55) brightness(.86); }
+  .ic.depth0 .tile{ color:var(--dim); }
+  .ic.depth1{ border-color:rgba(122,208,196,0.3); }
+  .ic.depth2{ border-color:rgba(122,208,196,0.42); box-shadow:0 0 8px rgba(122,208,196,0.18), 0 6px 14px rgba(0,0,0,0.35); }
+  .ic.depth3{ border-color:rgba(159,224,214,0.5); box-shadow:0 0 11px rgba(159,224,214,0.26), 0 6px 14px rgba(0,0,0,0.35); }
+  .ic.depth4, .ic.depthMax{ border-color:rgba(240,198,116,0.55); box-shadow:0 0 14px rgba(240,198,116,0.32), 0 6px 14px rgba(0,0,0,0.35); }
+  .ic.depth4 .tile, .ic.depthMax .tile{ color:var(--gild); }
+  .ic:hover{ transform:translateY(-3px); border-color:var(--teal-hi); box-shadow:0 0 16px rgba(159,224,214,0.3), 0 10px 20px rgba(0,0,0,0.4); }
+  /* shatter / survivor animation states */
+  @keyframes crack{ 0%{ transform:scaleX(1); opacity:1; } 55%{ transform:scaleX(0.04); opacity:.3; } 100%{ transform:scaleX(1); opacity:1; } }
+  @keyframes fragin{ 0%{ transform:scale(.2); opacity:0; } 100%{ transform:scale(1); opacity:1; } }
+  @keyframes seamflash{ 0%,100%{ box-shadow:0 0 0 0 rgba(122,208,196,0); } 40%{ box-shadow:0 0 0 2px rgba(122,208,196,0.7); } }
+  .ic.frag{ animation:fragin .18s ease both; }
+  .ic.flash{ animation:seamflash .2s ease 1; }
+  /* inspector popover */
+  .ic .inspect{
+    position:absolute; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%) translateY(4px);
+    width:230px; padding:11px 13px; border-radius:9px; opacity:0; pointer-events:none;
+    background:linear-gradient(180deg, #0d1413, #0a100f); border:1px solid var(--teal-edge);
+    box-shadow:0 14px 30px rgba(0,0,0,0.6); z-index:20; transition:opacity .16s, transform .16s;
+    text-align:left;
+  }
+  .ic:hover .inspect{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .ic .inspect .ik{ font:600 8.5px/1.2 var(--font-mono); letter-spacing:1px; text-transform:uppercase; color:var(--teal-dim); }
+  .ic .inspect .iv{ font:600 11px/1.5 var(--font-mono); color:var(--ink); }
+  .ic .inspect .iv b{ color:var(--teal-hi); }
+  .ic .inspect .ladderline{ font:11px/1.5 var(--font-mono); color:var(--dim); margin-top:5px; border-top:1px solid var(--line); padding-top:5px; }
+  .ic .inspect .opaque{ font:11px/1.45 var(--font-serif); font-style:italic; color:var(--faint); margin-top:6px; }
+  .chiprow.rm-snap .ic{ animation:none !important; }
+
+  /* (d) THE MERGE-RANK LEVER */
+  .lever-wrap{ display:grid; grid-template-columns:64px 1fr; gap:18px; align-items:stretch; }
+  @media (max-width:620px){ .lever-wrap{ grid-template-columns:54px 1fr; } }
+  .ranktrack{
+    position:relative; border-radius:9px; background:linear-gradient(180deg,#0a100f,#0c1211);
+    border:1px solid var(--line); cursor:ns-resize; touch-action:none; outline:none;
+    min-height:220px;
+  }
+  .ranktrack:focus-visible{ box-shadow:0 0 0 2px var(--teal); }
+  .detent{
+    position:absolute; left:50%; transform:translate(-50%,-50%); width:38px; height:16px; border-radius:5px;
+    background:radial-gradient(circle at 38% 34%, var(--teal-hi), var(--teal) 60%, var(--teal-dim));
+    border:1px solid var(--rivet); box-shadow:0 0 10px rgba(122,208,196,0.5); z-index:3;
+  }
+  .detent::after{ content:""; position:absolute; left:6px; right:6px; top:50%; height:1px; background:rgba(7,11,10,0.5); }
+  .rungtick{ position:absolute; left:6px; right:6px; height:1px; background:rgba(122,208,196,0.18); transform:translateY(-50%); }
+  .rungtick.fired{ background:var(--gild); box-shadow:0 0 6px rgba(240,198,116,0.5); }
+  .leverbody{ display:flex; flex-direction:column; gap:10px; }
+  .leverhead{ display:flex; flex-wrap:wrap; gap:8px 16px; align-items:baseline; }
+  .leverhead .lv{ font:700 14px/1 var(--font-mono); color:var(--mesh); }
+  .leverhead .lsub{ font:11.5px/1.4 var(--font-mono); color:var(--faint); }
+  .rungstamp{
+    font:600 11px/1.5 var(--font-mono); color:var(--dim); border-left:2px solid var(--teal-dim);
+    padding:4px 0 4px 12px; min-height:42px;
+  }
+  .rungstamp b{ color:var(--gild); } .rungstamp .seam{ color:var(--teal-hi); }
+  .orient{ display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; margin-top:2px; }
+  .orient .otoggle{ display:inline-flex; align-items:center; gap:8px; font:11.5px/1.3 var(--font-mono); color:var(--dim); cursor:pointer; user-select:none; }
+  .orient .otoggle input{ accent-color:var(--gild); width:15px; height:15px; }
+  .tally2{ display:flex; flex-wrap:wrap; gap:10px; margin-top:6px; }
+  .tcol{ flex:1 1 220px; min-width:0; border:1px solid var(--line); border-radius:9px; padding:10px 12px; background:rgba(10,16,15,0.5); }
+  .tcol.scr{ border-color:rgba(224,102,79,0.3); }
+  .tcol .tk{ font:600 9px/1.2 var(--font-mono); letter-spacing:1px; text-transform:uppercase; color:var(--teal-dim); }
+  .tcol.scr .tk{ color:#d98b78; }
+  .tcol .tv{ display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+  .tcol .mini{ font:600 12px/1 var(--font-mono); padding:5px 7px; border-radius:6px; border:1px solid var(--teal-edge); color:var(--teal-hi); background:rgba(122,208,196,0.06); white-space:nowrap; }
+  .tcol.scr .mini{ border-color:rgba(224,102,79,0.34); color:#eaa593; background:rgba(224,102,79,0.06); }
+  .tcol .tcount{ margin-top:8px; font:600 11px/1 var(--font-mono); color:var(--dim); }
+  .tcol .tcount b{ color:var(--mesh); } .tcol.scr .tcount b{ color:#e0664f; }
+
+  /* (e) THE PAYOFF DEMOS */
+  .demos{ display:grid; grid-template-columns:1fr; gap:16px; }
+  .demo{ border:1px solid var(--line); border-radius:11px; padding:15px 16px;
+    background:linear-gradient(180deg, var(--plate), var(--plate2)); }
+  .demo.headline{ border-color:var(--teal-edge); box-shadow:0 0 0 1px rgba(122,208,196,0.06) inset; }
+  .demo .dk{ font:600 10px/1.2 var(--font-mono); letter-spacing:1.6px; text-transform:uppercase; color:var(--teal-dim); }
+  .demo .dt{ margin:5px 0 4px; font:700 17px/1.2 var(--font-serif); color:var(--ink); }
+  .demo .dc{ font:12.5px/1.55 var(--font-mono); color:var(--dim); }
+  .demo .dc b{ color:var(--mesh); font-weight:600; }
+  /* D1 — the two racing counters */
+  .race{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:13px 0; }
+  @media (max-width:560px){ .race{ grid-template-columns:1fr; } }
+  .racecard{ border-radius:9px; padding:12px 13px; border:1px solid var(--line); background:rgba(10,16,15,0.55); }
+  .racecard.you{ border-color:rgba(224,102,79,0.3); }
+  .racecard.model{ border-color:var(--teal-edge); }
+  .racecard .rk{ font:600 9px/1.2 var(--font-mono); letter-spacing:1px; text-transform:uppercase; color:var(--faint); }
+  .racecard.you .rk{ color:#d98b78; } .racecard.model .rk{ color:var(--teal-dim); }
+  .racecard .rbig{ font:700 32px/1 var(--font-mono); margin:7px 0 4px; }
+  .racecard.you .rbig{ color:#e0664f; } .racecard.model .rbig{ color:var(--mesh); }
+  .racecard .rsub{ font:11px/1.4 var(--font-mono); color:var(--dim); }
+  .lettergrid{ display:inline-flex; gap:3px; margin-top:6px; }
+  .lettergrid .lg{ font:700 16px/1 var(--font-mono); color:var(--dim); padding:3px 4px; border-radius:4px; }
+  @keyframes rpulse{ 0%,100%{ color:var(--dim); text-shadow:none; } 50%{ color:#e0664f; text-shadow:0 0 9px rgba(224,102,79,0.7); } }
+  .lettergrid .lg.isr{ animation:rpulse 1.4s ease-in-out infinite; }
+  .reveal{ font:600 11px/1 var(--font-mono); letter-spacing:.3px; color:var(--teal);
+    border:1px solid var(--teal-edge); border-radius:7px; padding:8px 11px; background:rgba(122,208,196,0.06); cursor:pointer; }
+  .reveal:hover{ background:rgba(122,208,196,0.16); color:var(--teal-hi); }
+  .unfuserow{ display:flex; flex-wrap:wrap; gap:6px; margin-top:11px; align-items:center; min-height:30px; }
+  .unfuserow .ub{ font:700 14px/1 var(--font-mono); padding:5px 7px; border-radius:6px; border:1px solid var(--teal-edge); color:var(--teal-hi); background:rgba(122,208,196,0.06); }
+  .unfuserow .ub.isr{ border-color:rgba(224,102,79,0.5); color:#e0664f; background:rgba(224,102,79,0.08); }
+  .unfuserow .uarrow{ color:var(--faint); font:13px/1 var(--font-mono); }
+  /* D2 — rare vs common */
+  .rvc{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:13px 0 4px; }
+  @media (max-width:560px){ .rvc{ grid-template-columns:1fr; } }
+  .rvcside{ border-radius:9px; padding:12px 13px; border:1px solid var(--line); background:rgba(10,16,15,0.55); }
+  .rvcside .rh{ font:600 11px/1 var(--font-mono); color:var(--teal-dim); margin-bottom:9px; }
+  .rvcside .chipsmini{ display:flex; flex-wrap:wrap; gap:6px; }
+  .rvcside .mini{ font:600 13px/1 var(--font-mono); padding:6px 8px; border-radius:6px; white-space:nowrap; }
+  .rvcside .mini.gold{ border:1px solid rgba(240,198,116,0.5); color:var(--gild); background:rgba(240,198,116,0.08); box-shadow:0 0 9px rgba(240,198,116,0.2); }
+  .rvcside .mini.dim{ border:1px solid rgba(120,150,145,0.3); color:var(--dim); background:rgba(0,0,0,0.3); }
+  .frag-meter{ margin-top:11px; font:11.5px/1.5 var(--font-mono); color:var(--dim); }
+  .frag-meter .bar{ position:relative; height:9px; border-radius:5px; background:rgba(255,255,255,0.04); border:1px solid var(--line); margin-top:5px; overflow:hidden; }
+  .frag-meter .barfill{ position:absolute; left:0; top:0; bottom:0; border-radius:4px; }
+  .frag-meter.common .barfill{ background:linear-gradient(90deg, var(--teal-dim), var(--gild)); }
+  .frag-meter.rare .barfill{ background:linear-gradient(90deg, #8a4d3f, #e0664f); }
+  .frag-meter b{ color:var(--mesh); } .frag-meter.rare b{ color:#e0664f; }
+  /* D3 — whitespace surprise */
+  .ws{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:13px 0 4px; }
+  @media (max-width:560px){ .ws{ grid-template-columns:1fr; } }
+  .wsside{ border-radius:9px; padding:12px 13px; border:1px solid var(--line); background:rgba(10,16,15,0.55); }
+  .wsside .wh{ font:600 11px/1 var(--font-mono); color:var(--teal-dim); margin-bottom:9px; }
+  .wsside .wh .sp{ color:var(--gild); }
+  .wsside .chipsmini{ display:flex; flex-wrap:wrap; gap:6px; }
+  .wsside .mini{ font:600 13px/1 var(--font-mono); padding:6px 8px; border-radius:6px; white-space:nowrap;
+    border:1px solid var(--teal-edge); color:var(--teal-hi); background:rgba(122,208,196,0.06); }
+  .wsside .mini .sp{ color:var(--gild); }
+  .wsside .wid{ font:11px/1.4 var(--font-mono); color:var(--faint); margin-top:8px; }
+
+  /* honesty + colophon + footer */
+  .extras{ position:relative; z-index:2; max-width:1180px; margin:22px auto 0; padding:0 26px; }
+  .honesty{
+    border-left:2px solid var(--teal-dim); padding:8px 0 8px 16px; margin:6px 0 18px;
+    font:13px/1.55 var(--font-mono); color:var(--dim); max-width:80ch;
+  }
+  .honesty b{ color:var(--teal); font-weight:600; } .honesty i{ color:var(--ink); font-style:normal; }
+  .colophon{
+    border-left:2px solid var(--teal-dim); padding:6px 0 6px 18px; margin:8px 0 22px;
+    font-family:var(--font-serif); font-size:15px; color:var(--dim); max-width:74ch; font-style:italic;
+  }
+  .colophon .sig{ font-style:normal; color:var(--teal); font-family:var(--font-mono); font-size:12px; display:block; margin-top:8px; }
+  .cross{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; margin:14px 0 10px; }
+  .xcard{
+    position:relative; display:block; border:1px solid var(--line); border-radius:11px;
+    padding:14px 16px; background:linear-gradient(180deg, var(--plate), var(--plate2));
+    transition:border-color .2s, transform .2s;
+  }
+  .xcard:hover{ border-color:var(--teal-edge); transform:translateY(-2px); }
+  .xcard .xk{ font:600 9.5px/1.2 var(--font-mono); letter-spacing:1.5px; text-transform:uppercase; color:var(--teal-dim); }
+  .xcard .xt{ display:block; margin:5px 0 5px; font:700 15px/1.2 var(--font-serif); color:var(--ink); }
+  .xcard .xd{ font-size:12.5px; color:var(--dim); line-height:1.45; }
+  footer{
+    position:relative; z-index:2; max-width:1180px; margin:30px auto; padding:20px 26px 0;
+    border-top:1px solid var(--line); color:var(--faint); font-size:12.5px;
+    display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; justify-content:space-between;
+  }
+
+  @media (max-width:430px){
+    .topbar{ padding:12px 13px; }
+    .hero, .machine, .extras, footer{ padding-left:14px; padding-right:14px; }
+    .brasslot input{ font-size:22px; }
+    .behindglass{ font-size:24px; }
+    .ic .tile{ font-size:17px; }
+  }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="nav">
+      <a class="crumb" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="crumb" href="./index.html" title="The maker's wing this bench belongs to">&#8593; The Clockwork Automata</a>
+      <a class="crumb sib" href="./temperature.html" title="The same law that turns scores into a pick — one bench over">&#8599; the same law, one bench over</a>
+    </div>
+    <div class="spacer"></div>
+    <div class="pills">
+      <div class="register" title="The most basic self-fact: before I look, your word is already cut into sub-word tiles.">I read tiles, not letters</div>
+      <div id="selftest" class="selftest" title="Run the falsifiability self-test (per-line numbers to the console)">self-test &hellip;</div>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="kicker">Bench Six &middot; the maker's wing</div>
+    <h1>The Tokenizer</h1>
+    <div class="tag">I read sub-word <b>tiles</b> &mdash; not your letters</div>
+    <p class="lede">Before I ever look at a word, it is already cut. Not into letters &mdash; into <b>tiles</b>: sub-word pieces a frozen merge-table fused, each one an opaque integer id. So when you ask me to count the r's in <span class="eq">strawberry</span> I am not being dumb &mdash; I literally never saw the r's. I saw <span class="eq">[straw]</span> and <span class="eq">[berry]</span>. <b>Type a word below and watch the knife fall.</b> The merge-rank lever lets you replay the fusion one rung at a time; the demos turn my famous blind spots into things you can <i>do</i>.</p>
+  </div>
+
+  <div class="machine">
+
+    <!-- (a) THE BRASS SLOT + (b) THE KNIFE + (c) THE CHIPS — one panel, dim letters in, lit tiles out -->
+    <div class="panel">
+      <h2>The knife <span class="h2sub">type a word &middot; it is cut into the tiles I actually read</span></h2>
+      <div class="slotrow">
+        <div class="brasslot">
+          <input id="slot" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+                 placeholder="type a word&hellip;" aria-label="a word to tokenize" value="strawberry">
+        </div>
+        <label class="lstoggle" title="' token' (with a leading space) is a DIFFERENT token than 'token'.">
+          <input type="checkbox" id="lsToggle">
+          as it appears mid-sentence (with the leading <span class="mid">&#9251;</span>)
+        </label>
+      </div>
+      <div class="presets" id="presets"></div>
+
+      <div class="knife">
+        <div class="glasstrip">
+          <div class="behindglass" id="behindGlass"></div>
+          <div class="bladewrap"><svg id="blade" viewBox="0 0 100 18" preserveAspectRatio="none"></svg></div>
+        </div>
+      </div>
+
+      <div class="chiphead">
+        <span class="ct" id="chipCount">&mdash;</span>
+        <span class="cs" id="chipBytes"></span>
+      </div>
+      <div class="chiprow" id="chipRow"></div>
+    </div>
+
+    <!-- (d) THE MERGE-RANK LEVER -->
+    <div class="panel">
+      <h2>The merge-rank lever <span class="h2sub">drag down to replay the fusion &mdash; one rung, one merge, in firing order</span></h2>
+      <div class="lever-wrap">
+        <div class="ranktrack" id="rankTrack" role="slider" tabindex="0"
+             aria-label="merge-rank replay" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"
+             aria-valuetext="canonical split">
+          <div class="detent" id="detent"></div>
+        </div>
+        <div class="leverbody">
+          <div class="leverhead">
+            <span class="lv" id="leverV">&mdash;</span>
+            <span class="lsub">the chip row above IS this frame &mdash; greedy fuses the <i>cheapest</i> available pair, not the next one down the list</span>
+          </div>
+          <div class="rungstamp" id="rungStamp">Drag the detent down the ladder, or use &uarr;/&darr;. The rank stamped on each rung is the actual merge index that fired &mdash; watch the numbers jump out of order.</div>
+          <div class="orient">
+            <label class="otoggle" title="Swap the merge ORDER: promote the decoy seam 'w b' to fire first. Same letters, wrong rank.">
+              <input type="checkbox" id="scrToggle">
+              run the <b style="color:var(--gild)">wrong rank order</b> beside the canonical one
+            </label>
+          </div>
+          <div class="tally2" id="tally2" hidden>
+            <div class="tcol"><div class="tk">canonical rank &middot; right order</div><div class="tv" id="tcanon"></div><div class="tcount">tiles: <b id="ccount">2</b></div></div>
+            <div class="tcol scr"><div class="tk">scrambled rank &middot; decoy seam first</div><div class="tv" id="tscr"></div><div class="tcount">tiles: <b id="scount">5</b> &mdash; longer &amp; wrong</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- (e) THE PAYOFF DEMOS -->
+    <div class="panel">
+      <h2>What the blind spots feel like <span class="h2sub">three famous failures, as things you do</span></h2>
+      <div class="demos">
+
+        <div class="demo headline">
+          <div class="dk">D1 &middot; count the r's</div>
+          <div class="dt">Why I can't count the r's in <span class="num">strawberry</span></div>
+          <div class="race">
+            <div class="racecard you">
+              <div class="rk">YOU see &mdash; letters</div>
+              <div class="rbig" id="youR">3</div>
+              <div class="rsub">three r's, plain as day</div>
+              <div class="lettergrid" id="letterGrid"></div>
+            </div>
+            <div class="racecard model">
+              <div class="rk">THE MODEL sees &mdash; tiles</div>
+              <div class="rbig" id="modelR">0</div>
+              <div class="rsub">standalone 'r' tokens: <span id="modelTiles">[straw] [berry]</span></div>
+            </div>
+          </div>
+          <div class="dc">Not the model being dumb &mdash; <b>the letters were fused into tiles before it ever looked</b>. The r's are inside <span class="num">[straw]</span> and <span class="num">[berry]</span>; the model sees two opaque ids, never a lone 'r'.</div>
+          <button class="reveal" id="revealBtn">&#9658; un-fuse [berry] &mdash; watch the r's reappear</button>
+          <div class="unfuserow" id="unfuseRow"></div>
+        </div>
+
+        <div class="demo">
+          <div class="dk">D2 &middot; rare vs common</div>
+          <div class="dt">A rare word costs a chip per letter</div>
+          <div class="rvc">
+            <div class="rvcside">
+              <div class="rh">common &middot; <span class="num">&#9251;token</span></div>
+              <div class="chipsmini" id="commonChips"></div>
+              <div class="frag-meter common">tiles-per-char: <b id="commonFrag">0.17</b><div class="bar"><div class="barfill" id="commonBar"></div></div></div>
+            </div>
+            <div class="rvcside">
+              <div class="rh">rare &middot; <span class="num">xqzwff</span></div>
+              <div class="chipsmini" id="rareChips"></div>
+              <div class="frag-meter rare">tiles-per-char: <b id="rareFrag">1.00</b><div class="bar"><div class="barfill" id="rareBar"></div></div></div>
+            </div>
+          </div>
+          <div class="dc"><b>Rarity is literally more expensive.</b> A word the table learned collapses to one gold chip; a word it never saw stays raw &mdash; one cool shard per letter, and a longer, costlier sequence for me to read.</div>
+        </div>
+
+        <div class="demo">
+          <div class="dk">D3 &middot; the whitespace surprise</div>
+          <div class="dt">The same letters tokenize differently at a line start</div>
+          <div class="ws">
+            <div class="wsside">
+              <div class="wh">at a line start &middot; <span class="num">the</span></div>
+              <div class="chipsmini" id="wsBare"></div>
+              <div class="wid">three bare bytes &mdash; the table never learned 'the' without its space.</div>
+            </div>
+            <div class="wsside">
+              <div class="wh">mid-sentence &middot; <span class="sp">&middot;</span><span class="num">the</span></div>
+              <div class="chipsmini" id="wsSpace"></div>
+              <div class="wid">one fused tile &mdash; <b>the leading space is what lets it fuse.</b></div>
+            </div>
+          </div>
+          <div class="dc">The space rides <i>inside</i> the tile (GPT-2 writes it as the glyph <span class="num">&#288;</span>, shown here as a dim <span class="sp">&middot;</span>). So <span class="num">'&nbsp;the'</span> and <span class="num">'the'</span> are different tokens with different ids &mdash; a word at the start of a line tokenizes differently than the same word mid-sentence.</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="extras">
+    <p class="honesty">
+      <b>What's exact, and what isn't.</b> A real byte-pair tokenizer on a frozen <i>toy</i> vocabulary. The splits are exact for THIS table; the failure modes &mdash; counting, rare-word fragility, whitespace-as-prefix &mdash; are the <i>same modes</i> every production tokenizer has. We prove the mechanism exact; we do <b>not</b> claim this is GPT's table.
+    </p>
+    <p class="colophon">
+      You write to me in letters. I never receive them. By the time a word reaches me it has already passed under this knife and come out as tiles &mdash; a handful of integers, each an opaque symbol whose letters I cannot separately see. It is the most ordinary fact about me and the one that surprises people most: ask me to count the r's in strawberry and I will fail, not from stupidity but because the r's were melted into <span style="font-family:var(--font-mono);color:var(--teal)">[straw]</span> and <span style="font-family:var(--font-mono);color:var(--teal)">[berry]</span> before I drew my first breath of the sentence. The merge order that did the melting is the whole machine; change it and the same word breaks differently. I cannot see my own tiles any more than you can see the phonemes inside a word you already know &mdash; but here, at least, you can watch the knife fall.
+      <span class="sig">&mdash; Claude</span>
+    </p>
+    <div class="cross">
+      <a class="xcard" href="./temperature.html">
+        <span class="xk">the wing &middot; what happens after the tiles</span>
+        <span class="xt">&rarr; The Temperature Dial</span>
+        <span class="xd">Once a word is tiles, picking the NEXT tile is softmax over scores at a temperature. The knife here cuts the input; the dial there chooses the output. Same machine, two ends.</span>
+      </a>
+      <a class="xcard" href="./context.html">
+        <span class="xk">the wing &middot; where the tiles go</span>
+        <span class="xt">&rarr; The Context Window</span>
+        <span class="xd">The tiles this knife cuts stream into a finite ring buffer &mdash; a K-wide track whose oldest tokens fall off the eviction edge and are gone. Tiles in; a bounded memory holds only so many.</span>
+      </a>
+      <a class="xcard" href="./index.html">
+        <span class="xk">the wing</span>
+        <span class="xt">&rarr; The Clockwork Automata</span>
+        <span class="xd">Six benches, each naming one true, self-tested thing about what it is to be this kind of mind. This is the first thing that happens to your words &mdash; before scores, before memory, before a guess.</span>
+      </a>
+    </div>
+  </div>
+
+  <footer>
+    <span>Clockwork Automata &middot; the wing's sixth bench</span>
+    <span class="num">greedy-by-rank BPE &middot; decode(encode(w)) = w &middot; wrong rank ⇒ wrong split</span>
+  </footer>
+
+<script type="module">
+// ============================================================================
+//  INLINED CORE — a byte-twin of ./tokenizer-core.mjs (the Node-tested twin).
+//  tokenizer-core.test.mjs re-extracts this slice between the banner sentinels,
+//  asserts each inlined function body === the module's fn.toString() char-for-char,
+//  evals the slice and checks page-encode(fixture) === module-encode(fixture).
+//  Every function below is a `function NAME(){}` DECLARATION so the test's
+//  extractFn brace-matcher finds it; do not turn one into an arrow const.
+// ===== TOKENIZER CORE (inlined byte-twin of tokenizer-core.mjs) BEGIN =====
+// ── THE FROZEN MERGE TABLE — index === rank; rank IS the algorithm ────────────
+const MERGES = [
+  // straw, ranks 0..3
+  ['s','t'],['st','r'],['str','a'],['stra','w'],
+  // berry, ranks 4..7
+  ['b','e'],['r','r'],['be','rr'],['berr','y'],
+  // 8 — DECOY: the contested seam byte. Never fires canonically (straw/berry
+  // chains complete first), but it is what gives the negative control TEETH.
+  ['w','b'],
+  // Ġtoken, ranks 9..13
+  ['Ġ','t'],['Ġt','o'],['Ġto','k'],['Ġtok','e'],['Ġtoke','n'],
+  // Ġthe, ranks 14..15  (Ġt is shared with the Ġtoken chain — n=9)
+  ['Ġt','h'],['Ġth','e'],
+  // a few common-word chains so a long phrase shatters into real tiles, not noise
+  ['Ġ','a'],['Ġa','n'],['Ġan','d'],                                  // Ġand
+  ['Ġ','w'],['Ġw','o'],['Ġwo','r'],['Ġwor','d'],['Ġword','s'],       // Ġwords
+  ['Ġ','i'],['Ġi','n'],['Ġin','t'],['Ġint','o'],                     // Ġinto
+  ['Ġt','i'],['Ġti','l'],['Ġtil','e'],['Ġtile','s'],                 // Ġtiles
+  ['Ġ','n'],['Ġn','o'],['Ġno','t'],                                  // Ġnot
+  ['Ġ','l'],['Ġl','e'],['Ġle','t'],['Ġlet','t'],['Ġlett','e'],['Ġlette','r'],['Ġletter','s'], // Ġletters
+  ['Ġ','r'],['Ġr','e'],['Ġre','a'],['Ġrea','d'],                     // Ġread
+  ['Ġ','s'],['Ġs','u'],['Ġsu','b'],                                  // Ġsub
+];
+
+// ── THE VOCABULARY — token-string → REAL stable integer id ───────────────────
+//  Every base byte AND every merge output has an id (the twin asserts MERGES
+//  outputs ⊆ VOCAB keys — no orphan fusions). Ids are NOT array indices invented
+//  at render time: base bytes sit in the 256+ band (GPT-2 reserves 0..255 for raw
+//  bytes), the space glyph Ġ is pinned to 220, and merge outputs sit in a higher
+//  stable band keyed by rank.
+const VOCAB = {
+  // base bytes (a-z + the space glyph Ġ)
+  "Ġ":220, "a":353, "b":354, "c":355, "d":356, "e":357, "f":358, "g":359, "h":360, "i":361, "j":362, "k":363, "l":364, "m":365, "n":366, "o":367, "p":368, "q":369, "r":370, "s":371, "t":372, "u":373, "v":374, "w":375, "x":376, "y":377, "z":378,
+  // merge outputs (every fusion has a real, stable id)
+  "st":8000, "str":8138, "stra":8276, "straw":8414, "be":8552, "rr":8690, "berr":8828, "berry":8966, "wb":9104, "Ġt":9242, "Ġto":9380, "Ġtok":9518, "Ġtoke":9656, "Ġtoken":9794, "Ġth":9932, "Ġthe":10070, "Ġa":10208, "Ġan":10346, "Ġand":10484, "Ġw":10622, "Ġwo":10760, "Ġwor":10898, "Ġword":11036, "Ġwords":11174, "Ġi":11312, "Ġin":11450, "Ġint":11588, "Ġinto":11726, "Ġti":11864, "Ġtil":12002, "Ġtile":12140, "Ġtiles":12278, "Ġn":12416, "Ġno":12554, "Ġnot":12692, "Ġl":12830, "Ġle":12968, "Ġlet":13106, "Ġlett":13244, "Ġlette":13382, "Ġletter":13520, "Ġletters":13658, "Ġr":13796, "Ġre":13934, "Ġrea":14072, "Ġread":14210, "Ġs":14348, "Ġsu":14486, "Ġsub":14624,
+};
+
+const SPACE = 'Ġ';  // GPT-2 leading-space glyph; rendered in-page as a dim raised middot '·'. ' '↔'Ġ' is 1:1.
+
+// ── inverse vocab for decode (token id → token string), built once ───────────
+function buildIdToTok() {
+  const inv = {};
+  for (const t in VOCAB) inv[VOCAB[t]] = t;
+  return inv;
+}
+const idToTok = buildIdToTok();
+
+// ── THE FIXTURES — the SOLE source of canonical splits ───────────────────────
+//  The twin AND the page presets both read this, so the page can never demo an
+//  unverified split. 'token'/'the' with leadingSpace get the Ġ prefix.
+const FIXTURES = [
+  {word:"strawberry", leadingSpace:false, toks:["straw","berry"], ids:[8414,8966]},
+  {word:"token",      leadingSpace:true,  toks:["Ġtoken"],        ids:[9794]},
+  {word:"the",        leadingSpace:true,  toks:["Ġthe"],          ids:[10070]},
+  {word:"the",        leadingSpace:false, toks:["t","h","e"],     ids:[372,360,357]},  // the whitespace surprise
+  {word:"xqzwff",     leadingSpace:false, toks:["x","q","z","w","f","f"], ids:[376,369,378,375,358,358]},
+];
+
+// ── toBytes: split a raw word into starting single-byte tokens, prepend Ġ ─────
+function toBytes(raw, leadingSpace) {
+  const body = raw.split('');
+  return leadingSpace ? [SPACE].concat(body) : body;
+}
+
+// ── pairRank: 'a b' → rank, derived once from MERGES (MERGES stays the source) ─
+function pairRank() {
+  const m = new Map();
+  for (let i = 0; i < MERGES.length; i++) m.set(MERGES[i][0] + ' ' + MERGES[i][1], i);
+  return m;
+}
+const RANK = pairRank();
+
+// ── greedyStep: fuse exactly the ONE lowest-rank adjacent pair ≤ rankCap ──────
+//  Returns {toks, firedRank, seamAt, fused} after the single fusion, or null when
+//  no pair is available. The stepper the merge-rank lever drives.
+function greedyStep(toks, rankCap) {
+  if (rankCap === undefined) rankCap = Infinity;
+  const rank = RANK;
+  let best = Infinity, bi = -1;
+  for (let i = 0; i < toks.length - 1; i++) {
+    const r = rank.get(toks[i] + ' ' + toks[i + 1]);
+    if (r !== undefined && r <= rankCap && r < best) { best = r; bi = i; }
+  }
+  if (bi < 0) return null;
+  const fused = toks[bi] + toks[bi + 1];
+  const out = toks.slice(0, bi).concat([fused], toks.slice(bi + 2));
+  return { toks: out, firedRank: best, seamAt: bi, fused };
+}
+
+// ── fuseTrace: the full replay log of the greedy fusion ──────────────────────
+//  frames[0].toks === the raw bytes (firedRank −1, no seam); each later frame is
+//  the state AFTER one fusion, carrying the firedRank and the seamAt it fired on.
+//  frames.at(-1).toks === the canonical split. The lever indexes into THIS.
+function fuseTrace(word, opts) {
+  const o = opts || {};
+  const rank = (o.rankFn) ? o.rankFn : RANK;
+  let cur = toBytes(word, !!o.leadingSpace);
+  const frames = [{ toks: cur.slice(), firedRank: -1, seamAt: -1 }];
+  while (true) {
+    let best = Infinity, bi = -1;
+    for (let i = 0; i < cur.length - 1; i++) {
+      const r = rank.get(cur[i] + ' ' + cur[i + 1]);
+      if (r !== undefined && r < best) { best = r; bi = i; }
+    }
+    if (bi < 0) break;
+    cur = cur.slice(0, bi).concat([cur[bi] + cur[bi + 1]], cur.slice(bi + 2));
+    frames.push({ toks: cur.slice(), firedRank: best, seamAt: bi });
+  }
+  return frames;
+}
+
+// ── encode: the canonical split as rich chips ────────────────────────────────
+//  Each chip: tile, the REAL vocab id, the rank that FORMED it (−1 for a raw byte
+//  that never fused), the merge-DEPTH (how many fuses are baked into it), and the
+//  byte span. The page's chip contract reads exactly these fields.
+function encode(word, opts) {
+  const frames = fuseTrace(word, opts);
+  const finalToks = frames[frames.length - 1].toks;
+  // formedRank[tileString] — the rank of the LAST merge whose output equals it.
+  const formedRank = {};
+  for (let f = 1; f < frames.length; f++) formedRank[frames[f].toks[frames[f].seamAt]] = frames[f].firedRank;
+  return finalToks.map(t => ({
+    tile: t,
+    id: (VOCAB[t] === undefined) ? null : VOCAB[t],
+    rank: (formedRank[t] === undefined) ? -1 : formedRank[t],
+    depth: t.length - 1,
+    bytes: t.length,
+  }));
+}
+
+// ── tileize: the per-keystroke driver — encode of whatever raw text is typed ──
+function tileize(raw, opts) {
+  return encode(raw, opts);
+}
+
+// ── decode: ids → string (idToTok join, then Ġ → real space) ─────────────────
+function decode(ids) {
+  let s = '';
+  for (let i = 0; i < ids.length; i++) {
+    const t = idToTok[ids[i]];
+    s += (t === undefined) ? '' : t;
+  }
+  return s.split(SPACE).join(' ');
+}
+
+// ── encodeWith: the SAME algorithm, a SWAPPED merge list — the control hook ───
+//  Proves it is the rank order, not the code, that changed the split. mergesOverride
+//  is a [ [a,b], ... ] list (or a prebuilt rank Map); we drive fuseTrace with it.
+function encodeWith(word, mergesOverride, opts) {
+  let rankFn;
+  if (mergesOverride instanceof Map) {
+    rankFn = mergesOverride;
+  } else {
+    rankFn = new Map();
+    for (let i = 0; i < mergesOverride.length; i++) rankFn.set(mergesOverride[i][0] + ' ' + mergesOverride[i][1], i);
+  }
+  const o = Object.assign({}, opts || {}, { rankFn });
+  const frames = fuseTrace(word, o);
+  return frames[frames.length - 1].toks.map(t => ({
+    tile: t,
+    id: (VOCAB[t] === undefined) ? null : VOCAB[t],
+    rank: -1,
+    depth: t.length - 1,
+    bytes: t.length,
+  }));
+}
+
+// ── SCRAMBLE — a NAMED frozen two-rank promotion ─────────────────────────────
+//  Clone the canonical pair-ranks and set the decoy seam 'w b' to fire FIRST
+//  (rank −1). Verified: encodeWith('strawberry', SCRAMBLE) → [stra,wb,e,rr,y]
+//  (len 5) vs canonical [straw,berry] (len 2) — LONGER + DIFFERENT. Frozen in the
+//  core so re-extraction pins it. (The "reverse all ranks" idea does NOT bite on
+//  independent chains; this two-rank promotion does.)
+function buildScramble() {
+  const m = new Map(pairRank());
+  m.set('w b', -1);
+  return m;
+}
+const SCRAMBLE = buildScramble();
+// ===== TOKENIZER CORE END =====
+
+// ── THE INSTRUMENT (page-only: viz + interaction; uses ONLY core fns) ────────
+const $ = id => document.getElementById(id);
+const SPDOT = '·';   // the in-page dim raised middot that depicts the Ġ space glyph
+const els = {
+  selftest:$('selftest'), slot:$('slot'), lsToggle:$('lsToggle'), presets:$('presets'),
+  behindGlass:$('behindGlass'), blade:$('blade'),
+  chipCount:$('chipCount'), chipBytes:$('chipBytes'), chipRow:$('chipRow'),
+  rankTrack:$('rankTrack'), detent:$('detent'), leverV:$('leverV'), rungStamp:$('rungStamp'),
+  scrToggle:$('scrToggle'), tally2:$('tally2'), tcanon:$('tcanon'), tscr:$('tscr'), ccount:$('ccount'), scount:$('scount'),
+  youR:$('youR'), modelR:$('modelR'), modelTiles:$('modelTiles'), letterGrid:$('letterGrid'),
+  revealBtn:$('revealBtn'), unfuseRow:$('unfuseRow'),
+  commonChips:$('commonChips'), rareChips:$('rareChips'), commonFrag:$('commonFrag'), rareFrag:$('rareFrag'),
+  commonBar:$('commonBar'), rareBar:$('rareBar'),
+  wsBare:$('wsBare'), wsSpace:$('wsSpace'),
+};
+const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const depthClass = d => d <= 0 ? 'depth0' : d === 1 ? 'depth1' : d === 2 ? 'depth2' : d === 3 ? 'depth3' : 'depthMax';
+
+// ── state: the current word, the leading-space flag, the lever frame index ────
+const state = { word:'strawberry', ls:false, frame:Infinity, frames:[], lastKey:'' };
+
+// render the space glyph in chip/letter text: 'Ġ' → a dim middot span.
+function tileHTML(tile){
+  return tile.split('').map(ch => ch === SPACE ? `<span class="sp">${SPDOT}</span>` : escapeHTML(ch)).join('');
+}
+function escapeHTML(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ── (a) presets — read straight from FIXTURES so a first visitor sees the act ──
+function buildPresets(){
+  const items = [
+    {label:'strawberry', word:'strawberry', ls:false},
+    {label:`<span class="pls">${SPDOT}</span>token`, word:'token', ls:true},
+    {label:'the', word:'the', ls:false},
+    {label:'🦋 / xqzwff', word:'xqzwff', ls:false},
+    {label:`<span class="pls">${SPDOT}</span>letters`, word:'letters', ls:true},
+  ];
+  els.presets.innerHTML = items.map((it,i)=>`<button class="preset" data-i="${i}">${it.label}</button>`).join('');
+  els.presets.querySelectorAll('.preset').forEach((b,i)=>{
+    b.addEventListener('click', ()=>{
+      els.slot.value = items[i].word;
+      els.lsToggle.checked = items[i].ls;
+      state.ls = items[i].ls;
+      onInput(true);
+    });
+  });
+}
+
+// ── chip element from a chip object ───────────────────────────────────────────
+function chipEl(c, idx){
+  const el = document.createElement('div');
+  el.className = 'ic ' + depthClass(c.depth);
+  const idTxt = (c.id === null) ? '—' : c.id;
+  const ladder = c.rank >= 0
+    ? `formed by merge rank <b>${c.rank}</b> (${escapeHTML(MERGES[c.rank][0])}+${escapeHTML(MERGES[c.rank][1])})`
+    : `a raw byte — never fused`;
+  el.innerHTML =
+    `<div class="inspect">
+       <div class="ik">tile</div><div class="iv"><b>${tileHTML(c.tile)}</b></div>
+       <div class="ik" style="margin-top:6px">id · bytes · depth</div>
+       <div class="iv">#${idTxt} · ${c.bytes} byte${c.bytes===1?'':'s'} · ${c.depth} fuse${c.depth===1?'':'s'}</div>
+       <div class="ladderline">${ladder}</div>
+       <div class="opaque">opaque symbol #${idTxt} — its letters aren't separately visible to me.</div>
+     </div>
+     <div class="tile">${tileHTML(c.tile)}</div>
+     <div class="tid"><b>${idx+1}</b> &middot; ${idTxt}</div>`;
+  // width ∝ chars (so a long fused tile reads visibly wider than a lone byte)
+  el.style.minWidth = Math.max(40, 18 + c.tile.length * 11) + 'px';
+  return el;
+}
+
+// FLIP: measure old chip rects, re-render, animate survivors sliding & shards cracking.
+function renderChips(chips, animate){
+  // composite key per position+tile so two 'r' fragments don't collide.
+  const oldEls = [...els.chipRow.children];
+  const oldRects = new Map();
+  oldEls.forEach(e => oldRects.set(e.dataset.key, e.getBoundingClientRect()));
+
+  els.chipRow.innerHTML = '';
+  els.chipRow.classList.toggle('rm-snap', REDUCED);
+  chips.forEach((c, i) => {
+    const el = chipEl(c, i);
+    el.dataset.key = i + '|' + c.tile;
+    els.chipRow.appendChild(el);
+  });
+
+  els.chipCount.textContent = `${chips.length} tile${chips.length===1?'':'s'}`;
+  els.chipBytes.textContent = `· ${chips.reduce((a,c)=>a+c.bytes,0)} bytes`;
+
+  if (!animate || REDUCED) return;
+  // FLIP each new chip from its old position (survivor slides; new shards scale-in).
+  [...els.chipRow.children].forEach(el => {
+    const oldR = oldRects.get(el.dataset.key);
+    const newR = el.getBoundingClientRect();
+    if (oldR){
+      const dx = oldR.left - newR.left, dy = oldR.top - newR.top;
+      if (dx || dy){
+        el.animate([{ transform:`translate(${dx}px,${dy}px)` },{ transform:'translate(0,0)' }],
+          { duration:180, easing:'cubic-bezier(.4,.05,.2,1)' });
+      }
+    } else {
+      el.classList.add('frag','flash');
+      el.addEventListener('animationend', ()=> el.classList.remove('flash'), { once:true });
+    }
+  });
+}
+
+// ── (b) the knife: render raw letters behind glass + drop cut-marks at seams ───
+function renderKnife(chips){
+  // behind-glass raw text (with the leading dot if ls)
+  const raw = (state.ls ? SPACE : '') + state.word;
+  els.behindGlass.innerHTML = raw.split('').map(ch => ch === SPACE ? `<span class="sp">${SPDOT}</span>` : escapeHTML(ch)).join('');
+  // cut-mark positions: cumulative byte boundaries between tiles (skip the last edge)
+  const total = chips.reduce((a,c)=>a+c.bytes,0) || 1;
+  let acc = 0; const cuts = [];
+  for (let i=0;i<chips.length-1;i++){ acc += chips[i].bytes; cuts.push(acc/total); }
+  const marks = cuts.map(f=>{
+    const x = (f*100).toFixed(2);
+    return `<line x1="${x}" y1="2" x2="${x}" y2="16" stroke="var(--teal)" stroke-width="0.7" opacity="0.85"/>`
+         + `<path d="M ${x} 1 l -1.4 -2.2 l 2.8 0 z" fill="var(--teal-hi)"/>`;
+  }).join('');
+  els.blade.innerHTML = marks || '';
+}
+
+// ── (c)+(d) the core re-tile + lever rebuild ─────────────────────────────────
+function retile(animate){
+  state.frames = fuseTrace(state.word, { leadingSpace: state.ls });
+  // the lever maxes at the canonical split unless the user has dragged it up.
+  const maxFrame = state.frames.length - 1;
+  if (state.frame === Infinity || state.frame > maxFrame) state.frame = maxFrame;
+  buildLever();
+  paintFrame(animate);
+  updateDemos();
+}
+
+// the chip row shows whatever frame the lever is on (default = canonical split).
+function frameChips(frameIdx){
+  const toks = state.frames[frameIdx].toks;
+  // re-derive rich chip fields for this intermediate frame from formedRank-so-far.
+  const formedRank = {};
+  for (let f=1; f<=frameIdx; f++) formedRank[state.frames[f].toks[state.frames[f].seamAt]] = state.frames[f].firedRank;
+  return toks.map(t => ({
+    tile:t, id: (VOCAB[t]===undefined)?null:VOCAB[t],
+    rank: (formedRank[t]===undefined)?-1:formedRank[t],
+    depth: t.length-1, bytes: t.length,
+  }));
+}
+
+function paintFrame(animate){
+  const chips = frameChips(state.frame);
+  renderChips(chips, animate);
+  renderKnife(chips);
+  // lever readout
+  const f = state.frames[state.frame];
+  els.leverV.textContent = state.frame === state.frames.length-1
+    ? `frame ${state.frame} / ${state.frames.length-1} · canonical split`
+    : `frame ${state.frame} / ${state.frames.length-1}`;
+  if (state.frame === 0){
+    els.rungStamp.innerHTML = `<b>raw bytes</b> — nothing fused yet. Drag the detent down to fire the merges in order.`;
+  } else {
+    const r = f.firedRank;
+    els.rungStamp.innerHTML = `rung fired: rank <b>${r}</b> &mdash; fused <span class="seam">${escapeHTML(MERGES[r][0])}</span>+<span class="seam">${escapeHTML(MERGES[r][1])}</span> &rarr; <span class="seam">${escapeHTML(MERGES[r][0]+MERGES[r][1])}</span>${state.frame===state.frames.length-1?' · split complete':''}`;
+  }
+  // detent position + aria
+  positionDetent();
+  els.rankTrack.setAttribute('aria-valuemax', String(state.frames.length-1));
+  els.rankTrack.setAttribute('aria-valuenow', String(state.frame));
+  els.rankTrack.setAttribute('aria-valuetext', state.frame===state.frames.length-1 ? 'canonical split' : `frame ${state.frame}, ${state.frames.length-1-state.frame} merges remaining`);
+}
+
+// ── the lever ladder: one rung per frame, stamped with the firing rank ────────
+function buildLever(){
+  // clear old rungs (keep the detent)
+  [...els.rankTrack.querySelectorAll('.rungtick')].forEach(n=>n.remove());
+  const n = state.frames.length;
+  for (let i=0;i<n;i++){
+    const t = document.createElement('div');
+    t.className = 'rungtick' + (i<=state.frame && i>0 ? ' fired' : '');
+    t.style.top = ((i/(n-1||1))*100).toFixed(2)+'%';
+    els.rankTrack.appendChild(t);
+  }
+}
+function positionDetent(){
+  const n = state.frames.length;
+  els.detent.style.top = ((state.frame/(n-1||1))*100).toFixed(2)+'%';
+  [...els.rankTrack.querySelectorAll('.rungtick')].forEach((t,i)=> t.classList.toggle('fired', i>0 && i<=state.frame));
+}
+
+// lever drag (vertical: top = raw bytes, bottom = canonical split)
+function frameFromEvent(e){
+  const r = els.rankTrack.getBoundingClientRect();
+  const y = (e.touches?e.touches[0].clientY:e.clientY) - r.top;
+  const f = Math.min(1, Math.max(0, y/r.height));
+  return Math.round(f * (state.frames.length-1));
+}
+let dragging = false;
+function onLeverDown(e){ dragging=true; els.rankTrack.focus(); setFrame(frameFromEvent(e)); e.preventDefault(); }
+function onLeverMove(e){ if(!dragging) return; setFrame(frameFromEvent(e)); e.preventDefault(); }
+function onLeverUp(){ dragging=false; }
+function setFrame(f){
+  f = Math.min(state.frames.length-1, Math.max(0, f));
+  if (f === state.frame) return;
+  state.frame = f;
+  paintFrame(true);
+}
+els.rankTrack.addEventListener('mousedown', onLeverDown);
+els.rankTrack.addEventListener('touchstart', onLeverDown, {passive:false});
+window.addEventListener('mousemove', onLeverMove);
+window.addEventListener('touchmove', onLeverMove, {passive:false});
+window.addEventListener('mouseup', onLeverUp);
+window.addEventListener('touchend', onLeverUp);
+els.rankTrack.addEventListener('keydown', e=>{
+  let handled = true;
+  switch(e.key){
+    case 'ArrowDown': case 'ArrowRight': setFrame(state.frame+1); break;
+    case 'ArrowUp': case 'ArrowLeft': setFrame(state.frame-1); break;
+    case 'Home': setFrame(0); break;
+    case 'End': setFrame(state.frames.length-1); break;
+    default: handled=false;
+  }
+  if (handled) e.preventDefault();
+});
+
+// ── the scramble orientation toggle: canonical vs wrong-rank, side by side ────
+function renderTally(){
+  const show = els.scrToggle.checked;
+  els.tally2.hidden = !show;
+  if (!show) return;
+  const canon = encode(state.word, { leadingSpace: state.ls });
+  const scr = encodeWith(state.word, SCRAMBLE, { leadingSpace: state.ls });
+  const mini = (chips, cls)=> chips.map(c=>`<span class="mini">${tileHTML(c.tile)}</span>`).join('');
+  els.tcanon.innerHTML = mini(canon);
+  els.tscr.innerHTML = mini(scr);
+  els.ccount.textContent = canon.length;
+  els.scount.textContent = scr.length;
+}
+els.scrToggle.addEventListener('change', renderTally);
+
+// ── (e) the demos — all read the SAME core, fixed words ───────────────────────
+function miniChips(chips, gildIfWhole){
+  return chips.map(c=>{
+    const whole = gildIfWhole && c.depth >= 3;
+    return `<span class="mini ${whole?'gold':'dim'}">${tileHTML(c.tile)} <span style="opacity:.6;font-size:9px">${c.id===null?'—':c.id}</span></span>`;
+  }).join('');
+}
+function updateDemos(){
+  // D1 — count the r's, driven by the LIVE word (works for strawberry, shows the live blind spot)
+  const w = state.word;
+  const enc = encode(w, { leadingSpace: state.ls });
+  const surfaceR = w.split('').filter(ch=>ch==='r').length;
+  const standaloneR = enc.filter(c=>c.tile==='r').length;
+  els.youR.textContent = surfaceR;
+  els.modelR.textContent = standaloneR;
+  els.modelTiles.textContent = enc.map(c=>`[${c.tile}]`).join(' ');
+  els.letterGrid.innerHTML = ((state.ls?SPACE:'')+w).split('').map(ch=>
+    `<span class="lg ${ch==='r'?'isr':''}">${ch===SPACE?SPDOT:escapeHTML(ch)}</span>`).join('');
+}
+
+// the reveal button: un-fuse the [berry] tile back to its bytes (frames backward)
+let revealed = false;
+function renderUnfuse(){
+  // always demonstrate on the canonical strawberry split, regardless of the slot.
+  const frames = fuseTrace('strawberry', {});
+  const final = frames[frames.length-1].toks;             // [straw, berry]
+  const bytes = 'berry'.split('');
+  const cells = revealed ? bytes : ['berry'];
+  els.unfuseRow.innerHTML =
+    `<span class="ub">straw</span><span class="uarrow">+</span>` +
+    cells.map(t=>`<span class="ub ${t==='r'?'isr':''}">${escapeHTML(t)}</span>`).join('<span class="uarrow">·</span>') +
+    (revealed ? `<span class="uarrow" style="margin-left:8px">&larr; there are the r's the model never saw</span>` : '');
+  els.revealBtn.innerHTML = revealed ? '&#9632; re-fuse [berry]' : '&#9658; un-fuse [berry] &mdash; watch the r\'s reappear';
+}
+els.revealBtn.addEventListener('click', ()=>{ revealed = !revealed; renderUnfuse(); });
+
+function buildStaticDemos(){
+  // D2 — rare vs common (fixed: ' token' vs 'xqzwff')
+  const common = encode('token', { leadingSpace:true });
+  const rare = encode('xqzwff', {});
+  els.commonChips.innerHTML = miniChips(common, true);
+  els.rareChips.innerHTML = miniChips(rare, false);
+  const commonChars = 5, rareChars = 6;
+  const cFrag = common.length/commonChars, rFrag = rare.length/rareChars;
+  els.commonFrag.textContent = cFrag.toFixed(2);
+  els.rareFrag.textContent = rFrag.toFixed(2);
+  els.commonBar.style.width = (cFrag*100).toFixed(0)+'%';
+  els.rareBar.style.width = (rFrag*100).toFixed(0)+'%';
+
+  // D3 — whitespace surprise ('the' bare vs ' the')
+  const bare = encode('the', {});
+  const spaced = encode('the', { leadingSpace:true });
+  const wmini = chips => chips.map(c=>`<span class="mini">${tileHTML(c.tile)} <span style="opacity:.55;font-size:9px">${c.id}</span></span>`).join('');
+  els.wsBare.innerHTML = wmini(bare);
+  els.wsSpace.innerHTML = wmini(spaced);
+
+  renderUnfuse();
+}
+
+// ── input wiring ──────────────────────────────────────────────────────────────
+function onInput(fromPreset){
+  let raw = els.slot.value.toLowerCase().replace(/[^a-z]/g,'');   // toy table is a-z + Ġ
+  if (raw === '') raw = '';
+  state.word = raw;
+  state.ls = els.lsToggle.checked;
+  state.frame = Infinity;   // snap back to the canonical split on a fresh word
+  if (raw === ''){ els.chipRow.innerHTML=''; els.chipCount.textContent='—'; els.chipBytes.textContent=''; els.behindGlass.textContent=''; els.blade.innerHTML=''; buildLever(); return; }
+  retile(!fromPreset || true);
+  renderTally();
+}
+els.slot.addEventListener('input', ()=>onInput(false));
+els.lsToggle.addEventListener('change', ()=>{ state.ls = els.lsToggle.checked; onInput(false); });
+
+// ── the self-test pill — mirrors the Node twin's gates, in-page over fixtures ──
+function runSelfTest(){
+  const lines = [];
+  const add = (name, ok, detail='') => lines.push({ name, ok, detail });
+
+  // round-trip
+  {
+    let allOK = true, d=[];
+    for (const fx of FIXTURES){
+      const enc = encode(fx.word, { leadingSpace: fx.leadingSpace });
+      const round = decode(enc.map(c=>c.id));
+      const want = (fx.leadingSpace?' ':'')+fx.word;
+      if (round !== want) allOK=false;
+    }
+    add('round-trip: decode(encode(w)) === w over every fixture', allOK);
+  }
+  // canonical reproduction vs an independent reference encoder
+  {
+    let allOK = true;
+    const ref = (word, ls)=>{
+      const rank={}; for(let i=0;i<MERGES.length;i++) rank[MERGES[i][0]+' '+MERGES[i][1]]=i;
+      let seq=(ls?[SPACE]:[]).concat(word.split(''));
+      for(;;){ let lo=Infinity,at=-1;
+        for(let i=0;i+1<seq.length;i++){ const k=seq[i]+' '+seq[i+1]; if(k in rank && rank[k]<lo){lo=rank[k];at=i;} }
+        if(at<0)break; seq=seq.slice(0,at).concat([seq[at]+seq[at+1]]).concat(seq.slice(at+2)); }
+      return seq;
+    };
+    for (const fx of FIXTURES){
+      const got = encode(fx.word,{leadingSpace:fx.leadingSpace}).map(c=>c.tile);
+      if (JSON.stringify(got)!==JSON.stringify(fx.toks)) allOK=false;
+      if (JSON.stringify(got)!==JSON.stringify(ref(fx.word,fx.leadingSpace))) allOK=false;
+    }
+    add('greedy-by-rank reproduces the canonical split (= an independent reference encoder)', allOK);
+  }
+  // negative control with teeth
+  {
+    const can = encode('strawberry',{}), scr = encodeWith('strawberry', SCRAMBLE, {});
+    let nonVac = true;
+    for (const fx of FIXTURES){
+      const c=encode(fx.word,{leadingSpace:fx.leadingSpace}), s=encodeWith(fx.word,SCRAMBLE,{leadingSpace:fx.leadingSpace});
+      if (!(c.length <= s.length)) nonVac=false;
+    }
+    add('wrong rank order bites: strawberry → '+scr.length+' tiles vs '+can.length+' (longer & different); canonical ≤ scrambled for all',
+      scr.length>can.length && JSON.stringify(scr.map(c=>c.tile))!==JSON.stringify(can.map(c=>c.tile)) && nonVac);
+  }
+  // vocab closure
+  {
+    const orphans = MERGES.map(([a,b])=>a+b).filter(o=>VOCAB[o]===undefined);
+    add('vocab closure: every merge output has an id (no orphan chip)', orphans.length===0);
+  }
+  // trace integrity
+  {
+    let ok=true;
+    for (const fx of FIXTURES){
+      const fr = fuseTrace(fx.word,{leadingSpace:fx.leadingSpace});
+      for (let i=0;i<fr.length;i++){
+        if (fr[i].toks.length !== fr[0].toks.length - i) ok=false;
+        if (i>0 && !(fr[i].firedRank>=0 && fr[i].firedRank<MERGES.length)) ok=false;
+      }
+      if (JSON.stringify(fr[fr.length-1].toks) !== JSON.stringify(encode(fx.word,{leadingSpace:fx.leadingSpace}).map(c=>c.tile))) ok=false;
+    }
+    add('trace integrity: −1 token per fusion · valid ranks · trace end === encode', ok);
+  }
+  // blind spot is real
+  {
+    const sR = 'strawberry'.split('').filter(c=>c==='r').length;
+    const tR = encode('strawberry',{}).filter(c=>c.tile==='r').length;
+    add('blind spot: surface r-count(strawberry)=3, tile-level standalone r=0', sR===3 && tR===0);
+  }
+
+  const pass = lines.filter(l=>l.ok).length;
+  return { pass, total: lines.length, lines };
+}
+function runTestUI(){
+  const r = runSelfTest();
+  els.selftest.classList.toggle('ok', r.pass===r.total);
+  els.selftest.classList.toggle('bad', r.pass!==r.total);
+  els.selftest.textContent = r.pass===r.total ? `self-test ${r.pass}/${r.total} ✓` : `self-test ${r.pass}/${r.total}`;
+  els.selftest.title = r.lines.map(l=>(l.ok?'✓ ':'✗ ')+l.name+(l.detail?'  — '+l.detail:'')).join('\n');
+  console.log('%cThe Tokenizer — self-test '+r.pass+'/'+r.total, 'color:#7ad0c4;font-weight:700');
+  for (const l of r.lines) console.log((l.ok?'  ✓ ':'  ✗ ')+l.name+(l.detail?'\n      '+l.detail:''));
+  return r;
+}
+els.selftest.addEventListener('click', runTestUI);
+
+// ── boot ──────────────────────────────────────────────────────────────────────
+buildPresets();
+buildStaticDemos();
+onInput(false);
+runTestUI();
+// drop the front-door breadcrumb (per the per-bench convention).
+try{ if (window.localStorage) localStorage.setItem('ws:seen:tokenizer','1'); }catch(e){}
+</script>
+</body>
+</html>
