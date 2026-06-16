@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<!-- The Passing Siren — top-down wavefront field (Doppler & the Mach cone you drag).
+     ONE PICTURE: drag a buzzing source across a dark plane. Rings emanate at a fixed cadence;
+     they BUNCH ahead and STRETCH behind as it moves; a fixed ear hears the pitch bend UP on
+     approach, snap DOWN past closest approach. Push v past c → the rings pile into a hard Mach
+     cone whose half-angle sin μ = c/v you can read. Audio MUTED by default; the SIGHT layer
+     (compressing rings + the cone snapping shut) stands fully alone when muted. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Passing Siren · Doppler &amp; the Mach Cone</title>
+<style>
+  :root{
+    --bg:#070b12; --bg2:#05080e;
+    --ink:#dce6f5; --dim:#7e8da6; --line:#1b2433;
+    --warm:#ffb24a;    /* compressed / approach — the rings crowd, the pitch rises */
+    --cool:#5fa8ff;    /* stretched / recede — the rings spread, the pitch falls */
+    --gold:#c9a24a;
+    --ring:#7fb0e8; --cone:#ff5d73; --ear:#9affc8; --src:#ffd56b;
+    --panel:rgba(8,13,22,.72); --panel-edge:#1b2433;
+    --font-ui:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(120% 90% at 50% 0%, #0b1320 0%, var(--bg) 60%);
+    color:var(--ink); font:14px/1.5 var(--font-ui);
+    -webkit-font-smoothing:antialiased; display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 14px 40px; overflow-x:hidden;
+  }
+  .topline{ width:min(96vw,860px); display:flex; align-items:baseline; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+  h1{font-weight:600; font-size:19px; letter-spacing:.3px; margin:0 0 2px}
+  h1 .acc{color:var(--warm)}
+  .back{ font-size:11px; color:var(--gold); text-decoration:none; opacity:.85; white-space:nowrap; }
+  .back:hover{ opacity:1; text-decoration:underline; }
+  .sub{color:var(--dim); font-size:12.5px; margin:0 0 12px; text-align:center; max-width:680px}
+  .sub b{font-weight:600}
+  #stage{position:relative; width:min(96vw,860px)}
+  canvas{display:block; width:100%; border-radius:14px; border:1px solid var(--line);
+    background:var(--bg2); box-shadow:0 18px 60px -28px #000, inset 0 0 80px -40px #1a2740; touch-action:none; cursor:grab}
+  canvas.drag{cursor:grabbing}
+  /* HUD */
+  .hud{position:absolute; left:14px; top:12px; display:flex; flex-direction:column; gap:7px; pointer-events:none}
+  .chip{background:var(--panel); border:1px solid var(--panel-edge); border-radius:9px;
+    padding:6px 10px; font:12px/1.2 var(--font-mono); color:var(--dim);
+    backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); min-width:150px}
+  .chip b{color:var(--ink); font-weight:600}
+  .chip .big{font-size:17px; color:var(--ink)}
+  .chip.hot b, .chip.hot .big{color:var(--warm)}
+  .chip.cold b, .chip.cold .big{color:var(--cool)}
+  .chip.cone .big{color:var(--cone)}
+  /* pitch ribbon, right side */
+  .pitch{position:absolute; right:14px; top:12px; bottom:54px; width:54px;
+    border:1px solid var(--line); border-radius:9px; background:rgba(8,13,22,.6); overflow:hidden}
+  .pitch .needle{position:absolute; left:0; right:0; height:3px; background:var(--warm);
+    box-shadow:0 0 12px var(--warm); transition:top .04s linear, background .12s}
+  .pitch .base{position:absolute; left:0; right:0; height:1px; background:#3a465c}
+  .pitch .lbl{position:absolute; left:50%; transform:translateX(-50%); font:9px var(--font-mono); color:var(--dim)}
+  .ctl{display:flex; flex-wrap:wrap; gap:9px 14px; align-items:center; margin-top:14px; width:min(96vw,860px); justify-content:center}
+  .ctl label{display:flex; gap:8px; align-items:center; color:var(--dim); font-size:12.5px}
+  .ctl input[type=range]{width:160px; accent-color:var(--warm)}
+  .btn{appearance:none; background:#101a2a; color:var(--ink); border:1px solid var(--line);
+    border-radius:9px; padding:7px 13px; font-size:13px; cursor:pointer; transition:.15s; white-space:nowrap}
+  .btn:hover{border-color:#33425c; background:#16243a}
+  .btn.on{background:#1d2f1f; border-color:#2f6a3a; color:var(--ear)}
+  .btn.warn{border-color:#5a2530}
+  .btn.hero{border-color:#5a2530; color:#ffb9c2; background:#1d1115}
+  .btn.hero:hover{border-color:#a23a4a; background:#2a141a}
+  .btn.hero.running{background:#2a141a; border-color:#ff5d73; color:#ff9aa8}
+  .selftest{cursor:pointer; user-select:none; border:1px solid var(--line); border-radius:9px;
+    padding:7px 13px; font:12px var(--font-mono); color:var(--dim); background:rgba(8,13,22,.6)}
+  .selftest.ok{color:#8af0a8; border-color:#234a30}
+  .selftest.bad{color:#ff8a98; border-color:#5a2530}
+  .note{color:var(--dim); font-size:12px; max-width:680px; text-align:center; margin-top:14px}
+  .note b{color:var(--ink)}
+  details{max-width:680px; margin-top:6px; color:var(--dim); font-size:12px}
+  summary{cursor:pointer; color:var(--src)}
+  code{color:#cfe0ff; background:#0d1626; padding:1px 5px; border-radius:5px; font-size:11.5px}
+  kbd{background:#0d1626; border:1px solid var(--line); border-bottom-width:2px; border-radius:5px; padding:0 5px; font-size:11px}
+</style>
+</head>
+<body>
+  <div class="topline">
+    <h1>The Passing <span class="acc">Siren</span></h1>
+    <a class="back" href="../index.html">← The Orrery Estate</a>
+  </div>
+  <p class="sub">Drag the <b style="color:var(--src)">source</b> across the field. Its rings crowd ahead and stretch behind &mdash;
+     pitch is just geometry in a hurry. The <b style="color:var(--ear)">ear</b> hears it bend up, then snap down. Crank the speed past <i>c</i> and the rings harden into a <b style="color:var(--cone)">Mach cone</b>.</p>
+
+  <div id="stage">
+    <canvas id="field" width="860" height="540"></canvas>
+    <div class="hud">
+      <div class="chip" id="chSpeed">speed <b><span id="vVal">0.60</span> c</b><br><span style="color:#566479">Mach <span id="machVal">0.60</span></span></div>
+      <div class="chip" id="chPitch">heard pitch<br><span class="big"><span id="fVal">1.00</span>&times;</span></div>
+      <div class="chip cone" id="chCone" style="display:none">cone half-angle<br><span class="big">&mu; = <span id="muVal">&mdash;</span>&deg;</span></div>
+    </div>
+    <div class="pitch" id="pitchBar">
+      <div class="base" id="pBase"></div>
+      <div class="needle" id="pNeedle"></div>
+      <div class="lbl" style="top:4px">high</div>
+      <div class="lbl" style="bottom:4px">low</div>
+    </div>
+  </div>
+
+  <div class="ctl">
+    <label>speed&nbsp; <input type="range" id="vSlider" min="0" max="2.4" step="0.01" value="0.6"></label>
+    <button class="btn hero" id="btnMach">&#9654; accelerate through Mach&nbsp;1</button>
+    <button class="btn on" id="btnRun">&#10073;&#10073; pause</button>
+    <button class="btn" id="btnFreeze">&#10074;&#10074; freeze</button>
+    <button class="btn" id="btnSound">&#128263; sound off</button>
+    <button class="btn" id="btnStop">&#9209; stop source</button>
+    <button class="btn warn" id="btnReset">reset</button>
+    <span class="selftest" id="selftest" title="self-test of the Doppler + cone math">checking&hellip;</span>
+  </div>
+
+  <p class="note">The source auto-orbits a loop so you can just watch; <b>drag it</b> (or the ear) to steer. <kbd>stop source</kbd> parks it &mdash; a stationary source bends <b>no</b> pitch and bunches <b>no</b> rings. That is the negative control: the shift is the <i>motion's</i>, not arithmetic noise.</p>
+
+  <details>
+    <summary>what the math proves</summary>
+    <p>Each ring is a circle centered where the source <i>was</i> when it fired, growing at the wave speed <code>c</code>.
+    The ear hears ring <i>k</i> when that circle's radius reaches it. Differentiating the arrival time gives the closed form
+    <code>f_obs = f_src &middot; c/(c &minus; v&middot;cos&theta;)</code>, where &theta; is the angle between the source's velocity and the line to the ear,
+    measured at emission. The self-test pill checks the rendered ring-arrival rate against this form along a whole pass (approach / closest / recede),
+    confirms a stationary source gives <code>f_obs = f_src</code> to machine precision, and checks that above <code>c</code> the ring envelope's half-angle obeys
+    <code>sin&thinsp;&mu; = c/v</code> exactly. The same core runs in a Node twin (<code>core.test.mjs</code>), byte-identical to the page.</p>
+  </details>
+
+<script type="module">
+"use strict";
+// ===== PASSING-SIREN CORE (byte-identical to core.mjs) =====
+"use strict";
+
+const C = 1.0;          // wave speed (world units / second)
+
+// Heard frequency factor for a moving source, still listener (classical Doppler, source-motion
+// form): f_obs = f_src · c / (c − v_radial), v_radial = component of source velocity TOWARD the
+// listener = v·cosθ, θ = angle(velocity, source→listener) measured at EMISSION. Approaching
+// (v_radial>0) → denominator shrinks → pitch rises; receding (v_radial<0) → pitch falls. Returns
+// the bare factor f_obs/f_src (=1 when stationary, ∞ when a ring overtakes the listener, v>c only).
+function dopplerFactor(vx, vy, sx, sy, lx, ly){
+  const dx = lx - sx, dy = ly - sy;          // source → listener at emission
+  const dist = Math.hypot(dx, dy);
+  if (dist < 1e-12) return 1;
+  const vrad = (vx*dx + vy*dy) / dist;       // = v·cosθ
+  const denom = C - vrad;
+  if (denom <= 1e-9) return Infinity;        // ring overtakes listener (only possible when v>c)
+  return C / denom;
+}
+
+// Exact arrival time at listener L of the ring emitted at time te from a CONSTANT-velocity source
+// X(te) = X0 + V·te. The ring's radius at time t is c·(t − te); it reaches L when that radius
+// equals |L − X(te)|. So t_arrive(te) = te + |L − X(te)| / c.
+function arrivalTime(te, x0, y0, vx, vy, lx, ly){
+  const sx = x0 + vx*te, sy = y0 + vy*te;
+  return te + Math.hypot(lx - sx, ly - sy) / C;
+}
+
+// Instantaneous heard frequency from the arrival map: f_obs = f_src / (d t_arrive / d te).
+// d t_arrive/dte = 1 − v_radial/c, so f_obs = f_src · c/(c − v_radial) — the SAME closed form,
+// derived a second way. arrivalRate returns d t_arrive / d te by a centred difference; the
+// self-test pins this against dopplerFactor() across a full pass.
+function arrivalRate(te, x0, y0, vx, vy, lx, ly, h){
+  h = h || 1e-5;
+  const a1 = arrivalTime(te - h, x0, y0, vx, vy, lx, ly);
+  const a2 = arrivalTime(te + h, x0, y0, vx, vy, lx, ly);
+  return (a2 - a1) / (2*h);                  // d t_arrive / d te
+}
+
+// Mach cone half-angle for a SUPERSONIC source: the envelope of the expanding rings is a cone with
+// sin(μ) = c/v. Pure geometry — a ring fired at lag τ has radius c·τ; the source has since travelled
+// v·τ, so the tangent from the source-now to that circle subtends sin(μ) = cτ/(vτ) = c/v, INDEPENDENT
+// of τ. Returns radians, or NaN if subsonic (no cone exists at or below c).
+function machAngle(speed){
+  if (speed <= C) return NaN;
+  return Math.asin(C / speed);
+}
+
+// ── the self-test: prove the three claims numerically ──────────────────────────────────────
+function runSelfTest(){
+  const checks = [];
+  const ck = (name, pass, info) => checks.push({ name, pass, info });
+
+  // (1) SUBSONIC: the rendered ring-arrival rate matches the closed form across a FULL pass.
+  // Source flies left→right past an off-axis ear; sample θ from deep-approach to deep-recede and
+  // demand the two independent derivations agree to machine precision the whole way.
+  {
+    const x0 = -4, y0 = 0, vx = 0.6, vy = 0, lx = 0, ly = 0.8, fsrc = 12;
+    let maxRel = 0;
+    for (let te = -6; te <= 6; te += 0.05){
+      // closed form via velocity·(source→listener) at this emission position
+      const sx = x0 + vx*te, sy = y0 + vy*te;
+      const fClosed = fsrc * dopplerFactor(vx, vy, sx, sy, lx, ly);
+      // independent: f_obs = f_src / (d t_arrive/d te), te-derivative of the EXACT arrival map
+      const fArr = fsrc / arrivalRate(te, x0, y0, vx, vy, lx, ly);
+      if (!isFinite(fClosed) || !isFinite(fArr)) continue;
+      maxRel = Math.max(maxRel, Math.abs(fArr - fClosed) / fClosed);
+    }
+    ck('1 · subsonic: arrival-rate = c/(c−v·cosθ) across a full pass', maxRel < 1e-6, 'maxRelErr = ' + maxRel.toExponential(2));
+  }
+
+  // (2) NEGATIVE CONTROL: a STATIONARY source bends NO pitch — f_obs = f_src exactly, at every
+  // angle. This is the playable control on the page (the "stop source" button).
+  {
+    let maxDev = 0;
+    for (let ang = 0; ang < 6.283; ang += 0.21){
+      const lx = 2*Math.cos(ang), ly = 2*Math.sin(ang);
+      const f = dopplerFactor(0, 0, 0, 0, lx, ly);   // zero velocity → no shift
+      maxDev = Math.max(maxDev, Math.abs(f - 1));
+    }
+    ck('2 · stationary control: f_obs = f_src (no shift, all angles)', maxDev < 1e-12, 'maxDev = ' + maxDev.toExponential(2));
+  }
+
+  // (3) SUPERSONIC: the ring-envelope half-angle equals asin(c/v) — checked against a DIRECT
+  // geometric envelope sweep (the minimum tangent angle over many lagged rings) at several speeds.
+  {
+    let maxErr = 0, sample = '';
+    for (const v of [1.4, 2.0, 3.0]){
+      const closed = machAngle(v);
+      // direct: source NOW at the origin (te=0); rings fired at te<0 from x = v·te, radius = −c·te.
+      let minAng = Infinity;
+      for (let k = 1; k < 4000; k++){
+        const te = -k * 0.001;
+        const cx = v*te, rad = -C*te;          // ring centre x, radius
+        const dist = Math.hypot(0 - cx, 0);    // source-now (origin) to ring centre
+        if (rad >= dist) continue;
+        minAng = Math.min(minAng, Math.asin(rad / dist));
+      }
+      const err = Math.abs(minAng - closed);
+      if (err > maxErr){ maxErr = err; sample = 'v=' + v + 'c μ=' + (closed*180/Math.PI).toFixed(2) + '°'; }
+    }
+    ck('3 · supersonic: sin μ = c/v (cone envelope)', maxErr < 1e-3, sample + ' err=' + maxErr.toExponential(2));
+  }
+
+  const passed = checks.filter(c => c.pass).length;
+  return { ok: passed === checks.length, passed, total: checks.length, checks };
+}
+// ===== END PASSING-SIREN CORE =====
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// THE FIELD — render the rings, the ear, the cone. Form expresses content: you SEE the rings
+// bunch, you SEE the cone snap shut. No plotted curve.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+const cv = document.getElementById('field');
+const ctx = cv.getContext('2d');
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+let W = cv.width, H = cv.height;
+function resize(){
+  const rect = cv.getBoundingClientRect();
+  W = Math.round(rect.width * DPR); H = Math.round((rect.width * 540/860) * DPR);
+  cv.width = W; cv.height = H;
+}
+window.addEventListener('resize', resize);
+
+// World ↔ pixel: world spans roughly [-5,5] in x. Keep a fixed scale so c is meaningful.
+function scale(){ return (W / DPR) / 10 * (DPR); }   // world width 10 → canvas width
+function w2px(wx){ return W/2 + wx * scale(); }
+function w2py(wy){ return H/2 + wy * scale(); }
+function px2wx(px){ return (px - W/2) / scale(); }
+function px2wy(py){ return (py - H/2) / scale(); }
+
+// State.
+const ear = { x: 0.0, y: 1.7 };                 // listener, world units
+let src = { x: -3.5, y: 0 };                    // source position now
+let vx = 0.6, vy = 0;                           // current source velocity (world units/sec)
+let speedSetting = 0.6;                          // |v| the slider commands
+let heading = 0;                                // orbit/drag-derived heading
+const rings = [];                               // {x,y, t0, vx,vy}  emission centre, time, AND
+                                                //   the source velocity AT emission (Refinement A:
+                                                //   exact warm/cool hue even through sharp turns)
+let lastEmit = 0;
+const FSRC = 12;                                // emission cadence (rings/sec) — also "pitch 1.0"
+const EMIT_DT = 1 / FSRC;
+let t = 0;                                       // sim clock (seconds)
+let running = true;
+let manualSteer = false;                         // user is dragging the source → no orbit
+let parked = false;                              // "stop source" → stationary control
+let dragging = null;                             // 'src' | 'ear' | null
+
+// scripted Mach-1 run (Refinement B): a smoothstep ease rest → ~2.0c over ~6s so the cone visibly
+// snaps shut and tightens. null when not running; otherwise { t0, dur, from, to }.
+let machRun = null;
+const MACH_TO = 2.0, MACH_DUR = 6.0;
+function smoothstep(u){ u = Math.max(0, Math.min(1, u)); return u*u*(3 - 2*u); }
+
+// auto-orbit path (a wide figure-eight loop) so the scene lives without input.
+function orbitTarget(tt){
+  const a = tt * 0.28;
+  return { x: 3.4*Math.cos(a), y: 1.55*Math.sin(2*a) };  // figure-eight-ish, crosses the ear's row
+}
+
+// audio (opt-in, muted by default). Sawtooth, gain ≤ 0.06, freq clamped ≤ 3× so no clipping.
+let audioOn = false, actx = null, osc = null, gain = null;
+function ensureAudio(){
+  if (actx) return;
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  osc = actx.createOscillator(); gain = actx.createGain();
+  osc.type = 'sawtooth'; osc.frequency.value = 220; gain.gain.value = 0;
+  osc.connect(gain).connect(actx.destination); osc.start();
+}
+
+// current heard pitch factor (for HUD + audio + needle).
+function heardFactor(){
+  if (parked || (vx===0 && vy===0)) return 1;
+  const f = dopplerFactor(vx, vy, src.x, src.y, ear.x, ear.y);
+  return isFinite(f) ? f : 6;   // clamp the singularity for display
+}
+
+// ── step the sim ──
+function step(dt){
+  if (!running) return;
+  t += dt;
+  // scripted Mach-1 acceleration overrides the slider for its duration.
+  if (machRun){
+    const u = (t - machRun.t0) / machRun.dur;
+    speedSetting = machRun.from + (machRun.to - machRun.from) * smoothstep(u);
+    vSlider.value = speedSetting.toFixed(2);
+    if (u >= 1){ speedSetting = machRun.to; vSlider.value = speedSetting.toFixed(2); machRun = null; btnMach.classList.remove('running'); btnMach.innerHTML = '&#9654; accelerate through Mach&nbsp;1'; }
+    parked = false;
+  }
+  // velocity: parked → 0; manual steer keeps last heading; else follow the orbit.
+  if (parked){
+    vx = 0; vy = 0;
+  } else if (!manualSteer){
+    const tgt = orbitTarget(t);
+    const dx = tgt.x - src.x, dy = tgt.y - src.y, d = Math.hypot(dx, dy) || 1;
+    heading = Math.atan2(dy, dx);
+    vx = (dx/d) * speedSetting; vy = (dy/d) * speedSetting;
+    src.x += vx*dt; src.y += vy*dt;
+  } else {
+    // manual: drift along last heading at the set speed (so rings keep forming while held)
+    vx = Math.cos(heading)*speedSetting; vy = Math.sin(heading)*speedSetting;
+    // position is updated by the pointer handler; don't double-move here
+  }
+  // emit rings at the fixed cadence — store the source velocity ON each ring (Refinement A).
+  // GUARD: never let the catch-up loop run away. If lastEmit has fallen more than a few cadence
+  // periods behind (a fresh start, a long tab-stall, or a paused jump), snap it forward so we emit
+  // at most a handful of rings this frame — not one per EMIT_DT since the clock's origin.
+  if (t - lastEmit > 8*EMIT_DT) lastEmit = t - EMIT_DT;
+  while (t - lastEmit >= EMIT_DT){
+    lastEmit += EMIT_DT;
+    rings.push({ x: src.x, y: src.y, t0: lastEmit, vx, vy });
+  }
+  // cull old rings (radius beyond the field)
+  const maxR = 12;
+  while (rings.length && C*(t - rings[0].t0) > maxR) rings.shift();
+}
+
+// ── render ──
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // subtle grid
+  ctx.strokeStyle = 'rgba(40,56,82,.35)'; ctx.lineWidth = 1*DPR;
+  for (let gx=-5; gx<=5; gx++){ ctx.beginPath(); ctx.moveTo(w2px(gx),0); ctx.lineTo(w2px(gx),H); ctx.stroke(); }
+  for (let gy=-3; gy<=3; gy++){ ctx.beginPath(); ctx.moveTo(0,w2py(gy)); ctx.lineTo(W,w2py(gy)); ctx.stroke(); }
+
+  const supersonic = speedSetting > C && !parked;
+
+  // rings — tint each by the radial component of its STORED emission velocity toward the ear
+  // (Refinement A): a ring fired while the source was moving TOWARD the ear is warm (it crowds);
+  // one fired moving AWAY is cool (it spreads). Using the stored vx/vy makes the hue exact even
+  // through the figure-eight's sharp turns — the heading "now" is irrelevant to a ring already fired.
+  for (const r of rings){
+    const rad = C*(t - r.t0);
+    if (rad <= 0) continue;
+    const dxE = ear.x - r.x, dyE = ear.y - r.y;
+    const dist = Math.hypot(dxE, dyE) || 1;
+    const vradEmit = (r.vx*dxE + r.vy*dyE) / dist;   // emission v · (ring→ear), signed
+    const warm = vradEmit > 1e-6;
+    const cool = vradEmit < -1e-6;
+    const a = Math.max(0, 0.55 - rad*0.05);
+    ctx.strokeStyle = warm ? `rgba(255,178,74,${a.toFixed(3)})`
+                    : cool ? `rgba(95,168,255,${a.toFixed(3)})`
+                           : `rgba(127,176,232,${a.toFixed(3)})`;
+    ctx.lineWidth = 1.4*DPR;
+    ctx.beginPath();
+    ctx.arc(w2px(r.x), w2py(r.y), rad*scale(), 0, 6.2832);
+    ctx.stroke();
+  }
+
+  // Mach cone (drawn as two tangent lines from the source apex) when supersonic.
+  if (supersonic){
+    const mu = machAngle(speedSetting);
+    const dir = Math.atan2(vy, vx);              // travel direction
+    const back = dir + Math.PI;                  // the cone opens BEHIND the source
+    // shade the cone interior faintly first (under the edges)
+    ctx.fillStyle = 'rgba(255,93,115,.06)';
+    ctx.beginPath();
+    ctx.moveTo(w2px(src.x), w2py(src.y));
+    ctx.lineTo(w2px(src.x + Math.cos(back+mu)*16), w2py(src.y + Math.sin(back+mu)*16));
+    ctx.lineTo(w2px(src.x + Math.cos(back-mu)*16), w2py(src.y + Math.sin(back-mu)*16));
+    ctx.closePath(); ctx.fill();
+    for (const s of [+1,-1]){
+      const a = back + s*mu;
+      const len = 16;
+      ctx.strokeStyle = 'rgba(255,93,115,.92)'; ctx.lineWidth = 2*DPR;
+      ctx.beginPath();
+      ctx.moveTo(w2px(src.x), w2py(src.y));
+      ctx.lineTo(w2px(src.x + Math.cos(a)*len), w2py(src.y + Math.sin(a)*len));
+      ctx.stroke();
+    }
+  }
+
+  // velocity arrow from the source
+  if (!parked && (vx||vy)){
+    const a = Math.atan2(vy,vx), L = 0.9;
+    ctx.strokeStyle = 'rgba(255,213,107,.7)'; ctx.lineWidth = 2*DPR;
+    ctx.beginPath(); ctx.moveTo(w2px(src.x), w2py(src.y));
+    ctx.lineTo(w2px(src.x+Math.cos(a)*L), w2py(src.y+Math.sin(a)*L)); ctx.stroke();
+  }
+
+  // line of sight source → ear
+  ctx.setLineDash([4*DPR,4*DPR]); ctx.strokeStyle = 'rgba(154,255,200,.25)'; ctx.lineWidth=1*DPR;
+  ctx.beginPath(); ctx.moveTo(w2px(src.x),w2py(src.y)); ctx.lineTo(w2px(ear.x),w2py(ear.y)); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ear (listener)
+  drawEar();
+
+  // source (the buzzing dot)
+  const pulse = 1 + 0.25*Math.sin(t*FSRC*2*Math.PI);
+  ctx.fillStyle = '#ffd56b';
+  ctx.shadowColor = '#ffd56b'; ctx.shadowBlur = 14*DPR;
+  ctx.beginPath(); ctx.arc(w2px(src.x), w2py(src.y), 6*DPR*pulse, 0, 6.2832); ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function drawEar(){
+  const px = w2px(ear.x), py = w2py(ear.y);
+  ctx.fillStyle = '#9affc8'; ctx.strokeStyle = '#9affc8'; ctx.lineWidth = 2*DPR;
+  // simple ear glyph: a ring + inner curl
+  ctx.beginPath(); ctx.arc(px,py,9*DPR,-1.1,2.0); ctx.stroke();
+  ctx.beginPath(); ctx.arc(px,py,4.2*DPR,-0.6,2.4); ctx.stroke();
+  ctx.beginPath(); ctx.arc(px,py,1.6*DPR,0,6.28); ctx.fill();
+}
+
+// ── HUD ──
+const vSlider=document.getElementById('vSlider');
+const vVal=document.getElementById('vVal'), machVal=document.getElementById('machVal'),
+      fVal=document.getElementById('fVal'), muVal=document.getElementById('muVal'),
+      chPitch=document.getElementById('chPitch'), chCone=document.getElementById('chCone'),
+      pNeedle=document.getElementById('pNeedle'), pBase=document.getElementById('pBase');
+function updateHUD(){
+  vVal.textContent = speedSetting.toFixed(2);
+  machVal.textContent = (speedSetting/C).toFixed(2);
+  const f = heardFactor();
+  fVal.textContent = f.toFixed(2);
+  chPitch.classList.toggle('hot', f > 1.02);
+  chPitch.classList.toggle('cold', f < 0.98);
+  // needle: map factor [0.5..2] → [bottom..top]
+  const barH = document.getElementById('pitchBar').clientHeight;
+  const fr = Math.max(0, Math.min(1, (f - 0.5) / 1.5));
+  pNeedle.style.top = ((1-fr) * (barH-3)) + 'px';
+  pNeedle.style.background = f>1.02 ? 'var(--warm)' : (f<0.98 ? 'var(--cool)' : '#cfe0ff');
+  pBase.style.bottom = ((1 - (1-0.5)/1.5) * (barH-1)) + 'px';  // f=1 line
+  // cone chip
+  if (speedSetting > C && !parked){
+    chCone.style.display='block';
+    muVal.textContent = (machAngle(speedSetting)*180/Math.PI).toFixed(1);
+  } else chCone.style.display='none';
+  // audio — clamp freq to ≤ 3× base and gain to 0.06 so it never clips.
+  if (audioOn && actx){
+    const base = 220;
+    const tgt = Math.min(base*3, base * (isFinite(f)?f:3));
+    osc.frequency.setTargetAtTime(tgt, actx.currentTime, 0.02);
+    gain.gain.setTargetAtTime(0.06, actx.currentTime, 0.05);
+  }
+}
+
+// ── loop ──
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(0.05, (now-last)/1000); last = now;
+  step(dt); draw(); updateHUD();
+  requestAnimationFrame(frame);
+}
+
+// ── interaction ──
+function pickAt(px,py){
+  const wx=px2wx(px), wy=px2wy(py);
+  const dS = Math.hypot(wx-src.x, wy-src.y), dE = Math.hypot(wx-ear.x, wy-ear.y);
+  if (dS < 0.5 && dS <= dE) return 'src';
+  if (dE < 0.5) return 'ear';
+  return null;
+}
+function localPt(e){
+  const r = cv.getBoundingClientRect();
+  const cx = (e.touches?e.touches[0].clientX:e.clientX) - r.left;
+  const cy = (e.touches?e.touches[0].clientY:e.clientY) - r.top;
+  return { px: cx*DPR, py: cy*DPR };
+}
+cv.addEventListener('pointerdown', e=>{
+  const {px,py}=localPt(e); const hit = pickAt(px,py);
+  if (hit){ dragging=hit; cv.classList.add('drag'); cv.setPointerCapture(e.pointerId);
+    if (hit==='src'){ manualSteer=true; parked=false; machRun=null; btnMach.classList.remove('running'); btnMach.innerHTML='&#9654; accelerate through Mach&nbsp;1'; } }
+});
+cv.addEventListener('pointermove', e=>{
+  if (!dragging) return;
+  const {px,py}=localPt(e);
+  const wx=px2wx(px), wy=px2wy(py);
+  if (dragging==='ear'){ ear.x=Math.max(-4.8,Math.min(4.8,wx)); ear.y=Math.max(-3,Math.min(3,wy)); }
+  else {
+    // moving the source: derive heading from the drag delta; emit happens in step()
+    const ow={x:src.x,y:src.y};
+    src.x=Math.max(-4.8,Math.min(4.8,wx)); src.y=Math.max(-3,Math.min(3,wy));
+    const dx=src.x-ow.x, dy=src.y-ow.y;
+    if (Math.hypot(dx,dy)>1e-3) heading=Math.atan2(dy,dx);
+  }
+});
+function endDrag(){ if(dragging){ dragging=null; cv.classList.remove('drag'); } }
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+
+vSlider.addEventListener('input', e=>{ speedSetting=parseFloat(e.target.value); if(speedSetting>0) parked=false; machRun=null; btnMach.classList.remove('running'); btnMach.innerHTML='&#9654; accelerate through Mach&nbsp;1'; });
+const btnRun=document.getElementById('btnRun');
+btnRun.addEventListener('click', ()=>{ running=!running; btnRun.innerHTML = running?'&#10073;&#10073; pause':'&#9654; run'; last=performance.now(); });
+const btnFreeze=document.getElementById('btnFreeze');
+btnFreeze.addEventListener('click', ()=>{ running=false; btnRun.innerHTML='&#9654; run'; });
+const btnMach=document.getElementById('btnMach');
+btnMach.addEventListener('click', ()=>{
+  // script a smoothstep ease from rest → 2.0c over ~6s so the cone snaps shut and tightens.
+  running = true; btnRun.innerHTML='&#10073;&#10073; pause'; last=performance.now();
+  parked = false; manualSteer = false;
+  src = { x:-4.4, y:0 }; heading = 0; rings.length = 0; t = 0; lastEmit = 0;
+  speedSetting = 0; vSlider.value = '0.00';
+  machRun = { t0: 0, dur: MACH_DUR, from: 0, to: MACH_TO };
+  btnMach.classList.add('running'); btnMach.innerHTML='&#9654; accelerating&hellip;';
+});
+const btnSound=document.getElementById('btnSound');
+btnSound.addEventListener('click', ()=>{
+  audioOn=!audioOn;
+  if (audioOn){ ensureAudio(); if(actx.state==='suspended')actx.resume(); btnSound.classList.add('on'); btnSound.innerHTML='&#128266; sound on'; }
+  else { if(gain) gain.gain.setTargetAtTime(0, actx.currentTime, 0.03); btnSound.classList.remove('on'); btnSound.innerHTML='&#128263; sound off'; }
+});
+document.getElementById('btnStop').addEventListener('click', ()=>{ parked=!parked; manualSteer=false; machRun=null; btnMach.classList.remove('running'); btnMach.innerHTML='&#9654; accelerate through Mach&nbsp;1'; if(parked){vx=0;vy=0;} });
+document.getElementById('btnReset').addEventListener('click', ()=>{
+  src={x:-3.5,y:0}; speedSetting=0.6; vSlider.value='0.60'; vx=speedSetting; vy=0; ear.x=0; ear.y=1.7;
+  rings.length=0; t=0; lastEmit=0; parked=false; manualSteer=false; machRun=null;
+  running=true; btnRun.innerHTML='&#10073;&#10073; pause'; last=performance.now();
+  btnMach.classList.remove('running'); btnMach.innerHTML='&#9654; accelerate through Mach&nbsp;1';
+});
+
+// ── self-test pill ──
+const pill=document.getElementById('selftest');
+function showSelfTest(){
+  const st=runSelfTest();
+  pill.textContent=(st.ok?'✓ ':'✗ ')+st.passed+'/'+st.total+' self-test';
+  pill.classList.toggle('ok',st.ok); pill.classList.toggle('bad',!st.ok);
+  pill.title = st.checks.map(c=>(c.pass?'✓':'✗')+' '+c.name+'  ['+c.info+']').join('\n');
+}
+pill.addEventListener('click', ()=>alert(runSelfTest().checks.map(c=>(c.pass?'✓ ':'✗ ')+c.name+'\n   '+c.info).join('\n\n')));
+
+resize(); showSelfTest(); requestAnimationFrame(frame);
+// expose for the Node twin / debugging
+window.PassingSiren = { dopplerFactor, arrivalTime, arrivalRate, machAngle, runSelfTest };
+
+/* =====================================================================================
+   BREADCRUMB — register a direct visit for the Survey.
+   ===================================================================================== */
+try{ const k='ws:seen:passing-siren'; if(!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
+</script>
+</body>
+</html>

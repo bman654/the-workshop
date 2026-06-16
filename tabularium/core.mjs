@@ -246,7 +246,7 @@ export function verdict(checks) {
 /* The VERIFIED real aggregate targets of ledger/ledger.jsonl, as of this build.
    The Node twin pins to these; if the real file ever changes shape, the twin
    fails loudly and the room must be re-forged. */
-export const CLAIM = { marks: 298, makers: 264, cycles: 74, minCyc: 306, maxCyc: 410 };
+export const CLAIM = { marks: 304, makers: 269, cycles: 75, minCyc: 306, maxCyc: 411 };
 
 /* ── THE ESTATE'S WINGS, by their REAL first-appearance ───────────────────────
    `bornCycle` is the git commit-DEPTH of the commit that first added that wing's
