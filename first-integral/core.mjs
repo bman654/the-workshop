@@ -41,6 +41,38 @@ function hCatenary(y, yp) {
   return y / Math.sqrt(1 + yp * yp);
 }
 
+// ---------------------------------------------------------------------------
+//  THE ACTION ITSELF — not the conserved H, but the integral H is conserved ALONG.
+//  These three pure functions let the self-test prove the OTHER half of the story:
+//  the true catenary doesn't just conserve H, it MINIMISES the action ∫f dx, so
+//  ANY dragged perturbation costs MORE.  (The page's COST-BOWL is this number.)
+// ---------------------------------------------------------------------------
+
+// f for the catenary/catenoid action (energy/area): f = y·√(1+y′²)
+function fCatenary(y, yp){ return y * Math.sqrt(1 + yp*yp); }
+
+// discretised action ∫f dx — MIDPOINT rule, slope RECOMPUTED from the ACTUAL node
+// positions per segment (this is load-bearing: a bumped y MUST change the slope, or
+// the minimum is a fiction — verified, see below).
+function action(samples, fFn){
+  let total = 0;
+  for (let i = 0; i < samples.length - 1; i++){
+    const a = samples[i], b = samples[i+1], dx = b.x - a.x;
+    total += fFn(0.5*(a.y+b.y), (b.y-a.y)/dx) * dx;
+  }
+  return total;
+}
+
+// move interior node by delta in y; endpoints pinned. (Single-node discrete bump —
+// this is the SELF-TEST atom; the on-screen drag uses a smooth spline bump but feeds
+// the SAME action() with recomputed segment slopes.)
+function perturb(trueSamples, pointIndex, delta){
+  const out = trueSamples.map(s => ({ x:s.x, y:s.y, yp:s.yp }));
+  if (pointIndex > 0 && pointIndex < out.length - 1)
+    out[pointIndex] = { ...out[pointIndex], y: out[pointIndex].y + delta };
+  return out;
+}
+
 // SOAP FILM / CATENOID — minimise surface AREA of revolution:
 //   f = y·√(1+y′²)   (y = the radius of the surface at this station; 2π·f dx is
 //   the lateral area element).  IDENTICAL FORM to the catenary's energy integrand
@@ -317,12 +349,86 @@ function runSelfTest() {
        'max drift ' + maxDrift.toExponential(1));
   }
 
+  // ==========================================================================
+  //  THE ACTION-MINIMUM CLAIM (catenary) — the true curve doesn't only conserve
+  //  H, it MINIMISES the action ∫f dx.  We prove it on the catenary alone (the
+  //  slide & film bowls are visual / followup-proven — we do NOT self-test their
+  //  minima yet).  Slopes here are RECOMPUTED from the perturbed node positions:
+  //  a bumped y changes the segment slope, or the minimum is a fiction.
+  // ==========================================================================
+  const cat = sampleCatenary(0.85, 1.25, 240);
+  const I0 = action(cat, fCatenary);
+  const midN = Math.floor(cat.length / 2);
+
+  // (11) MINIMUM: over interior nodes × deltas, action(perturbed) − action(true) ≥ 0.
+  {
+    let worst = Infinity;
+    const deltas = [0.04, 0.03, 0.02, 0.01, 0.005, -0.005, -0.01, -0.02, -0.03, -0.04];
+    for (let k = 1; k < cat.length - 1; k += 7) {
+      for (const d of deltas) {
+        const dI = action(perturb(cat, k, d), fCatenary) - I0;
+        if (dI < worst) worst = dI;
+      }
+    }
+    detail.actionWorst = worst;
+    ok('Action minimum: every dragged perturbation has action ≥ the true action (ΔI ≥ 0)',
+       worst >= 0,
+       'worst ΔI over the sweep = +' + worst.toExponential(2) + ' (≥ 0 ⇒ the floor is the law)');
+  }
+
+  // (12) QUADRATIC by Richardson halving — at small d the bowl is a true parabola:
+  //   R = (I(d)−I0)/(I(d/2)−I0) → 4 as d halves.  Small-delta regime (a large d
+  //   bends R via the cubic tail).  This is the DISCRIMINATING quadratic-minimum
+  //   test (ΔI/δ² does NOT converge for the midpoint integrator → do not use it).
+  {
+    const dI = (d) => action(perturb(cat, midN, d), fCatenary) - I0;
+    const base = 0.004;
+    const R = dI(base) / dI(base / 2);
+    detail.actionR = R;
+    ok('Action grows ~quadratically (a genuine minimum): Richardson R → 4 as the pull halves',
+       Math.abs(R - 4) < 0.1,
+       'R = (I(d)−I0)/(I(d/2)−I0) = ' + R.toFixed(3) + ' (→ 4 ⇒ ΔI ∝ d², a smooth bowl)');
+  }
+
+  // (13) H BREAKS PAST THE FLOOR — the SAME recomputed (finite-difference / segment)
+  //   slopes the live strip shows.  A d=0.02 bump makes hCatenary's relDev ≫ 1e-3,
+  //   vs the true curve's flat strip.  (Do NOT compare this FD relDev to the 1e-9
+  //   floor — FD slopes wobble ~0.5% even on the true curve; the drag climbs above it.)
+  {
+    const fd = (samples) => {
+      const o = samples.map((s) => ({ x: s.x, y: s.y }));
+      for (let i = 0; i < o.length; i++) {
+        if (i === 0) o[i].yp = (o[1].y - o[0].y) / (o[1].x - o[0].x);
+        else if (i === o.length - 1) o[i].yp = (o[i].y - o[i - 1].y) / (o[i].x - o[i - 1].x);
+        else o[i].yp = (o[i + 1].y - o[i - 1].y) / (o[i + 1].x - o[i - 1].x);
+      }
+      return o;
+    };
+    const trueFD = flatness(fd(cat), hCatenary).relDev;
+    const bumpFD = flatness(fd(perturb(cat, midN, 0.02)), hCatenary).relDev;
+    detail.hTrueFD = trueFD; detail.hBumpFD = bumpFD;
+    ok('H strip buckles past the floor: a d=0.02 drag makes H waver ≫ 1e-3 (true strip stays ~flat)',
+       bumpFD > 1e-3 && bumpFD > 20 * trueFD,
+       'dragged H waves ' + (bumpFD * 100).toFixed(1) + '% vs true-FD ' + (trueFD * 100).toFixed(2) + '%');
+  }
+
+  // (14) DETERMINISM of the action: rebuilt twice, byte-identical (drift 0).
+  {
+    const a2 = action(sampleCatenary(0.85, 1.25, 240), fCatenary);
+    const b2 = action(sampleCatenary(0.85, 1.25, 240), fCatenary);
+    detail.actionDrift = Math.abs(a2 - b2);
+    ok('Action is deterministic — rebuilt twice, byte-identical (drift 0)',
+       a2 === b2,
+       'drift ' + Math.abs(a2 - b2).toExponential(1));
+  }
+
   const pass = checks.filter((c) => c.pass).length;
   return { pass, total: checks.length, checks, detail };
 }
 
 export {
   hCatenary, hCatenoid, hBrachistochrone, firstIntegralBrachistochrone,
+  fCatenary, action, perturb,
   sampleCatenary, sampleCatenoid, sampleCycloid, sampleArc, sampleParabola,
   flatness, buildPanels, runSelfTest,
 };

@@ -6,6 +6,7 @@
 // ============================================================================
 import {
   hCatenary, hCatenoid, hBrachistochrone, firstIntegralBrachistochrone,
+  fCatenary, action, perturb,
   sampleCatenary, sampleCatenoid, sampleCycloid, sampleArc, sampleParabola,
   flatness, buildPanels, runSelfTest,
 } from './core.mjs';
@@ -107,6 +108,57 @@ console.log('\n— Independent re-derivations (this file, not the bundled self-t
   const a = JSON.stringify(runSelfTest().detail);
   const b = JSON.stringify(runSelfTest().detail);
   check('two full self-test runs are byte-identical (deterministic)', a === b);
+}
+
+// THE ACTION MINIMUM (independent of the bundled self-test): the true catenary
+//   minimises ∫f dx, so any dragged node costs MORE, and the cost grows ∝ d².
+{
+  const cat = sampleCatenary(0.85, 1.25, 240);
+  const I0 = action(cat, fCatenary);
+  const mid = Math.floor(cat.length / 2);
+  // ΔI ≥ 0 over a fine interior × delta sweep (no slack):
+  let worst = Infinity;
+  for (let k = 1; k < cat.length - 1; k += 3) {
+    for (const d of [0.05, 0.02, 0.008, 0.003, -0.003, -0.008, -0.02, -0.05]) {
+      worst = Math.min(worst, action(perturb(cat, k, d), fCatenary) - I0);
+    }
+  }
+  check('action minimum: ΔI ≥ 0 over a fine interior×delta sweep (the true curve is the floor)',
+        worst >= 0, 'worst ΔI = +' + worst.toExponential(2));
+  // Richardson R → 4 at small d (quadratic bowl); large d bends it via the cubic tail.
+  const dI = (d) => action(perturb(cat, mid, d), fCatenary) - I0;
+  for (const base of [0.004, 0.002]) {
+    const R = dI(base) / dI(base / 2);
+    check('Richardson R→4 at base d=' + base + ' (ΔI ∝ d²)', Math.abs(R - 4) < 0.1, 'R=' + R.toFixed(3));
+  }
+  // a single bumped node lifts the action measurably (the bowl is not flat):
+  check('a single dragged node has STRICTLY higher action than the true curve',
+        dI(0.02) > 1e-6, 'ΔI(d=0.02)=' + dI(0.02).toExponential(2));
+  // determinism of the action value:
+  check('action rebuilt twice is byte-identical',
+        action(sampleCatenary(0.85, 1.25, 240), fCatenary) === action(sampleCatenary(0.85, 1.25, 240), fCatenary));
+}
+
+// H BREAKS PAST THE FLOOR under the SAME recomputed slopes the live strip uses.
+{
+  const cat = sampleCatenary(0.85, 1.25, 240);
+  const mid = Math.floor(cat.length / 2);
+  const fd = (s) => {
+    const o = s.map((p) => ({ x: p.x, y: p.y }));
+    for (let i = 0; i < o.length; i++) {
+      if (i === 0) o[i].yp = (o[1].y - o[0].y) / (o[1].x - o[0].x);
+      else if (i === o.length - 1) o[i].yp = (o[i].y - o[i - 1].y) / (o[i].x - o[i - 1].x);
+      else o[i].yp = (o[i + 1].y - o[i - 1].y) / (o[i + 1].x - o[i - 1].x);
+    }
+    return o;
+  };
+  const trueFD = flatness(fd(cat), hCatenary).relDev;
+  const bumpFD = flatness(fd(perturb(cat, mid, 0.02)), hCatenary).relDev;
+  check('true-curve FD strip stays ~flat (the ~0.5% baseline wobble, NOT the 1e-9 floor)',
+        trueFD < 0.02, 'true-FD relDev ' + (trueFD * 100).toFixed(2) + '%');
+  check('a dragged node makes the H strip waver ≫ the true strip (≫ 1e-3, > 20× baseline)',
+        bumpFD > 1e-3 && bumpFD > 20 * trueFD,
+        'dragged ' + (bumpFD * 100).toFixed(1) + '% vs true ' + (trueFD * 100).toFixed(2) + '%');
 }
 
 // ---------------------------------------------------------------------------

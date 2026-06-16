@@ -8,6 +8,102 @@ law. A self-contained standalone Workbench bench in the **Toys & benches** group
 
 ---
 
+## v2 — the bowl you can't get below (2026-06-15, cycle #59 of the fun-forever loop)
+
+**Re-souled to a touchable form.** v1 was three side-by-side flat-strip explainers —
+correct, but a chart-museum register. v2 turns the headline into a **thing you grab**:
+the true curve sits at the **bottom of a bowl** and you try (and fail) to beat it.
+
+### The new form (FORM EXPRESSES CONTENT)
+- **Two-column hero** (stacks ≤820px): LEFT = the touchable chain + a reactive
+  H-strip; RIGHT = the big **COST-BOWL** gauge (the emotional centre). **Tabs**
+  switch ONE curve at a time (chain ⛓️ / slide 🛝 / soap-neck 🫧) so the minimum is
+  the star, not a 3-up comparison.
+- **The curve you grab.** Beads ride the true extremal; ends pinned (Dirichlet).
+  Grab an interior bead and drag — the curve deforms as a **smooth C¹ raised-cosine
+  bump** centred on the dragged node (width ~⅓ span, zero at both pins) — a kink
+  would look broken on a chain. Cursor grab→grabbing (sibling Catenary convention).
+  On release: an **eased spring-back** that lands EXACTLY on the analytic sample
+  (the visual eases; the true samples are untouched, so the strip returns true-flat).
+- **The cost bowl** (hero gauge). A filled translucent gold parabolic well; a bright
+  dot rides it. Drag magnitude → horizontal position; **measured ΔI = action(pulled)
+  − action(true)** → height up the wall. The dot rests on the floor at the true
+  curve, **rises on ANY pull** (up or down, any node), and **cannot go below** the
+  dashed "FLOOR — the true curve" line. The rim is the **measured ΔI swept over a
+  drag** (the data IS the shape), with a thin dashed **∝ d²** reference overlaid.
+  Badge: `ΔI = +0.0203` / idle `ΔI = 0 — you are at the minimum`.
+- **The H-strip** (demoted to evidence). Flat gold at rest; on drag it **buckles**
+  and the arc segments whose Euler–Lagrange residual breaks tolerance light **red**
+  — on BOTH the strip and the curve. Readout `H flat → wavers 66%`.
+- **Idle hook** — the canned impostor (the v1 circular arc) is ghosted dim with its
+  bowl-dot already parked HIGH up the wall: "here's a bad guess, cost is way up —
+  drag the bead to beat it." A lightweight toggle (catenary tab only).
+- **Self-earned taunt** on each release: `+0.266 — still uphill. The floor is the law.`
+- **prefers-reduced-motion** respected — no spring; snaps instantly to the
+  dragged/true state, the bowl dot jumps rather than eases. (v1 had no such rule.)
+
+### The math stays a quiet, PROVABLE layer (the OTHER half of the story)
+v1 proved the true curve **conserves** H. v2 adds the deeper claim: it **minimises**
+the action `∫f dx`, so any dragged perturbation **costs more**. `core.mjs` gains three
+surgical pure functions between the same sentinels (so re-extraction parity holds):
+- `fCatenary(y,yp) = y·√(1+y′²)` — the action integrand.
+- `action(samples,fFn)` — discretised `∫f dx`, **midpoint rule**, slope **recomputed
+  per segment from the actual node positions** (load-bearing: a bumped y MUST change
+  the slope, or the minimum is a fiction).
+- `perturb(trueSamples,k,δ)` — move one interior node by δ, endpoints pinned (the
+  single-node discrete bump that is the self-test atom; the on-screen drag uses the
+  smooth spline bump but feeds the SAME `action()` with recomputed slopes).
+
+**Two-register slope model** (honoured so the headline can't self-contradict): the
+**quiet proof layer** (the original 10 checks + the at-rest strip) uses the EXACT
+analytic `yp` (sinh, cot(τ/2)) → flat to ~1e-15, untouched. The **live-drag / action
+layer** recomputes `yp` from the deformed curve (segment slopes inside `action()`,
+central-diff for the strip). The true-curve baseline under recomputed slopes wobbles
+~0.5% — correct and expected; the drag response climbs cleanly above it. Analytic
+slopes never feed the action-minimum check; FD slopes never feed the 1e-9 check.
+
+### The new claims — proven EXACT (catenary only; slide/film bowls are visual)
+- **(11) MINIMUM** — over interior nodes × deltas {±0.04…±0.005},
+  `action(perturb(cat,k,δ)) − action(cat) ≥ 0` with **no slack** (worst measured
+  **+1.4e-4 ≥ 0**). Any dragged perturbation has action ≥ the true action.
+- **(12) QUADRATIC by Richardson halving** — with base d≈0.004,
+  `R = (I(d)−I0)/(I(d/2)−I0) → 4` as the perturbation halves; `|R−4| < 0.1`
+  (measured **R=3.91**). The discriminating quadratic-minimum test — small-delta
+  regime (a large d bends R via the cubic tail; `ΔI/δ²→const` does NOT converge for
+  the midpoint integrator, so it's deliberately not used).
+- **(13) H BREAKS PAST THE FLOOR** — a `d=0.02` bump makes the FD/segment-slope
+  `hCatenary` relDev **27.3%** (>0.5% baseline, >20×), the SAME slopes the live strip
+  shows — number and visual agree. (Not compared against the 1e-9 floor.)
+- **(14) DETERMINISM** — `action(cat)` rebuilt twice is byte-identical (drift 0).
+
+### Self-test — GREEN, deterministic
+- in-page chip: **15/15 ✓** (browser-verified at `:8743`, 0 console errors,
+  ~0.68 ms/frame render path during a live drag → ample 60fps headroom)
+- Node twin `core.test.mjs`: **45/45 ✓**, exit 0, inlined core **byte-identical** to
+  `core.mjs` (re-extraction parity holds — the three new functions live between the
+  sentinels), action minimum re-derived independently (ΔI≥0 over a fine sweep, R→4,
+  strict positivity, H breaks past floor).
+
+### Browser-verified (`fi-c59-verify` session, `:8743`)
+At rest: chip 15/15; chain with beads + open-circle pins; H-strip dead-flat gold
+(H=0.85000=a); bowl dot resting on the green FLOOR line; measured rim + cyan ∝d²
+dashed reference; impostor dot parked high-right. On a drag-up: the chain bumps
+smoothly and reddens gold→bad where the residual breaks; the H-strip buckles to a red
+wave (**66%**); the bowl dot rides UP the left wall (above the floor, **ΔI=+0.2663**);
+badge flips red. On release: spring-back to ΔI=0 green + the taunt fires. All three
+tabs switch cleanly (the slide is also draggable, ΔI climbs; the ghost toggle hides
+off-catenary); 0 console errors after tab cycling.
+
+### Integration — preserved
+- **Route + Workbench card** (L440, *Toys & benches*, beside its three sources)
+  **unchanged**; the three **inbound sibling cross-links** (catenary / brachistochrone
+  / soap-film foot teasers) still resolve; the three **outbound footer links**
+  unchanged.
+- **NEW: drops a `ws:seen:first-integral` breadcrumb** on load (v1 was breadcrumb-exempt;
+  v2 self-registers like the front-door surfaces).
+
+---
+
 ## v1 — three curves, one law (2026-06-14, cycle #17 of the fun-forever loop)
 
 **The one idea.** The hanging chain (catenary, `y=a·cosh(x/a)`), the fastest slide
