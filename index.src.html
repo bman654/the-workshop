@@ -2344,26 +2344,31 @@ renderEstate();
       render(curMin);
       ev.preventDefault();
     }
-    function endDrag(){ if(!dragging) return; dragging=false; gnG.classList.remove("dragging");
-      window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", endDrag); }
+    // the dial's nav target. Declared ahead of endDrag because endDrag is where the
+    // no-scrub TAP now navigates (see below) — NOT a bubbled `click` MouseEvent.
+    var GNHREF = (gp && gp.href) ? gp.href : "hours/index.html";
+    // THE NAVIGATION (the #80 dead-click fix). A REAL physical mouse dispatches its
+    // `click` on the nearest common ancestor of the (differing) down/up hit-targets —
+    // which for this overlaid dial resolves to svg#sheet, OUTSIDE the #hours-gnomon
+    // subtree — so a `gnG`-scoped click listener NEVER fired and the tap was dead.
+    // (Programmatic .click()/agent-browser dispatch straight to the node, so they DID
+    // navigate — which is exactly why two prior click-based "fixes" verified green yet
+    // shipped broken.) The cure: navigate from `pointerup` (endDrag), which fires on the
+    // window and already has the scrub classification in scope. `scrubbed` is the boolean
+    // source of truth (untouched by the dragging-class removal); we read it FIRST, then
+    // tear down, then navigate iff it was NOT a scrub. We also re-check euclidean distance
+    // at pointerup so a fast scrub that skipped onMove (no move event fired) still counts.
+    function endDrag(ev){ if(!dragging) return;
+      var wasScrub = scrubbed || (ev && pastThreshold(ev));  // read BEFORE removing the class
+      dragging=false; gnG.classList.remove("dragging");
+      window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", endDrag);
+      if(!wasScrub){ try{ WS.seen("gnomon"); }catch(e){} location.href = GNHREF; }
+    }
     gnG.addEventListener("pointerdown", function(ev){
       if(playing) stopPlay();
       dragging = true; scrubbed = false; downX = ev.clientX; downY = ev.clientY;
       window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", endDrag);
-      // do NOT preventDefault/stopPropagation here — a no-move tap must reach the POI link.
-    });
-    // a no-scrub TAP on the dial is a click on the gnomon POI → enter the wing page;
-    // a real scrub is swallowed so it never navigates. (The overlay sits above the POI
-    // link, so we navigate explicitly rather than relying on event fall-through.) We
-    // re-check the pointerup distance too, so even a fast scrub that skipped onMove
-    // (no intermediate move event fired) is still classified correctly here.
-    var GNHREF = (gp && gp.href) ? gp.href : "hours/index.html";
-    gnG.addEventListener("click", function(ev){
-      var wasScrub = scrubbed || gnG.classList.contains("dragging") || pastThreshold(ev);
-      if(wasScrub){ ev.preventDefault(); ev.stopPropagation(); return; }  // a scrub — stay on the front door
-      ev.preventDefault(); ev.stopPropagation();
-      try{ WS.seen("gnomon"); }catch(e){}
-      location.href = GNHREF;
+      // do NOT preventDefault/stopPropagation here — endDrag handles the tap navigation.
     });
     // Enter/Space on the focused dial also enters the wing (a11y).
     gnG.addEventListener("keydown", function(ev){

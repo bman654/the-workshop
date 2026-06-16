@@ -207,43 +207,62 @@ ok(core.pass, 'CORE BATTERY: every solar/tint/apparition claim passes');
   ok(/if\(!pinFrame\s*&&\s*aps\)/.test(src),
     '(e.1) source: catch-recording is suppressed only on pinFrame, not the rune');
 
-  /* ── (e.2) THE CLICK-vs-SCRUB CLASSIFIER — a tap (and sub-threshold jitter) navigates;
+  /* ── (e.2) THE TAP-vs-SCRUB CLASSIFIER — a tap (and sub-threshold jitter) navigates;
      a real >10px scrub does not. Euclidean distance, so a diagonal jitter can't sneak
-     past two independent axis thresholds (the old 4px-per-axis trap). ── */
+     past two independent axis thresholds (the old 4px-per-axis trap).
+     #80 ROOT-CAUSE FIX: the navigation no longer rides a bubbled `click` MouseEvent
+     (which the browser fires on svg#sheet — OUTSIDE the gnomon subtree — when the
+     mousedown/mouseup hit-targets differ, so a gnG-scoped click listener NEVER fired
+     for a real pointer). It now runs in `endDrag(ev)` on the window `pointerup` path,
+     reading `wasScrub` from the `scrubbed` BOOLEAN (captured BEFORE the dragging class
+     is removed) OR the pointerup distance — independent of any click event. The dead
+     gnG `click` listener was DELETED. ── */
   const SCRUB_PX = 10, SCRUB_PX2 = SCRUB_PX * SCRUB_PX;
   // pastThreshold(down→up displacement): squared euclidean > 10².
   function pastThreshold(dx, dy) { return (dx * dx + dy * dy) > SCRUB_PX2; }
   // the gesture is a scrub if it ever crossed the threshold (scrubbed) OR the up-point did.
+  // (NB: `scrubbed` is read in endDrag BEFORE the dragging class is removed, so the boolean
+  // is the source of truth — the class is no longer consulted in the classification.)
   function navigates(g) {
-    const wasScrub = g.scrubbed || g.draggingClass || pastThreshold(g.upDx, g.upDy);
+    const wasScrub = g.scrubbed || pastThreshold(g.upDx, g.upDy);
     return !wasScrub;   // navigate when NOT a scrub
   }
   // a no-move tap → navigates.
-  ok(navigates({ scrubbed: false, draggingClass: false, upDx: 0, upDy: 0 }) === true,
+  ok(navigates({ scrubbed: false, upDx: 0, upDy: 0 }) === true,
     '(e.2) a no-move tap navigates to the wing');
   // a tiny axis-aligned jitter (5px) → still navigates (was a dead click under the old 4px rule).
-  ok(navigates({ scrubbed: false, draggingClass: false, upDx: 5, upDy: 0 }) === true,
+  ok(navigates({ scrubbed: false, upDx: 5, upDy: 0 }) === true,
     '(e.2) a 5px axis jitter navigates (the old 4px-per-axis dead-click is fixed)');
   // a diagonal jitter (5px,5px = 7.07px < 10) → navigates (the old per-axis OR would have killed it).
-  ok(navigates({ scrubbed: false, draggingClass: false, upDx: 5, upDy: 5 }) === true,
+  ok(navigates({ scrubbed: false, upDx: 5, upDy: 5 }) === true,
     '(e.2) a 5px,5px diagonal jitter (7.07px) navigates (euclidean gate, not per-axis)');
   // a just-under-threshold jitter (9px) → navigates.
-  ok(navigates({ scrubbed: false, draggingClass: false, upDx: 9, upDy: 0 }) === true,
+  ok(navigates({ scrubbed: false, upDx: 9, upDy: 0 }) === true,
     '(e.2) a 9px jitter (just under the 10px gate) still navigates');
   // a deliberate scrub (60px) → does NOT navigate.
-  ok(navigates({ scrubbed: false, draggingClass: false, upDx: 60, upDy: 0 }) === false,
+  ok(navigates({ scrubbed: false, upDx: 60, upDy: 0 }) === false,
     '(e.2) a 60px scrub stays on the front door (no navigation)');
   // a scrub that already flagged `scrubbed` mid-drag but happened to release near origin → no nav.
-  ok(navigates({ scrubbed: true, draggingClass: true, upDx: 1, upDy: 1 }) === false,
+  ok(navigates({ scrubbed: true, upDx: 1, upDy: 1 }) === false,
     '(e.2) a gesture that crossed the threshold mid-drag is a scrub even if it returns to origin');
 
-  // ── GREP the source: the threshold is euclidean >10px and `scrubbed` gates the click. ──
+  // ── GREP the source: the threshold is euclidean >10px, and the #80 fix wiring. ──
   ok(/SCRUB_PX\s*=\s*10\b/.test(src),
     '(e.2) source: the scrub threshold is 10px (well above incidental jitter)');
   ok(/dx\*dx\s*\+\s*dy\*dy\)\s*>\s*SCRUB_PX2/.test(src),
     '(e.2) source: the threshold is EUCLIDEAN (squared distance), not per-axis');
-  ok(/var\s+wasScrub\s*=\s*scrubbed\s*\|\|\s*gnG\.classList\.contains\(["']dragging["']\)\s*\|\|\s*pastThreshold\(ev\)/.test(src),
-    '(e.2) source: the click navigates unless scrubbed / dragging-class / past-threshold');
+  // #80: navigation runs in endDrag(ev) (the pointerup path), reading the `scrubbed` boolean
+  // BEFORE the class is removed — NOT in a bubbled click handler.
+  ok(/function\s+endDrag\(ev\)/.test(src),
+    '(e.2) source: endDrag takes the event (the pointerup classifier path)');
+  ok(/var\s+wasScrub\s*=\s*scrubbed\s*\|\|\s*\(\s*ev\s*&&\s*pastThreshold\(ev\)\s*\)/.test(src),
+    '(e.2) source: wasScrub reads the `scrubbed` boolean OR the pointerup distance (immune to the class removal)');
+  ok(/if\s*\(\s*!wasScrub\s*\)\s*\{[\s\S]{0,80}location\.href\s*=\s*GNHREF/.test(src),
+    '(e.2) source: a non-scrub navigates via location.href=GNHREF on the pointerup/endDrag path');
+  ok(/addEventListener\(["']pointerup["']\s*,\s*endDrag\)/.test(src),
+    '(e.2) source: pointerup is wired to endDrag (the click-independent nav path)');
+  ok(!/gnG\.addEventListener\(["']click["']/.test(src),
+    '(e.2) source: the dead gnG click listener is GONE (no bubbled-click nav dependency)');
   ok(/keydown[\s\S]{0,160}Enter[\s\S]{0,60}location\.href\s*=\s*GNHREF/.test(src),
     '(e.2) source: the keyboard Enter/Space a11y path still enters the wing');
   ok(/addEventListener\(["']dblclick["']/.test(src),
