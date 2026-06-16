@@ -167,9 +167,150 @@ function runSelfTest(){
 }
 // ===== COMMA CORE END =====
 
+// ============================================================================
+//  THE OUT OF TUNE CORE — the sole authority for the claim "Kepler's third law
+//  a^(3/2) === period holds for every real planet, yet voicing each planet's
+//  period as a pitch makes the solar-system chord land audibly OUT OF TUNE."
+//  Pure, dependency-free. This block REUSES cents() and foldToOctave() from the
+//  COMMA CORE block above (it MUST NOT re-define them — the pitch/cents law lives
+//  in exactly one place). The Out of Tune bench (sound-garden/out-of-tune/) inlines
+//  a BYTE-TWIN of the slice between the sentinels below; its Node twin
+//  (out-of-tune/core.test.mjs) re-extracts that slice and asserts it is char-for-
+//  char this module, and that the COMMA CORE / PITCH CORE blocks above are still
+//  byte-untouched. The in-page pill and the Node twin both call THIS
+//  runOutOfTuneSelfTest, so "self-test green" cannot drift. (Appended #76; every
+//  byte above is left untouched so butterfly-voice and the-comma keep byte-twinning
+//  their slices.)
+// ============================================================================
+
+// ===== OUT OF TUNE CORE (inlined byte-twin) BEGIN =====
+// The 13-tone JUST set across one octave (the in-tune lattice the ear measures a
+// chord AGAINST): unison, the just diatonic + chromatic ratios, the octave.
+//   1/1 · 16/15 · 9/8 · 6/5 · 5/4 · 4/3 · 45/32 (the tritone) · 3/2 · 8/5 · 5/3 · 9/5 · 15/8 · 2/1.
+const JUST_SET = [1/1, 16/15, 9/8, 6/5, 5/4, 4/3, 45/32, 3/2, 8/5, 5/3, 9/5, 15/8, 2/1];
+// the just ratio's musical name, index-aligned with JUST_SET (for the readout / rail).
+const JUST_NAME = ['unison','m2','M2','m3','M3','P4','tritone','P5','m6','M6','m7','M7','octave'];
+// SNAP: given a ratio already FOLDED into [1,2), the SIGNED cents deviation to the
+// NEAREST just ratio (|dev| minimised). Positive = sharp of the just tone, negative
+// = flat. This is the single source of "how out of tune is this interval." Reuses
+// cents() from the COMMA CORE above — the pitch law is NOT re-typed here.
+function nearestDev(folded){
+  let best = Infinity;
+  for(const j of JUST_SET){ const d = cents(folded / j); if(Math.abs(d) < Math.abs(best)) best = d; }
+  return best;
+}
+function nearestDevAbs(folded){ return Math.abs(nearestDev(folded)); }
+// the nearest just ratio's NAME for a folded ratio (for the tuning-rail caption).
+function nearestJustName(folded){
+  let best = Infinity, bi = 0;
+  for(let i=0;i<JUST_SET.length;i++){ const d = Math.abs(cents(folded / JUST_SET[i])); if(d < best){ best = d; bi = i; } }
+  return JUST_NAME[bi];
+}
+
+// the audible chord's voicing law: each planet's PERIOD (years) is folded into one
+// octave above EARTH_PERIOD and rung at BASE_HZ. Earth (period 1) sits exactly on
+// BASE_HZ; every other planet is one folded tone. ONE law, shared by synth + test.
+const BASE_HZ = 220;               // A3 — Earth's home pitch
+const EARTH_PERIOD = 1.0;          // Earth's period, the chord's anchor
+function planetHz(period){ return BASE_HZ * foldToOctave(period / EARTH_PERIOD); }
+// the DETUNING the readout / rail / wolf-thread / test measure is the ADJACENT
+// period-RATIO folded vs nearest just (where the largest honest sourness lives —
+// distinct from the chord's per-planet folded tone). Signed cents.
+function adjacentDev(periodLo, periodHi){ return nearestDev(foldToOctave(periodHi / periodLo)); }
+
+// the pinned LAW bands (stated with measured headroom):
+//  KEPLER_REL_TOL = 0.10% — real worst is Neptune 0.0616% (1.6x headroom); a
+//   corrupted period fails it by ~190x. DETUNE [3,60]¢ — the real measured adjacent
+//   band is 5.35¢ (Earth→Mars off the M7) to 37.55¢ (Mercury→Venus off the M3).
+const KEPLER_REL_TOL = 0.001;      // 0.10% — Kepler a^(3/2) === period band
+const DETUNE_FLOOR   = 3.0;        // ¢ — below this an interval reads in-tune
+const DETUNE_CEIL    = 60.0;       // ¢ — above this it would be a different interval
+const CLEAN_THRESH   = 6.0;        // ¢ — a thread under this reads clean (teal, no throb)
+
+// Kepler's third law as a residual: how far a^(3/2) sits from the stored period,
+// as a fraction of the period. Real planets are ≤0.0616%; a corrupt body blows up.
+function keplerRel(a, period){ return Math.abs(Math.pow(a, 1.5) - period) / period; }
+
+// ── runOutOfTuneSelfTest(planets, concordia) — the SOLE ORACLE. Same shape as the
+// other benches: { pass, total, lines:[{name, ok, detail}] }. The in-page pill and
+// the Node twin both call THIS so they cannot disagree. `planets` is the real-planet
+// array (each {name,a,period}); `concordia` is the fictional exact-3:2 control. The
+// Eris-X corrupt fixture is defined HERE (test-only, kept OUT of the playable dial).
+// Every detail carries LIVE numbers; the pinned reference band lives only in the
+// tolerance checks below.
+function runOutOfTuneSelfTest(planets, concordia){
+  const lines = [];
+  const T = (name, ok, detail='') => lines.push({ name, ok: !!ok, detail });
+
+  // LEG 1 — KEPLER: every real planet obeys a^(3/2) === period within 0.10%. The
+  //   detail carries the LIVE worst residual (real worst ≈ 0.0616%, Neptune).
+  {
+    let ok = true, worst = 0, worstName = '';
+    for(const p of planets){ const rel = keplerRel(p.a, p.period);
+      if(rel >= KEPLER_REL_TOL) ok = false;
+      if(rel > worst){ worst = rel; worstName = p.name; } }
+    T('LEG 1 — Kepler holds: every real planet a^(3/2) === period within 0.10% — the orrery\'s independently-stored a and period agree under the third law (not a tautology)',
+      ok && planets.length === 8,
+      ok ? `worst real residual = ${(worst*100).toFixed(4)}% (${worstName}) · band ${(KEPLER_REL_TOL*100).toFixed(2)}% · ${planets.length} planets`
+         : `a planet exceeded ${(KEPLER_REL_TOL*100).toFixed(2)}% (worst ${(worst*100).toFixed(4)}% ${worstName})`);
+  }
+
+  // LEG 2 — AUDIBLE DETUNING: every adjacent planet pair, voiced as a folded
+  //   period-ratio, is NONZERO and lands in [3,60]¢ off the nearest just interval.
+  //   The detail carries the LIVE band (real ≈ 5.35¢ Earth→Mars … 37.55¢ Merc→Venus).
+  {
+    let ok = true, lo = Infinity, hi = -Infinity, loP = '', hiP = '';
+    for(let i=0;i<planets.length-1;i++){
+      const dev = adjacentDev(planets[i].period, planets[i+1].period);
+      const ad = Math.abs(dev);
+      if(!(ad >= DETUNE_FLOOR && ad <= DETUNE_CEIL) || ad === 0) ok = false;
+      if(ad < lo){ lo = ad; loP = planets[i].name+'→'+planets[i+1].name; }
+      if(ad > hi){ hi = ad; hiP = planets[i].name+'→'+planets[i+1].name; }
+    }
+    T('LEG 2 — audibly out of tune: every adjacent pair is NONZERO and lands in [3,60]¢ off the nearest just interval — the solar-system chord is provably sour, not clean',
+      ok, ok ? `band ${lo.toFixed(2)}¢ (${loP}) … ${hi.toFixed(2)}¢ (${hiP}) — all in [${DETUNE_FLOOR},${DETUNE_CEIL}]¢, none 0`
+             : `a pair fell outside [${DETUNE_FLOOR},${DETUNE_CEIL}]¢ or snapped to 0`);
+  }
+
+  // LEG 3 — CONTROL A (Concordia, FICTIONAL): a planet whose period is an EXACT 3:2
+  //   with Earth PASSES Kepler (checked by the BAND — a^1.5 = 1.4999999999999998 is
+  //   1 ULP off 1.5, so === would FALSE-fail) AND its interval snaps to 0¢ BIT-EXACT
+  //   (foldToOctave(1.5) is unchanged → cents(1.5/(3/2)) === 0). Clean by construction.
+  {
+    const rel = keplerRel(concordia.a, concordia.period);
+    const keplerPasses = rel < KEPLER_REL_TOL;          // BAND, not ===
+    const snap = cents(foldToOctave(concordia.period / EARTH_PERIOD) / (3/2));   // its fifth vs Earth
+    const snapExactZero = snap === 0;                   // bit-exact 0 (division-free fold)
+    const usedEqualsWouldFail = (Math.pow(concordia.a, 1.5) === concordia.period) === false;
+    T('LEG 3 — control A (Concordia, fictional exact-3:2): PASSES Kepler via the BAND (a^1.5 is 1 ULP off period, so === would false-fail) AND snaps to 0¢ bit-exact — a clean fifth by construction',
+      keplerPasses && snapExactZero && usedEqualsWouldFail,
+      `Kepler rel = ${rel.toExponential(2)} (band ✓, === would ${usedEqualsWouldFail?'FALSE-fail':'pass'}) · interval dev = ${snap}¢ (bit-exact 0)`);
+  }
+
+  // LEG 4 — CONTROL B (Eris-X, corrupt test-only fixture, kept OUT of the dial):
+  //   a body whose period DISAGREES with a^(3/2) FAILS the Kepler band — the law-check
+  //   has teeth (it is not vacuously green). a:2.0 period:3.5 → a^1.5 = 2.828, off by 19%.
+  {
+    const erisX = { name:'Eris-X', a:2.0, period:3.5 };
+    const rel = keplerRel(erisX.a, erisX.period);
+    const fails = rel >= KEPLER_REL_TOL;                // it MUST fail → asserts RED elsewhere
+    T('LEG 4 — control B (Eris-X, corrupt): a body with period ≠ a^(3/2) FAILS the Kepler band by ~190x — the law-check is non-vacuous (it can go red)',
+      fails && rel > 0.10,
+      `Eris-X a:2.0 period:3.5 → rel = ${(rel*100).toFixed(2)}% ≥ ${(KEPLER_REL_TOL*100).toFixed(2)}% — correctly REJECTED`);
+  }
+
+  let pass = 0; for(const l of lines) if(l.ok) pass++;
+  return { pass, total: lines.length, lines };
+}
+// ===== OUT OF TUNE CORE END =====
+
 export {
   semiToFreq, noteName, MIDDLE_C_HZ,
   JUST_FIFTH, OCTAVE, PYTHAGOREAN_COMMA, pythagoreanComma,
   cents, foldToOctave, temperedFifth, fifthRatio, equalTemperFifth,
   stackFifths, gapCents, residualCents, runSelfTest,
+  JUST_SET, JUST_NAME, nearestDev, nearestDevAbs, nearestJustName,
+  BASE_HZ, EARTH_PERIOD, planetHz, adjacentDev,
+  KEPLER_REL_TOL, DETUNE_FLOOR, DETUNE_CEIL, CLEAN_THRESH, keplerRel,
+  runOutOfTuneSelfTest,
 };
