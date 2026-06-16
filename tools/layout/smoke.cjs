@@ -19,6 +19,7 @@ const PLACES = [
   { id:'numbers-room', district:'grounds', tier:2, wing:'number', footprint:'numbers-room' },
   { id:'daedalus', district:'grounds', tier:1, wing:'amusements', footprint:'maze', order:20 },
   { id:'arcade', district:'grounds', tier:1, wing:'amusements', footprint:'arcade', order:10 },
+  { id:'puzzle-pavilion', district:'grounds', tier:1, wing:'amusements', footprint:'pavilion', order:15 },
   { id:'engine-room', district:'grounds', tier:2, wing:'works', footprint:'engine', order:10 },
   { id:'alchemy', district:'grounds', tier:2, wing:'works', footprint:'laboratory', order:20 },
   { id:'firmament', district:'observatory', tier:1, footprint:'tower' },
