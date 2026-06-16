@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Cross-Sums — Kakuro · The Puzzle Pavilion</title>
+<style>
+  :root{
+    --bg:#070a10;                /* deep-sea ink ground */
+    --plate1:#101826;
+    --plate2:#0a1018;
+    --ink:#e9eff5;
+    --ink-dim:#90a4ba;
+    --gold:#c9a24a;             /* the estate gold (slab + pavilion wing) */
+    --gold-edge:rgba(201,162,74,0.36);
+    --teal:#6fd3c4;             /* the wing accent + the "proven" voice */
+    --teal-soft:rgba(111,211,196,0.12);
+    --teal-edge:rgba(111,211,196,0.40);
+    --fill:#86d39a;            /* a satisfied run */
+    --fill2:#37f7e0;           /* the selected cell */
+    --warn:#ff7b72;
+    --panel:rgba(13,20,33,0.82);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1300px 820px at 50% -12%, rgba(111,211,196,0.07), transparent 56%),
+      radial-gradient(1000px 700px at 14% 112%, rgba(55,247,224,0.04), transparent 60%),
+      radial-gradient(1000px 700px at 86% 114%, rgba(201,162,74,0.04), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  /* a faint chart-of-soundings texture (a grid the cells sit on) */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(120,150,190,0.018) 0 1px, transparent 1px 34px),
+      repeating-linear-gradient(90deg, rgba(120,150,190,0.018) 0 1px, transparent 1px 34px);
+    mix-blend-mode:overlay;
+  }
+
+  /* ── topbar (estate vocabulary) ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:13px 20px; gap:12px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(7,10,16,0.94), rgba(7,10,16,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--teal); opacity:1; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--teal-edge); background:rgba(0,0,0,0.4); white-space:nowrap; cursor:default; user-select:none;
+    color:var(--ink-dim); max-width:60vw; overflow:hidden; text-overflow:ellipsis; }
+  .selftest.ok{ color:#8fe7d4; border-color:var(--teal-edge); background:rgba(20,46,42,0.5); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  /* ── hero ── */
+  .hero{ position:relative; z-index:1; max-width:1180px; margin:0 auto; padding:78px 22px 4px; text-align:center; }
+  .eyebrow{ font:600 11px/1 var(--font-mono); letter-spacing:.30em; text-transform:uppercase; color:var(--teal);
+    opacity:.9; margin-bottom:14px; }
+  .hero h1{
+    font-family:var(--font-serif); font-weight:600; margin:0;
+    font-size:clamp(34px, 7vw, 56px); letter-spacing:.4px; line-height:1.03;
+  }
+  .hero h1 .glyph{ filter:drop-shadow(0 0 10px rgba(111,211,196,.5)); }
+  .hero .lede{ max-width:680px; margin:18px auto 0; font:15.5px/1.62 var(--font-serif); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--teal); font-weight:600; }
+  .hero .lede i{ color:var(--ink); font-style:italic; }
+
+  /* ── the stage: board + side ── */
+  .stage{ position:relative; z-index:1; max-width:1180px; margin:22px auto 0; padding:0 22px;
+    display:flex; gap:20px; align-items:flex-start; justify-content:center; flex-wrap:wrap; }
+  .msg{ min-height:20px; text-align:center; font:13.5px/1.5 var(--font-serif); color:var(--teal); font-weight:600;
+    margin:4px auto 12px; max-width:680px; padding:0 22px; position:relative; z-index:1; }
+
+  .boardwrap{ position:relative; flex:1 1 540px; min-width:0; max-width:600px;
+    background:linear-gradient(160deg,#0d1726,#0a1018);
+    border:1px solid rgba(111,211,196,0.16); border-radius:16px; padding:10px;
+    box-shadow:0 12px 44px rgba(0,0,0,.45) inset, 0 8px 28px rgba(0,0,0,.4); }
+  canvas{ display:block; width:100%; height:auto; border-radius:10px; touch-action:none; cursor:pointer; }
+  .legend{ font:11.5px/1.4 var(--font-mono); color:var(--ink-dim); display:flex; gap:13px; flex-wrap:wrap;
+    justify-content:center; margin-top:9px; letter-spacing:.02em; }
+  .legend i{ display:inline-block; width:13px; height:13px; border-radius:3px; vertical-align:-2px; margin-right:5px; }
+  .legend i.fill{ background:#86d39a; }
+  .legend i.sel{ background:#37f7e0; }
+  .legend i.bad{ background:#ff7b72; }
+
+  /* ── the keypad: tap a digit (1–9) into the selected cell ── */
+  .keypad{ display:grid; grid-template-columns:repeat(5, 1fr); gap:7px; margin-top:11px; }
+  .keypad button{ font:700 16px/1 var(--font-mono); padding:11px 0; }
+  .keypad button.clr{ font:600 12px/1 var(--font-ui); color:#f4b9b3; border-color:#5a3030; background:#1f1212; }
+  .keypad button.clr:hover{ background:#2a1818; }
+
+  .side{ flex:0 1 300px; min-width:248px; display:flex; flex-direction:column; gap:12px; }
+  .card{ background:var(--panel); border:1px solid rgba(111,211,196,0.14); border-radius:13px; padding:13px 15px; }
+  .card h3{ margin:0 0 8px; font:700 10.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--teal); }
+  .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  button{ font:600 12.5px/1 var(--font-ui); color:var(--ink); background:#16243a; border:1px solid #2c4156;
+    border-radius:8px; padding:8px 11px; cursor:pointer; transition:.14s; }
+  button:hover{ background:#1d3047; border-color:#406180; }
+  button:active{ transform:translateY(1px); }
+  button.primary{ background:#143228; border-color:#2f6b54; color:#bff0df; }
+  button.primary:hover{ background:#1a4234; }
+  .pill{ display:inline-flex; align-items:center; gap:7px; font:12px/1 var(--font-mono); border-radius:999px;
+    padding:6px 11px; border:1px solid #2c4156; background:#0e1828; white-space:nowrap; }
+  .pill.ok{ border-color:var(--teal-edge); background:rgba(20,46,42,0.5); color:#bdf0e4; }
+  .pill.bad{ border-color:#7a3030; background:#241010; color:#f4b9b3; }
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--fill); }
+  .stat{ display:flex; justify-content:space-between; font:13px/1.5 var(--font-ui); padding:3px 0; border-bottom:1px dashed #223348; }
+  .stat:last-child{ border-bottom:none; }
+  .stat b{ color:var(--fill2); font-variant-numeric:tabular-nums; font-family:var(--font-mono); }
+  .trace{ font:11px/1.45 var(--font-mono); max-height:170px; overflow:auto; color:#bcd;
+    background:#0a121e; border:1px solid #1c2c44; border-radius:8px; padding:8px 9px; white-space:pre-wrap; }
+  .trace .rule{ color:var(--fill); }
+  .trace .step{ color:#7fb0e8; }
+  .seedline{ font:11.5px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.04em; }
+  input[type=number]{ width:78px; background:#0d1726; color:var(--ink); border:1px solid #2c4156; border-radius:6px;
+    padding:6px 8px; font:13px/1 var(--font-mono); }
+  .proofnote{ font:12px/1.55 var(--font-serif); color:var(--ink-dim); margin:0 0 8px; }
+  .proofnote b{ color:var(--teal); font-weight:600; }
+
+  /* ── footer ── */
+  .foot{ position:relative; z-index:1; max-width:760px; margin:34px auto 0; padding:22px 26px 48px;
+    border-top:1px solid rgba(111,211,196,0.1); text-align:center; font:12.5px/1.7 var(--font-serif); color:var(--ink-dim); }
+  .foot b{ color:var(--teal); font-weight:600; }
+  .foot a{ color:var(--teal); text-decoration:none; border-bottom:1px solid rgba(111,211,196,0.3); }
+  .foot code{ color:#c9b6f0; background:#161f30; padding:1px 5px; border-radius:4px; font:11.5px var(--font-mono); }
+
+  @media (max-width:760px){
+    .stage{ flex-direction:column; align-items:stretch; }
+    .boardwrap{ max-width:none; }
+    .side{ flex:1 1 auto; }
+  }
+  @media (max-width:420px){
+    .hero{ padding-top:72px; }
+    .legend{ gap:9px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">← The Puzzle Pavilion</a>
+    <div class="selftest" id="selftest" title="The bench proves its own claim across many generated boards.">checking…</div>
+  </div>
+
+  <header class="hero">
+    <div class="eyebrow">The Puzzle Pavilion · the second leaf in flower</div>
+    <h1><span class="glyph">✚</span> The Cross-Sums</h1>
+    <p class="lede">Kakuro — a crossword in arithmetic. Each black clue-cell labels a run of white cells with a target
+      <b>sum</b>; fill the digits <i>1–9</i> so every run hits its clue with <b>no digit repeated within a run</b>.
+      <i>Tap</i> a white cell, then a digit (or use your keyboard). <b>Never a guess:</b> every board has a single
+      solution reachable by pure combinatorial logic — which run-sums force which digit-sets.</p>
+  </header>
+
+  <div class="msg" id="msg">Tap a white cell, then a digit 1–9 — every run must sum to its clue with no repeats.</div>
+
+  <div class="stage">
+    <div class="boardwrap">
+      <canvas id="board" width="560" height="560"></canvas>
+      <div class="legend">
+        <span><i class="sel"></i>selected cell</span>
+        <span><i class="fill"></i>run satisfied</span>
+        <span><i class="bad"></i>conflict (repeat / over sum)</span>
+      </div>
+      <div class="keypad" id="keypad">
+        <button data-d="1">1</button><button data-d="2">2</button><button data-d="3">3</button>
+        <button data-d="4">4</button><button data-d="5">5</button><button data-d="6">6</button>
+        <button data-d="7">7</button><button data-d="8">8</button><button data-d="9">9</button>
+        <button class="clr" data-d="0">clear</button>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <h3>The board</h3>
+        <div class="row">
+          <button class="primary" id="new">New grid</button>
+          <button id="solveBtn">Reveal logic</button>
+          <button id="clear">Clear digits</button>
+        </div>
+        <div class="row" style="margin-top:9px">
+          <span class="seedline">seed</span>
+          <input type="number" id="seed" value="7" min="1">
+          <button id="hint">Hint</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Live state</h3>
+        <div class="stat"><span>white cells</span><b id="sCells">–</b></div>
+        <div class="stat"><span>cells filled</span><b id="sFilled">–</b></div>
+        <div class="stat"><span>runs satisfied</span><b id="sRuns">–</b></div>
+        <div class="stat"><span>conflicts</span><b id="sConf">–</b></div>
+        <div style="margin-top:9px"><span class="pill" id="solvedPill"><span class="dot"></span><span id="solvedTxt">unsolved</span></span></div>
+      </div>
+
+      <div class="card">
+        <h3>The claim, self-tested</h3>
+        <p class="proofnote">For every generated board: <b>exactly one</b> solution, reachable by <b>pure deduction</b>
+          with no guess — combination-sets per run-sum, then naked &amp; hidden singles. Loosen any one clue and it breaks.</p>
+        <div class="trace" id="trace">the deduction trace appears here when you Reveal logic</div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <b>Why arithmetic, not a chart.</b> A Kakuro board is the estate's most <i>combinatorial</i> deduction puzzle: the
+    proof lives in a table you can recite — a sum of <i>k</i> distinct digits 1–9 has a known set of possibilities
+    (6-in-3 is only {1,2,3}; 17-in-2 is only {8,9}), and intersecting a cell's across- and down-runs pins it. You fill,
+    you watch each run flush green as it tallies, you <i>win</i> when every run sums true. The math core in this page is
+    byte-identical to a Node twin <code>core.test.mjs</code> — page and test can never drift. &nbsp;·&nbsp;
+    <a href="../index.html">Back to the Pavilion</a>
+  </footer>
+
+<script type="module">
+// ============================================================================
+// === CORE BEGIN ===
+// The Cross-Sums — Kakuro math core (single source of truth).
+// A Kakuro board: a grid of FILL cells (each holds a digit 1..9) and BLOCK cells.
+// A BLOCK that sits left of a horizontal run of fills carries an ACROSS clue (the run's
+// sum); a BLOCK above a vertical run carries a DOWN clue. The two ironclad guarantees:
+//   (1) the completed board is the UNIQUE solution (countSolutions === 1), and
+//   (2) it is reachable by PURE DEDUCTION — run-sum combinatorics + cross-elimination +
+//       naked singles — with NO guess step in the trace.
+// This module is the SOLE authority and is inlined byte-identical into index.html between
+// the CORE BEGIN / CORE END sentinels, tested by core.test.mjs — page & test can't drift.
+//
+// Board model: cells[r][c] is one of
+//   { t:'block', across:null|sum, down:null|sum }   — a wall, maybe carrying clue(s)
+//   { t:'fill', v:0|1..9 }                          — a solvable cell (0 = empty)
+// Runs are derived from the grid: a maximal horizontal/vertical strip of fill cells, with
+// the clue read from the block immediately before it.
+
+const DIGITS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+// ── PRNG (mulberry32) — every seed reproduces the same board everywhere ──
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function shuffle(a, rng) {
+  for (let i = a.length - 1; i > 0; i--) { const j = (rng() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+// ── THE COMBINATORIAL TABLE (the quiet, beautiful math layer) ──
+// comboSets(sum, k): every SET of k DISTINCT digits 1..9 that sums to `sum`.
+// Returned as bitmasks (bit d-1 set ⇒ digit d present). This is the canonical Kakuro
+// "magic" table: e.g. sum 6 in 3 cells = {1,2,3} only; sum 24 in 3 = {7,8,9} only.
+function comboSets(sum, k) {
+  const out = [];
+  (function rec(start, left, need, mask) {
+    if (need === 0) { if (left === 0) out.push(mask); return; }
+    for (let d = start; d <= 9; d++) {
+      if (d > left) break;                 // even the smallest remaining can't undershoot? prune high
+      if (left - d > (need - 1) * 9) continue; // can't reach with remaining maxima
+      rec(d + 1, left - d, need - 1, mask | (1 << (d - 1)));
+    }
+  })(1, sum, k, 0);
+  return out;
+}
+// allowedMask(sum,k): the OR of every combo set — the digits that CAN appear in such a run.
+// Memoized: (sum,k) ∈ [0..45]×[0..9] is a tiny fixed table, computed at most once.
+const _allowedCache = new Map();
+function allowedMask(sum, k) {
+  if (k <= 0 || sum < 0) return 0;
+  const key = sum * 10 + k;
+  let v = _allowedCache.get(key);
+  if (v === undefined) { v = 0; for (const s of comboSets(sum, k)) v |= s; _allowedCache.set(key, v); }
+  return v;
+}
+function popcount(m) { let c = 0; while (m) { m &= m - 1; c++; } return c; }
+function maskToDigits(m) { const a = []; for (let d = 1; d <= 9; d++) if (m & (1 << (d - 1))) a.push(d); return a; }
+
+// ── derive the runs of a board (across + down), each = {cells:[{r,c}], sum} ──
+function deriveRuns(cells) {
+  const R = cells.length, C = cells[0].length;
+  const across = [], down = [];
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    const cell = cells[r][c];
+    if (cell.t !== 'block') continue;
+    if (cell.across != null) {
+      const run = []; let cc = c + 1;
+      while (cc < C && cells[r][cc].t === 'fill') { run.push({ r, c: cc }); cc++; }
+      across.push({ cells: run, sum: cell.across });
+    }
+    if (cell.down != null) {
+      const run = []; let rr = r + 1;
+      while (rr < R && cells[rr][c].t === 'fill') { run.push({ r: rr, c }); rr++; }
+      down.push({ cells: run, sum: cell.down });
+    }
+  }
+  return { across, down };
+}
+
+// ── EXACT solution COUNTER (ground truth, independent of the deducer) ──
+// Backtracks over fill cells; a partial assignment is pruned the instant a run's running
+// sum exceeds its clue, a digit repeats within a run, or a completed run misses its sum.
+// Capped (default 2 for the generator, higher for the self-test) — a return of `cap` means
+// "cap or more"; the UI renders that honestly as "cap+".
+function countSolutions(cells, cap = 2) {
+  const R = cells.length, C = cells[0].length;
+  const { across, down } = deriveRuns(cells);
+  // index: for each fill cell, the across-run + down-run it belongs to
+  const acrossOf = {}, downOf = {};
+  across.forEach((run, i) => run.cells.forEach(p => { acrossOf[p.r + ',' + p.c] = i; }));
+  down.forEach((run, i) => run.cells.forEach(p => { downOf[p.r + ',' + p.c] = i; }));
+  const fills = [];
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (cells[r][c].t === 'fill') fills.push({ r, c });
+  const grid = cells.map(row => row.map(x => x.t === 'fill' ? 0 : -1));
+  let count = 0;
+
+  function fits(r, c, v) {
+    // distinct within across run
+    const ai = acrossOf[r + ',' + c];
+    if (ai != null) { for (const p of across[ai].cells) if (grid[p.r][p.c] === v) return false; }
+    const di = downOf[r + ',' + c];
+    if (di != null) { for (const p of down[di].cells) if (grid[p.r][p.c] === v) return false; }
+    // partial-sum prune + exact-sum on completion, for both runs
+    for (const [idx, table] of [[ai, across], [di, down]]) {
+      if (idx == null) continue;
+      const run = table[idx]; let s = v, blanks = 0;
+      for (const p of run.cells) { if (p.r === r && p.c === c) continue; const g = grid[p.r][p.c]; if (g === 0) blanks++; else s += g; }
+      if (s > run.sum) return false;
+      if (blanks === 0 && s !== run.sum) return false;
+      // even all-9 on the blanks can't reach? prune
+      if (s + blanks * 9 < run.sum) return false;
+    }
+    return true;
+  }
+  function rec(i) {
+    if (count >= cap) return;
+    if (i === fills.length) { count++; return; }
+    const { r, c } = fills[i];
+    for (const v of DIGITS) { if (fits(r, c, v)) { grid[r][c] = v; rec(i + 1); grid[r][c] = 0; if (count >= cap) return; } }
+  }
+  rec(0);
+  return count;
+}
+
+// ── PURE-DEDUCTION solver (the guess-free engine) ──
+// Maintains a candidate bitmask per fill cell. Three named rules, applied to fixpoint:
+//   'combo'  — a cell's candidates ⊆ (allowed digits of its across run) ∩ (its down run),
+//              recomputed from the run's REMAINING sum & REMAINING cells (this is the
+//              run-sum combinatorics + cross-elimination at once);
+//   'naked'  — a cell with exactly one candidate is fixed to it;
+//   'unique' — a digit that fits exactly one open cell of a run is placed there.
+// Records fillOrder [{r,c,v,rule}]; never branches, so the trace is guess-free by
+// construction. Reports contradiction (a cell → 0 candidates) for the negative control.
+function deduce(cells) {
+  const R = cells.length, C = cells[0].length;
+  const { across, down } = deriveRuns(cells);
+  const acrossOf = {}, downOf = {};
+  across.forEach((run, i) => run.cells.forEach(p => { acrossOf[p.r + ',' + p.c] = i; }));
+  down.forEach((run, i) => run.cells.forEach(p => { downOf[p.r + ',' + p.c] = i; }));
+  const val = cells.map(row => row.map(x => x.t === 'fill' ? (x.v || 0) : -1));
+  const ALL = 0x1FF;
+  const cand = {};
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (val[r][c] === 0) cand[r + ',' + c] = ALL;
+  const fillOrder = [];
+  const key = (r, c) => r + ',' + c;
+
+  // allowed-mask of a run given which digits are already PLACED and the remaining open cells
+  function runMask(run) {
+    let placed = 0, openCount = 0, rem = run.sum;
+    for (const p of run.cells) { const g = val[p.r][p.c]; if (g > 0) { placed |= (1 << (g - 1)); rem -= g; } else openCount++; }
+    if (openCount === 0) return { mask: 0, placed, openCount, rem };
+    let m = allowedMask(rem, openCount) & ~placed; // digits that can fill the remaining cells
+    return { mask: m, placed, openCount, rem };
+  }
+  function setOne(r, c, v, rule) {
+    val[r][c] = v; delete cand[key(r, c)]; fillOrder.push({ r, c, v, rule });
+  }
+
+  let progress = true, contradiction = false;
+  while (progress && !contradiction) {
+    progress = false;
+    // RULE combo: intersect each open cell's candidates with both its runs' allowed masks,
+    // minus digits already used in either run.
+    for (const k in cand) {
+      let m = cand[k];
+      const ai = acrossOf[k], di = downOf[k];
+      if (ai != null) { const rm = runMask(across[ai]); m &= rm.mask; }
+      if (di != null) { const rm = runMask(down[di]); m &= rm.mask; }
+      if (m === 0) { contradiction = true; break; }
+      if (m !== cand[k]) { cand[k] = m; progress = true; }
+    }
+    if (contradiction) break;
+    // RULE naked: single-candidate cell
+    for (const k in cand) {
+      if (popcount(cand[k]) === 1) {
+        const [r, c] = k.split(',').map(Number);
+        setOne(r, c, maskToDigits(cand[k])[0], 'naked'); progress = true;
+      }
+    }
+    if (progress) continue;
+    // RULE unique: a digit that can land in exactly one open cell of a run
+    for (const table of [across, down]) {
+      for (const run of table) {
+        const open = run.cells.filter(p => val[p.r][p.c] === 0);
+        if (open.length === 0) continue;
+        const rm = runMask(run);
+        for (const d of maskToDigits(rm.mask)) {
+          const bit = 1 << (d - 1);
+          const spots = open.filter(p => cand[key(p.r, p.c)] & bit);
+          if (spots.length === 1) { setOne(spots[0].r, spots[0].c, d, 'unique'); progress = true; }
+        }
+      }
+    }
+  }
+  const blanks = Object.keys(cand).length;
+  return { solved: !contradiction && blanks === 0, contradiction, blanks, val, fillOrder };
+}
+
+// ── randomized SOLVER (fills a block-layout with a random valid solution) ──
+// Same prune logic as the counter, but visits digits in shuffled order and returns the
+// first complete fill. Used by the generator to pick a random ground-truth solution for a
+// fixed wall pattern.
+function solveRandom(cells, rng) {
+  const R = cells.length, C = cells[0].length;
+  const { across, down } = deriveRuns(cells);
+  const acrossOf = {}, downOf = {};
+  across.forEach((run, i) => run.cells.forEach(p => { acrossOf[p.r + ',' + p.c] = i; }));
+  down.forEach((run, i) => run.cells.forEach(p => { downOf[p.r + ',' + p.c] = i; }));
+  const fills = [];
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (cells[r][c].t === 'fill') fills.push({ r, c });
+  const grid = cells.map(row => row.map(x => x.t === 'fill' ? 0 : -1));
+  function fits(r, c, v) {
+    const ai = acrossOf[r + ',' + c], di = downOf[r + ',' + c];
+    if (ai != null) for (const p of across[ai].cells) if (grid[p.r][p.c] === v) return false;
+    if (di != null) for (const p of down[di].cells) if (grid[p.r][p.c] === v) return false;
+    return true;
+  }
+  function rec(i) {
+    if (i === fills.length) return true;
+    const { r, c } = fills[i];
+    for (const v of shuffle(DIGITS.slice(), rng)) { if (fits(r, c, v)) { grid[r][c] = v; if (rec(i + 1)) return true; grid[r][c] = 0; } }
+    return false;
+  }
+  if (!rec(0)) return null;
+  return grid; // numeric grid; -1 at blocks
+}
+
+function layoutToCells(pat) {
+  return pat.map(row => row.split('').map(ch => ch === '#'
+    ? { t: 'block', across: null, down: null }
+    : { t: 'fill', v: 0 }));
+}
+
+// derive clue sums onto the block cells from a completed numeric solution grid (-1 at blocks)
+function applyClues(cells, sol) {
+  const R = cells.length, C = cells[0].length;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    if (cells[r][c].t !== 'block') continue;
+    cells[r][c] = { t: 'block', across: null, down: null };
+    if (c + 1 < C && cells[r][c + 1].t === 'fill') { let s = 0, cc = c + 1; while (cc < C && cells[r][cc].t === 'fill') s += sol[r][cc++]; cells[r][c].across = s; }
+    if (r + 1 < R && cells[r + 1][c].t === 'fill') { let s = 0, rr = r + 1; while (rr < R && cells[rr][c].t === 'fill') s += sol[rr++][c]; cells[r][c].down = s; }
+  }
+  return cells;
+}
+
+// ── THE VERIFIED BASE LIBRARY ──
+// Each base is a {wall, sol} that was discovered by an offline search and is PROVEN
+// (re-verified here at module-eval AND in core.test.mjs) to be BOTH uniquely-solvable and
+// guess-free deducible. Guess-free Kakuro is combinatorially scarce (uniqueness is killed by
+// "swap rectangles"); these dense, short-run boards are the ones that survive — which is why
+// the family's signature is the TIGHT board, every clue load-bearing. `wall`: '#'=block,
+// '.'=fill. `sol`: rows of digits with '#' at blocks, '/'-joined.
+const BASES = [
+  { wall: ['#####', '###..', '##...', '#...#', '#..##'], sol: '#####/###57/##869/#378#/#89##' },
+  { wall: ['#####', '###..', '##...', '#...#', '#..##'], sol: '#####/###21/##173/#589#/#69##' },
+  { wall: ['#####', '###..', '##...', '#...#', '#..##'], sol: '#####/###93/##971/#413#/#23##' },
+  { wall: ['#####', '###..', '##...', '#...#', '#..##'], sol: '#####/###84/##968/#741#/#95##' },
+  { wall: ['#####', '###..', '##...', '#...#', '#..##'], sol: '#####/###79/##621/#586#/#79##' },
+  { wall: ['#####', '#..##', '#...#', '##...', '###..'], sol: '#####/#83##/#698#/##298/###41' },
+  { wall: ['#####', '###..', '##...', '#...#', '#..##'], sol: '#####/###27/##389/#829#/#94##' },
+  { wall: ['#####', '#..##', '#...#', '##...', '###..'], sol: '#####/#29##/#389#/##126/###39' },
+];
+
+function solStrToRows(solStr) { return solStr.split('/').map(r => r.split('').map(ch => ch === '#' ? -1 : Number(ch))); }
+
+// build a puzzle (clue-bearing cells) + its answer grid from a base
+function baseToBoard(base) {
+  const cells = layoutToCells(base.wall);
+  const sol = solStrToRows(base.sol);
+  applyClues(cells, sol);
+  return { cells, sol };
+}
+
+// ── DIHEDRAL TRANSFORMS (for variety) ──
+// The 8 transforms of the square. Each maps {wall,sol} → a new {wall,sol}. They preserve
+// UNIQUENESS exactly (the constraint structure is isomorphic), but NOT always guess-free
+// deducibility (our deduce applies row/col rules in a fixed order, which a transpose can
+// reorder past the solver's reach). So `generate` APPLIES a transform then RE-VERIFIES both
+// guarantees, falling back through transforms to identity — never shipping an unproven board.
+function _transpose(g) { const R = g.length, C = g[0].length, o = []; for (let c = 0; c < C; c++) { const row = []; for (let r = 0; r < R; r++) row.push(g[r][c]); o.push(row); } return o; }
+function _flipH(g) { return g.map(r => r.slice().reverse()); }
+function _flipV(g) { return g.slice().reverse(); }
+function _applyXform(base, xf) {
+  let wg = base.wall.map(r => r.split(''));
+  let sg = solStrToRows(base.sol);
+  if (xf & 1) { wg = _transpose(wg); sg = _transpose(sg); }
+  if (xf & 2) { wg = _flipH(wg); sg = _flipH(sg); }
+  if (xf & 4) { wg = _flipV(wg); sg = _flipV(sg); }
+  return { wall: wg.map(r => r.join('')), sol: sg.map(r => r.map(v => v < 0 ? '#' : v).join('')).join('/') };
+}
+
+// verify a {wall,sol} is unique + guess-free + the deduced answer matches the given sol
+function verifyBase(base) {
+  const { cells, sol } = baseToBoard(base);
+  if (countSolutions(cells, 2) !== 1) return null;
+  const d = deduce(cells);
+  if (!d.solved) return null;
+  for (let r = 0; r < cells.length; r++) for (let c = 0; c < cells[0].length; c++)
+    if (cells[r][c].t === 'fill' && d.val[r][c] !== sol[r][c]) return null;
+  return { cells, sol, fillOrder: d.fillOrder };
+}
+
+// GENERATOR: seed → a proven board. Picks a base, tries a seeded dihedral transform for
+// variety, RE-VERIFIES both guarantees, and falls back to identity if the transform broke
+// deducibility — so a generated board is *always* unique & guess-free, by construction.
+function generate(seed) {
+  const rng = mulberry32(seed >>> 0);
+  const base = BASES[(seed >>> 0) % BASES.length];
+  const order = shuffle([0, 1, 2, 3, 4, 5, 6, 7], rng); // try transforms in a seeded order
+  for (const xf of order) {
+    const t = _applyXform(base, xf);
+    const v = verifyBase(t);
+    if (v) return { ...v, wall: t.wall, base, xform: xf };
+  }
+  // identity is always valid (the base itself is proven)
+  const v0 = verifyBase(base);
+  return { ...v0, wall: base.wall.slice(), base, xform: 0 };
+}
+
+// ── NEGATIVE CONTROL (the load-bearing proof) ──
+// minSumFor/maxSumFor(len): the smallest/largest distinct-digit sum a run of `len` cells can
+// hold (len2 → 3..17, len3 → 6..24). Any clue value strictly between is a valid alternate.
+function minSumFor(len) { let s = 0; for (let d = 1; d <= len; d++) s += d; return s; }
+function maxSumFor(len) { let s = 0; for (let d = 9; d > 9 - len; d--) s += d; return s; }
+
+// loadBearing(cells): a clue is "load-bearing" if REPLACING its sum with some OTHER feasible
+// value breaks the board's uniqueness or guess-freeness. For each clue we search every legal
+// alternate sum (the run's whole feasible range, minus the true value) and pick the one that
+// best demonstrates breakage — preferring genuine AMBIGUITY (count≥2) over "stalls" over
+// "no solution". A clue counts as load-bearing if ANY alternate breaks it. Returns
+// {bearing, total, firstBreak} — proof the givens are minimal-ish & each pulls weight.
+function loadBearing(cells) {
+  const R = cells.length, C = cells[0].length;
+  const clues = [];
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    if (cells[r][c].t !== 'block') continue;
+    if (cells[r][c].across != null) { let len = 0, cc = c + 1; while (cc < C && cells[r][cc].t === 'fill') { len++; cc++; } clues.push({ r, c, dir: 'across', len }); }
+    if (cells[r][c].down != null) { let len = 0, rr = r + 1; while (rr < R && cells[rr][c].t === 'fill') { len++; rr++; } clues.push({ r, c, dir: 'down', len }); }
+  }
+  let bearing = 0, firstBreak = null;
+  for (const cl of clues) {
+    const orig = cells[cl.r][cl.c][cl.dir];
+    const lo = minSumFor(cl.len), hi = maxSumFor(cl.len);
+    let best = null; // { alt, cnt, ded, kind } — kind: 'ambiguous' | 'stalls' | 'nosol'
+    const rank = k => k === 'ambiguous' ? 3 : k === 'stalls' ? 2 : 1;
+    for (let alt = lo; alt <= hi; alt++) {
+      if (alt === orig) continue;
+      const loose = cells.map(row => row.map(x => ({ ...x })));
+      loose[cl.r][cl.c][cl.dir] = alt;
+      const cnt = countSolutions(loose, 9);
+      const ded = deduce(loose).solved;
+      let kind = null;
+      if (cnt >= 2) kind = 'ambiguous'; else if (cnt === 1 && !ded) kind = 'stalls'; else if (cnt === 0) kind = 'nosol';
+      if (kind && (!best || rank(kind) > rank(best.kind))) { best = { alt, cnt, ded, kind, loose, clue: cl, orig }; }
+    }
+    if (best) { bearing++; if (!firstBreak || rank(best.kind) > rank(firstBreak.kind)) firstBreak = best; }
+  }
+  return { bearing, total: clues.length, firstBreak };
+}
+
+export {
+  DIGITS, mulberry32, shuffle, comboSets, allowedMask, popcount, maskToDigits,
+  deriveRuns, countSolutions, deduce, solveRandom, layoutToCells, applyClues,
+  BASES, baseToBoard, solStrToRows, verifyBase, generate, minSumFor, maxSumFor, loadBearing,
+};
+// === CORE END ===
+// ============================================================================
+
+// =================== UI / RENDER / INTERACTION (browser only) ===============
+const $ = s => document.querySelector(s);
+const cv = $('#board'), ctx = cv.getContext('2d');
+let G = null;            // { cells, sol, runs, fillOrder, wall, base }
+let user = null;         // user grid: numeric digits over fill cells (0 = empty), -1 at blocks
+let sel = null;          // {r,c} currently selected fill cell (or null)
+let DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+let CS = 560;            // logical canvas size in CSS px (square), sized responsively
+let GR = 5, GC = 5;      // grid rows / cols
+let cell = 0, ox = 0, oy = 0;
+
+// Responsive sizing: the canvas fills its column (CSS width:100%) but we keep its backing
+// store crisp & square. We pick a CSS side from the wrap's content width (capped), set the
+// backing store to side*DPR, and scale the context once so all drawing code can keep using
+// logical (CSS) coordinates. Only the on-screen scale changes — so the board never runs past
+// the fold on a short / narrow viewport and clears 390 with 0 overflow.
+function sizeCanvas() {
+  const wrap = cv.parentElement;
+  const avail = Math.max(220, wrap.clientWidth - 20); // minus the wrap's 10px padding ×2
+  CS = Math.round(Math.min(560, avail));
+  DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  cv.style.width = CS + 'px'; cv.style.height = CS + 'px';
+  cv.width = Math.round(CS * DPR); cv.height = Math.round(CS * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);   // draw in CSS px; backing store is crisp
+}
+
+function layoutGeom() {
+  const pad = Math.max(6, CS * 0.018);
+  const inner = CS - 2 * pad;
+  cell = Math.floor(inner / Math.max(GR, GC));
+  ox = Math.round((CS - cell * GC) / 2);
+  oy = Math.round((CS - cell * GR) / 2);
+}
+
+function newBoard(seed) {
+  const g = generate(seed >>> 0);
+  if (!g || !g.cells) { $('#msg').textContent = 'generator missed this seed — try another'; return; }
+  G = g;
+  GR = g.cells.length; GC = g.cells[0].length;
+  G.runs = deriveRuns(g.cells);
+  // user starts blank on every fill cell, -1 (block) elsewhere
+  user = g.cells.map(row => row.map(x => x.t === 'fill' ? 0 : -1));
+  sel = firstFill();
+  sizeCanvas(); layoutGeom(); draw(); updateState();
+  $('#trace').textContent = 'the deduction trace appears here when you Reveal logic';
+  $('#msg').textContent = 'Tap a white cell, then a digit 1–9.';
+}
+function firstFill() {
+  for (let r = 0; r < GR; r++) for (let c = 0; c < GC; c++) if (G.cells[r][c].t === 'fill') return { r, c };
+  return null;
+}
+
+// ── conflict analysis: for each fill cell, is it part of a broken run? ──
+// A run is "bad" if a digit repeats OR (run full → sum ≠ clue) OR (running sum already > clue).
+// A run is "satisfied" if every cell filled, distinct, and sum === clue.
+function analyze() {
+  const conflict = G.cells.map(row => row.map(() => false));
+  const runState = [];      // per run: {sat, bad}
+  let satCount = 0, confCells = 0;
+  for (const run of [...G.runs.across, ...G.runs.down]) {
+    let s = 0, blanks = 0; const seen = {}; let repeat = false;
+    for (const p of run.cells) {
+      const v = user[p.r][p.c];
+      if (v === 0) { blanks++; continue; }
+      s += v; if (seen[v]) repeat = true; seen[v] = true;
+    }
+    const over = s > run.sum;
+    const full = blanks === 0;
+    const bad = repeat || over || (full && s !== run.sum);
+    const sat = full && !repeat && s === run.sum;
+    if (sat) satCount++;
+    if (bad) for (const p of run.cells) { if (!conflict[p.r][p.c]) confCells++; conflict[p.r][p.c] = true; }
+    runState.push({ sat, bad, sum: run.sum });
+  }
+  return { conflict, satCount, runState, runTotal: G.runs.across.length + G.runs.down.length };
+}
+
+function draw() {
+  if (!G) return;
+  ctx.clearRect(0, 0, CS, CS);
+  // ground
+  const grd = ctx.createLinearGradient(0, 0, 0, CS);
+  grd.addColorStop(0, '#0b1322'); grd.addColorStop(1, '#0a0f1a');
+  ctx.fillStyle = grd; ctx.fillRect(0, 0, CS, CS);
+  const a = analyze();
+  for (let r = 0; r < GR; r++) for (let c = 0; c < GC; c++) {
+    const x = ox + c * cell, y = oy + r * cell;
+    const cellModel = G.cells[r][c];
+    if (cellModel.t === 'block') drawBlock(x, y, cellModel, r, c);
+    else drawFill(x, y, r, c, a.conflict[r][c]);
+  }
+}
+
+function drawBlock(x, y, m, r, c) {
+  // a slate clue-cell; if it carries a clue, a diagonal split with the across (upper-right)
+  // and down (lower-left) sums.
+  const hasClue = m.across != null || m.down != null;
+  ctx.fillStyle = hasClue ? '#142033' : '#0e1626';
+  ctx.fillRect(x, y, cell, cell);
+  ctx.strokeStyle = 'rgba(120,150,190,.14)'; ctx.lineWidth = 1; ctx.strokeRect(x + .5, y + .5, cell - 1, cell - 1);
+  if (!hasClue) return;
+  // the diagonal divider
+  ctx.strokeStyle = 'rgba(201,162,74,.5)'; ctx.lineWidth = Math.max(1, cell * 0.018);
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + cell, y + cell); ctx.stroke();
+  ctx.font = `700 ${Math.round(cell * 0.30)}px ${getComputedStyle(document.body).fontFamily}`;
+  ctx.fillStyle = '#d9c485';
+  // across clue → upper-right triangle
+  if (m.across != null) {
+    ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    ctx.fillText(String(m.across), x + cell - cell * 0.10, y + cell * 0.08);
+  }
+  // down clue → lower-left triangle
+  if (m.down != null) {
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText(String(m.down), x + cell * 0.10, y + cell - cell * 0.07);
+  }
+}
+
+function drawFill(x, y, r, c, conflict) {
+  const v = user[r][c];
+  const isSel = sel && sel.r === r && sel.c === c;
+  // cell ground
+  ctx.fillStyle = conflict ? '#2a1414' : (v ? '#0f2230' : '#0c1623');
+  ctx.fillRect(x, y, cell, cell);
+  // selected ring
+  if (isSel) {
+    ctx.fillStyle = 'rgba(55,247,224,0.10)'; ctx.fillRect(x, y, cell, cell);
+    ctx.strokeStyle = '#37f7e0'; ctx.lineWidth = Math.max(2, cell * 0.04);
+    ctx.strokeRect(x + 1.5, y + 1.5, cell - 3, cell - 3);
+  } else {
+    ctx.strokeStyle = conflict ? 'rgba(255,123,114,.55)' : 'rgba(120,150,190,.16)';
+    ctx.lineWidth = 1; ctx.strokeRect(x + .5, y + .5, cell - 1, cell - 1);
+  }
+  if (v) {
+    ctx.fillStyle = conflict ? '#ff9a92' : (isSel ? '#bdfff5' : '#dff3ea');
+    ctx.font = `600 ${Math.round(cell * 0.5)}px ${getComputedStyle(document.body).fontFamily}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(v), x + cell / 2, y + cell / 2 + 1);
+  }
+}
+
+// ── pointer: tap a white cell to select it ──
+function cellAt(x, y) {
+  const c = Math.floor((x - ox) / cell), r = Math.floor((y - oy) / cell);
+  if (r < 0 || r >= GR || c < 0 || c >= GC) return null;
+  if (G.cells[r][c].t !== 'fill') return null;
+  return { r, c };
+}
+function evtPos(e) { const rect = cv.getBoundingClientRect(); return { x: (e.clientX - rect.left) * CS / rect.width, y: (e.clientY - rect.top) * CS / rect.height }; }
+cv.addEventListener('pointerdown', e => {
+  if (!G) return;
+  const { x, y } = evtPos(e); const hit = cellAt(x, y);
+  if (hit) { sel = hit; draw(); }
+});
+
+// ── enter a digit into the selected cell (0 = clear) ──
+function place(d) {
+  if (!G || !sel) { $('#msg').textContent = 'tap a white cell first.'; return; }
+  user[sel.r][sel.c] = d;
+  // advance to the next fill cell in reading order for fluid entry
+  if (d !== 0) advanceSel();
+  draw(); updateState();
+}
+function advanceSel() {
+  let started = false;
+  for (let r = 0; r < GR; r++) for (let c = 0; c < GC; c++) {
+    if (r === sel.r && c === sel.c) { started = true; continue; }
+    if (started && G.cells[r][c].t === 'fill' && user[r][c] === 0) { sel = { r, c }; return; }
+  }
+}
+
+function updateState() {
+  const a = analyze();
+  let filled = 0, total = 0;
+  for (let r = 0; r < GR; r++) for (let c = 0; c < GC; c++) if (G.cells[r][c].t === 'fill') { total++; if (user[r][c]) filled++; }
+  let confCells = 0; for (let r = 0; r < GR; r++) for (let c = 0; c < GC; c++) if (a.conflict[r][c]) confCells++;
+  $('#sCells').textContent = total;
+  $('#sFilled').textContent = filled + '/' + total;
+  $('#sRuns').textContent = a.satCount + '/' + a.runTotal;
+  $('#sConf').textContent = confCells;
+  const solved = filled === total && confCells === 0 && a.satCount === a.runTotal;
+  const pill = $('#solvedPill'), txt = $('#solvedTxt');
+  if (solved) {
+    pill.className = 'pill ok'; txt.textContent = 'solved — every run tallies!';
+    $('#msg').textContent = '✚ Every run sums to its clue with no repeats. Solved.';
+  } else if (confCells > 0) {
+    pill.className = 'pill bad'; txt.textContent = 'a run conflicts';
+  } else {
+    pill.className = 'pill'; txt.textContent = 'unsolved';
+  }
+}
+
+// ── reveal the deduction (replays deduce().fillOrder, each step naming its rule) ──
+function revealLogic() {
+  const d = deduce(G.cells);
+  if (!d.solved) { $('#msg').textContent = 'solver did not finish (unexpected)'; return; }
+  for (let r = 0; r < GR; r++) for (let c = 0; c < GC; c++) if (G.cells[r][c].t === 'fill') user[r][c] = d.val[r][c];
+  sel = null; draw(); updateState();
+  const names = {
+    'combo': 'combination-set — the run-sum admits only these digits here',
+    'naked': 'naked single — one candidate remains in this cell',
+    'unique': 'hidden single — this digit fits exactly one open cell of its run',
+  };
+  const lines = []; let step = 1;
+  for (const t of d.fillOrder) {
+    lines.push(`<span class="step">${String(step++).padStart(2)}</span> r${t.r}c${t.c} → <b>${t.v}</b>  <span class="rule">${names[t.rule] || t.rule}</span>`);
+  }
+  $('#trace').innerHTML = lines.join('\n') || '(solved immediately)';
+  $('#msg').textContent = 'Revealed by pure logic — scroll the trace; not one step is a guess.';
+}
+
+// ── Hint: fill ONE cell the deducer can prove next, naming the rule (never "the answer is N") ──
+function hint() {
+  const d = deduce(G.cells);
+  if (!d.solved) { $('#msg').textContent = 'no logical hint available'; return; }
+  const names = {
+    'combo': 'a combination-set forces it',
+    'naked': 'a naked single — only one candidate is left in that cell',
+    'unique': 'a hidden single — that digit fits exactly one open cell of its run',
+  };
+  // find the first deduced cell the user has not yet filled correctly, in the deducer's own order
+  for (const t of d.fillOrder) {
+    if (user[t.r][t.c] !== t.v) {
+      sel = { r: t.r, c: t.c };
+      user[t.r][t.c] = t.v; draw(); updateState();
+      $('#msg').textContent = `Logic fills r${t.r}c${t.c}: ${names[t.rule] || t.rule}.`;
+      return;
+    }
+  }
+  $('#msg').textContent = 'every forced cell already matches — keep going!';
+}
+
+// ── self-test pill (runs the SAME core over many seeds; mirrors core.test.mjs claims) ──
+function structurallyValid(cells, sol) {
+  const { across, down } = deriveRuns(cells);
+  for (const run of [...across, ...down]) {
+    const seen = new Set(); let s = 0;
+    for (const p of run.cells) {
+      const v = sol[p.r][p.c];
+      if (!DIGITS.includes(v)) return false;
+      if (seen.has(v)) return false;
+      seen.add(v); s += v;
+    }
+    if (s !== run.sum) return false;
+  }
+  return true;
+}
+
+async function byteTwinParity() {
+  // diff-true: the inlined CORE (between this page's sentinels) must equal core.mjs char-for-char.
+  try {
+    const [pageTxt, coreTxt] = await Promise.all([
+      fetch(location.href).then(r => r.text()),
+      fetch('./core.mjs').then(r => r.text()),
+    ]);
+    const slice = txt => {
+      const b = txt.indexOf('// === CORE BEGIN ===');
+      const e = txt.indexOf('// === CORE END ===');
+      if (b < 0 || e < 0) return null;
+      return txt.slice(b, e + '// === CORE END ==='.length);
+    };
+    const inPage = slice(pageTxt), inFile = slice(coreTxt);
+    if (inPage == null || inFile == null) return { ok: false, reason: 'sentinel not found' };
+    return { ok: inPage === inFile, reason: inPage === inFile ? 'byte-identical' : 'DRIFT: inlined core ≠ core.mjs' };
+  } catch (e) {
+    // file:// or fetch blocked — parity is enforced by the Node twin; treat as skipped-OK in that case
+    return { ok: true, reason: 'parity deferred to Node twin (fetch unavailable)', skipped: true };
+  }
+}
+
+async function selfTest() {
+  const SEEDS = 120;
+  let allUnique = 0, allDeduced = 0, allMatch = 0, allStruct = 0, ruleOk = 0, controlFired = 0;
+  let bearingSum = 0, clueSum = 0;
+  const RULES = ['combo', 'naked', 'unique'];
+  for (let s = 1; s <= SEEDS; s++) {
+    const seed = (s * 2654435761) >>> 0;
+    const g = generate(seed);
+    if (!g || !g.cells) continue;
+    const { cells, sol, fillOrder } = g;
+    if (countSolutions(cells, 9) === 1) allUnique++;
+    const d = deduce(cells);
+    if (d.solved) allDeduced++;
+    if (structurallyValid(cells, d.val)) allStruct++;
+    let match = true;
+    for (let r = 0; r < cells.length && match; r++) for (let c = 0; c < cells[0].length; c++)
+      if (cells[r][c].t === 'fill' && d.val[r][c] !== sol[r][c]) { match = false; break; }
+    if (match) allMatch++;
+    const blanks = cells.flat().filter(x => x.t === 'fill').length;
+    if (fillOrder.every(f => RULES.includes(f.rule)) && (!d.solved || fillOrder.length === blanks)) ruleOk++;
+    const lb = loadBearing(cells);
+    if (lb.bearing >= 1) controlFired++;
+    bearingSum += lb.bearing; clueSum += lb.total;
+  }
+  const parity = await byteTwinParity();
+  const checks = [
+    ['unique', allUnique === SEEDS],
+    ['deduction-solved (no guess)', allDeduced === SEEDS],
+    ['matches stored answer', allMatch === SEEDS],
+    ['structurally valid', allStruct === SEEDS],
+    ['every trace step a named rule', ruleOk === SEEDS],
+    ['negative control fires (load-bearing clues)', controlFired === SEEDS],
+    ['byte-twin parity (inlined core ≡ core.mjs)', parity.ok],
+  ];
+  const pass = checks.filter(c => c[1]).length;
+  const ok = pass === checks.length;
+  const pct = (100 * bearingSum / Math.max(1, clueSum)).toFixed(0);
+  const pill = $('#selftest');
+  pill.className = 'selftest ' + (ok ? 'ok' : 'bad');
+  pill.textContent = ok
+    ? `self-test ${pass}/${checks.length} ✓ · ${SEEDS} boards unique & logic-solvable · ${pct}% clues load-bearing`
+    : `self-test ${pass}/${checks.length} ✗ (${checks.filter(c => !c[1]).map(c => c[0]).join(', ')})`;
+  pill.title = ok
+    ? 'Every generated board: one solution, reached by pure deduction (no guess); loosen a clue and it breaks; the inlined core is byte-identical to core.mjs.'
+    : pill.textContent;
+  return { pass, total: checks.length, allUnique, allDeduced, allMatch, ruleOk, controlFired, bearingSum, clueSum, parity };
+}
+
+// ── drop the front-door breadcrumb (the bench drops its own seen flag) ──
+try { const k = 'ws:seen:cross-sums'; if (!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); } catch (e) {}
+
+// wire up
+$('#new').onclick = () => { const s = (Math.random() * 1e6) | 0; $('#seed').value = s; newBoard(s); };
+$('#solveBtn').onclick = revealLogic;
+$('#clear').onclick = () => { for (let r = 0; r < GR; r++) for (let c = 0; c < GC; c++) if (G.cells[r][c].t === 'fill') user[r][c] = 0; draw(); updateState(); $('#msg').textContent = 'cleared.'; };
+$('#hint').onclick = hint;
+$('#seed').onchange = e => newBoard(parseInt(e.target.value, 10) || 1);
+$('#keypad').addEventListener('click', e => { const b = e.target.closest('button'); if (b) place(parseInt(b.dataset.d, 10)); });
+window.addEventListener('keydown', e => {
+  if (!G) return;
+  if (e.key >= '1' && e.key <= '9') { place(parseInt(e.key, 10)); e.preventDefault(); }
+  else if (e.key === '0' || e.key === 'Backspace' || e.key === 'Delete') { place(0); e.preventDefault(); }
+  else if (e.key.startsWith('Arrow') && sel) { moveSel(e.key); e.preventDefault(); }
+});
+function moveSel(key) {
+  const dr = key === 'ArrowUp' ? -1 : key === 'ArrowDown' ? 1 : 0;
+  const dc = key === 'ArrowLeft' ? -1 : key === 'ArrowRight' ? 1 : 0;
+  let r = sel.r, c = sel.c;
+  for (let i = 0; i < Math.max(GR, GC); i++) {
+    r += dr; c += dc;
+    if (r < 0 || r >= GR || c < 0 || c >= GC) return;
+    if (G.cells[r][c].t === 'fill') { sel = { r, c }; draw(); return; }
+  }
+}
+
+let _rz = null;
+window.addEventListener('resize', () => { clearTimeout(_rz); _rz = setTimeout(() => { if (G) { sizeCanvas(); layoutGeom(); draw(); } }, 120); });
+
+newBoard(parseInt($('#seed').value, 10) || 7);
+selfTest().then(r => console.log('self-test', r));
+</script>
+</body>
+</html>

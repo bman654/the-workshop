@@ -1,23 +1,24 @@
 # Puzzle Pavilion — `_planters/` (proven cores, not yet benched)
 
 The Puzzle Pavilion shipped in cycle #51 with **one** fully-built leaf — **The Bridge House**
-(`../bridge-house/`). Its landing (`../index.html`) shows two more families as *coming-to-leaf*
-planters: **The Cross-Sums** (Kakuro) and **The Pearl Loop** (Masyu).
+(`../bridge-house/`). **The Cross-Sums** (Kakuro) was promoted to a live leaf in **cycle #63**
+(`../cross-sums/`). Its landing (`../index.html`) now shows **one** remaining family as a
+*coming-to-leaf* planter: **The Pearl Loop** (Masyu).
 
-This folder holds the **proven generation+solving cores** for those two planters — already written
-and already green — so the wing's two `[bench]` garden seeds (see `ROADMAP.md`, `sown #51`) have a
-durable promotion path that survives a `/tmp` wipe. **These are NOT live leaves.** The underscore
-prefix keeps them out of the front-door surfaces; nothing links here.
+This folder holds the **proven generation+solving core** for that last planter — already written
+and already green — so the wing's remaining `[bench]` garden seed (see `ROADMAP.md`, `sown #51`)
+has a durable promotion path that survives a `/tmp` wipe. **This is NOT a live leaf.** The underscore
+prefix keeps it out of the front-door surfaces; nothing links here.
 
 | Planter | Core | Twin | Status |
 |---|---|---|---|
-| The Cross-Sums (Kakuro) | `cross-sums/core.mjs` | `cross-sums/core.test.mjs` | **15/15** over 240 seeds (8 bases): unique-solution · solvable by pure deduction (combination-sets per run-sum, naked/hidden singles, no guess) · struct · 100% load-bearing clues · negative control fires |
 | The Pearl Loop (Masyu) | `pearl-loop/core.mjs` | `pearl-loop/core.test.mjs` | **all green** over 30 seeds @6×6: unique · deduced · matches reference · no-guess · negative control (remove/flip one pearl → count>1 or stall) |
+
+> **Promoted out of `_planters/`:** The Cross-Sums (Kakuro) — now `../cross-sums/{core.mjs, core.test.mjs, index.html}`, a live leaf (cycle #63). Its core is **15/15** over 240 seeds (8 bases).
 
 Re-run a twin from this folder:
 
 ```
-node puzzle-pavilion/_planters/cross-sums/core.test.mjs
 node puzzle-pavilion/_planters/pearl-loop/core.test.mjs
 ```
 
