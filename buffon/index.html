@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Buffon's Needles — pi out of thin air</title>
+<style>
+  :root{
+    --panel-bg: rgba(9,11,16,0.86);
+    --panel-edge: rgba(150,190,220,0.26);
+    --ink: #e7edf4;
+    --ink-dim: #8f9bb0;
+    --accent: #7fc7e8;
+    --accent-soft: rgba(127,199,232,0.16);
+    --green: #8fd79a;
+    --green-glow: rgba(120,225,150,0.55);
+    --grey: #6b7686;
+    --plank: #6b4a2c;
+    --plank2: #5c3f25;
+    --seam: #2a1c10;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --bg: #08090d;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-ui); overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+  /* top bar */
+  header{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; gap:14px; padding:11px 18px;
+    background:linear-gradient(180deg, rgba(8,9,13,0.92), rgba(8,9,13,0.0));
+    pointer-events:none;
+  }
+  header .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; pointer-events:auto; }
+  header .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; flex-direction:column; gap:2px; }
+  .brand h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.4px; margin:0; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .spacer{ flex:1; }
+  .selftest{ pointer-events:auto; font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.4); white-space:nowrap; cursor:pointer; user-select:none; color:var(--ink-dim); }
+  .selftest.ok{ color:var(--green); border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* the floor — the hero */
+  #floorwrap{ position:fixed; inset:0; }
+  canvas#floor{ display:block; width:100%; height:100%; touch-action:none; cursor:crosshair; }
+
+  /* the by-product readout (the pi heap) — bottom-left, glanceable, never the star but legible */
+  #heap{
+    position:fixed; left:18px; bottom:18px; z-index:20;
+    background:var(--panel-bg); border:1px solid var(--panel-edge); border-radius:14px;
+    padding:13px 16px 12px; min-width:230px; backdrop-filter:blur(7px);
+  }
+  #heap .lab{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.5px; text-transform:uppercase; }
+  #pibig{ font-family:var(--font-serif); font-size:42px; font-weight:600; line-height:1.05; margin:2px 0 1px;
+    letter-spacing:.5px; font-variant-numeric:tabular-nums; }
+  #pibig .lit{ color:var(--accent); }
+  #pibig .dim{ color:var(--ink-dim); opacity:.5; }
+  #heaptally{ font:12px/1.5 var(--font-mono); color:var(--ink-dim); }
+  #heaptally b{ color:var(--ink); font-weight:600; }
+  #heaptally .gr{ color:var(--green); }
+  .formula{ font:11px/1.4 var(--font-mono); color:var(--ink-dim); margin-top:7px; opacity:.85; }
+  .readhint{ font:10px/1.4 var(--font-mono); color:var(--ink-dim); margin-top:5px; opacity:.62; max-width:230px; }
+
+  /* controls — bottom-right */
+  #panel{
+    position:fixed; right:18px; bottom:18px; z-index:20;
+    background:var(--panel-bg); border:1px solid var(--panel-edge); border-radius:14px;
+    padding:13px 15px 14px; width:268px; backdrop-filter:blur(7px);
+  }
+  #panel .row{ display:flex; align-items:center; gap:9px; margin:9px 0; }
+  #panel .row:first-child{ margin-top:2px; }
+  #panel label{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.3px; width:88px; flex:none; }
+  #panel input[type=range]{ flex:1; min-width:0; accent-color:var(--accent); height:3px; }
+  #panel .val{ font:11px/1 var(--font-mono); color:var(--ink); width:40px; text-align:right; flex:none; font-variant-numeric:tabular-nums; }
+  .btnrow{ display:flex; gap:8px; margin-top:11px; }
+  button.act{ flex:1; font:600 11px/1 var(--font-mono); letter-spacing:.3px; padding:9px 8px; border-radius:9px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); color:var(--ink); cursor:pointer; transition:.18s; user-select:none; }
+  button.act:hover{ border-color:var(--accent); color:var(--accent); }
+  button.act:active{ transform:translateY(1px); }
+  button.act.on{ color:#06222d; background:var(--accent); border-color:var(--accent); }
+  button.act.danger.on{ color:#2a0d08; background:#f0a07a; border-color:#f0a07a; }
+  .bias{ margin-top:11px; padding-top:11px; border-top:1px solid rgba(150,190,220,0.14); }
+  .biastog{ display:flex; align-items:center; gap:9px; cursor:pointer; user-select:none; }
+  .biastog .sw{ width:34px; height:18px; border-radius:10px; background:rgba(120,140,160,0.25); position:relative; transition:.2s; flex:none; }
+  .biastog .sw::after{ content:""; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#cdd6e2; transition:.2s; }
+  .biastog.on .sw{ background:#f0a07a; }
+  .biastog.on .sw::after{ left:18px; background:#2a0d08; }
+  .biastog .t{ font:11px/1.3 var(--font-mono); color:var(--ink-dim); }
+  .biastog.on .t{ color:#f0a07a; }
+  .biasnote{ font:10.5px/1.4 var(--font-mono); color:var(--ink-dim); margin-top:6px; opacity:.78; }
+
+  /* the quiet convergence side-rail — top-right, dim, a glance not a star */
+  #rail{
+    position:fixed; right:18px; top:60px; z-index:18;
+    width:300px; height:118px;
+    background:rgba(9,11,16,0.55); border:1px solid rgba(150,190,220,0.14); border-radius:12px;
+    padding:8px 10px 6px;
+    opacity:.78;
+  }
+  #rail .rlab{ font:9.5px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; text-transform:uppercase; display:flex; justify-content:space-between; }
+  #rail .rlab .nN{ color:var(--accent); opacity:.85; }
+  canvas#rail-c{ display:block; width:100%; height:84px; margin-top:4px; }
+
+  .hint{ position:fixed; left:50%; top:52px; transform:translateX(-50%); z-index:25;
+    font:12px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.3px; pointer-events:none;
+    background:rgba(8,9,13,0.7); padding:7px 13px; border-radius:18px; border:1px solid rgba(150,190,220,0.12);
+    transition:opacity .6s; }
+  @media (max-width:720px){
+    #rail{ display:none; }
+    header{ padding:9px 14px; }
+    .brand h1{ font-size:17px; }
+    .hint{ top:auto; bottom:calc(50% - 16px); }
+    /* stacked single column: controls above the readout, with clearance so the taller heap can't ride up */
+    #panel{ width:auto; left:14px; right:14px; bottom:208px; padding:11px 13px 12px; }
+    #heap{ left:14px; right:14px; bottom:14px; min-width:0; padding:11px 14px 11px; }
+    #pibig{ font-size:36px; }
+    .readhint{ max-width:none; }
+  }
+  @media (max-width:720px) and (max-height:760px){
+    /* very short phones: trim the prose so the column still fits without overlap */
+    #panel{ bottom:198px; }
+    .readhint{ display:none; }
+  }
+</style>
+</head>
+<body>
+<div id="floorwrap"><canvas id="floor"></canvas></div>
+
+<header>
+  <a class="back" href="../workbench/index.html">◂ Workbench</a>
+  <div class="brand">
+    <h1>Buffon's Needles</h1>
+    <span class="tag">pi out of thin air · drop, don't compute</span>
+  </div>
+  <div class="spacer"></div>
+  <button class="selftest" id="selftest" title="Run the byte-twinned proof">self-test ▸</button>
+</header>
+
+<div class="hint" id="hint">flick anywhere to toss a needle · hold to rain</div>
+
+<div id="rail">
+  <div class="rlab"><span>π estimate vs. the 1/√N corridor</span><span class="nN" id="railN">N=0</span></div>
+  <canvas id="rail-c"></canvas>
+</div>
+
+<div id="heap">
+  <div class="lab">π read off the heap</div>
+  <div id="pibig"><span class="lit">3</span><span class="dim">.—</span></div>
+  <div id="heaptally"><b id="tN">0</b> tossed · <span class="gr" id="tC">0</span> crossed</div>
+  <div class="formula">π ≈ 2·L·N / (t·crossings)</div>
+  <div class="readhint">π is DROPPED, not computed — you read it off the pile. The lit digits are the ones that already agree with true π.</div>
+</div>
+
+<div id="panel">
+  <div class="row">
+    <label>needle L / gap t</label>
+    <input id="sL" type="range" min="0.2" max="1" step="0.02" value="0.8">
+    <span class="val" id="vL">0.80</span>
+  </div>
+  <div class="row">
+    <label>rain rate</label>
+    <input id="sRate" type="range" min="1" max="400" step="1" value="90">
+    <span class="val" id="vRate">90</span>
+  </div>
+  <div class="btnrow">
+    <button class="act" id="bRain">⛆ rain</button>
+    <button class="act" id="bClear">clear</button>
+  </div>
+  <div class="bias">
+    <div class="biastog" id="biastog">
+      <div class="sw"></div>
+      <div class="t">bias the throw — fix every needle ⟂ to the planks</div>
+    </div>
+    <div class="biasnote" id="biasnote">uniform orientation is load-bearing. Flip this and the randomness is gone — the estimate drifts to <b>2.0</b>, not π.</div>
+  </div>
+</div>
+
+<script>
+// =================================================================================================
+// The block between the BUFFON CORE sentinels below is inlined BYTE-FOR-BYTE from core.mjs.
+// core.test.mjs byte-parity-checks this inlined copy against the module body — one oracle, no drift.
+// The predicate crosses(d,theta,L) is THE law: the canvas colours each needle by it AND the proof
+// counts by it. runSelfTest() is the SOLE oracle for both the in-page pill and the Node twin.
+// ===== BUFFON CORE (byte-identical to core.mjs) =====
+"use strict";
+
+// A landed needle, reduced to the only two numbers that decide a crossing:
+//   d     = distance from the needle's CENTER to the NEAREST seam, in [0, t/2]
+//   theta = orientation in [0, pi)  (sin is symmetric across pi, so [0,pi) covers all lines)
+// CROSSES iff the across-planks half-extent (L/2)·sin(theta) reaches the seam: d <= (L/2)·sin(theta).
+// This single predicate is the sole oracle — the canvas colours a needle by it, and the proof counts by it.
+function crosses(d, theta, L){
+  return d <= (L / 2) * Math.abs(Math.sin(theta));
+}
+
+// Exact crossing PROBABILITY for the SHORT-needle regime L<=t, orientation uniform on [0,pi):
+//   P = 2L/(pi·t).  (Derived by averaging the crossing indicator over d~U[0,t/2], theta~U[0,pi).)
+function crossProbUniform(L, t){
+  return (2 * L) / (Math.PI * t);
+}
+
+// Crossing probability when EVERY needle is thrown at a FIXED orientation thetaFixed (the negative
+// control): P = (L/t)·|sin thetaFixed|. (No theta-average — the orientation is degenerate.)
+function crossProbFixedAngle(L, t, thetaFixed){
+  return (L / t) * Math.abs(Math.sin(thetaFixed));
+}
+
+// pi estimate from a tally: pi ~= 2·L·N / (t·crossings). Returns NaN before the first crossing.
+function piEstimate(N, crossings, L, t){
+  if (crossings <= 0) return NaN;
+  return (2 * L * N) / (t * crossings);
+}
+
+// One physical toss. rng() -> [0,1). If thetaFixed is a finite number, the orientation is forced to
+// it (the biased control); otherwise theta is uniform on [0,pi). Returns the full landed state so the
+// renderer can draw the matchstick AND decide its colour from the SAME numbers the proof counts.
+function toss(rng, L, t, thetaFixed){
+  const theta = (typeof thetaFixed === 'number' && isFinite(thetaFixed))
+    ? thetaFixed
+    : rng() * Math.PI;
+  const d = rng() * (t / 2);                 // center distance to nearest seam, U[0, t/2]
+  return { theta, d, hit: crosses(d, theta, L) };
+}
+
+// A deterministic, seedable PRNG (mulberry32) so the Node twin and the page agree bit-for-bit.
+function makeRng(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let x = Math.imul(a ^ (a >>> 15), 1 | a);
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Run a batch of N tosses; return {N, crossings, pi}. thetaFixed (finite) selects the biased control.
+function runBatch(rng, N, L, t, thetaFixed){
+  let crossings = 0;
+  for (let i = 0; i < N; i++){
+    if (toss(rng, L, t, thetaFixed).hit) crossings++;
+  }
+  return { N, crossings, pi: piEstimate(N, crossings, L, t) };
+}
+
+// 1/sqrt(N) tolerance corridor half-width for the pi estimate, in absolute pi-units, at confidence z.
+// crossings ~ Binomial(N, p), p = 2L/(pi t). pi_hat = 2LN/(t·crossings) = pi·(N·p)/crossings, so by the
+// delta method SD(pi_hat) ≈ pi·sqrt((1−p)/(N·p)) — exactly a 1/sqrt(N) law. half-width = z·SD.
+function corridorHalfWidth(N, L, t, z){
+  if (N <= 0) return Infinity;
+  const p = crossProbUniform(L, t);
+  return (z || 1.96) * Math.PI * Math.sqrt((1 - p) / (N * p));
+}
+
+// ── the self-test: prove the three claims numerically ──────────────────────────────────────
+function runSelfTest(){
+  const checks = [];
+  const ck = (name, pass, info) => checks.push({ name, pass, info });
+  const L = 0.8, t = 1.0;
+
+  // (1) BIG-N inside the Monte-Carlo confidence band: a large uniform run lands the empirical estimate
+  // within the 1/sqrt(N) corridor of 2L/(pi t) → pi. (Seeded, so this is deterministic & reproducible.)
+  {
+    const N = 400000;
+    const { pi } = runBatch(makeRng(0xB0FFE5), N, L, t);
+    const band = corridorHalfWidth(N, L, t, 4);     // generous 4-sigma band: ~1-in-15000 false fail
+    const inBand = isFinite(pi) && Math.abs(pi - Math.PI) <= band;
+    ck('1 · big-N lands inside the 4σ Monte-Carlo band of 2L/(pi·t)', inBand,
+       'pi≈' + pi.toFixed(5) + '  |err|=' + Math.abs(pi - Math.PI).toExponential(2) + '  band=' + band.toExponential(2));
+  }
+
+  // (2) 1/sqrt(N) DECAY across decades: averaging the absolute error over many seeds at N and 100·N,
+  // the error must shrink by ≈ sqrt(100) = 10×. We demand the ratio land in [6, 16] — clearly 1/sqrt(N),
+  // not flat (would be ~1) and not faster. This is the honest slow-convergence lesson made falsifiable.
+  {
+    const Nsmall = 2000, Nbig = 200000, trials = 60;
+    let eSmall = 0, eBig = 0;
+    for (let s = 0; s < trials; s++){
+      eSmall += Math.abs(runBatch(makeRng(1000 + s), Nsmall, L, t).pi - Math.PI);
+      eBig   += Math.abs(runBatch(makeRng(9000 + s), Nbig,   L, t).pi - Math.PI);
+    }
+    eSmall /= trials; eBig /= trials;
+    const ratio = eSmall / eBig;                    // expect ≈ sqrt(100) = 10
+    ck('2 · error shrinks ~1/sqrt(N) across 2 decades (ratio≈10)', ratio >= 6 && ratio <= 16,
+       'meanErr(2k)=' + eSmall.toExponential(2) + '  meanErr(200k)=' + eBig.toExponential(2) + '  ratio=' + ratio.toFixed(2));
+  }
+
+  // (3) NEGATIVE CONTROL: needles thrown at a FIXED angle (not uniform) bias the estimate AWAY from pi.
+  // Perpendicular (θ=π/2): the rate is L/t, so 2LN/(t·crossings) → 2.0, NOT pi. The estimate must land
+  // near 2 and FAR from pi — proving uniform orientation is load-bearing, the randomness IS the proof.
+  {
+    const N = 300000;
+    const { pi: biased } = runBatch(makeRng(0x5151), N, L, t, Math.PI / 2);
+    const nearTwo = Math.abs(biased - 2) < 0.02;
+    const farFromPi = Math.abs(biased - Math.PI) > 1.0;
+    ck('3 · negative control: fixed-angle throw biases to 2.0, NOT pi', nearTwo && farFromPi,
+       'biased≈' + biased.toFixed(4) + '  (uniform would give pi=' + Math.PI.toFixed(4) + ')');
+  }
+
+  // (4) the crossing ORACLE matches the closed-form probability: Monte-Carlo crossing fraction over the
+  // reduced (d,theta) space converges to crossProbUniform — the predicate and the formula are one thing.
+  {
+    const N = 500000, rng = makeRng(0xC0FFEE);
+    let hit = 0;
+    for (let i = 0; i < N; i++) if (toss(rng, L, t).hit) hit++;
+    const empirical = hit / N, exact = crossProbUniform(L, t);
+    ck('4 · crossing oracle ≈ closed-form P=2L/(pi·t)', Math.abs(empirical - exact) < 5e-3,
+       'P_emp=' + empirical.toFixed(5) + '  P_exact=' + exact.toFixed(5));
+  }
+
+  const passed = checks.filter(c => c.pass).length;
+  return { ok: passed === checks.length, passed, total: checks.length, checks };
+}
+// ===== END BUFFON CORE =====
+
+// =================================================================================================
+// THE FLOOR — render the hero. The proof core decides crossings; the canvas only draws the matchsticks.
+// =================================================================================================
+(function(){
+  const cv = document.getElementById('floor');
+  const ctx = cv.getContext('2d');
+  let W = 0, H = 0, DPR = Math.min(2, window.devicePixelRatio || 1);
+
+  // floor geometry: plank spacing t in CSS pixels. needle length L = sL * t (L<=t enforced by slider max).
+  const t_px = 86;                  // seam spacing on screen
+  const T = 1.0;                    // logical plank spacing (= t_px on screen)
+  let L = 0.8;                      // logical needle length, in [0.2..1.0]*T
+  let thetaFixed = null;            // null = uniform; Math.PI/2 = biased control
+
+  // state
+  let N = 0, crossings = 0;
+  const rng = Math.random;          // live floor uses real entropy (the self-test uses a seeded twin)
+  const live = [];                  // ONLY the needles still animating {cx,cy,theta,d,hit,settleOff,flash}
+  const railHist = [];              // {N, pi} samples for the side-rail
+
+  // pi-history for the rail, logarithmic-ish sampling so decades show
+  let nextRailAt = 1;
+
+  // the BAKED layer: an offscreen canvas holding the floor + every needle that has come to rest. Each
+  // frame we blit this once (O(1)) and draw only the live needles on top — so fps stays flat as N grows.
+  const bake = document.createElement('canvas');
+  const bctx = bake.getContext('2d');
+
+  function resize(){
+    const r = cv.getBoundingClientRect();
+    W = r.width; H = r.height;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    bake.width = cv.width; bake.height = cv.height;
+    bctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    repaintBake();                  // geometry changed → re-stamp the floor (settled needles are lost on resize)
+  }
+  window.addEventListener('resize', resize);
+
+  // seam x-positions across the floor (vertical planks → vertical seams, needles cross horizontally)
+  function seamXs(){
+    const xs = [];
+    const x0 = (W % t_px) / 2;
+    for (let x = x0; x <= W + 1; x += t_px) xs.push(x);
+    return xs;
+  }
+
+  // distance (logical units) from an on-screen x to the nearest seam, clamped to [0, T/2].
+  function logicalD(cx){
+    const seams = seamXs();
+    let nearest = Infinity;
+    for (const sx of seams){ const dd = Math.abs(cx - sx); if (dd < nearest) nearest = dd; }
+    return Math.min(nearest, t_px/2) / t_px * T;
+  }
+
+  // drop a needle: pick a random landing point, derive (d,theta) the SAME way the proof does, draw it.
+  function dropNeedle(px, py){
+    // center: random across the floor (or near a fling point with jitter)
+    let cx, cy;
+    if (px == null){
+      cx = Math.random() * W;
+      cy = Math.random() * H;
+    } else {
+      cx = px + (Math.random() - 0.5) * 26;
+      cy = py + (Math.random() - 0.5) * 26;
+    }
+    // orientation: uniform on [0,pi) — OR forced perpendicular in the biased control.
+    const theta = (thetaFixed === null) ? Math.random() * Math.PI : thetaFixed;
+    // the on-screen geometry IS the data: store d (distance to nearest seam) so we can re-classify the
+    // pile honestly if L changes. The crossing is decided by the SOLE oracle crosses(d,theta,L).
+    const d = logicalD(cx);
+    const hit = crosses(d, theta, L);
+    // "live" needles are only the ones still animating (settling/flashing). Once a needle comes to rest
+    // it is BAKED into an offscreen layer (one-time draw) and dropped from the live set — so each frame
+    // we composite a single cached image plus a tiny handful of live needles, holding ~60fps no matter
+    // how high the pile grows. The pile of baked pixels IS the heap; it never costs per-frame work.
+    live.push({
+      cx, cy, theta, d, hit,
+      age: 0, settleOff: null, svy: 0,
+      flash: 1.0
+    });
+    N++; if (hit) crossings++;
+    recordRail();
+  }
+
+  function recordRail(){
+    if (N >= nextRailAt){
+      const pi = piEstimate(N, crossings, L, T);
+      if (isFinite(pi)) railHist.push({ N, pi });
+      if (railHist.length > 900) railHist.shift();
+      // logarithmic-ish cadence: dense early, sparse late
+      nextRailAt = Math.ceil(N * 1.04) + 1;
+    }
+  }
+
+  function clearRun(){
+    live.length = 0; N = 0; crossings = 0; railHist.length = 0; nextRailAt = 1;
+    repaintBake();                  // wipe the baked pile back to a bare floor
+  }
+
+  // ---- drawing ----
+  // stamp the bare floor (wood, grain, seams) into a target 2D context (used for the baked layer).
+  function drawFloor(g2){
+    const g = g2.createLinearGradient(0, 0, 0, H);
+    // wood base — brightened so the floor reads warm, not black (the grey needles must stay legible on it)
+    g.addColorStop(0, '#3a2814'); g.addColorStop(0.5, '#33220f'); g.addColorStop(1, '#2b1c0c');
+    g2.fillStyle = g; g2.fillRect(0, 0, W, H);
+    // planks: alternating warm-brown strips
+    const seams = seamXs();
+    for (let i = 0; i < seams.length - 1; i++){
+      const x = seams[i], w = seams[i+1] - seams[i];
+      const shade = (i % 2 === 0) ? 'rgba(140,98,56,0.16)' : 'rgba(108,74,42,0.18)';
+      g2.fillStyle = shade; g2.fillRect(x, 0, w, H);
+    }
+    // grain lines — a touch lighter so the wood reads as wood, not a void
+    g2.strokeStyle = 'rgba(60,40,22,0.28)'; g2.lineWidth = 1;
+    for (let i = 0; i < seams.length; i++){
+      const x = seams[i];
+      g2.beginPath();
+      for (let gx = x + 14; gx < x + t_px - 6; gx += 22){
+        g2.moveTo(gx, 0);
+        g2.bezierCurveTo(gx + 6, H*0.33, gx - 6, H*0.66, gx + 2, H);
+      }
+      g2.stroke();
+    }
+    // seams — the lines that matter
+    g2.strokeStyle = 'rgba(20,12,6,0.92)'; g2.lineWidth = 2.4;
+    g2.beginPath();
+    for (const sx of seams){ g2.moveTo(sx, 0); g2.lineTo(sx, H); }
+    g2.stroke();
+    // a faint highlight on each seam's edge for the carved look
+    g2.strokeStyle = 'rgba(180,135,88,0.22)'; g2.lineWidth = 1;
+    g2.beginPath();
+    for (const sx of seams){ g2.moveTo(sx+1.6, 0); g2.lineTo(sx+1.6, H); }
+    g2.stroke();
+  }
+
+  // draw one needle into a target context. `flash` (0..1) drives the green crossing glow; a settled
+  // needle is drawn with flash=0 (no shadow-blur — cheap and identical whether live or baked).
+  function drawNeedle(g2, n, flash){
+    const len = L * t_px;
+    const dx = Math.cos(n.theta) * len/2, dy = Math.sin(n.theta) * len/2;
+    const off = n.settleOff || 0;
+    const x1 = n.cx - dx, y1 = n.cy - dy + off;
+    const x2 = n.cx + dx, y2 = n.cy + dy + off;
+    // shadow
+    g2.strokeStyle = 'rgba(0,0,0,0.32)'; g2.lineWidth = 3.4; g2.lineCap='round';
+    g2.beginPath(); g2.moveTo(x1+1.5, y1+2.5); g2.lineTo(x2+1.5, y2+2.5); g2.stroke();
+    // body
+    if (n.hit){
+      // dialed-back green glow so the floor doesn't over-read green (only while flashing)
+      if (flash > 0){
+        g2.shadowColor = 'rgba(120,225,150,'+(0.28*flash)+')';
+        g2.shadowBlur = 4 + flash*6;
+      } else { g2.shadowBlur = 0; }
+      g2.strokeStyle = 'rgba('+Math.round(120+70*flash)+','+Math.round(205+35*flash)+','+Math.round(140+40*flash)+',0.92)';
+    } else {
+      // brighter grey so clean needles read clearly against the warmer wood
+      g2.shadowBlur = 0;
+      g2.strokeStyle = 'rgba(196,204,218,'+(0.78 + flash*0.18)+')';
+    }
+    g2.lineWidth = 2.7; g2.lineCap = 'round';
+    g2.beginPath(); g2.moveTo(x1, y1); g2.lineTo(x2, y2); g2.stroke();
+    // matchstick head (a faint tip on one end)
+    g2.shadowBlur = 0;
+    g2.fillStyle = n.hit ? 'rgba(180,255,200,0.85)' : 'rgba(214,118,98,0.85)';
+    g2.beginPath(); g2.arc(x2, y2, 2.3, 0, 7); g2.fill();
+  }
+
+  // re-stamp the baked layer from scratch: bare floor only (settled needles re-accumulate as they land).
+  function repaintBake(){
+    bctx.clearRect(0, 0, W, H);
+    drawFloor(bctx);
+  }
+
+  function frame(){
+    // 1) blit the cached floor+pile in a single draw (O(1) in the pile size)
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(bake, 0, 0);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    // 2) advance + draw ONLY the live (still-animating) needles; bake each one the instant it comes to rest
+    for (let i = live.length - 1; i >= 0; i--){
+      const n = live[i];
+      if (n.settleOff == null){ n.settleOff = -7; n.svy = 0; }
+      n.svy = (n.svy + 0.7) * 0.82;
+      n.settleOff += n.svy;
+      if (n.settleOff > 0){ n.settleOff = 0; n.svy *= -0.3; }
+      if (n.flash > 0) n.flash *= 0.90;
+      const settled = (n.settleOff >= 0 && Math.abs(n.svy) < 0.15);
+      if (settled && n.flash < 0.06){
+        // come to rest: stamp once into the baked layer, then drop from the live set
+        n.settleOff = 0;
+        drawNeedle(bctx, n, 0);
+        live.splice(i, 1);
+      } else {
+        drawNeedle(ctx, n, n.flash);
+      }
+    }
+    drawHeap();
+    drawRail();
+    raf = requestAnimationFrame(frame);
+  }
+
+  // ---- the by-product readout ----
+  const piEl = document.getElementById('pibig');
+  const tNEl = document.getElementById('tN');
+  const tCEl = document.getElementById('tC');
+  function drawHeap(){
+    tNEl.textContent = N.toLocaleString();
+    tCEl.textContent = crossings.toLocaleString();
+    const pi = piEstimate(N, crossings, L, T);
+    if (!isFinite(pi)){ piEl.innerHTML = '<span class="lit">3</span><span class="dim">.—</span>'; return; }
+    // show digits that agree with true pi lit, the rest dim — the convergence you SEE
+    const truth = Math.PI.toFixed(5);          // "3.14159"
+    const est = pi.toFixed(5);
+    let html = '';
+    let stillRight = true;
+    for (let i = 0; i < est.length; i++){
+      const c = est[i];
+      if (stillRight && c === truth[i]) html += '<span class="lit">'+c+'</span>';
+      else { stillRight = false; html += '<span class="dim">'+c+'</span>'; }
+    }
+    piEl.innerHTML = html;
+  }
+
+  // ---- the quiet side-rail: pi rattling inside a narrowing 1/sqrt(N) corridor ----
+  const railC = document.getElementById('rail-c');
+  const rctx = railC.getContext('2d');
+  const railNEl = document.getElementById('railN');
+  let railDPR = Math.min(2, window.devicePixelRatio||1);
+  function sizeRail(){
+    const r = railC.getBoundingClientRect();
+    railC.width = Math.round(r.width*railDPR); railC.height = Math.round(r.height*railDPR);
+    rctx.setTransform(railDPR,0,0,railDPR,0,0);
+    railW = r.width; railH = r.height;
+  }
+  let railW=300, railH=84;
+  function drawRail(){
+    rctx.clearRect(0,0,railW,railH);
+    railNEl.textContent = 'N=' + N.toLocaleString();
+    if (railHist.length < 2) return;
+    // x = log10(N) mapped across; y = pi value, centered on PI with a fixed window
+    const lo = Math.log10(railHist[0].N || 1);
+    const hi = Math.log10(Math.max(railHist[railHist.length-1].N, 10));
+    const span = Math.max(hi - lo, 0.3);
+    const yMid = railH * 0.5;
+    const yRange = 1.4;   // pi +/- 0.7 fills the height
+    const yOf = v => yMid - (v - Math.PI) / (yRange) * railH;
+    const xOf = n => 6 + (Math.log10(Math.max(n,1)) - lo) / span * (railW - 12);
+
+    // the corridor: pi +/- corridorHalfWidth(N) — a narrowing trumpet
+    rctx.fillStyle = 'rgba(127,199,232,0.10)';
+    rctx.beginPath();
+    let started=false;
+    for (const s of railHist){
+      const hw = Math.min(corridorHalfWidth(s.N, L, T, 1.96), yRange/2);
+      const x = xOf(s.N), y = yOf(Math.PI + hw);
+      if(!started){ rctx.moveTo(x,y); started=true; } else rctx.lineTo(x,y);
+    }
+    for (let i=railHist.length-1;i>=0;i--){
+      const s = railHist[i];
+      const hw = Math.min(corridorHalfWidth(s.N, L, T, 1.96), yRange/2);
+      rctx.lineTo(xOf(s.N), yOf(Math.PI - hw));
+    }
+    rctx.closePath(); rctx.fill();
+
+    // true pi line
+    rctx.strokeStyle = 'rgba(143,215,154,0.55)'; rctx.lineWidth = 1; rctx.setLineDash([4,3]);
+    rctx.beginPath(); rctx.moveTo(6, yOf(Math.PI)); rctx.lineTo(railW-6, yOf(Math.PI)); rctx.stroke();
+    rctx.setLineDash([]);
+
+    // the running estimate rattling inside
+    rctx.strokeStyle = thetaFixed===null ? 'rgba(231,237,244,0.92)' : 'rgba(240,160,122,0.95)';
+    rctx.lineWidth = 1.4;
+    rctx.beginPath();
+    let first=true;
+    for (const s of railHist){
+      const x = xOf(s.N), y = Math.max(2, Math.min(railH-2, yOf(s.pi)));
+      if(first){ rctx.moveTo(x,y); first=false; } else rctx.lineTo(x,y);
+    }
+    rctx.stroke();
+
+    // if biased, draw the "2.0" attractor line the estimate is fleeing toward
+    if (thetaFixed !== null){
+      const y2 = yOf(2.0);
+      if (y2 < railH && y2 > 0){
+        rctx.strokeStyle = 'rgba(240,160,122,0.4)'; rctx.setLineDash([2,3]);
+        rctx.beginPath(); rctx.moveTo(6,y2); rctx.lineTo(railW-6,y2); rctx.stroke();
+        rctx.setLineDash([]);
+      }
+    }
+    // π label
+    rctx.fillStyle='rgba(143,215,154,0.7)'; rctx.font='9px ui-monospace,monospace';
+    rctx.fillText('π', railW-14, yOf(Math.PI)-3);
+  }
+
+  // ---- interaction ----
+  let raining = false, rainTimer = null;
+  let rate = 90;
+  function setRainRate(){
+    rate = +document.getElementById('sRate').value;
+    document.getElementById('vRate').textContent = rate;
+    if (raining){ stopRain(); startRain(); }
+  }
+  function startRain(){
+    raining = true; document.getElementById('bRain').classList.add('on');
+    document.getElementById('bRain').textContent = '⛆ raining…';
+    // tosses per second = rate; do a batch each ~33ms
+    rainTimer = setInterval(()=>{
+      const perTick = Math.max(1, Math.round(rate/30));
+      for (let i=0;i<perTick;i++) dropNeedle(null,null);
+    }, 33);
+    fadeHint();
+  }
+  function stopRain(){
+    raining = false; clearInterval(rainTimer); rainTimer=null;
+    document.getElementById('bRain').classList.remove('on');
+    document.getElementById('bRain').textContent = '⛆ rain';
+  }
+
+  // fling a single needle on pointerdown; hold to rain a quick local burst
+  let holdTimer = null;
+  cv.addEventListener('pointerdown', e=>{
+    const x = e.clientX, y = e.clientY;
+    dropNeedle(x, y);
+    holdTimer = setInterval(()=> dropNeedle(x + (Math.random()-0.5)*8, y + (Math.random()-0.5)*8), 45);
+    fadeHint();
+  });
+  function endHold(){ if (holdTimer){ clearInterval(holdTimer); holdTimer=null; } }
+  window.addEventListener('pointerup', endHold);
+  window.addEventListener('pointercancel', endHold);
+
+  // controls — L slider (needle L / gap t). Changing the ratio re-defines crossings for the WHOLE pile,
+  // so accumulated counts gathered under the old L would make the rail jump dishonestly: AUTO-CLEAR.
+  document.getElementById('sL').addEventListener('input', e=>{
+    L = +e.target.value;                       // slider max=1 ⇒ L<=t (short-needle law holds)
+    document.getElementById('vL').textContent = L.toFixed(2);
+    clearRun();
+  });
+  document.getElementById('sRate').addEventListener('input', setRainRate);
+  document.getElementById('bRain').addEventListener('click', ()=> raining ? stopRain() : startRain());
+  document.getElementById('bClear').addEventListener('click', clearRun);
+
+  // the negative-control toggle — flips orientation to fixed ⟂; a clean break so you watch it diverge.
+  const biastog = document.getElementById('biastog');
+  biastog.addEventListener('click', ()=>{
+    const on = thetaFixed === null;
+    thetaFixed = on ? Math.PI/2 : null;
+    biastog.classList.toggle('on', on);
+    clearRun();
+  });
+
+  // hint fade
+  let hintGone=false;
+  function fadeHint(){ if(hintGone) return; hintGone=true;
+    const h=document.getElementById('hint'); if(!h) return;
+    h.style.opacity='0';
+    setTimeout(()=>h.remove(), 700);
+  }
+
+  // self-test pill — runSelfTest() is the SOLE oracle (same code as the Node twin).
+  const stEl = document.getElementById('selftest');
+  function runPill(){
+    const r = runSelfTest();
+    stEl.classList.toggle('ok', r.ok); stEl.classList.toggle('bad', !r.ok);
+    stEl.textContent = (r.ok ? '✓ ' : '✗ ') + r.passed + '/' + r.total + ' proven';
+    console.log('%cBuffon self-test', 'font-weight:bold');
+    for (const c of r.checks) console.log((c.pass?'PASS':'FAIL'), c.name, '['+c.info+']');
+    return r;
+  }
+  stEl.addEventListener('click', runPill);
+
+  // boot
+  let raf=0;
+  resize(); sizeRail();
+  window.addEventListener('resize', sizeRail);
+  // a few seed needles so the floor isn't empty
+  for (let i=0;i<14;i++) dropNeedle(null,null);
+  frame();
+  // run the proof once on load so the pill greets you GREEN (it's the same oracle as core.test.mjs)
+  runPill();
+
+  // breadcrumb: this wing has been seen
+  try { localStorage.setItem('ws:seen:buffon', '1'); } catch (e) {}
+})();
+</script>
+</body>
+</html>
