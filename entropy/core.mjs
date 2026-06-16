@@ -54,6 +54,7 @@
 //       frequency analysis breaks it. (Verified: H(plaintext) == H(ciphertext).)
 // ============================================================================
 
+// === CORE BEGIN ===
 const log2 = (x) => Math.log(x) / Math.LN2;
 
 // ---------------------------------------------------------------------------
@@ -424,3 +425,4 @@ export function runSelfTest() {
   const pass = lines.filter(l => l.ok).length;
   return { lines, pass, total: lines.length };
 }
+// === CORE END ===
