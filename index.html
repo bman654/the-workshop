@@ -363,6 +363,10 @@
   @keyframes hoursFly{ 0%,100%{ opacity:.2; } 50%{ opacity:1; } }
   /* the gnomon furniture: the live brass dial + its real cast shadow + HUD */
   #hours-gnomon{ cursor:grab; touch-action:none; }
+  /* dragging the dial must never select map text — the drag listeners live on
+     window, so suppress selection across the whole Hours furniture set. */
+  #hours-gnomon, #hours-hud, #hours-ring, #hours-back, #hours-apparitions{
+    user-select:none; -webkit-user-select:none; -moz-user-select:none; }
   #hours-gnomon.dragging{ cursor:grabbing; }
   #hours-gnomon .gn-shadow{ stroke:rgba(10,8,5,.82); stroke-linecap:round; transition:none; }
   #hours-gnomon .gn-style{ fill:#e6bd6f; stroke:#1a1206; stroke-width:.6; }
@@ -382,11 +386,12 @@
   #hours-hud .hh-clock{ font:600 13px/1 var(--mono); fill:var(--brass-bright); letter-spacing:.06em;
     paint-order:stroke; stroke:rgba(6,8,13,.7); stroke-width:2.6px; stroke-linejoin:round; }
   #hours-hud .hh-phase{ font:italic 9px/1 var(--serif); fill:#cbb98a; }
-  #hours-hud .hh-caught{ font:600 7.5px/1 var(--mono); fill:var(--brass); letter-spacing:.14em; opacity:.8; }
-  #hours-hud .hh-test{ font:600 7px/1 var(--mono); letter-spacing:.1em; fill:var(--ink-dim); opacity:.85;
+  /* the self-test pill (#hours-pill) was lifted OUT of #hours-hud to sit below the
+     dial, so its styles are scoped by class — not under #hours-hud — to keep matching. */
+  .hh-test{ font:600 7px/1 var(--mono); letter-spacing:.1em; fill:var(--ink-dim); opacity:.85;
     paint-order:stroke; stroke:rgba(6,8,13,.6); stroke-width:2px; stroke-linejoin:round; }
-  #hours-hud .hh-test.ok{ fill:#8fd79a; }
-  #hours-hud .hh-test.bad{ fill:#f08a7a; }
+  .hh-test.ok{ fill:#8fd79a; }
+  .hh-test.bad{ fill:#f08a7a; }
 
   @media (prefers-reduced-motion:reduce){
     .haze{ animation:none; }
@@ -4023,6 +4028,10 @@ const FURNITURE = [
   { x:816, y:798, w:212, h:52  },   // the scale bar (moved left to clear the revealed sky-tally)
   { x:96,  y:760, w:266, h:78  },   // the demoted corner survey nameplate ("The Workshop")
 ];
+/* The Hours layer (theHours(), which runs BEFORE placeLabels) injects SVG furniture —
+   the live clock/phase/self-test HUD — that bypasses the label solver. It registers its
+   occupied box here so placeLabels() keeps the gnomon's own POI label off the HUD. */
+const HOURS_FURNITURE = [];
 /* the inner frame, inset a little so no label kisses the ruled border. */
 const LABEL_BOUNDS = { x:46, y:52, w:1348, h:790 };
 /* solver params — a fixed seed → deterministic layout; LABEL_GAP is the constant
@@ -4253,7 +4262,7 @@ function placeLabels(){
     const labelW = d.label.length * 6.4;
     return { x:d.x + d.w/2 - labelW/2, y:d.y - 17, w:labelW, h:15 };
   });
-  const obstacles = footObstacles.concat(FURNITURE).concat(zoneObstacles);
+  const obstacles = footObstacles.concat(FURNITURE).concat(HOURS_FURNITURE).concat(zoneObstacles);
 
   const features = entries.map(e=>{
     const r = e.parts.r;
@@ -4502,21 +4511,38 @@ renderEstate();
     ringG.appendChild(ringCount);
     viewport.appendChild(ringG);
 
-    // 5) hours-hud: the clock + phase readout, as top furniture (sits in the dark band
-    //    above the gnomon so it never overlaps a footprint or a POI label).
-    var hud = E("g", { id:"hours-hud", transform:"translate("+GX+" "+(GY-DIAL_R-34)+")" });
+    // 5) hours-hud: a COMPACT two-line live readout (clock + phase) seated in the thin
+    //    band just above the dial. The catch-count is NOT repeated here (the gold
+    //    phase-ring + its pr-count already show it), and the self-test pill rides BELOW
+    //    the dial by the cap — so this furniture stays small and the gnomon's own POI
+    //    label (solved after this layer) can take the clean slot above without garbling.
+    var HUD_DY = -(DIAL_R + 18);                    // clock baseline, just above the rim
+    var hud = E("g", { id:"hours-hud", transform:"translate("+GX+" "+(GY+HUD_DY)+")" });
     var hClock = E("text", { "class":"hh-clock", x:0, y:0, "text-anchor":"middle" }); hud.appendChild(hClock);
-    var hPhase = E("text", { "class":"hh-phase", x:0, y:13, "text-anchor":"middle" }); hud.appendChild(hPhase);
-    var hCaught = E("text", { "class":"hh-caught", x:0, y:-13, "text-anchor":"middle" }); hud.appendChild(hCaught);
+    var hPhase = E("text", { "class":"hh-phase", x:0, y:11, "text-anchor":"middle" }); hud.appendChild(hPhase);
+    viewport.appendChild(hud);
+
     // the in-page SELF-TEST PILL — runs the SAME core the Node twin proves; green ✓ N/N.
-    var hTest = E("text", { id:"hours-pill", "class":"hh-test", x:0, y:-25, "text-anchor":"middle" }); hud.appendChild(hTest);
+    // It sits just BELOW the dial, under the "drag to run the day" cap, in the open band
+    // before the Puzzle Pavilion — out of the POI label's way entirely.
+    var hTest = E("text", { id:"hours-pill", "class":"hh-test", x:GX, y:GY+DIAL_R+38, "text-anchor":"middle" });
     (function(){
       try{ var r = Hours.selfTest(); var nP = r.results.filter(function(x){return x.pass;}).length;
         hTest.textContent = (r.pass?"✓ ":"✗ ") + nP + "/" + r.results.length + " · the dial proved exact";
         hTest.setAttribute("class", "hh-test " + (r.pass ? "ok" : "bad"));
       }catch(e){ hTest.textContent = ""; }
     })();
-    viewport.appendChild(hud);
+    viewport.appendChild(hTest);
+
+    // Register the HUD's occupied boxes with the label solver (it runs AFTER this layer)
+    // so the gnomon's own POI label is forced into the clear slot ABOVE the readout
+    // instead of garbling over it. Box A brackets the 2-line clock/phase readout (made
+    // WIDE so the only collision-free escape is straight up); box B brackets the pill.
+    try{
+      var hudY = GY + HUD_DY;
+      HOURS_FURNITURE.push({ x: GX - 170, y: hudY - 13, w: 340, h: 30 });   // clock+phase
+      HOURS_FURNITURE.push({ x: GX - 95,  y: GY + DIAL_R + 30, w: 190, h: 14 }); // self-test pill
+    }catch(e){}
 
     /* ── THE CAUGHT-APPARITIONS METAGAME — additive ws:flag:hours-caught-<id>. ──
        Catching an apparition (seeing it ON while scrubbing) fills the gold ring. The
@@ -4591,10 +4617,9 @@ renderEstate();
       var n = catchCount();
       ringFill.setAttribute("stroke-dashoffset", (CIRC * (1 - n/NAP)).toFixed(2));
       ringCount.textContent = n + "/" + NAP;
-      // (f) the HUD
+      // (f) the HUD — the live clock + phase (the catch-count lives on the ring count)
       hClock.textContent = fmtClock(civilMin);
       hPhase.textContent = Hours.phaseName(altDeg);
-      hCaught.textContent = "HOURS CAUGHT " + n + "/" + NAP;
     }
 
     /* ── THE DRAG: pointerdown→drag on the dial maps angle→minute. A full turn is a
@@ -4602,7 +4627,14 @@ renderEstate();
        snap-to-real-clock, and a ▶ run-the-day button live on the gnomon POI's own
        wing page (hours/index.html); here on the front door the dial itself is the
        handle (drag to scrub) so the on-ramp is operable in one gesture. ── */
-    var curMin = forceAllOn ? CANON_MIN : 750;   // default ~12:30 (a clear day) unless screenshotting
+    // the door opens at the VISITOR'S TRUE LOCAL CLOCK (real civil minute of the
+    // current moment) so the plate's tint matches the wall clock — EXCEPT the
+    // canonical screenshot/reduced-motion frames, which stay pinned for stable captures.
+    function localCivilMin(){
+      try{ var d = new Date(); return ((d.getHours()*60 + d.getMinutes())%1440+1440)%1440; }
+      catch(e){ return 750; }                    // fall back to ~12:30 if Date is unavailable
+    }
+    var curMin = forceAllOn ? CANON_MIN : localCivilMin();
     var dragging = false, moved = false, downX = 0, downY = 0, playing = false, rafId = null;
 
     function angleToMin(dx, dy){
