@@ -1,3 +1,4 @@
+// === CORE BEGIN ===
 // The Pearl Loop — Masyu math core (single source of truth).
 //
 // A Masyu board is an R×C grid of cells; some cells hold a WHITE (1) or BLACK (2)
@@ -483,3 +484,4 @@ function generate(seed,R=6,C=6){
 
 export { OFF,UNK,ON, mulberry32, shuffle, makeEdgeIndex, countSolutions, deduce, generate,
          isComplete, loopEdges, legalPearls, refLoop, DIRS, OPP };
+// === CORE END ===

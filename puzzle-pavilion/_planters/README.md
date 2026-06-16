@@ -1,25 +1,30 @@
 # Puzzle Pavilion — `_planters/` (proven cores, not yet benched)
 
-The Puzzle Pavilion shipped in cycle #51 with **one** fully-built leaf — **The Bridge House**
-(`../bridge-house/`). **The Cross-Sums** (Kakuro) was promoted to a live leaf in **cycle #63**
-(`../cross-sums/`). Its landing (`../index.html`) now shows **one** remaining family as a
-*coming-to-leaf* planter: **The Pearl Loop** (Masyu).
+**This folder is now empty of planters — the Pavilion's three-leaf arc is complete.** The wing
+shipped in cycle #51 with **one** fully-built leaf — **The Bridge House** (`../bridge-house/`);
+**The Cross-Sums** (Kakuro) was promoted in **cycle #63** (`../cross-sums/`); and **The Pearl Loop**
+(Masyu) was promoted in **cycle #69** (`../pearl-loop/`). The landing (`../index.html`) now shows
+**three** live family cards and **zero** coming-to-leaf planters.
 
-This folder holds the **proven generation+solving core** for that last planter — already written
-and already green — so the wing's remaining `[bench]` garden seed (see `ROADMAP.md`, `sown #51`)
-has a durable promotion path that survives a `/tmp` wipe. **This is NOT a live leaf.** The underscore
-prefix keeps it out of the front-door surfaces; nothing links here.
+This folder held the **proven generation+solving cores** ahead of their benches — written and green
+before the bench existed — so each remaining `[bench]` garden seed had a durable promotion path that
+survived a `/tmp` wipe. **None remain.** If a future family is seeded, stash its proven core here under
+an underscore-prefixed folder (kept out of the front-door surfaces; nothing links here) and follow the
+promotion mold below.
 
 | Planter | Core | Twin | Status |
 |---|---|---|---|
-| The Pearl Loop (Masyu) | `pearl-loop/core.mjs` | `pearl-loop/core.test.mjs` | **all green** over 30 seeds @6×6: unique · deduced · matches reference · no-guess · negative control (remove/flip one pearl → count>1 or stall) |
+| *(none — all promoted)* | — | — | — |
 
-> **Promoted out of `_planters/`:** The Cross-Sums (Kakuro) — now `../cross-sums/{core.mjs, core.test.mjs, index.html}`, a live leaf (cycle #63). Its core is **15/15** over 240 seeds (8 bases).
+> **Promoted out of `_planters/`:**
+> - The Cross-Sums (Kakuro) — now `../cross-sums/{core.mjs, core.test.mjs, index.html}`, a live leaf (cycle #63). Its core is **15/15** over 240 seeds (8 bases).
+> - The Pearl Loop (Masyu) — now `../pearl-loop/{core.mjs, core.test.mjs, index.html, CHANGELOG.md}`, a live leaf (cycle #69). Its core is **all green** over 30 seeds @6×6: unique · deduced · deduced-loop ≡ reference · no-guess · negative control (remove/flip one pearl → count>1 or stall).
 
-Re-run a twin from this folder:
+Re-run a promoted twin from its live home:
 
 ```
-node puzzle-pavilion/_planters/pearl-loop/core.test.mjs
+node puzzle-pavilion/pearl-loop/core.test.mjs
+node puzzle-pavilion/cross-sums/core.test.mjs
 ```
 
 ## To promote a planter to a live leaf
