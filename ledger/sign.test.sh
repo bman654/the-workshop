@@ -223,6 +223,42 @@ check "(C) re-forged face inlines the new mark" "yes" \
 ( cd "$xsb" && node tools/forge/forge.mjs --check ledger/face.src.html >/dev/null 2>&1 )
 check "(C) forge --check: face.html CURRENT after collate" "0" "$?"
 
+# ════════════════════════════════════════════════════════════════════════════
+#  (GC) COLLATE IS THE AUTHORITATIVE STAMPER — the mid-cycle-split fix.
+#  Two makers sign at DIFFERENT HEADs (a human commits between them, the way a
+#  push / PR-merge lands mid-cycle). Their sign-time estimates DISAGREE — but
+#  collate stamps every folded stone with ONE depth (rev-list(HEAD)+1 at collate
+#  time), so co-committed makers share their commit's depth and the record stays
+#  monotonic. This is the bug that scattered #56's stones across 394/395/397.
+# ════════════════════════════════════════════════════════════════════════════
+gcsb="$(mktemp -d "${TMPDIR:-/tmp}/sign-gcollate.XXXXXX")"
+trap 'rm -rf "$gsb" "$fsb" "$csb" "$xsb" "$gcsb"' EXIT
+(
+  cd "$gcsb"
+  git init -q; git config user.email t@t.t; git config user.name Tester
+  for i in 1 2 3; do echo "c$i" > "f$i"; git add -A; git commit -q -m "c$i"; done
+)
+cp "$real_sign" "$gcsb/sign.sh"; chmod +x "$gcsb/sign.sh"
+cp "$real_collate" "$gcsb/collate.sh"; chmod +x "$gcsb/collate.sh"
+mkdir -p "$gcsb/inbox"; : > "$gcsb/ledger.jsonl"
+git -C "$gcsb" add -A >/dev/null 2>&1; git -C "$gcsb" commit -q -m "harness"
+gcfl="$gcsb/funlog.txt"; printf '===== fun cycle #1 =====\n' > "$gcfl"
+# maker A signs at the current HEAD (early in the cycle)
+WORKSHOP_FUNLOG="$gcfl" "$gcsb/sign.sh" director "Early" "signed first" >/dev/null
+# HEAD MOVES mid-cycle — a human commits — so A's sign-time estimate is now stale
+echo "interloper" > "$gcsb/mid.txt"; git -C "$gcsb" add -A >/dev/null 2>&1
+git -C "$gcsb" commit -q -m "a human commits mid-cycle"
+# maker B signs at the NEW HEAD (late) — its estimate differs from A's
+WORKSHOP_FUNLOG="$gcfl" "$gcsb/sign.sh" publisher "Late" "signed after the shove" >/dev/null
+check "(GC) sign-time estimates SPLIT across a mid-cycle HEAD move (the bug)" "2" \
+  "$(jq -rs 'map(.cycle)|unique|length' "$gcsb"/inbox/*.json)"
+gc_expect=$(( $(git -C "$gcsb" rev-list --count HEAD) + 1 ))
+( cd "$gcsb" && bash collate.sh >/dev/null 2>&1 )
+check "(GC) collate stamps ALL stones ONE uniform depth (the fix)" "1" \
+  "$(jq -rs 'map(.cycle)|unique|length' "$gcsb/ledger.jsonl")"
+check "(GC) and that depth is the upcoming commit's (rev-list+1)" "$gc_expect" \
+  "$(jq -rs 'map(.cycle)|unique[0]' "$gcsb/ledger.jsonl")"
+
 echo
 echo "$pass/$total ✓"
 [ "$pass" -eq "$total" ]

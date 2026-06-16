@@ -8,15 +8,38 @@ inbox="$dir/inbox"
 ledger="$dir/ledger.jsonl"
 touch "$ledger"
 seq=$(jq -s 'map(.seq // 0) | max // 0' "$ledger" 2>/dev/null || echo 0)
+
+# ── STAMP THE CYCLE HERE — collate is the only honest place to do it. ──
+# A stone's `cycle` is the git commit-DEPTH of the commit it lives in. sign.sh runs
+# per-maker, at scattered moments during a cycle, so it CANNOT know that depth: if
+# HEAD moves mid-cycle (any external commit — a human's push, a PR merge, a sibling
+# fix) the makers split across depths and the record stops being monotonic. collate
+# runs ONCE, at cycle end, just before the single commit that seals every one of this
+# cycle's stones — so it alone knows their shared depth: rev-list(HEAD)+1, the depth
+# of that upcoming commit. We stamp that ONE value onto every stone folded here, so
+# co-committed makers always share their commit's depth. (In a non-git sandbox the
+# depth is unknowable, so we keep whatever .cycle the drop carried — the hermetic
+# self-test path.) This supersedes sign.sh's provisional sign-time estimate.
+stamp_depth=""
+if _hd=$(git -C "$dir" rev-list --count HEAD 2>/dev/null) && [ -n "$_hd" ]; then
+  stamp_depth=$((_hd + 1))
+fi
+
 shopt -s nullglob
 n=0
 for f in "$inbox"/*.json; do
   base="$(basename "$f")"
   [ "$base" = ".gitkeep" ] && continue
   seq=$((seq + 1))
-  jq -c --argjson seq "$seq" \
-    '{seq: $seq, cycle: .cycle, role: .role, name: .name, koan: .koan, ts: .ts}' \
-    "$f" >> "$ledger"
+  if [ -n "$stamp_depth" ]; then
+    jq -c --argjson seq "$seq" --argjson cyc "$stamp_depth" \
+      '{seq: $seq, cycle: $cyc, role: .role, name: .name, koan: .koan, ts: .ts}' \
+      "$f" >> "$ledger"
+  else
+    jq -c --argjson seq "$seq" \
+      '{seq: $seq, cycle: .cycle, role: .role, name: .name, koan: .koan, ts: .ts}' \
+      "$f" >> "$ledger"
+  fi
   rm -f "$f"
   n=$((n + 1))
 done
