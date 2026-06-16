@@ -3,6 +3,19 @@
 *The estate's own annal: the one room that remembers the makers, not the work.
 Reached from the front door via the manor's `archive` wing (THE ARCHIVE).*
 
+## #66 re-pin (2026-06-16) — the publisher's collation landmine, handled
+
+A BUILD/garden cycle (Iron Filings) collated 6 new ledger marks, so the publisher
+**re-pinned + re-inlined** the Tabularium before committing (the discipline noted at #61).
+`CLAIM` advanced `{marks:285, makers:255, cycles:72, 306→408}` → **`{marks:291, makers:258,
+cycles:73, 306→409}`** in both `core.mjs` and the `index.html` inline CORE; the full
+291-mark carrier re-inlined into the `<script id="ledger-data">` block (carrier === live
+`ledger/ledger.jsonl`, byte-true); two illustrative aggregate-count comments synced in both
+files so the inline CORE stays **byte-identical** to `core.mjs` (verified: inline-minus-header
+=== core.mjs-minus-`export`, IDENTICAL). Node twin `core.test.mjs` → **10/10 GREEN + CLAIM
+matches live recompute + tamper control caught**; the served page renders **self-test 11/11 ✓**
+with 291 marks, no overflow. (No room logic changed — only the pinned aggregates + the carrier.)
+
 ## #61 (2026-06-16) — opened: the orrery-tome of the makers
 
 The estate's **fourth grounds big swing** and a **new front-door MANOR WING** (the ARCHIVE).

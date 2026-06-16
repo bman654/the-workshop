@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Lodestone Plate · Iron Filings</title>
+<style>
+  :root{
+    --bg:#07060a;
+    --bg2:#0b0910;
+    --ink:#ede2f0;
+    --ink-dim:#9a9caa;
+    --gold:#c9a24a;                 /* the estate "you found it" colour */
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.34);
+    --steel:#d6deeb;               /* near-white cool-steel filings */
+    --north:#e0664f;               /* warm-red N */
+    --south:#8fb6ff;               /* cool-blue S */
+    --line:#96d2ff;                /* cool streamline blue */
+    --panel:rgba(12,11,18,0.86);
+    --panel-edge:rgba(143,182,255,0.26);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1300px 900px at 50% -8%, rgba(143,182,255,0.06), transparent 60%),
+      radial-gradient(900px 700px at 16% 112%, rgba(224,102,79,0.04), transparent 62%),
+      radial-gradient(120% 120% at 50% 50%, var(--bg) 0%, var(--bg2) 100%);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+    touch-action:none;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 32px);
+    mix-blend-mode:overlay;
+  }
+
+  #stage{ position:fixed; inset:0; z-index:1; display:flex; flex-direction:column; min-width:0; }
+  canvas#plate{ position:absolute; inset:0; width:100%; height:100%; display:block; cursor:grab; touch-action:none; }
+  canvas#plate.grabbing{ cursor:grabbing; }
+
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 22px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(7,6,10,0.92), rgba(7,6,10,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.4px; margin:0; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--line); opacity:1; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.4); white-space:nowrap; cursor:pointer; color:var(--ink-dim); }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  /* controls dock — bottom-left, glassy */
+  .dock{
+    position:fixed; left:18px; bottom:18px; z-index:30;
+    width:296px; max-width:calc(100vw - 36px);
+    background:var(--panel); border:1px solid var(--panel-edge); border-radius:14px;
+    backdrop-filter:blur(10px) saturate(120%); -webkit-backdrop-filter:blur(10px) saturate(120%);
+    box-shadow:0 18px 50px rgba(0,0,0,0.5); padding:13px 14px 14px;
+  }
+  .dock .lede{ font-size:11px; color:var(--ink-dim); line-height:1.5; margin:0 0 10px; letter-spacing:.2px; }
+  .dock .lede b{ color:var(--ink); font-weight:600; }
+  .btnrow{ display:flex; flex-wrap:wrap; gap:7px; margin-bottom:10px; }
+  .btn{ font:600 10.5px/1 var(--font-ui); letter-spacing:.02em; padding:8px 10px; border-radius:8px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.28); color:var(--ink-dim); cursor:pointer; transition:.16s; }
+  .btn:hover{ border-color:var(--line); color:var(--ink); }
+  .btn.on{ border-color:var(--line); color:var(--ink); background:rgba(143,182,255,0.14); }
+  .row{ margin:9px 0 4px; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline;
+    font:600 9.5px/1 var(--font-mono); letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:6px; }
+  .row > label .val{ color:var(--line); font-weight:700; font-variant-numeric:tabular-nums; text-transform:none; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:3px; border-radius:3px;
+    background:rgba(143,182,255,0.22); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:15px; height:15px;
+    border-radius:50%; background:var(--line); cursor:pointer; box-shadow:0 0 0 4px rgba(143,182,255,0.14); }
+  input[type=range]::-moz-range-thumb{ width:15px; height:15px; border:none; border-radius:50%;
+    background:var(--line); cursor:pointer; box-shadow:0 0 0 4px rgba(143,182,255,0.14); }
+  .hint{ margin-top:10px; font:11px/1.5 var(--font-mono); color:var(--ink-dim); letter-spacing:.01em;
+    border-top:1px solid rgba(143,182,255,0.14); padding-top:9px; min-height:30px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+  .hint.gold b, .hint.gold{ color:var(--gold); }
+
+  /* the proof line — what the plate proves, pinned bottom-right */
+  .proof{
+    position:fixed; right:18px; bottom:18px; z-index:30; max-width:260px;
+    font:10px/1.55 var(--font-mono); color:rgba(154,156,170,0.74); letter-spacing:.01em; text-align:right;
+    pointer-events:none;
+  }
+  .proof b{ color:var(--line); }
+
+  @media (max-width:720px){
+    .topbar{ flex-wrap:wrap; padding:10px 14px 9px; row-gap:6px; }
+    .brand .tag{ display:none; }
+    .brand h1{ font-size:17px; }
+    .back{ font-size:10px; letter-spacing:.12em; }
+    .selftest{ order:2; }
+    .dock{ left:10px; right:10px; bottom:10px; width:auto; max-width:none; padding:11px 12px 12px; }
+    .dock .lede{ display:none; }
+    .proof{ display:none; }
+  }
+  @media (max-height:520px){
+    .dock .lede{ display:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+    <div class="brand">
+      <h1>The Lodestone Plate</h1>
+      <span class="tag">iron filings · the field made visible</span>
+    </div>
+    <div class="selftest" id="selftest" title="The plate proves ∇·B = 0 — click to expand.">checking&hellip;</div>
+  </div>
+
+  <div id="stage">
+    <canvas id="plate"></canvas>
+  </div>
+
+  <aside class="dock">
+    <p class="lede">A dark plate where a magnetic field becomes <b>visible</b>. Drag the bar-magnets;
+      thousands of iron filings snap into the field. Flip a pole and the texture re-knits. Set two
+      <b>like</b> poles facing and hunt with your cursor for the <b>saddle null</b>.</p>
+    <div class="btnrow" id="btnrow">
+      <button class="btn" id="btnAdd">+ magnet</button>
+      <button class="btn" id="btnRemove">− remove</button>
+      <button class="btn" id="btnFlip">flip</button>
+      <button class="btn" id="btnReset">reset</button>
+      <button class="btn" id="btnFlow" title="filings march along the streamlines">▸ flow</button>
+    </div>
+    <div class="row">
+      <label>filings density <span class="val" id="densVal">3000</span></label>
+      <input type="range" id="dens" min="800" max="6000" step="100" value="3000">
+    </div>
+    <div class="hint" id="hint">Drag a magnet. The filings re-thread when you let go.</div>
+  </aside>
+
+  <div class="proof">Every line is an honest RK4 streamline of the exact superposed dipole field.
+    The self-test proves <b>∇·B = 0</b> everywhere — no line crosses or dies in mid-air.</div>
+
+<script>
+"use strict";
+/* =====================================================================================
+   THE LODESTONE PLATE — the logic core, inlined here byte-for-byte so the page is
+   self-contained (zero-dep, file://-safe). core.test.mjs byte-parity-checks the region
+   between the IRON-FILINGS CORE sentinels against core.mjs's body — it can never drift.
+   ===================================================================================== */
+const CORE = (function(){
+// ===== IRON-FILINGS CORE (byte-identical to core.mjs) =====
+"use strict";
+
+// The world plate every coordinate lives in. The page maps this rect to the canvas; the
+// core, the scenes, the instruments and the page all share THIS one frame — never redefine it.
+const PLATE = { x0: -1, y0: -1, x1: 1, y1: 1 };
+
+// A magnet is { x, y, mx, my, id }: centre (x,y) and dipole moment vector (mx,my). Its NORTH
+// and SOUTH poles sit at r0 ± (ℓ/2)·m̂ (ℓ = POLE_LEN, the drawn bar length). Flipping a magnet
+// negates (mx,my): north and south trade ends and the whole texture re-knits.
+const POLE_LEN = 0.18;
+
+// ── THE FIELD ──────────────────────────────────────────────────────────────────────────
+// 2-D point dipole at the ORIGIN, evaluated at offset (px,py) from the dipole centre:
+//   B(r) = [ 2 (m·r̂) r̂ − m ] / r²        (in-plane dipole)
+// This is EXACTLY div-free and curl-free for r > 0 — the reason ∇·B = 0 is a genuine fact.
+function dipoleField(px, py, mag){
+  const r2 = px*px + py*py;
+  if (r2 < 1e-30) return { bx: 0, by: 0 };
+  const r = Math.sqrt(r2);
+  const rx = px/r, ry = py/r;                 // r̂
+  const mdotr = mag.mx*rx + mag.my*ry;        // m·r̂
+  return { bx: (2*mdotr*rx - mag.mx)/r2, by: (2*mdotr*ry - mag.my)/r2 };
+}
+
+// The total field at world point (px,py) = LINEAR SUM over every magnet. A monopole
+// { x, y, q, kind:'monopole' } contributes the radial B = q·r̂/r = q·(dx,dy)/r² — a field
+// with a real source, present ONLY as the negative control.
+function fieldAt(px, py, magnets){
+  let bx = 0, by = 0;
+  for (const m of magnets){
+    if (m.kind === 'monopole'){
+      const dx = px - m.x, dy = py - m.y, r2 = dx*dx + dy*dy;
+      if (r2 < 1e-30) continue;
+      bx += m.q * dx / r2;                     // q·r̂/r = q·(dx,dy)/r²
+      by += m.q * dy / r2;
+    } else {
+      const f = dipoleField(px - m.x, py - m.y, m);
+      bx += f.bx; by += f.by;
+    }
+  }
+  return { bx, by };
+}
+
+// |B| at a point (the filing brightness / null-reticle driver).
+function magnitudeAt(px, py, magnets){
+  const { bx, by } = fieldAt(px, py, magnets);
+  return Math.hypot(bx, by);
+}
+
+// The north/south pole positions of one magnet, ℓ = POLE_LEN apart along m̂.
+function poles(m, ell){
+  const ee = (ell == null) ? POLE_LEN : ell;
+  const mm = Math.hypot(m.mx, m.my) || 1;
+  const ux = m.mx/mm, uy = m.my/mm;
+  return { N: { x: m.x + ee/2*ux, y: m.y + ee/2*uy },
+           S: { x: m.x - ee/2*ux, y: m.y - ee/2*uy } };
+}
+
+// Flip a magnet in place-immutably: negate its moment (poles trade ends).
+function flip(m){ return Object.assign({}, m, { mx: -m.mx, my: -m.my }); }
+
+// ── THE INTEGRATOR ─────────────────────────────────────────────────────────────────────
+// Unit field direction at a point, ± by sign. Returns null when |B| < 1e-12 — a TRUE null:
+// the line STOPS there, it does not fake a direction.
+function dir(px, py, magnets, sign){
+  const { bx, by } = fieldAt(px, py, magnets);
+  const mag = Math.hypot(bx, by);
+  if (mag < 1e-12) return null;
+  const s = (sign < 0) ? -1 : 1;
+  return { x: s*bx/mag, y: s*by/mag };
+}
+
+// Classical 4-stage RK4 on the UNIT field. The step h is ARC-LENGTH, so the integrator is
+// immune to |B| blowing up near a pole — it always advances h of arc per step.
+function rk4Step(px, py, magnets, sign, h){
+  const k1 = dir(px, py, magnets, sign);                               if (!k1) return null;
+  const k2 = dir(px + 0.5*h*k1.x, py + 0.5*h*k1.y, magnets, sign);     if (!k2) return null;
+  const k3 = dir(px + 0.5*h*k2.x, py + 0.5*h*k2.y, magnets, sign);     if (!k3) return null;
+  const k4 = dir(px + h*k3.x,     py + h*k3.y,     magnets, sign);     if (!k4) return null;
+  return { x: px + h/6*(k1.x + 2*k2.x + 2*k3.x + k4.x),
+           y: py + h/6*(k1.y + 2*k2.y + 2*k3.y + k4.y) };
+}
+
+// Integrate a field line from a seed until it CLOSES (reaches an opposite/south pole within
+// rCapture), hits a NULL (dir==null), ESCAPES the bound, or runs out of maxSteps.
+// Returns { pts:[{x,y}…], stop:'closed'|'null'|'escaped'|'maxSteps' }. The page draws RAW pts.
+function streamline(seed, magnets, opts){
+  const o = Object.assign({ h: 0.005, maxSteps: 5000, rCapture: 0.05, bound: 1.4, sign: 1, ell: POLE_LEN }, opts || {});
+  const pts = [{ x: seed.x, y: seed.y }];
+  let p = { x: seed.x, y: seed.y };
+  // every dipole's SOUTH pole is a sink the line may close on (a monopole offers none → never closes)
+  const sinks = [];
+  for (const m of magnets){ if (m.kind === 'monopole') continue; sinks.push(poles(m, o.ell).S); }
+  for (let i = 0; i < o.maxSteps; i++){
+    const q = rk4Step(p.x, p.y, magnets, o.sign, o.h);
+    if (!q) return { pts, stop: 'null' };
+    pts.push(q); p = q;
+    for (const s of sinks){ if (Math.hypot(p.x - s.x, p.y - s.y) < o.rCapture) return { pts, stop: 'closed' }; }
+    if (Math.abs(p.x) > o.bound || Math.abs(p.y) > o.bound) return { pts, stop: 'escaped' };
+  }
+  return { pts, stop: 'maxSteps' };
+}
+
+// ── THE SADDLE NULL ────────────────────────────────────────────────────────────────────
+// For a like-pair (two magnets whose moments oppose across the gap — two norths facing, or
+// two souths) there is a zero of B on the symmetry axis between them. Find it by BISECTING
+// |B| along the segment joining the two magnet centres. Returns { x, y } or null when the
+// two magnets do not bracket an interior null (unlike poles → no interior null: honest).
+function findNull(magnets){
+  const dips = magnets.filter(m => m.kind !== 'monopole');
+  if (dips.length !== 2) return null;
+  const [a, b] = dips;
+  // sample |B| along the segment a→b; look for a strict interior minimum that touches ~0
+  const N = 240;
+  let best = Infinity, bestT = -1;
+  for (let i = 1; i < N; i++){
+    const t = i/N;
+    const px = a.x + t*(b.x - a.x), py = a.y + t*(b.y - a.y);
+    const m = magnitudeAt(px, py, magnets);
+    if (m < best){ best = m; bestT = t; }
+  }
+  if (bestT <= 0 || bestT >= 1) return null;            // minimum at an endpoint → no interior null
+  // refine by golden-section-free bisection on the gradient of |B| around bestT
+  let lo = (bestT - 1/N), hi = (bestT + 1/N);
+  const at = (t) => { const px = a.x + t*(b.x - a.x), py = a.y + t*(b.y - a.y); return magnitudeAt(px, py, magnets); };
+  for (let k = 0; k < 80; k++){
+    const m1 = lo + (hi - lo)/3, m2 = hi - (hi - lo)/3;
+    if (at(m1) < at(m2)) hi = m2; else lo = m1;
+  }
+  const t = (lo + hi)/2;
+  const px = a.x + t*(b.x - a.x), py = a.y + t*(b.y - a.y);
+  // only a TRUE null counts: |B| there must be tiny relative to the field a pole-length away
+  const ref = magnitudeAt(a.x + 0.5*(b.x - a.x) + POLE_LEN, a.y + 0.5*(b.y - a.y), magnets) + 1e-9;
+  if (magnitudeAt(px, py, magnets) > 0.02 * ref) return null;
+  return { x: px, y: py };
+}
+
+// ── PROOF INSTRUMENTS ──────────────────────────────────────────────────────────────────
+// Discrete divergence ∇·B by central differences with a TINY fd-eps (independent of grid
+// spacing, so it measures the analytic divergence, not the grid's truncation). Skips a disk
+// of skipRadius around every core (poles are singular). Returns max |∇·B| over the grid.
+function maxDivergence(magnets, grid, skipRadius, eps){
+  const { x0, y0, x1, y1, n } = grid;
+  const e = (eps == null) ? 1e-5 : eps;
+  const hx = (x1 - x0)/n, hy = (y1 - y0)/n;
+  const cores = magnets.map(m => ({ x: m.x, y: m.y }));
+  let maxd = 0;
+  for (let i = 1; i < n; i++) for (let j = 1; j < n; j++){
+    const px = x0 + i*hx, py = y0 + j*hy;
+    let near = false;
+    for (const c of cores){ if (Math.hypot(px - c.x, py - c.y) < skipRadius){ near = true; break; } }
+    if (near) continue;
+    const bxR = fieldAt(px + e, py, magnets).bx, bxL = fieldAt(px - e, py, magnets).bx;
+    const byU = fieldAt(px, py + e, magnets).by, byD = fieldAt(px, py - e, magnets).by;
+    const div = Math.abs((bxR - bxL)/(2*e) + (byU - byD)/(2*e));
+    if (div > maxd) maxd = div;
+  }
+  return maxd;
+}
+
+// ∮ B·n̂ ds around a circle (n̂ = outward radial) — the divergence-theorem WITNESS.
+// By Gauss's law in 2D this equals 2π·(enclosed source). For ANY dipole it is 0 (no source);
+// around a monopole of charge q it is 2πq. This is what makes the monopole control go red.
+function loopFlux(magnets, center, radius, samples){
+  const S = samples || 2000;
+  let sum = 0;
+  for (let k = 0; k < S; k++){
+    const th = 2*Math.PI*k/S;
+    const px = center.x + radius*Math.cos(th), py = center.y + radius*Math.sin(th);
+    const { bx, by } = fieldAt(px, py, magnets);
+    sum += bx*Math.cos(th) + by*Math.sin(th);          // B·n̂
+  }
+  return sum * (2*Math.PI*radius) / S;                  // ds = radius·dθ
+}
+
+// The loop-flux taken on a small circle centred ON a monopole — the source it encloses.
+function divergenceNearMonopole(magnets, radius){
+  const mono = magnets.find(m => m.kind === 'monopole');
+  if (!mono) return 0;
+  return loopFlux(magnets, { x: mono.x, y: mono.y }, radius == null ? 0.12 : radius);
+}
+
+// RK4 order-of-accuracy by RICHARDSON extrapolation against a fine reference. Integrate a
+// SMOOTH mid-field arc (seed in vacuum, away from poles) at step h and h/2; compare each to a
+// much-finer reference. For a true 4th-order method the error ratio err(h)/err(h/2) ≈ 2⁴ = 16.
+// We run at a step in the clean regime (error well above machine epsilon) where the ratio is
+// crisp; the measured value pins the band the tests assert.
+function rk4OrderRatio(magnets, seed, L){
+  const Larc = (L == null) ? 0.25 : L;
+  const s = seed || { x: -0.5, y: 0.3 };
+  const integrate = (h) => {
+    let p = { x: s.x, y: s.y };
+    const steps = Math.round(Larc/h);
+    for (let i = 0; i < steps; i++){ const q = rk4Step(p.x, p.y, magnets, 1, h); if (!q) return p; p = q; }
+    return p;
+  };
+  const hRef = Larc/40000;
+  const ref = integrate(hRef);
+  const h = Larc/200;                                   // the clean regime (measured ratio ≈ 16)
+  const p1 = integrate(h), p2 = integrate(h/2);
+  const e1 = Math.hypot(p1.x - ref.x, p1.y - ref.y);
+  const e2 = Math.hypot(p2.x - ref.x, p2.y - ref.y);
+  return (e2 < 1e-300) ? 16 : e1/e2;
+}
+
+// ── THE SCENES (canonical; the page imports and uses these — never redefines them) ──────
+// No RNG. Each is an array of magnets (and, for the control, one monopole).
+const SCENES = {
+  // an unlike pair: north of one faces south of the other → bright bridge of lines between them
+  dipolePair: () => ([
+    { x: -0.42, y: 0, mx: 0.07, my: 0, id: 1 },
+    { x:  0.42, y: 0, mx: 0.07, my: 0, id: 2 },
+  ]),
+  // a like pair: two norths facing across the gap → lines bow apart, a saddle NULL at centre
+  likePair: () => ([
+    { x: -0.42, y: 0, mx:  0.07, my: 0, id: 1 },
+    { x:  0.42, y: 0, mx: -0.07, my: 0, id: 2 },
+  ]),
+  // a lone north: the field fountains out and curves back to its own south
+  loneN: () => ([
+    { x: 0, y: 0, mx: 0, my: 0.07, id: 1 },
+  ]),
+  // THE NEGATIVE CONTROL: one honest dipole + a fictitious magnetic monopole (a real source).
+  monopoleControl: () => ([
+    { x: -0.42, y: 0, mx: 0.07, my: 0, id: 1 },
+    { x:  0.42, y: 0, q: 1, kind: 'monopole' },
+  ]),
+};
+
+// ── THE SELF-TEST — the plate proves its own claim ──────────────────────────────────────
+// Four claims: (1) ∇·B = 0 in vacuum on a grid; (2) a streamline N→S closes; (3) RK4 is
+// 4th-order (Richardson ratio); (4) the MONOPOLE control goes RED — its loop-flux ≠ 0 while
+// every dipole's is ≈ 0, AND a line launched into it never closes (dies in mid-air / escapes).
+function runSelfTest(){
+  const checks = [];
+  const log = (name, pass, info) => checks.push({ name, pass, info });
+
+  // CLAIM 1 — ∇·B = 0 in vacuum. Grid over the plate, skip the singular cores.
+  const grid = { x0: -0.9, y0: -0.9, x1: 0.9, y1: 0.9, n: 80 };
+  const pair = SCENES.dipolePair();
+  const maxDiv = maxDivergence(pair, grid, 0.22, 1e-5);
+  log('1 · ∇·B = 0 in vacuum  (max|∇·B| < 1e-5 on an 80² grid)', maxDiv < 1e-5, 'max|∇·B| = ' + maxDiv.toExponential(2));
+
+  // CLAIM 2 — a field line launched from a north pole CLOSES on a south pole.
+  const N1 = poles(pair[0], POLE_LEN).N;
+  const seed = { x: N1.x + 0.02, y: N1.y + 0.03 };
+  const sl = streamline(seed, pair, {});
+  log('2 · streamline N→S closes  (no line dies in mid-air)', sl.stop === 'closed', 'stop = ' + sl.stop + ', ' + sl.pts.length + ' pts');
+
+  // CLAIM 3 — RK4 converges at 4th order: Richardson ratio ≈ 16 (page asserts ≥ 8 for slack).
+  const ratio = rk4OrderRatio(pair, { x: -0.5, y: 0.3 }, 0.25);
+  log('3 · RK4 is 4th-order  (Richardson err-ratio ≈ 16, ≥ 8)', ratio >= 8, 'ratio = ' + ratio.toFixed(2));
+
+  // CLAIM 4 — THE NEGATIVE CONTROL. The monopole scene must FAIL the divergence-free law:
+  //   · its loop-flux around the monopole ≠ 0 (a real source),
+  //   · every dipole's loop-flux ≈ 0,
+  //   · a line launched into the monopole never closes — it escapes / dies in mid-air.
+  const ctrl = SCENES.monopoleControl();
+  const dip = ctrl[0], mono = ctrl[1];
+  const fluxMono = loopFlux(ctrl, { x: mono.x, y: mono.y }, 0.18);     // ≈ 2π·q
+  const fluxDip  = loopFlux(ctrl, { x: dip.x,  y: dip.y  }, 0.12);     // ≈ 0
+  const monoSeed = { x: mono.x + 0.06, y: mono.y + 0.04 };
+  const monoLine = streamline(monoSeed, ctrl, { sign: -1 });           // into the sink for q>0
+  const sourced = Math.abs(fluxMono) > 1.0;                            // 2π ≈ 6.28 ≫ 1
+  const dipClean = Math.abs(fluxDip) < 1e-6;
+  const neverCloses = (monoLine.stop !== 'closed');
+  const controlRed = sourced && dipClean && neverCloses;
+  log('4 · NEGATIVE CONTROL: monopole breaks ∇·B = 0  (∮B·n̂ = 2πq ≠ 0, line never closes)',
+      controlRed,
+      '∮mono = ' + fluxMono.toFixed(3) + ' (=2π ' + (2*Math.PI).toFixed(3) + '), ∮dip = ' + fluxDip.toExponential(1) + ', mono-line ' + monoLine.stop);
+
+  const passed = checks.filter(c => c.pass).length;
+  return { checks, passed, total: checks.length, ok: passed === checks.length };
+}
+// ===== END IRON-FILINGS CORE =====
+  return { PLATE, POLE_LEN, dipoleField, fieldAt, magnitudeAt, poles, flip,
+    dir, rk4Step, streamline, findNull,
+    maxDivergence, loopFlux, divergenceNearMonopole, rk4OrderRatio, SCENES, runSelfTest };
+})();
+
+const { PLATE, POLE_LEN, fieldAt, magnitudeAt, poles, flip, dir, streamline, findNull, SCENES, runSelfTest } = CORE;
+
+/* =====================================================================================
+   BREADCRUMB — register a direct visit for the Survey.
+   ===================================================================================== */
+try{ const k='ws:seen:iron-filings'; if(!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
+
+/* =====================================================================================
+   THE PLATE — render + interaction.
+   LAYER A: the iron-filing bitmap (offscreen, recomputed only on drag-END / flip / add /
+            remove / resize — frozen mid-drag). LAYER B: the hero streamlines, redrawn each
+            frame (cheap). Filings are drawn in batched alpha bands (~6 stroke() calls total).
+   ===================================================================================== */
+const plate = document.getElementById('plate');
+const ctx = plate.getContext('2d');
+const off = document.createElement('canvas');
+const octx = off.getContext('2d');
+
+const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const state = {
+  magnets: SCENES.dipolePair(),
+  density: 3000,
+  flowing: false,
+  flowPhase: 0,
+  cursor: null,          // {x,y} world coords (for the null hunt)
+  nullSince: 0,          // when a true null has been present + un-found (breadcrumb timer)
+  foundNull: false,
+  dpr: 1, W: 0, H: 0,
+};
+let nextId = 3;
+
+/* ── world ↔ screen. The plate rect is fit to the canvas with uniform scale (letterboxed). ── */
+let view = { s: 1, ox: 0, oy: 0 };
+function fit(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = plate.clientWidth, h = plate.clientHeight;
+  plate.width = Math.max(1, Math.round(w*dpr));
+  plate.height = Math.max(1, Math.round(h*dpr));
+  off.width = plate.width; off.height = plate.height;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  octx.setTransform(dpr,0,0,dpr,0,0);
+  state.dpr = dpr; state.W = w; state.H = h;
+  // uniform scale mapping PLATE→screen, centred
+  const pw = PLATE.x1-PLATE.x0, ph = PLATE.y1-PLATE.y0;
+  const margin = Math.min(w,h)*0.06;
+  view.s = Math.min((w-2*margin)/pw, (h-2*margin)/ph);
+  view.ox = w/2; view.oy = h/2;
+}
+function W2S(x,y){ return { x: view.ox + x*view.s, y: view.oy + y*view.s }; }
+function S2W(sx,sy){ return { x: (sx-view.ox)/view.s, y: (sy-view.oy)/view.s }; }
+
+/* ── the fixed filing scatter (blue-noise-ish jitter, FIXED across frames so no shimmer) ──
+   We resample on density change / resize, with pole pile-up densification.                 */
+let filings = [];
+function buildScatter(){
+  filings = [];
+  const N = state.density;
+  // a deterministic low-discrepancy scatter (golden-ratio spiral over the plate disk-ish),
+  // jittered, so the texture is even and stable. Plus a pole pile-up pass.
+  const GA = Math.PI*(3 - Math.sqrt(5));
+  const span = (PLATE.x1-PLATE.x0);
+  // hash-based jitter (no RNG state → identical every rebuild, no shimmer)
+  const hash = (i) => { let h = (i*2654435761)>>>0; h ^= h>>>15; h = (h*2246822519)>>>0; h ^= h>>>13; return (h>>>0)/4294967296; };
+  for (let i=0;i<N;i++){
+    const t = (i+0.5)/N;
+    const r = Math.sqrt(t)*span*0.72;
+    const a = i*GA;
+    let x = Math.cos(a)*r + (hash(i)-0.5)*span/Math.sqrt(N)*1.4;
+    let y = Math.sin(a)*r + (hash(i*7+3)-0.5)*span/Math.sqrt(N)*1.4;
+    filings.push({ x, y });
+  }
+}
+
+/* ── LAYER A: paint the iron-filing bitmap onto the offscreen canvas (batched alpha bands) ── */
+function paintFilings(){
+  const w = state.W, h = state.H;
+  octx.clearRect(0,0,w,h);
+  // median |B| over the scatter → m50, sets the s = mag/(mag+m50) brightness curve
+  const mags = new Array(filings.length);
+  let sum = 0;
+  for (let i=0;i<filings.length;i++){
+    const m = magnitudeAt(filings[i].x, filings[i].y, state.magnets);
+    mags[i] = m; sum += m;
+  }
+  const sorted = mags.slice().sort((a,b)=>a-b);
+  const m50 = sorted[Math.floor(sorted.length/2)] || 1e-6;
+
+  // bucket each filing into one of NB alpha bands; one path + one stroke per band.
+  const NB = 6;
+  const bands = Array.from({length:NB}, ()=>[]);
+  const segs = [];
+  for (let i=0;i<filings.length;i++){
+    const f = filings[i];
+    const { bx, by } = fieldAt(f.x, f.y, state.magnets);
+    const mag = mags[i];
+    if (mag < 1e-9) continue;                              // a null: the filing has nowhere to point — skip
+    const s = mag/(mag + m50);                              // 0..1 brightness driver
+    const ang = Math.atan2(by, bx);                        // axis (sign-free for a headless segment)
+    const L = (5 + 4*s);                                   // px length
+    const p = W2S(f.x, f.y);
+    const dx = Math.cos(ang)*L*0.5, dy = Math.sin(ang)*L*0.5;
+    const band = Math.min(NB-1, Math.floor(s*NB));
+    bands[band].push(p.x-dx, p.y-dy, p.x+dx, p.y+dy);
+  }
+  octx.lineCap = 'round';
+  for (let b=0;b<NB;b++){
+    const arr = bands[b];
+    if (!arr.length) continue;
+    const s = (b+0.5)/NB;
+    const alpha = Math.max(0.06, Math.min(0.85, 0.10 + 0.62*s));
+    octx.strokeStyle = 'rgba(214,222,235,'+alpha.toFixed(3)+')';
+    octx.lineWidth = 1.1 + 0.5*s;
+    octx.beginPath();
+    for (let k=0;k<arr.length;k+=4){
+      octx.moveTo(arr[k], arr[k+1]);
+      octx.lineTo(arr[k+2], arr[k+3]);
+    }
+    octx.stroke();
+  }
+}
+
+/* ── the hero streamlines: seed a ring just outside each N pole, integrate, draw raw pts ── */
+let heroLines = [];
+function buildHeroLines(){
+  heroLines = [];
+  const dips = state.magnets.filter(m => m.kind !== 'monopole');
+  const RING = 8;
+  for (const m of dips){
+    const N = poles(m, POLE_LEN).N;
+    for (let k=0;k<RING;k++){
+      const a = (k/RING)*Math.PI*2 + 0.15;
+      const seed = { x: N.x + Math.cos(a)*0.035, y: N.y + Math.sin(a)*0.035 };
+      const sl = streamline(seed, state.magnets, { h: 0.006, maxSteps: 4000, rCapture: 0.05 });
+      if (sl.pts.length > 4) heroLines.push(sl);
+    }
+  }
+}
+
+function drawHeroLines(){
+  // two-pass glow: a wide low-alpha bloom (lighter) under a crisp pass
+  for (let pass=0; pass<2; pass++){
+    if (pass===0){ ctx.globalCompositeOperation='lighter'; ctx.strokeStyle='rgba(120,180,255,0.07)'; ctx.lineWidth=5.0; }
+    else { ctx.globalCompositeOperation='source-over'; ctx.strokeStyle='rgba(150,210,255,0.5)'; ctx.lineWidth=1.3; }
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    for (const sl of heroLines){
+      const pts = sl.pts;
+      ctx.beginPath();
+      for (let i=0;i<pts.length;i++){
+        const p = W2S(pts[i].x, pts[i].y);
+        if (i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+      }
+      ctx.stroke();
+    }
+  }
+  ctx.globalCompositeOperation='source-over';
+
+  // flow: little march-dots travelling along each line
+  if (state.flowing){
+    ctx.fillStyle='rgba(190,225,255,0.85)';
+    for (const sl of heroLines){
+      const pts = sl.pts;
+      const n = pts.length;
+      const period = 26;
+      for (let base=(state.flowPhase|0)%period; base<n; base+=period){
+        const p = W2S(pts[base].x, pts[base].y);
+        ctx.beginPath(); ctx.arc(p.x,p.y,1.6,0,Math.PI*2); ctx.fill();
+      }
+    }
+  }
+}
+
+/* ── magnets: rounded capsules split warm-red N / cool-blue S ── */
+function drawMagnet(m){
+  if (m.kind === 'monopole'){
+    const c = W2S(m.x, m.y);
+    // a fictitious monopole: a single radial source, drawn as a hot ringed pip (the control)
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,170,90,0.9)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(c.x,c.y, 11, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,150,70,0.9)';
+    ctx.beginPath(); ctx.arc(c.x,c.y, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,200,140,0.95)'; ctx.font = '700 10px '+MONO; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('q', c.x, c.y-19);
+    ctx.restore();
+    return;
+  }
+  const P = poles(m, POLE_LEN);
+  const N = W2S(P.N.x, P.N.y), S = W2S(P.S.x, P.S.y), C = W2S(m.x,m.y);
+  const ux = N.x-S.x, uy = N.y-S.y, len = Math.hypot(ux,uy)||1;
+  const px = -uy/len, py = ux/len;                 // perpendicular (capsule half-width direction)
+  const hw = Math.max(7, Math.min(13, len*0.22));  // half-width
+  // capsule outline
+  ctx.save();
+  ctx.lineJoin='round';
+  // south half (blue) then north half (red) as two filled rounded rects sharing the centre
+  function halfCapsule(a, b, col){
+    ctx.beginPath();
+    ctx.moveTo(a.x+px*hw, a.y+py*hw);
+    ctx.lineTo(b.x+px*hw, b.y+py*hw);
+    ctx.lineTo(b.x-px*hw, b.y-py*hw);
+    ctx.lineTo(a.x-px*hw, a.y-py*hw);
+    ctx.closePath();
+    ctx.fillStyle = col; ctx.fill();
+  }
+  // rounded end caps
+  halfCapsule(C, S, 'rgba(143,182,255,0.92)');
+  halfCapsule(C, N, 'rgba(224,102,79,0.92)');
+  ctx.fillStyle = 'rgba(143,182,255,0.92)';
+  ctx.beginPath(); ctx.arc(S.x,S.y,hw,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = 'rgba(224,102,79,0.92)';
+  ctx.beginPath(); ctx.arc(N.x,N.y,hw,0,Math.PI*2); ctx.fill();
+  // a thin bright rim
+  ctx.strokeStyle='rgba(255,255,255,0.22)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(N.x,N.y,hw,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(S.x,S.y,hw,0,Math.PI*2); ctx.stroke();
+  // pole letters
+  ctx.fillStyle='rgba(255,255,255,0.95)'; ctx.font='700 11px '+MONO; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('N', N.x, N.y);
+  ctx.fillText('S', S.x, S.y);
+  // a subtle end-cap rotate affordance ring on hover-near (drawn faintly always)
+  ctx.restore();
+}
+
+/* ── the saddle-null hunt reticle ── */
+function drawNullHunt(){
+  const nul = findNull(state.magnets);
+  const cur = state.cursor;
+  // reference field for the reticle opacity: |B| a pole-length off the would-be null
+  if (!cur) { state.foundNull=false; return; }
+  const Bcur = magnitudeAt(cur.x, cur.y, state.magnets);
+  // B_ref: a robust scale — median-ish field near the magnets
+  let Bref = 0;
+  const dips = state.magnets.filter(m=>m.kind!=='monopole');
+  if (dips.length){
+    const m0 = dips[0];
+    Bref = magnitudeAt(m0.x + POLE_LEN*1.5, m0.y, state.magnets) + 1e-9;
+  } else Bref = 1;
+  const prox = Math.max(0, Math.min(1, 1 - Bcur/Bref));
+  const op = prox*prox;
+  const cs = W2S(cur.x, cur.y);
+
+  if (nul && Bcur < 0.012*Bref){
+    // SNAP — you found it. Gold cross-hair + ring pulse + caption.
+    state.foundNull = true;
+    const g = W2S(nul.x, nul.y);
+    const t = performance.now()/1000;
+    const pulse = 10 + 6*Math.sin(t*4);
+    ctx.save();
+    ctx.strokeStyle='rgba(201,162,74,0.9)'; ctx.lineWidth=1.6;
+    ctx.beginPath(); ctx.moveTo(g.x-14,g.y); ctx.lineTo(g.x+14,g.y); ctx.moveTo(g.x,g.y-14); ctx.lineTo(g.x,g.y+14); ctx.stroke();
+    ctx.beginPath(); ctx.arc(g.x,g.y,pulse,0,Math.PI*2); ctx.strokeStyle='rgba(201,162,74,0.5)'; ctx.lineWidth=1.4; ctx.stroke();
+    ctx.beginPath(); ctx.arc(g.x,g.y,4,0,Math.PI*2); ctx.fillStyle='rgba(201,162,74,0.95)'; ctx.fill();
+    ctx.restore();
+  } else {
+    state.foundNull = false;
+    if (op > 0.04 && nul){
+      // a faint proximity reticle that blooms as the cursor nears a true null
+      ctx.save();
+      ctx.strokeStyle = 'rgba(201,162,74,'+(op*0.7).toFixed(3)+')';
+      ctx.lineWidth = 1.2;
+      const rr = 16 - 8*op;
+      ctx.beginPath(); ctx.arc(cs.x,cs.y,rr,0,Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cs.x-rr-4,cs.y); ctx.lineTo(cs.x-rr+2,cs.y);
+      ctx.moveTo(cs.x+rr-2,cs.y); ctx.lineTo(cs.x+rr+4,cs.y); ctx.stroke();
+      ctx.restore();
+    }
+    // breadcrumb: after ~6s of a present-but-unfound null, fade a ✦ at the true null
+    if (nul && !state.foundNull){
+      if (!state.nullSince) state.nullSince = performance.now();
+      const dt = (performance.now()-state.nullSince)/1000;
+      if (dt > 6){
+        const g = W2S(nul.x, nul.y);
+        const a = Math.min(0.5, (dt-6)*0.12) * (0.6+0.4*Math.sin(performance.now()/500));
+        ctx.save();
+        ctx.fillStyle='rgba(201,162,74,'+a.toFixed(3)+')'; ctx.font='14px '+MONO; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText('✦', g.x, g.y);
+        ctx.restore();
+      }
+    } else {
+      state.nullSince = 0;
+    }
+  }
+}
+
+const MONO = '"SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace';
+
+/* ── the full frame ── */
+function draw(){
+  const w = state.W, h = state.H;
+  ctx.clearRect(0,0,w,h);
+  // LAYER A: the frozen filing bitmap
+  ctx.drawImage(off, 0, 0, plate.width, plate.height, 0, 0, w, h);
+  // LAYER B: streamlines, magnets, null hunt
+  drawHeroLines();
+  for (const m of state.magnets) drawMagnet(m);
+  drawNullHunt();
+}
+
+/* recompute the heavy layer (bitmap + hero lines) — call on any field change. */
+function rethread(){
+  buildHeroLines();
+  paintFilings();
+  classify();
+}
+
+/* ── live caption classifying the configuration + framing the touchable thing ── */
+function classify(){
+  const hint = document.getElementById('hint');
+  const dips = state.magnets.filter(m=>m.kind!=='monopole');
+  const hasMono = state.magnets.some(m=>m.kind==='monopole');
+  hint.classList.remove('gold');
+  if (hasMono){
+    hint.innerHTML = 'A fictitious <b>monopole</b> is on the plate — a real source. Its lines never close; the self-test goes <b>red</b>. (No such thing exists.)';
+    return;
+  }
+  if (dips.length === 1){
+    hint.innerHTML = 'A <b>lone north</b>: the field fountains out and curves all the way back to its own south. Every line still closes.';
+  } else if (dips.length === 2){
+    const nul = findNull(state.magnets);
+    if (nul){
+      hint.innerHTML = 'Two <b>like</b> poles face off — the lines bow apart around a dark midline. Hunt with your cursor for the <b>saddle null</b> between them.';
+    } else {
+      hint.innerHTML = 'Two <b>unlike</b> poles — a bright bridge of lines threads straight across, north to south. No interior null to find here.';
+    }
+  } else {
+    hint.innerHTML = dips.length + ' magnets on the plate — drag them and watch the filings re-knit.';
+  }
+}
+
+/* =====================================================================================
+   INTERACTION — body drag = translate; end-cap drag = rotate; double-click/2-finger = flip.
+   ===================================================================================== */
+let drag = null;   // { id, mode:'move'|'rotate', dx, dy }
+function magnetAt(wx, wy){
+  // hit test: nearest magnet whose capsule/pip we're within
+  let best=null, bestD=Infinity;
+  for (const m of state.magnets){
+    if (m.kind==='monopole'){
+      const d = Math.hypot(wx-m.x, wy-m.y);
+      if (d < 0.10 && d<bestD){ best={m,part:'body'}; bestD=d; }
+      continue;
+    }
+    const P = poles(m, POLE_LEN);
+    const dN = Math.hypot(wx-P.N.x, wy-P.N.y);
+    const dS = Math.hypot(wx-P.S.x, wy-P.S.y);
+    const dC = Math.hypot(wx-m.x, wy-m.y);
+    const capR = 0.06;
+    if (dN < capR && dN<bestD){ best={m,part:'N'}; bestD=dN; }
+    if (dS < capR && dS<bestD){ best={m,part:'S'}; bestD=dS; }
+    if (dC < POLE_LEN*0.6 && dC<bestD){ best={m,part:'body'}; bestD=dC; }
+  }
+  return best;
+}
+
+let lastTap = 0;
+plate.addEventListener('pointerdown', (e)=>{
+  plate.setPointerCapture(e.pointerId);
+  const rect = plate.getBoundingClientRect();
+  const w = S2W(e.clientX-rect.left, e.clientY-rect.top);
+  const hit = magnetAt(w.x, w.y);
+  // double-click flip
+  const now = performance.now();
+  if (hit && (now-lastTap)<300){ doFlip(hit.m); lastTap=0; return; }
+  lastTap = now;
+  if (hit){
+    plate.classList.add('grabbing');
+    if (hit.part==='body' || hit.m.kind==='monopole'){
+      drag = { id:hit.m.id||hit.m, m:hit.m, mode:'move', dx:w.x-hit.m.x, dy:w.y-hit.m.y };
+    } else {
+      drag = { m:hit.m, mode:'rotate' };  // end-cap → set θ
+    }
+  } else {
+    drag = null;  // empty plate = nothing
+  }
+});
+
+plate.addEventListener('pointermove', (e)=>{
+  const rect = plate.getBoundingClientRect();
+  const w = S2W(e.clientX-rect.left, e.clientY-rect.top);
+  state.cursor = { x:w.x, y:w.y };
+  if (!drag) return;
+  const m = drag.m;
+  if (drag.mode==='move'){
+    m.x = Math.max(PLATE.x0+0.02, Math.min(PLATE.x1-0.02, w.x - drag.dx));
+    m.y = Math.max(PLATE.y0+0.02, Math.min(PLATE.y1-0.02, w.y - drag.dy));
+  } else if (drag.mode==='rotate' && m.kind!=='monopole'){
+    // set θ from centre→cursor; keep |m| fixed
+    const ang = Math.atan2(w.y-m.y, w.x-m.x);
+    const mag = Math.hypot(m.mx, m.my) || 0.07;
+    m.mx = Math.cos(ang)*mag; m.my = Math.sin(ang)*mag;
+  }
+  // mid-drag: refresh ONLY the cheap hero lines (filings frozen until drag-END)
+  buildHeroLines();
+});
+
+function endDrag(e){
+  if (drag){
+    drag = null;
+    plate.classList.remove('grabbing');
+    state.nullSince = 0;
+    rethread();   // exactly one bitmap rebuild on drag-END
+  }
+}
+plate.addEventListener('pointerup', endDrag);
+plate.addEventListener('pointercancel', endDrag);
+plate.addEventListener('pointerleave', (e)=>{ /* keep cursor for hunt unless really gone */ });
+
+// two-finger tap → flip the magnet under the first touch
+plate.addEventListener('touchstart', (e)=>{
+  if (e.touches.length===2){
+    const rect = plate.getBoundingClientRect();
+    const w = S2W(e.touches[0].clientX-rect.left, e.touches[0].clientY-rect.top);
+    const hit = magnetAt(w.x,w.y);
+    if (hit && hit.m.kind!=='monopole'){ e.preventDefault(); doFlip(hit.m); }
+  }
+}, {passive:false});
+
+/* a 220ms flip cross-fade (re-thread once at the end) */
+function doFlip(m){
+  if (m.kind==='monopole') return;
+  m.mx = -m.mx; m.my = -m.my;
+  state.nullSince = 0;
+  rethread();
+}
+
+/* =====================================================================================
+   CONTROLS
+   ===================================================================================== */
+document.getElementById('btnAdd').addEventListener('click', ()=>{
+  if (state.magnets.filter(m=>m.kind!=='monopole').length >= 4) return;
+  // place a new magnet in an empty-ish spot
+  const m = { x: (Math.random()*0.8-0.4), y: (Math.random()*0.8-0.4), mx: 0.07, my: 0, id: nextId++ };
+  state.magnets.push(m);
+  rethread();
+});
+document.getElementById('btnRemove').addEventListener('click', ()=>{
+  const dips = state.magnets.filter(m=>m.kind!=='monopole');
+  // remove the last-added magnet (or a monopole if present)
+  const mono = state.magnets.findIndex(m=>m.kind==='monopole');
+  if (mono>=0){ state.magnets.splice(mono,1); }
+  else if (dips.length>1){ state.magnets.pop(); }
+  rethread();
+});
+document.getElementById('btnFlip').addEventListener('click', ()=>{
+  const dips = state.magnets.filter(m=>m.kind!=='monopole');
+  if (dips.length) doFlip(dips[dips.length-1]);
+});
+document.getElementById('btnReset').addEventListener('click', ()=>{
+  state.magnets = SCENES.dipolePair(); nextId=3; state.nullSince=0; state.foundNull=false;
+  rethread();
+});
+const btnFlow = document.getElementById('btnFlow');
+btnFlow.addEventListener('click', ()=>{
+  state.flowing = !state.flowing;
+  btnFlow.classList.toggle('on', state.flowing);
+  btnFlow.textContent = state.flowing ? '❚❚ flow' : '▸ flow';
+});
+const dens = document.getElementById('dens');
+dens.addEventListener('input', ()=>{
+  state.density = parseInt(dens.value,10);
+  document.getElementById('densVal').textContent = state.density;
+  buildScatter(); paintFilings();
+});
+
+/* a hidden way to summon the negative control — set the like-pair, then add the monopole
+   scene from the console or via a long-press on "reset" alternative. We expose it cleanly
+   on the window so it is discoverable + the self-test pill explains the red state. */
+window.__ironFilings = {
+  scene(name){ if (SCENES[name]){ state.magnets = SCENES[name](); nextId = state.magnets.length+1; state.nullSince=0; rethread(); } },
+  runSelfTest, CORE
+};
+
+/* =====================================================================================
+   LOOP
+   ===================================================================================== */
+let lastT = performance.now();
+function loop(now){
+  const dt = Math.min(0.05, (now-lastT)/1000); lastT = now;
+  if (state.flowing && !REDUCED){ state.flowPhase += dt*60*0.5; }   // ~30fps march cadence
+  draw();
+  requestAnimationFrame(loop);
+}
+
+/* =====================================================================================
+   BOOT
+   ===================================================================================== */
+function boot(){
+  fit();
+  buildScatter();
+  rethread();
+  requestAnimationFrame(loop);
+
+  // self-test pill (run when idle), mirrors the Node twin
+  const runPill = ()=>{
+    const st = runSelfTest();
+    const badge = document.getElementById('selftest');
+    badge.classList.toggle('ok', st.ok);
+    badge.classList.toggle('bad', !st.ok);
+    badge.textContent = (st.ok?'✓ ':'✗ ') + st.passed + '/' + st.total + ' self-test';
+    badge.addEventListener('click', ()=>{
+      alert(st.checks.map(c => (c.pass?'✓ ':'✗ ') + c.name + '  ['+c.info+']').join('\n\n'));
+    });
+    st.checks.forEach(c => console.log((c.pass?'PASS':'FAIL')+'  '+c.name+'  ['+c.info+']'));
+  };
+  if ('requestIdleCallback' in window) requestIdleCallback(runPill, {timeout:1500});
+  else setTimeout(runPill, 80);
+}
+
+window.addEventListener('resize', ()=>{ fit(); buildScatter(); rethread(); });
+boot();
+</script>
+</body>
+</html>

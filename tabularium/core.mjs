@@ -96,7 +96,7 @@ export function partitionByChapter(records) {
 
 /* ── recomputeAggregates: records → the numbers the room displays ─────────────
    Every aggregate the page asserts is RE-DERIVED here from the data, so the
-   displayed 257 / 232 / 67 / 306→403 can never drift from the file. */
+   displayed 291 / 258 / 73 / 306→409 can never drift from the file. */
 export function recomputeAggregates(records) {
   const names = new Set(), cycles = new Set();
   let minCyc = Infinity, maxCyc = -Infinity;
@@ -246,7 +246,7 @@ export function verdict(checks) {
 /* The VERIFIED real aggregate targets of ledger/ledger.jsonl, as of this build.
    The Node twin pins to these; if the real file ever changes shape, the twin
    fails loudly and the room must be re-forged. */
-export const CLAIM = { marks: 285, makers: 255, cycles: 72, minCyc: 306, maxCyc: 408 };
+export const CLAIM = { marks: 291, makers: 258, cycles: 73, minCyc: 306, maxCyc: 409 };
 
 /* ── THE ESTATE'S WINGS, by their REAL first-appearance ───────────────────────
    `bornCycle` is the git commit-DEPTH of the commit that first added that wing's
@@ -286,7 +286,7 @@ export const WINGS = [
 /* ── estateAt: which wings stand at this cycle ────────────────────────────────
    A wing is "standing" iff cycle ≥ its bornCycle. `pre` wings (born before the
    record opened) are standing from the very first leaf — honestly, without
-   claiming a recorded birth-year inside the orrery's 306→403 span. Returns
+   claiming a recorded birth-year inside the orrery's 306→409 span. Returns
    per-wing { name, bornCycle, pre, standing, justRaised } where justRaised marks
    a wing whose recorded birth-year IS this exact cycle (it rose this turn). */
 export function estateAt(cycle, recordStart) {
