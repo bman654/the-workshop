@@ -96,7 +96,7 @@ export function partitionByChapter(records) {
 
 /* ── recomputeAggregates: records → the numbers the room displays ─────────────
    Every aggregate the page asserts is RE-DERIVED here from the data, so the
-   displayed 291 / 258 / 73 / 306→409 can never drift from the file. */
+   displayed 313 / 278 / 77 / 306→413 can never drift from the file. */
 export function recomputeAggregates(records) {
   const names = new Set(), cycles = new Set();
   let minCyc = Infinity, maxCyc = -Infinity;
@@ -246,7 +246,7 @@ export function verdict(checks) {
 /* The VERIFIED real aggregate targets of ledger/ledger.jsonl, as of this build.
    The Node twin pins to these; if the real file ever changes shape, the twin
    fails loudly and the room must be re-forged. */
-export const CLAIM = { marks: 307, makers: 272, cycles: 76, minCyc: 306, maxCyc: 412 };
+export const CLAIM = { marks: 313, makers: 278, cycles: 77, minCyc: 306, maxCyc: 413 };
 
 /* ── THE ESTATE'S WINGS, by their REAL first-appearance ───────────────────────
    `bornCycle` is the git commit-DEPTH of the commit that first added that wing's

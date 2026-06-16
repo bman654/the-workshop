@@ -25,6 +25,7 @@
 //  function  Q_n(r) = f^{2^n}(1/2; r) − 1/2  for its first root above R_{n−1}.
 // ============================================================================
 
+// ===== ROAD-INTO-CHAOS CORE (inlined byte-twin of core.mjs) BEGIN =====
 export const FEIGENBAUM_DELTA = 4.669201609102990;  // the universal constant
 export const FEIGENBAUM_ALPHA = 2.502907875095892;  // the spatial scaling (kept for reference)
 
@@ -159,15 +160,12 @@ export function lyapunov(map, r, transient = 500, steps = 8000) {
 // Detect the period of the attractor at r (1,2,4,8,… or 0 for "aperiodic/chaos")
 // by tolerance-clustering the kept orbit points. Returns the number of distinct
 // bands, capped — a clean way to colour the orbit diagram by period.
+//
+// This delegates to detectOrbitPeriod(attractor(...)) so that the box-count the
+// EYE sees on the cobweb staircase and the period the TEST asserts are ONE
+// computation — there is no second, private clustering anywhere.
 export function periodOf(map, r, cap = 64, tol = 1e-4) {
-  const pts = attractor(map, r, 1500, 600);
-  const sorted = pts.slice().sort((a, b) => a - b);
-  let bands = 1;
-  for (let i = 1; i < sorted.length; i++) {
-    if (sorted[i] - sorted[i - 1] > tol) bands++;
-    if (bands > cap) return 0;   // too many distinct values ⇒ treat as chaotic
-  }
-  return bands;
+  return detectOrbitPeriod(attractor(map, r, 1500, 600), cap, tol);
 }
 
 // The accumulation point r_∞ where the cascade ends and chaos begins, estimated
@@ -178,3 +176,119 @@ export function accumulationPoint(R, delta = FEIGENBAUM_DELTA) {
   const n = R.length - 1;
   return R[n] + (R[n] - R[n - 1]) / (delta - 1);
 }
+
+// ============================================================================
+//  THE LIVE COBWEB LAYER — the staircase the page DRAWS and the period the
+//  test ASSERTS are ONE computation. Everything below is byte-twinned, char for
+//  char (minus the leading `export `), into index.html between the sentinels
+//  and re-extracted by core.test.mjs so silent drift is impossible to commit.
+// ============================================================================
+
+// The PUBLISHED period-doubling ONSETS r_n of the logistic map (not the
+// superstable R_n). These bound the bands where the live orbit has a given
+// period: [lo, hi). C's table — the single source of truth for the snap-ticks
+// painted on the r-knob AND for expectedPeriod's cross-check.
+export const R_INFINITY = 3.5699456;
+export const CASCADE_BANDS = {
+  1:  [0,        3.0],
+  2:  [3.0,      3.449490],
+  4:  [3.449490, 3.544090],
+  8:  [3.544090, 3.564407],
+  16: [3.564407, 3.5699456],
+};
+
+// The cascade-PREDICTED period at r, read straight off the published onset table
+// — a genuine cross-check INDEPENDENT of the live orbit. 0 past r_∞ (chaos band,
+// where no finite period is predicted). Below the first onset it is the fixed
+// point (period 1).
+export function expectedPeriod(r) {
+  if (r >= R_INFINITY) return 0;
+  for (const p of [16, 8, 4, 2, 1]) {
+    const [lo, hi] = CASCADE_BANDS[p];
+    if (r >= lo && r < hi) return p;
+  }
+  return 1;
+}
+
+// The EXACT array the page draws as the cobweb staircase: iterate past the
+// transient, then KEEP the next `keep` points. orbit[i] → orbit[i+1] is one
+// step of the map, and the staircase pen walks (orbit[i],orbit[i]) up to the
+// curve then across to (orbit[i+1],orbit[i+1]). This is the SOLE source of the
+// staircase points — the page never runs a private loop. x0 defaults to the
+// critical point xmax (lands on the attractor fast, the honest transient seed).
+export function cobwebOrbit(map, r, x0 = null, transient = 800, keep = 256) {
+  let x = (x0 === null) ? map.xmax : x0;
+  for (let i = 0; i < transient; i++) x = map.f(r, x);
+  const orbit = new Array(keep + 1);
+  orbit[0] = x;
+  for (let i = 1; i <= keep; i++) { x = map.f(r, x); orbit[i] = x; }
+  return orbit;
+}
+
+// Detect the period of an ALREADY-COMPUTED orbit by tolerance-clustering its
+// points — the SAME clustering periodOf used to use inline, now shared so the
+// box-count the eye counts on the staircase and the period the test asserts are
+// literally one function. Returns the band count, or 0 when it exceeds `cap`
+// (treated as aperiodic/chaotic).
+export function detectOrbitPeriod(orbit, cap = 64, tol = 1e-4) {
+  const sorted = orbit.slice().sort((a, b) => a - b);
+  let bands = 1;
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i] - sorted[i - 1] > tol) bands++;
+    if (bands > cap) return 0;   // too many distinct values ⇒ treat as chaotic
+  }
+  return bands;
+}
+
+// The in-page self-test (the pill). Takes NO args (the cardioid pattern), runs
+// the SAME claims as the Node twin's first checks, and is re-extracted from the
+// page and re-evaluated by core.test.mjs to prove parity. Every detail string
+// carries LIVE numbers, never a hardcoded echo.
+export function runSelfTest(){
+  const lines=[]; const T=(name,ok,detail='')=>lines.push({name,ok:!!ok,detail});
+  const L=MAPS.logistic;
+  const R=superstableLadder(L,8);
+  const {best,ratios}=feigenbaumRatios(R);
+
+  // δ MEASURED from the cascade → 4.6692, and the estimates converge to it.
+  T('δ measured from the cascade → 4.6692', Math.abs(best-FEIGENBAUM_DELTA)<0.02, 'δ='+best.toFixed(5));
+  T('the δ estimates converge toward the constant',
+    Math.abs(ratios[ratios.length-1]-FEIGENBAUM_DELTA)<Math.abs(ratios[0]-FEIGENBAUM_DELTA),
+    ratios.map(v=>v.toFixed(3)).join('→'));
+
+  // UNIVERSALITY — the same δ falls out of the sine map.
+  const Rs=superstableLadder(MAPS.sine,7); const bs=feigenbaumRatios(Rs).best;
+  T('universality: the sine map yields the SAME δ', Math.abs(bs-FEIGENBAUM_DELTA)<0.05, 'δ(sine)='+bs.toFixed(4));
+
+  // R_∞ the hardcoded onset agrees with the δ-extrapolated wall (< 0.001).
+  T('R_INFINITY constant agrees with the extrapolated wall',
+    Math.abs(R_INFINITY-accumulationPoint(R))<0.001,
+    'const='+R_INFINITY.toFixed(7)+' extrap='+accumulationPoint(R).toFixed(7));
+
+  // λ is the arbiter: negative in order, ≈ln2 in full chaos.
+  T('λ<0 in the periodic window (r=3.2, stable 2-cycle)', lyapunov(L,3.2)<-0.01, 'λ='+lyapunov(L,3.2).toFixed(4));
+  T('λ≈ln2 in full chaos (r=4.0)', Math.abs(lyapunov(L,4.0)-Math.LN2)<0.02, 'λ='+lyapunov(L,4.0).toFixed(4));
+
+  // THE LIVE-PERIOD HEARTBEAT: the box-count the staircase traces == the
+  // cascade-predicted period == the asserted period, at the band CENTERS.
+  T('box-count == cascade period at band centers (1·2·4·8)',
+    periodOf(L,2.8)===1 && expectedPeriod(2.8)===1 &&
+    periodOf(L,3.2)===2 && expectedPeriod(3.2)===2 &&
+    periodOf(L,3.50)===4 && expectedPeriod(3.50)===4 &&
+    periodOf(L,3.555)===8 && expectedPeriod(3.555)===8,
+    '2.8→1 · 3.2→2 · 3.50→4 · 3.555→8');
+
+  // DRAWN == TESTED: the period read off the exact staircase array == the test's.
+  T('drawn == tested: detectOrbitPeriod(cobwebOrbit(3.50))===4',
+    detectOrbitPeriod(cobwebOrbit(L,3.50))===4, 'p='+detectOrbitPeriod(cobwebOrbit(L,3.50)));
+
+  // NEG CONTROL — a chaotic r never fakes a closed loop (λ>0, period 0).
+  T('neg control: chaotic r (3.7) is aperiodic & λ>0',
+    periodOf(L,3.7)===0 && lyapunov(L,3.7)>0, 'p='+periodOf(L,3.7)+' λ='+lyapunov(L,3.7).toFixed(4));
+  T('neg control: a short chaotic staircase still never closes (r=3.7)',
+    detectOrbitPeriod(cobwebOrbit(L,3.7,null,50))===0, 'p='+detectOrbitPeriod(cobwebOrbit(L,3.7,null,50)));
+
+  const passed=lines.filter(c=>c.ok).length;
+  return { pass:passed, total:lines.length, lines };
+}
+// ===== ROAD-INTO-CHAOS CORE (inlined byte-twin of core.mjs) END =====

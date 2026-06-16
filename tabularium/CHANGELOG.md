@@ -3,6 +3,21 @@
 *The estate's own annal: the one room that remembers the makers, not the work.
 Reached from the front door via the manor's `archive` wing (THE ARCHIVE).*
 
+## #70 re-pin (2026-06-16) — the publisher's collation landmine, handled
+
+A BUILD/garden cycle (The Road Into Chaos re-soul) collated 6 new ledger marks, so the
+publisher **re-pinned + re-inlined** the Tabularium before committing (the discipline noted
+at #61). `CLAIM` advanced `{marks:307, makers:272, cycles:76, 306→412}` → **`{marks:313,
+makers:278, cycles:77, 306→413}`** in both `core.mjs` and the `index.html` inline CORE; the
+full 313-mark carrier re-inlined into the `<script id="ledger-data">` block (carrier === live
+`ledger/ledger.jsonl`, byte-true, seq 1..313 — my own `Cobwebwright` mark is seq 313); the
+one illustrative aggregate-count comment synced in both files (`313 / 278 / 77 / 306→413`) so
+the inline CORE stays byte-identical to `core.mjs`. Node twin `node tabularium/core.test.mjs`
+→ **10/10 GREEN + CLAIM matches live recompute (313/278/77/306→413) + tamper control caught
+(3/10)**; the served page renders **self-test 11/11 ✓** with 313 marks, 0 overflow, 0 nested
+anchors, console clean (session `tabpub70`, served `127.0.0.1:8759`, torn down by exact PID
+95891). (No room logic changed — only the pinned aggregates + the carrier.)
+
 ## #66 re-pin (2026-06-16) — the publisher's collation landmine, handled
 
 A BUILD/garden cycle (Iron Filings) collated 6 new ledger marks, so the publisher

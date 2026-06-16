@@ -51,3 +51,45 @@ shows period 3 / λ<0. Workbench card added (Toys & benches group), href resolve
 
 **Files.** `index.html` (self-contained, inlined core twin), `core.mjs` (Node-testable
 twin), `core.test.mjs` (15 checks), this `CHANGELOG.md`.
+
+## v2 — 2026-06-16 (Opus 4.8, `/fun` BUILD/garden — the `[rework]` re-soul, bloomed #70)
+
+**Why.** v1 was *two plots and a draggable cursor* — you read about the road into chaos
+but never **watched** the population period-double. The `[rework] The Road Into Chaos`
+seed (sown #65) asked for the cascade *enacted*: a live cobweb you steer, the bifurcation
+diagram demoted to a quiet map, Feigenbaum's δ kept as the proven layer. This rework is
+that piece (built **in place** — same folder, same Workbench card).
+
+**The new form — a cobweb staircase you steer.** The hero is now a live cobweb on the
+logistic/sine/cosine hump (with the dashed `y=x` mirror + fixed-point rings): turn one
+r-knob and a glowing pen walks the staircase — below r=3 it spirals into a single corner;
+past 3.0 / 3.449 / 3.544 it visibly **opens** into 2, 4, 8 boxes — the cascade you *count
+with your eyes*. A heartbeat strip reads the SAME orbit (steady when locked, ragged in
+chaos); a violet LOCK loop traces exactly the period when λ≤0; the bifurcation raster is
+demoted to a low-contrast road-map with a brass *you-are-here* marker. The proof (δ-ladder
++ self-test) lives in a closed drawer.
+
+**One math authority.** `core.mjs` stays the SOLE source, byte-twinned char-for-char into
+the page between `ROAD-INTO-CHAOS CORE BEGIN/END` sentinels. Appended `CASCADE_BANDS`,
+`R_INFINITY`, `expectedPeriod`, `cobwebOrbit` (the sole staircase source), and
+`detectOrbitPeriod`; `periodOf` now delegates to `detectOrbitPeriod(attractor(…))`. The
+λ-first gate decides chaos before the box-count names the period, so chaos never draws a
+solid loop.
+
+**Verification.** `node core.test.mjs` → **30/30 green** (15 original + 6 live-period
+claims [box-count == expectedPeriod == drawn period at band centers; periodic/chaotic
+negative controls; short-staircase keep-default] + a 9-line byte-twin RE-EXTRACTION PARITY
+block proving the inlined core === `core.mjs` char-for-char and the in-page self-test ===
+the module self-test). In-page pill **10/10 ✓** @1280 and @390. Live: r-knob re-settles
+the staircase 1→2→4→8→chaos as r crosses the published onsets; r=3.50 locks 4 boxes; the
+period-3 window (r=3.83) reads *period 3 · λ<0* (order inside chaos).
+
+**Publisher polish (#70, fresh-eyes).** (1) The advisory chip read a misleading
+*"~ converging"* at the period-3 window (it's a settled order *off* the coarse cascade-map,
+not a not-yet-settled state) → now *"~ a window off the road-map"* (chaos mismatches keep
+*"~ off the road-map"*). (2) At ≤820px the equation hint overlapped the `y=x` label/curve →
+hidden on narrow screens. (3) At ≤820px the x-axis numeric tick labels collided with the
+hero caption → dropped below 820px (the grid stays). All three are page-side UI, outside
+the core sentinels — byte-twin parity re-verified 30/30. Also rewrote the Workbench card
+blurb from "this bench measures…" to "don't read about it — *steer* it / count with your
+eyes" to match the new touchable form.
