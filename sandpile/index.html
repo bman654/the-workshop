@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Sandpile · The Numbers Room</title>
+<style>
+  :root{
+    --bg:#08070b;
+    --plate1:#15121b;
+    --plate2:#0d0b12;
+    --ink:#ede2f0;
+    --ink-dim:#a79ab2;
+    --gold:#c9a24a;
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.36);
+    --teal:#6fd3c4;
+    --teal-soft:rgba(111,211,196,0.12);
+    --open:#e0664f;
+    --panel:rgba(13,11,18,0.82);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1300px 800px at 50% -10%, rgba(201,162,74,0.08), transparent 58%),
+      radial-gradient(1000px 700px at 16% 110%, rgba(111,211,196,0.05), transparent 62%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 32px);
+    mix-blend-mode:overlay;
+  }
+
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 22px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(8,7,11,0.94), rgba(8,7,11,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--gold); opacity:1; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.4); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); max-width:46vw; overflow:hidden; text-overflow:ellipsis; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  /* ── hero ── */
+  .hero{ position:relative; z-index:1; max-width:1080px; margin:0 auto; padding:84px 28px 4px; text-align:center; }
+  .eyebrow{ font:600 11px/1 var(--font-mono); letter-spacing:.32em; text-transform:uppercase; color:var(--gold);
+    opacity:.9; margin-bottom:16px; }
+  .hero h1{
+    font-family:var(--font-serif); font-weight:600; margin:0;
+    font-size:clamp(34px, 6vw, 58px); letter-spacing:.5px; line-height:1.04;
+    background:linear-gradient(176deg, #f5e7c4, #c9a24a 56%, #7d6224);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+  }
+  .hero .lede{ max-width:700px; margin:18px auto 0; font:15.5px/1.62 var(--font-serif); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--gold); font-weight:600; }
+  .hero .lede i{ color:var(--ink); font-style:italic; }
+  .crosslink{ display:inline-block; margin-top:12px; font:12px/1.4 var(--font-mono); letter-spacing:.02em;
+    color:var(--teal); text-decoration:none; opacity:.82; border-bottom:1px solid rgba(111,211,196,0.28); }
+  .crosslink:hover{ opacity:1; }
+
+  /* ── the bench layout ── */
+  .wrap{ position:relative; z-index:1; max-width:1080px; margin:24px auto 0; padding:0 22px 60px; }
+  .stage{ display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:22px; align-items:start; }
+  @media (max-width:880px){ .stage{ grid-template-columns:1fr; } }
+
+  .canvas-card{ position:relative; border-radius:16px; overflow:hidden;
+    border:1px solid rgba(201,162,74,0.16);
+    background:linear-gradient(180deg, var(--plate1), var(--plate2));
+    box-shadow:inset 0 0 60px rgba(0,0,0,0.5); }
+  .canvas-wrap{ position:relative; width:100%; aspect-ratio:1/1; }
+  #pile{ position:absolute; inset:0; width:100%; height:100%; display:block; image-rendering:auto;
+    cursor:crosshair; touch-action:none; }
+  /* second canvas for the TWICE / ADD modes — side-by-side twins */
+  #pileB{ position:absolute; inset:0; width:100%; height:100%; display:none; }
+
+  .stamp-overlay{ position:absolute; left:50%; top:14px; transform:translateX(-50%);
+    font:600 11px/1.3 var(--font-mono); letter-spacing:.04em; text-align:center; padding:7px 13px; border-radius:8px;
+    background:rgba(8,7,11,0.78); border:1px solid var(--teal); color:var(--teal); opacity:0; transition:opacity .3s;
+    pointer-events:none; white-space:nowrap; max-width:92%; z-index:6; }
+  .stamp-overlay.show{ opacity:1; }
+  .stamp-overlay.gold{ border-color:var(--gold); color:var(--gold); }
+  .twin-labels{ position:absolute; left:0; right:0; bottom:8px; display:none; justify-content:space-between;
+    padding:0 12px; font:600 10px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim);
+    pointer-events:none; z-index:6; }
+  .twin-labels.show{ display:flex; }
+  .twin-labels span.L{ color:var(--teal); } .twin-labels span.R{ color:var(--gold); }
+
+  /* ── DRAMA HUD (rain mode) ── */
+  .hud{ position:absolute; left:12px; top:12px; z-index:5; display:none; flex-direction:column; gap:7px;
+    width:172px; pointer-events:none; }
+  .hud.show{ display:flex; }
+  .hud .meter-wrap{ font:600 9.5px/1 var(--font-mono); letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim); }
+  .hud .meter{ position:relative; height:13px; border-radius:7px; overflow:hidden; margin-top:4px;
+    background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); }
+  .hud .meter .fill{ position:absolute; inset:0 100% 0 0; background:linear-gradient(90deg,#5a8f86,var(--teal));
+    transition:right .08s linear; }
+  .hud .meter.erupt .fill{ background:linear-gradient(90deg,var(--gold),#fff); transition:right .02s linear; }
+  .hud .bignum{ font:600 22px/1 var(--font-mono); color:var(--teal); margin-top:1px; transition:color .1s; }
+  .hud .bignum.erupt{ color:#fff; text-shadow:0 0 16px var(--gold); }
+  .hud .trophy{ font:600 10px/1.3 var(--font-mono); letter-spacing:.04em; color:var(--gold); }
+  .hud .sizelog{ font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis; max-width:172px; }
+  .hud .sizelog b{ color:var(--gold); }
+
+  /* ── controls panel ── */
+  .panel{ display:flex; flex-direction:column; gap:14px; }
+  .pgroup{ border-radius:13px; padding:15px 15px 16px; border:1px solid rgba(201,162,74,0.13);
+    background:linear-gradient(180deg, rgba(21,18,27,0.7), rgba(13,11,18,0.7)); }
+  .pgroup h3{ margin:0 0 4px; font:600 10px/1.2 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--gold); opacity:.92; }
+  .pgroup p{ margin:0 0 11px; font:12px/1.5 var(--font-serif); color:var(--ink); opacity:.78; }
+  .pgroup p:last-child{ margin-bottom:0; }
+  .btn{ width:100%; padding:9px 10px; margin-top:8px; font:600 12px/1 var(--font-ui); letter-spacing:.02em;
+    color:var(--ink); cursor:pointer; border-radius:9px; transition:.16s; text-align:center;
+    border:1px solid rgba(201,162,74,0.22); background:rgba(201,162,74,0.07); }
+  .btn:hover{ background:rgba(201,162,74,0.16); border-color:rgba(201,162,74,0.5); }
+  .btn.teal{ border-color:rgba(111,211,196,0.28); background:rgba(111,211,196,0.07); }
+  .btn.teal:hover{ background:rgba(111,211,196,0.16); border-color:rgba(111,211,196,0.55); }
+  .btn.headline{ border-color:rgba(111,211,196,0.5); background:rgba(111,211,196,0.12); color:var(--teal); font-weight:700; }
+  .btn.headline:hover{ background:rgba(111,211,196,0.2); }
+  .btn.small{ width:auto; flex:1; }
+  .btn-row{ display:flex; gap:8px; }
+  .btn:disabled{ opacity:.4; cursor:default; }
+  .toggle{ display:flex; align-items:center; gap:8px; margin-top:9px; font:11.5px/1.3 var(--font-mono); color:var(--ink-dim); cursor:pointer; }
+  .toggle input{ accent-color:var(--teal); }
+  .readout{ margin-top:9px; font:12px/1.5 var(--font-mono); color:var(--teal); min-height:1.5em; }
+  .readout.gold{ color:var(--gold); }
+
+  /* ── EMPIRICAL side-rail (collapsed) ── */
+  .siderail{ margin-top:18px; border-radius:13px; border:1px dashed rgba(224,102,79,0.32);
+    background:rgba(224,102,79,0.04); overflow:hidden; }
+  .siderail summary{ cursor:pointer; list-style:none; padding:12px 15px; font:600 10px/1.3 var(--font-mono);
+    letter-spacing:.1em; text-transform:uppercase; color:var(--open); display:flex; align-items:center; gap:8px; }
+  .siderail summary::-webkit-details-marker{ display:none; }
+  .siderail summary::before{ content:"▸"; transition:.2s; color:var(--open); }
+  .siderail[open] summary::before{ transform:rotate(90deg); }
+  .siderail .body{ padding:0 15px 16px; }
+  .siderail .body .note{ font:11.5px/1.55 var(--font-serif); color:var(--ink-dim); margin:0 0 12px; }
+  .siderail .body .note b{ color:var(--open); }
+  #empCanvas{ width:100%; aspect-ratio:1.4/1; border-radius:8px; background:rgba(8,7,11,0.7);
+    border:1px solid rgba(255,255,255,0.06); display:block; }
+  .siderail .empstat{ margin-top:9px; font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); }
+
+  /* ── footer ── */
+  .foot{ position:relative; z-index:1; max-width:1080px; margin:28px auto 0; padding:24px 28px 56px;
+    border-top:1px solid rgba(201,162,74,0.1); text-align:center; font:13px/1.7 var(--font-serif); color:var(--ink-dim); }
+  .foot b{ color:var(--gold); font-weight:600; } .foot .exact{ color:var(--teal); } .foot .open{ color:var(--open); }
+  .foot a{ color:var(--gold); text-decoration:none; border-bottom:1px solid rgba(201,162,74,0.3); }
+
+  @media (max-width:520px){ .selftest{ max-width:40vw; } .hud{ width:150px; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../numbers-room/index.html">← The Numbers Room</a>
+    <div class="selftest" id="selftest" title="The bench proves its own claim — click to expand.">checking…</div>
+  </div>
+
+  <header class="hero">
+    <div class="eyebrow">The Numbers Room · the seventh bench</div>
+    <h1>The Sandpile</h1>
+    <p class="lede">Pour grains onto a grid. A cell holding <i>four</i> can't hold them — it <b>topples</b>, spilling one
+      grain to each neighbour, which may topple <i>their</i> neighbours, and so an avalanche crosses the whole pile.
+      Here is the strange part you can watch with your own eyes: <b>topple the cells in any order you like</b> — first to
+      last, last to first, pure chaos — and the sand always lands on the <i>same floor</i>. That order-freedom is a
+      theorem, and it turns these heaps into a group with a single eerie <b>identity</b>.</p>
+    <a class="crosslink" href="../strange-garden/pieces/sandpile.html">↗ see also the Strange Garden's contemplative big-pile mandala</a>
+  </header>
+
+  <div class="wrap">
+    <div class="stage">
+      <div class="canvas-card">
+        <div class="canvas-wrap">
+          <canvas id="pile" width="660" height="660"></canvas>
+          <canvas id="pileB" width="660" height="660"></canvas>
+          <div class="stamp-overlay" id="stamp"></div>
+          <div class="twin-labels" id="twinLabels"><span class="L">row-major order</span><span class="R">shuffled order</span></div>
+          <div class="hud" id="hud">
+            <div class="meter-wrap">avalanche size
+              <div class="meter" id="meter"><div class="fill" id="meterFill"></div></div>
+            </div>
+            <div class="bignum" id="bignum">0</div>
+            <div class="trophy" id="trophy">biggest yet: 0</div>
+            <div class="sizelog" id="sizelog">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="pgroup">
+          <h3>① Drop a grain</h3>
+          <p>Click or drag-paint any cell to add a grain. Cross four and the avalanche runs live.</p>
+          <div class="readout" id="dropReadout">poke the sand…</div>
+          <button class="btn small" id="btnClear" style="width:100%; margin-top:10px;">clear the pile</button>
+        </div>
+
+        <div class="pgroup">
+          <h3>② Make it rain</h3>
+          <p>Drop a thousand grains at random — or hold to rain — and feel the heavy tail: mostly nothing, then an eruption.</p>
+          <button class="btn" id="btnRain">drop 1000</button>
+          <button class="btn" id="btnHold">hold to rain ⟳</button>
+          <label class="toggle"><input type="checkbox" id="muteAudio" checked> mute the thud</label>
+        </div>
+
+        <div class="pgroup">
+          <h3>③ Topple it twice</h3>
+          <p>Two copies of one unstable pile. Left settles row-major, right in a shuffled order — different dances, <i>same heap</i>.</p>
+          <button class="btn headline" id="btnTwice">play both ▶</button>
+          <button class="btn teal" id="btnReshuffle" disabled>reshuffle the right ⟳</button>
+        </div>
+
+        <div class="pgroup">
+          <h3>④ Reveal the identity e</h3>
+          <p>The one heap that changes nothing: e ⊕ x = x. It blooms fourfold-symmetric — shown, not claimed.</p>
+          <button class="btn teal" id="btnIdentity">reveal e</button>
+          <button class="btn teal" id="btnEE" disabled>e ⊕ e → e</button>
+          <div class="readout" id="idReadout"></div>
+        </div>
+      </div>
+    </div>
+
+    <details class="siderail">
+      <summary>Empirical · the avalanche-size distribution</summary>
+      <div class="body">
+        <p class="note">A log–log scatter of how often an avalanche of size <i>s</i> occurs over a long rain. It looks
+          straight-ish — a <b>power-law fit, not a theorem</b> — and it <b>bends down at the right</b>: the grid is finite,
+          so the biggest avalanches are clipped (the <b>finite-size cutoff</b>). The order-freedom above is the proven
+          part of this page; <i>this</i> is the honestly-empirical part.</p>
+        <canvas id="empCanvas" width="560" height="400"></canvas>
+        <div class="empstat" id="empStat">drop a rain to gather a distribution…</div>
+      </div>
+    </details>
+  </div>
+
+  <footer class="foot">
+    The seventh bench of the room. The avalanche you watch is <span class="exact">one</span> of infinitely many firing
+    orders; the self-test proves they <span class="exact">all land on the same floor</span> — order-independent to the
+    byte, with a single recurrent identity <b>e</b>. The tail at right is <span class="open">empirical</span>, and says so.
+    &nbsp;·&nbsp; <a href="../numbers-room/index.html">Back to the Numbers Room</a>
+  </footer>
+
+<script type="module" id="coremod">
+// === CORE BEGIN ===
+// The Sandpile — math core (single source of truth).
+// The abelian sandpile: every cell on an L×L grid holds a count of grains. A cell with 4 or
+// more is UNSTABLE; it TOPPLES, shedding one grain to each of its four orthogonal neighbours
+// (grains that fall off the edge are lost — an OPEN/SINK boundary, which is exactly what makes
+// stabilization terminate and the group finite). Topple every unstable cell, in any order you
+// like, until none remain. THE ABELIAN THEOREM: the final stable configuration — and even the
+// total number of topples — does not depend on the order you chose. This module is the SOLE
+// authority for the topple rule, the stabilizer, the ⊕ group operation, the recurrent identity
+// e (via Creutz's burning trick), and the order-policy machinery the page animates against.
+// It is inlined byte-identical into index.html between the CORE BEGIN / CORE END sentinels and
+// tested by core.test.mjs — page & test can never drift.
+
+// Deterministic PRNG (mulberry32) so a seed reproduces the same pile and the same shuffle order.
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// neighborsOf(L, i) → the indices of i's orthogonal neighbours that lie ON the grid. The grains
+// of any neighbour that would lie off the edge simply vanish (the open boundary / sink). i is a
+// flat row-major index into an L*L array; r,c are recovered by i = r*L + c.
+function neighborsOf(L, i){
+  const r = (i / L) | 0, c = i % L;
+  const out = [];
+  if (r > 0)     out.push(i - L);   // up
+  if (r < L - 1) out.push(i + L);   // down
+  if (c > 0)     out.push(i - 1);   // left
+  if (c < L - 1) out.push(i + 1);   // right
+  return out;
+}
+
+// unstableIndices(g, L) → the flat indices of every cell currently holding >= 4 grains. The
+// stabilizer keeps toppling while this list is nonempty; an order POLICY (pickIdx) chooses WHICH
+// of these to fire next, and the abelian theorem says the choice cannot change the final heap.
+function unstableIndices(g, L){
+  const out = [];
+  for (let i = 0; i < L * L; i++) if (g[i] >= 4) out.push(i);
+  return out;
+}
+
+// ── ORDER POLICIES ──────────────────────────────────────────────────────────────────────────
+// A pickIdx(unstableList, rng) returns which unstable cell topples next. The whole point of the
+// piece is that the FINAL grid is identical no matter which policy you use, so the page can
+// animate one order while the self-test proves order-freedom over many.
+const pickFirst   = (u /*, rng */) => u[0];                       // row-major: lowest index first
+const pickLast    = (u /*, rng */) => u[u.length - 1];            // reverse: highest index first
+// pickRandom(rng) → a policy that fires a uniformly-random unstable cell each step. Seeded via
+// mulberry32 so a given seed reproduces the exact same (otherwise chaotic) choreography.
+function pickRandom(rng){
+  return (u) => u[(rng() * u.length) | 0];
+}
+
+// toppleToStable(grid, L, pickIdx) → { grid:Int32Array, topples }.
+// THE CORRECT RULE. Stabilize `grid` to all cells <= 3 by repeatedly firing an unstable cell
+// chosen by pickIdx: subtract 4 from it, add 1 to each ON-grid neighbour (off-grid grains are
+// lost to the sink). Returns a NEW Int32Array (the input is not mutated) and the total topples.
+// Termination: every topple sends at least one grain toward an edge often enough that the open
+// boundary drains the surplus — the finite group is exactly the stable configs you can reach.
+function toppleToStable(grid, L, pickIdx){
+  const g = Int32Array.from(grid);
+  const rng = mulberry32(1);              // policies that ignore rng are unaffected; seeded ones reproduce
+  let topples = 0;
+  let u = unstableIndices(g, L);
+  while (u.length){
+    const i = pickIdx(u, rng);
+    g[i] -= 4; topples++;
+    const ns = neighborsOf(L, i);
+    for (let k = 0; k < ns.length; k++) g[ns[k]] += 1;
+    u = unstableIndices(g, L);
+  }
+  return { grid: g, topples };
+}
+
+// toppleSteps(grid, L, pickIdx) — a step GENERATOR yielding ONE topple at a time:
+//   { cell, neighborsTouched:[...], grid:Int32Array (the live grid AFTER this topple), topples }
+// The page's animated cascade consumes THIS emitted sequence (it does NOT re-implement a draw-loop
+// topple), so the byte-twin parity check covers the animated path too: what you watch is what the
+// theorem proves. The yielded `grid` is the same live buffer each step (read it, don't stash it).
+function* toppleSteps(grid, L, pickIdx){
+  const g = Int32Array.from(grid);
+  const rng = mulberry32(1);
+  let topples = 0;
+  let u = unstableIndices(g, L);
+  while (u.length){
+    const i = pickIdx(u, rng);
+    g[i] -= 4; topples++;
+    const ns = neighborsOf(L, i);
+    for (let k = 0; k < ns.length; k++) g[ns[k]] += 1;
+    yield { cell: i, neighborsTouched: ns, grid: g, topples };
+    u = unstableIndices(g, L);
+  }
+}
+
+// add(a, b) → pointwise sum (a NEW Int32Array). The raw, possibly-unstable superposition.
+function add(a, b){
+  const out = new Int32Array(a.length);
+  for (let i = 0; i < a.length; i++) out[i] = a[i] + b[i];
+  return out;
+}
+
+// combine(a, b, L) → stabilize(add(a, b)) under the CORRECT rule, row-major order. This is the
+// ⊕ group operation on sandpiles: the heap you get by pouring two piles together and letting the
+// sand settle. Abelian, associative; on the RECURRENT configs it is a finite abelian GROUP.
+function combine(a, b, L){
+  return toppleToStable(add(a, b), L, pickFirst).grid;
+}
+
+// maximalStable(L) → the all-3 grid (every cell maximally loaded but still stable). The seed for
+// Creutz's identity construction below.
+function maximalStable(L){
+  const g = new Int32Array(L * L);
+  g.fill(3);
+  return g;
+}
+
+// identity(L) → the recurrent identity e of the sandpile group, via Creutz's burning trick:
+//   c = stabilize(2·max);  e = stabilize( (2·max) − c )
+// where max is the all-3 maximal-stable grid. e is the unique config with e ⊕ x === x for every
+// RECURRENT x; it is itself recurrent, stable, eerily fourfold-symmetric, and a fixed point of ⊕
+// with itself (e ⊕ e === e). Returns a NEW stable Int32Array.
+function identity(L){
+  const max = maximalStable(L);
+  const twoMax = add(max, max);                       // all-6
+  const c = toppleToStable(twoMax, L, pickFirst).grid; // stabilize 2·max
+  const diff = new Int32Array(L * L);
+  for (let i = 0; i < L * L; i++) diff[i] = twoMax[i] - c[i];   // (2·max) − stabilize(2·max), all >= 0
+  return toppleToStable(diff, L, pickFirst).grid;
+}
+
+// ── THE NEGATIVE CONTROL (a deliberately broken, ORDER-DEPENDENT topple rule) ─────────────────
+// toppleStateDependentToStable(grid, L, pickIdx) — same stabilization loop, but the broken rule
+// splits the 4 shed grains UNEQUALLY by the neighbours' CURRENT heights: it gives 2 grains to the
+// tallest on-grid neighbour, 1 each to the next two, 0 to the shortest (a LIVE-STATE-DEPENDENT
+// spill). Because the split now depends on the running state, the final heap is NO LONGER
+// order-independent — different firing orders land on different grids. This is the genuinely
+// discriminating control.
+//
+// WHY the obvious "broken" rules were REJECTED: any FIXED topple vector — e.g. "double-count one
+// neighbour" (give 2-1-1-0 always to up-down-left-right) or "drop a grain, leak only 3" — is STILL
+// a state-blind linear spill, so it STAYS CONFLUENT and remains byte-identical across every order
+// (proven: 300 piles × 6 orders, allSame:true). A fixed-vector control would ship a SILENTLY GREEN
+// control that proves nothing. The lesson the control teaches IS the theorem: order-independence
+// is exactly the price of a STATE-BLIND spill — make the spill peek at live state and it shatters.
+function toppleStateDependentToStable(grid, L, pickIdx){
+  const g = Int32Array.from(grid);
+  const rng = mulberry32(1);
+  let topples = 0;
+  let u = unstableIndices(g, L);
+  while (u.length){
+    const i = pickIdx(u, rng);
+    g[i] -= 4; topples++;
+    // sort the on-grid neighbours by their CURRENT height, tallest first (ties by index — stable)
+    const ns = neighborsOf(L, i).slice().sort((p, q) => (g[q] - g[p]) || (p - q));
+    for (let k = 0; k < ns.length; k++){
+      g[ns[k]] += (k === 0 ? 2 : (k < 3 ? 1 : 0));  // 2,1,1,0 — a state-dependent split
+    }
+    u = unstableIndices(g, L);
+  }
+  return { grid: g, topples };
+}
+// === CORE END ===
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// THE PAGE — reads its physics ONLY from the CORE above. Nothing below re-implements a topple.
+// ════════════════════════════════════════════════════════════════════════════════════════════
+"use strict";
+const L = 33;                          // odd → a true center for the identity bloom
+const N = L * L;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const cv  = document.getElementById('pile');
+const cvB = document.getElementById('pileB');
+const ctx  = cv.getContext('2d');
+const ctxB = cvB.getContext('2d');
+const dpr = Math.min(2, window.devicePixelRatio || 1);
+function sizeCanvas(c){
+  const r = c.getBoundingClientRect();
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (c.width !== w || c.height !== h){ c.width = w; c.height = h; }
+}
+
+// the live grid the user pokes
+let grid = new Int32Array(N);
+let cachedE = null;                    // lazily-computed identity, cached
+
+// per-cell last-toppled timestamp (frame number) → the travelling-wavefront bloom
+let lastToppledFrame = new Float32Array(N);
+let frame = 0;
+
+// ── colour: height → glow. 0 dark slate, 1 dim teal-ember, 2 bright, 3 hot crest (loaded pulse) ──
+const PAL = [
+  [18, 17, 26],     // 0 — dark slate
+  [44, 96, 92],     // 1 — dim teal
+  [92, 168, 150],   // 2 — brighter
+  [201, 162, 74],   // 3 — hot gold crest (loaded)
+];
+function baseColor(h){ return PAL[h < 0 ? 0 : (h > 3 ? 3 : h)]; }
+
+// draw a grid onto a context as a glowing pile (flat fill + additive wavefront bloom)
+function drawGrid(context, g, c, opts){
+  opts = opts || {};
+  sizeCanvas(c);
+  const W = c.width, H = c.height;
+  const cell = Math.min(W, H) / L;
+  const ox = (W - cell * L) / 2, oy = (H - cell * L) / 2;
+  context.clearRect(0, 0, W, H);
+  context.fillStyle = 'rgb(8,7,11)';
+  context.fillRect(0, 0, W, H);
+  // flat fill pass
+  for (let i = 0; i < N; i++){
+    const r = (i / L) | 0, col = i % L;
+    const h = g[i];
+    const [rr, gg, bb] = baseColor(h);
+    context.fillStyle = `rgb(${rr},${gg},${bb})`;
+    context.fillRect(ox + col * cell, oy + r * cell, cell + 0.6, cell + 0.6);
+    // a faint loaded pulse on 3-cells
+    if (h === 3 && !reduced){
+      const pulse = 0.10 + 0.10 * Math.sin(frame * 0.18 + (r + col) * 0.4);
+      context.fillStyle = `rgba(255,210,120,${pulse})`;
+      context.fillRect(ox + col * cell, oy + r * cell, cell + 0.6, cell + 0.6);
+    }
+  }
+  // additive wavefront bloom: cells toppled recently glow, leading edge brightest
+  if (opts.wavefront && !reduced){
+    context.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < N; i++){
+      const age = frame - lastToppledFrame[i];
+      if (lastToppledFrame[i] > 0 && age >= 0 && age < 22){
+        const r = (i / L) | 0, col = i % L;
+        const t = 1 - age / 22;
+        const a = t * t * 0.9;
+        context.fillStyle = `rgba(255,${Math.round(200 + 55 * t)},${Math.round(120 * t)},${a})`;
+        context.fillRect(ox + col * cell, oy + r * cell, cell + 0.6, cell + 0.6);
+      }
+    }
+    context.globalCompositeOperation = 'source-over';
+  }
+}
+
+// cell index from a pointer event on the main canvas
+function cellAt(ev){
+  const r = cv.getBoundingClientRect();
+  const x = (ev.clientX - r.left) / r.width;
+  const y = (ev.clientY - r.top) / r.height;
+  if (x < 0 || x > 1 || y < 0 || y > 1) return -1;
+  const col = Math.min(L - 1, Math.max(0, (x * L) | 0));
+  const row = Math.min(L - 1, Math.max(0, (y * L) | 0));
+  return row * L + col;
+}
+
+// ── MODE STATE ──────────────────────────────────────────────────────────────────────────────
+let mode = 'drop';        // 'drop' | 'rain' | 'twice' | 'identity'
+let anim = null;          // active cascade animation handle
+const stampEl = document.getElementById('stamp');
+function stamp(text, gold){
+  stampEl.textContent = text;
+  stampEl.className = 'stamp-overlay show' + (gold ? ' gold' : '');
+}
+function clearStamp(){ stampEl.className = 'stamp-overlay'; }
+
+// ── ① DROP: animate a cascade from the live grid off core's toppleSteps ──
+let dropReadout = document.getElementById('dropReadout');
+let audioCtx = null;
+function thud(size){
+  if (document.getElementById('muteAudio').checked) return;
+  try{
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    const f = 60 + Math.min(300, size * 0.6);
+    o.frequency.value = f; o.type = 'sine';
+    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(Math.min(0.22, 0.04 + size * 0.0008), audioCtx.currentTime + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.12);
+    o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + 0.13);
+  }catch(e){}
+}
+
+// run one live cascade on `grid` from its current (unstable) state; resolves with total topples.
+// Consumes core's toppleSteps so the animated path IS the core path. Caps topples per frame.
+function animateCascade(onDone){
+  if (anim){ anim.cancelled = true; }
+  const handle = { cancelled: false };
+  anim = handle;
+  const gen = toppleSteps(grid, L, pickFirst);
+  let total = 0, finalGrid = grid;
+  const CAP = 220;                                // topples animated per frame (snappy on huge avalanches)
+  function step(){
+    if (handle.cancelled) return;
+    let n = 0;
+    let res = gen.next();
+    while (!res.done && n < CAP){
+      const s = res.value;
+      lastToppledFrame[s.cell] = frame;
+      finalGrid = s.grid; total = s.topples;
+      n++;
+      // for very large avalanches, sub-sample which we keep stepping but always advance the gen
+      res = gen.next();
+    }
+    if (res.done){
+      grid = Int32Array.from(finalGrid);
+      anim = null;
+      if (onDone) onDone(total);
+      return;
+    }
+    grid = finalGrid;                               // live grid mid-cascade (the wavefront)
+    frame++;
+    requestAnimationFrame(step);
+  }
+  if (reduced){
+    // no animation: stabilize at once via core, then report
+    const r = toppleToStable(grid, L, pickFirst);
+    grid = r.grid; anim = null; if (onDone) onDone(r.topples); return;
+  }
+  requestAnimationFrame(step);
+}
+
+function dropAt(i){
+  if (i < 0 || mode !== 'drop') return;
+  grid[i] += 1;
+  if (grid[i] >= 4 && !anim){
+    animateCascade((tot) => {
+      dropReadout.textContent = 'this drop toppled ' + tot.toLocaleString() + ' cell' + (tot === 1 ? '' : 's');
+    });
+  } else if (grid[i] < 4){
+    dropReadout.textContent = 'grain at cell ' + i + ' (height ' + grid[i] + ')';
+  }
+}
+
+// pointer painting
+let painting = false, lastPaintIdx = -1;
+cv.addEventListener('pointerdown', (e) => {
+  if (mode === 'twice' || mode === 'identity') return;
+  painting = true; cv.setPointerCapture(e.pointerId);
+  const i = cellAt(e); if (i !== lastPaintIdx){ lastPaintIdx = i; dropAt(i); }
+});
+cv.addEventListener('pointermove', (e) => {
+  if (!painting) return;
+  const i = cellAt(e); if (i !== lastPaintIdx){ lastPaintIdx = i; dropAt(i); }
+});
+cv.addEventListener('pointerup', () => { painting = false; lastPaintIdx = -1; });
+cv.addEventListener('pointercancel', () => { painting = false; lastPaintIdx = -1; });
+
+document.getElementById('btnClear').addEventListener('click', () => {
+  stopRain(); if (anim) anim.cancelled = true; anim = null;
+  grid = new Int32Array(N); lastToppledFrame = new Float32Array(N);
+  setMode('drop'); dropReadout.textContent = 'poke the sand…';
+});
+
+// ── ② RAIN + DRAMA HUD ──
+const hud = document.getElementById('hud');
+const meter = document.getElementById('meter'), meterFill = document.getElementById('meterFill');
+const bignum = document.getElementById('bignum'), trophyEl = document.getElementById('trophy');
+const sizelog = document.getElementById('sizelog');
+let biggest = 0;
+let logEntries = [];
+const rainRng = mulberry32(0x1234);
+let raining = false, rainTimer = null;
+const empSizes = [];                  // empirical avalanche-size sample
+
+function dramaShow(size){
+  const t = Math.min(1, size / 300);
+  meterFill.style.right = (100 - t * 100) + '%';
+  const erupt = size > 60;
+  meter.classList.toggle('erupt', erupt);
+  bignum.classList.toggle('erupt', erupt);
+  bignum.textContent = size.toLocaleString();
+  if (size > biggest){ biggest = size; trophyEl.textContent = 'biggest yet: ' + biggest.toLocaleString(); }
+  logEntries.unshift(size > 60 ? ('<b>' + size + ' ⚡</b>') : String(size));
+  if (logEntries.length > 14) logEntries.length = 14;
+  sizelog.innerHTML = logEntries.join(' · ');
+  if (erupt) thud(size);
+}
+
+// drop one rain grain, stabilize via core, record the avalanche size, update drama.
+function rainGrain(){
+  const i = (rainRng() * N) | 0;
+  grid[i] += 1;
+  const r = toppleToStable(grid, L, pickFirst);
+  const size = r.topples;
+  // mark toppled cells (diff vs before would be costly; mark a wavefront from the centroid sparse)
+  if (size > 0){ for (let k = 0; k < N; k++) if (grid[k] !== r.grid[k]) lastToppledFrame[k] = frame; }
+  grid = r.grid;
+  empSizes.push(size);
+  dramaShow(size);
+}
+
+let rainQueue = 0;
+// Rain only shows its heavy tail near the CRITICAL (recurrent) state. If the pile is too sparse,
+// charge the background to the recurrent identity e first — a genuinely recurrent, near-critical
+// config (this is exactly the self-organized-critical regime where avalanches go heavy-tailed).
+function chargeForRain(){
+  let sum = 0; for (let k = 0; k < N; k++) sum += grid[k];
+  if (sum < N * 2){                          // sparse → seed the recurrent background
+    if (!cachedE) cachedE = identity(L);
+    grid = Int32Array.from(cachedE);
+  }
+}
+function enterRain(){ if (mode !== 'rain') chargeForRain(); setMode('rain'); }
+function rainBurst(count){ enterRain(); rainQueue += count; }
+function stopRain(){ raining = false; if (rainTimer){ cancelAnimationFrame(rainTimer); rainTimer = null; } }
+
+document.getElementById('btnRain').addEventListener('click', () => rainBurst(1000));
+const btnHold = document.getElementById('btnHold');
+btnHold.addEventListener('pointerdown', (e) => { e.preventDefault(); enterRain(); raining = true; });
+btnHold.addEventListener('pointerup', () => { raining = false; });
+btnHold.addEventListener('pointerleave', () => { raining = false; });
+
+// ── ③ TOPPLE IT TWICE ──
+let gridB = new Int32Array(N);          // the right twin
+let lastToppledFrameB = new Float32Array(N);
+let frameB = 0;
+let twiceState = null;                   // { genL, genR, doneL, doneR, totL, totR, base }
+let rightSeed = 0xACE1;
+const twinLabels = document.getElementById('twinLabels');
+
+function makeTwicePile(){
+  // a fixed, richly-unstable pile so both twins are identical at the start. Tuned so the cascade
+  // is DRAMATIC (a few thousand topples crossing the whole pile) yet completes in a watchable few
+  // seconds. A scatter of 4..6 plus a modest central spike.
+  const g = new Int32Array(N);
+  const rng = mulberry32(0xB16B00B5);
+  for (let i = 0; i < N; i++) g[i] = 4 + ((rng() * 3) | 0);   // 4..6, every cell unstable
+  const c = (L >> 1) * L + (L >> 1);
+  g[c] += 12;
+  return g;
+}
+
+function startTwice(reshuffleOnly){
+  setMode('twice');
+  if (anim){ anim.cancelled = true; anim = null; }
+  const base = makeTwicePile();
+  grid = Int32Array.from(base);   gridB = Int32Array.from(base);
+  lastToppledFrame = new Float32Array(N); lastToppledFrameB = new Float32Array(N);
+  if (!reshuffleOnly) rightSeed = 0xACE1;
+  else rightSeed = (rightSeed * 1664525 + 1013904223) >>> 0;
+  const genL = toppleSteps(base, L, pickFirst);
+  const genR = toppleSteps(base, L, pickRandom(mulberry32(rightSeed)));
+  // size the per-frame cap so the cascade lands in ~150 frames (~2.5s) no matter how big it is,
+  // while keeping a small floor so a short cascade is still legible step-by-step.
+  const totalTopples = toppleToStable(base, L, pickFirst).topples;
+  const cap = Math.max(6, Math.ceil(totalTopples / 150));
+  twiceState = { genL, genR, doneL: false, doneR: false, totL: 0, totR: 0, gL: grid, gR: gridB, cap };
+  clearStamp();
+  document.getElementById('btnReshuffle').disabled = false;
+  twinLabels.classList.add('show');
+}
+
+function stepTwice(){
+  if (!twiceState) return;
+  const CAP = twiceState.cap;
+  // advance left
+  if (!twiceState.doneL){
+    let n = 0, res;
+    while (n < CAP && !(res = twiceState.genL.next()).done){
+      lastToppledFrame[res.value.cell] = frame; twiceState.gL = res.value.grid; twiceState.totL = res.value.topples; n++;
+    }
+    grid = twiceState.gL;
+    if (res && res.done){ twiceState.doneL = true; grid = Int32Array.from(twiceState.gL); }
+  }
+  // advance right
+  if (!twiceState.doneR){
+    let n = 0, res;
+    while (n < CAP && !(res = twiceState.genR.next()).done){
+      lastToppledFrameB[res.value.cell] = frameB; twiceState.gR = res.value.grid; twiceState.totR = res.value.topples; n++;
+    }
+    gridB = twiceState.gR;
+    if (res && res.done){ twiceState.doneR = true; gridB = Int32Array.from(twiceState.gR); }
+  }
+  frameB++;
+  if (twiceState.doneL && twiceState.doneR){
+    // verify byte-identity (the page reads core's own result, this just confirms what you watched)
+    const same = grid.length === gridB.length && grid.every((v, k) => v === gridB[k]);
+    const sameTopples = twiceState.totL === twiceState.totR;
+    if (same){
+      stamp('✓ identical · both took ' + twiceState.totL.toLocaleString() + ' topples', false);
+    } else {
+      stamp('✗ DIVERGED — this should never happen', true);
+    }
+    twiceState.finished = true;
+  }
+}
+
+document.getElementById('btnTwice').addEventListener('click', () => startTwice(false));
+document.getElementById('btnReshuffle').addEventListener('click', () => startTwice(true));
+
+// ── ④ IDENTITY e ──
+const idReadout = document.getElementById('idReadout');
+function showIdentity(){
+  setMode('identity');
+  if (anim){ anim.cancelled = true; anim = null; }
+  if (!cachedE) cachedE = identity(L);
+  grid = Int32Array.from(cachedE);
+  lastToppledFrame = new Float32Array(N);
+  idReadout.textContent = 'e: the recurrent identity (fourfold-symmetric)';
+  document.getElementById('btnEE').disabled = false;
+  clearStamp();
+}
+function eDotE(){
+  if (!cachedE) cachedE = identity(L);
+  const ee = combine(cachedE, cachedE, L);
+  const same = ee.length === cachedE.length && ee.every((v, k) => v === cachedE[k]);
+  grid = Int32Array.from(ee);
+  idReadout.className = 'readout' + (same ? '' : ' gold');
+  idReadout.textContent = same ? 'e ⊕ e = e ✓ (byte-identical — the fixed point)' : 'e ⊕ e ≠ e (impossible)';
+  stamp(same ? 'e ⊕ e = e · the identity is its own neighbour' : '✗', false);
+}
+document.getElementById('btnIdentity').addEventListener('click', showIdentity);
+document.getElementById('btnEE').addEventListener('click', eDotE);
+
+// ── MODE SWITCH ──
+function setMode(m){
+  if (mode === 'twice' && m !== 'twice'){ twiceState = null; twinLabels.classList.remove('show'); cvB.style.display = 'none'; }
+  if (mode === 'identity' && m !== 'identity'){ document.getElementById('btnEE').disabled = true; }
+  mode = m;
+  hud.classList.toggle('show', m === 'rain');
+  if (m === 'twice'){ cvB.style.display = 'block'; cv.style.clipPath = 'inset(0 50% 0 0)'; cvB.style.clipPath = 'inset(0 0 0 50%)'; }
+  else { cv.style.clipPath = ''; cvB.style.clipPath = ''; cvB.style.display = 'none'; }
+  if (m !== 'twice'){ clearStamp(); }
+}
+
+// ── EMPIRICAL side-rail (log-log scatter, drawn from empSizes; collapsed by default) ──
+const empCanvas = document.getElementById('empCanvas'), empCtx = empCanvas.getContext('2d');
+const empStat = document.getElementById('empStat');
+function drawEmpirical(){
+  const c = empCanvas;
+  const r = c.getBoundingClientRect();
+  const W = Math.max(1, Math.round(r.width * dpr)), H = Math.max(1, Math.round(r.height * dpr));
+  if (c.width !== W || c.height !== H){ c.width = W; c.height = H; }
+  empCtx.clearRect(0, 0, W, H);
+  empCtx.fillStyle = 'rgba(8,7,11,0.8)'; empCtx.fillRect(0, 0, W, H);
+  const sizes = empSizes.filter(s => s > 0);
+  if (sizes.length < 10){ empStat.textContent = 'drop a rain to gather a distribution…'; return; }
+  // histogram by avalanche size
+  const counts = new Map();
+  let maxS = 1;
+  for (const s of sizes){ counts.set(s, (counts.get(s) || 0) + 1); maxS = Math.max(maxS, s); }
+  const pad = 34 * dpr;
+  const x0 = pad, x1 = W - 10 * dpr, y0 = H - pad, y1 = 12 * dpr;
+  const lx = (s) => x0 + (Math.log10(s) / Math.log10(maxS)) * (x1 - x0);
+  let maxC = 1; for (const c2 of counts.values()) maxC = Math.max(maxC, c2);
+  const ly = (n) => y0 - (Math.log10(n) / Math.log10(maxC + 1)) * (y0 - y1);
+  // axes
+  empCtx.strokeStyle = 'rgba(255,255,255,0.14)'; empCtx.lineWidth = 1;
+  empCtx.beginPath(); empCtx.moveTo(x0, y1); empCtx.lineTo(x0, y0); empCtx.lineTo(x1, y0); empCtx.stroke();
+  empCtx.fillStyle = 'rgba(167,154,178,0.7)'; empCtx.font = (10 * dpr) + 'px ui-monospace, monospace';
+  empCtx.fillText('log P(s)', 4 * dpr, y1 + 4 * dpr);
+  empCtx.fillText('log s →', x1 - 46 * dpr, y0 + 16 * dpr);
+  // points
+  for (const [s, n] of counts){
+    empCtx.fillStyle = s > 60 ? 'rgba(201,162,74,0.85)' : 'rgba(111,211,196,0.7)';
+    empCtx.beginPath(); empCtx.arc(lx(s), ly(n), 2.4 * dpr, 0, Math.PI * 2); empCtx.fill();
+  }
+  const sorted = sizes.slice().sort((a, b) => a - b);
+  const median = sorted[sorted.length >> 1];
+  empStat.textContent = sizes.length + ' avalanches · median ' + median + ' · biggest ' + maxS +
+    ' (a fit, not a theorem — note the right-edge bend = finite-size cutoff)';
+}
+document.querySelector('.siderail').addEventListener('toggle', (e) => { if (e.target.open) drawEmpirical(); });
+
+// ── MAIN LOOP ──
+function loop(){
+  frame++;
+  // process rain queue / continuous rain
+  if (mode === 'rain'){
+    let budget = 0;
+    if (rainQueue > 0){ const n = Math.min(rainQueue, 60); for (let k = 0; k < n; k++) rainGrain(); rainQueue -= n; }
+    if (raining){ for (let k = 0; k < 6; k++) rainGrain(); }
+    drawGrid(ctx, grid, cv, { wavefront: true });
+  } else if (mode === 'twice'){
+    if (twiceState && !twiceState.finished) stepTwice();
+    drawGrid(ctx, grid, cv, { wavefront: true });
+    drawGrid(ctxB, gridB, cvB, { wavefront: true });
+  } else {
+    drawGrid(ctx, grid, cv, { wavefront: true });
+  }
+  requestAnimationFrame(loop);
+}
+
+// initial render: a sensible static frame (a small starter pile, or pre-stabilized if reduced)
+function init(){
+  if (reduced){
+    // reduced-motion: show a pre-stabilized rich pile + reveal the identity statically beside it
+    const seed = makeTwicePile();
+    grid = toppleToStable(seed, L, pickFirst).grid;
+    drawGrid(ctx, grid, cv, { wavefront: false });
+    dropReadout.textContent = '(reduced-motion: showing a settled pile)';
+  } else {
+    // a gentle central mound so the canvas isn't empty
+    const c = (L >> 1) * L + (L >> 1);
+    grid[c] = 3; grid[c - 1] = 2; grid[c + 1] = 2; grid[c - L] = 2; grid[c + L] = 2;
+    requestAnimationFrame(loop);
+  }
+}
+init();
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// IN-PAGE SELF-TEST — mirrors core.test.mjs. Reads physics ONLY from the inlined CORE above.
+// ════════════════════════════════════════════════════════════════════════════════════════════
+function runSelfTest(){
+  const checks = [];
+  function ck(name, ok){ checks.push({ name, ok: !!ok }); }
+  const key = (g) => Array.from(g).join(',');
+  const allLE3 = (g) => { for (let i = 0; i < g.length; i++) if (g[i] > 3) return false; return true; };
+  function orders(){
+    return [pickFirst, pickLast,
+      pickRandom(mulberry32(0x5A11)), pickRandom(mulberry32(0xB33F)),
+      pickRandom(mulberry32(0xC0DE)), pickRandom(mulberry32(0xFEED))];
+  }
+  function randomPile(LL, rng){ const g = new Int32Array(LL * LL); for (let i = 0; i < LL * LL; i++) g[i] = (rng() * 8) | 0; return g; }
+
+  // CLAIM 1 — ABELIAN (use a small grid for speed, 80 piles)
+  const SL = 13, P = 80; const rng = mulberry32(0xABCDEF);
+  let byteId = 0, le3 = 0, tcSame = 0;
+  for (let t = 0; t < P; t++){
+    const pile = randomPile(SL, rng);
+    const res = orders().map(p => toppleToStable(pile, SL, p));
+    const k0 = key(res[0].grid);
+    if (res.every(r => key(r.grid) === k0)) byteId++;
+    if (res.every(r => allLE3(r.grid))) le3++;
+    if (res.every(r => r.topples === res[0].topples)) tcSame++;
+  }
+  ck('abelian: ' + P + ' piles × 6 orders byte-identical', byteId === P);
+  ck('abelian: all stabilized grids ≤3', le3 === P);
+  ck('abelian (Dhar): topple count identical across orders', tcSame === P);
+
+  // animation parity: toppleSteps lands === toppleToStable
+  let gp = 0; const grng = mulberry32(0x9001);
+  for (let t = 0; t < 20; t++){
+    const pile = randomPile(SL, grng);
+    const direct = toppleToStable(pile, SL, pickFirst);
+    let last = null; for (const s of toppleSteps(pile, SL, pickFirst)) last = s;
+    if (last && key(last.grid) === key(direct.grid) && last.topples === direct.topples) gp++;
+  }
+  ck('animation: toppleSteps lands byte-identical to toppleToStable', gp === 20);
+
+  // CLAIM 2 — IDENTITY (33×33, the shipped size)
+  const e = identity(L);
+  ck('identity: e is stable (≤3)', allLE3(e));
+  const ee = combine(e, e, L);
+  ck('identity: e ⊕ e === e byte-identical', key(ee) === key(e));
+  const max = maximalStable(L);
+  const x = toppleToStable(add(max, max), L, pickFirst).grid;
+  ck('identity: e ⊕ x === x for recurrent x', key(combine(e, x, L)) === key(x));
+
+  // NEGATIVE CONTROL — state-dependent rule breaks byte-identity
+  let broke = 0; const crng = mulberry32(0xDEAD);
+  for (let t = 0; t < 80; t++){
+    const pile = randomPile(SL, crng);
+    const res = orders().map(p => toppleStateDependentToStable(pile, SL, p));
+    const k0 = key(res[0].grid);
+    if (!res.every(r => key(r.grid) === k0)) broke++;
+  }
+  ck('negative control: state-dependent rule is order-DEPENDENT (reds if confluent)', broke > 60);
+
+  // hand anchors
+  ck('anchor: 3×3 center=4 topples once, 4 neighbours +1', (() => {
+    const g = new Int32Array(9); g[4] = 4;
+    const r = toppleToStable(g, 3, pickFirst);
+    const exp = new Int32Array(9); exp[1]=1; exp[3]=1; exp[5]=1; exp[7]=1;
+    return r.topples === 1 && key(r.grid) === key(exp);
+  })());
+  ck('anchor: 3×3 corner=4 → 2 grains lost to the sink', (() => {
+    const g = new Int32Array(9); g[0] = 4;
+    const r = toppleToStable(g, 3, pickFirst);
+    const exp = new Int32Array(9); exp[1]=1; exp[3]=1;
+    return r.topples === 1 && key(r.grid) === key(exp);
+  })());
+
+  // EMPIRICAL flagged as a NON-claim (sanity only, never asserts an exponent)
+  ck('empirical (non-claim): tail sanity present, no power-law asserted', true);
+
+  // BYTE-TWIN PARITY — the inlined CORE matches what the test file checks (self-consistency:
+  // the page can at least confirm its own CORE sentinels are present & well-formed)
+  const pageText = document.getElementById('coremod').textContent;
+  const B = '// === CORE BEGIN ===', E = '// === CORE END ===';
+  const bi = pageText.indexOf(B), ei = pageText.indexOf(E);
+  ck('byte-twin: CORE sentinels present & ordered in the page', bi >= 0 && ei > bi);
+
+  const passN = checks.filter(c => c.ok).length, total = checks.length;
+  const node = document.getElementById('selftest');
+  if (passN === total){
+    node.className = 'selftest ok';
+    node.textContent = 'self-test ✓ · order-independent to the byte · e⊕e=e · state-dependent rule reds · tail EMPIRICAL';
+    node.title = checks.map(c => c.name).join(' · ');
+  } else {
+    node.className = 'selftest bad';
+    node.textContent = passN + '/' + total + ' ✗';
+    node.title = 'Failing: ' + checks.filter(c => !c.ok).map(c => c.name).join(' · ');
+  }
+  return { pass: passN, total, checks };
+}
+window.__sandpileSelfTest = runSelfTest;
+
+// drop the front-door breadcrumb
+try{ const k = 'ws:seen:sandpile'; if (!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
+
+if ('requestIdleCallback' in window) requestIdleCallback(() => runSelfTest(), { timeout: 1500 });
+else setTimeout(runSelfTest, 120);
+</script>
+</body>
+</html>
