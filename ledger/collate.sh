@@ -43,3 +43,23 @@ else
   [ -s "$depth_file" ] || printf '0\n' > "$depth_file"
   echo "depth NOT refreshed (no git/HEAD); kept $(cat "$depth_file" 2>/dev/null || echo 0)"
 fi
+
+# ── re-forge the served face: ledger.jsonl + depth.txt just changed, so the
+# STATIC page that inlines them (ledger/face.html) is now stale until rebuilt.
+# Previously collate left this to a manual re-forge, so the served page was
+# chronically behind and `forge --check --all` flagged ledger/face.html STALE
+# (cycle #53). Re-forge here, every cycle, so the changeset the publisher commits
+# carries the up-to-date face.html alongside ledger.jsonl + depth.txt.
+# collate lives in ledger/, so the repo root (where tools/forge lives) is "$dir/..".
+repo_root="$(cd "$dir/.." && pwd)"
+forge="$repo_root/tools/forge/forge.mjs"
+face_src="$dir/face.src.html"
+if [ -f "$forge" ] && [ -f "$face_src" ]; then
+  if node "$forge" "$face_src" >/dev/null 2>&1; then
+    echo "face re-forged: ledger/face.html re-inlines the updated ledger.jsonl + depth.txt"
+  else
+    echo "WARNING: forge run FAILED — ledger/face.html may be STALE (run: node tools/forge/forge.mjs ledger/face.src.html)" >&2
+  fi
+else
+  echo "WARNING: forge or face.src.html absent — ledger/face.html NOT re-forged (forge=$forge)" >&2
+fi
