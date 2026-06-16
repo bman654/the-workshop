@@ -246,7 +246,7 @@ export function verdict(checks) {
 /* The VERIFIED real aggregate targets of ledger/ledger.jsonl, as of this build.
    The Node twin pins to these; if the real file ever changes shape, the twin
    fails loudly and the room must be re-forged. */
-export const CLAIM = { marks: 313, makers: 278, cycles: 77, minCyc: 306, maxCyc: 413 };
+export const CLAIM = { marks: 319, makers: 284, cycles: 78, minCyc: 306, maxCyc: 414 };
 
 /* ── THE ESTATE'S WINGS, by their REAL first-appearance ───────────────────────
    `bornCycle` is the git commit-DEPTH of the commit that first added that wing's
@@ -280,7 +280,8 @@ export const WINGS = [
   { name: 'The Conservatory',     bornCycle: 359 },
   { name: 'The Alchemy Lab',      bornCycle: 374 },
   { name: 'Puzzle Pavilion',      bornCycle: 388 },
-  { name: 'The Tabularium',       bornCycle: 404 }
+  { name: 'The Tabularium',       bornCycle: 404 },
+  { name: 'The Hours',            bornCycle: 414 }
 ];
 
 /* ── estateAt: which wings stand at this cycle ────────────────────────────────

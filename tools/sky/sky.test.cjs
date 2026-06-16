@@ -67,7 +67,8 @@ const FOOTPRINTS = [
   { id: 'arcade',          x: 1046, y: 231, w: 168, h: 116 },
   { id: 'workbench',       x: 520,  y: 589, w: 88,  h: 61 },
   { id: 'undercroft',      x: 698,  y: 517, w: 46,  h: 64 },
-  { id: 'hall-of-mirrors', x: 196,  y: 410, w: 140, h: 97 }  // the optics wing — the feat-stars cluster beside it
+  { id: 'hall-of-mirrors', x: 196,  y: 410, w: 140, h: 97 }, // the optics wing — the feat-stars cluster beside it
+  { id: 'gnomon',          x: 1118, y: 203, w: 142, h: 98 }  // The Hours — the horology wing's open east-park sundial
 ];
 const FURNITURE = [
   { id: 'compass',      x: 74,   y: 82,  w: 92,  h: 92 },
@@ -85,7 +86,7 @@ const STAR_PAD = 12;
    each map to exactly one catalog star (the BIJECTION half that ties to the map). */
 const PLACES_IDS = [
   'verse', 'compositor', 'cartographer', 'sound-garden', 'threshold',
-  'strange-garden', 'firmament', 'daedalus', 'arcade', 'workbench', 'undercroft'
+  'strange-garden', 'firmament', 'daedalus', 'arcade', 'workbench', 'undercroft', 'gnomon'
 ];
 
 function boxHit(s, b) {

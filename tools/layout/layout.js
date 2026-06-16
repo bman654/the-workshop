@@ -119,6 +119,12 @@ var Layout = (function () {
      east grounds; give it its own east-band sub-region distinct from the western
      glasshouses so the two glass wings don't fight for one block. */
   GROUNDS_WINGS.conservatory_band = { x: 1006, y: 548, w: 212, h: 150 };  // pulled W off the SE corner toward the working core
+  /* HOROLOGY — the estate's timekeeping garden (The Hours' master sundial). Set in
+     the OPEN upper-right park band along the east edge, where the sun sweeps the
+     whole day across an unobstructed sky — a sundial wants open ground. Its own
+     sub-region (verified star/footprint/furniture/pool-clear by hours.test.cjs's
+     live Layout.solve) so the gnomon never crowds amusements or a catalog star. */
+  GROUNDS_WINGS.horology = { x: 1100, y: 152, w: 178, h: 200 };
 
   /* ── WING_META: display label, representative accent (for tint + engraved
      label), and optional grows:N reserved-lot count. An unknown wing is allowed
@@ -133,7 +139,8 @@ var Layout = (function () {
     number:      { label: 'THE NUMBER WING',    accent: '#c9a24a' },
     amusements:  { label: 'AMUSEMENTS',         accent: '#37f7e0' },
     works:       { label: 'THE WORKS',          accent: '#d9a441' },
-    conservatory:{ label: 'LIVING-SYSTEMS WING', accent: '#86d39a' }
+    conservatory:{ label: 'LIVING-SYSTEMS WING', accent: '#86d39a' },
+    horology:    { label: 'HOROLOGY',           accent: '#e6bd6f' }
   };
   function wingLabel(slug) {
     if (WING_META[slug] && WING_META[slug].label) return WING_META[slug].label;

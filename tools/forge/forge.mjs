@@ -213,9 +213,16 @@ function auditSeen(root, strict) {
     return 1;
   }
   const src = readText(srcFile);
-  // Restrict to the PLACES array body so footer/anchor hrefs don't leak in.
+  // Restrict to the PLACES array BODY only. Bounding at the array's closing `];`
+  // matters: parsePlaces lazily pairs each `id:` with the NEXT `href:`, so any
+  // `id:"sky:"+wingId`-style construct in the rendering code AFTER the array would
+  // otherwise steal a downstream href and manufacture a phantom room. (Adding a
+  // PLACES entry shifts the id/href pairing parity and can expose this — caught
+  // #71 when the new gnomon entry conjured a bogus `sky:` → hours/index.html row.)
   const start = src.indexOf('const PLACES');
-  const slice = start >= 0 ? src.slice(start) : src;
+  let slice = start >= 0 ? src.slice(start) : src;
+  const end = slice.indexOf('\n];');
+  if (end >= 0) slice = slice.slice(0, end);
   const places = parsePlaces(slice);
   if (!places.length) {
     console.error('forge --audit-seen: parsed 0 PLACES entries — parser may be stale.');
