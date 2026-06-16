@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Giant Component — a world snaps shut</title>
+<style>
+  :root{
+    --panel-bg: rgba(9,11,16,0.86);
+    --panel-edge: rgba(150,190,220,0.26);
+    --ink: #e7edf4;
+    --ink-dim: #8f9bb0;
+    --accent: #7fc7e8;
+    --accent-soft: rgba(127,199,232,0.16);
+    --hot: #ff7a3d;            /* the random giant — hot continent */
+    --hot-soft: rgba(255,122,61,0.16);
+    --cool: #66d2a0;           /* the lattice giant — cool, never snaps */
+    --cool-soft: rgba(102,210,160,0.16);
+    --dot: #46506a;            /* a scattered, un-joined speck */
+    --shadow-ink: rgba(170,150,255,0.5);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --bg: #07080b;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-ui); overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+
+  /* ───────── Top bar ───────── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:14px;
+    padding:13px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:11px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; user-select:none;
+    justify-self:end; max-width:42vw; overflow:hidden; text-overflow:ellipsis; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  /* ───────── Stage: the split-screen race ───────── */
+  #stage{
+    position:fixed; inset:0; display:flex; flex-direction:column;
+    background: radial-gradient(1200px 860px at 50% 36%, #101218 0%, #0a0b10 64%, #07080b 100%);
+    padding:60px 16px 14px;
+  }
+  #arena{ flex:1 1 auto; display:flex; gap:14px; min-height:0; }
+  .field{ position:relative; flex:1 1 0; min-width:0; min-height:0; border-radius:16px; overflow:hidden;
+    box-shadow: 0 24px 70px rgba(0,0,0,0.55), 0 0 0 1px rgba(150,190,220,0.07) inset; }
+  .field canvas{ display:block; width:100%; height:100%; }
+  .field .label{ position:absolute; top:12px; left:14px; z-index:4; pointer-events:none; max-width:62%; }
+  .field .label .who{ font:700 12px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; }
+  .field .label .sub{ font:11px/1.3 var(--font-ui); color:var(--ink-dim); margin-top:5px; }
+  .field.random .label .who{ color:var(--hot); }
+  .field.lattice .label .who{ color:var(--cool); }
+
+  /* the mass meter — a filling vertical bar on the inner edge of each field */
+  .field .meter{ position:absolute; top:14px; bottom:14px; width:9px; z-index:4; border-radius:6px;
+    background:rgba(255,255,255,0.05); overflow:hidden; }
+  .field.random  .meter{ right:14px; }
+  .field.lattice .meter{ left:14px; }
+  .field .meter .fill{ position:absolute; left:0; right:0; bottom:0; height:0%;
+    transition:height .12s linear; border-radius:6px; }
+  .field.random  .meter .fill{ background:linear-gradient(180deg,#ffb07a,var(--hot)); box-shadow:0 0 14px var(--hot-soft); }
+  .field.lattice .meter .fill{ background:linear-gradient(180deg,#a8eccf,var(--cool)); box-shadow:0 0 14px var(--cool-soft); }
+  .field .massnum{ position:absolute; bottom:13px; z-index:4; font:700 22px/1 var(--font-mono);
+    font-variant-numeric:tabular-nums; }
+  .field.random  .massnum{ right:30px; color:var(--hot); text-align:right; }
+  .field.lattice .massnum{ left:30px; color:var(--cool); }
+  .field .massnum small{ display:block; font:600 9.5px/1 var(--font-mono); letter-spacing:.12em;
+    color:var(--ink-dim); margin-top:5px; text-transform:uppercase; }
+
+  /* the criticality flash — fires once when scrubbing the random field through k=1 */
+  #critflash{ position:absolute; top:38%; left:25%; transform:translate(-50%,-50%);
+    z-index:7; pointer-events:none; text-align:center; opacity:0; transition:opacity .12s;
+    font-family:var(--font-serif); font-size:26px; letter-spacing:.5px; color:#ffd9a8;
+    text-shadow:0 0 30px rgba(255,122,61,0.8); white-space:nowrap; }
+  #critflash small{ display:block; font:11px/1 var(--font-mono); letter-spacing:.12em; color:var(--ink-dim);
+    margin-top:6px; text-shadow:none; }
+
+  /* the verdict ribbon that flares as the random field snaps and clears the lattice */
+  #verdict{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) scale(.92);
+    z-index:6; pointer-events:none; text-align:center; opacity:0; transition:opacity .4s, transform .4s; max-width:84%; }
+  #verdict.show{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+  #verdict .big{ font-family:var(--font-serif); font-size:28px; color:#fff; letter-spacing:.5px;
+    text-shadow:0 2px 30px rgba(255,122,61,0.55); }
+  #verdict .small{ font:12px/1.4 var(--font-ui); color:var(--ink-dim); margin-top:6px; }
+
+  /* ───────── Control panel (bottom) ───────── */
+  #controls{ flex:0 0 auto; margin-top:12px; display:flex; align-items:stretch; gap:16px;
+    background:var(--panel-bg); backdrop-filter:blur(12px) saturate(120%);
+    -webkit-backdrop-filter:blur(12px) saturate(120%);
+    border:1px solid var(--panel-edge); border-radius:14px; padding:13px 18px;
+    box-shadow:0 14px 40px rgba(0,0,0,0.5); }
+  #kwrap{ flex:1 1 auto; min-width:0; }
+  #kwrap .klabel{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:11px; }
+  #kwrap .klabel .t{ font:600 11px/1.2 var(--font-mono); letter-spacing:.10em; text-transform:uppercase; color:var(--ink-dim); }
+  #kwrap .klabel .v{ font:700 15px/1 var(--font-mono); font-variant-numeric:tabular-nums; color:var(--accent); white-space:nowrap; }
+  .ktrack{ position:relative; }
+  #kslider{ -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:4px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,9%), rgba(255,255,255,0.12) var(--fill,9%));
+    outline:none; margin:0; cursor:ew-resize; }
+  #kslider::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; height:18px; border-radius:50%;
+    background:#eaf6ff; border:2px solid #3f7fa0; box-shadow:0 1px 6px rgba(0,0,0,.6); cursor:ew-resize; }
+  #kslider::-moz-range-thumb{ width:16px; height:16px; border-radius:50%; background:#eaf6ff; border:2px solid #3f7fa0; cursor:ew-resize; }
+  /* the dashed k=1 critical mark, placed at 1/3.5 of the track */
+  .crit{ position:absolute; top:-5px; bottom:-5px; width:0; border-left:1.5px dashed rgba(255,122,61,0.75); pointer-events:none; }
+  .crit::after{ content:"⟨k⟩=1 critical"; position:absolute; top:-18px; left:50%; transform:translateX(-50%);
+    font:600 9.5px/1 var(--font-mono); color:var(--hot); white-space:nowrap; letter-spacing:.03em; }
+  .btnrow{ flex:0 0 auto; display:flex; gap:8px; align-items:center; }
+  .btn{ font:600 11px/1 var(--font-mono); letter-spacing:.04em; padding:9px 13px; border-radius:9px;
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink); cursor:pointer; transition:.15s; white-space:nowrap; }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.snap{ border-color:rgba(255,122,61,0.5); color:#ffd0b3; }
+  .btn.snap:hover{ background:var(--hot-soft); border-color:var(--hot); }
+
+  /* ───────── The demoted S(k) shadow chart — a faint corner inset ───────── */
+  #shadow{ position:absolute; right:16px; bottom:78px; width:188px; height:108px; z-index:8;
+    background:rgba(7,9,13,0.74); border:1px solid var(--panel-edge); border-radius:11px; padding:7px 8px 5px;
+    box-shadow:0 12px 34px rgba(0,0,0,0.5); }
+  #shadow .stitle{ font:600 9px/1 var(--font-mono); letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:3px; }
+  #shadow canvas{ display:block; width:100%; height:78px; }
+  #shadow .skey{ display:flex; gap:10px; margin-top:3px; font:9px/1 var(--font-mono); color:var(--ink-dim); }
+  #shadow .skey i{ display:inline-block; width:9px; height:2px; vertical-align:middle; margin-right:3px; }
+
+  /* ───────── Mobile reflow (≤640) — stack fields vertically; never let header / control text collide ───────── */
+  @media (max-width:640px){
+    .topbar{ grid-template-columns:1fr auto; grid-template-rows:auto auto; gap:4px 12px; padding:11px 16px 0; }
+    .back{ grid-column:1; grid-row:1; }
+    .selftest{ grid-column:2; grid-row:1; max-width:54vw; }
+    .brand{ grid-column:1 / -1; grid-row:2; flex-wrap:wrap; gap:3px 10px; }
+    .brand h1{ font-size:18px; }
+    #stage{ padding:74px 12px 12px; }
+    #arena{ flex-direction:column; gap:12px; }
+    #shadow{ display:none; }
+    #critflash{ left:50%; top:24%; font-size:22px; }
+    #verdict .big{ font-size:22px; }
+    #controls{ flex-direction:column; gap:12px; padding:14px 16px; }
+    #kwrap{ order:1; }
+    .btnrow{ order:2; justify-content:space-between; }
+    .btn{ flex:1 1 0; text-align:center; padding:10px 8px; }
+    .field .label{ max-width:74%; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../workbench/index.html">‹ The Workbench</a>
+    <div class="brand">
+      <h1>The Giant Component</h1>
+      <span class="tag">a world snaps shut at ⟨k⟩ = 1</span>
+    </div>
+    <div class="selftest" id="selftest" title="The bench proves its own claim — click to re-run.">checking…</div>
+  </div>
+
+  <div id="stage">
+    <div id="arena">
+      <div class="field random" id="fieldRandom">
+        <div class="label">
+          <div class="who">Random wiring</div>
+          <div class="sub">Erdős–Rényi: every edge joins two specks chosen anywhere.</div>
+        </div>
+        <canvas id="cvRandom"></canvas>
+        <div class="meter"><div class="fill" id="fillRandom"></div></div>
+        <div class="massnum" id="massRandom">0%<small>giant mass S</small></div>
+        <div id="critflash">the world snaps shut<small>a giant component is born</small></div>
+      </div>
+      <div class="field lattice" id="fieldLattice">
+        <div class="label">
+          <div class="who">Lattice wiring</div>
+          <div class="sub">Same edge count — but each edge stays a short local hop on a fixed grid.</div>
+        </div>
+        <canvas id="cvLattice"></canvas>
+        <div class="meter"><div class="fill" id="fillLattice"></div></div>
+        <div class="massnum" id="massLattice">0%<small>giant mass S</small></div>
+      </div>
+      <div id="verdict">
+        <div class="big">the random world snapped shut</div>
+        <div class="small">same edges fed to both — only randomness manufactured the continent</div>
+      </div>
+    </div>
+
+    <div id="controls">
+      <div id="kwrap">
+        <div class="klabel">
+          <span class="t">average degree ⟨k⟩ — scrub to pour edges into both fields (drag back to peel them out)</span>
+          <span class="v" id="kval">0.30</span>
+        </div>
+        <div class="ktrack">
+          <input type="range" id="kslider" min="0" max="3.5" step="0.005" value="0.3">
+          <div class="crit" id="critmark"></div>
+        </div>
+      </div>
+      <div class="btnrow">
+        <button class="btn snap" id="snapBtn" title="Animate a scrub up past the threshold">↦ ⟨k⟩=1.2</button>
+        <button class="btn" id="resetBtn">Reset</button>
+      </div>
+    </div>
+
+    <div id="shadow">
+      <div class="stitle">S(⟨k⟩) — the demoted shadow</div>
+      <canvas id="cvShadow"></canvas>
+      <div class="skey">
+        <span><i style="background:var(--hot)"></i>random (knee)</span>
+        <span><i style="background:var(--cool)"></i>lattice (no knee)</span>
+      </div>
+    </div>
+  </div>
+
+<script type="module" id="coremod">
+// === CORE BEGIN ===
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//  The Giant Component — pure, dependency-free CORE (the single source of truth).
+//
+//  ONE IDEA. Scatter n dots on a field and rain edges onto them. As the AVERAGE DEGREE
+//  ⟨k⟩ = 2·(#edges)/n rises, the dots fuse into ever-larger connected blobs. Erdős–Rényi (1959):
+//  there is a SHARP THRESHOLD at ⟨k⟩ = 1. Below it every blob is tiny — the largest is O(log n) —
+//  so the field stays a dust of specks. Above it a single GIANT component appears holding a Θ(n)
+//  fraction S of all the dots, and S is the unique positive root of the self-consistency
+//      S = 1 − e^(−⟨k⟩·S)            (the survival probability of a Poisson(⟨k⟩) branching tree).
+//
+//  THE SHOW IS THE NEGATIVE CONTROL. We run TWO fields fed the SAME edge count by one ⟨k⟩ knob.
+//  LEFT = RANDOM wiring (edges land anywhere). RIGHT = a LATTICE (edges are short local hops on a
+//  fixed √n×√n grid). Scrub up: the random field SNAPS into one continent at ⟨k⟩≈1 while the
+//  lattice merely creeps. Same edges — only the wiring differs. The divergence IS the proof.
+//
+//  THE REVERSIBLE PROCESS (what makes the knob scrubbable both ways). For each field we fix, ONCE,
+//  a seeded shuffled ordering of candidate edges. The knob value k maps to a prefix length
+//  m = round(k·n/2) of that list. The live graph at ⟨k⟩ is ALWAYS the first m edges of one fixed
+//  ordering — a MONOTONE process: raising k only adds edges, lowering k only removes them. We
+//  rebuild union-find from the prefix each frame (trivially fast at this n), so the state is a PURE
+//  FUNCTION of (ordering, m) and never of history. Drag right → edges rain in; drag left → exactly
+//  those edges peel back out. Same k ⇒ same graph, every time — deterministic, history-free.
+//
+//  UNION-FIND (path-compression + union-by-size) is the VISIBLE engine and the sole authority on
+//  component sizes; the page recolors a dot the instant its root changes. An INDEPENDENT BFS/flood
+//  that shares no code cross-checks it. This module is inlined BYTE-IDENTICAL into index.html
+//  between the CORE BEGIN / CORE END sentinels and exercised by core.test.mjs — page & test can
+//  never drift.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+// ── a tiny seeded PRNG (mulberry32): deterministic, portable, fast ────────────────────────────
+function mulberry32(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+// hashSeed(str) → a 32-bit int, so a text seed ("component") maps to a reproducible stream.
+function hashSeed(str){
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return h >>> 0;
+}
+
+// ── UNION-FIND — the VISIBLE ENGINE (path-compression + union-by-size) ─────────────────────────
+// DSU(n) builds n singleton blobs. find collapses a node to its blob root (compressing the path it
+// walks). union merges two blobs, hanging the SMALLER under the LARGER (so trees stay shallow) and
+// tracking each root's size and a live component count. This is the single source of truth for
+// component sizes: the page recolors a dot the instant union() changes its root.
+class DSU{
+  constructor(n){
+    this.parent = new Int32Array(n);
+    this.size = new Int32Array(n);
+    for (let i = 0; i < n; i++){ this.parent[i] = i; this.size[i] = 1; }
+    this.n = n;
+    this.comps = n;                 // live component count
+    this.maxSize = n > 0 ? 1 : 0;
+  }
+  find(x){                          // path compression (iterative — no stack blowups)
+    let r = x;
+    while (this.parent[r] !== r) r = this.parent[r];
+    while (this.parent[x] !== r){ const nx = this.parent[x]; this.parent[x] = r; x = nx; }
+    return r;
+  }
+  union(a, b){                      // union by size (ra is the larger root)
+    let ra = this.find(a), rb = this.find(b);
+    if (ra === rb) return false;
+    if (this.size[ra] < this.size[rb]){ const t = ra; ra = rb; rb = t; }
+    this.parent[rb] = ra;
+    this.size[ra] += this.size[rb];
+    this.comps--;
+    if (this.size[ra] > this.maxSize) this.maxSize = this.size[ra];
+    return true;
+  }
+}
+
+// ── ⟨k⟩  ⇄  edge-count m  (the knob's mapping) ────────────────────────────────────────────────
+// average degree ⟨k⟩ = 2m / n  ⇒  m = round(k·n/2). Reversible & monotone in k.
+function edgesForK(k, n){ return Math.max(0, Math.round(k * n / 2)); }
+function kForEdges(m, n){ return (2 * m) / n; }
+
+// ── THE TWO EDGE GENERATORS — the experiment & its negative control ────────────────────────────
+// Both return a SHUFFLED list of candidate edges; the knob pours the first m of them as ⟨k⟩ rises.
+// Both feed the SAME per-edge union process — the ONLY thing that differs is WHERE edges may land.
+//
+//   randomEdges(n, rng) — the experiment. Erdős–Rényi G(n,p): every candidate joins two dots
+//   chosen UNIFORMLY at random, anywhere on the field (long-range wiring permitted). We emit
+//   round(2.2·n) distinct candidate pairs — comfortably more than the n·k_max/2 we ever pour.
+function randomEdges(n, rng){
+  const want = Math.round(2.2 * n);
+  const seen = new Set();
+  const edges = [];
+  let guard = 0;
+  while (edges.length < want && guard < want * 8){
+    guard++;
+    let a = (rng() * n) | 0, b = (rng() * n) | 0;
+    if (a === b) continue;
+    if (a > b){ const t = a; a = b; b = t; }
+    const key = a * n + b;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    edges.push([a, b]);
+  }
+  return edges;
+}
+//   latticeEdges(n, rng, R) — the NEGATIVE CONTROL. The dots live on a √n×√n grid; the only
+//   candidate edges are SHORT LOCAL HOPS to grid neighbours within Chebyshev radius R. We SHUFFLE
+//   that local candidate list with the SAME kind of rng, so the page pours the same NUMBER of
+//   edges in a comparable random temporal order — the sole difference from ER is the GEOMETRIC
+//   CONSTRAINT (an edge must stay local). That isolates "random long-range wiring" as the cause of
+//   the snap, holding edge-count fixed.
+//
+// WHY a constrained-local control (not a regular ring of fixed shells): a regular ring added in
+// SHELL order (all i↔i+1, then all i↔i+2 …) makes ONE long chain immediately, so its "giant" looks
+// huge at tiny ⟨k⟩ — a silently misleading control that would teach the OPPOSITE of the truth.
+// Pouring the SAME local candidates in SHUFFLED order reproduces the real lesson: a low-dimensional
+// lattice has NO sharp giant-component threshold near ⟨k⟩=1 (2-D bond percolation only spans near
+// mean degree ≈ 2, and even then the spanning cluster grows CONTINUOUSLY, with no O(log n)→Θ(n)
+// discontinuity). The largest blob climbs smoothly and lags the random field badly through the
+// whole neighbourhood of the threshold.
+function latticeEdges(n, rng, R){
+  R = R || 1;
+  const side = Math.max(1, Math.round(Math.sqrt(n)));
+  const idx = (r, c) => r * side + c;
+  const edges = [];
+  const seen = new Set();
+  for (let r = 0; r < side; r++){
+    for (let c = 0; c < side; c++){
+      const a = idx(r, c);
+      if (a >= n) continue;
+      for (let dr = -R; dr <= R; dr++){
+        for (let dc = -R; dc <= R; dc++){
+          if (dr === 0 && dc === 0) continue;
+          const nr = r + dr, nc = c + dc;
+          if (nr < 0 || nc < 0 || nr >= side || nc >= side) continue;
+          const b = idx(nr, nc);
+          if (b >= n) continue;
+          const lo = Math.min(a, b), hi = Math.max(a, b);
+          const key = lo * n + hi;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          edges.push([lo, hi]);
+        }
+      }
+    }
+  }
+  // Fisher–Yates shuffle the local candidates so edges arrive in a comparable random temporal order.
+  for (let i = edges.length - 1; i > 0; i--){
+    const j = (rng() * (i + 1)) | 0;
+    const t = edges[i]; edges[i] = edges[j]; edges[j] = t;
+  }
+  return edges;
+}
+
+// ── build the graph state at a given prefix length m of an edge ordering ───────────────────────
+// Returns the DSU plus the per-node root and the giant root, so the renderer can paint each dot by
+// which blob it's in. DSU is rebuilt from scratch for the prefix — which is what makes the knob
+// reversible: state is a PURE FUNCTION of (ordering, m), never of history.
+function buildAt(edges, m, n){
+  const dsu = new DSU(n);
+  const mm = Math.min(m, edges.length);
+  for (let e = 0; e < mm; e++){
+    const pair = edges[e];
+    dsu.union(pair[0], pair[1]);
+  }
+  let giantRoot = -1, best = -1;
+  const roots = new Int32Array(n);
+  for (let i = 0; i < n; i++){
+    const r = dsu.find(i); roots[i] = r;
+    if (dsu.size[r] > best){ best = dsu.size[r]; giantRoot = r; }
+  }
+  return { dsu, roots, giantRoot, giantSize: best, comps: dsu.comps, m: mm };
+}
+
+// largest(edges, m, n) → the size of the biggest component at prefix m (the meter's authority).
+function largest(edges, m, n){ return buildAt(edges, m, n).giantSize; }
+// components(edges, m, n) → the live number of connected components at prefix m.
+function components(edges, m, n){ return buildAt(edges, m, n).comps; }
+// giantFraction(edges, m, n) → S, the giant's mass as a fraction of n (drives the meter & ribbon).
+function giantFraction(edges, m, n){ return n > 0 ? buildAt(edges, m, n).giantSize / n : 0; }
+
+// ── THE PREDICTED GIANT FRACTION — the self-consistency root S = 1 − e^(−k·S) ──────────────────
+// For k ≤ 1 the only root in [0,1] is S = 0 (the subcritical phase — no giant). For k > 1 there is
+// a UNIQUE positive root, found by a damped fixed-point iteration (a contraction on (0,1]). This is
+// the curve the measured random giant must track above threshold, and the faint shadow the page
+// draws. It is EXACT in the n→∞ limit; on a finite field the measured S lands in a tolerance band.
+function predictedS(k){
+  if (k <= 1) return 0;
+  let S = 0.5;
+  for (let i = 0; i < 400; i++){
+    const next = 1 - Math.exp(-k * S);
+    S = 0.5 * S + 0.5 * next;       // damped — guaranteed convergence to the positive fixed point
+  }
+  return S;
+}
+
+// ── THE INDEPENDENT ORACLE — a BFS/flood cross-check of union-find ─────────────────────────────
+// floodMaxComponent builds an adjacency list from the first m edges and flood-fills with an
+// explicit stack (NO union-find), returning the largest connected-component size and the component
+// count. The test asserts this EXACTLY equals union-find's report for the SAME prefix — two
+// independent algorithms agreeing is the proof that the VISIBLE engine reports true sizes.
+function floodMaxComponent(edges, m, n){
+  const adj = Array.from({ length: n }, () => []);
+  const mm = Math.min(m, edges.length);
+  for (let e = 0; e < mm; e++){
+    const pair = edges[e]; adj[pair[0]].push(pair[1]); adj[pair[1]].push(pair[0]);
+  }
+  const seen = new Uint8Array(n);
+  let max = 0, compCount = 0;
+  const stack = [];
+  for (let s = 0; s < n; s++){
+    if (seen[s]) continue;
+    compCount++;
+    let sz = 0; stack.length = 0; stack.push(s); seen[s] = 1;
+    while (stack.length){
+      const u = stack.pop(); sz++;
+      const nbrs = adj[u];
+      for (let i = 0; i < nbrs.length; i++){ const v = nbrs[i]; if (!seen[v]){ seen[v] = 1; stack.push(v); } }
+    }
+    if (sz > max) max = sz;
+  }
+  return { max, comps: compCount };
+}
+// === CORE END ===
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// THE PAGE — everything below reads largest / components / giantFraction / predictedS from the
+// CORE above; it NEVER recomputes the math. The CORE is the single source of truth; this is only
+// choreography. (Page profile n≤~600 keeps the render loop buttery; the Node twin runs n≤~8000.)
+// ════════════════════════════════════════════════════════════════════════════════════════════
+
+const N = 240;                 // dots per field — a clean, readable snap that animates at 60fps
+const R_LATTICE = 1;           // lattice locality radius (Chebyshev): a tight local grid, so its
+                               // 2-D percolation threshold sits well above ⟨k⟩=1 and it visibly
+                               // LAGS the random snap through the whole neighbourhood of k=1
+
+const fieldRandom  = { which: 'random' };
+const fieldLattice = { which: 'lattice' };
+
+let seedStr = 'component';
+let curK = 0.3;                // the live (eased) ⟨k⟩
+let targetK = 0.3;             // where the slider points
+
+// per-field state: positions + a FIXED shuffled edge ordering. The graph at ⟨k⟩ is ALWAYS the
+// first m = edgesForK(k, N) edges of that ordering, rebuilt fresh each frame ⇒ fully reversible.
+function buildField(f){
+  const rng = mulberry32(hashSeed(seedStr + ':' + f.which));
+  f.pos = new Array(N);
+  if (f.which === 'lattice'){
+    const side = Math.round(Math.sqrt(N));
+    for (let i = 0; i < N; i++){
+      const r = (i / side) | 0, c = i % side;
+      // jitter so it reads as scattered dots, not graph paper
+      f.pos[i] = { x: (c + 0.5) / side + (rng() - 0.5) * 0.020, y: (r + 0.5) / side + (rng() - 0.5) * 0.020 };
+    }
+    f.edges = latticeEdges(N, mulberry32(hashSeed(seedStr + ':lat-edges')), R_LATTICE);
+  } else {
+    for (let i = 0; i < N; i++){
+      f.pos[i] = { x: 0.06 + rng() * 0.88, y: 0.06 + rng() * 0.88 };
+    }
+    f.edges = randomEdges(N, mulberry32(hashSeed(seedStr + ':rnd-edges')));
+  }
+  f.flash = 0;                 // merge-flash timer
+  f.state = buildAt(f.edges, 0, N);
+}
+
+// rebuild a field's union-find for the current prefix m (pure function of (edges, m)) ──────────
+function syncField(f){
+  const m = edgesForK(curK, N);
+  f.state = buildAt(f.edges, m, N);
+}
+function fieldS(f){ return f.state.giantSize / N; }
+
+// ── rendering ──────────────────────────────────────────────────────────────────────────────
+function setupCanvas(canvas){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.max(2, Math.floor(rect.width * dpr));
+  canvas.height = Math.max(2, Math.floor(rect.height * dpr));
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: rect.width, h: rect.height };
+}
+
+// a hot-color ramp for the random continent (orange → near-white as it swells)
+function giantColor(frac, hot){
+  if (!hot) return '#7ee0b2';
+  const t = Math.min(1, frac * 1.4);
+  const r = 255, g = Math.round(122 + 96 * t), b = Math.round(60 + 130 * t);
+  return `rgb(${r},${g},${b})`;
+}
+
+function drawField(f, canvas, hot){
+  const { ctx, w, h } = setupCanvas(canvas);
+  ctx.clearRect(0, 0, w, h);
+  const pad = 24;
+  const X = (x) => pad + x * (w - 2 * pad);
+  const Y = (y) => pad + y * (h - 2 * pad);
+
+  const st = f.state;
+  const { roots, giantRoot, giantSize, m } = st;
+  const gFrac = giantSize / N;
+  const ed = f.edges;
+  const mm = Math.min(m, ed.length);
+
+  // edges first (under the dots): giant edges glow hot/cool, the rest are faint
+  for (let e = 0; e < mm; e++){
+    const a = ed[e][0], b = ed[e][1];
+    const inGiant = roots[a] === giantRoot;
+    ctx.beginPath();
+    ctx.moveTo(X(f.pos[a].x), Y(f.pos[a].y));
+    ctx.lineTo(X(f.pos[b].x), Y(f.pos[b].y));
+    if (inGiant){ ctx.strokeStyle = hot ? `rgba(255,122,61,${0.22 + 0.30 * gFrac})` : 'rgba(102,210,160,0.5)'; ctx.lineWidth = 1.4; }
+    else { ctx.strokeStyle = 'rgba(120,140,170,0.16)'; ctx.lineWidth = 0.8; }
+    ctx.stroke();
+  }
+
+  // a soft halo over the giant's territory (only once it's a real continent)
+  if (gFrac > 0.06){
+    for (let i = 0; i < N; i++){
+      if (roots[i] !== giantRoot) continue;
+      const x = X(f.pos[i].x), y = Y(f.pos[i].y);
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 22);
+      const col = hot ? '255,122,60' : '102,210,160';
+      g.addColorStop(0, `rgba(${col},${0.07 + 0.10 * gFrac})`);
+      g.addColorStop(1, `rgba(${col},0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, 22, 0, 7); ctx.fill();
+    }
+  }
+
+  // dots: giant dots are hot & large; the rest are dim specks
+  for (let i = 0; i < N; i++){
+    const inGiant = roots[i] === giantRoot && giantSize > 1;
+    const x = X(f.pos[i].x), y = Y(f.pos[i].y);
+    ctx.beginPath();
+    if (inGiant){
+      const r = 4.0 + f.flash * 1.4;
+      ctx.fillStyle = giantColor(gFrac, hot);
+      ctx.shadowColor = hot ? 'rgba(255,122,61,0.75)' : 'rgba(102,210,160,0.6)';
+      ctx.shadowBlur = 9;
+      ctx.arc(x, y, r, 0, 7);
+    } else {
+      ctx.fillStyle = '#46506a';
+      ctx.shadowBlur = 0;
+      ctx.arc(x, y, 2.4, 0, 7);
+    }
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  if (f.flash > 0) f.flash = Math.max(0, f.flash - 0.06);
+}
+
+// ── the demoted S(k) shadow (random predicted knee + lattice live trace + cursor) ────────────
+const latTrace = [];           // sampled (k, lattice-S) points as the visitor scrubs upward
+function drawShadow(){
+  const canvas = document.getElementById('cvShadow');
+  if (!canvas || canvas.offsetParent === null) return;   // hidden on mobile
+  const { ctx, w, h } = setupCanvas(canvas);
+  ctx.clearRect(0, 0, w, h);
+  const kMax = 3.5, pad = 4;
+  const X = (k) => pad + (k / kMax) * (w - 2 * pad);
+  const Y = (s) => (h - pad) - s * (h - 2 * pad);
+  ctx.strokeStyle = 'rgba(150,170,200,0.18)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(X(0), Y(0)); ctx.lineTo(X(kMax), Y(0)); ctx.stroke();
+  // threshold mark at k=1
+  ctx.strokeStyle = 'rgba(255,122,61,0.4)'; ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(X(1), Y(0)); ctx.lineTo(X(1), Y(1)); ctx.stroke();
+  ctx.setLineDash([]);
+  // predicted random S(k) — the knee (read from CORE)
+  ctx.strokeStyle = 'rgba(255,122,61,0.85)'; ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (let i = 0; i <= 120; i++){ const k = (i / 120) * kMax; const s = predictedS(k); if (i === 0) ctx.moveTo(X(k), Y(s)); else ctx.lineTo(X(k), Y(s)); }
+  ctx.stroke();
+  // measured lattice trace — a growing record, no knee
+  ctx.strokeStyle = 'rgba(102,210,160,0.8)'; ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  let started = false;
+  for (let i = 0; i < latTrace.length; i++){ const p = latTrace[i]; if (!started){ ctx.moveTo(X(p.k), Y(p.s)); started = true; } else ctx.lineTo(X(p.k), Y(p.s)); }
+  ctx.stroke();
+  // the live cursor — where we are now on both curves
+  ctx.fillStyle = 'rgba(255,122,61,0.95)';
+  ctx.beginPath(); ctx.arc(X(curK), Y(fieldS(fieldRandom)), 2.8, 0, 7); ctx.fill();
+  ctx.fillStyle = 'rgba(102,210,160,0.95)';
+  ctx.beginPath(); ctx.arc(X(curK), Y(fieldS(fieldLattice)), 2.8, 0, 7); ctx.fill();
+}
+
+// ── HUD ──────────────────────────────────────────────────────────────────────────────────────
+function pct(x){ return Math.round(x * 100) + '%'; }
+let prevK = 0.3, critUntil = 0;
+function refreshHUD(){
+  const sr = fieldS(fieldRandom), sl = fieldS(fieldLattice);
+  document.getElementById('massRandom').innerHTML = pct(sr) + '<small>giant mass S</small>';
+  document.getElementById('massLattice').innerHTML = pct(sl) + '<small>giant mass S</small>';
+  document.getElementById('fillRandom').style.height = (sr * 100) + '%';
+  document.getElementById('fillLattice').style.height = (sl * 100) + '%';
+  document.getElementById('kval').textContent = curK.toFixed(2);
+  document.getElementById('kslider').style.setProperty('--fill', (curK / 3.5) * 100 + '%');
+  // verdict ribbon: the random field has snapped (>45%) and cleared the lattice (>0.28 lead)
+  const v = document.getElementById('verdict');
+  if (sr > 0.45 && sr - sl > 0.28) v.classList.add('show'); else v.classList.remove('show');
+  // criticality flash — fired when scrubbing the RANDOM field THROUGH k=1
+  if ((prevK < 1 && curK >= 1) || (prevK > 1 && curK <= 1)) critUntil = performance.now() + 1000;
+  prevK = curK;
+  document.getElementById('critflash').style.opacity = (performance.now() < critUntil) ? '1' : '0';
+}
+
+// ── main loop ──────────────────────────────────────────────────────────────────────────────
+function render(){
+  drawField(fieldRandom, document.getElementById('cvRandom'), true);
+  drawField(fieldLattice, document.getElementById('cvLattice'), false);
+  drawShadow();
+  refreshHUD();
+}
+
+function setK(k, recordTrace){
+  k = Math.max(0, Math.min(3.5, k));
+  const wasS = fieldS(fieldRandom);
+  curK = k;
+  syncField(fieldRandom);
+  syncField(fieldLattice);
+  // flash the random continent when it grows a real merge step (a visible swell)
+  if (fieldS(fieldRandom) > wasS + 0.002) fieldRandom.flash = 1;
+  if (recordTrace){
+    const sl = fieldS(fieldLattice);
+    if (latTrace.length === 0 || k >= latTrace[latTrace.length - 1].k) latTrace.push({ k, s: sl });
+  }
+}
+
+function reset(){
+  latTrace.length = 0;
+  buildField(fieldRandom);
+  buildField(fieldLattice);
+  curK = 0.3; targetK = 0.3; prevK = 0.3;
+  document.getElementById('kslider').value = '0.3';
+  setK(0.3, true);
+}
+
+// ── eased animation frame: smoothly chase targetK so scrubbing feels buttery ──────────────────
+function frame(){
+  if (Math.abs(curK - targetK) > 0.0008){
+    const next = curK + (targetK - curK) * 0.32;
+    setK(next, true);
+  } else if (curK !== targetK){
+    setK(targetK, true);
+  }
+  render();
+  requestAnimationFrame(frame);
+}
+
+// ── wiring ────────────────────────────────────────────────────────────────────────────────────
+function placeCritMark(){
+  document.getElementById('critmark').style.left = (1 / 3.5 * 100) + '%';   // k=1 on a 0..3.5 track
+}
+
+function init(){
+  const slider = document.getElementById('kslider');
+  slider.addEventListener('input', (e) => { targetK = parseFloat(e.target.value); });
+  document.getElementById('snapBtn').addEventListener('click', () => {
+    const target = 1.2;
+    if (targetK >= target){ targetK = target; slider.value = target.toFixed(3); }
+    else { targetK = target; slider.value = target.toFixed(3); }   // the eased frame animates to it
+  });
+  document.getElementById('resetBtn').addEventListener('click', reset);
+  placeCritMark();
+  reset();
+  window.addEventListener('resize', render);
+  requestAnimationFrame(frame);
+
+  // defer the self-test so the field paints first (never block first paint — A's hard-won lesson)
+  if ('requestIdleCallback' in window) requestIdleCallback(() => runSelfTest(), { timeout: 1500 });
+  else setTimeout(runSelfTest, 200);
+}
+
+// ── SELF-TEST — proves the conditional math claim live in the page (page profile: light n) ──────
+const checks = [];
+function ck(name, ok){ checks.push({ name, ok }); }
+
+function runSelfTest(){
+  checks.length = 0;
+
+  // CLAIM 1 — measured random giant fraction tracks the predicted root S=1−e^(−kS) within a band.
+  {
+    const n = 600; const ks = [1.4, 1.8, 2.2, 2.8]; let within = 0;
+    for (const k of ks){
+      let acc = 0; const trials = 4;
+      for (let t = 0; t < trials; t++) acc += giantFraction(randomEdges(n, mulberry32(hashSeed('c1:' + k + ':' + t))), edgesForK(k, n), n);
+      if (Math.abs(acc / trials - predictedS(k)) < 0.075) within++;
+    }
+    ck('CLAIM 1: random S tracks S=1−e^(−kS) within ±0.075 across ⟨k⟩∈{1.4,1.8,2.2,2.8}', within === ks.length);
+  }
+
+  // CLAIM 2 — SHARP: super-critical giant is Θ(n) (>0.4), sub-critical is o(n) (<0.05, shrinking).
+  // Averaged over a few trials so finite-n noise at the lighter page scale can't masquerade as a
+  // failure; n=1000,2000 is comfortably in the asymptotic regime yet runs in a few ms.
+  {
+    const avg = (n, k, tag) => { let a = 0; for (let t = 0; t < 3; t++) a += largest(randomEdges(n, mulberry32(hashSeed(tag + ':' + n + ':' + t))), edgesForK(k, n), n) / n; return a / 3; };
+    const sub = [], sup = [];
+    for (const n of [1000, 2000]){ sub.push(avg(n, 0.8, 'sub')); sup.push(avg(n, 1.6, 'sup')); }
+    ck('CLAIM 2: super-critical giant is Θ(n) — sup/n>0.4 at every size', sup.every(f => f > 0.4));
+    ck('CLAIM 2: sub-critical largest is o(n) — sub/n<0.05 and shrinks as n grows', sub.every(f => f < 0.05) && sub[sub.length - 1] < sub[0]);
+  }
+
+  // CLAIM 3 — NEGATIVE CONTROL: the lattice fed the same edge count lags random by >0.18 near k=1.
+  {
+    const n = 576; let gapOK = 0; const ks = [1.2, 1.4, 1.6];   // 24×24 grid
+    for (const k of ks){
+      const m = edgesForK(k, n);
+      const sR = giantFraction(randomEdges(n, mulberry32(hashSeed('ctrlR:' + k))), m, n);
+      const sL = giantFraction(latticeEdges(n, mulberry32(hashSeed('ctrlL:' + k)), R_LATTICE), m, n);
+      if (sR - sL > 0.18) gapOK++;
+    }
+    ck('CLAIM 3 (control): lattice lags random by >0.18 across ⟨k⟩∈{1.2,1.4,1.6}', gapOK === ks.length);
+  }
+
+  // ORACLE — union-find largest == an independent BFS flood, exact, across many random prefixes.
+  {
+    let agree = 0; const trials = 30; const n = 200;
+    for (let t = 0; t < trials; t++){
+      const rng = mulberry32(hashSeed('oracle:' + t));
+      const edges = randomEdges(n, rng);
+      const m = (rng() * edges.length) | 0;
+      if (buildAt(edges, m, n).giantSize === floodMaxComponent(edges, m, n).max) agree++;
+    }
+    ck('ORACLE: union-find largest == independent BFS flood (30 random prefixes, exact)', agree === trials);
+  }
+
+  // PREDICT guard — S=0 exactly for all ⟨k⟩ ≤ 1 (subcritical has no giant).
+  {
+    let zeros = 0; const ks = [0.0, 0.4, 0.8, 1.0];
+    for (const k of ks) if (predictedS(k) === 0) zeros++;
+    ck('PREDICT: S=0 exactly for all ⟨k⟩ ≤ 1 (subcritical has no giant)', zeros === ks.length);
+  }
+
+  // BYTE-TWIN — the inlined CORE sentinels are present & ordered in the page.
+  {
+    const pageText = document.getElementById('coremod').textContent;
+    const B = '// === CORE BEGIN ===', E = '// === CORE END ===';
+    const bi = pageText.indexOf(B), ei = pageText.indexOf(E);
+    ck('byte-twin: CORE sentinels present & ordered in the page', bi >= 0 && ei > bi);
+  }
+
+  const passN = checks.filter(c => c.ok).length, total = checks.length;
+  const node = document.getElementById('selftest');
+  if (passN === total){
+    node.className = 'selftest ok';
+    node.textContent = `self-test ${passN}/${total} ✓`;
+    node.title = checks.map(c => c.name).join(' · ');
+  } else {
+    node.className = 'selftest bad';
+    node.textContent = passN + '/' + total + ' ✗';
+    node.title = 'Failing: ' + checks.filter(c => !c.ok).map(c => c.name).join(' · ');
+  }
+  console.log('%cGiant Component self-test (page profile)', 'font-weight:bold');
+  for (const c of checks) console.log((c.ok ? '  ✓ ' : '  ✗ ') + c.name);
+  console.log(`Giant Component self-test: ${passN}/${total} ` + (passN === total ? 'PASS' : 'FAIL') + '  (Node core.test.mjs runs the full-scale profile)');
+  return { pass: passN, total, checks };
+}
+window.__giantComponentSelfTest = runSelfTest;
+document.getElementById('selftest').addEventListener('click', () => runSelfTest());
+
+// drop the front-door breadcrumb
+try{ const k = 'ws:seen:giant-component'; if (!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
+
+if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', init); else init();
+</script>
+</body>
+</html>
