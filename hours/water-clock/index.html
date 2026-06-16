@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Water-Clock · The Hours · The Orrery Estate</title>
+<style>
+  :root{
+    --bg:#06080f; --plate1:#141019; --plate2:#0b0810;
+    --ink:#f0e2c4; --ink-dim:#b8a172; --accent:#e6bd6f;
+    --accent-soft:rgba(230,189,111,.13); --accent-edge:rgba(230,189,111,.34);
+    --night:#9db4ff; --night-soft:rgba(157,180,255,.12);
+    --water-top:#3a6ea8; --water-deep:#0c2747; --water-meniscus:#9fd0ff;
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%; color:var(--ink); font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+    background:
+      radial-gradient(1300px 820px at 50% -12%, rgba(230,189,111,.10), transparent 58%),
+      radial-gradient(1000px 700px at 16% 112%, rgba(157,180,255,.05), transparent 62%),
+      var(--bg);
+  }
+  body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.012) 0 1px, transparent 1px 32px),
+      radial-gradient(circle at 16px 16px, rgba(230,189,111,.05) 0 1.2px, transparent 1.6px);
+    background-size:auto, auto, 32px 32px; mix-blend-mode:overlay; }
+
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:40; display:flex; align-items:center;
+    justify-content:space-between; padding:14px 22px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(6,8,15,.94), rgba(6,8,15,0)); }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--accent-edge); background:rgba(0,0,0,.4); white-space:nowrap; cursor:pointer;
+    user-select:none; color:var(--ink-dim); }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,.5); background:rgba(28,52,36,.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,.6); background:rgba(64,28,24,.45); }
+
+  .wrap{ position:relative; z-index:1; max-width:980px; margin:0 auto; padding:84px 22px 60px; }
+  .eyebrow{ font:600 11px/1 var(--font-mono); letter-spacing:.32em; text-transform:uppercase;
+    color:var(--accent); opacity:.9; text-align:center; margin-bottom:14px; }
+  h1{ font-family:var(--font-serif); font-weight:600; margin:0; text-align:center;
+    font-size:clamp(34px,7vw,58px); letter-spacing:.4px; line-height:1.04;
+    background:linear-gradient(176deg, #fbeccb, #e6bd6f 56%, #9a7325);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .lede{ max-width:700px; margin:18px auto 0; font:15.5px/1.62 var(--font-serif); color:var(--ink);
+    opacity:.92; text-align:center; }
+  .lede b{ color:var(--accent); font-weight:600; }
+  .lede .blue{ color:var(--night); font-weight:600; }
+
+  .stage{ position:relative; width:min(820px,100%); margin:24px auto 0; }
+  svg.room{ width:100%; height:auto; display:block; border-radius:12px;
+    box-shadow:0 18px 60px rgba(0,0,0,.62), inset 0 0 0 1px rgba(214,176,108,.12); }
+
+  .console{ width:min(820px,100%); margin:14px auto 0; background:rgba(20,15,9,.72);
+    border:1px solid rgba(214,176,108,.30); border-radius:12px; padding:14px 16px; }
+  .row{ display:flex; align-items:center; gap:11px; flex-wrap:wrap; }
+  .row + .row{ margin-top:11px; }
+  button{ font:12px/1 var(--font-ui); background:var(--accent-soft); color:var(--ink);
+    border:1px solid var(--accent-edge); border-radius:7px; padding:8px 14px; cursor:pointer; transition:.2s; }
+  button:hover{ background:rgba(230,189,111,.24); }
+  button.on{ background:var(--accent); color:#1a1206; border-color:var(--accent); }
+  button:disabled{ opacity:.4; cursor:default; }
+  .seg{ display:inline-flex; border:1px solid var(--accent-edge); border-radius:7px; overflow:hidden; }
+  .seg button{ border:none; border-radius:0; background:transparent; padding:8px 12px; }
+  .seg button.on{ background:var(--accent); color:#1a1206; }
+  .clock{ font:600 19px/1 var(--font-mono); color:var(--accent); min-width:108px; text-align:center;
+    text-shadow:0 0 14px rgba(230,189,111,.4); }
+  .lit{ font:11.5px/1.4 var(--font-mono); color:var(--ink-dim); display:flex; gap:18px; flex-wrap:wrap; }
+  .lit b{ color:var(--accent); font-weight:600; }
+  .hint{ font:11px/1.5 var(--font-mono); color:var(--ink-dim); flex:1 1 200px; min-width:0; }
+
+  .proof{ width:min(820px,100%); margin:18px auto 0; border:1px solid rgba(157,180,255,.26);
+    border-radius:12px; padding:15px 17px; background:rgba(12,16,28,.6); }
+  .proof h3{ font:600 9.5px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase;
+    color:var(--night); margin:0 0 9px; }
+  .proof .claim{ font:13.5px/1.62 var(--font-serif); color:var(--ink); margin:0 0 8px; opacity:.95; }
+  .proof .claim b{ color:var(--accent); font-weight:600; }
+  .proof .claim .blue{ color:var(--night); font-weight:600; }
+  .proof .nope{ font:11.5px/1.55 var(--font-mono); color:var(--ink-dim); margin:0; opacity:.82; }
+  .proof .nope b{ color:var(--ink-dim); font-weight:700; }
+
+  .myth{ max-width:680px; margin:28px auto 6px; font:italic 14px/1.7 var(--font-serif);
+    color:var(--ink-dim); text-align:center; }
+  .foot{ max-width:700px; margin:8px auto 0; font:12.5px/1.6 var(--font-serif); color:var(--ink-dim);
+    text-align:center; }
+  .foot a{ color:var(--accent); text-decoration:none; } .foot a:hover{ text-decoration:underline; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">← The Hours</a>
+    <div class="selftest" id="pill" title="Click for per-check detail">running self-test…</div>
+  </div>
+
+  <div class="wrap">
+    <p class="eyebrow">Horology · the clepsydra that keeps even hours</p>
+    <h1>The Water-Clock</h1>
+    <p class="lede">Two glass vessels, the <b>same water</b>, the <b>same hole</b>. The straight cylinder on the left
+    empties fast-then-slow — the deeper the water, the harder it pushes — so its painted hour-marks <b>crowd</b> toward
+    the bottom. Reshape the right vessel's bore to a <span class="blue">fourth-root</span> curve and the level falls at a
+    perfectly <b>constant</b> rate: its marks tick <span class="blue">evenly</span>, the steady clock the ancients chased.
+    Both fill to the same head and drain through the same orifice, so both finish at once — one in an accelerando, one
+    like a metronome. Pour them and watch.</p>
+
+    <div class="stage">
+      <svg class="room" id="room" viewBox="0 0 760 460" preserveAspectRatio="xMidYMid meet" role="img"
+           aria-label="Two glass water-clock vessels on a brass shelf: a straight cylinder whose hour-marks crowd at the bottom, and a fourth-root bore whose hour-marks are evenly spaced."></svg>
+    </div>
+
+    <div class="console">
+      <div class="row">
+        <button id="btnFill">Fill both</button>
+        <button class="on" id="btnRun">▶ pour / run</button>
+        <button id="btnReset">Reset</button>
+        <div class="clock" id="clock">0.0 s</div>
+        <div class="seg" id="speedSeg" title="how fast the wall clock runs the 15-second drain">
+          <button data-speed="1" class="on">15 s</button>
+          <button data-speed="0.5">30 s</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="lit">
+          <span>cylinder marks lit: <b id="litCyl">0/6</b></span>
+          <span>bore marks lit: <b id="litShaped">0/6</b></span>
+        </div>
+        <div class="hint" id="hint"></div>
+      </div>
+    </div>
+
+    <div class="proof">
+      <h3>what this proves</h3>
+      <p class="claim"><b>The claim.</b> Under Torricelli's law <b>v = √(2gh)</b>, a bore whose cross-section grows as
+      <span class="blue">A(h) ∝ √h</span> (a fourth-root radius profile) drops the water level at a <b>constant rate</b> —
+      so equal spans of time fall equal spans of height, and the hour-marks come out <span class="blue">even</span>. A
+      straight cylinder cannot: its level falls as √h, fast then slow, and its marks <b>crowd</b>. Every line above is read
+      from the equation, self-tested in the pill — not asserted by hand.</p>
+      <p class="nope"><b>What it does NOT claim.</b> This is idealised Torricelli — inviscid, incompressible flow, no
+      vena-contracta discharge coefficient, no surface tension, a quasi-static slow-drain limit, a massless float. We model
+      the SHAPE LAW that makes a clepsydra keep even hours, not a real vessel's friction.</p>
+    </div>
+
+    <p class="myth">“When the sun is hidden, the estate still keeps the hour — it counts the falling of the water, and
+    the marks it falls past were placed by the proven equation, not by hand.”</p>
+
+    <p class="foot">The drip you watch is the proven equation; the spacing of the marks is its consequence, self-tested
+    below, not asserted. The fluids math lives in <b>core.mjs</b>, inlined byte-identical between sentinels &amp; run in
+    Node. &nbsp;·&nbsp; <a href="../index.html">Back to The Hours</a></p>
+  </div>
+
+<script>
+"use strict";
+// ===== WATER-CLOCK-CORE (byte-identical to core.mjs) =====
+/* ============================================================================
+   THE HOURS · WATER-CLOCK — core.mjs   (the SOLE fluids authority for the bench)
+
+   A clepsydra tells the hour by how far its water has fallen. The trouble the
+   ancients hit: water does not fall at a steady pace. Torricelli's law gives the
+   speed of the jet leaving a small hole at the bottom under a head h:
+
+        v = √(2·g·h)                                    (the deeper the water, the faster it leaves)
+
+   Conservation of volume ties the falling surface to that jet. If the vessel has
+   cross-section A(h) at height h and the orifice has area a, then in time dt the
+   surface drops dh while a·v·dt of water leaves:
+
+        A(h)·(−dh) = a·v·dt        ⇒        dh/dt = −(a / A(h))·√(2·g·h)
+
+   ── THE STRAIGHT CYLINDER (A constant) ──
+   dh/dt = −(a/A)·√(2gh) depends on h, so the level falls FAST when full and SLOW
+   when nearly empty. Integrating:  √h(t) = √h0 − (a/A)·√(g/2)·t, hence
+
+        h(t) = ( √h0 − (a/A)·√(g/2)·t )²              (a falling parabola in t)
+
+   Even hour-marks in TIME land at uneven heights — they CROWD toward the bottom,
+   because Δ(√h) is the constant, not Δh. A cylinder can never keep even hours.
+
+   ── THE SHAPED BORE (the fix the ancients sought) ──
+   DEMAND a constant drop rate dh/dt = −c. Solve the ODE for the cross-section:
+
+        −c = −(a/A(h))·√(2gh)      ⇒      A(h) = (a/c)·√(2g)·√h = K·√h
+
+   A cross-section proportional to √h. Since A = π·r², the radius profile is
+
+        r(h) = √(K/π)·h^(1/4)                          (a FOURTH-ROOT bore — narrow base, flaring top)
+
+   With A(h)=K·√h the level falls LINEARLY:  h(t) = h0 − c·t.  Even hours in time
+   now land at EVEN heights. Same water, same hole, same finish time — but the
+   marks are a metronome instead of an accelerando. THAT is the lesson.
+
+   Everything the bench draws — the vessel WALLS, the water level, the hour-marks —
+   is read FROM this module (the drawn vessel outline IS the bore the math used).
+   The bench animates nothing but the surface y; it computes no fluids of its own.
+
+   index.html INLINES this file byte-identical between sentinels; core.test.mjs
+   runs it in Node. If the page's inline ever drifts from this file, the page's
+   re-extraction parity check fails.
+
+   PINNED CONSTANTS — all derive from T_DRAIN. To retime the clock, change ONLY
+   T_DRAIN; never touch G, and keep A_CYL derived (so the negative control stays
+   honest: same Torricelli law, same orifice, same finish, ONLY the shape differs).
+   ============================================================================ */
+
+// ── physical + design constants (labeled; the bench reads these, never hardcodes) ──
+const G = 9.80665;                       // standard gravity (m/s²)
+const H0 = 0.30;                          // both vessels fill to this head (m) — a fair race
+const T_DRAIN = 15;                       // the shaped bore drains in exactly this many seconds
+const C = H0 / T_DRAIN;                    // the demanded constant drop rate (m/s) = 0.02
+const A_ORIFICE = Math.PI * 0.002 * 0.002; // the SAME hole both vessels drain through (2 mm radius)
+const K_BORE = (A_ORIFICE / C) * Math.sqrt(2 * G); // A(h) = K_BORE·√h for the constant-rate bore
+const N_MARKS = 6;                         // six even hour-marks down the head
+// the cylinder's cross-section, DERIVED so it too drains in exactly T_DRAIN — the
+// negative control shares law, orifice and finish-time; ONLY its shape is straight.
+const A_CYL = (T_DRAIN / Math.sqrt(2 * H0 / G)) * A_ORIFICE;
+
+// ── cross-section of the shaped bore at head h: A(h) = K_BORE·√h ──
+function shapedArea(h){ return K_BORE * Math.sqrt(Math.max(h, 0)); }
+
+// ── cross-section of the straight cylinder: constant ──
+function cylinderArea(_){ return A_CYL; }
+
+// ── the outflow ODE: dh/dt = −(a/A(h))·√(2gh). The ONE law both vessels obey. ──
+function dhdt(h, areaFn, a = A_ORIFICE){
+  const hc = Math.max(h, 0);
+  return -(a / areaFn(hc)) * Math.sqrt(2 * G * hc);
+}
+
+// ── shaped bore: the closed-form LINEAR level h(t) = h0 − C·t (the headline result) ──
+function shapedHeight(t){ return Math.max(H0 - C * t, 0); }
+function shapedEmpty(){ return H0 / C; }   // = T_DRAIN exactly
+
+// ── straight cylinder: the closed-form drain time and the falling-parabola level ──
+function cylinderEmpty(h0 = H0, A = A_CYL, a = A_ORIFICE){
+  return (A / a) * Math.sqrt(2 * h0 / G);          // √h reaches 0 at this t
+}
+function cylinderHeight(t, h0 = H0, A = A_CYL, a = A_ORIFICE){
+  const tE = cylinderEmpty(h0, A, a);
+  if(t >= tE) return 0;
+  const s = Math.sqrt(h0) - (a / A) * Math.sqrt(G / 2) * t;
+  return s > 0 ? s * s : 0;
+}
+
+// ── the level reader the view uses for either vessel, in physical seconds ──
+function heightAt(kind, t){
+  return kind === 'shaped' ? shapedHeight(t) : cylinderHeight(t);
+}
+function emptyTime(kind){
+  return kind === 'shaped' ? shapedEmpty() : cylinderEmpty();
+}
+
+// ── radii the VIEW draws from, so the DRAWN vessel IS the bore the math used.
+//    (shaped base radius ≈0.39 cm — near zero; the view applies a small COSMETIC
+//     floor so the vessel doesn't pinch to a point. The math here is unfloored.) ──
+function shapedRadius(h){ return Math.sqrt(shapedArea(h) / Math.PI); }
+function cylinderRadius(){ return Math.sqrt(A_CYL / Math.PI); }
+function radiusAt(kind, h){ return kind === 'shaped' ? shapedRadius(h) : cylinderRadius(); }
+
+// ── the hour-marks: N even divisions of TIME, read back to heights off the level law.
+//    On the shaped bore the heights come out even; on the cylinder they crowd. ──
+function hourMarks(kind, N = N_MARKS){
+  const tE = emptyTime(kind);
+  const out = [];
+  for(let i = 0; i <= N; i++){
+    const t = (i / N) * tE;
+    out.push({ i, t, h: heightAt(kind, t) });
+  }
+  return out;
+}
+
+// ── the same marks, plus √h — exposing the cylinder's hidden invariant Δ(√h)=const ──
+function sqrtMarks(kind, N = N_MARKS){
+  return hourMarks(kind, N).map(m => ({ ...m, sqrtH: Math.sqrt(Math.max(m.h, 0)) }));
+}
+
+// ── the independent WITNESS: integrate the raw ODE with RK4 and confirm the
+//    closed forms above. Frame jitter never touches this — it is the twin only.
+//    f clamps h to hStop so the singular A(0)=0 can't blow the integrator up. ──
+function rk4Drain(areaFn, { h0 = H0, dt = 1e-3, a = A_ORIFICE, hStop = 1e-7 } = {}){
+  let h = h0, t = 0;
+  const samples = [{ t, h }];
+  const f = hh => { const hc = Math.max(hh, hStop); return -(a / areaFn(hc)) * Math.sqrt(2 * G * hc); };
+  while(h > hStop && t < 10000){
+    const k1 = f(h), k2 = f(h + 0.5 * dt * k1), k3 = f(h + 0.5 * dt * k2), k4 = f(h + dt * k3);
+    h = h + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4); t += dt;
+    if(h < 0) h = 0;
+    samples.push({ t, h });
+  }
+  return { tEmpty: t, samples };
+}
+// ===== END WATER-CLOCK-CORE =====
+
+/* ============================================================================
+   THE BENCH — everything below is presentation. It calls the core above; it adds
+   NO fluids of its own. The vessel WALLS are sampled from radiusAt(); the water
+   level y comes from heightAt(); the hour-mark heights come from hourMarks(). The
+   picture cannot disagree with the proven equation.
+   ============================================================================ */
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+function svg(tag, attrs){ const n = document.createElementNS(SVGNS, tag);
+  for(const k in attrs) n.setAttribute(k, attrs[k]); return n; }
+
+const RM = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ── view geometry: two vessels on a brass shelf inside a 760×460 night room ──
+const VIEW = { W: 760, H: 460 };
+const SHELF_Y = 392;                 // the brass shelf top (vessel floors sit here)
+const VTOP_Y = 64;                   // the rim of a full vessel (h = H0)
+const VESSEL_H_PX = SHELF_Y - VTOP_Y;// pixels spanning the full head H0
+const PX_PER_M = VESSEL_H_PX / H0;   // vertical scale: head metres → pixels
+// horizontal scale (m of radius → px). Tuned so the bore visibly flares from a
+// pinched base to a wide rim while the cylinder reads distinctly narrower-than-bore-rim.
+const RADIUS_PX_PER_M = 2600;
+const R_FLOOR_PX = 7;                // cosmetic floor: the near-zero bore base never pinches to a point
+const CYL_CX = 232, SHAPED_CX = 528; // the two vessel centre-lines
+
+// surface y for a given head h (h metres up from the floor)
+function surfaceY(h){ return SHELF_Y - Math.max(h, 0) * PX_PER_M; }
+// drawn half-width (px) of a vessel wall at head h — straight from the core's radius
+function wallPx(kind, h){ return Math.max(radiusAt(kind, h) * RADIUS_PX_PER_M, R_FLOOR_PX); }
+
+/* ── per-vessel state: the lit hour-marks (monotone — never un-light) ── */
+function makeVessel(kind, cx){
+  return { kind, cx, marks: hourMarks(kind), lit: hourMarks(kind).map(() => false), pulses: [] };
+}
+const state = {
+  cyl: makeVessel('cylinder', CYL_CX),
+  shaped: makeVessel('shaped', SHAPED_CX),
+  t: 0,                  // current core-seconds into the drain
+  running: false,
+  filled: true,         // both vessels start full (a fair race, h0 equal, a equal)
+  speed: 1,             // 1 ⇒ the 15 s drain runs in 15 s wall; 0.5 ⇒ 30 s wall (slow-mo)
+  t0: 0,                // wall-clock anchor (ms)
+};
+
+/* ============================ THE STATIC SCAFFOLD ============================ */
+// Walls, shelf, hour-mark ticks + numbers — drawn ONCE (they never animate). Only
+// the water rect's top edge and the float move per frame. Returns the per-vessel
+// <rect> water nodes + float nodes so the frame loop can move just those.
+let waterNodes = {}, floatNodes = {}, markEls = {};
+
+function buildVesselWallPath(kind, cx){
+  // sample the wall up the head; mirror + close. The LEFT wall goes bottom→top,
+  // the RIGHT wall top→bottom, so the path traces the full vessel silhouette.
+  const N = 48;
+  let left = '', right = '';
+  for(let i = 0; i <= N; i++){
+    const h = (i / N) * H0;
+    const y = surfaceY(h);
+    const w = wallPx(kind, h);
+    left += (i === 0 ? 'M' : 'L') + (cx - w).toFixed(2) + ' ' + y.toFixed(2) + ' ';
+  }
+  for(let i = N; i >= 0; i--){
+    const h = (i / N) * H0;
+    const y = surfaceY(h);
+    const w = wallPx(kind, h);
+    right += 'L' + (cx + w).toFixed(2) + ' ' + y.toFixed(2) + ' ';
+  }
+  return left + right + 'Z';
+}
+
+function buildScaffold(){
+  const root = document.getElementById('room');
+  root.innerHTML = '';
+  waterNodes = {}; floatNodes = {}; markEls = {};
+
+  // ── defs: water gradients + per-vessel interior clip paths ──
+  const defs = svg('defs', {});
+  for(const v of [state.cyl, state.shaped]){
+    const grad = svg('linearGradient', { id: 'water-' + v.kind, x1: '0', y1: '0', x2: '0', y2: '1' });
+    grad.appendChild(svg('stop', { offset: '0%',  'stop-color': 'var(--water-top)' }));
+    grad.appendChild(svg('stop', { offset: '100%', 'stop-color': 'var(--water-deep)' }));
+    defs.appendChild(grad);
+    // the vessel interior, as a clip path (water can only show inside the glass)
+    const clip = svg('clipPath', { id: 'clip-' + v.kind });
+    clip.appendChild(svg('path', { d: buildVesselWallPath(v.kind, v.cx) }));
+    defs.appendChild(clip);
+  }
+  root.appendChild(defs);
+
+  // ── the brass shelf the two vessels stand on ──
+  root.appendChild(svg('rect', { x: 40, y: SHELF_Y, width: VIEW.W - 80, height: 16, rx: 4,
+    fill: 'rgba(230,189,111,.14)', stroke: 'rgba(230,189,111,.4)', 'stroke-width': 1.4 }));
+  root.appendChild(svg('line', { x1: 40, y1: SHELF_Y + 16, x2: VIEW.W - 40, y2: SHELF_Y + 16,
+    stroke: 'rgba(0,0,0,.4)', 'stroke-width': 6, opacity: .5 }));   // shelf shadow
+
+  // ── the brass scale-rule between the vessels: "the same water · the same hole" ──
+  const midX = (CYL_CX + SHAPED_CX) / 2;
+  root.appendChild(svg('line', { x1: midX, y1: VTOP_Y + 6, x2: midX, y2: SHELF_Y - 6,
+    stroke: 'rgba(230,189,111,.22)', 'stroke-width': 1, 'stroke-dasharray': '2 5' }));
+  // even rule ticks at each H0/N, both vessels fill to the same top tick
+  for(let i = 0; i <= N_MARKS; i++){
+    const y = surfaceY((i / N_MARKS) * H0);
+    root.appendChild(svg('line', { x1: midX - 6, y1: y, x2: midX + 6, y2: y,
+      stroke: 'rgba(230,189,111,.3)', 'stroke-width': 1 }));
+  }
+  const ruleLbl = svg('text', { x: midX, y: VTOP_Y - 8, 'font-size': 10, 'text-anchor': 'middle',
+    fill: 'var(--ink-dim)', 'font-family': 'var(--font-mono)', 'letter-spacing': '0.05em' });
+  ruleLbl.textContent = 'the same water · the same hole'; root.appendChild(ruleLbl);
+
+  // ── per vessel: glass tint, water rect (clipped), float, hour-marks, label ──
+  for(const v of [state.cyl, state.shaped]){
+    const wallPath = buildVesselWallPath(v.kind, v.cx);
+
+    // faint cool inner glass tint (under the water, over the night bg)
+    root.appendChild(svg('path', { d: wallPath, fill: 'rgba(157,180,255,.045)', stroke: 'none' }));
+
+    // the WATER — a rect filling the whole vessel box, CLIPPED to the interior. Only
+    // its y (top edge) moves per frame; everything else is fixed.
+    const wrect = svg('rect', { x: v.cx - 120, y: VTOP_Y, width: 240, height: SHELF_Y - VTOP_Y,
+      fill: 'url(#water-' + v.kind + ')', 'clip-path': 'url(#clip-' + v.kind + ')' });
+    root.appendChild(wrect);
+    waterNodes[v.kind] = wrect;
+
+    // the 2px brighter meniscus line riding the surface (moves per frame)
+    const men = svg('line', { x1: v.cx - 40, y1: VTOP_Y, x2: v.cx + 40, y2: VTOP_Y,
+      stroke: 'var(--water-meniscus)', 'stroke-width': 2, opacity: .85, 'clip-path': 'url(#clip-' + v.kind + ')' });
+    root.appendChild(men);
+    floatNodes[v.kind + '_men'] = men;
+
+    // the glass WALL outline OVER the water
+    root.appendChild(svg('path', { d: wallPath, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 1.8, opacity: .92 }));
+    // a glass sheen highlight up the left wall
+    root.appendChild(svg('path', { d: buildSheenPath(v.kind, v.cx), fill: 'none',
+      stroke: 'rgba(255,255,255,.10)', 'stroke-width': 2.4, 'stroke-linecap': 'round' }));
+
+    // a brass float disc riding the surface (cy moves per frame; width tracks the radius)
+    const flW = wallPx(v.kind, H0) * 0.7;
+    const fl = svg('ellipse', { cx: v.cx, cy: VTOP_Y, rx: flW, ry: 4.5,
+      fill: 'var(--accent)', stroke: 'rgba(255,230,160,.6)', 'stroke-width': 1, opacity: .92 });
+    root.appendChild(fl);
+    floatNodes[v.kind] = fl;
+
+    // ── the PAINTED HOUR-MARKS — drawn ONCE from hourMarks(kind). On the outer glass,
+    //    numbered. They CROWD on the cylinder, are EVEN on the bore. Visible before GO. ──
+    const side = (v.kind === 'cylinder') ? -1 : 1;        // ticks face outward
+    markEls[v.kind] = [];
+    for(let i = 1; i <= N_MARKS; i++){
+      const m = v.marks[i];
+      const y = surfaceY(m.h);
+      const w = wallPx(v.kind, m.h);
+      const x0 = v.cx + side * w;
+      const tick = svg('line', { x1: x0, y1: y, x2: x0 + side * 14, y2: y,
+        stroke: 'rgba(230,189,111,.55)', 'stroke-width': 1.4 });
+      root.appendChild(tick);
+      const num = svg('text', { x: x0 + side * 19, y: y + 3.5,
+        'font-size': 10.5, 'text-anchor': side < 0 ? 'end' : 'start',
+        fill: 'var(--ink-dim)', 'font-family': 'var(--font-mono)' });
+      num.textContent = i;
+      root.appendChild(num);
+      // a ring node for the one-shot light-up pulse (hidden until lit)
+      const ring = svg('circle', { cx: x0, cy: y, r: 3, fill: 'none',
+        stroke: '#ffe6a0', 'stroke-width': 1.6, opacity: 0 });
+      root.appendChild(ring);
+      markEls[v.kind].push({ tick, num, ring, idx: i });
+    }
+
+    // a small label under each vessel
+    const lbl = svg('text', { x: v.cx, y: SHELF_Y + 34, 'font-size': 11.5, 'text-anchor': 'middle',
+      fill: 'var(--ink-dim)', 'font-family': 'var(--font-mono)', 'letter-spacing': '0.04em' });
+    lbl.textContent = v.kind === 'cylinder' ? 'straight cylinder' : 'fourth-root bore';
+    root.appendChild(lbl);
+    const sub = svg('text', { x: v.cx, y: SHELF_Y + 49, 'font-size': 9.5, 'text-anchor': 'middle',
+      fill: v.kind === 'cylinder' ? 'var(--ink-dim)' : 'var(--night)', 'font-family': 'var(--font-mono)',
+      'letter-spacing': '0.06em', opacity: .85 });
+    sub.textContent = v.kind === 'cylinder' ? 'marks crowd · accelerando' : 'marks even · metronome';
+    root.appendChild(sub);
+  }
+}
+
+// a sheen highlight running up the left interior wall of a vessel
+function buildSheenPath(kind, cx){
+  const N = 24; let d = '';
+  for(let i = 0; i <= N; i++){
+    const h = (i / N) * H0;
+    const y = surfaceY(h);
+    const w = wallPx(kind, h) * 0.62;
+    d += (i === 0 ? 'M' : 'L') + (cx - w).toFixed(2) + ' ' + y.toFixed(2) + ' ';
+  }
+  return d;
+}
+
+/* ============================ THE PER-FRAME RENDER ============================ */
+// Move ONLY the water top edge, the meniscus, and the float — the proven level y.
+// Light any hour-marks the descending surface has just crossed (monotone).
+function renderLevels(){
+  for(const v of [state.cyl, state.shaped]){
+    const h = heightAt(v.kind, state.t);
+    const y = surfaceY(h);
+    // water rect: top at the surface, bottom at the shelf
+    const wr = waterNodes[v.kind];
+    wr.setAttribute('y', y.toFixed(2));
+    wr.setAttribute('height', Math.max(0, SHELF_Y - y).toFixed(2));
+    // meniscus line at the surface, width tracking the wall
+    const w = wallPx(v.kind, h);
+    const men = floatNodes[v.kind + '_men'];
+    men.setAttribute('y1', y.toFixed(2)); men.setAttribute('y2', y.toFixed(2));
+    men.setAttribute('x1', (v.cx - Math.min(w, 90)).toFixed(2));
+    men.setAttribute('x2', (v.cx + Math.min(w, 90)).toFixed(2));
+    men.setAttribute('opacity', h > 1e-5 ? .85 : 0);
+    // float disc riding the surface, width tracking the radius
+    const fl = floatNodes[v.kind];
+    fl.setAttribute('cy', y.toFixed(2));
+    fl.setAttribute('rx', Math.max(w * 0.7, 5).toFixed(2));
+    fl.setAttribute('opacity', h > 1e-5 ? .92 : 0);
+
+    // light any marks the surface has now descended PAST (monotone)
+    for(const me of markEls[v.kind]){
+      const mh = v.marks[me.idx].h;
+      if(!v.lit[me.idx] && h <= mh + 1e-9){
+        v.lit[me.idx] = true;
+        me.tick.setAttribute('stroke', '#ffe6a0');
+        me.tick.setAttribute('stroke-width', '2');
+        me.num.setAttribute('fill', '#ffe6a0');
+        v.pulses.push({ el: me.ring, t: 0 });     // one-shot ~250ms ring pulse
+      }
+    }
+  }
+  updateLitReadout();
+}
+
+function updateLitReadout(){
+  const nC = state.cyl.lit.filter((b, i) => b && i >= 1).length;
+  const nS = state.shaped.lit.filter((b, i) => b && i >= 1).length;
+  document.getElementById('litCyl').textContent = nC + '/' + N_MARKS;
+  document.getElementById('litShaped').textContent = nS + '/' + N_MARKS;
+}
+
+function advancePulses(dtMs){
+  for(const v of [state.cyl, state.shaped]){
+    for(let i = v.pulses.length - 1; i >= 0; i--){
+      const p = v.pulses[i]; p.t += dtMs;
+      const f = p.t / 250;                       // ~250ms expanding ring
+      if(f >= 1){ p.el.setAttribute('opacity', 0); v.pulses.splice(i, 1); continue; }
+      p.el.setAttribute('r', (3 + 12 * f).toFixed(2));
+      p.el.setAttribute('opacity', (0.85 * (1 - f)).toFixed(3));
+    }
+  }
+}
+
+function setClock(){ document.getElementById('clock').textContent = state.t.toFixed(1) + ' s'; }
+
+/* ============================ THE RUN LOOP ============================ */
+let rAF = null, lastMs = 0;
+const tEmptyMax = Math.max(emptyTime('cylinder'), emptyTime('shaped'));   // when BOTH have finished
+
+function frame(ms){
+  const dtWall = Math.min(60, ms - lastMs); lastMs = ms;
+  // SPEED scales wall-clock delta → core-seconds. The core stays in physical
+  // seconds; scaling lives ONLY here in the render path, never leaks into the core.
+  const dtCore = (dtWall / 1000) * state.speed;
+  state.t = Math.min(state.t + dtCore, tEmptyMax);
+  renderLevels();
+  advancePulses(dtWall);
+  setClock();
+  if(state.t >= tEmptyMax){      // freeze empty, all marks lit
+    state.running = false;
+    document.getElementById('btnRun').classList.remove('on');
+    document.getElementById('btnRun').textContent = '▶ pour / run';
+    rAF = null;
+    document.getElementById('hint').textContent =
+      'both emptied at ' + emptyTime('shaped').toFixed(1) + ' s — same finish, different cadence. Reset to run again.';
+    return;
+  }
+  rAF = requestAnimationFrame(frame);
+}
+
+function startRun(){
+  if(RM || state.running) return;
+  state.running = true;
+  document.getElementById('btnRun').classList.add('on');
+  document.getElementById('btnRun').textContent = '⏸ running…';
+  document.getElementById('hint').textContent = 'pouring — watch the cylinder lead early, then the bore catch up to the same finish.';
+  lastMs = performance.now();
+  rAF = requestAnimationFrame(frame);
+}
+function pauseRun(){
+  state.running = false;
+  if(rAF){ cancelAnimationFrame(rAF); rAF = null; }
+  document.getElementById('btnRun').classList.remove('on');
+  document.getElementById('btnRun').textContent = '▶ pour / run';
+}
+function fillBoth(){
+  // a FAIR race: both refilled to the SAME h0, drained through the SAME orifice.
+  // (h0 and a are the SAME core constants for both — the honesty caption can't lie.)
+  pauseRun();
+  state.t = 0; state.filled = true;
+  state.cyl = makeVessel('cylinder', CYL_CX);
+  state.shaped = makeVessel('shaped', SHAPED_CX);
+  buildScaffold();
+  renderLevels(); setClock();
+  document.getElementById('hint').textContent = 'both filled to the same head — press pour to race them.';
+}
+
+/* ============================ REDUCED MOTION ============================ */
+// One honest static frame: both vessels half-drained, floats at that surface, marks
+// above each surface shown LIT, below unlit — so crowded-vs-even AND the lighting
+// idea read frozen. GO is a no-op with a note.
+function renderReducedMotion(){
+  const tHalf = emptyTime('shaped') * 0.5;
+  state.t = tHalf;
+  for(const v of [state.cyl, state.shaped]){
+    const h = heightAt(v.kind, tHalf);
+    for(const me of markEls[v.kind]){
+      if(v.marks[me.idx].h >= h - 1e-9){
+        v.lit[me.idx] = true;
+        me.tick.setAttribute('stroke', '#ffe6a0'); me.tick.setAttribute('stroke-width', '2');
+        me.num.setAttribute('fill', '#ffe6a0');
+      }
+    }
+  }
+  renderLevels(); setClock();
+  document.getElementById('btnRun').disabled = true;
+  document.getElementById('btnRun').textContent = '▶ pour (reduced-motion: frozen frame)';
+  document.getElementById('hint').textContent =
+    'reduced-motion: a frozen half-drained frame — note the cylinder\'s lit marks crowd, the bore\'s are even.';
+}
+
+/* ============================ WIRING ============================ */
+document.getElementById('btnFill').onclick = fillBoth;
+document.getElementById('btnReset').onclick = fillBoth;
+document.getElementById('btnRun').onclick = () => {
+  if(RM) return;
+  if(state.running) pauseRun();
+  else { if(state.t >= tEmptyMax) fillBoth(); startRun(); }
+};
+document.querySelectorAll('#speedSeg button').forEach(b => {
+  b.onclick = () => {
+    state.speed = parseFloat(b.dataset.speed);
+    document.querySelectorAll('#speedSeg button').forEach(x => x.classList.toggle('on', x === b));
+  };
+});
+
+/* ============================ THE SELF-TEST (in-page pill) ============================ */
+async function runSelfTest(){
+  const checks = [];
+  const ck = (name, ok, info) => checks.push({ name, ok: !!ok, info });
+
+  // (1) shaped bore drops the level LINEARLY in time, to machine-ε
+  {
+    const rk = rk4Drain(shapedArea, { dt: 1e-3 });
+    let worst = 0;
+    for(const s of rk.samples) worst = Math.max(worst, Math.abs(s.h - Math.max(H0 - C * s.t, 0)));
+    ck('shaped bore: RK4 level tracks h0−C·t to machine-ε (≤1e-9, worst=' + worst.toExponential(2) + ')', worst <= 1e-9);
+  }
+  // (2) shaped drains in exactly T_DRAIN; RK4 agrees
+  {
+    ck('shapedEmpty() = T_DRAIN = ' + T_DRAIN + '.000 s exactly', Math.abs(shapedEmpty() - T_DRAIN) <= 1e-12);
+    const rk = rk4Drain(shapedArea, { dt: 1e-3 });
+    ck('RK4 shaped tEmpty ≈ analytic T_DRAIN (≤1e-3)', Math.abs(rk.tEmpty - T_DRAIN) <= 1e-3);
+  }
+  // (3) shaped marks EVEN
+  {
+    const m = hourMarks('shaped'); let worst = 0;
+    for(let i = 1; i <= N_MARKS; i++) worst = Math.max(worst, Math.abs((m[i-1].h - m[i].h) - H0 / N_MARKS));
+    ck('shaped hour-marks are EVEN: max|gap − H0/N| ≤ 1e-12 (=' + worst.toExponential(2) + ')', worst <= 1e-12);
+  }
+  // (4) NEGATIVE CONTROL: cylinder tuned to 15 s too, yet its marks CROWD ≥ 10×
+  {
+    ck('cylinderEmpty() tuned to T_DRAIN (same finish, ≤1e-9)', Math.abs(cylinderEmpty() - T_DRAIN) <= 1e-9);
+    const m = hourMarks('cylinder'); const gaps = [];
+    for(let i = 1; i <= N_MARKS; i++) gaps.push(m[i-1].h - m[i].h);
+    const ratio = Math.max(...gaps) / Math.min(...gaps);
+    ck('cylinder marks CROWD: max(gap)/min(gap) ≥ 10 (=' + ratio.toFixed(2) + ' — same law, only shape differs)', ratio >= 10);
+  }
+  // (5) the cylinder's hidden invariant: Δ(√h) uniform
+  {
+    const sm = sqrtMarks('cylinder'); const dsq = [];
+    for(let i = 1; i <= N_MARKS; i++) dsq.push(sm[i-1].sqrtH - sm[i].sqrtH);
+    ck('cylinder Δ(√h) is uniform across all marks (max−min ≤ 1e-12)', (Math.max(...dsq) - Math.min(...dsq)) <= 1e-12);
+  }
+  // (6) one law: shaped dh/dt = −C ∀ h
+  {
+    let worst = 0;
+    for(let h = H0; h > 1e-6; h -= H0 / 1000) worst = Math.max(worst, Math.abs(dhdt(h, shapedArea) + C));
+    ck('shaped dh/dt = −C at every head (≤1e-12, worst=' + worst.toExponential(2) + ')', worst <= 1e-12);
+  }
+  // (7) the 4th-root signature
+  {
+    const ratio = shapedRadius(H0) / shapedRadius(H0 / 4);
+    ck('4th-root bore: shapedRadius(H0)/shapedRadius(H0/4) = √2 (≤1e-12)', Math.abs(ratio - Math.SQRT2) <= 1e-12);
+  }
+  // (8) volume conservation
+  {
+    const rk = rk4Drain(shapedArea, { dt: 1e-3 });
+    const startVol = K_BORE * (2/3) * Math.pow(H0, 1.5);
+    let outVol = 0;
+    for(let i = 1; i < rk.samples.length; i++){
+      const dt = rk.samples[i].t - rk.samples[i-1].t;
+      const hm = Math.max((rk.samples[i].h + rk.samples[i-1].h) / 2, 0);
+      outVol += A_ORIFICE * Math.sqrt(2 * G * hm) * dt;
+    }
+    const rel = Math.abs(outVol - startVol) / startVol;
+    ck('volume conservation: |∫ a·√(2gh) dt − start vol| / start vol ≤ 1e-6 (=' + rel.toExponential(2) + ')', rel <= 1e-6);
+  }
+
+  // (PARITY) re-extraction: the inline core IS core.mjs, byte-for-byte (export-stripped)
+  let parityOk = false, parityInfo = '';
+  try{
+    const [pageSrc, coreSrc] = await Promise.all([
+      fetch(location.href).then(r => r.text()),
+      fetch('core.mjs').then(r => r.text())
+    ]);
+    const START = '// ===== WATER-CLOCK-CORE (byte-identical to core.mjs) =====';
+    const END = '// ===== END WATER-CLOCK-CORE =====';
+    const si = pageSrc.indexOf(START), ei = pageSrc.indexOf(END);
+    if(si < 0 || ei < 0) throw new Error('sentinels not found in page');
+    const inline = pageSrc.slice(si + START.length, ei).replace(/^\n/, '').replace(/\n[ \t]*$/, '');
+    const expected = coreSrc.split('\n').map(l => l.replace(/^export /, '')).join('\n').replace(/\n$/, '');
+    parityOk = (inline === expected);
+    if(!parityOk){
+      const a = inline.split('\n'), b = expected.split('\n');
+      let dl = -1; for(let i = 0; i < Math.max(a.length, b.length); i++){ if(a[i] !== b[i]){ dl = i; break; } }
+      parityInfo = 'first diff at line ' + (dl+1) + ' (inline ' + a.length + ' lines, core ' + b.length + ')';
+    }
+  }catch(e){ parityInfo = 'parity fetch failed: ' + e.message + ' (serve over http to run this check)'; }
+  ck('re-extraction parity: inline core === core.mjs (export-stripped)', parityOk, parityInfo);
+
+  const pass = checks.filter(c => c.ok).length, total = checks.length;
+  const chip = document.getElementById('pill');
+  const allOk = pass === total;
+  chip.className = 'selftest ' + (allOk ? 'ok' : 'bad');
+  chip.textContent = 'self-test ' + pass + '/' + total + (allOk ? ' ✓' : ' ✗');
+  console.log('%cThe Water-Clock — self-test ' + pass + '/' + total, 'color:#e6bd6f;font-weight:bold');
+  for(const c of checks) console.log((c.ok ? '  ✓ ' : '  ✗ ') + c.name + (c.info ? '  ·  ' + c.info : ''));
+  chip.onclick = () => alert('The Water-Clock self-test ' + pass + '/' + total + '\n\n' +
+    checks.map(c => (c.ok ? '✓ ' : '✗ ') + c.name + (c.info ? '\n     ' + c.info : '')).join('\n'));
+  window.__waterClockSelfTest = { pass, total, checks };
+  return { pass, total, checks };
+}
+
+/* ── boot ── */
+(function boot(){
+  try{ localStorage.setItem('ws:seen:water-clock', String(Date.now())); }catch(e){}
+  buildScaffold();
+  if(RM){ renderReducedMotion(); }
+  else { renderLevels(); setClock();
+    document.getElementById('hint').textContent = 'both filled to the same head — press pour to race them.'; }
+  runSelfTest();
+})();
+</script>
+</body>
+</html>
