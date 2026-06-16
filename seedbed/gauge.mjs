@@ -37,7 +37,7 @@ export const TH = {
   gardenFuelFloor: 4,     // PLAN/garden when gardenFuel <= this (bed running dry)
   gardenFuelCeiling: 10,  // the gardener refills toward this (advisory; raised 8→10 for a richer, more varied bed incl. rework)
   gardenInterval: 6,      // PLAN/garden when gardenBuilds >= this (time-based backstop)
-  gardenDecayAge: 12,     // a garden seed decays when (cycle - sown) >= this
+  gardenDecayAge: 15,     // a garden seed decays when (cycle - sown) >= this — raised 12→15 at cycle 65 from the measured 47% decay ratio (vs ~33% target; the bed lost the planting contest to crosses, it didn't go stale)
   groundsFuelFloor: 2,    // PLAN/grounds when groundsFuel < this (keep big swings ready)
   groundsFuelCeiling: 3,  // the groundskeeper refills toward this (advisory)
   groundsInterval: 9,     // BUILD/grounds (a swing!) when (cycle - lastBigSwing) >= this AND a ripe one exists
