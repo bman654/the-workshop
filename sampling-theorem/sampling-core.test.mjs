@@ -15,7 +15,7 @@
 //  process.exit(pass === total ? 0 : 1).
 // ============================================================================
 import {
-  runSelfTest, sampleToneLUT, foldedFreq, spectrum, reconstructPeriodic,
+  runSelfTest, sampleToneLUT, foldedFreq, apparentRate, spectrum, reconstructPeriodic,
   sourceValue, N_DEFAULT,
 } from './sampling-core.mjs';
 import { readFileSync } from 'node:fs';
@@ -104,6 +104,36 @@ console.log('\n— Deeper Node-only re-derivations (this file, not the bundled s
   }
   check('foldedFreq names the alias across c ∈ [129,255]: |foldedFreq(f,fs) − (256−c)·fs/N| < 1e-12 every bin',
         worst < 1e-12, 'worst Δ = ' + worst.toExponential(2) + ' Hz');
+}
+
+// ── 4b. THE SIGN-FLIP SWEEP — above Nyquist the apparent rate is NEGATIVE (the
+//      backward phantom) and |apparentRate| === foldedFreq at every step. Sweep f
+//      from fs/2+ε up through several·fs. (The signed sibling of the fold sweep.) ──
+{
+  const fs = 8;
+  const eps = 1e-6;
+  let worstMagΔ = 0, wrongSign = 0, steps = 0, worstF = 0;
+  // strictly above Nyquist, skipping the exact n·fs (the trivial fold where
+  // foldedFreq===0 and the sign is undefined) and the exact half-integer freeze.
+  for (let f = fs / 2 + eps; f <= 5 * fs; f += 0.013){
+    const r = f / fs;
+    const near = Math.abs(r - Math.round(r));        // distance to a whole multiple
+    if (near < 2e-3) continue;                       // skip f≈n·fs (fold→0, sign nil)
+    if (Math.abs(near - 0.5) < 2e-3) continue;       // skip the exact freeze (±½)
+    const ap = apparentRate(f, fs);
+    const magΔ = Math.abs(Math.abs(ap) - foldedFreq(f, fs));
+    if (magΔ > worstMagΔ){ worstMagΔ = magΔ; worstF = f; }
+    // above Nyquist but below fs the apparent rate must be NEGATIVE (retreating).
+    // In the upper half of each fs-band (frac > ½ wraps to a negative frac) the
+    // phantom runs backward; assert the sign matches sign(frac−round(frac)).
+    const frac = r - Math.round(r);
+    const expectNeg = frac < 0;
+    if ((ap < 0) !== expectNeg) wrongSign++;
+    steps++;
+  }
+  check('SIGN-FLIP SWEEP: across f ∈ (fs/2, 5·fs] |apparentRate| === foldedFreq every step (signed sibling of the fold), and sign(apparentRate) === sign(frac) — the backward phantom whenever the spoke retreats',
+        worstMagΔ < 1e-12 && wrongSign === 0 && steps > 100,
+        steps + ' steps · worst |·|−fold Δ=' + worstMagΔ.toExponential(2) + ' @ f=' + worstF.toFixed(3) + ' · wrong-sign count=' + wrongSign);
 }
 
 console.log('\n— Anti-circularity (the transform is IMPORTED, not re-typed here) —');

@@ -56,6 +56,19 @@ function sinc(x){
 //    formula CHAR-IDENTICAL to the lede/card prose (anti-drift). ──
 function foldedFreq(f, fs){ return Math.abs(f - Math.round(f / fs) * fs); }
 
+// ── apparentRate: the SIGNED stroboscopic alias — what the EYE reconstructs when a
+//    rate-f source is seen only at flash-rate fs. Per flash the spoke advances f/fs
+//    cycles; the eye picks the SMALLEST-magnitude equivalent advance in (−½,½], so the
+//    rendered rate is frac·fs, SIGNED. |apparentRate| === foldedFreq (the unsigned
+//    alias Hz); the SIGN is the regime: + true/forward, − the backward phantom.
+//    Below Nyquist (f<fs/2 ⇒ round=0) apparent===f, no fold. AT Nyquist (f=fs/2) JS
+//    round-half-up makes frac=−½ ⇒ apparent=−fs/2: the spoke lands ANTIPODALLY each
+//    flash — the FREEZE (read it off |apparent|·2===fs, NOT apparent===0). ──
+function apparentRate(f, fs){
+  const frac = f / fs - Math.round(f / fs);   // ∈ (−½, ½]
+  return frac * fs;                            // signed apparent cycles/s
+}
+
 // ── aliasOf: the folded frequency + how many fs-widths it folded + whether it
 //    actually aliases (f above the Nyquist line fs/2). ──
 function aliasOf(f, fs){
@@ -322,13 +335,33 @@ function runSelfTest(){
        'imports ok=' + importsOk + '  ·  non-pow2 fft throws=' + threw);
   }
 
+  // ── F  THE WHEEL'S APPARENT RATE === THE SIGNED FOLD (the phantom IS the math) ──
+  {
+    const fs = 8;
+    const fBelow = 3, fFreeze = 4, fAbove = 7;          // below / AT Nyquist (fs/2=4) / above
+    const apBelow = apparentRate(fBelow, fs);           // === f (true forward)
+    const apFreeze = apparentRate(fFreeze, fs);         // |·|·2===fs (the freeze, antipodal)
+    const apAbove = apparentRate(fAbove, fs);           // NEGATIVE (backward phantom)
+    const magMatch = Math.abs(Math.abs(apAbove) - foldedFreq(fAbove, fs)) < 1e-12;
+    const signsOk = Math.abs(apBelow - fBelow) < 1e-12 && Math.abs(Math.abs(apFreeze) * 2 - fs) < 1e-12 && apAbove < 0;
+    // single-source: the drawn spoke-X (cos θ_n) IS core.sampleTone at f, every flash
+    const xs = sampleTone(fAbove, fs, 64); let drawDiff = 0;
+    for (let n = 0; n < 64; n++) drawDiff = Math.max(drawDiff, Math.abs(xs[n] - Math.cos(2 * Math.PI * fAbove * n / fs)));
+    // NEG CONTROL: continuous light / well-oversampled ⇒ apparent === true to ε
+    const apTrue = apparentRate(fBelow, 1000 * fBelow);
+    const negCtl = Math.abs(apTrue - fBelow) < 1e-12;
+    ok('F wheel apparent rate === signed fold: above Nyquist apparent NEGATIVE (backward) with |apparent|===foldedFreq; below it apparent===f (true); AT Nyquist the freeze (|apparent|·2===fs, the antipodal standing wheel); the drawn spoke-X IS core.sampleTone (drift 0); continuous-light neg-control apparent===true to ε',
+       magMatch && signsOk && drawDiff === 0 && negCtl,
+       'apparent(above)=' + apAbove.toFixed(3) + ' (fold ' + foldedFreq(fAbove, fs).toFixed(3) + ', backward) · apparent(below)=' + apBelow.toFixed(3) + '=f · freeze |ap|·2=' + (Math.abs(apFreeze) * 2).toFixed(3) + '=fs · spoke-vs-core drift=' + drawDiff + ' · neg-ctl Δ=' + Math.abs(apTrue - fBelow).toExponential(2));
+  }
+
   const pass = lines.filter(l => l.ok).length;
   return { pass: pass, total: lines.length, lines: lines, ledeTol: ledeTol };
 }
 // ===== SAMPLING CORE END =====
 
 export {
-  sinc, foldedFreq, aliasOf, nyquist,
+  sinc, foldedFreq, apparentRate, aliasOf, nyquist,
   sampleTone, sourceValue, reconstruct, reconstructPeriodic,
   sampleToneLUT, spectrum,
   runSelfTest, N_DEFAULT,

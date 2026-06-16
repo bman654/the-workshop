@@ -6,6 +6,78 @@ byte-for-byte identical samples, so the reconstruction provably rebuilds the *al
 never the source. Imports the Butterfly's radix-2 FFT to watch the line fold to the
 wrong bin.
 
+## v2 (cycle #84, 2026-06-16, Opus 4.8) — RE-SOULED IN PLACE (the wagon wheel is the hero)
+
+A `[rework]` re-soul (audit-marked #82): the v1 bench was polished + correct but LED with a
+single 1-D waveform plot, demoting the most viscerally touchable phenomenon in sampling — the
+**wagon-wheel illusion** — to a mere preset on that flat chart. Re-grown IN PLACE (same route,
+same ws-less breadcrumb): a **strobed spinning wheel is now the hero you feel in your gut**,
+single-sourced from the proven core; the old 1-D time/freq plots demoted to a quiet side-rail
+("the curve is the shadow"). Form expresses content — a wheel you watch freeze and run backward,
+not its plotted curve.
+
+### The core math (added inside the byte-twin sentinels, char-identical in BOTH copies)
+- **`apparentRate(f, fs)`** — the SIGNED stroboscopic alias `frac·fs` (`frac = f/fs − round(f/fs)
+  ∈ (−½,½]`). `|apparentRate| === foldedFreq`; the SIGN is the regime: **+ true/forward**,
+  **− the backward phantom**. Below Nyquist `apparent === f` (no fold); AT Nyquist the antipodal
+  **freeze** (read it off `|apparent|·2 === fs`, NOT `apparent === 0`). `foldedFreq`'s body
+  untouched (anti-drift + B3 safe); no `dft`/`fft` token added (anti-circularity grep stays green).
+- **Self-test leg F** (the phantom IS the math): the wheel's apparent rate === the signed fold;
+  the drawn spoke-X IS `core.sampleTone` (drift 0); a continuous-light neg-control reads
+  `apparent === true` to ε. In-page pill **7/7 → 8/8**.
+- **`sampling-core.test.mjs`** gained the **SIGN-FLIP SWEEP (#4b)** across `f ∈ (fs/2, 5·fs]`
+  (2747 steps, worst |·|−fold Δ=0, wrong-sign count=0). Node twin **14/14 → 16/16** exit 0.
+- `apparentRate` appended to the module export list (OUTSIDE the sentinels). The byte-twin slice
+  grew `13734 → 16406` chars (exactly the added `apparentRate` fn + leg F); both copies re-extract
+  char-identical (the load-bearing parity invariant stays green).
+
+### The page (hero wheel + side-rail)
+- `drawWheel()` leads the draw spine; spokes (even=6 default) hub→rim, ONE gold marked spoke (teal
+  under continuous light), a teal rim ring (the truth), a flash-glow keyed to the flash index, a red
+  ghost-trail of the eye's marked spoke over the last ~6 flashes. Apparent rate read ONLY from
+  `core.apparentRate` (never re-derived in the page); continuous-light renders the LITERAL true rate
+  so the phantom provably vanishes. `t0/phi0` rebased in the slider handlers so the eye's phase stays
+  continuous across f/fs changes.
+- **Reduced-motion gate FIRST** in the spine: one static FROZEN-at-Nyquist frame (antipodal spoke +
+  faint prior-flash ghost + a baked caption), no rAF armed (`animating` excludes `wheelLive` under
+  `REDUCED`).
+- `#stage` reflowed into `#wheelHost` (flex 62%, the hero) + `#sideRail` (the OLD time + freq canvases
+  shrunk side-by-side). A hero **regime badge** + the status pill BOTH key off the signed fold
+  (true / freeze / backward). ON-RAMP: loads mid-motion in a slow BACKWARD phantom (wagon preset
+  retuned `f=4.6 @ fs=8 → apparent −3.40`) with a baked "drag f_s up to make it spin true →" hint.
+  Negative-control "continuous light" toggle + a 5/6-spokes chip added to `#togs`. ResizeObserver
+  now observes `#wheelHost`.
+
+### Preserved (the honesty guardrails carry over intact)
+- Both `.xteaser` blocks (incl. the Voice **leakage ≠ aliasing** honesty-cross), both back-links
+  (Butterfly "↔ the ceiling" + the Voice "why the teeth bite →"), the muted-by-default audio pair.
+  The leakage≠aliasing distinction is load-bearing — protect it (see the v1 guardrail below).
+
+### Registration (no new front-door footprint — a re-soul of an existing bench)
+- `workbench/index.html` (+1/−1): the Sampling card kind gains `· the wagon wheel`; the blurb is
+  re-led with the wheel/strobe. Same route, glyph 📶, slot. No front-door entry, no `ws:seen`.
+
+### Verification (publisher fresh-eyes, cycle #84 — shipped clean, no bug caught)
+- Served `127.0.0.1:8749` (session `st84pub`), browser closed by exact session name + http server
+  killed by exact PID 12433, port confirmed free — Brandon's :3001/:4380 untouched.
+- In-page pill **8/8** ✓ · Node twin **16/16** exit 0 · byte-twin parity GREEN (16406 chars identical).
+- Regimes verified LIVE on the real `fs` slider (with rAF settle): `fs=8` → "BACKWARD phantom,
+  apparent −3.40"; `fs=20` → "spinning TRUE, apparent 4.60"; `fs=9.2 (=2·f)` → "FROZEN, fs=2·f=9.20";
+  continuous-light toggle → "CONTINUOUS · TRUE, no strobe, 4.60" (phantom vanishes), off restores the
+  backward phantom. The wheel canvas changes frame-to-frame (genuinely spinning, 180ms hash differs).
+- **0 console errors** after exercising every control · **0 nested anchors** on the bench AND the
+  Workbench · **0 horizontal overflow @1280 AND @390** · mobile @390 collapses to one legible column
+  (wheel hero full-width, controls stack). All four cross-targets resolve 200 (Butterfly back-link,
+  Voice xteaser + honesty-cross, Workbench card, the Voice/Butterfly forward crosses). `forge --check`
+  stays current at 31/31 (no `.src.html` touched).
+- The reduced-motion path verified by code inspection (this Chrome build won't report
+  `prefers-reduced-motion` to matchMedia; the builder used a shim probe at build time): the gate is
+  first in the spine, renders one static frozen frame, arms no rAF.
+- **No real bug found, no polish edit, no `[bug]`, no `⚡` spark.** The toggles are non-focusable
+  `<div class="tog">` — but that is v1's established pattern (confirmed via git: `tog kern`/`tog
+  ghost`/`tog win` were already plain divs), followed consistently for the two new toggles; not a
+  regression and out of scope for this re-soul (the presets + sliders are keyboard-operable).
+
 ## v1 (cycle #27, 2026-06-14, Opus 4.8) — SHIPPED
 
 ### The claim, proven exact (in-page pill 7/7 · Node twin 14/14)
