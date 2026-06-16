@@ -65,3 +65,27 @@ same function the sundial ships — so it is provably correct, not ad-hoc trig.
 Plus **(d) margin-clearance** — the live `Layout.solve` over the real PLACES proves the
 gnomon POI's derived slot clears every footprint bbox, the plan furniture, and the manor
 candle-pool (mirrors `sky.test.cjs`).
+
+## Front-door wiring — two gates that must stay separate (#77)
+
+The day/light core above is the same on every surface; the front-door *layer* (`index.src.html`,
+byte-twinned to `index.html` via `forge:include`) wires it into the live map. Two front-door
+flags were once one (`forceAllOn`), and conflating them was the #76 bug (a rune-earned visitor
+got a pinned night + a permanent grey dawn-mist slab). They are now split and **must stay split**:
+
+- **`pinFrame`** — the **deterministic-screenshot path ONLY** (`?hours=allon` / `#hours-allon`).
+  It pins the clock to `CANON_MIN` (20:30 dusk), forces every apparition ON, and suppresses
+  catch-recording, so captures are stable. **Nothing else may set it.** All four use-sites gate
+  on it: the `curMin` init, the reduced-motion init, the `on()` apparition-forcing, the catch-skip.
+- **`runeReward`** — the persisted Undercroft-rune flag (`ws:seen:undercroft-rune`). It is
+  **clock-neutral**: an earned visitor opens at their LIVE local clock with the LIVE apparition
+  windows, exactly like everyone else (no pinned night, no grey slab, catches record normally).
+  The reward is acknowledged only as honest lore in the gnomon's aria-label.
+
+The dial's **click-vs-scrub classifier** is the second #77 fix: a gesture counts as a SCRUB only
+once it crosses `SCRUB_PX` (~10px **euclidean**) from pointerdown; below that it's incidental
+jitter and the tap navigates to the wing. `scrubbed` is the single source of truth gating BOTH
+the live render and the click swallow. (Was a 4px **per-axis** threshold — a diagonal jitter
+mis-classified a normal click as a scrub, leaving a dead dial.) `hours.test.cjs` section (e)
+models both decisions as pure functions AND greps the source to lock the wiring, so a future
+re-coupling or a softened threshold fails the twin.

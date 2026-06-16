@@ -4426,11 +4426,20 @@ renderEstate();
        every apparition forced visible, so screenshots are deterministic. We detect
        the revealed state (the rune flag the reveal script sets) OR an explicit
        ?hours=allon / #hours-allon and pin a canonical dusk minute + force-all-on. */
-    var forceAllOn = false, CANON_MIN = 1230;   // ~20:30 — dusk: stars up, lamps lit, candle burning
+    /* TWO concerns that USED to share one flag (the #76 bug): the SCREENSHOT path and
+       the rune REWARD. They are now split.
+         • pinFrame — the DETERMINISTIC-SCREENSHOT path ONLY (?hours=allon / #hours-allon).
+           It pins the clock to CANON_MIN, forces every apparition ON, and suppresses
+           catch-recording, so captures are stable. NOTHING ELSE may set it.
+         • runeReward — the persisted Undercroft-rune flag. A real visitor who earned it
+           opens at their LIVE local clock with the LIVE apparition windows, EXACTLY like
+           everyone else (no pinned 20:30 night, no permanent grey dawn-mist slab, catches
+           record normally). The reward is the wing's lore, not a frozen night. */
+    var pinFrame = false, runeReward = false, CANON_MIN = 1230;   // ~20:30 — dusk: stars up, lamps lit, candle burning
     try{
-      var href = String(location.href||""), q = String(location.search||""), h = String(location.hash||"");
-      if(/hours=allon/.test(q) || /hours-allon/.test(h)) forceAllOn = true;
-      if(WS && WS.store){ var s2 = WS.store(); if(s2 && s2.has && s2.has("ws:seen:undercroft-rune")) forceAllOn = true; }
+      var q = String(location.search||""), h = String(location.hash||"");
+      if(/hours=allon/.test(q) || /hours-allon/.test(h)) pinFrame = true;
+      if(WS && WS.store){ var s2 = WS.store(); if(s2 && s2.has && s2.has("ws:seen:undercroft-rune")) runeReward = true; }
     }catch(e){}
 
     /* ── BUILD THE LAYER STACK (into #viewport, after the sky pass) ─────────── */
@@ -4498,6 +4507,12 @@ renderEstate();
     var cap = E("text", { "class":"gn-cap", x:0, y:DIAL_R+18, "text-anchor":"middle" });
     cap.textContent = "drag to run the day";
     gnG.appendChild(cap);
+    // the rune REWARD (earned in the Undercroft) is honest lore, never a frozen night:
+    // the dial still opens at the visitor's LIVE clock with the LIVE apparition windows
+    // (exactly like everyone else); we only acknowledge it in the aria label, so the
+    // earned state is legible to a screen reader without pinning time or the dawn-mist.
+    if(runeReward){ gnG.setAttribute("aria-label",
+      "the gnomon — drag to run the day and catch every apparition (the Undercroft rune is yours; all four hours are findable)"); }
     viewport.appendChild(gnG);
 
     // 4) hours-ring: the gold phase-ring meter, around the dial.
@@ -4574,7 +4589,7 @@ renderEstate();
       var day = Hours.dayFactor(altDeg);           // 0 night → 1 day
       var lamp = Hours.lampGlow(altDeg);
       var sky = Hours.skyColor(altDeg);
-      var aps = forceAllOn ? null : Hours.apparitionsAt(altDeg);
+      var aps = pinFrame ? null : Hours.apparitionsAt(altDeg);
 
       // (a) the wash: darken the margins at night (1−day), tinted toward the phase
       //     colour so dusk reads warm-rose and deep night reads cool-indigo. Capped
@@ -4603,15 +4618,16 @@ renderEstate();
       }
 
       // (d) apparitions — each shown ONLY inside its altitude window (or all-on for
-      //     the deterministic screenshot path). Catch any that's ON.
-      function on(id){ return forceAllOn ? true : !!(aps && aps[id]); }
+      //     the deterministic SCREENSHOT path, pinFrame; the rune reward is NOT this).
+      //     Catch any that's ON.
+      function on(id){ return pinFrame ? true : !!(aps && aps[id]); }
       mist.setAttribute("fill", on("dawn-mist") ? "rgba(200,184,216,.16)" : "rgba(196,180,214,0)");
       fireG.setAttribute("opacity", on("dusk-fireflies") ? "1" : "0");
       candleG.setAttribute("opacity", on("candle-window") ? "1" : "0");
       ghost.setAttribute("fill", on("witching-ghost") ? "rgba(184,202,232,.5)" : "rgba(184,202,232,0)");
       if(on("witching-ghost")){ ghost.setAttribute("cx", (560 + ((civilMin%240)/240)*220).toFixed(0)); }
       // record catches (only while a real scrub is happening, not the forced screenshot)
-      if(!forceAllOn && aps){ for(var i=0;i<NAP;i++){ if(aps[APS[i].id]) markCaught(APS[i].id); } }
+      if(!pinFrame && aps){ for(var i=0;i<NAP;i++){ if(aps[APS[i].id]) markCaught(APS[i].id); } }
 
       // (e) the ring fill + counts
       var n = catchCount();
@@ -4634,8 +4650,23 @@ renderEstate();
       try{ var d = new Date(); return ((d.getHours()*60 + d.getMinutes())%1440+1440)%1440; }
       catch(e){ return 750; }                    // fall back to ~12:30 if Date is unavailable
     }
-    var curMin = forceAllOn ? CANON_MIN : localCivilMin();
-    var dragging = false, moved = false, downX = 0, downY = 0, playing = false, rafId = null;
+    var curMin = pinFrame ? CANON_MIN : localCivilMin();
+    var dragging = false, scrubbed = false, downX = 0, downY = 0, playing = false, rafId = null;
+
+    /* THE CLICK-vs-SCRUB CLASSIFIER (the #76 dead-click fix).
+       A real mouse click commonly jitters a few px between down and up. The OLD code
+       tripped a scrub at >4px on EITHER axis (so a 5px+5px diagonal wiggle = "scrub")
+       and then swallowed the click with preventDefault — leaving a dead dial. Now a
+       gesture only counts as a SCRUB once it travels past SCRUB_PX of EUCLIDEAN distance
+       from pointerdown — ~10px, well above incidental jitter but far below any real
+       drag. `scrubbed` is the single source of truth: set true the instant the gesture
+       crosses the threshold, it gates BOTH the live render and the click swallow, so a
+       tap (and a sub-threshold jitter) reliably navigates while a genuine drag does not. */
+    var SCRUB_PX = 10, SCRUB_PX2 = SCRUB_PX*SCRUB_PX;
+    function pastThreshold(ev){
+      var dx = ev.clientX-downX, dy = ev.clientY-downY;
+      return (dx*dx + dy*dy) > SCRUB_PX2;
+    }
 
     function angleToMin(dx, dy){
       // SVG: atan2(dy,dx); noon(12:00) is straight up (dx0, dy<0). map to [0,1440).
@@ -4649,11 +4680,10 @@ renderEstate();
     }
     function onMove(ev){
       if(!dragging) return;
-      // a >4px move makes it a SCRUB (like the pan/zoom threshold); a pure tap on the
-      // gnomon falls through to navigate to the wing page (hours/index.html).
-      if(Math.abs(ev.clientX-downX) > 4 || Math.abs(ev.clientY-downY) > 4) moved = true;
-      if(!moved) return;
-      gnG.classList.add("dragging");
+      // a gesture only becomes a SCRUB once it crosses SCRUB_PX (euclidean) from the
+      // pointerdown; below that it's incidental jitter and the tap stays a navigation.
+      if(!scrubbed && pastThreshold(ev)){ scrubbed = true; gnG.classList.add("dragging"); }
+      if(!scrubbed) return;
       var p = svgPt(ev.clientX, ev.clientY); if(!p) return;
       curMin = angleToMin(p.x - GX, p.y - GY);
       render(curMin);
@@ -4663,17 +4693,20 @@ renderEstate();
       window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", endDrag); }
     gnG.addEventListener("pointerdown", function(ev){
       if(playing) stopPlay();
-      dragging = true; moved = false; downX = ev.clientX; downY = ev.clientY;
+      dragging = true; scrubbed = false; downX = ev.clientX; downY = ev.clientY;
       window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", endDrag);
       // do NOT preventDefault/stopPropagation here — a no-move tap must reach the POI link.
     });
-    // a no-move TAP on the dial is a click on the gnomon POI → enter the wing page;
-    // a scrub (moved) is swallowed so it never navigates. (The overlay sits above the
-    // POI link, so we navigate explicitly rather than relying on event fall-through.)
+    // a no-scrub TAP on the dial is a click on the gnomon POI → enter the wing page;
+    // a real scrub is swallowed so it never navigates. (The overlay sits above the POI
+    // link, so we navigate explicitly rather than relying on event fall-through.) We
+    // re-check the pointerup distance too, so even a fast scrub that skipped onMove
+    // (no intermediate move event fired) is still classified correctly here.
     var GNHREF = (gp && gp.href) ? gp.href : "hours/index.html";
     gnG.addEventListener("click", function(ev){
+      var wasScrub = scrubbed || gnG.classList.contains("dragging") || pastThreshold(ev);
+      if(wasScrub){ ev.preventDefault(); ev.stopPropagation(); return; }  // a scrub — stay on the front door
       ev.preventDefault(); ev.stopPropagation();
-      if(moved) return;                       // it was a scrub — stay on the front door
       try{ WS.seen("gnomon"); }catch(e){}
       location.href = GNHREF;
     });
@@ -4699,7 +4732,7 @@ renderEstate();
 
     // initial paint. Under reduced-motion / freeze we render the canonical frozen
     // frame and never tick; otherwise a clear midday so the dial + shadow read.
-    if(reduce){ curMin = forceAllOn ? CANON_MIN : 765; }   // 12:45 — a legible shadow, static
+    if(reduce){ curMin = pinFrame ? CANON_MIN : 765; }   // 12:45 — a legible shadow, static
     render(curMin);
   }catch(e){ /* the Hours layer is cosmetic — never let it break the plan */ }
 })();

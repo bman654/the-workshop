@@ -125,6 +125,131 @@ ok(core.pass, 'CORE BATTERY: every solar/tint/apparition claim passes');
   ok(true, 'MARGIN-CLEARANCE: gnomon dial centre (shadow origin) at (' + cx + ', ' + cy + ') — clear');
 })();
 
+/* ── (e) THE FRONT-DOOR HOURS LAYER — the #76 root-cause fixes, proven against the
+   LIVE forge SOURCE (index.src.html), not a copy. Two unrelated concerns used to share
+   one flag (`forceAllOn`): the deterministic SCREENSHOT path and the persisted rune
+   REWARD. While coupled, a rune visitor's door opened pinned at 20:30/night with a
+   permanent grey dawn-mist slab and catches suppressed. The fix SPLITS them:
+     • pinFrame   — set ONLY by ?hours=allon / #hours-allon (the screenshot path).
+     • runeReward — set by the ws:seen:undercroft-rune flag; it must NOT pin time, must
+                    NOT force the dawn-mist, and must NOT suppress catches.
+   AND the dial CLICK was dead: a >4px jitter on either axis tripped a "scrub" so a tap
+   never navigated. The fix raises the scrub gate to a 10px EUCLIDEAN threshold and makes
+   `scrubbed` the single source of truth.
+
+   We (1) MODEL both decisions as pure functions and assert their truth tables, and
+   (2) GREP the source to prove it is actually wired that way (so a future re-coupling
+   or a softened threshold fails this twin). ── */
+(function () {
+  const fs = require('fs');
+  const path = require('path');
+  const SRC = path.join(__dirname, '..', '..', 'index.src.html');
+  let src = '';
+  try { src = fs.readFileSync(SRC, 'utf8'); }
+  catch (e) { ok(false, 'HOURS-LAYER: could not read index.src.html (' + e.message + ')'); return; }
+
+  /* ── (e.1) THE FLAG SPLIT — pure model of how the layer derives pinFrame/runeReward
+     and what each gates. CANON_MIN=1230 (20:30); local civil minute is the live clock. */
+  const CANON_MIN = 1230;
+  // pinFrame ONLY from the screenshot param; runeReward ONLY from the rune flag.
+  function deriveFlags(opts) {
+    const screenshotParam = !!opts.screenshotParam;   // ?hours=allon / #hours-allon
+    const runeFlag = !!opts.runeFlag;                 // ws:seen:undercroft-rune present
+    return { pinFrame: screenshotParam, runeReward: runeFlag };
+  }
+  // the opening minute: pinned ONLY when pinFrame; otherwise the live local clock.
+  function openingMinute(flags, localCivilMin) { return flags.pinFrame ? CANON_MIN : localCivilMin; }
+  // dawn-mist alpha: forced (0.16) ONLY when pinFrame; otherwise the live window decides.
+  function dawnMistForced(flags) { return flags.pinFrame; }
+  // catches record EXCEPT on the pinned screenshot frame.
+  function catchesRecord(flags) { return !flags.pinFrame; }
+
+  const LOCAL = 643;   // a sample live civil minute (10:43) — daytime, NOT 20:30
+
+  // RUNE visitor, no screenshot param: opens at the LIVE clock, mist NOT forced, catches record.
+  const fRune = deriveFlags({ runeFlag: true, screenshotParam: false });
+  ok(fRune.runeReward === true && fRune.pinFrame === false,
+    '(e.1) rune flag sets runeReward but NOT pinFrame (the two concerns are split)');
+  ok(openingMinute(fRune, LOCAL) === LOCAL,
+    '(e.1) a rune visitor opens at the LOCAL civil minute (' + LOCAL + '), NOT CANON_MIN/20:30');
+  ok(dawnMistForced(fRune) === false,
+    '(e.1) a rune visitor does NOT force the dawn-mist (no permanent grey slab)');
+  ok(catchesRecord(fRune) === true,
+    '(e.1) a rune visitor records catches normally (no suppression)');
+
+  // SCREENSHOT path (?hours=allon): the canonical frame is STILL pinned + all-on.
+  const fShot = deriveFlags({ runeFlag: false, screenshotParam: true });
+  ok(fShot.pinFrame === true,
+    '(e.1) ?hours=allon sets pinFrame (the deterministic screenshot path is preserved)');
+  ok(openingMinute(fShot, LOCAL) === CANON_MIN,
+    '(e.1) the screenshot frame still pins CANON_MIN=1230 (20:30)');
+  ok(dawnMistForced(fShot) === true && catchesRecord(fShot) === false,
+    '(e.1) the screenshot frame still forces all apparitions ON and suppresses catches');
+
+  // a PLAIN visitor (neither): live clock, nothing forced. (the universal baseline)
+  const fPlain = deriveFlags({ runeFlag: false, screenshotParam: false });
+  ok(openingMinute(fPlain, LOCAL) === LOCAL && !dawnMistForced(fPlain) && catchesRecord(fPlain),
+    '(e.1) a plain visitor opens at the live clock with nothing forced (the baseline)');
+
+  // ── GREP the source: prove the wiring matches the model (no re-coupling). ──
+  ok(/var\s+pinFrame\s*=\s*false\s*,\s*runeReward\s*=\s*false/.test(src),
+    '(e.1) source declares BOTH pinFrame and runeReward (split, not one flag)');
+  ok(/hours=allon[\s\S]{0,40}\bpinFrame\s*=\s*true/.test(src),
+    '(e.1) source: ONLY the ?hours=allon param sets pinFrame');
+  ok(/undercroft-rune[\s\S]{0,40}\bruneReward\s*=\s*true/.test(src),
+    '(e.1) source: the rune flag sets runeReward (NOT pinFrame)');
+  ok(!/forceAllOn/.test(src),
+    '(e.1) source: the old coupled flag forceAllOn is GONE');
+  ok(/var\s+curMin\s*=\s*pinFrame\s*\?\s*CANON_MIN\s*:\s*localCivilMin\(\)/.test(src),
+    '(e.1) source: the opening minute is gated on pinFrame, not the rune');
+  ok(/function on\(id\)\{\s*return\s+pinFrame\s*\?\s*true/.test(src),
+    '(e.1) source: apparition forcing is gated on pinFrame, not the rune');
+  ok(/if\(!pinFrame\s*&&\s*aps\)/.test(src),
+    '(e.1) source: catch-recording is suppressed only on pinFrame, not the rune');
+
+  /* ── (e.2) THE CLICK-vs-SCRUB CLASSIFIER — a tap (and sub-threshold jitter) navigates;
+     a real >10px scrub does not. Euclidean distance, so a diagonal jitter can't sneak
+     past two independent axis thresholds (the old 4px-per-axis trap). ── */
+  const SCRUB_PX = 10, SCRUB_PX2 = SCRUB_PX * SCRUB_PX;
+  // pastThreshold(down→up displacement): squared euclidean > 10².
+  function pastThreshold(dx, dy) { return (dx * dx + dy * dy) > SCRUB_PX2; }
+  // the gesture is a scrub if it ever crossed the threshold (scrubbed) OR the up-point did.
+  function navigates(g) {
+    const wasScrub = g.scrubbed || g.draggingClass || pastThreshold(g.upDx, g.upDy);
+    return !wasScrub;   // navigate when NOT a scrub
+  }
+  // a no-move tap → navigates.
+  ok(navigates({ scrubbed: false, draggingClass: false, upDx: 0, upDy: 0 }) === true,
+    '(e.2) a no-move tap navigates to the wing');
+  // a tiny axis-aligned jitter (5px) → still navigates (was a dead click under the old 4px rule).
+  ok(navigates({ scrubbed: false, draggingClass: false, upDx: 5, upDy: 0 }) === true,
+    '(e.2) a 5px axis jitter navigates (the old 4px-per-axis dead-click is fixed)');
+  // a diagonal jitter (5px,5px = 7.07px < 10) → navigates (the old per-axis OR would have killed it).
+  ok(navigates({ scrubbed: false, draggingClass: false, upDx: 5, upDy: 5 }) === true,
+    '(e.2) a 5px,5px diagonal jitter (7.07px) navigates (euclidean gate, not per-axis)');
+  // a just-under-threshold jitter (9px) → navigates.
+  ok(navigates({ scrubbed: false, draggingClass: false, upDx: 9, upDy: 0 }) === true,
+    '(e.2) a 9px jitter (just under the 10px gate) still navigates');
+  // a deliberate scrub (60px) → does NOT navigate.
+  ok(navigates({ scrubbed: false, draggingClass: false, upDx: 60, upDy: 0 }) === false,
+    '(e.2) a 60px scrub stays on the front door (no navigation)');
+  // a scrub that already flagged `scrubbed` mid-drag but happened to release near origin → no nav.
+  ok(navigates({ scrubbed: true, draggingClass: true, upDx: 1, upDy: 1 }) === false,
+    '(e.2) a gesture that crossed the threshold mid-drag is a scrub even if it returns to origin');
+
+  // ── GREP the source: the threshold is euclidean >10px and `scrubbed` gates the click. ──
+  ok(/SCRUB_PX\s*=\s*10\b/.test(src),
+    '(e.2) source: the scrub threshold is 10px (well above incidental jitter)');
+  ok(/dx\*dx\s*\+\s*dy\*dy\)\s*>\s*SCRUB_PX2/.test(src),
+    '(e.2) source: the threshold is EUCLIDEAN (squared distance), not per-axis');
+  ok(/var\s+wasScrub\s*=\s*scrubbed\s*\|\|\s*gnG\.classList\.contains\(["']dragging["']\)\s*\|\|\s*pastThreshold\(ev\)/.test(src),
+    '(e.2) source: the click navigates unless scrubbed / dragging-class / past-threshold');
+  ok(/keydown[\s\S]{0,160}Enter[\s\S]{0,60}location\.href\s*=\s*GNHREF/.test(src),
+    '(e.2) source: the keyboard Enter/Space a11y path still enters the wing');
+  ok(/addEventListener\(["']dblclick["']/.test(src),
+    '(e.2) source: the double-click run-the-day handler is intact');
+})();
+
 /* ── report ─────────────────────────────────────────────────────────────────── */
 const total = pass + fail;
 if (fail) {
