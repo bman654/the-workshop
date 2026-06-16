@@ -14,6 +14,7 @@ const PLACES = [
   { id:'threshold', district:'manor', tier:2, wing:'east', footprint:'east-wing', order:20 },
   { id:'clockwork', district:'manor', tier:2, wing:'maker', footprint:'clockwork' },
   { id:'strange-garden', district:'grounds', tier:1, wing:'glasshouses', footprint:'glasshouse' },
+  { id:'kirigami', district:'grounds', tier:2, wing:'glasshouses', footprint:'glasshouse' },
   { id:'conservatory', district:'grounds', tier:2, wing:'conservatory', footprint:'glasshouse-wing' },
   { id:'hall-of-mirrors', district:'grounds', tier:1, wing:'optics', footprint:'hall' },
   { id:'numbers-room', district:'grounds', tier:2, wing:'number', footprint:'numbers-room' },

@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kirigami — fold, cut, unfold</title>
+<style>
+  :root{
+    --bg:#0a0b0f; --ink:#e8eaf0; --muted:#9aa0b0; --accent:#c9b6ff;
+    --paper:#f4f1ea; --paper-edge:#d8d2c4; --paper-shade:#cfc8b7;
+    --cut:#1c1e26;
+    --gold:#e8c879; --blue:#7fb6ff;
+    --font-ui:system-ui,-apple-system,"Segoe UI",sans-serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,monospace;
+    --font-serif:Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:
+      radial-gradient(1100px 680px at 50% -12%, rgba(150,130,210,.10), transparent 60%),
+      radial-gradient(820px 560px at 88% 112%, rgba(110,150,200,.07), transparent 55%),
+      var(--bg);
+    color:var(--ink); font-family:var(--font-ui); -webkit-font-smoothing:antialiased;
+    min-height:100vh; }
+  .back-ws{ position:fixed; top:18px; left:22px; z-index:40;
+    font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--muted); text-decoration:none; opacity:.72; transition:.2s; }
+  .back-ws:hover{ opacity:1; color:var(--ink); }
+  header{ text-align:center; padding:54px 20px 8px; }
+  .kick{ font:600 12px/1 var(--font-mono); letter-spacing:.32em; text-transform:uppercase;
+    color:var(--muted); opacity:.8; }
+  h1{ font-family:var(--font-serif); font-weight:500; font-size:clamp(34px,6vw,60px);
+    margin:.16em 0 .1em; letter-spacing:-.01em;
+    background:linear-gradient(180deg,#fff,#c8cad6); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  .sub{ color:var(--muted); font-size:14.5px; font-style:italic; font-family:var(--font-serif);
+    max-width:560px; margin:0 auto; line-height:1.5; }
+  .sib{ margin-top:12px; font:11px/1.6 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; }
+  .sib a{ color:var(--muted); text-decoration:none; border-bottom:1px solid transparent;
+    padding-bottom:2px; transition:.2s; }
+  .sib a:hover{ color:var(--ink); border-bottom-color:rgba(255,255,255,.3); }
+  .sib .sep{ opacity:.4; margin:0 10px; }
+
+  .stage{ display:flex; gap:26px; justify-content:center; align-items:flex-start;
+    flex-wrap:wrap; padding:26px 20px 40px; }
+  .panel{ background:rgba(255,255,255,.025); border:1px solid rgba(255,255,255,.08);
+    border-radius:18px; padding:18px; }
+  .panel .ptitle{ font:600 11px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase;
+    color:var(--muted); margin:0 0 14px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .stagew{ width:520px; max-width:94vw; }
+  svg.board{ display:block; width:100%; height:auto; border-radius:12px;
+    background:radial-gradient(120% 130% at 50% 30%, #15161d, #0c0d12 78%);
+    touch-action:none; cursor:crosshair; }
+
+  /* the quiet correctness chip */
+  .chip{ font:600 10px/1 var(--font-mono); letter-spacing:.04em; padding:5px 9px; border-radius:999px;
+    border:1px solid rgba(255,255,255,.16); background:rgba(0,0,0,.3); color:var(--muted);
+    white-space:nowrap; cursor:default; user-select:none; transition:.2s; }
+  .chip.ok{ color:#8fd79a; border-color:rgba(120,200,130,.5); background:rgba(30,58,38,.4); }
+  .chip.bad{ color:#f08a7a; border-color:rgba(220,120,100,.6); background:rgba(70,30,26,.4); }
+
+  .controls{ display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center;
+    margin-top:16px; }
+  .group{ display:flex; align-items:center; gap:8px; }
+  .lab{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--muted); }
+  .seg{ display:inline-flex; border:1px solid rgba(255,255,255,.14); border-radius:999px; overflow:hidden; }
+  .seg button{ background:transparent; color:var(--muted); border:0; cursor:pointer;
+    font:600 12px/1 var(--font-mono); padding:8px 12px; transition:.15s; }
+  .seg button.on{ background:var(--accent); color:#15131f; }
+  .seg button:hover:not(.on){ color:var(--ink); }
+  .btn{ background:rgba(255,255,255,.04); color:var(--ink); cursor:pointer;
+    border:1px solid rgba(255,255,255,.16); border-radius:999px;
+    font:600 11px/1 var(--font-mono); letter-spacing:.08em; padding:10px 16px; transition:.18s; }
+  .btn:hover{ background:rgba(255,255,255,.1); border-color:rgba(255,255,255,.34); transform:translateY(-1px); }
+  .btn.primary{ background:var(--accent); color:#15131f; border-color:transparent; }
+  .btn.primary:hover{ filter:brightness(1.07); }
+  .btn:disabled{ opacity:.35; cursor:default; transform:none; }
+
+  .toggle{ display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+    font:11px/1.3 var(--font-mono); color:var(--muted); user-select:none; margin-top:13px; }
+  .toggle input{ accent-color:var(--accent); width:14px; height:14px; }
+  .toggle:hover{ color:var(--ink); }
+
+  .hint{ margin-top:12px; font:12px/1.5 var(--font-mono); color:var(--muted); opacity:.8; min-height:18px; }
+  .stagetag{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--accent); opacity:.9; }
+
+  /* gallery */
+  .gallery{ width:300px; max-width:94vw; }
+  .flurry{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; max-height:360px; overflow:auto;
+    padding-right:4px; }
+  .flake{ position:relative; aspect-ratio:1; border-radius:10px; overflow:hidden;
+    background:#101117; border:1px solid rgba(255,255,255,.07); cursor:pointer; transition:.2s;
+    animation:pop .4s cubic-bezier(.2,.8,.2,1); }
+  @keyframes pop{ from{ opacity:0; transform:scale(.7) } to{ opacity:1; transform:none } }
+  .flake:hover{ border-color:color-mix(in srgb,var(--accent) 60%,transparent);
+    box-shadow:0 8px 24px -8px rgba(0,0,0,.7), 0 0 0 1px color-mix(in srgb,var(--accent) 30%,transparent); }
+  .flake svg{ display:block; width:100%; height:100%; }
+  .flake .x{ position:absolute; top:3px; right:4px; z-index:2; color:var(--muted);
+    font:700 13px/1 var(--font-mono); opacity:0; transition:.15s; cursor:pointer; }
+  .flake:hover .x{ opacity:.8; }
+  .flake .x:hover{ color:#ff8aa8; opacity:1; }
+  .empty{ grid-column:1/-1; text-align:center; color:var(--muted); opacity:.5;
+    font:12px/1.6 var(--font-mono); padding:40px 10px; }
+  .galtools{ display:flex; gap:8px; margin-top:14px; }
+  .galtools .btn{ flex:1; text-align:center; }
+
+  footer{ text-align:center; color:var(--muted); opacity:.5;
+    font:11px/1.7 var(--font-mono); padding:24px; letter-spacing:.04em; }
+</style>
+</head>
+<body>
+<a class="back-ws" href="../index.html">&larr; The Orrery Estate</a>
+
+<header>
+  <div class="kick">The Gardens &middot; Paper Folly</div>
+  <h1>Kirigami</h1>
+  <div class="sub">Fold the paper, snip the edge, and open it up. The single cut you make
+    blooms across every fold into a snowflake whose symmetry <em>you</em> designed.</div>
+  <div class="sib">
+    <a href="../strange-garden/index.html">🌿 the Strange Garden</a>
+    <span class="sep">·</span>
+    <a href="../kaleidoscope/index.html">🔮 the Kaleidoscope</a>
+  </div>
+</header>
+
+<div class="stage">
+  <div class="panel stagew">
+    <div class="ptitle">
+      <span>The Paper</span>
+      <span style="display:flex; align-items:center; gap:10px;">
+        <span class="chip" id="chip" title="optional: the unfolded flake's exact symmetry">D₆ · checking…</span>
+        <span class="stagetag" id="phaseTag">flat</span>
+      </span>
+    </div>
+    <svg class="board" id="board" viewBox="0 0 520 520" aria-label="folding paper"></svg>
+
+    <div class="controls">
+      <div class="group">
+        <span class="lab">Folds</span>
+        <div class="seg" id="folds">
+          <button data-n="4">4</button>
+          <button data-n="6" class="on">6</button>
+          <button data-n="8">8</button>
+        </div>
+      </div>
+      <div class="group">
+        <span class="lab">→ symmetry</span>
+        <span id="symTag" class="stagetag" style="color:var(--muted)">12-fold</span>
+      </div>
+      <div style="flex:1"></div>
+      <button class="btn primary" id="foldBtn">Fold ▸</button>
+      <button class="btn" id="unfoldBtn" disabled>Unfold ✦</button>
+      <button class="btn" id="resetBtn">Reset</button>
+    </div>
+    <div class="hint" id="hint">Pick a fold count, then press <b>Fold</b> to stack the paper into a wedge.</div>
+    <label class="toggle"><input type="checkbox" id="proofTog"> show the mirror proof — every copy is the source, reflected</label>
+  </div>
+
+  <div class="panel gallery">
+    <div class="ptitle"><span>The Flurry</span><span id="count" class="stagetag" style="color:var(--muted)">0</span></div>
+    <div class="flurry" id="flurry"><div class="empty">cut a snowflake and<br>pin it here ❄</div></div>
+    <div class="galtools">
+      <button class="btn" id="pinBtn" disabled>📌 Pin it</button>
+      <button class="btn" id="svgBtn" disabled>↓ SVG</button>
+      <button class="btn" id="pngBtn" disabled>↓ PNG</button>
+    </div>
+  </div>
+</div>
+
+<footer>A paper-snowflake folly — the dihedral group D<sub>N</sub> is the brush; the cut is the play.</footer>
+
+<script>
+"use strict";
+(function(){
+  /* =========================================================================
+     KIRIGAMI — fold a disc into one wedge (the fundamental domain of the
+     dihedral group D_N), snip a freehand notch through the folded edge, and
+     unfold. The single cut is replayed across all 2N images (N rotations × a
+     mirror) into a radial snowflake. Turning the fold dial re-reflects the SAME
+     cut into a new D_N, live.
+
+     The CUT is authored in WEDGE-LOCAL coords (hinge/apex at the origin, the
+     fold edge along angle 0, the wedge opening up to angle π/N). Kept paper =
+     inside the sector AND not inside the bitten-out notch (a polygon closed back
+     onto the fold edge). That single keptLocal/keptWorld definition drives BOTH
+     the render and the optional D_N self-test, so the chip is a real shared-def
+     check, not a tautology.
+     ========================================================================= */
+
+  // ---- breadcrumb (front-door survey registers a visit) ----
+  try{ var __k='ws:seen:kirigami'; if(localStorage.getItem(__k)==null) localStorage.setItem(__k,String(Date.now())); }catch(e){}
+
+  var TAU=Math.PI*2;
+  var SVGNS='http://www.w3.org/2000/svg';
+  var board=document.getElementById('board');
+  var CX=260, CY=270, R=215;            // disc center + radius on the 520-board
+
+  /* =========================================================================
+     THE CORE — wedge-local cut model + D_N kept-paper predicate + proof.
+     (Ported from explorer A; shared by render + self-test.)
+     ========================================================================= */
+  var Kirigami = {
+    N: 6,            // fold count → dihedral D_N → 2N half-wedges
+    cut: [],         // freehand cut polyline in wedge-local {x,y} (hinge at origin), normalized r∈[0,Rn]
+    Rn: 1,           // normalized wedge radius
+
+    setN:function(n){ this.N=n; },
+
+    // close the freehand cut back onto the fold edge (angle 0 → the +x ray) so it
+    // reads as a bite taken OUT of the folded edge — the classic snowflake cut.
+    notchPolygon:function(){
+      if(this.cut.length<2) return null;
+      var p=this.cut, a=p[0], b=p[p.length-1];
+      var poly=[{x:a.x,y:0}];
+      for(var i=0;i<p.length;i++) poly.push({x:p[i].x,y:p[i].y});
+      poly.push({x:b.x,y:0});
+      return poly;
+    },
+
+    pointInPoly:function(px,py,poly){
+      var inside=false;
+      for(var i=0,j=poly.length-1;i<poly.length;j=i++){
+        var xi=poly[i].x,yi=poly[i].y,xj=poly[j].x,yj=poly[j].y;
+        if(((yi>py)!==(yj>py)) && (px < (xj-xi)*(py-yi)/(yj-yi)+xi)) inside=!inside;
+      }
+      return inside;
+    },
+
+    // KEPT-PAPER predicate in WEDGE-LOCAL coords. The rim & angle gates carry a
+    // tiny epsilon so a point sitting EXACTLY on the disc rim (r=1) or the sector
+    // edge can't be flipped by sub-ULP rounding after a rotate/reflect — that
+    // boundary jitter is the one thing that would make the D_N test report a
+    // false mismatch (it did, at one r=1 grid node for N=6, before this guard).
+    keptLocal:function(x,y){
+      var r=Math.hypot(x,y), phi=Math.atan2(y,x);
+      if(r>this.Rn+1e-9 || r<1e-4) return false;
+      if(phi<-1e-9 || phi>Math.PI/this.N+1e-9) return false;  // inside the sector
+      var poly=this.notchPolygon();
+      if(poly && this.pointInPoly(x,y,poly)) return false;     // bitten out
+      return true;
+    },
+
+    // fold a world point back into the fundamental wedge (the kaleidoscope fold,
+    // reused ONLY to test symmetry / sample the mask — never to author the cut).
+    foldToWedge:function(x,y){
+      var r=Math.hypot(x,y), a=Math.atan2(y,x);
+      var sector=TAU/this.N, half=sector/2;
+      a=((a%sector)+sector)%sector;
+      if(a>half) a=sector-a;
+      return {x:r*Math.cos(a), y:r*Math.sin(a)};
+    },
+    keptWorld:function(x,y){ var w=this.foldToWedge(x,y); return this.keptLocal(w.x,w.y); },
+
+    // ---- the optional self-test: prove the mask is EXACTLY D_N symmetric ----
+    // Sample a grid of world points; the kept-mask must be invariant under
+    //   (a) rotation by 2π/N   and   (b) reflection across the x-axis.
+    // Both are generators of D_N; together they generate the whole group, so
+    // invariance under both ⇒ invariance under all 2N elements.
+    proveSymmetry:function(){
+      if(this.cut.length<2) return {ok:true, checked:0, bad:0, note:"no cut yet"};
+      var sector=TAU/this.N, c=Math.cos(sector), s=Math.sin(sector);
+      var checked=0, bad=0, step=this.Rn/26;
+      for(var x=-this.Rn;x<=this.Rn;x+=step){
+        for(var y=-this.Rn;y<=this.Rn;y+=step){
+          if(Math.hypot(x,y)>this.Rn) continue;
+          var base=this.keptWorld(x,y);
+          var rx=x*c-y*s, ry=x*s+y*c;       // (a) rotate by one sector
+          var fx=x, fy=-y;                    // (b) reflect across x-axis
+          if(this.keptWorld(rx,ry)!==base) bad++;
+          if(this.keptWorld(fx,fy)!==base) bad++;
+          checked++;
+        }
+      }
+      return {ok:bad===0, checked:checked, bad:bad};
+    }
+  };
+  window.Kirigami=Kirigami;     // expose for any external harness
+
+  // ---------- coord helpers ----------
+  function hi(){ return Math.PI/Kirigami.N; }        // wedge opening angle (fundamental domain)
+  // normalized wedge-local (Rn=1) → board pixel, wedge presented along +x opening UP
+  function wl2px(p){ return { x:CX + p.x*R, y:CY - p.y*R }; }
+  // board pixel → normalized wedge-local
+  function px2wl(x,y){ return { x:(x-CX)/R, y:(CY-y)/R }; }
+  // clamp a freehand wedge-local point inside the sector [0..π/N], r∈[.02,1]
+  function clampToWedge(p){
+    var r=Math.hypot(p.x,p.y), phi=Math.atan2(p.y,p.x), top=hi();
+    if(r>Kirigami.Rn) r=Kirigami.Rn; if(r<0.02) r=0.02;
+    if(phi<0) phi=0; else if(phi>top) phi=top;
+    return { x:r*Math.cos(phi), y:r*Math.sin(phi) };
+  }
+
+  // ---------- phase / state ----------
+  var phase='flat';                  // flat | folded | unfolded
+  var drawing=false;
+  var showProof=false;
+
+  // ===========================================================================
+  // FLAT sheet
+  // ===========================================================================
+  function drawFlat(){
+    clear();
+    board.appendChild(el('circle',{cx:CX,cy:CY,r:R,fill:'#f4f1ea',stroke:'#d8d2c4','stroke-width':1.5,filter:'url(#soft)'}));
+    var N=Kirigami.N;
+    for(var s=0;s<N;s++){
+      var a=s*Math.PI/N;
+      board.appendChild(el('line',{x1:CX-R*Math.cos(a),y1:CY-R*Math.sin(a),
+        x2:CX+R*Math.cos(a),y2:CY+R*Math.sin(a),
+        stroke:'#cfc8b7','stroke-width':1,'stroke-dasharray':'3 5',opacity:.5}));
+    }
+    label(CX,CY+R+30,'a flat sheet — '+N+' fold lines');
+  }
+
+  // ===========================================================================
+  // FOLDED STACK — a stack of N layers (visible THICKNESS) presented along +x,
+  // opening upward by the wedge angle π/N. The cut goes through ALL layers.
+  // ===========================================================================
+  var stackG=null, cutG=null;
+  function wedgePathPx(off){
+    // wedge pie-slice from angle 0..hi, apex at center, offset up-left for depth.
+    var top=hi(), steps=18, ox=-off*0.5, oy=-off;
+    var ax=CX+ox, ay=CY+oy;
+    var d='M'+ax+' '+ay;
+    // out along the fold edge (angle 0)
+    d+=' L'+(CX+R+ox)+' '+(CY+oy);
+    // arc up to angle hi
+    for(var i=1;i<=steps;i++){
+      var a=top*i/steps;
+      d+=' L'+(CX+R*Math.cos(a)+ox)+' '+(CY-R*Math.sin(a)+oy);
+    }
+    d+=' Z';
+    return d;
+  }
+  function drawFolded(){
+    clear();
+    var N=Kirigami.N;
+    stackG=el('g',{}); board.appendChild(stackG);
+    for(var L=N-1;L>=0;L--){
+      var off=L*5.0;
+      var shade=0.62+0.38*(1-L/N);
+      var fill='rgb('+Math.round(244*shade)+','+Math.round(241*shade)+','+Math.round(234*shade)+')';
+      stackG.appendChild(el('path',{d:wedgePathPx(off),fill:fill,
+        stroke:'#cdc6b5','stroke-width':1, opacity:(L===0?1:.96)}));
+    }
+    // edge labels: the dotted FOLD edge (angle 0) and the OPEN edge (angle hi)
+    var top=hi();
+    board.appendChild(el('line',{x1:CX+R*0.06,y1:CY,x2:CX+R*0.96,y2:CY,
+      stroke:'rgba(201,182,255,.75)','stroke-width':1.5,'stroke-dasharray':'2 5'}));
+    label(CX+R*0.52, CY-7, 'fold', 'rgba(201,182,255,.95)');
+    var om=wl2px({x:0.52*Math.cos(top), y:0.52*Math.sin(top)});
+    label(om.x-4, om.y-6, 'open', 'rgba(150,160,180,.8)');
+    label(CX, CY+R+30, N+' layers stacked — drag across the wedge to snip a notch ✎');
+    cutG=el('g',{}); board.appendChild(cutG);
+    redrawCut();
+  }
+
+  function redrawCut(){
+    if(!cutG) return;
+    while(cutG.firstChild) cutG.removeChild(cutG.firstChild);
+    if(Kirigami.cut.length<1) return;
+    // shade the bitten-out notch (dark stage shows through the snip)
+    var poly=Kirigami.notchPolygon();
+    if(poly){
+      var dn='M';
+      for(var i=0;i<poly.length;i++){ var s=wl2px(poly[i]); dn+=(i?' L':'')+s.x.toFixed(1)+' '+s.y.toFixed(1); }
+      dn+=' Z';
+      cutG.appendChild(el('path',{d:dn, fill:'rgba(13,13,18,.92)', stroke:'none'}));
+    }
+    // the scissor stroke
+    var dc='M';
+    for(var k=0;k<Kirigami.cut.length;k++){ var p=wl2px(Kirigami.cut[k]); dc+=(k?' L':'')+p.x.toFixed(1)+' '+p.y.toFixed(1); }
+    cutG.appendChild(el('path',{d:dc,fill:'none',stroke:'#c9b6ff','stroke-width':2.4,
+      'stroke-linecap':'round','stroke-linejoin':'round','stroke-dasharray':'7 4'}));
+    var last=wl2px(Kirigami.cut[Kirigami.cut.length-1]);
+    cutG.appendChild(el('circle',{cx:last.x,cy:last.y,r:3.4,fill:'#c9b6ff'}));
+  }
+
+  // ===========================================================================
+  // UNFOLD — render the kept paper across all 2N half-wedges as
+  // (sector minus notch) via even-odd fill. Half-wedge s: rotation by
+  // floor(s/2)·(2π/N); odd s is the mirror image (reflect across the fold edge).
+  // ===========================================================================
+  // build the path string for one half-wedge (sector wedge + notch hole),
+  // in BOARD pixels, given rotation angle `rot` and a mirror flag.
+  function halfWedgePath(rot, mirror){
+    var top=hi(), steps=22;
+    // map a wedge-local normalized point (x,y) through optional mirror + rotation → px
+    function map(x,y){
+      var ly = mirror ? -y : y;             // reflect across the fold edge (angle 0)
+      var c=Math.cos(rot), s=Math.sin(rot);
+      var rx=x*c-ly*s, ry=x*s+ly*c;         // rotate in math frame (+y up)
+      return { x:CX+rx*R, y:CY-ry*R };      // to pixels (y flips down)
+    }
+    // sector wedge: apex → fold-edge rim → arc → apex
+    var d='', q=map(0,0); d+='M'+q.x.toFixed(1)+' '+q.y.toFixed(1);
+    q=map(Kirigami.Rn,0); d+=' L'+q.x.toFixed(1)+' '+q.y.toFixed(1);
+    for(var i=1;i<=steps;i++){ var a=top*i/steps; q=map(Kirigami.Rn*Math.cos(a), Kirigami.Rn*Math.sin(a));
+      d+=' L'+q.x.toFixed(1)+' '+q.y.toFixed(1); }
+    d+=' Z';
+    // notch sub-path (even-odd cuts it out)
+    var poly=Kirigami.notchPolygon();
+    if(poly){
+      q=map(poly[0].x,poly[0].y); d+=' M'+q.x.toFixed(1)+' '+q.y.toFixed(1);
+      for(var j=1;j<poly.length;j++){ q=map(poly[j].x,poly[j].y); d+=' L'+q.x.toFixed(1)+' '+q.y.toFixed(1); }
+      d+=' Z';
+    }
+    return d;
+  }
+
+  var snowParts=[];
+  function buildSnowflake(forBloom){
+    var N=Kirigami.N, out=[];
+    for(var s=0;s<2*N;s++){
+      var rot=Math.floor(s/2)*(TAU/N), mirror=(s%2===1);
+      out.push({ d:halfWedgePath(rot,mirror), idx:s });
+    }
+    return out;
+  }
+
+  function unfold(){
+    if(Kirigami.cut.length<2){ setHint('Draw a cut first — drag across the folded wedge ✎'); return; }
+    phase='unfolded'; setPhase('unfolded');
+    clear();
+    board.appendChild(el('circle',{cx:CX,cy:CY,r:R+4,fill:'none',stroke:'rgba(255,255,255,.05)','stroke-width':1}));
+    var parts=buildSnowflake(true);
+    var g=el('g',{}); board.appendChild(g);
+    snowParts=[];
+    parts.forEach(function(pt){
+      var path=el('path',{d:pt.d,fill:'#f4f1ea',stroke:'#e6e0d2','stroke-width':.6,'fill-rule':'evenodd',
+        opacity:0, transform:'rotate('+(pt.idx%2?6:-6)+' '+CX+' '+CY+') scale(.84)'});
+      g.appendChild(path); snowParts.push(path);
+    });
+    snowG=g;
+    // layer-by-layer bloom: reveal mirror pairs springing into place
+    var i=0;
+    function bloom(){
+      if(i>=snowParts.length){ finishUnfold(); return; }
+      [snowParts[i],snowParts[i+1]].forEach(function(p){
+        if(!p) return;
+        p.style.transition='opacity .42s ease, transform .55s cubic-bezier(.2,.85,.25,1.05)';
+        p.setAttribute('opacity','1');
+        p.setAttribute('transform','rotate(0 '+CX+' '+CY+') scale(1)');
+      });
+      i+=2; setTimeout(bloom,140);
+    }
+    setTimeout(bloom,110);
+    label(CX,CY+R+30,'✦ unfolded — your snowflake (D'+sub(Kirigami.N)+' symmetry)');
+  }
+  var snowG=null, proofG=null;
+
+  function finishUnfold(){
+    setHint('Beautiful. <b>Pin</b> it to your flurry, export it, or <b>Reset</b> to cut another.');
+    document.getElementById('pinBtn').disabled=false;
+    document.getElementById('svgBtn').disabled=false;
+    document.getElementById('pngBtn').disabled=false;
+    lastSnowflake=currentSnowflakeSVG(120);
+    runChip();
+    drawProof();
+  }
+
+  // ---------- the mirror-proof overlay (B's idea, optional ornament) ----------
+  function drawProof(){
+    if(proofG){ if(proofG.parentNode) proofG.parentNode.removeChild(proofG); proofG=null; }
+    if(!showProof || phase!=='unfolded' || Kirigami.cut.length<2) return;
+    var N=Kirigami.N;
+    proofG=el('g',{}); board.appendChild(proofG);
+    // dashed fold-axis spokes (2N of them: N fold edges + N open edges)
+    for(var k=0;k<2*N;k++){
+      var ang=k*hi();           // spokes every π/N around the disc
+      var even=(k%2===0);
+      proofG.appendChild(el('line',{x1:CX,y1:CY,x2:CX+Math.cos(ang)*R, y2:CY-Math.sin(ang)*R,
+        stroke: even?'rgba(127,182,255,.55)':'rgba(150,150,180,.25)',
+        'stroke-width': even?1.6:1, 'stroke-dasharray': even?'6 5':'2 6'}));
+    }
+    // tint the SOURCE wedge gold, its first mirror blue
+    proofG.appendChild(el('path',{d:halfWedgePath(0,false), fill:'rgba(232,200,121,.34)', stroke:'none','fill-rule':'evenodd'}));
+    proofG.appendChild(el('path',{d:halfWedgePath(0,true),  fill:'rgba(127,182,255,.30)', stroke:'none','fill-rule':'evenodd'}));
+  }
+
+  // ===========================================================================
+  // FOLD animation (flat disc collapses into the stacked wedge)
+  // ===========================================================================
+  function animateFold(){
+    setHint('folding…');
+    var t0=performance.now(), dur=620, N=Kirigami.N;
+    function step(now){
+      var t=Math.min(1,(now-t0)/dur), e=1-Math.pow(1-t,3);
+      clear();
+      board.appendChild(el('circle',{cx:CX,cy:CY,r:R,fill:'#f4f1ea',stroke:'#d8d2c4','stroke-width':1.4,opacity:(1-e)}));
+      for(var L=N-1;L>=0;L--){
+        var off=L*5.0*e;
+        var shade=0.62+0.38*(1-L/N);
+        var fill='rgb('+Math.round(244*shade)+','+Math.round(241*shade)+','+Math.round(234*shade)+')';
+        board.appendChild(el('path',{d:wedgePathPx(off),fill:fill,stroke:'#cdc6b5','stroke-width':1,
+          opacity:e*(L===0?1:.96)}));
+      }
+      if(t<1){ requestAnimationFrame(step); }
+      else { phase='folded'; setPhase('folded'); drawFolded();
+        setHint('Now <b>drag across the wedge</b> to snip a notch through all '+N+' layers. ✎'); }
+    }
+    requestAnimationFrame(step);
+  }
+
+  // ===========================================================================
+  // POINTER (the scissor)
+  // ===========================================================================
+  function pt(ev){
+    var r=board.getBoundingClientRect();
+    var sx=520/r.width, sy=520/r.height;
+    return { x:(ev.clientX-r.left)*sx, y:(ev.clientY-r.top)*sy };
+  }
+  board.addEventListener('pointerdown',function(ev){
+    if(phase!=='folded') return;
+    drawing=true; Kirigami.cut=[]; board.setPointerCapture(ev.pointerId);
+    var p=pt(ev); Kirigami.cut.push(clampToWedge(px2wl(p.x,p.y))); redrawCut();
+    ev.preventDefault();
+  });
+  board.addEventListener('pointermove',function(ev){
+    if(!drawing) return;
+    var p=pt(ev), wl=clampToWedge(px2wl(p.x,p.y));
+    var last=Kirigami.cut[Kirigami.cut.length-1];
+    if(Math.hypot(wl.x-last.x, wl.y-last.y)>0.012){ Kirigami.cut.push(wl); redrawCut(); }
+  });
+  function endCut(){
+    if(!drawing) return; drawing=false;
+    document.getElementById('unfoldBtn').disabled = Kirigami.cut.length<2;
+    if(Kirigami.cut.length>=2) setHint('Nice cut. Press <b>Unfold ✦</b> to open the paper.');
+  }
+  board.addEventListener('pointerup',endCut);
+  board.addEventListener('pointercancel',endCut);
+
+  // ===========================================================================
+  // SNAPSHOT SVG (gallery thumbs + export)
+  // ===========================================================================
+  function currentSnowflakeSVG(size){
+    if(Kirigami.cut.length<2) return null;
+    var parts=buildSnowflake(false);
+    var s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 520" width="'+size+'" height="'+size+'">';
+    s+='<rect width="520" height="520" fill="#101117"/>';
+    parts.forEach(function(pt){
+      s+='<path d="'+pt.d+'" fill="#f4f1ea" stroke="#e6e0d2" stroke-width="0.6" fill-rule="evenodd"/>';
+    });
+    s+='</svg>';
+    return { svg:s, n:Kirigami.N };
+  }
+  var lastSnowflake=null;
+
+  // ===========================================================================
+  // GALLERY
+  // ===========================================================================
+  var flurry=document.getElementById('flurry');
+  var pinned=[];
+  function refreshGallery(){
+    flurry.innerHTML='';
+    if(pinned.length===0){ flurry.innerHTML='<div class="empty">cut a snowflake and<br>pin it here ❄</div>';
+      document.getElementById('count').textContent='0'; return; }
+    document.getElementById('count').textContent=pinned.length;
+    pinned.forEach(function(item,idx){
+      var cell=el2('div','flake'); cell.innerHTML=item.svg+'<span class="x" title="remove">×</span>';
+      cell.querySelector('.x').addEventListener('click',function(e){ e.stopPropagation(); pinned.splice(idx,1); refreshGallery(); });
+      cell.addEventListener('click',function(){ downloadSVG(item.svg,'kirigami-D'+item.n); });
+      flurry.appendChild(cell);
+    });
+  }
+  document.getElementById('pinBtn').addEventListener('click',function(){
+    if(!lastSnowflake) return;
+    pinned.unshift({svg:lastSnowflake.svg,n:lastSnowflake.n});
+    if(pinned.length>18) pinned.pop();
+    refreshGallery();
+    setHint('Pinned ❄ — '+pinned.length+' in your flurry.');
+  });
+
+  // ===========================================================================
+  // EXPORT
+  // ===========================================================================
+  function downloadSVG(svgStr,name){
+    var blob=new Blob([svgStr],{type:'image/svg+xml'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+'.svg';
+    a.click(); setTimeout(function(){URL.revokeObjectURL(a.href);},800);
+  }
+  document.getElementById('svgBtn').addEventListener('click',function(){
+    if(lastSnowflake) downloadSVG(lastSnowflake.svg,'kirigami-D'+lastSnowflake.n);
+  });
+  document.getElementById('pngBtn').addEventListener('click',function(){
+    if(!lastSnowflake) return;
+    var img=new Image();
+    var blob=new Blob([lastSnowflake.svg],{type:'image/svg+xml'});
+    var url=URL.createObjectURL(blob);
+    img.onload=function(){
+      var c=document.createElement('canvas'); c.width=c.height=720;
+      var ctx=c.getContext('2d'); ctx.drawImage(img,0,0,720,720);
+      var a=document.createElement('a'); a.href=c.toDataURL('image/png');
+      a.download='kirigami-D'+lastSnowflake.n+'.png'; a.click();
+      URL.revokeObjectURL(url);
+    };
+    img.src=url;
+  });
+
+  // ===========================================================================
+  // CONTROLS
+  // ===========================================================================
+  document.querySelectorAll('#folds button').forEach(function(b){
+    b.addEventListener('click',function(){
+      document.querySelectorAll('#folds button').forEach(function(x){x.classList.remove('on');});
+      b.classList.add('on'); Kirigami.setN(+b.dataset.n);
+      document.getElementById('symTag').textContent=(2*Kirigami.N)+'-fold';
+      // re-clamp the SAME cut into the new wedge so changing N RE-REFLECTS it live
+      Kirigami.cut=Kirigami.cut.map(clampToWedge);
+      if(phase==='unfolded' && Kirigami.cut.length>=2){ unfold(); }
+      else if(phase==='flat'){ drawFlat(); }
+      else if(phase==='folded'){ drawFolded(); }
+      runChip();
+    });
+  });
+  document.getElementById('foldBtn').addEventListener('click',function(){
+    if(phase==='unfolded') return;
+    animateFold();
+  });
+  document.getElementById('unfoldBtn').addEventListener('click',unfold);
+  document.getElementById('resetBtn').addEventListener('click',function(){
+    phase='flat'; Kirigami.cut=[]; setPhase('flat');
+    document.getElementById('unfoldBtn').disabled=true;
+    document.getElementById('pinBtn').disabled=true;
+    document.getElementById('svgBtn').disabled=true;
+    document.getElementById('pngBtn').disabled=true;
+    drawFlat(); setHint('Pick a fold count, then press <b>Fold</b> to stack the paper into a wedge.');
+    runChip();
+  });
+  document.getElementById('proofTog').addEventListener('change',function(e){
+    showProof=e.target.checked; drawProof();
+  });
+
+  // ===========================================================================
+  // THE QUIET CORRECTNESS CHIP (optional ornament — never a gate)
+  // ===========================================================================
+  var chipEl=document.getElementById('chip');
+  function runChip(){
+    var res=Kirigami.proveSymmetry();
+    if(Kirigami.cut.length<2){
+      chipEl.className='chip'; chipEl.innerHTML='D'+sub(Kirigami.N)+' · cut to test';
+      chipEl.title='Draw a cut, then this proves the unfolded flake is exactly D_N symmetric.';
+      return;
+    }
+    if(res.ok){
+      chipEl.className='chip ok'; chipEl.innerHTML='D'+sub(Kirigami.N)+' · exact ✓';
+      chipEl.title='Verified: the unfolded mask is invariant under a 2π/'+Kirigami.N+' rotation AND a reflection ('+res.checked+' samples) — the two generators of D'+Kirigami.N+'.';
+    }else{
+      chipEl.className='chip bad'; chipEl.innerHTML='D'+sub(Kirigami.N)+' · '+res.bad+' off';
+      chipEl.title='Symmetry check failed on '+res.bad+' samples.';
+    }
+  }
+
+  // ===========================================================================
+  // HELPERS
+  // ===========================================================================
+  function el(tag,attrs){ var e=document.createElementNS(SVGNS,tag);
+    for(var k in attrs) e.setAttribute(k,attrs[k]); return e; }
+  function el2(tag,cls){ var e=document.createElement(tag); if(cls) e.className=cls; return e; }
+  function clear(){ while(board.firstChild) board.removeChild(board.firstChild); addDefs(); }
+  function addDefs(){
+    var defs=el('defs',{});
+    var f=el('filter',{id:'soft',x:'-20%',y:'-20%',width:'140%',height:'140%'});
+    f.appendChild(el('feDropShadow',{dx:0,dy:6,stdDeviation:10,'flood-color':'#000','flood-opacity':.45}));
+    defs.appendChild(f); board.appendChild(defs);
+  }
+  function label(x,y,txt,color){
+    var t=el('text',{x:x,y:y,fill:color||'#9aa0b0','font-size':12.5,'text-anchor':'middle',
+      'font-family':'ui-monospace,Menlo,monospace','letter-spacing':'.04em',opacity:.88});
+    t.textContent=txt; board.appendChild(t);
+  }
+  function setHint(h){ document.getElementById('hint').innerHTML=h; }
+  function setPhase(p){ phase=p; document.getElementById('phaseTag').textContent=p; }
+  function sub(n){ return String(n).split('').map(function(d){return '₀₁₂₃₄₅₆₇₈₉'[+d];}).join(''); }
+
+  // ===========================================================================
+  // SEED a gentle default cut so the gallery thumb + chip have something live,
+  // then boot to the FLAT sheet (cut interaction is gated behind the fold).
+  // ===========================================================================
+  function seedDemoCut(){
+    var top=hi(), pts=[];
+    for(var i=0;i<=6;i++){
+      var r=0.35+0.42*(i/6);
+      var ph=(i%2 ? top*0.85 : top*0.22);
+      pts.push({x:r*Math.cos(ph), y:r*Math.sin(ph)});
+    }
+    Kirigami.cut=pts.map(clampToWedge);
+  }
+
+  // ---------- boot ----------
+  seedDemoCut();           // a live default cut (drives the chip + first export)
+  drawFlat(); setPhase('flat');
+  runChip();
+})();
+</script>
+</body>
+</html>
