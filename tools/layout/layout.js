@@ -134,6 +134,7 @@ var Layout = (function () {
     east:        { label: 'THE EAST WING',      accent: '#74b0a6' },
     maker:       { label: "THE MAKER'S WING",   accent: '#7ad0c4' },
     archive:     { label: 'THE ARCHIVE',        accent: '#c9a44e' },
+    reckoning:   { label: 'THE RECKONING CABINET', accent: '#c9a24a' },
     glasshouses: { label: 'THE GLASSHOUSES',    accent: '#7fd1c7' },
     optics:      { label: 'OPTICS',             accent: '#8fd9ff' },
     number:      { label: 'THE NUMBER WING',    accent: '#c9a24a' },
