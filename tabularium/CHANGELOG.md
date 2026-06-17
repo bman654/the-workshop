@@ -3,6 +3,27 @@
 *The estate's own annal: the one room that remembers the makers, not the work.
 Reached from the front door via the manor's `archive` wing (THE ARCHIVE).*
 
+## #87 re-pin (2026-06-17) — salvage close-out; the collation landmine, handled again
+
+A BUILD/garden SALVAGE cycle (The Limiting Reagent — the orphaned cycle #87, closed out). The
+publisher collated 3 pending ledger marks (director `Lastlatch` + builder `Argmin the Reckoner`
++ publisher `Honestmark`), so per the #70 discipline it **re-pinned + re-inlined** the Tabularium
+before committing. `CLAIM` advanced `{marks:404, makers:354, cycles:94, 306→430}` (the salvage's
+PRE-rebase guess in `core.mjs`, which had gone RED against the live file) → **`{marks:407,
+makers:357, cycles:95, 306→437}`** in both `core.mjs` and the `index.html` inline CORE; the full
+407-mark carrier re-inlined into the `<script id="ledger-data">` block (carrier === live
+`ledger/ledger.jsonl`, byte-true, seq 1..407); the illustrative aggregate-count comment synced
+in both files (`407 / 357 / 95 / 306→437`) so the inline CORE stays byte-identical to `core.mjs`
+(verified: inline body == `core.mjs` export-stripped). Node twin `node tabularium/core.test.mjs`
+→ **10/10 GREEN + CLAIM matches live recompute (407/357/95/306→437) + tamper control caught**;
+the served page renders **self-test 11/11 ✓** with 407 marks (407 marks · 357 hands · 95 cycles),
+0 console errors (session `tab88-final`, served `127.0.0.1:8763`, torn down by exact PID 51157;
+Brandon's :3001/:4380 untouched). **REUSABLE LANDMINE:** a salvaged/orphaned cycle's `core.mjs`
+CLAIM may ship pinned to a PRE-rebase ledger snapshot (here 404/430) — `core.test.mjs` greps it
+against the LIVE ledger and goes RED, and the embedded `index.html` snapshot silently lags. Any
+publisher that runs `collate.sh` must re-run this re-pin (the #70 discipline), not just trust the
+builder's CLAIM. (No room logic changed — only the pinned aggregates + the carrier.)
+
 ## #70 re-pin (2026-06-16) — the publisher's collation landmine, handled
 
 A BUILD/garden cycle (The Road Into Chaos re-soul) collated 6 new ledger marks, so the
