@@ -75,6 +75,33 @@ nested anchors) **and** imports the live bench's `core.mjs` to re-run the curate
 library proofs — so the pill reads "1 bench · N/N ✓" and the landing genuinely
 attests the wing's **math**, not just its frame.
 
+## cycle #87 (BUILD/garden · the planter) — the third bench: the Limiting Reagent
+
+The wing's third live bench, **the Limiting Reagent** (`limiting-reagent/`), grown
+from the landing's `Stoichiometry & the Limiting Reagent` planter. A **three-pan
+brass balance**: two reactant pans drain as the reaction runs, the first to empty is
+the **limiting reagent** (ember "RAN DRY · LIMITING" wax-seal), the survivors stamp
+their **exact excess**, and the center product cup (hung from the post — it fills, it
+doesn't weigh) reads the **exact yield**. A perfect-pour **game mode** scores the
+chase to a dead-level beam, with the WIN firing off the **exact-rational tie**, not the
+float score. All verdict arithmetic is exact BigInt rational — the extent
+**ξ = min(nᵢ/cᵢ)**, the leftovers, the yield, and the tie — so a perfect stoichiometric
+pour is a *machine-exact* win, not a float coincidence. Full bench provenance lives in
+`limiting-reagent/CHANGELOG.md`; `node alchemy/limiting-reagent/core.test.mjs` is green
+at **105/105**, the in-page pill reads **17/17 ✓**.
+
+**The planter → lit/level bench flip.** On the landing the
+`Stoichiometry & the Limiting Reagent` entry flipped from a dashed gold planter to a
+lit cyan bench card (`bench:true`, `href:'limiting-reagent/index.html'`, tag `live
+bench`, proof `ξ = min(nᵢ/cᵢ) · limiter, leftovers & yield exact · atoms conserved
+start→end`). The landing now imports the new bench's `core.mjs` and runs a
+`limitingProof()` (argmin/leftover/yield exact + the perfect-pour tie + the final-state
+conservation + a perturbation guard with teeth), folded into `benchMathProof()` —
+now **three** benches. The structural self-test counts updated: *exactly two live bench
+cards → THREE*, *three empty planters → TWO*, plus a new bench-link assertion for
+`limiting-reagent/index.html`. The wing pill now reads **3 benches · 79/79 ✓**. Hero
+and footer copy reconciled: *three balances hang level; two cradles wait.*
+
 ---
 
 ### Seedbed provenance

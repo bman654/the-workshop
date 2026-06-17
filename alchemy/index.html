@@ -136,8 +136,9 @@
     <h1>The Alchemy Lab</h1>
     <p class="lede">The estate's first <b>chemistry</b> wing. Each bench is a <b>hanging balance</b> on the
       laboratory wall — a law of matter you can feel as weight and level. The atoms the Cavern's physics
-      drift takes apart are the ones you put back together here. The <b>Reaction Balancer</b> and
-      <b>Titration</b> hang lit and level; the empty cradles tip in gold, naming where the wing grows next.</p>
+      drift takes apart are the ones you put back together here. The <b>Reaction Balancer</b>,
+      <b>Titration</b> and the <b>Limiting Reagent</b> hang lit and level; the empty cradles tip in gold,
+      naming where the wing grows next.</p>
     <span class="glowline"></span>
   </header>
 
@@ -163,9 +164,10 @@
   </section>
 
   <footer class="foot">
-    Two balances hang level; three cradles wait. Each bench keeps the workshop's promise — where it makes a
+    Three balances hang level; two cradles wait. Each bench keeps the workshop's promise — where it makes a
     claim, a built-in <b>self-test</b> proves it to machine precision. The Reaction Balancer reads coefficients
-    <b>off the nullspace</b>; Titration roots the equivalence pH from <b>charge balance</b>, exact. &nbsp;·&nbsp;
+    <b>off the nullspace</b>; Titration roots the equivalence pH from <b>charge balance</b>; the Limiting Reagent
+    decides the scarcest pan from <b>ξ = min(nᵢ/cᵢ)</b> — all exact. &nbsp;·&nbsp;
     <a href="../index.html">Back to the estate map</a>
   </footer>
 
@@ -177,9 +179,10 @@
      can read "1 bench · N/N ✓" and can never claim the wing is sound while the
      bench math is broken. (A dynamic import keeps the page usable off file://,
      where ES-module fetch is blocked — the pill then attests structure only.) */
-  let CORE = null, TITR = null;
+  let CORE = null, TITR = null, LIMIT = null;
   try{ CORE = await import('./reaction-balancer/core.mjs'); }catch(e){ /* file:// or fetch blocked */ }
   try{ TITR = await import('./titration/core.mjs'); }catch(e){ /* file:// or fetch blocked — degrade to structural-only */ }
+  try{ LIMIT = await import('./limiting-reagent/core.mjs'); }catch(e){ /* file:// or fetch blocked — degrade to structural-only */ }
 
   /* ── the front-door breadcrumb (the Survey of Heaven's only food) ── */
   try{ var k = 'ws:seen:alchemy'; if(!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
@@ -210,9 +213,9 @@
     { title:'The Reaction Balancer', bench:true, href:'reaction-balancer/index.html',
       tag:'live bench', proof:'coefficients read off the nullspace · A·c = 0 exact',
       desc:'Read the whole-number coefficients of a reaction straight off the nullspace of its element-count matrix — no guessing — and watch the two pans come level only when every element tallies equal on both sides.' },
-    { title:'Stoichiometry & the Limiting Reagent', bench:false, href:null,
-      tag:'planter · next', proof:null,
-      desc:'How much product, and which reactant runs out first? The pan that empties — and stops the reaction the instant it does.' },
+    { title:'Stoichiometry & the Limiting Reagent', bench:true, href:'limiting-reagent/index.html',
+      tag:'live bench', proof:'ξ = min(nᵢ/cᵢ) · limiter, leftovers & yield exact · atoms conserved start→end',
+      desc:'Load moles onto two brass pans, pick a reaction, hit START — and watch the pans drain until one empties. That pan is the limiting reagent; the reaction stops there, the rest sits in excess, and the yield is the exact product. Or pour the perfect ratio and every pan empties at once.' },
     { title:'pH & Titration', bench:true, href:'titration/index.html',
       tag:'live bench', proof:'pH(V) from charge balance · self-test 15/15 ✓',
       desc:'Pour NaOH into HCl drop by drop and chase the equivalence point by feel — the flask flips pink a hair past pH 7, the curve in the rail is only its shadow, and every claim is proven exact.' },
@@ -293,12 +296,55 @@
     return { ran:true, pass:pass, total:total };
   }
 
-  // combine both live benches into the wing-level math attestation
+  // ── bench #3: the Limiting-Reagent core's headline claims (ξ = min(nᵢ/cᵢ), limiter =
+  //    argmin, leftovers & yield exact, the perfect-pour tie, atoms conserved at the FINAL
+  //    state) re-run over the library — the same exact-rational proofs the bench badge runs. ──
+  function limitingProof(){
+    if(!LIMIT) return { ran:false, pass:0, total:0 };
+    var pass = 0, total = 0;
+    var R = LIMIT.R, rCmp = LIMIT.rCmp, rIsZero = LIMIT.rIsZero, rMul = LIMIT.rMul;
+    function rEq(a,b){ return rCmp(a,b) === 0; }
+    function coefsOf(rx){ var s = LIMIT.solve(rx.reactants, rx.products);
+      return { cR: s.coef.slice(0, rx.reactants.length), cP: s.coef.slice(rx.reactants.length) }; }
+    var lib = LIMIT.LIBRARY;
+    // argmin / leftover / yield exact, over every ≥2-reagent entry at an off-tie pour
+    for(var i = 0; i < lib.length; i++){
+      var rx = lib[i]; if(rx.negative || rx.reactants.length < 2) continue;
+      var c = coefsOf(rx);
+      var moles = []; for(var k = 0; k < c.cR.length; k++) moles.push(R(BigInt(c.cR[k]) * (k === c.cR.length-1 ? 10n : 10n) - (k === c.cR.length-1 ? 3n : 0n), 10n));
+      var e = LIMIT.extent(c.cR, c.cP, moles);
+      // independent recompute of ξ = min(nᵢ/cᵢ) and the argmin
+      var ratio = moles.map(function(m, j){ return LIMIT.rDiv(m, R(BigInt(c.cR[j]))); });
+      var xiInd = ratio[0]; for(var j = 1; j < ratio.length; j++) if(rCmp(ratio[j], xiInd) < 0) xiInd = ratio[j];
+      total++; if(rEq(e.xi, xiInd)) pass++;                                  // ξ exact
+      total++; if(e.leftover.every(function(l){ return l.n >= 0n; }) && e.limiters.every(function(li){ return rIsZero(e.leftover[li]); })) pass++; // leftovers ≥0, dry limiter
+      total++; if(e.yield.every(function(y, p){ return rEq(y, rMul(R(BigInt(c.cP[p])), e.xi)); })) pass++; // yield exact
+    }
+    // the perfect-pour TIE (the win) is an exact-rational fact, per rack reaction
+    for(var i2 = 0; i2 < lib.length; i2++){
+      var rx2 = lib[i2]; if(rx2.negative || rx2.reactants.length !== 2) continue;
+      var c2 = coefsOf(rx2);
+      var m2 = c2.cR.map(function(cc){ return R(BigInt(cc)); });
+      var e2 = LIMIT.extent(c2.cR, c2.cP, m2);
+      total++; if(e2.tie && e2.limiters.length === c2.cR.length && e2.leftover.every(rIsZero)) pass++;
+      // atoms conserved at the final state
+      total++; if(LIMIT.conservedAtFinalState(rx2.reactants, rx2.products, [R(BigInt(c2.cR[0])+2n), R(BigInt(c2.cR[1]))]) === true) pass++;
+    }
+    // perturbation teeth: an over-run extent drives a leftover negative (physically impossible)
+    var gl = lib.find(function(r){ return r.id === 'glucose'; });
+    if(gl){ var cg = coefsOf(gl); var rg = LIMIT.react(gl.reactants, gl.products, [R(1n), R(3n)]);
+      var xiBad = LIMIT.rAdd(rg.xi, R(1n));
+      var loBad = [R(1n), R(3n)].map(function(m, j){ return LIMIT.rSub(m, rMul(R(BigInt(cg.cR[j])), xiBad)); });
+      total++; if(loBad[rg.limiterIndex].n < 0n) pass++; }
+    return { ran:true, pass:pass, total:total };
+  }
+
+  // combine all three live benches into the wing-level math attestation
   function benchMathProof(){
-    var b = balancerProof(), t = titrationProof();
-    var ranCount = (b.ran ? 1 : 0) + (t.ran ? 1 : 0);
-    return { ran: b.ran || t.ran, benches: ranCount,
-      pass: b.pass + t.pass, total: b.total + t.total };
+    var b = balancerProof(), t = titrationProof(), l = limitingProof();
+    var ranCount = (b.ran ? 1 : 0) + (t.ran ? 1 : 0) + (l.ran ? 1 : 0);
+    return { ran: b.ran || t.ran || l.ran, benches: ranCount,
+      pass: b.pass + t.pass + l.pass, total: b.total + t.total + l.total };
   }
 
   function runSelfTest(){
@@ -306,7 +352,7 @@
     function ck(name, ok){ checks.push({ name: name, ok: !!ok }); }
 
     var benches = Array.from(document.querySelectorAll('a.vial.bench'));
-    ck('exactly two live bench cards', benches.length === 2);
+    ck('exactly three live bench cards', benches.length === 3);
     // every live bench link is bare-relative (no leading "/", no scheme) + points at an index.html
     ck('every bench link is bare-relative (no leading "/", no scheme)',
        benches.every(function(b){ var h = b.getAttribute('href');
@@ -316,9 +362,11 @@
        hrefs.indexOf('reaction-balancer/index.html') >= 0);
     ck('the Titration bench link is bare-relative & points at titration/index.html',
        hrefs.indexOf('titration/index.html') >= 0);
+    ck('the Limiting-Reagent bench link is bare-relative & points at limiting-reagent/index.html',
+       hrefs.indexOf('limiting-reagent/index.html') >= 0);
 
     var planters = Array.from(document.querySelectorAll('.vial.empty'));
-    ck('three empty planters for the next chapters', planters.length === 3);
+    ck('two empty planters for the next chapters', planters.length === 2);
     ck('every planter names where the wing grows',
        planters.every(function(p){ var t = p.querySelector('.vtitle'); return t && t.textContent.trim().length > 0; }));
 
