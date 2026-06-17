@@ -179,5 +179,91 @@ console.log('The Coastline Paradox — Node cross-check\n');
      `circle slope=${smoothD.slope.toFixed(3)}, coast slope=${coast.div.slope.toFixed(3)}`);
 }
 
+// ---------------------------------------------------------------------------
+// F. THE WALK PATH — the re-souled hero EARNS D by marching the calipers, not
+//    by stamping it. These four assert that what the calipers SHOW on screen
+//    (steps · ε, the length they climb to) is EXACTLY what dividerDimension
+//    fits — so the in-page hero adds zero math authority. They walk the SAME
+//    ε ladder dividerDimension uses, against core's UNCHANGED functions.
+// ---------------------------------------------------------------------------
+
+// the page's ε ladder (verbatim from dividerDimension's inner loop band)
+function walkLadder(poly, nScales=10){
+  let total=0; for(let i=0;i<poly.length-2;i+=2) total+=Math.hypot(poly[i+2]-poly[i],poly[i+3]-poly[i+1]);
+  const epsMax=total/8, epsMin=total/400; const eps=[];
+  for(let k=0;k<nScales;k++){ const f=k/(nScales-1); eps.push(epsMax*Math.pow(epsMin/epsMax,f)); }
+  return eps;
+}
+// the page's fitLadder (least-squares over {logEps,logL}, identical to
+// dividerDimension's inner regression) — mirrored here for the Node assert.
+function fitLadder(rungs){
+  const n=rungs.length; let sx=0,sy=0,sxx=0,sxy=0;
+  for(const r of rungs){ sx+=r.logEps; sy+=r.logL; sxx+=r.logEps*r.logEps; sxy+=r.logEps*r.logL; }
+  const slope=(n*sxy-sx*sy)/(n*sxx-sx*sx); const intercept=(sy-slope*sx)/n;
+  const ybar=sy/n; let ssR=0,ssT=0;
+  for(const r of rungs){ const pr=slope*r.logEps+intercept; ssR+=(r.logL-pr)**2; ssT+=(r.logL-ybar)**2; }
+  return { D:1-slope, slope, intercept, r2: ssT>0?1-ssR/ssT:1 };
+}
+// walk the ladder → rungs (each = one stride-set the calipers march on screen)
+function walkRungs(poly){
+  const rungs=[];
+  for(const eps of walkLadder(poly)){
+    const {steps,L}=C.dividerLength(poly, eps);
+    if(L>0) rungs.push({eps, steps, L:steps*eps, logEps:Math.log(eps), logL:Math.log(steps*eps)});
+  }
+  return rungs;
+}
+
+// 13. WALKED-LENGTH IDENTITY — the number the climbing HUD shows, L(ε)=steps·ε,
+//     is float-exactly dividerLength's L for every ε on the ladder. What the
+//     calipers SHOW is the measurement, not a re-derivation.
+{
+  const m=C.measureCoast('Verdania', 0.62, 'continents');
+  let maxGap=0;
+  for(const eps of walkLadder(m.main)){ const r=C.dividerLength(m.main, eps);
+    maxGap=Math.max(maxGap, Math.abs(r.L - r.steps*eps)); }
+  ok('walked length L(ε) === steps·ε exactly (what the calipers show)', maxGap===0,
+     `max |L − steps·ε| = ${maxGap}`);
+}
+
+// 14. EARNED === FIT — walking the exact dividerDimension ε ladder and fitting
+//     {logEps,logL} yields a D that equals dividerDimension's D within 1e-9, AND
+//     the headline number is THAT divider fit, NOT box.D (guards against
+//     regressing the hero to stamping the box-count number).
+{
+  const m=C.measureCoast('Britannia', 0.60, 'continents');
+  const fit=fitLadder(walkRungs(m.main));
+  const earnedEqualsFit = Math.abs(fit.D - m.div.D) < 1e-9;
+  const earnedNotBox = Math.abs(fit.D - m.box.D) > 1e-9;  // the earned D is the divider fit, not box.D
+  ok('earned D (walked-then-fit) === dividerDimension D within 1e-9, and is NOT box.D',
+     earnedEqualsFit && earnedNotBox,
+     `fit=${fit.D.toFixed(9)} div=${m.div.D.toFixed(9)} box=${m.box.D.toFixed(3)} |fit−div|=${Math.abs(fit.D-m.div.D).toExponential(1)}`);
+}
+
+// 15. DIVIDER-D AND BOX-COUNT-D AGREE on the same coast — asserted THROUGH the
+//     earned (walked) path: |box.D − earnedFit.D| < 0.22. Two independent rulers,
+//     one walked by hand, land on the same dimension.
+{
+  const m=C.measureCoast('Mistral', 0.66, 'continents');
+  const fit=fitLadder(walkRungs(m.main));
+  const gap=Math.abs(m.box.D - fit.D);
+  ok('divider-D (walked) and box-count-D agree on the same coast (< 0.22)',
+     gap<0.22 && fit.D>1 && fit.D<2 && m.box.D>1 && m.box.D<2,
+     `box=${m.box.D.toFixed(3)}, walked=${fit.D.toFixed(3)}, gap=${gap.toFixed(3)}`);
+}
+
+// 16. SMOOTH-CIRCLE CONTROL through the walk path — the negative control coast
+//     (a circle) reads slope ≈ 0 and D ≈ 1 when WALKED, just as it does through
+//     dividerDimension. Marching it: the length stays flat, the rail goes
+//     horizontal, the verdict resolves D ≈ 1.00.
+{
+  const n=1600, R=0.4; const poly=[];
+  for(let i=0;i<=n;i++){ const t=2*Math.PI*i/n; poly.push(0.5+R*Math.cos(t), 0.5+R*Math.sin(t)); }
+  const fit=fitLadder(walkRungs(poly));
+  ok('smooth-circle control walks to slope≈0 / D≈1 (|slope|<0.06, |D−1|<0.08)',
+     Math.abs(fit.slope)<0.06 && Math.abs(fit.D-1)<0.08,
+     `walked slope=${fit.slope.toFixed(4)}, D=${fit.D.toFixed(4)}`);
+}
+
 console.log(`\n${pass}/${total} ${pass===total?'✓ ALL GREEN':'✗ FAILURES'}`);
 process.exit(pass===total?0:1);

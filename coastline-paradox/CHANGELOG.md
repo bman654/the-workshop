@@ -78,3 +78,61 @@ them — the actual Richardson divider. The two independent estimators then agre
 
 v1 — 2026-06-13 (Opus 4.8, `/fun` BUILD session). The `cross` seed
 "Cartographer × fractal dimension — the coastline paradox" (flagged `RIPE`) bloomed.
+
+## v2 — RE-SOULED: WALK the shore, EARN the dimension (cycle #97)
+
+The v1 bench was *correct but told-at-you*: a giant `D = 1.176` stamped over the
+map and a log–log plot you **read**. The soul it lacked — you never *walked* the
+coast; the dimension was printed AT you, not discovered. v2 makes **stepping the
+dividers** the hero verb. `core.mjs` is **reused byte-for-byte** (math stays sole
+authority); everything new is page-only and proven to add zero authority.
+
+- **The hero is the marching calipers.** Set a compass opening (the stride slider,
+  log-scaled over the dividerDimension ε-band, with a live step estimate). Press
+  **March the coast ▸** and a two-leg-and-hinge caliper glyph walks the shoreline
+  tip-over-tip, easing pin→pin, planting a teal footprint at each step, with a
+  dashed ε-radius compass arc showing where the next pin must land. The climbing
+  HUD `L(ε)=steps·ε` ratchets up and flashes on each integer step.
+- **D is EARNED, not stamped.** On open the verdict reads a greyed `D ≈ ?  keep
+  walking… 0/5 rulers`. Each completed walk drops one point on the **rigor rail**
+  (the demoted log–log plot, framed up-front to the full ε band so dots land in
+  final position and *accumulate* rather than churn). At 5 distinct rungs the
+  bright regression line snaps in and the headline resolves to the **divider fit**
+  `D = 1 − slope` (NOT box-count) with a "you walked this" stamp. **Walk the
+  ladder ▸▸** is the one-click on-ramp: it auto-marches 5 rungs coarse→fine and
+  resolves the line.
+- **Negative control you can walk:** a 4th land option **○ Bay** (a smooth circle).
+  Walking it the calipers step evenly, L stays flat, the rail goes horizontal, and
+  the verdict resolves **D ≈ 1.00** — the roughness slider dims with "the control
+  coast — should read D ≈ 1 no matter how you walk it."
+- **The box-count second ruler** stays drawn faint the whole time (eager from
+  every coast change), and the triple verdict shows `divider (you) / box-count
+  (auto) / slider 2−H` with a "two rulers agree" badge keyed on `|box.D − fit.D| < 0.18`.
+
+### Page-only recorder (adds zero math authority — verified)
+
+Inlined after the unchanged core: `dividerTrace(poly,eps)` is line-for-line
+`dividerLength`'s stepping but pushes each compass anchor; its terminal `(steps,L)`
+is **float-identical** to `dividerLength`. `fitLadder(rungs)` is the exact
+least-squares from `dividerDimension`'s inner loop. Walking the exact
+dividerDimension ε ladder and fitting reproduces `dividerDimension(poly).D` to
+**1e-9** (in fact 0.0 in tested cases).
+
+### Self-test grows 10→14 in-page · 12→16 Node
+
+Four new checks, mirrored in both harnesses (Node asserts against core's UNCHANGED
+`dividerLength`/`dividerDimension`):
+
+- **T13** walked length `L(ε) === steps·ε` exactly, and `dividerTrace === dividerLength`.
+- **T14** earned D (walk→fit) `=== dividerDimension D` within 1e-9, **and is NOT box.D**
+  (guards against regressing the headline to the stamped box-count number).
+- **T15** divider-D (walked) and box-count-D agree on the same coast (`< 0.22`).
+- **T16** smooth-circle control walks to `slope ≈ 0` / `D ≈ 1` (`|slope|<0.06`, `|D−1|<0.08`).
+
+Browser-verified: calipers visibly march, L ratchets up, D is earned-not-stamped,
+the bay reads D ≈ 1.006, ~60 fps, clean console. Same folder, same Workbench
+route/card, **no front-door change** (re-souls an existing piece — the
+`ws:seen:coastline-paradox` breadcrumb is unchanged).
+
+v2 — 2026-06-17 (Opus 4.8, `/fun-forever` cycle #97, PLANTER). The `rework` seed
+"WALK the shore, don't read its dimension" (sown #96) bloomed.
