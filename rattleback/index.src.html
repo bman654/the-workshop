@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Contrary Stone — a top that argues with your hand</title>
+<style>
+  :root{
+    --panel-bg: rgba(9,11,16,0.86);
+    --panel-edge: rgba(150,190,220,0.26);
+    --ink: #e7edf4;
+    --ink-dim: #8f9bb0;
+    --accent: #e8b86b;          /* brass */
+    --accent2: #7fc7e8;         /* cool — the skew mass-axis line */
+    --rock: #c98be8;            /* violet — the rock mode */
+    --green: #8fd79a;
+    --green-glow: rgba(120,225,150,0.55);
+    --bg: #08090d;
+    --felt: #15211c;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+  header{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    gap:14px; padding:11px 18px; background:linear-gradient(180deg, rgba(8,9,13,0.94), rgba(8,9,13,0.0));
+    pointer-events:none; }
+  header .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; pointer-events:auto; white-space:nowrap; }
+  .brand{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.4px; margin:0;
+    white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .spacer{ flex:1; }
+  .selftest{ pointer-events:auto; font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px;
+    border-radius:20px; border:1px solid var(--panel-edge); background:rgba(0,0,0,0.4); white-space:nowrap;
+    cursor:pointer; user-select:none; color:var(--ink-dim); flex:none; max-width:62vw; overflow:hidden;
+    text-overflow:ellipsis; }
+  .selftest.ok{ color:var(--green); border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  #stagewrap{ position:fixed; inset:0; }
+  canvas#stage{ display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
+  canvas#stage.dragging{ cursor:grabbing; }
+
+  /* hero readout — the spin direction + magnitude, top-center */
+  #readout{ position:fixed; left:50%; top:60px; transform:translateX(-50%); z-index:24; text-align:center;
+    pointer-events:none; max-width:94vw; }
+  #spinbig{ font-family:var(--font-mono); font-weight:700; font-size:58px; line-height:1;
+    letter-spacing:1px; font-variant-numeric:tabular-nums; color:var(--accent);
+    text-shadow:0 0 26px rgba(232,184,107,0.35), 0 2px 0 rgba(0,0,0,0.6); transition:color .25s; }
+  #spinbig.favored{ color:var(--green); text-shadow:0 0 30px var(--green-glow); }
+  #spinbig.wrong{ color:#f0a978; }
+  #spinlab{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.5px;
+    text-transform:uppercase; margin-top:8px; }
+  #verdict{ font-family:var(--font-serif); font-size:18px; margin-top:8px; opacity:0; transition:opacity .5s;
+    letter-spacing:.5px; }
+  #verdict.show{ opacity:1; }
+
+  /* the two energy bars — spin vs rock — bottom-left, the SEEN energy transfer */
+  #energy{ position:fixed; left:18px; bottom:18px; z-index:21; background:var(--panel-bg);
+    border:1px solid var(--panel-edge); border-radius:14px; padding:13px 15px 14px; width:236px;
+    max-width:calc(100vw - 36px); backdrop-filter:blur(7px); }
+  #energy .lab{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.5px;
+    text-transform:uppercase; margin-bottom:10px; }
+  .ebar{ margin:9px 0; }
+  .ebar .name{ font:10px/1 var(--font-mono); letter-spacing:.3px; margin-bottom:4px; display:flex;
+    justify-content:space-between; }
+  .ebar .track{ height:9px; border-radius:5px; background:rgba(255,255,255,0.06); overflow:hidden; }
+  .ebar .fill{ height:100%; border-radius:5px; transition:width .05s linear; }
+  .ebar.spin .name{ color:var(--accent); } .ebar.spin .fill{ background:var(--accent); }
+  .ebar.rock .name{ color:var(--rock); }   .ebar.rock .fill{ background:var(--rock); }
+  #etotal{ font:10px/1.4 var(--font-mono); color:var(--ink-dim); margin-top:8px; padding-top:9px;
+    border-top:1px solid rgba(150,190,220,0.14); opacity:.9; }
+  #etotal b{ color:var(--green); }
+
+  /* controls — bottom-right */
+  #panel{ position:fixed; right:18px; bottom:18px; z-index:20; background:var(--panel-bg);
+    border:1px solid var(--panel-edge); border-radius:14px; padding:14px 16px 15px; width:268px;
+    max-width:calc(100vw - 36px); backdrop-filter:blur(7px); }
+  #panel .row{ display:flex; align-items:center; gap:9px; margin:10px 0; }
+  #panel label{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.3px; width:96px; flex:none; }
+  #panel input[type=range]{ flex:1; min-width:0; accent-color:var(--accent); height:3px; }
+  #panel .val{ font:11px/1 var(--font-mono); color:var(--accent); width:54px; text-align:right; flex:none;
+    font-variant-numeric:tabular-nums; }
+  #panel .val.skew{ color:var(--accent2); }
+  .btnrow{ display:flex; gap:8px; margin-top:12px; }
+  button.act{ flex:1; font:600 11px/1 var(--font-mono); letter-spacing:.3px; padding:10px 8px; border-radius:9px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); color:var(--ink); cursor:pointer;
+    transition:.18s; user-select:none; }
+  button.act:hover{ border-color:var(--accent); color:var(--accent); }
+  button.act:active{ transform:translateY(1px); }
+  button.act.on{ color:#1a1206; background:var(--accent); border-color:var(--accent); }
+  .hint{ font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); margin-top:11px; padding-top:11px;
+    border-top:1px solid rgba(150,190,220,0.14); opacity:.86; }
+  .hint b{ color:var(--accent); } .hint .skewc{ color:var(--accent2); }
+
+  /* the flick prompt — appears at rest, fades on first grab */
+  #prompt{ position:fixed; left:50%; top:54%; transform:translate(-50%,-50%); z-index:18;
+    font-family:var(--font-serif); font-size:15px; color:var(--ink-dim); text-align:center;
+    pointer-events:none; transition:opacity .6s; letter-spacing:.4px; max-width:80vw; }
+  #prompt.hide{ opacity:0; }
+
+  /* narrow screens — the two bottom panels would collide side-by-side, so the
+     controls dock full-width at the bottom and the energy strip docks full-width
+     at the TOP, just under the spin readout (no height-guessing, no overlap).
+     Mirrors the estate's iron-filings full-width dock convention. */
+  @media (max-width:680px){
+    header{ flex-wrap:wrap; row-gap:5px; padding:10px 14px; }
+    .brand .tag{ display:none; }
+    .brand h1{ font-size:17px; }
+    .selftest{ order:3; max-width:none; }
+    #readout{ top:50px; }
+    #spinbig{ font-size:44px; }
+    #panel{ right:10px; left:10px; width:auto; max-width:none; padding:12px 14px 13px; }
+    #energy{ right:10px; left:10px; bottom:auto; top:150px; width:auto; max-width:none;
+      padding:10px 13px 11px; }
+    #energy .lab{ margin-bottom:7px; }
+    .ebar{ margin:7px 0; }
+    .hint{ display:none; }   /* the long secret reads on desktop; phone keeps the touchable stone uncluttered */
+  }
+  @media (max-width:680px) and (max-height:560px){
+    #energy{ display:none; }   /* very short screens: keep the touchable stone + controls only */
+  }
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="../index.html">← The Estate</a>
+  <div class="brand">
+    <h1>The Contrary Stone</h1>
+    <div class="tag">a rattleback — flick it the wrong way and it argues</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="selftest" id="selftest" title="run the embedded physics self-test">self-test …</div>
+</header>
+
+<div id="stagewrap"><canvas id="stage"></canvas></div>
+
+<div id="readout">
+  <div id="spinbig">↻ 0.00</div>
+  <div id="spinlab">spin rate (rad/s)</div>
+  <div id="verdict"></div>
+</div>
+
+<div id="prompt">flick across the stone to spin it — try both directions</div>
+
+<div id="energy">
+  <div class="lab">where the energy lives</div>
+  <div class="ebar spin"><div class="name"><span>SPIN</span><span id="espinpct">0%</span></div>
+    <div class="track"><div class="fill" id="espinfill" style="width:0%"></div></div></div>
+  <div class="ebar rock"><div class="name"><span>ROCK</span><span id="erockpct">0%</span></div>
+    <div class="track"><div class="fill" id="erockfill" style="width:0%"></div></div></div>
+  <div id="etotal">total energy <b id="etotalval">0.00</b> — conserved (frictionless)</div>
+</div>
+
+<div id="panel">
+  <div class="row"><label>damping</label>
+    <input type="range" id="damp" min="0" max="100" value="25"><span class="val" id="dampval">0.05</span></div>
+  <div class="row"><label>skew δ</label>
+    <input type="range" id="skew" min="-25" max="25" step="1" value="14"><span class="val skew" id="skewval">14°</span></div>
+  <div class="btnrow">
+    <button class="act" id="favbtn">flick FAVORED</button>
+    <button class="act" id="wrongbtn">flick WRONG</button>
+  </div>
+  <div class="btnrow">
+    <button class="act" id="diagbtn">diagonal tensor (δ = 0)</button>
+  </div>
+  <div class="hint" id="hint">The <span class="skewc">cyan dashed line</span> is the stone's mass axis, tilted <b id="dlab">14°</b> off its keel — the whole secret. Drag <b>skew δ → 0</b> (or the button) and the line snaps to the keel: a diagonal tensor that spins happily <b>both</b> ways. Flip δ negative and the <b>other</b> spin becomes favored.</div>
+</div>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════════════
+   THE CONTRARY STONE — core (sole physics authority) inlined byte-faithfully
+   from core.mjs via forge:include. The same module is proven by core.test.mjs.
+   (forge strips the `export` keywords so it runs as a plain in-page script.)
+   ════════════════════════════════════════════════════════════════════════════ */
+<!-- forge:include core.mjs -->
+</script>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════════════
+   THE STAGE — oblique pseudo-3D view. The hero is the STONE: a canoe-shaped
+   rattleback drawn on a felt table, seen from a tilted angle so the ROCKING
+   (pitch see-saw on the curved belly + roll) is vividly visible while the spin
+   plays out. No plotted curve required; a faint spin(t) ghost-trace rides the rim.
+   ════════════════════════════════════════════════════════════════════════════ */
+const cv = document.getElementById('stage');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(2, window.devicePixelRatio || 1);
+function resize() {
+  W = cv.clientWidth; H = cv.clientHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+
+// ── live state ──
+// P.eps is DERIVED from the visible skew angle δ (deg) via epsOfSkew; wp,wq = the two
+// rock frequencies (detuned, as in a real celt); mu = contact damping. Default δ=14°
+// gives a wrong-way reversal that visibly BUILDS over several rocks (~3s) before the
+// spin reverses, then settles ~1s later — the satisfying interactive pace.
+let skewDeg = 14;                         // the visible mass-axis skew angle δ
+const P = { eps: epsOfSkewDeg(skewDeg), wp: 1.0, wq: 1.7, mu: 0.05 };
+let y = [0, 0, 0, 0, 0];    // v = [n, A, B, sA, sB]
+let launchSign = 0;         // remembered for the verdict
+let reversed = false;       // has the spin crossed zero away from launch?
+let trace = [];             // faint spin(t) ghost — rim history
+const H_DT = 1 / 240;       // physics sub-dt (fixed, stable)
+const TIMESCALE = 7.0;      // physics-seconds per wall-second (reversal plays in ~3s)
+
+// ── projection: oblique view. World (sx, sy) on the table → screen, tilted. ──
+const TILT = 0.52;          // how much we squash y (table seen from ~58°)
+function project(cx, cy, sx, sy, lift) {
+  // sx along screen-x; sy is depth (squashed by TILT); lift raises toward camera.
+  return [cx + sx, cy + sy * TILT - lift];
+}
+
+// the favored spin sign for the LIVE coupling (recomputed as δ changes; 0 at δ=0).
+function favSign() { return favoredSign(P.eps); }
+
+// draw the canoe-shaped rattleback at body orientation (spin angle, roll, pitch)
+let spinAngle = 0;
+function drawStone(cx, cy, scale) {
+  // map physics state → visible tilts. sA is the pitch (long-axis see-saw) amplitude,
+  // sB the roll (short-axis) amplitude. Scaled up so the rocking reads large on screen.
+  const [n, A, B, sA, sB] = y;
+  const pitch = sA * 1.5, roll = sB * 1.5;
+  // The belly see-saw: pitch tilts the long axis (foreground end dips/rises),
+  // roll tilts the short axis. We render the hull rim as an ellipse whose two
+  // half-axes get foreshortened by the tilt, plus a 3D-ish belly underside.
+
+  const longR = 116 * scale, shortR = 46 * scale;
+  const heading = spinAngle;        // accumulated visible heading angle
+
+  // sample the hull rim (canoe: a fattened ellipse, pointed ends)
+  const N = 64;
+  const top = [], bot = [];
+  for (let i = 0; i <= N; i++) {
+    const t = (i / N) * Math.PI * 2;
+    // canoe profile: ellipse with sharpened ends
+    let rx = Math.cos(t), ry = Math.sin(t);
+    const sharp = 1 - 0.18 * Math.cos(2 * t);     // pinch the ends
+    let bx = rx * longR * sharp;
+    let by = ry * shortR;
+    // rotate by spin heading (in the table plane)
+    const hx = bx * Math.cos(heading) - by * Math.sin(heading);
+    const hy = bx * Math.sin(heading) + by * Math.cos(heading);
+    // apply rock tilts: pitch lifts foreground (depends on hx after heading),
+    // roll lifts sideways (depends on hy). Belly curvature => the rim point's
+    // LIFT is curvature*(its planar offset)·tilt-angle.
+    const liftTop = -pitch * hx - roll * hy + 6 * scale;   // rim height (curved-belly contact)
+    const liftBot = -pitch * hx - roll * hy - 14 * scale;  // underside
+    top.push(project(cx, cy, hx, hy, liftTop));
+    bot.push(project(cx, cy, hx, hy, liftBot));
+  }
+
+  // contact shadow on the felt — squashed under the belly, shifts with the rock
+  const shx = cx + 10 * pitch * longR * 0.4, shy = cy + 8 + 10 * roll * shortR * 0.3 * TILT;
+  const sg = ctx.createRadialGradient(shx, shy + 26, 4, shx, shy + 26, 120 * scale);
+  sg.addColorStop(0, 'rgba(0,0,0,0.42)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = sg;
+  ctx.beginPath(); ctx.ellipse(shx, shy + 26, 110 * scale, 40 * scale, 0, 0, Math.PI * 2); ctx.fill();
+
+  // the belly (underside) — darker, gives the 3D thickness
+  ctx.beginPath();
+  ctx.moveTo(top[0][0], top[0][1]);
+  for (let i = 1; i < top.length; i++) ctx.lineTo(top[i][0], top[i][1]);
+  for (let i = bot.length - 1; i >= 0; i--) ctx.lineTo(bot[i][0], bot[i][1]);
+  ctx.closePath();
+  const bg = ctx.createLinearGradient(cx - longR, cy, cx + longR, cy + 30);
+  bg.addColorStop(0, '#3a2a16'); bg.addColorStop(1, '#1c140a');
+  ctx.fillStyle = bg; ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+
+  // the top deck — brass, lit; the canoe's polished face
+  ctx.beginPath();
+  ctx.moveTo(top[0][0], top[0][1]);
+  for (let i = 1; i < top.length; i++) ctx.lineTo(top[i][0], top[i][1]);
+  ctx.closePath();
+  // light direction shifts with roll → the deck catches/loses light as it rocks
+  const lit = 0.5 + 0.5 * Math.tanh(roll * 3 + pitch * 1.5);
+  const dg = ctx.createLinearGradient(
+    cx - longR * Math.cos(heading), cy - shortR, cx + longR * Math.cos(heading), cy + shortR);
+  const c1 = `rgba(${232},${184 + 30 * lit},${107 + 20 * lit},1)`;
+  dg.addColorStop(0, '#8a6a36'); dg.addColorStop(0.5, c1); dg.addColorStop(1, '#6e5128');
+  ctx.fillStyle = dg; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,240,210,0.5)'; ctx.lineWidth = 1.4; ctx.stroke();
+
+  // ── THE MASS-AXIS SKEW LINE: a faint cyan dashed line inlaid in the brass deck,
+  //    rotated by δ off the hull's KEEL axis. This is the VISIBLE CAUSE — the
+  //    principal inertia axis tilted off the geometric long axis. It rocks with the
+  //    deck (same lift law) so it reads as engraved INTO the stone, not floating.
+  const dRad = skewDeg * Math.PI / 180;
+  const skewHeading = heading + dRad;
+  const ml = longR * 0.74;
+  const me1 = project(cx, cy,  ml * Math.cos(skewHeading),  ml * Math.sin(skewHeading),
+                       -pitch * (ml * Math.cos(skewHeading)) - roll * (ml * Math.sin(skewHeading)) + 6 * scale);
+  const me2 = project(cx, cy, -ml * Math.cos(skewHeading), -ml * Math.sin(skewHeading),
+                        pitch * (ml * Math.cos(skewHeading)) + roll * (ml * Math.sin(skewHeading)) + 6 * scale);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(127,199,232,0.78)'; ctx.setLineDash([6, 5]); ctx.lineWidth = 1.7;
+  ctx.beginPath(); ctx.moveTo(me1[0], me1[1]); ctx.lineTo(me2[0], me2[1]); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  // a center seam (the KEEL) + two inlaid dots so the SPIN is unmistakable
+  const seamA = project(cx, cy, longR * 0.86 * Math.cos(heading), longR * 0.86 * Math.sin(heading), -pitch * longR * 0.86 + 6 * scale);
+  const seamB = project(cx, cy, -longR * 0.86 * Math.cos(heading), -longR * 0.86 * Math.sin(heading), pitch * longR * 0.86 + 6 * scale);
+  ctx.strokeStyle = 'rgba(40,28,12,0.6)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(seamA[0], seamA[1]); ctx.lineTo(seamB[0], seamB[1]); ctx.stroke();
+  for (const [end, col] of [[seamA, '#f3e0b0'], [seamB, '#caa45c']]) {
+    ctx.beginPath(); ctx.arc(end[0], end[1], 4.5 * scale, 0, Math.PI * 2);
+    ctx.fillStyle = col; ctx.fill();
+  }
+}
+
+// the favored-spin hint arc — a faint curved arrow ABOVE the stone shown BEFORE the
+// first flick (and at rest), so a first visitor knows which way is "favored" without
+// it deciding the outcome. It points the way of the LIVE favored sign (flips with δ);
+// at δ=0 (no preference) it is hidden. Lifts to green when the live spin matches it.
+function drawFavoredHint(cx, cy, scale) {
+  const fav = favSign();
+  if (fav === 0) return;                       // diagonal tensor: no favored way to point
+  const r = 150 * scale;
+  const matched = Math.sign(y[0]) === fav && Math.abs(y[0]) > 0.05;
+  const showStrong = (launchSign === 0) || (Math.abs(y[0]) < 0.04);   // before/at rest: bold
+  ctx.save();
+  ctx.globalAlpha = matched ? 0.55 : (showStrong ? 0.42 : 0.16);
+  ctx.strokeStyle = matched ? '#8fd79a' : 'rgba(143,215,154,0.9)';
+  ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+  // a short arc on top of the stone; favored = +1 → CCW (drawn left-to-right on top)
+  const a0 = -Math.PI * 0.78, a1 = -Math.PI * 0.22;
+  ctx.beginPath();
+  // for fav<0 mirror the sweep so the arrowhead points the OTHER way
+  if (fav > 0) ctx.ellipse(cx, cy - 8, r, r * TILT, 0, a0, a1);
+  else ctx.ellipse(cx, cy - 8, r, r * TILT, 0, a1, a0, true);
+  ctx.stroke();
+  // arrowhead at the leading end
+  const aLead = fav > 0 ? a1 : a0;
+  const hx = cx + r * Math.cos(aLead), hy = cy - 8 + r * TILT * Math.sin(aLead);
+  const tang = (fav > 0 ? 1 : -1) * (Math.PI / 2 + aLead);   // tangent direction
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.beginPath();
+  ctx.moveTo(hx, hy);
+  ctx.lineTo(hx + Math.cos(tang + 2.5) * 11 * scale, hy + Math.sin(tang + 2.5) * 11 * scale * TILT * 1.6);
+  ctx.lineTo(hx + Math.cos(tang - 2.5) * 11 * scale, hy + Math.sin(tang - 2.5) * 11 * scale * TILT * 1.6);
+  ctx.closePath(); ctx.fill();
+  // the word "favored" floating above the arc
+  if (showStrong) {
+    ctx.globalAlpha = 0.7;
+    ctx.font = '600 11px ' + getComputedStyle(document.body).getPropertyValue('--font-mono');
+    ctx.fillStyle = 'rgba(143,215,154,0.85)'; ctx.textAlign = 'center';
+    ctx.fillText('favored', cx, cy - 8 - r * TILT - 12 * scale);
+  }
+  ctx.restore();
+}
+
+function drawFelt() {
+  ctx.fillStyle = '#08090d'; ctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H * 0.54;
+  // felt oval table
+  const g = ctx.createRadialGradient(cx, cy, 30, cx, cy, Math.max(W, H) * 0.6);
+  g.addColorStop(0, '#1b2a23'); g.addColorStop(0.6, '#13201b'); g.addColorStop(1, '#0a0f0c');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.ellipse(cx, cy + 30, Math.min(W * 0.42, 460), Math.min(W * 0.42, 460) * TILT, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,150,135,0.16)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(cx, cy + 30, Math.min(W * 0.42, 460), Math.min(W * 0.42, 460) * TILT, 0, 0, Math.PI * 2); ctx.stroke();
+  return [cx, cy];
+}
+
+// faint spin(t) ghost trace — a quiet rim history along the bottom, secondary layer
+function drawTrace() {
+  if (trace.length < 2) return;
+  const x0 = 18, x1 = W - 18, ybase = H - 150, hgt = 46;
+  ctx.save();
+  ctx.globalAlpha = 0.5;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  const n = trace.length;
+  for (let i = 0; i < n; i++) {
+    const x = x0 + (x1 - x0) * (i / (n - 1));
+    const v = Math.max(-1, Math.min(1, trace[i] / 1.6));
+    const yy = ybase - v * hgt;
+    if (i === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+  }
+  ctx.strokeStyle = 'rgba(127,199,232,0.55)'; ctx.stroke();
+  // zero line
+  ctx.globalAlpha = 0.25; ctx.strokeStyle = 'rgba(200,210,225,0.6)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x0, ybase); ctx.lineTo(x1, ybase); ctx.stroke();
+  ctx.restore();
+}
+
+// ── render loop ──
+const $ = id => document.getElementById(id);
+let lastT = performance.now();
+function frame(now) {
+  let dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+
+  // step physics with a fixed sub-dt for stability; physics runs TIMESCALE× wall time
+  let acc = dt * TIMESCALE;
+  while (acc > 0) {
+    const h = Math.min(H_DT, acc); acc -= h;
+    y = rk4Step(y, h, P);
+    spinAngle += y[0] * h;
+    // detect reversal for the verdict — set ONLY because the integrated n crossed zero
+    // away from the launch sign (never on a timer; this is the emergent reversal).
+    if (launchSign !== 0 && !reversed && Math.sign(y[0]) === -launchSign && Math.abs(y[0]) > 0.04) {
+      reversed = true;
+    }
+  }
+  // trace history (downsampled)
+  if (Math.abs(y[0]) > 0.001 || trace.length) {
+    trace.push(y[0]); if (trace.length > 320) trace.shift();
+  }
+
+  const [cx, cy] = drawFelt();
+  drawFavoredHint(cx, cy, 1);
+  drawTrace();
+  drawStone(cx, cy, 1);
+
+  // ── readouts ──
+  const wz = y[0];
+  const dir = wz >= 0 ? '↻' : '↺';
+  $('spinbig').textContent = `${dir} ${Math.abs(wz).toFixed(2)}`;
+  const fav = favSign();
+  $('spinbig').className = Math.abs(wz) < 0.05 ? '' :
+    (fav !== 0 && Math.sign(wz) === fav ? 'favored' : 'wrong');
+
+  const es = energySplit(y, P);
+  const tot = es.total;
+  const sp = tot > 1e-6 ? es.spin / tot : 0, rk = tot > 1e-6 ? es.rock / tot : 0;
+  $('espinfill').style.width = (sp * 100).toFixed(1) + '%';
+  $('erockfill').style.width = (rk * 100).toFixed(1) + '%';
+  $('espinpct').textContent = (sp * 100).toFixed(0) + '%';
+  $('erockpct').textContent = (rk * 100).toFixed(0) + '%';
+  $('etotalval').textContent = tot.toFixed(2);
+  $('etotal').innerHTML = P.mu > 0
+    ? `total energy <b style="color:var(--ink-dim)">${tot.toFixed(2)}</b> — decaying (damped)`
+    : `total energy <b>${tot.toFixed(2)}</b> — conserved (frictionless)`;
+
+  // verdict line — driven entirely by the EMERGENT `reversed` flag (no timer)
+  const vd = $('verdict');
+  if (fav !== 0 && launchSign === -fav && reversed) {
+    vd.textContent = 'it argued — and reversed to its favored spin';
+    vd.className = 'show';
+  } else if (fav !== 0 && launchSign === fav && Math.abs(wz) > 0.05) {
+    vd.textContent = 'flicked its favored way — it spins clean';
+    vd.className = 'show';
+  } else if (fav === 0 && launchSign !== 0 && Math.abs(wz) > 0.05) {
+    vd.textContent = 'diagonal tensor — no favored way; it just spins';
+    vd.className = 'show';
+  } else if (Math.abs(wz) < 0.03 && launchSign !== 0) {
+    // settled — leave the last verdict up
+  } else { vd.className = 'verdict'; }
+
+  requestAnimationFrame(frame);
+}
+
+// ── launch helpers ──  v = [n, A, B, sA, sB]
+function launch(sign, mag = 1.0) {
+  // pure spin + a tiny seed rock (a real celt always carries a micro-perturbation;
+  // the instability is what AMPLIFIES it for the wrong-way spin).
+  y = [sign * mag, 0, 0, 0.06 + 0.02 * Math.random(), 0.01 * (Math.random() - 0.5)];
+  launchSign = sign; reversed = false; trace = [];
+  $('prompt').classList.add('hide');
+}
+
+// ── pointer flick: drag across the stone, release = impart spin ──
+let dragging = false, lastTime = 0, angVel = 0, prevAng = 0;
+function ptAngle(x, y0, cx, cy) { return Math.atan2((y0 - cy) / TILT, x - cx); }
+cv.addEventListener('pointerdown', e => {
+  dragging = true; cv.classList.add('dragging'); cv.setPointerCapture(e.pointerId);
+  const r = cv.getBoundingClientRect(); const cx = W / 2, cy = H * 0.54;
+  prevAng = ptAngle(e.clientX - r.left, e.clientY - r.top, cx, cy);
+  lastTime = performance.now(); angVel = 0; $('prompt').classList.add('hide');
+});
+cv.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const r = cv.getBoundingClientRect(); const cx = W / 2, cy = H * 0.54;
+  const ang = ptAngle(e.clientX - r.left, e.clientY - r.top, cx, cy);
+  let d = ang - prevAng;
+  while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+  const t = performance.now(); const dtt = Math.max(8, t - lastTime) / 1000;
+  angVel = d / dtt; prevAng = ang; lastTime = t;
+});
+function endDrag() {
+  if (!dragging) return; dragging = false; cv.classList.remove('dragging');
+  const mag = Math.max(0.4, Math.min(2.4, Math.abs(angVel) * 0.45));
+  if (Math.abs(angVel) > 0.3) launch(Math.sign(angVel), mag);
+}
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+
+// ── controls ──  skew slider δ → eps continuously; damping slider → mu
+$('damp').addEventListener('input', e => { P.mu = (e.target.value / 100) * 0.2; $('dampval').textContent = P.mu.toFixed(2); });
+$('skew').addEventListener('input', e => {
+  skewDeg = +e.target.value;
+  P.eps = epsOfSkewDeg(skewDeg);
+  $('skewval').textContent = skewDeg + '°';
+  $('dlab').textContent = Math.abs(skewDeg) + '°';
+});
+$('favbtn').addEventListener('click', () => { const f = favSign() || 1; launch(f); });
+$('wrongbtn').addEventListener('click', () => { const f = favSign() || 1; launch(-f); });
+$('diagbtn').addEventListener('click', () => {
+  skewDeg = 0; P.eps = epsOfSkewDeg(0); $('skew').value = 0; $('skewval').textContent = '0°';
+  $('dlab').textContent = '0°';
+  launch(-1);  // launch a spin to show it now does NOT reverse (no favored sign at δ=0)
+});
+
+// ── self-test pill ──
+function runPill() {
+  const pill = $('selftest');
+  try {
+    const r = runSelfTest();
+    if (r.fail === 0) { pill.textContent = `self-test ✓ ${r.pass}/${r.pass}`; pill.className = 'selftest ok'; }
+    else { pill.textContent = `self-test ✗ ${r.fail} fail`; pill.className = 'selftest bad'; console.error(r.log.join('\n')); }
+  } catch (err) { pill.textContent = 'self-test ✗ error'; pill.className = 'selftest bad'; console.error(err); }
+}
+$('selftest').addEventListener('click', runPill);
+
+// ── boot ──
+resize();
+$('skew').value = skewDeg; $('skewval').textContent = skewDeg + '°'; $('dlab').textContent = Math.abs(skewDeg) + '°';
+$('damp').value = Math.round(P.mu / 0.2 * 100); $('dampval').textContent = P.mu.toFixed(2);
+runPill();
+launch(-favSign());   // open with a WRONG-way flick so the visitor sees it argue immediately
+requestAnimationFrame(frame);
+
+// expose for console poking
+window.__rb = {
+  rk4Step, integrate, runSelfTest, energySplit, epsOfSkewDeg, favoredSign,
+  get y(){ return y; }, set y(v){ y = v; },
+  setState(v){ y = v.slice(); },
+  get reversed(){ return reversed; },
+  get launchSign(){ return launchSign; },
+  get eps(){ return P.eps; },
+};
+
+// rAF can be throttled to ~0 in some headless contexts; a low-rate setInterval
+// fallback keeps the sim alive there (no-op on a normal vsync-driven page since the
+// rAF loop already advances time by wall-clock dt).
+let __lastFrameStamp = performance.now();
+const __origRAF = window.requestAnimationFrame.bind(window);
+window.requestAnimationFrame = (cb) => __origRAF((t) => { __lastFrameStamp = t; cb(t); });
+setInterval(() => {
+  if (performance.now() - __lastFrameStamp > 250) { __lastFrameStamp = performance.now(); frame(performance.now()); }
+}, 100);
+
+// ── Survey-of-Heaven breadcrumb: a direct visit registers this room. ──
+try{ if(localStorage.getItem('ws:seen:rattleback')==null) localStorage.setItem('ws:seen:rattleback', String(Date.now())); }catch(e){}
+</script>
+</body>
+</html>
