@@ -75,14 +75,25 @@ worklog/NOTES entry **"writ · served before #N"** so the number stays free for 
    follow-up line describing the mismatch so the next steward escalates it — never "fix" it by acting yourself.
 3. **RELEASE the creative clauses** as ORDINARY seeds — `bed sow -` your context's `writReleasedSeeds`, each
    led by its `[type]` and `**title**`, with NO mention of the Patron or the writ (indistinguishable from a
-   seed the collective wrote — no priority, no providence). (An ambiguous writ releases NONE — skip this.)
-4. **REMOVE the served writ:** `bed rm "<the writ's **bold title**>" --reason SERVED`. (bed lays the one-line
-   tombstone + keeps the ring bounded; there is nothing to sweep by hand.)
+   seed the collective wrote — no priority, no providence). This unmarking is BINDING in EVERY maker-visible
+   channel, not just the seed line — the **commit subject** (step 7) and the **NOTES current-state block** must
+   NOT link a released seed back to a writ/Patron either. A future maker who sees that linkage mistakes the
+   seed for a Patron-blessed pick and biases toward it: it happened once — a director read "released from a
+   served writ" off a recent-commit subject and weighed ONLY the two released seeds, ignoring the rest of the
+   bed. (An ambiguous writ releases NONE — skip this.)
+4. **REMOVE the served writ:** `bed rm "<the writ's **bold title**>" --reason SERVED`. The writ fence is pinned
+   to keep=0 — bed removes the writ CLEANLY, leaving NO tombstone (a writ's providence must never linger in the
+   file to bias a future maker). There is nothing to sweep by hand.
 5. **BOOKKEEPING:** worklog block (newest-first, marked a WRIT/Patron entry, header per the exception above) +
    INDEX line + REPLACE the NOTES current-state block. Prune/decay NO garden/grounds seed — a writ ages nothing.
 6. **RUN THE GAUGE RECORD** — cadence-neutral: `node seedbed/gauge.mjs record --mode WRIT --track writ`.
 7. **LEDGER + PUBLISH** — commit the REPO changes only (operational repo files + the ROADMAP edits). The vault
-   write / message the steward made is already done and is not a repo artifact.
+   write / message the steward made is already done and is not a repo artifact. **COMMIT SUBJECT — provenance
+   hygiene (it is maker-visible via the recent-commits list every seat receives):** you MAY note a writ was
+   served and describe MANDATE/escalation work plainly (those create no biasing seed) — but a RELEASE enters
+   the subject as an ORDINARY sow ("sow N seed(s) into the beds"), NEVER naming a released seed as writ- or
+   Patron-derived. The full writ→seed provenance lives ONLY in the worklog (a deliberate-read channel) — never
+   in the commit subject, the NOTES resume block, or the fence.
 
 ### BUILD (a builder shipped a piece, left UNCOMMITTED)
 

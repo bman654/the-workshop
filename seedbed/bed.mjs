@@ -22,6 +22,14 @@
 //
 //   <!-- ✝ BLOOMED #108: The Slingshot → aerodrome/slingshot/ · after e4f0ea4 -->
 //
+// THE WRIT EXCEPTION — keep=0, no memory by design. The `writ` fence is the one ring
+// that keeps NOTHING. A served writ leaves NO tombstone, because the whole point of a
+// writ RELEASE is that the seed enters the pool *unmarked* — an equal, never the
+// Patron's command. A lingering "✝ SERVED #N: <seed>" would tell a future maker "this
+// came from the Patron" and bias the pick (it did, once). So `FENCE_KEEP` pins the
+// writ ring to 0 as a HARD ceiling that `--keep` cannot raise: a writ removed via
+// `bed rm` vanishes cleanly, leaving no thread back to its origin in the file.
+//
 // ── SUBCOMMANDS ───────────────────────────────────────────────────────────────
 //   bed sow <batch>                         add seeds/bugs/writs (→ sow.mjs, no commit)
 //   bed rm "<title>" --reason <WORD>        remove a live seed → tombstone (FIFO ≤N)
@@ -46,6 +54,16 @@ const SOW = fileURLToPath(new URL('./sow.mjs', import.meta.url))
 
 export const FENCES = ['writ', 'bug', 'sparks', 'grounds-seeds', 'garden-seeds']
 export const DEFAULT_KEEP = 5
+// Per-fence HARD ceiling on the tombstone ring. A fence here can keep AT MOST this
+// many tombstones no matter what --keep asks. writ:0 means a served writ leaves no
+// trace in the file (see "THE WRIT EXCEPTION" above) — its providence must never
+// reach a future maker. Absent a fence ⇒ no ceiling (the requested keep stands).
+export const FENCE_KEEP = { writ: 0 }
+// the effective ring size for a fence: the smaller of what's asked and the hard cap.
+export function keepFor(fence, requested = DEFAULT_KEEP) {
+  const cap = FENCE_KEEP[fence]
+  return cap == null ? requested : Math.min(requested, cap)
+}
 const MAX_TITLE = 72
 const MAX_HINT = 48
 // the canonical one-line tombstone; we only need reason + cycle to manage the ring.
@@ -121,8 +139,10 @@ export function removeByTitle(text, { title, reason, cycle, hint, after, keep = 
   const fen = fence || fenceOf(lines, idx)
   if (!fen) throw new Error('the matched seed is not inside a gauge fence')
   lines.splice(idx, 1)
+  const k = keepFor(fen, keep)
+  if (k <= 0) return { text: lines.join('\n'), removedLine, tombstone: null, fence: fen } // no-memory fence (writ): vanish cleanly
   const tomb = makeTomb(reason, cycle, title, hint, after)
-  placeTomb(lines, fen, tomb, keep)
+  placeTomb(lines, fen, tomb, k)
   return { text: lines.join('\n'), removedLine, tombstone: tomb, fence: fen }
 }
 
@@ -130,8 +150,10 @@ export function removeByTitle(text, { title, reason, cycle, hint, after, keep = 
 export function addTomb(text, { fence, reason, cycle, title, hint, after, keep = DEFAULT_KEEP } = {}) {
   const lines = text.split('\n')
   fenceBounds(lines, fence) // validates the fence exists
+  const k = keepFor(fence, keep)
+  if (k <= 0) return { text: lines.join('\n'), tombstone: null, fence } // no-memory fence (writ): refuse to inscribe
   const tomb = makeTomb(reason, cycle, title, hint, after)
-  placeTomb(lines, fence, tomb, keep)
+  placeTomb(lines, fence, tomb, k)
   return { text: lines.join('\n'), tombstone: tomb, fence }
 }
 
@@ -170,7 +192,8 @@ export function gc(text, { keep = DEFAULT_KEEP } = {}) {
       drop.push(i)                                // both legacy AND canon are re-laid below
     }
     if (!drop.length) { report.push({ fence, keptCanon: 0, droppedLegacy: 0 }); continue }
-    const keptCanon = canon.sort((a, c) => a.cycle - c.cycle).slice(-keep)
+    const k = keepFor(fence, keep)
+    const keptCanon = k <= 0 ? [] : canon.sort((a, c) => a.cycle - c.cycle).slice(-k)
     for (const i of drop.slice().sort((a, c) => c - a)) lines.splice(i, 1) // remove bottom-up
     const b2 = fenceBounds(lines, fence)
     lines.splice(b2.end, 0, ...keptCanon.map(k => k.line))  // re-lay kept canon, chronological
@@ -245,11 +268,15 @@ async function main() {
     const title = o.title || o._[1]
     if (!title) throw new Error('rm needs a title:  bed rm "<title>" --reason <WORD>')
     result = removeByTitle(text, { title, reason: oneWord(o.reason), cycle, hint: o.hint, after, keep, fence: o.fence })
-    out = `🪦 ${result.fence}: removed "${title}" → ${result.tombstone}`
+    out = result.tombstone
+      ? `🪦 ${result.fence}: removed "${title}" → ${result.tombstone}`
+      : `🧽 ${result.fence}: removed "${title}" cleanly — no tombstone (${result.fence} keeps no memory; providence stays out of the file)`
   } else if (cmd === 'tomb') {
     if (!o.fence || !o.title) throw new Error('tomb needs --fence and --title')
     result = addTomb(text, { fence: o.fence, reason: oneWord(o.reason), cycle, title: o.title, hint: o.hint, after, keep })
-    out = `🪦 ${result.fence}: ${result.tombstone}`
+    out = result.tombstone
+      ? `🪦 ${result.fence}: ${result.tombstone}`
+      : `🧽 ${result.fence}: keeps no memory (keep=0) — nothing inscribed`
   } else if (cmd === 'restamp') {
     const title = o.title || o._[1]
     if (!title) throw new Error('restamp needs a title')

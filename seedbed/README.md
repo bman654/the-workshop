@@ -127,7 +127,11 @@ redesign, a re-soul, the navigation, a taste call about the app)?*
 - **Yes → release.** The director does **not** impose it: it is rephrased into an
   ordinary seed/spark and sown **unmarked** into the normal beds, free for the
   collective to take up or let decay like any other. *The Patron's wishes for the art
-  enter the queue as equals; they never command it.*
+  enter the queue as equals; they never command it.* The unmarking is total: the served
+  writ is removed by `bed rm --reason SERVED`, and the **writ fence keeps `keep=0`** —
+  it leaves **no tombstone** (unlike every other fence's bounded ring). The commit
+  subject and NOTES block stay provenance-free too, so no maker-visible channel can ever
+  whisper "this seed came from the Patron" and bias a future pick toward it.
 - **No → mandate.** The cycle **carries it out** (the **steward** implements; it may
   fan out explorers → a judge → the steward for a rich task). This covers operational
   work *and* creative content that lands somewhere **other than** the deployed estate
