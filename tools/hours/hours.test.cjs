@@ -68,7 +68,6 @@ ok(core.pass, 'CORE BATTERY: every solar/tint/apparition claim passes');
     { id: 'alchemy', district: 'grounds', tier: 2, wing: 'works', footprint: 'laboratory', order: 20 },
     { id: 'iron-filings', district: 'grounds', tier: 2, footprint: 'iron-filings' },
     { id: 'clockwork', district: 'manor', tier: 2, wing: 'maker', footprint: 'clockwork' },
-    { id: 'tabularium', district: 'manor', tier: 2, wing: 'archive', footprint: 'house-wing', order: 10 },
     { id: 'conservatory', district: 'grounds', tier: 2, wing: 'conservatory', footprint: 'glasshouse-wing' },
     { id: 'workbench', district: 'outbuilding', tier: 3, footprint: 'shed' },
     // ── THE NEW GROUNDS SWING — the estate's master sundial, its own horology wing ──

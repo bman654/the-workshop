@@ -66,13 +66,10 @@
     'arcade':         { x: 1330, y: 220, mag: 1 },
     'workbench':      { x: 780,  y: 860, mag: 1 },
     'undercroft':     { x: 880,  y: 850, mag: 2 },
-    // the manor's archive annal — a field star in the upper-right band, lit on first
-    // visit to the Tabularium (additive; never feeds the wings-only capstone).
-    'tabularium':     { x: 1180, y: 150, mag: 1 },
     // The Museum — the archive wing's grand hall (the Centennial Jubilee · River of
-    // Days). A field star in the upper-right archive band beside its kin (tabularium
-    // 1180,150 · gnomon 1270,170); lit on first visit. Position VERIFIED clear of the
-    // archive-wing colonnade footprint + every box by sky.test.cjs CATALOG INTEGRITY.
+    // Days). A field star in the upper-right archive band beside its kin (gnomon
+    // 1270,170); lit on first visit. Position VERIFIED clear of the archive-wing
+    // colonnade footprint + every box by sky.test.cjs CATALOG INTEGRITY.
     'museum':         { x: 1150, y: 178, mag: 1 },
     // The Hours — the estate's sundial (horology wing). A field star in the dark
     // top-right margin beside its open east-park footprint; lit on first visit.
