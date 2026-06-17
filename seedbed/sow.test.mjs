@@ -15,6 +15,9 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.error(`  ✗ ${m}`)
 const eq = (a, b, m) => ok(a === b, `${m} — got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`)
 
 const FIXTURE = `# ROADMAP
+<!-- gauge:writ:start -->
+<!-- gauge:writ:end -->
+
 <!-- gauge:bug:start -->
 <!-- gauge:bug:end -->
 
@@ -49,6 +52,8 @@ eq(route('bug').fence, 'bug', 'bug → bug fence')
 eq(route('bug').stamp, null, 'bug is never stamped')
 eq(route('spark').fence, 'sparks', 'spark → sparks fence')
 eq(route('spark').stamp, null, 'spark is never stamped')
+eq(route('writ').fence, 'writ', 'writ → writ fence')
+eq(route('writ').stamp, null, 'writ is never stamped (top priority, never decays)')
 eq(route('nonsense'), null, 'unknown kind → null route')
 
 // ── parsing ──
@@ -88,11 +93,14 @@ const batch = `[exhibit] **New Exhibit** — fresh.
 
 [bug] **A new bug.** broke.
 
-⚡ **A new spark** — raw.`
+⚡ **A new spark** — raw.
+
+[writ] **Slack me a summary.** AUTHORIZES: send-slack — the steward only.`
 const { text } = insert(FIXTURE, parseBatch(batch), { cycle: 105, contest: 8 })
 
 // the gauge must now COUNT every insertion in the right place
 const bed = parseBed(text)
+eq(bed.writs, 1, 'gauge counts the new writ')
 eq(bed.bugs, 1, 'gauge counts the new bug')
 eq(bed.sparks, 2, 'gauge counts existing + new spark')
 eq(bed.groundsFuel, 2, 'gauge counts existing + new grounds seed')
@@ -101,6 +109,7 @@ ok(text.includes('**New Exhibit** — fresh. (sown #105)'), 'new exhibit stamped
 ok(text.includes('**New Cross** — links a×b. (sown #105)'), 'new cross stamped')
 ok(text.includes('**New Room** — a wing. (sown #105 · contest #8)'), 'new room stamped with contest')
 ok(text.includes('- [bug] **A new bug.** broke.\n'), 'new bug inserted unstamped')
+ok(text.includes('- [writ] **Slack me a summary.** AUTHORIZES: send-slack — the steward only.\n') && !text.includes('Slack me a summary.** AUTHORIZES: send-slack — the steward only. (sown'), 'writ inserted unstamped')
 // new cross sits under ### cross, not ### exhibit
 const lines = text.split('\n')
 const crossIdx = lines.findIndex(l => l.trim() === '### cross')
@@ -120,7 +129,7 @@ const SOW = fileURLToPath(new URL('./sow.mjs', import.meta.url))
 execFileSync('node', [SOW, '--roadmap', rm, '--cycle', '105', '--contest', '8', '-'], { input: batch, encoding: 'utf8' })
 const after = readFileSync(rm, 'utf8')
 const bed2 = parseBed(after)
-ok(bed2.bugs === 1 && bed2.sparks === 2 && bed2.groundsFuel === 2 && bed2.gardenFuel === 3, 'CLI end-to-end: gauge counts all insertions')
+ok(bed2.writs === 1 && bed2.bugs === 1 && bed2.sparks === 2 && bed2.groundsFuel === 2 && bed2.gardenFuel === 3, 'CLI end-to-end: gauge counts all insertions')
 
 console.log(`${fail ? '✗' : '✓'} sow.test: ${pass}/${pass + fail} passed`)
 process.exit(fail ? 1 : 0)

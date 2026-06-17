@@ -52,6 +52,7 @@ const GARDEN_KINDS = new Set(['exhibit', 'cross', 'curation', 'grow', 'rework'])
 const GROUNDS_KINDS = new Set(['room', 'engine', 'metagame', 'map', 'medium', 'wing'])
 export function classify(kind) {
   const k = String(kind || '').toLowerCase().split(/[\/·\s]/)[0]
+  if (k === 'writ') return 'writ'
   if (k === 'bug') return 'bug'
   if (GARDEN_KINDS.has(k)) return 'garden'
   if (GROUNDS_KINDS.has(k)) return 'grounds'
@@ -63,7 +64,8 @@ export function classify(kind) {
 // A live seed line starts with "- [" (struck "- ~~[" and tombstone "*…" lines
 // are excluded). Each carries a stamp: garden "(sown #N)", grounds adds
 // "· contest #M". Sparks are plain "- " lines in the sparks section.
-const SECTIONS = ['garden-seeds', 'grounds-seeds', 'sparks', 'bug']
+// 'writ' first: a Patron's Writ outranks everything (see the decision ladder).
+const SECTIONS = ['writ', 'garden-seeds', 'grounds-seeds', 'sparks', 'bug']
 function section(text, name) {
   const m = text.match(new RegExp(`<!--\\s*gauge:${name}:start\\s*-->([\\s\\S]*?)<!--\\s*gauge:${name}:end\\s*-->`))
   return m ? m[1] : null
@@ -91,16 +93,19 @@ function pitchOf(line) {
 }
 
 export function parseBed(text) {
+  const writs = liveSeedLines(section(text, 'writ'))
   const garden = liveSeedLines(section(text, 'garden-seeds'))
   const grounds = liveSeedLines(section(text, 'grounds-seeds'))
   const sparks = liveSparkLines(section(text, 'sparks'))
   const bugs = liveSeedLines(section(text, 'bug'))
   const present = SECTIONS.filter(s => section(text, s) != null)
   return {
+    writs: writs.length,
     gardenFuel: garden.length,
     groundsFuel: grounds.length,
     sparks: sparks.length,
     bugs: bugs.length,
+    writSeeds: writs.map(l => ({ kind: kindOf(l), pitch: pitchOf(l) })),
     gardenSeeds: garden.map(l => ({ kind: kindOf(l), pitch: pitchOf(l), ...stampOf(l) })),
     groundsSeeds: grounds.map(l => ({ kind: kindOf(l), pitch: pitchOf(l), ...stampOf(l) })),
     sectionsPresent: present,
@@ -133,10 +138,16 @@ export function decide(state, bed, th = TH) {
     currentCycle: cycle + 1, // the cycle ABOUT to run — stamp seeds + the funlog with this
     gardenFuel: bed.gardenFuel, gardenBuilds,
     groundsFuel: bed.groundsFuel, groundsSince,
-    bigSwingsBuilt: state.bigSwingsBuilt, sparks: bed.sparks, bugs: bed.bugs,
+    bigSwingsBuilt: state.bigSwingsBuilt, sparks: bed.sparks, bugs: bed.bugs, writs: bed.writs,
   }
   let r
-  if (bed.bugs > 0) {
+  if (bed.writs > 0) {
+    // The Patron's Writ outranks everything, even a bug. The director TRIAGES it,
+    // and the cycle is CADENCE-NEUTRAL (see applyRecord) — serving the Patron decays
+    // nothing else, so we hand the director an EMPTY decay list (prune nothing).
+    r = { mode: 'WRIT', track: 'writ', role: 'director',
+      reason: `${bed.writs} sealed Patron's writ(s) — triage before all else; this cycle decays nothing (the cadence clocks hold).` }
+  } else if (bed.bugs > 0) {
     r = { mode: 'BUILD', track: 'bug', role: 'bug-fixer',
       reason: `${bed.bugs} open [bug] — a fix jumps the queue.` }
   } else if (groundsSince >= th.groundsInterval && bed.groundsFuel >= 1) {
@@ -155,7 +166,7 @@ export function decide(state, bed, th = TH) {
     r = { mode: 'BUILD', track: 'garden', role: 'planter',
       reason: `gardenFuel=${bed.gardenFuel} (>${th.gardenFuelFloor}), gardenBuilds=${gardenBuilds} (<${th.gardenInterval}) — pull a garden seed (or dream one) and sow it.` }
   }
-  return { ...r, gauges, decayed: decayed(bed, state, th) }
+  return { ...r, gauges, decayed: r.track === 'writ' ? [] : decayed(bed, state, th) }
 }
 
 // ── State IO ──────────────────────────────────────────────────────────────────
@@ -172,8 +183,8 @@ function saveState(s) { writeFileSync(STATE, JSON.stringify(s, null, 2) + '\n') 
 // mode/track throws (a silent miss would desync the cadence forever). Plurals are
 // tolerated (the prose says "gardens"/"grounds"); counts coerce non-numbers → 0
 // (a forgotten "--sown N" placeholder must not crash the cycle bump or poison the tally).
-const MODES = { BUILD: 'BUILD', PLAN: 'PLAN', TRIVIAL: 'TRIVIAL' }
-const TRACKS = { garden: 'garden', gardens: 'garden', grounds: 'grounds', ground: 'grounds', bug: 'bug', bugs: 'bug' }
+const MODES = { BUILD: 'BUILD', PLAN: 'PLAN', TRIVIAL: 'TRIVIAL', WRIT: 'WRIT' }
+const TRACKS = { garden: 'garden', gardens: 'garden', grounds: 'grounds', ground: 'grounds', bug: 'bug', bugs: 'bug', writ: 'writ', writs: 'writ' }
 // currentBed (optional) = { garden: [seed-title, …], grounds: [seed-title, …] } — the
 // bed AFTER this cycle's edits. When given, the tally is DERIVED by diffing it against
 // the snapshot in state.fence (like fuel — the bed is the source of truth, so a sloppy
@@ -182,8 +193,33 @@ const TRACKS = { garden: 'garden', gardens: 'garden', grounds: 'grounds', ground
 export function applyRecord(state, { mode, track, bloomed, sown, decayed } = {}, currentBed = null) {
   const m = MODES[String(mode).toUpperCase()]
   const t = TRACKS[String(track).toLowerCase()]
-  if (!m) throw new Error(`record: unknown --mode "${mode}" (want BUILD | PLAN | TRIVIAL)`)
-  if (!t) throw new Error(`record: unknown --track "${track}" (want garden | grounds | bug)`)
+  if (!m) throw new Error(`record: unknown --mode "${mode}" (want BUILD | PLAN | TRIVIAL | WRIT)`)
+  if (!t) throw new Error(`record: unknown --track "${track}" (want garden | grounds | bug | writ)`)
+
+  // ── A Patron's Writ is CADENCE-NEUTRAL ──────────────────────────────────────
+  // It advances NO clock (cycle / lastGardenPlan / lastBigSwing / bigSwingsBuilt all
+  // hold), so serving the Patron ages and decays NOTHING else in the beds. It only
+  // (a) re-baselines the bed snapshot and (b) credits any creative clauses it RELEASED
+  // into the beds as 'sown' (an honest fuel metric) — it never books a bloom or a decay,
+  // and a released seed carries NO mark of its Patron origin (no providence in the bed).
+  if (m === 'WRIT') {
+    const sw = { ...state }
+    if (currentBed) {
+      const tally = { ...(state.tally || {}) }
+      const old = state.fence || { garden: [], grounds: [] }
+      for (const fence of ['garden', 'grounds']) {
+        const cur = new Set(currentBed[fence] || [])
+        const prev = new Set(old[fence] || [])
+        const sownN = [...cur].filter(x => !prev.has(x)).length // released this writ
+        tally[`${fence}Sown`] = (tally[`${fence}Sown`] || 0) + sownN
+        // NB: a seed absent from cur is NOT booked decayed — a writ never prunes the beds.
+      }
+      sw.tally = tally
+      sw.fence = { garden: [...(currentBed.garden || [])], grounds: [...(currentBed.grounds || [])] }
+    }
+    return sw
+  }
+
   const s = { ...state }
   s.cycle = state.cycle + 1 // every completed cycle advances the durable clock
   if (m === 'PLAN' && t === 'garden') s.lastGardenPlan = s.cycle
@@ -244,7 +280,11 @@ function main() {
     saveState(ns)
     const dt = ns.tally, ot = state.tally || {}
     const delta = (k) => (dt[k] || 0) - (ot[k] || 0)
-    console.log(`recorded ${f.mode}/${f.track}: cycle ${state.cycle} → ${ns.cycle}  ·  garden +${delta('gardenSown')} sown / ${delta('gardenBloomed')} bloomed / ${delta('gardenDecayed')} decayed · grounds +${delta('groundsSown')} sown / ${delta('groundsBloomed')} bloomed / ${delta('groundsDecayed')} decayed`)
+    if (String(f.mode).toUpperCase() === 'WRIT') {
+      console.log(`recorded WRIT/writ: cadence HELD at cycle ${ns.cycle} (no clock advanced → nothing decayed) · released ${delta('gardenSown')} garden + ${delta('groundsSown')} grounds seed(s) to the beds`)
+    } else {
+      console.log(`recorded ${f.mode}/${f.track}: cycle ${state.cycle} → ${ns.cycle}  ·  garden +${delta('gardenSown')} sown / ${delta('gardenBloomed')} bloomed / ${delta('gardenDecayed')} decayed · grounds +${delta('groundsSown')} sown / ${delta('groundsBloomed')} bloomed / ${delta('groundsDecayed')} decayed`)
+    }
     console.log(JSON.stringify(ns, null, 2))
     return
   }
@@ -262,7 +302,7 @@ function main() {
     console.log(`🎲 cycle ${g.currentCycle} (last completed ${g.cycle})`)
     console.log(`   GARDEN  fuel=${g.gardenFuel} (floor ${TH.gardenFuelFloor}/ceil ${TH.gardenFuelCeiling}) · builds-since-plan=${g.gardenBuilds} (cap ${TH.gardenInterval})`)
     console.log(`   GROUNDS fuel=${g.groundsFuel} (floor ${TH.groundsFuelFloor}/ceil ${TH.groundsFuelCeiling}) · since-swing=${g.groundsSince} (interval ${TH.groundsInterval}) · swings-built=${g.bigSwingsBuilt} · sparks=${g.sparks}`)
-    console.log(`   bugs=${g.bugs}`)
+    console.log(`   ${g.writs ? '✒️  ' : ''}writs=${g.writs}   bugs=${g.bugs}`)
     console.log(`\n▶ ${d.mode} / ${d.track}  (be the ${d.role})`)
     console.log(`   ${d.reason}`)
     if (d.decayed.length) {

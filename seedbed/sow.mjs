@@ -15,13 +15,15 @@
 //   • One ITEM per block; blocks are separated by a blank line.
 //   • A block's lines are joined with single spaces (write a long bug across
 //     several lines if you like — they fold into one ROADMAP line).
-//   • Each block must LEAD with its kind:  [exhibit] / [cross] / [curate] /
-//     [rework] / [bench]   (garden)   ·   [room] / [engine] / [metagame] / [map] /
-//     [medium] / [wing]   (grounds)   ·   [bug]   ·   ⚡  or  [spark]   (spark).
+//   • Each block must LEAD with its kind:  [writ] (the Patron — top priority)  ·
+//     [exhibit] / [cross] / [curate] / [rework] / [bench]   (garden)   ·   [room] /
+//     [engine] / [metagame] / [map] / [medium] / [wing]   (grounds)   ·   [bug]   ·
+//     ⚡  or  [spark]   (spark).
 //   • A leading "- " is optional (added if absent). A block whose first line
 //     starts with "#" is a comment and is skipped.
 //   • A stamp is added if you didn't write one. Garden→"(sown #N)",
-//     grounds→"(sown #N · contest #M)"; bugs & sparks are never stamped.
+//     grounds→"(sown #N · contest #M)"; writs, bugs & sparks are never stamped.
+//   • A [writ] may carry "AUTHORIZES: <one outside action> — the steward only".
 //
 //   Example batch file:
 //     [exhibit] **The Rattleback** — a top with one allowed spin. Flip it; it
@@ -59,6 +61,7 @@ const GROUNDS_KINDS = new Set(['room', 'engine', 'metagame', 'map', 'medium', 'w
 
 export function route(kind) {
   const k = String(kind || '').toLowerCase().trim()
+  if (k === 'writ') return { fence: 'writ', stamp: null }      // the Patron's request — top priority, unstamped (never decays)
   if (k === 'spark') return { fence: 'sparks', stamp: null, spark: true }
   if (k === 'bug') return { fence: 'bug', stamp: null }
   if (k in GARDEN_SUB) return { fence: 'garden-seeds', sub: GARDEN_SUB[k], stamp: 'sown' }
@@ -87,7 +90,7 @@ export function parseBatch(text) {
       line = `- ${body}`
     }
     const r = route(kind)
-    if (!r) throw new Error(`unknown kind "[${kind}]". Valid: ${[...Object.keys(GARDEN_SUB), ...GROUNDS_KINDS, 'bug', 'spark'].join(' / ')}`)
+    if (!r) throw new Error(`unknown kind "[${kind}]". Valid: writ / ${[...Object.keys(GARDEN_SUB), ...GROUNDS_KINDS, 'bug', 'spark'].join(' / ')}`)
     const tm = body.match(/\*\*(.+?)\*\*/)
     items.push({ kind, route: r, title: tm ? tm[1].trim() : body.replace(/^\[[^\]]+\]\s*/, '').slice(0, 50), line })
   }
