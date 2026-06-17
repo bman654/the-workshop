@@ -147,6 +147,38 @@ export function sternBrocotPath(x, maxSteps = 200) {
   return { path };
 }
 
+// ---------------------------------------------------------------------------
+//  INSTRUMENTED Stern–Brocot descent (the twin of sternBrocotPath the UI drives).
+//  Same mediant rule as sternBrocotPath — but it EXPOSES the live bracket so the
+//  page and the self-test share ONE source of motion. Returns, per step:
+//      { node:{p,q}, dir:'L'|'R'|null, low, high, width, exact }
+//  where [low,high] is the live bracketing interval (lo.p/lo.q .. hi.p/hi.q),
+//  width = high − low (Infinity until BOTH jaws are finite — the hi jaw starts at
+//  1/0 = +∞), and exact=true on the final step if the mediant lands on x.
+//  The node sequence is byte-for-byte the sternBrocotPath sequence (the page's
+//  revealed prefix is structurally a prefix of the core walk — unbreakable).
+// ---------------------------------------------------------------------------
+export function sternBrocotWalk(x, maxSteps = 200) {
+  let lo = { p: 0, q: 1 };          // 0/1
+  let hi = { p: 1, q: 0 };          // 1/0 (=+∞)
+  const steps = [];
+  for (let i = 0; i < maxSteps; i++) {
+    const med = { p: lo.p + hi.p, q: lo.q + hi.q };
+    const mv = med.p / med.q;
+    if (Math.abs(mv - x) < 1e-15) {
+      steps.push({ node: med, dir: null, low: mv, high: mv, width: 0, exact: true });
+      break;
+    }
+    let dir;
+    if (x < mv) { hi = med; dir = 'L'; } else { lo = med; dir = 'R'; }
+    const low  = lo.q === 0 ? -Infinity : lo.p / lo.q;
+    const high = hi.q === 0 ?  Infinity : hi.p / hi.q;
+    const finite = lo.q !== 0 && hi.q !== 0;
+    steps.push({ node: med, dir, low, high, width: finite ? high - low : Infinity, exact: false });
+  }
+  return steps;
+}
+
 // The "turning points" of a Stern–Brocot descent — the steps where the search
 // switched direction. These coincide with the continued-fraction convergents.
 // We derive direction by comparing each mediant's value to x.
@@ -359,6 +391,88 @@ export function runSelfTest() {
       if (last.p !== p / g || last.q !== q / g) { ok = false; bad = `reconstruct ${p}/${q} → ${last.p}/${last.q}`; break; }
     }
     T('finite CF reconstructs its rational exactly (5 cases)', ok, ok ? '' : bad);
+  }
+
+  // 11. PREFIX CONTRACT (the re-soul's spine): the instrumented walk the PAGE
+  //     drives is the same descent as sternBrocotPath — node-for-node, full length
+  //     (not merely a prefix). So the revealed nodes can NEVER diverge from core.
+  {
+    let ok = true, bad = '';
+    for (const [nm, x] of [['φ', PHI], ['√2', SQRT2], ['π', PI], ['e', E], ['22/7', 22 / 7]]) {
+      const s = sternBrocotWalk(x, 400);
+      const { path } = sternBrocotPath(x, 400);
+      if (s.length !== path.length) { ok = false; bad = `${nm}: len ${s.length}≠${path.length}`; break; }
+      for (let i = 0; i < s.length; i++)
+        if (s[i].node.p !== path[i].p || s[i].node.q !== path[i].q) { ok = false; bad = `${nm}@${i}`; break; }
+      if (!ok) break;
+    }
+    T('hand-walk reproduces the core descent (node-for-node, full length)', ok, ok ? 'page ≡ sternBrocotPath' : bad);
+  }
+
+  // 12. THE VISE: the bracket always contains x; its width is monotone
+  //     non-increasing, and STRICTLY shrinks once both jaws are finite (the slam
+  //     is real, not cosmetic). Strict check scoped to finite, non-exact steps.
+  {
+    let ok = true, bad = '';
+    for (const [nm, x] of [['φ', PHI], ['√2', SQRT2], ['π', PI], ['e', E]]) {
+      let prev = Infinity;
+      for (const st of sternBrocotWalk(x, 60)) {
+        if (!(st.low - 1e-12 <= x && x <= st.high + 1e-12)) { ok = false; bad = `${nm}: x outside bracket`; break; }
+        if (st.width > prev + 1e-18) { ok = false; bad = `${nm}: width grew`; break; }
+        if (st.width !== Infinity && prev !== Infinity && !exact(st) && !(st.width < prev)) { ok = false; bad = `${nm}: not strictly shrinking`; break; }
+        prev = st.width;
+      }
+      if (!ok) break;
+    }
+    function exact(st) { return st.exact; }
+    T('the vise: bracket holds x, width monotone-shrinks (strict once finite)', ok, ok ? '' : bad);
+  }
+
+  // 13. GOLD === TURNS === CONVERGENTS: the gold stamps fired by the UI (the
+  //     nodes the walk just LEFT at a direction-change, plus the final node) are
+  //     exactly the Stern–Brocot turning points, which are exactly the CF
+  //     convergents — every one already in lowest terms. Filtered to q≤2000 (the
+  //     pre-float-collapse safe zone; π only agrees for 4 before the tail drifts).
+  {
+    const goldFrom = (x, m) => {
+      const s = sternBrocotWalk(x, m).filter(st => !st.exact);
+      const gold = []; let pd = null;
+      for (let i = 0; i < s.length; i++) { if (pd !== null && s[i].dir !== pd) gold.push(s[i - 1].node); pd = s[i].dir; }
+      if (s.length) gold.push(s[s.length - 1].node);
+      return gold;
+    };
+    let ok = true, bad = '';
+    for (const [nm, x] of [['φ', PHI], ['√2', SQRT2], ['π', PI], ['e', E]]) {
+      const gold = goldFrom(x, 200).filter(g => g.q <= 2000);
+      const tp   = sternBrocotTurningPoints(x, 200).filter(g => g.q <= 2000);
+      const cv   = convergentsOf(x, 14).filter(c => c.q <= 2000);
+      const k = Math.min(gold.length, tp.length, cv.length);
+      for (let i = 0; i < k; i++) {
+        if (gold[i].p !== tp[i].p || gold[i].q !== tp[i].q) { ok = false; bad = `gold≠tp ${nm}@${i}`; break; }
+        if (tp[i].p !== cv[i].p || tp[i].q !== cv[i].q) { ok = false; bad = `tp≠cv ${nm}@${i}`; break; }
+        if (gcd(cv[i].p, cv[i].q) !== 1) { ok = false; bad = `gcd ${nm} ${cv[i].p}/${cv[i].q}`; break; }
+      }
+      if (!ok) break;
+    }
+    T('gold stamps = turning points = convergents (q≤2000, gcd=1)', ok, ok ? 'φ:14 √2:9 π:4 e:11 agree' : bad);
+  }
+
+  // 14. NEGATIVE CONTROL (honest about float): a RATIONAL p/q terminates — its
+  //     last walk step is exact, the node is p/q reduced, width exactly 0 — in
+  //     finite steps; while an IRRATIONAL keeps a STRICTLY positive width through
+  //     every finite non-exact step up to step 30 (φ/√2/π/e all float-collapse
+  //     eventually, so "never terminates" would be FALSE — this is the true claim).
+  {
+    let ok = true, bad = '';
+    for (const [p, q] of [[22, 7], [355, 113], [13, 8]]) {
+      const s = sternBrocotWalk(p / q, 4000); const last = s[s.length - 1]; const g = gcd(p, q);
+      if (!(last.exact === true && last.node.p === p / g && last.node.q === q / g && last.width === 0)) { ok = false; bad = `${p}/${q} did not terminate cleanly`; break; }
+    }
+    if (ok) for (const [nm, x] of [['φ', PHI], ['√2', SQRT2], ['π', PI], ['e', E]]) {
+      const s = sternBrocotWalk(x, 30).filter(st => st.width !== Infinity && !st.exact);
+      if (!s.every(st => st.width > 0)) { ok = false; bad = `${nm}: width hit 0 by step 30`; break; }
+    }
+    T('rational terminates (width 0); irrational width > 0 through step 30', ok, ok ? '' : bad);
   }
 
   const pass = lines.filter(l => l.ok).length;

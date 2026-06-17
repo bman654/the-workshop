@@ -4,6 +4,46 @@ A number-theory bench: continued fractions, the convergents (best rational
 approximations), and the Stern–Brocot tree. The estate's first foray into
 **number theory** (only incidental prime/φ mentions existed before).
 
+## v2 — #90 re-soul (Opus 4.8, planter BUILD)
+
+**From a graph you watch to a vise you steer.** v1's hero was an auto-drawn
+Stern–Brocot descent — a chart that drew itself. v2 makes it a **thing you do**:
+the centerpiece is now a **hand-steered vise** on a number line. Two jaws (0/1
+and +∞) bracket your target; you press the **glowing jaw** (or ← / →) to take one
+mediant step, and the window **slams shut** around the number — eased-tweened and
+auto-framed so the slam stays visible at microscopic widths, with a cumulative
+`zoomed Nx` honesty tag so the gap reads as genuinely shrinking.
+
+- **One source of motion.** The page no longer runs its own loop. `setNumber`
+  precomputes `sternBrocotWalk(x, 60)` — the oracle — and pressing only advances
+  `state.step` (reading the precomputed prefix). Undo is `step--`. The revealed
+  nodes *are* the core walk's prefix, so they can never diverge from the math.
+- **Gold ignition → the ledger.** Every convergent you pass (read from the core
+  `sternBrocotTurningPoints` set — the UI re-implements no turning rule) flashes
+  a gold burst, drops a persistent breadcrumb tick on the bar, and **stamps a row**
+  into the ledger (the demoted-but-re-souled convergent table), which renders
+  empty and fills under your hand. Each stamp runs a live brute-force `best ≤ q?`
+  check, so the "✓ theorem holds (N verified)" badge counts UP as you steer.
+  Includes n=0 (φ:1/1, π:3/1); the trivial a₀/1 and any q=1 row show "—" (the
+  theorem is stated for n≥1, where round(x) can beat floor(x)).
+- **The φ punch, felt.** A turn-meter shows L/R chips per step — φ reads
+  R L R L… perfectly alternating, so it stamps **every press** (the slowest
+  possible vise); a caption "every press turns → most irrational" is *earned*
+  only after the last 5 presses all alternated, never pre-printed.
+- **The q²·err plot demoted** to a collapsed `<details>` rigor rail (redraws on
+  open; a canvas in a closed details sizes 1×1, so it's guarded).
+- **+4 self-test claims (11–14):** the prefix contract (hand-walk ≡ core path,
+  full length), the vise (bracket holds x, width monotone-shrinks, strict once
+  finite), gold===turns===convergents (q≤2000, gcd=1), and an honest negative
+  control (rationals terminate at width 0; irrationals stay width>0 through step
+  30 — *not* "never terminate"; φ/√2/π/e all float-collapse eventually). Counts:
+  **in-page 14/14, Node 24/24** (`core.test.mjs` adds deeper G/H/I). The core
+  math (`sternBrocotPath/TurningPoints/convergentsOf/bruteBest`) is unchanged and
+  remains the sole authority; `sternBrocotWalk` is its instrumented twin.
+- **a11y / reduced-motion:** real focusable `<button>` jaws, ← / → keys (wrong
+  arrow shakes, never advances), Backspace = undo; reduced-motion does a
+  synchronous jump-to-depth with no tweens/bursts. PNG export now saves the vise.
+
 ## v1 — 2026-06-13 (Opus 4.8, `/fun` BUILD session)
 
 **The missing medium.** The estate models light, motion, chaos, geometry,

@@ -7,7 +7,8 @@
 import {
   PHI, PI, E, SQRT2,
   cfExpand, cfOfRational, convergents, convergentsOf,
-  bruteBest, sternBrocotTurningPoints, convergentError, gcd, fib,
+  bruteBest, sternBrocotPath, sternBrocotTurningPoints, sternBrocotWalk,
+  convergentError, gcd, fib,
   runSelfTest,
 } from './core.mjs';
 
@@ -120,6 +121,47 @@ ok('[self-test] all in-page checks pass', st.pass === st.total, `${st.pass}/${st
   const c = convergentsOf(PHI, 12);
   const good = c.every((cv, n) => cv.q === fib(n + 1) && cv.p === fib(n + 2));
   ok('fib() yields φ convergent num/den (F_{n+2}/F_{n+1})', good);
+}
+
+// G. The instrumented hand-walk reproduces sternBrocotPath node-for-node for a
+//    fresh battery of irrationals (deeper than the in-page claim 11) — proof the
+//    UI's sole source of motion never diverges from the core descent.
+{
+  let good = true, bad = '';
+  for (const x of [Math.sqrt(3), Math.cbrt(2), PI * PI / 6, 0.30102999566]) { // √3, ∛2, ζ(2), log10(2)
+    const s = sternBrocotWalk(x, 800);
+    const { path } = sternBrocotPath(x, 800);
+    if (s.length !== path.length) { good = false; bad = `len ${s.length}≠${path.length} (x≈${x.toFixed(5)})`; break; }
+    for (let i = 0; i < s.length; i++)
+      if (s[i].node.p !== path[i].p || s[i].node.q !== path[i].q) { good = false; bad = `divergence@${i} (x≈${x.toFixed(5)})`; break; }
+    if (!good) break;
+  }
+  ok('hand-walk === sternBrocotPath for √3, ∛2, ζ(2), log10(2) (maxSteps 800)', good, bad);
+}
+
+// H. φ's vise: across its ~36 finite steps the width strictly shrinks, never
+//    growing, and its last finite width is a genuine sub-1e-12 sliver (still > 0).
+{
+  const fin = sternBrocotWalk(PHI, 200).filter(st => st.width !== Infinity && !st.exact);
+  let strict = true, prev = Infinity;
+  for (const st of fin) { if (!(st.width < prev)) strict = false; prev = st.width; }
+  const lastW = fin[fin.length - 1].width;
+  const tiny = lastW > 0 && lastW < 1e-12;
+  ok('φ vise strictly shrinks over its finite steps; last width >0 and <1e-12',
+    strict && tiny, `steps=${fin.length} lastW=${lastW.toExponential(3)}`);
+}
+
+// I. Long-CF rationals terminate cleanly at width 0 (Fibonacci pairs are the
+//    longest-CF, slowest-to-resolve rationals — the deepest the walk works for).
+{
+  let good = true, bad = '';
+  for (const [p, q] of [[89, 55], [1597, 987], [1000, 7]]) {
+    const s = sternBrocotWalk(p / q, 4000); const last = s[s.length - 1]; const g = gcd(p, q);
+    if (!(last.exact === true && last.node.p === p / g && last.node.q === q / g && last.width === 0)) {
+      good = false; bad = `${p}/${q} → ${last.node.p}/${last.node.q} exact=${last.exact} w=${last.width}`; break;
+    }
+  }
+  ok('long-CF rationals 89/55, 1597/987, 1000/7 terminate at width 0', good, bad);
 }
 
 console.log(`\n${pass}/${total} passed`);
