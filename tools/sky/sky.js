@@ -80,6 +80,12 @@
     // clear of partition@318,122 / temperature-dial@392,78 / the manor pool, and
     // every footprint+furniture box (sky.test.cjs CATALOG INTEGRITY).
     'aerodrome':      { x: 360,  y: 120, mag: 1 },
+    // The Clack Counter — the number wing's collisions room (heard π in 314 clacks).
+    // A FEATS-flavoured field star in the dark lower band right of the manor pool,
+    // near its grounds kin; lit on first visit (ws:seen:collisions). Verified clear
+    // of every footprint/furniture box, the manor pool, the viewBox edge, and every
+    // existing catalog star (nearest = daedalus @126px) by sky.test.cjs CATALOG INTEGRITY.
+    'collisions':     { x: 1180, y: 560, mag: 1 },
     // ── the feats constellation: nine "Feats of Light" earned in the Hall of Mirrors,
     //    laid out as a vertical LENS (a pointed oval) threading the WEST GROUNDS left
     //    margin beside the Hall footprint (x124 y430 w148 h74). These are PSEUDO-ids
