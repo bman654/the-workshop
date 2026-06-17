@@ -1,5 +1,58 @@
 # The Undercroft — changelog
 
+## Build 12 — The Constellation of Mastery: 6 secrets that reward what you CONQUERED (2026-06-17, cycle #95)
+
+Wave one of the `[curate]` Undercroft-curation seed (sown #86: "add ≥10 new secrets, half gating an
+exhibit"). Where the Undercroft's first 12 secrets were a flat cabinet of curiosities rewarding what
+you *wandered past*, the new 6 form a named **GROUP** — **The Constellation of Mastery** — that rewards
+what you *finished*, with discovery staged as an event.
+
+**The six secrets** (ids + predicate fns live in `tools/ws/ws.js` `WS.SECRETS`; all names/badges/riddles
+/signs live ONLY in `index.src.html`, so no secret prose leaks into a public trigger page):
+
+- **m-keeper-of-tales** 🏮 — carried all THREE public Lantern tales to their ends (`ws:flag:the-lamplighter-won`
+  ∧ `ws:flag:the-ferryman-won` ∧ `ws:flag:the-clockmaker-won`). **GATES the earned page `keeper.html`.**
+- **m-clean-sweep** 🧹 — a flawless solve of all FOUR puzzle benches (`latch/slitherlink/akari/mirror-maze`
+  `-clean` flags, written by the puzzle pages).
+- **m-held-the-line** 🛡️ — outlasted the Swarm to the tenth wave (`ws:best:swarm ≥ 10`).
+- **m-half-the-light** 🎚️ — mastered at least FIVE of the nine Hall Feats of Light (`ws:flag:earned-*`).
+- **m-eleven-and-still** — pushed every dial to eleven AND kept the long quiet (`ws:flag:eleven` ∧ `ws:flag:patience`).
+- **m-grandmaster** 👑 — the capstone; lights ONLY when all five above do. It re-evaluates the SAME five
+  RAW predicates against the store and does **NOT** recurse through `WS.unlocked` (a deliberate, tested
+  invariant — 0 `WS.unlocked` calls inside it).
+
+**The framework (reusable — wave two needs no render rewrite).** `index.src.html` gained a generic
+`group` field; the existing 12 niches get none → a default section with byte-identical markup. `render()`
+now PARTITIONS niches by group, drawing a full-width section header (`grp-title` "The Constellation of
+Mastery", `grp-epigraph` "you did not merely arrive — you won", a `grp-meter` "k of 6 mastered" + a "the
+constellation waits on N more" line). ONE global count drives the top bar to **18** and all-found needs 18.
+Two motion flourishes, both behind `prefers-reduced-motion`: a `near` breathing glow + "one more sign…"
+at total−1 (the event on-ramp), and an `igniting` candle-sweep when m-grandmaster lights.
+
+**The earned page `keeper.html`** (NEW, forged from `keeper.src.html`): a quiet candlelit alcove naming the
+three carried-home Lantern tales (The Lamplighter / The Ferryman / The Clockmaker) with a micro-dedication
+teasing the hidden Night Shift. Inlines `ws.js` via forge (module guard stripped) and writes
+`WS.seen('keeper')` at parse time, so a direct visit registers its `ws:seen:keeper` breadcrumb.
+
+**Self-test.** `node tools/ws/ws.test.cjs` → **57/57 PASS** (was 36/36; +21: each predicate locked-by-default
+→ unlocks on the exact set → stays locked on a near-miss, plus interference controls [swarm=11 keeps
+the-survivor firing; 5/9 feats keeps light-mixer locked; all-but-one keeps m-grandmaster locked] + a codex
+regression re-assert). `forge --check --all` → all 34 files current (all 33 ws.js-inlining pages + the new
+keeper.html). `forge --audit-seen` → all 26 front-door pages drop their breadcrumb.
+
+**Publisher fresh-eyes (cycle #95).** Served on `127.0.0.1:8761`, session `ws95-pub`, torn down by exact
+PID/name. Verified fresh state (18 niches, group header, "0 of 18"), the near-miss 2/3 (keeper `locked near`
++ "2 of 3 signs"; Night Shift legitimately unlocks at 2 tales — its own predicate), the full trail 3/3
+(keeper unlocks → keeper.html opens clean, drops `ws:seen:keeper`), the capstone all-5 ("6 of 6 mastered",
+`body.igniting`, 👑 lit, front door loads the updated ws.js with all 6 `m-*` ids + the broken-stair footprint
+intact), and the reset (globs all 30 `ws:` keys → 0, incl. every `ws:ann:m-*` + `ws:seen:keeper`, no
+special-casing). 0 nested anchors · 0 horizontal overflow @1280 AND @390 · console clean throughout.
+SHIPPED CLEAN — no bug, no polish edit, no `[bug]` filed.
+
+**Wave two invited** (not built here): another named constellation — a breadth "Wanderer's" set (reward
+roaming widely across the estate's wings) and/or a "Cipherwrights" crypto wing (chain the Black Chamber ·
+Scytale · Enigma · Volvelle). The group/meter/near-glow framework is reusable.
+
 ## Build 11 — The Light Mixer: the Spectroscope's inverse, recomposing light (2026-06-13)
 
 A new hidden piece, `undercroft/light-mixer.html` — the quiet capstone reward for a visitor who has
