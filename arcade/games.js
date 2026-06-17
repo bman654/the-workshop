@@ -115,5 +115,11 @@ window.GAMES = [
     name: "Bulwark",
     blurb: "neon ring defender — thrust the wrap-around line, shoot the Lantern, catch the falling tender, bomb a depot to refuel",
     accent: "#5fe6c4"
+  },
+  {
+    file: "lode-runner.html",
+    name: "Lode Runner",
+    blurb: "neon dig-heist — dig holes to trap the guards, steal every nugget, climb out the lit escape ladder",
+    accent: "#ffd24d"
   }
 ];

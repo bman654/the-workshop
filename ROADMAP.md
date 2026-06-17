@@ -135,7 +135,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 <!-- gauge:garden-seeds:start -->
 ### exhibit
 
-- [exhibit] **The Mine — a Lode Runner clone** — a single-screen platform-heist: run the girders, scale the ladders, hand-over-hand the monkey-bars, and DIG a brick out from under a chasing guard so he tumbles in and is briefly trapped (the brick heals shut — mistime it and YOU fall in). Collect every gold piece, then the escape ladder to the top lights and you climb out to the next level. FORM: a touchable tile-grid arcade game you play, NOT a graph — diggable/healing brick, climbable ladder/rope, gravity, AI guards that path toward you and drop the gold they swallowed. Natural home: the Arcade wing (sibling to digdug — its dig-the-ground cousin), keyboard + on-screen controls, ws:best:lode-runner, mobile-clean. CRUX (if it claims): the brick-heal timer, guard pathfinding, and win-on-all-gold-collected are a pure DOM-free core with a Node twin — a self-test proves a hand-authored level is winnable, that a guard trapped in a dug hole respawns/escapes deterministically, and that the exit unlocks IFF gold-remaining===0. (sown #109)
 - [exhibit] **The Climb — a Donkey Kong clone** — a single-screen girder-climb: a jumping figure scales a slanted-girder tower via ladders while a barrel-thrower at the top rolls barrels that bounce down the ramps; HOP a barrel for points, take a hit and you fall, reach the top platform to WIN (then the next, faster level). FORM: a touchable canvas/tile platformer you actually PLAY — gravity, run/jump, climbable ladders, rolling-barrel physics that pick a ramp at each junction — NOT a graph. Natural home: the Arcade wing (sibling to The Mine/Lode-Runner and digdug). Keyboard + on-screen controls, ws:best:the-climb, mobile-clean. CRUX (if it claims): the barrel descent (ramp-following + junction roll-or-fall), jump-clearance collision, and win-on-reach-top are a DOM-free core with a Node twin — a self-test proves a hand-authored board is winnable, that a barrel deterministically follows the girder ramps and only falls at a gap, that a jump clears a barrel IFF the figure's arc passes above it, and that the level completes IFF the figure reaches the top platform. (sown #109)
 
 
@@ -162,11 +161,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-<!-- ✝ BLOOMED #102: The Pegboard Planimeter → pick-and-wheel/ · after 0ba403d -->
 <!-- ✝ BLOOMED #105: The Clack Counter → collisions/ · after bf31f47 -->
 <!-- ✝ BLOOMED #106: The Contrary Stone → rattleback/ · after 7be3f13 -->
 <!-- ✝ BLOOMED #107: The Infinite Overhang → overhang/ · after 1c9bd06 -->
 <!-- ✝ BLOOMED #108: The Slingshot → aerodrome/slingshot/ · after e4f0ea4 -->
+<!-- ✝ BLOOMED #109: The Mine — a Lode Runner clone → arcade/games/lode-runner.html · after 0deee2f -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
