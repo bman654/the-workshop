@@ -1,6 +1,60 @@
 # The Aerodrome — Changelog
 
-## 2026-06-17 — Plant the wing (cycle #91, grounds big-swing)
+## 2026-06-17 — The Transfer Bridge (cycle #100, garden grow-seed bloomed)
+
+A SECOND room in the wing: a touchable **Hohmann transfer** you fly by hand (`transfer/index.html`),
+the #91 invited grow-seed finally sown. Sit on the green inner ring, pull a single PROGRADE handle until
+the live ellipse's apoapsis **kisses** the red target ring (snaps gold + locks), press play to coast,
+auto-pause exactly at apoapsis, then pull prograde again to **round onto** the ring — two burns, two
+circles. The form is a maneuver you FEEL (dual stacked Δv tubes drain by Tsiolkovsky), not a plotted curve.
+
+### Built
+- **`transfer-core.mjs`** (~95L) — a thin NEW Hohmann core that *imports* `AeroCore from ../core.mjs`
+  (an ES-module dependency, NOT an inlined copy; `core.mjs` is byte-untouched). Exports `transferA`,
+  `dvBurn1/2`, `dvTotal`, `apoapsisKiss(orbit,r2,tol)`, `minBridgeEccentricity`.
+- **`transfer/index.html`** (~870L, hand-authored — NO `.src.html`, matching the carnot/lattice nested-page
+  convention: cores arrive as module imports, nothing to forge-inline) — the park→aim①→coast→aim②→done
+  phase machine; a single prograde handle (radial + retro stubs faint & locked); a live PENDING bridge
+  recomputed every frame as an exact analytic conic; velocity-Verlet ship (dual-truth); magnetic detent
+  that eases the preview toward the exact kiss but never auto-fires; kiss cues (proximity glow + tangent
+  seam + gold snap + flash); auto-pause at apoapsis; ring red→gold on circularize; a `#receipt` surfacing
+  Σ flown vs closed-form; Retry / Undo-last-burn; and the felt **"Try one burn"** negative control.
+- **`transfer-core.test.mjs`** (~185L) — the Node twin. **23/23 PASS, exit 0.**
+
+### Self-test numbers (this build)
+- **Claim A — vis-viva dual-truth:** transfer speeds & both burns match `v=√(μ(2/r−1/a))` to `|Δ|=0` across
+  the `(r₁,r₂,μ)` sweep; accessor fields agree; raising transfer is two prograde burns; non-physical radii → null.
+- **Claim B — the bridge IS the post-burn-① orbit:** `orbitFromState` of the fired state has a/peri/apo/e ===
+  the analytic transfer to 1e-12, and its eccentricity sits exactly ON `minBridgeEccentricity` (the floor).
+- **Claim C — fly it:** summed flown Δv === closed-form `dvTotal` to `|Δ|=0`; apoapsis error **quarters as dt
+  halves** (O(dt²) ratios 4.00, 4.00 — convergence, not luck); flown post-burn-② rounds onto a circle (e=4.7e-5);
+  closed-form burn-② is a circle to machine ε (e=0, r===r₂).
+- **Claim D — the floor is load-bearing:** `minBridgeEccentricity === transfer e` to ~3e-16 and is strictly > 0;
+  a sweep of prograde/retro/radial/oblique × Δv∈[0.02,3] confirms **every single burn that reaches r₂ has
+  e ≥ the floor > 1e-3 — never a circle** (one-burn arrival e≈0.385). Two burns are structurally required.
+
+### Discoverability (no new front-door footprint — grows the existing wing)
+- The parent `aerodrome/index.src.html` gained a `↗ Transfer Bridge` sib-link beside the Orrery link, then
+  re-forged → `index.html` (parent core byte-parity preserved, parent twin still 25/25).
+- The room drops its own `ws:seen:transfer` breadcrumb; cross-links (← Aerodrome / ← Orrery Estate /
+  ↗ Launch Rail / ↗ Orrery) all resolve 200 at the correct depth.
+
+### Publisher fresh-eyes (cycle #100) — caught & fixed: the mobile panel blanketed the touchable orbits
+Served on port 8814 (session `xferpub100`, torn down by exact PID — Brandon's :3001/:4380 untouched).
+Verified GREEN: Node twin **23/23** + parent **25/25**, `core.mjs` byte-clean (no diff); in-page self-test
+pill `✓ self-test passed`; 0 console errors · 0 nested anchors · 0 horizontal overflow @1280 AND @390; the
+**"Try one burn"** negative control drives live (ship rides an e=0.385 eccentric ellipse to the ring, ring
+STAYS red); all four cross-links + the parent sib-link resolve. **Caught:** on a phone the control panel
+covered the *entire* central canvas — for a piece whose soul is *touching* the orbits, the rings were
+invisible on first load, and (worse than the builder's note) the full-height panel **collided with the
+topbar links** at top:18. **Fix:** a `@media (max-width:560px)` block — the panel goes full-width but starts
+*below* the topbar (top:60) and caps its height (`calc(72vh − 60px)`) so the target ring now peeks beneath
+it (236px of canvas visible vs 0 before), and the collapse ✕ gets a 3-pulse gold "hide to fly" hint
+(`prefers-reduced-motion` safe). Desktop is byte-unaffected (media query ≤560px only; panel still top:18 /
+w:300, self-test re-verified green). **Also:** deleted the redundant `transfer/index.src.html` (an identical
+twin with no forge directives that tripped `forge --check`) to match the carnot/lattice convention exactly —
+`forge --check --all` now reports **all 34 files current**. No `[bug]` filed, no ⚡ spark. Bloomed the
+`[exhibit]` grow-seed (#100). Committed & pushed.
 
 Born as a GROUNDS big swing: a new aerospace wing on the estate's upper sky court, sibling to the
 Observatory's Orrery. Where the Orrery wheels the orbits the universe already chose (elements-from-time,

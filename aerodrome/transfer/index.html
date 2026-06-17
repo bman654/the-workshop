@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Transfer Bridge — two burns kiss two circles</title>
+<style>
+  :root{
+    --panel-bg: rgba(18,14,8,0.86);
+    --panel-edge: rgba(214,176,108,0.42);
+    --ink: #f0e2c4;
+    --ink-dim: #b8a172;
+    --accent: #e6bd6f;
+    --accent-soft: rgba(230,189,111,0.16);
+    --steel: #cdd6e0;
+    --steel-soft: rgba(205,214,224,0.16);
+    --cyan: #7fc7e0;
+    --green: #7fc796;          /* the inner start-ring green */
+    --red: #e0786e;            /* the outer target-ring red */
+    --warn: #ffd9a0;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:#06040a; color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+  #stage{ position:fixed; inset:0; background:#05040a; }
+  canvas#field{ display:block; position:absolute; inset:0; cursor:default; touch-action:none; }
+  canvas#field.grabbing{ cursor:grabbing; }
+  canvas#field.canpush{ cursor:grab; }
+
+  /* ── Top bar (back-links + sibling) ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 22px 0; pointer-events:none;
+  }
+  .topbar a{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:4px; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--steel); opacity:1; }
+  .back.deep{ opacity:.6; }
+  .topright{ display:flex; gap:18px; align-items:center; }
+  .sib{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.7; transition:.25s; }
+  .sib:hover{ color:var(--steel); opacity:1; }
+
+  /* ── Control panel ── */
+  #panel{
+    position:fixed; top:18px; left:18px; width:300px;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border:1px solid var(--panel-edge); border-radius:12px; padding:14px 15px 16px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.6); z-index:20;
+    transition: transform .35s cubic-bezier(.2,.8,.2,1), opacity .25s;
+    max-height: calc(100vh - 36px); overflow-y:auto;
+  }
+  #panel.collapsed{ transform: translateX(calc(-100% - 24px)); opacity:0; pointer-events:none; }
+  #panel h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.3px; margin:0 0 2px; color:var(--ink); }
+  #panel .sub{ font-size:10.5px; color:var(--ink-dim); margin:0 0 8px; letter-spacing:.4px; text-transform:uppercase; }
+
+  .selftest{ font:10px/1.5 var(--font-mono); letter-spacing:.2px; margin:6px 0 4px;
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 9px; background:rgba(0,0,0,.25); cursor:pointer; }
+  .selftest .hd{ display:flex; justify-content:space-between; align-items:center; }
+  .selftest .pill{ font-weight:700; letter-spacing:.4px; }
+  .selftest .ok{ color:#7fd28a; } .selftest .bad{ color:#f08a7a; }
+  .selftest .leg{ display:none; margin-top:6px; color:var(--ink-dim); }
+  .selftest.open .leg{ display:block; }
+  .selftest .leg div{ margin:2px 0; }
+
+  /* the beat banner — the felt maneuver's narrator */
+  .beat{ font:600 12px/1.5 var(--font-ui); letter-spacing:.2px; color:var(--steel);
+    border:1px solid var(--panel-edge); border-radius:9px; padding:9px 11px; margin:8px 0 4px;
+    background:linear-gradient(180deg, rgba(205,214,224,0.10), rgba(205,214,224,0.02)); }
+  .beat .step{ display:block; font:700 9.5px/1 var(--font-mono); letter-spacing:.28em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:5px; }
+  .beat .em{ color:var(--ink); }
+
+  .playrow{ display:flex; gap:8px; align-items:center; margin:11px 0; }
+  .playbtn{ flex:0 0 auto; width:40px; height:40px; border-radius:9px; border:1px solid var(--panel-edge);
+    background:linear-gradient(180deg, rgba(205,214,224,0.20), rgba(205,214,224,0.06));
+    color:var(--ink); cursor:pointer; font-size:16px; line-height:1; display:flex; align-items:center; justify-content:center; transition:.15s; }
+  .playbtn:hover{ border-color:var(--steel); background:linear-gradient(180deg, rgba(205,214,224,0.32), rgba(205,214,224,0.12)); }
+  .actbtn{ flex:1; height:40px; border-radius:9px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.04); color:var(--ink); cursor:pointer; font-size:12.5px; font-weight:600; letter-spacing:.3px; transition:.15s; }
+  .actbtn:hover{ background:var(--steel-soft); border-color:var(--steel); }
+  .actbtn:disabled{ opacity:.4; cursor:default; }
+  .actbtn.warn{ color:var(--warn); }
+  .speedreadout{ text-align:center; font:11px/1 var(--font-mono); color:var(--steel); letter-spacing:.3px; margin:-2px 0 6px; font-variant-numeric:tabular-nums; }
+
+  .minirow{ display:flex; gap:8px; margin:9px 0; }
+  .minibtn{ flex:1; font:600 11px/1.3 var(--font-ui); padding:8px 8px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.03); color:var(--ink-dim); cursor:pointer; transition:.15s; }
+  .minibtn:hover{ color:var(--ink); border-color:var(--steel); background:var(--steel-soft); }
+  .minibtn.warn{ color:var(--warn); border-color:rgba(224,120,110,0.5); }
+  .minibtn.warn:hover{ background:rgba(224,120,110,0.14); border-color:var(--red); }
+  .minibtn:disabled{ opacity:.32; cursor:default; }
+
+  hr.sep{ border:none; border-top:1px solid rgba(214,176,108,0.22); margin:13px 0 11px; }
+  .hint{ font-size:10px; color:#8a784f; margin-top:11px; line-height:1.5; letter-spacing:.2px; }
+  .hint b{ color:var(--ink-dim); }
+
+  .reads{ font:11px/1.4 var(--font-mono); margin:2px 0 0; font-variant-numeric:tabular-nums; }
+  .reads .rr{ display:flex; justify-content:space-between; padding:1.5px 0; }
+  .reads .rr .k{ color:var(--ink-dim); letter-spacing:.2px; }
+  .reads .rr .v{ color:var(--steel); }
+  .reads .rr .v.gold{ color:var(--accent); }
+  .reads .rr .v.warn{ color:var(--warn); }
+
+  /* the BRIDGE-COMPLETE receipt */
+  #receipt{ display:none; margin:6px 0 2px; border:1px solid rgba(230,189,111,0.5); border-radius:9px;
+    padding:9px 11px; background:linear-gradient(180deg, rgba(230,189,111,0.12), rgba(230,189,111,0.03));
+    font:11px/1.5 var(--font-mono); font-variant-numeric:tabular-nums; }
+  #receipt.show{ display:block; }
+  #receipt .rh{ font:700 9.5px/1 var(--font-mono); letter-spacing:.26em; text-transform:uppercase; color:var(--accent); margin-bottom:7px; }
+  #receipt .rr{ display:flex; justify-content:space-between; padding:1.5px 0; color:var(--ink-dim); }
+  #receipt .rr .v{ color:var(--accent); }
+  #receipt .rr.bad .v{ color:var(--red); }
+  #receipt .ok{ color:#7fd28a; } #receipt .no{ color:var(--red); }
+  #receipt .note{ margin-top:6px; font-size:9.5px; color:#8a784f; line-height:1.5; }
+
+  #reopen{ position:fixed; top:18px; left:18px; z-index:21; width:42px; height:42px; border-radius:10px;
+    border:1px solid var(--panel-edge); background:var(--panel-bg); color:var(--steel); cursor:pointer; font-size:18px;
+    display:none; align-items:center; justify-content:center; backdrop-filter:blur(8px); box-shadow:0 8px 24px rgba(0,0,0,.5); }
+  #panel.collapsed ~ #reopen{ display:flex; }
+  .collapse-x{ position:absolute; top:9px; right:9px; width:22px; height:22px; border-radius:6px; border:none;
+    background:transparent; color:var(--ink-dim); cursor:pointer; font-size:15px; line-height:1; }
+  .collapse-x:hover{ color:var(--ink); background:rgba(255,255,255,0.06); }
+
+  /* On a phone the panel would blanket the touchable orbits — narrow it, cap its
+     height so the rings peek below, and pulse the ✕ so "hide to fly" is found. */
+  @media (max-width:560px){
+    #panel{ width:auto; left:12px; right:12px; top:60px; max-height:calc(72vh - 60px); }
+    .collapse-x{ width:26px; height:26px; font-size:16px;
+      animation:hintPulse 2.6s ease-in-out 1s 3; }
+    #reopen{ top:60px; left:12px; }
+  }
+  @keyframes hintPulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(212,170,90,0); color:var(--ink-dim); }
+    50%{ box-shadow:0 0 0 5px rgba(212,170,90,.18); color:var(--accent); } }
+  @media (prefers-reduced-motion: reduce){ .collapse-x{ animation:none; } }
+
+  /* outcome flash */
+  #flash{ position:fixed; left:50%; top:46%; transform:translate(-50%,-50%); z-index:19; pointer-events:none;
+    font:700 26px/1.1 var(--font-serif); letter-spacing:1px; text-align:center; opacity:0; transition:opacity .5s; text-shadow:0 2px 18px rgba(0,0,0,.9); }
+  #flash.show{ opacity:1; }
+  #flash .sub{ display:block; font:500 12px/1.4 var(--font-mono); letter-spacing:.4px; margin-top:7px; }
+
+  ::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-thumb{background:rgba(205,214,224,.3);border-radius:4px}
+</style>
+</head>
+<body>
+  <div id="stage"><canvas id="field"></canvas></div>
+
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">← The Aerodrome</a>
+      <a class="back deep" href="../../index.html">← The Orrery Estate</a>
+    </div>
+    <div class="topright">
+      <a class="sib" href="../index.html" title="Kick a single conic by hand — the Launch Rail">↗ Launch Rail</a>
+      <a class="sib" href="../../orrery/index.html" title="The orbits the universe already chose">↗ Orrery</a>
+    </div>
+  </div>
+
+  <div id="panel">
+    <button class="collapse-x" id="collapseBtn" title="Hide panel">&#10005;</button>
+    <h1>The Transfer Bridge</h1>
+    <p class="sub">Two prograde burns kiss two circles</p>
+
+    <div class="selftest" id="selftest" title="Run the proofs live, in this page">
+      <div class="hd"><span class="pill" id="stPill">running…</span><span style="color:var(--ink-dim)">self-test ▾</span></div>
+      <div class="leg" id="stLegs"></div>
+    </div>
+
+    <div class="beat" id="beat"><span class="step" id="beatStep">park</span><span id="beatBody"></span></div>
+
+    <div class="playrow">
+      <button class="playbtn" id="playBtn" title="Play / Pause (Space)">&#9654;</button>
+      <button class="actbtn" id="retryBtn" title="Park again on the green ring">&#9673; Retry</button>
+    </div>
+
+    <div class="minirow">
+      <button class="minibtn" id="undoBtn" title="Undo the last burn">↶ Undo last burn</button>
+      <button class="minibtn warn" id="oneBurnBtn" title="Fire ONE combined burn — watch it arrive but NOT circularise">⚡ Try one burn</button>
+    </div>
+
+    <div class="speedreadout" id="speedReadout"></div>
+
+    <hr class="sep">
+
+    <div class="reads" id="reads"></div>
+
+    <div id="receipt">
+      <div class="rh">★ Bridge complete — the receipt</div>
+      <div class="rr"><span>burn ① Δv</span><span class="v" id="rcB1"></span></div>
+      <div class="rr"><span>burn ② Δv</span><span class="v" id="rcB2"></span></div>
+      <div class="rr"><span>Σ flown</span><span class="v" id="rcFlown"></span></div>
+      <div class="rr"><span>Σ Hohmann (closed form)</span><span class="v" id="rcForm"></span></div>
+      <div class="rr"><span>flown === formula</span><span class="v" id="rcMatch"></span></div>
+      <div class="rr bad"><span>one-burn arrival</span><span class="v" id="rcOne"></span></div>
+      <div class="note" id="rcNote"></div>
+    </div>
+
+    <hr class="sep">
+
+    <p class="hint"><b>Grab the ship</b> on the green ring and pull the <b>prograde</b> handle until the live ellipse <b>kisses</b> the red ring — it snaps gold and locks. Release to fire <b>burn ①</b>. Press play to coast; it auto-pauses at <b>apoapsis</b>. Pull prograde again to <b>round onto</b> the red ring — <b>burn ②</b> completes the bridge. The Δv column drains by Tsiolkovsky. <b>Radial &amp; retrograde are faint &amp; locked</b> — only prograde builds a Hohmann.</p>
+  </div>
+
+  <button id="reopen" title="Show panel">&#9776;</button>
+  <div id="flash"></div>
+
+<script type="module">
+"use strict";
+import AeroCore from '../core.mjs';
+import { transferA, minBridgeEccentricity, apoapsisKiss } from '../transfer-core.mjs';
+
+/* ============================================================================
+   THE TRANSFER BRIDGE — a second room in the Aerodrome wing.
+   ----------------------------------------------------------------------------
+   The Launch Rail room next door lets you kick a single conic by hand. Here you
+   build a HOHMANN transfer: park on the inner green circle, pull prograde until
+   the live ellipse KISSES the outer red circle (gold lock), coast to apoapsis,
+   pull prograde again to round onto the red ring. Two burns, two circles.
+
+   DUAL-TRUTH (the visible proof, same discipline as the Launch Rail):
+     • the drawn bridge = sampleConic(stateAfterKick(parkState, pendingDv,
+       'prograde')) — the EXACT analytic conic, recomputed every frame, never
+       hand-faked.
+     • the moving ship = velocity-Verlet integrated state (AeroCore.verletStep) on
+       a fixed dt accumulator decoupled from the frame.
+     • the gold-lock / ring-complete state reads from the CLOSED-FORM kiss / circ
+       predicate (apoapsisKiss, transfer eccentricity), NEVER from the integrated
+       sum — so the lock can't jitter. The twin (transfer-core.test.mjs) proves
+       the physics is exact; the live UI must not gate on integrated equality.
+
+   This page IMPORTS ../core.mjs and ../transfer-core.mjs as ES modules — there is
+   no inlining and therefore no byte-parity claim. The Node twin owns the proof.
+   ========================================================================== */
+
+/* ── units & scene (Explorer B, verified to fit) ───────────────────────────── */
+const MU = 1;
+const R1 = 1.6;          // green inner / start ring
+const R2 = 3.6;          // red outer / target ring
+const TRANSFER = transferA(R1, R2, MU);              // the closed-form Hohmann bridge
+const E_FLOOR = minBridgeEccentricity(R1, R2);       // the least-eccentric bridge's e
+
+const canvas = document.getElementById('field');
+const ctx = canvas.getContext('2d');
+let DPR = Math.min(window.devicePixelRatio||1, 2);
+
+const view = { W:0, H:0, cx:0, cy:0, ppu:60 };
+function computeSize(){
+  view.W = window.innerWidth; view.H = window.innerHeight;
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  canvas.width = Math.round(view.W*DPR); canvas.height = Math.round(view.H*DPR);
+  canvas.style.width = view.W+'px'; canvas.style.height = view.H+'px';
+  view.cx = view.W/2; view.cy = view.H/2;
+  view.ppu = Math.min(view.W, view.H) / 9;      // reuse the parent transform 1:1
+}
+function toScreen(rx, ry){ return [ view.cx + rx*view.ppu, view.cy - ry*view.ppu ]; }
+function toWorld(px, py){ return [ (px - view.cx)/view.ppu, -(py - view.cy)/view.ppu ]; }
+
+/* ── the lock tolerance: ONE number for the visual snap AND the lock predicate.
+   We choose a pixel snap-band and map it to canonical units through view.ppu, so
+   what you SEE (the snap) is exactly what LOCKS (apoapsisKiss tol). ────────────*/
+const SNAP_PX = 5;                                   // px snap-band on the apo dot
+function kissTol(){ return SNAP_PX / view.ppu; }     // canonical-unit tolerance
+
+/* ============================================================================
+   THE SHIP, ITS BUDGET, AND THE FELT-MANEUVER STATE MACHINE
+   ========================================================================== */
+const ship = {
+  s: AeroCore.circularState(R1, MU, true),   // integrated state (the thing that MOVES)
+  trail: [],
+};
+// the Δv budget — a generous shared tank; both burns drain ONE Tsiolkovsky column.
+const tank = { ve: 1.4, m0: 8.0, dry: 1.0, mf: 8.0 };
+function dvBudgetTotal(){ return AeroCore.dvSpent(tank.m0, tank.dry, tank.ve); }
+function dvSpentSoFar(){ return AeroCore.dvSpent(tank.m0, tank.mf, tank.ve); }
+function dvRemaining(){ return Math.max(0, dvBudgetTotal() - dvSpentSoFar()); }
+function spendDv(dv){
+  const newSpent = Math.min(dvBudgetTotal(), dvSpentSoFar() + dv);
+  tank.mf = tank.m0 / Math.exp(newSpent / tank.ve);
+}
+
+/* the phase machine: park → aim1 → coast → aim2 → done. */
+const xfer = {
+  phase: 'park',
+  s0: null,            // snapshot at park (for Retry / Undo to park)
+  sApo: null,          // snapshot at apoapsis (for Undo last burn in 'done')
+  burn1Dv: 0,
+  burn2Dv: 0,
+  locked: false,       // is the current pending aim within the kiss / circ window?
+  ringComplete: false, // burn② succeeded — outer ring is gold
+  completeT: 0,        // wall-clock ms of completion (for the gold pulse)
+  oneBurnTried: false, // negative control fired
+};
+function snapState(){ return { rx:ship.s.rx, ry:ship.s.ry, vx:ship.s.vx, vy:ship.s.vy }; }
+
+/* ============================================================================
+   ANALYTIC CONIC sampling (reused verbatim from the Launch Rail room).
+   ========================================================================== */
+function sampleConic(s){
+  const o = AeroCore.orbitFromState(s.rx, s.ry, s.vx, s.vy, MU);
+  const pts = [];
+  const N = 280;
+  const maxR = (Math.hypot(view.W, view.H)/view.ppu) * 1.4;
+  if(o.bound && o.e < 1){
+    for(let i=0;i<=N;i++){
+      const nu = i/N*2*Math.PI;
+      const r = o.p/(1 + o.e*Math.cos(nu));
+      const ang = o.omega + nu;
+      pts.push([ r*Math.cos(ang), r*Math.sin(ang) ]);
+    }
+    return { o, pts, closed:true };
+  } else {
+    const nuInf = o.e>1 ? Math.acos(-1/o.e) : Math.PI*0.98;
+    const span = Math.min(nuInf*0.999, Math.PI*0.98);
+    for(let i=0;i<=N;i++){
+      const nu = -span + (2*span)*(i/N);
+      const denom = 1 + o.e*Math.cos(nu);
+      if(denom <= 1e-6) continue;
+      const r = o.p/denom;
+      if(r > maxR || r <= 0) continue;
+      const ang = o.omega + nu;
+      pts.push([ r*Math.cos(ang), r*Math.sin(ang) ]);
+    }
+    return { o, pts, closed:false };
+  }
+}
+
+/* the PENDING aim: from the parked / apoapsis state, what conic does the current
+   prograde pendingDv produce? Recomputed EVERY FRAME — never hand-faked. */
+function pendingState(){
+  return AeroCore.stateAfterKick(grab.baseState || ship.s, grab.pendingDv, 'prograde', MU);
+}
+
+/* a fading ghost conic of the pre-burn orbit. */
+let ghost = null;
+const GHOST_MS = 2200;
+
+/* ============================================================================
+   RENDER
+   ========================================================================== */
+function draw(){
+  computeSize();
+  ctx.save(); ctx.scale(DPR, DPR); ctx.clearRect(0,0,view.W,view.H);
+  drawField();
+  drawPlanet();
+  drawRings();                       // green start + red/gold target rings
+  if(ghost) drawGhost();
+  drawActiveConic();                 // the live bridge OR the parked circle
+  drawTrail();
+  drawApsides();
+  if(xfer.ringComplete) drawCompletePulse();
+  drawShip();
+  if(grab.active) drawHandle();
+  drawTank();
+  ctx.restore();
+}
+
+function drawField(){
+  const g = ctx.createRadialGradient(view.cx, view.cy, 0, view.cx, view.cy, Math.hypot(view.W,view.H)*0.62);
+  g.addColorStop(0,'#1b1408'); g.addColorStop(0.55,'#120c05'); g.addColorStop(1,'#070402');
+  ctx.fillStyle=g; ctx.fillRect(0,0,view.W,view.H);
+  ctx.save(); ctx.strokeStyle='rgba(205,214,224,0.06)'; ctx.lineWidth=1;
+  for(let u=1; u*view.ppu < Math.hypot(view.W,view.H)*0.6; u++){
+    ctx.beginPath(); ctx.arc(view.cx, view.cy, u*view.ppu, 0, Math.PI*2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawPlanet(){
+  const [cx,cy]=toScreen(0,0);
+  const rs = 0.6*view.ppu;          // a smaller central body than the launch room (rings are 1.6 / 3.6)
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  const ag=ctx.createRadialGradient(cx,cy,rs*0.9, cx,cy,rs*1.7);
+  ag.addColorStop(0,'rgba(120,160,200,0.16)'); ag.addColorStop(1,'rgba(120,160,200,0)');
+  ctx.fillStyle=ag; ctx.beginPath(); ctx.arc(cx,cy,rs*1.7,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  const dg=ctx.createRadialGradient(cx-rs*0.35,cy-rs*0.35,rs*0.1, cx,cy,rs);
+  dg.addColorStop(0,'#6a7e92'); dg.addColorStop(0.6,'#3c4a5a'); dg.addColorStop(1,'#1c2530');
+  ctx.fillStyle=dg; ctx.beginPath(); ctx.arc(cx,cy,rs,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(205,214,224,0.5)'; ctx.lineWidth=1.2; ctx.stroke();
+  ctx.save(); ctx.strokeStyle='rgba(205,214,224,0.18)'; ctx.lineWidth=0.8;
+  ctx.beginPath(); ctx.ellipse(cx,cy,rs,rs*0.42,0,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,cy-rs); ctx.lineTo(cx,cy+rs); ctx.stroke();
+  ctx.restore();
+}
+
+/* the two destination rings — the heroes of the scene. */
+function drawRings(){
+  const [cx,cy]=toScreen(0,0);
+  // is the ship parked on the green ring (phase park/aim1, not yet departed)?
+  const parked = (xfer.phase==='park' || xfer.phase==='aim1');
+  // GREEN inner / start ring
+  ctx.save();
+  const greenLocked = (xfer.phase!=='park' && xfer.phase!=='aim1'); // departed → it's "spent"
+  ctx.lineWidth=2; ctx.strokeStyle = greenLocked ? 'rgba(230,189,111,0.55)' : 'rgba(127,199,150,0.62)';
+  if(parked){ ctx.shadowColor='rgba(127,199,150,0.5)'; ctx.shadowBlur=10; }
+  ctx.beginPath(); ctx.arc(cx,cy,R1*view.ppu,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+  engravedLabel('start  r₁='+R1.toFixed(1), cx, cy - R1*view.ppu - 7, greenLocked?'rgba(230,189,111,0.8)':'rgba(127,199,150,0.85)');
+
+  // RED outer / target ring — dashed until ring-complete, then solid gold.
+  ctx.save();
+  if(xfer.ringComplete){
+    ctx.setLineDash([]); ctx.lineWidth=2.6; ctx.strokeStyle='rgba(230,189,111,0.95)';
+    ctx.shadowColor='rgba(230,189,111,0.7)'; ctx.shadowBlur=16;
+  } else {
+    ctx.setLineDash([2,7]); ctx.lineWidth=2; ctx.strokeStyle='rgba(224,120,110,0.8)';
+    ctx.shadowColor='rgba(224,120,110,0.4)'; ctx.shadowBlur=8;
+  }
+  ctx.beginPath(); ctx.arc(cx,cy,R2*view.ppu,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+  engravedLabel(xfer.ringComplete?'★ target  r₂='+R2.toFixed(1):'target  r₂='+R2.toFixed(1),
+    cx, cy - R2*view.ppu - 8, xfer.ringComplete?'rgba(230,189,111,0.95)':'rgba(224,120,110,0.9)');
+}
+function engravedLabel(txt, x, y, col){
+  ctx.save(); ctx.font='10px var(--font-mono)'; ctx.textAlign='center'; ctx.fillStyle=col;
+  ctx.fillText(txt, x, y); ctx.restore();
+}
+
+/* the ACTIVE conic: while aiming it's the live PENDING bridge; otherwise the
+   ship's current orbit. Locked aims snap saturated gold. */
+function drawActiveConic(){
+  let sc, gold=false;
+  if(grab.active && grab.pendingDv>0){
+    sc = sampleConic(pendingState());
+    gold = xfer.locked;
+  } else {
+    sc = sampleConic(ship.s);
+    gold = (xfer.ringComplete && xfer.phase==='done');
+  }
+  if(!sc.pts.length) return;
+  ctx.save();
+  if(gold){
+    ctx.lineWidth=2.4; ctx.strokeStyle='rgba(244,206,120,0.98)';
+    ctx.shadowColor='rgba(244,206,120,0.75)'; ctx.shadowBlur=14;
+  } else {
+    ctx.lineWidth=1.6; ctx.strokeStyle='rgba(238,224,180,0.7)';
+    ctx.shadowColor='rgba(238,224,180,0.3)'; ctx.shadowBlur=6;
+  }
+  ctx.beginPath();
+  for(let i=0;i<sc.pts.length;i++){ const [x,y]=toScreen(sc.pts[i][0],sc.pts[i][1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }
+  if(sc.closed) ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+  drawActiveConic._sc = sc;     // stash for the apsis pass
+}
+
+function drawApsides(){
+  const sc = drawActiveConic._sc;
+  if(!sc || !sc.o.bound || sc.o.e>=1) return;
+  // periapsis (steel)
+  drawApsis(sc.o.peri, sc.o.omega, '#cdd6e0', 'peri');
+  // apoapsis (gold) — with the proximity glow toward the kiss.
+  drawApoWithKiss(sc.o);
+}
+function drawApsis(r, ang, col, label){
+  const [x,y]=toScreen(r*Math.cos(ang), r*Math.sin(ang));
+  ctx.save();
+  ctx.fillStyle=col; ctx.beginPath(); ctx.arc(x,y,3.2,0,Math.PI*2); ctx.fill();
+  ctx.font='9px var(--font-mono)'; ctx.fillStyle=col; ctx.globalAlpha=0.85; ctx.textAlign='center';
+  ctx.fillText(label, x, y-7);
+  ctx.restore();
+}
+/* the apoapsis dot, with THREE escalating kiss cues:
+   (1) proximity glow that grows + warms as |apo−r₂| shrinks,
+   (2) a tangent kiss-seam tick when within ~3·tol,
+   (3) the one-shot snap is handled in the conic (gold) + flash on lock. */
+function drawApoWithKiss(o){
+  const [x,y]=toScreen(o.apo*Math.cos(o.omega+Math.PI), o.apo*Math.sin(o.omega+Math.PI));
+  const k = apoapsisKiss(o, R2, kissTol());
+  const warm = k.closeness;
+  ctx.save();
+  // proximity glow
+  if(warm>0.02){
+    ctx.globalCompositeOperation='lighter';
+    const gg=ctx.createRadialGradient(x,y,0,x,y,6+warm*16);
+    gg.addColorStop(0,`rgba(255,${Math.round(210+40*warm)},${Math.round(140+90*warm)},${0.35+0.5*warm})`);
+    gg.addColorStop(1,'rgba(255,210,140,0)');
+    ctx.fillStyle=gg; ctx.beginPath(); ctx.arc(x,y,6+warm*16,0,Math.PI*2); ctx.fill();
+    ctx.globalCompositeOperation='source-over';
+  }
+  ctx.fillStyle=k.kiss?'#f4ce78':'#e6bd6f'; ctx.beginPath(); ctx.arc(x,y,k.kiss?4.2:3.2,0,Math.PI*2); ctx.fill();
+  ctx.font='9px var(--font-mono)'; ctx.fillStyle=k.kiss?'#f4ce78':'#e6bd6f'; ctx.globalAlpha=0.9; ctx.textAlign='center';
+  ctx.fillText(k.kiss?'★ kiss':'apo', x, y-8);
+  // (2) the tangent kiss-seam tick: a short arc of the red ring at the apo angle.
+  if(warm>0.6){
+    const [cx,cy]=toScreen(0,0);
+    const a0 = (o.omega+Math.PI);
+    ctx.globalAlpha = (warm-0.6)/0.4;
+    ctx.strokeStyle='#f4ce78'; ctx.lineWidth=2.2; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(cx,cy,R2*view.ppu, -a0-0.16, -a0+0.16); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawGhost(){
+  const age = performance.now() - ghost.t0;
+  const fade = Math.max(0, 1 - age/GHOST_MS);
+  if(fade<=0){ ghost=null; return; }
+  ctx.save();
+  ctx.setLineDash([4,5]); ctx.lineWidth=1.1;
+  ctx.strokeStyle=`rgba(127,199,224,${0.5*fade})`;
+  ctx.beginPath();
+  for(let i=0;i<ghost.pts.length;i++){ const [x,y]=toScreen(ghost.pts[i][0],ghost.pts[i][1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }
+  if(ghost.closed) ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawTrail(){
+  if(ship.trail.length<2) return;
+  ctx.save(); ctx.lineCap='round';
+  for(let i=1;i<ship.trail.length;i++){
+    const a=(i/ship.trail.length);
+    ctx.strokeStyle=`rgba(205,214,224,${a*0.5})`;
+    ctx.lineWidth=1.2+a*1.1;
+    ctx.beginPath(); ctx.moveTo(ship.trail[i-1][0],ship.trail[i-1][1]); ctx.lineTo(ship.trail[i][0],ship.trail[i][1]); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawShip(){
+  const [x,y]=toScreen(ship.s.rx, ship.s.ry);
+  const heading = Math.atan2(-ship.s.vy, ship.s.vx);
+  ctx.save(); ctx.translate(x,y); ctx.rotate(heading);
+  ctx.fillStyle='#eef2f7'; ctx.strokeStyle='#9fb0c2'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(8,0); ctx.lineTo(-5,4.5); ctx.lineTo(-3,0); ctx.lineTo(-5,-4.5); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.globalCompositeOperation='lighter';
+  const hg=ctx.createRadialGradient(0,0,0,0,0,14);
+  hg.addColorStop(0,'rgba(205,214,224,0.5)'); hg.addColorStop(1,'rgba(205,214,224,0)');
+  ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(0,0,14,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+/* the single-axis PROGRADE handle along the velocity tangent, with the dashed
+   prograde rail and the faint/locked radial & retrograde stubs (teaching WHY). */
+function drawHandle(){
+  const [sx,sy]=toScreen(ship.s.rx, ship.s.ry);
+  const v=Math.hypot(ship.s.vx, ship.s.vy)||1;
+  const px=ship.s.vx/v, py=ship.s.vy/v;            // prograde unit (world)
+  const r=Math.hypot(ship.s.rx, ship.s.ry)||1;
+  const rxu=ship.s.rx/r, ryu=ship.s.ry/r;          // radial-out unit (world)
+  const RAIL=170;
+  ctx.save();
+  // the dashed prograde rail
+  ctx.setLineDash([3,5]); ctx.strokeStyle='rgba(214,176,108,0.5)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(sx+px*RAIL, sy-py*RAIL); ctx.stroke();
+  ctx.setLineDash([]);
+  // faint LOCKED radial & retrograde stubs — they can't build a Hohmann.
+  ctx.strokeStyle='rgba(205,214,224,0.16)'; ctx.lineWidth=1; ctx.setLineDash([1,4]);
+  const lockStubs=[[-px,-py,'RET'],[rxu,ryu,'OUT'],[-rxu,-ryu,'IN']];
+  for(const [ux,uy,lab] of lockStubs){
+    ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(sx+ux*34, sy-uy*34); ctx.stroke();
+    ctx.save(); ctx.setLineDash([]); ctx.font='8px var(--font-mono)'; ctx.fillStyle='rgba(205,214,224,0.28)'; ctx.textAlign='center';
+    ctx.fillText('🔒'+lab, sx+ux*46, sy-uy*46); ctx.restore();
+  }
+  ctx.setLineDash([]);
+  // the pending Δv arrow along prograde
+  const len = 18 + grab.pendingDv*220;
+  const ex=sx+px*len, ey=sy-py*len;
+  const gold = xfer.locked;
+  ctx.strokeStyle=gold?'#f4ce78':'#fff'; ctx.lineWidth=gold?3:2.4;
+  ctx.shadowColor=gold?'rgba(244,206,120,.7)':'rgba(255,255,255,.6)'; ctx.shadowBlur=gold?12:8;
+  ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex,ey); ctx.stroke();
+  const ah=Math.atan2(ey-sy,ex-sx);
+  ctx.beginPath(); ctx.moveTo(ex,ey);
+  ctx.lineTo(ex-9*Math.cos(ah-0.4), ey-9*Math.sin(ah-0.4));
+  ctx.lineTo(ex-9*Math.cos(ah+0.4), ey-9*Math.sin(ah+0.4));
+  ctx.closePath(); ctx.fillStyle=gold?'#f4ce78':'#fff'; ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.font='600 10px var(--font-mono)'; ctx.fillStyle=gold?'#f4ce78':'#fff'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('Δv '+grab.pendingDv.toFixed(3), sx+px*(len+2)+px*14, sy-py*(len+2)-py*14-2);
+  // a PRO label near the handle base
+  ctx.fillStyle=gold?'#f4ce78':'rgba(205,214,224,0.85)';
+  ctx.fillText('PRO', sx+px*(len*0.0)+12*px, sy-py*(len*0.0)+12*(-py)+0);
+  ctx.restore();
+}
+
+/* the DUAL Δv tank: ONE apothecary column, two stacked segments (burn①, burn②).
+   Pre-flight it shows GHOST previews of where both burns land for the current
+   pending apo, so you watch the total budget cost update live. */
+function drawTank(){
+  const x = view.W - 46, y0 = 92, h = Math.min(280, view.H-200), w=22;
+  const total = dvBudgetTotal();
+  ctx.save();
+  // column glass
+  ctx.fillStyle='rgba(10,8,5,0.55)'; ctx.strokeStyle='rgba(214,176,108,0.55)'; ctx.lineWidth=1.2;
+  ctx.beginPath(); ctx.roundRect(x, y0, w, h, 5); ctx.fill(); ctx.stroke();
+  const dvToH = (dv)=> (total>1e-9? dv/total : 0) * h;
+
+  // committed burns (filled), plus a GHOST preview of the projected total.
+  let b1 = xfer.burn1Dv, b2 = xfer.burn2Dv;
+  let ghostB1=0, ghostB2=0;
+  // preview: if aiming burn1, ghost where this pending burn1 + its closed-form
+  // burn2 would land; if aiming burn2, ghost the pending burn2.
+  if(grab.active && grab.pendingDv>0){
+    if(xfer.phase==='aim1'){
+      ghostB1 = grab.pendingDv;
+      // closed-form dv2 for the apo this pending burn1 produces.
+      const o = sampleConic(pendingState()).o;
+      if(o.bound && isFinite(o.apo)){
+        const rApo=o.apo;
+        const vApoNow = Math.sqrt(MU*(2/rApo - 1/o.a));
+        const vCircApo = Math.sqrt(MU/rApo);
+        ghostB2 = Math.abs(vCircApo - vApoNow);
+      }
+    } else if(xfer.phase==='aim2'){
+      ghostB2 = grab.pendingDv;
+    }
+  }
+  // draw committed burn① (steel→cyan) from the bottom up.
+  let yBottom = y0+h;
+  function seg(dv, c0, c1){
+    if(dv<=1e-6) return;
+    const segH=dvToH(dv); const gy=yBottom-segH;
+    const g=ctx.createLinearGradient(0,gy,0,yBottom);
+    g.addColorStop(0,c1); g.addColorStop(1,c0);
+    ctx.fillStyle=g; ctx.beginPath(); ctx.roundRect(x+1.5, gy, w-3, segH-0.5, 2); ctx.fill();
+    yBottom = gy;
+  }
+  seg(b1, 'rgba(205,214,224,0.92)', 'rgba(127,199,224,0.85)');   // burn① steel→cyan
+  seg(b2, 'rgba(230,189,111,0.95)', 'rgba(244,206,120,0.8)');    // burn② gold
+  // ghost previews above the committed fills (hollow, dashed-edge feel)
+  function ghostSeg(dv, col){
+    if(dv<=1e-6) return;
+    const segH=dvToH(dv); const gy=yBottom-segH;
+    ctx.save(); ctx.globalAlpha=0.4; ctx.fillStyle=col;
+    ctx.beginPath(); ctx.roundRect(x+1.5, gy, w-3, segH-0.5, 2); ctx.fill();
+    ctx.restore();
+    // a hairline at the top of the ghost
+    ctx.strokeStyle=col; ctx.globalAlpha=0.6; ctx.setLineDash([2,2]); ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x,gy); ctx.lineTo(x+w,gy); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1;
+    yBottom = gy;
+  }
+  ghostSeg(ghostB1, 'rgba(127,199,224,0.6)');
+  ghostSeg(ghostB2, 'rgba(244,206,120,0.55)');
+
+  // hairline divider between burn① and burn② regions (at the committed-b1 top)
+  if(b1>1e-6){
+    const yd = y0+h - dvToH(b1);
+    ctx.strokeStyle='rgba(214,176,108,0.6)'; ctx.lineWidth=0.8; ctx.setLineDash([1,2]);
+    ctx.beginPath(); ctx.moveTo(x, yd); ctx.lineTo(x+w, yd); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // graduations
+  ctx.strokeStyle='rgba(214,176,108,0.35)'; ctx.lineWidth=0.8;
+  for(let i=0;i<=4;i++){ const yy=y0+h*i/4; ctx.beginPath(); ctx.moveTo(x,yy); ctx.lineTo(x-4,yy); ctx.stroke(); }
+  // labels
+  ctx.font='9px var(--font-mono)'; ctx.fillStyle='rgba(205,214,224,0.85)'; ctx.textAlign='center';
+  ctx.fillText('Δv', x+w/2, y0-7);
+  const projTotal = (b1+b2) + (ghostB1+ghostB2);
+  ctx.fillStyle='rgba(230,189,111,0.85)';
+  ctx.fillText('Σ '+projTotal.toFixed(3), x+w/2, y0+h+14);
+  // side labels burn①/burn②
+  ctx.save(); ctx.translate(x-12, y0+h*0.82); ctx.rotate(-Math.PI/2);
+  ctx.font='8px var(--font-mono)'; ctx.fillStyle='rgba(127,199,224,0.8)'; ctx.fillText('burn①', 0,0); ctx.restore();
+  ctx.save(); ctx.translate(x-12, y0+h*0.45); ctx.rotate(-Math.PI/2);
+  ctx.font='8px var(--font-mono)'; ctx.fillStyle='rgba(244,206,120,0.8)'; ctx.fillText('burn②', 0,0); ctx.restore();
+  ctx.save(); ctx.translate(x+w+11, y0+h/2); ctx.rotate(-Math.PI/2);
+  ctx.font='8px var(--font-mono)'; ctx.fillStyle='rgba(184,161,114,0.65)'; ctx.fillText('ve·ln(m₀/mf)', 0,0); ctx.restore();
+  ctx.restore();
+}
+
+/* the expanding gold pulse on ring-complete (~700ms, 'lighter'). */
+function drawCompletePulse(){
+  const age = performance.now() - xfer.completeT;
+  if(age > 700) return;
+  const t = age/700;
+  const [cx,cy]=toScreen(0,0);
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  const rpx = R2*view.ppu*(1 + t*0.18);
+  ctx.strokeStyle=`rgba(244,206,120,${(1-t)*0.9})`; ctx.lineWidth=4*(1-t)+1;
+  ctx.shadowColor='rgba(244,206,120,0.8)'; ctx.shadowBlur=20*(1-t);
+  ctx.beginPath(); ctx.arc(cx,cy,rpx,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
+
+/* ============================================================================
+   READOUTS + BEAT NARRATOR
+   ========================================================================== */
+const readsEl = document.getElementById('reads');
+function fmt(x, d){ if(!isFinite(x)) return '—'; return x.toFixed(d==null?3:d); }
+function updateReads(){
+  const o = AeroCore.orbitFromState(ship.s.rx, ship.s.ry, ship.s.vx, ship.s.vy, MU);
+  // when aiming, show the PENDING bridge's elements (so the kiss reads live).
+  const oShow = (grab.active && grab.pendingDv>0) ? sampleConic(pendingState()).o : o;
+  const k = (oShow.bound && oShow.e<1) ? apoapsisKiss(oShow, R2, kissTol()) : {kiss:false,gap:Infinity};
+  const rows = [
+    ['radius r', fmt(Math.hypot(ship.s.rx,ship.s.ry)), ''],
+    ['conic e', fmt(oShow.e), (oShow.e<1e-3?'gold':'')],
+    ['apoᵇʳⁱᵈᵍᵉ', isFinite(oShow.apo)?fmt(oShow.apo):'—', (k.kiss?'gold':'')],
+    ['target r₂', fmt(R2,1), ''],
+    ['Σ Hohmann', fmt(TRANSFER.dvTotal), 'gold'],
+    ['Δv remaining', fmt(dvRemaining(),2), dvRemaining()<0.05?'warn':''],
+  ];
+  readsEl.innerHTML = rows.map(([k2,v,c])=>`<div class="rr"><span class="k">${k2}</span><span class="v ${c}">${v}</span></div>`).join('');
+}
+
+const beatStepEl=document.getElementById('beatStep'), beatBodyEl=document.getElementById('beatBody');
+const BEATS = {
+  park:  ['park',  "You're parked on the green ring. <span class='em'>Grab the ship and pull PROGRADE</span> — build a bridge whose far point kisses the red ring."],
+  aim1:  ['aim ①', "Drag the prograde handle. The live ellipse blooms — slide its apoapsis into the <span class='em'>gold kiss window</span> on the red ring, then release to fire <span class='em'>burn ①</span>."],
+  coast: ['coast', "Burn ① spent. <span class='em'>Press play</span> to coast the bridge; it auto-pauses exactly at <span class='em'>apoapsis</span>."],
+  aim2:  ['aim ②', "At apoapsis. <span class='em'>Pull PROGRADE again</span> — round the ellipse down onto the red ring (e → 0) and release to fire <span class='em'>burn ②</span>."],
+  done:  ['done',  "<span class='em'>Bridge complete.</span> Two prograde burns, two circles. See the receipt below — Σ flown === the closed-form Hohmann total."],
+};
+function updateBeat(){
+  const [step,body] = BEATS[xfer.phase] || BEATS.park;
+  beatStepEl.textContent = step; beatBodyEl.innerHTML = body;
+}
+
+/* ============================================================================
+   POINTER — grab the ship, drag the single prograde handle, release = impulse.
+   ========================================================================== */
+const grab = { active:false, pendingDv:0, baseState:null };
+function evtXY(e){ const rect=canvas.getBoundingClientRect(); const t=e.touches?e.touches[0]:e; return [t.clientX-rect.left, t.clientY-rect.top]; }
+function nearShip(px,py){ const [sx,sy]=toScreen(ship.s.rx,ship.s.ry); return Math.hypot(px-sx,py-sy) < 24; }
+
+function canAim(){ return xfer.phase==='aim1' || xfer.phase==='park' || xfer.phase==='aim2'; }
+
+function onDown(e){
+  const [px,py]=evtXY(e);
+  if(!canAim()) return;
+  if(nearShip(px,py)){
+    grab.active=true; grab.pendingDv=0; grab.baseState=snapState();
+    xfer.locked=false;
+    if(xfer.phase==='park') setPhase('aim1');
+    canvas.classList.add('grabbing');
+    clock._wasPlaying = clock.playing;
+    setPlaying(false);
+    e.preventDefault&&e.preventDefault();
+    requestStatic();
+  }
+}
+function onMove(e){
+  const [px,py]=evtXY(e);
+  if(grab.active){
+    const [sx,sy]=toScreen(grab.baseState.rx, grab.baseState.ry);
+    const v=Math.hypot(grab.baseState.vx, grab.baseState.vy)||1;
+    const pxu=grab.baseState.vx/v, pyu=grab.baseState.vy/v;     // prograde unit (world)
+    // project the drag onto the prograde axis (screen y flips).
+    const dx=px-sx, dy=-(py-sy);
+    const along = dx*pxu + dy*pyu;                              // px along prograde
+    let raw=Math.max(0, (along-18)/220);                        // px → Δv (matches arrow)
+    raw = Math.min(raw, dvRemaining());
+    grab.pendingDv = raw;
+    // LOCK predicate + light magnetic detent toward the exact kiss/circ.
+    applyDetentAndLock();
+    requestStatic();
+    e.preventDefault&&e.preventDefault();
+    return;
+  }
+  canvas.classList.toggle('canpush', canAim() && nearShip(px,py));
+}
+/* the magnetic detent eases the PREVIEW toward the exact kiss/circ window when
+   near it (strength ~0.35), and the lock fires from the CLOSED-FORM predicate.
+   The detent turns OFF the instant the pull exceeds the window (continuous
+   search). The FIRED Δv is whatever pendingDv shows — no math cheat. */
+function applyDetentAndLock(){
+  const DETENT=0.35;
+  if(xfer.phase==='aim1' || xfer.phase==='park'){
+    // exact burn① that kisses r₂:
+    const exact = TRANSFER.dv1;
+    const o = sampleConic(pendingState()).o;
+    const k = (o.bound && o.e<1) ? apoapsisKiss(o, R2, kissTol()) : {kiss:false,closeness:0};
+    if(k.closeness>0.55 && Math.abs(grab.pendingDv-exact) < exact*0.12){
+      grab.pendingDv = grab.pendingDv + (exact-grab.pendingDv)*DETENT;   // ease toward exact
+    }
+    const o2 = sampleConic(pendingState()).o;
+    const k2 = (o2.bound && o2.e<1) ? apoapsisKiss(o2, R2, kissTol()) : {kiss:false};
+    xfer.locked = !!k2.kiss;
+  } else if(xfer.phase==='aim2'){
+    // exact burn② that circularises at the current radius:
+    const r=Math.hypot(grab.baseState.rx, grab.baseState.ry);
+    const o0=AeroCore.orbitFromState(grab.baseState.rx,grab.baseState.ry,grab.baseState.vx,grab.baseState.vy,MU);
+    const vNow=Math.hypot(grab.baseState.vx, grab.baseState.vy);
+    const exact = Math.abs(Math.sqrt(MU/r) - vNow);
+    if(Math.abs(grab.pendingDv-exact) < exact*0.25){
+      grab.pendingDv = grab.pendingDv + (exact-grab.pendingDv)*DETENT;
+    }
+    const o2 = sampleConic(pendingState()).o;
+    // circularised if e collapses AND radius ≈ r₂.
+    const circTol = 2.2*kissTol()/r + 0.01;       // a forgiving e-window in canonical units
+    xfer.locked = (o2.e < circTol) && Math.abs(r - R2) < 8*kissTol();
+  }
+}
+function onUp(e){
+  if(!grab.active) return;
+  canvas.classList.remove('grabbing');
+  const fired = grab.pendingDv;
+  const wasLocked = xfer.locked;
+  grab.active=false;
+  if(fired>0){
+    if(xfer.phase==='aim1') fireBurn1(fired, wasLocked);
+    else if(xfer.phase==='aim2') fireBurn2(fired, wasLocked);
+  } else {
+    // released without a real pull — fall back toward park if we were aiming.
+    if(xfer.phase==='aim1'){ /* stay in aim1, just re-show */ }
+  }
+  grab.pendingDv=0; grab.baseState=null;
+  requestStatic();
+}
+
+function fireBurn1(dv, locked){
+  const pre = sampleConic(ship.s);
+  ghost = { pts: pre.pts, closed: pre.closed, t0: performance.now() };
+  ship.s = AeroCore.stateAfterKick(ship.s, dv, 'prograde', MU);
+  spendDv(dv);
+  xfer.burn1Dv = dv;
+  xfer.locked=false;
+  setPhase('coast');
+  if(locked){ showFlash('★ kiss', 'burn ① fired — the bridge touches r₂', '#f4ce78'); setTimeout(hideFlash,1400); }
+}
+function fireBurn2(dv, locked){
+  const pre = sampleConic(ship.s);
+  ghost = { pts: pre.pts, closed: pre.closed, t0: performance.now() };
+  xfer.sApo = snapState();           // snapshot BEFORE burn② for Undo
+  ship.s = AeroCore.stateAfterKick(ship.s, dv, 'prograde', MU);
+  spendDv(dv);
+  xfer.burn2Dv = dv;
+  xfer.locked=false;
+  const o = AeroCore.orbitFromState(ship.s.rx,ship.s.ry,ship.s.vx,ship.s.vy,MU);
+  const r=Math.hypot(ship.s.rx,ship.s.ry);
+  if(o.e < 1.4e-2 && Math.abs(r-R2) < 0.06){
+    completeBridge();
+  } else {
+    setPhase('done');     // they fired but didn't round it — still 'done', no ring
+    showFlash('arrived — not circular', 'e='+o.e.toFixed(3)+' ✗  pull closer to the circ window', '#e0786e');
+    setTimeout(hideFlash, 2200);
+    fillReceipt(false);
+  }
+}
+function completeBridge(){
+  xfer.ringComplete=true; xfer.completeT=performance.now();
+  setPhase('done');
+  const total = Math.abs(xfer.burn1Dv)+Math.abs(xfer.burn2Dv);
+  showFlash('BRIDGE COMPLETE', 'two prograde burns · Hohmann · Σ Δv = '+total.toFixed(4), '#e6bd6f');
+  fillReceipt(true);
+}
+
+/* ============================================================================
+   THE COAST — auto-pause exactly at apoapsis (rv crossing +→−).
+   ========================================================================== */
+function maybeAutoPauseApoapsis(prev, cur){
+  if(xfer.phase!=='coast') return false;
+  const rvPrev = prev.rx*prev.vx + prev.ry*prev.vy;
+  const rvCur  = cur.rx*cur.vx + cur.ry*cur.vy;
+  if(rvPrev > 0 && rvCur <= 0){
+    // we just crossed apoapsis — settle, snapshot, switch to aim2.
+    xfer.sApo = snapState();
+    setPhase('aim2');
+    setPlaying(false);
+    showFlash('apoapsis', 'pull PROGRADE again to round onto r₂', '#cdd6e0');
+    setTimeout(hideFlash, 1800);
+    return true;
+  }
+  return false;
+}
+
+/* ============================================================================
+   OUTCOMES / FLASH
+   ========================================================================== */
+function showFlash(title, sub, col){
+  const f=document.getElementById('flash');
+  f.style.color=col; f.innerHTML=title+'<span class="sub">'+sub+'</span>';
+  f.classList.add('show');
+}
+function hideFlash(){ document.getElementById('flash').classList.remove('show'); }
+
+/* the receipt — surfaces the twin's result to the PLAYER. */
+function fillReceipt(complete){
+  const r=document.getElementById('receipt');
+  const b1=Math.abs(xfer.burn1Dv), b2=Math.abs(xfer.burn2Dv);
+  const flown=b1+b2, form=TRANSFER.dvTotal;
+  document.getElementById('rcB1').textContent = b1.toFixed(4);
+  document.getElementById('rcB2').textContent = b2.toFixed(4);
+  document.getElementById('rcFlown').textContent = flown.toFixed(4);
+  document.getElementById('rcForm').textContent = form.toFixed(4)+'  (Δv₁+Δv₂)';
+  const matchOK = Math.abs(flown - form) < 5e-3;
+  document.getElementById('rcMatch').innerHTML = matchOK
+    ? '<span class="ok">✓ |Δ| '+Math.abs(flown-form).toExponential(1)+'</span>'
+    : '<span class="no">✗ |Δ| '+Math.abs(flown-form).toExponential(1)+'</span>';
+  // one-burn arrival: the Hohmann burn① alone arrives at r₂ on an ellipse e=floor.
+  document.getElementById('rcOne').innerHTML = '<span class="no">e='+E_FLOOR.toFixed(3)+' ✗ never a circle</span>';
+  document.getElementById('rcNote').innerHTML = complete
+    ? 'The least-eccentric bridge possible — and even it isn\'t a circle (e ≥ |r₂−r₁|/(r₁+r₂) = '+E_FLOOR.toFixed(3)+'). It takes the SECOND burn to round onto the ring.'
+    : 'Not rounded — pull burn② closer to the circ window. Σ flown will still match once both burns are the Hohmann pair.';
+  r.classList.add('show');
+}
+function hideReceipt(){ document.getElementById('receipt').classList.remove('show'); }
+
+/* ============================================================================
+   THE NEGATIVE CONTROL MADE FELT — one combined prograde burn.
+   It ARRIVES at r₂ (apoapsis kisses the ring) but the conic is an ellipse
+   crossing the ring at an angle — e = floor ≈ 0.385, never a circle. Ring stays red.
+   ========================================================================== */
+function tryOneBurn(){
+  // reset to park, then fire the single Hohmann burn① (apo touches r₂).
+  doRetry(true);
+  const dv = TRANSFER.dv1;
+  const pre = sampleConic(ship.s);
+  ghost = { pts: pre.pts, closed: pre.closed, t0: performance.now() };
+  ship.s = AeroCore.stateAfterKick(ship.s, dv, 'prograde', MU);
+  spendDv(dv);
+  xfer.burn1Dv = dv; xfer.burn2Dv = 0; xfer.oneBurnTried=true;
+  setPhase('coast');                 // it's now on the transfer ellipse, coasting
+  const o = AeroCore.orbitFromState(ship.s.rx,ship.s.ry,ship.s.vx,ship.s.vy,MU);
+  showFlash('arrived — but not circular (e≠0)', 'one burn reaches r₂ on an ellipse · e='+o.e.toFixed(3)+' ≥ floor · ring stays red', '#e0786e');
+  setTimeout(hideFlash, 3200);
+  setPlaying(true);
+}
+
+/* ============================================================================
+   PHASE / RETRY / UNDO
+   ========================================================================== */
+function setPhase(p){ xfer.phase=p; updateBeat(); syncButtons(); }
+function syncButtons(){
+  document.getElementById('undoBtn').disabled = (xfer.phase==='park' || xfer.phase==='aim1');
+  document.getElementById('oneBurnBtn').disabled = false;
+}
+function doRetry(silent){
+  ship.s = AeroCore.circularState(R1, MU, true);
+  ship.trail.length=0;
+  tank.mf=tank.m0;
+  ghost=null;
+  xfer.burn1Dv=0; xfer.burn2Dv=0; xfer.locked=false; xfer.ringComplete=false; xfer.oneBurnTried=false;
+  xfer.s0 = snapState(); xfer.sApo=null;
+  setPhase('park');
+  hideReceipt();
+  if(!silent) hideFlash();
+  setPlaying(false);
+}
+function undoLastBurn(){
+  if(xfer.phase==='coast' || xfer.phase==='aim2'){
+    // undo burn① → back to park.
+    ship.s = xfer.s0 ? {...xfer.s0} : AeroCore.circularState(R1,MU,true);
+    tank.mf=tank.m0; ghost=null; ship.trail.length=0;
+    xfer.burn1Dv=0; xfer.locked=false;
+    setPhase('park'); setPlaying(false); hideFlash();
+  } else if(xfer.phase==='done'){
+    // undo burn② → back to apoapsis (aim2).
+    if(xfer.sApo){ ship.s = {...xfer.sApo}; }
+    spendDv(-Math.abs(xfer.burn2Dv));   // refund (clamped in spendDv via budget math)
+    tank.mf = tank.m0 / Math.exp(Math.min(dvBudgetTotal(), Math.abs(xfer.burn1Dv))/tank.ve);
+    xfer.burn2Dv=0; xfer.ringComplete=false; xfer.locked=false; ghost=null;
+    setPhase('aim2'); setPlaying(false); hideReceipt(); hideFlash();
+  }
+  requestStatic();
+}
+
+/* ============================================================================
+   CLOCK + PHYSICS STEP (dual-truth: the ship moves by the INTEGRATOR)
+   ========================================================================== */
+const clock = { playing:false, speedExp:0.6, dtPhys:0.0016, acc:0 };
+function simRate(exp){ const a=Math.abs(exp); const r=Math.pow(10, a-1); return exp<0 ? -r : r; }
+function speedLabel(){ const r=simRate(clock.speedExp); return (r<0?'− ':'')+Math.abs(r).toFixed(2)+'×'; }
+
+function physicsStep(dtWall){
+  const rate=simRate(clock.speedExp);
+  let simDt = Math.max(-0.5, Math.min(0.5, dtWall*rate));
+  clock.acc += simDt;
+  let guard=0;
+  const step = clock.dtPhys * (clock.acc<0?-1:1);
+  while(Math.abs(clock.acc) >= clock.dtPhys && guard++ < 4000){
+    const prev = ship.s;
+    ship.s = AeroCore.verletStep(ship.s, MU, step);
+    clock.acc -= step;
+    if(maybeAutoPauseApoapsis(prev, ship.s)) break;
+  }
+  // trail
+  if(ship.trail!==null){
+    const [x,y]=toScreen(ship.s.rx,ship.s.ry);
+    const last=ship.trail[ship.trail.length-1];
+    if(!last || Math.hypot(last[0]-x,last[1]-y)>2){ ship.trail.push([x,y]); if(ship.trail.length>300) ship.trail.shift(); }
+  }
+}
+
+/* ============================================================================
+   LOOP
+   ========================================================================== */
+let rafId=null, lastTs=0;
+function frame(ts){
+  if(!lastTs) lastTs=ts;
+  const dt=(ts-lastTs)/1000; lastTs=ts;
+  if(clock.playing && !grab.active){ physicsStep(dt); }
+  draw(); updateReads();
+  // keep the loop alive during the completion pulse so it animates out.
+  const pulsing = xfer.ringComplete && (performance.now()-xfer.completeT < 750);
+  if(clock.playing || grab.active || pulsing){ rafId=requestAnimationFrame(frame); }
+  else rafId=null;
+}
+function startLoop(){ if(rafId==null){ lastTs=0; rafId=requestAnimationFrame(frame); } }
+function stopLoop(){ if(rafId){ cancelAnimationFrame(rafId); rafId=null; } }
+function requestStatic(){ if(rafId==null){ draw(); updateReads(); } }
+
+/* ============================================================================
+   UI WIRING
+   ========================================================================== */
+const playBtn=document.getElementById('playBtn');
+function setPlaying(on){
+  clock.playing=on; playBtn.innerHTML = on ? '&#9208;' : '&#9654;';
+  document.getElementById('speedReadout').textContent = on ? ('coasting '+speedLabel()) : 'paused';
+  if(on) startLoop(); else { stopLoop(); requestStatic(); }
+}
+
+function wireUI(){
+  playBtn.addEventListener('click',()=>{
+    // only allow play during coast (the maneuver gates aiming while paused).
+    if(xfer.phase==='coast' || clock.playing) setPlaying(!clock.playing);
+    else if(xfer.phase==='done' && xfer.oneBurnTried) setPlaying(!clock.playing);
+  });
+  document.getElementById('retryBtn').addEventListener('click',()=>{ doRetry(false); requestStatic(); });
+  document.getElementById('undoBtn').addEventListener('click', undoLastBurn);
+  document.getElementById('oneBurnBtn').addEventListener('click', tryOneBurn);
+  document.getElementById('collapseBtn').addEventListener('click',()=> document.getElementById('panel').classList.add('collapsed'));
+  document.getElementById('reopen').addEventListener('click',()=> document.getElementById('panel').classList.remove('collapsed'));
+  document.getElementById('selftest').addEventListener('click',()=> document.getElementById('selftest').classList.toggle('open'));
+  canvas.addEventListener('mousedown',onDown);
+  canvas.addEventListener('mousemove',onMove);
+  window.addEventListener('mouseup',onUp);
+  canvas.addEventListener('touchstart',onDown,{passive:false});
+  canvas.addEventListener('touchmove',onMove,{passive:false});
+  window.addEventListener('touchend',onUp);
+  window.addEventListener('keydown',e=>{ if(e.code==='Space' && e.target.tagName!=='INPUT'){ e.preventDefault(); if(xfer.phase==='coast'||clock.playing) setPlaying(!clock.playing); } });
+  let rt=null; window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(()=>requestStatic(),120); });
+}
+
+/* ============================================================================
+   IN-PAGE SELF-TEST PILL — runs a subset of the twin live (A, B, C-analytic, D).
+   ========================================================================== */
+function runSelfTest(){
+  const legs=[]; let allOK=true;
+  // (A) analytic dual-truth: speeds & burns match vis-viva exact.
+  (function(){
+    let worst=0;
+    for(const [r1,r2] of [[1.6,3.6],[1.0,4.0],[2.0,9.5]]){
+      const t=transferA(r1,r2,MU); const at=(r1+r2)/2;
+      const vp=Math.sqrt(MU*(2/r1-1/at)), va=Math.sqrt(MU*(2/r2-1/at));
+      const vc1=Math.sqrt(MU/r1), vc2=Math.sqrt(MU/r2);
+      worst=Math.max(worst, Math.abs(t.dv1-(vp-vc1)), Math.abs(t.dv2-(vc2-va)), Math.abs(t.dvTotal-((vp-vc1)+(vc2-va))));
+    }
+    const ok=worst<1e-12; allOK=allOK&&ok;
+    legs.push([ok,'Δv matches vis-viva √(μ(2/r−1/a))','|Δ|='+worst.toExponential(1)+' < 1e-12']);
+  })();
+  // (B) the bridge IS orbitFromState of post-burn-①; e === the floor.
+  (function(){
+    const t=transferA(R1,R2,MU);
+    const park=AeroCore.circularState(R1,MU,true);
+    const after=AeroCore.stateAfterKick(park,t.dv1,'prograde',MU);
+    const o=AeroCore.orbitFromState(after.rx,after.ry,after.vx,after.vy,MU);
+    const ok = Math.abs(o.a-t.at)<1e-12 && Math.abs(o.apo-R2)<1e-12 && Math.abs(o.e-E_FLOOR)<1e-12;
+    allOK=allOK&&ok;
+    legs.push([ok,'bridge === orbitFromState(post-burn①); e === floor','a,apo,e match to 1e-12 (e_floor='+E_FLOOR.toFixed(3)+')']);
+  })();
+  // (C-analytic) closed-form circularisation at the transfer apoapsis is a CIRCLE.
+  (function(){
+    const t=transferA(R1,R2,MU);
+    const apoState={rx:-R2,ry:0,vx:0,vy:-t.va};
+    const circ=AeroCore.stateAfterKick(apoState,t.dv2,'prograde',MU);
+    const o=AeroCore.orbitFromState(circ.rx,circ.ry,circ.vx,circ.vy,MU);
+    const ok = o.e<1e-9 && AeroCore.conicType(o.e)==='circle' && Math.abs(o.apo-R2)<1e-12;
+    allOK=allOK&&ok;
+    legs.push([ok,'closed-form burn② circularises at r₂','e='+o.e.toExponential(1)+' → '+AeroCore.conicType(o.e)]);
+  })();
+  // (D-floor) the floor === transfer e and is strictly > 0 (never a circle).
+  (function(){
+    const t=transferA(R1,R2,MU);
+    const ok = Math.abs(E_FLOOR-t.et)<3e-16 && E_FLOOR>1e-3;
+    allOK=allOK&&ok;
+    legs.push([ok,'min-bridge e === transfer e; > 0 (never a circle)','e_floor='+E_FLOOR.toFixed(4)+' === e_transfer']);
+  })();
+  const pill=document.getElementById('stPill'), legsEl=document.getElementById('stLegs');
+  pill.innerHTML = allOK ? '<span class="ok">✓ self-test passed</span>' : '<span class="bad">✗ self-test FAILED</span>';
+  legsEl.innerHTML = legs.map(([ok,name,info])=>`<div><span class="${ok?'ok':'bad'}">${ok?'✓':'✗'}</span> ${name}<br><span style="opacity:.7">&nbsp;&nbsp;${info}</span></div>`).join('');
+  console.log('Transfer Bridge self-test:', allOK?'PASS':'FAIL', legs.map(l=>l[1]+' '+(l[0]?'✓':'✗')).join(' | '));
+  return allOK;
+}
+
+/* ============================================================================
+   BOOT
+   ========================================================================== */
+function boot(){
+  computeSize();
+  ship.s = AeroCore.circularState(R1, MU, true);
+  xfer.s0 = snapState();
+  wireUI();
+  runSelfTest();
+  setPhase('park');
+  setPlaying(false);
+  draw(); updateReads();
+  console.log('Transfer Bridge ready — μ=1, r₁='+R1+', r₂='+R2+'. Grab the ship, pull prograde to kiss the red ring.');
+}
+window.addEventListener('DOMContentLoaded', boot);
+
+/* ws: breadcrumb. This is a SIBLING sub-page in the Aerodrome wing (the wing
+   landing ../index.html already drops ws:seen:aerodrome). This room drops its own
+   ws:seen:transfer for any future Survey/secret use — matching the carnot/lattice
+   sibling convention (a direct localStorage write, no shared module needed). */
+try{ var _k='ws:seen:transfer'; if(window.localStorage && !localStorage.getItem(_k)) localStorage.setItem(_k, String(Date.now())); }catch(e){}
+</script>
+</body>
+</html>
