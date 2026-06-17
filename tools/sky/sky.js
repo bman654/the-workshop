@@ -72,6 +72,12 @@
     // The Hours — the estate's sundial (horology wing). A field star in the dark
     // top-right margin beside its open east-park footprint; lit on first visit.
     'gnomon':         { x: 1270, y: 170, mag: 1 },
+    // The Aerodrome — the upper-LEFT sky court's launch wing (kick-the-conic). A
+    // field star in the dark top band above its open launch-rail footprint, the
+    // craft's first apoapsis hanging over the rail; lit on first visit. Verified
+    // clear of partition@318,122 / temperature-dial@392,78 / the manor pool, and
+    // every footprint+furniture box (sky.test.cjs CATALOG INTEGRITY).
+    'aerodrome':      { x: 360,  y: 120, mag: 1 },
     // ── the feats constellation: nine "Feats of Light" earned in the Hall of Mirrors,
     //    laid out as a vertical LENS (a pointed oval) threading the WEST GROUNDS left
     //    margin beside the Hall footprint (x124 y430 w148 h74). These are PSEUDO-ids

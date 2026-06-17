@@ -125,6 +125,16 @@ var Layout = (function () {
      sub-region (verified star/footprint/furniture/pool-clear by hours.test.cjs's
      live Layout.solve) so the gnomon never crowds amusements or a catalog star. */
   GROUNDS_WINGS.horology = { x: 1100, y: 152, w: 178, h: 200 };
+  /* AEROSPACE — The Aerodrome, where you push off and AUTHOR an orbit by hand
+     (sibling to the Observatory's Orrery, which wheels the orbits already chosen).
+     Set in the OPEN upper-LEFT sky court, left of the candle-pool decoration
+     (x421+) — a launch needs clear sky up-and-right. Its own sub-region keeps the
+     launch-rail footprint just to the RIGHT of the Observatory's firmament tower
+     (x242-358) in the upper sky band — adjacent sibling, collision-free. Verified
+     clear of every footprint + catalog star (FINALIZED via smoke.cjs's live
+     Layout.solve: the brief's x214 region overlapped firmament's tower, so the
+     court is nudged right to seat the rail clear in the open upper court). */
+  GROUNDS_WINGS.aerospace = { x: 366, y: 156, w: 200, h: 140 };
 
   /* ── WING_META: display label, representative accent (for tint + engraved
      label), and optional grows:N reserved-lot count. An unknown wing is allowed
@@ -141,7 +151,8 @@ var Layout = (function () {
     amusements:  { label: 'AMUSEMENTS',         accent: '#37f7e0' },
     works:       { label: 'THE WORKS',          accent: '#d9a441' },
     conservatory:{ label: 'LIVING-SYSTEMS WING', accent: '#86d39a' },
-    horology:    { label: 'HOROLOGY',           accent: '#e6bd6f' }
+    horology:    { label: 'HOROLOGY',           accent: '#e6bd6f' },
+    aerospace:   { label: 'THE AERODROME',      accent: '#cdd6e0' }
   };
   function wingLabel(slug) {
     if (WING_META[slug] && WING_META[slug].label) return WING_META[slug].label;

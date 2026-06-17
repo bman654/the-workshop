@@ -11,6 +11,7 @@ const PLACES = [
   { id:'sound-garden', district:'manor', tier:2, wing:'east', footprint:'house-wing', order:10 },
   { id:'threshold', district:'manor', tier:2, wing:'east', footprint:'east-wing', order:20 },
   { id:'clockwork', district:'manor', tier:2, wing:'maker', footprint:'clockwork' },
+  { id:'aerodrome', district:'grounds', tier:1, wing:'aerospace', footprint:'launch-rail' },
   { id:'strange-garden', district:'grounds', tier:1, wing:'glasshouses', footprint:'glasshouse' },
   { id:'conservatory', district:'grounds', tier:2, wing:'conservatory', footprint:'glasshouse-wing' },
   { id:'hall-of-mirrors', district:'grounds', tier:1, wing:'optics', footprint:'hall' },
