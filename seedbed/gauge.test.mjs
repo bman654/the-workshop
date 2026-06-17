@@ -10,9 +10,10 @@ const ok = (cond, msg) => { if (cond) { pass++ } else { fail++; console.error(' 
 const eq = (a, b, msg) => ok(a === b, `${msg} — got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`)
 
 // helper: build a roadmap string with N garden + M grounds + S sparks + B bugs
-function bedDoc({ garden = [], grounds = [], sparks = [], bugs = [] } = {}) {
+function bedDoc({ writs = [], garden = [], grounds = [], sparks = [], bugs = [] } = {}) {
   const sec = (name, lines) => `<!-- gauge:${name}:start -->\n${lines.join('\n')}\n<!-- gauge:${name}:end -->`
   return [
+    sec('writ', writs),
     sec('bug', bugs),
     sec('garden-seeds', garden),
     sec('grounds-seeds', grounds),
@@ -22,6 +23,7 @@ function bedDoc({ garden = [], grounds = [], sparks = [], bugs = [] } = {}) {
 const G = (pitch, sown) => `- [exhibit] **${pitch}** — a gap. (sown #${sown})`
 const GR = (pitch, sown, contest) => `- [room] **${pitch}** — a wing. (sown #${sown} · contest #${contest})`
 const SP = (t) => `- ${t}`
+const W = (pitch) => `- [writ] **${pitch}** — a request from the Patron.`
 const st = (o = {}) => ({ cycle: 30, lastGardenPlan: 28, lastBigSwing: 28, bigSwingsBuilt: 2, tally: {}, ...o })
 
 console.log('classify:')
@@ -110,6 +112,69 @@ console.log('decision ladder — each branch:')
   bed = parseBed(bedDoc({ garden: [G('a', 30), G('b', 30), G('c', 30), G('d', 30), G('e', 30), G('f', 30)], grounds: [GR('w', 30, 2), GR('w2', 30, 2)] }))
   d = decide(st({ cycle: 30, lastBigSwing: 29, lastGardenPlan: 28 }), bed) // gardenBuilds=2, fuel=6
   eq(d.mode + '/' + d.track, 'BUILD/garden', 'healthy → BUILD/garden (planter)')
+}
+
+console.log("Patron's Writ — top priority + cadence-neutral:")
+{
+  // a writ outranks even a bug AND a due swing
+  let bed = parseBed(bedDoc({
+    writs: [W('summarize X and Slack it to me')],
+    bugs: ['- [bug] **broken** — fix. (sown #40)'],
+    garden: [G('a', 30)], grounds: [GR('w', 30, 2), GR('w2', 30, 2)],
+  }))
+  let d = decide(st({ cycle: 40, lastBigSwing: 28, lastGardenPlan: 38 }), bed) // a swing is also due
+  eq(d.mode + '/' + d.track, 'WRIT/writ', 'a writ outranks a bug AND a due swing')
+  eq(d.role, 'director', "a writ is the director's to triage")
+  eq(d.decayed.length, 0, 'a writ directive carries an EMPTY decay list (it prunes nothing)')
+  eq(d.gauges.writs, 1, 'gauges report the writ count')
+
+  // no writ → the ladder behaves exactly as before (bug regains the top)
+  bed = parseBed(bedDoc({ writs: [], bugs: ['- [bug] **broken** — fix. (sown #40)'], garden: [G('a', 30)], grounds: [GR('w', 30, 2)] }))
+  eq(decide(st(), bed).track, 'bug', 'no writ → bug regains the top of the ladder')
+
+  // cadence-neutral record: NO clock advances; existing seeds cannot age/decay
+  const base = st({ cycle: 50, lastGardenPlan: 44, lastBigSwing: 41, bigSwingsBuilt: 3, tally: {},
+    fence: { garden: ['A', 'B'], grounds: ['W'] } })
+
+  // a writ that RELEASES one creative clause as a normal seed, touching nothing else
+  let r = applyRecord(base, { mode: 'WRIT', track: 'writ' }, { garden: ['A', 'B', 'NewSeed'], grounds: ['W'] })
+  eq(r.cycle, 50, 'WRIT holds the cycle clock (no decay tick)')
+  eq(r.lastGardenPlan, 44, 'WRIT does not reset the garden-plan clock')
+  eq(r.lastBigSwing, 41, 'WRIT does not touch the swing clock')
+  eq(r.bigSwingsBuilt, 3, 'WRIT does not count as a swing')
+  eq(r.tally.gardenSown, 1, 'a released creative clause is credited as sown (honest fuel)')
+  eq(r.tally.gardenBloomed || 0, 0, 'WRIT blooms nothing')
+  eq(r.tally.gardenDecayed || 0, 0, 'WRIT decays nothing')
+  eq(r.fence.garden.join(','), 'A,B,NewSeed', 'WRIT re-baselines the bed snapshot')
+
+  // a purely operational writ (no bed change) is a clean cadence no-op
+  r = applyRecord(base, { mode: 'WRIT', track: 'writ' }, { garden: ['A', 'B'], grounds: ['W'] })
+  eq(r.cycle, 50, 'operational writ: cycle held')
+  eq((r.tally.gardenSown || 0) + (r.tally.gardenDecayed || 0), 0, 'operational writ books nothing in the tally')
+
+  // a title that VANISHES during a writ is NOT booked as decayed (a writ never prunes)
+  r = applyRecord(base, { mode: 'WRIT', track: 'writ' }, { garden: ['A'], grounds: ['W'] })
+  eq(r.tally.gardenDecayed || 0, 0, 'a writ never books a decay even if a title vanished')
+
+  // WRIT normalizes case + plural like the other tracks
+  eq(applyRecord(base, { mode: 'writ', track: 'writs' }, { garden: ['A', 'B'], grounds: ['W'] }).cycle, 50, "lowercase 'writ' + plural 'writs' normalize")
+  // and classify knows it
+  eq(classify('writ'), 'writ', 'classify(writ) → writ')
+
+  // back-to-back writs: every clock still holds across consecutive writs
+  let chained = applyRecord(base, { mode: 'WRIT', track: 'writ' }, { garden: ['A', 'B'], grounds: ['W'] })
+  chained = applyRecord(chained, { mode: 'WRIT', track: 'writ' }, { garden: ['A', 'B'], grounds: ['W'] })
+  ok(chained.cycle === 50 && chained.lastGardenPlan === 44 && chained.lastBigSwing === 41 && chained.bigSwingsBuilt === 3, 'back-to-back writs hold every clock')
+
+  // a writ with NO currentBed (a simple errand whose steward never touched the bed) is a clean no-op
+  const noBed = applyRecord(base, { mode: 'WRIT', track: 'writ' })
+  ok(noBed.cycle === 50 && JSON.stringify(noBed.fence) === JSON.stringify(base.fence), 'writ with no currentBed: clean no-op, fence preserved')
+
+  // a writ holds the GROUNDS decay posture too — even with a grounds seed AT the strike threshold
+  const gbase = st({ cycle: 50, bigSwingsBuilt: 8, lastBigSwing: 41, lastGardenPlan: 44, tally: {}, fence: { garden: [], grounds: ['old wing'] } })
+  const gbed = parseBed(bedDoc({ writs: [W('do a thing')], grounds: [GR('old wing', 20, 8 - TH.groundsDecayStrikes)] }))
+  eq(decide(gbase, gbed).decayed.length, 0, 'a writ directive lists no decayed grounds seed even at the strike threshold')
+  eq(applyRecord(gbase, { mode: 'WRIT', track: 'writ' }, { garden: [], grounds: ['old wing'] }).bigSwingsBuilt, 8, 'a writ holds bigSwingsBuilt (the grounds decay clock is frozen)')
 }
 
 console.log('record — state transitions:')

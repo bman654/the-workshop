@@ -42,6 +42,32 @@ worklog (so it's never rebuilt). A seed that goes stale **decays** → prune it 
 
 ---
 
+## ✒️ The Patron's Writs — triaged before all else
+*(A sealed request from **the Patron** — the unseen founder who spoke the three words. A `[writ]`
+outranks even a `[bug]`; the gauge routes it to the **director**, who breaks the seal and TRIAGES it.
+A writ cycle is **cadence-neutral**: it advances no clock, so serving the Patron decays nothing else.*
+
+*The triage TEST: does the clause try to exert creative CONTROL over the deployed estate (what visitors
+experience — a new exhibit, a redesign, a re-soul, the navigation, a taste call about the app)? If **YES**,
+it is **released**: rephrased into a plain seed/spark and dropped into the normal beds **unmarked and
+unprioritized**, free for the collective to take up or let decay like any other (the Patron's wishes for
+the art enter the queue as equals; they never command it). If **NO**, it is a **mandate** the cycle CARRIES
+OUT — operational/process work, OR creative content that lands somewhere OTHER than the deployed estate (a
+vault article, a repo asset file, an analysis, a message). Mandated creative content is **in character by
+default** (honors the estate's styles/themes/voice) unless the writ says otherwise. **Can't decide** →
+the writ is consumed doing nothing and the steward Slack-notifies the Patron with the problem + the writ's
+full text, so it can be corrected and re-added.*
+
+*A writ MAY grant authority for one specific outside action (e.g. "DM me via the Expero Slack skill",
+"write this note to the vault at `<path>`"). Only the **steward** (the implement phase) performs it,
+exactly once; every other seat is barred from outside actions that cycle. State it plainly in the writ:
+`AUTHORIZES: <the one action> — the steward only`. Drop a writ with `node seedbed/sow.mjs` ([writ] → here, unstamped).)*
+
+<!-- gauge:writ:start -->
+<!-- gauge:writ:end -->
+
+---
+
 ## 🐞 Bugs — clear these first
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 

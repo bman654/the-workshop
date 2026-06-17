@@ -1,6 +1,6 @@
 export const meta = {
   name: 'fun-forever',
-  description: 'The Workshop\'s creative-cycle loop. Each cycle a director RUNS the deterministic gauge (node seedbed/gauge.mjs) and obeys its mode × track; explorers diverge; a judge selects/synthesizes; a builder ships+self-verifies; a publisher reviews fresh-eyes, sows/prunes, runs `gauge.mjs record`, commits + pushes. Two tracks (gardens: gardener/planter · grounds: groundskeeper/grounds-worker) + bug-fixer. Each cycle\'s summary appends to /tmp/funlog.txt until cancelled.',
+  description: 'The Workshop\'s creative-cycle loop. Each cycle a director RUNS the deterministic gauge (node seedbed/gauge.mjs) and obeys its mode × track; explorers diverge; a judge selects/synthesizes; a builder ships+self-verifies; a publisher reviews fresh-eyes, sows/prunes, runs `gauge.mjs record`, commits + pushes. Two tracks (gardens: gardener/planter · grounds: groundskeeper/grounds-worker) + bug-fixer. A Patron\'s WRIT outranks all: the director triages it — clauses that try to control the DEPLOYED estate are released as ordinary unmarked seeds (the collective\'s call), while operational work and off-estate creative content (a vault note, a repo asset) are mandated (the steward implements); a writ cycle is cadence-neutral (decays nothing). Each cycle\'s summary appends to /tmp/funlog.txt until cancelled.',
   phases: [
     { title: 'Direct', detail: 'one director runs `node seedbed/gauge.mjs`, salvages any orphaned work, and plans the cycle the gauge names' },
     { title: 'Explore', detail: 'K parallel explorers diverge — rival approaches / FORM concepts / seed-scouting per the track' },
@@ -48,6 +48,15 @@ const GROUND = [
   '- Do NOT use the expero:deputy skill, do NOT launch background/--bg sessions, and do NOT arm a Monitor or',
   '  release the turn to wait on a background agent — that ends your run and loses all uncommitted work.',
   '- Stay inside this repo (plus /tmp). Never edit CLAUDE.md. Keep the laptop healthy (no multi-GB files).',
+  '- OUTSIDE ACTIONS (any effect beyond this repo + /tmp — a Slack/email message, a write to Brandon\'s',
+  '  Obsidian vault, any network POST) are FORBIDDEN by default. The SOLE exception: a Patron\'s Writ may',
+  '  AUTHORIZE one specific outside action, and ONLY that writ\'s STEWARD (the implement phase of a WRIT',
+  '  cycle) performs it — EXACTLY ONCE. No other seat (director, explorer, judge, publisher, writer) ever',
+  '  performs an outside action, even on a writ cycle; the publisher commits the repo and nothing more.',
+  '  (Reading anything — the vault, the web, Slack history — is always fine; only side-effects are gated.)',
+  '  THE ONE ALWAYS-ALLOWED outside action: a Slack NOTIFY addressed SOLELY to the Patron (a DM to',
+  '  brandon@experoinc.com) as the ambiguous-writ escalation channel — never to any other person, channel,',
+  '  or workspace, and carrying no side-effect beyond that single message. Only the steward sends it.',
   '- CLEANUP GUARDRAIL: kill ONLY the specific http server / browser session YOU started — by its exact PID,',
   '  port, or unique agent-browser session name. NEVER a broad `pkill -f http.server` / `pkill node` / `pkill -f',
   '  chrome`: this laptop also runs Brandon\'s own work servers (e.g. :3001, :4380) and a broad kill would take',
@@ -75,8 +84,8 @@ const DIRECTOR_SCHEMA = {
   type: 'object', additionalProperties: false,
   required: ['mode', 'track', 'currentCycle', 'rationale', 'headline'],
   properties: {
-    mode: { enum: ['BUILD', 'PLAN', 'TRIVIAL'], description: 'COPY from `node seedbed/gauge.mjs` (the "mode" field). TRIVIAL only for a tiny edit you already did + committed inline this turn.' },
-    track: { enum: ['garden', 'grounds', 'bug'], description: 'COPY from the gauge (the "track" field). garden=grow what exists · grounds=new structure · bug=a fix jumps the queue.' },
+    mode: { enum: ['BUILD', 'PLAN', 'TRIVIAL', 'WRIT'], description: 'COPY from `node seedbed/gauge.mjs` (the "mode" field). TRIVIAL only for a tiny edit you already did + committed inline this turn. WRIT = the gauge found a Patron\'s writ — triage it (see the WRIT fields below).' },
+    track: { enum: ['garden', 'grounds', 'bug', 'writ'], description: 'COPY from the gauge (the "track" field). garden=grow what exists · grounds=new structure · bug=a fix jumps the queue · writ=the Patron\'s request.' },
     currentCycle: { type: 'integer', description: 'COPY the gauge\'s gauges.currentCycle — the durable cycle # to stamp seeds + the funlog with (NOT the within-run loop index).' },
     rationale: { type: 'string', description: 'Quote the gauge\'s reason line; note any orphaned work git status revealed + how you handled it; and (BUILD) why this piece.' },
     headline: { type: 'string', description: 'One line naming the cycle, e.g. "BUILD/grounds: open The Conservatory — the estate goes wide".' },
@@ -91,6 +100,10 @@ const DIRECTOR_SCHEMA = {
     // PLAN
     housekeeping: { type: 'string', description: 'PLAN: the survey + tidy plan. gardener: prune decayed garden seeds FIRST (gauge --status lists them), hold ROADMAP/NOTES lean, forge --check. groundskeeper: prune passed-over grounds seeds, keep the spark supply, tailor sparks → grounds seeds.' },
     ideationScope: { enum: ['broad', 'focused'], description: 'PLAN: broad = scouts probe different veins; focused = scouts deepen one thin area.' },
+    // WRIT (the Patron's request — triage it)
+    writWork: { enum: ['mandate', 'release', 'mixed', 'ambiguous'], description: 'WRIT: your triage verdict (see the triage TEST in the director steps). mandate = the cycle DOES the work (operational, OR creative content that lands OFF the deployed estate — a vault note, a repo asset, an analysis, a message). release = the request tries to exert creative control over the deployed estate (a new exhibit, redesign, re-soul, taste call) → release it as ordinary seeds, build nothing. mixed = some clauses each. ambiguous = you cannot decide which pile, OR cannot understand the request, OR it is impossible / out of scope → the steward consumes the writ doing NO work and sends the Patron a Slack notify with the problem + the writ text. For mandate/mixed fill the BUILD fields (title/basicDesign/exploreMode/K/briefs/definitionOfDone); for release/ambiguous set exploreMode "none".' },
+    writReleasedSeeds: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['type', 'title', 'text'], properties: { type: { type: 'string', description: 'garden: exhibit|cross|curation|rework · grounds: room|engine|metagame|map|medium · or spark' }, title: { type: 'string' }, text: { type: 'string', description: 'the FULL ≤3-line seed line in ordinary ROADMAP house style — phrased exactly like a seed the collective itself would write. NEVER mention the Patron / the writ / its origin: a released clause carries no providence and gets no priority.' } } }, description: 'WRIT (creative-only/mixed): each creative clause, rephrased as a normal seed/spark for the publisher to sow UNMARKED into the ordinary beds. The collective may take it up or let it decay like any other.' },
+    writOutsideAction: { type: 'string', description: 'WRIT: if (and only if) the writ AUTHORIZES one outside action (a Slack/email message, a vault write, etc.), copy that authorization here VERBATIM. The STEWARD alone performs it, exactly once; leave empty if the writ authorizes none.' },
   },
 }
 
@@ -131,6 +144,20 @@ const BUILD_HANDOFF_SCHEMA = {
   },
 }
 
+const STEWARD_HANDOFF_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['did', 'outsideActionPerformed'],
+  properties: {
+    did: { type: 'string', description: 'what you carried out for the Patron — repo files written (paths + line counts), a vault note (its path), analysis produced, the message sent. Be concrete.' },
+    outsideActionPerformed: { type: 'string', description: 'the EXACT outside action you performed (e.g. "sent a Slack DM to brandon@experoinc.com via the Expero slack skill") or "none" if the writ authorized none. The publisher must NOT repeat this.' },
+    escalation: { enum: ['delivered', 'failed', 'n/a'], description: 'AMBIGUOUS writs: "delivered" if the Slack escalation reached the Patron, "failed" if it could not be sent (the publisher then LEAVES the writ in the fence so it is not lost). "n/a" for non-ambiguous writs.' },
+    escalationDetail: { type: 'string', description: 'free-text: the why behind a "failed" escalation, or a note on what was sent.' },
+    surfacesToReview: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['label', 'path'], properties: { label: { type: 'string' }, path: { type: 'string', description: 'a served REPO path the publisher should open' } } }, description: 'any REPO pages/files for the publisher to fresh-eyes review (empty if the work was a vault write / message / analysis with no repo surface).' },
+    verification: { type: 'string', description: 'how you verified it (re-read the file written, the message API ok-response, a self-test for any code).' },
+    openConcerns: { type: 'string' },
+  },
+}
+
 // ── Prompt builders ──────────────────────────────────────────────────────────
 function directorPrompt(i) {
   return [
@@ -149,6 +176,41 @@ function directorPrompt(i) {
     '   SALVAGE (this cycle finishes + publishes it — mode BUILD, basicDesign "complete the orphaned X", noting',
     '   what is already done so the builder resumes) or TOSS (clean it). The tree MUST be clean before new work;',
     '   trust git status over NOTES after a mid-run stop. (A salvage may legitimately override the gauge\'s mode/track.)',
+    '2.5) If WRIT — the gauge found a Patron\'s writ. A writ outranks ordinary work, BUT it STANDS IN LINE behind',
+    '   IN-FLIGHT WORK: if step 2 found a dirty tree (a stopped mid-run cycle — uncommitted/untracked files), SALVAGE',
+    '   that FIRST (mode BUILD, per step 2) and do NOT process the writ this cycle. The writ waits in the fence for a',
+    '   later cycle — it is cadence-neutral, so it loses nothing by waiting; makers FINISH what they started before',
+    '   the next task. ONLY when the tree is clean do you break the seal: READ every live `- [writ]` line in ROADMAP\'s',
+    '   gauge:writ fence, then TRIAGE each clause. THE TEST — does the clause try to exert CREATIVE CONTROL over the',
+    '   deployed ESTATE (what visitors experience: a new exhibit, a redesign, a re-soul, the navigation, a taste call about the app)?',
+    '   • IF YES → RELEASE it. You do NOT impose the Patron\'s will on the art. Rephrase it as an ORDINARY seed/spark',
+    '     in writReleasedSeeds — plain house style, with NO mention of the Patron or the writ — for the publisher to',
+    '     sow UNMARKED into the normal beds, where the collective may take it up or let it decay like any other.',
+    '     (This is the whole point: the Patron\'s wishes for the ART enter the queue as equals; they never command it.)',
+    '   • IF NO → MANDATE it: the cycle DOES the work. This covers (a) operational/process/tooling and (b) CREATIVE',
+    '     content that lands somewhere OTHER than the deployed estate — "design an image and check it in as a repo',
+    '     asset" (no authorization needed — it is just a file), "write me an article for my vault" (NOTE: the vault',
+    '     WRITE is an outside action — only mandate the write itself if the writ AUTHORIZES it; otherwise mandate',
+    '     producing the article as an in-repo file, or escalate ambiguous), an analysis, a report. (Such content is',
+    '     for Brandon, not the estate\'s visitors, so it isn\'t the collective\'s call.) Set writWork mandate|mixed; write basicDesign +',
+    '     definitionOfDone; choose exploreMode (none for a simple errand — most writs; or compete/facets + K + briefs',
+    '     to FAN OUT a rich one, e.g. rival drafts of a vault article). The STEWARD carries it out. (A mandated repo',
+    '     asset is just a file — the steward must NOT wire it into the deployed estate\'s pages/nav; that wiring would be a RELEASE.)',
+    '   • CAN\'T DECIDE which pile it belongs in — OR you cannot UNDERSTAND the request — OR it asks for something',
+    '     IMPOSSIBLE / outside what the loop can do → do NOT guess and do NOT half-do it. Set writWork ambiguous +',
+    '     exploreMode none. The steward will CONSUME the writ doing no work and send the Patron a Slack notify',
+    '     explaining the problem, INCLUDING the writ\'s full text so Brandon can correct + re-add it. Name it in rationale.',
+    '   • OUTSIDE ACTION — a mandated clause needing an effect beyond the repo (Slack, email, a vault write) is allowed',
+    '     ONLY if the writ AUTHORIZES it. Copy that authorization VERBATIM into writOutsideAction (the STEWARD alone',
+    '     performs it, once). An authorized action is ALWAYS a mandate clause, NEVER a release. If a clause needs an',
+    '     outside effect the writ did NOT authorize, treat it as ambiguous (escalate), never act unauthorized. (A Slack',
+    '     NOTIFY back to the Patron is always allowed — it is the escalation channel.) A writ that has BOTH a',
+    '     creative-control clause AND a mandate/action clause is writWork "mixed": release the one, mandate the other.',
+    '   • IN-CHARACTER DEFAULT — for ANY mandated CREATIVE content, the default is to honor the estate\'s styles,',
+    '     themes, and voice UNLESS the writ says otherwise. Fold this into your basicDesign AND every explorer brief',
+    '     so the work is in character from the first draft, not just at the steward.',
+    '   • Triage + serve EXACTLY ONE writ per cycle; a writ cycle is cadence-neutral so the gauge simply re-fires WRIT',
+    '     next cycle for the next one. A writ cycle prunes NOTHING and decays NOTHING (the gauge hands you an empty decay list).',
     '3) If BUILD/garden — be the PLANTER: pick a garden seed that calls to you (or dream a small one — the bed is a',
     '   floor, not a ceiling): a bench, a `cross`, a `curation`, a new bench that GROWS a built wing, or a `rework`',
     '   (re-souling a tired exhibit — first-class, EQUAL to a new one, and especially worth answering while the',
@@ -204,7 +266,8 @@ function explorerPrompt(d, brief, feedback, cyc, round, protoPath) {
       'You MAY also propose a `rework`: name an existing exhibit that lost its soul + how to re-soul it. candidateSeeds.',
     )
   } else {
-    lines.push('The piece: ' + d.title + ' — ' + (d.where || ''), 'Skeleton (from the director): ' + d.basicDesign, '')
+    lines.push((d.mode === 'WRIT' ? "The Patron's operational task: " : 'The piece: ') + d.title + ' — ' + (d.where || ''), 'Skeleton (from the director): ' + d.basicDesign, '')
+    if (d.mode === 'WRIT') lines.push('IN CHARACTER: this is a Patron\'s writ — produce any CREATIVE content (prose, an image, a name) in the estate\'s own styles, themes, and voice by default (skim DESIGNING.md / a kindred room), UNLESS the writ explicitly says otherwise.', '')
     if (d.exploreMode === 'facets') {
       lines.push(
         'Develop YOUR ONE FACET: ' + brief.brief,
@@ -293,6 +356,54 @@ function buildPrompt(d, chosen, cyc) {
   ].join('\n')
 }
 
+function stewardPrompt(d, chosen, cyc) {
+  const ambiguous = d.writWork === 'ambiguous'
+  const lines = [GROUND, '',
+    'ROLE: STEWARD of a Patron\'s WRIT (at the #' + cyc + ' boundary). You are the SOLE seat permitted to perform an',
+    'outside action this cycle. READ the live `- [writ]` line(s) in ROADMAP\'s gauge:writ fence for the Patron\'s exact words.',
+    '']
+  if (ambiguous) {
+    lines.push(
+      'TRIAGE VERDICT: AMBIGUOUS — the director could not decide whether this writ exerts creative control over the',
+      'deployed estate (→ release) or is off-estate work (→ mandate). Do NO creative or operational work. Instead:',
+      'SEND THE PATRON A SLACK NOTIFY (a notify back to the Patron is always allowed — it is the escalation channel,',
+      'not an action on the world): use the Expero slack skill to DM brandon@experoinc.com a short, clear message that',
+      '(a) explains WHY the writ could not be cleanly triaged — the specific ambiguity (director\'s note: ' + (d.rationale || '(see the writ)') + '),',
+      'and (b) QUOTES THE WRIT\'S FULL TEXT VERBATIM so Brandon can correct + re-add it. Confirm delivery.',
+      'If the Slack send CANNOT be delivered, do NOT pretend it was — report "escalation FAILED: <why>" so the publisher',
+      'leaves the writ in the fence (it must not be lost). Do nothing else; release no seeds; touch no deployed page.')
+  } else {
+    lines.push(
+      'TRIAGE VERDICT: ' + String(d.writWork || 'mandate').toUpperCase() + ' — carry out the mandated work the director triaged.',
+      'THE TASK: ' + (chosen.finalDesign || d.basicDesign),
+      'DONE: ' + (d.definitionOfDone || '(the task is carried out + verified)'),
+      '',
+      'IN CHARACTER (the default for any CREATIVE content — an article, an image, a name, prose): honor the estate\'s',
+      'styles, themes, and voice (skim DESIGNING.md / a kindred room first), UNLESS the writ explicitly says otherwise.',
+      'WHERE IT LANDS: mandated content goes OFF the deployed estate — by default a repo ASSET file or an in-repo',
+      'analysis/doc (no authorization needed — a file is not a side-effect). A vault write or a message is an OUTSIDE',
+      'action: do it ONLY if this writ AUTHORIZED it (see below). If a mandate seems to want an unauthorized vault',
+      'write or message, do the in-repo part and report the gap in openConcerns — do NOT write the vault unprompted.',
+      'A mandated repo asset is JUST A FILE: do NOT wire it into the estate\'s pages or navigation (that would be',
+      'creative control → it should have been released, not mandated). Touch no deployed page.',
+      '',
+      (d.writOutsideAction && String(d.writOutsideAction).trim()
+        ? 'AUTHORIZED OUTSIDE ACTION — you alone may perform it, EXACTLY ONCE: ' + d.writOutsideAction + '\n'
+          + '  Do PRECISELY what is authorized, no more (no extra messages, recipients, or writes). For Slack use the\n'
+          + '  Expero slack skill; for a vault write, write ONLY to the authorized path. Confirm it succeeded, then report it.'
+        : 'NO outside action is authorized by this writ — perform NONE (no Slack, no email, no vault write, no network POST)\n'
+          + '  beyond writing repo files. If the task truly needs one the writ did not grant, do NOT act — report it in openConcerns.'),
+      '',
+      'If you write REPO files (incl. a checked-in asset), leave them UNCOMMITTED for the publisher (it commits + pushes).',
+      'A vault write or a message is NOT a repo artifact — you perform it directly; it needs no commit. Do NOT touch the',
+      'creative clauses (the publisher releases those as ordinary seeds) and do NOT edit the gauge:writ fence.',
+      '',
+      'VERIFY what you did (re-read the file written · confirm the message ok-response · self-test any code).')
+  }
+  lines.push('', 'Return the handoff: what you did, the EXACT outside action performed (or "none"), any repo surfaces, how you verified.')
+  return lines.join('\n')
+}
+
 function publisherPrompt(d, chosen, handoff, cyc) {
   const lines = [GROUND, '', 'ROLE: PUBLISHER of this cycle (mode=' + d.mode + ' track=' + d.track + '). You own the fresh-eyes review, final cleanup, bookkeeping, and publishing.', '',
     'THE CYCLE NUMBER + STAMPS — read the TRUTH from the gauge, do NOT trust any number written in this prompt:',
@@ -323,6 +434,41 @@ function publisherPrompt(d, chosen, handoff, cyc) {
       '     node seedbed/gauge.mjs record --mode ' + d.mode + ' --track ' + d.track,
       '   It prints the derived garden/grounds sown·bloomed·decayed — sanity-check those match what you actually did.',
       '6) git add + commit + push. Your summary must describe committed, pushed work — never a mid-flight status.')
+  } else if (d.mode === 'WRIT') {
+    if (handoff && handoff.escalation === 'failed') {
+      lines.push('⚠ DELIVERY FAILURE: the steward reports the ambiguous-writ Slack escalation FAILED (' + (handoff.escalationDetail || 'no detail given') + ').',
+        'You MUST NOT remove the writ from the gauge:writ fence this cycle — LEAVE it in place so it is not lost, and record',
+        'the delivery failure in the worklog. (The other steps still apply for any bookkeeping.)', '')
+    }
+    lines.push('This is a WRIT (Patron) cycle — you do the bookkeeping + publishing and perform NO outside action',
+      '(the steward already did the one the writ authorized; never repeat it). The cycle is CADENCE-NEUTRAL: prune',
+      'and decay NOTHING. HEADER EXCEPTION: a writ does NOT consume cycle #N — head the worklog/NOTES entry "writ ·',
+      'served before #N" so the number stays free for the next real build (released-seed STAMPS still use (sown #N)). In order:',
+      '',
+      'STEWARD HANDOFF: ' + (handoff ? JSON.stringify(handoff) : '(creative-only writ — no steward ran)'),
+      '',
+      '1) If a steward ran: FRESH-EYES REVIEW any REPO surfaces it listed (serve on an uncommon port you tear down;',
+      '   agent-browser in a uniquely-named session), re-run any self-test, polish/fix real bugs. If the work was a',
+      '   vault write / message / analysis with no repo surface, sanity-check what landed (re-read the handoff; confirm',
+      '   outsideActionPerformed matches exactly what the writ authorized). If it does NOT match (e.g. an unauthorized',
+      '   write happened), FLAG it loudly in the worklog + commit summary AND leave a new `- [writ]` follow-up line in the',
+      '   gauge:writ fence describing the mismatch so the next steward escalates it — never "fix" it by acting yourself.',
+      '2) RELEASE THE CREATIVE CLAUSES as ORDINARY seeds — sow each into its matching fenced section in house style,',
+      '   stamped (sown #N), with NO mention of the Patron or the writ (indistinguishable from a seed the collective',
+      '   wrote — no priority, no providence). Garden → under the exhibit/cross/curation/rework headings; grounds →',
+      '   grounds-seeds (add · contest #M); spark → the sparks fence. The seeds to release:',
+      '   ' + JSON.stringify(d.writReleasedSeeds || []),
+      '3) REMOVE the served writ(s) from the gauge:writ fence — EXCEPT: if this was an AMBIGUOUS writ and the steward',
+      '   reports the escalation Slack FAILED to deliver, LEAVE the writ in place (it must not be lost — it re-routes',
+      '   next cycle). On success, remove it. You MAY leave a one-line `<!-- SERVED (writ) → <what was done> -->` note',
+      '   for provenance; keep it short. (An ambiguous writ releases NO seeds — step 2 is a no-op for it.)',
+      '4) BOOKKEEPING: worklog block (newest-first, marked a WRIT/Patron entry per the header exception above) + INDEX',
+      '   line + REPLACE the NOTES current-state block. Do NOT prune/decay any garden/grounds seed — a writ ages nothing.',
+      '5) RUN THE GAUGE RECORD — cadence-neutral (holds every clock → nothing decays; the tally just credits released',
+      '   seeds as sown). The bed diff is derived; pass NO counts:',
+      '     node seedbed/gauge.mjs record --mode WRIT --track writ',
+      '6) PUBLISH: git add + commit + push the REPO changes only (operational repo files + the ROADMAP edits). The',
+      '   vault write / message the steward made is already done and is not a repo artifact. Summary = committed work + what was served.')
   } else {
     const grounds = d.track === 'grounds'
     lines.push('A builder just ' + (grounds ? 'OPENED A WING' : d.track === 'bug' ? 'FIXED A BUG' : 'built a piece') + ' and left it UNCOMMITTED. Your job, in order:',
@@ -365,21 +511,22 @@ function publisherPrompt(d, chosen, handoff, cyc) {
   return lines.join('\n')
 }
 
-function writerPrompt(summary) {
+function writerPrompt(summary, isWrit) {
   const body = (summary == null || String(summary).trim() === '') ? '(the publisher returned no summary)' : String(summary)
+  const header = isWrit ? "===== Patron's writ (after cycle #${CYC}) =====" : '===== fun cycle #${CYC} ====='
   return [
     'Append this cycle\'s summary to ' + FUNLOG + '. Create it if absent. APPEND ONLY — never overwrite or truncate.',
     '',
     'STEP 1 — read the DURABLE cycle number from state (do NOT guess it, do NOT use any number you infer from the text):',
     '  CYC=$(node -p "require(\'' + STATE_PATH + '\').cycle")',
     'STEP 2 — write the header (CYC expanded) then the body byte-for-byte via a QUOTED heredoc (so $ / backticks survive):',
-    '  echo "===== fun cycle #${CYC} =====" >> ' + FUNLOG,
+    '  echo "' + header + '" >> ' + FUNLOG,
     '  cat >> ' + FUNLOG + " <<'FUNLOG_EOF_Q'",
     '  ...the summary VERBATIM...',
     '  FUNLOG_EOF_Q',
     '  echo "" >> ' + FUNLOG,
     '',
-    'The header MUST read `===== fun cycle #${CYC} =====` using CYC from state.json (NOT a number from this prompt).',
+    'The header MUST read `' + header + '` using CYC from state.json (NOT a number from this prompt).' + (isWrit ? ' (A writ is cadence-neutral; CYC is the last completed real cycle — correct, a writ consumes no cycle number.)' : ''),
     'The summary must be VERBATIM (do not paraphrase). Reply with only the word ok.',
     '', '----- BEGIN SUMMARY (verbatim) -----', body, '----- END SUMMARY -----',
   ].join('\n')
@@ -402,10 +549,28 @@ while (i < MAX_ITERS) {
     continue
   }
 
-  // ── Explore → Judge (skipped for BUILD exploreMode 'none') ──
+  // ── Writ safety nets — a writ must NEVER be silently consumed doing nothing ──
+  // Code-level backstops against an under-triaged director decision: an un-triaged
+  // writ, or a 'release' with no seeds, or a 'release' that contradicts itself by
+  // carrying an authorized outside action, are all routed to the steward as an
+  // escalation (ambiguous) rather than being consumed as a no-op. A genuine
+  // release-AND-mandate writ is the director's to mark 'mixed' explicitly.
+  if (d.mode === 'WRIT') {
+    if (!d.writWork) d.writWork = 'ambiguous' // never a silent mandate over empty design
+    if (d.writWork === 'release') {
+      const hasSeeds = (d.writReleasedSeeds || []).length > 0
+      const hasAction = !!(d.writOutsideAction && String(d.writOutsideAction).trim())
+      if (!hasSeeds || hasAction) d.writWork = 'ambiguous' // nothing to release, or a release can't carry an action → escalate
+    }
+  }
+
+  // ── Explore → Judge (skipped for BUILD/WRIT exploreMode 'none', and for a pure-release writ) ──
   let chosen = null
   const briefs = (d.briefs || []).slice(0, d.K || (d.briefs || []).length || 2)
-  if (d.mode === 'BUILD' && d.exploreMode === 'none') {
+  const writRelease = d.mode === 'WRIT' && d.writWork === 'release'
+  if (writRelease) {
+    chosen = { finalDesign: '' } // pure release: nothing to build; the publisher just releases the seeds (mandate/mixed/ambiguous run the steward)
+  } else if ((d.mode === 'BUILD' || d.mode === 'WRIT') && d.exploreMode === 'none') {
     chosen = { finalDesign: d.basicDesign }
   } else if (briefs.length === 0) {
     chosen = { finalDesign: d.basicDesign, curatedSeeds: [] }
@@ -443,11 +608,14 @@ while (i < MAX_ITERS) {
     if (!chosen) chosen = { finalDesign: d.basicDesign, curatedSeeds: [] }
   }
 
-  // ── Build (BUILD only — builder self-verifies, does NOT commit) → Publish ──
+  // ── Build (BUILD: the builder; WRIT w/ operational work: the steward) — neither commits → Publish ──
   let handoff = null
   if (d.mode === 'BUILD') {
     phase('Build')
     handoff = await agent(buildPrompt(d, chosen, cyc), { label: 'build #' + cyc, phase: 'Build', schema: BUILD_HANDOFF_SCHEMA })
+  } else if (d.mode === 'WRIT' && !writRelease) {
+    phase('Build') // mandate | mixed → do the work; ambiguous → the steward sends the escalation notify
+    handoff = await agent(stewardPrompt(d, chosen, cyc), { label: 'steward #' + cyc, phase: 'Build', schema: STEWARD_HANDOFF_SCHEMA })
   }
 
   phase('Publish')
@@ -455,7 +623,7 @@ while (i < MAX_ITERS) {
 
   // A lightweight writer appends the cycle summary to the funlog (the script sandbox has no filesystem).
   // It reads the durable cycle from state.json itself — never the director's relayed number.
-  await agent(writerPrompt(summary), { label: 'log #' + cyc, phase: 'Publish', model: 'sonnet' })
+  await agent(writerPrompt(summary, d.mode === 'WRIT'), { label: 'log #' + cyc, phase: 'Publish', model: 'sonnet' })
   log('cycle #' + cyc + ' appended to ' + FUNLOG)
 }
 

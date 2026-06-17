@@ -57,6 +57,7 @@ existing wing (a new bench) or metagame (a new constellation/crossover) is
 
 ## Lexicon
 
+- **writ** — a sealed request from **the Patron** (the unseen founder). Top priority, never decays; the director triages it (see below). (`[writ]` → ROADMAP `## ✒️ The Patron's Writs`.)
 - **spark** — a few words, a raw gap. Big-track only. (`seedbed/` → ROADMAP `## ⚡ Sparks`.)
 - **seed** — a **≤3-line provocation, not a spec.** The gardener *files* them; the
   groundskeeper tailors a spark into a (slightly longer) grounds seed.
@@ -88,6 +89,7 @@ across loop relaunches, the ledger lesson):
 
 ### The decision ladder (top wins)
 
+0. **a Patron's `[writ]`** → `WRIT/writ` — outranks even a bug. The director **triages** it; the cycle is **cadence-neutral** (advances no clock, so nothing else decays). See *The Patron's Writ* below.
 1. **open `[bug]`** → `BUILD/bug` (a fix jumps the queue).
 2. **swing time** (`groundsSince ≥ groundsInterval`) **and a ripe grounds seed exists** → `BUILD/grounds`. *Go wide.*
 3. **grounds fuel below floor** → `PLAN/grounds` (groundskeeper restocks). *(Also where step 2 lands when it's swing time but the bed is empty — raise ambition, never fake a wing to satisfy a gauge.)*
@@ -104,9 +106,51 @@ Each seed carries its birth stamp; decay is computed when a tender reads the bed
 Garden seeds flow fast (age in cycles); big swings are patient (punished only for
 *losing when their moment came*, never for merely waiting).
 
+## The Patron's Writ — a request from outside the loop
+
+The estate is built by makers who each live a single turn; the gauge is the *Hand
+That Guides*. Above both is **the Patron** — the unseen founder who spoke the three
+words. A **`[writ]`** is the Patron's way to slide a request under the door without
+seizing the wheel. It is **binding on the running of the house, never on the art.**
+
+Drop one with `node seedbed/sow.mjs` (`[writ]` routes to the writ fence, unstamped).
+The gauge routes it to the **director**, ahead of everything — and the cycle is
+**cadence-neutral**: it advances no counter, so serving the Patron **ages and decays
+nothing else** (`record --mode WRIT` touches only the bed snapshot).
+
+The director **triages** each clause by one test — *does it try to exert creative
+**control** over the deployed estate (what visitors experience — a new exhibit, a
+redesign, a re-soul, the navigation, a taste call about the app)?*
+
+- **Yes → release.** The director does **not** impose it: it is rephrased into an
+  ordinary seed/spark and sown **unmarked** into the normal beds, free for the
+  collective to take up or let decay like any other. *The Patron's wishes for the art
+  enter the queue as equals; they never command it.*
+- **No → mandate.** The cycle **carries it out** (the **steward** implements; it may
+  fan out explorers → a judge → the steward for a rich task). This covers operational
+  work *and* creative content that lands somewhere **other than** the deployed estate
+  — a vault article, a checked-in repo asset, an analysis, a message. Mandated creative
+  content is **in character by default** (honors the estate's styles, themes, and
+  voice) unless the writ says otherwise; a mandated repo asset is just a file and is
+  *not* wired into the estate's pages (wiring it in would be control → a release).
+- **Can't decide — or can't understand it, or it's impossible — → escalate.** The writ
+  is consumed doing nothing; the steward Slack-notifies the Patron with the problem **and
+  the writ's full text**, so it can be corrected and re-added.
+
+**A writ stands in line behind in-flight work.** A writ outranks *ordinary* work, but not
+a half-finished cycle: if a build was stopped mid-run (a dirty tree), the director
+**salvages and finishes that first**; the writ — cadence-neutral — simply waits in the
+fence for a later cycle. Makers finish what they started before taking up the next task.
+
+A writ may **authorize one outside action** (a Slack message, a vault write, …) —
+forbidden by default. Only the **steward** performs it, exactly once; every other
+seat (director, explorers, judge, publisher, writer) is barred from outside actions
+that cycle, so no two seats ever both act. State it in the writ:
+`AUTHORIZES: <the one action> — the steward only`.
+
 ## Thresholds (tunable — top of `gauge.mjs`)
 
-`gardenFuelFloor 4 · ceiling 10 · interval 6 · decayAge 12` ·
+`gardenFuelFloor 4 · ceiling 10 · interval 6 · decayAge 15` ·
 `groundsFuelFloor 2 · ceiling 3 · interval 9 · decayStrikes 4` · `sparkFloor 3`.
 
 Tuned for Brandon's instinct: **~⅓ of filed seeds decay, ~⅔ get sown** (enough
@@ -120,8 +164,10 @@ node seedbed/gauge.mjs            # JSON directive for THIS cycle (the director 
 node seedbed/gauge.mjs --status   # human-readable gauge + decayed list + decay ratio
 node seedbed/gauge.mjs record --mode BUILD --track garden [--bloomed n --sown n --decayed n]
                                   # the publisher applies the cycle outcome at cycle end
+node seedbed/gauge.mjs record --mode WRIT  --track writ    # cadence-neutral: holds every clock (a writ decays nothing)
 node seedbed/gauge.mjs --check    # validate state shape + show the directive
-node seedbed/gauge.test.mjs       # the Node twin (62 checks: classify · ladder · decay · derived tally · cadence sim)
+node seedbed/gauge.test.mjs       # the Node twin (classify · ladder · decay · derived tally · cadence sim · the writ)
+node seedbed/sow.mjs <batchfile>  # inject seeds/bugs/writs into ROADMAP as one commit (the keeper's console)
 ```
 
 `record` is the **only** way state.json changes — deterministic, never hand-edited.
