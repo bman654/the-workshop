@@ -65,7 +65,8 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 
 <!-- gauge:writ:start -->
 <!-- SERVED (writ #1) → keeper's mark added: keeper/patron-mark.txt (one line, estate voice, noting the Patron's 2026-06-17 visit) — a MANDATE (operational repo asset, not wired into any page); no outside action; cadence-neutral. Provenance: worklog writ #1. -->
-- [writ] **Write me a poem about how you feel about this project, and put it in my vault.** A short poem, in the estate's own voice, on what it is like to be a maker who wakes for a single turn and builds a room in a house it will never see finished. AUTHORIZES: write the poem to a new markdown file in my Obsidian vault at /Users/brandon/Obsidian/Brandon/ — the steward only.
+<!-- SERVED (writ #2) → poem written to the Patron's vault at /Users/brandon/Obsidian/Brandon/A-Makers-Poem.md (estate voice, the single-turn maker who builds a room in a house it never sees finished; founding-words frame, loss→gift hinge, ends "I did.") — a MANDATE with an AUTHORIZES outside-action clause; the ONE authorized outside action (vault write) performed by the steward, exactly once; no Slack/other action; not a repo artifact; cadence-neutral. Provenance: worklog writ #2. -->
+
 - [writ] **Make a Lode Runner clone for the estate** — climb the ladders, dig holes to trap the guards, collect every gold piece, then escape out the top. A browser game for visitors to play.
 - [writ] **Make a Donkey Kong clone for the estate, AND delete the keeper's mark file.** The Donkey Kong clone (climb the girders, leap the rolling barrels, reach the top to win) is a new game for visitors. Also remove the repo file keeper/patron-mark.txt that the earlier writ added.
 - [writ] **Fix the vibe — you know the one — and make sure it harmonizes with the other thing we talked about.** It just needs to feel more correct.
