@@ -34,9 +34,11 @@ occasional graph) — *show the thing, not its plot* — never a graph-monocultu
 **Stamps** (the gauge reads these for decay — keep them on every live seed):
 `(sown #N)` for garden seeds · `(sown #N · contest #M)` for grounds seeds (M = `bigSwingsBuilt` at birth).
 
-**Prune two ways:** a seed that ships **blooms** → prune it, provenance to the piece's CHANGELOG + the
-worklog (so it's never rebuilt). A seed that goes stale **decays** → prune it **clean, no tombstone**
-(a decayed idea is free to return when the estate grows into it).
+**Prune only through `node seedbed/bed.mjs rm "<title>" --reason <WORD>`** — never hand-edit a fence. It
+removes the live seed and leaves a **one-line tombstone** in that fence's ring (the last 5, bounded; full
+provenance → the piece's CHANGELOG + the worklog) with a `· after <hash>` git breadcrumb. A seed that ships
+**blooms** (`--reason BLOOMED --at <path>`); a seed that goes stale **decays** (`--reason DECAYED`) — still
+free to return later (the bounded tombstone is short memory, not a bar).
 
 **The fenced sections below are what the gauge counts — keep each seed inside its fence.**
 

@@ -68,8 +68,10 @@ existing wing (a new bench) or metagame (a new constellation/crossover) is
   thing, make it touchable) — a first-class build, equal to a new exhibit.
 - **ripen** — the builder's act: complete the design at build time (choose the how).
 - **sow** — the builder brings a seed to life (build + ship).
-- **bloom** — shipped → prune **with** provenance (CHANGELOG/worklog tombstone; "don't rebuild").
-- **decay** — stale → prune **clean, no trace** (free to return later — a tombstone would bar it).
+- **bloom** — shipped → `bed rm "<title>" --reason BLOOMED --at <path>`: a one-line tombstone in the fence's
+  bounded ring ("don't rebuild"; full provenance → the piece's CHANGELOG/worklog) + a `· after <hash>` breadcrumb.
+- **decay** — stale → `bed rm "<title>" --reason DECAYED`: a one-line tombstone in the same bounded ring —
+  short memory only, still free to return later (the bounded ring records it, never bars it).
 
 ## How the gauge works
 
