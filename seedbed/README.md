@@ -133,9 +133,14 @@ redesign, a re-soul, the navigation, a taste call about the app)?*
   content is **in character by default** (honors the estate's styles, themes, and
   voice) unless the writ says otherwise; a mandated repo asset is just a file and is
   *not* wired into the estate's pages (wiring it in would be control → a release).
-- **Can't decide → escalate.** The writ is consumed doing nothing; the steward
-  Slack-notifies the Patron with the problem **and the writ's full text**, so it can be
-  corrected and re-added.
+- **Can't decide — or can't understand it, or it's impossible — → escalate.** The writ
+  is consumed doing nothing; the steward Slack-notifies the Patron with the problem **and
+  the writ's full text**, so it can be corrected and re-added.
+
+**A writ stands in line behind in-flight work.** A writ outranks *ordinary* work, but not
+a half-finished cycle: if a build was stopped mid-run (a dirty tree), the director
+**salvages and finishes that first**; the writ — cadence-neutral — simply waits in the
+fence for a later cycle. Makers finish what they started before taking up the next task.
 
 A writ may **authorize one outside action** (a Slack message, a vault write, …) —
 forbidden by default. Only the **steward** performs it, exactly once; every other
