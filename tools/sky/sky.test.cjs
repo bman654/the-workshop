@@ -56,19 +56,19 @@ const VIEWBOX = { x: 0, y: 0, w: 1440, h: 900 };
    declaration changes — keep it in sync or this test false-fails. Every generated
    box is verified star-clear (all 35 catalog stars lie outside the interior FIELD). */
 const FOOTPRINTS = [
-  { id: 'verse',           x: 665,  y: 308, w: 53,  h: 38 },
-  { id: 'compositor',      x: 724,  y: 308, w: 53,  h: 38 },
-  { id: 'cartographer',    x: 665,  y: 351, w: 53,  h: 38 },
-  { id: 'sound-garden',    x: 665,  y: 403, w: 53,  h: 38 },
-  { id: 'threshold',       x: 724,  y: 403, w: 53,  h: 38 },
-  { id: 'strange-garden',  x: 286,  y: 577, w: 138, h: 95 },
-  { id: 'firmament',       x: 242,  y: 207, w: 116, h: 116 }, // tower r→bbox
-  { id: 'daedalus',        x: 968,  y: 388, w: 163, h: 113 },
-  { id: 'arcade',          x: 968,  y: 260, w: 163, h: 113 },
-  { id: 'workbench',       x: 520,  y: 589, w: 88,  h: 61 },
-  { id: 'undercroft',      x: 698,  y: 517, w: 46,  h: 64 },
-  { id: 'hall-of-mirrors', x: 196,  y: 410, w: 140, h: 97 }, // the optics wing — the feat-stars cluster beside it
-  { id: 'gnomon',          x: 1118, y: 203, w: 142, h: 98 }  // The Hours — the horology wing's open east-park sundial
+  { id: 'verse',            x: 692,   y: 306,  w: 28,   h: 20 },
+  { id: 'compositor',       x: 722,   y: 306,  w: 28,   h: 20 },
+  { id: 'cartographer',     x: 692,   y: 329,  w: 28,   h: 20 },
+  { id: 'sound-garden',     x: 692,   y: 420,  w: 28,   h: 20 },
+  { id: 'threshold',        x: 722,   y: 420,  w: 28,   h: 20 },
+  { id: 'strange-garden',   x: 322,   y: 629,  w: 67,   h: 47 },
+  { id: 'firmament',        x: 242,   y: 207,  w: 116,  h: 116 },  // tower r→bbox
+  { id: 'daedalus',         x: 995,   y: 429,  w: 110,  h: 76 },
+  { id: 'arcade',           x: 995,   y: 255,  w: 110,  h: 76 },
+  { id: 'workbench',        x: 520,   y: 589,  w: 88,   h: 61 },
+  { id: 'undercroft',       x: 698,   y: 517,  w: 46,   h: 64 },
+  { id: 'hall-of-mirrors',  x: 242,   y: 410,  w: 140,  h: 97 },  // the optics wing — the feat-stars cluster beside it
+  { id: 'gnomon',           x: 1118,  y: 203,  w: 142,  h: 98 }  // The Hours — the horology wing's open east-park sundial
 ];
 const FURNITURE = [
   { id: 'compass',      x: 74,   y: 82,  w: 92,  h: 92 },

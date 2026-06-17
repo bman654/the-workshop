@@ -69,6 +69,11 @@
     // the manor's archive annal — a field star in the upper-right band, lit on first
     // visit to the Tabularium (additive; never feeds the wings-only capstone).
     'tabularium':     { x: 1180, y: 150, mag: 1 },
+    // The Museum — the archive wing's grand hall (the Centennial Jubilee · River of
+    // Days). A field star in the upper-right archive band beside its kin (tabularium
+    // 1180,150 · gnomon 1270,170); lit on first visit. Position VERIFIED clear of the
+    // archive-wing colonnade footprint + every box by sky.test.cjs CATALOG INTEGRITY.
+    'museum':         { x: 1150, y: 178, mag: 1 },
     // The Hours — the estate's sundial (horology wing). A field star in the dark
     // top-right margin beside its open east-park footprint; lit on first visit.
     'gnomon':         { x: 1270, y: 170, mag: 1 },
