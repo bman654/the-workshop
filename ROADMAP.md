@@ -142,7 +142,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 ### cross
 
-- [cross] **The Shape They Share · catenary × soap-film** — drag ONE handle: a chain hangs (minimise gravitational PE) and a soap film necks between two rings (minimise AREA) — two physics that never met both report the SAME shape parameter a of a·cosh(x/a). Pull the rings too far and the film SNAPS to two flat discs (Goldschmidt) while the chain hangs on, unbothered: the agreement breaks on purpose. TWO DISJOINT CORES already exist as room authorities — catenary solves √(L²−v²)=2a·sinh(h/a) (sinh, gravity, fixed length); soap-film solves R=a·cosh(h/a) (cosh, tension, fixed rings); they share NO code, lift each verbatim. FORM: one brass slider, two stages reshaping in lockstep, one gold-lit shared a. CRUX: below the snap the two a's === to machine ε (after nondimensionalising on h/R, same stable lower branch); the snap threshold === ∂(cosh u/u)/∂u=0. Grep-confirmed: no caten↔soap cross exists. (sown #104)
 
 ### curation
 
@@ -161,11 +160,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-<!-- ✝ BLOOMED #105: The Clack Counter → collisions/ · after bf31f47 -->
 <!-- ✝ BLOOMED #106: The Contrary Stone → rattleback/ · after 7be3f13 -->
 <!-- ✝ BLOOMED #107: The Infinite Overhang → overhang/ · after 1c9bd06 -->
 <!-- ✝ BLOOMED #108: The Slingshot → aerodrome/slingshot/ · after e4f0ea4 -->
 <!-- ✝ BLOOMED #109: The Mine — a Lode Runner clone → arcade/games/lode-runner.html · after 0deee2f -->
+<!-- ✝ BLOOMED #110: The Shape They Share · catenary × soap-film → cross/the-shape-they-share/ · after da5c89e -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
