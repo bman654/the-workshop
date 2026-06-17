@@ -1,5 +1,72 @@
 # The Aerodrome — Changelog
 
+## 2026-06-17 — The Slingshot (cycle #108, garden `[exhibit]` bloomed)
+
+A THIRD room in the wing: a **gravity assist you AIM by hand** (`slingshot/index.html`), completing an
+orphaned in-progress build. A Sun off-frame (lower-left glow) sets the heliocentric frame; a planet at
+center moves +x with its `v_planet` vector; you drag a dashed inbound asymptote with a gold **b-handle**
+to set the impact parameter, choose a **trailing** or **leading** side, and press **Fly**. The craft
+animates along the real `AeroCore.verletStep`-integrated SOI passage — the curve you WATCH bend — while
+the result is **scored** from the closed-form `flybyOut` / `heliocentricGain` / `momentumBalance`
+(dual-truth). The heart is the **twin speedometers**: a sun-frame `|v|` half-dial that JUMPS across the
+encounter (ghost tick at the inbound value) and a planet-frame `|v∞|` dial that stays PINNED — the theft
+made visible. The planet's recoil `dU` renders as a tiny red arrow + a `|dU|` receipt. The negative
+control is a **Freeze-planet** toggle: with `v_planet = 0` the sun-frame needle does not move for any aim
+(Δ = 0, "NO CHANGE — STILL MASS"). FORM EXPRESSES CONTENT — a flyby you aim and a needle that jumps, not
+a plotted curve.
+
+### Built
+- **`slingshot/index.html`** (~1095L, hand-authored — NO `.src.html`, matching the Transfer-Bridge
+  module-import convention: the page `import`s its sibling `./slingshot-core.mjs`, which re-exports
+  `../core.mjs` as `AeroCore`; nothing to forge-inline, no byte-parity sentinel). `aerodrome/core.mjs`
+  is **byte-untouched** (`git diff` empty).
+- **`slingshot/slingshot-core.mjs`** (carried-in, byte-untouched) — the patched-conic SOI authority,
+  re-exporting `AeroCore`. **`slingshot/slingshot-core.test.mjs`** (carried-in) — the Node twin.
+
+### Self-test — all green
+- Node twin `node aerodrome/slingshot/slingshot-core.test.mjs` → **13 passed, 0 failed, exit 0**;
+  parent `node aerodrome/core.test.mjs` → **25/25 exit 0** (core byte-clean).
+- In-page pill **✓ self-test passed (5/5)**, claims 1–5 run live: (1) planet-frame `|relIn|===|relOut|`
+  (pure rotation), |Δ|=6.7e-16; (2) `|out|²−|vIn|²===2·vP·(relOut−relIn)` and `|Δv|≤2|U|`; (3) NEG
+  CONTROL `vPlanet=0 ⇒ |out|===|vIn|`; (4) momentum theft `mC·Δv + mP·dU === 0` with `dU·Δv<0` (recoil);
+  (5) `sin(δ/2)===1/e, e>1` plus a tractable integrated-SOI recovery of δ to ~1e-4 (the full O(dt²)
+  convergence-ratio half stays in the Node twin — a page version would hang on the main thread; the
+  same "the page runs a subset of the twin" discipline as the Transfer Bridge pill).
+
+### Build bug-fixes (load-bearing)
+1. The import was `../slingshot-core.mjs` (one level too high → 404, the page never booted) — corrected
+   to `./slingshot-core.mjs` (the core is a sibling).
+2. Module scripts are deferred, so `DOMContentLoaded` had already fired — added a `readyState` guard.
+3. The integrated path's geometric handedness was OPPOSITE the analytic side convention (trailing read
+   as a brake) — introduced a single `aimOffset() = -b·side` source-of-truth used by `buildPath` / the
+   aim-line / the handle, so the flown curve and the scored result agree (trailing = BOOST, leading =
+   BRAKE).
+4. Replaced a fragile second analytic-hyperbola reconstruction with a faint dashed PREVIEW of the actual
+   `FLY.path` (the preview and the flown path can never disagree).
+
+### Registered (additive)
+- `aerodrome/index.src.html` gained a `↗ Slingshot` sib-link in the topbar topright (beside Transfer
+  Bridge / Orrery) → re-forged `aerodrome/index.html` (parent core byte-parity preserved).
+
+### Publisher fresh-eyes (cycle #108) — caught & fixed: the mobile scene hid behind the panel
+The **same ergonomics flaw the Transfer Bridge publisher caught at #100 recurred here.** On a 390px
+phone the full-width control panel (top:60 → ~74vh) overlaid the vertically-centred scene (the planet
+sat at `view.cy = H·0.50`), hiding the planet **and the gold b-handle — the touchable HEART of a
+touchable piece — behind the panel on first load.** Pixel-sampling found the scene centroid at CSS
+y≈482 with 56/67 bright pixels hidden behind the panel. **Fix:** a `view.W <= 600` branch in
+`computeSize()` drops the scene into the visible strip BELOW the panel (`view.cy = H·0.84`,
+`view.cx = W·0.50`) and tightens the scale (`ppu` via `H·0.42`) so the whole flyby fits that band.
+Re-verified: the scene centroid now sits at y≈676 (below the panel bottom at 625) with 93/117 bright
+pixels in the visible strip — the planet, the `b = 0.55` gold handle, the `v_planet` vector, and the
+inbound asymptote are all visible on first load, and a Fly still boosts to 0.961 at mobile width. The
+branch fires only ≤600px, so desktop is byte-unaffected (re-verified @1280: pill GREEN, no overflow).
+Verified LIVE: Trailing Fly → sun `|v|` 0.733→0.961 **BOOST +0.226** (planet pinned 0.900); Leading Fly
+→ **BRAKE −0.237** sun→0.494 (planet pinned); Freeze-planet Fly → Δ=+0.0000 "NO CHANGE (STILL MASS)".
+All four cross-links resolve 200 + the parent `↗ Slingshot` sib-link navigates correctly; 0 console
+errors, 0 nested anchors, 0 horizontal overflow @1280 AND @390. Gates green: `forge --check --all`
+38/38, `forge --audit-seen --strict` (all 30 front-door pages drop their breadcrumb), Node twins
+13/13 + 25/25. Bloomed the `[exhibit]` seed.
+
 ## 2026-06-17 — The Transfer Bridge (cycle #100, garden grow-seed bloomed)
 
 A SECOND room in the wing: a touchable **Hohmann transfer** you fly by hand (`transfer/index.html`),

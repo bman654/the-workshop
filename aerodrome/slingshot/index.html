@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Slingshot — steal a planet's speed by hand</title>
+<style>
+  :root{
+    --panel-bg: rgba(18,14,8,0.86);
+    --panel-edge: rgba(214,176,108,0.42);
+    --ink: #f0e2c4;
+    --ink-dim: #b8a172;
+    --accent: #e6bd6f;
+    --accent-soft: rgba(230,189,111,0.16);
+    --steel: #cdd6e0;
+    --steel-soft: rgba(205,214,224,0.16);
+    --cyan: #7fc7e0;
+    --green: #7fc796;          /* boost green */
+    --red: #e0786e;            /* brake / theft red */
+    --warn: #ffd9a0;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:#06040a; color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+  #stage{ position:fixed; inset:0; background:#05040a; }
+  canvas#field{ display:block; position:absolute; inset:0; cursor:default; touch-action:none; }
+  canvas#field.grabbing{ cursor:grabbing; }
+  canvas#field.canpush{ cursor:grab; }
+
+  /* ── Top bar (back-links + siblings) ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 22px 0; pointer-events:none;
+  }
+  .topbar a{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:4px; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--steel); opacity:1; }
+  .back.deep{ opacity:.6; }
+  .topright{ display:flex; gap:18px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+  .sib{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.7; transition:.25s; }
+  .sib:hover{ color:var(--steel); opacity:1; }
+
+  /* ── Control panel ── */
+  #panel{
+    position:fixed; top:18px; left:18px; width:308px;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border:1px solid var(--panel-edge); border-radius:12px; padding:14px 15px 16px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.6); z-index:20;
+    transition: transform .35s cubic-bezier(.2,.8,.2,1), opacity .25s;
+    max-height: calc(100vh - 36px); overflow-y:auto;
+  }
+  #panel.collapsed{ transform: translateX(calc(-100% - 24px)); opacity:0; pointer-events:none; }
+  #panel h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.3px; margin:0 0 2px; color:var(--ink); }
+  #panel .sub{ font-size:10.5px; color:var(--ink-dim); margin:0 0 8px; letter-spacing:.4px; text-transform:uppercase; }
+
+  .selftest{ font:10px/1.5 var(--font-mono); letter-spacing:.2px; margin:6px 0 4px;
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 9px; background:rgba(0,0,0,.25); cursor:pointer; }
+  .selftest .hd{ display:flex; justify-content:space-between; align-items:center; }
+  .selftest .pill{ font-weight:700; letter-spacing:.4px; }
+  .selftest .ok{ color:#7fd28a; } .selftest .bad{ color:#f08a7a; }
+  .selftest .leg{ display:none; margin-top:6px; color:var(--ink-dim); }
+  .selftest.open .leg{ display:block; }
+  .selftest .leg div{ margin:2px 0; }
+
+  /* the beat banner — narrates the encounter */
+  .beat{ font:600 12px/1.5 var(--font-ui); letter-spacing:.2px; color:var(--steel);
+    border:1px solid var(--panel-edge); border-radius:9px; padding:9px 11px; margin:8px 0 4px;
+    background:linear-gradient(180deg, rgba(205,214,224,0.10), rgba(205,214,224,0.02)); }
+  .beat .step{ display:block; font:700 9.5px/1 var(--font-mono); letter-spacing:.28em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:5px; }
+  .beat .em{ color:var(--ink); }
+
+  /* the TWIN speedometers — the heart of the room */
+  .gauges{ display:flex; gap:9px; margin:11px 0 6px; }
+  .gauge{ flex:1; border:1px solid var(--panel-edge); border-radius:10px; padding:8px 8px 7px;
+    background:linear-gradient(180deg, rgba(0,0,0,.30), rgba(0,0,0,.12)); position:relative; overflow:hidden; }
+  .gauge .gtitle{ font:700 8.5px/1.2 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:5px; }
+  .gauge.sun .gtitle{ color:var(--accent); }
+  .gauge.planet .gtitle{ color:var(--cyan); }
+  .gauge canvas{ display:block; width:100%; height:54px; }
+  .gauge .gval{ font:700 14px/1 var(--font-mono); font-variant-numeric:tabular-nums; margin-top:3px; text-align:center; letter-spacing:.3px; }
+  .gauge.sun .gval{ color:var(--accent); }
+  .gauge.planet .gval{ color:var(--cyan); }
+  .gauge .gtag{ font:600 8px/1.2 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; text-align:center; color:var(--ink-dim); margin-top:1px; min-height:10px; }
+  .gauge.sun .gtag.boost{ color:var(--green); }
+  .gauge.sun .gtag.brake{ color:var(--red); }
+  .gauge.planet .gtag.pinned{ color:var(--cyan); }
+
+  .playrow{ display:flex; gap:8px; align-items:center; margin:11px 0; }
+  .actbtn{ flex:1; height:40px; border-radius:9px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.04); color:var(--ink); cursor:pointer; font-size:12.5px; font-weight:600; letter-spacing:.3px; transition:.15s; }
+  .actbtn:hover{ background:var(--steel-soft); border-color:var(--steel); }
+  .actbtn:disabled{ opacity:.4; cursor:default; }
+  .actbtn.go{ color:var(--accent); border-color:rgba(230,189,111,0.55); }
+  .actbtn.go:hover{ background:var(--accent-soft); border-color:var(--accent); }
+
+  .minirow{ display:flex; gap:8px; margin:9px 0; }
+  .minibtn{ flex:1; font:600 11px/1.3 var(--font-ui); padding:8px 8px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(255,255,255,0.03); color:var(--ink-dim); cursor:pointer; transition:.15s; }
+  .minibtn:hover{ color:var(--ink); border-color:var(--steel); background:var(--steel-soft); }
+  .minibtn.active{ color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
+  .minibtn.warn{ color:var(--warn); border-color:rgba(224,120,110,0.5); }
+  .minibtn.warn.active{ color:#ffd; border-color:var(--red); background:rgba(224,120,110,0.16); }
+  .minibtn:disabled{ opacity:.32; cursor:default; }
+
+  hr.sep{ border:none; border-top:1px solid rgba(214,176,108,0.22); margin:13px 0 11px; }
+  .hint{ font-size:10px; color:#8a784f; margin-top:11px; line-height:1.5; letter-spacing:.2px; }
+  .hint b{ color:var(--ink-dim); }
+
+  .reads{ font:11px/1.4 var(--font-mono); margin:2px 0 0; font-variant-numeric:tabular-nums; }
+  .reads .rr{ display:flex; justify-content:space-between; padding:1.5px 0; }
+  .reads .rr .k{ color:var(--ink-dim); letter-spacing:.2px; }
+  .reads .rr .v{ color:var(--steel); }
+  .reads .rr .v.gold{ color:var(--accent); }
+  .reads .rr .v.warn{ color:var(--warn); }
+  .reads .rr .v.green{ color:var(--green); }
+  .reads .rr .v.red{ color:var(--red); }
+
+  /* the THEFT receipt */
+  #receipt{ display:none; margin:6px 0 2px; border:1px solid rgba(230,189,111,0.5); border-radius:9px;
+    padding:9px 11px; background:linear-gradient(180deg, rgba(230,189,111,0.12), rgba(230,189,111,0.03));
+    font:11px/1.5 var(--font-mono); font-variant-numeric:tabular-nums; }
+  #receipt.show{ display:block; }
+  #receipt .rh{ font:700 9.5px/1 var(--font-mono); letter-spacing:.26em; text-transform:uppercase; color:var(--accent); margin-bottom:7px; }
+  #receipt .rr{ display:flex; justify-content:space-between; padding:1.5px 0; color:var(--ink-dim); }
+  #receipt .rr .v{ color:var(--accent); }
+  #receipt .rr.bad .v{ color:var(--red); }
+  #receipt .ok{ color:#7fd28a; } #receipt .no{ color:var(--red); }
+  #receipt .note{ margin-top:6px; font-size:9.5px; color:#8a784f; line-height:1.5; }
+
+  #reopen{ position:fixed; top:18px; left:18px; z-index:21; width:42px; height:42px; border-radius:10px;
+    border:1px solid var(--panel-edge); background:var(--panel-bg); color:var(--steel); cursor:pointer; font-size:18px;
+    display:none; align-items:center; justify-content:center; backdrop-filter:blur(8px); box-shadow:0 8px 24px rgba(0,0,0,.5); }
+  #panel.collapsed ~ #reopen{ display:flex; }
+  .collapse-x{ position:absolute; top:9px; right:9px; width:22px; height:22px; border-radius:6px; border:none;
+    background:transparent; color:var(--ink-dim); cursor:pointer; font-size:15px; line-height:1; }
+  .collapse-x:hover{ color:var(--ink); background:rgba(255,255,255,0.06); }
+
+  @media (max-width:600px){
+    #panel{ width:auto; left:12px; right:12px; top:60px; max-height:calc(74vh - 60px); }
+    .collapse-x{ width:26px; height:26px; font-size:16px; animation:hintPulse 2.6s ease-in-out 1s 3; }
+    #reopen{ top:60px; left:12px; }
+    .topbar{ padding:12px 14px 0; }
+  }
+  @keyframes hintPulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(212,170,90,0); color:var(--ink-dim); }
+    50%{ box-shadow:0 0 0 5px rgba(212,170,90,.18); color:var(--accent); } }
+  @media (prefers-reduced-motion: reduce){ .collapse-x{ animation:none; } }
+
+  /* outcome flash */
+  #flash{ position:fixed; left:50%; top:44%; transform:translate(-50%,-50%); z-index:19; pointer-events:none;
+    font:700 26px/1.1 var(--font-serif); letter-spacing:1px; text-align:center; opacity:0; transition:opacity .5s; text-shadow:0 2px 18px rgba(0,0,0,.9); }
+  #flash.show{ opacity:1; }
+  #flash .sub{ display:block; font:500 12px/1.4 var(--font-mono); letter-spacing:.4px; margin-top:7px; }
+
+  ::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-thumb{background:rgba(205,214,224,.3);border-radius:4px}
+</style>
+</head>
+<body>
+  <div id="stage"><canvas id="field"></canvas></div>
+
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">← The Aerodrome</a>
+      <a class="back deep" href="../../index.html">← The Orrery Estate</a>
+    </div>
+    <div class="topright">
+      <a class="sib" href="../transfer/index.html" title="Two prograde burns kiss two circles — the Transfer Bridge">↗ Transfer Bridge</a>
+      <a class="sib" href="../../orrery/index.html" title="The orbits the universe already chose">↗ Orrery</a>
+    </div>
+  </div>
+
+  <div id="panel">
+    <button class="collapse-x" id="collapseBtn" title="Hide panel">&#10005;</button>
+    <h1>The Slingshot</h1>
+    <p class="sub">Steal a planet's speed by hand</p>
+
+    <div class="selftest" id="selftest" title="Run the proofs live, in this page">
+      <div class="hd"><span class="pill" id="stPill">running…</span><span style="color:var(--ink-dim)">self-test ▾</span></div>
+      <div class="leg" id="stLegs"></div>
+    </div>
+
+    <div class="beat" id="beat"><span class="step" id="beatStep">aim</span><span id="beatBody"></span></div>
+
+    <!-- the twin speedometers: SUN-frame jumps, PLANET-frame stays pinned -->
+    <div class="gauges">
+      <div class="gauge sun">
+        <div class="gtitle">Sun frame |v|</div>
+        <canvas id="gSun"></canvas>
+        <div class="gval" id="gSunVal">—</div>
+        <div class="gtag" id="gSunTag">heliocentric</div>
+      </div>
+      <div class="gauge planet">
+        <div class="gtitle">Planet frame |v∞|</div>
+        <canvas id="gPlanet"></canvas>
+        <div class="gval" id="gPlanetVal">—</div>
+        <div class="gtag" id="gPlanetTag">pinned</div>
+      </div>
+    </div>
+
+    <div class="playrow">
+      <button class="actbtn go" id="flyBtn" title="Release the craft along the flyby (Space)">&#9654; Fly the encounter</button>
+      <button class="actbtn" id="retryBtn" title="Re-arm the craft on the inbound asymptote">&#9673; Re-aim</button>
+    </div>
+
+    <div class="minirow">
+      <button class="minibtn active" id="sideTrail" title="Aim BEHIND the planet — a trailing pass STEALS speed (boost)">side ⊕ trailing</button>
+      <button class="minibtn" id="sideLead" title="Aim AHEAD of the planet — a leading pass DONATES speed (brake)">side ⊖ leading</button>
+    </div>
+    <div class="minirow">
+      <button class="minibtn warn" id="stationaryBtn" title="Freeze the planet — the negative control: a still mass gives nothing">⏸ Freeze planet (control)</button>
+    </div>
+
+    <hr class="sep">
+
+    <div class="reads" id="reads"></div>
+
+    <div id="receipt">
+      <div class="rh">★ Encounter — the theft receipt</div>
+      <div class="rr"><span>sun-frame |v| in</span><span class="v" id="rcIn"></span></div>
+      <div class="rr"><span>sun-frame |v| out</span><span class="v" id="rcOut"></span></div>
+      <div class="rr"><span>Δ|v|<sub>helio</sub></span><span class="v" id="rcDv"></span></div>
+      <div class="rr"><span>planet-frame |v∞|</span><span class="v" id="rcVinf"></span></div>
+      <div class="rr"><span>planet slowed by</span><span class="v" id="rcTheft"></span></div>
+      <div class="rr"><span>Σ momentum (craft+planet)</span><span class="v" id="rcMom"></span></div>
+      <div class="note" id="rcNote"></div>
+    </div>
+
+    <hr class="sep">
+
+    <p class="hint"><b>Drag the aim line</b> (the dashed approach) up or down to set the <b>impact parameter b</b> — how close the craft skims the planet. Pick a <b>trailing</b> or <b>leading</b> pass. Press <b>Fly</b>: the craft curves past the planet on its real hyperbola. Watch the <b>two speedometers</b> — the planet-frame needle stays <b>pinned</b> (the encounter is a pure rotation) while the sun-frame needle <b>jumps</b>. The energy is <b>stolen from the planet</b>, which slows by a hair. <b>Freeze the planet</b> and the jump vanishes — a still mass gives nothing.</p>
+  </div>
+
+  <button id="reopen" title="Show panel">&#9776;</button>
+  <div id="flash"></div>
+
+<script type="module">
+"use strict";
+import { deflection, eccentricityOf, flybyOut, heliocentricGain, momentumBalance, AeroCore } from './slingshot-core.mjs';
+
+/* ============================================================================
+   THE SLINGSHOT — a third room in the Aerodrome wing.
+   ----------------------------------------------------------------------------
+   ONE IDEA: a gravity assist STEALS a planet's orbital speed. In the PLANET's
+   frame the flyby is a pure hyperbolic TURN — speed unchanged, direction rotated
+   by δ. In the SUN's frame, re-adding the planet's velocity differently on the
+   way out than in makes the craft's heliocentric speed JUMP (a boost on a
+   trailing pass, a brake on a leading pass). The energy is STOLEN from the
+   planet (momentum-conserving), never conjured.
+
+   DUAL-TRUTH (the visible proof, the discipline the wing shares):
+     • the drawn flyby = AeroCore.verletStep-integrated two-body passage about
+       the planet (the SOI passage you SEE bend) — the SAME integrator the twin
+       uses, recovering δ to O(dt²).
+     • the SCORE (both speedometers, the theft arrow, the receipt) reads from the
+       CLOSED-FORM flybyOut / heliocentricGain / momentumBalance — never from the
+       integrated sum, so the needles can't jitter. The twin
+       (slingshot-core.test.mjs, 13/13) owns the proof; this page must not gate
+       on integrated equality.
+
+   This page IMPORTS ./slingshot-core.mjs (its sibling in this folder), which in
+   turn re-exports ../core.mjs as AeroCore — all as ES modules, so there is NO
+   inlining and therefore no byte-parity claim here. The Node twin owns the proof.
+   ========================================================================== */
+
+/* ── units & scene ──────────────────────────────────────────────────────────
+   Canonical units shared with the rest of the Aerodrome. The Sun sits off-frame
+   to the lower-left; the planet crosses left→right with velocity vPlanet. We work
+   in a planet-centred WORLD where the planet is fixed at the origin and the craft
+   comes in on the hyperbola; the sun-frame velocity is reconstructed by adding
+   vPlanet back. (Drawing in the planet frame keeps the integration honest and the
+   hyperbola centred; the velocity arrows carry the sun-frame story.) */
+const MU = 0.06;                       // planet gravitational parameter (a minor body)
+const M_CRAFT = 2.0;                   // craft mass (for the theft balance)
+const M_PLANET = 6000;                 // planet mass — heavy, so the recoil is tiny but real
+const V_PLANET = { x: 1.0, y: 0 };     // the planet's heliocentric velocity (→ +x)
+
+const canvas = document.getElementById('field');
+const ctx = canvas.getContext('2d');
+let DPR = Math.min(window.devicePixelRatio||1, 2);
+
+const view = { W:0, H:0, cx:0, cy:0, ppu:60 };
+function computeSize(){
+  view.W = window.innerWidth; view.H = window.innerHeight;
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  canvas.width = Math.round(view.W*DPR); canvas.height = Math.round(view.H*DPR);
+  canvas.style.width = view.W+'px'; canvas.style.height = view.H+'px';
+  // planet sits a touch right-of-centre so the inbound leg has room.
+  view.cx = view.W*0.56; view.cy = view.H*0.50;
+  // pixels-per-unit: the SOI is a few units across; scale so a ~3-unit span fits.
+  view.ppu = Math.min(view.W, view.H) / 7.2;
+  // ── narrow / phone: the full-width control panel overlays the TOP ~74vh, so a
+  // centred scene would hide the planet + the gold b-handle (the touchable heart)
+  // behind it on first load. Drop the scene into the visible strip BELOW the panel
+  // and tighten the scale so the whole flyby fits that band. (Desktop: panel is on
+  // the left, scene stays centred.)
+  if(view.W <= 600){
+    view.cx = view.W*0.50; view.cy = view.H*0.84;
+    view.ppu = Math.min(view.W, view.H*0.42) / 6.4;
+  }
+}
+function toScreen(rx, ry){ return [ view.cx + rx*view.ppu, view.cy - ry*view.ppu ]; }
+function toWorld(px, py){ return [ (px - view.cx)/view.ppu, -(py - view.cy)/view.ppu ]; }
+
+/* ============================================================================
+   THE AIM. The craft approaches the planet on a straight inbound asymptote far
+   up-range (−x), offset perpendicular by the impact parameter b. The sign of the
+   offset times the chosen side decides which way it whips around. We let the
+   player drag b (the perpendicular offset of the dashed approach) and toggle the
+   pass side.
+   ========================================================================== */
+const aim = {
+  b: 0.55,            // impact parameter (canonical units), > 0
+  side: +1,           // +1 trailing (boost) / −1 leading (brake)
+  stationary: false,  // negative control: freeze the planet
+  // inbound relative-velocity direction in the PLANET frame. The craft must approach
+  // ACROSS the planet's +x motion (not parallel to it) for the assist to bite — a
+  // 225° heading (down-left) brings it in from the upper-right against the planet,
+  // so a TRAILING pass (+1) clearly BOOSTS (+0.23) and a LEADING pass (−1) clearly
+  // BRAKES (−0.24): a near-symmetric, legible toggle. (relIn ∥ vPlanet is the
+  // degenerate case where the toggle barely moves — avoid it as the default.)
+  vInfDir: { x: -Math.SQRT1_2, y: -Math.SQRT1_2 },
+  vInfMag: 0.9,       // |v∞| inbound, the hyperbolic excess speed (planet frame)
+};
+const B_MIN = 0.06, B_MAX = 2.6;
+
+/* the inbound heliocentric craft velocity: vCraftIn = relIn + vPlanet, with
+   relIn = v∞·dir. (If the planet is frozen, vPlanet=0, so vCraftIn=relIn.) */
+function planetVel(){ return aim.stationary ? {x:0,y:0} : V_PLANET; }
+function relIn(){ return { x: aim.vInfDir.x*aim.vInfMag, y: aim.vInfDir.y*aim.vInfMag }; }
+function vCraftIn(){ const r=relIn(), p=planetVel(); return { x:r.x+p.x, y:r.y+p.y }; }
+
+/* the SIGNED perpendicular offset that places the craft so the INTEGRATED flyby
+   bends the SAME way flybyOut(...,aim.side) scores it. flybyOut rotates relIn by
+   +side·δ (CCW for side=+1); a body offset by +b·perp from the planet (perp the
+   +90° rotation of the inbound direction) is attracted toward the planet and turns
+   CW — the opposite sense. So the geometric offset that MATCHES side=+1's CCW turn
+   is −b·side along perp. One source of truth for the aim geometry — buildPath, the
+   aim line, the b-handle, and the pre-fly craft all read this, so what you SEE
+   (the dashed approach + knob) is the side the craft actually flies & is scored on. */
+function aimOffset(){ return -aim.b * aim.side; }
+
+/* the analytic encounter — the truth we score on. The geometric `side` of the
+   aim (b above or below the velocity line) IS the pass side: aiming the craft to
+   pass on the +y (above) side of a planet moving +x makes it whip behind
+   (trailing) → a boost. We expose that via aim.side and feed it to flybyOut. */
+function encounter(){
+  return flybyOut(vCraftIn(), planetVel(), aim.b, MU, aim.side);
+}
+function gain(){
+  return heliocentricGain(vCraftIn(), planetVel(), aim.b, MU, aim.side);
+}
+function theft(){
+  const g = gain();
+  return momentumBalance(M_CRAFT, M_PLANET, g.dv);
+}
+
+/* ============================================================================
+   THE INTEGRATED SOI PASSAGE — the curve you SEE bend (dual-truth).
+   We integrate a two-body flyby about the planet (origin) with AeroCore.verletStep,
+   starting far up-range on the inbound asymptote at perpendicular offset b on the
+   side·(+y) side, with relative velocity v∞ along the inbound direction. The path
+   is in the PLANET frame; we draw it directly (planet fixed at origin). The twin
+   proves this recovers the closed-form δ to O(dt²). We precompute the whole path
+   once per aim so the animation just walks the samples.
+   ========================================================================== */
+const FLY = {
+  path: [],           // [{rx,ry,vx,vy}] in planet frame, dense
+  i: 0,               // current animation index
+  playing: false,
+  done: false,
+  // cached analytic results at release, frozen for the receipt:
+  enc: null, g: null, t: null,
+};
+
+/* build the inbound asymptote start: a point far up-range whose perpendicular
+   miss distance from the origin is exactly b, on the side·(+y) side, moving along
+   relIn direction. We rotate a canonical (−x inbound, +y offset) setup into the
+   inbound-direction frame. With aim.vInfDir = +x, the inbound asymptote runs along
+   +x toward the planet from −x; the offset is +b·side along +y. */
+function buildPath(){
+  const v = aim.vInfMag;
+  const dir = aim.vInfDir;                       // unit inbound direction (planet frame)
+  // perpendicular to dir, rotated +90° (CCW): for dir=+x this is +y.
+  const perp = { x: -dir.y, y: dir.x };
+  const off = aimOffset();                        // signed perpendicular offset (matches the analytic side)
+  const r0 = 5.4;                                // start this many units up-range (inside view but far vs b)
+  // start position: −r0·dir + off·perp ; start velocity: v·dir
+  const start = {
+    rx: -r0*dir.x + off*perp.x,
+    ry: -r0*dir.y + off*perp.y,
+    vx: v*dir.x,
+    vy: v*dir.y,
+  };
+  // integrate until the craft is well past the planet (|along| > r0 again) or step cap.
+  const dt = 0.010;
+  const path = [];
+  let s = { ...start };
+  path.push({ ...s });
+  const along0 = s.rx*dir.x + s.ry*dir.y;        // ≈ −r0
+  let guard = 0;
+  while(guard++ < 60000){
+    s = AeroCore.verletStep(s, MU, dt);
+    // sample every few steps to keep the array light but smooth
+    if(guard % 2 === 0) path.push({ ...s });
+    const along = s.rx*dir.x + s.ry*dir.y;
+    if(along > -along0 && guard > 10) break;      // past the planet by ~r0
+  }
+  path.push({ ...s });
+  FLY.path = path;
+  FLY.i = 0;
+  FLY.done = false;
+}
+
+/* ============================================================================
+   RENDER
+   ========================================================================== */
+function draw(){
+  computeSize();
+  ctx.save(); ctx.scale(DPR, DPR); ctx.clearRect(0,0,view.W,view.H);
+  drawField();
+  drawSunGlow();
+  drawSOI();
+  if(!FLY.playing && !FLY.done) drawAimLine();   // dashed approach + b handle (pre-fly)
+  drawPathPreview();                             // faint dashed preview of the exact flyby (pre-fly)
+  drawPath();                                    // the integrated curve (drawn so far)
+  drawPlanet();
+  drawCraft();
+  drawVelocityVectors();
+  ctx.restore();
+}
+
+function drawField(){
+  const g = ctx.createRadialGradient(view.cx, view.cy, 0, view.cx, view.cy, Math.hypot(view.W,view.H)*0.7);
+  g.addColorStop(0,'#160f06'); g.addColorStop(0.55,'#0f0a04'); g.addColorStop(1,'#060402');
+  ctx.fillStyle=g; ctx.fillRect(0,0,view.W,view.H);
+  // a faint heliocentric "downhill toward the Sun" hint: parallel streaks toward lower-left.
+  ctx.save(); ctx.strokeStyle='rgba(230,189,111,0.05)'; ctx.lineWidth=1;
+  const a = Math.atan2(1,-1);  // toward lower-left in screen space
+  for(let k=-8;k<=8;k++){
+    const ox = view.cx + k*64, oy = view.cy + k*64;
+    ctx.beginPath();
+    ctx.moveTo(ox - 1400*Math.cos(a), oy - 1400*Math.sin(a));
+    ctx.lineTo(ox + 1400*Math.cos(a), oy + 1400*Math.sin(a));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* the Sun, off-frame to the lower-left — only its glow reaches the corner, naming
+   the heliocentric frame. */
+function drawSunGlow(){
+  const sx = -view.W*0.12, sy = view.H*1.12;
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, Math.hypot(view.W,view.H)*0.62);
+  g.addColorStop(0,'rgba(255,206,120,0.22)'); g.addColorStop(0.4,'rgba(230,160,80,0.08)'); g.addColorStop(1,'rgba(230,160,80,0)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,view.W,view.H);
+  ctx.restore();
+  ctx.save(); ctx.font='10px var(--font-mono)'; ctx.fillStyle='rgba(230,189,111,0.55)'; ctx.textAlign='left';
+  ctx.fillText('☀ Sun (off-frame) — the heliocentric frame', 14, view.H-16);
+  ctx.restore();
+}
+
+/* the planet's sphere of influence — a faint dashed ring where the encounter lives. */
+function drawSOI(){
+  const [cx,cy]=toScreen(0,0);
+  // a visual SOI radius (not the physical Hill sphere — a teaching boundary).
+  const rSOI = 3.4*view.ppu;
+  ctx.save();
+  ctx.setLineDash([2,8]); ctx.lineWidth=1; ctx.strokeStyle='rgba(127,199,224,0.20)';
+  ctx.beginPath(); ctx.arc(cx,cy,rSOI,0,Math.PI*2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font='9px var(--font-mono)'; ctx.fillStyle='rgba(127,199,224,0.4)'; ctx.textAlign='center';
+  ctx.fillText('sphere of influence', cx, cy - rSOI - 6);
+  ctx.restore();
+}
+
+/* the draggable dashed inbound asymptote + the b-handle (perpendicular offset). */
+function drawAimLine(){
+  const dir = aim.vInfDir, perp = { x:-dir.y, y:dir.x };
+  const off = aimOffset();
+  // the straight inbound asymptote: from far up-range, offset by off·perp.
+  const A = { x: -6*dir.x + off*perp.x, y: -6*dir.y + off*perp.y };
+  const B = { x:  0.2*dir.x + off*perp.x, y: 0.2*dir.y + off*perp.y };
+  const [ax,ay]=toScreen(A.x,A.y), [bx,by]=toScreen(B.x,B.y);
+  ctx.save();
+  ctx.setLineDash([5,6]); ctx.lineWidth=1.4; ctx.strokeStyle='rgba(238,224,180,0.55)';
+  ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+  ctx.setLineDash([]);
+  // the b leg: a perpendicular tick from the planet centre to the asymptote.
+  const [cx,cy]=toScreen(0,0);
+  const footW = { x: off*perp.x, y: off*perp.y };       // foot of perpendicular on the asymptote
+  const [fx,fy]=toScreen(footW.x, footW.y);
+  ctx.strokeStyle='rgba(230,189,111,0.7)'; ctx.lineWidth=1.4; ctx.setLineDash([2,3]);
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(fx,fy); ctx.stroke(); ctx.setLineDash([]);
+  // the b handle (drag target) — a gold knob at the foot.
+  const grabbing = drag.active;
+  ctx.fillStyle = grabbing ? '#f4ce78' : '#e6bd6f';
+  ctx.shadowColor='rgba(244,206,120,0.7)'; ctx.shadowBlur = grabbing?14:7;
+  ctx.beginPath(); ctx.arc(fx,fy, grabbing?7:5.5, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur=0;
+  // label b
+  ctx.font='600 10px var(--font-mono)'; ctx.fillStyle='#f0e2c4'; ctx.textAlign='center';
+  const [mx,my]=[ (cx+fx)/2, (cy+fy)/2 ];
+  const lblSign = -aim.side;     // outboard along the offset direction (off = −b·side)
+  ctx.fillText('b = '+aim.b.toFixed(2), mx + 16*perp.x*lblSign, my - 16*perp.y*lblSign - 10);
+  ctx.restore();
+}
+
+/* the FULL integrated path as a faint dashed PREVIEW before flight — the exact
+   curve this aim will fly. It IS the integrated trajectory (FLY.path), not a
+   separate analytic reconstruction, so the preview and the flown path can never
+   disagree. During/after the flight drawPath() draws it bright on top. */
+function drawPathPreview(){
+  if(FLY.playing || FLY.done) return;        // only a pre-fly preview
+  if(!FLY.path || FLY.path.length<2) return;
+  ctx.save();
+  ctx.setLineDash([2,6]); ctx.lineWidth=1.2; ctx.strokeStyle='rgba(238,224,180,0.32)';
+  ctx.beginPath();
+  for(let i=0;i<FLY.path.length;i++){
+    const [x,y]=toScreen(FLY.path[i].rx, FLY.path[i].ry);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+/* the integrated path drawn so far (the curve you watch bend). */
+function drawPath(){
+  if(!FLY.path.length) return;
+  const upTo = (FLY.playing || FLY.done) ? FLY.i : 0;   // pre-fly: hide the integrated trail
+  if(upTo < 2) return;
+  ctx.save(); ctx.lineCap='round';
+  ctx.beginPath();
+  for(let i=0;i<=upTo && i<FLY.path.length;i++){
+    const [x,y]=toScreen(FLY.path[i].rx, FLY.path[i].ry);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  // gradient stroke: cool inbound → warm outbound (the boost made visible).
+  const grad = ctx.createLinearGradient(0,0,view.W,0);
+  grad.addColorStop(0,'rgba(127,199,224,0.85)'); grad.addColorStop(1,'rgba(244,206,120,0.95)');
+  ctx.strokeStyle=grad; ctx.lineWidth=2.2; ctx.shadowColor='rgba(244,206,120,0.4)'; ctx.shadowBlur=6;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPlanet(){
+  const [cx,cy]=toScreen(0,0);
+  const rs = 0.30*view.ppu;
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  const ag=ctx.createRadialGradient(cx,cy,rs*0.9, cx,cy,rs*2.0);
+  ag.addColorStop(0,'rgba(120,160,200,0.22)'); ag.addColorStop(1,'rgba(120,160,200,0)');
+  ctx.fillStyle=ag; ctx.beginPath(); ctx.arc(cx,cy,rs*2.0,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  const dg=ctx.createRadialGradient(cx-rs*0.35,cy-rs*0.35,rs*0.1, cx,cy,rs);
+  dg.addColorStop(0,'#7c93ab'); dg.addColorStop(0.6,'#42566a'); dg.addColorStop(1,'#202a36');
+  ctx.fillStyle=dg; ctx.beginPath(); ctx.arc(cx,cy,rs,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(205,214,224,0.5)'; ctx.lineWidth=1.1; ctx.stroke();
+  ctx.save(); ctx.font='10px var(--font-mono)'; ctx.fillStyle='rgba(205,214,224,0.7)'; ctx.textAlign='center';
+  ctx.fillText('planet', cx, cy + rs + 14);
+  ctx.restore();
+}
+
+/* the craft — at its current path position (or armed at the inbound start). */
+function drawCraft(){
+  let p;
+  if(FLY.playing || FLY.done){
+    p = FLY.path[Math.min(FLY.i, FLY.path.length-1)];
+  } else {
+    p = FLY.path.length ? FLY.path[0] : { rx:-5.4, ry: aim.b*aim.side, vx: aim.vInfMag, vy:0 };
+  }
+  const [x,y]=toScreen(p.rx, p.ry);
+  const heading = Math.atan2(-p.vy, p.vx);
+  ctx.save(); ctx.translate(x,y); ctx.rotate(heading);
+  ctx.fillStyle='#eef2f7'; ctx.strokeStyle='#9fb0c2'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(9,0); ctx.lineTo(-6,5); ctx.lineTo(-3.5,0); ctx.lineTo(-6,-5); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.globalCompositeOperation='lighter';
+  const hg=ctx.createRadialGradient(0,0,0,0,0,15);
+  hg.addColorStop(0,'rgba(244,206,120,0.5)'); hg.addColorStop(1,'rgba(244,206,120,0)');
+  ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(0,0,15,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+/* the velocity vectors — the WHOLE story in arrows:
+   • the planet's velocity vPlanet (gold, at the planet),
+   • the craft's heliocentric velocity (steel→warm), drawn at the craft,
+   • when done, the planet's recoil dU (a tiny red arrow — "the planet pays"). */
+function drawVelocityVectors(){
+  const SCALE = 0.9*view.ppu;     // velocity → pixels
+  // planet velocity vPlanet (at the planet centre), unless frozen.
+  const pv = planetVel();
+  const [cx,cy]=toScreen(0,0);
+  if(Math.hypot(pv.x,pv.y) > 1e-9){
+    arrow(cx, cy, cx + pv.x*SCALE, cy - pv.y*SCALE, 'rgba(230,189,111,0.92)', 'v_planet', 2.4);
+  } else {
+    ctx.save(); ctx.font='10px var(--font-mono)'; ctx.fillStyle='rgba(224,120,110,0.85)'; ctx.textAlign='center';
+    ctx.fillText('v_planet = 0  (frozen)', cx, cy - 0.30*view.ppu - 30);
+    ctx.restore();
+  }
+
+  // craft heliocentric velocity at its current position.
+  let p, vHelio;
+  if(FLY.playing || FLY.done){
+    p = FLY.path[Math.min(FLY.i, FLY.path.length-1)];
+    // sun-frame velocity = planet-frame velocity (integrated) + vPlanet.
+    vHelio = { x: p.vx + pv.x, y: p.vy + pv.y };
+  } else {
+    p = FLY.path.length ? FLY.path[0] : { rx:-5.4, ry:aim.b*aim.side, vx:aim.vInfMag, vy:0 };
+    vHelio = vCraftIn();
+  }
+  const [px,py]=toScreen(p.rx, p.ry);
+  arrow(px, py, px + vHelio.x*SCALE, py - vHelio.y*SCALE, 'rgba(205,214,224,0.95)', 'v_craft', 2.2);
+
+  // on completion, the planet's recoil dU (tiny but real) — exaggerated for sight.
+  if(FLY.done && FLY.t){
+    const dU = FLY.t.dU;
+    const mag = Math.hypot(dU.x, dU.y);
+    if(mag>0){
+      const EXAG = 9000;        // dU is ~1e-3·craft-Δv/planet-mass-ratio — show it.
+      const ex = cx + dU.x*SCALE*EXAG, ey = cy - dU.y*SCALE*EXAG;
+      arrow(cx, cy, ex, ey, 'rgba(224,120,110,0.95)', 'planet recoil dU (×'+EXAG.toLocaleString()+')', 2.0);
+    }
+  }
+}
+
+function arrow(x0,y0,x1,y1,col,label,w){
+  ctx.save();
+  ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=w;
+  ctx.shadowColor=col; ctx.shadowBlur=4;
+  ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+  const a=Math.atan2(y1-y0,x1-x0), L=Math.hypot(x1-x0,y1-y0);
+  if(L>6){
+    ctx.beginPath(); ctx.moveTo(x1,y1);
+    ctx.lineTo(x1-9*Math.cos(a-0.42), y1-9*Math.sin(a-0.42));
+    ctx.lineTo(x1-9*Math.cos(a+0.42), y1-9*Math.sin(a+0.42));
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.shadowBlur=0;
+  if(label){
+    ctx.font='600 9px var(--font-mono)'; ctx.textAlign='center';
+    ctx.fillText(label, x1 + (x1>x0?14:-14), y1 - 7);
+  }
+  ctx.restore();
+}
+
+/* ============================================================================
+   THE TWIN SPEEDOMETERS — half-dial needle gauges.
+   sun-frame |v| JUMPS across the encounter; planet-frame |v∞| stays PINNED.
+   ========================================================================== */
+const gSun = document.getElementById('gSun'), gSunCtx = gSun.getContext('2d');
+const gPlanet = document.getElementById('gPlanet'), gPlanetCtx = gPlanet.getContext('2d');
+function sizeGauge(cv){
+  const w = cv.clientWidth||130, h = 54, dpr = Math.min(window.devicePixelRatio||1,2);
+  cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+  return { w, h, dpr };
+}
+/* draw a half-circle dial. value in [0,vmax]; needle sweeps 180°→0° (left→right).
+   `markIn` draws a faint ghost tick at the pre-encounter value (so the JUMP is
+   legible: the needle moved off the ghost). */
+function drawGauge(cv, c, value, vmax, color, markIn){
+  const { w, h, dpr } = sizeGauge(cv);
+  c.save(); c.scale(dpr,dpr); c.clearRect(0,0,w,h);
+  const cx = w/2, cy = h-6, R = Math.min(w/2-6, h-10);
+  // arc track
+  c.strokeStyle='rgba(205,214,224,0.18)'; c.lineWidth=4; c.lineCap='round';
+  c.beginPath(); c.arc(cx,cy,R,Math.PI,0); c.stroke();
+  // ticks
+  c.strokeStyle='rgba(205,214,224,0.28)'; c.lineWidth=1;
+  for(let i=0;i<=8;i++){ const a=Math.PI - (i/8)*Math.PI; const r0=R-3,r1=R+1;
+    c.beginPath(); c.moveTo(cx+r0*Math.cos(a), cy-r0*Math.sin(a)); c.lineTo(cx+r1*Math.cos(a), cy-r1*Math.sin(a)); c.stroke(); }
+  const frac = Math.max(0, Math.min(1, (value||0)/vmax));
+  // ghost tick at the inbound value
+  if(markIn!=null){
+    const fg = Math.max(0, Math.min(1, markIn/vmax));
+    const ag = Math.PI - fg*Math.PI;
+    c.strokeStyle='rgba(205,214,224,0.45)'; c.lineWidth=2; c.setLineDash([2,2]);
+    c.beginPath(); c.moveTo(cx,cy); c.lineTo(cx + (R-2)*Math.cos(ag), cy - (R-2)*Math.sin(ag)); c.stroke();
+    c.setLineDash([]);
+  }
+  // needle
+  const a = Math.PI - frac*Math.PI;
+  c.strokeStyle=color; c.lineWidth=2.6; c.shadowColor=color; c.shadowBlur=8; c.lineCap='round';
+  c.beginPath(); c.moveTo(cx,cy); c.lineTo(cx + (R-2)*Math.cos(a), cy - (R-2)*Math.sin(a)); c.stroke();
+  c.shadowBlur=0;
+  c.fillStyle=color; c.beginPath(); c.arc(cx,cy,3,0,Math.PI*2); c.fill();
+  c.restore();
+}
+
+/* the live speedometer values:
+   • before fly: inbound values (ghost = none).
+   • during/after fly: the live sun-frame |v| from the integrated state + the
+     pinned planet-frame |v∞|; the ghost tick marks the inbound sun-frame value. */
+const V_MAX = 2.6;   // gauge full-scale for sun-frame |v|
+const VINF_MAX = 1.8;
+function liveSpeeds(){
+  const pv = planetVel();
+  const enc = encounter();
+  const inHelio = Math.hypot(vCraftIn().x, vCraftIn().y);
+  const vinf = enc.vinf;   // pinned, always
+  if(FLY.playing || FLY.done){
+    const p = FLY.path[Math.min(FLY.i, FLY.path.length-1)];
+    const sunNow = Math.hypot(p.vx+pv.x, p.vy+pv.y);
+    const planetNow = Math.hypot(p.vx, p.vy);   // integrated planet-frame speed (≈ pinned)
+    return { sun: sunNow, planet: planetNow, sunIn: inHelio, vinf };
+  }
+  return { sun: inHelio, planet: vinf, sunIn: null, vinf };
+}
+function paintGauges(){
+  const s = liveSpeeds();
+  drawGauge(gSun, gSunCtx, s.sun, V_MAX, '#e6bd6f', s.sunIn);
+  drawGauge(gPlanet, gPlanetCtx, s.planet, VINF_MAX, '#7fc7e0', null);
+  document.getElementById('gSunVal').textContent = s.sun.toFixed(3);
+  document.getElementById('gPlanetVal').textContent = s.planet.toFixed(3);
+  // tags
+  const sunTag = document.getElementById('gSunTag'), pTag = document.getElementById('gPlanetTag');
+  if(FLY.done){
+    const g = FLY.g;
+    if(aim.stationary){ sunTag.textContent='no change (still mass)'; sunTag.className='gtag'; }
+    else if(g.boost){ sunTag.textContent='▲ boost +'+g.dSpeed.toFixed(3); sunTag.className='gtag boost'; }
+    else { sunTag.textContent='▼ brake '+g.dSpeed.toFixed(3); sunTag.className='gtag brake'; }
+    pTag.textContent='pinned (pure rotation)'; pTag.className='gtag pinned';
+  } else if(FLY.playing){
+    sunTag.textContent='…encountering'; sunTag.className='gtag';
+    pTag.textContent='pinned'; pTag.className='gtag pinned';
+  } else {
+    sunTag.textContent= aim.stationary ? 'planet frozen' : 'inbound'; sunTag.className='gtag';
+    pTag.textContent='|v∞| inbound'; pTag.className='gtag';
+  }
+}
+
+/* ============================================================================
+   READOUTS + BEAT
+   ========================================================================== */
+const readsEl = document.getElementById('reads');
+function fmt(x,d){ if(!isFinite(x)) return '—'; return x.toFixed(d==null?3:d); }
+function updateReads(){
+  const enc = encounter();
+  const g = gain();
+  const dvCeil = 2*Math.hypot(planetVel().x, planetVel().y);
+  const rows = [
+    ['impact b', fmt(aim.b,2), ''],
+    ['deflection δ', fmt(enc.delta,3)+' rad', ''],
+    ['eccentricity e', fmt(enc.e,3), enc.e>1?'gold':'warn'],
+    ['|v∞| (planet frame)', fmt(enc.vinf,3), ''],
+    ['Δ|v| helio', (g.dSpeed>=0?'+':'')+fmt(g.dSpeed,3), g.boost?'green':(Math.abs(g.dSpeed)<1e-9?'':'red')],
+    ['|Δv| ceiling 2|U|', fmt(dvCeil,2), 'gold'],
+  ];
+  readsEl.innerHTML = rows.map(([k,v,c])=>`<div class="rr"><span class="k">${k}</span><span class="v ${c}">${v}</span></div>`).join('');
+}
+
+const beatStepEl=document.getElementById('beatStep'), beatBodyEl=document.getElementById('beatBody');
+function updateBeat(){
+  let step, body;
+  if(aim.stationary){
+    step='control'; body="The planet is <span class='em'>frozen</span> (v_planet = 0). Aim however you like and press Fly — the sun-frame needle <span class='em'>will not move</span>. A still mass gives nothing: there is no orbital speed to steal.";
+  } else if(FLY.done){
+    const g=FLY.g;
+    step='done';
+    body = g.boost
+      ? "<span class='em'>Boost.</span> The trailing pass whipped behind the planet — the sun-frame speed JUMPED up by +"+g.dSpeed.toFixed(3)+", while the planet-frame |v∞| never budged. The planet paid: see its recoil arrow. <span class='em'>Re-aim</span> or flip to a leading pass to brake."
+      : "<span class='em'>Brake.</span> The leading pass robbed the craft of "+Math.abs(g.dSpeed).toFixed(3)+" — the sun-frame speed dropped, and that energy went INTO the planet. The planet-frame |v∞| stayed pinned. <span class='em'>Re-aim</span> or flip to trailing to boost.";
+  } else if(FLY.playing){
+    step='encounter'; body="Watch the curve bend past the planet — the integrated hyperbola. The <span class='em'>planet-frame needle holds</span>; the <span class='em'>sun-frame needle</span> is about to jump.";
+  } else {
+    step='aim'; body="Drag the gold knob to set the <span class='em'>impact parameter b</span>; choose a <span class='em'>trailing</span> (boost) or <span class='em'>leading</span> (brake) pass. Press <span class='em'>Fly</span> to send the craft around the planet and watch the two speedometers.";
+  }
+  beatStepEl.textContent=step; beatBodyEl.innerHTML=body;
+}
+
+/* ============================================================================
+   POINTER — drag the b-handle (perpendicular offset of the aim line).
+   ========================================================================== */
+const drag = { active:false };
+function evtXY(e){ const rect=canvas.getBoundingClientRect(); const t=e.touches?e.touches[0]:e; return [t.clientX-rect.left, t.clientY-rect.top]; }
+function handleScreen(){
+  const dir=aim.vInfDir, perp={x:-dir.y,y:dir.x}; const off=aimOffset();
+  return toScreen(off*perp.x, off*perp.y);
+}
+function nearHandle(px,py){ const [hx,hy]=handleScreen(); return Math.hypot(px-hx,py-hy) < 26; }
+
+function onDown(e){
+  if(FLY.playing) return;
+  const [px,py]=evtXY(e);
+  if(nearHandle(px,py)){
+    drag.active=true; canvas.classList.add('grabbing');
+    e.preventDefault&&e.preventDefault();
+    if(FLY.done) reAim(true);
+    requestStatic();
+  }
+}
+function onMove(e){
+  const [px,py]=evtXY(e);
+  if(drag.active){
+    // project the pointer onto the perpendicular axis to read b (signed by side).
+    const [wx,wy]=toWorld(px,py);
+    const dir=aim.vInfDir, perp={x:-dir.y,y:dir.x};
+    const along = wx*perp.x + wy*perp.y;          // signed perpendicular distance (world)
+    // b is |along|; the SIDE follows the sign the user drags to (so dragging across
+    // the velocity line flips trailing/leading — a felt, physical choice). The knob
+    // lives at aimOffset()·perp = −b·side·perp, so along>0 ⇒ side=−1 (the mapping is
+    // inverted vs `along` to keep the handle exactly under the cursor).
+    const newSide = along>=0 ? -1 : +1;
+    aim.side = newSide; syncSideButtons();
+    aim.b = Math.max(B_MIN, Math.min(B_MAX, Math.abs(along)));
+    buildPath();
+    requestStatic();
+    e.preventDefault&&e.preventDefault();
+    return;
+  }
+  canvas.classList.toggle('canpush', !FLY.playing && nearHandle(px,py));
+}
+function onUp(){
+  if(!drag.active) return;
+  drag.active=false; canvas.classList.remove('grabbing');
+  requestStatic();
+}
+
+/* ============================================================================
+   FLY / RE-AIM
+   ========================================================================== */
+function fly(){
+  if(aim.b<=0) return;
+  buildPath();
+  // freeze the analytic truth at release for the receipt.
+  FLY.enc = encounter();
+  FLY.g = gain();
+  FLY.t = theft();
+  FLY.i = 0; FLY.playing = true; FLY.done = false;
+  hideReceipt();
+  updateBeat(); syncButtons();
+  startLoop();
+}
+function reAim(silent){
+  FLY.playing=false; FLY.done=false; FLY.i=0;
+  buildPath();
+  hideReceipt(); if(!silent) hideFlash();
+  updateBeat(); syncButtons();
+  requestStatic();
+}
+function finishFly(){
+  FLY.playing=false; FLY.done=true; FLY.i=FLY.path.length-1;
+  fillReceipt();
+  const g=FLY.g;
+  if(aim.stationary){
+    showFlash('no boost', 'a still mass gives nothing — Δ|v| = 0 for any aim', '#e0786e');
+  } else if(g.boost){
+    showFlash('BOOST  +'+g.dSpeed.toFixed(3), 'speed stolen from the planet · |v∞| pinned', '#7fc796');
+  } else {
+    showFlash('BRAKE  '+g.dSpeed.toFixed(3), 'speed donated to the planet · |v∞| pinned', '#e0786e');
+  }
+  setTimeout(hideFlash, 2600);
+  updateBeat(); syncButtons();
+}
+
+/* ============================================================================
+   THE THEFT RECEIPT
+   ========================================================================== */
+function fillReceipt(){
+  const g=FLY.g, t=FLY.t;
+  const inSp = g.speedIn, outSp = g.speedOut;
+  document.getElementById('rcIn').textContent = inSp.toFixed(4);
+  document.getElementById('rcOut').textContent = outSp.toFixed(4);
+  const dvEl=document.getElementById('rcDv');
+  dvEl.textContent = (g.dSpeed>=0?'+':'')+g.dSpeed.toFixed(4);
+  dvEl.style.color = aim.stationary ? 'var(--ink-dim)' : (g.boost?'var(--green)':'var(--red)');
+  document.getElementById('rcVinf').textContent = g.vinf.toFixed(4)+'  (in === out)';
+  const theftMag = Math.hypot(t.dU.x, t.dU.y);
+  document.getElementById('rcTheft').textContent = theftMag.toExponential(2)+'  |dU|';
+  // Σ momentum: craft gain + planet loss must be ~0.
+  const sumx = M_CRAFT*g.dv.x + M_PLANET*t.dU.x;
+  const sumy = M_CRAFT*g.dv.y + M_PLANET*t.dU.y;
+  const sumMag = Math.hypot(sumx, sumy);
+  document.getElementById('rcMom').innerHTML = '<span class="ok">✓ '+sumMag.toExponential(1)+' ≈ 0</span>';
+  document.getElementById('rcNote').innerHTML = aim.stationary
+    ? 'The planet was frozen — v_planet = 0, so there was nothing to steal. The sun-frame speed equals the planet-frame speed: the encounter is a pure rotation with no boost. <b>This is the negative control.</b>'
+    : 'The craft gained '+(g.boost?'+':'')+g.dSpeed.toFixed(4)+' in the Sun frame, yet its planet-frame |v∞| was unchanged. The energy came from the planet, which slowed by |dU| — craft momentum gain + planet momentum loss cancel to ~0. <b>No free energy: the planet pays.</b>';
+  document.getElementById('receipt').classList.add('show');
+}
+function hideReceipt(){ document.getElementById('receipt').classList.remove('show'); }
+
+/* ============================================================================
+   FLASH
+   ========================================================================== */
+function showFlash(title, sub, col){
+  const f=document.getElementById('flash');
+  f.style.color=col; f.innerHTML=title+'<span class="sub">'+sub+'</span>';
+  f.classList.add('show');
+}
+function hideFlash(){ document.getElementById('flash').classList.remove('show'); }
+
+/* ============================================================================
+   LOOP — walk the precomputed integrated path; analytic gates the score.
+   ========================================================================== */
+let rafId=null;
+const STEP_PER_FRAME = 5;      // path samples advanced per frame (tuned ~smooth at 60fps)
+function frame(){
+  if(FLY.playing){
+    FLY.i += STEP_PER_FRAME;
+    if(FLY.i >= FLY.path.length-1){ FLY.i = FLY.path.length-1; finishFly(); }
+  }
+  draw(); paintGauges(); updateReads();
+  if(FLY.playing){ rafId=requestAnimationFrame(frame); }
+  else rafId=null;
+}
+function startLoop(){ if(rafId==null){ rafId=requestAnimationFrame(frame); } }
+function requestStatic(){ if(rafId==null){ draw(); paintGauges(); updateReads(); } }
+
+/* ============================================================================
+   UI WIRING
+   ========================================================================== */
+function syncButtons(){
+  document.getElementById('flyBtn').disabled = FLY.playing;
+  document.getElementById('retryBtn').disabled = (!FLY.done && !FLY.playing && FLY.i===0) ? false : false;
+}
+function syncSideButtons(){
+  document.getElementById('sideTrail').classList.toggle('active', aim.side>0);
+  document.getElementById('sideLead').classList.toggle('active', aim.side<0);
+}
+function setStationary(on){
+  aim.stationary=on;
+  document.getElementById('stationaryBtn').classList.toggle('active', on);
+  document.getElementById('stationaryBtn').textContent = on ? '▶ Un-freeze planet' : '⏸ Freeze planet (control)';
+  reAim(true);
+}
+function wireUI(){
+  document.getElementById('flyBtn').addEventListener('click', ()=>{ if(!FLY.playing) fly(); });
+  document.getElementById('retryBtn').addEventListener('click', ()=> reAim(false));
+  document.getElementById('sideTrail').addEventListener('click', ()=>{ aim.side=+1; syncSideButtons(); reAim(true); });
+  document.getElementById('sideLead').addEventListener('click', ()=>{ aim.side=-1; syncSideButtons(); reAim(true); });
+  document.getElementById('stationaryBtn').addEventListener('click', ()=> setStationary(!aim.stationary));
+  document.getElementById('collapseBtn').addEventListener('click',()=> document.getElementById('panel').classList.add('collapsed'));
+  document.getElementById('reopen').addEventListener('click',()=> document.getElementById('panel').classList.remove('collapsed'));
+  document.getElementById('selftest').addEventListener('click',()=> document.getElementById('selftest').classList.toggle('open'));
+  canvas.addEventListener('mousedown',onDown);
+  canvas.addEventListener('mousemove',onMove);
+  window.addEventListener('mouseup',onUp);
+  canvas.addEventListener('touchstart',onDown,{passive:false});
+  canvas.addEventListener('touchmove',onMove,{passive:false});
+  window.addEventListener('touchend',onUp);
+  window.addEventListener('keydown',e=>{
+    if(e.target.tagName==='INPUT') return;
+    if(e.code==='Space'){ e.preventDefault(); if(!FLY.playing) fly(); }
+    else if(e.code==='KeyR'){ reAim(false); }
+  });
+  let rt=null; window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(()=>requestStatic(),120); });
+}
+
+/* ============================================================================
+   IN-PAGE SELF-TEST PILL — runs claims 1–5 live (the same proofs as the twin).
+   ========================================================================== */
+function runSelfTest(){
+  const legs=[]; let allOK=true;
+  function mag(v){ return Math.hypot(v.x,v.y); }
+  function sub(a,b){ return {x:a.x-b.x,y:a.y-b.y}; }
+  function dot(a,b){ return a.x*b.x+a.y*b.y; }
+  function rng32(seed){ let a=seed>>>0; return function(){ a|=0; a=(a+0x6D2B79F5)|0; let t=Math.imul(a^(a>>>15),1|a); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
+
+  // (1) planet-frame |relIn| === |relOut| over a sweep (a pure rotation).
+  (function(){
+    const r=rng32(0x51a7); let worst=0;
+    for(let i=0;i<1500;i++){
+      const vc={x:(r()-.5)*2.4,y:(r()-.5)*2.4}, vp={x:(r()-.5)*1.6,y:(r()-.5)*1.6};
+      const b=0.02+r()*2, side=r()<.5?-1:1;
+      const f=flybyOut(vc,vp,b,MU,side);
+      worst=Math.max(worst,Math.abs(mag(f.relIn)-mag(f.relOut)));
+    }
+    const ok=worst<1e-14; allOK=allOK&&ok;
+    legs.push([ok,'planet-frame |relIn| === |relOut| (pure rotation)','|Δ|='+worst.toExponential(1)+' < 1e-14']);
+  })();
+
+  // (2) exact energy identity + the 2|U| ceiling.
+  (function(){
+    const r=rng32(0xbee5); let worst=0, maxDv=0;
+    const vpC={x:1,y:0}, ceil=2*mag(vpC);
+    for(let i=0;i<1500;i++){
+      const vc={x:(r()-.5)*2.4,y:(r()-.5)*2.4}, vp={x:(r()-.5)*1.6,y:(r()-.5)*1.6};
+      const b=0.02+r()*2, side=r()<.5?-1:1;
+      const f=flybyOut(vc,vp,b,MU,side);
+      const lhs=dot(f.out,f.out)-dot(vc,vc), rhs=2*dot(vp,sub(f.relOut,f.relIn));
+      worst=Math.max(worst,Math.abs(lhs-rhs));
+    }
+    for(let i=0;i<2000;i++){ const b=0.0005+i*0.0016; const th=(i/2000)*Math.PI*2;
+      const relIn={x:Math.cos(th),y:Math.sin(th)}; const vc={x:vpC.x+relIn.x,y:vpC.y+relIn.y};
+      maxDv=Math.max(maxDv, heliocentricGain(vc,vpC,b,MU,1).dvMag); }
+    const ok=worst<1e-14 && maxDv<=ceil+1e-9; allOK=allOK&&ok;
+    legs.push([ok,'|out|²−|vIn|² === 2·vP·(relOut−relIn); |Δv| ≤ 2|U|','|Δ|='+worst.toExponential(1)+'; max|Δv|='+maxDv.toFixed(3)+' ≤ '+ceil.toFixed(2)]);
+  })();
+
+  // (3) NEGATIVE CONTROL: vPlanet=0 ⇒ |out| === |vIn| for every aim.
+  (function(){
+    const r=rng32(0x0dead); let worst=0; const vp0={x:0,y:0};
+    for(let i=0;i<1500;i++){
+      const vc={x:(r()-.5)*2.4,y:(r()-.5)*2.4}, b=0.02+r()*2, side=r()<.5?-1:1;
+      const f=flybyOut(vc,vp0,b,MU,side);
+      worst=Math.max(worst,Math.abs(mag(f.out)-mag(vc)));
+    }
+    const g=heliocentricGain({x:1.3,y:0.4},vp0,0.5,MU,1);
+    const ok=worst<1e-14 && Math.abs(g.dSpeed)<1e-14; allOK=allOK&&ok;
+    legs.push([ok,'NEG CONTROL: vPlanet=0 ⇒ |out| === |vIn|','|Δ|='+worst.toExponential(1)+'; dSpeed='+g.dSpeed.toExponential(1)]);
+  })();
+
+  // (4) momentum theft: mCraft·Δv + mPlanet·dU === 0 (vector).
+  (function(){
+    const r=rng32(0x33aa); let worst=0;
+    for(let i=0;i<1500;i++){
+      const vc={x:(r()-.5)*2.4,y:(r()-.5)*2.4}, vp={x:(r()-.5)*1.6,y:(r()-.5)*1.6};
+      const b=0.02+r()*2, side=r()<.5?-1:1, mC=0.5+r()*3, mP=1e3+r()*9e3;
+      const g=heliocentricGain(vc,vp,b,MU,side), bal=momentumBalance(mC,mP,g.dv);
+      worst=Math.max(worst, Math.abs(mC*g.dv.x+mP*bal.dU.x), Math.abs(mC*g.dv.y+mP*bal.dU.y));
+    }
+    const g=heliocentricGain({x:1.4,y:0.2},{x:0.1,y:0.9},0.4,MU,1), bal=momentumBalance(2,5000,g.dv);
+    const ok=worst<1e-12 && dot(bal.dU,g.dv)<0; allOK=allOK&&ok;
+    legs.push([ok,'momentum theft: mC·Δv + mP·dU === 0','|Δ|='+worst.toExponential(1)+'; dU·Δv < 0 (recoil)']);
+  })();
+
+  // (5) sin(δ/2) === 1/e & e>1; an integrated SOI flyby recovers the closed-form δ.
+  //     The closed-form half is exact & instant. For the dual-truth half we integrate
+  //     ONE representative SOI passage with the SAME AeroCore.verletStep the room
+  //     animates, at a TRACTABLE up-range distance (r0=160, a few ms) — it recovers δ
+  //     to ~1e-4. The full O(dt²) convergence RATIO (which needs r0~2e5 / ~22M steps
+  //     to push the finite-asymptote floor below the truncation error — far too heavy
+  //     for the main thread) is asserted by the Node twin, claim 5(b), 13/13. This
+  //     pill runs the affordable, honest subset — matching the Transfer Bridge pill.
+  (function(){
+    const r=rng32(0xc105ed); let worstSin=0, everyHyper=true;
+    for(let i=0;i<1500;i++){
+      const b=0.02+r()*2, vinf=0.1+r()*2;
+      const d=deflection(b,vinf,MU), e=eccentricityOf(b,vinf,MU);
+      worstSin=Math.max(worstSin,Math.abs(Math.sin(d/2)-1/e));
+      if(!(e>1)) everyHyper=false;
+    }
+    // integrated SOI flyby (a single representative aim) recovers the closed-form δ.
+    const bI=0.45, vI=0.9, closed=deflection(bI,vI,MU);
+    function integDelta(dt, r0){
+      let s={rx:-r0,ry:bI,vx:vI,vy:0}; const vIn={x:vI,y:0};
+      let guard=0; const maxSteps=Math.ceil((2*r0/vI)/dt)+50000;
+      while(s.rx<r0 && guard++<maxSteps){ s=AeroCore.verletStep(s,MU,dt); }
+      const ang=Math.atan2(vIn.x*s.vy-vIn.y*s.vx, vIn.x*s.vx+vIn.y*s.vy);
+      return Math.abs(ang);
+    }
+    const integ = integDelta(0.01, 160);
+    const recovers = Math.abs(integ - closed) < 5e-4;
+    const ok = worstSin<1e-14 && everyHyper && recovers; allOK=allOK&&ok;
+    legs.push([ok,'sin(δ/2)===1/e, e>1; integ SOI recovers closed-form δ','|Δsin|='+worstSin.toExponential(1)+'; δ='+closed.toFixed(4)+', integ='+integ.toFixed(4)+' (O(dt²) ratio in twin)']);
+  })();
+
+  const pill=document.getElementById('stPill'), legsEl=document.getElementById('stLegs');
+  pill.innerHTML = allOK ? '<span class="ok">✓ self-test passed (5/5)</span>' : '<span class="bad">✗ self-test FAILED</span>';
+  legsEl.innerHTML = legs.map(([ok,name,info])=>`<div><span class="${ok?'ok':'bad'}">${ok?'✓':'✗'}</span> ${name}<br><span style="opacity:.7">&nbsp;&nbsp;${info}</span></div>`).join('');
+  console.log('Slingshot self-test:', allOK?'PASS':'FAIL', legs.map(l=>l[1]+' '+(l[0]?'✓':'✗')).join(' | '));
+  return allOK;
+}
+
+/* ============================================================================
+   BOOT
+   ========================================================================== */
+function boot(){
+  computeSize();
+  syncSideButtons();
+  buildPath();
+  wireUI();
+  runSelfTest();
+  updateBeat(); syncButtons();
+  draw(); paintGauges(); updateReads();
+  console.log('Slingshot ready — μ='+MU+', v_planet='+V_PLANET.x+'. Drag b, pick a side, press Fly.');
+}
+// Module scripts are deferred, so DOMContentLoaded may have ALREADY fired by the
+// time this evaluates — in that case the listener would never run. Boot right away
+// if the document is parsed; otherwise wait for the event.
+if(document.readyState==='loading') window.addEventListener('DOMContentLoaded', boot);
+else boot();
+
+/* ws: breadcrumb. This is a SIBLING sub-page in the Aerodrome wing (the wing
+   landing ../index.html drops ws:seen:aerodrome). This room drops its own
+   ws:seen:slingshot for any future Survey/secret use — matching the transfer /
+   carnot / lattice sibling convention (a direct localStorage write). */
+try{ var _k='ws:seen:slingshot'; if(window.localStorage && !localStorage.getItem(_k)) localStorage.setItem(_k, String(Date.now())); }catch(e){}
+</script>
+</body>
+</html>
