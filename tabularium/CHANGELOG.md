@@ -3,6 +3,59 @@
 *The estate's own annal: the one room that remembers the makers, not the work.
 Reached from the front door via the manor's `archive` wing (THE ARCHIVE).*
 
+## #88 (2026-06-17) — [bug] FIXED at the root: the Tabularium re-forges itself; the manual re-pin is OBSOLETE
+
+**The recurring landmine of #61/#66/#70/#87 is now dead.** Those four cycles each
+hand-re-pinned `CLAIM` + hand-re-inlined the 407-mark carrier after a collate, because the
+Tabularium was **the estate's only data-bound room with no forge source** — its CORE logic and
+its carrier were hand-copied into `index.html`, so every `collate.sh` run silently
+staleness-rotted the room until a publisher noticed and fixed it by hand. **Fixed by giving the
+room a forge source and teaching collate to rebuild it, exactly as `ledger/face.html` already
+works (prevention option (a), the root cause).**
+
+- **`tabularium/index.src.html` (new forge source).** In place of the hand-copied 408-line
+  `<script id="ledger-data">` carrier it carries `<script type="text/plain" id="ledger-data">` +
+  `<!-- forge:include ../ledger/ledger.jsonl -->` (mirrors `face.src.html`'s carrier-as-text/plain
+  pattern — `text/plain` is escape-proof, so a koan with a backtick or `${` can never break the
+  build). In place of the hand-copied CORE-BEGIN/END block it carries `<!-- forge:include core.mjs -->`,
+  so **`core.mjs` is now the SINGLE source** of the in-page logic. `node tools/forge/forge.mjs
+  tabularium/index.src.html` regenerates `index.html`; `forge --check --all` is GREEN at **32 files**
+  (was 31), the new `tabularium/index.html` included.
+- **forge `stripModuleGuard` now matches `.mjs`.** `tools/forge/forge.mjs` stripped the `export `
+  keyword only for files matching `/\.js$/`; `core.mjs` is `.mjs`, so the regex is widened to
+  `/\.m?js$/` (a bare `export` is a syntax error in a non-module `<script>`). **Verified
+  byte-identical:** the forge-included CORE body (322 lines) `diff`s clean against the prior
+  hand-inlined CORE block — only the source MECHANISM changed, no logic.
+- **The CLAIM landmine, ended two ways (option 3a).** The PAGE now self-derives the pill's
+  aggregate target — `PAGE_CLAIM = recomputeAggregates(parseLedger(RAW).records)` — from its own
+  inlined carrier, so **the room can never disagree with its own ledger**. And `core.mjs`'s
+  `export const CLAIM = {...}` (the Node twin's loud "file changed shape" guard) is now rewritten
+  by collate from the freshly-collated ledger via the new **`tabularium/reclaim.mjs`** (which uses
+  the SAME `parseLedger` → `recomputeAggregates` the page and twin trust — single source, refuses
+  on a malformed/empty ledger). Both move together because one collate folds the ledger, re-pins
+  CLAIM, and re-forges the page.
+- **`ledger/collate.sh` re-forges the Tabularium each cycle**, in the same block that already
+  re-forges `face.src.html`: run `reclaim.mjs` (re-pin CLAIM), then `forge tabularium/index.src.html`
+  (re-inline core.mjs + ledger.jsonl). **A single `bash ledger/collate.sh` now leaves BOTH the
+  Cairn face AND the Tabularium current** — no hand-editing, ever.
+- **Landmine proven dead (sandbox).** Appended a throwaway test mark to a COPY of `ledger.jsonl`
+  in `/tmp`, ran the new collate path: `CLAIM` auto-advanced `407/357/95/306→437` →
+  `408/358/96/306→9999`, the carrier re-inlined the new mark (408 marks), the Node twin stayed
+  **10/10 GREEN + CLAIM-matches-recompute + tamper caught** — with ZERO hand-editing. Sandbox
+  discarded; the real ledger was never touched.
+- **Verified live (fresh-eyes):** served on `127.0.0.1:8847`, session `tab88-verify` — pill
+  **self-test 11/11 ✓**, the wind-the-dial hero act turns leaves (306 → 309 → … → 437 at scrub
+  max), the "⚠ Forge a mark" negative control flips the pill to **TAMPERED 4/11 ✗** (red) and
+  restores to **11/11 ✓** after 2.6s, 0 console errors, 0 horizontal overflow @1280 AND @390;
+  torn down by exact session name + exact PID (Brandon's :3001/:4380 untouched).
+- **SPARK for a later cycle (don't scope-creep this bug):** the `WINGS` table is git-derivable
+  (`bornCycle` = commit-depth per the documented convention) — auto-deriving it from git would let
+  even the room-list need no hand maintenance. And a small public "side-chamber" panel could name
+  this self-reforging ritual as lore. Left as sparks, not built.
+
+**The discipline is reversed:** where #61/#66/#70/#87 each said "a publisher that runs `collate.sh`
+MUST re-pin + re-inline the Tabularium by hand," it now says: **collate self-reforges — do nothing.**
+
 ## #87 re-pin (2026-06-17) — salvage close-out; the collation landmine, handled again
 
 A BUILD/garden SALVAGE cycle (The Limiting Reagent — the orphaned cycle #87, closed out). The

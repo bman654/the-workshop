@@ -30,8 +30,9 @@ const SKIP_DIRS = new Set(['.git', 'node_modules']);
 /* A forge-level error we present cleanly (no raw stack at the user). */
 class ForgeError extends Error {}
 
-/* ── Strip the dual-use module guard + leading `export ` from an included .js so
-   the inline is clean in a browser (the guard is inert there, but ugly). We drop
+/* ── Strip the dual-use module guard + leading `export ` from an included .js or
+   .mjs so the inline is clean in a browser (the guard is inert there, but ugly,
+   and a bare `export` is a syntax error in a non-module <script>). We drop
    any line that is a `if (typeof module !== 'undefined' && module.exports) {...}`
    guard — both the single-line form and a multi-line `{ ... }` block — and strip a
    leading `export ` keyword on declarations. */
@@ -106,7 +107,7 @@ function buildOne(srcFile) {
         '  (resolved to ' + incPath + ', relative to ' + srcFile + ')');
     }
     let content = readText(incPath);
-    if (/\.js$/.test(incPath)) content = stripModuleGuard(content);
+    if (/\.m?js$/.test(incPath)) content = stripModuleGuard(content);
     // Inline verbatim (trim a single trailing newline so the block sits flush;
     // the directive line itself is replaced 1:1).
     outLines.push(content.replace(/\n$/, ''));

@@ -86,3 +86,38 @@ if [ -f "$forge" ] && [ -f "$face_src" ]; then
 else
   echo "WARNING: forge or face.src.html absent — ledger/face.html NOT re-forged (forge=$forge)" >&2
 fi
+
+# ── re-pin + re-forge the TABULARIUM: it is the estate's OTHER data-bound room,
+# binding the SAME ledger.jsonl. Before this (bug #88) its core logic + 407-mark
+# carrier were hand-copied, so every collate silently staleness-rotted the room
+# until a publisher re-pinned CLAIM + re-inlined the carrier by hand (#61/#66/#70/#87).
+# Now it has a forge source (tabularium/index.src.html) that includes core.mjs +
+# ../ledger/ledger.jsonl, exactly like the Cairn face. Two steps, in order:
+#   1. RE-PIN the shape-guard: rewrite core.mjs's `const CLAIM = {...}` from the
+#      freshly-collated ledger (via tabularium/reclaim.mjs, which uses the SAME
+#      parse+recompute the page and Node twin trust). The page pins its pill to
+#      recompute(its own carrier), so it is always self-consistent; CLAIM stays
+#      the Node twin's loud "file changed shape" guard, kept current here.
+#   2. RE-FORGE the page so it re-inlines the updated core.mjs + ledger.jsonl.
+# Order matters: re-pin core.mjs BEFORE forging, so the forged page carries the
+# updated CLAIM line too.
+reclaim="$dir/../tabularium/reclaim.mjs"
+tab_src="$dir/../tabularium/index.src.html"
+if [ -f "$reclaim" ]; then
+  if node "$reclaim"; then
+    :
+  else
+    echo "WARNING: reclaim FAILED — tabularium/core.mjs CLAIM may be STALE (run: node tabularium/reclaim.mjs)" >&2
+  fi
+else
+  echo "WARNING: tabularium/reclaim.mjs absent — CLAIM NOT re-pinned" >&2
+fi
+if [ -f "$forge" ] && [ -f "$tab_src" ]; then
+  if node "$forge" "$tab_src" >/dev/null 2>&1; then
+    echo "tabularium re-forged: tabularium/index.html re-inlines the updated core.mjs + ledger.jsonl"
+  else
+    echo "WARNING: forge run FAILED — tabularium/index.html may be STALE (run: node tools/forge/forge.mjs tabularium/index.src.html)" >&2
+  fi
+else
+  echo "WARNING: forge or tabularium/index.src.html absent — tabularium/index.html NOT re-forged" >&2
+fi
