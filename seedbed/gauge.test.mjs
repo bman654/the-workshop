@@ -160,6 +160,21 @@ console.log("Patron's Writ — top priority + cadence-neutral:")
   eq(applyRecord(base, { mode: 'writ', track: 'writs' }, { garden: ['A', 'B'], grounds: ['W'] }).cycle, 50, "lowercase 'writ' + plural 'writs' normalize")
   // and classify knows it
   eq(classify('writ'), 'writ', 'classify(writ) → writ')
+
+  // back-to-back writs: every clock still holds across consecutive writs
+  let chained = applyRecord(base, { mode: 'WRIT', track: 'writ' }, { garden: ['A', 'B'], grounds: ['W'] })
+  chained = applyRecord(chained, { mode: 'WRIT', track: 'writ' }, { garden: ['A', 'B'], grounds: ['W'] })
+  ok(chained.cycle === 50 && chained.lastGardenPlan === 44 && chained.lastBigSwing === 41 && chained.bigSwingsBuilt === 3, 'back-to-back writs hold every clock')
+
+  // a writ with NO currentBed (a simple errand whose steward never touched the bed) is a clean no-op
+  const noBed = applyRecord(base, { mode: 'WRIT', track: 'writ' })
+  ok(noBed.cycle === 50 && JSON.stringify(noBed.fence) === JSON.stringify(base.fence), 'writ with no currentBed: clean no-op, fence preserved')
+
+  // a writ holds the GROUNDS decay posture too — even with a grounds seed AT the strike threshold
+  const gbase = st({ cycle: 50, bigSwingsBuilt: 8, lastBigSwing: 41, lastGardenPlan: 44, tally: {}, fence: { garden: [], grounds: ['old wing'] } })
+  const gbed = parseBed(bedDoc({ writs: [W('do a thing')], grounds: [GR('old wing', 20, 8 - TH.groundsDecayStrikes)] }))
+  eq(decide(gbase, gbed).decayed.length, 0, 'a writ directive lists no decayed grounds seed even at the strike threshold')
+  eq(applyRecord(gbase, { mode: 'WRIT', track: 'writ' }, { garden: [], grounds: ['old wing'] }).bigSwingsBuilt, 8, 'a writ holds bigSwingsBuilt (the grounds decay clock is frozen)')
 }
 
 console.log('record — state transitions:')

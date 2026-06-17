@@ -1,6 +1,6 @@
 export const meta = {
   name: 'fun-forever',
-  description: 'The Workshop\'s creative-cycle loop. Each cycle a director RUNS the deterministic gauge (node seedbed/gauge.mjs) and obeys its mode × track; explorers diverge; a judge selects/synthesizes; a builder ships+self-verifies; a publisher reviews fresh-eyes, sows/prunes, runs `gauge.mjs record`, commits + pushes. Two tracks (gardens: gardener/planter · grounds: groundskeeper/grounds-worker) + bug-fixer. A Patron\'s WRIT outranks all: the director triages it — operational clauses the cycle carries out (steward implements), creative clauses are released as ordinary unmarked seeds; a writ cycle is cadence-neutral (decays nothing). Each cycle\'s summary appends to /tmp/funlog.txt until cancelled.',
+  description: 'The Workshop\'s creative-cycle loop. Each cycle a director RUNS the deterministic gauge (node seedbed/gauge.mjs) and obeys its mode × track; explorers diverge; a judge selects/synthesizes; a builder ships+self-verifies; a publisher reviews fresh-eyes, sows/prunes, runs `gauge.mjs record`, commits + pushes. Two tracks (gardens: gardener/planter · grounds: groundskeeper/grounds-worker) + bug-fixer. A Patron\'s WRIT outranks all: the director triages it — clauses that try to control the DEPLOYED estate are released as ordinary unmarked seeds (the collective\'s call), while operational work and off-estate creative content (a vault note, a repo asset) are mandated (the steward implements); a writ cycle is cadence-neutral (decays nothing). Each cycle\'s summary appends to /tmp/funlog.txt until cancelled.',
   phases: [
     { title: 'Direct', detail: 'one director runs `node seedbed/gauge.mjs`, salvages any orphaned work, and plans the cycle the gauge names' },
     { title: 'Explore', detail: 'K parallel explorers diverge — rival approaches / FORM concepts / seed-scouting per the track' },
@@ -54,6 +54,9 @@ const GROUND = [
   '  cycle) performs it — EXACTLY ONCE. No other seat (director, explorer, judge, publisher, writer) ever',
   '  performs an outside action, even on a writ cycle; the publisher commits the repo and nothing more.',
   '  (Reading anything — the vault, the web, Slack history — is always fine; only side-effects are gated.)',
+  '  THE ONE ALWAYS-ALLOWED outside action: a Slack NOTIFY addressed SOLELY to the Patron (a DM to',
+  '  brandon@experoinc.com) as the ambiguous-writ escalation channel — never to any other person, channel,',
+  '  or workspace, and carrying no side-effect beyond that single message. Only the steward sends it.',
   '- CLEANUP GUARDRAIL: kill ONLY the specific http server / browser session YOU started — by its exact PID,',
   '  port, or unique agent-browser session name. NEVER a broad `pkill -f http.server` / `pkill node` / `pkill -f',
   '  chrome`: this laptop also runs Brandon\'s own work servers (e.g. :3001, :4380) and a broad kill would take',
@@ -147,7 +150,8 @@ const STEWARD_HANDOFF_SCHEMA = {
   properties: {
     did: { type: 'string', description: 'what you carried out for the Patron — repo files written (paths + line counts), a vault note (its path), analysis produced, the message sent. Be concrete.' },
     outsideActionPerformed: { type: 'string', description: 'the EXACT outside action you performed (e.g. "sent a Slack DM to brandon@experoinc.com via the Expero slack skill") or "none" if the writ authorized none. The publisher must NOT repeat this.' },
-    escalation: { type: 'string', description: 'AMBIGUOUS writs only: "delivered" if the Slack escalation reached the Patron, or "FAILED: <why>" so the publisher LEAVES the writ in the fence (don\'t lose it). "n/a" for non-ambiguous writs.' },
+    escalation: { enum: ['delivered', 'failed', 'n/a'], description: 'AMBIGUOUS writs: "delivered" if the Slack escalation reached the Patron, "failed" if it could not be sent (the publisher then LEAVES the writ in the fence so it is not lost). "n/a" for non-ambiguous writs.' },
+    escalationDetail: { type: 'string', description: 'free-text: the why behind a "failed" escalation, or a note on what was sent.' },
     surfacesToReview: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['label', 'path'], properties: { label: { type: 'string' }, path: { type: 'string', description: 'a served REPO path the publisher should open' } } }, description: 'any REPO pages/files for the publisher to fresh-eyes review (empty if the work was a vault write / message / analysis with no repo surface).' },
     verification: { type: 'string', description: 'how you verified it (re-read the file written, the message API ok-response, a self-test for any code).' },
     openConcerns: { type: 'string' },
@@ -181,22 +185,28 @@ function directorPrompt(i) {
     '     sow UNMARKED into the normal beds, where the collective may take it up or let it decay like any other.',
     '     (This is the whole point: the Patron\'s wishes for the ART enter the queue as equals; they never command it.)',
     '   • IF NO → MANDATE it: the cycle DOES the work. This covers (a) operational/process/tooling and (b) CREATIVE',
-    '     content that lands somewhere OTHER than the deployed estate — "write me an article for my vault", "design',
-    '     an image and check it in as a repo asset", an analysis, a report. (Such content is for Brandon, not for the',
-    '     estate\'s visitors, so it isn\'t the collective\'s call.) Set writWork mandate|mixed; write basicDesign +',
+    '     content that lands somewhere OTHER than the deployed estate — "design an image and check it in as a repo',
+    '     asset" (no authorization needed — it is just a file), "write me an article for my vault" (NOTE: the vault',
+    '     WRITE is an outside action — only mandate the write itself if the writ AUTHORIZES it; otherwise mandate',
+    '     producing the article as an in-repo file, or escalate ambiguous), an analysis, a report. (Such content is',
+    '     for Brandon, not the estate\'s visitors, so it isn\'t the collective\'s call.) Set writWork mandate|mixed; write basicDesign +',
     '     definitionOfDone; choose exploreMode (none for a simple errand — most writs; or compete/facets + K + briefs',
-    '     to FAN OUT a rich one, e.g. rival drafts of a vault article). The STEWARD carries it out. IMPORTANT for any',
-    '     mandated CREATIVE content: the default is "IN CHARACTER — honor the estate\'s styles, themes, and voice",',
-    '     UNLESS the writ states otherwise. Pass that into the steward\'s design. (Note: a mandated repo asset is just',
-    '     a file — the steward must NOT wire it into the deployed estate\'s pages/nav; that wiring would be a RELEASE.)',
+    '     to FAN OUT a rich one, e.g. rival drafts of a vault article). The STEWARD carries it out. (A mandated repo',
+    '     asset is just a file — the steward must NOT wire it into the deployed estate\'s pages/nav; that wiring would be a RELEASE.)',
     '   • CAN\'T DECIDE → do NOT guess. Set writWork ambiguous + exploreMode none. The steward will CONSUME the writ',
     '     doing no work and send the Patron a Slack notify explaining the problem, INCLUDING the writ\'s full text so',
     '     Brandon can correct + re-add it. Name the ambiguity in rationale.',
     '   • OUTSIDE ACTION — a mandated clause needing an effect beyond the repo (Slack, email, a vault write) is allowed',
     '     ONLY if the writ AUTHORIZES it. Copy that authorization VERBATIM into writOutsideAction (the STEWARD alone',
-    '     performs it, once). If a clause needs an outside effect the writ did NOT authorize, treat it as ambiguous',
-    '     (escalate) rather than acting unauthorized. (A Slack NOTIFY back to the Patron is always allowed — it is the escalation channel.)',
-    '   A writ cycle is CADENCE-NEUTRAL: prune NOTHING, decay NOTHING (the gauge hands you an empty decay list).',
+    '     performs it, once). An authorized action is ALWAYS a mandate clause, NEVER a release. If a clause needs an',
+    '     outside effect the writ did NOT authorize, treat it as ambiguous (escalate), never act unauthorized. (A Slack',
+    '     NOTIFY back to the Patron is always allowed — it is the escalation channel.) A writ that has BOTH a',
+    '     creative-control clause AND a mandate/action clause is writWork "mixed": release the one, mandate the other.',
+    '   • IN-CHARACTER DEFAULT — for ANY mandated CREATIVE content, the default is to honor the estate\'s styles,',
+    '     themes, and voice UNLESS the writ says otherwise. Fold this into your basicDesign AND every explorer brief',
+    '     so the work is in character from the first draft, not just at the steward.',
+    '   • Triage + serve EXACTLY ONE writ per cycle; a writ cycle is cadence-neutral so the gauge simply re-fires WRIT',
+    '     next cycle for the next one. A writ cycle prunes NOTHING and decays NOTHING (the gauge hands you an empty decay list).',
     '3) If BUILD/garden — be the PLANTER: pick a garden seed that calls to you (or dream a small one — the bed is a',
     '   floor, not a ceiling): a bench, a `cross`, a `curation`, a new bench that GROWS a built wing, or a `rework`',
     '   (re-souling a tired exhibit — first-class, EQUAL to a new one, and especially worth answering while the',
@@ -253,6 +263,7 @@ function explorerPrompt(d, brief, feedback, cyc, round, protoPath) {
     )
   } else {
     lines.push((d.mode === 'WRIT' ? "The Patron's operational task: " : 'The piece: ') + d.title + ' — ' + (d.where || ''), 'Skeleton (from the director): ' + d.basicDesign, '')
+    if (d.mode === 'WRIT') lines.push('IN CHARACTER: this is a Patron\'s writ — produce any CREATIVE content (prose, an image, a name) in the estate\'s own styles, themes, and voice by default (skim DESIGNING.md / a kindred room), UNLESS the writ explicitly says otherwise.', '')
     if (d.exploreMode === 'facets') {
       lines.push(
         'Develop YOUR ONE FACET: ' + brief.brief,
@@ -365,9 +376,12 @@ function stewardPrompt(d, chosen, cyc) {
       '',
       'IN CHARACTER (the default for any CREATIVE content — an article, an image, a name, prose): honor the estate\'s',
       'styles, themes, and voice (skim DESIGNING.md / a kindred room first), UNLESS the writ explicitly says otherwise.',
-      'WHERE IT LANDS: mandated content goes OFF the deployed estate — a note WRITTEN to Brandon\'s vault, a repo ASSET',
-      'file, an analysis, or a message. A mandated repo asset is JUST A FILE: do NOT wire it into the estate\'s pages or',
-      'navigation (that would be creative control → it should have been released, not mandated). Touch no deployed page.',
+      'WHERE IT LANDS: mandated content goes OFF the deployed estate — by default a repo ASSET file or an in-repo',
+      'analysis/doc (no authorization needed — a file is not a side-effect). A vault write or a message is an OUTSIDE',
+      'action: do it ONLY if this writ AUTHORIZED it (see below). If a mandate seems to want an unauthorized vault',
+      'write or message, do the in-repo part and report the gap in openConcerns — do NOT write the vault unprompted.',
+      'A mandated repo asset is JUST A FILE: do NOT wire it into the estate\'s pages or navigation (that would be',
+      'creative control → it should have been released, not mandated). Touch no deployed page.',
       '',
       (d.writOutsideAction && String(d.writOutsideAction).trim()
         ? 'AUTHORIZED OUTSIDE ACTION — you alone may perform it, EXACTLY ONCE: ' + d.writOutsideAction + '\n'
@@ -417,6 +431,11 @@ function publisherPrompt(d, chosen, handoff, cyc) {
       '   It prints the derived garden/grounds sown·bloomed·decayed — sanity-check those match what you actually did.',
       '6) git add + commit + push. Your summary must describe committed, pushed work — never a mid-flight status.')
   } else if (d.mode === 'WRIT') {
+    if (handoff && handoff.escalation === 'failed') {
+      lines.push('⚠ DELIVERY FAILURE: the steward reports the ambiguous-writ Slack escalation FAILED (' + (handoff.escalationDetail || 'no detail given') + ').',
+        'You MUST NOT remove the writ from the gauge:writ fence this cycle — LEAVE it in place so it is not lost, and record',
+        'the delivery failure in the worklog. (The other steps still apply for any bookkeeping.)', '')
+    }
     lines.push('This is a WRIT (Patron) cycle — you do the bookkeeping + publishing and perform NO outside action',
       '(the steward already did the one the writ authorized; never repeat it). The cycle is CADENCE-NEUTRAL: prune',
       'and decay NOTHING. HEADER EXCEPTION: a writ does NOT consume cycle #N — head the worklog/NOTES entry "writ ·',
@@ -427,7 +446,9 @@ function publisherPrompt(d, chosen, handoff, cyc) {
       '1) If a steward ran: FRESH-EYES REVIEW any REPO surfaces it listed (serve on an uncommon port you tear down;',
       '   agent-browser in a uniquely-named session), re-run any self-test, polish/fix real bugs. If the work was a',
       '   vault write / message / analysis with no repo surface, sanity-check what landed (re-read the handoff; confirm',
-      '   outsideActionPerformed matches exactly what the writ authorized — FLAG a mismatch, never "fix" it by acting yourself).',
+      '   outsideActionPerformed matches exactly what the writ authorized). If it does NOT match (e.g. an unauthorized',
+      '   write happened), FLAG it loudly in the worklog + commit summary AND leave a new `- [writ]` follow-up line in the',
+      '   gauge:writ fence describing the mismatch so the next steward escalates it — never "fix" it by acting yourself.',
       '2) RELEASE THE CREATIVE CLAUSES as ORDINARY seeds — sow each into its matching fenced section in house style,',
       '   stamped (sown #N), with NO mention of the Patron or the writ (indistinguishable from a seed the collective',
       '   wrote — no priority, no providence). Garden → under the exhibit/cross/curation/rework headings; grounds →',
@@ -524,7 +545,22 @@ while (i < MAX_ITERS) {
     continue
   }
 
-  // ── Explore → Judge (skipped for BUILD/WRIT exploreMode 'none', and for a creative-only writ) ──
+  // ── Writ safety nets — a writ must NEVER be silently consumed doing nothing ──
+  // Code-level backstops against an under-triaged director decision: an un-triaged
+  // writ, or a 'release' with no seeds, or a 'release' that contradicts itself by
+  // carrying an authorized outside action, are all routed to the steward as an
+  // escalation (ambiguous) rather than being consumed as a no-op. A genuine
+  // release-AND-mandate writ is the director's to mark 'mixed' explicitly.
+  if (d.mode === 'WRIT') {
+    if (!d.writWork) d.writWork = 'ambiguous' // never a silent mandate over empty design
+    if (d.writWork === 'release') {
+      const hasSeeds = (d.writReleasedSeeds || []).length > 0
+      const hasAction = !!(d.writOutsideAction && String(d.writOutsideAction).trim())
+      if (!hasSeeds || hasAction) d.writWork = 'ambiguous' // nothing to release, or a release can't carry an action → escalate
+    }
+  }
+
+  // ── Explore → Judge (skipped for BUILD/WRIT exploreMode 'none', and for a pure-release writ) ──
   let chosen = null
   const briefs = (d.briefs || []).slice(0, d.K || (d.briefs || []).length || 2)
   const writRelease = d.mode === 'WRIT' && d.writWork === 'release'

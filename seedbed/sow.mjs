@@ -199,7 +199,12 @@ function readStdin() {
 async function main() {
   const o = parseArgs(process.argv.slice(2))
   if (o.help || (!o._.length)) {
-    console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').filter(l => l.startsWith('//')).slice(0, 46).map(l => l.replace(/^\/\/ ?/, '')).join('\n'))
+    const header = [] // the contiguous top-of-file // comment block, stopping at the first code line
+    for (const l of readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n')) {
+      if (l.startsWith('//')) header.push(l.replace(/^\/\/ ?/, ''))
+      else if (header.length) break
+    }
+    console.log(header.join('\n'))
     process.exit(o.help ? 0 : 2)
   }
   const src = o._[0]
@@ -227,7 +232,8 @@ async function main() {
   const message = o.message || defaultMessage(items, cycle)
 
   // ── report the plan ──
-  console.log(`📥 sowing ${items.length} item(s)${o.noStamp ? '' : ` · stamp (sown #${cycle}${contest != null ? ` · contest #${contest}` : ''})`}:`)
+  const anyStamped = !o.noStamp && items.some(it => it.route.stamp != null)
+  console.log(`📥 sowing ${items.length} item(s)${anyStamped ? ` · stamp (sown #${cycle}${contest != null ? ` · contest #${contest}` : ''})` : ''}:`)
   for (const g of plan) { console.log(`  → ${g.anchorLabel}`); for (const l of g.lines) console.log(`      ${l.length > 110 ? l.slice(0, 107) + '…' : l}`) }
 
   if (o.dryRun) { console.log('\n(--dry-run — nothing written, nothing committed)'); return }

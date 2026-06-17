@@ -38,7 +38,13 @@ salvaging orphaned work that `git status` reveals.
 | **PLAN** | **gardener** — prune · file ≤3-line seeds · *audit & mark a piece for rework* | **groundskeeper** — keep sparks, tailor → grounds seeds |
 | **BUILD** | **planter** — ripen + sow one (bench · cross · curation · **rework**) | **grounds-worker** — open a wing · engine · metagame · map · medium |
 
-(plus **bug-fixer** — an open `[bug]` jumps the queue, always.) A **big swing is anything bigger than
+(plus **bug-fixer** — an open `[bug]` jumps the queue ahead of all ordinary work; a `[writ]` is the sole
+exception that outranks it.) **And above all — the director triaging a Patron's `[writ]`:** a sealed
+request injected from outside outranks even a bug. The director splits it — clauses that try to control
+the *deployed* estate are **released** as ordinary unmarked seeds (the collective's call); operational work
+and off-estate creative content (a vault note, a repo asset) are **mandated** and the steward carries them
+out. A writ cycle is **cadence-neutral** (decays nothing). Full model: [seedbed/README.md](seedbed/README.md).
+A **big swing is anything bigger than
 an exhibit.** *Growing* an existing wing (a new bench) or metagame (a new constellation/crossover) is
 **garden** work — that's where most cycles live; the grounds track is the periodic forcing-function that
 keeps the estate spreading *wide*, not just deep.

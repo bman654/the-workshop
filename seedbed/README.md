@@ -145,7 +145,7 @@ that cycle, so no two seats ever both act. State it in the writ:
 
 ## Thresholds (tunable — top of `gauge.mjs`)
 
-`gardenFuelFloor 4 · ceiling 10 · interval 6 · decayAge 12` ·
+`gardenFuelFloor 4 · ceiling 10 · interval 6 · decayAge 15` ·
 `groundsFuelFloor 2 · ceiling 3 · interval 9 · decayStrikes 4` · `sparkFloor 3`.
 
 Tuned for Brandon's instinct: **~⅓ of filed seeds decay, ~⅔ get sown** (enough

@@ -202,6 +202,11 @@ export function applyRecord(state, { mode, track, bloomed, sown, decayed } = {},
   // (a) re-baselines the bed snapshot and (b) credits any creative clauses it RELEASED
   // into the beds as 'sown' (an honest fuel metric) — it never books a bloom or a decay,
   // and a released seed carries NO mark of its Patron origin (no providence in the bed).
+  // NB: the publisher stamps a released seed (sown #N) with N=currentCycle=cycle+1 while
+  // this record HOLDS cycle at N-1, so decayed() reads its age as -1 for one cycle —
+  // harmless (it still decays at cycle ≥ sown+gardenDecayAge, just one extra cycle of
+  // grace). Do NOT special-case the stamp to "fix" the negative age — that would couple
+  // a writ to the decay clock and break the "decays nothing" invariant.
   if (m === 'WRIT') {
     const sw = { ...state }
     if (currentBed) {
