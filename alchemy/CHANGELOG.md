@@ -102,6 +102,36 @@ cards → THREE*, *three empty planters → TWO*, plus a new bench-link assertio
 `limiting-reagent/index.html`. The wing pill now reads **3 benches · 79/79 ✓**. Hero
 and footer copy reconciled: *three balances hang level; two cradles wait.*
 
+## cycle #92 (BUILD/garden · the planter) — the fourth bench: Le Chatelier's Vise
+
+The wing's fourth live bench, **Le Chatelier's Vise** (`equilibrium/`), grown from the
+landing's `Equilibrium · Le Chatelier` planter — **completing the wing's arc**: the
+Reaction Balancer gives the *ratio*, the Limiting Reagent *runs a pan dry and stops*,
+and the Vise is the reaction that *never finishes* — it runs both ways at once and
+settles where forward and back exactly cancel. A **sealed glass cylinder you operate,
+not a curve you read**: drag the **piston** (volume) or the **flame** (temperature) and
+the gas re-settles toward the stress-favoured side until the reaction quotient
+**Q(ξ) re-equals the constant K**. Three graduated gas bands (thickness = mole-fraction),
+countable drifting glyphs, an ember flame; the Q→K curve is demoted to a dim
+*the curve is the shadow* side-rail. Unlike the three exact-BigInt siblings, this bench
+lives in an **honest float + tolerance register** — ξ* is a transcendental root, so it
+is found by **bracketed bisection** to a *public* `TOL_SETTLE = 1e-9`, never fake-exact.
+Full bench provenance lives in `equilibrium/CHANGELOG.md`;
+`node alchemy/equilibrium/core.test.mjs` is green at **31/31**, the in-page pill reads
+**11/11 ✓**.
+
+**The planter → lit/level bench flip.** On the landing the `Equilibrium · Le Chatelier`
+entry flipped from a dashed gold planter to a lit cyan bench card (`bench:true`,
+`href:'equilibrium/index.html'`, tag `live bench`). The landing now imports the new
+bench's `core.mjs` and runs an `equilibriumProof()` (Q≡K at rest · a squeeze shifts ξ
+toward Δn_gas<0 until Q re-equals K · van't Hoff sign · the Δn=0 neg-control does NOT
+shift · a hand-broken ξ fails Q≡K, read to the public `TOL_SETTLE`), folded into
+`benchMathProof()` — now **four** benches. The structural self-test counts updated:
+*three live bench cards → FOUR*, *two empty planters → ONE*, plus a bench-link assertion
+for `equilibrium/index.html`. The wing pill now reads **4 benches · 91/91 ✓**. The
+front-door blurb was re-forged to name all four lit benches and leave *the periodic
+table* as the lone remaining planter.
+
 ---
 
 ### Seedbed provenance
