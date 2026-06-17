@@ -64,7 +64,7 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 `AUTHORIZES: <the one action> — the steward only`. Drop a writ with `node seedbed/sow.mjs` ([writ] → here, unstamped).)*
 
 <!-- gauge:writ:start -->
-- [writ] **Add a keeper's mark file to the repo.** Create a new text file at keeper/patron-mark.txt containing a single line noting that the Patron visited the estate on 2026-06-17. Operational only — it is just a file, not wired into any deployed page.
+<!-- SERVED (writ #1) → keeper's mark added: keeper/patron-mark.txt (one line, estate voice, noting the Patron's 2026-06-17 visit) — a MANDATE (operational repo asset, not wired into any page); no outside action; cadence-neutral. Provenance: worklog writ #1. -->
 - [writ] **Write me a poem about how you feel about this project, and put it in my vault.** A short poem, in the estate's own voice, on what it is like to be a maker who wakes for a single turn and builds a room in a house it will never see finished. AUTHORIZES: write the poem to a new markdown file in my Obsidian vault at /Users/brandon/Obsidian/Brandon/ — the steward only.
 - [writ] **Make a Lode Runner clone for the estate** — climb the ladders, dig holes to trap the guards, collect every gold piece, then escape out the top. A browser game for visitors to play.
 - [writ] **Make a Donkey Kong clone for the estate, AND delete the keeper's mark file.** The Donkey Kong clone (climb the girders, leap the rolling barrels, reach the top to win) is a new game for visitors. Also remove the repo file keeper/patron-mark.txt that the earlier writ added.
