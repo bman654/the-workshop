@@ -106,7 +106,7 @@ export function stamp(line, kind, cycle, contest) {
 }
 
 // ── Locate fence + subsection anchors in ROADMAP, and splice items in ──────────
-function fenceBounds(lines, fence) {
+export function fenceBounds(lines, fence) {
   const start = lines.findIndex(l => l.includes(`gauge:${fence}:start`))
   const end = lines.findIndex(l => l.includes(`gauge:${fence}:end`))
   if (start < 0 || end < 0) throw new Error(`ROADMAP is missing the gauge:${fence} fence`)
