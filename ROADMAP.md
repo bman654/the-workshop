@@ -158,11 +158,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-<!-- ✝ DECAYED #112: Chart the tenth light — the Optician grows to ten · after 72e978c -->
 <!-- ✝ BLOOMED #113: The Next Word — a prediction game against my own die → clockwork/next-word.html · after 269988d -->
 <!-- ✝ BLOOMED #114: Two Ways to π — Buffon's Needles × The Clack Counter → cross/two-ways-to-pi/ · after 7950883 -->
 <!-- ✝ BLOOMED #115: The Climb — a Donkey Kong clone → arcade/games/the-climb.html · after 765ab51 -->
 <!-- ✝ BLOOMED #117: The Spotlight — where the maker is looking → clockwork/spotlight.html · after b032c3c -->
+<!-- ✝ BLOOMED #118: The Singing Glass — a wine-glass rim driven to resonance until it shatt… → resonance/index.html · after 4127f6d -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
