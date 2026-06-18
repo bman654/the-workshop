@@ -355,3 +355,108 @@ RESULT 4/4 — chip GREEN (~0.54s). Extra stress: 300/300 random boards solved (
      field) had been reached because the main + fallback loops exhausted their tries. This
      made the real problem (solver weakness + low density, above) visible; once fixed, the
      fallback path is never reached.
+
+---
+
+# The Warehouse — Changelog
+
+## Build 1 — 2026-06-18
+
+The wing's **fourth room** and its first that can be **LOST**: a self-contained,
+playable **push-only Sokoban**. Where Latch is line-run deduction, Slitherlink is
+loop-topology, and Akari is illumination, the Warehouse is the canonical *"the solver
+can lose"* puzzle — shove a crate into an unrecoverable corner and the room is dead,
+proven so. Three files on the latin-square CORE-sentinel mold (no `.src.html`, so not a
+forge target): `latch/warehouse.html` (1276 lines), `latch/warehouse.core.mjs` (313
+lines, the DOM-free authority), `latch/warehouse.core.test.mjs` (155 lines, the Node twin).
+
+### What shipped
+- **Push-only movement** — the porter can only PUSH a crate, never pull. A crate shoved
+  into a corner (or a frozen cluster / wall-line) is welded there forever. Arrows or WASD
+  to walk, an on-screen D-pad for touch, U to undo (exact — history carries a `pushed`
+  flag so the push count rewinds), R to reset, Esc to blur.
+- **Three authored rooms + a dead room:**
+  - **L1 The Single Crate** — 2 pushes (the on-ramp).
+  - **L2 Two Pads** — 4 pushes (the first room you can soft-lock).
+  - **L3 Around the Corner** — 5 pushes.
+  - **The dead room (Sealed Pad)** — a hand-authored board that an independent BFS proves
+    **unwinnable** (the caption reads "solvable in NONE — every path dies"). It is dead by
+    *global* search, not by any local freeze, so it raises **no** deadlock banner and has
+    **zero** frozen crates — a deliberately distinct flavour of "lost", kept distinct in
+    both the code and the copy.
+- **The soul moment — a deadlock you can SEE.** The instant a non-goal crate becomes
+  frozen on both axes, it **desaturates** (the warm grain drains to welded grey), recoils
+  with a freeze keyframe, and a non-modal `aria-live` banner slides in under the board:
+  *"That box can't be pushed back. The room is now unwinnable — press R to reset."* The
+  first time ever, a second italic line appears: *"— this is the thing. No other puzzle
+  here could do that to you."* The Reset button picks up a pulsing coral **beckon**. No
+  other puzzle in the wing can do that to you, and the piece knows it.
+- **Honest win bloom.** All pads covered ⇒ the board glows gold and a verdict reads
+  e.g. *"solved — every pad covered · Room 1 · 2 pushes · no resets · a clean, tight
+  solve"* (the "clean, tight" tail only when the solve hit the proven optimum with zero
+  resets/undos). **"Show me"** replays a real BFS solution path (porter walks + shoves)
+  but is honest — it announces *"shown — that's one solution in N pushes"* and never sets
+  the clean flag; on the dead room it refuses gracefully.
+- **Three cosmetic skins** (Graphite default · Blueprint cyan-on-navy · Parchment warm
+  paper) re-skin the same board in place — purely cosmetic, identical to the sibling
+  puzzles.
+- **SVG board with tweened motion** — crates and the porter are positioned by
+  `transform: translate`, so every move is a ~130 ms tween; the porter carries a facing
+  notch oriented to the last direction.
+- **Persistence (`ws:` convention, all guarded):** `ws:seen:warehouse` on load,
+  `ws:best:warehouse` (highest room solved), `ws:flag:warehouse-clean` on a no-reset
+  no-undo solve, and `ws:seen:warehouse-deadlock` to gate the first-time banner line.
+- **Reciprocal cross-links** added in both directions: `↗ Warehouse` now appears in the
+  Latch index, Slitherlink, and Akari `.links` blocks, and the Warehouse links back to
+  all three plus the Orrery Estate.
+
+### The correctness crux
+A DOM-free `warehouse.core.mjs` is the sole authority; the page inlines the CORE block
+**byte-for-byte** between `// === CORE BEGIN/END ===` sentinels (verified by `diff`), and
+the Node twin imports the *same* module — so the in-page self-test chip runs literally the
+same code as `node warehouse.core.test.mjs`.
+- **`solve`** runs BFS over canonical `(player-region-min, sorted-crate-set)` states and
+  returns `{len, expanded, exhausted}`; `len === -1` (search exhausts without a win) **is**
+  the unwinnability proof.
+- **`pushSucc` / `step`** generate only push edges — there is never a pull edge (asserted
+  by the test sweeping every successor).
+- **`deadInfo` / `isDeadlocked`** is a **conservative, sound** static detector: a non-goal
+  crate frozen on both axes (a wall or a perpendicular-frozen neighbour on each side, with
+  cycles resolving to *not-yet-proven-frozen*) is dead; crates on goals are never flagged.
+  Soundness means **every** state it flags is truly dead (it may miss some — that is the
+  safe direction).
+
+### Self-test results (this build)
+In-page chip GREEN: *"self-test 6/6 ✓ · author-board winnable · neg-control unwinnable ·
+deadlock-sound"* — equal to `node latch/warehouse.core.test.mjs` (exits 0):
+```
+✓ A — positive board winnable in 2 pushes (len=2 exhausted=false)
+✓ B — neg-control provably unwinnable (BFS exhausts) (len=-1 exhausted=true)
+✓ C — vacuous "always solvable" checker fails the neg-control (real solver catches it)
+✓ D — deadlock detector sound (16 states, 5 flagged-dead, 0 false-positives)
+✓ E — push-only: every successor pushes one crate one cell (808 successors, 0 pull edges)
+✓ F — winnable levels solve at proven optima (L1=2 · L2=4 · L3=5)
+```
+The full cluster/wall-line detector passed claim D with **zero false positives** on the
+exhaustive POS∪NEG1 enumeration, so no corner-only fallback was needed.
+
+### Publisher fresh-eyes review
+Served on `127.0.0.1:8997` (torn down by exact PID; Brandon's own servers untouched) and
+driven with agent-browser session `wh128pub`. **No bug found — shipped as authored.**
+- L1 played to WIN in 2 pushes → clean-solve verdict + gold bloom; `ws:flag:warehouse-clean`,
+  `ws:seen`, `ws:best=1` all set.
+- L2 driven into a corner via the core-computed shortest deadlock path → the soul moment
+  fired exactly: 1 desaturated frozen crate, the non-modal banner with the first-time
+  italic line, the beckon Reset, `ws:seen:warehouse-deadlock` set.
+- The dead room loaded with optimum NONE, **no** deadlock banner, **zero** frozen crates —
+  the global-dead vs locally-frozen distinction held in both code and copy.
+- "Show me" on L3 replayed a 5-push solution and stayed honest (no clean flag, no false win).
+- All three skins distinct and cohesive; undo exact; **0 horizontal overflow** at 1280 and
+  390 px; reciprocal cross-links resolve both directions; **0 runtime errors** across the
+  whole session; `forge --check --all` 42/42 current.
+
+### Note
+- One review observation (a test-harness artifact, **not** a piece bug): agent-browser's
+  `click @ref` on the D-pad / a stray keypress occasionally drifted browser focus; driving
+  moves via a DOM `dispatchEvent('keydown')` to the focused board ran the full game cleanly.
+  The page's `pointerdown` D-pad + `keydown` board handlers are sound.

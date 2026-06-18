@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Warehouse — push-only</title>
+<style>
+  :root{
+    /* ---- Graphite (default skin) — verbatim from Akari/Latch ---- */
+    --bg:        #0c0c0f;
+    --stage:     radial-gradient(1200px 800px at 56% 38%, #18181c 0%, #111114 68%, #0a0a0c 100%);
+    --panel-bg:  rgba(20,20,24,0.88);
+    --panel-edge:rgba(150,150,165,0.28);
+    --ink:       #ededf2;
+    --ink-dim:   #9a9aa6;
+    --accent:    #c9a24a;            /* warm gilt */
+    --accent-soft: rgba(201,162,74,0.16);
+    --accent-ink: #16140d;
+    --ok:  #7fd28a;
+    --bad: #f08a7a;
+    /* board surfaces (Akari's logic-floor → reads as a sibling) */
+    --board-bg:   #14141a;
+    --floor:      rgba(255,255,255,0.020);
+    --floor-edge: rgba(150,150,165,0.10);
+    --wall:       #26262e;
+    --wall-edge:  rgba(0,0,0,0.55);
+    /* ---- warehouse pieces (this room's own vars) ---- */
+    --crate:      #b98a4e;           /* a wooden crate */
+    --crate-edge: #6e4f29;
+    --crate-grain:rgba(0,0,0,0.30);  /* plank grain lines */
+    --crate-lit:  #e8c47a;           /* a crate seated on a goal — warm */
+    --goal:       var(--accent);     /* the goal pad ring */
+    --goal-soft:  rgba(201,162,74,0.14);
+    --seated-glow:rgba(201,162,74,0.55);
+    --porter:     #dcdce4;           /* the porter token */
+    --porter-ink: #16161c;           /* its facing notch */
+    --stuck:      #6a5a4a;           /* a frozen, welded crate — desaturated */
+    --stuck-edge: #3a3026;
+    --dead-banner:rgba(240,138,122,0.14);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --font-clue: Georgia, "Times New Roman", serif;
+  }
+  /* ---- Blueprint skin (cyan-on-navy drafting) — verbatim from Akari/Latch ---- */
+  body[data-skin="blueprint"]{
+    --bg:#071726;
+    --stage: radial-gradient(1200px 800px at 52% 36%, #0e2c45 0%, #0a2236 64%, #061521 100%);
+    --panel-bg: rgba(8,30,48,0.9);
+    --panel-edge: rgba(120,196,238,0.34);
+    --ink:#dcf1ff; --ink-dim:#7fb3d6;
+    --accent:#5fd0ff; --accent-soft: rgba(95,208,255,0.16); --accent-ink:#06223a;
+    --ok:#7fe4d0; --bad:#ff9a8a;
+    --board-bg: rgba(10,40,64,0.5);
+    --floor: rgba(120,196,238,0.030);
+    --floor-edge: rgba(120,196,238,0.12);
+    --wall:#0a2236; --wall-edge: rgba(0,0,0,0.5);
+    /* warehouse pieces on blueprint */
+    --crate:#2f6f96; --crate-edge:#13405e; --crate-grain:rgba(0,0,0,0.34); --crate-lit:#ffd27a;
+    --goal:#ffd27a; --goal-soft:rgba(255,210,122,0.16); --seated-glow:rgba(255,210,122,0.6);
+    --porter:#dcf1ff; --porter-ink:#06223a;
+    --stuck:#3a5066; --stuck-edge:#1d3346; --dead-banner:rgba(255,154,138,0.16);
+  }
+  /* ---- Parchment skin (warm paper + ink) — verbatim from Akari/Latch ---- */
+  body[data-skin="parchment"]{
+    --bg:#e8ddc4;
+    --stage: radial-gradient(1200px 800px at 54% 36%, #f3ead2 0%, #e9dcbe 66%, #ddcfa8 100%);
+    --panel-bg: rgba(247,239,221,0.92);
+    --panel-edge: rgba(120,96,60,0.34);
+    --ink:#3a2f1d; --ink-dim:#7a6a4c;
+    --accent:#a8541f; --accent-soft: rgba(168,84,31,0.14); --accent-ink:#f7efdd;
+    --ok:#4f7a3a; --bad:#b23a25;
+    --board-bg: rgba(255,251,238,0.55);
+    --floor: rgba(120,96,60,0.030);
+    --floor-edge: rgba(120,96,60,0.16);
+    --wall:#4a3c26; --wall-edge: rgba(0,0,0,0.32);
+    /* warehouse pieces on parchment */
+    --crate:#c08a45; --crate-edge:#7a5223; --crate-grain:rgba(0,0,0,0.22); --crate-lit:#e4a93a;
+    --goal:#a8541f; --goal-soft:rgba(168,84,31,0.16); --seated-glow:rgba(216,150,40,0.5);
+    --porter:#3a2f1d; --porter-ink:#f3ead2;
+    --stuck:#9c8a64; --stuck-edge:#6b5d40; --dead-banner:rgba(178,58,37,0.14);
+  }
+
+  *{ box-sizing:border-box }
+  html,body{ height:100% }
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    transition: background .4s ease, color .4s ease;
+  }
+  #stage{
+    min-height:100vh;
+    display:flex; align-items:flex-start; justify-content:center;
+    background:var(--stage); transition: background .4s ease;
+    padding:22px 18px 60px;
+  }
+  .wrap{
+    display:flex; gap:22px; align-items:flex-start;
+    flex-wrap:wrap; justify-content:center; width:100%; max-width:1100px;
+  }
+
+  /* ----------------------------- Panel (Latch chrome) ----------------------------- */
+  #panel{
+    width:296px; flex:0 0 296px;
+    background:var(--panel-bg);
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+    border:1px solid var(--panel-edge);
+    border-radius:14px;
+    padding:16px 16px 18px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+    transition: background .4s ease, border-color .4s ease;
+  }
+  .topline{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  #panel h1{ font-size:23px; font-weight:700; letter-spacing:-0.4px; margin:0; }
+  .links{ display:flex; gap:10px; align-items:baseline; white-space:nowrap; flex-wrap:wrap; justify-content:flex-end; }
+  .back{ font-size:11px; color:var(--accent); text-decoration:none; opacity:.85; }
+  .back:hover{ opacity:1; text-decoration:underline; }
+  .sub{ font-size:10px; color:var(--ink-dim); margin:3px 0 10px; letter-spacing:1.2px; text-transform:uppercase; }
+  .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.62; margin:0 0 12px; letter-spacing:.2px; }
+  .lede b{ color:var(--ink); font-weight:600; }
+
+  /* self-test chip */
+  .selftest{ display:inline-flex; align-items:center; gap:6px;
+    font-size:11px; font-family:var(--font-mono); padding:5px 9px; border-radius:8px;
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.02);
+    color:var(--ink-dim); cursor:default; margin-bottom:14px; user-select:none; }
+  .selftest.ok{ color:var(--ok); border-color:rgba(127,210,138,0.4); background:rgba(127,210,138,0.08); }
+  .selftest.bad{ color:var(--bad); border-color:rgba(240,138,122,0.5); background:rgba(240,138,122,0.1); }
+  .selftest .dot{ width:7px; height:7px; border-radius:50%; background:currentColor; }
+
+  .row{ margin-bottom:12px; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline;
+    font-size:11px; color:var(--ink-dim); margin-bottom:6px; letter-spacing:.4px; text-transform:uppercase; }
+
+  /* segmented control */
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.18); border:1px solid var(--panel-edge);
+    border-radius:9px; padding:4px; }
+  .seg button{ flex:1 1 0; min-width:0; border:none; background:transparent; color:var(--ink-dim);
+    font-size:11.5px; padding:7px 4px; border-radius:6px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui); letter-spacing:.2px; }
+  .seg button.active{ background:var(--accent); color:var(--accent-ink); font-weight:700; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+
+  .actions{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .actions button{ border:1px solid var(--panel-edge); border-radius:9px; padding:9px 8px;
+    background:rgba(255,255,255,0.03); color:var(--ink); cursor:pointer; font-size:12.5px;
+    font-weight:600; transition:.15s; letter-spacing:.2px; font-family:var(--font-ui); }
+  .actions button:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .actions button.wide{ grid-column:1 / -1; }
+  .actions button:disabled{ opacity:.4; cursor:default; }
+  .actions button.beckon{ animation: beckon 1.1s ease 2; border-color:var(--bad); }
+  @keyframes beckon{ 0%,100%{ box-shadow:0 0 0 0 rgba(240,138,122,0) } 50%{ box-shadow:0 0 0 4px rgba(240,138,122,0.32) } }
+
+  /* ---- on-screen D-pad + touch controls ---- */
+  .pad{ display:flex; flex-direction:column; align-items:center; gap:6px; margin-top:14px; }
+  .dpad{ display:grid; grid-template-columns:repeat(3, 46px); grid-template-rows:repeat(3, 46px); gap:6px; }
+  .dpad button{ border:1px solid var(--panel-edge); border-radius:9px; background:rgba(255,255,255,0.04);
+    color:var(--ink); font-size:18px; line-height:1; cursor:pointer; transition:.12s; touch-action:manipulation;
+    -webkit-user-select:none; user-select:none; }
+  .dpad button:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .dpad button:active{ background:var(--accent); color:var(--accent-ink); }
+  .dpad button.spacer{ visibility:hidden; pointer-events:none; }
+  .dpad button:disabled{ opacity:.4; cursor:default; }
+  .padbtns{ display:flex; gap:7px; }
+  .padbtns button{ flex:1; border:1px solid var(--panel-edge); border-radius:9px; padding:8px 12px;
+    background:rgba(255,255,255,0.03); color:var(--ink); cursor:pointer; font-size:12px; font-weight:600;
+    transition:.15s; font-family:var(--font-ui); letter-spacing:.2px; }
+  .padbtns button:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .padbtns button:disabled{ opacity:.4; cursor:default; }
+
+  .caption{ font-size:11px; color:var(--ink-dim); margin-top:14px; line-height:1.6; letter-spacing:.2px; }
+  .caption b{ color:var(--ink); font-weight:600; }
+  .caption .mono{ font-family:var(--font-mono); color:var(--accent); }
+  .stat{ font-family:var(--font-mono); color:var(--accent); font-variant-numeric:tabular-nums; }
+
+  /* ----------------------------- Board ----------------------------- */
+  #boardWrap{ flex:1 1 auto; display:flex; flex-direction:column; align-items:center; min-width:0; }
+  #boardOuter{ position:relative; border-radius:12px; padding:14px;
+    background:var(--board-bg); border:1px solid var(--panel-edge);
+    transition: background .4s ease, border-color .4s ease; outline:none; }
+  #boardOuter:focus-visible{ border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
+  svg#board{ display:block; user-select:none; -webkit-user-select:none; touch-action:manipulation; }
+
+  /* SVG element styles */
+  .floor{ fill:var(--floor); stroke:var(--floor-edge); stroke-width:1; transition: fill .3s ease; }
+  .wall{ fill:var(--wall); stroke:var(--wall-edge); stroke-width:1; }
+
+  /* a goal pad: a soft fill + a ring */
+  .goalfill{ fill:var(--goal-soft); transition: fill .3s ease; }
+  .goalring{ fill:none; stroke:var(--goal); stroke-width:2; opacity:.55; transition: opacity .3s ease, stroke .3s ease; }
+  .goalring.seated{ opacity:1; }
+
+  /* a crate: a rounded wooden body (translated by JS); grain lines + corner band */
+  .crate{ transition: transform .13s cubic-bezier(.22,.61,.36,1); }
+  .crate .body{ fill:var(--crate); stroke:var(--crate-edge); stroke-width:2; transition: fill .3s ease, stroke .3s ease; }
+  .crate .grain{ stroke:var(--crate-grain); stroke-width:2; stroke-linecap:round; transition: opacity .3s ease; }
+  .crate .band{ fill:none; stroke:var(--crate-edge); stroke-width:2; opacity:.5; }
+  .crate.seated .body{ fill:var(--crate-lit); }
+  .crate.seated{ filter: drop-shadow(0 0 6px var(--seated-glow)); }
+  .crate.seated.seatpop .body{ animation: seat .5s ease; }
+  @keyframes seat{ 0%{ filter:none } 45%{ filter: drop-shadow(0 0 9px var(--seated-glow)) } 100%{ filter:none } }
+  /* a welded, frozen crate — desaturated, no grain warmth */
+  .crate.stuck .body{ fill:var(--stuck); stroke:var(--stuck-edge); }
+  .crate.stuck .grain{ opacity:.25; }
+  .crate.stuck.freeze{ animation: freeze .42s ease; }
+  @keyframes freeze{ 0%{ transform:scale(1) } 45%{ transform:scale(1.06) } 100%{ transform:scale(1) } }
+
+  /* the porter: a rounded token with a facing notch that rotates to last-move dir */
+  .porter{ transition: transform .13s cubic-bezier(.22,.61,.36,1); }
+  .porter .torso{ fill:var(--porter); stroke:var(--crate-edge); stroke-width:1.5; opacity:.92; }
+  .porter .notch{ fill:var(--porter-ink); transition: transform .13s ease; transform-box:fill-box; transform-origin:center; }
+
+  /* win bloom — the floor warms, seated crates hold their glow */
+  #boardOuter.won .floor{ fill:var(--goal-soft); }
+  #boardOuter.won .goalring{ opacity:1; }
+  #boardOuter.won .crate.seated .body{ filter:none; }
+
+  .verdict{ min-height:30px; margin-top:16px; text-align:center; font-size:15px; letter-spacing:.3px;
+    opacity:0; transition:opacity .4s ease; }
+  .verdict.show{ opacity:1; }
+  .verdict .name{ color:var(--accent); font-weight:700; }
+  .verdict .small{ display:block; font-size:11px; color:var(--ink-dim); margin-top:3px; letter-spacing:.4px; }
+
+  /* the deadlock banner — non-modal, slides down under the board */
+  #deadBanner{ max-width:420px; margin:12px auto 0; overflow:hidden;
+    max-height:0; opacity:0; transition: max-height .35s ease, opacity .35s ease, margin .35s ease; }
+  #deadBanner.show{ max-height:160px; opacity:1; }
+  #deadBanner .inner{ border:1px solid var(--bad); border-radius:10px; background:var(--dead-banner);
+    padding:11px 14px; font-size:12.5px; line-height:1.5; color:var(--ink); }
+  #deadBanner .inner b{ color:var(--bad); font-weight:700; }
+  #deadBanner .first{ display:block; margin-top:5px; color:var(--ink-dim); font-style:italic; }
+
+  @media (max-width:720px){
+    .wrap{ flex-direction:column; align-items:center; }
+    #panel{ width:100%; max-width:360px; flex:none; }
+  }
+</style>
+</head>
+<body data-skin="graphite">
+<div id="stage">
+  <div class="wrap">
+    <!-- ----------------------------- PANEL ----------------------------- -->
+    <div id="panel">
+      <div class="topline">
+        <h1>The Warehouse</h1>
+        <div class="links">
+          <a class="back" href="index.html">↗ Latch</a>
+          <a class="back" href="slitherlink.html">↗ Slitherlink</a>
+          <a class="back" href="akari.html">↗ Akari</a>
+          <a class="back" href="../index.html">← The Orrery Estate</a>
+        </div>
+      </div>
+      <div class="sub">push-only · a crate never comes back</div>
+      <p class="lede">Every other puzzle in this wing forgives you — fill a wrong cell, draw a wrong edge, place a wrong bulb, and you just erase it. Here you are a <b>porter who can only PUSH</b>. Shove a crate into a corner and it stays there forever: the room can become unwinnable while every move you made was legal. This is the logic puzzle where the solver can <b>LOSE</b>.</p>
+
+      <div id="selftest" class="selftest" title="Built-in logic verifier"><span class="dot"></span><span id="stText">running self-test…</span></div>
+
+      <div class="row">
+        <label>Room</label>
+        <div class="seg" id="levelSeg">
+          <button data-level="0" class="active">1</button>
+          <button data-level="1">2</button>
+          <button data-level="2">3</button>
+          <button data-level="3">dead room</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Skin</label>
+        <div class="seg" id="skinSeg">
+          <button data-skin="graphite" class="active">Graphite</button>
+          <button data-skin="blueprint">Blueprint</button>
+          <button data-skin="parchment">Parchment</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="undoBtn">Undo</button>
+        <button id="resetBtn">Reset</button>
+        <button id="showBtn" class="wide">Show me ▸</button>
+      </div>
+
+      <div class="pad" aria-hidden="false">
+        <div class="dpad" id="dpad">
+          <button class="spacer" tabindex="-1"></button>
+          <button data-dir="0" aria-label="push up">▲</button>
+          <button class="spacer" tabindex="-1"></button>
+          <button data-dir="2" aria-label="push left">◀</button>
+          <button class="spacer" tabindex="-1"></button>
+          <button data-dir="3" aria-label="push right">▶</button>
+          <button class="spacer" tabindex="-1"></button>
+          <button data-dir="1" aria-label="push down">▼</button>
+          <button class="spacer" tabindex="-1"></button>
+        </div>
+      </div>
+
+      <div class="caption" id="caption"></div>
+    </div>
+
+    <!-- ----------------------------- BOARD ----------------------------- -->
+    <div id="boardWrap">
+      <div id="boardOuter" tabindex="0" role="application" aria-label="Warehouse — arrow or WASD to move the porter, U to undo, R to reset">
+        <svg id="board" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      <div id="deadBanner" role="status" aria-live="polite"><div class="inner" id="deadInner"></div></div>
+      <div class="verdict" id="verdict"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+// === CORE BEGIN ===
+// The Warehouse — Sokoban math core (single source of truth).
+// A push-only crate puzzle: walk the porter, shove crates onto every goal. A
+// crate can ONLY be pushed, never pulled — so a crate shoved into a corner is
+// welded there forever, and a room can become genuinely UNWINNABLE while every
+// move you made was legal. This module is the SOLE authority for:
+//   • the breadth-first SOLVER over (player-reachable-region, sorted crate-set)
+//     that proves a board winnable in N pushes — or PROVES it unwinnable (the
+//     search exhausts the reachable state-space with no goal-cover), and
+//   • the CONSERVATIVE static deadlock detector (corner + cluster/wall-line
+//     freeze), which is SOUND: every state it flags as frozen is truly dead.
+// It is inlined byte-identical into warehouse.html between the CORE BEGIN /
+// CORE END sentinels, and tested by warehouse.core.test.mjs — page & test can't
+// drift. All boards are hand-authored, so there is no RNG and no generator.
+
+// ── board parse ───────────────────────────────────────────────────────────
+// A board is an array of equal-length strings. Legend (Sokoban-standard):
+//   '#' wall · ' ' floor · '.' goal-floor · '@' player · '$' crate
+//   '*' crate-on-goal · '+' player-on-goal · 'G' alias for goal-floor
+// Cells are indexed y*W+x. Returns the STATIC immutable structure plus the
+// start placement: { W,H,walls:Uint8Array, goals:Set<int>, start:{player,crates:int[]} }.
+// walls/goals never change during play; only player + crate positions move.
+function parseBoard(rows) {
+  const H = rows.length;
+  const W = Math.max(...rows.map(r => r.length));
+  const walls = new Uint8Array(W * H);
+  const goals = new Set();
+  let player = -1;
+  const crates = [];
+  for (let y = 0; y < H; y++) {
+    const row = rows[y];
+    for (let x = 0; x < W; x++) {
+      const ch = x < row.length ? row[x] : ' ';
+      const i = y * W + x;
+      switch (ch) {
+        case '#': walls[i] = 1; break;
+        case '.': case 'G': goals.add(i); break;
+        case '@': player = i; break;
+        case '+': player = i; goals.add(i); break;
+        case '$': crates.push(i); break;
+        case '*': crates.push(i); goals.add(i); break;
+        case ' ': break;
+        default: break;
+      }
+    }
+  }
+  crates.sort((a, b) => a - b);
+  return { W, H, walls, goals, start: { player, crates } };
+}
+
+// neighbour cell in direction d (0=up,1=down,2=left,3=right); -1 if off-grid.
+const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+function nbr(b, cell, d) {
+  const x = cell % b.W, y = (cell / b.W) | 0;
+  const nx = x + DIRS[d][0], ny = y + DIRS[d][1];
+  if (nx < 0 || ny < 0 || nx >= b.W || ny >= b.H) return -1;
+  return ny * b.W + nx;
+}
+const isWall = (b, cell) => cell < 0 || b.walls[cell] === 1;
+
+// ── reachable region ────────────────────────────────────────────────────────
+// The set of cells the porter can stand on starting from `player`, walking over
+// free floor only (walls AND crates block). BFS. Returns a Set<int>.
+function region(b, player, crates) {
+  const blocked = new Set(crates);
+  const seen = new Set();
+  if (isWall(b, player) || blocked.has(player)) return seen;
+  const q = [player]; seen.add(player);
+  while (q.length) {
+    const cur = q.shift();
+    for (let d = 0; d < 4; d++) {
+      const n = nbr(b, cur, d);
+      if (n < 0 || isWall(b, n) || blocked.has(n) || seen.has(n)) continue;
+      seen.add(n); q.push(n);
+    }
+  }
+  return seen;
+}
+
+// Canonical key for a search state: the player is NORMALIZED to the minimum cell
+// of its reachable region (so every player position in the same region collapses
+// to one equivalence class), joined with the sorted crate-set.
+function ckey(reg, crates) {
+  let mn = Infinity;
+  for (const c of reg) if (c < mn) mn = c;
+  return mn + '|' + crates.join(',');
+}
+
+// ── push-only successor generator ───────────────────────────────────────────
+// For each crate × direction d: the porter must stand on the OPPOSITE cell
+// (crate-d) — which must be floor AND inside the current region — and the
+// destination (crate+d) must be in-bounds floor AND unoccupied by another crate.
+// On a legal push the crate moves +d and the porter lands on the crate's OLD
+// cell. There is NEVER a pull edge — that asymmetry IS the soul of the puzzle.
+// Returns [{ crateIdx, dir, crates:newSortedCrates, player:oldCrateCell }, ...].
+function pushSucc(b, reg, crates) {
+  const occupied = new Set(crates);
+  const succ = [];
+  for (let k = 0; k < crates.length; k++) {
+    const c = crates[k];
+    for (let d = 0; d < 4; d++) {
+      const behind = nbr(b, c, d ^ 1);     // d^1 flips up<->down, left<->right
+      const ahead = nbr(b, c, d);
+      if (behind < 0 || isWall(b, behind) || occupied.has(behind) || !reg.has(behind)) continue;
+      if (ahead < 0 || isWall(b, ahead) || occupied.has(ahead)) continue;
+      const next = crates.slice();
+      next[k] = ahead;
+      next.sort((a, z) => a - z);
+      succ.push({ crateIdx: k, dir: d, crates: next, player: c });
+    }
+  }
+  return succ;
+}
+
+// every goal covered by a crate?
+function won(b, crates) {
+  if (crates.length < b.goals.size) return false;
+  for (const g of b.goals) if (!crates.includes(g)) return false;
+  return true;
+}
+
+// ── conservative static deadlock detector ───────────────────────────────────
+// Returns { dead:bool, frozenCrates:[cellIdx] }. A non-goal crate frozen on BOTH
+// axes is dead. A crate is frozen on an axis if a wall sits on EITHER side of
+// that axis, OR the neighbour on that axis is itself a crate that is frozen on
+// the PERPENDICULAR axis (cluster / wall-line). Mutual recursion is memoized;
+// a cycle resolves to "not yet proven frozen" (conservative — never over-claims).
+// CRITICAL: a crate sitting ON a goal is never flagged — a goal in a corner is
+// SOLVED, not dead. If ANY non-goal crate is frozen on both axes the room is dead.
+function deadInfo(b, crates) {
+  const crateSet = new Set(crates);
+  // memo[cell] per axis: undefined=unknown, 'computing'=on stack, true/false=result
+  const memoH = new Map(), memoV = new Map();
+
+  // is the crate at `cell` frozen on the given axis? axis 0 = vertical (up/down),
+  // axis 1 = horizontal (left/right). dirs for that axis:
+  function frozenOnAxis(cell, axis) {
+    const memo = axis === 0 ? memoV : memoH;
+    const m = memo.get(cell);
+    if (m === 'computing') return false;      // cycle ⇒ not proven frozen
+    if (m !== undefined) return m;
+    memo.set(cell, 'computing');
+    const dA = axis === 0 ? 0 : 2;            // up / left
+    const dB = axis === 0 ? 1 : 3;            // down / right
+    const nA = nbr(b, cell, dA), nB = nbr(b, cell, dB);
+    // wall on either side of this axis ⇒ frozen on this axis
+    let frozen = isWall(b, nA) || isWall(b, nB);
+    // else: if a neighbour on this axis is a crate frozen on the PERPENDICULAR
+    // axis, this crate can't move along this axis either.
+    if (!frozen) {
+      const perp = axis ^ 1;
+      if (crateSet.has(nA) && frozenOnAxis(nA, perp)) frozen = true;
+      else if (crateSet.has(nB) && frozenOnAxis(nB, perp)) frozen = true;
+    }
+    memo.set(cell, frozen);
+    return frozen;
+  }
+
+  const frozenCrates = [];
+  for (const c of crates) {
+    if (b.goals.has(c)) continue;             // a crate on a goal is never dead
+    if (frozenOnAxis(c, 0) && frozenOnAxis(c, 1)) frozenCrates.push(c);
+  }
+  return { dead: frozenCrates.length > 0, frozenCrates };
+}
+function isDeadlocked(b, crates) { return deadInfo(b, crates).dead; }
+
+// ── the BFS solver ───────────────────────────────────────────────────────────
+// Breadth-first over canonical push-states. Returns { len, expanded, exhausted }:
+//   len = the shortest PUSH count to cover all goals (NOT keystrokes), or -1 if
+//   the reachable push-state space drains with no goal-cover (the unwinnability
+//   PROOF). useDeadlock only PRUNES dead branches — it can never change `len` on
+//   a winnable board because the detector is SOUND (flagged ⊆ truly-dead). The
+//   BFS also records a predecessor chain (used by showPath).
+function solve(b, useDeadlock = true) {
+  const start = b.start;
+  if (won(b, start.crates)) return { len: 0, expanded: 0, exhausted: false, parent: new Map(), goalKey: null };
+  const reg0 = region(b, start.player, start.crates);
+  const k0 = ckey(reg0, start.crates);
+  const dist = new Map([[k0, 0]]);
+  const parent = new Map([[k0, null]]);   // key -> { prevKey, crateIdx, dir }
+  const stateOf = new Map([[k0, { player: start.player, crates: start.crates }]]);
+  const q = [k0];
+  let expanded = 0, head = 0;
+  while (head < q.length) {
+    const key = q[head++];
+    expanded++;
+    const st = stateOf.get(key);
+    const reg = region(b, st.player, st.crates);
+    for (const mv of pushSucc(b, reg, st.crates)) {
+      if (useDeadlock && isDeadlocked(b, mv.crates)) continue;
+      const nreg = region(b, mv.player, mv.crates);
+      const nk = ckey(nreg, mv.crates);
+      if (dist.has(nk)) continue;
+      dist.set(nk, dist.get(key) + 1);
+      parent.set(nk, { prevKey: key, crateIdx: mv.crateIdx, dir: mv.dir, player: mv.player, crates: mv.crates });
+      stateOf.set(nk, { player: mv.player, crates: mv.crates });
+      if (won(b, mv.crates)) {
+        return { len: dist.get(nk), expanded, exhausted: false, parent, goalKey: nk, stateOf };
+      }
+      q.push(nk);
+    }
+  }
+  return { len: -1, expanded, exhausted: true, parent, goalKey: null, stateOf };
+}
+
+// ── live-play step (the page's SOLE authority for a keypress) ────────────────
+// Walk the porter one cell in dir d from `state`={player,crates}. If a crate is
+// directly ahead and the cell BEYOND it is free floor, push the crate (porter
+// follows). If a wall or an immovable crate blocks the porter, moved:false.
+// Returns { moved, pushed, crateIdx, next:{player,crates} }.
+function step(state, dir, b) {
+  const ahead = nbr(b, state.player, dir);
+  if (ahead < 0 || isWall(b, ahead)) {
+    return { moved: false, pushed: false, crateIdx: -1, next: state };
+  }
+  const ci = state.crates.indexOf(ahead);
+  if (ci === -1) {
+    // free floor ahead — just walk
+    return { moved: true, pushed: false, crateIdx: -1, next: { player: ahead, crates: state.crates } };
+  }
+  // a crate is ahead — can it be pushed?
+  const beyond = nbr(b, ahead, dir);
+  if (beyond < 0 || isWall(b, beyond) || state.crates.includes(beyond)) {
+    return { moved: false, pushed: false, crateIdx: -1, next: state };  // blocked
+  }
+  const crates = state.crates.slice();
+  crates[ci] = beyond;
+  crates.sort((a, z) => a - z);
+  return { moved: true, pushed: true, crateIdx: ci, next: { player: ahead, crates } };
+}
+
+// ── show-me path ─────────────────────────────────────────────────────────────
+// Derive an optimal solution as a list of porter STEP directions (walks + pushes)
+// from solve()'s BFS predecessor chain. Between two consecutive push-states we
+// BFS a walk path through the region to bring the porter to the push's launch
+// cell, then emit the push direction itself. Returns [dir,...] of single-cell
+// porter moves, or [] if the board is unwinnable.
+function showPath(b) {
+  const res = solve(b, true);
+  if (res.exhausted || res.goalKey == null) return [];
+  // reconstruct the push sequence (each: launch cell = behind, dir, then porter
+  // ends on the crate's old cell).
+  const pushes = [];
+  let key = res.goalKey;
+  while (key && res.parent.get(key)) {
+    const p = res.parent.get(key);
+    pushes.push(p);
+    key = p.prevKey;
+  }
+  pushes.reverse();
+  // walk the porter from start, expanding each push into walk-steps + the shove.
+  const steps = [];
+  let player = b.start.player;
+  let crates = b.start.crates.slice();
+  for (const p of pushes) {
+    // the crate that gets pushed in dir p.dir: its OLD cell is one step before
+    // p.player along p.dir... actually p.player IS the crate's old cell (porter
+    // lands there). The launch cell (where the porter must stand to push) is the
+    // cell BEHIND the crate = one step opposite p.dir from p.player.
+    const oldCrate = p.player;                    // crate's pre-push cell
+    const launch = nbr(b, oldCrate, p.dir ^ 1);   // porter must stand here
+    const walk = bfsWalk(b, player, launch, crates);
+    if (walk == null) return [];                  // shouldn't happen on a solved chain
+    for (const d of walk) steps.push(d);
+    steps.push(p.dir);                            // the shove
+    // apply the push to local state
+    const ci = crates.indexOf(oldCrate);
+    crates[ci] = nbr(b, oldCrate, p.dir);
+    crates.sort((a, z) => a - z);
+    player = oldCrate;
+  }
+  return steps;
+}
+// BFS a walk path (list of step dirs) for the porter from `from` to `to` over
+// free floor (crates block). Returns [dir,...] or null if unreachable.
+function bfsWalk(b, from, to, crates) {
+  if (from === to) return [];
+  const blocked = new Set(crates);
+  const prev = new Map([[from, null]]);
+  const q = [from]; let head = 0;
+  while (head < q.length) {
+    const cur = q[head++];
+    for (let d = 0; d < 4; d++) {
+      const n = nbr(b, cur, d);
+      if (n < 0 || isWall(b, n) || blocked.has(n) || prev.has(n)) continue;
+      prev.set(n, { cell: cur, dir: d });
+      if (n === to) {
+        const path = [];
+        let c = n;
+        while (prev.get(c)) { path.push(prev.get(c).dir); c = prev.get(c).cell; }
+        return path.reverse();
+      }
+      q.push(n);
+    }
+  }
+  return null;
+}
+
+// ── authored boards (all BFS-verified) ───────────────────────────────────────
+const L1 = { name: 'The Single Crate', rows: ['#######', '#     #', '# @$ .#', '#     #', '#######'] };       // 2 pushes
+const L2 = { name: 'Two Pads', rows: ['########', '#  .   #', '# $$ . #', '#  @   #', '########'] };           // 4 pushes
+const L3 = { name: 'Around the Corner', rows: ['#######', '#.    #', '#.$ $ #', '#   @ #', '#######'] };       // 5 pushes
+const NEG1 = { name: 'Frozen Corner', rows: ['#######', '#$    #', '#  @  #', '#    .#', '#######'] };          // unwinnable: crate starts frozen in corner
+const NEG2 = { name: 'Sealed Pad', rows: ['#######', '#     #', '# ### #', '# #.# #', '# ### #', '#@ $  #', '#######'] }; // unwinnable by global BFS, no local freeze
+
+const LEVELS = [L1, L2, L3, NEG2];
+const POS_BOARD = L1.rows;
+const POS_PUSHES = 2;
+const NEG_BOARD = NEG1.rows;
+// === CORE END ===
+
+/* ===========================================================================
+   THE PAGE SELF-TEST — the board constants + shared helpers + runChecks() are
+   inlined byte-identical from warehouse.core.test.mjs (lines 21-143). The chip
+   runs THIS runChecks(), so the in-page result equals `node warehouse.core.test.mjs`.
+   ======================================================================== */
+// the authored boards, all sourced from the core's single LEVELS table (so there
+// is exactly ONE place the board literals live — the core — and this block inlines
+// cleanly into the page without re-declaring them):
+//   LEVELS = [L1 'Single Crate', L2 'Two Pads', L3 'Around the Corner', NEG2 'Sealed Pad']
+//   NEG_BOARD = NEG1 'Frozen Corner'
+const wL1 = LEVELS[0].rows, wL2 = LEVELS[1].rows, wL3 = LEVELS[2].rows;
+const wNEG1 = NEG_BOARD;                                  // 'Frozen Corner'
+const wNEG2 = LEVELS[3].rows;                             // 'Sealed Pad'
+
+// ── shared helpers (used by both the page chip and this twin) ────────────────
+// canonical key matching the core's internal scheme (player normalized to region min)
+function regKey(reg, crates) { let mn = Infinity; for (const c of reg) if (c < mn) mn = c; return mn + '|' + crates.join(','); }
+// full enumeration of reachable push-states (deadlock pruning OFF — we want ALL of them)
+function reachable(rows) {
+  const b = parseBoard(rows);
+  const reg0 = region(b, b.start.player, b.start.crates);
+  const seen = new Map([[regKey(reg0, b.start.crates), { player: b.start.player, crates: b.start.crates }]]);
+  const q = [...seen.keys()]; let head = 0;
+  while (head < q.length) {
+    const st = seen.get(q[head++]);
+    const reg = region(b, st.player, st.crates);
+    for (const mv of pushSucc(b, reg, st.crates)) {
+      const nk = regKey(region(b, mv.player, mv.crates), mv.crates);
+      if (seen.has(nk)) continue;
+      seen.set(nk, { player: mv.player, crates: mv.crates });
+      q.push(nk);
+    }
+  }
+  return { b, states: [...seen.values()] };
+}
+// solve starting from an arbitrary mid-game state (deadlock OFF for the soundness proof)
+function solveFrom(b, st) {
+  const bb = { W: b.W, H: b.H, walls: b.walls, goals: b.goals, start: { player: st.player, crates: st.crates.slice() } };
+  return solve(bb, false);
+}
+
+// ── the six checks (the page chip runs this IDENTICAL function) ──────────────
+function runChecks() {
+  const checks = [];
+
+  // A — POSITIVE: the authored positive board is winnable in exactly POS_PUSHES.
+  {
+    const r = solve(parseBoard(POS_BOARD), true);
+    const pass = r.exhausted === false && r.len === POS_PUSHES;
+    checks.push({ name: 'positive board winnable in ' + POS_PUSHES + ' pushes', pass, detail: 'len=' + r.len + ' exhausted=' + r.exhausted });
+  }
+
+  // B — NEG-CONTROL (load-bearing): the authored neg board is provably unwinnable.
+  {
+    const r = solve(parseBoard(wNEG1), true);
+    const pass = r.exhausted === true && r.len === -1;
+    checks.push({ name: 'neg-control provably unwinnable (BFS exhausts)', pass, detail: 'len=' + r.len + ' exhausted=' + r.exhausted + ' expanded=' + r.expanded });
+  }
+
+  // C — VACUOUS-CHECKER REFUTATION: a checker that always claims solvable would pass A's
+  // shape (it would "agree" the positive board is solvable) but FAILS B — proving B does
+  // real work and isn't satisfied by any trivial checker.
+  {
+    const alwaysSolvable = () => ({ len: 0, exhausted: false });
+    const passesPosShape = alwaysSolvable(parseBoard(POS_BOARD)).exhausted === false;
+    const failsNeg = alwaysSolvable(parseBoard(wNEG1)).exhausted !== true;   // it never reports exhausted
+    const realResultOnNeg = solve(parseBoard(wNEG1), true).exhausted === true; // the REAL solver does
+    const pass = passesPosShape && failsNeg && realResultOnNeg;
+    checks.push({ name: 'vacuous "always solvable" checker fails the neg-control', pass, detail: 'vacuous-passes-pos=' + passesPosShape + ' vacuous-misses-neg=' + failsNeg + ' real-catches-neg=' + realResultOnNeg });
+  }
+
+  // D — DEADLOCK SOUNDNESS: over reachable(POS) ∪ reachable(NEG1), every flagged-dead state
+  // is truly dead (solveFrom exhausts); falsePositives MUST be 0, AND flaggedCount > 0.
+  {
+    let total = 0, flagged = 0, falsePos = 0;
+    for (const rows of [POS_BOARD, wNEG1]) {
+      const { b, states } = reachable(rows);
+      for (const st of states) {
+        total++;
+        if (isDeadlocked(b, st.crates)) {
+          flagged++;
+          if (!solveFrom(b, st).exhausted) falsePos++;   // flagged dead but actually winnable ⇒ UNSOUND
+        }
+      }
+    }
+    const pass = falsePos === 0 && flagged > 0;
+    checks.push({ name: 'deadlock detector sound (flagged ⊆ truly-dead, and non-empty)', pass, detail: total + ' states, ' + flagged + ' flagged-dead, ' + falsePos + ' false-positive(s)' });
+  }
+
+  // E — PUSH-ONLY INVARIANT: sweep pushSucc over reachable states of L1,L2,L3 — every
+  // successor moves exactly one crate exactly one cell, and the porter lands on the crate's
+  // OLD cell (a pull edge would put the porter on the far side / move the crate toward it).
+  {
+    let bad = 0, swept = 0;
+    for (const rows of [wL1, wL2, wL3]) {
+      const { b, states } = reachable(rows);
+      for (const st of states) {
+        const reg = region(b, st.player, st.crates);
+        for (const mv of pushSucc(b, reg, st.crates)) {
+          swept++;
+          // diff the crate multisets: exactly one cell leaves, exactly one arrives.
+          const before = new Set(st.crates), after = new Set(mv.crates);
+          let removed = 0, added = 0, movedFrom = -1, movedTo = -1;
+          for (const c of st.crates) if (!after.has(c)) { removed++; movedFrom = c; }
+          for (const c of mv.crates) if (!before.has(c)) { added++; movedTo = c; }
+          if (removed !== 1 || added !== 1) { bad++; continue; }
+          // the moved crate travelled exactly one orthogonal cell
+          const dx = Math.abs((movedTo % b.W) - (movedFrom % b.W));
+          const dy = Math.abs(((movedTo / b.W) | 0) - ((movedFrom / b.W) | 0));
+          if (dx + dy !== 1) { bad++; continue; }
+          // PUSH (not pull): the porter ends on the crate's OLD cell.
+          if (mv.player !== movedFrom) { bad++; continue; }
+        }
+      }
+    }
+    checks.push({ name: 'push-only: every successor pushes one crate one cell (no pull edge)', pass: bad === 0, detail: swept + ' successors swept, ' + bad + ' violation(s)' });
+  }
+
+  // F — WINNABLE-LEVELS LENGTHS: the three winnable levels solve at their authored optima.
+  {
+    const l1 = solve(parseBoard(wL1)).len, l2 = solve(parseBoard(wL2)).len, l3 = solve(parseBoard(wL3)).len;
+    const pass = l1 === 2 && l2 === 4 && l3 === 5;
+    checks.push({ name: 'winnable levels solve at proven optima (2 · 4 · 5)', pass, detail: 'L1=' + l1 + ' L2=' + l2 + ' L3=' + l3 });
+  }
+
+  const passed = checks.filter(c => c.pass).length;
+  return { passed, total: checks.length, allPass: passed === checks.length, checks };
+}
+
+/* ===========================================================================
+   ============================  THE UI / GAME  ===========================
+   The page keeps NO parallel game authority: every keypress/tap routes through
+   the core's step(); every push consults the core's deadInfo(); the win check
+   is the core's won(); "show me" replays the core's showPath().
+   ======================================================================== */
+const $ = id => document.getElementById(id);
+const SVGNS = "http://www.w3.org/2000/svg";
+const boardEl = $('board'), boardOuter = $('boardOuter'), verdict = $('verdict'),
+      caption = $('caption'), deadBanner = $('deadBanner'), deadInner = $('deadInner');
+
+/* ---- storage helpers (guarded; page works even when storage throws) ---- */
+function safeSet(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) { } }
+function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+const state = {
+  levelIdx: 0,
+  skin: "graphite",
+  board: null,        // parsed board (static walls/goals + start)
+  pos: null,          // live { player, crates } — the porter's mutable state
+  history: [],        // stack of prior { player, crates } for undo
+  resets: 0,
+  undos: 0,
+  pushes: 0,          // player's push count this attempt
+  won: false,
+  replaying: false,
+  moving: false,      // a tween is in flight
+  pending: null,      // 1-deep queued move dir
+  lastDir: 1,         // porter facing (default down)
+  optimal: -1,        // proven push-optimum for this level (-1 = unwinnable)
+  // element refs, rebuilt each render
+  crateEls: null,     // crateIdx-stable? no — crates is a sorted set; we map by cell
+  crateByCell: null,  // Map cell -> <g.crate>
+  goalRings: null,    // Map goal-cell -> ring element
+  porterEl: null,
+  cellPx: 0, X: null, Y: null, cx: null, cy: null,
+  seatedCells: null,  // Set of crate cells currently seated (for seat-pop detection)
+  deadlockSeen: false,
+};
+
+/* ---- load a level ---- */
+function loadLevel(idx) {
+  state.levelIdx = idx;
+  const lvl = LEVELS[idx];
+  state.board = parseBoard(lvl.rows);
+  state.pos = { player: state.board.start.player, crates: state.board.start.crates.slice() };
+  state.history = [];
+  state.resets = 0; state.undos = 0; state.pushes = 0;
+  state.won = false; state.replaying = false; state.moving = false; state.pending = null;
+  state.lastDir = 1;
+  state.seatedCells = new Set();
+  state.deadlockSeen = false;
+  // the proven optimum (push count) for this room — from the SOLE authority
+  const res = solve(state.board, true);
+  state.optimal = res.exhausted ? -1 : res.len;
+  boardOuter.classList.remove('won');
+  verdict.classList.remove('show'); verdict.innerHTML = "";
+  hideDeadBanner();
+  renderBoard();
+  updateButtons();
+  updateCaption();
+}
+
+/* ---- render the SVG board ---- */
+function renderBoard() {
+  const b = state.board, N = Math.max(b.W, b.H);
+  const cellPx = N <= 6 ? 60 : N <= 8 ? 52 : 44;
+  const pad = Math.round(cellPx * 0.22);
+  const W = b.W * cellPx + pad * 2, H = b.H * cellPx + pad * 2;
+  const X = x => pad + x * cellPx, Y = y => pad + y * cellPx;
+  const cx = x => pad + x * cellPx + cellPx / 2, cy = y => pad + y * cellPx + cellPx / 2;
+  state.cellPx = cellPx; state.X = X; state.Y = Y; state.cx = cx; state.cy = cy;
+
+  boardEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  boardEl.setAttribute('width', W); boardEl.setAttribute('height', H);
+  boardEl.style.maxWidth = '100%';
+  while (boardEl.firstChild) boardEl.removeChild(boardEl.firstChild);
+
+  // LAYER 1 — floor + walls
+  const baseLayer = document.createElementNS(SVGNS, 'g');
+  for (let y = 0; y < b.H; y++) for (let x = 0; x < b.W; x++) {
+    const i = y * b.W + x;
+    const rect = document.createElementNS(SVGNS, 'rect');
+    rect.setAttribute('x', X(x)); rect.setAttribute('y', Y(y));
+    rect.setAttribute('width', cellPx); rect.setAttribute('height', cellPx);
+    rect.setAttribute('rx', Math.round(cellPx * 0.10));
+    rect.setAttribute('class', isWall(b, i) ? 'wall' : 'floor');
+    baseLayer.appendChild(rect);
+  }
+  boardEl.appendChild(baseLayer);
+
+  // LAYER 2 — goal pads (ring + soft fill)
+  const goalLayer = document.createElementNS(SVGNS, 'g');
+  const goalRings = new Map();
+  const gr = cellPx * 0.30;
+  for (const g of b.goals) {
+    const x = g % b.W, y = (g / b.W) | 0;
+    const fill = document.createElementNS(SVGNS, 'circle');
+    fill.setAttribute('cx', cx(x)); fill.setAttribute('cy', cy(y)); fill.setAttribute('r', gr * 1.18);
+    fill.setAttribute('class', 'goalfill');
+    goalLayer.appendChild(fill);
+    const ring = document.createElementNS(SVGNS, 'circle');
+    ring.setAttribute('cx', cx(x)); ring.setAttribute('cy', cy(y)); ring.setAttribute('r', gr);
+    ring.setAttribute('class', 'goalring');
+    goalLayer.appendChild(ring);
+    goalRings.set(g, ring);
+  }
+  boardEl.appendChild(goalLayer);
+  state.goalRings = goalRings;
+
+  // LAYER 3 — crates (positioned by transform translate so a move is a tween)
+  const crateLayer = document.createElementNS(SVGNS, 'g');
+  const crateByCell = new Map();
+  const cs = cellPx * 0.74, off = (cellPx - cs) / 2;
+  for (const c of state.pos.crates) {
+    const g = makeCrateEl(cs);
+    placeAt(g, c);
+    crateLayer.appendChild(g);
+    crateByCell.set(c, g);
+  }
+  boardEl.appendChild(crateLayer);
+  state.crateByCell = crateByCell;
+  state._crateLayer = crateLayer; state._crateSize = cs;
+
+  // LAYER 4 — the porter
+  const porter = makePorterEl();
+  placeAt(porter, state.pos.player);
+  boardEl.appendChild(porter);
+  state.porterEl = porter;
+  orientPorter(state.lastDir);
+
+  paintSeated(true);
+}
+
+// build a crate <g> (body + two plank grain lines + corner band), centered at 0,0
+function makeCrateEl(cs) {
+  const g = document.createElementNS(SVGNS, 'g');
+  g.setAttribute('class', 'crate');
+  const r = Math.round(cs * 0.14);
+  const body = document.createElementNS(SVGNS, 'rect');
+  body.setAttribute('x', 0); body.setAttribute('y', 0);
+  body.setAttribute('width', cs); body.setAttribute('height', cs);
+  body.setAttribute('rx', r); body.setAttribute('class', 'body');
+  g.appendChild(body);
+  // two plank grain lines
+  for (const f of [0.36, 0.64]) {
+    const ln = document.createElementNS(SVGNS, 'line');
+    ln.setAttribute('x1', cs * 0.14); ln.setAttribute('y1', cs * f);
+    ln.setAttribute('x2', cs * 0.86); ln.setAttribute('y2', cs * f);
+    ln.setAttribute('class', 'grain');
+    g.appendChild(ln);
+  }
+  // corner band (inset rect)
+  const band = document.createElementNS(SVGNS, 'rect');
+  band.setAttribute('x', cs * 0.16); band.setAttribute('y', cs * 0.16);
+  band.setAttribute('width', cs * 0.68); band.setAttribute('height', cs * 0.68);
+  band.setAttribute('rx', Math.round(cs * 0.08)); band.setAttribute('class', 'band');
+  g.appendChild(band);
+  g.dataset.cs = cs;
+  return g;
+}
+function makePorterEl() {
+  const g = document.createElementNS(SVGNS, 'g');
+  g.setAttribute('class', 'porter');
+  const cs = state._crateSize || state.cellPx * 0.74;
+  const pr = cs * 0.30;
+  const torso = document.createElementNS(SVGNS, 'circle');
+  torso.setAttribute('cx', 0); torso.setAttribute('cy', 0); torso.setAttribute('r', pr);
+  torso.setAttribute('class', 'torso');
+  g.appendChild(torso);
+  // facing notch — a small triangle pointing "up" by default; rotated to dir
+  const notch = document.createElementNS(SVGNS, 'polygon');
+  const t = pr * 0.62;
+  notch.setAttribute('points', `0,${-pr * 0.95} ${t * 0.7},${-pr * 0.30} ${-t * 0.7},${-pr * 0.30}`);
+  notch.setAttribute('class', 'notch');
+  g.appendChild(notch);
+  state._porterNotch = notch;
+  return g;
+}
+// place a <g> centered on cell `cell` via transform translate
+function placeAt(g, cell) {
+  const x = cell % state.board.W, y = (cell / state.board.W) | 0;
+  const cs = +g.dataset.cs || (g.classList.contains('crate') ? state._crateSize : 0);
+  if (g.classList.contains('crate')) {
+    const off = (state.cellPx - cs) / 2;
+    g.setAttribute('transform', `translate(${state.X(x) + off}, ${state.Y(y) + off})`);
+  } else {
+    g.setAttribute('transform', `translate(${state.cx(x)}, ${state.cy(y)})`);
+  }
+}
+// rotate the porter's facing notch to a dir (0=up,1=down,2=left,3=right)
+function orientPorter(dir) {
+  const deg = dir === 0 ? 0 : dir === 3 ? 90 : dir === 1 ? 180 : 270;
+  if (state._porterNotch) state._porterNotch.style.transform = `rotate(${deg}deg)`;
+}
+
+/* ---- the one input code path ---- */
+function attemptMove(dir) {
+  if (state.won || state.replaying) return;
+  if (state.moving) { state.pending = dir; return; }       // 1-deep queue for held keys
+  const before = state.pos;
+  const r = step(before, dir, state.board);
+  state.lastDir = dir;
+  orientPorter(dir);
+  if (!r.moved) { return; }                                // wall/crate blocks — porter stays
+  // record undo BEFORE mutating (carry whether this move was a push so undo is exact)
+  state.history.push({ player: before.player, crates: before.crates.slice(), pushed: r.pushed });
+  const movedCrateFrom = r.pushed ? before.crates[ r.crateIdx ] : -1;  // crate's OLD cell
+  const movedCrateTo = r.pushed ? findNewCrateCell(before.crates, r.next.crates) : -1;
+  state.pos = r.next;
+  if (r.pushed) state.pushes++;
+  state.moving = true;
+  tweenMove(dir, r.pushed, movedCrateFrom, movedCrateTo);
+}
+// the single crate cell present in `after` but not `before`
+function findNewCrateCell(before, after) {
+  const bset = new Set(before);
+  for (const c of after) if (!bset.has(c)) return c;
+  return -1;
+}
+
+/* ---- animate one move: porter (+ pushed crate) slide one cell together ---- */
+function tweenMove(dir, pushed, crateFrom, crateTo) {
+  // move the porter
+  placeAt(state.porterEl, state.pos.player);
+  let crateEl = null;
+  if (pushed) {
+    crateEl = state.crateByCell.get(crateFrom);
+    if (crateEl) {
+      state.crateByCell.delete(crateFrom);
+      placeAt(crateEl, crateTo);
+      state.crateByCell.set(crateTo, crateEl);
+    }
+  }
+  const done = () => {
+    state.porterEl.removeEventListener('transitionend', done);
+    finishMove(pushed, crateTo, crateEl);
+  };
+  // fall back to a timer if transitionend doesn't fire (no transform delta / reduced motion)
+  state.porterEl.addEventListener('transitionend', done, { once: true });
+  state._moveTimer = setTimeout(() => { if (state.moving) done(); }, 200);
+}
+function finishMove(pushed, crateTo, crateEl) {
+  clearTimeout(state._moveTimer);
+  state.moving = false;
+  // seated-glow: did a crate land on a goal?
+  if (pushed) paintSeated(false);
+  // deadlock check after every push (the soul moment)
+  if (pushed) checkDeadlock();
+  updateButtons();
+  // win?
+  if (won(state.board, state.pos.crates)) { onWin(); return; }
+  // dequeue a pending move
+  if (state.pending != null) { const d = state.pending; state.pending = null; attemptMove(d); }
+}
+
+/* ---- seated glow: toggle .seated on every crate sitting on a goal ---- */
+function paintSeated(initial) {
+  const b = state.board;
+  const nowSeated = new Set();
+  for (const [cell, el] of state.crateByCell) {
+    const seated = b.goals.has(cell);
+    el.classList.toggle('seated', seated);
+    if (seated) {
+      nowSeated.add(cell);
+      // replay the seat keyframe only when newly seated (not on full repaint)
+      if (!initial && !state.seatedCells.has(cell)) {
+        el.classList.remove('seatpop'); void el.getBBox(); el.classList.add('seatpop');
+      }
+    }
+    // goal ring brightens when seated
+  }
+  for (const [g, ring] of state.goalRings) ring.classList.toggle('seated', nowSeated.has(g));
+  state.seatedCells = nowSeated;
+}
+
+/* ---- the soul moment: surface a deadlock if one just formed ---- */
+function checkDeadlock() {
+  const info = deadInfo(state.board, state.pos.crates);
+  // paint every frozen (non-goal) crate as welded
+  let firstFreeze = false;
+  for (const [cell, el] of state.crateByCell) {
+    const frozen = info.frozenCrates.includes(cell);
+    if (frozen && !el.classList.contains('stuck')) {
+      el.classList.add('stuck');
+      el.classList.remove('freeze'); void el.getBBox(); el.classList.add('freeze');
+      firstFreeze = true;
+    } else if (!frozen && el.classList.contains('stuck')) {
+      el.classList.remove('stuck', 'freeze');
+    }
+  }
+  if (info.dead) showDeadBanner();
+  else hideDeadBanner();
+}
+function showDeadBanner() {
+  let html = `<b>That box can't be pushed back.</b> The room is now unwinnable — press R to reset.`;
+  if (!state.deadlockSeen && safeGet('ws:seen:warehouse-deadlock') == null) {
+    html += `<span class="first">— this is the thing. No other puzzle here could do that to you.</span>`;
+    safeSet('ws:seen:warehouse-deadlock', Date.now());
+  }
+  state.deadlockSeen = true;
+  deadInner.innerHTML = html;
+  deadBanner.classList.add('show');
+  $('resetBtn').classList.add('beckon');
+}
+function hideDeadBanner() {
+  deadBanner.classList.remove('show');
+  $('resetBtn').classList.remove('beckon');
+}
+
+/* ---- win ---- */
+function onWin() {
+  state.won = true;
+  boardOuter.classList.add('won');
+  paintSeated(true);
+  const clean = state.resets === 0 && state.undos === 0;
+  const optimal = state.optimal >= 0 && state.pushes === state.optimal;
+  let small = `Room ${state.levelIdx + 1} · ${state.pushes} push${state.pushes === 1 ? '' : 'es'}`;
+  small += state.resets === 0 ? ' · no resets' : ` · after ${state.resets} reset${state.resets === 1 ? '' : 's'}`;
+  if (optimal && clean) small += ' · a clean, tight solve';
+  verdict.innerHTML = `<span>solved — <span class="name">every pad covered</span></span><span class="small">${small}</span>`;
+  verdict.classList.add('show');
+  hideDeadBanner();
+  // bookkeeping (guarded)
+  try {
+    const prevBest = parseInt(safeGet('ws:best:warehouse') || '0', 10) || 0;
+    if (state.levelIdx + 1 > prevBest) safeSet('ws:best:warehouse', state.levelIdx + 1);
+  } catch (e) { }
+  // clean = solved with ZERO resets AND ZERO undos. NEG2 can't be cleared by design.
+  if (clean) safeSet('ws:flag:warehouse-clean', Date.now());
+  updateButtons();
+}
+
+/* ---- undo / reset (gated behind an in-flight tween) ---- */
+function doUndo() {
+  if (state.won || state.replaying || state.moving) return;
+  if (state.history.length === 0) return;
+  const prev = state.history.pop();
+  if (prev.pushed) state.pushes = Math.max(0, state.pushes - 1);  // exact: undo a push, drop the count
+  state.pos = { player: prev.player, crates: prev.crates };
+  state.undos++;
+  rebuildCrates();
+  hideDeadBanner();
+  checkDeadlock();
+  updateButtons();
+}
+function doReset() {
+  if (state.moving || state.replaying) return;
+  state.pos = { player: state.board.start.player, crates: state.board.start.crates.slice() };
+  state.history = [];
+  state.resets++;
+  state.pushes = 0;
+  state.won = false;
+  boardOuter.classList.remove('won');
+  verdict.classList.remove('show'); verdict.innerHTML = "";
+  hideDeadBanner();
+  state.lastDir = 1;
+  rebuildCrates();
+  orientPorter(state.lastDir);
+  updateButtons();
+}
+// re-place every crate element to match state.pos.crates (after undo/reset)
+function rebuildCrates() {
+  const layer = state._crateLayer;
+  while (layer.firstChild) layer.removeChild(layer.firstChild);
+  const cs = state._crateSize;
+  const map = new Map();
+  for (const c of state.pos.crates) {
+    const g = makeCrateEl(cs);
+    placeAt(g, c);
+    layer.appendChild(g);
+    map.set(c, g);
+  }
+  state.crateByCell = map;
+  placeAt(state.porterEl, state.pos.player);
+  state.seatedCells = new Set();
+  paintSeated(true);
+}
+/* ---- show me: replay showPath through the same tween ---- */
+function doShow() {
+  if (state.replaying || state.moving) return;
+  // reset to start, then replay (does NOT set the clean flag — watching the answer is honest)
+  state.pos = { player: state.board.start.player, crates: state.board.start.crates.slice() };
+  state.history = [];
+  state.won = false; state.pushes = 0;
+  boardOuter.classList.remove('won');
+  verdict.classList.remove('show'); verdict.innerHTML = "";
+  hideDeadBanner();
+  rebuildCrates();
+  const path = showPath(state.board);
+  if (path.length === 0) {
+    flashCaption("this room can't be solved — that's the lesson. Pick another room.");
+    return;
+  }
+  state.replaying = true;
+  updateButtons();
+  let k = 0;
+  const tick = () => {
+    if (k >= path.length) {
+      state.replaying = false;
+      // land on the win bloom
+      boardOuter.classList.add('won');
+      paintSeated(true);
+      verdict.innerHTML = `<span>shown — <span class="name">that's one solution in ${state.optimal} pushes</span></span>` +
+        `<span class="small">now try it yourself — R to reset</span>`;
+      verdict.classList.add('show');
+      updateButtons();
+      return;
+    }
+    const dir = path[k++];
+    const r = step(state.pos, dir, state.board);
+    state.lastDir = dir; orientPorter(dir);
+    if (r.pushed) {
+      const from = findOldCrate(state.pos.crates, r.next.crates);
+      const to = findNewCrateCell(state.pos.crates, r.next.crates);
+      state.pos = r.next;
+      const el = state.crateByCell.get(from);
+      placeAt(state.porterEl, state.pos.player);
+      if (el) { state.crateByCell.delete(from); placeAt(el, to); state.crateByCell.set(to, el); }
+      paintSeated(false);
+    } else {
+      state.pos = r.next;
+      placeAt(state.porterEl, state.pos.player);
+    }
+    setTimeout(tick, 220);
+  };
+  setTimeout(tick, 260);
+}
+function findOldCrate(before, after) {
+  const aset = new Set(after);
+  for (const c of before) if (!aset.has(c)) return c;
+  return -1;
+}
+
+/* ---- buttons / caption ---- */
+function updateButtons() {
+  const lock = state.won || state.replaying;
+  $('undoBtn').disabled = lock || state.history.length === 0;
+  $('resetBtn').disabled = state.replaying;
+  $('showBtn').disabled = state.replaying;
+  for (const btn of document.querySelectorAll('#dpad button[data-dir]')) {
+    btn.disabled = lock;
+    btn.setAttribute('aria-disabled', lock ? 'true' : 'false');
+  }
+}
+let capTimer = null;
+function updateCaption() {
+  const b = state.board;
+  const nGoals = b.goals.size, nCrates = state.board.start.crates.length;
+  const lvl = LEVELS[state.levelIdx];
+  const proven = state.optimal >= 0
+    ? `a breadth-first search proved this board solvable in <span class="stat">${state.optimal}</span> push${state.optimal === 1 ? '' : 'es'}`
+    : `a breadth-first search proved this board solvable in <span class="stat">NONE</span> — every path dies`;
+  caption.innerHTML = `<b>${lvl.name}.</b> A hand-authored Sokoban room, verified before it reached you: ${proven}. ` +
+    `<span class="stat">${nCrates}</span> crate${nCrates === 1 ? '' : 's'}, <span class="stat">${nGoals}</span> pad${nGoals === 1 ? '' : 's'}. ` +
+    `Arrows or WASD to walk; walk into a box to push it. <span class="mono">U</span> to undo, <span class="mono">R</span> to reset.`;
+}
+function flashCaption(msg) {
+  caption.innerHTML = `<b>${msg}</b>`;
+  if (capTimer) clearTimeout(capTimer);
+  capTimer = setTimeout(updateCaption, 3600);
+}
+
+/* ----------------------------- wiring ----------------------------- */
+const KEYDIR = { ArrowUp: 0, ArrowDown: 1, ArrowLeft: 2, ArrowRight: 3, w: 0, s: 1, a: 2, d: 3, W: 0, S: 1, A: 2, D: 3 };
+boardOuter.addEventListener('keydown', e => {
+  if (state.replaying) { if (e.key === 'Escape') boardOuter.blur(); return; }
+  if (e.key in KEYDIR) { e.preventDefault(); attemptMove(KEYDIR[e.key]); }
+  else if (e.key === 'u' || e.key === 'U') { e.preventDefault(); doUndo(); }
+  else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); doReset(); }
+  else if (e.key === 'Escape') boardOuter.blur();
+});
+// D-pad — pointerdown + preventDefault dispatches the SAME attemptMove
+$('dpad').addEventListener('pointerdown', e => {
+  const btn = e.target.closest('button[data-dir]'); if (!btn || btn.disabled) return;
+  e.preventDefault(); boardOuter.focus();
+  attemptMove(+btn.dataset.dir);
+});
+$('undoBtn').addEventListener('click', doUndo);
+$('resetBtn').addEventListener('click', doReset);
+$('showBtn').addEventListener('click', doShow);
+$('levelSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#levelSeg button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  loadLevel(+b.dataset.level);
+  boardOuter.focus();
+});
+$('skinSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#skinSeg button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  state.skin = b.dataset.skin;
+  document.body.dataset.skin = state.skin;   // PURELY cosmetic
+});
+
+/* ----------------------------- boot ----------------------------- */
+(function boot() {
+  // self-test FIRST (workshop tradition); the chip runs the SAME runChecks() the
+  // Node twin runs, so the in-page result MUST equal `node warehouse.core.test.mjs`.
+  let st;
+  try { st = runChecks(); }
+  catch (err) { console.error('[Warehouse] self-test threw', err); st = { passed: 0, total: 6, allPass: false, checks: [] }; }
+  const chip = $('selftest'), txt = $('stText');
+  const labels = ['A', 'B', 'C', 'D', 'E', 'F'];
+  for (let k = 0; k < st.checks.length; k++) {
+    const c = st.checks[k];
+    if (c.pass) console.log('[Warehouse] self-test PASS — ' + labels[k] + ' ' + c.name + ' (' + c.detail + ')');
+    else console.error('[Warehouse] self-test FAIL — ' + labels[k] + ' ' + c.name + ' (' + c.detail + ')');
+  }
+  if (st.allPass) { chip.classList.add('ok'); txt.textContent = 'self-test 6/6 ✓ · author-board winnable · neg-control unwinnable · deadlock-sound'; }
+  else { chip.classList.add('bad'); txt.textContent = `self-test ${st.passed}/6 — see console`; }
+
+  // breadcrumb (guarded; a direct visit registers for the Survey of Heaven / Undercroft)
+  safeSet('ws:seen:warehouse', Date.now());
+
+  loadLevel(0);
+  console.log('[Warehouse] ready. rooms:', LEVELS.length, '· level 1 optimum:', state.optimal, 'pushes');
+})();
+</script>
+</body>
+</html>
