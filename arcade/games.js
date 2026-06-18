@@ -121,5 +121,11 @@ window.GAMES = [
     name: "Lode Runner",
     blurb: "neon dig-heist — dig holes to trap the guards, steal every nugget, climb out the lit escape ladder",
     accent: "#ffd24d"
+  },
+  {
+    file: "the-climb.html",
+    name: "The Climb",
+    blurb: "neon girder-climb — hop the rolling barrels, time the jump, reach the top platform",
+    accent: "#ff7a3d"
   }
 ];

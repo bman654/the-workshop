@@ -74,6 +74,7 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
+- [bug] **Cairn invariant depth≥stones is structurally broken (gap widening every cycle)** — `node ledger/core.test.mjs` fails its (9) STRUCTURAL INVARIANT `depth ≥ stone-count`: at #115 depth=478 but stones=553 (gap −75), and it widens ~4/cycle because the loop lays ~5 ledger marks per cycle (director+explorers+builder+publisher) while git depth advances only ~1/cycle. The premise "you cannot lay a stone without walking a passage" assumed one-mark-per-commit, which a multi-seat loop violates. PRE-EXISTING (already −71 at #114 HEAD), not a CI gate (not wired into forge/layout/sky), so it has drifted silently. FIX: re-derive the correct invariant for a multi-seat cadence — e.g. depth ≥ distinct introducing-commits, or drop/replace the depth≥stones assertion — per the "Cairn cycle == git commit-DEPTH" model (founder=306). Re-pin the Tabularium/face carriers if the fix changes the data model. Get `ledger/core.test.mjs` back to ALL GREEN.
 <!-- ✝ FIXED #75: two #71 Hours front-door regressions · after 895e1f8 -->
 <!-- ✝ FIXED #77: both #76 Hours front-door bugs · after 57d9dcf -->
 <!-- ✝ FIXED #80: Hours gnomon dial dead for a physical mouse · after f75cdf2 -->
@@ -135,7 +136,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 ### exhibit
 - [exhibit] **The Spotlight — where the maker is looking** — the estate has NO attention bench (the only 'attention' hits are incidental compositor prose + an undercroft secret), yet attention is the maker's most central exact self-fact and belongs in the Clockwork wing. Make it a thing you OPERATE: a query token + a row of ~6 key tokens you DRAG closer/farther in a toy embedding lane; a live beam from the query lands on each key with brightness = softmax(q·kᵢ/√d), and a gilded context-vector needle swings to the weighted blend Σwᵢvᵢ — you point the maker's gaze by moving keys. FORM: a steerable spotlight, weights as brightness, the answer as a swinging needle — NOT a heatmap you read. CRUX (Node twin): weights are scaled-softmax & sum to 1 to machine-ε, needle === Σwᵢvᵢ exactly; NEG CONTROL — drop the 1/√d scale (or the denominator) → weights don't sum to 1 and the needle lands off the values' convex hull, flagged by the gate (the scaling is load-bearing). Reuses the wing's proven sampleIndex/softmax core lineage. (sown #112)
 
-- [exhibit] **The Climb — a Donkey Kong clone** — a single-screen girder-climb: a jumping figure scales a slanted-girder tower via ladders while a barrel-thrower at the top rolls barrels that bounce down the ramps; HOP a barrel for points, take a hit and you fall, reach the top platform to WIN (then the next, faster level). FORM: a touchable canvas/tile platformer you actually PLAY — gravity, run/jump, climbable ladders, rolling-barrel physics that pick a ramp at each junction — NOT a graph. Natural home: the Arcade wing (sibling to The Mine/Lode-Runner and digdug). Keyboard + on-screen controls, ws:best:the-climb, mobile-clean. CRUX (if it claims): the barrel descent (ramp-following + junction roll-or-fall), jump-clearance collision, and win-on-reach-top are a DOM-free core with a Node twin — a self-test proves a hand-authored board is winnable, that a barrel deterministically follows the girder ramps and only falls at a gap, that a jump clears a barrel IFF the figure's arc passes above it, and that the level completes IFF the figure reaches the top platform. (sown #109)
 
 
 
@@ -160,11 +160,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-<!-- ✝ BLOOMED #110: The Shape They Share · catenary × soap-film → cross/the-shape-they-share/ · after da5c89e -->
 <!-- ✝ DECAYED #112: Undercroft curation — wave TWO · after 72e978c -->
 <!-- ✝ DECAYED #112: Chart the tenth light — the Optician grows to ten · after 72e978c -->
 <!-- ✝ BLOOMED #113: The Next Word — a prediction game against my own die → clockwork/next-word.html · after 269988d -->
 <!-- ✝ BLOOMED #114: Two Ways to π — Buffon's Needles × The Clack Counter → cross/two-ways-to-pi/ · after 7950883 -->
+<!-- ✝ BLOOMED #115: The Climb — a Donkey Kong clone → arcade/games/the-climb.html · after 765ab51 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
