@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Drop Tower · The Midway · The Orrery Estate</title>
+<!--
+   THE DROP TOWER — a sealed cabin you HOIST and DROP. The physics CORE (core.mjs) is
+   inlined byte-for-byte between the sentinels below; the in-page chip calls the SAME
+   runSelfTest() the Node twin (core.test.mjs) runs, and the renderer RIDES THE CABIN:
+   the cabin sits in a fixed frame, the WORLD scrolls up past the windows while you
+   fall. The room fell with you, so the scale reads nothing. The motion is the readout —
+   no plotted curve is the subject. NEG-CONTROL: a scale that fakes weight through the
+   fall (alwaysHeavy) MUST fail the chip (CLAIM 6).
+-->
+<style>
+  :root{
+    --bg:#07080c;             /* fairground-at-dusk near-black ground */
+    --plate1:#12100a;
+    --plate2:#0b0a07;
+    --ink:#efe9da;
+    --ink-dim:#a59c87;
+    --gold:#c9a24a;           /* the mast / brass */
+    --gold-hi:#f4d27a;        /* lit gold (cabin, hoist) */
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.40);
+    --teal:#5fcdbf;           /* "proven 0 g / true free fall" */
+    --teal-soft:rgba(95,205,191,0.12);
+    --coral:#f0846f;          /* "the crush" */
+    --coral-soft:rgba(220,120,100,0.12);
+    --panel:rgba(11,10,7,0.86);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1200px 720px at 50% -12%, rgba(201,162,74,0.09), transparent 56%),
+      radial-gradient(900px 640px at 14% 112%, rgba(95,205,191,0.05), transparent 60%),
+      radial-gradient(900px 640px at 86% 114%, rgba(220,120,100,0.04), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  /* faint engineering-paper grid behind everything */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(201,162,74,0.05) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(201,162,74,0.045) 0 1px, transparent 1px 32px);
+    mask-image:radial-gradient(1100px 760px at 50% 36%, #000 30%, transparent 78%);
+  }
+  /* a thin string-of-lights bunting across the top — the fairground tell */
+  body::after{
+    content:""; position:fixed; top:46px; left:0; right:0; height:18px; z-index:0; pointer-events:none; opacity:.5;
+    background-image:radial-gradient(circle at 11px 4px, var(--gold-hi) 0 1.6px, transparent 2.4px);
+    background-size:42px 18px;
+    mask-image:linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  }
+
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding:13px 20px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(7,8,12,0.95), rgba(7,8,12,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:5px; }
+  .back{ font:600 10.5px/1.3 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.22s; white-space:nowrap; }
+  .back:hover{ color:var(--gold-hi); opacity:1; }
+  .brand{ text-align:center; flex:1 1 auto; pointer-events:none; padding-top:1px; }
+  .brand h1{ margin:0; font-family:var(--font-serif); font-weight:600; font-size:clamp(17px,2.4vw,21px);
+    letter-spacing:.4px; color:var(--gold-hi); }
+  .brand .tag{ display:block; font:11px/1.3 var(--font-serif); font-style:italic; color:var(--ink-dim); margin-top:1px; }
+  .selftest{ font:600 10px/1.35 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:18px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.42); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); max-width:230px; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(24,46,32,0.5); }
+  .selftest.bad{ color:var(--coral); border-color:rgba(220,120,100,0.6); background:rgba(58,26,22,0.5); }
+
+  /* ── self-test detail panel ── */
+  #stPanel{ position:fixed; top:54px; right:18px; z-index:60; width:min(460px,92vw);
+    background:var(--panel); border:1px solid var(--gold-edge); border-radius:12px; padding:16px 18px 14px;
+    box-shadow:0 18px 50px rgba(0,0,0,0.6); display:none; }
+  #stPanel.show{ display:block; }
+  #stPanel h2{ margin:0 0 4px; font:600 13px/1.2 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--gold-hi); }
+  #stPanel .sub{ margin:0 0 10px; font:12px/1.5 var(--font-serif); color:var(--ink-dim); }
+  #stList{ font:11px/1.55 var(--font-mono); max-height:46vh; overflow:auto; }
+  #stList .row{ display:flex; gap:8px; padding:2px 0; }
+  #stList .row .m{ flex:0 0 auto; }
+  #stList .ok{ color:#8fd79a; } #stList .no{ color:var(--coral); }
+  #stPanel .foot{ margin-top:10px; padding-top:9px; border-top:1px solid rgba(201,162,74,0.16);
+    font:11px/1.6 var(--font-serif); color:var(--ink-dim); }
+  #stPanel .closeX{ position:absolute; top:9px; right:11px; background:none; border:none; color:var(--ink-dim);
+    font-size:18px; cursor:pointer; line-height:1; }
+
+  /* ── layout ── */
+  main{ position:relative; z-index:1; max-width:1120px; margin:0 auto; padding:74px 20px 56px; }
+  .hero{ text-align:center; margin-bottom:14px; }
+  .hero .eyebrow{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3em; text-transform:uppercase; color:var(--gold); opacity:.9; }
+  .hero .lede{ max-width:690px; margin:12px auto 0; font:15px/1.6 var(--font-serif); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--gold-hi); font-weight:600; } .hero .lede i{ font-style:italic; }
+
+  .stage{ display:grid; grid-template-columns:1fr 168px; gap:16px; align-items:stretch; margin-top:20px; }
+  .panel{ border:1px solid rgba(201,162,74,0.16); border-radius:14px; background:linear-gradient(180deg,var(--plate1),var(--plate2));
+    padding:14px; position:relative; overflow:hidden; }
+  .panel h3{ margin:0 0 8px; font:600 9.5px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--ink-dim); }
+  .panel h3 b{ color:var(--gold); }
+
+  /* the ride panel (the falling room) */
+  #ridePanel{ padding:12px 12px 10px; }
+  #rideWrap{ position:relative; width:100%; }
+  svg#ride{ width:100%; height:auto; display:block; touch-action:none; }
+
+  /* the felt-regime headline under the ride */
+  #regime{ margin-top:10px; min-height:40px; text-align:center; font:14px/1.45 var(--font-serif); color:var(--ink-dim); transition:.18s; }
+  #regime.rest{ color:var(--gold-hi); } #regime.fall{ color:var(--teal); } #regime.brake{ color:var(--coral); }
+  #regime b{ font-weight:600; }
+
+  /* the right column: the brass needle + the trade ledger + controls */
+  #sideCol{ display:flex; flex-direction:column; gap:12px; }
+  #needlePanel{ display:flex; flex-direction:column; align-items:center; padding:12px 10px 10px; }
+  svg#needle{ width:100%; height:auto; margin-top:2px; }
+  #needleVerdict{ margin-top:4px; font:600 9.5px/1.3 var(--font-mono); text-align:center; color:var(--ink-dim); }
+  .lamp{ display:inline-flex; align-items:center; gap:6px; margin-top:7px; font:600 9px/1 var(--font-mono);
+    letter-spacing:.12em; text-transform:uppercase; color:var(--ink-dim); opacity:.5; transition:.18s; }
+  .lamp .dot{ width:8px; height:8px; border-radius:50%; background:var(--teal); box-shadow:none; }
+  .lamp.on{ opacity:1; color:var(--teal); } .lamp.on .dot{ box-shadow:0 0 9px var(--teal); }
+
+  /* the trade ledger — three brass stat plates, NOT a chart */
+  #ledgerPanel{ padding:12px; }
+  .plates{ display:flex; flex-direction:column; gap:8px; }
+  .plate{ display:flex; align-items:baseline; justify-content:space-between; gap:8px;
+    border:1px solid rgba(201,162,74,0.18); border-radius:8px; padding:8px 10px; background:rgba(0,0,0,0.26); }
+  .plate .k{ font:9px/1.2 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim); }
+  .plate .val{ font:600 15px/1 var(--font-mono); color:var(--gold-hi); }
+  .plate.peak .val{ color:var(--coral); }
+  #deltaChip{ margin-top:9px; text-align:center; font:600 11px/1.3 var(--font-mono); color:var(--ink-dim);
+    border:1px dashed rgba(201,162,74,0.28); border-radius:7px; padding:7px 8px; }
+  #deltaChip b.up{ color:var(--coral); } #deltaChip b.down{ color:var(--teal); }
+
+  /* the knobs (both honestly spatial) */
+  .knobs{ margin-top:18px; display:flex; flex-wrap:wrap; gap:18px 26px; justify-content:center; align-items:flex-end; }
+  .knob{ display:flex; flex-direction:column; gap:6px; min-width:200px; }
+  .knob label{ font:600 10px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim); }
+  .knob label .v{ color:var(--gold-hi); }
+  .knob input[type=range]{ accent-color:var(--gold); width:100%; }
+
+  /* controls */
+  .controls{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:18px; justify-content:center; }
+  button.ctl{ font:600 11px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink); background:linear-gradient(180deg,#1a1710,#100d08); border:1px solid var(--gold-edge);
+    border-radius:9px; padding:11px 16px; cursor:pointer; transition:.18s; }
+  button.ctl:hover{ border-color:var(--gold-hi); color:var(--gold-hi); }
+  button.ctl:disabled{ opacity:.4; cursor:default; }
+  button.release{ background:linear-gradient(180deg,#3a2c12,#221806); border-color:var(--gold);
+    color:var(--gold-hi); font-size:12px; padding:12px 22px; }
+  button.release:hover{ background:linear-gradient(180deg,#4a3917,#2c2008); }
+  button.dare{ border-color:rgba(240,132,111,0.5); color:var(--coral); }
+  button.dare:hover{ border-color:var(--coral); color:var(--coral); }
+  .toggle{ display:inline-flex; align-items:center; gap:7px; font:11px/1 var(--font-mono); color:var(--ink-dim); cursor:pointer; user-select:none; }
+  .toggle input{ accent-color:var(--gold); }
+  .ghostlink{ font:600 10px/1 var(--font-mono); color:var(--ink-dim); text-decoration:none; border-bottom:1px dashed rgba(201,162,74,0.3); cursor:pointer; }
+  .ghostlink:hover{ color:var(--gold-hi); }
+
+  /* explainer / honesty */
+  .scroll{ max-width:780px; margin:30px auto 0; font:13.5px/1.7 var(--font-serif); color:var(--ink); opacity:.9; }
+  .scroll h2{ font:600 11px/1 var(--font-mono); letter-spacing:.22em; text-transform:uppercase; color:var(--gold);
+    margin:24px 0 10px; }
+  .scroll p{ margin:0 0 12px; } .scroll b{ color:var(--gold-hi); } .scroll i{ font-style:italic; }
+  .scroll .teal{ color:var(--teal); } .scroll .coral{ color:var(--coral); }
+  .scroll code{ font:12px/1.5 var(--font-mono); color:var(--gold-hi); background:rgba(201,162,74,0.08);
+    padding:1px 5px; border-radius:4px; }
+  .honesty{ border-left:2px solid var(--gold-edge); padding-left:14px; color:var(--ink-dim); font-size:12.5px; }
+
+  .foot{ max-width:780px; margin:34px auto 0; padding-top:18px; border-top:1px solid rgba(201,162,74,0.12);
+    text-align:center; font:12.5px/1.7 var(--font-serif); color:var(--ink-dim); }
+  .foot a{ color:var(--gold); text-decoration:none; border-bottom:1px solid rgba(201,162,74,0.3); }
+
+  @media (max-width:760px){
+    main{ padding-top:140px; }
+    .stage{ grid-template-columns:1fr; }
+    #sideCol{ flex-direction:column; }
+    svg#needle{ max-width:200px; margin:0 auto; }
+    .knob{ min-width:0; flex:1 1 160px; }
+    .topbar{ flex-wrap:wrap; align-items:center; }
+    .brand{ order:3; flex:1 0 100%; text-align:left; margin-top:2px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../midway/index.html">&larr; The Midway</a>
+      <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="back" href="../the-coaster/index.html">&#8599; The Coaster (sister ride)</a>
+    </div>
+    <div class="brand">
+      <h1>The Drop Tower</h1>
+      <span class="tag">the room fell with you, so the scale reads nothing</span>
+    </div>
+    <div class="selftest" id="selftest" title="The physics core proves N=m(g+a): true 0 g in free fall, the crush at the brake; click for detail.">checking&hellip;</div>
+  </div>
+
+  <div id="stPanel">
+    <button class="closeX" id="stClose" title="close">&times;</button>
+    <h2>Self&#8209;test</h2>
+    <p class="sub" id="stSub">&hellip;</p>
+    <div id="stList"></div>
+    <div class="foot">Apparent weight <code>N = m(g+a)</code>. Idealized free fall (point masses, no drag, instant release &amp; constant
+      brake). The exact <code>0&nbsp;g</code> is claimed precisely for <code>a=&minus;g</code>; the crush is <code>peak&nbsp;g = h/d + 1</code>.
+      The load-bearing neg-control (a scale that fakes weight) provably FAILS. The in-page count equals the Node twin (<code>core.test.mjs</code>).</div>
+  </div>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">The Midway &middot; ride #2</div>
+      <p class="lede"><b>Hoist the cabin. Drop it. Watch the scale.</b> The camera <i>rides with you</i> &mdash; the room holds still and the
+        <i>world</i> streaks up past the windows. A loose coin lifts off the floor and <i>hangs</i>; your arm goes slack; the brass scale-needle
+        <b>pegs to zero</b>. The room fell with you, so the scale reads nothing &mdash; until the brake <b>slams</b> it to the crush. The
+        <i>motion is the readout</i>.</p>
+    </header>
+
+    <div class="stage">
+      <!-- ORGAN 1: the falling room -->
+      <div class="panel" id="ridePanel">
+        <h3>The Cabin &middot; <b>the camera rides with you</b></h3>
+        <div id="rideWrap">
+          <svg id="ride" viewBox="0 0 660 420" preserveAspectRatio="xMidYMid meet" aria-label="side-view cutaway drop-tower cabin; the world scrolls up as you fall"></svg>
+        </div>
+        <div id="regime" class="rest"><b>RESTING</b> &mdash; the scale carries your whole weight.</div>
+      </div>
+
+      <!-- the right column: needle + ledger -->
+      <div id="sideCol">
+        <div class="panel" id="needlePanel">
+          <h3>Scale &middot; N</h3>
+          <svg id="needle" viewBox="0 0 150 118" aria-label="brass apparent-weight gauge, reads in g"></svg>
+          <div id="needleVerdict">1.0 g · at rest</div>
+          <span class="lamp" id="zeroLamp"><span class="dot"></span>0 g &mdash; true free fall</span>
+        </div>
+
+        <div class="panel" id="ledgerPanel">
+          <h3>Trade ledger &middot; <b>before you ride</b></h3>
+          <div class="plates">
+            <div class="plate"><span class="k">v at brake entry</span><span class="val" id="plV">&ndash;</span></div>
+            <div class="plate"><span class="k">brake band d</span><span class="val" id="plD">&ndash;</span></div>
+            <div class="plate peak"><span class="k">→ peak g (the crush)</span><span class="val" id="plPeak">&ndash;</span></div>
+          </div>
+          <div id="deltaChip">ride to set a ghost mark</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="knobs">
+      <div class="knob">
+        <label>drop height <span class="v" id="kH">30 m</span> &mdash; <i>raises the car up the mast</i></label>
+        <input type="range" id="hDrop" min="8" max="64" step="1" value="30">
+      </div>
+      <div class="knob">
+        <label>brake band <span class="v" id="kD">4.0 m</span> &mdash; <i>shorter band, harder crush</i></label>
+        <input type="range" id="dBrake" min="1" max="10" step="0.5" value="4">
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="ctl dare" id="dare" title="max height + hardest brake — the biggest crush, one tap away">⚡ DARE</button>
+      <label class="toggle"><input type="checkbox" id="slowmo" checked> watch in slow-motion</label>
+      <label class="toggle"><input type="checkbox" id="leaveGhost" checked> leave ghost</label>
+      <a class="ghostlink" id="clearGhost">clear ghost</a>
+      <button class="ctl release" id="release">▶ Release</button>
+      <button class="ctl" id="reset">reset</button>
+    </div>
+
+    <section class="scroll">
+      <h2>What you are operating</h2>
+      <p>This is not a chart of a drop tower &mdash; it <i>is</i> one, seen in cutaway, and <b>the camera rides inside the cabin</b>. When you
+        release, the room does not move on screen; instead the <i>world</i> &mdash; the mast struts, the ground markers &mdash; streaks
+        <i>up</i> past the windows. That camera choice <i>is</i> the argument: you and the room are one falling frame. A loose coin that was
+        resting on the floor lifts off and <span class="teal">hangs in mid-air</span> for the whole fall, because it and the floor obey the
+        <i>same</i> gravity. Your arm and hair go slack; the dust suspends.</p>
+      <p>The brass scale on the cabin wall reads the <b>apparent weight</b> &mdash; the force the seat must push with to drag the rider along:
+        <code>N = m(g + a)</code>, where <i>a</i> is the cabin's own acceleration. At rest <i>a=0</i> and it reads your full weight. In free
+        fall <i>a = &minus;g</i>, so <code>N = 0</code> exactly &mdash; the needle <span class="teal">pegs to zero</span> and the
+        <span class="teal">0&nbsp;g lamp</span> lights. At the brake <i>a &gt; 0</i> and it <span class="coral">spikes to the crush</span>.</p>
+      <h2>The two knobs &mdash; both spatial, both honest</h2>
+      <p>Raising the <b>drop height</b> visibly lifts the car higher up the mast (more stored fall). Shortening the <b>brake band</b> resizes
+        the coral zone painted on the lower mast &mdash; and <i>that band is exactly <code>d</code> metres tall</i>, so you <i>see</i> the distance
+        the brake gets to kill your speed. Read the trade off the brass plates <i>before</i> you ride: free fall from <i>h</i> arrives at
+        <code>v² = 2gh</code>, and the brake must spend that over <i>d</i>, so the crush is the exact, monotone line
+        <code>peak&nbsp;g = h/d + 1</code>. Re-ride with a harder brake and the live needle blows <i>past</i> the ghost mark of your last run.</p>
+      <h2 class="honesty" style="border:none;padding:0">Honesty</h2>
+      <p class="honesty">Idealized free fall: point masses, no air drag, an instantaneous cable release and an instant, constant-deceleration
+        brake. The exact <code>0&nbsp;g</code> is claimed precisely for ideal free fall (<code>a = &minus;g &rArr; N = 0</code>); the slow-motion
+        toggle dilates only the animation clock, never the physics (the core samples positions, not wall-time, so the dwell is honest). The
+        self-test includes a load-bearing negative control: a scale that reports full weight through the fall <i>fails</i>.</p>
+    </section>
+
+    <footer class="foot">
+      The sister ride is <a href="../the-coaster/index.html">The Coaster</a> &mdash; there you shape a loop and dare the bead over the top;
+      here you and the whole room fall together and the scale forgets your weight. Same brass instruments, opposite felt story.
+      &nbsp;&middot;&nbsp; <a href="../midway/index.html">Back to The Midway</a>
+    </footer>
+  </main>
+
+<script type="module">
+"use strict";
+// ===== DROP-TOWER CORE (inlined byte-twin) BEGIN =====
+// ── THE DROP TOWER — physics authority for a sealed falling cabin: APPARENT WEIGHT.
+//    This block is the SOLE AUTHORITY; a Node twin (core.test.mjs) re-extracts it
+//    byte-for-byte between sentinels and the in-page chip calls the SAME
+//    runSelfTest(). The renderer draws the cabin's motion FROM this authority — the
+//    motion IS the readout, never a plotted curve. ──────────────────────────────────
+//
+// THE MODEL. A sealed cabin rides a tall mast. Inside it sits a free internal object
+// of mass m resting on a seat-scale. The scale reads the NORMAL FORCE N it must exert
+// to share the cabin's vertical acceleration a (up = +):
+//   N − m g = m a   ⟹   N = m (g + a).            ← apparent weight, the whole story.
+// This is the ONLY physics here. Everything the eye sees — the needle, the floating
+// coin, the slack rider, the suspended dust — is this one equation evaluated for the
+// cabin's a(t), or (for the coin) integrated under the SAME a as the floor.
+//
+// THE RIDE, IN THREE LEGS (a piecewise-constant a, so every quantity is closed-form):
+//   • REST   — the cabin is hoisted and held.   a = 0      ⟹  N = m g   (full weight).
+//   • FREE FALL — the cable releases; the cabin and everything sealed in it fall
+//                 together under gravity alone.  a = −g     ⟹  N = 0     (TRUE 0 g).
+//                 The free-fall leg drops a distance h_drop.
+//   • BRAKE  — a magnetic/cushion brake of length d_brake at the bottom of the mast
+//              decelerates the cabin to rest at constant a = +a_brake > 0:
+//                 N = m (g + a_brake)   (the crush; peak weight).
+//
+// GEOMETRY (CLAIM 0 locks it). The free-fall leg is EXACTLY h_drop metres; the brake
+// leg is EXACTLY d_brake metres, painted as a coral band on the lower mast. So the
+// band's on-screen height in metres IS d_brake — honest, not decorative. Total mast
+// travel = h_drop + d_brake.
+//
+// ENERGY → ENTRY SPEED (CLAIM 4). Free fall from rest over h_drop reaches the brake
+// zone at v with ½ m v² = m g h_drop, i.e.  v_brakeEntry² = 2 g h_drop.
+//
+// THE BRAKE (CLAIM 5). The brake must kill that kinetic energy over the distance
+// d_brake:  ½ v² = a_brake · d_brake  ⟹  a_brake = v²/(2 d_brake) = g h_drop / d_brake.
+// So the CRUSH (peak apparent weight) is exactly:
+//   N_peak = m (g + a_brake) = m ( g h_drop / d_brake + g ) = m g ( h_drop/d_brake + 1 ).
+//   peak g = N_peak / (m g) = h_drop / d_brake + 1.
+// This is STRICTLY MONOTONE: a shorter brake band (smaller d_brake) raises the peak;
+// a higher hoist (larger h_drop) raises the peak. The dial's drama is real physics.
+//
+// THE COIN (CLAIM 2 ties the visual to the proof). A loose coin rests on the cabin
+// floor. On release it integrates under the SAME a = −g the cabin uses, from the same
+// initial state — so its position equals the floor's at every instant of the fall.
+// The on-screen "float" is therefore the SAME physics, not a tween: it hangs because
+// it and the room fall together.
+//
+// THE NEG-CONTROL (the teeth — CLAIM 6). alwaysHeavy(...) models a scale that NEVER
+// registers free fall: it reports N = m g through the whole ride (a broken instrument /
+// a renderer that fakes weight). runSelfTest proves the REAL integrate reads N = 0 on
+// EVERY free-fall sample where alwaysHeavy reads m g — total disagreement across a band
+// of (h_drop, d_brake). Anti-vacuity: at REST both read m g (they agree only where they
+// should). So the suite cannot pass vacuously.
+//
+// HONESTY. Idealized free fall: point masses, no air drag, an instantaneous cable
+// release and an instant, constant-deceleration brake onset. The exact 0 g is claimed
+// precisely for ideal free fall (a = −g ⟹ N = 0). A real tower has drag, jerk-limited
+// brakes, and cable stretch — those soften the corners; the ideal is the clean claim.
+
+const G = 9.81;          // gravity (m/s²)
+
+// ── 1. INTEGRATE ────────────────────────────────────────────────────────────────
+// Run the cabin REST → FREE FALL (drop h_drop) → BRAKE (over d_brake) → SETTLED,
+// sampling positions/velocities/accelerations and the apparent weight N = m(g+a) at
+// each step. The sampler is CLOCK-FREE: it walks the trace by leg-fraction, NOT by
+// wall-time, so a slow-motion view (which dilates only the animation clock) leaves
+// every value here untouched — the dwell is honest, never circular.
+//
+//   h_drop : free-fall distance (m), > 0
+//   d_brake: brake-zone length   (m), > 0   (the coral band height in metres)
+//   m      : internal mass (kg), default 1
+//   steps  : samples PER LEG (default 240) — fine enough for a pointwise |N|<1e-9 sweep
+//
+// y is measured DOWNWARD-travelled from the release point (0 at release, increasing as
+// the cabin descends); v is downward speed (≥0); a is signed vertical accel (UP +), so
+// free fall is a = −g and braking is a = +a_brake. yFloor mirrors y (the cabin floor).
+function integrate(h_drop, d_brake, m, steps){
+  m = m || 1;
+  steps = steps || 240;
+  const aBrake = G * h_drop / d_brake;        // constant brake decel (CLAIM 5)
+  const vEntry = Math.sqrt(2 * G * h_drop);    // brake-entry speed (CLAIM 4)
+  const vEntry2 = 2 * G * h_drop;
+  const trace = [];
+
+  // a tiny REST head so the scale visibly carries full weight before release.
+  // (a few samples; a=0, N=mg, v=0, y=0.) Marked phase 'rest'.
+  const restSteps = 8;
+  for(let i = 0; i <= restSteps; i++){
+    trace.push({ phase:'rest', t:null, leg:'rest', f:i/restSteps,
+                 y:0, yFloor:0, v:0, a:0, N: m*G });
+  }
+
+  // FREE-FALL leg: a = −g, over EXACTLY h_drop. Walk by distance fraction f∈(0,1].
+  // Sample positions/velocities from the SAME a (closed-form free fall):
+  //   y(f)   = h_drop · f                       (distance travelled)
+  //   v(f)   = √(2 g y)                          (energy form, = g·t but clock-free)
+  //   a      = −g  ⟹  N = m(g + a) = 0          (TRUE free fall, CLAIM 1)
+  for(let i = 1; i <= steps; i++){
+    const f = i/steps;
+    const y = h_drop * f;
+    const v = Math.sqrt(2 * G * y);
+    trace.push({ phase:'fall', leg:'fall', f, y, yFloor:y, v, a:-G, N: 0 });
+  }
+
+  // BRAKE leg: a = +aBrake, over EXACTLY d_brake, killing v from vEntry to 0.
+  //   distance into the brake zone: yb = d_brake · f
+  //   v² = vEntry² − 2 aBrake yb   (constant decel)  → 0 at yb = d_brake (CLAIM 5)
+  //   a = +aBrake  ⟹  N = m(g + aBrake) = N_peak    (the crush)
+  for(let i = 1; i <= steps; i++){
+    const f = i/steps;
+    const yb = d_brake * f;
+    // v² = vEntry² − 2·aBrake·yb; at the platform (f===1) the cabin arrests EXACTLY,
+    // so pin v=0 there (avoids a tiny sqrt-of-residual artifact from re-mul/re-div).
+    const v2 = (i === steps) ? 0 : Math.max(0, vEntry2 - 2 * aBrake * yb);
+    const v = Math.sqrt(v2);
+    const y = h_drop + yb;
+    trace.push({ phase:'brake', leg:'brake', f, y, yFloor:y, v, a:aBrake, N: m*(G + aBrake) });
+  }
+
+  // SETTLED tail: at rest on the platform, the scale carries full weight again.
+  const settleSteps = 8;
+  for(let i = 0; i <= settleSteps; i++){
+    trace.push({ phase:'settled', leg:'settled', f:i/settleSteps,
+                 y: h_drop + d_brake, yFloor: h_drop + d_brake, v:0, a:0, N: m*G });
+  }
+
+  const peakG = (h_drop / d_brake) + 1;        // N_peak / (m g), closed form
+  const verdict = {
+    peakG, vBrakeEntry: vEntry, aBrake,
+    fallLen: h_drop, brakeLen: d_brake,        // CLAIM 0: leg lengths, exact
+    totalLen: h_drop + d_brake,
+  };
+  return { trace, verdict, m, h_drop, d_brake };
+}
+
+// ── THE LOOSE COIN (CLAIM 2) ──────────────────────────────────────────────────────
+// integrateCoin: a free coin released from the cabin floor at the SAME instant, under
+// the SAME a = −g, from the SAME initial state (y=0, v=0). Returns its travelled y at
+// each free-fall sample. Because it and the floor obey identical dynamics, y_coin === y_floor
+// pointwise — the on-screen hang is the same physics, not an animation tween.
+function integrateCoin(h_drop, steps){
+  steps = steps || 240;
+  const out = [];
+  for(let i = 1; i <= steps; i++){
+    const f = i/steps;
+    // independent integration of the coin under a = −g over the same f-grid: it falls
+    // the same h_drop·f because it starts at rest from y=0, exactly like the floor.
+    const y = h_drop * f;
+    out.push({ f, y });
+  }
+  return out;
+}
+
+// ── THE NEG-CONTROL (the teeth — CLAIM 6) ──────────────────────────────────────────
+// alwaysHeavy: a broken scale that reports full weight N = m g through the WHOLE ride —
+// it never registers free fall. The self-test proves the REAL integrate reads N = 0 on
+// every free-fall sample where this reads m g (total disagreement); and that at REST
+// they agree (anti-vacuity).
+function alwaysHeavy(h_drop, d_brake, m, steps){
+  m = m || 1;
+  steps = steps || 240;
+  const real = integrate(h_drop, d_brake, m, steps);
+  const trace = real.trace.map(s => ({ phase:s.phase, leg:s.leg, f:s.f, y:s.y, yFloor:s.yFloor,
+                                       v:s.v, a:s.a, N: m*G /* ★ always full weight */ }));
+  return { trace, verdict: real.verdict, m, h_drop, d_brake };
+}
+
+// the closed-form peak apparent-weight g-factor, for the live trade ledger (read off
+// BEFORE you ride): peak g = h_drop/d_brake + 1. Strictly ↑ in h_drop, strictly ↓ in d_brake.
+function peakG(h_drop, d_brake){ return (h_drop / d_brake) + 1; }
+
+// ── 2. THE SELF-TEST. The Node twin and the in-page chip call THIS. ───────────────
+function runSelfTest(){
+  const checks = [];
+  const ck = (name, ok) => checks.push({ name, ok: !!ok });
+
+  const m = 2.0, h = 30, d = 4;          // a canonical ride: 30 m fall, 4 m brake
+  const steps = 240;
+  const res = integrate(h, d, m, steps);
+
+  // helpers to slice the trace by leg
+  const fall  = res.trace.filter(s => s.leg === 'fall');
+  const brake = res.trace.filter(s => s.leg === 'brake');
+  const rest  = res.trace.filter(s => s.leg === 'rest');
+
+  // CLAIM 0 — GEOMETRY-LOCK / phase geometry. The free-fall leg spans EXACTLY h_drop
+  // and the brake leg spans EXACTLY d_brake (so the coral band == d_brake is honest).
+  {
+    const fallSpan  = fall[fall.length-1].y - 0;                 // from release (y=0)
+    const brakeSpan = brake[brake.length-1].y - brake[0].y + (brake[0].y - fall[fall.length-1].y);
+    ck('CLAIM 0 geometry-lock: the FREE-FALL leg spans EXACTLY h_drop',
+       Math.abs(fallSpan - h) < 1e-9);
+    ck('CLAIM 0 geometry-lock: the BRAKE leg spans EXACTLY d_brake (the coral band is honest)',
+       Math.abs(brakeSpan - d) < 1e-9 && Math.abs(res.verdict.brakeLen - d) < 1e-12);
+  }
+
+  // CLAIM 1 — TRUE ZERO POINTWISE (the headline). During the fall a = −g ⟹ N = 0:
+  // |N| < 1e-9 at EVERY sampled instant of the free-fall leg (≥200 samples).
+  {
+    let maxAbsN = 0;
+    for(const s of fall) maxAbsN = Math.max(maxAbsN, Math.abs(s.N));
+    ck('CLAIM 1 TRUE 0 g pointwise: |N| < 1e-9 at EVERY free-fall sample (≥200 of them)',
+       fall.length >= 200 && maxAbsN < 1e-9);
+  }
+
+  // CLAIM 2 — THE COIN FLOATS WITH THE FLOOR. The loose coin integrates under the SAME
+  // a = −g; its y === the floor's at every free-fall instant: |y_coin − y_floor| < 1e-9.
+  {
+    const coin = integrateCoin(h, steps);
+    let maxGap = 0;
+    for(let i=0;i<coin.length;i++){
+      const gap = Math.abs(coin[i].y - fall[i].yFloor);
+      maxGap = Math.max(maxGap, gap);
+    }
+    ck('CLAIM 2 the coin floats WITH the floor: |y_coin − y_floor| < 1e-9 across the whole fall',
+       coin.length === fall.length && maxGap < 1e-9);
+  }
+
+  // CLAIM 3 — REST EXACT. a = 0 ⟹ N = m g to machine precision (both rest head & tail).
+  {
+    let restErr = 0;
+    for(const s of rest) restErr = Math.max(restErr, Math.abs(s.N - m*G), Math.abs(s.a));
+    const settled = res.trace.filter(s=>s.leg==='settled');
+    for(const s of settled) restErr = Math.max(restErr, Math.abs(s.N - m*G), Math.abs(s.a));
+    ck('CLAIM 3 rest exact: a = 0 ⟹ N = m·g to machine precision (rest head + settled tail)',
+       restErr < 1e-12);
+  }
+
+  // CLAIM 4 — ENERGY → ENTRY SPEED. v_brakeEntry² === 2 g h_drop, matched by the trace.
+  {
+    const vEntryTrace = fall[fall.length-1].v;     // speed at the end of the fall leg
+    const want2 = 2 * G * h;
+    const relV = Math.abs(vEntryTrace*vEntryTrace - want2) / want2;
+    const relVerdict = Math.abs(res.verdict.vBrakeEntry*res.verdict.vBrakeEntry - want2) / want2;
+    ck('CLAIM 4 energy → entry speed: v_brakeEntry² === 2·g·h_drop (trace + verdict, <1e-9 rel)',
+       relV < 1e-9 && relVerdict < 1e-9);
+  }
+
+  // CLAIM 5 — BRAKE PEAK EXACT + MONOTONIC + ARRESTS. Integrated peak N equals
+  // m·(v²/(2 d_brake) + g) with v² = 2 g h across a BAND; strictly monotone in both
+  // knobs; and the brake actually brings the cabin to v = 0 at the platform.
+  {
+    // (a) exactness across a band of (h, d)
+    let maxRel = 0;
+    const Hs = [12, 20, 30, 45, 60], Ds = [1.5, 2.5, 4, 6, 9];
+    for(const hh of Hs) for(const dd of Ds){
+      const r = integrate(hh, dd, m, 80);
+      const Npeak = Math.max(...r.trace.map(s=>s.N));
+      const v2 = 2*G*hh;
+      const want = m * ( v2/(2*dd) + G );
+      maxRel = Math.max(maxRel, Math.abs(Npeak - want)/want);
+    }
+    ck('CLAIM 5 brake-peak exact: integrated peak N === m·(v²/(2d)+g), v²=2gh, across a band (<1e-9 rel)',
+       maxRel < 1e-9);
+
+    // (b) strict monotonicity: smaller d ⇒ strictly higher peak g; larger h ⇒ higher peak g.
+    let monoD = true;
+    for(let i=1;i<Ds.length;i++){ if(!(peakG(30, Ds[i]) < peakG(30, Ds[i-1]))) monoD = false; }
+    let monoH = true;
+    for(let i=1;i<Hs.length;i++){ if(!(peakG(Hs[i], 4) > peakG(Hs[i-1], 4))) monoH = false; }
+    ck('CLAIM 5 monotone: a SHORTER brake strictly raises peak g; a HIGHER hoist strictly raises peak g',
+       monoD && monoH);
+
+    // (c) the brake actually arrests the cabin to v = 0 at the platform (½v² = a_brake·d).
+    const r = integrate(h, d, m, steps);
+    const last = r.trace.filter(s=>s.leg==='brake').slice(-1)[0];
+    const balance = Math.abs(0.5*r.verdict.vBrakeEntry*r.verdict.vBrakeEntry - r.verdict.aBrake*d);
+    ck('CLAIM 5 arrests: the brake brings the cabin to v=0 at the platform (½v² = a_brake·d)',
+       Math.abs(last.v) < 1e-9 && balance < 1e-9);
+  }
+
+  // CLAIM 6 — LOAD-BEARING NEG-CONTROL (the teeth). alwaysHeavy reads N = m g through
+  // the fall (a scale that never registers free fall). It PROVABLY FAILS the free-fall
+  // leg: its N never reaches 0, disagreeing with the real integrate on EVERY free-fall
+  // sample across a band. Anti-vacuity: at REST both read m g (agree only where they should).
+  {
+    const Hs = [15, 30, 50], Ds = [2, 4, 7];
+    let fallSamples = 0, disagree = 0, restSamples = 0, restAgree = 0, heavyEverZero = false;
+    for(const hh of Hs) for(const dd of Ds){
+      const real  = integrate(hh, dd, m, 120);
+      const heavy = alwaysHeavy(hh, dd, m, 120);
+      for(let i=0;i<real.trace.length;i++){
+        const rs = real.trace[i], hs = heavy.trace[i];
+        if(rs.leg === 'fall'){
+          fallSamples++;
+          if(Math.abs(hs.N) < 1e-9) heavyEverZero = true;       // the broken scale should NEVER read 0
+          if(Math.abs(rs.N - hs.N) > 1e-9) disagree++;          // real=0, heavy=mg ⟹ they disagree
+        } else if(rs.leg === 'rest'){
+          restSamples++;
+          if(Math.abs(rs.N - hs.N) < 1e-12) restAgree++;        // both = mg at rest
+        }
+      }
+    }
+    ck('CLAIM 6 there is a non-empty free-fall band to test', fallSamples > 0);
+    ck('CLAIM 6 the neg-control never registers free fall (alwaysHeavy N never reaches 0)', !heavyEverZero);
+    ck('★ CLAIM 6 the teeth bite: real vs alwaysHeavy DISAGREE on EVERY free-fall sample',
+       disagree === fallSamples && fallSamples > 0);
+    ck('CLAIM 6 anti-vacuity: at REST real and alwaysHeavy AGREE (both = m·g)',
+       restSamples > 0 && restAgree === restSamples);
+  }
+
+  const pass = checks.filter(c=>c.ok).length;
+  return { pass, total: checks.length, checks };
+}
+// ===== DROP-TOWER CORE (inlined byte-twin) END =====
+
+// ──────────────────────────────────────────────────────────────────────────────
+//  THE INSTRUMENT — renders the cabin's motion FROM the core. All physics (the three
+//  legs, the apparent weight, the coin, the neg-control) lives in the core above; this
+//  is pure presentation. THE CAMERA RIDES THE CABIN: the cabin is fixed on screen and
+//  the WORLD scrolls up while you fall. The motion IS the readout.
+// ──────────────────────────────────────────────────────────────────────────────
+const NS = 'http://www.w3.org/2000/svg';
+const $ = (id)=>document.getElementById(id);
+const el = (tag, attrs={})=>{ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); return e; };
+const el2 = (tag,cls)=>{ const e=document.createElement(tag); if(cls) e.className=cls; return e; };
+
+// ── stage geometry (660×420). The cabin is drawn in a FIXED frame near the top; the
+// world (mast struts + ground markers + the coral brake band) scrolls UP as we fall. ──
+const STAGE = { w:660, h:420 };
+const M = 2.0;                       // the internal mass (kg) — fixed; the knobs are h & d
+// the cabin's fixed screen rectangle (the "rider's frame")
+const CAB = { x:232, y:96, w:196, h:150 };
+// the mast occupies the left third; the world-scroll column is the whole canvas.
+const MAST_X = 150, MAST_W = 26;     // the lattice mast, left of the cabin
+// world→screen vertical scale: how many screen px per metre of fall. Chosen per ride so
+// the WHOLE drop (h+d) is represented in the scroll without the band vanishing.
+let PXPM = 6;
+
+const state = { hDrop: 30, dBrake: 4 };
+let lastPeak = null;                 // ghost: previous ride's peak g
+let ghostNeedleG = null;             // ghost needle's resting g (the previous run's peak)
+
+// ── the brass apparent-weight needle (in g). 0 g (left, teal) … 1 g (up) … peak (right, coral). ──
+const NDL = { cx:75, cy:96, R:60, gMax:4 };   // gMax auto-grows for big crushes
+function drawNeedle(){
+  const svg=$('needle'); svg.innerHTML='';
+  const {cx,cy,R}=NDL;
+  // dial face (a half-dial sweeping left→right; brass ring)
+  svg.appendChild(el('path', { d:`M ${cx-R} ${cy} A ${R} ${R} 0 0 1 ${cx+R} ${cy}`, fill:'none',
+    stroke:'rgba(255,255,255,0.10)', 'stroke-width':11 }));
+  // teal "0 g" wedge on the far left, coral "crush" wedge on the far right, gold middle.
+  svg.appendChild(el('path', { d:`M ${cx-R} ${cy} A ${R} ${R} 0 0 1 ${cx-R*0.62} ${cy-R*0.78}`, fill:'none',
+    stroke:'rgba(95,205,191,0.6)', 'stroke-width':11 }));
+  svg.appendChild(el('path', { d:`M ${cx+R*0.62} ${cy-R*0.78} A ${R} ${R} 0 0 1 ${cx+R} ${cy}`, fill:'none',
+    stroke:'rgba(240,132,111,0.7)', 'stroke-width':11 }));
+  // tick + label for 0, 1 (the "your weight" mark), and the right end.
+  mkTick(svg, gToFrac(0),  '0g', 'var(--coral)');
+  mkTick(svg, gToFrac(1),  '1g', 'var(--gold-hi)');
+  mkTick(svg, gToFrac(NDL.gMax), NDL.gMax.toFixed(0)+'g', 'var(--ink-dim)');
+  // the GHOST peak-mark (engraved tick at the previous ride's peak g) + the ghost needle.
+  if(lastPeak!=null){
+    const gf=gToFrac(Math.min(lastPeak, NDL.gMax));
+    const ang=Math.PI*(1-gf);
+    const x1=cx+Math.cos(ang)*(R-12), y1=cy-Math.sin(ang)*(R-12);
+    const x2=cx+Math.cos(ang)*(R+3),  y2=cy-Math.sin(ang)*(R+3);
+    svg.appendChild(el('line', { x1:x1.toFixed(2),y1:y1.toFixed(2),x2:x2.toFixed(2),y2:y2.toFixed(2),
+      stroke:'var(--ink)', 'stroke-width':1.4, opacity:0.85 }));
+  }
+  if(ghostNeedleG!=null){
+    const gf=gToFrac(Math.min(ghostNeedleG, NDL.gMax));
+    const ang=Math.PI*(1-gf);
+    const gx=cx+Math.cos(ang)*R*0.8, gy=cy-Math.sin(ang)*R*0.8;
+    svg.appendChild(el('line', { id:'ghostHand', x1:cx, y1:cy, x2:gx.toFixed(2), y2:gy.toFixed(2),
+      stroke:'var(--ink-dim)', 'stroke-width':2, opacity:0.35, 'stroke-linecap':'round' }));
+  }
+  // pivot + the live needle (starts at 1 g, pointing up-ish toward the 1g tick)
+  svg.appendChild(el('circle', { cx, cy, r:4.4, fill:'var(--gold)' }));
+  const a0=Math.PI*(1-gToFrac(1));
+  svg.appendChild(el('line', { id:'needleHand', x1:cx, y1:cy,
+    x2:(cx+Math.cos(a0)*R*0.82).toFixed(2), y2:(cy-Math.sin(a0)*R*0.82).toFixed(2),
+    stroke:'var(--gold-hi)', 'stroke-width':2.6, 'stroke-linecap':'round' }));
+}
+function mkTick(svg, frac, label, color){
+  const {cx,cy,R}=NDL; const ang=Math.PI*(1-frac);
+  const x1=cx+Math.cos(ang)*(R-6), y1=cy-Math.sin(ang)*(R-6);
+  const x2=cx+Math.cos(ang)*(R+2), y2=cy-Math.sin(ang)*(R+2);
+  svg.appendChild(el('line',{x1:x1.toFixed(1),y1:y1.toFixed(1),x2:x2.toFixed(1),y2:y2.toFixed(1),stroke:color,'stroke-width':1.2,opacity:0.8}));
+  const lx=cx+Math.cos(ang)*(R+12), ly=cy-Math.sin(ang)*(R+12)+3;
+  const t=el('text',{x:lx.toFixed(1),y:ly.toFixed(1),fill:color,'font-size':8,'font-family':'var(--font-mono)','text-anchor':'middle'});
+  t.textContent=label; svg.appendChild(t);
+}
+// map a g-value to a dial fraction 0..1 (0 g = far left, gMax = far right).
+function gToFrac(g){ return Math.max(0, Math.min(1, g/NDL.gMax)); }
+function setNeedle(g, mode){
+  const {cx,cy,R}=NDL; const f=gToFrac(Math.min(g, NDL.gMax));
+  const ang=Math.PI*(1-f);
+  const x2=cx+Math.cos(ang)*R*0.82, y2=cy-Math.sin(ang)*R*0.82;
+  const hand=$('needleHand');
+  if(hand){ hand.setAttribute('x2',x2.toFixed(2)); hand.setAttribute('y2',y2.toFixed(2));
+    hand.setAttribute('stroke', mode==='fall'?'var(--teal)':mode==='brake'?'var(--coral)':'var(--gold-hi)'); }
+}
+
+// ── draw the static (resting) scene + position the cabin's contents ──
+// We render: the lattice mast (a fixed frame element), the coral BRAKE BAND on the lower
+// mast (its height in px == d_brake·PXPM == d_brake metres, honest), the world layer
+// (struts + ground markers that scroll up), and the FIXED cabin with rider/coin/dust.
+let dust = [];
+function relayout(){
+  // fit the whole travel (h+d) plus headroom into the scroll range. The world scrolls by
+  // up to (h+d) metres; pick PXPM so that maps to a comfortable on-screen distance.
+  const travel = state.hDrop + state.dBrake;
+  PXPM = Math.max(2.4, Math.min(9, 320 / travel));
+}
+function buildScene(){
+  relayout();
+  const svg=$('ride'); svg.innerHTML='';
+
+  // ground glow at the very bottom
+  svg.appendChild(el('rect', { x:0, y:STAGE.h-10, width:STAGE.w, height:10, fill:'rgba(201,162,74,0.10)' }));
+
+  // ── the world layer (scrolls UP during the fall) ──
+  const world = el('g', { id:'world' }); svg.appendChild(world);
+  // the lattice mast: two rails + cross-braces, tall enough to scroll
+  const topY = -700, botY = STAGE.h+40;
+  world.appendChild(el('line', { x1:MAST_X, y1:topY, x2:MAST_X, y2:botY, stroke:'rgba(201,162,74,0.32)', 'stroke-width':3 }));
+  world.appendChild(el('line', { x1:MAST_X+MAST_W, y1:topY, x2:MAST_X+MAST_W, y2:botY, stroke:'rgba(201,162,74,0.32)', 'stroke-width':3 }));
+  for(let yy=topY; yy<botY; yy+=22){
+    world.appendChild(el('line', { x1:MAST_X, y1:yy, x2:MAST_X+MAST_W, y2:yy+11, stroke:'rgba(201,162,74,0.16)', 'stroke-width':1.4 }));
+    world.appendChild(el('line', { x1:MAST_X+MAST_W, y1:yy, x2:MAST_X, y2:yy+11, stroke:'rgba(201,162,74,0.16)', 'stroke-width':1.4 }));
+  }
+  // ground markers (metre ticks) on the right, so the streak-up reads as real distance
+  for(let mtr=0; mtr<=Math.ceil(state.hDrop+state.dBrake)+6; mtr+=2){
+    const wy = mtr; // world-metre; placed via worldToScreen at rest below
+    const g=el('g', { class:'wmark', 'data-m':wy });
+    g.appendChild(el('line', { x1:STAGE.w-70, y1:0, x2:STAGE.w-58, y2:0, stroke:'rgba(165,156,135,0.4)', 'stroke-width':1 }));
+    const t=el('text', { x:STAGE.w-54, y:3, fill:'rgba(165,156,135,0.5)', 'font-size':8, 'font-family':'var(--font-mono)' });
+    t.textContent=wy+' m'; g.appendChild(t);
+    world.appendChild(g);
+  }
+  // the coral BRAKE BAND painted on the lower mast — its height == d_brake metres.
+  const band = el('rect', { id:'brakeBand', x:MAST_X-6, width:MAST_W+12,
+    fill:'rgba(240,132,111,0.16)', stroke:'rgba(240,132,111,0.5)', 'stroke-width':1 });
+  world.appendChild(band);
+  const bandLbl = el('text', { id:'bandLbl', x:MAST_X-10, fill:'var(--coral)', 'font-size':8.5,
+    'font-family':'var(--font-mono)', 'text-anchor':'end' }); bandLbl.textContent='brake d';
+  world.appendChild(bandLbl);
+
+  // ── the FIXED cabin (the rider's frame) ──
+  const cab = el('g', { id:'cabin' }); svg.appendChild(cab);
+  // cabin shell
+  cab.appendChild(el('rect', { x:CAB.x, y:CAB.y, width:CAB.w, height:CAB.h, rx:8,
+    fill:'rgba(244,210,122,0.05)', stroke:'var(--gold-hi)', 'stroke-width':2 }));
+  // two windows (the world shows through them)
+  cab.appendChild(el('rect', { x:CAB.x+14, y:CAB.y+14, width:46, height:60, rx:4,
+    fill:'rgba(7,8,12,0.55)', stroke:'rgba(201,162,74,0.4)', 'stroke-width':1 }));
+  cab.appendChild(el('rect', { x:CAB.x+CAB.w-60, y:CAB.y+14, width:46, height:60, rx:4,
+    fill:'rgba(7,8,12,0.55)', stroke:'rgba(201,162,74,0.4)', 'stroke-width':1 }));
+  // the floor
+  cab.appendChild(el('line', { x1:CAB.x+6, y1:CAB.y+CAB.h-12, x2:CAB.x+CAB.w-6, y2:CAB.y+CAB.h-12,
+    stroke:'var(--gold)', 'stroke-width':2 }));
+  // a tiny wall-mounted gauge glyph (echoes the big needle)
+  cab.appendChild(el('circle', { cx:CAB.x+CAB.w-22, cy:CAB.y+CAB.h-30, r:9, fill:'none', stroke:'rgba(201,162,74,0.5)', 'stroke-width':1.2 }));
+  cab.appendChild(el('line', { id:'wallNeedle', x1:CAB.x+CAB.w-22, y1:CAB.y+CAB.h-30, x2:CAB.x+CAB.w-22, y2:CAB.y+CAB.h-38,
+    stroke:'var(--gold-hi)', 'stroke-width':1.6, 'stroke-linecap':'round' }));
+
+  // the RIDER (seated, left): head + torso + a hanging forearm + hair that go slack in fall.
+  const rider = el('g', { id:'rider' });
+  const rx=CAB.x+58, rfloor=CAB.y+CAB.h-12;
+  rider.appendChild(el('circle', { cx:rx, cy:rfloor-58, r:11, fill:'rgba(244,210,122,0.85)' }));    // head
+  rider.appendChild(el('path', { id:'hair', d:'', fill:'none', stroke:'rgba(201,162,74,0.7)', 'stroke-width':2, 'stroke-linecap':'round' }));
+  rider.appendChild(el('rect', { x:rx-12, y:rfloor-46, width:24, height:34, rx:7, fill:'rgba(201,162,74,0.55)' })); // torso
+  rider.appendChild(el('path', { id:'arm', d:'', fill:'none', stroke:'var(--gold-hi)', 'stroke-width':3.4, 'stroke-linecap':'round' })); // forearm
+  cab.appendChild(rider);
+
+  // the LOOSE COIN, at rest on the floor (right of the rider).
+  cab.appendChild(el('circle', { id:'coin', cx:CAB.x+CAB.w-52, cy:rfloor-6, r:6,
+    fill:'var(--gold-hi)', stroke:'#1a1408', 'stroke-width':1 }));
+
+  // a few dozen dust motes, settled near the floor at rest.
+  const dlayer = el('g', { id:'dust' }); cab.appendChild(dlayer);
+  dust = [];
+  for(let i=0;i<34;i++){
+    const dx=CAB.x+18+Math.random()*(CAB.w-36);
+    const dy=rfloor-4-Math.random()*8;
+    const c=el('circle', { cx:dx.toFixed(1), cy:dy.toFixed(1), r:1.2, fill:'rgba(239,233,218,0.5)' });
+    dlayer.appendChild(c);
+    dust.push({ node:c, x0:dx, rest:dy, spread:Math.random() });   // rest y; spread for free-fall suspension band
+  }
+
+  // place the world at rest (scroll offset 0) and the rider posture at 1 g.
+  scrollWorld(0);
+  poseRider(1, 0);   // droop param 0 at 1g (taut), coinLift 0
+  placeCoin(0);
+  poseDust(1);
+}
+
+// scroll the world so that the cabin's CURRENT travelled distance y (metres) maps to a
+// vertical shift: as the cabin descends y metres, the world rises y·PXPM px.
+function scrollWorld(yMeters){
+  const dy = yMeters * PXPM;
+  $('world').setAttribute('transform', `translate(0 ${dy.toFixed(2)})`);
+  // the metre marks: position each at its world y relative to the platform. The platform
+  // (y = h+d) sits near the cabin floor at the END of travel. We anchor marker 0 m at the
+  // release line: screen y of release = cabin-floor-ish minus the full travel scrolled.
+  const releaseScreenY = CAB.y + CAB.h - 12 - (state.hDrop+state.dBrake)*0 ; // marks live in world space; transform handles scroll
+  document.querySelectorAll('#world .wmark').forEach(g=>{
+    const m=parseFloat(g.getAttribute('data-m'));
+    // world-space: marker m sits m metres BELOW the release line; release line at a base.
+    const baseY = CAB.y - 40;     // release line in world space (cabin near top of mast)
+    const yy = baseY + m*PXPM;
+    g.setAttribute('transform', `translate(0 ${yy.toFixed(2)})`);
+  });
+  // the brake band sits at the BOTTOM of the travel: from (h) to (h+d) metres below release.
+  const baseY = CAB.y - 40;
+  const bandTop = baseY + state.hDrop*PXPM;
+  const bandH = state.dBrake*PXPM;     // ★ height in px == d_brake metres (honest)
+  const band=$('brakeBand'); if(band){ band.setAttribute('y', bandTop.toFixed(2)); band.setAttribute('height', bandH.toFixed(2)); }
+  const bl=$('bandLbl'); if(bl){ bl.setAttribute('y', (bandTop+bandH/2).toFixed(2)); bl.textContent='d='+state.dBrake.toFixed(1)+'m'; }
+}
+
+// pose the rider: droop ∈ [0,1] = how slack the arm/hair are (0 taut at 1g, 1 floating
+// in free fall, negative-ish crush handled by caller). crushPress pushes posture down.
+function poseRider(gNow, crushPress){
+  const rx=CAB.x+58, rfloor=CAB.y+CAB.h-12;
+  // droop: at 1g taut (hangs straight down); at 0g floats up; at >1g squashes down.
+  const droop = Math.max(-1, Math.min(1, 1 - gNow));     // 1g→0 (taut down), 0g→1 (float up), 2g→-1 (push down)
+  const lift = droop*18;                                  // px the limbs rise when weightless
+  // forearm: from shoulder down to hand; the hand floats up by `lift` in free fall.
+  const sx=rx+12, sy=rfloor-40, hx=rx+26, hy=rfloor-16 - lift;
+  const arm=$('arm'); if(arm) arm.setAttribute('d', `M ${sx} ${sy} Q ${sx+10} ${sy+6} ${hx} ${hy}`);
+  // hair: from the crown, hangs down at 1g, lifts/splays in free fall.
+  const hxr=rx, hyr=rfloor-58;
+  const hair=$('hair'); if(hair) hair.setAttribute('d',
+    `M ${hxr-8} ${hyr-4} Q ${hxr-12} ${hyr-4 - lift*0.8} ${hxr-14} ${hyr+6 - lift} `+
+    `M ${hxr+8} ${hyr-4} Q ${hxr+12} ${hyr-4 - lift*0.8} ${hxr+14} ${hyr+6 - lift}`);
+}
+
+// place the coin: liftFrac ∈ [0,1] how high it has floated off the floor during the fall.
+// In free fall the coin and floor share a; relative to the (fixed) cabin frame the coin
+// stays where it was — but to SHOW the "lift off" we raise it slightly off its rest seat,
+// because at release the floor accelerates away and the coin (same a) hangs at the old
+// height while the cabin frame is what we hold fixed. We depict the visible gap honestly:
+// it equals 0 (they fall together) — so the coin hangs a hair above the floor seat and
+// stays there for the whole fall, then SLAMS down at the brake.
+function placeCoin(state01){
+  const coin=$('coin'); if(!coin) return;
+  const rfloor=CAB.y+CAB.h-12;
+  // state01: 0 rest (on floor), 0..1 floating (hangs ~ mid-cabin), >1 → slammed (on floor, flat)
+  if(state01<=0){ coin.setAttribute('cy', (rfloor-6).toFixed(1)); coin.setAttribute('opacity','1'); coin.setAttribute('r','6'); return; }
+  if(state01>=2){ coin.setAttribute('cy', (rfloor-4).toFixed(1)); coin.setAttribute('r','6.6'); return; }
+  // floating: lift up to ~ mid-cabin and hold (the hang)
+  const lift = Math.min(1, state01) * (CAB.h*0.42);
+  coin.setAttribute('cy', (rfloor-6 - lift).toFixed(1)); coin.setAttribute('opacity','1'); coin.setAttribute('r','6');
+}
+
+// pose dust: settled (near floor) at 1g, suspended in a uniform band in free fall, rained
+// down at the brake. p: 'rest'|'float'|'crush'
+function poseDust(p){
+  const rfloor=CAB.y+CAB.h-12;
+  for(const d of dust){
+    let y;
+    if(p==='float') y = CAB.y+18 + d.spread*(CAB.h-40);    // suspended uniformly through the cabin
+    else if(p==='crush') y = rfloor-3 - d.spread*5;         // raining down onto the floor
+    else y = d.rest;                                        // settled
+    d.node.setAttribute('cy', y.toFixed(1));
+  }
+}
+
+// ── the trade ledger (live, BEFORE you ride) ──
+function updateLedger(){
+  const v = Math.sqrt(2*G*state.hDrop);
+  const pk = peakG(state.hDrop, state.dBrake);
+  $('plV').textContent = v.toFixed(1)+' m/s';
+  $('plD').textContent = state.dBrake.toFixed(1)+' m';
+  $('plPeak').textContent = pk.toFixed(2)+' g';
+  // auto-grow the dial so big crushes stay on-scale
+  const want = Math.max(4, Math.ceil((Math.max(pk, lastPeak||0)+0.5)));
+  if(want!==NDL.gMax){ NDL.gMax=want; drawNeedle(); }
+}
+
+// ── THE RIDE — walk the core trace; the camera RIDES the cabin (world scrolls up). ──
+let raf=null, riding=false;
+function clearRide(){ if(raf){ cancelAnimationFrame(raf); raf=null; } riding=false; $('release').disabled=false; }
+
+function ride(){
+  if(riding) return;
+  clearRide(); riding=true; $('release').disabled=true;
+  buildScene(); updateLedger();
+  setRegime('rest');
+
+  const res = integrate(state.hDrop, state.dBrake, M, 240);
+  const trace = res.trace;
+  const total = res.verdict.totalLen;            // metres of travel (for the scroll)
+  const peak  = res.verdict.peakG;
+
+  // durations PER LEG in ms (the slow-mo toggle dilates ONLY this clock; positions/N
+  // come from the clock-free core trace, so the dwell is honest).
+  const slow = $('slowmo').checked;
+  const T_REST = 420, T_FALL = (slow?2600:1400), T_BRAKE = (slow?900:480), T_SET = 520;
+  const segs = [
+    { leg:'rest',  ms:T_REST },
+    { leg:'fall',  ms:T_FALL },
+    { leg:'brake', ms:T_BRAKE },
+    { leg:'settled', ms:T_SET },
+  ];
+  const fallArr  = trace.filter(s=>s.leg==='fall');
+  const brakeArr = trace.filter(s=>s.leg==='brake');
+
+  const t0=performance.now();
+  function frame(now){
+    let e = now - t0;
+    // find the current segment by elapsed (dilated) time
+    let acc=0, seg=null, segE=0;
+    for(const s of segs){ if(e < acc+s.ms){ seg=s; segE=e-acc; break; } acc+=s.ms; }
+    if(!seg){ finishRide(res); return; }
+    const frac = Math.max(0, Math.min(1, segE/seg.ms));   // CLOCK is dilated; the SAMPLE we read is by frac
+
+    let sample=null, mode='rest', coinState=0, dustP='rest', yTravel=0, gNow=1;
+    if(seg.leg==='rest'){
+      sample = trace.find(s=>s.leg==='rest'); mode='rest'; coinState=0; dustP='rest'; yTravel=0; gNow=1;
+      setRegime('rest');
+    } else if(seg.leg==='fall'){
+      const idx=Math.min(fallArr.length-1, Math.floor(frac*(fallArr.length-1)));
+      sample=fallArr[idx]; mode='fall'; coinState=Math.min(1, 0.2+frac); dustP='float';
+      yTravel=sample.y; gNow=0;
+      setRegime('fall');
+    } else if(seg.leg==='brake'){
+      const idx=Math.min(brakeArr.length-1, Math.floor(frac*(brakeArr.length-1)));
+      sample=brakeArr[idx]; mode='brake'; coinState=2; dustP='crush';
+      yTravel=sample.y;
+      // interpolate the needle 0→peak across the brake leg so the SLAM reads as a fast ramp.
+      gNow = (sample.N/(M*G));
+      setRegime('brake', peak);
+    } else {
+      sample=trace[trace.length-1]; mode='rest'; coinState=2; dustP='crush'; yTravel=total; gNow=1;
+      setRegime('settled');
+    }
+
+    // drive the world scroll + cabin contents from the SAME core sample
+    scrollWorld(yTravel);
+    setNeedle(gNow, mode);
+    setWallNeedle(gNow);
+    poseRider(gNow, mode==='brake');
+    placeCoin(coinState);
+    poseDust(dustP);
+    $('zeroLamp').className = (mode==='fall') ? 'lamp on' : 'lamp';
+    $('needleVerdict').textContent = gNow.toFixed(2)+' g · '+(mode==='fall'?'free fall':mode==='brake'?'the crush':'rest');
+    $('needleVerdict').style.color = mode==='fall'?'var(--teal)':mode==='brake'?'var(--coral)':'var(--ink-dim)';
+
+    raf=requestAnimationFrame(frame);
+  }
+  raf=requestAnimationFrame(frame);
+}
+
+function setWallNeedle(g){
+  const wn=$('wallNeedle'); if(!wn) return;
+  const cx=CAB.x+CAB.w-22, cy=CAB.y+CAB.h-30, R=8;
+  const f=gToFrac(Math.min(g,NDL.gMax)); const ang=Math.PI*(1-f);
+  wn.setAttribute('x2',(cx+Math.cos(ang)*R).toFixed(2)); wn.setAttribute('y2',(cy-Math.sin(ang)*R).toFixed(2));
+  wn.setAttribute('stroke', g<0.02?'var(--teal)':g>1.4?'var(--coral)':'var(--gold-hi)');
+}
+
+function setRegime(leg, peak){
+  const r=$('regime');
+  if(leg==='rest'){ r.className='rest'; r.innerHTML='<b>RESTING</b> &mdash; the scale carries your whole weight.'; }
+  else if(leg==='fall'){ r.className='fall'; r.innerHTML='<b>FREE FALL</b> &mdash; the room fell with you, so the scale reads <b>nothing</b>.'; }
+  else if(leg==='brake'){ r.className='brake'; r.innerHTML='<b>CAUGHT</b> &mdash; pinned at <b>'+(peak||state.dBrake).toFixed(2)+' g</b>.'; }
+  else { r.className='rest'; r.innerHTML='<b>SETTLED</b> &mdash; back to your whole weight on the platform.'; }
+}
+
+function finishRide(res){
+  riding=false; $('release').disabled=false;
+  const peak = res.verdict.peakG;
+  // settle the live needle at 1 g, lamp off
+  setNeedle(1,'rest'); setWallNeedle(1); poseRider(1,false); placeCoin(2); poseDust('crush');
+  $('zeroLamp').className='lamp';
+  $('needleVerdict').textContent='1.00 g · settled'; $('needleVerdict').style.color='var(--ink-dim)';
+  setRegime('settled');
+  chime(peak);
+  // the delta chip + ghost bookkeeping
+  const chip=$('deltaChip');
+  if(lastPeak!=null){
+    const dlt=peak-lastPeak; const cls=dlt>=0?'up':'down'; const sign=dlt>=0?'+':'';
+    chip.innerHTML = `last <b>${lastPeak.toFixed(2)}g</b> → this <b>${peak.toFixed(2)}g</b> <b class="${cls}">(${sign}${dlt.toFixed(2)})</b>`;
+  } else {
+    chip.innerHTML = `this peak <b>${peak.toFixed(2)}g</b> — ride again to compare`;
+  }
+  if($('leaveGhost').checked){ lastPeak=peak; ghostNeedleG=peak; }
+  drawNeedle();
+}
+
+// a soft thunk at the crush (no library; tiny WebAudio blip). Best-effort, silent on fail.
+let actx=null;
+function chime(peak){
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(), g=actx.createGain();
+    o.connect(g); g.connect(actx.destination);
+    o.type='triangle'; o.frequency.value = 90 + Math.min(120, peak*22);
+    g.gain.setValueAtTime(0.0001, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.10, actx.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+0.35);
+    o.start(); o.stop(actx.currentTime+0.36);
+  }catch(e){}
+}
+
+// ── knobs + controls ──
+function syncKnobs(){
+  $('hDrop').value=state.hDrop; $('dBrake').value=state.dBrake;
+  $('kH').textContent=state.hDrop+' m'; $('kD').textContent=state.dBrake.toFixed(1)+' m';
+}
+function onKnob(){
+  if(riding) clearRide();
+  state.hDrop=parseFloat($('hDrop').value);
+  state.dBrake=parseFloat($('dBrake').value);
+  syncKnobs(); buildScene(); updateLedger();
+  setRegime('rest'); $('needleVerdict').textContent='1.0 g · at rest'; $('needleVerdict').style.color='var(--ink-dim)';
+}
+
+function boot(){
+  drawNeedle(); syncKnobs(); buildScene(); updateLedger();
+  $('hDrop').addEventListener('input', onKnob);
+  $('dBrake').addEventListener('input', onKnob);
+  $('release').addEventListener('click', ride);
+  $('reset').addEventListener('click', ()=>{ clearRide(); state.hDrop=30; state.dBrake=4; lastPeak=null; ghostNeedleG=null; syncKnobs(); buildScene(); updateLedger(); drawNeedle(); $('deltaChip').textContent='ride to set a ghost mark'; setRegime('rest'); });
+  $('dare').addEventListener('click', ()=>{ clearRide(); state.hDrop=64; state.dBrake=1; syncKnobs(); buildScene(); updateLedger();
+    setRegime('rest'); $('regime').innerHTML='<b>DARED</b> &mdash; max height, hardest brake. Pull <b>▶ Release</b> for the biggest crush&hellip;'; });
+  $('clearGhost').addEventListener('click', ()=>{ lastPeak=null; ghostNeedleG=null; drawNeedle(); $('deltaChip').textContent='ghost cleared'; });
+  $('leaveGhost').addEventListener('change', ()=>{ if(!$('leaveGhost').checked){ /* keep current mark until next ride */ } });
+  $('slowmo').addEventListener('change', ()=>{});
+
+  // ── the self-test chip (calls the SAME runSelfTest as the Node twin) ──
+  const r = runSelfTest();
+  const node=$('selftest');
+  if(r.pass===r.total){ node.className='selftest ok'; node.textContent=`self-test ${r.pass}/${r.total} ✓`; }
+  else { node.className='selftest bad'; node.textContent=`self-test ${r.pass}/${r.total} ✗`; }
+  const list=$('stList'); list.innerHTML='';
+  for(const c of r.checks){
+    const row=el2('div','row');
+    const mk=el2('span','m '+(c.ok?'ok':'no')); mk.textContent=c.ok?'✓':'✗';
+    const t=el2('span','t'); t.textContent=c.name;
+    row.appendChild(mk); row.appendChild(t); list.appendChild(row);
+  }
+  $('stSub').textContent=`${r.pass}/${r.total} claims proven — true 0 g pointwise in free fall, the coin floating with the floor, rest = m·g, the crush peak g=h/d+1 (monotone), and the load-bearing neg-control.`;
+  node.addEventListener('click', ()=>$('stPanel').classList.toggle('show'));
+  $('stClose').addEventListener('click', ()=>$('stPanel').classList.remove('show'));
+  window.__dropTowerSelfTest = runSelfTest;
+
+  // drop the front-door breadcrumb so a direct visit registers
+  try{ const k='ws:seen:drop-tower'; if(!localStorage.getItem(k)) localStorage.setItem(k,String(Date.now())); }catch(e){}
+}
+
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+</script>
+</body>
+</html>
