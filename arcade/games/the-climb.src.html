@@ -315,7 +315,7 @@ const parts = [];
 function spawnPart(x,y,vx,vy,life,r,color){ parts.push({x,y,vx,vy,life,max:life,r,color}); if(parts.length>300) parts.shift(); }
 function spawnBurst(actor, color, n){
   const px = originX + (actor.px/FRAC + 0.5)*cell;
-  const py = originY + (actor.py/FRAC + 0.5)*cell;
+  const py = originY + (actor.py/FRAC)*cell - cell*0.4;   // around the body, on the beam line
   for(let i=0;i<n;i++){ const a=Math.random()*TAU, sp=40+Math.random()*120;
     spawnPart(px,py,Math.cos(a)*sp,Math.sin(a)*sp,0.3+Math.random()*0.3,1.2+Math.random()*1.8,color); }
 }
@@ -386,18 +386,30 @@ function drawGrid(){
     }
   }
 }
+// THE BASELINE CONTRACT (the vertical-anchoring fix, cycle #122): the core's feet/py
+// convention is py = cy*FRAC, which Y() maps to the cell-TOP of row cy. The girder
+// BEAM is drawn flush at that exact line, and every resting entity's FEET are drawn
+// at that same line — so a figure/barrel sits ON TOP of its beam, never floating
+// against the beam above (the old build drew feet at the cell CENTER, +cell*0.5,
+// ~half a cell below the beam → the float). BEAM_TOP is the single source of truth.
+const BEAM_THK = 0.18;                       // beam thickness as a fraction of a cell
 function drawGirder(px,py,goal){
-  // the figure's FEET sit at the TOP of the cell (py = cy*FRAC maps to the cell top),
-  // so draw a slim neon beam at the cell top — the figure stands ON it.
-  const top = py + cell*0.04;
+  const top = py;                            // beam top == the entity feet line (cell top)
+  const thk = cell*BEAM_THK;
   ctx.save();
-  ctx.fillStyle = goal ? SK.goal : SK.girder;
-  ctx.shadowBlur = goal?14:8; ctx.shadowColor = goal ? SK.goal : SK.girderGlow;
-  ctx.fillRect(px, top, cell, cell*0.16);
-  ctx.strokeStyle = hexToRgba(goal?SK.goal:SK.girderEdge, 0.6); ctx.lineWidth=1;
+  // a solid neon beam with a darker underside so it reads as a floor you stand on
+  const grad = ctx.createLinearGradient(0, top, 0, top+thk);
+  grad.addColorStop(0, goal ? SK.goal : SK.girderEdge);
+  grad.addColorStop(0.4, goal ? SK.goal : SK.girder);
+  grad.addColorStop(1, hexToRgba(goal?SK.goal:SK.girderGlow, 0.85));
+  ctx.fillStyle = grad;
+  ctx.shadowBlur = goal?16:9; ctx.shadowColor = goal ? SK.goal : SK.girderGlow;
+  ctx.fillRect(px, top, cell, thk);
+  // rivet hatching for texture
+  ctx.strokeStyle = hexToRgba(goal?'#062':'#1a0f03', 0.5); ctx.lineWidth=1;
   ctx.beginPath();
-  ctx.moveTo(px+cell*0.2, top); ctx.lineTo(px+cell*0.32, top+cell*0.16);
-  ctx.moveTo(px+cell*0.6, top); ctx.lineTo(px+cell*0.72, top+cell*0.16);
+  ctx.moveTo(px+cell*0.22, top); ctx.lineTo(px+cell*0.34, top+thk);
+  ctx.moveTo(px+cell*0.62, top); ctx.lineTo(px+cell*0.74, top+thk);
   ctx.stroke();
   ctx.restore();
 }
@@ -421,19 +433,30 @@ function drawDropMark(px,py){
   ctx.restore();
 }
 function drawBarrels(){
+  const r = cell*0.30;
   for (const b of world.barrels){
     if (!b.alive) continue;
-    const px = X(b.px)+cell*0.5;
-    const py = Y(b.py)+cell*0.5;
-    const r = cell*0.30;
-    ctx.save(); ctx.translate(px,py);
+    // FEET on the beam: b.py is the barrel's contact line (cell top of its row); the
+    // barrel CENTER sits one radius above it, so the barrel rests ON the girder.
+    const cx = X(b.px) + cell*0.5;            // centered in its column
+    const cy = Y(b.py) - r + cell*BEAM_THK;   // bottom of the barrel touches the beam
+    ctx.save(); ctx.translate(cx,cy);
     const spin = (b.px) * 0.06 * (b.dir||1);
     ctx.rotate(spin);
     ctx.shadowBlur = 12; ctx.shadowColor = SK.barrelGlow;
-    ctx.fillStyle = b.hopped ? SK.drop : SK.barrel;
-    ctx.strokeStyle = hexToRgba('#fff4dd',0.9); ctx.lineWidth=1.4;
+    // a wooden-barrel look: a filled disc with stave lines + two hoops
+    const g = ctx.createRadialGradient(-r*0.3,-r*0.3,r*0.2, 0,0,r);
+    g.addColorStop(0, b.hopped ? SK.drop : '#ffd9a0');
+    g.addColorStop(1, b.hopped ? SK.barrelGlow : SK.barrel);
+    ctx.fillStyle = g;
+    ctx.strokeStyle = hexToRgba('#fff4dd',0.85); ctx.lineWidth=1.4;
     ctx.beginPath(); ctx.arc(0,0,r,0,TAU); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-r,0); ctx.lineTo(r,0); ctx.moveTo(0,-r*0.7); ctx.lineTo(0,r*0.7); ctx.stroke();
+    ctx.strokeStyle = hexToRgba('#7a3a10',0.7); ctx.lineWidth=1.1;
+    ctx.beginPath();
+    ctx.ellipse(0,0,r*0.45,r,0,0,TAU);        // central stave
+    ctx.moveTo(-r,-r*0.42); ctx.lineTo(r,-r*0.42);  // top hoop
+    ctx.moveTo(-r,r*0.42);  ctx.lineTo(r,r*0.42);   // bottom hoop
+    ctx.stroke();
     ctx.restore();
   }
 }
@@ -452,26 +475,47 @@ function drawThrower(){
 function drawPlayer(){
   const p = world.player;
   if (!p.alive) return;
-  // feet at (px,py); draw the body rising from the feet.
-  const fx = X(p.px)+cell*0.5;
-  const fy = Y(p.py)+cell*0.5;     // feet baseline (center of feet cell)
-  const r = cell*0.34;
+  // FEET on the beam: p.py is the feet line (cell top of its row) — draw the body
+  // RISING from there so the climber stands ON the girder (the float fix). r scales
+  // the figure to ~0.9 of a cell tall so it reads at a glance without overlapping rows.
+  const fx = X(p.px) + cell*0.5;             // centered in its column
+  const fy = Y(p.py) + cell*BEAM_THK;        // soles touch the beam top
+  const r  = cell*0.30;
+  const t  = Date.now()*0.012;
+  // animation phase: a walk-cycle stride when running, still on a ladder, a tuck in air
+  const moving = (input.left||input.right) && p.onGround && !p.onLadder;
+  const stride = p.jumping ? 0.55 : (p.onLadder ? Math.sin(t*1.4)*0.5 : (moving ? Math.sin(t*2.2)*0.7 : 0.12));
   ctx.save(); ctx.translate(fx,fy);
-  ctx.shadowBlur = 14; ctx.shadowColor = SK.playerGlow;
-  ctx.strokeStyle = SK.player; ctx.lineWidth = 2.2; ctx.fillStyle = hexToRgba(SK.playerGlow,0.22);
-  // head
-  ctx.beginPath(); ctx.arc(0,-r*1.15,r*0.42,0,TAU); ctx.fill(); ctx.stroke();
-  // torso + limbs (a little climber)
+  ctx.shadowBlur = 13; ctx.shadowColor = SK.playerGlow;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  const HEAD = -r*1.95, SH = -r*1.45, HIP = -r*0.55;   // head / shoulders / hips, above the feet
+  // torso
+  ctx.strokeStyle = SK.player; ctx.lineWidth = 3.0;
+  ctx.beginPath(); ctx.moveTo(0,SH); ctx.lineTo(0,HIP); ctx.stroke();
+  // legs (stride apart when moving)
+  ctx.lineWidth = 2.6;
   ctx.beginPath();
-  ctx.moveTo(0,-r*0.75); ctx.lineTo(0,r*0.05);
-  const swing = p.jumping ? 0.5 : Math.sin(Date.now()*0.02)*(p.onLadder?0.0:0.45);
-  // legs
-  ctx.moveTo(0,r*0.05); ctx.lineTo(-r*0.4*p.facing+swing*r, r*0.6);
-  ctx.moveTo(0,r*0.05); ctx.lineTo(r*0.4*p.facing-swing*r, r*0.6);
-  // arms
-  ctx.moveTo(0,-r*0.55); ctx.lineTo(r*0.5*p.facing, p.jumping?-r*1.0:(p.onLadder?-r*0.9:-r*0.3));
-  ctx.moveTo(0,-r*0.55); ctx.lineTo(-r*0.5*p.facing, p.onLadder?-r*0.9:-r*0.3);
+  ctx.moveTo(0,HIP); ctx.lineTo(-r*0.42 + stride*r, 0);
+  ctx.moveTo(0,HIP); ctx.lineTo( r*0.42 - stride*r, 0);
   ctx.stroke();
+  // arms (reach up on a ladder / jump; pump when running)
+  const armUp = p.onLadder || p.jumping;
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  if (armUp){
+    ctx.moveTo(0,SH); ctx.lineTo( r*0.55, SH - r*0.7);
+    ctx.moveTo(0,SH); ctx.lineTo(-r*0.55, SH - r*0.7);
+  } else {
+    ctx.moveTo(0,SH); ctx.lineTo( r*0.55*p.facing + stride*r*0.4, SH + r*0.55);
+    ctx.moveTo(0,SH); ctx.lineTo(-r*0.40*p.facing - stride*r*0.4, SH + r*0.35);
+  }
+  ctx.stroke();
+  // head (filled disc with a glow)
+  ctx.fillStyle = SK.player;
+  ctx.beginPath(); ctx.arc(0, HEAD, r*0.45, 0, TAU); ctx.fill();
+  // a little cap brim toward facing — gives it character + a clear orientation
+  ctx.strokeStyle = SK.playerGlow; ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.moveTo(p.facing*r*0.1, HEAD-r*0.4); ctx.lineTo(p.facing*r*0.7, HEAD-r*0.45); ctx.stroke();
   ctx.restore();
 }
 function drawParts(){

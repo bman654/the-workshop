@@ -55,9 +55,17 @@
 /* ── lattice tunables (FROZEN — renderer + self-test both read these) ────────── */
 var FRAC      = 16;     // sub-cell lattice resolution (integer units per cell, each axis)
 var RUN_SPEED = 3;      // lattice units the figure walks per tick along a girder
+                        //   (≈11px/frame at the live cell; a held key crosses the
+                        //   15-cell board in 15*16/3 = 80 ticks ≈ 1.3s — human-paced,
+                        //   not a per-tick whole-cell flick)
 var CLIMB_SPEED = 3;    // lattice units the figure climbs per tick on a ladder
 var GRAV      = 1;      // lattice units/tick added to vy each airborne tick
-var JUMP_VY   = -11;    // initial upward lattice velocity of a jump (the FIXED arc)
+var JUMP_VY   = -6;     // initial upward lattice velocity of a jump (the FIXED arc).
+                        //   apex rise = 15 lattice = 0.94 cell — clears one barrel
+                        //   (lethal box ~0.6 cell = 12 lattice) yet stays UNDER one floor
+                        //   (16 lattice), so it never punches through a ceiling. (Was -11
+                        //   → 3.4 cells, a punch through three ceilings; the jump-apex +
+                        //   ceiling self-tests now guard both ends.)
 var BARREL_SPEED = 2;   // lattice units a barrel rolls along its girder per tick
 var BARREL_FALL  = 3;   // lattice units a barrel falls per tick while dropping at a gap
 var HOP_SCORE   = 100;  // points for clearing a barrel with a well-timed jump
@@ -84,14 +92,16 @@ var LEVELS = [
     //   tumble between rows. The spawn girder is SPARSE (level-1 fairness tuning).
     rows: [
       '.T.............',  //  0  thrower (sits on the goal girder below it)
-      '=W==========H==',  //  1  TOP girder + GOAL (x=1); ladder col x=12
+      '=W=========hH==',  //  1  TOP girder + GOAL (x=1); DROP at x=11 (barrels spawned
+                          //       here roll right then tumble — the spawn girder MUST
+                          //       have a junction or barrels circulate forever); ladder x=12
       '............H..',  //  2  ladder x=12 connects r3 → r1
       '=h==========H==',  //  3  girder ←; DROP at x=1; ladder col x=12
-      '..H...........',  //  4  ladder x=2 connects r5 → r3
+      '..H............',  //  4  ladder x=2 connects r5 → r3
       '==H========h===',  //  5  girder →; ladder col x=2; DROP at x=11
       '............H..',  //  6  ladder x=12 connects r7 → r5
       '=h==========H==',  //  7  girder ←; DROP at x=1; ladder col x=12
-      '..H...........',  //  8  ladder x=2 connects r9 → r7
+      '..H............',  //  8  ladder x=2 connects r9 → r7
       '==H========h===',  //  9  girder →; ladder col x=2; DROP at x=11
       '............H..',  // 10  ladder x=12 connects r11 → r9
       'P===========H==',  // 11  start girder (spawn x=0); ladder col x=12
@@ -107,11 +117,11 @@ var LEVELS = [
       '=W====h=====H==',  //  1  DROP at x=6
       '............H..',  //  2
       '=h====h=====H==',  //  3  DROPs at x=1,6
-      '..H...........',  //  4
+      '..H............',  //  4
       '==H===h====h===',  //  5  DROPs at x=6,11
       '............H..',  //  6
       '=h====h=====H==',  //  7  DROPs at x=1,6
-      '..H...........',  //  8
+      '..H............',  //  8
       '==H===h====h===',  //  9  DROPs at x=6,11
       '............H..',  // 10
       'P===========H==',  // 11
@@ -323,8 +333,36 @@ function stepPlayer(w, input) {
 
   // ── airborne: the fixed jump arc OR a fall. Integer kinematics (A's model). ──
   if (!a.onGround) {
+    var prevHeadY = a.py - BODY_H;               // head BEFORE this tick's rise
     a.vy += GRAV;
     a.py += a.vy;
+    // CEILING: a rising figure is BLOCKED when its HEAD reaches the BEAM of a solid /
+    // girder row above — it does NOT tunnel through (symmetric to the landing check).
+    // Girders are THIN beams sitting at the TOP of their cell (the beam line = the
+    // row's cell-top = row*FRAC), so the head only bonks when it actually reaches that
+    // line — NOT merely on entering the (mostly-empty) cell. (A naive cell-occupancy
+    // test wrongly bonks on the staircase, where the head is always inside SOME girder
+    // cell.) The check SWEEPS every row the head crosses this tick, so a STRONG impulse
+    // cannot tunnel past several beams between ticks. SOLID '#' fills its whole cell, so
+    // its bonk line is the cell BOTTOM. Guards symptom-4's tunnel + the one-cell hop.
+    if (a.vy < 0) {
+      var hcx = cellOfX(a.px);
+      var headY = a.py - BODY_H;                  // head AFTER this tick's rise
+      var topRow = Math.floor(headY / FRAC);      // highest row the head now reaches
+      var botRow = Math.floor(prevHeadY / FRAC);  // row the head left from
+      for (var ry = botRow; ry >= topRow && ry >= 0; ry--) {
+        var ct = tileAt(w, hcx, ry);
+        if (isGirderTile(ct)) {                   // thin beam at the row's cell-top line
+          var beamLine = ry * FRAC;
+          // bonk only a beam that was ABOVE the head a tick ago and is reached now —
+          // never the (empty-or-not) row the head was already sitting in at rest.
+          if (beamLine < prevHeadY && headY <= beamLine) { a.py = beamLine + BODY_H; a.vy = 0; break; }
+        } else if (ct === SOLID) {                // a full-cell wall: bonk at its bottom
+          var floorLine = (ry + 1) * FRAC;
+          if (floorLine < prevHeadY && headY <= floorLine) { a.py = floorLine + BODY_H; a.vy = 0; break; }
+        }
+      }
+    }
     // horizontal control persists in the air (drift), bounded to passable cells
     if (input.left && !input.right)  { a.facing = -1; tryDrift(w, a, -RUN_SPEED); }
     if (input.right && !input.left)  { a.facing = 1;  tryDrift(w, a,  RUN_SPEED); }
@@ -349,7 +387,6 @@ function stepPlayer(w, input) {
 
   // ── grounded. WIN check first (the goal is self-supporting). ──
   a.cy = clampN(a.cy, 0, w.H - 1);
-  a.px = a.cx * FRAC;               // grounded motion is cell-quantized horizontally
   if (onGoal(w, a)) { w.won = true; w.over = true; return; }
 
   a.onLadder = isLadder(w, a.cx, a.cy);
@@ -361,27 +398,41 @@ function stepPlayer(w, input) {
 
   // JUMP — a discrete fixed-arc impulse, only from a grounded girder (not a ladder).
   if (input.jump && !a.onLadder && isFloorBelow(w, a.cx, a.cy)) {
+    a.px = a.cx * FRAC;            // center on the cell so the arc lands cleanly
     a.vy = JUMP_VY; a.onGround = false; a.jumping = true; a.onLadder = false;
     return;
   }
 
-  // climb a ladder (up / down)
+  // climb a ladder (up / down). Vertical climb stays cell-stepped (the win-solver +
+  // ladder grammar center on cells); snap px to the ladder column on pickup.
   if (input.up && (isLadder(w, a.cx, a.cy - 1) || isLadder(w, a.cx, a.cy))) {
     if (passableCell(w, a.cx, a.cy - 1) && a.cy - 1 >= 0) {
-      a.cy -= 1; a.py = a.cy * FRAC; a.onLadder = true; return;
+      a.cy -= 1; a.py = a.cy * FRAC; a.px = a.cx * FRAC; a.onLadder = true; return;
     }
   }
   if (input.down && isLadder(w, a.cx, a.cy + 1)) {
-    if (a.cy + 1 < w.H) { a.cy += 1; a.py = a.cy * FRAC; a.onLadder = true; return; }
+    if (a.cy + 1 < w.H) { a.cy += 1; a.py = a.cy * FRAC; a.px = a.cx * FRAC; a.onLadder = true; return; }
   }
 
-  // run horizontally along the girder
+  // run horizontally along the girder — SUB-CELL lattice motion at RUN_SPEED units
+  // per tick (was a whole cell per tick: a flick). px is the source of truth; cx is
+  // derived from it via cellOfX. On direction-RELEASE we re-center px on the cell so
+  // ladder pickup + the win-solver always find the figure centered on a column.
   if (input.left && !input.right) {
     a.facing = -1;
-    if (canStep(w, a.cx - 1, a.cy)) { a.cx -= 1; a.px = a.cx * FRAC; }
+    var nxl = a.px - RUN_SPEED;
+    if (passableCell(w, cellOfX(nxl), a.cy) || cellOfX(nxl) === a.cx) {
+      a.px = nxl; if (a.px < 0) a.px = 0; a.cx = cellOfX(a.px);
+    }
   } else if (input.right && !input.left) {
     a.facing = 1;
-    if (canStep(w, a.cx + 1, a.cy)) { a.cx += 1; a.px = a.cx * FRAC; }
+    var nxr = a.px + RUN_SPEED;
+    var maxX = (w.W - 1) * FRAC;
+    if (passableCell(w, cellOfX(nxr), a.cy) || cellOfX(nxr) === a.cx) {
+      a.px = nxr; if (a.px > maxX) a.px = maxX; a.cx = cellOfX(a.px);
+    }
+  } else {
+    a.px = a.cx * FRAC;             // no horizontal input → settle onto the cell center
   }
   // after walking, re-check support: if the new cell hangs over a gap, fall.
   if (!isLadder(w, a.cx, a.cy) && !isFloorBelow(w, a.cx, a.cy)) {
@@ -729,6 +780,133 @@ function runSelfTest() {
           same && sameAfterWait,
           same ? ('final 0x' + ra.hashes[ra.hashes.length - 1].toString(16) + ' waitOk=' + sameAfterWait)
                : ('diverged at tick ' + firstDiff));
+  }
+
+  /* ═══ GAMEPLAY-PHYSICS REALISM (cycle #122 — these would have FAILED on the
+     broken #115 build that reported 5/5 green on an unplayable cabinet). The
+     original battery proved the deterministic CORE but never the PLAYABILITY; each
+     claim below targets one of the five symptoms at the gameplay layer. ═══ */
+
+  // ── CLAIM 6: a THROWN barrel actually DESCENDS — it leaves the TOP girder under
+  //    gravity within a bounded number of ticks (catches symptom 2: barrels that
+  //    circulated forever on the spawn girder because it had no DROP junction). ──
+  {
+    var w6 = makeWorld(0, { spawnEnabled: false });
+    var b6 = spawnBarrel(w6);              // onto the top girder, like the thrower does
+    var startY = b6.py, startCy = b6.cy, leftTop = false, maxPy = b6.py, leaveTick = -1;
+    var N = 200;                            // bound: must leave the top girder within N ticks
+    for (var k6 = 0; k6 < N && b6.alive; k6++) {
+      b6.prevPx = b6.px; b6.prevPy = b6.py;
+      stepBarrel(w6, b6);
+      if (b6.py > maxPy) maxPy = b6.py;
+      if (b6.cy > startCy && leaveTick < 0) { leftTop = true; leaveTick = k6; }
+    }
+    var descended = (maxPy - startY) >= FRAC;        // fell at least one full floor
+    check('BARREL DESCENDS: a thrown barrel py INCREASES under gravity and LEAVES the top girder within ' + N + ' ticks (not circulate forever)',
+          leftTop && descended,
+          'leftTopAt=' + leaveTick + ' descendedCells=' + ((maxPy - startY) / FRAC).toFixed(1));
+  }
+
+  // ── CLAIM 7: a resting entity's FEET sit on the TOP of its platform — its py maps
+  //    to the SAME row as the girder it stands on, never the floor above (catches
+  //    symptom 3: the float / vertical-anchoring off-by-one). NEG CONTROL: a feet-py
+  //    that lands one row HIGH must NOT pass this floor-on-platform invariant. ──
+  {
+    var w7 = makeWorld(0, { spawnEnabled: false });
+    var p7 = w7.player;                      // spawned on the start girder, resting
+    stepTick(w7, blankInput());              // settle one tick (no input)
+    var feetRow = Math.round(p7.py / FRAC);
+    var standsOnFloor = isFigureFloorTile(tileAt(w7, p7.cx, feetRow));  // its own row IS a floor tile
+    var pyOnLattice = (p7.py % FRAC) === 0;  // feet rest exactly on a row line (no sub-cell offset)
+    // NEG CONTROL: an entity offset one row UP (the float bug's signature) is NOT
+    // resting on its platform — its feet row would be empty air above the girder.
+    var floatRow = feetRow - 1;
+    var floatRestsOnFloor = isFigureFloorTile(tileAt(w7, p7.cx, floatRow));
+    check('FEET ON PLATFORM TOP: a resting figure\'s feet row IS its girder (py on the lattice line); NEG: one row up is NOT a floor',
+          standsOnFloor && pyOnLattice && !floatRestsOnFloor,
+          'feetRow=' + feetRow + ' onFloor=' + standsOnFloor + ' latticeAligned=' + pyOnLattice + ' negFloatOnFloor=' + floatRestsOnFloor);
+  }
+
+  // ── CLAIM 8: a JUMP's apex rise is < ONE FLOOR HEIGHT in lattice units — it clears
+  //    about one barrel, NOT 2.5 stories (catches symptom 4's untuned impulse). The
+  //    apex is the analytic sum of the fixed arc; it must be strictly under FRAC. ──
+  {
+    var w8 = makeWorld(0, { spawnEnabled: false });
+    var p8 = w8.player; p8.cx = 5; p8.cy = 11; p8.px = 5 * FRAC; p8.py = 11 * FRAC;
+    p8.onGround = true; p8.alive = true; p8.vy = 0;
+    var groundY = p8.py, apexRise = 0;
+    var in8 = blankInput(); in8.jump = true;
+    for (var k8 = 0; k8 < 40 && !w8.over; k8++) {
+      stepTick(w8, in8); in8.jump = false;
+      var rise = groundY - p8.py; if (rise > apexRise) apexRise = rise;
+      if (p8.onGround && k8 > 0) break;        // landed back
+    }
+    var FLOOR = FRAC;                            // one floor = one cell in lattice units
+    check('JUMP APEX < ONE FLOOR: the fixed jump arc rises < one floor height (clears ~a barrel, not 2.5 stories)',
+          apexRise > 0 && apexRise < FLOOR,
+          'apexRise=' + apexRise + ' lattice (' + (apexRise / FRAC).toFixed(2) + ' cells) floor=' + FLOOR);
+  }
+
+  // ── CLAIM 9: a rising figure is BLOCKED by a CEILING — a STRONG upward impulse
+  //    fired under a girder does NOT tunnel through it (catches symptom 4's tunnel:
+  //    the broken build, with no upward-collision check, let a rising figure punch
+  //    straight through every girder above). We drive a large vy (like the old broken
+  //    JUMP_VY) at a figure one empty row below a ceiling girder, and assert the head
+  //    NEVER crosses the ceiling beam. NEG CONTROL: the same impulse in OPEN air
+  //    (ceiling carved away) DOES rise past that height — proving the block is the
+  //    ceiling, not the arc topping out. ───────────────────────────────────────── */
+  {
+    function ceilingShaft(withCeiling) {
+      var ww = makeWorld(0, { spawnEnabled: false });
+      var Wc = ww.W, col = 7, standRow = 6, ceilRow = 4;   // one empty row (5) between
+      for (var x = 0; x < Wc; x++) {                        // clear rows 4,5,6 at the column
+        ww.tiles[5 * Wc + col] = EMPTY;
+      }
+      ww.tiles[standRow * Wc + col] = GIRDER;               // figure stands here
+      ww.tiles[ceilRow * Wc + col] = withCeiling ? GIRDER : EMPTY;  // ceiling (or air)
+      var pp = ww.player; pp.cx = col; pp.cy = standRow; pp.px = col * FRAC; pp.py = standRow * FRAC;
+      pp.onGround = true; pp.alive = true; pp.vy = 0;
+      return { w: ww, p: pp, col: col, ceilRow: ceilRow };
+    }
+    // POSITIVE: a strong impulse under a ceiling — the head must stop at/below the beam.
+    var s9 = ceilingShaft(true);
+    s9.p.onGround = false; s9.p.jumping = true; s9.p.vy = -20;   // a deliberately big rise
+    var minHeadY = s9.p.py - BODY_H;
+    for (var k9 = 0; k9 < 40 && !s9.w.over; k9++) {
+      stepTick(s9.w, blankInput());
+      var hy = s9.p.py - BODY_H; if (hy < minHeadY) minHeadY = hy;
+      if (s9.p.onGround && k9 > 0) break;
+    }
+    var ceilBeam = s9.ceilRow * FRAC;
+    var blockedByCeiling = minHeadY >= ceilBeam;            // head never crossed the beam line
+    // NEG CONTROL: identical impulse with the ceiling carved to air → it rises past it.
+    var s9n = ceilingShaft(false);
+    s9n.p.onGround = false; s9n.p.jumping = true; s9n.p.vy = -20;
+    var minHeadYn = s9n.p.py - BODY_H;
+    for (var k9n = 0; k9n < 40 && !s9n.w.over; k9n++) {
+      stepTick(s9n.w, blankInput());
+      var hyn = s9n.p.py - BODY_H; if (hyn < minHeadYn) minHeadYn = hyn;
+      if (s9n.p.onGround && k9n > 0) break;
+    }
+    var rosePastInOpen = minHeadYn < ceilBeam;             // without a ceiling it goes higher
+    check('CEILING BLOCKS UPWARD: a strong impulse under a girder bonks (head never crosses the beam); NEG: open air rises past it',
+          blockedByCeiling && rosePastInOpen,
+          'minHeadY=' + minHeadY + ' ceilBeam=' + ceilBeam + ' blocked=' + blockedByCeiling + ' negOpenMinHeadY=' + minHeadYn);
+  }
+
+  // ── CLAIM 10: a grounded held-direction move advances by ~RUN_SPEED lattice units
+  //    per tick — SUB-cell, NOT a whole cell (catches symptom 1's flick: the old
+  //    whole-cell-per-tick run that crossed the board in 15 ticks). ──
+  {
+    var w10 = makeWorld(0, { spawnEnabled: false });
+    var p10 = w10.player; p10.cx = 4; p10.cy = 11; p10.px = 4 * FRAC; p10.py = 11 * FRAC;
+    p10.onGround = true; p10.alive = true; p10.vy = 0;
+    var x0 = p10.px, in10 = blankInput(); in10.right = true;
+    stepTick(w10, in10);
+    var advanced = p10.px - x0;
+    check('SUB-CELL RUN: one tick of a held arrow advances ~RUN_SPEED (≤ a fraction of a cell), not a whole cell',
+          advanced > 0 && advanced <= RUN_SPEED && advanced < FRAC,
+          'advanced=' + advanced + ' lattice (RUN_SPEED=' + RUN_SPEED + ', a whole cell=' + FRAC + ')');
   }
 
   return { allPass: allPass, results: results };
