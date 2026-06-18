@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>THE LAST LINE — neon descending-invader stand</title>
+<style>
+  :root{ --accent:#5fff8a; --accent2:#37d6ff; --warn:#ff2e88; --bg:#03060a; --gold:#ffd24d; --ufo:#ff6adf; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; background:var(--bg); overflow:hidden;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    color:#eef3ff; -webkit-font-smoothing:antialiased; cursor:default; }
+  #stage{ position:fixed; inset:0; }
+  canvas{ display:block; position:absolute; inset:0; }
+
+  /* ---------- HUD ---------- */
+  .hud{ position:fixed; inset:0; pointer-events:none; z-index:5; font-variant-numeric:tabular-nums; }
+  .hud-row{ position:absolute; top:14px; display:flex; }
+  .hud-left{ left:18px; flex-direction:column; gap:3px; align-items:flex-start; }
+  .hud-right{ right:18px; flex-direction:column; align-items:flex-end; gap:3px; }
+  .label{ font-size:9.5px; letter-spacing:.28em; color:#4ad189; opacity:.9; text-transform:uppercase; }
+  .label.b2{ color:#4a9ec7; }
+  .value{ font-size:26px; font-weight:700; letter-spacing:.04em; line-height:1;
+    color:#dcffe7; text-shadow:0 0 16px rgba(95,255,138,.6); }
+  .value.small{ font-size:15px; color:#bfe6ff; text-shadow:0 0 12px rgba(55,214,255,.5); }
+
+  /* lives + wave cluster (top center) */
+  .center-hud{ position:fixed; top:12px; left:50%; transform:translateX(-50%);
+    display:flex; flex-direction:column; align-items:center; gap:5px; z-index:5; pointer-events:none; }
+  .pips{ display:flex; gap:6px; align-items:center; }
+  .pip{ width:16px; height:11px; clip-path:polygon(0 100%, 22% 40%, 50% 0, 78% 40%, 100% 100%);
+    background:var(--accent); box-shadow:0 0 8px rgba(95,255,138,.7); }
+  .pip.empty{ opacity:.16; background:#2a3a30; box-shadow:none; transform:scale(.82); }
+  .gwave{ font-size:9.5px; letter-spacing:.24em; color:#4a9ec7; text-transform:uppercase; }
+
+  #muteTag{ position:fixed; bottom:13px; right:16px; font-size:10px; letter-spacing:.22em;
+    color:#4ad189; opacity:.7; text-transform:uppercase; pointer-events:none; }
+
+  /* self-test chip */
+  #selftest{ position:fixed; left:50%; bottom:13px; transform:translateX(-50%);
+    z-index:6; font-size:10px; letter-spacing:.22em; text-transform:uppercase;
+    color:#04140a; background:var(--accent); border-radius:10px; padding:3px 10px;
+    box-shadow:0 0 14px rgba(95,255,138,.7); opacity:0; transition:opacity .4s;
+    pointer-events:none; font-weight:700; }
+  #selftest.show{ opacity:.92; }
+  #selftest.fail{ color:#fff; background:#ff2e88; box-shadow:0 0 14px rgba(255,46,136,.8); }
+
+  /* ---------- Overlays ---------- */
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:8px;
+    background:radial-gradient(120% 120% at 50% 38%, rgba(4,10,8,.4), rgba(1,3,5,.94));
+    backdrop-filter:blur(1.5px); transition:opacity .35s; padding:18px; }
+  .overlay.hidden{ opacity:0; pointer-events:none; }
+  .title{ font-size:clamp(40px,11vw,116px); font-weight:800; letter-spacing:.04em;
+    line-height:.9; color:#dcffe7;
+    text-shadow:0 0 30px rgba(95,255,138,.6), 0 0 70px rgba(95,255,138,.3);
+    -webkit-text-stroke:1px rgba(150,255,190,.22); }
+  .title .a2{ color:var(--accent2); -webkit-text-stroke:1px rgba(55,214,255,.4);
+    text-shadow:0 0 30px rgba(55,214,255,.55); }
+  .tagline{ font-size:12.5px; letter-spacing:.30em; color:var(--accent); text-transform:uppercase;
+    opacity:.92; margin-bottom:18px; }
+  .prompt{ font-size:14px; letter-spacing:.12em; color:#eef3ff;
+    margin-top:10px; animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:.45} 50%{opacity:1} }
+  .controls{ margin-top:20px; display:grid; grid-template-columns:auto auto;
+    gap:6px 24px; font-size:12px; letter-spacing:.04em; color:#bfe6ff; opacity:.92; }
+  .controls .k{ text-align:right; color:var(--accent); }
+  .controls b{ color:#dcffe7; font-weight:700; }
+  .hint{ margin-top:16px; font-size:11px; letter-spacing:.12em; color:#4ad189;
+    text-transform:uppercase; opacity:.85; max-width:56ch; line-height:1.7; }
+  .go-stats{ margin-top:8px; display:grid; grid-template-columns:auto auto; gap:6px 28px;
+    font-size:14px; letter-spacing:.05em; color:#bfe6ff; }
+  .go-stats .k{ text-align:right; color:#4ad189; }
+  .go-stats b{ color:#dcffe7; }
+  .newhigh{ color:var(--accent2); font-size:13px; letter-spacing:.26em; text-transform:uppercase;
+    margin-top:10px; animation:pulse 1s ease-in-out infinite; }
+  .gameover-title{ font-size:clamp(30px,7vw,64px); font-weight:800; letter-spacing:.10em;
+    color:var(--warn); text-shadow:0 0 28px rgba(255,46,136,.6); margin-bottom:6px; }
+  .win-title{ color:var(--accent2); text-shadow:0 0 28px rgba(55,214,255,.65); }
+  .pausetitle{ font-size:42px; font-weight:800; letter-spacing:.18em; color:#dcffe7;
+    text-shadow:0 0 24px rgba(95,255,138,.55); }
+
+  /* mobile touch controls */
+  #touch{ position:fixed; inset:0; z-index:7; display:none; pointer-events:none; }
+  .tbtn{ position:absolute; pointer-events:auto; border-radius:50%;
+    border:1.5px solid rgba(55,214,255,.4); background:rgba(55,214,255,.08);
+    color:#bfe6ff; font-size:21px; display:flex; align-items:center; justify-content:center;
+    width:64px; height:64px; box-shadow:0 0 16px rgba(55,214,255,.16); user-select:none;
+    -webkit-user-select:none; -webkit-tap-highlight-color:transparent; }
+  .tbtn:active{ background:rgba(55,214,255,.22); }
+  .tbtn.fire{ border-color:rgba(95,255,138,.6); color:#bfffd0; width:78px; height:78px; font-size:14px; letter-spacing:.06em; }
+  body.touch #touch{ display:block; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg"></canvas>
+  <canvas id="game"></canvas>
+</div>
+
+<!-- HUD -->
+<div class="hud" id="hud" style="display:none">
+  <div class="hud-row hud-left">
+    <div class="label">Score</div>
+    <div class="value" id="score">0</div>
+  </div>
+  <div class="hud-row hud-right">
+    <div class="label b2">Best</div>
+    <div class="value small" id="best">0</div>
+  </div>
+</div>
+<div class="center-hud" id="centerHud" style="display:none">
+  <div class="pips" id="lives"></div>
+  <div class="gwave" id="wavetag">Wave 1</div>
+</div>
+<div id="muteTag">M · sound off</div>
+<div id="selftest">✓ self-test</div>
+
+<!-- Title -->
+<div class="overlay" id="titleScreen">
+  <div class="title">THE LAST<span class="a2"> LINE</span></div>
+  <div class="tagline">hold the wall · clear the descending line · the march quickens</div>
+  <div class="prompt">Press SPACE / tap to defend</div>
+  <div class="controls">
+    <span class="k">← →</span><span>slide the cannon along the wall</span>
+    <span class="k">SPACE / Z / ↑</span><span>FIRE (one shot aloft at a time)</span>
+    <span class="k">P</span><span>pause &nbsp; <b>R</b> restart &nbsp; <b>M</b> sound</span>
+  </div>
+  <div class="hint">A grid of invaders marches in lock-step; the instant any one touches a side rim the whole line reverses AND drops a row. Four bunkers crumble cell-by-cell — cover for you and them. Clear the grid to face a hotter wave. The fewer left, the faster they come — the quickening drumbeat. Lose if the line reaches your row, a bomb hits you, or your lives run out.</div>
+</div>
+
+<!-- Game over -->
+<div class="overlay hidden" id="gameoverScreen">
+  <div class="gameover-title" id="goTitle">THE LINE BROKE THROUGH</div>
+  <div class="go-stats">
+    <span class="k">Score</span><b id="goScore">0</b>
+    <span class="k">Wave reached</span><b id="goWave">1</b>
+    <span class="k">Invaders downed</span><b id="goKills">0</b>
+  </div>
+  <div class="newhigh" id="newHigh" style="display:none">★ NEW BEST ★</div>
+  <div class="prompt">Press SPACE / tap to play again</div>
+</div>
+
+<!-- Pause -->
+<div class="overlay hidden" id="pauseScreen">
+  <div class="pausetitle">PAUSED</div>
+  <div class="prompt">Press P or ESC to resume</div>
+</div>
+
+<!-- touch controls -->
+<div id="touch">
+  <div class="tbtn" id="tLeft"  style="left:16px;  bottom:40px">◀</div>
+  <div class="tbtn" id="tRight" style="left:92px;  bottom:40px">▶</div>
+  <div class="tbtn fire" id="tFire" style="right:24px; bottom:36px">FIRE</div>
+</div>
+
+<script>
+"use strict";
+<!-- forge:include ../../tools/ws/ws.js -->
+</script>
+<script>
+"use strict";
+// ── the deterministic CORE (forge inlines the-last-line.core.js here; its module
+//    guard is stripped, so makeGame/stepTick/runSelfTest/… become page globals). ──
+<!-- forge:include the-last-line.core.js -->
+</script>
+<script>
+"use strict";
+(function(){
+//============================================================== canvas / view
+const bgCanvas = document.getElementById('bg');
+const canvas   = document.getElementById('game');
+const bgx = bgCanvas.getContext('2d');
+const ctx = canvas.getContext('2d');
+
+let W = 0, H = 0, DPR = 1;
+let cell = 16, originX = 0, originY = 0;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  for (const c of [bgCanvas, canvas]){
+    c.width = Math.floor(W*DPR); c.height = Math.floor(H*DPR);
+    c.style.width = W+'px'; c.style.height = H+'px';
+  }
+  bgx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  layout(); drawBackground();
+}
+function layout(){
+  const padTop = 64, padBot = (document.body.classList.contains('touch')?150:54), padX = 16;
+  const availW = W - padX*2, availH = H - padTop - padBot;
+  cell = Math.max(6, Math.floor(Math.min(availW/COLS, availH/ROWS)));
+  const fw = cell*COLS, fh = cell*ROWS;
+  originX = Math.floor((W - fw)/2);
+  originY = Math.floor(padTop + (availH - fh)/2);
+}
+window.addEventListener('resize', resize);
+
+const TAU = Math.PI*2;
+const clamp = (v,lo,hi)=> v<lo?lo:(v>hi?hi:v);
+
+//============================================================== skins (render-only, cycle per wave)
+const SKINS = [
+  { inv1:'#5fff8a', inv2:'#37d6ff', inv3:'#ffd24d', glow:'#39ff9e',
+    bunker:'#3affc0', bunkerEdge:'#bafff0', shot:'#dcffe7', bomb:'#ff6a9e',
+    player:'#bafff0', playerGlow:'#5fff8a', ufo:'#ff6adf', sky1:'#04100a', sky2:'#03060a' },
+  { inv1:'#37d6ff', inv2:'#b06bff', inv3:'#5fff8a', glow:'#37d6ff',
+    bunker:'#6ad0ff', bunkerEdge:'#cfeeff', shot:'#eafaff', bomb:'#ffb13d',
+    player:'#cfeeff', playerGlow:'#37d6ff', ufo:'#ffd24d', sky1:'#04101a', sky2:'#020a12' }
+];
+let SK = SKINS[0];
+
+//============================================================== world / state
+let game = null;
+let mode = 'title';
+let acc = 0, best = 0;
+let wave = 1, lives = 3, carryScore = 0;
+const input = blankInput();
+
+function loadBest(){ try{ best = parseInt(localStorage.getItem('ws:best:the-last-line')||'0',10)||0; }catch(e){ best=0; } }
+
+function newGame(wv, freshSeed){
+  SK = SKINS[(wv-1) % SKINS.length];
+  game = makeGame(wv, { seed: freshSeed!=null ? freshSeed : ((wv*2654435761)>>>0) });
+  // a graceful opening interval so wave 1 doesn't start its first march instantly
+  game.marchTimer = stepInterval(game.totalInvaders, game.totalInvaders, wv);
+  acc = 0; layout(); drawBackground();
+}
+
+//============================================================== background (static art — a starfield)
+function drawBackground(){
+  bgx.clearRect(0,0,W,H);
+  const g = bgx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0, SK.sky1); g.addColorStop(1, SK.sky2);
+  bgx.fillStyle = g; bgx.fillRect(0,0,W,H);
+  let s = 50621;
+  const rnd = ()=>{ s = (s*1103515245 + 12345) & 0x7fffffff; return s/0x7fffffff; };
+  for (let i=0;i<90;i++){
+    const x = rnd()*W, y = rnd()*H, r = rnd()*1.2+0.2;
+    bgx.fillStyle = rnd()<0.5 ? SK.inv2 : SK.glow;
+    bgx.globalAlpha = 0.05 + rnd()*0.12;
+    bgx.beginPath(); bgx.arc(x,y,r,0,TAU); bgx.fill();
+  }
+  bgx.globalAlpha = 1;
+}
+
+//============================================================== audio (procedural)
+function readMutePref(){ try{ return localStorage.getItem('ws:pref:muted') === '1'; }catch(e){ return false; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v ? '1' : '0'); }catch(e){} }
+const Audio_ = {
+  ctx:null, master:null, muted:readMutePref(),
+  init(){ if(this.ctx) return; try{
+    const AC = window.AudioContext||window.webkitAudioContext;
+    this.ctx = new AC(); this.master = this.ctx.createGain();
+    this.master.gain.value = 0.28; this.master.connect(this.ctx.destination);
+  }catch(e){ this.ctx=null; } },
+  resume(){ if(this.ctx && this.ctx.state==='suspended') this.ctx.resume(); },
+  blip(type,f,dur,vol,sweep){ if(!this.ctx||this.muted) return;
+    const t=this.ctx.currentTime, o=this.ctx.createOscillator(), g=this.ctx.createGain();
+    o.type=type; o.frequency.setValueAtTime(f,t);
+    if(sweep) o.frequency.exponentialRampToValueAtTime(Math.max(40,f*sweep),t+dur);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t+dur+0.02); },
+  noise(dur,vol,lp){ if(!this.ctx||this.muted) return;
+    const t=this.ctx.currentTime, len=Math.floor(this.ctx.sampleRate*dur);
+    const buf=this.ctx.createBuffer(1,len,this.ctx.sampleRate), d=buf.getChannelData(0);
+    for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len);
+    const src=this.ctx.createBufferSource(); src.buffer=buf;
+    const f=this.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=lp||1200;
+    const gn=this.ctx.createGain(); gn.gain.value=vol;
+    src.connect(f); f.connect(gn); gn.connect(this.master); src.start(t); },
+  fire(){ this.blip('square',880,0.07,0.04,1.8); },
+  hit(){ this.blip('triangle',520,0.08,0.06,0.5); this.noise(0.10,0.08,2200); },
+  // the iconic four-note march drumbeat — pitch picked by the marchStep counter
+  march(step){ const notes=[196,165,147,131]; this.blip('square',notes[step%4],0.07,0.05,1.0); },
+  bomb(){ this.blip('sawtooth',180,0.10,0.03,0.6); },
+  ufo(){ this.blip('sine',760,0.14,0.04,1.3); },
+  wave(){ [392,523,659,784].forEach((f,i)=>setTimeout(()=>this.blip('triangle',f,0.16,0.07,1.2), i*90)); },
+  die(){ this.noise(0.55,0.30,500); this.blip('sawtooth',150,0.55,0.12,0.25); }
+};
+
+//============================================================== event detection (sim deltas → SFX/juice)
+let prevSnap = null;
+function snapshot(g){ return { kills:g.kills, marches:g.marches, dead:g.dead, won:g.won,
+  bombs:g.bombs.length, shot:!!g.shot, solid:bunkerSolidCount(g.bunkers), ufo:!!g.ufo }; }
+function detectEvents(g){
+  const cur = snapshot(g);
+  if (prevSnap){
+    if (cur.kills > prevSnap.kills){ Audio_.hit(); flash(0.08); }
+    if (cur.marches > prevSnap.marches){ Audio_.march(g.marches); }
+    if (cur.shot && !prevSnap.shot){ Audio_.fire(); }
+    if (cur.bombs > prevSnap.bombs){ Audio_.bomb(); }
+    if (cur.ufo && !prevSnap.ufo){ Audio_.ufo(); }
+    if (cur.dead && !prevSnap.dead){ Audio_.die(); addShake(18); flash(0.45); }
+    if (cur.won && !prevSnap.won){ Audio_.wave(); flash(0.4); }
+  }
+  prevSnap = cur;
+}
+
+//============================================================== shake / flash / particles (render-only)
+let shake = 0, flashAmt = 0;
+function addShake(v){ shake = Math.min(26, shake+v); }
+function flash(v){ flashAmt = Math.min(1, flashAmt+v); }
+const parts = [];
+function spawnPart(x,y,vx,vy,life,r,color){ parts.push({x,y,vx,vy,life,max:life,r,color}); if(parts.length>360) parts.shift(); }
+function burstAt(px,py,color,n){
+  for(let i=0;i<n;i++){ const a=Math.random()*TAU, sp=40+Math.random()*150;
+    spawnPart(px,py,Math.cos(a)*sp,Math.sin(a)*sp,0.3+Math.random()*0.35,1.2+Math.random()*1.9,color); }
+}
+function updateParts(dt){
+  for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.life-=dt;
+    if(p.life<=0){ parts.splice(i,1); continue; } p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.95; p.vy*=0.95; }
+}
+
+//============================================================== fixed-timestep advance
+// The sim advances in FIXED SIM_HZ ticks (exact collision/march). The render reads the
+// live world each frame; shots/march are slow enough that no interpolation is needed for
+// readability — the juice (shake/flash/particles) is what carries the feel.
+let prevKills = 0, prevSolid = 0;
+function advance(dt){
+  acc += dt;
+  const STEP = 1/SIM_HZ;
+  let steps = 0;
+  while (acc >= STEP && steps < 8){
+    const beforeKills = game.kills, beforeSolid = bunkerSolidCount(game.bunkers);
+    stepTick(game, input);
+    input.fire = false;                // one-shot pulse
+    // particle bursts on a fresh kill / bunker erosion (read deltas)
+    if (game.kills > beforeKills) emitKillBurst();
+    if (bunkerSolidCount(game.bunkers) < beforeSolid) emitChipBurst();
+    detectEvents(game);
+    acc -= STEP; steps++;
+    if (game.over) break;
+  }
+  if (steps >= 8) acc = 0;
+
+  const sc = carryScore + game.score;
+  if (sc > best){ best = sc; try{ WS.best('the-last-line', sc); }catch(e){} }
+
+  if (game.over && mode==='playing'){
+    if (game.won) onWaveWon();
+    else onPlayerDeath();
+  }
+}
+// the most-recently-killed invader location is recoverable by diffing the formation,
+// but cheaper: burst at the live shot's last position (shot is cleared on a hit).
+let lastShotPx = 0, lastShotPy = 0;
+function emitKillBurst(){ burstAt(lastShotPx, lastShotPy, SK.glow, 14); addShake(4); }
+function emitChipBurst(){ burstAt(lastShotPx, lastShotPy, SK.bunker, 6); }
+
+//============================================================== rendering helpers
+const X = (lx)=> originX + (lx/FRAC)*cell;       // lattice-x → canvas-x
+const Y = (ly)=> originY + (ly/FRAC)*cell;       // lattice-y → canvas-y
+function hexToRgba(hex, a){
+  const h = hex.replace('#',''); const n = parseInt(h.length===3? h.split('').map(c=>c+c).join('') : h, 16);
+  return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';
+}
+
+//============================================================== rendering
+function render(){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  if (shake>0.3){ const a=Math.random()*TAU; ctx.translate(Math.cos(a)*shake, Math.sin(a)*shake); }
+  if (game){
+    drawRims();
+    drawBunkers();
+    drawInvaders();
+    drawUfo();
+    drawBombs();
+    drawShot();
+    drawPlayer();
+    drawParts();
+  }
+  ctx.restore();
+  if (flashAmt>0.01){ ctx.fillStyle='rgba(150,255,190,'+(flashAmt*0.26)+')'; ctx.fillRect(0,0,W,H); }
+}
+
+function drawRims(){
+  // the side rims + the floor line beneath the cannon
+  ctx.save();
+  ctx.strokeStyle = hexToRgba(SK.player,0.22); ctx.lineWidth=1.5;
+  const fx0 = X(0), fx1 = X(COLS*FRAC), fy1 = Y((PLAYER_ROW+1.5)*FRAC);
+  ctx.beginPath(); ctx.moveTo(fx0, originY); ctx.lineTo(fx0, fy1);
+  ctx.moveTo(fx1, originY); ctx.lineTo(fx1, fy1); ctx.stroke();
+  // the cannon's ground line, glowing
+  ctx.strokeStyle = SK.playerGlow; ctx.lineWidth=2; ctx.shadowBlur=10; ctx.shadowColor=SK.playerGlow;
+  ctx.beginPath(); ctx.moveTo(fx0, fy1); ctx.lineTo(fx1, fy1); ctx.stroke();
+  ctx.restore();
+}
+
+// a chunky pixel-invader glyph drawn in a box; phase toggles the legs/arms (the
+// classic two-frame waddle, advanced once per march)
+function invaderGlyph(cx, cy, w, h, color, phase){
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.fillStyle = color; ctx.shadowBlur = 8; ctx.shadowColor = color;
+  const u = w/8;                                  // pixel unit (8 wide)
+  const px = (gx,gy,gw,gh)=> ctx.fillRect((gx-4)*u, (gy-3)*u*(h/(6*u)), gw*u, gh*u*(h/(6*u)));
+  // body (rows of an 8x6 stylised invader)
+  // head
+  px(2,0,4,1);
+  px(1,1,6,1);
+  px(0,2,8,1);
+  // eyes (notch out via background colour — just leave gaps by drawing two arm/leg variants)
+  ctx.clearRect((2-4)*u, (3-3)*u*(h/(6*u)), u, u*(h/(6*u)));
+  ctx.clearRect((5-4)*u, (3-3)*u*(h/(6*u)), u, u*(h/(6*u)));
+  px(0,3,2,1); px(3,3,2,1); px(6,3,2,1);
+  // legs alternate by phase
+  if (phase % 2 === 0){ px(1,4,1,1); px(6,4,1,1); px(0,5,2,1); px(6,5,2,1); }
+  else { px(2,4,1,1); px(5,4,1,1); px(2,5,1,1); px(5,5,1,1); }
+  ctx.restore();
+}
+
+function drawInvaders(){
+  const f = game.formation;
+  const phase = game.marches;                     // waddle phase advances per march
+  for (let r=0;r<f.rows;r++){
+    for (let c=0;c<f.cols;c++){
+      if (!f.cells[r][c]) continue;
+      const lx = invLeftX(f,c), rx = invRightX(f,c), ty = invTopY(f,r), by = invBotY(f,r);
+      const cx = X((lx+rx)/2), cy = Y((ty+by)/2);
+      const w = (rx-lx)/FRAC*cell, h = (by-ty)/FRAC*cell;
+      const color = r===0 ? SK.inv3 : (r<2 ? SK.inv2 : SK.inv1);
+      invaderGlyph(cx, cy, w, h, color, phase);
+    }
+  }
+}
+
+function drawBunkers(){
+  const bks = game.bunkers;
+  for (const bk of bks){
+    for (let r=0;r<bk.h;r++){
+      for (let c=0;c<bk.w;c++){
+        if (!bk.grid[r][c]) continue;
+        const px = X((bk.col+c)*FRAC), py = Y((bk.row+r)*FRAC);
+        ctx.save();
+        ctx.fillStyle = hexToRgba(SK.bunker,0.9); ctx.shadowBlur=6; ctx.shadowColor=SK.bunker;
+        ctx.fillRect(px+0.5, py+0.5, cell-1, cell-1);
+        ctx.strokeStyle = hexToRgba(SK.bunkerEdge,0.5); ctx.lineWidth=1;
+        ctx.strokeRect(px+0.5, py+0.5, cell-1, cell-1);
+        ctx.restore();
+      }
+    }
+  }
+}
+
+function drawShot(){
+  if (!game.shot) return;
+  lastShotPx = X(game.shot.x); lastShotPy = Y(game.shot.y);
+  ctx.save();
+  ctx.strokeStyle = SK.shot; ctx.lineWidth = 2.4; ctx.lineCap='round';
+  ctx.shadowBlur=12; ctx.shadowColor=SK.shot;
+  ctx.beginPath(); ctx.moveTo(lastShotPx, lastShotPy); ctx.lineTo(lastShotPx, lastShotPy+cell*0.7); ctx.stroke();
+  ctx.restore();
+}
+
+function drawBombs(){
+  for (const b of game.bombs){
+    const bx = X(b.x), by = Y(b.y);
+    ctx.save();
+    ctx.strokeStyle = SK.bomb; ctx.lineWidth=2.2; ctx.lineCap='round';
+    ctx.shadowBlur=10; ctx.shadowColor=SK.bomb;
+    // a little zig-zag bolt
+    ctx.beginPath();
+    ctx.moveTo(bx-cell*0.18, by); ctx.lineTo(bx+cell*0.18, by-cell*0.22);
+    ctx.lineTo(bx-cell*0.18, by-cell*0.44); ctx.lineTo(bx+cell*0.18, by-cell*0.66);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawUfo(){
+  if (!game.ufo) return;
+  const ux = X(game.ufo.x), uy = Y(1*FRAC);
+  ctx.save(); ctx.translate(ux, uy);
+  ctx.fillStyle = hexToRgba(SK.ufo,0.92); ctx.strokeStyle = SK.ufo; ctx.lineWidth=1.5;
+  ctx.shadowBlur=14; ctx.shadowColor=SK.ufo;
+  ctx.beginPath(); ctx.ellipse(0,0, cell*1.0, cell*0.42, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0,-cell*0.18, cell*0.5, cell*0.32, 0, Math.PI, TAU); ctx.fill();
+  // little lights
+  ctx.fillStyle = '#fff';
+  for (let i=-2;i<=2;i++){ ctx.beginPath(); ctx.arc(i*cell*0.32, cell*0.16, cell*0.06, 0, TAU); ctx.fill(); }
+  ctx.restore();
+}
+
+function drawPlayer(){
+  const p = game.player;
+  if (!p.alive) return;
+  const cx = X(p.x), top = Y(PLAYER_ROW*FRAC), bw = (p.w/FRAC)*cell;
+  ctx.save(); ctx.translate(cx, top);
+  ctx.fillStyle = SK.player; ctx.shadowBlur=12; ctx.shadowColor=SK.playerGlow;
+  // a stout neon cannon: a base + a barrel
+  const baseH = cell*1.1, baseW = bw*1.4;
+  ctx.beginPath();
+  ctx.moveTo(-baseW/2, baseH); ctx.lineTo(-baseW/2, baseH*0.45);
+  ctx.lineTo(-baseW*0.18, baseH*0.45); ctx.lineTo(-baseW*0.10, 0);
+  ctx.lineTo(baseW*0.10, 0); ctx.lineTo(baseW*0.18, baseH*0.45);
+  ctx.lineTo(baseW/2, baseH*0.45); ctx.lineTo(baseW/2, baseH);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function drawParts(){
+  ctx.save();
+  for (const p of parts){
+    ctx.globalAlpha = clamp(p.life/p.max,0,1)*0.85;
+    ctx.shadowBlur=7; ctx.shadowColor=p.color; ctx.fillStyle=p.color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,TAU); ctx.fill();
+  }
+  ctx.globalAlpha=1; ctx.restore();
+}
+
+//============================================================== HUD
+const elScore=document.getElementById('score'), elBest=document.getElementById('best');
+const elLives=document.getElementById('lives'), elWaveTag=document.getElementById('wavetag');
+let displayScore = 0;
+function syncHud(){
+  const sc = carryScore + (game?game.score:0);
+  displayScore += (sc-displayScore)*0.25;
+  elScore.textContent = Math.round(displayScore).toLocaleString();
+  elBest.textContent = best.toLocaleString();
+  let lh=''; for(let i=0;i<3;i++) lh += '<div class="pip'+(i>=lives?' empty':'')+'"></div>';
+  if (elLives.dataset.n!==String(lives)){ elLives.innerHTML=lh; elLives.dataset.n=String(lives); }
+  elWaveTag.textContent = 'Wave '+wave;
+}
+
+//============================================================== input
+function setMuteTag(){ document.getElementById('muteTag').textContent='M · sound '+(Audio_.muted?'off':'on'); }
+function setKey(k,down){
+  switch(k){
+    case 'arrowleft': case 'a': input.left=down; break;
+    case 'arrowright': case 'd': input.right=down; break;
+    case 'arrowup': case 'w': case ' ': case 'z': case 'spacebar': if(down) input.fire=true; break;
+  }
+}
+window.addEventListener('keydown', e=>{
+  const k = e.key.toLowerCase();
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  switch(k){
+    case 'p': case 'escape': if(mode==='playing'||mode==='paused') togglePause(); return;
+    case 'enter': if(mode==='title'||mode==='gameover') startGame(); return;
+    case 'r': if(mode==='playing'||mode==='paused'||mode==='gameover') startGame(); return;
+    case 'm': Audio_.init(); Audio_.muted=!Audio_.muted; writeMutePref(Audio_.muted); setMuteTag(); if(!Audio_.muted) Audio_.resume(); return;
+  }
+  // Space starts from the title / game-over (sibling rack convention: Space-or-tap).
+  if ((k===' '||k==='spacebar') && (mode==='title'||mode==='gameover')){ startGame(); return; }
+  setKey(k,true);
+}, {passive:false});
+window.addEventListener('keyup', e=>{ setKey(e.key.toLowerCase(),false); });
+window.addEventListener('blur', ()=>{ input.left=input.right=false; });
+window.addEventListener('pointerdown', ()=>{ Audio_.init(); if(!Audio_.muted) Audio_.resume(); }, {once:true});
+window.addEventListener('storage', e=>{
+  if(e.key!=='ws:pref:muted') return;
+  Audio_.muted = readMutePref(); setMuteTag(); if(!Audio_.muted) Audio_.resume();
+});
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden && mode==='playing') togglePause(); });
+
+// touch controls (gated behind real touch, like the siblings)
+function bindTouchHold(id, key){
+  const el = document.getElementById(id);
+  const on = (e)=>{ e.preventDefault(); setKey(key,true); };
+  const off = (e)=>{ e.preventDefault(); setKey(key,false); };
+  el.addEventListener('touchstart', on, {passive:false});
+  el.addEventListener('touchend', off, {passive:false});
+  el.addEventListener('touchcancel', off, {passive:false});
+}
+function bindTouchTap(id, key){
+  const el = document.getElementById(id);
+  el.addEventListener('touchstart', (e)=>{ e.preventDefault(); setKey(key,true); }, {passive:false});
+}
+if ('ontouchstart' in window || navigator.maxTouchPoints>0){
+  document.body.classList.add('touch');
+  bindTouchHold('tLeft','arrowleft'); bindTouchHold('tRight','arrowright');
+  bindTouchTap('tFire',' ');
+  document.addEventListener('touchstart', ()=>{ if(mode==='title'||mode==='gameover') startGame(); }, {passive:true});
+  layout();
+}
+
+//============================================================== state transitions
+function startGame(){
+  wave = 1; lives = 3; carryScore = 0;
+  newGame(wave);
+  prevSnap = null; displayScore = 0; shake=0; flashAmt=0; parts.length=0;
+  for (const k in input) input[k]=false;
+  mode='playing';
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('gameoverScreen').classList.add('hidden');
+  document.getElementById('pauseScreen').classList.add('hidden');
+  document.getElementById('hud').style.display='block';
+  document.getElementById('centerHud').style.display='flex';
+  elLives.dataset.n='';
+  Audio_.init(); if(!Audio_.muted) Audio_.resume();
+}
+function onWaveWon(){
+  carryScore += game.score + 200;          // clear bonus
+  wave++;
+  newGame(wave);
+  prevSnap = null; mode='playing';
+}
+function onPlayerDeath(){
+  lives--;
+  if (lives > 0){
+    const keep = carryScore;
+    // respawn the SAME wave's formation where it was? classic SI keeps the field —
+    // but for a fair, finite stand we restart the wave (keeps the proof's clean wave).
+    newGame(wave); carryScore = keep;
+    prevSnap = null; mode='playing';
+  } else { endGame(); }
+}
+function endGame(){
+  mode='gameover';
+  const finalScore = carryScore + (game?game.score:0);
+  try{ WS.best('the-last-line', finalScore); }catch(e){}
+  const isBest = finalScore>best && finalScore>0;
+  if (finalScore>best) best = finalScore;
+  document.getElementById('goScore').textContent = finalScore.toLocaleString();
+  document.getElementById('goWave').textContent = wave;
+  document.getElementById('goKills').textContent = (game?game.kills:0) + (lives<3? ' +':'');
+  document.getElementById('newHigh').style.display = isBest?'block':'none';
+  document.getElementById('gameoverScreen').classList.remove('hidden');
+}
+function togglePause(){
+  if (mode==='playing'){ mode='paused'; document.getElementById('pauseScreen').classList.remove('hidden'); }
+  else if (mode==='paused'){ mode='playing'; document.getElementById('pauseScreen').classList.add('hidden'); }
+}
+
+//============================================================== main loop
+let last = performance.now();
+function frame(now){
+  let dt = (now-last)/1000; last = now;
+  if (dt>0.1) dt=0.1;
+  if (mode==='playing') advance(dt);
+  updateParts(dt);
+  shake *= Math.pow(0.05, dt);
+  flashAmt *= Math.pow(0.02, dt);
+  if (game) render();
+  if (mode!=='title') syncHud();
+  requestAnimationFrame(frame);
+}
+
+//============================================================== boot
+loadBest();
+newGame(1);
+resize();
+setMuteTag();
+elBest.textContent = best.toLocaleString();
+
+// attract: a self-playing demo behind the title (the scripted controller clears the
+// grid, then resets — shows the descending march + the quickening live on the title).
+let attractTimer = setInterval(()=>{
+  if (mode==='title' && game){
+    for (let i=0;i<2;i++){ stepTick(game, winController(game)); if(game.over) break; }
+    if (game.over) newGame(1);
+  }
+}, 1000/40);
+
+requestAnimationFrame(frame);
+
+// drop the front-door breadcrumb (a direct visit registers for the Survey/Undercroft)
+try{ WS.seen && WS.seen('the-last-line'); localStorage.setItem('ws:seen:the-last-line','1'); }catch(e){}
+
+//============================================================== self-test (in-page chip + console)
+const SELFTEST = runSelfTest();
+(function showChip(){
+  const chip = document.getElementById('selftest');
+  const n = SELFTEST.results.length, pass = SELFTEST.results.filter(r=>r.pass).length;
+  for (const r of SELFTEST.results) console.log((r.pass?'PASS':'FAIL')+' — '+r.name+(r.detail?'  ('+r.detail+')':''));
+  if (SELFTEST.allPass){ chip.classList.add('show'); chip.textContent='✓ self-test '+pass+'/'+n;
+    console.log('THE LAST LINE SELF-TEST: ALL PASS ('+n+' claims)'); }
+  else { chip.classList.add('show','fail'); chip.textContent='✗ self-test '+pass+'/'+n;
+    console.error('THE LAST LINE SELF-TEST: FAILURES PRESENT'); }
+})();
+
+// verification hook (used only by the headless/browser verifier)
+window.__lastLineSelfTest = SELFTEST.allPass;
+window.__LASTLINE__ = {
+  get mode(){ return mode; },
+  get score(){ return carryScore + (game?game.score:0); },
+  get wave(){ return wave; },
+  get lives(){ return lives; },
+  get kills(){ return game?game.kills:0; },
+  get marches(){ return game?game.marches:0; },
+  get won(){ return game?game.won:false; },
+  get dead(){ return game?game.dead:false; },
+  get over(){ return game?game.over:false; },
+  get frame(){ return game?game.frame:0; },
+  get live(){ return game?liveCount(game.formation):0; },
+  get solid(){ return game?bunkerSolidCount(game.bunkers):0; },
+  get selftest(){ return SELFTEST.allPass; },
+  get muted(){ return Audio_.muted; },
+  get game(){ return game; },
+  _start(){ startGame(); },
+  _key(name,down){ setKey(name,down); },
+  _fire(){ input.fire=true; },
+  _tick(n){ for(let i=0;i<(n||1);i++){ stepTick(game,input); input.fire=false; detectEvents(game); } },
+  // deterministic win: drive the LIVE game headlessly (proves the in-page game wins too)
+  _solve(budget){ return winSolve(game, budget||20000); }
+};
+
+})();
+</script>
+
+<!-- arc-back -->
+<style>
+  .arc-back{ position:fixed; left:16px; bottom:13px; z-index:9999; pointer-events:auto;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11.5px;
+    letter-spacing:.18em; text-transform:uppercase; text-decoration:none;
+    color:#eef3ff; opacity:.40; transition:opacity .2s, text-shadow .2s;
+    text-shadow:0 0 8px rgba(95,255,138,.45); }
+  .arc-back:hover{ opacity:.95; text-shadow:0 0 12px rgba(95,255,138,.85); }
+</style>
+<a class="arc-back" href="../index.html">← arcade</a>
+</body>
+</html>

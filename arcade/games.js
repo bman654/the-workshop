@@ -127,5 +127,11 @@ window.GAMES = [
     name: "The Climb",
     blurb: "neon girder-climb — hop the rolling barrels, time the jump, reach the top platform",
     accent: "#ff7a3d"
+  },
+  {
+    file: "the-last-line.html",
+    name: "The Last Line",
+    blurb: "neon descending-invader stand — clear the marching grid, erode the bunkers, brace for the quickening",
+    accent: "#5fff8a"
   }
 ];
