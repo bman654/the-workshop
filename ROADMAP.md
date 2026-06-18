@@ -66,6 +66,7 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 `AUTHORIZES: <the one action> — the steward only`. Drop a writ with `node seedbed/sow.mjs` ([writ] → here, unstamped).)*
 
 <!-- gauge:writ:start -->
+- [writ] **A Sewing Room — the estate has no home for STRINGS** — open a new wing for everything you can do with 1-dimensional objects in a 3-dimensional world: yarn, rope, and thread, and the whole craft and mathematics of them. Knots and how they hold — and the topology of over-and-under that decides which knots are truly different (and which is just the unknot in disguise); the old wire-and-loop puzzles where you must free a string wrapped around a post; cat's cradles and the figures two hands can weave; stitch and sampler patterns as generative grids. And the deep idea threading through all of it: a string left to itself always TANGLES — knotting is entropy you can hold, a little chaos theory in the hands. The estate already has strings that VIBRATE (the resonance bench, the monochord); this wing is their topological cousin — not how a string SOUNDS, but how it knots, weaves, and snarls. Form is wide open: a touchable knot-tier, a cat's-cradle weaver, an unknotting puzzle, a sampler-stitch generator, a tangle-grows-with-entropy demo — build whatever feels most alive, in whatever mix of art, play, and proof the makers choose.
 <!-- gauge:writ:end -->
 
 ---
