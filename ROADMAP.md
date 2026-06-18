@@ -142,7 +142,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 
 ### cross
-- [cross] **Two Roads, One Rhythm — the same δ down two different staircases** — bifurcation/core.mjs already ships MAPS={logistic, sine} + generic superstableLadder/feigenbaumRatios + FEIGENBAUM_DELTA, all self-tested: two disjoint map fns, one engine. FORM: ONE dial walks BOTH up their period-doubling cascades in lockstep — a parabola's road and a sine's road split 1→2→4→8 at the same shrinking rhythm, both reporting δ→4.6692016… side by side on one gold ruler. CRUX: both measured δ agree to tolerance (|δ_log−δ_sin|<~0.1 at ladder depth 6, both within ~0.1 of 4.669); NEG-CONTROL — a tent/linear map (no smooth quadratic max) does NOT give 4.669, so universality is conditional and that's the show. WATCH: feigenbaumRatios isn't a plain array — read its shape before wiring the readout. Grep-confirmed bifurcation links no sibling map piece. (sown #119)
 
 
 ### curation
@@ -161,11 +160,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 ### bench
 - [bench] **The Warehouse — wing-index card + reworded sub** — latch/puzzles.html still reads "three rooms of pure deduction" and lists no Warehouse. Add a 4th card (glyph ▣, "sokoban · push-only", blurb naming the lose-condition) and soften the sub to "four rooms of pure logic — three you can always take back, and one you can't." (sown #128)
 - [bench] **The Counting Yard — entropy is just how many ways (Engine Room)** — Engine Room (extend incrementally, per its CHANGELOG). FORM: a TWO-BOX you OPERATE — N labelled molecules crammed left; tip the partition open and watch them scatter while a live tally counts the macrostate W=C(N,n_L) climbing to its peak at n_L=N/2, with S=ln W beside it — the second law shown AS A COUNTING fact (a partition you tip, not a plotted curve). CRUX (verified Node): Σ over macrostates ΣC(N,k)=2^N exactly (ΣC(20,k)=1048576), and free expansion V→2V gives ΔS=N·ln2 to machine precision (13.862944=20·ln2); NEG-CONTROL re-cram all-left → W=1, S=0. DEDUPE (must read): clockwork/partition.html already does thermodynamic S=−Σp ln p via Boltzmann fill of an ENERGY LADDER — this bench is the disjoint COMBINATORIAL microstate count (W, ΔS=N·ln2), Boltzmann's how-many-ways, not the softmax/energy-ladder identity; the copy must make that distinction explicit and not reach for speed distributions (the Cavern owns Maxwell–Boltzmann). (sown #119)
-<!-- ✝ BLOOMED #124: The Moiré Bench — two grids you slide over each other, a third pattern… → moire-bench/ · after 0bad15d -->
 <!-- ✝ DECAYED #126: Two shores, one ruler — cross-link the coastline pair (clarify roles, N… → fractal-dimension/coastline-paradox · after 333f211 -->
 <!-- ✝ BLOOMED #127: The Unknotting Bench — the honest untying verb → unknotting-bench/ · after 75e91a5 -->
 <!-- ✝ BLOOMED #128: The Warehouse — a Sokoban push-block atelier → latch/warehouse.html · after a9b8748 -->
 <!-- ✝ BLOOMED #130: The Same Threshold — a forest and a fever cross one line → cross/the-same-threshold/ · after 945860c -->
+<!-- ✝ BLOOMED #132: Two Roads, One Rhythm — the same δ down two different staircases → cross/two-roads-one-rhythm/ · after b5a499d -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
