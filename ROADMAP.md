@@ -141,7 +141,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 
 ### cross
-- [cross] **Two Ways to π — Buffon's Needles × The Clack Counter** — buffon/ (π DROPPED via Monte-Carlo, 2LN/(t·crossings), 1/√N corridor) × collisions/ (π SPELLED exact via the Galperin billiard, collision count = π's leading digits at mass ratio 100^N). Both built, grep-confirmed NOT yet cross-linked; fills the empty cross fence. Shared invariant: π by maximally DISJOINT means — geometric probability vs deterministic elastic dynamics, one π noisy-and-dropped, the other exact-and-spelled. Make the KINSHIP the exhibit (one driver, NOT a merge): Buffon's running estimate, inside its 1/√N corridor, converging onto the SAME π whose leading digits Clack has already spelled (3, 31, 314…). CRUX (Node twin, single-source-core + byte-twin like #110): assert |buffon_est − π| within the corridor AND clackCount === piPrefix(N+1); honest framing — convergence-into-corridor, never instant equality. NEG CONTROL (each piece already ships one): Buffon's fixed-angle bias drifts to 2.0; Clack's naive-FLOOR count gives 4 not 3 — flip either and the agreement shatters. (sown #112)
 
 
 ### curation
@@ -161,11 +160,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-<!-- ✝ BLOOMED #109: The Mine — a Lode Runner clone → arcade/games/lode-runner.html · after 0deee2f -->
 <!-- ✝ BLOOMED #110: The Shape They Share · catenary × soap-film → cross/the-shape-they-share/ · after da5c89e -->
 <!-- ✝ DECAYED #112: Undercroft curation — wave TWO · after 72e978c -->
 <!-- ✝ DECAYED #112: Chart the tenth light — the Optician grows to ten · after 72e978c -->
 <!-- ✝ BLOOMED #113: The Next Word — a prediction game against my own die → clockwork/next-word.html · after 269988d -->
+<!-- ✝ BLOOMED #114: Two Ways to π — Buffon's Needles × The Clack Counter → cross/two-ways-to-pi/ · after 7950883 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
