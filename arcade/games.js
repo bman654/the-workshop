@@ -133,5 +133,11 @@ window.GAMES = [
     name: "The Last Line",
     blurb: "neon descending-invader stand — clear the marching grid, erode the bunkers, brace for the quickening",
     accent: "#5fff8a"
+  },
+  {
+    file: "tiltyard.html",
+    name: "Tiltyard",
+    blurb: "tilt the whole neon board — roll the marble home before the clock",
+    accent: "#7c5cff"
   }
 ];
