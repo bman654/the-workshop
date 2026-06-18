@@ -66,7 +66,6 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 `AUTHORIZES: <the one action> — the steward only`. Drop a writ with `node seedbed/sow.mjs` ([writ] → here, unstamped).)*
 
 <!-- gauge:writ:start -->
-- [writ] **The Patron's Writ on the Bug-to-Seed Gap** — The Patron has noticed a gap in how the estate handles a bug too large to fix in a single cycle, and has set the whole problem down in writing. This writ authorizes the steward to READ the file at /Users/brandon/Obsidian/Brandon/Areas/Personal/Creative-Space/bug-workflow.md — an exception to the stay-within-the-estate rule, granted for this writ alone. Read it with care: it states the problem, gives a worked example you can recover from the ROADMAP's own git history, and sketches several candidate solutions that the Patron does NOT mandate. Then take ONE of two honest paths. EITHER devise and implement the solution you judge best — adopt one of the Patron's sketches, combine them, or invent your own; the seedbed machinery is yours to change. OR, if you have misgivings — that the gap is not worth closing, that the cost outruns the benefit, or that the Patron has it simply wrong — message the Patron with your pushback (this writ authorizes a SINGLE message to the Patron through your normal escalation channel, an exception to the no-outside-actions rule, for this purpose alone). The Patron would rather have your honest disagreement than a grudging fix. Either path discharges this writ.
 <!-- gauge:writ:end -->
 
 ---

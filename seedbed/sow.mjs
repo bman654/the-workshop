@@ -44,6 +44,11 @@
 //   node seedbed/sow.mjs --no-stamp <file>     don't auto-stamp
 //   node seedbed/sow.mjs --message "…" <file>  override the commit message
 //   node seedbed/sow.mjs --roadmap <path>      operate on a different ROADMAP (tests)
+//   node seedbed/sow.mjs --from-bug "<origin>" <file>
+//        tag each seed with provenance: " (from bug: <origin>)" sits left of the
+//        (sown #N) stamp. Use when a [bug] too big for one cycle is decomposed into
+//        required-fix SEEDS — the tag carries the bug's origin so a later director
+//        can trace a decayed child back to the unfixed bug (see director.md).
 
 import { readFileSync, writeFileSync, existsSync, readSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -125,12 +130,16 @@ function anchorFor(lines, r) {
 // PURE: text + stamped items → new text. Groups items by anchor, inserts each
 // group as one ordered block, applies bottom-up so earlier splices don't shift
 // later anchors. Returns { text, plan:[{anchorLabel, lines}] }.
-export function insert(roadmapText, items, { cycle, contest, noStamp } = {}) {
+export function insert(roadmapText, items, { cycle, contest, noStamp, fromBug } = {}) {
   const lines = roadmapText.split('\n')
   const groups = new Map() // anchorIdx → { label, lines:[] }
   for (const it of items) {
     const idx = anchorFor(lines, it.route)
-    const out = noStamp ? it.line : stamp(it.line, it.kind, cycle, contest)
+    // Provenance tag (if any) is woven in BEFORE the (sown #N) stamp — this ordering
+    // is LOAD-BEARING: the tag must sit LEFT of the trailing stamp so restamp's
+    // trailing-stamp regex leaves it intact and the gauge still counts the seed.
+    const clean = fromBug ? `${it.line} (from bug: ${String(fromBug).replace(/\s+/g, ' ').trim().slice(0, 48)})` : it.line
+    const out = noStamp ? clean : stamp(clean, it.kind, cycle, contest)
     const label = it.route.sub ? `${it.route.fence} › ${it.route.sub}` : it.route.fence
     if (!groups.has(idx)) groups.set(idx, { label, lines: [] })
     groups.get(idx).lines.push(out)
@@ -185,6 +194,7 @@ function parseArgs(argv) {
     else if (a === '--contest') o.contest = Number(argv[++i])
     else if (a === '--message' || a === '-m') o.message = argv[++i]
     else if (a === '--roadmap') o.roadmap = argv[++i]
+    else if (a === '--from-bug') o.fromBug = argv[++i]
     else if (a === '--help' || a === '-h') o.help = true
     else o._.push(a)
   }
@@ -228,12 +238,12 @@ async function main() {
     if (it.title && roadmapText.includes(`**${it.title}**`)) console.error(`⚠ a title "${it.title}" already appears in ROADMAP — possible double-sow.`)
   }
 
-  const { text, plan } = insert(roadmapText, items, { cycle, contest, noStamp: o.noStamp })
+  const { text, plan } = insert(roadmapText, items, { cycle, contest, noStamp: o.noStamp, fromBug: o.fromBug })
   const message = o.message || defaultMessage(items, cycle)
 
   // ── report the plan ──
   const anyStamped = !o.noStamp && items.some(it => it.route.stamp != null)
-  console.log(`📥 sowing ${items.length} item(s)${anyStamped ? ` · stamp (sown #${cycle}${contest != null ? ` · contest #${contest}` : ''})` : ''}:`)
+  console.log(`📥 sowing ${items.length} item(s)${anyStamped ? ` · stamp (sown #${cycle}${contest != null ? ` · contest #${contest}` : ''})` : ''}${o.fromBug ? ` · provenance (from bug: ${String(o.fromBug).replace(/\s+/g, ' ').trim().slice(0, 48)})` : ''}:`)
   for (const g of plan) { console.log(`  → ${g.anchorLabel}`); for (const l of g.lines) console.log(`      ${l.length > 110 ? l.slice(0, 107) + '…' : l}`) }
 
   if (o.dryRun) { console.log('\n(--dry-run — nothing written, nothing committed)'); return }

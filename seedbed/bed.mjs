@@ -39,7 +39,17 @@
 //       --cycle N --title "<t>" [--at <hint>] [--keep N]
 //   bed gc [--keep N]                       normalize every fence: drop legacy/narrative
 //                                           comments, trim each canonical ring to ≤N
-// Common: --reason is ONE WORD (SERVED·BLOOMED·DECAYED·PRUNED·MERGED·FIXED·RELEASED).
+//   bed unstick "<bug title>" [--fence bug] clear a STICKY tombstone (the bug is truly
+//                                           fixed — all its child seeds bloomed)
+//
+// STICKY TOMBSTONES — the bug-decomposition guard. When a [bug] too big for one cycle is
+// decomposed into required-fix SEEDS (sown with `sow --from-bug`), drop a STICKY vestige
+// for the bug: `bed rm "<bug>" --reason CONVERTED --fence bug --sticky`. A sticky tombstone
+// (`✝🔒`) is EXEMPT from FIFO prune — it can never silently rotate off the ring while a
+// child seed has decayed without the bug being fixed. A later director who sees `✝🔒
+// CONVERTED` in the bug fence knows an unfinished fix may have lost a piece; they re-open it
+// with `git log <hash>..HEAD -- ROADMAP.md`. When ALL children bloom, `bed unstick "<bug>"`.
+// Common: --reason is ONE WORD (SERVED·BLOOMED·DECAYED·PRUNED·MERGED·FIXED·RELEASED·CONVERTED).
 //   bed edits ROADMAP.md and does NOT commit (the cycle's publisher commits once at
 //   the end; the keeper commits by hand). Pass --roadmap <path> to operate on a fixture.
 //
@@ -67,7 +77,10 @@ export function keepFor(fence, requested = DEFAULT_KEEP) {
 const MAX_TITLE = 72
 const MAX_HINT = 48
 // the canonical one-line tombstone; we only need reason + cycle to manage the ring.
-const TOMB_RE = /^<!--\s*✝\s+(\S+)\s+#(\d+):/
+// matches BOTH the normal `✝` form and the STICKY `✝🔒` form (the 🔒 is optional here).
+const TOMB_RE = /^<!--\s*✝(?:🔒)?\s+(\S+)\s+#(\d+):/u
+// a STICKY tombstone (lock glyph right after the cross) is EXEMPT from FIFO prune.
+export function isSticky(line) { return /^<!--\s*✝🔒/u.test(String(line).trim()) }
 
 // ── Tombstone construction ─────────────────────────────────────────────────────
 function oneWord(reason) {
@@ -79,11 +92,12 @@ function clamp(s, n) {
   const t = String(s == null ? '' : s).replace(/\s+/g, ' ').trim()
   return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t
 }
-export function makeTomb(reason, cycle, title, hint, after) {
+export function makeTomb(reason, cycle, title, hint, after, sticky = false) {
   const r = String(reason).trim().split(/\s+/)[0].toUpperCase() // defensive: first word
   const t = clamp(title, MAX_TITLE)
   const tail = [hint ? `→ ${clamp(hint, MAX_HINT)}` : '', after ? `· after ${after}` : ''].filter(Boolean).join(' ')
-  return `<!-- ✝ ${r} #${cycle}: ${t}${tail ? ' ' + tail : ''} -->`
+  const cross = sticky ? '✝🔒' : '✝'
+  return `<!-- ${cross} ${r} #${cycle}: ${t}${tail ? ' ' + tail : ''} -->`
 }
 
 // ── Locating live seeds + tombstones inside the fences ─────────────────────────
@@ -121,15 +135,22 @@ function tombIndices(lines, fence) {
   return out
 }
 // insert a tombstone just above the fence's :end, then FIFO-prune oldest beyond keep.
+// STICKY tombstones (`✝🔒`) are NEVER prunable — `keep` bounds only the NORMAL ring; the
+// sticky cairns sit alongside it untouched, so a bug-decomposition vestige can't rotate off.
 function placeTomb(lines, fence, tomb, keep) {
   const b = fenceBounds(lines, fence)
   lines.splice(b.end, 0, tomb)                 // newest sits just above :end
   let idxs = tombIndices(lines, fence)
-  while (idxs.length > keep) { lines.splice(idxs[0], 1); idxs = tombIndices(lines, fence) } // drop oldest (topmost)
+  let prunable = idxs.filter(i => !isSticky(lines[i]))
+  while (prunable.length > keep) {             // drop oldest NORMAL (topmost) — never sticky
+    lines.splice(prunable[0], 1)
+    idxs = tombIndices(lines, fence)
+    prunable = idxs.filter(i => !isSticky(lines[i]))
+  }
 }
 
 // ── PURE op: remove a live seed by title, leaving a FIFO tombstone ─────────────
-export function removeByTitle(text, { title, reason, cycle, hint, after, keep = DEFAULT_KEEP, fence } = {}) {
+export function removeByTitle(text, { title, reason, cycle, hint, after, keep = DEFAULT_KEEP, fence, sticky = false } = {}) {
   const lines = text.split('\n')
   const hits = findLive(lines, title, fence)
   if (hits.length === 0) throw new Error(`no live seed matching "${title}"${fence ? ` in the ${fence} fence` : ''}`)
@@ -141,18 +162,18 @@ export function removeByTitle(text, { title, reason, cycle, hint, after, keep = 
   lines.splice(idx, 1)
   const k = keepFor(fen, keep)
   if (k <= 0) return { text: lines.join('\n'), removedLine, tombstone: null, fence: fen } // no-memory fence (writ): vanish cleanly
-  const tomb = makeTomb(reason, cycle, title, hint, after)
+  const tomb = makeTomb(reason, cycle, title, hint, after, sticky)
   placeTomb(lines, fen, tomb, k)
   return { text: lines.join('\n'), removedLine, tombstone: tomb, fence: fen }
 }
 
 // ── PURE op: add a bare tombstone (no seed removed) ────────────────────────────
-export function addTomb(text, { fence, reason, cycle, title, hint, after, keep = DEFAULT_KEEP } = {}) {
+export function addTomb(text, { fence, reason, cycle, title, hint, after, keep = DEFAULT_KEEP, sticky = false } = {}) {
   const lines = text.split('\n')
   fenceBounds(lines, fence) // validates the fence exists
   const k = keepFor(fence, keep)
   if (k <= 0) return { text: lines.join('\n'), tombstone: null, fence } // no-memory fence (writ): refuse to inscribe
-  const tomb = makeTomb(reason, cycle, title, hint, after)
+  const tomb = makeTomb(reason, cycle, title, hint, after, sticky)
   placeTomb(lines, fence, tomb, k)
   return { text: lines.join('\n'), tombstone: tomb, fence }
 }
@@ -173,6 +194,21 @@ export function restampByTitle(text, { title, cycle, contest, fence } = {}) {
   return { text: lines.join('\n'), before, after }
 }
 
+// ── PURE op: unstick — clear a STICKY tombstone (the bug is truly fixed) ────────
+// Finds the sticky tombstone whose title substring matches `title` and removes it.
+// On >1 match, errors (mirror removeByTitle's ambiguity guard). Called when every
+// child seed of a decomposed bug has bloomed, so the safety-net cairn can retire.
+export function unstick(text, { title, fence = 'bug' } = {}) {
+  const lines = text.split('\n')
+  const want = String(title).trim()
+  const hits = tombIndices(lines, fence).filter(i => isSticky(lines[i]) && lines[i].includes(want))
+  if (hits.length === 0) throw new Error(`no sticky tombstone matching "${title}" in the ${fence} fence`)
+  if (hits.length > 1) throw new Error(`"${title}" is ambiguous (${hits.length} sticky tombstones match) — pass a more exact title`)
+  const removed = lines[hits[0]]
+  lines.splice(hits[0], 1)
+  return { text: lines.join('\n'), removed, fence }
+}
+
 // ── PURE op: gc — normalize every fence ────────────────────────────────────────
 // Drops legacy / narrative comments (their provenance lives in the worklog) and
 // trims each fence's canonical ✝ ring to the newest ≤keep. One-time migration AND
@@ -182,22 +218,25 @@ export function gc(text, { keep = DEFAULT_KEEP } = {}) {
   const report = []
   for (const fence of FENCES) {
     let b; try { b = fenceBounds(lines, fence) } catch { continue }
-    const canon = []      // {cycle, line}
+    const canon = []      // {cycle, line} — NORMAL tombstones (sliced to keep)
+    const sticky = []     // {cycle, line} — STICKY tombstones (always kept, never sliced)
     const drop = []       // indices to remove (legacy/narrative comments)
     for (let i = b.start + 1; i < b.end; i++) {
       const t = lines[i].trim()
       if (!t.startsWith('<!--')) continue        // live seed / heading / blank — keep
       const m = t.match(TOMB_RE)
-      if (m) canon.push({ cycle: Number(m[2]), line: lines[i] })
-      drop.push(i)                                // both legacy AND canon are re-laid below
+      if (m) (isSticky(lines[i]) ? sticky : canon).push({ cycle: Number(m[2]), line: lines[i] })
+      drop.push(i)                                // legacy + canon + sticky are all re-laid below
     }
     if (!drop.length) { report.push({ fence, keptCanon: 0, droppedLegacy: 0 }); continue }
     const k = keepFor(fence, keep)
     const keptCanon = k <= 0 ? [] : canon.sort((a, c) => a.cycle - c.cycle).slice(-k)
+    const keptSticky = sticky.sort((a, c) => a.cycle - c.cycle)   // sticky cairns: kept unconditionally
+    const relay = [...keptSticky, ...keptCanon].sort((a, c) => a.cycle - c.cycle)
     for (const i of drop.slice().sort((a, c) => c - a)) lines.splice(i, 1) // remove bottom-up
     const b2 = fenceBounds(lines, fence)
-    lines.splice(b2.end, 0, ...keptCanon.map(k => k.line))  // re-lay kept canon, chronological
-    report.push({ fence, keptCanon: keptCanon.length, droppedLegacy: drop.length - canon.length, droppedCanon: canon.length - keptCanon.length })
+    lines.splice(b2.end, 0, ...relay.map(k => k.line))  // re-lay kept canon + sticky, chronological
+    report.push({ fence, keptCanon: keptCanon.length, keptSticky: keptSticky.length, droppedLegacy: drop.length - canon.length - sticky.length, droppedCanon: canon.length - keptCanon.length })
   }
   return { text: lines.join('\n'), report }
 }
@@ -221,6 +260,7 @@ function parseArgs(argv) {
     else if (a === '--keep') o.keep = Number(argv[++i])
     else if (a === '--after') o.after = argv[++i]
     else if (a === '--roadmap') o.roadmap = argv[++i]
+    else if (a === '--sticky') o.sticky = true
     else if (a === '--help' || a === '-h') o.help = true
     else o._.push(a)
   }
@@ -267,13 +307,13 @@ async function main() {
   if (cmd === 'rm') {
     const title = o.title || o._[1]
     if (!title) throw new Error('rm needs a title:  bed rm "<title>" --reason <WORD>')
-    result = removeByTitle(text, { title, reason: oneWord(o.reason), cycle, hint: o.hint, after, keep, fence: o.fence })
+    result = removeByTitle(text, { title, reason: oneWord(o.reason), cycle, hint: o.hint, after, keep, fence: o.fence, sticky: o.sticky })
     out = result.tombstone
       ? `🪦 ${result.fence}: removed "${title}" → ${result.tombstone}`
       : `🧽 ${result.fence}: removed "${title}" cleanly — no tombstone (${result.fence} keeps no memory; providence stays out of the file)`
   } else if (cmd === 'tomb') {
     if (!o.fence || !o.title) throw new Error('tomb needs --fence and --title')
-    result = addTomb(text, { fence: o.fence, reason: oneWord(o.reason), cycle, title: o.title, hint: o.hint, after, keep })
+    result = addTomb(text, { fence: o.fence, reason: oneWord(o.reason), cycle, title: o.title, hint: o.hint, after, keep, sticky: o.sticky })
     out = result.tombstone
       ? `🪦 ${result.fence}: ${result.tombstone}`
       : `🧽 ${result.fence}: keeps no memory (keep=0) — nothing inscribed`
@@ -284,9 +324,14 @@ async function main() {
     out = `♻  restamped "${title}":\n   ${result.before.trim()}\n → ${result.after.trim()}`
   } else if (cmd === 'gc') {
     result = gc(text, { keep })
-    out = '🧹 gc — normalized fences:\n' + result.report.map(r => `   ${r.fence}: kept ${r.keptCanon} canon, dropped ${r.droppedLegacy} legacy${r.droppedCanon ? ` + ${r.droppedCanon} over-ring` : ''}`).join('\n')
+    out = '🧹 gc — normalized fences:\n' + result.report.map(r => `   ${r.fence}: kept ${r.keptCanon} canon${r.keptSticky ? ` + ${r.keptSticky} sticky` : ''}, dropped ${r.droppedLegacy} legacy${r.droppedCanon ? ` + ${r.droppedCanon} over-ring` : ''}`).join('\n')
+  } else if (cmd === 'unstick') {
+    const title = o.title || o._[1]
+    if (!title) throw new Error('unstick needs a title:  bed unstick "<bug title>" [--fence bug]')
+    result = unstick(text, { title, fence: o.fence || 'bug' })
+    out = `🔓 ${result.fence}: cleared sticky tombstone → ${result.removed.trim()}`
   } else {
-    throw new Error(`unknown subcommand "${cmd}" — try: sow | rm | restamp | tomb | gc  (--help)`)
+    throw new Error(`unknown subcommand "${cmd}" — try: sow | rm | restamp | tomb | gc | unstick  (--help)`)
   }
 
   writeFileSync(roadmapPath, result.text)

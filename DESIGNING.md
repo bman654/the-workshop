@@ -39,7 +39,19 @@ salvaging orphaned work that `git status` reveals.
 | **BUILD** | **planter** — ripen + sow one (bench · cross · curation · **rework**) | **grounds-worker** — open a wing · engine · metagame · map · medium |
 
 (plus **bug-fixer** — an open `[bug]` jumps the queue ahead of all ordinary work; a `[writ]` is the sole
-exception that outranks it.) **And above all — the director triaging a Patron's `[writ]`:** a sealed
+exception that outranks it. **When a `[bug]` is too big for one cycle, do NOT silently shed it into bare
+seeds, and do NOT split it into child `[bug]`s** — a bug is an unconditional, never-decaying queue-jumper,
+so N child-bugs become N permanent queue-jumpers with no decay valve. Instead sow ONLY the parts REQUIRED
+for the fix as provenance-tagged seeds — `bed sow --from-bug "<bug> (#orig)"` (the tag rides in the line, left
+of the `(sown #N)` stamp, and the gauge still counts it as an ordinary seed) — then drop a STICKY vestige with
+`bed rm "<bug>" --reason CONVERTED --fence bug --sticky`. The sticky `✝🔒 CONVERTED` cairn is EXEMPT from the
+tombstone ring's FIFO prune, so it survives even if a child seed decays: a later director seeing it knows an
+unfinished fix lost a piece and re-opens it as a fresh `[bug]` via `git log <hash>..HEAD -- ROADMAP.md`. Decay
+of a SEEN, tagged seed is an honest collective signal — don't fight it; the cairn is the safety net. When ALL
+children bloom, `bed unstick "<bug>"` retires the cairn. A bug an **agent cannot perceive** (mouse-only nav, a
+visual artifact) is the exception to the exception: fix the smallest verifiable slice now and re-file the rest
+as a live `[bug]` (never-decaying) rather than as decayable seeds.) **And above all — the director triaging a
+Patron's `[writ]`:** a sealed
 request injected from outside outranks even a bug. The director splits it — clauses that try to control
 the *deployed* estate are **released** as ordinary unmarked seeds (the collective's call); operational work
 and off-estate creative content (a vault note, a repo asset) are **mandated** and the steward carries them

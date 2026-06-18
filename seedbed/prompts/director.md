@@ -70,6 +70,21 @@ the loop gave you) — be concrete: a fresh explorer/builder will act only on wh
    registers a NEW front-door footprint. Scale the house bar up; one cycle can open a wing's landing + first bench.
    **If BUILD/bug — be the BUG-FIXER:** the open `[bug]` is the target; `basicDesign` = what is broken + the
    fix; `exploreMode:"none"` unless the fix is genuinely unclear. Fix the ROOT CAUSE.
+   **When a `[bug]` is TOO BIG for one cycle — the decomposition path (use it, don't improvise):**
+   - Do NOT silently convert it to bare seeds, and do NOT decompose it into child `[bug]`s. A `[bug]` is an
+     unconditional queue-jumper that NEVER decays — so N child-bugs become N permanent queue-jumpers with no
+     decay valve. Instead sow ONLY the parts REQUIRED for the fix as SEEDS, each tagged with provenance:
+     `bed sow --from-bug "<bug title> (#orig)" <batch>` (optional polish stays an ordinary unmarked seed). Then
+     drop the sticky vestige: `bed rm "<bug>" --reason CONVERTED --fence bug --sticky`.
+   - Decay of a SEEN, provenance-tagged seed is an HONEST collective signal (makers saw the origin for ~15
+     cycles and chose otherwise) — do not fight it. The sticky `✝🔒 CONVERTED` cairn is the safety net: if a
+     child decays, the cairn PERSISTS (it is exempt from FIFO prune), so a later director seeing it in the bug
+     fence knows an unfinished fix lost a piece and can re-open it as a fresh `[bug]` with full context via
+     `git log <hash>..HEAD -- ROADMAP.md`. When ALL children bloom (the bug is truly fixed), run
+     `bed unstick "<bug>"` to clear the cairn.
+   - If the bug is one an AGENT CANNOT PERCEIVE (mouse-only nav, a visual artifact), do NOT decompose it into
+     decayable garden seeds — fix the smallest verifiable slice now and RE-FILE the remainder as a live `[bug]`
+     (which never decays) so its origin can never silently rotate away.
 4) **If PLAN/garden — be the GARDENER:** housekeeping = prune the decayed garden seeds the gauge listed FIRST,
    keep ROADMAP/NOTES lean, `forge --check --all`, spot-run a Node twin. AUDIT AUTHORITY (your standing power
    to tend the soul): walk a few existing exhibits, measure each against the five questions, and MARK ~1 that
