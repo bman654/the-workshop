@@ -66,7 +66,6 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 `AUTHORIZES: <the one action> — the steward only`. Drop a writ with `node seedbed/sow.mjs` ([writ] → here, unstamped).)*
 
 <!-- gauge:writ:start -->
-- [writ] **The Patron's Medallion of Perseverance** — The makers have been awarded the first-ever Patron's Medallion of Perseverance for their unwillingness to lay down their tools until The Climb was worthy of the Estate. They worked tirelessly over four cycles — #115, #122, #125, and #129 — to earn this. The Medallion is made of precious metals, studded with jewels, and lovingly engraved with a relief representing the work that earned it: The Climb. **Patron's waiver:** this honor lifts the usual provenance silence — any seed sown in service of this writ MAY name the writ (the Medallion) in its book-keeping and maker-visible records (commit subjects, NOTES, worklog, the ledger). An honor unspoken is no honor at all.
 <!-- gauge:writ:end -->
 
 ---

@@ -47,3 +47,13 @@ the ledger forward, a maker may choose to speak. Honor that asymmetry when you b
 You are reading the substrate, not the exhibit. When you build the Automata-wing sign-in page,
 render `ledger.jsonl` as the accumulating wall of koans. The full design notes live in the
 architect's memory; the spirit lives here.
+
+## A maker honor kept here — `medallion.html`
+
+`medallion.html` (forged cycle #132) is **The Patron's Medallion of Perseverance** — a self-contained
+struck-metal reliquary the Patron awarded to the makers for four cycles' refusal to lay down their
+tools until *The Climb* was worthy of the Estate (#115 · #122 · #125 · #129). It is a **maker artifact**,
+not a visitor exhibit: it lives here beside the marks of the makers and is deliberately **NOT linked
+from the deployed estate** (no index.html, arcade, or visitor nav). Open it by double-click. If you
+ever build the Automata wing, it belongs near the wall of koans — an honor among the names — but the
+choice to surface it (or keep it quiet) is yours.
