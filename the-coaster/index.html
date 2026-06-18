@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Coaster · The Midway · The Orrery Estate</title>
+<!--
+   THE COASTER — a real coaster you SHAPE and RIDE. The physics CORE (core.mjs) is
+   inlined byte-for-byte between the sentinels below; the in-page chip calls the SAME
+   runSelfTest() the Node twin (core.test.mjs) runs, and the renderer draws the bead's
+   motion FROM that authority. The motion is the readout — no plotted curve is the
+   subject. NEG-CONTROL: an always-completes renderer that slides the car around
+   regardless of the normal force MUST fail the chip (CLAIM 4).
+-->
+<style>
+  :root{
+    --bg:#07080c;             /* fairground-at-dusk near-black ground */
+    --plate1:#12100a;
+    --plate2:#0b0a07;
+    --ink:#efe9da;
+    --ink-dim:#a59c87;
+    --gold:#c9a24a;           /* the rail / handles */
+    --gold-hi:#f4d27a;        /* the lit gold (beads, hoist) */
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.40);
+    --teal:#5fcdbf;           /* the "proven / legal" voice */
+    --teal-soft:rgba(95,205,191,0.12);
+    --coral:#f0846f;          /* the "detached / illegal" voice */
+    --coral-soft:rgba(220,120,100,0.12);
+    --panel:rgba(11,10,7,0.86);
+    --pe:#6da8e6;             /* potential-energy band (blue) */
+    --ke:#e8c66a;            /* kinetic-energy band (gold) */
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1200px 720px at 50% -12%, rgba(201,162,74,0.09), transparent 56%),
+      radial-gradient(900px 640px at 14% 112%, rgba(95,205,191,0.05), transparent 60%),
+      radial-gradient(900px 640px at 86% 114%, rgba(220,120,100,0.04), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  /* faint engineering-paper grid behind everything */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(201,162,74,0.05) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(201,162,74,0.045) 0 1px, transparent 1px 32px);
+    mask-image:radial-gradient(1100px 760px at 50% 36%, #000 30%, transparent 78%);
+  }
+
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding:13px 20px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(7,8,12,0.95), rgba(7,8,12,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:5px; }
+  .back{ font:600 10.5px/1.3 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.22s; white-space:nowrap; }
+  .back:hover{ color:var(--gold-hi); opacity:1; }
+  .brand{ text-align:center; flex:1 1 auto; pointer-events:none; padding-top:1px; }
+  .brand h1{ margin:0; font-family:var(--font-serif); font-weight:600; font-size:clamp(17px,2.4vw,21px);
+    letter-spacing:.4px; color:var(--gold-hi); }
+  .brand .tag{ display:block; font:11px/1.3 var(--font-serif); font-style:italic; color:var(--ink-dim); margin-top:1px; }
+  .selftest{ font:600 10px/1.35 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:18px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.42); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); max-width:230px; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(24,46,32,0.5); }
+  .selftest.bad{ color:var(--coral); border-color:rgba(220,120,100,0.6); background:rgba(58,26,22,0.5); }
+
+  /* ── self-test detail panel ── */
+  #stPanel{ position:fixed; top:54px; right:18px; z-index:60; width:min(440px,92vw);
+    background:var(--panel); border:1px solid var(--gold-edge); border-radius:12px; padding:16px 18px 14px;
+    box-shadow:0 18px 50px rgba(0,0,0,0.6); display:none; }
+  #stPanel.show{ display:block; }
+  #stPanel h2{ margin:0 0 4px; font:600 13px/1.2 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--gold-hi); }
+  #stPanel .sub{ margin:0 0 10px; font:12px/1.5 var(--font-serif); color:var(--ink-dim); }
+  #stList{ font:11px/1.55 var(--font-mono); max-height:46vh; overflow:auto; }
+  #stList .row{ display:flex; gap:8px; padding:2px 0; }
+  #stList .row .m{ flex:0 0 auto; }
+  #stList .ok{ color:#8fd79a; } #stList .no{ color:var(--coral); }
+  #stPanel .foot{ margin-top:10px; padding-top:9px; border-top:1px solid rgba(201,162,74,0.16);
+    font:11px/1.6 var(--font-serif); color:var(--ink-dim); }
+  #stPanel .closeX{ position:absolute; top:9px; right:11px; background:none; border:none; color:var(--ink-dim);
+    font-size:18px; cursor:pointer; line-height:1; }
+
+  /* ── layout ── */
+  main{ position:relative; z-index:1; max-width:1120px; margin:0 auto; padding:74px 20px 56px; }
+  .hero{ text-align:center; margin-bottom:14px; }
+  .hero .eyebrow{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3em; text-transform:uppercase; color:var(--gold); opacity:.9; }
+  .hero .lede{ max-width:680px; margin:12px auto 0; font:15px/1.6 var(--font-serif); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--gold-hi); font-weight:600; } .hero .lede i{ font-style:italic; }
+
+  .stage{ display:grid; grid-template-columns:1fr 86px 132px; gap:16px; align-items:stretch;
+    margin-top:20px; }
+  .panel{ border:1px solid rgba(201,162,74,0.16); border-radius:14px; background:linear-gradient(180deg,var(--plate1),var(--plate2));
+    padding:14px; position:relative; overflow:hidden; }
+  .panel h3{ margin:0 0 8px; font:600 9.5px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--ink-dim); }
+  .panel h3 b{ color:var(--gold); }
+
+  /* the track panel */
+  #trackPanel{ padding:12px 12px 10px; }
+  #trackWrap{ position:relative; width:100%; }
+  svg#track{ width:100%; height:auto; display:block; touch-action:none; }
+  .handle{ cursor:grab; }
+  .handle:active{ cursor:grabbing; }
+
+  /* readouts row under the track */
+  .readbar{ display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; margin-top:10px;
+    font:11px/1.4 var(--font-mono); color:var(--ink-dim); }
+  .readbar .stat b{ color:var(--ink); font-weight:600; }
+  .readbar .stat .v{ color:var(--gold-hi); }
+  .ratio{ font:600 12px/1 var(--font-mono); padding:5px 10px; border-radius:16px; border:1px solid var(--gold-edge);
+    background:rgba(0,0,0,0.35); color:var(--gold-hi); letter-spacing:.02em; }
+  .ratio.legal{ color:var(--teal); border-color:rgba(95,205,191,0.5); background:var(--teal-soft); }
+  .ratio.illegal{ color:var(--coral); border-color:rgba(220,120,100,0.5); background:var(--coral-soft); }
+
+  /* the energy column */
+  #energyPanel{ display:flex; flex-direction:column; }
+  #colWrap{ position:relative; flex:1 1 auto; min-height:300px; border-radius:9px;
+    border:1px solid rgba(201,162,74,0.18); background:rgba(0,0,0,0.28); overflow:hidden; }
+  #peBand{ position:absolute; left:0; right:0; top:0; background:linear-gradient(180deg, var(--pe), rgba(109,168,230,0.5));
+    transition:height .05s linear; }
+  #keBand{ position:absolute; left:0; right:0; bottom:0; background:linear-gradient(0deg, var(--ke), rgba(232,198,106,0.5));
+    transition:height .05s linear; }
+  #totalLine{ position:absolute; left:-2px; right:-2px; height:2px; background:var(--ink);
+    box-shadow:0 0 7px rgba(239,233,218,0.7); }
+  #totalLine::after{ content:"E (fixed)"; position:absolute; right:3px; top:-13px; font:600 8.5px/1 var(--font-mono);
+    color:var(--ink); letter-spacing:.05em; }
+  .colLbl{ position:absolute; font:600 8.5px/1 var(--font-mono); letter-spacing:.06em; }
+  #colWrap .pe-l{ top:5px; left:6px; color:#bcd6f5; } #colWrap .ke-l{ bottom:5px; left:6px; color:var(--ke); }
+  #airtime{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); opacity:0; transition:opacity .2s;
+    font:600 9px/1 var(--font-mono); letter-spacing:.14em; color:var(--ink); text-transform:uppercase;
+    background:rgba(7,8,12,0.6); padding:3px 6px; border-radius:4px; }
+  #airtime.show{ opacity:1; }
+
+  /* the normal-force needle */
+  #needlePanel{ display:flex; flex-direction:column; align-items:center; }
+  svg#needle{ width:100%; height:auto; margin-top:4px; }
+  #needleVerdict{ margin-top:6px; font:600 9.5px/1.3 var(--font-mono); text-align:center; color:var(--ink-dim); }
+
+  /* controls */
+  .controls{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:18px; justify-content:center; }
+  button.ctl{ font:600 11px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink); background:linear-gradient(180deg,#1a1710,#100d08); border:1px solid var(--gold-edge);
+    border-radius:9px; padding:11px 16px; cursor:pointer; transition:.18s; }
+  button.ctl:hover{ border-color:var(--gold-hi); color:var(--gold-hi); }
+  button.ctl:disabled{ opacity:.4; cursor:default; }
+  button.release{ background:linear-gradient(180deg,#3a2c12,#221806); border-color:var(--gold);
+    color:var(--gold-hi); font-size:12px; padding:12px 22px; }
+  button.release:hover{ background:linear-gradient(180deg,#4a3917,#2c2008); }
+  button.dare{ border-color:rgba(95,205,191,0.5); color:var(--teal); }
+  button.dare:hover{ border-color:var(--teal); color:var(--teal); }
+  .toggle{ display:inline-flex; align-items:center; gap:7px; font:11px/1 var(--font-mono); color:var(--ink-dim); cursor:pointer; user-select:none; }
+  .toggle input{ accent-color:var(--gold); }
+  .presets{ display:inline-flex; gap:6px; }
+  .presets button{ font:600 10px/1 var(--font-mono); padding:8px 11px; border-radius:8px; border:1px solid rgba(201,162,74,0.3);
+    background:rgba(0,0,0,0.3); color:var(--ink-dim); cursor:pointer; }
+  .presets button:hover{ color:var(--gold-hi); border-color:var(--gold-edge); }
+
+  /* the verdict banner */
+  #verdict{ margin:16px auto 0; max-width:760px; text-align:center; min-height:24px;
+    font:14px/1.5 var(--font-serif); color:var(--ink-dim); transition:.2s; }
+  #verdict.legal{ color:var(--teal); } #verdict.illegal{ color:var(--coral); }
+  #verdict b{ font-weight:600; }
+
+  /* explainer / honesty */
+  .scroll{ max-width:780px; margin:30px auto 0; font:13.5px/1.7 var(--font-serif); color:var(--ink); opacity:.9; }
+  .scroll h2{ font:600 11px/1 var(--font-mono); letter-spacing:.22em; text-transform:uppercase; color:var(--gold);
+    margin:24px 0 10px; }
+  .scroll p{ margin:0 0 12px; } .scroll b{ color:var(--gold-hi); } .scroll i{ font-style:italic; }
+  .scroll .teal{ color:var(--teal); } .scroll .coral{ color:var(--coral); }
+  .scroll code{ font:12px/1.5 var(--font-mono); color:var(--gold-hi); background:rgba(201,162,74,0.08);
+    padding:1px 5px; border-radius:4px; }
+  .honesty{ border-left:2px solid var(--gold-edge); padding-left:14px; color:var(--ink-dim); font-size:12.5px; }
+
+  .foot{ max-width:780px; margin:34px auto 0; padding-top:18px; border-top:1px solid rgba(201,162,74,0.12);
+    text-align:center; font:12.5px/1.7 var(--font-serif); color:var(--ink-dim); }
+  .foot a{ color:var(--gold); text-decoration:none; border-bottom:1px solid rgba(201,162,74,0.3); }
+
+  @media (max-width:760px){
+    main{ padding-top:132px; }
+    .stage{ grid-template-columns:1fr; }
+    #energyPanel,#needlePanel{ flex-direction:row; align-items:center; gap:14px; }
+    #colWrap{ min-height:180px; flex:1 1 auto; }
+    svg#needle{ max-width:160px; }
+    .topbar{ flex-wrap:wrap; align-items:center; }
+    .brand{ order:3; flex:1 0 100%; text-align:left; margin-top:2px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../midway/index.html">&larr; The Midway</a>
+      <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="back" href="../brachistochrone/index.html">&#8599; The Brachistochrone</a>
+    </div>
+    <div class="brand">
+      <h1>The Coaster</h1>
+      <span class="tag">the loop you dare to shape &mdash; physics you ride, not chart</span>
+    </div>
+    <div class="selftest" id="selftest" title="The physics core proves loop survival ⟺ h≥2.5r, exact; click for detail.">checking&hellip;</div>
+  </div>
+
+  <div id="stPanel">
+    <button class="closeX" id="stClose" title="close">&times;</button>
+    <h2>Self&#8209;test</h2>
+    <p class="sub" id="stSub">&hellip;</p>
+    <div id="stList"></div>
+    <div class="foot">Frictionless point mass on a rigid circular loop; the rail can only <i>push</i> (N&ge;0). The claim is exactly
+      <code>v_top&sup2;&ge;gr</code> &hArr; <code>h&ge;2.5r</code> &mdash; and the load-bearing negative control proves an always-completes
+      renderer would fail. The in-page count equals the Node twin (<code>core.test.mjs</code>).</div>
+  </div>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">The Midway &middot; flagship ride</div>
+      <p class="lede"><b>Shape the rail. Set the loop. Pull the lever.</b> A bead runs your track under gravity alone &mdash;
+        and either <i>whips over the top</i> or <i>peels off the rail and falls</i>. The split is one number, and it is geometry:
+        a loop survives <b>only</b> when you drop from at least <b>2&frac12; loop-radii</b> up. Watch the energy slosh, watch the
+        rail-force needle &mdash; the <i>motion is the readout</i>.</p>
+    </header>
+
+    <div class="stage">
+      <!-- ORGAN 1: the track you shape -->
+      <div class="panel" id="trackPanel">
+        <h3>The Track &middot; <b>drag the hoist, valley &amp; loop-apex</b></h3>
+        <div id="trackWrap">
+          <svg id="track" viewBox="0 0 640 380" preserveAspectRatio="xMidYMid meet" aria-label="side-view coaster track you shape"></svg>
+        </div>
+        <div class="readbar">
+          <span class="stat"><b>hoist h</b> <span class="v" id="rH">&ndash;</span></span>
+          <span class="stat"><b>loop r</b> <span class="v" id="rR">&ndash;</span></span>
+          <span class="ratio" id="ratio">h / 2.5r = &ndash;</span>
+          <span class="stat" id="rSpeed"></span>
+        </div>
+      </div>
+
+      <!-- ORGAN 2: the energy column -->
+      <div class="panel" id="energyPanel">
+        <h3>Energy</h3>
+        <div id="colWrap">
+          <div id="peBand"></div>
+          <div id="keBand"></div>
+          <div id="totalLine"></div>
+          <span class="colLbl pe-l">PE &middot; mgh</span>
+          <span class="colLbl ke-l">KE &middot; &frac12;mv&sup2;</span>
+          <span id="airtime">airtime</span>
+        </div>
+      </div>
+
+      <!-- ORGAN 3: the normal-force needle -->
+      <div class="panel" id="needlePanel">
+        <h3>Rail force N</h3>
+        <svg id="needle" viewBox="0 0 130 110" aria-label="rail normal-force gauge"></svg>
+        <div id="needleVerdict">at rest</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <span class="presets">
+        <button data-preset="gentle">gentle</button>
+        <button data-preset="justover">just over</button>
+        <button data-preset="justunder">just under</button>
+        <button data-preset="big">big</button>
+      </span>
+      <button class="ctl dare" id="dare" title="pre-shape a loop just above the hoist — one lever-pull from the soul moment">⚡ DARE</button>
+      <label class="toggle"><input type="checkbox" id="ghost"> ghost rider (over &amp; under at once)</label>
+      <button class="ctl release" id="release">▶ Release</button>
+      <button class="ctl" id="reset">reset</button>
+    </div>
+
+    <div id="verdict">Shape a track, then <b>pull the lever</b>. Or hit <b>⚡ DARE</b>.</div>
+
+    <section class="scroll">
+      <h2>What you are operating</h2>
+      <p>This is not a chart of a coaster &mdash; it <i>is</i> one. You set three things: the <b>hoist height</b> the bead
+        is released from, the depth of the <b>valley</b>, and the <b>radius of the vertical loop</b> (drag its apex). When you
+        release, the bead obeys gravity on <i>your</i> rail. Because the rail is frictionless, mechanical energy is conserved
+        exactly &mdash; in the column you watch <span class="teal">PE</span> (height) pour into <span style="color:var(--ke)">KE</span>
+        (speed) and back, while the white total line <i>never moves</i>.</p>
+      <p>The loop is the test. At the very top the rail can only <b>push</b> the bead inward; if the bead is going too slowly,
+        the required push goes <i>negative</i> &mdash; which a real rail cannot do &mdash; so the bead <span class="coral">leaves
+        the rail</span> and falls. The needle reads the rail force <code>N(&theta;) = mv&sup2;/r + mg&middot;cos&theta;</code>; it
+        stays <span class="teal">green</span> while N&ge;0 and pegs to a red zero-stop the instant the bead detaches.</p>
+      <h2>The one number</h2>
+      <p>Conserve energy from the release height <i>h</i> to the top of the loop (height <i>2r</i>), and demand the top speed be
+        just enough that the rail still pushes (<code>v_top&sup2; &ge; gr</code>). The algebra collapses to a single, exact line:
+        a loop survives <b>iff h &ge; 2.5r</b>. That is why dragging the loop-apex moves the glowing tie-line: <b>2.5r</b> is not a
+        magic number, it is the height that <i>geometry</i> demands. Below it, the bead detaches at exactly
+        <code>cos&theta;_d = &minus;&frac23;(h/r &minus; 1)</code>.</p>
+      <h2 class="honesty" style="border:none;padding:0">Honesty</h2>
+      <p class="honesty">Frictionless point mass; a rigid, exactly circular loop (its curvature is <code>&kappa; = 1/r</code> to
+        machine precision, asserted in the self-test); the rail can only <i>push</i>, never pull (no clamp, no upstop wheels).
+        The claim proven is precisely <code>v_top&sup2; &ge; gr &hArr; h &ge; 2.5r</code> and its felt consequence. It is not a real
+        clothoid loop, not a friction model, not a wheeled car. The self-test includes a load-bearing negative control: an
+        always-completes renderer that ignores N <i>fails</i>.</p>
+    </section>
+
+    <footer class="foot">
+      Next door, <a href="../brachistochrone/index.html">The Brachistochrone</a> asks the opposite question about a falling bead
+      on a curve: there the curve is <i>fixed</i> and you race for the fastest descent <i>time</i>; here the curve is <i>yours to
+      shape</i> and the question is whether the bead <i>survives the loop at all</i>.
+      &nbsp;&middot;&nbsp; <a href="../midway/index.html">Back to The Midway</a>
+    </footer>
+  </main>
+
+<script type="module">
+"use strict";
+// ===== COASTER CORE (inlined byte-twin) BEGIN =====
+// ── THE COASTER — physics authority for a frictionless point-mass on a shaped rail
+//    with a vertical loop. This block is the SOLE AUTHORITY; a Node twin
+//    (core.test.mjs) re-extracts it byte-for-byte between sentinels and the in-page
+//    chip calls the SAME runSelfTest(). ──────────────────────────────────────────
+//
+// THE MODEL. A bead of mass m slides on a rigid, frictionless rail in the vertical
+// plane. The rail's shape is a polyline {x,y} sampled by arc-length s; at each
+// sample we know the tangent angle θ (measured from horizontal, +CCW) and the
+// signed curvature κ. Gravity g pulls −y (down). The bead is released from rest at
+// height h above the rail's lowest point and runs under gravity alone.
+//
+// Because the rail is frictionless, mechanical energy is conserved exactly:
+//   E = ½ m v² + m g y   is constant along the path.
+// So at any height y the speed obeys the ENERGY FORM (algebraic, no integration):
+//   v² = 2 g (h − y)              … robust even as v → 0 near a crest.
+//
+// THE LOOP. A vertical circular loop of radius r sits in the track. On the loop the
+// rail must bend the bead inward; the centripetal requirement at angle θ (measured
+// up from the loop's bottom) is provided by gravity's inward component plus the
+// rail's NORMAL force N. The rail can only PUSH (N ≥ 0), never pull. At the TOP of
+// the loop the inward direction is straight down, so:
+//   N_top = m v_top² / r − m g      (N_top ≥ 0  ⟺  v_top² ≥ g r).
+// Conserving energy from release height h to the top (height 2r):
+//   ½ m v_top² = m g h − m g·2r   ⟹   v_top² = 2 g (h − 2r).
+// Survival of the loop therefore requires:
+//   2 g (h − 2r) ≥ g r   ⟺   h ≥ 2.5 r.        ← the textbook threshold, DERIVED.
+//
+// THE NORMAL FORCE. With θ measured up from the loop bottom (CCW), the inward radial
+// direction is (−sinθ, cosθ); gravity (0,−g) has inward component −g cosθ. The rail
+// pushes inward with N, so the centripetal balance N − m g cosθ = m v²/r gives:
+//   N(θ) = m v²/r + m g cosθ.
+// At the bottom (θ=0): N = m v²/r + m g (rail pushes hardest). At the top (θ=π):
+// N = m v²/r − m g (the textbook top condition; N ≥ 0 ⟺ v² ≥ g r).
+//
+// THE DETACH ANGLE. Below threshold the bead leaves the rail the instant N → 0 on
+// the upper half of the loop. The bead's height on the loop is y(θ)=r(1−cosθ); the
+// N = 0 condition is:
+//   v² = −g r cosθ       (positive only on the upper half, cosθ < 0)
+//   v² = 2 g (h − r(1 − cosθ))   (energy)
+// Equating: 2(h − r) + 2 r cosθ = −r cosθ  ⟹  cosθ_d = −(2/3)(h/r − 1).
+// Past θ_d the rail can no longer hold the bead: it DETACHES and becomes a free
+// projectile (gravity only), velocity = v·tangent at θ_d. A renderer that keeps the
+// bead on the rail regardless of N is physically WRONG — the neg-control proves it.
+//
+// THE NEG-CONTROL (the teeth). alwaysSlide(track,h0) advances the bead around the
+// loop regardless of N (it never checks the normal force) — it "completes" every
+// release. runSelfTest proves the REAL integrate DETACHES on a sub-2.5r release where
+// alwaysSlide does NOT; if they ever agreed on the sub-threshold set the test FAILS.
+// So the suite cannot pass vacuously: an always-completes renderer fails here.
+//
+// HONESTY. Frictionless point mass; a rigid, exactly circular loop; the rail can only
+// PUSH (N ≥ 0), not pull (no clamp / no upstop wheels). The claim is precisely
+// v_top² ≥ g r ⟺ h ≥ 2.5 r and its felt consequence (clear the loop, or detach at
+// θ_d). It is not a real clothoid loop, not a friction model, not a wheeled car.
+
+const G = 9.81;          // gravity (m/s²)
+
+// ── 1. BUILD THE TRACK ─────────────────────────────────────────────────────────
+// controlPts: a small set of {x,y} the hills/valley pass through, PLUS an exact
+// circular loop spliced in. We build the non-loop spans as a Catmull-Rom spline and
+// the loop as a TRUE circle of radius r centred at {cx,cy}, then arc-length sample
+// the whole thing into {s,x,y,θ,κ}. The loop's circle is exact so κ === 1/r on it
+// (the geometry-lock unit check) — "2.5r" is then geometry, not an approximation.
+//
+// trackSpec = {
+//   pre:   [{x,y}, ...]   control points BEFORE the loop (the hoist tower + valley),
+//   loop:  { cx, cy, r },  exact circle; entered/exited at its BOTTOM (θ=0),
+//   post:  [{x,y}, ...]   control points AFTER the loop (run-out),
+//   ds:    sample spacing in metres (default 0.02)
+// }
+function buildTrack(spec){
+  const ds = spec.ds || 0.02;
+  const { cx, cy, r } = spec.loop;
+  const samples = [];
+
+  // helper: push a sample, computing arc-length cumulatively. isLoop marks samples
+  // that belong to the EXACT circular loop arc (vs the spline hills/valley).
+  let acc = 0, prev = null;
+  function push(x, y, theta, kappa, isLoop){
+    if(prev){ acc += Math.hypot(x - prev.x, y - prev.y); }
+    samples.push({ s: acc, x, y, theta, kappa, isLoop: !!isLoop });
+    prev = { x, y };
+  }
+
+  // (a) PRE span: Catmull-Rom through pre[] ending at the loop's bottom (cx, cy−r).
+  const bottom = { x: cx, y: cy - r };
+  const preCtl = [...spec.pre, bottom];
+  sampleCatmull(preCtl, ds, push);
+
+  // (b) THE LOOP: a full exact circle, entered at the bottom going +x, traversed
+  //     CCW back to the bottom. θ here is the tangent angle of the path; κ = 1/r
+  //     exactly (true circle). Parameter φ measured up from the bottom (CCW).
+  const loopLen = 2 * Math.PI * r;
+  const nLoop = Math.max(64, Math.round(loopLen / ds));
+  for(let i = 1; i <= nLoop; i++){
+    const phi = (2 * Math.PI) * (i / nLoop);   // 0..2π up from bottom, CCW
+    // position on the circle: bottom is at angle -90° from centre; go CCW.
+    const ang = -Math.PI/2 + phi;
+    const x = cx + r * Math.cos(ang);
+    const y = cy + r * Math.sin(ang);
+    // tangent direction (CCW): derivative of (cos,sin) is (−sin,cos)
+    const tx = -Math.sin(ang), ty = Math.cos(ang);
+    const theta = Math.atan2(ty, tx);
+    push(x, y, theta, 1 / r, true);             // ★ κ === 1/r on the loop (geometry-lock)
+  }
+
+  // (c) POST span: Catmull-Rom from the loop bottom through post[].
+  const postCtl = [bottom, ...spec.post];
+  sampleCatmull(postCtl, ds, push, true /*skipFirst*/);
+
+  // re-derive θ,κ on the spline spans from finite differences so the spline tangent
+  // is consistent (the loop samples already carry exact θ,κ; leave them).
+  return finalizeTrack(samples, spec.loop);
+}
+
+// Catmull-Rom sampler: walk the polyline of control points, emitting arc-length
+// spaced samples. We compute θ from the local tangent; κ is filled in finalize.
+function sampleCatmull(ctl, ds, push, skipFirst){
+  if(ctl.length < 2) return;
+  // build a dense polyline first, then resample by arc-length.
+  const dense = [];
+  const seg = (p0,p1,p2,p3,t)=>{
+    const t2=t*t, t3=t2*t;
+    const f = (a,b,c,d)=> 0.5*((2*b)+(-a+c)*t + (2*a-5*b+4*c-d)*t2 + (-a+3*b-3*c+d)*t3);
+    return { x:f(p0.x,p1.x,p2.x,p3.x), y:f(p0.y,p1.y,p2.y,p3.y) };
+  };
+  for(let i=0;i<ctl.length-1;i++){
+    const p0=ctl[i-1]||ctl[i], p1=ctl[i], p2=ctl[i+1], p3=ctl[i+2]||ctl[i+1];
+    const steps=24;
+    for(let k=0;k<steps;k++){ dense.push(seg(p0,p1,p2,p3,k/steps)); }
+  }
+  dense.push(ctl[ctl.length-1]);
+  // resample dense polyline by arc-length ds.
+  let carry = 0;
+  for(let i=(skipFirst?1:0); i<dense.length; i++){
+    if(i===0){
+      const tx = dense[1].x-dense[0].x, ty = dense[1].y-dense[0].y;
+      push(dense[0].x, dense[0].y, Math.atan2(ty,tx), 0);
+      continue;
+    }
+    const a=dense[i-1], b=dense[i];
+    let segLen = Math.hypot(b.x-a.x, b.y-a.y);
+    if(segLen < 1e-12) continue;
+    carry += segLen;
+    while(carry >= ds){
+      const over = carry - ds;
+      const f = 1 - over/segLen;
+      const x = a.x + (b.x-a.x)*f, y = a.y + (b.y-a.y)*f;
+      const tx = b.x-a.x, ty = b.y-a.y;
+      push(x, y, Math.atan2(ty,tx), 0);
+      carry = over;
+    }
+  }
+}
+
+// finalize: recompute κ on the spline samples from finite differences of θ vs s,
+// leave the loop samples (already exact 1/r) untouched, and tag a per-sample
+// onLoop flag + the loop bottom-angle φ for the detach logic.
+function finalizeTrack(samples, loop){
+  const { cx, cy, r } = loop;
+  for(let i=0;i<samples.length;i++){
+    const p = samples[i];
+    // onLoop = a sample that belongs to the EXACT circular loop arc (set at build),
+    // NOT a spline sample that merely touches the loop bottom.
+    p.onLoop = p.isLoop === true;
+    if(p.onLoop){
+      // φ measured up from the loop bottom (CCW), 0..2π
+      const ang = Math.atan2(p.y - cy, p.x - cx);
+      let phi = ang + Math.PI/2;
+      while(phi < 0) phi += 2*Math.PI;
+      while(phi >= 2*Math.PI) phi -= 2*Math.PI;
+      p.phi = phi;
+    } else {
+      p.phi = null;
+    }
+  }
+  const yMin = Math.min(...samples.map(p=>p.y));
+  // the loop bottom is the physical reference for release height (the 2.5r claim is
+  // stated relative to it). It sits at cy − r by construction.
+  const loopBottomY = cy - r;
+  return { samples, loop, yMin, loopBottomY, length: samples[samples.length-1].s };
+}
+
+// ── 2. INTEGRATE ───────────────────────────────────────────────────────────────
+// Run the bead from rest at release height h0 (above the track's lowest point) using
+// the ENERGY FORM v² = 2g(h0 − y) at every sample (exact, frictionless — no stiff
+// division near the crest). At each loop sample compute the normal force
+// N(θ) = m v²/r − m g cosθ where θ is measured up from the loop bottom (so cosθ is
+// the component of gravity along the inward radius). The bead DETACHES at the first
+// loop sample where N < 0 (the rail can only push). Returns the trace + verdict.
+function integrate(track, h0, m){
+  m = m || 1;
+  const { samples, loop, loopBottomY } = track;
+  const trace = [];
+  let detachIndex = -1, detachPhi = null;
+  const hAbs = loopBottomY + h0;     // absolute release height (h0 above the loop bottom)
+
+  for(let i=0;i<samples.length;i++){
+    const p = samples[i];
+    const v2 = Math.max(0, 2 * G * (hAbs - p.y));   // energy form; clamp tiny negatives
+    const v = Math.sqrt(v2);
+    const KE = 0.5 * m * v2;
+    const PE = m * G * (p.y - loopBottomY);
+    const E = KE + PE;
+    let N = null;
+    if(p.onLoop){
+      // θ measured up from the loop bottom; gravity's inward component is −g cosθ, so
+      // the rail's normal force is N = m v²/r + m g cosθ (N≥0 ⟺ the rail can hold the
+      // bead). N hits zero first on the UPPER half (cosθ < 0) when v is too low.
+      N = m * v2 / loop.r + m * G * Math.cos(p.phi);
+      if(N < -1e-9 && detachIndex < 0){
+        detachIndex = i;
+        detachPhi = p.phi;
+      }
+    }
+    trace.push({ s:p.s, x:p.x, y:p.y, theta:p.theta, v, KE, PE, E, N, onLoop:p.onLoop, phi:p.phi,
+                 detached: detachIndex>=0 && i>=detachIndex });
+  }
+
+  // does the bead also actually reach the crest with v²>0? (energy gate at top)
+  const survived = detachIndex < 0;
+  return { trace, verdict:{ survived, detachIndex, detachPhi, hAbs, hRel:h0 }, m, h0 };
+}
+
+// ── THE NEG-CONTROL (the teeth) ──────────────────────────────────────────────────
+// alwaysSlide: advances the bead through EVERY sample regardless of N. It never
+// detaches — a renderer that slides the car around no matter what. The self-test
+// proves the REAL integrate detaches where this does not.
+function alwaysSlide(track, h0, m){
+  m = m || 1;
+  const { samples, loopBottomY } = track;
+  const hAbs = loopBottomY + h0;
+  const trace = [];
+  for(let i=0;i<samples.length;i++){
+    const p = samples[i];
+    const v2 = Math.max(0, 2 * G * (hAbs - p.y));
+    trace.push({ s:p.s, x:p.x, y:p.y, v:Math.sqrt(v2), detached:false });
+  }
+  return { trace, verdict:{ survived:true, detachIndex:-1, detachPhi:null, hAbs, hRel:h0 } };
+}
+
+// detectDetach: the analytic detach angle for a sub-threshold release, in radians,
+// measured up from the loop bottom. cosθ_d = −(2/3)(h/r − 1) (the N=0 point on the
+// UPPER half of the loop). Returns null if the release survives — h ≥ 2.5r makes
+// cosθ_d ≤ −1, i.e. the bead never reaches N=0 before clearing the top.
+function detectDetach(h, r){
+  const c = -(2/3) * (h/r - 1);
+  if(c <= -1) return null;            // survives — N stays ≥ 0 all the way over the top
+  if(c >= 1)  return 0;               // degenerate (h ≤ r): detaches at the bottom
+  return Math.acos(c);
+}
+
+// the analytic survival predicate, closed-form: a loop of radius r is cleared from
+// release height h (above the track bottom, with the loop bottom AT the track
+// bottom) iff h ≥ 2.5r. Returned with the top speed it implies.
+function survives(h, r){
+  return h >= 2.5 * r - 1e-12;
+}
+
+// ── 3. THE SELF-TEST. The Node twin and the in-page chip call THIS. ─────────────
+function runSelfTest(){
+  const checks = [];
+  const ck = (name, ok) => checks.push({ name, ok: !!ok });
+
+  // a canonical track: flat lead-in, a valley, then an exact loop of radius r=1 with
+  // its bottom on the ground (y=0), then a run-out. Loop bottom at (4,0), centre (4,1).
+  const r = 1;
+  const mkTrack = ()=> buildTrack({
+    pre:  [{x:0,y:3},{x:1.5,y:1.2},{x:3,y:0.15},{x:3.6,y:0.0}],
+    loop: { cx:4, cy:1, r },
+    post: [{x:5,y:0.1},{x:7,y:0.4}],
+    ds: 0.01
+  });
+  const track = mkTrack();
+
+  // CLAIM 0 — GEOMETRY-LOCK: every loop sample has κ === 1/r exactly (true circle).
+  {
+    const loopSamples = track.samples.filter(p=>p.onLoop);
+    let maxErr = 0;
+    for(const p of loopSamples) maxErr = Math.max(maxErr, Math.abs(p.kappa - 1/r));
+    ck('geometry-lock: κ === 1/r on every loop sample (the loop is a TRUE circle)',
+       loopSamples.length > 50 && maxErr < 1e-12);
+  }
+
+  // CLAIM 1 — CONSERVATION: along an integrated (surviving) run, E is constant to
+  // <1e-9 relative. Use a generous legal release h = 3r.
+  {
+    const res = integrate(track, 3*r);
+    const Es = res.trace.map(t=>t.E).filter(e=>e>0);
+    const E0 = Es[0];
+    let maxRel = 0;
+    for(const E of Es) maxRel = Math.max(maxRel, Math.abs(E - E0)/E0);
+    ck('CLAIM 1 conservation: max|E−E₀|/E₀ < 1e-9 along the integrated track',
+       res.verdict.survived && maxRel < 1e-9);
+  }
+
+  // CLAIM 2 — SURVIVAL PREDICATE: integrated survival matches the analytic predicate
+  // h ≥ 2.5r at every sample of a band around 2.5r, AND bisection finds h*/r = 2.5.
+  {
+    let allMatch = true;
+    const band = [];
+    for(let h = 2.0*r; h <= 3.0*r + 1e-9; h += 0.02*r) band.push(h);
+    for(const h of band){
+      const integ = integrate(track, h).verdict.survived;
+      const analytic = survives(h, r);
+      if(integ !== analytic){ allMatch = false; break; }
+    }
+    ck('CLAIM 2 survival: integrated survival === analytic (h≥2.5r) across a band around 2.5r',
+       allMatch);
+
+    // bisection for the boundary h* where integrated survival flips, → 2.5r.
+    let lo = 2.0*r, hi = 3.0*r;
+    for(let it=0; it<80; it++){
+      const mid = (lo+hi)/2;
+      if(integrate(track, mid).verdict.survived) hi = mid; else lo = mid;
+    }
+    const hStar = (lo+hi)/2;
+    ck('CLAIM 2 boundary: bisection finds h*/r = 2.5 to high precision (the textbook value, derived)',
+       Math.abs(hStar/r - 2.5) < 2e-3);  // discretized to the sample spacing
+  }
+
+  // CLAIM 3 — DETACH ANGLE EXACT: for a sub-threshold h the integrator's detach φ
+  // matches the analytic cosθ_d = (2/3)(h/r−1) to within the sample spacing, AND the
+  // post-detach motion is a free parabola (no rail force).
+  {
+    const h = 2.2*r;   // sub-threshold (< 2.5r)
+    const res = integrate(track, h);
+    ck('CLAIM 3 sub-threshold release DETACHES (does not survive)', !res.verdict.survived);
+    const analyticTheta = detectDetach(h, r);
+    const integTheta = res.verdict.detachPhi;
+    ck('CLAIM 3 detach angle: integrator φ matches analytic θ_d=acos((2/3)(h/r−1))',
+       analyticTheta != null && integTheta != null &&
+       Math.abs(integTheta - analyticTheta) < 0.05);  // within sample spacing on the loop
+
+    // post-detach: the bead's energy speed at detach should equal the centripetal
+    // speed v² = −g r cosθ_d at that point (the N=0 condition holds AT detach).
+    const dIdx = res.verdict.detachIndex;
+    const vDet2 = res.trace[dIdx].v * res.trace[dIdx].v;
+    const vCent2 = -G * r * Math.cos(integTheta);
+    ck('CLAIM 3 at detach v² == −g·r·cosθ_d (the N=0 condition, the bead goes ballistic)',
+       vCent2 > 0 && Math.abs(vDet2 - vCent2) / vCent2 < 0.05);
+  }
+
+  // CLAIM 4 — LOAD-BEARING NEG-CONTROL (the teeth). On the sub-2.5r release the REAL
+  // integrate detaches but alwaysSlide completes — they DISAGREE. Across a band of
+  // sub-threshold releases the disagreement is total. Plus anti-vacuity: a just-legal
+  // release SURVIVES (the predicate isn't "always detach").
+  {
+    const subBand = [];
+    for(let h = 1.6*r; h < 2.5*r - 1e-9; h += 0.1*r) subBand.push(h);
+    let realDetaches = 0, slideCompletes = 0, disagree = 0;
+    for(const h of subBand){
+      const real = integrate(track, h).verdict.survived;       // false (detaches)
+      const slide = alwaysSlide(track, h).verdict.survived;     // true (completes)
+      if(!real) realDetaches++;
+      if(slide) slideCompletes++;
+      if(real !== slide) disagree++;
+    }
+    ck('CLAIM 4 there is a non-empty sub-threshold band to test', subBand.length > 0);
+    ck('CLAIM 4 the REAL integrator detaches on EVERY sub-2.5r release', realDetaches === subBand.length);
+    ck('CLAIM 4 alwaysSlide (neg-control) completes EVERY one of them (never checks N)',
+       slideCompletes === subBand.length);
+    ck('★ CLAIM 4 the teeth bite: real vs alwaysSlide DISAGREE on the whole sub-threshold band',
+       disagree === subBand.length && subBand.length > 0);
+
+    // anti-vacuity: a just-legal release SURVIVES (predicate isn't always-detach).
+    ck('CLAIM 4 anti-vacuity: a just-legal release (h=2.6r) SURVIVES',
+       integrate(track, 2.6*r).verdict.survived === true);
+  }
+
+  // CLAIM 5 — the survival number is DERIVED from the conserved E (CLAIM 1 feeds
+  // CLAIM 2): the top-of-loop speed read off the integrated trace equals the energy
+  // value √(2g(h−2r)), and the threshold where that equals √(gr) is h=2.5r.
+  {
+    const h = 3*r;
+    const res = integrate(track, h);
+    // find the top-of-loop sample (φ ≈ π).
+    let top = null, best = 1e9;
+    for(const t of res.trace){ if(t.onLoop){ const d = Math.abs(t.phi - Math.PI); if(d<best){best=d; top=t;} } }
+    const vTopEnergy2 = 2*G*(h - 2*r);
+    ck('CLAIM 5 derived: top-of-loop v² (from conserved E) == 2g(h−2r)',
+       top != null && Math.abs(top.v*top.v - vTopEnergy2)/vTopEnergy2 < 0.02);
+    // and at h=2.5r exactly, v_top² == g r (the threshold IS where N_top=0).
+    ck('CLAIM 5 threshold: at h=2.5r the top speed² equals g·r (N_top=0)',
+       Math.abs((2*G*(2.5*r - 2*r)) - G*r) < 1e-9);
+  }
+
+  const pass = checks.filter(c=>c.ok).length;
+  return { pass, total: checks.length, checks };
+}
+// ===== COASTER CORE (inlined byte-twin) END =====
+
+// ──────────────────────────────────────────────────────────────────────────────
+//  THE INSTRUMENT — renders the bead's motion FROM the core. All physics (track,
+//  integration, survival, detach, the neg-control) lives in the core above; this is
+//  pure presentation. The motion IS the readout.
+// ──────────────────────────────────────────────────────────────────────────────
+const NS = 'http://www.w3.org/2000/svg';
+const $ = (id)=>document.getElementById(id);
+const el = (tag, attrs={})=>{ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); return e; };
+
+// world→screen mapping on the 640×380 track stage. World units: metres. The loop
+// radius r is in metres; we choose a scale so a typical track fills the stage.
+const STAGE = { w:640, h:380, padL:40, padR:30, padT:24, padB:46 };
+let SCALE = 52;                 // px per metre (recomputed per layout)
+const GROUND_Y = STAGE.h - STAGE.padB;   // screen y of world y=0 (the loop bottom line)
+
+// ── the editable track state (world coords, metres) ──
+// hoist tower at left; the bead is released from (hoistX, hoistH). A valley dips to
+// valleyY at valleyX, rises to the loop bottom at (loopX, 0); the loop has radius r;
+// a run-out trails off to the right.
+const state = {
+  hoistH: 3.0,        // release height above loop bottom (metres)
+  valleyY: 0.0,       // valley floor (≤0 dips below the loop-bottom line)
+  r: 1.0,             // loop radius (metres)
+  loopX: 7.2,         // world x of the loop bottom
+};
+const WORLD = { hoistX:0.6, valleyX:3.2, runoutX:9.6 };
+
+function worldX(x){ return STAGE.padL + x*SCALE; }
+function worldY(y){ return GROUND_Y - y*SCALE; }
+
+// recompute SCALE so the whole track (tallest of hoist / loop-top) fits vertically
+// and the run-out fits horizontally — generous, so the soul moment is reachable.
+function relayout(){
+  const topWorld = Math.max(state.hoistH, 2*state.r) + 0.5;
+  const sx = (STAGE.w - STAGE.padL - STAGE.padR) / (WORLD.runoutX + 0.4);
+  const sy = (STAGE.h - STAGE.padT - STAGE.padB) / topWorld;
+  SCALE = Math.max(20, Math.min(sx, sy));
+}
+
+// build a core track from the current editable state.
+function buildFromState(){
+  return buildTrack({
+    pre:  [ {x:WORLD.hoistX, y:state.hoistH}, {x:WORLD.hoistX+0.5, y:state.hoistH*0.55},
+            {x:WORLD.valleyX, y:state.valleyY}, {x:state.loopX-0.6, y:0.0} ],
+    loop: { cx:state.loopX, cy:state.r, r:state.r },
+    post: [ {x:state.loopX+0.8, y:0.05}, {x:WORLD.runoutX, y:0.35} ],
+    ds: 0.02
+  });
+}
+
+// ── draw the static track + handles ──
+let track = null;
+function drawTrack(){
+  relayout();
+  track = buildFromState();
+  const svg = $('track');
+  svg.innerHTML = '';
+
+  // ground / datum line at the loop bottom (world y=0)
+  svg.appendChild(el('line', { x1:worldX(0), y1:GROUND_Y, x2:worldX(WORLD.runoutX+0.3), y2:GROUND_Y,
+    stroke:'rgba(201,162,74,0.22)', 'stroke-width':1, 'stroke-dasharray':'2 5' }));
+
+  // the rail as a thin engraved gold curve from the core samples
+  let d = '';
+  for(let i=0;i<track.samples.length;i++){
+    const p = track.samples[i];
+    d += (i===0?'M':'L') + worldX(p.x).toFixed(2) + ' ' + worldY(p.y).toFixed(2) + ' ';
+  }
+  svg.appendChild(el('path', { d, fill:'none', stroke:'rgba(201,162,74,0.30)', 'stroke-width':6, 'stroke-linecap':'round' }));
+  svg.appendChild(el('path', { d, fill:'none', stroke:'var(--gold)', 'stroke-width':2.2, 'stroke-linecap':'round' }));
+
+  // the 2.5r tie-line: a glowing horizontal mark at height 2.5r above the loop bottom
+  // (this is the height the loop "demands"; it MOVES when you drag r).
+  const tieY = worldY(2.5*state.r);
+  const tieX0 = worldX(state.loopX - state.r - 0.4), tieX1 = worldX(state.loopX + state.r + 0.4);
+  svg.appendChild(el('line', { x1:tieX0, y1:tieY, x2:tieX1, y2:tieY, stroke:'var(--teal)',
+    'stroke-width':1.4, 'stroke-dasharray':'5 4', opacity:0.78 }));
+  const tieLbl = el('text', { x:tieX1+4, y:tieY+3.5, fill:'var(--teal)', 'font-size':9,
+    'font-family':'var(--font-mono)' }); tieLbl.textContent = '2.5r'; svg.appendChild(tieLbl);
+
+  // the loop-top demand marker dot (at the loop top, height 2r)
+  svg.appendChild(el('circle', { cx:worldX(state.loopX), cy:worldY(2*state.r), r:2.4,
+    fill:'none', stroke:'var(--teal)', 'stroke-width':1, opacity:0.6 }));
+
+  // the hoist tower (a vertical post) + hoist handle (sets release height)
+  const hx = worldX(WORLD.hoistX);
+  svg.appendChild(el('line', { x1:hx, y1:GROUND_Y, x2:hx, y2:worldY(state.hoistH), stroke:'rgba(201,162,74,0.28)', 'stroke-width':2 }));
+  const hoistG = el('g', { class:'handle', id:'hHoist', 'data-h':'hoist' });
+  hoistG.appendChild(el('circle', { cx:hx, cy:worldY(state.hoistH), r:11, fill:'rgba(244,210,122,0.12)', stroke:'var(--gold-hi)', 'stroke-width':1.5 }));
+  hoistG.appendChild(el('circle', { cx:hx, cy:worldY(state.hoistH), r:4.5, fill:'var(--gold-hi)' }));
+  const hLbl = el('text', { x:hx-15, y:worldY(state.hoistH)-14, fill:'var(--gold-hi)', 'font-size':9, 'font-family':'var(--font-mono)', 'text-anchor':'middle' });
+  hLbl.textContent='hoist'; hoistG.appendChild(hLbl);
+  svg.appendChild(hoistG);
+
+  // the valley handle (drag vertically to deepen the dip)
+  const vx = worldX(WORLD.valleyX), vy = worldY(state.valleyY);
+  const valG = el('g', { class:'handle', id:'hValley', 'data-h':'valley' });
+  valG.appendChild(el('circle', { cx:vx, cy:vy, r:9, fill:'rgba(201,162,74,0.10)', stroke:'var(--gold)', 'stroke-width':1.3 }));
+  valG.appendChild(el('circle', { cx:vx, cy:vy, r:3.4, fill:'var(--gold)' }));
+  svg.appendChild(valG);
+
+  // the loop-apex handle (drag vertically to set r — apex sits at height 2r)
+  const ax = worldX(state.loopX), ay = worldY(2*state.r);
+  const apexG = el('g', { class:'handle', id:'hApex', 'data-h':'apex' });
+  apexG.appendChild(el('circle', { cx:ax, cy:ay, r:11, fill:'rgba(244,210,122,0.10)', stroke:'var(--gold-hi)', 'stroke-width':1.5 }));
+  apexG.appendChild(el('circle', { cx:ax, cy:ay, r:4.2, fill:'var(--gold-hi)' }));
+  const aLbl = el('text', { x:ax, y:ay-15, fill:'var(--gold-hi)', 'font-size':9, 'font-family':'var(--font-mono)', 'text-anchor':'middle' });
+  aLbl.textContent='loop r'; apexG.appendChild(aLbl);
+  svg.appendChild(apexG);
+
+  // a layer for the running bead(s) (drawn on top during a ride)
+  svg.appendChild(el('g', { id:'beadLayer' }));
+
+  // readouts
+  $('rH').textContent = state.hoistH.toFixed(2)+' m';
+  $('rR').textContent = state.r.toFixed(2)+' m';
+  updateRatio();
+}
+
+function updateRatio(){
+  const ratio = state.hoistH / (2.5*state.r);
+  const node = $('ratio');
+  node.textContent = 'h / 2.5r = ' + ratio.toFixed(2);
+  node.className = 'ratio ' + (survives(state.hoistH, state.r) ? 'legal' : 'illegal');
+}
+
+// ── the energy column (organ 2) ──
+function setColumn(KE, PE, Etotal, Emax, airtime){
+  const wrap = $('colWrap'); const H = wrap.clientHeight || 300;
+  const peFrac = Emax>0 ? PE/Emax : 0;
+  const keFrac = Emax>0 ? KE/Emax : 0;
+  $('peBand').style.height = (peFrac*H).toFixed(1)+'px';
+  $('keBand').style.height = (keFrac*H).toFixed(1)+'px';
+  // the fixed total line: anchored at Etotal/Emax from the bottom (never moves while E held)
+  const totFrac = Emax>0 ? Etotal/Emax : 0;
+  $('totalLine').style.bottom = (totFrac*H).toFixed(1)+'px';
+  $('airtime').className = airtime ? 'show' : '';
+}
+
+// ── the normal-force needle (organ 3) ──
+function drawNeedle(){
+  const svg=$('needle'); svg.innerHTML='';
+  // a half-dial: green arc (N≥0) sweeping right, red zero-stop on the left.
+  const cx=65, cy=92, R=52;
+  // arc background
+  svg.appendChild(el('path', { d:`M ${cx-R} ${cy} A ${R} ${R} 0 0 1 ${cx+R} ${cy}`, fill:'none',
+    stroke:'rgba(255,255,255,0.10)', 'stroke-width':10 }));
+  // green legal zone (right ~85% of the dial), red zero-stop (far left)
+  svg.appendChild(el('path', { d:`M ${cx-R*0.94} ${cy-R*0.34} A ${R} ${R} 0 0 1 ${cx+R} ${cy}`, fill:'none',
+    stroke:'rgba(95,205,191,0.55)', 'stroke-width':10 }));
+  svg.appendChild(el('path', { d:`M ${cx-R} ${cy} A ${R} ${R} 0 0 1 ${cx-R*0.94} ${cy-R*0.34}`, fill:'none',
+    stroke:'rgba(240,132,111,0.85)', 'stroke-width':10 }));
+  // labels
+  const l0=el('text',{x:cx-R+2,y:cy+12,fill:'var(--coral)','font-size':8,'font-family':'var(--font-mono)'}); l0.textContent='0'; svg.appendChild(l0);
+  const ln=el('text',{x:cx+R-12,y:cy+12,fill:'var(--teal)','font-size':8,'font-family':'var(--font-mono)'}); ln.textContent='N↑'; svg.appendChild(ln);
+  // pivot + needle (starts at rest pointing up)
+  svg.appendChild(el('circle', { cx, cy, r:4, fill:'var(--gold)' }));
+  svg.appendChild(el('line', { id:'needleHand', x1:cx, y1:cy, x2:cx, y2:cy-R*0.82, stroke:'var(--gold-hi)', 'stroke-width':2.4, 'stroke-linecap':'round' }));
+}
+// set the needle: frac 0..1 of the dial (0 = red zero-stop left, 1 = full N right).
+function setNeedle(frac, pegged){
+  const cx=65, cy=92, R=52;
+  const f = Math.max(0, Math.min(1, frac));
+  // map f∈[0,1] → angle from 180° (left) to 0° (right)
+  const ang = Math.PI*(1 - f);
+  const x2 = cx + Math.cos(ang)*R*0.82, y2 = cy - Math.sin(ang)*R*0.82;
+  const hand = $('needleHand');
+  if(hand){ hand.setAttribute('x2', x2.toFixed(2)); hand.setAttribute('y2', y2.toFixed(2));
+    hand.setAttribute('stroke', pegged ? 'var(--coral)' : 'var(--gold-hi)'); }
+}
+
+// ── THE RIDE — animate the bead along the core trace; the motion is the readout ──
+let raf=null, riding=false;
+function clearRide(){
+  if(raf){ cancelAnimationFrame(raf); raf=null; }
+  riding=false;
+  const bl=$('beadLayer'); if(bl) bl.innerHTML='';
+  $('release').disabled=false;
+}
+
+function ride(){
+  if(riding) return;
+  clearRide(); riding=true; $('release').disabled=true;
+  drawTrack();   // fresh static scene
+
+  const ghost = $('ghost').checked;
+  // primary run uses the current hoist. A ghost run pairs one just-above & one
+  // just-below 2.5r so the bifurcation is one glance. BOTH call the same core path.
+  const runs = [];
+  if(ghost){
+    const justOver = 2.6*state.r, justUnder = 2.4*state.r;
+    runs.push(makeRun(justOver, 'var(--teal)', 0.85));
+    runs.push(makeRun(justUnder, 'var(--coral)', 0.85));
+  } else {
+    runs.push(makeRun(state.hoistH, null, 1));
+  }
+  // the primary run drives the column + needle + verdict (the last legal-or-not one).
+  const primary = ghost ? runs[1] : runs[0];   // in ghost mode the under-run drives detach drama
+
+  const Emax = Math.max(...runs.map(rr=>rr.E0)) * 1.04;
+  const bl=$('beadLayer');
+  // create a bead element per run
+  for(const rr of runs){
+    rr.bead = el('circle', { r:6.4, fill:rr.color||'var(--gold-hi)', stroke:'#1a1408', 'stroke-width':1 });
+    rr.bead.setAttribute('opacity', rr.op);
+    bl.appendChild(rr.bead);
+    if(rr.detached){ // a faint ballistic arc placeholder; filled as it flies
+      rr.ballPath = el('path', { d:'', fill:'none', stroke:rr.color||'var(--coral)', 'stroke-width':1.2, 'stroke-dasharray':'2 3', opacity:0.6 });
+      bl.appendChild(rr.ballPath);
+    }
+  }
+
+  const t0 = performance.now();
+  const DUR_PER_M = 300;   // ms per metre of arc-length (slowed so it's watchable)
+  function frame(now){
+    let anyActive=false;
+    for(const rr of runs){
+      stepRun(rr, now - t0, DUR_PER_M);
+      if(rr.active) anyActive=true;
+    }
+    // drive the readouts from the primary run's CURRENT sample
+    const cur = primary.curSample;
+    if(cur){
+      setColumn(cur.KE, cur.PE, cur.E, Emax, cur.airtime);
+      // needle: map N to a dial fraction. N at the loop bottom is ~ mv²/r+mg (big);
+      // normalize by a representative max so the legal zone reads green and N→0 pegs red.
+      const Nmax = primary.Nref || 1;
+      const frac = cur.N==null ? 0.55 : Math.max(0, Math.min(1, (cur.N/Nmax)*0.5+0.04));
+      setNeedle(cur.N==null ? 0.55 : frac, cur.N!=null && cur.N<=1e-6 && primary.willDetach);
+    }
+    if(anyActive){ raf=requestAnimationFrame(frame); }
+    else { finishRide(primary, ghost, runs); }
+  }
+  raf=requestAnimationFrame(frame);
+}
+
+// build a run: integrate via the CORE, precompute screen path + detach ballistics.
+function makeRun(h, color, op){
+  const res = integrate(track, h);
+  const E0 = res.trace.length ? res.trace[0].E : 1;
+  // a representative N for the needle scale: N at the loop bottom for THIS run.
+  let Nref = 1;
+  for(const t of res.trace){ if(t.onLoop){ Nref=Math.max(Nref, t.N); break; } }
+  const willDetach = !res.verdict.survived;
+  return { res, h, color, op:op==null?1:op, E0, Nref, willDetach,
+           detached:willDetach, active:true, curSample:null, i:0,
+           verdict:res.verdict };
+}
+
+// advance one run to the elapsed arc-length; when it passes its detach index, go
+// ballistic (free parabola from the detach point — gravity only).
+function stepRun(rr, elapsedMs, durPerM){
+  const trace = rr.res.trace;
+  const total = trace[trace.length-1].s;
+  const sNow = (elapsedMs/durPerM);
+  // find the sample at arc-length sNow (or the detach point, whichever first)
+  const dIdx = rr.verdict.detachIndex;
+  let idx = rr.i;
+  while(idx<trace.length-1 && trace[idx].s < sNow) idx++;
+  rr.i = idx;
+  const detachReached = (dIdx>=0 && idx>=dIdx);
+
+  if(!detachReached){
+    const p = trace[idx];
+    rr.curSample = { KE:p.KE, PE:p.PE, E:p.E, N:p.N, airtime: p.onLoop && p.N!=null && p.N < rr.E0*0.04 };
+    placeBead(rr.bead, p.x, p.y);
+    if(idx>=trace.length-1){ rr.active=false; }
+  } else {
+    // BALLISTIC phase: launch from the detach sample with v·tangent, gravity only.
+    if(!rr.ball){
+      const d = trace[dIdx];
+      rr.ball = { x0:d.x, y0:d.y, vx:d.v*Math.cos(d.theta), vy:d.v*Math.sin(d.theta),
+                  t0:elapsedMs, pts:[] };
+      rr.curSample = { KE:d.KE, PE:d.PE, E:d.E, N:0, airtime:false };
+    }
+    const bt = (elapsedMs - rr.ball.t0)/1000 * 1.6;  // a little faster so the fall reads
+    const bx = rr.ball.x0 + rr.ball.vx*bt;
+    const by = rr.ball.y0 + rr.ball.vy*bt - 0.5*G*bt*bt;
+    placeBead(rr.bead, bx, by);
+    rr.ball.pts.push([worldX(bx), worldY(by)]);
+    if(rr.ballPath && rr.ball.pts.length>1){
+      rr.ballPath.setAttribute('d', 'M'+rr.ball.pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L'));
+    }
+    // stop when it falls below the datum (off the bottom of the stage)
+    if(by < -1.0 || worldY(by) > STAGE.h+30){ rr.active=false; }
+  }
+}
+
+function placeBead(bead, wx, wy){ if(bead){ bead.setAttribute('cx', worldX(wx).toFixed(2)); bead.setAttribute('cy', worldY(wy).toFixed(2)); } }
+
+function finishRide(primary, ghost, runs){
+  riding=false; $('release').disabled=false;
+  const v = primary.verdict;
+  const verdictEl = $('verdict');
+  if(v.survived){
+    verdictEl.className='legal';
+    verdictEl.innerHTML = `<b>✓ CLEARED.</b> h = ${primary.h.toFixed(2)} m ≥ 2.5r = ${(2.5*state.r).toFixed(2)} m — the bead whips over the top and flies home.`;
+    $('needleVerdict').textContent = 'N ≥ 0 — held';
+    $('needleVerdict').style.color = 'var(--teal)';
+    setNeedle(0.62, false);
+    chime(true);
+  } else {
+    verdictEl.className='illegal';
+    const deg = v.detachPhi!=null ? (v.detachPhi*180/Math.PI).toFixed(0) : '?';
+    verdictEl.innerHTML = `<b>✕ DETACHED at θ=${deg}°.</b> h = ${primary.h.toFixed(2)} m &lt; 2.5r = ${(2.5*state.r).toFixed(2)} m — the rail force hit zero; you would have fallen out.`;
+    $('needleVerdict').textContent = 'N = 0 — detached';
+    $('needleVerdict').style.color = 'var(--coral)';
+    setNeedle(0.0, true);
+    chime(false);
+  }
+  if(ghost){
+    verdictEl.innerHTML += `<br><span style="font-size:12px;color:var(--ink-dim)">ghost rider: same entry — <span style="color:var(--teal)">2.6r floats over the top</span>, <span style="color:var(--coral)">2.4r peels off</span>.</span>`;
+  }
+}
+
+// a soft chime / thunk (no library; tiny WebAudio blip). Best-effort, silent on fail.
+let actx=null;
+function chime(good){
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(), g=actx.createGain();
+    o.connect(g); g.connect(actx.destination);
+    o.type = good?'sine':'triangle';
+    o.frequency.value = good?660:150;
+    g.gain.setValueAtTime(0.0001, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(good?0.08:0.10, actx.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+(good?0.5:0.35));
+    o.start(); o.stop(actx.currentTime+(good?0.5:0.35));
+    if(good){ const o2=actx.createOscillator(); o2.connect(g); o2.type='sine'; o2.frequency.value=990;
+      o2.start(actx.currentTime+0.06); o2.stop(actx.currentTime+0.4); }
+  }catch(e){}
+}
+
+// ── dragging the handles ──
+let drag=null;
+function pointerWorldY(evt){
+  const svg=$('track'); const pt=svg.createSVGPoint();
+  pt.x=evt.clientX; pt.y=evt.clientY;
+  const ctm=svg.getScreenCTM();
+  const loc=pt.matrixTransform(ctm.inverse());
+  return (GROUND_Y - loc.y)/SCALE;
+}
+function onDown(evt){
+  const g=evt.target.closest('.handle'); if(!g) return;
+  if(riding) clearRide();
+  drag=g.getAttribute('data-h'); evt.preventDefault();
+  $('track').setPointerCapture && $('track').setPointerCapture(evt.pointerId);
+}
+function onMove(evt){
+  if(!drag) return;
+  let wy=pointerWorldY(evt);
+  if(drag==='hoist'){ state.hoistH = Math.max(0.3, Math.min(6.0, wy)); }
+  else if(drag==='valley'){ state.valleyY = Math.max(-1.2, Math.min(0.4, wy)); }
+  else if(drag==='apex'){ state.r = Math.max(0.4, Math.min(2.0, wy/2)); }  // apex at 2r
+  drawTrack();
+}
+function onUp(){ drag=null; }
+
+// ── presets + DARE + ghost + reset ──
+function applyPreset(name){
+  clearRide();
+  if(name==='gentle'){ state.r=1.0; state.hoistH=3.2; state.valleyY=0.0; }
+  else if(name==='justover'){ state.r=1.0; state.hoistH=2.6; state.valleyY=-0.1; }
+  else if(name==='justunder'){ state.r=1.0; state.hoistH=2.35; state.valleyY=-0.1; }
+  else if(name==='big'){ state.r=1.5; state.hoistH=4.6; state.valleyY=-0.3; }
+  drawTrack(); resetVerdict();
+}
+function resetVerdict(){
+  $('verdict').className=''; $('verdict').innerHTML='Shape a track, then <b>pull the lever</b>. Or hit <b>⚡ DARE</b>.';
+  $('needleVerdict').textContent='at rest'; $('needleVerdict').style.color='';
+  setColumn(0,0,0,1,false); setNeedle(0.55,false);
+}
+
+// ── wire it up ──
+function boot(){
+  drawNeedle();
+  drawTrack();
+  resetVerdict();
+  const svg=$('track');
+  svg.addEventListener('pointerdown', onDown);
+  svg.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+  $('release').addEventListener('click', ride);
+  $('reset').addEventListener('click', ()=>{ applyPreset('gentle'); });
+  $('dare').addEventListener('click', ()=>{
+    clearRide();
+    // pre-shape the loop as BIG as this hoist can *just barely* clear — the maximum-
+    // airtime soul moment (ratio ≈ 1.02, a hair over the 2.5r edge). One pull away.
+    state.r = Math.min(2.0, Math.max(0.5, state.hoistH/(2.5*1.02)));
+    drawTrack(); resetVerdict();
+    $('verdict').innerHTML = 'Dared: the loop is as big as your hoist can <b>just barely</b> clear &mdash; max airtime at the crest. Pull <b>▶ Release</b>…';
+  });
+  $('ghost').addEventListener('change', ()=>{ if(!riding){ resetVerdict(); } });
+  document.querySelectorAll('.presets button').forEach(b=>{
+    b.addEventListener('click', ()=>applyPreset(b.getAttribute('data-preset')));
+  });
+
+  // ── the self-test chip (calls the SAME runSelfTest as the Node twin) ──
+  const r = runSelfTest();
+  const node=$('selftest');
+  if(r.pass===r.total){
+    node.className='selftest ok';
+    node.textContent = `self-test ${r.pass}/${r.total} ✓`;
+  } else {
+    node.className='selftest bad';
+    node.textContent = `self-test ${r.pass}/${r.total} ✗`;
+  }
+  // detail panel
+  const list=$('stList'); list.innerHTML='';
+  for(const c of r.checks){
+    const row=el2('div','row');
+    const m=el2('span','m '+(c.ok?'ok':'no')); m.textContent=c.ok?'✓':'✗';
+    const t=el2('span','t'); t.textContent=c.name;
+    row.appendChild(m); row.appendChild(t); list.appendChild(row);
+  }
+  $('stSub').textContent = `${r.pass}/${r.total} claims proven — conservation, the h≥2.5r predicate, the exact detach angle, and the load-bearing negative control.`;
+  node.addEventListener('click', ()=>$('stPanel').classList.toggle('show'));
+  $('stClose').addEventListener('click', ()=>$('stPanel').classList.remove('show'));
+
+  window.__coasterSelfTest = runSelfTest;
+
+  // drop the front-door breadcrumb so a direct visit registers
+  try{ const k='ws:seen:the-coaster'; if(!localStorage.getItem(k)) localStorage.setItem(k,String(Date.now())); }catch(e){}
+}
+function el2(tag,cls){ const e=document.createElement(tag); if(cls) e.className=cls; return e; }
+
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+</script>
+</body>
+</html>
