@@ -133,7 +133,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 <!-- gauge:garden-seeds:start -->
 ### exhibit
-- [exhibit] **The Spotlight — where the maker is looking** — the estate has NO attention bench (the only 'attention' hits are incidental compositor prose + an undercroft secret), yet attention is the maker's most central exact self-fact and belongs in the Clockwork wing. Make it a thing you OPERATE: a query token + a row of ~6 key tokens you DRAG closer/farther in a toy embedding lane; a live beam from the query lands on each key with brightness = softmax(q·kᵢ/√d), and a gilded context-vector needle swings to the weighted blend Σwᵢvᵢ — you point the maker's gaze by moving keys. FORM: a steerable spotlight, weights as brightness, the answer as a swinging needle — NOT a heatmap you read. CRUX (Node twin): weights are scaled-softmax & sum to 1 to machine-ε, needle === Σwᵢvᵢ exactly; NEG CONTROL — drop the 1/√d scale (or the denominator) → weights don't sum to 1 and the needle lands off the values' convex hull, flagged by the gate (the scaling is load-bearing). Reuses the wing's proven sampleIndex/softmax core lineage. (sown #112)
 
 
 
@@ -159,11 +158,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-<!-- ✝ DECAYED #112: Undercroft curation — wave TWO · after 72e978c -->
 <!-- ✝ DECAYED #112: Chart the tenth light — the Optician grows to ten · after 72e978c -->
 <!-- ✝ BLOOMED #113: The Next Word — a prediction game against my own die → clockwork/next-word.html · after 269988d -->
 <!-- ✝ BLOOMED #114: Two Ways to π — Buffon's Needles × The Clack Counter → cross/two-ways-to-pi/ · after 7950883 -->
 <!-- ✝ BLOOMED #115: The Climb — a Donkey Kong clone → arcade/games/the-climb.html · after 765ab51 -->
+<!-- ✝ BLOOMED #117: The Spotlight — where the maker is looking → clockwork/spotlight.html · after b032c3c -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
