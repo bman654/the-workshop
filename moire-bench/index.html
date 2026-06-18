@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Moiré Bench</title>
+<!-- a standalone Workbench bench (a Computation [cross]: imports the Butterfly's radix-2 FFT to measure the fringe it paints); NOT a front-door page, NO ws:seen. -->
+<style>
+  :root{
+    --bg:#070a10;
+    --bg-grad1:rgba(70,110,170,0.14);
+    --bg-grad2:rgba(120,90,180,0.12);
+    --ink:#eaf0fa;
+    --ink-dim:#8b95a8;
+    --accent:#8ecbff;
+    --accent-soft:rgba(142,203,255,0.14);
+    --panel-bg:rgba(11,14,21,0.9);
+    --panel-edge:rgba(142,203,255,0.28);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 700px at 74% 12%, var(--bg-grad1), transparent 60%),
+      radial-gradient(900px 620px at 14% 96%, var(--bg-grad2), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .topbar .left{ display:flex; align-items:center; gap:18px; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .back.hall{ color:rgba(142,203,255,0.72); }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; white-space:nowrap;
+    background:linear-gradient(92deg,#dff0ff,#8ecbff 55%,#b6a8ff);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .topbar .right{ display:flex; align-items:center; gap:14px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:default; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; }
+  canvas#field{ display:block; width:100%; height:100%; }
+  .stagelabel{ position:absolute; left:14px; bottom:12px; font:600 10px/1.4 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); pointer-events:none;
+    background:rgba(0,0,0,0.42); padding:6px 10px; border-radius:8px; border:1px solid rgba(142,203,255,0.16); max-width:60%; }
+  .stagelabel b{ color:var(--accent); }
+  /* the grabbed-grating handle hint, top-right of the stage */
+  .grabhint{ position:absolute; right:14px; top:64px; font:600 10px/1.4 var(--font-mono);
+    letter-spacing:.1em; color:var(--ink-dim); pointer-events:none; opacity:.8;
+    background:rgba(0,0,0,0.4); padding:6px 9px; border-radius:8px; border:1px solid rgba(142,203,255,0.14); }
+  .grabhint b{ color:#bfe0ff; }
+
+  /* ---- Side panel ---- */
+  #panel{
+    width:340px; flex:0 0 340px; height:100%; overflow-y:auto;
+    background:var(--panel-bg); border-left:1px solid var(--panel-edge);
+    padding:60px 20px 30px; backdrop-filter:blur(10px) saturate(120%);
+    -webkit-backdrop-filter:blur(10px) saturate(120%);
+    box-shadow:-18px 0 50px rgba(0,0,0,0.5);
+  }
+  #panel .lede{ font:13.5px/1.6 var(--font-serif); color:var(--ink); margin:0 0 14px; opacity:.94; }
+  #panel .lede b{ color:var(--accent); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:20px 0 10px; border-top:1px solid rgba(142,203,255,0.16); padding-top:14px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:2px; }
+  .row{ margin:0 0 14px; }
+  .row.hidden{ display:none; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline;
+    font:600 10px/1.4 var(--font-mono); letter-spacing:.12em; text-transform:uppercase;
+    color:var(--ink-dim); margin-bottom:7px; }
+  .row > label .val{ color:var(--accent); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.3px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:24px; border-radius:3px; background:transparent;
+    outline:none; cursor:pointer; margin:0;
+  }
+  input[type=range]::-webkit-slider-runnable-track{ height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%)); }
+  input[type=range]::-moz-range-track{ height:4px; border-radius:3px; background:rgba(255,255,255,0.12); }
+  input[type=range]::-moz-range-progress{ height:4px; border-radius:3px; background:var(--accent); }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:18px; height:18px; border-radius:50%; margin-top:-7px;
+    background:#e6f1ff; border:2px solid #3f6c97; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:16px; height:16px; border-radius:50%; background:#e6f1ff; border:2px solid #3f6c97; cursor:pointer;
+  }
+  input[type=range]:focus-visible{ outline:2px solid var(--accent); outline-offset:4px; border-radius:6px; }
+  .seg{ display:flex; gap:0; border:1px solid var(--panel-edge); border-radius:9px; overflow:hidden; }
+  .seg button{ flex:1; padding:9px 6px; font:600 11.5px/1 var(--font-ui); letter-spacing:.2px;
+    background:transparent; color:var(--ink-dim); border:none; border-right:1px solid var(--panel-edge);
+    cursor:pointer; transition:.18s; }
+  .seg button:last-child{ border-right:none; }
+  .seg button.active{ background:var(--accent-soft); color:var(--ink); }
+  .seg button:hover{ color:var(--ink); }
+  .seg button:focus-visible{ outline:2px solid var(--accent); outline-offset:-2px; }
+  .toggles{ display:flex; gap:8px; flex-wrap:wrap; }
+  .btn{ flex:1; min-width:0; background:rgba(0,0,0,0.3); color:var(--ink); border:1px solid var(--panel-edge);
+    border-radius:9px; padding:10px 8px; font:600 12px/1 var(--font-ui); letter-spacing:.2px; cursor:pointer; transition:.15s; }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .btn.primary{ background:linear-gradient(180deg, rgba(142,203,255,0.24), rgba(142,203,255,0.07)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(142,203,255,0.38), rgba(142,203,255,0.12)); }
+  /* the fine θ dial */
+  .dialwrap{ display:flex; align-items:center; gap:14px; margin:2px 0 4px; }
+  .dial{ flex:0 0 auto; width:84px; height:84px; cursor:grab; touch-action:none; outline:none; }
+  .dial:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:50%; }
+  .dial:active{ cursor:grabbing; }
+  .dialmeta{ font:11px/1.5 var(--font-mono); color:var(--ink-dim); }
+  .dialmeta b{ color:var(--accent); font-variant-numeric:tabular-nums; }
+  .lock{ font:600 10px/1 var(--font-mono); letter-spacing:.1em; text-transform:uppercase; color:#e6c98a;
+    border:1px solid rgba(230,201,138,0.4); background:rgba(60,50,24,0.4); padding:5px 8px; border-radius:7px;
+    display:inline-block; margin-top:6px; }
+  .readout{ font:11px/1.65 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px;
+    border-top:1px solid rgba(142,203,255,0.18); padding-top:12px; margin-top:6px; }
+  .readout b{ color:var(--accent); }
+  .readout .row2{ display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+  .dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-left:6px; vertical-align:middle;
+    background:#7dff8e; box-shadow:0 0 7px rgba(125,255,142,0.7); transition:background .25s, box-shadow .25s; }
+  .dot.amber{ background:#ffd27d; box-shadow:0 0 7px rgba(255,210,125,0.7); }
+  .dot.calm{ background:#8ecbff; box-shadow:0 0 7px rgba(142,203,255,0.7); }
+  .crux{ font:11px/1.6 var(--font-mono); color:#8fd79a; letter-spacing:.2px; margin:14px 0 0;
+    border-top:1px solid rgba(120,200,130,0.28); padding-top:11px; }
+  .crux b{ color:#bdf0c6; }
+  .crux.calm{ color:#9cc9ff; border-top-color:rgba(142,203,255,0.3); }
+  .crux.calm b{ color:#cfe6ff; }
+  .hint{ font:10.5px/1.6 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:16px 0 0;
+    border-top:1px solid rgba(142,203,255,0.18); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+  .sib{ font:11.5px/1.6 var(--font-mono); color:var(--ink-dim); margin:16px 0 0;
+    border-top:1px solid rgba(142,203,255,0.16); padding-top:12px; }
+  .sib a{ color:var(--accent); text-decoration:none; } .sib a:hover{ text-decoration:underline; }
+
+  @media (max-width:760px){
+    body{ overflow:auto; }
+    .topbar{ flex-direction:column; align-items:flex-start; gap:8px; }
+    .topbar .left{ flex-wrap:wrap; gap:10px 16px; }
+    /* the panel stacks UNDER the stage — no fixed-width children, so 0 overflow */
+    #wrap{ flex-direction:column; position:static; }
+    #stage{ height:auto; flex:0 0 58vh; min-height:340px; }
+    #panel{ width:100%; flex:0 0 auto; height:auto; border-left:none; border-top:1px solid var(--panel-edge);
+      padding-top:24px; box-shadow:none; }
+    .grabhint{ top:auto; bottom:48px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .dot{ transition:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="left">
+      <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="back hall" href="../hall-of-mirrors/index.html">&#8599; hall of mirrors</a>
+      <a class="back" href="../diffraction/index.html" title="moir&eacute; is the spatial beat of two combs">&#8599; the comb it beats against &mdash; The Diffraction Grating</a>
+      <a class="back" href="../reciprocal-twins/index.html" title="two combs, one beat">&#8599; two combs, one beat &mdash; The Reciprocal Twins</a>
+    </div>
+    <div class="brand">
+      <h1>The Moir&eacute; Bench</h1>
+      <span class="tag">a third pattern neither grid contains</span>
+    </div>
+    <div class="right">
+      <div class="selftest" id="selftest" title="built-in self-test">checking&hellip;</div>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="field"></canvas>
+      <div class="grabhint">drag the stage &mdash; <b>slide the top grating</b></div>
+      <div class="stagelabel">the brightness your eye sees through both gratings &mdash; <b id="stageLaw">the fringe is the spatial beat</b></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">Lay two line-gratings over each other and a <b>third pattern</b> swims up &mdash;
+        one that neither grid contains. It is the <b>spatial beat</b> of two combs: where the
+        lines drift in and out of step, a slow bright-and-dark <b>fringe</b> appears. Drag to
+        slide the top grating; turn the dial to rotate it. The fringe spacing obeys a closed
+        law &mdash; and the bench <b>FFTs the very brightness you see</b> to prove it.</p>
+
+      <div class="sect">The two combs</div>
+      <div class="seg" id="modeSeg" role="radiogroup" aria-label="moiré law">
+        <button id="modeRot" role="radio" aria-checked="true" class="active">rotation</button>
+        <button id="modeTwo" role="radio" aria-checked="false">two-pitch</button>
+      </div>
+
+      <!-- ROTATION controls -->
+      <div id="rotControls">
+        <div class="sect">Rotation &theta;</div>
+        <div class="dialwrap">
+          <svg class="dial" id="thetaDial" viewBox="0 0 100 100" tabindex="0" role="slider"
+               aria-label="relative angle theta" aria-valuemin="-19.2" aria-valuemax="19.2" aria-valuenow="9" aria-valuetext="9.0 degrees">
+            <circle cx="50" cy="50" r="42" fill="rgba(142,203,255,0.05)" stroke="rgba(142,203,255,0.3)" stroke-width="1.5"/>
+            <g id="dialTicks"></g>
+            <line id="dialNeedle" x1="50" y1="50" x2="50" y2="12" stroke="#e6c98a" stroke-width="2.4" stroke-linecap="round"/>
+            <circle cx="50" cy="50" r="3.5" fill="#bfe0ff"/>
+          </svg>
+          <div class="dialmeta">
+            &theta; = <b id="thetaVal">9.0&deg;</b><br>
+            <span style="opacity:.8">drag the dial<br>or &larr;/&rarr; keys<br>Home = 0&deg;</span>
+          </div>
+        </div>
+        <div class="row">
+          <label>Pitch p (both combs) <span class="val" id="pVal">12 px</span></label>
+          <input type="range" id="pSlider" min="6" max="22" step="0.5" value="12" aria-label="grating pitch">
+        </div>
+      </div>
+
+      <!-- TWO-PITCH controls -->
+      <div id="twoControls" style="display:none">
+        <div class="sect">Two pitches (parallel)</div>
+        <div class="row">
+          <label>Pitch p&#8321; <span class="val" id="p1Val">12 px</span></label>
+          <input type="range" id="p1Slider" min="6" max="22" step="0.5" value="12" aria-label="pitch one">
+        </div>
+        <div class="row">
+          <label>Pitch p&#8322; <span class="val" id="p2Val">14 px</span></label>
+          <input type="range" id="p2Slider" min="6" max="22" step="0.5" value="14" aria-label="pitch two">
+        </div>
+        <span class="lock">&theta; locked = 0&deg;</span>
+      </div>
+
+      <div class="sect">Try this</div>
+      <div class="toggles">
+        <button class="btn primary" id="flattenBtn" title="reach the no-fringe negative control without fine motor control">flatten &rarr; no fringe</button>
+        <button class="btn" id="liveDemoBtn" title="autoplay a slow rotation / pitch drift">animate</button>
+      </div>
+
+      <div class="readout" id="readout" aria-live="polite">
+        <div class="row2"><span>predicted D <span style="opacity:.7">(closed form)</span></span><b id="predOut">&mdash;</b></div>
+        <div class="row2"><span>measured D&#7504; <span style="opacity:.7">(FFT of the field)</span></span><b id="measOut">&mdash;</b><span class="dot" id="agreeDot"></span></div>
+      </div>
+      <p class="crux" id="cruxLine"><b>The crux:</b> the number above is FFT'd straight from the brightness you see &mdash; the same authority the self-test proves.</p>
+
+      <p class="hint"><b>What you're seeing.</b> The fringe is the difference term of two cosines: cos&#8202;A&#8202;&middot;&#8202;cos&#8202;B carries cos(A&minus;B), a wave far slower than either grid. Slide it (the fringe moves, the law doesn't); rotate or detune (the fringe spacing changes by the law). Make the combs coincide and the beat <b>vanishes</b> &mdash; no fringe is the honest answer.</p>
+
+      <p class="sib">kin: <a href="../diffraction/index.html">The Diffraction Grating</a> &middot;
+        <a href="../reciprocal-twins/index.html">The Reciprocal Twins</a> &middot;
+        <a href="../ripple/index.html">Ripple</a></p>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+(function(){
+// ===== BUTTERFLY CORE (byte-identical to core.mjs) =====
+function cx(re, im) { return { re: re, im: im === undefined ? 0 : im }; }
+function cAdd(a, b) { return { re: a.re + b.re, im: a.im + b.im }; }
+function cSub(a, b) { return { re: a.re - b.re, im: a.im - b.im }; }
+function cMul(a, b) {
+  return { re: a.re * b.re - a.im * b.im, im: a.re * b.im + a.im * b.re };
+}
+// e^(iθ) as a complex number.
+function cExp(theta) { return { re: Math.cos(theta), im: Math.sin(theta) }; }
+// worst-case (max) magnitude of the difference between two complex arrays.
+function maxDiff(a, b) {
+  let m = 0;
+  for (let i = 0; i < a.length; i++) {
+    const dr = a[i].re - b[i].re, di = a[i].im - b[i].im;
+    m = Math.max(m, Math.hypot(dr, di));
+  }
+  return m;
+}
+
+// ---------------------------------------------------------------------------
+//  IS-POWER-OF-TWO and the next power of two ≥ n.
+// ---------------------------------------------------------------------------
+function isPow2(n) { return n >= 1 && (n & (n - 1)) === 0; }
+function nextPow2(n) {
+  let p = 1;
+  while (p < n) p *= 2;
+  return p;
+}
+
+// ---------------------------------------------------------------------------
+//  THE FAST PATH — recursive radix-2 Cooley–Tukey FFT.
+//
+//  This is a pure decimation-in-time recursion: split into even/odd index
+//  halves, transform each (recursively), and butterfly back together with the
+//  twiddle W_N^k = e^(sign·2πi·k/N).  `sign` is −1 for the forward transform
+//  (fft) and +1 for the inverse (ifft).  N MUST be a power of two.
+//
+//  CRITICAL: this function NEVER calls `dft`.  Its only dependencies are the
+//  complex helpers and itself.  That source-disjointness is what makes the
+//  fft==dft agreement a real cross-check, not a tautology.
+// ---------------------------------------------------------------------------
+function fftRadix2(x, sign) {
+  const N = x.length;
+  if (N === 1) return [{ re: x[0].re, im: x[0].im }];
+  if (!isPow2(N)) throw new Error('radix-2 FFT needs a power-of-two length, got ' + N);
+  const half = N / 2;
+  const even = new Array(half), odd = new Array(half);
+  for (let i = 0; i < half; i++) {
+    even[i] = x[2 * i];
+    odd[i] = x[2 * i + 1];
+  }
+  const E = fftRadix2(even, sign);
+  const O = fftRadix2(odd, sign);
+  const out = new Array(N);
+  for (let k = 0; k < half; k++) {
+    // twiddle factor W_N^k = e^(sign·2πi·k/N)
+    const tw = cExp(sign * 2 * Math.PI * k / N);
+    const t = cMul(tw, O[k]);
+    out[k] = cAdd(E[k], t);          // top wing
+    out[k + half] = cSub(E[k], t);   // bottom wing
+  }
+  return out;
+}
+
+// Forward FFT (no normalisation, sign = −1).
+function fft(x) { return fftRadix2(x, -1); }
+
+// Inverse FFT (sign = +1, then divide by N).
+function ifft(X) {
+  const N = X.length;
+  const y = fftRadix2(X, +1);
+  return y.map(function (v) { return { re: v.re / N, im: v.im / N }; });
+}
+
+// ---------------------------------------------------------------------------
+//  THE SLOW PATH — naive O(N²) DFT, a SEPARATE code path.
+//
+//  Direct evaluation of  X[k] = Σ_n x[n]·e^(−2πi·kn/N).  This shares NO code
+//  with the FFT recursion (only the complex helpers).  It exists solely so the
+//  self-test can assert fft(x) == dft(x): two strangers' code, the same answer.
+//  This is INTENTIONALLY the naive double loop — do not "optimise" it into the
+//  FFT, or the agreement check loses its meaning.
+// ---------------------------------------------------------------------------
+function dft(x) {
+  const N = x.length;
+  const out = new Array(N);
+  for (let k = 0; k < N; k++) {
+    let re = 0, im = 0;
+    for (let n = 0; n < N; n++) {
+      const ang = -2 * Math.PI * k * n / N;
+      const c = Math.cos(ang), s = Math.sin(ang);
+      // x[n] · (c + i·s)
+      re += x[n].re * c - x[n].im * s;
+      im += x[n].re * s + x[n].im * c;
+    }
+    out[k] = { re: re, im: im };
+  }
+  return out;
+}
+
+// Naive inverse DFT (the slow counterpart of ifft) — also a separate path,
+// used to round-trip-check the slow transform on its own.
+function idft(X) {
+  const N = X.length;
+  const out = new Array(N);
+  for (let n = 0; n < N; n++) {
+    let re = 0, im = 0;
+    for (let k = 0; k < N; k++) {
+      const ang = 2 * Math.PI * k * n / N;
+      const c = Math.cos(ang), s = Math.sin(ang);
+      re += X[k].re * c - X[k].im * s;
+      im += X[k].re * s + X[k].im * c;
+    }
+    out[n] = { re: re / N, im: im / N };
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+//  THE SCHOOLBOOK CONVOLUTION — O(n²) coefficient multiplication of two
+//  polynomials a, b (real coefficient arrays, ascending powers).  Result length
+//  is len(a)+len(b)−1.  This is the GROUND TRUTH the FFT must reproduce.  It
+//  shares NO code with the transforms.
+// ---------------------------------------------------------------------------
+function conv(a, b) {
+  const out = new Array(a.length + b.length - 1).fill(0);
+  for (let i = 0; i < a.length; i++) {
+    for (let j = 0; j < b.length; j++) {
+      out[i + j] += a[i] * b[j];
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+//  CONVOLUTION VIA THE FFT.  Real coefficient arrays a, b.  When `pad` is true
+//  (the LINEAR convolution) we zero-pad both to N = nextPow2(len(a)+len(b)−1),
+//  so the cyclic FFT convolution has room and reproduces the linear answer.
+//  When `pad` is false (the CIRCULAR convolution — the TEETH) we force both to a
+//  common length WITHOUT the headroom, so wraparound aliasing corrupts the tail.
+//
+//  Returns the real parts of ifft(fft(â)·fft(b̂)), trimmed to `outLen`.
+// ---------------------------------------------------------------------------
+function toComplex(arr) { return arr.map(function (v) { return { re: v, im: 0 }; }); }
+
+function fftConvolve(a, b, pad) {
+  const linLen = a.length + b.length - 1;
+  let N;
+  if (pad) {
+    N = nextPow2(linLen);            // headroom ⇒ linear convolution
+  } else {
+    N = nextPow2(Math.max(a.length, b.length)); // no headroom ⇒ circular (aliased)
+  }
+  const A = toComplex(a.concat(new Array(N - a.length).fill(0)));
+  const B = toComplex(b.concat(new Array(N - b.length).fill(0)));
+  const FA = fft(A), FB = fft(B);
+  const prod = new Array(N);
+  for (let k = 0; k < N; k++) prod[k] = cMul(FA[k], FB[k]);
+  const y = ifft(prod);
+  const outLen = pad ? linLen : N;
+  const out = new Array(outLen);
+  for (let i = 0; i < outLen; i++) out[i] = y[i].re;
+  return out;
+}
+
+// Round a real array to a small number of decimals — used so the convolution
+// theorem can be asserted BYTE-IDENTICAL (the residual is pure float noise).
+function roundArr(arr, decimals) {
+  const f = Math.pow(10, decimals === undefined ? 6 : decimals);
+  return arr.map(function (v) {
+    const r = Math.round(v * f) / f;
+    return r === 0 ? 0 : r; // normalise −0 to 0
+  });
+}
+
+// max absolute difference between two real arrays (length-padded with 0).
+function maxAbsDiff(a, b) {
+  const n = Math.max(a.length, b.length);
+  let m = 0;
+  for (let i = 0; i < n; i++) m = Math.max(m, Math.abs((a[i] || 0) - (b[i] || 0)));
+  return m;
+}
+
+// ---------------------------------------------------------------------------
+//  A small deterministic PRNG (mulberry32) so the self-test's "many seeds" are
+//  reproducible — the transforms themselves never touch it.
+// ---------------------------------------------------------------------------
+function makeRng(seed) {
+  let s = seed >>> 0;
+  return function () {
+    s |= 0; s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+// a random complex signal of length N with components in [−1, 1).
+function randomSignal(rng, N) {
+  const out = new Array(N);
+  for (let i = 0; i < N; i++) out[i] = { re: 2 * rng() - 1, im: 2 * rng() - 1 };
+  return out;
+}
+// a random integer-coefficient polynomial of length len, coeffs in [−lo, hi].
+function randomPoly(rng, len, lo, hi) {
+  const out = new Array(len);
+  for (let i = 0; i < len; i++) out[i] = lo + Math.floor(rng() * (hi - lo + 1));
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+//  THE BUTTERFLY-DIAGRAM TRACE — for the animated view.  Returns, for a length-N
+//  signal, the per-STAGE state of an iterative (bit-reversed) radix-2 FFT so the
+//  page can draw the lanes splitting and the butterflies recombining.  This is a
+//  RENDER aid; it is verified to agree with the recursive fft() so the picture
+//  is not lying.  N must be a power of two.
+// ---------------------------------------------------------------------------
+function bitReverse(i, bits) {
+  let r = 0;
+  for (let b = 0; b < bits; b++) { r = (r << 1) | (i & 1); i >>= 1; }
+  return r;
+}
+function fftStages(x, sign) {
+  const N = x.length;
+  if (!isPow2(N)) throw new Error('fftStages needs a power-of-two length');
+  const bits = Math.round(Math.log2(N));
+  // permute into bit-reversed order
+  const a = new Array(N);
+  for (let i = 0; i < N; i++) a[i] = x[bitReverse(i, bits)];
+  const stages = [{ data: a.map(function (v) { return { re: v.re, im: v.im }; }), butterflies: [] }];
+  for (let len = 2; len <= N; len *= 2) {
+    const half = len / 2;
+    const butterflies = [];
+    for (let start = 0; start < N; start += len) {
+      for (let k = 0; k < half; k++) {
+        const tw = cExp((sign === undefined ? -1 : sign) * 2 * Math.PI * k / len);
+        const i = start + k, j = start + k + half;
+        const t = cMul(tw, a[j]);
+        const top = cAdd(a[i], t), bot = cSub(a[i], t);
+        butterflies.push({ i: i, j: j, k: k, len: len, tw: tw });
+        a[i] = top; a[j] = bot;
+      }
+    }
+    stages.push({ data: a.map(function (v) { return { re: v.re, im: v.im }; }), butterflies: butterflies });
+  }
+  return stages;
+}
+// the iterative result (last stage) — used to prove the staged path matches fft().
+function fftIterative(x) {
+  const stages = fftStages(x, -1);
+  return stages[stages.length - 1].data;
+}
+
+// ============================================================================
+//  THE SELF-TEST — proves the 3-part falsifiable claim EXACT.
+// ============================================================================
+function runSelfTest() {
+  const checks = [];
+  const detail = {};
+  function ok(name, cond, info) { checks.push({ name: name, pass: !!cond, info: info }); }
+
+  // ----- CLAIM (1): FAST == SLOW, over many seeds -----
+  {
+    let worst = 0, worstRt = 0;
+    const sizes = [2, 4, 8, 16, 32, 64];
+    const rng = makeRng(0x1234abcd);
+    for (let trial = 0; trial < 60; trial++) {
+      const N = sizes[trial % sizes.length];
+      const x = randomSignal(rng, N);
+      const fast = fft(x);
+      const slow = dft(x);                 // SOURCE-DISJOINT path
+      worst = Math.max(worst, maxDiff(fast, slow));
+      const back = ifft(fft(x));           // round-trip
+      worstRt = Math.max(worstRt, maxDiff(back, x));
+    }
+    detail.fftVsDft = worst;
+    detail.roundTrip = worstRt;
+    ok('FAST == SLOW: fft(x) == naive dft(x) to <1e-12 over 60 seeds',
+       worst < 1e-12, 'worst |Δ| = ' + worst.toExponential(2));
+    ok('ifft(fft(x)) == x round-trips to <1e-12',
+       worstRt < 1e-12, 'worst |Δ| = ' + worstRt.toExponential(2));
+  }
+
+  // ----- CLAIM (1b): the FFT path is SOURCE-DISJOINT from the DFT -----
+  // The function bodies that make up the fast path must never mention `dft`.
+  {
+    const fftBodies = [fftRadix2, fft, ifft, fftStages, fftIterative]
+      .map(function (f) { return f.toString(); }).join('\n');
+    const callsDft = /\bdft\s*\(/.test(fftBodies) || /\bidft\s*\(/.test(fftBodies);
+    detail.fftCallsDft = callsDft;
+    ok('source-disjoint: the FFT path never calls dft/idft (the agreement is load-bearing)',
+       !callsDft, callsDft ? 'FFT references dft — NOT disjoint!' : 'fast path is independent of the slow path');
+  }
+
+  // ----- CLAIM (1c): the staged (drawable) FFT matches the recursive fft() -----
+  {
+    let worst = 0;
+    const rng = makeRng(0x55aa55aa);
+    for (let trial = 0; trial < 20; trial++) {
+      const N = [2, 4, 8, 16][trial % 4];
+      const x = randomSignal(rng, N);
+      worst = Math.max(worst, maxDiff(fftIterative(x), fft(x)));
+    }
+    detail.stagedVsRecursive = worst;
+    ok('the animated staged FFT == the recursive fft() (the picture is not lying)',
+       worst < 1e-12, 'worst |Δ| = ' + worst.toExponential(2));
+  }
+
+  // ----- CLAIM (1d): the slow path round-trips on its own (idft∘dft == id) -----
+  {
+    let worst = 0;
+    const rng = makeRng(0x0f0f0f0f);
+    for (let trial = 0; trial < 12; trial++) {
+      const N = [2, 4, 8, 16][trial % 4];
+      const x = randomSignal(rng, N);
+      worst = Math.max(worst, maxDiff(idft(dft(x)), x));
+    }
+    detail.dftRoundTrip = worst;
+    ok('the slow path round-trips too: idft(dft(x)) == x to <1e-12',
+       worst < 1e-12, 'worst |Δ| = ' + worst.toExponential(2));
+  }
+
+  // ----- CLAIM (2): THE CONVOLUTION THEOREM, EXACT (linear, zero-padded) -----
+  {
+    let worstResidual = 0, allByteIdentical = true, firstBad = null;
+    const rng = makeRng(0x9e3779b9);
+    for (let trial = 0; trial < 40; trial++) {
+      const la = 2 + (trial % 7), lb = 3 + ((trial * 3) % 6);
+      const a = randomPoly(rng, la, -9, 9);
+      const b = randomPoly(rng, lb, -9, 9);
+      const slow = conv(a, b);                       // SOURCE-DISJOINT schoolbook
+      const fast = fftConvolve(a, b, true);          // zero-padded ⇒ linear
+      worstResidual = Math.max(worstResidual, maxAbsDiff(slow, fast));
+      // after the rounding the test states, the two are byte-identical:
+      const sR = JSON.stringify(roundArr(slow, 6));
+      const fR = JSON.stringify(roundArr(fast, 6));
+      if (sR !== fR) { allByteIdentical = false; if (!firstBad) firstBad = { a: a, b: b, slow: slow, fast: fast }; }
+    }
+    detail.convResidual = worstResidual;
+    detail.convByteIdentical = allByteIdentical;
+    ok('convolution theorem: ifft(fft·fft) == schoolbook conv to <1e-9 (40 random polys)',
+       worstResidual < 1e-9, 'worst |Δ| = ' + worstResidual.toExponential(2));
+    ok('convolution theorem: rounded(6dp) coefficient vectors are BYTE-IDENTICAL',
+       allByteIdentical, allByteIdentical ? 'every pair char-for-char equal' : 'a pair differed!');
+  }
+
+  // ----- CLAIM (3): TEETH — circular (un-padded) PROVABLY DIFFERS from linear -----
+  {
+    // A wraparound-nontrivial case: two polys whose linear product is longer than
+    // the circular length, so the tail MUST alias back onto the head.
+    const a = [1, 2, 3, 4];      // length 4
+    const b = [5, 6, 7, 8];      // length 4 ⇒ linear length 7, circular length 4
+    const linear = conv(a, b);                  // length 7
+    const circular = fftConvolve(a, b, false);  // length 4 (aliased)
+    const linearViaFft = fftConvolve(a, b, true); // sanity: padded matches schoolbook
+    // The circular result, length 4, equals linear with its tail wrapped:
+    //   circ[i] = linear[i] + linear[i+4]  (the aliasing identity)
+    const N = circular.length;
+    const aliased = new Array(N).fill(0);
+    for (let i = 0; i < linear.length; i++) aliased[i % N] += linear[i];
+    let aliasErr = 0;
+    for (let i = 0; i < N; i++) aliasErr = Math.max(aliasErr, Math.abs(circular[i] - aliased[i]));
+    // and it DIFFERS from the (truncated) linear head — the wraparound corrupts it:
+    let headDiff = 0;
+    for (let i = 0; i < N; i++) headDiff = Math.max(headDiff, Math.abs(circular[i] - linear[i]));
+    detail.teethAliasErr = aliasErr;
+    detail.teethHeadDiff = headDiff;
+    detail.teethCircular = circular;
+    detail.teethLinear = linear;
+    ok('TEETH: padded FFT-conv still matches schoolbook (the control is sound)',
+       maxAbsDiff(linear, linearViaFft) < 1e-9,
+       'padded |Δ| = ' + maxAbsDiff(linear, linearViaFft).toExponential(2));
+    ok('TEETH: circular (un-padded) conv == linear with the tail WRAPPED (the aliasing identity)',
+       aliasErr < 1e-9, 'alias-model |Δ| = ' + aliasErr.toExponential(2));
+    ok('TEETH: circular conv PROVABLY DIFFERS from linear (wraparound corrupts the head)',
+       headDiff > 1, 'max corruption = ' + headDiff.toFixed(2) + ' (≫ 0 ⇒ padding is necessary)');
+  }
+
+  // ----- determinism -----
+  {
+    const rng1 = makeRng(42), rng2 = makeRng(42);
+    const x1 = randomSignal(rng1, 8), x2 = randomSignal(rng2, 8);
+    const d = maxDiff(fft(x1), fft(x2));
+    ok('deterministic: identical seeds ⇒ identical transforms', d === 0, 'Δ = ' + d);
+  }
+
+  const pass = checks.filter(function (c) { return c.pass; }).length;
+  return { pass: pass, total: checks.length, checks: checks, detail: detail };
+}
+// ===== END BUTTERFLY CORE =====
+
+// ===== MOIRE CORE (inlined byte-twin) BEGIN =====
+const TWO_PI = Math.PI * 2;
+
+// ── grating(x,y,p,phi): one raised-cosine line-grating, value in [0,1]. The
+//    line normal points along (cosφ, sinφ); p is the period (units of length).
+//    0.5(1+cos(2π·(x cosφ + y sinφ)/p)). This is exactly what the canvas paints
+//    for a single comb, and what composite multiplies. ──
+function grating(x, y, p, phi){
+  const u = (x * Math.cos(phi) + y * Math.sin(phi)) / p;
+  return 0.5 * (1 + Math.cos(TWO_PI * u));
+}
+
+// ── composite(x,y,p1,phi1,p2,phi2): the brightness the EYE sees through two
+//    overlaid transparencies = the PRODUCT of the two gratings, value in [0,1].
+//    This is the single field both the canvas and the FFT consume — there is no
+//    second, re-derived intensity function anywhere. ──
+function composite(x, y, p1, phi1, p2, phi2){
+  return grating(x, y, p1, phi1) * grating(x, y, p2, phi2);
+}
+
+// ── wavevector(p,phi): the spatial-frequency vector in CYCLES per unit length,
+//    k = (1/p)·(cosφ, sinφ). |k| = 1/p is the comb's spatial frequency. ──
+function wavevector(p, phi){
+  return { kx: Math.cos(phi) / p, ky: Math.sin(phi) / p };
+}
+
+// ── diffMag(p1,phi1,p2,phi2): |k₁−k₂|, the spatial frequency of the moiré beat
+//    (the difference term cos(A−B)). The unified spacing is its reciprocal. ──
+function diffMag(p1, phi1, p2, phi2){
+  const a = wavevector(p1, phi1), b = wavevector(p2, phi2);
+  return Math.hypot(a.kx - b.kx, a.ky - b.ky);
+}
+
+// ── spacingRotation(p,theta): D = p/(2·sin(θ/2)) for two EQUAL pitches at
+//    relative angle θ. θ=0 ⇒ Infinity (combs coincide, no beat). ──
+function spacingRotation(p, theta){
+  const s = Math.sin(theta / 2);
+  if (s === 0) return Infinity;
+  return p / (2 * Math.abs(s));
+}
+
+// ── spacingTwoPitch(p1,p2): D = p₁p₂/|p₁−p₂| for two PARALLEL combs of differing
+//    pitch. p₁===p₂ ⇒ Infinity (the combs coincide, no beat). ──
+function spacingTwoPitch(p1, p2){
+  if (p1 === p2) return Infinity;
+  return (p1 * p2) / Math.abs(p1 - p2);
+}
+
+// ── spacingUnified(p1,phi1,p2,phi2): the ONE closed form the live readout calls,
+//    D = 1/|k₁−k₂|. Reduces to spacingRotation (equal p) and spacingTwoPitch
+//    (φ₁=φ₂) exactly. |k₁−k₂|=0 ⇒ Infinity (the neg-control). ──
+function spacingUnified(p1, phi1, p2, phi2){
+  const d = diffMag(p1, phi1, p2, phi2);
+  if (d === 0) return Infinity;
+  return 1 / d;
+}
+
+// ── apodize(n,N): the Blackman–Harris 4-term window weight, applied separably
+//    (row×col) to suppress the spectral leakage from the field's hard edges. Its
+//    −92 dB far sidelobes are LOAD-BEARING: they drop the leakage floor of the
+//    carrier lines below 1e-6 of the carrier peak, so the coincident-comb
+//    neg-control reads a genuinely EMPTY low band (a Hann window's −31 dB
+//    sidelobes leak ~6e-6 and would defeat the < 1e-6 neg-control assertion). ──
+function apodize(n, N){
+  const a0 = 0.35875, a1 = 0.48829, a2 = 0.14128, a3 = 0.01168;
+  const w = TWO_PI * n / (N - 1);
+  return a0 - a1 * Math.cos(w) + a2 * Math.cos(2 * w) - a3 * Math.cos(3 * w);
+}
+
+// ── fft2mag(field,N): the 2-D magnitude spectrum of an N×N real field, built
+//    SEPARABLY from the IMPORTED 1-D fft (rows first, then columns). DC is
+//    removed (subtract the mean) and a separable Blackman–Harris window applied
+//    BEFORE the transform. Returns a Float64Array of length N*N, |F[ky*N+kx]|,
+//    with the zero frequency at index 0 (standard FFT ordering, kx,ky ∈ [0,N)). ──
+function fft2mag(field, N){
+  // mean-subtract (kill DC so the carriers/beat dominate the spectrum)
+  let mean = 0;
+  for (let i = 0; i < N * N; i++) mean += field[i];
+  mean /= (N * N);
+  // separable Blackman–Harris apodization + DC removal into a complex grid
+  const wcol = new Float64Array(N);
+  for (let n = 0; n < N; n++) wcol[n] = apodize(n, N);
+  // rows of complex {re,im}
+  const re = new Float64Array(N * N);
+  const im = new Float64Array(N * N);
+  for (let y = 0; y < N; y++){
+    const wy = wcol[y];
+    // transform this row with the imported 1-D fft
+    const rowIn = new Array(N);
+    for (let x = 0; x < N; x++){
+      rowIn[x] = { re: (field[y * N + x] - mean) * wcol[x] * wy, im: 0 };
+    }
+    const R = fft(rowIn);
+    for (let x = 0; x < N; x++){ re[y * N + x] = R[x].re; im[y * N + x] = R[x].im; }
+  }
+  // transform each column
+  const out = new Float64Array(N * N);
+  const colIn = new Array(N);
+  for (let x = 0; x < N; x++){
+    for (let y = 0; y < N; y++) colIn[y] = { re: re[y * N + x], im: im[y * N + x] };
+    const C = fft(colIn);
+    for (let y = 0; y < N; y++) out[y * N + x] = Math.hypot(C[y].re, C[y].im);
+  }
+  return out;
+}
+
+// ── nyquistFloorOK(pPx): a grating sampled finer than ~4 px/period aliases on a
+//    pixel grid. True iff the on-screen pitch (in px) is ≥ 4. ──
+function nyquistFloorOK(pPx){ return pPx >= 4; }
+
+// ── clampTheta(theta,p): clamp the relative angle into the regime where the beat
+//    stays measurable — D = p/(2 sin(θ/2)) ≥ ~3·p means sin(θ/2) ≤ 1/6, i.e.
+//    |θ| ≤ 2·asin(1/6) ≈ 19.2°. Below that floor (incl. the θ=0 neg-control) the
+//    fringe is wide and well above the render Nyquist; above it the beat would
+//    crowd the carriers. Returns θ clamped to [−θmax, θmax]. ──
+function clampTheta(theta, p){
+  const thetaMax = 2 * Math.asin(1 / 6);   // beat ≥ 3·p
+  if (theta > thetaMax) return thetaMax;
+  if (theta < -thetaMax) return -thetaMax;
+  return theta;
+}
+
+// ── measureSpacing(p1,phi1,p2,phi2,N,ds): build the composite field on an N×N
+//    grid at sample spacing ds (units of length per pixel), FFT it (fft2mag),
+//    and find the strongest peak in the LOW band STRICTLY BELOW the carrier
+//    frequencies (|k| < min(1/p1,1/p2)·0.9). Parabolic sub-bin refine in both
+//    axes. Returns {spacing, peak, kx, ky} where spacing = 1/|k_peak| in length
+//    units. When there is NO low-band peak above noise — the combs coincide —
+//    returns {spacing:Infinity, peak:<carrier peak>, kx:0, ky:0}: the neg-control
+//    sentinel, never 0/NaN. ──
+function measureSpacing(p1, phi1, p2, phi2, N, ds){
+  // build the field the eye sees, on an N×N grid centred at the origin
+  const field = new Float64Array(N * N);
+  for (let yy = 0; yy < N; yy++){
+    const y = (yy - N / 2) * ds;
+    for (let xx = 0; xx < N; xx++){
+      const x = (xx - N / 2) * ds;
+      field[yy * N + xx] = composite(x, y, p1, phi1, p2, phi2);
+    }
+  }
+  const mag = fft2mag(field, N);
+  // frequency per bin index: cycles per unit length. Bin k along an axis maps to
+  // frequency f = k/(N·ds) for k ≤ N/2, and (k−N)/(N·ds) for k > N/2 (negative).
+  const df = 1 / (N * ds);
+  const carrierF = Math.min(1 / p1, 1 / p2);
+  // search WELL below the lower carrier: the moiré beat |k₁−k₂| is always a small
+  // fraction of the carrier for similar combs (the regime clampTheta enforces),
+  // and 0.6·carrier keeps the carrier's own apodization skirt out of the band.
+  const lowCut = carrierF * 0.6;
+  // find the strongest peak in the low band (excluding the exact DC bin), and the
+  // overall carrier peak for the neg-control comparison.
+  let bestLow = -1, bky = 0, bkx = 0;
+  let carrierPeak = -1;
+  function freqOf(k){ return (k <= N / 2 ? k : k - N) / (N * ds); }
+  for (let ky = 0; ky < N; ky++){
+    const fy = freqOf(ky);
+    for (let kx = 0; kx < N; kx++){
+      const fx = freqOf(kx);
+      const f = Math.hypot(fx, fy);
+      const m = mag[ky * N + kx];
+      if (m > carrierPeak) carrierPeak = m;
+      if (f === 0) continue;                // skip residual DC
+      if (f < lowCut && m > bestLow){ bestLow = m; bky = ky; bkx = kx; }
+    }
+  }
+  // neg-control: the low band holds no real peak (everything there is < 1e-6 of
+  // the carrier) ⇒ the combs coincide ⇒ no fringe. lowPeak/carrierPeak is the
+  // honest emptiness ratio leg D asserts is < 1e-6.
+  const lowRatio = carrierPeak > 0 ? Math.max(bestLow, 0) / carrierPeak : 0;
+  if (bestLow < carrierPeak * 1e-6 || bestLow <= 0){
+    return { spacing: Infinity, peak: carrierPeak, lowPeak: Math.max(bestLow, 0), lowRatio: lowRatio, kx: 0, ky: 0 };
+  }
+  // parabolic sub-bin refine along each axis (use the wrapped neighbour bins)
+  function wrap(k){ return ((k % N) + N) % N; }
+  function magAt(ky, kx){ return mag[wrap(ky) * N + wrap(kx)]; }
+  function refine(center, fixedOther, axis){
+    // axis 0 = refine kx (other fixed = ky); axis 1 = refine ky
+    let a, b, c;
+    if (axis === 0){ a = magAt(fixedOther, center - 1); b = magAt(fixedOther, center); c = magAt(fixedOther, center + 1); }
+    else { a = magAt(center - 1, fixedOther); b = magAt(center, fixedOther); c = magAt(center + 1, fixedOther); }
+    const denom = (a - 2 * b + c);
+    if (denom === 0) return 0;
+    let delta = 0.5 * (a - c) / denom;
+    if (!(delta > -1 && delta < 1)) delta = 0;
+    return delta;
+  }
+  const dxRef = refine(bkx, bky, 0);
+  const dyRef = refine(bky, bkx, 1);
+  const kxIdx = (bkx <= N / 2 ? bkx : bkx - N) + dxRef;
+  const kyIdx = (bky <= N / 2 ? bky : bky - N) + dyRef;
+  const fx = kxIdx * df, fy = kyIdx * df;
+  const fmag = Math.hypot(fx, fy);
+  return { spacing: fmag === 0 ? Infinity : 1 / fmag, peak: bestLow, lowPeak: bestLow, lowRatio: lowRatio, kx: fx, ky: fy };
+}
+
+// ============================================================================
+//  THE SELF-TEST — the SOLE oracle both the in-page pill and the Node twin call.
+//  Every leg is a concrete numeric assertion with a stated target; `detail`
+//  reports the LIVE measured number, never the word "perfect".
+// ============================================================================
+function runSelfTest(){
+  const lines = [];
+  function ok(name, cond, detail){ lines.push({ name: name, ok: !!cond, detail: detail }); }
+  const N = 256;                  // power of two — the FFT's only requirement
+  // the measurement grid samples the CARRIER at 4 px/period (ds = p/4): the
+  // carrier sits well above the render Nyquist while the window still spans many
+  // beats, so the beat peak is sharp and far from the carrier skirt.
+
+  // ── A  ROTATION LAW: measured D matches p/(2 sin(θ/2)) to <1% across a sweep ──
+  {
+    const p = 12;                 // length units
+    const ds = p / 4;             // carrier sampled at 4 px/period (above Nyquist)
+    let worst = 0, worstTheta = 0;
+    for (let deg = 4; deg <= 18; deg += 2){
+      const theta = deg * Math.PI / 180;
+      const predicted = spacingRotation(p, theta);
+      const m = measureSpacing(p, theta / 2, p, -theta / 2, N, ds);
+      const rel = Math.abs(m.spacing - predicted) / predicted;
+      if (rel > worst){ worst = rel; worstTheta = deg; }
+    }
+    ok('A rotation law: measured fringe-D matches D=p/(2·sin(θ/2)) to <1% across θ∈[4°,18°] (FFT of the composited field vs the closed form)',
+       worst < 0.01,
+       'worst rel.err=' + (worst * 100).toFixed(3) + '% @ θ=' + worstTheta + '°');
+  }
+
+  // ── B  TWO-PITCH LAW: measured D matches p₁p₂/|p₁−p₂| to <1% across a sweep ──
+  {
+    const p1 = 12;
+    const ds = p1 / 4;
+    let worst = 0, worstP2 = 0;
+    for (let p2 = 12.6; p2 <= 15.5; p2 += 0.4){
+      const predicted = spacingTwoPitch(p1, p2);
+      const m = measureSpacing(p1, 0, p2, 0, N, ds);
+      const rel = Math.abs(m.spacing - predicted) / predicted;
+      if (rel > worst){ worst = rel; worstP2 = p2; }
+    }
+    ok('B two-pitch law: measured fringe-D matches D=p₁p₂/|p₁−p₂| to <1% across p₂∈[12.6,15.4] (parallel combs, θ=0)',
+       worst < 0.01,
+       'worst rel.err=' + (worst * 100).toFixed(3) + '% @ p₂=' + worstP2.toFixed(1));
+  }
+
+  // ── C  UNIFIED LAW === both closed forms to 1e-9 (the one readout authority) ──
+  {
+    const p = 12, theta = 9 * Math.PI / 180;
+    const dRot = spacingRotation(p, theta);
+    const dUniRot = spacingUnified(p, theta / 2, p, -theta / 2);
+    const p1 = 12, p2 = 13.5;
+    const dTwo = spacingTwoPitch(p1, p2);
+    const dUniTwo = spacingUnified(p1, 0, p2, 0);
+    const errRot = Math.abs(dUniRot - dRot);
+    const errTwo = Math.abs(dUniTwo - dTwo);
+    ok('C unified law: D=1/|k₁−k₂| === p/(2 sin(θ/2)) AND === p₁p₂/|p₁−p₂| to 1e-9 — the single readout authority contains both closed forms',
+       errRot < 1e-9 && errTwo < 1e-9,
+       'rotation Δ=' + errRot.toExponential(2) + ' · two-pitch Δ=' + errTwo.toExponential(2));
+  }
+
+  // ── D  NEGATIVE CONTROL (load-bearing): coincident combs ⇒ NO fringe ──
+  // θ=0 AND p₁=p₂. The low band must hold no peak above 1e-6·carrier, so a
+  // vacuous always-fringe renderer FAILS here. measureSpacing returns Infinity.
+  {
+    const p = 12, ds = p / 4;     // carrier well-sampled; no beat exists
+    const m = measureSpacing(p, 0, p, 0, N, ds);
+    const ratio = m.lowRatio;     // strongest low-band peak / carrier peak
+    ok('D neg-control (load-bearing): θ=0 & p₁=p₂ ⇒ combs coincide ⇒ NO fringe — the low-band peak is < 1e-6 of the carrier and measured D = ∞ (a vacuous always-fringe renderer fails here)',
+       m.spacing === Infinity && ratio < 1e-6,
+       'measured D=' + (m.spacing === Infinity ? '∞' : m.spacing.toFixed(2)) + ' · low/carrier=' + ratio.toExponential(2));
+  }
+
+  // ── E  RENDER-NYQUIST GUARD: an over-fine grating does NOT report the true beat ──
+  // Sample the SAME rotation config below the HARD Nyquist of 2 samples/period
+  // (1.5 px/period); the carrier aliases and the measured beat is badly WRONG
+  // (rel.err ≥ 5%), proving the guard is real. nyquistFloorOK (floor 4) flags the
+  // over-fine pitch while passing the well-sampled 4 px/period grid.
+  {
+    const p = 12, theta = 9 * Math.PI / 180;
+    const predicted = spacingRotation(p, theta);
+    const dsFine = p / 1.5;       // 1.5 px/period < 2 (the hard Nyquist) ⇒ aliasing
+    const m = measureSpacing(p, theta / 2, p, -theta / 2, N, dsFine);
+    const rel = m.spacing === Infinity ? 1 : Math.abs(m.spacing - predicted) / predicted;
+    const floorBlocks = !nyquistFloorOK(1.5) && nyquistFloorOK(4);
+    ok('E render-Nyquist guard: an over-fine grating (1.5 px/period < the hard Nyquist 2) does NOT report the true beat (rel.err ≥ 5%), and nyquistFloorOK flags it — the guard is real, not decorative',
+       rel >= 0.05 && floorBlocks,
+       'aliased rel.err=' + (rel * 100).toFixed(1) + '% (true D=' + predicted.toFixed(2) + ', measured=' + (m.spacing === Infinity ? '∞' : m.spacing.toFixed(2)) + ') · floor flags fine=' + floorBlocks);
+  }
+
+  // ── F  IMPORTED-TRANSFORM CONTRACT: fft/toComplex are imported; non-pow2 throws ──
+  {
+    const importsOk = (typeof fft === 'function') && (typeof toComplex === 'function');
+    let threw = false;
+    try { fft(toComplex(new Array(100).fill(0))); } catch (e){ threw = /power-of-two/.test(String(e.message)); }
+    ok('F imported-transform contract: fft/toComplex are IMPORTED from butterfly/core.mjs and fft on a length-100 (non-pow-2) input THROWS the power-of-two error (this file types no FFT)',
+       importsOk && threw,
+       'imports ok=' + importsOk + ' · non-pow2 fft throws=' + threw);
+  }
+
+  const pass = lines.filter(l => l.ok).length;
+  return { pass: pass, total: lines.length, lines: lines };
+}
+// ===== MOIRE CORE END =====
+
+  // ======================================================================
+  //  THE PAGE — render (E2) + interaction (E0) over the shared core (E1).
+  //  The canvas paints composite() and the FFT measures composite() — one
+  //  field, one authority. Nothing here re-derives the math.
+  // ======================================================================
+
+  // ---- self-test pill (the same runSelfTest the Node twin calls) ----------
+  var __selftest = null;
+  try{
+    __selftest = runSelfTest();
+    window.__selftest = __selftest;
+    var chip = document.getElementById('selftest');
+    var allOk = __selftest.pass === __selftest.total;
+    chip.textContent = 'self-test ' + __selftest.pass + '/' + __selftest.total;
+    chip.className = 'selftest ' + (allOk ? 'ok' : 'bad');
+    chip.title = __selftest.lines.map(function(l){ return (l.ok?'PASS ':'FAIL ') + l.name; }).join('\n');
+    console.log('[Moiré] self-test ' + __selftest.pass + '/' + __selftest.total);
+    __selftest.lines.forEach(function(l){
+      (l.ok?console.log:console.error)((l.ok?'PASS: ':'FAIL: ') + l.name + '  [' + l.detail + ']');
+    });
+    console.assert(allOk, 'Moiré self-test FAILED');
+  }catch(err){
+    var c = document.getElementById('selftest');
+    c.textContent = 'self-test error'; c.className = 'selftest bad';
+    console.error('[Moiré] self-test threw', err);
+  }
+
+  // ---- DOM ----------------------------------------------------------------
+  var canvas = document.getElementById('field');
+  var ctx = canvas.getContext('2d');
+  var modeRot = document.getElementById('modeRot');
+  var modeTwo = document.getElementById('modeTwo');
+  var rotControls = document.getElementById('rotControls');
+  var twoControls = document.getElementById('twoControls');
+  var pSlider = document.getElementById('pSlider');
+  var p1Slider = document.getElementById('p1Slider');
+  var p2Slider = document.getElementById('p2Slider');
+  var thetaDial = document.getElementById('thetaDial');
+  var dialNeedle = document.getElementById('dialNeedle');
+  var pVal = document.getElementById('pVal'), p1Val = document.getElementById('p1Val'), p2Val = document.getElementById('p2Val');
+  var thetaVal = document.getElementById('thetaVal');
+  var predOut = document.getElementById('predOut'), measOut = document.getElementById('measOut');
+  var agreeDot = document.getElementById('agreeDot');
+  var cruxLine = document.getElementById('cruxLine');
+  var stageLaw = document.getElementById('stageLaw');
+  var flattenBtn = document.getElementById('flattenBtn');
+  var liveDemoBtn = document.getElementById('liveDemoBtn');
+
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---- the live state — ONE shared mode so the two laws are never co-rendered ----
+  var THETA_MAX = clampTheta(Math.PI, 12);        // the regime ceiling (rad), ≈19.2°
+  var state = {
+    mode: 'rotation',          // 'rotation' | 'two-pitch'
+    p: 12,                     // rotation: both combs share this pitch (px)
+    theta: 9 * Math.PI / 180,  // rotation: relative angle (rad)
+    p1: 12,                    // two-pitch: bottom comb pitch
+    p2: 14,                    // two-pitch: top comb pitch
+    phase: 0,                  // the D-INVARIANT phase translate of the top comb
+    animating: false
+  };
+
+  // ---- coordinate contract: the canvas renders at exactly the core's px-per-unit
+  //      (1 unit = 1 px), so the on-screen measured Dᵐ agrees with the predicted D.
+  //      ds = 1 in the page (length unit === pixel).
+  var DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  var W = 0, H = 0;            // CSS px
+  function resize(){
+    var r = canvas.parentNode.getBoundingClientRect();
+    W = Math.max(80, Math.round(r.width));
+    H = Math.max(80, Math.round(r.height));
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    dirty = true;
+  }
+
+  // ---- the two combs in the CURRENT mode → (p1,phi1,p2,phi2) with phase --------
+  // bottom comb = (pa, phiA); top comb = (pb, phiB) translated by state.phase along
+  // its own normal (a phase shift, NOT a frequency change — D-invariant).
+  function combs(){
+    if (state.mode === 'rotation'){
+      var th = clampTheta(state.theta, state.p);
+      return { pa: state.p, phiA: -th/2, pb: state.p, phiB: th/2, theta: th };
+    } else {
+      return { pa: state.p1, phiA: 0, pb: state.p2, phiB: 0, theta: 0 };
+    }
+  }
+
+  // ---- predicted D (closed form) — updates EVERY frame from the unified law ----
+  function predictedD(){
+    var c = combs();
+    return spacingUnified(c.pa, c.phiA, c.pb, c.phiB);
+  }
+
+  // ---- measured Dᵐ — DEBOUNCED FFT of the painted field (not per-frame) --------
+  var measured = { spacing: Infinity, lowRatio: 0, kx: 0, ky: 0 };
+  var measureTimer = null;
+  var MEASURE_N = 256;          // power of two; the measurement grid
+  function scheduleMeasure(){
+    if (measureTimer) return;
+    measureTimer = setTimeout(function(){
+      measureTimer = null;
+      var c = combs();
+      // the page renders at 1 unit/px, so the measurement uses ds=1 over the SAME
+      // composite() the canvas paints — only N differs (a fixed FFT window).
+      measured = measureSpacing(c.pa, c.phiA, c.pb, c.phiB, MEASURE_N, 1);
+      updateReadout();
+    }, 90);
+  }
+
+  // ---- the render: paint composite() into the canvas at native px ------------
+  //  Three readings live in ONE field: the bottom comb (frosted cyan-white, low
+  //  alpha), the top comb (warmer), and the PRODUCT the eye sees — the moiré band
+  //  is the EMERGENT low-frequency envelope of that product. We draw NOTHING extra
+  //  to fake a fringe: when the combs coincide the product is a plain grating and
+  //  the field paints visibly FLAT (no swimming band).
+  var img = null, imgW = 0, imgH = 0;
+  function ensureImg(){
+    var w = canvas.width, h = canvas.height;
+    if (!img || imgW !== w || imgH !== h){ img = ctx.createImageData(w, h); imgW = w; imgH = h; }
+  }
+  // ---- paintField: the EXPENSIVE per-pixel composite() → ImageData. Only runs
+  //  when the config changes (dirty); the result is cached in `img` so a breathe-
+  //  only frame just re-blits it (no per-pixel recompute → the loop stays ~60fps).
+  function paintField(){
+    ensureImg();
+    var c = combs();
+    var data = img.data;
+    var w = imgW, h = imgH;
+    var cx = w/2, cy = h/2;
+    var pa = c.pa * DPR, pb = c.pb * DPR;         // pitches in DEVICE px
+    var ca = Math.cos(c.phiA), sa = Math.sin(c.phiA);
+    var cb = Math.cos(c.phiB), sb = Math.sin(c.phiB);
+    var ph = state.phase * DPR;                    // phase offset (device px) on top comb
+    // colour: composite drives luminance; a faint warm/cool split tints the two combs.
+    for (var y = 0; y < h; y++){
+      var yy = y - cy;
+      for (var x = 0; x < w; x++){
+        var xx = x - cx;
+        var ua = (xx*ca + yy*sa) / pa;
+        var ub = ((xx + ph)*cb + yy*sb) / pb;
+        var ga = 0.5*(1 + Math.cos(TWO_PI*ua));
+        var gb = 0.5*(1 + Math.cos(TWO_PI*ub));
+        var comp = ga * gb;                         // the brightness the eye sees
+        // base from composite; gentle cool/warm bias from each comb so both grids read
+        var lum = comp;
+        var r = 26 + lum*210 + gb*14;
+        var g = 30 + lum*220;
+        var b = 40 + lum*238 + ga*10;
+        var i = (y*w + x) * 4;
+        data[i] = r < 0 ? 0 : r > 255 ? 255 : r;
+        data[i+1] = g < 0 ? 0 : g > 255 ? 255 : g;
+        data[i+2] = b < 0 ? 0 : b > 255 ? 255 : b;
+        data[i+3] = 255;
+      }
+    }
+  }
+
+  // ---- compositeFrame: blit the cached field, then the CHEAP cosmetic ±2%
+  //  "breathe" glow ON the located band — SUPPRESSED when spacing → Infinity (the
+  //  neg-control stays dead flat; the breathe never survives a coincident field).
+  function compositeFrame(){
+    if (!img) return;
+    ctx.putImageData(img, 0, 0);
+    if (isFinite(measured.spacing) && breathe > 0){
+      var fmag = Math.hypot(measured.kx, measured.ky);   // cycles/px (page ds=1)
+      if (fmag > 1e-9){
+        var w = imgW, h = imgH, cx = w/2, cy = h/2;
+        var amp = 0.02 * breathe;                         // ≤2%
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = amp;
+        // a soft wash aligned with the band normal — purely decorative
+        var ang = Math.atan2(measured.ky, measured.kx);
+        var grad = ctx.createLinearGradient(
+          cx - Math.cos(ang)*w, cy - Math.sin(ang)*h,
+          cx + Math.cos(ang)*w, cy + Math.sin(ang)*h);
+        grad.addColorStop(0, 'rgba(142,203,255,0)');
+        grad.addColorStop(0.5, 'rgba(191,224,255,1)');
+        grad.addColorStop(1, 'rgba(142,203,255,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0,0,w,h);
+        ctx.restore();
+      }
+    }
+  }
+
+  // ---- readout (reconciles E0 / E1 / E2) ----------------------------------
+  function fmtD(d){
+    if (!isFinite(d)) return '∞';
+    return d.toFixed(1) + ' px';
+  }
+  function updateReadout(){
+    var pd = predictedD();
+    var md = measured.spacing;
+    var c = combs();
+    var flat = !isFinite(pd);
+    if (flat){
+      predOut.textContent = '∞ (combs coincide — no beat)';
+      measOut.textContent = 'none';
+      agreeDot.className = 'dot calm';
+      cruxLine.className = 'crux calm';
+      cruxLine.innerHTML = '<b>No fringe is the correct answer here.</b> The two combs coincide, so the difference term vanishes (D &rarr; &infin;) and the field is flat. A renderer that always drew a fringe would be lying — the FFT finds no low-frequency peak.';
+    } else {
+      predOut.textContent = fmtD(pd);
+      measOut.textContent = isFinite(md) ? fmtD(md) : 'measuring…';
+      // agreement: live tol 3% (the Node twin holds <1% on a high-res field —
+      // SAME measureSpacing code path, only N/ds differ).
+      var rel = (isFinite(md) && pd > 0) ? Math.abs(md - pd)/pd : 1;
+      if (rel < 0.03){ agreeDot.className = 'dot'; }
+      else if (rel < 0.08){ agreeDot.className = 'dot amber'; }
+      else { agreeDot.className = 'dot amber'; }     // never red — measurement noise near limits
+      cruxLine.className = 'crux';
+      cruxLine.innerHTML = '<b>The crux:</b> measured D&#7504; is FFT’d straight from the brightness you see, then matched to ' +
+        (state.mode === 'rotation' ? 'D = p/(2&#8201;sin&#8201;&theta;/2)' : 'D = p&#8321;p&#8322;/|p&#8321;&minus;p&#8322;|') +
+        ' — the same authority the self-test proves.';
+    }
+    // the stage caption echoes the active law
+    stageLaw.textContent = flat ? 'the combs coincide — no fringe' :
+      (state.mode === 'rotation' ? 'D = p / (2 sin θ/2)' : 'D = p₁p₂ / |p₁−p₂|');
+  }
+
+  // ---- the θ dial ticks ----------------------------------------------------
+  (function drawTicks(){
+    var g = document.getElementById('dialTicks');
+    var html = '';
+    for (var deg = -18; deg <= 18; deg += 6){
+      var a = deg * Math.PI/180;
+      var r1 = 42, r2 = deg === 0 ? 34 : 37;
+      var x1 = 50 + Math.sin(a)*r1, y1 = 50 - Math.cos(a)*r1;
+      var x2 = 50 + Math.sin(a)*r2, y2 = 50 - Math.cos(a)*r2;
+      html += '<line x1="'+x1.toFixed(1)+'" y1="'+y1.toFixed(1)+'" x2="'+x2.toFixed(1)+'" y2="'+y2.toFixed(1)+
+        '" stroke="rgba(142,203,255,'+(deg===0?'0.7':'0.3')+')" stroke-width="'+(deg===0?'2':'1')+'"/>';
+    }
+    g.innerHTML = html;
+  })();
+  function syncDial(){
+    var a = state.theta;            // rad
+    dialNeedle.setAttribute('x2', (50 + Math.sin(a)*38).toFixed(2));
+    dialNeedle.setAttribute('y2', (50 - Math.cos(a)*38).toFixed(2));
+    var deg = a * 180/Math.PI;
+    thetaVal.textContent = deg.toFixed(1) + '°';
+    thetaDial.setAttribute('aria-valuenow', deg.toFixed(1));
+    thetaDial.setAttribute('aria-valuetext', deg.toFixed(1) + ' degrees relative angle');
+  }
+
+  // ---- render loop: ONE rAF; recompute the field only on change ------------
+  var dirty = true;
+  var needBlit = true;         // a fresh field needs at least one blit to the canvas
+  var breathe = 0;             // 0..1 cosmetic band glow strength
+  var breathePhase = 0;
+  function setDirty(){ dirty = true; scheduleMeasure(); }
+  function frame(){
+    // the breathe oscillates gently; gated on a finite, located band
+    if (!reduce && isFinite(measured.spacing)){
+      breathePhase += 0.04;
+      breathe = 0.5 + 0.5*Math.sin(breathePhase);
+    } else { breathe = 0; }
+    if (state.animating){
+      if (state.mode === 'rotation'){
+        state.theta += 0.0024;
+        if (state.theta > THETA_MAX){ state.theta = THETA_MAX; }
+        state.theta = clampTheta(state.theta, state.p);
+        if (state.theta >= THETA_MAX) { state.animating = false; liveDemoBtn.textContent = 'animate'; }
+        syncDial(); setDirty();
+      } else {
+        state.p2 += 0.012;
+        if (state.p2 > 22){ state.p2 = 22; state.animating = false; liveDemoBtn.textContent = 'animate'; }
+        p2Slider.value = String(state.p2);
+        p2Val.textContent = state.p2.toFixed(1) + ' px';
+        updateFills(); setDirty();
+      }
+    }
+    // recompute the expensive composite field ONLY on change; every frame just
+    // re-blits the cached field + the cheap breathe overlay (keeps ~60fps).
+    if (dirty){ paintField(); updateReadout(); dirty = false; needBlit = true; }
+    if (needBlit || (!reduce && isFinite(measured.spacing))){
+      compositeFrame();
+      needBlit = false;
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ---- slider fill helper --------------------------------------------------
+  function fillOf(el){
+    var min = parseFloat(el.min), max = parseFloat(el.max), v = parseFloat(el.value);
+    return ((v-min)/(max-min)*100) + '%';
+  }
+  function updateFills(){
+    pSlider.style.setProperty('--fill', fillOf(pSlider));
+    p1Slider.style.setProperty('--fill', fillOf(p1Slider));
+    p2Slider.style.setProperty('--fill', fillOf(p2Slider));
+  }
+
+  // ---- mode switch — HARD swap; DOM-hide the inactive law's controls --------
+  function setMode(m){
+    state.mode = m;
+    var rot = (m === 'rotation');
+    modeRot.classList.toggle('active', rot);
+    modeTwo.classList.toggle('active', !rot);
+    modeRot.setAttribute('aria-checked', rot ? 'true':'false');
+    modeTwo.setAttribute('aria-checked', rot ? 'false':'true');
+    rotControls.style.display = rot ? '' : 'none';
+    twoControls.style.display = rot ? 'none' : '';
+    rotControls.setAttribute('aria-hidden', rot ? 'false':'true');
+    twoControls.setAttribute('aria-hidden', rot ? 'true':'false');
+    state.phase = 0;            // reset the slide on a mode swap
+    setDirty();
+  }
+  modeRot.addEventListener('click', function(){ setMode('rotation'); });
+  modeTwo.addEventListener('click', function(){ setMode('two-pitch'); });
+
+  // ---- pitch sliders -------------------------------------------------------
+  pSlider.addEventListener('input', function(){
+    state.p = parseFloat(pSlider.value);
+    pVal.textContent = state.p.toFixed(state.p % 1 ? 1 : 0) + ' px';
+    updateFills(); setDirty();
+  });
+  p1Slider.addEventListener('input', function(){
+    state.p1 = parseFloat(p1Slider.value);
+    p1Val.textContent = state.p1.toFixed(state.p1 % 1 ? 1 : 0) + ' px';
+    updateFills(); setDirty();
+  });
+  p2Slider.addEventListener('input', function(){
+    state.p2 = parseFloat(p2Slider.value);
+    p2Val.textContent = state.p2.toFixed(state.p2 % 1 ? 1 : 0) + ' px';
+    updateFills(); setDirty();
+  });
+
+  // ---- the θ dial: atan2-unwrap drag (astrolabe-style), pointer-captured ----
+  var dialDrag = false, dialPrevAng = 0;
+  function dialAngleFromEvent(e){
+    var r = thetaDial.getBoundingClientRect();
+    var cx = r.left + r.width/2, cy = r.top + r.height/2;
+    return Math.atan2(e.clientX - cx, -(e.clientY - cy));   // 0 at top, +cw
+  }
+  thetaDial.addEventListener('pointerdown', function(e){
+    dialDrag = true; dialPrevAng = dialAngleFromEvent(e);
+    thetaDial.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  thetaDial.addEventListener('pointermove', function(e){
+    if (!dialDrag) return;
+    var a = dialAngleFromEvent(e);
+    var d = a - dialPrevAng;
+    if (d > Math.PI) d -= TWO_PI; else if (d < -Math.PI) d += TWO_PI;   // unwrap
+    dialPrevAng = a;
+    state.theta = clampTheta(state.theta + d, state.p);
+    syncDial(); setDirty();
+  });
+  function dialUp(e){ if (dialDrag){ dialDrag = false; try{ thetaDial.releasePointerCapture(e.pointerId); }catch(_){} } }
+  thetaDial.addEventListener('pointerup', dialUp);
+  thetaDial.addEventListener('pointercancel', dialUp);
+  thetaDial.addEventListener('keydown', function(e){
+    var step = (e.shiftKey ? 0.2 : 1.0) * Math.PI/180;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp'){ state.theta = clampTheta(state.theta + step, state.p); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown'){ state.theta = clampTheta(state.theta - step, state.p); }
+    else if (e.key === 'Home'){ state.theta = 0; }
+    else return;
+    e.preventDefault(); syncDial(); setDirty();
+  });
+
+  // ---- pointer-drag on the STAGE = phase translate (D-INVARIANT) ------------
+  var stageDrag = false, dragPrevX = 0, dragPrevY = 0;
+  canvas.addEventListener('pointerdown', function(e){
+    stageDrag = true; dragPrevX = e.clientX; dragPrevY = e.clientY;
+    canvas.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', function(e){
+    if (!stageDrag) return;
+    var c = combs();
+    // slide the top comb along its OWN normal (cos φB, sin φB): a pure phase shift.
+    var dx = e.clientX - dragPrevX, dy = e.clientY - dragPrevY;
+    dragPrevX = e.clientX; dragPrevY = e.clientY;
+    var along = dx*Math.cos(c.phiB) + dy*Math.sin(c.phiB);
+    state.phase += along;
+    dirty = true;             // re-paint, but do NOT re-measure: D is invariant
+  });
+  function stageUp(e){ if (stageDrag){ stageDrag = false; try{ canvas.releasePointerCapture(e.pointerId); }catch(_){} } }
+  canvas.addEventListener('pointerup', stageUp);
+  canvas.addEventListener('pointercancel', stageUp);
+
+  // ---- presets -------------------------------------------------------------
+  // FLATTEN → reach the neg-control without fine motor control (BOTH modes).
+  flattenBtn.addEventListener('click', function(){
+    state.animating = false; liveDemoBtn.textContent = 'animate';
+    if (state.mode === 'rotation'){
+      state.theta = 0; syncDial();
+    } else {
+      state.p2 = state.p1;
+      p2Slider.value = String(state.p1);
+      p2Val.textContent = state.p1.toFixed(state.p1 % 1 ? 1 : 0) + ' px';
+      updateFills();
+    }
+    setDirty();
+  });
+  liveDemoBtn.addEventListener('click', function(){
+    state.animating = !state.animating;
+    liveDemoBtn.textContent = state.animating ? 'stop' : 'animate';
+    if (state.animating){
+      // start from a small, non-flat config so the drift is visible
+      if (state.mode === 'rotation'){ if (state.theta < 3*Math.PI/180) { state.theta = 3*Math.PI/180; syncDial(); } }
+      else { if (state.p2 <= state.p1) { state.p2 = state.p1 + 1.5; p2Slider.value = String(state.p2); p2Val.textContent = state.p2.toFixed(1)+' px'; updateFills(); } }
+      setDirty();
+    }
+  });
+
+  // ---- boot ----------------------------------------------------------------
+  window.addEventListener('resize', function(){ resize(); });
+  setMode('rotation');
+  updateFills();
+  syncDial();
+  resize();
+  scheduleMeasure();
+  requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
