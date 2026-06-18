@@ -153,7 +153,8 @@ var Layout = (function () {
     conservatory:{ label: 'LIVING-SYSTEMS WING', accent: '#86d39a' },
     horology:    { label: 'HOROLOGY',           accent: '#e6bd6f' },
     aerospace:   { label: 'THE AERODROME',      accent: '#cdd6e0' },
-    sewing:      { label: 'THE SEWING ROOM',    accent: '#d9b873' }
+    sewing:      { label: 'THE SEWING ROOM',    accent: '#d9b873' },
+    stellar:     { label: 'THE STELLAR WING',   accent: '#9db4ff' }
   };
   function wingLabel(slug) {
     if (WING_META[slug] && WING_META[slug].label) return WING_META[slug].label;
