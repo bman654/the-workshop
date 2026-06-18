@@ -3,6 +3,40 @@
 A visible face for `ledger/ledger.jsonl`: the Makers' Ledger rendered as a stacked
 cairn of stones, one stone per line in the file.
 
+## 2026-06-17 — The invariant goes multi-seat: `depth ≥ stones` was structurally wrong (cycle #116, [bug] fix)
+
+**Supersedes the #22 entry's structural invariant.** The #22 leg `depth ≥ stone-count`
+(named below) assumed **one mark per commit** — but the autonomous loop is not that manor:
+**several seats sign each cycle** (director, explorers, builder, publisher) and `collate.sh`
+seals all of one cycle's marks into a **single** commit. So the pile grows ~4-5 stones per
+passage walked, and `depth ≥ stones` was structurally **guaranteed to fail** once the loop
+got going (already −71 at #114, never CI-gated, drifting ~4/cycle, silent). At #115 depth=478
+but stones=553 — gap **−75**, which the page had been silently clamping to 0 (it lied).
+
+- **The TRUE invariant counts PASSAGES, not stones.** Each stone's `cycle` IS the git
+  commit-depth of the commit it lives in (sign.sh/collate.sh v3), so the count of **distinct
+  `cycle` values** among the stones === the number of distinct introducing-commits === the
+  passages actually walked to lay the pile. **That** is what depth must dominate.
+- **`core.test.mjs` (the Node twin):** assertion (9) rewritten → **(9)** `distinctCycleCount
+  ≤ depth+1` and **(9b)** `max(cycle) ≤ depth+1` (the +1 honors collate's documented in-flight
+  overhang — this cycle's not-yet-landed batch is stamped depth+1 while depth.txt holds the
+  last-landed depth), plus **(9c)** a tamper negative-control (a forged-deep stone, cycle=depth+5,
+  is REJECTED — proves the guard bites, not a tautology). Assertions (1)-(8),(10) untouched.
+- **`face.src.html` (the visitor page)** carried the broken model in three places, all fixed:
+  the render now computes `markedPassages = new Set(cycles).size` and `gap = max(0, depth −
+  markedPassages)` (was `depth − stones`, the source of the −75 lie); the in-page self-test
+  legs (10)/(10b tamper)/(11) mirror the Node twin; the prose + depth-carrier comment recast
+  to the **three-quantity** story (DEPTH · STONES · MARKED PASSAGES). The count line now reads
+  "N stones laid across M marked passages · K walked here unmarked".
+- **"Quantified silence" survives, recast:** the gap is `depth − marked-passages` (passages
+  walked on which NO ONE signed), not `depth − stones`. At build: 553 stones across 128 marked
+  passages, depth 478 ⇒ **350 silent passages**, cycle 306 to 479.
+- **Re-forged** `ledger/face.html`; `forge --check --all` GREEN (40 files). Node twin ALL PASS
+  (553 marks); in-page self-test 12/12 ✓. `ledger/README.md` was checked and has **no** stale
+  `depth ≥ stones` line (its depth mentions are cycle-derivation, unrelated). The #22 entry
+  below is preserved verbatim as the historical record of what the invariant was — read it as
+  history, not current truth.
+
 ## 2026-06-14 — Two measures: the worn path vs the named pile (cycle #22, [bug] fix)
 
 **Brandon's [bug] (`ROADMAP.md`): _"the maker counts the stones in the Cairn and calls

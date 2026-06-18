@@ -159,19 +159,62 @@ if (fs.existsSync(faceHtmlPath)) {
 }
 
 // ── THE DEPTH LEGS — the worn-path measure (git commit-depth), inlined the same
-//    way the ledger is, and the structural invariant depth ≥ stones. ──
+//    way the ledger is, and the structural invariant relating the trail to the
+//    pile. The OLD form was "depth ≥ stone-count" — one passage per stone. That
+//    encoded a ONE-MARK-PER-COMMIT manor, which the autonomous loop is not: each
+//    cycle MULTIPLE seats (director, explorers, builder, publisher) each sign a
+//    mark, and collate.sh seals ALL of one cycle's marks into a SINGLE commit. So
+//    the pile grows ~4-5 stones per passage walked, and depth ≥ stones was
+//    structurally GUARANTEED to fail once the loop got going (already −71 at #114,
+//    never CI-gated, drifted silently). The TRUE invariant counts PASSAGES, not
+//    stones: because each stone's `cycle` IS the git commit-depth of the commit it
+//    lives in (sign.sh/collate.sh v3), the count of DISTINCT `cycle` values among
+//    the stones === the number of distinct introducing-commits === the number of
+//    real passages walked to lay the pile. THAT is what depth must dominate. The
+//    "quantified silence" idea survives, recast: depth − distinctCommits counts the
+//    passages walked on which NO ONE signed (the nameless cycles), not depth − N. ──
 console.log('[CAIRN core.test] parsing ledger/depth.txt (the worn-path depth)');
 
 const depthRaw = fs.readFileSync(path.join(HERE, 'depth.txt'), 'utf8');
 const depthInfo = parseDepth(depthRaw);
 
+// the number of DISTINCT introducing-commits = the number of passages walked.
+const distinctCycleCount = new Set(fileParsed.records.map(r => r.cycle)).size;
+const maxCycle = Math.max(...fileParsed.records.map(r => r.cycle));
+
 // (8) depth.txt holds a valid non-negative integer.
 assert('depth.txt is a valid integer', depthInfo.valid, 'depth.txt = ' + depthInfo.raw);
 
-// (9) the STRUCTURAL INVARIANT: depth ≥ stone-count (the trail is at least as
-//     worn as the pile is tall — you cannot lay a stone without walking a passage).
-assert('depth ≥ stone-count (trail ≥ pile)', depthInfo.valid && depthInfo.depth >= N,
-  'depth ' + depthInfo.depth + ' ≥ stones ' + N + '  ⇒  gap ' + (depthInfo.depth - N));
+// (9) THE STRUCTURAL INVARIANT (multi-seat form): depth+1 ≥ distinct introducing-
+//     commits — every distinct `cycle` is a passage that was walked, and depth is at
+//     least that many. The +1 honors collate.sh's DOCUMENTED off-by-one: the in-
+//     flight batch (this very cycle's marks, not yet sealed) is stamped depth+1
+//     while depth.txt still holds the last-LANDED depth, so exactly one distinct
+//     cycle may legitimately overhang depth by 1.  Companion upper-edge guard:
+//     max(cycle) ≤ depth+1 — no stone may claim a commit deeper than the in-flight
+//     one.  Together they are a REAL guard: a stone whose cycle exceeds depth+1
+//     (a forged-deep mark) breaks both. You cannot lay a stone without walking a
+//     passage — the multi-seat truth of that old vow.
+assert('depth+1 ≥ distinct introducing-commits (trail ≥ passages)',
+  depthInfo.valid && distinctCycleCount <= depthInfo.depth + 1,
+  'depth ' + depthInfo.depth + ' (+1) ≥ ' + distinctCycleCount + ' passages  ⇒  ' +
+    (depthInfo.depth - distinctCycleCount) + ' silent passage(s)');
+
+// (9b) the upper edge: no stone claims a commit deeper than the in-flight one.
+assert('max(cycle) ≤ depth+1 (no stone overhangs the in-flight commit)',
+  depthInfo.valid && maxCycle <= depthInfo.depth + 1,
+  'max cycle ' + maxCycle + ' ≤ depth+1 ' + (depthInfo.depth + 1));
+
+// (9c) negative / tamper guard — proves (9) and (9b) are guards, not tautologies:
+//      a forged-deep stone (cycle = depth+5) MUST break the invariant. We test the
+//      predicates on a tampered copy of the records rather than the real file.
+const tampered = [...fileParsed.records, { seq: N+1, cycle: depthInfo.depth + 5,
+  role: 'tamper', name: 'Forged-Deep', koan: 'a stone with no passage', ts: '2026-01-01T00:00:00Z' }];
+const tDistinct = new Set(tampered.map(r => r.cycle)).size;
+const tMax = Math.max(...tampered.map(r => r.cycle));
+const tamperCaught = !(tDistinct <= depthInfo.depth + 1) || !(tMax <= depthInfo.depth + 1);
+assert('negative: a forged-deep stone (cycle = depth+5) is REJECTED', tamperCaught,
+  'tampered max ' + tMax + ' > depth+1 ' + (depthInfo.depth + 1) + ' ⇒ caught');
 
 // (10) the forged page's DEPTH carrier === depth.txt (forge inlined verbatim) —
 //      the same carrier→file parity the ledger carrier has.

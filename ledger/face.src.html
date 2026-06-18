@@ -213,8 +213,9 @@
     <div class="silence" id="silence"></div>
     <p class="silence-cap" id="silence-cap">
       Beneath the named lie the makers who walked this path and set no stone —
-      <span id="gapphrase">the unmarked passages</span>. The trail is worn deeper than
-      the pile is tall; the difference is the silence, and the silence is part of the path.
+      <span id="gapphrase">the unmarked passages</span>. Many stones may share one
+      passage (a cycle’s seats all sign, and the marks land in a single commit); the
+      silence is the passages walked on which no one signed, and it is part of the path.
       They remain in git only, as “Claude,” koanless.
     </p>
 
@@ -247,13 +248,20 @@
 
   <!-- ═══════════════════════════════════════════════════════════════════════
        THE DEPTH CARRIER — the worn-path measure, inlined the same way.
-       The Cairn measures TWO different, honest quantities:
+       The Cairn measures THREE honest quantities of a MULTI-SEAT path:
          • DEPTH  = the git commit-depth of the history (`git rev-list --count`),
                     how far the trail is WORN — every passage, signed or not.
          • STONES = the count of named marks in ledger.jsonl, how many makers
-                    chose to leave a koan.
-       depth ≥ stones always (you cannot lay a stone without walking a passage),
-       and the gap (depth − stones) is the count of unmarked passages — the
+                    chose to leave a koan. Many stones share one passage: each
+                    cycle several seats sign and collate.sh seals them into ONE
+                    commit, so STONES grows faster than depth — stones ≫ depth.
+         • MARKED PASSAGES = the count of DISTINCT introducing-commits (distinct
+                    `cycle` values among the stones, since each stone's cycle IS
+                    the git depth of its commit) — the passages on which at least
+                    one maker signed.
+       depth+1 ≥ marked-passages always (every distinct cycle is a passage that was
+       walked; the +1 is collate's documented in-flight overhang), and the gap
+       (depth − marked-passages) is the count of passages walked UNMARKED — the
        quantified silence. The forged face is STATIC (no server, no git at view
        time), so the commit-depth is inlined at BUILD time from the tracked file
        ledger/depth.txt — exactly as ledger.jsonl is inlined above — and refreshed
@@ -356,16 +364,24 @@ function renderCairn(records, depthInfo){
   const cycles = asc.map(r => r.cycle);
   const loCyc = Math.min(...cycles), hiCyc = Math.max(...cycles);
 
-  // ── the two honest measures, clearly distinguished ──
-  // DEPTH (the worn path) is the primary, larger quantity; STONES (named makers)
-  // is the secondary, smaller one; their difference is the quantified silence —
-  // the passages walked but never marked. depth ≥ stones is a structural
-  // invariant (you cannot lay a stone without walking a passage), so the gap is
-  // never negative; we clamp defensively only to avoid a "-N" if a carrier is
-  // ever stale, and the self-test asserts depth ≥ stones independently.
+  // ── the honest measures of a MULTI-SEAT path, clearly distinguished ──
+  // DEPTH (the worn path) is how many passages were walked. STONES is how many
+  // named marks were laid — but a single passage carries MANY stones: each cycle
+  // several seats (director, explorers, builder, publisher) sign, and collate.sh
+  // seals all of one cycle's marks into ONE commit. So stones ≫ depth, and the
+  // honest middle quantity is PASSAGES MARKED = the count of DISTINCT introducing-
+  // commits (distinct `cycle` values among the stones, since each stone's cycle IS
+  // the git depth of its commit). The quantified silence is then depth − marked-
+  // passages: the passages walked on which NO ONE signed. THAT gap is the real one,
+  // and it is structurally ≥ 0 (every distinct cycle is a passage that was walked).
   const stones = asc.length;
+  const markedPassages = new Set(cycles).size;            // distinct introducing-commits
   const depth  = depthInfo.valid ? depthInfo.depth : null;
-  const gap    = (depth !== null) ? Math.max(0, depth - stones) : null;
+  // silent passages: walked, never signed. depth+1 honors collate's documented
+  // off-by-one (the in-flight, not-yet-landed batch is stamped depth+1), so we
+  // clamp at 0 only to absorb that single overhang, never to mask a real fault —
+  // the self-test asserts markedPassages ≤ depth+1 independently.
+  const gap    = (depth !== null) ? Math.max(0, depth - markedPassages) : null;
 
   const depthLine  = document.getElementById('depthline');
   const stonesLine = document.getElementById('stonesline');
@@ -374,8 +390,8 @@ function renderCairn(records, depthInfo){
   if (depth !== null){
     depthLine.textContent  = 'the path is worn ' + depth + ' passages deep';
     stonesLine.textContent =
-      stones + ' stones laid · ' + gap + ' walked here unmarked · cycle ' +
-      loCyc + ' to ' + hiCyc;
+      stones + ' stones laid across ' + markedPassages + ' marked passages · ' +
+      gap + ' walked here unmarked · cycle ' + loCyc + ' to ' + hiCyc;
     gapPhrase.textContent  = gap + ' walked here unmarked';
   } else {
     // carrier malformed — say so plainly; the self-test will already be red.
@@ -384,7 +400,7 @@ function renderCairn(records, depthInfo){
     gapPhrase.textContent  = 'the unmarked passages';
   }
   // stash the rendered numbers for the self-test's display-binding check.
-  return { stones, depth, gap, loCyc, hiCyc };
+  return { stones, markedPassages, depth, gap, loCyc, hiCyc };
 }
 
 /* ── render the silence: a fixed band of anonymous, unmarked stones for the
@@ -501,22 +517,43 @@ function selfTest(parsed, depthInfo, rendered){
      reDepth.valid && shownDepth === reDepth.depth && rendered.depth === reDepth.depth,
      'shown ' + shownDepth + ' · carrier ' + reDepth.depth + ' · rendered ' + rendered.depth);
 
-  // (10) STRUCTURAL INVARIANT: depth ≥ stone-count — the trail is at least as
-  //      worn as the pile is tall (you cannot lay a stone without walking a
-  //      passage). This is what makes the silence REAL: gap = depth − stones ≥ 0.
-  ok('depth ≥ stone-count (trail ≥ pile)',
-     depthInfo.valid && depthInfo.depth >= N,
-     'depth ' + depthInfo.depth + ' ≥ stones ' + N + '  ⇒  gap ' + (depthInfo.depth - N));
+  // (10) STRUCTURAL INVARIANT (multi-seat form): depth+1 ≥ marked passages —
+  //      every distinct introducing-commit (distinct `cycle`) is a passage that
+  //      was walked, and the trail is worn at least that deep. This is the TRUE
+  //      vow "you cannot lay a stone without walking a passage" for a manor whose
+  //      every cycle lays many stones in ONE commit: stones may exceed depth, but
+  //      MARKED PASSAGES never may (beyond the +1 in-flight overhang). Companion
+  //      upper edge: max(cycle) ≤ depth+1 — no stone claims a commit deeper than
+  //      the in-flight one. This is what makes the silence REAL: gap ≥ 0.
+  const distinctCycleCount = new Set(records.map(r => r.cycle)).size;
+  const maxCycleSeen = Math.max(...records.map(r => r.cycle));
+  ok('depth+1 ≥ marked passages (trail ≥ passages)',
+     depthInfo.valid && distinctCycleCount <= depthInfo.depth + 1 && maxCycleSeen <= depthInfo.depth + 1,
+     'depth ' + depthInfo.depth + ' (+1) ≥ ' + distinctCycleCount + ' marked passages · max cycle ' +
+       maxCycleSeen + '  ⇒  ' + (depthInfo.depth - distinctCycleCount) + ' silent passage(s)');
 
-  // (11) the rendered GAP is exactly depth − stones (the quantified silence is
-  //      arithmetic, not decoration) — and it equals the number named in prose.
+  // (10b) NEGATIVE / TAMPER: a forged-deep stone (cycle = depth+5) MUST break the
+  //       invariant — proving (10) is a real guard, not a tautology that any data
+  //       passes. We test the predicate on a tampered copy, never on the real file.
+  const tamperedCycles = records.map(r => r.cycle).concat([depthInfo.depth + 5]);
+  const tDistinct = new Set(tamperedCycles).size;
+  const tMax = Math.max(...tamperedCycles);
+  ok('negative: a forged-deep stone (cycle = depth+5) is REJECTED',
+     depthInfo.valid && !(tDistinct <= depthInfo.depth + 1 && tMax <= depthInfo.depth + 1),
+     'tampered max ' + tMax + ' > depth+1 ' + (depthInfo.depth + 1) + ' ⇒ caught');
+
+  // (11) the rendered GAP is exactly depth − marked-passages (the quantified
+  //      silence is arithmetic, not decoration) — and it equals the number named
+  //      in prose. We clamp the expected value the same way render does, so the
+  //      lone in-flight overhang (gap could be −1) reads as 0 here and in prose.
   const gapPhraseNum = (() => {
     const m = (document.getElementById('gapphrase').textContent || '').match(/(\d+)/);
     return m ? Number(m[1]) : NaN;
   })();
-  ok('gap === depth − stones (named in prose too)',
-     depthInfo.valid && rendered.gap === (depthInfo.depth - N) && gapPhraseNum === rendered.gap,
-     'gap ' + rendered.gap + ' === ' + depthInfo.depth + '−' + N + ' · prose names ' + gapPhraseNum);
+  const expectedGap = Math.max(0, depthInfo.depth - distinctCycleCount);
+  ok('gap === depth − marked-passages (named in prose too)',
+     depthInfo.valid && rendered.gap === expectedGap && gapPhraseNum === rendered.gap,
+     'gap ' + rendered.gap + ' === max(0, ' + depthInfo.depth + '−' + distinctCycleCount + ') · prose names ' + gapPhraseNum);
 
   // verdict
   const allPass = checks.every(c => c.pass);
