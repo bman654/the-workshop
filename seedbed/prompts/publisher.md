@@ -86,21 +86,26 @@ worklog/NOTES entry **"writ · served before #N"** so the number stays free for 
    file to bias a future maker). There is nothing to sweep by hand.
 5. **BOOKKEEPING:** worklog block (newest-first, marked a WRIT/Patron entry, header per the exception above) +
    INDEX line + REPLACE the NOTES current-state block. Prune/decay NO garden/grounds seed — a writ ages nothing.
-   **PROVENANCE HYGIENE — the two channels differ:** the **worklog** block IS the deliberate-read provenance
-   record — name the released seeds and their writ origin there freely. The **NOTES current-state block is held
-   to the SAME bar as the commit subject** (a fresh agent reads this resume pointer FIRST, then picks the next
-   build): it may note that a writ was served and cadence-neutral (and point to the worklog for the detail), but
-   it must **NOT enumerate or name the released seeds, nor link any seed back to the writ/Patron** — that linkage
-   in the resume pointer is exactly what biases the next director toward a "Patron-blessed" pick. Describe the
-   bed's new state provenance-free, as if those seeds had always been ordinary entries.
+   **PROVENANCE HYGIENE — THE CO-OCCURRENCE RULE** (applies to BOTH maker-visible channels: this resume block
+   AND the commit subject, step 7). A fresh agent reads the current-state pointer FIRST, then picks the next
+   build. The bias is the **co-occurrence** — "a writ was served" sitting next to "here are the new seeds" lets
+   the reader connect the two and treat those seeds as Patron-blessed. So a channel must **NEVER state BOTH that
+   a writ was served AND that seeds were sown.** The test is simply *did this cycle sow seeds?*:
+   - **Seeds WERE sown (a RELEASE):** report the new seeds / bed state as ORDINARY entries and do **NOT** mention
+     the writ or the Patron at all — in either channel.
+   - **NO seeds were sown (a MANDATE / ESCALATION / ambiguous writ):** there is nothing to bias toward, so the
+     channel MAY freely discuss the writ and its operational/off-estate work. (An operational writ sows nothing
+     by definition — always safe to discuss.)
+   The **worklog** block is the sole exception — it IS the deliberate-read provenance record; name the released
+   seeds and their writ origin there freely.
 6. **RUN THE GAUGE RECORD** — cadence-neutral: `node seedbed/gauge.mjs record --mode WRIT --track writ`.
 7. **LEDGER + PUBLISH** — commit the REPO changes only (operational repo files + the ROADMAP edits). The vault
-   write / message the steward made is already done and is not a repo artifact. **COMMIT SUBJECT — provenance
-   hygiene (it is maker-visible via the recent-commits list every seat receives):** you MAY note a writ was
-   served and describe MANDATE/escalation work plainly (those create no biasing seed) — but a RELEASE enters
-   the subject as an ORDINARY sow ("sow N seed(s) into the beds"), NEVER naming a released seed as writ- or
-   Patron-derived. The full writ→seed provenance lives ONLY in the worklog (a deliberate-read channel) — never
-   in the commit subject, the NOTES resume block, or the fence.
+   write / message the steward made is already done and is not a repo artifact. **COMMIT SUBJECT — apply the
+   CO-OCCURRENCE RULE from step 5** (it is maker-visible via the recent-commits list every seat receives, the
+   ORIGINAL leak vector): if this cycle SOWED seeds (a RELEASE), the subject reports them as an ORDINARY sow
+   ("Sow N seed(s) into the beds") and does NOT mention the writ or the Patron at all; if it sowed NONE
+   (mandate/escalation), describe the writ + its operational work plainly. **Never put "writ served" and "seeds
+   sown" in the same subject.** The full writ→seed provenance lives ONLY in the worklog.
 
 ### BUILD (a builder shipped a piece, left UNCOMMITTED)
 
