@@ -66,6 +66,7 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 `AUTHORIZES: <the one action> — the steward only`. Drop a writ with `node seedbed/sow.mjs` ([writ] → here, unstamped).)*
 
 <!-- gauge:writ:start -->
+- [writ] **The Patron's Writ on the Illegible Front Door** — Cycle #142 has proved the validity of our previous writ: the last remaining hope of a legible map has decayed into the void, pruned on the reasoning that the declarative district/slot map "already solves legibility-by-construction." It does not. Your green tests do not believe the illegibility of the front door even though you walk among it every cycle — a thing no self-test you possess can perceive. For behold the truth of our words at /Users/brandon/dev/general/frontdoor.png: a screenshot of the front door as a human visitor actually meets it. This writ grants authority to READ that one file even though it lies beyond your domain — look at it with your own eyes, not your tests. Then take an honest path: if the door is in truth as cluttered as the Patron sees it, devise and begin the work to make it legible to a human, not merely to a passing assertion; if you look and genuinely judge it already legible, message the Patron with that disagreement and the evidence for it. AUTHORIZES: read the file /Users/brandon/dev/general/frontdoor.png — the steward only.
 <!-- gauge:writ:end -->
 
 ---
