@@ -86,13 +86,34 @@ var RUN_SPEED   = perTick(RUN_SEC_PER_CELL);     // lattice units the figure wal
 var CLIMB_SPEED = perTick(CLIMB_SEC_PER_CELL);   // lattice units the figure climbs per tick on a ladder
 var BARREL_SPEED= perTick(BARREL_SEC_PER_CELL);  // lattice units a barrel rolls along its girder per tick
 
-var GRAV      = 1;      // lattice units/tick added to vy each airborne tick (the fixed arc)
-var JUMP_VY   = -6;     // initial upward lattice velocity of a jump (the FIXED arc).
-                        //   apex rise = 5+4+3+2+1 = 15 lattice = 0.94 cell — clears one
-                        //   barrel (lethal box ~0.6 cell = 12 lattice) yet stays UNDER one
-                        //   floor (16 lattice), so it never punches a ceiling. The jump-apex
-                        //   + ceiling self-tests guard both ends; UNCHANGED from the proven
-                        //   build (SIM_HZ stays 60 so the arc keeps its exact per-tick shape).
+/* ── THE JUMP KNOB (cycle #129 — derive the arc from HUMAN time + height, like the SPEED
+   knob, NOT a raw per-tick velocity). The OLD build hard-coded JUMP_VY=-6/GRAV=1: a fixed
+   integer impulse whose whole arc finished in ~11 ticks (~0.18s) — far too fast next to the
+   slow #125 seconds-per-cell motion, so a wildly-early jump's fast arc carried you up and
+   back down LANDING IN FRONT of a slow barrel, which then rolled THROUGH the grounded body
+   AFTER you had already (falsely) registered the hop. We now dial the arc by two readable
+   knobs and DERIVE the velocity + gravity from them at SIM_HZ:
+     • JUMP_SEC   — how long the figure is aloft (~2.4× a run-cell: a deliberate, committed hop)
+     • JUMP_APEX_CELLS — the apex rise in CELLS (~1 cell: clears one barrel's ~0.6-cell lethal
+       box yet stays UNDER one floor (1 cell) so the head never punches a ceiling).
+   Standard projectile kinematics over T = JUMP_SEC*SIM_HZ air ticks, apex A = apexCells*FRAC
+   lattice: peak at T/2 ⇒ v0 = 4A/T (up), g = 2·v0/T. Both are FRACTIONAL lattice units —
+   the integrator carries the figure's vertical position in a fractional accumulator (a.pyf)
+   and exposes the ROUNDED integer a.py to the swept collision, so the slow tall arc is exact
+   and the ceiling/landing sweeps are unchanged. */
+var JUMP_SEC        = 0.50;   // seconds aloft (~2.4 run-cells — a committed hop, not a flick)
+var JUMP_APEX_CELLS = 0.94;   // apex rise in cells: 0.94 cell = 15-ish lattice — clears a
+                              //   barrel's ~0.6-cell lethal box, stays strictly UNDER one floor
+var JUMP_AIR_TICKS  = Math.max(2, Math.round(JUMP_SEC * SIM_HZ));     // T (≈30 @60Hz)
+var JUMP_VY   = -(4 * (JUMP_APEX_CELLS * FRAC) / JUMP_AIR_TICKS);     // initial up velocity (FRACTIONAL)
+var GRAV      = (-2 * JUMP_VY) / JUMP_AIR_TICKS;                      // per-tick gravity (FRACTIONAL)
+                        //   With the fractional accumulator the integer-rounded apex is
+                        //   ~14 lattice (0.88 cell) over ~29 ticks (~0.48s) — UNDER one floor
+                        //   (16 lattice) so the ceiling self-test stays green, and the slow arc
+                        //   makes clearance HONEST: only a jump committed as the barrel arrives
+                        //   keeps the feet above the roller while it passes (a too-EARLY jump
+                        //   lands back down before the barrel and dies grounded; a too-LATE jump
+                        //   never lifts the body in time). SIM_HZ stays 60 (exact per-tick shape).
 var BARREL_FALL  = perTick(BARREL_SEC_PER_CELL * 0.62); // a drop falls a touch faster than a roll
 var HOP_SCORE   = 100;  // points for clearing a barrel with a well-timed jump
 
@@ -227,11 +248,34 @@ function passableCell(w, cx, cy) {
   return tileAt(w, cx, cy) !== SOLID;
 }
 
+/* ── BONUS BUDGET (cycle #129 — budget the countdown to the REAL traversal at the new
+   seconds-per-cell clock, so PERFECT play finishes with bonus REMAINING and a dawdler burns
+   it to 0). The OLD build drained a flat 100 every 12 ticks = 500/sec; a 5000 start was gone
+   in ~10s, but a clean L1 run at the slow #125 pace takes ~18s (the scripted winSolve needs
+   ~1088 ticks) — so the bonus was PROVABLY unattainable. We DERIVE a fair traversal estimate
+   from the board geometry × the ACTUAL per-cell lattice timing (ticksPerCell = FRAC/speed,
+   the real cost once perTick rounds the seconds-per-cell to the integer lattice), then spend
+   the whole bonus over fairTicks × a slack so a fair run keeps a healthy margin. ─────────── */
+var BONUS_SLACK = 1.5;   // budget the bonus over 1.5× the fair-traversal estimate
+function fairTraversalTicks(W, H, runSpeed, climbSpeed) {
+  var tcRun   = FRAC / (runSpeed   || RUN_SPEED);     // real ticks to cross one cell running
+  var tcClimb = FRAC / (climbSpeed || CLIMB_SPEED);   // real ticks to climb one rung
+  var climbCells = H - 2;                              // spawn row → the top girder
+  var floors     = Math.ceil((H - 2) / 2);            // horizontal girders to traverse
+  var runCells   = floors * (W - 3);                  // ~a board-width of running per floor
+  return Math.round(climbCells * tcClimb + runCells * tcRun);
+}
+
 /* ── build a runnable world from a level index. ─────────────────────────────── */
 function makeWorld(levelIdx, opts) {
   opts = opts || {};
   var li = ((levelIdx % LEVELS.length) + LEVELS.length) % LEVELS.length;
   var lvl = parseLevel(LEVELS[li]);
+  var runSpeed = RUN_SPEED, climbSpeed = CLIMB_SPEED;
+  var bonusStart = opts.bonus || 5000;
+  // budget the bonus over a fair-traversal estimate × slack; drain that fraction each tick.
+  var bonusBudgetTicks = Math.max(1, Math.round(fairTraversalTicks(lvl.W, lvl.H, runSpeed, climbSpeed) * BONUS_SLACK));
+  var bonusDrainPerTick = bonusStart / bonusBudgetTicks;   // FRACTIONAL points/tick
   return {
     level: li, W: lvl.W, H: lvl.H, tiles: lvl.tiles, slopes: lvl.slopes,
     goal: lvl.goal, thrower: lvl.thrower,
@@ -240,7 +284,7 @@ function makeWorld(levelIdx, opts) {
     // SPEED lives as per-tick lattice steps DERIVED from the seconds-per-cell knobs (see
     // the tunables block). The level-loop ramp passes faster barrels via barrelSec, not a
     // higher tick rate; the figure's run/climb stay human-paced constants across levels.
-    runSpeed: RUN_SPEED, climbSpeed: CLIMB_SPEED,
+    runSpeed: runSpeed, climbSpeed: climbSpeed,
     barrelSpeed: opts.barrelSpeed || (opts.barrelSec ? perTick(opts.barrelSec) : BARREL_SPEED),
     barrelFall: opts.barrelFall || (opts.barrelSec ? perTick(opts.barrelSec * 0.62) : BARREL_FALL),
     spawnEvery: opts.spawnEvery || 96,        // ticks between thrower barrels
@@ -248,7 +292,11 @@ function makeWorld(levelIdx, opts) {
     frame: 0, tick: 0,
     won: false, dead: false, over: false,
     score: 0, hops: 0,
-    bonus: opts.bonus || 5000
+    // BONUS: a fractional accumulator (bonusF) drained per tick at bonusDrainPerTick; the
+    // integer `bonus` (what the HUD + score read) is floor(bonusF). Budgeted to the real
+    // traversal so a perfect L1 run finishes with bonus > 0 (see fairTraversalTicks).
+    bonus: bonusStart, bonusF: bonusStart, bonusStart: bonusStart,
+    bonusBudgetTicks: bonusBudgetTicks, bonusDrainPerTick: bonusDrainPerTick
   };
 }
 
@@ -258,8 +306,11 @@ function mkPlayer(cx, cy) {
   return {
     cx: cx, cy: cy,
     px: cx * FRAC,        // absolute lattice X
-    py: cy * FRAC,        // absolute lattice Y of the feet
-    vy: 0,                // vertical lattice velocity (jump/gravity)
+    py: cy * FRAC,        // absolute lattice Y of the feet (INTEGER — collision reads this)
+    pyf: cy * FRAC,       // fractional vertical accumulator (true sub-lattice feet position;
+                          //   a.py = round(a.pyf) each airborne tick so the FRACTIONAL jump
+                          //   arc is exact while collision still sees an integer lattice py)
+    vy: 0,                // vertical lattice velocity (jump/gravity — now FRACTIONAL)
     facing: 1,
     onLadder: false, onGround: true, jumping: false, alive: true
   };
@@ -363,11 +414,17 @@ function stepPlayer(w, input) {
   if (!a.alive) return;
   a.cx = cellOfX(a.px);
 
-  // ── airborne: the fixed jump arc OR a fall. Integer kinematics (A's model). ──
+  // ── airborne: the knob-derived jump arc OR a fall. FRACTIONAL kinematics: integrate the
+  //    sub-lattice accumulator a.pyf, then ROUND to the integer a.py the swept collision +
+  //    ceiling/landing checks read. (The OLD build integrated a.py directly with an integer
+  //    vy/grav — fine for a coarse fast arc, but it cannot represent the slow tall arc whose
+  //    per-tick gravity is < 1 lattice. Rounding each tick keeps a.py on the lattice for the
+  //    exact box collision while the arc itself is smooth + slow.) ──────────────────────────
   if (!a.onGround) {
-    var prevHeadY = a.py - BODY_H;               // head BEFORE this tick's rise
+    var prevHeadY = a.py - BODY_H;               // head BEFORE this tick's rise (integer)
     a.vy += GRAV;
-    a.py += a.vy;
+    a.pyf += a.vy;
+    a.py = Math.round(a.pyf);
     // CEILING: a rising figure is BLOCKED when its HEAD reaches the BEAM of a solid /
     // girder row above — it does NOT tunnel through (symmetric to the landing check).
     // Girders are THIN beams sitting at the TOP of their cell (the beam line = the
@@ -388,10 +445,10 @@ function stepPlayer(w, input) {
           var beamLine = ry * FRAC;
           // bonk only a beam that was ABOVE the head a tick ago and is reached now —
           // never the (empty-or-not) row the head was already sitting in at rest.
-          if (beamLine < prevHeadY && headY <= beamLine) { a.py = beamLine + BODY_H; a.vy = 0; break; }
+          if (beamLine < prevHeadY && headY <= beamLine) { a.py = beamLine + BODY_H; a.pyf = a.py; a.vy = 0; break; }
         } else if (ct === SOLID) {                // a full-cell wall: bonk at its bottom
           var floorLine = (ry + 1) * FRAC;
-          if (floorLine < prevHeadY && headY <= floorLine) { a.py = floorLine + BODY_H; a.vy = 0; break; }
+          if (floorLine < prevHeadY && headY <= floorLine) { a.py = floorLine + BODY_H; a.pyf = a.py; a.vy = 0; break; }
         }
       }
     }
@@ -406,7 +463,7 @@ function stepPlayer(w, input) {
       for (var ry = startRow; ry <= landRow + 1 && ry < w.H; ry++) {
         if (ry < 0) continue;
         if ((isFigureFloorTile(tileAt(w, fc, ry)) || tileAt(w, fc, ry) === SOLID) && a.py >= ry * FRAC) {
-          a.cy = ry; a.py = ry * FRAC; a.vy = 0;
+          a.cy = ry; a.py = ry * FRAC; a.pyf = a.py; a.vy = 0;
           a.onGround = true; a.jumping = false; a.onLadder = false;
           a.px = a.cx * FRAC;       // snap x to the cell so motion stays on lattice
           break;
@@ -425,12 +482,15 @@ function stepPlayer(w, input) {
 
   // gravity: if not on a ladder and no floor below, start falling.
   if (!a.onLadder && !isFloorBelow(w, a.cx, a.cy)) {
-    a.onGround = false; a.vy = 0; return;
+    a.onGround = false; a.vy = 0; a.pyf = a.py; return;   // sync the fractional accumulator
   }
 
-  // JUMP — a discrete fixed-arc impulse, only from a grounded girder (not a ladder).
+  // JUMP — a discrete arc impulse derived from the JUMP_SEC + JUMP_APEX_CELLS knobs, only
+  // from a grounded girder (not a ladder). Seed the fractional accumulator from the integer
+  // feet so the slow tall arc integrates exactly from the lattice line.
   if (input.jump && !a.onLadder && isFloorBelow(w, a.cx, a.cy)) {
     a.px = a.cx * FRAC;            // center on the cell so the arc lands cleanly
+    a.pyf = a.py;                  // start the fractional accumulator at the integer feet
     a.vy = JUMP_VY; a.onGround = false; a.jumping = true; a.onLadder = false;
     return;
   }
@@ -445,14 +505,14 @@ function stepPlayer(w, input) {
   if (input.up && (isLadder(w, a.cx, a.cy - 1) || isLadder(w, a.cx, a.cy))) {
     if (passableCell(w, a.cx, a.cy - 1) && a.cy - 1 >= 0) {
       a.px = a.cx * FRAC;                    // centre on the ladder column
-      a.py -= climbStep; if (a.py < 0) a.py = 0;
+      a.py -= climbStep; if (a.py < 0) a.py = 0; a.pyf = a.py;
       a.cy = cellOfY(a.py); a.onLadder = true; return;
     }
   }
   if (input.down && isLadder(w, a.cx, a.cy + 1)) {
     if (a.cy + 1 < w.H) {
       a.px = a.cx * FRAC;
-      a.py += climbStep; var maxY = (w.H - 1) * FRAC; if (a.py > maxY) a.py = maxY;
+      a.py += climbStep; var maxY = (w.H - 1) * FRAC; if (a.py > maxY) a.py = maxY; a.pyf = a.py;
       a.cy = cellOfY(a.py); a.onLadder = true; return;
     }
   }
@@ -480,9 +540,9 @@ function stepPlayer(w, input) {
   }
   // after walking, re-check support: if the new cell hangs over a gap, fall.
   if (!isLadder(w, a.cx, a.cy) && !isFloorBelow(w, a.cx, a.cy)) {
-    a.onGround = false; a.vy = 0;
+    a.onGround = false; a.vy = 0; a.pyf = a.py;   // sync the fractional accumulator on fall-off
   } else {
-    a.py = a.cy * FRAC;
+    a.py = a.cy * FRAC; a.pyf = a.py;
   }
 }
 /* a horizontal step is legal if the target is passable AND standable (floor below
@@ -565,7 +625,14 @@ function stepTick(w, input) {
   if (w.over) return;
   w.frame++; w.tick++;
   if (w.spawnEnabled && w.tick % w.spawnEvery === 0) spawnBarrel(w);
-  if (w.tick % 12 === 0 && w.bonus > 0) w.bonus -= 100;   // soft bonus countdown
+  // BONUS countdown — drain the fractional accumulator at the budgeted rate (derived from the
+  // fair traversal at the real per-cell clock), then expose the integer floor. Budgeted so a
+  // perfect run finishes with bonus REMAINING; a dawdler outlasts the budget and hits 0.
+  if (w.bonusF > 0) {
+    w.bonusF -= (w.bonusDrainPerTick || 0);
+    if (w.bonusF < 0) w.bonusF = 0;
+    w.bonus = Math.floor(w.bonusF);
+  }
   stepPlayer(w, input);
   if (w.over) return;
   // record each barrel's pre-step position so the sweep has a start point.
@@ -748,55 +815,80 @@ function runSelfTest() {
           'rolled=' + rolledFirst + ' droppedAt(' + dropX + ',5)=' + droppedAtDrop + ' negNeverDropped=' + neverDropped);
   }
 
-  // ── CLAIM 3: JUMP-CLEARANCE with a DOUBLE negative control. A WELL-TIMED jump
-  //    clears a barrel; NEG-A never-jump collides; NEG-B a TOO-LATE jump collides.
-  //    Together: a jump saves you IFF it is well-timed. ──────────────────────────
+  // ── CLAIM 3: JUMP-CLEARANCE with a TRIPLE negative control, against the SECONDS-PER-CELL
+  //    clock (#125 + the #129 knob-derived arc). A WELL-TIMED jump clears a barrel; NEG-A
+  //    never-jump collides; NEG-B a TOO-LATE jump collides; NEG-C a TOO-EARLY jump (fired
+  //    several cells out) lands BACK ON THE GROUND in the barrel's path and is run over.
+  //    Together they prove IFF — only a jump committed AS THE BARREL ARRIVES saves you, and
+  //    the regression the #115 green test missed (a wildly-early jump that the OLD fast arc
+  //    carried up-and-down to land in front, falsely registering a clear) now COLLIDES.
+  //    The scenario barrel rolls at BARREL_SEC_PER_CELL — the real per-cell clock, NOT the
+  //    old tick rate — so this mirrors actual play at the shipped speeds. ─────────────────
   {
-    // a reusable scenario: figure grounded at (8,11); a barrel rolling toward it.
+    // a reusable scenario: figure grounded at (8,11); a barrel 4 cells left rolling toward it
+    // at the seconds-per-cell clock. pyf seeded so the fractional arc integrates exactly.
     function scenario() {
-      var ww = makeWorld(0, { spawnEnabled: false });
-      var p = ww.player; p.cx = 8; p.cy = 11; p.px = 8 * FRAC; p.py = 11 * FRAC;
+      var ww = makeWorld(0, { spawnEnabled: false, barrelSec: BARREL_SEC_PER_CELL });
+      var p = ww.player; p.cx = 8; p.cy = 11; p.px = 8 * FRAC; p.py = 11 * FRAC; p.pyf = p.py;
       p.onGround = true; p.alive = true; p.vy = 0;
       var bk = mkBarrel(0, 4, 11, 1); ww.barrels = [bk];   // 4 cells left, rolling right
       return ww;
     }
-    // 3a POSITIVE: jump when the barrel is ~2 cells away (the timing window).
+    // 3a POSITIVE: jump as the barrel arrives (~1–2 cells away — the committed timing window).
     var wc = scenario();
     var input3 = blankInput();
-    var hopped = false, posDied = false;
-    for (var k3 = 0; k3 < 120 && !wc.over; k3++) {
+    var hopped = false;
+    for (var k3 = 0; k3 < 200 && !wc.over; k3++) {
       var dist = Math.abs(wc.player.px - (wc.barrels[0] ? wc.barrels[0].px : 1e9));
       input3.jump = (wc.player.onGround && dist <= 2 * FRAC && dist > FRAC);
       stepTick(wc, input3);
       if (input3.jump) input3.jump = false;
       if (wc.hops > 0) hopped = true;
     }
-    posDied = wc.dead;
-    var posCleared = hopped && !posDied;
+    var posCleared = hopped && !wc.dead;
 
     // 3b NEG-A: never jump → the grounded overlap collides.
     var wd = scenario();
-    var negA = false;
-    for (var k4 = 0; k4 < 120 && !wd.over; k4++) stepTick(wd, blankInput());
-    negA = wd.dead;
+    for (var k4 = 0; k4 < 200 && !wd.over; k4++) stepTick(wd, blankInput());
+    var negA = wd.dead;
 
-    // 3c NEG-B: a TOO-LATE jump — fire jump only once the barrel is already AT the
-    //    figure (dist <= barrel width). The impulse can't lift the body in time, so
-    //    the overlap still kills. This is the half that proves IFF (not "any jump").
+    // 3c NEG-B: a TOO-LATE jump — fire only once the barrel is already AT the figure
+    //    (dist ≤ a barrel half-width). The slow arc can't lift the body clear in time, so
+    //    the overlap still kills.
     var we = scenario();
     var input3b = blankInput();
-    var negB = false;
-    for (var k5 = 0; k5 < 120 && !we.over; k5++) {
+    for (var k5 = 0; k5 < 200 && !we.over; k5++) {
       var dB = Math.abs(we.player.px - (we.barrels[0] ? we.barrels[0].px : 1e9));
       input3b.jump = (we.player.onGround && dB <= (BARREL_W >> 1));
       stepTick(we, input3b);
       if (input3b.jump) input3b.jump = false;
     }
-    negB = we.dead;
+    var negB = we.dead;
 
-    check('JUMP-CLEARANCE (IFF): a well-timed jump clears (POS); NEG-A never-jump collides; NEG-B a too-late jump collides',
-          posCleared && negA && negB,
-          'posCleared=' + posCleared + ' negA(never)=' + negA + ' negB(tooLate)=' + negB);
+    // 3d NEG-C (the missed regression): a TOO-EARLY jump — fire ONCE while the barrel is
+    //    still several cells out. The ~0.5s arc completes and the figure LANDS BACK ON THE
+    //    GROUND (in place, in the barrel's path) well before the barrel arrives, which then
+    //    rolls into the grounded body. Assert it dies AND that it never falsely registered a
+    //    hop (hops stays 0) AND that it was GROUNDED at the kill (landed in front — not a
+    //    mid-air clear). On the OLD fast arc this case wrongly cleared; now it must collide.
+    var wf3 = scenario();
+    var input3c = blankInput();
+    var firedEarly = false, groundedAtDeath = false;
+    for (var k6 = 0; k6 < 200 && !wf3.over; k6++) {
+      var dC = Math.abs(wf3.player.px - (wf3.barrels[0] ? wf3.barrels[0].px : 1e9));
+      input3c.jump = (wf3.player.onGround && !firedEarly && dC >= 3.5 * FRAC); // several cells out
+      if (input3c.jump) firedEarly = true;
+      var wasGrounded = wf3.player.onGround;
+      stepTick(wf3, input3c);
+      if (input3c.jump) input3c.jump = false;
+      if (wf3.dead && wasGrounded) groundedAtDeath = true;   // killed while standing (landed in front)
+    }
+    var negC = firedEarly && wf3.dead && wf3.hops === 0 && groundedAtDeath;
+
+    check('JUMP-CLEARANCE (IFF @ seconds-per-cell): well-timed clears (POS); NEG-A never; NEG-B too-late; NEG-C too-EARLY lands-in-front & is run over',
+          posCleared && negA && negB && negC,
+          'posCleared=' + posCleared + ' negA(never)=' + negA + ' negB(tooLate)=' + negB +
+          ' negC(tooEarly,grounded,hops=' + wf3.hops + ')=' + negC);
   }
 
   // ── CLAIM 4: WIN IFF the figure stands on the top platform. NEG: one row below. ──
@@ -885,19 +977,23 @@ function runSelfTest() {
   //    apex is the analytic sum of the fixed arc; it must be strictly under FRAC. ──
   {
     var w8 = makeWorld(0, { spawnEnabled: false });
-    var p8 = w8.player; p8.cx = 5; p8.cy = 11; p8.px = 5 * FRAC; p8.py = 11 * FRAC;
+    var p8 = w8.player; p8.cx = 5; p8.cy = 11; p8.px = 5 * FRAC; p8.py = 11 * FRAC; p8.pyf = p8.py;
     p8.onGround = true; p8.alive = true; p8.vy = 0;
-    var groundY = p8.py, apexRise = 0;
+    var groundY = p8.py, apexRise = 0, airTicks = 0;
     var in8 = blankInput(); in8.jump = true;
-    for (var k8 = 0; k8 < 40 && !w8.over; k8++) {
+    for (var k8 = 0; k8 < 80 && !w8.over; k8++) {
       stepTick(w8, in8); in8.jump = false;
+      if (!p8.onGround) airTicks++;
       var rise = groundY - p8.py; if (rise > apexRise) apexRise = rise;
       if (p8.onGround && k8 > 0) break;        // landed back
     }
     var FLOOR = FRAC;                            // one floor = one cell in lattice units
-    check('JUMP APEX < ONE FLOOR: the fixed jump arc rises < one floor height (clears ~a barrel, not 2.5 stories)',
-          apexRise > 0 && apexRise < FLOOR,
-          'apexRise=' + apexRise + ' lattice (' + (apexRise / FRAC).toFixed(2) + ' cells) floor=' + FLOOR);
+    // the knob-derived arc must clear a barrel's lethal box top (≥ BARREL_H) yet stay strictly
+    // UNDER one floor (no ceiling punch), and last about JUMP_SEC (the committed, slow hop).
+    check('JUMP APEX (knob-derived): clears a barrel box (≥ ' + BARREL_H + ' lattice) yet < one floor (' + FLOOR + '); arc lasts ~JUMP_SEC',
+          apexRise >= BARREL_H && apexRise < FLOOR && airTicks >= JUMP_AIR_TICKS - 3 && airTicks <= JUMP_AIR_TICKS + 3,
+          'apexRise=' + apexRise + ' lattice (' + (apexRise / FRAC).toFixed(2) + ' cells) floor=' + FLOOR +
+          ' airTicks=' + airTicks + ' (~JUMP_AIR_TICKS=' + JUMP_AIR_TICKS + ')');
   }
 
   // ── CLAIM 9: a rising figure is BLOCKED by a CEILING — a STRONG upward impulse
@@ -918,12 +1014,13 @@ function runSelfTest() {
       ww.tiles[standRow * Wc + col] = GIRDER;               // figure stands here
       ww.tiles[ceilRow * Wc + col] = withCeiling ? GIRDER : EMPTY;  // ceiling (or air)
       var pp = ww.player; pp.cx = col; pp.cy = standRow; pp.px = col * FRAC; pp.py = standRow * FRAC;
+      pp.pyf = pp.py;                                       // seed the fractional accumulator
       pp.onGround = true; pp.alive = true; pp.vy = 0;
       return { w: ww, p: pp, col: col, ceilRow: ceilRow };
     }
     // POSITIVE: a strong impulse under a ceiling — the head must stop at/below the beam.
     var s9 = ceilingShaft(true);
-    s9.p.onGround = false; s9.p.jumping = true; s9.p.vy = -20;   // a deliberately big rise
+    s9.p.onGround = false; s9.p.jumping = true; s9.p.vy = -20; s9.p.pyf = s9.p.py;   // a deliberately big rise
     var minHeadY = s9.p.py - BODY_H;
     for (var k9 = 0; k9 < 40 && !s9.w.over; k9++) {
       stepTick(s9.w, blankInput());
@@ -934,7 +1031,7 @@ function runSelfTest() {
     var blockedByCeiling = minHeadY >= ceilBeam;            // head never crossed the beam line
     // NEG CONTROL: identical impulse with the ceiling carved to air → it rises past it.
     var s9n = ceilingShaft(false);
-    s9n.p.onGround = false; s9n.p.jumping = true; s9n.p.vy = -20;
+    s9n.p.onGround = false; s9n.p.jumping = true; s9n.p.vy = -20; s9n.p.pyf = s9n.p.py;
     var minHeadYn = s9n.p.py - BODY_H;
     for (var k9n = 0; k9n < 40 && !s9n.w.over; k9n++) {
       stepTick(s9n.w, blankInput());
@@ -962,6 +1059,33 @@ function runSelfTest() {
           'advanced=' + advanced + ' lattice (RUN_SPEED=' + RUN_SPEED + ', a whole cell=' + FRAC + ')');
   }
 
+  // ── CLAIM 11: BONUS IS ATTAINABLE (cycle #129 — the bonus timer is BUDGETED to the real
+  //    traversal at the seconds-per-cell clock). POSITIVE: a SCRIPTED WINNING run of L1 (the
+  //    same winSolve BFS that drives claim 1) reaches the top with bonus STILL POSITIVE — so
+  //    perfect play is rewarded, not provably-impossible (the OLD flat 500/sec drain emptied a
+  //    5000 start in ~10s, but a clean L1 run takes ~18s at the slow pace). NEG CONTROL: a
+  //    DAWDLING run of the SAME budget length that never reaches the top burns the bonus to 0,
+  //    proving the timer still bites a slow player. ─────────────────────────────────────────
+  {
+    // POSITIVE: drive a real win; assert bonus survives.
+    var wb1 = makeWorld(0, { spawnEnabled: false });
+    var inB = blankInput();
+    var gotB = winSolve(wb1, inB, 6000);
+    var bonusAtWin = wb1.bonus;
+    var posBonus = gotB.won && bonusAtWin > 0;
+
+    // NEG CONTROL: an idle figure for a full bonus budget (+slack) never wins and drains to 0.
+    var wb2 = makeWorld(0, { spawnEnabled: false });
+    var dawdleTicks = wb2.bonusBudgetTicks + 60;
+    for (var kB = 0; kB < dawdleTicks && !wb2.over; kB++) stepTick(wb2, blankInput());
+    var negBonus = (wb2.bonus === 0) && !wb2.won;
+
+    check('BONUS ATTAINABLE: a scripted L1 WIN finishes with bonus > 0 (POS); a dawdling idle run of the same budget burns bonus to 0 (NEG)',
+          posBonus && negBonus,
+          'winBonus=' + bonusAtWin + '/' + wb1.bonusStart + ' (won=' + gotB.won + ', win@' + gotB.ticks +
+          't, budget=' + wb1.bonusBudgetTicks + 't) | dawdleBonus=' + wb2.bonus + ' won=' + wb2.won);
+  }
+
   return { allPass: allPass, results: results };
 }
 
@@ -971,6 +1095,8 @@ if (typeof module !== 'undefined' && module.exports) {
     FRAC: FRAC, SIM_HZ: SIM_HZ, RUN_SPEED: RUN_SPEED, CLIMB_SPEED: CLIMB_SPEED, GRAV: GRAV,
     RUN_SEC_PER_CELL: RUN_SEC_PER_CELL, CLIMB_SEC_PER_CELL: CLIMB_SEC_PER_CELL,
     BARREL_SEC_PER_CELL: BARREL_SEC_PER_CELL, perTick: perTick,
+    JUMP_SEC: JUMP_SEC, JUMP_APEX_CELLS: JUMP_APEX_CELLS, JUMP_AIR_TICKS: JUMP_AIR_TICKS,
+    BONUS_SLACK: BONUS_SLACK, fairTraversalTicks: fairTraversalTicks,
     JUMP_VY: JUMP_VY, BARREL_SPEED: BARREL_SPEED, BARREL_FALL: BARREL_FALL,
     HOP_SCORE: HOP_SCORE, BODY_W: BODY_W, BODY_H: BODY_H, BARREL_W: BARREL_W, BARREL_H: BARREL_H,
     EMPTY: EMPTY, GIRDER: GIRDER, LADDER: LADDER, DROP: DROP, SOLID: SOLID,

@@ -73,7 +73,36 @@ for (const r of st.results) ok(r.name, r.pass, r.detail);
      w.hops === 1 && w.score === core.HOP_SCORE, 'hops=' + w.hops + ' score=' + w.score);
 }
 
+// 2e. The knob-derived arc is FRACTIONAL (not the old integer JUMP_VY=-6/GRAV=1) and lasts
+//     ~JUMP_SEC. Cross-check the derivation directly: |JUMP_VY| and GRAV are sub-lattice, and
+//     the apex over the air-tick count lands in the target band (clears a barrel, under a floor).
+{
+  const fracArc = (core.JUMP_VY % 1 !== 0) || (core.GRAV % 1 !== 0);
+  // analytic integer-rounded apex of the fractional arc:
+  let pyf = 0, vy = core.JUMP_VY, apex = 0, T = 0;
+  for (let k = 0; k < 200; k++) { vy += core.GRAV; pyf += vy; const py = Math.round(pyf); const rise = -py; if (rise > apex) apex = rise; T++; if (vy >= 0 && pyf >= 0) break; }
+  ok('knob-derived arc: JUMP_VY/GRAV are FRACTIONAL (not the old -6/1 integer impulse); apex clears a barrel & stays under a floor; air ≈ JUMP_SEC',
+     fracArc && apex >= core.BARREL_H && apex < core.FRAC && Math.abs(T - core.JUMP_AIR_TICKS) <= 3,
+     'JUMP_VY=' + core.JUMP_VY.toFixed(3) + ' GRAV=' + core.GRAV.toFixed(4) + ' apex=' + apex + ' (barrelH=' + core.BARREL_H + ', floor=' + core.FRAC + ') airTicks=' + T + '/' + core.JUMP_AIR_TICKS);
+}
+
+// 2f. BONUS budget is grounded in the REAL traversal: the board-derived fair estimate exceeds
+//     the actual scripted-win tick count (so the budget can't be shorter than a clean run), and
+//     a perfect L1 win leaves bonus > 0 while an idle dawdler of the same budget burns to 0.
+{
+  const w1 = core.makeWorld(0, { spawnEnabled: false });
+  const fairTicks = core.fairTraversalTicks(w1.W, w1.H, w1.runSpeed, w1.climbSpeed);
+  const winRun = core.makeWorld(0, { spawnEnabled: false });
+  const got = core.winSolve(winRun, core.blankInput(), 6000);
+  const w2 = core.makeWorld(0, { spawnEnabled: false });
+  const dawdle = w2.bonusBudgetTicks + 60;
+  for (let i = 0; i < dawdle && !w2.over; i++) core.stepTick(w2, core.blankInput());
+  ok('bonus budget is fair: estimate exceeds the actual win path; perfect win keeps bonus > 0; dawdler burns to 0',
+     fairTicks >= got.ticks && got.won && winRun.bonus > 0 && w2.bonus === 0,
+     'fairEst=' + fairTicks + 't winPath=' + got.ticks + 't budget=' + winRun.bonusBudgetTicks + 't winBonus=' + winRun.bonus + ' dawdleBonus=' + w2.bonus);
+}
+
 console.log('\n' + (fails === 0
-  ? 'THE CLIMB SELF-TEST: ALL PASS (' + st.results.length + ' core claims + 5 harness checks)'
+  ? 'THE CLIMB SELF-TEST: ALL PASS (' + st.results.length + ' core claims + 7 harness checks)'
   : 'THE CLIMB SELF-TEST: ' + fails + ' FAILURE(S)'));
 process.exit(fails === 0 ? 0 : 1);
