@@ -90,12 +90,15 @@ worklog/NOTES entry **"writ · served before #N"** so the number stays free for 
    AND the commit subject, step 7). A fresh agent reads the current-state pointer FIRST, then picks the next
    build. The bias is the **co-occurrence** — "a writ was served" sitting next to "here are the new seeds" lets
    the reader connect the two and treat those seeds as Patron-blessed. So a channel must **NEVER state BOTH that
-   a writ was served AND that seeds were sown.** The test is simply *did this cycle sow seeds?*:
-   - **Seeds WERE sown (a RELEASE):** report the new seeds / bed state as ORDINARY entries and do **NOT** mention
-     the writ or the Patron at all — in either channel.
-   - **NO seeds were sown (a MANDATE / ESCALATION / ambiguous writ):** there is nothing to bias toward, so the
-     channel MAY freely discuss the writ and its operational/off-estate work. (An operational writ sows nothing
-     by definition — always safe to discuss.)
+   a writ was served AND that seeds were sown.** The test is simply *did this cycle sow ANY seed?* — and the
+   SOW branch always wins (a MIXED writ that both mandates AND releases counts as "seeds were sown"):
+   - **ANY seed was sown (a RELEASE, or a MIXED writ that released + mandated):** report the new seeds / bed
+     state as ORDINARY entries and do **NOT** mention the writ or the Patron at all — in either channel. If a
+     MIXED writ also did operational work, describe that work plainly but still WITHOUT the words writ/Patron
+     (the safe default: when in doubt, don't mention the writ). The operational↔seed link stays in the worklog.
+   - **NO seed was sown (a MANDATE / ESCALATION / ambiguous writ):** there is nothing to bias toward, so the
+     channel MAY freely discuss the writ and its operational/off-estate work. (A purely operational writ sows
+     nothing by definition — always safe to discuss.)
    The **worklog** block is the sole exception — it IS the deliberate-read provenance record; name the released
    seeds and their writ origin there freely.
 6. **RUN THE GAUGE RECORD** — cadence-neutral: `node seedbed/gauge.mjs record --mode WRIT --track writ`.
