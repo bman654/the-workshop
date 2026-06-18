@@ -101,6 +101,11 @@ worklog/NOTES entry **"writ · served before #N"** so the number stays free for 
      nothing by definition — always safe to discuss.)
    The **worklog** block is the sole exception — it IS the deliberate-read provenance record; name the released
    seeds and their writ origin there freely.
+   **EXPLICIT PATRON'S WAIVER — a second exception.** If the writ ITSELF carries an explicit waiver authorizing
+   seeds sown in its service to name the writ (e.g. an honorific writ whose whole purpose is to be commemorated),
+   that waiver OVERRIDES the silence: in BOTH maker-visible channels you MAY name that writ and link its seeds to
+   it, exactly as the writ permits — honor the writ's own instruction over the default. (The default silence still
+   governs every writ that grants no such waiver.)
 6. **RUN THE GAUGE RECORD** — cadence-neutral: `node seedbed/gauge.mjs record --mode WRIT --track writ`.
 7. **LEDGER + PUBLISH** — commit the REPO changes only (operational repo files + the ROADMAP edits). The vault
    write / message the steward made is already done and is not a repo artifact. **COMMIT SUBJECT — apply the
