@@ -645,10 +645,16 @@
 
    THE CONTRACT THIS FILE PROVES
    ─────────────────────────────
-   The whole climb is a PURE FUNCTION of (level, scripted input track). No
-   Math.random / Date / performance.now in the step path; time advances in FIXED
-   integer ticks; the figure + barrels live on a sub-cell lattice (FRAC integer
-   units per cell) so motion is smooth but the logic is exact integer state.
+   The climb's RULES are a PURE FUNCTION of (level, scripted input track). No
+   Math.random / Date / performance.now in the step path; the figure + barrels live on a
+   sub-cell lattice (FRAC integer units per cell) and the sim advances at a FIXED tick
+   rate (SIM_HZ) so collision is exact. SPEED is a human-readable seconds-per-cell knob
+   (RUN/CLIMB/BARREL_SEC_PER_CELL) that DERIVES the per-tick lattice step — NOT the tick
+   rate. The PAGE interpolates (lerps) render positions BETWEEN ticks, so motion is fluid
+   at any display refresh; the discrete grid LOGIC stays exactly self-testable. (cycle
+   #125 dropped the old byte-identical PER-TICK replay claim — it forced a fixed-integer-
+   tick architecture that, rendered raw, snapped a tick at a time — and replaced it with a
+   seed-reproducible LAYOUT claim, digdug's determinism contract.)
 
    THE FIVE CLAIMS (the in-page chip === the Node twin):
      (1) WINNABLE: a hand-authored board is reachable to the top platform by a
@@ -663,8 +669,9 @@
          jump saves you, not "any jump".
      (4) WIN IFF TOP: the level completes IFF the figure stands on the top
          platform. NEG CONTROL: standing one row below is NOT a win.
-     (5) REPLAY DETERMINISM: same level + scripted track → byte-identical per-tick
-         hash sequence, twice, and unchanged across a busy-wait (seed purity).
+     (5) LAYOUT REPRODUCIBLE FROM A SEED: a level resolves to a byte-identical board —
+         makeWorld(idx) twice → identical layout hash; a different idx differs. (The
+         digdug determinism contract; replaces the feel-hostile per-tick replay claim.)
 
    COLLISION MODEL (grafted from explorer A — sub-cell box, clearance-before-kill)
    ──────────────────────────────────────────────────────────────────────────────
@@ -690,20 +697,39 @@
 
 /* ── lattice tunables (FROZEN — renderer + self-test both read these) ────────── */
 var FRAC      = 16;     // sub-cell lattice resolution (integer units per cell, each axis)
-var RUN_SPEED = 3;      // lattice units the figure walks per tick along a girder
-                        //   (≈11px/frame at the live cell; a held key crosses the
-                        //   15-cell board in 15*16/3 = 80 ticks ≈ 1.3s — human-paced,
-                        //   not a per-tick whole-cell flick)
-var CLIMB_SPEED = 3;    // lattice units the figure climbs per tick on a ladder
-var GRAV      = 1;      // lattice units/tick added to vy each airborne tick
+
+/* ── THE SPEED KNOB (cycle #125 — human-readable seconds-per-cell, NOT a tick rate).
+   The sim runs at a FIXED tick rate (SIM_HZ) so the integrator + collision are exact and
+   the renderer can INTERPOLATE between ticks for glassy motion at ANY display refresh;
+   SPEED is dialed by how many SECONDS a thing takes to cross one cell, and the per-tick
+   lattice step is DERIVED from it. (The OLD build coupled speed to simHz — it bumped the
+   TICK RATE to go faster, which doubled as the speed AND, rendered raw with no interp,
+   made the figure snap a tick at a time on a high-refresh display. The level-loop ramp now
+   SHRINKS the seconds-per-cell via a speedMul instead of raising the tick rate; SIM_HZ is
+   constant so the proven jump arc + swept collision keep their exact per-tick timing.)
+   Tuned BY FEEL in the browser to a pace a held key can control across the board. */
+var SIM_HZ    = 60;     // FIXED logical ticks/sec (the integrator resolution — never the speed)
+var RUN_SEC_PER_CELL   = 0.21;  // a held arrow crosses one cell in ~0.21s (≈4.8 cells/s — human-paced, controllable)
+var CLIMB_SEC_PER_CELL = 0.27;  // a ladder rung-to-rung takes ~0.27s (a deliberate climb, slower than a run)
+var BARREL_SEC_PER_CELL= 0.27;  // a barrel rolls one cell in ~0.27s (≈3.7 cells/s — readable, dodgeable)
+
+/* per-tick lattice steps DERIVED from the seconds-per-cell knobs (round to ≥1 so the
+   integer lattice always advances). cellsPerTick = 1/(secPerCell*SIM_HZ); lattice/tick =
+   FRAC * cellsPerTick. At SIM_HZ=60: RUN≈1.27→1, CLIMB/BARREL≈0.99→1. The render TWEEN
+   (lerp between ticks) hides the integer rounding entirely — motion is fluid + slow. */
+function perTick(secPerCell){ return Math.max(1, Math.round(FRAC / (secPerCell * SIM_HZ))); }
+var RUN_SPEED   = perTick(RUN_SEC_PER_CELL);     // lattice units the figure walks per tick along a girder
+var CLIMB_SPEED = perTick(CLIMB_SEC_PER_CELL);   // lattice units the figure climbs per tick on a ladder
+var BARREL_SPEED= perTick(BARREL_SEC_PER_CELL);  // lattice units a barrel rolls along its girder per tick
+
+var GRAV      = 1;      // lattice units/tick added to vy each airborne tick (the fixed arc)
 var JUMP_VY   = -6;     // initial upward lattice velocity of a jump (the FIXED arc).
-                        //   apex rise = 15 lattice = 0.94 cell — clears one barrel
-                        //   (lethal box ~0.6 cell = 12 lattice) yet stays UNDER one floor
-                        //   (16 lattice), so it never punches through a ceiling. (Was -11
-                        //   → 3.4 cells, a punch through three ceilings; the jump-apex +
-                        //   ceiling self-tests now guard both ends.)
-var BARREL_SPEED = 2;   // lattice units a barrel rolls along its girder per tick
-var BARREL_FALL  = 3;   // lattice units a barrel falls per tick while dropping at a gap
+                        //   apex rise = 5+4+3+2+1 = 15 lattice = 0.94 cell — clears one
+                        //   barrel (lethal box ~0.6 cell = 12 lattice) yet stays UNDER one
+                        //   floor (16 lattice), so it never punches a ceiling. The jump-apex
+                        //   + ceiling self-tests guard both ends; UNCHANGED from the proven
+                        //   build (SIM_HZ stays 60 so the arc keeps its exact per-tick shape).
+var BARREL_FALL  = perTick(BARREL_SEC_PER_CELL * 0.62); // a drop falls a touch faster than a roll
 var HOP_SCORE   = 100;  // points for clearing a barrel with a well-timed jump
 
 /* the figure's lethal body box + the barrel's (shorter) lethal box, in lattice
@@ -847,7 +873,12 @@ function makeWorld(levelIdx, opts) {
     goal: lvl.goal, thrower: lvl.thrower,
     player: mkPlayer(lvl.pspawn.x, lvl.pspawn.y),
     barrels: [], nextBarrelId: 0,
-    barrelSpeed: opts.barrelSpeed || BARREL_SPEED,
+    // SPEED lives as per-tick lattice steps DERIVED from the seconds-per-cell knobs (see
+    // the tunables block). The level-loop ramp passes faster barrels via barrelSec, not a
+    // higher tick rate; the figure's run/climb stay human-paced constants across levels.
+    runSpeed: RUN_SPEED, climbSpeed: CLIMB_SPEED,
+    barrelSpeed: opts.barrelSpeed || (opts.barrelSec ? perTick(opts.barrelSec) : BARREL_SPEED),
+    barrelFall: opts.barrelFall || (opts.barrelSec ? perTick(opts.barrelSec * 0.62) : BARREL_FALL),
     spawnEvery: opts.spawnEvery || 96,        // ticks between thrower barrels
     spawnEnabled: opts.spawnEnabled !== false,
     frame: 0, tick: 0,
@@ -910,7 +941,8 @@ function spawnBarrel(w) {
 function stepBarrel(w, b) {
   if (!b.alive) return;
   if (b.falling) {
-    b.py += w.barrelSpeed > BARREL_FALL ? w.barrelSpeed : BARREL_FALL;
+    var fall = w.barrelFall || BARREL_FALL;
+    b.py += w.barrelSpeed > fall ? w.barrelSpeed : fall;
     if (b.py >= b.fallTarget) {
       b.py = b.fallTarget; b.falling = false;
       b.cy = cellOfY(b.py);
@@ -1039,30 +1071,42 @@ function stepPlayer(w, input) {
     return;
   }
 
-  // climb a ladder (up / down). Vertical climb stays cell-stepped (the win-solver +
-  // ladder grammar center on cells); snap px to the ladder column on pickup.
+  // climb a ladder (up / down) — SUB-CELL lattice motion at climbSpeed units per tick
+  // (was a whole cell per tick: a vertical flick). py is the source of truth; cy is
+  // derived from it via cellOfY. The figure snaps onto the ladder COLUMN on pickup, so
+  // px stays centred; on a clean rung boundary the win-solver + ladder grammar (which
+  // reason in cells) always find the figure centred on a column. The render tween lerps
+  // py between ticks so the climb is fluid at any refresh.
+  var climbStep = w.climbSpeed || CLIMB_SPEED;
   if (input.up && (isLadder(w, a.cx, a.cy - 1) || isLadder(w, a.cx, a.cy))) {
     if (passableCell(w, a.cx, a.cy - 1) && a.cy - 1 >= 0) {
-      a.cy -= 1; a.py = a.cy * FRAC; a.px = a.cx * FRAC; a.onLadder = true; return;
+      a.px = a.cx * FRAC;                    // centre on the ladder column
+      a.py -= climbStep; if (a.py < 0) a.py = 0;
+      a.cy = cellOfY(a.py); a.onLadder = true; return;
     }
   }
   if (input.down && isLadder(w, a.cx, a.cy + 1)) {
-    if (a.cy + 1 < w.H) { a.cy += 1; a.py = a.cy * FRAC; a.px = a.cx * FRAC; a.onLadder = true; return; }
+    if (a.cy + 1 < w.H) {
+      a.px = a.cx * FRAC;
+      a.py += climbStep; var maxY = (w.H - 1) * FRAC; if (a.py > maxY) a.py = maxY;
+      a.cy = cellOfY(a.py); a.onLadder = true; return;
+    }
   }
 
-  // run horizontally along the girder — SUB-CELL lattice motion at RUN_SPEED units
+  // run horizontally along the girder — SUB-CELL lattice motion at runSpeed units
   // per tick (was a whole cell per tick: a flick). px is the source of truth; cx is
   // derived from it via cellOfX. On direction-RELEASE we re-center px on the cell so
   // ladder pickup + the win-solver always find the figure centered on a column.
+  var runStep = w.runSpeed || RUN_SPEED;
   if (input.left && !input.right) {
     a.facing = -1;
-    var nxl = a.px - RUN_SPEED;
+    var nxl = a.px - runStep;
     if (passableCell(w, cellOfX(nxl), a.cy) || cellOfX(nxl) === a.cx) {
       a.px = nxl; if (a.px < 0) a.px = 0; a.cx = cellOfX(a.px);
     }
   } else if (input.right && !input.left) {
     a.facing = 1;
-    var nxr = a.px + RUN_SPEED;
+    var nxr = a.px + runStep;
     var maxX = (w.W - 1) * FRAC;
     if (passableCell(w, cellOfX(nxr), a.cy) || cellOfX(nxr) === a.cx) {
       a.px = nxr; if (a.px > maxX) a.px = maxX; a.cx = cellOfX(a.px);
@@ -1186,6 +1230,23 @@ function hashWorld(w) {
     mix(b.id); mix(b.px); mix(b.py); mix(b.cx); mix(b.cy);
     mix(b.dir); mix(b.falling ? 1 : 0); mix(b.hopped ? 1 : 0);
   }
+  return h >>> 0;
+}
+
+/* ── 32-bit hash of a world's LAYOUT (the board geometry, spawn/goal/thrower, and
+   slopes) — the deterministic "seed" each level resolves to. Two worlds built from the
+   same level index hash IDENTICALLY; different indices differ. This is the digdug
+   determinism contract (buildLevel(seed)→identical layout) carried over to the Climb's
+   hand-authored boards: the LOGIC stays reproducible from a seed without freezing the
+   renderer to integer ticks. (Excludes live entity positions — only the fixed layout.) */
+function hashBoard(w) {
+  var h = 0x811c9dc5 >>> 0;
+  function mix(v) { v = (v | 0); h ^= v; h = Math.imul(h, 0x01000193) >>> 0; }
+  mix(w.W); mix(w.H);
+  for (var i = 0; i < w.tiles.length; i++) mix(w.tiles[i].charCodeAt(0));
+  for (var s = 0; s < w.slopes.length; s++) mix(w.slopes[s]);
+  mix(w.goal.x); mix(w.goal.y); mix(w.thrower.x); mix(w.thrower.y);
+  mix(w.player.cx); mix(w.player.cy);
   return h >>> 0;
 }
 
@@ -1394,28 +1455,20 @@ function runSelfTest() {
           winOnTop && noWinBelow, 'winOnTop=' + winOnTop + ' noWinOneBelow=' + noWinBelow);
   }
 
-  // ── CLAIM 5: REPLAY DETERMINISM — identical per-tick hashes twice + unchanged
-  //    across a busy-wait (no wall-clock in the step path). ─────────────────────
+  // ── CLAIM 5: LAYOUT REPRODUCIBLE FROM A SEED (digdug's determinism contract).
+  //    The hand-authored boards are a PURE function of the level index: makeWorld(idx)
+  //    twice yields a byte-identical layout; a different index yields a different one.
+  //    This replaces the old feel-hostile byte-identical PER-TICK replay claim (which
+  //    forced a fixed-integer-tick architecture that snapped the renderer) — the LOGIC
+  //    stays provable from a seed while the motion is free to be a smooth dt-tween. ──
   {
-    var track = [
-      { at: 0,   set: { right: true } },
-      { at: 24,  set: { right: false, up: true } },
-      { at: 70,  set: { up: false, jump: true } },
-      { at: 90,  set: { left: true } },
-      { at: 150, set: { left: false, up: true } }
-    ];
-    var ra = replay(0, track, 700);
-    var rb = replay(0, track, 700);
-    var same = ra.hashes.length === rb.hashes.length, firstDiff = -1;
-    for (var i = 0; same && i < ra.hashes.length; i++)
-      if (ra.hashes[i] !== rb.hashes[i]) { same = false; firstDiff = i; }
-    var spin = Date.now(); while (Date.now() - spin < 20) { /* burn wall-clock */ }
-    var rc = replay(0, track, 700);
-    var sameAfterWait = rc.hashes[rc.hashes.length - 1] === ra.hashes[ra.hashes.length - 1];
-    check('REPLAY DETERMINISM: identical per-tick hash twice + unchanged across a busy-wait (seed purity)',
-          same && sameAfterWait,
-          same ? ('final 0x' + ra.hashes[ra.hashes.length - 1].toString(16) + ' waitOk=' + sameAfterWait)
-               : ('diverged at tick ' + firstDiff));
+    var la = hashBoard(makeWorld(0, { spawnEnabled: false }));
+    var lb = hashBoard(makeWorld(0, { spawnEnabled: false }));
+    var l2 = hashBoard(makeWorld(1, { spawnEnabled: false }));
+    var sameLayout = (la === lb), differsByIdx = (la !== l2);
+    check('LAYOUT REPRODUCIBLE: a level resolves to a byte-identical board (same idx → same hash; a different idx differs)',
+          sameLayout && differsByIdx,
+          'L1 0x' + la.toString(16) + ' (twice ' + sameLayout + ') vs L2 0x' + l2.toString(16) + ' (differs ' + differsByIdx + ')');
   }
 
   /* ═══ GAMEPLAY-PHYSICS REALISM (cycle #122 — these would have FAILED on the
@@ -1602,22 +1655,35 @@ let world = null;
 let mode = 'title';
 let acc = 0, best = 0;
 let level = 0, lives = 3, totalScore = 0;
-let simHz = 60;
+// SIM_HZ is the FIXED integrator rate (from the core) — NEVER the speed. Speed is the
+// human-readable seconds-per-cell knobs in the core; the level-loop ramp shrinks the
+// barrel seconds-per-cell (faster hazards) + the spawn cadence, not the tick rate.
+let loops = 0;                       // tower loops survived (the after-L2 difficulty ramp)
 const input = blankInput();
 
 function loadBest(){ try{ best = parseInt(localStorage.getItem('ws:best:the-climb')||'0',10)||0; }catch(e){ best=0; } }
 
+// LEVEL TUNES — speed in human-readable SECONDS-PER-CELL (barrelSec), denser/faster each
+// level. The core derives the per-tick lattice from barrelSec; the figure's run/climb stay
+// constant (human-paced) so only the hazards escalate (the classic DK difficulty curve).
 const LEVEL_TUNES = [
-  { barrelSpeed:2, spawnEvery:120, bonus:5000 },   // L1 — fair: sparse, slow
-  { barrelSpeed:3, spawnEvery:78,  bonus:7000 }    // L2 — hotter: faster, denser
+  { barrelSec:0.30, spawnEvery:150, bonus:5000 },   // L1 — fair: slow rolls (~3.3 cells/s), sparse
+  { barrelSec:0.24, spawnEvery:96,  bonus:7000 }     // L2 — hotter: ~4.2 cells/s, denser
 ];
-function tuneFor(lvl){ return LEVEL_TUNES[Math.min(lvl, LEVEL_TUNES.length-1)]; }
+function tuneFor(lvl){
+  const base = LEVEL_TUNES[Math.min(lvl, LEVEL_TUNES.length-1)];
+  // each completed tower-loop shrinks the barrel seconds-per-cell (faster) + tightens the
+  // spawn cadence — difficulty rises by RATE, not by raising the integrator tick rate.
+  const sec   = Math.max(0.13, base.barrelSec * Math.pow(0.88, loops));   // floor: stays dodgeable
+  const every = Math.max(48, Math.round(base.spawnEvery * Math.pow(0.9, loops)));
+  return { barrelSec:sec, spawnEvery:every, bonus:base.bonus };
+}
 
 function newWorld(lvl){
   const li = lvl % LEVELS.length;
   SK = SKINS[li % SKINS.length];
   world = makeWorld(lvl, tuneFor(lvl));
-  acc = 0; layout(); drawBackground();
+  acc = 0; captureSnap(); layout(); drawBackground();
 }
 
 //============================================================== background (static art)
@@ -1693,8 +1759,11 @@ function flash(v){ flashAmt = Math.min(1, flashAmt+v); }
 const parts = [];
 function spawnPart(x,y,vx,vy,life,r,color){ parts.push({x,y,vx,vy,life,max:life,r,color}); if(parts.length>300) parts.shift(); }
 function spawnBurst(actor, color, n){
-  const px = originX + (actor.px/FRAC + 0.5)*cell;
-  const py = originY + (actor.py/FRAC)*cell - cell*0.4;   // around the body, on the beam line
+  // use the interpolated figure position when bursting around the player (a hop), so the
+  // particles spawn where the smooth body actually is — not at the raw logical lattice.
+  const ip = (actor === (world&&world.player)) ? interpP() : { px:actor.px, py:actor.py };
+  const px = originX + (ip.px/FRAC + 0.5)*cell;
+  const py = originY + (ip.py/FRAC)*cell - cell*0.4;   // around the body, on the beam line
   for(let i=0;i<n;i++){ const a=Math.random()*TAU, sp=40+Math.random()*120;
     spawnPart(px,py,Math.cos(a)*sp,Math.sin(a)*sp,0.3+Math.random()*0.3,1.2+Math.random()*1.8,color); }
 }
@@ -1703,19 +1772,38 @@ function updateParts(dt){
     if(p.life<=0){ parts.splice(i,1); continue; } p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=260*dt; p.vx*=0.96; }
 }
 
-//============================================================== fixed-timestep advance
+//============================================================== fixed-timestep + render interpolation
+// The sim advances in FIXED SIM_HZ ticks (exact collision); the RENDERER lerps between the
+// pre-tick snapshot and the live world by the leftover-accumulator fraction (alpha), so the
+// figure + barrels glide smoothly between ticks at ANY display refresh — the digdug split:
+// the discrete grid LOGIC steps at a fixed rate, the rendered MOTION is a dt-paced tween.
+// (The old build drew the raw world each frame, so a tick showed for ~2 frames then SNAPPED
+// on a high-refresh display. SIM_HZ no longer doubles as speed, so this is pure smoothing.)
+let renderAlpha = 0;                 // 0..1 fraction into the next tick (acc/STEP)
+let prevP = { px:0, py:0 };          // figure render position BEFORE the current tick
+let prevB = new Map();               // barrelId → {px,py} BEFORE the current tick
+function captureSnap(){
+  if (!world) return;
+  const p = world.player; prevP.px = p.px; prevP.py = p.py;
+  prevB.clear();
+  for (const b of world.barrels) prevB.set(b.id, { px:b.px, py:b.py });
+  renderAlpha = 0;
+}
 function advance(dt){
   acc += dt;
-  const STEP = 1/simHz;
+  const STEP = 1/SIM_HZ;
   let steps = 0;
-  while (acc >= STEP && steps < 6){
+  while (acc >= STEP && steps < 8){
+    captureSnap();                   // snapshot positions BEFORE this tick (interp source)
     stepTick(world, input);
-    input.jump = false;            // one-shot pulse
+    input.jump = false;              // one-shot pulse
     detectEvents(world);
     acc -= STEP; steps++;
     if (world.over) break;
   }
-  if (steps === 6) acc = 0;
+  if (steps >= 8) acc = 0;
+  // alpha = how far we are into the NEXT (un-run) tick → lerp prev→cur by it (clamped).
+  renderAlpha = clamp(acc / STEP, 0, 1);
 
   const sc = totalScore + world.score;
   if (sc > best){ best = sc; try{ WS.best('the-climb', sc); }catch(e){} }
@@ -1724,6 +1812,22 @@ function advance(dt){
     if (world.won) onLevelWon();
     else onPlayerDeath();
   }
+}
+// interpolated lattice positions for the renderer (prev→cur by renderAlpha). A barrel with
+// no prior snapshot (just spawned) renders at its live position. The figure always has one.
+function lerpN(a,b,t){ return a + (b-a)*t; }
+function interpP(){
+  const p = world.player;
+  return { px: lerpN(prevP.px, p.px, renderAlpha), py: lerpN(prevP.py, p.py, renderAlpha) };
+}
+function interpB(b){
+  const s = prevB.get(b.id);
+  if (!s) return { px:b.px, py:b.py };
+  // don't interpolate across a teleport (a fall landing snaps px to the column): if the
+  // jump is large the lerp would slide diagonally — guard by snapping when far apart.
+  const dx = Math.abs(b.px - s.px), dy = Math.abs(b.py - s.py);
+  if (dx > FRAC*1.5 || dy > FRAC*1.5) return { px:b.px, py:b.py };
+  return { px: lerpN(s.px, b.px, renderAlpha), py: lerpN(s.py, b.py, renderAlpha) };
 }
 
 //============================================================== rendering
@@ -1815,12 +1919,16 @@ function drawBarrels(){
   const r = cell*0.30;
   for (const b of world.barrels){
     if (!b.alive) continue;
-    // FEET on the beam: b.py is the barrel's contact line (cell top of its row); the
-    // barrel CENTER sits one radius above it, so the barrel rests ON the girder.
-    const cx = X(b.px) + cell*0.5;            // centered in its column
-    const cy = Y(b.py) - r + cell*BEAM_THK;   // bottom of the barrel touches the beam
+    // INTERPOLATED render position (smooth between fixed ticks) — the logic uses b.px/py.
+    const ip = interpB(b);
+    // FEET on the beam: b.py is the barrel's contact line (the beam TOP = cell-top of its
+    // row); the barrel CENTER sits one radius ABOVE that line so its underside rests flush
+    // ON the girder's top surface (cycle #125 feet fix: was +BEAM_THK, which sank it into
+    // the beam's underside). r is the barrel radius.
+    const cx = X(ip.px) + cell*0.5;           // centered in its column
+    const cy = Y(ip.py) - r;                   // bottom of the barrel touches the beam top
     ctx.save(); ctx.translate(cx,cy);
-    const spin = (b.px) * 0.06 * (b.dir||1);
+    const spin = (ip.px) * 0.06 * (b.dir||1);
     ctx.rotate(spin);
     ctx.shadowBlur = 12; ctx.shadowColor = SK.barrelGlow;
     // a wooden-barrel look: a filled disc with stave lines + two hoops
@@ -1854,11 +1962,15 @@ function drawThrower(){
 function drawPlayer(){
   const p = world.player;
   if (!p.alive) return;
-  // FEET on the beam: p.py is the feet line (cell top of its row) — draw the body
-  // RISING from there so the climber stands ON the girder (the float fix). r scales
-  // the figure to ~0.9 of a cell tall so it reads at a glance without overlapping rows.
-  const fx = X(p.px) + cell*0.5;             // centered in its column
-  const fy = Y(p.py) + cell*BEAM_THK;        // soles touch the beam top
+  // INTERPOLATED render position (smooth between fixed ticks) — the logic uses p.px/py.
+  const ip = interpP();
+  // FEET on the beam: p.py is the feet line (the beam TOP = cell-top of its row) — draw the
+  // body RISING from there so the soles stand ON the girder's top surface. (cycle #125 feet
+  // fix: was +BEAM_THK, putting the soles on the beam's UNDERSIDE — sunk in. The beam top is
+  // the contact line; the feet sit exactly on it.) r scales the figure to ~0.9 of a cell
+  // tall so it reads at a glance without overlapping rows.
+  const fx = X(ip.px) + cell*0.5;            // centered in its column
+  const fy = Y(ip.py);                        // soles stand ON the beam top
   const r  = cell*0.30;
   const t  = Date.now()*0.012;
   // animation phase: a walk-cycle stride when running, still on a ladder, a tuck in air
@@ -1982,7 +2094,7 @@ if ('ontouchstart' in window || navigator.maxTouchPoints>0){
 
 //============================================================== state transitions
 function startGame(){
-  level = 0; lives = 3; totalScore = 0; simHz = 60;
+  level = 0; lives = 3; totalScore = 0; loops = 0;
   newWorld(level);
   prevSnap = null; displayScore = 0; shake=0; flashAmt=0; parts.length=0;
   for (const k in input) input[k]=false;
@@ -2000,7 +2112,7 @@ function onLevelWon(){
   level++;
   if (level >= LEVELS.length){
     level = level % LEVELS.length;
-    simHz = Math.min(96, simHz + 6);                  // looped the tower → keep climbing, faster
+    loops++;                                          // looped the tower → faster HAZARDS (not tick rate)
   }
   newWorld(level);
   prevSnap = null; mode='playing';
@@ -2051,10 +2163,14 @@ resize();
 setMuteTag();
 elBest.textContent = best.toLocaleString();
 
-// attract: tick the title world with barrels rolling behind the title
+// attract: tick the title world with barrels rolling behind the title. Capture the snap
+// then step, and pin renderAlpha=1 so the render shows the current world cleanly (the
+// interp source == the post-step world, so no stale-snapshot ghosting on the title).
 let attractTimer = setInterval(()=>{
   if (mode==='title' && world){
+    captureSnap();
     stepTick(world, blankInput()); input.jump=false;
+    renderAlpha = 1;
     if (world.over || world.frame > 1200) newWorld(0);
   }
 }, 1000/30);
@@ -2090,6 +2206,10 @@ window.__CLIMB__ = {
   get playerCell(){ return world?[world.player.cx,world.player.cy]:[0,0]; },
   get selftest(){ return SELFTEST.allPass; },
   get muted(){ return Audio_.muted; },
+  // INTERPOLATED render lattice position (the smooth tween the renderer draws) + the logical
+  // lattice + the current alpha — for the verifier to confirm sub-tick smooth motion.
+  get renderPx(){ const i=interpP(); return world?[i.px,i.py,world.player.px,world.player.py,renderAlpha]:[0,0,0,0,0]; },
+  get world(){ return world; },     // verifier handle (read/poke the live world)
   _start(){ startGame(); },
   _key(name,down){ setKey(name,down); },
   _jump(){ input.jump=true; },

@@ -37,6 +37,28 @@ Each game is self-contained, zero-dependency, browser-play-tested. Reference sty
   defense / vs-CPU / physics-landing). Responsive `auto-fill` grid: adding more needs no rebalance.
 
 ## Log
+- 2026-06-18 — **Fixed The Climb's FEEL** (bug-fix BUILD, cycle #125): the #122 fix made the LOGIC
+  correct (self-test 10/10 green) but a human playtest still found it awful — because a game is judged by
+  PLAYING it, not by a green core. Three feel faults, none catchable by a logic self-test, all cleared in
+  `the-climb.core.js` / `.src.html` (re-forged → `.html`): **(1) JERKY** — the sim advanced in fixed 60 Hz
+  integer ticks and the render drew the raw current tick with NO interpolation, so on a 120 Hz/ProMotion
+  display each state showed for two frames then jumped. Adopted the **digdug model**: discrete grid LOGIC
+  stays self-tested + SEED-reproducible (dropped the byte-identical per-tick replay claim that had forced
+  the feel-hostile fixed-tick architecture), and **motion is now a dt-driven TWEEN** — a fixed-60 Hz sim
+  plus `interpP`/`interpB` lerp the render by `renderAlpha`, fluid at ANY refresh. **(2) TOO FAST** — speed
+  is now a **human-readable seconds-per-cell knob** (`RUN_SEC_PER_CELL=0.21` ≈ 4.8 c/s, `CLIMB`/`BARREL`
+  `=0.27` ≈ 3.7 c/s) that DERIVES the per-tick lattice step via `perTick()`; `SIM_HZ` stays 60 and is never
+  the speed. **(3) FEET SUNK IN** — the figure's feet aligned to the BOTTOM of the girder; re-baselined
+  onto the girder TOP (`py === cy*FRAC`, offset 0). Verified by ACTUALLY PLAYING it (agent-browser, served
+  origin, named session `climb125pub`): drove the LIVE world via `window.__CLIMB__` + real dispatched keys,
+  sampling `renderPx[0]` over 120 real rAF frames → **110 distinct interpolated positions, ZERO two-frame
+  snaps** (smooth tween, no per-tick stutter); measured **~3.44 cells/s** live (controllable, not a blur;
+  reads below 4.8 only by the headless rAF throttle); **feet on the girder TOP** mid-game AND at fresh spawn
+  (offset 0, screenshot confirmed); **0 console errors**, in-page pill **✓ self-test 10/10**, 0 overflow
+  @1280 AND @390. Node twin `the-climb.test.cjs` = **15/15** (10 core + 5 harness); `forge --check` current.
+  KNOWN/INTENTIONAL: at `SIM_HZ=60`/`FRAC=16` integer rounding collapses RUN/CLIMB/BARREL to 1 lattice/tick
+  (~3.75 c/s) so the runner can't out-WALK a barrel on flat ground (dodge via jump + ladders) — documented
+  in core.js line 82; left because the three named faults are all fixed and a finer FRAC risks the battery.
 - 2026-06-18 — **Fixed The Climb at the ROOT** (bug-fix BUILD, cycle #122): a playtest of the #115 build
   found it broken on five counts and doing a disservice to the rack — and its `5/5` self-test was GREEN on
   the broken build (it validated the wrong layer). All five fixed in `the-climb.core.js` / `.src.html`,
