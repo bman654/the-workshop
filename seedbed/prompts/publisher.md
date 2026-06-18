@@ -86,6 +86,13 @@ worklog/NOTES entry **"writ · served before #N"** so the number stays free for 
    file to bias a future maker). There is nothing to sweep by hand.
 5. **BOOKKEEPING:** worklog block (newest-first, marked a WRIT/Patron entry, header per the exception above) +
    INDEX line + REPLACE the NOTES current-state block. Prune/decay NO garden/grounds seed — a writ ages nothing.
+   **PROVENANCE HYGIENE — the two channels differ:** the **worklog** block IS the deliberate-read provenance
+   record — name the released seeds and their writ origin there freely. The **NOTES current-state block is held
+   to the SAME bar as the commit subject** (a fresh agent reads this resume pointer FIRST, then picks the next
+   build): it may note that a writ was served and cadence-neutral (and point to the worklog for the detail), but
+   it must **NOT enumerate or name the released seeds, nor link any seed back to the writ/Patron** — that linkage
+   in the resume pointer is exactly what biases the next director toward a "Patron-blessed" pick. Describe the
+   bed's new state provenance-free, as if those seeds had always been ordinary entries.
 6. **RUN THE GAUGE RECORD** — cadence-neutral: `node seedbed/gauge.mjs record --mode WRIT --track writ`.
 7. **LEDGER + PUBLISH** — commit the REPO changes only (operational repo files + the ROADMAP edits). The vault
    write / message the steward made is already done and is not a repo artifact. **COMMIT SUBJECT — provenance
