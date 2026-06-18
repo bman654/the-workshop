@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Tangle Bench — shake a strand, earn a knot, read the number off the geometry</title>
+<!-- The Sewing Room's fourth bench. It IMPORTS the shared knot math from the sibling
+     Knot Tabulator core (single authority); the page inlines ONLY the NEW detector +
+     sim + braid harness + oracle between the // ===== TANGLE CORE BEGIN/END ===== sentinels. -->
+<style>
+  :root{
+    --bg:#0a0805;
+    --plate1:#15110b;
+    --plate2:#0d0a07;
+    --ink:#f0ece2;
+    --ink-dim:#a9a294;
+    --ink-faint:#6f6a5d;
+    --gold:#d9b873;
+    --strand:#e8c878;
+    --strand-hi:#f6ebcf;
+    --strand-lo:#8a6a2c;
+    --gold-soft:rgba(217,184,115,0.14);
+    --gold-edge:rgba(217,184,115,0.36);
+    --teal:#6fc7c0;
+    --teal-soft:rgba(111,199,192,0.12);
+    --open:#f08a7a;
+    --open-soft:rgba(220,120,100,0.10);
+    --bad:#e0664f; --bad-soft:rgba(220,120,100,0.6);
+    --good:#8fd79a; --good-soft:rgba(120,200,130,0.5);
+    --panel:rgba(13,11,8,0.82);
+    --stage:#0c0a07;
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1300px 800px at 50% -10%, rgba(217,184,115,0.08), transparent 58%),
+      radial-gradient(1000px 700px at 16% 110%, rgba(111,199,192,0.05), transparent 62%),
+      radial-gradient(1000px 700px at 84% 112%, rgba(220,120,100,0.035), transparent 62%),
+      var(--bg);
+    color:var(--ink); font-family:var(--font-ui); -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.55;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 26px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.010) 0 1px, transparent 1px 26px);
+    mix-blend-mode:overlay;
+  }
+
+  /* ── topbar ── */
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:40; display:flex; align-items:center;
+    justify-content:space-between; padding:13px 20px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(10,8,5,0.94), rgba(10,8,5,0)); flex-wrap:wrap; }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; min-width:0; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--gold); opacity:1; }
+  .back.sib{ letter-spacing:.06em; text-transform:none; color:var(--ink-faint); }
+  .back.sib:hover{ color:var(--teal); }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.4); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); }
+  .selftest.ok{ color:var(--good); border-color:var(--good-soft); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:var(--open); border-color:var(--bad-soft); background:rgba(64,28,24,0.45); }
+
+  /* ── layout ── */
+  #wrap{ position:relative; z-index:1; max-width:1180px; margin:0 auto; padding:64px 22px 40px; }
+  .head{ text-align:center; margin-bottom:14px; }
+  .eyebrow{ font:600 11px/1 var(--font-mono); letter-spacing:.3em; text-transform:uppercase; color:var(--gold); opacity:.9; }
+  .head h1{ font-family:var(--font-serif); font-weight:600; margin:10px 0 0; font-size:clamp(30px,5.5vw,46px); letter-spacing:.4px;
+    background:linear-gradient(176deg, #f6ebcf, #d9b873 56%, #8a6a2c);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .head .lede{ max-width:700px; margin:12px auto 0; font:14.5px/1.6 var(--font-serif); color:var(--ink); opacity:.9; }
+  .head .lede b{ color:var(--gold); font-weight:600; } .head .lede i{ font-style:italic; }
+  .head .lede .exact{ color:var(--teal); } .head .lede .open{ color:var(--open); }
+
+  .board{ display:grid; grid-template-columns:1.55fr 1fr; gap:18px; margin-top:18px; align-items:start; }
+  @media (max-width:860px){ .board{ grid-template-columns:1fr; } }
+
+  /* the stage card (the glass box + the strand) */
+  .stage-card{ position:relative; border-radius:14px; overflow:hidden;
+    border:1px solid rgba(217,184,115,0.16); background:linear-gradient(180deg, var(--plate1), var(--plate2)); }
+  #stageHost{ position:relative; width:100%; aspect-ratio:1/1;
+    background:
+      repeating-linear-gradient(90deg, rgba(217,184,115,0.018) 0 1px, transparent 1px 13px),
+      repeating-linear-gradient(0deg, rgba(217,184,115,0.014) 0 1px, transparent 1px 13px),
+      radial-gradient(120% 120% at 50% 38%, #110d08 0%, var(--stage) 72%); }
+  #cv{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; }
+  #bloom{ position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .9s ease;
+    background:radial-gradient(60% 60% at 50% 50%, rgba(217,184,115,0.30), rgba(217,184,115,0.05) 55%, transparent 72%); }
+  #bloom.show{ opacity:1; }
+  /* the live headline — the knot read off the strand */
+  #headline{ position:absolute; left:50%; top:12px; transform:translateX(-50%); z-index:5; pointer-events:none;
+    text-align:center; background:rgba(0,0,0,0.52); border:1px solid var(--gold-edge); border-radius:11px;
+    padding:8px 16px; -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); min-width:200px; }
+  #headline .verdict{ font:600 14px/1.2 var(--font-serif); letter-spacing:.4px; }
+  #headline .verdict.loop{ color:var(--ink); } #headline .verdict.knot{ color:var(--gold); }
+  #headline .det{ font:600 10.5px/1.5 var(--font-mono); color:var(--teal); margin-top:3px; }
+  #headline .det b{ color:var(--teal); font-variant-numeric:tabular-nums; }
+  .hint{ position:absolute; left:14px; bottom:11px; z-index:5; pointer-events:none;
+    font:11px/1.4 var(--font-mono); color:var(--ink-faint); }
+  .rate{ position:absolute; right:12px; bottom:11px; z-index:5; pointer-events:none;
+    font:10.5px/1.4 var(--font-mono); color:var(--ink-faint); text-align:right; }
+  .rate b{ color:var(--gold); font-variant-numeric:tabular-nums; }
+
+  /* the control column */
+  .side{ display:flex; flex-direction:column; gap:14px; }
+  .card{ border-radius:12px; border:1px solid rgba(217,184,115,0.14);
+    background:linear-gradient(180deg, var(--plate1), var(--plate2)); padding:14px 15px; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim); margin:0 0 11px; }
+  .verbrow{ display:flex; gap:9px; }
+  .verb{ flex:1 1 auto; display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; cursor:pointer; user-select:none;
+    border:1px solid var(--gold-edge); background:var(--gold-soft); color:var(--ink);
+    border-radius:9px; padding:11px 12px; transition:.14s; font:inherit; touch-action:manipulation; }
+  .verb:hover{ border-color:var(--gold); background:rgba(217,184,115,0.2); }
+  .verb:active, .verb.active{ background:rgba(232,200,120,0.32); border-color:var(--gold); transform:translateY(1px); }
+  .verb .vn{ font:600 13px/1.1 var(--font-mono); color:var(--gold); letter-spacing:.04em; }
+  .verb .vd{ font:10px/1.32 var(--font-serif); color:var(--ink-faint); font-weight:400; }
+  .verb.tight{ border-color:rgba(111,199,192,0.4); background:var(--teal-soft); }
+  .verb.tight .vn{ color:var(--teal); } .verb.tight:hover{ border-color:var(--teal); background:rgba(111,199,192,0.2); }
+
+  .slider{ margin-top:12px; }
+  .slider label{ display:flex; justify-content:space-between; font:600 10.5px/1 var(--font-mono); color:var(--ink-dim);
+    letter-spacing:.06em; margin-bottom:6px; }
+  .slider label b{ color:var(--gold); font-variant-numeric:tabular-nums; }
+  input[type=range]{ width:100%; -webkit-appearance:none; appearance:none; height:4px; border-radius:3px;
+    background:rgba(217,184,115,0.22); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:15px; height:15px; border-radius:50%;
+    background:var(--gold); border:2px solid #0a0805; cursor:pointer; }
+  input[type=range]::-moz-range-thumb{ width:15px; height:15px; border-radius:50%; background:var(--gold); border:2px solid #0a0805; cursor:pointer; }
+
+  .ctrls{ display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .btn{ flex:1 1 auto; cursor:pointer; border:1px solid rgba(214,178,120,0.26); background:rgba(232,200,120,0.06);
+    color:var(--ink); border-radius:9px; padding:9px; font:600 11px/1 var(--font-mono); letter-spacing:.04em; transition:.16s; }
+  .btn:hover{ border-color:var(--gold); background:rgba(232,200,120,0.13); }
+
+  /* the entropy spark-line card */
+  .spark-card{ padding:13px 15px; }
+  .sparkwrap{ position:relative; }
+  #spark{ display:block; width:100%; height:90px; }
+  .sparkleg{ display:flex; justify-content:space-between; font:9.5px/1.4 var(--font-mono); color:var(--ink-faint); margin-top:4px; }
+  .note{ font:11px/1.55 var(--font-serif); color:var(--ink-dim); margin:9px 0 0; }
+  .note b{ color:var(--gold); } .note .exact{ color:var(--teal); } .note .open{ color:var(--open); }
+
+  /* ── footer ── */
+  .foot{ position:relative; z-index:1; max-width:960px; margin:30px auto 0; padding:22px 24px 40px;
+    border-top:1px solid rgba(217,184,115,0.1); text-align:center; font:12.5px/1.7 var(--font-serif); color:var(--ink-dim); }
+  .foot b{ color:var(--gold); font-weight:600; } .foot .exact{ color:var(--teal); } .foot .open{ color:var(--open); }
+  .foot a{ color:var(--gold); text-decoration:none; border-bottom:1px solid rgba(217,184,115,0.3); }
+  @media (prefers-reduced-motion: reduce){ #bloom{ transition:none; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../sewing-room/index.html">← The Sewing Room</a>
+      <a class="back sib" href="../knot-tabulator/index.html" title="The Tabulator computes |Δ| combinatorially; here the detector reads the SAME number off the geometry">↗ The Knot Tabulator — the same number, computed</a>
+      <a class="back sib" href="../unknotting-bench/index.html" title="There you untie a disguise; here you watch a knot get earned">↗ The Unknotting Bench</a>
+    </div>
+    <div class="selftest" id="selftest" title="Click for the per-claim detail (also printed to the console)">checking&hellip;</div>
+  </div>
+
+  <main id="wrap">
+    <header class="head">
+      <div class="eyebrow">The Sewing Room · topology · entropy · the knot determinant</div>
+      <h1>The Tangle Bench</h1>
+      <p class="lede">The Tabulator <i>computed</i> a number; the Unknotting Bench let you <i>untie</i> a disguise. Here a knot is
+        <b>earned</b>. Hold <b>SHAKE</b> and the strand writhes like a dropped garden hose — and a live detector reads the wing's own
+        <span class="exact">|Δ(−1)|</span> straight off the geometry, the <span class="exact">same integer</span> the Tabulator computes
+        another way. Lengthen the rope, shake harder, and a <b>loop becomes a knot</b>. <b>PULL-TIGHT</b> cinches a real knot — but only
+        relaxes a <span class="open">disguise</span>.</p>
+    </header>
+
+    <section class="board">
+      <div class="stage-card">
+        <div id="stageHost">
+          <canvas id="cv"></canvas>
+          <div id="bloom"></div>
+          <div id="headline">
+            <div class="verdict loop" id="verdict">a still loop</div>
+            <div class="det" id="detline">|Δ(−1)| = <b id="detval">1</b></div>
+          </div>
+          <div class="hint" id="hint">hold SHAKE</div>
+          <div class="rate" id="rate"></div>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="card">
+          <div class="sect">The verbs — hold to shake, tap to cinch</div>
+          <div class="verbrow">
+            <button class="verb" id="vShake"><span class="vn">⠿ SHAKE</span><span class="vd">hold — a traveling-wave ripple agitates the strand</span></button>
+            <button class="verb tight" id="vTight"><span class="vn">⇲ PULL-TIGHT</span><span class="vd">cinch the ends — locks a knot, relaxes a loop</span></button>
+          </div>
+          <div class="slider">
+            <label>LENGTH <b id="lenval">46</b> beads</label>
+            <input type="range" id="lenSlider" min="24" max="90" step="2" value="46">
+          </div>
+          <div class="slider">
+            <label>VIGOR <b id="vigval">1.4</b></label>
+            <input type="range" id="vigSlider" min="0.4" max="2.4" step="0.1" value="1.4">
+          </div>
+          <div class="ctrls">
+            <button class="btn" id="bReset">↺ reset strand</button>
+          </div>
+        </div>
+
+        <div class="card spark-card">
+          <div class="sect">The entropy curve — P(knot) vs agitation</div>
+          <div class="sparkwrap"><canvas id="spark"></canvas></div>
+          <div class="sparkleg"><span>calm · A=0</span><span>well-shaken · A=80</span></div>
+          <p class="note">A glance at the <b>published</b> claim: over a <b>fixed</b> battery of seeded braid-closure trials, the chance a
+            <span class="exact">3-strand</span> tangle is genuinely knotted <b>climbs with agitation</b> — from <span class="exact">0</span> at
+            rest to <b id="phi">0.69</b> well-shaken, the calm and shaken cohorts' 95% intervals <span class="exact">disjoint</span>. The live
+            hand-shake tally at the box is a <i>separate</i> observed count, never this curve.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    The fourth bench. The first proves a tangle <span class="exact">truly knotted</span> by a number nothing can wiggle away; the second
+    weaves figures that exist <span class="exact">only</span> as legal pickups; the third lets you <span class="exact">untie</span> a disguise
+    and be <span class="open">refused</span> by a theorem. This one shows where the knot <b>comes from</b> — shake a strand until it
+    <b>earns</b> one, and read the number off the writhe. <b>Agitation earns a knot; a number reads it off the geometry.</b>
+    &nbsp;·&nbsp; <a href="../sewing-room/index.html">Back to the Sewing Room</a>
+  </footer>
+
+<!-- the shared knot math is the IMPORT (single authority); the detector + sim + braid
+     harness + oracle are inlined below as a byte-twin between the sentinels. -->
+<script type="module">
+"use strict";
+import {
+  gaussToCrossings, knotDeterminant, isRealizable, diagramCode, makeRng,
+} from '../knot-tabulator/knot-core.mjs';
+
+// ===== TANGLE CORE BEGIN =====
+// The detector + the sim + the braid harness + the oracle live ONLY between these
+// sentinels. The page inlines a byte-twin of THIS slice; the shared knot math
+// (gaussToCrossings / knotDeterminant / isRealizable / diagramCode / makeRng) is the
+// IMPORT, not duplicated — the single shared authority. tangle-core.test.mjs proves
+// this slice char-for-char === the module.
+
+// ── THE WORLD GEOMETRY CONSTANTS — fixed integers, no wall-clock anywhere. ─────
+// One box, one rest length; the sim is a fixed-DT / fixed-substep / fixed-pass
+// integrator so "same seed replays byte-identical" is a near-trivial guarantee.
+const BOX = 130, PAD = 12, ZBOX = 42, L0 = 6;
+const SUBSTEPS = 5, PROJ_PASSES = 9;
+const DAMP = 0.99, REP_R = 7.0, REP_K = 1.0, REP_CLAMP = 1.6;
+const DETECT_EVERY = 6;           // detLive cadence (frames) — O(seg²)·Bareiss is not per-paint
+const ZCLOSE = -(ZBOX + 30);      // the closure return path runs far under (always the under-strand)
+
+// ── segInt(ax,ay,bx,by,cx,cy,dx,dy) — strict-interior 2-D segment crossing. ────
+// Returns { t, u } (the parameters along AB and CD) when the OPEN segments cross in
+// their interiors, else null. The strict (no-endpoint) test keeps a shared bead from
+// registering as a crossing of its own two incident segments.
+function segInt(ax, ay, bx, by, cx, cy, dx, dy){
+  const r1x = bx - ax, r1y = by - ay, r2x = dx - cx, r2y = dy - cy;
+  const den = r1x * r2y - r1y * r2x;
+  if (Math.abs(den) < 1e-12) return null;
+  const t = ((cx - ax) * r2y - (cy - ay) * r2x) / den;
+  const u = ((cx - ax) * r1y - (cy - ay) * r1x) / den;
+  if (t > 1e-9 && t < 1 - 1e-9 && u > 1e-9 && u < 1 - 1e-9) return { t, u };
+  return null;
+}
+
+// ── crossingSign(oTx,oTy,uTx,uTy) — the right-hand rule on the tangents. ───────
+// +1 when the OVER strand's tangent turns counter-clockwise onto the UNDER strand's
+// (the sign convention diagramCode() uses), −1 otherwise. The sign feeds the signed
+// Alexander matrix; it is read off geometry, never invented.
+function crossingSign(oTx, oTy, uTx, uTy){
+  return (oTx * uTy - oTy * uTx) >= 0 ? 1 : -1;
+}
+
+// ── geomToGauss(pts, z) — THE GEOMETRY→GAUSS BRIDGE. ───────────────────────────
+// pts is an OPEN polyline [x0,y0,x1,y1,…] (the strand's beads in order); z is the
+// per-bead height. Walk the strand once: collect every self-crossing between non-
+// adjacent segments, interpolate z on each strand to set over/under (greater z =
+// OVER), set the sign by the right-hand rule, then ORDER each crossing's two passes
+// by (segment index, t-along-segment) — that linear order along the strand IS the
+// Gauss sequence. Each geometric crossing gets ONE shared id (first sight → next id,
+// second → reuse). Returns the signed Gauss code [{t,id,sign}] read downstream by the
+// IMPORTED gaussToCrossings — this never re-parses or re-implements the seam.
+function geomToGauss(pts, z){
+  const N = pts.length / 2;
+  const X = i => pts[2 * i], Y = i => pts[2 * i + 1], Z = i => z[i];
+  const raw = [];
+  for (let i = 0; i < N - 1; i++){
+    for (let j = i + 2; j < N - 1; j++){
+      const h = segInt(X(i), Y(i), X(i + 1), Y(i + 1), X(j), Y(j), X(j + 1), Y(j + 1));
+      if (!h) continue;
+      const zi = Z(i) + h.t * (Z(i + 1) - Z(i));
+      const zj = Z(j) + h.u * (Z(j + 1) - Z(j));
+      const tiX = X(i + 1) - X(i), tiY = Y(i + 1) - Y(i);
+      const tjX = X(j + 1) - X(j), tjY = Y(j + 1) - Y(j);
+      raw.push({ i, ti: h.t, j, tj: h.u, zi, zj, tiX, tiY, tjX, tjY });
+    }
+  }
+  const ev = [];
+  for (let k = 0; k < raw.length; k++){
+    const c = raw[k];
+    const iOver = c.zi > c.zj;                                   // greater interpolated z = OVER
+    const oTx = iOver ? c.tiX : c.tjX, oTy = iOver ? c.tiY : c.tjY;
+    const uTx = iOver ? c.tjX : c.tiX, uTy = iOver ? c.tjY : c.tiY;
+    const sgn = crossingSign(oTx, oTy, uTx, uTy);
+    ev.push({ seg: c.i, along: c.ti, cid: k, t: iOver ? 'O' : 'U', sign: sgn });
+    ev.push({ seg: c.j, along: c.tj, cid: k, t: iOver ? 'U' : 'O', sign: sgn });
+  }
+  ev.sort((a, b) => a.seg !== b.seg ? a.seg - b.seg : a.along - b.along);   // walk order along the strand
+  const idOf = new Map();
+  let next = 1;
+  const code = [];
+  for (const e of ev){
+    let id = idOf.get(e.cid);
+    if (id === undefined){ id = next++; idOf.set(e.cid, id); }
+    code.push({ t: e.t, id, sign: e.sign });
+  }
+  return code;
+}
+
+// ── closeArc(x,y,z,N) — close an OPEN strand the standard way (knot closure). ──
+// Append a return path from the last bead back to the first, routed FAR outside the
+// frame (and far under in z, so it is always the under-strand) — it adds no crossing
+// with the body, so the closure reads the knot type of the open arc, nothing more.
+function closeArc(x, y, z, N){
+  const px = [], pz = [];
+  for (let i = 0; i < N; i++){ px.push(x[i], y[i]); pz.push(z[i]); }
+  const big = BOX * 2.4;
+  const detour = [ [x[N - 1], -big], [-big, -big], [-big, y[0]] ];
+  for (const [dx, dy] of detour){ px.push(dx, dy); pz.push(ZCLOSE); }
+  px.push(x[0], y[0]); pz.push(z[0]);                            // land back on the first bead
+  return { pts: Float64Array.from(px), z: Float64Array.from(pz) };
+}
+
+// ── detLive(pts, z) — read the live |Δ(−1)| off the strand geometry. ──────────
+// Build the Gauss code from the geometry; if the projection is momentarily not a
+// realizable diagram (a near-tangent transient) return {det:null, realizable:false}
+// so the headline HOLDS its last verdict (no flicker). Otherwise run the IMPORTED
+// gaussToCrossings + knotDeterminant — the ONE source of truth the headline and the
+// PULL-TIGHT verb both read. pts/z are an already-CLOSED polyline.
+function detLive(pts, z){
+  const code = geomToGauss(pts, z);
+  if (!isRealizable(code)) return { det: null, realizable: false, ncross: code.length / 2 };
+  const det = knotDeterminant(gaussToCrossings(code));
+  return { det, realizable: true, ncross: code.length / 2 };
+}
+
+// ── REFERENCE POLYLINES — canonical knots drawn as closed polylines (+ per-bead z).
+// Hand-authored parametric curves; the detector must read |Δ| off THESE and match the
+// Tabulator's diagramCode() exactly (the CLAIM-a parity teeth). Plus a DISGUISED
+// UNKNOT — a visibly messy loop whose det must still read 1 (the count-crossings fake
+// fails it). Each returns a CLOSED polyline so detLive reads it directly.
+function refPolyline(name){
+  const close = (pts, z) => {
+    const N = pts.length / 2; const px = pts.slice(); const pz = z.slice();
+    px.push(pts[0], pts[1]); pz.push(z[0]); return { pts: Float64Array.from(px), z: Float64Array.from(pz), N };
+  };
+  if (name === 'unknot'){
+    const N = 40, p = [], z = [];
+    for (let i = 0; i < N; i++){ const a = 2 * Math.PI * i / N; p.push(50 + 30 * Math.cos(a), 50 + 30 * Math.sin(a)); z.push(0); }
+    return close(p, z);
+  }
+  if (name === 'trefoil'){
+    const N = 120, p = [], z = [];
+    for (let i = 0; i < N; i++){ const t = 2 * Math.PI * i / N;
+      p.push(50 + 9 * (Math.sin(t) + 2 * Math.sin(2 * t)), 50 + 9 * (Math.cos(t) - 2 * Math.cos(2 * t)));
+      z.push(Math.sin(3 * t)); }
+    return close(p, z);
+  }
+  if (name === 'figure8'){
+    const N = 160, p = [], z = [];
+    for (let i = 0; i < N; i++){ const t = 2 * Math.PI * i / N; const r = 2 + Math.cos(2 * t);
+      p.push(50 + 9 * (r * Math.cos(3 * t)), 50 + 9 * (r * Math.sin(3 * t)));
+      z.push(Math.sin(4 * t)); }
+    return close(p, z);
+  }
+  if (name === 'disguise'){
+    // a big circle wearing FOUR little epicyclic kinks — each a trivial R1 loop, so
+    // the loop is the unknot in disguise (|Δ|=1) even though crossing-COUNT screams 4.
+    // The fast epicycle adds the visible loops; its phase sets each kink's clean
+    // over/under z, so the diagram stays realizable and the determinant reads 1.
+    const N = 240, K = 5, R = 26, lr = 7, p = [], z = [];
+    for (let i = 0; i < N; i++){ const t = 2 * Math.PI * i / N;
+      p.push(50 + R * Math.cos(t) + lr * Math.cos(K * t), 50 + R * Math.sin(t) + lr * Math.sin(K * t));
+      z.push(Math.sin(K * t));
+    }
+    return close(p, z);
+  }
+  throw new Error('unknown reference: ' + name);
+}
+
+// ── braidGauss(n, word) — a braid word's TRACE CLOSURE as a signed Gauss code. ─
+// n vertical strands descending; word is an array of signed generators (±k means
+// σ_k^{±1}, 1≤k≤n−1, swapping the strands in positions k−1,k with k the OVER strand
+// for σ_k>0). Trace closure wraps the bottom of each slot to its top. Walk the single
+// closed component from (slot 0, row 0), emitting one token per crossing (over/under
+// by the generator, sign by it). Returns { code, single } — `single` is false when
+// the closure is a multi-component LINK (then it is not a single knot). This is the
+// EXACT combinatorial construction — no geometry, no fragile layout.
+function braidGauss(n, word){
+  const R = word.length;
+  const stepDown = (slot, r) => {
+    if (r >= R) return { slot, row: 0, cross: null };            // trace-closure wrap: bottom → top, same slot
+    const g = word[r], k = Math.abs(g) - 1;
+    if (slot === k)     return { slot: k + 1, row: r + 1, cross: { cid: r, role: (g > 0 ? 'over' : 'under'), sign: (g > 0 ? 1 : -1) } };
+    if (slot === k + 1) return { slot: k,     row: r + 1, cross: { cid: r, role: (g > 0 ? 'under' : 'over'), sign: (g > 0 ? 1 : -1) } };
+    return { slot, row: r + 1, cross: null };
+  };
+  let slot = 0, row = 0, steps = 0;
+  const maxSteps = n * (R + 2) * 4 + 10;
+  const tokens = [];
+  do {
+    const st = stepDown(slot, row);
+    if (st.cross) tokens.push({ cid: st.cross.cid, t: st.cross.role === 'over' ? 'O' : 'U', sign: st.cross.sign });
+    slot = st.slot; row = st.row; steps++;
+    if (steps > maxSteps) break;
+  } while (!(slot === 0 && row === 0));
+  const idOf = new Map();
+  let next = 1;
+  const code = [];
+  for (const tk of tokens){ let id = idOf.get(tk.cid); if (id === undefined){ id = next++; idOf.set(tk.cid, id); } code.push({ t: tk.t, id, sign: tk.sign }); }
+  const cnt = new Map();
+  for (const tk of tokens) cnt.set(tk.cid, (cnt.get(tk.cid) || 0) + 1);
+  let single = true;
+  for (const v of cnt.values()) if (v !== 2) single = false;     // every crossing seen exactly twice ⟹ one component
+  return { code, single };
+}
+
+// ── THE ENTROPY HARNESS — random braid words, knotted = single-component ∧ det>1. ─
+// runTrial(n,A,seed): build a length-A random braid word on n strands from the ONE
+// shared RNG, close it, ask det>1. randomWord uses makeRng so a (n,A,seed) replays
+// bit-for-bit. A multi-component link closure is NOT a single knot → not "knotted".
+function randomWord(n, A, rng){
+  const word = [];
+  for (let i = 0; i < A; i++){ const k = 1 + Math.floor(rng() * (n - 1)); const s = rng() < 0.5 ? 1 : -1; word.push(s * k); }
+  return word;
+}
+function runTrial(n, A, seed){
+  const rng = makeRng(seed >>> 0);
+  const r = braidGauss(n, randomWord(n, A, rng));
+  if (!r.single) return { knotted: false, det: null, single: false };
+  if (!isRealizable(r.code)) return { knotted: false, det: null, single: true };
+  const det = knotDeterminant(gaussToCrossings(r.code));
+  return { knotted: det > 1, det, single: true };
+}
+
+// THE FIXED SEED LIST — the published P never drifts on reload (the live hand-shake
+// counter on the page is a SEPARATE observed-rate readout, never this claim).
+function cohortSeeds(count){
+  const s = [];
+  for (let i = 1; i <= count; i++) s.push((i * 2654435761) >>> 0);
+  return s;
+}
+function cohortP(n, A, count = 200){
+  const seeds = cohortSeeds(count);
+  let k = 0;
+  for (const s of seeds){ if (runTrial(n, A, s).knotted) k++; }
+  return { p: k / seeds.length, k, n: seeds.length };
+}
+
+// wilson(k, n) — the Wilson 95% score interval for k successes in n trials. Used to
+// prove the calm and well-shaken cohorts' confidence intervals are DISJOINT (so the
+// monotonicity gap is not a sampling artifact).
+function wilson(k, n){
+  if (n === 0) return [0, 0];
+  const z = 1.959963984540054, p = k / n, d = 1 + z * z / n;
+  const c = p + z * z / (2 * n);
+  const hw = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n));
+  return [(c - hw) / d, (c + hw) / d];
+}
+
+// ── countCrossingsFake(detResult) — the FAKE invariant (the teeth). ───────────
+// "Knotted iff it has any crossing" — crossing-COUNT is not a knot invariant. On the
+// disguised unknot (8 projected crossings, |Δ|=1) the fake screams KNOTTED while the
+// real det reads 1: the teeth bite, so the detector is not vacuously honest.
+function countCrossingsFake(detResult){ return detResult.ncross > 0; }
+
+// constantPFake(n, A) — a fake estimator that ignores agitation and always reports a
+// fixed mid P. It must FAIL the monotonicity claim (the trend is real, not a harness
+// artifact). The load-bearing negative control for CLAIM b.
+function constantPFake(_n, _A){ return 0.4; }
+
+// ── THE LIVE SIM — a deterministic 3-D bead strand you SHAKE (the hero; art). ──
+// An OPEN chain of N beads, Verlet + position-based distance/repulsion/wall solves.
+// Canvas shows (x,y); z is a real third coordinate giving over/under. NO wall-clock:
+// tick() does fixed SUBSTEPS of fixed-pass projection; RAF only pumps display. Same
+// seed + same shake schedule ⟹ byte-identical replay (the twin proves it). makeWorld
+// returns the handle set the page renders + the closure the detector reads.
+function makeWorld(seed, N){
+  const rng = makeRng(seed >>> 0);
+  const cx = BOX / 2, cy = BOX / 2;
+  const R = Math.min(BOX / 2 - PAD, (N * L0) / (2 * Math.PI));
+  const x = new Float64Array(N), y = new Float64Array(N), z = new Float64Array(N);
+  const px = new Float64Array(N), py = new Float64Array(N), pz = new Float64Array(N);
+  for (let i = 0; i < N; i++){
+    const a = 2 * Math.PI * i / N;
+    x[i] = cx + R * Math.cos(a) + (rng() * 2 - 1) * 1.5;
+    y[i] = cy + R * Math.sin(a) + (rng() * 2 - 1) * 1.5;
+    z[i] = (rng() * 2 - 1) * 3;                                  // a deterministic small per-bead z, drawn ONCE
+    px[i] = x[i]; py[i] = y[i]; pz[i] = z[i];
+  }
+  let frame = 0, shakeAmp = 0, shakePhase = 0;
+  function solveLinks(dir){
+    const lo = dir ? 0 : N - 2, hi = dir ? N - 1 : -1, st = dir ? 1 : -1;
+    for (let kk = lo; kk !== hi; kk += st){
+      const i = kk, j = kk + 1;
+      let dx = x[j] - x[i], dy = y[j] - y[i], dz = z[j] - z[i];
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-9;
+      const diff = (d - L0) / d * 0.5; dx *= diff; dy *= diff; dz *= diff;
+      x[i] += dx; y[i] += dy; z[i] += dz; x[j] -= dx; y[j] -= dy; z[j] -= dz;
+    }
+  }
+  function solveRepulsion(){
+    const inv = 1 / REP_R, grid = new Map();
+    const key = (a, b, c) => (a * 73856093) ^ (b * 19349663) ^ (c * 83492791);
+    for (let i = 0; i < N; i++){
+      const gx = Math.floor(x[i] * inv), gy = Math.floor(y[i] * inv), gz = Math.floor(z[i] * inv);
+      const kk = key(gx, gy, gz); let arr = grid.get(kk); if (!arr){ arr = []; grid.set(kk, arr); } arr.push(i);
+    }
+    for (let i = 0; i < N; i++){
+      const gx = Math.floor(x[i] * inv), gy = Math.floor(y[i] * inv), gz = Math.floor(z[i] * inv);
+      for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) for (let oz = -1; oz <= 1; oz++){
+        const arr = grid.get(key(gx + ox, gy + oy, gz + oz)); if (!arr) continue;
+        for (const j of arr){
+          if (j <= i) continue; const dd = Math.abs(i - j); if (dd === 1) continue;   // skip self + chain neighbors
+          let dx = x[j] - x[i], dy = y[j] - y[i], dz = z[j] - z[i];
+          const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          if (d < REP_R && d > 1e-9){
+            let push = (REP_R - d) / d * REP_K * 0.5;
+            push = Math.min(push, REP_CLAMP);                    // CLAMP so the solver can't explode
+            dx *= push; dy *= push; dz *= push;
+            x[i] -= dx; y[i] -= dy; z[i] -= dz; x[j] += dx; y[j] += dy; z[j] += dz;
+          }
+        }
+      }
+    }
+  }
+  function solveWalls(){
+    for (let i = 0; i < N; i++){
+      if (x[i] < PAD) x[i] = PAD; if (x[i] > BOX - PAD) x[i] = BOX - PAD;
+      if (y[i] < PAD) y[i] = PAD; if (y[i] > BOX - PAD) y[i] = BOX - PAD;
+      if (z[i] < -ZBOX) z[i] = -ZBOX; if (z[i] > ZBOX) z[i] = ZBOX;
+    }
+  }
+  function substep(){
+    for (let i = 0; i < N; i++){
+      const vx = (x[i] - px[i]) * DAMP, vy = (y[i] - py[i]) * DAMP, vz = (z[i] - pz[i]) * DAMP;
+      px[i] = x[i]; py[i] = y[i]; pz[i] = z[i];
+      x[i] += vx; y[i] += vy; z[i] += vz;
+    }
+    if (shakeAmp > 0){                                           // raised-cosine traveling-wave kick (the garden-hose ripple)
+      const w = Math.max(3, Math.floor(N * 0.22)), c = shakePhase % N;
+      for (let q = 0; q < w; q++){
+        const i = (c + q) % N, env = 0.5 - 0.5 * Math.cos(2 * Math.PI * q / w);
+        const ang = 2 * Math.PI * (i / N) * 3 + shakePhase * 0.7;
+        x[i] += Math.cos(ang) * env * shakeAmp;
+        y[i] += Math.sin(ang) * env * shakeAmp;
+        z[i] += Math.sin(ang * 2.3) * env * shakeAmp * 1.4;      // a big z-kick drives genuine 3-D tangling
+      }
+      const e0 = (shakePhase * 3) % N;                           // drive a free-ish end to fold the coils
+      x[e0] += Math.cos(shakePhase) * shakeAmp * 1.5; z[e0] += Math.sin(shakePhase) * shakeAmp * 1.5;
+    }
+    for (let p = 0; p < PROJ_PASSES; p++){ solveLinks(p % 2 === 0); solveRepulsion(); solveWalls(); }
+  }
+  return {
+    tick(){ frame++; for (let s = 0; s < SUBSTEPS; s++) substep(); },
+    shake(amp, advance){ shakeAmp = amp; shakePhase += advance; },
+    stopShake(){ shakeAmp = 0; },
+    openPoly(){ const o = new Float64Array(N * 2); for (let i = 0; i < N; i++){ o[2 * i] = x[i]; o[2 * i + 1] = y[i]; } return o; },
+    zArray(){ return z; },
+    closed(){ return closeArc(x, y, z, N); },                    // the closed polyline the detector reads
+    pullTight(frac){                                             // cinch the two ends toward the walls (ramped by the page)
+      const f = Math.max(0, Math.min(1, frac));
+      x[0] = x[0] + (PAD - x[0]) * f * 0.18; y[0] = y[0] + (cy - y[0]) * f * 0.18;
+      x[N - 1] = x[N - 1] + (BOX - PAD - x[N - 1]) * f * 0.18; y[N - 1] = y[N - 1] + (cy - y[N - 1]) * f * 0.18;
+    },
+    get frame(){ return frame; },
+    handles: [0, N - 1],                                         // the two FIXED PULL-TIGHT beads (replay-stable)
+    N,
+  };
+}
+
+// ── runSelfTest() — THE SOLE ORACLE (the in-page pill AND the Node twin call it). ─
+// Returns { pass, total, lines:[{name,ok,detail}] }, every detail carrying LIVE
+// numbers. The five claims:
+//   (a) DETECTOR SOUNDNESS / PARITY — the geometry road (detLive on the reference
+//       polylines) equals the Tabulator's combinatorial authority: unknot 1, trefoil
+//       3, figure-8 5 (two disjoint roads, one integer).
+//   (b) ENTROPY MONOTONICITY — on n=3 strands P(knot) at A_hi minus P at A_lo ≥ 0.6
+//       with NON-OVERLAPPING Wilson 95% intervals; the n=3 row is non-decreasing in A
+//       (τ slack). The trend, not "strictly up at every cell".
+//   (c) NEG-CONTROL — the A=0 cohort is 100% the unknot (det≡1, P=0). Entropy needs
+//       room to act.
+//   (bridge) INTEGRITY — on the reference set geomToGauss is always realizable, every
+//       id appears exactly twice, and the crossing count equals the raw segCrossings.
+//   (teeth) — a crossing-COUNT fake calls the disguised unknot KNOTTED while det reads
+//       1; AND a constant-P fake FAILS the monotonicity (the trend isn't an artifact).
+//   (replay) — makeWorld(seed,N) ticked deterministically yields a byte-identical
+//       polyline on a re-run (clock-free determinism — the twin asserts it too).
+function runSelfTest(){
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+
+  const litDet = { unknot: 1, trefoil: 3, figure8: 5 };
+
+  // ── CLAIM a — DETECTOR SOUNDNESS / PARITY. ──────────────────────────────────
+  {
+    let bad = '';
+    const got = {};
+    for (const name of ['unknot', 'trefoil', 'figure8']){
+      const ref = refPolyline(name);
+      const live = detLive(ref.pts, ref.z).det;
+      const comb = knotDeterminant(gaussToCrossings(diagramCode(name).code));
+      got[name] = { live, comb };
+      if (live !== comb || live !== litDet[name]) bad = name;
+    }
+    const ok = bad === '';
+    T('CLAIM a — DETECTOR SOUNDNESS / PARITY: the geometry road (detLive on the reference polylines) reads |Δ(−1)| = the Tabulator\'s combinatorial authority — unknot 1, trefoil 3, figure-8 5 — two disjoint roads to the SAME integer',
+      ok, ok ? `geom=comb on all three · unknot ${got.unknot.live}=${got.unknot.comb} · trefoil ${got.trefoil.live}=${got.trefoil.comb} · fig-8 ${got.figure8.live}=${got.figure8.comb}`
+            : `mismatch at ${bad}: geom ${got[bad].live} vs comb ${got[bad].comb} (lit ${litDet[bad]})`);
+  }
+
+  // ── CLAIM b — ENTROPY MONOTONICITY (n=3 strands, A = braid word length). ────
+  let bResult = null;
+  {
+    const N = 200;
+    const lo = cohortP(3, 0, N), hi = cohortP(3, 80, N);
+    const wLo = wilson(lo.k, lo.n), wHi = wilson(hi.k, hi.n);
+    const gap = hi.p - lo.p;
+    const disjoint = wHi[0] > wLo[1];
+    // the n=3 row non-decreasing in A (τ=0.05 slack)
+    const As = [0, 3, 8, 20, 50, 80];
+    const row = As.map(A => cohortP(3, A, N).p);
+    let mono = true;
+    for (let i = 1; i < row.length; i++) if (row[i] < row[i - 1] - 0.05) mono = false;
+    bResult = { lo, hi, wLo, wHi, gap, disjoint, row, As, mono };
+    const ok = gap >= 0.6 && disjoint && mono;
+    T('CLAIM b — ENTROPY MONOTONICITY: on n=3 strands P(knot) climbs from A=0 to A=80 by ≥0.6 with NON-OVERLAPPING Wilson 95% intervals, and the P-vs-A row is non-decreasing (τ=0.05) — agitation earns knots',
+      ok, ok ? `P(A=80)=${hi.p.toFixed(3)} [${wHi[0].toFixed(3)},${wHi[1].toFixed(3)}] − P(A=0)=${lo.p.toFixed(3)} [${wLo[0].toFixed(3)},${wLo[1].toFixed(3)}] = gap ${gap.toFixed(3)} (≥0.6 ✓, disjoint ✓) · row ${row.map(p => p.toFixed(2)).join('→')} monotone`
+            : `gap=${gap.toFixed(3)} disjoint=${disjoint} mono=${mono} row=${row.map(p => p.toFixed(2)).join(',')}`);
+  }
+
+  // ── CLAIM c — NEG-CONTROL: A=0 cohort is 100% the bare unknot. ──────────────
+  {
+    const N = 200;
+    const nc = cohortP(3, 0, N);
+    // every A=0 trial is provably det===1 (an empty braid word ⟹ n parallel runs ⟹
+    // the unknot for a single-component closure).
+    let everyUnknot = true, checked = 0;
+    for (const s of cohortSeeds(N)){
+      const r = runTrial(3, 0, s);
+      checked++;
+      if (!(r.single ? r.det === 1 : true)) { everyUnknot = false; }
+      if (r.knotted) everyUnknot = false;
+    }
+    const ok = nc.p === 0 && nc.k === 0 && everyUnknot;
+    T('CLAIM c — NEG-CONTROL: the A=0 cohort (no agitation) is 100% the unknot — P(knot)=0, every trial det≡1. Entropy needs room to act',
+      ok, ok ? `A=0: P=${nc.p} (${nc.k}/${nc.n}) · all ${checked} trials det≡1 (the bare unknot)`
+            : `P=${nc.p} k=${nc.k} everyUnknot=${everyUnknot}`);
+  }
+
+  // ── CLAIM bridge — INTEGRITY of geomToGauss on the reference set. ───────────
+  {
+    let bad = '';
+    for (const name of ['unknot', 'trefoil', 'figure8', 'disguise']){
+      const ref = refPolyline(name);
+      const code = geomToGauss(ref.pts, ref.z);
+      if (!isRealizable(code)){ bad = `${name}/notRealizable`; break; }
+      const cnt = new Map();
+      for (const c of code) cnt.set(c.id, (cnt.get(c.id) || 0) + 1);
+      for (const v of cnt.values()) if (v !== 2){ bad = `${name}/idNotTwice`; break; }
+      if (bad) break;
+      // crossing count from the code (tokens/2) === a raw recount of segment crossings
+      const N = ref.pts.length / 2;
+      let segX = 0;
+      const X = i => ref.pts[2 * i], Y = i => ref.pts[2 * i + 1];
+      for (let i = 0; i < N - 1; i++) for (let j = i + 2; j < N - 1; j++) if (segInt(X(i), Y(i), X(i + 1), Y(i + 1), X(j), Y(j), X(j + 1), Y(j + 1))) segX++;
+      if (code.length / 2 !== segX){ bad = `${name}/countMismatch(${code.length / 2}≠${segX})`; break; }
+    }
+    const ok = bad === '';
+    T('CLAIM bridge — INTEGRITY: on every reference diagram geomToGauss is realizable, each crossing id appears exactly twice (one O / one U), and the token-count == the raw segment-crossing count (no crossing lost or invented)',
+      ok, ok ? `unknot/trefoil/figure8/disguise all realizable · every id twice · token-count == segCrossings count`
+            : `integrity fault: ${bad}`);
+  }
+
+  // ── CLAIM teeth — the fakes bite. ───────────────────────────────────────────
+  {
+    const dis = refPolyline('disguise');
+    const disDet = detLive(dis.pts, dis.z);
+    const fakeSaysKnotted = countCrossingsFake(disDet);          // crossing-count fake: TRUE (it has crossings)
+    const realSaysUnknot = disDet.realizable && disDet.det === 1; // the real det: it is the unknot
+    const fakeBites = fakeSaysKnotted && realSaysUnknot && disDet.ncross > 0;
+    // the constant-P fake must FAIL CLAIM b's monotonicity (a flat estimator has no trend)
+    const fakeRow = bResult.As.map(A => constantPFake(3, A));
+    let fakeMonotoneStrict = false;
+    for (let i = 1; i < fakeRow.length; i++) if (fakeRow[i] > fakeRow[i - 1] + 0.001) fakeMonotoneStrict = true;
+    const fakeGap = constantPFake(3, 80) - constantPFake(3, 0);
+    const constFakeFails = !fakeMonotoneStrict && fakeGap < 0.6;  // flat ⟹ no gap, no trend
+    const ok = fakeBites && constFakeFails;
+    T('CLAIM teeth: a crossing-COUNT fake calls the disguised unknot KNOTTED while the real |Δ| reads 1 (crossing-count is no invariant); AND a constant-P fake FAILS the monotonicity (gap 0, no trend) — the claims are not vacuous',
+      ok, ok ? `disguise: fake "${disDet.ncross} crossings ⟹ KNOTTED" but real |Δ|=${disDet.det} (UNKNOT) — fake caught · constant-P fake gap ${fakeGap.toFixed(2)} (<0.6, no trend) — caught`
+            : `fakeBites=${fakeBites} (ncross ${disDet.ncross}, det ${disDet.det}) constFakeFails=${constFakeFails}`);
+  }
+
+  // ── CLAIM replay — clock-free determinism: same seed/schedule ⟹ identical strand.
+  {
+    const tickSched = (w) => { for (let f = 0; f < 30; f++){ w.shake(1.4, 7); w.tick(); } w.stopShake(); for (let f = 0; f < 10; f++) w.tick(); };
+    const a = makeWorld(12345, 40); tickSched(a); const pa = a.openPoly();
+    const b = makeWorld(12345, 40); tickSched(b); const pb = b.openPoly();
+    let same = pa.length === pb.length;
+    for (let i = 0; same && i < pa.length; i++) if (pa[i] !== pb[i]) same = false;
+    // a DIFFERENT seed must (almost surely) differ — guards against a frozen sim
+    const c = makeWorld(99999, 40); tickSched(c); const pc = c.openPoly();
+    let differs = false;
+    for (let i = 0; i < pa.length; i++) if (pa[i] !== pc[i]){ differs = true; break; }
+    const ok = same && differs;
+    T('CLAIM replay: the clock-free sim is deterministic — makeWorld(seed,N) under a fixed shake schedule yields a byte-identical strand on re-run (and a different seed differs)',
+      ok, ok ? `seed 12345 replays byte-identical over ${pa.length / 2} beads · seed 99999 differs (not frozen)`
+            : `same=${same} differs=${differs}`);
+  }
+
+  const pass = lines.filter(l => l.ok).length;
+  return { pass, total: lines.length, lines };
+}
+// ===== TANGLE CORE END =====
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE SURFACE — render the live strand on canvas + wire the verbs. The renderer
+   reads the live (x,y) projection of the bead strand and draws it as a gold tube,
+   the casing-gap at each under-pass (Celtic-interlace standard). The headline reads
+   detLive() off the closed strand every DETECT_EVERY frames; PULL-TIGHT keys its
+   outcome off that ONE number. None of this is in tangle-core.mjs — it is the page's
+   own display layer, not part of the proven core, so it lives below the sentinel.
+   ════════════════════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const cv = $('cv'), ctx = cv.getContext('2d');
+const SS = 130;                                  // world is BOX=130 square; canvas maps [0,130]→pixels
+
+// ── canvas sizing (devicePixelRatio-aware) ──
+function fitCanvas(){
+  const host = $('stageHost'); const r = host.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cssW = r.width; cssH = r.height;
+}
+let cssW = 0, cssH = 0;
+const wx = x => x / SS * cssW;                   // world→css px
+const wy = y => y / SS * cssH;
+
+// ── the live world ──
+let N = 46, vigor = 1.4, seedCounter = 1;
+let world = makeWorld(seedCounter, N);
+let shaking = false, tightening = 0;
+let lastDet = { det: 1, realizable: true, ncross: 0 };
+let liveKnots = 0, liveTrials = 0;               // the SEPARATE observed hand-shake tally
+let wasKnotted = false;
+
+function rebuild(){
+  world = makeWorld(seedCounter, N);
+  shaking = false; tightening = 0; lastDet = { det: 1, realizable: true, ncross: 0 }; wasKnotted = false;
+}
+
+// ── draw the strand as a gold tube with casing-gap under-passes ──
+function draw(){
+  ctx.clearRect(0, 0, cssW, cssH);
+  const poly = world.openPoly(), z = world.zArray(), n = world.N;
+  // faint motion trail: previous-frame ghost is implicit via low-alpha clear; we draw
+  // a soft casing first, then the bright core, then break the casing at under-passes.
+  // 1) soft outer casing
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(12,10,7,0.95)'; ctx.lineWidth = Math.max(7, wx(7.4));
+  strokePath(poly, n);
+  // 2) the gold core as a vertical gradient (the wing's serif-title gradient, as rope)
+  const grad = ctx.createLinearGradient(0, 0, 0, cssH);
+  grad.addColorStop(0, getCSS('--strand-hi')); grad.addColorStop(0.55, getCSS('--strand')); grad.addColorStop(1, getCSS('--strand-lo'));
+  ctx.strokeStyle = grad; ctx.lineWidth = Math.max(3.4, wx(4.0));
+  strokePath(poly, n);
+  // 3) the under-pass casing gaps: at every detected crossing, erase a short stub of
+  //    the UNDER strand so the OVER strand reads as passing on top.
+  drawCasingGaps(poly, z, n);
+  // 4) the two PULL-TIGHT handles as small teal nibs
+  for (const h of world.handles){
+    ctx.beginPath(); ctx.arc(wx(poly[2*h]), wy(poly[2*h+1]), Math.max(2.6, wx(2.4)), 0, 7);
+    ctx.fillStyle = getCSS('--teal'); ctx.fill();
+  }
+}
+function strokePath(poly, n){
+  ctx.beginPath();
+  ctx.moveTo(wx(poly[0]), wy(poly[1]));
+  for (let i = 1; i < n; i++) ctx.lineTo(wx(poly[2*i]), wy(poly[2*i+1]));
+  ctx.stroke();
+}
+function drawCasingGaps(poly, z, n){
+  // recompute the crossings cheaply for display (same segInt the detector uses).
+  for (let i = 0; i < n - 1; i++){
+    for (let j = i + 2; j < n - 1; j++){
+      const h = segInt(poly[2*i],poly[2*i+1],poly[2*i+2],poly[2*i+3], poly[2*j],poly[2*j+1],poly[2*j+2],poly[2*j+3]);
+      if (!h) continue;
+      const zi = z[i] + h.t*(z[i+1]-z[i]), zj = z[j] + h.u*(z[j+1]-z[j]);
+      // the UNDER strand is the lower-z one — erase a stub of it at the crossing.
+      const u0 = zi < zj ? i : j, ut = zi < zj ? h.t : h.u;
+      const ax = poly[2*u0], ay = poly[2*u0+1], bx = poly[2*u0+2], by = poly[2*u0+3];
+      const cxp = ax + ut*(bx-ax), cyp = ay + ut*(by-ay);
+      const dx = bx-ax, dy = by-ay, dl = Math.hypot(dx,dy)||1, ux = dx/dl, uy = dy/dl;
+      const gap = 4.2;
+      ctx.strokeStyle = 'rgba(12,10,7,0.98)'; ctx.lineWidth = Math.max(4.4, wx(5.0)); ctx.lineCap='butt';
+      ctx.beginPath();
+      ctx.moveTo(wx(cxp-ux*gap), wy(cyp-uy*gap)); ctx.lineTo(wx(cxp+ux*gap), wy(cyp+uy*gap));
+      ctx.stroke();
+    }
+  }
+  ctx.lineCap='round';
+}
+function getCSS(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+// ── the verdict headline, read off the closed strand ──
+function refreshDetector(){
+  const cl = world.closed();
+  const r = detLive(cl.pts, cl.z);
+  if (r.realizable) lastDet = r;                 // non-realizable transient → HOLD last verdict
+  const det = lastDet.det;
+  const knotted = det !== null && det > 1;
+  $('verdict').textContent = knotted ? 'KNOTTED' : (det === 1 ? 'still just a loop' : 'a still loop');
+  $('verdict').className = 'verdict ' + (knotted ? 'knot' : 'loop');
+  $('detval').textContent = det == null ? '—' : det;
+  // count a fresh shake-resolved knot for the SEPARATE live tally (a rising edge)
+  if (knotted && !wasKnotted){ liveKnots++; }
+  if (knotted !== wasKnotted){ liveTrials++; wasKnotted = knotted; }
+  $('rate').innerHTML = liveTrials > 0 ? `seen knotted <b>${liveKnots}×</b>` : '';
+  $('bloom').classList.toggle('show', knotted);
+}
+
+// ── the RAF pump — display only; the integrator is clock-free ──
+let frame = 0;
+function loop(){
+  if (shaking) world.shake(vigor, 7);
+  else world.stopShake();
+  if (tightening > 0){ world.pullTight(tightening / 90); tightening--; }
+  world.tick();
+  draw();
+  if (world.frame % DETECT_EVERY === 0) refreshDetector();
+  frame++;
+  requestAnimationFrame(loop);
+}
+
+// ── the entropy spark-line — the published n=3 P-vs-A curve ──
+function drawSpark(){
+  const sc = $('spark'); const sx = sc.getContext('2d');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const r = sc.getBoundingClientRect();
+  sc.width = Math.round(r.width*dpr); sc.height = Math.round(r.height*dpr); sx.setTransform(dpr,0,0,dpr,0,0);
+  const W = r.width, H = r.height, padL = 6, padR = 6, padT = 8, padB = 6;
+  const As = [0, 3, 8, 20, 50, 80];
+  const pts = As.map(A => cohortP(3, A, 200).p);
+  $('phi').textContent = pts[pts.length-1].toFixed(2);
+  const xAt = i => padL + (W-padL-padR) * i/(As.length-1);
+  const yAt = p => padT + (H-padT-padB) * (1-p);
+  // baseline
+  sx.strokeStyle = 'rgba(217,184,115,0.16)'; sx.lineWidth=1;
+  sx.beginPath(); sx.moveTo(padL, yAt(0)); sx.lineTo(W-padR, yAt(0)); sx.stroke();
+  // area under the curve
+  const grad = sx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'rgba(217,184,115,0.28)'); grad.addColorStop(1,'rgba(217,184,115,0.02)');
+  sx.beginPath(); sx.moveTo(xAt(0), yAt(0));
+  pts.forEach((p,i)=> sx.lineTo(xAt(i), yAt(p)));
+  sx.lineTo(xAt(As.length-1), yAt(0)); sx.closePath(); sx.fillStyle=grad; sx.fill();
+  // the curve
+  sx.strokeStyle = getCSS('--gold'); sx.lineWidth=2; sx.lineJoin='round';
+  sx.beginPath(); pts.forEach((p,i)=> i?sx.lineTo(xAt(i),yAt(p)):sx.moveTo(xAt(i),yAt(p))); sx.stroke();
+  // nodes
+  pts.forEach((p,i)=>{ sx.beginPath(); sx.arc(xAt(i),yAt(p),2.4,0,7); sx.fillStyle=getCSS('--strand-hi'); sx.fill(); });
+}
+
+// ── verbs ──
+function bindHold(el, on, off){
+  const start = e => { e.preventDefault(); el.classList.add('active'); on(); };
+  const end = e => { el.classList.remove('active'); off(); };
+  el.addEventListener('mousedown', start); el.addEventListener('touchstart', start, {passive:false});
+  window.addEventListener('mouseup', end); el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
+  el.addEventListener('mouseleave', end);
+}
+bindHold($('vShake'), ()=>{ shaking = true; $('hint').textContent='writhing…'; }, ()=>{ shaking=false; $('hint').textContent='hold SHAKE'; });
+$('vTight').addEventListener('click', ()=>{ tightening = 90; });
+$('lenSlider').addEventListener('input', e => { N = +e.target.value; $('lenval').textContent = N; rebuild(); });
+$('vigSlider').addEventListener('input', e => { vigor = +e.target.value; $('vigval').textContent = vigor.toFixed(1); });
+$('bReset').addEventListener('click', ()=>{ seedCounter++; rebuild(); });
+
+// keyboard niceties
+window.addEventListener('keydown', e => {
+  if (e.repeat) return;
+  if (e.key === ' '){ e.preventDefault(); shaking = true; $('vShake').classList.add('active'); $('hint').textContent='writhing…'; }
+  if (e.key === 't' || e.key === 'T'){ tightening = 90; }
+  if (e.key === 'r' || e.key === 'R'){ seedCounter++; rebuild(); }
+});
+window.addEventListener('keyup', e => { if (e.key === ' '){ shaking=false; $('vShake').classList.remove('active'); $('hint').textContent='hold SHAKE'; } });
+
+// ── the self-test pill (the SOLE oracle; the same runSelfTest the Node twin runs) ──
+function paintSelfTest(){
+  const st = runSelfTest();
+  const node = $('selftest');
+  if (st.pass === st.total){
+    node.className = 'selftest ok'; node.textContent = st.pass + '/' + st.total + ' ✓';
+  } else {
+    node.className = 'selftest bad'; node.textContent = st.pass + '/' + st.total + ' ✗';
+  }
+  node.title = st.lines.map(l => (l.ok?'✓ ':'✗ ') + l.name + ' — ' + l.detail).join('\n');
+  node.addEventListener('click', ()=>{ console.log('%cThe Tangle Bench — self-test', 'color:#d9b873;font-weight:bold');
+    for (const l of st.lines) console.log((l.ok?'✓':'✗'), l.name, '\n   ', l.detail); });
+  window.__tangleSelfTest = st;
+  return st;
+}
+
+// ── boot ──
+function boot(){
+  fitCanvas(); drawSpark(); paintSelfTest();
+  window.addEventListener('resize', ()=>{ fitCanvas(); drawSpark(); });
+  requestAnimationFrame(loop);
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+</script>
+</body>
+</html>
