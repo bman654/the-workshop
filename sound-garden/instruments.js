@@ -49,5 +49,11 @@ window.INSTRUMENTS = [
     name: "Gamelan",
     blurb: "two interlocking parts — polos and sangsih — weave into one gap-free stream on inharmonic metallophones tuned to slendro or pelog",
     accent: "#e0a23c"
+  },
+  {
+    file: "monochord.html",
+    name: "Monochord",
+    blurb: "pluck, slide, and touch one tensioned string — its overtones are an exactly even ladder you can see and hear (fₙ/f₁=n)",
+    accent: "#d9a441"
   }
 ];
