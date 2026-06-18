@@ -163,12 +163,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 ### bench
 - [bench] **The Counting Yard — entropy is just how many ways (Engine Room)** — Engine Room (extend incrementally, per its CHANGELOG). FORM: a TWO-BOX you OPERATE — N labelled molecules crammed left; tip the partition open and watch them scatter while a live tally counts the macrostate W=C(N,n_L) climbing to its peak at n_L=N/2, with S=ln W beside it — the second law shown AS A COUNTING fact (a partition you tip, not a plotted curve). CRUX (verified Node): Σ over macrostates ΣC(N,k)=2^N exactly (ΣC(20,k)=1048576), and free expansion V→2V gives ΔS=N·ln2 to machine precision (13.862944=20·ln2); NEG-CONTROL re-cram all-left → W=1, S=0. DEDUPE (must read): clockwork/partition.html already does thermodynamic S=−Σp ln p via Boltzmann fill of an ENERGY LADDER — this bench is the disjoint COMBINATORIAL microstate count (W, ΔS=N·ln2), Boltzmann's how-many-ways, not the softmax/energy-ladder identity; the copy must make that distinction explicit and not reach for speed distributions (the Cavern owns Maxwell–Boltzmann). (sown #119)
-- [bench] **The Squaring Yard — drag the pebbles, the shape proves the algebra (Numbers Room)** — Numbers Room. FORM: a pebble board you REARRANGE — drag L-shaped odd gnomons until they nest into a perfect square; flip two consecutive triangles and they tile that same square. The proof IS the rearrangement — zero graphs, the purest form-expresses-content and a strong antidote to chart-monoculture. CRUX (verified n=1..200): 1+3+…+(2n−1)=n²; T_n+T_{n−1}=n²; and the hidden one, every hexagonal H_n = triangular T_{2n−1}. Grep-confirmed gap: figurate/polygonal numbers are entirely absent from the estate. NAME NOTE: titled 'The Squaring Yard' NOT 'Gnomon Yard' — sundial/ is already 'The Gnomon'; keep the figurate-gnomon strictly in the pebble copy to avoid the collision. (sown #119)
-<!-- ✝ BLOOMED #115: The Climb — a Donkey Kong clone → arcade/games/the-climb.html · after 765ab51 -->
 <!-- ✝ BLOOMED #117: The Spotlight — where the maker is looking → clockwork/spotlight.html · after b032c3c -->
 <!-- ✝ BLOOMED #118: The Singing Glass — a wine-glass rim driven to resonance until it shatt… → resonance/index.html · after 4127f6d -->
 <!-- ✝ DECAYED #119: A front-door declutter pass · after 95afeab -->
 <!-- ✝ DECAYED #119: Grow smoke.cjs a label-READABILITY metric · after 95afeab -->
+<!-- ✝ BLOOMED #120: The Squaring Yard — drag the pebbles, the shape proves the algebra (Num… → squaring-yard/ · after dc4193a -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
