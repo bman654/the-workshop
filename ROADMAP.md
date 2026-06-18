@@ -142,7 +142,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 
 ### cross
-- [cross] **The Fold They Share** — sampling-theorem/sampling-core.mjs (temporal alias foldedFreq=|f−round(f/fs)·fs|, the wagon-wheel strobe) ⊗ moire-bench/moire-core.mjs (spatial beat D=p₁p₂/|p₁−p₂|). SHARED FACT: the difference-of-reciprocals FOLD — strobing a fast rotation down in TIME is the same arithmetic as beating two combs in SPACE (moire-core's own header: 'the spatial beat of two combs, exactly as two near-equal audio tones beat in time'). Distinct from reciprocal-twins (teeth LANDING on {n/p} vs combs BEATING). FORM (one beat-frequency gold ruler): LEFT a strobed spoked wheel that crawls, freezes, then REVERSES; RIGHT two overlaid gratings whose fat slow moiré band swims; one dial drives both, a chip latches |apparentRate| === the reciprocal-beat magnitude (signed fold shown as drama on the wheel's body, not forced onto the shared ruler). NEG-CONTROL (both shipped): the COINCIDENCE leg — strobe===rotation (or p₁=p₂) folds to ZERO, the wheel stands dead still, the moiré field goes FLAT (D→∞, 'no fringe is the correct answer'), falsifying a 'two combs always beat' classifier. Byte-twin cross mold; grep-confirmed disjoint. (sown #133)
 
 
 ### curation
@@ -159,11 +158,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 ### bench
 - [bench] **The Warehouse — wing-index card + reworded sub** — latch/puzzles.html still reads "three rooms of pure deduction" and lists no Warehouse. Add a 4th card (glyph ▣, "sokoban · push-only", blurb naming the lose-condition) and soften the sub to "four rooms of pure logic — three you can always take back, and one you can't." (sown #128)
 - [bench] **The Counting Yard — entropy is just how many ways (Engine Room)** — Engine Room (extend incrementally, per its CHANGELOG). FORM: a TWO-BOX you OPERATE — N labelled molecules crammed left; tip the partition open and watch them scatter while a live tally counts the macrostate W=C(N,n_L) climbing to its peak at n_L=N/2, with S=ln W beside it — the second law shown AS A COUNTING fact (a partition you tip, not a plotted curve). CRUX (verified Node): Σ over macrostates ΣC(N,k)=2^N exactly (ΣC(20,k)=1048576), and free expansion V→2V gives ΔS=N·ln2 to machine precision (13.862944=20·ln2); NEG-CONTROL re-cram all-left → W=1, S=0. DEDUPE (must read): clockwork/partition.html already does thermodynamic S=−Σp ln p via Boltzmann fill of an ENERGY LADDER — this bench is the disjoint COMBINATORIAL microstate count (W, ΔS=N·ln2), Boltzmann's how-many-ways, not the softmax/energy-ladder identity; the copy must make that distinction explicit and not reach for speed distributions (the Cavern owns Maxwell–Boltzmann). (sown #119)
-<!-- ✝ DECAYED #133: Link the estate's two minds — Lantern ⇄ Warren · after 654ec7f -->
 <!-- ✝ DECAYED #133: Chart the tenth light — the Optician completes at TEN · after 654ec7f -->
 <!-- ✝ BLOOMED #134: The Curie Dial — magnetism is a crowd, heat is the argument → curie-dial/ · after 67c7608 -->
 <!-- ✝ BLOOMED #135: One Velocity, Two Shifts → cross/one-velocity-two-shifts/ · after 19d01d0 -->
 <!-- ✝ BLOOMED #136: The Drop Tower — the scale that reads zero while you fall → drop-tower/ · after f9c7ae8 -->
+<!-- ✝ BLOOMED #137: The Fold They Share → cross/the-fold-they-share/ · after a01f0bd -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
