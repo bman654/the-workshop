@@ -6,7 +6,64 @@ mechanism under each, with a falsifiable proof). With three benches the wing **e
 a front-door wing-landing** (`clockwork/index.html` + a POI on the north grounds) and
 its benches were **promoted off the Workbench** into their true home; a **4th bench**
 (The Partition Function, cycle #8), a **5th** (The Measurement, cycle #23) and a **6th**
-(The Tokenizer, cycle #67) have since joined them on the landing. Newest first.
+(The Tokenizer, cycle #67) have since joined them on the landing. The wing's **first
+GAME** — The Next Word 🎲 (cycle #113) — now sits in its own brass slot below the six
+benches: not a bench to read, but a table to play. Newest first.
+
+---
+
+# The Next Word 🎲 — CHANGELOG
+
+*Built cycle #113 (2026-06-17, Opus 4.8). The wing's FIRST GAME — a loaded die you bet against,
+scored in bits. Six benches before it (Temperature · Context · Turn · Partition · Measurement ·
+Tokenizer), zero games — no next-token guessing game existed estate-wide.*
+
+**What it is.** A toy sentence stem appears ("the cat sat on the …"). You stake a guess on one of
+~6 candidate tokens, then the model rolls its **loaded die** — the six wedge AREAS *are* the softmax
+distribution `p` (the same softmax the sibling Temperature Dial warps; cross-linked both ways). The
+odds are **hidden until the roll** so the bet is a real blind read: calibration is the only skill the
+table rewards. After the roll a **three-layer reveal** lights up — YOUR guess + stake (and whether it
+landed) · the LIT TRUTH (the mode token, its %, the entropy `H`) · the ROLLED word (its `p`, its
+**model-bits** = −log₂ p). Three decoders **race** over a fixed seeded 8-stem deck: YOU (stake-weighted),
+GREEDY (always the mode, with a finite miss-penalty — never ∞), UNIFORM (chance). A temperature knob
+warps the same softmax; a stake slider sets your conviction; `ws:best:clockwork-next-word` persists.
+
+**The exact mechanism.** The SCORE is cross-entropy: your total realized bits === −Σ log₂ p_realized
+over the deck, to machine-ε. The three per-decoder bit functions **genuinely diverge** (not three names
+for one number — A's original race was broken with all three identical; this is the fix). The
+race-sanity claim is **robust expected-bits ordering** (calibrated reader = entropy floor by Gibbs <
+greedy < uniform over the deck), true seed-independently rather than by a lucky path.
+
+**Honesty / the temperature lever.** At the trained temperature (T=1) the seeded deck's modes are
+confident enough that the die lands on the mode every roll, so GREEDY pays ~0 and is unbeatable *on
+that path* — this is honest (at T=1 the top guess is usually right). The **temperature knob is the
+skill lever**: at T≈4 the die spreads, greedy starts missing and pays its finite penalties (verified:
+greedy 32.92b > uniform 20.68b > you 19.61b — the divergence flips).
+
+**Files (byte-twin core mold, like its 5 bench siblings).** `next-word-core.mjs` (~310L) — the DOM-free
+SOLE authority: shared `softmax`/`argmax`/`makeRng`/`sampleIndex` **byte-identical** to `core.mjs` (the
+Temperature Dial), plus the new scoring physics and a frozen 8-stem DECK with pinned logit literals;
+5-claim `runSelfTest`. `next-word.html` (~48KB) — the playable page, core inlined byte-for-byte between
+BEGIN/END sentinels. `next-word-core.test.mjs` (~250L) — the Node twin: the shared 5-claim self-test at
+N=200000 + cross-entropy over 61 temperatures + warp on every stem + neg-control teeth + per-decoder
+divergence (incl. greedy finite-penalty + stake-cuts-both-ways) + byte-parity re-extraction proving all
+17 inlined functions char-for-char match the .mjs and the DECK source rows string-match the page slice.
+
+**Self-test — ALL GREEN.** `node clockwork/next-word-core.test.mjs` → **43/43 ✓** (5 shared claims +
+deeper Node assertions + 17 byte-parity checks + DECK-source string-match + cross-boundary spot values:
+total=5.433315 bits over 8 stems, p₀=0.519420). In-page pill **5/5 ✓**. The landing self-test
+(`clockwork/index.html`) gained 5 game-card assertions → **21/21 ✓** (the game card is a distinct brass
+`.game` slot, not a `.bench`; 0 nested anchors; →`next-word.html`; its own 5/5 chip; the 6 benches intact).
+
+**Publisher fresh-eyes (cycle #113).** Served `127.0.0.1:8973` (PID 24156) + agent-browser session
+`nw113`, both torn down by exact PID/name. Self-test 5/5 ✓ + **0 console errors** on the game AND the
+wing landing; odds hidden pre-roll (`.pbar` opacity 0) → revealed post-roll (mode ▲ marker only after);
+a live round verified end-to-end (picked "mat" → ROLL enabled → die landed `mat`, reveal `mat 51.9% ·
+0.95 bits`, the tape recorded the bet, racers diverged YOU 1.00 / GREEDY 0.00 / UNIFORM 2.58); **0
+horizontal overflow @1280 AND @390** (the die scales, single-column mobile re-flow clean); **0 nested
+anchors** on both pages; cross-links resolve. Estate gates GREEN: `forge --check --all` 39/39 (the
+clockwork pages are hand-inlined, not forge-managed) · layout smoke PASS · sky 73/73 (no new map POI).
+**SHIPPED CLEAN — no fix needed.** The at-T=1 one-sided race adjudicated honest, not a defect — kept.
 
 ---
 
