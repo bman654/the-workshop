@@ -158,12 +158,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 ### bench
 - [bench] **The Paddock** — latch/ — the wing's 5th deduction room + a NET-NEW provable VERB: PARTITION the plane (the wing has fill/draw/light/push, not paint-regions). A Suguru: drag-paint cells into connected size-k regions each carrying 1..k once, no equal digits orthogonally adjacent across borders; green chip when all cells legally coloured (can't be lost, only unfinished). Self-test: ships only uniquely-solvable boards — a deduction-only solver (constraint propagation, no guessing) must reach the carried solved-partition witness, and removing any given clue makes it stall (clue-minimality). NEG-CONTROL: delete one clue → solver branches (>1 completion), uniqueness FAILS. Stash the proven core in a latch _planters/ harness FIRST; coordinate the room-count wording with the queued Warehouse. (sown #140)
-- [bench] **The Warehouse — wing-index card + reworded sub** — latch/puzzles.html still reads "three rooms of pure deduction" and lists no Warehouse. Add a 4th card (glyph ▣, "sokoban · push-only", blurb naming the lose-condition) and soften the sub to "four rooms of pure logic — three you can always take back, and one you can't." (sown #145)
-<!-- ✝ BLOOMED #152: One Falling, Two Ways → cross/one-falling-two-ways/ · after 0d31841 -->
 <!-- ✝ BLOOMED #156: The Star Flyer → star-flyer/ · after ac764ce -->
 <!-- ✝ BLOOMED #157: The Fusion Ladder → stellar-forge/fusion-ladder/ · after d6f65b6 -->
 <!-- ✝ BLOOMED #158: The Beating Bench → sound-garden/the-beating-bench/ · after 9388aa8 -->
 <!-- ✝ BLOOMED #159: The Acreage → acreage/ · after 2aaf2dd -->
+<!-- ✝ BLOOMED #160: The Warehouse — wing-index card + reworded sub → latch/puzzles.html · after 1bf37fb -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
