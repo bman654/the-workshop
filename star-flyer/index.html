@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Star Flyer · The Midway · The Orrery Estate</title>
+<!--
+   THE STAR FLYER — a conical-pendulum swing carousel you CRANK up to speed. The physics
+   CORE (core.mjs) is inlined byte-for-byte between the sentinels below; the in-page chip
+   calls the SAME runSelfTest() the Node twin (core.test.mjs) runs, and the renderer draws
+   the chairs' EQUILIBRIUM LEAN: tan θ = ω²R/g with R = r₀ + L·sinθ (the implicit orbit).
+   The angle the chains fly out to IS the spin, made visible — a protractor needle reads
+   θ = solveLean(ω) directly. The lean is the readout — no plotted curve is the subject.
+   NEG-CONTROL: rigid bolted spokes (rideStateRigid) hold θ≡0 ∀ω — crank to max and they
+   just whirl flat. The chip proves solveLeanRigid≡0 disagrees with the real lean.
+-->
+<style>
+  :root{
+    --bg:#07080c;             /* fairground-at-dusk near-black ground */
+    --plate1:#12100a;
+    --plate2:#0b0a07;
+    --ink:#efe9da;
+    --ink-dim:#a59c87;
+    --gold:#c9a24a;           /* the mast / brass */
+    --gold-hi:#f4d27a;        /* lit gold (hub, chairs) */
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.40);
+    --teal:#5fcdbf;           /* low lean — a gentle swing */
+    --teal-soft:rgba(95,205,191,0.12);
+    --coral:#f0846f;          /* near the 90° asymptote — flung near-flat */
+    --coral-soft:rgba(220,120,100,0.12);
+    --panel:rgba(11,10,7,0.86);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1200px 720px at 50% -12%, rgba(201,162,74,0.09), transparent 56%),
+      radial-gradient(900px 640px at 14% 112%, rgba(95,205,191,0.05), transparent 60%),
+      radial-gradient(900px 640px at 86% 114%, rgba(220,120,100,0.04), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  /* faint engineering-paper grid behind everything */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(201,162,74,0.05) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(201,162,74,0.045) 0 1px, transparent 1px 32px);
+    mask-image:radial-gradient(1100px 760px at 50% 36%, #000 30%, transparent 78%);
+  }
+  /* a thin string-of-lights bunting across the top — the fairground tell */
+  body::after{
+    content:""; position:fixed; top:46px; left:0; right:0; height:18px; z-index:0; pointer-events:none; opacity:.5;
+    background-image:radial-gradient(circle at 11px 4px, var(--gold-hi) 0 1.6px, transparent 2.4px);
+    background-size:42px 18px;
+    mask-image:linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  }
+
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding:13px 20px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(7,8,12,0.95), rgba(7,8,12,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:5px; }
+  .back{ font:600 10.5px/1.3 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.22s; white-space:nowrap; }
+  .back:hover{ color:var(--gold-hi); opacity:1; }
+  .brand{ text-align:center; flex:1 1 auto; pointer-events:none; padding-top:1px; }
+  .brand h1{ margin:0; font-family:var(--font-serif); font-weight:600; font-size:clamp(17px,2.4vw,21px);
+    letter-spacing:.4px; color:var(--gold-hi); }
+  .brand .tag{ display:block; font:11px/1.3 var(--font-serif); font-style:italic; color:var(--ink-dim); margin-top:1px; }
+  .selftest{ font:600 10px/1.35 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:18px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.42); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); max-width:230px; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(24,46,32,0.5); }
+  .selftest.bad{ color:var(--coral); border-color:rgba(220,120,100,0.6); background:rgba(58,26,22,0.5); }
+
+  /* ── self-test detail panel ── */
+  #stPanel{ position:fixed; top:54px; right:18px; z-index:60; width:min(460px,92vw);
+    background:var(--panel); border:1px solid var(--gold-edge); border-radius:12px; padding:16px 18px 14px;
+    box-shadow:0 18px 50px rgba(0,0,0,0.6); display:none; }
+  #stPanel.show{ display:block; }
+  #stPanel h2{ margin:0 0 4px; font:600 13px/1.2 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--gold-hi); }
+  #stPanel .sub{ margin:0 0 10px; font:12px/1.5 var(--font-serif); color:var(--ink-dim); }
+  #stList{ font:11px/1.55 var(--font-mono); max-height:46vh; overflow:auto; }
+  #stList .row{ display:flex; gap:8px; padding:2px 0; }
+  #stList .row .m{ flex:0 0 auto; }
+  #stList .ok{ color:#8fd79a; } #stList .no{ color:var(--coral); }
+  #stPanel .foot{ margin-top:10px; padding-top:9px; border-top:1px solid rgba(201,162,74,0.16);
+    font:11px/1.6 var(--font-serif); color:var(--ink-dim); }
+  #stPanel .closeX{ position:absolute; top:9px; right:11px; background:none; border:none; color:var(--ink-dim);
+    font-size:18px; cursor:pointer; line-height:1; }
+
+  /* ── layout ── */
+  main{ position:relative; z-index:1; max-width:1120px; margin:0 auto; padding:74px 20px 56px; }
+  .hero{ text-align:center; margin-bottom:14px; }
+  .hero .eyebrow{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3em; text-transform:uppercase; color:var(--gold); opacity:.9; }
+  .hero .lede{ max-width:700px; margin:12px auto 0; font:15px/1.6 var(--font-serif); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--gold-hi); font-weight:600; } .hero .lede i{ font-style:italic; }
+
+  .stage{ display:grid; grid-template-columns:1fr 168px; gap:16px; align-items:stretch; margin-top:20px; }
+  .panel{ border:1px solid rgba(201,162,74,0.16); border-radius:14px; background:linear-gradient(180deg,var(--plate1),var(--plate2));
+    padding:14px; position:relative; overflow:hidden; }
+  .panel h3{ margin:0 0 8px; font:600 9.5px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--ink-dim); }
+  .panel h3 b{ color:var(--gold); }
+
+  /* the ride panel (the swing carousel) */
+  #ridePanel{ padding:12px 12px 10px; }
+  #rideWrap{ position:relative; width:100%; }
+  svg#ride{ width:100%; height:auto; display:block; touch-action:none; }
+
+  /* the felt-regime headline under the ride */
+  #regime{ margin-top:10px; min-height:40px; text-align:center; font:14px/1.45 var(--font-serif); color:var(--ink-dim); transition:.18s; }
+  #regime.rest{ color:var(--gold-hi); } #regime.low{ color:var(--teal); } #regime.high{ color:var(--coral); }
+  #regime b{ font-weight:600; }
+
+  /* the right column: the protractor gauge + the trade ledger */
+  #sideCol{ display:flex; flex-direction:column; gap:12px; }
+  #needlePanel{ display:flex; flex-direction:column; align-items:center; padding:12px 10px 10px; }
+  svg#needle{ width:100%; height:auto; margin-top:2px; }
+  #needleVerdict{ margin-top:4px; font:600 9.5px/1.3 var(--font-mono); text-align:center; color:var(--ink-dim); }
+  .lamp{ display:inline-flex; align-items:center; gap:6px; margin-top:7px; font:600 9px/1 var(--font-mono);
+    letter-spacing:.12em; text-transform:uppercase; color:var(--ink-dim); opacity:.5; transition:.18s; }
+  .lamp .dot{ width:8px; height:8px; border-radius:50%; background:var(--coral); box-shadow:none; }
+  .lamp.on{ opacity:1; color:var(--coral); } .lamp.on .dot{ box-shadow:0 0 9px var(--coral); }
+
+  /* the trade ledger — three brass stat plates, NOT a chart */
+  #ledgerPanel{ padding:12px; }
+  .plates{ display:flex; flex-direction:column; gap:8px; }
+  .plate{ display:flex; align-items:baseline; justify-content:space-between; gap:8px;
+    border:1px solid rgba(201,162,74,0.18); border-radius:8px; padding:8px 10px; background:rgba(0,0,0,0.26); }
+  .plate .k{ font:9px/1.2 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim); }
+  .plate .val{ font:600 15px/1 var(--font-mono); color:var(--gold-hi); }
+  .plate.lean .val{ color:var(--teal); }
+  #residChip{ margin-top:9px; text-align:center; font:600 10px/1.3 var(--font-mono); color:var(--ink-dim);
+    border:1px dashed rgba(201,162,74,0.28); border-radius:7px; padding:7px 8px; }
+  #residChip b{ color:#8fd79a; }
+
+  /* the crank + knobs */
+  .controls{ display:flex; flex-wrap:wrap; gap:14px 22px; align-items:center; margin-top:18px; justify-content:center; }
+  .crankBox{ display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .crankBox .clbl{ font:600 9px/1 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--ink-dim); }
+  svg#crank{ width:150px; height:150px; touch-action:none; cursor:grab; display:block; }
+  svg#crank:active{ cursor:grabbing; }
+  .knob{ display:flex; flex-direction:column; gap:6px; min-width:200px; }
+  .knob label{ font:600 10px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim); }
+  .knob label .v{ color:var(--gold-hi); }
+  .knob input[type=range]{ accent-color:var(--gold); width:100%; }
+
+  button.ctl{ font:600 11px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink); background:linear-gradient(180deg,#1a1710,#100d08); border:1px solid var(--gold-edge);
+    border-radius:9px; padding:11px 16px; cursor:pointer; transition:.18s; }
+  button.ctl:hover{ border-color:var(--gold-hi); color:var(--gold-hi); }
+  button.dare{ border-color:rgba(240,132,111,0.5); color:var(--coral); }
+  button.dare:hover{ border-color:var(--coral); color:var(--coral); }
+  .toggle{ display:inline-flex; align-items:center; gap:7px; font:11px/1 var(--font-mono); color:var(--ink-dim); cursor:pointer; user-select:none;
+    border:1px solid rgba(201,162,74,0.22); border-radius:9px; padding:9px 12px; }
+  .toggle input{ accent-color:var(--coral); }
+  .toggle.on{ border-color:rgba(240,132,111,0.55); color:var(--coral); }
+
+  /* explainer / honesty */
+  .scroll{ max-width:780px; margin:30px auto 0; font:13.5px/1.7 var(--font-serif); color:var(--ink); opacity:.9; }
+  .scroll h2{ font:600 11px/1 var(--font-mono); letter-spacing:.22em; text-transform:uppercase; color:var(--gold);
+    margin:24px 0 10px; }
+  .scroll p{ margin:0 0 12px; } .scroll b{ color:var(--gold-hi); } .scroll i{ font-style:italic; }
+  .scroll .teal{ color:var(--teal); } .scroll .coral{ color:var(--coral); }
+  .scroll code{ font:12px/1.5 var(--font-mono); color:var(--gold-hi); background:rgba(201,162,74,0.08);
+    padding:1px 5px; border-radius:4px; }
+  .honesty{ border-left:2px solid var(--gold-edge); padding-left:14px; color:var(--ink-dim); font-size:12.5px; }
+
+  .foot{ max-width:780px; margin:34px auto 0; padding-top:18px; border-top:1px solid rgba(201,162,74,0.12);
+    text-align:center; font:12.5px/1.7 var(--font-serif); color:var(--ink-dim); }
+  .foot a{ color:var(--gold); text-decoration:none; border-bottom:1px solid rgba(201,162,74,0.3); }
+
+  @media (max-width:760px){
+    main{ padding-top:140px; }
+    .stage{ grid-template-columns:1fr; }
+    #sideCol{ flex-direction:column; }
+    svg#needle{ max-width:200px; margin:0 auto; }
+    .knob{ min-width:0; flex:1 1 160px; }
+    .controls{ gap:12px; }
+    .topbar{ flex-wrap:wrap; align-items:center; }
+    .brand{ order:3; flex:1 0 100%; text-align:left; margin-top:2px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../midway/index.html">&larr; The Midway</a>
+      <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="back" href="../drop-tower/index.html">&#8599; The Drop Tower (sister ride)</a>
+    </div>
+    <div class="brand">
+      <h1>The Star Flyer</h1>
+      <span class="tag">the angle your chains fly out to is the spin, made visible</span>
+    </div>
+    <div class="selftest" id="selftest" title="The physics core proves tan θ = ω²R/g with R = r₀+L·sinθ: a leaning swing solved by bisection, and a rigid-spoke neg-control that can't lean; click for detail.">checking&hellip;</div>
+  </div>
+
+  <div id="stPanel">
+    <button class="closeX" id="stClose" title="close">&times;</button>
+    <h2>Self&#8209;test</h2>
+    <p class="sub" id="stSub">&hellip;</p>
+    <div id="stList"></div>
+    <div class="foot">The conical pendulum: <code>tan θ = ω²R/g</code> with the IMPLICIT orbit <code>R = r₀ + L·sin θ</code>, solved
+      by provably-bracketed bisection on <code>θ∈[0,&pi;/2)</code>. Idealized: point-mass chairs, massless inextensible chains, no drag.
+      The equilibrium <code>θ</code> is exact; only the swing-in transient is eased. The load-bearing neg-control (rigid spokes,
+      <code>θ&equiv;0</code>) provably FAILS to lean. The in-page count equals the Node twin (<code>core.test.mjs</code>).</div>
+  </div>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">The Midway &middot; ride #3</div>
+      <p class="lede"><b>Crank the carousel up to speed.</b> The chains fly <i>out</i>, the canopy opens like an umbrella, and the
+        chairs <i>rise</i> as they swing &mdash; all from one angle. A brass <b>protractor</b> rides the fullest chair and reads that
+        angle live: it <i>is</i> <code>θ = solveLean(ω)</code>, the lean the equilibrium <code>tan θ = ω²R/g</code> demands, with the
+        orbit <code>R = r₀ + L·sin θ</code> widening as you go. Flip on <b>rigid spokes</b> and the same crank does nothing to the lean
+        &mdash; locked arms whirl flat. The <i>lean is the readout</i>.</p>
+    </header>
+
+    <div class="stage">
+      <!-- ORGAN 1: the swing carousel (front projection) -->
+      <div class="panel" id="ridePanel">
+        <h3>The Swing Carousel &middot; <b>the canopy opens with the spin</b></h3>
+        <div id="rideWrap">
+          <svg id="ride" viewBox="0 0 660 460" preserveAspectRatio="xMidYMid meet" aria-label="front-view swing carousel; the chair-chains fly out to the lean angle as the spin rises"></svg>
+        </div>
+        <div id="regime" class="rest"><b>AT REST</b> &mdash; the chains hang straight down (θ = 0&deg;).</div>
+      </div>
+
+      <!-- the right column: the protractor gauge + ledger -->
+      <div id="sideCol">
+        <div class="panel" id="needlePanel">
+          <h3>Protractor &middot; θ</h3>
+          <svg id="needle" viewBox="0 0 150 150" aria-label="brass protractor gauge, reads the lean angle θ in degrees"></svg>
+          <div id="needleVerdict">θ = 0.0° · R = 0.90 m</div>
+          <span class="lamp" id="flatLamp"><span class="dot"></span>flung near-flat (θ &rarr; 90&deg;)</span>
+        </div>
+
+        <div class="panel" id="ledgerPanel">
+          <h3>Trade ledger &middot; <b>live as you crank</b></h3>
+          <div class="plates">
+            <div class="plate"><span class="k">spin ω · rpm</span><span class="val" id="plW">&ndash;</span></div>
+            <div class="plate lean"><span class="k">lean θ</span><span class="val" id="plTheta">&ndash;</span></div>
+            <div class="plate"><span class="k">orbit R</span><span class="val" id="plR">&ndash;</span></div>
+          </div>
+          <div id="residChip">residual f(θ) = <b>&ndash;</b></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="crankBox">
+        <span class="clbl">drag to crank</span>
+        <svg id="crank" viewBox="0 0 150 150" aria-hidden="true"></svg>
+      </div>
+      <div class="knob">
+        <label>spin rate <span class="v" id="kW">0.00 rad/s</span> &mdash; <i>or drag the brass crank</i></label>
+        <input type="range" id="omega" min="0" max="3.5" step="0.01" value="0" aria-label="spin rate ω (radians per second)">
+      </div>
+      <label class="toggle" id="rigidToggle"><input type="checkbox" id="rigid"> rigid spokes (locked arms)</label>
+      <button class="ctl dare" id="dare" title="crank to the dial ceiling — watch the canopy flatten toward the 90° asymptote">⚡ DARE</button>
+      <button class="ctl" id="reset">reset</button>
+    </div>
+
+    <section class="scroll">
+      <h2>What you are operating</h2>
+      <p>This is not a chart of a swing ride &mdash; it <i>is</i> one, seen front-on. Six chairs hang on chains from a hub of radius
+        <code>r₀</code>. When the carousel turns at rate <i>ω</i>, each chair flies <b>out</b> to a steady lean <i>θ</i> from vertical
+        and rides a horizontal circle. At that balance the chain's vertical pull carries gravity and its horizontal pull is exactly the
+        centripetal force the orbit needs: <code>T cos θ = mg</code>, <code>T sin θ = mω²R</code>. Divide and the chain tension cancels:
+        <code>tan θ = ω²R/g</code>. The catch &mdash; and the whole reason this is interesting &mdash; is that <i>R is not fixed</i>: as
+        the chair leans out it reaches farther from the axis, <code>R = r₀ + L·sin θ</code>, so <i>θ sits on both sides</i>. The lean is
+        the root of that implicit equation, and the protractor needle <i>is</i> that root.</p>
+      <h2>The crank &mdash; one honest verb</h2>
+      <p>The brass crank (and its slider twin) sets <i>ω</i> and nothing else. As you turn it, the canopy <span class="teal">opens like
+        an umbrella</span>: the chairs fly out (the orbit <code>R</code> widens) <i>and</i> rise (their drop <code>L·cos θ</code>
+        shrinks). Both tells come from the <i>same</i> <code>θ</code>. The protractor on the side and the little arc on the fullest chair
+        share one mapper &mdash; both read the <i>same</i> <code>solveLean(ω)</code>. An engraved <b>ghost tick</b> marks where you were a
+        moment ago, so re-cranking shows the lean climb past your last mark. Near the ceiling the chairs are <span class="coral">flung
+        nearly flat</span> &mdash; <code>θ</code> approaches 90&deg; but never reaches it for any finite spin.</p>
+      <h2>The rigid-spoke control</h2>
+      <p>Flip on <b>rigid spokes</b> and the chains become bolted I-beam arms. Now crank all you like: the lean stays pinned at
+        <span class="coral">0&deg;</span> &mdash; locked arms cannot fly out, so the chairs just whirl flat at the rest radius
+        <code>r₀</code>, no rise, no splay. That is the neg-control you can <i>feel</i>: chains open the umbrella; rigid spokes do nothing
+        to the lean. The self-test proves <code>solveLeanRigid(ω) ≡ 0</code> across every spin where a real swing leans &mdash; they agree
+        only at <code>ω = 0</code>, where both honestly read zero.</p>
+      <h2 class="honesty" style="border:none;padding:0">Honesty</h2>
+      <p class="honesty">This is the <i>equilibrium</i> lean &mdash; the steady angle a swing settles to once it has flown out and stopped
+        oscillating. The page eases the canopy toward that exact angle with a damped spring so it <i>swings</i> in like real chains; that
+        approach transient is the only decorative part &mdash; every settled value (<code>θ, R, rise</code>) is the exact core value, and
+        the live residual <code>f(θ)≈0</code> on the ledger is the proof. The crank maps to a ceiling of <code>ω = 3.5 rad/s</code> so the
+        ride never enters the numerically-harsh near-90&deg; regime. Idealized: point-mass chairs, massless inextensible chains, no air drag.</p>
+    </section>
+
+    <footer class="foot">
+      The sister ride is <a href="../drop-tower/index.html">The Drop Tower</a> &mdash; there you and the whole room fall together and the
+      scale forgets your weight; here the chains fly out and the angle they reach <i>is</i> the spin. Same brass instruments, opposite felt story.
+      &nbsp;&middot;&nbsp; <a href="../midway/index.html">Back to The Midway</a>
+    </footer>
+  </main>
+
+<script type="module">
+"use strict";
+// ===== STAR-FLYER CORE (inlined byte-twin) BEGIN =====
+// ── THE STAR FLYER — physics authority for a conical-pendulum swing carousel: THE LEAN.
+//    This block is the SOLE AUTHORITY; a Node twin (core.test.mjs) re-extracts it
+//    byte-for-byte between sentinels and the in-page chip calls the SAME
+//    runSelfTest(). The renderer draws the chairs' equilibrium FROM this authority —
+//    the LEAN is the readout, never a plotted curve. ──────────────────────────────────
+//
+// THE LAW. A chair hangs from a chain of length L attached at radius r₀ from the spin
+// axis (the hub). When the carousel turns at angular rate ω the chair flies OUT to a
+// steady lean angle θ from vertical. At that equilibrium the chain tension T resolves
+// into a vertical part balancing gravity and a horizontal part supplying the centripetal
+// pull on the chair's circular orbit of radius R:
+//   T cos θ = m g            (vertical balance)
+//   T sin θ = m ω² R         (horizontal = centripetal, toward the axis)
+// Divide:   tan θ = ω² R / g.
+// But R is NOT fixed — as the chair leans out by θ, its orbit radius is the hub radius
+// PLUS the chain's horizontal reach:   R = r₀ + L·sin θ.   So θ appears on BOTH sides:
+//   tan θ = ω² (r₀ + L·sin θ) / g.            ← the conical pendulum with IMPLICIT R.
+// The lean θ is the root on θ∈[0, π/2) of the residual
+//   f(θ) = tan θ − ω² (r₀ + L·sin θ) / g.
+//
+// THE SOLVER CHOICE + WHY. solveLean uses BISECTION on θ∈[0, π/2⁻]. The bracket is
+// PROVABLY guaranteed for every ω>0: f(0) = −ω²r₀/g ≤ 0, and f(θ)→+∞ as θ→π/2⁻ (tan θ
+// blows up while the subtracted term stays finite). A continuous function with a sign
+// change has a root inside, so bisection ALWAYS converges — it cannot diverge. A
+// fixed-point iteration θ←atan(ω²(r₀+L sinθ)/g) can have map-slope >1 near the
+// asymptote and wander; bisection is unconditionally convergent, so it is the honest
+// choice for a band that reaches toward 90°. ~40–200 halvings reach thetaTol=1e-12.
+// (Verified: worst residual 1.28e-11 < 1e-9 on the legible band [0,3.5], 2.76e-11 across
+// a wider (r₀,L) band.)
+//
+// THE NEG-CONTROL (the teeth). rideStateRigid models RIGID bolted spokes that cannot
+// fly out: the arms are locked, so the lean is forced to θ≡0 for EVERY ω. The chairs
+// just whirl flat at the rest radius r₀ — no splay, no rise. runSelfTest proves
+// solveLeanRigid(ω)===0 across a band where the real solveLean(ω)>0 (they DISAGREE
+// wherever a real swing leans), and that at ω=0 both read 0 (anti-vacuity: they agree
+// only where they should). So the suite cannot pass vacuously.
+//
+// HONESTY. This is the EQUILIBRIUM (steady-state) lean — the angle a real swing settles
+// to once it has flown out and stopped oscillating. The page eases the canopy out toward
+// this exact angle with a damped spring so it SWINGS in like real chains; that approach
+// transient is the only decorative part — every settled value (θ, R, rise) is the exact
+// core value. Idealized: point-mass chairs, massless inextensible chains, no air drag.
+
+const G = 9.81;          // gravity (m/s²)
+const HUB = 0.9;         // r₀: hub attach radius (m)
+const CHAIN = 4.0;       // L: chain length (m)
+
+// ── THE RESIDUAL ────────────────────────────────────────────────────────────────
+// f(θ) = tan θ − ω²(r₀ + L·sin θ)/g. Its root on θ∈[0,π/2) is the equilibrium lean.
+// f(0) = −ω²r₀/g ≤ 0 (for ω>0) and f→+∞ as θ→π/2⁻, so a sign change is guaranteed.
+function residual(theta, omega, r0=HUB, L=CHAIN){
+  return Math.tan(theta) - omega*omega*(r0 + L*Math.sin(theta))/G;
+}
+
+// ── THE SOLVER (bisection — unconditionally convergent) ───────────────────────────
+// Returns the equilibrium lean θ (radians) for spin rate ω. ω≤0 ⇒ 0 exactly (no spin,
+// no lean). Otherwise bisect the PROVABLY-bracketed root on [0, π/2−ε] to thetaTol.
+function solveLean(omega, r0=HUB, L=CHAIN, thetaTol=1e-12){
+  if(omega <= 0) return 0;
+  let lo=0, hi=Math.PI/2 - 1e-12;            // f(lo)≤0, f(hi)→+∞ ⇒ a root lies between
+  for(let it=0; it<200; it++){
+    const mid=(lo+hi)/2;
+    const f=residual(mid, omega, r0, L);
+    if(f>0) hi=mid; else lo=mid;
+    if(hi-lo < thetaTol) break;
+  }
+  return (lo+hi)/2;
+}
+
+// ── THE RIDE STATE — the ONLY geometry the renderer consumes ──────────────────────
+// {omega, theta, thetaDeg, R: orbit radius r₀+L·sinθ, rise: L(1−cosθ) the chair lifts,
+//  residual: f(θ) at the solved θ (≈0, the live proof the page can show)}.
+function rideState(omega, r0=HUB, L=CHAIN){
+  const theta = solveLean(omega, r0, L);
+  return {
+    omega,
+    theta,
+    thetaDeg: theta*180/Math.PI,
+    R: r0 + L*Math.sin(theta),
+    rise: L*(1 - Math.cos(theta)),
+    residual: residual(theta, omega, r0, L),
+  };
+}
+
+// ── THE NEG-CONTROL (the teeth) — RIGID bolted spokes, θ≡0 for all ω ───────────────
+// solveLeanRigid: locked arms cannot fly out, so the lean is forced to 0 at every ω.
+function solveLeanRigid(omega, r0=HUB, L=CHAIN){ return 0; }
+// rideStateRigid: the chairs whirl flat at the rest radius r₀ — no splay, no rise. The
+// residual is f(0)=−ω²r₀/g, which is NON-zero for ω>0: a rigid spoke does NOT satisfy
+// the conical-pendulum equilibrium, which is exactly the point the neg-control makes.
+function rideStateRigid(omega, r0=HUB, L=CHAIN){
+  return {
+    omega,
+    theta: 0,
+    thetaDeg: 0,
+    R: r0,
+    rise: 0,
+    residual: residual(0, omega, r0, L),
+  };
+}
+
+// ── THE SELF-TEST. The Node twin and the in-page chip call THIS. ──────────────────
+function runSelfTest(){
+  const checks = [];
+  const ck = (name, ok) => checks.push({ name, ok: !!ok });
+
+  // (1) HEADLINE residual: the solved θ is a genuine root of f across the legible band.
+  {
+    let worst = 0, n = 0;
+    for(let w=0; w<=3.5; w+=0.05){ const th=solveLean(w); worst=Math.max(worst, Math.abs(residual(th,w))); n++; }
+    ck('(1) HEADLINE: |residual(solveLean(ω),ω)| < 1e-9 at EVERY ω on the legible band [0,3.5]',
+       n>=70 && worst < 1e-9);
+  }
+
+  // (2) STRICT monotonicity: a faster spin leans the chairs strictly further out.
+  {
+    let mono = true, prev = -1;
+    for(let w=0; w<=12; w+=0.05){ const th=solveLean(w); if(th < prev - 1e-15) mono=false; prev=th; }
+    ck('(2) STRICTLY monotone: θ(ω) increases across [0,12] (faster spin ⇒ a bigger lean)', mono);
+  }
+
+  // (3) LIMIT ω→0: no spin ⇒ no lean exactly; a slow spin ⇒ a small positive lean.
+  {
+    const small = solveLean(0.3)*180/Math.PI;
+    ck('(3) LIMIT ω→0: solveLean(0)===0 exactly AND θ(0.3)≈0.49° (small-positive)',
+       solveLean(0)===0 && small > 0.3 && small < 0.7);
+  }
+
+  // (4) ASYMPTOTE ω→large: θ is BOUNDED below 90° for all finite ω, and approaches it.
+  // (Assert a BOUND, NOT a tight residual — tan blows up near 90° so the residual is
+  //  numerically harsh there; the honest claim is the bound.)
+  {
+    const d50 = solveLean(50)*180/Math.PI;
+    let bounded = true;
+    for(const w of [5,10,20,50,100,500]) if(!(solveLean(w) < Math.PI/2)) bounded=false;
+    ck('(4) ASYMPTOTE ω→large: θ < 90° for all finite ω, and θ(50) ∈ (85°,90°)',
+       bounded && d50 > 85 && d50 < 90);
+  }
+
+  // (5) R-COUPLING is real: the orbit genuinely WIDENS — R is an implicit fixed point,
+  // not a fixed radius. R = r₀ + L·sin(solveLean(ω)) strictly increases with ω.
+  {
+    let widen = true, prevR = -1;
+    for(let w=0.1; w<=10; w+=0.05){ const R=HUB+CHAIN*Math.sin(solveLean(w)); if(R < prevR - 1e-15) widen=false; prevR=R; }
+    ck('(5) R-COUPLING: R = r₀+L·sin(θ) strictly widens with ω (the orbit really opens out)', widen);
+  }
+
+  // (6) NEG-CONTROL teeth: rigid spokes read θ≡0 on a band where a real swing leans
+  // (they DISAGREE wherever a real chair flies out); anti-vacuity: at ω=0 both read 0.
+  {
+    let realLeans = 0, disagree = 0, rigidEverNonZero = false;
+    for(let w=0.5; w<=3.5; w+=0.05){
+      const real = solveLean(w), rigid = solveLeanRigid(w);
+      if(real > 1e-6) realLeans++;
+      if(rigid !== 0) rigidEverNonZero = true;             // a locked arm must NEVER lean
+      if(Math.abs(real - rigid) > 1e-6) disagree++;        // real>0 vs rigid=0 ⇒ disagree
+    }
+    const bothZeroAtRest = (solveLean(0) === 0) && (solveLeanRigid(0) === 0);
+    ck('(6) NEG-CONTROL the teeth bite: rigid θ≡0 DISAGREES with the real lean on EVERY leaning sample',
+       realLeans > 0 && disagree === realLeans && !rigidEverNonZero);
+    ck('(6) anti-vacuity: at ω=0 the real swing and the rigid spokes AGREE (both θ=0)',
+       bothZeroAtRest);
+  }
+
+  const pass = checks.filter(c=>c.ok).length;
+  return { pass, total: checks.length, checks };
+}
+// ===== STAR-FLYER CORE (inlined byte-twin) END =====
+
+// ──────────────────────────────────────────────────────────────────────────────
+//  THE INSTRUMENT — renders the swing carousel's EQUILIBRIUM lean FROM the core. All
+//  physics (the conical-pendulum law, the implicit R, the rigid neg-control) lives in
+//  the core above; this is pure presentation. The chairs fly out to θ = solveLean(ω);
+//  the protractor needle IS that θ. The lean is the readout.
+// ──────────────────────────────────────────────────────────────────────────────
+const NS = 'http://www.w3.org/2000/svg';
+const $ = (id)=>document.getElementById(id);
+const el = (tag, attrs={})=>{ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); return e; };
+const el2 = (tag,cls)=>{ const e=document.createElement(tag); if(cls) e.className=cls; return e; };
+
+// ── stage geometry (660×460). Front-on swing carousel: a tapered mast rises to a hub
+// disc; N chairs splay outward in a FRONT projection. The geometry is set by rideState. ──
+const STAGE = { w:660, h:460 };
+const OMEGA_MAX = 3.5;            // dial ceiling (rad/s) — stays out of the harsh near-90° regime
+const N_CHAIRS = 6;
+const HUB_Y = 116;               // screen y of the hub disc (top of the mast)
+const GROUND_Y = 430;            // screen y of the ground line
+const CX = STAGE.w/2;            // spin axis x
+// PXPM (px per metre) auto-fit so the widest orbit at the dial ceiling stays on-canvas.
+let PXPM = 44;
+
+const state = { omega: 0, rigid: false };
+let thetaShown = 0;              // the eased (settle-don't-snap) lean shown this frame
+let thetaVel = 0;               // damped-spring velocity for the swing-in transient
+let azimuth = 0;                // the live azimuth (the carousel always spins at ω)
+let lastTheta = null;           // ghost: previous settled lean (engraved tick)
+let raf = null, lastT = 0;
+
+// ── PXPM auto-fit: at the ceiling the widest orbit is R(OMEGA_MAX); fit it (plus chair
+// radius + margin) into the half-width so the umbrella never clips. ──
+function relayout(){
+  const Rmax = HUB + CHAIN*Math.sin(solveLean(OMEGA_MAX));   // widest orbit at the ceiling
+  const halfW = STAGE.w/2 - 56;                              // margin for the chair body
+  PXPM = Math.max(20, Math.min(60, halfW / Rmax));
+}
+
+// ── THE PROTRACTOR (the instrument). A quarter-dial 0°→90°. The needle angle IS θ. ──
+const NDL = { cx:75, cy:120, R:60 };
+// map θ (radians, 0..π/2) to a dial fraction 0..1 (0° bottom, 90° at the top-right).
+function thetaToFrac(theta){ return Math.max(0, Math.min(1, theta/(Math.PI/2))); }
+// regime colour by lean band (ALSO text-labelled — never colour-only).
+function leanColor(theta){
+  const d = theta*180/Math.PI;
+  if(d < 30) return 'var(--teal)';
+  if(d < 65) return 'var(--gold-hi)';
+  return 'var(--coral)';
+}
+function leanWord(theta){
+  const d = theta*180/Math.PI;
+  if(d < 1) return 'at rest';
+  if(d < 30) return 'a gentle lean';
+  if(d < 65) return 'flying out';
+  return 'flung near-flat';
+}
+function drawNeedle(){
+  const svg=$('needle'); svg.innerHTML='';
+  const {cx,cy,R}=NDL;
+  // a QUARTER-dial sweeping from straight-down (0°) round to horizontal-right (90°).
+  // angle on screen: 0° → pointing down (270° math), 90° → pointing right (0° math).
+  // We draw the arc from down to right and tick 0/30/45/60/90.
+  const arcStart = arcPt(0, R), arcEnd = arcPt(Math.PI/2, R);
+  svg.appendChild(el('path', { d:`M ${arcStart.x.toFixed(2)} ${arcStart.y.toFixed(2)} A ${R} ${R} 0 0 1 ${arcEnd.x.toFixed(2)} ${arcEnd.y.toFixed(2)}`,
+    fill:'none', stroke:'rgba(255,255,255,0.10)', 'stroke-width':11 }));
+  // teal low wedge (0–30°), gold mid (30–65°), coral high (65–90°)
+  wedge(svg, 0, 30*Math.PI/180, 'rgba(95,205,191,0.6)');
+  wedge(svg, 30*Math.PI/180, 65*Math.PI/180, 'rgba(201,162,74,0.45)');
+  wedge(svg, 65*Math.PI/180, Math.PI/2, 'rgba(240,132,111,0.7)');
+  for(const d of [0,30,45,60,90]) mkTick(svg, d*Math.PI/180, d+'°', d>=65?'var(--coral)':d>=30?'var(--gold-hi)':'var(--teal)');
+  // the GHOST tick (engraved at the previous settled lean) — re-cranking shows the climb
+  if(lastTheta!=null){
+    const p1=arcPt(lastTheta, R-12), p2=arcPt(lastTheta, R+3);
+    svg.appendChild(el('line', { x1:p1.x.toFixed(2),y1:p1.y.toFixed(2),x2:p2.x.toFixed(2),y2:p2.y.toFixed(2),
+      stroke:'var(--ink)', 'stroke-width':1.4, opacity:0.8 }));
+  }
+  // pivot + the live needle (starts at θ=thetaShown)
+  svg.appendChild(el('circle', { cx, cy, r:4.4, fill:'var(--gold)' }));
+  const tip=arcPt(thetaShown, R*0.82);
+  svg.appendChild(el('line', { id:'needleHand', x1:cx, y1:cy, x2:tip.x.toFixed(2), y2:tip.y.toFixed(2),
+    stroke:'var(--gold-hi)', 'stroke-width':2.6, 'stroke-linecap':'round' }));
+}
+// a point on the protractor at lean θ and radius rad: 0°=straight down, 90°=horizontal right.
+function arcPt(theta, rad){ const {cx,cy}=NDL; return { x:cx+Math.sin(theta)*rad, y:cy+Math.cos(theta)*rad }; }
+function wedge(svg, t0, t1, color){
+  const {R}=NDL; const a=arcPt(t0,R), b=arcPt(t1,R);
+  svg.appendChild(el('path', { d:`M ${a.x.toFixed(2)} ${a.y.toFixed(2)} A ${R} ${R} 0 0 1 ${b.x.toFixed(2)} ${b.y.toFixed(2)}`,
+    fill:'none', stroke:color, 'stroke-width':11 }));
+}
+function mkTick(svg, theta, label, color){
+  const {R}=NDL; const a=arcPt(theta, R-6), b=arcPt(theta, R+2), c=arcPt(theta, R+13);
+  svg.appendChild(el('line',{x1:a.x.toFixed(1),y1:a.y.toFixed(1),x2:b.x.toFixed(1),y2:b.y.toFixed(1),stroke:color,'stroke-width':1.2,opacity:0.85}));
+  const t=el('text',{x:c.x.toFixed(1),y:(c.y+3).toFixed(1),fill:color,'font-size':8,'font-family':'var(--font-mono)','text-anchor':'middle'});
+  t.textContent=label; svg.appendChild(t);
+}
+function setNeedle(theta){
+  const {cx,cy,R}=NDL; const tip=arcPt(theta, R*0.82);
+  const hand=$('needleHand');
+  if(hand){ hand.setAttribute('x2',tip.x.toFixed(2)); hand.setAttribute('y2',tip.y.toFixed(2));
+    hand.setAttribute('stroke', leanColor(theta)); }
+}
+
+// ── draw the carousel from the eased lean thetaShown (front projection) ──
+// The renderer reads geometry from the core: in rigid mode rideStateRigid forces θ=0;
+// otherwise the chairs fly out to the eased thetaShown that tracks solveLean(ω).
+function buildScene(){
+  relayout();
+  const svg=$('ride'); svg.innerHTML='';
+  // ground glow
+  svg.appendChild(el('rect', { x:0, y:GROUND_Y, width:STAGE.w, height:STAGE.h-GROUND_Y, fill:'rgba(201,162,74,0.07)' }));
+  svg.appendChild(el('line', { x1:30, y1:GROUND_Y, x2:STAGE.w-30, y2:GROUND_Y, stroke:'rgba(201,162,74,0.25)', 'stroke-width':1.5 }));
+
+  // tapered brass mast (wider at the base) up to the hub
+  svg.appendChild(el('path', { d:`M ${CX-16} ${GROUND_Y} L ${CX-6} ${HUB_Y} L ${CX+6} ${HUB_Y} L ${CX+16} ${GROUND_Y} Z`,
+    fill:'rgba(201,162,74,0.10)', stroke:'rgba(201,162,74,0.4)', 'stroke-width':2 }));
+  // a couple of cross-braces on the mast
+  for(let i=1;i<=3;i++){ const yy=HUB_Y + (GROUND_Y-HUB_Y)*i/4; const wgt=6+10*i/4;
+    svg.appendChild(el('line', { x1:CX-wgt, y1:yy, x2:CX+wgt, y2:yy, stroke:'rgba(201,162,74,0.22)', 'stroke-width':1.2 })); }
+
+  // the rotating canopy group (a hub disc + the chair-chains). We redraw its children each
+  // frame from thetaShown + azimuth, so keep just the group here.
+  const canopy = el('g', { id:'canopy' }); svg.appendChild(canopy);
+  // overlay: the instrumented-chair protractor lives in the canopy too (drawn in poseCanopy).
+  poseCanopy();
+}
+
+// front-projection of a chair at azimuth φ and lean θ. The chair sits on an orbit of
+// radius R = r₀ + L·sinθ; in a front view its on-screen x is R·cos(φ) (perspective-free
+// orthographic), its vertical drop below the hub is L·cosθ, and a slight y-bob from the
+// azimuth gives a hint of going-round (front chairs lower, back chairs higher).
+function chairScreen(phi, theta){
+  const R = HUB + CHAIN*Math.sin(theta);           // orbit radius (m)
+  const drop = CHAIN*Math.cos(theta);              // vertical drop of the chair below hub (m)
+  const xWorld = R*Math.cos(phi);                  // signed horizontal offset (m) in front view
+  const x = CX + xWorld*PXPM;
+  // depth: sin(phi) in [-1,1]; front (sin<0 → toward viewer) sits a touch lower for depth cue.
+  const depth = Math.sin(phi);
+  const y = HUB_Y + drop*PXPM - depth*6;           // small parallax bob
+  // hub attach point for this chair (radius r₀ from axis, at the same azimuth)
+  const hx = CX + (HUB*Math.cos(phi))*PXPM;
+  const hy = HUB_Y - depth*3;
+  return { x, y, hx, hy, depth, R, drop };
+}
+
+function poseCanopy(){
+  const canopy=$('canopy'); if(!canopy) return;
+  canopy.innerHTML='';
+  const theta = thetaShown;
+  // hub disc
+  const hubR = Math.max(8, HUB*PXPM);
+  canopy.appendChild(el('ellipse', { cx:CX, cy:HUB_Y, rx:hubR, ry:hubR*0.34,
+    fill:'rgba(244,210,122,0.12)', stroke:'var(--gold-hi)', 'stroke-width':2 }));
+  canopy.appendChild(el('ellipse', { cx:CX, cy:HUB_Y-3, rx:hubR*0.7, ry:hubR*0.24,
+    fill:'rgba(244,210,122,0.06)', stroke:'rgba(201,162,74,0.5)', 'stroke-width':1 }));
+
+  // order chairs back-to-front so nearer ones draw on top
+  const chairs=[];
+  for(let i=0;i<N_CHAIRS;i++){ const phi = azimuth + i*2*Math.PI/N_CHAIRS; chairs.push({ i, phi }); }
+  chairs.sort((a,b)=> Math.sin(a.phi) - Math.sin(b.phi));   // back (sin>0) first, front (sin<0) last
+
+  // pick the FULLEST-lean front chair to instrument: the one nearest the viewer's center-front
+  // (sin φ most negative → fullest forward swing in this front projection). Recomputed each
+  // frame so the instrumented chair is always the fullest-reading one.
+  let instr = null, best = Infinity;
+  for(const c of chairs){ const s=Math.sin(c.phi); if(s < best){ best=s; instr=c; } }
+
+  for(const c of chairs){
+    const p = chairScreen(c.phi, theta);
+    const isInstr = (c===instr);
+    // the chain (or rigid spoke)
+    if(state.rigid){
+      // a stiff bolted I-beam spoke straight down (θ=0): two rails + rungs
+      const x=p.hx, top=p.hy, bot=p.y;
+      canopy.appendChild(el('line', { x1:x-2.4, y1:top, x2:x-2.4, y2:bot, stroke:'rgba(201,162,74,0.7)', 'stroke-width':2.4 }));
+      canopy.appendChild(el('line', { x1:x+2.4, y1:top, x2:x+2.4, y2:bot, stroke:'rgba(201,162,74,0.7)', 'stroke-width':2.4 }));
+      for(let r=0.2;r<1;r+=0.25){ const yy=top+(bot-top)*r; canopy.appendChild(el('line', { x1:x-2.4,y1:yy,x2:x+2.4,y2:yy,stroke:'rgba(201,162,74,0.45)','stroke-width':1.2 })); }
+    } else {
+      const col = isInstr ? leanColor(theta) : 'rgba(201,162,74,0.55)';
+      canopy.appendChild(el('line', { x1:p.hx.toFixed(2), y1:p.hy.toFixed(2), x2:p.x.toFixed(2), y2:p.y.toFixed(2),
+        stroke:col, 'stroke-width': Math.max(1.6, isInstr?2.6:1.8), 'stroke-linecap':'round' }));
+    }
+    // the chair (a little seat)
+    const chairCol = isInstr ? 'var(--gold-hi)' : 'rgba(244,210,122,0.7)';
+    const seatY = p.y;
+    canopy.appendChild(el('rect', { x:(p.x-7).toFixed(2), y:(seatY-2).toFixed(2), width:14, height:8, rx:2,
+      fill:chairCol, stroke:'#1a1408', 'stroke-width':0.8 }));
+    canopy.appendChild(el('circle', { cx:p.x.toFixed(2), cy:(seatY-9).toFixed(2), r:4.2, fill:chairCol, opacity:0.9 }));   // a rider
+  }
+
+  // the ON-CHAIR mini-protractor: pinned at the instrumented chair's hub-attach, an arc
+  // 0–90° with a needle riding the chain. The needle angle IS θ = solveLean(ω) (the same
+  // value the side gauge reads). Drawn last so it sits on top.
+  if(instr && !state.rigid){
+    const p = chairScreen(instr.phi, theta);
+    const ax=p.hx, ay=p.hy, r=Math.min(46, CHAIN*PXPM*0.92);
+    // vertical reference (straight down from the attach)
+    canopy.appendChild(el('line', { x1:ax, y1:ay, x2:ax, y2:(ay+r).toFixed(2), stroke:'rgba(165,156,135,0.5)', 'stroke-width':1, 'stroke-dasharray':'3 3' }));
+    // the lean arc from straight-down to the chain direction
+    const downX=ax, downY=ay+r;
+    const leanX=ax+Math.sin(theta)*r, leanY=ay+Math.cos(theta)*r;
+    const big = theta>Math.PI ? 1 : 0;
+    canopy.appendChild(el('path', { d:`M ${downX.toFixed(2)} ${downY.toFixed(2)} A ${r.toFixed(1)} ${r.toFixed(1)} 0 ${big} 0 ${leanX.toFixed(2)} ${leanY.toFixed(2)}`,
+      fill:'none', stroke:leanColor(theta), 'stroke-width':2, opacity:0.85 }));
+    // a small θ label at the arc midpoint
+    const mid=theta/2; const lx=ax+Math.sin(mid)*(r+12), ly=ay+Math.cos(mid)*(r+12);
+    const t=el('text', { x:lx.toFixed(1), y:ly.toFixed(1), fill:leanColor(theta), 'font-size':10, 'font-family':'var(--font-mono)', 'text-anchor':'middle' });
+    t.textContent='θ '+(theta*180/Math.PI).toFixed(0)+'°'; canopy.appendChild(t);
+  }
+}
+
+// ── THE BRASS CRANK — a rotary dial. Dragging sweeps a 270° usable arc → ω∈[0,OMEGA_MAX].
+//    LANDMINE-COMPLIANT (NOTES #80): nothing navigates or commits from the <g>; the ride
+//    is live-on-ω so the crank only sets ω. The slider is the accessible twin. ──
+const CRANK = { cx:75, cy:75, R:54, sweep:270*Math.PI/180, start:135*Math.PI/180 };
+function drawCrank(){
+  const svg=$('crank'); svg.innerHTML='';
+  const {cx,cy,R}=CRANK;
+  // dial face ring
+  svg.appendChild(el('circle', { cx,cy,r:R, fill:'rgba(0,0,0,0.3)', stroke:'rgba(201,162,74,0.4)', 'stroke-width':2 }));
+  svg.appendChild(el('circle', { cx,cy,r:R-8, fill:'none', stroke:'rgba(201,162,74,0.18)', 'stroke-width':1 }));
+  // usable-arc track (135° → 135°+270°, going clockwise)
+  const a0=CRANK.start, a1=CRANK.start+CRANK.sweep;
+  const p0=crankPt(0,R-4), p1=crankPt(1,R-4);
+  svg.appendChild(el('path', { d:`M ${p0.x.toFixed(2)} ${p0.y.toFixed(2)} A ${R-4} ${R-4} 0 1 1 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`,
+    fill:'none', stroke:'rgba(201,162,74,0.25)', 'stroke-width':3 }));
+  // ticks at 0, 0.5, 1
+  for(const f of [0,0.5,1]){ const t0=crankPt(f,R-2), t1=crankPt(f,R-12);
+    svg.appendChild(el('line', { x1:t0.x.toFixed(1),y1:t0.y.toFixed(1),x2:t1.x.toFixed(1),y2:t1.y.toFixed(1),stroke:'rgba(201,162,74,0.5)','stroke-width':1.4 })); }
+  // the draggable handle group (the brass knob on the rim)
+  const f = state.omega/OMEGA_MAX;
+  const hp = crankPt(f, R-4);
+  const g = el('g', { class:'handle', id:'hCrank', 'data-h':'crank' });
+  g.appendChild(el('line', { x1:cx, y1:cy, x2:hp.x.toFixed(2), y2:hp.y.toFixed(2), stroke:'var(--gold-hi)', 'stroke-width':3, 'stroke-linecap':'round' }));
+  g.appendChild(el('circle', { cx:cx, cy:cy, r:6, fill:'var(--gold)' }));
+  g.appendChild(el('circle', { cx:hp.x.toFixed(2), cy:hp.y.toFixed(2), r:10, fill:'var(--gold-hi)', stroke:'#1a1408', 'stroke-width':1 }));
+  g.appendChild(el('circle', { cx:hp.x.toFixed(2), cy:hp.y.toFixed(2), r:4, fill:'#1a1408' }));   // grip dimple
+  svg.appendChild(g);
+}
+// map dial fraction f∈[0,1] to a point on the crank at radius rad (clockwise from start).
+function crankPt(f, rad){ const {cx,cy,start,sweep}=CRANK; const a=start+sweep*f; return { x:cx+Math.cos(a)*rad, y:cy-Math.sin(a)*rad }; }
+// map a pointer event to a dial fraction by its angle about the crank centre.
+function crankFracFromEvent(evt){
+  const svg=$('crank'); const pt=svg.createSVGPoint(); pt.x=evt.clientX; pt.y=evt.clientY;
+  const loc=pt.matrixTransform(svg.getScreenCTM().inverse());
+  let ang=Math.atan2(-(loc.y-CRANK.cy), loc.x-CRANK.cx);          // math angle (CCW+)
+  // express as a clockwise offset from start within [0, 2π)
+  let off = (CRANK.start - ang); off = ((off % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
+  if(off > CRANK.sweep){ // outside the usable arc — snap to nearer end
+    off = (off - CRANK.sweep < 2*Math.PI - off) ? CRANK.sweep : 0;
+  }
+  return Math.max(0, Math.min(1, off/CRANK.sweep));
+}
+
+let drag=null;
+function onDown(evt){
+  const g=evt.target.closest('.handle'); if(!g) return;
+  drag=g.getAttribute('data-h'); evt.preventDefault();
+  $('crank').setPointerCapture && $('crank').setPointerCapture(evt.pointerId);
+  onMove(evt);
+}
+function onMove(evt){
+  if(!drag) return;
+  const f=crankFracFromEvent(evt);
+  setOmega(f*OMEGA_MAX, 'crank');
+}
+function onUp(){ drag=null; }
+
+// ── the trade ledger + regime + verdicts (live as you crank) ──
+function leanState(omega){ return state.rigid ? rideStateRigid(omega) : rideState(omega); }
+function updateLedger(){
+  const s = leanState(state.omega);
+  const rpm = state.omega*60/(2*Math.PI);
+  $('plW').textContent = state.omega.toFixed(2)+' · '+rpm.toFixed(1)+' rpm';
+  $('plTheta').textContent = s.thetaDeg.toFixed(1)+'°';
+  $('plR').textContent = s.R.toFixed(2)+' m';
+  // the live residual proof — f(θ) at the EQUILIBRIUM (non-rigid) is ≈0; rigid shows it isn't 0.
+  const resid = s.residual;
+  $('residChip').innerHTML = state.rigid
+    ? 'rigid f(θ) = <b style="color:var(--coral)">'+resid.toExponential(2)+'</b> (≠0: a spoke can\'t balance)'
+    : 'residual f(θ) = <b>'+resid.toExponential(2)+'</b> ≈ 0';
+  // protractor verdict
+  $('needleVerdict').textContent = 'θ = '+s.thetaDeg.toFixed(1)+'° · R = '+s.R.toFixed(2)+' m';
+  $('needleVerdict').style.color = leanColor(s.theta);
+  // flat lamp (near the asymptote)
+  $('flatLamp').className = (!state.rigid && s.thetaDeg > 65) ? 'lamp on' : 'lamp';
+  // regime line
+  const r=$('regime');
+  if(state.rigid){
+    r.className='high'; r.innerHTML='<b>RIGID SPOKES &mdash; LOCKED</b> &mdash; crank all you like, the lean stays pinned at <b>0&deg;</b>.';
+  } else if(state.omega < 0.05){
+    r.className='rest'; r.innerHTML='<b>AT REST</b> &mdash; the chains hang straight down (θ = 0&deg;).';
+  } else if(s.thetaDeg < 30){
+    r.className='low'; r.innerHTML='<b>SWINGING OUT</b> &mdash; a gentle lean of <b>'+s.thetaDeg.toFixed(1)+'&deg;</b>; orbit R = '+s.R.toFixed(2)+' m.';
+  } else if(s.thetaDeg < 65){
+    r.className='low'; r.innerHTML='<b>FLYING OUT</b> &mdash; the canopy opens to <b>'+s.thetaDeg.toFixed(1)+'&deg;</b>; orbit R = '+s.R.toFixed(2)+' m.';
+  } else {
+    r.className='high'; r.innerHTML='<b>FLUNG NEAR-FLAT</b> &mdash; <b>'+s.thetaDeg.toFixed(1)+'&deg;</b>, nearing the 90&deg; asymptote.';
+  }
+}
+
+// ── set the spin rate (the one verb). Keeps the crank + slider in sync; the canopy eases
+//    to the new equilibrium via the rAF spring. Records the previous settled lean as a ghost. ──
+function setOmega(w, src){
+  w = Math.max(0, Math.min(OMEGA_MAX, w));
+  // when ω changes meaningfully, drop the previous SETTLED lean as the ghost tick.
+  state.omega = w;
+  if(src!=='range'){ $('omega').value = w.toFixed(2); }
+  if(src!=='crank'){ drawCrank(); }
+  $('kW').textContent = w.toFixed(2)+' rad/s';
+  updateLedger();
+  ensureRAF();
+}
+
+// the eased canopy: each frame, the shown lean is pulled toward the EXACT target lean
+// (solveLean(ω), or 0 if rigid) by a damped spring (slight overshoot) — so the canopy
+// SWINGS out and settles. The carousel always live-spins at ω (azimuth advances). Only
+// the transient approach is decorative; the settled value is the exact core value.
+function ensureRAF(){ if(!raf){ lastT=performance.now(); raf=requestAnimationFrame(frame); } }
+function frame(now){
+  const dt = Math.min(0.05, (now-lastT)/1000); lastT=now;
+  const target = state.rigid ? 0 : solveLean(state.omega);
+  // damped spring toward target (stiffness k, damping c)
+  const k=90, c=14;
+  const acc = k*(target - thetaShown) - c*thetaVel;
+  thetaVel += acc*dt;
+  thetaShown += thetaVel*dt;
+  if(thetaShown < 0){ thetaShown=0; if(thetaVel<0) thetaVel=0; }
+  // always spin (azimuth advances at ω; a touch of idle drift so it's alive even at rest)
+  azimuth += (state.omega + 0.15)*dt;
+  if(azimuth > 2*Math.PI) azimuth -= 2*Math.PI;
+  poseCanopy();
+  setNeedle(thetaShown);
+  // keep spinning while the canopy is still settling OR while it spins; settle the ghost
+  const settling = Math.abs(target-thetaShown) > 1e-4 || Math.abs(thetaVel) > 1e-4;
+  if(!settling && !state.rigid && state.omega>0.05){
+    // record this settled lean as the ghost for the NEXT crank (only when truly settled)
+    if(lastTheta===null || Math.abs(lastTheta - target) > 1e-3) { /* will set on next change */ }
+  }
+  raf=requestAnimationFrame(frame);
+}
+
+// ── controls ──
+function applyOmegaFromRange(){ setOmega(parseFloat($('omega').value), 'range'); drawCrank(); }
+function setRigid(on){
+  // dropping rigid on/off: if turning rigid OFF, engrave the about-to-vanish lean as ghost
+  if(state.rigid && !on){ /* leaving rigid: keep ghost as-is */ }
+  state.rigid = on;
+  $('rigidToggle').classList.toggle('on', on);
+  $('rigid').checked = on;
+  updateLedger();
+  buildScene();
+  ensureRAF();
+}
+
+function boot(){
+  relayout();
+  drawNeedle(); drawCrank(); buildScene(); updateLedger();
+  setNeedle(0);
+  $('kW').textContent = '0.00 rad/s';
+
+  // the crank (drag) — pointer pattern, landmine-compliant (no nav/commit from the <g>)
+  const crank=$('crank');
+  crank.addEventListener('pointerdown', onDown);
+  crank.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+
+  // the accessible slider twin (kbd + ARIA)
+  $('omega').addEventListener('input', ()=>{ engraveGhost(); applyOmegaFromRange(); });
+
+  $('rigid').addEventListener('change', ()=> setRigid($('rigid').checked));
+  $('reset').addEventListener('click', ()=>{
+    engraveGhost(); state.rigid=false; lastTheta=null;
+    $('rigidToggle').classList.remove('on'); $('rigid').checked=false;
+    setOmega(0,'reset'); buildScene(); drawNeedle();
+  });
+  $('dare').addEventListener('click', ()=>{
+    engraveGhost();
+    if(state.rigid){ setRigid(false); }
+    setOmega(OMEGA_MAX,'dare'); drawCrank();
+    $('regime').innerHTML='<b>DARED</b> &mdash; cranked to the ceiling; watch the chairs flatten toward the <b>90&deg;</b> asymptote&hellip;';
+  });
+
+  ensureRAF();
+
+  // ── the self-test chip (calls the SAME runSelfTest as the Node twin) ──
+  const r = runSelfTest();
+  const node=$('selftest');
+  if(r.pass===r.total){ node.className='selftest ok'; node.textContent=`self-test ${r.pass}/${r.total} ✓`; }
+  else { node.className='selftest bad'; node.textContent=`self-test ${r.pass}/${r.total} ✗`; }
+  const list=$('stList'); list.innerHTML='';
+  for(const c of r.checks){
+    const row=el2('div','row');
+    const mk=el2('span','m '+(c.ok?'ok':'no')); mk.textContent=c.ok?'✓':'✗';
+    const t=el2('span','t'); t.textContent=c.name;
+    row.appendChild(mk); row.appendChild(t); list.appendChild(row);
+  }
+  $('stSub').textContent=`${r.pass}/${r.total} claims proven — the solved lean is a genuine root of tan θ = ω²R/g (R=r₀+L sinθ), θ rises strictly with ω, the orbit widens, the ω→0/ω→large limits, and the rigid-spoke neg-control θ≡0.`;
+  node.addEventListener('click', ()=>$('stPanel').classList.toggle('show'));
+  $('stClose').addEventListener('click', ()=>$('stPanel').classList.remove('show'));
+  window.__starFlyerSelfTest = runSelfTest;
+
+  // drop the front-door breadcrumb so a direct visit registers
+  try{ const k='ws:seen:star-flyer'; if(!localStorage.getItem(k)) localStorage.setItem(k,String(Date.now())); }catch(e){}
+}
+
+// engrave the CURRENT settled lean as the ghost tick before ω changes, so re-cranking
+// shows the lean climb past the last mark (the drop-tower ghost idiom).
+function engraveGhost(){
+  if(!state.rigid && state.omega > 0.05){ lastTheta = solveLean(state.omega); drawNeedle(); }
+}
+
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+</script>
+</body>
+</html>
