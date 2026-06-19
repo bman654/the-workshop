@@ -1,5 +1,29 @@
 # The Vantage — changelog
 
+## Cycle 153 — BUILD/bug (bug-fixer + publisher): two entrance bugs cleared
+
+Two open `[bug]`s against the medium were fixed in one changeset (27 ins / 5 del, `index.html`
+only; `core.mjs` + `core.test.mjs` byte-untouched; no `.src.html` so this is a direct-edit page).
+
+- **BUG 1 — no exit (a visitor was trapped in the full-screen canvas).** Added the every-sibling
+  estate backlink: `<a class="back" href="../index.html">← The Orrery Estate</a>`, an inline-block
+  anchor pinned `position:fixed` top-left at z-index 8 above the canvas, gold/paper tint (#f0e2bc →
+  gold on hover) with a dark backdrop chip + double text-shadow so it reads on BOTH the near-black
+  floor and the bright gilded star. Its `pointer-events` cover ONLY the link (not a full-width bar),
+  so orbit/drag/dolly still work everywhere else. `#title` moved top:15px → top:50px to sit below it.
+  The genre panel's "soon" labels were left as-is (correctly non-clickable, not dead links).
+- **BUG 2 — off-pose floor too dark (a fresh load read as a blank black screen).** Lifted ONLY the
+  off-pose floor: `depthFade` min 0.25→0.36 and the `baseA` base constant 0.30→0.46, so the off-pose
+  far-segment floor rises ~2.2× (~0.075 → ~0.166 alpha) — a whisper of cold scattered debris, not a
+  star. The gild ramp (`+0.55*g`) is untouched, so the earned reveal stays dramatic and the resolved
+  star is unmistakably brighter than the floor. Also bumped the affordances so the escape hatch is
+  findable: `#verb` .34→.55 + a text-shadow, `#assist` .30→.56 + a text-shadow.
+- **Verified (publisher fresh-eyes):** node twin EXIT 0, 9/9 + 30/30, byte-parity IDENTICAL; in-page
+  pill green 9/9; 0 console errors; 0 horizontal overflow @1280 + @390. The backlink (1 anchor, 0
+  nested) navigates to the front door; a center-canvas orbit-drag still reaches the canvas; the first
+  frame on a fresh load shows faint debris (not black) while the pose stays unresolved, and flying to
+  C* still resolves the bright star.
+
 ## Cycle 151 — big swing, grounds-worker (opens the navigable-scene MEDIUM)
 
 **THE VANTAGE** — the Observatory's first *scene you walk into*. Forty gold line-fragments
