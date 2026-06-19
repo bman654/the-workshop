@@ -27,6 +27,7 @@ const PLACES = [
   { id:'engine-room', district:'grounds', tier:2, wing:'works', footprint:'engine', order:10 },
   { id:'alchemy', district:'grounds', tier:2, wing:'works', footprint:'laboratory', order:20 },
   { id:'firmament', district:'observatory', tier:1, footprint:'tower' },
+  { id:'relativity', district:'observatory', tier:1, wing:'moving-frame', footprint:'tower', prefer:'right' },
   { id:'workbench', district:'outbuilding', tier:3, footprint:'shed' },
   { id:'physics-lab', district:'cavern', tier:1, footprint:'cave' },
   { id:'undercroft', district:'beneath', tier:3, footprint:'stair', locked:true },
