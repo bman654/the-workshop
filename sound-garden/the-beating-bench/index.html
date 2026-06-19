@@ -1,0 +1,1045 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Beating Bench — drag a tone until the throb dies</title>
+<!-- a Sound Garden LEAF (garden growth of the rack). Reached from the rack's footer
+     'rigorous voices' line and from the sibling-voice links below. Copies '← sound
+     garden'. NOT a new front-door footprint — NO ws:seen. All tuning math is single-
+     sourced to ../pitch-core.mjs (the COMMA CORE + OUT OF TUNE CORE blocks supply
+     cents/foldToOctave + the JUST_SET lattice as byte-twins); the NEW beat physics is
+     single-sourced to ./core.mjs (the BEAT CORE block, byte-twinned here). The Node
+     twin core.test.mjs proves all three slices are char-for-char their source. -->
+<style>
+  :root{
+    --bg:#07060d; --ink:#ece9f6; --muted:#8a85a6;
+    --c:#7ad6ff;                 /* the bench accent (cyan — the dragged voice) */
+    --drone:#b59bff;             /* the steady drone (violet) */
+    --drag:#ffd76b;              /* the dragged tone (gold) */
+    --still:#54e08a;             /* the islands of stillness (green) */
+    --ok:#54e08a; --bad:#ff6b6b;
+    --panel:#110e1c; --line:rgba(255,255,255,.08);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--bg); color:var(--ink); overflow-x:hidden;
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased; }
+  body{ min-height:100vh; background:
+    radial-gradient(1000px 600px at 50% -10%, rgba(120,150,230,.16), transparent 60%),
+    radial-gradient(820px 520px at 14% 110%, rgba(181,155,255,.10), transparent 55%),
+    radial-gradient(820px 520px at 88% 112%, rgba(255,215,107,.07), transparent 55%),
+    var(--bg); }
+  .wrap{ max-width:1080px; margin:0 auto; padding:30px 24px 90px; }
+  a{ color:inherit; }
+  .back{ display:inline-block; font:600 11px/1 ui-monospace,Menlo,monospace; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); text-decoration:none; opacity:.8; margin-bottom:14px; }
+  .back:hover{ color:var(--c); opacity:1; }
+  header{ text-align:center; margin-bottom:8px; }
+  .kick{ font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.34em;
+    text-transform:uppercase; color:var(--muted); opacity:.85; }
+  h1{ font-family:Georgia,"Times New Roman",serif; font-weight:500;
+    font-size:clamp(34px,6vw,58px); margin:.14em 0 .1em; letter-spacing:.01em;
+    background:linear-gradient(180deg,#fff,#bcd9ec); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  .sub{ color:var(--muted); font-size:15px; font-style:italic; font-family:Georgia,serif;
+    max-width:640px; margin:0 auto; line-height:1.55; }
+  .sub b{ font-style:normal; }
+
+  .stage{ margin-top:26px; display:grid; gap:18px; grid-template-columns:1fr; }
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; }
+  .card h3{ margin:0 0 10px; font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); }
+
+  /* ── the BENCH: traces + needle (the played instrument) ── */
+  #benchHost{ position:relative; width:100%; height:340px; touch-action:none; }
+  #bench{ width:100%; height:100%; display:block; border-radius:10px; cursor:ew-resize;
+    background:radial-gradient(120% 90% at 50% 0%, rgba(120,150,230,.10), transparent 70%), #0a0813; }
+  .hint{ position:absolute; left:50%; top:10px; transform:translateX(-50%); pointer-events:none;
+    font:600 11px/1 ui-monospace,Menlo,monospace; letter-spacing:.06em; color:var(--muted);
+    opacity:.85; transition:opacity .4s; text-align:center; }
+
+  /* ── the RAIL: the lit islands of stillness, in cents across the octave ── */
+  #railHost{ position:relative; width:100%; height:96px; }
+  #rail{ width:100%; height:100%; display:block; border-radius:10px; cursor:ew-resize;
+    background:#0a0813; touch-action:none; }
+
+  .controls{ display:flex; flex-direction:column; gap:14px; margin-top:14px; }
+  .row{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .btn{ appearance:none; border:1px solid var(--line); background:#16121f; color:var(--ink);
+    font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.08em; padding:10px 14px;
+    border-radius:9px; cursor:pointer; transition:.18s; }
+  .btn:hover{ border-color:color-mix(in srgb,var(--c) 55%,transparent); box-shadow:0 0 18px -6px var(--c); }
+  .btn.primary{ background:linear-gradient(180deg,#1c3a4a,#142634); border-color:rgba(122,214,255,.4); }
+  .btn.ctrl{ background:linear-gradient(180deg,#3a2350,#241636); border-color:rgba(255,215,107,.3); }
+  .btn:disabled{ opacity:.4; cursor:default; box-shadow:none; }
+
+  .readouts{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+  @media(min-width:620px){ .readouts{ grid-template-columns:repeat(4,1fr); } }
+  .ro{ background:#0d0a16; border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .ro .k{ font:600 10px/1 ui-monospace,Menlo,monospace; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); }
+  .ro .v{ font:700 19px/1.2 ui-monospace,Menlo,monospace; margin-top:6px; }
+  .ro .v small{ font-weight:500; font-size:12px; color:var(--muted); }
+  .v.still{ color:var(--still); } .v.drag{ color:var(--drag); }
+
+  .note{ font-size:13px; color:var(--muted); line-height:1.6; margin:14px 0 0; }
+  .note b{ color:var(--ink); font-weight:600; }
+
+  /* the muted-audio segment (estate ws:pref:muted convention) */
+  .seg{ display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+  .seg .opt{ padding:9px 13px; font:600 11px/1 ui-monospace,Menlo,monospace; letter-spacing:.08em;
+    cursor:pointer; color:var(--muted); background:#0d0a16; transition:.16s; }
+  .seg .opt.on{ color:#07060d; background:var(--c); }
+
+  /* the SELF-TEST pill — green/red RESERVED for the verdict only */
+  #selftest{ display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
+    font:700 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.04em; padding:9px 13px; border-radius:9px;
+    border:1px solid var(--line); background:#0d0a16; color:var(--muted); }
+  #selftest.ok{ color:var(--ok); border-color:color-mix(in srgb,var(--ok) 50%,transparent); }
+  #selftest.bad{ color:var(--bad); border-color:color-mix(in srgb,var(--bad) 50%,transparent); }
+  #selftest .dotp{ width:8px; height:8px; border-radius:50%; background:currentColor; box-shadow:0 0 8px currentColor; }
+
+  footer{ margin-top:46px; text-align:center; color:var(--muted); opacity:.6;
+    font:11px/1.7 ui-monospace,Menlo,monospace; letter-spacing:.05em; }
+  footer a{ color:inherit; }
+  code{ font-family:ui-monospace,Menlo,monospace; font-size:.92em; color:#bcd9ec; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../index.html">&larr; sound garden</a>
+  <header>
+    <div class="kick">Sound&nbsp;Garden&nbsp;·&nbsp;a&nbsp;leaf</div>
+    <h1>The Beating Bench</h1>
+    <p class="sub">Consonance is not a number you read off a chart &mdash; it is the place where the
+      <b style="color:var(--still)">beating stops</b>. A steady <b style="color:var(--drone)">drone</b> sounds; you
+      <b>drag one tone</b> across it by hand. The two voices <b style="color:var(--drag)">throb</b>; drag toward a
+      just ratio and the throb <em>slows to a dead stop</em>. The silent islands are the consonances themselves.</p>
+  </header>
+
+  <div class="stage">
+    <!-- THE BENCH: the played instrument -->
+    <div class="card">
+      <h3>The bench &mdash; drag the gold tone over the drone</h3>
+      <div id="benchHost">
+        <canvas id="bench"></canvas>
+        <div class="hint" id="hint">drag left / right &mdash; or use &#9664; &#9654; &mdash; and watch the needle</div>
+      </div>
+      <!-- THE RAIL: the lit islands of stillness across one octave -->
+      <h3 style="margin:18px 0 8px">The islands of stillness &mdash; where the throb dies</h3>
+      <div id="railHost"><canvas id="rail"></canvas></div>
+      <div class="controls">
+        <div class="readouts">
+          <div class="ro"><div class="k">dragged ratio</div><div class="v drag" id="roRatio">&mdash;</div></div>
+          <div class="ro"><div class="k">beat rate (throb)</div><div class="v" id="roBeat">&mdash;</div></div>
+          <div class="ro"><div class="k">nearest island</div><div class="v" id="roIsland">&mdash;</div></div>
+          <div class="ro"><div class="k">off the island</div><div class="v" id="roDev">&mdash;</div></div>
+        </div>
+        <div class="row" style="justify-content:space-between">
+          <div class="row" style="gap:8px">
+            <button class="btn primary" id="playBtn">&#9654; sound the drone + tone</button>
+            <button class="btn ctrl" id="ditoneBtn" title="snap the dragged tone to 81/64 — a just M3 nudged by the syntonic comma 81/80">jump to the comma-detuned third</button>
+          </div>
+          <span class="seg" id="segAudio" title="Honours the estate-wide ws:pref:muted key; muted by default.">
+            <span class="opt" data-audio="on">sound on</span>
+            <span class="opt on" data-audio="off">sound off</span>
+          </span>
+        </div>
+        <p class="note" id="story">
+          Drag the gold tone. The two glowing traces are the <b>nearest pair of partials</b> &mdash; one from the
+          drone, one from the tone &mdash; and the needle reads their <b>beat rate</b>: the throb you HEAR is exactly
+          <code>|f<sub>hi</sub> &minus; f<sub>lo</sub>|</code> of that pair. Slide onto a green island and the pair
+          <b style="color:var(--still)">merges</b>: the beat falls to <b>0&nbsp;Hz</b> and the sound goes glassy-still.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- THE PROOF -->
+  <div class="card" style="margin-top:18px">
+    <div class="row" style="justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap">
+      <div style="flex:1 1 320px;min-width:0">
+        <h3 style="margin-top:0">Why the islands are the consonances</h3>
+        <p class="note" style="margin-top:0">
+          The drone rings harmonics at <code>f&#8320;, 2f&#8320;, 3f&#8320;&hellip;</code>; the dragged tone rings
+          <code>f&#8320;r, 2f&#8320;r, 3f&#8320;r&hellip;</code>. At a <b>simple</b> ratio <code>p/q</code> the drone's
+          <i>p</i>-th partial and the tone's <i>q</i>-th partial land on the <b>same frequency</b> &mdash; the pair
+          coincides and the beat is <b style="color:var(--still)">exactly zero</b>. That is why the lit islands are
+          precisely the classical consonances <b>(unison&middot;m3&middot;M3&middot;P4&middot;P5&middot;m6&middot;M6&middot;octave)</b>,
+          while the complex just ratios (m2, M2, the tritone, m7, M7) never quite still &mdash; <b>dissonance is the
+          throb that won't die.</b>
+        </p>
+        <p class="note">
+          <b style="color:var(--drag)">The honest test:</b> jump to the <b>comma-detuned third</b> &mdash; a just
+          major third (5/4) nudged by the syntonic comma 81/80, landing on 81/64. It looks a hair from M3, but its
+          partials do <em>not</em> coincide, so it <b>still throbs</b>. You cannot fake stillness by snapping to the
+          nearest semitone or by visual proximity &mdash; only the <b style="color:var(--still)">true ratio</b> reaches silence.
+        </p>
+      </div>
+      <div style="flex:1 1 280px;min-width:0">
+        <div class="row">
+          <span id="selftest" title="click to re-run"><span class="dotp"></span><span id="stText">self-test &mdash;</span></span>
+        </div>
+        <p class="note" style="margin-top:12px;font-size:12px">
+          The self-test proves it EXACT: the needle (<code>beatRate</code>) equals <code>|&Delta;f|</code> of the
+          nearest partial pair to the bit; the beat is <b>0&nbsp;Hz</b> at every consonant island and <b>nonzero</b> at
+          every complex ratio (and at the comma-detuned third &mdash; the load-bearing negative control); and the silence
+          is a true minimum you slow into. The new beat physics is single-sourced to <code>core.mjs</code>; the tuning
+          lattice (<code>JUST_SET</code>, <code>cents</code>) is single-sourced to <code>pitch-core.mjs</code> &mdash;
+          both byte-twinned into this page, with the Node twin <code>core.test.mjs</code> proving char-for-char parity.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    a leaf of the <a href="../index.html">Sound Garden</a> &middot; all sound synthesised live (Web Audio), zero dependencies &middot;
+    beat physics &rarr; <code>core.mjs</code> &middot; tuning &rarr; <code>sound-garden/pitch-core.mjs</code><br>
+    <a href="../the-comma/index.html">&harr; The Comma</a> &middot;
+    <a href="../out-of-tune/index.html">&harr; Out of Tune</a> &middot;
+    <a href="../butterfly-voice/index.html">&harr; The Butterfly's Voice</a> &middot;
+    <a href="../monochord.html">&harr; The Monochord</a> &middot;
+    <a href="../../index.html">&larr; The Orrery Estate</a>
+  </footer>
+</div>
+
+<script>
+"use strict";
+// ════════════════════════ INLINED SINGLE-SOURCE TUNING LATTICE ═══════════════
+// BYTE-TWINS of sound-garden/pitch-core.mjs between the matching sentinels. The
+// BEAT CORE below REUSES cents() + foldToOctave() (COMMA CORE) and JUST_SET /
+// JUST_NAME / nearestDev / nearestDevAbs / nearestJustName (OUT OF TUNE CORE)
+// from these blocks — the tuning ratios are NEVER re-typed. The Node twin
+// (core.test.mjs) re-extracts each slice and asserts it is char-for-char the
+// module, so "self-test green" cannot drift between the page and the source.
+
+// ===== COMMA CORE (inlined byte-twin) BEGIN =====
+// A just (Pythagorean) perfect fifth is the exact ratio 3/2; an octave is 2/1.
+// Stacking twelve just fifths gives (3/2)^12; folding that down seven octaves
+// (÷2^7) leaves the Pythagorean comma — the overshoot you can hear as a wolf.
+const JUST_FIFTH = 3 / 2;                            // the true (just) perfect fifth
+const OCTAVE = 2;                                    // one octave = doubling
+// The Pythagorean comma as a pure ratio (>1): the ONE place its literal lives.
+//   (3/2)^12 = 531441/4096, folded down 2^7 = 531441/524288 = 1.013643…
+const PYTHAGOREAN_COMMA = 531441 / 524288;
+function pythagoreanComma(){ return PYTHAGOREAN_COMMA; }            // the comma, as a ratio
+// any positive ratio → cents:  cents = 1200·log2(ratio)
+function cents(ratio){ return 1200 * Math.log2(ratio); }
+// fold any ratio into one octave [1, 2):  the spoke's position on the clock.
+function foldToOctave(ratio){ while(ratio >= OCTAVE) ratio /= OCTAVE; while(ratio < 1) ratio *= OCTAVE; return ratio; }
+// the equal-tempered perfect fifth: 2^(7/12), which is EXACTLY 700 cents.
+function temperedFifth(){ return Math.pow(OCTAVE, 7 / 12); }
+// a fifth tempered by fraction t∈[0,1]: t=0 → just 3/2, t=1 → ET 2^(7/12).
+// the temper is LINEAR IN CENTS, so cents(fifthRatio(t)) = (1−t)·just + t·ET.
+function fifthRatio(t){ return Math.pow(OCTAVE, ((1 - t) * cents(JUST_FIFTH) + t * cents(temperedFifth())) / 1200); }
+// the equal hair ET shaves off every fifth: comma/12 = 1.955 cents.
+function equalTemperFifth(){ return cents(PYTHAGOREAN_COMMA) / 12; }
+// wind n fifths of temper t, folding each running pitch into one octave. Returns
+// the per-step folded ratios (the spokes) AND the un-folded raw product (the reach).
+function stackFifths(n, t){
+  const f = fifthRatio(t); const spokes = []; let raw = 1;
+  for(let i = 1; i <= n; i++){ raw *= f; spokes.push(foldToOctave(raw)); }
+  return { spokes, raw };
+}
+// the residual GAP after twelve fifths of temper t, vs the true octave home (2^7):
+// how far the un-folded twelfth pitch sits past seven octaves, in cents.
+//   just → +23.460 (the comma);  ET → 0 (the spiral shuts).
+function gapCents(t){ const { raw } = stackFifths(12, t); return cents(raw / Math.pow(OCTAVE, 7)); }
+// alias kept for symmetry with the bench prose ("the residual the wolf measures").
+function residualCents(t){ return gapCents(t); }
+
+// ── runSelfTest() — the SOLE ORACLE. Same shape as the butterfly/voice bench:
+// { pass, total, lines:[{name, ok, detail}] }. The in-page pill and the Node twin
+// both call THIS so they cannot disagree. Every detail carries LIVE numbers; the
+// comma is DERIVED here (cents∘fold∘(3/2)^12) with NO typed decimal — the famous
+// 23.460 reference value lives only in the test oracle's tolerance check below.
+function runSelfTest(){
+  const lines = [];
+  const T = (name, ok, detail='') => lines.push({ name, ok: !!ok, detail });
+  const EPS = 1e-9;
+  const COMMA_REF = 23.460;                 // the famous value, used ONLY as a tolerance anchor here
+
+  // LEG A — the comma is EXACT (two disjoint derivations agree to the bit):
+  //   stacking 3/2 twelve times and folding 2^7 === the literal 531441/524288,
+  //   AND twelve ET fifths fold to a pure octave (residual ≈ 0 within float eps).
+  {
+    let raw = 1; for(let i=0;i<12;i++) raw *= JUST_FIFTH;       // (3/2)^12
+    const folded = raw / Math.pow(OCTAVE, 7);                   // fold 7 octaves down
+    const exact = folded === PYTHAGOREAN_COMMA;                 // two disjoint routes, Δ=0
+    const etCloses = Math.abs(gapCents(1)) < EPS;               // twelve ET fifths close
+    T('LEG A — exact comma: (3/2)¹² folded ÷2⁷ === 531441/524288 to the bit (Δ=0, two disjoint derivations), and twelve ET fifths close with residual ≈ 0',
+      exact && etCloses,
+      exact ? `folded = ${folded} === 531441/524288 (Δ=0) · ET residual ${Math.abs(gapCents(1)).toExponential(2)}¢`
+            : `folded ${folded} ≠ ${PYTHAGOREAN_COMMA}`);
+  }
+  // LEG B — that ratio IS 23.460 cents, and the just spiral overshoots by exactly that.
+  {
+    const c = cents(pythagoreanComma());
+    const g = gapCents(0);
+    const ok = Math.abs(c - COMMA_REF) < 0.001 && Math.abs(g - c) < EPS;
+    T('LEG B — 23.460¢: cents(531441/524288) = 23.460¢, and winding twelve JUST fifths overshoots home by exactly that — the geometric gap IS the comma',
+      ok, ok ? `cents = ${c.toFixed(6)}¢ ≈ 23.460¢ · just gap = ${g.toFixed(6)}¢ (equal)`
+             : `cents ${c.toFixed(6)} vs gap ${g.toFixed(6)}`);
+  }
+  // LEG C — the equal hair: ET shaves EXACTLY comma/12 = 1.955¢ off every fifth
+  //   (701.955¢ just → 700¢ ET), and twelve of those close the spiral.
+  {
+    const shave = cents(JUST_FIFTH) - cents(temperedFifth());   // per-fifth narrowing
+    const commaOver12 = equalTemperFifth();                     // comma/12
+    const justCents = cents(JUST_FIFTH);
+    const ok = Math.abs(shave - commaOver12) < EPS &&
+               Math.abs(shave - 1.955) < 0.001 &&
+               Math.abs(justCents - 701.955) < 0.001;
+    T('LEG C — equal hair: ET narrows each fifth by EXACTLY comma/12 = 1.955¢ (701.955¢ → 700¢) — the bench distributes one comma across twelve pegs',
+      ok, ok ? `shave = ${shave.toFixed(6)}¢ === comma/12 = ${commaOver12.toFixed(6)}¢ · just fifth ${justCents.toFixed(3)}¢`
+             : `shave ${shave.toFixed(6)} ≠ comma/12 ${commaOver12.toFixed(6)}`);
+  }
+  // LEG D — NEGATIVE CONTROL (load-bearing): identical machinery (12 multiplies +
+  //   a fold) leaves the full comma for the 3/2 ratio but ≈0 for 2^(7/12) — the
+  //   comma is a property of the JUST FIFTH, not of arithmetic round-off.
+  {
+    const gJust = gapCents(0), gEqual = Math.abs(gapCents(1));
+    const ok = gEqual < EPS && Math.abs(gJust - COMMA_REF) < 0.001;
+    T('LEG D — negative control: same 12 multiplies + fold leaves 23.460¢ for 3/2 but ≈0¢ for 2^(7/12) — the comma is the FIFTH\'S, not round-off',
+      ok, ok ? `just leaves ${gJust.toFixed(3)}¢ · ET leaves ${gEqual.toExponential(2)}¢ — only the ratio changed`
+             : `just ${gJust.toFixed(3)} / ET ${gEqual.toExponential(2)}`);
+  }
+  // LEG E — continuity: as the lever sweeps just→equal the gap shrinks STRICTLY &
+  //   monotonically from the comma to 0 — gap(t) = comma·(1−t), no jump (the lever
+  //   truly closes it). This backs the throb you HEAR decelerating to a dead stop.
+  {
+    let prev = Infinity, mono = true, worstLin = 0;
+    const comma = cents(pythagoreanComma());
+    for(let k=0;k<=100;k++){ const t=k/100; const g=gapCents(t);
+      if(g > prev + EPS) mono = false; prev = g;
+      worstLin = Math.max(worstLin, Math.abs(g - comma*(1-t))); }
+    const ok = mono && worstLin < 1e-7;
+    T('LEG E — continuity: sweeping the lever just→equal shrinks the gap STRICTLY & linearly from 23.460¢ to 0 (gap(t) = comma·(1−t)) — the lever closes it with no jump',
+      ok, ok ? `monotone ✓ · worst |gap − comma·(1−t)| = ${worstLin.toExponential(2)}¢`
+             : `monotone=${mono} · worst lin err ${worstLin.toExponential(2)}`);
+  }
+  // LEG F — per-fifth accumulation (the cents ruler): the running just stack climbs
+  //   by exactly +1.955¢ of comma per peg, reaching the full comma at peg 12.
+  {
+    let ok = true, worst = 0;
+    const per = equalTemperFifth();                            // 1.955¢ per peg
+    for(let n=1;n<=12;n++){
+      // the comma accumulated through n just fifths = how far the n-th just spoke
+      // sits past where the ET spoke would land = n·(just − ET cents) = n·comma/12.
+      const acc = n * (cents(JUST_FIFTH) - cents(temperedFifth()));
+      const expect = n * per;
+      worst = Math.max(worst, Math.abs(acc - expect));
+      if (Math.abs(acc - expect) > EPS) ok = false;
+    }
+    ok = ok && Math.abs(12 * per - cents(pythagoreanComma())) < EPS;
+    T('LEG F — cents ruler: the just stack accrues +1.955¢ of comma per peg (n·comma/12), reaching the full 23.460¢ at peg 12 — the ruler sums to the comma',
+      ok, ok ? `12 × 1.955¢ = ${(12*per).toFixed(3)}¢ === comma · worst per-peg Δ = ${worst.toExponential(2)}¢`
+             : `worst per-peg Δ ${worst.toExponential(2)}`);
+  }
+
+  let pass = 0; for(const l of lines) if(l.ok) pass++;
+  return { pass, total: lines.length, lines };
+}
+// ===== COMMA CORE END =====
+
+// ===== OUT OF TUNE CORE (inlined byte-twin) BEGIN =====
+// The 13-tone JUST set across one octave (the in-tune lattice the ear measures a
+// chord AGAINST): unison, the just diatonic + chromatic ratios, the octave.
+//   1/1 · 16/15 · 9/8 · 6/5 · 5/4 · 4/3 · 45/32 (the tritone) · 3/2 · 8/5 · 5/3 · 9/5 · 15/8 · 2/1.
+const JUST_SET = [1/1, 16/15, 9/8, 6/5, 5/4, 4/3, 45/32, 3/2, 8/5, 5/3, 9/5, 15/8, 2/1];
+// the just ratio's musical name, index-aligned with JUST_SET (for the readout / rail).
+const JUST_NAME = ['unison','m2','M2','m3','M3','P4','tritone','P5','m6','M6','m7','M7','octave'];
+// SNAP: given a ratio already FOLDED into [1,2), the SIGNED cents deviation to the
+// NEAREST just ratio (|dev| minimised). Positive = sharp of the just tone, negative
+// = flat. This is the single source of "how out of tune is this interval." Reuses
+// cents() from the COMMA CORE above — the pitch law is NOT re-typed here.
+function nearestDev(folded){
+  let best = Infinity;
+  for(const j of JUST_SET){ const d = cents(folded / j); if(Math.abs(d) < Math.abs(best)) best = d; }
+  return best;
+}
+function nearestDevAbs(folded){ return Math.abs(nearestDev(folded)); }
+// the nearest just ratio's NAME for a folded ratio (for the tuning-rail caption).
+function nearestJustName(folded){
+  let best = Infinity, bi = 0;
+  for(let i=0;i<JUST_SET.length;i++){ const d = Math.abs(cents(folded / JUST_SET[i])); if(d < best){ best = d; bi = i; } }
+  return JUST_NAME[bi];
+}
+
+// the audible chord's voicing law: each planet's PERIOD (years) is folded into one
+// octave above EARTH_PERIOD and rung at BASE_HZ. Earth (period 1) sits exactly on
+// BASE_HZ; every other planet is one folded tone. ONE law, shared by synth + test.
+const BASE_HZ = 220;               // A3 — Earth's home pitch
+const EARTH_PERIOD = 1.0;          // Earth's period, the chord's anchor
+function planetHz(period){ return BASE_HZ * foldToOctave(period / EARTH_PERIOD); }
+// the DETUNING the readout / rail / wolf-thread / test measure is the ADJACENT
+// period-RATIO folded vs nearest just (where the largest honest sourness lives —
+// distinct from the chord's per-planet folded tone). Signed cents.
+function adjacentDev(periodLo, periodHi){ return nearestDev(foldToOctave(periodHi / periodLo)); }
+
+// the pinned LAW bands (stated with measured headroom):
+//  KEPLER_REL_TOL = 0.10% — real worst is Neptune 0.0616% (1.6x headroom); a
+//   corrupted period fails it by ~190x. DETUNE [3,60]¢ — the real measured adjacent
+//   band is 5.35¢ (Earth→Mars off the M7) to 37.55¢ (Mercury→Venus off the M3).
+const KEPLER_REL_TOL = 0.001;      // 0.10% — Kepler a^(3/2) === period band
+const DETUNE_FLOOR   = 3.0;        // ¢ — below this an interval reads in-tune
+const DETUNE_CEIL    = 60.0;       // ¢ — above this it would be a different interval
+const CLEAN_THRESH   = 6.0;        // ¢ — a thread under this reads clean (teal, no throb)
+
+// Kepler's third law as a residual: how far a^(3/2) sits from the stored period,
+// as a fraction of the period. Real planets are ≤0.0616%; a corrupt body blows up.
+function keplerRel(a, period){ return Math.abs(Math.pow(a, 1.5) - period) / period; }
+
+// ── runOutOfTuneSelfTest(planets, concordia) — the SOLE ORACLE. Same shape as the
+// other benches: { pass, total, lines:[{name, ok, detail}] }. The in-page pill and
+// the Node twin both call THIS so they cannot disagree. `planets` is the real-planet
+// array (each {name,a,period}); `concordia` is the fictional exact-3:2 control. The
+// Eris-X corrupt fixture is defined HERE (test-only, kept OUT of the playable dial).
+// Every detail carries LIVE numbers; the pinned reference band lives only in the
+// tolerance checks below.
+function runOutOfTuneSelfTest(planets, concordia){
+  const lines = [];
+  const T = (name, ok, detail='') => lines.push({ name, ok: !!ok, detail });
+
+  // LEG 1 — KEPLER: every real planet obeys a^(3/2) === period within 0.10%. The
+  //   detail carries the LIVE worst residual (real worst ≈ 0.0616%, Neptune).
+  {
+    let ok = true, worst = 0, worstName = '';
+    for(const p of planets){ const rel = keplerRel(p.a, p.period);
+      if(rel >= KEPLER_REL_TOL) ok = false;
+      if(rel > worst){ worst = rel; worstName = p.name; } }
+    T('LEG 1 — Kepler holds: every real planet a^(3/2) === period within 0.10% — the orrery\'s independently-stored a and period agree under the third law (not a tautology)',
+      ok && planets.length === 8,
+      ok ? `worst real residual = ${(worst*100).toFixed(4)}% (${worstName}) · band ${(KEPLER_REL_TOL*100).toFixed(2)}% · ${planets.length} planets`
+         : `a planet exceeded ${(KEPLER_REL_TOL*100).toFixed(2)}% (worst ${(worst*100).toFixed(4)}% ${worstName})`);
+  }
+
+  // LEG 2 — AUDIBLE DETUNING: every adjacent planet pair, voiced as a folded
+  //   period-ratio, is NONZERO and lands in [3,60]¢ off the nearest just interval.
+  //   The detail carries the LIVE band (real ≈ 5.35¢ Earth→Mars … 37.55¢ Merc→Venus).
+  {
+    let ok = true, lo = Infinity, hi = -Infinity, loP = '', hiP = '';
+    for(let i=0;i<planets.length-1;i++){
+      const dev = adjacentDev(planets[i].period, planets[i+1].period);
+      const ad = Math.abs(dev);
+      if(!(ad >= DETUNE_FLOOR && ad <= DETUNE_CEIL) || ad === 0) ok = false;
+      if(ad < lo){ lo = ad; loP = planets[i].name+'→'+planets[i+1].name; }
+      if(ad > hi){ hi = ad; hiP = planets[i].name+'→'+planets[i+1].name; }
+    }
+    T('LEG 2 — audibly out of tune: every adjacent pair is NONZERO and lands in [3,60]¢ off the nearest just interval — the solar-system chord is provably sour, not clean',
+      ok, ok ? `band ${lo.toFixed(2)}¢ (${loP}) … ${hi.toFixed(2)}¢ (${hiP}) — all in [${DETUNE_FLOOR},${DETUNE_CEIL}]¢, none 0`
+             : `a pair fell outside [${DETUNE_FLOOR},${DETUNE_CEIL}]¢ or snapped to 0`);
+  }
+
+  // LEG 3 — CONTROL A (Concordia, FICTIONAL): a planet whose period is an EXACT 3:2
+  //   with Earth PASSES Kepler (checked by the BAND — a^1.5 = 1.4999999999999998 is
+  //   1 ULP off 1.5, so === would FALSE-fail) AND its interval snaps to 0¢ BIT-EXACT
+  //   (foldToOctave(1.5) is unchanged → cents(1.5/(3/2)) === 0). Clean by construction.
+  {
+    const rel = keplerRel(concordia.a, concordia.period);
+    const keplerPasses = rel < KEPLER_REL_TOL;          // BAND, not ===
+    const snap = cents(foldToOctave(concordia.period / EARTH_PERIOD) / (3/2));   // its fifth vs Earth
+    const snapExactZero = snap === 0;                   // bit-exact 0 (division-free fold)
+    const usedEqualsWouldFail = (Math.pow(concordia.a, 1.5) === concordia.period) === false;
+    T('LEG 3 — control A (Concordia, fictional exact-3:2): PASSES Kepler via the BAND (a^1.5 is 1 ULP off period, so === would false-fail) AND snaps to 0¢ bit-exact — a clean fifth by construction',
+      keplerPasses && snapExactZero && usedEqualsWouldFail,
+      `Kepler rel = ${rel.toExponential(2)} (band ✓, === would ${usedEqualsWouldFail?'FALSE-fail':'pass'}) · interval dev = ${snap}¢ (bit-exact 0)`);
+  }
+
+  // LEG 4 — CONTROL B (Eris-X, corrupt test-only fixture, kept OUT of the dial):
+  //   a body whose period DISAGREES with a^(3/2) FAILS the Kepler band — the law-check
+  //   has teeth (it is not vacuously green). a:2.0 period:3.5 → a^1.5 = 2.828, off by 19%.
+  {
+    const erisX = { name:'Eris-X', a:2.0, period:3.5 };
+    const rel = keplerRel(erisX.a, erisX.period);
+    const fails = rel >= KEPLER_REL_TOL;                // it MUST fail → asserts RED elsewhere
+    T('LEG 4 — control B (Eris-X, corrupt): a body with period ≠ a^(3/2) FAILS the Kepler band by ~190x — the law-check is non-vacuous (it can go red)',
+      fails && rel > 0.10,
+      `Eris-X a:2.0 period:3.5 → rel = ${(rel*100).toFixed(2)}% ≥ ${(KEPLER_REL_TOL*100).toFixed(2)}% — correctly REJECTED`);
+  }
+
+  let pass = 0; for(const l of lines) if(l.ok) pass++;
+  return { pass, total: lines.length, lines };
+}
+// ===== OUT OF TUNE CORE END =====
+
+// ════════════════════════ INLINED SINGLE-SOURCE BEAT CORE ════════════════════
+// BYTE-TWIN of sound-garden/the-beating-bench/core.mjs between the BEAT CORE
+// sentinels. The in-page self-test pill AND the Node twin both call the
+// runBeatSelfTest defined in THIS slice; the Node twin re-extracts it and asserts
+// it is char-for-char core.mjs. This block owns the bench's NEW physics (the
+// nearest-partial beat rate + the consonant silent set); it depends only on the
+// JUST_SET lattice + cents/foldToOctave inlined above — no DOM, no re-typed ratios.
+
+// ===== BEAT CORE (inlined byte-twin) BEGIN =====
+// A DRONE at f0 carries harmonic partials at k·f0 (k = 1..N). A second tone
+// DRAGGED to f0·ratio carries partials at k·f0·ratio. Two partials — one from
+// each voice — that are CLOSE in frequency interfere and BEAT at the difference
+// of their frequencies; the SLOWEST, most-audible throb is the one between the
+// NEAREST such pair. This is the bench's central physics: it is computed HERE
+// once and shared by the page's needle + the test, so the seen and heard agree.
+
+// the default partial count we listen across (drone & dragged both get 1..N).
+const N_PARTIALS = 8;
+
+// build the ascending partial frequencies of a voice: [g, 2g, …, N·g].
+function partials(g, n = N_PARTIALS) {
+  const out = [];
+  for (let k = 1; k <= n; k++) out.push(k * g);
+  return out;
+}
+
+// the NEAREST-PARTIAL BEAT: scan every (drone-partial, dragged-partial) pair and
+// return the SMALLEST |Δf| among pairs that are within a perceptual-roughness
+// window of each other (a partial only beats audibly against a near neighbour —
+// partials a wide interval apart are heard as separate tones, not a throb). The
+// window is set in PROPORTION to f0 so it scales with register. Returns the beat
+// rate in Hz (≥ 0); 0 means a pair coincided exactly (a just ratio's silence).
+function beatRate(f0, ratio, n = N_PARTIALS) {
+  const droneP = partials(f0, n);
+  const dragP = partials(f0 * ratio, n);
+  const window = f0;                 // pairs farther apart than f0 don't throb as one
+  let best = Infinity;
+  for (const a of droneP) {
+    for (const b of dragP) {
+      const d = Math.abs(a - b);
+      if (d <= window && d < best) best = d;
+    }
+  }
+  // if no pair fell inside the window (shouldn't happen for ratios in [1,2]),
+  // fall back to the globally nearest pair so the function is total.
+  if (best === Infinity) {
+    for (const a of droneP) for (const b of dragP) {
+      const d = Math.abs(a - b); if (d < best) best = d;
+    }
+  }
+  return best;
+}
+
+// the frequencies of the nearest-beating pair (for the page's two sliding
+// traces): returns { fLo, fHi, beat } where beat === |fHi − fLo| === beatRate.
+function nearestPair(f0, ratio, n = N_PARTIALS) {
+  const droneP = partials(f0, n);
+  const dragP = partials(f0 * ratio, n);
+  const window = f0;
+  let best = Infinity, fa = droneP[0], fb = dragP[0];
+  for (const a of droneP) for (const b of dragP) {
+    const d = Math.abs(a - b);
+    if (d <= window && d < best) { best = d; fa = a; fb = b; }
+  }
+  if (best === Infinity) for (const a of droneP) for (const b of dragP) {
+    const d = Math.abs(a - b); if (d < best) { best = d; fa = a; fb = b; }
+  }
+  const fLo = Math.min(fa, fb), fHi = Math.max(fa, fb);
+  return { fLo, fHi, beat: fHi - fLo };
+}
+
+// WHICH just ratios actually fall SILENT depends on how many partials we listen
+// across: a ratio reaches a dead stop only when SOME drone partial coincides with
+// SOME dragged partial WITHIN the N we hear. A simple ratio p/q (in lowest terms)
+// first coincides at drone-partial p ≡ dragged-partial q (both at p·f0); if either
+// p or q exceeds N that coincidence is never reached, so the interval keeps a
+// residual throb. So the SILENT islands are exactly the SIMPLE-ratio just
+// intervals — which, beautifully, ARE the classical consonances (unison, m3, M3,
+// P4, P5, m6, M6, octave) — while the complex just ratios (m2 16/15, M2 9/8, the
+// tritone 45/32, m7 9/5, M7 15/8) never still: dissonance is the throb that won't die.
+// We DERIVE this set from beatRate itself (no re-typed list): a JUST_SET member is
+// "still" iff its nearest-pair beat is 0 at the bench's partial count.
+function silentZoneIndices(f0, n = N_PARTIALS) {
+  const idx = [];
+  for (let i = 0; i < JUST_SET.length; i++) {
+    if (beatRate(f0, JUST_SET[i], n) < 1e-7) idx.push(i);
+  }
+  return idx;
+}
+
+// which named just interval the dragged ratio is closest to (the lit still-zone's
+// label) — and the signed/abs cents deviation to it. Single-sourced: the ratio
+// set + names + nearestJustName all come from ../pitch-core.mjs; NOT re-typed.
+function nearestStillZone(ratio) {
+  const folded = foldToOctave(ratio);
+  return {
+    name: nearestJustName(folded),
+    dev: nearestDev(folded),
+    devAbs: nearestDevAbs(folded),
+  };
+}
+
+// the still-zones, as renderable bands: each just ratio in [1,2] with its name,
+// its ratio, its centre in cents, and whether it falls SILENT at the bench's
+// partial count (the lit islands) or keeps a residual throb (a dim, dissonant tick).
+function stillZones(f0, n = N_PARTIALS) {
+  const silent = new Set(silentZoneIndices(f0, n));
+  const zones = [];
+  for (let i = 0; i < JUST_SET.length; i++) {
+    zones.push({
+      name: JUST_NAME[i], ratio: JUST_SET[i], cents: cents(JUST_SET[i]),
+      silent: silent.has(i),
+    });
+  }
+  return zones;
+}
+
+// a syntonic-comma-detuned ditone: a JUST major third (5/4) NUDGED by 81/80 (the
+// syntonic comma) lands on the Pythagorean ditone 81/64 — visually "almost M3",
+// but it is NOT a JUST_SET member, so its nearest partials do NOT coincide and it
+// STILL THROBS. This is the load-bearing negative control (defined HERE, used by
+// the page's "compare" button and asserted nonzero by the test): true stillness
+// cannot be faked by snapping to the nearest semitone or by mere visual proximity.
+const SYNTONIC_COMMA = 81 / 80;
+const JUST_M3 = 5 / 4;
+const DITONE = JUST_M3 * SYNTONIC_COMMA;     // = 81/64, the Pythagorean ditone
+
+// ── runBeatSelfTest(f0) — the SOLE ORACLE. Same shape as the sibling benches:
+// { pass, total, lines:[{name, ok, detail}] }. The in-page pill and the Node twin
+// both call THIS so they cannot disagree. f0 is the drone's fundamental (Hz); the
+// claims are scale-free but a concrete f0 makes the detail numbers legible.
+function runBeatSelfTest(f0 = 220) {
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+  const EPS = 1e-9;
+
+  // LEG 1 — the heard beat IS |Δf| of the nearest partial pair: beatRate equals
+  //   the difference of the two frequencies nearestPair reports, to the bit, for a
+  //   sweep of detuned ratios. The needle reads the same number the traces show.
+  {
+    let ok = true, worst = 0;
+    for (let k = 0; k <= 200; k++) {
+      const r = 1 + k / 200;                  // ratios across the whole octave [1,2]
+      const br = beatRate(f0, r);
+      const np = nearestPair(f0, r);
+      const d = Math.abs(br - np.beat);
+      worst = Math.max(worst, d);
+      if (d > EPS) ok = false;
+    }
+    T('LEG 1 — needle = |Δf|: the beat rate === |fHi − fLo| of the nearest partial pair, to the bit, across the whole octave — what you HEAR is what the two traces SHOW',
+      ok, ok ? `worst |beatRate − |Δf|| = ${worst.toExponential(2)} Hz over 201 ratios`
+             : `a ratio disagreed (worst ${worst.toExponential(2)} Hz)`);
+  }
+
+  // LEG 2 — islands of stillness ARE the consonances: at each SIMPLE-ratio just
+  //   interval (p,q ≤ N) the nearest partial pair coincides, so beatRate is
+  //   EXACTLY 0 (to ε) — and these are precisely the classical consonances
+  //   (unison, m3, M3, P4, P5, m6, M6, octave). The COMPLEX just ratios
+  //   (m2, M2, tritone, m7, M7) keep a residual throb: dissonance never stills.
+  {
+    const silent = silentZoneIndices(f0);
+    const silentNames = silent.map(i => JUST_NAME[i]);
+    const EXPECT_SILENT = ['unison', 'm3', 'M3', 'P4', 'P5', 'm6', 'M6', 'octave'];
+    let zeroOK = true, worstZero = 0;
+    for (const i of silent) { const br = beatRate(f0, JUST_SET[i]); worstZero = Math.max(worstZero, br); if (br > EPS) zeroOK = false; }
+    // every NON-silent just ratio MUST keep a real throb (load-bearing: the set is
+    // not silent-by-default — the complex ratios are provably still beating).
+    let throbOK = true, minThrob = Infinity;
+    for (let i = 0; i < JUST_SET.length; i++) if (!silent.includes(i)) {
+      const br = beatRate(f0, JUST_SET[i]); minThrob = Math.min(minThrob, br); if (br <= 1e-3) throbOK = false;
+    }
+    const setOK = silentNames.length === EXPECT_SILENT.length &&
+      EXPECT_SILENT.every((n, k) => silentNames[k] === n);
+    T('LEG 2 — islands of stillness: the just ratios that beat EXACTLY 0 (to ε) are precisely the classical consonances (unison · m3 · M3 · P4 · P5 · m6 · M6 · octave) — and EVERY complex just ratio keeps a residual throb (dissonance never stills)',
+      zeroOK && throbOK && setOK,
+      (zeroOK && throbOK && setOK)
+        ? `silent: ${silentNames.join(' · ')} (all 0 Hz, worst ${worstZero.toExponential(2)}) · the rest throb ≥ ${minThrob.toFixed(2)} Hz`
+        : `silentSet=[${silentNames.join(',')}] zeroOK=${zeroOK} throbOK=${throbOK} (min throb ${minThrob.toFixed(2)})`);
+  }
+
+  // LEG 3 — named islands: at each SILENT just ratio nearestStillZone names the
+  //   SAME interval pitch-core's nearestJustName returns for the FOLDED ratio,
+  //   with 0¢ deviation — the lit island's label is single-sourced, not re-typed.
+  //   (The octave 2/1 folds to 1/1; the page lays the octave island at the rail's
+  //   far end explicitly, so here we name the ratios just inside the octave.)
+  {
+    let ok = true, mism = '';
+    for (let i = 0; i < JUST_SET.length; i++) {
+      const r = JUST_SET[i];
+      const folded = foldToOctave(r);
+      if (folded === 1 && r !== 1) continue;     // 2/1 folds to unison — handled by the rail, not named here
+      const z = nearestStillZone(r);
+      const want = JUST_NAME[i];
+      if (z.name !== want) { ok = false; mism = `${r} → ${z.name} ≠ ${want}`; }
+      if (z.devAbs > EPS) ok = false;            // at a just ratio the dev to itself is 0
+    }
+    T('LEG 3 — named islands: at each in-octave just ratio nearestStillZone\'s name === the index-aligned JUST_NAME member (P5, M3, P4…) with 0¢ deviation — the label is single-sourced to pitch-core, never re-typed',
+      ok, ok ? `all in-octave just ratios name-match nearestJustName at 0¢ deviation`
+             : `mismatch: ${mism}`);
+  }
+
+  // LEG 4 — NEGATIVE CONTROL (load-bearing): the syntonic-comma-detuned ditone
+  //   (just M3 × 81/80 = 81/64) is NOT a just-set member, so its nearest partials
+  //   do NOT coincide — it STILL THROBS (beatRate nonzero). "In tune" cannot be
+  //   faked by visual proximity to M3: only the true 5/4 reaches silence.
+  {
+    const brJust = beatRate(f0, JUST_M3);          // 5/4 → silence
+    const brDit  = beatRate(f0, DITONE);           // 81/64 → still beats
+    const ditCents = cents(DITONE / JUST_M3);      // the syntonic comma, in cents (~21.5¢)
+    const ok = brJust <= EPS && brDit > 1e-3 &&
+               Math.abs(ditCents - 21.506) < 0.01; // syntonic comma = 21.506¢
+    T('LEG 4 — negative control: the just M3 (5/4) reaches DEAD SILENCE, but nudging it by the syntonic comma 81/80 → 81/64 STILL THROBS (nonzero) — proximity to M3 cannot fake stillness; only the true ratio is silent',
+      ok, ok ? `5/4 beats ${brJust.toExponential(2)} Hz (silent) · 81/64 beats ${brDit.toFixed(3)} Hz (throb) · the nudge is ${ditCents.toFixed(3)}¢`
+             : `5/4 ${brJust.toExponential(2)} / 81/64 ${brDit.toFixed(3)} / comma ${ditCents.toFixed(3)}¢`);
+  }
+
+  // LEG 5 — the throb QUICKENS as you drag away and SLOWS to a stop returning:
+  //   sweeping the ratio toward a just island, |beatRate| decreases monotonically
+  //   to 0 at the island and increases leaving it — the dead stop is a true minimum.
+  //   (Checked around the P5 at 3/2: the beat is 0 there and strictly positive on
+  //   both sides for a small neighbourhood.)
+  {
+    const P5 = 3 / 2;
+    const atP5 = beatRate(f0, P5);
+    let monoUp = true, monoDown = true, prevUp = -1, prevDown = -1;
+    for (let k = 1; k <= 40; k++) {
+      const e = k * 0.0008;                        // small detune fraction
+      const up = beatRate(f0, P5 * (1 + e));
+      const dn = beatRate(f0, P5 * (1 - e));
+      if (up <= prevUp - EPS) monoUp = false;       // beat grows leaving on the sharp side
+      if (dn <= prevDown - EPS) monoDown = false;    // …and on the flat side
+      prevUp = up; prevDown = dn;
+    }
+    const ok = atP5 <= EPS && monoUp && monoDown &&
+               beatRate(f0, P5 * 1.01) > atP5 && beatRate(f0, P5 * 0.99) > atP5;
+    T('LEG 5 — a true minimum: the beat is 0 AT the P5 (3/2) and grows STRICTLY on both sides as you drag away — the silence is a real dead-stop you slow into, not a flat plateau',
+      ok, ok ? `beat at 3/2 = ${atP5.toExponential(2)} Hz · grows both sides (monotone ✓) · +1% → ${beatRate(f0, P5*1.01).toFixed(2)} Hz`
+             : `atP5 ${atP5.toExponential(2)} · monoUp ${monoUp} monoDown ${monoDown}`);
+  }
+
+  let pass = 0; for (const l of lines) if (l.ok) pass++;
+  return { pass, total: lines.length, lines };
+}
+// ===== BEAT CORE END =====
+
+// ════════════════════════ STATE ══════════════════════════════════════════════
+const F0 = 220;                          // the drone fundamental (A3)
+const RMIN = 1, RMAX = 2;                // the dragged ratio spans exactly one octave
+const state = { ratio: 1.5 };            // start the dragged tone on the P5 island
+
+// ════════════════════════ AUDIO (muted-by-default · ws:pref:muted) ════════════
+function readMutePref(){ try{ return localStorage.getItem('ws:pref:muted') === '1'; }catch(e){ return false; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v ? '1' : '0'); }catch(e){} }
+const Snd = { ctx:null, master:null, on:false, muted:readMutePref(), drone:null, drag:null };
+
+function ensureCtx(){
+  if (Snd.ctx) return;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  Snd.ctx = new AC();
+  Snd.master = Snd.ctx.createGain(); Snd.master.gain.value = 0.0001;
+  const comp = Snd.ctx.createDynamicsCompressor();
+  comp.threshold.value = -12; comp.ratio.value = 12; comp.attack.value = 0.003; comp.release.value = 0.25;
+  Snd.master.connect(comp); comp.connect(Snd.ctx.destination);
+}
+// build a voice with a few harmonic partials (so partials of the two voices can
+// BEAT — a pure sine pair would only beat on its fundamentals). The partial count
+// matches the BEAT CORE's N_PARTIALS so what you HEAR matches the needle.
+function makeVoice(getFreq){
+  if (!Snd.ctx) return null;
+  const out = Snd.ctx.createGain(); out.gain.value = 0.0001; out.connect(Snd.master);
+  const partialsArr = [];
+  for (let k = 1; k <= N_PARTIALS; k++){
+    const o = Snd.ctx.createOscillator(); o.type = 'sine';
+    const g = Snd.ctx.createGain(); g.gain.value = 0.5 / (k*k);   // ~1/k² rolloff, gentle
+    o.frequency.value = k * getFreq();
+    o.connect(g); g.connect(out); o.start();
+    partialsArr.push(o);
+  }
+  return { out, partialsArr, getFreq };
+}
+function retuneVoice(v){
+  if (!v || !Snd.ctx) return;
+  const now = Snd.ctx.currentTime;
+  v.partialsArr.forEach((o,i)=> o.frequency.setTargetAtTime((i+1)*v.getFreq(), now, 0.02));
+}
+function startSound(){
+  ensureCtx(); if (!Snd.ctx) return;
+  if (Snd.ctx.state === 'suspended') Snd.ctx.resume();
+  if (Snd.drone) return;                                  // already sounding
+  Snd.drone = makeVoice(()=>F0);
+  Snd.drag  = makeVoice(()=>F0*state.ratio);
+  const now = Snd.ctx.currentTime, peak = Snd.muted ? 0.0001 : 0.20;
+  [Snd.drone, Snd.drag].forEach(v=>{ v.out.gain.cancelScheduledValues(now);
+    v.out.gain.setValueAtTime(0.0001, now); v.out.gain.exponentialRampToValueAtTime(peak, now+0.05); });
+  Snd.master.gain.cancelScheduledValues(now); Snd.master.gain.setValueAtTime(Snd.master.gain.value, now);
+  Snd.master.gain.exponentialRampToValueAtTime(Snd.muted ? 0.0001 : 0.9, now+0.05);
+  playBtn.textContent = '■ stop';
+}
+function stopSound(){
+  if (!Snd.drone || !Snd.ctx) { playBtn.textContent = '▶ sound the drone + tone'; return; }
+  const now = Snd.ctx.currentTime;
+  [Snd.drone, Snd.drag].forEach(v=>{ try{ v.out.gain.cancelScheduledValues(now);
+    v.out.gain.setValueAtTime(v.out.gain.value, now); v.out.gain.exponentialRampToValueAtTime(0.0001, now+0.12);
+    v.partialsArr.forEach(o=>o.stop(now+0.2)); }catch(e){} });
+  Snd.drone = null; Snd.drag = null;
+  playBtn.textContent = '▶ sound the drone + tone';
+}
+function applyMuteLive(){
+  if (!Snd.ctx || !Snd.drone) return;
+  const now = Snd.ctx.currentTime, peak = Snd.muted ? 0.0001 : 0.20;
+  [Snd.drone, Snd.drag].forEach(v=>{ v.out.gain.cancelScheduledValues(now);
+    v.out.gain.setValueAtTime(v.out.gain.value, now); v.out.gain.exponentialRampToValueAtTime(peak, now+0.05); });
+}
+
+// ── the audio segment (sound on/off ↔ ws:pref:muted) ──
+const segAudio = document.getElementById('segAudio');
+segAudio.addEventListener('click', e=>{
+  const opt = e.target.closest('.opt'); if (!opt) return;
+  const wantOn = opt.dataset.audio === 'on';
+  Snd.on = wantOn; Snd.muted = !wantOn; writeMutePref(Snd.muted);
+  [...segAudio.children].forEach(o=>o.classList.toggle('on', o===opt));
+  applyMuteLive();
+});
+window.addEventListener('storage', e=>{ if (e.key!=='ws:pref:muted') return;
+  Snd.muted = readMutePref(); syncAudioUI(); applyMuteLive(); });
+function syncAudioUI(){ if (Snd.muted) Snd.on=false; const showOn=Snd.on&&!Snd.muted;
+  [...segAudio.children].forEach(o=>o.classList.toggle('on', (o.dataset.audio==='on')===showOn)); }
+
+// ════════════════════════ CANVASES ═══════════════════════════════════════════
+const bench = document.getElementById('bench'), bctx = bench.getContext('2d');
+const rail = document.getElementById('rail'), rctx = rail.getContext('2d');
+function fit(cv){ const r=cv.getBoundingClientRect(), dpr=Math.min(2,window.devicePixelRatio||1);
+  cv.width=Math.max(1,r.width*dpr); cv.height=Math.max(1,r.height*dpr);
+  const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); return {w:r.width,h:r.height}; }
+
+// map the dragged ratio ↔ a horizontal position by CENTS (so islands are spaced
+// as the ear hears them, not by raw ratio). x = (cents(ratio)/1200) across [pad,w-pad].
+const PAD = 20;
+function ratioToCents(r){ return cents(r); }
+function centsToX(cn, w){ return PAD + (cn/1200) * (w - 2*PAD); }
+function xToRatio(x, w){ const cn = ((x - PAD)/(w - 2*PAD)) * 1200; return Math.pow(2, cn/1200); }
+
+// ── the BENCH canvas: two sliding traces (the nearest partial pair) + a beat-rate
+//    needle. The traces are drawn as live sine wavetrains at the pair's two
+//    frequencies; their SUM (the throb envelope) rides above, swelling & nulling
+//    at the beat rate — the thing you HEAR. A vertical pointer marks the drag.
+let phase = 0;
+function drawBench(){
+  const {w,h} = fit(bench);
+  bctx.clearRect(0,0,w,h);
+  const np = nearestPair(F0, state.ratio);
+  const beat = np.beat;
+  const onIsland = beat < 0.05;
+
+  // ── the two sliding traces (top 58% of the canvas) ──
+  const traceTop = 26, traceH = h*0.50, traceMid = traceTop + traceH/2;
+  const A = traceH*0.20;
+  // a visual time-scale: show ~ a few cycles of the lower partial across the width.
+  const tScale = 6 / (np.fLo || 1) / w;             // seconds per pixel (auto-fit ~6 cycles)
+  const cols = [getCss('--drone'), getCss('--drag')];
+  bctx.lineWidth = 2;
+  [np.fLo, np.fHi].forEach((f,si)=>{
+    bctx.strokeStyle = cols[si]; bctx.globalAlpha = .65; bctx.beginPath();
+    for (let px=0; px<=w; px++){
+      const tt = px*tScale + phase;
+      const yy = traceMid + A*Math.sin(2*Math.PI*f*tt) + (si? 0.5*A : -0.5*A);   // offset so both read
+      px===0?bctx.moveTo(px,yy):bctx.lineTo(px,yy);
+    }
+    bctx.stroke();
+  });
+  bctx.globalAlpha = 1;
+  // labels for the pair — drawn on canvas (no reflow), so adapt to width: use the
+  // full labels when both fit with a gap, else a compact form, else shrink the font.
+  // Prevents the two readouts colliding mid-canvas at narrow widths (both can read 660.0 Hz).
+  bctx.font='600 10px ui-monospace,Menlo,monospace';
+  let loTxt='drone partial · '+np.fLo.toFixed(1)+' Hz', hiTxt='tone partial · '+np.fHi.toFixed(1)+' Hz';
+  const fits = ()=> bctx.measureText(loTxt).width + bctx.measureText(hiTxt).width + 16 <= w-2*PAD;
+  if (!fits()){ loTxt='drone · '+np.fLo.toFixed(1)+' Hz'; hiTxt='tone · '+np.fHi.toFixed(1)+' Hz'; }
+  if (!fits()){ bctx.font='600 9px ui-monospace,Menlo,monospace'; }
+  bctx.fillStyle=cols[0]; bctx.textAlign='left';  bctx.fillText(loTxt, PAD, traceTop-6);
+  bctx.fillStyle=cols[1]; bctx.textAlign='right'; bctx.fillText(hiTxt, w-PAD, traceTop-6); bctx.textAlign='left';
+
+  // ── the SUM trace = the throb you hear (lower 42%) ──
+  const sumTop = traceTop + traceH + 14, sumH = h - sumTop - 40, sumMid = sumTop + sumH/2;
+  const sA = sumH*0.42;
+  bctx.strokeStyle = onIsland ? getCss('--still') : getCss('--drag');
+  bctx.lineWidth = 2.4; bctx.beginPath();
+  for (let px=0; px<=w; px++){
+    const tt = px*tScale + phase;
+    const y1=Math.sin(2*Math.PI*np.fLo*tt), y2=Math.sin(2*Math.PI*np.fHi*tt);
+    const yy = sumMid + sA*((y1+y2)/2);
+    px===0?bctx.moveTo(px,yy):bctx.lineTo(px,yy);
+  }
+  bctx.stroke();
+  // the beat-envelope outline (|cos(π·beat·t)|) — the slow swell at the beat rate
+  if (!onIsland){
+    bctx.strokeStyle='rgba(255,215,107,.30)'; bctx.lineWidth=1.2; bctx.setLineDash([4,4]);
+    for (const sgn of [1,-1]){
+      bctx.beginPath();
+      for (let px=0; px<=w; px++){
+        const tt = px*tScale + phase;
+        const env = Math.abs(Math.cos(Math.PI*beat*tt));
+        const yy = sumMid + sgn*sA*env;
+        px===0?bctx.moveTo(px,yy):bctx.lineTo(px,yy);
+      }
+      bctx.stroke();
+    }
+    bctx.setLineDash([]);
+  }
+
+  // ── the NEEDLE: a beat-rate meter (a sweeping arc, faster = wider swing) ──
+  const ny = h-24;
+  bctx.font='700 13px ui-monospace,Menlo,monospace';
+  if (onIsland){
+    bctx.fillStyle=getCss('--still');
+    bctx.fillText('● still — beat 0.00 Hz', PAD, ny);
+  } else {
+    bctx.fillStyle=getCss('--drag');
+    bctx.fillText('beating at '+beat.toFixed(2)+' Hz', PAD, ny);
+  }
+  // a small pulsing dot whose flash period IS the beat period (a literal throb)
+  const pulse = onIsland ? 1 : (0.5 + 0.5*Math.cos(2*Math.PI*beat*phase));
+  bctx.beginPath(); bctx.arc(w-PAD-8, ny-5, 6, 0, Math.PI*2);
+  bctx.fillStyle = onIsland ? getCss('--still') : `rgba(255,215,107,${0.25+0.75*pulse})`;
+  bctx.shadowColor = bctx.fillStyle; bctx.shadowBlur = 12*pulse; bctx.fill(); bctx.shadowBlur=0;
+
+  // advance phase in real-ish time so the throb visibly pulses
+  phase += 0.0006;
+}
+
+// ── the RAIL: the lit islands of stillness across one octave (by cents). Silent
+//    islands glow green; the dragged tone is a moving gold marker; non-silent
+//    just ratios are dim ticks (still beating). Click/drag the rail to set ratio.
+function drawRail(){
+  const {w,h} = fit(rail);
+  rctx.clearRect(0,0,w,h);
+  const midY = h*0.52;
+  // base line
+  rctx.strokeStyle='rgba(255,255,255,.10)'; rctx.lineWidth=1;
+  rctx.beginPath(); rctx.moveTo(PAD,midY); rctx.lineTo(w-PAD,midY); rctx.stroke();
+  const zones = stillZones(F0);
+  for (const z of zones){
+    const x = centsToX(z.cents, w);
+    if (z.silent){
+      // a lit green island: a soft vertical glow band + a node + the name
+      const grad = rctx.createLinearGradient(0,midY-26,0,midY+26);
+      grad.addColorStop(0,'rgba(84,224,138,0)'); grad.addColorStop(.5,'rgba(84,224,138,.22)'); grad.addColorStop(1,'rgba(84,224,138,0)');
+      rctx.fillStyle=grad; rctx.fillRect(x-9, midY-26, 18, 52);
+      rctx.beginPath(); rctx.arc(x,midY,5,0,Math.PI*2);
+      rctx.fillStyle=getCss('--still'); rctx.shadowColor=getCss('--still'); rctx.shadowBlur=12; rctx.fill(); rctx.shadowBlur=0;
+      rctx.fillStyle=getCss('--still'); rctx.font='700 10px ui-monospace,Menlo,monospace'; rctx.textAlign='center';
+      rctx.fillText(z.name, x, midY-16); rctx.textAlign='left';
+    } else {
+      // a dim tick — a complex just ratio that never stills
+      rctx.strokeStyle='rgba(255,215,107,.22)'; rctx.lineWidth=1;
+      rctx.beginPath(); rctx.moveTo(x,midY-7); rctx.lineTo(x,midY+7); rctx.stroke();
+      rctx.fillStyle='rgba(255,215,107,.45)'; rctx.font='500 9px ui-monospace,Menlo,monospace'; rctx.textAlign='center';
+      rctx.fillText(z.name, x, midY+18); rctx.textAlign='left';
+    }
+  }
+  // the dragged tone marker
+  const cx = centsToX(ratioToCents(state.ratio), w);
+  const beat = beatRate(F0, state.ratio); const onIsland = beat < 0.05;
+  rctx.strokeStyle = onIsland ? getCss('--still') : getCss('--drag'); rctx.lineWidth=2;
+  rctx.beginPath(); rctx.moveTo(cx,midY-30); rctx.lineTo(cx,midY+30); rctx.stroke();
+  rctx.beginPath(); rctx.moveTo(cx-6,midY-30); rctx.lineTo(cx+6,midY-30); rctx.lineTo(cx,midY-22); rctx.closePath();
+  rctx.fillStyle = onIsland ? getCss('--still') : getCss('--drag'); rctx.fill();
+}
+
+function getCss(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+// ════════════════════════ READOUTS ═══════════════════════════════════════════
+function updateReadouts(){
+  const beat = beatRate(F0, state.ratio);
+  const z = nearestStillZone(state.ratio);
+  const onIsland = beat < 0.05;
+  document.getElementById('roRatio').textContent = state.ratio.toFixed(4)+'×';
+  const rb = document.getElementById('roBeat');
+  rb.textContent = onIsland ? '0.00 Hz' : beat.toFixed(2)+' Hz';
+  rb.classList.toggle('still', onIsland); rb.classList.toggle('drag', !onIsland);
+  const ri = document.getElementById('roIsland');
+  ri.textContent = z.name;
+  ri.classList.toggle('still', onIsland);
+  const rd = document.getElementById('roDev');
+  rd.textContent = (z.dev>=0?'+':'')+z.dev.toFixed(1)+'¢';
+  rd.classList.toggle('still', Math.abs(z.dev)<0.5);
+}
+
+// ════════════════════════ RENDER LOOP ════════════════════════════════════════
+function frame(){ drawBench(); drawRail(); requestAnimationFrame(frame); }
+
+// ════════════════════════ INTERACTION ════════════════════════════════════════
+function setRatio(r, retune){
+  state.ratio = Math.min(RMAX, Math.max(RMIN, r));
+  updateReadouts();
+  if (retune !== false) retuneVoice(Snd.drag);
+}
+// drag on the bench OR the rail sets the ratio by horizontal position (in cents).
+function dragHandler(cv){
+  let dragging = false;
+  const pos = (ev)=>{ const r=cv.getBoundingClientRect();
+    const cx=(ev.touches? ev.touches[0].clientX : ev.clientX) - r.left;
+    return setRatio(xToRatio(Math.min(r.width, Math.max(0, cx)), r.width)); };
+  cv.addEventListener('pointerdown', e=>{ dragging=true; cv.setPointerCapture(e.pointerId); pos(e); hideHint(); });
+  cv.addEventListener('pointermove', e=>{ if(dragging) pos(e); });
+  cv.addEventListener('pointerup', ()=>{ dragging=false; });
+  cv.addEventListener('pointercancel', ()=>{ dragging=false; });
+}
+dragHandler(bench); dragHandler(rail);
+
+// keyboard: ← → nudge the ratio in cents (fine with shift)
+window.addEventListener('keydown', e=>{
+  let step = 0;
+  if (e.key==='ArrowRight') step = e.shiftKey? 1 : 8;
+  else if (e.key==='ArrowLeft') step = e.shiftKey? -1 : -8;
+  else return;
+  e.preventDefault(); hideHint();
+  const cn = Math.min(1200, Math.max(0, cents(state.ratio) + step));
+  setRatio(Math.pow(2, cn/1200));
+});
+
+let hintHidden=false;
+function hideHint(){ if(hintHidden) return; hintHidden=true; const el=document.getElementById('hint'); if(el) el.style.opacity='0'; }
+
+const playBtn = document.getElementById('playBtn');
+playBtn.addEventListener('click', ()=>{ if (Snd.drone) stopSound(); else startSound(); });
+// the negative-control button: jump to the comma-detuned ditone (81/64), which
+// looks a hair from M3 but provably STILL THROBS. Pulls the constant from the BEAT CORE.
+document.getElementById('ditoneBtn').addEventListener('click', ()=>{ hideHint(); setRatio(DITONE); });
+
+// ════════════════════════ SELF-TEST PILL ════════════════════════════════════
+function runPill(){
+  let r; try{ r=runBeatSelfTest(F0); }catch(e){ console.error('[beating-bench] self-test threw:',e);
+    r={pass:0,total:1,lines:[{name:'self-test threw',ok:false,detail:String(e)}]}; }
+  const el=document.getElementById('selftest'), txt=document.getElementById('stText');
+  const green=r.pass===r.total;
+  el.classList.toggle('ok',green); el.classList.toggle('bad',!green);
+  txt.textContent = green? ('the throb dies only at true ratios ✓ '+r.pass+'/'+r.total) : ('self-test ✗ '+r.pass+'/'+r.total);
+  el.title = r.lines.map(c=>(c.ok?'✓ ':'✗ ')+c.name+(c.detail?'  ('+c.detail+')':'')).join('\n\n');
+  if (!green){ console.error('[beating-bench] SELF-TEST FAILED '+r.pass+'/'+r.total);
+    for (const c of r.lines) if (!c.ok) console.error('  ✗ '+c.name+'  ·  '+c.detail); }
+  else console.log('[beating-bench] self-test '+r.pass+'/'+r.total+' ✓ — the beat rate IS |Δf| of the nearest partials; it falls to 0 only at the consonances; the comma-detuned third still throbs. The seen and the heard agree.');
+  return r;
+}
+document.getElementById('selftest').addEventListener('click', runPill);
+window.__beatSelfTest = runBeatSelfTest;
+
+// ════════════════════════ OFFLINE RENDER (Audio Lens hook · silent WAV) ══════
+// Renders the drone + dragged tone (each with N_PARTIALS harmonics, matching what
+// you hear) at a given RATIO to a WAV Blob via OfflineAudioContext — NO speakers.
+// The Audio Lens measures the amplitude-modulation (beat) rate: a just ratio reads
+// as a STEADY tone (no throb); the comma-detuned 81/64 reads as an audible beat.
+// The pitches + partial count come ONLY from the BEAT CORE above.
+function renderOfflineWAV(seconds, ratio){
+  const sr=44100, len=Math.max(1,Math.floor(seconds*sr));
+  const OAC = window.OfflineAudioContext||window.webkitOfflineAudioContext;
+  const ac = new OAC(1, len, sr);
+  const rr = (ratio==null? state.ratio : ratio);
+  const mkVoice=(base)=>{ for(let k=1;k<=N_PARTIALS;k++){ const o=ac.createOscillator(); o.type='sine';
+    o.frequency.value=k*base; const g=ac.createGain(); g.gain.value=(0.5/(k*k))*0.45;
+    o.connect(g); g.connect(ac.destination); o.start(0); o.stop(seconds); } };
+  mkVoice(F0); mkVoice(F0*rr);
+  return ac.startRendering().then(buf=>encodeWAV(buf));
+}
+function encodeWAV(buf){
+  const ch=buf.getChannelData(0), sr=buf.sampleRate, n=ch.length;
+  const ab=new ArrayBuffer(44+n*2), dv=new DataView(ab);
+  const wr=(o,s)=>{ for(let i=0;i<s.length;i++) dv.setUint8(o+i,s.charCodeAt(i)); };
+  wr(0,'RIFF'); dv.setUint32(4,36+n*2,true); wr(8,'WAVE'); wr(12,'fmt '); dv.setUint32(16,16,true);
+  dv.setUint16(20,1,true); dv.setUint16(22,1,true); dv.setUint32(24,sr,true); dv.setUint32(28,sr*2,true);
+  dv.setUint16(32,2,true); dv.setUint16(34,16,true); wr(36,'data'); dv.setUint32(40,n*2,true);
+  let o=44; for (let i=0;i<n;i++){ let s=Math.max(-1,Math.min(1,ch[i])); dv.setInt16(o,s<0?s*0x8000:s*0x7fff,true); o+=2; }
+  return new Blob([ab],{type:'audio/wav'});
+}
+window.__renderOffline = function(seconds, ratio){ return renderOfflineWAV(seconds||3, ratio); };
+
+// ════════════════════════ BOOT ══════════════════════════════════════════════
+syncAudioUI(); updateReadouts(); runPill(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>
