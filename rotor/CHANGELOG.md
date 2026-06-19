@@ -54,3 +54,6 @@ exits 0 (31/31, including re-extraction parity); the in-page chip shows 9/9.
 Sister ride: **The Star Flyer** — there the chains fly *out* and the angle they reach is
 the spin; here the floor drops *away* and friction pins you to the wall, your weight
 forgotten. Same brass instruments, opposite felt story.
+
+Kin ride (added cycle 174): **The Teacups** — here *one* spin pins you to a wall; there a
+*second* spin blooms a flower and trades the lurch for a float.

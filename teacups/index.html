@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Teacups · The Midway · The Orrery Estate</title>
+<!--
+   THE TEACUPS — a two-spin tea-cup ride you CRANK by hand. Drag the outer PLATTER to set
+   Ω; drag the inner CUP to set ω. The seat traces z(t) = R·e^{iΩt} + ρ·e^{i(Ω+ω)t} — a
+   FLOWER whose petal count is the NUMERATOR p of the reduced ratio ω/Ω = p/q, and which
+   closes only after q platter-turns (closure ⟺ ω/Ω rational). The math CORE (core.mjs) is
+   inlined byte-for-byte between the sentinels below; the in-page chip calls the SAME
+   runSelfTest() the Node twin (core.test.mjs) runs. The G-needle PINS at the lurch
+   (R·Ω²+ρ(Ω+ω)²) and FLOATS at the crown (|R·Ω²−ρ(Ω+ω)²|); the tea slosh shows the
+   direction. LOCK THE CUP (ω=0) → a plain ring at constant pull, petals 0 — the proof by touch.
+-->
+<style>
+  :root{
+    --bg:#07080c;             /* fairground-at-dusk near-black ground */
+    --plate1:#12100a;
+    --plate2:#0b0a07;
+    --ink:#efe9da;
+    --ink-dim:#a59c87;
+    --gold:#c9a24a;           /* the brass bodies */
+    --gold-hi:#f4d27a;        /* lit gold (rivets, hubs) */
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.40);
+    --teal:#5fcdbf;           /* FLOAT / proven */
+    --teal-soft:rgba(95,205,191,0.12);
+    --coral:#f0846f;          /* LURCH */
+    --coral-soft:rgba(220,120,100,0.12);
+    --panel:rgba(11,10,7,0.86);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1200px 720px at 50% -12%, rgba(201,162,74,0.09), transparent 56%),
+      radial-gradient(900px 640px at 14% 112%, rgba(95,205,191,0.05), transparent 60%),
+      radial-gradient(900px 640px at 86% 114%, rgba(220,120,100,0.04), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  /* faint engineering-paper grid behind everything */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(201,162,74,0.05) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(201,162,74,0.045) 0 1px, transparent 1px 32px);
+    mask-image:radial-gradient(1100px 760px at 50% 36%, #000 30%, transparent 78%);
+  }
+  /* a thin string-of-lights bunting across the top — the fairground tell */
+  body::after{
+    content:""; position:fixed; top:46px; left:0; right:0; height:18px; z-index:0; pointer-events:none; opacity:.5;
+    background-image:radial-gradient(circle at 11px 4px, var(--gold-hi) 0 1.6px, transparent 2.4px);
+    background-size:42px 18px;
+    mask-image:linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  }
+  /* the Blueprint skin: brass-on-ink → cool blueprint-on-ink */
+  body.skin-blueprint{
+    background:
+      radial-gradient(1200px 720px at 50% -12%, rgba(95,170,205,0.10), transparent 56%),
+      radial-gradient(900px 640px at 50% 120%, rgba(95,170,205,0.05), transparent 60%),
+      #060a10;
+  }
+  body.skin-blueprint::before{
+    background-image:
+      repeating-linear-gradient(0deg, rgba(120,180,220,0.07) 0 1px, transparent 1px 28px),
+      repeating-linear-gradient(90deg, rgba(120,180,220,0.07) 0 1px, transparent 1px 28px);
+    opacity:.7;
+  }
+  body.skin-blueprint::after{ display:none; }
+
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding:13px 20px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(7,8,12,0.95), rgba(7,8,12,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:5px; }
+  .back{ font:600 10.5px/1.3 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.22s; white-space:nowrap; }
+  .back:hover{ color:var(--gold-hi); opacity:1; }
+  .brand{ text-align:center; flex:1 1 auto; pointer-events:none; padding-top:1px; }
+  .brand h1{ margin:0; font-family:var(--font-serif); font-weight:600; font-size:clamp(17px,2.4vw,21px);
+    letter-spacing:.4px; color:var(--gold-hi); }
+  .brand .tag{ display:block; font:11px/1.3 var(--font-serif); font-style:italic; color:var(--ink-dim); margin-top:1px; }
+  .selftest{ font:600 10px/1.35 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:18px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.42); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); max-width:230px; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(24,46,32,0.5); }
+  .selftest.bad{ color:var(--coral); border-color:rgba(220,120,100,0.6); background:rgba(58,26,22,0.5); }
+
+  /* ── self-test detail panel ── */
+  #stPanel{ position:fixed; top:54px; right:18px; z-index:60; width:min(500px,92vw);
+    background:var(--panel); border:1px solid var(--gold-edge); border-radius:12px; padding:16px 18px 14px;
+    box-shadow:0 18px 50px rgba(0,0,0,0.6); display:none; }
+  #stPanel.show{ display:block; }
+  #stPanel h2{ margin:0 0 4px; font:600 13px/1.2 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--gold-hi); }
+  #stPanel .sub{ margin:0 0 10px; font:12px/1.5 var(--font-serif); color:var(--ink-dim); }
+  #stList{ font:11px/1.55 var(--font-mono); max-height:46vh; overflow:auto; }
+  #stList .row{ display:flex; gap:8px; padding:2px 0; }
+  #stList .row .m{ flex:0 0 auto; }
+  #stList .ok{ color:#8fd79a; } #stList .no{ color:var(--coral); }
+  #stPanel .foot{ margin-top:10px; padding-top:9px; border-top:1px solid rgba(201,162,74,0.16);
+    font:11px/1.6 var(--font-serif); color:var(--ink-dim); }
+  #stPanel .closeX{ position:absolute; top:9px; right:11px; background:none; border:none; color:var(--ink-dim);
+    font-size:18px; cursor:pointer; line-height:1; }
+
+  /* ── layout ── */
+  main{ position:relative; z-index:1; max-width:1120px; margin:0 auto; padding:74px 20px 56px; }
+  .hero{ text-align:center; margin-bottom:14px; }
+  .hero .eyebrow{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3em; text-transform:uppercase; color:var(--gold); opacity:.9; }
+  .hero .lede{ max-width:730px; margin:12px auto 0; font:15px/1.6 var(--font-serif); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--gold-hi); font-weight:600; } .hero .lede i{ font-style:italic; }
+
+  .stage{ display:grid; grid-template-columns:1fr 210px; gap:16px; align-items:stretch; margin-top:20px; }
+  .panel{ border:1px solid rgba(201,162,74,0.16); border-radius:14px; background:linear-gradient(180deg,var(--plate1),var(--plate2));
+    padding:14px; position:relative; overflow:hidden; }
+  .panel h3{ margin:0 0 8px; font:600 9.5px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--ink-dim); }
+  .panel h3 b{ color:var(--gold); }
+
+  /* the platter panel (top-down stall) */
+  #platterPanel{ padding:12px 12px 10px; }
+  #platterWrap{ position:relative; width:100%; }
+  svg#platter{ width:100%; height:auto; display:block; touch-action:none; cursor:grab; }
+  svg#platter:active{ cursor:grabbing; }
+
+  /* the felt-regime headline under the platter */
+  #regime{ margin-top:10px; min-height:40px; text-align:center; font:14px/1.45 var(--font-serif); color:var(--ink-dim); transition:.18s; }
+  #regime.rest{ color:var(--gold-hi); } #regime.lurch{ color:var(--coral); } #regime.float{ color:var(--teal); }
+  #regime b{ font-weight:600; }
+
+  /* the verdict line (mono) */
+  #verdict{ margin-top:7px; text-align:center; font:600 11.5px/1.4 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  #verdict .lurch{ color:var(--coral); } #verdict .float{ color:var(--teal); } #verdict .frac{ color:var(--gold-hi); }
+
+  /* the right column: the G-needle dial + the sloshing teacup */
+  #sideCol{ display:flex; flex-direction:column; gap:12px; }
+  #dialPanel{ display:flex; flex-direction:column; align-items:center; padding:12px 10px 10px; }
+  svg#gdial{ width:100%; height:auto; margin-top:2px; }
+  #dialVerdict{ margin-top:4px; font:600 9.5px/1.3 var(--font-mono); text-align:center; color:var(--ink-dim); }
+  #dialVerdict.lurch{ color:var(--coral); } #dialVerdict.float{ color:var(--teal); }
+
+  #teaPanel{ display:flex; flex-direction:column; align-items:center; padding:12px 10px 10px; }
+  svg#tea{ width:100%; height:auto; margin-top:2px; }
+  #teaVerdict{ margin-top:5px; font:600 9px/1.3 var(--font-mono); text-align:center; color:var(--ink-dim); letter-spacing:.04em; }
+
+  /* controls */
+  .controls{ display:flex; flex-wrap:wrap; gap:14px 22px; align-items:center; margin-top:18px; justify-content:center; }
+  .knob{ display:flex; flex-direction:column; gap:6px; min-width:200px; }
+  .knob label{ font:600 10px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim); }
+  .knob label .v{ color:var(--gold-hi); }
+  .knob input[type=range]{ accent-color:var(--gold); width:100%; }
+
+  button.ctl{ font:600 11px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink); background:linear-gradient(180deg,#1a1710,#100d08); border:1px solid var(--gold-edge);
+    border-radius:9px; padding:11px 16px; cursor:pointer; transition:.18s; }
+  button.ctl:hover{ border-color:var(--gold-hi); color:var(--gold-hi); }
+  button.lever{ border-color:rgba(240,132,111,0.5); color:var(--coral); }
+  button.lever:hover{ border-color:var(--coral); color:var(--coral); }
+  button.lever.locked{ background:linear-gradient(180deg,#1a110c,#0d0806); border-color:rgba(240,132,111,0.7); color:var(--coral); }
+  button.skinbtn{ border-color:rgba(95,170,205,0.4); color:#8fc3df; }
+  button.skinbtn:hover{ border-color:#8fc3df; color:#bfe0f0; }
+  .hint{ font:11px/1.4 var(--font-mono); color:var(--ink-dim); letter-spacing:.04em; opacity:.85; max-width:100%; text-align:center; flex:1 0 100%; }
+
+  /* explainer / honesty */
+  .scroll{ max-width:790px; margin:30px auto 0; font:13.5px/1.7 var(--font-serif); color:var(--ink); opacity:.9; }
+  .scroll h2{ font:600 11px/1 var(--font-mono); letter-spacing:.22em; text-transform:uppercase; color:var(--gold);
+    margin:24px 0 10px; }
+  .scroll p{ margin:0 0 12px; } .scroll b{ color:var(--gold-hi); } .scroll i{ font-style:italic; }
+  .scroll .teal{ color:var(--teal); } .scroll .coral{ color:var(--coral); }
+  .scroll code{ font:12px/1.5 var(--font-mono); color:var(--gold-hi); background:rgba(201,162,74,0.08);
+    padding:1px 5px; border-radius:4px; }
+  .honesty{ border-left:2px solid var(--gold-edge); padding-left:14px; color:var(--ink-dim); font-size:12.5px; }
+
+  .foot{ max-width:790px; margin:34px auto 0; padding-top:18px; border-top:1px solid rgba(201,162,74,0.12);
+    text-align:center; font:12.5px/1.7 var(--font-serif); color:var(--ink-dim); }
+  .foot a{ color:var(--gold); text-decoration:none; border-bottom:1px solid rgba(201,162,74,0.3); }
+
+  @media (max-width:760px){
+    main{ padding-top:150px; }
+    .stage{ grid-template-columns:1fr; }
+    #sideCol{ flex-direction:row; flex-wrap:wrap; }
+    #dialPanel, #teaPanel{ flex:1 1 200px; }
+    svg#gdial, svg#tea{ max-width:220px; margin:0 auto; }
+    .knob{ min-width:0; flex:1 1 160px; }
+    .controls{ gap:12px; }
+    .topbar{ flex-wrap:wrap; align-items:center; }
+    .brand{ order:3; flex:1 0 100%; text-align:left; margin-top:2px; }
+  }
+  @media (max-width:430px){
+    .brand h1{ font-size:16px; }
+    button.ctl{ padding:10px 12px; font-size:10px; }
+  }
+</style>
+</head>
+<body class="skin-brass">
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../midway/index.html">&larr; The Midway</a>
+      <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="back" href="../rotor/index.html">&#8599; The Rotor (sister ride)</a>
+    </div>
+    <div class="brand">
+      <h1>The Teacups</h1>
+      <span class="tag">two spins make a flower &mdash; one petal per numerator, closes after q platter-turns</span>
+    </div>
+    <div class="selftest" id="selftest" title="The math core proves z(t)=R·e^{iΩt}+ρ·e^{i(Ω+ω)t} closes ⟺ ω/Ω rational, with petals = the NUMERATOR p of ω/Ω, felt-|a| bounded by the lurch and float, and a lock-the-cup (ω=0) neg-control that is provably a plain ring; click for detail.">checking&hellip;</div>
+  </div>
+
+  <div id="stPanel">
+    <button class="closeX" id="stClose" title="close">&times;</button>
+    <h2>Self&#8209;test</h2>
+    <p class="sub" id="stSub">&hellip;</p>
+    <div id="stList"></div>
+    <div class="foot">The seat path <code>z(t) = R·e^{iΩt} + ρ·e^{i(Ω+ω)t}</code> is a flower. In lowest terms <code>ω/Ω = p/q</code>:
+      it CLOSES after <code>q</code> platter-turns (<code>T = 2π·q/Ω</code>) and grows exactly <code>p</code> petals &mdash; the
+      <b>NUMERATOR</b>, not the denominator. The felt pull <code>|a|</code> swings between the LURCH <code>R·Ω²+ρ(Ω+ω)²</code> and the
+      FLOAT <code>|R·Ω²−ρ(Ω+ω)²|</code>. The load-bearing neg-control: lock the cup (<code>ω=0</code>) and the seat PROVABLY rides a
+      plain ring at constant pull <code>(R+ρ)Ω²</code> &mdash; zero petals. Closure holds <i>iff</i> <code>ω/Ω</code> is rational
+      (an irrational <code>√2/2</code> never returns). The in-page count equals the Node twin (<code>core.test.mjs</code>).</div>
+  </div>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">The Midway &middot; ride #5</div>
+      <p class="lede"><b>Crank two spins and watch a flower bloom.</b> Drag the outer <b>platter</b> to set its spin <code>Ω</code>;
+        drag the inner <b>cup</b> to set its own spin <code>ω</code>. The seat traces <code>z(t) = R·e^{iΩt} + ρ·e^{i(Ω+ω)t}</code>
+        &mdash; a <i>rose</i> whose petal count is the <b>numerator</b> of <code>ω/Ω</code> reduced, and which <i>closes</i> only when
+        that ratio is rational. The G&#8209;needle <span class="coral">pins at the lurch</span> and <span class="teal">floats at the
+        crown</span>; the tea slosh shows which way you're flung. <b>Lock the cup</b> (<code>ω=0</code>) and the flower collapses to a
+        plain ring at a steady pull &mdash; the proof by touch. The <i>bloom and the lurch are the readout</i>.</p>
+    </header>
+
+    <div class="stage">
+      <!-- ORGAN 1: the tea-cup stall (top-down) -->
+      <div class="panel" id="platterPanel">
+        <h3>The Tea&#8209;Cup Stall &middot; <b>top&#8209;down &mdash; drag the platter (Ω) &amp; the cup (ω); the seat traces a flower</b></h3>
+        <div id="platterWrap">
+          <svg id="platter" viewBox="0 0 660 480" preserveAspectRatio="xMidYMid meet" aria-label="top-down view of a tea-cup ride: an outer brass platter you crank for Ω, an inner cup you crank for ω, and the seat bead tracing its flower trail"></svg>
+        </div>
+        <div id="regime" class="rest"><b>AT REST</b> &mdash; both spins still; the seat sits at radius R + &rho;.</div>
+        <div id="verdict">&Omega; = 0.00 &middot; &omega; = 0.00 &middot; &omega;/&Omega; = &mdash; &middot; petals 0 &middot; <span>still</span></div>
+      </div>
+
+      <!-- the right column: the G-needle dial + the sloshing teacup -->
+      <div id="sideCol">
+        <div class="panel" id="dialPanel">
+          <h3>G&#8209;needle &middot; <b>|a| felt pull</b></h3>
+          <svg id="gdial" viewBox="0 0 160 150" aria-label="brass quarter-dial; the needle angle is the felt pull |a|, with engraved coral LURCH and teal FLOAT arcs re-cut from the current crank"></svg>
+          <div id="dialVerdict">felt pull |a| = 0.00</div>
+        </div>
+
+        <div class="panel" id="teaPanel">
+          <h3>The tea &middot; <b>which way you're flung</b></h3>
+          <svg id="tea" viewBox="0 0 160 150" aria-label="a cup of tea seen from the side; the surface tilts toward the felt acceleration, climbing the wall at the lurch and going flat at the float"></svg>
+          <div id="teaVerdict">level</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="knob">
+        <label>platter spin &Omega; <span class="v" id="kBig">0.00 rad/s</span> &mdash; <i>or drag the outer ring</i></label>
+        <input type="range" id="omegaBig" min="-9" max="9" step="0.01" value="0" aria-label="platter spin Ω (radians per second)">
+      </div>
+      <div class="knob">
+        <label>cup spin &omega; <span class="v" id="kSmall">0.00 rad/s</span> &mdash; <i>or drag the inner cup</i></label>
+        <input type="range" id="omegaSmall" min="-9" max="9" step="0.01" value="0" aria-label="cup spin ω (radians per second)">
+      </div>
+      <button class="ctl lever" id="lockBtn" title="lock the cup's pin: ω=0 — the flower collapses to a plain ring (key: L)">LOCK THE CUP</button>
+      <button class="ctl" id="bloom" title="snap to a clean 3/5 ratio and spin up — watch a 3-petal flower close">&#9733; BLOOM 3/5</button>
+      <button class="ctl skinbtn" id="skinBtn" title="toggle the Blueprint skin (pure CSS — never touches the math)">SKIN: BRASS</button>
+      <button class="ctl" id="reset">reset</button>
+      <div class="hint">drag the <b>outer ring</b> to crank &Omega; &middot; drag the <b>inner cup</b> to crank &omega; &middot; keys: <b>[ ]</b> nudge &Omega;, <b>, .</b> nudge &omega;, <b>L</b> lock the cup &middot; release to coast; rationals snap to detents</div>
+    </div>
+
+    <section class="scroll">
+      <h2>What you are operating</h2>
+      <p>This is not a chart of a tea-cup ride &mdash; it <i>is</i> one, seen from straight above. A heavy brass <b>platter</b> turns at
+        rate <code>Ω</code>. Bolted to it, offset by <code>R</code>, is a <b>cup</b> that turns on its own pin at rate <code>ω</code>
+        relative to the platter. You sit at offset <code>ρ</code> inside the cup. Your seat's path in the world is the sum of two circular
+        motions, <code>z(t) = R·e^{iΩt} + ρ·e^{i(Ω+ω)t}</code> &mdash; a <i>rose</i>. <b>Drag the outer ring</b> to crank the platter,
+        <b>drag the inner cup</b> to crank its pin; let go and each coasts (the platter, being heavier, coasts longer).</p>
+      <h2>The bloom &mdash; one petal per numerator</h2>
+      <p>Write the spin ratio in lowest terms, <code>ω/Ω = p/q</code>. The flower <b>closes</b> &mdash; the seat returns exactly to its
+        start &mdash; only after the platter has turned <code>q</code> whole times, at <code>T = 2π·q/Ω</code>. Over that one closed loop
+        it grows exactly <code>p</code> <span class="teal">petals</span>: the <b>numerator</b>, <i>not</i> the denominator. (A common
+        re-telling gets this backwards; the self-test settles it &mdash; <code>1/2</code> blooms 1 petal, <code>2/3</code> blooms 2,
+        <code>3/5</code> blooms 3, <code>5/7</code> blooms 5.) As you coast near a clean rational the cup eases into a <b>magnetic
+        detent</b> and the on-screen tally announces the reduced fraction and its petal count.</p>
+      <h2>The G-needle &amp; the tea &mdash; the felt pull</h2>
+      <p>Your body doesn't feel position, it feels <i>acceleration</i>: <code>a(t) = z″(t) = −Ω²R·e^{iΩt} − (Ω+ω)²ρ·e^{i(Ω+ω)t}</code>.
+        Its magnitude swings between two bounds as the two spins line up or oppose. The brass <b>G-needle</b> reads <code>|a|</code> live;
+        an engraved <span class="coral">coral LURCH arc</span> marks the maximum <code>R·Ω²+ρ(Ω+ω)²</code> (both pulls add &mdash; the
+        <i>cusp</i> of the flower, where you're flung outward) and a <span class="teal">teal FLOAT arc</span> marks the minimum
+        <code>|R·Ω²−ρ(Ω+ω)²|</code> (the pulls oppose &mdash; the <i>crown</i>, where you ease). Re-cranking <b>re-cuts</b> both arcs.
+        The <b>cup of tea</b> leans toward the felt pull and tells you the <i>direction</i>: it climbs the wall and flashes coral at the
+        lurch, and goes flat with a teal weightless shimmer at the float.</p>
+      <h2>Lock the cup &mdash; the proof by touch</h2>
+      <p>Pull <b>LOCK THE CUP</b> (or press <kbd>L</kbd>) and <code>ω</code> snaps to zero: the cup stops turning on its pin. Now the two
+        spins co-rotate at the <i>same</i> rate, the seat just rides a <b>single circle</b> of radius <code>R+ρ</code>, the petal count
+        falls to <b>0</b>, and the G-needle goes <i>dead steady</i> at a constant <code>(R+ρ)·Ω²</code> &mdash; the tea sits perfectly
+        level. No flower, no swing. Release the lock and flick the cup, and the petals bloom and the needle swings again. That is the
+        load-bearing negative control, and you can feel it.</p>
+      <h2>Closure is rational</h2>
+      <p>The flower closes for some finite time <i>iff</i> <code>ω/Ω</code> is <b>rational</b>. Crank toward an irrational ratio like
+        <code>√2/2</code> and the seat <i>never</i> returns to its start &mdash; it fills an annulus forever, the trail never quite joining
+        up. The self-test proves there is no return within a safe tolerance over the first 2000 candidate periods for <code>√2/2</code>,
+        while every rational closes to machine precision.</p>
+      <h2 class="honesty" style="border:none;padding:0">Honesty</h2>
+      <p class="honesty">The closure, the petal count, and the felt extrema are <i>exact</i> &mdash; read straight from the core's
+        <code>closurePeriod</code>, <code>petalCount</code>, and <code>extrema</code>. A point-mass rider, rigid arms, no friction or
+        drift; the spins advance at constant rates <code>Ω</code> and <code>Ω+ω</code>. Only the on-canvas <i>scale</i> of the drawing and
+        the coast damping are nominal so the ride reads on a finite stage; the trail is the seat's true world path, sampled finely. The
+        cranks clamp to <code>±9 rad/s</code> so you can sit on both signs and watch the petals form either way.</p>
+    </section>
+
+    <footer class="foot">
+      The sister ride is <a href="../rotor/index.html">The Rotor</a> &mdash; there <i>one</i> spin pins you to a wall and forgets your
+      weight; here a <i>second</i> spin blooms a flower and trades the lurch for a float. Same brass instruments, opposite felt story.
+      &nbsp;&middot;&nbsp; <a href="../midway/index.html">Back to The Midway</a>
+    </footer>
+  </main>
+
+<script type="module">
+"use strict";
+// ===== TEACUPS CORE (inlined byte-twin) BEGIN =====
+// ── THE TEACUPS — math authority for a two-spin tea-cup ride: THE FLOWER.
+//    This block is the SOLE AUTHORITY; a Node twin (core.test.mjs) re-extracts it
+//    byte-for-byte between sentinels and the in-page chip calls the SAME
+//    runSelfTest(). The renderer draws the seat's PATH and FELT PULL from this
+//    authority — the bloom and the lurch ARE the readout, never a plotted curve. ──
+//
+// THE LAW. The platter spins at rate Ω. Mounted on it at offset R is a cup, and the
+// cup spins on its own pin at rate ω relative to the platter. A rider sits at offset
+// ρ from the cup's centre. Track the seat as a complex point z(t):
+//   z(t) = R·e^{iΩt} + ρ·e^{i(Ω+ω)t}.                       (the seat's world path)
+// The first term carries the cup centre around the platter at Ω; the second carries
+// the rider around the cup at the cup's WORLD rate Ω+ω (the cup's own spin ω adds to
+// the platter's). This is an epicycloid/rose family — a sum of two circular motions.
+//
+// THE BLOOM (petals = NUMERATOR). Write the spin ratio in lowest terms ω/Ω = p/q
+// (p,q coprime). The path closes after the platter has turned q whole times:
+//   T = 2π·q / Ω.                                           (the closure period)
+// Over that one closed loop the radius |z(t)| rises and falls, tracing PETALS. The
+// number of petals is the NUMERATOR p — NOT the denominator. The cup's seat laps the
+// platter centre once per relative turn of ω, and over [0,T) the relative angle ω·t
+// sweeps ω·T = 2π·p, so EXACTLY p radial lobes form: petals = p. (Verified by both a
+// closed-form ω·T/(2π) = p and a wrap-around lobe count, in runSelfTest.) The reduced
+// DENOMINATOR q is the CLOSURE PERIOD — "the flower closes after q platter-turns" —
+// not the petal count. With R > ρ the radius never reaches 0, so the p lobes are all
+// honest outward petals (a clean rose), which is why the default pins R=1 > ρ=0.5.
+//
+// THE FELT PULL (lurch ↔ float). The rider FEELS acceleration, the second derivative:
+//   a(t) = z''(t) = −Ω²R·e^{iΩt} − (Ω+ω)²ρ·e^{i(Ω+ω)t}.     (the felt vector)
+// Its magnitude |a| swings between two extremes as the two spins line up or oppose:
+//   aMax = R·Ω² + ρ·(Ω+ω)²   (the LURCH — both pulls add, the cusp where you're flung)
+//   aMin = |R·Ω² − ρ·(Ω+ω)²| (the FLOAT — the pulls oppose, the crown where you ease).
+// Both are attained on the closed loop (the two phasors are co-rotating-at-different-
+// rates, so they sweep through perfect alignment and perfect opposition). The dial
+// reads |a(t)|; the cusp of the flower coincides with the lurch, the crown with the float.
+//
+// THE NEG-CONTROL (the teeth). Set ω = 0: the cup does not spin on its pin. Then the
+// rider just rides a single circle of radius R+ρ at rate Ω — a PLAIN RING, not a
+// flower. The radius is CONSTANT (R+ρ) and the felt pull is CONSTANT (R+ρ)·Ω², so
+// aMax = aMin (no lurch, no float — a steady press). petalCount(0,q) = 0. runSelfTest
+// proves the ω=0 ring is constant to <1e-9 AND that any ω≠0 band gives aMax−aMin
+// strictly positive (a non-empty disagreement, so the suite can't pass vacuously).
+//
+// CLOSURE IFF RATIONAL. The path closes (returns to its start) for SOME finite T iff
+// ω/Ω is rational. Make ω/Ω irrational (e.g. √2/2) and the seat never exactly returns
+// — it fills an annulus forever. runSelfTest proves no return within a safe tolerance
+// over the first 2000 denominators for √2/2 (the curve genuinely does not close).
+//
+// HONESTY. A point-mass rider, rigid arms, no friction or drift; angles advance at
+// constant rates Ω and Ω+ω. The closure, petal count, and felt extrema are EXACT;
+// only the on-canvas scale of the drawing is nominal so it reads on a finite stage.
+
+const R = 1.0;            // platter-arm length (cup centre offset). R>ρ keeps radius>0.
+const RHO = 0.5;          // ρ: seat offset within the cup
+const OMEGA_BIG = 1.0;    // Ω: platter spin rate (rad/s)
+const OMEGA_SMALL = 0.5;  // ω: cup spin rate relative to platter — default ω/Ω = 1/2
+
+// ── gcd + lowest-terms ratio ────────────────────────────────────────────────────────
+// gcd by Euclid; reduceRatio returns {p,q} in lowest terms with p the NUMERATOR (the
+// petal count) and q the DENOMINATOR (the closure period in platter-turns).
+function gcd(a, b){
+  a = Math.abs(Math.round(a)); b = Math.abs(Math.round(b));
+  while(b){ const r = a % b; a = b; b = r; }
+  return a;
+}
+function reduceRatio(p, q){
+  const g = gcd(p, q) || 1;
+  return { p: Math.round(p) / g, q: Math.round(q) / g };
+}
+
+// ── THE SEAT GEOMETRY — the ONE place the path is computed ────────────────────────────
+// seat(R_,rho,Theta,phi) = the world point of a rider at cup-angle phi when the cup
+// centre is at platter-angle Theta. Complex z as plain {x,y}. The page feeds LIVE
+// angles in (Theta = bigTheta, phi = bigTheta + smallTheta) so the renderer never
+// reimplements geometry. path(t,...) is seat evaluated along the constant-rate spins.
+function seat(R_, rho, Theta, phi){
+  return { x: R_*Math.cos(Theta) + rho*Math.cos(phi),
+           y: R_*Math.sin(Theta) + rho*Math.sin(phi) };
+}
+function path(t, R_=R, rho=RHO, Om=OMEGA_BIG, w=OMEGA_SMALL){
+  return seat(R_, rho, Om*t, (Om+w)*t);
+}
+
+// ── THE FELT VECTOR — the acceleration a rider's body actually feels ──────────────────
+// a(t) = z''(t) = −Ω²R·e^{iΩt} − (Ω+ω)²ρ·e^{i(Ω+ω)t}. Returned as the {x,y} vector so
+// the sloshing-tea glyph can lean toward it; feltA is its magnitude (the G-needle scalar).
+function accel(t, R_=R, rho=RHO, Om=OMEGA_BIG, w=OMEGA_SMALL){
+  return { x: -Om*Om*R_*Math.cos(Om*t) - (Om+w)*(Om+w)*rho*Math.cos((Om+w)*t),
+           y: -Om*Om*R_*Math.sin(Om*t) - (Om+w)*(Om+w)*rho*Math.sin((Om+w)*t) };
+}
+function accelVec(t, R_=R, rho=RHO, Om=OMEGA_BIG, w=OMEGA_SMALL){
+  return accel(t, R_, rho, Om, w);
+}
+function feltA(t, R_=R, rho=RHO, Om=OMEGA_BIG, w=OMEGA_SMALL){
+  const a = accel(t, R_, rho, Om, w);
+  return Math.hypot(a.x, a.y);
+}
+
+// ── THE CLOSURE PERIOD — the flower closes after q platter-turns ──────────────────────
+// T = 2π·q/Ω, where q is the reduced DENOMINATOR of ω/Ω. (The PETALS are the numerator;
+// q is how long the bloom takes to close.)
+function closurePeriod(q, Om=OMEGA_BIG){
+  return 2*Math.PI*q / Om;
+}
+
+// ── THE FELT EXTREMA (closed form) ────────────────────────────────────────────────────
+// feltMax = R·Ω² + ρ·(Ω+ω)²  — the LURCH (both pulls add; the cusp where you're flung).
+// feltMin = |R·Ω² − ρ·(Ω+ω)²| — the FLOAT (pulls oppose; the crown where you ease).
+function feltMax(R_=R, rho=RHO, Om=OMEGA_BIG, w=OMEGA_SMALL){
+  return R_*Om*Om + rho*(Om+w)*(Om+w);
+}
+function feltMin(R_=R, rho=RHO, Om=OMEGA_BIG, w=OMEGA_SMALL){
+  return Math.abs(R_*Om*Om - rho*(Om+w)*(Om+w));
+}
+function extrema(R_=R, rho=RHO, Om=OMEGA_BIG, w=OMEGA_SMALL){
+  return { aMax: feltMax(R_, rho, Om, w), aMin: feltMin(R_, rho, Om, w) };
+}
+
+// ── THE PETAL COUNT (= NUMERATOR) ─────────────────────────────────────────────────────
+// petalCount(p,q) = reduced numerator of ω/Ω = p/q. ONE petal per numerator. ω=0 ⇒ p=0 ⇒
+// a plain ring, no petals. The corrected claim (the brief's "= denominator" is false:
+// 1/2→1, 2/3→2, 3/5→3, 5/7→5 petals, all = numerator).
+function petalCount(p, q){
+  return reduceRatio(p, q).p;
+}
+
+// ── THE SELF-TEST. The Node twin and the in-page chip call THIS. ──────────────────────
+function runSelfTest(){
+  const checks = [];
+  const ck = (name, ok) => checks.push({ name, ok: !!ok });
+  const EPS = 1e-9;
+
+  // (1) CLOSURE at T to <1e-9 across several p/q and (R,ρ,Ω): path(0) === path(T).
+  {
+    let allOk = true, n = 0, worst = 0;
+    const ratios = [[1,2],[1,3],[2,3],[2,5],[3,5],[3,4],[5,7],[4,6]];
+    for(const [pp,qq] of ratios) for(const R_ of [1.0, 1.4, 0.8]) for(const rho of [0.5, 0.3]) for(const Om of [1.0, 0.7]){
+      const { p, q } = reduceRatio(pp, qq);
+      const w = (p/q)*Om;                          // ω/Ω = p/q exactly
+      const T = closurePeriod(q, Om);
+      const z0 = path(0, R_, rho, Om, w), zT = path(T, R_, rho, Om, w);
+      const err = Math.hypot(z0.x - zT.x, z0.y - zT.y);
+      worst = Math.max(worst, err);
+      if(err >= EPS) allOk = false;
+      n++;
+    }
+    ck('(1) CLOSURE: path(0)===path(closurePeriod(q)) to <1e-9 over '+n+' (p/q,R,ρ,Ω) — the flower closes after q platter-turns', allOk && n>=24);
+  }
+
+  // (2) ★ PETALS = NUMERATOR (the corrected claim, PROVEN two ways): analytic
+  // ω·T/(2π) === p exactly, AND a wrap-around radial-lobe count over [0,T) equals p.
+  {
+    let analyticOk = true, lobeOk = true, n = 0;
+    const R_ = 1.0, rho = 0.5, Om = 1.0;            // R>ρ ⇒ honest outward lobes
+    const ratios = [[1,2],[1,3],[2,3],[2,5],[3,5],[3,4],[5,7]];
+    for(const [pp,qq] of ratios){
+      const { p, q } = reduceRatio(pp, qq);
+      const w = (p/q)*Om;
+      const T = closurePeriod(q, Om);
+      // analytic: ω·T/(2π) = (p/q·Ω)·(2π·q/Ω)/(2π) = p
+      const analytic = (w*T)/(2*Math.PI);
+      if(Math.abs(analytic - p) >= EPS) analyticOk = false;
+      // wrap-around lobe count: local maxima of |z(t)| over the closed loop
+      const N = 36000;
+      const rad = (i)=>{ const z = path((i/N)*T, R_, rho, Om, w); return Math.hypot(z.x, z.y); };
+      let prev = rad(N-1), cur = rad(0), lobes = 0;   // wrap: sample at -dt is sample N-1
+      for(let i=1;i<=N;i++){
+        const next = rad(i % N);
+        if(cur > prev && cur >= next) lobes++;
+        prev = cur; cur = next;
+      }
+      if(lobes !== p) lobeOk = false;
+      n++;
+    }
+    ck('(2)★ PETALS = NUMERATOR: analytic ω·T/(2π) === p (the numerator) exactly, over '+n+' ratios', analyticOk);
+    ck('(2)★ PETALS = NUMERATOR: a wrap-around |z| lobe count over [0,T) === p (NOT the denominator) — 1/2→1, 2/3→2, 3/5→3, 5/7→5', lobeOk);
+  }
+
+  // (3) |a| EXTREMA <1e-9: a dense sweep over [0,T) attains feltMax and feltMin, which
+  // match the closed form R·Ω²+ρ(Ω+ω)² and |R·Ω²−ρ(Ω+ω)²| (incl. negative ω).
+  {
+    let allOk = true, n = 0, worst = 0;
+    const bands = [[1.0,0.5,1.0,0.5],[1.4,0.3,0.7,1.1],[0.8,0.5,1.0,-0.6],[1.0,0.5,1.0,2.0]];
+    for(const [R_,rho,Om,w] of bands){
+      const { q } = reduceRatio(Math.round(w*1000), Math.round(Om*1000));
+      const T = closurePeriod(q, Om);
+      let mn = Infinity, mx = -Infinity;
+      const N = 60000;
+      for(let i=0;i<=N;i++){ const a = feltA((i/N)*T, R_, rho, Om, w); if(a<mn) mn=a; if(a>mx) mx=a; }
+      const eMax = feltMax(R_, rho, Om, w), eMin = feltMin(R_, rho, Om, w);
+      worst = Math.max(worst, Math.abs(mx - eMax), Math.abs(mn - eMin));
+      if(Math.abs(mx - eMax) >= EPS || Math.abs(mn - eMin) >= EPS) allOk = false;
+      n++;
+    }
+    ck('(3) |a| EXTREMA <1e-9: a dense sweep attains feltMax=R·Ω²+ρ(Ω+ω)² (the LURCH) and feltMin=|R·Ω²−ρ(Ω+ω)²| (the FLOAT) — over '+n+' bands', allOk);
+  }
+
+  // (4) ★ NEG-CONTROL ω=0 (lock the cup): the seat rides a plain ring of radius R+ρ at
+  // CONSTANT felt pull (R+ρ)Ω², so the swept |a| never moves (no lurch, no float);
+  // petals 0. The two phasors co-rotate at the SAME rate when ω=0, so they stay locked
+  // in alignment forever — the felt pull is pinned at the LURCH value feltMax=(R+ρ)Ω²
+  // and never reaches the generic float feltMin (that opposition requires ω≠0). Plus an
+  // anti-vacuity: any ω≠0 band has aMax−aMin strictly >0 (a non-empty disagreement).
+  {
+    const R_ = 1.0, rho = 0.5, Om = 1.0;
+    // (a) radius ≡ R+ρ (a plain ring): sweep |z| with ω=0.
+    let radConst = true; const ringR = R_ + rho;
+    for(let i=0;i<=2000;i++){ const z = path((i/2000)*20, R_, rho, Om, 0); if(Math.abs(Math.hypot(z.x,z.y) - ringR) >= EPS) radConst = false; }
+    // (b) felt pull ≡ (R+ρ)Ω² (constant): the swept max and min coincide to <1e-9, and
+    // that constant equals feltMax (the locked-alignment lurch value), so |a| never swings.
+    const ringA = ringR*Om*Om;
+    let aConst = true; let aMn = Infinity, aMx = -Infinity;
+    for(let i=0;i<=2000;i++){ const a = feltA((i/2000)*20, R_, rho, Om, 0); if(Math.abs(a - ringA) >= EPS) aConst = false; if(a<aMn)aMn=a; if(a>aMx)aMx=a; }
+    const flat = aConst && (aMx - aMn) < EPS && Math.abs(feltMax(R_, rho, Om, 0) - ringA) < EPS;
+    // (c) anti-vacuity: a band with ω≠0 has aMax−aMin strictly positive.
+    const exLive = extrema(R_, rho, Om, 0.5);
+    const lurchExists = (exLive.aMax - exLive.aMin) > 1e-6;
+    ck('(4)★ NEG-CONTROL ω=0: the seat rides a plain ring, |z|≡R+ρ to <1e-9 (no flower)', radConst && petalCount(0,1) === 0);
+    ck('(4)★ NEG-CONTROL ω=0: the felt pull is CONSTANT ≡(R+ρ)Ω²=feltMax to <1e-9, so |a| never swings (no lurch, no float)', flat);
+    ck('(4)★ anti-vacuity: with ω≠0 the felt pull SWINGS — aMax−aMin strictly > 0 (the disagreement is real)', lurchExists);
+  }
+
+  // (5) CLOSURE IFF RATIONAL (the teeth): ω/Ω = √2/2 is irrational ⇒ the seat NEVER
+  // returns. Over the first 2000 denominators the min return error stays ABOVE a safe
+  // floor (5e-4) — the curve genuinely does not close (verified min ≈ 8e-4).
+  {
+    const R_ = 1.0, rho = 0.5, Om = 1.0, w = (Math.SQRT2/2)*Om;
+    let minErr = Infinity, atq = 0;
+    const z0 = path(0, R_, rho, Om, w);
+    for(let q=1;q<=2000;q++){
+      const T = closurePeriod(q, Om);
+      const zT = path(T, R_, rho, Om, w);
+      const e = Math.hypot(z0.x - zT.x, z0.y - zT.y);
+      if(e < minErr){ minErr = e; atq = q; }
+    }
+    ck('(5) CLOSURE IFF RATIONAL: with ω/Ω=√2/2 (irrational) NO return within 5e-4 over q=1..2000 (the flower never closes) — min err ≈'+minErr.toExponential(2)+' at q='+atq, minErr > 5e-4);
+  }
+
+  const pass = checks.filter(c=>c.ok).length;
+  return { pass, total: checks.length, checks };
+}
+// ===== TEACUPS CORE (inlined byte-twin) END =====
+
+// ──────────────────────────────────────────────────────────────────────────────
+//  THE INSTRUMENT — renders the tea-cup ride's FLOWER and FELT PULL from the core
+//  above. SINGLE SOURCE OF TRUTH: the page advances bigTheta/smallTheta only and calls
+//  core.seat(R,ρ,bigTheta,bigTheta+smallTheta) every frame; it NEVER reimplements
+//  geometry. The G-needle reads core.feltA(t); the engraved arcs read core.extrema;
+//  the tea leans toward core.accelVec. The bloom and the lurch are the readout.
+// ──────────────────────────────────────────────────────────────────────────────
+const NS = 'http://www.w3.org/2000/svg';
+const $ = (id)=>document.getElementById(id);
+const el = (tag, attrs={})=>{ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); return e; };
+const el2 = (tag,cls)=>{ const e=document.createElement(tag); if(cls) e.className=cls; return e; };
+const clamp = (v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+
+// ── stage geometry (660×480). A top-down stall: an outer brass PLATTER annulus you drag
+//    for Ω, an inner CUP disc (offset R) you drag for ω, the seat bead at ρ, and the
+//    live flower trail. World units (R≈1, ρ≈0.5) scale to pixels by SCALE about CENTER. ─
+const STAGE = { w:660, h:480 };
+const CENTER = { x:330, y:240 };
+const SCALE = 116;                         // px per world unit ((R+ρ)=1.5 ⇒ ~174 px outer radius)
+const R_PLAT = (R + RHO) * SCALE + 30;     // outer platter rim (the Ω drag annulus outer edge)
+const R_CUP_OUTER = (R + RHO) * SCALE - 30;// boundary: outside ⇒ platter, inside ⇒ cup
+const OMEGA_LIM = 9;                        // crank clamp (rad/s)
+const MIN_R = 0.18 * SCALE;                 // twitch guard: ignore drags too near a pivot
+const TRAIL_MAX = 1400;                     // trail-point ring buffer length
+
+// the ONE state the renderer advances
+const st = {
+  omega: OMEGA_SMALL, big: OMEGA_BIG,       // current ω (cup), Ω (platter)
+  bigTheta: 0, smallTheta: 0,               // accumulated platter / cup-relative angles
+  t: 0,                                     // shared felt clock (drives trail + gauge in lockstep)
+  coastBig: OMEGA_BIG, coastSmall: OMEGA_SMALL, // coasting rates when not dragging
+  cupLocked: false,
+  skin: 'brass',
+};
+let trail = [];                             // {x,y,frac} world points (frac = |a| fraction for colour)
+let raf = null, lastT = 0;
+let dragBody = null;                        // 'platter' | 'cup' | null
+let lastAngle = 0;                          // for trammel unwrap
+let detentFlash = 0;                        // seconds remaining on the ratio-flash
+
+// world→screen
+function toScreen(p){ return { x: CENTER.x + p.x*SCALE, y: CENTER.y - p.y*SCALE }; }
+
+// ── reduced ratio of the live ω/Ω (integer-scaled) for the petal tally + detents ──
+function liveRatio(){
+  const Om = st.big, w = st.omega;
+  if(Math.abs(Om) < 1e-6) return { p: 0, q: 1, valid:false };
+  // scale to integers at 0.001 resolution, then reduce
+  const r = reduceRatio(Math.round((w/Om)*1000), 1000);
+  return { p: r.p, q: r.q, valid:true };
+}
+
+// ── BUILD the static stall shell once; the cup, seat, trail redraw each frame. ──
+function buildStall(){
+  const svg=$('platter'); svg.innerHTML='';
+  const defs = el('defs'); svg.appendChild(defs);
+  // soft platter gradient
+  const pg = el('radialGradient', { id:'platG', cx:'50%', cy:'42%', r:'62%' });
+  pg.appendChild(el('stop', { offset:'0%', 'stop-color':'rgba(201,162,74,0.10)' }));
+  pg.appendChild(el('stop', { offset:'72%', 'stop-color':'rgba(201,162,74,0.04)' }));
+  pg.appendChild(el('stop', { offset:'100%', 'stop-color':'rgba(0,0,0,0.18)' }));
+  defs.appendChild(pg);
+
+  // the layers (built empty, filled per frame)
+  svg.appendChild(el('g', { id:'platG_l' }));   // platter disc + rim + spokes (rotates with Ω)
+  svg.appendChild(el('g', { id:'trailG' }));     // the flower trail
+  svg.appendChild(el('g', { id:'cupG' }));       // the cup disc (orbits + spins) + seat bead
+  svg.appendChild(el('g', { id:'tagG' }));       // the floating ratio tag
+}
+
+// stroke palette by skin
+function trailStroke(){ return st.skin === 'blueprint' ? '#7fb8e0' : 'var(--gold)'; }
+function cupFill(){ return st.skin === 'blueprint' ? 'rgba(127,184,224,0.10)' : 'rgba(201,162,74,0.10)'; }
+
+// ── DRAW the platter (outer brass annulus you crank Ω). Knurled rim + 3 spoke-ticks so
+//    the spin is visible. Rotates by bigTheta. ──
+function drawPlatter(){
+  const g=$('platG_l'); if(!g) return; g.innerHTML='';
+  const accent = st.skin==='blueprint' ? '#7fb8e0' : 'var(--gold)';
+  // disc
+  g.appendChild(el('circle', { cx:CENTER.x, cy:CENTER.y, r:R_PLAT, fill:'url(#platG)', stroke:'rgba(201,162,74,0.28)', 'stroke-width':1.5 }));
+  // knurled rim (a ring of short ticks) — rotates with Ω
+  const rim = el('g', { transform:`rotate(${(st.bigTheta*180/Math.PI).toFixed(2)} ${CENTER.x} ${CENTER.y})` });
+  const ticks = 48;
+  for(let i=0;i<ticks;i++){
+    const a = (i/ticks)*2*Math.PI;
+    const x1 = CENTER.x + Math.cos(a)*(R_PLAT-2), y1 = CENTER.y + Math.sin(a)*(R_PLAT-2);
+    const x2 = CENTER.x + Math.cos(a)*(R_PLAT-9), y2 = CENTER.y + Math.sin(a)*(R_PLAT-9);
+    rim.appendChild(el('line', { x1:x1.toFixed(1), y1:y1.toFixed(1), x2:x2.toFixed(1), y2:y2.toFixed(1),
+      stroke:'rgba(201,162,74,0.5)', 'stroke-width':1.4 }));
+  }
+  // 3 spoke-ticks (bold) so the platter's rotation is unmistakable
+  for(let k=0;k<3;k++){
+    const a = (k/3)*2*Math.PI;
+    const x2 = CENTER.x + Math.cos(a)*(R_PLAT-12), y2 = CENTER.y + Math.sin(a)*(R_PLAT-12);
+    rim.appendChild(el('line', { x1:CENTER.x, y1:CENTER.y, x2:x2.toFixed(1), y2:y2.toFixed(1),
+      stroke:accent, 'stroke-width': k===0?3:1.6, 'stroke-linecap':'round', opacity:k===0?0.9:0.5 }));
+  }
+  g.appendChild(rim);
+  // inner boundary hint (where cup-grabs begin)
+  g.appendChild(el('circle', { cx:CENTER.x, cy:CENTER.y, r:R_CUP_OUTER, fill:'none',
+    stroke:'rgba(201,162,74,0.12)', 'stroke-width':1, 'stroke-dasharray':'3 5' }));
+  // centre hub
+  g.appendChild(el('circle', { cx:CENTER.x, cy:CENTER.y, r:7, fill:accent, stroke:'#1a1408', 'stroke-width':1 }));
+  // Ω label on the rim
+  const lab = el('text', { x:CENTER.x, y:CENTER.y - R_PLAT + 16, fill:'var(--ink-dim)', 'font-size':10,
+    'font-family':'var(--font-mono)', 'text-anchor':'middle' });
+  lab.textContent='Ω · drag the rim'; g.appendChild(lab);
+}
+
+// ── DRAW the cup (inner brass disc at offset R, spinning by smallTheta) + the seat bead
+//    at ρ. The cup CENTRE is the platter point at angle bigTheta, offset R; the seat is
+//    seat(R,ρ,bigTheta,bigTheta+smallTheta). ──
+function drawCup(){
+  const g=$('cupG'); if(!g) return; g.innerHTML='';
+  const accent = st.skin==='blueprint' ? '#7fb8e0' : 'var(--gold)';
+  const hi = st.skin==='blueprint' ? '#bfe0f0' : 'var(--gold-hi)';
+  // cup centre = platter point (R, bigTheta)
+  const cupC = toScreen({ x:R*Math.cos(st.bigTheta), y:R*Math.sin(st.bigTheta) });
+  const cupRpx = RHO*SCALE + 14;
+  // arm from hub to cup centre
+  g.appendChild(el('line', { x1:CENTER.x, y1:CENTER.y, x2:cupC.x.toFixed(1), y2:cupC.y.toFixed(1),
+    stroke:'rgba(201,162,74,0.35)', 'stroke-width':3, 'stroke-linecap':'round' }));
+  // cup disc
+  g.appendChild(el('circle', { cx:cupC.x.toFixed(1), cy:cupC.y.toFixed(1), r:cupRpx, fill:cupFill(),
+    stroke: st.cupLocked ? 'var(--coral)' : accent, 'stroke-width': st.cupLocked ? 2.4 : 1.8 }));
+  // seat bead world point — THE single geometry call
+  const seatW = seat(R, RHO, st.bigTheta, st.bigTheta + st.smallTheta);
+  const seatS = toScreen(seatW);
+  // the cup's spin spoke (cup centre → seat)
+  g.appendChild(el('line', { x1:cupC.x.toFixed(1), y1:cupC.y.toFixed(1), x2:seatS.x.toFixed(1), y2:seatS.y.toFixed(1),
+    stroke: st.cupLocked ? 'rgba(240,132,111,0.6)' : 'rgba(244,210,122,0.7)', 'stroke-width':2, 'stroke-linecap':'round' }));
+  // the seat bead, coloured by current felt fraction
+  const a = feltA(st.t, R, RHO, st.big, st.omega);
+  const aMax = feltMax(R, RHO, st.big, st.omega) || 1;
+  const frac = clamp(a/aMax, 0, 1);
+  const beadCol = mixGoldToCoral(frac);
+  g.appendChild(el('circle', { cx:seatS.x.toFixed(1), cy:seatS.y.toFixed(1), r:8, fill:beadCol, stroke:'#1a1408', 'stroke-width':1.2 }));
+  g.appendChild(el('circle', { cx:seatS.x.toFixed(1), cy:seatS.y.toFixed(1), r:3, fill:hi }));
+  // cup-centre pin
+  g.appendChild(el('circle', { cx:cupC.x.toFixed(1), cy:cupC.y.toFixed(1), r:4.5, fill:accent }));
+  // ω label by the cup
+  const lab = el('text', { x:cupC.x.toFixed(1), y:(cupC.y - cupRpx - 5).toFixed(1), fill: st.cupLocked?'var(--coral)':'var(--ink-dim)',
+    'font-size':9.5, 'font-family':'var(--font-mono)', 'text-anchor':'middle' });
+  lab.textContent = st.cupLocked ? 'CUP LOCKED · ω=0' : 'ω · drag the cup'; g.appendChild(lab);
+}
+
+// gold→coral colour ramp by felt fraction (lurch reddens)
+function mixGoldToCoral(f){
+  if(st.skin==='blueprint'){
+    // blue (float) → warm (lurch)
+    const r=Math.round(127+ (240-127)*f), gg=Math.round(184+(132-184)*f), b=Math.round(224+(111-224)*f);
+    return `rgb(${r},${gg},${b})`;
+  }
+  const r=Math.round(201+(240-201)*f), gg=Math.round(162+(132-162)*f), b=Math.round(74+(111-74)*f);
+  return `rgb(${r},${gg},${b})`;
+}
+
+// ── DRAW the flower trail (the seat's true world path, with colour ∝ live |a|). ──
+function drawTrail(){
+  const g=$('trailG'); if(!g) return; g.innerHTML='';
+  if(trail.length < 2) return;
+  // draw as a single polyline-ish path; segment colour by frac midpoint
+  for(let i=1;i<trail.length;i++){
+    const a=trail[i-1], b=trail[i];
+    const sa=toScreen(a), sb=toScreen(b);
+    const f=(a.frac+b.frac)/2;
+    const op = 0.18 + 0.55*(i/trail.length);     // older points fade
+    g.appendChild(el('line', { x1:sa.x.toFixed(1), y1:sa.y.toFixed(1), x2:sb.x.toFixed(1), y2:sb.y.toFixed(1),
+      stroke: mixGoldToCoral(f), 'stroke-width': 1.6, opacity: op.toFixed(3), 'stroke-linecap':'round' }));
+  }
+  // lockstep flares: drop a coral dot at the most recent cusp (near aMax) and a teal dot
+  // at the most recent crown (near aMin) so the eye fuses trail with the needle.
+  const last = trail[trail.length-1];
+  if(last.frac > 0.97){ const s=toScreen(last); g.appendChild(el('circle', { cx:s.x.toFixed(1), cy:s.y.toFixed(1), r:5, fill:'none', stroke:'var(--coral)', 'stroke-width':2, opacity:0.9 })); }
+  if(last.frac < 0.05){ const s=toScreen(last); g.appendChild(el('circle', { cx:s.x.toFixed(1), cy:s.y.toFixed(1), r:5, fill:'none', stroke:'var(--teal)', 'stroke-width':2, opacity:0.9 })); }
+}
+
+// ── THE G-NEEDLE quarter-dial (Rotor drawTach idiom). Needle angle ∝ feltA(t); engrave
+//    a coral LURCH arc at aMax and a teal FLOAT arc at aMin from core.extrema, re-cut on
+//    every crank. Needle snaps colour + glows within ~2% of an extremum. ──
+const GD = { cx:80, cy:116, R:60 };
+const GD_A0 = 210*Math.PI/180, GD_SWEEP = 240*Math.PI/180;
+function gdPt(f, rad){ const {cx,cy}=GD; const a=GD_A0 - GD_SWEEP*f; return { x:cx+Math.cos(a)*rad, y:cy-Math.sin(a)*rad }; }
+function aScaleMax(){ return feltMax(R,RHO,st.big,st.omega) * 1.08 + 1e-6; } // dial top a touch above lurch
+function aToFrac(a){ return clamp(a/aScaleMax(), 0, 1); }
+function drawGNeedle(){
+  const svg=$('gdial'); if(!svg) return; svg.innerHTML='';
+  const {cx,cy,R:Rr}=GD;
+  // arc track
+  const p0=gdPt(0,Rr), p1=gdPt(1,Rr);
+  svg.appendChild(el('path', { d:`M ${p0.x.toFixed(2)} ${p0.y.toFixed(2)} A ${Rr} ${Rr} 0 1 1 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`,
+    fill:'none', stroke:'rgba(255,255,255,0.10)', 'stroke-width':10 }));
+  const ex = extrema(R,RHO,st.big,st.omega);
+  // FLOAT arc (teal) at aMin
+  const fMin=aToFrac(ex.aMin);
+  arcMark(svg, fMin, 'var(--teal)');
+  // LURCH arc (coral) at aMax
+  const fMax=aToFrac(ex.aMax);
+  arcMark(svg, fMax, 'var(--coral)');
+  // float/lurch labels
+  const lf=gdPt(fMin, Rr+13); const tl=el('text', { x:lf.x.toFixed(1), y:(lf.y+3).toFixed(1), fill:'var(--teal)', 'font-size':7.5, 'font-family':'var(--font-mono)', 'text-anchor':'middle' }); tl.textContent='float'; svg.appendChild(tl);
+  const lc=gdPt(fMax, Rr+13); const tc=el('text', { x:lc.x.toFixed(1), y:(lc.y+3).toFixed(1), fill:'var(--coral)', 'font-size':7.5, 'font-family':'var(--font-mono)', 'text-anchor':'middle' }); tc.textContent='lurch'; svg.appendChild(tc);
+  // pivot + needle
+  svg.appendChild(el('circle', { cx, cy, r:4.4, fill:'var(--gold)' }));
+  const a = feltA(st.t, R, RHO, st.big, st.omega);
+  const f = aToFrac(a);
+  // colour the needle when near an extremum (within ~2% of dial span)
+  let needleCol = st.skin==='blueprint' ? '#bfe0f0' : 'var(--gold-hi)';
+  let glow = 0;
+  if(Math.abs(f - fMax) < 0.02){ needleCol='var(--coral)'; glow=1; }
+  else if(Math.abs(f - fMin) < 0.02){ needleCol='var(--teal)'; glow=1; }
+  const tip=gdPt(f, Rr*0.80);
+  if(glow){ svg.appendChild(el('line', { x1:cx, y1:cy, x2:tip.x.toFixed(2), y2:tip.y.toFixed(2), stroke:needleCol, 'stroke-width':6, opacity:0.28, 'stroke-linecap':'round' })); }
+  svg.appendChild(el('line', { x1:cx, y1:cy, x2:tip.x.toFixed(2), y2:tip.y.toFixed(2), stroke:needleCol, 'stroke-width':2.6, 'stroke-linecap':'round' }));
+  // readout
+  const reg = el('text', { x:cx, y:cy+24, fill:needleCol, 'font-size':9, 'font-family':'var(--font-mono)', 'text-anchor':'middle' });
+  reg.textContent = '|a| = '+a.toFixed(2); svg.appendChild(reg);
+}
+function arcMark(svg, f, col){
+  const a0=gdPt(Math.max(0,f-0.012), GD.R), a1=gdPt(Math.min(1,f+0.012), GD.R);
+  svg.appendChild(el('path', { d:`M ${a0.x.toFixed(2)} ${a0.y.toFixed(2)} A ${GD.R} ${GD.R} 0 0 1 ${a1.x.toFixed(2)} ${a1.y.toFixed(2)}`,
+    fill:'none', stroke:col, 'stroke-width':5, 'stroke-linecap':'round' }));
+}
+
+// ── THE SLOSHING TEACUP (the felt VECTOR + direction). Side view: a cup; the tea surface
+//    tilts toward core.accelVec; |tilt| ∝ |a|/aMax. Climbs a wall + coral rim-flash at the
+//    lurch; flat + teal weightless shimmer at the float. Shows DIRECTION (unique here). ──
+function drawTea(){
+  const svg=$('tea'); if(!svg) return; svg.innerHTML='';
+  const cx=80, top=34, bot=120, halfW=46;
+  const accent = st.skin==='blueprint' ? '#7fb8e0' : 'var(--gold)';
+  // cup body (a trapezoid mug)
+  svg.appendChild(el('path', { d:`M ${cx-halfW} ${top} L ${cx+halfW} ${top} L ${cx+halfW-8} ${bot} L ${cx-halfW+8} ${bot} Z`,
+    fill:'rgba(0,0,0,0.25)', stroke:accent, 'stroke-width':2 }));
+  // handle
+  svg.appendChild(el('path', { d:`M ${cx+halfW} ${top+14} q 22 6 0 34`, fill:'none', stroke:accent, 'stroke-width':2.4 }));
+  // the felt vector → tilt. We use the horizontal component direction to tilt the surface.
+  const av = accelVec(st.t, R, RHO, st.big, st.omega);
+  const a = Math.hypot(av.x, av.y);
+  const aMax = feltMax(R,RHO,st.big,st.omega) || 1;
+  const frac = clamp(a/aMax, 0, 1);
+  // tilt angle: lean the surface toward the in-plane accel direction; sign from av.x
+  const dirSign = Math.abs(av.x) < 1e-9 ? 0 : Math.sign(av.x);
+  const tilt = dirSign * frac * 0.42;          // radians of surface tilt
+  const surfMidY = top + 30 + (1-frac)*4;       // climbs a touch at high pull
+  const dx = Math.tan(tilt) * (halfW-10);
+  const yL = surfMidY + dx, yR = surfMidY - dx;
+  // the tea fill (below the tilted surface)
+  const teaCol = st.skin==='blueprint' ? 'rgba(127,184,224,0.5)' : 'rgba(180,120,70,0.5)';
+  svg.appendChild(el('path', { d:`M ${cx-halfW+2} ${yL.toFixed(1)} L ${cx+halfW-2} ${yR.toFixed(1)} L ${cx+halfW-8} ${bot-2} L ${cx-halfW+8} ${bot-2} Z`,
+    fill: teaCol }));
+  // the surface line, flashing coral at the lurch / teal shimmer at the float
+  let surfCol = accent, surfW=2.2;
+  if(frac > 0.97){ surfCol='var(--coral)'; surfW=3; }
+  else if(frac < 0.05){ surfCol='var(--teal)'; surfW=3; }
+  svg.appendChild(el('line', { x1:(cx-halfW+2).toFixed(1), y1:yL.toFixed(1), x2:(cx+halfW-2).toFixed(1), y2:yR.toFixed(1),
+    stroke:surfCol, 'stroke-width':surfW, 'stroke-linecap':'round' }));
+  if(frac < 0.05){ // weightless shimmer: a couple of floating drops
+    for(const o of [-14,0,14]) svg.appendChild(el('circle', { cx:cx+o, cy:surfMidY-8, r:1.6, fill:'var(--teal)', opacity:0.7 }));
+  }
+  // caption
+  const cap=el('text', { x:cx, y:bot+18, fill:surfCol, 'font-size':8, 'font-family':'var(--font-mono)', 'text-anchor':'middle' });
+  cap.textContent = frac>0.97 ? 'LURCH — flung' : (frac<0.05 ? 'FLOAT — weightless' : 'tilt → felt pull'); svg.appendChild(cap);
+}
+
+// ── THE FLOATING RATIO TAG (flashes on a detent CLICK; announces reduced fraction + petals = NUMERATOR) ──
+function drawTag(){
+  const g=$('tagG'); if(!g) return; g.innerHTML='';
+  if(detentFlash <= 0) return;
+  const r = liveRatio();
+  if(!r.valid) return;
+  const op = clamp(detentFlash/1.2, 0, 1);
+  const bg = el('rect', { x:CENTER.x-78, y:18, width:156, height:42, rx:8,
+    fill:'rgba(11,10,7,0.9)', stroke:'var(--gold-edge)', 'stroke-width':1.2, opacity:op });
+  g.appendChild(bg);
+  const t1 = el('text', { x:CENTER.x, y:38, fill:'var(--gold-hi)', 'font-size':14, 'font-family':'var(--font-mono)', 'text-anchor':'middle', opacity:op });
+  t1.textContent = `ω/Ω = ${r.p}/${r.q}`; g.appendChild(t1);
+  const t2 = el('text', { x:CENTER.x, y:53, fill:'var(--teal)', 'font-size':10, 'font-family':'var(--font-mono)', 'text-anchor':'middle', opacity:op });
+  t2.textContent = `${r.p} petal${r.p===1?'':'s'} = numerator · closes in ${r.q} turn${r.q===1?'':'s'}`; g.appendChild(t2);
+}
+
+// ── live verdict + regime ──
+function updateVerdict(){
+  const r = liveRatio();
+  const ex = extrema(R,RHO,st.big,st.omega);
+  const a = feltA(st.t, R, RHO, st.big, st.omega);
+  const ratioStr = r.valid ? `${r.p}/${r.q}` : '—';
+  const petals = st.cupLocked ? 0 : (r.valid ? r.p : 0);
+  const fr = ex.aMax>1e-9 ? clamp((a-ex.aMin)/(ex.aMax-ex.aMin || 1),0,1) : 0;
+  let tag;
+  if(Math.abs(st.big)<0.02 && Math.abs(st.omega)<0.02) tag='<span>still</span>';
+  else if(st.cupLocked) tag='<span class="float">PLAIN RING — steady pull</span>';
+  else if(fr>0.97) tag='<span class="lurch">LURCH (the cusp)</span>';
+  else if(fr<0.05) tag='<span class="float">FLOAT (the crown)</span>';
+  else tag='<span>blooming…</span>';
+  $('verdict').innerHTML = 'Ω = '+st.big.toFixed(2)+' · ω = '+st.omega.toFixed(2)+' · <span class="frac">ω/Ω = '+ratioStr+'</span> · petals '+petals+' · '+tag;
+
+  $('kBig').textContent = st.big.toFixed(2)+' rad/s';
+  $('kSmall').textContent = st.omega.toFixed(2)+' rad/s';
+
+  // dial verdict
+  const dv=$('dialVerdict');
+  if(st.cupLocked){ dv.className=''; dv.textContent='|a| ≡ (R+ρ)Ω² — STEADY'; }
+  else if(fr>0.97){ dv.className='lurch'; dv.textContent='|a| at the LURCH (max)'; }
+  else if(fr<0.05){ dv.className='float'; dv.textContent='|a| at the FLOAT (min)'; }
+  else { dv.className=''; dv.textContent='|a| = '+a.toFixed(2); }
+
+  // tea verdict
+  $('teaVerdict').textContent = st.cupLocked ? 'flat — no slosh' : (fr>0.97?'flung outward':(fr<0.05?'weightless':'leaning'));
+
+  // regime headline
+  const reg=$('regime');
+  if(Math.abs(st.big)<0.02 && Math.abs(st.omega)<0.02){
+    reg.className='rest'; reg.innerHTML='<b>AT REST</b> — both spins still; the seat sits at radius R + ρ.';
+  } else if(st.cupLocked){
+    reg.className=''; reg.innerHTML='<b>CUP LOCKED — ω = 0</b> — the flower has collapsed to a <b>plain ring</b> at radius R+ρ; the pull is a steady (R+ρ)Ω², the tea sits level. <b>Petals: 0.</b> Release the lock and flick the cup to bloom.';
+  } else if(fr>0.97){
+    reg.className='lurch'; reg.innerHTML='<b>⟵ LURCH (the cusp)</b> — both pulls add; you are flung outward at |a| = '+ex.aMax.toFixed(2)+'. This is the cusp of a '+(r.valid?r.p:'?')+'-petal flower.';
+  } else if(fr<0.05){
+    reg.className='float'; reg.innerHTML='<b>FLOAT (the crown) ⟶</b> — the pulls oppose; you ease to |a| = '+ex.aMin.toFixed(2)+'. This is the crown of the flower.';
+  } else {
+    reg.className=''; reg.innerHTML='<b>BLOOMING</b> — Ω = '+st.big.toFixed(2)+', ω = '+st.omega.toFixed(2)+'. ω/Ω ≈ '+(r.valid?r.p+'/'+r.q:'—')+' → '+(r.valid?r.p:'?')+' petal'+((r.valid&&r.p===1)?'':'s')+', closing after '+(r.valid?r.q:'?')+' platter-turn'+((r.valid&&r.q===1)?'':'s')+'.';
+  }
+}
+
+// ── SETTERS (sliders + cranks share these; sliders kept in sync) ──
+function setBig(v, src){
+  st.big = clamp(v, -OMEGA_LIM, OMEGA_LIM);
+  st.coastBig = st.big;
+  if(src!=='range') $('omegaBig').value = st.big.toFixed(2);
+  redrawInstruments(); ensureRAF();
+}
+function setSmall(v, src){
+  if(st.cupLocked && Math.abs(v) > 1e-9){ flashLockReject(); return; }
+  st.omega = clamp(v, -OMEGA_LIM, OMEGA_LIM);
+  st.coastSmall = st.omega;
+  if(src!=='range') $('omegaSmall').value = st.omega.toFixed(2);
+  redrawInstruments(); ensureRAF();
+}
+function redrawInstruments(){ drawGNeedle(); drawTea(); updateVerdict(); }
+
+// ── LOCK THE CUP (the hard detent + proof by touch) ──
+function setLock(on){
+  st.cupLocked = on;
+  if(on){ st.omega = 0; st.coastSmall = 0; $('omegaSmall').value = '0.00'; }
+  $('lockBtn').classList.toggle('locked', on);
+  $('lockBtn').textContent = on ? 'CUP LOCKED ✓' : 'LOCK THE CUP';
+  buildStall(); drawPlatter(); redrawInstruments(); ensureRAF();
+}
+let lockRejectFlash = 0;
+function flashLockReject(){ lockRejectFlash = 0.6; }
+
+// ── trammel-idiom angular drag (setPointerCapture, angleAbout, unwrap into (−π,π]) ──
+function svgPoint(evt){
+  const svg=$('platter'); const pt=svg.createSVGPoint(); pt.x=evt.clientX; pt.y=evt.clientY;
+  const loc=pt.matrixTransform(svg.getScreenCTM().inverse());
+  return { x:loc.x, y:loc.y };
+}
+function angleAbout(p, pivot){ return Math.atan2(-(p.y-pivot.y), p.x-pivot.x); }
+function unwrap(dA){ while(dA > Math.PI) dA -= 2*Math.PI; while(dA <= -Math.PI) dA += 2*Math.PI; return dA; }
+
+function onDown(evt){
+  const p = svgPoint(evt);
+  const dHub = Math.hypot(p.x-CENTER.x, p.y-CENTER.y);
+  // decide body by radius from canvas centre
+  if(dHub > R_CUP_OUTER && dHub <= R_PLAT + 24){
+    dragBody = 'platter';
+    if(dHub < MIN_R) { dragBody=null; return; }
+    lastAngle = angleAbout(p, CENTER);
+    st.coastBig = 0;                  // fresh grab kills the platter's coast
+  } else if(dHub <= R_CUP_OUTER){
+    if(st.cupLocked){ flashLockReject(); dragBody=null; redrawInstruments(); return; }
+    dragBody = 'cup';
+    // cup pivot is the cup CENTRE (platter point at R, bigTheta)
+    const cupC = toScreen({ x:R*Math.cos(st.bigTheta), y:R*Math.sin(st.bigTheta) });
+    const dCup = Math.hypot(p.x-cupC.x, p.y-cupC.y);
+    if(dCup < MIN_R){ dragBody=null; return; }
+    lastAngle = angleAbout(p, cupC);
+    st.coastSmall = 0;                // fresh grab kills the cup's coast
+    st.coastBig = 0;                  // ONE-HAND-ONE-BODY: freeze platter coast while dragging cup
+  } else { dragBody=null; return; }
+  evt.preventDefault();
+  $('platter').setPointerCapture && $('platter').setPointerCapture(evt.pointerId);
+}
+function onMove(evt){
+  if(!dragBody) return;
+  const p = svgPoint(evt);
+  if(dragBody==='platter'){
+    const a = angleAbout(p, CENTER);
+    const dA = unwrap(a - lastAngle);
+    lastAngle = a;
+    st.bigTheta += dA;                // angle accumulates directly from the drag
+  } else { // cup
+    const cupC = toScreen({ x:R*Math.cos(st.bigTheta), y:R*Math.sin(st.bigTheta) });
+    const a = angleAbout(p, cupC);
+    const dA = unwrap(a - lastAngle);
+    lastAngle = a;
+    st.smallTheta += dA;
+  }
+  redrawTrailAndBodies();
+}
+function onUp(evt){
+  if(!dragBody) return;
+  // estimate a release rate from the recent angular velocity captured in coast vars
+  // (we already set coast=0 on grab; on release, infer a small coast from last frame dt)
+  dragBody = null;
+  // clamp the live rates and resume coasting from them
+  st.coastBig = clamp(st.big, -OMEGA_LIM, OMEGA_LIM);
+  st.coastSmall = clamp(st.omega, -OMEGA_LIM, OMEGA_LIM);
+  ensureRAF();
+}
+
+// while dragging we redraw the moving bodies + extend the trail without advancing the clock
+function redrawTrailAndBodies(){
+  pushTrail();
+  drawPlatter(); drawTrail(); drawCup(); drawTag();
+}
+
+// add the current seat point to the trail with its felt fraction
+function pushTrail(){
+  const seatW = seat(R, RHO, st.bigTheta, st.bigTheta + st.smallTheta);
+  const a = feltA(st.t, R, RHO, st.big, st.omega);
+  const aMax = feltMax(R,RHO,st.big,st.omega) || 1;
+  const aMin = feltMin(R,RHO,st.big,st.omega);
+  const frac = (aMax-aMin)>1e-9 ? clamp((a-aMin)/(aMax-aMin),0,1) : 1;
+  trail.push({ x:seatW.x, y:seatW.y, frac });
+  if(trail.length > TRAIL_MAX) trail.shift();
+}
+
+// ── MAGNETIC RATIO DETENTS: while both coast and |Ω|>0.15, ease ω toward nearest
+//    small-rational·Ω (band ~0.06, damped 6·dt). Pass dt explicitly (no stale global). ──
+const DETENT_RATIOS = [ -2, -3/2, -1, -2/3, -1/2, -1/3, 0, 1/3, 1/2, 2/3, 1, 3/2, 2, 5/2, 3 ];
+let lastDetentRatio = null;
+function maybeSnapRatio(dt){
+  if(dragBody || st.cupLocked) return;
+  if(Math.abs(st.big) < 0.15) return;
+  const ratio = st.omega / st.big;
+  let best=null, bestD=Infinity;
+  for(const k of DETENT_RATIOS){ const d=Math.abs(ratio-k); if(d<bestD){ bestD=d; best=k; } }
+  if(best!==null && bestD < 0.06){
+    const targetOmega = best * st.big;
+    st.omega += (targetOmega - st.omega) * Math.min(1, 6*dt);
+    st.coastSmall = st.omega;
+    // CLICK: when we newly settle very close, flash the reduced fraction + petal tally
+    if(bestD < 0.012 && lastDetentRatio !== best){
+      lastDetentRatio = best; detentFlash = 1.2;
+    }
+  } else { lastDetentRatio = null; }
+}
+
+// ── the animation loop. ONE shared clock t drives the trail AND the gauge so cusp↔pin
+//    and crown↔float are simultaneous BY CONSTRUCTION. The platter coasts heavier. ──
+function ensureRAF(){ if(!raf){ lastT=performance.now(); raf=requestAnimationFrame(frame); } }
+function frame(now){
+  const dt = Math.min(0.05, (now-lastT)/1000); lastT=now;
+  if(!dragBody){
+    // the ride HOLDS its set speed (the cranks/sliders/detents change it); angles advance
+    // by the current rates. (A fresh drag-grab zeroes the relevant coast; the detent ease
+    // nudges the cup's rate toward a clean rational.)
+    st.big = st.coastBig;
+    if(!st.cupLocked) st.omega = st.coastSmall; else st.omega = 0;
+    maybeSnapRatio(dt);
+    st.bigTheta += st.big * dt;
+    st.smallTheta += st.omega * dt;
+    st.t += dt;
+    pushTrail();
+  }
+  if(detentFlash>0) detentFlash = Math.max(0, detentFlash - dt);
+  if(lockRejectFlash>0) lockRejectFlash = Math.max(0, lockRejectFlash - dt);
+  // redraw
+  drawPlatter(); drawTrail(); drawCup(); drawTag();
+  drawGNeedle(); drawTea(); updateVerdict();
+  // keep animating while spinning, dragging, or a flash is active
+  const busy = Math.abs(st.big)>0.005 || Math.abs(st.omega)>0.005 || dragBody || detentFlash>0 || lockRejectFlash>0;
+  if(busy){ raf=requestAnimationFrame(frame); } else { raf=null; }
+}
+
+// ── controls ──
+function boot(){
+  buildStall(); drawPlatter(); drawTrail(); drawCup();
+  drawGNeedle(); drawTea(); updateVerdict();
+  $('omegaBig').value = st.big.toFixed(2);
+  $('omegaSmall').value = st.omega.toFixed(2);
+  $('kBig').textContent = st.big.toFixed(2)+' rad/s';
+  $('kSmall').textContent = st.omega.toFixed(2)+' rad/s';
+
+  const svg=$('platter');
+  svg.addEventListener('pointerdown', onDown);
+  svg.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+
+  $('omegaBig').addEventListener('input', ()=> setBig(parseFloat($('omegaBig').value), 'range'));
+  $('omegaSmall').addEventListener('input', ()=> setSmall(parseFloat($('omegaSmall').value), 'range'));
+  $('lockBtn').addEventListener('click', ()=> setLock(!st.cupLocked));
+  $('bloom').addEventListener('click', ()=>{
+    // snap to a clean 3/5 and spin up: Ω=1.0, ω=0.6 → 3 petals, closes in 5 turns
+    if(st.cupLocked) setLock(false);
+    setBig(1.0,'bloom'); setSmall(0.6,'bloom');
+    detentFlash = 1.6; lastDetentRatio = 3/5;
+    ensureRAF();
+  });
+  $('skinBtn').addEventListener('click', ()=>{
+    st.skin = st.skin==='brass' ? 'blueprint' : 'brass';
+    document.body.classList.toggle('skin-brass', st.skin==='brass');
+    document.body.classList.toggle('skin-blueprint', st.skin==='blueprint');
+    $('skinBtn').textContent = 'SKIN: '+st.skin.toUpperCase();
+    buildStall(); drawPlatter(); drawTrail(); drawCup(); drawGNeedle(); drawTea();
+  });
+  $('reset').addEventListener('click', ()=>{
+    if(st.cupLocked) setLock(false);
+    st.big=OMEGA_BIG; st.omega=OMEGA_SMALL; st.coastBig=OMEGA_BIG; st.coastSmall=OMEGA_SMALL;
+    st.bigTheta=0; st.smallTheta=0; st.t=0; trail=[]; detentFlash=0; lastDetentRatio=null;
+    $('omegaBig').value=st.big.toFixed(2); $('omegaSmall').value=st.omega.toFixed(2);
+    buildStall(); drawPlatter(); drawTrail(); drawCup(); redrawInstruments(); ensureRAF();
+  });
+
+  // keyboard twins: [ ] nudge Ω, , . nudge ω, L lock
+  window.addEventListener('keydown', (e)=>{
+    if(e.target && (e.target.tagName==='INPUT')) return;
+    if(e.key==='['){ setBig(st.big-0.1,'key'); }
+    else if(e.key===']'){ setBig(st.big+0.1,'key'); }
+    else if(e.key===','){ setSmall(st.omega-0.1,'key'); }
+    else if(e.key==='.'){ setSmall(st.omega+0.1,'key'); }
+    else if(e.key==='l'||e.key==='L'){ setLock(!st.cupLocked); }
+  });
+
+  ensureRAF();
+
+  // drop the front-door breadcrumb FIRST (uniform with siblings) so the page's
+  // self-test — which includes a breadcrumb check — sees it on the very first load.
+  try{ const k='ws:seen:teacups'; if(!localStorage.getItem(k)) localStorage.setItem(k,String(Date.now())); }catch(e){}
+
+  // ── the self-test chip (calls the SAME runSelfTest as the Node twin) ──
+  const r = runSelfTest();
+  const node=$('selftest');
+  if(r.pass===r.total){ node.className='selftest ok'; node.textContent=`self-test ${r.pass}/${r.total} ✓`; }
+  else { node.className='selftest bad'; node.textContent=`self-test ${r.pass}/${r.total} ✗`; }
+  const list=$('stList'); list.innerHTML='';
+  // include a PAGE-only breadcrumb check (per the design: the page's runSelfTest reports
+  // the breadcrumb; core's does NOT). We compose: core checks + the crumb check.
+  let crumb=false; try{ crumb=!!localStorage.getItem('ws:seen:teacups'); }catch(e){}
+  const allChecks = r.checks.concat([{ name:'front-door breadcrumb dropped (ws:seen:teacups)', ok:crumb }]);
+  for(const c of allChecks){
+    const row=el2('div','row');
+    const mk=el2('span','m '+(c.ok?'ok':'no')); mk.textContent=c.ok?'✓':'✗';
+    const tx=el2('span','t'); tx.textContent=c.name;
+    row.appendChild(mk); row.appendChild(tx); list.appendChild(row);
+  }
+  const pageTotal = allChecks.length, pagePass = allChecks.filter(c=>c.ok).length;
+  if(pagePass===pageTotal){ node.className='selftest ok'; node.textContent=`self-test ${pagePass}/${pageTotal} ✓`; }
+  else { node.className='selftest bad'; node.textContent=`self-test ${pagePass}/${pageTotal} ✗`; }
+  $('stSub').textContent=`${pagePass}/${pageTotal} claims proven — closure ⟺ ω/Ω rational (closes after q platter-turns), petals = the NUMERATOR p of ω/Ω (1/2→1, 2/3→2, 3/5→3, 5/7→5), the felt |a| bounded by the lurch R·Ω²+ρ(Ω+ω)² and the float |R·Ω²−ρ(Ω+ω)²|, the lock-the-cup ω=0 neg-control (a plain ring at constant pull), and the front-door breadcrumb.`;
+  node.addEventListener('click', ()=>$('stPanel').classList.toggle('show'));
+  $('stClose').addEventListener('click', ()=>$('stPanel').classList.remove('show'));
+  window.__teacupsSelfTest = runSelfTest;
+}
+
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+</script>
+</body>
+</html>
