@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Rotor · The Midway · The Orrery Estate</title>
+<!--
+   THE ROTOR — a wall-of-death spin drum you CRANK up to speed, then DROP THE FLOOR.
+   The physics CORE (core.mjs) is inlined byte-for-byte between the sentinels below; the
+   in-page chip calls the SAME runSelfTest() the Node twin (core.test.mjs) runs, and the
+   renderer draws the riders' FATE: above ω_c = √(g/μr) friction pins everyone to the
+   wall; below it everyone slides into the shaft. The mass cancels — a 95 kg adult and a
+   22 kg child read the SAME drop. The stick-or-sink IS the readout — no plotted curve.
+   NEG-CONTROL: a frictionless wall (μ=0) still PRESSES (N=mω²r grows) but the reserve μN
+   is dead, so the riders ALWAYS slide and ω_c vanishes to +∞. The chip proves it.
+-->
+<style>
+  :root{
+    --bg:#07080c;             /* fairground-at-dusk near-black ground */
+    --plate1:#12100a;
+    --plate2:#0b0a07;
+    --ink:#efe9da;
+    --ink-dim:#a59c87;
+    --gold:#c9a24a;           /* the drum / brass */
+    --gold-hi:#f4d27a;        /* lit gold (rivets, hub) */
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.40);
+    --teal:#5fcdbf;           /* held / pinned / proven */
+    --teal-soft:rgba(95,205,191,0.12);
+    --coral:#f0846f;          /* slips / illegal / sinks */
+    --coral-soft:rgba(220,120,100,0.12);
+    --panel:rgba(11,10,7,0.86);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1200px 720px at 50% -12%, rgba(201,162,74,0.09), transparent 56%),
+      radial-gradient(900px 640px at 14% 112%, rgba(95,205,191,0.05), transparent 60%),
+      radial-gradient(900px 640px at 86% 114%, rgba(220,120,100,0.04), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  /* faint engineering-paper grid behind everything */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(201,162,74,0.05) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(201,162,74,0.045) 0 1px, transparent 1px 32px);
+    mask-image:radial-gradient(1100px 760px at 50% 36%, #000 30%, transparent 78%);
+  }
+  /* a thin string-of-lights bunting across the top — the fairground tell */
+  body::after{
+    content:""; position:fixed; top:46px; left:0; right:0; height:18px; z-index:0; pointer-events:none; opacity:.5;
+    background-image:radial-gradient(circle at 11px 4px, var(--gold-hi) 0 1.6px, transparent 2.4px);
+    background-size:42px 18px;
+    mask-image:linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  }
+
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding:13px 20px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(7,8,12,0.95), rgba(7,8,12,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:5px; }
+  .back{ font:600 10.5px/1.3 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.22s; white-space:nowrap; }
+  .back:hover{ color:var(--gold-hi); opacity:1; }
+  .brand{ text-align:center; flex:1 1 auto; pointer-events:none; padding-top:1px; }
+  .brand h1{ margin:0; font-family:var(--font-serif); font-weight:600; font-size:clamp(17px,2.4vw,21px);
+    letter-spacing:.4px; color:var(--gold-hi); }
+  .brand .tag{ display:block; font:11px/1.3 var(--font-serif); font-style:italic; color:var(--ink-dim); margin-top:1px; }
+  .selftest{ font:600 10px/1.35 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:18px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.42); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); max-width:230px; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(24,46,32,0.5); }
+  .selftest.bad{ color:var(--coral); border-color:rgba(220,120,100,0.6); background:rgba(58,26,22,0.5); }
+
+  /* ── self-test detail panel ── */
+  #stPanel{ position:fixed; top:54px; right:18px; z-index:60; width:min(480px,92vw);
+    background:var(--panel); border:1px solid var(--gold-edge); border-radius:12px; padding:16px 18px 14px;
+    box-shadow:0 18px 50px rgba(0,0,0,0.6); display:none; }
+  #stPanel.show{ display:block; }
+  #stPanel h2{ margin:0 0 4px; font:600 13px/1.2 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--gold-hi); }
+  #stPanel .sub{ margin:0 0 10px; font:12px/1.5 var(--font-serif); color:var(--ink-dim); }
+  #stList{ font:11px/1.55 var(--font-mono); max-height:46vh; overflow:auto; }
+  #stList .row{ display:flex; gap:8px; padding:2px 0; }
+  #stList .row .m{ flex:0 0 auto; }
+  #stList .ok{ color:#8fd79a; } #stList .no{ color:var(--coral); }
+  #stPanel .foot{ margin-top:10px; padding-top:9px; border-top:1px solid rgba(201,162,74,0.16);
+    font:11px/1.6 var(--font-serif); color:var(--ink-dim); }
+  #stPanel .closeX{ position:absolute; top:9px; right:11px; background:none; border:none; color:var(--ink-dim);
+    font-size:18px; cursor:pointer; line-height:1; }
+
+  /* ── layout ── */
+  main{ position:relative; z-index:1; max-width:1120px; margin:0 auto; padding:74px 20px 56px; }
+  .hero{ text-align:center; margin-bottom:14px; }
+  .hero .eyebrow{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3em; text-transform:uppercase; color:var(--gold); opacity:.9; }
+  .hero .lede{ max-width:720px; margin:12px auto 0; font:15px/1.6 var(--font-serif); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--gold-hi); font-weight:600; } .hero .lede i{ font-style:italic; }
+
+  .stage{ display:grid; grid-template-columns:1fr 200px; gap:16px; align-items:stretch; margin-top:20px; }
+  .panel{ border:1px solid rgba(201,162,74,0.16); border-radius:14px; background:linear-gradient(180deg,var(--plate1),var(--plate2));
+    padding:14px; position:relative; overflow:hidden; }
+  .panel h3{ margin:0 0 8px; font:600 9.5px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--ink-dim); }
+  .panel h3 b{ color:var(--gold); }
+
+  /* the drum panel (the front cutaway) */
+  #drumPanel{ padding:12px 12px 10px; }
+  #drumWrap{ position:relative; width:100%; }
+  svg#drum{ width:100%; height:auto; display:block; touch-action:none; }
+
+  /* the felt-regime headline under the drum */
+  #regime{ margin-top:10px; min-height:40px; text-align:center; font:14px/1.45 var(--font-serif); color:var(--ink-dim); transition:.18s; }
+  #regime.rest{ color:var(--gold-hi); } #regime.held{ color:var(--teal); } #regime.slip{ color:var(--coral); }
+  #regime b{ font-weight:600; }
+
+  /* the verdict line (mono) */
+  #verdict{ margin-top:7px; text-align:center; font:600 11.5px/1.4 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  #verdict .held{ color:var(--teal); } #verdict .slip{ color:var(--coral); }
+
+  /* the right column: the tachometer + the balance-dial */
+  #sideCol{ display:flex; flex-direction:column; gap:12px; }
+  #tachPanel{ display:flex; flex-direction:column; align-items:center; padding:12px 10px 10px; }
+  svg#tach{ width:100%; height:auto; margin-top:2px; }
+  #tachVerdict{ margin-top:4px; font:600 9.5px/1.3 var(--font-mono); text-align:center; color:var(--ink-dim); }
+
+  /* the balance-dial (μN vs mg) */
+  #dialPanel{ padding:12px 10px 10px; display:flex; flex-direction:column; align-items:center; }
+  svg#dial{ width:100%; height:auto; margin-top:2px; }
+  #dialVerdict{ margin-top:5px; font:600 9px/1.3 var(--font-mono); text-align:center; color:var(--ink-dim); letter-spacing:.04em; }
+  #dialVerdict.held{ color:var(--teal); } #dialVerdict.slip{ color:var(--coral); }
+
+  /* the crank + knobs */
+  .controls{ display:flex; flex-wrap:wrap; gap:14px 22px; align-items:center; margin-top:18px; justify-content:center; }
+  .crankBox{ display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .crankBox .clbl{ font:600 9px/1 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--ink-dim); }
+  svg#crank{ width:150px; height:150px; touch-action:none; cursor:grab; display:block; }
+  svg#crank:active{ cursor:grabbing; }
+  .knob{ display:flex; flex-direction:column; gap:6px; min-width:200px; }
+  .knob label{ font:600 10px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim); }
+  .knob label .v{ color:var(--gold-hi); }
+  .knob input[type=range]{ accent-color:var(--gold); width:100%; }
+
+  button.ctl{ font:600 11px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink); background:linear-gradient(180deg,#1a1710,#100d08); border:1px solid var(--gold-edge);
+    border-radius:9px; padding:11px 16px; cursor:pointer; transition:.18s; }
+  button.ctl:hover{ border-color:var(--gold-hi); color:var(--gold-hi); }
+  button.lever{ border-color:rgba(95,205,191,0.5); color:var(--teal); }
+  button.lever:hover{ border-color:var(--teal); color:var(--teal); }
+  button.lever.dropped{ background:linear-gradient(180deg,#16110c,#0d0a06); border-color:rgba(240,132,111,0.55); color:var(--coral); }
+  button.dare{ border-color:rgba(240,132,111,0.5); color:var(--coral); }
+  button.dare:hover{ border-color:var(--coral); color:var(--coral); }
+  .toggle{ display:inline-flex; align-items:center; gap:7px; font:11px/1 var(--font-mono); color:var(--ink-dim); cursor:pointer; user-select:none;
+    border:1px solid rgba(201,162,74,0.22); border-radius:9px; padding:9px 12px; }
+  .toggle input{ accent-color:var(--coral); }
+  .toggle.on{ border-color:rgba(240,132,111,0.55); color:var(--coral); }
+
+  /* explainer / honesty */
+  .scroll{ max-width:780px; margin:30px auto 0; font:13.5px/1.7 var(--font-serif); color:var(--ink); opacity:.9; }
+  .scroll h2{ font:600 11px/1 var(--font-mono); letter-spacing:.22em; text-transform:uppercase; color:var(--gold);
+    margin:24px 0 10px; }
+  .scroll p{ margin:0 0 12px; } .scroll b{ color:var(--gold-hi); } .scroll i{ font-style:italic; }
+  .scroll .teal{ color:var(--teal); } .scroll .coral{ color:var(--coral); }
+  .scroll code{ font:12px/1.5 var(--font-mono); color:var(--gold-hi); background:rgba(201,162,74,0.08);
+    padding:1px 5px; border-radius:4px; }
+  .honesty{ border-left:2px solid var(--gold-edge); padding-left:14px; color:var(--ink-dim); font-size:12.5px; }
+
+  .foot{ max-width:780px; margin:34px auto 0; padding-top:18px; border-top:1px solid rgba(201,162,74,0.12);
+    text-align:center; font:12.5px/1.7 var(--font-serif); color:var(--ink-dim); }
+  .foot a{ color:var(--gold); text-decoration:none; border-bottom:1px solid rgba(201,162,74,0.3); }
+
+  @media (max-width:760px){
+    main{ padding-top:140px; }
+    .stage{ grid-template-columns:1fr; }
+    #sideCol{ flex-direction:row; flex-wrap:wrap; }
+    #tachPanel, #dialPanel{ flex:1 1 200px; }
+    svg#tach, svg#dial{ max-width:220px; margin:0 auto; }
+    .knob{ min-width:0; flex:1 1 160px; }
+    .controls{ gap:12px; }
+    .topbar{ flex-wrap:wrap; align-items:center; }
+    .brand{ order:3; flex:1 0 100%; text-align:left; margin-top:2px; }
+  }
+  @media (max-width:430px){
+    .brand h1{ font-size:16px; }
+    button.ctl{ padding:10px 12px; font-size:10px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../midway/index.html">&larr; The Midway</a>
+      <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="back" href="../star-flyer/index.html">&#8599; The Star Flyer (sister ride)</a>
+    </div>
+    <div class="brand">
+      <h1>The Rotor</h1>
+      <span class="tag">the floor drops away &mdash; and you don't, if you spin past ω<sub>c</sub></span>
+    </div>
+    <div class="selftest" id="selftest" title="The physics core proves the pin condition μmω²r ≥ mg ⇒ ω_c = √(g/μr) is MASS-INVARIANT (a 95 kg adult and a 22 kg child share one fate), with a frictionless-wall neg-control that always slides; click for detail.">checking&hellip;</div>
+  </div>
+
+  <div id="stPanel">
+    <button class="closeX" id="stClose" title="close">&times;</button>
+    <h2>Self&#8209;test</h2>
+    <p class="sub" id="stSub">&hellip;</p>
+    <div id="stList"></div>
+    <div class="foot">The pin condition: friction <code>μN</code> must carry the full weight <code>mg</code>, with the wall press
+      <code>N = mω²r</code>. The mass cancels &mdash; <code>μω²r ≥ g</code> &mdash; so the threshold <code>ω<sub>c</sub> = √(g/μr)</code>
+      is MASS-INVARIANT: a 95 kg adult and a 22 kg child stick or sink together. Idealized: point-mass riders, a rigid wall, dry
+      Coulomb friction, a single <code>μ</code>. The load-bearing neg-control (a frictionless wall, <code>μ=0</code>) PROVABLY always
+      slides &mdash; <code>ω<sub>c</sub>=+∞</code> &mdash; even though the wall still presses. The in-page count equals the Node twin
+      (<code>core.test.mjs</code>).</div>
+  </div>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">The Midway &middot; ride #4</div>
+      <p class="lede"><b>Crank the drum up to speed, then drop the floor.</b> Two riders stand against the wall &mdash; a 95&nbsp;kg adult
+        and a 22&nbsp;kg child. Below the threshold spin they both <i>sink</i> into the shaft; above it the wall's friction pins them
+        both, and the floor falls away beneath their feet to nothing. The split is one number and it <i>forgets your weight</i>:
+        <code>ω<sub>c</sub> = √(g/μr)</code> has no mass in it. Flip the wall <b>frictionless</b> and no spin ever holds &mdash; the
+        wall still <i>presses</i>, but nothing catches. The <i>stick-or-sink is the readout</i>.</p>
+    </header>
+
+    <div class="stage">
+      <!-- ORGAN 1: the spin drum (front cutaway) -->
+      <div class="panel" id="drumPanel">
+        <h3>The Spin Drum &middot; <b>front cutaway &mdash; the floor drops, you don't (above ω<sub>c</sub>)</b></h3>
+        <div id="drumWrap">
+          <svg id="drum" viewBox="0 0 660 480" preserveAspectRatio="xMidYMid meet" aria-label="front cutaway of a spinning drum; two riders against the wall, a hinged trap floor, and the shaft below"></svg>
+        </div>
+        <div id="regime" class="rest"><b>AT REST</b> &mdash; the drum is still; the floor is shut.</div>
+        <div id="verdict">&omega; = 0.00 &middot; &omega;<sub>c</sub> = 3.30 &middot; N = 0 N &middot; <span>floor shut</span></div>
+      </div>
+
+      <!-- the right column: the tachometer + the balance-dial -->
+      <div id="sideCol">
+        <div class="panel" id="tachPanel">
+          <h3>Tachometer &middot; &omega;</h3>
+          <svg id="tach" viewBox="0 0 160 150" aria-label="brass tachometer; the needle angle is ω, with an engraved ω_c arc-mark that moves with μ and r"></svg>
+          <div id="tachVerdict">&omega; = 0.00 rad/s</div>
+        </div>
+
+        <div class="panel" id="dialPanel">
+          <h3>Balance dial &middot; <b>μN vs mg</b></h3>
+          <svg id="dial" viewBox="0 0 160 168" aria-label="vertical balance gauge; a fixed mg weight tick and a filling μN friction-reserve column, latching teal when the reserve reaches the weight"></svg>
+          <div id="dialVerdict">reserve &lt; weight</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="crankBox">
+        <span class="clbl">drag to crank</span>
+        <svg id="crank" viewBox="0 0 150 150" aria-hidden="true"></svg>
+      </div>
+      <div class="knob">
+        <label>spin rate <span class="v" id="kW">0.00 rad/s</span> &mdash; <i>or drag the brass crank</i></label>
+        <input type="range" id="omega" min="0" max="6" step="0.01" value="0" aria-label="spin rate ω (radians per second)">
+      </div>
+      <button class="ctl lever" id="dropBtn" title="swing the trap floor down — the moment of truth">DROP THE FLOOR</button>
+      <label class="toggle" id="fricToggle"><input type="checkbox" id="fric"> frictionless wall (μ = 0)</label>
+      <button class="ctl dare" id="dare" title="slam ω to just under ω_c, then drop the floor — watch them sink">⚡ DARE</button>
+      <button class="ctl" id="reset">reset</button>
+    </div>
+
+    <section class="scroll">
+      <h2>What you are operating</h2>
+      <p>This is not a chart of a wall-of-death &mdash; it <i>is</i> one, seen in front cutaway. Two riders stand against the inside
+        wall of a drum of radius <code>r</code>. When it spins at rate <i>ω</i>, the wall must shove each rider inward to bend them
+        onto their circular path: that inward shove is the normal force, the <b>wall press</b> <code>N = mω²r</code>. The only thing
+        fighting gravity once the floor is gone is <i>friction</i> along the wall, and friction can supply at most <code>μN</code>.
+        The rider stays pinned exactly when that reserve carries the full weight: <code>μN ≥ mg</code>. Cancel the mass and the
+        condition is <code>μω²r ≥ g</code> &mdash; the threshold is <code>ω<sub>c</sub> = √(g/μr)</code>, and there is <i>no mass in
+        it</i>. That is why the heavy adult and the light child stick or sink <i>together</i>.</p>
+      <h2>The crank &mdash; one honest verb</h2>
+      <p>The brass crank (and its slider twin) sets <i>ω</i> and nothing else. The drum's banded wall sweeps faster as you turn it; the
+        tachometer needle <i>is</i> <code>ω</code>, and an engraved <span class="coral">red ω<sub>c</sub> mark</span> sits at the
+        threshold &mdash; it physically <i>moves</i> when you change <code>μ</code> or <code>r</code>. Once the needle climbs past that
+        mark, the wall can hold. Then pull <b>DROP THE FLOOR</b>: the hinged brass plate swings down on its hinge, baring the shaft.
+        Above <code>ω<sub>c</sub></code> both riders <span class="teal">hang pinned</span> over the void; below it both
+        <span class="coral">slump and sink</span> &mdash; and they read the <i>same</i> sink, because the slip acceleration
+        <code>g − μω²r</code> is mass-free too.</p>
+      <h2>The balance dial &mdash; the race you watch cross</h2>
+      <p>The side dial is the inequality made into a race. A <i>fixed</i> tick engraved <span class="coral">gravity · mg</span> marks
+        the weight to be carried; a filling column &mdash; the <b>friction reserve</b> <code>μN</code> &mdash; climbs as you crank. While
+        the column is short the dial reads <span class="coral">reserve &lt; weight — you SLIDE</span>; the instant it reaches the tick it
+        <b>latches</b> <span class="teal">reserve ≥ weight — you STICK</span>, and a gold hairline marks the <code>ω<sub>c</sub></code>
+        crossing. No plotted curve &mdash; just the two bars racing, and the moment one overtakes the other.</p>
+      <h2>The frictionless-wall control</h2>
+      <p>Flip on <b>frictionless wall</b> (<code>μ = 0</code>) and crank all you like: the wall <i>still presses</i> &mdash; the press bar
+        <code>N = mω²r</code> grows just the same, you can feel the crush &mdash; but the friction reserve <code>μN</code> is
+        <span class="coral">dead at zero</span>. So the riders slide at <i>every</i> spin, the dial never latches, and the
+        <code>ω<sub>c</sub></code> mark vanishes off the tachometer to <code>+∞</code>. That is the neg-control you can feel: spin presses;
+        only friction <i>holds</i>. The self-test proves <code>holdsFrictionless ≡ false</code> across every spin &mdash; including spins
+        <i>above</i> the real <code>ω<sub>c</sub></code>, where the true wall holds &mdash; a genuine, non-empty disagreement.</p>
+      <h2 class="honesty" style="border:none;padding:0">Honesty</h2>
+      <p class="honesty">The pin/slide threshold and the wall press are <i>exact</i>: the riders' fate (pinned vs sinking) is read straight
+        from the core's <code>holds</code> and <code>riderState</code>. Only the slide's <i>draw</i> is nominal &mdash; the sink uses a fixed
+        fall depth so it reads on a finite canvas, and the drop is eased a few frames so the floor swings rather than teleports. Idealized:
+        point-mass riders, a rigid drum wall, dry Coulomb friction with a single coefficient <code>μ</code> (no static/kinetic split, no air
+        drag). The crank tops out at <code>ω = 6 rad/s</code> so you can sit on both sides of the <code>ω<sub>c</sub> ≈ 3.30</code> crossing.</p>
+    </section>
+
+    <footer class="foot">
+      The sister ride is <a href="../star-flyer/index.html">The Star Flyer</a> &mdash; there the chains fly <i>out</i> and the angle they
+      reach is the spin; here the floor drops <i>away</i> and friction pins you to the wall, your weight forgotten. Same brass
+      instruments, opposite felt story. &nbsp;&middot;&nbsp; <a href="../midway/index.html">Back to The Midway</a>
+    </footer>
+  </main>
+
+<script type="module">
+"use strict";
+// ===== ROTOR CORE (inlined byte-twin) BEGIN =====
+// ── THE ROTOR — physics authority for a wall-of-death spin drum: THE PIN.
+//    This block is the SOLE AUTHORITY; a Node twin (core.test.mjs) re-extracts it
+//    byte-for-byte between sentinels and the in-page chip calls the SAME
+//    runSelfTest(). The renderer draws the riders' FATE from this authority —
+//    stick or sink IS the readout, never a plotted curve. ──────────────────────────
+//
+// THE LAW. A rider of mass m stands against the inside wall of a drum of radius r
+// spinning at angular rate ω. The wall pushes inward on the rider to bend them onto
+// their circular path — that is the NORMAL force, the centripetal press:
+//   N = m ω² r.                                            (the wall press)
+// Friction along the wall can hold at most μN before the rider slides. The floor
+// drops away; the only thing fighting the rider's weight mg is that friction. The
+// rider STAYS PINNED exactly when friction can carry the full weight:
+//   μN ≥ mg            ⇔            μ m ω² r ≥ m g.        (the pin condition)
+// The mass m appears on BOTH sides and CANCELS:
+//   μ ω² r ≥ g.        ← mass-free. A 95 kg adult and a 22 kg child share ONE fate.
+// The threshold spin is the ω where it becomes an equality:
+//   ω_c = √( g / (μ r) ).                                  (mass-INVARIANT)
+// Above ω_c everyone is pinned; below it everyone slides down into the shaft. The
+// soul of this ride is that the drum forgets your weight: ω_c has NO mass term.
+//
+// THE SLIDE. Below ω_c the net downward pull per unit mass is the slip acceleration
+//   a_slip = g − μ ω² r.                                   (>0 ⇒ sliding, m-free)
+// also mass-free — so two riders of different mass sink in LOCKSTEP. The rider's sink
+// fraction over a fall depth `fall` after time t is drop01 = min(1, ½ a_slip t² / fall),
+// clamped to [0,1]; pinned riders read drop01 ≡ 0. Because a_slip carries no mass,
+// drop01 is identical for the adult and the child — the drawn proof of invariance.
+//
+// THE NEG-CONTROL (the teeth). holdsFrictionless models a FRICTIONLESS wall (μ=0):
+// the wall still PRESSES (N = mω²r still grows with ω — you can feel it crush) but the
+// friction reserve μN is dead, so the rider ALWAYS slides at every spin. omegaC(0) is
+// +∞ (no finite spin ever holds). runSelfTest proves holdsFrictionless ≡ false across
+// a band that INCLUDES ω above the real ω_c (where the real wall holds) — a non-empty
+// disagreement, so the suite cannot pass vacuously, while press still strictly grows.
+//
+// HONESTY. Point-mass riders, a rigid drum wall, dry Coulomb friction with a single
+// coefficient μ (no static/kinetic split, no air drag). The pin/slide threshold and
+// the wall press are exact; only the slide's draw uses a nominal fall depth so the
+// sink reads on a finite canvas.
+
+const G = 9.81;          // gravity (m/s²)
+const R_DRUM = 2.0;      // r: drum radius (m)
+const MU = 0.45;         // μ: wall friction coefficient — ω_c ≈ 3.3015 rad/s
+
+// ── THE WALL PRESS ────────────────────────────────────────────────────────────────
+// N = m ω² r: the normal (centripetal) force the wall exerts on a rider of mass m
+// spinning at ω in a drum of radius r. Strictly increases with ω at any μ (the wall
+// presses even when frictionless). This is the force friction feeds on.
+function press(m, omega, r=R_DRUM){
+  return m*omega*omega*r;
+}
+
+// ── THE PIN CONDITION (the predicate) ──────────────────────────────────────────────
+// holds: does the wall friction carry the rider's full weight? μN ≥ mg. The mass
+// cancels (μω²r ≥ g) so the verdict is mass-INVARIANT; μ=0 ⇒ μN=0 < mg ⇒ never holds.
+function holds(m, omega, mu=MU, r=R_DRUM, g=G){
+  return mu*press(m, omega, r) >= m*g;
+}
+
+// ── THE THRESHOLD SPIN (mass-invariant) ─────────────────────────────────────────────
+// ω_c = √(g/(μr)) — the spin where μN exactly equals mg. NO mass argument: the
+// crossing is the SAME for every rider. μ=0 ⇒ no finite spin holds ⇒ +∞.
+function omegaC(mu=MU, r=R_DRUM, g=G){
+  return mu>0 ? Math.sqrt(g/(mu*r)) : Infinity;
+}
+
+// ── THE RIDER STATE — the ONLY fate the renderer consumes ───────────────────────────
+// {m, omega, pinned, aSlip: g−μω²r (the slip accel, m-free), N: the wall press,
+//  drop01: the sink fraction ∈[0,1] over a fall of depth `fall` after time t}. Both
+//  aSlip and drop01 are MASS-FREE, so heavy and light riders read IDENTICAL drop01 —
+//  the visceral proof drawn in the drum.
+function riderState(m, omega, t, mu=MU, r=R_DRUM, g=G, fall=1.6){
+  const aSlip = g - mu*omega*omega*r;          // >0 ⇒ sliding; ≤0 ⇒ pinned. Mass-free.
+  const pinned = aSlip <= 0;
+  return {
+    m,
+    omega,
+    pinned,
+    aSlip,
+    N: press(m, omega, r),
+    drop01: Math.min(1, pinned ? 0 : 0.5*aSlip*t*t / fall),
+  };
+}
+
+// ── THE NEG-CONTROL (the teeth) — a FRICTIONLESS wall, μ=0, never holds ─────────────
+// holdsFrictionless: the same pin test with μ pinned to 0. The wall still presses
+// (press(m,ω,r) is unchanged) but the friction reserve μN is identically zero, so
+// μN ≥ mg is false for every ω>0 — the rider ALWAYS slides. omegaC(0)===Infinity.
+function holdsFrictionless(m, omega, r=R_DRUM, g=G){
+  return holds(m, omega, 0, r, g);
+}
+
+// ── THE GRAFT (the balance-dial instrument) — Explorer 2's honest distinction ───────
+// frictionReserve = μN: the most weight the wall friction can currently carry. The
+// side dial races this filling column against the FIXED weight tick mg; holds is true
+// exactly when the reserve reaches the weight. At μ=0 the reserve is dead (≡0) even
+// though press still grows — the wall presses, but nothing holds.
+function frictionReserve(m, omega, mu=MU, r=R_DRUM){
+  return mu*press(m, omega, r);
+}
+
+// ── THE SELF-TEST. The Node twin and the in-page chip call THIS. ──────────────────
+function runSelfTest(){
+  const checks = [];
+  const ck = (name, ok) => checks.push({ name, ok: !!ok });
+  const EPS = 1e-9;
+
+  // (1) THRESHOLD both sides <1e-9, swept over several (μ,r,g). Just below ω_c the
+  // rider slides (holds false, not pinned); just above it sticks (holds true, pinned);
+  // at exactly ω_c the gap μN−mg is zero to <1e-9.
+  {
+    let allOk = true, n = 0;
+    for(const mu of [0.30, 0.45, 0.62]) for(const r of [1.6, 2.0, 2.8]) for(const g of [9.81, 9.0]){
+      const m = 70;                               // any mass — the threshold is mass-free
+      const wc = omegaC(mu, r, g);
+      const below = wc*(1 - 1e-6), above = wc*(1 + 1e-6);
+      if( holds(m, below, mu, r, g) ) allOk = false;            // below ⇒ slides
+      if( riderState(m, below, 0.5, mu, r, g).pinned ) allOk = false;
+      if( !holds(m, above, mu, r, g) ) allOk = false;           // above ⇒ sticks
+      if( !riderState(m, above, 0.5, mu, r, g).pinned ) allOk = false;
+      const gapAtC = mu*press(m, wc, r) - m*g;                  // μN − mg at exactly ω_c
+      if( Math.abs(gapAtC) >= EPS ) allOk = false;
+      n++;
+    }
+    ck('(1) THRESHOLD both sides <1e-9: ω_c⁻ slides (¬holds,¬pinned), ω_c⁺ sticks (holds,pinned), μN−mg≈0 at ω_c — over '+n+' (μ,r,g)', allOk && n>=12);
+  }
+
+  // (2) ★ MASS-INVARIANCE (the soul, PROVEN). omegaC takes no mass (trivially equal);
+  // load-bearing: holds and pinned flip at the SAME ω for 95 kg vs 22 kg over a dense
+  // (ω,t) grid, and the drawn drop01 is byte-identical (they sink in lockstep).
+  {
+    let same = true, dropSame = true, n = 0, flips = 0, prevH = null;
+    const wc = omegaC();                          // default μ,r,g
+    for(let w = 0; w <= 6; w += 0.02){
+      const hA = holds(95, w), hB = holds(22, w);
+      if(hA !== hB) same = false;
+      if(prevH !== null && hA !== prevH) flips++;  // count stick↔slide transitions
+      prevH = hA;
+      for(const t of [0, 0.2, 0.5, 1.0, 1.8]){
+        const sa = riderState(95, w, t), sb = riderState(22, w, t);
+        if(sa.pinned !== sb.pinned) same = false;
+        if(sa.drop01 !== sb.drop01) dropSame = false;           // byte-identical sink
+      }
+      n++;
+    }
+    ck('(2)★ MASS-INVARIANT: holds(95,ω)===holds(22,ω) AND pinned matches at every (ω,t) over '+n+' spins — they flip stick↔slide at the SAME ω', same && flips>=1);
+    ck('(2)★ LOCKSTEP: riderState(95,ω,t).drop01 === riderState(22,ω,t).drop01 (the two bodies sink byte-identically)', dropSame);
+    ck('(2)★ omegaC carries NO mass term: ω_c is the single mass-free crossing √(g/μr)', wc > 0 && Number.isFinite(wc));
+  }
+
+  // (3) MONOTONE press: N(m,ω,r)=mω²r strictly increases in ω.
+  {
+    let mono = true, prev = -Infinity, n = 0;
+    for(let w = 0; w <= 6; w += 0.02){ const N = press(80, w); if(N <= prev - 1e-15) mono = false; prev = N; n++; }
+    ck('(3) MONOTONE press: N = mω²r STRICTLY increases in ω across [0,6] ('+n+' samples)', mono);
+  }
+
+  // (4) NEG-CONTROL teeth: a frictionless wall NEVER holds — even ABOVE the real ω_c
+  // where the real wall holds (non-empty disagreement); omegaC(0)===Infinity; AND the
+  // press still strictly grows at μ=0 (the wall presses; only the reserve is dead).
+  {
+    const wc = omegaC();
+    let fricEverHolds = false, realHoldsBand = 0, disagreeAbove = 0, samplesAbove = 0;
+    for(let w = 0; w <= 6; w += 0.02){
+      if( holdsFrictionless(70, w) ) fricEverHolds = true;       // must NEVER hold
+      if( holds(70, w) ) realHoldsBand++;                        // a band where real holds
+      if( w > wc ){                                              // ABOVE the real threshold
+        samplesAbove++;
+        if( holds(70, w) && !holdsFrictionless(70, w) ) disagreeAbove++;  // real holds, fric doesn't
+      }
+    }
+    // press at μ=0 still strictly grows (the wall still presses — only friction is dead).
+    let pressGrows = true, prevN = -Infinity;
+    for(let w = 0; w <= 6; w += 0.05){ const N = press(70, w); if(N <= prevN - 1e-15) pressGrows = false; prevN = N; }
+    ck('(4) NEG-CONTROL the teeth bite: holdsFrictionless ≡ false for EVERY ω, AND disagrees with the real holds above ω_c (non-empty)',
+       !fricEverHolds && disagreeAbove > 0 && disagreeAbove === samplesAbove);
+    ck('(4) anti-vacuity: a band EXISTS where the real wall HOLDS (so the disagreement is real) AND omegaC(μ=0)===Infinity',
+       realHoldsBand > 0 && omegaC(0) === Infinity);
+    ck('(4) the wall STILL presses at μ=0: press(m,ω,r) strictly grows even frictionless (only the reserve is dead)', pressGrows);
+  }
+
+  // (5) drop01 kinematics (s = ½at²): pinned ⇒ drop01≡0 ∀t; sliding ⇒ drop01 strictly
+  // increases in t and reaches 1 in finite time; a faster slide (smaller ω) sinks faster.
+  {
+    const wc = omegaC();
+    // pinned: above ω_c, drop01 is 0 for all t.
+    let pinnedZero = true;
+    const wAbove = wc*1.2;
+    for(const t of [0, 0.3, 1, 5, 50]){ if( riderState(70, wAbove, t).drop01 !== 0 ) pinnedZero = false; }
+    // sliding: below ω_c, drop01 strictly increases in t (until clamped) and reaches 1.
+    const wBelow = wc*0.5;
+    let inc = true, prev = -1, reaches1 = false;
+    for(let t = 0; t <= 5; t += 0.05){
+      const d = riderState(70, wBelow, t).drop01;
+      if(d < prev - 1e-15) inc = false;
+      if(d >= 1) reaches1 = true;
+      prev = d;
+    }
+    // a faster slide sinks faster: smaller ω ⇒ bigger aSlip ⇒ bigger drop01 at fixed t.
+    const slow = riderState(70, wc*0.7, 0.6).drop01;     // closer to ω_c ⇒ slower slide
+    const fast = riderState(70, wc*0.2, 0.6).drop01;     // far below ω_c ⇒ faster slide
+    ck('(5) drop01 kinematics: pinned ⇒ drop01≡0 ∀t; sliding ⇒ drop01 strictly ↑ in t and reaches 1; a faster slide (smaller ω) sinks faster',
+       pinnedZero && inc && reaches1 && fast > slow);
+  }
+
+  const pass = checks.filter(c=>c.ok).length;
+  return { pass, total: checks.length, checks };
+}
+// ===== ROTOR CORE (inlined byte-twin) END =====
+
+// ──────────────────────────────────────────────────────────────────────────────
+//  THE INSTRUMENT — renders the spin drum's FATE FROM the core. All physics (the pin
+//  condition, the wall press, the mass-free threshold, the frictionless neg-control)
+//  lives in the core above; this is pure presentation. The riders' feet sink by
+//  riderState(...).drop01; the contact glow is holds(...). The stick-or-sink is the
+//  readout — no plotted curve is the subject.
+// ──────────────────────────────────────────────────────────────────────────────
+const NS = 'http://www.w3.org/2000/svg';
+const $ = (id)=>document.getElementById(id);
+const el = (tag, attrs={})=>{ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); return e; };
+const el2 = (tag,cls)=>{ const e=document.createElement(tag); if(cls) e.className=cls; return e; };
+
+// ── stage geometry (660×480). Front cutaway: a brass cylinder wall (two concentric
+//    arcs for thickness) with riveted banding that scrolls sideways ∝ ω, two riders
+//    against the wall, a hinged trap floor at their feet, and a dark shaft below. ──
+const STAGE = { w:660, h:480 };
+const OMEGA_MAX = 6;             // dial ceiling (rad/s) — straddles ω_c ≈ 3.30
+const M_ADULT = 95, M_CHILD = 22;
+const WALL_TOP = 70;             // y of the drum's open top
+const FLOOR_Y = 300;            // y of the (shut) trap floor — the riders' feet at rest
+const SHAFT_BOTTOM = 452;       // y where the shaft fades to black
+const SINK_PX = 132;            // how far the feet sink across drop01 ∈ [0,1]
+const MAX_SLUMP = 0.42;         // max pose-lean (radians) when fully sliding
+const WALL_L = 150, WALL_R = 510;  // inner wall x-bounds (the rider lane)
+const ADULT_X = 250, CHILD_X = 410;
+
+const state = { omega: 0, fric: false, floorDropped: false };
+let band = 0;                    // scrolling rivet-band phase (∝ ω)
+let floorAnim = 0;              // 0 shut → 1 fully dropped (eased)
+let slideT = 0;                 // seconds since the floor dropped (drives the sink)
+let raf = null, lastT = 0;
+
+// ── helpers reading the core ──
+function mu(){ return state.fric ? 0 : MU; }
+function wc(){ return omegaC(mu(), R_DRUM, G); }
+function riderFate(m, t){ return riderState(m, state.omega, t, mu(), R_DRUM, G); }
+function rcolor(pinned){ return pinned ? 'var(--teal)' : 'var(--coral)'; }
+
+// ── THE DRUM (front cutaway). Static shell built once; the riders + floor + banding
+//    are redrawn each frame from the core. ──
+function buildDrum(){
+  const svg=$('drum'); svg.innerHTML='';
+
+  // the dark shaft behind everything (a vertical void fading to black with rivet-rings)
+  const shaftGrad = el('linearGradient', { id:'shaftG', x1:0, y1:0, x2:0, y2:1 });
+  shaftGrad.appendChild(el('stop', { offset:'0%', 'stop-color':'#15110b' }));
+  shaftGrad.appendChild(el('stop', { offset:'62%', 'stop-color':'#0a0805' }));
+  shaftGrad.appendChild(el('stop', { offset:'100%', 'stop-color':'#000' }));
+  const defs = el('defs'); defs.appendChild(shaftGrad); svg.appendChild(defs);
+  svg.appendChild(el('rect', { x:WALL_L, y:FLOOR_Y, width:WALL_R-WALL_L, height:SHAFT_BOTTOM-FLOOR_Y, fill:'url(#shaftG)' }));
+  // receding rivet-rings inside the shaft (the void you don't fall into)
+  for(let i=1;i<=5;i++){
+    const yy = FLOOR_Y + (SHAFT_BOTTOM-FLOOR_Y)*(i/6);
+    const inset = 10 + i*9;
+    svg.appendChild(el('ellipse', { cx:(WALL_L+WALL_R)/2, cy:yy, rx:(WALL_R-WALL_L)/2 - inset, ry:7 - i*0.7,
+      fill:'none', stroke:'rgba(201,162,74,'+(0.18 - i*0.03)+')', 'stroke-width':1 }));
+  }
+
+  // the curved back wall: two concentric vertical brass arcs (cylinder thickness).
+  // A head-on cylinder reads as a tall rounded-rect with curved top/bottom edges.
+  const outer = `M ${WALL_L-14} ${WALL_TOP+8}
+    Q ${(WALL_L+WALL_R)/2} ${WALL_TOP-22} ${WALL_R+14} ${WALL_TOP+8}
+    L ${WALL_R+14} ${SHAFT_BOTTOM}
+    Q ${(WALL_L+WALL_R)/2} ${SHAFT_BOTTOM+18} ${WALL_L-14} ${SHAFT_BOTTOM} Z`;
+  svg.appendChild(el('path', { d:outer, fill:'rgba(201,162,74,0.05)', stroke:'rgba(201,162,74,0.34)', 'stroke-width':2.5 }));
+  const inner = `M ${WALL_L} ${WALL_TOP+12}
+    Q ${(WALL_L+WALL_R)/2} ${WALL_TOP-12} ${WALL_R} ${WALL_TOP+12}
+    L ${WALL_R} ${FLOOR_Y-2}
+    L ${WALL_L} ${FLOOR_Y-2} Z`;
+  svg.appendChild(el('path', { id:'wallInner', d:inner, fill:'rgba(0,0,0,0.30)', stroke:'rgba(201,162,74,0.5)', 'stroke-width':1.5 }));
+
+  // a clip for the scrolling banding so it stays inside the wall lane
+  const clip = el('clipPath', { id:'wallClip' });
+  clip.appendChild(el('rect', { x:WALL_L, y:WALL_TOP, width:WALL_R-WALL_L, height:FLOOR_Y-WALL_TOP }));
+  defs.appendChild(clip);
+  const bandG = el('g', { id:'bandG', 'clip-path':'url(#wallClip)' }); svg.appendChild(bandG);
+
+  // top rim of the drum (a bright brass ellipse arc)
+  svg.appendChild(el('path', { d:`M ${WALL_L-14} ${WALL_TOP+8} Q ${(WALL_L+WALL_R)/2} ${WALL_TOP-22} ${WALL_R+14} ${WALL_TOP+8}`,
+    fill:'none', stroke:'var(--gold-hi)', 'stroke-width':3 }));
+
+  // the riders group + the trap floor group (redrawn each frame)
+  svg.appendChild(el('g', { id:'ridersG' }));
+  svg.appendChild(el('g', { id:'floorG' }));
+
+  // mass ledger labels (static)
+  const labA = el('text', { x:ADULT_X, y:WALL_TOP+34, fill:'var(--ink-dim)', 'font-size':11, 'font-family':'var(--font-mono)', 'text-anchor':'middle' });
+  labA.textContent = '95 kg'; svg.appendChild(labA);
+  const labC = el('text', { x:CHILD_X, y:WALL_TOP+34, fill:'var(--ink-dim)', 'font-size':11, 'font-family':'var(--font-mono)', 'text-anchor':'middle' });
+  labC.textContent = '22 kg'; svg.appendChild(labC);
+
+  poseDrum();
+}
+
+// the scrolling rivet-banding (head-on spin reads as horizontal banding sweeping past).
+function drawBanding(){
+  const g=$('bandG'); if(!g) return; g.innerHTML='';
+  const laneH = FLOOR_Y - WALL_TOP;
+  const cols = 9;                                   // vertical rivet-stripes
+  const colW = (WALL_R-WALL_L)/cols;
+  // motion blur: faster ω ⇒ longer streaks + lower opacity (it blurs into bands)
+  const speed = state.omega;
+  const blur = Math.min(1, speed/OMEGA_MAX);
+  for(let i=0;i<=cols;i++){
+    // each stripe's x scrolls by band, wrapping within the lane
+    let x = WALL_L + ((i*colW + band) % (WALL_R-WALL_L));
+    const op = 0.30*(1-0.5*blur);
+    g.appendChild(el('line', { x1:x.toFixed(1), y1:WALL_TOP+12, x2:x.toFixed(1), y2:FLOOR_Y-2,
+      stroke:'rgba(201,162,74,'+op.toFixed(3)+')', 'stroke-width': (1.4 + 2.6*blur).toFixed(2) }));
+    // rivets along the stripe
+    if(blur < 0.55){
+      for(let r=0.12;r<1;r+=0.18){ const yy=WALL_TOP+12 + laneH*r;
+        g.appendChild(el('circle', { cx:x.toFixed(1), cy:yy.toFixed(1), r:1.5, fill:'rgba(244,210,122,'+(0.4*(1-blur)).toFixed(3)+')' })); }
+    }
+  }
+}
+
+// draw one rider silhouette at (x, feetY) leaning by `lean` (radians, toward the wall
+// centre when sliding), scaled by `h` (height). Glow colour = pinned/sliding.
+function drawRider(g, x, feetY, lean, h, w, pinned){
+  const col = rcolor(pinned);
+  const headR = h*0.10;
+  const bodyTop = feetY - h;
+  // lean tilts the whole figure about the feet; sliding leans toward drum centre.
+  const dir = (x < (WALL_L+WALL_R)/2) ? 1 : -1;     // child/adult lean inward as they slump
+  const dx = Math.sin(lean)*h*0.5*dir;
+  const cx = x;                                       // feet x
+  const topX = cx + dx;
+  // contact glow at the wall (a soft ellipse behind the feet/back)
+  g.appendChild(el('ellipse', { cx:cx, cy:feetY-h*0.5, rx:w*0.9, ry:h*0.55,
+    fill: pinned ? 'rgba(95,205,191,0.16)' : 'rgba(240,132,111,0.14)' }));
+  // body (a tapered capsule)
+  g.appendChild(el('path', { d:`M ${cx-w*0.5} ${feetY} Q ${cx} ${feetY+3} ${cx+w*0.5} ${feetY}
+    L ${topX+w*0.34} ${bodyTop+headR*2} Q ${topX} ${bodyTop+headR*1.4} ${topX-w*0.34} ${bodyTop+headR*2} Z`,
+    fill: pinned ? 'rgba(95,205,191,0.34)' : 'rgba(240,132,111,0.30)', stroke:col, 'stroke-width':1.6 }));
+  // head
+  g.appendChild(el('circle', { cx:topX, cy:bodyTop+headR, r:headR, fill:col, opacity:0.92 }));
+}
+
+function poseDrum(){
+  const ridersG=$('ridersG'), floorG=$('floorG');
+  if(!ridersG||!floorG) return;
+  ridersG.innerHTML=''; floorG.innerHTML='';
+
+  const t = state.floorDropped ? slideT : 0;
+  const fa = riderFate(M_ADULT, t), fc = riderFate(M_CHILD, t);
+  // both read the SAME drop01 (mass cancels) — only height/width differ for the drawing.
+  const sinkA = fa.drop01 * SINK_PX, sinkC = fc.drop01 * SINK_PX;
+  const leanA = fa.pinned ? 0 : MAX_SLUMP * easeIn(fa.drop01);
+  const leanC = fc.pinned ? 0 : MAX_SLUMP * easeIn(fc.drop01);
+
+  // the trap floor: hinge on the LEFT (WALL_L), lever on the right. floorAnim 0→1 swings
+  // it down about the hinge. Drawn first so riders sit above it.
+  const hingeX = WALL_L, hingeY = FLOOR_Y, plateLen = WALL_R - WALL_L;
+  const ang = floorAnim * (Math.PI*0.46);          // swings down ~83°
+  const tipX = hingeX + Math.cos(ang)*plateLen;
+  const tipY = hingeY + Math.sin(ang)*plateLen;
+  const thick = 9;
+  const nx = Math.sin(ang)*thick, ny = -Math.cos(ang)*thick;   // plate-thickness normal
+  floorG.appendChild(el('path', { d:`M ${hingeX} ${hingeY} L ${tipX.toFixed(1)} ${tipY.toFixed(1)}
+    L ${(tipX+nx).toFixed(1)} ${(tipY+ny).toFixed(1)} L ${(hingeX+nx).toFixed(1)} ${(hingeY+ny).toFixed(1)} Z`,
+    fill:'rgba(201,162,74,0.16)', stroke:'var(--gold)', 'stroke-width':2 }));
+  // hinge knuckle + lever knob
+  floorG.appendChild(el('circle', { cx:hingeX, cy:hingeY, r:5, fill:'var(--gold-hi)', stroke:'#1a1408', 'stroke-width':1 }));
+  floorG.appendChild(el('circle', { cx:tipX.toFixed(1), cy:tipY.toFixed(1), r:5, fill:'var(--gold)' }));
+  // rivet line along the plate
+  for(let r=0.15;r<1;r+=0.2){ const px=hingeX+(tipX-hingeX)*r, py=hingeY+(tipY-hingeY)*r;
+    floorG.appendChild(el('circle', { cx:px.toFixed(1), cy:py.toFixed(1), r:1.6, fill:'rgba(244,210,122,0.5)' })); }
+
+  // the riders, against the wall, feet sinking by drop01.
+  drawRider(ridersG, ADULT_X, FLOOR_Y + sinkA, leanA, 158, 38, fa.pinned);
+  drawRider(ridersG, CHILD_X, FLOOR_Y + sinkC, leanC, 104, 27, fc.pinned);
+
+  // a tiny "SAME SINK" tie-line when both are sliding and the floor is open — the lockstep
+  if(state.floorDropped && !fa.pinned && !fc.pinned && fa.drop01 > 0.04){
+    const yA = FLOOR_Y + sinkA, yC = FLOOR_Y + sinkC;   // identical drop01 ⇒ yA-FLOOR_Y == yC-FLOOR_Y
+    ridersG.appendChild(el('line', { x1:ADULT_X+20, y1:yA, x2:CHILD_X-14, y2:yC,
+      stroke:'rgba(240,132,111,0.5)', 'stroke-width':1, 'stroke-dasharray':'4 3' }));
+    const tl=el('text', { x:(ADULT_X+CHILD_X)/2, y:yA-8, fill:'var(--coral)', 'font-size':9.5, 'font-family':'var(--font-mono)', 'text-anchor':'middle' });
+    tl.textContent='same sink — mass cancels'; ridersG.appendChild(tl);
+  }
+}
+function easeIn(x){ return x*x; }
+
+// ── THE TACHOMETER. A quarter-dial; the needle angle IS ω. An engraved red ω_c mark
+//    sits at the dial angle for omegaC(μ,r) and MOVES when μ (frictionless) changes. ──
+const TACH = { cx:80, cy:118, R:62 };
+// map ω∈[0,OMEGA_MAX] to a dial fraction 0..1.
+function omegaToFrac(w){ return Math.max(0, Math.min(1, w/OMEGA_MAX)); }
+// a point on the tach at fraction f and radius rad: 0 at bottom-left (~220°), sweeping
+// CCW up to top-right; we use a 250° arc from 200° down-left to -50°.
+const TACH_A0 = 210*Math.PI/180, TACH_SWEEP = 250*Math.PI/180;
+function tachPt(f, rad){ const {cx,cy}=TACH; const a=TACH_A0 - TACH_SWEEP*f; return { x:cx+Math.cos(a)*rad, y:cy-Math.sin(a)*rad }; }
+function drawTach(){
+  const svg=$('tach'); svg.innerHTML='';
+  const {cx,cy,R}=TACH;
+  // arc track
+  const p0=tachPt(0,R), p1=tachPt(1,R);
+  svg.appendChild(el('path', { d:`M ${p0.x.toFixed(2)} ${p0.y.toFixed(2)} A ${R} ${R} 0 1 1 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`,
+    fill:'none', stroke:'rgba(255,255,255,0.10)', 'stroke-width':10 }));
+  // ticks at integer ω
+  for(let w=0; w<=OMEGA_MAX; w++){
+    const f=omegaToFrac(w); const a=tachPt(f,R-5), b=tachPt(f,R+2), c=tachPt(f,R+12);
+    svg.appendChild(el('line', { x1:a.x.toFixed(1),y1:a.y.toFixed(1),x2:b.x.toFixed(1),y2:b.y.toFixed(1),stroke:'rgba(201,162,74,0.5)','stroke-width':1.2 }));
+    const t=el('text', { x:c.x.toFixed(1), y:(c.y+3).toFixed(1), fill:'var(--ink-dim)', 'font-size':7.5, 'font-family':'var(--font-mono)', 'text-anchor':'middle' });
+    t.textContent=String(w); svg.appendChild(t);
+  }
+  // the engraved ω_c arc-mark (red) — at the dial angle for the CURRENT μ,r. Vanishes
+  // when frictionless (ω_c=+∞, off the dial).
+  const w_c = wc();
+  if(Number.isFinite(w_c) && w_c <= OMEGA_MAX){
+    const f=omegaToFrac(w_c); const a=tachPt(f,R-10), b=tachPt(f,R+5);
+    svg.appendChild(el('line', { id:'wcMark', x1:a.x.toFixed(1),y1:a.y.toFixed(1),x2:b.x.toFixed(1),y2:b.y.toFixed(1),
+      stroke:'var(--coral)', 'stroke-width':2.4 }));
+    const c=tachPt(f,R+15);
+    const t=el('text', { x:c.x.toFixed(1), y:(c.y+3).toFixed(1), fill:'var(--coral)', 'font-size':8, 'font-family':'var(--font-mono)', 'text-anchor':'middle' });
+    t.textContent='ωc'; svg.appendChild(t);
+  } else {
+    const t=el('text', { x:cx, y:cy+R+8, fill:'var(--coral)', 'font-size':8, 'font-family':'var(--font-mono)', 'text-anchor':'middle' });
+    t.textContent='ωc → ∞'; svg.appendChild(t);
+  }
+  // pivot + needle
+  svg.appendChild(el('circle', { cx, cy, r:4.4, fill:'var(--gold)' }));
+  const tip=tachPt(omegaToFrac(state.omega), R*0.78);
+  const held = state.fric ? false : holds(M_ADULT, state.omega);
+  svg.appendChild(el('line', { id:'tachHand', x1:cx, y1:cy, x2:tip.x.toFixed(2), y2:tip.y.toFixed(2),
+    stroke: held ? 'var(--teal)' : 'var(--gold-hi)', 'stroke-width':2.6, 'stroke-linecap':'round' }));
+  // register: rest / below / ABOVE
+  const reg = el('text', { x:cx, y:cy+22, fill:'var(--ink-dim)', 'font-size':8.5, 'font-family':'var(--font-mono)', 'text-anchor':'middle' });
+  reg.textContent = state.omega<0.05 ? 'REST' : (held ? 'ABOVE ωc' : 'below ωc');
+  reg.setAttribute('fill', state.omega<0.05 ? 'var(--gold-hi)' : (held ? 'var(--teal)' : 'var(--coral)'));
+  svg.appendChild(reg);
+}
+
+// ── THE BALANCE DIAL (μN vs mg). A vertical gauge: a FIXED weight tick mg + a filling
+//    friction-reserve column μN. Latches teal when reserve ≥ weight; gold ω_c hairline. ──
+const DIAL = { x:46, top:18, bot:150, w:42 };       // column geometry
+function drawDial(){
+  const svg=$('dial'); svg.innerHTML='';
+  const { x, top, bot, w } = DIAL;
+  const H = bot - top;
+  // use the ADULT's reserve vs its weight (one rider's bar; invariance is shown in the drum).
+  const m = M_ADULT;
+  const weight = m*G;                                 // mg (the fixed tick)
+  const reserve = frictionReserve(m, state.omega, mu(), R_DRUM);   // μN (the filling bar)
+  // scale so the fixed mg tick sits ~70% up the column; the reserve can overtop it.
+  const full = weight / 0.70;
+  const yOf = (val)=> bot - H*Math.min(1, val/full);
+  const heldNow = state.fric ? false : holds(m, state.omega);
+
+  // column frame
+  svg.appendChild(el('rect', { x, y:top, width:w, height:H, rx:5, fill:'rgba(0,0,0,0.3)', stroke:'rgba(201,162,74,0.3)', 'stroke-width':1.4 }));
+  // the filling friction-reserve bar (μN)
+  const ry = yOf(reserve);
+  svg.appendChild(el('rect', { x:x+3, y:ry.toFixed(1), width:w-6, height:Math.max(0,(bot-ry)).toFixed(1), rx:3,
+    fill: heldNow ? 'rgba(95,205,191,0.5)' : 'rgba(240,132,111,0.42)' }));
+  // the FIXED mg weight tick (a bright line across the column)
+  const wy = yOf(weight);
+  svg.appendChild(el('line', { x1:x-6, y1:wy.toFixed(1), x2:x+w+6, y2:wy.toFixed(1), stroke:'var(--coral)', 'stroke-width':2.2 }));
+  const wlab=el('text', { x:x+w+10, y:(wy+3).toFixed(1), fill:'var(--coral)', 'font-size':8, 'font-family':'var(--font-mono)' });
+  wlab.textContent='mg'; svg.appendChild(wlab);
+  // the gold ω_c hairline — where the reserve column WOULD reach the weight (i.e. at ω_c)
+  const w_c = wc();
+  if(Number.isFinite(w_c)){
+    svg.appendChild(el('line', { x1:x-2, y1:wy.toFixed(1), x2:x+w+2, y2:wy.toFixed(1), stroke:'var(--gold-hi)', 'stroke-width':0.8, 'stroke-dasharray':'2 2', opacity:0.8 }));
+  }
+  // reserve label at the bar top
+  const rlab=el('text', { x:x-8, y:Math.max(top+8, ry).toFixed(1), fill: heldNow?'var(--teal)':'var(--ink-dim)', 'font-size':8, 'font-family':'var(--font-mono)', 'text-anchor':'end' });
+  rlab.textContent='μN'; svg.appendChild(rlab);
+  // caption
+  const cap=el('text', { x:(x+w/2), y:bot+14, fill:'var(--ink-dim)', 'font-size':7.5, 'font-family':'var(--font-mono)', 'text-anchor':'middle' });
+  cap.textContent='friction reserve'; svg.appendChild(cap);
+}
+
+// ── THE BRASS CRANK — a rotary dial. Dragging sweeps a 270° usable arc → ω∈[0,OMEGA_MAX].
+//    LANDMINE-COMPLIANT: nothing navigates or commits from the <g>; the drum is live-on-ω
+//    so the crank only sets ω. The slider is the accessible twin. ──
+const CRANK = { cx:75, cy:75, R:54, sweep:270*Math.PI/180, start:135*Math.PI/180 };
+function drawCrank(){
+  const svg=$('crank'); svg.innerHTML='';
+  const {cx,cy,R}=CRANK;
+  svg.appendChild(el('circle', { cx,cy,r:R, fill:'rgba(0,0,0,0.3)', stroke:'rgba(201,162,74,0.4)', 'stroke-width':2 }));
+  svg.appendChild(el('circle', { cx,cy,r:R-8, fill:'none', stroke:'rgba(201,162,74,0.18)', 'stroke-width':1 }));
+  const p0=crankPt(0,R-4), p1=crankPt(1,R-4);
+  svg.appendChild(el('path', { d:`M ${p0.x.toFixed(2)} ${p0.y.toFixed(2)} A ${R-4} ${R-4} 0 1 1 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`,
+    fill:'none', stroke:'rgba(201,162,74,0.25)', 'stroke-width':3 }));
+  for(const f of [0,0.5,1]){ const t0=crankPt(f,R-2), t1=crankPt(f,R-12);
+    svg.appendChild(el('line', { x1:t0.x.toFixed(1),y1:t0.y.toFixed(1),x2:t1.x.toFixed(1),y2:t1.y.toFixed(1),stroke:'rgba(201,162,74,0.5)','stroke-width':1.4 })); }
+  const f = state.omega/OMEGA_MAX;
+  const hp = crankPt(f, R-4);
+  const g = el('g', { class:'handle', id:'hCrank', 'data-h':'crank' });
+  g.appendChild(el('line', { x1:cx, y1:cy, x2:hp.x.toFixed(2), y2:hp.y.toFixed(2), stroke:'var(--gold-hi)', 'stroke-width':3, 'stroke-linecap':'round' }));
+  g.appendChild(el('circle', { cx:cx, cy:cy, r:6, fill:'var(--gold)' }));
+  g.appendChild(el('circle', { cx:hp.x.toFixed(2), cy:hp.y.toFixed(2), r:10, fill:'var(--gold-hi)', stroke:'#1a1408', 'stroke-width':1 }));
+  g.appendChild(el('circle', { cx:hp.x.toFixed(2), cy:hp.y.toFixed(2), r:4, fill:'#1a1408' }));
+}
+function crankPt(f, rad){ const {cx,cy,start,sweep}=CRANK; const a=start+sweep*f; return { x:cx+Math.cos(a)*rad, y:cy-Math.sin(a)*rad }; }
+function crankFracFromEvent(evt){
+  const svg=$('crank'); const pt=svg.createSVGPoint(); pt.x=evt.clientX; pt.y=evt.clientY;
+  const loc=pt.matrixTransform(svg.getScreenCTM().inverse());
+  let ang=Math.atan2(-(loc.y-CRANK.cy), loc.x-CRANK.cx);
+  let off = (CRANK.start - ang); off = ((off % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
+  if(off > CRANK.sweep){ off = (off - CRANK.sweep < 2*Math.PI - off) ? CRANK.sweep : 0; }
+  return Math.max(0, Math.min(1, off/CRANK.sweep));
+}
+let drag=null;
+function onDown(evt){
+  const g=evt.target.closest('.handle'); if(!g) return;
+  drag=g.getAttribute('data-h'); evt.preventDefault();
+  $('crank').setPointerCapture && $('crank').setPointerCapture(evt.pointerId);
+  onMove(evt);
+}
+function onMove(evt){ if(!drag) return; const f=crankFracFromEvent(evt); setOmega(f*OMEGA_MAX, 'crank'); }
+function onUp(){ drag=null; }
+
+// ── verdict line + regime (live as you crank / drop) ──
+function updateVerdict(){
+  const w_c = wc();
+  const t = state.floorDropped ? slideT : 0;
+  const fa = riderFate(M_ADULT, t);
+  const held = state.fric ? false : holds(M_ADULT, state.omega);
+  const N = Math.round(press(M_ADULT, state.omega, R_DRUM));
+  const wcStr = Number.isFinite(w_c) ? w_c.toFixed(2) : '∞';
+  const tag = state.fric ? '<span class="slip">FRICTIONLESS — SLIDES</span>'
+            : (!state.floorDropped ? 'floor shut'
+            : (held ? '<span class="held">HELD</span>' : '<span class="slip">SINKING</span>'));
+  $('verdict').innerHTML = 'ω = '+state.omega.toFixed(2)+' · ω<sub>c</sub> = '+wcStr+' · N = '+N+' N · '+tag;
+
+  // tach verdict
+  $('tachVerdict').textContent = 'ω = '+state.omega.toFixed(2)+' rad/s';
+  // dial verdict
+  const dv=$('dialVerdict');
+  if(state.fric){ dv.className='slip'; dv.textContent='reserve DEAD (μ=0) — SLIDE'; }
+  else if(held){ dv.className='held'; dv.textContent='reserve ≥ weight — STICK'; }
+  else { dv.className='slip'; dv.textContent='reserve < weight — SLIDE'; }
+
+  // regime line
+  const r=$('regime');
+  if(state.fric){
+    r.className='slip'; r.innerHTML='<b>FRICTIONLESS WALL</b> — the wall presses (N = '+N+' N) but nothing holds; <b>ω<sub>c</sub> → ∞</b>. Drop the floor and both riders sink, at any spin.';
+  } else if(state.omega < 0.05){
+    r.className='rest'; r.innerHTML='<b>AT REST</b> — the drum is still; the floor is shut.';
+  } else if(!state.floorDropped){
+    r.className = held ? 'held' : 'slip';
+    r.innerHTML = held
+      ? '<b>SPUN UP, FLOOR SHUT</b> — ω = '+state.omega.toFixed(2)+' is ABOVE ω<sub>c</sub> = '+wcStr+'. The wall can hold — <b>drop the floor</b>.'
+      : '<b>SPUN UP, FLOOR SHUT</b> — ω = '+state.omega.toFixed(2)+' is BELOW ω<sub>c</sub> = '+wcStr+'. Drop now and they will sink.';
+  } else if(held){
+    r.className='held'; r.innerHTML='<b>FLOOR DROPPED — BOTH PINNED</b> — the floor fell away and both riders hang on the wall (ω ≥ ω<sub>c</sub>). Weight forgotten.';
+  } else {
+    r.className='slip'; r.innerHTML='<b>FLOOR DROPPED — BOTH SINKING</b> — below ω<sub>c</sub>, friction can\'t carry the weight; adult and child sink the <i>same</i>.';
+  }
+}
+
+// ── set the spin rate (the one verb) ──
+function setOmega(w, src){
+  w = Math.max(0, Math.min(OMEGA_MAX, w));
+  state.omega = w;
+  if(src!=='range'){ $('omega').value = w.toFixed(2); }
+  if(src!=='crank'){ drawCrank(); }
+  $('kW').textContent = w.toFixed(2)+' rad/s';
+  drawTach(); drawDial(); updateVerdict();
+  ensureRAF();
+}
+
+function ensureRAF(){ if(!raf){ lastT=performance.now(); raf=requestAnimationFrame(frame); } }
+function frame(now){
+  const dt = Math.min(0.05, (now-lastT)/1000); lastT=now;
+  // banding scrolls ∝ ω (head-on spin)
+  band += state.omega*60*dt;
+  if(band > (WALL_R-WALL_L)) band -= (WALL_R-WALL_L);
+  // floor eases open/shut
+  const floorTarget = state.floorDropped ? 1 : 0;
+  floorAnim += (floorTarget - floorAnim) * Math.min(1, dt*8);
+  // the slide clock advances only while the floor is open AND a rider is sliding
+  if(state.floorDropped){
+    const fa = riderFate(M_ADULT, slideT);
+    if(!fa.pinned && fa.drop01 < 1) slideT += dt;
+  }
+  drawBanding(); poseDrum();
+  // keep animating while spinning, while the floor is mid-swing, or while sliding
+  const fa = riderFate(M_ADULT, slideT);
+  const busy = state.omega>0.01 || Math.abs(floorTarget-floorAnim)>1e-3 || (state.floorDropped && !fa.pinned && fa.drop01<1);
+  if(busy){ raf=requestAnimationFrame(frame); } else { raf=null; }
+}
+
+// ── controls ──
+function applyOmegaFromRange(){ setOmega(parseFloat($('omega').value), 'range'); drawCrank(); }
+function setFric(on){
+  state.fric = on;
+  $('fricToggle').classList.toggle('on', on);
+  $('fric').checked = on;
+  drawTach(); drawDial(); updateVerdict(); buildDrum();
+  ensureRAF();
+}
+function dropFloor(){
+  state.floorDropped = true; slideT = 0;
+  $('dropBtn').classList.add('dropped'); $('dropBtn').textContent='FLOOR DROPPED';
+  updateVerdict(); ensureRAF();
+}
+function shutFloor(){
+  state.floorDropped = false; slideT = 0; floorAnim = 0;
+  $('dropBtn').classList.remove('dropped'); $('dropBtn').textContent='DROP THE FLOOR';
+}
+
+function boot(){
+  buildDrum(); drawTach(); drawDial(); drawCrank(); updateVerdict();
+  $('kW').textContent = '0.00 rad/s';
+
+  const crank=$('crank');
+  crank.addEventListener('pointerdown', onDown);
+  crank.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+
+  $('omega').addEventListener('input', applyOmegaFromRange);
+  $('fric').addEventListener('change', ()=> setFric($('fric').checked));
+  $('dropBtn').addEventListener('click', ()=>{ if(state.floorDropped) shutFloor(); else dropFloor(); buildDrum(); });
+  $('reset').addEventListener('click', ()=>{
+    state.fric=false; $('fricToggle').classList.remove('on'); $('fric').checked=false;
+    shutFloor(); setOmega(0,'reset'); buildDrum(); drawTach(); drawDial();
+  });
+  $('dare').addEventListener('click', ()=>{
+    if(state.fric){ setFric(false); }
+    // slam ω to just UNDER ω_c, then drop — watch them sink
+    const target = Math.max(0, wc()*0.86);
+    setOmega(target, 'dare'); drawCrank();
+    dropFloor(); buildDrum();
+    $('regime').innerHTML='<b>DARED</b> — ω slammed to just under ω<sub>c</sub>, floor dropped; watch both riders <b>sink the same</b>…';
+  });
+
+  ensureRAF();
+
+  // ── the self-test chip (calls the SAME runSelfTest as the Node twin) ──
+  const r = runSelfTest();
+  const node=$('selftest');
+  if(r.pass===r.total){ node.className='selftest ok'; node.textContent=`self-test ${r.pass}/${r.total} ✓`; }
+  else { node.className='selftest bad'; node.textContent=`self-test ${r.pass}/${r.total} ✗`; }
+  const list=$('stList'); list.innerHTML='';
+  for(const c of r.checks){
+    const row=el2('div','row');
+    const mk=el2('span','m '+(c.ok?'ok':'no')); mk.textContent=c.ok?'✓':'✗';
+    const tx=el2('span','t'); tx.textContent=c.name;
+    row.appendChild(mk); row.appendChild(tx); list.appendChild(row);
+  }
+  $('stSub').textContent=`${r.pass}/${r.total} claims proven — the pin condition μN ≥ mg with N=mω²r, the MASS-INVARIANT threshold ω_c=√(g/μr) (95 kg and 22 kg share one fate, byte-identical drop), strict press monotonicity, the frictionless-wall neg-control (always slides, even above the real ω_c), and the drop01 sink kinematics.`;
+  node.addEventListener('click', ()=>$('stPanel').classList.toggle('show'));
+  $('stClose').addEventListener('click', ()=>$('stPanel').classList.remove('show'));
+  window.__rotorSelfTest = runSelfTest;
+
+  // drop the front-door breadcrumb so a direct visit registers
+  try{ const k='ws:seen:rotor'; if(!localStorage.getItem(k)) localStorage.setItem(k,String(Date.now())); }catch(e){}
+}
+
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+</script>
+</body>
+</html>
