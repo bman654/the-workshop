@@ -129,10 +129,41 @@ function properTimeCoordinate(legs){
   for (const L of legs) tau += coordRate(L.beta) * L.dt;    // ≡ Σ dt = t
   return tau;
 }
+
+// --- relativistic aberration & Doppler: the sky you fly INTO -----------------
+// θ is the star's RING angle in the dome's REST frame (cosθ=+1 dead ahead,
+// cosθ=−1 dead astern).  Flying at β toward θ=0, the moving observer SEES the
+// star at θ' given by the aberration of light (c=1):
+//   cosθ' = (cosθ + β)/(1 + β·cosθ).
+// As β→1 every star with cosθ>−1 has θ'→0 (the HEADLIGHT); the lone antipode
+// cosθ=−1 is a measure-zero fixed point.  Its own inverse at −β: a bijection.
+function relativisticAberration(cosTheta, beta){
+  return (cosTheta + beta) / (1 + beta*cosTheta);
+}
+
+// The relativistic DOPPLER factor for that star: D = ν_obs/ν_rest =
+//   (1 + β·cosθ)/√(1−β²).   D>1 ahead (BLUEshift), D<1 behind (REDshift),
+// and D=1 exactly at rest (β=0) for every star.  Boosting by β then −β (with
+// the aberrated angle) returns the frequency unchanged: D(β,θ)·D(−β,θ')=1.
+function dopplerFactor(cosTheta, beta){
+  return (1 + beta*cosTheta) / Math.sqrt(1 - beta*beta);
+}
+
+// The NEGATIVE CONTROL — Galilean ("classical") aberration: the apparent
+// direction shifts by simple vector subtraction of the observer's velocity,
+// with NO 1/(1+β·cosθ) denominator → cosθ' = cosθ+β, clamped to the sphere.
+// There is NO headlight: a rear star (cosθ near −1) barely moves and θ' does
+// NOT → 0 as β→1.  Intentionally not a bijection (the clamp collapses a cap):
+// classical aberration is not a clean solid-angle remap — only the
+// relativistic Möbius map is.  This is what gives the headlight claim teeth.
+function classicalAberration(cosTheta, beta){
+  return Math.max(-1, Math.min(1, cosTheta + beta));
+}
 // === CORE END ===
 
 export {
   gammaOf, rateOf, lorentz, interval2, velAdd, galilean, gammaFromGeometry,
   constLegTau, tauClosedForm, properTime, properTimeIntegral,
   properTimePiecewise, coordRate, coordinateClockTau, properTimeCoordinate,
+  relativisticAberration, dopplerFactor, classicalAberration,
 };

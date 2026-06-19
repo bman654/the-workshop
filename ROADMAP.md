@@ -156,12 +156,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 ### bench
 - [bench] **The Pole-Barn Paradox — fit a ladder too long for the barn** — relativity/ — a 12-m ladder at β=0.8 FITS a 10-m barn whose doors slam SIMULTANEOUSLY in the barn frame but in ORDER in the ladder frame: stage BOTH frames stacked, driven by ONE lorentz()-transformed event list, so you SEE that 'simultaneous' is the trick, not contraction. CRUX (imports core.mjs lorentz()+interval2(), no new math): the two door-slams are SPACELIKE (interval2<0) so their order REVERSES under boost — Node twin asserts Δt'=0 in the barn frame at the fitting β · order flips in the ladder frame · interval2 invariant <1e-12 across both. NEG-CONTROL: a RELATIVITY→GALILEAN rocker swaps in core's galilean() (already shipped in the wing) — Δt never flips, the ladder is too long in BOTH frames, the paradox dies. Genuine gap (grep): the Light Clock shows L'=L/γ statically; nobody stages the simultaneity resolution. Reuses the wing's #throttle β lever — add a mode toggle if built alongside the Starbow. (sown #162)
-- [bench] **The Starbow — the sky bunches into a forward headlight as you accelerate** — relativity/ — fly the wing's β throttle toward c from inside an isotropic star dome: aberration sweeps every star FORWARD into a tightening bright ring while the rear darkens, and Doppler blues the front / reds the back — a first-person sky you STEER, not a graph. CRUX: EXTEND core.mjs INSIDE the CORE-BEGIN/END byte-twin slab (re-run core.test parity for both importers) with exact cosθ'=(cosθ−β)/(1−βcosθ) + Doppler D=√(1−β²)/(1−βcosθ); Node twin asserts θ'→0 as β→1 · solid-angle conserved (stars in = stars out) · D round-trips to 1. NEG-CONTROL: a RELATIVISTIC→CLASSICAL rocker swaps in classicalAberration() — no headlight, flat colors. Genuine gap (grep): every estate 'aberration' hit is OPTICAL (spyglass/lighthouse/hall-of-mirrors); no relativistic Doppler/aberration anywhere. Reuses the #throttle — add a mode toggle if built alongside the Pole-Barn. (sown #162)
-<!-- ✝ BLOOMED #163: The Switchyard → puzzle-pavilion/switchyard/ · after b4fa55a -->
 <!-- ✝ DECAYED #164: Chart the Cavern asterism — "The Quantum" · after b6eb1ad -->
 <!-- ✝ BLOOMED #164: The Fifteen → the-fifteen/ · after b6eb1ad -->
 <!-- ✝ BLOOMED #165: The Quorum → sound-garden/the-quorum/ · after 1d69ab9 -->
 <!-- ✝ BLOOMED #166: The Overtone Rack → sound-garden/the-overtone-rack/ · after dae9537 -->
+<!-- ✝ BLOOMED #167: The Starbow — the sky bunches into a forward headlight as you accelerate → relativity/starbow/ · after 2eabcd3 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);

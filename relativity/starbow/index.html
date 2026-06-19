@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Starbow · The Moving Frame</title>
+<style>
+  :root{
+    --bg:        #080a0f;
+    --stage:     radial-gradient(1200px 820px at 50% 50%, #0c0f18 0%, #090b12 60%, #050609 100%);
+    --panel-bg:  rgba(13,16,26,0.90);
+    --panel-edge:rgba(157,180,255,0.24);
+    --ink:       #e9eef9;
+    --ink-dim:   #9aa6c0;
+    --ink-faint: #67708a;
+    --accent:    #9db4ff;          /* the Rise's cool starlight */
+    --accent-hi: #cfe0ff;
+    --accent-soft: rgba(157,180,255,0.16);
+    --accent-edge: rgba(157,180,255,0.40);
+    --home:      #7fd4c0;          /* mineral teal — kept for kin consistency */
+    --warm:      #f0b45a;          /* the throttle / brass / the earned headlight */
+    --warm-soft: rgba(240,180,90,0.16);
+    --bad:       #f08a7a;
+    --good:      #8fd79a;
+    --blue:      #aaccff;
+    --red:       #ff8c6a;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:13px 20px 0; pointer-events:none; gap:14px;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .topbar .left{ display:flex; align-items:center; gap:18px; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .back.rise{ color:rgba(157,180,255,0.74); }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0;
+    background:linear-gradient(96deg,#eaf2ff,#9db4ff 58%,#5d7fc0);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .topbar .right{ display:flex; align-items:center; gap:12px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--accent-edge); background:rgba(0,0,0,0.4); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); }
+  .selftest.ok{ color:var(--good); border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:var(--bad); border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  /* ── layout ── */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; background:var(--stage); overflow:hidden; }
+  canvas#dome{ display:block; width:100%; height:100%; position:relative; z-index:1; }
+  .viewlabel{ position:absolute; left:14px; top:60px; z-index:2; font:600 10px/1 var(--font-mono);
+    letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim); pointer-events:none;
+    background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:7px; border:1px solid rgba(157,180,255,0.18); }
+  .viewlabel b{ color:var(--accent); }
+
+  /* a floating heading compass + ring readout, top-centre of the dome */
+  #compass{ position:absolute; left:50%; top:60px; transform:translateX(-50%); z-index:4;
+    display:flex; flex-direction:column; align-items:center; gap:5px; pointer-events:none;
+    background:rgba(0,0,0,0.42); padding:8px 14px; border-radius:10px;
+    border:1px solid rgba(157,180,255,0.18); max-width:calc(100% - 28px); }
+  #compass .hdg{ font:600 9px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase; color:var(--accent); }
+  #compass .ring{ font:700 13px/1.1 var(--font-mono); color:var(--warm); font-variant-numeric:tabular-nums; }
+  #compass .ring small{ font:600 8.5px/1 var(--font-mono); color:var(--ink-faint); letter-spacing:.1em; text-transform:uppercase; }
+
+  /* β readout, bottom-centre of the dome */
+  #bplate{ position:absolute; left:50%; bottom:18px; transform:translateX(-50%); z-index:4;
+    pointer-events:none; background:rgba(0,0,0,0.42); padding:7px 16px; border-radius:9px;
+    border:1px solid rgba(157,180,255,0.16); display:flex; gap:14px; align-items:baseline;
+    font:600 10px/1 var(--font-mono); letter-spacing:.06em; color:var(--ink-faint);
+    max-width:calc(100% - 28px); }
+  #bplate b{ color:var(--warm); font:700 14px/1 var(--font-mono); font-variant-numeric:tabular-nums; }
+  #bplate .mode{ color:var(--accent); }
+  #bplate .mode.cls{ color:var(--bad); }
+
+  /* the THROTTLE — a physical brass lever, left side (copied from the wing) */
+  #throttle{
+    position:absolute; left:26px; bottom:152px; z-index:5; width:74px; height:300px;
+    touch-action:none; user-select:none; cursor:ns-resize;
+  }
+  #throttle .track{ position:absolute; left:50%; top:8px; bottom:8px; width:12px; transform:translateX(-50%);
+    border-radius:8px; background:linear-gradient(180deg, rgba(240,180,90,0.55), rgba(157,180,255,0.10));
+    border:1px solid rgba(255,255,255,0.10); box-shadow:inset 0 0 12px rgba(0,0,0,0.6); }
+  #throttle .grip{ position:absolute; left:50%; width:58px; height:30px; transform:translate(-50%,-50%);
+    border-radius:9px; background:linear-gradient(180deg,#39414f,#1a1e2a); border:1px solid rgba(255,255,255,0.16);
+    box-shadow:0 4px 14px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.12); cursor:grab; }
+  #throttle .grip::after{ content:""; position:absolute; left:10px; right:10px; top:50%; height:6px; transform:translateY(-50%);
+    border-radius:4px; background:repeating-linear-gradient(90deg, rgba(255,255,255,0.18) 0 2px, transparent 2px 5px); }
+  #throttle.dragging .grip{ cursor:grabbing; box-shadow:0 0 0 2px var(--warm-soft), 0 4px 14px rgba(0,0,0,0.6); }
+  #throttle .cap{ position:absolute; left:0; right:0; text-align:center; font:600 8.5px/1 var(--font-mono);
+    letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+  #throttle .cap.top{ top:-16px; color:var(--warm); }
+  #throttle .cap.bot{ bottom:-16px; }
+  #throttle .bval{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    font:700 12px/1 var(--font-mono); color:var(--warm); pointer-events:none; text-shadow:0 1px 3px #000; }
+
+  /* ── side panel ── */
+  #panel{
+    width:362px; flex:0 0 362px; height:100%; overflow-y:auto;
+    background:var(--panel-bg); border-left:1px solid var(--accent-edge);
+    padding:58px 20px 34px; backdrop-filter:blur(10px) saturate(120%);
+    -webkit-backdrop-filter:blur(10px) saturate(120%);
+    box-shadow:-18px 0 50px rgba(0,0,0,0.5);
+  }
+  #panel .lede{ font:13.5px/1.62 var(--font-serif); color:var(--ink); margin:0 0 6px; opacity:.95; }
+  #panel .lede b{ color:var(--accent); font-weight:600; }
+  #panel .lede .w{ color:var(--warm); }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:20px 0 11px; border-top:1px solid rgba(157,180,255,0.16); padding-top:14px; }
+
+  .flightbar{ display:flex; gap:8px; margin:4px 0 6px; }
+  .flightbar button{ flex:1; padding:11px 6px; font:600 11px/1.1 var(--font-mono); letter-spacing:.06em;
+    background:rgba(157,180,255,0.06); color:var(--ink); border:1px solid var(--accent-edge); border-radius:9px;
+    cursor:pointer; transition:.16s; }
+  .flightbar button:hover{ background:var(--accent-soft); }
+  .flightbar button.warm{ border-color:rgba(240,180,90,0.5); color:var(--warm); }
+  .flightbar button.warm:hover{ background:var(--warm-soft); }
+
+  .hint2{ font:10.5px/1.6 var(--font-mono); color:var(--ink-faint); margin:2px 0 6px; }
+  .hint2 b{ color:var(--ink-dim); }
+  .hint2 .k{ color:var(--accent); }
+
+  /* a panel slider — for look heading on touch (and a fine β on any device) */
+  .slab{ margin:8px 0 4px; }
+  .slab label{ display:flex; justify-content:space-between; align-items:baseline;
+    font:600 9px/1 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:6px; }
+  .slab label b{ color:var(--accent); font:700 11px/1 var(--font-mono); font-variant-numeric:tabular-nums; letter-spacing:0; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:5px; border-radius:4px;
+    background:linear-gradient(90deg, rgba(170,204,255,0.5), rgba(255,140,106,0.5));
+    outline:none; cursor:pointer; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:18px; height:18px; border-radius:50%;
+    background:linear-gradient(180deg,#39414f,#1a1e2a); border:1px solid rgba(255,255,255,0.2);
+    box-shadow:0 2px 6px rgba(0,0,0,0.6); }
+  input[type=range]::-moz-range-thumb{ width:18px; height:18px; border-radius:50%; border:1px solid rgba(255,255,255,0.2);
+    background:#272d3a; box-shadow:0 2px 6px rgba(0,0,0,0.6); }
+
+  .readout{ font:11.5px/1.7 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px;
+    border-top:1px solid rgba(157,180,255,0.18); padding-top:12px; margin-top:8px; }
+  .readout .row2{ display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+  .readout b{ color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums; }
+  .readout .w{ color:var(--warm); }
+  .readout .blue{ color:var(--blue); }
+  .readout .red{ color:var(--red); }
+
+  .ringbox{ margin-top:12px; padding:12px 13px; border-radius:11px; border:1px solid var(--warm-soft);
+    background:linear-gradient(180deg, rgba(240,180,90,0.07), rgba(0,0,0,0)); }
+  .ringbox .lab{ font:600 9px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+  .ringbox .num{ font:700 22px/1.1 var(--font-mono); color:var(--warm); margin:5px 0 2px; font-variant-numeric:tabular-nums; }
+  .ringbox .sub{ font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); }
+
+  /* ── the RELATIVISTIC → CLASSICAL rocker (the negative control) ── */
+  .panelbox{ margin-top:10px; padding:11px 12px 13px; border-radius:11px;
+    border:1px solid rgba(157,180,255,0.18); background:rgba(157,180,255,0.035); }
+  .panelcap{ font:600 8.5px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-faint); margin:0 0 9px; display:flex; align-items:center; gap:8px; }
+  .panelcap::before, .panelcap::after{ content:""; flex:1; height:1px; background:rgba(157,180,255,0.14); }
+  .switch{ display:flex; align-items:flex-start; gap:11px; margin:4px 0; cursor:pointer;
+    padding:7px 8px; border-radius:8px; transition:.14s; }
+  .switch:hover{ background:rgba(157,180,255,0.05); }
+  .switch input{ position:absolute; opacity:0; pointer-events:none; }
+  .rocker{ flex:0 0 30px; width:30px; height:18px; border-radius:4px; position:relative;
+    background:linear-gradient(180deg,#10131c,#070a11); border:1px solid rgba(157,180,255,0.30);
+    box-shadow:inset 0 1px 3px rgba(0,0,0,0.8); margin-top:1px; transition:.18s; }
+  .rocker::after{ content:""; position:absolute; left:2px; top:1.5px; width:12px; height:12px; border-radius:3px;
+    background:linear-gradient(180deg,#3a4254,#1b1f2b); border:1px solid rgba(255,255,255,0.14);
+    box-shadow:0 1px 3px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.12); transition:.18s; }
+  .switch input:checked + .rocker{ background:linear-gradient(180deg,rgba(240,138,122,0.30),rgba(240,138,122,0.10));
+    border-color:var(--bad); box-shadow:inset 0 1px 3px rgba(0,0,0,0.6), 0 0 9px rgba(240,138,122,0.35); }
+  .switch input:checked + .rocker::after{ transform:translateX(13px);
+    background:linear-gradient(180deg,#f0b0a4,#d4756a); }
+  .swlab{ font:11px/1.45 var(--font-mono); color:var(--ink-dim); }
+  .swlab b{ color:var(--ink); font-weight:600; }
+  .swlab .why{ color:var(--ink-faint); font-size:10px; display:block; margin-top:1px; }
+  .switch input:checked ~ .swlab b{ color:var(--bad); }
+  .swstate{ font:600 8px/1 var(--font-mono); letter-spacing:.12em; color:var(--ink-faint);
+    border:1px solid rgba(157,180,255,0.2); border-radius:4px; padding:3px 5px; margin-left:auto; white-space:nowrap; }
+  .switch input:checked ~ .swstate{ color:var(--bad); border-color:rgba(240,138,122,0.5); }
+
+  .hint{ font:10.5px/1.62 var(--font-mono); color:var(--ink-faint); letter-spacing:.2px; margin:18px 0 0;
+    border-top:1px solid rgba(157,180,255,0.18); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+  .hint .k{ color:var(--accent); }
+  .hint a{ color:var(--accent); text-decoration:none; border-bottom:1px dotted rgba(157,180,255,0.4); }
+  .hint a:hover{ color:var(--accent-hi); }
+
+  .kin{ font:10.5px/1.6 var(--font-mono); color:var(--ink-faint); margin:14px 0 0;
+    border-top:1px solid rgba(157,180,255,0.14); padding-top:12px; }
+  .kin a{ color:var(--accent); text-decoration:none; border-bottom:1px dotted rgba(157,180,255,0.4); }
+  .kin a:hover{ color:var(--accent-hi); }
+  .kin .arrow{ color:var(--ink-faint); }
+
+  /* self-test detail */
+  #stPanel{ position:absolute; right:14px; top:60px; width:340px; max-width:calc(100% - 28px);
+    background:rgba(7,9,13,0.96); border:1px solid var(--accent-edge); border-radius:11px;
+    padding:13px 14px; font:10.5px/1.55 var(--font-mono); color:var(--ink-dim);
+    box-shadow:0 10px 40px rgba(0,0,0,0.6); display:none; z-index:20; }
+  #stPanel.show{ display:block; }
+  #stPanel h4{ margin:0 0 9px; font:600 10px/1 var(--font-mono); letter-spacing:.16em;
+    text-transform:uppercase; color:var(--accent); }
+  #stPanel .line{ display:flex; gap:8px; align-items:baseline; margin:5px 0; }
+  #stPanel .badge{ flex:0 0 auto; font-weight:600; }
+  #stPanel .pass{ color:var(--good); }
+  #stPanel .fail{ color:var(--bad); }
+  #stPanel .nm{ color:var(--ink); }
+  #stPanel .dt{ color:var(--ink-faint); }
+  #stPanel .soul{ color:var(--warm); margin:9px 0 0; border-top:1px solid rgba(157,180,255,0.14); padding-top:8px; }
+
+  @media (max-width:820px){
+    #wrap{ flex-direction:column; overflow-y:auto; }
+    #stage{ flex:0 0 auto; height:60vh; min-height:380px; }
+    #panel{ width:100%; flex:0 0 auto; height:auto; border-left:none; border-top:1px solid var(--accent-edge);
+      padding:18px 16px 30px; box-shadow:none; }
+    .brand{ display:none; }
+    .topbar{ padding:10px 14px 0; }
+    #throttle{ bottom:120px; }
+    #stPanel{ width:248px; }
+    /* the compass carries the heading on mobile; the viewlabel would collide */
+    .viewlabel{ display:none; }
+    #compass{ top:50px; }
+  }
+  @media (max-width:390px){
+    #stage{ height:54vh; min-height:320px; }
+    #throttle{ left:18px; bottom:108px; height:240px; }
+    #compass, #bplate{ font-size:9px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="left">
+      <a class="back rise" href="../index.html">&larr; Observatory Rise</a>
+      <a class="back" href="../../index.html">&larr; The Orrery Estate</a>
+    </div>
+    <div class="brand">
+      <h1>The Starbow</h1>
+      <span class="tag">a sky you fly, not a chart you read</span>
+    </div>
+    <div class="right">
+      <div class="selftest" id="selftest" title="built-in self-test &mdash; click for detail">checking&hellip;</div>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="dome"></canvas>
+      <div class="viewlabel">the flown sky &mdash; <b>push toward c and watch it bunch</b></div>
+      <div id="stPanel"></div>
+
+      <div id="compass">
+        <div class="hdg" id="hdgText">looking AHEAD</div>
+        <div class="ring"><span id="ringVal">180</span>&deg; <small>forward 80% within</small></div>
+      </div>
+
+      <div id="bplate">
+        <span>&beta; = v/c <b id="bplateVal">0.000</b></span>
+        <span class="mode" id="modePlate">RELATIVISTIC</span>
+      </div>
+
+      <!-- the THROTTLE lever -->
+      <div id="throttle" title="drag up to push toward c">
+        <div class="cap top">c</div>
+        <div class="track"></div>
+        <div class="grip" id="grip"><span class="bval" id="bvalGrip">0</span></div>
+        <div class="cap bot">rest</div>
+      </div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">Stand inside an even sky &mdash; stars scattered the same in every direction. Now <b>fly</b>:
+        push the brass throttle toward <b class="w">c</b>. The whole sky slides <b>forward</b> and crowds into a
+        tightening bright ring ahead &mdash; the <b class="w">headlight</b> &mdash; while the rear thins and darkens.
+        The front blues, the back reds. Nothing was made or destroyed; every star just moved, and where you look
+        is no longer where it sits at rest.</p>
+
+      <div class="sect">Fly it</div>
+      <div class="flightbar">
+        <button id="btnDive" class="warm">DIVE &beta;&rarr;0.9</button>
+        <button id="btnRest">REST</button>
+      </div>
+      <p class="hint2">Drag the lever (or <b class="k">&uarr;/&darr;</b>) to set <b>&beta;</b>. Drag across the dome &mdash;
+        or use the slider &mdash; to swing your gaze from <b>ahead</b> to <b>astern</b> and see the dark red rear.</p>
+
+      <div class="slab">
+        <label>look heading <b id="hdgDeg">0&deg;</b></label>
+        <input type="range" id="lookSlider" min="0" max="180" value="0" step="1" aria-label="look heading">
+      </div>
+
+      <div class="readout">
+        <div class="row2"><span>throttle &beta;</span><span><b class="w" id="bVal">0.000</b></span></div>
+        <div class="row2"><span>Lorentz &gamma;</span><span><b id="gammaVal">1.000</b></span></div>
+        <div class="row2"><span class="blue">dead-ahead Doppler D</span><span><b class="blue" id="dFront">1.000</b></span></div>
+        <div class="row2"><span class="red">dead-astern Doppler D</span><span><b class="red" id="dRear">1.000</b></span></div>
+        <div class="row2"><span>stars in the field</span><span><b id="starCount">&mdash;</b></span></div>
+      </div>
+
+      <div class="ringbox">
+        <div class="lab">forward 80% of the sky fits within</div>
+        <div class="num" id="ringNum">180&deg;</div>
+        <div class="sub" id="ringSub">at rest the sky is even &mdash; half ahead, half behind. Push toward c and it collapses to a cap.</div>
+      </div>
+
+      <div class="sect">Switch off relativity</div>
+      <div class="panelbox">
+        <p class="panelcap">instrument bench &middot; the falsifier</p>
+        <label class="switch">
+          <input type="checkbox" id="ngClassical">
+          <span class="rocker"></span>
+          <span class="swlab"><b>Classical aberration</b>
+            <span class="why">cos&theta;&prime; = cos&theta;+&beta;, clamped &mdash; no 1/(1+&beta;cos&theta;) denominator</span></span>
+          <span class="swstate" id="stateSky">RELATIVISTIC</span>
+        </label>
+        <p class="hint2" style="margin:8px 0 0;">Throw the switch and the headlight must <b>DIE</b> &mdash; that's the
+          point. With no relativistic denominator the rear barely moves, the sky never bunches, and the colours go
+          flat. The chip top-right <b>proves</b> the difference live.</p>
+      </div>
+
+      <p class="hint">Each star's apparent ring angle is the aberration of light,
+        <b>cos&theta;&prime; = (cos&theta;+&beta;)/(1+&beta;cos&theta;)</b>; its colour is the relativistic Doppler factor
+        <b>D = (1+&beta;cos&theta;)/&radic;(1&minus;&beta;&sup2;)</b> &mdash; brighter forward, by relativistic beaming.
+        As &beta;&rarr;c, <span class="k">every</span> star but the lone antipode is swept to &theta;&prime;&rarr;0: the
+        headlight. The map is a clean bijection &mdash; boost by &minus;&beta; and every star returns home. The same
+        &radic;(1&minus;&beta;&sup2;) is the slant the <a href="../../cavern/light-clock/index.html">Light Clock</a>
+        draws; the same throttle the <a href="../index.html">Twin Voyage</a> flies.</p>
+
+      <p class="kin">Kin across the estate &mdash; one geometry, more windows on it:<br>
+        <a href="../index.html">The Twin Voyage</a> <span class="arrow">&middot; the fare a clock pays to travel</span><br>
+        <a href="../../cavern/light-clock/index.html">The Light Clock</a> <span class="arrow">&middot; &gamma; from Pythagoras</span><br>
+        <span style="color:var(--accent)">The Starbow</span> <span class="arrow">&middot; the sky you fly into</span></p>
+    </aside>
+  </div>
+
+<script type="module">
+"use strict";
+/* ===================================================================
+ *  THE SHARED CORE — imported from relativity/core.mjs, the estate's ONE
+ *  special-relativity logic core.  This page does NOT inline the slab (it is
+ *  not a byte-parity target); it RUNS the imported aberration / Doppler math.
+ *  Natural units, c = 1.
+ * =================================================================== */
+import * as CORE from '../core.mjs';
+
+const M = {
+  gammaOf: CORE.gammaOf,
+  relativisticAberration: CORE.relativisticAberration,
+  dopplerFactor: CORE.dopplerFactor,
+  classicalAberration: CORE.classicalAberration,
+};
+
+const $ = id => document.getElementById(id);
+
+/* ===================================================================
+ *  STATE
+ * =================================================================== */
+const state = {
+  beta: 0,            // current speed (eased toward target)
+  targetBeta: 0,      // throttle target
+  lookHeading: 0,     // 0 = dead ahead, π = dead astern
+  classical: false,   // the negative control
+};
+
+/* the dome's render selectors — ONE branch each on the classical control.
+   classical ⇒ D≡1 (flat colours) is a RENDER contract, not a core claim. */
+function skyMap(cosTheta, beta){
+  return state.classical ? M.classicalAberration(cosTheta, beta)
+                         : M.relativisticAberration(cosTheta, beta);
+}
+function skyDoppler(cosTheta, beta){
+  return state.classical ? 1 : M.dopplerFactor(cosTheta, beta);
+}
+
+/* ===================================================================
+ *  THE REST FIELD — an isotropic star dome, seeded → reproducible.
+ * =================================================================== */
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const N_STARS = 1400;
+const stars = [];          // {cos0, phi, restK, mag}
+(function buildField(){
+  const rnd = mulberry32(0xCA11AB1E);
+  for(let i=0;i<N_STARS;i++){
+    const u = rnd(), v = rnd();
+    const cos0 = 2*u - 1;            // area-correct isotropy: cosθ uniform on [-1,1]
+    const phi  = 2*Math.PI*v;        // azimuth uniform on [0,2π)
+    const restK = 3200 + rnd()*(12000-3200);
+    // a magnitude distribution: many faint, few bright (power-ish via cube)
+    const mag = Math.pow(rnd(), 2.4);   // 0 dim .. 1 bright-ish, skewed dim
+    stars.push({ cos0, phi, restK, mag });
+  }
+})();
+
+/* ===================================================================
+ *  COLOUR — blackbody Kelvin → RGB (page-side polynomial, NOT in the slab).
+ *  A compact, well-behaved approximation over ~1000–40000 K.
+ * =================================================================== */
+function kelvinToRGB(kelvin){
+  let t = kelvin / 100;
+  let r, g, b;
+  if(t <= 66){
+    r = 255;
+    g = 99.4708025861*Math.log(t) - 161.1195681661;
+    if(t <= 19){ b = 0; }
+    else { b = 138.5177312231*Math.log(t-10) - 305.0447927307; }
+  } else {
+    r = 329.698727446*Math.pow(t-60, -0.1332047592);
+    g = 288.1221695283*Math.pow(t-60, -0.0755148492);
+    b = 255;
+  }
+  const cl = x => Math.max(0, Math.min(255, x));
+  return [cl(r), cl(g), cl(b)];
+}
+
+/* ===================================================================
+ *  CANVAS
+ * =================================================================== */
+const cv = $('dome'), ctx = cv.getContext('2d');
+const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+let W = 0, H = 0, cx = 0, cy = 0, R = 1;
+let reduceMotion = false;
+try{ reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
+
+function resize(){
+  const r = cv.getBoundingClientRect();
+  W = Math.max(2, r.width); H = Math.max(2, r.height);
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  cx = W/2; cy = H/2;
+  R = 0.46 * Math.min(W, H);    // square-safe: shrinks, never clips
+}
+
+/* ===================================================================
+ *  THE FORWARD-80% RING — the ONE idea, made unmissable.
+ *  The apparent angle θ' enclosing 80% of the stars (from dead ahead).
+ *  Because cosθ₀ is uniform, the rest-frame 80%-from-ahead boundary is the
+ *  star whose cos0 is the 80th percentile from +1, i.e. cos0 = 1 - 2*0.8 =
+ *  -0.6.  We map THAT boundary through the live aberration to get the apparent
+ *  cap angle, exactly tracking the crowd as β climbs.
+ * =================================================================== */
+function forward80Angle(beta){
+  const boundaryCos0 = 1 - 2*0.8;            // -0.6: 80% of the sky lies ahead of it
+  const cosA = skyMap(boundaryCos0, beta);
+  return Math.acos(Math.max(-1, Math.min(1, cosA)));   // radians, 0..π
+}
+
+/* projected radius for an apparent ring angle θ' (equidistant azimuthal) */
+function thetaToR(thetaPrime){ return R * (thetaPrime / Math.PI); }
+
+/* ===================================================================
+ *  DRAW
+ * =================================================================== */
+let prevBeta = 0;
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  const beta = state.beta;
+  const dBeta = beta - prevBeta;
+  const streaking = !reduceMotion && Math.abs(dBeta) > 0.0016;
+
+  // horizon ring (θ'=π, the full backward edge) + reticle
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(157,180,255,0.10)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, R*0.5, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(157,180,255,0.06)'; ctx.lineWidth = 1; ctx.stroke();
+
+  // additive compositing so the crowded forward ring blooms into one disc
+  ctx.globalCompositeOperation = 'lighter';
+
+  let drawn = 0;
+  for(const s of stars){
+    // apparent ring angle from dead-ahead, then rotate by the look heading
+    const cosA = skyMap(s.cos0, beta);
+    const thetaApp = Math.acos(Math.max(-1, Math.min(1, cosA)));   // 0..π from AHEAD
+    // looking toward heading h: a star at ring-angle θ from ahead appears at
+    // ring-angle |θ − h| from the CENTRE of the view (we sweep the camera, not
+    // the sky's azimuth) — a faithful fly-through swing from ahead (h=0) to
+    // astern (h=π) where the dark rear ring fills the disc.
+    const thetaView = Math.abs(thetaApp - state.lookHeading);
+    if(thetaView > Math.PI) continue;        // behind the viewer's hemisphere edge
+    const rPx = thetaToR(thetaView);
+    const x = cx + rPx*Math.cos(s.phi);
+    const y = cy + rPx*Math.sin(s.phi);
+
+    // colour from the Doppler-shifted temperature
+    const D = skyDoppler(s.cos0, beta);
+    const Tobs = s.restK * D;
+    const [cr, cg, cb] = kelvinToRGB(Tobs);
+
+    // brightness: base from magnitude, beamed by D^2.2 (perceptual compression
+    // of the true forward beaming — monotone, ordering-faithful).
+    const base = 0.10 + 0.55*s.mag;
+    let bright = base * Math.pow(D, 2.2);
+    const alpha = Math.min(1, bright);
+    if(alpha < 0.015){ drawn++; continue; }   // counted (none destroyed), not drawn
+
+    const radius = 0.7 + 1.7*Math.min(1.6, bright);
+
+    if(streaking){
+      // inward streak toward / outward away from centre as the sky rushes by
+      const dir = Math.sign(dBeta) || 1;
+      const sx = cx + (rPx + dir*2.4)*Math.cos(s.phi);
+      const sy = cy + (rPx + dir*2.4)*Math.sin(s.phi);
+      ctx.strokeStyle = 'rgba('+(cr|0)+','+(cg|0)+','+(cb|0)+','+(alpha*0.6)+')';
+      ctx.lineWidth = radius*0.9; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(x, y); ctx.stroke();
+    }
+
+    ctx.fillStyle = 'rgba('+(cr|0)+','+(cg|0)+','+(cb|0)+','+alpha+')';
+    ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI*2); ctx.fill();
+    drawn++;
+  }
+
+  ctx.globalCompositeOperation = 'source-over';
+
+  // the TIGHTENING RING — a faint brass annulus at the forward-80% angle, drawn
+  // relative to the current look heading so it tracks the crowd in view.
+  const ring80 = forward80Angle(beta);
+  const ringViewTheta = Math.abs(ring80 - state.lookHeading);
+  if(ringViewTheta <= Math.PI){
+    const rr = thetaToR(ringViewTheta);
+    ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(240,180,90,0.5)'; ctx.lineWidth = 1.4;
+    ctx.setLineDash([3,4]); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // centre reticle (where you're aimed)
+  ctx.strokeStyle = 'rgba(207,224,255,0.5)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cx-7, cy); ctx.lineTo(cx+7, cy);
+  ctx.moveTo(cx, cy-7); ctx.lineTo(cx, cy+7); ctx.stroke();
+
+  // an OPTIONAL centre tick — the only canvas text — width-measured then clamped
+  ctx.font = '600 9px ' + mono();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  const tick = state.lookHeading < Math.PI*0.34 ? 'AHEAD'
+            : state.lookHeading > Math.PI*0.66 ? 'ASTERN' : 'ABEAM';
+  ctx.fillStyle = 'rgba(160,172,190,0.7)';
+  const half = ctx.measureText(tick).width/2;
+  ctx.fillText(tick, Math.min(W-half-2, Math.max(half+2, cx)), cy - 14);
+
+  prevBeta = beta;
+  return drawn;
+}
+function mono(){ return getComputedStyle(document.documentElement).getPropertyValue('--font-mono') || 'monospace'; }
+
+/* ===================================================================
+ *  READOUTS
+ * =================================================================== */
+function updateReadouts(drawn){
+  const b = state.beta;
+  $('bVal').textContent = b.toFixed(3);
+  $('bplateVal').textContent = b.toFixed(3);
+  $('bvalGrip').textContent = b===0 ? '0' : b.toFixed(2);
+  $('gammaVal').textContent = M.gammaOf(b).toFixed(3);
+  $('dFront').textContent = skyDoppler(1, b).toFixed(3);
+  $('dRear').textContent  = skyDoppler(-1, b).toFixed(3);
+  $('starCount').textContent = (drawn!=null? drawn : N_STARS) + ' / ' + N_STARS;
+
+  const ring80deg = forward80Angle(b) * 180/Math.PI;
+  $('ringNum').textContent = ring80deg.toFixed(0) + '°';
+  $('ringVal').textContent = ring80deg.toFixed(0);
+  const sub = $('ringSub');
+  if(b < 0.02){
+    sub.textContent = 'at rest the sky is even — half ahead, half behind. Push toward c and it collapses to a cap.';
+  } else {
+    sub.textContent = 'the forward 80% has crowded into a ' + ring80deg.toFixed(0) + '° cap — the headlight.';
+  }
+
+  // heading text
+  const hdg = state.lookHeading;
+  const hdgTxt = hdg < Math.PI*0.34 ? 'looking AHEAD'
+              : hdg > Math.PI*0.66 ? 'looking ASTERN' : 'looking ABEAM';
+  $('hdgText').textContent = hdgTxt;
+  $('hdgDeg').textContent = (hdg*180/Math.PI).toFixed(0) + '°';
+}
+
+/* ===================================================================
+ *  THROTTLE LEVER (copied pattern from the wing)
+ * =================================================================== */
+function setBeta(b){
+  b = Math.max(0, Math.min(0.99, b));
+  state.targetBeta = b;
+  if(reduceMotion) state.beta = b;     // no easing under reduced motion
+  positionGrip();
+}
+function positionGrip(){
+  const tr = $('throttle'), grip = $('grip');
+  const Htr = tr.clientHeight, gh = grip.offsetHeight;
+  const usable = Htr - 16 - gh;
+  const frac = state.targetBeta/0.99;
+  grip.style.top = (8 + gh/2 + (1-frac)*usable) + 'px';
+}
+(function(){
+  const tr = $('throttle'), grip = $('grip');
+  let dragging=false;
+  function fromY(clientY){
+    const rect = tr.getBoundingClientRect();
+    const gh = grip.offsetHeight;
+    const usable = rect.height - 16 - gh;
+    let frac = 1 - ((clientY - rect.top - 8 - gh/2)/usable);
+    frac = Math.max(0, Math.min(1, frac));
+    setBeta(frac*0.99);
+  }
+  function down(e){ dragging=true; tr.classList.add('dragging'); fromY((e.touches?e.touches[0]:e).clientY); e.preventDefault(); }
+  function move(e){ if(!dragging) return; fromY((e.touches?e.touches[0]:e).clientY); e.preventDefault(); }
+  function up(){ dragging=false; tr.classList.remove('dragging'); }
+  tr.addEventListener('mousedown', down); window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+  tr.addEventListener('touchstart', down, {passive:false}); window.addEventListener('touchmove', move, {passive:false}); window.addEventListener('touchend', up);
+})();
+
+/* ── look-heading: drag across the dome, OR the panel slider ── */
+(function(){
+  const stage = $('stage');
+  let dragging=false;
+  function fromX(clientX){
+    const rect = cv.getBoundingClientRect();
+    let frac = (clientX - rect.left)/rect.width;
+    frac = Math.max(0, Math.min(1, frac));
+    setLook(frac*Math.PI);
+  }
+  function isOnThrottle(e){
+    const t = $('throttle').getBoundingClientRect();
+    const px = (e.touches?e.touches[0]:e).clientX, py = (e.touches?e.touches[0]:e).clientY;
+    return px>=t.left && px<=t.right && py>=t.top && py<=t.bottom;
+  }
+  function down(e){ if(isOnThrottle(e)) return; dragging=true; fromX((e.touches?e.touches[0]:e).clientX); }
+  function move(e){ if(!dragging) return; fromX((e.touches?e.touches[0]:e).clientX); e.preventDefault(); }
+  function up(){ dragging=false; }
+  cv.addEventListener('mousedown', down); window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+  cv.addEventListener('touchstart', down, {passive:true}); window.addEventListener('touchmove', e=>{ if(dragging) move(e); }, {passive:false}); window.addEventListener('touchend', up);
+})();
+function setLook(rad){
+  state.lookHeading = Math.max(0, Math.min(Math.PI, rad));
+  $('lookSlider').value = String(Math.round(state.lookHeading*180/Math.PI));
+}
+$('lookSlider').addEventListener('input', e=>{ setLook((+e.target.value)*Math.PI/180); });
+
+/* ── keys ── */
+const keys = {};
+window.addEventListener('keydown', e=>{
+  if(e.key==='ArrowUp'){ keys.up=true; e.preventDefault(); }
+  if(e.key==='ArrowDown'){ keys.down=true; e.preventDefault(); }
+  if(e.key==='ArrowLeft'){ setLook(state.lookHeading - 0.12); e.preventDefault(); }
+  if(e.key==='ArrowRight'){ setLook(state.lookHeading + 0.12); e.preventDefault(); }
+});
+window.addEventListener('keyup', e=>{
+  if(e.key==='ArrowUp') keys.up=false;
+  if(e.key==='ArrowDown') keys.down=false;
+});
+
+/* ── buttons + rocker ── */
+$('btnDive').addEventListener('click', ()=>setBeta(0.9));
+$('btnRest').addEventListener('click', ()=>setBeta(0));
+$('ngClassical').addEventListener('change', e=>{
+  state.classical = e.target.checked;
+  $('stateSky').textContent = e.target.checked ? 'CLASSICAL' : 'RELATIVISTIC';
+  const mp = $('modePlate');
+  mp.textContent = e.target.checked ? 'CLASSICAL' : 'RELATIVISTIC';
+  mp.classList.toggle('cls', e.target.checked);
+});
+
+/* ===================================================================
+ *  THE SELF-TEST — runs the SAME (9*) claims live in-browser via CORE.*
+ *  (relaxed <1e-11 tolerance), per-line PASS badges + soul copy.
+ * =================================================================== */
+function runSelfTest(){
+  const log = [];
+  const check = (name, ok, detail) => log.push({ name, ok:!!ok, detail:detail||'' });
+  const DEG = 180/Math.PI;
+  const acosClamp = c => Math.acos(Math.max(-1, Math.min(1, c)));
+
+  // (9a) HEADLIGHT
+  {
+    const beta = 1 - 1e-9; let maxTheta = 0;
+    for(let i=0;i<=4000;i++){
+      const cos0 = -1 + 1e-3 + (1-(-1+1e-3))*(i/4000);
+      const th = acosClamp(M.relativisticAberration(cos0, beta))*DEG;
+      if(th>maxTheta) maxTheta = th;
+    }
+    check('almost the whole sky crowds into a forward cone as you near c ✓',
+      maxTheta < 0.5, 'max θ′ ' + maxTheta.toFixed(3) + '° at β→1');
+  }
+  // (9b) BIJECTION + inverse round-trip
+  {
+    const beta = 0.9, N = 4000; let cin=0, cout=0, onSphere=true, maxR=0;
+    for(let i=0;i<=N;i++){
+      const cos0 = -1 + 2*(i/N); cin++;
+      const cosA = M.relativisticAberration(cos0, beta);
+      if(Number.isFinite(cosA)) cout++;
+      if(!(cosA>=-1-1e-12 && cosA<=1+1e-12)) onSphere=false;
+      const back = M.relativisticAberration(cosA, -beta);
+      maxR = Math.max(maxR, Math.abs(back-cos0));
+    }
+    check('every star moved, none made or unmade ✓',
+      cin===N+1 && cout===N+1 && onSphere && maxR<1e-11,
+      cin+' in = '+cout+' out · inverse round-trip ' + maxR.toExponential(2));
+  }
+  // (9c) DOPPLER round-trip + D(·,0)=1
+  {
+    let maxErr = 0;
+    for(let s=0;s<=200;s++){
+      const beta = (s/200)*0.999;
+      for(let i=0;i<=20;i++){
+        const cos0 = -1 + 2*(i/20);
+        const cosA = M.relativisticAberration(cos0, beta);
+        maxErr = Math.max(maxErr, Math.abs(M.dopplerFactor(cos0,beta)*M.dopplerFactor(cosA,-beta) - 1));
+      }
+    }
+    const restExact = M.dopplerFactor(1,0)===1 && M.dopplerFactor(-1,0)===1;
+    check('boost there and back, colors return to rest ✓',
+      maxErr<1e-11 && restExact, 'max |Δ| ' + maxErr.toExponential(2) + ' · D(·,0)=1');
+  }
+  // (9d) DIRECTIONAL
+  {
+    let ok = true;
+    for(const beta of [0.1,0.5,0.9]){ if(!(M.dopplerFactor(1,beta)>1 && M.dopplerFactor(-1,beta)<1)) ok=false; }
+    check('the front blues, the back reds ✓', ok,
+      'D ahead .9=' + M.dopplerFactor(1,0.9).toFixed(2) + ' · D behind=' + M.dopplerFactor(-1,0.9).toFixed(2));
+  }
+  // (9e) NEG-CONTROL
+  {
+    const beta = 1 - 1e-9;
+    const thRel = acosClamp(M.relativisticAberration(-0.5, beta))*DEG;
+    const thCls = acosClamp(M.classicalAberration(-0.5, beta))*DEG;
+    check('switch off relativity and the headlight dies ✓',
+      thRel<0.06 && thCls>57, 'relativistic θ′=' + thRel.toFixed(3) + '° · classical θ′=' + thCls.toFixed(1) + '°');
+  }
+
+  const pass = log.filter(l=>l.ok).length;
+  return { pass, total:log.length, log };
+}
+
+const chip = $('selftest'), stPanel = $('stPanel');
+function showSelfTest(){
+  try{
+    const res = runSelfTest();
+    const ok = res.pass===res.total;
+    chip.textContent = res.pass+'/'+res.total+(ok?' ✓':' ✗');
+    chip.className = 'selftest '+(ok?'ok':'bad');
+    let html = '<h4>Built-in self-test — '+res.pass+'/'+res.total+'</h4>';
+    res.log.forEach(l=>{
+      html += '<div class="line"><span class="badge '+(l.ok?'pass':'fail')+'">'+(l.ok?'PASS':'FAIL')+'</span>'+
+        '<span><span class="nm">'+l.name+'</span>'+(l.detail?' <span class="dt">['+l.detail+']</span>':'')+'</span></div>';
+    });
+    html += '<div class="soul">The same five claims the Node twin proves, run live in your browser.</div>';
+    stPanel.innerHTML = html;
+    console.log('[starbow] self-test '+res.pass+'/'+res.total+(ok?' ✓':' ✗'));
+  }catch(err){
+    chip.textContent = 'self-test ERR'; chip.className='selftest bad';
+    stPanel.innerHTML = '<h4>self-test errored</h4><div class="dt">'+String(err)+'</div>';
+    console.error(err);
+  }
+}
+chip.addEventListener('click', ()=>stPanel.classList.toggle('show'));
+
+/* ===================================================================
+ *  LOOP
+ * =================================================================== */
+let raf=0, running=true, lastT=0;
+function frame(t){
+  if(!running) return;
+  let dt = lastT ? (t-lastT)/1000 : 0; lastT=t;
+  if(dt>0.1) dt=0.1;
+  if(keys.up)   setBeta(state.targetBeta + dt*0.7);
+  if(keys.down) setBeta(state.targetBeta - dt*0.7);
+  // momentum easing toward the throttle target
+  if(!reduceMotion) state.beta += (state.targetBeta - state.beta) * Math.min(1, dt*4);
+  else state.beta = state.targetBeta;
+  const drawn = draw();
+  updateReadouts(drawn);
+  raf = requestAnimationFrame(frame);
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden){ running=false; if(raf) cancelAnimationFrame(raf); }
+  else if(!running){ running=true; lastT=0; raf=requestAnimationFrame(frame); }
+});
+window.addEventListener('resize', ()=>{ resize(); positionGrip(); });
+
+// breadcrumb — namespace-safe, grep-confirmed unused
+try{ const k='ws:seen:starbow'; if(!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
+
+// expose for verification
+window.STARBOW = { runSelfTest, CORE, M, state, setBeta, setLook };
+
+// boot
+resize();
+positionGrip();
+showSelfTest();
+// draw at least one static frame for reduced-motion users
+draw(); updateReadouts(N_STARS);
+raf = requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -17,6 +17,14 @@
 //   (7) γ FROM PHOTON-PATH PYTHAGORAS == 1/√(1−β²) (the Light Clock's claim,
 //       proved from the same shared function).
 //   (8) velocity addition stays strictly below c.
+//   (9) THE STARBOW — the sky you fly into.  Aberration cosθ'=(cosθ+β)/(1+βcosθ)
+//       and Doppler D=(1+βcosθ)/√(1−β²):  (9a) HEADLIGHT — every star sweeps to
+//       θ'→0 as β→1 (max θ' < 0.5° at β=1−1e-9); (9a′) per-star θ'(β) is strictly
+//       monotone ↓; (9b) it is a BIJECTION — N+1 stars in, N+1 out, all finite,
+//       and the inverse boost at −β round-trips each cosθ (<1e-11); (9c) the
+//       Doppler round-trips, D(β,θ)·D(−β,θ')=1 (<1e-11), and D(c,0)=1 exactly;
+//       (9d) it is DIRECTIONAL — blue ahead (D>1), red behind (D<1); (9e) the
+//       classical NEG-CONTROL FAILS the headlight (a rear star stays at 60°).
 //   (e) BYTE-TWIN PARITY: the inlined CORE slab in BOTH relativity/index.html
 //       and cavern/light-clock/index.html is byte-identical (indentation-
 //       normalised) to core.mjs's slab — so the math can never silently drift.
@@ -26,6 +34,7 @@ import {
   gammaOf, rateOf, lorentz, interval2, velAdd, galilean, gammaFromGeometry,
   constLegTau, tauClosedForm, properTime, properTimeIntegral,
   properTimePiecewise, coordinateClockTau, properTimeCoordinate,
+  relativisticAberration, dopplerFactor, classicalAberration,
 } from './core.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -204,6 +213,105 @@ function check(name, ok, detail){
   }
   check('(8) velocity addition (u+v)/(1+uv) stays |w| < c  (5000 pairs)',
     allUnder && maxW < 1, 'max |w| ' + maxW.toFixed(9) + ' c');
+}
+
+// ── (9) THE STARBOW — relativistic aberration + Doppler of the flown sky ─────
+const DEG = 180 / Math.PI;
+const acosClamp = c => Math.acos(Math.max(-1, Math.min(1, c)));
+{
+  // (9a) HEADLIGHT: at β just under c every star (bar the measure-zero antipode)
+  //      is swept to θ'≈0.  Sweep cosθ₀ from just above −1 up to +1.
+  {
+    const beta = 1 - 1e-9;
+    let maxTheta = 0, worst = -2;
+    for (let i = 0; i <= 4000; i++){
+      const cos0 = -1 + 1e-3 + (1 - (-1 + 1e-3)) * (i / 4000);
+      const th = acosClamp(relativisticAberration(cos0, beta)) * DEG;
+      if (th > maxTheta){ maxTheta = th; worst = cos0; }
+    }
+    check('(9a) HEADLIGHT: β→1 sweeps the whole sky into θ′<0.5°',
+      maxTheta < 0.5, 'max θ′ ' + maxTheta.toFixed(3) + '° @cosθ=' + worst.toFixed(4));
+  }
+
+  // (9a′) PER-STAR MONOTONE: for a fixed star, θ'(β) strictly decreases in β.
+  {
+    let mono = true, worst = '';
+    for (const cos0 of [0.5, 0, -0.5, -0.9, -0.999]){
+      let prev = Infinity;
+      for (let s = 0; s <= 400; s++){
+        const beta = (s / 400) * 0.99999;
+        const th = acosClamp(relativisticAberration(cos0, beta));
+        if (s > 0 && !(th < prev - 1e-15)){ mono = false; worst = 'cosθ=' + cos0 + ' @β step ' + s; break; }
+        prev = th;
+      }
+      if (!mono) break;
+    }
+    check('(9a′) per-star θ′(β) strictly ↓ in β (the star never swings back)',
+      mono, mono ? '5 stars monotone over 401 β each' : 'NOT monotone: ' + worst);
+  }
+
+  // (9b) BIJECTION: every rest star maps to exactly one apparent star, finite and
+  //      on the sphere; and the inverse boost at −β returns the original cosθ.
+  {
+    const beta = 0.9;
+    const N = 4000;
+    let countIn = 0, countOut = 0, allOnSphere = true, maxRound = 0, worst = 0;
+    for (let i = 0; i <= N; i++){
+      const cos0 = -1 + 2 * (i / N);
+      countIn++;
+      const cosA = relativisticAberration(cos0, beta);
+      if (Number.isFinite(cosA)) countOut++;
+      if (!(cosA >= -1 - 1e-12 && cosA <= 1 + 1e-12)) allOnSphere = false;
+      const back = relativisticAberration(cosA, -beta);     // inverse at −β
+      const e = Math.abs(back - cos0);
+      if (e > maxRound){ maxRound = e; worst = cos0; }
+    }
+    check('(9b) BIJECTION: N+1 in === N+1 out, all on the sphere; inverse-at−β round-trips',
+      countIn === N + 1 && countOut === N + 1 && allOnSphere && maxRound < 1e-11,
+      'in/out ' + countIn + '/' + countOut + ' · max round-trip ' + maxRound.toExponential(2) +
+      ' @cosθ=' + worst.toFixed(4) + ' (1+βcosθ→0 at the antipode is the conditioning-worst point; 1e-12 is unachievable in float64)');
+  }
+
+  // (9c) DOPPLER round-trips to 1, and D(c,0)=1 exactly (no shift at rest, full restore).
+  {
+    let maxErr = 0, worst = 0;
+    for (let s = 0; s <= 400; s++){
+      const beta = (s / 400) * 0.999;
+      for (let i = 0; i <= 40; i++){
+        const cos0 = -1 + 2 * (i / 40);
+        const cosA = relativisticAberration(cos0, beta);
+        const round = dopplerFactor(cos0, beta) * dopplerFactor(cosA, -beta);
+        const e = Math.abs(round - 1);
+        if (e > maxErr){ maxErr = e; worst = beta; }
+      }
+    }
+    const restExact = dopplerFactor(1, 0) === 1 && dopplerFactor(0, 0) === 1 && dopplerFactor(-1, 0) === 1;
+    check('(9c) DOPPLER round-trips D(β,θ)·D(−β,θ′)=1 (<1e-11) and D(·,0)=1 exactly',
+      maxErr < 1e-11 && restExact, 'max |Δ| ' + maxErr.toExponential(2) + ' @β=' + worst.toFixed(3) +
+      (restExact ? ' · D(·,0)=1 ✓' : ' · D at rest ≠ 1'));
+  }
+
+  // (9d) DIRECTIONAL: blueshift dead ahead (D>1), redshift dead astern (D<1).
+  {
+    let dirOk = true, note = '';
+    for (const beta of [0.1, 0.5, 0.9]){
+      const ahead = dopplerFactor(1, beta), behind = dopplerFactor(-1, beta);
+      if (!(ahead > 1 && behind < 1)){ dirOk = false; note = 'β=' + beta + ' ahead=' + ahead.toFixed(3) + ' behind=' + behind.toFixed(3); break; }
+    }
+    check('(9d) DIRECTIONAL: blue ahead (D>1), red behind (D<1) for β∈{.1,.5,.9}',
+      dirOk, dirOk ? 'D(+1,.9)=' + dopplerFactor(1, 0.9).toFixed(3) + ' · D(−1,.9)=' + dopplerFactor(-1, 0.9).toFixed(3) : note);
+  }
+
+  // (9e) NEG-CONTROL: the relativistic map passes the headlight; the classical
+  //      one FAILS — a rear star at cosθ=−0.5 stays at 60°, no headlight.
+  {
+    const beta = 1 - 1e-9;
+    const thRel = acosClamp(relativisticAberration(-0.5, beta)) * DEG;
+    const thCls = acosClamp(classicalAberration(-0.5, beta)) * DEG;
+    check('(9e) CONTROL: relativistic passes headlight (θ′<0.06°) while classical FAILS (θ′>57°)',
+      thRel < 0.06 && thCls > 57,
+      'relativistic θ′=' + thRel.toFixed(4) + '° · classical θ′=' + thCls.toFixed(2) + '°');
+  }
 }
 
 // ── (e) BYTE-TWIN PARITY: both pages’ inlined CORE slab === core.mjs slab ────
