@@ -10,11 +10,11 @@
                               battery from the SAME bytes the twin checks.
 
    DOM-free, zero-import, no randomness, no wall-clock NOW. Given the raw text of
-   ledger/ledger.jsonl it answers: do the 662 marks partition cleanly into maker
+   ledger/ledger.jsonl it answers: do the 668 marks partition cleanly into maker
    buckets under a DOCUMENTED role-normalization rule — no token double-counted,
    no token dropped (Σ bucket counts === N exactly)?
 
-   Source of truth is ledger/ledger.jsonl (662 marks), a DIFFERENT file than the
+   Source of truth is ledger/ledger.jsonl (668 marks), a DIFFERENT file than the
    River's museum/cycles.json — hence this fresh core, not a reuse of core.mjs.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -322,14 +322,14 @@ export function verdict(checks) {
 
 /* The VERIFIED real census of this estate's ledger, as of this build. The Node
    twin pins to these; if the ledger changes shape the twin fails loudly and the
-   page must be re-forged. Recomputed THIS turn from ledger/ledger.jsonl (662 marks).
-   byRole is the full partition; Σ === N === 662. */
+   page must be re-forged. Recomputed THIS turn from ledger/ledger.jsonl (668 marks).
+   byRole is the full partition; Σ === N === 668. */
 export const CLAIM = {
-  N: 662,
-  distinctNames: 556,
-  againNames: 61,         // hands that signed >1 mark (167 of the 662 tokens)
+  N: 668,
+  distinctNames: 561,
+  againNames: 62,         // hands that signed >1 mark (169 of the 668 tokens)
   byRole: {
-    publisher: 166, explorer: 193, director: 96, judge: 66, builder: 83,
+    publisher: 167, explorer: 195, director: 97, judge: 67, builder: 84,
     planter: 29, 'bug-fixer': 9, gardener: 7, 'grounds-worker': 7,
     steward: 5, architect: 1, other: 0
   }
