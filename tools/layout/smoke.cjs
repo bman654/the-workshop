@@ -1,7 +1,20 @@
 /* smoke test: run Layout.solve over the declarative PLACES and verify every
-   footprint stays inside FIELD and clear of all catalog stars. Node-only. */
+   footprint stays inside FIELD and clear of all catalog stars. Node-only.
+
+   After the STRUCTURAL suite, this also runs the LEGIBILITY CONSCIENCE
+   (legibility.cjs) over the LIVE 37-POI door as a separate, clearly-labelled
+   section. EXIT-CODE POLICY: the legibility verdict is a WARNING, never a hard
+   exit-1. The live door is EXPECTED to FAIL the legibility threshold — that red
+   is the intended confirmation of #103 (modeled label-box crowding) and the
+   concrete target for a pending [map] re-draw. If it tripped the structural exit
+   code, every unrelated cycle's CI would break on a known-open issue. So the
+   structural `fail` counter (which drives process.exit) NEVER counts the
+   legibility verdict; legibility's own regression guard is legibility.test.cjs. */
+const fs = require('fs');
+const path = require('path');
 const Layout = require('./layout.js');
 const Sky = require('../sky/sky.js');
+const Leg = require('./legibility.cjs');
 const C = Sky.CATALOG;
 const STAR_PAD = 12;
 
@@ -73,5 +86,37 @@ console.log('=== BENEATH SLOT ===', JSON.stringify(Layout.beneathSlot()));
 try { Layout.solve([{id:'x', district:'nowhere', tier:1}]); console.log('  ASSERT FAILED: unknown district did not throw'); fail++; }
 catch(e){ console.log('  ✓ unknown district throws:', e.message.slice(0,60)); }
 
-console.log(fail ? ('\n✗ '+fail+' FAILURES') : '\n✓ ALL LAYOUT CHECKS PASS');
+console.log(fail ? ('\n✗ '+fail+' STRUCTURAL FAILURES') : '\n✓ ALL LAYOUT CHECKS PASS');
+
+/* ── LEGIBILITY (modeled-label crowding PROXY · #103) ──────────────────────────
+   Read the REAL 37-POI PLACES straight out of index.src.html (the single source of
+   truth — it carries room/piece/tag, so the modeled label boxes are faithful) and
+   run the legibility conscience. This is a WARNING section, NOT part of `fail`. */
+function liveLegibility() {
+  const SRC = path.join(__dirname, '..', '..', 'index.src.html');
+  const src = fs.readFileSync(SRC, 'utf8');
+  const start = src.indexOf('const PLACES = [');
+  const end = src.indexOf('\n];', start);
+  if (start < 0 || end < 0) { console.log('  (could not read live PLACES — skipping legibility)'); return; }
+  // eslint-disable-next-line no-eval
+  const LIVE = eval('(' + src.slice(start + 'const PLACES = '.length, end + 2) + ')').filter(p => !p.locked);
+  const sol = Layout.solve(LIVE);
+  const rep = Leg.score(sol, LIVE);
+  console.log('\n=== LEGIBILITY (modeled-label crowding PROXY · #103) ===');
+  console.log(Leg.renderAscii(rep));
+  if (rep.pass) {
+    console.log('\n  ✓ live door is LEGIBLE (composite ' + rep.overall.composite + ' < ' + rep.threshold + ')');
+  } else {
+    const o = rep.overall;
+    console.log('\n  ⚠ WARNING (intended · #103): live door is CROWDED — composite ' +
+      o.composite + ' > threshold ' + rep.threshold + '.');
+    console.log('    pressure-hottest = ' + o.pressureHottest.district +
+      ' (composite ' + o.pressureHottest.composite + ', what a viewer sees);' +
+      ' count-hottest = ' + o.countHottest.district + ' (n=' + o.countHottest.n + ', raw rooms).');
+    console.log('    A pending [map] re-draw has two concrete targets above.' +
+      ' This WARNING does NOT fail the structural smoke (exit-code policy: see legibility.cjs header).');
+  }
+}
+liveLegibility();
+
 process.exit(fail?1:0);

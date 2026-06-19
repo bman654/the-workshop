@@ -118,12 +118,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 <!-- gauge:grounds-seeds:start -->
 - [map] **Re-draw the front door — legible to a human, not just to the packer** — The front door carries ~36 POIs; labels are collision-free BY CONSTRUCTION (placeLabels + smoke.cjs) yet read crowded to the eye — a perception gap no self-test catches. Re-draw the district/slot map so it is legible to a human at a glance: fewer competing labels, clearer grouping by wing, breathing room. FORM over a denser packer — let the map read like a place, not a constraint solution. Verify by LOOKING (fresh-eyes screenshot @1280 + @390), not only green smoke. (sown #143 · contest #12)
-- [engine] **Teach smoke.cjs to see label crowding** — tools/layout/smoke.cjs proves footprint/star/field bounds but has ZERO label-legibility check, so the map can pass while reading unreadable. Add a label-readability metric (min label-to-label gap, leader-line crossings, local label density) with a threshold that FAILS when the door is crowded — so 'collision-free' can never again be mistaken for 'legible'. Pure Node twin, self-tested with a crowded-negative + a clean-positive control. (sown #143 · contest #12)
-<!-- ✝ BLOOMED #131: The Midway — physics of fun you RIDE, not chart → midway/ + the-coaster/ · after a69158b -->
 <!-- ✝ BLOOMED #141: The Stellar Forge — a physics of stars, not a map of them → stellar-forge/ · after e96215c -->
 <!-- ✝ DECAYED #142: Re-draw the front door for ~36 POIs — legible by design, not by luck · after c402aad -->
 <!-- ✝ BLOOMED #151: The Vantage — the estate's first SCENE you move a camera through, where… → vantage/ · after abbbf0e -->
 <!-- ✝ BLOOMED #161: The Observatory of the Moving Frame — the relativity wing you FLY, not… → relativity/ · after f9ef707 -->
+<!-- ✝ BLOOMED #171: Teach smoke.cjs to see label crowding → tools/layout/legibility.cjs · after 76bb7f9 -->
 <!-- gauge:grounds-seeds:end -->
 
 ---

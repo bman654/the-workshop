@@ -166,3 +166,24 @@ Then state your SEMANTIC carry-forward (NOT a spatial cleanup): e.g. "this leave
 Run `tools/layout/reveal-all-secrets.js` (paste into `agent-browser eval`, then reload) so every
 constellation + the Undercroft are lit — hidden/earned features must be composed-for, or work that
 looks clean cold-open collides once secrets appear (that is exactly how the bottom-right tally bug hid).
+
+## Automated legibility PRE-CHECK (the legibility conscience)
+
+The pipeline now has an automated legibility pre-check — `tools/layout/legibility.cjs`, exercised by
+`smoke.cjs` over the live door. It models each placed POI's label box + leader from the declarations
+(one shared `buildLabelModel`, seated with the renderer's OWN `slotTopLeft`/`nearestEdgePoint` geometry
+so it can't drift from `applyPlacement`), then scores how crowded the result reads via three sub-scores —
+**pairwise-gap** (label↔label and label↔non-owner-footprint clear distance), **leader-crossings**
+(proper segment crossings + footprint intrusions), and **local-density** (per-district Gaussian kernel
+peak) — blended gap-dominant into one composite (`0.5·gap + 0.3·density + 0.2·leader`) per district and
+overall, against a threshold (0.30) tuned from clean/crowded controls (all constants documented in the
+module header). It is a **modeled-label PROXY, not rendered pixels** (#103): boxes are seated at the
+prefer-seed START slot, so it measures the PRESSURE that forces labels into competition before the
+annealer relieves some of it — the quantity a map re-draw must reduce at the source. To tune the
+threshold, re-run the controls in `legibility.test.cjs` and pick a value that PASSES clean and FAILS
+crowded with margin. The check reports BOTH a count-hottest district (most rooms) and a pressure-hottest
+district (worst composite — what a viewer sees); on the live 37-POI door these are **grounds** (n=18) and
+**manor** (composite ≈ 0.71) respectively, and the door correctly reads CROWDED — an HONEST, INTENDED red
+confirming #103, surfaced in `smoke.cjs` as a clearly-labelled WARNING section that does NOT fail the
+structural exit code (so a known-open issue never breaks unrelated CI). The regression guard for the
+metric itself lives in `legibility.test.cjs` (green on the controls), not in the live-door scan.
