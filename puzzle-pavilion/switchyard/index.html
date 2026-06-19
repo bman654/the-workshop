@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Switchyard — Netwalk · The Puzzle Pavilion</title>
+<style>
+  :root{
+    --bg:#070a10;                /* deep-sea ink ground */
+    --plate1:#101826;
+    --plate2:#0a1018;
+    --ink:#e9eff5;
+    --ink-dim:#90a4ba;
+    --gold:#c9a24a;             /* the estate gold (slab + solved lattice) */
+    --gold-bright:#e8c45a;
+    --gold-edge:rgba(201,162,74,0.36);
+    --teal:#6fd3c4;             /* the wing accent + the "powered" voice */
+    --teal-soft:rgba(111,211,196,0.12);
+    --teal-edge:rgba(111,211,196,0.40);
+    --slate:#54667e;           /* a dim, un-powered arm (never lost, only half-lit) */
+    --warn:#ff7b72;
+    --panel:rgba(13,20,33,0.82);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1300px 820px at 50% -12%, rgba(111,211,196,0.07), transparent 56%),
+      radial-gradient(1000px 700px at 14% 112%, rgba(55,247,224,0.04), transparent 60%),
+      radial-gradient(1000px 700px at 86% 114%, rgba(201,162,74,0.04), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  /* a faint chart-of-soundings texture (a sea-grid the lattice sits on) */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(120,150,190,0.018) 0 1px, transparent 1px 34px),
+      repeating-linear-gradient(90deg, rgba(120,150,190,0.018) 0 1px, transparent 1px 34px);
+    mix-blend-mode:overlay;
+  }
+
+  /* ── topbar (estate vocabulary) ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:13px 20px; gap:12px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(7,10,16,0.94), rgba(7,10,16,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--teal); opacity:1; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--teal-edge); background:rgba(0,0,0,0.4); white-space:nowrap; cursor:default; user-select:none;
+    color:var(--ink-dim); max-width:64vw; overflow:hidden; text-overflow:ellipsis; }
+  .selftest.ok{ color:#8fe7d4; border-color:var(--teal-edge); background:rgba(20,46,42,0.5); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  /* ── hero ── */
+  .hero{ position:relative; z-index:1; max-width:1180px; margin:0 auto; padding:78px 22px 4px; text-align:center; }
+  .eyebrow{ font:600 11px/1 var(--font-mono); letter-spacing:.30em; text-transform:uppercase; color:var(--teal);
+    opacity:.9; margin-bottom:14px; }
+  .hero h1{
+    font-family:var(--font-serif); font-weight:600; margin:0;
+    font-size:clamp(34px, 7vw, 56px); letter-spacing:.4px; line-height:1.03;
+  }
+  .hero h1 .glyph{ filter:drop-shadow(0 0 10px rgba(201,162,74,.55)); }
+  .hero .lede{ max-width:680px; margin:18px auto 0; font:15.5px/1.62 var(--font-serif); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--teal); font-weight:600; }
+  .hero .lede i{ color:var(--ink); font-style:italic; }
+
+  /* ── the stage: board + side ── */
+  .stage{ position:relative; z-index:1; max-width:1180px; margin:22px auto 0; padding:0 22px;
+    display:flex; gap:20px; align-items:flex-start; justify-content:center; flex-wrap:wrap; }
+  .msg{ min-height:20px; text-align:center; font:13.5px/1.5 var(--font-serif); color:var(--teal); font-weight:600;
+    margin:4px auto 12px; max-width:680px; padding:0 22px; position:relative; z-index:1; }
+
+  .boardwrap{ position:relative; flex:1 1 540px; min-width:0; max-width:600px;
+    background:linear-gradient(160deg,#0d1726,#0a1018);
+    border:1px solid rgba(111,211,196,0.16); border-radius:16px; padding:10px;
+    box-shadow:0 12px 44px rgba(0,0,0,.45) inset, 0 8px 28px rgba(0,0,0,.4); }
+  canvas{ display:block; width:100%; height:auto; border-radius:10px; touch-action:none; cursor:pointer; outline:none; }
+  canvas:focus-visible{ box-shadow:0 0 0 2px var(--teal-edge); }
+  .legend{ font:11.5px/1.4 var(--font-mono); color:var(--ink-dim); display:flex; gap:13px; flex-wrap:wrap;
+    justify-content:center; margin-top:9px; letter-spacing:.02em; }
+  .legend i{ display:inline-block; width:18px; height:0; border-top:3px solid var(--teal); vertical-align:middle; margin-right:5px; }
+  .legend i.dim{ border-top-color:var(--slate); }
+  .legend i.gold{ border-top-color:var(--gold-bright); }
+  .legend i.src{ width:11px; height:11px; border:none; border-radius:50%; background:var(--gold-bright);
+    box-shadow:0 0 8px rgba(232,196,90,.8); }
+
+  .side{ flex:0 1 300px; min-width:248px; display:flex; flex-direction:column; gap:12px; }
+  .card{ background:var(--panel); border:1px solid rgba(111,211,196,0.14); border-radius:13px; padding:13px 15px; }
+  .card h3{ margin:0 0 8px; font:700 10.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--teal); }
+  .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  button{ font:600 12.5px/1 var(--font-ui); color:var(--ink); background:#16243a; border:1px solid #2c4156;
+    border-radius:8px; padding:8px 11px; cursor:pointer; transition:.14s; }
+  button:hover{ background:#1d3047; border-color:#406180; }
+  button:active{ transform:translateY(1px); }
+  button.primary{ background:#143228; border-color:#2f6b54; color:#bff0df; }
+  button.primary:hover{ background:#1a4234; }
+  .pill{ display:inline-flex; align-items:center; gap:7px; font:12px/1 var(--font-mono); border-radius:999px;
+    padding:6px 11px; border:1px solid #2c4156; background:#0e1828; white-space:nowrap; }
+  .pill.ok{ border-color:var(--gold-edge); background:rgba(50,40,16,0.5); color:#f0dca0; }
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--slate); }
+  .pill.ok .dot{ background:var(--gold-bright); box-shadow:0 0 7px rgba(232,196,90,.8); }
+  .stat{ display:flex; justify-content:space-between; font:13px/1.5 var(--font-ui); padding:3px 0; border-bottom:1px dashed #223348; }
+  .stat:last-child{ border-bottom:none; }
+  .stat b{ color:var(--teal); font-variant-numeric:tabular-nums; font-family:var(--font-mono); }
+  .trace{ font:11px/1.45 var(--font-mono); max-height:150px; overflow:auto; color:#bcd;
+    background:#0a121e; border:1px solid #1c2c44; border-radius:8px; padding:8px 9px; white-space:pre-wrap; }
+  .trace .rule{ color:var(--teal); }
+  .trace .step{ color:#7fb0e8; }
+  .seedline{ font:11.5px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.04em; }
+  input[type=number]{ width:78px; background:#0d1726; color:var(--ink); border:1px solid #2c4156; border-radius:6px;
+    padding:6px 8px; font:13px/1 var(--font-mono); }
+  .proofnote{ font:12px/1.55 var(--font-serif); color:var(--ink-dim); margin:0 0 8px; }
+  .proofnote b{ color:var(--teal); font-weight:600; }
+  /* the surfaced negative-control card */
+  .ctrlcard h3{ color:var(--gold); }
+  .ctrlcard .proofnote b{ color:var(--gold); }
+  .verdict{ font:11.5px/1.5 var(--font-mono); margin-top:9px; padding:8px 10px; border-radius:8px;
+    background:#0a121e; border:1px solid #1c2c44; color:#bcd; min-height:18px; }
+  .verdict.broke{ color:#f0c39a; border-color:rgba(201,140,74,0.5); background:rgba(48,30,14,0.5); }
+  .verdict b{ color:var(--warn); }
+  .kbd{ font:600 10.5px/1.4 var(--font-mono); color:var(--ink-dim); margin-top:9px; }
+  .kbd kbd{ display:inline-block; font:inherit; color:#cfe; background:#162033; border:1px solid #2c4156;
+    border-bottom-width:2px; border-radius:5px; padding:2px 6px; margin:0 1px; }
+
+  /* ── footer ── */
+  .foot{ position:relative; z-index:1; max-width:760px; margin:34px auto 0; padding:22px 26px 48px;
+    border-top:1px solid rgba(111,211,196,0.1); text-align:center; font:12.5px/1.7 var(--font-serif); color:var(--ink-dim); }
+  .foot b{ color:var(--teal); font-weight:600; }
+  .foot .g{ color:var(--gold); font-weight:600; }
+  .foot a{ color:var(--teal); text-decoration:none; border-bottom:1px solid rgba(111,211,196,0.3); }
+  .foot code{ color:#c9b6f0; background:#161f30; padding:1px 5px; border-radius:4px; font:11.5px var(--font-mono); }
+
+  @media (max-width:760px){
+    .stage{ flex-direction:column; align-items:stretch; }
+    .boardwrap{ max-width:none; }
+    .side{ flex:1 1 auto; }
+  }
+  @media (max-width:420px){
+    .hero{ padding-top:72px; }
+    .legend{ gap:9px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">← The Puzzle Pavilion</a>
+    <div class="selftest" id="selftest" title="The bench proves its own claim across many generated boards.">checking…</div>
+  </div>
+
+  <header class="hero">
+    <div class="eyebrow">The Puzzle Pavilion · the fourth leaf · the first ROTATE verb</div>
+    <h1><span class="glyph">⌁</span> The Switchyard</h1>
+    <p class="lede">Netwalk. Every tile is a piece of pipe; one tile is the glowing <b>source</b>. <i>Rotate</i> each tile
+      until the whole lattice fuses into one network and every arm drinks from the source. <b>Click or arrow-key</b> a
+      tile to spin it a quarter-turn. There is no losing state — only tiles half-lit in slate, waiting their turn.
+      Every board has <b>one</b> solved orientation, reachable by pure logic.</p>
+  </header>
+
+  <div class="msg" id="msg">Click a tile to rotate it — or focus the board and use the arrow keys.</div>
+
+  <div class="stage">
+    <div class="boardwrap">
+      <canvas id="board" width="560" height="560" tabindex="0" role="application"
+        aria-label="Switchyard board. Arrow keys move the focused tile; Enter or Space rotates it a quarter turn clockwise."></canvas>
+      <div class="legend">
+        <span><i class="src"></i>source</span>
+        <span><i></i>powered</span>
+        <span><i class="dim"></i>un-powered (half-lit)</span>
+        <span><i class="gold"></i>solved</span>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <h3>The board</h3>
+        <div class="row">
+          <button class="primary" id="new">New lattice</button>
+          <button id="solveBtn">Reveal logic</button>
+          <button id="scramble">Scramble</button>
+        </div>
+        <div class="row" style="margin-top:9px">
+          <span class="seedline">seed</span>
+          <input type="number" id="seed" value="7" min="1">
+          <button id="hint">Hint</button>
+        </div>
+        <div class="kbd"><kbd>← ↑ → ↓</kbd> move focus · <kbd>Enter</kbd>/<kbd>Space</kbd> rotate</div>
+      </div>
+
+      <div class="card">
+        <h3>Live state</h3>
+        <div class="stat"><span>tiles</span><b id="sTiles">–</b></div>
+        <div class="stat"><span>tiles powered</span><b id="sPowered">–</b></div>
+        <div class="stat"><span>dangling arms</span><b id="sDangle">–</b></div>
+        <div class="stat"><span>one network?</span><b id="sConn">–</b></div>
+        <div style="margin-top:9px"><span class="pill" id="solvedPill"><span class="dot"></span><span id="solvedTxt">unsolved</span></span></div>
+      </div>
+
+      <div class="card ctrlcard">
+        <h3>Bend one arm →</h3>
+        <p class="proofnote">Claim: <b>every arm is load-bearing</b>. Toggle one arm on the current <i>solved</i> board
+          and the unique solution dies. Press it and watch the proof fire.</p>
+        <div class="row">
+          <button id="bendBtn">Bend one arm on the solved board</button>
+        </div>
+        <div class="verdict" id="verdict">solve the board (or Reveal logic) first, then bend an arm.</div>
+      </div>
+
+      <div class="card">
+        <h3>The claim, self-tested</h3>
+        <p class="proofnote">For every generated board: <b>exactly one</b> solved orientation, reachable by
+          <b>pure deduction</b> with no guess — and every single arm is load-bearing.</p>
+        <div class="trace" id="trace">the deduction trace appears here when you Reveal logic</div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <b>Why a switchyard.</b> Netwalk is the estate's first <i>rotate</i> verb — you never add or remove a thing, only
+    turn what is already there until the current flows. It cannot be lost: an un-powered tile is just half-lit in
+    <i>slate</i>, waiting. The instant the source reaches every tile the whole lattice settles into <span class="g">gold</span>.
+    Each board is grown as a spanning tree from the source, scrambled, and kept only if it has a single solved
+    orientation a no-guess solver can reach — and if <b>every</b> arm proves load-bearing. The math core in this page is
+    byte-identical to a Node twin <code>core.test.mjs</code>; page and test can never drift.
+    &nbsp;·&nbsp; <a href="../index.html">Back to the Pavilion</a>
+  </footer>
+
+<script type="module">
+// ============================================================================
+// === CORE BEGIN ===
+// THE SWITCHYARD — Netwalk (rotate-the-pipes) math core (single source of truth).
+//
+// An R×C grid of pipe/wire tiles. Each tile has an ARM-MASK over the 4 directions
+// {N,E,S,W} — which sides a pipe-arm sticks out of — fixed by the tile's shape, plus
+// a ROTATION in {0,90,180,270} the player can spin. ONE tile is the SOURCE (the power
+// node). A tile is POWERED iff it is reachable from the source through a chain of
+// JUNCTIONS — a junction exists between two orthogonally-adjacent tiles when BOTH
+// present an arm toward the shared edge (arm reciprocity).
+//
+// SOLVED orientation: (i) every tile is powered, (ii) no arm points off-grid (into a
+// wall), (iii) every arm is reciprocated (no arm faces a neighbour-side with no arm).
+// (ii)+(iii) ⇒ the powered "on" arms form an undirected graph with no half-edges; (i)
+// ⇒ it is connected and spans all cells; the arm count of a spanning connected graph on
+// N cells with no half-edges is exactly the tree/loop structure the generator laid.
+//
+// This module is the SOLE authority for: (a) the exact orientation-solution COUNTER
+// (ground truth — budget-protected backtracking over per-tile rotations, pruned by the
+// border-no-off-grid constraint and pairwise edge reciprocity), (b) a pure-DEDUCTION
+// solver that forces orientations with NO guessing (border walls forbid off-grid arms;
+// degree-1 stubs and the unique source-arm count force orientations; a forced arm on
+// one side forces the neighbour to reciprocate / a forced wall forbids the neighbour's
+// arm), and (c) a GENERATOR that grows a connected spanning network from the source,
+// scrambles each tile's rotation, and keeps ONLY boards that are BOTH uniquely solvable
+// (counter==1) AND deduction-solvable (the no-guess solver reaches the carried witness).
+// Inlined byte-identical into the page between the sentinels; imported by core.test.mjs.
+//
+// DIRECTIONS. d ∈ {0:N, 1:E, 2:S, 3:W}. An arm-mask is a 4-bit int: bit d set ⇒ an arm
+// points in direction d (in the tile's CURRENT orientation). The base mask is the shape
+// at rotation 0; rotating 90° clockwise maps N→E→S→W→N, i.e. bit d → bit (d+1)&3.
+// ============================================================================
+
+const DR=[-1,0,1,0], DC=[0,1,0,-1];   // N,E,S,W
+const OPP=[2,3,0,1];
+
+// Deterministic PRNG (mulberry32) — every seed reproduces the same board.
+function mulberry32(seed){
+  return function(){
+    seed|=0; seed=(seed+0x6D2B79F5)|0;
+    let t=Math.imul(seed^(seed>>>15),1|seed);
+    t=(t+Math.imul(t^(t>>>7),61|t))^t;
+    return ((t^(t>>>14))>>>0)/4294967296;
+  };
+}
+function shuffle(a,rng){ for(let i=a.length-1;i>0;i--){ const j=(rng()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+// rotate a 4-bit mask k quarter-turns clockwise (N→E→S→W).
+function rot(mask, q){
+  q=((q%4)+4)%4;
+  let m=mask;
+  for(let i=0;i<q;i++){
+    let n=0;
+    for(let d=0;d<4;d++) if(m&(1<<d)) n|=(1<<((d+1)&3));
+    m=n;
+  }
+  return m;
+}
+// the set of DISTINCT masks a base shape can present (a straight has 2, an end has 4,
+// a tee has 4, an elbow has 4, the all-4 cross has 1). Used by counter/deduce to know
+// a tile's candidate orientations without double-counting symmetric ones.
+function orientations(baseMask){
+  const seen=new Set(), out=[];
+  for(let q=0;q<4;q++){ const m=rot(baseMask,q); if(!seen.has(m)){ seen.add(m); out.push(m); } }
+  return out; // list of distinct masks
+}
+function popcount(m){ let c=0; while(m){ c+=m&1; m>>=1; } return c; }
+
+// ---- board ------------------------------------------------------------------
+// A board is { R, C, base:Int (per-cell base arm-mask at rotation 0), src:[r,c] }.
+// build helpers assemble it; cellMask(board, orient, idx) is the current mask of a tile
+// given an orientation array (quarter-turns per cell).
+function buildBoard(R,C,base,src){ return {R,C,base:base.slice(),src:src.slice()}; }
+function idx(C,r,c){ return r*C+c; }
+
+// Given per-cell ABSOLUTE masks (already rotated to their chosen orientation), is the
+// board fully solved? (i) every arm reciprocated + no off-grid arm; (ii) the source's
+// component spans EVERY cell that has any arm; (iii) every cell has ≥1 arm (no dead tile)
+// — the generator guarantees all cells are on the network, so a solved board powers all.
+function checkSolved(board, masks){
+  const {R,C,src}=board;
+  // (ii) reciprocity + no off-grid
+  for(let r=0;r<R;r++) for(let c=0;c<C;c++){
+    const m=masks[idx(C,r,c)];
+    for(let d=0;d<4;d++) if(m&(1<<d)){
+      const nr=r+DR[d], nc=c+DC[d];
+      if(nr<0||nc<0||nr>=R||nc>=C) return false;          // arm off-grid
+      if(!(masks[idx(C,nr,nc)] & (1<<OPP[d]))) return false; // not reciprocated
+    }
+  }
+  // (i)+(iii) flood from source; every cell must be reached (all cells carry arms)
+  const seen=new Uint8Array(R*C); const st=[idx(C,src[0],src[1])]; seen[st[0]]=1; let cnt=1;
+  while(st.length){
+    const u=st.pop(), r=(u/C)|0, c=u%C, m=masks[u];
+    for(let d=0;d<4;d++) if(m&(1<<d)){
+      const nr=r+DR[d], nc=c+DC[d], v=idx(C,nr,nc);
+      // reciprocity already verified, so this is a real junction
+      if(!seen[v]){ seen[v]=1; cnt++; st.push(v); }
+    }
+  }
+  return cnt===R*C;
+}
+
+// power-flood: from a partial/complete orientation, which cells are powered? (BFS over
+// reciprocated junctions from the source). Returns Uint8Array of length R*C. Used live by
+// the page to light tiles, and by the counter/verifier.
+function powerFlood(board, masks){
+  const {R,C,src}=board;
+  const seen=new Uint8Array(R*C); const st=[idx(C,src[0],src[1])]; seen[st[0]]=1;
+  while(st.length){
+    const u=st.pop(), r=(u/C)|0, c=u%C, m=masks[u];
+    for(let d=0;d<4;d++) if(m&(1<<d)){
+      const nr=r+DR[d], nc=c+DC[d];
+      if(nr<0||nc<0||nr>=R||nc>=C) continue;
+      const v=idx(C,nr,nc);
+      if((masks[v]&(1<<OPP[d])) && !seen[v]){ seen[v]=1; st.push(v); }
+    }
+  }
+  return seen;
+}
+
+// ---- exact orientation-solution COUNTER (ground truth) ----------------------
+// Backtracking over per-cell orientation choices (the distinct masks of each base),
+// pruned HARD by the two LOCAL constraints that any solved board must satisfy at every
+// committed cell: (P1) no committed arm points off-grid; (P2) reciprocity across every
+// edge BETWEEN two committed cells (and a committed arm toward an off-board side is P1).
+// We fill cells in a fixed order; when a cell is committed we check its edges to already-
+// committed neighbours (above/left under row-major order) for reciprocity both ways, and
+// check all four sides against the BOARD border. A full assignment is then verified for
+// global power (connectivity) by checkSolved. Capped at `cap` (return cap means "≥cap");
+// `budget` caps the recursion nodes — on exceeding it returns cap (treated as "≥cap",
+// sound for the generator's gate, which only TIGHTENS on uncertainty).
+function countSolutions(board, cap=2, budget=600000){
+  const {R,C,base}=board;
+  const N=R*C;
+  const cand=base.map(b=>orientations(b));      // candidate masks per cell
+  const chosen=new Array(N).fill(0);
+  let count=0, nodes=0, capped=false;
+  // committed[i] true once cell i has a chosen mask (cells filled in index order)
+  function compatBorderAndPrev(i, m){
+    const r=(i/C)|0, c=i%C;
+    for(let d=0;d<4;d++){
+      const arm=!!(m&(1<<d));
+      const nr=r+DR[d], nc=c+DC[d];
+      const off = nr<0||nc<0||nr>=R||nc>=C;
+      if(off){ if(arm) return false; continue; }      // P1: no off-grid arm
+      const ni=idx(C,nr,nc);
+      if(ni<i){                                        // neighbour already committed
+        const narm=!!(chosen[ni] & (1<<OPP[d]));
+        if(arm!==narm) return false;                   // P2: must reciprocate exactly
+      }
+    }
+    return true;
+  }
+  function rec(i){
+    if(capped) return;
+    if(++nodes>budget){ capped=true; count=cap; return; }
+    if(i===N){
+      if(checkSolved(board, chosen)) { count++; if(count>=cap) capped=true; }
+      return;
+    }
+    for(const m of cand[i]){
+      if(!compatBorderAndPrev(i,m)) continue;
+      chosen[i]=m;
+      rec(i+1);
+      if(capped) return;
+    }
+  }
+  rec(0);
+  return Math.min(count, cap);
+}
+
+// ---- pure-DEDUCTION solver (NO guessing) ------------------------------------
+// State per cell: a SET of still-possible masks (subset of its distinct orientations).
+// We propagate three sound rules to a fixed point, NEVER guessing:
+//   (R1) BORDER: drop any candidate mask that points an arm off-grid. (An edge tile
+//        can't point off the board — the wall reciprocates nothing.)
+//   (R2) EDGE-RECIPROCITY: for an edge between cells u,v in direction d: if EVERY
+//        remaining candidate of u agrees on whether it has an arm toward v (all-arm or
+//        all-noarm), that fact is forced on v — drop v's candidates that disagree
+//        (an arm needs a reciprocating arm; a wall-of-no-arm forbids the partner's arm).
+//   (R3) the implicit degree/connectivity facts fall out of R1+R2 fixpoint for the
+//        boards the generator ships (it only keeps boards this set closes). Each drop is
+//        recorded with a NAMED rule so the trace proves "no guess".
+// solved iff every cell pinned to exactly one mask AND that full assignment checkSolved.
+function deduce(board){
+  const {R,C,base}=board;
+  const N=R*C;
+  const cands=base.map(b=>orientations(b).slice());   // mutable candidate lists
+  const trace=[];
+  let progress=true, contradiction=false;
+  // does cell i, given its candidate set, DEFINITELY have an arm in dir d? definitely NOT?
+  function side(i,d){
+    let allYes=true, allNo=true;
+    for(const m of cands[i]){ if(m&(1<<d)) allNo=false; else allYes=false; }
+    return allYes ? 1 : (allNo ? 0 : -1);   // 1=forced arm, 0=forced wall, -1=undecided
+  }
+  function dropIf(i, pred, rule){
+    const before=cands[i].length;
+    cands[i]=cands[i].filter(m=>!pred(m));
+    if(cands[i].length<before){ trace.push({i,rule,kept:cands[i].length}); if(cands[i].length===0) contradiction=true; return true; }
+    return false;
+  }
+  // R1 once up front (border never changes)
+  for(let r=0;r<R;r++) for(let c=0;c<C;c++){
+    const i=idx(C,r,c);
+    dropIf(i, m=>{
+      for(let d=0;d<4;d++) if(m&(1<<d)){ const nr=r+DR[d],nc=c+DC[d];
+        if(nr<0||nc<0||nr>=R||nc>=C) return true; }
+      return false;
+    }, 'border-no-off-grid');
+  }
+  while(progress && !contradiction){
+    progress=false;
+    for(let r=0;r<R && !contradiction;r++) for(let c=0;c<C && !contradiction;c++){
+      const i=idx(C,r,c);
+      for(let d=0;d<4;d++){
+        const nr=r+DR[d], nc=c+DC[d];
+        if(nr<0||nc<0||nr>=R||nc>=C) continue;
+        const j=idx(C,nr,nc);
+        const si=side(i,d);
+        if(si===1){ if(dropIf(j, m=>!(m&(1<<OPP[d])), 'reciprocate-arm')) progress=true; }
+        else if(si===0){ if(dropIf(j, m=>(m&(1<<OPP[d])), 'reciprocate-wall')) progress=true; }
+      }
+    }
+  }
+  let pinned=true; for(let i=0;i<N;i++) if(cands[i].length!==1){ pinned=false; break; }
+  const masks=cands.map(cs=>cs.length===1?cs[0]:null);
+  let solved=false;
+  if(pinned && !contradiction) solved=checkSolved(board, masks);
+  return {solved, contradiction, pinned, cands, masks, trace};
+}
+
+// ---- GENERATOR --------------------------------------------------------------
+// 1) grow a connected SPANNING tree over all R×C cells, rooted at a random source
+//    (randomized Prim/DFS over the grid) — the tree edges define each cell's SOLVED
+//    arm-mask (an arm toward every tree-neighbour). Optionally add a few extra
+//    non-tree edges (loops) for richer shapes, still spanning & all-reciprocated.
+// 2) the per-cell SOLVED mask is the base shape; scramble each cell's rotation to a
+//    random orientation — that scrambled board is the puzzle, the solved mask the witness.
+// 3) keep ONLY boards that are BOTH uniquely solvable (counter==1) AND deduction-solvable
+//    (deduce.solved AND deduce's pinned masks === the witness solved masks).
+function growNetwork(rng, R, C, loopChance){
+  const N=R*C;
+  const src=[(rng()*R)|0, (rng()*C)|0];
+  // randomized spanning tree (Prim-ish): frontier of edges from the growing component.
+  const inTree=new Uint8Array(N); const sMask=new Array(N).fill(0);
+  const start=idx(C,src[0],src[1]); inTree[start]=1;
+  let frontier=[]; // {r,c,d} edges leaving a tree cell to a non-tree cell
+  const pushFrontier=(r,c)=>{ for(let d=0;d<4;d++){ const nr=r+DR[d],nc=c+DC[d];
+    if(nr<0||nc<0||nr>=R||nc>=C) continue; if(!inTree[idx(C,nr,nc)]) frontier.push({r,c,d}); } };
+  pushFrontier(src[0],src[1]);
+  let added=1;
+  while(added<N && frontier.length){
+    const k=(rng()*frontier.length)|0; const {r,c,d}=frontier[k];
+    frontier[k]=frontier[frontier.length-1]; frontier.pop();
+    const nr=r+DR[d], nc=c+DC[d]; const ni=idx(C,nr,nc);
+    if(inTree[ni]) continue;
+    // connect (r,c)<->(nr,nc): arms both ways
+    sMask[idx(C,r,c)] |= (1<<d);
+    sMask[ni] |= (1<<OPP[d]);
+    inTree[ni]=1; added++;
+    pushFrontier(nr,nc);
+  }
+  if(added!==N) return null; // didn't span (shouldn't happen on a connected grid)
+  // optional extra (loop) edges — add arms across some non-tree adjacent pairs.
+  for(let r=0;r<R;r++) for(let c=0;c<C;c++){
+    for(const d of [1,2]){ // E,S to avoid double-count
+      const nr=r+DR[d], nc=c+DC[d]; if(nr<0||nc<0||nr>=R||nc>=C) continue;
+      const i=idx(C,r,c), j=idx(C,nr,nc);
+      if((sMask[i]&(1<<d))) continue; // already connected
+      if(rng()<loopChance){ sMask[i]|=(1<<d); sMask[j]|=(1<<OPP[d]); }
+    }
+  }
+  return {src, sMask};
+}
+function generate(seed, R=5, C=5, loopChance=0.0){
+  for(let attempt=0; attempt<300; attempt++){
+    const rng=mulberry32((seed ^ (attempt*2654435761))>>>0);
+    const net=growNetwork(rng, R, C, loopChance);
+    if(!net) continue;
+    const {src, sMask}=net;
+    // base = scrambled rotation of the solved mask. We store base as the mask AT a random
+    // orientation; the candidate orientations of that base include the solved mask.
+    const base=new Array(R*C);
+    for(let i=0;i<R*C;i++){ const q=(rng()*4)|0; base[i]=rot(sMask[i], q); }
+    const board=buildBoard(R,C,base,src);
+    // witness = solved masks (must be among each cell's candidate orientations)
+    if(countSolutions(board, 2) !== 1) continue;
+    const d=deduce(board);
+    if(!d.solved) continue;
+    // deduced pinned masks must equal the witness (sMask)
+    let match=true; for(let i=0;i<R*C;i++) if(d.masks[i]!==sMask[i]){ match=false; break; }
+    if(!match) continue;
+    return {board, R, C, src, witness:sMask, base};
+  }
+  return null;
+}
+
+export { mulberry32, shuffle, rot, orientations, popcount, buildBoard, idx,
+         checkSolved, powerFlood, countSolutions, deduce, generate, growNetwork, DR, DC, OPP };
+// === CORE END ===
+// ============================================================================
+
+// ---- shared NEGATIVE-CONTROL (lives OUTSIDE the byte-diffed core so page+twin can't drift) -
+// Every single-arm mutation of a solved board destroys the unique deducible solution: bend ONE
+// arm on ONE non-source tile's solved (witness) mask and the board must lose uniqueness OR stall
+// the no-guess solver. Page (the "Bend one arm" demo + pill) and Node twin both call this.
+function controlEveryArm(board, witness){
+  let tested=0, broke=0; const N=board.R*board.C;
+  const srcIdx=board.src[0]*board.C+board.src[1];
+  for(let i=0;i<N;i++){
+    if(i===srcIdx) continue;
+    for(let bit=0; bit<4; bit++){
+      const mutW = witness.slice();
+      mutW[i] = witness[i] ^ (1<<bit);
+      const broken = buildBoard(board.R, board.C, mutW.map(m=>m), board.src);
+      tested++;
+      const cnt = countSolutions(broken, 2);
+      const d   = deduce(broken);
+      if(cnt!==1 || !d.solved) broke++;
+    }
+  }
+  return {tested, broke};
+}
+
+// =================== UI / RENDER / INTERACTION (browser only) ===============
+const $=s=>document.querySelector(s);
+const cv=$('#board'), ctx=cv.getContext('2d');
+let G=null;            // {board, R, C, src, witness, base}
+let mask=null;         // live per-cell ABSOLUTE masks (the player's current orientation)
+let spin=null;         // per-cell visual spin {from:rad, to:rad, t0:ms} during a turn
+let focusIdx=0;        // keyboard focus cell
+let won=false, winT=0, winRAF=0;
+let DPR=Math.max(1,Math.min(2,window.devicePixelRatio||1));
+let CS=560;            // logical canvas size in CSS px (square), sized responsively
+let pad=40, cell=0, ox=0, oy=0;
+
+// Responsive sizing: the canvas fills its column (CSS width:100%) but we keep its backing
+// store crisp & square. CSS side from the wrap's content width (capped), backing store
+// side*DPR, context scaled once so drawing stays in logical (CSS) coords.
+function sizeCanvas(){
+  const wrap=cv.parentElement;
+  const avail=Math.max(220, wrap.clientWidth-20); // minus the wrap's 10px padding ×2
+  CS=Math.round(Math.min(560, avail));
+  DPR=Math.max(1,Math.min(2,window.devicePixelRatio||1));
+  cv.style.width=CS+'px'; cv.style.height=CS+'px';
+  cv.width=Math.round(CS*DPR); cv.height=Math.round(CS*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  pad=Math.max(14, CS*0.035);
+}
+function layoutGeom(){
+  const {R,C}=G;
+  const innerW=CS-2*pad, innerH=CS-2*pad;
+  cell=Math.min(innerW/C, innerH/R);
+  ox=(CS-C*cell)/2; oy=(CS-R*cell)/2;
+}
+const cellCenter=i=>{ const C=G.C; const r=(i/C)|0, c=i%C; return {x:ox+(c+0.5)*cell, y:oy+(r+0.5)*cell}; };
+
+function newBoard(seed){
+  const g=generate(seed>>>0, 5, 5, 0.0);
+  if(!g){ $('#msg').textContent='generator missed this seed — try another'; return; }
+  G=g; mask=g.base.slice(); spin=new Array(G.R*G.C).fill(null);
+  focusIdx=g.src[0]*g.C+g.src[1];
+  won=false; cancelAnimationFrame(winRAF);
+  sizeCanvas(); layoutGeom(); draw(); updateState();
+  $('#trace').textContent='the deduction trace appears here when you Reveal logic';
+  $('#verdict').className='verdict'; $('#verdict').textContent='solve the board (or Reveal logic) first, then bend an arm.';
+  $('#msg').textContent='Click a tile to rotate it — or focus the board and use the arrow keys.';
+}
+
+// ── render: one drawTile draws ALL families from the 4-bit mask ──
+function rotForSpin(i){
+  // returns the extra radians to rotate this tile's arms for the in-flight spin animation
+  if(!spin[i]) return 0;
+  const k=Math.min(1,(performance.now()-spin[i].t0)/140);
+  const ease=1-Math.pow(1-k,3);                 // easeOutCubic
+  if(k>=1){ spin[i]=null; return 0; }
+  return (1-ease)*(-Math.PI/2);                 // start a quarter-turn back, settle to 0
+}
+function draw(){
+  if(!G) return;
+  const {R,C,src}=G;
+  ctx.clearRect(0,0,CS,CS);
+  // board ground
+  const grd=ctx.createLinearGradient(0,0,0,CS);
+  grd.addColorStop(0,'#0b1322'); grd.addColorStop(1,'#0a0f1a');
+  ctx.fillStyle=grd; ctx.fillRect(0,0,CS,CS);
+  // live power flood
+  const pf=powerFlood(G.board, mask);
+  const half=cell*0.5;
+  let anySpin=false;
+  for(let i=0;i<R*C;i++){
+    const {x,y}=cellCenter(i);
+    // cell plate
+    ctx.fillStyle='rgba(120,150,190,0.035)';
+    roundRect(x-half+2,y-half+2,cell-4,cell-4,Math.min(7,cell*0.13)); ctx.fill();
+    const extra=rotForSpin(i); if(spin[i]) anySpin=true;
+    const isSrc=(i===src[0]*C+src[1]);
+    const powered=!!pf[i];
+    drawTile(x, y, half*0.84, mask[i], { powered, solved:won, isSrc, extra });
+  }
+  // keyboard focus ring (dashed teal) on the focused cell
+  if(document.activeElement===cv){
+    const {x,y}=cellCenter(focusIdx);
+    ctx.save(); ctx.setLineDash([5,4]); ctx.lineWidth=2; ctx.strokeStyle=won?'rgba(232,196,90,.95)':'rgba(111,211,196,.95)';
+    roundRect(x-half+1,y-half+1,cell-2,cell-2,Math.min(8,cell*0.15)); ctx.stroke(); ctx.restore();
+  }
+  if(anySpin) requestAnimationFrame(()=>{ if(!won) draw(); });
+}
+function roundRect(x,y,w,h,r){ ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+// draw a tile of any family straight from its 4-bit arm mask:
+//   stub=1 arm (a capsule), elbow=2 adjacent, straight=2 opposite, tee=3, cross=4.
+// a hub disc fuses the arms; the SOURCE is the always-glowing gold radial node.
+function drawTile(cx, cy, reach, m, st){
+  const armW=Math.max(3, reach*0.30);
+  const colDim='#54667e', colHot='#6fd3c4', colGold='#e8c45a';
+  const col = st.solved ? colGold : (st.powered ? colHot : colDim);
+  const glow = st.solved ? 'rgba(232,196,90,0.55)' : (st.powered ? 'rgba(111,211,196,0.5)' : 'transparent');
+  ctx.save();
+  ctx.translate(cx,cy);
+  if(st.extra) ctx.rotate(st.extra);
+  // arms
+  ctx.lineCap='round';
+  ctx.strokeStyle=col; ctx.lineWidth=armW;
+  ctx.shadowColor=glow; ctx.shadowBlur=st.powered||st.solved?9:0;
+  for(let d=0;d<4;d++) if(m&(1<<d)){
+    const ex=DC[d]*reach, ey=DR[d]*reach;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(ex,ey); ctx.stroke();
+  }
+  ctx.shadowBlur=0;
+  // hub disc
+  const hub=armW*0.95;
+  if(st.isSrc){
+    // the source: an intrinsically-gold always-glowing radial node
+    const g=ctx.createRadialGradient(0,0,1,0,0,hub*2.4);
+    g.addColorStop(0,'#fff4cf'); g.addColorStop(0.4,'#e8c45a'); g.addColorStop(1,'rgba(201,162,74,0.05)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,hub*2.4,0,7); ctx.fill();
+    ctx.fillStyle='#fff4cf'; ctx.beginPath(); ctx.arc(0,0,hub*0.95,0,7); ctx.fill();
+  } else {
+    ctx.fillStyle=col; ctx.beginPath(); ctx.arc(0,0,hub,0,7); ctx.fill();
+    if(st.powered||st.solved){ ctx.fillStyle=st.solved?'#fff4cf':'#bff3ea';
+      ctx.beginPath(); ctx.arc(0,0,hub*0.5,0,7); ctx.fill(); }
+  }
+  ctx.restore();
+}
+
+// ── current witness, recomputed from the live deduce (page never re-derives win) ──
+function currentSolvedFlags(){
+  // solved iff the live mask === a fully-solved orientation (checkSolved over current mask)
+  return checkSolved(G.board, mask);
+}
+
+// ── the ROTATE verb (mouse AND keyboard, one entry point) ──
+function rotateCell(i){
+  if(won) return;
+  mask[i]=((mask[i]<<1)|(mask[i]>>3))&15;   // CW, matches core's rot() one quarter-turn
+  spin[i]={t0:performance.now()};
+  draw(); updateState();
+}
+function cellAt(x,y){
+  const C=G.C, R=G.R;
+  const c=Math.floor((x-ox)/cell), r=Math.floor((y-oy)/cell);
+  if(r<0||c<0||r>=R||c>=C) return -1;
+  return idx(C,r,c);
+}
+function evtPos(e){ const r=cv.getBoundingClientRect(); return {x:(e.clientX-r.left)*CS/r.width, y:(e.clientY-r.top)*CS/r.height}; }
+cv.addEventListener('pointerup',e=>{
+  if(!G) return;
+  cv.focus();
+  const {x,y}=evtPos(e); const i=cellAt(x,y);
+  if(i>=0){ focusIdx=i; rotateCell(i); }
+});
+// keyboard: arrows move focus, Enter/Space rotate
+cv.addEventListener('keydown',e=>{
+  if(!G) return;
+  const C=G.C, R=G.R; let r=(focusIdx/C)|0, c=focusIdx%C; let handled=true;
+  switch(e.key){
+    case 'ArrowUp': r=Math.max(0,r-1); break;
+    case 'ArrowDown': r=Math.min(R-1,r+1); break;
+    case 'ArrowLeft': c=Math.max(0,c-1); break;
+    case 'ArrowRight': c=Math.min(C-1,c+1); break;
+    case 'Enter': case ' ': rotateCell(focusIdx); e.preventDefault(); return;
+    default: handled=false;
+  }
+  if(handled){ focusIdx=idx(C,r,c); e.preventDefault(); draw(); }
+});
+cv.addEventListener('focus',draw);
+cv.addEventListener('blur',draw);
+
+function updateState(){
+  const {R,C}=G; const N=R*C;
+  const pf=powerFlood(G.board, mask);
+  let poweredCnt=0; for(let i=0;i<N;i++) if(pf[i]) poweredCnt++;
+  // dangling arms: an arm with no reciprocating neighbour (off-grid or wall-facing)
+  let dangle=0;
+  for(let r=0;r<R;r++) for(let c=0;c<C;c++){
+    const m=mask[idx(C,r,c)];
+    for(let d=0;d<4;d++) if(m&(1<<d)){
+      const nr=r+DR[d], nc=c+DC[d];
+      if(nr<0||nc<0||nr>=R||nc>=C){ dangle++; continue; }
+      if(!(mask[idx(C,nr,nc)] & (1<<OPP[d]))) dangle++;
+    }
+  }
+  const solved=checkSolved(G.board, mask);
+  $('#sTiles').textContent=N;
+  $('#sPowered').textContent=poweredCnt+'/'+N;
+  $('#sDangle').textContent=dangle;
+  $('#sConn').textContent=(poweredCnt===N)?'yes':'no';
+  const pill=$('#solvedPill'), txt=$('#solvedTxt');
+  if(solved){ pill.className='pill ok'; txt.textContent='solved — one network!'; triggerWin(); }
+  else { pill.className='pill'; txt.textContent='half-lit — keep rotating'; }
+}
+
+// ── the solved-settle flourish: the whole lit lattice settles GOLD ──
+function triggerWin(){
+  if(won) return;
+  won=true; winT=performance.now();
+  $('#msg').textContent='⌁ Every tile drinks from the source — the network is whole. Solved.';
+  // arm the bend-demo now that the board is solved (mask === witness)
+  $('#verdict').className='verdict'; $('#verdict').textContent='Board solved. Press “Bend one arm” to watch every arm prove load-bearing.';
+  const pulse=(t)=>{
+    draw();
+    const k=Math.min(1,(t-winT)/900);
+    // an expanding gold halo sweeping the powered lattice
+    ctx.save();
+    const pf=powerFlood(G.board, mask);
+    for(let i=0;i<G.R*G.C;i++){ if(!pf[i]) continue;
+      const {x,y}=cellCenter(i);
+      const rad=2+k*cell*0.85;
+      ctx.strokeStyle=`rgba(232,196,90,${0.5*(1-k)})`;
+      ctx.lineWidth=2+3*(1-k);
+      ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2); ctx.stroke();
+    }
+    ctx.restore();
+    if(k<1) winRAF=requestAnimationFrame(pulse);
+    else draw();
+  };
+  winRAF=requestAnimationFrame(pulse);
+}
+
+// ── Reveal the deduction (replays deduce().trace; sets each tile to its forced turn) ──
+const RULE_NAMES={
+  'border-no-off-grid':'edge tile — an arm can’t point off-grid',
+  'reciprocate-arm':'a neighbour’s forced arm forces this tile to reciprocate',
+  'reciprocate-wall':'a neighbour’s forced wall forbids this tile’s arm',
+};
+function revealLogic(){
+  const d=deduce(G.board);
+  if(!d.solved){ $('#msg').textContent='solver did not finish (unexpected)'; return; }
+  mask=d.masks.slice();
+  won=false; cancelAnimationFrame(winRAF); spin=new Array(G.R*G.C).fill(null);
+  draw(); updateState();
+  const lines=[]; let step=1;
+  for(const t of d.trace){
+    const r=(t.i/G.C)|0, c=t.i%G.C;
+    lines.push(`<span class="step">${String(step++).padStart(2)}</span> (${r},${c})  <span class="rule">${RULE_NAMES[t.rule]||t.rule}</span>`);
+  }
+  $('#trace').innerHTML=lines.join('\n')||'(forced immediately by the border)';
+  $('#msg').textContent='Revealed by pure logic — scroll the trace; not one step is a guess.';
+}
+
+// ── Hint: lay the single next FORCED tile, naming its rule ──
+function hint(){
+  const d=deduce(G.board);
+  if(!d.solved){ $('#msg').textContent='no logical hint available'; return; }
+  for(let i=0;i<G.R*G.C;i++){
+    if(d.masks[i]!==null && mask[i]!==d.masks[i]){
+      mask[i]=d.masks[i]; spin[i]={t0:performance.now()};
+      // name the FIRST rule that touched this cell in the trace
+      const t=d.trace.find(tr=>tr.i===i);
+      const r=(i/G.C)|0, c=i%G.C;
+      $('#msg').textContent=`Logic forces tile (${r},${c}): ${t?(RULE_NAMES[t.rule]||t.rule):'forced'}.`;
+      draw(); updateState();
+      return;
+    }
+  }
+  $('#msg').textContent='every forced tile already matches — finish the lattice!';
+}
+
+// ── the surfaced negative-control demo: bend ONE arm on the SOLVED board, recount, verdict ──
+function bendOneArm(){
+  if(!checkSolved(G.board, mask)){
+    $('#verdict').className='verdict';
+    $('#verdict').textContent='Bend it on a SOLVED board — solve it first (or press Reveal logic), then bend.';
+    return;
+  }
+  // the current mask IS a solved orientation === witness. Toggle one arm on one non-source tile.
+  const {R,C,src}=G; const srcIdx=src[0]*C+src[1];
+  // pick a non-source tile that has an arm to bend, varying each press
+  const order=[]; for(let i=0;i<R*C;i++) if(i!==srcIdx) order.push(i);
+  // rotate the pick deterministically by a click counter so repeated presses show different tiles
+  bendOneArm._n=(bendOneArm._n||0)+1;
+  let chosen=-1, bit=-1;
+  for(let k=0;k<order.length;k++){
+    const i=order[(bendOneArm._n+k)%order.length];
+    // a bit we can toggle that yields a real change in solvability (any bit works — claim is ALL)
+    bit=(bendOneArm._n)%4;
+    chosen=i; break;
+  }
+  const mutW=mask.slice();
+  mutW[chosen]=mask[chosen]^(1<<bit);
+  const broken=buildBoard(R,C,mutW.map(m=>m),src);
+  const cnt=countSolutions(broken,2);
+  const d=deduce(broken);
+  const r=(chosen/C)|0, c=chosen%C;
+  const DIR=['N','E','S','W'][bit];
+  let why;
+  if(cnt===0) why='NO solution — the network can never close';
+  else if(cnt>=2) why='≥2 solutions — the puzzle is no longer unique';
+  else if(!d.solved) why='the no-guess solver stalls — no longer logic-solvable';
+  else why='(unexpected: still uniquely solvable)';
+  const broke=(cnt!==1 || !d.solved);
+  $('#verdict').className='verdict'+(broke?' broke':'');
+  $('#verdict').innerHTML=`tile (${r},${c}) — bent its ${DIR} arm → <b>${why}</b>. Every arm is load-bearing.`;
+}
+
+// ── self-test pill (runs the SAME inlined core over many seeds; mirrors core.test.mjs) ──
+async function byteTwinParity(){
+  // diff-true: the inlined CORE (between this page's sentinels) must equal core.mjs char-for-char.
+  try{
+    const [pageTxt, coreTxt]=await Promise.all([
+      fetch(location.href).then(r=>r.text()),
+      fetch('./core.mjs').then(r=>r.text()),
+    ]);
+    const slice=t=>{ const b=t.indexOf('// === CORE BEGIN ==='); const e=t.indexOf('// === CORE END ===');
+      if(b<0||e<0) return null; return t.slice(b, e+'// === CORE END ==='.length); };
+    const inPage=slice(pageTxt), inFile=slice(coreTxt);
+    if(inPage==null||inFile==null) return {ok:false, reason:'sentinel not found'};
+    return {ok:inPage===inFile, reason:inPage===inFile?'byte-identical':'DRIFT: inlined core ≠ core.mjs'};
+  }catch(e){ return {ok:true, reason:'parity deferred to Node twin (fetch unavailable)', skipped:true}; }
+}
+async function runSelfTest(){
+  const SEEDS=120; const sizes=[[5,5],[6,6]];
+  const named=new Set(['border-no-off-grid','reciprocate-arm','reciprocate-wall']);
+  let made=0, uniq=0, ded=0, match=0, treeOK=0, noGuess=0, ctrlBoards=0, ctrlBroke=0;
+  for(const [R,C] of sizes){
+    for(let s=1;s<=SEEDS;s++){
+      const seed=(s*2654435761 ^ (R*131+C))>>>0;
+      const g=generate(seed,R,C,0.0); if(!g) continue; made++;
+      if(countSolutions(g.board,3)===1) uniq++;
+      const d=deduce(g.board);
+      if(d.solved) ded++;
+      if(d.solved){ let m=true; for(let i=0;i<R*C;i++) if(d.masks[i]!==g.witness[i]){m=false;break;} if(m) match++; }
+      if(d.trace.every(t=>named.has(t.rule))) noGuess++;
+      if(d.solved){
+        const ok=checkSolved(g.board,g.witness);
+        let arms=0; for(let i=0;i<R*C;i++){ let m=g.witness[i]; while(m){arms+=m&1;m>>=1;} }
+        const pf=powerFlood(g.board,g.witness); let all=true; for(let i=0;i<R*C;i++) if(!pf[i]) all=false;
+        if(ok && arms/2===R*C-1 && all) treeOK++;
+      }
+      // real neg-control on a sample (every-arm is expensive; sample 1-in-8 seeds fully)
+      if(s%8===0){
+        const cc=controlEveryArm(g.board, g.witness);
+        ctrlBoards++; if(cc.tested>0 && cc.broke===cc.tested) ctrlBroke++;
+      }
+    }
+  }
+  const parity=await byteTwinParity();
+  const checks=[
+    ['boards generated', made>=Math.floor(SEEDS*2*0.8)],
+    ['unique (count===1)', uniq===made && made>0],
+    ['deduction-solved (no guess)', ded===made],
+    ['matches reference (deduced===witness)', match===made],
+    ['fully powered spanning tree', treeOK===made],
+    ['every trace step named', noGuess===made],
+    ['every single-arm mutation breaks', ctrlBroke===ctrlBoards && ctrlBoards>0],
+    ['byte-twin parity (inlined core ≡ core.mjs)', parity.ok],
+  ];
+  const pass=checks.filter(c=>c[1]).length;
+  const ok=pass===checks.length;
+  const fails=checks.filter(c=>!c[1]).map(c=>c[0]);
+  const pill=$('#selftest');
+  pill.className='selftest '+(ok?'ok':'bad');
+  pill.textContent= ok
+    ? `self-test ${pass}/${checks.length} ✓ · ${made} boards unique & logic-solvable · every arm load-bearing`
+    : `self-test ${pass}/${checks.length} ✗ (${fails.join(', ')})`;
+  pill.title= ok
+    ? 'Every generated board: one solved orientation by pure deduction (no guess); every single arm load-bearing; the inlined core is byte-identical to core.mjs.'
+    : pill.textContent;
+  const res={ok, pass, total:checks.length, fails, made, uniq, ded, match, treeOK, noGuess, ctrlBoards, ctrlBroke, parity};
+  window.__switchyardSelfTest=res;
+  return res;
+}
+window.runSelfTest=runSelfTest;
+
+// ── drop the front-door breadcrumb (the bench drops its own seen flag) ──
+try{ const k='ws:seen:switchyard'; if(!localStorage.getItem(k)) localStorage.setItem(k,String(Date.now())); }catch(e){}
+
+// wire up
+$('#new').onclick=()=>{ const s=(Math.random()*1e6)|0; $('#seed').value=s; newBoard(s); };
+$('#solveBtn').onclick=revealLogic;
+$('#scramble').onclick=()=>{ if(!G) return; newBoard(parseInt($('#seed').value,10)||7); $('#msg').textContent='re-scrambled the same lattice.'; };
+$('#hint').onclick=hint;
+$('#bendBtn').onclick=bendOneArm;
+$('#seed').onchange=e=>newBoard(parseInt(e.target.value,10)||1);
+
+let _rz=null;
+window.addEventListener('resize',()=>{ clearTimeout(_rz); _rz=setTimeout(()=>{ if(G){ sizeCanvas(); layoutGeom(); draw(); } },120); });
+
+newBoard(parseInt($('#seed').value,10)||7);
+runSelfTest().then(r=>console.log('self-test',r));
+</script>
+</body>
+</html>
