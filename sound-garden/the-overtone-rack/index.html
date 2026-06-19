@@ -1,0 +1,865 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Overtone Rack — twelve brass faders on one pitch; pull the fundamental and it survives</title>
+<!-- a Sound Garden LEAF (garden growth of the rack). Reached from the front-door
+     'rigorous voices' line in sound-garden/index.html. Copies '← sound garden'.
+     NOT a new front-door footprint — NO ws:seen. The additive-synthesis physics +
+     the missing-fundamental estimator are single-sourced to ./core.mjs (the
+     OVERTONE CORE block, byte-twinned here char-for-char); the harmonic ladder
+     k·g comes from ../the-beating-bench/core.mjs (`partials`, also byte-twinned)
+     and the pitch anchor semiToFreq from ../pitch-core.mjs (PITCH CORE, twinned).
+     The Node twin core.test.mjs re-extracts each slice and asserts parity. -->
+<style>
+  :root{
+    --bg:#07060d; --ink:#ece9f6; --muted:#8a85a6;
+    --c:#ffd76b;                 /* the leaf accent (gold — waveform trace + values) */
+    --brass:#caa45a;             /* the twelve levers (the brass faders) */
+    --residue:#54e08a;           /* RESERVED: self-test verdict + the survived-pitch verdict only */
+    --coral:#ff9d7a;             /* the inharmonic "no common fundamental" readout (NOT the pill's red) */
+    --ok:#54e08a; --bad:#ff6b6b;
+    --panel:#110e1c; --line:rgba(255,255,255,.08);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--bg); color:var(--ink); overflow-x:hidden;
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased; }
+  body{ min-height:100vh; background:
+    radial-gradient(1000px 600px at 50% -10%, rgba(255,215,107,.12), transparent 60%),
+    radial-gradient(820px 520px at 14% 110%, rgba(202,164,90,.10), transparent 55%),
+    radial-gradient(820px 520px at 88% 112%, rgba(120,150,230,.08), transparent 55%),
+    var(--bg); }
+  .wrap{ max-width:1080px; margin:0 auto; padding:30px 24px 90px; }
+  a{ color:inherit; }
+  .back{ display:inline-block; font:600 11px/1 ui-monospace,Menlo,monospace; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); text-decoration:none; opacity:.8; margin-bottom:14px; }
+  .back:hover{ color:var(--c); opacity:1; }
+  header{ text-align:center; margin-bottom:8px; }
+  .kick{ font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.34em;
+    text-transform:uppercase; color:var(--muted); opacity:.85; }
+  h1{ font-family:Georgia,"Times New Roman",serif; font-weight:500;
+    font-size:clamp(34px,6vw,58px); margin:.14em 0 .1em; letter-spacing:.01em;
+    background:linear-gradient(180deg,#fff,#ecdcb0); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  .sub{ color:var(--muted); font-size:15px; font-style:italic; font-family:Georgia,serif;
+    max-width:680px; margin:0 auto; line-height:1.55; }
+  .sub b{ font-style:normal; }
+
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; }
+  .card h3{ margin:0 0 10px; font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); }
+
+  /* the stage: one column on mobile → rack beside the tone on desktop */
+  .stage{ margin-top:26px; display:grid; gap:18px; grid-template-columns:1fr; }
+  @media(min-width:860px){ .stage{ grid-template-columns:1.25fr .75fr; align-items:start; } }
+
+  /* ── the RACK: twelve vertical faders (DOM, for native a11y) ── */
+  .rack{ display:flex; align-items:flex-end; gap:6px; height:300px; padding:6px 2px 0;
+    overflow-x:auto; touch-action:none; }
+  @media(min-width:860px){ .rack{ overflow-x:visible; } }
+  .fader{ position:relative; flex:0 0 auto; width:clamp(20px,5.4vw,30px); height:100%;
+    display:flex; flex-direction:column; align-items:center; }
+  .track{ position:relative; flex:1 1 auto; width:100%; border-radius:8px; cursor:ns-resize;
+    background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
+    border:1px solid var(--line); overflow:hidden; outline:none; touch-action:none; }
+  .track:focus-visible{ box-shadow:0 0 0 2px color-mix(in srgb,var(--c) 60%,transparent); }
+  .fill{ position:absolute; left:0; right:0; bottom:0; height:0%;
+    background:linear-gradient(180deg, color-mix(in srgb,var(--brass) 85%,#fff 0%), #8a6b2e);
+    box-shadow:0 0 14px -3px var(--brass); transition:background .15s; }
+  .cap{ position:absolute; left:1px; right:1px; height:8px; bottom:0; border-radius:4px;
+    background:#e6c479; box-shadow:0 1px 4px rgba(0,0,0,.5), inset 0 1px 1px rgba(255,255,255,.4); }
+  .track.muted-fund .fill{ background:linear-gradient(180deg,#3a3550,#241f36); box-shadow:none; }
+  .track.muted-fund .cap{ background:#4a4560; box-shadow:none; }
+  .fnum{ margin-top:6px; font:600 10px/1 ui-monospace,Menlo,monospace; color:var(--muted); }
+  .fnum.fund{ color:var(--brass); }
+  .rackHint{ margin:10px 0 0; font:600 11px/1.5 ui-monospace,Menlo,monospace; color:var(--muted); opacity:.85; }
+
+  /* ── the TONE column: the sum-waveform witness + readouts + switches ── */
+  #waveHost{ position:relative; width:100%; height:150px; }
+  #wave{ width:100%; height:100%; display:block; border-radius:10px;
+    background:radial-gradient(120% 100% at 50% 50%, rgba(255,215,107,.05), transparent 70%), #0a0813; }
+  .specline{ margin:8px 0 0; font:600 11px/1.5 ui-monospace,Menlo,monospace; color:var(--muted);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  .controls{ display:flex; flex-direction:column; gap:14px; }
+  .readouts{ display:grid; grid-template-columns:1fr; gap:10px; }
+  .ro{ background:#0d0a16; border:1px solid var(--line); border-radius:10px; padding:10px 12px;
+    overflow:hidden; }
+  .ro .k{ font:600 10px/1 ui-monospace,Menlo,monospace; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); }
+  .ro .v{ font:700 18px/1.2 ui-monospace,Menlo,monospace; margin-top:6px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ro .v.survive{ color:var(--residue); }
+  .ro .v.coral{ color:var(--coral); }
+
+  .switches{ display:flex; flex-direction:column; gap:10px; }
+  .switch{ display:flex; align-items:center; gap:12px; background:#0d0a16; border:1px solid var(--line);
+    border-radius:10px; padding:10px 12px; cursor:pointer; user-select:none; }
+  .switch:focus-visible{ outline:2px solid color-mix(in srgb,var(--c) 60%,transparent); outline-offset:2px; }
+  .switch .knobtrack{ position:relative; flex:0 0 auto; width:42px; height:24px; border-radius:13px;
+    background:#1c1830; border:1px solid var(--line); transition:.18s; }
+  .switch .knobdot{ position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%;
+    background:#6a6480; transition:.18s; }
+  .switch[aria-pressed="true"] .knobtrack{ background:linear-gradient(180deg,#3a2350,#241636); border-color:rgba(255,215,107,.45); }
+  .switch[aria-pressed="true"] .knobdot{ left:22px; background:var(--c); box-shadow:0 0 10px -2px var(--c); }
+  .switch .lbl{ min-width:0; }
+  .switch .lbl .t{ font:600 12px/1.2 ui-monospace,Menlo,monospace; color:var(--ink); }
+  .switch .lbl .d{ font:500 11px/1.3 ui-monospace,Menlo,monospace; color:var(--muted); margin-top:2px; }
+
+  .btnrow{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .btn{ appearance:none; border:1px solid var(--line); background:#16121f; color:var(--ink);
+    font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.06em; padding:9px 12px;
+    border-radius:9px; cursor:pointer; transition:.18s; }
+  .btn:hover{ border-color:color-mix(in srgb,var(--c) 55%,transparent); box-shadow:0 0 18px -6px var(--c); }
+  .btn:focus-visible{ outline:2px solid color-mix(in srgb,var(--c) 60%,transparent); outline-offset:2px; }
+  .seg{ display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+  .seg .opt{ padding:9px 12px; font:600 11px/1 ui-monospace,Menlo,monospace; letter-spacing:.06em;
+    cursor:pointer; color:var(--muted); background:#0d0a16; transition:.16s; }
+  .seg .opt.on{ color:#07060d; background:var(--c); }
+
+  .note{ font-size:13px; color:var(--muted); line-height:1.6; margin:12px 0 0; }
+  .note b{ color:var(--ink); font-weight:600; }
+  .note.lit{ color:var(--residue); }
+
+  /* the SELF-TEST pill — green/red RESERVED for the verdict only */
+  #selftest{ display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
+    font:700 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.04em; padding:9px 13px; border-radius:9px;
+    border:1px solid var(--line); background:#0d0a16; color:var(--muted); }
+  #selftest.ok{ color:var(--ok); border-color:color-mix(in srgb,var(--ok) 50%,transparent); }
+  #selftest.bad{ color:var(--bad); border-color:color-mix(in srgb,var(--bad) 50%,transparent); }
+  #selftest .dotp{ width:8px; height:8px; border-radius:50%; background:currentColor; box-shadow:0 0 8px currentColor; }
+
+  footer{ margin-top:46px; text-align:center; color:var(--muted); opacity:.6;
+    font:11px/1.7 ui-monospace,Menlo,monospace; letter-spacing:.05em; }
+  footer a{ color:inherit; }
+  code{ font-family:ui-monospace,Menlo,monospace; font-size:.92em; color:#ecdcb0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../index.html">&larr; sound garden</a>
+  <header>
+    <div class="kick">Sound&nbsp;Garden&nbsp;·&nbsp;a&nbsp;leaf</div>
+    <h1>The Overtone Rack</h1>
+    <p class="sub">A pitch is not its lowest note &mdash; it is the <b style="color:var(--c)">spacing</b> of its
+      overtones. Drag twelve <b style="color:var(--brass)">brass faders</b>, each one harmonic on a single held
+      tone, and HEAR a timbre take shape under your hand. Then <b>pull the fundamental</b> all the way down &mdash;
+      the bottom rung goes silent, yet the <b style="color:var(--residue)">pitch holds</b>. Your ear rebuilds it
+      from the rungs above.</p>
+  </header>
+
+  <div class="stage">
+    <!-- THE RACK: the played instrument -->
+    <div class="card">
+      <h3>The rack &mdash; twelve harmonics on one pitch</h3>
+      <div class="rack" id="rack" role="application" aria-label="twelve harmonic faders; drag to set each overtone's strength"></div>
+      <p class="rackHint">Drag a fader, or focus one (Tab) and use &uarr;&darr; (Shift = fine, PageUp/Dn = coarse, Home/End = 0/full). Pick a preset to hear a timbre assemble.</p>
+    </div>
+
+    <!-- THE TONE: the sum-waveform witness + readouts + the two switches -->
+    <div class="card">
+      <h3>The tone you are mixing</h3>
+      <div class="controls">
+        <div id="waveHost"><canvas id="wave" role="img" aria-label="one period of the additive waveform you are building"></canvas></div>
+        <p class="specline" id="specline">&nbsp;</p>
+
+        <div class="readouts">
+          <div class="ro"><div class="k" id="roF0k">heard fundamental f&#8320;</div><div class="v" id="roF0">&mdash;</div></div>
+          <div class="ro"><div class="k">lowest partial present</div><div class="v" id="roLow">&mdash;</div></div>
+        </div>
+
+        <div class="switches">
+          <div class="switch" id="swPull" role="switch" tabindex="0" aria-pressed="false"
+               aria-label="pull the fundamental: silence the bottom rung; the pitch should survive">
+            <span class="knobtrack"><span class="knobdot"></span></span>
+            <span class="lbl"><span class="t">pull the fundamental</span><span class="d">silence rung 1 &mdash; does the pitch hold?</span></span>
+          </div>
+          <div class="switch" id="swInh" role="switch" tabindex="0" aria-pressed="false"
+               aria-label="inharmonic rack: retune the partials to f0 times n to the 1.4; the common fundamental should vanish">
+            <span class="knobtrack"><span class="knobdot"></span></span>
+            <span class="lbl"><span class="t">inharmonic rack</span><span class="d">retune partials to f&#8320;&middot;n^1.4 &mdash; no common f&#8320;</span></span>
+          </div>
+        </div>
+
+        <div class="btnrow">
+          <button class="btn" id="presetSaw">sawtooth (1/n)</button>
+          <button class="btn" id="presetSquare">square (odd 1/n)</button>
+          <button class="btn" id="presetSine">sine (h1)</button>
+        </div>
+        <div class="btnrow">
+          <span class="seg" id="segAudio" title="Honours the estate-wide ws:pref:muted key; muted by default.">
+            <span class="opt" data-audio="on">sound on</span>
+            <span class="opt on" data-audio="off">sound off</span>
+          </span>
+        </div>
+
+        <p class="note" id="reveal">&nbsp;</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- THE PROOF -->
+  <div class="card" style="margin-top:18px">
+    <div class="btnrow" style="justify-content:space-between;align-items:flex-start;gap:24px">
+      <div style="flex:1 1 340px;min-width:0">
+        <h3 style="margin-top:0">Why the pitch survives</h3>
+        <p class="note" style="margin-top:0">
+          The held tone is a <b>stack of partials</b> at f&#8320;, 2f&#8320;, 3f&#8320;, &hellip; &mdash; each
+          fader sets one partial's strength. What you HEAR is the additive sum
+          <code>y(t) = &Sigma; a<sub>n</sub>&middot;sin(2&pi;&middot;n&middot;t)</code>, the very curve the
+          witness draws. A sawtooth is <code>a<sub>n</sub> = 1/n</code> on every rung; a square is
+          <code>1/n</code> on the odd rungs only.
+        </p>
+        <p class="note">
+          <b style="color:var(--c)">The reveal:</b> pull rung&nbsp;1 to zero and the lowest sounding partial
+          jumps to <b>2f&#8320;</b> &mdash; yet the PITCH does not move. A tolerance-GCD estimator recovers the
+          same f&#8320; from the <b>spacing</b> of the surviving rungs, exactly as your ear rebuilds the missing
+          fundamental. <b style="color:var(--c)">The honest test:</b> retune the rack
+          <b>inharmonic</b> (partial n at f&#8320;&middot;n<sup>1.4</sup>) and the SAME estimator returns
+          FAILURE &mdash; the rungs share no common divisor, so there is no fundamental to rebuild. The failure
+          is the input, not the estimator.
+        </p>
+      </div>
+      <div style="flex:1 1 280px;min-width:0">
+        <div class="btnrow">
+          <span id="selftest" title="click to re-run"><span class="dotp"></span><span id="stText">self-test &mdash;</span></span>
+        </div>
+        <p class="note" style="margin-top:12px;font-size:12px">
+          The self-test proves it EXACT: the sawtooth and square amplitude laws are <code>1/n</code> to the bit,
+          the additive sum's quarter-point is the Leibniz series &rarr; <code>&pi;/4</code>, the
+          tolerance-GCD estimator recovers f&#8320; with the fundamental present AND removed AND on the odd-only
+          set at two fundamentals, and an inharmonic rack makes the SAME estimator FAIL. The physics is
+          single-sourced to <code>core.mjs</code>, byte-twinned into this page, with the Node twin
+          <code>core.test.mjs</code> proving char-for-char parity and that the laws are re-typed nowhere.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    a leaf of the <a href="../index.html">Sound Garden</a> &middot; all sound synthesised live (Web Audio), zero dependencies &middot;
+    additive physics &rarr; <code>core.mjs</code> &middot; harmonic ladder &rarr; <code>the-beating-bench/core.mjs</code> &middot; pitch &rarr; <code>sound-garden/pitch-core.mjs</code><br>
+    <a href="../the-beating-bench/index.html">&harr; The Beating Bench</a> &middot;
+    <a href="../the-quorum/index.html">&harr; The Quorum</a> &middot;
+    <a href="../the-comma/index.html">&harr; The Comma</a> &middot;
+    <a href="../monochord.html">&harr; The Monochord</a> &middot;
+    <a href="../../index.html">&larr; The Orrery Estate</a>
+  </footer>
+</div>
+
+<script type="module">
+"use strict";
+// ════════════════════════ INLINED SINGLE-SOURCE BYTE-TWINS ═══════════════════
+// THREE byte-twins, in order. (a) the PITCH CORE slice (gives semiToFreq, so
+// f₀ = semiToFreq(−9) is single-sourced), char-for-char ../pitch-core.mjs.
+// (b) the HARMONIC LADDER slice (the bench's `partials`, k·g), char-for-char
+// ../the-beating-bench/core.mjs. (c) the OVERTONE CORE slice (the additive
+// synthesis + the missing-fundamental estimator + runRackSelfTest), char-for-char
+// ./core.mjs. The Node twin re-extracts each slice and asserts parity; the
+// in-page pill AND the Node twin both call the runRackSelfTest defined in (c).
+
+// ===== PITCH CORE (inlined byte-twin) BEGIN =====
+const MIDDLE_C_HZ = 261.625565;            // the ONE pitch anchor literal
+function semiToFreq(semi){ return MIDDLE_C_HZ * Math.pow(2, semi/12); }
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function noteName(semi){ const o=4+Math.floor(semi/12); const i=((semi%12)+12)%12; return NOTE_NAMES[i]+o; }
+// ===== PITCH CORE END =====
+
+// ===== HARMONIC LADDER (inlined byte-twin) BEGIN =====
+// the bench's harmonic ladder k·g — single-sourced to ../the-beating-bench/core.mjs.
+// Inlined verbatim (with the same N_PARTIALS default) so this page is self-contained
+// yet the k·g ladder is never re-typed; the Node twin asserts this block contains
+// the bench's `partials` definition char-for-char.
+const N_PARTIALS = 8;
+function partials(g, n = N_PARTIALS) {
+  const out = [];
+  for (let k = 1; k <= n; k++) out.push(k * g);
+  return out;
+}
+// ===== HARMONIC LADDER (inlined byte-twin) END =====
+
+// the rack's two fundamentals, DERIVED from the pitch anchor (no Hz literal is
+// re-typed). These live OUTSIDE the OVERTONE CORE slice (which takes f0/f0Alt as
+// parameters), exactly as core.mjs places them.
+const SEMI_F0 = -9;
+const F0 = semiToFreq(SEMI_F0);          // ≈155.56 Hz — the rack's home pitch
+const SEMI_F0_ALT = -21;
+const F0_ALT = semiToFreq(SEMI_F0_ALT);  // ≈77.78 Hz — an octave-down second fundamental for re-derivation
+
+// ===== OVERTONE CORE (inlined byte-twin) BEGIN =====
+// IMPORT-FREE: every function that needs the harmonic ladder takes `partialsFn`
+// (= the bench's `partials`, k·g) as a parameter, and f₀ as a parameter — so the
+// page can inline this block verbatim regardless of script load order, and the
+// k·g ladder is never re-typed inside the slice (the single-source grep checks).
+
+// the number of faders on the rack (twelve brass rungs).
+const RACK_SIZE = 12;
+
+// THE AMPLITUDE LAWS — the ONLY place these coefficients live as code (the
+// single-source grep asserts the 1/n literal appears in exactly one file).
+//   sawtooth: every harmonic at 1/n      → a bright, buzzy ramp
+//   square  : odd harmonics at 1/n, evens silent → a hollow, clarinet-ish tone
+function sawAmp(n){ return 1 / n; }
+function squareAmp(n){ return (n % 2 === 1) ? 1 / n : 0; }
+
+// the preset dispatcher: a named analytic timbre → its amplitude on harmonic n.
+// 'sine' is the pure fundamental (a₁=1, all else 0). Presets re-type NOTHING —
+// the page reads its fader values from THIS, never a hand-typed array.
+function analyticCoeff(shape, n){
+  if (shape === 'saw') return sawAmp(n);
+  if (shape === 'square') return squareAmp(n);
+  if (shape === 'sine') return n === 1 ? 1 : 0;
+  return 0;
+}
+
+// build the RACK_SIZE-long amplitude vectors for the analytic presets.
+function sawRack(size = RACK_SIZE){ const a = []; for (let n = 1; n <= size; n++) a.push(sawAmp(n)); return a; }
+function squareRack(size = RACK_SIZE){ const a = []; for (let n = 1; n <= size; n++) a.push(squareAmp(n)); return a; }
+
+// THE SUM the audio plays AND the trace draws — one additive law, two surfaces.
+//   y(t) = Σ aₙ·sin(2π·(n)·t)   (n = i+1; silent partials skipped)
+// t is in PERIODS of the fundamental (one period is t ∈ [0,1)), so the shape is
+// register-free; the page scales it to f₀ for the ear and to pixels for the eye.
+function additiveSample(amps, t){
+  let s = 0;
+  for (let i = 0; i < amps.length; i++){
+    const a = amps[i];
+    if (a === 0) continue;
+    s += a * Math.sin(2 * Math.PI * (i + 1) * t);
+  }
+  return s;
+}
+
+// one period of the additive waveform, sampled at `res` points over t ∈ [0,1).
+function waveform(amps, res = 512){
+  const out = new Float64Array(res);
+  for (let k = 0; k < res; k++) out[k] = additiveSample(amps, k / res);
+  return out;
+}
+
+// the 1-based indices of the partials that are actually sounding (amp above the
+// numerical floor). The feed for both the estimator and the live readouts.
+function activeHarmonics(amps, floor = 1e-9){
+  const out = [];
+  for (let i = 0; i < amps.length; i++) if (Math.abs(amps[i]) > floor) out.push(i + 1);
+  return out;
+}
+
+// THE ONE PLACE the inharmonic stretch lives: partial n sits at multiplier n for
+// a true harmonic stack, or n^1.4 when the rack is detuned inharmonic. BOTH the
+// audio retune and the estimator feed read THIS — they cannot disagree.
+const INHARM_STRETCH = 1.4;
+function partialMultiplier(n, inharmonic){ return inharmonic ? Math.pow(n, INHARM_STRETCH) : n; }
+
+// the frequencies of the ACTIVE partials, as a flat array (the estimator's feed).
+// Harmonic: the ladder is partialsFn(f0, N) = [f0, 2f0, …] (single-sourced k·g).
+// Inharmonic: each partial is f0·partialMultiplier(i+1, true) = f0·(i+1)^1.4.
+function activeFreqs(amps, f0, partialsFn, inharmonic = false, floor = 1e-9){
+  const ladder = inharmonic
+    ? amps.map((_, i) => f0 * partialMultiplier(i + 1, true))
+    : partialsFn(f0, amps.length);
+  const out = [];
+  for (let i = 0; i < amps.length; i++) if (Math.abs(amps[i]) > floor) out.push(ladder[i]);
+  return out;
+}
+
+// the ACTIVE partials as rich records [{n, freq, amp}] (the UI's feed). The freq
+// comes from the SAME partialMultiplier law activeFreqs uses — one law, two shapes.
+function activePartials(amps, f0, partialsFn, inharmonic = false, floor = 1e-9){
+  const ladder = inharmonic
+    ? amps.map((_, i) => f0 * partialMultiplier(i + 1, true))
+    : partialsFn(f0, amps.length);
+  const out = [];
+  for (let i = 0; i < amps.length; i++) if (Math.abs(amps[i]) > floor) out.push({ n: i + 1, freq: ladder[i], amp: amps[i] });
+  return out;
+}
+
+// THE ESTIMATOR — recover the fundamental from a set of partial frequencies by
+// the greatest common divisor of their spacing. Float-safe: a tolerance-guarded
+// Euclidean reduction (exact integer GCD is meaningless on floats). The relative
+// tolerance EST_REL_TOL is the only knob; EST_MAX_N caps the harmonic index a
+// partial may sit at (a partial at 5000× the candidate fundamental is not a
+// rebuild, it is a collapse).
+const EST_REL_TOL = 1e-3;
+const EST_MAX_N = 64;
+
+// the float-safe GCD: Euclid's a % b until b falls below the absolute tolerance,
+// with a hard guard so a pathological input cannot spin forever.
+function floatGcd(a, b, tol){
+  a = Math.abs(a); b = Math.abs(b);
+  let guard = 0;
+  while (b > tol){
+    const t = a % b; a = b; b = t;
+    if (++guard > 100000) break;
+  }
+  return a;
+}
+
+// estimateF0(freqs) → { ok, f0, worstRes, maxN, reason? }. Sort the positive
+// freqs; the tolerance scales with the lowest. Reduce the GCD across all of
+// them. If the GCD collapses toward zero (no common divisor — the inharmonic
+// case) it fails. Otherwise every partial must land on an integer multiple of
+// the recovered f₀ within EST_REL_TOL, with that integer in [1, EST_MAX_N].
+function estimateF0(freqs){
+  const s = freqs.filter(f => f > 0).slice().sort((x, y) => x - y);
+  if (s.length === 0) return { ok: false, f0: 0, worstRes: Infinity, maxN: 0, reason: 'empty' };
+  const tol = s[0] * EST_REL_TOL;
+  let g = s[0];
+  for (let i = 1; i < s.length; i++) g = floatGcd(g, s[i], tol);
+  if (!(g > 0) || !isFinite(g)) return { ok: false, f0: g, worstRes: Infinity, maxN: 0, reason: 'gcd-collapse' };
+  let worst = 0, maxN = 0, inRange = true;
+  for (const f of s){
+    const n = Math.round(f / g);
+    if (n < 1 || n > EST_MAX_N) inRange = false;
+    if (n > maxN) maxN = n;
+    const res = Math.abs(f / g - n);
+    if (res > worst) worst = res;
+  }
+  const ok = inRange && worst <= EST_REL_TOL;
+  return { ok, f0: g, worstRes: worst, maxN };
+}
+
+// the inharmonic partial frequencies f0·n^1.4 for a list of partial indices —
+// the negative-control feed (a stack with NO common fundamental).
+function inharmonicFreqs(f0, ns){ return ns.map(n => f0 * Math.pow(n, INHARM_STRETCH)); }
+
+// ── runRackSelfTest(f0, f0Alt, partialsFn) — the SOLE ORACLE. Same shape as the
+// sibling leaves: { pass, total, lines:[{name, ok, detail}] }. The in-page pill
+// and the Node twin both call THIS, so they cannot disagree. f0/f0Alt are the
+// two fundamentals; partialsFn is the bench's harmonic ladder (k·g).
+function runRackSelfTest(f0, f0Alt, partialsFn){
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+
+  // LEG 1 — THE AMPLITUDE LAWS, to the bit: the sawtooth rack is 1/n on every
+  //   harmonic, and the square rack is 1/n on the odds and exactly 0 on the
+  //   evens. These are the timbre recipes the faders snap to; they are computed,
+  //   never typed.
+  {
+    const saw = sawRack(), sq = squareRack();
+    let ok = true, worst = 0;
+    for (let n = 1; n <= RACK_SIZE; n++){
+      const dSaw = Math.abs(saw[n - 1] - 1 / n);
+      const wantSq = (n % 2 === 1) ? 1 / n : 0;
+      const dSq = Math.abs(sq[n - 1] - wantSq);
+      worst = Math.max(worst, dSaw, dSq);
+      if (dSaw > 0 || dSq > 0) ok = false;
+    }
+    T('LEG 1 — the amplitude laws: the sawtooth rack is aₙ = 1/n on every harmonic and the square rack is 1/n on the odds, 0 on the evens — the timbre recipes are computed to the bit, never a typed array',
+      ok, ok ? `saw[1..12] = 1/n exact · square = 1/n odd / 0 even exact (worst Δ ${worst.toExponential(2)})`
+             : `mismatch (worst Δ ${worst.toExponential(2)})`);
+  }
+
+  // LEG 2 — THE SUM IS THE SHAPE: the additive square-wave sum is positive in
+  //   the first half-period and negative in the second (a square is ±-symmetric
+  //   about the half-period), and at the quarter-point t=1/4 the odd-harmonic sum
+  //   Σ (1/n)·sin(πn/2) is the Leibniz series → π/4. The sum the ear hears IS the
+  //   trace the eye sees.
+  {
+    const sq = squareRack();
+    // sign over the two half-periods (sample inside each, avoiding the zero crossings)
+    let posFirst = true, negSecond = true;
+    for (let k = 1; k < 16; k++){
+      const t1 = k / 32;          // (0, 1/2)
+      const t2 = 0.5 + k / 32;    // (1/2, 1)
+      if (additiveSample(sq, t1) <= 0) posFirst = false;
+      if (additiveSample(sq, t2) >= 0) negSecond = false;
+    }
+    // the quarter-point value of the (1/n odd) sum is the Leibniz partial sum → π/4
+    const quarter = additiveSample(sq, 0.25);
+    const leibniz = (() => { let s = 0; for (let n = 1; n <= RACK_SIZE; n += 2) s += (1 / n) * Math.sin(Math.PI * n / 2); return s; })();
+    const quarterOK = Math.abs(quarter - leibniz) < 1e-12 && Math.abs(leibniz - Math.PI / 4) < 0.05;
+    const ok = posFirst && negSecond && quarterOK;
+    T('LEG 2 — the sum IS the trace: the additive square sum is positive in the first half-period and negative in the second, and its quarter-point value is the Leibniz partial sum Σ(1/n)sin(πn/2) → π/4 — the heard sum and the drawn curve are one function',
+      ok, ok ? `half-periods +/− ✓ · y(¼) = ${quarter.toFixed(5)} ≈ π/4 (${(Math.PI / 4).toFixed(5)}, 12-term partial)`
+             : `posFirst=${posFirst} negSecond=${negSecond} y(¼)=${quarter.toFixed(5)}`);
+  }
+
+  // LEG 3 — THE MISSING FUNDAMENTAL: estimateF0 over the ACTIVE partials recovers
+  //   the SAME f₀ with the fundamental partial present AND removed (slice(1)) AND
+  //   on the odd-only (square) set — re-derived at BOTH f0 and f0Alt. The pitch is
+  //   the SPACING; pulling the bottom rung does not move it.
+  {
+    let ok = true, worst = 0; const rows = [];
+    for (const [label, base] of [['f0', f0], ['f0Alt', f0Alt]]){
+      const saw = sawRack(), sq = squareRack();
+      const full = activeFreqs(saw, base, partialsFn, false);
+      const pulled = full.slice(1);                                  // fundamental removed
+      const odd = activeFreqs(sq, base, partialsFn, false);          // odd-only set
+      const oddPulled = odd.slice(1);                                // odd-only, fundamental removed
+      for (const [tag, fr] of [['full', full], ['pulled', pulled], ['odd', odd], ['oddPulled', oddPulled]]){
+        const est = estimateF0(fr);
+        const rel = Math.abs(est.f0 - base) / base;
+        worst = Math.max(worst, rel);
+        if (!(est.ok && rel <= EST_REL_TOL)) { ok = false; rows.push(`${label}/${tag} FAIL (ok=${est.ok}, Δ=${rel.toExponential(2)})`); }
+      }
+    }
+    T('LEG 3 — the missing fundamental: estimateF0 over the active partials recovers the SAME f₀ with the fundamental present AND removed AND on the odd-only set, re-derived at TWO fundamentals — the pitch lives in the spacing, not the lowest rung',
+      ok, ok ? `f₀ recovered at both fundamentals, fundamental present & pulled & odd-only — worst |Δf₀|/f₀ = ${worst.toExponential(2)} ≤ ${EST_REL_TOL}`
+             : rows.join(' · '));
+  }
+
+  // LEG 4 — THE NEGATIVE CONTROL: the SAME estimator fails on an inharmonic stack
+  //   (partials at f0·n^1.4, no common divisor) but succeeds on the matching
+  //   harmonic stack (partials at f0·n) — only the SPACING changed. The failure is
+  //   the input, not a broken estimator.
+  {
+    const ns = [1, 2, 3, 4, 5, 6, 7, 8];
+    const inh = estimateF0(inharmonicFreqs(f0, ns));
+    const har = estimateF0(ns.map(n => n * f0));
+    const ok = inh.ok === false && har.ok === true && Math.abs(har.f0 - f0) / f0 <= EST_REL_TOL;
+    T('LEG 4 — the negative control: the SAME estimator returns FAILURE on an inharmonic rack (partials at f₀·n^1.4 — no common fundamental) yet SUCCEEDS on the matching harmonic rack (f₀·n) — only the spacing changed; the failure is the input, not the estimator',
+      ok, ok ? `inharmonic → ok:false (${inh.reason || 'no common divisor'}, worstRes ${inh.worstRes.toExponential(2)}) · harmonic → ok:true, f₀ ${har.f0.toFixed(2)} Hz`
+             : `inh.ok=${inh.ok} har.ok=${har.ok} har.f0=${har.f0.toFixed(2)}`);
+  }
+
+  let pass = 0; for (const l of lines) if (l.ok) pass++;
+  return { pass, total: lines.length, lines };
+}
+// ===== OVERTONE CORE END =====
+
+// ════════════════════════ STATE ══════════════════════════════════════════════
+const PARTIAL_TRIM = 0.16;                   // master per-partial trim so 12 sines don't clip
+const STEP = 0.04, FINE = 0.01, COARSE = 0.2;
+const state = {
+  amps: sawRack(),                           // the live fader values (start on a sawtooth)
+  inharmonic: false,
+  pullFundamental: false,
+};
+
+// ════════════════════════ AUDIO (muted-by-default · ws:pref:muted) ════════════
+function readMutePref(){ try{ return localStorage.getItem('ws:pref:muted') === '1'; }catch(e){ return false; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v ? '1' : '0'); }catch(e){} }
+const Snd = { ctx:null, master:null, comp:null, on:false, muted:readMutePref(), osc:[], gain:[] };
+
+// build the continuous sine bank: one oscillator per harmonic through its own
+// GainNode → master → compressor → destination. The oscillators run forever (a
+// HELD tone); only the gains move. audioFreq reads core's partialMultiplier law.
+function audioFreq(n){ return F0 * partialMultiplier(n, state.inharmonic); }
+function ensureCtx(){
+  if (Snd.ctx) return;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  Snd.ctx = new AC();
+  Snd.master = Snd.ctx.createGain(); Snd.master.gain.value = 0.9;
+  Snd.comp = Snd.ctx.createDynamicsCompressor();
+  Snd.comp.threshold.value = -14; Snd.comp.ratio.value = 12; Snd.comp.attack.value = 0.003; Snd.comp.release.value = 0.25;
+  Snd.master.connect(Snd.comp); Snd.comp.connect(Snd.ctx.destination);
+  const t = Snd.ctx.currentTime;
+  for (let n = 1; n <= RACK_SIZE; n++){
+    const o = Snd.ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(audioFreq(n), t);
+    const g = Snd.ctx.createGain(); g.gain.setValueAtTime(0.0001, t);
+    o.connect(g); g.connect(Snd.master); o.start(t);
+    Snd.osc.push(o); Snd.gain.push(g);
+  }
+}
+// the effective amplitude of partial n right now (the pull silences rung 1).
+function effAmp(n){
+  if (state.pullFundamental && n === 1) return 0;
+  return state.amps[n - 1];
+}
+// glide partial n's gain toward its effective amplitude (no zipper/clicks).
+function applyGain(n){
+  if (!Snd.ctx) return;
+  const g = Snd.gain[n - 1]; if (!g) return;
+  const target = Math.max(0.00001, effAmp(n) * PARTIAL_TRIM);
+  g.gain.setTargetAtTime(target, Snd.ctx.currentTime, 0.015);
+}
+function applyAllGains(){ for (let n = 1; n <= RACK_SIZE; n++) applyGain(n); }
+// retune every oscillator (the inharmonic switch) — the ONE place inharmonic reaches the ear.
+function retuneOsc(){
+  if (!Snd.ctx) return;
+  const t = Snd.ctx.currentTime;
+  for (let n = 1; n <= RACK_SIZE; n++){ const o = Snd.osc[n - 1]; if (o) o.frequency.setTargetAtTime(audioFreq(n), t, 0.02); }
+}
+
+const segAudio = document.getElementById('segAudio');
+segAudio.addEventListener('click', e=>{
+  const opt = e.target.closest('.opt'); if (!opt) return;
+  const wantOn = opt.dataset.audio === 'on';
+  if (wantOn){ ensureCtx(); if (Snd.ctx && Snd.ctx.state === 'suspended') Snd.ctx.resume(); applyAllGains(); }
+  Snd.on = wantOn; Snd.muted = !wantOn; writeMutePref(Snd.muted);
+  // when turning off, glide all gains to silence (oscillators keep running, mute master path)
+  if (!wantOn && Snd.ctx) for (let n = 1; n <= RACK_SIZE; n++){ const g = Snd.gain[n-1]; if (g) g.gain.setTargetAtTime(0.00001, Snd.ctx.currentTime, 0.03); }
+  else if (wantOn) applyAllGains();
+  [...segAudio.children].forEach(o=>o.classList.toggle('on', o===opt));
+});
+window.addEventListener('storage', e=>{ if (e.key!=='ws:pref:muted') return;
+  Snd.muted = readMutePref(); syncAudioUI(); });
+function syncAudioUI(){ if (Snd.muted) Snd.on=false; const showOn=Snd.on&&!Snd.muted;
+  [...segAudio.children].forEach(o=>o.classList.toggle('on', (o.dataset.audio==='on')===showOn)); }
+
+// ════════════════════════ THE RACK (twelve DOM faders) ═══════════════════════
+const rack = document.getElementById('rack');
+const faders = [];                           // { track, fill, cap } per harmonic
+function buildRack(){
+  for (let n = 1; n <= RACK_SIZE; n++){
+    const fader = document.createElement('div'); fader.className = 'fader';
+    const track = document.createElement('div'); track.className = 'track';
+    track.tabIndex = 0; track.setAttribute('role','slider');
+    track.setAttribute('aria-valuemin','0'); track.setAttribute('aria-valuemax','100');
+    const fill = document.createElement('div'); fill.className = 'fill';
+    const cap = document.createElement('div'); cap.className = 'cap';
+    track.appendChild(fill); track.appendChild(cap); fader.appendChild(track);
+    const num = document.createElement('div'); num.className = 'fnum' + (n===1?' fund':'');
+    num.textContent = n === 1 ? '1·f₀' : String(n);
+    fader.appendChild(num);
+    rack.appendChild(fader);
+    faders.push({ track, fill, cap, n });
+    wireFader(faders[faders.length-1]);
+  }
+}
+function ariaText(n){
+  const freq = Math.round(audioFreq(n));
+  const tag = n === 1 ? 'harmonic 1 (fundamental)' : `harmonic ${n}`;
+  return `${tag}, ${freq} Hz, strength ${Math.round(state.amps[n-1]*100)} percent`;
+}
+function paintFader(f){
+  const n = f.n, v = state.amps[n-1];
+  const pulled = state.pullFundamental && n === 1;
+  const shown = pulled ? 0 : v;
+  f.fill.style.height = (shown*100) + '%';
+  f.cap.style.bottom = (shown*100) + '%';
+  f.cap.style.transform = 'translateY(50%)';
+  f.track.classList.toggle('muted-fund', pulled);
+  f.track.setAttribute('aria-valuenow', String(Math.round(v*100)));
+  f.track.setAttribute('aria-valuetext', ariaText(n) + (pulled ? ' (pulled to silence)' : ''));
+}
+function paintAllFaders(){ for (const f of faders) paintFader(f); }
+function setAmp(n, v){
+  v = Math.max(0, Math.min(1, v));
+  state.amps[n-1] = v;
+  paintFader(faders[n-1]);
+  applyGain(n);
+  redrawWitness();
+}
+function wireFader(f){
+  const setFromY = (clientY) => {
+    const r = f.track.getBoundingClientRect();
+    const frac = 1 - (clientY - r.top) / r.height;     // top = 1, bottom = 0
+    setAmp(f.n, frac);
+  };
+  let dragging = false;
+  f.track.addEventListener('pointerdown', e=>{ dragging = true; f.track.setPointerCapture(e.pointerId);
+    ensureCtx(); if (Snd.on && Snd.ctx && Snd.ctx.state==='suspended') Snd.ctx.resume(); setFromY(e.clientY); });
+  f.track.addEventListener('pointermove', e=>{ if (dragging) setFromY(e.clientY); });
+  f.track.addEventListener('pointerup', ()=>{ dragging = false; });
+  f.track.addEventListener('pointercancel', ()=>{ dragging = false; });
+  f.track.addEventListener('keydown', e=>{
+    const v = state.amps[f.n-1]; let nv = v, handled = true;
+    switch(e.key){
+      case 'ArrowUp': case 'ArrowRight': nv = v + (e.shiftKey?FINE:STEP); break;
+      case 'ArrowDown': case 'ArrowLeft': nv = v - (e.shiftKey?FINE:STEP); break;
+      case 'PageUp': nv = v + COARSE; break;
+      case 'PageDown': nv = v - COARSE; break;
+      case 'Home': nv = 0; break;
+      case 'End': nv = 1; break;
+      default: handled = false;
+    }
+    if (handled){ e.preventDefault(); ensureCtx(); setAmp(f.n, nv); }
+  });
+}
+
+// ════════════════════════ THE SUM-WAVEFORM WITNESS ═══════════════════════════
+const wave = document.getElementById('wave'), wctx = wave.getContext('2d');
+const specline = document.getElementById('specline');
+function fit(cv){ const r=cv.getBoundingClientRect(), dpr=Math.min(2,window.devicePixelRatio||1);
+  cv.width=Math.max(1,r.width*dpr); cv.height=Math.max(1,r.height*dpr);
+  const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); return {w:r.width,h:r.height}; }
+function getCss(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function fitLabel(ctx, txt, maxW, sizes){
+  for (const s of sizes){ ctx.font = `600 ${s}px ui-monospace,Menlo,monospace`;
+    if (ctx.measureText(txt).width <= maxW) return s; }
+  return sizes[sizes.length-1];
+}
+// the EFFECTIVE amplitude vector right now (pull silences rung 1). The witness +
+// the spectral readout both read THIS so the eye matches the ear.
+function effAmps(){ return state.amps.map((v,i)=> (state.pullFundamental && i===0) ? 0 : v); }
+function drawWitness(){
+  const {w,h} = fit(wave);
+  wctx.clearRect(0,0,w,h);
+  const amps = effAmps();
+  // one period over 600 samples of the SAME additiveSample the audio sums
+  const NS = 600;
+  let peak = 1e-6; const ys = new Float64Array(NS);
+  for (let k = 0; k < NS; k++){ const y = additiveSample(amps, k/NS); ys[k] = y; if (Math.abs(y) > peak) peak = Math.abs(y); }
+  // zero line
+  wctx.strokeStyle = 'rgba(255,255,255,.08)'; wctx.lineWidth = 1;
+  wctx.beginPath(); wctx.moveTo(0, h/2); wctx.lineTo(w, h/2); wctx.stroke();
+  // the trace, auto-scaled to peak
+  wctx.strokeStyle = getCss('--c'); wctx.lineWidth = 2; wctx.lineJoin = 'round';
+  wctx.beginPath();
+  for (let k = 0; k < NS; k++){
+    const x = (k/(NS-1)) * w;
+    const y = h/2 - (ys[k]/peak) * (h/2 - 8);
+    if (k === 0) wctx.moveTo(x,y); else wctx.lineTo(x,y);
+  }
+  wctx.stroke();
+}
+function redrawWitness(){
+  drawWitness();
+  updateSpecline();
+  updateReadouts();
+}
+// spectral centroid Σ n·aₙ / Σ aₙ (rises with brightness) + active-partial count.
+function updateSpecline(){
+  const amps = effAmps();
+  let num = 0, den = 0, count = 0;
+  for (let i = 0; i < amps.length; i++){ const a = Math.abs(amps[i]); if (a > 1e-9){ num += (i+1)*a; den += a; count++; } }
+  const centroid = den > 0 ? (num/den) : 0;
+  const txt = `centroid ${centroid.toFixed(2)}·f₀ · ${count} partial${count===1?'':'s'} sounding`;
+  // clamp to the canvas width so it never overflows at 390
+  const maxW = wave.getBoundingClientRect().width;
+  const probe = document.createElement('canvas').getContext('2d');
+  const s = fitLabel(probe, txt, maxW, [11,10,9]);
+  specline.style.fontSize = s + 'px';
+  specline.textContent = txt;
+}
+
+// ════════════════════════ THE TWO SWITCHES ═══════════════════════════════════
+const swPull = document.getElementById('swPull'), swInh = document.getElementById('swInh');
+const reveal = document.getElementById('reveal');
+function toggleSwitch(el, key, after){
+  const now = el.getAttribute('aria-pressed') !== 'true';
+  el.setAttribute('aria-pressed', String(now));
+  state[key] = now;
+  after();
+}
+function onPull(){
+  // silence rung 1 in the audio + repaint
+  applyAllGains();
+  paintAllFaders();
+  redrawWitness();
+}
+function onInh(){
+  retuneOsc();
+  redrawWitness();
+}
+swPull.addEventListener('click', ()=>{ ensureCtx(); toggleSwitch(swPull, 'pullFundamental', onPull); });
+swInh.addEventListener('click', ()=>{ ensureCtx(); toggleSwitch(swInh, 'inharmonic', onInh); });
+for (const [el,key,after] of [[swPull,'pullFundamental',onPull],[swInh,'inharmonic',onInh]]){
+  el.addEventListener('keydown', e=>{ if (e.key===' '||e.key==='Enter'){ e.preventDefault(); ensureCtx(); toggleSwitch(el,key,after); } });
+}
+
+// ════════════════════════ THE LIVE READOUTS + THE REVEAL CAPTION ═════════════
+const roF0 = document.getElementById('roF0'), roLow = document.getElementById('roLow');
+const roF0k = document.getElementById('roF0k');
+function updateReadouts(){
+  const amps = effAmps();
+  const ap = activePartials(amps, F0, partials, state.inharmonic);
+  const freqs = ap.map(p => p.freq);
+  const est = estimateF0(freqs);
+  const lowest = freqs.length ? Math.min(...freqs) : 0;
+  const narrow = window.innerWidth < 420;
+  roF0k.textContent = narrow ? 'f₀' : 'heard fundamental f₀';
+  // heard fundamental
+  if (freqs.length === 0){
+    roF0.textContent = '—'; roF0.className = 'v';
+    roLow.textContent = '—';
+  } else if (state.inharmonic && !est.ok){
+    roF0.textContent = narrow ? '— (no common)' : 'f₀ = — (no common fundamental)';
+    roF0.className = 'v coral';
+    roLow.textContent = lowest.toFixed(1) + ' Hz';
+  } else {
+    roF0.textContent = (narrow ? '' : 'f₀ = ') + est.f0.toFixed(1) + ' Hz';
+    roF0.className = 'v' + (state.pullFundamental && est.ok ? ' survive' : '');
+    roLow.textContent = lowest.toFixed(1) + ' Hz';
+  }
+  // the reveal caption
+  if (state.inharmonic){
+    reveal.classList.remove('lit');
+    reveal.innerHTML = 'Inharmonic &mdash; the rungs sit at f&#8320;&middot;n<sup>1.4</sup>; they share no common divisor, so there is no fundamental to rebuild. The estimator reports <b style="color:var(--coral)">FAIL</b> &mdash; correctly.';
+  } else if (state.pullFundamental){
+    if (est.ok){
+      reveal.classList.add('lit');
+      reveal.innerHTML = 'The tone you built has <b>no bottom rung</b> &mdash; the lowest partial present is 2f&#8320; &mdash; yet the pitch holds. Your ear rebuilds the missing fundamental from the spacing of the rungs above it.';
+    } else {
+      reveal.classList.remove('lit');
+      reveal.innerHTML = 'Too few rungs left to fix a pitch &mdash; raise a couple more faders.';
+    }
+  } else {
+    reveal.classList.remove('lit'); reveal.innerHTML = '&nbsp;';
+  }
+}
+
+// ════════════════════════ PRESETS (timbre-as-recipe) ═════════════════════════
+// each preset reads amps from core's analyticCoeff (never a typed array), applied
+// with a per-fader stagger so you HEAR the timbre assemble rung by rung.
+function applyPreset(shape){
+  ensureCtx(); if (Snd.on && Snd.ctx && Snd.ctx.state==='suspended') Snd.ctx.resume();
+  for (let n = 1; n <= RACK_SIZE; n++){
+    setTimeout(()=>{ setAmp(n, analyticCoeff(shape, n)); }, (n-1)*30);
+  }
+}
+document.getElementById('presetSaw').addEventListener('click', ()=>applyPreset('saw'));
+document.getElementById('presetSquare').addEventListener('click', ()=>applyPreset('square'));
+document.getElementById('presetSine').addEventListener('click', ()=>applyPreset('sine'));
+
+// ════════════════════════ SELF-TEST PILL ════════════════════════════════════
+function runPill(){
+  let r; try{ r = runRackSelfTest(F0, F0_ALT, partials); }catch(e){ console.error('[the-overtone-rack] self-test threw:',e);
+    r = {pass:0,total:1,lines:[{name:'self-test threw',ok:false,detail:String(e)}]}; }
+  const el = document.getElementById('selftest'), txt = document.getElementById('stText');
+  const green = r.pass === r.total;
+  el.classList.toggle('ok',green); el.classList.toggle('bad',!green);
+  txt.textContent = green ? ('a pitch is the spacing, not the bottom rung ✓ '+r.pass+'/'+r.total) : ('self-test ✗ '+r.pass+'/'+r.total);
+  el.title = r.lines.map(c=>(c.ok?'✓ ':'✗ ')+c.name+(c.detail?'  ('+c.detail+')':'')).join('\n\n');
+  if (!green){ console.error('[the-overtone-rack] SELF-TEST FAILED '+r.pass+'/'+r.total);
+    for (const c of r.lines) if (!c.ok) console.error('  ✗ '+c.name+'  ·  '+c.detail); }
+  else console.log('[the-overtone-rack] self-test '+r.pass+'/'+r.total+' ✓ — the amplitude laws are 1/n, the sum is the trace, the estimator recovers f₀ with the fundamental pulled, and an inharmonic rack makes it fail. A pitch is the spacing.');
+  return r;
+}
+document.getElementById('selftest').addEventListener('click', runPill);
+window.__rackSelfTest = runRackSelfTest;
+
+// ════════════════════════ OFFLINE RENDER (Audio Lens hook · silent WAV) ══════
+// Renders `seconds` of the SAME additive law at a FIXED canonical recipe — an
+// all-1/n sawtooth on 8 partials at f0=220 (so the loudest, lowest partials
+// dominate the top-3 peaks). The two flags reproduce the page's switches. The
+// Audio Lens reads the result: HARMONIC peaks sit on an evenly spaced f0-grid;
+// INHARMONIC peaks fan apart; PULLED keeps the grid but no peak at f0 itself.
+const RENDER_F0 = 220, RENDER_N = 8;
+function renderRackWAV(seconds, opts){
+  opts = opts || {};
+  const inharmonic = !!opts.inharmonic, pull = !!opts.pullFundamental;
+  const sr = 44100, len = Math.max(1, Math.floor(seconds*sr));
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const ac = new OAC(1, len, sr);
+  const master = ac.createGain(); master.gain.value = 0.9;
+  const comp = ac.createDynamicsCompressor();
+  comp.threshold.value = -14; comp.ratio.value = 12; comp.attack.value = 0.003; comp.release.value = 0.25;
+  master.connect(comp); comp.connect(ac.destination);
+  const t = 0;
+  for (let n = 1; n <= RENDER_N; n++){
+    const amp = sawAmp(n);                                  // canonical all-1/n recipe
+    const eff = (pull && n === 1) ? 0 : amp;
+    if (eff <= 0) continue;
+    const o = ac.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(RENDER_F0 * partialMultiplier(n, inharmonic), t);
+    const g = ac.createGain(); g.gain.setValueAtTime(eff * PARTIAL_TRIM, t);
+    o.connect(g); g.connect(master); o.start(t); o.stop(seconds);
+  }
+  return ac.startRendering().then(buf=>encodeWAV(buf));
+}
+function encodeWAV(buf){
+  const ch=buf.getChannelData(0), sr=buf.sampleRate, n=ch.length;
+  const ab=new ArrayBuffer(44+n*2), dv=new DataView(ab);
+  const wr=(o,s)=>{ for(let i=0;i<s.length;i++) dv.setUint8(o+i,s.charCodeAt(i)); };
+  wr(0,'RIFF'); dv.setUint32(4,36+n*2,true); wr(8,'WAVE'); wr(12,'fmt '); dv.setUint32(16,16,true);
+  dv.setUint16(20,1,true); dv.setUint16(22,1,true); dv.setUint32(24,sr,true); dv.setUint32(28,sr*2,true);
+  dv.setUint16(32,2,true); dv.setUint16(34,16,true); wr(36,'data'); dv.setUint32(40,n*2,true);
+  let o=44; for (let i=0;i<n;i++){ let s=Math.max(-1,Math.min(1,ch[i])); dv.setInt16(o,s<0?s*0x8000:s*0x7fff,true); o+=2; }
+  return new Blob([ab],{type:'audio/wav'});
+}
+window.__renderRack = function(seconds, opts){ return renderRackWAV(seconds||6, opts||{}); };
+
+// ════════════════════════ BOOT ══════════════════════════════════════════════
+buildRack();
+syncAudioUI();
+paintAllFaders();
+redrawWitness();
+runPill();
+window.addEventListener('resize', ()=>{ redrawWitness(); paintAllFaders(); });
+</script>
+</body>
+</html>
