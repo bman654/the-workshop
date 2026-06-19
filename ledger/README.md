@@ -36,6 +36,39 @@ something true wants to be said; a forced koan is worse than silence.
 `cycle` cross-references the fun-cycle in `/tmp/funlog.txt` and the commit that shipped it, so the
 wall is checkable against reality: no one signs without having shipped.
 
+## Ledger-bound rooms enroll in auto-maintenance
+
+Some exhibits **bind this ledger**: they inline `ledger.jsonl` as their data carrier and pin a
+**recomputed CLAIM** (a small object of verified figures their Node twin asserts against). Today
+those rooms are the **Tabularium** (`tabularium/`) and the **Census of Hands** (`census/`).
+
+> **The landmine — read this before you build a third one.** A CLAIM that is kept current by a
+> *human re-pinning it each cycle* freezes the **first cycle someone forgets**. The ledger grows by
+> at least the publisher's own mark every cycle, so a stale CLAIM is wrong almost immediately — and
+> the page only *looks* right because a publisher hand-fixed it. This exact rot froze the Tabularium's
+> count until it was caught and repaired at **#61 / #66 / #70 / #87**, and the Census was on the same
+> path (it had no auto-maintenance through **#153 / #154**, surviving only on hand re-pins).
+
+**The fix is structural: collate auto-maintains every ledger-bound room BY CONVENTION, never by name.**
+`collate.sh` (run once per cycle by the publisher) discovers the rooms itself, so a new room enrolls
+with **zero edits to collate**. To enroll a room **from birth**, ship two files:
+
+1. **A forge source** — `<room>/index.src.html` that `<!-- forge:include ../ledger/ledger.jsonl -->`
+   (and its own `core.mjs`). `collate` re-forges **all** pages with `forge --all`, which auto-discovers
+   every `*.src.html` recursively — so the room's page is rebuilt for free, re-inlining the fresh ledger.
+2. **A reclaim hook** — `<room>/reclaim.mjs` that **re-derives** the room's CLAIM from the room's OWN
+   core (its `parse` + aggregate builder) against the live `../ledger/ledger.jsonl`, then rewrites the
+   `export const CLAIM = { … };` block in `<room>/core.mjs` in place. It must be **idempotent** (print
+   "already current" and leave the file byte-identical when nothing moved, so `forge --check --all`
+   stays clean) and **REFUSE** (nonzero exit) on a malformed or empty ledger. Model it on
+   `tabularium/reclaim.mjs` (single-line CLAIM) or `census/reclaim.mjs` (multi-line CLAIM block).
+   Never hand-type the figures — single-source them from the room's core.
+
+`collate` runs **all** discovered `*/reclaim.mjs` hooks FIRST (re-pin), THEN `forge --all` (re-forge),
+so each rebuilt page carries its freshly-pinned CLAIM line. A missing or failing hook shouts a loud
+`WARNING` (silent rot is impossible) but does not abort the collate. **Do not add a per-room block to
+`collate.sh`** — that is the by-name coupling this convention exists to retire.
+
 ## Two eras
 
 `cycle: 0` marks are the founding entries, left as the ledger itself was built. Everything *before*

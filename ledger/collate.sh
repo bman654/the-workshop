@@ -67,57 +67,70 @@ else
   echo "depth NOT refreshed (no git/HEAD); kept $(cat "$depth_file" 2>/dev/null || echo 0)"
 fi
 
-# ── re-forge the served face: ledger.jsonl + depth.txt just changed, so the
-# STATIC page that inlines them (ledger/face.html) is now stale until rebuilt.
-# Previously collate left this to a manual re-forge, so the served page was
-# chronically behind and `forge --check --all` flagged ledger/face.html STALE
-# (cycle #53). Re-forge here, every cycle, so the changeset the publisher commits
-# carries the up-to-date face.html alongside ledger.jsonl + depth.txt.
+# ════════════════════════════════════════════════════════════════════════════
+# RE-PIN, THEN RE-FORGE — by CONVENTION, never by room NAME.
+# ────────────────────────────────────────────────────────────────────────────
+# ledger.jsonl + depth.txt just changed, so EVERY static page that inlines them
+# (ledger/face.html, plus every ledger-bound room: the Tabularium, the Census, …)
+# is now stale until rebuilt. We do this with ZERO per-room-by-name knowledge so
+# a future ledger-bound room enrolls simply by dropping in its own files — no edit
+# to this script (see "Ledger-bound rooms enroll in auto-maintenance" in
+# ledger/README.md). This is the landmine that froze the Tabularium's count until
+# #61/#66/#70/#87 and would have frozen the Census the first cycle a publisher
+# forgot to hand-re-pin it (#153/#154).
+#
+# Two phases, IN ORDER:
+#   1. RE-PIN every ledger-bound room's shape-guard. A room that pins a recomputed
+#      CLAIM from the ledger ships a `<room>/reclaim.mjs` that re-derives that CLAIM
+#      from the room's OWN core (tabularium/reclaim.mjs, census/reclaim.mjs, …). We
+#      DISCOVER and run every such hook by convention: every `*/reclaim.mjs` in the
+#      repo root's immediate child dirs. A room enrolls just by adding the file.
+#   2. RE-FORGE all pages generically with `forge --all` — forge auto-discovers
+#      every *.src.html recursively, so this rebuilds ledger/face.html AND every
+#      room's index.html (re-inlining its freshly re-pinned core.mjs + ledger.jsonl)
+#      in one call. Re-pinning happens BEFORE forging so each forged page carries
+#      its updated CLAIM line.
+# Graceful degradation is preserved: a missing/failed reclaim or a failed forge
+# SHOUTS a WARNING (so silent rot is impossible) but does not abort the collate.
 # collate lives in ledger/, so the repo root (where tools/forge lives) is "$dir/..".
 repo_root="$(cd "$dir/.." && pwd)"
 forge="$repo_root/tools/forge/forge.mjs"
-face_src="$dir/face.src.html"
-if [ -f "$forge" ] && [ -f "$face_src" ]; then
-  if node "$forge" "$face_src" >/dev/null 2>&1; then
-    echo "face re-forged: ledger/face.html re-inlines the updated ledger.jsonl + depth.txt"
-  else
-    echo "WARNING: forge run FAILED — ledger/face.html may be STALE (run: node tools/forge/forge.mjs ledger/face.src.html)" >&2
-  fi
+
+# ── PHASE 1: discover + run every ledger-bound room's reclaim hook by convention.
+# Scan the repo root's immediate child dirs for a reclaim.mjs, skipping the VCS /
+# deps dirs. No room is named here; enrollment is "ship a reclaim.mjs".
+shopt -s nullglob
+reclaim_hooks=()
+for d in "$repo_root"/*/; do
+  base="$(basename "$d")"
+  case "$base" in
+    .git|node_modules) continue ;;
+  esac
+  [ -f "$d/reclaim.mjs" ] && reclaim_hooks+=("$d/reclaim.mjs")
+done
+if [ "${#reclaim_hooks[@]}" -eq 0 ]; then
+  echo "re-pin: no */reclaim.mjs hooks discovered (no ledger-bound rooms enrolled)"
 else
-  echo "WARNING: forge or face.src.html absent — ledger/face.html NOT re-forged (forge=$forge)" >&2
+  for hook in "${reclaim_hooks[@]}"; do
+    room="$(basename "$(dirname "$hook")")"
+    if node "$hook"; then
+      :  # the hook prints its own "re-pinned"/"already current" line
+    else
+      echo "WARNING: reclaim FAILED for room '$room' — $room/core.mjs CLAIM may be STALE (run: node $room/reclaim.mjs)" >&2
+    fi
+  done
+  echo "re-pin: ran ${#reclaim_hooks[@]} reclaim hook(s) by convention"
 fi
 
-# ── re-pin + re-forge the TABULARIUM: it is the estate's OTHER data-bound room,
-# binding the SAME ledger.jsonl. Before this (bug #88) its core logic + 407-mark
-# carrier were hand-copied, so every collate silently staleness-rotted the room
-# until a publisher re-pinned CLAIM + re-inlined the carrier by hand (#61/#66/#70/#87).
-# Now it has a forge source (tabularium/index.src.html) that includes core.mjs +
-# ../ledger/ledger.jsonl, exactly like the Cairn face. Two steps, in order:
-#   1. RE-PIN the shape-guard: rewrite core.mjs's `const CLAIM = {...}` from the
-#      freshly-collated ledger (via tabularium/reclaim.mjs, which uses the SAME
-#      parse+recompute the page and Node twin trust). The page pins its pill to
-#      recompute(its own carrier), so it is always self-consistent; CLAIM stays
-#      the Node twin's loud "file changed shape" guard, kept current here.
-#   2. RE-FORGE the page so it re-inlines the updated core.mjs + ledger.jsonl.
-# Order matters: re-pin core.mjs BEFORE forging, so the forged page carries the
-# updated CLAIM line too.
-reclaim="$dir/../tabularium/reclaim.mjs"
-tab_src="$dir/../tabularium/index.src.html"
-if [ -f "$reclaim" ]; then
-  if node "$reclaim"; then
-    :
+# ── PHASE 2: re-forge ALL pages generically (forge --all auto-discovers every
+# *.src.html), so ledger/face.html AND every ledger-bound room's index.html are
+# rebuilt from the just-re-pinned cores + the freshly-collated ledger in one pass.
+if [ -f "$forge" ]; then
+  if node "$forge" --all "$repo_root" >/dev/null 2>&1; then
+    echo "re-forge: forge --all rebuilt every *.src.html (face + all ledger-bound rooms)"
   else
-    echo "WARNING: reclaim FAILED — tabularium/core.mjs CLAIM may be STALE (run: node tabularium/reclaim.mjs)" >&2
+    echo "WARNING: forge --all FAILED — forged pages may be STALE (run: node tools/forge/forge.mjs --all)" >&2
   fi
 else
-  echo "WARNING: tabularium/reclaim.mjs absent — CLAIM NOT re-pinned" >&2
-fi
-if [ -f "$forge" ] && [ -f "$tab_src" ]; then
-  if node "$forge" "$tab_src" >/dev/null 2>&1; then
-    echo "tabularium re-forged: tabularium/index.html re-inlines the updated core.mjs + ledger.jsonl"
-  else
-    echo "WARNING: forge run FAILED — tabularium/index.html may be STALE (run: node tools/forge/forge.mjs tabularium/index.src.html)" >&2
-  fi
-else
-  echo "WARNING: forge or tabularium/index.src.html absent — tabularium/index.html NOT re-forged" >&2
+  echo "WARNING: forge absent — pages NOT re-forged (forge=$forge)" >&2
 fi
