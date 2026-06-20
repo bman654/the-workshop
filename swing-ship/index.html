@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Swing-Ship · The Midway · The Orrery Estate</title>
+<!--
+   THE SWING-SHIP — a parametric pendulum you PUMP by changing its length, not by pushing.
+   The physics CORE (core.mjs) is inlined byte-for-byte between the sentinels below; the
+   in-page chip calls the SAME runSelfTest() the Node twin (core.test.mjs) runs, and the
+   renderer swings the REAL variable-length pendulum: θ̈ = −(2L̇/L)θ̇ − (g/L)sinθ. You CROUCH
+   (lengthen) at the bottom and STAND (shorten) at the top — pumping the length at 2ω₀ — and
+   the arc CLIMBS (the principal Mathieu instability tongue). The swing IS the readout — no
+   plotted driven-pendulum curve is the subject; a quiet amplitude rail only WITNESSES it.
+   NEG-CONTROL: pump at 1ω₀ (same effort) and the arc never grows — resonance is the 2:1
+   TIMING, not the pumping. The chip proves det(M)=1, |λ|>1 at 2ω₀ (σ>0), |λ|=1 at 1ω₀.
+-->
+<style>
+  :root{
+    --bg:#07080c;             /* fairground-at-dusk near-black */
+    --plate1:#12100a;
+    --plate2:#0b0a07;
+    --ink:#efe9da;
+    --ink-dim:#a59c87;
+    --gold:#c9a24a;           /* brass A-frame / chains */
+    --gold-hi:#f4d27a;        /* lit gold */
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.40);
+    --teal:#5fcdbf;           /* CROUCH cue / bounded */
+    --teal-soft:rgba(95,205,191,0.13);
+    --coral:#f0846f;          /* STAND cue / climbing toward the loop */
+    --coral-soft:rgba(220,120,100,0.13);
+    --panel:rgba(11,10,7,0.86);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1200px 720px at 50% -12%, rgba(201,162,74,0.09), transparent 56%),
+      radial-gradient(900px 640px at 14% 112%, rgba(95,205,191,0.05), transparent 60%),
+      radial-gradient(900px 640px at 86% 114%, rgba(220,120,100,0.04), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(201,162,74,0.05) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(201,162,74,0.045) 0 1px, transparent 1px 32px);
+    mask-image:radial-gradient(1100px 760px at 50% 36%, #000 30%, transparent 78%);
+  }
+  body::after{
+    content:""; position:fixed; top:46px; left:0; right:0; height:18px; z-index:0; pointer-events:none; opacity:.5;
+    background-image:radial-gradient(circle at 11px 4px, var(--gold-hi) 0 1.6px, transparent 2.4px);
+    background-size:42px 18px;
+    mask-image:linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  }
+
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding:13px 20px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(7,8,12,0.95), rgba(7,8,12,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:5px; }
+  .back{ font:600 10.5px/1.3 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.22s; white-space:nowrap; }
+  .back:hover{ color:var(--gold-hi); opacity:1; }
+  .brand{ text-align:center; flex:1 1 auto; pointer-events:none; padding-top:1px; }
+  .brand h1{ margin:0; font-family:var(--font-serif); font-weight:600; font-size:clamp(17px,2.4vw,21px);
+    letter-spacing:.4px; color:var(--gold-hi); }
+  .brand .tag{ display:block; font:11px/1.3 var(--font-serif); font-style:italic; color:var(--ink-dim); margin-top:1px; }
+  .selftest{ font:600 10px/1.35 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:18px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.42); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); max-width:240px; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(24,46,32,0.5); }
+  .selftest.bad{ color:var(--coral); border-color:rgba(220,120,100,0.6); background:rgba(58,26,22,0.5); }
+
+  /* ── self-test detail panel ── */
+  #stPanel{ position:fixed; top:54px; right:18px; z-index:60; width:min(500px,92vw);
+    background:var(--panel); border:1px solid var(--gold-edge); border-radius:12px; padding:16px 18px 14px;
+    box-shadow:0 18px 50px rgba(0,0,0,0.6); display:none; }
+  #stPanel.show{ display:block; }
+  #stPanel h2{ margin:0 0 4px; font:600 13px/1.2 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--gold-hi); }
+  #stPanel .sub{ margin:0 0 10px; font:12px/1.5 var(--font-serif); color:var(--ink-dim); }
+  #stList{ font:11px/1.55 var(--font-mono); max-height:46vh; overflow:auto; }
+  #stList .row{ display:flex; gap:8px; padding:2px 0; }
+  #stList .row .m{ flex:0 0 auto; }
+  #stList .ok{ color:#8fd79a; } #stList .no{ color:var(--coral); }
+  #stPanel .foot{ margin-top:10px; padding-top:9px; border-top:1px solid rgba(201,162,74,0.16);
+    font:11px/1.6 var(--font-serif); color:var(--ink-dim); }
+  #stPanel .closeX{ position:absolute; top:9px; right:11px; background:none; border:none; color:var(--ink-dim);
+    font-size:18px; cursor:pointer; line-height:1; }
+
+  /* ── layout ── */
+  main{ position:relative; z-index:1; max-width:1120px; margin:0 auto; padding:74px 20px 56px; }
+  .hero{ text-align:center; margin-bottom:14px; }
+  .hero .eyebrow{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3em; text-transform:uppercase; color:var(--gold); opacity:.9; }
+  .hero .lede{ max-width:720px; margin:12px auto 0; font:15px/1.62 var(--font-serif); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--gold-hi); font-weight:600; } .hero .lede i{ font-style:italic; }
+
+  .stage{ display:grid; grid-template-columns:1fr 220px; gap:16px; align-items:stretch; margin-top:18px; }
+  .panel{ border:1px solid rgba(201,162,74,0.16); border-radius:14px; background:linear-gradient(180deg,var(--plate1),var(--plate2));
+    padding:14px; position:relative; overflow:hidden; }
+  .panel h3{ margin:0 0 8px; font:600 9.5px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--ink-dim); }
+  .panel h3 b{ color:var(--gold); }
+
+  /* the ride panel (the swing-ship) */
+  #ridePanel{ padding:10px 10px 8px; }
+  #rideWrap{ position:relative; width:100%; }
+  svg#ride{ width:100%; height:auto; display:block; touch-action:none; cursor:pointer; }
+
+  /* the regime headline under the ride */
+  #regime{ margin-top:8px; min-height:38px; text-align:center; font:14px/1.45 var(--font-serif); color:var(--ink-dim); transition:.18s; }
+  #regime.win{ color:var(--gold-hi); } #regime.climb{ color:var(--coral); } #regime.flat{ color:var(--teal); }
+  #regime b{ font-weight:600; }
+
+  /* the phase coach — the big pulsing cue */
+  #coach{ display:flex; align-items:center; justify-content:center; gap:14px; margin-top:8px; }
+  .cue{ font:700 15px/1 var(--font-mono); letter-spacing:.12em; text-transform:uppercase;
+    padding:11px 18px; border-radius:10px; border:1px solid transparent; transition:.08s; opacity:.32; }
+  .cue.crouch{ color:var(--teal); border-color:var(--teal-soft); }
+  .cue.stand{ color:var(--coral); border-color:var(--coral-soft); }
+  .cue.on{ opacity:1; transform:scale(1.06); }
+  .cue.crouch.on{ background:rgba(95,205,191,0.16); border-color:rgba(95,205,191,0.55); box-shadow:0 0 22px rgba(95,205,191,0.28); }
+  .cue.stand.on{ background:rgba(220,120,100,0.16); border-color:rgba(220,120,100,0.55); box-shadow:0 0 22px rgba(220,120,100,0.28); }
+  .cuehint{ font:11px/1.4 var(--font-serif); font-style:italic; color:var(--ink-dim); text-align:center; margin-top:5px; }
+
+  /* the right column: gauges */
+  #sideCol{ display:flex; flex-direction:column; gap:12px; }
+  .gauge{ display:flex; flex-direction:column; gap:3px; }
+  .gauge .lab{ font:600 9px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim); }
+  .gauge .val{ font:600 17px/1.1 var(--font-mono); color:var(--gold-hi); }
+  .gauge .val small{ font-size:11px; color:var(--ink-dim); font-weight:400; }
+
+  /* the amplitude-envelope rail (the quiet witness, NOT the hero) */
+  #railPanel h3 .hint{ float:right; font:9px/1 var(--font-mono); color:var(--ink-dim); text-transform:none; letter-spacing:0; opacity:.7; }
+  svg#rail{ width:100%; height:78px; display:block; }
+
+  /* the Floquet verdict strip */
+  #verdict{ font:11px/1.5 var(--font-mono); color:var(--ink-dim); margin-top:4px; }
+  #verdict .lam{ color:var(--gold-hi); } #verdict .up{ color:var(--coral); } #verdict .bd{ color:var(--teal); }
+
+  /* the controls row */
+  .controls{ margin-top:16px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:center; }
+  .ctrl{ display:flex; align-items:center; gap:9px; border:1px solid rgba(201,162,74,0.18); border-radius:10px;
+    padding:9px 13px; background:linear-gradient(180deg,var(--plate1),var(--plate2)); }
+  .ctrl label{ font:600 9.5px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); }
+  .seg{ display:inline-flex; border:1px solid rgba(201,162,74,0.22); border-radius:8px; overflow:hidden; }
+  .seg button{ font:600 11px/1 var(--font-mono); letter-spacing:.04em; padding:8px 12px; border:none; cursor:pointer;
+    background:transparent; color:var(--ink-dim); transition:.16s; }
+  .seg button.on{ background:var(--gold-soft); color:var(--gold-hi); }
+  .seg button:hover{ color:var(--gold-hi); }
+  .btn{ font:600 11px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; padding:10px 16px; border-radius:9px;
+    border:1px solid var(--gold-edge); background:rgba(201,162,74,0.10); color:var(--gold-hi); cursor:pointer; transition:.16s; }
+  .btn:hover{ background:rgba(201,162,74,0.20); }
+  .btn.auto.on{ background:rgba(95,205,191,0.16); border-color:rgba(95,205,191,0.5); color:var(--teal); }
+  input[type=range]{ width:120px; accent-color:var(--gold); }
+  .ctrl .rv{ font:600 12px/1 var(--font-mono); color:var(--gold-hi); min-width:40px; text-align:right; }
+
+  /* the how-to-play strip */
+  .howto{ max-width:880px; margin:20px auto 0; font:13.5px/1.66 var(--font-serif); color:var(--ink); opacity:.9; text-align:center; }
+  .howto b{ color:var(--gold-hi); font-weight:600; } .howto i{ font-style:italic; }
+  .howto .teal{ color:var(--teal); } .howto .coral{ color:var(--coral); }
+
+  /* the explainer */
+  .explain{ max-width:880px; margin:26px auto 0; }
+  .explain .card{ border:1px solid rgba(201,162,74,0.14); border-radius:12px; padding:18px 20px;
+    background:linear-gradient(180deg, rgba(19,17,11,0.5), rgba(11,10,7,0.5)); }
+  .explain h3{ margin:0 0 8px; font-family:var(--font-serif); font-size:18px; font-weight:600; color:var(--gold-hi); }
+  .explain p{ margin:0 0 10px; font:14px/1.66 var(--font-serif); color:var(--ink); opacity:.9; }
+  .explain p:last-child{ margin-bottom:0; }
+  .explain b{ color:var(--gold-hi); font-weight:600; } .explain i{ font-style:italic; }
+  .explain .eq{ font-family:var(--font-mono); color:var(--gold); font-size:13px; }
+  .explain .teal{ color:var(--teal); } .explain .coral{ color:var(--coral); }
+
+  .neighbour{ max-width:880px; margin:22px auto 0; }
+  .neighbour a{ display:flex; align-items:center; gap:14px; text-decoration:none; color:var(--ink-dim);
+    border:1px solid rgba(201,162,74,0.12); border-radius:12px; padding:14px 18px;
+    background:linear-gradient(180deg, rgba(19,17,11,0.55), rgba(11,10,7,0.55)); transition:.22s; }
+  .neighbour a:hover{ border-color:rgba(201,162,74,0.4); color:var(--ink); }
+  .neighbour .g{ font-size:22px; } .neighbour b{ color:var(--gold-hi); font-weight:600; } .neighbour i{ font-style:italic; }
+
+  .foot{ max-width:880px; margin:30px auto 0; padding:20px 0 10px; border-top:1px solid rgba(201,162,74,0.1);
+    text-align:center; font:12.5px/1.7 var(--font-serif); color:var(--ink-dim); }
+  .foot a{ color:var(--gold); text-decoration:none; border-bottom:1px solid rgba(201,162,74,0.3); }
+
+  @media (max-width:820px){ .stage{ grid-template-columns:1fr; } #sideCol{ flex-direction:row; flex-wrap:wrap; } .gauge{ flex:1 1 40%; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="back" href="../midway/index.html">&larr; The Midway</a>
+    </div>
+    <div class="brand">
+      <h1>The Swing-Ship</h1>
+      <span class="tag">pump your own length — climb without a push</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for the falsifiable claims this ride proves live.">checking&hellip;</div>
+  </div>
+
+  <div id="stPanel">
+    <button class="closeX" id="stClose" aria-label="close">&times;</button>
+    <h2>The Swing-Ship proves itself</h2>
+    <p class="sub">The same <code>runSelfTest()</code> the Node twin runs, live in your browser — the parametric-resonance claims, exact.</p>
+    <div id="stList"></div>
+    <div class="foot">Each line is a falsifiable assertion on the inlined physics core, byte-identical to <code>core.mjs</code> (a Node twin re-extracts it and re-runs these same checks).</div>
+  </div>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">A ride of the Midway &middot; parametric resonance</div>
+      <p class="lede">A swing climbs not because something <i>pushes</i> it &mdash; but because the rider <b>raises and lowers their own body</b>:
+        <b class="" style="color:var(--teal)">crouch</b> (lengthen) at the bottom, <b style="color:var(--coral)">stand</b> (shorten) at the top.
+        That single rhythm pumps the pendulum's <i>length</i> at <b>twice</b> its natural beat &mdash; and the arc grows on its own.
+        Time it right and you <b>reach the loop</b>; mistime it and the swing dies. <i>This is the math you ride.</i></p>
+    </header>
+
+    <div class="stage">
+      <div class="panel" id="ridePanel">
+        <h3>The Swing-Ship &middot; <b>θ̈ = −(2L̇/L)θ̇ − (g/L)sinθ</b></h3>
+        <div id="rideWrap">
+          <svg id="ride" viewBox="0 0 600 440" preserveAspectRatio="xMidYMid meet" aria-label="a pirate swing-ship pendulum"></svg>
+        </div>
+        <div id="coach">
+          <div class="cue crouch" id="cueCrouch">▼ crouch</div>
+          <div class="cue stand" id="cueStand">▲ stand</div>
+        </div>
+        <div class="cuehint" id="cuehint">tap / hold <b>SPACE</b> or click the ship to pump — follow the lit cue</div>
+        <div id="regime" class="flat">Give it a nudge, then pump on the beat.</div>
+      </div>
+
+      <div id="sideCol">
+        <div class="panel">
+          <div class="gauge"><span class="lab">Arc reached</span><span class="val" id="gArc">0.0&deg;</span></div>
+        </div>
+        <div class="panel">
+          <div class="gauge"><span class="lab">Goal · the loop</span><span class="val" id="gGoal">135&deg;</span></div>
+        </div>
+        <div class="panel">
+          <div class="gauge"><span class="lab">Pump beat ωₘ</span><span class="val" id="gBeat">2&times;ω₀</span></div>
+        </div>
+        <div class="panel" id="railPanel">
+          <h3>Amplitude envelope <span class="hint">the witness</span></h3>
+          <svg id="rail" viewBox="0 0 220 78" preserveAspectRatio="none" aria-label="amplitude growth witness"></svg>
+          <div id="verdict">Floquet: <span id="vLam">|λ|=&mdash;</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="ctrl">
+        <label>Pump beat</label>
+        <div class="seg" id="segBeat">
+          <button data-r="2" class="on">2&times;ω₀ &middot; resonant</button>
+          <button data-r="1">1&times;ω₀</button>
+          <button data-r="1.5">1.5&times;ω₀</button>
+        </div>
+      </div>
+      <div class="ctrl">
+        <label>Pump depth ε</label>
+        <input type="range" id="epsRange" min="0" max="0.15" step="0.005" value="0.08">
+        <span class="rv" id="epsVal">0.08</span>
+      </div>
+      <button class="btn auto on" id="autoBtn" title="Let the phase coach pump for you, perfectly on the beat.">Auto-pump: ON</button>
+      <button class="btn" id="resetBtn">Reset swing</button>
+    </div>
+
+    <p class="howto">
+      <b>How to play.</b> The ship starts with a small nudge. Pump by tapping <b>SPACE</b> (or clicking the ship) — but
+      <i>when</i> is everything: pump on the <span class="teal">crouch</span>/<span class="coral">stand</span> cue and the arc
+      <b>ratchets up</b> toward the loop; pump off-beat and you waste the effort. Flip the beat to <b>1&times;ω₀</b> and pump just
+      as hard &mdash; it <i>refuses</i> to grow. The growth lives in the <b>2:1 timing</b>, not the muscle. Leave <b>Auto-pump</b>
+      on to feel the perfect rhythm, then turn it off and try to match it.
+    </p>
+
+    <div class="explain">
+      <div class="card">
+        <h3>Why the length, pumped at 2&times;, is the whole trick</h3>
+        <p>A swing held at a fixed length <i>L</i> is a plain pendulum: it rocks at <span class="eq">ω₀ = √(g/L)</span> and slowly dies.
+          But change the length <i>as you swing</i> and a new term appears in the equation of motion: <span class="eq">−(2L̇/L)·θ̇</span>.
+          Shorten the rod (stand up) while you are moving fastest and that term <b>feeds</b> the swing; lengthen it (crouch) at the
+          turning points and you lose nothing. Do this <b>twice per swing</b> &mdash; once at each end &mdash; and the length is being
+          pumped at <span class="eq">ωₘ = 2ω₀</span>, exactly <b>twice</b> the swing's own frequency.</p>
+        <p>That 2:1 ratio is special. Linearize the motion and it becomes <b>Mathieu's equation</b>, whose <b>principal instability
+          tongue</b> sits right at <span class="eq">ωₘ = 2ω₀</span>. Inside the tongue the amplitude grows <b>exponentially</b> with
+          no outside push &mdash; this is <b>parametric resonance</b>, the deep sibling of ordinary driven resonance.</p>
+        <p>The proof is exact and self-checking. The pumped pendulum over one beat is a linear, periodic map &mdash; its
+          <b>monodromy matrix M</b>. Because the length returns to itself each beat, <span class="eq">det(M) = 1</span> <i>exactly</i>.
+          Its eigenvalue <span class="eq">|λ|</span> is the verdict: at <span class="coral">2&times;ω₀</span>, <span class="eq">|λ| &gt; 1</span>
+          &mdash; the swing climbs at rate <span class="eq">σ = ln|λ|/Tₘ</span>; at <span class="teal">1&times;ω₀</span>,
+          <span class="eq">|λ| = 1</span> &mdash; bounded forever. <b>Same effort, opposite outcome.</b> The amplitude rail at right
+          is only a <i>witness</i> &mdash; the real readout is the arc you are riding.</p>
+      </div>
+    </div>
+
+    <div class="neighbour">
+      <a href="../star-flyer/index.html">
+        <span class="g">🎠</span>
+        <span><b>Next stall:</b> The Star Flyer &mdash; the other pendulum on the strip, but a <i>conical</i> one: there the chains
+          fly out to a steady <i>lean</i> as you spin. Here the rod hangs flat and you grow the <i>arc</i> by pumping its length. Two
+          pendulums, two utterly different ways to climb.</span>
+      </a>
+    </div>
+
+    <footer class="foot">
+      The Swing-Ship joins the Midway's spin-and-swing rides &mdash; the readout is the <b>arc itself</b>, climbing on honest physics:
+      pump the length at <span style="color:var(--coral)">2&times;ω₀</span> and it grows (<span style="color:var(--coral)">|λ|&gt;1</span>,
+      the Mathieu tongue); pump at <span style="color:var(--teal)">1&times;ω₀</span> with the same effort and it stays
+      <span style="color:var(--teal)">bounded</span> (<span style="color:var(--teal)">|λ|=1</span>). Resonance is the timing, not the muscle.
+      &nbsp;&middot;&nbsp; <a href="../midway/index.html">Back to the Midway</a>
+    </footer>
+  </main>
+
+<script>
+/* ============================================================================
+   THE SWING-SHIP CORE is inlined byte-for-byte below between the sentinels. The
+   Node twin (core.test.mjs) re-extracts this slice and proves it char-for-char
+   identical to core.mjs, then runs the SAME runSelfTest() the in-page chip runs.
+   ============================================================================ */
+// ===== SWING-SHIP CORE (inlined byte-twin) BEGIN =====
+const G = 9.81;          // gravity (m/s²)
+const L0 = 2.0;          // nominal pendulum length (m)
+const EPS = 0.08;        // default pump depth (fractional length change)
+
+// ── ω₀ = √(g/L): the small-angle natural frequency at length L. ────────────────────
+function omega0(L = L0){ return Math.sqrt(G / L); }
+
+// ── THE LENGTH PROGRAM. L(t) = L₀(1 + ε cos(ωₘ t + φ)) and its exact derivative L̇(t). ─
+function lengthAt(t, wm, eps = EPS, phi = 0, l0 = L0){
+  const a = wm * t + phi;
+  return { L: l0 * (1 + eps * Math.cos(a)), Ldot: -l0 * eps * wm * Math.sin(a) };
+}
+
+// ── THE NONLINEAR EOM (the visible swing). State y=[θ, θ̇]; returns [θ̇, θ̈]. ─────────
+// θ̈ = −(2L̇/L)θ̇ − (g/L)sinθ.  This is what the renderer integrates — the real arc.
+function deriv(t, y, wm, eps = EPS, phi = 0, l0 = L0){
+  const { L, Ldot } = lengthAt(t, wm, eps, phi, l0);
+  return [ y[1], -(2 * Ldot / L) * y[1] - (G / L) * Math.sin(y[0]) ];
+}
+
+// ── ONE RK4 STEP of the nonlinear EOM. ─────────────────────────────────────────────
+function rk4Step(y, t, dt, wm, eps = EPS, phi = 0, l0 = L0){
+  const k1 = deriv(t, y, wm, eps, phi, l0);
+  const k2 = deriv(t + 0.5 * dt, [y[0] + 0.5 * dt * k1[0], y[1] + 0.5 * dt * k1[1]], wm, eps, phi, l0);
+  const k3 = deriv(t + 0.5 * dt, [y[0] + 0.5 * dt * k2[0], y[1] + 0.5 * dt * k2[1]], wm, eps, phi, l0);
+  const k4 = deriv(t + dt, [y[0] + dt * k3[0], y[1] + dt * k3[1]], wm, eps, phi, l0);
+  return [ y[0] + (dt / 6) * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]),
+           y[1] + (dt / 6) * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]) ];
+}
+
+// ── ENERGY of the swing (mass=1): E = ½L²θ̇² + gL(1−cosθ). The pump changes L, so it ──
+//    does WORK on the swing; ΔE over a modulation cycle is that work. ────────────────
+function energy(t, y, wm, eps = EPS, phi = 0, l0 = L0){
+  const { L } = lengthAt(t, wm, eps, phi, l0);
+  return 0.5 * L * L * y[1] * y[1] + G * L * (1 - Math.cos(y[0]));
+}
+
+// ── THE LINEARIZED EOM (small angle, sinθ→θ): the Mathieu system Floquet acts on. ───
+function derivLin(t, y, wm, eps, phi, l0){
+  const { L, Ldot } = lengthAt(t, wm, eps, phi, l0);
+  return [ y[1], -(2 * Ldot / L) * y[1] - (G / L) * y[0] ];
+}
+function rk4Lin(y, t, dt, wm, eps, phi, l0){
+  const k1 = derivLin(t, y, wm, eps, phi, l0);
+  const k2 = derivLin(t + 0.5 * dt, [y[0] + 0.5 * dt * k1[0], y[1] + 0.5 * dt * k1[1]], wm, eps, phi, l0);
+  const k3 = derivLin(t + 0.5 * dt, [y[0] + 0.5 * dt * k2[0], y[1] + 0.5 * dt * k2[1]], wm, eps, phi, l0);
+  const k4 = derivLin(t + dt, [y[0] + dt * k3[0], y[1] + dt * k3[1]], wm, eps, phi, l0);
+  return [ y[0] + (dt / 6) * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]),
+           y[1] + (dt / 6) * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]) ];
+}
+
+// ── THE MONODROMY MATRIX M over one modulation period Tₘ = 2π/ωₘ. ──────────────────
+// Integrate the linear system from basis e₁=[1,0] and e₂=[0,1]; the propagated columns
+// ARE M. Returns [[a,b],[c,d]] = [[θ from e₁, θ from e₂],[θ̇ from e₁, θ̇ from e₂]].
+function monodromy(wm, eps = EPS, phi = 0, l0 = L0, steps = 8000){
+  const Tm = 2 * Math.PI / wm, dt = Tm / steps;
+  let c1 = [1, 0], c2 = [0, 1], t = 0;
+  for (let i = 0; i < steps; i++){
+    c1 = rk4Lin(c1, t, dt, wm, eps, phi, l0);
+    c2 = rk4Lin(c2, t, dt, wm, eps, phi, l0);
+    t += dt;
+  }
+  return [[c1[0], c2[0]], [c1[1], c2[1]]];
+}
+
+// ── FLOQUET ANALYSIS of M: the Mathieu-tongue verdict. ─────────────────────────────
+// Returns {det, trace, lambdaMax (largest |eigenvalue|), growth (σ=ln|λ|/Tₘ), unstable,
+// realEigs}. det≈1 EXACTLY (the periodic-L invariant). lambdaMax>1 ⇔ in the tongue.
+function floquet(wm, eps = EPS, phi = 0, l0 = L0, steps = 8000){
+  const M = monodromy(wm, eps, phi, l0, steps);
+  const a = M[0][0], b = M[0][1], c = M[1][0], d = M[1][1];
+  const tr = a + d, det = a * d - b * c;
+  const disc = tr * tr - 4 * det;
+  let lambdaMax, realEigs;
+  if (disc >= 0){
+    const s = Math.sqrt(disc);
+    const l1 = (tr + s) / 2, l2 = (tr - s) / 2;
+    lambdaMax = Math.max(Math.abs(l1), Math.abs(l2));
+    realEigs = true;
+  } else {
+    lambdaMax = Math.sqrt(det);          // |λ| = √det for a complex-conjugate pair
+    realEigs = false;
+  }
+  const Tm = 2 * Math.PI / wm;
+  return {
+    det, trace: tr, lambdaMax, realEigs,
+    growth: Math.log(lambdaMax) / Tm,    // σ: the exponential growth rate (per second)
+    unstable: lambdaMax > 1 + 1e-7,
+    M,
+  };
+}
+
+// ── THE DOMINANT EIGENVECTOR of M (the growing mode). For the |λ|max eigenvalue λ, ───
+//    v solves (M−λI)v=0 ⇒ v=[b, λ−a] (from row 1). Normalized to a small seed angle. ─
+function dominantEigenvector(wm, eps = EPS, phi = 0, l0 = L0, seed = 0.01, steps = 8000){
+  const M = monodromy(wm, eps, phi, l0, steps);
+  const a = M[0][0], b = M[0][1], c = M[1][0], d = M[1][1];
+  const tr = a + d, det = a * d - b * c, disc = tr * tr - 4 * det;
+  if (disc < 0) return [seed, 0];                       // no real growing mode: plain seed
+  const s = Math.sqrt(disc);
+  const l1 = (tr + s) / 2, l2 = (tr - s) / 2;
+  const lam = Math.abs(l1) >= Math.abs(l2) ? l1 : l2;
+  let v = [b, lam - a];
+  const n = Math.hypot(v[0], v[1]) || 1;
+  return [v[0] / n * seed, v[1] / n * seed];
+}
+
+// ── THE LN-AMPLITUDE FIT (the exponential-growth proof, made literal). ─────────────
+// Seed the LINEAR integrator in the dominant eigenvector, sample amplitude once per
+// modulation period (so the periodic ripple cancels), fit a line to ln(amplitude) vs t.
+// Amplitude in mode coords: A = √(θ² + (θ̇/ω₀)²). Returns {slope, maxResid, n, sigma}.
+function lnAmpFit(wm, eps = EPS, phi = 0, l0 = L0, periods = 12, steps = 8000){
+  const Tm = 2 * Math.PI / wm, dt = Tm / steps, w0 = omega0(l0);
+  let y = dominantEigenvector(wm, eps, phi, l0, 0.01, steps), t = 0;
+  const pts = [];
+  for (let k = 0; k <= periods; k++){
+    const A = Math.hypot(y[0], y[1] / w0);
+    pts.push({ t, lnA: Math.log(A) });
+    for (let i = 0; i < steps; i++){ y = rk4Lin(y, t, dt, wm, eps, phi, l0); t += dt; }
+  }
+  const n = pts.length;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const p of pts){ sx += p.t; sy += p.lnA; sxx += p.t * p.t; sxy += p.t * p.lnA; }
+  const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+  const icpt = (sy - slope * sx) / n;
+  let maxResid = 0;
+  for (const p of pts){ maxResid = Math.max(maxResid, Math.abs(p.lnA - (slope * p.t + icpt))); }
+  return { slope, maxResid, n, sigma: floquet(wm, eps, phi, l0, steps).growth };
+}
+
+// ── MEAN WORK PER MODULATION CYCLE (the "same effort, opposite outcome" claim). ────
+// Run the NONLINEAR swing from a small start; average ΔE over `cycles` modulation
+// periods. At 2ω₀-resonant this is strictly >0 (secular gain); at 1ω₀ it is ≈0.
+function meanWorkPerCycle(wm, eps = EPS, phi = 0, l0 = L0, th0 = 0.05, cycles = 16, steps = 3000){
+  const Tm = 2 * Math.PI / wm, dt = Tm / steps;
+  let y = [th0, 0], t = 0;
+  let Eprev = energy(t, y, wm, eps, phi, l0), sum = 0;
+  for (let k = 0; k < cycles; k++){
+    for (let i = 0; i < steps; i++){ y = rk4Step(y, t, dt, wm, eps, phi, l0); t += dt; }
+    const E = energy(t, y, wm, eps, phi, l0);
+    sum += (E - Eprev); Eprev = E;
+  }
+  return sum / cycles;
+}
+
+// ── THE SELF-TEST. The Node twin and the in-page chip call THIS. ──────────────────
+function runSelfTest(){
+  const checks = [];
+  const ck = (name, ok) => checks.push({ name, ok: !!ok });
+  const w0 = omega0(L0);
+
+  // (1) ω₀ = √(g/L) EXACT to <1e-9, at the nominal and across a band of lengths.
+  {
+    let worst = 0;
+    for (const L of [0.5, 1, 2, 3.5, 5, 8]){ worst = Math.max(worst, Math.abs(omega0(L) - Math.sqrt(G / L))); }
+    ck('(1) ω₀ = √(g/L) EXACT (<1e-9) at the nominal length AND across L∈[0.5,8]',
+       Math.abs(omega0(L0) - Math.sqrt(G / L0)) < 1e-9 && worst < 1e-9);
+  }
+
+  // (2) det(M)=1 EXACTLY — the periodic-L Floquet invariant (a self-check on the integrator).
+  {
+    let worst = 0;
+    for (const r of [1, 2, 1.5]) for (const e of [0.05, 0.08, 0.12]){
+      worst = Math.max(worst, Math.abs(floquet(r * w0, e, 0).det - 1));
+    }
+    ck('(2) det(monodromy)=1 EXACT (<1e-9) for every (ratio,ε) — the periodic-L invariant', worst < 1e-9);
+  }
+
+  // (3) HEADLINE: pump@2ω₀ sits IN the principal tongue → |λ|>1 and σ>0 (exponential growth).
+  {
+    const f = floquet(2 * w0, EPS, 0);
+    ck('(3) HEADLINE: pump@2ω₀ → Floquet |λ|>1 (in the principal Mathieu tongue) AND growth σ>0',
+       f.unstable && f.lambdaMax > 1.0 && f.growth > 0.01);
+  }
+
+  // (4) LINEAR ln-amplitude: seeded in the growing mode, ln(A) is LINEAR with slope=σ to
+  // tiny residual — exponential growth proven, AND the fit slope matches Floquet σ.
+  {
+    const fit = lnAmpFit(2 * w0, EPS, 0, L0, 12);
+    ck('(4) ln(amplitude) LINEAR in time: slope>0, residual <1e-9, AND slope == Floquet σ (<1e-6)',
+       fit.slope > 0 && fit.maxResid < 1e-9 && Math.abs(fit.slope - fit.sigma) < 1e-6);
+  }
+
+  // (5) NEG-CONTROL — FREQUENCY, not effort: pump@1ω₀ (SAME ε) → |λ|=1 (bounded, no tongue)
+  // and mean work/cycle ≈0. Same pump depth, opposite outcome. (Off-resonant 1.5ω₀ too.)
+  {
+    const f1 = floquet(1 * w0, EPS, 0);
+    const off = floquet(1.5 * w0, EPS, 0);
+    const boundedLam = Math.abs(f1.lambdaMax - 1) < 1e-6 && !f1.unstable
+                    && Math.abs(off.lambdaMax - 1) < 1e-6 && !off.unstable;
+    // mean work ≈0 at 1ω₀ averaged over phases (vs strictly >0 at 2ω₀)
+    let acc = 0, n = 0;
+    for (let k = 0; k < 8; k++){ acc += meanWorkPerCycle(1 * w0, EPS, (k / 8) * 2 * Math.PI); n++; }
+    const w1 = acc / n;
+    const w2 = meanWorkPerCycle(2 * w0, EPS, 0);
+    ck('(5) NEG-CONTROL the teeth bite: pump@1ω₀ (SAME ε) → |λ|=1 bounded AND mean work/cycle ≈0',
+       boundedLam && Math.abs(w1) < 1e-4);
+    ck('(5) same effort, OPPOSITE outcome: work@2ω₀ ≫ 0 while work@1ω₀ ≈ 0 (resonance is the 2:1 timing)',
+       w2 > 0.05 && Math.abs(w1) < 1e-4 && w2 > 100 * Math.abs(w1));
+  }
+
+  // (6) ANTI-VACUITY: at the SAME 2ω₀, ε→0 (no pump) → no growth (|λ|=1). The growth needs
+  // a real pump; the suite cannot pass on the frequency alone.
+  {
+    const f0 = floquet(2 * w0, 0, 0);
+    ck('(6) anti-vacuity: pump@2ω₀ but ε=0 (no pump) → |λ|=1, no growth (the tongue needs a real pump)',
+       Math.abs(f0.lambdaMax - 1) < 1e-6 && !f0.unstable);
+  }
+
+  const pass = checks.filter(c => c.ok).length;
+  return { pass, total: checks.length, checks };
+}
+// ===== SWING-SHIP CORE (inlined byte-twin) END =====
+
+/* ============================================================================
+   THE RIDE — the renderer + the game. The swing IS the readout; the rail only
+   witnesses. The visible ride PHASE-LOCKS the pump to the swing's own motion (exactly
+   how a real swinger pumps — in sync with where they are), so it stays resonant even as
+   a big arc lengthens the period. The 2:1 distinction is identical to the small-amplitude
+   Floquet proof above: pump TWICE per swing (2× the swing phase) and the arc climbs; pump
+   ONCE per swing (1×) or off the 2:1 ratio and it never grows — same effort, opposite
+   outcome. A live CROUCH/STAND coach teaches the rhythm; Auto-pump rides it perfectly.
+   ============================================================================ */
+(function(){
+  "use strict";
+
+  /* drop the front-door breadcrumb (so a direct visit registers for the Survey) */
+  try{ var k='ws:seen:swing-ship'; if(!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
+
+  // ── the in-page self-test chip ──────────────────────────────────────────────
+  function paintSelfTest(){
+    var res = runSelfTest();
+    var node = document.getElementById('selftest');
+    var list = document.getElementById('stList');
+    list.innerHTML = res.checks.map(function(c){
+      return '<div class="row"><span class="m '+(c.ok?'ok':'no')+'">'+(c.ok?'✓':'✗')+'</span><span>'+c.name+'</span></div>';
+    }).join('');
+    if(res.pass===res.total){ node.className='selftest ok'; node.textContent=res.pass+'/'+res.total+' ✓ proven'; }
+    else { node.className='selftest bad'; node.textContent=res.pass+'/'+res.total+' ✗'; }
+    return res;
+  }
+  window.__swingShipSelfTest = runSelfTest;
+
+  var stPanel=document.getElementById('stPanel');
+  document.getElementById('selftest').addEventListener('click', function(){ stPanel.classList.toggle('show'); });
+  document.getElementById('stClose').addEventListener('click', function(){ stPanel.classList.remove('show'); });
+
+  // ── geometry of the SVG stage ───────────────────────────────────────────────
+  var svg=document.getElementById('ride'), NS='http://www.w3.org/2000/svg';
+  var PIVX=300, PIVY=92;            // pivot (top of the A-frame)
+  var PX_PER_M=78;                  // pixels per metre of rod
+  var GOAL_DEG=135;                 // "reach the loop" target angle
+  var w0 = omega0(L0);              // small-angle natural frequency (the ride's reference)
+
+  function el(tag, attrs){ var n=document.createElementNS(NS,tag); for(var a in attrs) n.setAttribute(a, attrs[a]); return n; }
+
+  // build the static frame + the dynamic group once
+  function buildStage(){
+    while(svg.firstChild) svg.removeChild(svg.firstChild);
+
+    var defs=el('defs',{});
+    var lg=el('linearGradient',{id:'hullg',x1:0,y1:0,x2:0,y2:1});
+    lg.appendChild(el('stop',{offset:'0%','stop-color':'#322611'}));
+    lg.appendChild(el('stop',{offset:'100%','stop-color':'#15100a'}));
+    defs.appendChild(lg); svg.appendChild(defs);
+
+    // the arc-guide showing the goal angle (faint dashed, both sides)
+    var R=L0*PX_PER_M+30;
+    var ga=GOAL_DEG*Math.PI/180;
+    function arcPath(sign){
+      var x0=PIVX, y0=PIVY+R;
+      var x1=PIVX+sign*R*Math.sin(ga), y1=PIVY+R*Math.cos(ga);
+      var large = ga>Math.PI ? 1 : 0;
+      return 'M '+x0.toFixed(1)+' '+y0.toFixed(1)+' A '+R+' '+R+' 0 '+large+' '+(sign>0?1:0)+' '+x1.toFixed(1)+' '+y1.toFixed(1);
+    }
+    svg.appendChild(el('path',{d:arcPath(1),fill:'none',stroke:'rgba(201,162,74,0.16)','stroke-width':1.5,'stroke-dasharray':'2 6'}));
+    svg.appendChild(el('path',{d:arcPath(-1),fill:'none',stroke:'rgba(201,162,74,0.16)','stroke-width':1.5,'stroke-dasharray':'2 6'}));
+    // the loop markers at ±goal
+    [1,-1].forEach(function(s){
+      var x=PIVX+s*R*Math.sin(ga), y=PIVY+R*Math.cos(ga);
+      svg.appendChild(el('circle',{cx:x,cy:y,r:4.5,fill:'none',stroke:'var(--gold)','stroke-width':1.4,opacity:0.55}));
+      var t=el('text',{x:x+s*11,y:y+4,'text-anchor':(s>0?'start':'end'),fill:'var(--gold)','font-size':10.5,'font-family':'var(--font-mono)',opacity:0.75}); t.textContent='the loop'; svg.appendChild(t);
+    });
+
+    // the A-frame towers + base
+    svg.appendChild(el('line',{x1:PIVX-148,y1:418,x2:PIVX-10,y2:PIVY-4,stroke:'rgba(201,162,74,0.45)','stroke-width':6,'stroke-linecap':'round'}));
+    svg.appendChild(el('line',{x1:PIVX+148,y1:418,x2:PIVX+10,y2:PIVY-4,stroke:'rgba(201,162,74,0.45)','stroke-width':6,'stroke-linecap':'round'}));
+    svg.appendChild(el('line',{x1:PIVX-148,y1:418,x2:PIVX+148,y2:418,stroke:'rgba(201,162,74,0.30)','stroke-width':4,'stroke-linecap':'round'}));
+    svg.appendChild(el('rect',{x:PIVX-26,y:PIVY-13,width:52,height:15,rx:5,fill:'rgba(201,162,74,0.30)'}));
+    svg.appendChild(el('circle',{cx:PIVX,cy:PIVY,r:6,fill:'var(--gold-hi)'}));
+    // the vertical rest line
+    svg.appendChild(el('line',{x1:PIVX,y1:PIVY,x2:PIVX,y2:PIVY+R,stroke:'rgba(255,255,255,0.05)','stroke-width':1,'stroke-dasharray':'3 5'}));
+
+    // dynamic: two chains + the ship hull
+    svg.appendChild(el('line',{id:'chainL',stroke:'var(--gold)','stroke-width':2.4,'stroke-linecap':'round'}));
+    svg.appendChild(el('line',{id:'chainR',stroke:'var(--gold)','stroke-width':2.4,'stroke-linecap':'round'}));
+    var ship=el('g',{id:'ship'});
+    ship.appendChild(el('path',{d:'M -36 -8 Q -42 16 -20 20 L 20 20 Q 42 16 36 -8 Z',fill:'url(#hullg)',stroke:'var(--gold-hi)','stroke-width':2}));
+    ship.appendChild(el('path',{d:'M -30 -8 L -30 -22 M 30 -8 L 30 -22 M -30 -22 L 30 -22',fill:'none',stroke:'var(--gold)','stroke-width':2,'stroke-linecap':'round'}));
+    ship.appendChild(el('path',{d:'M 20 20 Q 36 20 38 4',fill:'none',stroke:'var(--gold-hi)','stroke-width':2}));
+    ship.appendChild(el('circle',{id:'r1',cx:-12,cy:-18,r:4.8,fill:'var(--coral)'}));
+    ship.appendChild(el('circle',{id:'r2',cx:12,cy:-18,r:4.8,fill:'var(--teal)'}));
+    svg.appendChild(ship);
+
+    svg.appendChild(el('text',{id:'aText',x:PIVX,y:PIVY-24,'text-anchor':'middle',fill:'var(--gold-hi)','font-size':13,'font-family':'var(--font-mono)','font-weight':600}));
+  }
+
+  // ── the live state ───────────────────────────────────────────────────────────
+  var state, params;
+  params = { perSwing:2, eps:0.09, auto:true, hold:false };
+  function reset(){
+    state = { th:0.12, om:0, t:0, L:L0, prevL:L0, won:false, overTop:false, envelope:[], lastFrac:0 };
+  }
+
+  // ── the pump: the rider's body sets the length L. Phase-locked to the swing's own
+  //    motion so it stays resonant at any arc (this is how you really pump a swing). ─
+  //    perSwing=2 → pump TWICE per swing (the 2:1 resonant beat) → climbs.
+  //    perSwing=1 → ONCE per swing → never grows. Off the 2:1 ratio → never grows.
+  //    The φ0=+π/2 lock is the growing phase (stand at the bottom, crouch at the top).
+  function targetLength(th, om){
+    if(!pumpActive()) return L0;
+    var psi = Math.atan2(om / w0, th);          // the swing's instantaneous phase
+    return L0 * (1 + params.eps * Math.cos(params.perSwing * psi + Math.PI/2));
+  }
+  function pumpActive(){ return params.auto || params.hold; }
+
+  // ── the physics tick: integrate the REAL nonlinear EOM with the body-set length. ─
+  function tick(realDt){
+    if(state.overTop) return;
+    var dt = Math.min(realDt, 0.033);
+    var sub = 8, h = dt/sub;
+    for(var i=0;i<sub;i++){
+      // the body moves the length toward target with a short time-constant (real L̇)
+      var Ltar = targetLength(state.th, state.om);
+      var tau = 0.035;
+      var Lnew = state.L + (Ltar - state.L) * (1 - Math.exp(-h/tau));
+      var Ldot = (Lnew - state.L) / h;
+      var L = state.L;
+      // one RK4 step of θ̈ = −(2L̇/L)θ̇ − (g/L)sinθ with the current L, L̇
+      var f = function(yy){ return [ yy[1], -(2*Ldot/L)*yy[1] - (G/L)*Math.sin(yy[0]) ]; };
+      var y = [state.th, state.om];
+      var k1=f(y), k2=f([y[0]+0.5*h*k1[0],y[1]+0.5*h*k1[1]]), k3=f([y[0]+0.5*h*k2[0],y[1]+0.5*h*k2[1]]), k4=f([y[0]+h*k3[0],y[1]+h*k3[1]]);
+      var thn = y[0] + h/6*(k1[0]+2*k2[0]+2*k3[0]+k4[0]);
+      var omn = y[1] + h/6*(k1[1]+2*k2[1]+2*k3[1]+k4[1]);
+      // turning-point detection → record amplitude envelope
+      if((y[1]>0&&omn<=0)||(y[1]<0&&omn>=0)){
+        var amp=Math.abs(y[0]); state.envelope.push(amp);
+        if(state.envelope.length>140) state.envelope.shift();
+      }
+      state.L = Lnew; state.th = thn; state.om = omn; state.t += h;
+      // win: reach the loop
+      if(!state.won && Math.abs(state.th) >= GOAL_DEG*Math.PI/180){ state.won = true; }
+      // over the top? freeze with a flourish (don't spin endlessly)
+      if(Math.abs(state.th) >= Math.PI*0.995){ state.overTop = true; state.th = Math.sign(state.th)*Math.PI*0.995; state.om = 0; break; }
+    }
+  }
+
+  // ── render the ship + chains + readouts from the live state ──────────────────
+  function render(){
+    var len=state.L*PX_PER_M, th=state.th;
+    var bx=PIVX+len*Math.sin(th), by=PIVY+len*Math.cos(th);
+    var ship=document.getElementById('ship');
+    ship.setAttribute('transform','translate('+bx.toFixed(2)+','+by.toFixed(2)+') rotate('+(th*180/Math.PI).toFixed(2)+')');
+    // chains from crossbar to ship rail corners (rotated with the ship)
+    function rp(localx){ var c=Math.cos(th), s=Math.sin(th); return [bx + localx*c - (-20)*s, by + localx*s + (-20)*c]; }
+    var pL=rp(-28), pR=rp(28);
+    var cL=document.getElementById('chainL'), cR=document.getElementById('chainR');
+    cL.setAttribute('x1',PIVX-12); cL.setAttribute('y1',PIVY); cL.setAttribute('x2',pL[0].toFixed(1)); cL.setAttribute('y2',pL[1].toFixed(1));
+    cR.setAttribute('x1',PIVX+12); cR.setAttribute('y1',PIVY); cR.setAttribute('x2',pR[0].toFixed(1)); cR.setAttribute('y2',pR[1].toFixed(1));
+
+    var deg=Math.abs(th*180/Math.PI);
+    document.getElementById('aText').textContent='θ = '+deg.toFixed(0)+'°';
+    var arcEl=document.getElementById('gArc'); arcEl.textContent=deg.toFixed(0)+'°';
+    arcEl.style.color = state.won ? 'var(--gold-hi)' : (deg>70?'var(--coral)':'var(--ink)');
+
+    // the regime line
+    var reg=document.getElementById('regime');
+    if(state.overTop){ reg.className='win'; reg.innerHTML='🏴‍☠️ <b>Over the top!</b> The arc went all the way around — pumped, never pushed.'; }
+    else if(state.won){ reg.className='win'; reg.innerHTML='🏴‍☠️ <b>You reached the loop!</b> The arc climbed past '+GOAL_DEG+'° on parametric resonance alone.'; }
+    else if(params.perSwing===2){ reg.className='climb'; reg.innerHTML='Pumping <b>twice per swing</b> (2:1) — the resonant beat. The arc <b>climbs</b>.'; }
+    else { reg.className='flat'; reg.innerHTML='Pumping <b>'+(params.perSwing===1?'once':params.perSwing+'×')+' per swing</b> — off the 2:1 tongue. Same effort; the arc <b>won’t grow</b>.'; }
+
+    // the phase coach: crouch at the extremes (turning point), stand through the bottom.
+    var nearBottom = Math.abs(th) < 0.22 && Math.abs(state.om) > 0.15;
+    var nearTop = Math.abs(state.om) < 0.22 && Math.abs(th) > 0.08;
+    var cc=document.getElementById('cueCrouch'), cs=document.getElementById('cueStand');
+    cc.classList.toggle('on', nearTop && !nearBottom);   // crouch (lengthen) at the top
+    cs.classList.toggle('on', nearBottom);               // stand (shorten) at the bottom
+
+    // riders rise/sink a touch with the body (cosmetic — shows the CoM move)
+    var rise = (state.L - L0)/L0;  // + = crouched (long), − = stood (short)
+    var ry = -18 + rise*60;
+    document.getElementById('r1').setAttribute('cy', ry.toFixed(1));
+    document.getElementById('r2').setAttribute('cy', ry.toFixed(1));
+  }
+
+  // ── the amplitude-envelope rail (the quiet witness, NOT the hero) ───────────
+  var rail=document.getElementById('rail');
+  function renderRail(){
+    while(rail.firstChild) rail.removeChild(rail.firstChild);
+    var W=220,H=78, env=state.envelope;
+    rail.appendChild(el('line',{x1:0,y1:H-2,x2:W,y2:H-2,stroke:'rgba(201,162,74,0.18)','stroke-width':1}));
+    if(env.length<2) return;
+    var maxA=Math.max(GOAL_DEG*Math.PI/180, Math.max.apply(null, env));
+    var gy=H-2-(GOAL_DEG*Math.PI/180/maxA)*(H-8);
+    rail.appendChild(el('line',{x1:0,y1:gy,x2:W,y2:gy,stroke:'rgba(201,162,74,0.32)','stroke-width':1,'stroke-dasharray':'3 4'}));
+    var pts=[];
+    for(var i=0;i<env.length;i++){ var x=(i/(env.length-1))*W; var y=H-2-(env[i]/maxA)*(H-8); pts.push(x.toFixed(1)+','+y.toFixed(1)); }
+    var col = params.perSwing===2 ? 'var(--coral)' : 'var(--teal)';
+    rail.appendChild(el('polyline',{points:pts.join(' '),fill:'none',stroke:col,'stroke-width':2,'stroke-linejoin':'round'}));
+  }
+
+  // ── the Floquet verdict strip (the EXACT small-amplitude proof for this beat) ─
+  function renderVerdict(){
+    var ratio = params.perSwing;     // pumps-per-swing == ωm/ω0
+    var f=floquet(ratio*w0, params.eps, 0, L0, 1500);
+    var v=document.getElementById('vLam');
+    if(f.unstable){ v.className='up'; v.innerHTML='|λ|='+f.lambdaMax.toFixed(3)+' &gt; 1 — climbs (σ='+f.growth.toFixed(2)+'/s)'; }
+    else { v.className='bd'; v.innerHTML='|λ|='+f.lambdaMax.toFixed(3)+' = 1 — bounded'; }
+  }
+
+  // ── input: SPACE / hold the ship / auto pump ─────────────────────────────────
+  function setHold(on){ params.hold=on; }
+  document.addEventListener('keydown', function(e){ if(e.code==='Space' && !params.auto){ e.preventDefault(); setHold(true); } });
+  document.addEventListener('keyup', function(e){ if(e.code==='Space' && !params.auto){ e.preventDefault(); setHold(false); } });
+  svg.addEventListener('pointerdown', function(){ if(!params.auto) setHold(true); });
+  window.addEventListener('pointerup', function(){ if(!params.auto) setHold(false); });
+
+  // beat segmented control
+  document.getElementById('segBeat').addEventListener('click', function(e){
+    var b=e.target.closest('button'); if(!b) return;
+    params.perSwing=parseFloat(b.getAttribute('data-r'));
+    Array.prototype.forEach.call(this.querySelectorAll('button'), function(x){ x.classList.toggle('on', x===b); });
+    document.getElementById('gBeat').innerHTML=(params.perSwing===2?'2':params.perSwing)+'×ω₀';
+    reset(); renderVerdict();
+  });
+  // eps slider
+  var epsRange=document.getElementById('epsRange');
+  epsRange.value=params.eps; document.getElementById('epsVal').textContent=params.eps.toFixed(3);
+  epsRange.addEventListener('input', function(){ params.eps=parseFloat(this.value); document.getElementById('epsVal').textContent=params.eps.toFixed(3); renderVerdict(); });
+  // auto-pump
+  var autoBtn=document.getElementById('autoBtn');
+  autoBtn.addEventListener('click', function(){ params.auto=!params.auto; this.classList.toggle('on',params.auto); this.textContent='Auto-pump: '+(params.auto?'ON':'OFF');
+    document.getElementById('cuehint').innerHTML = params.auto ? 'auto-pumping the perfect rhythm — watch the cue, then switch it off and try' : 'hold <b>SPACE</b> or press on the ship to pump — follow the lit cue';
+    if(!params.auto) params.hold=false; });
+  // reset
+  document.getElementById('resetBtn').addEventListener('click', function(){ reset(); });
+
+  // ── the loop ─────────────────────────────────────────────────────────────────
+  var last=performance.now();
+  function frame(now){
+    var dt=(now-last)/1000; last=now;
+    tick(dt);
+    render();
+    renderRail();
+    requestAnimationFrame(frame);
+  }
+
+  // boot
+  buildStage();
+  reset();
+  paintSelfTest();
+  document.getElementById('gGoal').textContent=GOAL_DEG+'°';
+  document.getElementById('gBeat').innerHTML='2×ω₀';
+  renderVerdict();
+  requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
