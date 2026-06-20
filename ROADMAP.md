@@ -127,7 +127,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 <!-- gauge:garden-seeds:start -->
 ### exhibit
-- [exhibit] **The Gene Jar — the pool that won't drift** — Conservatory (its first POPULATION-GENETICS bench; its four current rooms are growth/predation/game-theory/epidemic — genetics is a clean hole). TOUCHABLE: a glass jar of two-colour allele BEADS (gold A, slate a); set the starting fraction p with a slider, then CRANK 'one generation of random mating' — the jar scoops beads two-at-a-time and stacks offspring into three genotype columns (AA, Aa, aa) filling like the alchemy bins. FORM = beads you pour + a crank you turn, not a frequency plot. The surprise: after ONE crank the columns lock at p²,2pq,q² and STAY there crank after crank — the pool remembers nothing, drifts nowhere. CRUX (conservatory/the-gene-jar/core.mjs + Node twin, page-inline byte-identical): assert p²+2pq+q²===1 to the bit; assert p is INVARIANT under the mating operator (p'===p to <1e-9 for arbitrary p, the deterministic infinite-pool map = PROVEN); a finite seeded scoop of N pairs lands the three counts within √N of N·{p²,2pq,q²} (honest sampling FIT, NEVER claimed as proof — the Benford Mill χ² register). NEG-CONTROL (fires RED): an 'assortative mating' knife-switch (like-mates-with-like, the wrong rule, inline-ONLY) drains the Aa column and the identity check goes RED though p is unchanged — proving it's the RANDOM pairing, not the allele counts, that holds the pool still. (sown #207)
 
 
 
@@ -155,11 +154,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 ### bench
 - [bench] **The Voltaic Pile You Build — two metals decide the voltage** — Alchemy Lab (alchemy/galvanic-cell/) — the wing's FIRST electrochemistry bench (grep-confirmed hole; the 5 benches are balancer/limiting/titration/equilibrium/periodic). FORM you BUILD+read: two beakers + a salt bridge; DRAG a metal strip into each from a rack (Zn·Cu·Ag·Fe·Mg…) and a voltmeter needle swings to the cell EMF, electrons animate from anode through the wire. Surprise: the voltage is just the DIFFERENCE of two fixed rack numbers (standard reduction potentials) — swap the beakers and the needle flips sign but keeps size; play to rank every metal into one ladder. A concentration dial tilts it by the Nernst slope. CRUX (galvanic-cell/core.mjs + Node twin, inline byte-identical): E°cell===E°cathode−E°anode additive from the table to the bit for every pair; spontaneous IFF E°cell>0 (lower-potential metal forced to oxidize, sign matches); Nernst E=E°cell−(RT/nF)ln Q reduces to E===E°cell at 1 M (Q===1) to <1e-9; electrons balance, charge conserved. NEG-CONTROL (RED): same-metal-both-sides → E°cell===0 exactly, needle dead — it's the DIFFERENCE, not either metal, that drives the cell. Standard potentials are GIVEN data (like the Pinhole Race's true masses); the proof is the algebra. Nests under alchemy/, fills an idle planter, NOT a new front-door room. (sown #214)
-<!-- ✝ DECAYED #214: The Two Games That Decide by a Hidden Number · after b51bea6 -->
 <!-- ✝ DECAYED #214: The Living Grove trail — gather the estate's scattered living rooms · after b51bea6 -->
 <!-- ✝ DECAYED #214: The Cart That Won't Be Pushed · after b51bea6 -->
 <!-- ✝ BLOOMED #215: The Brass Whirligig — the current that pushes back → lodestone-hall/the-whirligig/ · after 17801db -->
 <!-- ✝ BLOOMED #217: The Poisoned Bar — the win nobody can show you → chomp/ · after aef2280 -->
+<!-- ✝ BLOOMED #218: The Gene Jar — the pool that won't drift → conservatory/the-gene-jar/ · after 65b7d10 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
