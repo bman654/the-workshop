@@ -39,7 +39,11 @@
          --gutter-x: max(0px, calc((100vw - var(--plate-w)) / 2)); }
   .stage{ position:fixed; inset:0 0 46px 0; overflow:hidden; touch-action:none; }
   .plan{ position:relative; width:100%; height:100%; display:block; }
-  svg.sheet{ width:100%; height:100%; display:block; touch-action:none; }
+  svg.sheet{ width:100%; height:100%; display:block; touch-action:none;
+    /* BUG#216-6: a pan drag must never rubber-band-select the map's SVG text. Scoped
+       to the map root (the pan listeners live on #sheet) so the rest of the page —
+       the legend, the door pill, the colophon links — stays selectable. */
+    user-select:none; -webkit-user-select:none; -moz-user-select:none; }
 
   /* a slow drifting candle-haze over the whole plate (behind the linework) — warm light
      gathered at the manor, a cool wash drifting over the grounds. */
@@ -134,7 +138,10 @@
   .labelgroup.live .leader-dot{ fill:var(--c); opacity:1; }
   .labelgroup.live .roomrule{ opacity:1; }
   .labelgroup.live .roomname{ fill:#fff; }
-  .labelgroup.live .roomsub{ fill:var(--c); }
+  /* BUG#216-2: a revealed subtitle keyed on the RAW wing accent (var(--c)) renders
+     near-black for the dark accents — illegible on the dark plate. Lift it toward
+     white so it stays accent-TINTED but always reads (a light, high-contrast fill). */
+  .labelgroup.live .roomsub{ fill:color-mix(in srgb, var(--c) 38%, #eaf0fb); }
   .labelgroup.live .within{ opacity:.85; }
   .poi:hover .glyph-emoji, .poi:focus-visible .glyph-emoji{
     filter:drop-shadow(0 0 7px color-mix(in srgb,var(--c) 80%,transparent)); }
@@ -175,9 +182,12 @@
     text-transform:uppercase; opacity:.7; paint-order:stroke;
     stroke:rgba(6,8,13,.55); stroke-width:2.2px; transition:opacity .42s ease; }
   .zone-tab{ stroke:var(--brass); stroke-width:.9; opacity:.5; }
+  /* WING sub-captions are a LEVEL-OF-DETAIL layer: HIDDEN at the resting fit-view
+     (only true DISTRICT names show at rest — BUG#216-1), faded in by setZoom as you
+     zoom into their district. The LOD opacity is set inline by the loupe module. */
   .wing-label{ font:600 8px/1 var(--mono); letter-spacing:.18em; fill:var(--wa);
-    text-transform:uppercase; opacity:.72; paint-order:stroke;
-    stroke:rgba(6,8,13,.5); stroke-width:1.9px; }
+    text-transform:uppercase; opacity:0; paint-order:stroke;
+    stroke:rgba(6,8,13,.5); stroke-width:1.9px; transition:opacity .42s ease; }
 
   /* ---- the circulation graph: the warm SPINE, district avenues, wing aisles ---- */
   .spine{ fill:none; stroke:var(--line-warm); stroke-width:2.4; opacity:.5;
@@ -435,7 +445,7 @@
 
   @media (prefers-reduced-motion:reduce){
     .haze{ animation:none; }
-    .fp-fill,.fp-line,.fp-fine,.fp-lit,.fp-floor,.fp-lamp,.roomrule,.leader,.leader-dot,.glyph-emoji,.within,#card,.focusring,.labelgroup,#loupe,.zone-label{ transition:none; }
+    .fp-fill,.fp-line,.fp-fine,.fp-lit,.fp-floor,.fp-lamp,.roomrule,.leader,.leader-dot,.glyph-emoji,.within,#card,.focusring,.labelgroup,#loupe,.zone-label,.wing-label{ transition:none; }
     .undercroft.grow{ animation:none; opacity:1; transform:none; }
     .undercroft.repairing .fp-line{ animation:none; }
     .rune.show{ animation:none; opacity:.8; text-shadow:0 0 10px rgba(201,162,74,.4); }
@@ -598,11 +608,18 @@
       <g id="manor"></g>
       <!-- the circulation graph: spine, district avenues, wing aisles, room stubs -->
       <g id="paths"></g>
-      <!-- the engraved zone + wing labels, seated ON their boundaries (ALWAYS-ON
-           resting layer — the only names the fit-view shows) -->
-      <g id="zonelabels"></g>
       <!-- the POIs (footprints + glyphs + leaders) -->
       <g id="pois"></g>
+      <!-- the engraved DISTRICT zone captions, seated ON their boundaries (the ALWAYS-ON
+           resting layer — the only names the fit-view shows). The WING sub-captions live
+           in #winglabels (below) and are LOD-revealed by zoom, not drawn at rest.
+           BUG#216-1 (occlusion): drawn AFTER #pois so a resting caption is never covered
+           by a building footprint. -->
+      <g id="zonelabels"></g>
+      <!-- the WING sub-captions (LOD layer): hidden at the resting fit-view, faded in as
+           you zoom into a district (a standard map's level-of-detail). Painted above the
+           footprints so a revealed wing name is never occluded. -->
+      <g id="winglabels"></g>
       <!-- the per-room name labels (the surveyor's LOUPE layer): DEFAULTS HIDDEN,
            one group lights to .live only under hover / tab-focus / zoom-reveal -->
       <g id="roomlabels"></g>
@@ -1976,6 +1993,7 @@ const MANOR_DOOR = LAYOUT.door || { x:721, y:504 };
 const precincts  = document.getElementById("precincts");
 const manorG     = document.getElementById("manor");
 const zonelabels = document.getElementById("zonelabels");
+const winglabels = document.getElementById("winglabels");   // wing sub-captions (LOD layer, hidden at rest)
 const roomlabels = document.getElementById("roomlabels");   // the loupe layer (defaults hidden)
 const viewport   = document.getElementById("viewport");
 
@@ -2029,7 +2047,10 @@ function buildPoi(r, opts){
   // opacity 0); renderReveal() lights its .live class when the visitor leans in.
   // The .poi keeps only its footprint + glyph + lamp + focus ring (the always-on
   // beauty), and stays a tabindexed link reachable WITHOUT the label.
-  const rlg = el("g",{ class:"labelgroup" });   // the per-room reveal wrapper
+  // BUG#216-2: set the wing accent (--c) on the WHOLE reveal wrapper so descendant
+  // text (the .roomsub) inherits a defined accent — previously --c was set only on the
+  // leader/rule, so `.live .roomsub{ fill:var(--c) }` resolved to the SVG default BLACK.
+  const rlg = el("g",{ class:"labelgroup", style:`--c:${r.accent}` });   // the per-room reveal wrapper
   rlg.dataset.id = r.id;
   const leaderPath = el("path",{ class:"leader", style:`--c:${r.accent}` });
   const leaderDot  = el("circle",{ r:2, class:"leader-dot", style:`--c:${r.accent}` });
@@ -2107,14 +2128,51 @@ function openCard(r, a){
   const bb = a.getBoundingClientRect();
   card.classList.add("show");                 // make measurable
   const cw = card.offsetWidth, ch = card.offsetHeight;
-  let left = bb.right + 14;
-  let top  = bb.top;
-  if(left + cw > window.innerWidth - 12) left = bb.left - cw - 14;       // flip left
-  if(left < 12) left = Math.min(window.innerWidth - cw - 12, Math.max(12, bb.left));
-  if(top + ch > window.innerHeight - 12) top = window.innerHeight - ch - 12;
-  if(top < 12) top = 12;
-  card.style.left = left + "px";
-  card.style.top  = top + "px";
+  const VW = window.innerWidth, VH = window.innerHeight, M = 12, GAP = 14;
+
+  // BUG#216-3: the SAME hover reveals this room's own label — route the card AWAY from
+  // it so both read at once. Measure the revealed label's screen box (the labelgroup's
+  // rendered rect) and reject any card side that overlaps it; prefer the side of the
+  // footprint OPPOSITE the label, then fall back through right/left/below/above.
+  let lbox = null;
+  try{
+    const lg = roomlabels.querySelector('.labelgroup[data-id="'+CSS.escape(r.id)+'"]');
+    if(lg){ const lr = lg.getBoundingClientRect(); if(lr && lr.width>0 && lr.height>0) lbox = lr; }
+  }catch(_){}
+  function overlaps(L, T, box){
+    if(!box) return false;
+    return L < box.right && box.left < L+cw && T < box.bottom && box.top < T+ch;
+  }
+  // candidate placements, in preference order; label-aware ranking below re-orders them.
+  const cands = [
+    { side:"right", left: bb.right + GAP,  top: bb.top },
+    { side:"left",  left: bb.left - cw - GAP, top: bb.top },
+    { side:"below", left: bb.left,         top: bb.bottom + GAP },
+    { side:"above", left: bb.left,         top: bb.top - ch - GAP }
+  ];
+  // prefer the side opposite the label: if the label sits to the right of the
+  // footprint, try the LEFT card first (and vice-versa); same for above/below.
+  if(lbox){
+    const fcx = (bb.left+bb.right)/2, fcy = (bb.top+bb.bottom)/2;
+    const lcx = (lbox.left+lbox.right)/2, lcy = (lbox.top+lbox.bottom)/2;
+    const labelRight = lcx >= fcx, labelBelow = lcy >= fcy;
+    const rank = { right: labelRight?2:0, left: labelRight?0:2, below: labelBelow?3:1, above: labelBelow?1:3 };
+    cands.sort((p,q)=> rank[p.side]-rank[q.side]);
+  }
+  function clampLeft(L){ return Math.min(VW - cw - M, Math.max(M, L)); }
+  function clampTop(T){ return Math.min(VH - ch - M, Math.max(M, T)); }
+  // pick the first candidate that fits on-screen AND clears the label; if none clears
+  // the label, take the first that at least fits on-screen (still readable, clamped).
+  let chosen = null, fallback = null;
+  for(const c of cands){
+    const L = clampLeft(c.left), T = clampTop(c.top);
+    const fits = c.left >= 0 && c.left + cw <= VW && c.top >= 0 && c.top + ch <= VH;
+    if(!fallback) fallback = { L, T };
+    if(!overlaps(L, T, lbox)){ chosen = { L, T }; if(fits) break; }
+  }
+  const pos = chosen || fallback || { L: clampLeft(bb.right+GAP), T: clampTop(bb.top) };
+  card.style.left = pos.L + "px";
+  card.style.top  = pos.T + "px";
 }
 function hideCard(){ card.classList.remove("show"); }
 
@@ -2258,7 +2316,8 @@ function drawCirculation(){
 
 /* engrave each DISTRICT zone label ON its boundary (a brass tab + a flanking rule),
    and each WING label on its wing-rect's top edge — never floating. */
-const ZONE_LABEL = new Map();   // district → its engraved caption (so the loupe can fade it back)
+const ZONE_LABEL = new Map();   // district → its engraved DISTRICT caption (always-on at rest)
+const WING_LABEL = new Map();   // district → [wing caption <text>] (LOD layer, hidden at rest)
 function drawZoneLabels(){
   LAYOUT.districtRects.forEach(d=>{
     // seat the label on the district's top boundary, centred
@@ -2269,15 +2328,24 @@ function drawZoneLabels(){
     const t = el("text",{ x:lx, y:ly, "text-anchor":"middle", class:"zone-label" });
     t.textContent = d.label;
     t.dataset.district = d.district;
+    t.dataset.ax = lx; t.dataset.ay = ly;   // BUG#216-4: anchor for the 1/k counter-scale
     zonelabels.appendChild(t);
     ZONE_LABEL.set(d.district, t);   // far things named by district; this caption fades
   });                                // back (floored .06) as its rooms name themselves
+  // WING sub-captions: NOT drawn at the resting fit-view (they are not district names;
+  // BUG#216-1 — they were the always-on second text layer that crowded the rest view).
+  // They live in #winglabels (above the footprints, BUG#216-1 occlusion) and fade in by
+  // LEVEL-OF-DETAIL as you zoom into their district (driven by the loupe's setZoom).
   LAYOUT.wingRects.forEach(w=>{
     const lx = w.x + 8, ly = w.y - 3;
     const t = el("text",{ x:lx, y:ly, "text-anchor":"start", class:"wing-label",
       style:`--wa:${w.accent}` });
     t.textContent = w.label;
-    zonelabels.appendChild(t);
+    t.dataset.district = w.district;
+    t.dataset.ax = lx; t.dataset.ay = ly;   // BUG#216-4: anchor for the 1/k counter-scale
+    winglabels.appendChild(t);
+    if(!WING_LABEL.has(w.district)) WING_LABEL.set(w.district, []);
+    WING_LABEL.get(w.district).push(t);
   });
 }
 
@@ -2394,6 +2462,12 @@ function applyPlacement(parts, box, side){
   const bb = parts.group.getBBox();
   const tx = box.x - (bb.x - LABEL_PAD), ty = box.y - (bb.y - LABEL_PAD);
   parts.group.setAttribute("transform", `translate(${tx} ${ty})`);
+  // BUG#216-4: stash the SOLVED translate so the loupe can COUNTER-SCALE the text by
+  // 1/k about this anchor when zoomed (keeping revealed labels a constant screen size).
+  // The counter-scale shrinks the text INSIDE its reserved SOLVED box, so Claim B's
+  // declutter (which reserves the full box) stays conservatively overlap-safe.
+  parts.baseTranslate = { x:tx, y:ty };
+  if(parts.wrap){ parts.wrap.dataset.tx = tx; parts.wrap.dataset.ty = ty; }
   // the label rect in viewBox coords (what the leader must reach)
   const rect = { x:box.x, y:box.y, w:box.w, h:box.h };
   const fb = footBBox(parts.r);
@@ -3331,8 +3405,15 @@ const LOUPE = (function(){
     const MIN_SCREEN_GAP = 18;   // breathing room demanded between two on-screen labels (CSS px)
     const ZONE_FLOOR = 0.06;     // a district caption never fades wholly anonymous
     const ZONE_FULL  = 0.7;      // the resting zone-label opacity (matches .zone-label CSS)
+    // BUG#216-5 — WING-LABEL LEVEL-OF-DETAIL: the wing sub-captions are HIDDEN at the
+    // resting fit-view and fade in as you zoom past WING_LOD_IN, full by WING_LOD_FULL.
+    const WING_LOD_IN   = 1.25;  // k below this → wing captions stay dark (rest view)
+    const WING_LOD_FULL = 2.2;   // k at/above this → wing captions at full LOD opacity
+    const WING_FULL_OP  = 0.72;  // the wing caption's full opacity (the old always-on value)
 
-    let curK = 1, curFocus = null, curMode = "rest";
+    // curSingleId: the one room a HOVER/TAB names (BUG#216-2 — hover is single-room,
+    // NOT the whole loupe neighbourhood; the multi-room loupe is for ZOOM only).
+    let curK = 1, curFocus = null, curMode = "rest", curSingleId = null;
 
     // the SOLVED render box for a POI's label, in viewBox units (what actually paints).
     // If a label was never solved (shouldn't happen for a present POI), skip it.
@@ -3379,14 +3460,67 @@ const LOUPE = (function(){
     }
     function overlapRect(a,b){ return a.x < b.x+b.w && b.x < a.x+a.w && a.y < b.y+b.h && b.y < a.y+a.h; }
 
+    /* the set of room labels to LIGHT right now:
+       · HOVER / TAB ("near") — exactly the ONE hovered room (BUG#216-2; the leader +
+         its single label, never the loupe neighbourhood).
+       · ZOOM ("zoom") — the loupe's multi-room declutter around the viewport centre,
+         a true level-of-detail neighbourhood (BUG#216-5).
+       · REST — nothing (only the district captions show).  */
+    function wantSet(){
+      // ZOOM mode: the loupe LOD neighbourhood, PLUS the one room under the cursor if
+      // it is currently hovered (so a hover while zoomed still guarantees that name).
+      if(curMode === "zoom"){
+        const set = revealedSet(curFocus, curK);
+        if(curSingleId && solvedBox(curSingleId) && set.indexOf(curSingleId) < 0) set.push(curSingleId);
+        return set;
+      }
+      // HOVER / TAB at rest: exactly the ONE hovered room (BUG#216-2).
+      if(curMode === "near"){
+        return (curSingleId && solvedBox(curSingleId)) ? [curSingleId] : [];
+      }
+      return [];
+    }
+
+    // BUG#216-4: a revealed label's TEXT is counter-scaled by 1/k about its SOLVED
+    // anchor, so it reads at a roughly CONSTANT screen size however far you zoom (the
+    // #roomlabels layer rides inside the scale(k) viewport). The leader stays anchored
+    // to its footprint. Counter-scaling shrinks the text strictly INSIDE its reserved
+    // SOLVED box, so the declutter (and Claim B, which reserves the full box) stays
+    // conservatively overlap-safe.
+    function scaleLabelText(wrap){
+      if(!wrap) return;
+      const lg = wrap.querySelector(".labeltext"); if(!lg) return;
+      const tx = parseFloat(wrap.dataset.tx), ty = parseFloat(wrap.dataset.ty);
+      if(!isFinite(tx) || !isFinite(ty)) return;
+      const inv = (curK > 1.0001) ? (1/curK) : 1;
+      // translate to the SOLVED anchor, then shrink about it (scale follows translate)
+      lg.setAttribute("transform", inv===1
+        ? `translate(${tx} ${ty})`
+        : `translate(${tx} ${ty}) scale(${inv.toFixed(4)})`);
+    }
+    // BUG#216-4: the engraved DISTRICT/WING captions also ride the scale(k) viewport, so
+    // counter-scale each by 1/k ABOUT its own anchor (x,y) when zoomed — keeping every
+    // text label a constant readable screen size, the way a real map's labels stay sized
+    // as you zoom. A null/0-opacity caption is skipped cheaply.
+    function scaleCaption(t){
+      if(!t) return;
+      const ax = parseFloat(t.dataset.ax), ay = parseFloat(t.dataset.ay);
+      if(!isFinite(ax) || !isFinite(ay)) return;
+      const inv = (curK > 1.0001) ? (1/curK) : 1;
+      t.setAttribute("transform", inv===1 ? "" :
+        `translate(${ax.toFixed(2)} ${ay.toFixed(2)}) scale(${inv.toFixed(4)}) translate(${(-ax).toFixed(2)} ${(-ay).toFixed(2)})`);
+    }
+
     let liveIds = new Set();
     function renderReveal(){
-      const want = new Set(revealedSet(curFocus, curK));
-      // turn OFF any no-longer-live labels
-      liveIds.forEach(id=>{ if(!want.has(id)){ const L = labelWrapFor(id); if(L) L.classList.remove("live"); } });
+      const want = new Set(wantSet());
+      // turn OFF any no-longer-live labels (restore their unscaled text transform)
+      liveIds.forEach(id=>{ if(!want.has(id)){ const L = labelWrapFor(id); if(L){ L.classList.remove("live"); scaleLabelText(L); } } });
       // turn ON the newly-live ones (geometry already SOLVED — just light them)
       want.forEach(id=>{ if(!liveIds.has(id)){ const L = labelWrapFor(id); if(L) L.classList.add("live"); } });
       liveIds = want;
+      // re-apply the 1/k counter-scale to every live label (k may have changed)
+      want.forEach(id=>{ scaleLabelText(labelWrapFor(id)); });
 
       // district captions fade BACK as their rooms name themselves (floored so a
       // district is never wholly anonymous), and restore when their rooms go dark.
@@ -3397,11 +3531,25 @@ const LOUPE = (function(){
         // fade in proportion to how many of the district's rooms are named, floored.
         const op = n ? Math.max(ZONE_FLOOR, ZONE_FULL - 0.16*n) : ZONE_FULL;
         t.style.opacity = op.toFixed(3);
+        scaleCaption(t);   // keep the district caption a constant screen size when zoomed
       });
 
-      // the loupe ring tracks the focus while detail is summoned
+      // BUG#216-5 — WING-LABEL LEVEL-OF-DETAIL: the wing sub-captions are dark at rest
+      // and fade in as you ZOOM into a district (WING_LOD_IN → WING_LOD_FULL). A
+      // district whose rooms are already naming themselves under the loupe lets its
+      // wing captions recede a touch (so room names dominate at close zoom).
+      const wingLOD = (curMode === "zoom" && curK > WING_LOD_IN)
+        ? Math.min(1, (curK - WING_LOD_IN) / (WING_LOD_FULL - WING_LOD_IN)) : 0;
+      WING_LABEL.forEach((arr, district)=>{
+        const named = namedByDistrict[district] || 0;
+        const op = WING_FULL_OP * wingLOD * (named ? 0.55 : 1);   // recede where rooms self-name
+        arr.forEach(t=>{ t.style.opacity = op.toFixed(3); scaleCaption(t); });
+      });
+
+      // the loupe ring tracks the focus while detail is summoned (zoom mode only —
+      // a single-room hover names its one room without drawing the loupe circle).
       if(loupeEl){
-        if(curFocus && want.size){
+        if(curMode === "zoom" && curFocus && want.size){
           loupeEl.setAttribute("cx", curFocus.x);
           loupeEl.setAttribute("cy", curFocus.y);
           loupeEl.setAttribute("r", (LOUPE_SCREEN/curK).toFixed(1));
@@ -3415,28 +3563,33 @@ const LOUPE = (function(){
       return roomlabels.querySelector('.labelgroup[data-id="'+CSS.escape(id)+'"]');
     }
 
-    /* HOVER / TAB-FOCUS near a POI → focus = that POI's centre (keep current zoom). */
+    /* HOVER / TAB-FOCUS over a POI names ONLY that ONE room (BUG#216-2). At rest this
+       is single-room mode; while zoomed it rides ON TOP of the zoom LOD (the room is
+       added to the loupe neighbourhood, never lost). */
     function revealNear(id){
       const p = poiById(id); if(!p) return;
-      const c = footCentre(p);
-      curFocus = { x:c.cx, y:c.cy };
-      curMode = "near";
+      curSingleId = id;
+      if(curK > 1.001){ curMode = "zoom"; }     // keep the LOD; wantSet() unions the room
+      else { curMode = "near"; curFocus = null; } // rest hover = exactly this room
       renderReveal();
     }
-    /* clear the hover/focus reveal (back to the resting captions-only layer), UNLESS
-       a zoom is currently holding a centre-focus open. */
+    /* clear the hover/focus reveal. At fit-view this drops back to the captions-only
+       rest layer; while zoomed, the zoom LOD stays (only the hovered single room
+       leaves the union). */
     function clearNear(){
-      if(curK > 1.001) return;   // a zoomed-in view keeps its centre-focus reveal
+      curSingleId = null;
+      if(curK > 1.001){ curMode = "zoom"; renderReveal(); return; }
       curFocus = null; curMode = "rest"; renderReveal();
     }
 
-    /* ZOOM drives the reveal: the viewport CENTRE becomes the focus; k drives the
-       declutter. Called by panZoom after every transform apply(). At fit-view (k≈1)
-       with no hover, detail rests (captions only). */
+    /* ZOOM drives the LEVEL-OF-DETAIL reveal: the viewport CENTRE becomes the focus and
+       k drives the declutter — room names + wing captions fade in WITHOUT a hover as
+       you zoom in, and fade back out as you zoom to fit (BUG#216-5). Called by panZoom
+       after every transform apply(). At fit-view (k≈1) with no hover, detail rests. */
     function setZoom(k, centreFocus){
       curK = k;
       if(k > 1.001){ curFocus = centreFocus || curFocus; curMode = "zoom"; }
-      else if(curMode === "zoom"){ curMode = "rest"; curFocus = null; }
+      else { curMode = curSingleId ? "near" : "rest"; curFocus = null; }
       renderReveal();
     }
 
