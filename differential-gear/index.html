@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Differential Gear · the gear that adds</title>
+<style>
+  :root{
+    --panel-bg: rgba(20,15,9,0.88);
+    --panel-edge: rgba(214,176,108,0.40);
+    --ink: #f0e2c4;
+    --ink-dim: #b8a172;
+    --accent: #e6bd6f;
+    --accent-soft: rgba(230,189,111,0.16);
+    --brass: #c9a24a;
+    --brass-lit: #f4d489;
+    --weld: #e5484d;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --bg: #0b0805;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; color:var(--ink); font-family:var(--font-ui);
+    background:#0b0805;
+    background:
+      radial-gradient(1200px 760px at 64% 16%, rgba(120,84,36,0.18), transparent 60%),
+      radial-gradient(900px 620px at 18% 92%, rgba(70,52,30,0.16), transparent 60%),
+      #0b0805;
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:flex-start;
+    justify-content:space-between; padding:14px 20px 0; pointer-events:none; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:3px; }
+  .back{ font:600 11px/1.35 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.22s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .back.sib{ text-transform:none; letter-spacing:.02em; opacity:.66; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1.35 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer;
+    color:var(--ink-dim); max-width:300px; text-align:right; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; }
+  #svg{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:grab; }
+  #svg.grabbing{ cursor:grabbing; }
+  .wsCue{ position:absolute; left:18px; bottom:14px; font:600 9.5px/1 var(--font-mono); letter-spacing:.18em;
+    text-transform:uppercase; color:rgba(184,161,114,0.5); pointer-events:none; }
+
+  #panel{ width:352px; flex:0 0 352px; height:100%; background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge); padding:62px 18px 26px;
+    box-shadow:-18px 0 50px rgba(0,0,0,0.5); z-index:20; overflow-y:auto; }
+  #panel .lede{ font-size:11.8px; color:var(--ink-dim); line-height:1.6; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 9px; border-top:1px solid rgba(214,176,108,0.18); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+
+  .presets{ display:grid; grid-template-columns:1fr; gap:7px; }
+  .preset{ font:600 11px/1.3 var(--font-ui); padding:10px 12px; border-radius:9px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; transition:.16s; text-align:left;
+    display:flex; align-items:baseline; gap:9px; }
+  .preset:hover{ border-color:var(--accent); color:var(--ink); }
+  .preset.on{ border-color:var(--accent); color:var(--ink); background:var(--accent-soft); }
+  .preset .g{ font-size:14px; color:var(--accent); width:16px; text-align:center; }
+  .preset b{ color:var(--ink); font-weight:600; }
+  .preset span{ display:block; font:9.5px/1.3 var(--font-mono); color:var(--ink-dim); letter-spacing:.01em; margin-top:2px; }
+
+  .toggles{ display:flex; gap:8px; flex-wrap:wrap; margin-top:2px; }
+  .toggle{ flex:1 1 auto; font:600 10.5px/1.2 var(--font-mono); letter-spacing:.04em; padding:9px 10px; border-radius:8px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; transition:.16s; text-align:center; }
+  .toggle:hover{ border-color:var(--accent); color:var(--ink); }
+  .toggle.on{ border-color:var(--accent); color:var(--ink); background:var(--accent-soft); }
+  .toggle.lock.on{ border-color:var(--weld); color:#f3b6ab; background:rgba(64,28,24,0.4); }
+
+  .facts{ margin-top:8px; font:11px/1.6 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  .facts .frow{ display:flex; justify-content:space-between; gap:10px; padding:2px 0; }
+  .facts .frow b{ color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums; }
+  .facts .frow.hero b{ color:var(--brass-lit); font-size:13px; }
+  .facts .frow.hero.broken b{ color:var(--weld); }
+  .facts .frow.hero.broken span{ color:#c98a7e; }
+
+  .regime{ margin-top:10px; padding:10px 12px; border-radius:9px; border:1px solid rgba(214,176,108,0.22);
+    background:rgba(0,0,0,0.3); font:11px/1.55 var(--font-mono); color:var(--ink-dim); }
+  .regime b{ color:var(--ink); }
+  .regime .glyph{ font-size:15px; color:var(--accent); margin-right:6px; }
+
+  .lockbox{ margin-top:10px; padding:10px 12px; border-radius:9px; display:none;
+    border:1px solid rgba(229,72,77,0.45); background:rgba(64,28,24,0.34); font:10.5px/1.55 var(--font-mono); color:#f3b6ab; }
+  .lockbox.show{ display:block; }
+  .lockbox b{ color:#ffd9d2; font-variant-numeric:tabular-nums; }
+
+  .foot{ margin-top:18px; font:10px/1.6 var(--font-mono); color:rgba(184,161,114,0.62); letter-spacing:.02em; }
+  .foot a{ color:var(--ink-dim); }
+  .scope{ margin-top:12px; padding-top:11px; border-top:1px solid rgba(214,176,108,0.16);
+    font:10px/1.6 var(--font-mono); color:rgba(184,161,114,0.78); letter-spacing:.01em; }
+  .claim{ margin-top:9px; font:10.5px/1.6 var(--font-mono); color:var(--ink-dim); }
+  .claim b{ color:var(--ink); }
+
+  @media (max-width:860px){
+    #wrap{ flex-direction:column; }
+    #panel{ width:100%; flex:0 0 auto; height:auto; max-height:46%; border-left:none;
+      border-top:1px solid var(--panel-edge); padding:14px 16px 22px; }
+    #stage{ flex:1 1 54%; }
+    .topbar{ flex-wrap:wrap; align-items:center; padding:10px 14px 9px; column-gap:10px; row-gap:6px;
+      background:linear-gradient(180deg, var(--bg) 64%, rgba(11,8,5,0) 100%); }
+    .backs{ flex:1 1 auto; }
+    .selftest{ order:2; flex:0 0 auto; max-width:50%; }
+    .brand{ order:3; flex:1 0 100%; }
+    .brand h1{ font-size:18px; }
+    .brand .tag{ display:none; }
+    #wrap{ padding-top:0; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="back" href="../reckoning/index.html">part of The Reckoning Cabinet &#8599;</a>
+      <a class="back sib" href="../slipstick/index.html">&#8617; The Slipstick · the gear that ADDS two lengths</a>
+    </div>
+    <div class="brand">
+      <h1>The Differential Gear</h1>
+      <span class="tag">crank two rims · the cage reads the average</span>
+    </div>
+    <div class="selftest" id="selftest" title="The gear proves its own claim — click to expand.">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <svg id="svg" viewBox="0 0 1000 720" preserveAspectRatio="xMidYMid meet" aria-label="A brass bevel-gear differential you crank by hand."></svg>
+      <div class="wsCue">The Reckoning Cabinet &middot; the gear that adds</div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede"><b>Crank the two rims by hand.</b> Grab a brass side-gear and spin it; grab the other and spin it
+        the other way. The single gold needle on the cage settles at the <b>angular midpoint</b> of the two &mdash;
+        the carrier turns at the <b>exact average</b> of the two inputs, with no arithmetic anywhere. Drop the
+        spider into a balance-beam picture and you can <i>see</i> why: its centre can only rest halfway.</p>
+
+      <div class="sect">Be shown each regime, then grab the wheels</div>
+      <div class="presets" id="presets">
+        <button class="preset" data-regime="together"><span class="g">&#8649;</span><b>Together</b>
+          <span>both rims one way, equal rate &middot; the cage carries the spider, no own-spin</span></button>
+        <button class="preset" data-regime="opposed"><span class="g">&#8646;</span><b>Opposed &mdash; the hero</b>
+          <span>equal &amp; opposite &middot; carrier DEAD STILL while the spider whirs &mdash; difference, zero average</span></button>
+        <button class="preset" data-regime="holdone"><span class="g">&#8867;</span><b>Hold one</b>
+          <span>pin the right rim, crank the left &middot; the needle lands at exactly half</span></button>
+      </div>
+
+      <div class="sect">Overlays</div>
+      <div class="toggles">
+        <button class="toggle" id="beamToggle">show the beam</button>
+        <button class="toggle lock" id="lockToggle">lock the differential</button>
+      </div>
+
+      <div class="regime" id="regimeBox"><span class="glyph" id="regimeGlyph">&#8226;</span><span id="regimeText">Crank a rim, or tap a regime above.</span></div>
+
+      <div class="lockbox" id="lockBox">
+        <b>DIFFERENTIAL LOCKED &mdash; NO LONGER ADDING.</b> The spider is welded to the cage; the needle has left
+        the half-sum. <br>avg law predicts <b id="lkPred">&mdash;</b> &middot; machine reads <b id="lkReads">&mdash;</b> &middot; GAP <b id="lkGap">&mdash;</b>
+      </div>
+
+      <div class="sect">What the cage reads</div>
+      <div class="facts">
+        <div class="frow"><span>left rim &theta;<sub>L</sub></span><b id="fThetaL">&mdash;</b></div>
+        <div class="frow"><span>right rim &theta;<sub>R</sub></span><b id="fThetaR">&mdash;</b></div>
+        <div class="frow hero" id="heroRow"><span>carrier &theta;<sub>C</sub> <span id="fThetaCeq">= &frac12;(&theta;<sub>L</sub>+&theta;<sub>R</sub>)</span></span><b id="fThetaC">&mdash;</b></div>
+        <div class="frow"><span>spider own-spin = &frac12;(&theta;<sub>L</sub>&minus;&theta;<sub>R</sub>)</span><b id="fSpider">&mdash;</b></div>
+      </div>
+
+      <p class="claim">For <b>equal-tooth</b> side gears the carrier turns at the <b>exact average</b> of the two inputs
+        &mdash; the Willis epicyclic law. Proven three ways so it isn&rsquo;t one formula checking itself: the carrier
+        equals the half-sum across a sweep, the three solve-directions cross-check, and the lock breaks it red.
+        Machine-exact (&lt;1e&minus;12).</p>
+
+      <p class="scope">This is the equal-tooth <b style="color:var(--ink-dim)">speed-average</b> only. A real car&rsquo;s open
+        differential uses equal teeth too, so the same law holds for its wheel speeds &mdash; but torque split,
+        limited-slip, Torsen worm gearing, and unequal-tooth planetaries are another story, and this bench does not
+        claim them.</p>
+
+      <div class="foot">A reckoning-wing bench &middot; kin to
+        <a href="../slipstick/index.html">The Slipstick</a> (adds two lengths) and
+        <a href="../cutting-gears/index.html">The Cutting Gears</a>. The carrier is a mechanical mean.</div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+/* =====================================================================================
+   THE LAW — inlined here byte-for-byte from core.mjs, between the SAME sentinels. This is
+   the estate idiom (cutting-gears / buffon / dissection all inline): the page is fully
+   self-contained and opens from file://, AND the thing the visitor cranks is provably the
+   SAME code core.test.mjs gates. Do NOT hand-edit a constant here — core.test.mjs's
+   byte-parity check fails the instant this slab drifts from core.mjs.
+   ===================================================================================== */
+// === DIFF-CORE BEGIN ===
+// Train values: e is the gear ratio taken RELATIVE TO THE CARRIER (Willis). A bevel
+// differential with equal-tooth side gears has e = −1 (FREE — the gear adds); welding
+// the spider to the cage forces e = +1 (LOCKED — a rigid body, no longer adding).
+const E_FREE = -1;
+const E_LOCKED = +1;
+
+// Willis solved for the carrier: e = (ωR − ωc)/(ωL − ωc)  ⇒  ωc = (ωR − e·ωL)/(1 − e).
+// At e = −1 this is exactly ½(ωL + ωR) — the equal-tooth speed-average.
+function carrierFromSuns(wL, wR, e = E_FREE) {
+  return (wR - e * wL) / (1 - e);
+}
+// The same Willis relation solved for each sun in turn — used to cross-check the
+// carrier three ways by back-substitution (no direction is privileged).
+function sunRfromCarrierSunL(wc, wL, e = E_FREE) {
+  return e * (wL - wc) + wc;
+}
+function sunLfromCarrierSunR(wc, wR, e = E_FREE) {
+  return (wR - wc) / e + wc;
+}
+// The spider's OWN spin (relative to the cage) is the half-DIFFERENCE — pure
+// differential rotation, the part with zero average. k (radius ratio) only scales
+// this whir; it never touches the carrier average, which is k-independent.
+function spiderSpin(wL, wR) {
+  return 0.5 * (wL - wR);
+}
+// The plain arithmetic mean, named so the page can compare the geared answer to it.
+function halfSum(wL, wR) {
+  return 0.5 * (wL + wR);
+}
+// THE LOCK (negative control): welding the spider to the cage yokes the shafts into a
+// rigid body — the ONLY consistent motion is ωL = ωR = ωc. If the two demands disagree
+// there is NO rigid solution, so the model returns NaN: the math itself says "no
+// solution", which is exactly why the locked machine can no longer realise the average.
+function carrierLocked(wL, wR) {
+  return Math.abs(wL - wR) > 1e-12 ? NaN : wL;
+}
+// === DIFF-CORE END ===
+
+// The SOLE oracle. Six checks; both the in-page pill and the Node twin call THIS.
+// Each check is { name, pass, info }; returns { checks, passed, total, ok }.
+function runSelfTest() {
+  const checks = [];
+  const log = (name, pass, info) => checks.push({ name, pass, info });
+  const EPS = 1e-12;
+
+  // (1) The carrier (Willis, e=−1) equals the plain half-sum across a dense sweep.
+  {
+    let maxErr = 0, n = 0;
+    for (let i = 0; i < 4000; i++) {
+      const wL = Math.sin(i * 0.013) * 1000 + (i - 2000) * 0.7;
+      const wR = Math.cos(i * 0.017) * 800 - (i - 2000) * 0.5;
+      const wc = carrierFromSuns(wL, wR);
+      maxErr = Math.max(maxErr, Math.abs(wc - halfSum(wL, wR)));
+      n++;
+    }
+    log('1 · carrier(e=−1) == ½(ωL+ωR) across a 4000-pt sweep',
+      maxErr < EPS, 'max|Δ|=' + maxErr.toExponential(2) + ' over ' + n + ' pts');
+  }
+
+  // (2) The three Willis directions cross-check by back-substitution round-trip.
+  //     Solve carrier from the suns, then re-derive each sun from the carrier + the
+  //     other sun; the recovered suns must match the originals to machine-ε.
+  {
+    let maxErr = 0, n = 0;
+    for (let i = 0; i < 4000; i++) {
+      const wL = Math.sin(i * 0.021) * 600 + 13;
+      const wR = Math.cos(i * 0.009) * 540 - 7;
+      const wc = carrierFromSuns(wL, wR);
+      const wRback = sunRfromCarrierSunL(wc, wL);
+      const wLback = sunLfromCarrierSunR(wc, wR);
+      maxErr = Math.max(maxErr, Math.abs(wRback - wR), Math.abs(wLback - wL));
+      n++;
+    }
+    log('2 · three Willis directions agree (back-substitution round-trip)',
+      maxErr < EPS, 'max|Δ|=' + maxErr.toExponential(2) + ' over ' + n + ' pts');
+  }
+
+  // (3) The three felt regimes are EXACT.
+  {
+    const a = carrierFromSuns(5, 5);    // same way, equal rate → carrier 5
+    const b = carrierFromSuns(5, -5);   // opposite, equal rate → carrier DEAD STILL (0)
+    const c = carrierFromSuns(0, 8);    // hold one → exactly half (4)
+    const ok = a === 5 && b === 0 && c === 4;
+    log('3 · the three regimes EXACT: (5,5)→5 · (5,−5)→0 · (0,8)→4',
+      ok, '(5,5)=' + a + ' (5,−5)=' + b + ' (0,8)=' + c);
+  }
+
+  // (4) The spider's own spin is the half-difference.
+  {
+    let maxErr = 0;
+    for (let i = 0; i < 2000; i++) {
+      const wL = Math.sin(i * 0.031) * 300, wR = Math.cos(i * 0.027) * 270;
+      maxErr = Math.max(maxErr, Math.abs(spiderSpin(wL, wR) - 0.5 * (wL - wR)));
+    }
+    log('4 · spider own-spin == ½(ωL−ωR) (pure differential, zero average)',
+      maxErr < EPS, 'max|Δ|=' + maxErr.toExponential(2));
+  }
+
+  // (5) NEGATIVE CONTROL — the LOCK breaks the half-sum AND jams (NaN) on every
+  //     unequal demand. Equal demands pass through (rigid body still turns).
+  {
+    let breaks = 0, jams = 0, total = 0, equalsOk = true;
+    for (let i = 0; i < 1000; i++) {
+      const wL = Math.sin(i * 0.05) * 50 + 1, wR = Math.cos(i * 0.07) * 50 - 1;
+      total++;
+      const locked = carrierLocked(wL, wR);
+      const free = carrierFromSuns(wL, wR);
+      if (Number.isNaN(locked)) jams++;                 // no rigid solution
+      if (Number.isNaN(locked) || Math.abs(locked - free) > EPS) breaks++; // not the half-sum
+    }
+    // and a genuinely equal demand still resolves to the shared rate (not jammed)
+    for (const v of [0, 3.5, -12, 1000]) if (carrierLocked(v, v) !== v) equalsOk = false;
+    const ok = breaks === total && jams === total && equalsOk;
+    log('5 · NEG-CONTROL: lock breaks the half-sum AND jams (NaN) on every unequal demand',
+      ok, 'breaks ' + breaks + '/' + total + ' · jams ' + jams + '/' + total + ' · equal-demand passes ' + equalsOk);
+  }
+
+  // (6) TAMPER — a perturbed train value e=−0.9 (as if the side teeth were unequal)
+  //     diverges measurably from the equal-tooth half-sum. The law is specific to e=−1.
+  {
+    let maxDiff = 0, n = 0;
+    for (let i = 0; i < 2000; i++) {
+      const wL = Math.sin(i * 0.019) * 400 + 5, wR = Math.cos(i * 0.023) * 360 - 3;
+      const tampered = carrierFromSuns(wL, wR, -0.9);
+      maxDiff = Math.max(maxDiff, Math.abs(tampered - halfSum(wL, wR)));
+      n++;
+    }
+    log('6 · TAMPER: a perturbed e=−0.9 diverges from the half-sum (law is e=−1 only)',
+      maxDiff > 1e-3, 'max|Δ|=' + maxDiff.toExponential(2) + ' over ' + n + ' pts');
+  }
+
+  const passed = checks.filter(c => c.pass).length;
+  return { checks, passed, total: checks.length, ok: passed === checks.length };
+}
+
+/* expose the law on a public handle so the page is re-auditable from the console. */
+window.__differentialGear = {
+  E_FREE, E_LOCKED, carrierFromSuns, sunRfromCarrierSunL, sunLfromCarrierSunR,
+  spiderSpin, halfSum, carrierLocked, runSelfTest
+};
+
+/* =====================================================================================
+   GEOMETRY — one horizontal main axle in an isometric brass world. The two sun bevels
+   sit at xL and xR, cones pointing inward, EQUAL TEETH (the equal-tooth assumption is
+   what makes the displayed law k-independent — k only scales the spider whir). The
+   carrier CAGE straddles centre and rotates about the main axle; a cross-pin carries the
+   floating SPIDER PINION (axis vertical) meshing both suns.
+   ===================================================================================== */
+const SVG = "http://www.w3.org/2000/svg";
+const svg = document.getElementById('svg');
+
+// iso projection: flatten the Y of circular rims so they read as ellipses on the axle.
+const ISO = 0.46;                 // vertical foreshorten of the sun-rim ellipses
+const CY  = 372;                  // main-axle screen Y
+const XL  = 312, XR  = 688;       // sun-bevel centres
+const XC  = (XL + XR) / 2;        // carrier hub
+const RSUN = 124;                 // sun pitch radius (screen px, pre-iso)
+const TEETH = 18;                 // equal tooth count on each sun (readable, not photoreal)
+const RSPIDER = 56;               // spider pinion radius
+const K = 1.0;                    // radius ratio (equal-tooth ⇒ k only scales whir)
+
+// State the page owns. θC and φ_spider are ALWAYS DERIVED via the core, never stored.
+const state = {
+  thetaL: 0, thetaR: 0,           // input shaft angles (radians, accumulate freely)
+  vL: 0, vR: 0,                   // flywheel angular velocities (rad/s) for coast
+  locked: false,
+  beam: false,
+  dragging: null,                 // 'L' | 'R' | null
+  dragLastAngle: 0,
+  dragLastT: 0,
+  regime: null,
+  reduced: !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+};
+
+// DERIVED, via the core only — the interaction never computes the average itself.
+function thetaC(){
+  return state.locked ? state.thetaL : carrierFromSuns(state.thetaL, state.thetaR);
+}
+function phiSpider(){ return K * spiderSpin(state.thetaL, state.thetaR); }
+
+/* engineState() — the ONLY physics the overlays may read. The beam + lock-gap own no
+   maths of their own; they read this + the screen-pixel tick positions below. */
+function engineState(){
+  return {
+    wL: state.thetaL, wR: state.thetaR,
+    wc: state.locked ? carrierLocked(state.thetaL, state.thetaR) : carrierFromSuns(state.thetaL, state.thetaR),
+    wcLaw: carrierFromSuns(state.thetaL, state.thetaR),         // the FREE law's prediction (ghost)
+    spiderSpin: state.locked ? 0 : phiSpider()
+  };
+}
+
+// ── helpers ──
+function el(tag, attrs){ const n = document.createElementNS(SVG, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); return n; }
+function clear(node){ while (node.firstChild) node.removeChild(node.firstChild); }
+// the screen position of a tick at angle θ on the rim centred (cx,CY), radius r, iso-flat.
+function tickPos(cx, theta, r){ return { x: cx + Math.cos(theta) * r, y: CY + Math.sin(theta) * r * ISO }; }
+
+/* =====================================================================================
+   RENDER — a static brass scene group + a live group redrawn each frame. We pre-build the
+   instrument frame once and only update the rotating parts + needles + overlays per frame.
+   ===================================================================================== */
+const defs = el('defs', {});
+defs.innerHTML =
+  '<radialGradient id="brassFace" cx="38%" cy="32%" r="78%">' +
+    '<stop offset="0%" stop-color="#f6dc97"/><stop offset="46%" stop-color="#c9a24a"/>' +
+    '<stop offset="100%" stop-color="#6e521f"/></radialGradient>' +
+  '<radialGradient id="cageFace" cx="40%" cy="34%" r="80%">' +
+    '<stop offset="0%" stop-color="#e7c878"/><stop offset="55%" stop-color="#a9852f"/>' +
+    '<stop offset="100%" stop-color="#5b431b"/></radialGradient>' +
+  '<linearGradient id="axleGrad" x1="0" y1="0" x2="0" y2="1">' +
+    '<stop offset="0%" stop-color="#e8cd86"/><stop offset="50%" stop-color="#a07e34"/>' +
+    '<stop offset="100%" stop-color="#5a431c"/></linearGradient>' +
+  '<filter id="drop" x="-30%" y="-30%" width="160%" height="160%">' +
+    '<feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#000" flood-opacity="0.55"/></filter>' +
+  '<radialGradient id="restHalo" cx="50%" cy="50%" r="50%">' +
+    '<stop offset="0%" stop-color="#86d39a" stop-opacity="0.32"/>' +
+    '<stop offset="70%" stop-color="#86d39a" stop-opacity="0.08"/>' +
+    '<stop offset="100%" stop-color="#86d39a" stop-opacity="0"/></radialGradient>';
+svg.appendChild(defs);
+
+const scene = el('g', { filter: 'url(#drop)' });     // the whole instrument (drop-shadow like abacus #frame)
+svg.appendChild(scene);
+const gStatic = el('g', {}); scene.appendChild(gStatic);
+const gLive   = el('g', {}); scene.appendChild(gLive);
+const gOverlay = el('g', {}); svg.appendChild(gOverlay);   // beam overlay in SCREEN space (not shadowed)
+
+// ── the static frame: the main axle, the two ring-dials, side labels ──
+function buildStatic(){
+  clear(gStatic);
+  // main horizontal axle
+  gStatic.appendChild(el('rect', { x: XL - 20, y: CY - 7, width: XR - XL + 40, height: 14, rx: 7, fill: 'url(#axleGrad)', stroke: '#3c2d12', 'stroke-width': 1 }));
+  // engraved ring-dials behind each sun (gold ticks every 30°)
+  for (const cx of [XL, XR]){
+    gStatic.appendChild(el('ellipse', { cx, cy: CY, rx: RSUN + 16, ry: (RSUN + 16) * ISO, fill: 'none', stroke: 'rgba(214,176,108,0.30)', 'stroke-width': 1.4 }));
+    for (let t = 0; t < 24; t++){
+      const a = t / 24 * Math.PI * 2;
+      const p1 = tickPos(cx, a, RSUN + 9), p2 = tickPos(cx, a, RSUN + 16);
+      gStatic.appendChild(el('line', { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, stroke: t % 2 ? 'rgba(214,176,108,0.22)' : 'rgba(214,176,108,0.5)', 'stroke-width': t % 2 ? 1 : 1.6 }));
+    }
+  }
+  // side nameplates
+  const lab = (x, txt) => { const t = el('text', { x, y: CY + RSUN * ISO + 50, fill: 'rgba(214,176,108,0.7)', 'font-family': 'var(--font-mono)', 'font-size': 13, 'font-weight': 600, 'text-anchor': 'middle', 'letter-spacing': '0.14em' }); t.textContent = txt; gStatic.appendChild(t); };
+  lab(XL, 'LEFT  RIM');
+  lab(XR, 'RIGHT  RIM');
+  const cg = el('text', { x: XC, y: CY - RSUN * ISO - 84, fill: 'rgba(244,212,137,0.85)', 'font-family': 'var(--font-mono)', 'font-size': 12, 'font-weight': 600, 'text-anchor': 'middle', 'letter-spacing': '0.14em' }); cg.textContent = 'CARRIER  CAGE'; gStatic.appendChild(cg);
+}
+
+// a bevel sun gear drawn as an iso-ellipse face with short radial machined teeth + a hub needle.
+function drawSun(cx, theta, opts){
+  const g = el('g', {});
+  // teeth: short radial strokes around the rim, rotating with θ
+  for (let i = 0; i < TEETH; i++){
+    const a = theta + i / TEETH * Math.PI * 2;
+    const p1 = tickPos(cx, a, RSUN), p2 = tickPos(cx, a, RSUN + 13);
+    g.appendChild(el('line', { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, stroke: '#3c2d12', 'stroke-width': 3, 'stroke-linecap': 'round' }));
+    g.appendChild(el('line', { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, stroke: '#e8cd86', 'stroke-width': 1.4, 'stroke-linecap': 'round' }));
+  }
+  // face
+  g.appendChild(el('ellipse', { cx, cy: CY, rx: RSUN, ry: RSUN * ISO, fill: 'url(#brassFace)', stroke: '#3c2d12', 'stroke-width': 1.6 }));
+  // inner cone ring (the bevel)
+  g.appendChild(el('ellipse', { cx, cy: CY, rx: RSUN * 0.58, ry: RSUN * 0.58 * ISO, fill: 'none', stroke: 'rgba(60,45,18,0.6)', 'stroke-width': 2 }));
+  // hub
+  g.appendChild(el('ellipse', { cx, cy: CY, rx: 13, ry: 13 * ISO + 3, fill: '#5b431b', stroke: '#e8cd86', 'stroke-width': 1.2 }));
+  // the GOLD tick-needle reading this rim's angle
+  const tip = tickPos(cx, theta, RSUN - 6);
+  g.appendChild(el('line', { x1: cx, y1: CY, x2: tip.x, y2: tip.y, stroke: opts.lit ? '#f4d489' : '#e6bd6f', 'stroke-width': 3.4, 'stroke-linecap': 'round' }));
+  g.appendChild(el('circle', { cx: tip.x, cy: tip.y, r: 4.6, fill: '#f4d489', stroke: '#5b431b', 'stroke-width': 1 }));
+  // a painted reference notch on the rim so spin is legible even at a glance
+  const notch = tickPos(cx, theta, RSUN * 0.78);
+  g.appendChild(el('circle', { cx: notch.x, cy: notch.y, r: 5, fill: '#0b0805', stroke: '#e8cd86', 'stroke-width': 1.6 }));
+  return g;
+}
+
+// the carrier cage: an arm from the hub out to the spider pin, rotating at θC about the axle.
+function drawCage(tc, locked){
+  const g = el('g', {});
+  const spiderAngle = tc;                              // the cross-pin orbits at the carrier angle
+  // the cage straddle bars (two arcs around centre)
+  g.appendChild(el('ellipse', { cx: XC, cy: CY, rx: 92, ry: 92 * ISO, fill: 'none', stroke: 'rgba(169,133,47,0.55)', 'stroke-width': 8 }));
+  g.appendChild(el('ellipse', { cx: XC, cy: CY, rx: 92, ry: 92 * ISO, fill: 'none', stroke: '#e7c878', 'stroke-width': 2 }));
+  // cage hub on the axle
+  g.appendChild(el('ellipse', { cx: XC, cy: CY, rx: 17, ry: 17 * ISO + 4, fill: 'url(#cageFace)', stroke: '#3c2d12', 'stroke-width': 1.6 }));
+  // the carrier arm out to the spider pin
+  const pin = tickPos(XC, spiderAngle, 92);
+  g.appendChild(el('line', { x1: XC, y1: CY, x2: pin.x, y2: pin.y, stroke: '#c9a24a', 'stroke-width': 7, 'stroke-linecap': 'round' }));
+  g.appendChild(el('line', { x1: XC, y1: CY, x2: pin.x, y2: pin.y, stroke: '#f4d489', 'stroke-width': 2, 'stroke-linecap': 'round' }));
+  return { g, pin, spiderAngle };
+}
+
+// the floating spider pinion at the pin, axis vertical, with its own-spin notch + (locked) weld bead.
+function drawSpider(pin, phi, locked){
+  const g = el('g', {});
+  // pinion body (vertical axis ⇒ a near-circle, lightly flattened)
+  g.appendChild(el('circle', { cx: pin.x, cy: pin.y, r: RSPIDER * 0.5, fill: 'url(#cageFace)', stroke: '#3c2d12', 'stroke-width': 1.6 }));
+  // short machined teeth around it
+  const nT = 10;
+  for (let i = 0; i < nT; i++){
+    const a = phi + i / nT * Math.PI * 2;
+    const r0 = RSPIDER * 0.5, r1 = RSPIDER * 0.5 + 7;
+    g.appendChild(el('line', { x1: pin.x + Math.cos(a) * r0, y1: pin.y + Math.sin(a) * r0, x2: pin.x + Math.cos(a) * r1, y2: pin.y + Math.sin(a) * r1, stroke: '#e8cd86', 'stroke-width': 1.6, 'stroke-linecap': 'round' }));
+  }
+  // the spider's OWN-SPIN notch (greyed + frozen when locked)
+  const np = { x: pin.x + Math.cos(phi) * RSPIDER * 0.34, y: pin.y + Math.sin(phi) * RSPIDER * 0.34 };
+  g.appendChild(el('circle', { cx: np.x, cy: np.y, r: 5, fill: locked ? '#5b5238' : '#f4d489', stroke: '#0b0805', 'stroke-width': 1.4 }));
+  // own-spin needle from pin centre
+  g.appendChild(el('line', { x1: pin.x, y1: pin.y, x2: np.x, y2: np.y, stroke: locked ? '#6b6244' : '#f4d489', 'stroke-width': 2.4, 'stroke-linecap': 'round' }));
+  if (locked){
+    // dog-clutch pin + red weld bead tying the pinion to the cage
+    g.appendChild(el('circle', { cx: pin.x, cy: pin.y, r: RSPIDER * 0.5 + 4, fill: 'none', stroke: 'var(--weld)', 'stroke-width': 2.4, 'stroke-dasharray': '3 4' }));
+    g.appendChild(el('circle', { cx: pin.x, cy: pin.y, r: 7, fill: 'var(--weld)', stroke: '#7a1f22', 'stroke-width': 1.4 }));
+  }
+  return g;
+}
+
+function render(){
+  clear(gLive);
+  const tc = thetaC();
+  const phi = phiSpider();
+
+  // (b) opposite-equal hero: carrier velocity ~0 → a faint settled "rest" halo so the
+  // frozen carrier reads as CORRECT stillness, not a hang.
+  const carrierStill = !state.locked && Math.abs(state.vL + state.vR) < 0.03
+    && (Math.abs(state.vL) > 0.05 || Math.abs(state.vR) > 0.05);
+  if (carrierStill){
+    gLive.appendChild(el('circle', { cx: XC, cy: CY, r: 120, fill: 'url(#restHalo)' }));
+  }
+
+  // suns (lit if currently being dragged)
+  gLive.appendChild(drawSun(XL, state.thetaL, { lit: state.dragging === 'L' }));
+  gLive.appendChild(drawSun(XR, state.thetaR, { lit: state.dragging === 'R' }));
+
+  // carrier cage + the floating spider on its pin
+  const cage = drawCage(tc, state.locked);
+  gLive.appendChild(cage.g);
+  gLive.appendChild(drawSpider(cage.pin, phi, state.locked));
+
+  // THE CARRIER NEEDLE — one gold needle on the cage hub reading θC (the hero pose).
+  const cn = tickPos(XC, tc, 150);
+  gLive.appendChild(el('line', { x1: XC, y1: CY, x2: cn.x, y2: cn.y, stroke: state.locked ? '#e5484d' : '#f4d489', 'stroke-width': 4.4, 'stroke-linecap': 'round' }));
+  gLive.appendChild(el('circle', { cx: cn.x, cy: cn.y, r: 7, fill: state.locked ? '#e5484d' : '#f4d489', stroke: '#5b431b', 'stroke-width': 1.4 }));
+
+  // hit-targets for the two shafts (invisible, generous) — declared as data-shaft groups.
+  const hitL = el('circle', { cx: XL, cy: CY, r: RSUN + 18, fill: 'transparent', 'data-shaft': 'L', style: 'cursor:grab' });
+  const hitR = el('circle', { cx: XR, cy: CY, r: RSUN + 18, fill: 'transparent', 'data-shaft': 'R', style: 'cursor:grab' });
+  gLive.appendChild(hitL); gLive.appendChild(hitR);
+
+  drawOverlay(tc);
+}
+
+/* =====================================================================================
+   BALANCE-BEAM OVERLAY — the why-it's-true picture. A faint horizontal GUIDE RAIL whose
+   two ends are pinned to the two carrier-needle endpoints... no: per spec, pinned to the
+   two INPUT-dial ticks (screen px), with a brass BUBBLE riding it at the geometric
+   midpoint (x_L+x_R)/2 in SCREEN space — never a printed number. The bubble is rigidly
+   tied to the carrier needle's value. Because the spider meshes BOTH suns its centre can
+   only rest at the midpoint, so the bubble is ALWAYS exactly halfway. Tie-lines from each
+   input tick to the carrier tick make the halfway parking unmissable.
+   ===================================================================================== */
+function drawOverlay(tc){
+  clear(gOverlay);
+  if (!state.beam) return;
+  const es = engineState();
+  // the two input-dial ticks (screen px) and the carrier tick — read from engineState only.
+  const tickL = tickPos(XL, es.wL, RSUN - 6);
+  const tickR = tickPos(XR, es.wR, RSUN - 6);
+  const tickC = tickPos(XC, tc, 150);
+  // guide rail pinned end-to-end between the two input ticks
+  gOverlay.appendChild(el('line', { x1: tickL.x, y1: tickL.y, x2: tickR.x, y2: tickR.y, stroke: 'rgba(214,176,108,0.5)', 'stroke-width': 2, 'stroke-dasharray': '2 5' }));
+  // tie-lines from each input tick to the carrier tick (the discoverability still)
+  gOverlay.appendChild(el('line', { x1: tickL.x, y1: tickL.y, x2: tickC.x, y2: tickC.y, stroke: 'rgba(134,211,154,0.5)', 'stroke-width': 1.4, 'stroke-dasharray': '4 4' }));
+  gOverlay.appendChild(el('line', { x1: tickR.x, y1: tickR.y, x2: tickC.x, y2: tickC.y, stroke: 'rgba(134,211,154,0.5)', 'stroke-width': 1.4, 'stroke-dasharray': '4 4' }));
+  // the BUBBLE at the geometric midpoint of the two input ticks (screen space)
+  const bx = (tickL.x + tickR.x) / 2, by = (tickL.y + tickR.y) / 2;
+  // under lock, the FREE law's ghost bubble stays at the midpoint; the rigid needle leaves it.
+  gOverlay.appendChild(el('circle', { cx: bx, cy: by, r: 11, fill: state.locked ? 'rgba(134,211,154,0.14)' : 'rgba(134,211,154,0.28)', stroke: state.locked ? 'rgba(134,211,154,0.5)' : '#86d39a', 'stroke-width': 2, 'stroke-dasharray': state.locked ? '3 3' : 'none' }));
+  gOverlay.appendChild(el('circle', { cx: bx, cy: by, r: 3, fill: '#86d39a' }));
+  // a tie from the bubble to the carrier needle endpoint (rigid tie when free; the GAP when locked)
+  if (state.locked){
+    gOverlay.appendChild(el('line', { x1: bx, y1: by, x2: tickC.x, y2: tickC.y, stroke: 'var(--weld)', 'stroke-width': 2.2 }));
+    const mid = { x: (bx + tickC.x) / 2, y: (by + tickC.y) / 2 - 8 };
+    const t = el('text', { x: mid.x, y: mid.y, fill: '#f3b6ab', 'font-family': 'var(--font-mono)', 'font-size': 11, 'font-weight': 600, 'text-anchor': 'middle' }); t.textContent = 'GAP'; gOverlay.appendChild(t);
+  } else {
+    gOverlay.appendChild(el('line', { x1: bx, y1: by, x2: tickC.x, y2: tickC.y, stroke: 'rgba(134,211,154,0.7)', 'stroke-width': 1.4 }));
+  }
+  // the quiet lede line under the rail
+  const t = el('text', { x: XC, y: CY + 210, fill: 'rgba(184,161,114,0.82)', 'font-family': 'var(--font-mono)', 'font-size': 11.5, 'text-anchor': 'middle' });
+  t.textContent = 'the spider rolls until it sits at the middle — its centre can only rest at the average';
+  gOverlay.appendChild(t);
+}
+
+/* =====================================================================================
+   INTERACTION — drag-to-crank (the abacus pointer-capture idiom). Each sun is a hit-target;
+   on pointerdown we capture, then on pointermove the DELTA of atan2 (with the ±π unwrap)
+   drives that shaft's θ so a full hand-spin accumulates continuously. recompute() goes
+   through the core (carrierFromSuns) — the interaction NEVER computes the average itself.
+   ===================================================================================== */
+function angleAt(cx, ev){
+  const r = svg.getBoundingClientRect();
+  const sx = (ev.clientX - r.left) / r.width * 1000;
+  const sy = (ev.clientY - r.top) / r.height * 720;
+  // iso-foreshortened: divide the y-offset back out so atan2 reads the true rim angle.
+  return Math.atan2((sy - CY) / ISO, sx - cx);
+}
+svg.addEventListener('pointerdown', (ev) => {
+  const target = ev.target;
+  const shaft = target && target.getAttribute && target.getAttribute('data-shaft');
+  if (!shaft) return;
+  state.dragging = shaft;
+  state.userTouched = true;
+  state.regime = null;
+  svg.classList.add('grabbing');
+  svg.setPointerCapture(ev.pointerId);
+  const cx = shaft === 'L' ? XL : XR;
+  state.dragLastAngle = angleAt(cx, ev);
+  state.dragLastT = performance.now();
+  // stop the coast on whichever shaft the hand has grabbed (both, under lock)
+  if (shaft === 'L' || state.locked) state.vL = 0;
+  if (shaft === 'R' || state.locked) state.vR = 0;
+  ev.preventDefault();
+});
+svg.addEventListener('pointermove', (ev) => {
+  if (!state.dragging) return;
+  const shaft = state.dragging;
+  const cx = shaft === 'L' ? XL : XR;
+  const a = angleAt(cx, ev);
+  let d = a - state.dragLastAngle;
+  if (d > Math.PI) d -= 2 * Math.PI;        // ±π UNWRAP so a full hand-spin accumulates
+  if (d < -Math.PI) d += 2 * Math.PI;
+  const now = performance.now();
+  const dt = Math.max(1, now - state.dragLastT) / 1000;
+  if (state.locked){
+    // rigid body: cranking adds the SAME delta to both rims, preserving their frozen
+    // offset. The machine still turns; but ½(θL+θR) — the law's prediction — now drifts
+    // with them, so the GAP to the rigid reading stays open (carrierLocked says NaN).
+    state.thetaL += d; state.thetaR += d; state.vL = state.vR = d / dt;
+  } else if (shaft === 'L'){ state.thetaL += d; state.vL = d / dt; }
+  else { state.thetaR += d; state.vR = d / dt; }
+  state.dragLastAngle = a;
+  state.dragLastT = now;
+  updatePanel();
+});
+function endDrag(ev){
+  if (!state.dragging) return;
+  state.dragging = null;
+  svg.classList.remove('grabbing');
+  try { svg.releasePointerCapture(ev.pointerId); } catch (e) {}
+  updatePanel();
+}
+svg.addEventListener('pointerup', endDrag);
+svg.addEventListener('pointercancel', endDrag);
+
+/* =====================================================================================
+   PRESET LEVERS — set the canonical flywheel pair on tap (the on-ramp). They fling the
+   wheels; the SINGLE rAF loop coasts them. "Opposite" holds the carrier still hands-free.
+   ===================================================================================== */
+const PRESETS = {
+  together: { vL: 2.0,  vR: 2.0,  glyph: '⇉', name: 'Together',
+    text: 'Both rims one way at equal rate. The cage carries the spider bodily — the spider’s own-spin notch stays fixed relative to the cage. Carried, not spun.' },
+  opposed:  { vL: 2.0,  vR: -2.0, glyph: '⇄', name: 'Opposite — the hero',
+    text: 'Equal and opposite. The carrier needle is DEAD STILL (its rest halo glows) while the spider whirs — the difference made pure spin, with exactly zero average.' },
+  holdone:  { vL: 0.0,  vR: 0.0,  glyph: '⊣', name: 'Hold one',
+    text: 'Pin the right rim and crank the left. Drag the left a quarter turn and the carrier needle lands on the eighth-turn mark — exactly half.' }
+};
+function setRegime(key){
+  const p = PRESETS[key];
+  if (!p) return;
+  state.userTouched = true;
+  if (key === 'holdone'){
+    // a discrete demonstration: pin R, advance L a quarter turn so the needle lands at θ/8.
+    state.vL = 0; state.vR = 0;
+    state.thetaR = 0;
+    state.thetaL += Math.PI / 2;          // a quarter turn on L
+  } else {
+    state.vL = p.vL; state.vR = p.vR;
+  }
+  state.regime = key;
+  document.querySelectorAll('.preset').forEach(b => b.classList.toggle('on', b.dataset.regime === key));
+  updatePanel();
+}
+document.querySelectorAll('.preset').forEach(b => b.addEventListener('click', () => setRegime(b.dataset.regime)));
+
+/* =====================================================================================
+   THE LOCK NEG-CONTROL + the beam toggle.
+   ===================================================================================== */
+const lockToggle = document.getElementById('lockToggle');
+const beamToggle = document.getElementById('beamToggle');
+lockToggle.addEventListener('click', () => {
+  state.locked = !state.locked;
+  lockToggle.classList.toggle('on', state.locked);
+  lockToggle.textContent = state.locked ? 'unlock the differential' : 'lock the differential';
+  if (state.locked){
+    // engaging the weld FREEZES the rims where they are — it does NOT equalize them.
+    // Going forward the rigid body turns both by the same delta, so the frozen offset
+    // (θL−θR) holds and the law's ghost prediction ½(θL+θR) stays a fixed GAP away from
+    // the rigid reading θL. The shafts coast together at the shared velocity.
+    state.vR = state.vL = 0.5 * (state.vL + state.vR);
+  }
+  updatePanel();
+});
+beamToggle.addEventListener('click', () => {
+  state.beam = !state.beam;
+  beamToggle.classList.toggle('on', state.beam);
+  drawOverlay(thetaC());
+});
+
+/* =====================================================================================
+   PANEL READOUTS + the live regime legend.
+   ===================================================================================== */
+const TAU = Math.PI * 2;
+const turns = (rad) => (rad / TAU).toFixed(3) + ' turns';
+function classifyRegime(){
+  // legend lights the regime you're CURRENTLY in, by the live velocities.
+  const sumV = state.vL + state.vR, difV = state.vL - state.vR;
+  const moving = Math.abs(state.vL) > 0.08 || Math.abs(state.vR) > 0.08;
+  if (state.locked) return { glyph: '⊗', text: 'LOCKED — the rims are yoked into one rigid body. Crank either and both turn together; the carrier no longer averages.' };
+  if (!moving) return { glyph: '•', text: 'Crank a rim, or tap a regime above. The cage needle parks at the midpoint of the two rims.' };
+  if (Math.abs(sumV) < 0.18 && Math.abs(difV) > 0.4) return { glyph: '⇄', text: 'OPPOSITE — carrier dead still, spider whirring. Pure difference, zero average. The hero pose.' };
+  if (Math.abs(difV) < 0.18) return { glyph: '⇉', text: 'TOGETHER — both rims one way; the cage carries the spider, no own-spin.' };
+  if (Math.abs(state.vL) < 0.08 || Math.abs(state.vR) < 0.08) return { glyph: '⊣', text: 'HOLD ONE — one rim pinned; the carrier reads exactly half the moving rim.' };
+  return { glyph: '⊕', text: 'ADDING — the carrier is tracking the exact average of the two rims.' };
+}
+function updatePanel(){
+  document.getElementById('fThetaL').textContent = turns(state.thetaL);
+  document.getElementById('fThetaR').textContent = turns(state.thetaR);
+  const es = engineState();
+  const tc = thetaC();
+  document.getElementById('fThetaC').textContent = turns(tc);
+  document.getElementById('fSpider').textContent = turns(state.locked ? 0 : phiSpider());
+
+  // HONESTY: when locked the displayed θC is the RIGID carrier, NOT the half-sum — so the
+  // hero row must STOP asserting the equation it no longer satisfies (and go red, like the
+  // needle). The lockbox below carries the law-vs-machine GAP. Free state restores the law.
+  document.getElementById('heroRow').classList.toggle('broken', state.locked);
+  document.getElementById('fThetaCeq').innerHTML = state.locked
+    ? '(rigid — no longer the average)'
+    : '= &frac12;(&theta;<sub>L</sub>+&theta;<sub>R</sub>)';
+
+  const r = classifyRegime();
+  document.getElementById('regimeGlyph').innerHTML = r.glyph;
+  document.getElementById('regimeText').textContent = r.text;
+
+  // lock-gap readout (reads engineState ONLY)
+  const lb = document.getElementById('lockBox');
+  if (state.locked){
+    lb.classList.add('show');
+    const pred = es.wcLaw, reads = es.wc, gap = Math.abs(pred - (Number.isNaN(reads) ? state.thetaL : reads));
+    document.getElementById('lkPred').textContent = (pred / TAU).toFixed(2) + ' t';
+    document.getElementById('lkReads').textContent = (state.thetaL / TAU).toFixed(2) + ' t';
+    document.getElementById('lkGap').textContent = (gap / TAU).toFixed(2) + ' t';
+  } else {
+    lb.classList.remove('show');
+  }
+}
+
+/* =====================================================================================
+   ONE rAF LOOP — owns dt; the flywheel coast and the render share it (no double-step).
+   ===================================================================================== */
+let lastT = performance.now();
+function loop(now){
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+  // flywheel coast for any shaft NOT under the hand
+  if (!state.reduced){
+    if (state.dragging !== 'L'){ state.thetaL += state.vL * dt; state.vL *= 0.985; }
+    if (state.dragging !== 'R'){ state.thetaR += state.vR * dt; state.vR *= 0.985; }
+    // under lock the two shafts share one velocity (set on lock + drag), so the same
+    // decay keeps the frozen offset intact — no clobber, the GAP stays real.
+  }
+  render();
+  // cheap panel refresh while coasting (don't thrash when idle)
+  if (Math.abs(state.vL) > 0.01 || Math.abs(state.vR) > 0.01 || state.dragging) updatePanel();
+  requestAnimationFrame(loop);
+}
+
+/* =====================================================================================
+   BOOT — wire the self-test pill (counts read from runSelfTest, never hardcoded), drop the
+   ws:seen breadcrumb, build the scene, start the loop.
+   ===================================================================================== */
+function boot(){
+  buildStatic();
+  updatePanel();
+
+  const st = runSelfTest();
+  const badge = document.getElementById('selftest');
+  badge.classList.toggle('ok', st.ok);
+  badge.classList.toggle('bad', !st.ok);
+  badge.textContent = st.ok
+    ? ('self-test ' + st.passed + '/' + st.total + ' ✓ · ω_carrier == ½(ωL+ωR) exact · proven three ways · the lock breaks it red')
+    : ('✗ ' + st.passed + '/' + st.total + ' — FAILED: ' + st.checks.filter(c => !c.pass).map(c => c.name).join('; '));
+  badge.addEventListener('click', () => {
+    alert(st.checks.map(c => (c.pass ? '✓ ' : '✗ ') + c.name + '\n   [' + c.info + ']').join('\n'));
+  });
+  st.checks.forEach(c => console.log((c.pass ? 'PASS' : 'FAIL') + '  ' + c.name + '  [' + c.info + ']'));
+
+  // ws:seen breadcrumb so a direct visit registers for the Survey of Heaven.
+  try { localStorage.setItem('ws:seen:differential-gear', '1'); } catch (e) {}
+
+  requestAnimationFrame(loop);
+}
+boot();
+</script>
+</body>
+</html>

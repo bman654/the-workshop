@@ -136,7 +136,15 @@
     // clear of every footprint/furniture box (incl. the new 'tank' footprint below the
     // Hall), the manor pool, the viewBox edge, and every existing catalog star
     // (nearest = cartographer @272px) by the CATALOG INTEGRITY self-test.
-    'refraction-run': { x: 392, y: 486, mag: 1 }
+    'refraction-run': { x: 392, y: 486, mag: 1 },
+    // The Differential Gear — the Reckoning Cabinet's bevel-gear adder (crank two rims;
+    // the cage reads the average). A FEATS-flavoured field star in the dark lower-right
+    // band below the manor pool, near its number-wing kin (collisions @1180,560); lit on
+    // first visit (ws:seen:differential-gear). The lead member of The Reckoner feat-group.
+    // Verified clear of every footprint/furniture box (nearest furniture = scalebar), the
+    // manor pool, the viewBox edge, and every existing catalog star (nearest = collisions
+    // @140px) by the CATALOG INTEGRITY self-test (re-runnable /tmp star-placement verifier).
+    'differential-gear': { x: 1180, y: 700, mag: 1 }
   };
 
   /* ── DATA: the six wings (companion-pairs), each an asterism ────────────────
@@ -191,7 +199,13 @@
     // feat-group it is ADDITIVE — it NEVER feeds the wings-only all-skies capstone.
     // Sized for a future fly-through branch should more piloted least-time scenes ship.
     { id: 'pilot', name: 'The Pilot', myth: 'Flies the least-time road; falls into the law.',
-      members: ['refraction-run'] }
+      members: ['refraction-run'] },
+    // The Reckoner — the Reckoning Cabinet's reward constellation. Founded with one star
+    // (The Differential Gear, a plain `ws:seen:differential-gear` room crumb); like every
+    // feat-group it is ADDITIVE — it NEVER feeds the wings-only all-skies capstone. Sized
+    // for the cabinet's analog-adder kin should more reckon-by-measuring scenes ship.
+    { id: 'reckoner', name: 'The Reckoner', myth: 'Reckons by measuring a shape; the cage reads the mean.',
+      members: ['differential-gear'] }
   ];
 
   Sky.CATALOG = CATALOG;
