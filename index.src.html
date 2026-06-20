@@ -64,6 +64,18 @@
     text-transform:uppercase; paint-order:stroke; stroke:rgba(6,8,13,.6); stroke-width:2.4px; }
   /* a faint accent kicker rule that tints the label in its wing's colour */
   .roomrule{ stroke:var(--c); stroke-width:1.4; opacity:.5; transition:opacity .3s ease; }
+  /* ── THE LOUPE LAYER — per-room name labels default HIDDEN (the fit-view shows
+     ONLY the engraved district/wing captions). A label lights to .live (a ~0.42s
+     cross-fade) only when the visitor leans in: hover, tab-focus, or zoom into its
+     neighbourhood. Far things are named by district; near things by name. The
+     labels reuse their SOLVED placement geometry, so a revealed name lands exactly
+     where its leader expects (overlap-safe by construction). */
+  .labelgroup{ opacity:0; transition:opacity .42s ease; pointer-events:none; }
+  .labelgroup.live{ opacity:1; }
+  /* the surveyor's loupe ring that tracks the focus while detail is summoned */
+  #loupe{ fill:none; stroke:var(--brass); stroke-width:1; opacity:0;
+    transition:opacity .3s ease; pointer-events:none; stroke-dasharray:1 5; }
+  #loupe.on{ opacity:.4; }
   .cart-title{ font:500 18px/1 var(--serif); fill:var(--ink); letter-spacing:.02em; }
   .cart-sub{ font:italic 10px/1 var(--serif); fill:var(--muted); }
   .cart-tick{ font:600 9px/1 var(--mono); letter-spacing:.26em; fill:var(--brass);
@@ -114,11 +126,16 @@
   .poi:hover .fp-lamp, .poi:focus-visible .fp-lamp{ fill:var(--c); opacity:.4; }
   .poi:hover .fp-line, .poi:focus-visible .fp-line,
   .poi:hover .fp-fine, .poi:focus-visible .fp-fine{ stroke:var(--c); opacity:.95; }
-  .poi:hover .leader, .poi:focus-visible .leader{ stroke:var(--c); opacity:.9; }
-  .poi:hover .leader-dot, .poi:focus-visible .leader-dot{ fill:var(--c); opacity:1; }
-  .poi:hover .roomrule, .poi:focus-visible .roomrule{ opacity:1; }
-  .poi:hover .roomname, .poi:focus-visible .roomname{ fill:#fff; }
-  .poi:hover .roomsub, .poi:focus-visible .roomsub{ fill:var(--c); }
+  /* a revealed (.live) label reads in its full lit look — the leader brightens to
+     the wing accent, the rule fills, the name goes white, the sub takes the accent.
+     (These used to be .poi:hover rules; the loupe now lights the labels via JS, so
+     the lit look keys on .live — the label layer is a sibling of the .poi.) */
+  .labelgroup.live .leader{ stroke:var(--c); opacity:.9; }
+  .labelgroup.live .leader-dot{ fill:var(--c); opacity:1; }
+  .labelgroup.live .roomrule{ opacity:1; }
+  .labelgroup.live .roomname{ fill:#fff; }
+  .labelgroup.live .roomsub{ fill:var(--c); }
+  .labelgroup.live .within{ opacity:.85; }
   .poi:hover .glyph-emoji, .poi:focus-visible .glyph-emoji{
     filter:drop-shadow(0 0 7px color-mix(in srgb,var(--c) 80%,transparent)); }
   /* visible keyboard focus ring around the whole footprint group */
@@ -129,7 +146,6 @@
   /* companion mark: a small "within" tick that surfaces on hover */
   .within{ font:600 8px/1 var(--mono); letter-spacing:.12em; fill:var(--muted);
     text-transform:uppercase; opacity:0; transition:opacity .3s ease; }
-  .poi:hover .within, .poi:focus-visible .within{ opacity:.85; }
 
   /* ════════════════════════════════════════════════════════════════════════
      DISTRICT PRECINCTS + WING SUB-PRECINCTS + ZONE LABELS — all renderer-drawn
@@ -157,7 +173,7 @@
   /* engraved labels seated ON a boundary (never floating) */
   .zone-label{ font:600 10px/1 var(--mono); letter-spacing:.22em; fill:var(--brass);
     text-transform:uppercase; opacity:.7; paint-order:stroke;
-    stroke:rgba(6,8,13,.55); stroke-width:2.2px; }
+    stroke:rgba(6,8,13,.55); stroke-width:2.2px; transition:opacity .42s ease; }
   .zone-tab{ stroke:var(--brass); stroke-width:.9; opacity:.5; }
   .wing-label{ font:600 8px/1 var(--mono); letter-spacing:.18em; fill:var(--wa);
     text-transform:uppercase; opacity:.72; paint-order:stroke;
@@ -419,7 +435,7 @@
 
   @media (prefers-reduced-motion:reduce){
     .haze{ animation:none; }
-    .fp-fill,.fp-line,.fp-fine,.fp-lit,.fp-floor,.fp-lamp,.roomrule,.leader,.leader-dot,.glyph-emoji,.within,#card,.focusring{ transition:none; }
+    .fp-fill,.fp-line,.fp-fine,.fp-lit,.fp-floor,.fp-lamp,.roomrule,.leader,.leader-dot,.glyph-emoji,.within,#card,.focusring,.labelgroup,#loupe,.zone-label{ transition:none; }
     .undercroft.grow{ animation:none; opacity:1; transform:none; }
     .undercroft.repairing .fp-line{ animation:none; }
     .rune.show{ animation:none; opacity:.8; text-shadow:0 0 10px rgba(201,162,74,.4); }
@@ -582,10 +598,16 @@
       <g id="manor"></g>
       <!-- the circulation graph: spine, district avenues, wing aisles, room stubs -->
       <g id="paths"></g>
-      <!-- the engraved zone + wing labels, seated ON their boundaries -->
+      <!-- the engraved zone + wing labels, seated ON their boundaries (ALWAYS-ON
+           resting layer — the only names the fit-view shows) -->
       <g id="zonelabels"></g>
-      <!-- the POIs (footprints + glyphs + leaders + labels) -->
+      <!-- the POIs (footprints + glyphs + leaders) -->
       <g id="pois"></g>
+      <!-- the per-room name labels (the surveyor's LOUPE layer): DEFAULTS HIDDEN,
+           one group lights to .live only under hover / tab-focus / zoom-reveal -->
+      <g id="roomlabels"></g>
+      <!-- the loupe ring that tracks the focus while names are summoned -->
+      <circle id="loupe" r="150"></circle>
       </g><!-- /#viewport -->
     </svg>
   </div>
@@ -611,7 +633,7 @@
   <span class="sep">·</span>
   <a href="https://github.com/bman654/the-workshop">source on GitHub ↗</a><!-- the earned rune is appended here -->
 </nav>
-<div class="hint">hover a footprint · click to enter · scroll to zoom · drag to pan</div>
+<div class="hint">districts named at rest · hover / tab / zoom a footprint to name it · click to enter · scroll to zoom · drag to pan</div>
 <!-- THE DOOR'S OWN page-level self-test pill (distinct from the clock dial's #hours-pill).
      Runs the Legibility Conscience's regression proof LIVE in-browser on the SAME
      clean/crowded controls the Node twin (legibility.test.cjs) asserts. Green = "the
@@ -1954,6 +1976,7 @@ const MANOR_DOOR = LAYOUT.door || { x:721, y:504 };
 const precincts  = document.getElementById("precincts");
 const manorG     = document.getElementById("manor");
 const zonelabels = document.getElementById("zonelabels");
+const roomlabels = document.getElementById("roomlabels");   // the loupe layer (defaults hidden)
 const viewport   = document.getElementById("viewport");
 
 /* Build one POI <a> (footprint + glyph + leader + label + card behaviour).
@@ -1998,18 +2021,28 @@ function buildPoi(r, opts){
   // so placeLabels() can translate the whole block to the engine-solved slot and
   // flip its text-anchor as one unit. The leader is (re)drawn from the footprint
   // boundary to the label's nearest edge once the slot is known.
-  const leaderPath = el("path",{ class:"leader" });
-  const leaderDot  = el("circle",{ r:2, class:"leader-dot" });
-  a.appendChild(leaderPath);
-  a.appendChild(leaderDot);
+  //
+  // ── THE LOUPE LAYER (#212): leader + dot + label live in a per-room wrapper that
+  // we append into the SHARED #roomlabels layer (NOT inside this .poi), so every
+  // revealed name paints ABOVE all footprints and a revealed label is never
+  // occluded by a neighbouring building. The wrapper DEFAULTS HIDDEN (.labelgroup
+  // opacity 0); renderReveal() lights its .live class when the visitor leans in.
+  // The .poi keeps only its footprint + glyph + lamp + focus ring (the always-on
+  // beauty), and stays a tabindexed link reachable WITHOUT the label.
+  const rlg = el("g",{ class:"labelgroup" });   // the per-room reveal wrapper
+  rlg.dataset.id = r.id;
+  const leaderPath = el("path",{ class:"leader", style:`--c:${r.accent}` });
+  const leaderDot  = el("circle",{ r:2, class:"leader-dot", style:`--c:${r.accent}` });
+  rlg.appendChild(leaderPath);
+  rlg.appendChild(leaderDot);
 
-  const lg = el("g",{ class:"labelgroup" });
+  const lg = el("g",{ class:"labeltext" });
   // room name (local origin)
   const nm = el("text",{ x:0, y:0, "text-anchor":"start", class:"roomname" });
   nm.textContent = r.room;
   lg.appendChild(nm);
   // a short accent kicker rule under the room name
-  const rule = el("line",{ x1:0, y1:5, x2:26, y2:5, class:"roomrule" });
+  const rule = el("line",{ x1:0, y1:5, x2:26, y2:5, class:"roomrule", style:`--c:${r.accent}` });
   lg.appendChild(rule);
   // sub (piece · tag) — or the Undercroft's state line
   const sub = el("text",{ x:0, y:18, "text-anchor":"start", class:"roomsub" });
@@ -2024,11 +2057,14 @@ function buildPoi(r, opts){
     within.textContent = "↳ "+r.companion.name+" within";
     lg.appendChild(within);
   }
-  a.appendChild(lg);
+  rlg.appendChild(lg);
+  roomlabels.appendChild(rlg);
 
   // hand the registry everything placeLabels() needs to measure, position the
-  // label group, set its text-anchor, and (re)draw the leader for this POI.
-  LABELS.set(a, { r, group:lg, leader:leaderPath, dot:leaderDot,
+  // label group, set its text-anchor, and (re)draw the leader for this POI. We key
+  // it by the POI element (legacy) and stash the reveal wrapper + id so the
+  // loupe's renderReveal() can light exactly this room's SOLVED-placed label.
+  LABELS.set(a, { r, group:lg, wrap:rlg, leader:leaderPath, dot:leaderDot,
                   texts:[nm, sub].concat(within?[within]:[]), rule });
 
   // ---- card behaviour ----
@@ -2222,6 +2258,7 @@ function drawCirculation(){
 
 /* engrave each DISTRICT zone label ON its boundary (a brass tab + a flanking rule),
    and each WING label on its wing-rect's top edge — never floating. */
+const ZONE_LABEL = new Map();   // district → its engraved caption (so the loupe can fade it back)
 function drawZoneLabels(){
   LAYOUT.districtRects.forEach(d=>{
     // seat the label on the district's top boundary, centred
@@ -2231,8 +2268,10 @@ function drawZoneLabels(){
     zonelabels.appendChild(el("line",{ x1:lx+30, y1:d.y, x2:lx+58, y2:d.y, class:"zone-tab" }));
     const t = el("text",{ x:lx, y:ly, "text-anchor":"middle", class:"zone-label" });
     t.textContent = d.label;
+    t.dataset.district = d.district;
     zonelabels.appendChild(t);
-  });
+    ZONE_LABEL.set(d.district, t);   // far things named by district; this caption fades
+  });                                // back (floored .06) as its rooms name themselves
   LAYOUT.wingRects.forEach(w=>{
     const lx = w.x + 8, ly = w.y - 3;
     const t = el("text",{ x:lx, y:ly, "text-anchor":"start", class:"wing-label",
@@ -3053,6 +3092,13 @@ renderEstate();
       const inv = ctm.inverse();
       return { x: inv.a*clientX + inv.c*clientY + inv.e, y: inv.b*clientX + inv.d*clientY + inv.f };
     }
+    // the viewBox point at the centre of the screen — the natural focus for a zoom.
+    function centreFocus(){ return svgPoint(window.innerWidth/2, window.innerHeight/2); }
+    // drive the loupe reveal from the current transform: ZOOM sets focus to the
+    // viewport centre + raises k; at fit-view (k≈1) it rests (captions only). Defined
+    // as a sibling of apply() so EVERY transform path (wheel, drag, buttons, keys,
+    // reset) feeds the same revealedSet(). Wrapped so a loupe hiccup never breaks pan.
+    function afterTransform(){ try{ LOUPE.setZoom(k, centreFocus()); }catch(_){} }
     function zoomTo(newK, pivot){
       newK = Math.max(K_MIN, Math.min(K_MAX, newK));
       if(pivot){
@@ -3060,9 +3106,9 @@ renderEstate();
         const vx = (pivot.x - tx)/k, vy = (pivot.y - ty)/k;
         k = newK; tx = pivot.x - vx*k; ty = pivot.y - vy*k;
       } else { k = newK; }
-      clamp(); apply();
+      clamp(); apply(); afterTransform();
     }
-    function reset(){ k=1; tx=0; ty=0; apply(); }
+    function reset(){ k=1; tx=0; ty=0; apply(); afterTransform(); }
 
     // ── WHEEL = zoom toward cursor ──
     sheet.addEventListener("wheel", (e)=>{
@@ -3090,7 +3136,7 @@ renderEstate();
       // convert client delta → viewBox delta via the CTM scale
       const ctm = sheet.getScreenCTM(); if(!ctm) return;
       tx = startTx + dx/ctm.a; ty = startTy + dy/ctm.d;
-      clamp(); apply(); hideCard();
+      clamp(); apply(); afterTransform(); hideCard();
     });
     function endDrag(e){
       if(!dragging) return;
@@ -3124,10 +3170,10 @@ renderEstate();
       if(e.key==="+"||e.key==="="){ zoomTo(k*1.25, centrePivot()); }
       else if(e.key==="-"||e.key==="_"){ zoomTo(k/1.25, centrePivot()); }
       else if(e.key==="0"){ reset(); }
-      else if(e.key==="ArrowLeft" && k>1){ tx+=step; clamp(); apply(); }
-      else if(e.key==="ArrowRight" && k>1){ tx-=step; clamp(); apply(); }
-      else if(e.key==="ArrowUp" && k>1){ ty+=step; clamp(); apply(); }
-      else if(e.key==="ArrowDown" && k>1){ ty-=step; clamp(); apply(); }
+      else if(e.key==="ArrowLeft" && k>1){ tx+=step; clamp(); apply(); afterTransform(); }
+      else if(e.key==="ArrowRight" && k>1){ tx-=step; clamp(); apply(); afterTransform(); }
+      else if(e.key==="ArrowUp" && k>1){ ty+=step; clamp(); apply(); afterTransform(); }
+      else if(e.key==="ArrowDown" && k>1){ ty-=step; clamp(); apply(); afterTransform(); }
       else return;
     });
 
@@ -3216,7 +3262,12 @@ window.addEventListener("resize", hideCard);
       rune.classList.add("found");               // rune settles to a quiet steady mark
       // (2) replace the broken POI with a working, whole one (animate the repair)
       const fresh = buildPoi(data, { asLink:true, extraClass: reduced ? "" : "repairing" });
-      LABELS.delete(tile);                         // retire the broken tile's label parts
+      // retire the broken tile's label parts. Its label wrapper lives in #roomlabels
+      // (the loupe layer), NOT inside the tile — so remove it explicitly, else it
+      // would orphan when we swap the tile below.
+      const oldParts = LABELS.get(tile);
+      if(oldParts && oldParts.wrap && oldParts.wrap.parentNode) oldParts.wrap.parentNode.removeChild(oldParts.wrap);
+      LABELS.delete(tile);
       tile.parentNode.replaceChild(fresh, tile);
       tile = fresh;
       // reuse the cellar-stair's already-solved label slot so the whole stair's name
@@ -3240,6 +3291,198 @@ window.addEventListener("resize", hideCard);
    the cellar stair) are now in the DOM and registered; let the plan letter itself.
    Solved ONCE: the viewBox scales uniformly, so the layout holds at every size. */
 placeLabels();
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE SURVEYOR'S LOUPE (#212) — the front door, made passable.
+
+   THE BUG (#103, long-standing): at the resting fit-view the plate drew ALL 46
+   per-room labels at once → a name thicket the legibility conscience scores 0.86
+   CROWDED. THE FIX: the fit-view now shows ZERO per-room labels — only the engraved
+   district/wing captions (the always-on #zonelabels). A room names itself in FULL
+   only under the loupe: when the visitor LEANS IN — hover, keyboard tab-focus, or
+   trackpad/button ZOOM into its neighbourhood. Far things are named by district;
+   near things by name. The map's beauty (footprints, lamps, glyphs) is untouched at
+   every zoom.
+
+   THREE INPUT MODES → ONE (focus, k): desktop HOVER and keyboard TAB-FOCUS set the
+   focus to the POI; trackpad/button ZOOM sets the focus to the viewport CENTRE and
+   raises k. From those two numbers, ONE revealedSet() gates candidates to a fixed
+   SCREEN-radius loupe, then runs a GREEDY SCREEN-SPACE DECLUTTER (nearest-focus
+   first, tier-ranked) admitting a label only if its RENDERED box — inflated by a
+   minimum screen gap — clears every already-admitted one ON SCREEN. So the same
+   focus+zoom always yields the same clean set, and the visible names NEVER overlap
+   at any zoom.
+
+   CRITICAL COUPLING: a revealed label REUSES its SOLVED placement geometry
+   (SOLVED.get(id).box — the same rectangle placeLabels() already positioned the
+   labelgroup at, with its leader). We only TOGGLE .live; we never re-seat a label.
+   So a revealed name lands exactly where its leader expects and the declutter's
+   overlap-safety holds by construction (the screen boxes ARE the rendered boxes).
+
+   Wrapped in try/catch: any failure leaves the static, fully-readable captions +
+   footprints plate (every room still reachable by its hover-card; see below).
+   ════════════════════════════════════════════════════════════════════════════ */
+const LOUPE = (function(){
+  const out = { renderReveal:function(){}, revealNear:function(){}, setZoom:function(){} };
+  try{
+    const loupeEl = document.getElementById("loupe");
+    const VB = { w:1440, h:900 };
+    const LOUPE_SCREEN  = 300;   // the loupe radius in CSS px (screen space)
+    const MIN_SCREEN_GAP = 18;   // breathing room demanded between two on-screen labels (CSS px)
+    const ZONE_FLOOR = 0.06;     // a district caption never fades wholly anonymous
+    const ZONE_FULL  = 0.7;      // the resting zone-label opacity (matches .zone-label CSS)
+
+    let curK = 1, curFocus = null, curMode = "rest";
+
+    // the SOLVED render box for a POI's label, in viewBox units (what actually paints).
+    // If a label was never solved (shouldn't happen for a present POI), skip it.
+    function solvedBox(id){ const s = SOLVED.get(id); return s ? s.box : null; }
+    function poiById(id){ return PLACES.find(p=> p.id===id); }
+
+    /* revealedSet(focus, k) → [ids] — the loupe + greedy screen-space declutter.
+       The loupe radius maps to LOUPE_SCREEN/k viewBox units (a fixed SCREEN radius,
+       so zooming in covers fewer rooms but names them bigger). The gap maps to
+       MIN_SCREEN_GAP/k viewBox units (more on-screen room as you zoom in → more
+       labels admitted). Candidates are the present (placed) POIs whose footprint
+       centre lies in the loupe, ranked tier-first then nearest-focus; admitted iff
+       the SOLVED box, inflated by the gap, clears every already-admitted box.
+
+       ── INVARIANCE NOTE (do NOT remove) ── This declutter is a GEOMETRIC guarantee
+       of zero on-screen overlap, NOT a lowered legibility composite. It cannot be
+       certified by Legibility.score(): that conscience is viewBox-scale-INVARIANT
+       (it models pre-anneal start slots in absolute viewBox units), so it cannot see
+       that a fixed SCREEN gap thins the set as k changes. Claim B in the door pill
+       proves the no-overlap property DIRECTLY over a focus×zoom sweep; it must never
+       be replaced by a score() call. */
+    function revealedSet(focus, k){
+      if(!focus) return [];
+      const loupeVB = LOUPE_SCREEN / k, loupeVB2 = loupeVB*loupeVB;
+      const padVB = MIN_SCREEN_GAP / k;
+      const cand = [];
+      for(const p of PLACES){
+        if(p.locked && !SOLVED.has(p.id)) continue;     // gated stair (not yet revealed)
+        const box = solvedBox(p.id); if(!box) continue;  // only placed labels can light
+        const c = footCentre(p);
+        const d2 = (c.cx-focus.x)**2 + (c.cy-focus.y)**2;
+        if(d2 > loupeVB2) continue;                      // outside the loupe
+        cand.push({ id:p.id, box, d2, tier:(p.tier||9) });
+      }
+      cand.sort((a,b)=> a.tier-b.tier || a.d2-b.d2);     // nearest-focus first, tier-ranked
+      const admitted = [];
+      for(const cd of cand){
+        const inf = { x:cd.box.x-padVB, y:cd.box.y-padVB, w:cd.box.w+2*padVB, h:cd.box.h+2*padVB };
+        let ok = true;
+        for(const a of admitted){ if(overlapRect(inf, a.box)){ ok=false; break; } }
+        if(ok) admitted.push(cd);
+      }
+      return admitted.map(a=> a.id);
+    }
+    function overlapRect(a,b){ return a.x < b.x+b.w && b.x < a.x+a.w && a.y < b.y+b.h && b.y < a.y+a.h; }
+
+    let liveIds = new Set();
+    function renderReveal(){
+      const want = new Set(revealedSet(curFocus, curK));
+      // turn OFF any no-longer-live labels
+      liveIds.forEach(id=>{ if(!want.has(id)){ const L = labelWrapFor(id); if(L) L.classList.remove("live"); } });
+      // turn ON the newly-live ones (geometry already SOLVED — just light them)
+      want.forEach(id=>{ if(!liveIds.has(id)){ const L = labelWrapFor(id); if(L) L.classList.add("live"); } });
+      liveIds = want;
+
+      // district captions fade BACK as their rooms name themselves (floored so a
+      // district is never wholly anonymous), and restore when their rooms go dark.
+      const namedByDistrict = {};
+      want.forEach(id=>{ const p = poiById(id); if(p) namedByDistrict[p.district] = (namedByDistrict[p.district]||0)+1; });
+      ZONE_LABEL.forEach((t, district)=>{
+        const n = namedByDistrict[district] || 0;
+        // fade in proportion to how many of the district's rooms are named, floored.
+        const op = n ? Math.max(ZONE_FLOOR, ZONE_FULL - 0.16*n) : ZONE_FULL;
+        t.style.opacity = op.toFixed(3);
+      });
+
+      // the loupe ring tracks the focus while detail is summoned
+      if(loupeEl){
+        if(curFocus && want.size){
+          loupeEl.setAttribute("cx", curFocus.x);
+          loupeEl.setAttribute("cy", curFocus.y);
+          loupeEl.setAttribute("r", (LOUPE_SCREEN/curK).toFixed(1));
+          loupeEl.classList.add("on");
+        } else loupeEl.classList.remove("on");
+      }
+    }
+
+    function labelWrapFor(id){
+      // find the reveal wrapper for a POI id (built into #roomlabels, data-id tagged)
+      return roomlabels.querySelector('.labelgroup[data-id="'+CSS.escape(id)+'"]');
+    }
+
+    /* HOVER / TAB-FOCUS near a POI → focus = that POI's centre (keep current zoom). */
+    function revealNear(id){
+      const p = poiById(id); if(!p) return;
+      const c = footCentre(p);
+      curFocus = { x:c.cx, y:c.cy };
+      curMode = "near";
+      renderReveal();
+    }
+    /* clear the hover/focus reveal (back to the resting captions-only layer), UNLESS
+       a zoom is currently holding a centre-focus open. */
+    function clearNear(){
+      if(curK > 1.001) return;   // a zoomed-in view keeps its centre-focus reveal
+      curFocus = null; curMode = "rest"; renderReveal();
+    }
+
+    /* ZOOM drives the reveal: the viewport CENTRE becomes the focus; k drives the
+       declutter. Called by panZoom after every transform apply(). At fit-view (k≈1)
+       with no hover, detail rests (captions only). */
+    function setZoom(k, centreFocus){
+      curK = k;
+      if(k > 1.001){ curFocus = centreFocus || curFocus; curMode = "zoom"; }
+      else if(curMode === "zoom"){ curMode = "rest"; curFocus = null; }
+      renderReveal();
+    }
+
+    out.renderReveal = renderReveal;
+    out.revealNear = revealNear;
+    out.clearNear = clearNear;
+    out.setZoom = setZoom;
+    out.revealedSet = revealedSet;   // exposed for the door pill's Claim-B geometric proof
+
+    /* ── input wiring (event delegation on #pois so we touch no per-POI handler) ──
+       Every POI stays a tabindexed link reachable INDEPENDENT of label visibility:
+       the hover-CARD path (mouseenter/focus → openCard) is untouched, so a room is
+       always openable even with its name dark. Tab-focus reveals the SAME set hover
+       does. */
+    pois.addEventListener("mouseover", e=>{ const a = e.target.closest && e.target.closest(".poi"); if(a && a.dataset.id) revealNear(a.dataset.id); });
+    pois.addEventListener("mouseout",  e=>{ const a = e.target.closest && e.target.closest(".poi");
+      // only clear when leaving the POI entirely (not when moving between its children)
+      if(a && (!e.relatedTarget || !a.contains(e.relatedTarget))) clearNear(); });
+    pois.addEventListener("focusin",  e=>{ const a = e.target.closest && e.target.closest(".poi"); if(a && a.dataset.id) revealNear(a.dataset.id); });
+    pois.addEventListener("focusout", e=>{ const a = e.target.closest && e.target.closest(".poi");
+      if(a && (!e.relatedTarget || !a.contains(e.relatedTarget))) clearNear(); });
+
+    /* ── TOUCH: a first tap on a POI reveals (focus + card) WITHOUT navigating; a
+       second tap on the same POI follows the link. Pointer/mouse devices are
+       unaffected (they get hover). This keeps every room reachable on touch where
+       there is no hover, per the accessibility DoD. */
+    let lastTapId = null;
+    pois.addEventListener("pointerdown", e=>{
+      if(e.pointerType !== "touch") return;
+      const a = e.target.closest && e.target.closest(".poi"); if(!a || !a.dataset.id) return;
+      if(lastTapId !== a.dataset.id){
+        e.preventDefault();                  // arm: reveal + card, do NOT navigate yet
+        lastTapId = a.dataset.id;
+        revealNear(a.dataset.id);
+        try{ a.focus(); }catch(_){}
+        // a second tap elsewhere disarms
+        setTimeout(()=>{ const clr = ev=>{ if(!ev.target.closest || !ev.target.closest('.poi[data-id="'+CSS.escape(a.dataset.id)+'"]')){ lastTapId=null; document.removeEventListener("pointerdown", clr, true); } };
+          document.addEventListener("pointerdown", clr, true); }, 0);
+      }
+      // else: same POI tapped again → let the click/navigation proceed (don't preventDefault)
+    });
+
+    renderReveal();   // first paint: the resting captions-only layer
+  }catch(e){ /* any failure → the static captions + footprints plate (cards still reach every room) */ }
+  return out;
+})();
 </script>
 
 <script>
@@ -3247,18 +3490,30 @@ placeLabels();
    THE DOOR'S OWN PAGE-LEVEL SELF-TEST — runs the Legibility Conscience's
    regression proof LIVE in the browser, in the estate's pill idiom.
 
-   THE HONEST CLAIM (the load-bearing nuance — we do NOT fake green on the live
-   door): the pill asserts the SAME claims tools/layout/legibility.test.cjs proves,
-   on the SAME clean/crowded CONTROL corpus baked in below — NOT on the live door.
-   Green N/N means "the conscience that judges this door is itself sound," NOT "the
-   door is uncrowded." The quiet sub-line states the LIVE door's REAL verdict
-   (CROWDED, composite ≈0.82 — the intended #103 pressure), so the pill ties to
-   THIS door and never lies that the crowd is gone.
+   THE HONEST CLAIM (the load-bearing nuance — we do NOT fake green): the pill keeps
+   asserting the SAME conscience-soundness claims tools/layout/legibility.test.cjs
+   proves on the baked-in clean/crowded CONTROL corpus (so page + twin can't drift),
+   AND it now adds the door's two new load-bearing claims, both true:
 
-   This is the Node twin's in-page mirror: it shares the SAME corpus + assertions
-   in spirit with legibility.test.cjs (the canonical Node twin), so page + twin
-   cannot silently drift. If they ever do, the green here will not match the green
-   there — and one of them goes red.
+     CLAIM A — the RESTING fit-view layer is LEGIBLE. The fit-view draws ZERO
+       per-room labels (only the engraved district/wing captions). Feeding the LIVE
+       conscience the SAME solve with the EMPTY label set, Legibility.score(LAYOUT,[])
+       composites 0.044 < 0.30 → LEGIBLE. The bug is FIXED at the layer a visitor
+       reads. (We ALSO keep asserting the FULL plate — all 46 labels at once — still
+       composites 0.859 CROWDED, so the #103 bug is never "defined away": it is real,
+       and the fix is to not DRAW that layer at rest, not to silence the scorer.)
+
+     CLAIM B — the REVEALED layer never re-crowds. A SEPARATE geometric proof asserts
+       ZERO rendered label-overlaps across a full focus×zoom sweep (every one of the
+       46 POIs × 7 zoom levels), reusing the loupe's own revealedSet() + the SOLVED
+       boxes. This is a GEOMETRIC guarantee, NOT a lowered composite — score() is
+       viewBox-scale-invariant and CANNOT certify the multi-room revealed set (see the
+       invariance note in the loupe module). So detail is summonable without ever
+       re-crowding.
+
+   The sub-line now honestly reads "LEGIBLE (0.04) at fit-view · full plate CROWDED
+   (0.86)" — the door is passable at the layer you read, and the full-plate pressure
+   that #103 named is still acknowledged.
    ════════════════════════════════════════════════════════════════════════════ */
 (function(){
   var btn = document.getElementById("doortest");
@@ -3337,18 +3592,58 @@ placeLabels();
     check("leader missing rect → no intrusion",
       L.segIntersectsRect(0,50,20,50,{x:8,y:0,w:4,h:10},0) === false);
 
-    // ── THE LIVE DOOR'S REAL VERDICT — surfaced honestly, NEVER part of pass/total.
-    //    Re-score THIS door's own placement (the same solve the plate uses).
-    var liveVerdict = "?", liveComposite = null;
+    // ── CLAIM A: the RESTING fit-view layer (district captions only = ZERO per-room
+    //    labels) is LEGIBLE. Feed the LIVE conscience the SAME solve the plate uses,
+    //    with the EMPTY label set. This is the fix at the layer a visitor reads.
+    var restComposite = null, restVerdict = "?";
+    var fullComposite = null, fullVerdict = "?";
     try{
-      var liveRep = L.score(LAYOUT, PLACES);
-      liveVerdict = liveRep.overall.verdict;
-      liveComposite = liveRep.overall.composite;
+      var restRep = L.score(LAYOUT, []);            // the resting layer: no POI labels
+      restComposite = restRep.overall.composite; restVerdict = restRep.overall.verdict;
+      var fullRep = L.score(LAYOUT, PLACES);        // the old all-at-once plate (the bug)
+      fullComposite = fullRep.overall.composite; fullVerdict = fullRep.overall.verdict;
     }catch(e){ /* leave unknown */ }
+    check("CLAIM A — RESTING fit-view layer is LEGIBLE (composite < threshold)",
+      restVerdict === "LEGIBLE" && restComposite != null && restComposite < TH,
+      "["+restComposite+" < "+TH+"]");
+    // the bug is never DEFINED AWAY: the full plate, all 46 labels at once, is STILL
+    // CROWDED. The fix is to not DRAW that layer at rest — not to silence the scorer.
+    check("the full plate (all 46 labels at once) is STILL CROWDED (#103 acknowledged)",
+      fullVerdict === "CROWDED" && fullComposite != null && fullComposite > TH,
+      "[full "+fullComposite+" > "+TH+"]");
+
+    // ── CLAIM B: the REVEALED layer never re-crowds — a GEOMETRIC proof of ZERO
+    //    rendered label-overlaps across a full focus×zoom sweep (every POI × 7 zooms),
+    //    reusing the loupe's OWN revealedSet() + the SOLVED boxes that actually paint.
+    //    NOT a lowered composite — score() is viewBox-scale-invariant and cannot
+    //    certify the multi-room revealed set (see the loupe's invariance note).
+    var overlaps = 0, pairs = 0, sweepRan = false;
+    try{
+      function rb(id){ var s = SOLVED.get(id); return s ? s.box : null; }
+      function ov(a,b){ return a.x < b.x+b.w && b.x < a.x+a.w && a.y < b.y+b.h && b.y < a.y+a.h; }
+      var ZOOMS = [1,1.5,2,2.5,3,3.5,4];
+      for(var zi=0; zi<ZOOMS.length; zi++){
+        for(var pi=0; pi<PLACES.length; pi++){
+          var pp = PLACES[pi]; if(!SOLVED.has(pp.id)) continue;
+          var cc = footCentre(pp);
+          var ids = LOUPE.revealedSet({ x:cc.cx, y:cc.cy }, ZOOMS[zi]);
+          for(var ii=0; ii<ids.length; ii++) for(var jj=ii+1; jj<ids.length; jj++){
+            var ba = rb(ids[ii]), bb = rb(ids[jj]); if(!ba || !bb) continue;
+            pairs++; if(ov(ba, bb)) overlaps++;
+          }
+        }
+      }
+      sweepRan = true;
+    }catch(e){ /* sweep unavailable → claim cannot be asserted */ }
+    check("CLAIM B — revealed declutter: ZERO rendered overlaps (46 focuses × 7 zooms)",
+      sweepRan && overlaps === 0, "["+overlaps+" overlaps / "+pairs+" pairs]");
 
     var passN = 0; for(var k=0;k<lines.length;k++) if(lines[k].ok) passN++;
     return { pass: passN === lines.length, total: lines.length, passed: passN,
-             lines: lines, liveVerdict: liveVerdict, liveComposite: liveComposite };
+             lines: lines,
+             restVerdict: restVerdict, restComposite: restComposite,
+             fullVerdict: fullVerdict, fullComposite: fullComposite,
+             overlaps: overlaps, pairs: pairs };
   }
 
   function render(){
@@ -3357,21 +3652,26 @@ placeLabels();
     catch(e){
       console.error("[door] legibility self-test threw:", e);
       r = { pass:false, total:1, passed:0, lines:[{name:"self-test threw", ok:false, detail:String(e)}],
-            liveVerdict:"?", liveComposite:null };
+            restVerdict:"?", restComposite:null, fullVerdict:"?", fullComposite:null, overlaps:null, pairs:null };
     }
     var green = r.pass;
     btn.classList.toggle("ok", green);
     btn.classList.toggle("bad", !green);
     txt.textContent = green
-      ? ("door verified — " + r.passed + "/" + r.total + " ✓")
+      ? ("door PASSABLE — " + r.passed + "/" + r.total + " ✓")
       : ("door self-test ✗ " + r.passed + "/" + r.total);
-    // honest secondary line: the LIVE door's real verdict (CROWDED — the #103 pressure).
-    var lc = (r.liveComposite == null) ? "?" : r.liveComposite.toFixed(2);
-    sub.textContent = "live door: " + r.liveVerdict + " (composite " + lc + ")";
+    // honest secondary line: the door is LEGIBLE at the layer you read (fit-view),
+    // and the full plate's #103 pressure is still acknowledged.
+    var rc = (r.restComposite == null) ? "?" : r.restComposite.toFixed(2);
+    var fc = (r.fullComposite == null) ? "?" : r.fullComposite.toFixed(2);
+    sub.textContent = r.restVerdict + " (" + rc + ") at fit-view · full plate " + r.fullVerdict + " (" + fc + ")";
     btn.title = green
-      ? ("the legibility conscience that judges this door is proven sound (" + r.passed + "/" + r.total +
-         ") — click to re-run. The live door itself reads " + r.liveVerdict + " (composite " + lc +
-         "), the intended #103 crowding pressure a [map] re-draw must relieve.")
+      ? ("PASSABLE: the resting fit-view layer reads " + r.restVerdict + " (composite " + rc +
+         " < 0.30); a room names itself only under the loupe (hover / tab / zoom), the revealed " +
+         "declutter never re-crowds (" + r.overlaps + " rendered overlaps across 46 focuses × 7 zooms), " +
+         "the full plate is still " + r.fullVerdict + " (" + fc + ", the #103 pressure — not defined away), " +
+         "and the conscience's controls still straddle the threshold (" + r.passed + "/" + r.total +
+         "). Click to re-run.")
       : ("door legibility self-test FAILED " + r.passed + "/" + r.total + " — click to re-run; see console.");
 
     if(!green){
@@ -3379,12 +3679,13 @@ placeLabels();
       for(var i=0;i<r.lines.length;i++) if(!r.lines[i].ok) console.error("  ✗", r.lines[i].name, r.lines[i].detail);
     } else {
       console.log("[door] legibility self-test " + r.passed + "/" + r.total +
-        " ✓ — the conscience that judges this door (clean control PASSES, crowded control FAILS, " +
-        "threshold derives from the controls, weights gap-dominant & normalized, density+composite " +
-        "monotone, exact-integer crossing crux) is proven sound IN-BROWSER. " +
-        "The live door itself reads " + r.liveVerdict + " (composite " +
-        (r.liveComposite == null ? "?" : r.liveComposite.toFixed(3)) +
-        ") — the intended #103 crowding pressure; the green pill proves the JUDGE, not that the crowd is gone.");
+        " ✓ — the resting fit-view layer reads " + r.restVerdict + " (composite " +
+        (r.restComposite == null ? "?" : r.restComposite.toFixed(3)) + " < 0.30), the revealed loupe " +
+        "declutter has " + r.overlaps + " rendered overlaps across 46 focuses × 7 zooms, the full plate " +
+        "is still " + r.fullVerdict + " (composite " +
+        (r.fullComposite == null ? "?" : r.fullComposite.toFixed(3)) + " — the #103 pressure, NOT defined " +
+        "away), and the conscience that judges all this is itself sound (controls straddle the threshold, " +
+        "weights gap-dominant, density+composite monotone, exact-integer crossing crux).");
       console.log("[door] self-test breakdown:");
       for(var j=0;j<r.lines.length;j++)
         console.log("  " + (r.lines[j].ok ? "✓" : "✗") + " " + r.lines[j].name +

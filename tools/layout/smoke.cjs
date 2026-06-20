@@ -109,16 +109,35 @@ function liveLegibility() {
   const rep = Leg.score(sol, LIVE);
   console.log('\n=== LEGIBILITY (modeled-label crowding PROXY · #103) ===');
   console.log(Leg.renderAscii(rep));
+
+  // ── THE RESTING FIT-VIEW LAYER (#212 — the front door, made passable) ──────────
+  //    The live door now draws ZERO per-room labels at fit-view — only the engraved
+  //    district/wing captions. The layer a visitor READS is the EMPTY label set, so
+  //    score it directly: Legibility.score(sol, []) → LEGIBLE. A room names itself in
+  //    full only under the loupe (hover / tab-focus / zoom); the revealed declutter is
+  //    proven overlap-free in-browser (the door pill's Claim B). The FULL-plate score
+  //    above is kept as the honest #103 record — the pressure the layer would have if
+  //    it were all drawn at once — never DEFINED AWAY, just no longer DRAWN at rest.
+  const restRep = Leg.score(sol, []);
+  console.log('\n  RESTING fit-view layer (zero per-room labels — only district captions):');
+  if (restRep.pass) {
+    console.log('    ✓ LEGIBLE (composite ' + restRep.overall.composite + ' < ' + restRep.threshold +
+      ') — the door is passable at the layer a visitor reads (#212).');
+  } else {
+    console.log('    ✗ unexpectedly CROWDED (composite ' + restRep.overall.composite + ') — the resting ' +
+      'layer should be empty-set LEGIBLE; investigate.');
+  }
   if (rep.pass) {
-    console.log('\n  ✓ live door is LEGIBLE (composite ' + rep.overall.composite + ' < ' + rep.threshold + ')');
+    console.log('\n  ✓ full plate is LEGIBLE (composite ' + rep.overall.composite + ' < ' + rep.threshold + ')');
   } else {
     const o = rep.overall;
-    console.log('\n  ⚠ WARNING (intended · #103): live door is CROWDED — composite ' +
+    console.log('\n  ⚠ WARNING (intended · #103): the FULL plate (all labels at once) is CROWDED — composite ' +
       o.composite + ' > threshold ' + rep.threshold + '.');
     console.log('    pressure-hottest = ' + o.pressureHottest.district +
       ' (composite ' + o.pressureHottest.composite + ', what a viewer sees);' +
       ' count-hottest = ' + o.countHottest.district + ' (n=' + o.countHottest.n + ', raw rooms).');
-    console.log('    A pending [map] re-draw has two concrete targets above.' +
+    console.log('    This is the layer the door NO LONGER DRAWS at rest (#212): the fit-view shows only the' +
+      ' district captions (LEGIBLE above); rooms name themselves under the loupe.' +
       ' This WARNING does NOT fail the structural smoke (exit-code policy: see legibility.cjs header).');
   }
 }

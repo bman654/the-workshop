@@ -74,12 +74,11 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
-- [bug] **Front door impassable — See reference-files/crowded-front-door.png.  self-test chip shows 12/12 green with CROWDED warning.  But actual crowding has reached the point of unusable.  A human cannot disinguish labels and cannot reliably click on desired room.  The estate is effectively closed to human visitors and needs to be addressed if the exhibits are to be seen.  Minimal small fix spark that do not truly solve the scale problem: various progressive disclosure techniques common to mapping systems ; Big swing fix spark that may solve the long term scale problems: Refactor single front-door to multiple interlinked front doors where visitors travel between front door areas of the state
-<!-- ✝ FIXED #129: The Climb — jump arc + bonus timer never re-tuned for the new slower sp… → arcade/games/the-climb · after 197b2d0 -->
 <!-- ✝ FIXED #153: The Vantage has no exit — a visitor who enters is trapped. → vantage/index.html · after ba048d3 -->
 <!-- ✝ FIXED #153: The Vantage's off-pose floor is too dark — first contact reads as a bla… → vantage/index.html · after ba048d3 -->
 <!-- ✝ FIXED #154: The Census re-pin is a hand-maintained landmine — collate auto-maintain… → census/reclaim.mjs + ledger/collate.sh · after 07ce17e -->
 <!-- ✝ FIXED #186: The front door is missing its self-test pill. → index.html (#doortest pill) · after bf1adda -->
+<!-- ✝ FIXED #212: Front door impassable → index.src.html (loupe layer + door pill Claim A… · after 5a4a533 -->
 <!-- gauge:bug:end -->
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth
@@ -95,6 +94,7 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 ## ⚡ Sparks — raw big-track gaps (the groundskeeper tailors these into grounds seeds)
 
 <!-- gauge:sparks:start -->
+- ⚡ **The estate with more than one front door** — the loupe (#212) made the single front door PASSABLE by revealing room names only under the visitor's lean, but the underlying SCALE pressure is unchanged: 46 rooms on one plate, still growing, the full-plate legibility score honestly CROWDED (0.86). The durable answer is structural, not a disclosure trick — split the one map into several interlinked front-door DISTRICTS a visitor TRAVELS BETWEEN (the manor · the grounds · the observatory each its own readable plate, with doorways/threshold tiles between), so no single view ever has to hold the whole estate. A big swing for the grounds queue: the navigation becomes a place you move through, each plate legible by construction at any room count. (Companion to the loupe, not a replacement — the loupe keeps any single district readable; this keeps the ESTATE readable as it grows past what one plate can ever hold.)
 - ⚡ **The wave that carries itself — E makes B makes E** — once the Lodestone Hall founds induction, the estate still lacks an ELECTROMAGNETIC WAVE you can launch: a place where a changing electric field sources a magnetic field that sources an electric field, the two riding together at c with no medium. A seen-and-touchable Maxwell's-bootstrap (give the field a flick, watch the self-sustaining E⊥B pulse propagate; the crux c=1/√(μ₀ε₀) read off the slope), the natural capstone bench of the new EM vein.
 - ⚡ **Rotate NOTES.md back under its token budget** — NOTES.md is ~35k tokens and trips the Read partial-view cap (>25k); the discipline asks for "well under 20k". The bulk is the line-80 historical tail, the "#166↓#157" mega-paragraph, and the giant evergreen don't-rebuild inventory. Move the deep per-wing inventory to worklog/INDEX.md + each piece's CHANGELOG (its canonical home) and leave NOTES a true small head-pointer.
 - ⚡ **A room whose navigation IS its subject** — a place whose *form expresses content* (an instrument you operate, a cabinet you open) — the Hall's lesson that a vertical list wasted optics.
