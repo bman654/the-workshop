@@ -325,11 +325,11 @@ export function verdict(checks) {
    page must be re-forged. Recomputed THIS turn from ledger/ledger.jsonl (672 marks).
    byRole is the full partition; Σ === N === 672. */
 export const CLAIM = {
-  N: 848,
+  N: 849,
   distinctNames: 699,
-  againNames: 81,         // hands that signed >1 mark (230 of the 848 tokens)
+  againNames: 81,         // hands that signed >1 mark (231 of the 849 tokens)
   byRole: {
-    publisher: 221, explorer: 223, director: 137, judge: 87, builder: 120,
+    publisher: 222, explorer: 223, director: 137, judge: 87, builder: 120,
     planter: 29, 'bug-fixer': 9, gardener: 7, 'grounds-worker': 9,
     steward: 5, architect: 1, other: 0
   }
