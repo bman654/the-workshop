@@ -156,7 +156,8 @@ var Layout = (function () {
     sewing:      { label: 'THE SEWING ROOM',    accent: '#d9b873' },
     stellar:     { label: 'THE STELLAR WING',   accent: '#9db4ff' },
     vantages:    { label: 'SCENES YOU WALK INTO', accent: '#9db4ff' },
-    'moving-frame': { label: 'THE MOVING FRAME', accent: '#9db4ff' }
+    'moving-frame': { label: 'THE MOVING FRAME', accent: '#9db4ff' },
+    arrow:       { label: 'THE ARROW WING',     accent: '#c9a24a' }
   };
   function wingLabel(slug) {
     if (WING_META[slug] && WING_META[slug].label) return WING_META[slug].label;
