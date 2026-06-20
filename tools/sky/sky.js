@@ -118,7 +118,17 @@
     'carnot':   { x: 1398, y: 548, mag: 1 }, // apex (eta=1-Tc/Th — brightest)
     'demon':    { x: 1372, y: 632, mag: 2 },
     'brownian': { x: 1402, y: 712, mag: 2 },
-    'stirling': { x: 1376, y: 836, mag: 2 }  // base
+    'stirling': { x: 1376, y: 836, mag: 2 }, // base
+    // The Holonomy Walk — the curved-country wing's founding room (the twist you
+    // can't survey away). A FEATS-flavoured field star in the dark WEST margin, a
+    // surveyor's mark below the Cartographer and above the nameplate, near its open
+    // west-park footprint; lit on first visit (ws:seen:holonomy). The lead member of
+    // The Surveyor feat-group (sized for the promised curved-country siblings — a
+    // Gauss-Bonnet polygon, a cone's deficit angle, a curvature-cancelling torus).
+    // Verified clear of every footprint/furniture box, the manor pool, the viewBox
+    // edge, and every existing catalog star (nearest = feat-maze @86px) by the
+    // CATALOG INTEGRITY self-test (re-runnable /tmp star-placement verifier).
+    'holonomy': { x: 130,  y: 700, mag: 1 }
   };
 
   /* ── DATA: the six wings (companion-pairs), each an asterism ────────────────
@@ -160,7 +170,14 @@
     { id: 'automaton', name: 'The Automaton', myth: 'Models its own making; keeps none of it.',
       members: ['context-window', 'temperature-dial', 'the-turn', 'partition'] },
     { id: 'furnace', name: 'The Furnace', myth: 'Turns heat to work; never quite all of it.',
-      members: ['carnot', 'demon', 'brownian', 'stirling'] }
+      members: ['carnot', 'demon', 'brownian', 'stirling'] },
+    // The Surveyor — Curved Country's reward constellation. Founded with one star
+    // (The Holonomy Walk, a plain `ws:seen:holonomy` room crumb); its membership
+    // grows as the wing's promised siblings ship (a Gauss-Bonnet polygon, a cone's
+    // deficit angle, a curvature-cancelling torus). Like every feat-group it is
+    // ADDITIVE — it NEVER feeds the wings-only all-skies capstone.
+    { id: 'surveyor', name: 'The Surveyor', myth: 'Walks the loop; brings home the twist no chart can hide.',
+      members: ['holonomy'] }
   ];
 
   Sky.CATALOG = CATALOG;
@@ -410,7 +427,8 @@
     var SUBTALLY = {
       feats:     { text: 'Feats of Light — the Optician charted',        cls: 'sky-tally-feats' },
       automaton: { text: "The Maker's Wing — the Automaton charted",     cls: 'sky-tally-automaton' },
-      furnace:   { text: 'The Engine Room — the Furnace charted',        cls: 'sky-tally-furnace' }
+      furnace:   { text: 'The Engine Room — the Furnace charted',        cls: 'sky-tally-furnace' },
+      surveyor:  { text: 'Curved Country — the Surveyor charted',        cls: 'sky-tally-surveyor' }
     };
     var subY = 848;
     for (i = 0; i < FEATS.length; i++) {

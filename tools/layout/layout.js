@@ -135,6 +135,16 @@ var Layout = (function () {
      Layout.solve: the brief's x214 region overlapped firmament's tower, so the
      court is nudged right to seat the rail clear in the open upper court). */
   GROUNDS_WINGS.aerospace = { x: 366, y: 156, w: 200, h: 140 };
+  /* CURVED COUNTRY — The Holonomy Walk, where you carry a gold spear around a loop
+     on a court you can BEND and it comes home pointing wrong (the curvature you
+     enclosed). A curved LANDSCAPE you traverse OUTSIDE → the open WEST PARK, set in
+     the clear band BELOW the Hall of Mirrors (its optics footprint ends ~y507) and
+     LEFT of the western glasshouses cluster (kirigami/strange-garden anchor ~x322),
+     clear of the manor candle-pool (x421+). Sized for GROWTH: the seed promises
+     siblings (a Gauss-Bonnet polygon, a cone's deficit angle, a curvature-cancelling
+     torus). Verified clear of every footprint + catalog star via smoke.cjs's live
+     Layout.solve (a wider region collides the glasshouses; this band seats it clean). */
+  GROUNDS_WINGS['curved-country'] = { x: 170, y: 520, w: 150, h: 160 };
 
   /* ── WING_META: display label, representative accent (for tint + engraved
      label), and optional grows:N reserved-lot count. An unknown wing is allowed
@@ -157,7 +167,8 @@ var Layout = (function () {
     stellar:     { label: 'THE STELLAR WING',   accent: '#9db4ff' },
     vantages:    { label: 'SCENES YOU WALK INTO', accent: '#9db4ff' },
     'moving-frame': { label: 'THE MOVING FRAME', accent: '#9db4ff' },
-    arrow:       { label: 'THE ARROW WING',     accent: '#c9a24a' }
+    arrow:       { label: 'THE ARROW WING',     accent: '#c9a24a' },
+    'curved-country': { label: 'CURVED COUNTRY', accent: '#caa15a' }
   };
   function wingLabel(slug) {
     if (WING_META[slug] && WING_META[slug].label) return WING_META[slug].label;

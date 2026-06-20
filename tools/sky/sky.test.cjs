@@ -33,6 +33,7 @@ const FEAT_GROUPS = Array.isArray(Sky.FEATS) ? Sky.FEATS : [Sky.FEATS];
 const OPTICIAN  = FEAT_GROUPS.find(g => g.id === 'feats');     // the Hall's nine Feats of Light
 const AUTOMATON = FEAT_GROUPS.find(g => g.id === 'automaton'); // Clockwork's 4 bench crumbs
 const FURNACE   = FEAT_GROUPS.find(g => g.id === 'furnace');   // the Engine Room's 4 bench crumbs
+const SURVEYOR  = FEAT_GROUPS.find(g => g.id === 'surveyor');  // Curved Country's founding star (The Holonomy Walk)
 // the legacy Optician sub-suite (174-228) refers to `FEATS` as the single Optician group.
 const FEATS = OPTICIAN;
 
@@ -154,7 +155,7 @@ function inViewBox(s) {
   const sFull = Sky.state(full, CATALOG, WINGS, FEAT_GROUPS);
   let allComp = true;
   sFull.asterisms.forEach(a => { if (!a.complete) allComp = false; });
-  ok(allComp, 'COMPLETION: full visit-set completes every asterism (incl. all three feat-groups)');
+  ok(allComp, 'COMPLETION: full visit-set completes every asterism (incl. all four feat-groups)');
   eq(sFull.allComplete, true, 'COMPLETION: allComplete true on the full set (capstone)');
 
   // empty set: nothing complete, allComplete false
@@ -420,13 +421,14 @@ WINGS.forEach(w => w.members.forEach(m => ALL_WING_MEMBERS.push(m)));
 
   // ── the feat-GROUPS: a group-agnostic disjointness sweep (replaces the old
   //    `feat-`-prefix-hardcoded block, which would FALSE-FAIL on plain room-id members).
-  //    There are exactly three feat-groups with distinct ids; EVERY member belongs to
-  //    exactly one group across WINGS + FEAT_GROUPS (no dupe); each NEW-group member is a
-  //    PLAIN room id (NOT feat-), a valid catalog id, and NOT a PLACES_ID. The `feat-`
-  //    prefix assertion is kept, scoped to the OPTICIAN only. ──
-  eq(FEAT_GROUPS.length, 3, 'BIJECTION: there are exactly three feat-groups');
-  eq(FEAT_GROUPS.length, new Set(FEAT_GROUPS.map(g => g.id)).size, 'BIJECTION: the three feat-group ids are distinct');
-  ok(!!OPTICIAN && !!AUTOMATON && !!FURNACE, 'BIJECTION: the three feat-groups are Optician + Automaton + Furnace');
+  //    There are exactly four feat-groups with distinct ids; EVERY member belongs to
+  //    exactly one group across WINGS + FEAT_GROUPS (no dupe); each plain-room-id NEW-group
+  //    member is a valid catalog id (NOT feat-). The `feat-` prefix assertion is kept,
+  //    scoped to the OPTICIAN only. The Surveyor (Curved Country) is founded on a real
+  //    front-door room's `ws:seen` crumb, sized to grow as the wing's siblings ship. ──
+  eq(FEAT_GROUPS.length, 4, 'BIJECTION: there are exactly four feat-groups');
+  eq(FEAT_GROUPS.length, new Set(FEAT_GROUPS.map(g => g.id)).size, 'BIJECTION: the four feat-group ids are distinct');
+  ok(!!OPTICIAN && !!AUTOMATON && !!FURNACE && !!SURVEYOR, 'BIJECTION: the four feat-groups are Optician + Automaton + Furnace + Surveyor');
 
   // every member belongs to exactly one group across WINGS + FEAT_GROUPS (no dupe across
   // the whole catalog of asterisms). memberWing already holds the wing assignments.
