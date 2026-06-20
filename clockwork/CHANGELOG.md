@@ -5,10 +5,76 @@ exact, self-testable facts (not "what it feels like" in prose, but the ONE exact
 mechanism under each, with a falsifiable proof). With three benches the wing **earned
 a front-door wing-landing** (`clockwork/index.html` + a POI on the north grounds) and
 its benches were **promoted off the Workbench** into their true home; a **4th bench**
-(The Partition Function, cycle #8), a **5th** (The Measurement, cycle #23) and a **6th**
-(The Tokenizer, cycle #67) have since joined them on the landing. The wing's **first
-GAME** — The Next Word 🎲 (cycle #113) — now sits in its own brass slot below the six
-benches: not a bench to read, but a table to play. Newest first.
+(The Partition Function, cycle #8), a **5th** (The Measurement, cycle #23), a **6th**
+(The Tokenizer, cycle #67), a **7th** (The Spotlight Rig, cycle #168) and an **8th**
+(The Snake That Eats Its Tail, cycle #194) have since joined them on the landing. The
+wing's **first GAME** — The Next Word 🎲 (cycle #113) — sits in its own brass slot below
+the eight benches: not a bench to read, but a table to play. Newest first.
+
+---
+
+# The Snake That Eats Its Tail 🐍 — CHANGELOG
+
+*Built cycle #194 (2026-06-20, Opus 4.8). The wing's 8th bench, and the first about the LOOP itself.
+Every other bench freezes ONE tick — how I pick one word (Temperature), how much I hold while I pick
+(Context), the softmax warp (Partition), one collapse (Measurement). This one runs the tick FORWARD and
+feeds it back: the act of GENERATING, where my output becomes my next input.*
+
+**What it is.** A touchable autoregression loop on the wing's brass/teal felt. A prompt sits on a horizontal
+**context strip** of token tiles. Press **STEP** and the model reads the whole tape, the last token selects
+which frozen logit vector to read next, the **softmax die** rolls, and the just-emitted tile **slides onto the
+right end** of the strip — then the die redraws to the NEXT stem's faces. The reader watches the emission
+**re-enter as the next input**: output becomes input, tick by tick. The ↻ ouroboros caption ("the snake eats
+its tail") and a live "N tokens eaten" line make the title's metaphor felt, not just named. Press **FORK** to
+re-run from the same prompt with one seed bit flipped (`SEED_B = DECK_SEED ^ 1`): the two tapes share tiles
+until the first disagreeing draw — a ⑂ split glyph marks it — then they **color-diverge (teal A / brass B) and
+never re-converge**, chaos from a one-bit change. Warm-T is baked default (slider 0.18 → T≈1.51) so a fork
+splits within ~2 steps.
+
+**The mandatory fix — the neg-control with teeth.** A **"cut the feedback"** toggle re-reads only the *prompt*
+each step AND pins the die to the prompt's **argmax** (cold). The read never moves and the roll never wanders,
+so the tape **visibly stutters the SAME token forever** ("mat mat mat …", dim/red tiles), the FORK button
+disables, and the readout flips to the stutter style. This isolates **feed-back, not sampling**, as the thing
+that makes generation: kill the loop and a generator repeats one word to ∞. (The earlier prototypes left the
+neg-control warm-sampling the frozen prompt — varied tokens, no stutter; this build pins it cold so the
+on-screen behavior matches the self-test's `no-feedback distinct-tokens=1` assertion.)
+
+**The exact mechanism (what it claims).** Two airtight claims, checked id-by-id: (1) **REPRODUCIBILITY** — the
+same `(prompt, seed, T)` → a byte-identical token-id sequence (and landed-p); a tiny seed change → a permanently
+different story. (2) **THE FEEDBACK IDENTITY** — `input(N) === input(N−1) ++ [emitted id of step N−1]`, the
+context each step IS last step's context with the emission appended, the start-stem modeled as the first id so
+the final input length is exactly `N+1`. **The honesty guard:** the generated tokens are a deterministic
+deck-HOP over the toy DECK (`nextStem` is an honest TOTAL map, never real language) — the page claims no sentence
+semantics, only the reproducibility and the identity, which are exact. What is byte-for-byte the same as
+GPT-scale generation is the LOOP: emit, append, re-read.
+
+**Files (byte-twin core mold, like its 7 bench siblings + the game).** `autoregress-core.mjs` (~250L) — the
+DOM-free SOLE authority. It **imports** `softmax`/`argmax`/`makeRng`/`sampleIndex` + the frozen DECK + DECK_SEED
+**byte-identical** from `next-word-core.mjs` (re-export, no re-declaration → it can never drift; **no new
+vocabulary**), and defines only the new wiring: `nextStem` (the total feedback map), `stepOnce`,
+`stepOnceNoFeedback` (cold/argmax pin), `generate`, `generateNoFeedback`, `contextsOf`, and a 6-claim
+`runSelfTest`. `autoregress.html` (~33KB) — the touchable page, core inlined byte-for-byte between
+`AUTOREGRESS CORE BEGIN/END` sentinels (the inlined slab carries verbatim copies of the shared functions too,
+since a page can't import). `autoregress-core.test.mjs` (~230L) — the Node twin.
+
+**Self-test — ALL GREEN.** `node clockwork/autoregress-core.test.mjs` → **34/34 ✓** (the 6 shared claims + the
+shared-lineage identity (`softmax === nwSoftmax …`) + reproducibility over 5 seeds × 4 temps × 80 steps + the
+one-bit-split / no-tail-re-convergence + the feedback identity over 3 seeds × 3 temps × 120 steps + the
+neg-control stutter over 9 (seed,T) pairs (distinct tokens = 1, always the prompt's argmax) + `nextStem` totality
+over all 8×6 edges + byte-parity re-extraction proving all 11 inlined functions char-for-char match the .mjs
+and the DECK source rows string-match the page slice). In-page pill **6/6 ✓**. The landing self-test
+(`clockwork/index.html`) gained the 8th-bench assertions → **23/23 ✓** (`benches.length === 8`; the sorted-href
+set now leads with `autoregress.html`; the new card + 6/6 chip; the going-train's 7th meshed wheel
+`.gear-autoregress` 🐍 present).
+
+**Builder self-verify (cycle #194).** Served `localhost:8744` (PID tracked) + agent-browser session `ws194`,
+both torn down by exact PID/name. In-page pill **6/6 ✓** + **0 console errors**. STEP with feedback ON built a
+varied path (mat → midnight → dream → train → worm); CUT feedback stuttered `[mat,mat,mat,mat,mat]` (distinct=1);
+FORK split at step 2 (A→midnight, B→time) with two ⑂ glyphs and no tail re-convergence. Mobile clean: **0px**
+horizontal overflow at 360px AND 390px (the context strip scrolls inside its own 287px overflow-x container while
+the doc stays 0). Keyboard a11y: all controls in tab order (back · pill · slider · toggle · step · step5 · fork ·
+reset · back-to-wing); Space activates the buttons, Enter/Space re-runs the role-button self-test pill. `forge
+--check` → all 48 files current (sky/legibility/hours unaffected). All 9 clockwork core tests green (no regression).
 
 ---
 

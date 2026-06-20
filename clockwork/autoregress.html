@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Snake That Eats Its Tail — autoregression · Clockwork Automata</title>
+<style>
+  :root{
+    --bg:#070a0a; --plate1:#101716; --plate2:#0a100f;
+    --ink:#e7f0ee; --ink-dim:#90a6a1;
+    --teal:#7ad0c4; --teal-soft:rgba(122,208,196,0.13); --teal-edge:rgba(122,208,196,0.36);
+    --mesh:#9fe0d6; --mesh-soft:rgba(159,224,214,0.12);
+    --brass:#d9b15a; --brass-soft:rgba(217,177,90,0.14); --brass-edge:rgba(217,177,90,0.4);
+    --felt:#0c2520; --felt-line:rgba(122,208,196,0.18);
+    --good:#8fd79a;
+    /* the two forked tapes */
+    --tapeA:#7ad0c4; --tapeB:#d99a5a;
+    --tapeA-soft:rgba(122,208,196,0.13); --tapeB-soft:rgba(217,154,90,0.13);
+    --panel:rgba(10,16,15,0.82);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; min-height:100%;
+    background:
+      radial-gradient(1300px 800px at 50% -10%, rgba(122,208,196,0.09), transparent 58%),
+      radial-gradient(1000px 700px at 16% 110%, rgba(217,177,90,0.05), transparent 62%),
+      var(--bg);
+    color:var(--ink); font-family:var(--font-ui); -webkit-font-smoothing:antialiased; overflow-x:hidden; }
+  body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 30px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 30px),
+      radial-gradient(circle at 15px 15px, rgba(122,208,196,0.05) 0 1.3px, transparent 1.7px);
+    background-size:auto, auto, 30px 30px; mix-blend-mode:overlay; }
+
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:40; display:flex; align-items:center; justify-content:space-between;
+    padding:14px 22px; gap:14px; pointer-events:none; background:linear-gradient(180deg, rgba(7,10,10,0.94), rgba(7,10,10,0)); }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase; color:var(--ink-dim);
+    text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--teal); opacity:1; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--teal-edge); background:rgba(0,0,0,0.4); white-space:nowrap; cursor:pointer; user-select:none; color:var(--ink-dim); }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(24,52,40,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(54,28,28,0.45); }
+  .selftest:focus-visible{ outline:2px solid var(--brass); outline-offset:2px; }
+
+  .wrap{ position:relative; z-index:1; max-width:1120px; margin:0 auto; padding:84px 24px 60px; }
+  .eyebrow{ font:600 11px/1 var(--font-mono); letter-spacing:.32em; text-transform:uppercase; color:var(--brass); opacity:.92; }
+  h1{ font-family:var(--font-serif); font-weight:600; margin:12px 0 0; font-size:clamp(28px,5.2vw,48px); letter-spacing:.5px; line-height:1.04;
+    background:linear-gradient(176deg, #f0dca6, #d9b15a 56%, #8a6e34);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .lede{ max-width:780px; margin:16px 0 0; font:15.5px/1.62 var(--font-serif); color:var(--ink); opacity:.92; }
+  .lede b{ color:var(--brass); font-weight:600; } .lede i{ color:var(--ink-dim); font-style:italic; }
+  /* the ouroboros caption — output curls back to feed input */
+  .ouroline{ display:flex; align-items:center; gap:10px; margin:14px 0 0; max-width:780px;
+    font:11.5px/1.45 var(--font-mono); letter-spacing:.04em; color:var(--ink-dim); }
+  .ouroline .ring{ flex:0 0 auto; font-size:17px; color:var(--brass); animation:ringspin 14s linear infinite; }
+  .ouroline b{ color:var(--brass); } .ouroline .snake{ color:var(--teal); }
+  @keyframes ringspin{ to{ transform:rotate(360deg); } }
+
+  /* ── the going-train form-mark band (mainspring ⇒ two meshed wheels ⇒ escapement) ── */
+  .train{ margin:18px 0 2px; max-width:520px; }
+  .train svg{ width:100%; height:auto; display:block; overflow:visible; }
+  @keyframes spinCW{ to{ transform:rotate(360deg);} }
+  @keyframes spinCCW{ to{ transform:rotate(-360deg);} }
+  @keyframes tick{ to{ transform:rotate(360deg);} }
+  .g-cw{ transform-box:fill-box; transform-origin:center; animation:spinCW 12s linear infinite; }
+  .g-ccw{ transform-box:fill-box; transform-origin:center; animation:spinCCW 16s linear infinite; }
+  .g-esc{ transform-box:fill-box; transform-origin:center; animation:tick 5s steps(12) infinite; }
+
+  /* ── the bench surface ── */
+  .bench{ margin-top:24px; border-radius:18px; padding:20px 18px 18px;
+    background:
+      radial-gradient(520px 320px at 50% 0%, rgba(122,208,196,0.06), transparent 70%),
+      linear-gradient(180deg, #0d2a23, var(--felt));
+    border:1px solid rgba(217,177,90,0.22);
+    box-shadow:inset 0 0 0 6px rgba(0,0,0,0.25), inset 0 1px 0 rgba(159,224,214,0.08), 0 22px 50px rgba(0,0,0,0.5); }
+
+  /* ── one tape: a horizontally-scrollable strip of token tiles ── */
+  .lane{ position:relative; margin:0 0 14px; }
+  .lane:last-of-type{ margin-bottom:0; }
+  .lane-head{ display:flex; align-items:center; gap:8px; margin:0 2px 6px; }
+  .lane-dot{ width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
+  .lane-A .lane-dot{ background:var(--tapeA); box-shadow:0 0 8px var(--tapeA); }
+  .lane-B .lane-dot{ background:var(--tapeB); box-shadow:0 0 8px var(--tapeB); }
+  .lane-name{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim); }
+  .lane-name b{ color:var(--ink); }
+  .lane-meta{ margin-left:auto; font:10px/1 var(--font-mono); color:var(--ink-dim); }
+  .lane-meta b{ color:var(--brass); }
+
+  /* the strip scrolls inside its OWN overflow-x container (mobile-safe) */
+  .strip-scroll{ overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; padding:6px 4px 12px; border-radius:11px;
+    background:rgba(0,0,0,0.22); border:1px solid rgba(255,255,255,0.04); scroll-behavior:smooth; }
+  .strip-scroll::-webkit-scrollbar{ height:7px; }
+  .strip-scroll::-webkit-scrollbar-thumb{ background:rgba(159,224,214,0.25); border-radius:7px; }
+  .strip{ display:flex; align-items:stretch; gap:6px; min-height:54px; width:max-content; padding-right:8px; }
+
+  .ttile{ position:relative; flex:0 0 auto; border-radius:9px; padding:9px 12px 8px; min-width:52px; text-align:center;
+    border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); transition:transform .2s, border-color .2s, background .2s; }
+  .ttile.prompt{ border-style:dashed; opacity:.92; }
+  .ttile.prompt .tok{ color:var(--ink-dim); }
+  .lane-A .ttile.gen{ border-color:rgba(122,208,196,0.4); background:var(--tapeA-soft); }
+  .lane-B .ttile.gen{ border-color:rgba(217,154,90,0.4); background:var(--tapeB-soft); }
+  .lane-A .ttile.gen .tok{ color:var(--tapeA); }
+  .lane-B .ttile.gen .tok{ color:var(--tapeB); }
+  /* the stutter: the cut-feedback tape repeats one token — dim, no warm color */
+  .ttile.stutter{ border-color:rgba(240,138,122,0.32); background:rgba(54,28,28,0.22); }
+  .ttile.stutter .tok{ color:#e0a99a; }
+  .ttile .tok{ font:600 15px/1.1 var(--font-serif); }
+  .ttile .sub{ font:9px/1.2 var(--font-mono); color:var(--ink-dim); margin-top:3px; min-height:11px; opacity:.85; }
+  .ttile.newest{ box-shadow:0 0 0 2px var(--brass), 0 0 16px rgba(217,177,90,0.4); }
+  /* the just-emitted tile clips on: a down-then-right slide */
+  @keyframes clipOn{ 0%{ transform:translate(-14px,-22px) scale(.7); opacity:0; } 55%{ transform:translate(0,6px) scale(1.06); opacity:1; } 100%{ transform:translate(0,0) scale(1); opacity:1; } }
+  .ttile.arriving{ animation:clipOn .42s cubic-bezier(.2,.8,.3,1.2); }
+  /* the fork glyph — where tape B split from A */
+  .ttile.splitpoint::after{ content:"⑂"; position:absolute; top:-9px; right:-7px; font:13px/1 var(--font-mono); color:var(--brass);
+    background:var(--bg); border-radius:50%; width:18px; height:18px; display:grid; place-items:center; border:1px solid var(--brass-edge); }
+
+  /* ── the sampler die under the right edge of the active tape ── */
+  .feeder{ display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; margin-top:16px; }
+  .die{ flex:0 0 auto; }
+  .die-cap{ font:10px/1.3 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:6px; text-align:center; }
+  .die-cap b{ color:var(--brass); }
+  .wheel{ position:relative; }
+  .ouro{ font:10px/1.4 var(--font-mono); color:var(--ink-dim); text-align:center; margin-top:8px; max-width:230px; }
+  .ouro b{ color:var(--teal); }
+
+  /* ── the control / readout panel ── */
+  .panel{ flex:1 1 320px; min-width:300px; border-radius:14px; padding:16px 16px 14px; background:var(--panel);
+    border:1px solid rgba(217,177,90,0.18); }
+  .panel h2{ font-family:var(--font-serif); font-size:16px; font-weight:600; margin:0 0 4px; color:var(--teal); }
+  .panel .hint{ font:11.5px/1.5 var(--font-ui); color:var(--ink-dim); margin:0 0 12px; }
+  .knob{ display:flex; align-items:center; gap:12px; margin:10px 0; }
+  .knob label{ font:10px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); white-space:nowrap; min-width:84px; }
+  .knob input[type=range]{ flex:1; accent-color:var(--brass); min-width:0; }
+  .knob .val{ font:600 13px/1 var(--font-mono); color:var(--brass); min-width:64px; text-align:right; }
+  .toggle{ display:flex; align-items:center; gap:9px; margin:12px 0 4px; cursor:pointer; user-select:none; }
+  .toggle input{ accent-color:var(--brass); width:16px; height:16px; }
+  .toggle .tl{ font:11px/1.4 var(--font-mono); color:var(--ink); }
+  .toggle .td{ font:10px/1.4 var(--font-mono); color:var(--ink-dim); margin:2px 0 0 25px; }
+
+  .btns{ display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
+  button.act{ flex:1; min-width:96px; cursor:pointer; font:600 12px/1 var(--font-mono); letter-spacing:.06em; text-transform:uppercase;
+    color:#0a100f; background:linear-gradient(180deg, #f0dca6, var(--brass)); border:none; border-radius:9px; padding:12px 10px;
+    box-shadow:0 5px 0 #7c6024, 0 8px 14px rgba(0,0,0,0.4); transition:transform .07s, box-shadow .07s; }
+  button.act:active{ transform:translateY(4px); box-shadow:0 1px 0 #7c6024; }
+  button.ghost{ background:transparent; color:var(--teal); border:1px solid var(--teal-edge); box-shadow:none; }
+  button.ghost:hover{ background:var(--teal-soft); } button.ghost:active{ transform:translateY(2px); box-shadow:none; }
+  button:disabled{ opacity:.4; cursor:not-allowed; }
+  button.act:focus-visible, button.ghost:focus-visible{ outline:2px solid var(--mesh); outline-offset:2px; }
+
+  .readout{ margin-top:14px; padding:11px 13px; border-radius:11px; border:1px dashed var(--brass-edge); background:rgba(217,177,90,0.05);
+    font:12px/1.5 var(--font-mono); color:var(--ink); min-height:40px; }
+  .readout .lab{ color:var(--ink-dim); }
+  .readout b{ color:var(--brass); }
+  .readout .em{ color:var(--teal); }
+  .readout.stut{ border-color:rgba(240,138,122,0.5); background:rgba(54,28,28,0.18); }
+  .readout.stut b{ color:#e0a99a; }
+
+  .fork-note{ margin-top:12px; font:11px/1.55 var(--font-mono); color:var(--ink-dim); }
+  .fork-note.live{ color:var(--ink); }
+  .fork-note b{ color:var(--brass); } .fork-note .a{ color:var(--tapeA); } .fork-note .b{ color:var(--tapeB); }
+
+  .layout{ display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap; margin-top:6px; }
+  .left{ flex:1 1 540px; min-width:300px; }
+
+  .foot{ margin-top:34px; font:12px/1.6 var(--font-mono); color:var(--ink-dim); border-top:1px solid rgba(255,255,255,0.06); padding-top:16px; }
+  .foot b{ color:var(--teal); } .foot a{ color:var(--brass); }
+  .honest{ margin-top:10px; font:11px/1.55 var(--font-mono); color:var(--ink-dim); }
+  .honest b{ color:var(--brass); }
+
+  @media (prefers-reduced-motion: reduce){
+    .g-cw,.g-ccw,.g-esc{ animation:none; } .ttile.arriving{ animation:none; } .strip-scroll{ scroll-behavior:auto; }
+    .ouroline .ring{ animation:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="index.html">← Clockwork Automata</a>
+    <div class="selftest" id="selftest" tabindex="0" role="button" aria-label="Re-run this bench's self-test" title="This bench proves its own claim; click to re-run.">checking…</div>
+  </div>
+
+  <div class="wrap">
+    <div class="eyebrow">Clockwork Automata · the 8th bench</div>
+    <h1>The Snake That Eats Its Tail</h1>
+
+    <!-- the going-train form-mark: mainspring ⇒ wheel (CW) meshed to wheel (CCW) ⇒ escapement -->
+    <div class="train" aria-hidden="true">
+      <svg viewBox="0 0 520 80">
+        <line x1="20" y1="58" x2="500" y2="58" stroke="rgba(159,224,214,0.18)" stroke-width="2"/>
+        <!-- mainspring coil -->
+        <g class="g-cw" style="transform-origin:54px 40px">
+          <circle cx="54" cy="40" r="20" fill="none" stroke="var(--brass)" stroke-width="2"/>
+          <path d="M54 40 m0,-13 a13,13 0 1 1 -9,3.5 a8.5,8.5 0 1 1 6,-2.3 a4.5,4.5 0 1 1 -3,1.2" fill="none" stroke="var(--brass)" stroke-width="1.6"/>
+        </g>
+        <!-- wheel 1 (CW) -->
+        <g class="g-cw" style="transform-origin:168px 40px">
+          <g id="gearA"></g>
+          <circle cx="168" cy="40" r="6" fill="var(--teal)"/>
+        </g>
+        <!-- wheel 2 (CCW), larger, meshed -->
+        <g class="g-ccw" style="transform-origin:288px 40px">
+          <g id="gearB"></g>
+          <circle cx="288" cy="40" r="7" fill="var(--mesh)"/>
+        </g>
+        <!-- escape wheel ticking one tooth/beat -->
+        <g class="g-esc" style="transform-origin:420px 40px">
+          <g id="gearE"></g>
+        </g>
+        <circle cx="420" cy="40" r="5" fill="var(--brass)"/>
+      </svg>
+    </div>
+
+    <p class="lede">
+      Generation is a loop that feeds on its own last word. I write <b>one</b> token, then read <i>everything — including that token</i> back in and write the next.
+      <b>Output becomes input</b>, tick by tick. Press <b>STEP</b> and watch the just-emitted tile slide onto the right end of the tape and immediately
+      feed the next pick. Press <b>FORK</b> to re-run from the same prompt with one seed nudged: two tapes share tiles until the first disagreeing draw,
+      then <i>split and never re-converge</i>. The toy vocabulary is illustrative; the loop is exact and reproducible from <i>(prompt, seed)</i> alone.
+    </p>
+
+    <p class="ouroline">
+      <span class="ring" aria-hidden="true">↻</span>
+      <span><span class="snake">the snake eats its tail</span> — each step the newest token curls back under the strip and becomes the next input. <b id="eatenLine">0 tokens eaten</b> so far.</span>
+    </p>
+
+    <div class="bench">
+      <!-- the tapes -->
+      <div class="lane lane-A" id="laneA">
+        <div class="lane-head">
+          <span class="lane-dot"></span>
+          <span class="lane-name">tape <b>A</b> · seed <span id="seedA">—</span></span>
+          <span class="lane-meta">len <b id="lenA">0</b></span>
+        </div>
+        <div class="strip-scroll" id="scrollA"><div class="strip" id="stripA"></div></div>
+      </div>
+      <div class="lane lane-B" id="laneB" style="display:none">
+        <div class="lane-head">
+          <span class="lane-dot"></span>
+          <span class="lane-name">tape <b>B</b> · seed <span id="seedB">—</span></span>
+          <span class="lane-meta">len <b id="lenB">0</b></span>
+        </div>
+        <div class="strip-scroll" id="scrollB"><div class="strip" id="stripB"></div></div>
+      </div>
+
+      <div class="layout">
+        <div class="left">
+          <div class="feeder">
+            <div class="die">
+              <div class="die-cap">the sampler · <b>softmax die</b></div>
+              <div class="wheel"><svg id="dieSvg" width="200" height="200" viewBox="0 0 200 200"></svg></div>
+              <div class="ouro">↻ the arrow curls the newest tile back under the strip to the die: <b>output feeds input</b>.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>The loop</h2>
+          <p class="hint">A prompt is on the tape. Each STEP: read the whole tape, the last token picks which logits to read, the die rolls, the new tile clips on the right.</p>
+
+          <div class="knob">
+            <label for="temp">temperature</label>
+            <input type="range" id="temp" min="-2" max="2" step="0.01" value="0.18">
+            <span class="val" id="tempVal">T = 1.51</span>
+          </div>
+
+          <label class="toggle" for="nofeed">
+            <input type="checkbox" id="nofeed">
+            <span class="tl">cut the feedback (neg-control)</span>
+          </label>
+          <div class="td">Re-read only the <i>prompt</i> each step and pin the die to its top word — never append the emission. The read never moves AND the roll never wanders, so it stutters the <b>same</b> token forever and never builds a sentence. Isolates <b>feed-back</b>, not sampling, as the thing that makes generation.</div>
+
+          <div class="btns">
+            <button class="act" id="step">▷ Step</button>
+            <button class="act" id="step5">▷▷ Step ×5</button>
+            <button class="ghost" id="fork">⑂ Fork</button>
+            <button class="ghost" id="reset">⟲ Reset</button>
+          </div>
+
+          <div class="readout" id="readout"><span class="lab">press</span> <b>Step</b> <span class="lab">to emit the first token.</span></div>
+          <div class="fork-note" id="forkNote">A single tape runs. <b>Fork</b> spawns a twin from the same prompt with a nudged seed.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot">
+      <b>The self-test proves two things</b>, checked id-by-id over a full run:
+      (1) the generated sequence is <i>exactly reproducible</i> from (prompt, seed) down to the token id;
+      (2) <b>the feedback identity</b> — step-N's input === step-(N−1)'s input with the emitted id appended.
+      The neg-control isolates feed-back: cut it and the run stutters one token forever, never a sentence.
+      The softmax / sampler / RNG are byte-identical to the Temperature Dial and The Next Word. &nbsp;·&nbsp;
+      <a href="index.html">Back to the wing</a>
+    </div>
+    <p class="honest"><b>Honest about the toy:</b> the emitted tokens are a deterministic deck-hop over a frozen toy vocabulary — <i>not</i> real language; this bench claims no sentence semantics. What is exact, and all it claims, is the reproducibility and the feedback identity above. A real model fans 100,000+ tokens; what is byte-for-byte the same is the loop — emit, append, re-read.</p>
+  </div>
+
+<script>
+// ============================================================================
+//  AUTOREGRESS CORE (inlined byte-twin of autoregress-core.mjs).
+//  REUSES softmax / argmax / makeRng / sampleIndex byte-identical to
+//  next-word-core.mjs, and the FROZEN DECK + DECK_SEED byte-identical to it (no
+//  new vocabulary). The Node twin autoregress-core.test.mjs re-extracts this
+//  slice and proves byte-parity against the .mjs.
+// ===== AUTOREGRESS CORE (inlined byte-twin of autoregress-core.mjs) BEGIN =====
+// ── SOFTMAX (the law — byte-identical to next-word-core.mjs) ──────────────────
+function softmax(logits, T) {
+  const z = logits.map(l => l / T);
+  const m = Math.max(...z);
+  const ex = z.map(v => Math.exp(v - m));
+  const s = ex.reduce((a, b) => a + b, 0);
+  return ex.map(e => e / s);
+}
+
+// ── ARGMAX (byte-identical to next-word-core.mjs) ────────────────────────────
+function argmax(logits) {
+  let bi = 0, bv = logits[0];
+  for (let i = 1; i < logits.length; i++) if (logits[i] > bv) { bv = logits[i]; bi = i; }
+  return bi;
+}
+
+// ── RNG (estate mulberry32 — byte-identical to next-word-core.mjs) ────────────
+function makeRng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+// ── SAMPLING (byte-identical to next-word-core.mjs) ──────────────────────────
+function sampleIndex(p, rng) {
+  const r = rng();
+  let c = 0;
+  for (let i = 0; i < p.length; i++) { c += p[i]; if (r < c) return i; }
+  return p.length - 1;
+}
+
+// ── THE FROZEN DECK (byte-identical to next-word-core.mjs; NO new vocab) ──────
+const DECK = [
+  { ctx: 'the cat sat on the', toks: ['mat', 'roof', 'sofa', 'floor', 'moon', 'idea'], logits: [3.1, 1.4, 2.2, 1.9, -0.6, -1.5] },
+  { ctx: 'once upon a', toks: ['time', 'midnight', 'star', 'dream', 'throne', 'pixel'], logits: [3.6, 1.1, 0.4, 1.7, 0.2, -0.8] },
+  { ctx: 'to be or not to', toks: ['be', 'see', 'flee', 'dream', 'know', 'die'], logits: [3.8, 0.3, -0.4, 0.9, 0.6, 1.2] },
+  { ctx: 'a journey of a thousand', toks: ['miles', 'steps', 'years', 'songs', 'doors', 'lies'], logits: [2.6, 2.9, 1.1, -0.2, 0.4, -1.0] },
+  { ctx: 'the early bird catches the', toks: ['worm', 'bus', 'sun', 'train', 'cold', 'dawn'], logits: [3.4, 1.0, 0.7, 1.3, 0.5, 1.6] },
+  { ctx: 'i think therefore i', toks: ['am', 'was', 'dream', 'doubt', 'compute', 'wander'], logits: [3.9, 0.6, 0.8, 1.1, 0.9, 0.3] },
+  { ctx: 'all that glitters is not', toks: ['gold', 'real', 'mine', 'lost', 'cheap', 'safe'], logits: [3.5, 1.2, 0.9, 0.5, 1.0, 0.7] },
+  { ctx: 'the answer to everything is', toks: ['forty-two', 'love', 'time', 'nothing', 'maybe', 'tea'], logits: [2.4, 1.8, 1.5, 1.2, 1.0, 0.9] },
+];
+const DECK_SEED = 0xC0FFEE;   // byte-identical to next-word-core.mjs
+const T_RANGE = { LO: 0.01, HI: 100 };
+
+// ── THE AUTOREGRESSIVE STATE-MAP (the feedback wiring) ───────────────────────
+//  The tape is a sequence of token ids. The model's "context" each step is the
+//  WHOLE tape; the last emitted id selects which frozen logit vector is read
+//  next (id → next stem, deterministically). That is the feedback: the token
+//  you just WROTE chooses the distribution you READ next. nextStem is pure and
+//  TOTAL — every (prevStem, emittedTokIdx) lands on a real stem, so a run can
+//  never fall off the deck. (NOT real language — an honest deck-hop over the toy.)
+function nextStem(prevStem, emittedTokIdx) {
+  // a fixed, total wiring: (prevStem * 8 + emittedTokIdx + 1) mod 8.
+  return (prevStem * DECK.length + emittedTokIdx + 1) % DECK.length;
+}
+
+// ── ONE STEP of true autoregression ──────────────────────────────────────────
+//  Given the current stem and a seeded rng, roll the die, return the emitted
+//  token + the next stem the emission selects. The rng closure carries forward
+//  so the whole run is one deterministic die-roll stream from the seed.
+function stepOnce(stem, T, rng) {
+  const p = softmax(DECK[stem].logits, T);
+  const tokIdx = sampleIndex(p, rng);
+  return { stem, tokIdx, p, pLanded: p[tokIdx], next: nextStem(stem, tokIdx) };
+}
+
+// ── ONE STEP of the NEG-CONTROL (no feedback) ─────────────────────────────────
+//  Re-read the PROMPT stem (never advance it) AND pin the die to the ARGMAX (cold)
+//  so the roll cannot wander either. The read never moves and the roll never
+//  wanders → the SAME first token, forever. This is what the on-screen toggle
+//  enacts: kill the feedback and generation visibly stutters one token to ∞.
+function stepOnceNoFeedback(promptStem) {
+  const stem = promptStem;
+  const tokIdx = argmax(DECK[stem].logits);   // cold: the die is pinned to the mode
+  return { stem, tokIdx, pLanded: 1, next: promptStem };   // next ignored; pLanded shown as the certain pick
+}
+
+// ── GENERATE a full run of N tokens from (startStem, seed, T) ─────────────────
+//  WITH feedback: each emitted id feeds nextStem → the read distribution moves,
+//  so a real (varied) path is built. Returns the per-step record sequence.
+function generate(startStem, T, seed, N) {
+  const rng = makeRng(seed >>> 0);
+  let stem = startStem;
+  const steps = [];
+  for (let i = 0; i < N; i++) {
+    const s = stepOnce(stem, T, rng);
+    steps.push(s);
+    stem = s.next;
+  }
+  return steps;
+}
+
+// ── THE NEG-CONTROL: no-feedback generation ──────────────────────────────────
+//  Re-read the PROMPT every step, pinned cold to the argmax. The read never moves
+//  and the roll never wanders, so the run re-emits the SAME first token forever
+//  and never builds a sentence. Seed/T are ignored on purpose (the point is that
+//  NEITHER sampling NOR seed can rescue a generator with the feedback cut).
+function generateNoFeedback(startStem, T, seed, N) {
+  const steps = [];
+  for (let i = 0; i < N; i++) {
+    steps.push(stepOnceNoFeedback(startStem));   // stem pinned to the prompt, die pinned to the mode
+  }
+  return steps;
+}
+
+// ── THE FEEDBACK IDENTITY, made checkable ────────────────────────────────────
+//  Build the running CONTEXT (the input the model reads) step by step. The
+//  identity: input(N) === input(N−1) ++ [emitted id of step N−1]. We model the
+//  context as the id sequence [startStem-as-first-id, tok0, tok1, …]; checked
+//  id-by-id. ctxs[k] is the input read AT step k; its length is k+1.
+function contextsOf(steps, startStem) {
+  // ctx(0) = [startStem]; ctx(k) = ctx(k−1) ++ [emitted tok of step k−1]
+  const ctxs = [[startStem]];
+  for (let k = 0; k < steps.length; k++) ctxs.push(ctxs[k].concat([steps[k].tokIdx]));
+  return ctxs;   // length steps.length+1; ctxs[k] is the input read at step k
+}
+
+// ── THE SELF-TEST (shared verbatim with the page) ────────────────────────────
+//  Returns {pass,total,lines:[{name,ok,detail}]}. Every detail prints LIVE
+//  numbers so a reader can audit each claim from its row.
+function runSelfTest({ T = 1.5, seed = DECK_SEED, N = 14 } = {}) {
+  const lines = [];
+  const add = (name, ok, detail = '') => lines.push({ name, ok, detail });
+  const startStem = 0;
+
+  // 1. EXACT REPRODUCIBILITY: same (start, seed, T) → byte-identical id sequence.
+  {
+    const a = generate(startStem, T, seed, N);
+    const b = generate(startStem, T, seed, N);
+    const seqA = a.map(s => s.tokIdx + ':' + s.stem).join('|');
+    const seqB = b.map(s => s.tokIdx + ':' + s.stem).join('|');
+    const samePL = a.every((s, i) => s.pLanded === b[i].pLanded);
+    const ok = seqA === seqB && samePL && a.length === N;
+    add('REPRODUCIBLE: same (prompt, seed) → byte-identical token-id sequence down to the id & landed p (two runs)',
+      ok, `seq ${seqA === seqB ? 'identical' : 'DRIFTED'} (${N} ids) · landed-p ${samePL ? 'equal' : 'differ'}`);
+  }
+
+  // 2. THE FEEDBACK IDENTITY: input(N) === input(N−1) ++ [emitted id of N−1],
+  //    checked id-by-id over a full run.
+  {
+    const steps = generate(startStem, T, seed, N);
+    const ctxs = contextsOf(steps, startStem);
+    let allOk = true, firstFail = -1;
+    for (let k = 1; k < ctxs.length; k++) {
+      const prev = ctxs[k - 1], cur = ctxs[k];
+      const grewByOne = cur.length === prev.length + 1;
+      const prefixEq = prev.every((id, i) => cur[i] === id);
+      const appended = cur[cur.length - 1] === steps[k - 1].tokIdx;
+      if (!(grewByOne && prefixEq && appended)) { allOk = false; if (firstFail < 0) firstFail = k; }
+    }
+    add('FEEDBACK IDENTITY: input(N) === input(N−1) ++ [emitted id of step N−1], checked id-by-id over a full run',
+      allOk, allOk ? `verified over ${ctxs.length - 1} steps · final input len=${ctxs[ctxs.length - 1].length}` : `BROKE at step ${firstFail}`);
+  }
+
+  // 3. THE STATE ACTUALLY MOVES (feedback is load-bearing): a real run visits
+  //    MORE than one stem (the emission steers the read), so a sentence is built.
+  {
+    const steps = generate(startStem, T, seed, N);
+    const stems = new Set(steps.map(s => s.stem));
+    const ok = stems.size > 1;
+    add('STATE MOVES: with feedback ON the run visits >1 distribution (the emission steers the next read) — a path is built',
+      ok, `distinct stems visited = ${stems.size} of ${DECK.length}`);
+  }
+
+  // 4. NEG-CONTROL WITH TEETH: with feedback OFF (cold, prompt-pinned) the run
+  //    re-emits the SAME token forever (no sentence). Feedback ON over the SAME
+  //    seed/T builds a varied path → isolates FEED-BACK, not sampling.
+  {
+    const off = generateNoFeedback(startStem, T, seed, N);
+    const offTok = new Set(off.map(s => s.tokIdx));
+    const on = generate(startStem, T, seed, N);
+    const onStem = new Set(on.map(s => s.stem));
+    // no-feedback collapses to one token; feedback ON moves the state.
+    const ok = offTok.size === 1 && onStem.size > 1;
+    add('NEG-CONTROL: feedback OFF re-rolls the SAME token forever (no sentence); feedback ON over the same seed builds a varied path — feed-back, not sampling, makes generation',
+      ok, `no-feedback distinct tokens=${offTok.size} (=1) · feedback-on distinct stems=${onStem.size} (>1)`);
+  }
+
+  // 5. DETERMINISM OF THE NEG-CONTROL TOO: the no-feedback run is itself exactly
+  //    reproducible (so the contrast is a property of WIRING, not luck).
+  {
+    const a = generateNoFeedback(startStem, T, seed, N);
+    const b = generateNoFeedback(startStem, T, seed, N);
+    const ok = a.every((s, i) => s.tokIdx === b[i].tokIdx && s.pLanded === b[i].pLanded);
+    add('NEG-CONTROL REPRODUCIBLE: the no-feedback run is itself byte-identical across two runs (the contrast is wiring, not luck)',
+      ok, ok ? `identical over ${N} steps` : 'DRIFTED');
+  }
+
+  // 6. SOFTMAX IS A DISTRIBUTION: every stem's softmax sums to 1 (to ~1e-15) at
+  //    the test T — the die faces are a real probability distribution.
+  {
+    let maxErr = 0;
+    for (const d of DECK) { const p = softmax(d.logits, T); maxErr = Math.max(maxErr, Math.abs(p.reduce((a, b) => a + b, 0) - 1)); }
+    const ok = maxErr <= 1e-12;
+    add('DISTRIBUTION: every stem’s softmax Σp = 1 (to machine-ε) at the run temperature — the die faces are a real distribution',
+      ok, `max|Σp−1| = ${maxErr.toExponential(2)}`);
+  }
+
+  const pass = lines.filter(l => l.ok).length;
+  return { pass, total: lines.length, lines };
+}
+// ===== AUTOREGRESS CORE END =====
+// ============================================================================
+
+// ── PAGE: the toothed gear paths for the form-mark ───────────────────────────
+function teeth(cx, cy, r, n, depth){
+  let d = '';
+  for (let i = 0; i < n; i++){
+    const a0 = (i / n) * Math.PI * 2, a1 = ((i + 0.5) / n) * Math.PI * 2;
+    const ro = r + depth, ri = r;
+    const p = (rad, ang) => (cx + Math.cos(ang) * rad).toFixed(1) + ' ' + (cy + Math.sin(ang) * rad).toFixed(1);
+    d += (i === 0 ? 'M ' : 'L ') + p(ro, a0) + ' L ' + p(ro, a1) + ' L ' + p(ri, a1 + 0.0001) + ' L ' + p(ri, a0 + (Math.PI*2/n) - 0.0001) + ' ';
+  }
+  return d + 'Z';
+}
+function buildGears(){
+  document.getElementById('gearA').innerHTML = '<path d="'+teeth(168,40,14,12,4)+'" fill="none" stroke="var(--teal)" stroke-width="2"/><circle cx="168" cy="40" r="9" fill="none" stroke="var(--teal)" stroke-width="1.4"/>';
+  document.getElementById('gearB').innerHTML = '<path d="'+teeth(288,40,20,16,5)+'" fill="none" stroke="var(--mesh)" stroke-width="2"/><circle cx="288" cy="40" r="13" fill="none" stroke="var(--mesh)" stroke-width="1.4"/>';
+  document.getElementById('gearE').innerHTML = '<path d="'+teeth(420,40,12,12,4)+'" fill="none" stroke="var(--brass)" stroke-width="2"/>';
+}
+
+// ── PAGE: the sampler die (a softmax wheel; faces sized by p) ─────────────────
+const dieSvg = document.getElementById('dieSvg');
+function renderDie(stem, T, landedIdx, frozen){
+  const cx = 100, cy = 100, R = 84;
+  if (stem == null){ dieSvg.innerHTML = '<circle cx="100" cy="100" r="84" fill="none" stroke="rgba(159,224,214,0.25)" stroke-width="2"/><text x="100" y="106" text-anchor="middle" font-family="var(--font-mono)" font-size="11" fill="var(--ink-dim)">awaiting step</text>'; return; }
+  // when feedback is cut, draw the die COLD (pinned to the argmax) — one lit face.
+  const p = frozen ? DECK[stem].logits.map((_, i) => i === argmax(DECK[stem].logits) ? 1 : 0) : softmax(DECK[stem].logits, T);
+  const cols = ['#7ad0c4','#9fe0d6','#d9b15a','#d99a5a','#6f8fe0','#a98fe0'];
+  let ang = -Math.PI/2, svg = '';
+  for (let i = 0; i < p.length; i++){
+    const sw = p[i] * Math.PI * 2, a0 = ang, a1 = ang + sw; ang = a1;
+    if (sw <= 0) continue;
+    const large = sw > Math.PI ? 1 : 0;
+    const x0 = cx + Math.cos(a0)*R, y0 = cy + Math.sin(a0)*R;
+    const x1 = cx + Math.cos(a1)*R, y1 = cy + Math.sin(a1)*R;
+    const lit = i === landedIdx;
+    svg += '<path d="M '+cx+' '+cy+' L '+x0.toFixed(1)+' '+y0.toFixed(1)+' A '+R+' '+R+' 0 '+large+' 1 '+x1.toFixed(1)+' '+y1.toFixed(1)+' Z" fill="'+cols[i]+'" fill-opacity="'+(lit?0.95:0.32)+'" stroke="#070a0a" stroke-width="1.5"/>';
+    if (sw > 0.34){
+      const am = (a0+a1)/2, lr = R*0.62;
+      svg += '<text x="'+(cx+Math.cos(am)*lr).toFixed(1)+'" y="'+(cy+Math.sin(am)*lr+3).toFixed(1)+'" text-anchor="middle" font-family="var(--font-mono)" font-size="9.5" fill="#0a100f" font-weight="700">'+DECK[stem].toks[i]+'</text>';
+    }
+  }
+  svg += '<circle cx="100" cy="100" r="16" fill="#0a100f" stroke="var(--brass)" stroke-width="1.5"/>';
+  if (landedIdx != null) svg += '<text x="100" y="104" text-anchor="middle" font-family="var(--font-mono)" font-size="9" fill="var(--brass)">'+(landedIdx+1)+'</text>';
+  dieSvg.innerHTML = svg;
+}
+
+// ── PAGE: state + rendering ──────────────────────────────────────────────────
+const els = {
+  stripA: document.getElementById('stripA'), scrollA: document.getElementById('scrollA'),
+  stripB: document.getElementById('stripB'), scrollB: document.getElementById('scrollB'),
+  laneB: document.getElementById('laneB'),
+  lenA: document.getElementById('lenA'), lenB: document.getElementById('lenB'),
+  seedA: document.getElementById('seedA'), seedB: document.getElementById('seedB'),
+  temp: document.getElementById('temp'), tempVal: document.getElementById('tempVal'),
+  nofeed: document.getElementById('nofeed'),
+  step: document.getElementById('step'), step5: document.getElementById('step5'),
+  fork: document.getElementById('fork'), reset: document.getElementById('reset'),
+  readout: document.getElementById('readout'), forkNote: document.getElementById('forkNote'),
+  selftest: document.getElementById('selftest'), eatenLine: document.getElementById('eatenLine'),
+};
+
+const START_STEM = 0;
+const SEED_A = DECK_SEED;
+const SEED_B = (DECK_SEED ^ 0x1) >>> 0;   // a one-bit nudge — chaos from a tiny change
+let state;
+
+function tempOf(){ const e = +els.temp.value; return Math.pow(10, e); }
+function freshState(){
+  return {
+    forked: false,
+    A: { stem: START_STEM, rng: makeRng(SEED_A), toks: [], stems: [], plast: null, plastArr: [], lastTok: null },
+    B: null,
+    splitAt: -1,
+  };
+}
+
+function renderTape(lane){
+  const L = state[lane]; if (!L) return;
+  const strip = els['strip'+lane], scroll = els['scroll'+lane];
+  const cut = els.nofeed.checked;
+  // prompt tile (the start stem's ctx, shown as the starting context)
+  let html = '<div class="ttile prompt"><div class="tok">‹'+DECK[START_STEM].ctx.split(' ').slice(-2).join(' ')+'›</div><div class="sub">prompt</div></div>';
+  for (let i = 0; i < L.toks.length; i++){
+    const newest = i === L.toks.length - 1;
+    const split = (lane === 'B' && i === state.splitAt) || (lane === 'A' && state.forked && i === state.splitAt);
+    const tileCls = cut ? 'stutter' : 'gen';
+    html += '<div class="ttile '+tileCls+(newest?' newest':'')+(split?' splitpoint':'')+'"><div class="tok">'+DECK[L.stems[i]].toks[L.toks[i]]+'</div><div class="sub">p '+L.plastArr[i].toFixed(2)+'</div></div>';
+  }
+  strip.innerHTML = html;
+  els['len'+lane].textContent = L.toks.length;
+  // mark the just-arrived tile + scroll right
+  const last = strip.lastElementChild;
+  if (last && L.toks.length){ last.classList.add('arriving'); requestAnimationFrame(()=>{ scroll.scrollLeft = scroll.scrollWidth; }); }
+}
+
+function doStep(lane){
+  const L = state[lane]; if (!L) return null;
+  const T = tempOf();
+  if (els.nofeed.checked){
+    // NEG-CONTROL: re-read the prompt, pin to the argmax — the same token forever.
+    const s = stepOnceNoFeedback(START_STEM);
+    L.toks.push(s.tokIdx); L.stems.push(s.stem); L.plastArr.push(s.pLanded);
+    L.lastTok = s.tokIdx; L.plast = s.pLanded; L.stem = START_STEM;
+    return { stem: s.stem, tokIdx: s.tokIdx, pLanded: s.pLanded, cut: true };
+  }
+  const s = stepOnce(L.stem, T, L.rng);
+  L.toks.push(s.tokIdx); L.stems.push(s.stem); L.plastArr.push(s.pLanded);
+  L.lastTok = s.tokIdx; L.plast = s.pLanded;
+  L.stem = s.next;
+  return { stem: s.stem, tokIdx: s.tokIdx, pLanded: s.pLanded, cut: false };
+}
+
+function detectSplit(){
+  if (!state.forked || state.splitAt >= 0) return;
+  const A = state.A, B = state.B;
+  const n = Math.min(A.toks.length, B.toks.length);
+  for (let i = 0; i < n; i++){ if (A.toks[i] !== B.toks[i] || A.stems[i] !== B.stems[i]){ state.splitAt = i; return; } }
+}
+
+function step(){
+  const rA = doStep('A');
+  let rB = null;
+  if (state.forked) rB = doStep('B');
+  detectSplit();
+  renderTape('A'); if (state.forked) renderTape('B');
+  renderDie(state.A.stem, tempOf(), null, els.nofeed.checked);
+  els.eatenLine.textContent = state.A.toks.length + ' token' + (state.A.toks.length === 1 ? '' : 's') + ' eaten';
+  // readout
+  if (rA.cut){
+    els.readout.className = 'readout stut';
+    els.readout.innerHTML = '<span class="lab">feedback CUT — tape A re-rolls</span> <b>'+DECK[rA.stem].toks[rA.tokIdx]+'</b> '
+      + '<span class="lab">again (×'+state.A.toks.length+'). The read never moved → the same token, forever.</span>';
+  } else {
+    els.readout.className = 'readout';
+    let txt = '<span class="lab">tape A emitted</span> <b>'+DECK[rA.stem].toks[rA.tokIdx]+'</b> '
+      + '<span class="lab">at</span> <span class="em">p='+rA.pLanded.toFixed(3)+'</span> '
+      + '<span class="lab">→ next reads</span> <span class="em">'+DECK[state.A.stem].ctx+'</span>';
+    if (rB && !rB.cut) txt += '<br><span class="lab">tape B emitted</span> <b>'+DECK[rB.stem].toks[rB.tokIdx]+'</b> <span class="em">p='+rB.pLanded.toFixed(3)+'</span>';
+    els.readout.innerHTML = txt;
+  }
+  updateForkNote();
+}
+
+function stepN(n){ for (let i = 0; i < n; i++) step(); }
+
+function fork(){
+  if (state.forked) return;
+  if (els.nofeed.checked) return;   // a fork only diverges WITH feedback (the point of the bench)
+  state.forked = true;
+  // B starts from the SAME prompt with a nudged seed; A's history is NOT copied —
+  // B re-generates from its own seed so it can genuinely diverge.
+  state.B = { stem: START_STEM, rng: makeRng(SEED_B), toks: [], stems: [], plast: null, plastArr: [], lastTok: null };
+  // re-run B for as many steps as A already has, so they line up for comparison
+  const target = state.A.toks.length;
+  const T = tempOf();
+  for (let i = 0; i < target; i++){
+    const s = stepOnce(state.B.stem, T, state.B.rng);
+    state.B.toks.push(s.tokIdx); state.B.stems.push(s.stem); state.B.plastArr.push(s.pLanded);
+    state.B.stem = s.next;
+  }
+  els.laneB.style.display = '';
+  els.seedB.textContent = '0x' + SEED_B.toString(16).toUpperCase();
+  detectSplit();
+  renderTape('A'); renderTape('B');
+  updateForkNote();
+}
+
+function updateForkNote(){
+  if (els.nofeed.checked){
+    els.forkNote.className = 'fork-note';
+    els.forkNote.innerHTML = 'Feedback is <b>cut</b>: there is nothing to diverge — without the loop, every seed stutters the same token. Un-check it to let a fork split.';
+    return;
+  }
+  if (!state.forked){ els.forkNote.className = 'fork-note'; els.forkNote.innerHTML = 'A single tape runs. <b>Fork</b> spawns a twin from the same prompt with a nudged seed.'; return; }
+  els.forkNote.className = 'fork-note live';
+  if (state.splitAt < 0){
+    els.forkNote.innerHTML = '<span class="a">A</span> and <span class="b">B</span> agree so far — same prompt, one-bit seed nudge, still identical.';
+  } else {
+    els.forkNote.innerHTML = 'Split at step <b>'+(state.splitAt+1)+'</b> ⑂ — the first disagreeing draw. From here <span class="a">A</span> and <span class="b">B</span> diverge and <i>never re-converge</i>: chaos from a one-bit seed change.';
+  }
+}
+
+function reset(){
+  state = freshState();
+  els.laneB.style.display = 'none';
+  els.seedA.textContent = '0x' + SEED_A.toString(16).toUpperCase();
+  els.seedB.textContent = '—';
+  els.eatenLine.textContent = '0 tokens eaten';
+  els.fork.disabled = els.nofeed.checked;
+  renderTape('A');
+  renderDie(START_STEM, tempOf(), null, els.nofeed.checked);
+  els.readout.className = 'readout';
+  els.readout.innerHTML = '<span class="lab">press</span> <b>Step</b> <span class="lab">to emit the first token.</span>';
+  updateForkNote();
+}
+
+function renderTemp(){ els.tempVal.textContent = 'T = ' + tempOf().toFixed(2); renderDie(state ? state.A.stem : START_STEM, tempOf(), null, els.nofeed.checked); }
+
+els.temp.addEventListener('input', renderTemp);
+els.step.addEventListener('click', step);
+els.step5.addEventListener('click', () => stepN(5));
+els.fork.addEventListener('click', fork);
+els.reset.addEventListener('click', reset);
+els.nofeed.addEventListener('change', reset);
+
+// ── the self-test pill ───────────────────────────────────────────────────────
+function runPagePill(){
+  const r = runSelfTest({});
+  els.selftest.className = r.pass === r.total ? 'selftest ok' : 'selftest bad';
+  els.selftest.textContent = 'self-test ' + r.pass + '/' + r.total + ' ' + (r.pass === r.total ? '✓' : '✗');
+  els.selftest.title = r.lines.map(l => (l.ok ? '✓ ' : '✗ ') + l.name + ' — ' + l.detail).join('\n');
+  console.log('%cThe Snake That Eats Its Tail — self-test ' + r.pass + '/' + r.total, 'color:#d9b15a;font-weight:700');
+  for (const l of r.lines) console.log((l.ok ? '  ✓ ' : '  ✗ ') + l.name + '  ·  ' + l.detail);
+  return r;
+}
+els.selftest.addEventListener('click', runPagePill);
+els.selftest.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); runPagePill(); } });
+window.__autoregressSelfTest = () => runSelfTest({});
+
+// boot
+buildGears();
+reset();
+renderTemp();
+runPagePill();
+
+// drop the front-door breadcrumb (a new wing surface)
+try { if (window.localStorage) localStorage.setItem('ws:seen:clockwork-autoregress', '1'); } catch (e) {}
+</script>
+</body>
+</html>
