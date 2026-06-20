@@ -35,13 +35,15 @@ function bbox(id){
 // the catalog-tied ids the sky test mirrors (front-door catalog stars + gnomon),
 // in the test's order. Keep in lockstep with sky.test.cjs's FOOTPRINTS block.
 const MIRROR_IDS = ['verse','compositor','cartographer','sound-garden','threshold',
-  'strange-garden','firmament','daedalus','arcade','workbench','undercroft','hall-of-mirrors','gnomon'];
+  'strange-garden','firmament','daedalus','arcade','workbench','undercroft','hall-of-mirrors',
+  'refraction-run','gnomon'];
 
 function starHit(s,b){ return s.x+STAR_PAD>b.x && s.x-STAR_PAD<b.x+b.w && s.y+STAR_PAD>b.y && s.y-STAR_PAD<b.y+b.h; }
 
 const notes = {
   firmament: '  // tower r→bbox',
   'hall-of-mirrors': '  // the optics wing — the feat-stars cluster beside it',
+  'refraction-run': '  // The Photon\'s Errand — the optics fly-through, the new \'tank\' footprint below the Hall',
   gnomon: '  // The Hours — the horology wing\'s open east-park sundial'
 };
 

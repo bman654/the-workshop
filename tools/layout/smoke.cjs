@@ -31,6 +31,7 @@ const PLACES = [
   { id:'kirigami', district:'grounds', tier:2, wing:'glasshouses', footprint:'glasshouse' },
   { id:'conservatory', district:'grounds', tier:2, wing:'conservatory', footprint:'glasshouse-wing' },
   { id:'hall-of-mirrors', district:'grounds', tier:1, wing:'optics', footprint:'hall' },
+  { id:'refraction-run', district:'grounds', tier:1, wing:'optics', footprint:'tank', prefer:['bottom','right'] },
   { id:'numbers-room', district:'grounds', tier:2, wing:'number', footprint:'numbers-room' },
   { id:'midway', district:'grounds', tier:1, wing:'amusements', footprint:'coaster', order:5 },
   { id:'daedalus', district:'grounds', tier:1, wing:'amusements', footprint:'maze', order:20 },

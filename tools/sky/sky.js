@@ -128,7 +128,15 @@
     // Verified clear of every footprint/furniture box, the manor pool, the viewBox
     // edge, and every existing catalog star (nearest = feat-maze @86px) by the
     // CATALOG INTEGRITY self-test (re-runnable /tmp star-placement verifier).
-    'holonomy': { x: 130,  y: 700, mag: 1 }
+    'holonomy': { x: 130,  y: 700, mag: 1 },
+    // The Photon's Errand — Optics' fly-through room (you ARE the photon; fall into
+    // Snell by flying least-time). A FEATS-flavoured field star in the optics band
+    // just right of the Hall of Mirrors footprint, near its kin; lit on first visit
+    // (ws:seen:refraction-run). The lead member of The Pilot feat-group. Verified
+    // clear of every footprint/furniture box (incl. the new 'tank' footprint below the
+    // Hall), the manor pool, the viewBox edge, and every existing catalog star
+    // (nearest = cartographer @272px) by the CATALOG INTEGRITY self-test.
+    'refraction-run': { x: 392, y: 486, mag: 1 }
   };
 
   /* ── DATA: the six wings (companion-pairs), each an asterism ────────────────
@@ -177,7 +185,13 @@
     // deficit angle, a curvature-cancelling torus). Like every feat-group it is
     // ADDITIVE — it NEVER feeds the wings-only all-skies capstone.
     { id: 'surveyor', name: 'The Surveyor', myth: 'Walks the loop; brings home the twist no chart can hide.',
-      members: ['holonomy'] }
+      members: ['holonomy'] },
+    // The Pilot — Optics' fly-through reward constellation. Founded with one star
+    // (The Photon's Errand, a plain `ws:seen:refraction-run` room crumb); like every
+    // feat-group it is ADDITIVE — it NEVER feeds the wings-only all-skies capstone.
+    // Sized for a future fly-through branch should more piloted least-time scenes ship.
+    { id: 'pilot', name: 'The Pilot', myth: 'Flies the least-time road; falls into the law.',
+      members: ['refraction-run'] }
   ];
 
   Sky.CATALOG = CATALOG;

@@ -34,6 +34,7 @@ const OPTICIAN  = FEAT_GROUPS.find(g => g.id === 'feats');     // the Hall's nin
 const AUTOMATON = FEAT_GROUPS.find(g => g.id === 'automaton'); // Clockwork's 4 bench crumbs
 const FURNACE   = FEAT_GROUPS.find(g => g.id === 'furnace');   // the Engine Room's 4 bench crumbs
 const SURVEYOR  = FEAT_GROUPS.find(g => g.id === 'surveyor');  // Curved Country's founding star (The Holonomy Walk)
+const PILOT     = FEAT_GROUPS.find(g => g.id === 'pilot');     // Optics' fly-through founding star (The Photon's Errand)
 // the legacy Optician sub-suite (174-228) refers to `FEATS` as the single Optician group.
 const FEATS = OPTICIAN;
 
@@ -57,18 +58,19 @@ const VIEWBOX = { x: 0, y: 0, w: 1440, h: 900 };
    declaration changes — keep it in sync or this test false-fails. Every generated
    box is verified star-clear (all 35 catalog stars lie outside the interior FIELD). */
 const FOOTPRINTS = [
-  { id: 'verse',            x: 692,   y: 306,  w: 28,   h: 20 },
-  { id: 'compositor',       x: 722,   y: 306,  w: 28,   h: 20 },
-  { id: 'cartographer',     x: 692,   y: 329,  w: 28,   h: 20 },
-  { id: 'sound-garden',     x: 692,   y: 420,  w: 28,   h: 20 },
-  { id: 'threshold',        x: 722,   y: 420,  w: 28,   h: 20 },
+  { id: 'verse',            x: 683,   y: 358,  w: 29,   h: 21 },
+  { id: 'compositor',       x: 715,   y: 358,  w: 29,   h: 21 },
+  { id: 'cartographer',     x: 683,   y: 382,  w: 29,   h: 21 },
+  { id: 'sound-garden',     x: 683,   y: 410,  w: 29,   h: 21 },
+  { id: 'threshold',        x: 715,   y: 410,  w: 29,   h: 21 },
   { id: 'strange-garden',   x: 322,   y: 629,  w: 67,   h: 47 },
-  { id: 'firmament',        x: 242,   y: 207,  w: 116,  h: 116 },  // tower r→bbox
-  { id: 'daedalus',         x: 995,   y: 429,  w: 110,  h: 76 },
-  { id: 'arcade',           x: 995,   y: 255,  w: 110,  h: 76 },
+  { id: 'firmament',        x: 288,   y: 194,  w: 24,   h: 24 },  // tower r→bbox
+  { id: 'daedalus',         x: 1017,  y: 410,  w: 67,   h: 46 },
+  { id: 'arcade',           x: 1017,  y: 304,  w: 67,   h: 46 },
   { id: 'workbench',        x: 520,   y: 589,  w: 88,   h: 61 },
   { id: 'undercroft',       x: 698,   y: 517,  w: 46,   h: 64 },
-  { id: 'hall-of-mirrors',  x: 242,   y: 410,  w: 140,  h: 97 },  // the optics wing — the feat-stars cluster beside it
+  { id: 'hall-of-mirrors',  x: 275,   y: 404,  w: 73,   h: 50 },  // the optics wing — the feat-stars cluster beside it
+  { id: 'refraction-run',   x: 275,   y: 461,  w: 73,   h: 50 },  // The Photon's Errand — the optics fly-through, the new 'tank' footprint below the Hall
   { id: 'gnomon',           x: 1118,  y: 203,  w: 142,  h: 98 }  // The Hours — the horology wing's open east-park sundial
 ];
 const FURNITURE = [
@@ -155,7 +157,7 @@ function inViewBox(s) {
   const sFull = Sky.state(full, CATALOG, WINGS, FEAT_GROUPS);
   let allComp = true;
   sFull.asterisms.forEach(a => { if (!a.complete) allComp = false; });
-  ok(allComp, 'COMPLETION: full visit-set completes every asterism (incl. all four feat-groups)');
+  ok(allComp, 'COMPLETION: full visit-set completes every asterism (incl. all five feat-groups)');
   eq(sFull.allComplete, true, 'COMPLETION: allComplete true on the full set (capstone)');
 
   // empty set: nothing complete, allComplete false
@@ -421,14 +423,15 @@ WINGS.forEach(w => w.members.forEach(m => ALL_WING_MEMBERS.push(m)));
 
   // ── the feat-GROUPS: a group-agnostic disjointness sweep (replaces the old
   //    `feat-`-prefix-hardcoded block, which would FALSE-FAIL on plain room-id members).
-  //    There are exactly four feat-groups with distinct ids; EVERY member belongs to
+  //    There are exactly five feat-groups with distinct ids; EVERY member belongs to
   //    exactly one group across WINGS + FEAT_GROUPS (no dupe); each plain-room-id NEW-group
   //    member is a valid catalog id (NOT feat-). The `feat-` prefix assertion is kept,
-  //    scoped to the OPTICIAN only. The Surveyor (Curved Country) is founded on a real
-  //    front-door room's `ws:seen` crumb, sized to grow as the wing's siblings ship. ──
-  eq(FEAT_GROUPS.length, 4, 'BIJECTION: there are exactly four feat-groups');
-  eq(FEAT_GROUPS.length, new Set(FEAT_GROUPS.map(g => g.id)).size, 'BIJECTION: the four feat-group ids are distinct');
-  ok(!!OPTICIAN && !!AUTOMATON && !!FURNACE && !!SURVEYOR, 'BIJECTION: the four feat-groups are Optician + Automaton + Furnace + Surveyor');
+  //    scoped to the OPTICIAN only. The Surveyor (Curved Country) and The Pilot (Optics'
+  //    fly-through) are each founded on a real front-door room's `ws:seen` crumb, sized to
+  //    grow as their wings' siblings ship. ──
+  eq(FEAT_GROUPS.length, 5, 'BIJECTION: there are exactly five feat-groups');
+  eq(FEAT_GROUPS.length, new Set(FEAT_GROUPS.map(g => g.id)).size, 'BIJECTION: the five feat-group ids are distinct');
+  ok(!!OPTICIAN && !!AUTOMATON && !!FURNACE && !!SURVEYOR && !!PILOT, 'BIJECTION: the five feat-groups are Optician + Automaton + Furnace + Surveyor + Pilot');
 
   // every member belongs to exactly one group across WINGS + FEAT_GROUPS (no dupe across
   // the whole catalog of asterisms). memberWing already holds the wing assignments.
