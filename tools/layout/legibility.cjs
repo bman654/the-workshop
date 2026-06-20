@@ -63,9 +63,22 @@
    ════════════════════════════════════════════════════════════════════════════ */
 'use strict';
 
-const Layout = require('./layout.js');
-const LabelPlacer = require('../label/label.js');
-const geom = LabelPlacer.geom;
+/* ── DUAL-USE WIRING (Node require · forge-inlined browser global) ───────────
+   In Node this module `require`s the repo's own engines. When forge inlines it
+   into index.html, `require`/`module` are absent — but layout.js + label/label.js
+   are inlined ABOVE this block and have already attached the `Layout` /
+   `LabelPlacer` globals, so we resolve from those instead. The IIFE returns the
+   exports object; the `globalThis` block attaches it as the `Legibility` global
+   for the page; the strippable guard at the very bottom keeps Node's
+   `require('./legibility.cjs')` working (forge drops exactly that braced line). */
+var Legibility = (function () {
+'use strict';
+// Browser default: read the globals the inlined layout.js / label.js attached above.
+var Layout = (typeof globalThis !== 'undefined') ? globalThis.Layout : null;
+var LabelPlacer = (typeof globalThis !== 'undefined') ? globalThis.LabelPlacer : null;
+// Node override (forge strips exactly this braced single line from the browser inline):
+if (typeof module !== 'undefined' && module.exports) { Layout = require('./layout.js'); LabelPlacer = require('../label/label.js'); }
+var geom = LabelPlacer.geom;
 
 /* ── calibrated tunables (see header) ─────────────────────────────────────── */
 const CHAR_W_NAME = 8.4;   // px/char, 16.5px serif .roomname  (measured getBBox)
@@ -503,7 +516,7 @@ function renderAscii(report) {
   return lines.join('\n');
 }
 
-module.exports = {
+return {
   score,
   buildLabelModel,
   gapSubScore,
@@ -520,3 +533,12 @@ module.exports = {
   WEIGHTS, THRESHOLD, LABEL_GAP, LABEL_BOUNDS,
   CHAR_W_NAME, CHAR_W_SUB, PAD, DENSITY_H, DENSITY_K
 };
+})();
+
+/* browser global (forge-inlined): attach the conscience as `Legibility`. */
+(function (root) {
+  if (root) root.Legibility = Legibility;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+// dual-use module guard (forge strips exactly this braced single line)
+if (typeof module !== 'undefined' && module.exports) { module.exports = Legibility; }

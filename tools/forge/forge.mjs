@@ -107,7 +107,7 @@ function buildOne(srcFile) {
         '  (resolved to ' + incPath + ', relative to ' + srcFile + ')');
     }
     let content = readText(incPath);
-    if (/\.m?js$/.test(incPath)) content = stripModuleGuard(content);
+    if (/\.[cm]?js$/.test(incPath)) content = stripModuleGuard(content);
     // Inline verbatim (trim a single trailing newline so the block sits flush;
     // the directive line itself is replaced 1:1).
     outLines.push(content.replace(/\n$/, ''));
