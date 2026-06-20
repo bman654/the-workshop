@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Felt-Gravity Curve — a flying chair and a clinging rider ride one φ = atan(Fr)</title>
+<!--
+   THE FELT-GRAVITY CURVE (Lean and Pin) — a cross of The Star Flyer × The Rotor. The physics
+   CORE (core.mjs) is inlined byte-for-byte between the sentinels below; the in-page chip calls
+   the SAME runSelfTest() the Node twin (core.test.mjs) runs. ONE law: in the rotating frame,
+   effective gravity tilts by φ = atan(Fr), Fr = ω²R/g. The flyer's chain hangs along that tilted
+   gravity (its solved lean IS φ); the rotor's rider PINS the instant φ reaches the friction angle
+   atan(1/μ) = 65.772°. One ω dial, one gold needle, two fates. NEG-CONTROLS: rigid spokes (flyer
+   bead peels to the x-axis) and a frictionless wall (PINNED never throws). Both parent cores are
+   imported byte-untouched; this cross core is the SOLE authority for the φ = atan(Fr) map.
+-->
+<style>
+  :root{
+    --bg:#07080c;             /* fairground-at-dusk near-black ground (lifted from both parents) */
+    --plate1:#12100a;
+    --plate2:#0b0a07;
+    --ink:#efe9da;
+    --ink-dim:#a59c87;
+    --gold:#c9a24a;           /* the brass / the law / the needle */
+    --gold-hi:#f4d27a;        /* lit gold (hub, beads) */
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.40);
+    --teal:#5fcdbf;           /* the rotor / low-tilt */
+    --teal-soft:rgba(95,205,191,0.12);
+    --coral:#f0846f;          /* the flyer / near-critical */
+    --coral-soft:rgba(220,120,100,0.12);
+    --panel:rgba(11,10,7,0.86);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1200px 720px at 50% -12%, rgba(201,162,74,0.09), transparent 56%),
+      radial-gradient(900px 640px at 14% 112%, rgba(95,205,191,0.05), transparent 60%),
+      radial-gradient(900px 640px at 86% 114%, rgba(220,120,100,0.04), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  /* faint engineering-paper grid behind everything (both parents share it) */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(201,162,74,0.05) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(201,162,74,0.045) 0 1px, transparent 1px 32px);
+    mask-image:radial-gradient(1100px 760px at 50% 36%, #000 30%, transparent 78%);
+  }
+  /* a thin string-of-lights bunting across the top — the fairground tell (both parents share it) */
+  body::after{
+    content:""; position:fixed; top:46px; left:0; right:0; height:18px; z-index:0; pointer-events:none; opacity:.5;
+    background-image:radial-gradient(circle at 11px 4px, var(--gold-hi) 0 1.6px, transparent 2.4px);
+    background-size:42px 18px;
+    mask-image:linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  }
+
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding:13px 20px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(7,8,12,0.95), rgba(7,8,12,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:5px; }
+  .back{ font:600 10.5px/1.3 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.22s; white-space:nowrap; }
+  .back:hover{ color:var(--gold-hi); opacity:1; }
+  .brand{ text-align:center; flex:1 1 auto; pointer-events:none; padding-top:1px; }
+  .brand h1{ margin:0; font-family:var(--font-serif); font-weight:600; font-size:clamp(17px,2.4vw,21px);
+    letter-spacing:.4px; color:var(--gold-hi); }
+  .brand .tag{ display:block; font:11px/1.3 var(--font-serif); font-style:italic; color:var(--ink-dim); margin-top:1px; }
+  .selftest{ font:600 10px/1.35 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:18px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.42); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); max-width:240px; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(24,46,32,0.5); }
+  .selftest.bad{ color:var(--coral); border-color:rgba(220,120,100,0.6); background:rgba(58,26,22,0.5); }
+
+  /* ── self-test detail panel ── */
+  #stPanel{ position:fixed; top:54px; right:18px; z-index:60; width:min(480px,92vw);
+    background:var(--panel); border:1px solid var(--gold-edge); border-radius:12px; padding:16px 18px 14px;
+    box-shadow:0 18px 50px rgba(0,0,0,0.6); display:none; }
+  #stPanel.show{ display:block; }
+  #stPanel h2{ margin:0 0 4px; font:600 13px/1.2 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--gold-hi); }
+  #stPanel .sub{ margin:0 0 10px; font:12px/1.5 var(--font-serif); color:var(--ink-dim); }
+  #stList{ font:11px/1.55 var(--font-mono); max-height:46vh; overflow:auto; }
+  #stList .row{ display:flex; gap:8px; padding:2px 0; }
+  #stList .row .m{ flex:0 0 auto; }
+  #stList .ok{ color:#8fd79a; } #stList .no{ color:var(--coral); }
+  #stPanel .foot{ margin-top:10px; padding-top:9px; border-top:1px solid rgba(201,162,74,0.16);
+    font:11px/1.6 var(--font-serif); color:var(--ink-dim); }
+  #stPanel .closeX{ position:absolute; top:9px; right:11px; background:none; border:none; color:var(--ink-dim);
+    font-size:18px; cursor:pointer; line-height:1; }
+
+  /* ── layout ── */
+  main{ position:relative; z-index:1; max-width:1120px; margin:0 auto; padding:74px 20px 56px; }
+  .hero{ text-align:center; margin-bottom:14px; }
+  .hero .eyebrow{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3em; text-transform:uppercase; color:var(--gold); opacity:.9; }
+  .hero .lede{ max-width:740px; margin:12px auto 0; font:15px/1.6 var(--font-serif); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--gold-hi); font-weight:600; } .hero .lede i{ font-style:italic; }
+  .hero .lede .law{ font-family:var(--font-mono); color:var(--gold); font-style:normal; }
+  .hero .lede .fl{ color:var(--coral); } .hero .lede .ro{ color:var(--teal); }
+
+  /* ── the instrument: a brass-rivet panel ── */
+  .instrument{ margin:22px 0 0; border-radius:18px; position:relative;
+    border:1px solid rgba(201,162,74,0.30);
+    background:
+      linear-gradient(115deg, rgba(255,255,255,0.04) 0%, transparent 20%, transparent 80%, rgba(255,255,255,0.025) 100%),
+      linear-gradient(180deg, var(--plate1), var(--plate2));
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 24px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+    padding:16px 16px 18px; }
+  .instrument::before, .instrument::after{ content:''; position:absolute; width:7px; height:7px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #f0d894, #9a7a32); box-shadow:0 0 4px rgba(0,0,0,0.6); }
+  .instrument::before{ top:11px; left:11px; }
+  .instrument::after{ top:11px; right:11px; }
+
+  /* the three-band stage: flyer diorama | needle hero | rotor diorama */
+  .stage{ display:grid; grid-template-columns:1fr 1.35fr 1fr; gap:12px; align-items:stretch; }
+  .bay{ border:1px solid var(--gold-edge); border-radius:12px; background:linear-gradient(180deg,#0b0d0a,#070a08);
+    padding:11px 12px 9px; position:relative; overflow:hidden; }
+  .bay.center{ border-color:rgba(201,162,74,0.5); }
+  .bhead{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin:0 0 7px; }
+  .btitle{ font-weight:600; font-size:13.5px; letter-spacing:.02em; font-family:var(--font-serif); }
+  .bay.flyer .btitle{ color:var(--coral); }
+  .bay.rotor .btitle{ color:var(--teal); }
+  .bay.center .btitle{ color:var(--gold-hi); }
+  .bsub{ font:9.5px/1.3 var(--font-mono); letter-spacing:.03em; color:var(--ink-dim); text-align:right; }
+  canvas.cv{ display:block; width:100%; height:auto; border-radius:8px; background:#06080a;
+    border:1px solid rgba(255,255,255,0.04); }
+
+  /* the caption pills under each diorama */
+  .cap{ font:9.5px/1.45 var(--font-mono); color:var(--ink-dim); margin:7px 1px 0; letter-spacing:.01em; }
+  .cap b{ color:var(--gold-hi); font-weight:600; } .cap .fl{ color:var(--coral); } .cap .ro{ color:var(--teal); }
+
+  /* the PINNED lamp + proof pill in the center bay */
+  .centerfoot{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 1px 0; flex-wrap:wrap; }
+  .lamp{ display:inline-flex; align-items:center; gap:7px; font:600 10px/1 var(--font-mono); letter-spacing:.12em;
+    text-transform:uppercase; padding:6px 11px; border-radius:18px; border:1px solid var(--gold-edge);
+    background:#1a1408; color:var(--ink-dim); transition:.18s; }
+  .lamp .bulb{ width:9px; height:9px; border-radius:50%; background:#3a2c12; box-shadow:inset 0 0 2px #000; transition:.18s; }
+  .lamp.on{ color:var(--gold-hi); border-color:rgba(244,210,122,0.7);
+    background:radial-gradient(circle at 30% 30%, rgba(240,132,111,0.28), rgba(40,26,8,0.9));
+    box-shadow:0 0 14px rgba(240,132,111,0.4), 0 0 0 1px rgba(201,162,74,0.55); }
+  .lamp.on .bulb{ background:radial-gradient(circle at 35% 30%, #ffd9a0, #f0846f); box-shadow:0 0 8px #f0846f; }
+  .lamp.latch{ animation:latchflash 120ms ease-out; }
+  @keyframes latchflash{ 0%{ transform:scale(1); } 45%{ transform:scale(1.08); } 100%{ transform:scale(1); } }
+  .proofpill{ font:600 9.5px/1.4 var(--font-mono); letter-spacing:.02em; padding:5px 10px; border-radius:8px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.32); color:var(--ink-dim); white-space:nowrap; }
+  .proofpill.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(24,46,32,0.45); }
+  @media (prefers-reduced-motion: reduce){ .lamp.latch{ animation:none; } }
+
+  /* ── the dial & controls row ── */
+  .controls{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin:16px 2px 2px; }
+  .dialwrap{ display:flex; align-items:center; gap:12px; flex:1 1 320px; min-width:260px; }
+  .dialwrap label{ font:10px/1 var(--font-mono); letter-spacing:.1em; text-transform:uppercase; color:var(--gold); white-space:nowrap; }
+  .dval{ font:600 18px/1 var(--font-mono); color:var(--gold-hi); min-width:7.6ch; }
+  .dval small{ font-size:10px; color:var(--ink-dim); font-weight:400; letter-spacing:.06em; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; height:6px; border-radius:6px; flex:1;
+    background:linear-gradient(90deg, #2a2418, var(--gold)); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:22px; height:22px; border-radius:50%;
+    background:radial-gradient(circle at 36% 30%, #f3e0a0, #b08a32); border:2px solid #07080c; cursor:pointer;
+    box-shadow:0 0 8px rgba(201,162,74,0.55); }
+  input[type=range]::-moz-range-thumb{ width:20px; height:20px; border-radius:50%;
+    background:radial-gradient(circle at 36% 30%, #f3e0a0, #b08a32); border:2px solid #07080c; cursor:pointer; }
+  .btn{ font:600 11px/1 var(--font-mono); padding:9px 14px; border-radius:8px; border:1px solid var(--gold-edge);
+    background:rgba(0,0,0,0.3); color:var(--ink); cursor:pointer; transition:.16s; letter-spacing:.04em; }
+  .btn:hover{ border-color:var(--gold); background:var(--gold-soft); }
+  .btn.sweeping{ color:var(--gold-hi); border-color:var(--gold); background:var(--gold-soft); }
+  .switches{ display:flex; gap:12px; flex-wrap:wrap; }
+  .bswitch{ display:flex; align-items:center; border:1px solid var(--gold-edge); border-radius:9px; overflow:hidden; }
+  .bswitch .tlabel{ font:9px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim);
+    padding:0 10px; align-self:center; }
+  .bswitch button{ font:600 11px/1 var(--font-mono); padding:9px 13px; background:rgba(0,0,0,0.3); color:var(--ink-dim);
+    border:none; border-left:1px solid var(--gold-edge); cursor:pointer; transition:.16s; letter-spacing:.04em; }
+  .bswitch button.on{ background:var(--coral-soft); color:var(--coral); }
+
+  .hint{ font:10.5px/1.55 var(--font-mono); color:var(--ink-dim); margin:11px 2px 0; }
+  .hint b{ color:var(--gold-hi); font-weight:600; }
+  .hint .fl{ color:var(--coral); } .hint .ro{ color:var(--teal); }
+
+  /* ── honest framing block ── */
+  .honest{ margin:22px 0 0; border:1px solid var(--gold-edge); border-radius:12px; padding:14px 16px;
+    background:rgba(0,0,0,0.22); }
+  .honest h2{ font:600 11px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--gold); margin:0 0 8px; }
+  .honest ul{ margin:0; padding-left:18px; }
+  .honest li{ font:13px/1.6 var(--font-serif); color:var(--ink); margin:0 0 5px; }
+  .honest li b{ color:var(--gold-hi); }
+  .honest li .ok{ color:#8fd79a; } .honest li .no{ color:var(--coral); }
+  .honest code{ font:12px/1 var(--font-mono); color:var(--gold-hi); }
+
+  .crumbs-foot{ margin:22px 0 0; display:flex; gap:18px; flex-wrap:wrap; }
+  .crumbs-foot a{ font:600 11px/1 var(--font-mono); letter-spacing:.06em; color:var(--ink-dim); text-decoration:none; transition:.16s; }
+  .crumbs-foot a:hover{ color:var(--gold-hi); }
+  .crumbs-foot a .arr{ color:var(--gold); }
+
+  @media (max-width:820px){
+    .stage{ grid-template-columns:1fr; }
+    .bay.center{ order:-1; }
+    .dialwrap{ flex:1 1 100%; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../../workbench/index.html">&larr; The Workbench</a>
+      <a class="back" href="../../star-flyer/index.html">&#8599; the chair — The Star Flyer</a>
+      <a class="back" href="../../rotor/index.html">&#8599; the rider — The Rotor</a>
+    </div>
+    <div class="brand">
+      <h1>The Felt-Gravity Curve</h1>
+      <span class="tag">the chain hangs along it · the rider pins to it · one needle, two fates</span>
+    </div>
+    <div class="selftest" id="selftest" title="The cross proves φ=atan(Fr): the flyer's lean IS the felt-tilt, the rotor pins at atan(1/μ), both on one arc — click for detail.">checking&hellip;</div>
+  </div>
+
+  <div id="stPanel">
+    <button class="closeX" id="stClose" title="close">&times;</button>
+    <h2>Self&#8209;test</h2>
+    <p class="sub" id="stSub">&hellip;</p>
+    <div id="stList"></div>
+    <div class="foot">In the rotating frame, effective gravity tilts by <code>φ = atan(Fr)</code>, the Froude number
+      <code>Fr = ω²R/g</code>. The flyer's SOLVED lean <code>tan θ = ω²R/g</code> IS that felt-tilt (the chain is a
+      plumb-line); the rotor pins exactly when <code>φ</code> reaches the friction angle <code>atan(1/μ) = 65.772°</code>.
+      Both parent cores measured <code>g = 9.81</code>, so the two beads sit on ONE arc with NO warp — the collapse is
+      the law itself. Two load-bearing neg-controls bite: rigid spokes peel the flyer to the x-axis; a frictionless wall
+      never pins. The two cores are imported byte-for-byte and the adapters share no code.</div>
+  </div>
+
+  <main>
+    <div class="hero">
+      <span class="eyebrow">a cross · The Star Flyer × The Rotor</span>
+      <p class="lede">
+        Turn <b>one</b> spin dial <span class="law">ω</span> and two rides that never met confess the same law: in the
+        rotating frame, effective gravity <i>tilts</i> by <span class="law">φ = atan(Fr)</span>, the Froude number
+        <span class="law">Fr = ω²R/g</span>. A <span class="fl">swing-carousel chair</span> flies OUT — its chain hangs
+        along that tilted gravity, so its <i>lean is the readout</i>. A <span class="ro">spin-drum rider</span> CLINGS —
+        it pins the instant <span class="law">φ</span> reaches the friction angle <span class="law">atan(1/μ) = 65.772°</span>.
+        <i>One law, one needle, two fates</i> — both beads on one curve, with the <b>same g</b>, no warp.
+      </p>
+    </div>
+
+    <div class="instrument">
+      <div class="stage">
+
+        <!-- LEFT — the flyer diorama -->
+        <div class="bay flyer">
+          <div class="bhead">
+            <span class="btitle" id="flyTitle">The Star Flyer</span>
+            <span class="bsub">side view · the chain<br>is a plumb-line</span>
+          </div>
+          <canvas class="cv" id="cvFlyer" width="360" height="320"></canvas>
+          <p class="cap" id="flyCap">the chain hangs along tilted g · <b>φ = atan(ω²R/g)</b>, R = r₀+L·sinθ widens</p>
+        </div>
+
+        <!-- CENTER — the needle hero (the spine) -->
+        <div class="bay center">
+          <div class="bhead">
+            <span class="btitle">The Felt-Gravity Needle</span>
+            <span class="bsub" id="needleSub">effective-g tilt φ<br>one master arc</span>
+          </div>
+          <canvas class="cv" id="cvNeedle" width="480" height="320"></canvas>
+          <div class="centerfoot">
+            <span class="lamp" id="lamp"><span class="bulb"></span><span id="lampTxt">not pinned</span></span>
+            <span class="proofpill" id="proofPill">φ = atan(Fr) · |residual| &lt; e · N/N</span>
+          </div>
+          <p class="cap" id="arcCap" style="text-align:center">same law, each its own <b>Fr</b> — the two beads sit at different x, one curve</p>
+        </div>
+
+        <!-- RIGHT — the rotor diorama -->
+        <div class="bay rotor">
+          <div class="bhead">
+            <span class="btitle" id="rotTitle">The Rotor</span>
+            <span class="bsub">cutaway · floor<br>dropped to a shaft</span>
+          </div>
+          <canvas class="cv" id="cvRotor" width="360" height="320"></canvas>
+          <p class="cap" id="rotCap">pinned when felt-g tilt <b>φ</b> reaches the friction angle <b>atan(1/μ) = 65.772°</b></p>
+        </div>
+
+      </div>
+
+      <!-- the dial + controls -->
+      <div class="controls">
+        <div class="dialwrap">
+          <label for="dial">spin ω</label>
+          <input type="range" id="dial" min="0" max="4" step="0.01" value="0" aria-label="spin rate omega, rad per second">
+          <span class="dval" id="dval">0.00 <small>rad/s</small></span>
+        </div>
+        <button class="btn" id="btnSweep" title="Sweep ω across its range once — watch the chairs splay continuously while nothing holds until the rotor bead crosses the μ-tick.">&#9654; sweep the dial</button>
+        <div class="switches">
+          <div class="bswitch">
+            <span class="tlabel">flyer</span>
+            <button id="btnRigid" data-on="0">rigid spokes</button>
+          </div>
+          <div class="bswitch">
+            <span class="tlabel">rotor</span>
+            <button id="btnFric" data-on="0">frictionless wall</button>
+          </div>
+        </div>
+      </div>
+      <div class="hint" id="hint">
+        Drag <b>ω</b> and the gold needle tilts to <b>φ</b>; the <span class="fl">flyer bead</span> and the
+        <span class="ro">rotor bead</span> ride the one arc at their own <b>Fr</b>. The chairs splay to the needle's
+        tilt; past the friction tick the rotor <b>PINNED</b> lamp throws. Flip <span class="fl">rigid spokes</span> —
+        the flyer bead peels to the x-axis (no lean, ever); flip <span class="ro">frictionless wall</span> — the μ-tick
+        slides to 90° and PINNED never throws.
+      </div>
+    </div>
+
+    <div class="honest">
+      <h2>what this proves, and what it doesn't</h2>
+      <ul>
+        <li><b>One law, two readings.</b> The flyer's SOLVED equilibrium lean (read from
+          <span class="ok">the star-flyer's own bisection solver</span>) is identically the felt-tilt of its own orbit:
+          <code>tan θ = ω²R/g</code> IS <code>φ = atan(Fr)</code> to <span class="ok">&lt; 2.0e-11</span>. The rotor's
+          pin (read from <span class="ok">the rotor's own holds predicate</span>) fires exactly when that felt-tilt
+          reaches the friction angle <code>atan(1/μ) = 65.772255°</code> — gap <span class="ok">0.0</span>.</li>
+        <li><b>The collapse is honest — no warp.</b> Both benches measured the same gravity
+          <code>g = 9.81</code> (the module asserts <code>F.G === R.G</code> at load), so the two beads sit on one arc
+          because the law is one law — not because a fudge factor forced them. Each bead sits at its OWN <code>Fr</code>:
+          the rides share a LAW, not an ω.</li>
+        <li><b>It is not a tautology — two negative controls bite.</b> <span class="no">Rigid spokes</span> lock the
+          flyer's arms (<code>θ ≡ 0</code> for every ω) so its bead peels to the x-axis while the real felt-tilt climbs.
+          <span class="no">Frictionless wall</span> kills the friction reserve (<code>μ = 0</code>) so the rider never
+          pins and <code>ω_c → +∞</code> (the μ-tick slides to 90°). At ω=0 every reading agrees on 0 (anti-vacuity).</li>
+        <li><b>Idealized.</b> Point-mass chairs on massless inextensible chains; a point-mass rider on a rigid drum wall
+          with dry Coulomb friction (single μ). The equilibrium lean and the pin threshold are exact; only the chairs'
+          swing-in and the rider's sink are eased for the eye.</li>
+      </ul>
+    </div>
+
+    <div class="crumbs-foot">
+      <a href="../../star-flyer/index.html"><span class="arr">&#8599;</span> the chair — The Star Flyer</a>
+      <a href="../../rotor/index.html"><span class="arr">&#8599;</span> the rider — The Rotor</a>
+      <a href="../../workbench/index.html"><span class="arr">&larr;</span> back to The Workbench</a>
+    </div>
+  </main>
+
+<script type="module">
+import * as F from '../../star-flyer/core.mjs';
+import * as R from '../../rotor/core.mjs';
+
+// === CORE BEGIN ===
+"use strict";
+
+// ══ THE ONE LAW SHARED BY BOTH — read LIVE from each foreign core, never re-typed ══════════════════
+// The collapse is HONEST: both benches measured g at the SAME 9.81, so there is NO warp. Assert it so
+// the collapse cannot quietly drift onto two different gravities.
+const G = F.G;
+if (G !== R.G) throw new Error('felt-gravity-curve: the two cores must share g for an honest collapse — F.G=' + F.G + ' R.G=' + R.G);
+
+// φ = atan(Fr): the tilt of effective gravity in the rotating frame, Fr the local Froude number ω²R/g.
+const tiltOfFr = Fr => Math.atan(Fr);
+const deg = x => x * 180 / Math.PI;
+
+// ══ THE TWO ADAPTERS — the ONLY foreign reads, each the sole bridge into one ride's physics ═════════
+// The disjointness grep slices these sub-sentineled blocks and proves the flyer block names no rotor
+// fn and the rotor block names no flyer fn.
+
+// ─ FLYER-ADAPTER BEGIN ─
+// flyerPoint(omega): the swing-carousel operating point. Reads the flyer core's SOLVED equilibrium —
+// rideState gives the lean θ and the implicit orbit R = r₀+L·sinθ. Fr = ω²R/g is the orbit's Froude
+// number; tiltDeg = atan(Fr)·180/π is the felt-tilt. The UNION claim: thetaDeg === tiltDeg, because the
+// solved lean tan θ = ω²R/g IS φ = atan(Fr). The chain hangs along that tilted effective gravity.
+function flyerPoint(omega){
+  const s = F.rideState(omega);
+  const Fr = omega * omega * s.R / G;
+  return { omega, R: s.R, Fr, thetaDeg: s.thetaDeg, tiltDeg: deg(tiltOfFr(Fr)) };
+}
+// flyerRigidPoint(omega): the NEG-CONTROL — RIGID bolted spokes (rideStateRigid) force θ≡0 for every ω.
+// The locked arms whirl flat at the rest radius, so the bead PEELS OFF the master arc (thetaDeg 0 while
+// the real felt-tilt > 0); at ω=0 both read 0 (anti-vacuity).
+function flyerRigidPoint(omega){
+  const s = F.rideStateRigid(omega);
+  const Fr = omega * omega * s.R / G;
+  return { omega, R: s.R, Fr, thetaDeg: s.thetaDeg, tiltDeg: deg(tiltOfFr(Fr)) };
+}
+// ─ FLYER-ADAPTER END ─
+
+// ─ ROTOR-ADAPTER BEGIN ─
+// rotorPoint(omega): the spin-drum operating point. The drum radius is fixed, so Fr = ω²R_DRUM/g and
+// tiltDeg = atan(Fr)·180/π is the felt-tilt for the drum's own Fr. `pinned` is the rotor core's own
+// verdict (holds) for a representative rider; `drop01` is how far that rider has sunk below ω_c (0 when
+// pinned). The pin tick is where the felt-tilt reaches the friction angle.
+function rotorPoint(omega){
+  const Fr = omega * omega * R.R_DRUM / G;
+  return {
+    omega, R: R.R_DRUM, Fr, tiltDeg: deg(tiltOfFr(Fr)),
+    pinned: R.holds(70, omega), drop01: R.riderState(70, omega, 0.5).drop01,
+  };
+}
+// rotorFrictionlessPoint(omega): the NEG-CONTROL — a FRICTIONLESS wall (holdsFrictionless) NEVER pins
+// at any finite ω, so 'PINNED' never lights. The felt-tilt still grows (the wall still presses), but
+// the friction reserve is dead.
+function rotorFrictionlessPoint(omega){
+  const Fr = omega * omega * R.R_DRUM / G;
+  return { omega, R: R.R_DRUM, Fr, tiltDeg: deg(tiltOfFr(Fr)), pinned: R.holdsFrictionless(70, omega) };
+}
+// muTickDeg: the friction angle atan(1/μ) = 65.772255° — the felt-tilt at which the rotor pins. The pin
+// tick on the master arc. omegaCrit(): the spin where the drum's felt-tilt reaches that angle (= ω_c).
+const muTickDeg = deg(Math.atan(1 / R.MU));
+function omegaCrit(){ return R.omegaC(); }
+// ─ ROTOR-ADAPTER END ─
+
+// ══ THE MASTER ARC — the one curve both beads ride ══════════════════════════════════════════════════
+// arcTiltDeg(Fr): the master arc itself, tilt = atan(Fr)·180/π, with a 90° asymptote as Fr→∞. Both
+// flyerPoint and rotorPoint sit on it at their OWN Fr — one curve, two beads.
+function arcTiltDeg(Fr){ return deg(tiltOfFr(Fr)); }
+
+// the spin sweep the page and the test ride over (rad/s) — covers ω_c ≈ 3.30 and pushes the flyer past
+// 70° lean.
+const OMEGA_MAX = 4;
+
+// ══ THE SELF-TEST (re-proven by core.test.mjs; byte-twin-inlined as the page's pill) ════════════════
+function runSelfTest(){
+  const checks = [];
+  const ck = (name, ok, info) => checks.push({ name, ok: !!ok, info });
+
+  // LEG 1 — UNION: the flyer's SOLVED lean IS the felt-tilt of its own orbit. Over a dense ω sweep
+  // thetaDeg === atan(ω²R/g)·180/π === tiltDeg to <1e-9 (worst ~2.0e-11). The chain is a plumb-line.
+  {
+    let worst = 0, worstW = 0, n = 0;
+    for (let w = 0; w <= OMEGA_MAX; w += 0.01){
+      const p = flyerPoint(w);
+      const arc = arcTiltDeg(p.Fr);
+      const d = Math.max(Math.abs(p.thetaDeg - arc), Math.abs(p.thetaDeg - p.tiltDeg));
+      if (d > worst){ worst = d; worstW = w; }
+      n++;
+    }
+    ck('1 · union: flyer thetaDeg === atan(ω²R/g)·180/π === tiltDeg over a dense ω sweep < 1e-9',
+       worst < 1e-9 && n >= 400,
+       'worst=' + worst.toExponential(2) + ' at ω=' + worstW.toFixed(2) + ' (n=' + n + ')');
+  }
+
+  // LEG 2 — PIN-TICK: the rotor pins exactly as its felt-tilt crosses the friction tick. holds flips
+  // false→true across omegaCrit(); tilt(omegaCrit) === muTickDeg === atan(1/μ) = 65.772255° (gap 0.0).
+  {
+    const wc = omegaCrit();
+    const below = rotorPoint(wc * (1 - 1e-7)), above = rotorPoint(wc * (1 + 1e-7));
+    const flips = (below.pinned === false) && (above.pinned === true);
+    const tiltAtC = arcTiltDeg(wc * wc * R.R_DRUM / G);
+    const gap = Math.abs(tiltAtC - muTickDeg);
+    ck('2 · pin-tick: holds flips false→true across ω_c AND tilt(ω_c) === atan(1/μ) = 65.772255° (gap 0.0)',
+       flips && gap < 1e-9 && Math.abs(muTickDeg - 65.77225468204583) < 1e-9,
+       'flips=' + flips + ' tilt(ω_c)=' + tiltAtC.toFixed(6) + ' muTick=' + muTickDeg.toFixed(6) + ' gap=' + gap.toExponential(2));
+  }
+
+  // LEG 3 — COLLAPSE: BOTH operating points satisfy tiltDeg === atan(Fr)·180/π for each ride's OWN Fr
+  // over the sweep — both beads on ONE arc. Genuine because F.G === R.G (asserted at module top).
+  {
+    let worstF = 0, worstR = 0;
+    for (let i = 0; i <= 200; i++){
+      const w = OMEGA_MAX * i / 200;
+      const fp = flyerPoint(w), rp = rotorPoint(w);
+      worstF = Math.max(worstF, Math.abs(fp.tiltDeg - arcTiltDeg(fp.Fr)));
+      worstR = Math.max(worstR, Math.abs(rp.tiltDeg - arcTiltDeg(rp.Fr)));
+    }
+    ck('3 · collapse: both flyer & rotor tiltDeg === atan(Fr)·180/π on one master arc < 1e-9 (F.G===R.G, honest, no warp)',
+       worstF < 1e-9 && worstR < 1e-9 && G === R.G,
+       'flyer=' + worstF.toExponential(2) + ' rotor=' + worstR.toExponential(2) + ' g=' + G);
+  }
+
+  // LEG 4 — ANTI-VACUITY: at ω=0 both rides AND both controls read tilt 0 (they agree only where they must).
+  {
+    const fp = flyerPoint(0), rp = rotorPoint(0), fr = flyerRigidPoint(0), rf = rotorFrictionlessPoint(0);
+    const allZero = fp.tiltDeg === 0 && rp.tiltDeg === 0 && fr.tiltDeg === 0 && rf.tiltDeg === 0
+      && fp.thetaDeg === 0 && fr.thetaDeg === 0;
+    ck('4 · anti-vacuity: at ω=0 both rides AND both neg-controls read tilt 0 (agree only where they must)',
+       allZero, 'flyer=' + fp.tiltDeg + ' rotor=' + rp.tiltDeg + ' rigid=' + fr.tiltDeg + ' fric=' + rf.tiltDeg);
+  }
+
+  // LEG 5 — NEG-CONTROL flyer: rigid spokes read θ≡0 on every leaning sample (peel off the arc) while
+  // the real felt-tilt > 0; at ω=0 both read 0 (anti-vacuity — they agree only where they should).
+  {
+    let realLeans = 0, peels = 0, rigidEver = false;
+    for (let w = 0.2; w <= OMEGA_MAX; w += 0.05){
+      const real = flyerPoint(w), rigid = flyerRigidPoint(w);
+      if (real.thetaDeg > 1e-6) realLeans++;
+      if (rigid.thetaDeg !== 0) rigidEver = true;
+      if (rigid.thetaDeg === 0 && real.tiltDeg > 1e-6) peels++;   // peeled to the x-axis while real leans
+    }
+    const bothZero = flyerPoint(0).thetaDeg === 0 && flyerRigidPoint(0).thetaDeg === 0;
+    ck('5 · neg-control flyer: rigid θ≡0 PEELS off the arc on EVERY leaning sample (real felt-tilt > 0); ω=0 both 0',
+       realLeans > 0 && peels === realLeans && !rigidEver && bothZero,
+       'leaning=' + realLeans + ' peeled=' + peels + ' rigidEver=' + rigidEver);
+  }
+
+  // LEG 6 — NEG-CONTROL rotor: a frictionless wall NEVER pins at any finite ω; omegaC(0) === Infinity
+  // (the pin tick slides to 90°); a non-empty band above the real ω_c exists where the real wall holds
+  // but the frictionless one never does — 'PINNED' never lights.
+  {
+    const wc = omegaCrit();
+    let fricEver = false, bandAbove = 0, samplesAbove = 0;
+    for (let w = 0; w <= OMEGA_MAX; w += 0.02){
+      if (rotorFrictionlessPoint(w).pinned) fricEver = true;
+      if (w > wc){ samplesAbove++; if (rotorPoint(w).pinned && !rotorFrictionlessPoint(w).pinned) bandAbove++; }
+    }
+    ck('6 · neg-control rotor: frictionless NEVER pins ∀ finite ω, omegaC(0)===Infinity, non-empty band above ω_c holds',
+       !fricEver && R.omegaC(0) === Infinity && bandAbove > 0 && bandAbove === samplesAbove,
+       'fricEver=' + fricEver + ' bandAbove=' + bandAbove + '/' + samplesAbove + ' ω_c=' + wc.toFixed(4));
+  }
+
+  const passed = checks.filter(c => c.ok).length;
+  return { ok: passed === checks.length, passed, total: checks.length, checks };
+}
+
+export {
+  G, OMEGA_MAX, muTickDeg,
+  flyerPoint, flyerRigidPoint, rotorPoint, rotorFrictionlessPoint, omegaCrit,
+  tiltOfFr, deg, arcTiltDeg,
+  runSelfTest,
+};
+// === CORE END ===
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//  THE PAGE — one ω dial drives a gold felt-gravity needle, a flyer diorama and a rotor diorama.
+//  Everything below the CORE slab is page rendering only; all the MATH lives in the slab above and
+//  is the byte-twin of core.mjs (proven by core.test.mjs Leg 7). The page calls flyerPoint() /
+//  rotorPoint() / arcTiltDeg() — the SAME functions the test consumes — so what you SEE is tested.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+
+const COL = (() => {
+  const css = getComputedStyle(document.documentElement);
+  const c = n => css.getPropertyValue(n).trim();
+  return {
+    gold: c('--gold'), goldHi: c('--gold-hi'), teal: c('--teal'), coral: c('--coral'),
+    dim: c('--ink-dim'), ink: c('--ink'), panel: '#06080a',
+  };
+})();
+
+// state — ω is the SOURCE OF TRUTH; tilt is read OUT (never inverted tilt→ω).
+let omega = 0;
+let rigid = false;     // neg-control A: rigid spokes (flyer θ≡0)
+let fric  = false;     // neg-control B: frictionless wall (rotor never pins)
+let sweep = null;      // {t0, dur} during a sweep
+let wasPinned = false; // for the latch flash
+
+const cvFlyer = document.getElementById('cvFlyer');
+const cvNeedle = document.getElementById('cvNeedle');
+const cvRotor = document.getElementById('cvRotor');
+const dial = document.getElementById('dial');
+const dval = document.getElementById('dval');
+const lamp = document.getElementById('lamp'), lampTxt = document.getElementById('lampTxt');
+const proofPill = document.getElementById('proofPill');
+const btnRigid = document.getElementById('btnRigid'), btnFric = document.getElementById('btnFric');
+const btnSweep = document.getElementById('btnSweep');
+const arcCap = document.getElementById('arcCap');
+const flyCap = document.getElementById('flyCap'), rotCap = document.getElementById('rotCap');
+const flyTitle = document.getElementById('flyTitle'), rotTitle = document.getElementById('rotTitle');
+
+// the friction-tick angle (and its slide to 90° when frictionless) — read from the CORE.
+const MU_TICK = muTickDeg;
+
+// canvas helper: size to CSS box × DPR
+function fit(cv, cssH){
+  const cssW = cv.clientWidth || cv.parentElement.clientWidth;
+  cv.width = Math.round(cssW * DPR);
+  cv.height = Math.round(cssH * DPR);
+  cv.style.height = cssH + 'px';
+  const g = cv.getContext('2d');
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  return { g, W: cssW, H: cssH };
+}
+function mono(){ return "'SF Mono',ui-monospace,monospace"; }
+
+// the live operating points the page reads (all physics from the CORE)
+function live(){
+  const fp = rigid ? flyerRigidPoint(omega) : flyerPoint(omega);
+  const rp = fric  ? rotorFrictionlessPoint(omega) : rotorPoint(omega);
+  return { fp, rp };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+//  CENTER — THE NEEDLE (the spine): a gold pendant needle = the effective-g vector, its angle
+//  from vertical === φ of the live operating point. Behind it the faint master arc with two beads
+//  and the μ-tick pin line.
+// ════════════════════════════════════════════════════════════════════════════════════════════
+function drawNeedle(){
+  const { g, W, H } = fit(cvNeedle, 320);
+  g.fillStyle = COL.panel; g.fillRect(0, 0, W, H);
+  const { fp, rp } = live();
+
+  // ── the faint ghost master arc (behind): tilt = atan(Fr), Fr on x∈[0,3], tilt on y∈[0,90] ──
+  const ax0 = 38, ax1 = W - 14, ay0 = H - 26, ay1 = 16;
+  const FR_MAX = 3, TILT_MAX = 90;
+  const AX = fr => ax0 + Math.min(fr, FR_MAX) / FR_MAX * (ax1 - ax0);
+  const AY = t => ay0 - t / TILT_MAX * (ay0 - ay1);
+  // 90° asymptote ghost ceiling
+  g.strokeStyle = 'rgba(201,162,74,0.16)'; g.setLineDash([3,4]); g.lineWidth = 1;
+  g.beginPath(); g.moveTo(ax0, AY(90)); g.lineTo(ax1, AY(90)); g.stroke(); g.setLineDash([]);
+  g.fillStyle = 'rgba(201,162,74,0.4)'; g.font = '8px ' + mono(); g.textAlign = 'left';
+  g.fillText('90° (Fr→∞)', ax0 + 2, AY(90) - 3);
+  // the arc curve
+  g.strokeStyle = 'rgba(201,162,74,0.3)'; g.lineWidth = 1.6;
+  g.beginPath();
+  for (let i = 0; i <= 160; i++){
+    const fr = i / 160 * FR_MAX;
+    const x = AX(fr), y = AY(arcTiltDeg(fr));
+    if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+  }
+  g.stroke();
+  // axis whisper
+  g.fillStyle = 'rgba(165,156,135,0.5)'; g.font = '8px ' + mono(); g.textAlign = 'center';
+  g.fillText('Fr = ω²R/g →', (ax0 + ax1) / 2, H - 8);
+
+  // the μ-tick PIN LINE (engraved) — slides to 90° when frictionless
+  const tickTilt = fric ? 90 : MU_TICK;
+  g.strokeStyle = fric ? 'rgba(95,205,191,0.5)' : 'rgba(240,132,111,0.7)'; g.setLineDash([2,3]); g.lineWidth = 1;
+  g.beginPath(); g.moveTo(ax0, AY(tickTilt)); g.lineTo(ax1, AY(tickTilt)); g.stroke(); g.setLineDash([]);
+  g.fillStyle = fric ? COL.teal : COL.coral; g.font = '600 8px ' + mono(); g.textAlign = 'right';
+  g.fillText(fric ? 'μ-tick → 90° (μ=0)' : 'μ-tick · atan(1/μ)=65.77°', ax1, AY(tickTilt) - 3);
+
+  // the two beads on the arc (at their OWN Fr)
+  function bead(fr, tilt, color, label){
+    const x = AX(fr), y = AY(tilt);
+    g.fillStyle = color;
+    g.beginPath(); g.arc(x, y, 4.4, 0, 2*Math.PI); g.fill();
+    g.strokeStyle = 'rgba(255,247,224,0.7)'; g.lineWidth = 1; g.beginPath(); g.arc(x, y, 4.4, 0, 2*Math.PI); g.stroke();
+    g.fillStyle = color; g.font = '7.5px ' + mono(); g.textAlign = 'center';
+    g.fillText(label, x, y - 7);
+  }
+  bead(fp.Fr, fp.tiltDeg, rigid ? COL.dim : COL.coral, 'flyer');
+  bead(rp.Fr, rp.tiltDeg, COL.teal, 'rotor');
+
+  // ── the HERO NEEDLE: a heavy gold pendant hung from a brass hub at center, angle === φ of the
+  //    live operating point (the flyer's φ — its lean — is the headline; falls back to rotor when rigid)
+  const opTilt = rigid ? rp.tiltDeg : fp.tiltDeg;   // the live operating φ the needle reads
+  const hubX = W * 0.5, hubY = ay1 + 12, len = (ay0 - hubY) * 0.92;
+  const phi = opTilt * Math.PI / 180;               // from vertical
+  const tipX = hubX + len * Math.sin(phi), tipY = hubY + len * Math.cos(phi);
+  // a faint vertical reference (gravity at rest)
+  g.strokeStyle = 'rgba(165,156,135,0.18)'; g.setLineDash([2,4]); g.lineWidth = 1;
+  g.beginPath(); g.moveTo(hubX, hubY); g.lineTo(hubX, hubY + len); g.stroke(); g.setLineDash([]);
+  // the needle shaft
+  g.strokeStyle = COL.gold; g.lineWidth = 4; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(hubX, hubY); g.lineTo(tipX, tipY); g.stroke();
+  // the pendant weight at the tip
+  g.fillStyle = COL.goldHi;
+  g.beginPath(); g.arc(tipX, tipY, 7, 0, 2*Math.PI); g.fill();
+  g.strokeStyle = 'rgba(7,8,12,0.6)'; g.lineWidth = 1.4; g.beginPath(); g.arc(tipX, tipY, 7, 0, 2*Math.PI); g.stroke();
+  // the brass hub
+  g.fillStyle = '#9a7a32'; g.beginPath(); g.arc(hubX, hubY, 5, 0, 2*Math.PI); g.fill();
+  g.fillStyle = COL.goldHi; g.beginPath(); g.arc(hubX, hubY, 2.4, 0, 2*Math.PI); g.fill();
+  // the live φ readout by the hub
+  g.fillStyle = COL.goldHi; g.font = '600 12px ' + mono(); g.textAlign = 'left';
+  g.fillText('φ = ' + opTilt.toFixed(2) + '°', hubX + 12, hubY + 4);
+  g.fillStyle = COL.dim; g.font = '8px ' + mono();
+  g.fillText('effective-g tilt', hubX + 12, hubY + 16);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+//  LEFT — THE FLYER (real depiction): hub + chains + a foremost chair, side view. The chain's
+//  angle from vertical === the flyer's current φ (the chain IS the plumb-line for effective g),
+//  read straight from flyerPoint — the lean is the readout, never re-typed.
+// ════════════════════════════════════════════════════════════════════════════════════════════
+function drawFlyer(){
+  const { g, W, H } = fit(cvFlyer, 320);
+  g.fillStyle = COL.panel; g.fillRect(0, 0, W, H);
+  const { fp } = live();
+  const phi = fp.thetaDeg * Math.PI / 180;   // the lean from vertical (the readout)
+
+  // the mast + hub
+  const mastX = W * 0.5, topY = 26, hubY = 64;
+  g.strokeStyle = 'rgba(201,162,74,0.4)'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(mastX, topY); g.lineTo(mastX, H - 24); g.stroke();
+  // canopy roof
+  g.strokeStyle = COL.gold; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(mastX - 46, hubY); g.lineTo(mastX, topY); g.lineTo(mastX + 46, hubY); g.stroke();
+  // the hub disc
+  g.fillStyle = '#9a7a32'; g.beginPath(); g.arc(mastX, hubY, 5, 0, 2*Math.PI); g.fill();
+
+  // chain geometry: a chain of pixel length CL hung from radius r0px on each side, leaning out by φ.
+  const r0px = 30, CL = 150;
+  function chair(side){   // side = +1 (front/right) or -1 (back/left)
+    const ax = mastX + side * r0px;   // attach point on the canopy rim
+    // the chain hangs along tilted effective gravity: out by φ from vertical
+    const cx = ax + side * CL * Math.sin(phi);
+    const cy = hubY + CL * Math.cos(phi);
+    return { ax, cx, cy };
+  }
+  // back chair (dim), then front chair (lit) — the foremost is the hero
+  const back = chair(-1), front = chair(1);
+  // back
+  g.strokeStyle = 'rgba(165,156,135,0.45)'; g.lineWidth = 1.4;
+  g.beginPath(); g.moveTo(back.ax, hubY); g.lineTo(back.cx, back.cy); g.stroke();
+  g.fillStyle = 'rgba(165,156,135,0.5)';
+  g.beginPath(); g.arc(back.cx, back.cy, 7, 0, 2*Math.PI); g.fill();
+  // the faint vertical reference at the front attach (gravity at rest)
+  g.strokeStyle = 'rgba(165,156,135,0.18)'; g.setLineDash([2,4]); g.lineWidth = 1;
+  g.beginPath(); g.moveTo(front.ax, hubY); g.lineTo(front.ax, hubY + CL); g.stroke(); g.setLineDash([]);
+  // front chain (the plumb-line) — lit coral
+  g.strokeStyle = rigid ? 'rgba(165,156,135,0.7)' : COL.coral; g.lineWidth = 2.2;
+  g.beginPath(); g.moveTo(front.ax, hubY); g.lineTo(front.cx, front.cy); g.stroke();
+  // the chair (a warm seat box)
+  g.save();
+  g.translate(front.cx, front.cy); g.rotate(phi * 0.6);   // the seat tips out a touch with the lean
+  g.fillStyle = rigid ? 'rgba(165,156,135,0.25)' : 'rgba(240,132,111,0.22)';
+  g.strokeStyle = rigid ? 'rgba(165,156,135,0.7)' : COL.coral; g.lineWidth = 1.5;
+  g.beginPath(); g.rect(-11, -3, 22, 16); g.fill(); g.stroke();
+  // a tiny rider dot
+  g.fillStyle = rigid ? COL.dim : COL.goldHi; g.beginPath(); g.arc(0, 0, 3.2, 0, 2*Math.PI); g.fill();
+  g.restore();
+
+  // the lean readout + the φ arc at the front attach
+  if (fp.thetaDeg > 0.5){
+    g.strokeStyle = 'rgba(240,132,111,0.5)'; g.lineWidth = 1;
+    g.beginPath(); g.arc(front.ax, hubY, 26, Math.PI/2, Math.PI/2 - phi, true); g.stroke();
+  }
+  g.fillStyle = rigid ? COL.dim : COL.coral; g.font = '600 11px ' + mono(); g.textAlign = 'center';
+  g.fillText('θ = ' + fp.thetaDeg.toFixed(2) + '°', mastX, H - 8);
+  g.fillStyle = COL.dim; g.font = '8px ' + mono(); g.textAlign = 'left';
+  g.fillText('R = ' + fp.R.toFixed(2) + ' m', 8, 18);
+  if (rigid){
+    g.fillStyle = COL.dim; g.font = '600 9px ' + mono(); g.textAlign = 'center';
+    g.fillText('RIGID SPOKES · θ≡0', mastX, 18);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+//  RIGHT — THE ROTOR (real depiction): drum cross-section, one rider against the inner wall, floor
+//  dropped to a dark shaft. The effective-g arrow inside tilts with φ. Below ω_c the rider SINKS
+//  (drop01); at/above ω_c the rider LOCKS flat and the PINNED lamp throws.
+// ════════════════════════════════════════════════════════════════════════════════════════════
+function drawRotor(){
+  const { g, W, H } = fit(cvRotor, 320);
+  g.fillStyle = COL.panel; g.fillRect(0, 0, W, H);
+  const { rp } = live();
+  const pinned = rp.pinned;
+  const drop = (fric ? rotorPoint(omega).drop01 : (rp.drop01 != null ? rp.drop01 : rotorPoint(omega).drop01));
+  // (for the frictionless control, the rider always sinks — read the real drop01 which is sink below ω_c
+  //  and continues sinking; we show the rider sliding since μ=0 never pins)
+  const sinkFrac = fric ? Math.min(1, rotorPoint(omega).drop01 || (omega > 0 ? 0.85 : 0)) : drop;
+
+  const cx = W * 0.5, cy = 130, rad = 86;
+  // drum walls (two arcs — a cross-section ring)
+  g.strokeStyle = 'rgba(201,162,74,0.4)'; g.lineWidth = 2.4;
+  g.beginPath(); g.arc(cx, cy, rad, 0, 2*Math.PI); g.stroke();
+  g.strokeStyle = 'rgba(201,162,74,0.18)'; g.lineWidth = 1;
+  g.beginPath(); g.arc(cx, cy, rad - 10, 0, 2*Math.PI); g.stroke();
+  // the dropped floor → a dark shaft below
+  const shaftTop = cy + rad - 6;
+  g.fillStyle = '#04060a';
+  g.fillRect(cx - rad, shaftTop, rad * 2, H - shaftTop);
+  g.strokeStyle = 'rgba(165,156,135,0.2)'; g.setLineDash([3,4]); g.lineWidth = 1;
+  g.beginPath(); g.moveTo(cx - rad, shaftTop); g.lineTo(cx + rad, shaftTop); g.stroke(); g.setLineDash([]);
+  g.fillStyle = COL.dim; g.font = '8px ' + mono(); g.textAlign = 'center';
+  g.fillText('floor dropped', cx, shaftTop + 14);
+
+  // the effective-g arrow inside, tilted by φ (the felt gravity the rider obeys)
+  const phi = rp.tiltDeg * Math.PI / 180;
+  const gLen = 38;
+  const gx = cx + gLen * Math.sin(phi), gy = cy + gLen * Math.cos(phi);
+  g.strokeStyle = 'rgba(201,162,74,0.55)'; g.lineWidth = 1.6;
+  g.beginPath(); g.moveTo(cx, cy); g.lineTo(gx, gy); g.stroke();
+  // arrowhead
+  g.fillStyle = 'rgba(201,162,74,0.7)';
+  const aa = Math.atan2(gy - cy, gx - cx);
+  g.beginPath(); g.moveTo(gx, gy);
+  g.lineTo(gx - 6*Math.cos(aa - 0.4), gy - 6*Math.sin(aa - 0.4));
+  g.lineTo(gx - 6*Math.cos(aa + 0.4), gy - 6*Math.sin(aa + 0.4));
+  g.closePath(); g.fill();
+  g.fillStyle = COL.dim; g.font = '7.5px ' + mono(); g.textAlign = 'left';
+  g.fillText('eff-g φ=' + rp.tiltDeg.toFixed(1) + '°', cx + 4, cy - 6);
+
+  // the rider against the inner wall (right side). pinned ⇒ locked flat at mid-height; sliding ⇒ sinks.
+  const wallX = cx + rad - 12;
+  const topRide = cy - rad * 0.42, botRide = shaftTop - 6;
+  const riderY = pinned ? topRide : topRide + sinkFrac * (botRide - topRide);
+  g.save();
+  g.translate(wallX, riderY);
+  const col = pinned ? COL.goldHi : COL.teal;
+  g.fillStyle = pinned ? 'rgba(240,132,111,0.3)' : 'rgba(95,205,191,0.22)';
+  g.strokeStyle = pinned ? COL.coral : COL.teal; g.lineWidth = 1.6;
+  // a body flattened to the wall when pinned, upright-ish when sliding
+  g.beginPath(); g.rect(-16, -7, 16, 14); g.fill(); g.stroke();
+  g.fillStyle = col; g.beginPath(); g.arc(-8, 0, 3.4, 0, 2*Math.PI); g.fill();
+  g.restore();
+
+  // labels
+  g.fillStyle = pinned ? COL.coral : COL.teal; g.font = '600 11px ' + mono(); g.textAlign = 'center';
+  g.fillText(pinned ? 'PINNED · φ ≥ 65.77°' : (omega > 0 ? 'sliding · drop ' + (sinkFrac*100|0) + '%' : 'at rest'), cx, H - 8);
+  g.fillStyle = COL.dim; g.font = '8px ' + mono(); g.textAlign = 'right';
+  g.fillText('Fr = ' + rp.Fr.toFixed(2), W - 8, 18);
+  if (fric){
+    g.fillStyle = COL.teal; g.font = '600 9px ' + mono(); g.textAlign = 'center';
+    g.fillText('FRICTIONLESS · μ=0', cx, 18);
+  }
+}
+
+// ── the PINNED lamp + proof pill ──────────────────────────────────────────────────────────────
+function setLampAndProof(){
+  const { rp } = live();
+  const pinned = rp.pinned;
+  const wasOn = lamp.classList.contains('on');
+  lamp.classList.toggle('on', pinned);
+  lampTxt.textContent = pinned ? 'PINNED' : (fric ? 'never pins (μ=0)' : 'not pinned');
+  // a brief brass latch flash on the false→true transition
+  if (pinned && !wasOn && !RM){ lamp.classList.remove('latch'); void lamp.offsetWidth; lamp.classList.add('latch'); }
+
+  // the proof pill: φ === atan(Fr) residual, live, over the operating point
+  const r = runSelfTest();
+  const fp = rigid ? flyerRigidPoint(omega) : flyerPoint(omega);
+  const resid = Math.abs(fp.tiltDeg - arcTiltDeg(fp.Fr));
+  proofPill.classList.toggle('ok', r.ok);
+  proofPill.textContent = 'φ = atan(Fr) · |res| ' + resid.toExponential(0) + ' · ' + r.passed + '/' + r.total + (r.ok ? ' ✓' : '');
+}
+
+// ── titles & captions react to the controls ────────────────────────────────────────────────────
+function setLabels(){
+  flyTitle.textContent = rigid ? 'The Rigid-Spoke Flyer' : 'The Star Flyer';
+  rotTitle.textContent = fric ? 'The Frictionless Drum' : 'The Rotor';
+  flyCap.innerHTML = rigid
+    ? 'rigid spokes lock the arms · <b>θ ≡ 0</b> at every ω — the bead peels to the x-axis'
+    : 'the chain hangs along tilted g · <b>φ = atan(ω²R/g)</b>, R = r₀+L·sinθ widens';
+  rotCap.innerHTML = fric
+    ? 'μ = 0 — the wall presses but never holds · the μ-tick slides to 90°, <b>PINNED never throws</b>'
+    : 'pinned when felt-g tilt <b>φ</b> reaches the friction angle <b>atan(1/μ) = 65.772°</b>';
+}
+
+// ── the master render ───────────────────────────────────────────────────────────────────────
+function render(){
+  drawNeedle(); drawFlyer(); drawRotor(); setLampAndProof(); setLabels();
+}
+
+// ── interaction (ω is the source of truth) ──────────────────────────────────────────────────────
+function setOmega(w){
+  omega = Math.max(0, Math.min(OMEGA_MAX, w));
+  dial.value = omega;
+  dval.firstChild.textContent = omega.toFixed(2) + ' ';
+  render();
+}
+dial.addEventListener('input', () => { if (sweep){ sweep = null; btnSweep.classList.remove('sweeping'); } setOmega(parseFloat(dial.value)); });
+dial.addEventListener('keydown', (e) => {
+  let d = 0;
+  if (e.key === 'ArrowRight') d = 0.02; else if (e.key === 'ArrowLeft') d = -0.02;
+  else if (e.key === 'ArrowUp') d = 0.2; else if (e.key === 'ArrowDown') d = -0.2;
+  if (d){ e.preventDefault(); if (sweep){ sweep = null; btnSweep.classList.remove('sweeping'); } setOmega(omega + d); }
+});
+btnRigid.addEventListener('click', () => { rigid = !rigid; btnRigid.classList.toggle('on', rigid); render(); });
+btnFric.addEventListener('click', () => { fric = !fric; btnFric.classList.toggle('on', fric); render(); });
+
+// GRAFT A — sweep the dial across its range once (continuous lean vs threshold pin made unmissable)
+btnSweep.addEventListener('click', () => {
+  if (sweep){ sweep = null; btnSweep.classList.remove('sweeping'); return; }
+  if (RM){ setOmega(OMEGA_MAX); return; }                 // reduced-motion: snap to the end
+  sweep = { t0: performance.now(), dur: 4200 };
+  btnSweep.classList.add('sweeping');
+  sweepLoop();
+});
+function sweepLoop(){
+  if (!sweep) return;
+  const e = (performance.now() - sweep.t0) / sweep.dur;
+  if (e >= 1){ setOmega(OMEGA_MAX); sweep = null; btnSweep.classList.remove('sweeping'); return; }
+  setOmega(e * OMEGA_MAX);
+  requestAnimationFrame(sweepLoop);
+}
+
+// ── the self-test pill + detail panel (chip === Node twin) ──────────────────────────────────────
+const stPanel = document.getElementById('stPanel');
+function runPill(){
+  const el = document.getElementById('selftest');
+  try{
+    const r = runSelfTest();
+    el.className = 'selftest ' + (r.ok ? 'ok' : 'bad');
+    el.textContent = (r.ok ? '✓ ' : '✗ ') + r.passed + '/' + r.total + ' · self-test';
+    // fill the detail panel
+    document.getElementById('stSub').textContent = r.ok
+      ? 'φ = atan(Fr): the flyer\'s lean IS the felt-tilt, the rotor pins at atan(1/μ), both on one arc — all legs green.'
+      : 'some legs FAILED — see below.';
+    const list = document.getElementById('stList'); list.innerHTML = '';
+    for (const c of r.checks){
+      const row = document.createElement('div'); row.className = 'row';
+      row.innerHTML = '<span class="m ' + (c.ok ? 'ok' : 'no') + '">' + (c.ok ? '✓' : '✗') + '</span>'
+        + '<span>' + c.name + (c.info ? ' <span style="opacity:.7">· ' + c.info + '</span>' : '') + '</span>';
+      list.appendChild(row);
+    }
+    return r.ok;
+  }catch(e){
+    el.className = 'selftest bad'; el.textContent = '✗ self-test threw'; el.title = String(e); return false;
+  }
+}
+document.getElementById('selftest').addEventListener('click', () => { runPill(); stPanel.classList.toggle('show'); });
+document.getElementById('stClose').addEventListener('click', () => stPanel.classList.remove('show'));
+
+// ── boot ───────────────────────────────────────────────────────────────────────────────────────
+function boot(){
+  setOmega(0);
+  runPill();
+  // drop the cross's own breadcrumb so a direct visit registers (reciprocal cross, not a front-door node)
+  try{ const k = 'ws:seen:cross-felt-gravity-curve'; if (!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
+}
+window.addEventListener('resize', render);
+boot();
+
+// expose globals for the publisher's in-browser parity check (in-browser globals reproduce the twin)
+window.__fgc = {
+  flyerPoint, rotorPoint, flyerRigidPoint, rotorFrictionlessPoint, arcTiltDeg, omegaCrit, muTickDeg, runSelfTest,
+  unionResidual: (w) => Math.abs(flyerPoint(w).thetaDeg - arcTiltDeg(flyerPoint(w).Fr)),
+};
+window.__FGC_SELFTEST__ = (() => { try { const r = runSelfTest(); return { pass: r.passed, total: r.total }; } catch(e){ return { pass: 0, total: 0 }; } })();
+</script>
+</body>
+</html>
