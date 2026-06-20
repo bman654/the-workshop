@@ -36,6 +36,7 @@ const FURNACE   = FEAT_GROUPS.find(g => g.id === 'furnace');   // the Engine Roo
 const SURVEYOR  = FEAT_GROUPS.find(g => g.id === 'surveyor');  // Curved Country's founding star (The Holonomy Walk)
 const PILOT     = FEAT_GROUPS.find(g => g.id === 'pilot');     // Optics' fly-through founding star (The Photon's Errand)
 const RECKONER  = FEAT_GROUPS.find(g => g.id === 'reckoner');  // the Reckoning Cabinet's founding star (The Differential Gear)
+const DROVER    = FEAT_GROUPS.find(g => g.id === 'drover');    // the Arcade's herding founding star (The Shepherd)
 // the legacy Optician sub-suite (174-228) refers to `FEATS` as the single Optician group.
 const FEATS = OPTICIAN;
 
@@ -158,7 +159,7 @@ function inViewBox(s) {
   const sFull = Sky.state(full, CATALOG, WINGS, FEAT_GROUPS);
   let allComp = true;
   sFull.asterisms.forEach(a => { if (!a.complete) allComp = false; });
-  ok(allComp, 'COMPLETION: full visit-set completes every asterism (incl. all five feat-groups)');
+  ok(allComp, 'COMPLETION: full visit-set completes every asterism (incl. all feat-groups)');
   eq(sFull.allComplete, true, 'COMPLETION: allComplete true on the full set (capstone)');
 
   // empty set: nothing complete, allComplete false
@@ -424,15 +425,16 @@ WINGS.forEach(w => w.members.forEach(m => ALL_WING_MEMBERS.push(m)));
 
   // ── the feat-GROUPS: a group-agnostic disjointness sweep (replaces the old
   //    `feat-`-prefix-hardcoded block, which would FALSE-FAIL on plain room-id members).
-  //    There are exactly six feat-groups with distinct ids; EVERY member belongs to
+  //    There are exactly seven feat-groups with distinct ids; EVERY member belongs to
   //    exactly one group across WINGS + FEAT_GROUPS (no dupe); each plain-room-id NEW-group
   //    member is a valid catalog id (NOT feat-). The `feat-` prefix assertion is kept,
   //    scoped to the OPTICIAN only. The Surveyor (Curved Country), The Pilot (Optics'
-  //    fly-through) and The Reckoner (the Reckoning Cabinet) are each founded on a real
-  //    front-door room's `ws:seen` crumb, sized to grow as their wings' siblings ship. ──
-  eq(FEAT_GROUPS.length, 6, 'BIJECTION: there are exactly six feat-groups');
-  eq(FEAT_GROUPS.length, new Set(FEAT_GROUPS.map(g => g.id)).size, 'BIJECTION: the six feat-group ids are distinct');
-  ok(!!OPTICIAN && !!AUTOMATON && !!FURNACE && !!SURVEYOR && !!PILOT && !!RECKONER, 'BIJECTION: the six feat-groups are Optician + Automaton + Furnace + Surveyor + Pilot + Reckoner');
+  //    fly-through), The Reckoner (the Reckoning Cabinet) and The Drover (the Arcade's herding
+  //    game) are each founded on a real front-door room's `ws:seen` crumb, sized to grow as
+  //    their wings' siblings ship. ──
+  eq(FEAT_GROUPS.length, 7, 'BIJECTION: there are exactly seven feat-groups');
+  eq(FEAT_GROUPS.length, new Set(FEAT_GROUPS.map(g => g.id)).size, 'BIJECTION: the seven feat-group ids are distinct');
+  ok(!!OPTICIAN && !!AUTOMATON && !!FURNACE && !!SURVEYOR && !!PILOT && !!RECKONER && !!DROVER, 'BIJECTION: the seven feat-groups are Optician + Automaton + Furnace + Surveyor + Pilot + Reckoner + Drover');
 
   // every member belongs to exactly one group across WINGS + FEAT_GROUPS (no dupe across
   // the whole catalog of asterisms). memberWing already holds the wing assignments.

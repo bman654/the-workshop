@@ -144,7 +144,13 @@
     // Verified clear of every footprint/furniture box (nearest furniture = scalebar), the
     // manor pool, the viewBox edge, and every existing catalog star (nearest = collisions
     // @140px) by the CATALOG INTEGRITY self-test (re-runnable /tmp star-placement verifier).
-    'differential-gear': { x: 1180, y: 700, mag: 1 }
+    'differential-gear': { x: 1180, y: 700, mag: 1 },
+    // The Shepherd — the Arcade's herd-a-living-flock game (steer a dog; the sheep flee; pen them
+    // all). A FEATS-flavoured field star in the dark amusements band right of the Daedalus/Arcade
+    // footprints; lit on first visit (ws:seen:the-shepherd). The lead member of The Drover feat-group.
+    // Verified clear of every footprint/furniture box, the manor pool, the viewBox edge, and every
+    // existing catalog star (nearest = collisions @139px) by the CATALOG INTEGRITY self-test.
+    'the-shepherd': { x: 1130, y: 430, mag: 1 }
   };
 
   /* ── DATA: the six wings (companion-pairs), each an asterism ────────────────
@@ -205,7 +211,12 @@
     // feat-group it is ADDITIVE — it NEVER feeds the wings-only all-skies capstone. Sized
     // for the cabinet's analog-adder kin should more reckon-by-measuring scenes ship.
     { id: 'reckoner', name: 'The Reckoner', myth: 'Reckons by measuring a shape; the cage reads the mean.',
-      members: ['differential-gear'] }
+      members: ['differential-gear'] },
+    // The Drover — the Arcade's herding reward constellation. Founded with one star (The Shepherd,
+    // a plain `ws:seen:the-shepherd` room crumb); like every feat-group it is ADDITIVE — it NEVER
+    // feeds the wings-only all-skies capstone. Sized for the amusements' steer-the-living-system kin.
+    { id: 'drover', name: 'The Drover', myth: 'Never pushes the flock; only chooses where to stand.',
+      members: ['the-shepherd'] }
   ];
 
   Sky.CATALOG = CATALOG;
