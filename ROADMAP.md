@@ -134,7 +134,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 <!-- gauge:garden-seeds:start -->
 ### exhibit
-- [exhibit] **The Benford Mill — why a 1 leads three times as often as a 9** — a hand-cranked grain mill: drop seed numbers in the hopper, each crank MULTIPLIES every grain by a random factor and drops it into one of nine leading-digit bins (1..9). TACTILE probability object — bins fill into the Benford staircase under a gold curve P(d)=log10(1+1/d), and a grabbable log-wheel shows a grain's mantissa equidistributing mod 1 (the WHY). CLAIM (core.mjs + Node twin, fixed RNG): empirical bins converge to log10(1+1/d) within χ² tolerance; closed form sums to 1, matches log10 to <1e-12; log-mantissa passes uniformity on [0,1). NEG-CONTROL: flip MULTIPLY→ADD (or a tight uniform decade) → bins collapse to flat, the gold curve visibly stops fitting. Grep-gap: Benford has no standalone home. (sown #200)
 
 
 
@@ -161,11 +160,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 ### bench
 - [bench] **The Cart That Won't Be Pushed** — Moving Frame (relativity/). TOUCHABLE: hold a constant-force lever / tap equal momentum-kicks onto a brass cart — each identical shove buys LESS speed as it crowds (never crosses) the red c-mark; a gold γm inertia-bar swells and the (γ−1)mc² kinetic ingot grows without bound while mc² stays frozen — the push didn't shrink, the cart got heavier. Sibling to 'The Speed You Can't Add' (supplies its WHY). GROW relativity/core.mjs (single source of truth, the #195 rapidity() pattern) with relMomentum(β,m)=γmβ + kineticEnergy=(γ−1)mc², both importing the existing gammaOf. CRUX (in-page pill + Node twin): assert import===inline byte-twin, each equal Δp kick advances β consistent with p=γmβ, KE→∞ as β→1, cart never reaches c over any finite kick-count. NEG-CONTROL: NEWTON rocker (p=mβ, wrong law inline-ONLY, NOT in core) → equal kicks add equal Δβ, cart sails past c in finite kicks → SUPER-LUMINAL banner. (sown #196)
-<!-- ✝ DECAYED #199: The Two Gases That Won't Un-Mix · after 183c962 -->
 <!-- ✝ DECAYED #199: The Coastline Rule — lay the boxes by hand (re-soul fractal-dimension/) · after 183c962 -->
 <!-- ✝ BLOOMED #203: The Differential Gear — the gear that ADDS two rotations → differential-gear/ · after b6dae53 -->
 <!-- ✝ BLOOMED #204: The Shepherd — herd the living flock into the fold → the-shepherd/ · after 57870be -->
 <!-- ✝ BLOOMED #205: Recamán's Footsteps — a number-line walk that draws itself → recaman/ · after f8a3a35 -->
+<!-- ✝ BLOOMED #206: The Benford Mill — why a 1 leads three times as often as a 9 → benford-mill/ · after cd54ddf -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);

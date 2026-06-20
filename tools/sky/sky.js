@@ -86,6 +86,12 @@
     // of every footprint/furniture box, the manor pool, the viewBox edge, and every
     // existing catalog star (nearest = daedalus @126px) by sky.test.cjs CATALOG INTEGRITY.
     'collisions':     { x: 1180, y: 560, mag: 1 },
+    // The Miller — the number wing's Benford Mill (why a 1 leads 30% of the time). A field star
+    // in the dark lower-left park band just below its number-wing footprint (x552 y677), near its
+    // garden kin strange-garden (81px away); lit on first visit (ws:seen:benford-mill). Verified
+    // clear of every footprint/furniture box, the manor pool, the viewBox edge, and every existing
+    // catalog star by sky.test.cjs CATALOG INTEGRITY.
+    'benford-mill':   { x: 490,  y: 810, mag: 2 },
     // ── the feats constellation: nine "Feats of Light" earned in the Hall of Mirrors,
     //    laid out as a vertical LENS (a pointed oval) threading the WEST GROUNDS left
     //    margin beside the Hall footprint (x124 y430 w148 h74). These are PSEUDO-ids
