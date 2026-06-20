@@ -3,16 +3,17 @@
 //
 //  Natural units, c = 1.  Pure, DOM-free, dependency-free, dual-use (runs in
 //  the browser and in Node).  This module is the SINGLE SOURCE OF TRUTH for all
-//  Lorentz / proper-time math on the estate.  TWO pages import it:
+//  Lorentz / proper-time math on the estate.  THREE pages import it:
 //
-//    • relativity/index.html         — The Twin Voyage (this wing's bench)
-//    • cavern/light-clock/index.html — The Light Clock (γ from Pythagoras)
+//    • relativity/index.html                  — The Twin Voyage (this wing's bench)
+//    • cavern/light-clock/index.html          — The Light Clock (γ from Pythagoras)
+//    • relativity/speed-you-cant-add/index.html — The Speed You Can't Add (velAdd via rapidity)
 //
-//  Both pages ALSO inline the slab between the CORE BEGIN / CORE END sentinels
-//  byte-for-byte; relativity/core.test.mjs proves each inline copy is identical
-//  to this file (indentation-normalised) so the two can never silently drift.
-//  Because the math lives here once, NO duplicate Lorentz code survives anywhere
-//  on the estate.
+//  All importers ALSO inline the slab between the CORE BEGIN / CORE END sentinels
+//  byte-for-byte; relativity/core.test.mjs proves the inline copies in the first
+//  two pages are identical to this file (indentation-normalised) so the math can
+//  never silently drift.  Because it lives here once, NO duplicate Lorentz code
+//  survives anywhere on the estate.
 //
 //  THE ONE IDEA. A clock measures the LENGTH of its own worldline through
 //  spacetime — its PROPER TIME.  At instantaneous speed β its clock runs at the
@@ -52,6 +53,14 @@ function interval2(ct, x){ return ct*ct - x*x; }
 // Relativistic velocity addition (collinear), c = 1:  w = (u+v)/(1 + uv).
 // Two sub-c speeds never compose to ≥ c — light keeps its monopoly on c.
 function velAdd(u, v){ return (u + v) / (1 + u*v); }
+
+// RAPIDITY  φ = atanh(β).  The ADDITIVE coordinate of a boost: collinear boosts
+// add their rapidities, which is WHY velocities compose by velAdd.  φ→∞ as β→1.
+function rapidity(beta){ return Math.atanh(beta); }
+
+// The inverse: β = tanh(φ).  Maps any real rapidity back into (−1, 1) — so no
+// stack of finite rapidities ever reaches c.  velAdd(u,v) === tanh(atanh u + atanh v).
+function betaOfRapidity(phi){ return Math.tanh(phi); }
 
 // The GALILEAN ("wrong", pre-Einstein) transform — the falsifiable control:
 // t unchanged, x sheared.  It does NOT preserve the interval, by construction.
@@ -162,7 +171,8 @@ function classicalAberration(cosTheta, beta){
 // === CORE END ===
 
 export {
-  gammaOf, rateOf, lorentz, interval2, velAdd, galilean, gammaFromGeometry,
+  gammaOf, rateOf, lorentz, interval2, velAdd, rapidity, betaOfRapidity,
+  galilean, gammaFromGeometry,
   constLegTau, tauClosedForm, properTime, properTimeIntegral,
   properTimePiecewise, coordRate, coordinateClockTau, properTimeCoordinate,
   relativisticAberration, dopplerFactor, classicalAberration,

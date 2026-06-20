@@ -17,6 +17,11 @@
 //   (7) γ FROM PHOTON-PATH PYTHAGORAS == 1/√(1−β²) (the Light Clock's claim,
 //       proved from the same shared function).
 //   (8) velocity addition stays strictly below c.
+//   (8R) RAPIDITY is why velocities compose: velAdd(u,v)==betaOfRapidity(rapidity
+//        u + rapidity v) over ~5000 sub-c pairs (<1e-12); tanh∘atanh round-trips
+//        (<1e-12); N equal φ-wedges stacked == one β composed N times by velAdd
+//        ("lengths add", <1e-11); and the STRICT Galilean neg-control: u+v > c
+//        for EVERY u,v in (0.5001, 0.999] (linear addition is the wrong law).
 //   (9) THE STARBOW — the sky you fly into.  Aberration cosθ'=(cosθ+β)/(1+βcosθ)
 //       and Doppler D=(1+βcosθ)/√(1−β²):  (9a) HEADLIGHT — every star sweeps to
 //       θ'→0 as β→1 (max θ' < 0.5° at β=1−1e-9); (9a′) per-star θ'(β) is strictly
@@ -31,7 +36,8 @@
 // ============================================================================
 
 import {
-  gammaOf, rateOf, lorentz, interval2, velAdd, galilean, gammaFromGeometry,
+  gammaOf, rateOf, lorentz, interval2, velAdd, rapidity, betaOfRapidity,
+  galilean, gammaFromGeometry,
   constLegTau, tauClosedForm, properTime, properTimeIntegral,
   properTimePiecewise, coordinateClockTau, properTimeCoordinate,
   relativisticAberration, dopplerFactor, classicalAberration,
@@ -213,6 +219,67 @@ function check(name, ok, detail){
   }
   check('(8) velocity addition (u+v)/(1+uv) stays |w| < c  (5000 pairs)',
     allUnder && maxW < 1, 'max |w| ' + maxW.toFixed(9) + ' c');
+}
+
+// ── (8R) RAPIDITY: velocities compose because rapidities ADD ────────────────
+// The Speed You Can't Add's claim, proved exact: velAdd === tanh(atanh+atanh).
+{
+  // (8R-a) THE HERO IDENTITY over ~5000 sub-c (u,v) pairs.
+  let maxErr = 0, n = 0;
+  for (let i = 0; i <= 70; i++){
+    const u = -0.999 + 1.998 * (i / 70);
+    for (let j = 0; j <= 70; j++){
+      const v = -0.999 + 1.998 * (j / 70);
+      const a = velAdd(u, v);
+      const b = betaOfRapidity(rapidity(u) + rapidity(v));
+      maxErr = Math.max(maxErr, Math.abs(a - b)); n++;
+    }
+  }
+  check('(8R) velAdd(u,v) === tanh(atanh u + atanh v)  (rapidities ADD; ' + n + ' pairs)',
+    maxErr < 1e-12 && n >= 5000, 'max |Δ| ' + maxErr.toExponential(2));
+
+  // (8R′) tanh∘atanh round-trips to identity on (−1,1).
+  let maxRT = 0;
+  for (let i = 0; i <= 4000; i++){
+    const b = -0.9999 + 1.9998 * (i / 4000);
+    maxRT = Math.max(maxRT, Math.abs(betaOfRapidity(rapidity(b)) - b));
+  }
+  check('(8R′) rapidity invertible — tanh(atanh β) = β  (<1e-12)',
+    maxRT < 1e-12, 'max |Δ| ' + maxRT.toExponential(2));
+
+  // (8R″) N EQUAL φ-WEDGES STACKED == one β composed N times by velAdd.
+  // "Lengths add" both directions: stack N rapidities of a single speed b and
+  // tanh(N·φ_b) must equal velAdd applied N times in a row.
+  let maxWedge = 0, worst = '';
+  for (const b of [0.1, 0.3, 0.5, 0.7, 0.9, 0.99]){
+    let composed = 0;                         // velAdd-fold of b with itself N times
+    for (let N = 1; N <= 12; N++){
+      composed = velAdd(composed, b);         // β composed N times
+      const stacked = betaOfRapidity(N * rapidity(b));   // N equal φ-wedges
+      const e = Math.abs(composed - stacked);
+      if (e > maxWedge){ maxWedge = e; worst = 'b=' + b + ' N=' + N; }
+    }
+  }
+  check('(8R″) N equal φ-wedges stacked === b composed N times by velAdd  (lengths add)',
+    maxWedge < 1e-11, 'max |Δ| ' + maxWedge.toExponential(2) + ' @' + worst);
+
+  // (8R‴) STRICT NEG-CONTROL: Galilean u+v exceeds c for EVERY u,v in
+  // (0.5001, 0.999].  The exact corner 0.5+0.5=c is luminal (not super-luminal),
+  // so the swath must START strictly above 0.5 — an inclusive >=0.5 is imprecise.
+  {
+    const N = 60, lo = 0.5001, hi = 0.999;
+    let breaches = 0, total = 0, minSum = 9;
+    for (let i = 0; i <= N; i++){
+      for (let j = 0; j <= N; j++){
+        const u = lo + (hi - lo) * (i / N), v = lo + (hi - lo) * (j / N);
+        total++; const s = u + v; minSum = Math.min(minSum, s);
+        if (s > 1) breaches++;
+      }
+    }
+    check('(8R‴) CONTROL: Galilean u+v > c for ALL u,v in (0.5001,0.999] — wrong law',
+      breaches === total && total > 1000,
+      breaches + '/' + total + ' super-luminal · min sum ' + minSum.toFixed(4) + ' > 1');
+  }
 }
 
 // ── (9) THE STARBOW — relativistic aberration + Doppler of the flown sky ─────

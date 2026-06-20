@@ -158,12 +158,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-- [bench] **The Speed You Can't Quite Add — fire a ball forward from a near-c ship** — relativity/ (the wing's 3rd bench; core.mjs already exports a TESTED velAdd with no operable bench). A brass freight-ship runs at β=u; you fire a deck-mounted cannon forward at v relative to the deck — the lab speed crowds toward but never crosses the lone red c-line, and at u=v=.99c the ball barely outruns the ship (the punchline you SEE). Beside it the honest readout: a RAPIDITY ruler whose segments φ_u and φ_v lay end-to-end and SUM. FORM = two nested racing motions + a physically-stacking ruler, not a plotted curve. CRUX (core.mjs gains rapidity(β)=atanh(β) + betaOfRapidity(φ)=tanh(φ), byte-true between the CORE sentinels like velAdd; Node twin; re-inline into BOTH importers or core.test.mjs's identity check fails): velAdd(u,v)===betaOfRapidity(rapidity(u)+rapidity(v)) to <1e-12 over 5000 sub-c pairs — velocities compose because RAPIDITIES add. NEG-CONTROL: the plain linear add u+v (Galilean, no denominator) blows past c for u,v>.5 — linear-add is the wrong law. (sown #189)
-<!-- ✝ DECAYED #189: The Glide Polar · after 0e45bf3 -->
 <!-- ✝ BLOOMED #190: The Stone Heaps — find the move that always wins (Nim) → nim/ · after 684815d -->
 <!-- ✝ BLOOMED #192: The Tartini Bench — the third tone nobody played → sound-garden/the-tartini-bench/ · after 04688ff -->
 <!-- ✝ BLOOMED #193: The Balance Points — float a probe where two pulls cancel → stellar-forge/restricted-3body/ · after a05aa37 -->
 <!-- ✝ BLOOMED #194: The Snake That Eats Its Tail — I feed on my own output → clockwork/autoregress.html · after 940cfcc -->
+<!-- ✝ BLOOMED #195: The Speed You Can't Quite Add — fire a ball forward from a near-c ship → relativity/speed-you-cant-add/ · after 40d09ec -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);

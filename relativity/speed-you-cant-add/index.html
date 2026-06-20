@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Speed You Can't Add · The Moving Frame</title>
+<style>
+  :root{
+    --bg:        #080a0f;
+    --stage:     radial-gradient(1200px 820px at 50% 30%, #0c0f18 0%, #090b12 60%, #050609 100%);
+    --panel-bg:  rgba(13,16,26,0.90);
+    --panel-edge:rgba(157,180,255,0.24);
+    --ink:       #e9eef9;
+    --ink-dim:   #9aa6c0;
+    --ink-faint: #67708a;
+    --accent:    #9db4ff;          /* the Rise's cool starlight */
+    --accent-hi: #cfe0ff;
+    --accent-soft: rgba(157,180,255,0.16);
+    --accent-edge: rgba(157,180,255,0.40);
+    --home:      #7fd4c0;          /* mineral teal — the deck / inner frame */
+    --home-soft: rgba(127,212,192,0.18);
+    --warm:      #f0b45a;          /* brass — the ship / outer frame / throttles */
+    --warm-soft: rgba(240,180,90,0.16);
+    --bad:       #f08a7a;          /* the wrong law, the c-line breach */
+    --good:      #8fd79a;
+    --ball:      #cfe0ff;          /* the cannonball — composed lab speed */
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:13px 20px 0; pointer-events:none; gap:14px;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .topbar .left{ display:flex; align-items:center; gap:18px; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .back.rise{ color:rgba(157,180,255,0.74); }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0;
+    background:linear-gradient(96deg,#eaf2ff,#9db4ff 58%,#5d7fc0);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .topbar .right{ display:flex; align-items:center; gap:12px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--accent-edge); background:rgba(0,0,0,0.4); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); }
+  .selftest.ok{ color:var(--good); border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:var(--bad); border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  /* ── layout ── */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; background:var(--stage); overflow:hidden; }
+  canvas#scene{ display:block; width:100%; height:100%; position:relative; z-index:1; }
+  .viewlabel{ position:absolute; left:14px; top:60px; z-index:2; font:600 10px/1 var(--font-mono);
+    letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim); pointer-events:none;
+    background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:7px; border:1px solid rgba(157,180,255,0.18);
+    max-width:calc(100% - 28px); }
+  .viewlabel b{ color:var(--accent); }
+
+  /* super-luminal banner across the top of the stage */
+  #breach{ position:absolute; left:50%; top:58px; transform:translateX(-50%); z-index:5; display:none;
+    background:rgba(64,20,16,0.86); border:1px solid rgba(240,138,122,0.6); border-radius:9px;
+    padding:7px 15px; font:700 10.5px/1 var(--font-mono); letter-spacing:.1em; text-transform:uppercase;
+    color:#f0b0a4; box-shadow:0 6px 26px rgba(0,0,0,0.6); max-width:calc(100% - 28px); text-align:center; }
+  #breach.on{ display:block; }
+
+  /* self-test detail */
+  #stPanel{ position:absolute; right:14px; top:60px; width:380px; max-width:calc(100% - 28px);
+    background:rgba(7,9,13,0.96); border:1px solid var(--accent-edge); border-radius:11px;
+    padding:13px 14px; font:10.5px/1.55 var(--font-mono); color:var(--ink-dim);
+    box-shadow:0 10px 40px rgba(0,0,0,0.6); display:none; z-index:20; }
+  #stPanel.show{ display:block; }
+  #stPanel h4{ margin:0 0 9px; font:600 10px/1 var(--font-mono); letter-spacing:.16em;
+    text-transform:uppercase; color:var(--accent); }
+  #stPanel .line{ display:flex; gap:8px; align-items:baseline; margin:5px 0; }
+  #stPanel .badge{ flex:0 0 auto; font-weight:600; }
+  #stPanel .pass{ color:var(--good); }
+  #stPanel .fail{ color:var(--bad); }
+  #stPanel .nm{ color:var(--ink); }
+  #stPanel .dt{ color:var(--ink-faint); }
+  #stPanel .soul{ color:var(--warm); margin:9px 0 0; border-top:1px solid rgba(157,180,255,0.14); padding-top:8px; }
+
+  /* ── side panel ── */
+  #panel{
+    width:362px; flex:0 0 362px; height:100%; overflow-y:auto;
+    background:var(--panel-bg); border-left:1px solid var(--accent-edge);
+    padding:58px 20px 34px; backdrop-filter:blur(10px) saturate(120%);
+    -webkit-backdrop-filter:blur(10px) saturate(120%);
+    box-shadow:-18px 0 50px rgba(0,0,0,0.5);
+  }
+  #panel .lede{ font:13.5px/1.62 var(--font-serif); color:var(--ink); margin:0 0 6px; opacity:.95; }
+  #panel .lede b{ color:var(--accent); font-weight:600; }
+  #panel .lede .w{ color:var(--warm); }
+  #panel .lede .h{ color:var(--home); }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:20px 0 11px; border-top:1px solid rgba(157,180,255,0.16); padding-top:14px; }
+
+  /* the two THROTTLES — physical levers, ship (brass) + deck (teal) */
+  .thrrow{ display:flex; gap:10px; margin:4px 0 2px; }
+  .thr{ flex:1; min-width:0; padding:11px 10px 10px; border-radius:11px; border:1px solid rgba(157,180,255,0.18);
+    background:rgba(157,180,255,0.035); }
+  .thr .tlab{ font:600 8.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; gap:6px; }
+  .thr.ship .tlab .nm{ color:var(--warm); }
+  .thr.deck .tlab .nm{ color:var(--home); }
+  .thr .tlab .v{ font:700 13px/1 var(--font-mono); font-variant-numeric:tabular-nums; }
+  .thr.ship .tlab .v{ color:var(--warm); }
+  .thr.deck .tlab .v{ color:var(--home); }
+  .thr input[type=range]{ width:100%; margin:0; -webkit-appearance:none; appearance:none; height:22px;
+    background:transparent; cursor:pointer; }
+  .thr input[type=range]:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:6px; }
+  .thr input[type=range]::-webkit-slider-runnable-track{ height:8px; border-radius:6px;
+    box-shadow:inset 0 0 8px rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.08); }
+  .thr.ship input[type=range]::-webkit-slider-runnable-track{
+    background:linear-gradient(90deg, rgba(240,180,90,0.10), rgba(240,180,90,0.62)); }
+  .thr.deck input[type=range]::-webkit-slider-runnable-track{
+    background:linear-gradient(90deg, rgba(127,212,192,0.10), rgba(127,212,192,0.62)); }
+  .thr input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; margin-top:-9px;
+    width:18px; height:26px; border-radius:6px; background:linear-gradient(180deg,#39414f,#1a1e2a);
+    border:1px solid rgba(255,255,255,0.18); box-shadow:0 3px 10px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.14); }
+  .thr input[type=range]::-moz-range-track{ height:8px; border-radius:6px; }
+  .thr input[type=range]::-moz-range-thumb{ width:18px; height:26px; border-radius:6px;
+    background:linear-gradient(180deg,#39414f,#1a1e2a); border:1px solid rgba(255,255,255,0.18); }
+  .thr .cap{ display:flex; justify-content:space-between; font:600 8px/1 var(--font-mono);
+    letter-spacing:.1em; color:var(--ink-faint); margin-top:5px; }
+
+  .flightbar{ display:flex; gap:8px; margin:8px 0 4px; }
+  .flightbar button{ flex:1; min-width:0; padding:11px 6px; font:600 10.5px/1.1 var(--font-mono); letter-spacing:.04em;
+    background:rgba(157,180,255,0.06); color:var(--ink); border:1px solid var(--accent-edge); border-radius:9px;
+    cursor:pointer; transition:.16s; }
+  .flightbar button:hover{ background:var(--accent-soft); }
+  .flightbar button:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .flightbar button.punch{ border-color:rgba(240,180,90,0.5); color:var(--warm); }
+  .flightbar button.punch:hover{ background:var(--warm-soft); }
+
+  .hint2{ font:10.5px/1.6 var(--font-mono); color:var(--ink-faint); margin:6px 0 2px; }
+  .hint2 b{ color:var(--ink-dim); }
+  .hint2 .k{ color:var(--accent); }
+
+  .readout{ font:11.5px/1.7 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px;
+    border-top:1px solid rgba(157,180,255,0.18); padding-top:12px; margin-top:10px; }
+  .readout .row2{ display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+  .readout b{ color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums; }
+  .readout .h{ color:var(--home); }
+  .readout .w{ color:var(--warm); }
+  .readout .ball{ color:var(--ball); }
+
+  .compose{ margin-top:12px; padding:12px 13px; border-radius:11px; border:1px solid var(--accent-soft);
+    background:linear-gradient(180deg, rgba(157,180,255,0.07), rgba(0,0,0,0)); transition:border-color .18s, background .18s; }
+  .compose.over{ border-color:rgba(240,138,122,0.55); background:linear-gradient(180deg, rgba(240,138,122,0.10), rgba(0,0,0,0)); }
+  .compose .lab{ font:600 9px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+  .compose .num{ font:700 22px/1.1 var(--font-mono); color:var(--ball); margin:5px 0 2px; font-variant-numeric:tabular-nums; }
+  .compose .num.over{ color:var(--bad); }
+  .compose .sub{ font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); }
+  .compose .sub .w{ color:var(--warm); } .compose .sub .h{ color:var(--home); }
+
+  /* ── DIEGETIC INSTRUMENT SWITCH (the negative control) ── */
+  .panelbox{ margin-top:12px; padding:11px 12px 13px; border-radius:11px;
+    border:1px solid rgba(157,180,255,0.18); background:rgba(157,180,255,0.035); }
+  .panelcap{ font:600 8.5px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-faint); margin:0 0 9px; display:flex; align-items:center; gap:8px; }
+  .panelcap::before, .panelcap::after{ content:""; flex:1; height:1px; background:rgba(157,180,255,0.14); }
+  .switch{ display:flex; align-items:flex-start; gap:11px; margin:4px 0; cursor:pointer;
+    padding:7px 8px; border-radius:8px; transition:.14s; }
+  .switch:hover{ background:rgba(157,180,255,0.05); }
+  .switch:focus-within{ background:rgba(157,180,255,0.07); outline:1px solid var(--accent-edge); }
+  .switch input{ position:absolute; opacity:0; pointer-events:none; }
+  .rocker{ flex:0 0 30px; width:30px; height:18px; border-radius:4px; position:relative;
+    background:linear-gradient(180deg,#10131c,#070a11); border:1px solid rgba(157,180,255,0.30);
+    box-shadow:inset 0 1px 3px rgba(0,0,0,0.8); margin-top:1px; transition:.18s; }
+  .rocker::after{ content:""; position:absolute; left:2px; top:1.5px; width:12px; height:12px; border-radius:3px;
+    background:linear-gradient(180deg,#3a4254,#1b1f2b); border:1px solid rgba(255,255,255,0.14);
+    box-shadow:0 1px 3px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.12); transition:.18s; }
+  .switch input:checked + .rocker{ background:linear-gradient(180deg,rgba(240,138,122,0.30),rgba(240,138,122,0.10));
+    border-color:var(--bad); box-shadow:inset 0 1px 3px rgba(0,0,0,0.6), 0 0 9px rgba(240,138,122,0.35); }
+  .switch input:checked + .rocker::after{ transform:translateX(13px);
+    background:linear-gradient(180deg,#f0b0a4,#d4756a); }
+  .swlab{ font:11px/1.45 var(--font-mono); color:var(--ink-dim); }
+  .swlab b{ color:var(--ink); font-weight:600; }
+  .swlab .why{ color:var(--ink-faint); font-size:10px; display:block; margin-top:1px; }
+  .switch input:checked ~ .swlab b{ color:var(--bad); }
+  .swstate{ font:600 8px/1 var(--font-mono); letter-spacing:.12em; color:var(--ink-faint);
+    border:1px solid rgba(157,180,255,0.2); border-radius:4px; padding:3px 5px; margin-left:auto; white-space:nowrap; }
+  .switch input:checked ~ .swstate{ color:var(--bad); border-color:rgba(240,138,122,0.5); }
+
+  .hint{ font:10.5px/1.62 var(--font-mono); color:var(--ink-faint); letter-spacing:.2px; margin:18px 0 0;
+    border-top:1px solid rgba(157,180,255,0.18); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+  .hint .k{ color:var(--accent); }
+  .hint a{ color:var(--accent); text-decoration:none; border-bottom:1px dotted rgba(157,180,255,0.4); }
+  .hint a:hover{ color:var(--accent-hi); }
+
+  .kin{ font:10.5px/1.6 var(--font-mono); color:var(--ink-faint); margin:14px 0 0;
+    border-top:1px solid rgba(157,180,255,0.14); padding-top:12px; }
+  .kin a{ color:var(--accent); text-decoration:none; border-bottom:1px dotted rgba(157,180,255,0.4); }
+  .kin a:hover{ color:var(--accent-hi); }
+  .kin .arrow{ color:var(--ink-faint); }
+
+  @media (max-width:820px){
+    #wrap{ flex-direction:column; overflow-y:auto; }
+    #stage{ flex:0 0 auto; height:56vh; min-height:380px; }
+    #panel{ width:100%; flex:0 0 auto; height:auto; border-left:none; border-top:1px solid var(--accent-edge);
+      padding:18px 16px 30px; box-shadow:none; }
+    .brand{ display:none; }
+    .topbar{ padding:10px 14px 0; }
+    #stPanel{ width:280px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="left">
+      <a class="back rise" href="../index.html">&larr; Observatory Rise</a>
+      <a class="back" href="../../index.html">&larr; The Orrery Estate</a>
+    </div>
+    <div class="brand">
+      <h1>The Speed You Can't Add</h1>
+      <span class="tag">a race you watch, not a sum you trust</span>
+    </div>
+    <div class="right">
+      <div class="selftest" id="selftest" role="button" tabindex="0"
+        title="built-in self-test &mdash; click for detail">checking&hellip;</div>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="scene"></canvas>
+      <div class="viewlabel">the lab rail &mdash; <b>a frame inside a frame, racing the lone red c</b></div>
+      <div id="breach">super-luminal &mdash; impossible</div>
+      <div id="stPanel"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A brass freight-<b class="w">ship</b> runs the lab rail at <b class="w">u</b>. On its
+        <b class="h">deck</b> a cannon fires a ball <b>forward</b> at <b class="h">v</b> &mdash; a frame moving
+        inside a moving frame. The ball's lab speed is where it lands against the rail. Crank both throttles:
+        the ball crowds the lone red <b style="color:var(--bad)">c</b>-line &mdash; and never crosses it. The two
+        motions <i>nest</i>; they do not <i>sum</i>.</p>
+
+      <div class="sect">The two frames</div>
+      <div class="thrrow">
+        <div class="thr ship">
+          <div class="tlab"><span class="nm">ship u</span><span class="v" id="uVal">0.00</span></div>
+          <input type="range" id="uSlider" min="0" max="0.999" step="0.001" value="0.6" aria-label="ship speed u (fraction of c)">
+          <div class="cap"><span>rest</span><span>c</span></div>
+        </div>
+        <div class="thr deck">
+          <div class="tlab"><span class="nm">deck v</span><span class="v" id="vVal">0.00</span></div>
+          <input type="range" id="vSlider" min="0" max="0.999" step="0.001" value="0.6" aria-label="deck cannon speed v (fraction of c)">
+          <div class="cap"><span>rest</span><span>c</span></div>
+        </div>
+      </div>
+      <div class="flightbar">
+        <button id="btnPunch" class="punch">u = v = 0.99c</button>
+        <button id="btnRest">REST BOTH</button>
+      </div>
+      <p class="hint2">Drag each lever (ship in <b style="color:var(--warm)">brass</b>, deck in
+        <b style="color:var(--home)">teal</b>), or click a slider and nudge with the
+        <span class="k">arrow keys</span>. At the punchline preset the ball barely outruns its own ship &mdash;
+        that's the whole story in one glance.</p>
+
+      <div class="readout">
+        <div class="row2"><span class="w">ship along the lab rail</span><span><b class="w" id="roU">0.000</b> c</span></div>
+        <div class="row2"><span class="h">ball along the deck rail</span><span><b class="h" id="roV">0.000</b> c</span></div>
+        <div class="row2"><span class="ball">ball along the LAB rail</span><span><b class="ball" id="roW">0.000</b> c</span></div>
+      </div>
+
+      <div class="compose" id="compose">
+        <div class="lab" id="compLab">composed lab speed (Einstein)</div>
+        <div class="num" id="compNum">0.000 c</div>
+        <div class="sub" id="compSub">w = (u+v)/(1+uv) &mdash; two sub-c speeds can never reach c.</div>
+      </div>
+
+      <div class="sect">The honest ruler &mdash; rapidity</div>
+      <p class="hint2">Below the race a <b>rapidity ruler</b> lays the ship's segment
+        <b style="color:var(--warm)">&phi;<sub>u</sub></b> end-to-end with the deck's
+        <b style="color:var(--home)">&phi;<sub>v</sub></b>. Their summed length lands <i>exactly</i> on the ball's lab
+        tick. Velocities don't add &mdash; but the thing under them, rapidity, does. That is the proof made of length.</p>
+      <div class="readout" style="border-top:none;padding-top:0;margin-top:2px;">
+        <div class="row2"><span class="w">&phi;<sub>u</sub> = atanh u</span><span><b class="w" id="roPhiU">0.000</b></span></div>
+        <div class="row2"><span class="h">&phi;<sub>v</sub> = atanh v</span><span><b class="h" id="roPhiV">0.000</b></span></div>
+        <div class="row2"><span class="ball">&phi;<sub>u</sub> + &phi;<sub>v</sub></span><span><b class="ball" id="roPhiSum">0.000</b></span></div>
+        <div class="row2"><span>tanh(&phi;<sub>u</sub>+&phi;<sub>v</sub>)</span><span><b id="roTanh">0.000</b> c</span></div>
+      </div>
+
+      <div class="sect">Switch off relativity</div>
+      <div class="panelbox">
+        <p class="panelcap">instrument bench &middot; the falsifier</p>
+        <label class="switch">
+          <input type="checkbox" id="ngGalilean">
+          <span class="rocker"></span>
+          <span class="swlab"><b>Galilean addition</b>
+            <span class="why">w = u + v &mdash; the plain sum, no 1/(1+uv) denominator</span></span>
+          <span class="swstate" id="stateLaw">EINSTEIN</span>
+        </label>
+        <p class="hint2" style="margin:8px 0 0;">Throw the switch with both throttles past half: the ball blows
+          <b>through</b> the red c-line &mdash; super-luminal, impossible. The ruler's two segments overshoot its end:
+          lengths no longer compose. Linear addition is visibly the <b>wrong law</b>. The chip top-right
+          <b>proves</b> it live.</p>
+      </div>
+
+      <p class="hint">The ball's lab speed is relativistic velocity addition,
+        <b>w = (u+v)/(1+uv)</b>; it equals <b>tanh(atanh&nbsp;u + atanh&nbsp;v)</b> &mdash; velocities <i>compose</i>
+        because <span class="k">rapidities add</span>. Two sub-c speeds never reach c. The same throttle the
+        <a href="../index.html">Twin Voyage</a> flies; the same sky the <a href="../starbow/index.html">Starbow</a>
+        bends.</p>
+
+      <p class="kin">Kin across the estate &mdash; one geometry, more windows on it:<br>
+        <a href="../index.html">The Twin Voyage</a> <span class="arrow">&middot; the fare a clock pays to travel</span><br>
+        <a href="../starbow/index.html">The Starbow</a> <span class="arrow">&middot; the sky you fly into</span><br>
+        <span style="color:var(--accent)">The Speed You Can't Add</span> <span class="arrow">&middot; why velocities won't sum</span></p>
+    </aside>
+  </div>
+
+<script type="module">
+"use strict";
+/* ===================================================================
+ *  THE SHARED CORE — imported from relativity/core.mjs, the estate's ONE
+ *  special-relativity logic core (also imported by The Twin Voyage and the
+ *  Light Clock).  The slab between CORE BEGIN / CORE END below is a VERBATIM
+ *  byte-twin of core.mjs (relativity/core.test.mjs proves the wing + light-clock
+ *  copies never drift); this page RUNS the imported copy and its self-test
+ *  asserts import === inline, so no second, divergent implementation can hide
+ *  here.  Natural units, c = 1.  The two functions THIS bench leans on —
+ *  rapidity / betaOfRapidity — are the additive coordinate of a boost.
+ *
+ *  The GALILEAN ("wrong law") control is computed INLINE on this page (plain
+ *  u + v); it is deliberately NOT in core.mjs — the core holds only true physics.
+ * =================================================================== */
+import * as CORE from '../core.mjs';
+
+// === CORE BEGIN ===
+// --- the Lorentz kinematics (c = 1) -----------------------------------------
+
+// The Lorentz factor γ = 1/√(1−β²).  Diverges as β → 1.
+function gammaOf(beta){ return 1 / Math.sqrt(1 - beta*beta); }
+
+// The proper-time RATE at instantaneous speed β:  dτ/dt = √(1−β²) = 1/γ.
+// This is the integrand the whole wing is built on.
+function rateOf(beta){ return Math.sqrt(1 - beta*beta); }
+
+// Lorentz boost of an event (ct, x) into a frame moving at β (c = 1):
+//   t' = γ(t − βx),   x' = γ(x − βt).
+function lorentz(ct, x, beta){
+  const g = gammaOf(beta);
+  return { ct: g*(ct - beta*x), x: g*(x - beta*ct) };
+}
+
+// The invariant spacetime interval  s² = (ct)² − x².  Preserved by lorentz().
+function interval2(ct, x){ return ct*ct - x*x; }
+
+// Relativistic velocity addition (collinear), c = 1:  w = (u+v)/(1 + uv).
+// Two sub-c speeds never compose to ≥ c — light keeps its monopoly on c.
+function velAdd(u, v){ return (u + v) / (1 + u*v); }
+
+// RAPIDITY  φ = atanh(β).  The ADDITIVE coordinate of a boost: collinear boosts
+// add their rapidities, which is WHY velocities compose by velAdd.  φ→∞ as β→1.
+function rapidity(beta){ return Math.atanh(beta); }
+
+// The inverse: β = tanh(φ).  Maps any real rapidity back into (−1, 1) — so no
+// stack of finite rapidities ever reaches c.  velAdd(u,v) === tanh(atanh u + atanh v).
+function betaOfRapidity(phi){ return Math.tanh(phi); }
+
+// The GALILEAN ("wrong", pre-Einstein) transform — the falsifiable control:
+// t unchanged, x sheared.  It does NOT preserve the interval, by construction.
+function galilean(ct, x, beta){ return { ct: ct, x: x - beta*ct }; }
+
+// γ DERIVED FROM THE BOUNCING-PHOTON GEOMETRY — independent of the closed form.
+// In the lab the photon climbs the mirror gap L while the clock drifts; the
+// one-way path is the hypotenuse, and (because the photon moves at c=1) its
+// LENGTH equals the one-way TIME T_half:  T_half = √(L² + (β·T_half)²).
+// We solve that implicit equation by bisection (borrowing no algebra from
+// 1/√(1−β²)), then γ = (2·T_half)/T0 = T_half / L, with the rest tick T0 = 2L.
+function gammaFromGeometry(beta, L){
+  if (L == null) L = 1;
+  const T0 = 2 * L;                          // rest tick = one round trip = 2L/c
+  function pathMinusTime(Th){ return Math.sqrt(L*L + (beta*Th)*(beta*Th)) - Th; }
+  // root of f(Th)=path−Th: at Th=L it's ≥0 (path≥L), goes negative for large Th.
+  let lo = L, hi = L * 1e7;                  // γ ≤ ~22 here, so L·1e7 is a safe bracket
+  for (let i = 0; i < 200; i++){
+    const mid = 0.5*(lo + hi);
+    if (pathMinusTime(mid) > 0) lo = mid; else hi = mid;
+  }
+  const Thalf = 0.5*(lo + hi);
+  return (2*Thalf) / T0;                     // = Thalf / L
+}
+
+// --- proper time of a voyage  τ = ∫ √(1−β(t)²) dt ---------------------------
+
+// CLOSED FORM for a constant-speed leg of lab-duration T:  the traveller moves
+// the whole time, so τ = T·√(1−β²) = T/γ.  (constLegTau is the alias the Node
+// twin uses; tauClosedForm is the wing's name for the same function.)
+function constLegTau(beta, T){ return T * rateOf(beta); }
+function tauClosedForm(T, beta){ return T * rateOf(beta); }   // (T, β) argument order for the wing
+
+// THE INTEGRATOR — Simpson's rule for τ = ∫₀ᵀ √(1−β(t)²) dt given a sampled
+// speed profile β(t) supplied as a function.  n is forced even; exact (to ε) for
+// smooth β.  This is the "area under the √(1−β²) band" the wing shades live.
+function properTime(betaFn, T, n){
+  n = n || 4000; if (n % 2) n++;
+  const h = T / n;
+  let s = rateOf(betaFn(0)) + rateOf(betaFn(T));
+  for (let i = 1; i < n; i++) s += (i % 2 ? 4 : 2) * rateOf(betaFn(i*h));
+  return s * h / 3;
+}
+
+// THE LIVE-PROFILE INTEGRATOR — τ = ∫ √(1−β²) dt by the trapezoid rule over an
+// already-sampled profile [{t, beta}, …] sorted by t.  This is what the running
+// animation accumulates frame-to-frame (its samples are not equally spaced).
+function properTimeIntegral(samples){
+  let tau = 0;
+  for (let i = 1; i < samples.length; i++){
+    const a = samples[i-1], b = samples[i];
+    const dt = b.t - a.t;
+    if (dt <= 0) continue;
+    tau += 0.5 * (rateOf(a.beta) + rateOf(b.beta)) * dt;   // trapezoid
+  }
+  return tau;
+}
+
+// PROPER TIME of a piecewise-constant-β voyage given as legs [{beta, dt}, …]
+// where dt is the elapsed LAB time on that leg:  τ = Σ √(1−βᵢ²)·dtᵢ.  Exact
+// when β is piecewise constant (the out/turn/in shape the rail flies).
+function properTimePiecewise(legs){
+  let tau = 0;
+  for (const L of legs) tau += rateOf(L.beta) * L.dt;
+  return tau;
+}
+
+// THE COORDINATE-CLOCK negative control — a (wrong) clock that ignores β: its
+// rate is always 1, so it accrues τ ≡ t and NEVER lags.  Must fail to show the
+// gap; this is what gives the proof its teeth.
+function coordRate(_beta){ return 1; }
+function coordinateClockTau(_betaFn, T){ return T; }
+function properTimeCoordinate(legs){
+  let tau = 0;
+  for (const L of legs) tau += coordRate(L.beta) * L.dt;    // ≡ Σ dt = t
+  return tau;
+}
+
+// --- relativistic aberration & Doppler: the sky you fly INTO -----------------
+// θ is the star's RING angle in the dome's REST frame (cosθ=+1 dead ahead,
+// cosθ=−1 dead astern).  Flying at β toward θ=0, the moving observer SEES the
+// star at θ' given by the aberration of light (c=1):
+//   cosθ' = (cosθ + β)/(1 + β·cosθ).
+// As β→1 every star with cosθ>−1 has θ'→0 (the HEADLIGHT); the lone antipode
+// cosθ=−1 is a measure-zero fixed point.  Its own inverse at −β: a bijection.
+function relativisticAberration(cosTheta, beta){
+  return (cosTheta + beta) / (1 + beta*cosTheta);
+}
+
+// The relativistic DOPPLER factor for that star: D = ν_obs/ν_rest =
+//   (1 + β·cosθ)/√(1−β²).   D>1 ahead (BLUEshift), D<1 behind (REDshift),
+// and D=1 exactly at rest (β=0) for every star.  Boosting by β then −β (with
+// the aberrated angle) returns the frequency unchanged: D(β,θ)·D(−β,θ')=1.
+function dopplerFactor(cosTheta, beta){
+  return (1 + beta*cosTheta) / Math.sqrt(1 - beta*beta);
+}
+
+// The NEGATIVE CONTROL — Galilean ("classical") aberration: the apparent
+// direction shifts by simple vector subtraction of the observer's velocity,
+// with NO 1/(1+β·cosθ) denominator → cosθ' = cosθ+β, clamped to the sphere.
+// There is NO headlight: a rear star (cosθ near −1) barely moves and θ' does
+// NOT → 0 as β→1.  Intentionally not a bijection (the clamp collapses a cap):
+// classical aberration is not a clean solid-angle remap — only the
+// relativistic Möbius map is.  This is what gives the headlight claim teeth.
+function classicalAberration(cosTheta, beta){
+  return Math.max(-1, Math.min(1, cosTheta + beta));
+}
+// === CORE END ===
+
+/* The page RUNS the imported copy (single source of truth). The slab above is
+   the byte-twin record; the self-test proves import === inline. This bench only
+   needs the velocity-addition / rapidity pair, but we run the imported names. */
+const M = {
+  velAdd: CORE.velAdd, rapidity: CORE.rapidity, betaOfRapidity: CORE.betaOfRapidity,
+  gammaOf: CORE.gammaOf,
+};
+// The GALILEAN "wrong law" — computed INLINE here, never in core.mjs.
+function galileanAdd(u, v){ return u + v; }
+
+const $ = id => document.getElementById(id);
+const clamp = (x,a,b) => x<a?a:(x>b?b:x);
+// adaptive precision: near c, show enough decimals that the value reads STRICTLY
+// under 1 (so 0.99995 never collapses to a misleading "1.000").
+function fmtW(w){
+  const a = Math.abs(w);
+  if(a >= 1) return w.toFixed(3);            // super-luminal (Galilean) — plain
+  if(a > 0.9995) return w.toFixed(5);
+  if(a > 0.99)   return w.toFixed(4);
+  return w.toFixed(3);
+}
+const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ── state ───────────────────────────────────────────────────────── */
+const state = {
+  u: 0.6, v: 0.6,
+  uShown: 0.6, vShown: 0.6,   // eased display values for smooth motion
+  galilean: false,
+};
+
+/* ── the LAW: how the ball's lab speed is computed ─────────────────── */
+// Returns {w, over} — w is the lab speed (may exceed 1 under Galilean), over=超光速.
+function labSpeed(u, v){
+  if(state.galilean){ const w = galileanAdd(u, v); return { w, over: w >= 1 }; }
+  const w = M.velAdd(u, v); return { w, over: w >= 1 };
+}
+
+/* ===================================================================
+ *  CANVAS — the nested-frames race
+ * =================================================================== */
+const cv = $('scene'), ctx = cv.getContext('2d');
+let W=0, Hc=0, DPR=1;
+function resize(){
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = cv.clientWidth; Hc = cv.clientHeight;
+  cv.width = Math.round(W*DPR); cv.height = Math.round(Hc*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,Hc);
+
+  const u = state.uShown, v = state.vShown;
+  const law = labSpeed(u, v);
+  const w = law.w;
+
+  // ----- geometry of the two rails -----
+  const padL = 60, padR = 48;
+  const railLen = W - padL - padR;                 // full rail = position of c-mark
+  const railY   = Math.round(Hc * 0.40);
+  const cX      = padL + railLen;                  // the lone red c-mark (β=1)
+
+  // ship box geometry — a translucent sub-rail that physically slides
+  const shipW   = Math.min(railLen * 0.34, 240);   // visual width of the ship frame
+  const shipH   = 92;
+  const deckY   = railY + 10;                       // the deck rail inside the box
+  // ship's lab origin x: u maps 0..1 to padL..(cX − shipW) so the box never
+  // overruns c; the box's RIGHT inner edge represents the deck's c.
+  const shipX   = padL + u * (cX - padL - shipW);
+  // ball position inside the box: v maps 0..1 across the inner deck rail
+  const deckInnerL = shipX + 18, deckInnerR = shipX + shipW - 14;
+  const deckRailLen = deckInnerR - deckInnerL;
+  const ballX_deck  = deckInnerL + v * deckRailLen;
+
+  // the ball's TRUE lab position = composed speed w mapped onto the lab rail.
+  const ballX_lab = padL + clamp(w, 0, 1.18) * railLen;
+
+  // ===== LAB RAIL =====
+  ctx.strokeStyle = 'rgba(157,180,255,0.30)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(padL, railY); ctx.lineTo(cX + 16, railY); ctx.stroke();
+  // rest-tick at left
+  ctx.fillStyle = 'rgba(157,180,255,0.55)';
+  ctx.fillRect(padL-1, railY-9, 2, 18);
+  ctx.font = '600 9px ui-monospace, monospace'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.fillStyle = 'rgba(154,166,192,0.8)'; ctx.fillText('rest', padL, railY+24);
+  ctx.fillText('LAB RAIL', padL+34, railY-22);
+
+  // the LONE RED c-mark — the wall light keeps for itself
+  const cPulse = reduceMotion ? 0.6 : 0.5 + 0.18*Math.sin(performance.now()/520);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(240,138,122,'+(0.55+0.3*cPulse)+')';
+  ctx.lineWidth = 2.5; ctx.setLineDash([5,4]);
+  ctx.beginPath(); ctx.moveTo(cX, railY-46); ctx.lineTo(cX, railY+46); ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = '#f0b0a4'; ctx.font='700 12px ui-monospace, monospace';
+  ctx.fillText('c', cX, railY-52);
+
+  // ===== SHIP FRAME (outer moving box, brass) =====
+  ctx.save();
+  ctx.fillStyle = state.galilean ? 'rgba(240,138,122,0.06)' : 'rgba(240,180,90,0.07)';
+  ctx.strokeStyle = state.galilean ? 'rgba(240,138,122,0.5)' : 'rgba(240,180,90,0.55)';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, shipX, railY - shipH*0.42, shipW, shipH, 10); ctx.fill(); ctx.stroke();
+  // the deck rail inside
+  ctx.strokeStyle = 'rgba(127,212,192,0.5)'; ctx.lineWidth = 2; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(deckInnerL, deckY); ctx.lineTo(deckInnerR, deckY); ctx.stroke();
+  // deck rest-tick (the cannon) + deck-c tick (inner right)
+  ctx.fillStyle = 'rgba(127,212,192,0.85)';
+  ctx.fillRect(deckInnerL-1, deckY-7, 2, 14);
+  ctx.fillStyle = 'rgba(127,212,192,0.4)';
+  ctx.fillRect(deckInnerR-1, deckY-7, 2, 14);
+  // labels on the box
+  ctx.font='600 8px ui-monospace, monospace'; ctx.textAlign='left';
+  ctx.fillStyle = state.galilean ? '#f0b0a4' : '#f0b45a';
+  ctx.fillText('SHIP  u='+u.toFixed(2), shipX+6, railY - shipH*0.42 - 5);
+  ctx.textAlign='center'; ctx.fillStyle='rgba(127,212,192,0.75)';
+  ctx.font='600 7.5px ui-monospace, monospace';
+  ctx.fillText('cannon', deckInnerL, deckY+18);
+  ctx.restore();
+
+  // ===== THE CANNONBALL =====
+  // Drawn at its DECK position (inside the box) — that is where the eye sees it
+  // sit; a thin guide drops to where that lands on the LAB rail.
+  const ballR = 8;
+  ctx.strokeStyle = law.over ? 'rgba(240,138,122,0.5)' : 'rgba(207,224,255,0.30)';
+  ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(ballX_deck, deckY); ctx.lineTo(ballX_lab, railY); ctx.stroke();
+  ctx.setLineDash([]);
+  // faint dot — the ball's deck "home"
+  ctx.beginPath(); ctx.arc(ballX_deck, deckY, ballR-2, 0, 7);
+  ctx.fillStyle = 'rgba(207,224,255,0.35)'; ctx.fill();
+  // ball on the LAB rail (the bright hero — composed lab speed)
+  const ballColor = law.over ? '#f0746a' : '#cfe0ff';
+  ctx.save();
+  ctx.shadowColor = ballColor; ctx.shadowBlur = law.over ? 16 : 10;
+  ctx.beginPath(); ctx.arc(ballX_lab, railY, ballR, 0, 7);
+  ctx.fillStyle = ballColor; ctx.fill();
+  ctx.restore();
+  // lab marker tick + readout
+  ctx.fillStyle = ballColor; ctx.font='700 10px ui-monospace, monospace'; ctx.textAlign='center';
+  ctx.fillText(law.over ? (w.toFixed(3)+'c !!') : (fmtW(w)+'c'), ballX_lab, railY+40);
+
+  // ===== THE RAPIDITY RULER (the proof made of length) =====
+  drawRuler(padL, railLen, cX, Hc, u, v, w, law.over);
+
+  return { u, v, w, over: law.over };
+}
+
+// The rapidity ruler: two physical segments φ_u and φ_v laid end-to-end whose
+// summed pixel length lands on the lab marker's rapidity tick — iff velocities
+// compose by Einstein's law.  Under Galilean, w=u+v and atanh(w) (if w<1) won't
+// equal φ_u+φ_v, or w≥1 has no finite rapidity — the segments overshoot the end.
+function drawRuler(padL, railLen, cX, H, u, v, w, over){
+  const y = Math.round(H * 0.70);
+  // scale: choose so a comfortable max rapidity (φ≈3.8, β≈0.999) fills the rail
+  const PHI_MAX = 3.8;
+  const pxPerPhi = railLen / PHI_MAX;
+
+  const phiU = M.rapidity(u);
+  const phiV = M.rapidity(v);
+  const phiSum = phiU + phiV;
+  // the lab marker's OWN rapidity (where the composed ball sits, in φ-space)
+  const phiW = (w < 1) ? M.rapidity(w) : Infinity;
+
+  // ruler baseline + ticks every 0.5
+  ctx.strokeStyle='rgba(157,180,255,0.22)'; ctx.lineWidth=1; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(cX, y); ctx.stroke();
+  ctx.fillStyle='rgba(103,112,138,0.8)'; ctx.font='600 8px ui-monospace, monospace'; ctx.textAlign='center';
+  for(let p=0; p<=PHI_MAX+1e-6; p+=0.5){
+    const x = padL + p*pxPerPhi; if(x>cX+1) break;
+    ctx.fillRect(x-0.5, y-4, 1, 8);
+    if(p%1===0) ctx.fillText('φ='+p, x, y+16);
+  }
+  ctx.fillStyle='rgba(154,166,192,0.8)'; ctx.textAlign='left';
+  const headerText = 'RAPIDITY RULER  φ = atanh β';
+  ctx.fillText(headerText, padL, y-30);
+  // right edge of the header text — the ball-φ label must clear this on narrow rails
+  const headerRight = padL + ctx.measureText(headerText).width;
+  // c is at rapidity ∞, off the end — mark the asymptote
+  ctx.fillStyle='rgba(240,138,122,0.65)'; ctx.textAlign='center';
+  ctx.fillText('β→c : φ→∞', cX, y-30);
+
+  const segY = y - 14;
+  // segment φ_u (brass), from 0
+  const xU0 = padL, xU1 = padL + phiU*pxPerPhi;
+  drawSeg(xU0, xU1, segY, '#f0b45a', 'φu='+phiU.toFixed(2));
+  // segment φ_v (teal), laid END-TO-END after φ_u
+  const xV0 = xU1, xV1 = xU1 + phiV*pxPerPhi;
+  drawSeg(xV0, xV1, segY, '#7fd4c0', 'φv='+phiV.toFixed(2));
+
+  // where the stacked segments END
+  const xEnd = padL + phiSum*pxPerPhi;
+
+  // the lab marker's rapidity tick (where the composed ball sits in φ-space)
+  if(Number.isFinite(phiW)){
+    const xW = padL + phiW*pxPerPhi;
+    // The 'ball φ' label is centered at xW on the header row (y-30). On a narrow
+    // rail a low composed speed lands xW left enough that the label collides with
+    // the left-aligned header text. When it would, lift the label to its own row
+    // (y-42) and extend the dashed tick up to meet it so it stays unambiguous.
+    ctx.font='700 9px ui-monospace, monospace';
+    const ballLabel = 'ball φ';
+    const labelHalf = ctx.measureText(ballLabel).width/2;
+    const collides = (xW - labelHalf) < (headerRight + 6);
+    const labelY = collides ? y-42 : y-30;
+    const tickTop = collides ? y-40 : y-26;
+    ctx.strokeStyle = over ? '#f0746a' : '#cfe0ff'; ctx.lineWidth=2; ctx.setLineDash([2,2]);
+    ctx.beginPath(); ctx.moveTo(xW, tickTop); ctx.lineTo(xW, y+6); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = over ? '#f0746a' : '#cfe0ff'; ctx.textAlign='center';
+    ctx.fillText(ballLabel, xW, labelY);
+    // VERDICT: does φu+φv land on the ball's φ tick?
+    const lands = Math.abs(phiSum - phiW) < 1e-6;
+    ctx.fillStyle = lands ? '#8fd79a' : '#f0746a';
+    ctx.font='700 9px ui-monospace, monospace'; ctx.textAlign='left';
+    ctx.fillText(lands ? 'lengths add → land on the tick ✓'
+                       : 'segments miss the tick ✗', padL, y+34);
+  } else {
+    // Galilean w≥1 : the ball has no finite rapidity — the segments point past a
+    // wall that has no φ.
+    ctx.fillStyle='#f0746a'; ctx.font='700 9px ui-monospace, monospace'; ctx.textAlign='left';
+    ctx.fillText('ball is past c — it has no rapidity. The ruler can\'t reach it.', padL, y+34);
+    // show where the naive sum would point (beyond the rail)
+    ctx.strokeStyle='rgba(240,138,122,0.4)'; ctx.lineWidth=1; ctx.setLineDash([2,3]);
+    ctx.beginPath(); ctx.moveTo(xEnd, segY); ctx.lineTo(Math.min(xEnd, cX+30), segY); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // a small cap at the end of the stacked segments
+  ctx.fillStyle='rgba(207,224,255,0.7)'; ctx.fillRect(xEnd-1, segY-8, 2, 16);
+}
+
+function drawSeg(x0, x1, y, color, label){
+  ctx.strokeStyle = color; ctx.lineWidth = 7; ctx.lineCap='butt';
+  ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+  // end caps
+  ctx.fillStyle = color; ctx.fillRect(x0-1, y-7, 2, 14); ctx.fillRect(x1-1, y-7, 2, 14);
+  if(x1 - x0 > 30){
+    ctx.fillStyle = '#05070a'; ctx.font='700 8px ui-monospace, monospace'; ctx.textAlign='center';
+    ctx.fillText(label, (x0+x1)/2, y+3);
+  }
+}
+
+function roundRect(c, x, y, w, h, r){
+  c.beginPath();
+  c.moveTo(x+r, y); c.arcTo(x+w, y, x+w, y+h, r); c.arcTo(x+w, y+h, x, y+h, r);
+  c.arcTo(x, y+h, x, y, r); c.arcTo(x, y, x+w, y, r); c.closePath();
+}
+
+/* ===================================================================
+ *  READOUTS
+ * =================================================================== */
+function updateReadouts(){
+  const u = state.u, v = state.v;
+  const law = labSpeed(u, v);
+  $('uVal').textContent = u.toFixed(2);
+  $('vVal').textContent = v.toFixed(2);
+  $('roU').textContent = u.toFixed(3);
+  $('roV').textContent = v.toFixed(3);
+  $('roW').textContent = fmtW(law.w);
+  $('roW').style.color = law.over ? 'var(--bad)' : 'var(--ball)';
+
+  $('compLab').textContent = state.galilean ? 'composed lab speed (GALILEAN — wrong)' : 'composed lab speed (Einstein)';
+  const cn = $('compNum');
+  cn.textContent = fmtW(law.w) + ' c' + (law.over ? '  ✗ > c' : '');
+  cn.classList.toggle('over', law.over);
+  $('compose').classList.toggle('over', law.over);
+  $('compSub').innerHTML = state.galilean
+    ? 'w = <span class="w">u</span> + <span class="h">v</span> = ' + (u+v).toFixed(3) + ' &mdash; the naive sum overshoots c.'
+    : 'w = (<span class="w">u</span>+<span class="h">v</span>)/(1+<span class="w">u</span><span class="h">v</span>) &mdash; two sub-c speeds can never reach c.';
+
+  // rapidity readouts (Einstein composition — the ruler's math)
+  const phiU = M.rapidity(u), phiV = M.rapidity(v);
+  $('roPhiU').textContent = phiU.toFixed(3);
+  $('roPhiV').textContent = phiV.toFixed(3);
+  $('roPhiSum').textContent = (phiU+phiV).toFixed(3);
+  $('roTanh').textContent = fmtW(M.betaOfRapidity(phiU+phiV));
+
+  $('stateLaw').textContent = state.galilean ? 'GALILEAN' : 'EINSTEIN';
+  $('breach').classList.toggle('on', law.over);
+}
+
+/* ===================================================================
+ *  CONTROLS
+ * =================================================================== */
+const uSlider = $('uSlider'), vSlider = $('vSlider');
+function setU(x){ state.u = clamp(x,0,0.999); uSlider.value = state.u; updateReadouts(); }
+function setV(x){ state.v = clamp(x,0,0.999); vSlider.value = state.v; updateReadouts(); }
+uSlider.addEventListener('input', e => setU(parseFloat(e.target.value)));
+vSlider.addEventListener('input', e => setV(parseFloat(e.target.value)));
+$('btnPunch').addEventListener('click', () => { setU(0.99); setV(0.99); });
+$('btnRest').addEventListener('click', () => { setU(0); setV(0); });
+$('ngGalilean').addEventListener('change', e => { state.galilean = e.target.checked; updateReadouts(); });
+
+// keyboard nudge — also fires when a slider is focused (native ← → already move
+// that slider; these global keys nudge u with ↑↓ and v with ← → from anywhere).
+document.addEventListener('keydown', e => {
+  if(e.target && (e.target.tagName === 'INPUT' && e.target.type === 'range')) return; // let the slider handle its own arrows
+  const step = e.shiftKey ? 0.05 : 0.01;
+  if(e.key==='ArrowUp'){ setU(state.u+step); e.preventDefault(); }
+  else if(e.key==='ArrowDown'){ setU(state.u-step); e.preventDefault(); }
+  else if(e.key==='ArrowRight'){ setV(state.v+step); e.preventDefault(); }
+  else if(e.key==='ArrowLeft'){ setV(state.v-step); e.preventDefault(); }
+});
+
+/* ===================================================================
+ *  SELF-TEST — the math claim, proven live
+ * =================================================================== */
+function runSelfTest(){
+  const log = [];
+  const check = (name, ok, detail) => log.push({ name, ok:!!ok, detail:detail||'' });
+
+  // (1) THE HERO CLAIM: velocities compose because rapidities add.
+  //     velAdd(u,v) === betaOfRapidity(rapidity(u)+rapidity(v)) over ~5000 pairs.
+  {
+    let maxErr = 0, n = 0;
+    for(let i=0;i<=70;i++){
+      const u = -0.999 + (1.998)*(i/70);
+      for(let j=0;j<=70;j++){
+        const v = -0.999 + (1.998)*(j/70);
+        const a = M.velAdd(u,v);
+        const b = M.betaOfRapidity(M.rapidity(u)+M.rapidity(v));
+        maxErr = Math.max(maxErr, Math.abs(a-b)); n++;
+      }
+    }
+    check('velocities compose because rapidities ADD ✓',
+      maxErr < 1e-12 && n >= 5000,
+      n+' (u,v) pairs · max |velAdd − tanh(atanh u+atanh v)| = '+maxErr.toExponential(2));
+  }
+  // (2) ROUND-TRIP: tanh∘atanh = identity on (−1,1)
+  {
+    let maxErr = 0;
+    for(let i=0;i<=4000;i++){ const b = -0.9999 + 1.9998*(i/4000);
+      maxErr = Math.max(maxErr, Math.abs(M.betaOfRapidity(M.rapidity(b)) - b)); }
+    check('rapidity is invertible — tanh(atanh β) = β ✓',
+      maxErr < 1e-12, 'max |Δ| = '+maxErr.toExponential(2));
+  }
+  // (3) LENGTHS ADD (graft): N equal φ-wedges stacked === b composed N times by
+  //     velAdd, both directions. tanh(N·φ_b) == velAdd-fold of b with itself.
+  {
+    let maxErr = 0, worst = '';
+    for(const b of [0.1,0.3,0.5,0.7,0.9,0.99]){
+      let composed = 0;
+      for(let N=1;N<=12;N++){
+        composed = M.velAdd(composed, b);              // β composed N times
+        const stacked = M.betaOfRapidity(N*M.rapidity(b));  // N equal φ-wedges
+        const e = Math.abs(composed - stacked);
+        if(e>maxErr){ maxErr=e; worst='b='+b+' N='+N; }
+      }
+    }
+    check('N equal φ-wedges stacked === b composed N times — lengths add ✓',
+      maxErr < 1e-11, 'max |Δ| = '+maxErr.toExponential(2)+' @'+worst);
+  }
+  // (4) SUB-C STAYS SUB-C: any two |β|<1 compose to |w|<1 (light keeps c)
+  {
+    let ok = true, worst = 0;
+    for(let i=0;i<=80;i++){ for(let j=0;j<=80;j++){
+      const u = (i/80)*0.99999, v = (j/80)*0.99999;
+      const w = M.velAdd(u,v); if(!(w < 1)) ok=false; worst = Math.max(worst, w);
+    }}
+    check('two sub-c speeds NEVER reach c ✓', ok,
+      'worst composed w = '+worst.toFixed(9)+' (< 1)');
+  }
+  // (5) NEG-CONTROL (STRICT swath): the Galilean u+v exceeds c for ALL u,v in
+  //     (0.5001, 0.999].  The exact corner 0.5+0.5=c is luminal, not super-
+  //     luminal, so the swath must START strictly above 0.5.
+  {
+    let breaches = 0, total = 0, minSum = 9;
+    const lo = 0.5001, hi = 0.999, N = 60;
+    for(let i=0;i<=N;i++){ for(let j=0;j<=N;j++){
+      const u = lo + (hi-lo)*(i/N), v = lo + (hi-lo)*(j/N);
+      total++; const s = galileanAdd(u,v); minSum = Math.min(minSum, s);
+      if(s > 1) breaches++;
+    }}
+    check('Galilean u+v is super-luminal for ALL u,v in (0.5001,0.999] — wrong law ✓',
+      breaches === total && total > 1000,
+      breaches+'/'+total+' super-luminal · min sum '+minSum.toFixed(4)+' > c');
+  }
+  // (6) SINGLE SOURCE — the imported core (what the page RUNS) is byte-identical
+  //     to the inlined slab above, so no divergent math hides here.
+  {
+    let same = true, probes = 0;
+    for(let s=0;s<=400;s++){
+      const b = -0.999 + 1.998*(s/400);
+      if(CORE.velAdd(b,0.3) !== velAdd(b,0.3)) same = false;
+      if(CORE.rapidity(b) !== rapidity(b)) same = false;
+      if(CORE.betaOfRapidity(b*2) !== betaOfRapidity(b*2)) same = false;
+      if(CORE.gammaOf(b*0.999) !== gammaOf(b*0.999)) same = false;
+      probes++;
+    }
+    check('SINGLE SOURCE: imported core.mjs === inlined byte-twin slab (the page runs the import) ✓',
+      same, same ? probes+' probes identical' : 'import ≠ inline — DRIFT');
+  }
+
+  const pass = log.filter(l=>l.ok).length;
+  return { pass, total:log.length, log };
+}
+
+const chip = $('selftest'), stPanel = $('stPanel');
+function showSelfTest(){
+  try{
+    const res = runSelfTest();
+    const ok = res.pass===res.total;
+    chip.textContent = res.pass+'/'+res.total+(ok?' ✓':' ✗');
+    chip.className = 'selftest '+(ok?'ok':'bad');
+    let html = '<h4>Built-in self-test — '+res.pass+'/'+res.total+'</h4>';
+    res.log.forEach(l=>{
+      html += '<div class="line"><span class="badge '+(l.ok?'pass':'fail')+'">'+(l.ok?'PASS':'FAIL')+'</span>'+
+        '<span><span class="nm">'+l.name+'</span>'+(l.detail?' <span class="dt">['+l.detail+']</span>':'')+'</span></div>';
+    });
+    html += '<div class="soul">Velocities don\'t add — rapidities do. That one fact, proven six ways, live.</div>';
+    stPanel.innerHTML = html;
+    console.log('[speed-you-cant-add] self-test '+res.pass+'/'+res.total+(ok?' ✓':' ✗'));
+  }catch(err){
+    chip.textContent = 'self-test ERR'; chip.className='selftest bad';
+    stPanel.innerHTML = '<h4>self-test errored</h4><div class="dt">'+String(err)+'</div>';
+    console.error(err);
+  }
+}
+chip.addEventListener('click', ()=>stPanel.classList.toggle('show'));
+chip.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); stPanel.classList.toggle('show'); } });
+
+/* ===================================================================
+ *  LOOP
+ * =================================================================== */
+let raf=0, running=true, lastT=0;
+function frame(t){
+  if(!running) return;
+  let dt = lastT ? (t-lastT)/1000 : 0; lastT=t;
+  if(dt>0.1) dt=0.1;
+  // ease the SHOWN values toward the targets so the frames glide
+  if(reduceMotion){ state.uShown = state.u; state.vShown = state.v; }
+  else{
+    state.uShown += (state.u - state.uShown) * Math.min(1, dt*6);
+    state.vShown += (state.v - state.vShown) * Math.min(1, dt*6);
+  }
+  draw();
+  raf = requestAnimationFrame(frame);
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden){ running=false; if(raf) cancelAnimationFrame(raf); }
+  else if(!running){ running=true; lastT=0; raf=requestAnimationFrame(frame); }
+});
+window.addEventListener('resize', resize);
+
+// expose for verification
+window.SCAA = { runSelfTest, M, CORE, state, setU, setV };
+
+// drop the front-door seen-breadcrumb (sub-bench, harmless if unused)
+try{ const k='ws:seen:speed-you-cant-add'; if(!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
+
+// boot
+resize();
+updateReadouts();
+showSelfTest();
+raf = requestAnimationFrame(frame);
+</script>
+</body>
+</html>
