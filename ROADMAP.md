@@ -74,6 +74,7 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
+- [bug] **The front door is missing its self-test pill.** Every other page that carries a self-test shows a self-test pill — a green ✓ N/N badge that proves to the visitor the page is honest and true. The front door has a self-test of its own: the Legibility Conscience (tools/layout/legibility.cjs) is the self-test built specifically for the door's layout. (Layout's structural self-tests surface on the Layouts exhibit, not on the door itself.) Yet the front door shows no self-test pill.
 <!-- ✝ FIXED #125: The Climb FEELS bad to play — jerky, too fast, feet sunk INTO the floor… → arcade/games/the-climb · after 241d75f -->
 <!-- ✝ FIXED #129: The Climb — jump arc + bonus timer never re-tuned for the new slower sp… → arcade/games/the-climb · after 197b2d0 -->
 <!-- ✝ FIXED #153: The Vantage has no exit — a visitor who enters is trapped. → vantage/index.html · after ba048d3 -->
