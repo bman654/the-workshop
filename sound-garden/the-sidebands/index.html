@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Sidebands — push the depth and one drawn comb IS the heard tone; at β≈2.4048 the carrier goes dark</title>
+<!-- a Sound Garden LEAF (garden growth of FM synthesis & Bessel sidebands). Reached
+     from the front-door 'rigorous voices' line in sound-garden/index.html. Copies
+     '← sound garden'. NOT a new front-door footprint — NO ws:seen. The FM-spectrum
+     physics (the FM law fmSample + the Bessel engine besselJarray + the comb
+     amplitudes |Jₙ(β)| + runSidebandSelfTest) is single-sourced to ./core.mjs (the
+     BESSEL CORE block, byte-twinned here char-for-char); the pitch anchor semiToFreq
+     comes from ../pitch-core.mjs (PITCH CORE, also byte-twinned). The Node twin
+     core.test.mjs re-extracts each slice and asserts parity.
+
+     THE LOCKSTEP CONTRACT (the soul): ONE state.beta drives BOTH the drawn comb
+     (draw() reads heights from combAmps) AND the live FM audio (applyFM, deviation
+     = β·fm) through the same core — the eye and the ear cannot disagree.
+
+     TWO STATED SETTINGS, never conflated:
+       • the LIVE hero default is fc=220 (semiToFreq(−3)), fm=110 (fc/2), β swept
+         freely [0,8] under the hand; the comb is drawn + heard at whatever band/depth
+         the hand chooses.
+       • the LENS-CHECK render (window.__renderSidebands) runs the SAME FM chain at a
+         FIXED lens band fc=1200, fm=500 (NOT the live UI fc/fm/β) so every checked
+         comb tooth clears the Audio Lens's 60 Hz floor / 5 kHz ceiling / 3% dedup.
+         THAT is the only heard-headless claim. See verify.sh. -->
+<style>
+  :root{
+    --bg:#07060d; --ink:#ece9f6; --muted:#8a85a6;
+    --c:#caa45a;                 /* the leaf accent (brass — the lever/chassis) */
+    --carrier:#b59bff;           /* the center rung at fc (violet) */
+    --side:#6fd3ff;              /* the sidebands at fc±n·fm (cyan) */
+    --brass:#caa45a;             /* the depth lever + chassis (brass) */
+    --null:#ff9d7a;             /* the dark-carrier state (coral) */
+    --ok:#54e08a; --bad:#ff6b6b; /* RESERVED for the self-test pill verdict only */
+    --panel:#110e1c; --line:rgba(255,255,255,.08);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--bg); color:var(--ink); overflow-x:hidden;
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased; }
+  body{ min-height:100vh; background:
+    radial-gradient(1000px 600px at 50% -10%, rgba(181,155,255,.12), transparent 60%),
+    radial-gradient(820px 520px at 14% 110%, rgba(111,211,255,.08), transparent 55%),
+    radial-gradient(820px 520px at 88% 112%, rgba(255,157,122,.07), transparent 55%),
+    var(--bg); }
+  .wrap{ max-width:1080px; margin:0 auto; padding:30px 24px 90px; }
+  a{ color:inherit; }
+  .back{ display:inline-block; font:600 11px/1 ui-monospace,Menlo,monospace; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); text-decoration:none; opacity:.8; margin-bottom:14px; }
+  .back:hover{ color:var(--c); opacity:1; }
+  header{ text-align:center; margin-bottom:8px; }
+  .kick{ font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.34em;
+    text-transform:uppercase; color:var(--muted); opacity:.85; }
+  h1{ font-family:Georgia,"Times New Roman",serif; font-weight:500;
+    font-size:clamp(34px,6vw,58px); margin:.14em 0 .1em; letter-spacing:.01em;
+    background:linear-gradient(180deg,#fff,#dcd0ff); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  .sub{ color:var(--muted); font-size:15px; font-style:italic; font-family:Georgia,serif;
+    max-width:720px; margin:0 auto; line-height:1.55; }
+  .sub b{ font-style:normal; }
+
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; }
+  .card h3{ margin:0 0 10px; font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); }
+
+  /* the stage: one column on mobile → the rig beside the readouts on desktop.
+     minmax(0,…) tracks + min-width:0 items let the grid shrink below its content's
+     min-content (the canvas) instead of forcing horizontal overflow on narrow screens. */
+  .stage{ margin-top:26px; display:grid; gap:18px; grid-template-columns:minmax(0,1fr); }
+  .stage > .card{ min-width:0; }
+  @media(min-width:860px){ .stage{ grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr); align-items:start; } }
+
+  /* ── THE COMB — the ONE drawn object: brass rail + tuned reeds, NOT a graph ── */
+  #combHost{ position:relative; width:100%; height:300px; touch-action:none; }
+  #comb{ width:100%; height:100%; display:block; border-radius:12px; cursor:ew-resize;
+    background:
+      radial-gradient(120% 90% at 50% 0%, rgba(181,155,255,.06), transparent 60%),
+      radial-gradient(120% 90% at 50% 100%, rgba(111,211,255,.05), transparent 60%), #0a0813; }
+  #comb:focus-visible{ outline:2px solid color-mix(in srgb,var(--brass) 60%,transparent); outline-offset:-2px; }
+  .stageHint{ margin:10px 0 0; font:600 11px/1.5 ui-monospace,Menlo,monospace; color:var(--muted); opacity:.85; }
+  .stageHint b{ color:var(--ink); font-weight:600; }
+
+  /* ── THE DEPTH LEVER — the hero verb, a brass slider ── */
+  .sliderrow{ display:flex; align-items:center; gap:12px; background:#0d0a16; border:1px solid var(--line);
+    border-radius:10px; padding:10px 12px; margin-top:14px; }
+  .sliderrow label{ font:600 11px/1.3 ui-monospace,Menlo,monospace; color:var(--muted); min-width:0; flex:0 0 auto; }
+  .sliderrow input[type=range]{ flex:1 1 auto; min-width:0; accent-color:var(--brass); }
+  .sliderrow .bval{ font:700 12px/1 ui-monospace,Menlo,monospace; color:var(--brass); flex:0 0 auto; min-width:42px; text-align:right; }
+
+  .controls{ display:flex; flex-direction:column; gap:14px; }
+  .readouts{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media(max-width:430px){ .readouts{ grid-template-columns:1fr; } }
+  .ro{ background:#0d0a16; border:1px solid var(--line); border-radius:10px; padding:10px 12px; overflow:hidden; }
+  .ro.wide{ grid-column:1 / -1; }
+  .ro .k{ font:600 10px/1 ui-monospace,Menlo,monospace; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); }
+  .ro .v{ font:700 17px/1.2 ui-monospace,Menlo,monospace; margin-top:6px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ro .v.fc{ color:var(--carrier); }
+  .ro .v.fm{ color:var(--brass); }
+  .ro .v.beta{ color:var(--brass); }
+  .ro .v.car{ color:var(--carrier); }
+  .ro .v.car.dark{ color:var(--null); }
+
+  .detentrow{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .detent{ font:700 11px/1 ui-monospace,Menlo,monospace; letter-spacing:.04em; cursor:pointer; user-select:none;
+    padding:9px 13px; border-radius:9px; border:1px solid color-mix(in srgb,var(--null) 45%,transparent);
+    background:#150f12; color:var(--null); transition:.16s; }
+  .detent:hover{ background:#1d1316; box-shadow:0 0 16px -6px var(--null); }
+  .detent:focus-visible{ outline:2px solid color-mix(in srgb,var(--null) 60%,transparent); outline-offset:2px; }
+
+  .seg{ display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+  .seg .opt{ padding:9px 12px; font:600 11px/1 ui-monospace,Menlo,monospace; letter-spacing:.06em;
+    cursor:pointer; color:var(--muted); background:#0d0a16; transition:.16s; }
+  .seg .opt.on{ color:#07060d; background:var(--c); }
+
+  .note{ font-size:13px; color:var(--muted); line-height:1.6; margin:12px 0 0; }
+  .note b{ color:var(--ink); font-weight:600; }
+  .note.lit{ color:var(--null); }
+
+  /* the SELF-TEST pill — green/red RESERVED for the verdict only */
+  #selftest{ display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
+    font:700 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.04em; padding:9px 13px; border-radius:9px;
+    border:1px solid var(--line); background:#0d0a16; color:var(--muted); }
+  #selftest.ok{ color:var(--ok); border-color:color-mix(in srgb,var(--ok) 50%,transparent); }
+  #selftest.bad{ color:var(--bad); border-color:color-mix(in srgb,var(--bad) 50%,transparent); }
+  #selftest .dotp{ width:8px; height:8px; border-radius:50%; background:currentColor; box-shadow:0 0 8px currentColor; }
+
+  footer{ margin-top:46px; text-align:center; color:var(--muted); opacity:.6;
+    font:11px/1.7 ui-monospace,Menlo,monospace; letter-spacing:.05em; }
+  footer a{ color:inherit; }
+  code{ font-family:ui-monospace,Menlo,monospace; font-size:.92em; color:#dcd0ff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../index.html">&larr; sound garden</a>
+  <header>
+    <div class="kick">Sound&nbsp;Garden&nbsp;·&nbsp;a&nbsp;leaf</div>
+    <h1>The Sidebands</h1>
+    <p class="sub">Wobble one pure carrier's pitch with a faster wave and it sprouts a whole
+      <b style="color:var(--side)">comb</b> of sidebands at <b>f<sub>c</sub>&nbsp;&plusmn;&nbsp;n&middot;f<sub>m</sub></b>,
+      each rung exactly <b>|J<sub>n</sub>(&beta;)|</b> tall. Push the <b style="color:var(--brass)">depth&nbsp;&beta;</b>
+      and the comb you SEE is the comb you HEAR &mdash; one lever drives both. At
+      <b style="color:var(--null)">&beta;&nbsp;&asymp;&nbsp;2.4048</b> the
+      <b style="color:var(--carrier)">carrier&nbsp;rung</b> itself goes dark: the pitch you played is the one pitch not there.</p>
+  </header>
+
+  <div class="stage">
+    <!-- THE RIG: the ONE drawn object — the comb is the heard tone -->
+    <div class="card">
+      <div class="stageHint" style="margin:0 0 12px">THE COMB &mdash; one drawn object that <b>is</b> the heard tone</div>
+      <div id="combHost">
+        <canvas id="comb" role="application" tabindex="0"
+          aria-label="the FM sideband comb: a brass rail of tuned reeds, the violet center reed the carrier at fc, cyan reeds the sidebands at fc plus or minus n times fm. Drag left or right (or use the arrow keys) to change the depth beta; Home sets beta to 0. At beta near 2.4048 the carrier reed goes dark."></canvas>
+      </div>
+      <p class="stageHint">Drag the comb <b>left/right</b> (or focus it and use &larr;/&rarr;, Home = &beta;0) to push the
+        <b style="color:var(--brass)">depth&nbsp;&beta;</b>. Watch the <b style="color:var(--side)">cyan sidebands</b> grow as the
+        <b style="color:var(--carrier)">violet carrier</b> shrinks &mdash; and vanishes at the null.</p>
+
+      <div class="sliderrow">
+        <label for="betaRange">depth&nbsp;&beta;</label>
+        <input type="range" id="betaRange" min="0" max="8" step="0.001" value="2.404825557695773"
+          aria-label="FM depth beta, 0 to 8">
+        <span class="bval" id="betaVal">2.405</span>
+      </div>
+
+      <div class="detentrow" style="margin-top:12px">
+        <span class="detent" id="snapNull" role="button" tabindex="0"
+          title="Jump beta to the first zero of J₀ — the depth where the carrier rung goes dark.">&#9662; snap to the carrier null (&beta;=j&#8320;,&#8321;&asymp;2.4048)</span>
+      </div>
+    </div>
+
+    <!-- THE READOUTS + the band sliders + the audio control -->
+    <div class="card">
+      <h3>The comb</h3>
+      <div class="controls">
+        <div class="readouts">
+          <div class="ro"><div class="k">f<sub>c</sub> carrier</div><div class="v fc" id="roFc">&mdash;</div></div>
+          <div class="ro"><div class="k">f<sub>m</sub> modulator</div><div class="v fm" id="roFm">&mdash;</div></div>
+          <div class="ro"><div class="k">&beta; depth</div><div class="v beta" id="roBeta">&mdash;</div></div>
+          <div class="ro"><div class="k">teeth shown</div><div class="v" id="roTeeth" style="color:var(--side)">&mdash;</div></div>
+          <div class="ro wide"><div class="k">carrier rung &mdash; |J&#8320;(&beta;)|</div><div class="v car" id="roCarrier">&mdash;</div></div>
+        </div>
+
+        <div class="sliderrow" style="margin-top:0">
+          <label for="fcRange">carrier&nbsp;f<sub>c</sub></label>
+          <input type="range" id="fcRange" min="110" max="660" step="1" value="220"
+            aria-label="carrier frequency fc, 110 to 660 Hz">
+          <span class="bval" id="fcVal" style="color:var(--carrier)">220</span>
+        </div>
+        <div class="sliderrow" style="margin-top:0">
+          <label for="fmRange">modulator&nbsp;f<sub>m</sub></label>
+          <input type="range" id="fmRange" min="20" max="330" step="1" value="110"
+            aria-label="modulator frequency fm, 20 to 330 Hz">
+          <span class="bval" id="fmVal" style="color:var(--brass)">110</span>
+        </div>
+
+        <div class="detentrow">
+          <span class="seg" id="segAudio" title="Honours the estate-wide ws:pref:muted key; muted by default.">
+            <span class="opt" data-audio="on">sound on</span>
+            <span class="opt on" data-audio="off">sound off</span>
+          </span>
+        </div>
+
+        <p class="note" id="reveal">&nbsp;</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- THE PROOF -->
+  <div class="card" style="margin-top:18px">
+    <div class="detentrow" style="justify-content:space-between;align-items:flex-start;gap:24px">
+      <div style="flex:1 1 340px;min-width:0">
+        <h3 style="margin-top:0">Why a comb appears (and why the carrier nulls)</h3>
+        <p class="note" style="margin-top:0">
+          Wobble a carrier's phase with a modulator of depth &beta; and the signal is
+          <code>y(t) = cos(2&pi;f<sub>c</sub>t + &beta;&middot;sin(2&pi;f<sub>m</sub>t))</code>. The Jacobi&ndash;Anger
+          identity turns that one wiggling tone into an infinite sum of steady tones:
+          <code>y = &Sigma;<sub>n</sub> J<sub>n</sub>(&beta;)&middot;cos(2&pi;(f<sub>c</sub>+n&middot;f<sub>m</sub>)t)</code>.
+          So the spectrum is a <b style="color:var(--side)">comb</b>: a rung at the carrier and a symmetric pair of
+          sidebands at every <b>f<sub>c</sub>&nbsp;&plusmn;&nbsp;n&middot;f<sub>m</sub></b>, each <b>|J<sub>n</sub>(&beta;)|</b> tall.
+          Energy is conserved &mdash; <code>&Sigma;<sub>n</sub> J<sub>n</sub>(&beta;)&sup2; = 1</code> for every &beta;.
+        </p>
+        <p class="note">
+          <b style="color:var(--null)">The carrier null:</b> the carrier's own height is <code>J&#8320;(&beta;)</code>, which is 1 at
+          &beta;=0 and then oscillates, crossing zero at <b>&beta;&nbsp;=&nbsp;2.404825557&hellip;</b> (the first zero of J&#8320;). At
+          THAT depth the center rung vanishes &mdash; the loudest tone goes silent while the sidebands flood. <b style="color:var(--carrier)">The
+          negative control:</b> set <b>&beta;=0</b> and J<sub>n</sub>(0) is 1 for the carrier and a <b>true 0</b> for every sideband &mdash;
+          one pure rung, an empty axis. The comb is the depth.
+        </p>
+        <p class="note" style="font-size:12px">
+          <b style="color:var(--brass)">Two stated settings.</b> The LIVE rig sweeps f<sub>c</sub>/f<sub>m</sub>/&beta; freely.
+          The headless heard-claim is made by <code>verify.sh</code> on the SAME FM chain at a FIXED lens band
+          (<code>window.__renderSidebands</code>: f<sub>c</sub>=1200, f<sub>m</sub>=500) so every checked tooth clears the
+          Audio&nbsp;Lens's 60&nbsp;Hz floor, 5&nbsp;kHz ceiling and 3% dedup &mdash; the live UI's f<sub>c</sub>/f<sub>m</sub>/&beta; are NOT
+          used by that render.
+        </p>
+      </div>
+      <div style="flex:1 1 280px;min-width:0">
+        <div class="detentrow">
+          <span id="selftest" title="click to re-run"><span class="dotp"></span><span id="stText">self-test &mdash;</span></span>
+        </div>
+        <p class="note" style="margin-top:12px;font-size:12px">
+          The self-test proves it EXACT: each sideband amplitude is <code>|J<sub>n</sub>(&beta;)|</code> by two independent
+          algorithms (downward recurrence vs power series) to <code>&lt;1e&minus;9</code>; energy is conserved
+          <code>&Sigma;<sub>n</sub> J<sub>n</sub>&sup2; = 1</code> across a &beta;-sweep; the carrier null is a real zero of J&#8320;
+          (<code>|J&#8320;(2.4048&hellip;)| &lt; 1e&minus;9</code>); the rendered FM comb reads <code>|J<sub>n</sub>(&beta;)|/2</code> at every
+          tooth; and at <b>&beta;=0</b> every sideband is a true 0. The physics is single-sourced to
+          <code>core.mjs</code>, byte-twinned into this page, with the Node twin <code>core.test.mjs</code> proving
+          char-for-char parity and cross-checking the first J&#8320; zero against the plate tool.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    a leaf of the <a href="../index.html">Sound Garden</a> &middot; all sound synthesised live (Web Audio), zero dependencies &middot;
+    FM-spectrum physics &rarr; <code>core.mjs</code> &middot; pitch &rarr; <code>sound-garden/pitch-core.mjs</code><br>
+    <a href="../the-overtone-rack/index.html">&harr; The Overtone Rack</a> &middot;
+    <a href="../the-tartini-bench/index.html">&harr; The Tartini Bench</a> &middot;
+    <a href="../the-beating-bench/index.html">&harr; The Beating Bench</a> &middot;
+    <a href="../the-quorum/index.html">&harr; The Quorum</a> &middot;
+    <a href="../monochord.html">&harr; The Monochord</a> &middot;
+    <a href="../../index.html">&larr; The Orrery Estate</a>
+  </footer>
+</div>
+
+<script type="module">
+"use strict";
+// ════════════════════════ INLINED SINGLE-SOURCE BYTE-TWINS ═══════════════════
+// TWO byte-twins, in order. (a) the PITCH CORE slice (gives semiToFreq, so
+// FC = semiToFreq(0) and FM = FC/16 are single-sourced), char-for-char
+// ../pitch-core.mjs. (b) the BESSEL CORE slice (the FM law + the Bessel engine +
+// the comb amplitudes + runSidebandSelfTest), char-for-char ./core.mjs. The Node
+// twin re-extracts each slice and asserts parity; the in-page pill AND the Node
+// twin both call the runSidebandSelfTest defined in (b).
+
+// ===== PITCH CORE (inlined byte-twin) BEGIN =====
+const MIDDLE_C_HZ = 261.625565;            // the ONE pitch anchor literal
+function semiToFreq(semi){ return MIDDLE_C_HZ * Math.pow(2, semi/12); }
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function noteName(semi){ const o=4+Math.floor(semi/12); const i=((semi%12)+12)%12; return NOTE_NAMES[i]+o; }
+// ===== PITCH CORE END =====
+
+// the bench's CONSTANTS, DERIVED from the pitch anchor (no Hz literal is re-typed).
+// These live OUTSIDE the BESSEL CORE slice (which takes fc/fm/β as parameters),
+// exactly as core.mjs places them. The self-test is pinned to these so the pill and
+// the Node twin agree. (The LIVE rig defaults below are a separate, stated setting.)
+const SEMI_FC = 0;                          // middle C as a semitone offset
+const FC = semiToFreq(SEMI_FC);             // ≈261.63 Hz — the self-test carrier
+const FM = FC / 16;                         // ≈16.35 Hz — the self-test modulator (16:1, leakage-free)
+const BETA = 2.0;                           // the self-test depth
+const J0_ZERO1 = 2.404825557695773;         // the first zero of J₀ — the staged razor
+
+// ===== BESSEL CORE (inlined byte-twin) BEGIN =====
+// IMPORT-FREE: every function takes the carrier fc, modulator fm and depth β (and,
+// where needed, the order n) as PARAMETERS — so the page can inline this block
+// verbatim regardless of script load order, and the pitch anchor is never re-typed
+// inside the slice (the single-source grep checks). The Bessel recurrence
+// `besselJarray` lives here and ONLY here.
+
+// THE BESSEL ENGINE — Jₙ(x) for all orders 0..nMax at once, by Miller's DOWNWARD
+// recurrence. The recurrence J_{n-1}(x) = (2n/x)·Jₙ(x) − J_{n+1}(x) is numerically
+// UNSTABLE upward (round-off explodes) but STABLE downward, so we start at a high
+// index M (well above both nMax and |x|), seed J_{M+1}=0 / J_M=1e-300 (an arbitrary
+// tiny start), recur DOWN to 0, then fix the unknown overall scale with the Neumann
+// identity J₀ + 2(J₂ + J₄ + …) = 1 (exact for all x, needs no reference value). An
+// on-the-fly ×1e-250 rescale guards against overflow for large x. Sign for negative
+// x follows Jₙ(−x) = (−1)ⁿ Jₙ(x). This single function is the SOLE source of every
+// sideband height the bench draws, sounds, and asserts.
+function besselJarray(x, nMax, extra = 18){
+  const ax = Math.abs(x);
+  let M = Math.max(nMax, Math.ceil(ax)) + extra;   // start comfortably above max(nMax, |x|)
+  if (M % 2 === 1) M += 1;                          // even start index for clean Neumann parity
+  const j = new Float64Array(M + 2);
+  j[M + 1] = 0;
+  j[M] = 1e-300;                                    // tiny seed; the overall scale is fixed below
+  for (let n = M; n >= 1; n--){
+    j[n - 1] = (2 * n / (ax === 0 ? 1 : ax)) * j[n] - j[n + 1];
+    if (Math.abs(j[n - 1]) > 1e250){               // rescale on the fly to dodge overflow
+      const s = 1e-250;
+      for (let k = n - 1; k <= M; k++) j[k] *= s;
+    }
+  }
+  let norm = j[0];                                  // Neumann normalizer: J₀ + 2·Σ_{k≥1} J_{2k} = 1
+  for (let k = 2; k <= M; k += 2) norm += 2 * j[k];
+  const out = new Float64Array(nMax + 1);
+  for (let n = 0; n <= nMax; n++) out[n] = j[n] / norm;
+  if (ax === 0){ out.fill(0); out[0] = 1; }         // x=0: J₀(0)=1, Jₙ(0)=0 (recurrence divides by x)
+  if (x < 0) for (let n = 1; n <= nMax; n += 2) out[n] = -out[n];   // Jₙ(−x) = (−1)ⁿ Jₙ(x)
+  return out;
+}
+
+// a single Bessel value Jₙ(x), pulled from the array engine above.
+function besselJ(n, x){ return besselJarray(x, Math.abs(n))[Math.abs(n)]; }
+
+// the n-th sideband's AMPLITUDE = |Jₙ(β)| — the height of the rung at fc ± n·fm.
+// (n=0 is the carrier rung |J₀(β)|.) The magnitude, because the page draws heights
+// and the lens reads peak magnitudes; the SIGN of Jₙ lives in the time-domain phase.
+function sidebandAmp(n, beta){ return Math.abs(besselJ(n, beta)); }
+
+// the n-th sideband's FREQUENCY = fc + n·fm (n<0 are the lower sidebands). EXACT
+// integer arithmetic when fc, fm are integers; the comb is evenly spaced by fm.
+function sidebandFreq(fc, fm, n){ return fc + n * fm; }
+
+// the whole comb of sideband AMPLITUDES |Jₙ(β)| for orders n = 0..nMax (the upper
+// half; the comb is symmetric, |J_{−n}| = |Jₙ|). Reads from besselJarray ONCE.
+function combAmps(beta, nMax){
+  const arr = besselJarray(beta, nMax);
+  const out = new Float64Array(nMax + 1);
+  for (let n = 0; n <= nMax; n++) out[n] = Math.abs(arr[n]);
+  return out;
+}
+
+// the carrier rung's amplitude alone, |J₀(β)| — turns to ~0 at β = J0_ZERO1.
+function carrierAmp(beta){ return Math.abs(besselJ(0, beta)); }
+
+// the total comb energy Σₙ Jₙ(β)² over all integer orders (J₀² + 2·Σ_{n≥1} Jₙ²),
+// which the Bessel identity says is EXACTLY 1 for every β. nMax must be high enough
+// to capture the tail (the comb's effective width is ≈ β + a few).
+function combEnergy(beta, nMax = 60){
+  const arr = besselJarray(beta, nMax);
+  let s = arr[0] * arr[0];
+  for (let n = 1; n <= nMax; n++) s += 2 * arr[n] * arr[n];
+  return s;
+}
+
+// THE FM LAW — one carrier whose phase is wobbled by a modulator of depth β. This
+// is the ONLY place the FM time-domain law lives as code (the single-source grep
+// asserts this fragment appears in exactly one file). β = 0 → a pure carrier.
+function fmSample(fc, fm, beta, t){ return Math.cos(2 * Math.PI * fc * t + beta * Math.sin(2 * Math.PI * fm * t)); }
+
+// render N samples of the FM signal y(t) = fmSample(fc, fm, beta, t) at `sampleRate`.
+// Used for ad-hoc renders and (via analysisWindow) for the leakage-free measurement
+// windows the test legs probe.
+function renderFM(fc, fm, beta, sampleRate, N){
+  const out = new Float64Array(N);
+  for (let i = 0; i < N; i++){
+    const t = i / sampleRate;
+    out[i] = fmSample(fc, fm, beta, t);
+  }
+  return out;
+}
+
+// a self-contained single-bin DFT: the DFT-bin magnitude of `samples` at frequency
+// `freq`, normalised by N so a cosine of amplitude c reads c/2. A DIRECT correlation
+// against cos/sin at `freq` — not the recursive Goertzel, whose error grows over N
+// samples; the direct sum keeps the analytic identities exact to <1e-9 even over a
+// long window. The test feeds it renderFM(...) to MEASURE each comb tooth and
+// confront it with |Jₙ(β)|/2.
+function goertzelMag(samples, freq, sampleRate){
+  const N = samples.length;
+  const w = 2 * Math.PI * freq / sampleRate;
+  const TAU = 2 * Math.PI;
+  let re = 0, im = 0, ph = 0;
+  for (let i = 0; i < N; i++){
+    re += samples[i] * Math.cos(ph); im -= samples[i] * Math.sin(ph);
+    ph += w; if (ph >= TAU) ph -= TAU;     // keep the phase small so cos/sin stay accurate over a long window
+  }
+  return Math.sqrt(re * re + im * im) / N;
+}
+
+// THE LEAKAGE-FREE WINDOW: with an INTEGER carrier:modulator ratio (FM = FC/16, so
+// fc = 16·fm), every comb tooth fc + n·fm is an integer multiple of fm. Render
+// exactly `periods` periods of fm with `spp` samples per fm-period — then the
+// effective sample rate SR = spp·fm puts every tooth on an EXACT DFT bin (bin =
+// its fm-multiple × periods), so the single-bin DFT reads |Jₙ(β)|/2 to machine
+// epsilon, with no window roundoff from a non-commensurate sample rate. Returns
+// { SR, N }. (The carrier itself is the 16·periods-th bin.)
+function analysisWindow(fm, spp = 512, periods = 64){
+  const SR = spp * fm;       // samples per second = samples-per-fm-period × fm-periods-per-second
+  const N = spp * periods;   // total samples = one fm-period's worth × the number of periods
+  return { SR, N };
+}
+
+// ── runSidebandSelfTest(fc, fm, beta) — the SOLE ORACLE. Same shape as the sibling
+// leaves: { pass, total, lines:[{name, ok, detail}] }. The in-page pill and the
+// Node twin both call THIS, so they cannot disagree. fc/fm are the carrier and
+// modulator; beta is the depth. Five legs prove the FM comb is a real, exact
+// |Jₙ(β)| spectrum, that energy is conserved, that the carrier nulls at the first
+// J₀ zero, and that β=0 is a lone pure carrier.
+function runSidebandSelfTest(fc, fm, beta){
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+
+  // an INDEPENDENT Bessel by the power series Jₙ(x) = Σ_m (−1)^m /(m!(m+n)!)·(x/2)^(2m+n)
+  // — a second method (not the recurrence) so LEG 1 is a true confrontation, not a
+  // restatement. Defined inside the oracle so the slice stays self-contained.
+  function besselSeries(n, x){
+    const h = x / 2;
+    let term = Math.pow(h, n);
+    for (let k = 2; k <= n; k++) term /= k;          // term₀ = hⁿ/n!
+    let sum = term; const h2 = h * h;
+    for (let m = 1; m < 200; m++){
+      term *= -h2 / (m * (m + n));
+      sum += term;
+      if (Math.abs(term) < 1e-18 * (Math.abs(sum) + 1e-300)) break;
+    }
+    return sum;
+  }
+
+  // LEG 1 — THE COMB IS THE BESSEL LADDER (second-method confrontation): combAmps
+  //   from the downward recurrence equals |besselSeries(n,β)| over an (n ≤ 16, β ∈
+  //   [0.5,12]) grid to <1e-9. Two disjoint algorithms agree — the sideband heights
+  //   really ARE the Bessel functions, not a fit.
+  {
+    let ok = true, worst = 0, worstAt = null;
+    for (let b = 0.5; b <= 12.0001; b += 0.5){
+      const amps = combAmps(b, 16);
+      for (let n = 0; n <= 16; n++){
+        const ref = Math.abs(besselSeries(n, b));
+        const d = Math.abs(amps[n] - ref);
+        if (d > worst){ worst = d; worstAt = { n, b: Math.round(b * 10) / 10 }; }
+        if (d >= 1e-9) ok = false;
+      }
+    }
+    T('LEG 1 — the comb IS the Bessel ladder: combAmps (Miller downward recurrence) equals the INDEPENDENT power-series |Jₙ(β)| over an (n ≤ 16, β ∈ [0.5,12]) grid to <1e-9 — two disjoint algorithms agree, the sideband heights really are Jₙ(β)',
+      ok, ok ? `recurrence === series to <1e-9 across the grid (worst Δ ${worst.toExponential(2)} at n=${worstAt.n}, β=${worstAt.b})`
+             : `mismatch (worst Δ ${worst.toExponential(2)} at n=${worstAt.n}, β=${worstAt.b})`);
+  }
+
+  // LEG 2 — ENERGY IS CONSERVED: Σₙ Jₙ(β)² = 1 for every β across [0,12] to <1e-9.
+  //   FM redistributes energy among the rungs but never creates or destroys it; the
+  //   total is always exactly one.
+  {
+    let ok = true, worst = 0, worstAt = null;
+    for (let b = 0; b <= 12.0001; b += 0.5){
+      const e = combEnergy(b, 60);
+      const d = Math.abs(e - 1);
+      if (d > worst){ worst = d; worstAt = Math.round(b * 10) / 10; }
+      if (d >= 1e-9) ok = false;
+    }
+    T('LEG 2 — energy conserved: Σₙ Jₙ(β)² = 1 for every β across [0,12] to <1e-9 — FM only redistributes energy among the comb rungs, the total is always exactly one',
+      ok, ok ? `Σ Jₙ² = 1 to <1e-9 across the sweep (worst |Σ−1| ${worst.toExponential(2)} at β=${worstAt})`
+             : `energy off (worst |Σ−1| ${worst.toExponential(2)} at β=${worstAt})`);
+  }
+
+  // LEG 3 — THE CARRIER NULL is real: |J₀(J0_ZERO1)| < 1e-9 at the analytic first
+  //   zero, AND the first three J₀ zeros located by bisection match the references
+  //   to <1e-9. The carrier really does vanish at β ≈ 2.4048 — it is a zero of J₀,
+  //   not a numerical accident.
+  {
+    const J0Z1 = 2.404825557695773;
+    const atZero = Math.abs(besselJ(0, J0Z1));
+    const J0 = x => besselJ(0, x);
+    const findZero = (a, c) => {
+      let fa = J0(a);
+      for (let i = 0; i < 200; i++){
+        const m = (a + c) / 2, fm0 = J0(m);
+        if (fa * fm0 <= 0) c = m; else { a = m; fa = fm0; }
+      }
+      return (a + c) / 2;
+    };
+    const z1 = findZero(2.0, 3.0), z2 = findZero(5.0, 6.0), z3 = findZero(8.0, 9.0);
+    const ref = [2.404825557695773, 5.520078110286311, 8.653727912911012];
+    const dz = Math.max(Math.abs(z1 - ref[0]), Math.abs(z2 - ref[1]), Math.abs(z3 - ref[2]));
+    const ok = atZero < 1e-9 && dz < 1e-9;
+    T('LEG 3 — the carrier null is real: |J₀(2.4048255…)| < 1e-9 at the analytic first zero, and the first three J₀ zeros found by bisection match the references to <1e-9 — the carrier rung vanishes at a true zero of J₀',
+      ok, `|J₀(z₁)| = ${atZero.toExponential(2)} (<1e-9) · located zeros [${z1.toFixed(9)}, ${z2.toFixed(9)}, ${z3.toFixed(9)}] vs refs, worst Δ ${dz.toExponential(2)}`);
+  }
+
+  // LEG 4 — THE HEARD COMB matches the math (band-independent): the DFT of the
+  //   rendered FM signal reads |Jₙ(β)|/2 at the carrier and the first five upper
+  //   sidebands to <1e-9, AND at β = J0_ZERO1 the carrier bin reads ~0 while the
+  //   sidebands survive. analysisWindow pins every tooth on an exact bin, so this
+  //   holds at ANY carrier band — the comb the ear gets is the comb the math draws.
+  {
+    const { SR, N } = analysisWindow(fm);
+    const y = renderFM(fc, fm, beta, SR, N);
+    let ok = true, worst = 0; const rows = [];
+    for (let n = 0; n <= 5; n++){
+      const measured = goertzelMag(y, sidebandFreq(fc, fm, n), SR);
+      const want = sidebandAmp(n, beta) / 2;       // a cosine of amplitude |Jₙ| reads |Jₙ|/2
+      const d = Math.abs(measured - want); worst = Math.max(worst, d);
+      if (d >= 1e-9){ ok = false; rows.push(`n=${n} ${measured.toExponential(3)}≠${want.toExponential(3)}`); }
+    }
+    // the carrier-null render: at β = J0_ZERO1 the carrier bin is ~0 while a sideband lives
+    const yNull = renderFM(fc, fm, J0_ZERO1, SR, N);
+    const carrierNull = goertzelMag(yNull, fc, SR);
+    const sideAlive = goertzelMag(yNull, sidebandFreq(fc, fm, 1), SR);
+    const nullOK = carrierNull < 1e-9 && sideAlive > 0.01;
+    ok = ok && nullOK;
+    T('LEG 4 — the heard comb matches the math: the DFT of the rendered FM signal reads |Jₙ(β)|/2 at the carrier + first five sidebands to <1e-9, AND at β=2.4048 the carrier bin reads ~0 while the sidebands survive — band-independent (every tooth on an exact bin)',
+      ok, ok ? `comb teeth match |Jₙ(β)|/2 (worst Δ ${worst.toExponential(2)}) · carrier-null bin ${carrierNull.toExponential(2)} (<1e-9) while sideband ${sideAlive.toFixed(4)} alive`
+             : `${rows.join(', ')} · null carrier ${carrierNull.toExponential(2)} / sideband ${sideAlive.toFixed(4)}`);
+  }
+
+  // LEG 5 — THE NEGATIVE CONTROL, to a true zero: at β=0, J₀(0) === 1 EXACTLY and
+  //   every Jₙ(0) for n≥1 is the literal 0 — not small, zero. The comb collapses to
+  //   a lone pure carrier; remove the depth and there is nothing on either side.
+  {
+    const amps = combAmps(0, 8);
+    const carrierOne = amps[0] === 1;
+    let allZero = true; const vals = [];
+    for (let n = 1; n <= 8; n++){ vals.push(amps[n]); if (amps[n] !== 0) allZero = false; }
+    const ok = carrierOne && allZero;
+    T('LEG 5 — the negative control: at β=0, J₀(0) === 1 exactly and every sideband Jₙ(0) (n≥1) is a TRUE 0 — the comb collapses to a lone pure carrier; the comb is the depth, remove it and there is silence on either side',
+      ok, ok ? `J₀(0) === 1 (exact) · J₁..J₈(0) all === 0 [${vals.join(', ')}]`
+             : `J₀(0)=${amps[0]} · sidebands [${vals.join(', ')}]`);
+  }
+
+  let pass = 0; for (const l of lines) if (l.ok) pass++;
+  return { pass, total: lines.length, lines };
+}
+// ===== BESSEL CORE END =====
+
+// ════════════════════════ LIVE STATE ═════════════════════════════════════════
+// the LIVE rig's defaults — a SEPARATE, stated setting from the self-test constants
+// above (the page copy + CHANGELOG say so). fc=220 (A3), fm=110 (fc/2, an integer
+// ratio so the live comb is clean too); β boots at the carrier null so the very
+// first thing seen is the center rung already DARK and short.
+const ORDER = 12;                            // draw the comb out to ±12 sidebands
+const BETA_NULL = J0_ZERO1;                  // IMPORTED from the core, never re-typed
+const state = {
+  fc: 220,                                   // live carrier (A3)
+  fm: 110,                                   // live modulator (fc/2)
+  beta: BETA_NULL,                           // boots AT the carrier null (the staged razor)
+};
+const NULL_TOL = 0.02;                        // |J₀(β)| below this → the carrier reads "null"
+
+// ════════════════════════ AUDIO (muted-by-default · ws:pref:muted) ════════════
+function readMutePref(){ try{ return localStorage.getItem('ws:pref:muted') === '1'; }catch(e){ return false; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v ? '1' : '0'); }catch(e){} }
+const Snd = { ctx:null, master:null, comp:null, on:false, muted:readMutePref(),
+  carrier:null, mod:null, modGain:null, amp:null };
+// the live FM voice: a modulator oscillator → a gain (the DEVIATION = β·fm) →
+// the carrier oscillator's frequency param. ONE β drives this deviation AND the
+// drawn comb (the lockstep contract). Deviation in Hz for phase-mod-as-freq-mod is
+// β·fm, so the carrier's instantaneous frequency swings ±β·fm — the exact FM law.
+function ensureCtx(){
+  if (Snd.ctx) return;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  Snd.ctx = new AC();
+  Snd.master = Snd.ctx.createGain(); Snd.master.gain.value = 0.9;
+  Snd.comp = Snd.ctx.createDynamicsCompressor();
+  Snd.comp.threshold.value = -14; Snd.comp.ratio.value = 12; Snd.comp.attack.value = 0.003; Snd.comp.release.value = 0.25;
+  const t = Snd.ctx.currentTime;
+  Snd.carrier = Snd.ctx.createOscillator(); Snd.carrier.type = 'sine'; Snd.carrier.frequency.setValueAtTime(state.fc, t);
+  Snd.mod = Snd.ctx.createOscillator(); Snd.mod.type = 'sine'; Snd.mod.frequency.setValueAtTime(state.fm, t);
+  Snd.modGain = Snd.ctx.createGain(); Snd.modGain.gain.setValueAtTime(state.beta * state.fm, t);  // DEVIATION = β·fm
+  Snd.amp = Snd.ctx.createGain(); Snd.amp.gain.setValueAtTime(0.00001, t);
+  Snd.mod.connect(Snd.modGain); Snd.modGain.connect(Snd.carrier.frequency);   // FM: modulate the carrier's freq
+  Snd.carrier.connect(Snd.amp); Snd.amp.connect(Snd.master);
+  Snd.master.connect(Snd.comp); Snd.comp.connect(Snd.ctx.destination);
+  Snd.carrier.start(t); Snd.mod.start(t);
+}
+function applyGains(){
+  if (!Snd.ctx) return;
+  const a = Snd.on ? 0.5 : 0.00001;
+  Snd.amp.gain.setTargetAtTime(Math.max(0.00001, a), Snd.ctx.currentTime, 0.02);
+}
+// the LOCKSTEP audio half of the contract: ONE state.beta sets the deviation β·fm
+// (and the carrier/modulator their frequencies). Called by the SAME setBeta/band
+// handlers that drive draw() — eye and ear move together.
+function applyFM(){
+  if (!Snd.ctx) return;
+  const t = Snd.ctx.currentTime;
+  Snd.carrier.frequency.setTargetAtTime(state.fc, t, 0.02);
+  Snd.mod.frequency.setTargetAtTime(state.fm, t, 0.02);
+  Snd.modGain.gain.setTargetAtTime(state.beta * state.fm, t, 0.02);            // DEVIATION = β·fm
+}
+
+const segAudio = document.getElementById('segAudio');
+segAudio.addEventListener('click', e=>{
+  const opt = e.target.closest('.opt'); if (!opt) return;
+  const wantOn = opt.dataset.audio === 'on';
+  if (wantOn){ ensureCtx(); if (Snd.ctx && Snd.ctx.state === 'suspended') Snd.ctx.resume(); applyFM(); }
+  Snd.on = wantOn; Snd.muted = !wantOn; writeMutePref(Snd.muted);
+  applyGains();
+  [...segAudio.children].forEach(o=>o.classList.toggle('on', o===opt));
+});
+window.addEventListener('storage', e=>{ if (e.key!=='ws:pref:muted') return;
+  Snd.muted = readMutePref(); syncAudioUI(); });
+function syncAudioUI(){ if (Snd.muted) Snd.on=false; const showOn=Snd.on&&!Snd.muted;
+  [...segAudio.children].forEach(o=>o.classList.toggle('on', (o.dataset.audio==='on')===showOn)); }
+
+// ════════════════════════ DERIVED LIVE QUANTITIES ════════════════════════════
+function getCss(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function liveCarrier(){ return carrierAmp(state.beta); }            // |J₀(β)| — drops to ~0 at the null
+function atNull(){ return liveCarrier() < NULL_TOL; }
+
+// ════════════════════════ THE COMB (canvas + drag) ═══════════════════════════
+const combHost = document.getElementById('combHost');
+const combCv = document.getElementById('comb'), cctx = combCv.getContext('2d');
+function fit(cv){ const r=cv.getBoundingClientRect(), dpr=Math.min(2,window.devicePixelRatio||1);
+  cv.width=Math.max(1,r.width*dpr); cv.height=Math.max(1,r.height*dpr);
+  const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); return {w:r.width,h:r.height}; }
+
+// THE COMB DRAW — a brass baseline rail with the carrier + sidebands as tuned reeds.
+// Heights read from the CORE's combAmps ONLY (zero math literals). At the carrier
+// null the center reed recolors to --null and drops its glow to ~0.
+function draw(){
+  const {w,h} = fit(combCv);
+  cctx.clearRect(0,0,w,h);
+  const amps = combAmps(state.beta, ORDER);          // [|J₀|, |J₁|, …] — the SOLE height source
+  const baseY = h - 30;                              // the brass rail sits near the bottom
+  const topPad = 18;
+  const railH = baseY - topPad;                      // pixels for a unit-tall reed (|J|=1)
+  const narrow = w < 430;
+  const visOrders = narrow ? 8 : ORDER;              // fewer reeds when cramped
+  // x positions: the carrier at center, sidebands stepping out by a fixed reed pitch.
+  const cx = w * 0.5;
+  const step = Math.min((w * 0.5 - 24) / (visOrders + 0.5), 26);
+
+  // the brass baseline rail
+  cctx.strokeStyle = getCss('--brass'); cctx.globalAlpha = 0.6; cctx.lineWidth = 2;
+  cctx.beginPath(); cctx.moveTo(16, baseY); cctx.lineTo(w-16, baseY); cctx.stroke();
+  cctx.globalAlpha = 1;
+
+  // a faint dashed envelope through the reed tips (the comb's outline)
+  const nullNow = atNull();
+  const tipY = (a) => baseY - Math.max(0, Math.min(1, a)) * railH;
+  cctx.strokeStyle = 'rgba(255,255,255,.10)'; cctx.lineWidth = 1; cctx.setLineDash([3,4]);
+  cctx.beginPath();
+  for (let n = visOrders; n >= 0; n--){ const x = cx - n*step; const a = amps[n]; if (n===visOrders) cctx.moveTo(x, tipY(a)); else cctx.lineTo(x, tipY(a)); }
+  for (let n = 1; n <= visOrders; n++){ const x = cx + n*step; const a = amps[n]; cctx.lineTo(x, tipY(a)); }
+  cctx.stroke(); cctx.setLineDash([]);
+
+  // draw the reeds: symmetric pairs first (cyan sidebands), then the carrier reed.
+  for (let n = visOrders; n >= 1; n--){
+    drawReed(cx - n*step, baseY, amps[n], railH, getCss('--side'), 0.85, narrow ? '' : '−'+n);
+    drawReed(cx + n*step, baseY, amps[n], railH, getCss('--side'), 0.85, narrow ? '' : '+'+n);
+  }
+  // the carrier reed (violet → coral at the null; glow drops to ~0 when dark)
+  const carCol = nullNow ? getCss('--null') : getCss('--carrier');
+  drawReed(cx, baseY, amps[0], railH, carCol, nullNow ? 0.0 : 1.0, narrow ? '' : 'fᴄ');
+
+  // labels under the rail
+  if (!narrow){
+    cctx.fillStyle = 'rgba(255,255,255,.55)'; cctx.font = '600 9px ui-monospace,Menlo,monospace'; cctx.textAlign='center';
+    cctx.fillText('fᴄ', cx, baseY + 14);
+    cctx.fillText('fᴄ+fₘ', cx + step, baseY + 14);
+    cctx.fillText('fᴄ−fₘ', cx - step, baseY + 14);
+  }
+  // the staged-razor caption, stamped on the canvas when dark / at β=0
+  cctx.textAlign = 'center';
+  if (state.beta === 0){
+    cctx.fillStyle = getCss('--carrier'); cctx.font = '600 12px ui-monospace,Menlo,monospace';
+    cctx.fillText('β = 0 — a single pure rung; every sideband a true 0.', cx, topPad + 6);
+  } else if (nullNow){
+    cctx.fillStyle = getCss('--null'); cctx.font = '700 12px ui-monospace,Menlo,monospace';
+    cctx.fillText('carrier null — β = j₀,₁ ≈ 2.4048, the first zero of J₀', cx, topPad + 6);
+  }
+}
+function drawReed(x, baseY, amp, railH, col, glow, label){
+  const a = Math.max(0, Math.min(1, amp));
+  const tipY = baseY - a * railH;
+  cctx.save();
+  cctx.shadowColor = col; cctx.shadowBlur = 14 * glow;
+  cctx.strokeStyle = col; cctx.globalAlpha = 0.35 + 0.65*glow; cctx.lineWidth = 4; cctx.lineCap = 'round';
+  cctx.beginPath(); cctx.moveTo(x, baseY); cctx.lineTo(x, Math.min(baseY-1, tipY)); cctx.stroke();
+  // the reed's tuned tip (a small disc)
+  cctx.shadowBlur = 18 * glow; cctx.fillStyle = col; cctx.globalAlpha = 0.45 + 0.55*glow;
+  cctx.beginPath(); cctx.arc(x, tipY, a > 0.02 ? 3.5 : 2, 0, 2*Math.PI); cctx.fill();
+  cctx.restore();
+}
+
+// drag the comb left/right → β over [0,8]; wheel nudges; the whole canvas is the surface.
+const BETA_MAX = 8;
+let dragging = false, dragX0 = 0, dragB0 = 0;
+function setBeta(b){
+  state.beta = Math.max(0, Math.min(BETA_MAX, b));
+  betaRange.value = state.beta;
+  betaVal.textContent = state.beta.toFixed(3);
+  applyFM();
+  redraw();
+}
+combCv.addEventListener('pointerdown', e=>{ dragging = true; combCv.setPointerCapture(e.pointerId);
+  dragX0 = e.clientX; dragB0 = state.beta;
+  ensureCtx(); if (Snd.on && Snd.ctx && Snd.ctx.state==='suspended') Snd.ctx.resume(); });
+combCv.addEventListener('pointermove', e=>{ if (!dragging) return;
+  const r = combCv.getBoundingClientRect();
+  const dx = (e.clientX - dragX0) / Math.max(1, r.width);
+  setBeta(dragB0 + dx * BETA_MAX); });
+combCv.addEventListener('pointerup', ()=>{ dragging = false; });
+combCv.addEventListener('pointercancel', ()=>{ dragging = false; });
+combCv.addEventListener('wheel', e=>{ e.preventDefault(); ensureCtx(); setBeta(state.beta + (e.deltaY < 0 ? 0.08 : -0.08)); }, {passive:false});
+combCv.addEventListener('keydown', e=>{
+  let b = state.beta, handled = true;
+  const step = e.shiftKey ? 0.02 : 0.1;
+  switch(e.key){
+    case 'ArrowRight': case 'ArrowUp': b = state.beta + step; break;
+    case 'ArrowLeft': case 'ArrowDown': b = state.beta - step; break;
+    case 'Home': b = 0; break;
+    case 'End': b = BETA_MAX; break;
+    default: handled = false;
+  }
+  if (handled){ e.preventDefault(); ensureCtx(); setBeta(b); }
+});
+
+// ════════════════════════ THE READOUTS + THE REVEAL CAPTION ═══════════════════
+const roFc = document.getElementById('roFc'), roFm = document.getElementById('roFm');
+const roBeta = document.getElementById('roBeta'), roTeeth = document.getElementById('roTeeth');
+const roCarrier = document.getElementById('roCarrier'), reveal = document.getElementById('reveal');
+function updateReadouts(){
+  roFc.textContent = state.fc.toFixed(0) + ' Hz';
+  roFm.textContent = state.fm.toFixed(0) + ' Hz';
+  roBeta.textContent = state.beta.toFixed(3);
+  // teeth: count sidebands above an audible floor (|Jₙ| > 0.01)
+  const amps = combAmps(state.beta, ORDER); let teeth = 0;
+  for (let n = 1; n <= ORDER; n++) if (amps[n] > 0.01) teeth++;
+  roTeeth.textContent = (state.beta === 0) ? '0 (pure carrier)' : (teeth*2) + ' (±' + teeth + ')';
+  const car = liveCarrier();
+  if (atNull()){
+    roCarrier.className = 'v car dark';
+    roCarrier.textContent = '≈ 0 · carrier null';
+  } else {
+    roCarrier.className = 'v car';
+    roCarrier.textContent = car.toFixed(4);
+  }
+  // the reveal caption
+  if (state.beta === 0){
+    reveal.classList.remove('lit');
+    reveal.innerHTML = '<b>β = 0</b> — one pure carrier, an empty axis. Every sideband J<sub>n</sub>(0) is a <b style="color:var(--carrier)">true 0</b>. Push β to breed the comb.';
+  } else if (atNull()){
+    reveal.classList.add('lit');
+    reveal.innerHTML = 'At <b>β ≈ 2.4048</b> the carrier <b>|J<sub>0</sub>(β)| ≈ 0</b> — the loudest rung goes <b style="color:var(--null)">dark</b> while the sidebands flood. The pitch you played is the one pitch not there.';
+  } else {
+    reveal.classList.remove('lit');
+    reveal.innerHTML = 'The depth breeds a <b style="color:var(--side)">comb</b> at f<sub>c</sub>±n·f<sub>m</sub>, each rung |J<sub>n</sub>(β)| tall — the carrier stands at <b>' + car.toFixed(3) + '</b>. Energy is conserved: Σ J<sub>n</sub>² = 1.';
+  }
+}
+
+function redraw(){ draw(); updateReadouts(); }
+
+// ════════════════════════ THE DEPTH + BAND CONTROLS ══════════════════════════
+const betaRange = document.getElementById('betaRange'), betaVal = document.getElementById('betaVal');
+betaRange.addEventListener('input', ()=>{ ensureCtx(); setBeta(parseFloat(betaRange.value)); });
+const snapNull = document.getElementById('snapNull');
+function doSnap(){ ensureCtx(); setBeta(BETA_NULL); }
+snapNull.addEventListener('click', doSnap);
+snapNull.addEventListener('keydown', e=>{ if (e.key===' '||e.key==='Enter'){ e.preventDefault(); doSnap(); } });
+
+const fcRange = document.getElementById('fcRange'), fcVal = document.getElementById('fcVal');
+fcRange.addEventListener('input', ()=>{ state.fc = parseFloat(fcRange.value); fcVal.textContent = state.fc.toFixed(0); applyFM(); redraw(); });
+const fmRange = document.getElementById('fmRange'), fmVal = document.getElementById('fmVal');
+fmRange.addEventListener('input', ()=>{ state.fm = parseFloat(fmRange.value); fmVal.textContent = state.fm.toFixed(0); applyFM(); redraw(); });
+
+// ════════════════════════ SELF-TEST PILL ════════════════════════════════════
+function runPill(){
+  let r; try{ r = runSidebandSelfTest(FC, FM, BETA); }catch(e){ console.error('[the-sidebands] self-test threw:',e);
+    r = {pass:0,total:1,lines:[{name:'self-test threw',ok:false,detail:String(e)}]}; }
+  const el = document.getElementById('selftest'), txt = document.getElementById('stText');
+  const green = r.pass === r.total;
+  el.classList.toggle('ok',green); el.classList.toggle('bad',!green);
+  txt.textContent = green ? ('the comb IS the Bessel ladder ✓ '+r.pass+'/'+r.total) : ('self-test ✗ '+r.pass+'/'+r.total);
+  el.title = r.lines.map(c=>(c.ok?'✓ ':'✗ ')+c.name+(c.detail?'  ('+c.detail+')':'')).join('\n\n');
+  if (!green){ console.error('[the-sidebands] SELF-TEST FAILED '+r.pass+'/'+r.total);
+    for (const c of r.lines) if (!c.ok) console.error('  ✗ '+c.name+'  ·  '+c.detail); }
+  else console.log('[the-sidebands] self-test '+r.pass+'/'+r.total+' ✓ — each sideband is |Jₙ(β)| (recurrence === series), energy Σ Jₙ² = 1, the carrier nulls at the first zero of J₀, the rendered comb reads |Jₙ|/2 at every tooth, and β=0 is a lone pure carrier. The comb is real, born of the depth.');
+  return r;
+}
+document.getElementById('selftest').addEventListener('click', runPill);
+window.__sidebandSelfTest = runSidebandSelfTest;
+
+// ════════════════════════ OFFLINE RENDER (Audio Lens hook · silent WAV) ══════
+// Renders `seconds` of the SAME FM chain at the FIXED LENS BAND fc=1200, fm=500 —
+// NOT the live UI fc/fm/β. At fm=500 the comb teeth fc±n·fm land at … 200, 700,
+// 1200, 1700, 2200 … Hz, all inside the lens's 60…5000 Hz window, each 41.7% apart
+// (far past the lens's 3% dedup), so the carrier and its sidebands read as DISTINCT
+// peaks. The depth is the render's argument (HERO 1.0, NULL 2.4048…, NEG 0). A=0.6
+// FM amplitude (a single FM oscillator), so even the worst comb sum stays under full
+// scale — no compressor needed in the offline render. encodeWAV mirrors the sibling
+// leaves (no cross-repo import). This is the two-settings seam Tartini uses.
+const LENS_FC = 1200, LENS_FM = 500, RENDER_A = 0.6;
+function renderSidebandsWAV(seconds, opts){
+  opts = opts || {};
+  const beta = (opts.beta != null) ? opts.beta : 1.0;
+  const sr = 12000, len = Math.max(1, Math.floor(seconds*sr));
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const ac = new OAC(1, len, sr);
+  const master = ac.createGain(); master.gain.value = 0.95;
+  const carrier = ac.createOscillator(); carrier.type = 'sine'; carrier.frequency.value = LENS_FC;
+  const mod = ac.createOscillator(); mod.type = 'sine'; mod.frequency.value = LENS_FM;
+  const modGain = ac.createGain(); modGain.gain.value = beta * LENS_FM;        // DEVIATION = β·fm — the FM law
+  const amp = ac.createGain(); amp.gain.value = RENDER_A;
+  mod.connect(modGain); modGain.connect(carrier.frequency);                     // FM: modulate carrier freq
+  carrier.connect(amp); amp.connect(master); master.connect(ac.destination);
+  carrier.start(0); mod.start(0); carrier.stop(seconds); mod.stop(seconds);
+  return ac.startRendering().then(buf=>encodeWAV(buf));
+}
+function encodeWAV(buf){
+  const ch=buf.getChannelData(0), sr=buf.sampleRate, n=ch.length;
+  const ab=new ArrayBuffer(44+n*2), dv=new DataView(ab);
+  const wr=(o,s)=>{ for(let i=0;i<s.length;i++) dv.setUint8(o+i,s.charCodeAt(i)); };
+  wr(0,'RIFF'); dv.setUint32(4,36+n*2,true); wr(8,'WAVE'); wr(12,'fmt '); dv.setUint32(16,16,true);
+  dv.setUint16(20,1,true); dv.setUint16(22,1,true); dv.setUint32(24,sr,true); dv.setUint32(28,sr*2,true);
+  dv.setUint16(32,2,true); dv.setUint16(34,16,true); wr(36,'data'); dv.setUint32(40,n*2,true);
+  let o=44; for (let i=0;i<n;i++){ let s=Math.max(-1,Math.min(1,ch[i])); dv.setInt16(o,s<0?s*0x8000:s*0x7fff,true); o+=2; }
+  return new Blob([ab],{type:'audio/wav'});
+}
+window.__renderSidebands = function(seconds, opts){ return renderSidebandsWAV(seconds||2, opts||{}); };
+
+// ════════════════════════ BOOT ══════════════════════════════════════════════
+betaRange.value = state.beta; betaVal.textContent = state.beta.toFixed(3);
+fcRange.value = state.fc; fcVal.textContent = state.fc.toFixed(0);
+fmRange.value = state.fm; fmVal.textContent = state.fm.toFixed(0);
+syncAudioUI();
+redraw();
+runPill();
+window.addEventListener('resize', redraw);
+</script>
+</body>
+</html>
