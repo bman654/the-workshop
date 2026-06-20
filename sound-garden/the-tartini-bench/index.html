@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Tartini Bench — tune two tones through a bent horn and HEAR a third pitch nobody played</title>
+<!-- a Sound Garden LEAF (garden growth of the difference tone). Reached from the
+     front-door 'rigorous voices' line in sound-garden/index.html. Copies '← sound
+     garden'. NOT a new front-door footprint — NO ws:seen. The difference-tone
+     physics (the horn law + the analytic x² spectrum + runTartiniSelfTest) is
+     single-sourced to ./core.mjs (the DIFFERENCE-TONE CORE block, byte-twinned
+     here char-for-char); the pitch anchor semiToFreq comes from ../pitch-core.mjs
+     (PITCH CORE, also byte-twinned). The Node twin core.test.mjs re-extracts each
+     slice and asserts parity.
+
+     TWO STATED SETTINGS, never conflated:
+       • the LIVE hero default is f₁=220, f₂=275 (just 5/4), ε=0.12 → a difference
+         tone at 55 Hz. 55 Hz is MATH-confirmed exact (<1e-9) but is BELOW the
+         Audio Lens's 60 Hz peak-pick floor, so it is NEVER lens-confirmed.
+       • the LENS-CHECK render (window.__renderTartini) runs the SAME horn an octave
+         up at f₁=2600, f₂=2750 with a stronger bend, so the 150 Hz difference tone
+         clears the 60 Hz floor and the lens can find it headless. THAT is the only
+         heard-headless claim. See verify.sh. -->
+<style>
+  :root{
+    --bg:#07060d; --ink:#ece9f6; --muted:#8a85a6;
+    --c:#ffd76b;                 /* the leaf accent (gold — readouts + spectrum axis) */
+    --brass:#caa45a;             /* the tone-wheels + the horn lever */
+    --drone:#b59bff;             /* f₁ the fulcrum (violet) */
+    --drag:#6fd3ff;              /* f₂ the dragged voice (cyan) */
+    --still:#54e08a;             /* the PHANTOM difference tone (green = emergent) */
+    --coral:#ff9d7a;             /* the 'played by nobody' / linear-silence readout */
+    --ok:#54e08a; --bad:#ff6b6b; /* RESERVED for the self-test pill verdict only */
+    --panel:#110e1c; --line:rgba(255,255,255,.08);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--bg); color:var(--ink); overflow-x:hidden;
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased; }
+  body{ min-height:100vh; background:
+    radial-gradient(1000px 600px at 50% -10%, rgba(181,155,255,.12), transparent 60%),
+    radial-gradient(820px 520px at 14% 110%, rgba(111,211,255,.08), transparent 55%),
+    radial-gradient(820px 520px at 88% 112%, rgba(84,224,138,.08), transparent 55%),
+    var(--bg); }
+  .wrap{ max-width:1080px; margin:0 auto; padding:30px 24px 90px; }
+  a{ color:inherit; }
+  .back{ display:inline-block; font:600 11px/1 ui-monospace,Menlo,monospace; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); text-decoration:none; opacity:.8; margin-bottom:14px; }
+  .back:hover{ color:var(--c); opacity:1; }
+  header{ text-align:center; margin-bottom:8px; }
+  .kick{ font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.34em;
+    text-transform:uppercase; color:var(--muted); opacity:.85; }
+  h1{ font-family:Georgia,"Times New Roman",serif; font-weight:500;
+    font-size:clamp(34px,6vw,58px); margin:.14em 0 .1em; letter-spacing:.01em;
+    background:linear-gradient(180deg,#fff,#dcd0ff); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  .sub{ color:var(--muted); font-size:15px; font-style:italic; font-family:Georgia,serif;
+    max-width:700px; margin:0 auto; line-height:1.55; }
+  .sub b{ font-style:normal; }
+
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; }
+  .card h3{ margin:0 0 10px; font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); }
+
+  /* the stage: one column on mobile → pitch-stage beside the readouts on desktop.
+     minmax(0,…) tracks + min-width:0 items let the grid shrink below its content's
+     min-content (the canvases) instead of forcing horizontal overflow on narrow screens. */
+  .stage{ margin-top:26px; display:grid; gap:18px; grid-template-columns:minmax(0,1fr); }
+  .stage > .card{ min-width:0; }
+  @media(min-width:860px){ .stage{ grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr); align-items:start; } }
+
+  /* ── THE HORN LEVER — a brass two-position toggle ── */
+  .lever{ display:inline-flex; border:1px solid var(--line); border-radius:11px; overflow:hidden;
+    background:#0d0a16; }
+  .lever .opt{ padding:10px 16px; font:700 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.08em;
+    cursor:pointer; color:var(--muted); transition:.16s; user-select:none; }
+  .lever .opt:focus-visible{ outline:2px solid color-mix(in srgb,var(--c) 60%,transparent); outline-offset:-2px; }
+  .lever .opt.on{ color:#1a1206;
+    background:linear-gradient(180deg, color-mix(in srgb,var(--brass) 90%,#fff), #8a6b2e);
+    box-shadow:0 0 18px -4px var(--brass); }
+  .leverlbl{ font:600 11px/1.4 ui-monospace,Menlo,monospace; color:var(--muted); margin:0 0 8px; }
+
+  /* ── THE PITCH STAGE — a vertical pitch axis with draggable tone-wheels ── */
+  #stageHost{ position:relative; width:100%; height:360px; touch-action:none; }
+  #pitchStage{ width:100%; height:100%; display:block; border-radius:12px; cursor:ns-resize;
+    background:
+      radial-gradient(120% 80% at 50% 0%, rgba(181,155,255,.06), transparent 60%),
+      radial-gradient(120% 80% at 50% 100%, rgba(84,224,138,.06), transparent 60%), #0a0813; }
+  .stageHint{ margin:10px 0 0; font:600 11px/1.5 ui-monospace,Menlo,monospace; color:var(--muted); opacity:.85; }
+
+  /* ── THE SPECTRUM STRIP — freq on X, vertical markers ── */
+  #specHost{ position:relative; width:100%; height:96px; margin-top:14px; }
+  #spectrum{ width:100%; height:100%; display:block; border-radius:10px;
+    background:linear-gradient(180deg, rgba(255,255,255,.02), transparent), #0a0813; }
+  .speccap{ margin:8px 0 0; font:600 11px/1.5 ui-monospace,Menlo,monospace; color:var(--muted);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  .controls{ display:flex; flex-direction:column; gap:14px; }
+  .readouts{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media(max-width:430px){ .readouts{ grid-template-columns:1fr; } }
+  .ro{ background:#0d0a16; border:1px solid var(--line); border-radius:10px; padding:10px 12px; overflow:hidden; }
+  .ro.wide{ grid-column:1 / -1; }
+  .ro .k{ font:600 10px/1 ui-monospace,Menlo,monospace; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); }
+  .ro .v{ font:700 17px/1.2 ui-monospace,Menlo,monospace; margin-top:6px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ro .v.f1{ color:var(--drone); }
+  .ro .v.f2{ color:var(--drag); }
+  .ro .v.diff{ color:var(--still); }
+  .ro .v.diff.dead{ color:var(--coral); }
+
+  .sliderrow{ display:flex; align-items:center; gap:12px; background:#0d0a16; border:1px solid var(--line);
+    border-radius:10px; padding:10px 12px; }
+  .sliderrow label{ font:600 11px/1.3 ui-monospace,Menlo,monospace; color:var(--muted); min-width:0; flex:0 0 auto; }
+  .sliderrow input[type=range]{ flex:1 1 auto; min-width:0; accent-color:var(--brass); }
+  .sliderrow .epsval{ font:700 12px/1 ui-monospace,Menlo,monospace; color:var(--brass); flex:0 0 auto; min-width:34px; text-align:right; }
+
+  .btnrow{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .seg{ display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+  .seg .opt{ padding:9px 12px; font:600 11px/1 ui-monospace,Menlo,monospace; letter-spacing:.06em;
+    cursor:pointer; color:var(--muted); background:#0d0a16; transition:.16s; }
+  .seg .opt.on{ color:#07060d; background:var(--c); }
+
+  .note{ font-size:13px; color:var(--muted); line-height:1.6; margin:12px 0 0; }
+  .note b{ color:var(--ink); font-weight:600; }
+  .note.lit{ color:var(--still); }
+
+  /* the SELF-TEST pill — green/red RESERVED for the verdict only (NOT the phantom green) */
+  #selftest{ display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
+    font:700 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.04em; padding:9px 13px; border-radius:9px;
+    border:1px solid var(--line); background:#0d0a16; color:var(--muted); }
+  #selftest.ok{ color:var(--ok); border-color:color-mix(in srgb,var(--ok) 50%,transparent); }
+  #selftest.bad{ color:var(--bad); border-color:color-mix(in srgb,var(--bad) 50%,transparent); }
+  #selftest .dotp{ width:8px; height:8px; border-radius:50%; background:currentColor; box-shadow:0 0 8px currentColor; }
+
+  footer{ margin-top:46px; text-align:center; color:var(--muted); opacity:.6;
+    font:11px/1.7 ui-monospace,Menlo,monospace; letter-spacing:.05em; }
+  footer a{ color:inherit; }
+  code{ font-family:ui-monospace,Menlo,monospace; font-size:.92em; color:#dcd0ff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../index.html">&larr; sound garden</a>
+  <header>
+    <div class="kick">Sound&nbsp;Garden&nbsp;·&nbsp;a&nbsp;leaf</div>
+    <h1>The Tartini Bench</h1>
+    <p class="sub">In 1714 Giuseppe Tartini heard a <b style="color:var(--still)">third tone</b> sounding under two
+      he was bowing &mdash; <i>il terzo suono</i>, a pitch no string played. Tune two
+      <b style="color:var(--brass)">brass tone-wheels</b> through a slightly-bent horn and HEAR it bloom at
+      <b>f&#8322;&minus;f&#8321;</b> &mdash; then flip the horn <b>LINEAR</b> and it vanishes. Tune it by ear.</p>
+  </header>
+
+  <div class="stage">
+    <!-- THE PITCH STAGE: the played instrument -->
+    <div class="card">
+      <div class="leverlbl">THE HORN &mdash; flip the bend live under your finger</div>
+      <div class="lever" id="lever" role="radiogroup" aria-label="horn transfer: LINEAR pass-through or HORN bend">
+        <span class="opt" data-horn="linear" role="radio" tabindex="0" aria-checked="false">LINEAR&nbsp;(y=x)</span>
+        <span class="opt on" data-horn="horn" role="radio" tabindex="0" aria-checked="true">HORN&nbsp;(y=x+&epsilon;x&sup2;)</span>
+      </div>
+
+      <div id="stageHost" style="margin-top:14px">
+        <canvas id="pitchStage" role="application"
+          aria-label="pitch stage: drag the cyan f₂ tone-wheel up or down; the violet f₁ fulcrum is fixed; a green phantom marks the emergent difference tone f₂−f₁"></canvas>
+      </div>
+      <p class="stageHint">Drag the <b style="color:var(--drag)">cyan&nbsp;f&#8322;</b> wheel up/down (or focus the stage and use &uarr;&darr;, Shift = fine). The <b style="color:var(--drone)">violet&nbsp;f&#8321;</b> fulcrum holds still; watch the <b style="color:var(--still)">green phantom</b> dive as f&#8322; flies up.</p>
+
+      <div id="specHost">
+        <canvas id="spectrum" role="img"
+          aria-label="spectrum strip: vertical markers at f₁, f₂, and the emergent difference tone f₂−f₁; the difference marker lights only on the horn path"></canvas>
+      </div>
+      <p class="speccap" id="speccap">&nbsp;</p>
+    </div>
+
+    <!-- THE READOUTS + the bend slider + the proof -->
+    <div class="card">
+      <h3>The three tones</h3>
+      <div class="controls">
+        <div class="readouts">
+          <div class="ro"><div class="k">f&#8321; fulcrum</div><div class="v f1" id="roF1">&mdash;</div></div>
+          <div class="ro"><div class="k">f&#8322; voice</div><div class="v f2" id="roF2">&mdash;</div></div>
+          <div class="ro wide"><div class="k">f&#8322;&minus;f&#8321; &mdash; the third tone</div><div class="v diff" id="roDiff">&mdash;</div></div>
+        </div>
+
+        <div class="sliderrow">
+          <label for="epsRange">horn flare&nbsp;&epsilon;</label>
+          <input type="range" id="epsRange" min="0" max="0.2" step="0.005" value="0.12"
+            aria-label="horn bend strength epsilon, 0 to 0.2">
+          <span class="epsval" id="epsVal">0.12</span>
+        </div>
+
+        <div class="btnrow">
+          <span class="seg" id="segAudio" title="Honours the estate-wide ws:pref:muted key; muted by default.">
+            <span class="opt" data-audio="on">sound on</span>
+            <span class="opt on" data-audio="off">sound off</span>
+          </span>
+        </div>
+
+        <p class="note" id="reveal">&nbsp;</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- THE PROOF -->
+  <div class="card" style="margin-top:18px">
+    <div class="btnrow" style="justify-content:space-between;align-items:flex-start;gap:24px">
+      <div style="flex:1 1 340px;min-width:0">
+        <h3 style="margin-top:0">Why a third tone appears</h3>
+        <p class="note" style="margin-top:0">
+          Two pure tones summed are <code>x(t) = cos(2&pi;f&#8321;t) + cos(2&pi;f&#8322;t)</code> &mdash; only
+          f&#8321; and f&#8322; live in that spectrum. Push them through a slightly-<b>bent</b> horn,
+          <code>y = x + &epsilon;&middot;x&sup2;</code>, and the quadratic term breeds components the input never
+          carried. <code>(cos A + cos B)&sup2;</code> contains <code>cos(A&minus;B)</code> &mdash; a real
+          tone at <b style="color:var(--still)">f&#8322;&minus;f&#8321;</b>, plus a sum tone, two octaves and a DC
+          shift. The third pitch is the input fed through the bend, nothing added by hand.
+        </p>
+        <p class="note">
+          <b style="color:var(--c)">The reveal:</b> slide f&#8322; up and the green phantom dives <b>down</b>
+          through the fulcrum &mdash; it sits at the mirror position f&#8321;&minus;(f&#8322;&minus;f&#8321;), so a
+          wider interval breeds a lower difference tone. <b style="color:var(--c)">The negative control:</b>
+          flip the horn <b>LINEAR</b> (&epsilon;=0, y=x) and the difference marker goes dead grey &mdash; the bend
+          is gone, so there is nothing to breed. The bloom is the bend.
+        </p>
+      </div>
+      <div style="flex:1 1 280px;min-width:0">
+        <div class="btnrow">
+          <span id="selftest" title="click to re-run"><span class="dotp"></span><span id="stText">self-test &mdash;</span></span>
+        </div>
+        <p class="note" style="margin-top:12px;font-size:12px">
+          The self-test proves it EXACT: <code>diffToneFreq</code> is <code>|f&#8322;&minus;f&#8321;|</code> to the
+          bit, the difference bin of the measured horn output is <code>&epsilon;/2</code> to
+          <code>&lt;1e&minus;9</code>, the whole x&sup2; expansion (sum <code>&epsilon;/2</code>, octaves
+          <code>&epsilon;/4</code>, DC <code>&epsilon;</code>) matches, and on the LINEAR path every bred bin is a
+          true 0. The physics is single-sourced to <code>core.mjs</code>, byte-twinned into this page, with the Node
+          twin <code>core.test.mjs</code> proving char-for-char parity. <b>The hero default (220&middot;275 &rarr;
+          55 Hz) is math-confirmed only</b> &mdash; 55 Hz is below the Audio Lens's 60 Hz floor, so the
+          heard-headless claim is made by <code>verify.sh</code> on the SAME horn an octave up (2600&middot;2750
+          &rarr; a 150 Hz difference tone the lens can find).
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    a leaf of the <a href="../index.html">Sound Garden</a> &middot; all sound synthesised live (Web Audio), zero dependencies &middot;
+    difference-tone physics &rarr; <code>core.mjs</code> &middot; pitch &rarr; <code>sound-garden/pitch-core.mjs</code><br>
+    <a href="../the-overtone-rack/index.html">&harr; The Overtone Rack</a> &middot;
+    <a href="../the-beating-bench/index.html">&harr; The Beating Bench</a> &middot;
+    <a href="../the-quorum/index.html">&harr; The Quorum</a> &middot;
+    <a href="../monochord.html">&harr; The Monochord</a> &middot;
+    <a href="../../index.html">&larr; The Orrery Estate</a>
+  </footer>
+</div>
+
+<script type="module">
+"use strict";
+// ════════════════════════ INLINED SINGLE-SOURCE BYTE-TWINS ═══════════════════
+// TWO byte-twins, in order. (a) the PITCH CORE slice (gives semiToFreq, so
+// F1 = semiToFreq(−3) and F2 = F1·5/4 are single-sourced), char-for-char
+// ../pitch-core.mjs. (b) the DIFFERENCE-TONE CORE slice (the horn law + the
+// analytic x² spectrum + runTartiniSelfTest), char-for-char ./core.mjs. The Node
+// twin re-extracts each slice and asserts parity; the in-page pill AND the Node
+// twin both call the runTartiniSelfTest defined in (b).
+
+// ===== PITCH CORE (inlined byte-twin) BEGIN =====
+const MIDDLE_C_HZ = 261.625565;            // the ONE pitch anchor literal
+function semiToFreq(semi){ return MIDDLE_C_HZ * Math.pow(2, semi/12); }
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function noteName(semi){ const o=4+Math.floor(semi/12); const i=((semi%12)+12)%12; return NOTE_NAMES[i]+o; }
+// ===== PITCH CORE END =====
+
+// the bench's two played tones, DERIVED from the pitch anchor (no Hz literal is
+// re-typed). These live OUTSIDE the DIFFERENCE-TONE CORE slice (which takes f1/f2
+// as parameters), exactly as core.mjs places them. F1 is the A3 fulcrum; F2 is a
+// just major third (5/4) above, so f₂−f₁ = F1/4 (a low A1 ≈ 55 Hz) falls out of ONE law.
+const F1 = semiToFreq(-3);          // ≈220 Hz — A3, the fulcrum tone (A4=440 is semiToFreq(+9))
+const F2 = F1 * (5 / 4);            // =275 Hz — a just major third above F1
+const EPS = 0.12;                   // the live horn's bend (facet-0's measured sweet spot)
+
+// ===== DIFFERENCE-TONE CORE (inlined byte-twin) BEGIN =====
+// IMPORT-FREE: every function takes its tones (f1, f2) and the horn bend ε as
+// PARAMETERS — so the page can inline this block verbatim regardless of script
+// load order, and the pitch anchor is never re-typed inside the slice (the
+// single-source grep checks). The horn law `hornTransfer` lives here and ONLY here.
+
+// the difference tone — the third pitch nobody played. EXACT integer arithmetic
+// when f1, f2 are integers; it is the absolute gap between the two tones.
+function diffToneFreq(f1, f2){ return Math.abs(f2 - f1); }
+
+// the sum tone — the other component the bend breeds, at f1+f2.
+function sumToneFreq(f1, f2){ return f1 + f2; }
+
+// THE HORN LAW — the ONLY place the nonlinearity lives as code (the single-source
+// grep asserts this fragment appears in exactly one file). A slightly-bent horn is
+// y = x + ε·x²: the linear term passes the input through untouched; the quadratic
+// term is what breeds the difference, sum, octave, and DC components. LINEAR is
+// ε = 0 (the identity y = x), and then the bend breeds nothing.
+function hornTransfer(x, eps){ return x + eps * x * x; }
+
+// the two pure tones, summed — the COSINE-phase stimulus fed to the horn. Cosine
+// phase (not sine) is what makes the analytic spectrum coefficients below EXACT.
+function stimulus(f1, f2, t){ return Math.cos(2 * Math.PI * f1 * t) + Math.cos(2 * Math.PI * f2 * t); }
+
+// THE ANALYTIC SPECTRUM — the heart. (cos A + cos B)² = ½+½ + ½cos2A + ½cos2B +
+// cos(A−B) + cos(A+B). In the Goertzel-bin convention (a cosine of amplitude c
+// reads c/2; DC reads c, having no negative-frequency twin to halve) the horn
+// output y = x + ε·x² has these EXACT bin magnitudes — the SOLE source of every
+// coefficient the test and the page assert. Do NOT "fix" DC to ε/2: it is full ε.
+function diffBinMag(eps){ return eps / 2; }        // |f₂−f₁| — the difference tone
+function diffBinMagLinear(){ return 0; }            // ε=0 — exactly nothing
+function sumBinMag(eps){ return eps / 2; }          // f₁+f₂ — the sum tone
+function octaveBinMag(eps){ return eps / 4; }       // 2f₁ and 2f₂ — the octaves
+function dcLevel(eps){ return eps; }                // f=0 — the DC shift (full ε)
+
+// a self-contained single-bin DFT: the DFT-bin magnitude of `samples` at
+// frequency `freq`, normalised by N so a cosine of amplitude c reads c/2 (and a
+// DC constant c reads c). A DIRECT correlation against cos/sin at `freq` — not the
+// recursive Goertzel, whose error grows over N samples; the direct sum keeps the
+// analytic identities exact to <1e-9 even over a long window. The test legs feed
+// it hornTransfer(stimulus(...)) to MEASURE the bin energies and confront them
+// with the analytic coefficients above.
+function goertzelMag(samples, freq, sampleRate){
+  const N = samples.length;
+  const w = 2 * Math.PI * freq / sampleRate;
+  const TAU = 2 * Math.PI;
+  let re = 0, im = 0, ph = 0;
+  for (let i = 0; i < N; i++){
+    re += samples[i] * Math.cos(ph); im -= samples[i] * Math.sin(ph);
+    ph += w; if (ph >= TAU) ph -= TAU;     // keep the phase small so cos/sin stay accurate over a long window
+  }
+  return Math.sqrt(re * re + im * im) / N;
+}
+
+// render N samples of the horn output y(t) = hornTransfer(stimulus(f1,f2,t), eps)
+// at `sampleRate`. Used both for ad-hoc renders and (via analysisWindow) for the
+// leakage-free measurement windows the test legs probe.
+function renderHorn(f1, f2, eps, sampleRate, N){
+  const out = new Float64Array(N);
+  for (let i = 0; i < N; i++){
+    const t = i / sampleRate;
+    out[i] = hornTransfer(stimulus(f1, f2, t), eps);
+  }
+  return out;
+}
+
+// THE LEAKAGE-FREE WINDOW: for the 5/4 bench, f1 = 4·fd and f2 = 5·fd, so EVERY
+// bin the test probes (diff fd, f1, f2, 2f1, 2f2, sum, DC) is an integer multiple
+// of the difference frequency fd = |f2−f1|. Render exactly `cycles` periods of fd
+// with M samples per fd-period — then the effective sample rate SR = M·fd puts
+// every probed bin on an EXACT DFT bin (bin = its fd-multiple × cycles), so the
+// single-bin DFT reads the analytic coefficient to machine epsilon, with no window
+// roundoff from a non-commensurate sample rate. Returns { SR, N }.
+function analysisWindow(f1, f2, cyclesPerFdPeriod = 256, fdPeriods = 32){
+  const fd = Math.abs(f2 - f1);
+  const SR = cyclesPerFdPeriod * fd;   // M samples per fd-period
+  const N = cyclesPerFdPeriod * fdPeriods;
+  return { SR, N, fd };
+}
+
+// ── runTartiniSelfTest(f1, f2, eps) — the SOLE ORACLE. Same shape as the sibling
+// leaves: { pass, total, lines:[{name, ok, detail}] }. The in-page pill and the
+// Node twin both call THIS, so they cannot disagree. f1/f2 are the two tones; eps
+// is the horn bend. Five legs prove the third pitch is a real, exact component of
+// the nonlinear spectrum and EXACTLY absent from the linear one.
+function runTartiniSelfTest(f1, f2, eps){
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+
+  // the leakage-free measurement window: M samples per difference-tone period over
+  // a whole number of difference-tone periods, so f1, f2 and every probed bin (diff,
+  // sum, 2f1, 2f2, DC) lands on an EXACT DFT bin and the single-bin DFT reads the
+  // analytic coefficient to machine epsilon (no spectral leakage, no window roundoff).
+  const { SR, N } = analysisWindow(f1, f2);
+
+  // LEG 1 — THE DIFFERENCE-TONE FREQUENCY, to the bit: diffToneFreq is exactly
+  //   |f₂−f₁| across an integer (f1,f2) sweep — the third pitch sits at the exact
+  //   gap, computed, never typed. Integer arithmetic, so Δ is literally 0.
+  {
+    let ok = true, worst = 0;
+    for (let a = 100; a <= 400; a += 37){
+      for (let b = a + 11; b <= a + 300; b += 53){
+        const got = diffToneFreq(a, b), want = Math.abs(b - a);
+        const d = Math.abs(got - want);
+        worst = Math.max(worst, d);
+        if (d !== 0) ok = false;
+      }
+    }
+    T('LEG 1 — the difference-tone frequency: diffToneFreq(f₁,f₂) is EXACTLY |f₂−f₁| across an integer tone sweep — the third pitch sits at the exact gap, integer-exact, computed not typed',
+      ok, ok ? `diffToneFreq = |f₂−f₁| to the bit across the sweep (worst Δ ${worst})`
+             : `mismatch (worst Δ ${worst})`);
+  }
+
+  // LEG 2 — THE QUADRATIC-TERM IDENTITY: the Goertzel at the difference bin of the
+  //   measured horn output equals diffBinMag(ε) = ε/2 to <1e-9. The bloom is real
+  //   and its size is the bend: the third pitch is the input fed through x².
+  {
+    const y = renderHorn(f1, f2, eps, SR, N);
+    const measured = goertzelMag(y, diffToneFreq(f1, f2), SR);
+    const want = diffBinMag(eps);
+    const d = Math.abs(measured - want);
+    const ok = d < 1e-9;
+    T('LEG 2 — the quadratic-term identity: the Goertzel at the |f₂−f₁| bin of the measured horn output equals diffBinMag(ε) = ε/2 to <1e-9 — the difference tone is a real spectral component, and its magnitude IS the bend',
+      ok, `measured ${measured.toExponential(6)} vs ε/2 ${want.toExponential(6)} — Δ ${d.toExponential(2)}`);
+  }
+
+  // LEG 3 — THE LINEAR CONTROL, to a true zero: with the horn LINEAR (ε=0) the
+  //   measured difference-bin energy is <1e-9 AND diffBinMagLinear() is EXACTLY 0.
+  //   The bloom is the bend; flip the horn flat and there is literally nothing.
+  {
+    const y0 = renderHorn(f1, f2, 0, SR, N);
+    const measured = goertzelMag(y0, diffToneFreq(f1, f2), SR);
+    const analytic = diffBinMagLinear();
+    const ok = measured < 1e-9 && analytic === 0;
+    T('LEG 3 — the linear control: with the horn LINEAR (ε=0) the measured difference-bin energy is <1e-9 AND diffBinMagLinear() is EXACTLY 0 — the third pitch vanishes to a true zero when the bend is removed',
+      ok, `measured ${measured.toExponential(2)} (<1e-9) · diffBinMagLinear() === 0: ${analytic === 0}`);
+  }
+
+  // LEG 4 — THE WHOLE x² EXPANSION, discriminated: every bin the bend breeds matches
+  //   its analytic coefficient — SUM = ε/2, each OCTAVE (2f₁,2f₂) = ε/4, DC = ε — to
+  //   <1e-9; AND on the LINEAR path ALL of {diff, sum, 2f₁, 2f₂} read ~0 while f₁, f₂
+  //   stand at full magnitude (ε/2 reads as ½ on the linear fundamentals: amplitude 1
+  //   → bin ½). This proves the entire quadratic expansion, not one lucky bin.
+  {
+    const y = renderHorn(f1, f2, eps, SR, N);
+    const y0 = renderHorn(f1, f2, 0, SR, N);
+    const fd = diffToneFreq(f1, f2), fs = sumToneFreq(f1, f2);
+    const checks = [
+      ['sum',    goertzelMag(y, fs, SR),       sumBinMag(eps)],
+      ['2f₁',    goertzelMag(y, 2 * f1, SR),   octaveBinMag(eps)],
+      ['2f₂',    goertzelMag(y, 2 * f2, SR),   octaveBinMag(eps)],
+      ['DC',     goertzelMag(y, 0, SR),        dcLevel(eps)],
+    ];
+    let ok = true, worst = 0; const rows = [];
+    for (const [name, got, want] of checks){
+      const d = Math.abs(got - want); worst = Math.max(worst, d);
+      if (d >= 1e-9){ ok = false; rows.push(`${name} ${got.toExponential(3)}≠${want.toExponential(3)}`); }
+    }
+    // linear path: diff/sum/octaves all ~0, fundamentals at full ½ magnitude
+    const linBred = [fd, fs, 2 * f1, 2 * f2].map(f => goertzelMag(y0, f, SR));
+    const linBredZero = linBred.every(m => m < 1e-9);
+    const f1Mag = goertzelMag(y0, f1, SR), f2Mag = goertzelMag(y0, f2, SR);
+    const fundsFull = Math.abs(f1Mag - 0.5) < 1e-9 && Math.abs(f2Mag - 0.5) < 1e-9;
+    ok = ok && linBredZero && fundsFull;
+    T('LEG 4 — the whole x² expansion: SUM = ε/2, each octave (2f₁,2f₂) = ε/4, DC = ε to <1e-9; AND on the LINEAR path diff/sum/2f₁/2f₂ all read ~0 while f₁,f₂ stand at full ½ magnitude — the entire quadratic expansion, not one lucky bin',
+      ok, ok ? `horn bins match analytics (worst Δ ${worst.toExponential(2)}) · linear bred-bins all <1e-9 · f₁,f₂ = ½ exact`
+             : `${rows.join(', ')} · linBredZero=${linBredZero} fundsFull=${fundsFull}`);
+  }
+
+  // LEG 5 — THE HERO VERB, as exact arithmetic: as f₂ slides UP away from f₁, the
+  //   difference tone f₂−f₁ rises MONOTONICALLY and equals the gap at every step —
+  //   the phantom dives away from the fulcrum by exactly the gap it opens. This is
+  //   the arithmetic behind "slide f₂ up and the third pitch slides too."
+  {
+    let ok = true, prev = -Infinity, worst = 0; const steps = [];
+    for (let b = f1 + 5; b <= f1 + 200; b += 17){
+      const got = diffToneFreq(f1, b), want = b - f1;
+      const d = Math.abs(got - want); worst = Math.max(worst, d);
+      if (d > 1e-9) ok = false;
+      if (!(got > prev)) ok = false;      // strictly increasing
+      prev = got; steps.push(got);
+    }
+    T('LEG 5 — the hero verb as arithmetic: as f₂ slides up away from f₁, diffToneFreq rises MONOTONICALLY and equals the gap at every step — the exact behaviour behind "slide f₂ up and the third pitch slides with it"',
+      ok, ok ? `monotone & === gap over ${steps.length} steps (worst Δ ${worst.toExponential(2)})`
+             : `monotone/gap broke (worst Δ ${worst.toExponential(2)})`);
+  }
+
+  let pass = 0; for (const l of lines) if (l.ok) pass++;
+  return { pass, total: lines.length, lines };
+}
+// ===== DIFFERENCE-TONE CORE END =====
+
+// ════════════════════════ STATE ══════════════════════════════════════════════
+const A_EACH = 0.45;                          // each pure tone's live amplitude (sum stays ±0.9)
+const F2_MIN = F1 * 1.04, F2_MAX = F1 * 2.6;  // f₂ drag range: just above the fulcrum → just shy of two octaves
+const CENT = Math.pow(2, 1/1200);             // one cent multiplier for keyboard nudges
+const state = {
+  f2: F2,                                     // the live dragged voice (starts at the just 5/4)
+  eps: EPS,                                   // the live horn bend
+  nonlinear: true,                            // HORN (true) vs LINEAR (false)
+};
+
+// ════════════════════════ AUDIO (muted-by-default · ws:pref:muted) ════════════
+function readMutePref(){ try{ return localStorage.getItem('ws:pref:muted') === '1'; }catch(e){ return false; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v ? '1' : '0'); }catch(e){} }
+const Snd = { ctx:null, master:null, comp:null, on:false, muted:readMutePref(),
+  osc1:null, osc2:null, g1:null, g2:null, shaper:null, hp:null };
+
+// the WaveShaper curve for the horn law y = x + ε·x². A WaveShaper maps its input
+// range [−1, +1] linearly across the WHOLE curve array, so the curve MUST be sampled
+// over x ∈ [−1, +1] (index i ↔ input x = −1 + 2i/(N−1)) — sampling a wider x range
+// would silently stretch the transfer and DOUBLE the gain. The live sum (±0.9) and
+// the render sum (±0.6) both stay within ±1. LINEAR = the identity (ε=0).
+function hornCurve(eps){
+  const N = 2048, curve = new Float32Array(N);
+  for (let i = 0; i < N; i++){
+    const x = (i / (N - 1)) * 2 - 1;          // x ∈ [−1, +1] — the WaveShaper input range
+    curve[i] = hornTransfer(x, eps);
+  }
+  return curve;
+}
+function ensureCtx(){
+  if (Snd.ctx) return;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  Snd.ctx = new AC();
+  Snd.master = Snd.ctx.createGain(); Snd.master.gain.value = 0.9;
+  Snd.comp = Snd.ctx.createDynamicsCompressor();
+  Snd.comp.threshold.value = -14; Snd.comp.ratio.value = 12; Snd.comp.attack.value = 0.003; Snd.comp.release.value = 0.25;
+  // two PURE sine tones → sum → WaveShaper (the horn) → highpass (kills the x² DC) → master → comp
+  const t = Snd.ctx.currentTime;
+  Snd.osc1 = Snd.ctx.createOscillator(); Snd.osc1.type = 'sine'; Snd.osc1.frequency.setValueAtTime(F1, t);
+  Snd.osc2 = Snd.ctx.createOscillator(); Snd.osc2.type = 'sine'; Snd.osc2.frequency.setValueAtTime(state.f2, t);
+  Snd.g1 = Snd.ctx.createGain(); Snd.g1.gain.setValueAtTime(0.00001, t);
+  Snd.g2 = Snd.ctx.createGain(); Snd.g2.gain.setValueAtTime(0.00001, t);
+  Snd.shaper = Snd.ctx.createWaveShaper(); Snd.shaper.oversample = '4x';
+  Snd.shaper.curve = hornCurve(state.nonlinear ? state.eps : 0);
+  Snd.hp = Snd.ctx.createBiquadFilter(); Snd.hp.type = 'highpass'; Snd.hp.frequency.value = 30;
+  Snd.osc1.connect(Snd.g1); Snd.osc2.connect(Snd.g2);
+  Snd.g1.connect(Snd.shaper); Snd.g2.connect(Snd.shaper);
+  Snd.shaper.connect(Snd.hp); Snd.hp.connect(Snd.master);
+  Snd.master.connect(Snd.comp); Snd.comp.connect(Snd.ctx.destination);
+  Snd.osc1.start(t); Snd.osc2.start(t);
+}
+function applyGains(){
+  if (!Snd.ctx) return;
+  const a = Snd.on ? A_EACH : 0.00001;
+  Snd.g1.gain.setTargetAtTime(Math.max(0.00001, a), Snd.ctx.currentTime, 0.02);
+  Snd.g2.gain.setTargetAtTime(Math.max(0.00001, a), Snd.ctx.currentTime, 0.02);
+}
+function applyHorn(){
+  if (!Snd.ctx) return;
+  Snd.shaper.curve = hornCurve(state.nonlinear ? state.eps : 0);   // swap the bend live under the finger
+}
+function applyF2(){
+  if (!Snd.ctx) return;
+  Snd.osc2.frequency.setTargetAtTime(state.f2, Snd.ctx.currentTime, 0.02);
+}
+
+const segAudio = document.getElementById('segAudio');
+segAudio.addEventListener('click', e=>{
+  const opt = e.target.closest('.opt'); if (!opt) return;
+  const wantOn = opt.dataset.audio === 'on';
+  if (wantOn){ ensureCtx(); if (Snd.ctx && Snd.ctx.state === 'suspended') Snd.ctx.resume(); }
+  Snd.on = wantOn; Snd.muted = !wantOn; writeMutePref(Snd.muted);
+  applyGains();
+  [...segAudio.children].forEach(o=>o.classList.toggle('on', o===opt));
+});
+window.addEventListener('storage', e=>{ if (e.key!=='ws:pref:muted') return;
+  Snd.muted = readMutePref(); syncAudioUI(); });
+function syncAudioUI(){ if (Snd.muted) Snd.on=false; const showOn=Snd.on&&!Snd.muted;
+  [...segAudio.children].forEach(o=>o.classList.toggle('on', (o.dataset.audio==='on')===showOn)); }
+
+// ════════════════════════ DERIVED LIVE QUANTITIES ════════════════════════════
+function getCss(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function liveDiff(){ return diffToneFreq(F1, state.f2); }                 // f₂−f₁
+// the green phantom's glow tracks ε·a² (its true bin amplitude) → dead on LINEAR.
+function diffAmp(){ return state.nonlinear ? (state.eps * A_EACH * A_EACH) : 0; }
+// the difference marker's lit fraction: its bin magnitude over the dominant (a fundamental).
+// diffBinMag(eps) is ε/2 in unit-amplitude terms; scale by a² for the live amplitudes,
+// over the fundamental's ½·a → clamp to [0,1]. Reads from the CORE, never hard-coded.
+function diffLitFrac(){
+  if (!state.nonlinear) return 0;
+  const dominant = 0.5 * A_EACH;                       // a fundamental's bin (½ in unit terms, ×a)
+  const diffBin = diffBinMag(state.eps) * A_EACH * A_EACH;  // ε/2 scaled by the live a²
+  return Math.max(0, Math.min(1, diffBin / dominant));
+}
+
+// ════════════════════════ THE PITCH STAGE (canvas + drag) ════════════════════
+const stageHost = document.getElementById('stageHost');
+const stageCv = document.getElementById('pitchStage'), sctx = stageCv.getContext('2d');
+function fit(cv){ const r=cv.getBoundingClientRect(), dpr=Math.min(2,window.devicePixelRatio||1);
+  cv.width=Math.max(1,r.width*dpr); cv.height=Math.max(1,r.height*dpr);
+  const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); return {w:r.width,h:r.height}; }
+// map a frequency to a y pixel: a log pitch axis spanning the displayed range.
+// The axis runs from a touch below the phantom's lowest dive to a touch above f₂'s top.
+const AXIS_LO = 30, AXIS_HI = F2_MAX * 1.05;           // Hz at bottom / top of the stage
+function freqToY(f, h){
+  const lo = Math.log2(AXIS_LO), hi = Math.log2(AXIS_HI);
+  const fr = (Math.log2(Math.max(AXIS_LO, f)) - lo) / (hi - lo);
+  return h - 8 - fr * (h - 16);                        // high freq near the top
+}
+function yToFreq(y, h){
+  const lo = Math.log2(AXIS_LO), hi = Math.log2(AXIS_HI);
+  const fr = (h - 8 - y) / (h - 16);
+  return Math.pow(2, lo + Math.max(0, Math.min(1, fr)) * (hi - lo));
+}
+function drawStage(){
+  const {w,h} = fit(stageCv);
+  sctx.clearRect(0,0,w,h);
+  const cx = w * 0.5;
+  // the pitch rail
+  sctx.strokeStyle = 'rgba(255,255,255,.10)'; sctx.lineWidth = 2;
+  sctx.beginPath(); sctx.moveTo(cx, 8); sctx.lineTo(cx, h-8); sctx.stroke();
+  // octave tick guides (faint)
+  sctx.fillStyle = 'rgba(255,255,255,.30)'; sctx.font = '10px ui-monospace,Menlo,monospace'; sctx.textAlign='left';
+  for (let f = 55; f <= AXIS_HI; f *= 2){
+    const y = freqToY(f, h);
+    sctx.strokeStyle = 'rgba(255,255,255,.05)';
+    sctx.beginPath(); sctx.moveTo(18, y); sctx.lineTo(w-18, y); sctx.stroke();
+    sctx.fillText(Math.round(f)+' Hz', 6, y-3);
+  }
+  const fd = liveDiff();
+  const phantomFreq = F1 - fd;                          // the MIRROR position: dives as f₂ flies up
+  // draw a connector line f₂ → f₁ → phantom to read the mirror
+  sctx.strokeStyle = 'rgba(255,255,255,.08)'; sctx.lineWidth = 1; sctx.setLineDash([4,4]);
+  sctx.beginPath(); sctx.moveTo(cx, freqToY(state.f2,h)); sctx.lineTo(cx, freqToY(Math.max(AXIS_LO,phantomFreq),h)); sctx.stroke();
+  sctx.setLineDash([]);
+  // the PHANTOM disc (green, emergent) — glow tracks the bend
+  const lit = diffLitFrac();
+  drawWheel(cx, freqToY(Math.max(AXIS_LO, phantomFreq), h), 15,
+    state.nonlinear ? getCss('--still') : '#54607a', 0.35 + 0.65*lit,
+    state.nonlinear ? 'phantom f₂−f₁' : '(no bend)');
+  // f₁ the fulcrum (violet, fixed)
+  drawWheel(cx, freqToY(F1, h), 19, getCss('--drone'), 1, 'f₁');
+  // f₂ the dragged voice (cyan)
+  drawWheel(cx, freqToY(state.f2, h), 19, getCss('--drag'), 1, 'f₂  ▲drag');
+}
+function drawWheel(x, y, r, col, glow, label){
+  sctx.save();
+  sctx.shadowColor = col; sctx.shadowBlur = 22 * glow;
+  const g = sctx.createRadialGradient(x-r*0.3, y-r*0.3, 1, x, y, r);
+  g.addColorStop(0, '#fff'); g.addColorStop(0.25, col); g.addColorStop(1, 'color-mix(in srgb,'+col+' 40%,#000)');
+  sctx.fillStyle = col; sctx.globalAlpha = 0.35 + 0.65*glow;
+  sctx.beginPath(); sctx.arc(x, y, r, 0, 2*Math.PI); sctx.fill();
+  sctx.globalAlpha = 1; sctx.shadowBlur = 0;
+  // brass rim
+  sctx.strokeStyle = 'rgba(255,255,255,.5)'; sctx.lineWidth = 1.5;
+  sctx.beginPath(); sctx.arc(x, y, r, 0, 2*Math.PI); sctx.stroke();
+  sctx.restore();
+  sctx.fillStyle = 'rgba(255,255,255,.85)'; sctx.font = '600 10px ui-monospace,Menlo,monospace'; sctx.textAlign='left';
+  sctx.fillText(label, x + r + 6, y + 3);
+}
+
+// drag the cyan f₂ wheel (the whole stage is a drag surface; nearest grabs f₂)
+let dragging = false;
+function setF2FromY(clientY){
+  const r = stageCv.getBoundingClientRect();
+  const y = clientY - r.top;
+  let f = yToFreq(y, r.height);
+  f = Math.max(F2_MIN, Math.min(F2_MAX, f));
+  state.f2 = f;
+  applyF2();
+  redraw();
+}
+stageCv.addEventListener('pointerdown', e=>{ dragging = true; stageCv.setPointerCapture(e.pointerId);
+  ensureCtx(); if (Snd.on && Snd.ctx && Snd.ctx.state==='suspended') Snd.ctx.resume(); setF2FromY(e.clientY); });
+stageCv.addEventListener('pointermove', e=>{ if (dragging) setF2FromY(e.clientY); });
+stageCv.addEventListener('pointerup', ()=>{ dragging = false; });
+stageCv.addEventListener('pointercancel', ()=>{ dragging = false; });
+stageCv.tabIndex = 0;
+stageCv.addEventListener('keydown', e=>{
+  let f = state.f2, handled = true;
+  const cents = e.shiftKey ? 5 : 30;
+  switch(e.key){
+    case 'ArrowUp': case 'ArrowRight': f = state.f2 * Math.pow(CENT, cents); break;
+    case 'ArrowDown': case 'ArrowLeft': f = state.f2 * Math.pow(CENT, -cents); break;
+    case 'Home': f = F2_MIN; break;
+    case 'End': f = F2_MAX; break;
+    default: handled = false;
+  }
+  if (handled){ e.preventDefault(); ensureCtx(); state.f2 = Math.max(F2_MIN, Math.min(F2_MAX, f)); applyF2(); redraw(); }
+});
+
+// ════════════════════════ THE SPECTRUM STRIP ═════════════════════════════════
+const specCv = document.getElementById('spectrum'), spc = specCv.getContext('2d');
+const speccap = document.getElementById('speccap');
+function drawSpectrum(){
+  const {w,h} = fit(specCv);
+  spc.clearRect(0,0,w,h);
+  const fd = liveDiff(), fs = sumToneFreq(F1, state.f2);
+  const SPEC_HI = Math.max(fs * 1.1, 700);             // X axis: 0 → just past the sum tone
+  const fx = f => 30 + (f / SPEC_HI) * (w - 40);
+  // baseline
+  spc.strokeStyle = 'rgba(255,255,255,.12)'; spc.lineWidth = 1;
+  spc.beginPath(); spc.moveTo(0, h-16); spc.lineTo(w, h-16); spc.stroke();
+  // the three markers — height reads from the CORE's bin magnitudes (×live a²), never hard-coded
+  const top = h - 16, bottomGap = 6;
+  const aFund = 0.5 * A_EACH;                          // a fundamental's unit-bin ½ × a
+  const drawMarker = (f, magUnit, col, lbl, alpha) => {
+    const x = fx(f);
+    const barH = Math.max(2, (magUnit / aFund) * (top - bottomGap));
+    spc.globalAlpha = alpha;
+    spc.strokeStyle = col; spc.lineWidth = 3; spc.lineCap = 'round';
+    spc.beginPath(); spc.moveTo(x, top); spc.lineTo(x, top - Math.min(top-bottomGap, barH)); spc.stroke();
+    spc.globalAlpha = Math.min(1, alpha + 0.2);
+    spc.fillStyle = col; spc.font = '600 9px ui-monospace,Menlo,monospace'; spc.textAlign='center';
+    spc.fillText(lbl, x, top + 12);
+    spc.globalAlpha = 1;
+  };
+  // f₁, f₂ at full fundamental magnitude (the linear x term keeps amplitude a → bin ½·a)
+  drawMarker(F1, aFund, getCss('--drone'), 'f₁', 1);
+  drawMarker(state.f2, aFund, getCss('--drag'), 'f₂', 1);
+  // the difference tone: bin = diffBinMag(ε)·a²; opacity = clamp(diffBin / dominant)
+  const diffBin = (state.nonlinear ? diffBinMag(state.eps) : diffBinMagLinear()) * A_EACH * A_EACH;
+  const diffAlpha = state.nonlinear ? Math.max(0.12, Math.min(1, diffBin / aFund) + 0.25) : 0.12;
+  drawMarker(fd, diffBin, state.nonlinear ? getCss('--still') : '#54607a', 'f₂−f₁', diffAlpha);
+  // caption
+  speccap.textContent = state.nonlinear
+    ? `the horn breeds a real component at ${fd.toFixed(1)} Hz (ε/2·a² = ${diffBin.toExponential(2)})`
+    : `LINEAR — the difference bin is a true 0; only f₁ and f₂ are present`;
+}
+
+// ════════════════════════ THE READOUTS + THE REVEAL CAPTION ═══════════════════
+const roF1 = document.getElementById('roF1'), roF2 = document.getElementById('roF2'), roDiff = document.getElementById('roDiff');
+const reveal = document.getElementById('reveal');
+function noteishName(f){
+  // nearest A-octave label for the hero tones (purely cosmetic; the Hz is the truth)
+  return f.toFixed(1) + ' Hz';
+}
+function updateReadouts(){
+  const fd = liveDiff();
+  roF1.textContent = F1.toFixed(1) + ' Hz';
+  roF2.textContent = state.f2.toFixed(1) + ' Hz';
+  if (state.nonlinear){
+    roDiff.className = 'v diff';
+    // name the hero default specially when near A1
+    const near55 = Math.abs(fd - 55) < 0.6;
+    roDiff.textContent = (near55 ? 'A1 · ' : '') + fd.toFixed(1) + ' Hz · played by nobody';
+  } else {
+    roDiff.className = 'v diff dead';
+    roDiff.textContent = '— (linear: no third tone)';
+  }
+  // the reveal caption
+  if (state.nonlinear){
+    reveal.classList.add('lit');
+    reveal.innerHTML = 'The bent horn breeds a <b>real</b> tone at <b>' + fd.toFixed(1) + ' Hz</b> &mdash; a pitch neither wheel plays. Tartini heard it by ear in 1714.';
+  } else {
+    reveal.classList.remove('lit');
+    reveal.innerHTML = 'LINEAR &mdash; the horn passes the two tones straight through (y=x). No quadratic term, so <b style="color:var(--coral)">no third tone</b>. Flip back to HORN to breed it.';
+  }
+}
+
+function redraw(){ drawStage(); drawSpectrum(); updateReadouts(); }
+
+// ════════════════════════ THE HORN LEVER ═════════════════════════════════════
+const lever = document.getElementById('lever');
+function setHorn(nonlinear){
+  state.nonlinear = nonlinear;
+  [...lever.children].forEach(o=>{
+    const on = (o.dataset.horn === 'horn') === nonlinear;
+    o.classList.toggle('on', on); o.setAttribute('aria-checked', String(on));
+  });
+  applyHorn();
+  redraw();
+}
+lever.addEventListener('click', e=>{ const opt = e.target.closest('.opt'); if (!opt) return;
+  ensureCtx(); setHorn(opt.dataset.horn === 'horn'); });
+lever.addEventListener('keydown', e=>{ const opt = e.target.closest('.opt'); if (!opt) return;
+  if (e.key===' '||e.key==='Enter'){ e.preventDefault(); ensureCtx(); setHorn(opt.dataset.horn === 'horn'); }
+  if (e.key==='ArrowLeft'||e.key==='ArrowRight'){ e.preventDefault(); ensureCtx(); setHorn(e.key==='ArrowRight'); } });
+
+// ════════════════════════ THE BEND SLIDER ════════════════════════════════════
+const epsRange = document.getElementById('epsRange'), epsVal = document.getElementById('epsVal');
+epsRange.addEventListener('input', ()=>{
+  state.eps = parseFloat(epsRange.value);
+  epsVal.textContent = state.eps.toFixed(3).replace(/0+$/,'').replace(/\.$/,'') || '0';
+  applyHorn(); redraw();
+});
+
+// ════════════════════════ SELF-TEST PILL ════════════════════════════════════
+function runPill(){
+  let r; try{ r = runTartiniSelfTest(F1, F2, EPS); }catch(e){ console.error('[the-tartini-bench] self-test threw:',e);
+    r = {pass:0,total:1,lines:[{name:'self-test threw',ok:false,detail:String(e)}]}; }
+  const el = document.getElementById('selftest'), txt = document.getElementById('stText');
+  const green = r.pass === r.total;
+  el.classList.toggle('ok',green); el.classList.toggle('bad',!green);
+  txt.textContent = green ? ('a third tone blooms at f₂−f₁ ✓ '+r.pass+'/'+r.total) : ('self-test ✗ '+r.pass+'/'+r.total);
+  el.title = r.lines.map(c=>(c.ok?'✓ ':'✗ ')+c.name+(c.detail?'  ('+c.detail+')':'')).join('\n\n');
+  if (!green){ console.error('[the-tartini-bench] SELF-TEST FAILED '+r.pass+'/'+r.total);
+    for (const c of r.lines) if (!c.ok) console.error('  ✗ '+c.name+'  ·  '+c.detail); }
+  else console.log('[the-tartini-bench] self-test '+r.pass+'/'+r.total+' ✓ — diffToneFreq is |f₂−f₁| exact, the horn breeds ε/2 at the difference bin, the whole x² expansion matches, and the linear path is a true zero. The third pitch is real, born of the bend.');
+  return r;
+}
+document.getElementById('selftest').addEventListener('click', runPill);
+window.__tartiniSelfTest = runTartiniSelfTest;
+
+// ════════════════════════ OFFLINE RENDER (Audio Lens hook · silent WAV) ══════
+// Renders `seconds` of the SAME WaveShaper horn chain at the LENS-CHECK tones —
+// an octave up at 2600/2750 so the 150 Hz difference tone clears the lens's 60 Hz
+// peak-pick floor (and the 5350 Hz sum sits above the 5 kHz ceiling, so the diff
+// tone makes the top-3). nonlinear:true → the horn bend (EPS_LENS); false → the
+// identity. The Audio Lens reads the result: a real 150 Hz peak on the horn render,
+// NONE on the linear render. The LIVE instrument's hero default (220/275, ε=0.12 →
+// 55 Hz) is a DIFFERENT, stated setting — 55 Hz is below the lens floor and is
+// math-confirmed only. encodeWAV mirrors the sibling leaves (no cross-repo import).
+const LENS_F1 = 2600, LENS_F2 = 2750, EPS_LENS = 0.6;
+// the render uses a LOWER per-tone amplitude than the live A_EACH so the worst-case
+// peak stays well under full scale (no clipping for the lens's clip check). The
+// difference-tone RATIO to the fundamentals is amplitude-independent, so the 150 Hz
+// peak still clears the lens's 10% peak-pick threshold. Worst case (horn): the sum
+// of two 0.3 sines reaches ±0.6, the bend adds ε·x² ≤ 0.6·0.6² ≈ 0.216 and a small
+// DC of ε·a² ≈ 0.054 → ~0.87, safely below 1.0. NO highpass and NO compressor in the
+// OFFLINE render: a highpass fed two abruptly-gated tones rings to full scale during
+// its settle (a transient clip), and the lens ignores DC anyway (its peak-pick floor
+// is 60 Hz). The LIVE chain keeps the 30 Hz highpass for the ear; the lens render
+// trades it for clean headroom. encodeWAV mirrors the sibling leaves (no cross-repo import).
+const RENDER_A = 0.3;
+function renderTartiniWAV(seconds, opts){
+  opts = opts || {};
+  const nonlinear = opts.nonlinear !== false;          // default to the horn
+  const sr = 12000, len = Math.max(1, Math.floor(seconds*sr));
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const ac = new OAC(1, len, sr);
+  const master = ac.createGain(); master.gain.value = 0.95;
+  const o1 = ac.createOscillator(); o1.type = 'sine'; o1.frequency.value = LENS_F1;
+  const o2 = ac.createOscillator(); o2.type = 'sine'; o2.frequency.value = LENS_F2;
+  const g1 = ac.createGain(); g1.gain.value = RENDER_A;
+  const g2 = ac.createGain(); g2.gain.value = RENDER_A;
+  const shaper = ac.createWaveShaper(); shaper.oversample = '4x';
+  shaper.curve = hornCurve(nonlinear ? EPS_LENS : 0);
+  o1.connect(g1); o2.connect(g2); g1.connect(shaper); g2.connect(shaper);
+  shaper.connect(master); master.connect(ac.destination);
+  o1.start(0); o2.start(0); o1.stop(seconds); o2.stop(seconds);
+  return ac.startRendering().then(buf=>encodeWAV(buf));
+}
+function encodeWAV(buf){
+  const ch=buf.getChannelData(0), sr=buf.sampleRate, n=ch.length;
+  const ab=new ArrayBuffer(44+n*2), dv=new DataView(ab);
+  const wr=(o,s)=>{ for(let i=0;i<s.length;i++) dv.setUint8(o+i,s.charCodeAt(i)); };
+  wr(0,'RIFF'); dv.setUint32(4,36+n*2,true); wr(8,'WAVE'); wr(12,'fmt '); dv.setUint32(16,16,true);
+  dv.setUint16(20,1,true); dv.setUint16(22,1,true); dv.setUint32(24,sr,true); dv.setUint32(28,sr*2,true);
+  dv.setUint16(32,2,true); dv.setUint16(34,16,true); wr(36,'data'); dv.setUint32(40,n*2,true);
+  let o=44; for (let i=0;i<n;i++){ let s=Math.max(-1,Math.min(1,ch[i])); dv.setInt16(o,s<0?s*0x8000:s*0x7fff,true); o+=2; }
+  return new Blob([ab],{type:'audio/wav'});
+}
+window.__renderTartini = function(seconds, opts){ return renderTartiniWAV(seconds||2, opts||{}); };
+
+// ════════════════════════ BOOT ══════════════════════════════════════════════
+setHorn(true);
+syncAudioUI();
+redraw();
+runPill();
+window.addEventListener('resize', redraw);
+</script>
+</body>
+</html>
