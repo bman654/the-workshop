@@ -43,6 +43,7 @@ const PLACES = [
   { id:'warren', district:'grounds', tier:1, wing:'amusements', footprint:'warren', order:25 },
   { id:'engine-room', district:'grounds', tier:2, wing:'works', footprint:'engine', order:10 },
   { id:'alchemy', district:'grounds', tier:2, wing:'works', footprint:'laboratory', order:20 },
+  { id:'lodestone-hall', district:'grounds', tier:1, wing:'induction', footprint:'coil', prefer:['right','bottom'] },
   { id:'firmament', district:'observatory', tier:1, footprint:'tower' },
   { id:'relativity', district:'observatory', tier:1, wing:'moving-frame', footprint:'tower', prefer:'right' },
   { id:'workbench', district:'outbuilding', tier:3, footprint:'shed' },

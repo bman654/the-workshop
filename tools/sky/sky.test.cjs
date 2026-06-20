@@ -37,6 +37,7 @@ const SURVEYOR  = FEAT_GROUPS.find(g => g.id === 'surveyor');  // Curved Country
 const PILOT     = FEAT_GROUPS.find(g => g.id === 'pilot');     // Optics' fly-through founding star (The Photon's Errand)
 const RECKONER  = FEAT_GROUPS.find(g => g.id === 'reckoner');  // the Reckoning Cabinet's founding star (The Differential Gear)
 const DROVER    = FEAT_GROUPS.find(g => g.id === 'drover');    // the Arcade's herding founding star (The Shepherd)
+const COILWRIGHT= FEAT_GROUPS.find(g => g.id === 'coilwright');// Electromagnetism's founding star (The Lodestone Hall)
 // the legacy Optician sub-suite (174-228) refers to `FEATS` as the single Optician group.
 const FEATS = OPTICIAN;
 
@@ -67,8 +68,8 @@ const FOOTPRINTS = [
   { id: 'threshold',        x: 715,   y: 410,  w: 29,   h: 21 },
   { id: 'strange-garden',   x: 322,   y: 629,  w: 67,   h: 47 },
   { id: 'firmament',        x: 288,   y: 194,  w: 24,   h: 24 },  // tower r→bbox
-  { id: 'daedalus',         x: 1017,  y: 410,  w: 67,   h: 46 },
-  { id: 'arcade',           x: 1017,  y: 304,  w: 67,   h: 46 },
+  { id: 'daedalus',         x: 1022,  y: 383,  w: 56,   h: 39 },
+  { id: 'arcade',           x: 1022,  y: 295,  w: 56,   h: 39 },
   { id: 'workbench',        x: 520,   y: 589,  w: 88,   h: 61 },
   { id: 'undercroft',       x: 698,   y: 517,  w: 46,   h: 64 },
   { id: 'hall-of-mirrors',  x: 275,   y: 404,  w: 73,   h: 50 },  // the optics wing — the feat-stars cluster beside it
@@ -425,16 +426,16 @@ WINGS.forEach(w => w.members.forEach(m => ALL_WING_MEMBERS.push(m)));
 
   // ── the feat-GROUPS: a group-agnostic disjointness sweep (replaces the old
   //    `feat-`-prefix-hardcoded block, which would FALSE-FAIL on plain room-id members).
-  //    There are exactly seven feat-groups with distinct ids; EVERY member belongs to
+  //    There are exactly eight feat-groups with distinct ids; EVERY member belongs to
   //    exactly one group across WINGS + FEAT_GROUPS (no dupe); each plain-room-id NEW-group
   //    member is a valid catalog id (NOT feat-). The `feat-` prefix assertion is kept,
   //    scoped to the OPTICIAN only. The Surveyor (Curved Country), The Pilot (Optics'
-  //    fly-through), The Reckoner (the Reckoning Cabinet) and The Drover (the Arcade's herding
-  //    game) are each founded on a real front-door room's `ws:seen` crumb, sized to grow as
-  //    their wings' siblings ship. ──
-  eq(FEAT_GROUPS.length, 7, 'BIJECTION: there are exactly seven feat-groups');
-  eq(FEAT_GROUPS.length, new Set(FEAT_GROUPS.map(g => g.id)).size, 'BIJECTION: the seven feat-group ids are distinct');
-  ok(!!OPTICIAN && !!AUTOMATON && !!FURNACE && !!SURVEYOR && !!PILOT && !!RECKONER && !!DROVER, 'BIJECTION: the seven feat-groups are Optician + Automaton + Furnace + Surveyor + Pilot + Reckoner + Drover');
+  //    fly-through), The Reckoner (the Reckoning Cabinet), The Drover (the Arcade's herding
+  //    game) and The Coilwright (Electromagnetism's induction wing) are each founded on a real
+  //    front-door room's `ws:seen` crumb, sized to grow as their wings' siblings ship. ──
+  eq(FEAT_GROUPS.length, 8, 'BIJECTION: there are exactly eight feat-groups');
+  eq(FEAT_GROUPS.length, new Set(FEAT_GROUPS.map(g => g.id)).size, 'BIJECTION: the eight feat-group ids are distinct');
+  ok(!!OPTICIAN && !!AUTOMATON && !!FURNACE && !!SURVEYOR && !!PILOT && !!RECKONER && !!DROVER && !!COILWRIGHT, 'BIJECTION: the eight feat-groups are Optician + Automaton + Furnace + Surveyor + Pilot + Reckoner + Drover + Coilwright');
 
   // every member belongs to exactly one group across WINGS + FEAT_GROUPS (no dupe across
   // the whole catalog of asterisms). memberWing already holds the wing assignments.

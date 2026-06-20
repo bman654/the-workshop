@@ -145,6 +145,16 @@ var Layout = (function () {
      torus). Verified clear of every footprint + catalog star via smoke.cjs's live
      Layout.solve (a wider region collides the glasshouses; this band seats it clean). */
   GROUNDS_WINGS['curved-country'] = { x: 170, y: 520, w: 150, h: 160 };
+  /* INDUCTION — The Lodestone Hall, the estate's first ELECTROMAGNETISM wing: a
+     working generator/alternator bench where the only current is the one you make
+     by MOVING (no battery). Seated as a KIN PILLAR beside thermo: in the working
+     south band just LEFT of The Works (x700,y540), so EM sits adjacent to the
+     Engine Room as a fellow power-house. Its own sub-region, sized for ≥4 growth
+     lots (the obvious siblings: an LC tank, a transformer, an eddy brake, a
+     betatron). Builder finalises exact x/y via smoke.cjs's live Layout.solve —
+     verified clear of every footprint + catalog star (the works block ends ~x1000,
+     amusements begins ~x910 upper-right; this lower-mid band is open). */
+  GROUNDS_WINGS.induction = { x: 600, y: 690, w: 210, h: 120 };
 
   /* ── WING_META: display label, representative accent (for tint + engraved
      label), and optional grows:N reserved-lot count. An unknown wing is allowed
@@ -168,7 +178,8 @@ var Layout = (function () {
     vantages:    { label: 'SCENES YOU WALK INTO', accent: '#9db4ff' },
     'moving-frame': { label: 'THE MOVING FRAME', accent: '#9db4ff' },
     arrow:       { label: 'THE ARROW WING',     accent: '#c9a24a' },
-    'curved-country': { label: 'CURVED COUNTRY', accent: '#caa15a' }
+    'curved-country': { label: 'CURVED COUNTRY', accent: '#caa15a' },
+    induction:   { label: 'ELECTROMAGNETISM', accent: '#7fd4ff' }
   };
   function wingLabel(slug) {
     if (WING_META[slug] && WING_META[slug].label) return WING_META[slug].label;

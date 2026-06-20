@@ -162,7 +162,15 @@
     // footprints; lit on first visit (ws:seen:the-shepherd). The lead member of The Drover feat-group.
     // Verified clear of every footprint/furniture box, the manor pool, the viewBox edge, and every
     // existing catalog star (nearest = collisions @139px) by the CATALOG INTEGRITY self-test.
-    'the-shepherd': { x: 1130, y: 430, mag: 1 }
+    'the-shepherd': { x: 1130, y: 430, mag: 1 },
+    // The Lodestone Hall — the induction wing's founding room (the current you make
+    // by MOVING). A FEATS-flavoured field star in the dark BOTTOM margin band below
+    // its lower-mid grounds footprint (x642 y706), near its grounds kin; lit on first
+    // visit (ws:seen:lodestone-hall). The lead member of The Coilwright feat-group.
+    // Verified clear of every footprint/furniture box, the manor pool, the viewBox
+    // edge, and every existing catalog star (nearest = tessellarium @ Δx40 Δy14,
+    // workbench-row above) by the CATALOG INTEGRITY self-test (live-solve probe).
+    'lodestone-hall': { x: 700, y: 872, mag: 1 }
   };
 
   /* ── DATA: the six wings (companion-pairs), each an asterism ────────────────
@@ -228,7 +236,14 @@
     // a plain `ws:seen:the-shepherd` room crumb); like every feat-group it is ADDITIVE — it NEVER
     // feeds the wings-only all-skies capstone. Sized for the amusements' steer-the-living-system kin.
     { id: 'drover', name: 'The Drover', myth: 'Never pushes the flock; only chooses where to stand.',
-      members: ['the-shepherd'] }
+      members: ['the-shepherd'] },
+    // The Coilwright — the Electromagnetism wing's reward constellation. Founded with
+    // one star (The Lodestone Hall, a plain `ws:seen:lodestone-hall` room crumb); like
+    // every feat-group it is ADDITIVE — it NEVER feeds the wings-only all-skies capstone.
+    // Sized for the induction vein's promised siblings (an LC tank, a transformer, an
+    // eddy brake, a betatron) as they ship.
+    { id: 'coilwright', name: 'The Coilwright', myth: 'Makes the current by moving; pays for every spark.',
+      members: ['lodestone-hall'] }
   ];
 
   Sky.CATALOG = CATALOG;
