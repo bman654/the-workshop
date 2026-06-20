@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<!-- The Lifeguard's Run — the least-time path you find with your own hand. A beam (or a
+     lifeguard) leaves the FAST upper medium (warm sand) and must reach a target in the SLOW
+     lower medium (cool water), free to cross the shore at any point. Drag the crossing X and
+     race a brass stopwatch toward the quickest route; the floor you settle into IS Snell's
+     law, sinθ1/sinθ2 = v1/v2, crystallizing out of your own search. Two obvious guesses —
+     straight through, hug the edge — both visibly lose.
+     The CORE slice between the sentinels below is byte-identical to core.mjs (the Node twin
+     greps both and asserts IDENTICAL), so the picture can never drift from its proof. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Lifeguard's Run · the least-time path</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.86);
+    --panel-edge: rgba(201,162,74,0.30);
+    --ink: #efe7d6;
+    --ink-dim: #a99c7f;
+    --accent: #c9a24a;
+    --accent-bright: #f4e6bf;
+    --accent-soft: rgba(201,162,74,0.14);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --bg: #08090d;
+    /* two EARNED media tones (cosmetic — never read by the physics) */
+    --sand: #e8cf9a;          /* fast upper medium */
+    --water: #4f86b8;         /* slow lower medium */
+    --shore: #fff8e6;         /* the brightest stroke — the boundary */
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-ui); overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar (Hall chrome) ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none; gap:14px;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .navwrap{ display:flex; gap:18px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0;
+    background:linear-gradient(92deg,#f4e6bf,#c9a24a 60%,#9c7a2e);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:var(--accent); }
+  .brand .seedtag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; text-transform:uppercase; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; user-select:none; }
+  .selftest.ok{ color:#9bd7a3; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0;
+    background: radial-gradient(1200px 820px at 46% 40%, #11141c 0%, #0a0c12 64%, #06070b 100%); }
+  #bench{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:crosshair; outline:none; }
+  #bench:focus-visible{ box-shadow: inset 0 0 0 2px rgba(201,162,74,0.5); }
+  #hud{ position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    font:11px/1.4 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.55);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 13px; letter-spacing:.3px;
+    pointer-events:none; max-width:92%; text-align:center; transition:opacity .3s; }
+  #hud b{ color:var(--accent); } #hud .law{ color:var(--accent-bright); font-weight:700; }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:322px; flex:0 0 322px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(11px) saturate(120%); -webkit-backdrop-filter: blur(11px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 26px; box-shadow:-18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.6; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  #panel .lede .sand{ color:#e8cf9a; font-weight:600; } #panel .lede .water{ color:#8cc0ec; font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 10px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .row{ margin:12px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.13em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:8px; }
+  .row > label .val{ color:var(--accent); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.2px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#f6ecd2; border:2px solid #8a6a22; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer; }
+  input[type=range]::-moz-range-thumb{ width:13px; height:13px; border-radius:50%; background:#f6ecd2; border:2px solid #8a6a22; cursor:pointer; }
+  .readout{ display:grid; grid-template-columns:1fr auto; gap:5px 10px; font:11.5px/1.35 var(--font-mono);
+    color:var(--ink-dim); letter-spacing:.2px; margin-top:4px; }
+  .readout .k{ color:var(--ink-dim); }
+  .readout .v{ color:var(--accent); text-align:right; font-variant-numeric:tabular-nums; }
+  .readout .v.big{ font-size:13px; font-weight:700; color:#f4e6bf; }
+  .btnrow{ display:flex; gap:8px; margin:14px 0 2px; flex-wrap:wrap; }
+  .btn{ flex:1; min-width:84px; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s; font-family:var(--font-ui); }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.on{ background:rgba(201,162,74,0.22); border-color:var(--accent); color:var(--accent-bright); }
+  .hint{ font:10.5px/1.6 var(--font-mono); color:var(--ink-dim); opacity:.85; letter-spacing:.2px; margin:18px 0 4px;
+    border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+
+  /* cross-link teasers (Hall idiom) */
+  .xteaser{ display:block; text-decoration:none; border:1px solid var(--panel-edge); border-radius:9px;
+    padding:9px 11px; background:rgba(201,162,74,0.05); transition:.18s; margin-top:8px; }
+  .xteaser:hover{ border-color:var(--accent); background:rgba(201,162,74,0.11); }
+  .xk{ display:block; font:600 10px/1.3 var(--font-mono); color:var(--accent); letter-spacing:.04em; margin-bottom:3px; }
+  .xt{ display:block; font:10px/1.5 var(--font-mono); color:var(--ink-dim); }
+  .xt b{ color:var(--ink); }
+
+  /* ---- narrow / mobile: stack the stage above the panel so the canvas is usable ---- */
+  @media (max-width: 720px){
+    body{ overflow:auto; }
+    #wrap{ position:static; inset:auto; flex-direction:column; min-height:100vh; }
+    #stage{ flex:none; width:100%; height:58vh; min-height:340px; }
+    #panel{ width:100%; flex:none; height:auto; border-left:none; border-top:1px solid var(--panel-edge);
+      box-shadow:none; padding:18px 16px 40px; overflow-y:visible; }
+    .topbar{ position:absolute; left:0; right:0; flex-wrap:wrap; gap:8px; padding:10px 14px 0; }
+    .topbar .brand{ order:3; flex-basis:100%; }
+    .topbar .navwrap{ flex-wrap:wrap; gap:10px; }
+    .brand h1{ font-size:18px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){ *{ scroll-behavior:auto !important; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="navwrap">
+      <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="back" href="../hall-of-mirrors/index.html">&uarr; The Hall of Mirrors</a>
+    </div>
+    <div class="brand">
+      <h1>The Lifeguard's Run</h1>
+      <span class="seedtag">least-time &middot; refraction</span>
+    </div>
+    <div class="navwrap" style="gap:10px">
+      <div class="selftest" id="selftest" title="The bench proves its own claim — click to expand.">checking&hellip;</div>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="bench" tabindex="0" role="slider"
+        aria-label="crossing point — drag along the shore to find the least-time path"
+        aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"></canvas>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A lifeguard sprints over <span class="sand">fast sand</span>, then swims through
+        <span class="water">slow water</span>, to reach a swimmer. Running straight at them wastes
+        time fighting the slow water; running to the water's edge first wastes distance on land.
+        The <b>quickest</b> route is bent — and the bend it settles into <b>is Snell's law</b>.
+        <b>Drag the brass grommet</b> where the path crosses the shore (or tap anywhere on the
+        bright shoreline) and watch the stopwatch race toward the floor.</p>
+
+      <div class="sect">The two media</div>
+      <div class="row">
+        <label>sand speed v&#8321; <span class="val" id="vV1">2.00</span></label>
+        <input type="range" id="sV1" min="1.0" max="3.0" step="0.01" value="2.0">
+      </div>
+      <div class="row">
+        <label>water speed v&#8322; <span class="val" id="vV2">1.00</span></label>
+        <input type="range" id="sV2" min="0.5" max="3.0" step="0.01" value="1.0">
+      </div>
+
+      <div class="sect">Readout</div>
+      <div class="readout" id="readout"></div>
+
+      <div class="sect">Try the losing guesses</div>
+      <div class="btnrow">
+        <button class="btn" id="btnStraight">straight through</button>
+        <button class="btn" id="btnEdge">hug the edge</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="btnSame">v&#8321;=v&#8322; (no bend)</button>
+        <button class="btn" id="btnMax">go slow on purpose</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="btnReset">reset</button>
+        <button class="btn" id="btnMute">&#128263; tick off</button>
+      </div>
+
+      <div class="hint" id="snellHint">
+        At the least-time crossing, <b>dt/dx = 0</b> — and that exact condition,
+        written with the geometry, IS <b>sinθ&#8321;/v&#8321; = sinθ&#8322;/v&#8322;</b>: Snell's
+        law. The bench proves it — the time-minimizing crossing satisfies Snell to a
+        billionth, and that it's a <b>minimum</b> (not merely stationary) is the whole point.
+      </div>
+
+      <div class="sect">Companions</div>
+      <a class="xteaser" href="../optics/index.html">
+        <span class="xk">↔ Caustic · Snell's law as a ray you steer</span>
+        <span class="xt">the same bend, enacted on a light-bench — drop a beam through glass and watch it refract by <b>n₁sinθ₁ = n₂sinθ₂</b>. Here you derive WHY it bends; there you play with the bend.</span>
+      </a>
+      <a class="xteaser" href="../rainbow/index.html">
+        <span class="xk">↔ The Rainbow · the bend, twice, in a droplet</span>
+        <span class="xt">refraction in and out of a raindrop sets the <b>42°</b> bow. The law you find by hand here is the law that paints the sky.</span>
+      </a>
+    </aside>
+  </div>
+
+<script type="module">
+"use strict";
+
+// ===== LIFEGUARDS-RUN CORE (byte-identical to core.mjs) =====
+// Leg lengths from the source/target to a crossing at horizontal position x:
+//   a1 = vertical drop in the fast medium, a2 = vertical drop in the slow medium.
+function legA1(p){ return Math.abs(p.boundaryY - p.src[1]); }
+function legA2(p){ return Math.abs(p.tgt[1] - p.boundaryY); }
+function dist1(x, p){ return Math.hypot(x - p.src[0], legA1(p)); }   // source → X
+function dist2(x, p){ return Math.hypot(p.tgt[0] - x, legA2(p)); }   // X → target
+
+// travelTime(x,p): the stopwatch number — time to go src→X in medium 1, X→tgt in medium 2.
+//   t(x) = d1(x)/v1 + d2(x)/v2.
+function travelTime(x, p){
+  return dist1(x, p) / p.v1 + dist2(x, p) / p.v2;
+}
+
+// dtdx(x,p): dt/dx, written in the form that EXPOSES Snell. With
+//   sinθ1 = (x − sx)/d1   (angle from the normal on the source side)
+//   sinθ2 = (tx − x)/d2   (angle from the normal on the target side)
+// we have   dt/dx = sinθ1/v1 − sinθ2/v2.   So dt/dx = 0  ⟺  sinθ1/v1 = sinθ2/v2 (Snell).
+function dtdx(x, p){
+  const d1 = dist1(x, p), d2 = dist2(x, p);
+  return (x - p.src[0]) / (p.v1 * d1) - (p.tgt[0] - x) / (p.v2 * d2);
+}
+
+// d2tdx2(x,p): the second derivative. Each term is a1²/(v·d³)-style and STRICTLY POSITIVE,
+// so t is strictly convex in x — there is exactly ONE stationary point and it is a MINIMUM
+// (never a saddle, never a max). This is what makes "t''(x*) > 0" provable, not asserted.
+function d2tdx2(x, p){
+  const a1 = legA1(p), a2 = legA2(p);
+  const d1 = dist1(x, p), d2 = dist2(x, p);
+  return (a1 * a1) / (p.v1 * d1 * d1 * d1) + (a2 * a2) / (p.v2 * d2 * d2 * d2);
+}
+
+// snellResidual(x,p): the SAME expression as dtdx, named for the physics readout. One
+// formula, two names — so "is the slope zero?" (the minimization gauge) and "is Snell
+// satisfied?" (the law readout) are provably ONE number. (Asserted equal in the self-test.)
+function snellResidual(x, p){
+  return dtdx(x, p);
+}
+
+// angles(x,p): the geometry the wedges and the printed ratio read.
+//   sin1 = (x−sx)/d1, sin2 = (tx−x)/d2; theta1/theta2 in radians from the normal.
+function angles(x, p){
+  const d1 = dist1(x, p), d2 = dist2(x, p);
+  const sin1 = (x - p.src[0]) / d1;
+  const sin2 = (p.tgt[0] - x) / d2;
+  return {
+    sin1, sin2,
+    theta1: Math.asin(Math.max(-1, Math.min(1, sin1))),
+    theta2: Math.asin(Math.max(-1, Math.min(1, sin2))),
+  };
+}
+
+// xChord(p): the straight-line crossing — where the geometric chord src→tgt cuts the
+// boundary. The Newton seed, and the x* for the v1===v2 (no-bend) negative control.
+function xChord(p){
+  const dy = p.tgt[1] - p.src[1];
+  if (dy === 0) return p.src[0];
+  const f = (p.boundaryY - p.src[1]) / dy;
+  return p.src[0] + f * (p.tgt[0] - p.src[0]);
+}
+
+// minimizeTime(p): the time-minimizing crossing. SAFEGUARDED Newton (Newton-bisection
+// hybrid) on dt/dx, seeded from the straight chord. Convexity guarantees a unique root in
+// the bracket [loX,hiX] (dtdx(loX) < 0 < dtdx(hiX)); a pure Newton step is taken when it
+// stays inside the bracket and shrinks it, otherwise the step is bisected. This keeps
+// Newton's quadratic speed in the normal case while NEVER diverging — t is asymptotically
+// linear at ±∞ (curvature → 0), so unbounded Newton would fling x to infinity on some
+// asymmetric, large-v1/v2 geometries; the bracket forbids that. Returns {x, tMin, edge}.
+// If p.maximize: time is convex so it has NO interior maximum; the larger-time extreme is
+// at a chord-EXTENT endpoint (the absurd edge-hug foil). Return that endpoint + {edge:true}.
+function minimizeTime(p){
+  if (p.maximize){
+    // Compare the two ends of the slider span [loX, hiX] (the same bracket the page draws).
+    const span = chordSpan(p);
+    const tLo = travelTime(span.loX, p), tHi = travelTime(span.hiX, p);
+    const x = (tHi >= tLo) ? span.hiX : span.loX;
+    return { x, tMin: travelTime(x, p), edge: true };
+  }
+  // Establish a sign-change bracket [lo,hi] with dtdx(lo) < 0 < dtdx(hi). The chord span
+  // suffices for in-domain crossings; widen geometrically if a degenerate pushes the root out.
+  const sp = chordSpan(p);
+  let lo = sp.loX, hi = sp.hiX, flo = dtdx(lo, p), fhi = dtdx(hi, p), grow = 0;
+  while ((!(flo < 0) || !(fhi > 0)) && grow < 60){
+    lo -= 10; hi += 10; flo = dtdx(lo, p); fhi = dtdx(hi, p); grow++;
+  }
+  let x = xChord(p);
+  if (!(x > lo && x < hi)) x = 0.5 * (lo + hi);     // seed inside the bracket
+  for (let i = 0; i < 80; i++){
+    const g = dtdx(x, p);
+    if (g === 0) break;
+    if (g < 0) lo = x; else hi = x;                 // tighten the bracket around the root
+    const h = d2tdx2(x, p);
+    let nx = (h > 0) ? x - g / h : Number.NaN;       // Newton step
+    if (!Number.isFinite(nx) || nx <= lo || nx >= hi) nx = 0.5 * (lo + hi);  // safeguard → bisect
+    const step = nx - x;
+    x = nx;
+    if (Math.abs(step) < 1e-15) break;
+  }
+  return { x, tMin: travelTime(x, p), edge: false };
+}
+
+// chordSpan(p): the x-bracket the slider rides — a little past both endpoints, so the
+// minimum is always interior and both edge-hug extremes are reachable.
+function chordSpan(p){
+  const loX = Math.min(p.src[0], p.tgt[0]) - 1;
+  const hiX = Math.max(p.src[0], p.tgt[0]) + 1;
+  return { loX, hiX };
+}
+
+// minimizeBrute(p) (a.k.a. crossCheckRoot): the PRECISION authority. Bisection ROOT of
+// dt/dx on the bracket — convexity guarantees dtdx(loX) < 0 < dtdx(hiX), so a sign-change
+// bracket exists and bisection converges. This replaces a literal "value scan", which on a
+// quadratic minimum provably stalls near sqrt(machine-eps) (~1e-7); the root finds x* to
+// ~1e-16. Newton and this agree to <1e-9 (measured ~4.44e-16).
+function minimizeBrute(p){
+  const span = chordSpan(p);
+  let lo = span.loX, hi = span.hiX;
+  let flo = dtdx(lo, p), fhi = dtdx(hi, p);
+  // Guard: if the bracket somehow doesn't straddle the root, widen once.
+  if (flo > 0 || fhi < 0){
+    lo -= 10; hi += 10; flo = dtdx(lo, p); fhi = dtdx(hi, p);
+  }
+  let mid = 0.5 * (lo + hi);
+  for (let i = 0; i < 200; i++){
+    mid = 0.5 * (lo + hi);
+    const fm = dtdx(mid, p);
+    if (fm === 0) break;
+    if (fm < 0) lo = mid; else hi = mid;
+  }
+  return { x: mid, tMin: travelTime(mid, p) };
+}
+const crossCheckRoot = minimizeBrute;
+
+// scanTime(p,N): N samples of {x,t} across the slider span — ONLY to DRAW the t-vs-X rail
+// (the picture of the floor). NEVER a precision claim; x* comes from minimizeTime/Brute.
+function scanTime(p, N){
+  const span = chordSpan(p);
+  const out = [];
+  const n = Math.max(2, N | 0);
+  for (let i = 0; i < n; i++){
+    const x = span.loX + (span.hiX - span.loX) * i / (n - 1);
+    out.push({ x, t: travelTime(x, p) });
+  }
+  return out;
+}
+
+// witness(): the canonical parameters the self-test + the page boot to.
+//   src in the fast medium (v1=2.0) above the shore at y=0; tgt in the slow medium (v2=1.0)
+//   below it. The least-time crossing is x* ≈ 2.934, t'' ≈ 0.186, residual ~5e-17 — a
+//   beam that visibly bends TOWARD the normal entering the slow medium (v1 > v2).
+function witness(){
+  return { src: [-4, 3], tgt: [5, -4], boundaryY: 0, v1: 2.0, v2: 1.0 };
+}
+
+// runSelfTest(): prove the claims numerically. Returns {ok,passed,total,checks},
+// each check {name,pass,info}. The page's pill and the Node twin both call THIS.
+function runSelfTest(){
+  const checks = [];
+  const ck = (name, pass, info) => checks.push({ name, pass, info });
+  const TOL = 1e-9;
+
+  const paramSets = [
+    witness(),
+    { src: [-6, 4], tgt: [3, -2], boundaryY: 0, v1: 1.7, v2: 1.0 },
+    { src: [-2, 5], tgt: [8, -3], boundaryY: 1, v1: 3.0, v2: 1.2 },
+    { src: [-5, 2], tgt: [-1, -6], boundaryY: -1, v1: 2.5, v2: 0.8 },
+    { src: [1, 6], tgt: [9, -1], boundaryY: 2, v1: 1.4, v2: 1.1 },
+  ];
+
+  // (1) STATIONARY ⟺ SNELL: at x* both |snellResidual| and |dt/dx| vanish (and are the
+  // SAME number, by construction). The hand's "flat floor" IS Snell's law.
+  {
+    let maxRes = 0, maxSlope = 0, sameNumber = true;
+    for (const p of paramSets){
+      const x = minimizeTime(p).x;
+      maxRes = Math.max(maxRes, Math.abs(snellResidual(x, p)));
+      maxSlope = Math.max(maxSlope, Math.abs(dtdx(x, p)));
+      if (snellResidual(x, p) !== dtdx(x, p)) sameNumber = false;
+    }
+    ck('1 · stationary ⟺ Snell: |snellResidual(x*)| & |dt/dx(x*)| < 1e-9, one number',
+       maxRes < TOL && maxSlope < TOL && sameNumber,
+       'res=' + maxRes.toExponential(2) + ' slope=' + maxSlope.toExponential(2) + ' identical=' + sameNumber);
+  }
+
+  // (2) MINIMIZER = ROOT: Newton's x* and the bisection ROOT agree to <1e-9 across all sets
+  // (the precision cross-check that REPLACES a value scan, which would stall at ~1e-7).
+  {
+    let maxGap = 0;
+    for (const p of paramSets){
+      const a = minimizeTime(p).x, b = minimizeBrute(p).x;
+      maxGap = Math.max(maxGap, Math.abs(a - b));
+    }
+    ck('2 · minimizer = root: |Newton x* − bisection root| < 1e-9 (not a value scan)',
+       maxGap < TOL, 'maxGap=' + maxGap.toExponential(2));
+  }
+
+  // (3) TRUE MINIMUM: d2tdx2(x*) > 0 AND t(x*) is strictly below t at x*±h for h up to 1.0
+  // (a real minimum, not merely stationary — the law is "LEAST", not "stationary").
+  {
+    let convex = true, isMin = true;
+    for (const p of paramSets){
+      const x = minimizeTime(p).x, t0 = travelTime(x, p);
+      if (!(d2tdx2(x, p) > 0)) convex = false;
+      for (const h of [1e-3, 0.1, 1.0]){
+        if (!(travelTime(x + h, p) > t0 && travelTime(x - h, p) > t0)) isMin = false;
+      }
+    }
+    ck('3 · true minimum: t″(x*) > 0 and t(x*) < t(x*±h) for h∈{1e-3,0.1,1.0}',
+       convex && isMin, 'convex=' + convex + ' isMin=' + isMin);
+  }
+
+  // (4) SNELL RATIO: at x*, sinθ1/sinθ2 equals v1/v2 to <1e-9 (the law, stated as a ratio).
+  {
+    let maxErr = 0;
+    for (const p of paramSets){
+      const x = minimizeTime(p).x, a = angles(x, p);
+      maxErr = Math.max(maxErr, Math.abs(a.sin1 / a.sin2 - p.v1 / p.v2));
+    }
+    ck('4 · Snell ratio: |sinθ1/sinθ2 − v1/v2| < 1e-9 at x*',
+       maxErr < TOL, 'maxErr=' + maxErr.toExponential(2));
+  }
+
+  // (5) NEG-1 (v1 === v2 ⇒ straight): with equal speeds the least-time path IS the geometric
+  // straight line (x* === xChord) and the angles are equal — no bend. Tested on a
+  // NON-symmetric chord too, so it isn't passing by accident of symmetry.
+  {
+    const same = [
+      { src: [-4, 3], tgt: [5, -4], boundaryY: 0, v1: 1.5, v2: 1.5 },
+      { src: [-7, 5], tgt: [2, -3], boundaryY: 1, v1: 2.2, v2: 2.2 },  // non-symmetric
+    ];
+    let straight = true, equalAngles = true;
+    for (const p of same){
+      const x = minimizeTime(p).x;
+      if (Math.abs(x - xChord(p)) > TOL) straight = false;
+      const a = angles(x, p);
+      if (Math.abs(a.theta1 - a.theta2) > TOL) equalAngles = false;
+    }
+    ck('5 · neg-1 (v1===v2 ⇒ straight): x* === xChord and θ1 === θ2 (non-symmetric too)',
+       straight && equalAngles, 'straight=' + straight + ' equalAngles=' + equalAngles);
+  }
+
+  // (6) NEG-2 (maximize ⇒ edge): asking for the LONGEST time returns a chord-extent
+  // endpoint (the absurd edge-crawl), with t strictly GREATER than the true minimum.
+  {
+    let edge = true, worse = true;
+    for (const p of paramSets){
+      const tMin = minimizeTime(p).tMin;
+      const mp = Object.assign({}, p, { maximize: true });
+      const r = minimizeTime(mp);
+      const span = chordSpan(p);
+      if (!(r.edge === true && (Math.abs(r.x - span.loX) < 1e-9 || Math.abs(r.x - span.hiX) < 1e-9))) edge = false;
+      if (!(r.tMin > tMin + 1e-9)) worse = false;
+    }
+    ck('6 · neg-2 (maximize ⇒ edge): returns a chord-extent endpoint with t > t(x*)',
+       edge && worse, 'edge=' + edge + ' worse=' + worse);
+  }
+
+  // (7) DOMAIN GUARDS: degenerate boundary (a1 or a2 → 0), vertical chord (tx===sx), v ≤ 0.
+  // The numbers the PAGE paints — x* and t(x*) — stay FINITE in every degenerate geometry
+  // (no NaN/Inf reaches the canvas). The slope/curvature formulas are genuinely UNDEFINED
+  // exactly where a leg has zero length (θ2 has no meaning when the target lies on the
+  // shore), so we assert them finite a hair OFF the degenerate point, where geometry exists.
+  {
+    const odd = [
+      { src: [-4, 3], tgt: [5, 0], boundaryY: 0, v1: 2.0, v2: 1.0 },   // a2 → 0 (target on shore)
+      { src: [-4, 0], tgt: [5, -4], boundaryY: 0, v1: 2.0, v2: 1.0 },  // a1 → 0 (source on shore)
+      { src: [2, 3], tgt: [2, -4], boundaryY: 0, v1: 2.0, v2: 1.0 },   // vertical chord tx===sx
+    ];
+    let drawn = true, nearby = true;
+    for (const p of odd){
+      const x = minimizeTime(p).x, t = travelTime(x, p);
+      if (!Number.isFinite(x) || !Number.isFinite(t)) drawn = false;          // what the page draws
+      const xo = x + 0.25;                                                     // a hair off the degenerate
+      if (![travelTime(xo, p), snellResidual(xo, p), d2tdx2(xo, p)].every(Number.isFinite)) nearby = false;
+    }
+    // v ≤ 0 must not silently produce a finite "answer" — travelTime should be ±Inf/NaN, i.e. NOT finite.
+    const bad = { src: [-4, 3], tgt: [5, -4], boundaryY: 0, v1: 0, v2: 1.0 };
+    const vGuard = !Number.isFinite(travelTime(0, bad));
+    ck('7 · domain guards: x* & t(x*) finite at degeneracies; finite a hair off; v≤0 not finite',
+       drawn && nearby && vGuard, 'drawn=' + drawn + ' nearby=' + nearby + ' vGuard=' + vGuard);
+  }
+
+  const passed = checks.filter(c => c.pass).length;
+  return { ok: passed === checks.length, passed, total: checks.length, checks };
+}
+// ===== END LIFEGUARDS-RUN CORE =====
+
+// ════════════════════════════════════════════════════════════════════════════
+//  THE VIEW — consumes ONLY the core functions above; never reimplements math.
+//  RENDER owns the rAF and calls drawLive(ctx) LAST. setX marks-dirty + emits
+//  the readout immediately. ONE emitState() object is the single source of truth.
+// ════════════════════════════════════════════════════════════════════════════
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// world params (the contract). src in fast sand (top), tgt in slow water (bottom).
+const P = { src: [-4, 3], tgt: [5, -4], boundaryY: 0, v1: 2.0, v2: 1.0, maximize: false };
+
+const state = {
+  x: null,             // current crossing position (world x); null → init to chord
+  v1: 2.0, v2: 1.0,
+  maximize: false,
+  settle: 0,           // eased "found" scalar in [0,1] — drives every bloom together
+  muted: true,
+};
+try { state.muted = (localStorage.getItem('ws:pref:muted') ?? '1') !== '0'; } catch(e){}
+
+// ── canvas plumbing ──
+const cv = document.getElementById('bench'), ctx = cv.getContext('2d');
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+let W = 0, H = 0;
+let dirty = true;
+
+// world → pixel mapping (single source). World x in chord span, world y around boundary.
+const MARGIN = { l: 96, r: 96, t: 96, b: 96 };
+function worldBounds(){
+  const span = { loX: Math.min(P.src[0], P.tgt[0]) - 1, hiX: Math.max(P.src[0], P.tgt[0]) + 1 };
+  const xs = [P.src[0], P.tgt[0], span.loX, span.hiX];
+  const ys = [P.src[1], P.tgt[1], P.boundaryY];
+  let minX = Math.min.apply(null, xs) - 1.2, maxX = Math.max.apply(null, xs) + 1.2;
+  let minY = Math.min.apply(null, ys) - 1.2, maxY = Math.max.apply(null, ys) + 1.2;
+  return { minX, maxX, minY, maxY };
+}
+let WB = worldBounds(), SC = 1, OX = 0, OY = 0;
+function recomputeView(){
+  WB = worldBounds();
+  const availW = W - MARGIN.l - MARGIN.r, availH = H - MARGIN.t - MARGIN.b;
+  const sx = availW / (WB.maxX - WB.minX), sy = availH / (WB.maxY - WB.minY);
+  SC = Math.min(sx, sy);
+  const usedW = (WB.maxX - WB.minX) * SC, usedH = (WB.maxY - WB.minY) * SC;
+  OX = MARGIN.l + (availW - usedW) / 2;
+  OY = MARGIN.t + (availH - usedH) / 2;
+}
+function toPx(wx, wy){ return [OX + (wx - WB.minX) * SC, OY + (WB.maxY - wy) * SC]; }   // y flips (world up = screen up)
+function toWorldX(px){ return WB.minX + (px - OX) / SC; }
+
+function resize(){
+  const r = cv.getBoundingClientRect();
+  W = Math.max(2, Math.round(r.width)); H = Math.max(2, Math.round(r.height));
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  recomputeView();
+  dirty = true;
+}
+window.addEventListener('resize', resize);
+
+// ── current param object the core reads ──
+function params(){ return { src: P.src, tgt: P.tgt, boundaryY: P.boundaryY, v1: state.v1, v2: state.v2, maximize: state.maximize }; }
+function span(){ return { loX: Math.min(P.src[0], P.tgt[0]) - 1, hiX: Math.max(P.src[0], P.tgt[0]) + 1 }; }
+function clampX(x){ const s = span(); return Math.max(s.loX, Math.min(s.hiX, x)); }
+
+// ── the detent (drifting-star pattern — aids, never auto-solves) ──
+function targetX(){
+  const r = minimizeTime(params());
+  return state.maximize ? r.x : r.x;   // in maximize mode the "target" is the edge
+}
+let DETENT_W = 0, DETENT_SNAP = 0.20;
+function recomputeDetent(){
+  const s = span();
+  DETENT_W = (s.hiX - s.loX) * 0.045;                 // ~4.5% of span
+  // clamp to a max CSS-px width on wide desktop
+  const maxWorld = 70 / Math.max(SC, 1e-6);
+  if (DETENT_W > maxWorld) DETENT_W = maxWorld;
+}
+let lastInBand = false;
+function applyDetent(rawX){
+  let x = clampX(rawX);
+  if (state.maximize) return x;                        // no snap in maximize mode (seeking the edge)
+  const tx = targetX();
+  const d = tx - x;
+  if (Math.abs(d) < DETENT_W){
+    x = clampX(x + d * DETENT_SNAP);                   // close a fraction of the gap
+    if (!lastInBand){ tick(); lastInBand = true; }
+  } else lastInBand = false;
+  return x;
+}
+
+// ── audio tick (muted by default; never load-bearing) ──
+let actx = null;
+function tick(){
+  if (state.muted) return;
+  try{
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = 'sine'; o.frequency.value = 1180;
+    g.gain.setValueAtTime(0.0001, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.045, actx.currentTime + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.05);
+    o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.055);
+  }catch(e){}
+}
+
+// ── set X: mark dirty + emit immediate readout (NEVER draws) ──
+function setX(x, snap){
+  state.x = snap ? applyDetent(x) : clampX(x);
+  dirty = true;
+  emitState();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ONE emitState() — the single source of truth read by needle, rail, verdict,
+//  Snell panel. They can never disagree.
+// ════════════════════════════════════════════════════════════════════════════
+let LAST = null;
+function emitState(){
+  const p = params();
+  const x = state.x;
+  const t = travelTime(x, p);
+  const r = minimizeTime(p);          // {x, tMin, edge}
+  const tMin = r.tMin, xStar = r.x;
+  const a = angles(x, p);
+  // worst time across the span (for the stopwatch sweep range)
+  const s = span();
+  const tWorst = Math.max(travelTime(s.loX, p), travelTime(s.hiX, p));
+  // ghost paths: straight chord & edge-hug
+  const xChordX = (function(){ const dy = p.tgt[1] - p.src[1]; if (dy === 0) return p.src[0];
+    return p.src[0] + ((p.boundaryY - p.src[1]) / dy) * (p.tgt[0] - p.src[0]); })();
+  const tStraight = travelTime(xChordX, p);
+  const xEdge = (travelTime(s.hiX, p) >= travelTime(s.loX, p)) ? s.hiX : s.loX;
+  const tEdge = travelTime(xEdge, p);
+  // latch: how close to the floor (drives Snell crystallization)
+  const latch = state.maximize ? 0 : smoothstep(0, DETENT_W, DETENT_W - Math.abs(x - xStar));
+  const out = {
+    x, t, tMin, xStar, tWorst, settle: state.settle,
+    sin1: a.sin1, sin2: a.sin2, theta1: a.theta1, theta2: a.theta2,
+    snellRatio1: a.sin2 === 0 ? Infinity : a.sin1 / a.sin2,
+    snellRatio2: p.v1 / p.v2,
+    xChordX, tStraight, xEdge, tEdge,
+    latch, maximize: state.maximize, v1: p.v1, v2: p.v2,
+  };
+  LAST = out;
+  updateReadout(out);
+  updateAria(out);
+  return out;
+}
+function smoothstep(a, b, x){ if (b <= a) return x >= b ? 1 : 0; const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+
+// ════════════════════════════════════════════════════════════════════════════
+//  READOUT + HUD verdict (read the SAME emitState object)
+// ════════════════════════════════════════════════════════════════════════════
+const readoutEl = document.getElementById('readout'), hudEl = document.getElementById('hud');
+const v1Lbl = document.getElementById('vV1'), v2Lbl = document.getElementById('vV2');
+function fmt(n, d){ return n.toFixed(d == null ? 3 : d); }
+function updateReadout(o){
+  const ratioStr = isFinite(o.snellRatio1) ? fmt(o.snellRatio1, 3) : '∞';
+  readoutEl.innerHTML =
+    '<span class="k">time t</span><span class="v big" id="tCell">' + fmt(o.t, 4) + ' units</span>' +
+    '<span class="k">least possible</span><span class="v">' + fmt(o.tMin, 4) + ' units</span>' +
+    '<span class="k">θ₁ (sand)</span><span class="v">' + fmt(o.theta1 * 180 / Math.PI, 1) + '°</span>' +
+    '<span class="k">θ₂ (water)</span><span class="v">' + fmt(o.theta2 * 180 / Math.PI, 1) + '°</span>' +
+    '<span class="k">sinθ₁ / sinθ₂</span><span class="v">' + ratioStr + '</span>' +
+    '<span class="k">v₁ / v₂</span><span class="v">' + fmt(o.snellRatio2, 3) + '</span>';
+}
+function updateHud(o){
+  if (o.maximize){
+    hudEl.innerHTML = '<span class="law">stationary isn\'t enough</span> — light takes the <b>LEAST</b> time, not the most. This edge-crawl is the longest route.';
+    return;
+  }
+  const atFloor = state.settle > 0.92;
+  if (atFloor){
+    if (Math.abs(o.v1 - o.v2) < 1e-9){
+      hudEl.innerHTML = '<span class="law">same medium → no bend.</span> Equal speeds, equal angles: the least-time path is the straight line.';
+    } else {
+      const dS = o.tStraight - o.tMin, dE = o.tEdge - o.tMin;
+      hudEl.innerHTML = '<span class="law">sinθ₁/sinθ₂ = ' + fmt(o.snellRatio2, 2) + ' = v₁/v₂ ✓</span> — your path is the refracted ray. ' +
+        'It beats straight-through by <b>' + fmt(dS, 3) + '</b> and the edge-crawl by <b>' + fmt(dE, 3) + '</b> units.';
+    }
+  } else {
+    hudEl.innerHTML = 'Drag the <b>brass grommet</b> on the shore — or tap the bright line. Race the stopwatch toward its rest at <b>12 o\'clock</b> (the least time).';
+  }
+}
+function updateAria(o){
+  const s = span();
+  const pct = Math.round((o.x - s.loX) / (s.hiX - s.loX) * 100);
+  cv.setAttribute('aria-valuenow', String(pct));
+  cv.setAttribute('aria-valuetext', 'crossing at ' + pct + '% of the shore · time ' + fmt(o.t, 3) + ' units' + (state.settle > 0.92 ? ' · least-time path (Snell satisfied)' : ''));
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  RENDER — owns the rAF. Draws the two media, the kinked beam, the wedges, the
+//  handle, the stopwatch, the quiet t-vs-X rail, the ghosts, the Snell panel.
+// ════════════════════════════════════════════════════════════════════════════
+let railCache = null, railCacheKey = '';
+function ensureRail(o){
+  const key = state.v1 + '|' + state.v2 + '|' + state.maximize + '|' + W + '|' + H;
+  if (key === railCacheKey && railCache) return railCache;
+  const p = params();
+  const samples = scanTime(p, 180);
+  let tmin = Infinity, tmax = -Infinity;
+  for (const s of samples){ if (s.t < tmin) tmin = s.t; if (s.t > tmax) tmax = s.t; }
+  railCache = { samples, tmin, tmax };
+  railCacheKey = key;
+  return railCache;
+}
+
+let t0 = performance.now();
+function frame(now){
+  const dt = Math.min(0.05, (now - t0) / 1000); t0 = now;
+  // ease settle toward target (every "found" visual blooms together)
+  const o = LAST || emitState();
+  const target = state.maximize ? 0 : (o.latch);
+  if (REDUCED){ state.settle = target; }
+  else { state.settle += (target - state.settle) * 0.18; }
+  if (Math.abs(target - state.settle) > 0.0005) dirty = true;
+  if (dirty){ draw(); dirty = false; }
+  requestAnimationFrame(frame);
+}
+
+function draw(){
+  const o = emitState();
+  ctx.clearRect(0, 0, W, H);
+  drawMedia(o);
+  drawRail(o);
+  drawGhosts(o);
+  drawWedges(o);
+  drawBeam(o);
+  drawHandle(o);
+  drawStopwatch(o);
+  drawSnellPanel(o);
+  updateHud(o);
+}
+
+// the boundary line in pixels (the shore) — the full slider
+function shorePx(){ const s = span(); const [x0] = toPx(s.loX, P.boundaryY); const [x1] = toPx(s.hiX, P.boundaryY);
+  const [, y] = toPx(0, P.boundaryY); return { x0, x1, y }; }
+
+function drawMedia(o){
+  const sh = shorePx();
+  const topY = 0, botY = H;
+  // upper FAST band — pale warm sand. Faint stipple.
+  let g = ctx.createLinearGradient(0, topY, 0, sh.y);
+  g.addColorStop(0, 'rgba(232,207,154,0.04)');
+  g.addColorStop(1, 'rgba(232,207,154,0.16)');
+  ctx.fillStyle = g; ctx.fillRect(0, topY, W, sh.y);
+  // faint stipple in sand
+  ctx.save(); ctx.globalAlpha = 0.10; ctx.fillStyle = '#e8cf9a';
+  for (let i = 0; i < 90; i++){ const px = ((i * 137 + 23) % W); const py = ((i * 71 + 13) % Math.max(1, sh.y));
+    ctx.fillRect(px, py, 1.2, 1.2); }
+  ctx.restore();
+
+  // lower SLOW band — deep cool water. Depth scales with how slow v2 is (slowness you SEE).
+  const slowness = Math.max(0, Math.min(1, (state.v1 - state.v2) / Math.max(state.v1, 0.001)));
+  const waterAlpha = 0.22 + 0.18 * slowness;
+  g = ctx.createLinearGradient(0, sh.y, 0, botY);
+  g.addColorStop(0, 'rgba(79,134,184,' + (waterAlpha * 0.7).toFixed(3) + ')');
+  g.addColorStop(1, 'rgba(40,86,140,' + waterAlpha.toFixed(3) + ')');
+  ctx.fillStyle = g; ctx.fillRect(0, sh.y, W, botY - sh.y);
+  // slow caustic ripples — wavelength scales with v2 (deeper/slower → longer, lazier waves)
+  ctx.save(); ctx.globalAlpha = 0.12 + 0.10 * slowness;
+  ctx.strokeStyle = '#bfe0ff'; ctx.lineWidth = 1;
+  const wl = 26 + 40 * slowness;
+  const ph = REDUCED ? 0 : (performance.now() / 1000) * (0.4 + 0.3 * (1 - slowness));
+  for (let yy = sh.y + 18; yy < botY; yy += 30){
+    ctx.beginPath();
+    for (let xx = 0; xx <= W; xx += 6){
+      const yo = Math.sin(xx / wl + ph + yy * 0.05) * (2 + 1.5 * slowness);
+      if (xx === 0) ctx.moveTo(xx, yy + yo); else ctx.lineTo(xx, yy + yo);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+  if (!REDUCED) dirty = true;   // keep ripples + sweep alive
+
+  // THE SHORE — the brightest stroke, soft glow.
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,248,230,0.6)'; ctx.shadowBlur = 12;
+  ctx.strokeStyle = 'var(--shore)'; ctx.strokeStyle = '#fff8e6'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, sh.y); ctx.lineTo(W, sh.y); ctx.stroke();
+  ctx.restore();
+
+  // labels
+  ctx.font = '600 11px ' + monoFont(); ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(232,207,154,0.7)'; ctx.textAlign = 'left';
+  ctx.fillText('FAST · sand · v₁ = ' + fmt(state.v1, 2), 14, 14);
+  ctx.fillStyle = 'rgba(140,192,236,0.8)'; ctx.textBaseline = 'bottom';
+  ctx.fillText('SLOW · water · v₂ = ' + fmt(state.v2, 2), 14, H - 14);
+
+  // source & target markers
+  const [sxp, syp] = toPx(P.src[0], P.src[1]);
+  const [txp, typ] = toPx(P.tgt[0], P.tgt[1]);
+  ctx.fillStyle = '#f4e6bf';
+  diamond(sxp, syp, 5); ctx.fill();
+  ctx.font = '600 10px ' + monoFont(); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillStyle = 'rgba(244,230,191,0.85)'; ctx.fillText('start', sxp, syp - 8);
+  // target = the swimmer
+  ctx.fillStyle = '#ffd9a8'; ctx.beginPath(); ctx.arc(txp, typ, 5, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = 'rgba(255,217,168,0.9)'; ctx.textBaseline = 'top'; ctx.fillText('swimmer', txp, typ + 9);
+}
+function diamond(x, y, r){ ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); }
+function monoFont(){ return 'ui-monospace,Menlo,Monaco,Consolas,monospace'; }
+
+// the quiet t-vs-X rail along the bottom of the same canvas
+function drawRail(o){
+  const rail = ensureRail(o);
+  const railH = 64, top = H - railH - 8, bot = H - 12;
+  const s = span();
+  const xToPx = (wx) => { const [px] = toPx(wx, P.boundaryY); return px; };
+  const range = (rail.tmax - rail.tmin) || 1;
+  const tToY = (t) => bot - (t - rail.tmin) / range * (bot - top);
+  // baseline glow box
+  ctx.save();
+  ctx.fillStyle = 'rgba(8,12,20,0.42)';
+  ctx.fillRect(0, top - 4, W, railH + 8);
+  // the curve
+  ctx.strokeStyle = 'rgba(111,134,168,0.5)'; ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  for (let i = 0; i < rail.samples.length; i++){
+    const px = xToPx(rail.samples[i].x), py = tToY(rail.samples[i].t);
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  // floor tick at x*
+  if (!o.maximize){
+    const fx = xToPx(o.xStar);
+    ctx.strokeStyle = 'rgba(201,162,74,' + (0.3 + 0.5 * state.settle).toFixed(2) + ')'; ctx.lineWidth = 1;
+    ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(fx, top); ctx.lineTo(fx, bot); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(201,162,74,0.7)'; ctx.font = '9px ' + monoFont(); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('↓ floor', fx, top - 2);
+  }
+  // the dot riding the curve at current X
+  const dx = xToPx(o.x), dy = tToY(o.t);
+  const glow = 2 + 5 * state.settle;
+  ctx.shadowColor = 'rgba(244,230,191,0.8)'; ctx.shadowBlur = glow;
+  ctx.fillStyle = state.settle > 0.6 ? '#f4e6bf' : '#cfe0ff';
+  ctx.beginPath(); ctx.arc(dx, dy, 3.4, 0, 6.2832); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(150,165,195,0.6)'; ctx.font = '9px ' + monoFont(); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(o.maximize ? 'time vs crossing — seeking the PEAK' : 'time vs crossing — the bowl IS the principle', 8, bot + 1 - railH - 4 + railH);
+  ctx.restore();
+}
+
+// two ghost rays always present (dashed, dim) + a clock chip with their larger t
+function drawGhosts(o){
+  ctx.save();
+  ctx.setLineDash([4, 5]); ctx.lineWidth = 1;
+  // straight S→T
+  drawPathAt(o.xChordX, 'rgba(180,186,210,0.32)');
+  chip(o.xChordX, o.tStraight, 'straight', 'rgba(180,186,210,0.5)');
+  // edge-hug
+  drawPathAt(o.xEdge, 'rgba(180,150,120,0.3)');
+  chip(o.xEdge, o.tEdge, 'edge', 'rgba(200,160,120,0.5)');
+  ctx.restore();
+}
+function drawPathAt(xw, stroke){
+  const [sx, sy] = toPx(P.src[0], P.src[1]);
+  const [kx, ky] = toPx(xw, P.boundaryY);
+  const [tx, ty] = toPx(P.tgt[0], P.tgt[1]);
+  ctx.strokeStyle = stroke; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(kx, ky); ctx.lineTo(tx, ty); ctx.stroke();
+}
+function chip(xw, t, label, col){
+  const [kx, ky] = toPx(xw, P.boundaryY);
+  ctx.setLineDash([]);
+  ctx.fillStyle = col; ctx.font = '9px ' + monoFont(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(label + ' ' + fmt(t, 2), kx, ky + 0);
+}
+
+// drawn angle wedges from core's angles() — GEOMETRICALLY TRUE to the beam. Each wedge is
+// the pie slice between the normal and the actual beam leg, so the wider sand-side arc makes
+// the bend self-evident. Angles are computed directly from the on-screen vertex geometry
+// (which equals core's theta1/theta2 by construction), so they can't disagree with the beam.
+function drawWedges(o){
+  if (o.maximize) return;
+  const [kx, ky] = toPx(o.x, P.boundaryY);
+  const [sxp, syp] = toPx(P.src[0], P.src[1]);
+  const [txp, typ] = toPx(P.tgt[0], P.tgt[1]);
+  const R = 34;
+  // normal at X (dashed vertical) — extends both ways from the shore
+  ctx.save();
+  ctx.strokeStyle = 'rgba(220,228,245,0.35)'; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+  ctx.beginPath(); ctx.moveTo(kx, ky - R - 14); ctx.lineTo(kx, ky + R + 14); ctx.stroke();
+  ctx.setLineDash([]);
+  // screen angles (canvas: +x right, +y down) from the vertex to source / target.
+  const aSrc = Math.atan2(syp - ky, sxp - kx);     // toward the start (up-ward)
+  const aTgt = Math.atan2(typ - ky, txp - kx);     // toward the swimmer (down-ward)
+  const upNormal = -Math.PI / 2;                    // points up in canvas
+  const downNormal = Math.PI / 2;                   // points down in canvas
+  // θ1 wedge: between the up-normal and the source leg (sand side, warm).
+  wedge(kx, ky, R, upNormal, aSrc, 'rgba(232,207,154,0.45)', 'rgba(232,207,154,0.85)');
+  // θ2 wedge: between the down-normal and the target leg (water side, cool).
+  wedge(kx, ky, R, downNormal, aTgt, 'rgba(140,192,236,0.45)', 'rgba(140,192,236,0.85)');
+  // labels placed on the bisector of each wedge
+  ctx.font = '600 10px ' + monoFont(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  placeLabel('θ₁', kx, ky, midAngle(upNormal, aSrc), R * 0.66, 'rgba(244,230,191,0.95)');
+  placeLabel('θ₂', kx, ky, midAngle(downNormal, aTgt), R * 0.66, 'rgba(174,212,255,0.95)');
+  ctx.restore();
+}
+// wedge: filled pie slice between two screen-space angles a (normal) and b (beam), taking
+// the SHORTER arc, plus a bright edge stroke on the beam side.
+function wedge(cx, cy, R, a, b, fill, edge){
+  let d = b - a;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;            // shortest signed sweep
+  ctx.beginPath(); ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, R, a, a + d, d < 0);
+  ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+  ctx.strokeStyle = edge; ctx.lineWidth = 1; ctx.stroke();
+}
+function midAngle(a, b){
+  let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+  return a + d / 2;
+}
+function placeLabel(txt, cx, cy, ang, r, col){
+  ctx.fillStyle = col; ctx.fillText(txt, cx + r * Math.cos(ang), cy + r * Math.sin(ang));
+}
+
+// the kinked beam S→X→T colored BY SPEED
+function drawBeam(o){
+  const [sx, sy] = toPx(P.src[0], P.src[1]);
+  const [kx, ky] = toPx(o.x, P.boundaryY);
+  const [tx, ty] = toPx(P.tgt[0], P.tgt[1]);
+  // additive glow pass (Hall luminous-ray look)
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  // sand leg — pale, thin, bright
+  ctx.strokeStyle = 'rgba(248,236,200,0.5)'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(kx, ky); ctx.stroke();
+  // water leg — dimmer, thicker
+  ctx.strokeStyle = 'rgba(150,200,255,0.4)'; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.moveTo(kx, ky); ctx.lineTo(tx, ty); ctx.stroke();
+  ctx.restore();
+  // crisp cores
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#fbeec8'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(kx, ky); ctx.stroke();
+  ctx.strokeStyle = '#aed4ff'; ctx.lineWidth = 2.6;
+  ctx.beginPath(); ctx.moveTo(kx, ky); ctx.lineTo(tx, ty); ctx.stroke();
+  // angle-dot at the vertex
+  ctx.fillStyle = '#fff8e6'; ctx.beginPath(); ctx.arc(kx, ky, 2, 0, 6.2832); ctx.fill();
+}
+
+// THE HANDLE — a brass grommet riding the shore
+function drawHandle(o){
+  const [kx, ky] = toPx(o.x, P.boundaryY);
+  // plumb tick
+  ctx.strokeStyle = 'rgba(201,162,74,0.4)'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+  ctx.beginPath(); ctx.moveTo(kx, ky - 16); ctx.lineTo(kx, ky + 16); ctx.stroke(); ctx.setLineDash([]);
+  // grommet
+  const glow = 4 + 8 * state.settle;
+  ctx.save();
+  ctx.shadowColor = 'rgba(244,230,191,0.7)'; ctx.shadowBlur = glow;
+  ctx.fillStyle = '#c9a24a'; ctx.beginPath(); ctx.arc(kx, ky, 7, 0, 6.2832); ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = '#5a4220'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(kx, ky, 7, 0, 6.2832); ctx.stroke();
+  ctx.fillStyle = '#1a1206'; ctx.beginPath(); ctx.arc(kx, ky, 2.4, 0, 6.2832); ctx.fill();
+}
+
+// THE RACING BRASS STOPWATCH (top-right of stage, canvas-drawn)
+function drawStopwatch(o){
+  const cx = W - 86, cy = 86, R = 50;
+  // race fraction: 0 at the floor (rest, 12 o'clock), 1 at worst
+  const denom = (o.tWorst - o.tMin) || 1;
+  const frac = Math.max(0, Math.min(1, (o.t - o.tMin) / denom));
+  // dial rim warms to gold as t→tMin
+  const warm = 1 - frac;
+  ctx.save();
+  // dial face
+  ctx.fillStyle = 'rgba(16,18,26,0.82)'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.2832); ctx.fill();
+  // rim
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(' + Math.round(120 + 110 * warm) + ',' + Math.round(110 + 90 * warm) + ',' + Math.round(70 + 30 * warm) + ',0.95)';
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.2832); ctx.stroke();
+  // best-time pip at 12 o'clock
+  ctx.fillStyle = '#9fe6b4'; ctx.beginPath(); ctx.arc(cx, cy - R + 5, 2.4, 0, 6.2832); ctx.fill();
+  // tick marks
+  ctx.strokeStyle = 'rgba(201,162,74,0.35)'; ctx.lineWidth = 1;
+  for (let k = 0; k < 12; k++){ const a = -Math.PI / 2 + k * Math.PI / 6;
+    ctx.beginPath(); ctx.moveTo(cx + (R - 6) * Math.cos(a), cy + (R - 6) * Math.sin(a)); ctx.lineTo(cx + (R - 1) * Math.cos(a), cy + (R - 1) * Math.sin(a)); ctx.stroke(); }
+  // sweep needle: angle = -90° (12 o'clock = rest) + frac*270°
+  const ang = -Math.PI / 2 + frac * (270 * Math.PI / 180);
+  ctx.strokeStyle = frac < 0.04 ? '#9fe6b4' : '#f4e6bf'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + (R - 12) * Math.cos(ang), cy + (R - 12) * Math.sin(ang)); ctx.stroke();
+  ctx.fillStyle = '#c9a24a'; ctx.beginPath(); ctx.arc(cx, cy, 3, 0, 6.2832); ctx.fill();
+  // digital readout
+  ctx.fillStyle = warm > 0.96 ? '#9fe6b4' : '#f4e6bf'; ctx.font = '700 12px ' + monoFont();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('t = ' + fmt(o.t, 3), cx, cy + R + 16);
+  ctx.fillStyle = 'rgba(159,230,180,0.8)'; ctx.font = '9px ' + monoFont();
+  ctx.fillText('units · best ' + fmt(o.tMin, 3), cx, cy + R + 30);
+  ctx.restore();
+}
+
+// THE SNELL READOUT — earned, not stamped. Far → blurred ?; at the floor → latches gold.
+function drawSnellPanel(o){
+  if (o.maximize) return;
+  const px = W - 170, py = H - 96;
+  const latch = state.settle;
+  ctx.save();
+  ctx.globalAlpha = 0.12 + 0.88 * latch;
+  ctx.fillStyle = latch > 0.85 ? 'rgba(40,34,16,0.9)' : 'rgba(20,22,30,0.55)';
+  ctx.strokeStyle = latch > 0.85 ? 'rgba(233,196,106,0.9)' : 'rgba(201,162,74,0.25)';
+  ctx.lineWidth = 1;
+  roundRect(px - 8, py - 26, 168, latch > 0.85 ? 56 : 40, 8); ctx.fill(); ctx.stroke();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  if (latch > 0.85){
+    ctx.fillStyle = '#ffe3a0'; ctx.font = '700 12px ' + monoFont();
+    ctx.fillText('sinθ₁/sinθ₂ = ' + fmt(o.snellRatio2, 2), px, py - 8);
+    ctx.fillStyle = '#9fe6b4'; ctx.font = '700 12px ' + monoFont();
+    ctx.fillText('= v₁/v₂ ✓', px, py + 8);
+    ctx.fillStyle = 'rgba(255,227,160,0.85)'; ctx.font = '9px ' + monoFont();
+    ctx.fillText('your path is the refracted ray', px, py + 24);
+  } else {
+    // converge the displayed ratio toward v/v as latch rises
+    const shown = isFinite(o.snellRatio1) ? (o.snellRatio1 * (1 - latch) + o.snellRatio2 * latch) : o.snellRatio2;
+    const blur = latch < 0.4 ? '?' : fmt(shown, 2);
+    ctx.fillStyle = 'rgba(201,162,74,' + (0.5 + 0.4 * latch).toFixed(2) + ')'; ctx.font = '600 11px ' + monoFont();
+    ctx.fillText('sinθ₁/sinθ₂ = ' + blur, px, py - 6);
+    ctx.fillStyle = 'rgba(169,156,127,0.8)'; ctx.font = '10px ' + monoFont();
+    ctx.fillText('v₁/v₂ = ' + fmt(o.snellRatio2, 2), px, py + 10);
+  }
+  ctx.restore();
+}
+function roundRect(x, y, w, h, r){ ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+
+// ════════════════════════════════════════════════════════════════════════════
+//  INTERACTION — the whole shore is the slider. Pointer + keyboard + setPointerCapture.
+// ════════════════════════════════════════════════════════════════════════════
+let dragging = false;
+function hitHandle(px, py){
+  const o = LAST || emitState();
+  const [kx, ky] = toPx(o.x, P.boundaryY);
+  return Math.hypot(px - kx, py - ky) <= 22;        // generous touch target (≥44px diameter)
+}
+function nearShore(py){
+  const sh = shorePx();
+  return Math.abs(py - sh.y) <= 60;                 // tap anywhere near the shore jumps X
+}
+function localPt(ev){ const r = cv.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; }
+
+cv.addEventListener('pointerdown', (ev) => {
+  const [px, py] = localPt(ev);
+  if (hitHandle(px, py) || nearShore(py)){
+    dragging = true;
+    try { cv.setPointerCapture(ev.pointerId); } catch(e){}
+    setX(toWorldX(px), false);
+    ev.preventDefault();
+  }
+  cv.focus();
+});
+cv.addEventListener('pointermove', (ev) => {
+  if (!dragging) return;
+  const [px] = localPt(ev);
+  setX(toWorldX(px), true);                          // snap (detent) while dragging
+  ev.preventDefault();
+});
+function endDrag(ev){
+  if (!dragging) return;
+  dragging = false;
+  try { cv.releasePointerCapture(ev.pointerId); } catch(e){}
+  // snap-to-floor on release within the basin
+  if (!state.maximize){
+    const o = LAST || emitState();
+    if (Math.abs(o.x - o.xStar) < DETENT_W){ setX(o.xStar, false); tick(); }
+  }
+}
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+
+cv.addEventListener('keydown', (ev) => {
+  const s = span(); const stepFine = (s.hiX - s.loX) / 200, stepCoarse = (s.hiX - s.loX) / 25;
+  let st = ev.shiftKey ? stepCoarse : stepFine;
+  if (ev.key === 'ArrowLeft'){ setX(state.x - st, false); ev.preventDefault(); }
+  else if (ev.key === 'ArrowRight'){ setX(state.x + st, false); ev.preventDefault(); }
+  else if (ev.key === 'Home'){ setX(s.loX, false); ev.preventDefault(); }
+  else if (ev.key === 'End'){ setX(s.hiX, false); ev.preventDefault(); }
+});
+
+// ── controls ──
+const sV1 = document.getElementById('sV1'), sV2 = document.getElementById('sV2');
+function fillRange(el){ const min = +el.min, max = +el.max, v = +el.value; el.style.setProperty('--fill', ((v - min) / (max - min) * 100) + '%'); }
+function onV(){
+  state.v1 = +sV1.value; state.v2 = +sV2.value;
+  // exiting same-medium mode if user moves a slider
+  state.maximize = state.maximize;   // unchanged
+  v1Lbl.textContent = fmt(state.v1, 2); v2Lbl.textContent = fmt(state.v2, 2);
+  fillRange(sV1); fillRange(sV2);
+  railCacheKey = '';                 // invalidate rail
+  recomputeDetent();
+  setX(state.x, false);
+}
+sV1.addEventListener('input', onV); sV2.addEventListener('input', onV);
+
+document.getElementById('btnStraight').addEventListener('click', () => {
+  state.maximize = false; syncMax();
+  const o = emitState(); setX(o.xChordX, false);
+});
+document.getElementById('btnEdge').addEventListener('click', () => {
+  state.maximize = false; syncMax();
+  const o = emitState(); setX(o.xEdge, false);
+});
+document.getElementById('btnSame').addEventListener('click', () => {
+  state.maximize = false; syncMax();
+  sV2.value = sV1.value; onV();
+  const o = emitState(); setX(o.xChordX, false);
+});
+const btnMax = document.getElementById('btnMax');
+btnMax.addEventListener('click', () => {
+  state.maximize = !state.maximize; syncMax();
+  railCacheKey = '';
+  const o = emitState();
+  setX(state.maximize ? o.xEdge : o.xStar, false);
+});
+function syncMax(){ btnMax.classList.toggle('on', state.maximize); btnMax.textContent = state.maximize ? '✓ going slow' : 'go slow on purpose'; }
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  state.maximize = false; syncMax();
+  sV1.value = '2.0'; sV2.value = '1.0'; onV();
+  const o = emitState(); setX(o.xStar, false);
+});
+const btnMute = document.getElementById('btnMute');
+function syncMute(){ btnMute.textContent = state.muted ? '🔇 tick off' : '🔊 tick on'; btnMute.classList.toggle('on', !state.muted); }
+btnMute.addEventListener('click', () => {
+  state.muted = !state.muted; syncMute();
+  try { localStorage.setItem('ws:pref:muted', state.muted ? '1' : '0'); } catch(e){}
+});
+
+// ── self-test pill (tidal-field pattern: click to expand) ──
+const pill = document.getElementById('selftest');
+function refreshPill(){
+  const st = runSelfTest();
+  pill.textContent = (st.ok ? '✓ ' : '✗ ') + st.passed + '/' + st.total + ' self-test';
+  pill.className = 'selftest ' + (st.ok ? 'ok' : 'bad');
+  pill.title = st.checks.map(c => (c.pass ? '✓' : '✗') + ' ' + c.name + '  [' + c.info + ']').join('\n');
+}
+pill.addEventListener('click', () => alert(runSelfTest().checks.map(c => (c.pass ? '✓ ' : '✗ ') + c.name + '\n   ' + c.info).join('\n\n')));
+
+// ── boot ──
+function init(){
+  resize();
+  recomputeDetent();
+  const r = minimizeTime(params());
+  state.x = clampX(r.x);
+  v1Lbl.textContent = fmt(state.v1, 2); v2Lbl.textContent = fmt(state.v2, 2);
+  fillRange(sV1); fillRange(sV2);
+  syncMax(); syncMute();
+  emitState();
+  refreshPill();
+  // start a touch off the floor so the stopwatch has somewhere to race from
+  const s = span(); state.x = clampX(r.x - (s.hiX - s.loX) * 0.18);
+  emitState();
+  requestAnimationFrame(frame);
+}
+window.addEventListener('load', init);
+
+// browser-verification hook
+window.__lifeguardsRun = {
+  runSelfTest, witness, minimizeTime, minimizeBrute, travelTime, dtdx, d2tdx2, snellResidual, angles,
+  state, params, getLast: () => LAST, setX, span,
+};
+</script>
+</body>
+</html>
