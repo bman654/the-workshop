@@ -1,0 +1,1352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Matchbox That Learns · The Adversary</title>
+<style>
+  :root{
+    --bg:#08070b;
+    --plate1:#15121b;
+    --plate2:#0d0b12;
+    --felt:#1a1424;
+    --felt2:#120e1a;
+    --wood:#241a12;
+    --ink:#ede2f0;
+    --ink-dim:#a79ab2;
+    --gold:#c9a24a;
+    --gold-bright:#f0d488;
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.36);
+    --teal:#6fd3c4;
+    --teal-soft:rgba(111,211,196,0.16);
+    --teal-edge:rgba(111,211,196,0.66);
+    --open:#e0664f;
+    --open-soft:rgba(224,102,79,0.14);
+    --open-edge:rgba(224,102,79,0.62);
+    --win:#8fd79a;
+    --panel:rgba(13,11,18,0.86);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  html{ overflow-x:hidden; }   /* the document never scrolls horizontally (the rack owns its scroll) */
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 760px at 50% -8%, rgba(201,162,74,0.08), transparent 58%),
+      radial-gradient(1000px 700px at 14% 112%, rgba(111,211,196,0.05), transparent 62%),
+      radial-gradient(1000px 700px at 86% 112%, rgba(224,102,79,0.045), transparent 62%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;            /* the body NEVER scrolls horizontally — the rack owns its own scroll */
+  }
+
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; gap:14px; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--gold); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.4); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  /* ── layout ── */
+  #wrap{ display:flex; min-height:100%; }
+  #stage{ flex:1; position:relative; display:flex; flex-direction:column; align-items:center;
+    padding:62px 22px 28px; min-width:0; max-width:100%; gap:15px; }
+
+  #boardWrap{ position:relative; display:flex; align-items:center; justify-content:center; }
+  #board{ display:block; box-shadow:0 26px 76px rgba(0,0,0,0.62); border-radius:16px; touch-action:none;
+    max-width:100%; user-select:none; -webkit-user-select:none; }
+  #board text{ user-select:none; -webkit-user-select:none; }
+
+  /* readout under the board */
+  #readout{
+    width:min(560px,100%); background:var(--panel);
+    border:1px solid var(--gold-edge); border-radius:10px; padding:11px 16px;
+    display:flex; flex-direction:column; gap:6px; align-items:center; text-align:center;
+    backdrop-filter: blur(8px) saturate(120%); -webkit-backdrop-filter: blur(8px) saturate(120%);
+  }
+  #readout .turn{ font:13px/1.3 var(--font-mono); color:var(--ink); letter-spacing:.3px; }
+  #readout .turn b{ color:var(--gold); }
+  #readout .verdict{ font:700 16px/1.2 var(--font-mono); letter-spacing:.4px; color:var(--ink); min-height:18px; }
+  #readout .verdict.win{ color:var(--win); }
+  #readout .verdict.lose{ color:var(--open); }
+  #readout .verdict.learn{ color:var(--teal); }
+  #readout .note{ font:11px/1.45 var(--font-mono); color:var(--ink-dim); min-height:14px; letter-spacing:.2px; }
+  #readout .note b{ color:var(--gold); }
+
+  /* win-streak meter + recent pips */
+  #streak{ display:flex; flex-direction:column; gap:7px; align-items:center; width:min(560px,100%); }
+  #streak .meterhead{ font:600 10px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase;
+    color:var(--ink-dim); display:flex; gap:10px; align-items:baseline; }
+  #streak .meterhead b{ color:var(--gold-bright); font-size:13px; }
+  #streak .meterhead .hard{ color:var(--open); }
+  #tallies{ display:flex; gap:4px; flex-wrap:wrap; justify-content:center; max-width:100%; }
+  #tallies .tick{ width:7px; height:18px; border-radius:2px; background:var(--gold); box-shadow:0 0 8px var(--gold-soft); transition:.2s; }
+  #tallies .tick.dead{ background:var(--lampOff,#2a2336); box-shadow:none; opacity:.5; }
+  #pips{ display:flex; gap:4px; align-items:center; }
+  #pips .pip{ width:9px; height:9px; border-radius:50%; background:rgba(255,255,255,0.10); }
+  #pips .pip.w{ background:var(--win); box-shadow:0 0 6px rgba(143,215,154,0.6); }
+  #pips .pip.l{ background:var(--open); box-shadow:0 0 6px rgba(224,102,79,0.55); }
+
+  /* ── the rack (the MIND) ── */
+  #rackWrap{ width:100%; max-width:980px; min-width:0; }
+  #rackScroll{ max-width:100%; }
+  #rackHead{ font:600 10px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim);
+    display:flex; justify-content:space-between; align-items:baseline; margin:0 4px 6px; gap:10px; }
+  #rackHead .cnt{ color:var(--gold); }
+  #rackHead.diverge .cnt{ color:var(--open); }
+  #rackScroll{ overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch;
+    border:1px solid var(--gold-edge); border-radius:12px; background:rgba(8,7,12,0.55);
+    padding:12px 12px 8px; }
+  #rack{ display:flex; gap:12px; align-items:flex-start; min-height:128px; }
+  .tray{ flex:0 0 auto; width:96px; background:linear-gradient(180deg,#1d1726,#120d18);
+    border:1px solid var(--gold-edge); border-radius:8px; padding:7px 7px 6px; position:relative;
+    transition:box-shadow .2s, border-color .2s, opacity .3s; }
+  .tray.consult{ border-color:var(--teal); box-shadow:0 0 18px var(--teal-soft); }
+  .tray.husk{ opacity:.42; border-style:dashed; }
+  .tray .ghost{ display:block; margin:0 auto 5px; }
+  .tray .pile{ display:flex; flex-wrap:wrap; gap:3px; justify-content:center; min-height:30px; align-content:flex-start; }
+  .tray .bead{ width:13px; height:13px; border-radius:50%; border:1.5px solid rgba(0,0,0,0.45);
+    box-shadow:inset 0 1px 1px rgba(255,255,255,0.35), 0 1px 2px rgba(0,0,0,0.5); cursor:pointer; transition:transform .15s, opacity .25s; }
+  .tray .bead.lift{ transform:translateY(-6px) scale(1.12); }
+  .tray .bead.solver-safe{ outline:1.5px solid var(--win); outline-offset:1px; }
+  .tray .bead.solver-loss{ outline:1.5px solid var(--open); outline-offset:1px; }
+  .tray .cap{ font:9px/1.2 var(--font-mono); color:var(--ink-dim); text-align:center; margin-top:4px; letter-spacing:.2px; }
+  .tray .cap b{ color:var(--gold); }
+  .tray.husk .cap{ color:var(--open); }
+  #trough{ margin-top:9px; border-top:1px dashed var(--gold-edge); padding-top:7px;
+    display:flex; align-items:center; gap:9px; min-height:26px; }
+  #trough .lbl{ font:9px/1 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--ink-dim); }
+  #troughBeads{ display:flex; flex-wrap:wrap; gap:3px; flex:1; }
+  #troughBeads .gb{ width:9px; height:9px; border-radius:50%; opacity:.5; filter:grayscale(.7); }
+  #trough .cnt{ font:10px/1 var(--font-mono); color:var(--gold); }
+
+  /* ── control panel ── */
+  #panel{
+    width:316px; flex:0 0 316px;
+    background:var(--panel);
+    backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--gold-edge);
+    padding:58px 16px 22px;
+    box-shadow:-18px 0 50px rgba(0,0,0,0.5);
+    z-index:20;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.6; margin:0 0 4px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); }
+  #panel .lede i{ color:var(--gold); font-style:normal; }
+  #panel .lede .beat{ color:var(--teal); font-style:normal; }
+  .row{ margin:14px 0; }
+  .row > label{ display:block; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:6px; width:100%;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.32); color:var(--ink); cursor:pointer;
+    font:600 12px/1 var(--font-mono); letter-spacing:.3px; padding:10px 12px; border-radius:8px; transition:.15s; }
+  .btn:hover{ border-color:var(--gold); color:var(--gold-bright); }
+  .btn.primary{ background:var(--gold); color:#241803; border-color:var(--gold); }
+  .btn.primary:hover{ background:var(--gold-bright); color:#241803; }
+  .btn + .btn{ margin-top:8px; }
+  .toggle{ display:flex; align-items:flex-start; gap:9px; cursor:pointer; user-select:none; }
+  .toggle input{ position:absolute; opacity:0; pointer-events:none; }
+  .toggle .sw{ width:38px; height:21px; border-radius:12px; background:rgba(0,0,0,0.4);
+    border:1px solid var(--gold-edge); position:relative; transition:.18s; flex:0 0 auto; margin-top:1px; }
+  .toggle .sw::after{ content:''; position:absolute; top:2px; left:2px; width:15px; height:15px; border-radius:50%;
+    background:var(--ink-dim); transition:.18s; }
+  .toggle input:checked + .sw{ background:var(--open-soft); border-color:var(--open); }
+  .toggle input:checked + .sw::after{ left:19px; background:var(--open); }
+  .toggle.tealsw input:checked + .sw{ background:var(--teal-soft); border-color:var(--teal); }
+  .toggle.tealsw input:checked + .sw::after{ background:var(--teal); }
+  .toggle .lbl{ font:12px/1.3 var(--font-ui); color:var(--ink); }
+  .toggle .lbl small{ display:block; font:10px/1.4 var(--font-mono); color:var(--ink-dim); margin-top:2px; }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.3); padding:3px; border-radius:9px; border:1px solid var(--gold-edge); }
+  .seg button{ flex:1; min-width:34px; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 3px;
+    border-radius:6px; cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono); }
+  .seg button.active{ background:var(--gold); color:#241803; font-weight:600; }
+  .runrow{ display:flex; gap:8px; margin-top:8px; }
+  .runrow .btn{ flex:1; }
+  #livestat{ background:rgba(0,0,0,0.3); border:1px solid var(--gold-edge); border-radius:8px; padding:9px 12px;
+    font:11px/1.5 var(--font-mono); color:var(--ink-dim); }
+  #livestat .big{ color:var(--gold-bright); font-size:14px; font-weight:600; }
+  #livestat .lbl{ font:9px/1 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--ink-dim); display:block; margin-bottom:4px; }
+  .xlinks{ margin-top:16px; border-top:1px solid var(--gold-edge); padding-top:13px; }
+  .xlinks a{ display:block; color:var(--ink-dim); text-decoration:none; font:11.5px/1.5 var(--font-mono);
+    padding:5px 0; transition:.18s; }
+  .xlinks a:hover{ color:var(--gold); }
+  .xlinks a b{ color:var(--ink); font-weight:600; }
+  .fineprint{ margin-top:14px; font:10px/1.5 var(--font-mono); color:var(--ink-dim); opacity:.7; }
+
+  /* mobile: stack panel under the stage */
+  @media (max-width:820px){
+    #wrap{ flex-direction:column; }
+    #panel{ width:100%; flex:0 0 auto; border-left:none; border-top:1px solid var(--gold-edge);
+      box-shadow:0 -18px 50px rgba(0,0,0,0.5); padding:18px 16px 26px; }
+    #stage{ padding-top:58px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .tray, .tray .bead{ transition:none !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../adversary/index.html">◂ The Adversary</a>
+    <div class="brand">
+      <h1>The Matchbox That Learns</h1>
+      <span class="tag">a pile of beads that teaches itself to stop losing</span>
+    </div>
+    <button class="selftest" id="selftest" title="Run the in-page proof">self-test —</button>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <div id="boardWrap"><svg id="board" width="460" height="460" viewBox="0 0 460 460" role="grid" aria-label="Hexapawn board, 3 by 3"></svg></div>
+
+      <div id="readout">
+        <div class="turn" id="turnLine">Your move — push or capture a <b>gold</b> pawn forward.</div>
+        <div class="verdict" id="verdict"></div>
+        <div class="note" id="note">Beat it. Then watch it stop losing.</div>
+      </div>
+
+      <div id="streak">
+        <div class="meterhead">
+          <span>win streak</span> <b id="streakNum">0</b>
+          <span class="hard" id="hardNote" hidden>· the rack has hardened</span>
+        </div>
+        <div id="tallies"></div>
+        <div id="pips" aria-label="recent twelve outcomes"></div>
+      </div>
+
+      <div id="rackWrap">
+        <div id="rackHead">
+          <span>the machine's mind — one matchbox per position it has faced</span>
+          <span class="cnt" id="rackCnt">0 boxes · 0 beads</span>
+        </div>
+        <div id="rackScroll">
+          <div id="rack"></div>
+          <div id="trough">
+            <span class="lbl">discard trough</span>
+            <div id="troughBeads"></div>
+            <span class="cnt" id="troughCnt">0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede"><b>Hexapawn:</b> three pawns a side on a 3×3 board. You're <i>gold</i> and move first; the machine is <span class="beat">teal</span>. Push straight into an empty square or capture one step diagonally. Reach the far rank, take every enemy, or leave them stuck — and you win.</p>
+      <p class="lede">The machine has no strategy. Each position it meets gets a little <i>matchbox</i> of coloured beads — one bead per legal reply. It draws a bead at random to move. <b>When it loses, it throws that game's beads away.</b> <span class="beat">Beat it a few times, then try to win again</span> — watch it run out of ways to lose.</p>
+
+      <div class="row">
+        <button class="btn primary" id="newMatch">New match</button>
+        <button class="btn" id="resetNaive">Reset the machine to naive</button>
+      </div>
+
+      <div class="row">
+        <label>Auto-play — let it train itself</label>
+        <div class="seg" id="autoSeg" role="group" aria-label="auto-play batch size">
+          <button data-n="1" class="active">×1</button>
+          <button data-n="10">×10</button>
+          <button data-n="100">×100</button>
+        </div>
+        <div class="runrow">
+          <button class="btn" id="autoRun">▶ Run a batch</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Live stats — this session</label>
+        <div id="livestat">
+          <span class="lbl">your hand-played matches</span>
+          <span class="big" id="statWins">0</span> won ·
+          <span class="big" id="statLoss">0</span> lost
+          <span style="opacity:.7"> (incl. auto-play)</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label class="toggle" for="rewardToggle">
+          <input type="checkbox" id="rewardToggle">
+          <span class="sw"></span>
+          <span class="lbl">Reward the loss
+            <small>The negative control: ADD a bead instead of pulling one. The machine's losing lines bloat and it never stops losing.</small>
+          </span>
+        </label>
+      </div>
+
+      <div class="row">
+        <label class="toggle tealsw" for="revealToggle">
+          <input type="checkbox" id="revealToggle">
+          <span class="sw"></span>
+          <span class="lbl">Reveal the solver
+            <small>Ring each bead: <span style="color:var(--win)">safe</span> (a proven win for the machine) or <span style="color:var(--open)">losing</span>. The discard ritual removes exactly the losing rings.</small>
+          </span>
+        </label>
+      </div>
+
+      <div class="xlinks">
+        <a href="../adversary/index.html"><b>The Adversary ▸</b> play the same solved Hexapawn against a perfect opponent</a>
+        <a href="../numbers-room/index.html"><b>The Numbers Room ▸</b> stone heaps, a queen on the golden diagonal, more solved games</a>
+      </div>
+
+      <p class="fineprint" id="fineprint">self-test runs the same code as <code>node hexapawn/core.test.mjs</code></p>
+    </aside>
+  </div>
+
+<script>
+/* =====================================================================
+   THE MATCHBOX THAT LEARNS — a by-hand Hexapawn board + a MENACE matchbox
+   machine you can watch teach itself. The opponent's whole brain is the
+   matchbox learner inlined below (byte-identical to hexapawn/core.mjs); the
+   game is the Workshop's solved-games engine, inlined by forge. Single file,
+   0 deps, 0 network, NO audio.
+
+   PROVEN (green pill = node hexapawn/core.test.mjs): Hexapawn is a 2nd-player
+   win, mate in 6; discard-on-loss shrinks reachable losing lines 17→0 in 15
+   monotone steps to a minimax-optimal subset; rewarding the loss diverges.
+   The win tally is an honest live STAT — never claimed as the proof.
+   ===================================================================== */
+
+/* ---- the certified engine + def, inlined by forge (module guards stripped).
+   After these, Adversary + GAME_hexapawn globals exist. ---- */
+<!-- forge:include ../tools/game/adversary.js -->
+<!-- forge:include ../tools/game/games/hexapawn.js -->
+
+/* ---- the matchbox learner — inlined BYTE-IDENTICAL to hexapawn/core.mjs
+   between the sentinels (parity asserted by core.test.mjs leg E). Do NOT edit
+   one copy alone. These are pure functions over (def, sol). ---- */
+// ===== HEXAPAWN LEARNER CORE (byte-identical to core.mjs) =====
+//
+// The machine is the SECOND player (Black, turn===1). A "box" is a canonical
+// machine-to-move position; a "bead" is one legal reply, coloured by the move it
+// votes for. The naive machine starts with every bead present (one vote each).
+//
+// All functions are PURE over (def, sol) where:
+//   def = the Hexapawn game-def (tools/game/games/hexapawn.js)
+//   sol = Adversary.solve(def) — the fully-solved retrograde table.
+// Both are passed in so the page (forge-inlined engine) and the Node twin (required
+// engine) run the identical learner code against their own engine instance.
+
+const WIN_ = 'WIN', LOSS_ = 'LOSS';
+
+// A small deterministic hash → an HSL hue, so a bead's colour is stable forever from
+// its FIXED-at-creation move id (canonical "from-to"). No flicker as the rack grows.
+function beadHue(moveId) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < moveId.length; i++) { h ^= moveId.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return h % 360;
+}
+
+// Build the catalog of machine boxes over the solved tree. Returns an ordered Map
+// canonicalKey → { key, state, moves, beadIds, hueOf }. `moves` are LIVE moves on
+// the representative state; `beadIds[i]` is the canonical move id for moves[i] (the
+// learner indexes beads by canonical id; the UI animates the live move via liveMove).
+function machineBoxes(def, sol) {
+  // one representative state per reachable canonical key (a tiny BFS over the DAG)
+  const byKey = new Map();
+  const root = def.initState();
+  const q = [root];
+  byKey.set(def.key(root), root);
+  while (q.length) {
+    const s = q.shift();
+    const t = def.terminal(s);
+    if (t.over) continue;
+    for (const m of def.legalMoves(s)) {
+      const c = def.apply(s, m);
+      const ck = def.key(c);
+      if (!byKey.has(ck)) { byKey.set(ck, c); q.push(c); }
+    }
+  }
+  const boxes = new Map();
+  const keys = [];
+  byKey.forEach((st, key) => {
+    if (st.turn !== 1) return;                 // machine = the side that moves at turn 1
+    const t = def.terminal(st);
+    if (t.over) return;
+    const moves = def.legalMoves(st);
+    if (!moves.length) return;
+    keys.push(key);
+  });
+  keys.sort();                                  // deterministic box order
+  for (const key of keys) {
+    const st = byKey.get(key);
+    const moves = def.legalMoves(st);
+    const beadIds = moves.map((m) => def.canonicalMoveId(st, m));
+    boxes.set(key, { key, state: st, moves, beadIds, hueOf: beadIds.map(beadHue) });
+  }
+  return boxes;
+}
+
+// Is reply i of `box` a LOSING bead? — i.e. does it hand the HUMAN a won position?
+// The child node's value is from the side-to-move's POV at the child; after the
+// machine moves it is the human's turn, so child.value===WIN means the human wins.
+function beadIsLosing(box, i, def, sol) {
+  const node = sol.table.get(def.key(def.apply(box.state, box.moves[i])));
+  return !!node && node.value === WIN_;
+}
+function beadIsWinning(box, i, def, sol) {
+  const node = sol.table.get(def.key(def.apply(box.state, box.moves[i])));
+  return !!node && node.value === LOSS_;       // child is a LOSS for the human → a machine win
+}
+function losingBeadsOf(box, def, sol) {
+  const out = [];
+  for (let i = 0; i < box.moves.length; i++) if (beadIsLosing(box, i, def, sol)) out.push(i);
+  return out;
+}
+
+// A "support" is the per-box multiset of present beads: Map<boxKey, Map<beadIdx,count>>.
+// count 0 = the bead is discarded; count ≥1 = present with that many votes (reward
+// raises a count; discard zeroes one). The naive machine: every bead count 1.
+function freshSupport(boxes) {
+  const sup = new Map();
+  boxes.forEach((b, k) => {
+    const m = new Map();
+    b.moves.forEach((_, i) => m.set(i, 1));
+    sup.set(k, m);
+  });
+  return sup;
+}
+function liveBeads(supBox) { let n = 0; supBox.forEach((c) => { if (c > 0) n++; }); return n; }
+
+// The boxes actually REACHABLE in play under a given support: BFS from the root
+// branching on ALL human moves but only on IN-SUPPORT machine beads. Convergence is
+// measured over this set — a box no path can reach no longer matters.
+function reachableBoxes(boxes, support, def) {
+  const seen = new Set();
+  const reached = new Set();
+  const q = [def.initState()];
+  while (q.length) {
+    const s = q.shift();
+    const t = def.terminal(s);
+    if (t.over) continue;
+    const k = def.key(s);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    if (s.turn === 0) {
+      for (const m of def.legalMoves(s)) q.push(def.apply(s, m));
+    } else {
+      const supBox = support.get(k);
+      if (!supBox) continue;
+      reached.add(k);
+      const box = boxes.get(k);
+      // MIRROR ROUND-TRIP: a bead is a canonical move id; translate to a live move on s
+      // before applying (the representative's move would not advance a mirrored live state).
+      supBox.forEach((cnt, bi) => { if (cnt > 0) q.push(def.apply(s, def.liveMove(s, box.beadIds[bi]))); });
+    }
+  }
+  return reached;
+}
+
+// R — the convergence measure: the number of REACHABLE, IN-SUPPORT losing beads,
+// counting reward multiplicity. R=0 ⟺ no path lets the machine blunder into a loss.
+function reachableLossCount(boxes, support, def, sol) {
+  const reached = reachableBoxes(boxes, support, def);
+  let r = 0;
+  reached.forEach((k) => {
+    const supBox = support.get(k), box = boxes.get(k);
+    supBox.forEach((cnt, bi) => { if (cnt > 0 && beadIsLosing(box, bi, def, sol)) r += cnt; });
+  });
+  return r;
+}
+
+// ONE DISCARD step: scan reachable boxes in key order; in the first box with >1 live
+// bead and a reachable losing bead, ZERO the smallest-index losing bead (keep ≥1
+// live). Because emptying a box of its losing replies can make a previously-protected
+// parent line force a loss, the NEXT step's reachableBoxes re-derivation back-props
+// the pruning toward the root automatically (a box reached only via a now-dead bead
+// drops out of `reached`). Returns the {boxKey, beadIdx} removed, or null at fixpoint.
+function discardStep(boxes, support, def, sol) {
+  const reached = reachableBoxes(boxes, support, def);
+  for (const k of boxes.keys()) {
+    if (!reached.has(k)) continue;
+    const supBox = support.get(k), box = boxes.get(k);
+    if (liveBeads(supBox) <= 1) continue;
+    const losing = [];
+    supBox.forEach((cnt, bi) => { if (cnt > 0 && beadIsLosing(box, bi, def, sol)) losing.push(bi); });
+    losing.sort((a, b) => a - b);
+    if (losing.length) { supBox.set(losing[0], 0); return { boxKey: k, beadIdx: losing[0] }; }
+  }
+  return null;
+}
+
+// ONE REWARD step (the negative control): the SAME schedule, sign flipped — instead
+// of removing a reachable losing bead, ADD a vote to it. Rewarding the blunder makes
+// the machine more likely to repeat it; R can only grow.
+function rewardStep(boxes, support, def, sol) {
+  const reached = reachableBoxes(boxes, support, def);
+  for (const k of boxes.keys()) {
+    if (!reached.has(k)) continue;
+    const supBox = support.get(k), box = boxes.get(k);
+    const losing = [];
+    supBox.forEach((cnt, bi) => { if (beadIsLosing(box, bi, def, sol)) losing.push(bi); });
+    losing.sort((a, b) => a - b);
+    if (losing.length) { supBox.set(losing[0], supBox.get(losing[0]) + 1); return { boxKey: k, beadIdx: losing[0] }; }
+  }
+  return null;
+}
+
+// Run the complete trainer to its fixpoint, recording R after each step. `mode` is
+// 'discard' or 'reward'. For reward we cap at `rewardSteps` (it never terminates).
+function completeTrainer(boxes, def, sol, mode, rewardSteps) {
+  const support = freshSupport(boxes);
+  const rSeq = [reachableLossCount(boxes, support, def, sol)];
+  const removals = [];
+  let steps = 0;
+  const CAP = 200;
+  while (steps < CAP) {
+    let act;
+    if (mode === 'reward') { if (steps >= (rewardSteps || 0)) break; act = rewardStep(boxes, support, def, sol); }
+    else { act = discardStep(boxes, support, def, sol); }
+    if (!act) break;
+    removals.push(act);
+    steps++;
+    rSeq.push(reachableLossCount(boxes, support, def, sol));
+    if (mode === 'discard' && rSeq[rSeq.length - 1] === 0) break;
+  }
+  return { support, rSeq, steps, removals };
+}
+
+// Is a converged support minimax-optimal? — every reachable box must (a) hold NO
+// in-support losing bead and (b) still hold ≥1 WINNING reply (a child that is a LOSS
+// for the human), so the machine, being the 2nd player of a 2nd-player-win game,
+// never loses against any opponent.
+function isMinimaxOptimal(boxes, support, def, sol) {
+  const reached = reachableBoxes(boxes, support, def);
+  let bad = null;
+  reached.forEach((k) => {
+    if (bad) return;
+    const supBox = support.get(k), box = boxes.get(k);
+    let hasWin = false;
+    supBox.forEach((cnt, bi) => {
+      if (cnt <= 0) return;
+      if (beadIsLosing(box, bi, def, sol)) bad = k + ' still holds a losing bead';
+      if (beadIsWinning(box, bi, def, sol)) hasWin = true;
+    });
+    if (!bad && !hasWin) bad = k + ' has no winning reply left';
+  });
+  return { ok: !bad, detail: bad || 'every reachable box keeps only winning replies' };
+}
+
+// ── the Menace RUNTIME — hand-play & auto-play share this exact draw/discard path ──
+// makeMachine(def, sol) → a live, mutable machine the page (and tests) drive turn by
+// turn. draw(state) picks an in-support bead weighted by vote count (seeded RNG);
+// recordOutcome() runs the MENACE discard on a machine loss along lineThisGame.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function makeMachine(def, sol, seed) {
+  const boxes = machineBoxes(def, sol);
+  const support = freshSupport(boxes);
+  const rng = mulberry32(seed == null ? 0x2468ace : seed);
+  let lineThisGame = [];                 // [{ boxKey, beadIdx }] of THIS game's machine replies
+  const stats = { wins: 0, losses: 0, games: 0 };
+
+  function boxFor(state) { return boxes.get(def.key(state)); }
+
+  // Draw a weighted in-support bead for the machine to move at `state`. Returns
+  // { boxKey, beadIdx, move (live), canonicalId } or null if the box is empty/absent.
+  function draw(state) {
+    const k = def.key(state);
+    const box = boxes.get(k);
+    const supBox = support.get(k);
+    if (!box || !supBox) return null;
+    let total = 0; supBox.forEach((c) => { if (c > 0) total += c; });
+    if (total <= 0) return null;          // an emptied (resigned) box has no reply
+    let pick = rng() * total, chosen = -1;
+    supBox.forEach((c, bi) => { if (chosen >= 0 || c <= 0) return; pick -= c; if (pick < 0) chosen = bi; });
+    if (chosen < 0) supBox.forEach((c, bi) => { if (chosen < 0 && c > 0) chosen = bi; });
+    lineThisGame.push({ boxKey: k, beadIdx: chosen });
+    // MIRROR ROUND-TRIP: the bead is indexed by canonical id; translate it back to a
+    // LIVE move on `state` so the board animates a real move and never teleports.
+    const move = def.liveMove(state, box.beadIds[chosen]);
+    return { boxKey: k, beadIdx: chosen, move, canonicalId: box.beadIds[chosen] };
+  }
+
+  function newGame() { lineThisGame = []; }
+
+  // Record the finished game's result FROM THE HUMAN's POV. On a human win (machine
+  // loss) we run the MENACE discard: remove the last machine bead on the line that
+  // still has a sibling (keep ≥1 live). Returns the discards applied (for animation).
+  function recordOutcome(humanWon) {
+    stats.games++;
+    const discards = [];
+    if (humanWon) {
+      stats.wins++;
+      for (let i = lineThisGame.length - 1; i >= 0; i--) {
+        const { boxKey, beadIdx } = lineThisGame[i];
+        const supBox = support.get(boxKey);
+        if (supBox && liveBeads(supBox) > 1 && supBox.get(beadIdx) > 0) {
+          supBox.set(beadIdx, supBox.get(beadIdx) - 1);
+          discards.push({ boxKey, beadIdx, emptied: liveBeads(supBox) === 1 });
+          break;                          // MENACE removes ONE bead per loss (the last live one)
+        }
+      }
+    } else {
+      stats.losses++;
+    }
+    return discards;
+  }
+
+  return {
+    boxes, support, stats,
+    boxFor, draw, newGame, recordOutcome,
+    liveBeadCount: (k) => liveBeads(support.get(k)),
+    beadCount: (k, bi) => (support.get(k) ? support.get(k).get(bi) || 0 : 0),
+    isEmptyBox: (k) => liveBeads(support.get(k)) === 0,
+    reset() {
+      support.forEach((m) => m.forEach((_, bi) => m.set(bi, 1)));
+      stats.wins = 0; stats.losses = 0; stats.games = 0; lineThisGame = [];
+    },
+    get line() { return lineThisGame.slice(); }
+  };
+}
+
+// ── runSelfTest(Adversary, def): the in-page green pill's oracle. The page's pill and
+// the Node twin both call THIS. Returns { ok, passed, total, checks, facts }. ──
+function runSelfTest(Adversary, def) {
+  const checks = [];
+  const add = (name, pass, info) => checks.push({ name, pass: !!pass, info: info || '' });
+
+  const sol = Adversary.solve(def);
+
+  // (1) the def's 6 engine checks + the literature battery (root LOSS / mate-6 / 71 / 0-draw / mirror)
+  const eng = Adversary.runSelfTest([def]);
+  add('engine self-test green (6/6) + literature battery', eng.pass === eng.total,
+    eng.pass + '/' + eng.total + ' · ' + (eng.checks.find((c) => /literature/.test(c.name)) || {}).detail);
+  add('Hexapawn = 2nd-player win, mate in 6 (' + sol.nodeCount + ' nodes)',
+    sol.value === LOSS_ && sol.dist === 6 && sol.nodeCount === 71,
+    sol.value + ' / mate ' + sol.dist + ' / ' + sol.nodeCount + ' nodes');
+
+  // (2) the naive machine: box & bead counts
+  const boxes = machineBoxes(def, sol);
+  let beads = 0; boxes.forEach((b) => { beads += b.moves.length; });
+  let totalLosing = 0; boxes.forEach((b) => { totalLosing += losingBeadsOf(b, def, sol).length; });
+  add('naive machine: 19 boxes, 47 beads, 17 losing replies',
+    boxes.size === 19 && beads === 47 && totalLosing === 17,
+    boxes.size + ' boxes · ' + beads + ' beads · ' + totalLosing + ' losing');
+
+  // (3) the complete trainer: R strictly decreases every step and reaches 0
+  const disc = completeTrainer(boxes, def, sol, 'discard');
+  let strictlyDown = true;
+  for (let i = 1; i < disc.rSeq.length; i++) if (disc.rSeq[i] >= disc.rSeq[i - 1]) strictlyDown = false;
+  const reaches0 = disc.rSeq[disc.rSeq.length - 1] === 0;
+  add('discard trainer: R 17→0 in 15 strictly-decreasing steps',
+    disc.rSeq[0] === 17 && strictlyDown && reaches0 && disc.steps === 15,
+    'R: ' + disc.rSeq.join('→') + '  (' + disc.steps + ' steps)');
+
+  // (4) the fixpoint is minimax-optimal (machine never loses)
+  const opt = isMinimaxOptimal(boxes, disc.support, def, sol);
+  add('converged machine is minimax-optimal (never loses)', opt.ok, opt.detail);
+
+  // (5) the reward-the-loss neg-control DIVERGES over the same schedule (sign flipped)
+  const rew = completeTrainer(boxes, def, sol, 'reward', disc.steps);
+  let nonDown = true, strictlyUp = true;
+  for (let i = 1; i < rew.rSeq.length; i++) {
+    if (rew.rSeq[i] < rew.rSeq[i - 1]) nonDown = false;
+    if (rew.rSeq[i] <= rew.rSeq[i - 1]) strictlyUp = false;
+  }
+  const never0 = rew.rSeq.every((v) => v > 0);
+  add('reward neg-control DIVERGES: R 17→' + rew.rSeq[rew.rSeq.length - 1] + ', strictly grows, never 0',
+    nonDown && strictlyUp && never0 && rew.rSeq[0] === 17,
+    'R: ' + rew.rSeq.join('→'));
+
+  const passed = checks.reduce((a, c) => a + (c.pass ? 1 : 0), 0);
+  return {
+    ok: passed === checks.length, passed, total: checks.length, checks,
+    facts: {
+      value: sol.value, mate: sol.dist, nodes: sol.nodeCount,
+      boxes: boxes.size, beads, losing: totalLosing,
+      discardSteps: disc.steps, discardSeq: disc.rSeq,
+      rewardFinal: rew.rSeq[rew.rSeq.length - 1], rewardSeq: rew.rSeq
+    }
+  };
+}
+// ===== END HEXAPAWN LEARNER CORE =====
+
+/* ===================================================================== *
+ *  PAGE GLUE — render the board + rack, gestures, keyboard, choreography  *
+ *  This is the PLAY LOOP + SOUL: it consumes the engine + learner and    *
+ *  re-derives no math.                                                    *
+ * ===================================================================== */
+
+try{ var __ck='ws:seen:hexapawn'; if(!localStorage.getItem(__ck)) localStorage.setItem(__ck, String(Date.now())); }catch(e){}
+
+const DEF = GAME_hexapawn;
+const SOL = Adversary.solve(DEF);
+const SVGNS = 'http://www.w3.org/2000/svg';
+const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let machine = makeMachine(DEF, SOL, 0x1f2e3d);
+
+const PAL = {
+  ink:'#ede2f0', dim:'#a79ab2', gold:'#c9a24a', goldBright:'#f0d488',
+  felt:'#1a1424', wood:'#241a12', white:'#e8c66a', whiteEdge:'#8a6d2e',
+  black:'#6fd3c4', blackEdge:'#2f7d72', teal:'#6fd3c4', win:'#8fd79a', open:'#e0664f',
+  ring:'rgba(201,162,74,0.55)', laurel:'#8fd79a'
+};
+
+// ── board geometry ──
+const B = { N:3, pad:34, cell:124, get size(){ return this.pad*2 + this.cell*this.N; } };
+function idx(r,c){ return r*3+c; }
+function rc(i){ return [Math.floor(i/3), i%3]; }
+function cellCenter(i){ const [r,c]=rc(i); return { x:B.pad + c*B.cell + B.cell/2, y:B.pad + r*B.cell + B.cell/2 }; }
+
+const board = document.getElementById('board');
+board.setAttribute('width', B.size); board.setAttribute('height', B.size);
+board.setAttribute('viewBox', '0 0 '+B.size+' '+B.size);
+
+function el(tag, attrs){ const e=document.createElementNS(SVGNS,tag); if(attrs) for(const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+
+/* ── GAME STATE ──
+   live position; whose turn; selection + drag transients; phase guards. */
+let GS = {
+  state: DEF.initState(),
+  over: false,
+  phase: 'human',          // 'human' | 'machine' | 'over' | 'auto'
+  selected: -1,            // selected pawn cell during keyboard/tap select
+  drag: null,              // { from, ghost } during pointer drag
+  focusCell: 0,            // keyboard roam cursor
+  lastMachine: null,       // { move, boxKey } for the verdict line
+  recent: [],              // last 12 outcomes (true=win)
+  streak: 0,
+  hardened: false,
+  consultKey: null         // the box currently lit
+};
+
+// ── DOM refs ──
+const $ = (id)=>document.getElementById(id);
+const rackEl=$('rack'), rackCntEl=$('rackCnt'), rackHeadEl=$('rackHead');
+const troughBeadsEl=$('troughBeads'), troughCntEl=$('troughCnt');
+const verdictEl=$('verdict'), noteEl=$('note'), turnEl=$('turnLine');
+const streakNumEl=$('streakNum'), talliesEl=$('tallies'), pipsEl=$('pips'), hardNoteEl=$('hardNote');
+const statWinsEl=$('statWins'), statLossEl=$('statLoss');
+
+let revealSolver=false, rewardMode=false;
+let autoN=1, autoRunning=false;
+let troughTotal=0;
+
+/* hue helper mirrors the core's beadHue for colour parity */
+function beadColor(hue){ return 'hsl('+hue+',62%,58%)'; }
+
+/* =====================================================================
+   BOARD RENDER
+   ===================================================================== */
+function clear(node){ while(node.firstChild) node.removeChild(node.firstChild); }
+
+function farRowOfTurn(turn){ return turn===0 ? 0 : 2; }
+
+function drawBoard(){
+  clear(board);
+  // frame plate
+  board.appendChild(el('rect',{x:6,y:6,width:B.size-12,height:B.size-12,rx:14,
+    fill:'url(#plate)',stroke:PAL.wood,'stroke-width':3}));
+  // defs (gradients) — added once
+  const defs=el('defs');
+  defs.innerHTML =
+    '<linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">'+
+    '<stop offset="0" stop-color="#1a141f"/><stop offset="1" stop-color="#0c0a12"/></linearGradient>'+
+    '<radialGradient id="wpawn" cx="0.4" cy="0.32" r="0.8">'+
+    '<stop offset="0" stop-color="#fff3cf"/><stop offset="0.5" stop-color="'+PAL.gold+'"/><stop offset="1" stop-color="'+PAL.whiteEdge+'"/></radialGradient>'+
+    '<radialGradient id="bpawn" cx="0.4" cy="0.32" r="0.8">'+
+    '<stop offset="0" stop-color="#cdfff6"/><stop offset="0.5" stop-color="'+PAL.teal+'"/><stop offset="1" stop-color="'+PAL.blackEdge+'"/></radialGradient>';
+  board.appendChild(defs);
+
+  const st = GS.state;
+  const activeFar = !GS.over;
+  // home-rail glow for the active side
+  if(!GS.over && GS.phase!=='over'){
+    const rail = st.turn===0 ? 2 : 0; // White home row2, Black home row0
+    const col = st.turn===0 ? PAL.gold : PAL.teal;
+    board.appendChild(el('rect',{x:B.pad, y:B.pad + rail*B.cell, width:B.cell*3, height:B.cell,
+      fill:'none', stroke:col, 'stroke-width':2, opacity:.30, rx:6}));
+  }
+
+  // grid cells (role=gridcell for keyboard/agent)
+  for(let i=0;i<9;i++){
+    const [r,c]=rc(i);
+    const x=B.pad+c*B.cell, y=B.pad+r*B.cell;
+    const g=el('g',{class:'cellg','data-cell':String(i)});
+    const cellBg = ((r+c)%2===0) ? 'rgba(255,255,255,0.035)' : 'rgba(255,255,255,0.015)';
+    const cellRect = el('rect',{x:x+3,y:y+3,width:B.cell-6,height:B.cell-6,rx:8,fill:cellBg,
+      stroke:'rgba(201,162,74,0.16)','stroke-width':1});
+    cellRect.setAttribute('role','gridcell');
+    cellRect.setAttribute('tabindex', i===GS.focusCell ? '0' : '-1');
+    cellRect.setAttribute('data-cell', String(i));
+    cellRect.setAttribute('aria-label', cellAria(i));
+    g.appendChild(cellRect);
+    if(i===GS.focusCell && document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('data-cell')!=null){
+      g.appendChild(el('rect',{x:x+3,y:y+3,width:B.cell-6,height:B.cell-6,rx:8,fill:'none',stroke:PAL.goldBright,'stroke-width':2,opacity:.7}));
+    }
+    board.appendChild(g);
+  }
+
+  // landing rings for the selected pawn
+  if(GS.selected>=0 && GS.phase==='human' && !GS.over){
+    const dests = legalDestsFrom(GS.selected);
+    for(const m of dests){
+      const ctr=cellCenter(m.to);
+      board.appendChild(el('circle',{cx:ctr.x,cy:ctr.y,r:B.cell*0.30,fill:'none',
+        stroke:PAL.ring,'stroke-width':3,'stroke-dasharray':'6 5',class:'landring',
+        'data-dest':String(m.to)}));
+    }
+  }
+
+  // pawns
+  for(let i=0;i<9;i++){
+    const v=st.board[i]; if(v===0) continue;
+    const ctr=cellCenter(i);
+    if(GS.drag && GS.drag.from===i) continue; // hide while dragging (ghost shown)
+    drawPawn(board, ctr.x, ctr.y, v, i===GS.selected);
+  }
+  // drag ghost
+  if(GS.drag && GS.drag.ghost){
+    drawPawn(board, GS.drag.ghost.x, GS.drag.ghost.y, st.board[GS.drag.from], true, .8);
+  }
+
+  // terminal laurel / ashed rail
+  if(GS.over) decorateTerminal();
+}
+
+function drawPawn(parent, x, y, who, hi, op){
+  const r=B.cell*0.30;
+  const fill = who==='W' ? 'url(#wpawn)' : 'url(#bpawn)';
+  const edge = who==='W' ? PAL.whiteEdge : PAL.blackEdge;
+  const g=el('g',{});
+  g.appendChild(el('ellipse',{cx:x,cy:y+r*0.7,rx:r*0.92,ry:r*0.34,fill:'rgba(0,0,0,0.45)'}));
+  // a chess-pawn silhouette: a ball on a flared base
+  g.appendChild(el('circle',{cx:x,cy:y-r*0.18,r:r*0.62,fill:fill,stroke:edge,'stroke-width':2.2}));
+  g.appendChild(el('path',{d:'M '+(x-r*0.66)+' '+(y+r*0.78)+' Q '+x+' '+(y+r*0.2)+' '+(x+r*0.66)+' '+(y+r*0.78)+' Z',
+    fill:fill,stroke:edge,'stroke-width':2.2}));
+  if(hi){ g.appendChild(el('circle',{cx:x,cy:y-r*0.18,r:r*0.62+4,fill:'none',stroke:PAL.goldBright,'stroke-width':2,opacity:.85})); }
+  parent.appendChild(g);
+}
+
+function decorateTerminal(){
+  // light the winning condition. The terminal value is LOSS for side-to-move; the
+  // WINNER is the other side. Determine which of the 3 paths fired.
+  const st=GS.state;
+  // promotion: an enemy on its far rank
+  const moverFar = farRowOfTurn(st.turn);   // mover's own far rank (where mover would promote)
+  const oppFar = farRowOfTurn(st.turn^1);
+  const oppPiece = st.turn===0 ? 'B' : 'W';
+  let promoted=-1;
+  for(let c=0;c<3;c++){ if(st.board[idx(oppFar,c)]===oppPiece) promoted=idx(oppFar,c); }
+  if(promoted>=0){
+    const ctr=cellCenter(promoted);
+    board.appendChild(el('circle',{cx:ctr.x,cy:ctr.y,r:B.cell*0.42,fill:'none',stroke:PAL.laurel,'stroke-width':3,opacity:.9}));
+    board.appendChild(el('circle',{cx:ctr.x,cy:ctr.y,r:B.cell*0.48,fill:'none',stroke:PAL.laurel,'stroke-width':1.5,opacity:.5}));
+  }
+}
+
+function cellAria(i){
+  const [r,c]=rc(i); const v=GS.state.board[i];
+  let who = v==='W' ? 'your pawn' : v==='B' ? 'machine pawn' : 'empty';
+  let moves='';
+  if(v==='W' && GS.phase==='human' && !GS.over){ const d=legalDestsFrom(i).length; moves = ', '+d+' move'+(d===1?'':'s'); }
+  return 'r'+(r+1)+'c'+(c+1)+', '+who+moves;
+}
+
+/* legal LIVE destinations from a human pawn at cell `from` */
+function legalDestsFrom(from){
+  if(GS.state.board[from]!=='W') return [];
+  return DEF.legalMoves(GS.state).filter(m=>m.from===from);
+}
+
+/* =====================================================================
+   THE RACK — one tray per machine box TOUCHED, lazily materialized.
+   Stable keyed DOM: a tray, once faced, never reshuffles.
+   ===================================================================== */
+const facedBoxes = [];     // ordered list of box keys faced (stable order)
+const facedSet = new Set();
+const trayEls = new Map(); // key -> tray element
+
+function faceBox(key){
+  if(facedSet.has(key)) return;
+  facedSet.add(key); facedBoxes.push(key);
+  const box=machine.boxes.get(key);
+  const tray=document.createElement('div');
+  tray.className='tray'; tray.dataset.key=key;
+  // ghost micro-board
+  const ghost=ghostBoard(box.state);
+  tray.appendChild(ghost);
+  // pile
+  const pile=document.createElement('div'); pile.className='pile';
+  tray.appendChild(pile);
+  // caption
+  const cap=document.createElement('div'); cap.className='cap';
+  tray.appendChild(cap);
+  rackEl.appendChild(tray);
+  trayEls.set(key, tray);
+  refreshTray(key);
+  updateRackHead();
+}
+
+function ghostBoard(state){
+  const G=26, P=3, cell=(G-P*2)/3;
+  const svg=document.createElementNS(SVGNS,'svg');
+  svg.setAttribute('class','ghost'); svg.setAttribute('width', 78); svg.setAttribute('height',78);
+  svg.setAttribute('viewBox','0 0 '+ (G*3) +' '+(G*3));
+  for(let i=0;i<9;i++){
+    const [r,c]=rc(i); const x=c*G, y=r*G;
+    svg.appendChild(elGhost('rect',{x:x+1,y:y+1,width:G-2,height:G-2,rx:3,
+      fill:((r+c)%2===0)?'rgba(255,255,255,0.05)':'rgba(255,255,255,0.02)',
+      stroke:'rgba(201,162,74,0.18)','stroke-width':1}));
+    const v=state.board[i];
+    if(v!==0){
+      svg.appendChild(elGhost('circle',{cx:x+G/2,cy:y+G/2,r:G*0.28,
+        fill: v==='W'?PAL.gold:PAL.teal, stroke: v==='W'?PAL.whiteEdge:PAL.blackEdge,'stroke-width':1}));
+    }
+  }
+  return svg;
+}
+function elGhost(tag,attrs){ const e=document.createElementNS(SVGNS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
+
+function refreshTray(key){
+  const tray=trayEls.get(key); if(!tray) return;
+  const box=machine.boxes.get(key);
+  const pile=tray.querySelector('.pile');
+  const cap=tray.querySelector('.cap');
+  clearHTML(pile);
+  let live=0;
+  for(let bi=0; bi<box.moves.length; bi++){
+    const cnt=machine.beadCount(key,bi);
+    for(let k=0;k<cnt;k++){
+      const b=document.createElement('div'); b.className='bead';
+      b.style.background=beadColor(box.hueOf[bi]);
+      b.dataset.bead=String(bi);
+      // tiny deterministic jitter so the pile reads as a loose heap
+      const jx=((box.hueOf[bi]*7 + k*13)%7)-3, jy=((box.hueOf[bi]*11 + k*5)%5)-2;
+      b.style.transform='translate('+jx+'px,'+jy+'px)';
+      if(revealSolver){
+        b.classList.add(beadIsLosing(box,bi,DEF,SOL)?'solver-loss':'solver-safe');
+      }
+      b.title=DEF.moveLabel(box.state, box.moves[bi]);
+      b.addEventListener('mouseenter',()=>highlightGhostMove(tray,box,bi,true));
+      b.addEventListener('mouseleave',()=>highlightGhostMove(tray,box,bi,false));
+      b.addEventListener('click',()=>highlightGhostMove(tray,box,bi,true,true));
+      pile.appendChild(b);
+    }
+    if(cnt>0) live++;
+  }
+  const empty=machine.isEmptyBox(key);
+  tray.classList.toggle('husk', empty);
+  if(empty){ cap.innerHTML='resigns ↑'; }
+  else { const total=totalBeads(key); cap.innerHTML='<b>'+total+'</b> bead'+(total===1?'':'s'); }
+}
+function totalBeads(key){ const box=machine.boxes.get(key); let t=0; for(let bi=0;bi<box.moves.length;bi++) t+=machine.beadCount(key,bi); return t; }
+function clearHTML(n){ while(n.firstChild) n.removeChild(n.firstChild); }
+
+let ghostArrow=null;
+function highlightGhostMove(tray,box,bi,on,sticky){
+  const ghost=tray.querySelector('.ghost');
+  // remove existing arrow
+  const old=ghost.querySelector('.gharrow'); if(old) old.remove();
+  if(!on) return;
+  // draw the live move arrow on the ghost (canonical orientation == box.state)
+  const G=26; const m=box.moves[bi];
+  const [fr,fc]=rc(m.from), [tr,tc]=rc(m.to);
+  const x1=fc*G+G/2, y1=fr*G+G/2, x2=tc*G+G/2, y2=tr*G+G/2;
+  const ln=elGhost('line',{x1,y1,x2,y2,stroke:beadColor(box.hueOf[bi]),'stroke-width':2,'class':'gharrow','stroke-linecap':'round'});
+  ghost.appendChild(ln);
+  ghost.appendChild(elGhost('circle',{cx:x2,cy:y2,r:3,fill:beadColor(box.hueOf[bi]),'class':'gharrow'}));
+}
+
+function updateRackHead(){
+  let beads=0; facedBoxes.forEach(k=>beads+=totalBeads(k));
+  rackCntEl.textContent = facedBoxes.length+' box'+(facedBoxes.length===1?'':'es')+' · '+beads+' bead'+(beads===1?'':'s');
+}
+
+/* =====================================================================
+   THE MENACE RITUAL — the machine's reply (drawer opens, bead arcs).
+   ===================================================================== */
+function aria(msg){ let a=$('arialive'); if(!a){ a=document.createElement('div'); a.id='arialive'; a.setAttribute('aria-live','polite'); a.style.position='absolute'; a.style.width='1px'; a.style.height='1px'; a.style.overflow='hidden'; a.style.clip='rect(0 0 0 0)'; document.body.appendChild(a); } a.textContent=msg; }
+
+function dataStateMirror(){
+  let d=$('dataStateMirror'); if(!d){ d=document.createElement('div'); d.id='dataStateMirror'; d.style.display='none'; document.body.appendChild(d); }
+  d.dataset.key = DEF.key(GS.state);
+  d.dataset.turn = String(GS.state.turn);
+  d.dataset.phase = GS.phase;
+  d.dataset.over = String(GS.over);
+}
+
+function machineReply(){
+  const k=DEF.key(GS.state);
+  faceBox(k);
+  // light the consulting drawer
+  if(GS.consultKey && trayEls.get(GS.consultKey)) trayEls.get(GS.consultKey).classList.remove('consult');
+  GS.consultKey=k;
+  const tray=trayEls.get(k); if(tray){ tray.classList.add('consult'); tray.scrollIntoView({block:'nearest',inline:'nearest',behavior:REDUCED?'auto':'smooth'}); }
+
+  const drawn=machine.draw(GS.state);
+  if(!drawn){ // empty box — machine cannot reply (shouldn't happen mid-game with keep>=1)
+    finishGame(true); return;
+  }
+  // lift the bead visually, then commit the move
+  liftBead(tray, drawn.beadIdx);
+  aria('machine plays '+DEF.moveLabel(GS.state, drawn.move)+' from box '+(facedBoxes.indexOf(k)+1));
+  const after = ()=>{ commitMachineMove(drawn); };
+  if(REDUCED){ after(); } else { setTimeout(after, 150); }
+}
+
+function liftBead(tray, bi){
+  if(!tray) return;
+  const beads=tray.querySelectorAll('.bead[data-bead="'+bi+'"]');
+  if(beads.length) beads[beads.length-1].classList.add('lift');
+}
+
+function commitMachineMove(drawn){
+  GS.state = DEF.apply(GS.state, drawn.move);
+  GS.lastMachine = { move: drawn.move, boxKey: drawn.boxKey, idx: facedBoxes.indexOf(drawn.boxKey)+1 };
+  refreshTray(drawn.boxKey);
+  drawBoard(); dataStateMirror();
+  // check terminal: did the machine's move end the game?
+  const t=DEF.terminal(GS.state);
+  if(t.over){ finishGame(GS.state.turn===0 ? /*human to move and lost? value LOSS for human*/ (t.value==='LOSS') : false); return; }
+  // now human's turn
+  GS.phase='human';
+  setTurnLine();
+}
+
+/* =====================================================================
+   HUMAN MOVE — single commit sink, validated against legalMoves.
+   ===================================================================== */
+function commitHumanMove(move){
+  if(GS.phase!=='human' || GS.over) return false;
+  // validate
+  const legal=DEF.legalMoves(GS.state).some(m=>m.from===move.from && m.to===move.to);
+  if(!legal){ noteEl.textContent='Illegal: pawns push forward into an empty square or capture one step diagonally.'; return false; }
+  GS.state=DEF.apply(GS.state, move);
+  GS.selected=-1; GS.drag=null;
+  drawBoard(); dataStateMirror();
+  const t=DEF.terminal(GS.state);
+  if(t.over){ // human just moved; now it's machine's turn and value is from machine POV
+    finishGame(t.value==='LOSS'); // machine to move and LOSS => human won
+    return true;
+  }
+  GS.phase='machine';
+  setTurnLine();
+  if(REDUCED){ machineReply(); } else { setTimeout(machineReply, 220); }
+  return true;
+}
+
+/* =====================================================================
+   GAME END — discard ritual + streak/stats bookkeeping.
+   ===================================================================== */
+function finishGame(humanWon){
+  GS.over=true; GS.phase='over';
+  const discards = machine.recordOutcome(humanWon);
+  // verdict
+  if(humanWon){
+    verdictEl.textContent='You win.'; verdictEl.className='verdict win';
+    noteEl.textContent = describeWin();
+    GS.streak++;
+  } else {
+    verdictEl.textContent='The machine wins.'; verdictEl.className='verdict lose';
+    noteEl.textContent = 'It found a line you couldn’t crack. Its rack is hardening.';
+    if(GS.streak>0 && !GS.hardened){ GS.hardened=true; hardNoteEl.hidden=false; }
+    GS.streak=0;
+  }
+  GS.recent.push(humanWon); if(GS.recent.length>12) GS.recent.shift();
+  // animate discards (grey + count down)
+  for(const d of discards){ animateDiscard(d); }
+  refreshAllFacedTrays();
+  updateStreak(); updateStats(); drawBoard(); dataStateMirror();
+  aria(humanWon?'You win. The machine discards a losing bead.':'The machine wins.');
+}
+
+function describeWin(){
+  // name which of the 3 win paths fired
+  const st=GS.state; const oppFar=farRowOfTurn(st.turn^1); const oppPiece=st.turn===0?'B':'W';
+  for(let c=0;c<3;c++){ if(st.board[idx(oppFar,c)]===oppPiece) return 'You reached the far rank. The machine throws that game’s beads away.'; }
+  // count machine pawns
+  let mp=0; for(let i=0;i<9;i++) if(st.board[i]==='B') mp++;
+  if(mp===0) return 'You captured its last pawn. It discards the line that lost.';
+  return 'You left it with no legal move. It discards the losing bead.';
+}
+
+function animateDiscard(d){
+  const tray=trayEls.get(d.boxKey); if(!tray) return;
+  const box=machine.boxes.get(d.boxKey);
+  // add a greyed bead to the trough
+  const gb=document.createElement('div'); gb.className='gb';
+  gb.style.background=beadColor(box.hueOf[d.beadIdx]);
+  troughBeadsEl.appendChild(gb);
+  troughTotal++; troughCntEl.textContent=String(troughTotal);
+  if(troughBeadsEl.children.length>60) troughBeadsEl.removeChild(troughBeadsEl.firstChild);
+}
+
+function refreshAllFacedTrays(){ facedBoxes.forEach(k=>refreshTray(k)); updateRackHead(); }
+
+function updateStreak(){
+  streakNumEl.textContent=String(GS.streak);
+  clearHTML(talliesEl);
+  const shown=Math.min(GS.streak, 24);
+  for(let i=0;i<Math.max(shown,1);i++){ const t=document.createElement('div'); t.className='tick'+(GS.streak===0?' dead':''); talliesEl.appendChild(t); }
+  clearHTML(pipsEl);
+  for(let i=0;i<12;i++){ const p=document.createElement('div'); p.className='pip'; const o=GS.recent[GS.recent.length-12+i]; if(o===true)p.classList.add('w'); else if(o===false)p.classList.add('l'); pipsEl.appendChild(p); }
+}
+function updateStats(){ statWinsEl.textContent=String(machine.stats.wins); statLossEl.textContent=String(machine.stats.losses); }
+
+/* =====================================================================
+   TURN LINE
+   ===================================================================== */
+function setTurnLine(){
+  if(GS.over) return;
+  if(GS.phase==='human'){ turnEl.innerHTML='Your move — push or capture a <b>gold</b> pawn forward.'; }
+  else if(GS.phase==='machine'){ turnEl.innerHTML='The machine consults its matchbox…'; }
+  verdictEl.textContent=''; verdictEl.className='verdict';
+}
+
+/* =====================================================================
+   NEW MATCH / RESET
+   ===================================================================== */
+function newMatch(){
+  GS.state=DEF.initState(); GS.over=false; GS.phase='human'; GS.selected=-1; GS.drag=null;
+  GS.lastMachine=null; GS.consultKey=null; GS.focusCell=0;
+  machine.newGame();
+  facedBoxes.forEach(k=>{ const tr=trayEls.get(k); if(tr) tr.classList.remove('consult'); });
+  noteEl.textContent = GS.recent.length ? 'Beat it again — watch the boxes it used drain.' : 'Beat it. Then watch it stop losing.';
+  setTurnLine(); drawBoard(); dataStateMirror();
+}
+
+function resetNaive(){
+  machine.reset();
+  // wipe rack + trough
+  clearHTML(rackEl); clearHTML(troughBeadsEl);
+  facedBoxes.length=0; facedSet.clear(); trayEls.clear();
+  troughTotal=0; troughCntEl.textContent='0';
+  GS.recent=[]; GS.streak=0; GS.hardened=false; hardNoteEl.hidden=true;
+  updateStreak(); updateStats(); updateRackHead();
+  newMatch();
+  noteEl.textContent='The machine is naive again — every box restocked.';
+}
+
+/* =====================================================================
+   AUTO-PLAY — the SAME draw/discard path, animation collapsed. A perfect-
+   exploring teacher (a winning human) trains the machine fast. This is how
+   convergence is watchable: the rack drains live, the tally climbs.
+   ===================================================================== */
+function perfectHumanMove(state){
+  // pick a move whose child is a LOSS for the machine (a human win), else any.
+  const moves=DEF.legalMoves(state);
+  // exploring teacher: rotate among winning moves so all human lines get trained
+  const winning=moves.filter(m=>{ const n=SOL.table.get(DEF.key(DEF.apply(state,m))); return n && n.value==='LOSS'; });
+  const pool = winning.length ? winning : moves;
+  return pool[(autoPlyCounter++) % pool.length];
+}
+let autoPlyCounter=0;
+
+function autoPlayOne(){
+  // one full game: perfect-exploring human vs the live machine, share draw/discard.
+  let s=DEF.initState(); machine.newGame();
+  while(true){
+    const t=DEF.terminal(s);
+    if(t.over){ const humanWon = (s.turn===1 && t.value==='LOSS'); const dis=machine.recordOutcome(humanWon);
+      for(const d of dis) animateDiscard(d);          // feed the trough so the graveyard records every lesson
+      GS.recent.push(humanWon); if(GS.recent.length>12) GS.recent.shift();
+      if(humanWon) GS.streak++; else GS.streak=0;
+      return; }
+    if(s.turn===0){ s=DEF.apply(s, perfectHumanMove(s)); }
+    else { const d=machine.draw(s); if(!d){ // empty box: machine resigns => human won
+        const dis=machine.recordOutcome(true); for(const x of dis) animateDiscard(x);
+        GS.recent.push(true); if(GS.recent.length>12)GS.recent.shift(); GS.streak++; return; }
+      s=DEF.apply(s, d.move); }
+  }
+}
+
+function runAutoBatch(){
+  if(autoRunning) return;
+  autoRunning=true; $('autoRun').textContent='…running';
+  for(let i=0;i<autoN;i++) autoPlayOne();
+  // re-materialize the rack to reflect drained boxes: face every box that has been touched
+  // (auto-play touches boxes via draw; reflect by facing all boxes that differ from naive)
+  machine.boxes.forEach((b,k)=>{ if(totalBeadsRaw(k) !== b.moves.length || machine.isEmptyBox(k)) faceBox(k); });
+  refreshAllFacedTrays();
+  updateStreak(); updateStats();
+  // reset the visible match so the player can hand-play against the trained machine
+  newMatch();
+  autoRunning=false; $('autoRun').textContent='▶ Run a batch';
+  noteEl.textContent='Trained '+autoN+' game'+(autoN===1?'':'s')+'. Now try to beat it.';
+}
+function totalBeadsRaw(key){ const box=machine.boxes.get(key); let t=0; for(let bi=0;bi<box.moves.length;bi++) t+=machine.beadCount(key,bi); return t; }
+
+/* =====================================================================
+   REWARD-THE-LOSS NEG-CONTROL — runs the exploring-teacher schedule with
+   the sign flipped; the convergence readout goes RED and losing lines CLIMB.
+   ===================================================================== */
+function applyRewardMode(on){
+  rewardMode=on;
+  rackHeadEl.classList.toggle('diverge', on);
+  if(on){
+    // run the complete reward trainer to bloat the live machine's losing lines.
+    const disc=completeTrainer(machine.boxes, DEF, SOL, 'discard');
+    const rew=completeTrainer(machine.boxes, DEF, SOL, 'reward', disc.steps);
+    // copy reward support into the live machine
+    rew.support.forEach((m,k)=>{ const live=machine.support.get(k); m.forEach((cnt,bi)=>live.set(bi,cnt)); });
+    // face every box and refresh
+    machine.boxes.forEach((b,k)=>faceBox(k));
+    refreshAllFacedTrays();
+    verdictEl.textContent='losing lines remaining: '+rew.rSeq[rew.rSeq.length-1]+' — and climbing';
+    verdictEl.className='verdict lose';
+    noteEl.textContent='Reward the blunder and the rack bloats. You will keep winning forever.';
+  } else {
+    machine.reset(); resetNaive();
+  }
+}
+
+/* =====================================================================
+   SOLVER REVEAL
+   ===================================================================== */
+function applyReveal(on){ revealSolver=on; refreshAllFacedTrays(); }
+
+/* =====================================================================
+   POINTER GESTURES — pointerdown lifts a pawn; drag a ghost; pointerup on a
+   ring commits. All paths resolve to commitHumanMove.
+   ===================================================================== */
+function svgPoint(ev){
+  const r=board.getBoundingClientRect();
+  const sx=B.size/r.width, sy=B.size/r.height;
+  return { x:(ev.clientX-r.left)*sx, y:(ev.clientY-r.top)*sy };
+}
+function cellAt(pt){
+  const c=Math.floor((pt.x-B.pad)/B.cell), r=Math.floor((pt.y-B.pad)/B.cell);
+  if(r<0||r>2||c<0||c>2) return -1; return idx(r,c);
+}
+
+board.addEventListener('pointerdown',(ev)=>{
+  if(GS.phase!=='human'||GS.over) return;
+  const pt=svgPoint(ev); const cell=cellAt(pt);
+  if(cell<0) return;
+  if(GS.state.board[cell]==='W' && legalDestsFrom(cell).length){
+    GS.selected=cell; GS.drag={ from:cell, ghost:{x:pt.x,y:pt.y} };
+    board.setPointerCapture(ev.pointerId);
+    drawBoard();
+  } else if(GS.selected>=0){
+    // tap a destination
+    tryCommitTo(cell);
+  }
+});
+board.addEventListener('pointermove',(ev)=>{
+  if(!GS.drag) return;
+  const pt=svgPoint(ev); GS.drag.ghost={x:pt.x,y:pt.y}; drawBoard();
+});
+board.addEventListener('pointerup',(ev)=>{
+  if(!GS.drag) return;
+  const pt=svgPoint(ev); const cell=cellAt(pt);
+  const from=GS.drag.from; GS.drag=null;
+  if(cell>=0 && cell!==from){ tryCommitTo(cell); }
+  else { drawBoard(); } // released on origin: keep selected (tap-select mode)
+});
+
+function tryCommitTo(toCell){
+  const dest=legalDestsFrom(GS.selected).find(m=>m.to===toCell);
+  if(dest){ commitHumanMove(dest); }
+  else if(GS.state.board[toCell]==='W' && legalDestsFrom(toCell).length){ GS.selected=toCell; drawBoard(); }
+  else { noteEl.textContent='Not a legal landing — push forward or capture diagonally.'; springBack(); }
+}
+function springBack(){ drawBoard(); }
+
+/* =====================================================================
+   KEYBOARD GRID — arrows roam; Space/Enter selects then commits; Esc cancels.
+   ===================================================================== */
+board.addEventListener('keydown',(ev)=>{
+  if(GS.over && ev.key!=='Tab'){ if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(ev.key)) ev.preventDefault(); return; }
+  let [r,c]=rc(GS.focusCell);
+  if(ev.key==='ArrowUp'){ r=Math.max(0,r-1); ev.preventDefault(); }
+  else if(ev.key==='ArrowDown'){ r=Math.min(2,r+1); ev.preventDefault(); }
+  else if(ev.key==='ArrowLeft'){ c=Math.max(0,c-1); ev.preventDefault(); }
+  else if(ev.key==='ArrowRight'){ c=Math.min(2,c+1); ev.preventDefault(); }
+  else if(ev.key===' '||ev.key==='Enter'){ ev.preventDefault(); keySelectOrCommit(); return; }
+  else if(ev.key==='Escape'){ GS.selected=-1; drawBoard(); return; }
+  else return;
+  GS.focusCell=idx(r,c); focusCurrent();
+});
+
+function focusCurrent(){
+  drawBoard();
+  const rectFor=board.querySelector('rect[role="gridcell"][data-cell="'+GS.focusCell+'"]');
+  if(rectFor) rectFor.focus();
+}
+function keySelectOrCommit(){
+  if(GS.phase!=='human'||GS.over) return;
+  const cell=GS.focusCell;
+  if(GS.selected<0){
+    if(GS.state.board[cell]==='W' && legalDestsFrom(cell).length){
+      GS.selected=cell;
+      const d=legalDestsFrom(cell); if(d.length){ GS.focusCell=d[0].to; }
+      focusCurrent();
+    }
+  } else {
+    const dest=legalDestsFrom(GS.selected).find(m=>m.to===cell);
+    if(dest){ commitHumanMove(dest); }
+    else if(GS.state.board[cell]==='W' && legalDestsFrom(cell).length){ GS.selected=cell; focusCurrent(); }
+  }
+}
+
+/* =====================================================================
+   SELF-TEST PILL
+   ===================================================================== */
+function runPill(){
+  const r=runSelfTest(Adversary, DEF);
+  const pill=$('selftest');
+  if(r.ok){
+    pill.className='selftest ok';
+    pill.textContent='self-test '+r.passed+'/'+r.total+' ✓';
+    pill.title='2nd-player win, mate in 6 · discard shrinks losses 17→0 in 15 steps · converged = never loses · reward diverges';
+  } else {
+    pill.className='selftest bad';
+    pill.textContent='self-test '+r.passed+'/'+r.total+' ✗';
+    pill.title=r.checks.filter(c=>!c.pass).map(c=>c.name).join(' | ');
+  }
+  return r;
+}
+
+/* =====================================================================
+   WIRING
+   ===================================================================== */
+$('newMatch').addEventListener('click', newMatch);
+$('resetNaive').addEventListener('click', resetNaive);
+$('autoRun').addEventListener('click', runAutoBatch);
+$('autoSeg').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+  $('autoSeg').querySelectorAll('button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); autoN=+b.dataset.n;
+}));
+$('rewardToggle').addEventListener('change', e=>applyRewardMode(e.target.checked));
+$('revealToggle').addEventListener('change', e=>applyReveal(e.target.checked));
+$('selftest').addEventListener('click', runPill);
+
+// boot
+runPill();
+updateStreak(); updateStats(); updateRackHead();
+newMatch();
+
+/* ws: unlock breadcrumb — the shared module (one source of truth), inlined via
+   forge. See /UNLOCK.md and tools/ws/README.md. Defines WS, records this piece's
+   first-visit, and (via WS auto-init) fires the unlock cue. Harmless if storage off. */
+<!-- forge:include ../tools/ws/ws.js -->
+try { WS.seen('hexapawn'); } catch (e) {}
+</script>
+</body>
+</html>

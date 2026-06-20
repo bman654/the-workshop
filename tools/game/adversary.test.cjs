@@ -14,7 +14,7 @@
 const path = require('path');
 const Adversary = require(path.join(__dirname, 'adversary.js'));
 
-const DEF_NAMES = ['nim', 'wythoff', 'ttt333', 'konane', 'hex3', 'mnk443'];
+const DEF_NAMES = ['nim', 'wythoff', 'ttt333', 'konane', 'hex3', 'mnk443', 'hexapawn'];
 const defs = DEF_NAMES.map((n) => require(path.join(__dirname, 'games', n + '.js')));
 
 function main() {

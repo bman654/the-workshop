@@ -34,6 +34,7 @@ const PLACES = [
   { id:'refraction-run', district:'grounds', tier:1, wing:'optics', footprint:'tank', prefer:['bottom','right'] },
   { id:'numbers-room', district:'grounds', tier:2, wing:'number', footprint:'numbers-room' },
   { id:'benford-mill', district:'grounds', tier:2, wing:'number', footprint:'benford-mill', prefer:['bottom','right'] },
+  { id:'hexapawn', district:'grounds', tier:2, wing:'number', footprint:'hexapawn', prefer:['bottom','right'] },
   { id:'midway', district:'grounds', tier:1, wing:'amusements', footprint:'coaster', order:5 },
   { id:'daedalus', district:'grounds', tier:1, wing:'amusements', footprint:'maze', order:20 },
   { id:'arcade', district:'grounds', tier:1, wing:'amusements', footprint:'arcade', order:10 },

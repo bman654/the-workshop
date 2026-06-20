@@ -92,6 +92,12 @@
     // clear of every footprint/furniture box, the manor pool, the viewBox edge, and every existing
     // catalog star by sky.test.cjs CATALOG INTEGRITY.
     'benford-mill':   { x: 490,  y: 810, mag: 2 },
+    // The Matchbox That Learns — the number wing's self-teaching Hexapawn machine. A field star
+    // in the dark lower band right of the manor pool, near its games kin The Clack Counter
+    // (collisions @120px); lit on first visit (ws:seen:hexapawn). Verified clear of every
+    // footprint/furniture box, the manor pool, the viewBox edge, and every existing catalog star
+    // by sky.test.cjs CATALOG INTEGRITY (re-runnable /tmp star-placement verifier).
+    'hexapawn':       { x: 1060, y: 560, mag: 2 },
     // ── the feats constellation: nine "Feats of Light" earned in the Hall of Mirrors,
     //    laid out as a vertical LENS (a pointed oval) threading the WEST GROUNDS left
     //    margin beside the Hall footprint (x124 y430 w148 h74). These are PSEUDO-ids
