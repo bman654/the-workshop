@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Dividing Yard — fold a number across a mirror</title>
+<style>
+  :root{
+    --bg:#08070b;
+    --panel:rgba(13,11,18,0.86);
+    --panel-edge:rgba(201,162,74,0.26);
+    --ink:#ede2f0;
+    --ink-dim:#a79ab2;
+    --gold:#c9a24a;              /* the Numbers Room's gold (number-theory tone) */
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.42);
+    --teal:#6fd3c4;             /* the "exact, proven" voice — also the mirror */
+    --green:#8fd79a;
+    --green-glow:rgba(120,225,150,0.5);
+    --open:#e0664f;             /* the honest overshoot / dropped voice */
+    --slot:rgba(167,154,178,0.16);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{ margin:0; background:
+      radial-gradient(1200px 760px at 50% -12%, rgba(201,162,74,0.08), transparent 58%),
+      radial-gradient(900px 640px at 14% 112%, rgba(111,211,196,0.05), transparent 62%),
+      var(--bg);
+    color:var(--ink); font-family:var(--font-ui); overflow-x:hidden; -webkit-font-smoothing:antialiased; }
+  /* faint squared-paper texture (numbers on a grid) */
+  body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 32px);
+    mix-blend-mode:overlay; }
+
+  /* ── header ── */
+  header{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    gap:14px; padding:11px 18px; background:linear-gradient(180deg, rgba(8,7,11,0.94), rgba(8,7,11,0));
+    pointer-events:none; }
+  header .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; pointer-events:auto; white-space:nowrap; }
+  header .back:hover{ color:var(--gold); opacity:1; }
+  .brand{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.4px; margin:0; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; }
+  .brand .sib{ font:10px/1 var(--font-mono); color:var(--ink-dim); opacity:.62; letter-spacing:.3px; margin-top:1px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:auto; }
+  .brand .sib a{ color:var(--gold); text-decoration:none; opacity:.85; }
+  .brand .sib a:hover{ opacity:1; text-decoration:underline; }
+  .spacer{ flex:1; }
+  .selftest{ pointer-events:auto; font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px;
+    border-radius:20px; border:1px solid var(--panel-edge); background:rgba(0,0,0,0.4); white-space:nowrap;
+    cursor:pointer; user-select:none; color:var(--ink-dim); flex:none; }
+  .selftest.ok{ color:var(--green); border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  /* ── board ── */
+  #stage{ position:fixed; inset:0; }
+  canvas#board{ display:block; width:100%; height:100%; touch-action:none; cursor:default; }
+  canvas#board.grabbing{ cursor:grabbing; }
+
+  /* the big readout — top-center, BELOW the header band */
+  #readout{ position:fixed; left:50%; top:60px; transform:translateX(-50%); z-index:24; text-align:center;
+    pointer-events:none; max-width:94vw; }
+  #countbig{ font-family:var(--font-mono); font-weight:700; font-size:60px; line-height:1; letter-spacing:1px;
+    font-variant-numeric:tabular-nums; color:var(--gold);
+    text-shadow:0 0 24px rgba(201,162,74,0.32), 0 2px 0 rgba(0,0,0,0.6); transition:color .2s; }
+  #countbig.kept{ color:var(--green); text-shadow:0 0 28px var(--green-glow); }
+  #countbig.broken{ color:var(--open); text-shadow:0 0 24px rgba(224,102,79,0.4); }
+  #eqline{ font-family:var(--font-serif); font-size:24px; margin-top:8px; letter-spacing:.5px;
+    font-variant-numeric:tabular-nums; opacity:0; transition:opacity .35s; min-height:30px; }
+  #eqline.show{ opacity:1; }
+  #eqline .sq{ color:var(--green); } #eqline .no{ color:var(--open); } #eqline .dim{ color:var(--ink-dim); opacity:.7; }
+  #eqline .gd{ color:var(--gold); } #eqline .tl{ color:var(--teal); }
+  #countlab{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.5px; text-transform:uppercase; margin-top:6px; }
+
+  /* mode tabs — top under the readout, centered */
+  #tabs{ position:fixed; left:50%; bottom:auto; top:166px; transform:translateX(-50%); z-index:23; display:flex; gap:8px;
+    background:var(--panel); border:1px solid var(--panel-edge); border-radius:12px; padding:6px; backdrop-filter:blur(7px); }
+  .tab{ font:600 11px/1 var(--font-mono); letter-spacing:.2px; padding:9px 13px; border-radius:8px; border:1px solid transparent;
+    background:transparent; color:var(--ink-dim); cursor:pointer; transition:.16s; user-select:none; white-space:nowrap; }
+  .tab:hover{ color:var(--gold); }
+  .tab.on{ color:#1a1206; background:var(--gold); border-color:var(--gold); }
+
+  /* controls — bottom-center */
+  #panel{ position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:22; background:var(--panel);
+    border:1px solid var(--panel-edge); border-radius:14px; padding:13px 16px 14px; width:min(560px, calc(100vw - 28px));
+    backdrop-filter:blur(7px); }
+  #panel .row{ display:flex; align-items:center; gap:10px; margin:4px 0; }
+  #panel label{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.3px; width:62px; flex:none; }
+  #panel input[type=range]{ flex:1; min-width:0; accent-color:var(--gold); height:3px; }
+  #panel .val{ font:12px/1 var(--font-mono); color:var(--gold); width:58px; text-align:right; flex:none; font-variant-numeric:tabular-nums; }
+  .btnrow{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  button.act{ flex:1 1 auto; min-width:88px; font:600 11px/1 var(--font-mono); letter-spacing:.3px; padding:10px 9px; border-radius:9px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); color:var(--ink); cursor:pointer; transition:.16s; user-select:none; }
+  button.act:hover{ border-color:var(--gold); color:var(--gold); }
+  button.act:active{ transform:translateY(1px); }
+  button.act.on{ color:#1a1206; background:var(--gold); border-color:var(--gold); }
+  button.act.warn:hover{ border-color:var(--open); color:var(--open); }
+  .hintline{ font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); margin-top:9px; opacity:.84; text-align:center; }
+  .hintline b{ color:var(--gold); } .hintline .t{ color:var(--teal); }
+
+  /* on-ramp hint — floats in the gap ABOVE the (taller) fold panel, clear of its buttons */
+  .hint{ position:fixed; left:50%; bottom:208px; transform:translateX(-50%); z-index:25;
+    font:12px/1.4 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; pointer-events:none;
+    background:rgba(8,7,11,0.72); padding:8px 15px; border-radius:18px; border:1px solid rgba(201,162,74,0.16);
+    transition:opacity .6s; max-width:90vw; text-align:center; }
+  .hint b{ color:var(--gold); } .hint .t{ color:var(--teal); }
+
+  @media (max-width:560px){
+    .brand .tag, .brand .sib{ display:none; }   /* shrink header so it clears the pill */
+    .brand h1{ font-size:15px; }
+    header{ padding:9px 12px; gap:8px; }
+    .back{ font-size:9.5px !important; letter-spacing:.1em !important; }
+    #countbig{ font-size:42px; } #readout{ top:46px; } #eqline{ font-size:16px; }
+    /* tabs: a horizontally-scrollable strip pinned full-width so the 3rd tab is reachable */
+    #tabs{ top:140px; left:8px; right:8px; transform:none; width:auto; justify-content:flex-start;
+      overflow-x:auto; -webkit-overflow-scrolling:touch; padding:5px; scrollbar-width:none; }
+    #tabs::-webkit-scrollbar{ display:none; }
+    .tab{ padding:8px 9px; font-size:10px; flex:0 0 auto; }
+    #panel{ left:8px; right:8px; width:auto; transform:none; }
+    #panel label{ width:auto; }
+    .hint{ bottom:auto; top:178px; font-size:10.5px; padding:6px 11px; }   /* above the board, clear of the panel */
+  }
+  @media (max-height:620px){
+    /* genuinely short: the tall fold panel + board squeeze the gap, so float the hint smaller + a touch lower */
+    #countbig{ font-size:40px; } #readout{ top:44px; }
+    .hint{ bottom:196px; font-size:10.5px; padding:6px 11px; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <a class="back" href="../numbers-room/index.html">&larr; The Numbers Room</a>
+    <div class="brand">
+      <h1>The Dividing Yard</h1>
+      <div class="tag">fold a number across a mirror</div>
+      <div class="sib">a bench of the <a href="../numbers-room/index.html">Numbers Room</a> &#8599; &nbsp;&#8596;&nbsp; <a href="../squaring-yard/index.html">The Squaring Yard</a></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="selftest" id="selftest" title="run the proof">self-test</div>
+  </header>
+
+  <div id="stage"><canvas id="board"></canvas></div>
+
+  <div id="readout">
+    <div id="countbig">0</div>
+    <div id="eqline"></div>
+    <div id="countlab">beads</div>
+  </div>
+
+  <div id="tabs">
+    <button class="tab on" data-mode="fold">fold across a mirror ↔</button>
+    <button class="tab" data-mode="sieve">two sieves → equal</button>
+  </div>
+
+  <div id="panel">
+    <div class="row">
+      <label id="nlabel">n</label>
+      <input type="range" id="nslider" min="1" max="12" step="1" value="7">
+      <span class="val" id="nval">7</span>
+    </div>
+    <div class="btnrow" id="btns"></div>
+    <div class="hintline" id="hintline"></div>
+  </div>
+
+  <div class="hint" id="hint">Drag a row's <b>right end</b> to reshape the staircase, then drop the <span class="t">teal mirror</span> (or press <b>fold ↔</b>) — every bead glides to its <b>conjugate</b>, and the count stays <b>n</b>.</div>
+
+<script>
+"use strict";
+/* ============================================================================
+   THE DIVIDING YARD — core (sole partition authority) inlined byte-faithfully
+   from core.mjs via forge:include. The same module is proven by core.test.mjs,
+   so the in-page chip below === the Node twin (chip↔twin parity).
+   ============================================================================ */
+<!-- forge:include core.mjs -->
+</script>
+
+<script>
+"use strict";
+/* ============================================================================
+   THE DIVIDING YARD — the touchable foldable staircase.
+
+   Two facets (no plotted curves anywhere):
+     • fold   — a Ferrers staircase of a partition of n; drag a row's right end
+                to reshape it (count pinned to n), then fold it across the teal
+                row=col mirror so every bead glides 1:1 to its conjugate cell.
+                conjugate∘conjugate = id, sum preserved → "= n, nothing lost".
+     • sieve  — two bead-figure towers: partitions into DISTINCT parts vs into
+                ODD parts. They rise to the SAME height (Euler #distinct=#odd).
+                A "let parts repeat" toggle re-enumerates the left tower as ALL
+                partitions, which overshoots the level line — the neg-control.
+
+   The visuals REPLAY exactly what the Core proves: the live count, the conjugate
+   read-out, the tower heights, and the overshoot all read off the Core's integer
+   functions (conjugate / ferrersCells / partitionsDistinct / partitionsOdd /
+   partitionsDistinctCheat). The pill TAMPER swaps countDistinct→cheat so the
+   Euler line AND the neg-control both go red — the felt proof the towers aren't
+   a vacuous "always equal" box.
+   ============================================================================ */
+
+const cv = document.getElementById('board'), ctx = cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){ DPR=Math.min(2, window.devicePixelRatio||1);
+  W=cv.clientWidth; H=cv.clientHeight; cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0); }
+window.addEventListener('resize', ()=>{ resize(); layout(); });
+resize();
+
+// ── colours ───────────────────────────────────────────────────────────────
+const GOLD = '#c9a24a';        // a partition's beads (rows)
+const TEAL = '#6fd3c4';        // the mirror + the conjugate "second truth"
+const GREEN = '#8fd79a';       // "kept — nothing lost"
+const OPEN = '#e0664f';        // the overshoot voice
+
+// ── global UI state ──
+let MODE = 'fold';
+let N = 7;
+
+// ====================== FACET 1: FOLD ACROSS A MIRROR ======================
+// A partition `cur` of n, laid as a left-justified Ferrers staircase. Drag a
+// row's right end to reshape (transferBead keeps the count pinned to n).
+// Drop the teal diagonal mirror to FOLD: each bead at cell (r,c) glides to its
+// conjugate cell (c,r), paired by walking ferrersCells(cur) and
+// ferrersCells(conjugate(cur)) in the SAME canonical order.
+const f = {
+  cur: [],            // the current partition (descending)
+  cell: 0, ox:0, oy:0,// staircase geometry (cell px, origin x/y)
+  fold: 0,            // fold progress 0→1 (animated)
+  folding: false,
+  conjAtFoldStart: [],// the conjugate snapshot the fold animates toward
+  drag: null,         // {row} a row being reshaped, or null
+  mirrorGrab: false,  // is the mirror handle grabbed?
+  flash: 0,           // diagonal flash 0..1 mid-fold
+  tint: 0,            // green "kept" tint on arrival 0..1
+  ghost: false,       // show the faint original outline during the first fold
+};
+
+// the diagonal mirror passes through (ox,oy) at 45°, i.e. the row=col axis.
+// Its grab handle sits a little down the line. Geometry is in cell units.
+function mirrorHandlePx(){
+  const cs=f.cell, len=Math.max(f.cur[0]||1, f.cur.length||1);
+  const t=Math.min(len, 3.2);              // handle a few cells down the diagonal
+  return { x:f.ox + t*cs, y:f.oy + t*cs };
+}
+
+// ====================== FACET 2: TWO SIEVES → EQUAL =======================
+// Two towers of small bead-figures: left = partitionsDistinct(n), right =
+// partitionsOdd(n). They rise to the same number of rows (Euler). A repeats
+// toggle swaps the left tower to partitionsAll(n) so it overshoots.
+const s = { repeats:false };
+
+// ── shared geometry: fit a board of `cols`×`rows` cells into the canvas ────────
+function fitCell(cols, rows){
+  const top = 210, bot = 150;                  // leave room for readout+tabs / panel
+  const availW = W - 60, availH = H - top - bot;
+  const cs = Math.max(6, Math.min(46, Math.floor(Math.min(availW/cols, availH/rows))));
+  const bw = cs*cols, bh = cs*rows;
+  const ox = (W - bw)/2, oy = top + Math.max(0,(availH - bh)/2);
+  return { cs, ox, oy };
+}
+function layout(){
+  if(MODE==='fold'){
+    // the staircase + its conjugate must both fit: width = max(maxPart, #rows of
+    // conjugate=maxPart) and height = max(#rows, maxConjPart=#rows). Both bounded
+    // by max(maxPart, #rows). Reserve a little extra for the conjugate ribbon.
+    const w = Math.max(f.cur[0]||1, f.cur.length||1);
+    const span = w + 2.2;
+    const fc = fitCell(span, span + 1.4);
+    f.cell = fc.cs;
+    f.ox = fc.ox + fc.cs*1.0;        // a little left margin for the ribbon
+    f.oy = fc.oy + fc.cs*0.4;
+  } else {
+    // sieve mode geometry is computed per-draw (depends on the two tower sizes)
+  }
+}
+
+// ── draw a single pebble (rounded square with a glossy top) ──
+function pebble(x,y,s,fill,alpha=1,glow=0){
+  const pad=Math.max(1, s*0.08), r=Math.max(2, s*0.22);
+  ctx.save(); ctx.globalAlpha=alpha;
+  if(glow>0){ ctx.shadowColor=fill; ctx.shadowBlur=glow; }
+  roundRect(x+pad, y+pad, s-2*pad, s-2*pad, r); ctx.fillStyle=fill; ctx.fill();
+  ctx.shadowBlur=0;
+  // glossy top sliver
+  ctx.globalAlpha=alpha*0.20; ctx.fillStyle='#ffffff';
+  roundRect(x+pad+1.5, y+pad+1.5, s-2*pad-3, (s-2*pad)*0.36, r*0.8); ctx.fill();
+  ctx.restore();
+}
+function roundRect(x,y,w,h,r){ r=Math.min(r,w/2,h/2);
+  ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+// an empty slot outline (where a pebble will go)
+function slot(x,y,s){ const pad=Math.max(1,s*0.08), r=Math.max(2,s*0.22);
+  ctx.save(); ctx.strokeStyle='rgba(167,154,178,0.20)'; ctx.lineWidth=1;
+  roundRect(x+pad,y+pad,s-2*pad,s-2*pad,r); ctx.stroke(); ctx.restore(); }
+
+function labelCenter(x,y,text,color,size){
+  ctx.save(); ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font='700 '+size+'px '+getMono(); ctx.fillText(text,x,y); ctx.restore();
+}
+function labelLeft(x,y,text,color,size){
+  ctx.save(); ctx.fillStyle=color; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.font='700 '+size+'px '+getMono(); ctx.fillText(text,x,y); ctx.restore();
+}
+function getMono(){ return getComputedStyle(document.body).getPropertyValue('--font-mono')||'monospace'; }
+
+// ============================ DRAW LOOP ====================================
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  if(MODE==='fold') drawFold();
+  else drawSieve();
+  requestAnimationFrame(draw);
+}
+
+function drawFold(){
+  const cs=f.cell, ox=f.ox, oy=f.oy, u=f.fold;
+  const cur=f.cur, conj=conjugate(cur);
+  const W0=Math.max(cur[0]||1, cur.length||1);     // bounding span of either shape
+
+  // faint frame around the working square (the fold lives inside it)
+  ctx.save(); ctx.strokeStyle='rgba(201,162,74,0.16)'; ctx.lineWidth=1.2;
+  roundRect(ox-4, oy-4, W0*cs+8, W0*cs+8, 8); ctx.stroke(); ctx.restore();
+
+  // the conjugate column-height RIBBON (the "second truth" you can read BEFORE
+  // folding): teal numerals down the left margin = conjugate(cur) parts.
+  if(u<0.5){
+    for(let i=0;i<conj.length;i++){
+      labelCenter(ox - cs*0.62, oy + i*cs + cs*0.5, String(conj[i]),
+        'rgba(111,211,196,'+(0.55*(1-u*2))+')', Math.max(9, cs*0.4));
+    }
+  }
+
+  // the diagonal MIRROR (row=col axis) — a teal dashed line with tick hatching
+  // and a grabbable handle. It flashes mid-fold.
+  const diagLen=(W0+0.4)*cs;
+  ctx.save();
+  ctx.strokeStyle = f.mirrorGrab ? 'rgba(111,211,196,0.95)' : 'rgba(111,211,196,'+(0.5+0.45*f.flash)+')';
+  ctx.lineWidth = 2 + 2*f.flash;
+  ctx.setLineDash([6,5]);
+  ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox+diagLen, oy+diagLen); ctx.stroke();
+  ctx.setLineDash([]);
+  // tick hatching across the diagonal
+  ctx.lineWidth=1; ctx.strokeStyle='rgba(111,211,196,'+(0.32+0.3*f.flash)+')';
+  for(let t=0.5; t<W0; t+=1){
+    const px=ox+t*cs, py=oy+t*cs, h=cs*0.16;
+    ctx.beginPath(); ctx.moveTo(px-h, py+h); ctx.lineTo(px+h, py-h); ctx.stroke();
+  }
+  // the grab handle
+  const mh=mirrorHandlePx();
+  ctx.fillStyle = f.mirrorGrab ? TEAL : 'rgba(111,211,196,0.82)';
+  ctx.beginPath(); ctx.arc(mh.x, mh.y, Math.max(6, cs*0.26), 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(8,7,11,0.9)'; ctx.font='700 '+Math.max(8,cs*0.3)+'px '+getMono();
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('↔', mh.x, mh.y+0.5);
+  ctx.restore();
+
+  // empty slots: the conjugate target footprint (faint), so you see WHERE beads land
+  if(u<0.999){
+    for(const {row,col} of ferrersCells(conj)) slot(ox+col*cs, oy+row*cs, cs);
+  }
+
+  // faint GHOST outline of the original staircase during the first fold, to
+  // foreshadow the fold-twice return.
+  if(f.ghost && u>0.02 && u<0.98){
+    ctx.save(); ctx.globalAlpha=0.18;
+    for(const {row,col} of ferrersCells(cur)){
+      ctx.strokeStyle='rgba(201,162,74,0.6)'; ctx.lineWidth=1;
+      roundRect(ox+col*cs+cs*0.1, oy+row*cs+cs*0.1, cs*0.8, cs*0.8, cs*0.2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // the beads — each glides 1:1 from its cell (r,c) to its conjugate cell (c,r),
+  // paired by walking ferrersCells(cur) and ferrersCells(conjugate(cur)) in the
+  // SAME canonical (row-major) order.
+  const src=ferrersCells(cur), dst=ferrersCells(conj);
+  const m=Math.min(src.length, dst.length);
+  for(let i=0;i<m;i++){
+    const sx=ox+src[i].col*cs, sy=oy+src[i].row*cs;
+    const dx=ox+dst[i].col*cs, dy=oy+dst[i].row*cs;
+    const x=sx+(dx-sx)*u, y=sy+(dy-sy)*u;
+    // colour: gold normally; tint toward green on arrival ("kept, nothing lost")
+    let fill=GOLD;
+    if(f.tint>0){ fill = lerpColor(GOLD, GREEN, f.tint); }
+    const glow = (f.drag && f.drag.row===src[i].row && u<0.01) ? 10 : 0;
+    pebble(x, y, cs, fill, 1, glow);
+  }
+
+  // self-conjugate badge
+  if(JSON.stringify(cur)===JSON.stringify(conj) && u<0.5){
+    labelCenter(ox + W0*cs/2, oy + W0*cs + cs*0.7, '◆ self-conjugate — its own mirror', TEAL, Math.max(10, cs*0.42));
+  } else {
+    // the running equation, below the staircase
+    const sumParts = cur.join(' + ');
+    if(u<0.5){
+      labelCenter(ox + W0*cs/2, oy + W0*cs + cs*0.7,
+        sumParts+' = '+N, GOLD, Math.max(10, cs*0.44));
+    } else {
+      labelCenter(ox + W0*cs/2, oy + W0*cs + cs*0.7,
+        conj.join(' + ')+' = '+N+'  ✓ folded', GREEN, Math.max(10, cs*0.44));
+    }
+  }
+}
+
+// linear interpolate between two #rrggbb colours
+function lerpColor(a,b,t){
+  const pa=[parseInt(a.slice(1,3),16),parseInt(a.slice(3,5),16),parseInt(a.slice(5,7),16)];
+  const pb=[parseInt(b.slice(1,3),16),parseInt(b.slice(3,5),16),parseInt(b.slice(5,7),16)];
+  const c=pa.map((v,i)=>Math.round(v+(pb[i]-v)*t));
+  return 'rgb('+c[0]+','+c[1]+','+c[2]+')';
+}
+
+function drawSieve(){
+  // two columns of bead-figures: left = distinct (or ALL if repeats), right = odd.
+  const left = s.repeats ? partitionsDistinctCheat(N) : partitionsDistinct(N);
+  const right = partitionsOdd(N);
+  const nL=left.length, nR=right.length;
+  const rows=Math.max(nL, nR);
+  // each figure occupies a small cell-grid; size figures so the taller tower fits.
+  const top=212, bot=150, availH=H-top-bot;
+  const figGap=0.5;                          // gap between stacked figures (in fig-rows)
+  // a figure's height in mini-cells = number of parts; cap mini-cell so rows fit.
+  // estimate max parts in a figure across both towers
+  let maxParts=1, maxWide=1;
+  for(const p of left.concat(right)){ if(p.length>maxParts) maxParts=p.length; if(p[0]>maxWide) maxWide=p[0]; }
+  const unit = Math.max(2.6, Math.min(7, availH/(rows*(maxParts*0.5+figGap+0.6))));
+  const figH = (maxParts*0.5+figGap)*unit;   // vertical pitch between figures
+  const colW = Math.max(maxWide*unit*1.1, 70);
+  const cxL = W/2 - colW*0.62, cxR = W/2 + colW*0.62;
+  const baseY = top + 8;
+
+  // level line — the equal height both honest towers reach
+  const honestRows=Math.max(partitionsDistinct(N).length, nR);
+  const levelY = baseY + honestRows*figH;
+
+  // draw a tower of bead-figures growing DOWN from baseY at column cx
+  function tower(parts, cx, fill, lab){
+    for(let i=0;i<parts.length;i++){
+      const p=parts[i];
+      const y0=baseY + i*figH;
+      // draw this partition's Ferrers figure as tiny beads, left-justified at cx
+      const w=p[0]; const x0=cx - w*unit*0.5;
+      for(let r=0;r<p.length;r++) for(let c=0;c<p[r];c++)
+        pebble(x0 + c*unit, y0 + r*unit*0.5, unit, fill, 0.96, 0);
+    }
+    // column label at the bottom
+    labelCenter(cx, baseY + Math.max(parts.length,1)*figH + 14, lab, fill, 12);
+    labelCenter(cx, baseY + Math.max(parts.length,1)*figH + 30, parts.length+' way'+(parts.length===1?'':'s'),
+      fill, 13);
+  }
+  // left tower colour: teal if cheat overshoots (red voice), gold otherwise
+  const overshoot = s.repeats && nL>nR;
+  tower(left, cxL, overshoot?OPEN:GOLD, s.repeats?'with repeats (ALL parts)':'distinct parts');
+  tower(right, cxR, TEAL, 'odd parts');
+
+  // the level line (the equal height) — solid green when equal, dashed red on overshoot
+  ctx.save();
+  if(overshoot){
+    ctx.strokeStyle='rgba(224,102,79,0.85)'; ctx.setLineDash([7,5]); ctx.lineWidth=2;
+  } else {
+    ctx.strokeStyle='rgba(143,215,154,0.8)'; ctx.lineWidth=2;
+  }
+  ctx.beginPath(); ctx.moveTo(cxL - colW*0.55, levelY); ctx.lineTo(cxR + colW*0.55, levelY); ctx.stroke();
+  ctx.setLineDash([]);
+  labelLeft(cxR + colW*0.55 + 8, levelY,
+    overshoot?'OVERSHOOT':'level ✓', overshoot?OPEN:GREEN, 12);
+  ctx.restore();
+}
+
+// ============================ ANIMATION ====================================
+function animate(obj, key, to, dur=620, done){
+  obj.folding=true; const from=obj[key], t0=performance.now();
+  function step(now){ let p=Math.min(1,(now-t0)/dur); const e=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2; // easeInOut
+    obj[key]=from+(to-from)*e; if(p<1) requestAnimationFrame(step); else { obj[key]=to; obj.folding=false; if(done) done(); updateReadout(); } }
+  requestAnimationFrame(step);
+}
+
+// THE FOLD: animate every bead to its conjugate cell, then make cur := conjugate.
+function doFold(){
+  if(f.folding) return;
+  f.conjAtFoldStart = conjugate(f.cur);
+  f.ghost = true;                    // foreshadow the return on the first fold
+  // flash the diagonal mid-fold
+  animate(f,'flash',1,310,()=>animate(f,'flash',0,310));
+  animate(f,'fold',1,620,()=>{
+    f.cur = f.conjAtFoldStart;       // the partition IS now its conjugate
+    f.fold = 0;                      // reset the morph (the new cur is "at rest")
+    f.ghost = false;
+    // green "kept" tint, then ease back to gold
+    f.tint=1; animate(f,'tint',0,460);
+    layout(); updateReadout();
+  });
+  dismissHint();
+}
+// FOLD TWICE = IDENTITY: fold, and when it lands fold again — the beads retrace
+// home exactly (conjugate∘conjugate === id).
+function foldTwice(){
+  if(f.folding) return;
+  doFold();
+  // schedule the second fold after the first completes (+ a beat to read it)
+  const wait=()=>{ if(f.folding){ requestAnimationFrame(wait); } else { setTimeout(()=>{ if(!f.folding) doFold(); }, 360); } };
+  setTimeout(wait, 700);
+}
+
+// ============================ READOUT ======================================
+const countbig=document.getElementById('countbig'), eqline=document.getElementById('eqline'),
+      countlab=document.getElementById('countlab');
+function updateReadout(){
+  if(MODE==='fold'){
+    const cur=f.cur, conj=conjugate(cur), sum=partSum(cur);
+    countbig.textContent = String(sum);                   // ALWAYS n, through the fold
+    countbig.classList.toggle('kept', f.fold>0.5 || f.tint>0.01);
+    countbig.classList.remove('broken');
+    countlab.textContent = 'beads · a partition of '+N;
+    const selfConj = JSON.stringify(cur)===JSON.stringify(conj);
+    let html;
+    if(f.tint>0.01 || (f.fold===0 && f.conjAtFoldStart.length && JSON.stringify(cur)===JSON.stringify(f.conjAtFoldStart))){
+      html = '<span class="sq">'+N+' ✓</span> <span class="dim">— folded, nothing lost</span>';
+    } else if(selfConj){
+      html = '<span class="gd">'+cur.join(' + ')+'</span> = '+N+' <span class="tl">· self-conjugate</span>';
+    } else {
+      // show the row read and the conjugate column read off the SAME n (the 7 green)
+      html = '<span class="gd">'+cur.join('+')+'</span> = <span class="tl">'+conj.join('+')+'</span> = <span class="sq">'+N+'</span>';
+    }
+    eqline.innerHTML = html; eqline.className='show';
+  } else {
+    const left = s.repeats ? partitionsDistinctCheat(N) : partitionsDistinct(N);
+    const right = partitionsOdd(N);
+    const nL=left.length, nR=right.length;
+    countbig.textContent = s.repeats ? String(nL) : String(nR);
+    const overshoot = s.repeats && nL>nR;
+    countbig.classList.toggle('kept', !s.repeats);
+    countbig.classList.toggle('broken', overshoot);
+    countlab.textContent = s.repeats ? 'partitions WITH repeats (overshoots)' : 'ways · distinct = odd';
+    let html;
+    if(s.repeats){
+      html = '<span class="no">with repeats: '+nL+' &gt; '+nR+' odd</span> <span class="dim">— Euler is SPECIAL to distinct↔odd</span>';
+    } else {
+      html = '<span class="gd">'+nL+' distinct</span> = <span class="tl">'+nR+' odd</span> <span class="sq">✓</span>';
+    }
+    eqline.innerHTML = html; eqline.className='show';
+  }
+}
+
+// ============================ INTERACTION ==================================
+function clientToBoard(e){ const r=cv.getBoundingClientRect(); return { x:e.clientX-r.left, y:e.clientY-r.top }; }
+
+// which row's right-end is near the pointer (fold mode)? returns row index or -1.
+function rowAtRightEnd(p){
+  const cs=f.cell, ox=f.ox, oy=f.oy;
+  for(let r=0;r<f.cur.length;r++){
+    const endX=ox + f.cur[r]*cs;            // right edge of row r
+    const y=oy + r*cs;
+    if(p.y>=y && p.y<=y+cs && p.x>=endX-cs*1.1 && p.x<=endX+cs*1.1) return r;
+  }
+  return -1;
+}
+function nearMirrorHandle(p){
+  const mh=mirrorHandlePx();
+  return Math.hypot(p.x-mh.x, p.y-mh.y) <= Math.max(12, f.cell*0.5);
+}
+
+cv.addEventListener('pointerdown', e=>{
+  if(MODE!=='fold' || f.folding) return;
+  const p=clientToBoard(e);
+  if(nearMirrorHandle(p)){
+    f.mirrorGrab=true; cv.classList.add('grabbing'); cv.setPointerCapture(e.pointerId); dismissHint(); return;
+  }
+  const r=rowAtRightEnd(p);
+  if(r>=0){ f.drag={ row:r, startX:p.x }; cv.classList.add('grabbing'); cv.setPointerCapture(e.pointerId); dismissHint(); }
+});
+cv.addEventListener('pointermove', e=>{
+  if(MODE!=='fold') return;
+  const p=clientToBoard(e);
+  if(f.drag && !f.folding){
+    // dragging a row's right end left/right adds or removes a bead (transferBead
+    // keeps the count pinned to n; illegal moves spring back).
+    const cs=f.cell;
+    const want=Math.round((p.x - f.ox)/cs);     // desired part length for this row
+    const have=f.cur[f.drag.row];
+    if(want>have){ const moved=transferBead(f.cur, f.drag.row, +1); f.cur=moved; layout(); updateReadout(); }
+    else if(want<have){ const moved=transferBead(f.cur, f.drag.row, -1); f.cur=moved; layout(); updateReadout(); }
+  }
+});
+function endPointer(){
+  if(f.mirrorGrab){ f.mirrorGrab=false; cv.classList.remove('grabbing'); doFold(); return; }
+  if(f.drag){ f.drag=null; cv.classList.remove('grabbing'); }
+}
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
+
+// sieve mode: click toggles repeats
+cv.addEventListener('click', e=>{
+  if(MODE==='sieve'){ s.repeats=!s.repeats; updateReadout(); dismissHint(); }
+});
+
+// ── keyboard: ArrowRight folds; ArrowLeft folds back; +/− adjust n ─────────────
+window.addEventListener('keydown', e=>{
+  if(e.key==='ArrowRight'||e.key==='Enter'){
+    if(MODE==='fold'){ doFold(); } else { s.repeats=true; updateReadout(); }
+    e.preventDefault();
+  } else if(e.key==='ArrowLeft'||e.key==='Backspace'){
+    if(MODE==='fold'){ doFold(); } else { s.repeats=false; updateReadout(); }
+    e.preventDefault();
+  } else if(e.key==='+'||e.key==='='){ setN(Math.min(+nslider.max, N+1)); e.preventDefault(); }
+  else if(e.key==='-'||e.key==='_'){ setN(Math.max(+nslider.min, N-1)); e.preventDefault(); }
+});
+
+// ============================ CONTROLS =====================================
+const nslider=document.getElementById('nslider'), nval=document.getElementById('nval'),
+      nlabel=document.getElementById('nlabel'), btns=document.getElementById('btns'),
+      hintline=document.getElementById('hintline'), tabs=document.getElementById('tabs');
+
+function setN(n){ N=n; nslider.value=String(n); nval.textContent=String(n);
+  // reset per-mode state for the new n
+  f.cur=defaultPartition(n); f.fold=0; f.tint=0; f.ghost=false; f.drag=null; f.mirrorGrab=false;
+  f.conjAtFoldStart=[]; s.repeats=false;
+  layout(); updateReadout(); renderButtons();
+}
+nslider.addEventListener('input', ()=> setN(+nslider.value));
+
+function resetShape(){ f.cur=defaultPartition(N); f.fold=0; f.tint=0; f.conjAtFoldStart=[]; layout(); updateReadout(); }
+function randomShape(){ f.cur=randomPartition(N); f.fold=0; f.tint=0; f.conjAtFoldStart=[]; layout(); updateReadout(); dismissHint(); }
+
+function renderButtons(){
+  btns.innerHTML='';
+  function mk(label, cls, fn){ const b=document.createElement('button'); b.className='act'+(cls?' '+cls:'');
+    b.textContent=label; b.addEventListener('click', fn); btns.appendChild(b); return b; }
+  if(MODE==='fold'){
+    mk('fold across mirror ↔', '', doFold);
+    mk('fold twice (identity)', '', foldTwice);
+    mk('reset shape', '', resetShape);
+    mk('random partition', '', randomShape);
+    hintline.innerHTML='Reshape the <b>Ferrers staircase</b>, then fold it across the <span class="t">row=col mirror</span>. Every bead lands on its <span class="t">conjugate</span> cell — <b>count stays n</b>, and folding twice returns home.';
+  } else {
+    mk('let parts repeat', 'warn', ()=>{ s.repeats=true; updateReadout(); });
+    mk('restore (distinct)', '', ()=>{ s.repeats=false; updateReadout(); });
+    hintline.innerHTML='Two sieves of the partitions of <b>'+N+'</b>: into <b>distinct</b> parts, into <span class="t">odd</span> parts. They reach the <b>same height</b> — Euler. <b>Let parts repeat</b> and the left tower overshoots: the match is special.';
+  }
+}
+
+// mode tabs
+tabs.querySelectorAll('.tab').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    tabs.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); MODE=b.dataset.mode;
+    nlabel.textContent='n';
+    setN(N);
+    document.getElementById('hint').style.opacity = (MODE==='fold') ? '1' : '0';
+  });
+});
+
+function dismissHint(){ document.getElementById('hint').style.opacity='0'; }
+
+// ============================ SELF-TEST (in-page) ==========================
+// The pill runs the SAME runChecks() the Node twin asserts (chip↔twin parity),
+// so a green pill here === a green `node core.test.mjs`. Clicking TAMPERS:
+// it swaps the distinct-count for the CHEAT count (= all partitions), so the
+// Euler line AND the neg-control both go RED, then restores after ~1200ms.
+let TAMPER=false;
+function runSelfTest(){
+  const btn=document.getElementById('selftest');
+  let r;
+  if(TAMPER){
+    // tampered oracle: claim #distinct = cheat count (= ALL partitions). Then the
+    // Euler check (#distinct === #odd) FAILS for every n≥2 (cheat overshoots),
+    // and so does the neg-control's premise — exactly what the control guards.
+    const fails=[]; let total=0;
+    for(let n=1;n<=RANGE;n++){ total++; if(partitionsDistinctCheat(n).length===countOdd(n)){/*ok by luck only at n=1*/} else fails.push('Euler tampered n='+n); }
+    r={ pass: total-fails.length, total, fails };
+  } else {
+    r=runChecks(RANGE);
+  }
+  const compact = window.innerWidth < 560;
+  if(r.fails.length===0 && !TAMPER){
+    btn.className='selftest ok';
+    btn.textContent = compact ? 'self-test ✓' : 'self-test ✓ '+r.pass+'/'+r.total+' · n=1..'+RANGE;
+    btn.title='GREEN: Euler #distinct=#odd (n=1..'+RANGE+'), conjugate∘conjugate=id (sum preserved, all partitions n=1..'+CONJ_RANGE+'), repeats→overshoot neg-control. (chip === node core.test.mjs) — click to TAMPER.';
+    console.log('SELF-TEST PASS: '+r.pass+'/'+r.total+' — Euler distinct=odd (n=1..'+RANGE+'), conjugation involution, repeats-overshoot neg-control, all integer ===.');
+  } else {
+    btn.className='selftest bad';
+    btn.textContent=(compact?'self-test ✗':'self-test ✗ '+r.fails.length)+(TAMPER?' (tampered)':'');
+    btn.title=(TAMPER?'TAMPERED → RED (expected): swapping #distinct for the CHEAT count (= ALL partitions) breaks Euler #distinct=#odd for every n≥2. ':'FAIL: ')+r.fails.slice(0,6).join(' · ');
+    console[TAMPER?'log':'error']('SELF-TEST '+(TAMPER?'TAMPERED → RED (expected)':'FAIL')+': '+r.fails.length+' failing — '+r.fails.slice(0,6).join(' · '));
+  }
+  // while tampered, also paint the Euler readout red (the felt proof)
+  if(TAMPER && MODE==='sieve'){ s.repeats=true; updateReadout(); }
+  return r;
+}
+window.__dividingYardSelfTest = ()=>runChecks(RANGE);   // for fresh-eyes harness
+document.getElementById('selftest').addEventListener('click', ()=>{
+  TAMPER=true; runSelfTest(); setTimeout(()=>{ TAMPER=false; if(MODE==='sieve') s.repeats=false; runSelfTest(); updateReadout(); }, 1200);
+});
+window.addEventListener('resize', ()=>runSelfTest());
+
+// ============================ BOOT =========================================
+setN(7); layout(); renderButtons(); updateReadout();
+requestAnimationFrame(draw);
+setTimeout(runSelfTest, 120);
+// drop the front-door survey breadcrumb (estate convention; harmless if unused)
+try{ if(localStorage.getItem('ws:seen:the-dividing-yard')==null) localStorage.setItem('ws:seen:the-dividing-yard', String(Date.now())); }catch(e){}
+</script>
+</body>
+</html>

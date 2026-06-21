@@ -154,12 +154,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-- [bench] **The Dividing Yard — fold a number into a staircase** — Numbers Room (a fresh number-shape). Build n as a raked-bead Ferrers STAIRCASE; drag the diagonal mirror to FLIP it to its conjugate (rows↔columns); a two-sieve toggle stacks n-into-DISTINCT-parts beside n-into-ODD-parts and the two towers always come out the same height. FORM: touchable folded bead-diagrams you fold along a mirror, NOT a p(n) curve. CLAIM (core.mjs sole partition authority + Node twin): Euler — #(partitions of n into DISTINCT parts) === #(into ODD parts) for n=1..40 by exact enumeration; conjugation is an n-preserving involution (fold twice = identity). NEG-CONTROL: a 'parts may repeat' cheat on the distinct sieve breaks the equality (the distinct count overshoots the odd count) → twin fires RED, proving the match is special to distinct↔odd. Grep-clean: no Ferrers/integer-partition bench exists — `clockwork/partition` is the STAT-MECH partition function Z (softmax), a different thing; Squaring-Yard is figurate 1+3+5=n². Sits beside the Squaring Yard in the same wing. (sown #233)
-<!-- ✝ BLOOMED #228: The Transformer — voltage you trade for current → lodestone-hall/the-transformer/ · after 3b2cc97 -->
 <!-- ✝ DECAYED #233: The Two Coasts That Measure the Same Thing · after 724e201 -->
 <!-- ✝ DECAYED #233: Games That Fight Back — a trail across the adversary-engine family · after 724e201 -->
 <!-- ✝ BLOOMED #234: The Column That Decides to Bend — buckling you operate with your hand → the-bending-column/ · after 6c589f9 -->
 <!-- ✝ BLOOMED #235: The Stubborn Spinner — the rotor that refuses every rate but its own → cavern/the-stubborn-spinner/ · after 7573fd2 -->
+<!-- ✝ BLOOMED #236: The Dividing Yard — fold a number into a staircase → the-dividing-yard/ · after 0073b1f -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
