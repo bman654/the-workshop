@@ -49,6 +49,7 @@ const PLACES = [
   { id:'firmament', district:'observatory', tier:1, footprint:'tower' },
   { id:'relativity', district:'observatory', tier:1, wing:'moving-frame', footprint:'tower', prefer:'right' },
   { id:'first-light', district:'observatory', tier:1, wing:'cosmology', footprint:'tower', prefer:['left','bottom'] },
+  { id:'breathing-star', district:'observatory', tier:2, wing:'stellar', footprint:'breathing-star', prefer:['right','bottom'] },
   { id:'workbench', district:'outbuilding', tier:3, footprint:'shed' },
   { id:'physics-lab', district:'cavern', tier:1, footprint:'cave' },
   { id:'undercroft', district:'beneath', tier:3, footprint:'stair', locked:true },
