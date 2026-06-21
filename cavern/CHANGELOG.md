@@ -8,6 +8,44 @@ proves its own physics exact.*
 
 ---
 
+## 2026-06-21 — The Stubborn Spinner: a rotor that refuses every rate but its own ladder
+
+**`cavern/the-stubborn-spinner/index.html` — The Stubborn Spinner ⟳** (Quantum drift). A touchable
+**rigid rotor**. Grab its vertical energy dial and try to set *any* rate you like — it **refuses**,
+snapping the knob to one of its allowed shelves while a gold **rubber band** shows the return force
+you're fighting (heavier the higher you climb, because the spring is keyed to ΔE). The hero verb is the
+*refusal*: the knob renders at the raw strained drive, the violet dumbbell rotor only ever spins at
+`ω_ℓ = √(ℓ(ℓ+1))`, and ℓ=0 is genuinely **still**. On the catch, a ring of **2ℓ+1** orientation-ghosts
+blooms (the m = −ℓ…+ℓ degeneracy) and the energy ladder lights the rung. The ladder's rungs are drawn at
+**height ∝ E_ℓ**, so they visibly **spread** as you climb — the rotor's signature made physical.
+
+- **The headline physics (units ℏ²/2I = 1):** `E_ℓ = ℏ²ℓ(ℓ+1)/2I` = 0, 2, 6, 12, 20, 30, 42… so the
+  gaps are the **even comb** `2(ℓ+1) = 2,4,6,8,…`, the second difference is a constant **2**, and each
+  level carries degeneracy **2ℓ+1** (Σ = a perfect square). Closed-form integer-exact — split into
+  separate `<1e-12`-over-ℓ=0..20 assertions.
+- **The audible ladder:** a LINEAR map (Hz ∝ ΔE, *deliberately not* Hear-the-Ladder's harmonic voicing)
+  voices each ℓ→ℓ+1 transition. Equal energy gaps → equal Hz gaps, so the tones rise by a constant
+  **2·TONE_PER_UNIT = 98 Hz** per rung (196 → 294 → 392…). "▶ Play the spectrum" walks the rungs as
+  rising tones (auto-unmutes; the incidental snap-tone respects mute silently); "⇄ rotor vs ℓ² cheat"
+  plays the two spectra back to back so the **ear** hears they are not the same ladder.
+- **The neg-control — the one load-bearing claim.** A small lamp + an "ℓ² cheat" toggle. The trap: the
+  `ℓ²` impostor's gaps `{1,3,5,7}` *also* have a constant second difference of **2** — a curvature test
+  gives a **false green**. So the verdict is keyed to the successive-gap **RATIO**: the rotor climbs
+  `2 → 4/2`, the cheat `1 → 3/1`; these diverge at the very first rung (2 vs 3) and never coincide
+  (min |Δ| over ℓ=0..10 = 0.0043). The lamp fires **RED** on the cheat via `ratioMatchesRotor`, *never*
+  via curvature, and that's a taught self-test check. The cheat is no strawman: its odd comb **IS** the
+  Particle-in-a-Box's `n²` spectrum — the cross-links to **box** and **hear-the-ladder** say so, both ways.
+- **The honest note:** this ladder is closed-form **integer-exact** — the `<1e-12` headline is met with
+  **zero residual**, so the precision carries no drama. The interesting claim is the **neg-control
+  separation** (the ratio test), not the headline. The honesty header in `core.mjs` states this outright.
+- **The spine.** A pure, headless, Web-Audio-free, DOM-free `core.mjs` is the **sole rotor authority**
+  (energies, gaps, curvature, the ratio, the shelves, the strain spring, the audio map, the verdict, and
+  `runSelfTest`). The page inlines that slice **byte-identical** between `// === CORE BEGIN/END ===`
+  sentinels; the Node twin `core.test.mjs` (21/21, exit 0) runs the bundled self-test, re-derives every
+  claim against hand-tabulated literals (including the trap — the cheat's gap2 ≡ 2), and asserts
+  **char-for-char parity** between file and page. The in-page **self-test ✓ 7/7** pill runs that *same*
+  `runSelfTest`. Not a forge target — hand-authored like the spin/hydrogen/hear-the-ladder siblings.
+
 ## 2026-06-13 — the Sound Garden meets the Cavern: Hear the Ladder ships (7th Q-bench, 10th overall)
 
 **`cavern/hear-the-ladder/index.html` — Hear the Ladder 🔔** (Quantum drift). The Box and the
