@@ -34,6 +34,8 @@ ok("'builder (planter)' → builder", normalizeRole('builder (planter)') === 'bu
 ok("'planter (builder)' → planter", normalizeRole('planter (builder)') === 'planter');
 ok("'builder · bug-fixer' → builder", normalizeRole('builder · bug-fixer') === 'builder');
 ok("'grounds-worker (builder)' → grounds-worker", normalizeRole('grounds-worker (builder)') === 'grounds-worker');
+ok("'groundskeeper' → groundskeeper", normalizeRole('groundskeeper') === 'groundskeeper');
+ok("'groundskeeper (director)' → groundskeeper", normalizeRole('groundskeeper (director)') === 'groundskeeper');
 ok("'Explorer' (case) → explorer", normalizeRole('Explorer') === 'explorer');
 ok("'explorer:facet:framing' → explorer", normalizeRole('explorer:facet:framing') === 'explorer');
 ok("'scout:fresh-mediums' → explorer", normalizeRole('scout:fresh-mediums') === 'explorer');

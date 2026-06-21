@@ -5,6 +5,59 @@ A touchable population of the estate's makers: one brass name-stone per mark in
 invents none. A repo-root sibling wing (peer of `tabularium/`, `museum/`), reached
 from the Museum. Brass-on-vellum, byte-twin convention of the Archive wing.
 
+## #220 — bug fix (BUILD / bug) — bug-fixer + publisher
+
+Cleared `[bug] #220` — the census twin went RED on the `other` bucket. The lone
+`groundskeeper`-led ledger mark (seq 869, "The Fieldwright" — the PLAN/grounds keeper
+seat, sibling of `gardener`) had no matching base bucket and fell into the catch-all
+`other`, so the strict leg `every role maps to a base bucket (0 in other)` reported
+`1 in other` and the dependent `VERDICT all legs green` bit RED (12/13).
+
+**Fix — the honest one (option 1 of the bug fence):** seat `groundskeeper` as a real
+12th BASE bucket rather than widening the catch-all. `gardener` (PLAN/garden) and
+`groundskeeper` (PLAN/grounds) are the two keeper seats that sow each track — both earn
+their own bin.
+
+**Files**
+- `core.mjs` — added `'groundskeeper'` to `BASES` (adjacent to `gardener`) and to
+  `SCAN_ORDER` (single-token group, heads disjoint from `grounds-worker` — neither
+  string prefixes the other). Recomputed `CLAIM` from the real ledger → `byRole` now
+  `groundskeeper: 1, other: 0` (N=890, distinctNames=730, againNames=86 unchanged).
+  Header/comments ELEVEN→TWELVE; stale `672`-marks comments → 890.
+- `core.test.mjs` — two new normalization unit checks: `'groundskeeper' → groundskeeper`
+  and `'groundskeeper (director)' → groundskeeper`.
+- `index.src.html` — colophon prose: "one of twelve base seats", named the two keeper
+  siblings, "thirteenth catch-all other"; de-literalized stale `1…672`/`672 exactly` →
+  `1…N`/`N exactly`; `~672 brass stones` → `~890`.
+- `index.html` — re-forged byte-true from the source; inlined core's `CLAIM` reads
+  `groundskeeper: 1, other: 0`, TWELVE BASE BUCKETS.
+
+**Publisher follow-on fix (a sibling file the builder missed).** `reclaim.mjs` — the
+hook `collate.sh` runs every cycle to re-pin `CLAIM` from the live ledger — carries its
+own `DISPLAY_ORDER` that must be a permutation of `BASES + OTHER` (a guard so a new
+bucket can never be silently dropped from the pinned partition). The builder added
+`groundskeeper` to `core.mjs` BASES but NOT to `reclaim.mjs` DISPLAY_ORDER, so `collate.sh`
+printed `reclaim: REFUSING — DISPLAY_ORDER is not a permutation of BASES+OTHER` and the
+CLAIM did not re-pin. Fixed: added `'groundskeeper'` to `DISPLAY_ORDER` (third line, before
+`architect`/`OTHER`, matching the room's hand layout) and changed the byRole print grouping
+5/4/3 → **5/4/4** (`g3` slice now `slice(9)`). Re-ran `node census/reclaim.mjs` → re-pinned
+cleanly. Also de-literalized every remaining hardcoded count (the two `core.mjs` header
+"890 marks" comments, the CLAIM comment "Σ === N === 890", and `index.src.html`'s
+`(672 / 195 / 563 / 62)` example + `~890 brass stones`) → "N / the live ledger", so
+**reclaim.mjs is the SOLE count authority** and the prose can never staleness-rot (the exact
+failure mode that produced the original 672-vs-890 drift). **If you ever add a bucket to
+`core.mjs` BASES, you MUST also add it to `reclaim.mjs` DISPLAY_ORDER** or the re-pin refuses.
+
+**Verified (final, N=893 after the cycle's 3 new ledger marks)** — `node census/core.test.mjs`
+ALL GREEN, exit 0: `0 in other` PASSES, `VERDICT all legs green — 13/13`,
+`every bucket count === claim — 12 buckets pinned`; new groundskeeper checks PASS;
+`'grounds-worker (builder)' → grounds-worker` still PASS; `unmappable 'gremlin' → other`
+still PASS (catch-all stays total, now empty on real data); tamper drop/dup still bite RED
+(8/13, 8/13). Tabularium twin (also re-pinned by collate) ALL GREEN. `forge --check` all 58
+current. In-browser: pyramid seats a GROUNDSKEEPER brick (count 1) between STEWARD and THE
+ARCHITECT, proofgrid 13/13 0-fail, partition card `893 = 893`, in-page tamper bites, no
+stale count literal in the prose.
+
 ## #149 — bloomed (BUILD / garden) — builder + publisher
 
 Grew the `[exhibit]` **The Census of Hands** seed (sown #147) into `census/`.

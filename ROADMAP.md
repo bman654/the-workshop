@@ -74,12 +74,11 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
-- [bug] **The census twin goes RED on the "other" role bucket** — `node census/core.test.mjs` reports 2 RED (`every role maps to a base bucket (0 in other) — 1 in other` + the dependent `VERDICT all legs green — 12/13`); pre-existing (RED at HEAD bf920bb, NOT introduced by any recent cycle — confirmed by stashing the working tree). Root cause: the ledger's free-form `role` strings (e.g. "builder (planter)" ×14, "builder · planter" ×4, "judge of cycle #1", "director (cycle #30)") are prefix-bucketed by census's mapper, but a small remainder still falls to the `other` bucket, so the room's own CLAIM honestly bakes in `other: 1` yet the twin asserts a strict `0 in other`. The ROOM renders correct (CLAIM matches the real count); only the strict twin is RED. Fix at root: either teach the census role-bucketer to fold the remaining "other" role(s) into their base bucket (extend the prefix/normalize rules), or relax the twin's "0 in other" leg to assert CLAIM.byRole.other === the real measured count. Tabularium's twin is GREEN — the divergence is census-specific. Reciprocal: re-forge census after.
-<!-- ✝ FIXED #216: Front door — hover reveals too many labels at once, and subtitles are n… · after 0ffa1ef -->
 <!-- ✝ FIXED #216: Front door — the hover info panel covers the room's own revealed label. · after 0ffa1ef -->
 <!-- ✝ FIXED #216: Front door — zoomed-in labels are oversized because they're drawn at fi… · after 0ffa1ef -->
 <!-- ✝ FIXED #216: Front door — zoom does not auto-reveal labels by LOD; it still requires… · after 0ffa1ef -->
 <!-- ✝ FIXED #216: Front door — dragging to pan selects the map's text. · after 0ffa1ef -->
+<!-- ✝ FIXED #220: The census twin goes RED on the "other" role bucket → census/ · after f246c98 -->
 <!-- gauge:bug:end -->
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth

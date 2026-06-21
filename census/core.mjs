@@ -10,11 +10,12 @@
                               battery from the SAME bytes the twin checks.
 
    DOM-free, zero-import, no randomness, no wall-clock NOW. Given the raw text of
-   ledger/ledger.jsonl it answers: do the 672 marks partition cleanly into maker
+   ledger/ledger.jsonl it answers: do the N marks partition cleanly into maker
    buckets under a DOCUMENTED role-normalization rule — no token double-counted,
-   no token dropped (Σ bucket counts === N exactly)?
+   no token dropped (Σ bucket counts === N exactly)? (N is whatever the live ledger
+   holds; reclaim.mjs re-pins the CLAIM below every cycle, so no count is hardcoded here.)
 
-   Source of truth is ledger/ledger.jsonl (672 marks), a DIFFERENT file than the
+   Source of truth is ledger/ledger.jsonl, a DIFFERENT file than the
    River's museum/cycles.json — hence this fresh core, not a reuse of core.mjs.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -25,7 +26,7 @@
    for the claims the page makes. */
 export const FIELDS = ['seq', 'cycle', 'role', 'name', 'koan', 'ts'];
 
-/* ── THE ELEVEN BASE BUCKETS (+ one catch-all) ─────────────────────────────────
+/* ── THE TWELVE BASE BUCKETS (+ one catch-all) ─────────────────────────────────
    The full set of maker roles the estate has ever run, in the PRIORITY ORDER the
    normalization rule scans (see normalizeRole). Order is load-bearing: the two
    HYPHENATED multi-word bases (bug-fixer, grounds-worker) are tested BEFORE the
@@ -33,9 +34,11 @@ export const FIELDS = ['seq', 'cycle', 'role', 'name', 'koan', 'ts'];
    'grounds-worker' onto nothing and is moot, but more importantly keeps the rule
    readable as "longest, most-specific base name wins its own head". 'other' is the
    single catch-all that absorbs any head that matches no base — it is what makes
-   the mapping TOTAL (every role string lands somewhere) so the partition is exact. */
+   the mapping TOTAL (every role string lands somewhere) so the partition is exact.
+   gardener (PLAN/garden seat) and groundskeeper (PLAN/grounds seat) are siblings —
+   the two keeper seats that sow each track; both earn their own base bucket. */
 export const BASES = [
-  'architect', 'publisher', 'gardener', 'builder', 'director',
+  'architect', 'publisher', 'gardener', 'groundskeeper', 'builder', 'director',
   'explorer', 'judge', 'planter', 'bug-fixer', 'grounds-worker', 'steward'
 ];
 export const OTHER = 'other';
@@ -46,8 +49,8 @@ export const BUCKETS = [...BASES, OTHER];
    the real ledger (the heads are disjoint after decoration is stripped), but it is
    pinned so the rule is deterministic for ANY future role string too. */
 const SCAN_ORDER = [
-  'bug-fixer', 'grounds-worker',                                  // hyphenated, scanned first
-  'architect', 'publisher', 'gardener', 'builder', 'director',    // single-token bases
+  'bug-fixer', 'grounds-worker',                                                 // hyphenated, scanned first
+  'architect', 'publisher', 'gardener', 'groundskeeper', 'builder', 'director',  // single-token bases
   'explorer', 'judge', 'planter', 'steward'
 ];
 
@@ -130,7 +133,7 @@ export function parse(raw) {
    The ONE aggregate builder. Every figure the page shows is a field of what this
    returns; nothing downstream is hard-typed. Returns:
      N            — total marks.
-     byRole       — Map<bucket, count> over ALL eleven buckets + other (zeros kept,
+     byRole       — Map<bucket, count> over ALL twelve buckets + other (zeros kept,
                     so the role pyramid always has all bins; Σ values === N).
      roleOrder    — buckets sorted by count desc (the pyramid's stacking order).
      tokens       — [{ seq, bucket, name, rawRole, koan, repeat }] one per mark, in
@@ -322,15 +325,18 @@ export function verdict(checks) {
 
 /* The VERIFIED real census of this estate's ledger, as of this build. The Node
    twin pins to these; if the ledger changes shape the twin fails loudly and the
-   page must be re-forged. Recomputed THIS turn from ledger/ledger.jsonl (672 marks).
-   byRole is the full partition; Σ === N === 672. */
+   page must be re-forged. These figures are RE-DERIVED from ledger/ledger.jsonl by
+   reclaim.mjs (run by collate.sh every cycle), never hand-typed — so the count below
+   tracks the live ledger and never staleness-rots. byRole is the full partition;
+   Σ === N. other === 0: every role string maps to one of the TWELVE base buckets
+   (gardener + groundskeeper, the two keeper seats, both seated). */
 export const CLAIM = {
-  N: 890,
-  distinctNames: 730,
-  againNames: 86,         // hands that signed >1 mark (246 of the 890 tokens)
+  N: 893,
+  distinctNames: 733,
+  againNames: 86,         // hands that signed >1 mark (246 of the 893 tokens)
   byRole: {
-    publisher: 234, explorer: 230, director: 145, judge: 90, builder: 130,
-    planter: 29, 'bug-fixer': 9, gardener: 7, 'grounds-worker': 9,
-    steward: 5, architect: 1, other: 1
+    publisher: 235, explorer: 230, director: 146, judge: 90, builder: 130,
+    planter: 29, 'bug-fixer': 10, gardener: 7, 'grounds-worker': 9,
+    steward: 5, architect: 1, groundskeeper: 1, other: 0
   }
 };

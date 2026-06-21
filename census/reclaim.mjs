@@ -62,7 +62,7 @@ if (c.N === 0) {
 const DISPLAY_ORDER = [
   'publisher', 'explorer', 'director', 'judge', 'builder',
   'planter', 'bug-fixer', 'gardener', 'grounds-worker',
-  'steward', 'architect', OTHER
+  'steward', 'architect', 'groundskeeper', OTHER
 ];
 // Guard: the display order must be a permutation of the live bucket set, so a
 // future bucket can never be silently dropped from the pinned partition.
@@ -79,11 +79,11 @@ if (orderSet.size !== liveBuckets.size || [...liveBuckets].some((b) => !orderSet
 const keyOf = (b) => (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(b) ? b : "'" + b + "'");
 const pair = (b) => keyOf(b) + ': ' + c.byRole.get(b);
 
-// byRole printed in three lines, grouped 5 / 4 / 3 (the room's layout), each
+// byRole printed in three lines, grouped 5 / 4 / 4 (the room's layout), each
 // line indented four spaces (two levels), trailing comma between groups.
 const g1 = DISPLAY_ORDER.slice(0, 5).map(pair).join(', ');
 const g2 = DISPLAY_ORDER.slice(5, 9).map(pair).join(', ');
-const g3 = DISPLAY_ORDER.slice(9, 12).map(pair).join(', ');
+const g3 = DISPLAY_ORDER.slice(9).map(pair).join(', ');
 
 // The aligned comment on the againNames line: `//` sits at column 26 (matching
 // the room's hand alignment for the 2-digit value), with at least one space.
