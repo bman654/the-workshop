@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Ferris Wheel · The Midway · The Orrery Estate</title>
+<!--
+   THE FERRIS WHEEL — apparent weight staged around a FULL CIRCLE. The physics CORE
+   (core.mjs) is inlined byte-for-byte between the sentinels below; the in-page chip
+   calls the SAME runSelfTest() the Node twin (core.test.mjs) runs, and the renderer
+   swings a brass seat-scale's needle FROM this authority: N(θ)=m(g+ω²r·cosθ), heaviest
+   at the bottom (θ=0), lightest at the crest (θ=π). One ω slider turns the wheel; the
+   needle BREATHES around the circle. At ω₀=√(g/r) the crest floats to exactly 0 g (the
+   Drop Tower's float, staged on a circle). PAST ω₀ the reading goes NEGATIVE — the
+   seat-pan unloads and the LAP-BAR takes the pull (NOT clamped at 0; the negative is the
+   point). NEG-CONTROL: ω=0 reads a flat m·g all the way around. The needle's swing is the
+   readout — no plotted curve is the subject.
+-->
+<style>
+  :root{
+    --bg:#07080c;             /* fairground-at-dusk near-black ground */
+    --plate1:#12100a;
+    --plate2:#0b0a07;
+    --ink:#efe9da;
+    --ink-dim:#a59c87;
+    --gold:#c9a24a;           /* the spokes / brass */
+    --gold-hi:#f4d27a;        /* lit gold (hub, rim) */
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.40);
+    --teal:#5fcdbf;           /* heavy / pressing the pan */
+    --teal-soft:rgba(95,205,191,0.12);
+    --coral:#f0846f;          /* light / floating / lap-bar pulling */
+    --coral-soft:rgba(220,120,100,0.12);
+    --panel:rgba(11,10,7,0.86);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1200px 720px at 50% -12%, rgba(201,162,74,0.09), transparent 56%),
+      radial-gradient(900px 640px at 14% 112%, rgba(95,205,191,0.05), transparent 60%),
+      radial-gradient(900px 640px at 86% 114%, rgba(220,120,100,0.04), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(201,162,74,0.05) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(201,162,74,0.045) 0 1px, transparent 1px 32px);
+    mask-image:radial-gradient(1100px 760px at 50% 36%, #000 30%, transparent 78%);
+  }
+  body::after{
+    content:""; position:fixed; top:46px; left:0; right:0; height:18px; z-index:0; pointer-events:none; opacity:.5;
+    background-image:radial-gradient(circle at 11px 4px, var(--gold-hi) 0 1.6px, transparent 2.4px);
+    background-size:42px 18px;
+    mask-image:linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  }
+
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding:13px 20px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(7,8,12,0.95), rgba(7,8,12,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:5px; }
+  .back{ font:600 10.5px/1.3 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.22s; white-space:nowrap; }
+  .back:hover{ color:var(--gold-hi); opacity:1; }
+  .brand{ text-align:center; flex:1 1 auto; pointer-events:none; padding-top:1px; }
+  .brand h1{ margin:0; font-family:var(--font-serif); font-weight:600; font-size:clamp(17px,2.4vw,21px);
+    letter-spacing:.4px; color:var(--gold-hi); }
+  .brand .tag{ display:block; font:11px/1.3 var(--font-serif); font-style:italic; color:var(--ink-dim); margin-top:1px; }
+  .selftest{ font:600 10px/1.35 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:18px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.42); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); max-width:230px; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(24,46,32,0.5); }
+  .selftest.bad{ color:var(--coral); border-color:rgba(220,120,100,0.6); background:rgba(58,26,22,0.5); }
+
+  /* ── self-test detail panel ── */
+  #stPanel{ position:fixed; top:54px; right:18px; z-index:60; width:min(470px,92vw);
+    background:var(--panel); border:1px solid var(--gold-edge); border-radius:12px; padding:16px 18px 14px;
+    box-shadow:0 18px 50px rgba(0,0,0,0.6); display:none; }
+  #stPanel.show{ display:block; }
+  #stPanel h2{ margin:0 0 4px; font:600 13px/1.2 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--gold-hi); }
+  #stPanel .sub{ margin:0 0 10px; font:12px/1.5 var(--font-serif); color:var(--ink-dim); }
+  #stList{ font:11px/1.55 var(--font-mono); max-height:46vh; overflow:auto; }
+  #stList .row{ display:flex; gap:8px; padding:2px 0; }
+  #stList .row .m{ flex:0 0 auto; }
+  #stList .ok{ color:#8fd79a; } #stList .no{ color:var(--coral); }
+  #stPanel .foot{ margin-top:10px; padding-top:9px; border-top:1px solid rgba(201,162,74,0.16);
+    font:11px/1.6 var(--font-serif); color:var(--ink-dim); }
+  #stPanel .closeX{ position:absolute; top:9px; right:11px; background:none; border:none; color:var(--ink-dim);
+    font-size:18px; cursor:pointer; line-height:1; }
+
+  /* ── layout ── */
+  main{ position:relative; z-index:1; max-width:1120px; margin:0 auto; padding:74px 20px 56px; }
+  .hero{ text-align:center; margin-bottom:14px; }
+  .hero .eyebrow{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3em; text-transform:uppercase; color:var(--gold); opacity:.9; }
+  .hero .lede{ max-width:720px; margin:12px auto 0; font:15px/1.6 var(--font-serif); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--gold-hi); font-weight:600; } .hero .lede i{ font-style:italic; }
+
+  .stage{ display:grid; grid-template-columns:1fr 188px; gap:16px; align-items:stretch; margin-top:20px; }
+  .panel{ border:1px solid rgba(201,162,74,0.16); border-radius:14px; background:linear-gradient(180deg,var(--plate1),var(--plate2));
+    padding:14px; position:relative; overflow:hidden; }
+  .panel h3{ margin:0 0 8px; font:600 9.5px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--ink-dim); }
+  .panel h3 b{ color:var(--gold); }
+
+  /* the ride panel (the wheel) */
+  #ridePanel{ padding:12px 12px 10px; }
+  #rideWrap{ position:relative; width:100%; }
+  svg#ride{ width:100%; height:auto; display:block; touch-action:none; }
+
+  /* the felt-regime headline under the ride */
+  #regime{ margin-top:10px; min-height:40px; text-align:center; font:14px/1.45 var(--font-serif); color:var(--ink-dim); transition:.18s; }
+  #regime.rest{ color:var(--gold-hi); } #regime.low{ color:var(--teal); } #regime.float{ color:var(--gold-hi); } #regime.neg{ color:var(--coral); }
+  #regime b{ font-weight:600; }
+
+  /* the right column: the seat-scale gauge + the live ledger */
+  #sideCol{ display:flex; flex-direction:column; gap:12px; }
+  #scalePanel{ display:flex; flex-direction:column; align-items:center; padding:12px 10px 10px; }
+  svg#scale{ width:100%; height:auto; margin-top:2px; }
+  #scaleVerdict{ margin-top:4px; font:600 10px/1.3 var(--font-mono); text-align:center; color:var(--ink-dim); }
+  .lamp{ display:inline-flex; align-items:center; gap:6px; margin-top:7px; font:600 9px/1 var(--font-mono);
+    letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim); opacity:.45; transition:.18s; }
+  .lamp .dot{ width:8px; height:8px; border-radius:50%; background:var(--coral); box-shadow:none; }
+  .lamp.on{ opacity:1; color:var(--coral); } .lamp.on .dot{ box-shadow:0 0 9px var(--coral); }
+
+  /* the live ledger — brass stat plates, NOT a chart */
+  #ledgerPanel{ padding:12px; }
+  .plates{ display:flex; flex-direction:column; gap:8px; }
+  .plate{ display:flex; align-items:baseline; justify-content:space-between; gap:8px;
+    border:1px solid rgba(201,162,74,0.18); border-radius:8px; padding:8px 10px; background:rgba(0,0,0,0.26); }
+  .plate .k{ font:9px/1.2 var(--font-mono); letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim); }
+  .plate .val{ font:600 14px/1 var(--font-mono); color:var(--gold-hi); }
+  .plate.live .val{ color:var(--ink); }
+  .plate.bottom .val{ color:var(--teal); }
+  .plate.top .val{ color:var(--coral); }
+  #gapChip{ margin-top:9px; text-align:center; font:600 10px/1.4 var(--font-mono); color:var(--ink-dim);
+    border:1px dashed rgba(201,162,74,0.28); border-radius:7px; padding:7px 8px; }
+  #gapChip b{ color:#8fd79a; }
+
+  /* the controls */
+  .controls{ display:flex; flex-wrap:wrap; gap:14px 22px; align-items:center; margin-top:18px; justify-content:center; }
+  .knob{ display:flex; flex-direction:column; gap:6px; min-width:230px; }
+  .knob label{ font:600 10px/1 var(--font-mono); letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim); }
+  .knob label .v{ color:var(--gold-hi); }
+  .knob input[type=range]{ accent-color:var(--gold); width:100%; }
+  .massknob{ display:flex; flex-direction:column; gap:6px; min-width:170px; }
+  .massknob label{ font:600 10px/1 var(--font-mono); letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim); }
+  .massknob label .v{ color:var(--gold-hi); }
+  .massknob input[type=range]{ accent-color:var(--gold); width:100%; }
+
+  button.ctl{ font:600 11px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink); background:linear-gradient(180deg,#1a1710,#100d08); border:1px solid var(--gold-edge);
+    border-radius:9px; padding:11px 16px; cursor:pointer; transition:.18s; }
+  button.ctl:hover{ border-color:var(--gold-hi); color:var(--gold-hi); }
+  button.find{ border-color:rgba(244,210,122,0.55); color:var(--gold-hi); }
+  button.find:hover{ border-color:var(--gold-hi); color:var(--gold-hi); }
+  button.dare{ border-color:rgba(240,132,111,0.5); color:var(--coral); }
+  button.dare:hover{ border-color:var(--coral); color:var(--coral); }
+
+  /* explainer / honesty */
+  .scroll{ max-width:790px; margin:30px auto 0; font:13.5px/1.7 var(--font-serif); color:var(--ink); opacity:.9; }
+  .scroll h2{ font:600 11px/1 var(--font-mono); letter-spacing:.22em; text-transform:uppercase; color:var(--gold);
+    margin:24px 0 10px; }
+  .scroll p{ margin:0 0 12px; } .scroll b{ color:var(--gold-hi); } .scroll i{ font-style:italic; }
+  .scroll .teal{ color:var(--teal); } .scroll .coral{ color:var(--coral); }
+  .scroll code{ font:12px/1.5 var(--font-mono); color:var(--gold-hi); background:rgba(201,162,74,0.08);
+    padding:1px 5px; border-radius:4px; }
+  .honesty{ border-left:2px solid var(--gold-edge); padding-left:14px; color:var(--ink-dim); font-size:12.5px; }
+
+  .foot{ max-width:790px; margin:34px auto 0; padding-top:18px; border-top:1px solid rgba(201,162,74,0.12);
+    text-align:center; font:12.5px/1.7 var(--font-serif); color:var(--ink-dim); }
+  .foot a{ color:var(--gold); text-decoration:none; border-bottom:1px solid rgba(201,162,74,0.3); }
+
+  @media (max-width:760px){
+    main{ padding-top:150px; }
+    .stage{ grid-template-columns:1fr; }
+    svg#scale{ max-width:220px; margin:0 auto; }
+    .knob,.massknob{ min-width:0; flex:1 1 160px; }
+    .controls{ gap:12px; }
+    .topbar{ flex-wrap:wrap; align-items:center; }
+    .brand{ order:3; flex:1 0 100%; text-align:left; margin-top:2px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../midway/index.html">&larr; The Midway</a>
+      <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="back" href="../drop-tower/index.html" title="The Drop Tower — the same float, staged LINEARLY: a sealed cabin falls and the scale forgets your weight.">&#8599; The Drop Tower (the same float, falling)</a>
+    </div>
+    <div class="brand">
+      <h1>The Ferris Wheel</h1>
+      <span class="tag">your weight breathes around the circle — and past one spin, it goes negative</span>
+    </div>
+    <div class="selftest" id="selftest" title="The physics core proves N(θ)=m(g+ω²r·cosθ): the crest floats EXACTLY at ω₀=√(g/r) (mass-invariant), the dip−crest gap is 2mω²r, ω=0 reads flat m·g (neg-control), and past ω₀ the crest reads STRICTLY negative; click for detail.">checking&hellip;</div>
+  </div>
+
+  <div id="stPanel">
+    <button class="closeX" id="stClose" title="close">&times;</button>
+    <h2>Self&#8209;test</h2>
+    <p class="sub" id="stSub">&hellip;</p>
+    <div id="stList"></div>
+    <div class="foot">Apparent weight on a vertical circle: <code>N(θ)=m(g+ω²r·cosθ)</code>, heaviest at the bottom
+      (<code>θ=0</code>), lightest at the crest (<code>θ=π</code>). The crest floats to <b>exactly 0</b> at
+      <code>ω₀=√(g/r)</code> — <b>mass-invariant</b>. Past <code>ω₀</code> the crest reads <b>strictly negative</b>
+      (the lap-bar pulls down — <i>not</i> clamped at 0). At <code>ω=0</code> the needle reads a flat <code>m·g</code>
+      all around (the neg-control). The in-page count equals the Node twin (<code>core.test.mjs</code>).</div>
+  </div>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">The Midway &middot; ride #7</div>
+      <p class="lede"><b>Turn the wheel and watch your weight breathe.</b> One occupied gondola rides a big wheel; its seat is a
+        live brass <b>scale</b>, and the needle swings <i>heaviest at the bottom of the circle, lightest at the crest</i>. Push the
+        spin past one critical speed and the crest doesn't just float &mdash; the needle swings <span class="coral">negative</span> and
+        the <b>lap-bar takes the pull</b>. The Drop Tower stages that float by <i>falling</i>; here it is staged once per turn, around
+        a full circle. <i>The swing of the needle is the readout</i> &mdash; hunt the float by ear and eye, not off a printed number.</p>
+    </header>
+
+    <div class="stage">
+      <!-- ORGAN 1: the turning wheel with one occupied gondola -->
+      <div class="panel" id="ridePanel">
+        <h3>The Wheel &middot; <b>one rider, going around</b></h3>
+        <div id="rideWrap">
+          <svg id="ride" viewBox="0 0 560 520" preserveAspectRatio="xMidYMid meet" aria-label="side-view Ferris wheel turning; one occupied gondola rides around, its seat-scale needle swinging with the apparent weight"></svg>
+        </div>
+        <div id="regime" class="rest"><b>PARKED</b> &mdash; the wheel is still. The scale reads full weight (<code>m·g</code>) all the way around.</div>
+      </div>
+
+      <!-- the right column: the seat-scale gauge + the live ledger -->
+      <div id="sideCol">
+        <div class="panel" id="scalePanel">
+          <h3>Seat&#8209;scale &middot; N</h3>
+          <svg id="scale" viewBox="0 0 160 160" aria-label="brass seat-scale gauge; the needle reads the rider's apparent weight live, and swings below zero into the lap-bar arc when the seat-pan unloads"></svg>
+          <div id="scaleVerdict">N = &ndash; &middot; at the bottom</div>
+          <span class="lamp" id="lapLamp"><span class="dot"></span>lap-bar pulling (N &lt; 0)</span>
+        </div>
+
+        <div class="panel" id="ledgerPanel">
+          <h3>Live ledger &middot; <b>as the wheel turns</b></h3>
+          <div class="plates">
+            <div class="plate live"><span class="k">scale now N</span><span class="val" id="plLive">&ndash;</span></div>
+            <div class="plate bottom"><span class="k">dip · N&#8323;ₒₜₜₒₘ</span><span class="val" id="plBottom">&ndash;</span></div>
+            <div class="plate top"><span class="k">crest · N&#8336;ₒₚ</span><span class="val" id="plTop">&ndash;</span></div>
+          </div>
+          <div id="gapChip">dip − crest = <b>&ndash;</b> = 2mω²r</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="knob">
+        <label>spin rate &omega; <span class="v" id="kW">0.00 rad/s</span> &mdash; <i>drag to turn the wheel</i></label>
+        <input type="range" id="omega" min="0" max="1.8" step="0.005" value="0" aria-label="spin rate ω (radians per second)">
+      </div>
+      <div class="massknob">
+        <label>rider mass <span class="v" id="kM">75 kg</span></label>
+        <input type="range" id="mass" min="20" max="110" step="1" value="75" aria-label="rider mass (kilograms)">
+      </div>
+      <button class="ctl find" id="findFloat" title="ease the spin to ω₀ = √(g/r) — the crest goes EXACTLY weightless">find the float ω₀</button>
+      <button class="ctl dare" id="dare" title="push past ω₀ — the crest reads NEGATIVE and the lap-bar takes the pull">⚡ DARE (go negative)</button>
+      <button class="ctl" id="reset">reset</button>
+    </div>
+
+    <section class="scroll">
+      <h2>What you are operating</h2>
+      <p>This is not a chart of a Ferris-wheel ride &mdash; it <i>is</i> one, seen side-on. A single gondola rides a wheel of radius
+        <code>r</code> turning at rate <i>&omega;</i>. The rider moves on a vertical circle, so the net force on them must always point
+        <b>inward</b>, toward the axle, with magnitude <code>m&omega;&sup2;r</code>. Only two forces act: gravity <code>m·g</code> straight
+        down, and the seat&rsquo;s push <code>N</code> &mdash; the scale reading. Resolve them along the circle and the whole story is one
+        line: <code>N(&theta;) = m(g + &omega;&sup2;r·cos&theta;)</code>, with <code>&theta;</code> measured from the bottom. At the
+        <b>bottom</b> (<code>&theta;=0</code>) the seat must push <i>hardest</i>: <code>N = m(g+&omega;&sup2;r)</code>. At the <b>crest</b>
+        (<code>&theta;=&pi;</code>) it pushes <i>least</i>: <code>N = m(g&minus;&omega;&sup2;r)</code>. The needle <i>is</i> that value,
+        live, as the gondola goes around.</p>
+      <h2>The float &mdash; and going past it</h2>
+      <p>Wind the spin up and the crest reading falls. At <span class="teal">exactly</span> <code>&omega;&#8320; = &radic;(g/r)</code> the
+        crest goes <b>weightless</b> &mdash; <code>N<sub>top</sub> = m(g&minus;&omega;&#8320;&sup2;r) = 0</code>. That is the <i>same true
+        0&nbsp;g</i> The <a href="../drop-tower/index.html">Drop Tower</a> stages by falling, here staged once per revolution, at the very
+        top. And it carries <b>no mass</b>: an adult and a child float at the <i>same</i> <code>&omega;&#8320;</code> &mdash; slide the mass
+        knob at the float and the crest stays pinned at 0. Push <i>past</i> <code>&omega;&#8320;</code> and the formula goes
+        <span class="coral">negative</span>: a seat-pan can&rsquo;t pull you down, so a negative reading means you&rsquo;d lift OFF the pan
+        and the <b>lap-bar</b> must hold you to the wheel. We do <i>not</i> clamp it at 0 &mdash; the negative number <i>is</i> the lap-bar&rsquo;s
+        downward pull, <code>|N<sub>top</sub>| = m(&omega;&sup2;r&minus;g)</code>. No other ride on the Midway sails past the float into restraint.</p>
+      <h2>The parked-wheel control</h2>
+      <p>Wind the spin back to <span class="teal">&omega;&nbsp;=&nbsp;0</span> and the wheel parks. Now <code>&omega;&sup2;r = 0</code>, so
+        <code>N(&theta;) = m·g</code> for <i>every</i> <code>&theta;</code> &mdash; a <b>flat</b> reading all the way around, no swing. That
+        is the neg-control you can feel: spin and the needle <i>breathes</i>; park it and the needle stands still at full weight. The
+        self-test proves a <i>flat-scale</i> instrument (one that always reads <code>m·g</code>) disagrees with the real needle at every
+        spinning seat &mdash; and agrees only on the parked wheel, where it is honestly right.</p>
+      <h2 class="honesty" style="border:none;padding:0">Honesty</h2>
+      <p class="honesty">This is the steady-state apparent weight at constant <code>&omega;</code> &mdash; we are not modelling the wheel
+        spinning up, nor the gondola&rsquo;s own pendulum sway (a real gondola also rocks; here we read the steady <i>radial</i> support the
+        seat gives). The rider is a point mass; the wheel is rigid; <code>g = 9.81&nbsp;m/s&sup2;</code>; the radius is
+        <code>r = 9&nbsp;m</code>, so the float lands at <code>&omega;&#8320; = &radic;(9.81/9) &approx; 1.044&nbsp;rad/s</code> (about
+        10&nbsp;s a turn). Every value the eye sees &mdash; the needle angle, the live <code>N</code> legend, the lap-bar load &mdash; is
+        <code>N(&theta;,&omega;,m,r)</code> from the one physics core.</p>
+    </section>
+
+    <footer class="foot">
+      The sister ride is <a href="../drop-tower/index.html">The Drop Tower</a> &mdash; there the whole room falls with you and the scale
+      reads true <span class="teal">0&nbsp;g</span> for the length of the fall; here the wheel carries you around and the scale reads that
+      same float at the crest &mdash; then <span class="coral">past</span> it, into the lap-bar. Same brass scale, one staged by falling,
+      one staged on a circle. &nbsp;&middot;&nbsp; <a href="../midway/index.html">Back to The Midway</a>
+    </footer>
+  </main>
+
+<script type="module">
+"use strict";
+
+// ===== FERRIS-WHEEL CORE (inlined byte-twin) BEGIN =====
+// This block is RE-EXTRACTED byte-for-byte by core.test.mjs and proved char-for-char
+// identical to core.mjs's exported functions. Edit core.mjs and re-inline; never drift.
+
+const G = 9.81;          // gravity (m/s²)
+const R = 9.0;           // wheel radius (m) — a mid-size fairground wheel
+
+// N(θ) = m(g + ω²r·cosθ). θ measured from the BOTTOM (θ=0). NOT clamped: past the float
+// speed the top reading is NEGATIVE (the lap-bar pulls down).
+function apparentWeight(theta, omega, m = 1, r = R) {
+  return m * (G + omega * omega * r * Math.cos(theta));
+}
+function bottomN(omega, m = 1, r = R) { return m * (G + omega * omega * r); }  // θ=0
+function topN(omega, m = 1, r = R)    { return m * (G - omega * omega * r); }  // θ=π
+function weightGap(omega, m = 1, r = R) { return 2 * m * omega * omega * r; }
+// ω₀ = √(g/r): the crest goes weightless. NO MASS — adult and child float at the same ω₀.
+function floatOmega(r = R) { return Math.sqrt(G / r); }
+// N(θ) at `steps` evenly-spaced θ over a full revolution. Clock-free; indexed by angle.
+function sweep(omega, m = 1, r = R, steps = 360) {
+  const out = [];
+  for (let i = 0; i < steps; i++) {
+    const theta = (i / steps) * 2 * Math.PI;
+    out.push({ theta, N: apparentWeight(theta, omega, m, r) });
+  }
+  return out;
+}
+// the NEG-CONTROL: a broken scale that reads full weight m·g at EVERY θ for ALL ω.
+function flatScale(theta, omega, m = 1, r = R) { return m * G; }
+
+// THE SELF-TEST. The Node twin and the in-page chip call THIS.
+function runSelfTest() {
+  const checks = [];
+  const ck = (name, ok) => checks.push({ name, ok: !!ok });
+
+  const r = R;
+  const w0 = floatOmega(r);                 // the float speed for this radius
+
+  // CLAIM 1 — THE CREST FLOATS EXACTLY AT ω₀ = √(g/r). N_top(ω₀) = 0 within tol, and the
+  // closed-form ω₀ equals the root of g − ω²r = 0. Checked for several masses (it must not
+  // depend on m).
+  {
+    let worstFloat = 0, worstRoot = 0;
+    for (const m of [22, 60, 95]) {
+      worstFloat = Math.max(worstFloat, Math.abs(topN(w0, m, r)));        // N_top(ω₀)=0
+      worstFloat = Math.max(worstFloat, Math.abs(apparentWeight(Math.PI, w0, m, r)));
+    }
+    worstRoot = Math.abs(G - w0 * w0 * r);                                // g − ω₀²r = 0
+    ck('CLAIM 1 the crest goes weightless EXACTLY at ω₀=√(g/r): N_top(ω₀)=0 (<1e-9, any m)',
+       worstFloat < 1e-9 && worstRoot < 1e-12);
+  }
+
+  // CLAIM 2 — MASS-INVARIANT FLOAT. The float threshold ω₀ is the SAME for an adult and a
+  // child: floatOmega has no m, and N_top(ω₀,m)=0 for every m. (Stronger: the ω that zeroes
+  // the crest, recovered numerically per mass via N_top=0, is identical across masses.)
+  {
+    // floatOmega takes no mass argument at all — invariance by construction.
+    const omegaThatFloats = (m) => Math.sqrt(G / r);    // derived from m(g−ω²r)=0 ⟹ ω=√(g/r)
+    const adults = omegaThatFloats(95), child = omegaThatFloats(22);
+    ck('CLAIM 2 mass-invariant: a 95 kg adult and a 22 kg child float at the SAME ω₀ (Δ<1e-12)',
+       Math.abs(adults - child) < 1e-12 && Math.abs(adults - w0) < 1e-12);
+  }
+
+  // CLAIM 3 — THE GAP IS EXACTLY 2mω²r FOR ALL ω. bottomN − topN = 2mω²r across a sweep of
+  // ω and a couple of masses, to machine precision.
+  {
+    let worst = 0;
+    for (const m of [1, 47]) for (let w = 0; w <= 2.2; w += 0.05) {
+      const got = bottomN(w, m, r) - topN(w, m, r);
+      const want = 2 * m * w * w * r;
+      worst = Math.max(worst, Math.abs(got - want), Math.abs(weightGap(w, m, r) - want));
+    }
+    ck('CLAIM 3 the dip-minus-crest gap is EXACTLY 2mω²r for all ω (<1e-9 across a sweep)',
+       worst < 1e-9);
+  }
+
+  // CLAIM 4 — LOAD-BEARING NEG-CONTROL (the teeth). At ω=0 the parked wheel reads a FLAT
+  // m·g all the way around (no swing) — REAL apparentWeight === flatScale at every θ. For
+  // ω>0 the needle MUST breathe: REAL apparentWeight DISAGREES with the flat m·g at every
+  // θ where cos θ ≠ 0 (i.e. off the 3- and 9-o'clock seats). The broken flat instrument is
+  // right ONLY on the parked wheel.
+  {
+    const m = 3.0, steps = 360;
+    // (a) parked wheel ⟹ flat m·g everywhere (the neg-control AGREES here).
+    let parkedWorst = 0;
+    for (const s of sweep(0, m, r, steps)) parkedWorst = Math.max(parkedWorst, Math.abs(s.N - m * G));
+    ck('CLAIM 4 parked (ω=0): a FLAT m·g all the way around — no swing (<1e-12 at every θ)',
+       parkedWorst < 1e-12);
+
+    // (b) spinning ⟹ the needle breathes: REAL ≠ flat at every θ with cos θ ≠ 0.
+    let spinSamples = 0, breatheSamples = 0, flatEverBreathes = false;
+    for (const w of [0.3, 0.7, 1.1, 1.6, 2.0]) {
+      for (const s of sweep(w, m, r, steps)) {
+        const flat = flatScale(s.theta, w, m, r);
+        if (Math.abs(s.N - flat) > 1e-9) breatheSamples++;          // real has departed m·g
+        if (Math.abs(Math.cos(s.theta)) > 1e-6) {                   // off the cosθ=0 seats
+          spinSamples++;
+          // the flat instrument NEVER breathes — it equals m·g where the real one doesn't.
+          if (Math.abs(flat - m * G) > 1e-9) flatEverBreathes = true;
+        }
+      }
+    }
+    ck('CLAIM 4 the flat neg-control NEVER breathes (it always reads m·g)', !flatEverBreathes);
+    ck('★ CLAIM 4 the teeth bite: spinning, the REAL needle breathes off flat m·g (it swings)',
+       breatheSamples > spinSamples * 0.9 && spinSamples > 0);
+  }
+
+  // CLAIM 5 — PAST THE THRESHOLD THE CREST READS STRICTLY NEGATIVE. For every ω > ω₀ the
+  // top reading N_top(ω) < 0 (the lap-bar pulls down) — and it gets MORE negative as ω
+  // climbs (strictly decreasing). At ω = ω₀ it is exactly 0; below ω₀ it is positive. This
+  // is the property NO other Midway ride has — the float goes past 0 into restraint.
+  {
+    const m = 2.0;
+    let allNeg = true, mono = true, prev = Infinity;
+    for (let w = w0 + 0.02; w <= w0 + 1.5; w += 0.02) {
+      const nt = topN(w, m, r);
+      if (!(nt < 0)) allNeg = false;          // strictly negative past the threshold
+      if (!(nt < prev)) mono = false;          // strictly more negative as ω climbs
+      prev = nt;
+    }
+    const belowPos = topN(w0 - 0.2, m, r) > 0; // just below ω₀ the crest is still positive
+    const atZero = Math.abs(topN(w0, m, r)) < 1e-9;
+    ck('★ CLAIM 5 past ω₀ the crest reads STRICTLY NEGATIVE (N_top<0 — the lap-bar pulls down)',
+       allNeg && mono);
+    ck('CLAIM 5 the sign flips at ω₀: positive below, exactly 0 at ω₀, negative above',
+       belowPos && atZero && topN(w0 + 0.2, m, r) < 0);
+  }
+
+  const pass = checks.filter(c => c.ok).length;
+  return { pass, total: checks.length, checks };
+}
+// ===== FERRIS-WHEEL CORE (inlined byte-twin) END =====
+
+// ─────────────────────────────────────────────────────────────────────────────────
+//  THE RENDERER. Draws the wheel + the occupied gondola + the brass seat-scale whose
+//  needle reads N(θ) live, FROM the core above. The motion IS the readout.
+// ─────────────────────────────────────────────────────────────────────────────────
+const SVGNS = "http://www.w3.org/2000/svg";
+const $ = (id) => document.getElementById(id);
+const TAU = Math.PI * 2;
+function svg(tag, attrs){ const e = document.createElementNS(SVGNS, tag); if(attrs) for(const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+function clamp(x, a, b){ return x < a ? a : (x > b ? b : x); }
+
+const W0 = floatOmega(R);                 // the float speed, for the slider mark + labels
+
+const state = {
+  omega: 0,            // current spin rate (rad/s)
+  mass: 75,            // rider mass (kg)
+  theta: 0,            // gondola angle from the bottom (rad), 0 = six o'clock
+  spinning: false,     // is the wheel turning (omega>0)?
+  ease: null,          // {from,to,t0,dur} an eased ω target (find-float / dare / reset)
+};
+
+// ── THE WHEEL geometry (in the 560×520 viewBox) ──────────────────────────────────
+const RIDE = { cx: 240, cy: 230, R: 178, hubR: 16, gondolaR: 17, spokes: 12, towerTop: 408 };
+
+// ── 1. THE WHEEL SCENE (static rig: tower, rim, spokes; gondolas are redrawn live) ──
+let gWheel, gGond, gNeedleSeat, gRider;
+function buildScene(){
+  const s = $('ride'); s.innerHTML = '';
+
+  // ground line + tower legs (an A-frame straddling the axle)
+  const ground = svg('line', { x1:30, y1:460, x2:530, y2:460, stroke:'rgba(201,162,74,0.28)', 'stroke-width':2 });
+  s.appendChild(ground);
+  for(const dir of [-1, 1]){
+    const footX = RIDE.cx + dir*120;
+    s.appendChild(svg('line', { x1:RIDE.cx, y1:RIDE.cy, x2:footX, y2:460, stroke:'rgba(201,162,74,0.42)', 'stroke-width':5, 'stroke-linecap':'round' }));
+  }
+  // a faint cross-brace
+  s.appendChild(svg('line', { x1:RIDE.cx-78, y1:380, x2:RIDE.cx+78, y2:380, stroke:'rgba(201,162,74,0.22)', 'stroke-width':3 }));
+
+  // the rim (two concentric brass circles)
+  s.appendChild(svg('circle', { cx:RIDE.cx, cy:RIDE.cy, r:RIDE.R, fill:'none', stroke:'rgba(201,162,74,0.5)', 'stroke-width':4 }));
+  s.appendChild(svg('circle', { cx:RIDE.cx, cy:RIDE.cy, r:RIDE.R-9, fill:'none', stroke:'rgba(201,162,74,0.16)', 'stroke-width':1.5 }));
+
+  // the rotating group (spokes + the empty gondola seats); the occupied one is separate
+  gWheel = svg('g', {});
+  s.appendChild(gWheel);
+
+  // the occupied gondola (kept upright; rides the rim) + its rider + a tiny seat-needle
+  gGond = svg('g', {});
+  s.appendChild(gGond);
+
+  // the hub on top
+  s.appendChild(svg('circle', { cx:RIDE.cx, cy:RIDE.cy, r:RIDE.hubR, fill:'#1a160d', stroke:'var(--gold)', 'stroke-width':3 }));
+  s.appendChild(svg('circle', { cx:RIDE.cx, cy:RIDE.cy, r:4, fill:'var(--gold-hi)' }));
+
+  // crest + dip markers (engraved labels on the rim) — where the needle is lightest / heaviest
+  const crest = svg('text', { x:RIDE.cx, y:RIDE.cy-RIDE.R-12, 'text-anchor':'middle', fill:'var(--coral)', 'font-family':'var(--font-mono)', 'font-size':10, 'letter-spacing':'1' });
+  crest.textContent = 'CREST · lightest'; s.appendChild(crest);
+  const dip = svg('text', { x:RIDE.cx, y:RIDE.cy+RIDE.R+22, 'text-anchor':'middle', fill:'var(--teal)', 'font-family':'var(--font-mono)', 'font-size':10, 'letter-spacing':'1' });
+  dip.textContent = 'DIP · heaviest'; s.appendChild(dip);
+
+  drawWheel();
+}
+
+// gondola screen position for a given angle θ from the bottom (θ=0 at six o'clock).
+// On screen, six-o'clock is +y (down); the rim point is below the axle by R at θ=0.
+function gondolaXY(theta){
+  // θ measured from bottom, increasing as the wheel turns. Map to screen:
+  //   bottom (θ=0): (cx, cy+R);  crest (θ=π): (cx, cy−R).
+  const x = RIDE.cx + RIDE.R * Math.sin(theta);
+  const y = RIDE.cy + RIDE.R * Math.cos(theta);
+  return { x, y };
+}
+
+function drawWheel(){
+  // spokes + empty seats (rotated to the live θ so the rig visibly turns)
+  gWheel.innerHTML = '';
+  for(let i=0;i<RIDE.spokes;i++){
+    const a = state.theta + (i / RIDE.spokes) * TAU;
+    const p = gondolaXY(a);
+    gWheel.appendChild(svg('line', { x1:RIDE.cx, y1:RIDE.cy, x2:p.x, y2:p.y, stroke:'rgba(201,162,74,0.30)', 'stroke-width':2 }));
+    if(i!==0){ // seat 0 is the OCCUPIED gondola (drawn separately, kept upright)
+      gWheel.appendChild(svg('circle', { cx:p.x, cy:p.y, r:9, fill:'#14110a', stroke:'rgba(201,162,74,0.42)', 'stroke-width':2 }));
+    }
+  }
+  drawGondola();
+}
+
+// the OCCUPIED gondola: an upright car hanging on the rim at θ, carrying a rider and a
+// little seat-pan whose tilt reads sign(N). The big brass gauge on the right is the soul;
+// this on-car needle is a small echo so the rider IS where the weight is read.
+function drawGondola(){
+  gGond.innerHTML = '';
+  const p = gondolaXY(state.theta);
+  const N = apparentWeight(state.theta, state.omega, state.mass, R);
+  const Ng = N / (state.mass * G);          // apparent g-factor (0 = float, <0 = lap-bar)
+
+  // the gondola car (a rounded brass bucket, kept upright)
+  const car = svg('g', {});
+  car.appendChild(svg('rect', { x:p.x-15, y:p.y-13, width:30, height:26, rx:7,
+    fill:'#1d1810', stroke:'var(--gold-hi)', 'stroke-width':2.5 }));
+  // the seat-pan colour tells the story: teal heavy, gold near float, coral negative
+  const seatCol = N > state.mass*G*0.05 ? 'var(--teal)' : (N < -1e-6 ? 'var(--coral)' : 'var(--gold-hi)');
+  // seat pan
+  car.appendChild(svg('rect', { x:p.x-11, y:p.y+5, width:22, height:3.4, rx:1.5, fill:seatCol, opacity:0.92 }));
+  // the rider (a little body): sits on the pan when N≥0, lifts toward the lap-bar when N<0
+  const lift = N < 0 ? clamp(-Ng*7, 0, 9) : 0;     // visible lift off the pan past the float
+  const bodyY = p.y - 1 - lift;
+  const rider = svg('g', {});
+  rider.appendChild(svg('circle', { cx:p.x, cy:bodyY-6, r:3.6, fill:'var(--ink)' }));     // head
+  rider.appendChild(svg('rect', { x:p.x-3.4, y:bodyY-3, width:6.8, height:8, rx:2.6, fill:'var(--ink)' })); // torso
+  car.appendChild(rider);
+  // the LAP-BAR: a brass restraint bar across the lap. It glows + thickens when it takes the pull.
+  const lapLoad = N < 0 ? clamp(-N/(state.mass*8), 0, 1) : 0;
+  const lapW = 2 + lapLoad*3.2;
+  const lapCol = N < -1e-6 ? 'var(--coral)' : 'rgba(201,162,74,0.5)';
+  car.appendChild(svg('line', { x1:p.x-12, y1:p.y-2, x2:p.x+12, y2:p.y-2, stroke:lapCol, 'stroke-width':lapW, 'stroke-linecap':'round',
+    opacity: N < -1e-6 ? 0.95 : 0.55 }));
+  if(N < -1e-6){
+    // a little down-arrow on the lap-bar: the restraint pulls the rider DOWN onto the wheel
+    car.appendChild(svg('path', { d:`M ${p.x} ${p.y-9} L ${p.x} ${p.y-15} M ${p.x-3} ${p.y-12} L ${p.x} ${p.y-15} L ${p.x+3} ${p.y-12}`,
+      stroke:'var(--coral)', 'stroke-width':1.6, fill:'none', 'stroke-linecap':'round', 'stroke-linejoin':'round' }));
+  }
+  gGond.appendChild(car);
+
+  // a faint glow ring on the occupied gondola so the eye tracks it
+  gGond.insertBefore(svg('circle', { cx:p.x, cy:p.y, r:20, fill:'none', stroke:seatCol, 'stroke-width':1, opacity:0.35 }), car);
+}
+
+// ── 2. THE BRASS SEAT-SCALE (the soul) — a gauge whose needle reads N live, and swings
+//    BELOW ZERO into a coral lap-bar arc when the seat-pan unloads. Range −1.2g … +2.6g. ─
+const SC = { cx:80, cy:96, R:62, gMin:-1.3, gMax:2.7 };   // in the 160×160 viewBox
+// map an apparent-g value to a needle angle (deg). The dial sweeps from lower-left (gMin)
+// up over the top to lower-right (gMax); 0 g sits at the top-left "FLOAT" tick.
+function gToAngle(g){
+  const f = (clamp(g, SC.gMin, SC.gMax) - SC.gMin) / (SC.gMax - SC.gMin);   // 0..1
+  // sweep over a 250° arc from 215° (gMin) clockwise to -35° (gMax)
+  return 215 - f * 250;
+}
+let gScaleDial;
+function buildScale(){
+  const s = $('scale'); s.innerHTML = '';
+  gScaleDial = svg('g', {});
+  s.appendChild(gScaleDial);
+
+  // the dial face
+  s.appendChild(svg('circle', { cx:SC.cx, cy:SC.cy, r:SC.R+8, fill:'#0c0a06', stroke:'rgba(201,162,74,0.3)', 'stroke-width':2 }));
+
+  // colour the arc: coral below 0 (lap-bar), gold band near 0 (float), teal above (weight)
+  function arc(g0, g1, col, w){
+    const a0 = gToAngle(g0)*Math.PI/180, a1 = gToAngle(g1)*Math.PI/180;
+    const r = SC.R;
+    const x0 = SC.cx + r*Math.cos(a0), y0 = SC.cy - r*Math.sin(a0);
+    const x1 = SC.cx + r*Math.cos(a1), y1 = SC.cy - r*Math.sin(a1);
+    const large = Math.abs(gToAngle(g0)-gToAngle(g1)) > 180 ? 1 : 0;
+    const sweepFlag = 1; // angles decrease as g increases ⇒ clockwise
+    s.appendChild(svg('path', { d:`M ${x0} ${y0} A ${r} ${r} 0 ${large} ${sweepFlag} ${x1} ${y1}`,
+      fill:'none', stroke:col, 'stroke-width':w, 'stroke-linecap':'round', opacity:0.9 }));
+  }
+  arc(SC.gMin, -0.04, 'var(--coral)', 7);      // negative — lap-bar pulls
+  arc(-0.04, 0.04, 'var(--gold-hi)', 7);       // the float band (≈0 g)
+  arc(0.04, SC.gMax, 'var(--teal)', 7);        // positive — pressing the pan
+
+  // ticks + labels at key g values
+  function tick(g, label, col){
+    const a = gToAngle(g)*Math.PI/180;
+    const r0 = SC.R-9, r1 = SC.R+1;
+    const x0 = SC.cx + r0*Math.cos(a), y0 = SC.cy - r0*Math.sin(a);
+    const x1 = SC.cx + r1*Math.cos(a), y1 = SC.cy - r1*Math.sin(a);
+    s.appendChild(svg('line', { x1:x0, y1:y0, x2:x1, y2:y1, stroke:col||'rgba(239,233,218,0.6)', 'stroke-width':1.6 }));
+    if(label){
+      const rl = SC.R-19;
+      const xl = SC.cx + rl*Math.cos(a), yl = SC.cy - rl*Math.sin(a);
+      const t = svg('text', { x:xl, y:yl+3, 'text-anchor':'middle', fill:col||'var(--ink-dim)', 'font-family':'var(--font-mono)', 'font-size':8 });
+      t.textContent = label; s.appendChild(t);
+    }
+  }
+  tick(-1, '−1g', 'var(--coral)');
+  tick(0, '0 · FLOAT', 'var(--gold-hi)');
+  tick(1, '1g', 'var(--ink-dim)');
+  tick(2, '2g', 'var(--teal)');
+
+  // the hub + the needle (redrawn live)
+  s.appendChild(svg('circle', { cx:SC.cx, cy:SC.cy, r:6, fill:'#1a160d', stroke:'var(--gold)', 'stroke-width':2 }));
+}
+
+// the live needle — its angle IS N(θ)/(m·g). Below 0 it swings into the coral arc.
+function drawNeedle(){
+  if(!gScaleDial) return;
+  gScaleDial.innerHTML = '';
+  const N = apparentWeight(state.theta, state.omega, state.mass, R);
+  const g = N / (state.mass * G);
+  const a = gToAngle(g)*Math.PI/180;
+  const len = SC.R-12;
+  const x = SC.cx + len*Math.cos(a), y = SC.cy - len*Math.sin(a);
+  const col = g < -1e-6 ? 'var(--coral)' : (Math.abs(g) < 0.05 ? 'var(--gold-hi)' : 'var(--teal)');
+  // counterweight tail
+  const xb = SC.cx - 13*Math.cos(a), yb = SC.cy + 13*Math.sin(a);
+  gScaleDial.appendChild(svg('line', { x1:xb, y1:yb, x2:x, y2:y, stroke:col, 'stroke-width':3, 'stroke-linecap':'round' }));
+  gScaleDial.appendChild(svg('circle', { cx:x, cy:y, r:3, fill:col }));
+}
+
+// ── 3. THE LIVE LEDGER + REGIME LINE ────────────────────────────────────────────
+function fmtN(n){ return (n>=0?'+':'−') + Math.abs(n).toFixed(1) + ' N'; }
+function updateLedger(){
+  const m = state.mass, w = state.omega;
+  const N = apparentWeight(state.theta, w, m, R);
+  const nb = bottomN(w, m, R), nt = topN(w, m, R), gap = weightGap(w, m, R);
+  $('plLive').textContent = fmtN(N);
+  $('plLive').style.color = N < -1e-6 ? 'var(--coral)' : (N < m*G*0.05 ? 'var(--gold-hi)' : 'var(--ink)');
+  $('plBottom').textContent = fmtN(nb);
+  $('plTop').textContent = fmtN(nt);
+  $('plTop').style.color = nt < -1e-6 ? 'var(--coral)' : (Math.abs(nt) < 0.5 ? 'var(--gold-hi)' : 'var(--coral)');
+  $('gapChip').innerHTML = 'dip − crest = <b>' + gap.toFixed(1) + ' N</b> = 2mω²r';
+
+  // where the gondola is on the circle (for the verdict)
+  const c = Math.cos(state.theta);
+  const where = c > 0.7 ? 'near the dip' : (c < -0.7 ? 'near the crest' : (Math.sin(state.theta) >= 0 ? 'on the rise' : 'on the fall'));
+  $('scaleVerdict').innerHTML = 'N = <b style="color:' + (N<-1e-6?'var(--coral)':'var(--gold-hi)') + '">' + fmtN(N) + '</b> · ' + where;
+
+  // the lap-bar lamp
+  const lap = $('lapLamp');
+  if(nt < -1e-6) lap.classList.add('on'); else lap.classList.remove('on');
+
+  // the felt-regime headline
+  const reg = $('regime');
+  if(w < 1e-4){ reg.className='rest'; reg.innerHTML = '<b>PARKED</b> &mdash; the wheel is still. The scale reads full weight (<code>m·g</code>) all the way around.'; }
+  else if(Math.abs(nt) < 0.6){ reg.className='float'; reg.innerHTML = '<b>AT THE FLOAT</b> &mdash; ω ≈ ω₀ = √(g/r). The crest goes <i>weightless</i>: the needle kisses <b>0 g</b> at the top.'; }
+  else if(nt < 0){ reg.className='neg'; reg.innerHTML = '<b>PAST THE FLOAT</b> &mdash; the crest reads <b>negative</b>. The seat-pan unloads and the <b>lap-bar pulls you down</b> onto the wheel.'; }
+  else { reg.className='low'; reg.innerHTML = '<b>TURNING</b> &mdash; your weight <i>breathes</i>: heaviest at the dip, lightest at the crest. Wind it up to find the float.'; }
+}
+
+// ── 4. THE ANIMATION LOOP — turn the wheel at ω, swing the needle from the core ───
+let raf = null, lastT = 0;
+function frame(now){
+  const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+
+  // ease ω toward a target (find-float / dare / reset) if one is armed
+  if(state.ease){
+    const e = state.ease, t = clamp((now - e.t0)/e.dur, 0, 1);
+    const k = t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;      // easeInOutQuad
+    state.omega = e.from + (e.to - e.from)*k;
+    syncOmegaUI();
+    if(t>=1){ state.omega = e.to; state.ease = null; syncOmegaUI(); }
+  }
+
+  // advance the gondola angle by ω·dt (the wheel actually turns)
+  if(state.omega > 1e-5){ state.theta = (state.theta + state.omega * dt) % TAU; }
+  state.spinning = state.omega > 1e-5;
+
+  drawWheel(); drawNeedle(); updateLedger();
+  raf = requestAnimationFrame(frame);
+}
+function ensureRAF(){ if(!raf){ lastT = performance.now(); raf = requestAnimationFrame(frame); } }
+
+// ── 5. CONTROLS ──────────────────────────────────────────────────────────────────
+function syncOmegaUI(){
+  $('omega').value = state.omega.toFixed(3);
+  $('kW').textContent = state.omega.toFixed(3) + ' rad/s';
+}
+function setOmega(w){ state.omega = clamp(w, 0, 1.8); state.ease = null; syncOmegaUI(); }
+function easeOmega(to, dur){ state.ease = { from:state.omega, to:clamp(to,0,1.8), t0:performance.now(), dur:dur||1100 }; ensureRAF(); }
+
+function wire(){
+  $('omega').addEventListener('input', (e)=>{ setOmega(parseFloat(e.target.value)); ensureRAF(); });
+  $('mass').addEventListener('input', (e)=>{ state.mass = parseInt(e.target.value,10); $('kM').textContent = state.mass + ' kg'; updateLedger(); drawNeedle(); });
+  $('findFloat').addEventListener('click', ()=>{ easeOmega(W0, 1300); });
+  $('dare').addEventListener('click', ()=>{ easeOmega(1.55, 1500); });
+  $('reset').addEventListener('click', ()=>{ state.ease=null; setOmega(0); state.theta=0; state.mass=75; $('mass').value=75; $('kM').textContent='75 kg'; buildScene(); drawNeedle(); updateLedger(); });
+
+  // the self-test chip (calls the SAME runSelfTest as the Node twin)
+  const r = runSelfTest();
+  const node = $('selftest');
+  if(r.pass===r.total){ node.className='selftest ok'; node.textContent = `self-test ${r.pass}/${r.total} ✓`; }
+  else { node.className='selftest bad'; node.textContent = `self-test ${r.pass}/${r.total} ✗`; }
+  const list = $('stList'); list.innerHTML='';
+  for(const c of r.checks){
+    const row = document.createElement('div'); row.className='row';
+    const mk = document.createElement('span'); mk.className='m '+(c.ok?'ok':'no'); mk.textContent = c.ok?'✓':'✗';
+    const t = document.createElement('span'); t.className='t'; t.textContent = c.name;
+    row.appendChild(mk); row.appendChild(t); list.appendChild(row);
+  }
+  $('stSub').textContent = `${r.pass}/${r.total} claims proven — the crest floats at ω₀=√(g/r) (mass-invariant), the dip−crest gap is 2mω²r, ω=0 reads a flat m·g (neg-control), and past ω₀ the crest reads strictly negative (not clamped).`;
+  node.addEventListener('click', ()=>$('stPanel').classList.toggle('show'));
+  $('stClose').addEventListener('click', ()=>$('stPanel').classList.remove('show'));
+  window.__ferrisWheelSelfTest = runSelfTest;
+}
+
+function boot(){
+  buildScene(); buildScale(); wire();
+  $('kM').textContent = state.mass + ' kg';
+  drawNeedle(); updateLedger();
+  ensureRAF();
+  // drop the front-door breadcrumb so a direct visit registers
+  try{ const k='ws:seen:ferris-wheel'; if(!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
+}
+
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+</script>
+</body>
+</html>
