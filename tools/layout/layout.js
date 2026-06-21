@@ -177,6 +177,7 @@ var Layout = (function () {
     stellar:     { label: 'THE STELLAR WING',   accent: '#9db4ff' },
     vantages:    { label: 'SCENES YOU WALK INTO', accent: '#9db4ff' },
     'moving-frame': { label: 'THE MOVING FRAME', accent: '#9db4ff' },
+    cosmology:   { label: 'COSMOLOGY',          accent: '#9db4ff' },
     arrow:       { label: 'THE ARROW WING',     accent: '#c9a24a' },
     'curved-country': { label: 'CURVED COUNTRY', accent: '#caa15a' },
     induction:   { label: 'ELECTROMAGNETISM', accent: '#7fd4ff' },

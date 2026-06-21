@@ -48,6 +48,7 @@ const PLACES = [
   { id:'lodestone-hall', district:'grounds', tier:1, wing:'induction', footprint:'coil', prefer:['right','bottom'] },
   { id:'firmament', district:'observatory', tier:1, footprint:'tower' },
   { id:'relativity', district:'observatory', tier:1, wing:'moving-frame', footprint:'tower', prefer:'right' },
+  { id:'first-light', district:'observatory', tier:1, wing:'cosmology', footprint:'tower', prefer:['left','bottom'] },
   { id:'workbench', district:'outbuilding', tier:3, footprint:'shed' },
   { id:'physics-lab', district:'cavern', tier:1, footprint:'cave' },
   { id:'undercroft', district:'beneath', tier:3, footprint:'stair', locked:true },
