@@ -246,7 +246,14 @@
     opacity:0; transform:translateY(6px) scale(.985); transform-origin:top left;
     transition:opacity .22s ease, transform .22s cubic-bezier(.2,.8,.2,1); }
   #card.show{ opacity:1; transform:none; }
+  /* BUG #230 — a long room popup (e.g. The Lodestone Hall on a short viewport) must scroll
+     INSIDE the card, not spill off the bottom. The .card-inner is the scroll container:
+     cap its height to the viewport (matching the 12px placement gutters, doubled), let it
+     scroll, and make it pointer-interactive so the inner scroll works. The card stays
+     pointer-events:none overall so it never blocks the plate; only the inner panel listens. */
   .card-inner{ position:relative; padding:15px 17px 16px; border-radius:6px;
+    max-height:calc(100vh - 24px); overflow-y:auto; overscroll-behavior:contain;
+    pointer-events:auto;
     background:linear-gradient(180deg, rgba(13,16,24,.975), rgba(8,10,15,.985));
     border:1px solid color-mix(in srgb,var(--cc) 44%,rgba(255,255,255,.10));
     box-shadow:0 26px 64px -22px rgba(0,0,0,.88), 0 0 46px -22px var(--cc);
@@ -2241,7 +2248,19 @@ function openCard(r, a){
   card.style.left = pos.L + "px";
   card.style.top  = pos.T + "px";
 }
-function hideCard(){ card.classList.remove("show"); }
+// BUG #230 — a long popup scrolls INSIDE the card (.card-inner is overflow:auto), so the
+// pointer must be able to LEAVE the POI and enter the card to scroll WITHOUT the card
+// dismissing. hideCard() is deferred by a short grace window; if the pointer lands on the
+// card in that window (cardEnter cancels the timer), the card stays. Leaving the card
+// (cardLeave) hides it for real. Pan/resize call hideCard(true) for an immediate dismiss.
+let _hideTimer = null, _overCard = false;
+function hideCard(immediate){
+  if(_hideTimer){ clearTimeout(_hideTimer); _hideTimer = null; }
+  if(immediate === true){ _overCard = false; card.classList.remove("show"); return; }
+  _hideTimer = setTimeout(()=>{ if(!_overCard) card.classList.remove("show"); _hideTimer = null; }, 90);
+}
+card.addEventListener("mouseenter", ()=>{ _overCard = true; if(_hideTimer){ clearTimeout(_hideTimer); _hideTimer = null; } });
+card.addEventListener("mouseleave", ()=>{ _overCard = false; card.classList.remove("show"); });
 
 /* ── a tree-lined survey avenue: a faint dashed quadratic path from the manor door to a
    target, flanked by small paired tree-dots so the open ground reads as planted grounds.
@@ -3233,8 +3252,17 @@ renderEstate();
       const inv = ctm.inverse();
       return { x: inv.a*clientX + inv.c*clientY + inv.e, y: inv.b*clientX + inv.d*clientY + inv.f };
     }
-    // the viewBox point at the centre of the screen — the natural focus for a zoom.
-    function centreFocus(){ return svgPoint(window.innerWidth/2, window.innerHeight/2); }
+    // the VIEWPORT-LOCAL point under the centre of the screen — the natural focus for a
+    // zoom. svgPoint() maps a screen pixel into #sheet viewBox units, but the #sheet CTM
+    // does NOT carry the #viewport's translate(tx,ty)scale(k); POIs + the loupe all live in
+    // viewport-local coords, so we must invert that transform too: localFocus = (sheetPt − t)/k.
+    // Without this the centre always inverse-maps to ~(720,450) and the loupe stays pinned to
+    // the plate centre no matter how far you pan (the room-labeling / manor-caption bugs).
+    function centreFocus(){
+      const p = svgPoint(window.innerWidth/2, window.innerHeight/2);
+      if(!p) return null;
+      return { x: (p.x - tx)/k, y: (p.y - ty)/k };
+    }
     // drive the loupe reveal from the current transform: ZOOM sets focus to the
     // viewport centre + raises k; at fit-view (k≈1) it rests (captions only). Defined
     // as a sibling of apply() so EVERY transform path (wheel, drag, buttons, keys,
@@ -3277,7 +3305,7 @@ renderEstate();
       // convert client delta → viewBox delta via the CTM scale
       const ctm = sheet.getScreenCTM(); if(!ctm) return;
       tx = startTx + dx/ctm.a; ty = startTy + dy/ctm.d;
-      clamp(); apply(); afterTransform(); hideCard();
+      clamp(); apply(); afterTransform(); hideCard(true);
     });
     function endDrag(e){
       if(!dragging) return;
@@ -3323,7 +3351,7 @@ renderEstate();
   }catch(e){ /* any failure → static, fully-visible plate (no transform) */ }
 })();
 
-window.addEventListener("resize", hideCard);
+window.addEventListener("resize", ()=> hideCard(true));
 
 /* ════════════════════════════════════════════════════════════════════════════
    THE UNDERCROFT — the hidden way down, ported faithfully from the previous front
@@ -3472,11 +3500,16 @@ const LOUPE = (function(){
     const MIN_SCREEN_GAP = 18;   // breathing room demanded between two on-screen labels (CSS px)
     const ZONE_FLOOR = 0.06;     // a district caption never fades wholly anonymous
     const ZONE_FULL  = 0.7;      // the resting zone-label opacity (matches .zone-label CSS)
-    // BUG#216-5 — WING-LABEL LEVEL-OF-DETAIL: the wing sub-captions are HIDDEN at the
-    // resting fit-view and fade in as you zoom past WING_LOD_IN, full by WING_LOD_FULL.
-    const WING_LOD_IN   = 1.25;  // k below this → wing captions stay dark (rest view)
-    const WING_LOD_FULL = 2.2;   // k at/above this → wing captions at full LOD opacity
+    // WING-LABEL LEVEL-OF-DETAIL: the wing sub-captions are HIDDEN at the resting fit-view
+    // and fade in as you zoom past WING_LOD_IN, full by WING_LOD_FULL.
+    // BUG #230 — LOD HIERARCHY: a WING is a higher LOD tier than a ROOM, so wing captions
+    // must light BEFORE room labels. Wings begin fading the instant you zoom (k>1) and reach
+    // full LOD by 1.25; room labels (in zoom mode) only start naming themselves at k≥1.25
+    // (LABEL_LOD_IN) — i.e. once the wing captions are already at full LOD.
+    const WING_LOD_IN   = 1;     // k at/below this → wing captions dark; above → begin fading
+    const WING_LOD_FULL = 1.25;  // k at/above this → wing captions at full LOD opacity
     const WING_FULL_OP  = 0.72;  // the wing caption's full opacity (the old always-on value)
+    const LABEL_LOD_IN  = 1.25;  // ZOOM-mode room labels stay dark below this k (wings come first)
 
     // curSingleId: the one room a HOVER/TAB names (BUG#216-2 — hover is single-room,
     // NOT the whole loupe neighbourhood; the multi-room loupe is for ZOOM only).
@@ -3536,8 +3569,12 @@ const LOUPE = (function(){
     function wantSet(){
       // ZOOM mode: the loupe LOD neighbourhood, PLUS the one room under the cursor if
       // it is currently hovered (so a hover while zoomed still guarantees that name).
+      // BUG #230 — LOD ORDER: the loupe room-label neighbourhood only lights once k≥LABEL_LOD_IN
+      // (wing captions, a higher LOD tier, are already at full LOD by then). Below that k the
+      // zoom neighbourhood stays dark — but an EXPLICIT hover/tab (curSingleId) still names its
+      // one room at ANY zoom, so the gate never swallows a deliberate hover.
       if(curMode === "zoom"){
-        const set = revealedSet(curFocus, curK);
+        const set = (curK >= LABEL_LOD_IN) ? revealedSet(curFocus, curK) : [];
         if(curSingleId && solvedBox(curSingleId) && set.indexOf(curSingleId) < 0) set.push(curSingleId);
         return set;
       }
@@ -3565,17 +3602,16 @@ const LOUPE = (function(){
         ? `translate(${tx} ${ty})`
         : `translate(${tx} ${ty}) scale(${inv.toFixed(4)})`);
     }
-    // BUG#216-4: the engraved DISTRICT/WING captions also ride the scale(k) viewport, so
-    // counter-scale each by 1/k ABOUT its own anchor (x,y) when zoomed — keeping every
-    // text label a constant readable screen size, the way a real map's labels stay sized
-    // as you zoom. A null/0-opacity caption is skipped cheaply.
+    // BUG #230: the engraved DISTRICT/WING captions read as part of the BASEMAP (like the
+    // sky's constellation/asterism names) — so they must SCALE WITH the plate's scale(k),
+    // NOT hold a constant screen size. This used to apply a 1/k counter-scale about the
+    // caption's anchor; that's now a NO-OP. We clear any leftover transform so each caption
+    // rides the viewport's scale(k) exactly like the footprints and lamps. (This is DISTINCT
+    // from scaleLabelText() for per-ROOM hover/zoom labels, which KEEPS its 1/k counter-scale
+    // so a room name stays a readable screen size — do NOT neutralize that one.)
     function scaleCaption(t){
       if(!t) return;
-      const ax = parseFloat(t.dataset.ax), ay = parseFloat(t.dataset.ay);
-      if(!isFinite(ax) || !isFinite(ay)) return;
-      const inv = (curK > 1.0001) ? (1/curK) : 1;
-      t.setAttribute("transform", inv===1 ? "" :
-        `translate(${ax.toFixed(2)} ${ay.toFixed(2)}) scale(${inv.toFixed(4)}) translate(${(-ax).toFixed(2)} ${(-ay).toFixed(2)})`);
+      if(t.getAttribute("transform")) t.removeAttribute("transform");
     }
 
     let liveIds = new Set();
@@ -3598,7 +3634,7 @@ const LOUPE = (function(){
         // fade in proportion to how many of the district's rooms are named, floored.
         const op = n ? Math.max(ZONE_FLOOR, ZONE_FULL - 0.16*n) : ZONE_FULL;
         t.style.opacity = op.toFixed(3);
-        scaleCaption(t);   // keep the district caption a constant screen size when zoomed
+        scaleCaption(t);   // BUG #230: clear any transform — the caption rides the plate's scale(k)
       });
 
       // BUG#216-5 — WING-LABEL LEVEL-OF-DETAIL: the wing sub-captions are dark at rest
