@@ -155,6 +155,17 @@ var Layout = (function () {
      verified clear of every footprint + catalog star (the works block ends ~x1000,
      amusements begins ~x910 upper-right; this lower-mid band is open). */
   GROUNDS_WINGS.induction = { x: 600, y: 690, w: 210, h: 120 };
+  /* WAVES — the wave-INTERFERENCE family (Ripple, the silent tank, + The Loud and the
+     Quiet Walk, the same field sung to your ear). Kin to OPTICS (both are "what light/
+     waves DO"), but a distinct family: interference & superposition, not geometric
+     bending. Seated as OPTICS' downstairs neighbour in the open west-central park —
+     directly RIGHT of the optics block (x269–354,y398–458) and ABOVE the lower-west
+     glasshouse cluster — so the two wave wings read as a column down the west grounds.
+     Sized for ≥2 lots now with room to grow (a beat/standing-wave bench, a diffraction
+     grating). Builder verified clear of every footprint + catalog star via smoke.cjs's
+     live Layout.solve (the fallback crammed it into the curved-country/glasshouse band;
+     this west-central band seats both tank footprints clean). */
+  GROUNDS_WINGS.waves = { x: 398, y: 392, w: 168, h: 150 };
 
   /* ── WING_META: display label, representative accent (for tint + engraved
      label), and optional grows:N reserved-lot count. An unknown wing is allowed
@@ -181,7 +192,8 @@ var Layout = (function () {
     arrow:       { label: 'THE ARROW WING',     accent: '#c9a24a' },
     'curved-country': { label: 'CURVED COUNTRY', accent: '#caa15a' },
     induction:   { label: 'ELECTROMAGNETISM', accent: '#7fd4ff' },
-    'kinetics-sound': { label: 'KINETICS & SOUND', accent: '#d8a94a' }
+    'kinetics-sound': { label: 'KINETICS & SOUND', accent: '#d8a94a' },
+    waves:       { label: 'WAVES',              accent: '#54d6d0' }
   };
   function wingLabel(slug) {
     if (WING_META[slug] && WING_META[slug].label) return WING_META[slug].label;

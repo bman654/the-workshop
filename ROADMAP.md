@@ -138,7 +138,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 
 ### cross
-- [cross] **The Loud and the Quiet Walk — interference you HEAR** — Two speakers sing one pure tone into a room; drag a listening-ear across the floor and HEAR it swell at antinodal lines, nearly vanish at nodal lines — your two ears are the meter. Paints the SAME hyperbolic bands the silent ripple/ already draws (its exact path-difference math grep-confirmed there — REUSE it, don't re-derive); slide source-spacing d and the bands fan in lockstep with what you hear. FORM: a touchable, walkable, AUDIBLE field. CRUX: loud maxima exactly where r₁−r₂=nλ, silent at (n+½)λ, λ=c/f — the heard-loud loci ARE ripple's foci-hyperbolas; twin checks loudness peaks land on nλ. Lay a RECIPROCAL cross-link into ripple/ (the same figure, one silent, one sung). (sown #247)
 
 
 ### curation
@@ -155,11 +154,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-<!-- ✝ BLOOMED #255: The Spinning Chair — pull your arms in, spin faster → spinning-chair/ · after 44c8e9c -->
 <!-- ✝ BLOOMED #256: The Circle That Rolls Itself Straight — the Tusi couple → tusi/ · after a98ed32 -->
 <!-- ✝ BLOOMED #257: The Heaviest Dwarfs Are the Smallest → stellar-forge/mass-radius/ · after ae55f1c -->
 <!-- ✝ BLOOMED #258: The Ring Made of One Star → einstein-ring/ · after 1d88bbb -->
 <!-- ✝ BLOOMED #259: The Fog That Cleared → recombination/ · after 1258ec0 -->
+<!-- ✝ BLOOMED #260: The Loud and the Quiet Walk — interference you HEAR → loud-and-quiet/ · after 312d1f1 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);

@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Loud and the Quiet Walk</title>
+<style>
+  :root{
+    --panel-bg: rgba(7,14,18,0.86);
+    --panel-edge: rgba(110,200,210,0.30);
+    --ink: #d8eef0;
+    --ink-dim: #7fa6ac;
+    --accent: #54d6d0;
+    --accent-warm: #e8b75a;     /* the "loud" colour — brass */
+    --accent-soft: rgba(84,214,208,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --tank: #03161a;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--tank); color:var(--ink);
+    font-family:var(--font-ui); overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .brand .twin{ font:600 10px/1 var(--font-mono); letter-spacing:.06em; color:var(--ink-dim); text-decoration:none; opacity:.78; }
+  .brand .twin:hover{ color:var(--accent); opacity:1; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; }
+  #tank{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:crosshair; }
+
+  /* the meter strip across the bottom of the stage — the spatial curve, drawn as a heard rhythm */
+  #meter{ position:absolute; left:0; right:0; bottom:0; height:120px; display:block;
+    background:linear-gradient(180deg, rgba(2,9,12,0) 0%, rgba(2,9,12,0.86) 22%);
+    pointer-events:none; }
+  #hud{ position:absolute; left:50%; bottom:130px; transform:translateX(-50%);
+    font:11px/1.3 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.5);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 12px; letter-spacing:.3px;
+    pointer-events:none; opacity:0; transition:opacity .15s; max-width:90%; text-align:center; }
+  #hud.show{ opacity:1; }
+  #hud b{ color:var(--accent); }
+
+  #panel{
+    width:328px; flex:0 0 328px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 22px; box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 8px; border-top:1px solid rgba(110,200,210,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .row{ margin:11px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .row > label .val{ color:var(--accent); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.2px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px; margin:0; box-sizing:border-box;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#eafcfb; border:2px solid #2f8f8a; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{ width:13px; height:13px; border-radius:50%; background:#eafcfb; border:2px solid #2f8f8a; cursor:pointer; }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(110,200,210,0.24); }
+  .seg button{
+    flex:1; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#04181a; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .btnrow{ display:flex; gap:8px; margin:12px 0; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(84,214,208,0.26), rgba(84,214,208,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(84,214,208,0.40), rgba(84,214,208,0.14)); }
+  .chip{
+    border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink-dim);
+    border-radius:8px; padding:8px 6px; font-size:11px; font-weight:600; letter-spacing:.2px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui); text-align:center;
+  }
+  .chip:hover{ background:var(--accent-soft); border-color:var(--accent); color:var(--ink); }
+  .preset-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:6px; }
+  .hint{ font:10.5px/1.55 var(--font-mono); color:var(--ink-dim); opacity:.8; letter-spacing:.2px; margin:16px 0 4px;
+    border-top:1px solid rgba(110,200,210,0.16); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+  .hint a{ color:var(--accent); text-decoration:none; }
+  .hint a:hover{ text-decoration:underline; }
+  .readout{ font:11px/1.5 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; margin:6px 0; }
+  .readout b{ color:var(--accent); }
+  .readout .warm{ color:var(--accent-warm); }
+  #lineInfo{ font:11px/1.6 var(--font-mono); color:var(--ink-dim); }
+  #lineInfo .tick{ color:var(--accent-warm); font-weight:600; }
+  .chimes{ font:600 12px/1 var(--font-mono); color:var(--accent-warm); letter-spacing:.06em; }
+  @media (prefers-reduced-motion: reduce){ #hud{ transition:none; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+    <div class="brand">
+      <h1>The Loud and the Quiet Walk</h1>
+      <span class="tag">interference you HEAR</span>
+      <a class="twin" href="../ripple/index.html" title="The same field, drawn in silence">&harr; Ripple — the same field, silent</a>
+    </div>
+    <div class="selftest" id="selftest">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="tank"></canvas>
+      <canvas id="meter"></canvas>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">Two speakers sing one pure tone into a room. Carry a <b>listening-ear</b> across the
+        floor and you HEAR the field <a href="../ripple/index.html" style="color:var(--accent)">Ripple</a>
+        draws in silence &mdash; swelling <b style="color:var(--accent-warm)">LOUD</b> on antinodal curves,
+        dropping to near-<b>silence</b> on nodal ones. <b>Your two ears are the meter.</b></p>
+
+      <p class="lede"><b>Scrub</b> the ear along the white walk-line (or press <b>Sweep</b>) and the tone
+        pulses loud&ndash;quiet&ndash;loud. Each loud peak <b>chimes a tick</b>; the meter shows the
+        <b>n&lambda; marks</b> the peaks must land on. Drag the <b>amber</b> line onto a nodal hyperbola
+        to walk it in silence.</p>
+
+      <div class="sect">The walk</div>
+      <div class="btnrow">
+        <button class="btn primary" id="sweepBtn">&#9654; Sweep the ear</button>
+      </div>
+      <div class="row">
+        <label>Ear position <span class="val" id="posVal">0.50</span></label>
+        <input type="range" id="posSlider" min="0" max="1" step="0.001" value="0.5">
+      </div>
+      <div class="row">
+        <label>Sweep speed <span class="val" id="speedVal">1.0&times;</span></label>
+        <input type="range" id="speedSlider" min="0.25" max="3" step="0.05" value="1">
+      </div>
+      <div id="lineInfo" class="readout"></div>
+
+      <div class="sect">The two speakers</div>
+      <div class="row">
+        <label>Source spacing d <span class="val" id="dVal">240</span></label>
+        <input type="range" id="dSlider" min="80" max="420" step="2" value="240">
+      </div>
+      <div class="row">
+        <label>Wavelength &lambda; <span class="val" id="lamVal">50</span></label>
+        <input type="range" id="lamSlider" min="22" max="120" step="1" value="50">
+      </div>
+      <div class="row">
+        <label>Pitch (c = f&lambda;) <span class="val" id="freqVal">440 Hz</span></label>
+        <input type="range" id="freqSlider" min="180" max="900" step="2" value="440">
+      </div>
+
+      <div class="sect">Sound</div>
+      <div class="row">
+        <div class="seg" id="audioSeg" title="Honours the estate-wide ws:pref:muted key.">
+          <button data-audio="on">&#9834; Sound on</button>
+          <button data-audio="off">Muted</button>
+        </div>
+      </div>
+      <div id="meterReadout" class="readout"></div>
+
+      <div class="sect">Try a walk</div>
+      <div class="preset-grid" id="presets"></div>
+
+      <div class="hint">
+        The pulse you HEAR is not hand-faked &mdash; it is <a href="../ripple/index.html">Ripple's</a> own field, the loudness read off
+        at the ear. Loud peaks land where the path difference r&#8321;&minus;r&#8322; = n&lambda;; silences
+        at (n+&frac12;)&lambda;. Fan the bands with <b>d</b> and the pulse-period changes with them.
+      </div>
+    </aside>
+  </div>
+
+<script type="module">
+"use strict";
+// ============================================================================
+// THE MATH CORE — inlined byte-identical from core.mjs (forge --check gates it).
+// The seven reused functions inside it are CHARACTER-IDENTICAL to ripple's own
+// (the Node twin core.test.mjs re-extracts them from ripple/index.html and proves it).
+// The heard loudness at the ear is THIS field's resultant amplitude, nothing else.
+// ============================================================================
+<!-- forge:include ./core.mjs -->
+
+// ============================================================================
+// APPLICATION (DOM) — built entirely on the inlined core. eye == ear because the
+// band-map pixels AND the oscillator gain both read gainAt(); nothing re-derives.
+// ============================================================================
+(function(){
+// drop the front-door breadcrumb (belt: the literal string grep finds — ws:seen:loud-and-quiet)
+try{ var __ck = 'ws:seen:loud-and-quiet'; if(!localStorage.getItem(__ck)) localStorage.setItem(__ck, String(Date.now())); }catch(_){}
+
+// run the self-test FIRST and paint the chip
+(function(){
+  const res = runSelfTest();
+  const chip = document.getElementById('selftest');
+  if(res.pass === res.total){ chip.className = 'selftest ok'; chip.textContent = 'verified — ' + res.pass + '/' + res.total + ' ✓'; }
+  else { chip.className = 'selftest bad'; chip.textContent = 'FAILED — ' + res.pass + '/' + res.total; }
+  if(typeof console !== 'undefined') console.log('Loud-and-Quiet self-test: ' + res.pass + '/' + res.total);
+})();
+
+function readMutePref(def){ try{ var v = localStorage.getItem('ws:pref:muted'); return v === '1' ? true : v === '0' ? false : !!def; }catch(e){ return !!def; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v ? '1' : '0'); }catch(e){} }
+
+// c (the "speed of sound" in px·Hz) ties pitch and wavelength: f = c/λ. We derive c from the
+// initial (λ=50, f=440) so the sliders start coherent; thereafter λ⇆f are coupled by it.
+const C_SPEED = 440 * 50;   // = 22000 px·Hz
+
+const state = {
+  d: 240,                 // source spacing
+  lambda: 50,
+  freqHz: 440,            // audible carrier pitch (= C_SPEED / lambda, kept coupled)
+  walk: { x0: 0.18, y0: 0.18, x1: 0.18, y1: 0.86 },   // the WALK line (stage-fraction coords)
+  quiet: { x0: 0.55, y0: 0.22, x1: 0.55, y1: 0.80 },  // the QUIET-HUNT line
+  pos: 0.5,               // ear position along the walk t∈[0,1]
+  sweeping: false,
+  sweepSpeed: 1.0,
+  chimeCount: 0,          // how many loud ticks this sweep
+  muted: readMutePref(true),  // muted by DEFAULT (estate convention)
+};
+const reduceMotion = (typeof window.matchMedia === 'function') && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const cv = document.getElementById('tank'); const ctx = cv.getContext('2d');
+const mcv = document.getElementById('meter'); const mctx = mcv.getContext('2d');
+let W = 0, H = 0, dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
+// low-res field buffer (like ripple) for the silent band-map under the walk
+let buf = document.createElement('canvas'); let bctx = buf.getContext('2d');
+let bw = 0, bh = 0, img = null, idata = null; const TARGET_BUF_W = 260;
+
+function resize(){
+  const stage = document.getElementById('stage');
+  W = Math.max(200, stage.clientWidth); H = Math.max(200, stage.clientHeight);
+  dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  const mH = 120;
+  mcv.width = Math.round(W * dpr); mcv.height = Math.round(mH * dpr); mcv.style.width = W + 'px'; mcv.style.height = mH + 'px';
+  bw = TARGET_BUF_W; bh = Math.max(40, Math.round(TARGET_BUF_W * H / W));
+  buf.width = bw; buf.height = bh; img = bctx.createImageData(bw, bh); idata = img.data;
+}
+
+// --- the two speakers, centred, spaced by d, in stage pixels (the only inputs gainAt ever sees) ---
+function sources(){
+  const cx = W * 0.5, cy = H * 0.42;       // a bit above centre so the meter strip has room
+  return twoSpeakers(cx, cy, state.d, 1);
+}
+// stage-fraction → pixel
+function fx(f){ return f * W; } function fy(f){ return f * H; }
+// a point on a line at parameter t
+function walkPoint(line, t){ return { x: fx(line.x0 + (line.x1 - line.x0) * t), y: fy(line.y0 + (line.y1 - line.y0) * t) }; }
+
+// ---------- silent band-map (the SAME field, drawn — eye agrees with ear) ----------
+function renderField(){
+  const k = kOf(state.lambda), lambda = state.lambda; const srcs = sources();
+  const sx = W / bw, sy = H / bh; let p = 0;
+  for(let by = 0; by < bh; by++){
+    const ly = (by + 0.5) * sy;
+    for(let bx = 0; bx < bw; bx++){
+      const lx = (bx + 0.5) * sx;
+      // LOUDNESS map (the envelope), normalised to [0,1] — the SAME gainAt() the ear reads
+      const R = gainAt(srcs, k, lambda, lx, ly) / 2; // ∈[0,1]
+      const n = Math.max(0, Math.min(1, R));
+      // dark teal (quiet) → warm brass (loud)
+      const cr = [232, 183, 90], md = [9, 30, 36], lo = [2, 9, 12];
+      let Rr, Gg, Bb;
+      if(n < 0.5){ const a = n / 0.5; Rr = lo[0] + (md[0] - lo[0]) * a; Gg = lo[1] + (md[1] - lo[1]) * a; Bb = lo[2] + (md[2] - lo[2]) * a; }
+      else { const a = (n - 0.5) / 0.5; Rr = md[0] + (cr[0] - md[0]) * a; Gg = md[1] + (cr[1] - md[1]) * a; Bb = md[2] + (cr[2] - md[2]) * a; }
+      idata[p++] = Rr; idata[p++] = Gg; idata[p++] = Bb; idata[p++] = 255;
+    }
+  }
+  bctx.putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(buf, 0, 0, bw, bh, 0, 0, W, H);
+}
+
+function drawSpeakers(){
+  const srcs = sources();
+  for(const s of srcs){
+    const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 22);
+    g.addColorStop(0, 'rgba(255,240,210,0.55)'); g.addColorStop(1, 'rgba(255,240,210,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(s.x, s.y, 22, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#f6e8c8'; ctx.beginPath(); ctx.arc(s.x, s.y, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.lineWidth = 1.6; ctx.strokeStyle = '#9c7a37'; ctx.beginPath(); ctx.arc(s.x, s.y, 7, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(246,232,200,0.4)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(s.x, s.y, 13, -0.9, 0.9); ctx.stroke();
+  }
+}
+
+// draw a line (walk = white, quiet = amber), with tick markers where path-diff = nλ on it
+function drawLine(line, colour, withTicks){
+  const a = walkPoint(line, 0), b = walkPoint(line, 1);
+  ctx.lineWidth = 2; ctx.strokeStyle = colour; ctx.setLineDash(withTicks ? [] : [6, 5]);
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
+  for(const pt of [a, b]){ ctx.fillStyle = colour; ctx.beginPath(); ctx.arc(pt.x, pt.y, 5, 0, Math.PI * 2); ctx.fill(); }
+  if(withTicks){
+    const ticks = peakParamsOnLine(line);
+    for(const tk of ticks){
+      const pt = walkPoint(line, tk.t);
+      const flashing = tickFlash.n === tk.n && performance.now() < tickFlash.until;
+      ctx.fillStyle = flashing ? '#fff6df' : 'rgba(232,183,90,0.95)';
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, flashing ? 6.5 : 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#e8b75a'; ctx.font = '600 11px ui-monospace, monospace'; ctx.textAlign = 'center';
+      ctx.fillText('n=' + tk.n, pt.x, pt.y - 9);
+    }
+  }
+}
+
+// find the parameters t along a line where path-diff crosses an INTEGER multiple of λ
+// (the antinodal peaks — where loud chimes happen). Returns [{t, n}].
+function peakParamsOnLine(line){
+  const srcs = sources(); const s1 = srcs[0], s2 = srcs[1]; const lambda = state.lambda;
+  const N = 600; let prev = null, prevPD = null; const out = [];
+  for(let i = 0; i <= N; i++){
+    const t = i / N; const pt = walkPoint(line, t);
+    const pd = pathDiff(s1, s2, pt.x, pt.y);
+    const ratio = pd / lambda;
+    if(prevPD !== null){
+      const a = prevPD / lambda, b = ratio;
+      const lo = Math.min(a, b), hi = Math.max(a, b);
+      for(let n = Math.ceil(lo); n <= Math.floor(hi); n++){
+        const frac = (n - a) / (b - a);
+        const tc = prev + (t - prev) * frac;
+        out.push({ t: tc, n });
+      }
+    }
+    prev = t; prevPD = pd;
+  }
+  return out;
+}
+
+// the ear marker on the walk
+function drawEar(){
+  const pt = walkPoint(state.walk, state.pos);
+  const srcs = sources(); const g = gainAt(srcs, kOf(state.lambda), state.lambda, pt.x, pt.y) / 2; // [0,1]
+  const rad = 8 + g * 10;
+  const grd = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, rad * 2.2);
+  const warm = 'rgba(232,183,90,'; grd.addColorStop(0, warm + (0.25 + 0.6 * g) + ')'); grd.addColorStop(1, warm + '0)');
+  ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(pt.x, pt.y, rad * 2.2, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(pt.x, pt.y, 5.5, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = '#e8b75a'; ctx.beginPath(); ctx.arc(pt.x, pt.y, 5.5, 0, Math.PI * 2); ctx.stroke();
+  return g;
+}
+
+// ---------- the METER strip: the spatial curve drawn as a heard rhythm ----------
+function drawMeter(){
+  const mH = 120; mctx.setTransform(1, 0, 0, 1, 0, 0); mctx.scale(dpr, dpr);
+  mctx.clearRect(0, 0, W, mH);
+  const srcs = sources(); const lambda = state.lambda; const k = kOf(lambda);
+  const padL = 14, padR = 14, w = W - padL - padR, baseY = mH - 24, topY = 18;
+  mctx.strokeStyle = 'rgba(127,166,172,0.4)'; mctx.lineWidth = 1;
+  mctx.beginPath(); mctx.moveTo(padL, baseY); mctx.lineTo(W - padR, baseY); mctx.stroke();
+  // the loudness curve along the WALK (this is what your ear traces in time)
+  mctx.beginPath();
+  for(let i = 0; i <= 400; i++){
+    const t = i / 400; const pt = walkPoint(state.walk, t);
+    const g = gainAt(srcs, k, lambda, pt.x, pt.y) / 2; // [0,1]
+    const x = padL + w * t, y = baseY - g * (baseY - topY);
+    if(i === 0) mctx.moveTo(x, y); else mctx.lineTo(x, y);
+  }
+  mctx.strokeStyle = '#54d6d0'; mctx.lineWidth = 2; mctx.stroke();
+  mctx.lineTo(padL + w, baseY); mctx.lineTo(padL, baseY); mctx.closePath();
+  mctx.fillStyle = 'rgba(84,214,208,0.10)'; mctx.fill();
+  // the nλ tick-marks the loud peaks MUST land on
+  const ticks = peakParamsOnLine(state.walk);
+  for(const tk of ticks){
+    const x = padL + w * tk.t;
+    mctx.strokeStyle = 'rgba(232,183,90,0.55)'; mctx.lineWidth = 1; mctx.setLineDash([3, 3]);
+    mctx.beginPath(); mctx.moveTo(x, topY - 6); mctx.lineTo(x, baseY); mctx.stroke(); mctx.setLineDash([]);
+    mctx.fillStyle = '#e8b75a'; mctx.font = '600 10px ui-monospace, monospace'; mctx.textAlign = 'center';
+    mctx.fillText(tk.n, x, topY - 8);
+  }
+  // the ear's current position on the strip
+  const ex = padL + w * state.pos;
+  const eg = gainAt(srcs, k, lambda, walkPoint(state.walk, state.pos).x, walkPoint(state.walk, state.pos).y) / 2;
+  mctx.strokeStyle = 'rgba(255,255,255,0.85)'; mctx.lineWidth = 1.5;
+  mctx.beginPath(); mctx.moveTo(ex, topY - 6); mctx.lineTo(ex, baseY); mctx.stroke();
+  mctx.fillStyle = '#fff'; mctx.beginPath(); mctx.arc(ex, baseY - eg * (baseY - topY), 4, 0, Math.PI * 2); mctx.fill();
+  mctx.fillStyle = 'rgba(127,166,172,0.85)'; mctx.font = '600 9px ui-monospace, monospace'; mctx.textAlign = 'left';
+  mctx.fillText('THE WALK — loudness your ear traces in time · amber = nλ ticks the peaks must hit', padL, mH - 7);
+}
+
+// ---------- compose ----------
+function draw(){
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.scale(dpr, dpr);
+  renderField();
+  drawLine(state.quiet, 'rgba(232,183,90,0.7)', false);   // quiet-hunt line (amber, dashed)
+  drawLine(state.walk, 'rgba(255,255,255,0.85)', true);   // the walk (white, ticked)
+  drawSpeakers();
+  const earGain = drawEar();
+  drawMeter();
+  updateReadouts(earGain);
+  audio.setLoudness(earGain);   // drive the audio loudness from the ear's gain
+}
+
+// ============================================================================
+// AUDIO — two oscillators panned L/R to the two speakers (genuinely binaural in
+// headphones); master gain honours ws:pref:muted; the ear's loudness drives the
+// level; a chime dings on each integer path-diff crossing. Degrades when muted.
+// ============================================================================
+const audio = {
+  ctx: null, master: null, started: false, oscL: null, oscR: null, gainNode: null,
+  chimeBus: null, muted: state.muted,
+  ensure(){
+    if(this.ctx) return;
+    const AC = window.AudioContext || window.webkitAudioContext; if(!AC) return;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain(); this.master.gain.value = this.muted ? 0 : 0.9;
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 8000; lp.Q.value = 0.4;
+    this.master.connect(lp); lp.connect(this.ctx.destination);
+    // the carrier — one tone, two oscillators panned to the two speakers (left/right)
+    this.gainNode = this.ctx.createGain(); this.gainNode.gain.value = 0.0001;
+    this.gainNode.connect(this.master);
+    const mkOsc = (pan) => {
+      const o = this.ctx.createOscillator(); o.type = 'sine'; o.frequency.value = state.freqHz;
+      const g = this.ctx.createGain(); g.gain.value = 0.5;
+      if(this.ctx.createStereoPanner){ const p = this.ctx.createStereoPanner(); p.pan.value = pan; o.connect(p); p.connect(g); }
+      else { o.connect(g); }
+      g.connect(this.gainNode); o.start(); return o;
+    };
+    this.oscL = mkOsc(-0.85); this.oscR = mkOsc(0.85);
+    this.chimeBus = this.ctx.createGain(); this.chimeBus.gain.value = 0.7; this.chimeBus.connect(this.master);
+  },
+  start(){ this.ensure(); if(this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); this.started = true; },
+  setLoudness(g){
+    if(!this.ctx || !this.started) return;
+    const t = this.ctx.currentTime;
+    const lvl = Math.max(0.0001, g * g * 0.9 + 0.0006);   // exp-ish ramp, floored (never exactly 0)
+    this.gainNode.gain.cancelScheduledValues(t);
+    this.gainNode.gain.setTargetAtTime(this.muted ? 0.0001 : lvl, t, 0.02);
+  },
+  setPitch(hz){ if(!this.ctx) return; const t = this.ctx.currentTime; if(this.oscL) this.oscL.frequency.setTargetAtTime(hz, t, 0.02); if(this.oscR) this.oscR.frequency.setTargetAtTime(hz, t, 0.02); },
+  chime(){
+    if(!this.ctx || !this.started || this.muted) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = state.freqHz * 2;   // a ding at 2f
+    const g = this.ctx.createGain(); g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.22, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.connect(g); g.connect(this.chimeBus); o.start(t); o.stop(t + 0.2);
+  },
+  setMuted(m){ this.muted = m; writeMutePref(m); if(this.master && this.ctx){ const t = this.ctx.currentTime; this.master.gain.setTargetAtTime(m ? 0 : 0.9, t, 0.05); } },
+};
+
+// ---------- pulse-counting: chime when the ear crosses a peak (path-diff = nλ) ----------
+let lastPD = null;
+function maybeChime(){
+  const pt = walkPoint(state.walk, state.pos);
+  const srcs = sources(); const pd = pathDiff(srcs[0], srcs[1], pt.x, pt.y) / state.lambda;
+  if(lastPD !== null){
+    const lo = Math.min(lastPD, pd), hi = Math.max(lastPD, pd);
+    for(let n = Math.ceil(lo); n <= Math.floor(hi); n++){ audio.chime(); flashTick(n); state.chimeCount++; }
+  }
+  lastPD = pd;
+}
+let tickFlash = { n: null, until: 0 };
+function flashTick(n){ tickFlash = { n, until: performance.now() + 600 }; }
+
+// ---------- readouts ----------
+function updateReadouts(earGain){
+  const pt = walkPoint(state.walk, state.pos);
+  const srcs = sources(); const pd = pathDiff(srcs[0], srcs[1], pt.x, pt.y);
+  const ratio = pd / state.lambda;
+  const near = Math.round(ratio);
+  const isLoud = Math.abs(ratio - near) < 0.12;
+  const isQuiet = Math.abs(ratio - (Math.floor(ratio) + 0.5)) < 0.12;
+  document.getElementById('lineInfo').innerHTML =
+    'r&#8321;&minus;r&#8322; = <b>' + pd.toFixed(0) + '</b> px = <b>' + ratio.toFixed(2) + '&lambda;</b> &middot; ' +
+    'loudness <b class="' + (isLoud ? 'tick' : '') + '">' + (earGain * 100 | 0) + '%</b>' +
+    (isLoud ? ' &mdash; <span class="tick">LOUD (n=' + near + ')</span>' : isQuiet ? ' &mdash; <span style="color:#7fa6ac">quiet</span>' : '');
+  // count how many ticks total + the quiet-line check
+  const ticks = peakParamsOnLine(state.walk);
+  let qmin = 2, qmax = 0;
+  for(let i = 0; i <= 120; i++){ const p2 = walkPoint(state.quiet, i / 120); const g = gainAt(srcs, kOf(state.lambda), state.lambda, p2.x, p2.y) / 2; qmin = Math.min(qmin, g); qmax = Math.max(qmax, g); }
+  const quietWalk = qmax < 0.18;
+  document.getElementById('meterReadout').innerHTML =
+    'The walk crosses <b>' + ticks.length + '</b> loud peaks &mdash; <span class="chimes">' + state.chimeCount + ' chimed</span> this sweep.<br>' +
+    'Amber line: peak loudness <b class="' + (quietWalk ? '' : 'warm') + '">' + (qmax * 100 | 0) + '%</b>' +
+    (quietWalk ? ' &mdash; <b>a silent nodal walk &#10003;</b>' : ' (drag onto a node to silence it)');
+}
+
+// ---------- interaction: scrub the ear / drag line endpoints ----------
+let drag = null;  // { kind:'ear'|'walkA'|'walkB'|'quietA'|'quietB' }
+function evToStage(ev){ const r = cv.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; }
+function nearPx(px, py, qx, qy, tol){ return Math.hypot(px - qx, py - qy) < (tol || 14); }
+
+cv.addEventListener('pointerdown', ev => {
+  audio.start();
+  const { x, y } = evToStage(ev);
+  cv.setPointerCapture && cv.setPointerCapture(ev.pointerId);
+  const wa = walkPoint(state.walk, 0), wb = walkPoint(state.walk, 1);
+  const qa = walkPoint(state.quiet, 0), qb = walkPoint(state.quiet, 1);
+  if(nearPx(x, y, qa.x, qa.y)){ drag = { kind: 'quietA' }; return; }
+  if(nearPx(x, y, qb.x, qb.y)){ drag = { kind: 'quietB' }; return; }
+  if(nearPx(x, y, wa.x, wa.y)){ drag = { kind: 'walkA' }; return; }
+  if(nearPx(x, y, wb.x, wb.y)){ drag = { kind: 'walkB' }; return; }
+  // else: scrub the ear to the nearest point on the walk line
+  stopSweep(); state.pos = projectOntoWalk(x, y); drag = { kind: 'ear' };
+  syncPosSlider();
+});
+cv.addEventListener('pointermove', ev => {
+  const { x, y } = evToStage(ev);
+  if(!drag){ cv.style.cursor = 'crosshair'; return; }
+  if(drag.kind === 'ear'){ state.pos = projectOntoWalk(x, y); syncPosSlider(); return; }
+  const fxv = Math.max(0.02, Math.min(0.98, x / W)), fyv = Math.max(0.02, Math.min(0.98, y / H));
+  if(drag.kind === 'walkA'){ state.walk.x0 = fxv; state.walk.y0 = fyv; }
+  else if(drag.kind === 'walkB'){ state.walk.x1 = fxv; state.walk.y1 = fyv; }
+  else if(drag.kind === 'quietA'){ state.quiet.x0 = fxv; state.quiet.y0 = fyv; }
+  else if(drag.kind === 'quietB'){ state.quiet.x1 = fxv; state.quiet.y1 = fyv; }
+  lastPD = null;
+});
+window.addEventListener('pointerup', () => { drag = null; });
+
+// project a stage pixel onto the walk segment → t∈[0,1]
+function projectOntoWalk(px, py){
+  const a = walkPoint(state.walk, 0), b = walkPoint(state.walk, 1);
+  const vx = b.x - a.x, vy = b.y - a.y; const len2 = vx * vx + vy * vy || 1;
+  let t = ((px - a.x) * vx + (py - a.y) * vy) / len2; return Math.max(0, Math.min(1, t));
+}
+
+// ---------- sweep animation ----------
+function startSweep(){ state.sweeping = true; if(state.pos >= 0.999){ state.pos = 0; } lastPD = null; state.chimeCount = 0; document.getElementById('sweepBtn').innerHTML = '&#10073;&#10073; Pause sweep'; }
+function stopSweep(){ state.sweeping = false; document.getElementById('sweepBtn').innerHTML = '&#9654; Sweep the ear'; }
+function sweepStep(dt){
+  if(!state.sweeping) return;
+  state.pos += dt * 0.28 * state.sweepSpeed;
+  if(state.pos >= 1){ state.pos = 0; lastPD = null; state.chimeCount = 0; }   // loop, reset chime tracker + count
+  syncPosSlider();
+}
+
+// ---------- loop ----------
+let last = 0, rafId = null;
+function frame(ts){
+  rafId = requestAnimationFrame(frame);
+  const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0; last = ts;
+  sweepStep(dt);
+  maybeChime();
+  draw();
+}
+
+// ---------- controls ----------
+function bindSlider(id, valId, fmt, onIn){
+  const sl = document.getElementById(id), v = document.getElementById(valId);
+  const setFill = () => sl.style.setProperty('--fill', ((sl.value - sl.min) / (sl.max - sl.min) * 100) + '%');
+  sl.addEventListener('input', () => { onIn(parseFloat(sl.value)); v.textContent = fmt(parseFloat(sl.value)); setFill(); });
+  setFill();
+}
+bindSlider('posSlider', 'posVal', v => v.toFixed(2), v => { state.pos = v; stopSweep(); lastPD = null; });
+bindSlider('speedSlider', 'speedVal', v => v.toFixed(2) + '×', v => state.sweepSpeed = v);
+bindSlider('dSlider', 'dVal', v => Math.round(v), v => { state.d = v; lastPD = null; });
+// λ and f are coupled by c = fλ. Moving λ re-derives f (and re-tunes the carrier); moving f re-derives λ.
+bindSlider('lamSlider', 'lamVal', v => Math.round(v), v => { setLambda(v); lastPD = null; });
+bindSlider('freqSlider', 'freqVal', v => Math.round(v) + ' Hz', v => { setFreq(v); lastPD = null; });
+
+function setLambda(lam){ state.lambda = lam; state.freqHz = C_SPEED / lam; audio.setPitch(state.freqHz); reflectFreqSlider(); }
+function setFreq(hz){ state.freqHz = hz; state.lambda = C_SPEED / hz; audio.setPitch(hz); reflectLamSlider(); }
+function reflectFreqSlider(){
+  const sl = document.getElementById('freqSlider');
+  const clamped = Math.max(parseFloat(sl.min), Math.min(parseFloat(sl.max), state.freqHz));
+  sl.value = clamped; sl.style.setProperty('--fill', ((clamped - sl.min) / (sl.max - sl.min) * 100) + '%');
+  document.getElementById('freqVal').textContent = Math.round(state.freqHz) + ' Hz';
+}
+function reflectLamSlider(){
+  const sl = document.getElementById('lamSlider');
+  const clamped = Math.max(parseFloat(sl.min), Math.min(parseFloat(sl.max), state.lambda));
+  sl.value = clamped; sl.style.setProperty('--fill', ((clamped - sl.min) / (sl.max - sl.min) * 100) + '%');
+  document.getElementById('lamVal').textContent = Math.round(state.lambda);
+}
+
+function syncPosSlider(){ const sl = document.getElementById('posSlider'); sl.value = state.pos; document.getElementById('posVal').textContent = state.pos.toFixed(2); sl.style.setProperty('--fill', (state.pos * 100) + '%'); }
+
+document.getElementById('sweepBtn').addEventListener('click', () => {
+  audio.start();
+  if(state.sweeping) stopSweep(); else startSweep();
+});
+
+// audio toggle
+const audioSeg = document.getElementById('audioSeg');
+function syncAudioSeg(){ for(const b of audioSeg.querySelectorAll('button')) b.classList.toggle('active', (b.dataset.audio === 'on') !== state.muted); }
+audioSeg.addEventListener('click', ev => { const b = ev.target.closest('button'); if(!b) return; audio.start(); const m = b.dataset.audio === 'off'; state.muted = m; audio.setMuted(m); syncAudioSeg(); });
+addEventListener('storage', e => { if(e.key !== 'ws:pref:muted') return; state.muted = readMutePref(true); audio.setMuted(state.muted); syncAudioSeg(); });
+
+// ---------- presets: pre-made walks ----------
+const PRESETS = {
+  'Far screen': () => { state.walk = { x0: 0.16, y0: 0.16, x1: 0.16, y1: 0.86 }; state.d = 240; setLambda(46); sync(); },
+  'Straight across': () => { state.walk = { x0: 0.06, y0: 0.62, x1: 0.92, y1: 0.62 }; state.d = 240; setLambda(50); sync(); },
+  'Tight bands': () => { state.walk = { x0: 0.16, y0: 0.14, x1: 0.16, y1: 0.88 }; state.d = 380; setLambda(40); sync(); },
+  'Wide bands': () => { state.walk = { x0: 0.16, y0: 0.14, x1: 0.16, y1: 0.88 }; state.d = 120; setLambda(80); sync(); },
+};
+function sync(){
+  const dl = document.getElementById('dSlider'); dl.value = state.d; dl.style.setProperty('--fill', ((dl.value - dl.min) / (dl.max - dl.min) * 100) + '%');
+  document.getElementById('dVal').textContent = Math.round(state.d);
+  reflectLamSlider(); reflectFreqSlider();
+  lastPD = null; state.chimeCount = 0;
+}
+function buildPresets(){
+  const host = document.getElementById('presets');
+  for(const name of Object.keys(PRESETS)){ const b = document.createElement('button'); b.className = 'chip'; b.textContent = name; b.addEventListener('click', PRESETS[name]); host.appendChild(b); }
+}
+
+// ---------- HUD ----------
+const hud = document.getElementById('hud');
+function flashHud(msg, ms){ hud.innerHTML = msg; hud.classList.add('show'); clearTimeout(flashHud._t); flashHud._t = setTimeout(() => hud.classList.remove('show'), ms || 3000); }
+
+window.addEventListener('resize', resize);
+
+// ---------- init ----------
+function init(){
+  buildPresets(); resize(); syncPosSlider(); syncAudioSeg(); reflectFreqSlider(); reflectLamSlider();
+  flashHud('Press <b>&#9654; Sweep</b> (or scrub the white line) &mdash; count the loud chimes', 4200);
+  rafId = requestAnimationFrame(frame);
+}
+init();
+
+})();
+</script>
+</body>
+</html>
