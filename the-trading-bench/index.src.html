@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Trading Bench — pull one pendulum, its twin steals the swing</title>
+<style>
+  :root{
+    --panel-bg: rgba(9,11,16,0.86);
+    --panel-edge: rgba(150,190,220,0.26);
+    --ink: #e7edf4;
+    --ink-dim: #8f9bb0;
+    --accent: #e8b86b;          /* brass — the apparatus, the spring */
+    --accent2: #7fc7e8;         /* cool cyan — the right vessel / response */
+    --fluidL: #ffb454;          /* the LEFT vial's glowing fluid (amber) */
+    --fluidR: #7fc7e8;          /* the RIGHT vial's glowing fluid (cyan) */
+    --rose: #f0a978;            /* warm — the spring working hardest */
+    --red: #f0776b;
+    --green: #8fd79a;
+    --green-glow: rgba(120,225,150,0.55);
+    --bg: #07080c;
+    --glass: rgba(160,205,235,0.10);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+  header{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
+    gap:14px; padding:11px 18px; background:linear-gradient(180deg, rgba(7,8,12,0.94), rgba(7,8,12,0.0));
+    pointer-events:none; }
+  header .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; pointer-events:auto; white-space:nowrap; }
+  .brand{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.4px; margin:0;
+    white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap; }
+  .spacer{ flex:1; }
+  .selftest{ pointer-events:auto; font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px;
+    border-radius:20px; border:1px solid var(--panel-edge); background:rgba(0,0,0,0.4); white-space:nowrap;
+    cursor:pointer; user-select:none; color:var(--ink-dim); flex:none; max-width:62vw; overflow:hidden;
+    text-overflow:ellipsis; }
+  .selftest.ok{ color:var(--green); border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  #stagewrap{ position:fixed; inset:0; }
+  canvas#stage{ display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
+  canvas#stage.grabbing{ cursor:grabbing; }
+
+  /* hero readout — the beat clock, top-center */
+  #readout{ position:fixed; left:50%; top:56px; transform:translateX(-50%); z-index:24; text-align:center;
+    pointer-events:none; max-width:94vw; }
+  #beatbig{ font-family:var(--font-mono); font-weight:700; font-size:40px; line-height:1;
+    letter-spacing:1px; font-variant-numeric:tabular-nums; color:var(--accent);
+    text-shadow:0 0 24px rgba(232,184,107,0.28), 0 2px 0 rgba(0,0,0,0.6); transition:color .2s; }
+  #beatbig.notrade{ color:var(--ink-dim); text-shadow:none; }
+  #beatlab{ font:11px/1.4 var(--font-mono); color:var(--ink-dim); letter-spacing:.5px;
+    text-transform:uppercase; margin-top:8px; }
+  #countdown{ font:11px/1 var(--font-mono); color:var(--accent2); letter-spacing:.4px; margin-top:7px;
+    opacity:.92; min-height:13px; }
+  #modemix{ font-family:var(--font-serif); font-size:14px; margin-top:8px; opacity:0; transition:opacity .5s;
+    letter-spacing:.3px; color:var(--ink-dim); }
+  #modemix.show{ opacity:.92; }
+  #modemix b{ color:var(--accent); } #modemix i{ color:var(--accent2); font-style:normal; }
+
+  /* controls — bottom-right. */
+  #panel{ position:fixed; right:18px; bottom:18px; z-index:20; background:var(--panel-bg);
+    border:1px solid var(--panel-edge); border-radius:14px; padding:14px 16px 15px; width:288px;
+    max-width:calc(100vw - 36px); backdrop-filter:blur(7px); }
+  #panel .row{ display:flex; align-items:center; gap:9px; margin:11px 0; }
+  #panel label{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.3px; width:96px; flex:none; }
+  #panel input[type=range]{ flex:1; min-width:0; accent-color:var(--accent); height:3px; }
+  #panel input#stiff{ accent-color:var(--accent); height:5px; }
+  #panel .val{ font:11px/1 var(--font-mono); color:var(--accent); width:62px; text-align:right; flex:none;
+    font-variant-numeric:tabular-nums; }
+  .btnrow{ display:flex; gap:8px; margin-top:12px; }
+  button.act{ flex:1; font:600 11px/1 var(--font-mono); letter-spacing:.2px; padding:10px 6px; border-radius:9px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); color:var(--ink); cursor:pointer;
+    transition:.18s; user-select:none; }
+  button.act:hover{ border-color:var(--accent2); color:var(--accent2); }
+  button.act:active{ transform:translateY(1px); }
+  button.act.on{ color:#06121a; background:var(--accent); border-color:var(--accent); }
+  button.act.latch.on{ color:#1a0606; background:var(--red); border-color:var(--red); }
+  .hint{ font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); margin-top:11px; padding-top:11px;
+    border-top:1px solid rgba(150,190,220,0.14); opacity:.86; }
+  .hint b{ color:var(--accent2); } .hint .d{ color:var(--accent); }
+  .hint a{ color:var(--accent); text-decoration:none; border-bottom:1px solid rgba(232,184,107,0.3); }
+
+  /* the prompt — appears at rest, fades on first interaction */
+  #prompt{ position:fixed; left:50%; top:54%; transform:translate(-50%,-50%); z-index:18;
+    font-family:var(--font-serif); font-size:15px; color:var(--ink-dim); text-align:center;
+    pointer-events:none; transition:opacity .6s; letter-spacing:.4px; max-width:80vw; }
+  #prompt.hide{ opacity:0; }
+
+  @media (max-width:760px){
+    header{ flex-wrap:wrap; row-gap:5px; padding:10px 14px; }
+    .brand .tag{ display:none; }
+    .brand h1{ font-size:17px; }
+    .selftest{ order:3; max-width:none; }
+    #readout{ top:74px; }
+    #beatbig{ font-size:30px; }
+    #panel{ right:10px; left:10px; width:auto; max-width:none; padding:12px 14px 13px; }
+    .hint{ display:none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="../index.html">← The Orrery Estate</a>
+  <div class="brand">
+    <h1>The Trading Bench</h1>
+    <div class="tag">pull one pendulum — watch its twin steal the swing</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="selftest" id="selftest" title="run the embedded physics self-test">self-test …</div>
+</header>
+
+<div id="stagewrap"><canvas id="stage"></canvas></div>
+
+<div id="readout">
+  <div id="beatbig">T_beat = 29.0 s</div>
+  <div id="beatlab">energy fully across in T_beat/2</div>
+  <div id="countdown">next full pour → 14.5 s</div>
+  <div id="modemix"></div>
+</div>
+
+<div id="prompt">grab a bob, pull it aside, and let go — then don't touch anything</div>
+
+<div id="panel">
+  <div class="row"><label>spring K</label>
+    <input type="range" id="stiff" min="5" max="320" step="1" value="110"><span class="val" id="stiffval">1.10</span></div>
+  <div class="row"><label>length L</label>
+    <input type="range" id="len" min="35" max="110" step="1" value="60"><span class="val" id="lenval">0.60 m</span></div>
+  <div class="btnrow">
+    <button class="act" id="symbtn">release together</button>
+    <button class="act" id="mirbtn">release mirrored</button>
+  </div>
+  <div class="btnrow">
+    <button class="act latch" id="freezebtn">freeze the coupling</button>
+    <button class="act" id="resetbtn">re-pull bob 1</button>
+  </div>
+  <div class="hint" id="hint">Grab either <b>bob</b> and pull it aside (the twin sits dead still); let go and watch the <span class="d">glowing fluid</span> pour from one <b>vial</b> to the other over <b>T_beat/2</b> — nobody touching it. The amber <span class="d">coupling spring</span> heats up exactly when the bobs are most out of step. <b>release together</b> → they swing in lockstep, the spring never stretches, no trade; <b>release mirrored</b> → they scissor, the spring pulses hottest, still no trade — a single pull is just ½ of each beating. Turn <span class="d">K</span> down and the trade goes lazy; <b>freeze the coupling</b> (K→0) and each vial holds its level forever. <i>Small-angle frame; the trade is exact there.</i>&nbsp;↔&nbsp; <a href="../resonance/index.html">The Singing Glass</a> — one oscillator driven to run away; here two trade ω₁,ω₂ instead.&nbsp;↔&nbsp; <a href="../sound-garden/the-beating-bench/index.html">The Beating Bench</a> — two close MODES beating is exactly what two close tones sound like.</div>
+</div>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════════════
+   THE TRADING BENCH — core (sole physics authority) inlined byte-faithfully
+   from core.mjs via forge:include. The same module is proven by core.test.mjs.
+   (forge strips the `export` keywords so it runs as a plain in-page script.)
+   ════════════════════════════════════════════════════════════════════════════ */
+<!-- forge:include core.mjs -->
+</script>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════════════
+   THE STAGE — the HERO is the APPARATUS, seen head-on: a brass rail across the
+   upper third; two identical pendulums hang from it; a drawn COUPLING SPRING
+   joins their rods at mid-height. Flanking each pendulum is a tall glass VIAL
+   that fills with glowing fluid to a height ∝ that bob's instantaneous mechanical
+   energy. Because total energy is conserved the two columns always sum to a
+   constant — left drains exactly as right fills.
+
+   The bobs' motion is the LIVE closed-form normal-mode sum from the core (no
+   integrator drift, byte-stable vs the Node twin). We never script the trade: we
+   evaluate closedForm(t, P) every frame, and the vials read perBobEnergy(t, P).
+   A conduit bead of light rides ALONG the glowing spring toward the filling vial.
+   ════════════════════════════════════════════════════════════════════════════ */
+const cv = document.getElementById('stage');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(2, window.devicePixelRatio || 1);
+function resize() {
+  W = cv.clientWidth; H = cv.clientHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+
+// ── live parameters. g is fixed; L and K are the hand-dials. The launch ICs live
+//    in P too (th1_0, th2_0, v1_0, v2_0) — closedForm reads them. A wall-time
+//    TIMESCALE (~2×) makes the first trade complete in a watchable window. ──
+const G = 9.81;
+const DRAG_CAP = 26 * Math.PI / 180;   // ≤26° — keeps the small-angle claim honest
+const TIMESCALE = 2.0;                 // physics seconds per wall second (resonance convention)
+const P = {
+  g: G, L: 0.60, K: 1.10,
+  th1_0: 0.0, th2_0: 0.0, v1_0: 0.0, v2_0: 0.0,
+};
+let pullAmp = DRAG_CAP * 0.78;         // the default pull (~20°) used by reset
+let tPhys = 0;                          // physics time since the last release
+let frozen = false;                     // the K→0 latch
+let Kbeforefreeze = P.K;
+let lastMode = 'single';                // 'single' | 'sym' | 'mir' — for the readout
+
+// the per-bob energy is smoothed for the slosh-lag on the fluid surface
+let fluidL = 0, fluidR = 0;             // displayed fill fraction (0..1) of each vial
+let sloshL = 0, sloshR = 0;             // surface slosh velocity (for the lagging meniscus)
+let bubblesL = [], bubblesR = [];       // rising bubbles, dense when that vial is GAINING
+let lastE1 = 0, lastE2 = 0;             // previous-frame per-bob energy, for dE/dt sign
+
+const $ = id => document.getElementById(id);
+
+// ── geometry: the rail, the two pivots, the bob positions ──
+function railY() { return H * 0.30; }
+function pivots() {
+  const cx = W / 2;
+  const gap = Math.min(W * 0.20, 210);   // half-distance between the two pivots
+  return [{ x: cx - gap, y: railY() }, { x: cx + gap, y: railY() }];
+}
+// pixels-per-radian-ish: the rod length on screen. Scales with L a little so a
+// longer pendulum reads as a longer rod, but clamped to fit the stage.
+function rodLen() {
+  const base = Math.min(H * 0.30, 230);
+  return base * (0.7 + 0.5 * (P.L / 0.60));   // 0.35m→shorter, 1.10m→longer, clamped by H
+}
+// the bob screen position for an angle θ (measured from straight-down).
+function bobPos(pv, th) {
+  const rl = rodLen();
+  return { x: pv.x + rl * Math.sin(th), y: pv.y + rl * Math.cos(th) };
+}
+
+// ── the TWO VIALS flank the apparatus, one outside each pendulum's swing ──
+function vialGeom() {
+  const pv = pivots();
+  const ry = railY();
+  const top = ry + 8;
+  const bottom = H * 0.92;
+  const vw = Math.min(W * 0.052, 46);
+  const margin = Math.min(W * 0.085, 96);
+  return {
+    L: { x: pv[0].x - margin, top, bottom, w: vw },
+    R: { x: pv[1].x + margin, top, bottom, w: vw },
+  };
+}
+
+/* ── render loop ───────────────────────────────────────────────────────────── */
+let lastT = performance.now();
+function frame(now) {
+  let dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+
+  if (!dragging) tPhys += dt * TIMESCALE;
+
+  // the live closed-form state (the sole authority)
+  const [th1, th2] = dragging ? [dragTh1(), dragTh2()] : closedForm(tPhys, P);
+  // per-bob energies → target fill fractions (normalized by the conserved total).
+  // While DRAGGING we show a quadratic preview (energy ∝ lift); once RELEASED the
+  // vials read the true conserved perBobEnergy — they always sum to the constant.
+  let f1 = 0, f2 = 0, e1 = 0, e2 = 0;
+  if (dragging) {
+    const peNow = pullEnergyPreview();
+    f1 = peNow.f1; f2 = peNow.f2;
+    e1 = f1; e2 = f2;                       // crude dE source for bubbles while dragging
+  } else if (!isPureRest()) {
+    const pe = perBobEnergy(tPhys, P);
+    e1 = pe.e1; e2 = pe.e2;
+    const Etot = totalEnergy(0, P) || 1;
+    f1 = Math.max(0, Math.min(1, e1 / Etot));
+    f2 = Math.max(0, Math.min(1, e2 / Etot));
+  }
+
+  // slosh-lag: the fluid surface chases its target with a damped spring (the
+  // mandatory anti-graph guardrail — the surface lags & overshoots, never a bar).
+  [fluidL, sloshL] = sloshStep(fluidL, sloshL, f1, dt);
+  [fluidR, sloshR] = sloshStep(fluidR, sloshR, f2, dt);
+
+  // bubbles: spawn when a vial is GAINING (dE/dt>0). dense when filling, sparse when draining.
+  spawnBubbles('L', e1 - lastE1, fluidL, dt);
+  spawnBubbles('R', e2 - lastE2, fluidR, dt);
+  stepBubbles(bubblesL, dt); stepBubbles(bubblesR, dt);
+  lastE1 = e1; lastE2 = e2;
+
+  drawBackdrop();
+  drawRail();
+  const vg = vialGeom();
+  drawVial(vg.L, fluidL, sloshL, getCSS('--fluidL'), bubblesL, 'left');
+  drawVial(vg.R, fluidR, sloshR, getCSS('--fluidR'), bubblesR, 'right');
+  drawCouplingSpring(th1, th2);
+  drawPendulum(pivots()[0], th1, getCSS('--fluidL'));
+  drawPendulum(pivots()[1], th2, getCSS('--fluidR'));
+  drawConduitBead(th1, th2, e1 - lastE1, e2 - lastE2);
+
+  updateReadouts(th1, th2);
+  requestAnimationFrame(frame);
+}
+
+// is the system at pure rest (nothing released)? then vials read 0.
+function isPureRest() {
+  return P.th1_0 === 0 && P.th2_0 === 0 && P.v1_0 === 0 && P.v2_0 === 0;
+}
+
+// damped-spring slosh integrator for the fluid surface
+function sloshStep(level, vel, target, dt) {
+  const k = 26, c = 7.0;                 // stiffness / damping of the surface chase
+  const a = k * (target - level) - c * vel;
+  vel += a * dt; level += vel * dt;
+  level = Math.max(0, Math.min(1.02, level));
+  return [level, vel];
+}
+
+function getCSS(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+/* ── backdrop ── */
+function drawBackdrop() {
+  ctx.fillStyle = '#07080c'; ctx.fillRect(0, 0, W, H);
+  const g = ctx.createRadialGradient(W/2, railY(), 30, W/2, H*0.5, Math.max(W, H) * 0.6);
+  g.addColorStop(0, 'rgba(20,28,40,0.5)');
+  g.addColorStop(1, 'rgba(7,8,12,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+
+/* ── the brass rail across the upper third + the two pivot mounts ── */
+function drawRail() {
+  const pv = pivots(); const ry = railY();
+  const x0 = pv[0].x - 60, x1 = pv[1].x + 60;
+  ctx.save();
+  const g = ctx.createLinearGradient(0, ry - 6, 0, ry + 6);
+  g.addColorStop(0, 'rgba(232,184,107,0.85)');
+  g.addColorStop(0.5, 'rgba(180,140,80,0.95)');
+  g.addColorStop(1, 'rgba(120,92,52,0.85)');
+  ctx.strokeStyle = g; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 3;
+  ctx.beginPath(); ctx.moveTo(x0, ry); ctx.lineTo(x1, ry); ctx.stroke();
+  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  // a thin specular highlight along the top of the rail
+  ctx.strokeStyle = 'rgba(255,235,200,0.5)'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(x0, ry - 2.4); ctx.lineTo(x1, ry - 2.4); ctx.stroke();
+  // pivot mounts
+  for (const p of pv) {
+    ctx.fillStyle = 'rgba(40,46,56,0.95)';
+    ctx.beginPath(); ctx.arc(p.x, p.y, 5.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(232,184,107,0.7)';
+    ctx.beginPath(); ctx.arc(p.x, p.y, 2.6, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ── one pendulum: slim rod, turned bob with a specular highlight + cast shadow ── */
+function drawPendulum(pv, th, fluidColor) {
+  const b = bobPos(pv, th);
+  ctx.save();
+  // faint cast shadow on the floor
+  const floorY = H * 0.93;
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath();
+  ctx.ellipse(b.x, floorY, 16 + Math.abs(b.x - pv.x) * 0.04, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // the rod
+  ctx.strokeStyle = 'rgba(200,210,225,0.55)'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(pv.x, pv.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  // the bob — a turned brass-rimmed disc glowing the fluid colour faintly
+  const R = 17;
+  const grd = ctx.createRadialGradient(b.x - R*0.35, b.y - R*0.4, R*0.15, b.x, b.y, R);
+  grd.addColorStop(0, lighten(fluidColor, 0.55));
+  grd.addColorStop(0.55, fluidColor);
+  grd.addColorStop(1, darken(fluidColor, 0.45));
+  ctx.fillStyle = grd;
+  ctx.shadowColor = hexA(fluidColor, 0.5); ctx.shadowBlur = 14;
+  ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+  // brass rim
+  ctx.strokeStyle = 'rgba(232,184,107,0.85)'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, Math.PI * 2); ctx.stroke();
+  // specular highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.beginPath(); ctx.arc(b.x - R*0.34, b.y - R*0.38, R*0.22, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  return b;
+}
+
+/* ── the DRAWN COUPLING SPRING: a coil joining the two rods at mid-height.
+   FIXED coil count, varying PITCH so it reads as a spring (not rubber); clamped
+   max stretch. Tint: dim slate near natural length → hot amber + thicker stroke
+   as |θ₁−θ₂| grows — the eye sees it work hardest when the bobs are most out of
+   step (the antisymmetric content, made visible). ── */
+const SPRING_COILS = 9;
+function springAnchors(th1, th2) {
+  const pv = pivots(); const rl = rodLen();
+  const frac = 0.52;                      // joins the rods at ~mid-height
+  const a = { x: pv[0].x + rl * frac * Math.sin(th1), y: pv[0].y + rl * frac * Math.cos(th1) };
+  const b = { x: pv[1].x + rl * frac * Math.sin(th2), y: pv[1].y + rl * frac * Math.cos(th2) };
+  return [a, b];
+}
+function drawCouplingSpring(th1, th2) {
+  const [a, b] = springAnchors(th1, th2);
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  const ux = dx / len, uy = dy / len;     // axis unit
+  const nx = -uy, ny = ux;                 // normal unit
+  // "natural" length = pivot spacing at rest; stretch ratio drives the tint
+  const natural = (pivots()[1].x - pivots()[0].x);
+  const stretch = Math.min(1.6, len / natural);
+  const out = Math.min(1, Math.abs(th1 - th2) / (DRAG_CAP * 1.2));   // 0 dim … 1 hot
+  const amp = 8;                           // coil radius
+  if (frozen) {
+    // slack, dark — the conduit is dead
+    ctx.save();
+    ctx.strokeStyle = 'rgba(120,130,145,0.30)'; ctx.lineWidth = 1.6;
+    ctx.setLineDash([3, 5]);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.setLineDash([]); ctx.restore();
+    return;
+  }
+  // colour heats slate → amber as the bobs go out of step
+  const col = lerpRGB([120, 134, 150], [232, 184, 107], out);
+  const glow = 0.12 + 0.55 * out;
+  ctx.save();
+  ctx.strokeStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+  ctx.lineWidth = 1.6 + 1.8 * out;
+  ctx.shadowColor = `rgba(${col[0]},${col[1]},${col[2]},${glow})`;
+  ctx.shadowBlur = 4 + 14 * out;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  const lead = 0.14;                       // straight lead-in at each end
+  const N = 90;
+  for (let i = 0; i <= N; i++) {
+    const s = i / N;
+    let px, py;
+    if (s < lead || s > 1 - lead) {
+      px = a.x + dx * s; py = a.y + dy * s;
+    } else {
+      const u = (s - lead) / (1 - 2 * lead);          // 0..1 along the coiled span
+      const coil = Math.sin(u * Math.PI * 2 * SPRING_COILS);
+      const env = Math.sin(u * Math.PI);               // taper the coil at the ends
+      const off = coil * amp * (0.5 + 0.5 * env);
+      const along = a.x + dx * s, alongY = a.y + dy * s;
+      px = along + nx * off; py = alongY + ny * off;
+    }
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* ── the CONDUIT BEAD: a dot of light riding ALONG the spring toward the filling
+   vial — the spring literally carries the glow from one vessel to the other.
+   Its direction follows which bob is GAINING energy. ── */
+let beadPhase = 0;
+function drawConduitBead(th1, th2, dE1, dE2) {
+  if (frozen || isPureRest()) return;
+  const [a, b] = springAnchors(th1, th2);
+  // direction: from the draining bob toward the gaining one
+  const toRight = (dE2 >= dE1);            // right (bob2) gaining → bead travels a→b
+  const out = Math.min(1, Math.abs(th1 - th2) / (DRAG_CAP * 1.2));
+  beadPhase = (beadPhase + 0.012 + 0.02 * out) % 1;
+  const s = toRight ? beadPhase : (1 - beadPhase);
+  const bx = a.x + (b.x - a.x) * s, by = a.y + (b.y - a.y) * s;
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,240,210,0.95)';
+  ctx.shadowColor = 'rgba(255,220,150,0.9)'; ctx.shadowBlur = 12;
+  ctx.beginPath(); ctx.arc(bx, by, 3.4, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/* ── a glass VIAL with glowing fluid: curved meniscus + bright rim highlight,
+   cylindrical glass shading (vertical specular left, dark right edge, faint
+   bottom ellipse), and internal bubbles. The mandatory anti-graph guardrails so
+   it reads as a VESSEL not a bar. ── */
+function drawVial(vg, fill, slosh, fluidColor, bubbles, side) {
+  const { x, top, bottom, w } = vg;
+  const h = bottom - top;
+  const r = w / 2;
+  const fillY = bottom - fill * h;
+  ctx.save();
+  // ── glass body (faint) ──
+  roundedColumn(x - r, top, w, h, r * 0.7);
+  const gg = ctx.createLinearGradient(x - r, 0, x + r, 0);
+  gg.addColorStop(0, 'rgba(190,225,245,0.10)');
+  gg.addColorStop(0.5, 'rgba(150,200,230,0.05)');
+  gg.addColorStop(1, 'rgba(90,120,150,0.10)');
+  ctx.fillStyle = gg; ctx.fill();
+
+  // ── the fluid column, clipped to the glass + below the meniscus ──
+  ctx.save();
+  roundedColumn(x - r, top, w, h, r * 0.7); ctx.clip();
+  const meniscusCurve = 4 + slosh * 26;    // the surface bows / sloshes
+  // fluid fill rectangle (down to bottom), top edge is the curved meniscus
+  const fg = ctx.createLinearGradient(0, fillY, 0, bottom);
+  fg.addColorStop(0, hexA(fluidColor, 0.85));
+  fg.addColorStop(1, hexA(darken(fluidColor, 0.3), 0.95));
+  ctx.fillStyle = fg;
+  ctx.beginPath();
+  ctx.moveTo(x - r, fillY + meniscusCurve);
+  ctx.quadraticCurveTo(x, fillY - meniscusCurve, x + r, fillY + meniscusCurve);
+  ctx.lineTo(x + r, bottom); ctx.lineTo(x - r, bottom); ctx.closePath();
+  ctx.fill();
+  // inner glow up from the fluid
+  ctx.fillStyle = hexA(fluidColor, 0.18);
+  ctx.fillRect(x - r, fillY, w, Math.min(h, fill * h));
+  // bubbles
+  for (const bub of bubbles) {
+    const by = bottom - bub.y * h;
+    if (by < fillY + meniscusCurve) continue;   // only inside the fluid
+    ctx.fillStyle = `rgba(255,255,255,${0.28 * bub.life})`;
+    ctx.beginPath(); ctx.arc(x + bub.x * r * 0.7, by, bub.r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+
+  // ── the curved meniscus surface with a bright rim highlight ──
+  if (fill > 0.005) {
+    ctx.strokeStyle = lighten(fluidColor, 0.6); ctx.lineWidth = 2;
+    ctx.shadowColor = hexA(fluidColor, 0.7); ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(x - r, fillY + meniscusCurve);
+    ctx.quadraticCurveTo(x, fillY - meniscusCurve, x + r, fillY + meniscusCurve);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  // ── cylindrical glass shading on top of everything: vertical specular left,
+  //    dark right edge, faint bottom ellipse ──
+  ctx.save();
+  roundedColumn(x - r, top, w, h, r * 0.7); ctx.clip();
+  // left specular band
+  const sp = ctx.createLinearGradient(x - r, 0, x - r + w * 0.5, 0);
+  sp.addColorStop(0, 'rgba(255,255,255,0.0)');
+  sp.addColorStop(0.45, 'rgba(255,255,255,0.16)');
+  sp.addColorStop(1, 'rgba(255,255,255,0.0)');
+  ctx.fillStyle = sp; ctx.fillRect(x - r, top, w * 0.5, h);
+  // dark right edge
+  const de = ctx.createLinearGradient(x + r - w * 0.28, 0, x + r, 0);
+  de.addColorStop(0, 'rgba(0,0,0,0.0)'); de.addColorStop(1, 'rgba(0,0,0,0.28)');
+  ctx.fillStyle = de; ctx.fillRect(x + r - w * 0.28, top, w * 0.28, h);
+  ctx.restore();
+  // faint bottom ellipse (the vial's base seen at a slight angle)
+  ctx.strokeStyle = 'rgba(180,215,240,0.20)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.ellipse(x, bottom, r, r * 0.22, 0, 0, Math.PI * 2); ctx.stroke();
+
+  // glass outline + rim
+  roundedColumn(x - r, top, w, h, r * 0.7);
+  ctx.strokeStyle = 'rgba(190,225,245,0.32)'; ctx.lineWidth = 1.3; ctx.stroke();
+  // top rim ellipse
+  ctx.strokeStyle = 'rgba(220,240,255,0.4)'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.ellipse(x, top, r, r * 0.22, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+}
+function roundedColumn(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+/* ── bubbles: dense when a vial is GAINING (dE>0), sparse when draining ── */
+function spawnBubbles(side, dE, fill, dt) {
+  const arr = side === 'L' ? bubblesL : bubblesR;
+  if (fill < 0.03) return;
+  const gaining = dE > 0;
+  const rate = (gaining ? 26 : 5) * fill;       // bubbles/sec
+  if (Math.random() < rate * dt && arr.length < 60) {
+    arr.push({ x: (Math.random() - 0.5) * 1.4, y: 0.02, r: 0.8 + Math.random() * 1.6,
+               v: 0.18 + Math.random() * 0.3, life: 1 });
+  }
+}
+function stepBubbles(arr, dt) {
+  for (const b of arr) { b.y += b.v * dt; b.life -= dt * 0.5; }
+  for (let i = arr.length - 1; i >= 0; i--) if (arr[i].life <= 0 || arr[i].y > 1) arr.splice(i, 1);
+}
+
+/* ── colour helpers ── */
+function parseHex(h) {
+  h = h.replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+}
+function hexA(c, a) { const [r,g,b] = c.startsWith('#') ? parseHex(c) : c.split(',').map(Number); return `rgba(${r},${g},${b},${a})`; }
+function lighten(c, t) { const [r,g,b] = parseHex(c); return `rgb(${Math.round(r+(255-r)*t)},${Math.round(g+(255-g)*t)},${Math.round(b+(255-b)*t)})`; }
+function darken(c, t) { if (c.startsWith('rgb')) return c; const [r,g,b] = parseHex(c); return `#${[r,g,b].map(v=>Math.round(v*(1-t)).toString(16).padStart(2,'0')).join('')}`; }
+function lerpRGB(a, b, t) { t = Math.max(0, Math.min(1, t)); return [Math.round(a[0]+(b[0]-a[0])*t), Math.round(a[1]+(b[1]-a[1])*t), Math.round(a[2]+(b[2]-a[2])*t)]; }
+
+/* ── the readouts: the beat clock + countdown + the mode-mix line ── */
+function updateReadouts(th1, th2) {
+  const Tb = beatPeriod(P);
+  const bb = $('beatbig'), cd = $('countdown');
+  if (frozen || !isFinite(Tb)) {
+    bb.textContent = 'T_beat = ∞ — no trade';
+    bb.className = 'notrade';
+    cd.textContent = frozen ? 'coupling frozen — each vial holds its level' : '';
+  } else if (lastMode === 'sym' || lastMode === 'mir') {
+    bb.textContent = 'T_beat = —';
+    bb.className = 'notrade';
+    cd.textContent = lastMode === 'sym' ? 'pure mode: lockstep, spring slack' : 'pure mode: scissoring, spring pulsing';
+  } else {
+    bb.textContent = `T_beat = ${Tb.toFixed(1)} s`;
+    bb.className = '';
+    // time to the next full pour (the next odd half-beat, or back-home full beat)
+    if (!isPureRest()) {
+      const tInBeat = ((tPhys % Tb) + Tb) % Tb;
+      const half = Tb / 2;
+      const next = tInBeat < half ? (half - tInBeat) : (Tb - tInBeat);
+      const which = tInBeat < half ? 'twin brims' : 'returns home';
+      cd.textContent = `next full pour → ${next.toFixed(1)} s (${which})`;
+    } else {
+      cd.textContent = 'pull a bob to start the clock';
+    }
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   INTERACTION — grab a bob, drag it aside along its arc (capped to DRAG_CAP),
+   release. The three buttons set pure modes / freeze / re-pull.
+   ════════════════════════════════════════════════════════════════════════════ */
+let dragging = null;          // null | 1 | 2 (which bob)
+let dragAngle = 0;            // the current dragged angle (capped)
+function dragTh1() { return dragging === 1 ? dragAngle : 0; }
+function dragTh2() { return dragging === 2 ? dragAngle : 0; }
+function pullEnergyPreview() {
+  // while dragging bob i, all energy sits in that bob (gravity PE of the lift +
+  // the loaded spring); preview both vials by computing perBobEnergy at t=0 with
+  // the current drag as the IC. We just show the grabbed vial proportional to θ².
+  const frac = Math.min(1, (dragAngle / DRAG_CAP) ** 2);
+  return dragging === 1 ? { f1: frac, f2: 0 } : { f1: 0, f2: frac };
+}
+
+function eventAngle(pv, ev) {
+  const rect = cv.getBoundingClientRect();
+  const px = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left;
+  const py = (ev.touches ? ev.touches[0].clientY : ev.clientY) - rect.top;
+  const th = Math.atan2(px - pv.x, py - pv.y);   // angle from straight-down
+  return Math.max(-DRAG_CAP, Math.min(DRAG_CAP, th));
+}
+function nearestBob(ev) {
+  const rect = cv.getBoundingClientRect();
+  const px = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left;
+  const py = (ev.touches ? ev.touches[0].clientY : ev.clientY) - rect.top;
+  const pv = pivots();
+  const b1 = bobPos(pv[0], closedForm(tPhys, P)[0]);
+  const b2 = bobPos(pv[1], closedForm(tPhys, P)[1]);
+  const d1 = Math.hypot(px - b1.x, py - b1.y), d2 = Math.hypot(px - b2.x, py - b2.y);
+  // also allow grabbing anywhere along the rod / near the pivot column
+  const grabR = 70;
+  if (Math.min(d1, d2) > grabR) return null;
+  return d1 <= d2 ? 1 : 2;
+}
+function startDrag(ev) {
+  const which = nearestBob(ev);
+  if (!which) return;
+  ev.preventDefault();
+  dragging = which;
+  cv.classList.add('grabbing');
+  dragAngle = eventAngle(pivots()[which - 1], ev);
+  $('prompt').classList.add('hide');
+}
+function moveDrag(ev) {
+  if (!dragging) return;
+  ev.preventDefault();
+  dragAngle = eventAngle(pivots()[dragging - 1], ev);
+}
+function endDrag(ev) {
+  if (!dragging) return;
+  ev.preventDefault();
+  cv.classList.remove('grabbing');
+  // release: set the launch ICs to the dragged bob at dragAngle, twin at rest,
+  // zero velocities; restart the clock.
+  P.th1_0 = dragging === 1 ? dragAngle : 0;
+  P.th2_0 = dragging === 2 ? dragAngle : 0;
+  P.v1_0 = 0; P.v2_0 = 0;
+  pullAmp = Math.abs(dragAngle);
+  tPhys = 0; lastMode = 'single';
+  dragging = null;
+  showModeMix();
+}
+cv.addEventListener('mousedown', startDrag);
+window.addEventListener('mousemove', moveDrag);
+window.addEventListener('mouseup', endDrag);
+cv.addEventListener('touchstart', startDrag, { passive: false });
+window.addEventListener('touchmove', moveDrag, { passive: false });
+window.addEventListener('touchend', endDrag, { passive: false });
+
+/* ── the buttons ── */
+function releasePure(kind) {
+  unfreezeIfNeeded();
+  const A = pullAmp || (DRAG_CAP * 0.78);
+  P.th1_0 = A; P.th2_0 = (kind === 'sym') ? A : -A;
+  P.v1_0 = 0; P.v2_0 = 0; tPhys = 0; lastMode = kind;
+  $('prompt').classList.add('hide');
+  showModeMix();
+}
+$('symbtn').addEventListener('click', () => { releasePure('sym'); flashBtn('symbtn'); });
+$('mirbtn').addEventListener('click', () => { releasePure('mir'); flashBtn('mirbtn'); });
+$('resetbtn').addEventListener('click', () => {
+  unfreezeIfNeeded();
+  P.th1_0 = (pullAmp || DRAG_CAP * 0.78); P.th2_0 = 0; P.v1_0 = 0; P.v2_0 = 0;
+  tPhys = 0; lastMode = 'single';
+  $('prompt').classList.add('hide'); showModeMix();
+});
+function flashBtn(id) {
+  // momentary highlight so the chosen pure mode is legible
+  ['symbtn', 'mirbtn'].forEach(b => $(b).classList.remove('on'));
+  $(id).classList.add('on');
+  setTimeout(() => $(id).classList.remove('on'), 1400);
+}
+
+// freeze latch: K→0, the spring goes slack, the conduit dark, each vial holds forever.
+$('freezebtn').addEventListener('click', () => {
+  frozen = !frozen;
+  $('freezebtn').classList.toggle('on', frozen);
+  $('freezebtn').textContent = frozen ? 'coupling FROZEN (K=0)' : 'freeze the coupling';
+  if (frozen) { Kbeforefreeze = P.K; P.K = 0; }
+  else { P.K = Kbeforefreeze; }
+  $('stiff').disabled = frozen;
+  $('prompt').classList.add('hide');
+});
+function unfreezeIfNeeded() {
+  if (frozen) {
+    frozen = false; P.K = Kbeforefreeze;
+    $('freezebtn').classList.remove('on');
+    $('freezebtn').textContent = 'freeze the coupling';
+    $('stiff').disabled = false;
+  }
+}
+
+// the K & L dials
+$('stiff').addEventListener('input', e => {
+  if (frozen) return;
+  P.K = +e.target.value / 100;            // 0.05 … 3.20
+  $('stiffval').textContent = P.K.toFixed(2);
+  Kbeforefreeze = P.K;
+});
+$('len').addEventListener('input', e => {
+  P.L = +e.target.value / 100;            // 0.35 … 1.10 m
+  $('lenval').textContent = P.L.toFixed(2) + ' m';
+});
+
+// the mode-mix line: launched state = ½(symmetric) + ½(antisymmetric)
+function showModeMix() {
+  const mm = $('modemix');
+  if (lastMode === 'single') {
+    mm.innerHTML = 'this single pull = ½ <b>(release together)</b> + ½ <i>(release mirrored)</i> — two clean modes beating';
+  } else if (lastMode === 'sym') {
+    mm.innerHTML = 'pure <b>symmetric</b> mode (ω₁): the spring never stretches — no trade';
+  } else if (lastMode === 'mir') {
+    mm.innerHTML = 'pure <i>antisymmetric</i> mode (ω₂): the spring pulses hottest — still no trade';
+  }
+  mm.classList.add('show');
+}
+
+/* ── self-test pill (the SAME runSelfTest the Node twin runs) ── */
+function runPill() {
+  const pill = $('selftest');
+  try {
+    const r = runSelfTest();
+    if (r.fail === 0) { pill.textContent = `self-test ✓ ${r.pass}/${r.pass}`; pill.className = 'selftest ok'; }
+    else { pill.textContent = `self-test ✗ ${r.fail} fail`; pill.className = 'selftest bad'; console.error(r.log.join('\n')); }
+    return r;
+  } catch (err) { pill.textContent = 'self-test ✗ error'; pill.className = 'selftest bad'; console.error(err); return { pass: 0, fail: 1, log: [String(err)] }; }
+}
+$('selftest').addEventListener('click', runPill);
+
+/* ── boot ── */
+resize();
+$('stiffval').textContent = P.K.toFixed(2);
+$('lenval').textContent = P.L.toFixed(2) + ' m';
+// open already launched so the trade is visible on arrival
+P.th1_0 = pullAmp; P.th2_0 = 0; P.v1_0 = 0; P.v2_0 = 0; tPhys = 0; lastMode = 'single';
+runPill();
+showModeMix();
+requestAnimationFrame(frame);
+
+// expose for console poking / headless checks. window.__tradingSelfTest() runs the
+// SAME suite the pill + Node twin run (chip===twin).
+window.__tb = {
+  closedForm, closedFormVel, perBobEnergy, totalEnergy, modeEnergies,
+  modeFreqs, beatPeriod, envelopes, runSelfTest,
+  P, get tPhys() { return tPhys; }, set tPhys(v) { tPhys = v; },
+  releasePure, get frozen() { return frozen; },
+};
+window.__tradingSelfTest = runSelfTest;
+
+// rAF fallback for headless throttling (mirrors the estate convention)
+let __lastFrameStamp = performance.now();
+const __origRAF = window.requestAnimationFrame.bind(window);
+window.requestAnimationFrame = (cb) => __origRAF((t) => { __lastFrameStamp = t; cb(t); });
+setInterval(() => {
+  if (performance.now() - __lastFrameStamp > 250) { __lastFrameStamp = performance.now(); frame(performance.now()); }
+}, 100);
+
+try{ if(localStorage.getItem('ws:seen:the-trading-bench')==null) localStorage.setItem('ws:seen:the-trading-bench', String(Date.now())); }catch(e){}
+</script>
+</body>
+</html>
