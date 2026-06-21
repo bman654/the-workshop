@@ -179,7 +179,8 @@ var Layout = (function () {
     'moving-frame': { label: 'THE MOVING FRAME', accent: '#9db4ff' },
     arrow:       { label: 'THE ARROW WING',     accent: '#c9a24a' },
     'curved-country': { label: 'CURVED COUNTRY', accent: '#caa15a' },
-    induction:   { label: 'ELECTROMAGNETISM', accent: '#7fd4ff' }
+    induction:   { label: 'ELECTROMAGNETISM', accent: '#7fd4ff' },
+    'kinetics-sound': { label: 'KINETICS & SOUND', accent: '#d8a94a' }
   };
   function wingLabel(slug) {
     if (WING_META[slug] && WING_META[slug].label) return WING_META[slug].label;

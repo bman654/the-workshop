@@ -38,6 +38,7 @@ const PILOT     = FEAT_GROUPS.find(g => g.id === 'pilot');     // Optics' fly-th
 const RECKONER  = FEAT_GROUPS.find(g => g.id === 'reckoner');  // the Reckoning Cabinet's founding star (The Differential Gear)
 const DROVER    = FEAT_GROUPS.find(g => g.id === 'drover');    // the Arcade's herding founding star (The Shepherd)
 const COILWRIGHT= FEAT_GROUPS.find(g => g.id === 'coilwright');// Electromagnetism's founding star (The Lodestone Hall)
+const SIRENIST  = FEAT_GROUPS.find(g => g.id === 'sirenist');  // Kinetics & Sound's founding star (The Tone Mill)
 // the legacy Optician sub-suite (174-228) refers to `FEATS` as the single Optician group.
 const FEATS = OPTICIAN;
 
@@ -61,11 +62,11 @@ const VIEWBOX = { x: 0, y: 0, w: 1440, h: 900 };
    declaration changes — keep it in sync or this test false-fails. Every generated
    box is verified star-clear (all 35 catalog stars lie outside the interior FIELD). */
 const FOOTPRINTS = [
-  { id: 'verse',            x: 683,   y: 358,  w: 29,   h: 21 },
-  { id: 'compositor',       x: 715,   y: 358,  w: 29,   h: 21 },
-  { id: 'cartographer',     x: 683,   y: 382,  w: 29,   h: 21 },
-  { id: 'sound-garden',     x: 683,   y: 410,  w: 29,   h: 21 },
-  { id: 'threshold',        x: 715,   y: 410,  w: 29,   h: 21 },
+  { id: 'verse',            x: 688,   y: 351,  w: 25,   h: 18 },
+  { id: 'compositor',       x: 716,   y: 351,  w: 25,   h: 18 },
+  { id: 'cartographer',     x: 688,   y: 372,  w: 25,   h: 18 },
+  { id: 'sound-garden',     x: 688,   y: 396,  w: 25,   h: 18 },
+  { id: 'threshold',        x: 716,   y: 396,  w: 25,   h: 18 },
   { id: 'strange-garden',   x: 322,   y: 629,  w: 67,   h: 47 },
   { id: 'firmament',        x: 288,   y: 194,  w: 24,   h: 24 },  // tower r→bbox
   { id: 'daedalus',         x: 1022,  y: 383,  w: 56,   h: 39 },
@@ -426,16 +427,17 @@ WINGS.forEach(w => w.members.forEach(m => ALL_WING_MEMBERS.push(m)));
 
   // ── the feat-GROUPS: a group-agnostic disjointness sweep (replaces the old
   //    `feat-`-prefix-hardcoded block, which would FALSE-FAIL on plain room-id members).
-  //    There are exactly eight feat-groups with distinct ids; EVERY member belongs to
+  //    There are exactly nine feat-groups with distinct ids; EVERY member belongs to
   //    exactly one group across WINGS + FEAT_GROUPS (no dupe); each plain-room-id NEW-group
   //    member is a valid catalog id (NOT feat-). The `feat-` prefix assertion is kept,
   //    scoped to the OPTICIAN only. The Surveyor (Curved Country), The Pilot (Optics'
   //    fly-through), The Reckoner (the Reckoning Cabinet), The Drover (the Arcade's herding
-  //    game) and The Coilwright (Electromagnetism's induction wing) are each founded on a real
-  //    front-door room's `ws:seen` crumb, sized to grow as their wings' siblings ship. ──
-  eq(FEAT_GROUPS.length, 8, 'BIJECTION: there are exactly eight feat-groups');
-  eq(FEAT_GROUPS.length, new Set(FEAT_GROUPS.map(g => g.id)).size, 'BIJECTION: the eight feat-group ids are distinct');
-  ok(!!OPTICIAN && !!AUTOMATON && !!FURNACE && !!SURVEYOR && !!PILOT && !!RECKONER && !!DROVER && !!COILWRIGHT, 'BIJECTION: the eight feat-groups are Optician + Automaton + Furnace + Surveyor + Pilot + Reckoner + Drover + Coilwright');
+  //    game), The Coilwright (Electromagnetism's induction wing) and The Sirenist (Kinetics &
+  //    Sound's siren wing) are each founded on a real front-door room's `ws:seen` crumb, sized
+  //    to grow as their wings' siblings ship. ──
+  eq(FEAT_GROUPS.length, 9, 'BIJECTION: there are exactly nine feat-groups');
+  eq(FEAT_GROUPS.length, new Set(FEAT_GROUPS.map(g => g.id)).size, 'BIJECTION: the nine feat-group ids are distinct');
+  ok(!!OPTICIAN && !!AUTOMATON && !!FURNACE && !!SURVEYOR && !!PILOT && !!RECKONER && !!DROVER && !!COILWRIGHT && !!SIRENIST, 'BIJECTION: the nine feat-groups are Optician + Automaton + Furnace + Surveyor + Pilot + Reckoner + Drover + Coilwright + Sirenist');
 
   // every member belongs to exactly one group across WINGS + FEAT_GROUPS (no dupe across
   // the whole catalog of asterisms). memberWing already holds the wing assignments.

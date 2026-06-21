@@ -170,7 +170,15 @@
     // Verified clear of every footprint/furniture box, the manor pool, the viewBox
     // edge, and every existing catalog star (nearest = tessellarium @ Δx40 Δy14,
     // workbench-row above) by the CATALOG INTEGRITY self-test (live-solve probe).
-    'lodestone-hall': { x: 700, y: 872, mag: 1 }
+    'lodestone-hall': { x: 700, y: 872, mag: 1 },
+    // The Tone Mill — the Kinetics & Sound wing's founding room (the pitch you HEAR
+    // is the rate you WATCH). A FEATS-flavoured field star in the dark LEFT margin
+    // band, away from the manor candle-pool and the optics feat-cluster; lit on
+    // first visit (ws:seen:tone-mill). The lead member of The Sirenist feat-group.
+    // Verified clear of every footprint/furniture box, the manor pool, the viewBox
+    // edge, and every existing catalog star (nearest = refraction-run feat-stars at
+    // x275+, Δx>120) by the CATALOG INTEGRITY self-test (live-solve probe).
+    'tone-mill': { x: 150, y: 500, mag: 1 }
   };
 
   /* ── DATA: the six wings (companion-pairs), each an asterism ────────────────
@@ -243,7 +251,14 @@
     // Sized for the induction vein's promised siblings (an LC tank, a transformer, an
     // eddy brake, a betatron) as they ship.
     { id: 'coilwright', name: 'The Coilwright', myth: 'Makes the current by moving; pays for every spark.',
-      members: ['lodestone-hall'] }
+      members: ['lodestone-hall'] },
+    // The Sirenist — the Kinetics & Sound wing's reward constellation. Founded with
+    // one star (The Tone Mill, a plain `ws:seen:tone-mill` room crumb); like every
+    // feat-group it is ADDITIVE — it NEVER feeds the wings-only all-skies capstone.
+    // Sized for the wing's promised siblings (a free stroboscope, a driven Chladni
+    // plate, a seen-and-heard tuning-fork beat) as they ship.
+    { id: 'sirenist', name: 'The Sirenist', myth: 'Spins the rate you watch into the pitch you hear.',
+      members: ['tone-mill'] }
   ];
 
   Sky.CATALOG = CATALOG;
