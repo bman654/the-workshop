@@ -98,6 +98,13 @@
     // footprint/furniture box, the manor pool, the viewBox edge, and every existing catalog star
     // by sky.test.cjs CATALOG INTEGRITY (re-runnable /tmp star-placement verifier).
     'hexapawn':       { x: 1060, y: 560, mag: 2 },
+    // The Belief Beam — the number wing's Bayesian apparatus (belief is a conserved liquid).
+    // A FEATS-flavoured field star in the dark lower-right band below the manor pool, between
+    // its number-wing kin collisions (1180,560) and differential-gear (1180,700); lit on first
+    // visit (ws:seen:belief-beam). The lead member of The Wagerer feat-group. Verified clear of
+    // every footprint/furniture box, the manor pool, the viewBox edge, and every existing catalog
+    // star by sky.test.cjs CATALOG INTEGRITY (re-runnable /tmp star-placement verifier).
+    'belief-beam':    { x: 1240, y: 630, mag: 1 },
     // ── the feats constellation: nine "Feats of Light" earned in the Hall of Mirrors,
     //    laid out as a vertical LENS (a pointed oval) threading the WEST GROUNDS left
     //    margin beside the Hall footprint (x124 y430 w148 h74). These are PSEUDO-ids
@@ -258,7 +265,13 @@
     // Sized for the wing's promised siblings (a free stroboscope, a driven Chladni
     // plate, a seen-and-heard tuning-fork beat) as they ship.
     { id: 'sirenist', name: 'The Sirenist', myth: 'Spins the rate you watch into the pitch you hear.',
-      members: ['tone-mill'] }
+      members: ['tone-mill'] },
+    // The Wagerer — the Belief Beam's reward constellation. Founded with one star (The Belief
+    // Beam, a plain `ws:seen:belief-beam` room crumb); like every feat-group it is ADDITIVE — it
+    // NEVER feeds the wings-only all-skies capstone. Sized for the wing's promised inference kin
+    // (a likelihood-ratio sluice, a conjugate-prior dial, a credible-interval lantern) as they ship.
+    { id: 'wagerer', name: 'The Wagerer', myth: 'Pours belief, never spills it; lets the evidence decide the level.',
+      members: ['belief-beam'] }
   ];
 
   Sky.CATALOG = CATALOG;
@@ -509,7 +522,8 @@
       feats:     { text: 'Feats of Light — the Optician charted',        cls: 'sky-tally-feats' },
       automaton: { text: "The Maker's Wing — the Automaton charted",     cls: 'sky-tally-automaton' },
       furnace:   { text: 'The Engine Room — the Furnace charted',        cls: 'sky-tally-furnace' },
-      surveyor:  { text: 'Curved Country — the Surveyor charted',        cls: 'sky-tally-surveyor' }
+      surveyor:  { text: 'Curved Country — the Surveyor charted',        cls: 'sky-tally-surveyor' },
+      wagerer:   { text: 'The Belief Beam — the Wagerer charted',        cls: 'sky-tally-wagerer' }
     };
     var subY = 848;
     for (i = 0; i < FEATS.length; i++) {

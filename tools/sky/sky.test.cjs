@@ -39,6 +39,7 @@ const RECKONER  = FEAT_GROUPS.find(g => g.id === 'reckoner');  // the Reckoning 
 const DROVER    = FEAT_GROUPS.find(g => g.id === 'drover');    // the Arcade's herding founding star (The Shepherd)
 const COILWRIGHT= FEAT_GROUPS.find(g => g.id === 'coilwright');// Electromagnetism's founding star (The Lodestone Hall)
 const SIRENIST  = FEAT_GROUPS.find(g => g.id === 'sirenist');  // Kinetics & Sound's founding star (The Tone Mill)
+const WAGERER   = FEAT_GROUPS.find(g => g.id === 'wagerer');   // the Belief Beam's founding star (The Belief Beam)
 // the legacy Optician sub-suite (174-228) refers to `FEATS` as the single Optician group.
 const FEATS = OPTICIAN;
 
@@ -435,9 +436,9 @@ WINGS.forEach(w => w.members.forEach(m => ALL_WING_MEMBERS.push(m)));
   //    game), The Coilwright (Electromagnetism's induction wing) and The Sirenist (Kinetics &
   //    Sound's siren wing) are each founded on a real front-door room's `ws:seen` crumb, sized
   //    to grow as their wings' siblings ship. ──
-  eq(FEAT_GROUPS.length, 9, 'BIJECTION: there are exactly nine feat-groups');
-  eq(FEAT_GROUPS.length, new Set(FEAT_GROUPS.map(g => g.id)).size, 'BIJECTION: the nine feat-group ids are distinct');
-  ok(!!OPTICIAN && !!AUTOMATON && !!FURNACE && !!SURVEYOR && !!PILOT && !!RECKONER && !!DROVER && !!COILWRIGHT && !!SIRENIST, 'BIJECTION: the nine feat-groups are Optician + Automaton + Furnace + Surveyor + Pilot + Reckoner + Drover + Coilwright + Sirenist');
+  eq(FEAT_GROUPS.length, 10, 'BIJECTION: there are exactly ten feat-groups');
+  eq(FEAT_GROUPS.length, new Set(FEAT_GROUPS.map(g => g.id)).size, 'BIJECTION: the ten feat-group ids are distinct');
+  ok(!!OPTICIAN && !!AUTOMATON && !!FURNACE && !!SURVEYOR && !!PILOT && !!RECKONER && !!DROVER && !!COILWRIGHT && !!SIRENIST && !!WAGERER, 'BIJECTION: the ten feat-groups are Optician + Automaton + Furnace + Surveyor + Pilot + Reckoner + Drover + Coilwright + Sirenist + Wagerer');
 
   // every member belongs to exactly one group across WINGS + FEAT_GROUPS (no dupe across
   // the whole catalog of asterisms). memberWing already holds the wing assignments.

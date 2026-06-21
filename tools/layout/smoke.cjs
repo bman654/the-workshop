@@ -37,6 +37,7 @@ const PLACES = [
   { id:'hexapawn', district:'grounds', tier:2, wing:'number', footprint:'hexapawn', prefer:['bottom','right'] },
   { id:'quiet-room', district:'grounds', tier:2, wing:'number', footprint:'quiet-room', prefer:['bottom','right'] },
   { id:'the-coin-that-lies', district:'grounds', tier:2, wing:'number', footprint:'coin-balance', prefer:['bottom','right'] },
+  { id:'belief-beam', district:'grounds', tier:2, wing:'number', footprint:'belief-beam', prefer:['bottom','right'] },
   { id:'midway', district:'grounds', tier:1, wing:'amusements', footprint:'coaster', order:5 },
   { id:'daedalus', district:'grounds', tier:1, wing:'amusements', footprint:'maze', order:20 },
   { id:'arcade', district:'grounds', tier:1, wing:'amusements', footprint:'arcade', order:10 },
