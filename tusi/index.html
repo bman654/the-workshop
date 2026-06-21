@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Circle That Rolls Itself Straight</title>
+<style>
+  /* :root tokens copied verbatim from ../spirograph/index.html */
+  :root{
+    --panel-bg: rgba(14,12,9,0.88);
+    --panel-edge: rgba(201,162,74,0.34);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --bg: #07080d;
+    --stage: #0a0c12;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; }
+  #board{ display:block; position:absolute; inset:0; width:100%; height:100%; cursor:grab; }
+  #board.grabbing{ cursor:grabbing; }
+  #hud{ position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    font:11px/1.4 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.55);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 12px; letter-spacing:.3px;
+    pointer-events:none; opacity:0; transition:opacity .15s; max-width:90%; text-align:center; z-index:10; }
+  #hud.show{ opacity:1; }
+  #hud b{ color:var(--accent); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:330px; flex:0 0 330px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 24px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 8px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .sect .rt{ float:right; color:var(--accent); text-transform:none; letter-spacing:.2px; font-variant-numeric:tabular-nums; }
+  .row{ margin:11px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.04em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:6px; }
+  .row > label .val{ color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:3px; border-radius:3px;
+    background:rgba(201,162,74,0.22); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:15px; height:15px;
+    border-radius:50%; background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  input[type=range]::-moz-range-thumb{ width:15px; height:15px; border:none; border-radius:50%;
+    background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(201,162,74,0.14); }
+  .btnrow{ display:flex; gap:8px; margin:10px 0 2px; flex-wrap:wrap; }
+  .btn{ flex:1 1 auto; min-width:0; font:600 11px/1 var(--font-ui); letter-spacing:.02em; padding:9px 10px;
+    border-radius:8px; border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink);
+    cursor:pointer; transition:.18s; white-space:nowrap; }
+  .btn:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .btn.primary{ background:rgba(201,162,74,0.16); border-color:rgba(201,162,74,0.5); color:var(--accent); }
+  .btn.primary:hover{ background:rgba(201,162,74,0.26); }
+  .chk{ display:flex; align-items:center; gap:8px; font:600 10.5px/1.3 var(--font-mono); letter-spacing:.02em;
+    color:var(--ink-dim); cursor:pointer; margin:10px 0 2px; user-select:none; }
+  .chk input{ accent-color:var(--accent); width:14px; height:14px; cursor:pointer; }
+  .facts{ margin-top:8px; font:11px/1.6 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  .facts .frow{ display:flex; justify-content:space-between; gap:10px; padding:2px 0; }
+  .facts .frow b{ color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums; }
+  .facts .verdict{ color:var(--ink-dim); }
+  .facts .verdict.line{ color:#f2d488; font-weight:700; }
+  .pip{ display:inline-block; vertical-align:middle; margin-left:8px; }
+  .facts .eqn{ margin-top:9px; padding:9px 11px; border-radius:8px; border:1px solid rgba(201,162,74,0.16);
+    background:rgba(0,0,0,0.28); color:var(--ink-dim); font-size:10.5px; line-height:1.6; }
+  .facts .eqn b{ color:var(--ink); }
+  .foot{ margin-top:20px; font:10px/1.55 var(--font-mono); color:rgba(154,156,170,0.6); letter-spacing:.02em; }
+  .foot a{ color:var(--ink-dim); }
+  @media (max-width:760px){
+    #panel{ width:280px; flex-basis:280px; }
+    .brand .tag{ display:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="back" href="../workbench/index.html">&larr; workbench</a>
+      <a class="back" href="../spirograph/index.html">&larr; The Spirograph</a>
+    </div>
+    <div class="brand">
+      <h1>The Circle That Rolls Itself Straight</h1>
+      <span class="tag">the Tusi couple · rolling makes a straight line</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for detail · per-check PASS lines are in the console">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="board"></canvas>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">A disk rolling inside a ring twice its size turns pure spinning into a
+        <b>DEAD-STRAIGHT LINE</b> — the <b>Tusi couple</b>. Crank it; nudge the ratio off 2:1 and the line
+        opens into an ellipse. <b>Straightness is a knife-edge.</b></p>
+
+      <div class="sect">The ratio dial</div>
+      <div class="row">
+        <label>Ratio <span style="text-transform:none;letter-spacing:0">R : r</span> <span class="val" id="ratioVal">2.000 : 1</span></label>
+        <input type="range" id="ratioSlider" min="1.50" max="3.00" step="0.005" value="2.000">
+      </div>
+
+      <div class="sect">Crank</div>
+      <div class="btnrow">
+        <button class="btn primary" id="rollBtn">↻ Roll</button>
+        <button class="btn" id="stepBtn">▷ Step</button>
+      </div>
+      <div class="row">
+        <label>Speed <span class="val" id="speedVal">1.0×</span></label>
+        <input type="range" id="speedSlider" min="0.25" max="3" step="0.05" value="1">
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="gearsBtn">○ Hide disk/ring</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="perpChk"> show ⊥ 2nd pen</label>
+
+      <div class="facts" id="facts">
+        <div class="frow"><span>ratio</span><b id="fRatio">2.000 : 1</b></div>
+        <div class="frow"><span class="verdict line" id="fVerdict">▔▔▔ A LINE</span><span class="pip" id="fPip"></span></div>
+        <div class="frow"><span>minor / major</span><b id="fAspect">0.000 <span style="color:var(--ink-dim);font-weight:400">(vs 1.414)</span></b></div>
+        <div class="eqn" id="fEqn"></div>
+      </div>
+
+      <div class="foot">
+        At <b>R = 2r</b> with the pen pinned on the rim, the rolling disk's spin and orbit cancel exactly along
+        one diameter — a 13th-century theorem of Naṣīr al-Dīn al-Ṭūsī. It is the
+        <a href="../spirograph/index.html">hypotrochoid</a> degenerated to a segment.
+        <br>Another way circle becomes ellipse becomes line:
+        <a href="../trammel/index.html">The Trammel of Archimedes &rarr;</a>
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+(function(){ if(typeof window === 'undefined') return; (function(){
+
+// ============================================================================
+// CORE — the SHARED pen() geometry. pen() and wheelCentre() are copied VERBATIM
+// from ../spirograph/index.html:244-260 (room convention: each room keeps its
+// own in-file copy + an in-page self-test as the proof; no shared .mjs). The
+// canvas, the readout, and the self-test ALL call this one pen().
+//
+// The Tusi couple is the hypotrochoid degenerated to inside, d=1, R=2r: a disk
+// of radius r rolling without slipping inside a ring of radius R, with the pen
+// pinned on the rim, traces a DEAD-STRAIGHT diameter of length 2R. The ratio
+// rho = R/r is CONTINUOUS here (R = rho·r is generally non-integer), so there is
+// NO gcd / closure / petal-count code — those would divide by a fractional gcd.
+// The only new formula is the contact point K(t) = (R·cos t, R·sin t).
+// ============================================================================
+
+// Pen position at rolling-parameter t. R,r are radii; d in [0,1]. (verbatim)
+function pen(R, r, d, t, inside){
+  if(inside){
+    var Rm = R - r, ph = (R - r) / r * t;
+    return { x: Rm * Math.cos(t) + d * r * Math.cos(ph),
+             y: Rm * Math.sin(t) - d * r * Math.sin(ph) };
+  } else {
+    var Rp = R + r, pe = (R + r) / r * t;
+    return { x: Rp * Math.cos(t) - d * r * Math.cos(pe),
+             y: Rp * Math.sin(t) - d * r * Math.sin(pe) };
+  }
+}
+
+// Centre of the rolling wheel at parameter t (for drawing the disk). (verbatim)
+function wheelCentre(R, r, t, inside){
+  var rad = inside ? (R - r) : (R + r);
+  return { x: rad * Math.cos(t), y: rad * Math.sin(t) };
+}
+
+// ----------------------------------------------------------------------------
+// lineFit(R, r): PCA best-fit line of the FULL crank (d=1, inside), the PROOF
+// LENS. mean-center, 2x2 covariance, major eigenvector = best-fit-line direction;
+// perpendicular = its normal. Returns {maxPerp, maxAlong, aspect=maxPerp/maxAlong}.
+// The SAME helper backs both the live readout and the self-test, so canvas, words
+// and proof agree on ONE number. N endpoint-inclusive over the full crank period.
+// ----------------------------------------------------------------------------
+function lineFit(R, r, N){
+  N = N || 4000;
+  var d = 1, inside = true;
+  // FULL crank: the wheel makes R/r turns per ring-lap; the closed figure needs
+  // r ring-laps to repeat exactly when R/r is rational, but the PROOF only needs
+  // a faithful sample of the figure. One ring-trip t in [0,2pi] already contains
+  // the whole degenerate segment at 2:1; for the neg-control ellipse one ring-trip
+  // traces one full ellipse-arc. We sample [0,2pi] (the canvas lens' own range)
+  // so the measured number is exactly what the canvas inks.
+  var xs = new Array(N + 1), ys = new Array(N + 1), mx = 0, my = 0;
+  for(var k = 0; k <= N; k++){
+    var t = 2 * Math.PI * k / N;
+    var p = pen(R, r, d, t, inside);
+    xs[k] = p.x; ys[k] = p.y; mx += p.x; my += p.y;
+  }
+  mx /= (N + 1); my /= (N + 1);
+  var sxx = 0, sxy = 0, syy = 0;
+  for(var i = 0; i <= N; i++){
+    var dx = xs[i] - mx, dy = ys[i] - my;
+    sxx += dx * dx; sxy += dx * dy; syy += dy * dy;
+  }
+  sxx /= (N + 1); sxy /= (N + 1); syy /= (N + 1);
+  // eigen-decompose the symmetric 2x2 covariance [[sxx,sxy],[sxy,syy]]
+  var tr = sxx + syy, det = sxx * syy - sxy * sxy;
+  var disc = Math.sqrt(Math.max(0, tr * tr / 4 - det));
+  var l1 = tr / 2 + disc;          // larger eigenvalue (along the line)
+  // major eigenvector for l1
+  var ex, ey;
+  if(Math.abs(sxy) > 1e-300){ ex = l1 - syy; ey = sxy; }
+  else { if(sxx >= syy){ ex = 1; ey = 0; } else { ex = 0; ey = 1; } }
+  var en = Math.hypot(ex, ey) || 1; ex /= en; ey /= en;
+  var nx = -ey, ny = ex;           // perpendicular (the line's normal)
+  var maxPerp = 0, maxAlong = 0;
+  for(var j = 0; j <= N; j++){
+    var ax = xs[j] - mx, ay = ys[j] - my;
+    var along = Math.abs(ax * ex + ay * ey);
+    var perp = Math.abs(ax * nx + ay * ny);
+    if(along > maxAlong) maxAlong = along;
+    if(perp > maxPerp) maxPerp = perp;
+  }
+  return { maxPerp: maxPerp, maxAlong: maxAlong, aspect: maxAlong > 0 ? maxPerp / maxAlong : 0 };
+}
+
+var Core = { pen: pen, wheelCentre: wheelCentre, lineFit: lineFit };
+
+// ============================================================================
+// HEADLESS SELF-TEST — exercises the SHARED pen() via lineFit(). PCA best-fit.
+// ============================================================================
+function runSelfTest(){
+  var pass = 0, total = 0, log = [], detail = {};
+  function check(name, cond){
+    total++;
+    if(cond){ pass++; log.push('PASS: ' + name); if(typeof console !== 'undefined') console.log('PASS: ' + name); }
+    else { log.push('FAIL: ' + name); if(typeof console !== 'undefined') console.error('FAIL: ' + name); }
+  }
+
+  // (1) EXACT LINE: R=2r, d=1 → perpendicular deviation < 1e-12 at the display
+  //     pair AND [2,1] AND a 3rd scale [100,50], so the pass is NOT pair-specific.
+  var exactRows = [], exactOk = true, maxExact = 0;
+  [[2,1],[100,50],[1000,500]].forEach(function(P){
+    var f = lineFit(P[0], P[1]);
+    exactRows.push(P[0] + '/' + P[1] + ' → ' + f.maxPerp.toExponential(2));
+    maxExact = Math.max(maxExact, f.maxPerp);
+    if(!(f.maxPerp < 1e-12)) exactOk = false;
+  });
+  detail.exactRows = exactRows; detail.maxExact = maxExact;
+  check('exact line: R=2r,d=1 → maxPerp < 1e-12 at [' + exactRows.join(', ') + ']', exactOk);
+
+  // (2) NEG-CONTROL (scale-free): for every ratio != 2, the inked figure is a
+  //     measurable ELLIPSE, never a line. aspect = minor/major >= 1e-4 — and
+  //     DIMENSIONLESS, so the bound means the same at any figure size.
+  var negRows = [], negOk = true, minNeg = Infinity;
+  [[3,1],[210,100],[201,100],[2001,1000],[150,40]].forEach(function(P){
+    var f = lineFit(P[0], P[1]);
+    negRows.push((P[0]/P[1]).toFixed(3) + ':1 → ' + f.aspect.toExponential(2));
+    minNeg = Math.min(minNeg, f.aspect);
+    if(!(f.aspect >= 1e-4)) negOk = false;
+  });
+  detail.negRows = negRows; detail.minNeg = minNeg;
+  check('neg-control: ratio≠2 → aspect ≥ 1e-4 (a real ellipse) — floor ' + minNeg.toExponential(2) + ' [' + negRows.join(', ') + ']', negOk);
+
+  // (3) d=0 → a perfect CIRCLE (|pen| const) — proves d genuinely controls
+  //     circle→line, not just decoration. Same display pair, pen at the centre.
+  var R = 2, r = 1, rad0 = R - r, maxDevC = 0;
+  for(var k = 0; k <= 800; k++){
+    var t = 2 * Math.PI * k / 800;
+    var p = pen(R, r, 0, t, true);
+    maxDevC = Math.max(maxDevC, Math.abs(Math.hypot(p.x, p.y) - rad0));
+  }
+  detail.maxDevC = maxDevC;
+  check('d-control: d=0 → exact circle |pen|=(R−r) (max dev ' + maxDevC.toExponential(2) + '); d=1 → the line above', maxDevC < 1e-9);
+
+  return { pass: pass, total: total, log: log, detail: detail };
+}
+
+// expose for Node re-audit / external verification
+Core.runSelfTest = runSelfTest;
+if(typeof window !== 'undefined'){ window.TusiCore = Core; }
+if(typeof module !== 'undefined' && module.exports){ module.exports = Core; }
+
+// ============================================================================
+// APPLICATION (DOM). Everything visual derives from the SHARED pen() above.
+// ============================================================================
+var canvas = document.getElementById('board');
+var ctx = canvas.getContext('2d');
+var hud = document.getElementById('hud');
+
+var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---- model state: rho is the ONLY moving param. r FIXED, R = rho·r. ----
+var state = {
+  rho: 2.000,            // R/r, the star param
+  r: 1,                  // FIXED model unit
+  R: 2,                  // = rho·r
+  d: 1,                  // pen pinned on the rim, FIXED
+  inside: true,
+  t: 0,                  // crank parameter, a single trip [0, 2π]
+  playing: !reduceMotion,
+  dir: 1,                // ping-pong direction over one trip
+  speed: 1,
+  dragging: false,
+  showDisk: true,
+  showPerp: false,
+  trip: [],              // sampled pen points over one ring-trip (canvas lens)
+  inked: 0,              // how many of trip are inked
+  perpTrip: [],          // optional perpendicular 2nd-pen trip
+  flash: 0               // gold-snap flash frames remaining
+};
+
+var TWO_PI = 2 * Math.PI;
+var TRIP_SAMPLES = 1400;
+var NT = 12;             // disk clock-face ticks (no-slip witness)
+var SNAP_BAND = 0.012;   // |rho - 2| within this snaps flat
+
+// ---- view transform: fit radius = R (the ring is the outer bound) + pad ----
+var view = { cx: 0, cy: 0, scale: 1 };
+function fitView(){
+  var w = canvas.clientWidth, h = canvas.clientHeight, pad = 52;
+  var rad = Math.max(0.001, state.R);
+  view.scale = (Math.min(w, h) - pad * 2) * 0.5 / rad;
+  view.cx = w / 2; view.cy = h / 2;
+}
+function toScreen(p){ return { x: view.cx + p.x * view.scale, y: view.cy - p.y * view.scale }; }
+
+function resize(){
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  fitView();
+}
+
+// ---- CANVAS LENS: one ring-trip, t in [0, 2π] ----
+// rebuildTrip() samples pen(R,r,1,t,inside) over exactly ONE wheel-centre orbit.
+// At 2:1 this inks a dead segment on the x-axis; off 2:1 it opens to ONE ellipse-arc.
+function rebuildTrip(){
+  state.R = state.rho * state.r;
+  state.trip = new Array(TRIP_SAMPLES + 1);
+  state.perpTrip = new Array(TRIP_SAMPLES + 1);
+  for(var k = 0; k <= TRIP_SAMPLES; k++){
+    var t = TWO_PI * k / TRIP_SAMPLES;
+    state.trip[k] = pen(state.R, state.r, state.d, t, state.inside);
+    state.perpTrip[k] = perpPen(t);
+  }
+  state.t = 0; state.inked = 0; state.dir = 1;
+}
+
+// optional perpendicular 2nd pen: a spoke at +90° on the disk (the perpendicular
+// diameter at 2:1 / the conjugate ellipse off-ratio). Uses the same disk frame.
+function perpPen(t){
+  var R = state.R, r = state.r, d = state.d;
+  var C = wheelCentre(R, r, t, state.inside);
+  var spin = -(R - r) / r * t;       // disk rotation in the fixed frame
+  // the rim pen sits at angle `spin` on the disk (matches pen()); +90° is the conjugate
+  return { x: C.x + d * r * Math.cos(spin + Math.PI / 2),
+           y: C.y + d * r * Math.sin(spin + Math.PI / 2) };
+}
+
+// tIndex → fractional index into trip for the current crank parameter
+function tripIndexForT(t){ return (t / TWO_PI) * TRIP_SAMPLES; }
+
+// ---- drawing ----
+function clearStage(){
+  ctx.fillStyle = '#0a0c12';
+  ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+}
+
+// the inked trail so far (under the mechanism)
+function drawTrail(){
+  var tp = state.trip; if(!tp) return;
+  var upto = Math.max(0, Math.min(TRIP_SAMPLES, Math.round(state.inked)));
+  if(upto < 1) return;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.lineWidth = 1.3;
+  var flash = state.flash > 0;
+  ctx.strokeStyle = flash ? 'rgba(242,212,136,0.95)' : 'rgba(201,162,74,0.7)';
+  ctx.shadowColor = 'rgba(201,162,74,0.5)'; ctx.shadowBlur = flash ? 14 : 6;
+  ctx.beginPath();
+  var p0 = toScreen(tp[0]); ctx.moveTo(p0.x, p0.y);
+  for(var k = 1; k <= upto; k++){ var p = toScreen(tp[k]); ctx.lineTo(p.x, p.y); }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  if(state.showPerp){
+    var pp = state.perpTrip;
+    ctx.lineWidth = 1.0; ctx.strokeStyle = 'rgba(120,170,200,0.55)';
+    ctx.beginPath();
+    var q0 = toScreen(pp[0]); ctx.moveTo(q0.x, q0.y);
+    for(var k2 = 1; k2 <= upto; k2++){ var q = toScreen(pp[k2]); ctx.lineTo(q.x, q.y); }
+    ctx.stroke();
+  }
+}
+
+function drawMechanism(){
+  if(!state.showDisk) return;
+  var R = state.R, r = state.r, t = state.t, s = view.scale;
+  var O = toScreen({ x: 0, y: 0 });
+
+  // 1) FIXED RING (stator)
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(201,162,74,0.16)';
+  ctx.beginPath(); ctx.arc(O.x, O.y, R * s, 0, TWO_PI); ctx.stroke();
+  ctx.strokeStyle = 'rgba(201,162,74,0.28)';
+  ctx.beginPath(); ctx.arc(O.x, O.y, R * s - 1.5, 0, TWO_PI); ctx.stroke();  // brighter inner edge → reads as a rim
+  // faint radial ticks every ~12°
+  ctx.strokeStyle = 'rgba(201,162,74,0.10)';
+  for(var a = 0; a < TWO_PI - 1e-6; a += TWO_PI / 30){
+    var i1 = { x: O.x + Math.cos(a) * (R * s - 5), y: O.y - Math.sin(a) * (R * s - 5) };
+    var i2 = { x: O.x + Math.cos(a) * (R * s),     y: O.y - Math.sin(a) * (R * s) };
+    ctx.beginPath(); ctx.moveTo(i1.x, i1.y); ctx.lineTo(i2.x, i2.y); ctx.stroke();
+  }
+
+  // 2) DIAMETER GUIDE — the major axis. At d=1, t starts at 0 → major axis is +x
+  //    (a fixed horizontal guide through O). The pen rides ON it at 2:1.
+  ctx.save();
+  ctx.setLineDash([5, 6]);
+  ctx.strokeStyle = 'rgba(201,162,74,0.18)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(O.x - R * s, O.y); ctx.lineTo(O.x + R * s, O.y); ctx.stroke();
+  ctx.restore();
+
+  // 4b) faint dotted orbit of the disk centre, radius (R-r)·s — the lovely
+  //     secondary truth: the CENTRE traces a circle while the rim PEN traces a line.
+  ctx.save();
+  ctx.setLineDash([2, 4]);
+  ctx.strokeStyle = 'rgba(154,156,170,0.10)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(O.x, O.y, (R - r) * s, 0, TWO_PI); ctx.stroke();
+  ctx.restore();
+
+  // 5) CONTACT POINT K = (R·cos t, R·sin t) on the ring + tangent tick + rolled-off arc
+  var K = { x: R * Math.cos(t), y: R * Math.sin(t) };
+  var Ks = toScreen(K);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(201,162,74,0.30)'; ctx.lineWidth = 1.4;
+  // subtle accent arc on the ring from start-contact (angle 0) to K (the rolled-off arc)
+  var endAng = -t;   // screen angle is negated (y-down); start at 0
+  ctx.beginPath(); ctx.arc(O.x, O.y, R * s, 0, endAng, t > 0);  // go the rolled direction
+  ctx.globalAlpha = 0.3; ctx.stroke(); ctx.globalAlpha = 1;
+  ctx.restore();
+  // tangent tick at K (perpendicular to the radius)
+  var tx = -Math.sin(t), ty = Math.cos(t);   // tangent dir in math coords
+  ctx.strokeStyle = 'rgba(201,162,74,0.5)'; ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(Ks.x - tx * 7, Ks.y + ty * 7);
+  ctx.lineTo(Ks.x + tx * 7, Ks.y - ty * 7);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(201,162,74,0.85)';
+  ctx.beginPath(); ctx.arc(Ks.x, Ks.y, 2.6, 0, TWO_PI); ctx.fill();
+
+  // 3) ROLLING DISK — must SPIN visibly
+  var C = wheelCentre(R, r, t, state.inside);
+  var Cs = toScreen(C);
+  ctx.strokeStyle = 'rgba(154,156,170,0.5)'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.arc(Cs.x, Cs.y, r * s, 0, TWO_PI); ctx.stroke();
+  // clock-face of NT ticks rigidly fixed to the disk: spin = -(R-r)/r·t.
+  var spin = -(R - r) / r * t;
+  for(var i = 0; i < NT; i++){
+    var ang = spin + TWO_PI * i / NT;   // math-frame angle of this tick
+    var bright = (i === 0);             // the pen's own spoke = the bright tick
+    var inr = r * s * 0.62, outr = r * s;
+    var x1 = Cs.x + Math.cos(ang) * inr, y1 = Cs.y - Math.sin(ang) * inr;
+    var x2 = Cs.x + Math.cos(ang) * outr, y2 = Cs.y - Math.sin(ang) * outr;
+    ctx.strokeStyle = bright ? 'rgba(242,212,136,0.95)' : 'rgba(154,156,170,0.32)';
+    ctx.lineWidth = bright ? 1.8 : 1;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+
+  // 4) ARM + CENTRE: thin accent rod C → P; grey dot at C
+  var P = pen(R, r, state.d, t, state.inside);
+  var Ps = toScreen(P);
+  ctx.strokeStyle = 'rgba(201,162,74,0.55)'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(Cs.x, Cs.y); ctx.lineTo(Ps.x, Ps.y); ctx.stroke();
+  ctx.fillStyle = 'rgba(154,156,170,0.85)';
+  ctx.beginPath(); ctx.arc(Cs.x, Cs.y, 2.4, 0, TWO_PI); ctx.fill();
+
+  // optional perpendicular 2nd pen marker
+  if(state.showPerp){
+    var Q = perpPen(t), Qs = toScreen(Q);
+    ctx.strokeStyle = 'rgba(120,170,200,0.5)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(Cs.x, Cs.y); ctx.lineTo(Qs.x, Qs.y); ctx.stroke();
+    ctx.fillStyle = 'rgba(150,190,215,0.9)';
+    ctx.beginPath(); ctx.arc(Qs.x, Qs.y, 2.6, 0, TWO_PI); ctx.fill();
+  }
+
+  // 6) PEN DOT — bright, glowing, leading the trail
+  ctx.shadowColor = 'rgba(242,212,136,0.8)'; ctx.shadowBlur = 10;
+  ctx.fillStyle = '#f2d488';
+  ctx.beginPath(); ctx.arc(Ps.x, Ps.y, 3.6, 0, TWO_PI); ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function render(){
+  clearStage();
+  drawTrail();
+  drawMechanism();
+}
+
+// ---- animation loop: one trip then PING-PONG ----
+var raf = null, lastTs = 0;
+function loop(ts){
+  raf = requestAnimationFrame(loop);
+  if(!lastTs) lastTs = ts;
+  var dt = Math.min(0.05, (ts - lastTs) / 1000); lastTs = ts;
+  if(state.playing && !state.dragging){
+    // one trip ≈ 4-6s at 1×: dt-per-frame maps to advancing t
+    var rate = (TWO_PI / 5.0) * state.speed;
+    state.t += state.dir * rate * dt;
+    if(state.t >= TWO_PI){ state.t = TWO_PI; state.dir = -1; }
+    else if(state.t <= 0){ state.t = 0; state.dir = 1; }
+    // ink grows to the high-water mark of the trip (so the full figure stays drawn)
+    var idx = tripIndexForT(state.t);
+    if(idx > state.inked) state.inked = idx;
+  }
+  if(state.flash > 0) state.flash--;
+  render();
+  updateReadout();
+}
+function startLoop(){ if(!raf) raf = requestAnimationFrame(loop); }
+
+// ---- HUD ----
+var hudTimer = null;
+function flashHud(html, ms){
+  hud.innerHTML = html; hud.classList.add('show');
+  if(hudTimer) clearTimeout(hudTimer);
+  hudTimer = setTimeout(function(){ hud.classList.remove('show'); }, ms || 3000);
+}
+
+// ---- readout (.facts idiom — measured, not asserted) ----
+var lastFitRho = null, lastFit = null;
+function currentFit(){
+  // memoise the PCA fit per rho (it only changes when rho changes)
+  if(lastFitRho !== state.rho){ lastFit = lineFit(state.R, state.r); lastFitRho = state.rho; }
+  return lastFit;
+}
+function updateReadout(){
+  var f = currentFit();
+  var ratioTxt = state.rho.toFixed(3) + ' : 1';
+  document.getElementById('fRatio').textContent = ratioTxt;
+  document.getElementById('ratioVal').textContent = ratioTxt;
+  // figure scale = the major extent; "a line" when maxPerp < 1e-9·scale
+  var scale = Math.max(1e-12, f.maxAlong);
+  var isLine = f.maxPerp < 1e-9 * scale;
+  var v = document.getElementById('fVerdict');
+  if(isLine){ v.textContent = '▔▔▔ A LINE'; v.className = 'verdict line'; }
+  else { v.textContent = '◯ an ellipse'; v.className = 'verdict'; }
+  document.getElementById('fAspect').innerHTML =
+    f.aspect.toFixed(3) + ' <span style="color:var(--ink-dim);font-weight:400">(vs 1.414)</span>';
+  // tiny inline ellipse pip whose height = aspect (clamped for legibility)
+  var pip = document.getElementById('fPip');
+  var ar = Math.min(1, Math.max(0.0, f.aspect));
+  var w0 = 26, h0 = Math.max(1.2, ar * 22);
+  pip.innerHTML = '<svg width="' + w0 + '" height="24" viewBox="0 0 ' + w0 + ' 24">' +
+    '<ellipse cx="' + (w0/2) + '" cy="12" rx="' + (w0/2 - 2) + '" ry="' + (h0/2) +
+    '" fill="none" stroke="' + (isLine ? '#f2d488' : 'rgba(154,156,170,0.7)') + '" stroke-width="1.3"/></svg>';
+}
+
+function updateEqn(){
+  var eq = document.getElementById('fEqn');
+  var rm = (state.R - state.r);
+  eq.innerHTML =
+    '<b>Tusi couple</b> · disk r=1 rolling inside ring R=' + state.R.toFixed(3) + '<br>' +
+    'centre orbits radius (R−r) = ' + rm.toFixed(3) + '<br>' +
+    'at R=2r the rim pen walks the diameter [−R, +R]';
+}
+
+// ---- ratio dial (the star) ----
+var ratioSlider = document.getElementById('ratioSlider');
+function setRho(rho, opts){
+  opts = opts || {};
+  // snap flat near 2.0 + the felt "click flat"
+  if(Math.abs(rho - 2) < SNAP_BAND){
+    if(state.rho !== 2.000 && !opts.silent){
+      state.flash = 8;               // 1-frame+ gold trail flash
+      flashHud('<b>2.000 : 1</b> — the line snaps flat. Pure rotation, a straight diameter.', 2200);
+    }
+    rho = 2.000;
+  }
+  state.rho = rho; state.R = rho * state.r;
+  ratioSlider.value = rho;
+  fitView(); rebuildTrip(); updateReadout(); updateEqn();
+}
+ratioSlider.addEventListener('input', function(e){ setRho(+e.target.value); });
+
+// ---- crank: Roll (auto, ping-pong) + Step ----
+var rollBtn = document.getElementById('rollBtn');
+function syncRoll(){ rollBtn.textContent = state.playing ? '❚❚ Pause' : (reduceMotion ? '▶ Roll' : '↻ Roll'); }
+rollBtn.addEventListener('click', function(){
+  state.playing = !state.playing; syncRoll();
+});
+document.getElementById('stepBtn').addEventListener('click', function(){
+  state.playing = false; syncRoll();
+  state.t += state.dir * 0.06;
+  if(state.t >= TWO_PI){ state.t = TWO_PI; state.dir = -1; }
+  else if(state.t <= 0){ state.t = 0; state.dir = 1; }
+  var idx = tripIndexForT(state.t);
+  if(idx > state.inked) state.inked = idx;
+});
+document.getElementById('speedSlider').addEventListener('input', function(e){
+  state.speed = +e.target.value;
+  document.getElementById('speedVal').textContent = state.speed.toFixed(1) + '×';
+});
+document.getElementById('gearsBtn').addEventListener('click', function(){
+  state.showDisk = !state.showDisk;
+  document.getElementById('gearsBtn').textContent = state.showDisk ? '○ Hide disk/ring' : '○ Show disk/ring';
+});
+document.getElementById('perpChk').addEventListener('change', function(e){
+  state.showPerp = e.target.checked;
+});
+
+// ---- drag-to-spin: map atan2 of the pointer about O to the crank parameter t ----
+function pointerAngle(ev){
+  var rect = canvas.getBoundingClientRect();
+  var px = ev.clientX - rect.left, py = ev.clientY - rect.top;
+  // math-frame: y-up, origin at view centre
+  var mx = (px - view.cx) / view.scale;
+  var my = -(py - view.cy) / view.scale;
+  return { ang: Math.atan2(my, mx), r: Math.hypot(mx, my) };
+}
+function setTFromAngle(ang){
+  // map atan2 (−π,π] → t in [0, 2π], unwrapped to the nearest of the current t
+  var a = ang; if(a < 0) a += TWO_PI;
+  // clamp to [0, 2π] one-trip; cranking the contact around drags the figure
+  state.t = Math.max(0, Math.min(TWO_PI, a));
+  var idx = tripIndexForT(state.t);
+  if(idx > state.inked) state.inked = idx;
+}
+canvas.addEventListener('pointerdown', function(ev){
+  var pa = pointerAngle(ev);
+  // grab anywhere reasonably near the ring/disk band
+  if(pa.r <= state.R * 1.15){
+    state.dragging = true; state.playing = false; syncRoll();
+    canvas.classList.add('grabbing');
+    try{ canvas.setPointerCapture(ev.pointerId); }catch(e){}
+    setTFromAngle(pa.ang); ev.preventDefault();
+  }
+});
+canvas.addEventListener('pointermove', function(ev){
+  if(!state.dragging) return;
+  setTFromAngle(pointerAngle(ev).ang); ev.preventDefault();
+});
+function endDrag(ev){
+  if(!state.dragging) return;
+  state.dragging = false; canvas.classList.remove('grabbing');
+  try{ canvas.releasePointerCapture(ev.pointerId); }catch(e){}
+}
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+// self-test chip
+document.getElementById('selftest').addEventListener('click', function(){
+  flashHud('<b>R = 2r → an exact straight line from pure rotation</b>; nudge the ratio and the line opens to an ellipse — proven in the console.', 5200);
+});
+
+window.addEventListener('resize', function(){ resize(); fitView(); render(); });
+
+// ============================================================================
+// INIT
+// ============================================================================
+function init(){
+  var res = runSelfTest();
+  var chip = document.getElementById('selftest');
+  if(res.pass === res.total){
+    chip.className = 'selftest ok';
+    chip.textContent = 'tusi verified — ' + res.pass + '/' + res.total + ' ✓';
+  } else {
+    chip.className = 'selftest bad';
+    chip.textContent = 'tusi FAILED — ' + res.pass + '/' + res.total;
+  }
+  chip.title = res.log.join('\n');
+  console.log('The Tusi couple self-test: ' + res.pass + '/' + res.total + ' passed. ' +
+              'exact-line maxPerp ' + res.detail.maxExact.toExponential(3) +
+              ', neg-control aspect floor ' + res.detail.minNeg.toExponential(3) +
+              ', d=0 circle dev ' + res.detail.maxDevC.toExponential(3) + '.');
+
+  document.getElementById('speedVal').textContent = state.speed.toFixed(1) + '×';
+  resize();
+  setRho(2.000, { silent: true });
+  syncRoll();
+
+  if(reduceMotion){
+    state.playing = false; syncRoll();
+    state.t = TWO_PI; state.inked = TRIP_SAMPLES;   // show the whole figure statically
+    render();
+    flashHud('Reduced motion: the full figure is drawn — press <b>▶ Roll</b> to crank the disk.', 5200);
+  } else {
+    flashHud('Grab the disk and crank — the pen walks a <b>straight line</b>. Slide the <b>RATIO</b> off 2:1 to open it into an ellipse.', 5000);
+  }
+  startLoop();
+
+  // ws breadcrumb (additive, never clobbers other keys) — a bench, not a front-door page
+  try{ localStorage.setItem('ws:seen:tusi', '1'); }catch(e){}
+}
+init();
+
+})(); })();
+</script>
+</body>
+</html>
