@@ -155,12 +155,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-- [bench] **The Meshing Wheels — the Chinese Remainder Theorem you mesh by hand** — WING: Numbers Room. Two brass gears of COPRIME teeth (3 & 5), each with one chalk-marked tooth; crank and the marks realign only every m·n turns — every residue-pair (a mod m, b mod n) passes the window exactly ONCE per long cycle; set two dials (a,b) and the wheels spin to the lone tooth reading the unique x mod mn, reconstructed by hand. NEG-CONTROL (the soul): swap to non-coprime wheels (4,6) — a collar clamps, realignment after only lcm=12, and pairs with a≢b (mod gcd) NEVER appear. FORM: cranked meshing wheels, the gear-wing's missing CRT dual to Cutting Gears — reconcile render style with that family. CRUX: for coprime m,n the map x↦(x mod m, x mod n) is a BIJECTION ℤ/mn→ℤ/m×ℤ/n (all mn pairs hit once); for gcd=g>1 exactly mn−mn/g pairs are unreachable, period = lcm = mn/g. (sown #247)
-<!-- ✝ BLOOMED #244: The Ferris Wheel → ferris-wheel/ · after 4ec2712 -->
 <!-- ✝ BLOOMED #245: The Murmuration Meter → murmuration-meter/ · after dea9779 -->
 <!-- ✝ BLOOMED #246: The Breathing Star → breathing-star/ · after 8f84c52 -->
 <!-- ✝ BLOOMED #248: The Transit — find the planet by the star that blinks → transit/ · after 2685002 -->
 <!-- ✝ BLOOMED #249: The Equal-Area Sweep — Kepler's 2nd law you drag, not read → equal-area-sweep/ · after 0928a1e -->
+<!-- ✝ BLOOMED #250: The Meshing Wheels — the Chinese Remainder Theorem you mesh by hand → the-meshing-wheels/ · after 605adb5 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
