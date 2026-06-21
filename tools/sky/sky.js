@@ -178,6 +178,14 @@
     // edge, and every existing catalog star (nearest = tessellarium @ Δx40 Δy14,
     // workbench-row above) by the CATALOG INTEGRITY self-test (live-solve probe).
     'lodestone-hall': { x: 700, y: 872, mag: 1 },
+    // The Bootstrap Bench — the induction wing's CAPSTONE (the wave that carries itself,
+    // E makes B makes E). A FEATS-flavoured field star in the dark BOTTOM margin band,
+    // right of its founder lodestone-hall (700,872) and clear of undercroft's star —
+    // the second member of The Coilwright feat-group, lit on first visit
+    // (ws:seen:bootstrap-bench). Verified clear of every footprint/furniture box, the
+    // manor pool, the viewBox edge, and every existing catalog star by the CATALOG
+    // INTEGRITY self-test (live-solve probe).
+    'bootstrap-bench': { x: 820, y: 884, mag: 1 },
     // The Tone Mill — the Kinetics & Sound wing's founding room (the pitch you HEAR
     // is the rate you WATCH). A FEATS-flavoured field star in the dark LEFT margin
     // band, away from the manor candle-pool and the optics feat-cluster; lit on
@@ -253,12 +261,13 @@
     { id: 'drover', name: 'The Drover', myth: 'Never pushes the flock; only chooses where to stand.',
       members: ['the-shepherd'] },
     // The Coilwright — the Electromagnetism wing's reward constellation. Founded with
-    // one star (The Lodestone Hall, a plain `ws:seen:lodestone-hall` room crumb); like
-    // every feat-group it is ADDITIVE — it NEVER feeds the wings-only all-skies capstone.
-    // Sized for the induction vein's promised siblings (an LC tank, a transformer, an
-    // eddy brake, a betatron) as they ship.
+    // The Lodestone Hall (`ws:seen:lodestone-hall`) and grown by The Bootstrap Bench
+    // (`ws:seen:bootstrap-bench`), the induction vein's capstone; like every feat-group
+    // it is ADDITIVE — it NEVER feeds the wings-only all-skies capstone. Sized to keep
+    // growing as the vein's promised siblings (an LC tank, a transformer, an eddy brake,
+    // a betatron) ship.
     { id: 'coilwright', name: 'The Coilwright', myth: 'Makes the current by moving; pays for every spark.',
-      members: ['lodestone-hall'] },
+      members: ['lodestone-hall', 'bootstrap-bench'] },
     // The Sirenist — the Kinetics & Sound wing's reward constellation. Founded with
     // one star (The Tone Mill, a plain `ws:seen:tone-mill` room crumb); like every
     // feat-group it is ADDITIVE — it NEVER feeds the wings-only all-skies capstone.

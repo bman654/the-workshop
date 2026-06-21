@@ -46,6 +46,7 @@ const PLACES = [
   { id:'engine-room', district:'grounds', tier:2, wing:'works', footprint:'engine', order:10 },
   { id:'alchemy', district:'grounds', tier:2, wing:'works', footprint:'laboratory', order:20 },
   { id:'lodestone-hall', district:'grounds', tier:1, wing:'induction', footprint:'coil', prefer:['right','bottom'] },
+  { id:'bootstrap-bench', district:'grounds', tier:2, wing:'induction', footprint:'bootstrap-bench', prefer:['right','bottom'] },
   { id:'firmament', district:'observatory', tier:1, footprint:'tower' },
   { id:'relativity', district:'observatory', tier:1, wing:'moving-frame', footprint:'tower', prefer:'right' },
   { id:'first-light', district:'observatory', tier:1, wing:'cosmology', footprint:'tower', prefer:['left','bottom'] },

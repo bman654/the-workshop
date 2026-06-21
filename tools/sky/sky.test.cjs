@@ -63,15 +63,15 @@ const VIEWBOX = { x: 0, y: 0, w: 1440, h: 900 };
    declaration changes — keep it in sync or this test false-fails. Every generated
    box is verified star-clear (all 35 catalog stars lie outside the interior FIELD). */
 const FOOTPRINTS = [
-  { id: 'verse',            x: 688,   y: 351,  w: 25,   h: 18 },
-  { id: 'compositor',       x: 716,   y: 351,  w: 25,   h: 18 },
-  { id: 'cartographer',     x: 688,   y: 372,  w: 25,   h: 18 },
-  { id: 'sound-garden',     x: 688,   y: 396,  w: 25,   h: 18 },
-  { id: 'threshold',        x: 716,   y: 396,  w: 25,   h: 18 },
+  { id: 'verse',            x: 696,   y: 345,  w: 22,   h: 16 },
+  { id: 'compositor',       x: 720,   y: 345,  w: 22,   h: 16 },
+  { id: 'cartographer',     x: 696,   y: 363,  w: 22,   h: 16 },
+  { id: 'sound-garden',     x: 696,   y: 435,  w: 22,   h: 16 },
+  { id: 'threshold',        x: 720,   y: 435,  w: 22,   h: 16 },
   { id: 'strange-garden',   x: 322,   y: 629,  w: 67,   h: 47 },
-  { id: 'firmament',        x: 288,   y: 194,  w: 24,   h: 24 },  // tower r→bbox
-  { id: 'daedalus',         x: 1022,  y: 383,  w: 56,   h: 39 },
-  { id: 'arcade',           x: 1022,  y: 295,  w: 56,   h: 39 },
+  { id: 'firmament',        x: 293,   y: 193,  w: 13,   h: 13 },  // tower r→bbox
+  { id: 'daedalus',         x: 1026,  y: 363,  w: 48,   h: 33 },
+  { id: 'arcade',           x: 1026,  y: 288,  w: 48,   h: 33 },
   { id: 'workbench',        x: 520,   y: 589,  w: 88,   h: 61 },
   { id: 'undercroft',       x: 698,   y: 517,  w: 46,   h: 64 },
   { id: 'hall-of-mirrors',  x: 275,   y: 404,  w: 73,   h: 50 },  // the optics wing — the feat-stars cluster beside it
