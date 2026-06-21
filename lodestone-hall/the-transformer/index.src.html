@@ -1,0 +1,584 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Transformer · Two Coils, One Flux</title>
+<style>
+  :root{
+    --ivory:#f4ecdb; --ink:#3a3326;
+    --brass:#b08d4f; --brass-dim:#8a6f3f; --brass-line:#c9aa6b; --brass-hot:#e9cf8f;
+    --gold:#e0b23c; --gold-hot:#ffd166; --amber:#f4a93c;
+    --emf:#7fd4ff; --emf-soft:#a8e2ff; --emf-dim:#4f8fb0;
+    --copper:#d98a52; --copper-hot:#ff9d5c;
+    --good:#76c66a; --good-hot:#9bd28e; --bad:#e26b4d; --bad-hot:#ff7a55;
+    --font-mono:'SF Mono',ui-monospace,Menlo,Consolas,monospace;
+    --font-ser:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; background:#0a0c10; color:#e8e2d2; font-family:var(--font-ser); }
+  body{ display:flex; flex-direction:column; min-height:100vh; overflow-x:hidden; }
+
+  .topbar{ position:sticky; top:0; z-index:30; display:flex; align-items:center; gap:14px;
+    padding:9px 16px; background:rgba(10,13,18,0.94); border-bottom:1px solid #232c36;
+    backdrop-filter:blur(6px); color:#cfe6f4; }
+  .topbar .brand{ font:600 13px/1 var(--font-ser); letter-spacing:.3px; }
+  .topbar .brand .sub{ color:#6fa6c4; font-weight:400; font-size:11px; margin-left:6px; }
+  .topbar a.back{ color:#9cc8e0; text-decoration:none; font:500 11px/1 var(--font-mono); border-bottom:1px dotted #3c5462; }
+  .topbar a.back:hover{ color:var(--emf); }
+  .topbar .spacer{ flex:1; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid #3c5462; color:#9cc8e0; background:rgba(24,32,42,0.5); cursor:pointer; white-space:nowrap; }
+  .selftest.ok{ color:#9bd28e; border-color:rgba(120,200,130,0.5); background:rgba(26,50,34,0.45); }
+  .selftest.bad{ color:#e89a85; border-color:rgba(220,120,100,0.6); background:rgba(60,26,22,0.45); }
+
+  .wrap{ flex:1; display:flex; gap:16px; padding:16px; align-items:flex-start;
+    max-width:1340px; margin:0 auto; width:100%; }
+  @media (max-width:1000px){ .wrap{ flex-direction:column; align-items:stretch; } }
+
+  .stage{ flex:1; min-width:0; background:radial-gradient(120% 120% at 50% 35%, #11151c 0%, #0a0c10 70%);
+    border:1px solid #1f2832; border-radius:9px;
+    box-shadow:0 14px 50px rgba(0,0,0,.55), inset 0 0 90px rgba(60,150,200,.045);
+    position:relative; overflow:hidden; }
+  .stage canvas{ display:block; width:100%; height:auto; touch-action:none; }
+  .court-cap{ position:absolute; left:15px; top:12px; font:600 11px/1.35 var(--font-mono);
+    color:#7aa6c0; letter-spacing:.4px; pointer-events:none; text-shadow:0 1px 4px rgba(0,0,0,.85); max-width:64%; }
+  .court-cap em{ color:#a7c2d2; font-style:normal; font-weight:400; display:block; font-size:10px; margin-top:3px; }
+  .free-banner{ position:absolute; left:50%; top:14px; transform:translateX(-50%);
+    font:700 12.5px/1.3 var(--font-mono); letter-spacing:.4px; text-align:center;
+    color:#ffd9c8; background:rgba(120,30,20,0.86); border:1.5px solid var(--bad-hot);
+    border-radius:7px; padding:8px 14px; box-shadow:0 6px 24px rgba(180,50,30,.4);
+    opacity:0; pointer-events:none; transition:opacity .3s; max-width:84%; }
+  .free-banner.show{ opacity:1; }
+  .free-banner small{ display:block; font-weight:400; font-size:10px; color:#ffc6b0; margin-top:3px; }
+
+  .panel{ width:352px; flex:none; display:flex; flex-direction:column; gap:12px; color:#e8e2d2; }
+  @media (max-width:1000px){ .panel{ width:auto; } }
+  .card{ background:rgba(18,24,31,0.95); border:1px solid #232f3a; border-radius:8px; padding:12px 13px; }
+  .card h3{ margin:0 0 5px; font:600 11.5px/1.2 var(--font-mono); letter-spacing:.5px; color:#bfe2f4; text-transform:uppercase; }
+  .card p{ margin:6px 0 0; font:400 12.5px/1.5 var(--font-ser); color:#aebfcc; }
+  .card p b{ color:#d7e6f0; }
+
+  .reads{ display:flex; flex-direction:column; gap:6px; }
+  .read{ display:flex; align-items:baseline; justify-content:space-between; gap:8px;
+    font:400 12px/1.2 var(--font-mono); color:#9db4c2; padding:4px 0; border-bottom:1px dotted #243240; }
+  .read:last-child{ border-bottom:none; }
+  .read .v{ font-weight:600; color:#e8e2d2; font-size:13.5px; }
+  .read .v.emf{ color:var(--emf); } .read .v.gold{ color:var(--gold-hot); }
+  .read .v.bad{ color:#e89a85; } .read .v.good{ color:#9bd28e; } .read .v.copper{ color:var(--copper-hot); }
+
+  /* the V·I power bar (pinned while V and I trade) */
+  .bars{ display:flex; flex-direction:column; gap:9px; margin-top:2px; }
+  .bar-row .lab{ font:600 9.5px/1 var(--font-mono); letter-spacing:.3px; color:#94aab8; margin-bottom:3px; display:flex; justify-content:space-between; }
+  .bar-row .lab .amt{ color:#cfe0ec; }
+  .bar-track{ height:13px; border-radius:6px; background:rgba(40,52,64,0.7); border:1px solid #2a3946; overflow:hidden; position:relative; }
+  .bar-fill{ height:100%; width:0%; border-radius:5px; transition:width .12s linear; }
+  .bar-fill.gold{ background:linear-gradient(90deg,#b07a3e,var(--gold-hot)); }
+  .bar-fill.diverge{ background:linear-gradient(90deg,#a0392a,var(--bad-hot)); }
+  .bar-pin{ position:absolute; top:-3px; bottom:-3px; width:2px; background:rgba(255,255,255,0.5); }
+
+  /* the turns slider (drag-a-VALUE) */
+  .slider-wrap{ display:flex; flex-direction:column; gap:7px; }
+  .slider-wrap input[type=range]{ width:100%; margin:0; -webkit-appearance:none; appearance:none; background:transparent; height:30px; }
+  .slider-wrap input[type=range]::-webkit-slider-runnable-track{ height:7px; border-radius:6px;
+    background:linear-gradient(90deg,#2a3946 0%,var(--brass) 50%,var(--brass-hot) 100%); border:1px solid #34465a; }
+  .slider-wrap input[type=range]::-moz-range-track{ height:7px; border-radius:6px;
+    background:linear-gradient(90deg,#2a3946 0%,var(--brass) 50%,var(--brass-hot) 100%); border:1px solid #34465a; }
+  .slider-wrap input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:16px; height:24px; margin-top:-9px;
+    border-radius:4px; background:repeating-linear-gradient(90deg,#e9d9a8 0 2px,#b59a62 2px 4px);
+    border:1px solid #7a6438; box-shadow:0 2px 5px rgba(0,0,0,.5); cursor:grab; }
+  .slider-wrap input[type=range]::-moz-range-thumb{ width:16px; height:24px; border-radius:4px;
+    background:repeating-linear-gradient(90deg,#e9d9a8 0 2px,#b59a62 2px 4px); border:1px solid #7a6438; cursor:grab; }
+  .ratio-big{ font:700 18px/1 var(--font-mono); color:var(--brass-hot); text-align:center; margin:2px 0; }
+  .ratio-big small{ font-size:11px; color:#94aab8; font-weight:400; }
+  .step-tag{ display:inline-block; font:600 9.5px/1 var(--font-mono); padding:2px 6px; border-radius:4px;
+    margin-left:6px; vertical-align:middle; }
+  .step-tag.up{ color:#9bd28e; background:rgba(118,198,106,0.15); border:1px solid rgba(118,198,106,0.4); }
+  .step-tag.down{ color:#ff9d5c; background:rgba(217,138,82,0.15); border:1px solid rgba(217,138,82,0.4); }
+  .step-tag.iso{ color:#94aab8; background:rgba(120,140,150,0.12); border:1px solid rgba(120,140,150,0.3); }
+
+  .btnrow{ display:flex; gap:7px; flex-wrap:wrap; }
+  .btnrow button{ flex:1; min-width:0; font:600 10.5px/1.2 var(--font-mono); letter-spacing:.2px; padding:9px 6px; border-radius:6px;
+    border:1px solid #34465a; background:rgba(30,40,52,0.6); color:#a8c2d2; cursor:pointer; transition:all .18s; }
+  .btnrow button:hover{ border-color:var(--emf-dim); color:#cfe6f4; }
+  .btnrow button.brass.on{ background:rgba(176,141,79,0.18); border-color:var(--brass-hot); color:var(--brass-hot); }
+  .btnrow button.danger{ border-color:#5a3128; color:#e3a08c; }
+  .btnrow button.danger.on{ background:rgba(180,60,40,0.22); border-color:var(--bad-hot); color:#ffc2ad; }
+
+  .hint{ font:400 11.5px/1.5 var(--font-ser); color:#9fb4c2; }
+  p.recip{ font:400 12px/1.55 var(--font-ser); color:#9fb4c2; margin:14px 0 0; padding:11px 13px;
+    border:1px dashed #34465a; border-radius:7px; background:rgba(20,28,36,0.5); }
+  p.recip b{ color:#cfe0ec; }
+
+  .rail a{ display:flex; align-items:center; gap:9px; text-decoration:none; color:#cfe0ec; padding:7px 8px;
+    border-radius:6px; border:1px solid transparent; }
+  .rail a:hover{ background:rgba(127,212,255,0.06); border-color:#2a3946; }
+  .rail .g{ font-size:18px; flex:none; }
+  .rail .t{ font:600 12px/1.25 var(--font-ser); }
+  .rail .t em{ display:block; font-style:normal; font-weight:400; font-size:10.5px; color:#90a6b4; margin-top:2px; }
+
+  .engraved{ font:600 10px/1.4 var(--font-mono); color:#7e6a44; letter-spacing:.3px; text-align:center;
+    border-top:1px dotted #2a3946; padding-top:9px; margin-top:3px; }
+</style>
+
+<div class="topbar">
+  <span class="brand">The Transformer<span class="sub">· Electromagnetism · two coils, one flux</span></span>
+  <a class="back" href="../index.html">← The Lodestone Hall</a>
+  <a class="back" href="../../index.html">↑ The Orrery Estate</a>
+  <span class="spacer"></span>
+  <div class="selftest" id="selftest" title="built-in self-test — click for detail">checking&hellip;</div>
+</div>
+
+<div class="wrap">
+  <div class="stage">
+    <div class="court-cap" id="cap">THE TRANSFORMER &mdash; SLIDE THE TURNS, TRADE VOLTAGE FOR CURRENT
+      <em>two coils on one iron core, threaded by the SAME changing flux. V&middot;I is held; voltage up means current down.</em></div>
+    <div class="free-banner" id="freeBanner">⚠ CORE UNLINKED &mdash; V_s &asymp; 0 FOR ANY N_s
+      <small>it is the SHARED CHANGING flux, not the wire count, that makes the voltage</small></div>
+    <canvas id="xfmr"></canvas>
+  </div>
+
+  <div class="panel">
+    <div class="card">
+      <h3>Two Coils, One Flux</h3>
+      <p id="modeNote">A primary coil (left) drives a changing flux <b>&Phi;(t)</b> through the shared iron core; a secondary coil (right) reads the SAME flux with its own turn count. Each winding's voltage is <b>&minus;N&middot;d&Phi;/dt</b>, so <b>V_s/V_p === N_s/N_p</b> exactly &mdash; the turns ratio is the only lever. <b>Slide the turns</b> to step the voltage up or down; the power V&middot;I is carried across untouched.</p>
+    </div>
+
+    <div class="card">
+      <h3>The Turns Ratio</h3>
+      <div class="ratio-big" id="ratioBig">N_s/N_p = 0.50&times; <span class="step-tag down" id="stepTag">STEP DOWN</span></div>
+      <div class="slider-wrap">
+        <input type="range" id="turns" min="10" max="320" step="1" value="50">
+        <div class="read" style="border:none;padding:0">
+          <span>N_p (fixed) = <b id="npVal" style="color:#cfe0ec">100</b></span>
+          <span>N_s = <span class="v gold" id="nsVal">50</span></span>
+        </div>
+      </div>
+      <p>Drag a single number. More secondary turns &rarr; higher V_s, lower I_s. The wire visibly thins on the high-turns side &mdash; thinner wire, more turns, more volts, less current.</p>
+    </div>
+
+    <div class="card">
+      <h3>The Meters (live with the AC)</h3>
+      <div class="reads">
+        <div class="read"><span>primary V_p</span><span class="v emf" id="rVp">0.0</span></div>
+        <div class="read"><span>secondary V_s = V_p&middot;N_s/N_p</span><span class="v gold" id="rVs">0.0</span></div>
+        <div class="read"><span>primary I_p (drive)</span><span class="v copper" id="rIp">2.00</span></div>
+        <div class="read"><span>secondary I_s = I_p&middot;N_p/N_s</span><span class="v copper" id="rIs">4.00</span></div>
+      </div>
+      <p style="margin-top:8px">The two voltmeter needles move in <b>lockstep</b> (ratio N_s/N_p locked frame-by-frame); the two ammeter needles move <b>opposite</b>. As the alternator swings the AC, both swing &mdash; but their ratio never moves.</p>
+    </div>
+
+    <div class="card">
+      <h3>The Power Stays Pinned</h3>
+      <div class="bars">
+        <div class="bar-row">
+          <div class="lab"><span>V_p&middot;I_p (in)</span><span class="amt" id="aPin">held</span></div>
+          <div class="bar-track"><div class="bar-fill gold" id="barPow"></div><div class="bar-pin" id="powPin" style="left:0%"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="lab"><span>V_s&middot;I_s (out)</span><span class="amt" id="aPout">held</span></div>
+          <div class="bar-track"><div class="bar-fill gold" id="barPowOut"></div></div>
+        </div>
+      </div>
+      <p id="powNote">Slide the turns: the voltmeters and ammeters swap their readings, but both power bars stay at the <b>same length</b>. Ideal V_p&middot;I_p === V_s&middot;I_s &mdash; the shared flux carries the power across untouched.</p>
+    </div>
+
+    <div class="card">
+      <h3>The Alternator</h3>
+      <div class="btnrow">
+        <button id="btnRun" class="brass on">▶ crank the primary</button>
+      </div>
+      <p class="hint">The crank drives the primary's flux &mdash; the engine running. The turns slider is the lever you set on top of it.</p>
+    </div>
+
+    <div class="card">
+      <h3>The Knife-Switches</h3>
+      <div class="btnrow">
+        <button id="btnUnlink" class="danger">✂ unlink the core</button>
+        <button id="btnDC" class="danger">⊟ DC primary</button>
+      </div>
+      <p class="hint" id="hint"><b>Unlink the core</b> breaks the shared iron so the secondary sees a static field &mdash; V_s drops to zero for ANY N_s. <b>DC primary</b> stops the change (&omega;=0) so d&Phi;/dt=0 and both meters go dead. A transformer needs CHANGE.</p>
+    </div>
+
+    <p class="recip"><b>This is the Hall's coil, doubled:</b> there ONE coil read the moving magnet's flux; here a SECOND coil reads the FIRST's flux through shared iron &mdash; the turns ratio is the only new lever.</p>
+
+    <div class="card">
+      <h3>Kin</h3>
+      <div class="rail">
+        <a href="../the-whirligig/index.html" title="The Whirligig — the same coils & core run as a MOTOR/generator; here two coils TRADE through one shared flux."><span class="g">🔄</span><span class="t">The Whirligig<em>the same coils &amp; core run as a MOTOR/generator &mdash; here two coils TRADE through one shared flux</em></span></a>
+        <a href="../index.html" title="The Lodestone Hall — MOVE the magnet past the coil to make a current. Here a SECOND coil reads the first's flux through shared iron."><span class="g">🧲</span><span class="t">The Lodestone Hall<em>where the flux law lives &mdash; this bench imports its EMF oracle byte-true and calls it with a different N</em></span></a>
+      </div>
+      <div class="engraved">Every power line on Earth is this.<br>Step the voltage up to cross the country, step it down for your wall; the shared changing flux carries the power untouched.</div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+/* ════════════════════════════════════════════════════════════════════════════
+   THE TRANSFORMER — slide the turns, trade voltage for current. The SOLE turns-
+   ratio authority is the-transformer/core.mjs, FORGE-INLINED byte-for-byte
+   between the TRANSFORMER CORE BEGIN / END sentinels below; the page RUNS the
+   inlined copy and the in-page pill reruns the SAME runSelfTest() the Node twin
+   proves. NO transformer math lives on this page except inside the inlined slab.
+
+   The transformer slab references the PARENT oracle (emfAlternator / dFluxdTheta /
+   fluxAtAngle / SCENE / COIL), which is forge-inlined FIRST from ../core.mjs — the
+   SAME Φ both windings read. The parent slab is wrapped in a scoping IIFE that
+   EXPOSES only those five oracle symbols (so its own helpers — including its
+   runSelfTest — stay private and never collide with the transformer's), and the
+   transformer slab then reads them from the enclosing scope. All needle numbers
+   trace to the inlined emfAlternator / core; no page-side flux math (anti-circularity).
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── THE PARENT ORACLE (the Lodestone Hall's Φ / EMF core), forge-inlined byte-for-
+   byte from ../core.mjs and scoped so only the five oracle symbols escape. ──────── */
+const { emfAlternator, dFluxdTheta, fluxAtAngle, SCENE, COIL } = (() => {
+<!-- forge:include ../core.mjs -->
+return { emfAlternator, dFluxdTheta, fluxAtAngle, SCENE, COIL };
+})();
+
+/* ── THE TRANSFORMER CORE (the turns-ratio authority), forge-inlined byte-for-byte
+   from core.mjs; its slab reads the five oracle symbols above from this scope. ──── */
+<!-- forge:include core.mjs -->
+
+const $ = id => document.getElementById(id);
+
+const cvs = $('xfmr'), ctx = cvs.getContext('2d');
+let DPR = 1, CW = 0, CH = 0;
+function fit(){
+  const r = cvs.getBoundingClientRect();
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  CW = Math.max(360, r.width); CH = Math.round(CW * 0.60);
+  cvs.width = CW*DPR; cvs.height = CH*DPR;
+  cvs.style.height = CH + 'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+let REDUCED = false;
+try { REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch(e){}
+
+/* ── STATE. θ is the alternator crank angle (the parent oracle's input); the turns
+   slider sets Ns. Np / Ip / ω come from XFMR. The needle integrator (spring) is UX
+   feel ONLY — the numbers themselves come from the inlined oracle. ─────────────── */
+const state = {
+  theta: 0.5,            // alternator crank angle (rad)
+  running: true,         // crank the primary
+  Ns: XFMR.Ns,           // secondary turns (the lever)
+  unlinked: false,       // NEG(1) knife-switch
+  dc: false,             // NEG(2) knife-switch
+  // needle springs (ζ≈0.82 critically-ish damped) toward the live oracle values
+  nVp: 0, nVpV: 0, nVs: 0, nVsV: 0, nIp: 0, nIpV: 0, nIs: 0, nIsV: 0,
+  fluxPulse: 0,
+};
+
+const ZETA = 0.82, K = 220;   // needle-spring constants (UX feel, not the core)
+
+/* opts fed to the inlined core for the current switch state */
+function liveOpts(){ return { unlinkedCore: state.unlinked, dcPrimary: state.dc }; }
+
+/* the LIVE oracle reads — every number on the page traces here, to the inlined core */
+function readLive(){
+  const o = liveOpts(), om = XFMR.omega, Np = XFMR.Np, Ns = state.Ns, Ip = XFMR.Ip;
+  const Vp = primaryVoltage(state.theta, om, Np, o);
+  const Vs = secondaryVoltage(state.theta, om, Ns, o);
+  const Is = secondaryCurrent(Ip, Np, Ns);
+  const Pin  = powerThrough(state.theta, om, Np, Ip, o);          // V_p·I_p, from the core
+  const Pout = powerThrough(state.theta, om, Ns, Is, o);          // V_s·I_s, from the core
+  return { Vp, Vs, Ip, Is, Pin, Pout, Np, Ns, ratio: turnsRatio(Np, Ns) };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DRAW — an edge-on diorama: a shared iron core (laminations) between two coils.
+   ════════════════════════════════════════════════════════════════════════════ */
+function draw(){
+  ctx.clearRect(0,0,CW,CH);
+  ctx.fillStyle = '#0d0f14'; ctx.fillRect(0,0,CW,CH);
+
+  const live = readLive();
+  const dead = state.unlinked || state.dc;
+
+  drawCore(live, dead);
+  drawCoil('primary', live, dead);
+  drawCoil('secondary', live, dead);
+  drawVerdict(live, dead);
+}
+
+/* the shared horizontal iron core (laminations) with a cyan flux-glow that pulses
+   along it in step with |dΦ/dθ| when linked; a visible GAP when unlinked. */
+function drawCore(live, dead){
+  const cy = CH*0.50;
+  const x0 = CW*0.27, x1 = CW*0.73;
+  const h = Math.max(26, CH*0.10);
+  // laminations: a stack of thin brass bars
+  const nLam = 7;
+  for (let k = 0; k < nLam; k++){
+    const ly = cy - h/2 + (h/(nLam))*k;
+    ctx.fillStyle = k%2 ? 'rgba(120,94,48,0.85)' : 'rgba(160,128,70,0.9)';
+    ctx.fillRect(x0, ly, x1-x0, h/nLam - 1);
+  }
+  ctx.strokeStyle = 'rgba(201,170,107,0.5)'; ctx.lineWidth = 1;
+  ctx.strokeRect(x0, cy-h/2, x1-x0, h);
+
+  // the flux-glow: a moving cyan band along the core, brightness ∝ |dΦ/dθ| & live AC
+  if (!dead){
+    const om = XFMR.omega;
+    const dphi = Math.abs(dFluxdTheta(state.theta, SCENE.rig, COIL));
+    const intensity = Math.min(1, dphi * 6);
+    const t = REDUCED ? 0.5 : (performance.now()/700) % 1;
+    const bandW = (x1-x0)*0.22;
+    const bx = x0 + (x1-x0-bandW)*t;
+    const grd = ctx.createLinearGradient(bx, 0, bx+bandW, 0);
+    grd.addColorStop(0,'rgba(127,212,255,0)');
+    grd.addColorStop(0.5,'rgba(127,212,255,'+(0.35*intensity).toFixed(3)+')');
+    grd.addColorStop(1,'rgba(127,212,255,0)');
+    ctx.fillStyle = grd; ctx.fillRect(x0, cy-h/2, x1-x0, h);
+    // Φ cartouche
+    ctx.fillStyle = 'rgba(127,212,255,0.7)'; ctx.font='600 11px var(--font-mono)';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('Φ(t) ⟶ shared flux', CW*0.5, cy - h/2 - 12);
+  } else if (state.unlinked){
+    // draw the BROKEN gap
+    const gx = CW*0.5;
+    ctx.fillStyle = '#0d0f14'; ctx.fillRect(gx-9, cy-h/2-2, 18, h+4);
+    ctx.strokeStyle = 'rgba(226,107,77,0.9)'; ctx.lineWidth = 2; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(gx-9, cy-h/2-4); ctx.lineTo(gx-9, cy+h/2+4);
+    ctx.moveTo(gx+9, cy-h/2-4); ctx.lineTo(gx+9, cy+h/2+4); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,122,85,0.85)'; ctx.font='600 10px var(--font-mono)';
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText('core unlinked — flux stops here', gx, cy - h/2 - 8);
+  } else {
+    ctx.fillStyle = 'rgba(150,160,170,0.5)'; ctx.font='600 11px var(--font-mono)';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('ω = 0 — flux frozen (DC)', CW*0.5, cy - h/2 - 12);
+  }
+}
+
+/* a coil drawn as a vertical stack of ellipse rings around the core (the Hall's
+   drawCoil ellipse idiom). primary: fixed Np rings on the left; secondary: rings ∝
+   Ns/Np on the right, wire thins as turns rise. */
+function drawCoil(which, live, dead){
+  const cy = CH*0.50;
+  const isP = which === 'primary';
+  const cx = isP ? CW*0.20 : CW*0.80;
+  const turns = isP ? live.Np : live.Ns;
+  // ring count is a legible proxy of turns (capped for drawing)
+  const nRings = Math.max(4, Math.min(16, Math.round(turns / 24)));
+  const coilH = Math.max(70, CH*0.40);
+  const ry = (coilH/2) / nRings;
+  const rx = Math.max(20, CW*0.055);
+  // wire thickness: thinner on the high-turns side (more turns ⇒ thinner wire)
+  const wire = Math.max(1.4, 5.5 - nRings*0.28);
+
+  // is THIS coil energised? primary always (unless DC); secondary only if linked & AC
+  const energised = !dead && (isP || (!state.unlinked && !state.dc));
+  const v = isP ? live.Vp : live.Vs;
+  const glow = Math.min(1, Math.abs(v)/120);
+
+  for (let k = 0; k < nRings; k++){
+    const ry0 = cy - coilH/2 + ry*(2*k+1);
+    ctx.lineWidth = wire;
+    ctx.strokeStyle = energised
+      ? 'rgba(217,138,82,'+(0.55 + 0.4*glow).toFixed(3)+')'
+      : 'rgba(110,98,78,0.5)';
+    ctx.beginPath();
+    ctx.ellipse(cx, ry0, rx, ry*0.92, 0, 0, Math.PI*2);
+    ctx.stroke();
+    // a cyan highlight arc on the front when energised (the induced EMF glow)
+    if (energised && glow > 0.05){
+      ctx.strokeStyle = 'rgba(127,212,255,'+(0.3*glow).toFixed(3)+')';
+      ctx.lineWidth = wire*0.6;
+      ctx.beginPath();
+      ctx.ellipse(cx, ry0, rx*0.92, ry*0.85, 0, Math.PI*0.15, Math.PI*0.85);
+      ctx.stroke();
+    }
+  }
+
+  // a needle-voltmeter under each coil reading its V (springy needle)
+  drawMeter(cx, cy + coilH/2 + 40, isP ? state.nVp : state.nVs, isP ? '#7fd4ff' : '#ffd166',
+            (isP?'V_p ':'V_s ') + (isP ? live.Vp : live.Vs).toFixed(0), 200, energised);
+  // an ammeter beside it reading its I
+  drawMeter(cx, cy - coilH/2 - 40, isP ? state.nIp : state.nIs, '#ff9d5c',
+            (isP?'I_p ':'I_s ') + (isP ? live.Ip : live.Is).toFixed(2), XFMR.I_max, !dead, true);
+
+  // coil label
+  ctx.fillStyle = energised ? 'rgba(217,138,82,0.9)' : 'rgba(140,150,160,0.7)';
+  ctx.font='600 11px var(--font-mono)'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText((isP?'PRIMARY  N_p=':'SECONDARY  N_s=') + turns, cx, cy + coilH/2 + 64);
+}
+
+/* a small brass needle-meter: a half-dial with a needle at value/scale */
+function drawMeter(cx, cy, needleVal, col, label, scale, energised, signed){
+  const R = Math.max(22, CW*0.05);
+  ctx.fillStyle = 'rgba(20,26,33,0.85)';
+  ctx.beginPath(); ctx.arc(cx, cy, R+5, Math.PI, 2*Math.PI); ctx.fill();
+  ctx.strokeStyle = '#8a6f3f'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI, 2*Math.PI); ctx.stroke();
+  // needle: map needleVal∈[−scale,scale] (signed) or [0,scale] to angle π..2π
+  let frac;
+  if (signed){ frac = 0.5 + 0.5*Math.max(-1, Math.min(1, needleVal/scale)); }
+  else { frac = Math.max(0, Math.min(1, Math.abs(needleVal)/scale)); }
+  const a = Math.PI + frac*Math.PI;
+  ctx.strokeStyle = energised ? col : 'rgba(180,180,180,0.4)';
+  ctx.lineWidth = 2; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a)*(R-4), cy + Math.sin(a)*(R-4)); ctx.stroke();
+  ctx.fillStyle = '#c9aa6b'; ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = energised ? col : 'rgba(150,160,170,0.6)';
+  ctx.font='600 9.5px var(--font-mono)'; ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText(label, cx, cy + 4);
+}
+
+function drawVerdict(live, dead){
+  const x = CW*0.5, y = 70;
+  let txt, col;
+  if (state.unlinked){
+    txt = '✗ core unlinked ⇒ V_s ≈ 0 for ANY N_s — it is the SHARED flux, not the wire count'; col = '#ff7a55';
+  } else if (state.dc){
+    txt = '✗ DC ⇒ dΦ/dt = 0 ⇒ both meters dead — a transformer needs CHANGE'; col = '#ff7a55';
+  } else {
+    const r = live.ratio;
+    const kind = r > 1.001 ? 'STEP UP' : r < 0.999 ? 'STEP DOWN' : 'ISOLATION';
+    txt = 'V_s/V_p = N_s/N_p = ' + r.toFixed(2) + '× — ' + kind + ', V·I held'; col = '#9bd28e';
+  }
+  ctx.font='700 12px var(--font-mono)'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillText(txt, x+1, y+1);
+  ctx.fillStyle = col; ctx.fillText(txt, x, y);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   INTERACTION
+   ════════════════════════════════════════════════════════════════════════════ */
+$('turns').addEventListener('input', ()=>{
+  state.Ns = parseInt($('turns').value, 10);
+  updateRatioUI();
+});
+$('btnRun').addEventListener('click', ()=>{
+  state.running = !state.running;
+  $('btnRun').classList.toggle('on', state.running);
+  $('btnRun').textContent = state.running ? '▶ crank the primary' : '⏸ primary stopped';
+});
+$('btnUnlink').addEventListener('click', ()=>{
+  state.unlinked = !state.unlinked;
+  if (state.unlinked) state.dc = false;
+  syncSwitches();
+});
+$('btnDC').addEventListener('click', ()=>{
+  state.dc = !state.dc;
+  if (state.dc) state.unlinked = false;
+  syncSwitches();
+});
+
+function syncSwitches(){
+  $('btnUnlink').classList.toggle('on', state.unlinked);
+  $('btnDC').classList.toggle('on', state.dc);
+  $('btnUnlink').textContent = state.unlinked ? '✂ core UNLINKED' : '✂ unlink the core';
+  $('btnDC').textContent = state.dc ? '⊟ DC primary ON' : '⊟ DC primary';
+  $('freeBanner').classList.toggle('show', state.unlinked);
+  if (state.dc){ $('freeBanner').classList.add('show'); $('freeBanner').innerHTML =
+    '⚠ DC PRIMARY &mdash; dΦ/dt = 0, BOTH METERS DEAD<small>a transformer needs CHANGE; it cannot transform DC</small>'; }
+  else if (state.unlinked){ $('freeBanner').innerHTML =
+    '⚠ CORE UNLINKED &mdash; V_s ≈ 0 FOR ANY N_s<small>it is the SHARED CHANGING flux, not the wire count, that makes the voltage</small>'; }
+  setTimeout(runPill, 0);
+}
+
+function updateRatioUI(){
+  const Np = XFMR.Np, Ns = state.Ns, r = turnsRatio(Np, Ns);
+  $('nsVal').textContent = Ns;
+  $('npVal').textContent = Np;
+  const kind = r > 1.001 ? 'up' : r < 0.999 ? 'down' : 'iso';
+  const word = kind === 'up' ? 'STEP UP' : kind === 'down' ? 'STEP DOWN' : 'ISOLATION';
+  $('ratioBig').innerHTML = 'N_s/N_p = ' + r.toFixed(2) + '× <span class="step-tag ' + kind + '" id="stepTag">' + word + '</span>';
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   LOOP — advance the crank, spring the needles toward the live oracle reads
+   ════════════════════════════════════════════════════════════════════════════ */
+let lastT = performance.now();
+function frame(now){
+  let dt = Math.min(0.05, (now-lastT)/1000); lastT = now;
+  if (REDUCED) dt = Math.min(dt, 0.033);
+
+  if (state.running && !state.dc) state.theta += XFMR.omega * dt;
+  if (state.theta > 8*Math.PI) state.theta -= 2*Math.PI;
+
+  // spring each needle toward its live oracle target (ζ≈0.82); snap if reduced-motion
+  const live = readLive();
+  springTo('nVp','nVpV', live.Vp, dt);
+  springTo('nVs','nVsV', live.Vs, dt);
+  springTo('nIp','nIpV', state.unlinked||state.dc ? 0 : live.Ip, dt);
+  springTo('nIs','nIsV', state.unlinked||state.dc ? 0 : live.Is, dt);
+
+  draw();
+  updateHUD(live);
+  requestAnimationFrame(frame);
+}
+
+function springTo(posKey, velKey, target, dt){
+  if (REDUCED){ state[posKey] = target; state[velKey] = 0; return; }
+  const x = state[posKey], v = state[velKey];
+  const a = K*(target - x) - 2*ZETA*Math.sqrt(K)*v;
+  state[velKey] = v + a*dt;
+  state[posKey] = x + state[velKey]*dt;
+}
+
+function updateHUD(live){
+  $('rVp').textContent = live.Vp.toFixed(1);
+  $('rVs').textContent = live.Vs.toFixed(1);
+  $('rIp').textContent = (state.unlinked||state.dc ? 0 : live.Ip).toFixed(2);
+  $('rIs').textContent = (state.unlinked||state.dc ? 0 : live.Is).toFixed(2);
+  // power bars — read powerThrough (NOT recompute V·I). |Pin|, |Pout| equal frame-by-frame.
+  const Pmax = XFMR.Np * 1.0 * XFMR.Ip * 4;  // a stable reference scale for the bar
+  // use the peak |Vp·Ip| as a scale so the bar reads a steady fraction; here just |Pin|.
+  const scale = 600;  // fixed display scale (volts·amps), bars read |power|/scale
+  const pin = Math.abs(live.Pin), pout = Math.abs(live.Pout);
+  const pctIn = Math.min(100, pin/scale*100), pctOut = Math.min(100, pout/scale*100);
+  $('barPow').style.width = pctIn.toFixed(1)+'%';
+  $('barPowOut').style.width = pctOut.toFixed(1)+'%';
+  $('powPin').style.left = pctIn.toFixed(1)+'%';
+  $('aPin').textContent = (state.unlinked||state.dc ? '0' : pin.toFixed(0));
+  $('aPout').textContent = (state.unlinked||state.dc ? '0' : pout.toFixed(0));
+  const diverge = state.unlinked || state.dc;
+  $('barPow').classList.toggle('diverge', diverge);
+  $('barPowOut').classList.toggle('diverge', diverge);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE SELF-TEST PILL — calls the inlined core's runSelfTest() (the SAME authority
+   the twin replays). No separate page logic ⇒ no drift.
+   ════════════════════════════════════════════════════════════════════════════ */
+function runTransformerTest(){ return runSelfTest(); }
+
+function runPill(){
+  const st = runTransformerTest();
+  const pill = $('selftest');
+  const dead = state.unlinked || state.dc;
+  pill.classList.toggle('ok', st.ok && !dead);
+  pill.classList.toggle('bad', !st.ok || dead);
+  if (state.unlinked){
+    pill.textContent = '✗ core unlinked ⇒ V_s ≈ 0';
+  } else if (state.dc){
+    pill.textContent = '✗ DC ⇒ both meters dead';
+  } else {
+    pill.textContent = (st.ok?'✓ ':'✗ ') + st.passed + '/' + st.total + ' self-test';
+  }
+  pill.onclick = ()=> alert(st.checks.map(c => (c.pass?'✓ ':'✗ ') + c.name + '\n   ['+c.info+']').join('\n\n'));
+  st.checks.forEach(c => console.log((c.pass?'PASS':'FAIL')+'  '+c.name+'  ['+c.info+']'));
+  window.__transformerSelfTest = { passed: st.passed, total: st.total, ok: st.ok };
+}
+
+/* ── publisher's probe handle ── */
+window.__transformer = { state, XFMR, runSelfTest };
+
+/* ── ws:seen breadcrumb (sub-bench: same grammar, no front-door footprint) ── */
+try{ const k='ws:seen:the-transformer'; if(!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
+
+/* ── boot ── */
+function boot(){
+  fit();
+  state.Ns = parseInt($('turns').value, 10);
+  updateRatioUI();
+  syncSwitches();
+  requestAnimationFrame(frame);
+  if ('requestIdleCallback' in window) requestIdleCallback(runPill, {timeout:1500});
+  else setTimeout(runPill, 90);
+}
+window.addEventListener('resize', fit);
+boot();
+</script>

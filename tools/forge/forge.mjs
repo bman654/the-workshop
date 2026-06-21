@@ -30,17 +30,40 @@ const SKIP_DIRS = new Set(['.git', 'node_modules']);
 /* A forge-level error we present cleanly (no raw stack at the user). */
 class ForgeError extends Error {}
 
-/* ── Strip the dual-use module guard + leading `export ` from an included .js or
-   .mjs so the inline is clean in a browser (the guard is inert there, but ugly,
-   and a bare `export` is a syntax error in a non-module <script>). We drop
-   any line that is a `if (typeof module !== 'undefined' && module.exports) {...}`
-   guard — both the single-line form and a multi-line `{ ... }` block — and strip a
-   leading `export ` keyword on declarations. */
+/* ── Strip the dual-use module guard + leading `export ` + bare top-level `import`s
+   from an included .js / .mjs so the inline is clean in a browser. The guard is
+   inert there but ugly; a bare `export` is a syntax error in a non-module <script>;
+   and a top-level `import … from '…'` re-declares symbols that a SIBLING include
+   already inlined (one core importing another's slab into the same page) — so we
+   drop it. We remove: any `if (typeof module !== 'undefined' && module.exports)`
+   guard (single-line or multi-line `{ … }` block); a leading `export ` keyword on
+   declarations; and a whole-line static `import` statement (`import … from '…';`,
+   `import '…';`, default / namespace / named forms). Dynamic `import(…)` calls are
+   NOT line-anchored static imports and are left untouched. */
+const STATIC_IMPORT = /^[ \t]*import\b(?:[^'"]*\bfrom\b)?\s*['"][^'"]+['"]\s*;?[ \t]*$/;
 function stripModuleGuard(src) {
   const lines = src.split('\n');
   const out = [];
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
+    // drop a whole-line static ES import (its symbols come from a sibling include)
+    if (STATIC_IMPORT.test(line)) continue;
+    // drop a named re-export list `export { … };` (single-line or multi-line block).
+    // It has no meaning in an inlined script, and is illegal if the inline sits in a
+    // nested scope (e.g. a parent core wrapped in a scoping IIFE). Declarations keep
+    // their value (the `export ` keyword is stripped below); only the list form goes.
+    if (/^[ \t]*export\s*\{/.test(line)) {
+      let inBraces = false, j = i;
+      for (; j < lines.length; j++) {
+        for (const ch of lines[j]) {
+          if (ch === '{') inBraces = true;
+          else if (ch === '}') inBraces = false;
+        }
+        if (!inBraces && /\}/.test(lines[j])) break;   // closing brace seen on this line
+      }
+      i = j; // skip through the closing line of the export list
+      continue;
+    }
     const guardStart = /^\s*if\s*\(\s*typeof\s+module\s*!==\s*['"]undefined['"]\s*&&\s*module\.exports\s*\)/;
     if (guardStart.test(line)) {
       // Consume the whole guard. If it closes on the same line (balanced braces),
