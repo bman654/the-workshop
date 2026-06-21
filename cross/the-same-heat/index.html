@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Same Heat — a language model's split and a Brownian ratchet's bias share one temperature dial</title>
+<!--
+   THE SAME HEAT — a cross of The Temperature Dial (clockwork/) × The Brownian Ratchet (engine-room/).
+   The logic CORE (core.mjs) is inlined byte-for-byte between the sentinels below; the in-page chip
+   calls the SAME runSelfTest() the Node twin (core.test.mjs) runs. ONE law: e^(−E/T). A model's
+   softmax log-odds is GAP/T; a ratchet's hop-bias log-odds is (−2τ)/T — both lines through the origin.
+   ONE thermostat bead pierces the dividing mullion, so the same heat straddles a mind and a gas; tune
+   −2τ to the logit gap and the two markers SNAP onto one gold Boltzmann line. NEG-CONTROL: a knife-
+   switch swaps softmax's exp for a non-Boltzmann normalizer — the line BENDS and no τ can align it.
+   Both parent cores are imported byte-untouched; this cross core is the SOLE authority for the map.
+-->
+<style>
+  :root{
+    --bg:#07080c;
+    --plate1:#12100a;
+    --plate2:#0b0a07;
+    --ink:#efe9da;
+    --ink-dim:#a59c87;
+    --gold:#c9a24a;              /* the brass / the Boltzmann line */
+    --gold-hi:#f4d27a;           /* lit gold (bead, hub, the merge bloom) */
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.40);
+    --mind:#7fb6ff;              /* the model / cool-blue MIND marker */
+    --mind-soft:rgba(127,182,255,0.13);
+    --gas:#f0846f;              /* the gas / ember-red GAS marker */
+    --gas-soft:rgba(240,132,111,0.12);
+    --bronze:#b88a4e;          /* the mistuned (separate) ray */
+    --amber:#f0b45a;           /* the warm fluid in the mind cylinders */
+    --cold:#3a6bd6;            /* deep-blue cold end of the capillary */
+    --hot:#fff2dc;             /* white-hot end of the capillary */
+    --panel:rgba(11,10,7,0.86);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1200px 720px at 50% -12%, rgba(201,162,74,0.09), transparent 56%),
+      radial-gradient(900px 640px at 13% 112%, rgba(127,182,255,0.05), transparent 60%),
+      radial-gradient(900px 640px at 87% 114%, rgba(240,132,111,0.05), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  /* faint engineering-paper grid behind everything */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(201,162,74,0.05) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(201,162,74,0.045) 0 1px, transparent 1px 32px);
+    mask-image:radial-gradient(1100px 760px at 50% 36%, #000 30%, transparent 78%);
+  }
+
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding:13px 20px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(7,8,12,0.95), rgba(7,8,12,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:5px; }
+  .back{ font:600 10.5px/1.3 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.22s; white-space:nowrap; }
+  .back:hover{ color:var(--gold-hi); opacity:1; }
+  .brand{ text-align:center; flex:1 1 auto; pointer-events:none; padding-top:1px; }
+  .brand h1{ margin:0; font-family:var(--font-serif); font-weight:600; font-size:clamp(17px,2.4vw,21px);
+    letter-spacing:.4px; color:var(--gold-hi); }
+  .brand .tag{ display:block; font:11px/1.3 var(--font-serif); font-style:italic; color:var(--ink-dim); margin-top:1px; }
+  .selftest{ font:600 10px/1.35 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:18px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.42); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); max-width:240px; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(24,46,32,0.5); }
+  .selftest.bad{ color:var(--gas); border-color:rgba(240,132,111,0.6); background:rgba(58,26,22,0.5); }
+
+  /* ── self-test detail panel ── */
+  #stPanel{ position:fixed; top:54px; right:18px; z-index:60; width:min(480px,92vw);
+    background:var(--panel); border:1px solid var(--gold-edge); border-radius:12px; padding:16px 18px 14px;
+    box-shadow:0 18px 50px rgba(0,0,0,0.6); display:none; }
+  #stPanel.show{ display:block; }
+  #stPanel h2{ margin:0 0 4px; font:600 13px/1.2 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--gold-hi); }
+  #stPanel .sub{ margin:0 0 10px; font:12px/1.5 var(--font-serif); color:var(--ink-dim); }
+  #stList{ font:11px/1.55 var(--font-mono); max-height:46vh; overflow:auto; }
+  #stList .row{ display:flex; gap:8px; padding:2px 0; }
+  #stList .row .m{ flex:0 0 auto; }
+  #stList .ok{ color:#8fd79a; } #stList .no{ color:var(--gas); }
+  #stPanel .foot{ margin-top:10px; padding-top:9px; border-top:1px solid rgba(201,162,74,0.16);
+    font:11px/1.6 var(--font-serif); color:var(--ink-dim); }
+  #stPanel .closeX{ position:absolute; top:9px; right:11px; background:none; border:none; color:var(--ink-dim);
+    font-size:18px; cursor:pointer; line-height:1; }
+
+  /* ── layout ── */
+  main{ position:relative; z-index:1; max-width:1120px; margin:0 auto; padding:74px 20px 56px; }
+  .hero{ text-align:center; margin-bottom:14px; }
+  .hero .eyebrow{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3em; text-transform:uppercase; color:var(--gold); opacity:.9; }
+  .hero .lede{ max-width:760px; margin:12px auto 0; font:15px/1.6 var(--font-serif); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--gold-hi); font-weight:600; } .hero .lede i{ font-style:italic; }
+  .hero .lede .law{ font-family:var(--font-mono); color:var(--gold); font-style:normal; }
+  .hero .lede .mn{ color:var(--mind); } .hero .lede .gs{ color:var(--gas); }
+
+  /* ── the instrument: a brass-rivet panel ── */
+  .instrument{ margin:22px 0 0; border-radius:18px; position:relative;
+    border:1px solid rgba(201,162,74,0.30);
+    background:
+      linear-gradient(115deg, rgba(255,255,255,0.04) 0%, transparent 20%, transparent 80%, rgba(255,255,255,0.025) 100%),
+      linear-gradient(180deg, var(--plate1), var(--plate2));
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 24px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+    padding:16px 16px 18px; }
+  .instrument::before, .instrument::after{ content:''; position:absolute; width:7px; height:7px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #f0d894, #9a7a32); box-shadow:0 0 4px rgba(0,0,0,0.6); }
+  .instrument::before{ top:11px; left:11px; }
+  .instrument::after{ top:11px; right:11px; }
+
+  /* the two glass bays under one face, separated by the mullion the capillary pierces */
+  .face{ display:grid; grid-template-columns:1fr 1fr; gap:0; position:relative; }
+  .bay{ border:1px solid var(--gold-edge); background:linear-gradient(180deg,#0b0d0a,#070a08);
+    padding:11px 13px 9px; position:relative; overflow:hidden; }
+  .bay.mind{ border-top-left-radius:12px; border-bottom-left-radius:12px; border-right:none; }
+  .bay.gas{ border-top-right-radius:12px; border-bottom-right-radius:12px; }
+  .bhead{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin:0 0 7px; }
+  .btitle{ font-weight:600; font-size:13.5px; letter-spacing:.02em; font-family:var(--font-serif); }
+  .bay.mind .btitle{ color:var(--mind); }
+  .bay.gas .btitle{ color:var(--gas); }
+  .bsub{ font:9.5px/1.3 var(--font-mono); letter-spacing:.03em; color:var(--ink-dim); text-align:right; }
+  canvas.cv{ display:block; width:100%; height:auto; border-radius:8px; background:#06080a;
+    border:1px solid rgba(255,255,255,0.04); }
+  .cap{ font:9.5px/1.45 var(--font-mono); color:var(--ink-dim); margin:7px 1px 0; letter-spacing:.01em; }
+  .cap b{ color:var(--gold-hi); font-weight:600; } .cap .mn{ color:var(--mind); } .cap .gs{ color:var(--gas); }
+
+  /* the dividing mullion — a brass column down the centre; the capillary crosses it */
+  .mullion{ position:absolute; top:0; bottom:0; left:50%; width:5px; transform:translateX(-50%); z-index:3;
+    background:linear-gradient(180deg, #9a7a32, #6f5722); box-shadow:0 0 0 1px rgba(0,0,0,0.5), inset 0 0 3px rgba(0,0,0,0.6);
+    pointer-events:none; }
+
+  /* the ONE shared capillary + bead row (the load-bearing legibility win) */
+  .capillaryrow{ position:relative; margin:13px 1px 2px; height:30px; }
+  .capillary{ position:absolute; left:0; right:0; top:50%; height:9px; transform:translateY(-50%);
+    border-radius:9px; border:1px solid var(--gold-edge);
+    /* one continuous thermal gradient straddling both worlds: deep-blue cold → white-hot */
+    background:linear-gradient(90deg, var(--cold) 0%, #7a86c8 28%, #d9b06a 60%, var(--hot) 100%);
+    box-shadow:inset 0 1px 2px rgba(0,0,0,0.5); }
+  .capLabel{ position:absolute; top:-15px; font:8.5px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.06em; }
+  .capLabel.lo{ left:2px; color:#8fb0ff; } .capLabel.hi{ right:2px; color:var(--hot); }
+  .bead{ position:absolute; top:50%; width:26px; height:26px; transform:translate(-50%,-50%); border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #fff0c8, #c79a3a 70%, #8a6a26);
+    border:2px solid #07080c; cursor:grab; z-index:6; touch-action:none;
+    box-shadow:0 0 12px rgba(201,162,74,0.6), inset 0 1px 2px rgba(255,255,255,0.4); }
+  .bead:active{ cursor:grabbing; }
+  .bead:focus{ outline:none; box-shadow:0 0 0 3px rgba(244,210,122,0.6), 0 0 14px rgba(201,162,74,0.7); }
+  .beadT{ position:absolute; top:-22px; left:50%; transform:translateX(-50%); white-space:nowrap;
+    font:600 10px/1 var(--font-mono); color:var(--gold-hi); }
+
+  /* the gold-ray panel (the climax) spanning both bays below the capillary */
+  .raypanel{ margin:10px 1px 0; border:1px solid var(--gold-edge); border-radius:12px; overflow:hidden;
+    background:linear-gradient(180deg,#0a0c09,#06080a); position:relative; }
+  canvas#cvRay{ display:block; width:100%; height:auto; }
+  .raylabel{ position:absolute; top:8px; left:12px; font:9.5px/1.3 var(--font-mono); color:var(--ink-dim); letter-spacing:.04em; }
+  .cartouche{ position:absolute; top:8px; right:12px; font:600 9.5px/1.2 var(--font-mono); letter-spacing:.1em;
+    text-transform:uppercase; padding:5px 11px; border-radius:8px; border:1px solid var(--gold-edge);
+    background:#1a1408; color:var(--ink-dim); transition:.18s; }
+  .cartouche.on{ color:var(--gold-hi); border-color:rgba(244,210,122,0.75);
+    background:radial-gradient(circle at 30% 30%, rgba(244,210,122,0.28), rgba(40,26,8,0.9));
+    box-shadow:0 0 16px rgba(244,210,122,0.45), 0 0 0 1px rgba(201,162,74,0.55); }
+  .cartouche.bloom{ animation:bloomflash 220ms ease-out; }
+  @keyframes bloomflash{ 0%{ transform:scale(1);} 45%{ transform:scale(1.07);} 100%{ transform:scale(1);} }
+  @media (prefers-reduced-motion: reduce){ .cartouche.bloom{ animation:none; } }
+
+  /* ── controls ── */
+  .controls{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin:16px 2px 2px; }
+  .tunewrap{ display:flex; align-items:center; gap:12px; flex:1 1 340px; min-width:280px; }
+  .tunewrap label{ font:10px/1.25 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--bronze); white-space:nowrap; }
+  .tunewrap label b{ color:var(--gold-hi); }
+  .tval{ font:600 15px/1 var(--font-mono); color:var(--gold-hi); min-width:11ch; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; height:6px; border-radius:6px; flex:1;
+    background:linear-gradient(90deg, #2a2418, var(--bronze)); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:20px; height:20px; border-radius:50%;
+    background:radial-gradient(circle at 36% 30%, #f3e0a0, #a8772e); border:2px solid #07080c; cursor:pointer;
+    box-shadow:0 0 8px rgba(184,138,78,0.55); }
+  input[type=range]::-moz-range-thumb{ width:18px; height:18px; border-radius:50%;
+    background:radial-gradient(circle at 36% 30%, #f3e0a0, #a8772e); border:2px solid #07080c; cursor:pointer; }
+  .btn{ font:600 11px/1 var(--font-mono); padding:9px 14px; border-radius:8px; border:1px solid var(--gold-edge);
+    background:rgba(0,0,0,0.3); color:var(--ink); cursor:pointer; transition:.16s; letter-spacing:.04em; }
+  .btn:hover{ border-color:var(--gold); background:var(--gold-soft); }
+  .btn.snapped{ color:var(--gold-hi); border-color:var(--gold); background:var(--gold-soft); }
+
+  /* the knife-switch (Boltzmann ⟷ not-Boltzmann) — a real two-position toggle */
+  .knife{ display:flex; align-items:stretch; border:1px solid var(--gold-edge); border-radius:9px; overflow:hidden; }
+  .knife .klabel{ font:9px/1.3 var(--font-mono); letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim);
+    padding:0 10px; align-self:center; max-width:120px; }
+  .knife button{ font:600 10.5px/1 var(--font-mono); padding:9px 12px; background:rgba(0,0,0,0.3); color:var(--ink-dim);
+    border:none; border-left:1px solid var(--gold-edge); cursor:pointer; transition:.16s; letter-spacing:.03em; }
+  .knife button.on{ background:var(--gas-soft); color:var(--gas); }
+  .verdict{ display:inline-flex; align-items:center; gap:7px; font:600 10px/1 var(--font-mono); letter-spacing:.08em;
+    text-transform:uppercase; padding:7px 11px; border-radius:18px; border:1px solid rgba(120,200,130,0.5);
+    background:rgba(24,46,32,0.45); color:#8fd79a; transition:.18s; }
+  .verdict.bad{ border-color:rgba(240,132,111,0.6); background:rgba(58,26,22,0.5); color:var(--gas); }
+
+  .hint{ font:10.5px/1.55 var(--font-mono); color:var(--ink-dim); margin:11px 2px 0; }
+  .hint b{ color:var(--gold-hi); font-weight:600; }
+  .hint .mn{ color:var(--mind); } .hint .gs{ color:var(--gas); }
+
+  /* ── honest framing block ── */
+  .honest{ margin:22px 0 0; border:1px solid var(--gold-edge); border-radius:12px; padding:14px 16px;
+    background:rgba(0,0,0,0.22); }
+  .honest h2{ font:600 11px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--gold); margin:0 0 8px; }
+  .honest ul{ margin:0; padding-left:18px; }
+  .honest li{ font:13px/1.6 var(--font-serif); color:var(--ink); margin:0 0 5px; }
+  .honest li b{ color:var(--gold-hi); }
+  .honest li .ok{ color:#8fd79a; } .honest li .no{ color:var(--gas); }
+  .honest code{ font:12px/1 var(--font-mono); color:var(--gold-hi); }
+
+  .crumbs-foot{ margin:22px 0 0; display:flex; gap:18px; flex-wrap:wrap; }
+  .crumbs-foot a{ font:600 11px/1 var(--font-mono); letter-spacing:.06em; color:var(--ink-dim); text-decoration:none; transition:.16s; }
+  .crumbs-foot a:hover{ color:var(--gold-hi); }
+  .crumbs-foot a .arr{ color:var(--gold); }
+
+  @media (max-width:760px){
+    /* keep the header on-screen: let it wrap and shrink the brand so the self-test pill never spills off the right edge */
+    .topbar{ flex-wrap:wrap; padding:10px 12px; gap:8px 10px; }
+    .backs{ order:1; flex:0 1 auto; }
+    .selftest{ order:2; margin-left:auto; }
+    .brand{ order:3; flex:1 1 100%; text-align:left; padding-top:2px; }
+    .brand .tag{ display:none; }            /* drop the long decorative tagline on mobile — the title carries it */
+    /* the wrapped header (backs + pill row, then the title) is taller than the desktop 74px — clear it */
+    main{ padding-top:124px; }
+    .face{ grid-template-columns:1fr; }
+    .bay.mind{ border-radius:12px 12px 0 0; border-right:1px solid var(--gold-edge); border-bottom:none; }
+    .bay.gas{ border-radius:0 0 12px 12px; }
+    .mullion{ left:0; right:0; top:50%; bottom:auto; width:auto; height:5px; transform:translateY(-50%);
+      background:linear-gradient(90deg,#9a7a32,#6f5722); }
+    .tunewrap{ flex:1 1 100%; min-width:0; }
+    .tval{ min-width:0; }
+    .controls{ gap:12px; }
+    .knife{ flex:1 1 100%; }
+    .knife .klabel{ max-width:none; flex:1 1 auto; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../../workbench/index.html">&larr; The Workbench</a>
+      <a class="back" href="../../clockwork/temperature.html">&#8599; the mind — The Temperature Dial</a>
+      <a class="back" href="../../engine-room/brownian/index.html">&#8599; the gas — The Brownian Ratchet</a>
+    </div>
+    <div class="brand">
+      <h1>The Same Heat</h1>
+      <span class="tag">one bead pierces both worlds · a mind's split &amp; a gas's bias · the Boltzmann line they share</span>
+    </div>
+    <div class="selftest" id="selftest" title="The cross proves e^(−E/T) is one law: a model's softmax log-odds is GAP/T, a ratchet's hop-bias is (−2τ)/T — tune −2τ to the gap and they coincide. Click for detail.">checking&hellip;</div>
+  </div>
+
+  <div id="stPanel">
+    <button class="closeX" id="stClose" title="close">&times;</button>
+    <h2>Self&#8209;test</h2>
+    <p class="sub" id="stSub">&hellip;</p>
+    <div id="stList"></div>
+    <div class="foot">There is ONE exponential, <code>e<sup>−E/T</sup></code>, under two knobs. A language model's
+      softmax makes the word-split log-odds <code>ln(p_the/p_on) = GAP/T</code>; a Brownian ratchet's single-bath
+      hop rates make the bias log-odds <code>ln(r_fwd/r_bwd) = (−2τ)/T</code>. Both are lines through the origin
+      (T→∞ ⇒ 50/50), so the only freedom is the slope. Tune the gas's load so <code>−2τ = GAP</code> and the two
+      lines are the SAME line, to machine precision, for every T. The neg-control swaps softmax's <code>exp</code>
+      for a non-Boltzmann normalizer — the line BENDS and no τ can align it: it is the exponential, not the
+      apparatus, that makes T the same dial. The two parent cores are imported byte-for-byte and the adapters
+      share no code.</div>
+  </div>
+
+  <main>
+    <div class="hero">
+      <span class="eyebrow">a cross · The Temperature Dial × The Brownian Ratchet</span>
+      <p class="lede">
+        Drag <b>one</b> brass thermostat bead and two machines that never met move in lockstep. A
+        <span class="mn">language model</span> warms or cools its guess — cold, the word <i>the</i> brims and
+        <i>on</i> empties; hot, both drift to <i>50/50</i>. A <span class="gs">Brownian ratchet</span> warms or
+        cools its wheel — cold, it creeps decisively forward; hot, it jitters net-zero. The bead is ONE object
+        seen through two windows, on one capillary that glows <span class="law">deep-blue cold → white-hot</span>
+        straight across the dividing column. Below, both drop a live marker on a gold-ray panel at <span class="law">x = 1/T</span>:
+        a <span class="mn">mind</span> at <span class="law">GAP/T</span>, a <span class="gs">gas</span> at
+        <span class="law">−2τ/T</span>. Tune <span class="law">−2τ</span> to the logit gap and the two markers
+        <i>snap onto one gold Boltzmann line</i>. <i>One heat, two confessions.</i>
+      </p>
+    </div>
+
+    <div class="instrument">
+      <div class="face">
+        <div class="mullion"></div>
+
+        <!-- LEFT — the mind bay: two glass cylinders 'the' & 'on' -->
+        <div class="bay mind">
+          <div class="bhead">
+            <span class="btitle" id="mindTitle">The Mind — softmax</span>
+            <span class="bsub">two glass cylinders<br>fill to softmax(LOGITS,T)</span>
+          </div>
+          <canvas class="cv" id="cvMind" width="360" height="300"></canvas>
+          <p class="cap" id="mindCap">cold: <span class="mn">the</span> brims, <span class="gs">on</span> empties (greedy) · hot: both → 50/50 · ghost-tick = T=1 trained level</p>
+        </div>
+
+        <!-- RIGHT — the gas bay: the toothed brass ratchet wheel -->
+        <div class="bay gas">
+          <div class="bhead">
+            <span class="btitle">The Gas — a Brownian ratchet</span>
+            <span class="bsub">a toothed wheel spins<br>∝ r_fwd − r_bwd</span>
+          </div>
+          <canvas class="cv" id="cvGas" width="360" height="300"></canvas>
+          <p class="cap" id="gasCap">cold: the wheel creeps <b>forward</b> decisively · hot: it jitters <b>net-zero</b> · the pawl-arrow shows the hop-bias</p>
+        </div>
+      </div>
+
+      <!-- the ONE shared bead on a capillary that pierces the mullion -->
+      <div class="capillaryrow">
+        <span class="capLabel lo">T = 0.25 (cold)</span>
+        <span class="capLabel hi">T = 4 · T→∞ : 50/50</span>
+        <div class="capillary"></div>
+        <div class="bead" id="bead" tabindex="0" role="slider" aria-label="temperature thermostat bead"
+             aria-valuemin="0.25" aria-valuemax="4" aria-valuenow="1">
+          <span class="beadT" id="beadT">T = 1.00</span>
+        </div>
+      </div>
+
+      <!-- the gold-ray panel — the climax (one rigid plumb-column ties bead → both bays → ray) -->
+      <div class="raypanel">
+        <span class="raylabel">log-odds&nbsp;(y)&nbsp;vs&nbsp;1/T&nbsp;(x)&nbsp;· both rays pivot through the origin</span>
+        <span class="cartouche" id="cartouche">tune −2τ to the gap</span>
+        <canvas id="cvRay" width="1040" height="300"></canvas>
+      </div>
+
+      <!-- the controls -->
+      <div class="controls">
+        <div class="tunewrap">
+          <label for="tune">tune <b>−2τ</b> to the gap</label>
+          <input type="range" id="tune" min="0.2" max="2.4" step="0.001" value="0.8" aria-label="the ratchet load, as minus two tau">
+          <span class="tval" id="tval">−2τ = 0.800</span>
+        </div>
+        <button class="btn" id="btnSnap" title="Snap −2τ exactly to the logit gap (1.3) so the two rays coincide.">&#9655; snap to the gap</button>
+        <div class="knife">
+          <span class="klabel">exp(z/T) ⟷ not-Boltzmann</span>
+          <button id="btnBoltz" class="on" data-mode="boltz">Boltzmann</button>
+          <button id="btnNonBoltz" data-mode="nonboltz">linear mix</button>
+        </div>
+        <span class="verdict" id="verdict"><span id="verdictTxt">Boltzmann ✓</span></span>
+      </div>
+      <div class="hint" id="hint">
+        Drag the <b>bead</b> (or focus it and use ← →) and BOTH bays move together — the mind's cylinders and the
+        gas's wheel read the <em>same</em> heat. Slide <b>−2τ</b> and the <span class="gs">paler-bronze gas ray</span>
+        rotates toward the <span style="color:var(--gold-hi)">gold mind ray</span>; at <b>−2τ = 1.3</b> they SNAP into
+        one line with a gold bloom. Throw the <b>knife-switch</b> to <span class="gs">linear mix</span> and the
+        <span class="mn">mind marker</span> bends off the straight ray — no τ can align a bent curve, because it is the
+        <em>exponential</em>, not the apparatus, that makes T the same dial.
+      </div>
+    </div>
+
+    <div class="honest">
+      <h2>what this proves, and what it doesn't</h2>
+      <ul>
+        <li><b>One law, two readings.</b> The model's split log-odds (read from
+          <span class="ok">the clockwork core's own softmax</span>) is <code>ln(p_the/p_on) = GAP/T</code>, exact
+          to <span class="ok">&lt; 2.2e-16</span>. The ratchet's hop-bias log-odds (read from
+          <span class="ok">the engine room's own symmetricRates</span>) is <code>ln(r_fwd/r_bwd) = (−2τ)/T</code>,
+          exact to the same precision. Both are the exponential <code>e<sup>−E/T</sup></code>, dead linear in 1/T.</li>
+        <li><b>The merge is honest — it is the tuning, not a fudge.</b> Both lines pivot through the origin
+          (T→∞ ⇒ 50/50), so the only freedom is the slope. The mind's is <code>GAP = 1.3</code>; the gas's is
+          <code>−2τ</code>. Set <code>−2τ = GAP</code> (τ = −0.65) and they coincide to <span class="ok">&lt;1e-9</span>
+          for every T. Mistune it and the gap <code>|Δ| = |GAP − (−2τ)|/T</code> GROWS with 1/T — the rays
+          genuinely <em>fan apart</em>, so coincidence is the tuning, never a tautology.</li>
+        <li><b>It is not the apparatus — a negative control bites.</b> <span class="no">Throw the knife-switch</span>
+          and softmax's <code>exp</code> is swapped for a linear mix <code>p_i ∝ (z_i/T + c)</code>. Its log-odds is
+          no longer linear in 1/T — the marker BENDS off the straight ray — and <em>no</em> τ can align a bent
+          curve with a straight one. It is the <em>exponential</em> shared by softmax and Arrhenius that makes T
+          the same dial; a vacuous "always linear" checker provably fails the bent curve.</li>
+        <li><b>Toy, exact law.</b> The model is the clockwork bench's frozen toy (|V|=8 tokens, one logit vector);
+          the ratchet is the engine room's reduced dimensionless rate model. The two log-odds are <em>exact</em>;
+          only the wheel's idle spin and the bead's throw are eased for the eye (the wheel render is history-free —
+          a picture of the current rate, never an accumulating odometer).</li>
+      </ul>
+    </div>
+
+    <div class="crumbs-foot">
+      <a href="../../clockwork/temperature.html"><span class="arr">&#8599;</span> the mind — The Temperature Dial</a>
+      <a href="../../engine-room/brownian/index.html"><span class="arr">&#8599;</span> the gas — The Brownian Ratchet</a>
+      <a href="../../workbench/index.html"><span class="arr">&larr;</span> back to The Workbench</a>
+    </div>
+  </main>
+
+<script type="module">
+import { softmax, LOGITS } from '../../clockwork/core.mjs';            // CORE A oracle (the mind)
+import { symmetricRates, E_B } from '../../engine-room/brownian/core.mjs'; // CORE B oracle (the gas)
+
+// === CORE BEGIN ===
+"use strict";
+
+// ══ THE TWO TOKENS — 'the' vs 'on' in the frozen toy vocabulary ════════════════════════════════════
+// LOGITS = [3.4('the'),0.7,0.2,2.1('on'),2.9,...] — see clockwork/core.mjs. A_IDX/B_IDX pick the
+// pair whose split we read; GAP = z_a − z_b = 1.3 is the mind's Boltzmann slope (the logit gap).
+const A_IDX = 0, B_IDX = 3;                                   // 'the' vs 'on'
+const GAP = LOGITS[A_IDX] - LOGITS[B_IDX];                    // = 1.3 (z_'the' − z_'on')
+
+// tunedTau(): the load τ at which the gas's slope −2τ equals the mind's slope GAP. Set −2τ = GAP ⇒
+// τ = −GAP/2 = −0.65: at this τ the two log-odds lines coincide for EVERY T (the merge).
+const tunedTau = () => -GAP / 2;                              // −2·tunedTau() === GAP ⇒ rays coincide
+
+// ══ THE MIND ADAPTER — reads softmax LIVE; the exp() lives in the imported oracle, never here ══════
+// ─ MIND-ADAPTER BEGIN ─
+// mindLogOdds(T): the model's word-split log-odds ln(p_'the'/p_'on'). Because p_i ∝ e^(z_i/T) the
+// ratio's exponentials cancel to (z_a − z_b)/T = GAP/T — EXACTLY linear in 1/T. Cold T spikes to
+// 'the'; hot T → 50/50 (log-odds → 0). The exp is inside softmax(); this fn only takes a ratio's log.
+function mindLogOdds(T){
+  const p = softmax(LOGITS, T);
+  return Math.log(p[A_IDX] / p[B_IDX]);
+}
+// nonBoltzmannLogOdds(T, c): the NEG-CONTROL. Swap softmax's exp for a LINEAR mix p_i ∝ (z_i/T + c).
+// The log-odds ln((z_a/T+c)/(z_b/T+c)) is NOT linear in 1/T — multiply by T and it is NOT constant —
+// so the blue marker BENDS off the straight ray and no τ can align a bent curve with a straight one.
+function nonBoltzmannLogOdds(T, c = 10){
+  const za = LOGITS[A_IDX] / T, zb = LOGITS[B_IDX] / T;      // the raw scaled logits (no exp)
+  return Math.log((za + c) / (zb + c));                       // a non-exponential normalizer ⇒ bends
+}
+// ─ MIND-ADAPTER END ─
+
+// ══ THE GAS ADAPTER — reads the ratchet's single-bath rates LIVE; the exp() lives in the oracle ════
+// ─ GAS-ADAPTER BEGIN ─
+// gasLogOdds(T, tau): the ratchet's hop-bias log-odds ln(r_fwd/r_bwd). With r_fwd = e^(−(E_B+τ)/T)
+// and r_bwd = e^(−(E_B−τ)/T) the barrier E_B cancels and the load doubles: (−(E_B+τ)+(E_B−τ))/T =
+// (−2τ)/T — EXACTLY linear in 1/T. Cold T drives a decisive bias; hot T → net zero (log-odds → 0).
+function gasLogOdds(T, tau){
+  const r = symmetricRates(T, tau, E_B);
+  return Math.log(r.r_fwd / r.r_bwd);
+}
+// gasRate(T, tau): the live forward/backward rates, for the wheel's HISTORY-FREE idle spin — the
+// wheel renders the CURRENT angular velocity ∝ (r_fwd − r_bwd), never an accumulating odometer.
+function gasRate(T, tau){
+  return symmetricRates(T, tau, E_B);                         // { r_fwd, r_bwd }
+}
+// ─ GAS-ADAPTER END ─
+
+// ══ THE BOLTZMANN LINE — the one ray both markers ride when tuned ═══════════════════════════════════
+// boltzmannLine(invT): the master ray, slope GAP through the origin (T→∞ ⇒ invT=0 ⇒ 50/50). Both
+// mindLogOdds and gasLogOdds(tuned) sit on it; the bronze (mistuned) ray has slope −2τ ≠ GAP and fans.
+function boltzmannLine(invT){ return GAP * invT; }
+
+// the softmax token split at T, for the LEFT bay's two glass cylinders (live levels of 'the' & 'on').
+function tokenSplit(T){ const p = softmax(LOGITS, T); return { the: p[A_IDX], on: p[B_IDX], p }; }
+
+// the temperature window the bead rides and the test sweeps. TIGHT enough that both the cold-spike and
+// the hot-flatten endpoints are reachable in one short throw: T∈[0.25,4] ⇒ 1/T∈[0.25,4].
+const T_LO = 0.25, T_HI = 4;
+const SWEEP = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
+
+// ══ THE SELF-TEST (re-proven by core.test.mjs; byte-twin-inlined as the page's pill) ════════════════
+function runSelfTest(){
+  const checks = [];
+  const ck = (name, ok, info) => checks.push({ name, ok: !!ok, info });
+  const tau = tunedTau();
+
+  // LEG 1 — MIND LINEARITY: the word-split log-odds is EXACTLY Boltzmann, ln(p_a/p_b) === GAP/T to
+  // <1e-9 over the sweep (worst ~2.22e-16). The model's split is the exponential law, dead linear in 1/T.
+  {
+    let worst = 0, worstT = 0;
+    for (const T of SWEEP){
+      const d = Math.abs(mindLogOdds(T) - GAP / T);
+      if (d > worst){ worst = d; worstT = T; }
+    }
+    ck('1 · mind linearity: ln(p_the/p_on) === GAP/T over T∈[0.25,4] < 1e-9 (the model split is Boltzmann)',
+       worst < 1e-9, 'worst=' + worst.toExponential(2) + ' at T=' + worstT);
+  }
+
+  // LEG 2 — GAS LINEARITY: the hop-bias log-odds is EXACTLY Boltzmann too, ln(r_fwd/r_bwd) ===
+  // (−2τ)/T to <1e-9 at the tuned τ (worst ~1.67e-16). The ratchet bias is the SAME exponential law.
+  {
+    let worst = 0, worstT = 0;
+    for (const T of SWEEP){
+      const d = Math.abs(gasLogOdds(T, tau) - (-2 * tau) / T);
+      if (d > worst){ worst = d; worstT = T; }
+    }
+    ck('2 · gas linearity: ln(r_fwd/r_bwd) === (−2τ)/T over T∈[0.25,4] < 1e-9 (the ratchet bias is Boltzmann)',
+       worst < 1e-9, 'worst=' + worst.toExponential(2) + ' at T=' + worstT);
+  }
+
+  // LEG 3 — COINCIDENCE: with −2τ = GAP the two log-odds ARE one line, |mind − gas(tuned)| < 1e-9
+  // across the whole sweep (worst ~1.67e-16). One bead, one heat — a mind's split is a gas's bias.
+  {
+    let worst = 0, worstT = 0;
+    for (const T of SWEEP){
+      const d = Math.abs(mindLogOdds(T) - gasLogOdds(T, tau));
+      if (d > worst){ worst = d; worstT = T; }
+    }
+    ck('3 · coincidence: |mindLogOdds − gasLogOdds(tuned)| < 1e-9 over the sweep (−2τ===GAP ⇒ one Boltzmann line)',
+       worst < 1e-9 && Math.abs(-2 * tau - GAP) < 1e-12,
+       'worst=' + worst.toExponential(2) + ' at T=' + worstT + ' · −2τ=' + (-2 * tau).toFixed(4) + ' GAP=' + GAP.toFixed(4));
+  }
+
+  // LEG 4 — MISMATCH IS REAL (non-vacuous): with −2τ ≠ GAP (use τ such that −2τ = 0.8) the gap |Δ| is
+  // nonzero AND GROWS with 1/T (the rays genuinely FAN), so the coincidence is the tuning, not a
+  // tautology. |Δ| = |GAP − 0.8|/T = 0.5/T — strictly increasing as T falls.
+  {
+    const tauMis = -0.4;                                       // −2·tauMis = 0.8 ≠ GAP
+    let nonzero = true, growsIn1overT = true, prev = -Infinity, minGap = Infinity;
+    // sweep T DESCENDING so 1/T ASCENDS; |Δ| must be strictly increasing.
+    const desc = [4, 3, 2, 1.5, 1, 0.75, 0.5, 0.25];
+    for (const T of desc){
+      const d = Math.abs(mindLogOdds(T) - gasLogOdds(T, tauMis));
+      if (d <= prev) growsIn1overT = false;                   // strictly rising as 1/T rises
+      if (!(d > 1e-6)) nonzero = false;
+      minGap = Math.min(minGap, d);
+      prev = d;
+    }
+    ck('4 · mismatch is real: −2τ ≠ GAP ⇒ |Δ| nonzero AND grows with 1/T (the rays fan — coincidence is the tuning)',
+       nonzero && growsIn1overT, 'minGap=' + minGap.toExponential(2) + ' grows-in-1/T=' + growsIn1overT);
+  }
+
+  // LEG 5 — NEG-CONTROL WITH TEETH: a non-Boltzmann normalizer is NOT linear in 1/T — nonBoltzmann·T
+  // is NOT constant (spread ≥ 1e-2 over the sweep), so a vacuous "always linear" checker FAILS the
+  // bent curve. (A correct Boltzmann log-odds ·T IS constant = GAP — that's exactly what bends here.)
+  {
+    const vals = SWEEP.map(T => nonBoltzmannLogOdds(T) * T);
+    const spread = Math.max(...vals) - Math.min(...vals);
+    // sanity: the TRUE mind log-odds ·T is constant (== GAP) — the control bends, the law does not.
+    const trueVals = SWEEP.map(T => mindLogOdds(T) * T);
+    const trueSpread = Math.max(...trueVals) - Math.min(...trueVals);
+    ck('5 · neg-control teeth: nonBoltzmann·T is NOT constant (spread ≥ 1e-2) while Boltzmann·T === GAP (a vacuous "always linear" checker fails)',
+       spread >= 1e-2 && trueSpread < 1e-9,
+       'nonB·T spread=' + spread.toExponential(2) + ' · Boltzmann·T spread=' + trueSpread.toExponential(2) + ' (===GAP)');
+  }
+
+  const passed = checks.filter(c => c.ok).length;
+  return { ok: passed === checks.length, passed, total: checks.length, checks };
+}
+
+export {
+  A_IDX, B_IDX, GAP, tunedTau, T_LO, T_HI, SWEEP,
+  mindLogOdds, gasLogOdds, gasRate, nonBoltzmannLogOdds, boltzmannLine, tokenSplit,
+  runSelfTest,
+};
+// === CORE END ===
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//  THE PAGE — one bead drives the mind's cylinders, the gas's wheel, and the gold-ray panel.
+//  Everything below the CORE slab is page rendering only; all the MATH lives in the slab above and
+//  is the byte-twin of core.mjs (proven by core.test.mjs Leg 7). The page calls mindLogOdds() /
+//  gasLogOdds() / tokenSplit() / gasRate() — the SAME functions the test consumes — so what you
+//  SEE is tested.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+
+const COL = (() => {
+  const css = getComputedStyle(document.documentElement);
+  const c = n => css.getPropertyValue(n).trim();
+  return {
+    gold: c('--gold'), goldHi: c('--gold-hi'), mind: c('--mind'), gas: c('--gas'),
+    bronze: c('--bronze'), amber: c('--amber'), dim: c('--ink-dim'), ink: c('--ink'),
+    panel: '#06080a',
+  };
+})();
+
+// ── STATE — T (the bead) and minus2tau (the tune) are the two independent inputs; mode is the knife.
+let T = 1;                       // the temperature the bead rides, T∈[T_LO,T_HI]
+let minus2tau = 0.8;             // the gas slope −2τ (OPEN MISMATCHED: 0.8 ≠ GAP=1.3)
+let mode = 'boltz';              // 'boltz' | 'nonboltz' (the knife-switch)
+let snapped = false;             // are the two rays coincident (−2τ === GAP)?
+let wasSnapped = false;          // for the bloom flash on the merge
+let spin = 0;                    // the wheel's idle phase (cosmetic; the VELOCITY is history-free)
+let rafId = null;
+
+// helper: τ from the −2τ slider (gasLogOdds takes τ, not −2τ)
+function tauFromSlider(){ return -minus2tau / 2; }
+
+const bead = document.getElementById('bead');
+const beadT = document.getElementById('beadT');
+const cvMind = document.getElementById('cvMind');
+const cvGas = document.getElementById('cvGas');
+const cvRay = document.getElementById('cvRay');
+const tune = document.getElementById('tune');
+const tval = document.getElementById('tval');
+const btnSnap = document.getElementById('btnSnap');
+const btnBoltz = document.getElementById('btnBoltz');
+const btnNonBoltz = document.getElementById('btnNonBoltz');
+const verdict = document.getElementById('verdict');
+const verdictTxt = document.getElementById('verdictTxt');
+const cartouche = document.getElementById('cartouche');
+const mindCap = document.getElementById('mindCap');
+const gasCap = document.getElementById('gasCap');
+
+function mono(){ return "'SF Mono',ui-monospace,monospace"; }
+function fit(cv, cssH){
+  const cssW = cv.clientWidth || cv.parentElement.clientWidth;
+  cv.width = Math.round(cssW * DPR);
+  cv.height = Math.round(cssH * DPR);
+  cv.style.height = cssH + 'px';
+  const g = cv.getContext('2d');
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  return { g, W: cssW, H: cssH };
+}
+
+// the bead's horizontal position on the capillary maps to 1/T (so x = 1/T lines up with the ray panel).
+// The capillary spans 1/T ∈ [T_LO, T_HI] = [0.25, 4]; the bead sits at the fractional position of 1/T.
+function invTToFrac(invT){ return (invT - T_LO) / (T_HI - T_LO); }
+function fracToInvT(f){ return T_LO + Math.max(0, Math.min(1, f)) * (T_HI - T_LO); }
+
+// place the bead element + its plumb-line column at the current T.
+function placeBead(){
+  const f = invTToFrac(1 / T);
+  bead.style.left = (f * 100) + '%';
+  beadT.textContent = 'T = ' + T.toFixed(2);
+  bead.setAttribute('aria-valuenow', T.toFixed(2));
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+//  LEFT — THE MIND: two glass cylinders ('the' / 'on') filling with warm amber to the softmax
+//  level. Cold ⇒ 'the' brims, 'on' near-empty; hot ⇒ both ~half. A ghost-tick marks the T=1 level.
+// ════════════════════════════════════════════════════════════════════════════════════════════
+function drawMind(){
+  const { g, W, H } = fit(cvMind, 300);
+  g.fillStyle = COL.panel; g.fillRect(0, 0, W, H);
+
+  // the live levels — softmax for Boltzmann; the linear-mix normalizer for the neg-control (bends).
+  let pThe, pOn;
+  if (mode === 'boltz'){
+    const s = tokenSplit(T); pThe = s.the; pOn = s.on;
+  } else {
+    // a NON-Boltzmann normalizer p_i ∝ (z_i/T + c) over the SAME two tokens (display proxy of the bend)
+    const c = 10;
+    const za = LOGITS[A_IDX] / T + c, zb = LOGITS[B_IDX] / T + c;
+    const sum = za + zb; pThe = za / sum; pOn = zb / sum;
+  }
+  // the trained (T=1) levels for the ghost-ticks
+  const s1 = tokenSplit(1);
+
+  const baseY = H - 34, topY = 24, fullH = baseY - topY;
+  const cylW = 56, gap = 46;
+  const cx = W / 2;
+  const xThe = cx - gap/2 - cylW/2, xOn = cx + gap/2 + cylW/2;
+
+  function cylinder(x, label, level, trained, color){
+    // glass tube
+    g.strokeStyle = 'rgba(201,162,74,0.45)'; g.lineWidth = 1.4;
+    g.strokeRect(x - cylW/2, topY, cylW, fullH);
+    // faint inner glass highlight
+    g.fillStyle = 'rgba(255,255,255,0.03)'; g.fillRect(x - cylW/2 + 2, topY + 2, 8, fullH - 4);
+    // the warm amber fluid
+    const fh = Math.max(0, Math.min(1, level)) * fullH;
+    const grad = g.createLinearGradient(0, baseY - fh, 0, baseY);
+    grad.addColorStop(0, color); grad.addColorStop(1, 'rgba(176,112,40,0.85)');
+    g.fillStyle = grad;
+    g.fillRect(x - cylW/2 + 1.5, baseY - fh, cylW - 3, fh);
+    // meniscus line
+    g.strokeStyle = 'rgba(255,242,220,0.7)'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(x - cylW/2 + 1.5, baseY - fh); g.lineTo(x + cylW/2 - 1.5, baseY - fh); g.stroke();
+    // the T=1 trained ghost-tick
+    const ty = baseY - trained * fullH;
+    g.strokeStyle = 'rgba(165,156,135,0.55)'; g.setLineDash([3,3]); g.lineWidth = 1;
+    g.beginPath(); g.moveTo(x - cylW/2 - 6, ty); g.lineTo(x + cylW/2 + 6, ty); g.stroke(); g.setLineDash([]);
+    g.fillStyle = 'rgba(165,156,135,0.7)'; g.font = '7px ' + mono(); g.textAlign = 'left';
+    g.fillText('T=1', x + cylW/2 + 8, ty + 2.5);
+    // the token label + live probability
+    g.fillStyle = color; g.font = '600 13px ' + mono(); g.textAlign = 'center';
+    g.fillText('"' + label + '"', x, H - 16);
+    g.fillStyle = COL.goldHi; g.font = '600 11px ' + mono();
+    g.fillText((level * 100).toFixed(1) + '%', x, baseY - fh - 7 < topY + 8 ? topY + 14 : baseY - fh - 7);
+  }
+  cylinder(xThe, 'the', pThe, s1.the, COL.amber);
+  cylinder(xOn, 'on', pOn, s1.on, '#d98c4f');
+
+  // the log-odds readout (what the marker rides)
+  const lo = (mode === 'boltz') ? mindLogOdds(T) : nonBoltzmannLogOdds(T);
+  g.fillStyle = COL.mind; g.font = '600 10px ' + mono(); g.textAlign = 'left';
+  g.fillText('ln(p_the/p_on) = ' + lo.toFixed(3), 8, 16);
+  if (mode === 'nonboltz'){
+    g.fillStyle = COL.gas; g.font = '600 9px ' + mono(); g.textAlign = 'right';
+    g.fillText('NOT-Boltzmann · linear mix', W - 8, 16);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+//  RIGHT — THE GAS: a toothed brass ratchet wheel. Its idle spin VELOCITY is ∝ (r_fwd − r_bwd) of
+//  the CURRENT T/τ (history-free — a render of the current rate, never an accumulating odometer).
+//  A pawl-arrow shows the hop-bias. Cold ⇒ creeps forward; hot ⇒ jitters net-zero.
+// ════════════════════════════════════════════════════════════════════════════════════════════
+function gasOmega(){
+  const r = gasRate(T, tauFromSlider());
+  return r.r_fwd - r.r_bwd;           // signed angular velocity proxy (history-free)
+}
+function drawGas(){
+  const { g, W, H } = fit(cvGas, 300);
+  g.fillStyle = COL.panel; g.fillRect(0, 0, W, H);
+  const cx = W * 0.5, cy = 130, rad = 78, teeth = 18;
+
+  // the toothed wheel — a sawtooth rim that rotates by `spin`
+  g.save();
+  g.translate(cx, cy); g.rotate(spin);
+  g.strokeStyle = 'rgba(201,162,74,0.5)'; g.lineWidth = 2;
+  g.fillStyle = 'rgba(201,162,74,0.07)';
+  g.beginPath();
+  for (let i = 0; i <= teeth; i++){
+    const a0 = (i / teeth) * 2 * Math.PI;
+    const a1 = ((i + 0.72) / teeth) * 2 * Math.PI;   // gentle ramp
+    const a2 = ((i + 1) / teeth) * 2 * Math.PI;       // steep face
+    const rIn = rad - 12, rOut = rad;
+    if (i === 0) g.moveTo(Math.cos(a0) * rIn, Math.sin(a0) * rIn);
+    g.lineTo(Math.cos(a1) * rOut, Math.sin(a1) * rOut);  // up the ramp
+    g.lineTo(Math.cos(a2) * rIn, Math.sin(a2) * rIn);    // drop down the steep face
+  }
+  g.closePath(); g.fill(); g.stroke();
+  // hub spokes so rotation is visible
+  g.strokeStyle = 'rgba(201,162,74,0.3)'; g.lineWidth = 1.4;
+  for (let i = 0; i < 6; i++){
+    const a = (i / 6) * 2 * Math.PI;
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(a) * (rad - 14), Math.sin(a) * (rad - 14)); g.stroke();
+  }
+  g.restore();
+  // hub cap
+  g.fillStyle = '#9a7a32'; g.beginPath(); g.arc(cx, cy, 7, 0, 2*Math.PI); g.fill();
+  g.fillStyle = COL.goldHi; g.beginPath(); g.arc(cx, cy, 3, 0, 2*Math.PI); g.fill();
+
+  // the PAWL-ARROW — points the way of the net hop-bias, length ∝ |bias|
+  const om = gasOmega();
+  const r = gasRate(T, tauFromSlider());
+  const bias = r.r_fwd > 0 ? (r.r_fwd - r.r_bwd) / (r.r_fwd + r.r_bwd) : 0;  // normalized −1..1
+  const pawlY = cy - rad - 16;
+  const dir = Math.sign(om) || 1;
+  const len = 14 + Math.abs(bias) * 36;
+  g.strokeStyle = COL.gas; g.lineWidth = 2.4; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(cx - dir * len / 2, pawlY); g.lineTo(cx + dir * len / 2, pawlY); g.stroke();
+  // arrowhead
+  const hx = cx + dir * len / 2;
+  g.fillStyle = COL.gas; g.beginPath();
+  g.moveTo(hx, pawlY); g.lineTo(hx - dir * 7, pawlY - 4); g.lineTo(hx - dir * 7, pawlY + 4); g.closePath(); g.fill();
+  g.fillStyle = COL.dim; g.font = '8px ' + mono(); g.textAlign = 'center';
+  g.fillText(Math.abs(bias) < 0.02 ? 'net-zero jitter' : (dir > 0 ? 'forward bias' : 'reverse bias'), cx, pawlY - 9);
+
+  // the hop-bias log-odds readout (what the gas marker rides)
+  g.fillStyle = COL.gas; g.font = '600 10px ' + mono(); g.textAlign = 'left';
+  g.fillText('ln(r_fwd/r_bwd) = ' + gasLogOdds(T, tauFromSlider()).toFixed(3), 8, 16);
+  g.fillStyle = COL.bronze; g.font = '9px ' + mono(); g.textAlign = 'right';
+  g.fillText('−2τ = ' + minus2tau.toFixed(3), W - 8, 16);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+//  THE GOLD-RAY PANEL — log-odds (y) vs 1/T (x). The gold mind ray (slope GAP) and the bronze gas
+//  ray (slope −2τ) both pivot through the origin; two live jewelled markers ride them at x = 1/T.
+//  When −2τ = GAP the rays coincide (gold bloom + COINCIDENCE cartouche). Neg-control: the mind
+//  marker rides the BENT non-Boltzmann curve instead of the straight ray.
+// ════════════════════════════════════════════════════════════════════════════════════════════
+const Y_MAX = 5.5;               // log-odds axis half-range
+function drawRay(){
+  const { g, W, H } = fit(cvRay, 264);
+  g.fillStyle = COL.panel; g.fillRect(0, 0, W, H);
+  const x0 = 46, x1 = W - 18, y0 = H - 30, yTop = 20;
+  const XMAX = T_HI;             // 1/T axis spans [0, 4]
+  const AX = inv => x0 + (inv / XMAX) * (x1 - x0);
+  const AY = lo => {
+    const yMid = (y0 + yTop) / 2;
+    return yMid - (lo / Y_MAX) * (yMid - yTop);
+  };
+
+  // axes
+  g.strokeStyle = 'rgba(165,156,135,0.25)'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(x0, yTop); g.lineTo(x0, y0); g.lineTo(x1, y0); g.stroke();
+  // the origin / 50-50 line (y=0) — both rays pivot through here
+  const yZero = AY(0);
+  g.strokeStyle = 'rgba(201,162,74,0.22)'; g.setLineDash([4,4]); g.lineWidth = 1;
+  g.beginPath(); g.moveTo(x0, yZero); g.lineTo(x1, yZero); g.stroke(); g.setLineDash([]);
+  g.fillStyle = 'rgba(165,156,135,0.6)'; g.font = '8px ' + mono(); g.textAlign = 'left';
+  g.fillText('log-odds 0  (50/50)', x0 + 6, yZero - 4);
+  g.textAlign = 'center'; g.fillText('1/T →', (x0 + x1) / 2, H - 8);
+  // x ticks at integer 1/T
+  for (let k = 0; k <= XMAX; k++){
+    const x = AX(k);
+    g.strokeStyle = 'rgba(165,156,135,0.18)'; g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y0 + 4); g.stroke();
+    g.fillStyle = 'rgba(165,156,135,0.5)'; g.font = '8px ' + mono(); g.fillText(String(k), x, y0 + 14);
+  }
+
+  const inv = 1 / T;
+  const tau = tauFromSlider();
+
+  // ── the GOLD mind ray (slope GAP) — or the BENT non-Boltzmann curve under the knife-switch ──
+  if (mode === 'boltz'){
+    g.strokeStyle = COL.gold; g.lineWidth = 2.2;
+    g.beginPath(); g.moveTo(AX(0), AY(boltzmannLine(0))); g.lineTo(AX(XMAX), AY(boltzmannLine(XMAX))); g.stroke();
+    g.fillStyle = COL.goldHi; g.font = '600 9px ' + mono(); g.textAlign = 'right';
+    g.fillText('mind: GAP/T  (slope ' + GAP.toFixed(2) + ')', x1 - 2, AY(boltzmannLine(XMAX)) + 12);
+  } else {
+    // the bent curve: nonBoltzmannLogOdds(T) plotted across 1/T — visibly NOT a straight ray
+    g.strokeStyle = COL.mind; g.lineWidth = 2.2; g.beginPath();
+    let first = true;
+    for (let i = 0; i <= 180; i++){
+      const invv = (i / 180) * XMAX;
+      const Tv = invv > 1e-6 ? 1 / invv : 1e6;
+      const x = AX(invv), y = AY(nonBoltzmannLogOdds(Tv));
+      if (first){ g.moveTo(x, y); first = false; } else g.lineTo(x, y);
+    }
+    g.stroke();
+    // a faint ghost of where the straight Boltzmann ray WOULD be (to show the bend)
+    g.strokeStyle = 'rgba(201,162,74,0.28)'; g.setLineDash([3,4]); g.lineWidth = 1.4;
+    g.beginPath(); g.moveTo(AX(0), AY(0)); g.lineTo(AX(XMAX), AY(boltzmannLine(XMAX))); g.stroke(); g.setLineDash([]);
+    g.fillStyle = COL.mind; g.font = '600 9px ' + mono(); g.textAlign = 'right';
+    g.fillText('mind: BENT (not linear in 1/T)', x1 - 2, AY(nonBoltzmannLogOdds(1/XMAX)) - 6);
+  }
+
+  // ── the GAS ray (slope −2τ) — coincides with gold when tuned, else a paler-bronze fan ──
+  const gasSlopeColor = snapped ? COL.gold : COL.bronze;
+  g.strokeStyle = snapped ? COL.gold : 'rgba(184,138,78,0.85)';
+  g.lineWidth = snapped ? 2.2 : 1.8;
+  g.beginPath(); g.moveTo(AX(0), AY(0)); g.lineTo(AX(XMAX), AY((-2 * tau) * XMAX)); g.stroke();
+  if (!snapped){
+    g.fillStyle = COL.bronze; g.font = '9px ' + mono(); g.textAlign = 'right';
+    g.fillText('gas: −2τ/T  (slope ' + minus2tau.toFixed(2) + ')', x1 - 2, AY((-2 * tau) * XMAX) - 5);
+  }
+
+  // ── the rigid plumb-column from the bead's x to the ray (one skewer tying bead + both bays + ray)
+  const xb = AX(inv);
+  g.strokeStyle = 'rgba(201,162,74,0.45)'; g.lineWidth = 2.4;
+  g.beginPath(); g.moveTo(xb, yTop - 18); g.lineTo(xb, y0); g.stroke();
+  g.fillStyle = 'rgba(201,162,74,0.5)'; g.font = '8px ' + mono(); g.textAlign = 'center';
+  g.fillText('1/T = ' + inv.toFixed(2), xb, yTop - 22 < 4 ? 10 : yTop - 22);
+
+  // ── the two jewelled markers, pinned on their rays at the cursor x = 1/T (no lag) ──
+  const mindLo = (mode === 'boltz') ? mindLogOdds(T) : nonBoltzmannLogOdds(T);
+  const gasLo = gasLogOdds(T, tau);
+  function jewel(lo, color, label, up){
+    const x = xb, y = AY(lo);
+    g.fillStyle = color; g.beginPath(); g.arc(x, y, 5.2, 0, 2*Math.PI); g.fill();
+    g.strokeStyle = 'rgba(255,247,224,0.8)'; g.lineWidth = 1.2; g.beginPath(); g.arc(x, y, 5.2, 0, 2*Math.PI); g.stroke();
+    g.fillStyle = color; g.font = '600 8.5px ' + mono(); g.textAlign = x > W - 80 ? 'right' : 'left';
+    const lx = x > W - 80 ? x - 9 : x + 9;
+    g.fillText(label + ' ' + lo.toFixed(2), lx, y + (up ? -6 : 12));
+  }
+  // when snapped + Boltzmann, the two jewels overlap → draw a single gold jewel with a bloom halo
+  if (snapped && mode === 'boltz'){
+    const x = xb, y = AY(mindLo);
+    g.fillStyle = 'rgba(244,210,122,0.18)'; g.beginPath(); g.arc(x, y, 16, 0, 2*Math.PI); g.fill();
+    g.fillStyle = COL.goldHi; g.beginPath(); g.arc(x, y, 6.5, 0, 2*Math.PI); g.fill();
+    g.strokeStyle = 'rgba(255,247,224,0.9)'; g.lineWidth = 1.4; g.beginPath(); g.arc(x, y, 6.5, 0, 2*Math.PI); g.stroke();
+    g.fillStyle = COL.goldHi; g.font = '600 9px ' + mono(); g.textAlign = x > W - 90 ? 'right' : 'left';
+    g.fillText('both ' + mindLo.toFixed(2), (x > W - 90 ? x - 10 : x + 10), y - 8);
+  } else {
+    jewel(gasLo, snapped ? COL.gold : COL.gas, 'gas', false);
+    jewel(mindLo, mode === 'boltz' ? COL.mind : '#9fc6ff', 'mind', true);
+  }
+}
+
+// ── the merge / verdict / cartouche state ─────────────────────────────────────────────────────
+function refreshState(){
+  snapped = Math.abs(minus2tau - GAP) < 5e-4;     // the rays coincide when −2τ ≈ GAP
+  // the cartouche (COINCIDENCE) lights only when snapped AND Boltzmann (a bent curve can't coincide)
+  const wasOn = cartouche.classList.contains('on');
+  const lit = snapped && mode === 'boltz';
+  cartouche.classList.toggle('on', lit);
+  if (lit){
+    cartouche.textContent = '−2τ = 1.300 = logit gap → markers coincide to <1e-9';
+    if (!wasOn && !RM){ cartouche.classList.remove('bloom'); void cartouche.offsetWidth; cartouche.classList.add('bloom'); }
+  } else {
+    cartouche.textContent = mode === 'nonboltz' ? 'not Boltzmann — no τ aligns a bent curve' : 'tune −2τ to the gap';
+  }
+  btnSnap.classList.toggle('snapped', lit);
+  // the knife-switch verdict
+  if (mode === 'boltz'){
+    verdict.classList.remove('bad'); verdictTxt.textContent = 'Boltzmann ✓';
+  } else {
+    verdict.classList.add('bad'); verdictTxt.textContent = 'not Boltzmann ✕ — the line bends';
+  }
+  // captions react
+  mindCap.innerHTML = mode === 'boltz'
+    ? 'cold: <span class="mn">the</span> brims, <span class="gs">on</span> empties (greedy) · hot: both → 50/50 · ghost-tick = T=1 trained level'
+    : 'knife thrown: <b>p ∝ (z/T + c)</b> — a linear mix, <b>NOT</b> e^(z/T) · the log-odds is no longer linear in 1/T';
+  gasCap.innerHTML = snapped
+    ? 'cold: the wheel creeps <b>forward</b> · hot: <b>net-zero</b> · <b>−2τ = 1.3 = the gap</b> — the bias mirrors the split'
+    : 'cold: the wheel creeps <b>forward</b> decisively · hot: it jitters <b>net-zero</b> · the pawl-arrow shows the hop-bias';
+  tval.textContent = '−2τ = ' + minus2tau.toFixed(3);
+}
+
+// ── the master render ─────────────────────────────────────────────────────────────────────────
+function render(){
+  drawMind(); drawGas(); drawRay();
+}
+
+// ── the idle wheel animation — VELOCITY is a render of the CURRENT rate (history-free position only
+//    accumulates a cosmetic phase; if you change T/τ the SPEED changes instantly, no memory). ──────
+let lastTs = 0;
+function tick(ts){
+  const dt = lastTs ? Math.min(0.05, (ts - lastTs) / 1000) : 0;
+  lastTs = ts;
+  if (!RM){
+    const om = gasOmega();                  // current signed rate (history-free read)
+    spin += om * dt * 8;                    // phase advances by current velocity × dt (cosmetic only)
+    spin %= (Math.PI * 2);
+  }
+  drawGas();                                // only the wheel needs per-frame redraw
+  rafId = requestAnimationFrame(tick);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+//  INTERACTION — the bead (T) and the tune slider (−2τ) are two independent inputs; both feed the
+//  gold-ray panel; either input recomputes BOTH markers. The bead reuses curie-dial's bead-drag
+//  grammar: pointerdown + setPointerCapture + pointermove + pointerup, keyboard nudge, focus ring.
+// ════════════════════════════════════════════════════════════════════════════════════════════
+function setT(t){
+  T = Math.max(T_LO, Math.min(T_HI, t));
+  placeBead(); refreshState(); render();
+}
+function beadFracFromClientX(clientX){
+  const row = bead.parentElement.getBoundingClientRect();
+  return (clientX - row.left) / row.width;
+}
+let dragging = false;
+bead.addEventListener('pointerdown', (e) => {
+  dragging = true; bead.setPointerCapture(e.pointerId); bead.style.cursor = 'grabbing'; e.preventDefault();
+});
+bead.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  const f = beadFracFromClientX(e.clientX);
+  setT(1 / fracToInvT(f));                  // bead x maps to 1/T; invert to T
+});
+bead.addEventListener('pointerup', (e) => {
+  dragging = false; try{ bead.releasePointerCapture(e.pointerId); }catch(_){}; bead.style.cursor = 'grab';
+});
+bead.addEventListener('keydown', (e) => {
+  // arrow keys nudge along 1/T so the throw feels uniform on the capillary
+  let dInv = 0;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowUp') dInv = 0.08;
+  else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') dInv = -0.08;
+  if (dInv){ e.preventDefault(); const inv = Math.max(T_LO, Math.min(T_HI, 1/T + dInv)); setT(1 / inv); }
+});
+
+tune.addEventListener('input', () => { minus2tau = parseFloat(tune.value); refreshState(); render(); });
+btnSnap.addEventListener('click', () => {
+  minus2tau = GAP; tune.value = String(GAP); refreshState(); render();
+});
+function setMode(m){
+  mode = m;
+  btnBoltz.classList.toggle('on', m === 'boltz');
+  btnNonBoltz.classList.toggle('on', m === 'nonboltz');
+  refreshState(); render();
+}
+btnBoltz.addEventListener('click', () => setMode('boltz'));
+btnNonBoltz.addEventListener('click', () => setMode('nonboltz'));
+
+// ── the self-test pill + detail panel (chip === Node twin) ──────────────────────────────────────
+const stPanel = document.getElementById('stPanel');
+function runPill(){
+  const el = document.getElementById('selftest');
+  try{
+    const r = runSelfTest();
+    el.className = 'selftest ' + (r.ok ? 'ok' : 'bad');
+    el.textContent = (r.ok ? '✓ ' : '✗ ') + r.passed + '/' + r.total + ' · self-test';
+    document.getElementById('stSub').textContent = r.ok
+      ? 'e^(−E/T) is one law: the model split is GAP/T, the ratchet bias is (−2τ)/T — tune −2τ to the gap and they coincide. All legs green.'
+      : 'some legs FAILED — see below.';
+    const list = document.getElementById('stList'); list.innerHTML = '';
+    for (const c of r.checks){
+      const row = document.createElement('div'); row.className = 'row';
+      row.innerHTML = '<span class="m ' + (c.ok ? 'ok' : 'no') + '">' + (c.ok ? '✓' : '✗') + '</span>'
+        + '<span>' + c.name + (c.info ? ' <span style="opacity:.7">· ' + c.info + '</span>' : '') + '</span>';
+      list.appendChild(row);
+    }
+    return r.ok;
+  }catch(e){
+    el.className = 'selftest bad'; el.textContent = '✗ self-test threw'; el.title = String(e); return false;
+  }
+}
+document.getElementById('selftest').addEventListener('click', () => { runPill(); stPanel.classList.toggle('show'); });
+document.getElementById('stClose').addEventListener('click', () => stPanel.classList.remove('show'));
+
+// ── boot ───────────────────────────────────────────────────────────────────────────────────────
+function boot(){
+  setT(1);
+  refreshState();
+  render();
+  runPill();
+  if (!RM) rafId = requestAnimationFrame(tick);
+  // drop the cross's own breadcrumb so a direct visit registers (reciprocal cross, not a front-door node)
+  try{ const k = 'ws:seen:cross-the-same-heat'; if (!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
+}
+window.addEventListener('resize', render);
+boot();
+
+// expose globals for the publisher's in-browser parity check (in-browser globals reproduce the twin)
+window.__tsh = {
+  mindLogOdds, gasLogOdds, gasRate, nonBoltzmannLogOdds, boltzmannLine, tokenSplit, tunedTau, GAP, runSelfTest,
+  coincidence: (t) => Math.abs(mindLogOdds(t) - gasLogOdds(t, tunedTau())),
+};
+window.__TSH_SELFTEST__ = (() => { try { const r = runSelfTest(); return { pass: r.passed, total: r.total }; } catch(e){ return { pass: 0, total: 0 }; } })();
+</script>
+</body>
+</html>
