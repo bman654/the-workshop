@@ -129,7 +129,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 <!-- gauge:garden-seeds:start -->
 ### exhibit
 - [exhibit] **The Octave Ladder Your Ear Climbs Wrong — pitch is log-frequency** — WING: sound-garden bench. One slider in linear Hz, one in perceived pitch. Go up an octave by EAR (click — rungs you HEAR as equal) vs by adding a fixed 100 Hz (click — steps that shrink to nothing up high); the two rulers visibly diverge as the Hz between by-ear octaves DOUBLES each rung. FORM: two draggable rulers you PLAY against each other — keep the clicks genuinely sounded, not just drawn (its weakest grounded axis). CRUX: equal pitch = equal frequency RATIO not difference; an octave is f→2f exactly, p=12·log₂(f/f_ref) — twin verifies by-ear rung frequencies are a geometric series (ratio 2) and the linear-Hz rungs are not. (sown #247)
-- [exhibit] **The Banked Curve** — a track whose tilt you set by hand, hunting the one no-push speed. Two knobs (bank angle θ, speed v) over a banked oval with a rider's-eye cab; a hanging plumb-bob is the instrument — straight = balanced, swung = which way the car is about to slide (down the bank below the speed, up and out above it). You OPERATE and HUNT (vs. the Star-Flyer, which computes the equilibrium lean FOR you). CRUX: the frictionless design speed v*=√(g·r·tanθ); the bob hangs along the seat-normal ONLY at v=v*. Neg-control: θ=0 ⇒ v*=0, so any speed needs friction and the bob always swings out. With friction μ the holds-band is √(gr(tanθ−μ)/(1+μtanθ)) ≤ v ≤ √(gr(tanθ+μ)/(1−μtanθ)). Self-test: bob-angle≈0 at v*, band collapses to the point v* as μ→0, v* mass-invariant. (sown #240)
 - [exhibit] **The Two-Chemical Skin** — a Gray–Scott reaction-diffusion skin whose ONE dial is the diffusion ratio D_u/D_v, that MEASURES what the strange-garden display only shows: it reports the dominant pattern WAVELENGTH λ (peak of the radially-averaged 2-D FFT of the settled u-field) live in pixels as you turn the dial. FORM: the living skin grows in front of you AND a little spectrum needle reads its stripe-spacing — a window turned into an instrument. CRUX (headless twin): λ SCALES with the ratio — halving both diffusion constants together halves λ to within one FFT bin (a code-checkable scaling, no magic constant); the FFT peak-finder round-trips a synthetic plane wave of known λ to <1 bin (prove the meter before trusting the chemistry); spots↔stripes reported as a measured (feed,kill) THRESHOLD you cross, not just named presets. Heavier (FFT) but the wavelength readout is the soul. (sown #240)
 
 
@@ -155,11 +154,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-<!-- ✝ BLOOMED #245: The Murmuration Meter → murmuration-meter/ · after dea9779 -->
 <!-- ✝ BLOOMED #246: The Breathing Star → breathing-star/ · after 8f84c52 -->
 <!-- ✝ BLOOMED #248: The Transit — find the planet by the star that blinks → transit/ · after 2685002 -->
 <!-- ✝ BLOOMED #249: The Equal-Area Sweep — Kepler's 2nd law you drag, not read → equal-area-sweep/ · after 0928a1e -->
 <!-- ✝ BLOOMED #250: The Meshing Wheels — the Chinese Remainder Theorem you mesh by hand → the-meshing-wheels/ · after 605adb5 -->
+<!-- ✝ BLOOMED #251: The Banked Curve → banked-curve/ · after 59e29a7 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);

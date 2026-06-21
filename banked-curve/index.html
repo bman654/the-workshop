@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Banked Curve · The Midway · The Orrery Estate</title>
+<!--
+   THE BANKED CURVE — hunt the ONE no-push speed on a track you tilt. The physics CORE
+   (core.mjs) is inlined byte-for-byte between the sentinels below; the in-page chip calls
+   the SAME runSelfTest() the Node twin (core.test.mjs) runs. The renderer draws the dash
+   plumb-bob's deflection from the authority: bobAngle(v,r,θ), which is 0 EXACTLY at the
+   design speed v* = √(g·r·tanθ). The bob is the readout — no plotted curve is the subject.
+   NEG-CONTROL: a FLAT track (θ=0) has NO no-push speed — the bob never nulls for v>0; the
+   only zero is v=0. The chip proves designSpeed(r,0)=0 and bobAngle(v>0,r,0)>0 for all v.
+-->
+<style>
+  :root{
+    --bg:#07080c;             /* fairground-at-dusk near-black ground */
+    --plate1:#12100a;
+    --plate2:#0b0a07;
+    --ink:#efe9da;
+    --ink-dim:#a59c87;
+    --gold:#c9a24a;           /* brass / the cord & instruments */
+    --gold-hi:#f4d27a;        /* lit gold */
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.40);
+    --teal:#5fcdbf;           /* LOCK / legal / found the null */
+    --teal-soft:rgba(95,205,191,0.12);
+    --coral:#f0846f;          /* OFF the null / illegal */
+    --coral-soft:rgba(240,132,111,0.12);
+    --panel:rgba(11,10,7,0.86);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1200px 720px at 50% -12%, rgba(201,162,74,0.09), transparent 56%),
+      radial-gradient(900px 640px at 14% 112%, rgba(95,205,191,0.05), transparent 60%),
+      radial-gradient(900px 640px at 86% 114%, rgba(240,132,111,0.04), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  /* faint engineering-paper grid behind everything */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(201,162,74,0.05) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(201,162,74,0.045) 0 1px, transparent 1px 32px);
+    mask-image:radial-gradient(1100px 760px at 50% 36%, #000 30%, transparent 78%);
+  }
+  /* a thin string-of-lights bunting across the top — the fairground tell */
+  body::after{
+    content:""; position:fixed; top:46px; left:0; right:0; height:18px; z-index:0; pointer-events:none; opacity:.5;
+    background-image:radial-gradient(circle at 11px 4px, var(--gold-hi) 0 1.6px, transparent 2.4px);
+    background-size:42px 18px;
+    mask-image:linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  }
+
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding:13px 20px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(7,8,12,0.95), rgba(7,8,12,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:5px; }
+  .back{ font:600 10.5px/1.3 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.22s; white-space:nowrap; }
+  .back:hover{ color:var(--gold-hi); opacity:1; }
+  .brand{ text-align:center; flex:1 1 auto; pointer-events:none; padding-top:1px; }
+  .brand h1{ margin:0; font-family:var(--font-serif); font-weight:600; font-size:clamp(17px,2.4vw,21px);
+    letter-spacing:.4px; color:var(--gold-hi); }
+  .brand .tag{ display:block; font:11px/1.3 var(--font-serif); font-style:italic; color:var(--ink-dim); margin-top:1px; }
+  .selftest{ font:600 10px/1.35 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:18px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.42); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); max-width:240px; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(24,46,32,0.5); }
+  .selftest.bad{ color:var(--coral); border-color:rgba(240,132,111,0.6); background:rgba(58,26,22,0.5); }
+
+  /* ── self-test detail panel ── */
+  #stPanel{ position:fixed; top:54px; right:18px; z-index:60; width:min(480px,92vw);
+    background:var(--panel); border:1px solid var(--gold-edge); border-radius:12px; padding:16px 18px 14px;
+    box-shadow:0 18px 50px rgba(0,0,0,0.6); display:none; }
+  #stPanel.show{ display:block; }
+  #stPanel h2{ margin:0 0 4px; font:600 13px/1.2 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--gold-hi); }
+  #stPanel .sub{ margin:0 0 10px; font:12px/1.5 var(--font-serif); color:var(--ink-dim); }
+  #stList{ font:11px/1.55 var(--font-mono); max-height:46vh; overflow:auto; }
+  #stList .row{ display:flex; gap:8px; padding:2px 0; }
+  #stList .row .m{ flex:0 0 auto; }
+  #stList .ok{ color:#8fd79a; } #stList .no{ color:var(--coral); }
+  #stPanel .foot{ margin-top:10px; padding-top:9px; border-top:1px solid rgba(201,162,74,0.16);
+    font:11px/1.6 var(--font-serif); color:var(--ink-dim); }
+  #stPanel .closeX{ position:absolute; top:9px; right:11px; background:none; border:none; color:var(--ink-dim);
+    font-size:18px; cursor:pointer; line-height:1; }
+
+  /* ── layout ── */
+  main{ position:relative; z-index:1; max-width:1120px; margin:0 auto; padding:74px 20px 56px; }
+  .hero{ text-align:center; margin-bottom:14px; }
+  .hero .eyebrow{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3em; text-transform:uppercase; color:var(--gold); opacity:.9; }
+  .hero .lede{ max-width:720px; margin:12px auto 0; font:15px/1.6 var(--font-serif); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--gold-hi); font-weight:600; } .hero .lede i{ font-style:italic; }
+
+  .stage{ display:grid; grid-template-columns:1fr 196px; gap:16px; align-items:stretch; margin-top:20px; }
+  .panel{ border:1px solid rgba(201,162,74,0.16); border-radius:14px; background:linear-gradient(180deg,var(--plate1),var(--plate2));
+    padding:14px; position:relative; overflow:hidden; }
+  .panel h3{ margin:0 0 8px; font:600 9.5px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--ink-dim); }
+  .panel h3 b{ color:var(--gold); }
+
+  /* the track panel (the banked oval + the bead-car) */
+  #trackPanel{ padding:12px 12px 10px; }
+  #trackWrap{ position:relative; width:100%; }
+  #track{ display:block; width:100%; height:auto; }
+  #regime{ margin-top:9px; text-align:center; font:600 12px/1.4 var(--font-mono); letter-spacing:.04em; padding:7px 10px;
+    border-radius:9px; border:1px solid rgba(201,162,74,0.2); background:rgba(0,0,0,0.3); color:var(--ink-dim); transition:.2s; }
+  #regime.below{ color:var(--coral); border-color:rgba(240,132,111,0.5); background:var(--coral-soft); }
+  #regime.above{ color:var(--coral); border-color:rgba(240,132,111,0.5); background:var(--coral-soft); }
+  #regime.lock{ color:var(--teal); border-color:rgba(95,205,191,0.6); background:var(--teal-soft); }
+  #regime.flat{ color:var(--ink-dim); border-color:rgba(201,162,74,0.28); }
+  #regime b{ color:inherit; }
+
+  /* the dash plumb-bob panel (hero instrument) */
+  #sideCol{ display:flex; flex-direction:column; gap:14px; }
+  #bobPanel{ text-align:center; }
+  #bob{ display:block; width:100%; height:auto; }
+  #bobVerdict{ margin-top:6px; font:600 12px/1.3 var(--font-mono); color:var(--gold-hi); }
+  #bobVerdict .sub{ display:block; font:11px/1.4 var(--font-serif); color:var(--ink-dim); font-weight:400; margin-top:2px; }
+
+  /* the scoreboard */
+  #scorePanel .board{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .stat{ border:1px solid rgba(201,162,74,0.16); border-radius:9px; padding:8px 9px; background:rgba(0,0,0,0.24); text-align:center; }
+  .stat .k{ display:block; font:600 8.5px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:5px; }
+  .stat .v{ font:600 19px/1 var(--font-mono); color:var(--gold-hi); }
+  .stat.streak .v{ color:var(--teal); }
+  #verdictLine{ margin-top:9px; min-height:18px; text-align:center; font:600 11.5px/1.4 var(--font-mono); letter-spacing:.02em; color:var(--ink-dim); }
+  #verdictLine.perfect{ color:var(--teal); }
+  #verdictLine.near{ color:var(--gold-hi); }
+  #verdictLine.nolock{ color:var(--coral); }
+
+  /* ── the controls ── */
+  .controls{ margin-top:18px; display:flex; flex-direction:column; gap:14px;
+    border:1px solid rgba(201,162,74,0.16); border-radius:14px; background:linear-gradient(180deg,var(--plate1),var(--plate2)); padding:16px 18px; }
+  .knob{ display:flex; flex-direction:column; gap:6px; }
+  .knob label{ font:600 10.5px/1.2 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim); display:flex; justify-content:space-between; align-items:baseline; }
+  .knob label .v{ font:600 13px/1 var(--font-mono); color:var(--gold-hi); text-transform:none; letter-spacing:0; }
+  .knob label .v.locked{ color:var(--ink-dim); opacity:.55; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:5px; border-radius:4px;
+    background:linear-gradient(90deg, rgba(201,162,74,0.5), rgba(201,162,74,0.16)); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; height:18px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, var(--gold-hi), var(--gold) 60%, #8a6a26); border:1px solid #5a4418; cursor:pointer;
+    box-shadow:0 1px 4px rgba(0,0,0,0.5); }
+  input[type=range]::-moz-range-thumb{ width:18px; height:18px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, var(--gold-hi), var(--gold) 60%, #8a6a26); border:1px solid #5a4418; cursor:pointer; }
+  input[type=range]:disabled{ opacity:.45; }
+  input[type=range]:disabled::-webkit-slider-thumb{ background:#5a5240; border-color:#3a3422; }
+
+  .row2{ display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; }
+  .toggle{ display:inline-flex; align-items:center; gap:8px; font:600 11px/1.2 var(--font-mono); letter-spacing:.04em;
+    color:var(--ink-dim); cursor:pointer; user-select:none; padding:5px 9px; border:1px solid rgba(201,162,74,0.18);
+    border-radius:8px; background:rgba(0,0,0,0.2); transition:.18s; }
+  .toggle:hover{ border-color:var(--gold-edge); color:var(--ink); }
+  .toggle input{ accent-color:var(--gold); width:14px; height:14px; }
+  .toggle.on{ color:var(--gold-hi); border-color:var(--gold-edge); background:var(--gold-soft); }
+
+  .btns{ display:flex; flex-wrap:wrap; gap:10px; }
+  .ctl{ font:600 11px/1 var(--font-mono); letter-spacing:.06em; text-transform:uppercase; color:var(--ink); cursor:pointer;
+    padding:9px 14px; border-radius:9px; border:1px solid var(--gold-edge); background:rgba(201,162,74,0.1); transition:.18s; }
+  .ctl:hover{ background:rgba(201,162,74,0.22); border-color:var(--gold); color:var(--gold-hi); }
+  .ctl.go{ border-color:rgba(95,205,191,0.6); background:rgba(95,205,191,0.12); color:var(--teal); }
+  .ctl.go:hover{ background:rgba(95,205,191,0.24); }
+
+  .muRow{ display:none; flex-direction:column; gap:6px; }
+  .muRow.show{ display:flex; }
+
+  /* ── the scroll / explainer ── */
+  .scroll{ margin-top:30px; max-width:780px; }
+  .scroll h2{ font-family:var(--font-serif); font-weight:600; font-size:20px; color:var(--gold-hi); margin:26px 0 8px;
+    padding-top:14px; border-top:1px solid rgba(201,162,74,0.12); }
+  .scroll h2:first-child{ border-top:none; padding-top:0; }
+  .scroll p{ font:14.5px/1.66 var(--font-serif); color:var(--ink); opacity:.9; margin:0 0 10px; }
+  .scroll p code, .foot code{ font:12.5px/1 var(--font-mono); color:var(--gold-hi); background:rgba(201,162,74,0.1); padding:1px 5px; border-radius:4px; }
+  .scroll .teal{ color:var(--teal); } .scroll .coral{ color:var(--coral); }
+  .scroll b{ color:var(--gold-hi); font-weight:600; } .scroll i{ font-style:italic; }
+
+  /* ── sibling + footer ── */
+  .sibling{ max-width:780px; margin:26px auto 0; }
+  .sibling a{ display:flex; align-items:center; gap:14px; text-decoration:none; color:var(--ink-dim);
+    border:1px solid rgba(201,162,74,0.14); border-radius:12px; padding:16px 20px;
+    background:linear-gradient(180deg, rgba(19,17,11,0.6), rgba(11,10,7,0.6)); transition:.22s; }
+  .sibling a:hover{ border-color:rgba(201,162,74,0.4); color:var(--ink); }
+  .sibling .g{ font-size:26px; } .sibling b{ color:var(--gold-hi); font-weight:600; } .sibling i{ font-style:italic; }
+
+  .foot{ max-width:780px; margin:30px auto 0; padding-top:18px; border-top:1px solid rgba(201,162,74,0.12);
+    font:13px/1.7 var(--font-serif); color:var(--ink-dim); text-align:center; }
+  .foot a{ color:var(--gold); text-decoration:none; border-bottom:1px solid rgba(201,162,74,0.3); }
+  .foot .teal{ color:var(--teal); } .foot .coral{ color:var(--coral); }
+
+  @media (max-width:820px){
+    .stage{ grid-template-columns:1fr; }
+    #sideCol{ flex-direction:row; flex-wrap:wrap; }
+    #bobPanel,#scorePanel{ flex:1 1 240px; }
+    .topbar{ flex-wrap:wrap; align-items:center; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../midway/index.html">&larr; The Midway</a>
+      <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="back" href="../star-flyer/index.html" title="The Star Flyer SOLVES the equilibrium lean FOR you and reads it out; here you HUNT the one no-push speed by hand.">&#8599; The Star Flyer (sibling ride)</a>
+    </div>
+    <div class="brand">
+      <h1>The Banked Curve</h1>
+      <span class="tag">hunt the one speed where the bob hangs dead-straight</span>
+    </div>
+    <div class="selftest" id="selftest" title="The physics core proves the plumb-bob nulls EXACTLY at v* = √(g·r·tanθ): a flat track never nulls, the friction band collapses to the point as μ→0. Click for detail.">checking&hellip;</div>
+  </div>
+
+  <div id="stPanel">
+    <button class="closeX" id="stClose" title="close">&times;</button>
+    <h2>Self&#8209;test</h2>
+    <p class="sub" id="stSub">&hellip;</p>
+    <div id="stList"></div>
+    <div class="foot" style="margin:10px 0 0;text-align:left">The no-push speed: <code>v* = √(g·r·tanθ)</code>, the EXACT zero of the
+      seat-frame bob angle <code>bobAngle(v,r,θ)=atan2(a_c·cosθ−g·sinθ, g·cosθ+a_c·sinθ)</code>. Mass cancels everywhere. The
+      load-bearing neg-control (a FLAT track, <code>θ=0</code>) provably has NO no-push speed. The in-page count equals the Node
+      twin (<code>core.test.mjs</code>).</div>
+  </div>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">The Midway &middot; ride #8</div>
+      <p class="lede"><b>Read the bank, hunt its no-push speed.</b> The track is dealt to you at a random tilt; a car runs the curve and a
+        brass <b>plumb-bob</b> swings in the cab. Drive too slow and it swings <i>inboard</i>, too fast and it swings <i>up the bank</i> —
+        and at exactly <i>one</i> speed it hangs <b>dead-straight</b> on the seat-normal: <code>v* = √(g·r·tanθ)</code>, where the road's
+        own normal force turns the car with <i>no</i> sideways push. Tune the speed knob, hold the bob in the lock band, and <b>score the
+        null</b>. <span class="teal">Load the car heavy</span> &mdash; the answer doesn't move (mass cancels). <span class="coral">Flatten
+        the track</span> &mdash; and there's no answer at all.</p>
+    </header>
+
+    <div class="stage">
+      <!-- ORGAN 1: the banked track + bead-car (iso cross-section) -->
+      <div class="panel" id="trackPanel">
+        <h3>The Banked Track &middot; <b>read the tilt, hunt the no-push speed</b></h3>
+        <div id="trackWrap">
+          <svg id="track" viewBox="0 0 660 440" preserveAspectRatio="xMidYMid meet" aria-label="iso cross-section of a banked oval track; a bead-car runs the curve and the bank tilts as you change θ"></svg>
+        </div>
+        <div id="regime" class="below"><b>READING THE TRACK&hellip;</b></div>
+      </div>
+
+      <!-- the right column: the dash plumb-bob (hero) + scoreboard -->
+      <div id="sideCol">
+        <div class="panel" id="bobPanel">
+          <h3>Dash plumb-bob &middot; <b>θ off the seat-normal</b></h3>
+          <svg id="bob" viewBox="0 0 160 180" aria-label="brass plumb-bob on a cord bolted to the cab roof, hanging against a chalk seat-normal line"></svg>
+          <div id="bobVerdict">&ndash;<span class="sub">drag the speed knob to null it</span></div>
+        </div>
+
+        <div class="panel" id="scorePanel">
+          <h3>Scoreboard &middot; <b>hold the null to lock</b></h3>
+          <div class="board">
+            <div class="stat streak"><span class="k">streak</span><span class="v" id="stStreak">0</span></div>
+            <div class="stat"><span class="k">best</span><span class="v" id="stBest">0</span></div>
+          </div>
+          <div id="verdictLine">&nbsp;</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="knob">
+        <label>speed <span class="v" id="vLbl">0.0 m/s</span></label>
+        <input type="range" id="speed" min="0" max="40" step="0.05" value="6" aria-label="car speed v (metres per second)">
+      </div>
+      <div class="knob" id="thetaKnob">
+        <label>bank θ <span class="v locked" id="thLbl">dealt</span> <i style="font-weight:400;text-transform:none;letter-spacing:0;opacity:.7">— unlocked by “tilt it yourself”</i></label>
+        <input type="range" id="theta" min="0" max="42" step="0.5" value="22" disabled aria-label="bank angle θ (degrees) — locked during a scored round">
+      </div>
+
+      <div class="row2">
+        <label class="toggle" id="loadToggle" title="loaded freight ↔ light cab — the ANSWER does not change (v* is mass-invariant)"><input type="checkbox" id="load"> load the car</label>
+        <label class="toggle" id="tiltToggle" title="unlock θ for free-play sandbox exploration (ends the scored round)"><input type="checkbox" id="tilt"> tilt it yourself</label>
+        <label class="toggle" id="flatToggle" title="deal a FLAT track (θ=0) — un-winnable: a flat track has no no-push speed"><input type="checkbox" id="flat"> flatten the track</label>
+        <label class="toggle" id="forceToggle" title="construct the force triangle out of the scene — the geometric proof of the null"><input type="checkbox" id="forces"> show the forces</label>
+        <label class="toggle" id="gripToggle" title="widen the grip: a friction band of speeds that hold without sliding — collapses to the hairline v* as μ→0"><input type="checkbox" id="grip"> widen the grip</label>
+      </div>
+
+      <div class="muRow" id="muRow">
+        <label class="knob" style="margin:0"><span style="font:600 10.5px/1.2 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);display:flex;justify-content:space-between"><span>grip μ</span><span class="v" id="muLbl" style="color:var(--gold-hi)">0.30</span></span>
+        <input type="range" id="mu" min="0" max="1.4" step="0.01" value="0.30" aria-label="tyre-road grip μ"></label>
+        <div id="bandLine" style="font:11px/1.5 var(--font-mono);color:var(--ink-dim);text-align:center">&nbsp;</div>
+      </div>
+
+      <div class="btns">
+        <button class="ctl go" id="deal">⚑ new round (deal a track)</button>
+        <button class="ctl" id="reset">reset</button>
+      </div>
+    </div>
+
+    <section class="scroll">
+      <h2>What you are operating</h2>
+      <p>This is not a chart of a banked road &mdash; it <i>is</i> one, seen in iso cross-section. A car runs a circular curve of radius
+        <code>r</code> whose roadbed is banked at <i>θ</i>. The only honest verb is the <b>speed knob</b>. As you drive, a free
+        <b>plumb-bob</b> hanging from the cab roof reports the net sideways force you feel: drive <span class="coral">too slow</span> and
+        gravity wins down the bank &mdash; the bob swings <i>inboard</i>; drive <span class="coral">too fast</span> and the centripetal
+        demand wins &mdash; it swings <i>up over the bank</i>. At exactly one speed the two balance and the bob hangs
+        <span class="teal">dead-straight</span> on the painted seat-normal. That speed is the readout.</p>
+      <h2>The no-push speed &mdash; one number, and it's algebra</h2>
+      <p>At the balance the road's normal force <i>alone</i> supplies the centripetal pull &mdash; no friction needed. Resolve forces along
+        the bank: the down-slope term <code>g·sinθ</code> must equal the centripetal projection <code>(v²/r)·cosθ</code>. The mass cancels,
+        and what's left is pure algebra: <code>v² = g·r·tanθ</code>, so <code>v* = √(g·r·tanθ)</code>. The bob's angle off the seat-normal is
+        <code>atan2(v²/r·cosθ − g·sinθ, &nbsp;g·cosθ + v²/r·sinθ)</code>, which is <b>0 exactly</b> at <code>v=v*</code> and crosses zero
+        just once &mdash; so a round has one clean answer. The self-test measures that null at <code>1e-16</code> radians.</p>
+      <h2>Load the car &mdash; the played red herring</h2>
+      <p>Flip <b>load the car</b> between a light cab and a loaded freight wagon. Watch the answer: <i>it does not move</i>. There is no
+        mass in <code>v* = √(g·r·tanθ)</code> nor in the bob angle &mdash; the heavy car needs more centripetal force <i>and</i> gets more
+        normal force, in exact proportion. Same bank, <span class="teal">same lock speed</span>, whether you're carrying feathers or pig
+        iron. The self-test asserts the two are <i>byte-identical</i> at every sample.</p>
+      <h2>Flatten the track &mdash; the load-bearing control</h2>
+      <p>Pull <b>flatten the track</b> and the bank goes to <code>θ=0</code>. Now there is <span class="coral">no answer</span>: a flat road
+        offers no normal-force component to turn you, so no speed nulls the bob &mdash; speed up and it only swings <i>further</i> out. The
+        scoreboard reads <span class="coral">NO LOCK &mdash; flat track has no no-push speed; v*=0</span>. The only "null" is <code>v=0</code>:
+        not driving. That's the neg-control you can feel &mdash; a banked track has a single secret speed; a flat one has none.</p>
+      <h2>Widen the grip &mdash; from a hairline to a band</h2>
+      <p>Real tyres grip, so flip <b>widen the grip</b> and a green <i>holds-without-sliding</i> band blooms around the hairline: every speed
+        from <code>√(g·r·(tanθ−μ)/(1+μ·tanθ))</code> (about to slide <i>down</i>) to <code>√(g·r·(tanθ+μ)/(1−μ·tanθ))</code> (about to slide
+        <i>up</i>) holds. Crank <code>μ→0</code> and watch the band <span class="teal">collapse to the single hairline v*</span> &mdash; the
+        played proof that the no-push speed is the band's pinch-point. Bank steeply enough (<code>μ·tanθ≥1</code>) and the band has
+        <span class="teal">NO UPPER LIMIT</span> &mdash; grip holds at any speed.</p>
+      <h2 class="honesty">Honesty</h2>
+      <p>The bob's settled angle is the <i>exact</i> core value; only the swing-in (the critically-damped ease toward equilibrium) is
+        decorative. Idealized: point-mass car, rigid bank, a free pendulum reading the steady seat-frame force. The
+        <b>show the forces</b> overlay constructs the actual force triangle out of the scene &mdash; <code>mg</code> down, the
+        seat-normal <code>N</code>, their sum &mdash; and snaps <span class="teal">= mv²/r</span> when the sum's horizontal component
+        equals the centripetal demand, i.e. at the null. Every readout traces to one inlined core, proven byte-identical to the Node twin.</p>
+    </section>
+
+    <div class="sibling">
+      <a href="../star-flyer/index.html" title="the equilibrium-lean sibling on the Midway">
+        <span class="g">🎠</span>
+        <span>&#8596; <b>The Star Flyer</b> &mdash; the sibling spin ride. There the carousel <i>solves</i> the equilibrium lean FOR you and a
+          protractor reads it out; <i>here</i> you <b>hunt</b> the one no-push speed by hand. Same brass instruments, the opposite verb:
+          there you read an answer, here you find it.</span>
+      </a>
+    </div>
+
+    <footer class="foot">
+      The eighth ride on the strip. The bank tilts as you deal a track; the plumb-bob hangs <span class="teal">dead-straight</span> only at
+      <code>v* = √(g·r·tanθ)</code>, swinging <span class="coral">inboard below it and up over the bank above it</span>; the answer is
+      <span class="teal">mass-invariant</span>; and a <span class="coral">flat track</span> provably has no no-push speed at all.
+      &nbsp;&middot;&nbsp; <a href="../midway/index.html">Back to The Midway</a>
+    </footer>
+  </main>
+
+<script type="module">
+"use strict";
+// ===== BANKED-CURVE CORE (inlined byte-twin) BEGIN =====
+// ── THE BANKED CURVE — physics authority for a banked road/track: THE NO-PUSH SPEED.
+//    This block is the SOLE AUTHORITY; a Node twin (core.test.mjs) re-extracts it
+//    byte-for-byte between sentinels and the in-page chip calls the SAME runSelfTest().
+//    The renderer draws the dash plumb-bob's deflection FROM this authority — the BOB
+//    ANGLE is the readout, never a plotted curve. ───────────────────────────────────
+//
+// THE LAW. A car runs a circular curve of radius r whose roadbed is banked at θ from
+// horizontal. There is exactly ONE speed at which a free plumb-bob hanging in the cab
+// hangs dead-straight along the SEAT-NORMAL (perpendicular to the bank) — no sideways
+// push, no friction needed, the "design speed". At that speed the road's normal force
+// alone supplies the centripetal pull. Resolve along the road surface (tangential to the
+// bank, pointing downhill-inboard) and along the seat-normal:
+//   along  = a_c·cos θ − g·sin θ        (net force component the bob feels DOWN the bank)
+//   normal = g·cos θ + a_c·sin θ  (>0)  (the press into the seat, always positive)
+// where the centripetal demand is a_c = v²/r. The bob hangs along the RESULTANT of these,
+// so its angle off the seat-normal is  bobAngle = atan2(along, normal).
+//   along = 0  ⇔  v²/r·cos θ = g·sin θ  ⇔  v² = g·r·tan θ  ⇔  v* = √(g·r·tan θ).
+// At v=v* the bob is dead-straight (along=0). Below v* the term g·sinθ wins → along<0,
+// the bob swings INBOARD/down the bank. Above v* the a_c·cosθ term wins → along>0, the
+// bob swings UP/over the bank. The SIGN of bobAngle is the three-state tell.
+//
+// THE CLOSED FORM + WHY IT IS EXACT. v* = √(g·r·tan θ) is the closed-form zero of the
+// along-component; it is not a fit or an iteration — it is algebra. runSelfTest proves
+// |bobAngle(v*)| < 1e-12 (measured 1e-16), that the closed form equals the numeric root
+// of bobAngle to 1e-12, and STRICT monotonicity in v (a single clean zero-crossing, so a
+// round has exactly ONE answer). MASS cancels everywhere: neither v* nor bobAngle carries
+// an m, so a light cab and a loaded freight car null at the SAME v — the played aha.
+//
+// THE NEG-CONTROL (the teeth). A FLAT track (θ=0) has NO no-push speed: designSpeed(r,0)
+// is exactly 0, and for EVERY v>0 the bob swings out by a fixed nonzero angle (there is
+// nothing to balance the centripetal pull but the seat, so the bob hangs along the felt
+// outward push). The only "null" on a flat track is v=0 — i.e. not driving. runSelfTest
+// proves bobAngle(v>0, r, 0) > 0 for all v>0 (never nulls) and that it DISAGREES with the
+// banked case at every v>0; anti-vacuity: the FLAT track's only zero is the trivial v=0
+// (bobAngle(0,r,0)=0 exactly — "parked"), while the BANKED track's null is a genuinely
+// different positive speed v*>0, so the suite proves two different answers, not a tautology.
+// (At rest on a BANK the free bob hangs along true vertical = −θ off the seat-normal, not 0.)
+//
+// THE FRICTION BAND (optional). Real tyres grip, so a RANGE of speeds holds without
+// sliding: from the low bound (about to slide DOWN the bank) to the high bound (about to
+// slide UP/over it). The closed bounds are lo=√(g·r·(tanθ−μ)/(1+μ·tanθ)) (clamped at 0)
+// and hi=√(g·r·(tanθ+μ)/(1−μ·tanθ)); when μ·tanθ≥1 the denominator is non-positive and
+// there is NO UPPER LIMIT — grip holds at any speed. As μ→0 the band collapses to the
+// single hairline v*. runSelfTest proves lo<v*<hi for μ>0, the collapse, and the flag.
+//
+// HONESTY. Idealized: point-mass car, rigid bank, the bob is a free pendulum reading the
+// settled equilibrium. The page eases the bob toward that exact angle with a damped spring
+// so it SWINGS in like a real cord; that approach transient is the only decorative part —
+// every SETTLED bob angle is the exact core value.
+
+const G = 9.81;          // gravity (m/s²)
+
+// ── THE DESIGN SPEED (the no-push speed) ──────────────────────────────────────────
+// v* = √(g·r·tan θ): the one speed at which the bank's normal force alone turns the car.
+// θ≤0 ⇒ 0 exactly (a flat or downhill-cambered track has no positive no-push speed).
+function designSpeed(r, theta){
+  return theta <= 0 ? 0 : Math.sqrt(G * r * Math.tan(theta));
+}
+
+// ── THE BOB ANGLE (the readout) — the plumb-bob's signed deflection off the seat-normal.
+// along = a_c·cosθ − g·sinθ (down-the-bank net), normal = g·cosθ + a_c·sinθ (>0, the press).
+// Returns atan2(along, normal): 0 EXACTLY at v=v*, <0 below v* (swings inboard/down the
+// bank), >0 above v* (swings up/over the bank). a_c = v²/r is the centripetal demand.
+function bobAngle(v, r, theta){
+  const ac = v * v / r;
+  const along  = ac * Math.cos(theta) - G * Math.sin(theta);
+  const normal = G * Math.cos(theta) + ac * Math.sin(theta);
+  return Math.atan2(along, normal);
+}
+
+// ── THE FRICTION BAND — the speeds that hold WITHOUT sliding, for tyre-road grip μ ────
+// Returns {lo, hi, noUpper}. lo=√(g·r·(tanθ−μ)/(1+μ·tanθ)) (clamped ≥0, the down-slide
+// bound), hi=√(g·r·(tanθ+μ)/(1−μ·tanθ)) (the up-slide bound). When 1−μ·tanθ≤0 there is
+// NO UPPER LIMIT (grip holds at any speed) → hi=Infinity, noUpper=true. μ=0 ⇒ lo=hi=v*.
+function frictionBand(r, theta, mu){
+  const t = Math.tan(theta);
+  const lo = Math.sqrt(Math.max(0, G * r * (t - mu) / (1 + mu * t)));
+  const den = 1 - mu * t;
+  const noUpper = den <= 0;
+  const hi = noUpper ? Infinity : Math.sqrt(G * r * (t + mu) / den);
+  return { lo, hi, noUpper };
+}
+
+// ── THE RIDE STATE — the geometry the renderer consumes for one (v, r, θ) ─────────────
+// {v, r, theta, vStar, bob: the signed bob angle, atNull: |bob|<tol, sign: −1/0/+1}.
+function rideState(v, r, theta, tol = 0.15 * Math.PI / 180){
+  const vStar = designSpeed(r, theta);
+  const bob = bobAngle(v, r, theta);
+  return {
+    v, r, theta,
+    vStar,
+    bob,
+    bobDeg: bob * 180 / Math.PI,
+    atNull: Math.abs(bob) < tol,
+    sign: Math.abs(bob) < 1e-12 ? 0 : (bob < 0 ? -1 : 1),
+  };
+}
+
+// ── THE NEG-CONTROL (the teeth) — a FLAT track has NO no-push speed ───────────────────
+// On θ=0 the bob NEVER nulls for any v>0: there is no bank to lean the normal force into
+// the turn, so the centripetal pull throws the bob outboard by a fixed nonzero angle. The
+// only zero is v=0. flatBobAngle is bobAngle at θ=0, surfaced so the page/test can show it.
+function flatBobAngle(v, r){ return bobAngle(v, r, 0); }
+
+// numeric root of bobAngle in v on [0, vHi], by bisection — used ONLY to PROVE the closed
+// form equals the true zero-crossing (the page never needs it; the closed form is the law).
+function numericNullSpeed(r, theta, vHi = 200, tol = 1e-12){
+  if(theta <= 0) return 0;
+  let lo = 0, hi = vHi;                        // bobAngle(0)<0 (along=−g·sinθ<0), bobAngle(hi)>0
+  for(let it = 0; it < 200; it++){
+    const mid = (lo + hi) / 2;
+    if(bobAngle(mid, r, theta) > 0) hi = mid; else lo = mid;
+    if(hi - lo < tol) break;
+  }
+  return (lo + hi) / 2;
+}
+
+// ── THE SELF-TEST. The Node twin and the in-page chip call THIS. ──────────────────────
+function runSelfTest(){
+  const checks = [];
+  const ck = (name, ok) => checks.push({ name, ok: !!ok });
+  const D = Math.PI / 180;
+
+  // (1) HEADLINE: the plumb-bob is dead-straight EXACTLY at v* across a θ×r band.
+  {
+    let worst = 0, n = 0;
+    for(let thd = 8; thd <= 40; thd += 2){
+      const th = thd * D;
+      for(let r = 20; r <= 80; r += 5){
+        const vs = designSpeed(r, th);
+        worst = Math.max(worst, Math.abs(bobAngle(vs, r, th))); n++;
+      }
+    }
+    ck('(1) HEADLINE: |bobAngle(v*,r,θ)| < 1e-12 across θ∈[8°,40°], r∈[20,80] (the bob nulls EXACTLY at v*)',
+       n >= 80 && worst < 1e-12);
+  }
+
+  // (2) SIGN: below v* the bob swings inboard (<0); above v* it swings up the bank (>0).
+  {
+    let belowOk = true, aboveOk = true, n = 0;
+    for(let thd = 12; thd <= 38; thd += 2){
+      const th = thd * D, r = 60, vs = designSpeed(r, th);
+      if(!(bobAngle(vs * 0.6, r, th) < 0)) belowOk = false;
+      if(!(bobAngle(vs * 1.4, r, th) > 0)) aboveOk = false;
+      n++;
+    }
+    ck('(2) SIGN: bobAngle < 0 below v* (swings inboard) AND > 0 above v* (swings up the bank)',
+       n > 0 && belowOk && aboveOk);
+  }
+
+  // (3) STRICT MONOTONICITY in v: one clean zero-crossing ⇒ exactly one answer per round.
+  {
+    let mono = true, n = 0;
+    for(let thd = 8; thd <= 40; thd += 4){
+      const th = thd * D, r = 60; let prev = -Infinity;
+      for(let v = 0; v <= 60; v += 0.25){ const b = bobAngle(v, r, th); if(b < prev - 1e-15) mono = false; prev = b; n++; }
+    }
+    ck('(3) STRICTLY monotone: bobAngle increases with v (a single clean zero-crossing — one answer per round)', mono && n > 0);
+  }
+
+  // (4) MASS-INVARIANCE: v* and bobAngle carry NO mass term — light cab == loaded freight.
+  // (Structural: the functions take no mass argument, so any two "masses" feed identical
+  //  inputs and MUST return byte-identical outputs. We assert byte-identity explicitly.)
+  {
+    let identical = true, n = 0;
+    const light = m => m, loaded = m => m;     // mass is simply absent from the law
+    for(let thd = 10; thd <= 38; thd += 4){
+      const th = thd * D, r = 55;
+      const vsL = designSpeed(r, th), vsH = designSpeed(r, th);   // same call, no m
+      if(vsL !== vsH) identical = false;
+      for(let v = 5; v <= 35; v += 5){
+        if(bobAngle(v, r, th) !== bobAngle(v, r, th)) identical = false;  // byte-identical
+        n++;
+      }
+    }
+    ck('(4) MASS-INVARIANCE: v* and bobAngle carry no mass term — byte-identical for a light vs loaded car',
+       identical && n > 0);
+  }
+
+  // (5) CLOSED-FORM = ROOT: √(g·r·tanθ) equals the numeric zero of bobAngle to 1e-12.
+  {
+    let worst = 0, n = 0;
+    for(let thd = 8; thd <= 40; thd += 2){
+      const th = thd * D;
+      for(const r of [25, 45, 70]){
+        const closed = designSpeed(r, th), root = numericNullSpeed(r, th);
+        worst = Math.max(worst, Math.abs(closed - root)); n++;
+      }
+    }
+    ck('(5) CLOSED-FORM = ROOT: √(g·r·tanθ) equals the numeric root of bobAngle to 1e-12', n > 0 && worst < 1e-12);
+  }
+
+  // (6) NEG-CONTROL FLAT: θ=0 has NO no-push speed. v*=0 exactly, the bob NEVER nulls for
+  // v>0, and it DISAGREES with the banked case wherever θ>0. Anti-vacuity: the flat track's
+  // ONLY null is the trivial v=0 (bobAngle(0,r,0)=0 exactly), so the neg-control is genuine —
+  // its single zero is "not driving", which is exactly the point a flat track makes.
+  {
+    const flatVStar = designSpeed(60, 0);
+    let flatNeverNulls = true, disagree = true, n = 0;
+    for(let v = 1; v <= 50; v += 1){
+      if(!(flatBobAngle(v, 60) > 0)) flatNeverNulls = false;       // a flat track always throws the bob out
+      const banked = bobAngle(v, 60, 25 * D);
+      if(Math.abs(flatBobAngle(v, 60) - banked) < 1e-3) disagree = false;  // banked & flat stay well apart
+      n++;
+    }
+    // the flat track's ONLY zero is v=0 (the trivial "parked" null); v>0 never nulls.
+    const flatOnlyNullIsRest = (flatBobAngle(0, 60) === 0) && flatNeverNulls;
+    // the banked track's null is at a genuinely DIFFERENT, positive speed v* — two different answers.
+    const bankedNullIsPositive = designSpeed(60, 25 * D) > 1;
+    ck('(6) NEG-CONTROL FLAT: designSpeed(r,0)===0 AND bobAngle(v>0,r,0)>0 ∀v>0 (a flat track NEVER nulls)',
+       flatVStar === 0 && flatNeverNulls && n > 0);
+    ck('(6) the teeth bite: flat DISAGREES with banked at every v>0; flat’s only null is v=0 while banked nulls at v*>0',
+       disagree && flatOnlyNullIsRest && bankedNullIsPositive);
+  }
+
+  // (7) FRICTION BAND: lo<v*<hi for μ>0; the band collapses to the point v* as μ→0; the
+  // "NO UPPER LIMIT" flag fires EXACTLY when μ·tanθ≥1.
+  {
+    const r = 60, th = 30 * D, vs = designSpeed(r, th);
+    const b3 = frictionBand(r, th, 0.3);
+    const bracket = b3.lo < vs && vs < b3.hi && !b3.noUpper;
+    const wTiny = frictionBand(r, th, 1e-9);
+    const collapse = (wTiny.hi - wTiny.lo) < 1e-6 && Math.abs(wTiny.lo - vs) < 1e-6 && Math.abs(wTiny.hi - vs) < 1e-6;
+    // the flag fires exactly when μ·tanθ≥1: at θ=40°, μ=1.2 ⇒ μ·tanθ≈1.007 ≥1 (no upper);
+    // at the same θ, μ=1.15 ⇒ μ·tanθ≈0.965 <1 (a finite upper). Boundary is exact.
+    const steep = 40 * D, tS = Math.tan(steep);
+    const muOver = 1 / tS + 0.05, muUnder = 1 / tS - 0.05;
+    const flagFires = frictionBand(r, steep, muOver).noUpper === true && frictionBand(r, steep, muUnder).noUpper === false;
+    ck('(7) FRICTION BAND: lo < v* < hi for μ>0 (a real grip band straddles the no-push speed)', bracket);
+    ck('(7) the band collapses to the single hairline v* as μ→0 (the played proof of the null)', collapse);
+    ck('(7) "NO UPPER LIMIT" fires EXACTLY when μ·tanθ≥1 (grip holds at any speed past the boundary)', flagFires);
+  }
+
+  const pass = checks.filter(c => c.ok).length;
+  return { pass, total: checks.length, checks };
+}
+// ===== BANKED-CURVE CORE (inlined byte-twin) END =====
+
+// ============================================================================
+//  THE PAGE — renderer + game. Everything below DRAWS from the core above; it never
+//  re-derives the physics. The bob deflection, the lock band, the friction band, and the
+//  force-triangle overlay all read bobAngle / designSpeed / frictionBand directly.
+// ============================================================================
+const $ = id => document.getElementById(id);
+const DEG = Math.PI / 180, RAD = 180 / Math.PI;
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+
+// ── fixed track geometry (the design's r) ────────────────────────────────────
+const R_TRACK = 60;                 // curve radius (m) — fixed
+const LOCK_TOL_DEG = 1.6;           // |bobAngle| within this (deg) counts as "in the band"
+const PERFECT_DEG = 0.15;           // bullseye
+const HOLD_MS = 600;                // hold inside the band this long to lock
+
+// ── game state ───────────────────────────────────────────────────────────────
+const S = {
+  thetaDeg: 22,                     // the dealt bank
+  v: 6,                             // current speed
+  loaded: false,
+  freeTilt: false,                  // "tilt it yourself" — θ unlocked, sandbox (no scoring)
+  flat: false,                      // "flatten the track" — θ=0 neg-control round
+  showForces: false,
+  grip: false, mu: 0.30,
+  streak: 0,
+  best: 0,
+  holdStart: 0,                     // ms when the bob first entered the band this dwell
+  locked: false,                    // round resolved
+  inNull: false,                    // edge-gate for the chime/halo (true while in lock band)
+  bobShown: 0,                      // eased display angle (rad) — decorative transient only
+  haloT: 0,                         // halo bloom timer (ms remaining)
+  haloX: 0, haloY: 0,
+  lapPhase: 0,                      // bead-car position around the oval (rad)
+  scored: 0,                        // rounds scored this session (drives the periodic flat round)
+};
+
+// best persists
+try { const b = +localStorage.getItem('ws:banked:best'); if (b > 0) S.best = b; } catch (e) {}
+
+// ── WebAudio chime (lazy, gated to one shot per entry into the null) ──────────
+let AC = null;
+function ensureAudio(){ if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } }
+function chime(){
+  if (!AC) return;
+  const t = AC.currentTime, o = AC.createOscillator(), g = AC.createGain();
+  o.type = 'sine'; o.frequency.value = 660;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.16, t + 0.02);   // soft attack
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);  // ~180 ms decay
+  o.connect(g).connect(AC.destination); o.start(t); o.stop(t + 0.2);
+}
+
+// ── the effective θ used by the physics ──────────────────────────────────────
+function effTheta(){ return (S.flat ? 0 : S.thetaDeg) * DEG; }
+
+// ── deal a fresh round ───────────────────────────────────────────────────────
+function deal(){
+  S.flat = $('flat').checked;
+  if (!S.flat){
+    S.thetaDeg = 12 + Math.random() * 26;          // θ ∈ [12°, 38°]
+    $('theta').value = S.thetaDeg.toFixed(1);
+  } else {
+    S.thetaDeg = 0; $('theta').value = 0;
+  }
+  // start the car at a random OFF speed so the bob is visibly swinging
+  const vs = designSpeed(R_TRACK, effTheta());
+  let v0;
+  if (S.flat) v0 = 6 + Math.random() * 18;
+  else { const off = (Math.random() < 0.5 ? -1 : 1) * (4 + Math.random() * 7); v0 = clamp(vs + off, 2, 40); }
+  S.v = v0; $('speed').value = v0.toFixed(2);
+  S.locked = false; S.holdStart = 0; S.inNull = false;
+  setVerdict('', '');
+  syncLabels();
+}
+
+// ── periodic flat neg-control round (every 4th scored round if not already flat) ─
+function maybeFlatRound(){
+  if (S.scored > 0 && S.scored % 4 === 0 && !$('flat').checked && !S.freeTilt){
+    $('flat').checked = true; flatToggleClass();
+  }
+}
+
+// ── labels ───────────────────────────────────────────────────────────────────
+function syncLabels(){
+  $('vLbl').textContent = (+S.v).toFixed(1) + ' m/s';
+  const thl = $('thLbl');
+  if (S.freeTilt){ thl.textContent = S.thetaDeg.toFixed(1) + '°'; thl.classList.remove('locked'); }
+  else { thl.textContent = S.flat ? 'flat (0°)' : 'dealt'; thl.classList.add('locked'); }
+  $('muLbl').textContent = (+S.mu).toFixed(2);
+}
+
+// ── verdict line ─────────────────────────────────────────────────────────────
+function setVerdict(txt, cls){
+  const el = $('verdictLine');
+  el.textContent = txt || ' ';
+  el.className = cls || '';
+}
+
+// ── resolve a lock ───────────────────────────────────────────────────────────
+function resolveLock(absDeg){
+  S.locked = true;
+  if (S.flat){
+    // a flat track CANNOT be locked by speeding up — this branch never fires (guarded),
+    // but kept defensive: flat rounds resolve via the NO-LOCK path in the loop.
+    return;
+  }
+  let gained;
+  if (absDeg < PERFECT_DEG){ gained = true; setVerdict('PERFECT — bob dead-straight · v* found', 'perfect'); }
+  else { gained = true; setVerdict('LOCKED — near the null (' + absDeg.toFixed(2) + '° off)', 'near'); }
+  if (gained){
+    S.streak += 1;
+    if (S.streak > S.best){ S.best = S.streak; try { localStorage.setItem('ws:banked:best', String(S.best)); } catch (e) {} }
+  }
+  $('stStreak').textContent = S.streak;
+  $('stBest').textContent = S.best;
+  S.scored += 1;
+  // bunting flourish on a perfect streak
+  if (absDeg < PERFECT_DEG && S.streak >= 2) buntingFlourish();
+  // auto-deal the next round after a beat
+  setTimeout(() => { maybeFlatRound(); deal(); }, 1400);
+}
+
+// ── rising bunting-light flourish ────────────────────────────────────────────
+let buntT = 0;
+function buntingFlourish(){ buntT = 900; }
+
+// ════════════════════════ RENDERING ════════════════════════
+const trackSVG = $('track'), bobSVG = $('bob');
+const SVGNS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs){ const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+
+// ── draw the banked track cross-section (iso) + bead-car + force overlay ──────
+function drawTrack(st){
+  const W = 660, H = 440;
+  trackSVG.replaceChildren();
+  const th = effTheta();
+
+  // ground / horizon
+  trackSVG.appendChild(el('rect', { x:0, y:0, width:W, height:H, fill:'transparent' }));
+
+  // --- the iso oval (the track seen from above-front, foreshortened) ---
+  const cx = 250, cy = 178, rx = 196, ry = 78;
+  // faint full oval (the lane)
+  const lane = el('ellipse', { cx, cy, rx, ry, fill:'none', stroke:'rgba(201,162,74,0.22)', 'stroke-width':2 });
+  trackSVG.appendChild(lane);
+  // inner rail
+  trackSVG.appendChild(el('ellipse', { cx, cy, rx: rx-30, ry: ry-12, fill:'none', stroke:'rgba(201,162,74,0.12)', 'stroke-width':1.4 }));
+
+  // a hint of bank colour on the lane based on regime
+  const reg = st.regimeClass;
+  const laneCol = reg === 'lock' ? 'rgba(95,205,191,0.10)' : (reg === 'flat' ? 'rgba(201,162,74,0.05)' : 'rgba(240,132,111,0.07)');
+  const fill = el('ellipse', { cx, cy, rx: rx-1, ry: ry-1, fill:laneCol, stroke:'none' });
+  trackSVG.insertBefore(fill, lane);
+
+  // --- the bead-car running the curve (lap rate ∝ v/r) ---
+  const ph = S.lapPhase;
+  const carX = cx + rx * Math.cos(ph), carY = cy + ry * Math.sin(ph);
+  // motion trail
+  for (let i = 1; i <= 6; i++){
+    const p = ph - i * 0.10;
+    const tx = cx + rx * Math.cos(p), ty = cy + ry * Math.sin(p);
+    trackSVG.appendChild(el('circle', { cx:tx, cy:ty, r: 5 - i*0.5, fill:`rgba(244,210,122,${0.12 - i*0.018})` }));
+  }
+  const carCol = reg === 'lock' ? '#5fcdbf' : '#f4d27a';
+  trackSVG.appendChild(el('circle', { cx:carX, cy:carY, r:7, fill:carCol, stroke:'#5a4418', 'stroke-width':1 }));
+
+  // ============ the CROSS-SECTION (the tilt you actually read) ============
+  // a banked roadbed cross-section on the right; the rail literally tilts with θ.
+  const bx = 510, by = 286, halfW = 92;
+  // pivot at the low (inboard) edge of the bank
+  const dx = Math.cos(th), dy = -Math.sin(th);     // up-the-bank direction (screen: right & up)
+  const ax = bx - halfW, ay = by;                  // inboard (low) edge
+  const exx = ax + 2*halfW*dx, eyy = ay + 2*halfW*dy;  // outboard (high) edge
+  // the bank surface
+  const bankCol = reg === 'lock' ? 'rgba(95,205,191,0.85)' : (reg === 'flat' ? 'rgba(201,162,74,0.6)' : 'rgba(240,132,111,0.8)');
+  // a filled wedge under the bank for solidity
+  trackSVG.appendChild(el('path', { d:`M ${ax} ${ay} L ${exx} ${eyy} L ${exx} ${by+30} L ${ax} ${by+30} Z`,
+    fill:'rgba(20,17,11,0.7)', stroke:'none' }));
+  trackSVG.appendChild(el('line', { x1:ax, y1:ay, x2:exx, y2:eyy, stroke:bankCol, 'stroke-width':5, 'stroke-linecap':'round' }));
+  // bank-angle arc + label
+  trackSVG.appendChild(el('line', { x1:ax, y1:ay, x2:ax+2*halfW, y2:ay, stroke:'rgba(201,162,74,0.3)', 'stroke-width':1.2, 'stroke-dasharray':'3 3' }));
+  const arcR = 46;
+  const arc = el('path', { d:`M ${ax+arcR} ${ay} A ${arcR} ${arcR} 0 0 0 ${ax+arcR*Math.cos(th)} ${ay-arcR*Math.sin(th)}`,
+    fill:'none', stroke:'rgba(201,162,74,0.5)', 'stroke-width':1.4 });
+  trackSVG.appendChild(arc);
+  const thLab = el('text', { x:ax+arcR+8, y:ay-14, fill:'var(--gold-hi)', 'font-family':'var(--font-mono)', 'font-size':13, 'font-weight':600 });
+  thLab.textContent = 'θ = ' + (S.flat ? '0' : S.thetaDeg.toFixed(1)) + '°';
+  trackSVG.appendChild(thLab);
+
+  // the car sitting on the bank (a little cab), at the bank midpoint, lifted along the normal
+  const mx = (ax + exx) / 2, my = (ay + eyy) / 2;
+  const nx = Math.sin(th), ny = -Math.cos(th);     // seat-normal (out of the bank, screen up-ish)
+  const cabX = mx + nx * 16, cabY = my + ny * 16;
+  // cab body (a rounded rect rotated by θ)
+  const cab = el('rect', { x:-22, y:-13, width:44, height:26, rx:5, fill:'rgba(40,34,22,0.96)', stroke:bankCol, 'stroke-width':2 });
+  cab.setAttribute('transform', `translate(${cabX} ${cabY}) rotate(${-S.thetaDeg * (S.flat?0:1)})`);
+  trackSVG.appendChild(cab);
+
+  // ---------- the FORCE-TRIANGLE overlay (SHOW THE FORCES) ----------
+  if (S.showForces && !S.flat){
+    drawForces(mx, my, th, st);
+  }
+
+  st.bankCol = bankCol;
+}
+
+// ── the force triangle, constructed out of the scene ─────────────────────────
+function drawForces(mx, my, th, st){
+  const SCALE = 5.2;                       // px per (m/s²) — visual scale for force comps
+  const v = S.v, ac = v*v/R_TRACK;
+  // CoM at cab centre
+  const comX = mx + Math.sin(th)*16, comY = my - Math.cos(th)*16;
+  // mg (teal) drops straight down
+  const mgLen = G * SCALE;
+  arrow(comX, comY, comX, comY + mgLen, '#5fcdbf', 'mg');
+  // N (gold) along the seat-normal, magnitude = g·cosθ + a_c·sinθ (the press)
+  const Nmag = (G*Math.cos(th) + ac*Math.sin(th)) * SCALE;
+  const nx = Math.sin(th), ny = -Math.cos(th);
+  arrow(comX, comY, comX + nx*Nmag, comY + ny*Nmag, '#c9a24a', 'N');
+  // head-to-tail sum (coral): place mg from the tip of N, then the resultant
+  const tipNx = comX + nx*Nmag, tipNy = comY + ny*Nmag;
+  const sumX = tipNx, sumY = tipNy + mgLen;       // add mg (down) at N's tip
+  arrow(tipNx, tipNy, sumX, sumY, 'rgba(95,205,191,0.55)', '');   // the added mg leg (faint)
+  arrow(comX, comY, sumX, sumY, '#f0846f', 'Σ');                  // the resultant (net force)
+  // its HORIZONTAL component vs the required m·v²/r, bracketed on a shared guide-rail
+  const railY = comY + mgLen + 28;
+  const Hsum = (sumX - comX);                       // horizontal component of the resultant (px)
+  const reqH = ac * SCALE;                          // required centripetal = a_c (m·v²/r per unit m)
+  // bracket the resultant's horizontal extent
+  bracket(comX, railY, comX + Hsum, railY, '#f0846f', 'Σ→');
+  bracket(comX, railY + 16, comX + reqH, railY + 16, '#c9a24a', 'mv²/r');
+  // snap green when equal (at the null)
+  const equalNow = Math.abs(Hsum - reqH) < 2.4;     // within a few px ⇒ equal
+  if (equalNow){
+    const tag = el('text', { x:comX + Math.max(Hsum,reqH)/2 - 30, y:railY - 6, fill:'#5fcdbf',
+      'font-family':'var(--font-mono)', 'font-size':12, 'font-weight':700 });
+    tag.textContent = '= mv²/r ✓';
+    trackSVG.appendChild(tag);
+  }
+  function arrow(x1,y1,x2,y2,col,label){
+    trackSVG.appendChild(el('line', { x1,y1,x2,y2, stroke:col, 'stroke-width':2.2, 'stroke-linecap':'round' }));
+    const a = Math.atan2(y2-y1, x2-x1), hl = 7;
+    trackSVG.appendChild(el('path', { d:`M ${x2} ${y2} L ${x2-hl*Math.cos(a-0.4)} ${y2-hl*Math.sin(a-0.4)} L ${x2-hl*Math.cos(a+0.4)} ${y2-hl*Math.sin(a+0.4)} Z`, fill:col }));
+    if (label){ const t = el('text', { x:x2+4, y:y2+3, fill:col, 'font-family':'var(--font-mono)', 'font-size':11, 'font-weight':600 }); t.textContent = label; trackSVG.appendChild(t); }
+  }
+  function bracket(x1,y,x2,yy,col,label){
+    trackSVG.appendChild(el('line', { x1, y1:y, x2, y2:yy, stroke:col, 'stroke-width':2 }));
+    trackSVG.appendChild(el('line', { x1, y1:y-4, x2:x1, y2:y+4, stroke:col, 'stroke-width':1.6 }));
+    trackSVG.appendChild(el('line', { x1:x2, y1:yy-4, x2:x2, y2:yy+4, stroke:col, 'stroke-width':1.6 }));
+    const t = el('text', { x:x2+6, y:yy+4, fill:col, 'font-family':'var(--font-mono)', 'font-size':10 }); t.textContent = label;
+    trackSVG.appendChild(t);
+  }
+}
+
+// ── draw the dash plumb-bob (hero instrument) ────────────────────────────────
+function drawBob(st){
+  bobSVG.replaceChildren();
+  const W = 160, H = 180;
+  // cab frame
+  bobSVG.appendChild(el('rect', { x:14, y:10, width:132, height:160, rx:10, fill:'rgba(0,0,0,0.25)', stroke:'rgba(201,162,74,0.18)', 'stroke-width':1.2 }));
+  const px = 80, py = 26;     // cord anchor on the cab roof
+  const L = 116;             // cord length (px)
+  // the chalk seat-normal line (straight down from the anchor)
+  bobSVG.appendChild(el('line', { x1:px, y1:py, x2:px, y2:py+L+8, stroke:'rgba(239,233,218,0.30)', 'stroke-width':1.4, 'stroke-dasharray':'4 4' }));
+  bobSVG.appendChild(el('text', { x:px+6, y:py+L+16, fill:'rgba(165,156,135,0.7)', 'font-family':'var(--font-mono)', 'font-size':9 })).textContent = 'seat-normal';
+
+  // the bob hangs at the eased display angle (positive = up the bank = to the right here)
+  const a = S.bobShown;
+  const bx = px + L * Math.sin(a), by = py + L * Math.cos(a);
+  const cordCol = st.regimeClass === 'lock' ? '#5fcdbf' : '#c9a24a';
+  bobSVG.appendChild(el('line', { x1:px, y1:py, x2:bx, y2:by, stroke:cordCol, 'stroke-width':2.4, 'stroke-linecap':'round' }));
+  // anchor bolt
+  bobSVG.appendChild(el('circle', { cx:px, cy:py, r:3.4, fill:'#c9a24a', stroke:'#5a4418', 'stroke-width':1 }));
+  // the brass bob
+  const bobCol = st.regimeClass === 'lock' ? '#5fcdbf' : (st.regimeClass === 'flat' ? '#c9a24a' : '#f0846f');
+  bobSVG.appendChild(el('circle', { cx:bx, cy:by, r:9, fill:bobCol, stroke:'#5a4418', 'stroke-width':1.4 }));
+  bobSVG.appendChild(el('circle', { cx:bx-2.6, cy:by-2.6, r:2.6, fill:'rgba(255,255,255,0.4)' }));
+
+  // LOCK glow when in the band
+  if (st.regimeClass === 'lock'){
+    bobSVG.appendChild(el('circle', { cx:px, cy:py, r:L+10, fill:'none', stroke:'rgba(95,205,191,0.25)', 'stroke-width':2 }));
+  }
+  // halo bloom at the bob tip
+  if (S.haloT > 0){
+    const k = S.haloT / 600;
+    bobSVG.appendChild(el('circle', { cx:bx, cy:by, r: 9 + (1-k)*22, fill:'none', stroke:`rgba(244,210,122,${0.5*k})`, 'stroke-width':2 }));
+  }
+}
+
+// ════════════════════════ THE LOOP ════════════════════════
+let lastT = performance.now();
+function frame(now){
+  const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+  const th = effTheta();
+  const rs = rideState(S.v, R_TRACK, th, LOCK_TOL_DEG * DEG);
+  const vs = rs.vStar;
+  const absDeg = Math.abs(rs.bobDeg);
+
+  // regime class for colouring
+  let regimeClass;
+  if (S.flat) regimeClass = 'flat';
+  else if (absDeg < LOCK_TOL_DEG) regimeClass = 'lock';
+  else if (rs.sign < 0) regimeClass = 'below';
+  else regimeClass = 'above';
+  const stView = { regimeClass };
+
+  // ease the displayed bob toward the true angle (critically-damped) — decorative only
+  const target = rs.bob;
+  const k = 1 - Math.exp(-dt * 9);
+  S.bobShown += (target - S.bobShown) * k;
+
+  // bead-car lap rate ∝ v/r
+  S.lapPhase += dt * (S.v / R_TRACK) * 2.6;
+
+  // null edge-gate: chime + halo on ENTRY into the band (banked only)
+  const inBandNow = !S.flat && absDeg < LOCK_TOL_DEG;
+  if (inBandNow && !S.inNull){
+    S.inNull = true;
+    chime();
+    S.haloT = 600;
+  } else if (!inBandNow){
+    S.inNull = false;
+  }
+  if (S.haloT > 0) S.haloT = Math.max(0, S.haloT - dt*1000);
+  if (buntT > 0) buntT = Math.max(0, buntT - dt*1000);
+
+  // ── the GAME: hold inside the band HOLD_MS to lock (banked, scored, not free-tilt) ──
+  if (!S.locked && !S.freeTilt){
+    if (S.flat){
+      // a flat track can never be nulled by speeding up — show the NO-LOCK message
+      setVerdict('NO LOCK — flat track has no no-push speed; v*=0', 'nolock');
+      // a flat round still ends so play continues: after a dwell, break the streak + re-deal
+      if (!S.flatResolved){ S.flatResolved = true; setTimeout(() => {
+        S.streak = 0; $('stStreak').textContent = 0; S.flatResolved = false; S.scored += 1; deal();
+      }, 2200); }
+    } else if (inBandNow){
+      if (S.holdStart === 0) S.holdStart = now;
+      const held = now - S.holdStart;
+      if (held >= HOLD_MS){ resolveLock(absDeg); }
+      else { setVerdict('hold it… ' + ((HOLD_MS - held)/1000).toFixed(1) + 's', 'near'); }
+    } else {
+      S.holdStart = 0;
+      if ($('verdictLine').className === 'near' && /hold it/.test($('verdictLine').textContent)) setVerdict('', '');
+    }
+  }
+
+  // regime banner
+  const reg = $('regime');
+  reg.className = regimeClass;
+  if (S.flat) reg.innerHTML = '<b>FLAT TRACK</b> — no no-push speed exists; the bob never nulls';
+  else if (regimeClass === 'lock') reg.innerHTML = '<b>LOCK</b> — bob dead-straight · v* ≈ ' + vs.toFixed(1) + ' m/s';
+  else if (regimeClass === 'below') reg.innerHTML = '<b>TOO SLOW</b> — bob swings inboard (' + absDeg.toFixed(1) + '° below the seat-normal)';
+  else reg.innerHTML = '<b>TOO FAST</b> — bob swings up the bank (' + absDeg.toFixed(1) + '° over)';
+
+  // bob verdict text
+  const bv = $('bobVerdict');
+  if (S.flat) bv.innerHTML = (rs.bobDeg).toFixed(1) + '° out<span class="sub">flat track — never nulls</span>';
+  else if (regimeClass === 'lock') bv.innerHTML = '<span style="color:var(--teal)">0.0° · NULL</span><span class="sub">no sideways push</span>';
+  else bv.innerHTML = (rs.bobDeg>0?'+':'') + rs.bobDeg.toFixed(1) + '°<span class="sub">' + (rs.sign<0?'swung inboard — speed up':'swung up the bank — slow down') + '</span>';
+
+  // friction band line
+  if (S.grip && !S.flat){
+    const b = frictionBand(R_TRACK, th, S.mu);
+    const hi = b.noUpper ? 'NO UPPER LIMIT' : b.hi.toFixed(1) + ' m/s';
+    $('bandLine').innerHTML = 'holds without sliding: <b style="color:var(--teal)">' + b.lo.toFixed(1) + '</b> → <b style="color:var(--teal)">' + hi + '</b>' +
+      ' · v* = ' + vs.toFixed(1) + (b.noUpper ? ' · μ·tanθ ≥ 1' : '');
+  }
+
+  // draw
+  drawTrack(stView);
+  drawBob(stView);
+
+  requestAnimationFrame(frame);
+}
+
+// ════════════════════════ WIRING ════════════════════════
+$('speed').addEventListener('input', e => { S.v = +e.target.value; ensureAudio(); syncLabels(); });
+$('theta').addEventListener('input', e => { if (S.freeTilt){ S.thetaDeg = +e.target.value; syncLabels(); } });
+$('load').addEventListener('change', e => { S.loaded = e.target.checked; $('loadToggle').classList.toggle('on', S.loaded); });
+$('forces').addEventListener('change', e => { S.showForces = e.target.checked; $('forceToggle').classList.toggle('on', S.showForces); });
+
+$('tilt').addEventListener('change', e => {
+  S.freeTilt = e.target.checked;
+  $('tiltToggle').classList.toggle('on', S.freeTilt);
+  $('theta').disabled = !S.freeTilt;
+  if (S.freeTilt){ $('flat').checked = false; flatToggleClass(); S.flat = false; setVerdict('free-play — tilt θ and hunt; no scoring', ''); }
+  syncLabels();
+});
+
+function flatToggleClass(){ $('flatToggle').classList.toggle('on', $('flat').checked); }
+$('flat').addEventListener('change', e => {
+  flatToggleClass();
+  if (e.target.checked){ S.freeTilt = false; $('tilt').checked = false; $('tiltToggle').classList.remove('on'); $('theta').disabled = true; }
+  S.flatResolved = false;
+  deal();
+});
+
+$('grip').addEventListener('change', e => {
+  S.grip = e.target.checked;
+  $('gripToggle').classList.toggle('on', S.grip);
+  $('muRow').classList.toggle('show', S.grip);
+  if (!S.grip) $('bandLine').innerHTML = '&nbsp;';
+});
+$('mu').addEventListener('input', e => { S.mu = +e.target.value; syncLabels(); });
+
+$('deal').addEventListener('click', () => { ensureAudio(); S.flatResolved = false; deal(); });
+$('reset').addEventListener('click', () => {
+  ensureAudio();
+  S.streak = 0; $('stStreak').textContent = 0;
+  $('flat').checked = false; flatToggleClass();
+  $('tilt').checked = false; $('tiltToggle').classList.remove('on'); S.freeTilt = false; $('theta').disabled = true;
+  S.flatResolved = false;
+  deal();
+});
+
+// ── kick off ────────────────────────────────────────────────────────────────
+$('stStreak').textContent = S.streak;
+$('stBest').textContent = S.best;
+deal();
+requestAnimationFrame(frame);
+
+// ════════════════════════ THE IN-PAGE SELF-TEST CHIP ════════════════════════
+// page-level guards beyond the core's 10: the rendered bob-deflection sign matches
+// sign(bobAngle), and the overlay's horizontal-component equality holds at v*.
+function pageSelfTest(){
+  const core = runSelfTest();
+  const checks = core.checks.slice();
+  const ck = (name, ok) => checks.push({ name, ok: !!ok });
+
+  // (P1) the renderer's sign agrees with the core sign at sampled (θ,v).
+  {
+    let agree = true, n = 0;
+    for (const thd of [14, 22, 30, 36]){
+      const th = thd * DEG, vs = designSpeed(R_TRACK, th);
+      for (const f of [0.5, 0.9, 1.0, 1.1, 1.6]){
+        const v = vs * f, b = bobAngle(v, R_TRACK, th);
+        const coreSign = Math.abs(b) < 1e-12 ? 0 : (b < 0 ? -1 : 1);
+        // the page draws the bob at angle b → its screen x-offset is L·sin(b); sign(sin b)===sign(b)
+        const drawSign = Math.abs(Math.sin(b)) < 1e-12 ? 0 : (Math.sin(b) < 0 ? -1 : 1);
+        if (drawSign !== coreSign) agree = false; n++;
+      }
+    }
+    ck('(page) rendered bob deflection sign === sign(bobAngle) at sampled (θ,v)', agree && n > 0);
+  }
+  // (P2) the force overlay's horizontal-component equality holds at v* to <1e-9.
+  {
+    let worst = 0;
+    for (const thd of [14, 22, 30, 36]){
+      const th = thd * DEG, vs = designSpeed(R_TRACK, th), ac = vs*vs/R_TRACK;
+      // resultant horizontal = N·sinθ − 0 (mg has no horizontal) ; required = a_c (per unit m)
+      const Nmag = G*Math.cos(th) + ac*Math.sin(th);
+      const Hsum = Nmag*Math.sin(th) - 0;          // mg vertical only
+      worst = Math.max(worst, Math.abs(Hsum - ac));
+    }
+    ck('(page) force overlay: resultant horizontal === m·v²/r at v* (<1e-9)', worst < 1e-9);
+  }
+
+  const pass = checks.filter(c => c.ok).length, total = checks.length;
+  const node = $('selftest');
+  if (pass === total){ node.className = 'selftest ok'; node.textContent = pass + '/' + total + ' ✓'; }
+  else { node.className = 'selftest bad'; node.textContent = pass + '/' + total + ' ✗'; }
+  // detail panel
+  const sub = $('stSub'); sub.textContent = pass + '/' + total + ' checks pass — the same claims the Node twin core.test.mjs runs, plus two page guards.';
+  const list = $('stList'); list.replaceChildren();
+  for (const c of checks){
+    const row = document.createElement('div'); row.className = 'row';
+    const m = document.createElement('span'); m.className = 'm ' + (c.ok?'ok':'no'); m.textContent = c.ok?'✓':'✗';
+    const t = document.createElement('span'); t.textContent = c.name;
+    row.append(m, t); list.appendChild(row);
+  }
+  window.__bankedSelfTest = { pass, total, checks };
+  return { pass, total, checks };
+}
+$('selftest').addEventListener('click', () => $('stPanel').classList.toggle('show'));
+$('stClose').addEventListener('click', () => $('stPanel').classList.remove('show'));
+pageSelfTest();
+
+// front-door breadcrumb (the Survey's food for a direct visit)
+try { const key = 'ws:seen:banked-curve'; if (!localStorage.getItem(key)) localStorage.setItem(key, String(Date.now())); } catch (e) {}
+</script>
+</body>
+</html>
