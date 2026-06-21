@@ -74,12 +74,11 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
-- [bug] **The Last Line and Tiltyard tiles in the Arcade room show no preview image.** Arcade tiles derive their thumbnail as `arcade/assets/thumbs/<file-basename>.png` (per `arcade/games.js`), but `arcade/assets/thumbs/the-last-line.png` and `arcade/assets/thumbs/tiltyard.png` do NOT exist — every other game has its thumb in that folder (21 present), these two were never generated when the games shipped, so both tiles point at a 404 and render blank. Fix: generate the two missing preview PNGs the same way the rest were made and commit them to `arcade/assets/thumbs/` (or override `thumb` for these two entries in `games.js` to a real asset).
-<!-- ✝ FIXED #230: On any zoom > 1 the THE MANOR HOUSE district caption becomes invisible… · after ed9fcb5 -->
 <!-- ✝ FIXED #230: Wing captions must become visible BEFORE room labels — a wing is a high… · after ed9fcb5 -->
 <!-- ✝ FIXED #230: Wing captions should NOT scale with zoom either — same defect as the di… · after ed9fcb5 -->
 <!-- ✝ FIXED #230: Room labeling is broken: the loupe is centred on the TOTAL map extent,… · after ed9fcb5 -->
 <!-- ✝ FIXED #230: A room detail popup with a lot of content grows past the viewport and g… · after ed9fcb5 -->
+<!-- ✝ FIXED #231: The Last Line and Tiltyard tiles in the Arcade room show no preview ima… → arcade/assets/thumbs/ · after 573351a -->
 <!-- gauge:bug:end -->
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth
