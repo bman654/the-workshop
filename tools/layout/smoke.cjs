@@ -50,6 +50,7 @@ const PLACES = [
   { id:'firmament', district:'observatory', tier:1, footprint:'tower' },
   { id:'relativity', district:'observatory', tier:1, wing:'moving-frame', footprint:'tower', prefer:'right' },
   { id:'first-light', district:'observatory', tier:1, wing:'cosmology', footprint:'tower', prefer:['left','bottom'] },
+  { id:'recombination', district:'observatory', tier:1, wing:'cosmology', footprint:'tower', prefer:['left','bottom'] },
   { id:'breathing-star', district:'observatory', tier:2, wing:'stellar', footprint:'breathing-star', prefer:['right','bottom'] },
   { id:'transit', district:'observatory', tier:1, wing:'exoplanets', footprint:'tower', prefer:['right','bottom'] },
   { id:'equal-area-sweep', district:'observatory', tier:2, wing:'celestial-mechanics', footprint:'tower', prefer:['right','bottom'] },
