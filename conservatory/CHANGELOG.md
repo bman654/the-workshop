@@ -6,6 +6,76 @@ for the first time.
 
 ---
 
+## Cycle #263 — The Pond (the 7th bench): constant-yield harvest & the irreversible fold
+
+A garden bench (BUILD / garden, PLANTER). The Conservatory's growth bench grows a
+SEQUEL: take the logistic colony next door and start pulling fish out at a constant
+rate h. The field bends down by a flat −h:
+
+    N' = r·N·(1 − N/K) − h      (r=0.6, K=100, h the harvest dial)
+
+— and that smallest possible change does something violent. The two rest points
+(an upper STABLE refuge N₊, a lower UNSTABLE threshold N₋) march together as h rises
+and **collide** at the critical harvest
+
+    h_crit = r·K/4 = 15  (= MSY, the maximum sustainable yield, at N = K/2 = 50)
+
+in a **saddle-node (fold) bifurcation**. For any h > h_crit there is NO rest: the
+field is negative everywhere, the pond drains to 0 from any start — and **stays
+empty**. That irreversibility is the moral made physical: ease the dial back below
+h_crit and the refuge mathematically EXISTS again, but N=0 is a TRUE latched fixed
+point (f_h(0) = −h < 0 pins it). The dial alone can never undo collapse; only a
+restock can.
+
+### Files
+- `conservatory/the-pond/core.mjs` (~270 lines) — a THIN overlay on the imported
+  `logistic/core.mjs` (it does NOT re-implement field/RK4/trace): `harvestField =
+  field − h` (byte-equal to the logistic field at h=0, the IEEE identity),
+  `harvestPrime = fPrime` re-exported (the −h is constant ⇒ stability slope
+  UNCHANGED — a structural insight, not a copy), closed-form `equilibria(h)`,
+  `rk4StepH` (same Butcher tableau, floored at 0 — the collapse latch lives here),
+  `traceH` (tracks `collapsed` + the cumulative `haul`), and `runHarvestSelfTest`.
+- `conservatory/the-pond/core.test.mjs` (~190 lines) — the Node twin: 27 checks
+  incl. re-extraction parity (the inlined HARVEST-CORE block is byte-identical).
+- `conservatory/the-pond/index.html` (~640 lines) — the living instrument: ONE
+  integrator owns ONE `sim.N` via `rk4StepH` floored at 0; the brass-edged glass
+  tank + golden-angle school (POOL=100=K, drawn-body-count === round(N), eye==state),
+  the brass HARVEST dial drawn on the rim (drag + ←/→ keyboard, role=slider), the
+  catch-bucket (Σ banked monotone, a "fastest-fill" ghost mark you discover sits at
+  MSY), and the live rail + state chip (UNFISHED · THINNED·STEADY · RAZOR'S
+  EDGE·MAX YIELD · OVER-NET·COLLAPSING · COLLAPSED·EMPTY). Reduced-motion renders a
+  static settled frame; the in-page self-test pill is the harvest core, 6/6.
+- `conservatory/index.html` — the 7th `.bed` tile (🐟, "constant-yield harvest")
+  with a planter-light preview driven by the SAME imported `the-pond/core.mjs` (an
+  ~8s lived cycle: full school → dial creeps past h_crit → empty → restock → repeat,
+  so the tile teases the collapse). Wing self-test bumped 6→7 beds + the bedpond
+  mount + the pond core wiring; landing now 33/33 green.
+
+### The six self-test checks (the SOLE authority — in-page pill + core.test.mjs)
+1. **Reduction at h=0** — the neg-control: harvestField === logistic field byte-exact
+   (worst |Δ| exactly 0), one RK4 step + a full 6000-step trace byte-match the
+   imported logistic, endN→K=100.
+2. **Closed roots are roots** — |f_h(N±)| ≤ 3.3e-15 for h∈{2,8,14,14.9}; independent
+   quadratic witness rN²−rKN+Kh ≈ 0.
+3. **Stability signs** — f'(N₊)<0 (refuge), f'(N₋)>0 (threshold), eigPlus = −eigMinus.
+4. **Saddle-node + MSY** — equilibria(15) ⇒ N₊=N₋=K/2=50, disc=0, both eig=0;
+   equilibria(15.0001)=null; MSY = rK/4 = 15 at N=50.
+5. **Knife-edge** — traceH(100,…,14.95).endN ≈ 52.886751 (collapsed=false, ~80k-step
+   horizon for the critical slowing-down); traceH(100,…,15.05).endN === 0.
+6. **Irreversibility** — maxField(h)=rK/4−h<0 for every h>h_crit ⇒ N→0 from any
+   start; f_h(0,10)=−10<0 (empty stays empty); deterministic (two runs byte-identical).
+
+### Proof vs illustration
+The deterministic core PROVES the fold structure exact; the living school
+ILLUSTRATES it. The bench copy never claims the discrete fish-tank proves the
+continuous bifurcation — the proof lives in core.test.mjs + the in-page pill.
+r/K/h are illustrative teaching landmarks (inherited from the logistic bench so the
+two never drift) — not a real fishery. Browser-verified: self-test 6/6, ~62fps,
+the over-net→collapse→dial-back-stays-empty→restock loop all behave; M /
+bigSwingsBuilt UNCHANGED (a garden bench, not a grounds swing).
+
+---
+
 ## Cycle #31 — the wing opens (front-door footprint + landing + first bench)
 
 A big swing (BUILD / grounds). The Conservatory enters the estate as a new
