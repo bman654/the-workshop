@@ -100,6 +100,120 @@ console.log('=== BENEATH SLOT ===', JSON.stringify(Layout.beneathSlot()));
 try { Layout.solve([{id:'x', district:'nowhere', tier:1}]); console.log('  ASSERT FAILED: unknown district did not throw'); fail++; }
 catch(e){ console.log('  ✓ unknown district throws:', e.message.slice(0,60)); }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   PLATES — "More Than One Front Door" (#262). A HARD PASS section (unlike the
+   whole-door legibility WARNING below, which stays expected-red as the #103
+   record). The front door is now a SET of plates the visitor travels between;
+   this asserts the SOLE-authority model is sound. Reads the REAL PLACES out of
+   index.src.html (they carry room/piece/tag so the name-only label boxes are
+   faithful). Adopts Explorer 2's MEASURED, PASSING construction rule: re-lay each
+   plate into a generous open frame + score NAME-ONLY (the at-a-glance label is the
+   room name; the "PIECE · tag" sub-line is the reward-on-arrival under the loupe). */
+function plateSelfTest() {
+  const SRC = path.join(__dirname, '..', '..', 'index.src.html');
+  const src = fs.readFileSync(SRC, 'utf8');
+  const start = src.indexOf('const PLACES = [');
+  const end = src.indexOf('\n];', start);
+  if (start < 0 || end < 0) { console.log('  (could not read live PLACES — skipping plate self-test)'); return; }
+  // eslint-disable-next-line no-eval
+  const LIVE = eval('(' + src.slice(start + 'const PLACES = '.length, end + 2) + ')').filter(p => !p.locked);
+
+  console.log('\n=== PLATES (More Than One Front Door · #262) — HARD PASS ===');
+  const P = Layout.plates(LIVE);
+
+  // CRUX 1 — TOTAL + DISJOINT cover: every room resolves to exactly one plate.
+  let total = 0; const seen = new Set(); let dup = false;
+  for (const id of P.ids) for (const r of P.members[id]) {
+    if (seen.has(r.id)) { dup = true; console.log('    DUP', r.id); }
+    seen.add(r.id); total++;
+  }
+  const cover = (total === LIVE.length && seen.size === LIVE.length && !dup);
+  if (!cover) fail++;
+  console.log('  CRUX 1 cover: ' + total + '/' + LIVE.length + ' rooms → exactly one of ' +
+    P.ids.length + ' plates ' + (cover ? '✓ TOTAL+DISJOINT' : '✗'));
+  console.log('    plates: ' + P.ids.join(', '));
+
+  // CRUX 2 — PER-PLATE FLOOR (the load-bearing assertion): every room-bearing plate,
+  // re-laid + NAME-ONLY scored, composites < THRESHOLD (LEGIBLE) ALONE.
+  let allFloor = true;
+  for (const id of P.ids) {
+    const rooms = P.members[id];
+    const relay = Layout.relayPlate(rooms);
+    const rep = Leg.score({ foot: relay.foot, footMeta: relay.footMeta, graph: null }, relay.places, { nameOnly: true });
+    const ok = rep.overall.composite < Leg.THRESHOLD;
+    if (!ok) { allFloor = false; fail++; }
+    console.log('    ' + id.padEnd(14) + ' n=' + String(rooms.length).padStart(2) +
+      ' name-only-relay=' + rep.overall.composite.toFixed(3) + (ok ? ' ✓ LEGIBLE' : ' ✗ CROWDED'));
+  }
+  console.log('  CRUX 2 per-plate floor (re-lay + name-only < ' + Leg.THRESHOLD + '): ' + (allFloor ? '✓ ALL plates LEGIBLE alone' : '✗'));
+  // the MID/ROOT resting layer (captions only, zero room labels) is also LEGIBLE
+  const restRep = Leg.score(P.solution, []);
+  if (!restRep.pass) fail++;
+  console.log('    resting layer score(sol,[]) = ' + restRep.overall.composite +
+    ' ' + (restRep.pass ? '✓ LEGIBLE (zero room labels)' : '✗'));
+
+  // CRUX 3 — TWO NEG-CONTROLS proving it is the split+name-only that carries it.
+  // NC1: all rooms forced onto ONE plate, FULL labels → CROWDED.
+  const allRelay = Layout.relayPlate(LIVE);
+  const nc1 = Leg.score({ foot: allRelay.foot, footMeta: allRelay.footMeta, graph: null }, LIVE);
+  const nc1ok = nc1.overall.composite >= Leg.THRESHOLD;
+  if (!nc1ok) fail++;
+  console.log('  CRUX 3 NC1 (all ' + LIVE.length + ' on one plate, FULL labels): ' +
+    nc1.overall.composite.toFixed(3) + ' ' + nc1.overall.verdict +
+    (nc1ok ? ' ✓ CROWDED (the split carries legibility, not the camera)' : ' ✗ expected CROWDED'));
+  // NC2: a re-laid plate WITH full sub-lines reads CROWDED where name-only PASSES
+  // → name-only is load-bearing (it is split+name-only, not the zoom alone).
+  let nc2plate = null;
+  for (const id of P.ids) {
+    const rooms = P.members[id]; const relay = Layout.relayPlate(rooms);
+    const full = Leg.score({ foot: relay.foot, footMeta: relay.footMeta, graph: null }, relay.places);
+    const name = Leg.score({ foot: relay.foot, footMeta: relay.footMeta, graph: null }, relay.places, { nameOnly: true });
+    if (full.overall.composite >= Leg.THRESHOLD && name.overall.composite < Leg.THRESHOLD) {
+      nc2plate = { id, full: full.overall.composite, name: name.overall.composite }; break;
+    }
+  }
+  if (!nc2plate) fail++;
+  console.log('  CRUX 3 NC2 (name-only is load-bearing): ' +
+    (nc2plate ? ('plate ' + nc2plate.id + ' FULL=' + nc2plate.full.toFixed(3) + ' CROWDED vs name-only=' +
+      nc2plate.name.toFixed(3) + ' LEGIBLE ✓') : '✗ no plate where full FAILS + name-only PASSES'));
+
+  // CRUX 4 — ROAD GRAPH: every threshold link resolves + reciprocates, all reachable.
+  let recip = true;
+  for (const a in P.adj) for (const b in P.adj[a]) if (!(P.adj[b] && P.adj[b][a])) { recip = false; console.log('    NON-RECIP', a, b); }
+  const q = ['manor'], vis = new Set(q);
+  while (q.length) { const x = q.shift(); for (const y in (P.adj[x] || {})) if (!vis.has(y)) { vis.add(y); q.push(y); } }
+  const connected = vis.size === P.ids.length;
+  if (!recip || !connected) fail++;
+  console.log('  CRUX 4 road graph: ' + P.edges.length + ' edges, ' +
+    (recip ? '✓ reciprocal (A↔B ⇔ B↔A)' : '✗ non-reciprocal') + ', ' +
+    (connected ? '✓ all ' + vis.size + '/' + P.ids.length + ' reachable from the door' : '✗ ' + vis.size + '/' + P.ids.length + ' reachable'));
+  console.log('    ' + P.edges.map(e => e[0] + '↔' + e[1]).join(', '));
+
+  // CRUX 5 — the BENEATH slot rides the MANOR plate (never stranded). The manor
+  // plate's bbox is EXTENDED to enclose the gated cellar slot; without the
+  // extension the slot would fall outside (the extension is load-bearing).
+  const bs = P.beneath, mb = P.bbox.manor;
+  const enclosed = bs.x >= mb.x && bs.y >= mb.y && bs.x + bs.w <= mb.x + mb.w && bs.y + bs.h <= mb.y + mb.h;
+  // re-derive the un-extended manor bbox from its member footprints
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const r of P.members.manor) {
+    const f = P.solution.foot[r.id];
+    const b = f.r != null ? { x: f.x - f.r, y: f.y - f.r, w: f.r * 2, h: f.r * 2 } : f;
+    x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h);
+  }
+  const bc = { x: bs.x + bs.w / 2, y: bs.y + bs.h / 2 };
+  const inRaw = bc.x >= x0 && bc.x <= x1 && bc.y >= y0 && bc.y <= y1;
+  const loadBearing = enclosed && !inRaw;  // enclosed only because of the extension
+  if (!loadBearing) fail++;
+  console.log('  CRUX 5 beneath rides the manor plate: ' +
+    (enclosed ? '✓ slot ⊆ manor bbox' : '✗ slot NOT enclosed') + ', ' +
+    (!inRaw ? '✓ extension is load-bearing (un-extended bbox ends y=' + Math.round(y1) + ' < slot)' : '✗ extension not needed'));
+
+  console.log('  ── PLATE SELF-TEST: ' + (cover && allFloor && restRep.pass && nc1ok && nc2plate && recip && connected && loadBearing
+    ? '✓ ALL CRUXES PASS' : '✗ SEE FAILURES ABOVE') + ' ──');
+}
+plateSelfTest();
+
 console.log(fail ? ('\n✗ '+fail+' STRUCTURAL FAILURES') : '\n✓ ALL LAYOUT CHECKS PASS');
 
 /* ── LEGIBILITY (modeled-label crowding PROXY · #103) ──────────────────────────

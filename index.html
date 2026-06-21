@@ -220,9 +220,49 @@
   .pzctl button:hover{ color:var(--brass-bright); border-color:var(--brass);
     background:rgba(201,162,74,.12); }
   #viewport{ will-change:transform; }
+  /* PLATE-WALK (#262): a walkTo() animates the camera between plates. The transition
+     is only armed WHILE travelling (the .walking class), so manual wheel/drag/pan
+     inside a plate stay instant. prefers-reduced-motion → no transition (snaps). */
+  #viewport.walking{ transition: transform 720ms cubic-bezier(.62,.02,.2,1); }
+  @media (prefers-reduced-motion:reduce){ #viewport.walking{ transition:none; } }
   .sheet.grabbable{ cursor:grab; }
   .sheet.grabbing{ cursor:grabbing; }
   @media (prefers-reduced-motion:reduce){ .first-thread{ animation:none; opacity:.5; } }
+
+  /* THRESHOLD TILES — a brass ⌖ chip on each shared-wall road midpoint; click / tab+
+     enter to WALK to the neighbouring plate. They live in #viewport so they pan with
+     the plate. Only the outgoing tiles (from the plate you stand on) are lit + active. */
+  .threshold{ cursor:pointer; opacity:.18; pointer-events:none;
+    transition:opacity .45s ease; }
+  .threshold.live{ opacity:1; pointer-events:auto; }
+  .thr-tile{ fill:#141a28; stroke:var(--brass); stroke-width:1.4;
+    transition:fill .2s; }
+  .threshold.live:hover .thr-tile,
+  .threshold.live:focus-visible .thr-tile{ fill:#2a3346; }
+  .threshold:focus{ outline:none; }
+  .threshold.live:focus-visible .thr-tile{ stroke:var(--brass-bright); stroke-width:2; }
+  .thr-glyph{ fill:var(--brass); font-size:15px; text-anchor:middle;
+    pointer-events:none; dominant-baseline:central; }
+  .thr-label{ fill:#c2cad8; font-size:8.5px; text-anchor:middle; font-variant:small-caps;
+    letter-spacing:.07em; pointer-events:none; }
+  /* a plate you are not standing on dims its rooms + tint while you're away */
+  .plate-dim{ transition:opacity .55s ease; }
+  /* the "you stand in / travel" wayfinder — a fixed brass strip, bottom-left */
+  #platebar{ position:fixed; left:14px; bottom:12px; z-index:40;
+    font-family:"Iowan Old Style",Palatino,Georgia,serif; font-size:12.5px;
+    color:#9aa6bc; background:rgba(11,14,22,.82); border:1px solid #26303f;
+    border-radius:9px; padding:7px 11px; max-width:min(46vw,420px);
+    backdrop-filter:blur(3px); line-height:1.4; }
+  #platebar .lede{ font-variant:small-caps; letter-spacing:.1em; }
+  #platebar b{ color:var(--brass); }
+  #platebar .doors{ display:flex; flex-wrap:wrap; gap:5px 7px; margin-top:5px; }
+  #platebar .door{ cursor:pointer; border:1px solid #2c3a4e; border-radius:6px;
+    padding:2px 7px; font-size:10.5px; color:#aeb9cd; font-variant:small-caps;
+    letter-spacing:.05em; background:rgba(20,26,40,.6); transition:all .2s; }
+  #platebar .door:hover,#platebar .door:focus-visible{ color:var(--brass-bright);
+    border-color:var(--brass); background:rgba(201,162,74,.12); outline:none; }
+  #platebar .back{ color:#7f8aa0; }
+  @media (max-width:640px){ #platebar{ font-size:11px; max-width:64vw; } }
 
   /* ---- the Undercroft POI states (the locked way down) ---- */
   /* BROKEN: a sealed cellar stair — faint, dashed, NOT navigable */
@@ -667,7 +707,11 @@
   <span class="sep">·</span>
   <a href="https://github.com/bman654/the-workshop">source on GitHub ↗</a><!-- the earned rune is appended here -->
 </nav>
-<div class="hint">districts named at rest · hover / tab / zoom a footprint to name it · click to enter · scroll to zoom · drag to pan</div>
+<div class="hint">walk between the grounds by the brass ⌖ doors · hover / tab / zoom a footprint to name it · click to enter · scroll to zoom · drag to pan</div>
+<!-- THE PLATE WAYFINDER (#262 — "More Than One Front Door"): names the plate you
+     stand on + its outgoing doors. Populated by the platewalk module; if JS fails it
+     stays empty and the door degrades to the static captions plate. -->
+<div id="platebar" role="navigation" aria-label="walk between the grounds"></div>
 <!-- THE DOOR'S OWN page-level self-test pill (distinct from the clock dial's #hours-pill).
      Runs the Legibility Conscience's regression proof LIVE in-browser on the SAME
      clean/crowded controls the Node twin (legibility.test.cjs) asserts. Green = "the
@@ -2798,6 +2842,177 @@ var Layout = (function () {
     return String(s).toLowerCase().replace(/\b\w/g, function (c) { return c.toUpperCase(); });
   }
 
+  /* ════════════════════════════════════════════════════════════════════════════
+     PLATES — "More Than One Front Door" (#262). The front door is no longer one
+     crowded plate; it is a SET of plates the visitor TRAVELS between. This pure,
+     deterministic, Node-testable partition is the SOLE authority's model.
+
+     THE PARTITION (total + disjoint): every live room resolves to EXACTLY one plate.
+     District is the default plate grain; the GROUNDS split West/East at the field
+     x-midline (the biggest district → two walkable plates); cavern + outbuilding
+     pool into "outskirts". A room landing exactly on the W/E midline tiebreaks by
+     district-region order (deterministic), not raw x.
+
+     Each plate's CAMERA target = its rooms' bbox padded ×1.45, k clamped ≤ ~3.2,
+     with a minimum frame so a narrow plate does not over-zoom. The MANOR plate's
+     bbox is EXTENDED to enclose the gated BENEATH slot so the Undercroft rides the
+     manor plate and is never stranded (crux: beneath ∈ exactly one plate's bbox).
+
+     THE ROAD GRAPH (reciprocal): manor is the hub (the front door lives in the
+     manor), so every plate links to manor; the two grounds halves share the mid
+     wall; the observatory rise shares the NW corner with grounds-west. Every edge
+     is reciprocal (A↔B ⇔ B↔A) and every plate is reachable from the door. ── */
+  var PLATE_PAD = 1.45;          // bbox padding factor for the camera frame
+  var PLATE_K_MAX = 3.2;         // max zoom so a tiny plate never over-magnifies
+  var PLATE_MIN_W = 360, PLATE_MIN_H = 240;  // minimum frame so narrow plates breathe
+
+  var PLATE_META = {
+    'manor':        { label: 'THE MANOR HOUSE',     hue: '#c9a24a' },
+    'grounds-west': { label: 'THE WEST GROUNDS',    hue: '#86b39a' },
+    'grounds-east': { label: 'THE EAST GROUNDS',    hue: '#37c9b0' },
+    'observatory':  { label: 'THE OBSERVATORY RISE', hue: '#9db4ff' },
+    'outskirts':    { label: 'THE OUTSKIRTS',       hue: '#7fd4c0' }
+  };
+
+  function footCentreOf(f) {
+    return f.r != null ? { x: f.x, y: f.y } : { x: f.x + f.w / 2, y: f.y + f.h / 2 };
+  }
+  function footBBoxOf(f) {
+    return f.r != null ? { x: f.x - f.r, y: f.y - f.r, w: f.r * 2, h: f.r * 2 }
+                       : { x: f.x, y: f.y, w: f.w, h: f.h };
+  }
+
+  /* which plate a room belongs to, given the solved solution (for the W/E split). */
+  function plateOf(r, solution) {
+    if (r.district === 'grounds') {
+      var c = footCentreOf(solution.foot[r.id]);
+      var mid = FIELD.x + FIELD.w / 2;
+      // tiebreak a room exactly on the midline by id order → 'grounds-west' (lower x bias)
+      return c.x < mid ? 'grounds-west' : (c.x > mid ? 'grounds-east' : 'grounds-west');
+    }
+    if (r.district === 'outbuilding' || r.district === 'cavern') return 'outskirts';
+    return r.district; // manor, observatory
+  }
+
+  /* Layout.plates(places) → the total/disjoint partition + per-plate camera bbox +
+     the reciprocal inter-plate road graph. Pure & deterministic (solves once). */
+  function plates(places) {
+    var live = places.filter(function (p) { return !p.locked; });
+    var solution = solve(live);
+
+    // 1. PARTITION (total + disjoint)
+    var members = {};   // plateId → [room,...]
+    var roomPlate = {}; // roomId → plateId
+    for (var i = 0; i < live.length; i++) {
+      var pid = plateOf(live[i], solution);
+      (members[pid] = members[pid] || []).push(live[i]);
+      roomPlate[live[i].id] = pid;
+    }
+
+    // 2. per-plate bbox over member footprints + camera frame
+    var bbox = {};
+    var pids = Object.keys(members).sort();
+    for (var pi = 0; pi < pids.length; pi++) {
+      var p = pids[pi], rooms = members[p];
+      var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (var ri = 0; ri < rooms.length; ri++) {
+        var b = footBBoxOf(solution.foot[rooms[ri].id]);
+        if (b.x < x0) x0 = b.x; if (b.y < y0) y0 = b.y;
+        if (b.x + b.w > x1) x1 = b.x + b.w; if (b.y + b.h > y1) y1 = b.y + b.h;
+      }
+      bbox[p] = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    }
+    // EXTEND the manor plate to enclose the gated BENEATH slot (the Undercroft rides
+    // the manor plate, never stranded). beneath ∈ exactly the manor plate's bbox.
+    if (bbox.manor) {
+      var bs = beneathSlot();
+      var mx0 = Math.min(bbox.manor.x, bs.x);
+      var my0 = Math.min(bbox.manor.y, bs.y);
+      var mx1 = Math.max(bbox.manor.x + bbox.manor.w, bs.x + bs.w);
+      var my1 = Math.max(bbox.manor.y + bbox.manor.h, bs.y + bs.h);
+      bbox.manor = { x: mx0, y: my0, w: mx1 - mx0, h: my1 - my0 };
+    }
+
+    // 3. CAMERA FRAME per plate: bbox padded ×PLATE_PAD, min-framed, centred, k clamped.
+    var VB = { w: 1440, h: 900 };
+    var frame = {};
+    for (var fi = 0; fi < pids.length; fi++) {
+      var pp = pids[fi], box = bbox[pp];
+      var cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+      var fw = Math.max(box.w * PLATE_PAD, PLATE_MIN_W);
+      var fh = Math.max(box.h * PLATE_PAD, PLATE_MIN_H);
+      var k = Math.min(VB.w / fw, VB.h / fh, PLATE_K_MAX);
+      frame[pp] = {
+        k: k,
+        tx: VB.w / 2 - cx * k,
+        ty: VB.h / 2 - cy * k,
+        cx: cx, cy: cy, fw: fw, fh: fh
+      };
+    }
+
+    // 4. the RECIPROCAL inter-plate ROAD GRAPH (manor is the hub; W/E share the mid
+    //    wall; observatory shares the NW corner with grounds-west)
+    var adj = {};
+    function link(a, b) {
+      if (!members[a] || !members[b] || a === b) return;
+      (adj[a] = adj[a] || {})[b] = true;
+      (adj[b] = adj[b] || {})[a] = true;
+    }
+    for (var li = 0; li < pids.length; li++) if (pids[li] !== 'manor') link('manor', pids[li]);
+    link('grounds-west', 'grounds-east');
+    link('observatory', 'grounds-west');
+    // emit a stable edge list (each undirected pair once, a<b)
+    var edges = [];
+    for (var a in adj) for (var b in adj[a]) if (a < b) edges.push([a, b]);
+    edges.sort(function (e, f) { return e[0] < f[0] ? -1 : e[0] > f[0] ? 1 : (e[1] < f[1] ? -1 : 1); });
+
+    return {
+      ids: pids,
+      members: members,    // plateId → [room,...]  (total + disjoint over live rooms)
+      roomPlate: roomPlate,// roomId → plateId
+      bbox: bbox,          // plateId → {x,y,w,h} (manor extended to enclose beneath)
+      frame: frame,        // plateId → {k,tx,ty,cx,cy,fw,fh}  the camera target
+      adj: adj,            // plateId → {neighbourId:true}
+      edges: edges,        // [[a,b],...] each undirected pair once (a<b), sorted
+      meta: PLATE_META,
+      beneath: beneathSlot(),
+      solution: solution
+    };
+  }
+
+  /* Layout.relayPlate(rooms) → a plate-LOCAL re-lay: spread JUST this plate's rooms
+     into a generous open frame (a two-column outward fan over ~85% of FIELD height,
+     footprints in the centre band, labels fanning to the margins) so that NAME-ONLY
+     labels never collide. This is the construction the legibility twin scores with
+     {nameOnly:true} to prove each plate clears the floor ALONE. It returns a sol-like
+     {foot, footMeta} for ONLY these rooms PLUS a `relaySide` per room (the L/R fan).
+     It is a RingView/plate-LOCAL transform ONLY — NEVER written back onto the
+     canonical Layout.foot (else emit-mirror.cjs / sky.test.cjs would false-fail). */
+  var RELAY_VSPREAD = 0.85;  // fraction of FIELD height the column stack uses
+  function relayPlate(rooms) {
+    var n = rooms.length;
+    var band = SIZE_BAND[3];  // folly size — small footprints so the label leads
+    var half = Math.ceil(n / 2);
+    var fh = FIELD.h * RELAY_VSPREAD, fy = FIELD.y + (FIELD.h - fh) / 2;
+    var rowH = half > 0 ? fh / half : fh;
+    var cxL = FIELD.x + FIELD.w * 0.40, cxR = FIELD.x + FIELD.w * 0.60;
+    var foot = {}, footMeta = {}, sideById = {}, places = [];
+    for (var i = 0; i < n; i++) {
+      var r = rooms[i];
+      var col = i % 2, rr = Math.floor(i / 2);
+      var cy = fy + (rr + 0.5) * rowH;
+      var cx = col === 0 ? cxL : cxR;
+      foot[r.id] = { x: cx - band.w / 2, y: cy - band.h / 2, w: band.w, h: band.h };
+      footMeta[r.id] = { tier: r.tier, district: r.district, wing: r.wing || null };
+      var side = col === 0 ? 'left' : 'right';
+      sideById[r.id] = side;
+      // a places copy carrying relaySide (Legibility reads r.relaySide for the seat side)
+      var copy = {}; for (var k in r) copy[k] = r[k]; copy.relaySide = side;
+      places.push(copy);
+    }
+    return { foot: foot, footMeta: footMeta, graph: null, sideById: sideById, places: places };
+  }
+
   /* the gated BENEATH slot (a reserved cellar slot at the manor south foundation) —
      revealUndercroft asks for it by id. Returns {x,y,w,h} for the stair footprint. */
   function beneathSlot() {
@@ -2817,7 +3032,10 @@ var Layout = (function () {
     beneathSlot: beneathSlot,
     bandFor: bandFor,
     wingLabel: wingLabel,
-    wingAccent: wingAccent
+    wingAccent: wingAccent,
+    plates: plates,
+    relayPlate: relayPlate,
+    PLATE_META: PLATE_META
   };
 })();
 
@@ -2920,6 +3138,7 @@ const CHAR_W_NAME = 8.4;   // px/char, 16.5px serif .roomname  (measured getBBox
 const CHAR_W_SUB = 6.8;    // px/char, 9px mono .roomsub        (measured getBBox)
 const BOX_H_BASE = 35;     // name + kicker rule + sub-line block height (pre-PAD)
 const BOX_H_COMPANION = 50;// + the "↳ companion within" line
+const BOX_H_NAME = 18;     // NAME-ONLY block height (just the 16.5px serif name line, no sub)
 const PAD = 3;             // LABEL_PAD — the backing-stroke halo (index.src.html:2004)
 const LABEL_GAP = 14;      // LABEL_GAP (index.src.html:2000) — leader breathing room
 const LABEL_BOUNDS = { x: 46, y: 52, w: 1348, h: 790 }; // index.src.html:1995
@@ -2985,7 +3204,13 @@ function subLen(r) {
 }
 function nameLen(r) { return (r.room || r.id || '').length; }
 
-function buildLabelModel(places, solution) {
+function buildLabelModel(places, solution, opts) {
+  opts = opts || {};
+  // NAME-ONLY mode (the PLATE self-test): drop the UPPERCASE "PIECE · tag" sub-line
+  // and model only the room NAME line. The sub-line is the reward-on-arrival shown
+  // under the loupe/blurb, never at-a-glance in the plate view — so the plate's
+  // at-a-glance legibility is scored against name-only label boxes (#262).
+  const nameOnly = !!opts.nameOnly;
   const boxes = [];
   const footMeta = {};
   // index places by id so a box can recover its declaration (companion, prefer).
@@ -2998,11 +3223,17 @@ function buildLabelModel(places, solution) {
     footMeta[r.id] = { district: r.district };
 
     // ── box dims from the MEASURED model (header) ──
-    const boxW = Math.max(nameLen(r) * CHAR_W_NAME, subLen(r) * CHAR_W_SUB) + 2 * PAD;
-    const boxH = (r.companion ? BOX_H_COMPANION : BOX_H_BASE) + 2 * PAD;
+    const boxW = nameOnly
+      ? nameLen(r) * CHAR_W_NAME + 2 * PAD
+      : Math.max(nameLen(r) * CHAR_W_NAME, subLen(r) * CHAR_W_SUB) + 2 * PAD;
+    const boxH = nameOnly
+      ? BOX_H_NAME + 2 * PAD
+      : (r.companion ? BOX_H_COMPANION : BOX_H_BASE) + 2 * PAD;
 
     // ── seat the box with the RENDERER'S OWN geometry ──
-    const side = preferSide(r);                         // the solver's START slot
+    // a relayed plate may carry a deterministic per-room `relaySide` (the L/R fan the
+    // re-lay assigns so name-only labels never collide); else the prefer-seed start.
+    const side = r.relaySide || preferSide(r);          // the solver's START slot
     const anchor = footCentre(f);
     const fb = footBBox(f);
     const gap = Math.max(fb.w, fb.h) / 2 + LABEL_GAP;   // labelGap(r), index.src.html:2073
@@ -3224,10 +3455,10 @@ function buildPlate(model, COLS, ROWS) {
   return { cols: COLS, rows: ROWS, cells: grid };
 }
 
-function score(solution, places) {
+function score(solution, places, opts) {
   const scale = 1; // viewBox units (the FIELD is in the same units as LABEL_GAP)
   const MARGIN = Math.round(scale * LABEL_GAP * 0.9); // 13px
-  const model = buildLabelModel(places, solution);
+  const model = buildLabelModel(places, solution, opts);
 
   const gapR = gapSubScore(model.boxes, MARGIN);
   const leaderR = leaderClutter(model, solution);
@@ -3366,7 +3597,7 @@ return {
   rectGap,
   // tunables (so tests can assert the threshold derivation):
   WEIGHTS, THRESHOLD, LABEL_GAP, LABEL_BOUNDS,
-  CHAR_W_NAME, CHAR_W_SUB, PAD, DENSITY_H, DENSITY_K
+  CHAR_W_NAME, CHAR_W_SUB, PAD, DENSITY_H, DENSITY_K, BOX_H_NAME
 };
 })();
 
@@ -6689,10 +6920,194 @@ renderEstate();
 
     sheet.classList.add("grabbable");
     apply();
+
+    /* ── EXPOSE A CAMERA HOOK for the plate-walk driver (#262) ──────────────────
+       walkTo() needs to set the transform to a plate frame while keeping panZoom's
+       OWN k/tx/ty in sync (so a subsequent wheel/drag continues from the plate, not
+       from a stale origin). frameTo() temporarily lifts K_MAX (a plate may zoom past
+       4×, e.g. the observatory rise) and skips the manual-pan clamp (which assumes a
+       door-centred view). It returns the applied {k,tx,ty}. recentre() restores the
+       whole-plate fit. The plate-walk arms the CSS transition itself. */
+    window.__panCamera = {
+      frameTo(frame){
+        k = frame.k; tx = frame.tx; ty = frame.ty;
+        apply(); afterTransform();
+        return { k, tx, ty };
+      },
+      recentre(){ reset(); },
+      get k(){ return k; }
+    };
   }catch(e){ /* any failure → static, fully-visible plate (no transform) */ }
 })();
 
 window.addEventListener("resize", ()=> hideCard(true));
+
+/* ════════════════════════════════════════════════════════════════════════════
+   MORE THAN ONE FRONT DOOR — the plate-walk (#262).
+
+   The single crowded plate becomes a SET of district / wing-cluster PLATES the
+   visitor travels between. The plate you stand on is sharp + centred; its
+   neighbours dim. A brass ⌖ THRESHOLD TILE seated on each shared-wall road
+   midpoint walks you to the neighbour (click, or tab + enter); esc / backspace
+   retreats. The PARTITION + the camera frames + the reciprocal road graph come
+   straight from Layout.plates(PLACES) — the SAME pure function the Node twin
+   (smoke.cjs / legibility.test.cjs) proves — so the page cannot drift from the
+   self-test. This is a COMPANION to the loupe (which still names one room in full
+   within a plate), never a replacement. Wrapped in try/catch: any failure degrades
+   to the static captions plate (the loupe + pan/zoom still work). ── */
+(function platewalk(){
+  // DEFER the setup one frame so EVERY POI exists first — revealUndercroft() (which
+  // adds the cellar-stair tile) and placeLabels() run AFTER this IIFE in source order,
+  // so we wait a frame to capture the whole POI set (incl. a revealed Undercroft).
+  function run(){
+  try{
+    if(typeof Layout === "undefined" || !viewport || !window.__panCamera) return;
+    const SVGNS = "http://www.w3.org/2000/svg";
+    const E = (n,a)=>{ const e=document.createElementNS(SVGNS,n); if(a) for(const k in a) e.setAttribute(k,a[k]); return e; };
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion:reduce)").matches;
+
+    // the partition + camera frames + reciprocal road graph (Node-proven, pure)
+    const LIVE = PLACES.filter(p=>!p.locked);
+    const P = Layout.plates(LIVE);
+    if(!P || !P.ids.length) return;
+
+    // map each POI tile (in #pois, by data-id) to its plate, so we can dim the plates
+    // you are away from. The undercroft (locked) rides the MANOR plate by declaration.
+    const tilePlate = {};   // plateId → [poi element,...]
+    for(const tile of pois.querySelectorAll(".poi[data-id]")){
+      const id = tile.dataset.id;
+      let pid = P.roomPlate[id];
+      if(!pid && id === (PLACES.find(p=>p.locked)||{}).id) pid = "manor"; // the Undercroft
+      if(!pid) continue;
+      (tilePlate[pid]=tilePlate[pid]||[]).push(tile);
+      tile.classList.add("plate-dim");
+    }
+
+    // ── THRESHOLD TILES: one per directed edge (A→B and B→A both rendered, reciprocal).
+    //    Seat each on the midpoint of the road between the two plate frame centres,
+    //    then NUDGE it clear of any room footprint it would land on. They live in
+    //    #viewport so they pan with the plate. ──
+    const thrLayer = E("g", { id:"threshold-tiles" });
+    viewport.appendChild(thrLayer);
+
+    // collect all live footprint rects for the nudge-clear check (so a threshold chip
+    // never lands on top of a building)
+    const footRects = LIVE.map(r=>footBBox(r));
+    function overlapsAnyFoot(x,y,w,h){
+      for(const b of footRects){
+        if(x < b.x+b.w && x+w > b.x && y < b.y+b.h && y+h > b.y) return true;
+      }
+      return false;
+    }
+    function centreOf(pid){ const f=P.frame[pid]; return { x:f.cx, y:f.cy }; }
+
+    const TW = 32, TH = 24;            // threshold-tile chip size
+    const tilesByFrom = {};            // fromPlate → [tile g,...]  (for lighting)
+    function makeThreshold(from, to){
+      const ca = centreOf(from), cb = centreOf(to);
+      // seat at the midpoint, biased 38% toward the destination so reciprocal pairs
+      // (A→B and B→A) don't stack on the exact same point.
+      let mx = ca.x + (cb.x-ca.x)*0.5, my = ca.y + (cb.y-ca.y)*0.5;
+      const dx = cb.x-ca.x, dy = cb.y-ca.y, len = Math.hypot(dx,dy)||1;
+      const off = 26;                  // push the two reciprocal chips apart along the road
+      mx += (-dy/len)*off; my += (dx/len)*off; // perpendicular nudge (A→B one side, B→A other)
+      // nudge clear of any footprint: step along the road toward the destination
+      let tries = 0;
+      while(overlapsAnyFoot(mx-TW/2, my-TH/2, TW, TH) && tries < 12){
+        mx += (dx/len)*18; my += (dy/len)*18; tries++;
+      }
+      const g = E("g", { class:"threshold", "data-from":from, "data-to":to,
+        tabindex:"-1", role:"button" });
+      g.setAttribute("aria-label", "walk to "+(P.meta[to]?P.meta[to].label:to));
+      g.appendChild(E("rect", { class:"thr-tile", x:mx-TW/2, y:my-TH/2, width:TW, height:TH, rx:4 }));
+      const gl = E("text", { class:"thr-glyph", x:mx, y:my-2 }); gl.textContent = "⌖"; g.appendChild(gl);
+      const lb = E("text", { class:"thr-label", x:mx, y:my+TH/2-1 });
+      lb.textContent = (P.meta[to]?P.meta[to].label:to).replace(/^THE /,"");
+      g.appendChild(lb);
+      const cross = (ev)=>{ if(ev){ ev.preventDefault(); ev.stopPropagation(); } walkTo(to, true); };
+      g.addEventListener("click", cross);
+      g.addEventListener("keydown", (ev)=>{ if(ev.key==="Enter"||ev.key===" ") cross(ev); });
+      thrLayer.appendChild(g);
+      (tilesByFrom[from]=tilesByFrom[from]||[]).push(g);
+      return g;
+    }
+    // render BOTH directions of every undirected edge (reciprocal)
+    for(const [a,b] of P.edges){ makeThreshold(a,b); makeThreshold(b,a); }
+
+    // ── THE WAYFINDER STRIP (#platebar): names the plate you stand on + its doors ──
+    const bar = document.getElementById("platebar");
+    function renderBar(here){
+      if(!bar) return;
+      const meta = P.meta[here] || { label: here };
+      const neighbours = Object.keys(P.adj[here]||{}).sort();
+      let html = '<span class="lede">you stand in</span> <b>'+meta.label+'</b>';
+      if(neighbours.length){
+        html += '<div class="doors">';
+        for(const n of neighbours){
+          const nm = (P.meta[n]?P.meta[n].label:n);
+          html += '<span class="door" role="button" tabindex="0" data-to="'+n+'">→ '+nm.replace(/^THE /,"")+'</span>';
+        }
+        if(history.length>1) html += '<span class="door back" role="button" tabindex="0" data-back="1">↩ back</span>';
+        html += '</div>';
+      }
+      bar.innerHTML = html;
+      for(const d of bar.querySelectorAll(".door")){
+        const go = ()=>{ if(d.dataset.back) retreat(); else walkTo(d.dataset.to, true); };
+        d.addEventListener("click", go);
+        d.addEventListener("keydown", (e)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } });
+      }
+    }
+
+    // ── THE CAMERA WALK ──
+    let here = null;
+    const history = [];                // plate stack for retreat (esc / backspace / ↩)
+    let armTimer = null;
+    function walkTo(pid, pushHistory){
+      if(!P.frame[pid]) return;
+      if(pushHistory && here && here !== pid) history.push(here);
+      here = pid;
+      // arm the CSS transition for the slide, then drive the panZoom camera to the frame
+      if(!reduce){ viewport.classList.add("walking"); }
+      window.__panCamera.frameTo(P.frame[pid]);
+      // disarm the transition after it completes so manual wheel/drag stay instant
+      if(armTimer) clearTimeout(armTimer);
+      if(!reduce) armTimer = setTimeout(()=>viewport.classList.remove("walking"), 760);
+      // dim every plate you're away from; light the one you're on
+      for(const p of P.ids){
+        const on = (p===pid);
+        for(const tile of (tilePlate[p]||[])) tile.style.opacity = on ? "" : "0.16";
+      }
+      // only the OUTGOING tiles from where you stand are lit + active
+      for(const from in tilesByFrom){
+        const live = (from===pid);
+        for(const g of tilesByFrom[from]){
+          g.classList.toggle("live", live);
+          g.setAttribute("tabindex", live ? "0" : "-1");
+        }
+      }
+      renderBar(pid);
+    }
+    function retreat(){
+      if(history.length){ const prev = history.pop(); walkTo(prev, false); }
+    }
+
+    // global keyboard: esc / backspace retreats (when not typing / not in a field)
+    window.addEventListener("keydown", (e)=>{
+      if(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      if(e.key==="Escape" || e.key==="Backspace"){
+        if(history.length){ e.preventDefault(); retreat(); }
+      }
+    });
+
+    // start standing in the MANOR — the front door's historic home (the door + the
+    // Undercroft stair both ride this plate).
+    const startPlate = P.ids.indexOf("manor")>=0 ? "manor" : P.ids[0];
+    walkTo(startPlate, false);
+  }catch(e){ /* any failure → the static captions plate; loupe + pan/zoom still work */ }
+  }
+  if(typeof requestAnimationFrame === "function") requestAnimationFrame(()=>requestAnimationFrame(run));
+  else run();
+})();
 
 /* ════════════════════════════════════════════════════════════════════════════
    THE UNDERCROFT — the hidden way down, ported faithfully from the previous front

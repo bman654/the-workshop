@@ -143,5 +143,86 @@ ok('buildLabelModel returns one box per placed POI', m.boxes.length === CLEAN.le
 ok('every box carries owner id + district + a leader segment',
   m.boxes.every(b => b.id && b.district && b.leader && typeof b.leader.x0 === 'number'));
 
+/* ── NAME-ONLY mode (the PLATE self-test's construction rule, #262) ─────────── */
+console.log('\nName-only label mode (#262 — drops the "PIECE · tag" sub-line):');
+// a room whose UPPERCASE sub-line is much WIDER than its name: full box >> name box.
+const wide = [{ id: 'w', room: 'Hex', piece: 'The Game That Cannot Tie', tag: 'union-find',
+  district: 'grounds', tier: 2, wing: 'number', footprint: 'numbers-room' }];
+const solW = Layout.solve(wide);
+const full = Leg.buildLabelModel(wide, solW);
+const nameO = Leg.buildLabelModel(wide, solW, { nameOnly: true });
+ok('name-only box is NARROWER than the full label box (sub-line dropped)',
+  nameO.boxes[0].box.w < full.boxes[0].box.w,
+  '[name=' + nameO.boxes[0].box.w.toFixed(0) + ' < full=' + full.boxes[0].box.w.toFixed(0) + ']');
+ok('name-only box width == nameLen·CHAR_W_NAME + 2·PAD (exact)',
+  Math.abs(nameO.boxes[0].box.w - ('Hex'.length * Leg.CHAR_W_NAME + 2 * Leg.PAD)) < 1e-9);
+ok('name-only box height == BOX_H_NAME + 2·PAD (exact)',
+  Math.abs(nameO.boxes[0].box.h - (Leg.BOX_H_NAME + 2 * Leg.PAD)) < 1e-9);
+// a relaySide override seats the box on the requested side (the re-lay's L/R fan)
+const seated = Leg.buildLabelModel([{ ...wide[0], relaySide: 'left' }], solW, { nameOnly: true });
+const anchorX = solW.foot.w.x + solW.foot.w.w / 2;
+ok('relaySide:left seats the name-only box to the LEFT of the footprint anchor',
+  seated.boxes[0].box.x + seated.boxes[0].box.w <= anchorX,
+  '[box right=' + (seated.boxes[0].box.x + seated.boxes[0].box.w).toFixed(0) + ' ≤ anchor=' + anchorX.toFixed(0) + ']');
+
+/* ── THE PLATE PARTITION (#262 — "More Than One Front Door") ────────────────── */
+console.log('\nPlate partition (Layout.plates over the live PLACES):');
+const fs2 = require('fs');
+const path2 = require('path');
+const SRC2 = path2.join(__dirname, '..', '..', 'index.src.html');
+const src2 = fs2.readFileSync(SRC2, 'utf8');
+const a2 = src2.indexOf('const PLACES = ['), b2 = src2.indexOf('\n];', a2);
+// eslint-disable-next-line no-eval
+const LIVE2 = eval('(' + src2.slice(a2 + 'const PLACES = '.length, b2 + 2) + ')').filter(p => !p.locked);
+const PP = Layout.plates(LIVE2);
+
+// total + disjoint
+let tot = 0; const seen2 = new Set(); let dup2 = false;
+for (const id of PP.ids) for (const r of PP.members[id]) { if (seen2.has(r.id)) dup2 = true; seen2.add(r.id); tot++; }
+ok('partition is TOTAL + DISJOINT (every live room → exactly one plate)',
+  tot === LIVE2.length && seen2.size === LIVE2.length && !dup2,
+  '[' + tot + '/' + LIVE2.length + ' rooms, ' + PP.ids.length + ' plates]');
+
+// per-plate floor: each plate re-laid + name-only < THRESHOLD
+let floorAll = true; const worst = { id: null, c: -1 };
+for (const id of PP.ids) {
+  const relay = Layout.relayPlate(PP.members[id]);
+  const rep = Leg.score({ foot: relay.foot, footMeta: relay.footMeta, graph: null }, relay.places, { nameOnly: true });
+  if (rep.overall.composite >= Leg.THRESHOLD) floorAll = false;
+  if (rep.overall.composite > worst.c) { worst.id = id; worst.c = rep.overall.composite; }
+}
+ok('EVERY plate clears the floor ALONE (re-lay + name-only < threshold)', floorAll,
+  '[worst: ' + worst.id + ' = ' + worst.c.toFixed(3) + ' < ' + Leg.THRESHOLD + ']');
+
+// NEG-CONTROL 1: all rooms on one plate, full labels → CROWDED
+const oneRelay = Layout.relayPlate(LIVE2);
+const ncAll = Leg.score({ foot: oneRelay.foot, footMeta: oneRelay.footMeta, graph: null }, LIVE2);
+ok('NEG-CONTROL: all ' + LIVE2.length + ' rooms on one plate (full labels) → CROWDED',
+  ncAll.overall.composite >= Leg.THRESHOLD,
+  '[' + ncAll.overall.composite.toFixed(3) + ' ≥ ' + Leg.THRESHOLD + ']');
+
+// NEG-CONTROL 2: name-only is load-bearing — a plate where full FAILS but name-only PASSES
+let loadBearing = false;
+for (const id of PP.ids) {
+  const relay = Layout.relayPlate(PP.members[id]);
+  const f = Leg.score({ foot: relay.foot, footMeta: relay.footMeta, graph: null }, relay.places);
+  const n = Leg.score({ foot: relay.foot, footMeta: relay.footMeta, graph: null }, relay.places, { nameOnly: true });
+  if (f.overall.composite >= Leg.THRESHOLD && n.overall.composite < Leg.THRESHOLD) loadBearing = true;
+}
+ok('NEG-CONTROL: name-only is LOAD-BEARING (a plate reads CROWDED full / LEGIBLE name-only)', loadBearing);
+
+// reciprocal + connected road graph
+let recip2 = true;
+for (const a in PP.adj) for (const c in PP.adj[a]) if (!(PP.adj[c] && PP.adj[c][a])) recip2 = false;
+const q2 = ['manor'], vis2 = new Set(q2);
+while (q2.length) { const x = q2.shift(); for (const y in (PP.adj[x] || {})) if (!vis2.has(y)) { vis2.add(y); q2.push(y); } }
+ok('road graph reciprocates (A↔B ⇔ B↔A) and every plate is reachable from the door',
+  recip2 && vis2.size === PP.ids.length, '[' + PP.edges.length + ' edges, ' + vis2.size + '/' + PP.ids.length + ' reachable]');
+
+// beneath rides the manor plate (the extension is load-bearing)
+const bs2 = PP.beneath, mb2 = PP.bbox.manor;
+const enc2 = bs2.x >= mb2.x && bs2.y >= mb2.y && bs2.x + bs2.w <= mb2.x + mb2.w && bs2.y + bs2.h <= mb2.y + mb2.h;
+ok('the BENEATH slot is enclosed by the (extended) manor plate bbox', enc2);
+
 console.log('\n' + (fail ? ('✗ ' + fail + ' FAILED, ' + pass + ' passed') : ('✓ ALL ' + pass + ' LEGIBILITY CHECKS PASS')));
 process.exit(fail ? 1 : 0);

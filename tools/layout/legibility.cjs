@@ -85,6 +85,7 @@ const CHAR_W_NAME = 8.4;   // px/char, 16.5px serif .roomname  (measured getBBox
 const CHAR_W_SUB = 6.8;    // px/char, 9px mono .roomsub        (measured getBBox)
 const BOX_H_BASE = 35;     // name + kicker rule + sub-line block height (pre-PAD)
 const BOX_H_COMPANION = 50;// + the "↳ companion within" line
+const BOX_H_NAME = 18;     // NAME-ONLY block height (just the 16.5px serif name line, no sub)
 const PAD = 3;             // LABEL_PAD — the backing-stroke halo (index.src.html:2004)
 const LABEL_GAP = 14;      // LABEL_GAP (index.src.html:2000) — leader breathing room
 const LABEL_BOUNDS = { x: 46, y: 52, w: 1348, h: 790 }; // index.src.html:1995
@@ -150,7 +151,13 @@ function subLen(r) {
 }
 function nameLen(r) { return (r.room || r.id || '').length; }
 
-function buildLabelModel(places, solution) {
+function buildLabelModel(places, solution, opts) {
+  opts = opts || {};
+  // NAME-ONLY mode (the PLATE self-test): drop the UPPERCASE "PIECE · tag" sub-line
+  // and model only the room NAME line. The sub-line is the reward-on-arrival shown
+  // under the loupe/blurb, never at-a-glance in the plate view — so the plate's
+  // at-a-glance legibility is scored against name-only label boxes (#262).
+  const nameOnly = !!opts.nameOnly;
   const boxes = [];
   const footMeta = {};
   // index places by id so a box can recover its declaration (companion, prefer).
@@ -163,11 +170,17 @@ function buildLabelModel(places, solution) {
     footMeta[r.id] = { district: r.district };
 
     // ── box dims from the MEASURED model (header) ──
-    const boxW = Math.max(nameLen(r) * CHAR_W_NAME, subLen(r) * CHAR_W_SUB) + 2 * PAD;
-    const boxH = (r.companion ? BOX_H_COMPANION : BOX_H_BASE) + 2 * PAD;
+    const boxW = nameOnly
+      ? nameLen(r) * CHAR_W_NAME + 2 * PAD
+      : Math.max(nameLen(r) * CHAR_W_NAME, subLen(r) * CHAR_W_SUB) + 2 * PAD;
+    const boxH = nameOnly
+      ? BOX_H_NAME + 2 * PAD
+      : (r.companion ? BOX_H_COMPANION : BOX_H_BASE) + 2 * PAD;
 
     // ── seat the box with the RENDERER'S OWN geometry ──
-    const side = preferSide(r);                         // the solver's START slot
+    // a relayed plate may carry a deterministic per-room `relaySide` (the L/R fan the
+    // re-lay assigns so name-only labels never collide); else the prefer-seed start.
+    const side = r.relaySide || preferSide(r);          // the solver's START slot
     const anchor = footCentre(f);
     const fb = footBBox(f);
     const gap = Math.max(fb.w, fb.h) / 2 + LABEL_GAP;   // labelGap(r), index.src.html:2073
@@ -389,10 +402,10 @@ function buildPlate(model, COLS, ROWS) {
   return { cols: COLS, rows: ROWS, cells: grid };
 }
 
-function score(solution, places) {
+function score(solution, places, opts) {
   const scale = 1; // viewBox units (the FIELD is in the same units as LABEL_GAP)
   const MARGIN = Math.round(scale * LABEL_GAP * 0.9); // 13px
-  const model = buildLabelModel(places, solution);
+  const model = buildLabelModel(places, solution, opts);
 
   const gapR = gapSubScore(model.boxes, MARGIN);
   const leaderR = leaderClutter(model, solution);
@@ -531,7 +544,7 @@ return {
   rectGap,
   // tunables (so tests can assert the threshold derivation):
   WEIGHTS, THRESHOLD, LABEL_GAP, LABEL_BOUNDS,
-  CHAR_W_NAME, CHAR_W_SUB, PAD, DENSITY_H, DENSITY_K
+  CHAR_W_NAME, CHAR_W_SUB, PAD, DENSITY_H, DENSITY_K, BOX_H_NAME
 };
 })();
 

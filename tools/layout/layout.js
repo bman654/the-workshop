@@ -555,6 +555,177 @@ var Layout = (function () {
     return String(s).toLowerCase().replace(/\b\w/g, function (c) { return c.toUpperCase(); });
   }
 
+  /* ════════════════════════════════════════════════════════════════════════════
+     PLATES — "More Than One Front Door" (#262). The front door is no longer one
+     crowded plate; it is a SET of plates the visitor TRAVELS between. This pure,
+     deterministic, Node-testable partition is the SOLE authority's model.
+
+     THE PARTITION (total + disjoint): every live room resolves to EXACTLY one plate.
+     District is the default plate grain; the GROUNDS split West/East at the field
+     x-midline (the biggest district → two walkable plates); cavern + outbuilding
+     pool into "outskirts". A room landing exactly on the W/E midline tiebreaks by
+     district-region order (deterministic), not raw x.
+
+     Each plate's CAMERA target = its rooms' bbox padded ×1.45, k clamped ≤ ~3.2,
+     with a minimum frame so a narrow plate does not over-zoom. The MANOR plate's
+     bbox is EXTENDED to enclose the gated BENEATH slot so the Undercroft rides the
+     manor plate and is never stranded (crux: beneath ∈ exactly one plate's bbox).
+
+     THE ROAD GRAPH (reciprocal): manor is the hub (the front door lives in the
+     manor), so every plate links to manor; the two grounds halves share the mid
+     wall; the observatory rise shares the NW corner with grounds-west. Every edge
+     is reciprocal (A↔B ⇔ B↔A) and every plate is reachable from the door. ── */
+  var PLATE_PAD = 1.45;          // bbox padding factor for the camera frame
+  var PLATE_K_MAX = 3.2;         // max zoom so a tiny plate never over-magnifies
+  var PLATE_MIN_W = 360, PLATE_MIN_H = 240;  // minimum frame so narrow plates breathe
+
+  var PLATE_META = {
+    'manor':        { label: 'THE MANOR HOUSE',     hue: '#c9a24a' },
+    'grounds-west': { label: 'THE WEST GROUNDS',    hue: '#86b39a' },
+    'grounds-east': { label: 'THE EAST GROUNDS',    hue: '#37c9b0' },
+    'observatory':  { label: 'THE OBSERVATORY RISE', hue: '#9db4ff' },
+    'outskirts':    { label: 'THE OUTSKIRTS',       hue: '#7fd4c0' }
+  };
+
+  function footCentreOf(f) {
+    return f.r != null ? { x: f.x, y: f.y } : { x: f.x + f.w / 2, y: f.y + f.h / 2 };
+  }
+  function footBBoxOf(f) {
+    return f.r != null ? { x: f.x - f.r, y: f.y - f.r, w: f.r * 2, h: f.r * 2 }
+                       : { x: f.x, y: f.y, w: f.w, h: f.h };
+  }
+
+  /* which plate a room belongs to, given the solved solution (for the W/E split). */
+  function plateOf(r, solution) {
+    if (r.district === 'grounds') {
+      var c = footCentreOf(solution.foot[r.id]);
+      var mid = FIELD.x + FIELD.w / 2;
+      // tiebreak a room exactly on the midline by id order → 'grounds-west' (lower x bias)
+      return c.x < mid ? 'grounds-west' : (c.x > mid ? 'grounds-east' : 'grounds-west');
+    }
+    if (r.district === 'outbuilding' || r.district === 'cavern') return 'outskirts';
+    return r.district; // manor, observatory
+  }
+
+  /* Layout.plates(places) → the total/disjoint partition + per-plate camera bbox +
+     the reciprocal inter-plate road graph. Pure & deterministic (solves once). */
+  function plates(places) {
+    var live = places.filter(function (p) { return !p.locked; });
+    var solution = solve(live);
+
+    // 1. PARTITION (total + disjoint)
+    var members = {};   // plateId → [room,...]
+    var roomPlate = {}; // roomId → plateId
+    for (var i = 0; i < live.length; i++) {
+      var pid = plateOf(live[i], solution);
+      (members[pid] = members[pid] || []).push(live[i]);
+      roomPlate[live[i].id] = pid;
+    }
+
+    // 2. per-plate bbox over member footprints + camera frame
+    var bbox = {};
+    var pids = Object.keys(members).sort();
+    for (var pi = 0; pi < pids.length; pi++) {
+      var p = pids[pi], rooms = members[p];
+      var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (var ri = 0; ri < rooms.length; ri++) {
+        var b = footBBoxOf(solution.foot[rooms[ri].id]);
+        if (b.x < x0) x0 = b.x; if (b.y < y0) y0 = b.y;
+        if (b.x + b.w > x1) x1 = b.x + b.w; if (b.y + b.h > y1) y1 = b.y + b.h;
+      }
+      bbox[p] = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    }
+    // EXTEND the manor plate to enclose the gated BENEATH slot (the Undercroft rides
+    // the manor plate, never stranded). beneath ∈ exactly the manor plate's bbox.
+    if (bbox.manor) {
+      var bs = beneathSlot();
+      var mx0 = Math.min(bbox.manor.x, bs.x);
+      var my0 = Math.min(bbox.manor.y, bs.y);
+      var mx1 = Math.max(bbox.manor.x + bbox.manor.w, bs.x + bs.w);
+      var my1 = Math.max(bbox.manor.y + bbox.manor.h, bs.y + bs.h);
+      bbox.manor = { x: mx0, y: my0, w: mx1 - mx0, h: my1 - my0 };
+    }
+
+    // 3. CAMERA FRAME per plate: bbox padded ×PLATE_PAD, min-framed, centred, k clamped.
+    var VB = { w: 1440, h: 900 };
+    var frame = {};
+    for (var fi = 0; fi < pids.length; fi++) {
+      var pp = pids[fi], box = bbox[pp];
+      var cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+      var fw = Math.max(box.w * PLATE_PAD, PLATE_MIN_W);
+      var fh = Math.max(box.h * PLATE_PAD, PLATE_MIN_H);
+      var k = Math.min(VB.w / fw, VB.h / fh, PLATE_K_MAX);
+      frame[pp] = {
+        k: k,
+        tx: VB.w / 2 - cx * k,
+        ty: VB.h / 2 - cy * k,
+        cx: cx, cy: cy, fw: fw, fh: fh
+      };
+    }
+
+    // 4. the RECIPROCAL inter-plate ROAD GRAPH (manor is the hub; W/E share the mid
+    //    wall; observatory shares the NW corner with grounds-west)
+    var adj = {};
+    function link(a, b) {
+      if (!members[a] || !members[b] || a === b) return;
+      (adj[a] = adj[a] || {})[b] = true;
+      (adj[b] = adj[b] || {})[a] = true;
+    }
+    for (var li = 0; li < pids.length; li++) if (pids[li] !== 'manor') link('manor', pids[li]);
+    link('grounds-west', 'grounds-east');
+    link('observatory', 'grounds-west');
+    // emit a stable edge list (each undirected pair once, a<b)
+    var edges = [];
+    for (var a in adj) for (var b in adj[a]) if (a < b) edges.push([a, b]);
+    edges.sort(function (e, f) { return e[0] < f[0] ? -1 : e[0] > f[0] ? 1 : (e[1] < f[1] ? -1 : 1); });
+
+    return {
+      ids: pids,
+      members: members,    // plateId → [room,...]  (total + disjoint over live rooms)
+      roomPlate: roomPlate,// roomId → plateId
+      bbox: bbox,          // plateId → {x,y,w,h} (manor extended to enclose beneath)
+      frame: frame,        // plateId → {k,tx,ty,cx,cy,fw,fh}  the camera target
+      adj: adj,            // plateId → {neighbourId:true}
+      edges: edges,        // [[a,b],...] each undirected pair once (a<b), sorted
+      meta: PLATE_META,
+      beneath: beneathSlot(),
+      solution: solution
+    };
+  }
+
+  /* Layout.relayPlate(rooms) → a plate-LOCAL re-lay: spread JUST this plate's rooms
+     into a generous open frame (a two-column outward fan over ~85% of FIELD height,
+     footprints in the centre band, labels fanning to the margins) so that NAME-ONLY
+     labels never collide. This is the construction the legibility twin scores with
+     {nameOnly:true} to prove each plate clears the floor ALONE. It returns a sol-like
+     {foot, footMeta} for ONLY these rooms PLUS a `relaySide` per room (the L/R fan).
+     It is a RingView/plate-LOCAL transform ONLY — NEVER written back onto the
+     canonical Layout.foot (else emit-mirror.cjs / sky.test.cjs would false-fail). */
+  var RELAY_VSPREAD = 0.85;  // fraction of FIELD height the column stack uses
+  function relayPlate(rooms) {
+    var n = rooms.length;
+    var band = SIZE_BAND[3];  // folly size — small footprints so the label leads
+    var half = Math.ceil(n / 2);
+    var fh = FIELD.h * RELAY_VSPREAD, fy = FIELD.y + (FIELD.h - fh) / 2;
+    var rowH = half > 0 ? fh / half : fh;
+    var cxL = FIELD.x + FIELD.w * 0.40, cxR = FIELD.x + FIELD.w * 0.60;
+    var foot = {}, footMeta = {}, sideById = {}, places = [];
+    for (var i = 0; i < n; i++) {
+      var r = rooms[i];
+      var col = i % 2, rr = Math.floor(i / 2);
+      var cy = fy + (rr + 0.5) * rowH;
+      var cx = col === 0 ? cxL : cxR;
+      foot[r.id] = { x: cx - band.w / 2, y: cy - band.h / 2, w: band.w, h: band.h };
+      footMeta[r.id] = { tier: r.tier, district: r.district, wing: r.wing || null };
+      var side = col === 0 ? 'left' : 'right';
+      sideById[r.id] = side;
+      // a places copy carrying relaySide (Legibility reads r.relaySide for the seat side)
+      var copy = {}; for (var k in r) copy[k] = r[k]; copy.relaySide = side;
+      places.push(copy);
+    }
+    return { foot: foot, footMeta: footMeta, graph: null, sideById: sideById, places: places };
+  }
+
   /* the gated BENEATH slot (a reserved cellar slot at the manor south foundation) —
      revealUndercroft asks for it by id. Returns {x,y,w,h} for the stair footprint. */
   function beneathSlot() {
@@ -574,7 +745,10 @@ var Layout = (function () {
     beneathSlot: beneathSlot,
     bandFor: bandFor,
     wingLabel: wingLabel,
-    wingAccent: wingAccent
+    wingAccent: wingAccent,
+    plates: plates,
+    relayPlate: relayPlate,
+    PLATE_META: PLATE_META
   };
 })();
 

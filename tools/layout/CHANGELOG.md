@@ -4,6 +4,44 @@ A log of the grounds-engine swings that change how the estate-plan map is solved
 scored, or pre-checked. (Per-room map declarations are NOT logged here — only
 engine/process changes.)
 
+## 2026-06-21 — More Than One Front Door (#262, a grounds big-swing)
+
+The lone CROWDED front-door plate became a **walkable set of plates** the visitor
+travels between — the structural answer to #103's scale pressure (the loupe #212 made
+the single plate passable, but did not stop it growing past what one view can ever hold).
+
+- **`layout.js`** (+176) — `Layout.plates(places)`: the pure/deterministic/Node-testable
+  partition. A TOTAL + DISJOINT cover (61/61 live rooms → exactly one of 5 plates:
+  manor · grounds-west · grounds-east · observatory · outskirts), each plate's camera
+  frame (bbox ×1.45, k≤3.2, a min-frame floor so a narrow plate does not over-zoom), and
+  the reciprocal inter-plate road graph (manor = hub; W/E share the mid wall; observatory
+  shares the NW corner; outskirts → manor). The MANOR plate's bbox is EXTENDED to enclose
+  the gated BENEATH slot so the Undercroft rides it (the extension is provably load-bearing:
+  un-extended bbox ends y=494, slot centre y=549). `Layout.relayPlate(rooms)`: a plate-LOCAL
+  two-column outward-fan re-lay (folly footprints in the centre band, labels fanning L/R to
+  the margins over ~85% of FIELD height) — NEVER written back onto `Layout.foot` (canonical
+  geometry untouched; `emit-mirror` + `sky.test` stay green).
+- **`legibility.cjs`** (+27) — a `{nameOnly:true}` flag drops the wide "PIECE · tag" sub-line
+  so a plate's at-a-glance legibility is scored against name-only boxes, plus a per-room
+  `relaySide` override to seat the fan. This is the LOAD-BEARING construction rule: a plate
+  reads CROWDED at full labels but LEGIBLE name-only.
+- **`index.src.html`** (+230) — a PLATES view-state + `walkTo` camera driver over the existing
+  panZoom IIFE (a `window.__panCamera.frameTo` hook keeps zoom/pan in sync); a CSS-transition
+  `.walking` class (720ms, `transition:none` under `prefers-reduced-motion`); a
+  `#threshold-tiles` layer of brass ⌖ chips at each shared-wall road midpoint (both reciprocal
+  directions, keyboard-reachable, aria-labelled); a `#platebar` wayfinder naming the plate you
+  stand on + its doors + a ↩ back; esc/backspace retreat via a history stack. The loupe stays
+  intact WITHIN a plate. Whole module in try/catch → degrades to the static captions plate.
+- **`smoke.cjs`** (+114) + **`legibility.test.cjs`** (+81) — a PLATE HARD-PASS section asserting
+  all 5 cruxes (total+disjoint cover · per-plate name-only floor < 0.30, worst grounds-west
+  0.085 · two neg-controls: 61-on-one-plate 0.950 CROWDED + name-only load-bearing · road graph
+  6 edges reciprocal & all 5 reachable · beneath ⊆ manor bbox & extension load-bearing). The
+  legacy whole-door 0.914 CROWDED WARNING (#103) is PRESERVED, not defined away. Both twins EXIT 0.
+- CRUX 5 FRAMING: the camera bboxes physically OVERLAP in screen space, so "beneath ∈ exactly
+  one bbox" is literally false; the asserted falsifiable version is "the WHOLE beneath slot ⊆
+  the manor plate's bbox AND the manor extension is load-bearing." The Undercroft demonstrably
+  rides the manor plate.
+
 ## 2026-06-19 — The Legibility Conscience (a grounds engine swing)
 
 Added an automated **legibility pre-check** to the map pipeline.
