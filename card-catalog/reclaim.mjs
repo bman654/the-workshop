@@ -17,6 +17,30 @@
    entry to {id,room,piece,glyph,accent,district,tier,wing,order,href,blurb,tag,
    locked}, and writes the JSON slab between the CATALOG-DATA sentinels.
 
+   ── ENTRY-TIME (git-derived, build-time): the slab is NOT a pure function of
+   PLACES. ── The front-door `order` field is a MAP-DISPLAY index (a room's slot
+   within its wing/plate), NOT entry-time — so it cannot order the Register of
+   Admissions truthfully. Instead reclaim derives, for EACH record, the moment the
+   room actually entered the estate from git history, and bakes two fields into the
+   slab so core.mjs stays pure (DOM-free, no shelling):
+     • `entry`     — the integer commit DEPTH-from-root of the room's FIRST-ADD
+                     commit (`git rev-list --count <hash>`); this is the SAME
+                     "cycle == git depth" metric the Cairn ledger uses, and being
+                     monotone in real history it naturally orders genesis /
+                     pre-cycle rooms ahead of recent ones. This is the SORT KEY for
+                     ORDERING 3 (byEntry).
+     • `entryDate` — the YYYY-MM-DD date of that first-add commit (human display,
+                     stamped on each admissions card + the room's detail panel).
+   The first-add commit is the EARLIEST `--diff-filter=A` commit touching any of
+   the room's source paths (resolved from `href`: <dir>/<file>.src.html, then
+   <dir>/<file>.html, then the directory). A room whose first-add commit cannot be
+   found (brand-new / uncommitted / a renamed path) gets a deterministic fallback
+   that sorts it LAST (entry = ENTRY_SENTINEL, entryDate = '') rather than crashing
+   or shipping a hole. Embedding git-derived facts here is correct: entry-time is a
+   fact about HISTORY, not about the plan — so the slab legitimately depends on more
+   than PLACES. reclaim is build-time and already shells the filesystem; shelling
+   git is in-bounds (core.mjs never does).
+
    The slab carries EVERY PLACES entry INCLUDING the locked undercroft (the page's
    filterUnlocked gates at RENDER time from live ws:). hrefs in PLACES are
    repo-root-relative; the catalog lives one level down, so the PAGE prefixes
@@ -30,13 +54,21 @@
    Run:  node card-catalog/reclaim.mjs
    Exits 0 on success (whether or not the slab changed); non-zero on any error.
    ═══════════════════════════════════════════════════════════════════════════ */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(__dirname, '..');
 const SRC_PATH = join(__dirname, 'index.src.html');
 const PLACES_PATH = join(__dirname, '..', 'index.src.html');
+
+/* A room whose first-add commit cannot be found (brand-new, uncommitted, or a
+   renamed path) gets this sentinel `entry` so it sorts LAST in the Register
+   rather than crashing reclaim or shipping a hole. Large enough to dwarf any real
+   git depth; finite (not Infinity) so it survives JSON round-trip as an integer. */
+const ENTRY_SENTINEL = 1e9;
 
 const BEGIN = '<!-- CATALOG-DATA BEGIN -->';
 const END = '<!-- CATALOG-DATA END -->';
@@ -181,6 +213,87 @@ function projectEntry(entry) {
   return rec;
 }
 
+/* ── ENTRY-TIME, derived from git history (build-time only) ──────────────────────
+   The candidate source paths for a record, in probe order, resolved from `href`.
+   For href "sound-garden/index.html": probe sound-garden/index.src.html (the
+   authored source forge inlines from), then sound-garden/index.html (the shipped
+   page), then the directory sound-garden/ (the room's whole footprint — catches
+   first-add even if the page was later renamed within the dir). For a top-level
+   single-file room the href file itself is the first probe. Repo-root-relative,
+   filtered to those that actually exist so git is asked only about real paths. */
+function entryPathsFor(href) {
+  const h = String(href || '').trim();
+  const out = [];
+  if (h) {
+    const slash = h.lastIndexOf('/');
+    const dir = slash === -1 ? '' : h.slice(0, slash);
+    const file = slash === -1 ? h : h.slice(slash + 1);
+    const dot = file.lastIndexOf('.');
+    const base = dot === -1 ? file : file.slice(0, dot);
+    if (dir) {
+      out.push(join(dir, base + '.src.html'));   // authored source
+      out.push(join(dir, base + '.html'));        // shipped page
+      out.push(dir);                              // the room's directory
+    } else {
+      out.push(join(base + '.src.html'));
+      out.push(h);
+    }
+  }
+  // de-dup, keep only paths that exist under the repo so git gets real targets
+  const seen = new Set();
+  return out.filter((p) => {
+    if (seen.has(p)) return false;
+    seen.add(p);
+    return existsSync(join(REPO_ROOT, p));
+  });
+}
+
+/* The FIRST-ADD commit for a set of repo-relative paths: the EARLIEST commit that
+   ADDED any of them (`git log --diff-filter=A --reverse`, first line). Returns
+   { hash, date } or null if git has no add-record for any path (brand-new /
+   uncommitted / renamed). Robust: any git failure (not a repo, path unknown)
+   yields null, never throws — reclaim falls back to the deterministic sentinel. */
+function firstAddCommit(paths) {
+  if (!paths.length) return null;
+  let best = null; // { hash, date, depth }
+  for (const p of paths) {
+    let line;
+    try {
+      const out = execFileSync('git', [
+        'log', '--diff-filter=A', '--reverse', '--format=%H|%ad', '--date=short',
+        '--', p
+      ], { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+      line = out.split('\n').find((l) => l.includes('|'));
+    } catch (e) {
+      line = undefined; // git failed for this path — try the next probe
+    }
+    if (!line) continue;
+    const bar = line.indexOf('|');
+    const hash = line.slice(0, bar).trim();
+    const date = line.slice(bar + 1).trim();
+    if (!hash) continue;
+    let depth;
+    try {
+      depth = parseInt(String(execFileSync('git', ['rev-list', '--count', hash], {
+        cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
+      }).trim()), 10);
+    } catch (e) { continue; }
+    if (!Number.isFinite(depth)) continue;
+    // keep the SHALLOWEST (earliest) first-add across the probes — depth is
+    // monotone in history, so the smallest depth is the truest entry moment.
+    if (!best || depth < best.depth) best = { hash, date, depth };
+  }
+  return best;
+}
+
+/* Resolve { entry, entryDate } for one projected record. Falls back to the
+   last-sorting sentinel when no first-add commit can be found. */
+function entryTimeFor(record) {
+  const commit = firstAddCommit(entryPathsFor(record.href));
+  if (!commit) return { entry: ENTRY_SENTINEL, entryDate: '' };
+  return { entry: commit.depth, entryDate: commit.date };
+}
+
 /* ── parsePlacesText: the structural core. Given the FULL text of a front-door
    index.src.html (or any file holding a `const PLACES = [ … ];`), slice the block,
    split its entries, project + validate each. Exported so the Node twin can feed
@@ -220,16 +333,37 @@ export function loadPlaces(placesPath = PLACES_PATH) {
   return parsePlacesText(readFileSync(placesPath, 'utf8'));
 }
 
+/* ── withEntryTimes: stamp each record with its git-derived { entry, entryDate } ──
+   Kept OUT of parsePlacesText so the parser stays a pure structural projection
+   (the Node twin feeds it synthetic fixtures that have no git history); the slab
+   the page ships is built from THIS, so the embedded entry/entryDate are the
+   single source the twin and the page both read. Every returned record carries an
+   INTEGER `entry` (a real git depth, or ENTRY_SENTINEL) and a string `entryDate`
+   (YYYY-MM-DD, or '' for the sentinel) — no holes. */
+export function withEntryTimes(records) {
+  return records.map((r) => {
+    const { entry, entryDate } = entryTimeFor(r);
+    return { ...r, entry, entryDate };
+  });
+}
+
 /* ── emit the slab + re-pin ─────────────────────────────────────────────────── */
 function main() {
-  const records = loadPlaces();
-  // canonical field order, stable, pretty-printed for a readable diff.
-  const FIELD_ORDER = ['id', 'room', 'piece', 'glyph', 'accent', 'district', 'tier', 'wing', 'order', 'href', 'blurb', 'tag', 'locked'];
+  const records = withEntryTimes(loadPlaces());
+  // canonical field order, stable, pretty-printed for a readable diff. `entry`
+  // (git depth-from-root) + `entryDate` (YYYY-MM-DD) are git-derived, baked here.
+  const FIELD_ORDER = ['id', 'room', 'piece', 'glyph', 'accent', 'district', 'tier', 'wing', 'order', 'href', 'blurb', 'tag', 'locked', 'entry', 'entryDate'];
   const projected = records.map((r) => {
     const o = {};
     for (const f of FIELD_ORDER) if (r[f] !== undefined) o[f] = r[f];
     return o;
   });
+  // GUARD: every record must carry an integer `entry` (no holes) before we ship.
+  for (const r of projected) {
+    if (!Number.isInteger(r.entry)) {
+      throw new Error('REFUSING: record "' + (r.id || '?') + '" has no integer `entry` field — entry-time derivation produced a hole.');
+    }
+  }
   const json = JSON.stringify(projected, null, 1);
 
   const src = readFileSync(SRC_PATH, 'utf8');

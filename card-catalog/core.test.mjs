@@ -14,8 +14,13 @@
      (a) SET EQUALITY — slab ids === front-door PLACES ids (incl. the locked
          undercroft); |slab| === |PLACES|; symmetric difference is ∅.
      (b) EACH OF THE 4 ORDERINGS IS A PERMUTATION of the unlocked set (distinct
-         ids deep-equal the canonical sorted list — sparse-`order` fallback
-         covered by including the no-order rooms).
+         ids deep-equal the canonical sorted list — the byEntry id-tiebreak leg
+         covered by rooms sharing a git-depth `entry`).
+     (b2) ENTRY-TIME TRUTH — every slab record carries an integer `entry` (git
+         depth, baked by reclaim) + a string `entryDate`; the Register of
+         Admissions is monotone non-decreasing in `entry`; and a genesis room
+         (sound-garden) sorts STRICTLY before a recent one (card-catalog) — the
+         exact inversion the bug reported, asserted gone.
      (c) HREF RESOLVABILITY — every card's `../<href>` fs.existsSync-resolves.
      (d) SEARCH SOUND + COMPLETE — for a battery of queries, search(q) returns
          EXACTLY the rooms matching an independent brute-force reference, plus
@@ -114,14 +119,54 @@ for (const key of Object.keys(ORDERINGS)) {
   check('ordering "' + key + '" is fully determined (no equal-compare ties left ambiguous)',
     ordered.length === unlocked.length, '');
 }
-// the sparse-order fallback is exercised: rooms with no `order` exist and land at the end of byEntry
-const noOrder = unlocked.filter((r) => r.order == null);
-check('sparse `order` present (fallback under test)', noOrder.length > 0, noOrder.length + ' rooms without order');
-const entryOrdered = ORDERINGS.entry(unlocked);
-const tailIds = entryOrdered.slice(entryOrdered.length - noOrder.length).map((r) => r.id).sort();
-check('no-order rooms tiebreak to the tail of the Register, sorted by id',
-  eqArr(tailIds, noOrder.map((r) => r.id).sort()),
-  tailIds.join(','));
+// the id-tiebreak leg of byEntry is exercised: rooms can share an `entry` (same
+// first-add commit / depth), and they must tiebreak by id deterministically.
+{
+  const reg = ORDERINGS.entry(unlocked);
+  let tieOk = true, tieDetail = 'no ties';
+  for (let i = 1; i < reg.length; i++) {
+    if ((reg[i].entry ?? Infinity) === (reg[i - 1].entry ?? Infinity)) {
+      if (reg[i - 1].id > reg[i].id) { tieOk = false; tieDetail = reg[i - 1].id + ' before ' + reg[i].id; break; }
+    }
+  }
+  check('byEntry: rooms sharing an `entry` tiebreak by id (deterministic)', tieOk, tieDetail);
+}
+
+// ═══════════════ (b2) ENTRY-TIME — the Register now tells the TRUTH ═══════════════
+section('(b2) ENTRY-TIME — the Register of Admissions tells the true order rooms were raised');
+{
+  // The git-derived fields live on the SLAB (reclaim bakes them). Assert against
+  // the operative DATA so a stale / un-reclaimed slab is caught.
+  const everyInt = DATA.every((r) => Number.isInteger(r.entry));
+  check('every slab record carries an INTEGER `entry` (git depth, no holes)', everyInt,
+    everyInt ? DATA.length + ' stamped' : 'a record is missing an integer entry');
+  const everyDate = DATA.every((r) => typeof r.entryDate === 'string');
+  check('every slab record carries a string `entryDate`', everyDate, everyDate ? 'all strings' : 'a record has a non-string entryDate');
+
+  const reg = ORDERINGS.entry(unlocked);
+  let mono = true, inv = null;
+  for (let i = 1; i < reg.length; i++) {
+    if ((reg[i].entry ?? Infinity) < (reg[i - 1].entry ?? Infinity)) { mono = false; inv = reg[i - 1].id + '→' + reg[i].id; break; }
+  }
+  check('Register is MONOTONE non-decreasing in `entry`', mono, mono ? reg.length + ' in true order' : 'inversion at ' + inv);
+
+  // THE BUG, asserted gone: a genesis room (sound-garden, an original pre-estate
+  // room) must sort STRICTLY BEFORE a recent room (card-catalog, #232) — the exact
+  // inversion the bug reported. These landmark rooms are in the real estate.
+  const gi = reg.findIndex((r) => r.id === 'sound-garden');
+  const ci = reg.findIndex((r) => r.id === 'card-catalog');
+  check('genesis (sound-garden) present in the volume', gi !== -1, 'idx ' + gi);
+  check('recent (card-catalog) present in the volume', ci !== -1, 'idx ' + ci);
+  check('the bug is gone: sound-garden sorts BEFORE card-catalog', gi !== -1 && ci !== -1 && gi < ci,
+    'sound-garden @' + gi + (gi < ci ? ' < ' : ' !< ') + 'card-catalog @' + ci);
+  // and their git depths confirm it independently of the sort
+  const sg = DATA.find((r) => r.id === 'sound-garden'), cc = DATA.find((r) => r.id === 'card-catalog');
+  if (sg && cc) check('sound-garden.entry < card-catalog.entry (git depth)', sg.entry < cc.entry,
+    sg.entry + ' < ' + cc.entry);
+  // the strange-garden is the deepest genesis room — it should head the Register
+  const sgg = reg.findIndex((r) => r.id === 'strange-garden');
+  if (sgg !== -1) check('a genesis garden lands in the first few admissions', sgg < 6, 'strange-garden @' + sgg);
+}
 
 // ═══════════════ (c) HREF RESOLVABILITY ═══════════════
 section('(c) HREF RESOLVABILITY — every card points at a real in-repo page');

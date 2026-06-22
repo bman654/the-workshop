@@ -30,7 +30,7 @@
    spatial fields (district/tier/wing/order) for the indexes. */
 export const FIELDS = [
   'id', 'room', 'piece', 'glyph', 'accent', 'district', 'tier',
-  'wing', 'order', 'href', 'blurb', 'tag', 'locked'
+  'wing', 'order', 'href', 'blurb', 'tag', 'locked', 'entry', 'entryDate'
 ];
 
 /* ── THE LOCK PREDICATE — PURE (ids/wsHas in, not localStorage reads) ──────────
@@ -200,12 +200,20 @@ export function bySubject(records) {
 }
 
 /* ── ORDERING 3 · REGISTER OF ADMISSIONS (by ORDER OF ENTRY) ──────────────────
-   the `order` field ASC. `order` is SPARSE — only some PLACES entries carry it —
-   so a missing order sorts to the END (order ?? Infinity), then a deterministic
-   id tiebreak. Both legs are covered by the permutation proof. */
+   `entry` ASC — the TRUE order rooms entered the estate. `entry` is the git
+   DEPTH-from-root of a room's first-add commit (the "cycle == git depth" metric),
+   baked into the slab by reclaim.mjs at build time; it is monotone in real
+   history, so genesis / pre-cycle rooms (the Strange Gardens, the Sound Garden,
+   the Arcade) head the Register and the newest rooms sort last. A record with no
+   `entry` (only synthetic fixtures, never the shipped slab) sorts to the END
+   (entry ?? Infinity), then a deterministic id tiebreak. Both legs stay covered by
+   the permutation proof; the twin additionally asserts the result is monotone
+   non-decreasing in `entry` and that the bug's reported inversion (a genesis room
+   landing AFTER a recent one) is gone. NB: we deliberately do NOT sort on the
+   front-door `order` field — that is a MAP-DISPLAY slot, not entry-time. */
 export function byEntry(records) {
   return records.slice().sort((a, b) =>
-    ((a.order ?? Infinity) - (b.order ?? Infinity)) ||
+    ((a.entry ?? Infinity) - (b.entry ?? Infinity)) ||
     byId(a, b));
 }
 
@@ -314,6 +322,10 @@ export function search(records, query) {
          against a brute-force reference over a battery of queries.)
      (f) LOCK PARITY — the locked card is in the data slab but absent from the
          visible set unless the store carries an undercroft breadcrumb.
+     (g) ENTRY-TIME TRUTH — every card carries an integer `entry` (no holes); the
+         Register of Admissions is monotone non-decreasing in `entry`; and a known
+         genesis room sorts strictly before a known recent room (the bug's
+         reported inversion, asserted gone — checked only when both are present).
    Returns { checks:[{label,pass,detail}], visible }. */
 export function runSelfTest(records, store) {
   const checks = [];
@@ -364,6 +376,31 @@ export function runSelfTest(records, store) {
     search(visible, '').length + '');
   add('a guaranteed-absent query returns none', search(visible, ABSENT).length === 0,
     search(visible, ABSENT).length + '');
+
+  // (g) ENTRY-TIME — the Register of Admissions now tells the TRUE order. Every
+  // card carries an integer `entry` (git depth, baked by reclaim — no holes); the
+  // Register is MONOTONE NON-DECREASING in `entry`; and a known genesis room sorts
+  // STRICTLY BEFORE a known recent room (the exact inversion the bug reported).
+  const everyEntryInt = visible.every((r) => Number.isInteger(r.entry));
+  add('every card carries an integer `entry` (no holes)', everyEntryInt,
+    everyEntryInt ? visible.length + ' stamped' : 'missing entry on a card');
+  const reg = byEntry(visible);
+  let monotone = true, firstInv = null;
+  for (let i = 1; i < reg.length; i++) {
+    if ((reg[i].entry ?? Infinity) < (reg[i - 1].entry ?? Infinity)) {
+      monotone = false; firstInv = reg[i - 1].id + '→' + reg[i].id; break;
+    }
+  }
+  add('Register of Admissions is monotone non-decreasing in `entry`', monotone,
+    monotone ? reg.length + ' in order' : 'inversion at ' + firstInv);
+  // genesis-before-recent: only asserted when BOTH landmark rooms are present
+  // (they are in the real estate; synthetic fixtures may lack them — skip cleanly).
+  const pos = (id) => reg.findIndex((r) => r.id === id);
+  const gi = pos('sound-garden'), ci = pos('card-catalog');
+  if (gi !== -1 && ci !== -1) {
+    add('a genesis room (sound-garden) sorts before a recent room (card-catalog)',
+      gi < ci, 'sound-garden @' + gi + ' < card-catalog @' + ci);
+  }
 
   // (f) LOCK PARITY — locked card present in data, gated in visible
   const lockedInData = records.some((r) => r.locked);
