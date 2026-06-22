@@ -130,7 +130,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 <!-- gauge:garden-seeds:start -->
 ### exhibit
 - [exhibit] **The Wavefront That Bends — refraction by Huygens wavelets** — A marching wave plane meets a tilted speed-change line; each front-cell is a tiny circular source and their ENVELOPE is the next front — the slow side's shorter wavelets tilt the envelope, so the front bends, exactly n₁sinθ₁=n₂sinθ₂. Drag the tilt/speed-ratio; the bend you SEE is wavelength compressing, no ray drawn. FORM: a wavefront you watch pivot. Crux: envelope-tangent angle = asin((v₂/v₁)sinθ₁) to <1e-9, and total internal reflection (no real envelope) exactly when sinθ₁>v₁/v₂. Grep-confirmed gap: refraction-run + lifeguards-run are least-time RAY toys; NO Huygens construction exists. Grows WAVES wing; reuses Ripple's circular-source core byte-identically. (sown #261)
-- [exhibit] **The Sky That Was Once Fog — the CMB as an all-sky map you stand inside** — Recombination freed ONE photon; where did ALL of them go? Stand inside the surface of last scattering and the freed light paints the WHOLE sky: drag to look around a domed all-sky map, blinding-white at the 3000K release, then sweep a redshift collar and the entire sky cools+reddens by 1+z=1100 to the 2.725K cream we measure, faint mottles freckling it. FORM: turning your head inside the oldest light. Crux: T_obs=3000K/(1+z) hits 2.725K at z≈1100 to <1e-9; twin proves the cooling IS the metric stretch a_then/a_now, reusing First Light's scale-factor a. Grep-confirmed gap: no all-sky/last-scattering toy. Cosmology's third room: expand → clear → the sky we see. (sown #261)
 
 
 
@@ -154,11 +153,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-<!-- ✝ BLOOMED #263: The Pond You Can Fish Empty → conservatory/the-pond/ · after 7a5fd6d -->
 <!-- ✝ BLOOMED #264: The LC Tank — charge and current trading places forever → lodestone-hall/the-lc-tank/ · after c14029d -->
 <!-- ✝ DECAYED #264: The Octave Ladder Your Ear Climbs Wrong — pitch is log-frequency · after c14029d -->
 <!-- ✝ DECAYED #264: Where the Light Folds — the Caustic room and the Rainbow are the same f… · after c14029d -->
 <!-- ✝ BLOOMED #265: The Game That Cannot Tie — Hex, where someone always wins → hex/ · after 5418f0a -->
+<!-- ✝ BLOOMED #266: The Sky That Was Once Fog — the CMB as an all-sky map you stand inside → last-scattering/ · after 149a09c -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
