@@ -155,6 +155,16 @@ var Layout = (function () {
      verified clear of every footprint + catalog star (the works block ends ~x1000,
      amusements begins ~x910 upper-right; this lower-mid band is open). */
   GROUNDS_WINGS.induction = { x: 600, y: 690, w: 210, h: 120 };
+  /* DRAWING-ENGINES — The Drawing Room, the estate's COMPUTE-BY-DRAWING wing (a
+     Scheiner pantograph that copies your hand at a dialed scale). Kin to the other
+     brass drawing-engines (linkage's exact line, the trammel's ellipse, the
+     spirograph's rosette). Seated in the open west-central park BELOW the optics /
+     waves column (optics ends ~y524, waves ~y542) and LEFT of the number wing
+     (x470+): a clear lower-west band. Sized for ≥4 growth lots (the named-dark
+     siblings: Hart's inversor, a conchoidograph — plus room for two more). Builder
+     FINALISED exact x/y via smoke.cjs's live Layout.solve, verified clear of every
+     footprint + catalog star + the legibility conscience. */
+  GROUNDS_WINGS['drawing-engines'] = { x: 166, y: 540, w: 150, h: 150 };
   /* WAVES — the wave-INTERFERENCE family (Ripple, the silent tank, + The Loud and the
      Quiet Walk, the same field sung to your ear). Kin to OPTICS (both are "what light/
      waves DO"), but a distinct family: interference & superposition, not geometric
@@ -192,6 +202,7 @@ var Layout = (function () {
     arrow:       { label: 'THE ARROW WING',     accent: '#c9a24a' },
     'curved-country': { label: 'CURVED COUNTRY', accent: '#caa15a' },
     induction:   { label: 'ELECTROMAGNETISM', accent: '#7fd4ff' },
+    'drawing-engines': { label: 'DRAWING ENGINES', accent: '#c9a24a' },
     'kinetics-sound': { label: 'KINETICS & SOUND', accent: '#d8a94a' },
     waves:       { label: 'WAVES',              accent: '#54d6d0' }
   };

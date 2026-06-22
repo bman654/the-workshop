@@ -193,7 +193,15 @@
     // Verified clear of every footprint/furniture box, the manor pool, the viewBox
     // edge, and every existing catalog star (nearest = refraction-run feat-stars at
     // x275+, Δx>120) by the CATALOG INTEGRITY self-test (live-solve probe).
-    'tone-mill': { x: 150, y: 500, mag: 1 }
+    'tone-mill': { x: 150, y: 500, mag: 1 },
+    // The Drawing Room — the drawing-engines wing's founding room (compute by
+    // drawing; the pantograph copies your hand at a dialed scale). A FEATS-flavoured
+    // field star in the dark BOTTOM margin band, LEFT of the induction pair
+    // (lodestone-hall 700,872 · bootstrap-bench 820,884) and clear of its own
+    // far-west footprint (x182 y574); lit on first visit (ws:seen:the-drawing-room).
+    // Verified clear of every footprint/furniture box, the manor pool, the viewBox
+    // edge, and every existing catalog star by the CATALOG INTEGRITY self-test.
+    'the-drawing-room': { x: 300, y: 868, mag: 1 }
   };
 
   /* ── DATA: the six wings (companion-pairs), each an asterism ────────────────
