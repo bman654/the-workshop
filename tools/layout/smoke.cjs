@@ -378,7 +378,15 @@ wingDisjointSelfTest();
    plate composite as a BASELINE and FAIL the build only if a LATER addition pushes
    crowding MEASURABLY above it. The #103 "intended" warning keeps its rationale; this
    just stops the next room from quietly re-crowding the plate past where we left it. ── */
-const CROWDING_BASELINE = 0.934;   // clean full-plate composite right after the #283 West-Grounds fix
+const CROWDING_BASELINE = 0.955;   // re-baselined #295 when The Cartouche joined drawing-engines (an
+                                   //   intentional room-add — the documented "if intentional, re-baseline"
+                                   //   path). NOTE: the ratchet was ALREADY tripped at HEAD before #295
+                                   //   (composite had drifted to 0.949 > the old 0.938 ceiling as rooms
+                                   //   accreted without a re-baseline); this pins the new clean full-plate
+                                   //   composite WITH the cartouche so the next add is measured against
+                                   //   today's truth. The door draws ZERO room labels at rest (#212), so
+                                   //   the full-plate crowding remains an intended WARNING, not a defect.
+                                   //   (was 0.934, the #283 West-Grounds-fix value.)
 const CROWDING_TOL = 0.004;        // a hair of slack for harmless reorderings (≈0.4%)
 function crowdingRatchet() {
   const SRC = path.join(__dirname, '..', '..', 'index.src.html');
