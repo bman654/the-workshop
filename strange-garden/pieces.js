@@ -205,5 +205,11 @@ window.PIECES = [
     name: "Cloth",
     blurb: "pinned fabric drapes, swings, and tears in your hands",
     accent: "#c9a3e0"
+  },
+  {
+    file: "the-marbling-bath.html",
+    name: "Marbling Bath",
+    blurb: "drop a ring of ink, rake the still water, and keep the marbled print",
+    accent: "#3fb6c9"
   }
 ];

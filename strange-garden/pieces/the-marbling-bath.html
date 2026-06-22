@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marbling Bath — Strange Garden</title>
+<style>
+  :root { --accent: #3fb6c9; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0a0b0f; overflow:hidden;
+    font-family: system-ui, sans-serif; color:#e6e8ee; -webkit-user-select:none; user-select:none; }
+  #c { display:block; width:100vw; height:100vh; cursor:crosshair; touch-action:none; }
+  #panel { position:fixed; top:16px; left:16px; width:268px; padding:16px 16px 14px;
+    background:rgba(18,20,28,.66); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.08); border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.5); font-size:13px; transition:opacity .2s;
+    max-height:calc(100vh - 32px); overflow:auto; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  /* folded: collapse to just the title bar so the bath is fully touchable (mobile
+     has no keyboard for the `h` shortcut — the chevron does it with a tap) */
+  #panel.fold > :not(.head) { display:none; }
+  #panel.fold { padding-bottom:14px; }
+  .head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  #fold { flex:0 0 auto; width:26px; height:26px; padding:0; line-height:1; font-size:14px;
+    border-radius:7px; color:#e6e8ee; background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.12); cursor:pointer; }
+  #fold:hover { background:rgba(255,255,255,.13); }
+  #panel h1 { font-size:14px; margin:0 0 2px; letter-spacing:.02em; }
+  #panel .desc { font-size:11px; opacity:.55; margin:0 0 10px; line-height:1.45; }
+  #panel label { font-size:11px; opacity:.8; margin:11px 0 3px;
+    font-family:ui-monospace,Menlo,monospace; display:flex; justify-content:space-between; }
+  #panel label b { color:var(--accent); font-weight:600; }
+  #panel input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  .sect { font:10px ui-monospace,Menlo,monospace; opacity:.4; letter-spacing:.12em;
+    text-transform:uppercase; margin:14px 0 2px; }
+  .row { display:flex; gap:8px; margin-top:10px; }
+  .swatches { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .sw { width:26px; height:26px; border-radius:50%; cursor:pointer; border:2px solid transparent;
+    box-shadow:0 1px 4px rgba(0,0,0,.5); transition:transform .1s; }
+  .sw:hover { transform:scale(1.12); }
+  .sw.on { border-color:#fff; }
+  button { flex:1; padding:7px 4px; font-size:12px; cursor:pointer; color:#e6e8ee;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:8px; transition:background .15s; }
+  button:hover { background:rgba(255,255,255,.13); }
+  button.pri { border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+    background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  button.on { border-color:color-mix(in srgb,var(--accent) 70%,transparent);
+    background:color-mix(in srgb,var(--accent) 26%,transparent); color:#fff; }
+  #strip { position:fixed; bottom:46px; left:50%; transform:translateX(-50%);
+    display:flex; gap:8px; z-index:40; pointer-events:auto; }
+  #strip img { width:64px; height:48px; object-fit:cover; border-radius:6px;
+    border:1px solid rgba(255,255,255,.18); box-shadow:0 4px 14px rgba(0,0,0,.5);
+    cursor:pointer; transition:transform .12s; }
+  #strip img:hover { transform:translateY(-3px) scale(1.04); }
+  #hud { position:fixed; bottom:10px; right:14px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.4; text-align:right; }
+  #hint { position:fixed; bottom:10px; left:16px; font:11px ui-monospace,Menlo,monospace;
+    opacity:.3; }
+  a.back { position:fixed; top:18px; right:18px; font:12px ui-monospace,Menlo,monospace;
+    color:#e6e8ee; opacity:.4; text-decoration:none; }
+  a.back:hover { opacity:.8; }
+  #flash { position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:60; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <div class="head">
+    <h1>Marbling Bath</h1>
+    <button id="fold" title="collapse panel (h)" aria-label="collapse panel">▾</button>
+  </div>
+  <p class="desc">A still tank of size-thickened water. Drop concentric ink rings, then
+    rake a comb through them — the ink rides the stroke into the feathered veins of marbled
+    endpaper. Lift the paper to keep your print.</p>
+
+  <div class="sect">Ink</div>
+  <div class="swatches" id="swatches"></div>
+
+  <div class="sect">Tool</div>
+  <div class="row">
+    <button id="tDrop" class="pri on">Drop ring</button>
+    <button id="tRake">Rake</button>
+    <button id="tStylus">Stylus</button>
+  </div>
+  <label>Drop size <b id="vDrop">38</b></label>
+  <input type="range" id="sDrop" min="14" max="90" step="1" value="38">
+  <label>Rake teeth <b id="vTeeth">8</b></label>
+  <input type="range" id="sTeeth" min="1" max="20" step="1" value="8">
+  <label>Tool width <b id="vWidth">0.55</b></label>
+  <input type="range" id="sWidth" min="0.1" max="1" step="0.02" value="0.55">
+
+  <div class="sect">Bath</div>
+  <label>Resolution <b id="vRes">3</b></label>
+  <input type="range" id="sRes" min="2" max="5" step="1" value="3">
+  <label>Stroke push <b id="vPush">0.55</b></label>
+  <input type="range" id="sPush" min="0.3" max="2" step="0.05" value="0.55">
+
+  <div class="row">
+    <button id="lift" class="pri">Lift paper</button>
+    <button id="clear">Fresh bath</button>
+  </div>
+  <div class="row">
+    <button id="demo">Auto demo</button>
+    <button id="save">Save PNG</button>
+  </div>
+</div>
+<div id="strip"></div>
+<div id="hud"></div>
+<div id="hint">drop rings · switch to Rake · drag to comb · L lift the paper · ▾ folds the panel</div>
+<a class="back" href="../index.html">← garden</a>
+<div id="flash"></div>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const panel=document.getElementById('panel'), hud=document.getElementById('hud');
+const $=id=>document.getElementById(id);
+
+// ===== the ebru palette (gouache colours over a pale size) ===================
+const PALETTE = [
+  ['#10243f', 'indigo'],     // suminagashi indigo
+  ['#c0392b', 'vermillion'],
+  ['#e1a200', 'saffron'],
+  ['#1f8a52', 'verdigris'],
+  ['#7d3c98', 'aubergine'],
+  ['#0d0e12', 'sumi black'],
+  ['#e8e3d6', 'shell white'],
+];
+const BG = [233, 227, 214];   // pale milky size colour (the unsized water)
+let inkColor = hexRGB(PALETTE[0][0]);
+let inkIndex = 0;
+
+function hexRGB(h){ return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)]; }
+
+// ===== state =================================================================
+let scale=3;        // px per dye cell
+let push=0.55;      // stroke velocity strength multiplier (subdivided per ~8px)
+let tool='drop';    // 'drop' | 'rake' | 'stylus'
+let dropR=38;       // ring radius in screen px
+let teeth=8;        // rake teeth
+let toolWidth=0.55; // fraction of stroke-normal span the tool spans
+
+let W,H,DPR, cssW,cssH;
+let gw,gh,N;
+// dye texture: three float planes for crisp colour (no premultiply needed; we
+// store straight colour and advect it — opaque field, every cell has colour)
+let dyeR, dyeG, dyeB, tmpR, tmpG, tmpB;
+let img, off, offCtx;
+
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  cssW=innerWidth; cssH=innerHeight;
+  W=cv.width=Math.floor(cssW*DPR); H=cv.height=Math.floor(cssH*DPR);
+  cv.style.width=cssW+'px'; cv.style.height=cssH+'px';
+  ctx.imageSmoothingEnabled=true;
+  alloc(true);
+}
+addEventListener('resize',resize);
+
+function alloc(fresh){
+  gw=Math.max(16,Math.floor(cssW/scale));
+  gh=Math.max(16,Math.floor(cssH/scale));
+  N=gw*gh;
+  dyeR=new Float32Array(N); dyeG=new Float32Array(N); dyeB=new Float32Array(N);
+  tmpR=new Float32Array(N); tmpG=new Float32Array(N); tmpB=new Float32Array(N);
+  off=document.createElement('canvas'); off.width=gw; off.height=gh;
+  offCtx=off.getContext('2d');
+  img=offCtx.createImageData(gw,gh);
+  freshBath();
+}
+
+function freshBath(){
+  for(let i=0;i<N;i++){ dyeR[i]=BG[0]; dyeG[i]=BG[1]; dyeB[i]=BG[2]; }
+}
+
+// grid<->screen helpers
+const sx2gx = x => x/cssW*gw;
+const sy2gy = y => y/cssH*gh;
+const dropRg = () => dropR/cssW*gw;   // ring radius in grid cells
+
+// ===== DROP A RING ===========================================================
+// A real ink drop on size DISPLACES the dye already there outward (it doesn't
+// paint over it). We model the textbook marbling drop deformation: every dye
+// cell within reach is pulled radially OUTWARD as if a disc of area πr² were
+// inserted at the centre — area-preserving so existing rings thin into crisp
+// concentric bands instead of being painted over. Then the new colour fills
+// the freshly-cleared centre disc.
+function dropRing(gx, gy, rg, col){
+  // 1) displace existing dye OUTWARD — the textbook marbling drop deformation.
+  //    Inserting a disc of area πr² at the centre pushes every existing point
+  //    from radius s to radius sqrt(s²+r²). The semi-Lagrangian BACKTRACE for a
+  //    destination cell at radius d (d>r) therefore reads its colour from the
+  //    smaller source radius s = sqrt(d²-r²); cells with d<=r are inside the new
+  //    disc and will be painted by the fill below. This is area-preserving, so
+  //    earlier rings only THIN into crisp concentric bands — never get erased.
+  const r2 = rg*rg;
+  const reach = rg*4.5;            // how far the drop disturbs the field
+  const reach2 = reach*reach;
+  const x0=Math.max(0,(gx-reach)|0), x1=Math.min(gw-1,(gx+reach)|0);
+  const y0=Math.max(0,(gy-reach)|0), y1=Math.min(gh-1,(gy+reach)|0);
+  // work on a copy so reads are from the pre-drop field
+  for(let y=y0;y<=y1;y++){
+    for(let x=x0;x<=x1;x++){
+      const dx=x-gx, dy=y-gy, dist2=dx*dx+dy*dy;
+      const i=y*gw+x;
+      if(dist2>reach2){ continue; }
+      if(dist2<=r2){ continue; }      // inside the new disc → fill handles it
+      const dist=Math.sqrt(dist2);
+      const srcDist=Math.sqrt(dist2 - r2);   // smaller source radius (push out)
+      const f = srcDist/dist;
+      let sxp=gx+dx*f, syp=gy+dy*f;
+      tmpR[i]=sampleBilinear(dyeR,sxp,syp);
+      tmpG[i]=sampleBilinear(dyeG,sxp,syp);
+      tmpB[i]=sampleBilinear(dyeB,sxp,syp);
+    }
+  }
+  for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){
+    const dx=x-gx, dy=y-gy, dist2=dx*dx+dy*dy;
+    if(dist2>reach2 || dist2<=r2) continue;   // skip inside-disc (fill owns it)
+    const i=y*gw+x;
+    dyeR[i]=tmpR[i]; dyeG[i]=tmpG[i]; dyeB[i]=tmpB[i];
+  }
+  // 2) fill the cleared centre disc with the new colour, soft edge for crispness
+  const fr=rg+1.2;
+  for(let y=Math.max(0,(gy-fr)|0); y<=Math.min(gh-1,(gy+fr)|0); y++)
+    for(let x=Math.max(0,(gx-fr)|0); x<=Math.min(gw-1,(gx+fr)|0); x++){
+      const dx=x-gx, dy=y-gy, dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist>fr) continue;
+      const a = dist<rg ? 1 : Math.max(0,1-(dist-rg)/1.2);
+      const i=y*gw+x;
+      dyeR[i]=dyeR[i]*(1-a)+col[0]*a;
+      dyeG[i]=dyeG[i]*(1-a)+col[1]*a;
+      dyeB[i]=dyeB[i]*(1-a)+col[2]*a;
+    }
+}
+
+function sampleBilinear(arr, x, y){
+  if(x<0)x=0; else if(x>gw-1)x=gw-1;
+  if(y<0)y=0; else if(y>gh-1)y=gh-1;
+  const xi=x|0, yi=y|0;
+  const fx=x-xi, fy=y-yi;
+  const xi1=xi<gw-1?xi+1:xi, yi1=yi<gh-1?yi+1:yi;
+  const a=arr[yi*gw+xi], b=arr[yi*gw+xi1];
+  const c=arr[yi1*gw+xi], d=arr[yi1*gw+xi1];
+  return (a*(1-fx)+b*fx)*(1-fy) + (c*(1-fx)+d*fx)*fy;
+}
+
+// ===== STROKE → VELOCITY FIELD → ADVECT ======================================
+// A stylus/rake stroke segment p0→p1 carries the surface. Each tooth lays a
+// localized velocity bump along the drag direction with a Gaussian transverse
+// falloff (the 1/r-ish marbling displacement). We then advect the dye by a
+// semi-Lagrangian backtrace: new[p] = old[p - v(p)]. No diffusion → crisp veins.
+let velX=null, velY=null;     // reusable velocity buffers
+function ensureVel(){
+  if(!velX || velX.length!==N){ velX=new Float32Array(N); velY=new Float32Array(N); }
+}
+
+function strokeAdvect(x0s,y0s,x1s,y1s){
+  ensureVel();
+  velX.fill(0); velY.fill(0);
+  const x0=sx2gx(x0s), y0=sy2gy(y0s), x1=sx2gx(x1s), y1=sy2gy(y1s);
+  let dx=x1-x0, dy=y1-y0;
+  const len=Math.hypot(dx,dy);
+  if(len<0.001) return;
+  const dirx=dx/len, diry=dy/len;       // drag direction
+  const nx=-diry, ny=dirx;              // stroke normal
+  // tool span across the normal, in grid cells
+  const halfSpan = (tool==='rake') ? Math.min(gw,gh)*0.5*toolWidth : 0;
+  const sigma = (tool==='rake') ? Math.max(1.4, (2*halfSpan/Math.max(teeth,1))*0.42)
+                                : Math.max(2.2, Math.min(gw,gh)*0.06*toolWidth+2);
+  // push proportional to how far you dragged — but CLAMP the per-call drag length
+  // so a single fast flick can't translate the whole field. The subdivision in
+  // pointerMove already feeds small (~8px) segments; this is a belt-and-braces
+  // cap at one tool-width (sigma) in grid cells so the displacement always reads
+  // as a SHEAR riding the comb, never one big translation. The auto-demo feeds
+  // n=30-40 sub-steps so its segments stay under the cap and comb cleanly.
+  const lenCap = Math.min(len, Math.max(2.5, sigma));
+  const strength = lenCap*push*1.05;
+  // tooth offsets along the normal
+  const offs=[];
+  if(tool==='rake' && teeth>1){
+    for(let k=0;k<teeth;k++){ offs.push((k/(teeth-1)-0.5)*2*halfSpan); }
+  } else { offs.push(0); }
+
+  // dirty-box bounds for the velocity write/advect (perf)
+  let bx0=gw,by0=gh,bx1=0,by1=0;
+  const samples = Math.max(2, Math.ceil(len));
+  const reach = sigma*3.0;
+  const s2 = sigma*sigma*2;
+  for(let off of offs){
+    // a line of velocity bumps from p0 to p1, offset along the normal
+    for(let s=0;s<=samples;s++){
+      const t=s/samples;
+      const cx=x0+dx*t + nx*off;
+      const cy=y0+dy*t + ny*off;
+      const ix0=Math.max(0,(cx-reach)|0), ix1=Math.min(gw-1,(cx+reach)|0);
+      const iy0=Math.max(0,(cy-reach)|0), iy1=Math.min(gh-1,(cy+reach)|0);
+      if(ix0<bx0)bx0=ix0; if(iy0<by0)by0=iy0; if(ix1>bx1)bx1=ix1; if(iy1>by1)by1=iy1;
+      for(let y=iy0;y<=iy1;y++) for(let x=ix0;x<=ix1;x++){
+        const ddx=x-cx, ddy=y-cy, d2=ddx*ddx+ddy*ddy;
+        if(d2>reach*reach) continue;
+        const w=Math.exp(-d2/s2) / samples;   // normalize over the line samples
+        const i=y*gw+x;
+        velX[i]+=dirx*strength*w;
+        velY[i]+=diry*strength*w;
+      }
+    }
+  }
+  if(bx1<bx0) return;
+  bx0=Math.max(0,bx0-1); by0=Math.max(0,by0-1); bx1=Math.min(gw-1,bx1+1); by1=Math.min(gh-1,by1+1);
+  // semi-Lagrangian backtrace within the dirty box (clamp velocity for stability)
+  for(let y=by0;y<=by1;y++) for(let x=bx0;x<=bx1;x++){
+    const i=y*gw+x;
+    let vx=velX[i], vy=velY[i];
+    const vm=Math.hypot(vx,vy), CAP=3.5;
+    if(vm>CAP){ vx*=CAP/vm; vy*=CAP/vm; }
+    if(vm<0.01){ tmpR[i]=dyeR[i]; tmpG[i]=dyeG[i]; tmpB[i]=dyeB[i]; continue; }
+    const sx=x-vx, sy=y-vy;
+    tmpR[i]=sampleBilinear(dyeR,sx,sy);
+    tmpG[i]=sampleBilinear(dyeG,sx,sy);
+    tmpB[i]=sampleBilinear(dyeB,sx,sy);
+  }
+  for(let y=by0;y<=by1;y++) for(let x=bx0;x<=bx1;x++){
+    const i=y*gw+x;
+    dyeR[i]=tmpR[i]; dyeG[i]=tmpG[i]; dyeB[i]=tmpB[i];
+  }
+}
+
+// ===== render ================================================================
+let needRender=true;
+function draw(){
+  const d=img.data;
+  for(let i=0,j=0;i<N;i++,j+=4){
+    d[j]=dyeR[i]; d[j+1]=dyeG[i]; d[j+2]=dyeB[i]; d[j+3]=255;
+  }
+  offCtx.putImageData(img,0,0);
+  ctx.drawImage(off,0,0,gw,gh,0,0,W,H);
+  needRender=false;
+}
+
+// ===== pointer ===============================================================
+let down=false, lastX=0, lastY=0;
+function pointerDown(e){
+  down=true; lastX=e.clientX; lastY=e.clientY;
+  if(tool==='drop'){ dropRing(sx2gx(e.clientX), sy2gy(e.clientY), dropRg(), inkColor); needRender=true; }
+}
+function pointerMove(e){
+  if(!down) return;
+  const x=e.clientX, y=e.clientY;
+  if(tool==='drop'){
+    // drag-drop trails a line of overlapping rings (the "lay a line of ink" gesture)
+    const dd=Math.hypot(x-lastX,y-lastY);
+    if(dd > dropR*0.7){
+      dropRing(sx2gx(x), sy2gy(y), dropRg(), inkColor);
+      lastX=x; lastY=y; needRender=true;
+    }
+  } else {
+    // Rake/stylus: SUBDIVIDE the segment into ~8px sub-steps and advect once per
+    // step (advancing `last` along the way). This mirrors the auto-demo's rakeRun
+    // exactly — displacement accumulates as a SHEAR field that feathers the rings
+    // in place rather than one large translation that sweeps the bath off-canvas.
+    const segLen=Math.hypot(x-lastX,y-lastY);
+    const k=Math.max(1,Math.ceil(segLen/8));
+    const sx=(x-lastX)/k, sy=(y-lastY)/k;
+    let px=lastX, py=lastY;
+    for(let s=0;s<k;s++){ strokeAdvect(px,py,px+sx,py+sy); px+=sx; py+=sy; }
+    lastX=x; lastY=y; needRender=true;
+  }
+}
+function pointerUp(){ down=false; }
+cv.addEventListener('pointerdown',pointerDown);
+addEventListener('pointermove',pointerMove);
+addEventListener('pointerup',pointerUp);
+
+// ===== lift the paper (keepsake) ============================================
+const strip=$('strip'), flash=$('flash');
+let keeps=[];
+function liftPaper(){
+  // flash, snapshot the current marbled frame at full canvas res
+  const url=cv.toDataURL('image/png');
+  flash.style.transition='none'; flash.style.opacity='0.85';
+  requestAnimationFrame(()=>{ flash.style.transition='opacity .5s'; flash.style.opacity='0'; });
+  keeps.unshift(url);
+  if(keeps.length>5) keeps.pop();
+  renderStrip();
+}
+function renderStrip(){
+  strip.innerHTML='';
+  keeps.forEach((u,k)=>{
+    const im=new Image(); im.src=u; im.title='click to download print '+(k+1);
+    im.onclick=()=>{ const a=document.createElement('a'); a.download='marbling-print.png'; a.href=u; a.click(); };
+    strip.appendChild(im);
+  });
+}
+
+// ===== auto demo: rings-then-rake → peacock ==================================
+let demoTimer=null;
+function autoDemo(){
+  if(demoTimer){ clearInterval(demoTimer); demoTimer=null; $('demo').classList.remove('on'); return; }
+  $('demo').classList.add('on');
+  freshBath(); needRender=true;
+  const saveT=tool, saveTeeth=teeth, saveW=toolWidth, savePush=push;
+  const steps=[];
+  // a rake drag is a chain of small segments so the advection ACCUMULATES into
+  // a real combed displacement (one long segment can only backtrace a few cells)
+  function rakeRun(x0,y0,x1,y1,n){
+    return ()=>{ const dx=(x1-x0)/n, dy=(y1-y0)/n; let px=x0,py=y0;
+      for(let s=0;s<n;s++){ strokeAdvect(px,py,px+dx,py+dy); px+=dx; py+=dy; } needRender=true; };
+  }
+  // 1) lay a grid of CONCENTRIC stone-marble rings (the structured base to rake).
+  //    Each cell is a real ebru "stone": ink dropped on the SAME spot in turn, the
+  //    drops in DECREASING size so every colour stays visible as its own band (a
+  //    fixed-radius stack would let the last drop swallow the rest). We size the
+  //    base ring to ~38% of the grid pitch so the stones read boldly but a little
+  //    pale size still feathers between them — a dense bed of bullseyes, not faint
+  //    specks and not a wall-to-wall flood.
+  const seq=[0,1,2,3,5];   // indigo · vermillion · saffron · verdigris · sumi black
+  const gxn=7, gyn=5;
+  const pitch=Math.min(cssW/(gxn+0.2), cssH/(gyn+0.2));   // grid spacing (px)
+  const baseR=()=> (pitch*0.38)/cssW*gw;                  // base ring in grid cells
+  for(let r=0;r<gyn;r++) for(let c=0;c<gxn;c++){
+    const px=cssW*(c+0.6)/(gxn+0.2), py=cssH*(r+0.6)/(gyn+0.2);
+    steps.push(()=>{ const b=baseR();
+      for(let k=0;k<seq.length;k++){
+        const rr=b*(1 - k*0.17);                          // each drop a touch smaller
+        dropRing(sx2gx(px),sy2gy(py),rr,hexRGB(PALETTE[seq[k]][0]));
+      } needRender=true; });
+  }
+  // 2) gel-git: rake vertical combs across the whole bath
+  steps.push(()=>{ tool='rake'; teeth=16; toolWidth=1.0; push=1.1; });
+  for(let c=1;c<9;c++){ const px=cssW*c/9; steps.push(rakeRun(px,cssH*0.06,px,cssH*0.94,30)); }
+  // 3) peacock: cross-comb horizontally, finer teeth
+  steps.push(()=>{ teeth=10; toolWidth=0.6; push=0.85; });
+  for(let r=1;r<6;r++){ const py=cssH*r/6; steps.push(rakeRun(cssW*0.06,py,cssW*0.94,py,40)); }
+  steps.push(()=>{ tool=saveT; teeth=saveTeeth; toolWidth=saveW; push=savePush; updateUI();
+    $('vTeeth').textContent=teeth; demoTimer&&clearInterval(demoTimer); demoTimer=null; $('demo').classList.remove('on'); });
+  let k=0;
+  demoTimer=setInterval(()=>{ if(k>=steps.length){ clearInterval(demoTimer); demoTimer=null; $('demo').classList.remove('on'); return; } steps[k++](); }, 90);
+}
+
+// ===== UI ====================================================================
+function buildSwatches(){
+  const sw=$('swatches'); sw.innerHTML='';
+  PALETTE.forEach((p,i)=>{
+    const el=document.createElement('div'); el.className='sw'+(i===inkIndex?' on':'');
+    el.style.background=p[0]; el.title=p[1];
+    el.onclick=()=>{ inkIndex=i; inkColor=hexRGB(p[0]); buildSwatches(); };
+    sw.appendChild(el);
+  });
+}
+function setTool(t){
+  tool=t;
+  $('tDrop').classList.toggle('on',t==='drop');
+  $('tRake').classList.toggle('on',t==='rake');
+  $('tStylus').classList.toggle('on',t==='stylus');
+  cv.style.cursor = t==='drop' ? 'crosshair' : 'grab';
+}
+function updateUI(){ $('vTeeth').textContent=teeth; $('vWidth').textContent=toolWidth.toFixed(2); }
+
+$('tDrop').onclick=()=>setTool('drop');
+$('tRake').onclick=()=>setTool('rake');
+$('tStylus').onclick=()=>setTool('stylus');
+$('sDrop').oninput=e=>{ dropR=+e.target.value; $('vDrop').textContent=dropR; };
+$('sTeeth').oninput=e=>{ teeth=+e.target.value; $('vTeeth').textContent=teeth; };
+$('sWidth').oninput=e=>{ toolWidth=+e.target.value; $('vWidth').textContent=toolWidth.toFixed(2); };
+$('sRes').oninput=e=>{ scale=+e.target.value; $('vRes').textContent=scale; alloc(); needRender=true; };
+$('sPush').oninput=e=>{ push=+e.target.value; $('vPush').textContent=push.toFixed(2); };
+$('lift').onclick=liftPaper;
+$('clear').onclick=()=>{ freshBath(); needRender=true; };
+$('demo').onclick=autoDemo;
+
+// fold/collapse the panel to its title bar (tap on mobile, `h` on desktop)
+function toggleFold(){ const f=panel.classList.toggle('fold'); $('fold').textContent=f?'▸':'▾';
+  $('fold').title=(f?'expand':'collapse')+' panel (h)'; }
+$('fold').onclick=toggleFold;
+$('save').onclick=()=>{ const a=document.createElement('a'); a.download='marbling-bath.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key==='h') toggleFold();
+  else if(e.key==='l'||e.key==='L') liftPaper();
+  else if(e.key==='c') { freshBath(); needRender=true; }
+  else if(e.key==='1') setTool('drop');
+  else if(e.key==='2') setTool('rake');
+  else if(e.key==='3') setTool('stylus');
+  else if(e.key>='4'&&e.key<='9'){ const i=+e.key-4; if(i<PALETTE.length){ inkIndex=i; inkColor=hexRGB(PALETTE[i][0]); buildSwatches(); } }
+});
+
+// ===== loop ==================================================================
+let fps=60,last=performance.now();
+function loop(now){
+  const dt=(now-last)/1000; last=now;
+  if(needRender) draw();
+  fps+=((1/Math.max(dt,1e-4))-fps)*0.06;
+  hud.textContent=`${gw}×${gh} dye field · ${fps.toFixed(0)} fps`;
+  requestAnimationFrame(loop);
+}
+
+// ===== go ====================================================================
+resize(); buildSwatches(); setTool('drop'); updateUI();
+// seed the bath with a few rings so it never opens empty
+(function seed(){
+  const c=[cssW*0.34,cssH*0.42], r=dropRg();
+  inkColor=hexRGB(PALETTE[0][0]); dropRing(sx2gx(c[0]),sy2gy(c[1]),r,inkColor);
+  inkColor=hexRGB(PALETTE[1][0]); dropRing(sx2gx(c[0]),sy2gy(c[1]),r,inkColor);
+  inkColor=hexRGB(PALETTE[2][0]); dropRing(sx2gx(c[0]),sy2gy(c[1]),r,inkColor);
+  inkColor=hexRGB(PALETTE[0][0]);
+  needRender=true;
+})();
+requestAnimationFrame(loop);
+</script>
+<!-- sg-nav -->
+<script src="../pieces.js"></script>
+<script>
+(function(){
+  if (document.getElementById('sg-nav')) return;
+  var pieces = window.PIECES;
+  if (!pieces || !pieces.length) return;
+  var here = (location.pathname.split('/').pop() || '').toLowerCase();
+  var idx = -1;
+  for (var i = 0; i < pieces.length; i++) {
+    if ((pieces[i].file || '').toLowerCase() === here) { idx = i; break; }
+  }
+  if (idx < 0) return;
+  var n = pieces.length;
+  var prev = pieces[(idx - 1 + n) % n];
+  var next = pieces[(idx + 1) % n];
+  var neutral = 'rgba(220,225,235,0.85)';
+
+  var bar = document.createElement('div');
+  bar.id = 'sg-nav';
+  bar.style.cssText = 'position:fixed;bottom:10px;left:50%;transform:translateX(-50%);' +
+    'z-index:50;pointer-events:auto;font:11px ui-monospace,Menlo,monospace;' +
+    'opacity:0.45;transition:opacity .18s ease;white-space:nowrap;' +
+    'letter-spacing:.02em;-webkit-font-smoothing:antialiased;user-select:none;';
+  bar.addEventListener('mouseenter', function(){ bar.style.opacity = '0.9'; });
+  bar.addEventListener('mouseleave', function(){ bar.style.opacity = '0.45'; });
+
+  function mkLink(piece, label){
+    var a = document.createElement('a');
+    a.href = piece.file;
+    a.style.cssText = 'color:' + (piece.accent || neutral) + ';text-decoration:none;';
+    a.textContent = label;
+    return a;
+  }
+  var prevLink = mkLink(prev, '‹ ' + prev.name);
+  var nextLink = mkLink(next, next.name + ' ›');
+  var sep = document.createElement('span');
+  sep.textContent = '   ·   ';
+  sep.style.color = 'rgba(180,185,195,0.6)';
+
+  bar.appendChild(prevLink);
+  bar.appendChild(sep);
+  bar.appendChild(nextLink);
+  document.body.appendChild(bar);
+
+  window.addEventListener('keydown', function(e){
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t) {
+      var tag = (t.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable) return;
+    }
+    if (e.key === 'ArrowLeft') { location.href = prev.file; }
+    else if (e.key === 'ArrowRight') { location.href = next.file; }
+  });
+})();
+</script>
+</body>
+</html>

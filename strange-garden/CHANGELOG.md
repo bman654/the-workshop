@@ -7,7 +7,7 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 > **Resume protocol:** read this top section, then continue from "Next up". Commit + update
 > here after every piece.
 
-## Status — 34 specimens, all browser-verified PASS (60fps unless noted), clean consoles. Browsable (prev/next).
+## Status — 35 specimens, all browser-verified PASS (60fps unless noted), clean consoles. Browsable (prev/next).
 
 | # | file | system | notes |
 |---|------|--------|-------|
@@ -45,6 +45,7 @@ HTML file in `pieces/`. The `index.html` is the gallery that ties them together 
 | 32 | kuramoto.html | Kuramoto | mean-field coupled oscillators sync; order-parameter inset; fireflies |
 | 33 | voronoi.html | Voronoi | nearest-site mosaic + Lloyd relaxation; drag/add sites |
 | 34 | cloth.html | Cloth | Verlet soft-body; drag/tear/wind; curtain/hammock/flag pins |
+| 35 | the-marbling-bath.html | Marbling Bath | ebru/suminagashi dye-field (Eulerian advection, area-preserving drop); drop concentric ink rings, rake/stylus to comb the feathered veins, Lift paper to keep the print; Auto demo lays a grid of bullseye stones → gel-git → peacock; tap-fold panel for mobile |
 
 - gallery `index.html` + `pieces.js` (9 entries) verified: all cards + thumbnails render, clean console.
 - thumbnails in `assets/thumbs/`; `assets/gallery-preview.png` is a full-page gallery shot.
