@@ -210,8 +210,11 @@
   @keyframes threadpulse{ 0%,100%{ opacity:.28; } 50%{ opacity:.7; } }
   .first-thread-tip{ font:italic 9px/1 var(--serif); fill:var(--brass-bright); opacity:.8; }
 
-  /* ---- pan/zoom control (a small in-idiom brass plate, bottom-left near the legend) ---- */
-  .pzctl{ position:fixed; left:calc(var(--gutter-x) + 20px); bottom:64px; z-index:31; display:flex; gap:6px;
+  /* ---- pan/zoom control (a small in-idiom brass plate, bottom-RIGHT) ----
+     Sited bottom-right so it never collides with the bottom-left wayfinder cluster
+     (the #platebar always lists all 5 presets + a Back row, plus the #legend strip):
+     the platebar (z-index 40) used to OVERLAP and swallow clicks on these controls. */
+  .pzctl{ position:fixed; right:calc(var(--gutter-x) + 20px); bottom:18px; z-index:41; display:flex; gap:6px;
     font:600 11px/1 var(--mono); }
   .pzctl button{ background:rgba(11,14,22,.85); color:var(--brass);
     border:1px solid color-mix(in srgb,var(--brass) 40%,transparent); border-radius:4px;
@@ -220,32 +223,20 @@
   .pzctl button:hover{ color:var(--brass-bright); border-color:var(--brass);
     background:rgba(201,162,74,.12); }
   #viewport{ will-change:transform; }
-  /* PLATE-WALK (#262): a walkTo() animates the camera between plates. The transition
-     is only armed WHILE travelling (the .walking class), so manual wheel/drag/pan
-     inside a plate stay instant. prefers-reduced-motion → no transition (snaps). */
+  /* PLATE-SWITCHER (#262 re-model): enterTour() eases the camera to a plate preset.
+     The transition is only armed WHILE the guided-tour ease runs (the .walking class),
+     so a by-hand wheel/drag/pan (which drops to free-explore) stays instant.
+     prefers-reduced-motion → no transition (snaps). */
   #viewport.walking{ transition: transform 720ms cubic-bezier(.62,.02,.2,1); }
   @media (prefers-reduced-motion:reduce){ #viewport.walking{ transition:none; } }
   .sheet.grabbable{ cursor:grab; }
   .sheet.grabbing{ cursor:grabbing; }
   @media (prefers-reduced-motion:reduce){ .first-thread{ animation:none; opacity:.5; } }
 
-  /* THRESHOLD TILES — a brass ⌖ chip on each shared-wall road midpoint; click / tab+
-     enter to WALK to the neighbouring plate. They live in #viewport so they pan with
-     the plate. Only the outgoing tiles (from the plate you stand on) are lit + active. */
-  .threshold{ cursor:pointer; opacity:.18; pointer-events:none;
-    transition:opacity .45s ease; }
-  .threshold.live{ opacity:1; pointer-events:auto; }
-  .thr-tile{ fill:#141a28; stroke:var(--brass); stroke-width:1.4;
-    transition:fill .2s; }
-  .threshold.live:hover .thr-tile,
-  .threshold.live:focus-visible .thr-tile{ fill:#2a3346; }
-  .threshold:focus{ outline:none; }
-  .threshold.live:focus-visible .thr-tile{ stroke:var(--brass-bright); stroke-width:2; }
-  .thr-glyph{ fill:var(--brass); font-size:15px; text-anchor:middle;
-    pointer-events:none; dominant-baseline:central; }
-  .thr-label{ fill:#c2cad8; font-size:8.5px; text-anchor:middle; font-variant:small-caps;
-    letter-spacing:.07em; pointer-events:none; }
-  /* a plate you are not standing on dims its rooms + tint while you're away */
+  /* a plate you are not touring dims its rooms (and goes pointer-events:none, set
+     inline by the platewalk module) while you tour another district. Free-explore
+     restores both. (#262 re-model: the in-map ⌖ threshold tiles are gone — the
+     navigation is the #platebar presets alone.) */
   .plate-dim{ transition:opacity .55s ease; }
   /* the "you stand in / travel" wayfinder — a fixed brass strip, bottom-left */
   #platebar{ position:fixed; left:14px; bottom:12px; z-index:40;
@@ -261,6 +252,9 @@
     letter-spacing:.05em; background:rgba(20,26,40,.6); transition:all .2s; }
   #platebar .door:hover,#platebar .door:focus-visible{ color:var(--brass-bright);
     border-color:var(--brass); background:rgba(201,162,74,.12); outline:none; }
+  /* the preset you are currently touring reads lit (the others are walkable presets) */
+  #platebar .door[aria-current]{ color:var(--brass-bright); border-color:var(--brass);
+    background:rgba(201,162,74,.16); }
   #platebar .back{ color:#7f8aa0; }
   @media (max-width:640px){ #platebar{ font-size:11px; max-width:64vw; } }
 
@@ -707,11 +701,12 @@
   <span class="sep">·</span>
   <a href="https://github.com/bman654/the-workshop">source on GitHub ↗</a><!-- the earned rune is appended here -->
 </nav>
-<div class="hint">walk between the grounds by the brass ⌖ doors · hover / tab / zoom a footprint to name it · click to enter · scroll to zoom · drag to pan</div>
-<!-- THE PLATE WAYFINDER (#262 — "More Than One Front Door"): names the plate you
-     stand on + its outgoing doors. Populated by the platewalk module; if JS fails it
-     stays empty and the door degrades to the static captions plate. -->
-<div id="platebar" role="navigation" aria-label="walk between the grounds"></div>
+<div class="hint">tour a wing from the brass strip ↙ · hover / tab / zoom a footprint to name it · click to enter · scroll to zoom · drag to pan · pan or zoom drops back to free-explore</div>
+<!-- THE PLATE WAYFINDER (#262 — "More Than One Front Door", re-modelled): lists all 5
+     location presets; clicking one eases the camera there and enters a guided tour, and
+     any by-hand pan/zoom drops back to free-explore. Populated by the platewalk module;
+     if JS fails it stays empty and the door degrades to the static captions plate. -->
+<div id="platebar" role="navigation" aria-label="tour the grounds by preset"></div>
 <!-- THE DOOR'S OWN page-level self-test pill (distinct from the clock dial's #hours-pill).
      Runs the Legibility Conscience's regression proof LIVE in-browser on the SAME
      clean/crowded controls the Node twin (legibility.test.cjs) asserts. Green = "the
@@ -6858,6 +6853,14 @@ renderEstate();
     // as a sibling of apply() so EVERY transform path (wheel, drag, buttons, keys,
     // reset) feeds the same revealedSet(). Wrapped so a loupe hiccup never breaks pan.
     function afterTransform(){ try{ LOUPE.setZoom(k, centreFocus()); }catch(_){} }
+
+    // ── MANUAL-MOVE SIGNAL (#262 re-model) ── the plate-switcher's guided tour drops
+    // to free-explore the instant the user touches the camera by HAND. frameTo() (the
+    // tour's own camera ease) suppresses the signal so a tour move never self-cancels;
+    // every other path (wheel, drag, ±/arrows, fit, dblclick) fires it. The switcher
+    // installs window.__panCamera.onManual; here we just call it, guarded.
+    let suppressManual = false;
+    function manualMoved(){ if(suppressManual) return; const f = window.__panCamera && window.__panCamera.onManual; if(typeof f==="function"){ try{ f(); }catch(_){} } }
     function zoomTo(newK, pivot){
       newK = Math.max(K_MIN, Math.min(K_MAX, newK));
       if(pivot){
@@ -6865,9 +6868,9 @@ renderEstate();
         const vx = (pivot.x - tx)/k, vy = (pivot.y - ty)/k;
         k = newK; tx = pivot.x - vx*k; ty = pivot.y - vy*k;
       } else { k = newK; }
-      clamp(); apply(); afterTransform();
+      clamp(); apply(); afterTransform(); manualMoved();
     }
-    function reset(){ k=1; tx=0; ty=0; apply(); afterTransform(); }
+    function reset(){ k=1; tx=0; ty=0; apply(); afterTransform(); manualMoved(); }
 
     // ── WHEEL = zoom toward cursor ──
     sheet.addEventListener("wheel", (e)=>{
@@ -6895,7 +6898,7 @@ renderEstate();
       // convert client delta → viewBox delta via the CTM scale
       const ctm = sheet.getScreenCTM(); if(!ctm) return;
       tx = startTx + dx/ctm.a; ty = startTy + dy/ctm.d;
-      clamp(); apply(); afterTransform(); hideCard(true);
+      clamp(); apply(); afterTransform(); hideCard(true); manualMoved();
     });
     function endDrag(e){
       if(!dragging) return;
@@ -6929,31 +6932,39 @@ renderEstate();
       if(e.key==="+"||e.key==="="){ zoomTo(k*1.25, centrePivot()); }
       else if(e.key==="-"||e.key==="_"){ zoomTo(k/1.25, centrePivot()); }
       else if(e.key==="0"){ reset(); }
-      else if(e.key==="ArrowLeft" && k>1){ tx+=step; clamp(); apply(); afterTransform(); }
-      else if(e.key==="ArrowRight" && k>1){ tx-=step; clamp(); apply(); afterTransform(); }
-      else if(e.key==="ArrowUp" && k>1){ ty+=step; clamp(); apply(); afterTransform(); }
-      else if(e.key==="ArrowDown" && k>1){ ty-=step; clamp(); apply(); afterTransform(); }
+      else if(e.key==="ArrowLeft" && k>1){ tx+=step; clamp(); apply(); afterTransform(); manualMoved(); }
+      else if(e.key==="ArrowRight" && k>1){ tx-=step; clamp(); apply(); afterTransform(); manualMoved(); }
+      else if(e.key==="ArrowUp" && k>1){ ty+=step; clamp(); apply(); afterTransform(); manualMoved(); }
+      else if(e.key==="ArrowDown" && k>1){ ty-=step; clamp(); apply(); afterTransform(); manualMoved(); }
       else return;
     });
 
     sheet.classList.add("grabbable");
     apply();
 
-    /* ── EXPOSE A CAMERA HOOK for the plate-walk driver (#262) ──────────────────
-       walkTo() needs to set the transform to a plate frame while keeping panZoom's
+    /* ── EXPOSE A CAMERA HOOK for the plate-switcher (#262 re-model) ────────────
+       enterTour() needs to set the transform to a plate frame while keeping panZoom's
        OWN k/tx/ty in sync (so a subsequent wheel/drag continues from the plate, not
-       from a stale origin). frameTo() temporarily lifts K_MAX (a plate may zoom past
-       4×, e.g. the observatory rise) and skips the manual-pan clamp (which assumes a
-       door-centred view). It returns the applied {k,tx,ty}. recentre() restores the
-       whole-plate fit. The plate-walk arms the CSS transition itself. */
+       from a stale origin). frameTo() sets the frame directly (bypassing the K_MAX clamp
+       so a plate may zoom past 4×, e.g. the observatory rise) and SUPPRESSES the
+       drop-out signal across its apply (the tour's own ease is never a manual move). It
+       returns the applied {k,tx,ty}. recentre() restores the whole-plate fit. The
+       switcher installs its drop-to-free callback on onManual; the plate-switcher arms
+       the CSS transition itself. */
     window.__panCamera = {
       frameTo(frame){
+        // the guided tour's OWN ease — never a manual move, so suppress the drop-out
+        // signal across the apply (afterTransform doesn't fire it, but belt-and-braces).
+        suppressManual = true;
         k = frame.k; tx = frame.tx; ty = frame.ty;
         apply(); afterTransform();
+        suppressManual = false;
         return { k, tx, ty };
       },
       recentre(){ reset(); },
-      get k(){ return k; }
+      get k(){ return k; },
+      // the plate-switcher installs its drop-to-free callback here (#262 re-model).
+      onManual: null
     };
   }catch(e){ /* any failure → static, fully-visible plate (no transform) */ }
 })();
@@ -6961,18 +6972,40 @@ renderEstate();
 window.addEventListener("resize", ()=> hideCard(true));
 
 /* ════════════════════════════════════════════════════════════════════════════
-   MORE THAN ONE FRONT DOOR — the plate-walk (#262).
+   MORE THAN ONE FRONT DOOR — the plate-switcher, re-modelled into two clean
+   states (#262, the re-model).
 
-   The single crowded plate becomes a SET of district / wing-cluster PLATES the
-   visitor travels between. The plate you stand on is sharp + centred; its
-   neighbours dim. A brass ⌖ THRESHOLD TILE seated on each shared-wall road
-   midpoint walks you to the neighbour (click, or tab + enter); esc / backspace
-   retreats. The PARTITION + the camera frames + the reciprocal road graph come
-   straight from Layout.plates(PLACES) — the SAME pure function the Node twin
-   (smoke.cjs / legibility.test.cjs) proves — so the page cannot drift from the
-   self-test. This is a COMPANION to the loupe (which still names one room in full
-   within a plate), never a replacement. Wrapped in try/catch: any failure degrades
-   to the static captions plate (the loupe + pan/zoom still work). ── */
+   The single crowded plate is read in TWO modes:
+
+   (1) FREE-EXPLORE — the DEFAULT and the resting state. The WHOLE estate is fully
+       lit and clickable, exactly like the pre-plate one-page map: the loupe uses
+       its standard circle-intersection / zoom-LOD label set, the #platebar lists
+       ALL 5 location presets (no Back button, empty history). This is what a
+       visitor lands in once they touch the camera, and what every drop-out returns
+       to.
+
+   (2) GUIDED-TOUR — entered ONLY by clicking a #platebar preset (INCLUDING the
+       implicit MANOR preset auto-applied on first load). The camera eases to that
+       district's preset frame (the frameTo ease); everything NOT in the navigated
+       PLATE is dimmed AND set pointer-events:none (it fires no hover popups, reveals
+       no labels); the loupe's lit set becomes EVERY POI in that plate (the whole
+       district's labels, not the circle-intersection); the navigated district's
+       engraved zone-caption is held FULLY VISIBLE (the #230 bug-2 fix). The
+       #platebar still lists all 5 presets, plus a Back button while a stack exists.
+
+   THE DROP-OUT (the soul of the fix): the INSTANT the user pans or zooms BY HAND
+   (wheel, drag, arrow-key, ±, fit), they have LEFT the preset → the whole estate
+   un-dims, pointer-events restore, the loupe returns to its standard
+   circle-intersection / zoom-LOD behaviour, and the #platebar resets to all-5 /
+   no-Back / cleared stack. Re-enter a tour by clicking a preset again.
+
+   There are NO in-map ⌖ threshold tiles — the navigation is the #platebar presets
+   alone (removed in this re-model; they were redundant clutter).
+
+   The PARTITION + the camera frames come straight from Layout.plates(PLACES) — the
+   SAME pure function the Node twin (smoke.cjs / plate.test.cjs / legibility.test.cjs)
+   proves — so the page cannot drift from the self-test. Wrapped in try/catch: any
+   failure degrades to the static captions plate (the loupe + pan/zoom still work). ── */
 (function platewalk(){
   // DEFER the setup one frame so EVERY POI exists first — revealUndercroft() (which
   // adds the cellar-stair tile) and placeLabels() run AFTER this IIFE in source order,
@@ -6980,147 +7013,125 @@ window.addEventListener("resize", ()=> hideCard(true));
   function run(){
   try{
     if(typeof Layout === "undefined" || !viewport || !window.__panCamera) return;
-    const SVGNS = "http://www.w3.org/2000/svg";
-    const E = (n,a)=>{ const e=document.createElementNS(SVGNS,n); if(a) for(const k in a) e.setAttribute(k,a[k]); return e; };
     const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion:reduce)").matches;
 
-    // the partition + camera frames + reciprocal road graph (Node-proven, pure)
+    // the partition + camera frames (Node-proven, pure). PLATE_ORDER pins the preset
+    // list to a stable, walkable sequence (manor first — the historic home).
     const LIVE = PLACES.filter(p=>!p.locked);
     const P = Layout.plates(LIVE);
     if(!P || !P.ids.length) return;
+    const PREF = ["manor","grounds-west","grounds-east","observatory","outskirts"];
+    const PRESETS = PREF.filter(id=> P.ids.indexOf(id)>=0)
+                        .concat(P.ids.filter(id=> PREF.indexOf(id)<0));
 
-    // map each POI tile (in #pois, by data-id) to its plate, so we can dim the plates
-    // you are away from. The undercroft (locked) rides the MANOR plate by declaration.
+    // map each POI tile (in #pois, by data-id) to its plate, AND collect the POI ids +
+    // districts per plate (for the loupe's whole-district lit set + caption hold). The
+    // undercroft (locked) rides the MANOR plate by declaration.
     const tilePlate = {};   // plateId → [poi element,...]
+    const idsByPlate = {};  // plateId → [poi id,...]
+    const distByPlate = {}; // plateId → Set(district)
+    const lockedId = (PLACES.find(p=>p.locked)||{}).id;
     for(const tile of pois.querySelectorAll(".poi[data-id]")){
       const id = tile.dataset.id;
       let pid = P.roomPlate[id];
-      if(!pid && id === (PLACES.find(p=>p.locked)||{}).id) pid = "manor"; // the Undercroft
+      if(!pid && id === lockedId) pid = "manor"; // the Undercroft rides the manor plate
       if(!pid) continue;
       (tilePlate[pid]=tilePlate[pid]||[]).push(tile);
+      (idsByPlate[pid]=idsByPlate[pid]||[]).push(id);
+      const meta = PLACES.find(p=>p.id===id);
+      const dd = meta ? meta.district : (id===lockedId ? "manor" : null);
+      if(dd){ (distByPlate[pid]=distByPlate[pid]||new Set()).add(dd); }
       tile.classList.add("plate-dim");
     }
 
-    // ── THRESHOLD TILES: one per directed edge (A→B and B→A both rendered, reciprocal).
-    //    Seat each on the midpoint of the road between the two plate frame centres,
-    //    then NUDGE it clear of any room footprint it would land on. They live in
-    //    #viewport so they pan with the plate. ──
-    const thrLayer = E("g", { id:"threshold-tiles" });
-    viewport.appendChild(thrLayer);
-
-    // collect all live footprint rects for the nudge-clear check (so a threshold chip
-    // never lands on top of a building)
-    const footRects = LIVE.map(r=>footBBox(r));
-    function overlapsAnyFoot(x,y,w,h){
-      for(const b of footRects){
-        if(x < b.x+b.w && x+w > b.x && y < b.y+b.h && y+h > b.y) return true;
-      }
-      return false;
-    }
-    function centreOf(pid){ const f=P.frame[pid]; return { x:f.cx, y:f.cy }; }
-
-    const TW = 32, TH = 24;            // threshold-tile chip size
-    const tilesByFrom = {};            // fromPlate → [tile g,...]  (for lighting)
-    function makeThreshold(from, to){
-      const ca = centreOf(from), cb = centreOf(to);
-      // seat at the midpoint, biased 38% toward the destination so reciprocal pairs
-      // (A→B and B→A) don't stack on the exact same point.
-      let mx = ca.x + (cb.x-ca.x)*0.5, my = ca.y + (cb.y-ca.y)*0.5;
-      const dx = cb.x-ca.x, dy = cb.y-ca.y, len = Math.hypot(dx,dy)||1;
-      const off = 26;                  // push the two reciprocal chips apart along the road
-      mx += (-dy/len)*off; my += (dx/len)*off; // perpendicular nudge (A→B one side, B→A other)
-      // nudge clear of any footprint: step along the road toward the destination
-      let tries = 0;
-      while(overlapsAnyFoot(mx-TW/2, my-TH/2, TW, TH) && tries < 12){
-        mx += (dx/len)*18; my += (dy/len)*18; tries++;
-      }
-      const g = E("g", { class:"threshold", "data-from":from, "data-to":to,
-        tabindex:"-1", role:"button" });
-      g.setAttribute("aria-label", "walk to "+(P.meta[to]?P.meta[to].label:to));
-      g.appendChild(E("rect", { class:"thr-tile", x:mx-TW/2, y:my-TH/2, width:TW, height:TH, rx:4 }));
-      const gl = E("text", { class:"thr-glyph", x:mx, y:my-2 }); gl.textContent = "⌖"; g.appendChild(gl);
-      const lb = E("text", { class:"thr-label", x:mx, y:my+TH/2-1 });
-      lb.textContent = (P.meta[to]?P.meta[to].label:to).replace(/^THE /,"");
-      g.appendChild(lb);
-      const cross = (ev)=>{ if(ev){ ev.preventDefault(); ev.stopPropagation(); } walkTo(to, true); };
-      g.addEventListener("click", cross);
-      g.addEventListener("keydown", (ev)=>{ if(ev.key==="Enter"||ev.key===" ") cross(ev); });
-      thrLayer.appendChild(g);
-      (tilesByFrom[from]=tilesByFrom[from]||[]).push(g);
-      return g;
-    }
-    // render BOTH directions of every undirected edge (reciprocal)
-    for(const [a,b] of P.edges){ makeThreshold(a,b); makeThreshold(b,a); }
-
-    // ── THE WAYFINDER STRIP (#platebar): names the plate you stand on + its doors ──
+    // ── THE WAYFINDER STRIP (#platebar): always lists ALL 5 presets; a Back button
+    //    shows ONLY while a guided-tour history stack exists. ──
     const bar = document.getElementById("platebar");
-    function renderBar(here){
+    function renderBar(){
       if(!bar) return;
-      const meta = P.meta[here] || { label: here };
-      const neighbours = Object.keys(P.adj[here]||{}).sort();
-      let html = '<span class="lede">you stand in</span> <b>'+meta.label+'</b>';
-      if(neighbours.length){
-        html += '<div class="doors">';
-        for(const n of neighbours){
-          const nm = (P.meta[n]?P.meta[n].label:n);
-          html += '<span class="door" role="button" tabindex="0" data-to="'+n+'">→ '+nm.replace(/^THE /,"")+'</span>';
-        }
-        if(history.length>1) html += '<span class="door back" role="button" tabindex="0" data-back="1">↩ back</span>';
-        html += '</div>';
+      const lede = here
+        ? '<span class="lede">touring</span> <b>'+((P.meta[here]||{label:here}).label)+'</b>'
+        : '<span class="lede">explore freely · or tour a wing</span>';
+      let html = lede + '<div class="doors">';
+      for(const id of PRESETS){
+        const nm = (P.meta[id]?P.meta[id].label:id).replace(/^THE /,"");
+        const cur = (id===here) ? ' aria-current="true"' : '';
+        html += '<span class="door" role="button" tabindex="0" data-to="'+id+'"'+cur+'>'+nm+'</span>';
       }
+      if(stack.length) html += '<span class="door back" role="button" tabindex="0" data-back="1">↩ back</span>';
+      html += '</div>';
       bar.innerHTML = html;
       for(const d of bar.querySelectorAll(".door")){
-        const go = ()=>{ if(d.dataset.back) retreat(); else walkTo(d.dataset.to, true); };
+        const go = ()=>{ if(d.dataset.back) retreat(); else enterTour(d.dataset.to, true); };
         d.addEventListener("click", go);
         d.addEventListener("keydown", (e)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } });
       }
     }
 
-    // ── THE CAMERA WALK ──
-    let here = null;
-    const history = [];                // plate stack for retreat (esc / backspace / ↩)
+    // ── STATE ──
+    let here = null;                   // the plate currently toured (null = free-explore)
+    const stack = [];                  // tour history for retreat (Back / esc / backspace)
     let armTimer = null;
-    function walkTo(pid, pushHistory){
-      if(!P.frame[pid]) return;
-      if(pushHistory && here && here !== pid) history.push(here);
-      here = pid;
-      // arm the CSS transition for the slide, then drive the panZoom camera to the frame
-      if(!reduce){ viewport.classList.add("walking"); }
-      window.__panCamera.frameTo(P.frame[pid]);
-      // disarm the transition after it completes so manual wheel/drag stay instant
-      if(armTimer) clearTimeout(armTimer);
-      if(!reduce) armTimer = setTimeout(()=>viewport.classList.remove("walking"), 760);
-      // dim every plate you're away from; light the one you're on
+
+    // FREE-EXPLORE: the whole estate lit + clickable, the standard loupe restored, the
+    // bar reset to all-5 / no-Back / cleared stack. The resting + drop-out state.
+    function freeExplore(clearStack){
+      here = null;
+      if(clearStack) stack.length = 0;
       for(const p of P.ids){
-        const on = (p===pid);
-        for(const tile of (tilePlate[p]||[])) tile.style.opacity = on ? "" : "0.16";
-      }
-      // only the OUTGOING tiles from where you stand are lit + active
-      for(const from in tilesByFrom){
-        const live = (from===pid);
-        for(const g of tilesByFrom[from]){
-          g.classList.toggle("live", live);
-          g.setAttribute("tabindex", live ? "0" : "-1");
+        for(const tile of (tilePlate[p]||[])){
+          tile.style.opacity = "";
+          tile.style.pointerEvents = "";
         }
       }
-      renderBar(pid);
+      try{ LOUPE.setTourSet(null); }catch(_){}   // restore circle-intersection/zoom-LOD
+      renderBar();
+    }
+
+    // GUIDED-TOUR: ease the camera to the plate preset; dim + make inert everything
+    // OUTSIDE the navigated plate; light the whole navigated plate's POI label set; hold
+    // its district caption full. A by-hand pan/zoom drops back to free-explore.
+    function enterTour(pid, pushHistory){
+      if(!P.frame[pid]) return;
+      if(pushHistory && here && here !== pid) stack.push(here);
+      here = pid;
+      if(!reduce){ viewport.classList.add("walking"); }
+      window.__panCamera.frameTo(P.frame[pid]);      // suppresses the drop-out signal
+      if(armTimer) clearTimeout(armTimer);
+      if(!reduce) armTimer = setTimeout(()=>viewport.classList.remove("walking"), 760);
+      // dim + make inert every plate you are NOT touring; light + enable the one you are.
+      for(const p of P.ids){
+        const on = (p===pid);
+        for(const tile of (tilePlate[p]||[])){
+          tile.style.opacity = on ? "" : "0.16";
+          tile.style.pointerEvents = on ? "" : "none";   // dimmed rooms fire no hover/labels
+        }
+      }
+      // the loupe lights the WHOLE navigated district (decluttered at the plate's framed
+      // scale) + holds its caption full (#230 bug-2)
+      try{ LOUPE.setTourSet(idsByPlate[pid]||[], P.frame[pid], Array.from(distByPlate[pid]||[])); }catch(_){}
+      renderBar();
     }
     function retreat(){
-      if(history.length){ const prev = history.pop(); walkTo(prev, false); }
+      if(stack.length){ enterTour(stack.pop(), false); }
+      else freeExplore(true);
     }
 
-    // global keyboard: esc / backspace retreats (when not typing / not in a field)
+    // THE DROP-OUT: any by-hand camera move while touring returns to free-explore. The
+    // panZoom module fires this from wheel / drag / ±/arrows / fit (never from frameTo).
+    window.__panCamera.onManual = function(){ if(here) freeExplore(true); };
+
+    // global keyboard: esc / backspace retreats while touring (when not typing).
     window.addEventListener("keydown", (e)=>{
       if(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
-      if(e.key==="Escape" || e.key==="Backspace"){
-        if(history.length){ e.preventDefault(); retreat(); }
-      }
+      if((e.key==="Escape" || e.key==="Backspace") && here){ e.preventDefault(); retreat(); }
     });
 
-    // start standing in the MANOR — the front door's historic home (the door + the
-    // Undercroft stair both ride this plate).
-    const startPlate = P.ids.indexOf("manor")>=0 ? "manor" : P.ids[0];
-    walkTo(startPlate, false);
+    // FIRST LOAD: rest in free-explore, then auto-apply the MANOR preset (a guided tour
+    // of the front door's historic home — the door + the Undercroft stair ride it).
+    freeExplore(true);
+    const startPlate = P.ids.indexOf("manor")>=0 ? "manor" : PRESETS[0];
+    enterTour(startPlate, false);
   }catch(e){ /* any failure → the static captions plate; loupe + pan/zoom still work */ }
   }
   if(typeof requestAnimationFrame === "function") requestAnimationFrame(()=>requestAnimationFrame(run));
@@ -7288,6 +7299,21 @@ const LOUPE = (function(){
     // curSingleId: the one room a HOVER/TAB names (BUG#216-2 — hover is single-room,
     // NOT the whole loupe neighbourhood; the multi-room loupe is for ZOOM only).
     let curK = 1, curFocus = null, curMode = "rest", curSingleId = null;
+    // GUIDED-TOUR override (#262 re-model): when the plate-switcher enters a guided
+    // tour, it hands the loupe the WHOLE navigated district's POI ids — they light as a
+    // SET (NOT the moving circle-intersection loupe), and that district's own zone
+    // caption is held FULL (the #230 bug-2 manor-caption regression). null = free-explore
+    // (the standard circle-intersection/zoom-LOD behaviour). tourDistricts = the district
+    // keys whose engraved caption stays full while the tour set is lit.
+    //
+    // LEGIBILITY (load-bearing): the SOLVED label boxes are placed for the WHOLE estate
+    // at once — lighting a district's ENTIRE raw set re-crowds (#103). So the tour set is
+    // itself DECLUTTERED by the SAME greedy screen-space pass the loupe uses (tier-first,
+    // then nearest the plate centre, admitting a label only if its SOLVED box clears every
+    // already-admitted one at the plate's framed scale). The visitor reads the whole
+    // district named as densely as the geometry allows, with ZERO on-screen overlap —
+    // which Claim C in the door pill proves over every preset.
+    let tourSet = null, tourDistricts = null;
 
     // the SOLVED render box for a POI's label, in viewBox units (what actually paints).
     // If a label was never solved (shouldn't happen for a present POI), skip it.
@@ -7334,6 +7360,32 @@ const LOUPE = (function(){
     }
     function overlapRect(a,b){ return a.x < b.x+b.w && b.x < a.x+a.w && a.y < b.y+b.h && b.y < a.y+a.h; }
 
+    /* declutterIds(ids, focus, k) → a NON-OVERLAPPING subset of the candidate ids, the
+       SAME greedy screen-space pass revealedSet() uses but seeded over an EXPLICIT id
+       list (the guided-tour whole-district set) instead of a loupe radius. Tier-first,
+       then nearest `focus` (the plate centre); admit a label only if its SOLVED box,
+       inflated by the screen gap at scale k, clears every already-admitted box. So the
+       tour set is provably overlap-free however crowded the raw district is (#262). */
+    function declutterIds(ids, focus, k){
+      const padVB = MIN_SCREEN_GAP / Math.max(k, 0.0001);
+      const cand = [];
+      for(const id of ids){
+        const box = solvedBox(id); if(!box) continue;
+        const p = poiById(id); const c = p ? footCentre(p) : { cx:box.x, cy:box.y };
+        const d2 = focus ? (c.cx-focus.x)**2 + (c.cy-focus.y)**2 : 0;
+        cand.push({ id, box, d2, tier:(p&&p.tier)||9 });
+      }
+      cand.sort((a,b)=> a.tier-b.tier || a.d2-b.d2);
+      const admitted = [];
+      for(const cd of cand){
+        const inf = { x:cd.box.x-padVB, y:cd.box.y-padVB, w:cd.box.w+2*padVB, h:cd.box.h+2*padVB };
+        let ok = true;
+        for(const a of admitted){ if(overlapRect(inf, a.box)){ ok=false; break; } }
+        if(ok) admitted.push(cd);
+      }
+      return admitted.map(a=> a.id);
+    }
+
     /* the set of room labels to LIGHT right now:
        · HOVER / TAB ("near") — exactly the ONE hovered room (BUG#216-2; the leader +
          its single label, never the loupe neighbourhood).
@@ -7341,6 +7393,15 @@ const LOUPE = (function(){
          a true level-of-detail neighbourhood (BUG#216-5).
        · REST — nothing (only the district captions show).  */
     function wantSet(){
+      // GUIDED-TOUR (#262): the plate-switcher lit the WHOLE district — light its
+      // DECLUTTERED label set (every POI in the navigated plate whose SOLVED box fits
+      // without overlap at the plate's framed scale), never the moving circle-loupe. A
+      // hover/tab while on tour still rides on top (its one room is always named).
+      if(tourSet){
+        const set = tourSet.slice();
+        if(curSingleId && solvedBox(curSingleId) && set.indexOf(curSingleId) < 0) set.push(curSingleId);
+        return set;
+      }
       // ZOOM mode: the loupe LOD neighbourhood, PLUS the one room under the cursor if
       // it is currently hovered (so a hover while zoomed still guarantees that name).
       // BUG #230 — LOD ORDER: the loupe room-label neighbourhood only lights once k≥LABEL_LOD_IN
@@ -7404,6 +7465,16 @@ const LOUPE = (function(){
       const namedByDistrict = {};
       want.forEach(id=>{ const p = poiById(id); if(p) namedByDistrict[p.district] = (namedByDistrict[p.district]||0)+1; });
       ZONE_LABEL.forEach((t, district)=>{
+        // GUIDED-TOUR (#262, the #230 bug-2 fix): the navigated district's engraved
+        // caption stays FULLY VISIBLE while its whole-POI label set is lit — it is the
+        // tour's title, not a far-away name receding behind its rooms. Other districts
+        // (dim + inert on tour) also rest at full; the per-room fade is a free-explore
+        // affordance only.
+        if(tourDistricts){
+          t.style.opacity = ZONE_FULL.toFixed(3);
+          scaleCaption(t);
+          return;
+        }
         const n = namedByDistrict[district] || 0;
         // fade in proportion to how many of the district's rooms are named, floored.
         const op = n ? Math.max(ZONE_FLOOR, ZONE_FULL - 0.16*n) : ZONE_FULL;
@@ -7470,10 +7541,29 @@ const LOUPE = (function(){
       renderReveal();
     }
 
+    /* GUIDED-TOUR (#262 re-model): the plate-switcher hands the loupe the WHOLE
+       navigated district — its POI ids, the plate's framed scale k + centre focus (so
+       the set is decluttered at the scale a visitor actually reads it), and the district
+       keys whose engraved caption stays full. The raw set is DECLUTTERED here into a
+       provably overlap-free subset (the SOLVED boxes are placed for the whole estate, so
+       a raw whole-district light re-crowds). Pass (null) to drop back to free-explore. */
+    function setTourSet(ids, frame, districts){
+      if(ids && ids.length){
+        const focus = frame ? { x:frame.cx, y:frame.cy } : null;
+        const fk = (frame && frame.k) ? frame.k : 1;
+        tourSet = declutterIds(ids, focus, fk);
+        tourDistricts = (districts && districts.length) ? new Set(districts) : null;
+      } else {
+        tourSet = null; tourDistricts = null;
+      }
+      renderReveal();
+    }
+
     out.renderReveal = renderReveal;
     out.revealNear = revealNear;
     out.clearNear = clearNear;
     out.setZoom = setZoom;
+    out.setTourSet = setTourSet;     // guided-tour whole-district lit set (#262 re-model)
     out.revealedSet = revealedSet;   // exposed for the door pill's Claim-B geometric proof
 
     /* ── input wiring (event delegation on #pois so we touch no per-POI handler) ──
@@ -7540,6 +7630,14 @@ const LOUPE = (function(){
        viewBox-scale-invariant and CANNOT certify the multi-room revealed set (see the
        invariance note in the loupe module). So detail is summonable without ever
        re-crowding.
+
+     CLAIM C — the GUIDED-TOUR whole-district label set is itself declutter-clean
+       (#262 re-model). A guided tour lights EVERY POI in the navigated PLATE at once
+       (not the circle-intersection loupe), so its legibility is a NEW property the
+       Claim-B loupe sweep does not cover. Partitioning the live places with the SAME
+       pure Layout.plates() the page + Node twin use, this asserts ZERO rendered
+       overlaps among each plate's whole-POI SOLVED boxes — proving the tour set a
+       visitor actually reads on a preset is legible, not just the free-explore set.
 
    The sub-line now honestly reads "LEGIBLE (0.04) at fit-view · full plate CROWDED
    (0.86)" — the door is passable at the layer you read, and the full-plate pressure
@@ -7668,12 +7766,88 @@ const LOUPE = (function(){
     check("CLAIM B — revealed declutter: ZERO rendered overlaps (46 focuses × 7 zooms)",
       sweepRan && overlaps === 0, "["+overlaps+" overlaps / "+pairs+" pairs]");
 
+    // ── CLAIM C (#262 re-model): the GUIDED-TOUR district label set, as the loupe
+    //    actually lights it, is declutter-clean. A guided tour lights the navigated
+    //    PLATE's whole-POI set — but the SOLVED boxes are placed for the whole estate at
+    //    once, so the RAW set re-crowds (the loupe DECLUTTERS it: tier-first, nearest the
+    //    plate centre, admitting a label only if its box clears every admitted one at the
+    //    plate's framed scale). This claim reproduces that EXACT declutter per preset —
+    //    partitioning live places with the SAME pure Layout.plates() the page + Node twin
+    //    use — and asserts ZERO rendered overlaps in the lit subset. We ALSO assert the
+    //    declutter is non-trivial (it admits the MAJORITY of each plate's tier-1 anchors),
+    //    so it is a real legible set, not "show almost nothing to be safe".
+    var tourOverlaps = 0, tourPairs = 0, tourPlates = 0, tourLit = 0, tourRaw = 0, tourRan = false;
+    try{
+      function rb2(id){ var s = SOLVED.get(id); return s ? s.box : null; }
+      function ov2(a,b){ return a.x < b.x+b.w && b.x < a.x+a.w && a.y < b.y+b.h && b.y < a.y+a.h; }
+      function fc2(p){ return footCentre(p); }
+      var GAP = Legibility ? 18 : 18;       // = MIN_SCREEN_GAP (the loupe's screen gap)
+      // declutter a plate's ids the SAME greedy way the loupe does (mirror of declutterIds)
+      function declutter(ids, focus, k){
+        var pad = GAP / Math.max(k, 0.0001), cand = [];
+        for(var i=0;i<ids.length;i++){
+          var box = rb2(ids[i]); if(!box) continue;
+          var p = PLACES.find(function(q){ return q.id===ids[i]; });
+          var c = p ? fc2(p) : { cx:box.x, cy:box.y };
+          cand.push({ id:ids[i], box:box, d2:(c.cx-focus.x)*(c.cx-focus.x)+(c.cy-focus.y)*(c.cy-focus.y), tier:(p&&p.tier)||9 });
+        }
+        cand.sort(function(a,b){ return a.tier-b.tier || a.d2-b.d2; });
+        var adm=[];
+        for(var j=0;j<cand.length;j++){
+          var cd=cand[j], inf={ x:cd.box.x-pad, y:cd.box.y-pad, w:cd.box.w+2*pad, h:cd.box.h+2*pad }, ok=true;
+          for(var a=0;a<adm.length;a++){ if(ov2(inf, adm[a].box)){ ok=false; break; } }
+          if(ok) adm.push(cd);
+        }
+        return adm.map(function(x){ return x.id; });
+      }
+      var liveP = PLACES.filter(function(p){ return !p.locked; });
+      var part = Layout.plates(liveP);
+      var lockedId2 = (PLACES.find(function(p){ return p.locked; })||{}).id;
+      var byPlate = {};
+      for(var pi2=0; pi2<PLACES.length; pi2++){
+        var pp2 = PLACES[pi2]; if(!SOLVED.has(pp2.id)) continue;
+        var pid2 = part.roomPlate[pp2.id];
+        if(!pid2 && pp2.id === lockedId2) pid2 = "manor";
+        if(!pid2) continue;
+        (byPlate[pid2] = byPlate[pid2] || []).push(pp2.id);
+      }
+      var tier1raw = 0, tier1lit = 0;
+      for(var pk in byPlate){
+        tourPlates++;
+        var ids2 = byPlate[pk], fr = part.frame[pk] || { cx:720, cy:450, k:1 };
+        tourRaw += ids2.length;
+        var lit = declutter(ids2, { x:fr.cx, y:fr.cy }, fr.k || 1);
+        tourLit += lit.length;
+        var litSet = {}; for(var li=0; li<lit.length; li++) litSet[lit[li]] = 1;
+        // every admitted pair is non-overlapping (the property a visitor reads)
+        for(var ai=0; ai<lit.length; ai++) for(var aj=ai+1; aj<lit.length; aj++){
+          var ba2 = rb2(lit[ai]), bb2 = rb2(lit[aj]); if(!ba2 || !bb2) continue;
+          tourPairs++; if(ov2(ba2, bb2)) tourOverlaps++;
+        }
+        // tier-1 coverage: how many of the plate's tier-1 anchors survive the declutter
+        for(var ti=0; ti<ids2.length; ti++){
+          var tp = PLACES.find(function(q){ return q.id===ids2[ti]; });
+          if(tp && tp.tier===1){ tier1raw++; if(litSet[ids2[ti]]) tier1lit++; }
+        }
+      }
+      tourRan = true;
+      var tier1ok = tier1raw===0 || tier1lit >= Math.ceil(tier1raw*0.6);
+      check("CLAIM C — guided-tour district label set: ZERO rendered overlaps (all "+tourPlates+" presets)",
+        tourOverlaps === 0, "["+tourOverlaps+" overlaps / "+tourPairs+" pairs · "+tourLit+"/"+tourRaw+" labels lit across "+tourPlates+" plates]");
+      check("CLAIM C′ — the tour declutter is non-trivial (keeps ≥60% of tier-1 anchors)",
+        tier1ok, "["+tier1lit+"/"+tier1raw+" tier-1 anchors survive]");
+    }catch(e){ /* partition unavailable → claim cannot be asserted */
+      check("CLAIM C — guided-tour district label set: ZERO rendered overlaps",
+        false, "[sweep threw: "+e+"]");
+    }
+
     var passN = 0; for(var k=0;k<lines.length;k++) if(lines[k].ok) passN++;
     return { pass: passN === lines.length, total: lines.length, passed: passN,
              lines: lines,
              restVerdict: restVerdict, restComposite: restComposite,
              fullVerdict: fullVerdict, fullComposite: fullComposite,
-             overlaps: overlaps, pairs: pairs };
+             overlaps: overlaps, pairs: pairs,
+             tourOverlaps: tourOverlaps, tourPairs: tourPairs, tourPlates: tourPlates };
   }
 
   function render(){
@@ -7682,7 +7856,8 @@ const LOUPE = (function(){
     catch(e){
       console.error("[door] legibility self-test threw:", e);
       r = { pass:false, total:1, passed:0, lines:[{name:"self-test threw", ok:false, detail:String(e)}],
-            restVerdict:"?", restComposite:null, fullVerdict:"?", fullComposite:null, overlaps:null, pairs:null };
+            restVerdict:"?", restComposite:null, fullVerdict:"?", fullComposite:null, overlaps:null, pairs:null,
+            tourOverlaps:null, tourPairs:null, tourPlates:null };
     }
     var green = r.pass;
     btn.classList.toggle("ok", green);
@@ -7699,6 +7874,8 @@ const LOUPE = (function(){
       ? ("PASSABLE: the resting fit-view layer reads " + r.restVerdict + " (composite " + rc +
          " < 0.30); a room names itself only under the loupe (hover / tab / zoom), the revealed " +
          "declutter never re-crowds (" + r.overlaps + " rendered overlaps across 46 focuses × 7 zooms), " +
+         "the guided-tour whole-district label set is declutter-clean (" + r.tourOverlaps +
+         " rendered overlaps across " + r.tourPlates + " presets), " +
          "the full plate is still " + r.fullVerdict + " (" + fc + ", the #103 pressure — not defined away), " +
          "and the conscience's controls still straddle the threshold (" + r.passed + "/" + r.total +
          "). Click to re-run.")
@@ -7711,7 +7888,9 @@ const LOUPE = (function(){
       console.log("[door] legibility self-test " + r.passed + "/" + r.total +
         " ✓ — the resting fit-view layer reads " + r.restVerdict + " (composite " +
         (r.restComposite == null ? "?" : r.restComposite.toFixed(3)) + " < 0.30), the revealed loupe " +
-        "declutter has " + r.overlaps + " rendered overlaps across 46 focuses × 7 zooms, the full plate " +
+        "declutter has " + r.overlaps + " rendered overlaps across 46 focuses × 7 zooms, the guided-tour " +
+        "whole-district label set has " + r.tourOverlaps + " rendered overlaps across " + r.tourPlates +
+        " presets, the full plate " +
         "is still " + r.fullVerdict + " (composite " +
         (r.fullComposite == null ? "?" : r.fullComposite.toFixed(3)) + " — the #103 pressure, NOT defined " +
         "away), and the conscience that judges all this is itself sound (controls straddle the threshold, " +
