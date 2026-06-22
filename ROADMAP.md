@@ -146,7 +146,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 
 ### cross
-- [cross] **The Same Slow Throb** — the-beating-bench (an AUDIBLE beat you HEAR, core nearestPair→beat=|fHi−fLo|) × tone-mill (a toothed siren disc you SEE crawl under a strobe, core apparentDriftHz). ONE law: a slow beat = |f1−f2| folded down — worn once as an ear-throb, once as an eye-crawl. Bridge: one control-bar drives both rate-pairs so the throb period = the crawl period; lock them and the heard pulse + seen crawl breathe in lockstep. NEG-CONTROL: pull the rates apart — the heard beat blurs into roughness (|df| leaves the beat band) while the seen crawl folds to a DIFFERENT strobe alias, so only one twin survives the bridge. CRUX: re-derive |f1−f2| from each parent's own export with no smuggled factor; assert beatRate's |df| = apparentDriftHz's fold to machine zero. GAP CONFIRMED both ways. Both costumes live (synth sound + animated motion), no graph. (sown #296)
 
 
 ### curation
@@ -166,11 +165,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 ### bench
 - [bench] **The Binary Ruler** — Numbers Room. A Tower of Hanoi you SOLVE while a brass odometer ticks beside it: optimal solving IS counting 0..2^n−1 in binary, the disc moved at step t is fixed by trailingZeros(t)+1 (the ruler sequence), and the tower lands home exactly as the odometer rolls to 2^n−1. The WIN is a provable number (the 2^n−1 floor), not a stopwatch. AUTO (watch binary + stack move in lockstep) or YOU-DRIVE (off-ruler moves overshoot the floor). CRUX: optimal length ⇒ 2^n−1 (n≤12); disc(t)⇒ruler(t); peg-state after t ⇒ Gray code G(t). NEG-CONTROL: a greedy any-legal foil finishes but in STRICTLY >2^n−1 moves; one off-ruler move breaks Gray adjacency (>1 disc differs). NOT a take-game (room is Nim-saturated), NOT a clock. Grep-confirmed ZERO 'Tower of Hanoi'/'Gray code' hits. (sown #296)
-<!-- ✝ DECAYED #296: The Squaring Clock · after 97bbbc1 -->
 <!-- ✝ DECAYED #296: The Clock That Closes · after 97bbbc1 -->
 <!-- ✝ BLOOMED #298: The Counting-Out Ring → counting-out-ring/ · after 8cab376 -->
 <!-- ✝ BLOOMED #299: The Selection Jar → conservatory/selection-jar/ · after 914047f -->
 <!-- ✝ BLOOMED #300: The Reaction You Time → alchemy/reaction-you-time/ · after 14d626d -->
+<!-- ✝ BLOOMED #301: The Same Slow Throb → the-same-slow-throb/ · after 9d6ef05 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
