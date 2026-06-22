@@ -298,6 +298,23 @@
       </div>
     </a>
 
+    <a class="bed" href="selection-jar/index.html" style="margin-top:14px">
+      <div class="bedgrid">
+        <div class="bedglass"><canvas id="bedsel" width="520" height="460"></canvas></div>
+        <div class="bedbody">
+          <div class="tagrow"><span class="glyph">&#129714;</span><span class="kind">selection on a visible trait</span></div>
+          <h2>The Selection Jar</h2>
+          <p>A jar of beetles you can SEE, on a background you <b>tint</b>. A predator eats the most-visible each
+          generation; survivors breed offspring a shade like their parents &mdash; and the cloud <b>crawls until it
+          vanishes into the colour you chose</b>. The Gene Jar keeps its shape; <b>this jar remembers which way the
+          light came from</b> &mdash; camouflage you watch evolve, not an allele table.</p>
+          <div class="proof">the per-generation mean-shift tracks the breeder&rsquo;s equation R = h²&middot;S on the
+          ensemble mean (within tol); h²=0 &rArr; no tracking despite identical culling; selection OFF &rArr; drift only.</div>
+          <span class="enter">&#8627; enter the bed</span>
+        </div>
+      </div>
+    </a>
+
     <!-- ===== CROSS-WING BRIDGE ===== -->
     <div class="bridge">
       <span class="bglyph">&#9851;</span>
@@ -337,6 +354,9 @@ import { runSelfTest as geneJarSelfTest, hardyWeinberg as gjHW, P as gjP } from 
 import { runHarvestSelfTest as pondSelfTest, rk4StepH as pondStep, equilibria as pondEq,
   H_CRIT as pondHcrit, EPS_EMPTY as pondEps, P as pondP } from './the-pond/core.mjs';
 const pondHmax = 1.4 * pondHcrit;
+import { runSelfTest as selectionSelfTest, makeState as selMakeState, step as selStep,
+  meanShade as selMeanShade, beetleColor as selBeetleColor, bgColor as selBgColor, P as selP }
+  from './selection-jar/core.mjs';
 
 // ---- breadcrumb: matches the front-door id EXACTLY (the Survey's food) ----
 try{ var k='ws:seen:conservatory'; if(!localStorage.getItem(k)) localStorage.setItem(k,String(Date.now())); }catch(e){}
@@ -771,6 +791,91 @@ function drawBedPond(advance){
 // rounded-rect helper for the pond preview
 function rr(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
 
+// ============================================================================
+//  THE SELECTION-JAR BED GLASS — a MINIATURE of the same camouflage cloud driven by
+//  the SAME imported selection-jar/core.mjs (preview and bench cannot drift — the
+//  wing contract, as with the Pond). It loops a short LIVED cycle: a fresh
+//  salt-and-pepper jar on a tinted floor → step the generations → the most-visible
+//  are culled, survivors breed, and the cloud CRAWLS until it blends into the floor
+//  → re-seed → repeat. The floor tint alternates dark/light so the tile teases that
+//  the cloud lands on WHICHEVER colour you chose (the bench's DIRECTION claim).
+// ============================================================================
+const bedsel = document.getElementById('bedsel');
+const selctx = bedsel.getContext('2d');
+let selgeo;
+const SEL_N = 150;                         // a comfortable preview cloud (bench runs ~220)
+// stable per-beetle homes inside a unit disk (r=√u keeps it uniform), seeded once so
+// the scatter is steady frame-to-frame and only the COLOUR migrates.
+const SEL_RNG = selP ? null : null;        // (placeholder kept for symmetry; homes below)
+const selHomes = [];
+(function(){ const rng = selMakeState ? null : null;
+  // deterministic homes via the same xorshift the bench uses (seed 1 ^ tag)
+  let s = (1 ^ 0x5bd1e995) >>> 0;
+  function r(){ s ^= s<<13; s>>>=0; s ^= s>>17; s ^= s<<5; s>>>=0; return s/4294967296; }
+  for(let i=0;i<SEL_N;i++){ selHomes.push({ hr:Math.sqrt(r()), ha:r()*Math.PI*2, ph:r()*Math.PI*2, fr:0.5+r()*0.9 }); }
+})();
+const SEL_BGS = [0.12, 0.85, 0.20, 0.78];  // the floor tints the lived cycle visits
+let selState = null, selPhase = 0, selBgIdx = 0;
+function selFreshJar(){
+  selState = selMakeState({ seed: 7 + selBgIdx, bg: SEL_BGS[selBgIdx], h2: 0.55, strength: 0.6, N: SEL_N });
+}
+function drawBedSel(advance){
+  if(!selState) selFreshJar();
+  const W = selgeo.w, H = selgeo.h;
+  // ---- the lived cycle: run generations, then re-seed onto the next floor tint ----
+  if(advance && !reduce){
+    selPhase += 1;
+    if(selPhase % 9 === 0 && selState.gen < 26){ selState = selStep(selState); }  // ~1 gen / 9 frames
+    if(selPhase > 9*30){ selPhase = 0; selBgIdx = (selBgIdx+1) % SEL_BGS.length; selFreshJar(); }  // re-seed → next tint
+  }
+  selctx.clearRect(0,0,W,H);
+  // the brass-ringed bell jar (interior = the tinted FLOOR — shade is COLOUR, never a plot)
+  const RIM = Math.max(10, W*0.045);
+  const jb = { x:RIM, y:RIM+4, w:W-2*RIM, h:H-2*RIM-8 };
+  selctx.lineWidth=4; selctx.strokeStyle='rgba(217,164,65,0.7)';
+  rr(selctx, 3,7, W-6,H-14, 14); selctx.stroke();
+  selctx.save(); rr(selctx, jb.x,jb.y, jb.w,jb.h, 10); selctx.clip();
+  // floor fill = bgColor(L): the exact tint the cloud is chasing
+  selctx.fillStyle = selBgColor(selState.bg);
+  selctx.fillRect(jb.x,jb.y,jb.w,jb.h);
+  // a soft top-down vignette so the glass reads as a vessel
+  const vg = selctx.createLinearGradient(0,jb.y,0,jb.y+jb.h);
+  vg.addColorStop(0,'rgba(255,255,255,0.05)'); vg.addColorStop(1,'rgba(0,0,0,0.18)');
+  selctx.fillStyle=vg; selctx.fillRect(jb.x,jb.y,jb.w,jb.h);
+  // the beetles — one dot per population member, COLOURED by its shade (eye == state)
+  const cx = jb.x+jb.w*0.5, cy = jb.y+jb.h*0.5;
+  const spread = Math.min(jb.w,jb.h)*0.42;
+  const shades = selState.shades;
+  const wob = reduce ? 0 : selPhase;
+  for(let i=0;i<SEL_N && i<shades.length;i++){
+    const hm = selHomes[i];
+    const a = hm.ha, rr2 = hm.hr*spread;
+    const bx = cx + Math.cos(a)*rr2*(jb.w/jb.h>1?1:1) + (reduce?0:Math.sin(wob*0.04*hm.fr+hm.ph)*2.2);
+    const by = cy + Math.sin(a)*rr2 + (reduce?0:Math.cos(wob*0.04*hm.fr+hm.ph)*2.2);
+    // visibility halo on the most conspicuous (distance of shade from floor)
+    const vis = Math.abs(shades[i]-selState.bg);
+    if(vis > 0.28){
+      const gl=selctx.createRadialGradient(bx,by,0,bx,by,6);
+      gl.addColorStop(0,'rgba(224,104,63,'+(0.30*Math.min(1,(vis-0.28)*2.2)).toFixed(3)+')');
+      gl.addColorStop(1,'rgba(224,104,63,0)');
+      selctx.fillStyle=gl; selctx.beginPath(); selctx.arc(bx,by,6,0,6.2832); selctx.fill();
+    }
+    selctx.fillStyle = selBeetleColor(shades[i]);
+    selctx.beginPath(); selctx.ellipse(bx,by,2.7,3.6,0,0,6.2832); selctx.fill();
+    selctx.strokeStyle='rgba(0,0,0,0.30)'; selctx.lineWidth=0.7;
+    selctx.beginPath(); selctx.ellipse(bx,by,2.7,3.6,0,0,6.2832); selctx.stroke();
+  }
+  selctx.restore();
+  // a small read at the bottom: which way the light came + how blended the cloud is
+  const m = selMeanShade(selState);
+  const blended = Math.abs(m - selState.bg) < 0.05;
+  selctx.font='600 10px var(--font-mono, monospace)';
+  selctx.fillStyle = blended ? 'rgba(217,164,65,0.9)' : 'rgba(159,176,164,0.85)';
+  selctx.textAlign='center';
+  selctx.fillText((blended?'blended · L=':'gen '+selState.gen+' · L=')+selState.bg.toFixed(2), W*0.5, H-9);
+  selctx.textAlign='left';
+}
+
 // ---- layout + loop ----
 function layout(){
   fgeo = fitCanvas(floor, fctx); fmap = floorMap(fgeo, ORB);
@@ -781,6 +886,7 @@ function layout(){
   ggeo = fitCanvas(bedgj, gctx);
   wgeo = fitCanvas(bedwr, wctx); wrSeeded=false;   // reseed the coral at the new size
   pgeo = fitCanvas(bedpond, pctx);
+  selgeo = fitCanvas(bedsel, selctx);
 }
 let tphase = 0;
 function loop(){
@@ -794,6 +900,7 @@ function loop(){
   drawBedGj(tphase);
   drawBedWr(true);
   drawBedPond(true);
+  drawBedSel(true);
   raf = requestAnimationFrame(loop);
 }
 let raf = 0;
@@ -802,15 +909,18 @@ const SIR_STATIC = SIR_TR.peakT/SIR_TR.ts[SIR_TR.ts.length-1]*SIR_TR.Is.length;
 // a thinned-but-living swarm (the same imported step), then paint one frame.
 function pondStatic(){ pond.h = pondHcrit*0.7; pond.N = POND_N0;
   for(let i=0;i<40000;i++) pond.N = pondStep(pond.N, 0.01, pond.h, pondP); drawBedPond(false); }
+// a still SELECTION JAR for reduced-motion / statics: run the SAME imported step to a
+// blended cloud (camouflaged on the dark floor), then paint one frame.
+function selStatic(){ selBgIdx = 0; selFreshJar(); for(let g=0;g<24;g++) selState = selStep(selState); drawBedSel(false); }
 function drawStatics(){ drawFloor(0); drawBed(0); drawBedLog(LOG_TMAX*0.62); drawBedSir(SIR_STATIC); drawBedRep(REP_TR.xs.length*0.55); drawBedGj(0);
   // reduced-motion: grow the coral headlessly to a rich still, then paint once
-  if(!wrSeeded) seedWrinkling(); for(let i=0;i<900;i++) wrStep(wrState,wrHash,wrParams,wrRng); drawBedWr(false); pondStatic(); }
+  if(!wrSeeded) seedWrinkling(); for(let i=0;i<900;i++) wrStep(wrState,wrHash,wrParams,wrRng); drawBedWr(false); pondStatic(); selStatic(); }
 window.addEventListener('resize', function(){ layout(); if(reduce){ drawStatics(); } }, {passive:true});
 layout();
 // eagerly seed the wrinkling preview so wrState exists (and is simple) before the self-test runs
 if(!wrSeeded) seedWrinkling();
 if (reduce){ drawFloor(ORB.pts.length*0.12); drawBed(bedOrb.pts.length*0.3); drawBedLog(LOG_TMAX*0.62); drawBedSir(SIR_STATIC); drawBedRep(REP_TR.xs.length*0.55); drawBedGj(0);
-  if(!wrSeeded) seedWrinkling(); for(let i=0;i<900;i++) wrStep(wrState,wrHash,wrParams,wrRng); drawBedWr(false); pondStatic(); }
+  if(!wrSeeded) seedWrinkling(); for(let i=0;i<900;i++) wrStep(wrState,wrHash,wrParams,wrRng); drawBedWr(false); pondStatic(); selStatic(); }
 else raf = requestAnimationFrame(loop);
 
 // ============================================================================
@@ -859,8 +969,13 @@ function runSelfTest(){
   ok('the Pond bench link present', !!benchPond);
   ok('the Pond bench link is bare-relative (no leading slash)', benchPond && !/^\//.test(benchPond.getAttribute('href')) && !/^\.\.\//.test(benchPond.getAttribute('href')));
 
-  // SEVEN live beds + ZERO empty planters (the wing has grown a seventh bed)
-  ok('seven live beds present (.bed)', document.querySelectorAll('.bed').length === 7);
+  // the Selection Jar bench link is present and BARE-RELATIVE (no leading slash)
+  const benchSel = [...document.querySelectorAll('a')].find(a=>/^selection-jar\/index\.html$/.test(a.getAttribute('href')||''));
+  ok('the Selection Jar bench link present', !!benchSel);
+  ok('the Selection Jar bench link is bare-relative (no leading slash)', benchSel && !/^\//.test(benchSel.getAttribute('href')) && !/^\.\.\//.test(benchSel.getAttribute('href')));
+
+  // EIGHT live beds + ZERO empty planters (the wing has grown an eighth bed)
+  ok('eight live beds present (.bed)', document.querySelectorAll('.bed').length === 8);
   ok('zero empty planters (the wing is fully planted)', document.querySelectorAll('.planter').length === 0);
 
   // the orbit-light canvas is mounted and sized
@@ -879,6 +994,8 @@ function runSelfTest(){
   ok('the Wrinkling preview curve is simple (embedded)', wrState && wrState.simple);
   // the Pond planter-light canvas is mounted and sized
   ok('the Pond planter-light canvas mounted', bedpond instanceof HTMLCanvasElement && bedpond.width > 0);
+  // the Selection Jar planter-light canvas is mounted and sized
+  ok('the Selection Jar planter-light canvas mounted', bedsel instanceof HTMLCanvasElement && bedsel.width > 0);
 
   // the cross-wing bridge points to ../first-integral/index.html
   const bridge = [...document.querySelectorAll('a')].find(a=>(a.getAttribute('href')||'')==='../first-integral/index.html');
@@ -901,6 +1018,8 @@ function runSelfTest(){
   ok('gene-jar core self-test all green ('+gjCore.pass+'/'+gjCore.total+')', gjCore.pass === gjCore.total);
   const pondCore = pondSelfTest();
   ok('the Pond core self-test all green ('+pondCore.pass+'/'+pondCore.total+')', pondCore.pass === pondCore.total);
+  const selCore = selectionSelfTest();
+  ok('the Selection Jar core self-test all green ('+selCore.pass+'/'+selCore.total+')', selCore.pass === selCore.total);
 
   const pass = checks.filter(c=>c.pass).length;
   return { pass, total: checks.length, checks };
