@@ -2533,6 +2533,139 @@ var Layout = (function () {
     };
   }
 
+  /* ── THE COLUMN-COLLAPSE GUARD (general principle, #275). A district's POI
+     placement must NEVER let a crowded room set collapse into one tall column that
+     scale-crushes every footprint (and its label) into a single illegible stack.
+     packGrid() picks cols = min(ceil√n, colsByWidth); when colsByWidth forces ONE
+     column for n rooms that don't fit the region HEIGHT, the grid is a tall stack
+     that fitInto() then crushes. This guard asserts the failure LOUD: a future
+     crowded district trips a build error pointing at the fix (widen the region, or
+     give the district a 2-D formation like the observatory's rings), rather than
+     silently overlapping. It is a no-op for every district that packs ≥ 2 columns
+     or whose single column genuinely fits its region. ── */
+  function assertNoColumnCollapse(district, n, band, region, gut, pad) {
+    if (n < 2) return;
+    var innerW = region.w - 2 * pad;
+    var colsByWidth = Math.max(1, Math.floor((innerW + gut) / (band.w + gut)));
+    if (colsByWidth >= 2) return;                         // packs ≥ 2 columns → fine
+    var colH = n * band.h + (n - 1) * gut;                // height of the 1-col stack
+    var innerH = region.h - 2 * pad;
+    if (colH <= innerH + 0.5) return;                     // the single column genuinely fits
+    throw new Error('Layout: district "' + district + '" would collapse ' + n +
+      ' rooms into ONE crushed column (region ' + region.w + '×' + region.h +
+      ' fits only 1 column of ' + band.w + 'px lots, but the stack is ' +
+      Math.round(colH) + 'px tall > ' + Math.round(innerH) + 'px). Widen the ' +
+      'region or give the district a 2-D formation (see placeObservatoryRings).');
+  }
+
+  /* ── CONCENTRIC-RING formation (#275) — the observatory's contour-map look from
+     above. n rooms become: ONE at the centre; an inner ring of up to 8 (so the
+     band reads as one contour); then outer rings holding the remainder, one
+     POI-width further out each. Ring radii + a UNIFORM backing radius `b` are SIZED
+     to the slot so (1) every pair of foot-circle backings is disjoint with a gutter,
+     and (2) the whole formation fits inside a disc of radius `halfMin` centred in
+     the region (so nothing spills past the plate frame). Deterministic; pure. ── */
+  function ringCounts(n) {
+    var rings = [], rem = n;
+    if (rem > 0) { rings.push(1); rem -= 1; }             // the centre
+    if (rem > 0) { var c = Math.min(8, rem); rings.push(c); rem -= c; }  // inner ring ≤ 8
+    var cap = 12;
+    while (rem > 0) { var k = Math.min(cap, rem); rings.push(k); rem -= k; cap += 4; }
+    return rings;                                          // [centre, inner, outer, …]
+  }
+  /* solve equal ring spacing S + the largest uniform backing radius b that keeps
+     every backing pairwise-disjoint (within-ring chord, radial spacing, centre↔ring1)
+     AND fits the outermost ring + b inside halfMin. Returns {radii, b}. */
+  function solveRingRadii(counts, halfMin, gut) {
+    var nRings = counts.length - 1;                       // outer rings (excl. centre)
+    if (nRings === 0) return { radii: [0], b: Math.max(4, Math.min(halfMin * 0.5, 18)) };
+    var best = null;
+    for (var S = 4; S <= halfMin; S += 0.25) {
+      var radii = [0];
+      for (var k = 1; k <= nRings; k++) radii.push(k * S);
+      var b = (S - gut) / 2;                               // radial spacing (centre↔r1 + r_k↔r_{k+1})
+      for (var j = 1; j <= nRings; j++) {
+        var nk = counts[j];
+        if (nk >= 2) {                                     // within-ring chord ≥ 2b+gut
+          var chordB = radii[j] * Math.sin(Math.PI / nk) - gut / 2;
+          if (chordB < b) b = chordB;
+        }
+      }
+      var fitB = halfMin - radii[nRings];                 // outermost ring + b ≤ halfMin
+      if (fitB < b) b = fitB;
+      if (b > 0 && (!best || b > best.b)) best = { radii: radii.slice(), b: b };
+    }
+    return best || { radii: [0], b: Math.max(4, halfMin * 0.4) };
+  }
+
+  /* place one observatory district's rooms as concentric rings. Emits a circular
+     foot for every room (towers stay circular; a non-tower footprint gets a centred
+     square whose inscribed circle == the backing) and the per-wing tint rects.
+     Supersedes wing-shelving for THIS district (the rise has no room to shelf wings
+     side by side); wing membership still drives breadcrumbs/links elsewhere. */
+  function placeObservatoryRings(rooms, solution) {
+    if (!rooms.length) return null;
+    var conf = DISTRICTS.observatory, region = conf.region;
+    var pad = DISTRICT_PAD, gut = 6;
+    var list = rooms.slice().sort(byOrderId);
+    var n = list.length;
+    var cx = region.x + region.w / 2, cy = region.y + region.h / 2;
+    var halfMin = Math.min(region.w - 2 * pad, region.h - 2 * pad) / 2;
+    var counts = ringCounts(n);
+    var sol = solveRingRadii(counts, halfMin, gut);
+    var b = sol.b, radii = sol.radii;
+
+    // assign each room to a (ring, slot-within-ring); centre first, then rings.
+    var idx = 0;
+    var allCircles = [];
+    for (var ri = 0; ri < counts.length; ri++) {
+      var cnt = counts[ri], R = radii[ri];
+      // offset each ring's start bearing by half a step from the previous so a
+      // cardinal POI sits beside its neighbour's diagonal — keeps backings clear
+      // even when two sub-rings are close (the design's alternating-bearing note).
+      var base = (ri % 2 === 0) ? -Math.PI / 2 : (-Math.PI / 2 + Math.PI / Math.max(1, cnt));
+      for (var s = 0; s < cnt && idx < n; s++) {
+        var ang = base + (cnt > 1 ? (2 * Math.PI * s / cnt) : 0);
+        var px = cx + (R === 0 ? 0 : R * Math.cos(ang));
+        var py = cy + (R === 0 ? 0 : R * Math.sin(ang));
+        var room = list[idx++];
+        // a 2b×2b slot CENTRED on (px,py). setFoot derives both a tower's circle
+        // (centre = slot.x+slot.w/2 = px, r = b) and a non-tower's square (inscribed
+        // circle = b) from the SAME top-left origin, so every backing is centred on
+        // its ring point regardless of footprint.
+        var slot = { x: px - b, y: py - b, w: 2 * b, h: 2 * b };
+        setFoot(solution, room, slot);
+        allCircles.push({ cx: px, cy: py, r: b, room: room });
+      }
+    }
+
+    // emit per-wing tint rects (a bounded tint over each wing's members), so wing
+    // membership still reads on the plate even under the ring formation.
+    var wingGroups = {};
+    for (var w = 0; w < allCircles.length; w++) {
+      var wid = allCircles[w].room.wing || '';
+      if (wid === '') continue;
+      (wingGroups[wid] = wingGroups[wid] || []).push(allCircles[w]);
+    }
+    var wkeys = Object.keys(wingGroups).sort();
+    for (var wk = 0; wk < wkeys.length; wk++) {
+      var grp = wingGroups[wkeys[wk]];
+      var rects = grp.map(function (c) { return { x: c.cx - c.r, y: c.cy - c.r, w: 2 * c.r, h: 2 * c.r }; });
+      var wu = rectUnion(rects);
+      solution.wingRects.push({
+        district: 'observatory', wing: wkeys[wk],
+        label: wingLabel(wkeys[wk]), accent: wingAccent(wkeys[wk], conf.hue),
+        x: wu.x - 3, y: wu.y - 3, w: wu.w + 6, h: wu.h + 6
+      });
+    }
+
+    // the district union = the bounding box of every backing circle.
+    var du = rectUnion(allCircles.map(function (c) {
+      return { x: c.cx - c.r, y: c.cy - c.r, w: 2 * c.r, h: 2 * c.r };
+    }));
+    return du;
+  }
+
   /* ── shelf-pack a list of {w,h} blocks into a frame of inner width fw, first-fit
      by row (skyline), top-left origin, GUTTER between. Returns block offsets +
      the union AABB. Used to lay wing blocks side by side in a district. ── */
@@ -2608,7 +2741,7 @@ var Layout = (function () {
     // ── 2..6: place each district's rooms ──
     placeManor(byDistrict.manor || [], solution);
     placeGrounds(byDistrict.grounds || [], solution);
-    placeSimpleDistrict('observatory', byDistrict.observatory || [], solution);
+    placeObservatory(byDistrict.observatory || [], solution);
     placeSimpleDistrict('outbuilding', byDistrict.outbuilding || [], solution);
     placeSimpleDistrict('cavern', byDistrict.cavern || [], solution);
 
@@ -2647,6 +2780,13 @@ var Layout = (function () {
       (wings[w] = wings[w] || []).push(rooms[i]);
     }
     var wingIds = Object.keys(wings).sort();
+
+    // GENERAL PRINCIPLE (#275): a district whose rooms can't fit a single column's
+    // width must overflow into a SECOND dimension, never stack one crushed column.
+    // Assert loud here so a future crowded district fails at build time pointing at
+    // the fix (the observatory escapes this via its concentric-ring formation).
+    var tierBand = bandFor((rooms[0] && rooms[0].tier) || 2, district);
+    assertNoColumnCollapse(district, rooms.length, tierBand, region, GUT, DPAD);
 
     // pack each wing into a local grid; collect its block size + per-room slots
     var blocks = [];
@@ -2765,7 +2905,16 @@ var Layout = (function () {
     emitDistrictRect('grounds', du, solution);
   }
 
-  /* a SIMPLE district (observatory/outbuilding/cavern): pack into its own region.
+  /* the OBSERVATORY: a concentric-ring formation (the rise's contour-map look),
+     NOT a packed grid (#275 — the grid collapsed its ~13 rooms into one crushed,
+     overlapping column). See placeObservatoryRings. */
+  function placeObservatory(rooms, solution) {
+    if (!rooms.length) return;
+    var du = placeObservatoryRings(rooms, solution);
+    emitDistrictRect('observatory', du, solution);
+  }
+
+  /* a SIMPLE district (outbuilding/cavern): pack into its own region.
      These have no named wings — one bounded precinct. */
   function placeSimpleDistrict(district, rooms, solution) {
     if (!rooms.length) return;
@@ -5739,10 +5888,16 @@ function buildPoi(r, opts){
 
   // a soft warm lamp glow at the footprint's heart (candlelit from inside),
   // behind the glyph — lifts to the wing's accent on hover. Skipped for the
-  // broken cellar stair (it is dark until the way is restored).
+  // broken cellar stair (it is dark until the way is restored). SIZED to the
+  // footprint so it stays WITHIN the backing (capped at 13 for the big lots): a
+  // small ring footprint — e.g. the observatory's concentric-ring backings (#275)
+  // — gets a proportionally small glow rather than a fixed r=13 halo that would
+  // bleed past its own backing into a neighbour's.
   const {cx,cy} = footCentre(r);
+  const footR = r.footprint==="tower" ? r.r : Math.min(r.w, r.h)/2;
+  const lampR = Math.max(4, Math.min(13, footR));
   if(!(r.locked && opts.extraClass==="broken")){
-    a.appendChild(el("circle",{ cx, cy, r:13, class:"fp-lamp" }));
+    a.appendChild(el("circle",{ cx, cy, r:lampR, class:"fp-lamp" }));
   }
 
   // emoji glyph at the footprint's heart
@@ -6066,6 +6221,13 @@ function drawZoneLabels(){
   // They live in #winglabels (above the footprints, BUG#216-1 occlusion) and fade in by
   // LEVEL-OF-DETAIL as you zoom into their district (driven by the loupe's setZoom).
   LAYOUT.wingRects.forEach(w=>{
+    // the OBSERVATORY rise lays out as a concentric-ring formation (#275), NOT
+    // side-by-side wing shelves — its wing tint rects are scattered ring sectors,
+    // so their engraved captions would overlap into an illegible pile. The rings
+    // ARE the organizing structure there; the soft tints stay, but the engraved
+    // wing CAPTIONS are suppressed for this one district (wing names still drive
+    // each room's breadcrumb/links/card, just not a stacked zone-caption).
+    if(w.district === "observatory") return;
     const lx = w.x + 8, ly = w.y - 3;
     const t = el("text",{ x:lx, y:ly, "text-anchor":"start", class:"wing-label",
       style:`--wa:${w.accent}` });

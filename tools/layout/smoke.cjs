@@ -79,11 +79,22 @@ for(const id in sol.foot){
   console.log('  ', id.padEnd(16), `x${Math.round(b.x)} y${Math.round(b.y)} ${Math.round(b.w)}x${Math.round(b.h)}`, sol.footMeta[id].wing||'(none)');
 }
 
-// footprint-vs-footprint overlap check
+// footprint-vs-footprint overlap check. A circular footprint (a tower) draws its
+// backing as the INSCRIBED CIRCLE, so two towers whose square bboxes merely touch at
+// a corner do NOT visually overlap — test them disc-vs-disc (centre-distance ≥ r_i+r_j),
+// which is the right geometry for the observatory's concentric rings (#275). Any pair
+// involving a rectangular footprint keeps the conservative bbox test.
 const ids = Object.keys(sol.foot);
 for(let i=0;i<ids.length;i++) for(let j=i+1;j<ids.length;j++){
-  const a=bbox(sol.foot[ids[i]]), b=bbox(sol.foot[ids[j]]);
-  const ov = a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y;
+  const fi=sol.foot[ids[i]], fj=sol.foot[ids[j]];
+  let ov;
+  if(fi.r!=null && fj.r!=null){
+    const d=Math.hypot(fi.x-fj.x, fi.y-fj.y);
+    ov = d < fi.r + fj.r - 1e-6;                 // two discs intersect
+  } else {
+    const a=bbox(fi), b=bbox(fj);
+    ov = a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y;
+  }
   if(ov){ console.log('  FOOT-OVERLAP', ids[i], '×', ids[j]); fail++; }
 }
 
@@ -100,6 +111,85 @@ console.log('=== BENEATH SLOT ===', JSON.stringify(Layout.beneathSlot()));
 // unknown-district assertion
 try { Layout.solve([{id:'x', district:'nowhere', tier:1}]); console.log('  ASSERT FAILED: unknown district did not throw'); fail++; }
 catch(e){ console.log('  ✓ unknown district throws:', e.message.slice(0,60)); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   OBSERVATORY RINGS — HARD PASS (#275). The Observatory Rise lays out as a
+   concentric-ring (contour-map) formation, NOT a packed grid: the grid collapsed
+   its ~13 rooms into one crushed column whose circular icon-backings + labels
+   overlapped illegibly. This asserts the CLAIM over the LIVE observatory PLACES:
+   (A) every PAIR of observatory foot circles (the backings) is pairwise NON-
+       OVERLAPPING — centre-distance ≥ r_i + r_j, no two discs intersect;
+   (B) the whole formation stays INSIDE the observatory district frame (no spill
+       past the plate); and (C) the GENERAL column-collapse GUARD fires LOUD when a
+       crowded district would otherwise stack one crushed column. ── */
+function observatoryRingsSelfTest() {
+  const SRC = path.join(__dirname, '..', '..', 'index.src.html');
+  const src = fs.readFileSync(SRC, 'utf8');
+  const a = src.indexOf('const PLACES = ['), b = src.indexOf('\n];', a);
+  if (a < 0 || b < 0) { console.log('  (could not read live PLACES — skipping observatory rings)'); return; }
+  // eslint-disable-next-line no-eval
+  const LIVE = eval('(' + src.slice(a + 'const PLACES = '.length, b + 2) + ')').filter(p => !p.locked);
+  const obs = LIVE.filter(p => p.district === 'observatory');
+  const s = Layout.solve(LIVE);
+  console.log('\n=== OBSERVATORY RINGS (the rise as a contour-map · #275) — HARD PASS ===');
+
+  // the foot CIRCLE (backing) of each observatory room: a tower draws its inscribed
+  // circle directly; a non-tower's backing is the inscribed circle of its square.
+  function circ(f) {
+    return f.r != null ? { cx: f.x, cy: f.y, r: f.r }
+      : { cx: f.x + f.w / 2, cy: f.y + f.h / 2, r: Math.min(f.w, f.h) / 2 };
+  }
+  const circles = obs.map(o => ({ id: o.id, ...circ(s.foot[o.id]) }));
+
+  // (A) PAIRWISE-DISJOINT backings: every centre-distance ≥ r_i + r_j.
+  let minSlack = Infinity, worstPair = null, disjoint = true;
+  for (let i = 0; i < circles.length; i++) for (let j = i + 1; j < circles.length; j++) {
+    const ci = circles[i], cj = circles[j];
+    const d = Math.hypot(ci.cx - cj.cx, ci.cy - cj.cy);
+    const slack = d - (ci.r + cj.r);                 // ≥ 0 ⇔ discs don't intersect
+    if (slack < minSlack) { minSlack = slack; worstPair = ci.id + '×' + cj.id; }
+    if (slack < -1e-6) { disjoint = false; console.log('    BACKING-OVERLAP', ci.id, '×', cj.id, 'slack=' + slack.toFixed(2)); }
+  }
+  if (!disjoint) fail++;
+  console.log('  (A) pairwise-disjoint backings (' + obs.length + ' rooms, ' +
+    (obs.length * (obs.length - 1) / 2) + ' pairs): ' +
+    (disjoint ? '✓ NO two foot circles intersect' : '✗ SEE OVERLAPS') +
+    '  [tightest gap ' + minSlack.toFixed(2) + 'px @ ' + worstPair + ']');
+
+  // (B) INSIDE THE DISTRICT FRAME: every backing circle is enclosed by the
+  //     observatory district rect (no spill past the plate frame).
+  const dr = s.districtRects.find(d => d.district === 'observatory');
+  let inFrame = true;
+  for (const c of circles) {
+    const ok = c.cx - c.r >= dr.x - 0.5 && c.cx + c.r <= dr.x + dr.w + 0.5 &&
+               c.cy - c.r >= dr.y - 0.5 && c.cy + c.r <= dr.y + dr.h + 0.5;
+    if (!ok) { inFrame = false; console.log('    SPILL', c.id, 'circle escapes the frame'); }
+  }
+  // and the district frame itself stays inside the declared region (no plate spill).
+  const reg = Layout.DISTRICTS.observatory.region;
+  const frameInRegion = dr.x >= reg.x - 0.5 && dr.y >= reg.y - 0.5 &&
+    dr.x + dr.w <= reg.x + reg.w + 0.5 && dr.y + dr.h <= reg.y + reg.h + 0.5;
+  if (!inFrame || !frameInRegion) fail++;
+  console.log('  (B) formation inside the district frame: ' +
+    (inFrame ? '✓ every backing ⊆ frame' : '✗ a backing spills') + ', ' +
+    (frameInRegion ? '✓ frame ⊆ region (no plate spill)' : '✗ frame spills past the region'));
+
+  // (C) the COLUMN-COLLAPSE GUARD: a crowded grid district (NOT the observatory)
+  //     with rooms that can't fit one column's width fails LOUD at build time.
+  let guardFired = false;
+  try {
+    Layout.solve([
+      ...Array.from({ length: 9 }, (_, i) => ({ id: 'g' + i, district: 'outbuilding', tier: 1, footprint: 'shed', order: i }))
+    ]);
+  } catch (e) { guardFired = /collapse|column/.test(e.message); }
+  if (!guardFired) fail++;
+  console.log('  (C) column-collapse guard fires for a crowded grid district: ' +
+    (guardFired ? '✓ build-error LOUD (no silent overlap)' : '✗ guard did NOT fire'));
+
+  console.log('  ── OBSERVATORY RINGS: ' +
+    (disjoint && inFrame && frameInRegion && guardFired ? '✓ ALL CLAIMS PASS' : '✗ SEE FAILURES ABOVE') + ' ──');
+}
+observatoryRingsSelfTest();
 
 /* ════════════════════════════════════════════════════════════════════════════
    PLATES — "More Than One Front Door" (#262). A HARD PASS section (unlike the
