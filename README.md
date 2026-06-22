@@ -453,6 +453,15 @@ footer — standalone tools, toys & tales, each self-contained:
   binomial); add rows and it smooths toward the normal. The self-test proves the ideal is exactly binomial
   and that the simulation converges to it — and that a *wrong* distribution is correctly rejected (the test
   has teeth). Order emerging from randomness, made visible.
+- **[The Birthday Bench](https://bman654.github.io/the-workshop/birthday/)** — the Numbers Room's **birthday
+  paradox**, made a thing you *seat*: a pegboard of 365 brass pegs above a growing oak bench. Seat guests one
+  at a time and each hangs a tag on the peg of their birthday — and around the **23rd** guest a peg *rings*,
+  because a clash needs only one coincidence among the C(n,2) pairs. A faint ghost-row of ~180 chairs you'll
+  never reach makes the surprise **spatial**, never a plotted curve. Pull the lever and a fresh party rings
+  near 23 again and again; turn the dial and a twin-needle gauge shows the answer riding **√d**. The self-test
+  proves thresholdN(365)=23, P(@23)=0.5073>½ and P(@22)=0.4757<½, that a Monte-Carlo of the same seating
+  converges to the exact probability, the one-day calendar rings on guest 2, and the naive 183 guess is wrong
+  by an order of magnitude. Kin to the Galton Board next door — same seeded dice, a different law.
 - **[The Straightedge](https://bman654.github.io/the-workshop/linkage/)** — the estate's first **linkage**:
   can you draw a straight line with only pivots and rigid rods? In 1864 Peaucellier proved you can, and here
   it *turns* — a crank rotates, and through a rhombus and two long arms the **Peaucellier–Lipkin** linkage
