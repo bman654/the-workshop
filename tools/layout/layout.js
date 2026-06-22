@@ -200,6 +200,17 @@ var Layout = (function () {
      assertGroundsWingsDisjoint — clear of every footprint, every catalog star, AND
      mutually DISJOINT from amusements, works and every other wing region. */
   GROUNDS_WINGS['figures-you-construct'] = { x: 790, y: 336, w: 168, h: 232 };
+  /* FOUNDRY — The Casting Floor, the estate's CASTING HOUSE: a pinned mold (Dirichlet
+     rim) is poured full of molten chaos, then RELEASED to cool and forget the pour,
+     relaxing to the one harmonic field its boundary allows; a bead then rides −∇T to
+     a cold gate. A POTENTIAL-FIELD kin to THE WORKS (heat → form): seated in the open
+     SOUTH working band directly BELOW The Works (its solved rect ends ~y708) and RIGHT
+     of the number wing (solved ~x591), in the clear lower-central lot. Sized for ≥4
+     growth lots (the named-dark benches: a Wave Front, a Streamline Cast, a Charge
+     Mold). FINALIZED via smoke.cjs's live Layout.solve + assertGroundsWingsDisjoint —
+     clear of every footprint, every catalog star, AND mutually DISJOINT from The Works,
+     induction, the number wing and every other grounds wing region. */
+  GROUNDS_WINGS.foundry = { x: 706, y: 714, w: 200, h: 96 };
 
   /* ── THE WING-ON-WING DISJOINTNESS GUARD (#283). Nothing used to assert that two
      grounds wings never shared the SAME DRAWN GROUND. Each wing was budgeted + checked
@@ -267,6 +278,7 @@ var Layout = (function () {
     arrow:       { label: 'THE ARROW WING',     accent: '#c9a24a' },
     'curved-country': { label: 'CURVED COUNTRY', accent: '#caa15a' },
     induction:   { label: 'ELECTROMAGNETISM', accent: '#7fd4ff' },
+    foundry:     { label: 'THE FOUNDRY',        accent: '#e6a13a' },
     'drawing-engines': { label: 'DRAWING ENGINES', accent: '#c9a24a' },
     'figures-you-construct': { label: 'FIGURES YOU CONSTRUCT', accent: '#6f9fc0' },
     'kinetics-sound': { label: 'KINETICS & SOUND', accent: '#d8a94a' },
