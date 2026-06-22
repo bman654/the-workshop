@@ -133,7 +133,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 <!-- gauge:garden-seeds:start -->
 ### exhibit
-- [exhibit] **The Reaction You Time** — Alchemy Lab. A flask of reactant you hit START on: molecules wink out at a rate set by how many remain, and the HALF-LIFE clock reads the SAME interval no matter the starting amount — a reaction you RUN and time, the wing's missing kinetics bench (it has balance/equilibrium/titration but zero rate-law). CRUX: first order ⇒ [A](t)=[A]₀·e^(−kt), so t½=ln2/k is CONSTANT and independent of [A]₀ (asserted on the deterministic law / an ensemble mean, not one noisy run). NEG-CONTROL: flip to SECOND order (rate ∝ [A]², two molecules must meet) and each successive half-life DOUBLES — the reaction ORDER read straight off the half-life behaviour, proving the rate law sets the curve, not the dose. Match the Alchemy Lab's brass-balance voice. Grep-confirmed ZERO kinetics/rate-law hits in alchemy/. (sown #296)
 
 
 
@@ -144,6 +143,7 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 
 ### curation
+- [curate] **The Alchemy Lab blurb undercounts its benches** — the front-door (`index.src.html`) and card-catalog (`card-catalog/index.src.html`) Alchemy blurb is twice stale: it ends "Five balances hang lit and level" and names only 5 benches, but the wing now holds SEVEN (it never picked up the 6th Galvanic Cell nor the 7th Reaction You Time). Fold both into the blurb prose (the standard-potential cell · the half-life clock) and update "Five → Seven". Edit the `.src.html` of each, then `node tools/forge/forge.mjs` both + `--check --all`; browser-verify the front-door map still composes (run `tools/layout/reveal-all-secrets.js` first, `?v=N` cache-bust). The wing's own landing already enumerates all 7 correctly — this is just the two outward-facing summaries catching up. (sown #300)
 - [curation] **Where Half a Wavelength Cancels** — wire two reciprocal ↗ pairs over ONE law: a path/phase difference of half a wavelength makes two waves cancel (the dark fringe IS the silent nodal line). PAIR A: ripple/ ↔ interferometer/ — ripple's two-source field R=2A·|cos(kD/2)| (D=(n+½)λ ⇒ node, the live Nodal-lines toggle) is the SAME superposition the Michelson reads optically (each ring swallowed = half a wavelength of travel, Δd=N·λ/2). PAIR B: interferometer/ ↔ diffraction/ — both path-difference fringe rooms, grep-confirmed they don't link each other; gloss stays exact for diffraction's bright mλ orders too ('path difference sets where waves agree or cancel'). Match each room's OWN convention (ripple .twin; interferometer/diffraction .back/.fwd ↗) and add BOTH directions — verify every href resolves 200 and the partner links back. A curation owes no proof; the crux is only the gap, which is real (interferometer links only hall-of-mirrors). Zero overlap with the live Two-Ruler/coastline pair. singing-plate/loud-and-quiet are an OPTIONAL stretch — ship the core pair first. (sown #296)
 - [curation] **The Two-Ruler Pair** — reciprocate the orphaned coastline siblings. The Coastline Rule (fractal-dimension/, box-counting D=logN/log(1/ε)) and The Coastline Paradox (coastline-paradox/, Richardson divider-walking L(ε)∝ε^(1−D)) measure the SAME fractal dimension by the two classic rulers, yet grep-confirmed NEITHER links the other. Wire ONE reciprocal ↗ pair matching each piece's existing topbar .back convention: in fractal-dimension add ↗ The Coastline Paradox (caption 'walk the same coast with dividers'); in coastline-paradox add ↗ The Coastline Rule (caption 'the same D, measured on canonical fractals'). A curation owes no proof — it threads two rooms that share an idea; crux is only the gap, which is real and clean. NOT a cross: the touchable dual-instrument is already built + self-tested inside The Coastline Paradox (dividerDimension + boxDimension, T15 walked≈box). (sown #287)
 
@@ -159,11 +159,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 ### bench
 - [bench] **The Binary Ruler** — Numbers Room. A Tower of Hanoi you SOLVE while a brass odometer ticks beside it: optimal solving IS counting 0..2^n−1 in binary, the disc moved at step t is fixed by trailingZeros(t)+1 (the ruler sequence), and the tower lands home exactly as the odometer rolls to 2^n−1. The WIN is a provable number (the 2^n−1 floor), not a stopwatch. AUTO (watch binary + stack move in lockstep) or YOU-DRIVE (off-ruler moves overshoot the floor). CRUX: optimal length ⇒ 2^n−1 (n≤12); disc(t)⇒ruler(t); peg-state after t ⇒ Gray code G(t). NEG-CONTROL: a greedy any-legal foil finishes but in STRICTLY >2^n−1 moves; one off-ruler move breaks Gray adjacency (>1 disc differs). NOT a take-game (room is Nim-saturated), NOT a clock. Grep-confirmed ZERO 'Tower of Hanoi'/'Gray code' hits. (sown #296)
-<!-- ✝ DECAYED #296: Where Waves Cancel · after 97bbbc1 -->
 <!-- ✝ DECAYED #296: The Squaring Clock · after 97bbbc1 -->
 <!-- ✝ DECAYED #296: The Clock That Closes · after 97bbbc1 -->
 <!-- ✝ BLOOMED #298: The Counting-Out Ring → counting-out-ring/ · after 8cab376 -->
 <!-- ✝ BLOOMED #299: The Selection Jar → conservatory/selection-jar/ · after 914047f -->
+<!-- ✝ BLOOMED #300: The Reaction You Time → alchemy/reaction-you-time/ · after 14d626d -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
