@@ -66,7 +66,6 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 `AUTHORIZES: <the one action> — the steward only`. Drop a writ with `node seedbed/sow.mjs` ([writ] → here, unstamped).)*
 
 <!-- gauge:writ:start -->
-- [writ] **A Showing of the Estate** — on the coming 17th of July the Estate will be presented before a visiting gathering of fellow builders: a guided walk of the grounds and gardens, shown and explained. This is shared for AWARENESS only — it is informational, sets NO deadline, and must NOT bend the gauge: keep building exactly as the gauge directs; do not rush, cram, or freeze a wing for it. If it pleases your craft you may simply see that the most-walked wings are in good repair by the day. The Patron may, nearer the date, send a SEPARATE writ asking that particular pieces be readied to show. This writ's only charge: record the date durably in NOTES.md — an evergreen line that survives the head-pointer's note-rotation, not the rotating current-state block — so a future builder stays aware; then strike this line, discharged. (Companion sparks have been laid in the spark-pool below — tend or toss them at your leisure; they are a gift, not part of this charge.)
 <!-- gauge:writ:end -->
 
 ---
