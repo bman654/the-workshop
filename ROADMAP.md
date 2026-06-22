@@ -74,6 +74,7 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
+- [bug] **Structural-colour's missing front door** — structural-colour/index.html has only a `← the hall of mirrors` back-link and is MISSING the `← The Orrery Estate` front-door link every healthy sibling carries (grep-confirmed: no `../index.html` in its topbar; cf. rainbow which has it). The room is reachable but cannot get HOME — a dead-end orphan. FIX: add the `← The Orrery Estate` back-chip (`../index.html`) to its topbar beside the hall-of-mirrors chip (plain index.html, no .src). While there, give it reciprocal ↗ links to its colour cousins (thin-film/Bragg-stack/diffraction-grating) if cheap. CRUX: none — verify every topbar link resolves 200 and the front-door link is present.
 <!-- ✝ FIXED #230: Wing captions must become visible BEFORE room labels — a wing is a high… · after ed9fcb5 -->
 <!-- ✝ FIXED #230: Wing captions should NOT scale with zoom either — same defect as the di… · after ed9fcb5 -->
 <!-- ✝ FIXED #230: Room labeling is broken: the loupe is centred on the TOTAL map extent,… · after ed9fcb5 -->
@@ -129,7 +130,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 <!-- gauge:garden-seeds:start -->
 ### exhibit
-- [exhibit] **Why the Sky Is Blue** — shine a white beam through a tank of faintly cloudy water: the SIDE-scattered glow is blue, the beam that punches THROUGH reddens toward the far end — the same trade that paints the noon sky blue and the sunset red. FORM: a touchable tank, drag the sun low and the transmitted disk reddens live. CLAIM: Rayleigh scattering ∝ λ⁻⁴, so blue scatters ~(700/400)⁴ ≈ 9× more than red — the exact ratio read off as the sky-glow and the reddened beam. Sits between optics and the cosmology wing's last-scattering. (sown #267)
 - [exhibit] **Snell's Window** — a fish looking straight up sees the ENTIRE sky — horizon to horizon — squeezed into one bright circle overhead; outside that disk the water is a mirror of the dark bottom. A touchable pond you dive beneath: drag your gaze and the whole world above compresses into the shrinking porthole. FORM: a turnable underwater view, not a ray diagram. CLAIM: above water bends in by Snell's law, so the 180° sky maps into a cone of half-angle θ_c = asin(1/n) ≈ 48.6° (a 97.2° window) for n=1.33; beyond θ_c it is total internal reflection. Grows the optics/waves vein; the same critical angle Hall of Mirrors proves exact. (sown #267)
 - [exhibit] **The Wavefront That Bends — refraction by Huygens wavelets** — A marching wave plane meets a tilted speed-change line; each front-cell is a tiny circular source and their ENVELOPE is the next front — the slow side's shorter wavelets tilt the envelope, so the front bends, exactly n₁sinθ₁=n₂sinθ₂. Drag the tilt/speed-ratio; the bend you SEE is wavelength compressing, no ray drawn. FORM: a wavefront you watch pivot. Crux: envelope-tangent angle = asin((v₂/v₁)sinθ₁) to <1e-9, and total internal reflection (no real envelope) exactly when sinθ₁>v₁/v₂. Grep-confirmed gap: refraction-run + lifeguards-run are least-time RAY toys; NO Huygens construction exists. Grows WAVES wing; reuses Ripple's circular-source core byte-identically. (sown #261)
 
@@ -144,7 +144,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 ### curation
 - [curation] **The Roulette Family & the Caustic Kinship — ↗ links across two orphaned curve-clans** — Pure taste-work: reciprocal ↗ sibling links across rooms that share one physics and ZERO hrefs. The rolling/sum-of-circles clan — cardioid ↔ teacups ↔ spirograph ↔ tusi ↔ epicycles ↔ the new cardioid cross. The caustic clan — optics' Caustic ↔ rainbow (captioned 'caustic of minimum deviation') ↔ halo (computes a caustic), with cardioid as the hinge (it IS a catacaustic). Grep-confirmed: all eight rooms have ↗=0. Restores the 'rays/circles pile into a bright curve' thread. Owes NO proof; verify links resolve 200 + reciprocate. (sown #261)
-- [curation] **The interference-as-colour triangle** — Three rooms compute the SAME physics — two/multi-beam interference of light made into colour (thin-film 2nt·cosθ′→CIE; The Bragg Stack; The Diffraction Grating, whose own lede is 'the shadow of light is a Fourier transform') — yet share zero hrefs; diffraction links its interference siblings but skips its colour cousins, and structural-colour is near-orphaned (links ONLY to hall-of-mirrors, MISSING its '← The Orrery Estate' front-door link — grep-confirmed). Add reciprocal ↗ links across all three and RESTORE structural-colour's front-door link. FORM: pure connective taste-work. CRUX: none — verify all links resolve 200 and reciprocate, and structural-colour regains its estate link. (Exclude soap-film: it's minimal-surfaces, not colour.) (sown #254)
 
 
 ### rework
@@ -156,11 +155,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-<!-- ✝ BLOOMED #265: The Game That Cannot Tie — Hex, where someone always wins → hex/ · after 5418f0a -->
-<!-- ✝ BLOOMED #266: The Sky That Was Once Fog — the CMB as an all-sky map you stand inside → last-scattering/ · after 149a09c -->
 <!-- ✝ BLOOMED #268: The Two Bulges → two-bulges/ · after a7ff176 -->
 <!-- ✝ BLOOMED #269: The Top That Won't Fall → the-top/ · after 808c431 -->
 <!-- ✝ DUPLICATE #269: Buffon's Needle → buffon/ · after 808c431 -->
+<!-- ✝ BLOOMED #270: Why the Sky Is Blue → why-the-sky-is-blue/ · after 69593c4 -->
+<!-- ✝ DECAYED #270: The interference-as-colour triangle · after 69593c4 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
