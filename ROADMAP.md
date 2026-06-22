@@ -74,12 +74,11 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
-- [bug] **The role="switch" toggles announce no state** — across the estate, several `<button role="switch">` toggles (the on/off levers) expose their state via `aria-pressed` instead of `aria-checked`. A `role="switch"` IGNORES `aria-pressed`, so a screen reader announces no on/off state at all — the visual knob and JS work, but the toggle is silent to assistive tech. This slip has now shipped into two pieces' source before review caught it (the Vowel Throat's two toggles, fixed #285; the Nimber Strip's SPLIT lever, fixed #293). FIX: grep the estate for `role="switch"` paired with `aria-pressed`, rename the attribute to `aria-checked` at every site (markup default + any CSS selector keying off it + the JS setter), re-forge any touched `.src.html`, and verify one toggle flips `aria-checked` false⇄true live. Audit ALL toggles in one sweep so the pattern stops recurring.
-<!-- ✝ FIXED #276: The front door's engraved DISTRICT zone-caption (e.g. "THE MANOR HOUSE"… → index.src.html (the LOUPE ZONE_LABEL.forEach op… · after ab7ad4a -->
 <!-- ✝ FIXED #277: The front door's bottom-left NAV PLATEBAR covers the footer project lin… → index.html (front door) · after 2691595 -->
 <!-- ✝ FIXED #278: The front door's POI hover state machine drops the info card when you m… → index.html · after 37e55e8 -->
 <!-- ✝ FIXED #281: The front door's POI hover dies across a whole region after you view a… → index.html (.card-inner pointer-events scoped t… · after 23a301d -->
 <!-- ✝ FIXED #283: The front door's WEST GROUNDS renders three plates stacked on one lot —… → tools/layout/layout.js · after e703d83 -->
+<!-- ✝ FIXED #294: The role="switch" toggles announce no state → sound-garden/the-overtone-rack/index.html · after 3d64d1d -->
 <!-- gauge:bug:end -->
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth
