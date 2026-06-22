@@ -325,6 +325,19 @@ footer — standalone tools, toys & tales, each self-contained:
   field is physically exact — the rendered tank *equals* the analytic superposition to a billionth,
   and the interference maxima and minima land precisely where the path-difference math demands. Where
   Caustic traces light as rays, Ripple is the wave story — a sandbox of waves you steer.
+- **[The Pool That Dances](https://bman654.github.io/the-workshop/pool/)** — Ripple's physical
+  water-cousin, in the Hall of Mirrors' optics wing: a top-down **sunlit pool** whose floor shows a
+  **live caustic net** you reshape by dragging the water. The sun pours straight down and every wrinkle
+  on the surface is a tiny lens, focusing the parallel sun into bright filaments on the floor — a
+  caustic. **Pinch** a bump and a knot of light blooms beneath it; **rake** a wave-train and the net
+  combs into rolling bright ribbons; **smooth** it and the floor washes even. No plotted graph anywhere
+  — the dancing caustic itself is the medium you touch. It keeps the workshop's promise (in-page pill +
+  a headless Node twin): the bright net lies on the **fold** — the zero-set det J = 0 of the
+  Snell-refracted surface→floor map — with the brightest floor pixels sitting on the fold's image; total
+  floor-light is **conserved** across any deformation (refraction only redistributes the sun; conserved
+  at fixed time, each frame); and the flat-surface neg-control gives the identity map J ≡ 1, a uniform
+  floor — made touchable by the *Still the pool* button. Where the light-bench traces single rays
+  through one lens, here the whole field focuses at once.
 - **[Harmonograph](https://bman654.github.io/the-workshop/harmonograph/)** — a Victorian **pendulum
   drawing-machine**, kin to Caustic and Ripple. Two decaying pendulums per axis sway the pen, and their
   combined motion traces the looping Lissajous-into-spiral figures that slowly settle to the centre. Set
