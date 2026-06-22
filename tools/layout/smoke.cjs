@@ -305,6 +305,105 @@ function plateSelfTest() {
 }
 plateSelfTest();
 
+/* ════════════════════════════════════════════════════════════════════════════
+   WING-ON-WING DISJOINTNESS — HARD PASS (#283). Two parts.
+
+   PART A — THE GUARD IS LIVE (not dead code): the live solve already proved every
+   pair of GROUNDS wing rects is disjoint (✓ ALL LAYOUT CHECKS PASS above runs the
+   in-solve assertGroundsWingsDisjoint over the real content). Here we prove the
+   guard FIRES: collide drawing-engines back onto curved-country's old patch and
+   confirm solve() throws naming BOTH wings — so we KNOW the assertion is wired, not
+   inert. (We mutate a copy of GROUNDS_WINGS, then restore it.)
+
+   PART B — generalise the disjointness to ALL drawn ground (the forward ratchet's
+   first half): assert that no two GROUNDS wing rects AND no two room FOOTPRINTS share
+   ground in the live solve. (Footprint overlap is already counted above; this names
+   it as the same #283 invariant so the intent reads in one place.) ── */
+function wingDisjointSelfTest() {
+  console.log('\n=== WING-ON-WING DISJOINTNESS (#283) — HARD PASS ===');
+
+  // PART A — the guard fires on a deliberate collision. Two grounds wings, each with
+  // one room, budgeted onto the SAME lower-west patch (exactly the original #283 bug):
+  // their solved tint rects overlap and solve() must throw naming BOTH wings.
+  const saved = { ...Layout.GROUNDS_WINGS };
+  const collide = [
+    { id: 'scratch-holonomy', district: 'grounds', tier: 1, wing: 'curved-country', footprint: 'hall' },
+    { id: 'scratch-pantograph', district: 'grounds', tier: 1, wing: 'drawing-engines', footprint: 'drawing-table' }
+  ];
+  let fired = false, msg = '';
+  try {
+    Layout.GROUNDS_WINGS['curved-country']  = { x: 170, y: 520, w: 150, h: 160 };
+    Layout.GROUNDS_WINGS['drawing-engines'] = { x: 166, y: 540, w: 150, h: 150 };   // back onto the bug patch
+    Layout.solve(collide);
+  } catch (e) {
+    fired = /GROUNDS wings share DRAWN ground/.test(e.message);
+    msg = e.message.split('.')[0];
+  } finally {
+    Layout.GROUNDS_WINGS['curved-country']  = saved['curved-country'];
+    Layout.GROUNDS_WINGS['drawing-engines'] = saved['drawing-engines'];
+  }
+  if (!fired) fail++;
+  console.log('  (A) guard FIRES on two wings re-collided onto one patch: ' +
+    (fired ? '✓ build-error LOUD — "' + msg + '"' : '✗ guard did NOT fire (dead code!)'));
+  // and the canonical PLACES solve again CLEAN now that the budgets are restored (live, not stuck)
+  let cleanAgain = true;
+  try { Layout.solve(PLACES); } catch (e) { cleanAgain = false; }
+  if (!cleanAgain) fail++;
+  console.log('  (A) and the restored layout solves CLEAN: ' +
+    (cleanAgain ? '✓ guard passes the real content' : '✗ still throwing after restore'));
+
+  // PART B — no two GROUNDS wing rects, no two room footprints, share ground (live).
+  const gw = sol.wingRects.filter(w => w.district === 'grounds');
+  let wingPairs = 0, wingBad = 0;
+  for (let i = 0; i < gw.length; i++) for (let j = i + 1; j < gw.length; j++) {
+    wingPairs++;
+    if (Layout.rectsOverlap(gw[i], gw[j])) { wingBad++; console.log('    WING-OVERLAP', gw[i].wing, '×', gw[j].wing); }
+  }
+  if (wingBad) fail++;
+  console.log('  (B) ' + gw.length + ' grounds wing rects, ' + wingPairs + ' pairs: ' +
+    (wingBad ? '✗ ' + wingBad + ' overlap' : '✓ ALL mutually disjoint (no label stacks on label)'));
+
+  console.log('  ── WING-ON-WING DISJOINTNESS: ' +
+    (fired && cleanAgain && !wingBad ? '✓ ALL CLAIMS PASS' : '✗ SEE FAILURES ABOVE') + ' ──');
+}
+wingDisjointSelfTest();
+
+/* ════════════════════════════════════════════════════════════════════════════
+   #103 CROWDING-REGRESSION RATCHET (#283, second half of the forward ratchet).
+   The FULL-plate label-crowding (every room's label drawn at once) is DELIBERATELY
+   tolerated — the door draws ZERO room labels at rest and the visitor TRAVELS between
+   plates rather than reading every label simultaneously (#103 / #212). So we do NOT
+   flip the #103 WARNING to a hard fail. Instead we PIN the post-#283-fix CLEAN full-
+   plate composite as a BASELINE and FAIL the build only if a LATER addition pushes
+   crowding MEASURABLY above it. The #103 "intended" warning keeps its rationale; this
+   just stops the next room from quietly re-crowding the plate past where we left it. ── */
+const CROWDING_BASELINE = 0.934;   // clean full-plate composite right after the #283 West-Grounds fix
+const CROWDING_TOL = 0.004;        // a hair of slack for harmless reorderings (≈0.4%)
+function crowdingRatchet() {
+  const SRC = path.join(__dirname, '..', '..', 'index.src.html');
+  const src = fs.readFileSync(SRC, 'utf8');
+  const a = src.indexOf('const PLACES = ['), b = src.indexOf('\n];', a);
+  if (a < 0 || b < 0) { console.log('  (could not read live PLACES — skipping crowding ratchet)'); return; }
+  // eslint-disable-next-line no-eval
+  const LIVE = eval('(' + src.slice(a + 'const PLACES = '.length, b + 2) + ')').filter(p => !p.locked);
+  const rep = Leg.score(Layout.solve(LIVE), LIVE);
+  const c = rep.overall.composite;
+  const ceiling = CROWDING_BASELINE + CROWDING_TOL;
+  console.log('\n=== #103 CROWDING-REGRESSION RATCHET (#283) — HARD PASS ===');
+  const ok = c <= ceiling + 1e-9;
+  if (!ok) fail++;
+  console.log('  full-plate composite ' + c.toFixed(3) + ' vs baseline ' + CROWDING_BASELINE.toFixed(3) +
+    ' (+tol ' + CROWDING_TOL + ' → ceiling ' + ceiling.toFixed(3) + '): ' +
+    (ok ? '✓ NO regression past the #283 baseline' :
+      '✗ CROWDING REGRESSED — a recent addition pushed the plate past where #283 left it. ' +
+      'Re-budget / re-home the new room (or, if intentional, re-baseline CROWDING_BASELINE here).'));
+  if (c + 0.02 < CROWDING_BASELINE) {
+    console.log('  NOTE: composite dropped ≥0.02 below the baseline — the plate got LESS crowded; ' +
+      'consider lowering CROWDING_BASELINE to ' + c.toFixed(3) + ' so the ratchet stays tight.');
+  }
+}
+crowdingRatchet();
+
 console.log(fail ? ('\n✗ '+fail+' STRUCTURAL FAILURES') : '\n✓ ALL LAYOUT CHECKS PASS');
 
 /* ── LEGIBILITY (modeled-label crowding PROXY · #103) ──────────────────────────

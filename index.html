@@ -2439,7 +2439,7 @@ var Layout = (function () {
     number:      { x: 470, y: 664, w: 224, h: 120 },   // lower-left park (Numbers Room) — lifted off the bottom margin
     works:       { x: 700, y: 540, w: 300, h: 222 },   // working edge, south of the house — lifted, tightened
     glasshouses: { x: 240, y: 560, w: 230, h: 130 },   // living systems (Strange Garden) west-low
-    amusements:  { x: 910, y: 240, w: 280, h: 280 }    // upper-right court (arcade + maze) — pulled toward the house, de-streaked
+    amusements:  { x: 910, y: 240, w: 190, h: 280 }    // upper-right court (arcade + maze); width 280→190 (#283) so the budget ends at x1100, disjoint from horology (x1100+). The old 280 budget overlapped horology, and a SPARSE amusements pack (e.g. the 3-room hours.test fixture) packed wide enough that its SOLVED rect clipped horology — the new wing-disjoint guard caught it. The live 9 rooms still pack one tidy column at x986-1024.
   };
   /* the Conservatory (living-systems wing, glasshouse-wing footprint) sits on the
      east grounds; give it its own east-band sub-region distinct from the western
@@ -2479,18 +2479,27 @@ var Layout = (function () {
      lots (the obvious siblings: an LC tank, a transformer, an eddy brake, a
      betatron). Builder finalises exact x/y via smoke.cjs's live Layout.solve —
      verified clear of every footprint + catalog star (the works block ends ~x1000,
-     amusements begins ~x910 upper-right; this lower-mid band is open). */
-  GROUNDS_WINGS.induction = { x: 600, y: 690, w: 210, h: 120 };
+     amusements begins ~x910 upper-right; this lower-mid band is open).
+     RE-BUDGETED (#283) when The Lodestone Plate (iron-filings) joined the wing: three
+     rooms pack as a short scaled column; the region is nudged left+narrowed to x582,130
+     so the column seats at x621-673 — clear of the number wing (ends ~x592) on its left
+     and DISJOINT from the works wing rect (its bottom-left corner reached ~y708) above,
+     now enforced by assertGroundsWingsDisjoint. Still west of the x720 midline, so all
+     three EM rooms ride the West Grounds plate together. */
+  GROUNDS_WINGS.induction = { x: 582, y: 686, w: 130, h: 124 };
   /* DRAWING-ENGINES — The Drawing Room, the estate's COMPUTE-BY-DRAWING wing (a
      Scheiner pantograph that copies your hand at a dialed scale). Kin to the other
      brass drawing-engines (linkage's exact line, the trammel's ellipse, the
-     spirograph's rosette). Seated in the open west-central park BELOW the optics /
-     waves column (optics ends ~y524, waves ~y542) and LEFT of the number wing
-     (x470+): a clear lower-west band. Sized for ≥4 growth lots (the named-dark
-     siblings: Hart's inversor, a conchoidograph — plus room for two more). Builder
-     FINALISED exact x/y via smoke.cjs's live Layout.solve, verified clear of every
-     footprint + catalog star + the legibility conscience. */
-  GROUNDS_WINGS['drawing-engines'] = { x: 166, y: 540, w: 150, h: 150 };
+     spirograph's rosette). Seated in the open LOWER-CENTRAL west park, in the clear
+     band BELOW the western glasshouses (their wing ends ~y684) and LEFT of the number
+     wing (x574+): a genuinely open lower-west lot. Sized for ≥4 growth lots (the
+     named-dark siblings: Hart's inversor, a conchoidograph — plus room for two more).
+     MOVED here (#283) off its old x166,y540 anchor, which OVERLAPPED curved-country
+     (both held one room near x170 → the West-Grounds label-stack bug). Re-budgeted via
+     smoke.cjs's live Layout.solve: this lot is clear of every footprint, every catalog
+     star, AND mutually DISJOINT from curved-country and every other wing region (the
+     new pairwise-disjoint guard now enforces that — see assertGroundsWingsDisjoint). */
+  GROUNDS_WINGS['drawing-engines'] = { x: 316, y: 688, w: 150, h: 118 };
   /* WAVES — the wave-INTERFERENCE family (Ripple, the silent tank, + The Loud and the
      Quiet Walk, the same field sung to your ear). Kin to OPTICS (both are "what light/
      waves DO"), but a distinct family: interference & superposition, not geometric
@@ -2502,6 +2511,47 @@ var Layout = (function () {
      live Layout.solve (the fallback crammed it into the curved-country/glasshouse band;
      this west-central band seats both tank footprints clean). */
   GROUNDS_WINGS.waves = { x: 398, y: 392, w: 168, h: 150 };
+
+  /* ── THE WING-ON-WING DISJOINTNESS GUARD (#283). Nothing used to assert that two
+     grounds wings never shared the SAME DRAWN GROUND. Each wing was budgeted + checked
+     only against room footprints and catalog stars — never against ANOTHER wing's
+     rendered region — so the loose GROUNDS_WINGS budget rectangles (which legitimately
+     OVERLAP each other; the packer scales each wing's content down into its own slice)
+     hid a real collision: curved-country {x170,y520} and drawing-engines {x166,y540}
+     were budgeted onto almost the same patch of lower-west park, so their SOLVED tint
+     rects (x176–314,y549–651 vs x172–310,y564–666) genuinely overlapped and the West-
+     Grounds plate stacked The Holonomy Walk on The Drawing Room with their engraved wing
+     labels (CURVED COUNTRY / DRAWING ENGINES) printed nearly on top of each other.
+
+     THE RIGHT INVARIANT is on the DRAWN geometry, not the loose anchors: every pair of
+     SOLVED grounds wing rects (the tinted boundary + its engraved label that actually
+     ship) must be mutually disjoint. A shared rect is a HARD BUILD ERROR (not a warning),
+     naming BOTH wings + their solved rects so the next collision is obvious. Pure axis-
+     aligned overlap. Scoped to GROUNDS because the OBSERVATORY's concentric-ring wings
+     (#275) intentionally use overlapping SQUARE bboxes that are disc-disjoint — a rect
+     test there would false-fire. Run inside solve() (below) on the real content, AND
+     re-exported so smoke.cjs can prove it FIRES on a deliberately-collided wing. ── */
+  function rectsOverlap(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+  function assertGroundsWingsDisjoint(solution) {
+    var gw = solution.wingRects.filter(function (w) { return w.district === 'grounds'; });
+    for (var i = 0; i < gw.length; i++) {
+      for (var j = i + 1; j < gw.length; j++) {
+        var A = gw[i], B = gw[j];
+        if (rectsOverlap(A, B)) {
+          var fmt = function (w) {
+            return '"' + w.wing + '" {x:' + Math.round(w.x) + ',y:' + Math.round(w.y) +
+              ',w:' + Math.round(w.w) + ',h:' + Math.round(w.h) + '}';
+          };
+          throw new Error('Layout: two GROUNDS wings share DRAWN ground — ' + fmt(A) +
+            ' overlaps ' + fmt(B) + '. Their tint rects + engraved labels would print on ' +
+            'top of each other (the West-Grounds #283 bug). Re-budget ONE wing in ' +
+            'GROUNDS_WINGS to a clear, mutually-DISJOINT band (verify via smoke.cjs).');
+        }
+      }
+    }
+  }
 
   /* ── WING_META: display label, representative accent (for tint + engraved
      label), and optional grows:N reserved-lot count. An unknown wing is allowed
@@ -2780,6 +2830,11 @@ var Layout = (function () {
     placeObservatory(byDistrict.observatory || [], solution);
     placeSimpleDistrict('outbuilding', byDistrict.outbuilding || [], solution);
     placeSimpleDistrict('cavern', byDistrict.cavern || [], solution);
+
+    // ── HARD GUARD (#283): no two GROUNDS wings may share DRAWN ground (tint rect +
+    //    engraved label). A build error here means a GROUNDS_WINGS budget collided a
+    //    sibling's slice — re-budget one wing to a clear band. See the guard's header. ──
+    assertGroundsWingsDisjoint(solution);
 
     // ── 7: the circulation graph ──
     buildGraph(solution);
@@ -3234,7 +3289,9 @@ var Layout = (function () {
     wingAccent: wingAccent,
     plates: plates,
     relayPlate: relayPlate,
-    PLATE_META: PLATE_META
+    PLATE_META: PLATE_META,
+    assertGroundsWingsDisjoint: assertGroundsWingsDisjoint,
+    rectsOverlap: rectsOverlap
   };
 })();
 
@@ -4665,7 +4722,7 @@ const PLACES = [
   { id:"iron-filings", room:"The Lodestone Plate", piece:"Iron Filings", glyph:"🧲",
     accent:"#8fb6ff", href:"iron-filings/index.html", tag:"magnetic field plate",
     companion:null,
-    district:"grounds", tier:2, footprint:"iron-filings", prefer:["right","bottom"],
+    district:"grounds", tier:2, wing:"induction", footprint:"iron-filings", prefer:["right","bottom"],
     blurb:"A dark plate where a magnetic field becomes visible — drag bar-magnets across it and thousands of iron filings snap live into the field lines, threading pole to pole, fountaining from a lone north into the dark. Flip a pole and the whole texture re-knits. Set two like poles facing and hunt with your cursor for the saddle null — the one spot the field is zero and the filings have nowhere to point. Every line is an honest RK4 streamline of the exact superposed dipole field; the self-test proves ∇·B=0 everywhere — no line ever crosses or dies in mid-air — and a fictitious monopole turned on as a control makes the test go red." },
 
   { id:"lodestone-hall", room:"The Lodestone Hall", piece:"The Lodestone Hall", glyph:"🧲",
