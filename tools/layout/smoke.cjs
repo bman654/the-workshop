@@ -48,6 +48,7 @@ const PLACES = [
   { id:'lodestone-hall', district:'grounds', tier:1, wing:'induction', footprint:'coil', prefer:['right','bottom'] },
   { id:'bootstrap-bench', district:'grounds', tier:2, wing:'induction', footprint:'bootstrap-bench', prefer:['right','bottom'] },
   { id:'the-drawing-room', district:'grounds', tier:1, wing:'drawing-engines', footprint:'drawing-table', prefer:['bottom','right'] },
+  { id:'construction-bench', district:'grounds', tier:1, wing:'figures-you-construct', footprint:'construction-bench', prefer:['left','bottom'] },
   { id:'firmament', district:'observatory', tier:1, footprint:'tower' },
   { id:'relativity', district:'observatory', tier:1, wing:'moving-frame', footprint:'tower', prefer:'right' },
   { id:'first-light', district:'observatory', tier:1, wing:'cosmology', footprint:'tower', prefer:['left','bottom'] },

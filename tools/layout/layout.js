@@ -185,6 +185,21 @@ var Layout = (function () {
      live Layout.solve (the fallback crammed it into the curved-country/glasshouse band;
      this west-central band seats both tank footprints clean). */
   GROUNDS_WINGS.waves = { x: 398, y: 392, w: 168, h: 150 };
+  /* FIGURES-YOU-CONSTRUCT — The Construction Bench, the estate's straightedge-and-
+     compass STAGE: trisect 60° by hand, watch a brass power-of-2 standpipe refuse to
+     grow a rung for the degree-3 root, then flip a marked ruler and watch it LAND.
+     Neighbour to DRAWING-ENGINES (both turn geometry into a thing you make): there a
+     linkage draws ONE curve; here you ASSEMBLE a figure from intersections. Seated in
+     the OPEN central-east park band — in the genuinely STAR-FREE corridor RIGHT of the
+     manor house (its footprint ends ~x785), LEFT of the amusements column (begins
+     ~x966), and ABOVE The Works (begins ~y594). The crowded east-edge band held the
+     lone the-shepherd catalog star (x1130,y430) dead-centre; this central corridor is
+     clear of every catalog star. Sized for ≥4 growth lots (the named-dark siblings: a
+     Galois Cabinet, a double-the-cube origami bench, a Gauss–Wantzel regular-n-gon
+     table, a neusis/conics annex). FINALIZED via smoke.cjs's live Layout.solve +
+     assertGroundsWingsDisjoint — clear of every footprint, every catalog star, AND
+     mutually DISJOINT from amusements, works and every other wing region. */
+  GROUNDS_WINGS['figures-you-construct'] = { x: 790, y: 336, w: 168, h: 232 };
 
   /* ── THE WING-ON-WING DISJOINTNESS GUARD (#283). Nothing used to assert that two
      grounds wings never shared the SAME DRAWN GROUND. Each wing was budgeted + checked
@@ -253,6 +268,7 @@ var Layout = (function () {
     'curved-country': { label: 'CURVED COUNTRY', accent: '#caa15a' },
     induction:   { label: 'ELECTROMAGNETISM', accent: '#7fd4ff' },
     'drawing-engines': { label: 'DRAWING ENGINES', accent: '#c9a24a' },
+    'figures-you-construct': { label: 'FIGURES YOU CONSTRUCT', accent: '#6f9fc0' },
     'kinetics-sound': { label: 'KINETICS & SOUND', accent: '#d8a94a' },
     waves:       { label: 'WAVES',              accent: '#54d6d0' }
   };
