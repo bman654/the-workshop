@@ -74,12 +74,11 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
-- [bug] **Structural-colour's missing front door** — structural-colour/index.html has only a `← the hall of mirrors` back-link and is MISSING the `← The Orrery Estate` front-door link every healthy sibling carries (grep-confirmed: no `../index.html` in its topbar; cf. rainbow which has it). The room is reachable but cannot get HOME — a dead-end orphan. FIX: add the `← The Orrery Estate` back-chip (`../index.html`) to its topbar beside the hall-of-mirrors chip (plain index.html, no .src). While there, give it reciprocal ↗ links to its colour cousins (thin-film/Bragg-stack/diffraction-grating) if cheap. CRUX: none — verify every topbar link resolves 200 and the front-door link is present.
-<!-- ✝ FIXED #230: Room labeling is broken: the loupe is centred on the TOTAL map extent,… · after ed9fcb5 -->
 <!-- ✝ FIXED #230: A room detail popup with a lot of content grows past the viewport and g… · after ed9fcb5 -->
 <!-- ✝ FIXED #231: The Last Line and Tiltyard tiles in the Arcade room show no preview ima… → arcade/assets/thumbs/ · after 573351a -->
 <!-- ✝ FIXED #271: The 5-plate front door (#262 "More Than One Front Door") is a serious R… → /index.html (front door) · after 7747857 -->
 <!-- ✝ FIXED #272: The Card Catalog's "Register of Admissions" order is WRONG, and the ent… → card-catalog/ · after 2a91053 -->
+<!-- ✝ FIXED #273: Structural-colour's missing front door → structural-colour/ · after 5da97e9 -->
 <!-- gauge:bug:end -->
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth
