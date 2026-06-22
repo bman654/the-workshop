@@ -6006,8 +6006,24 @@ function buildPoi(r, opts){
   return a;
 }
 
+// BUG #230 — a long popup scrolls INSIDE the card (.card-inner is overflow:auto), so the
+// pointer must be able to LEAVE the POI and enter the card to scroll WITHOUT the card
+// dismissing. hideCard() is deferred by a short grace window; if the pointer lands on the
+// card in that window (cardEnter cancels the timer), the card stays. Leaving the card
+// (cardLeave) hides it for real. Pan/resize call hideCard(true) for an immediate dismiss.
+// BUG #278 — these were declared BELOW openCard; hoisted here so openCard can cancel a
+// pending hide on entry. _cardOwner is the POI element that currently owns the shown card;
+// a deferred hide only ever removes the card it was ARMED for (and only if !_overCard), so
+// a fast POI→POI sweep inside the grace window can never strip the new room's card.
+let _hideTimer = null, _overCard = false, _cardOwner = null;
+
 /* ---- card positioning: place near the hovered footprint, clamped to viewport ---- */
 function openCard(r, a){
+  // BUG #278: arriving at any POI cancels the previous POI's pending hide and reclaims
+  // ownership — otherwise the orphaned grace-timer would fire and hide THIS room's card.
+  if(_hideTimer){ clearTimeout(_hideTimer); _hideTimer = null; }
+  _overCard = false;
+  _cardOwner = a;
   document.getElementById("c-room").textContent = r.room;
   document.getElementById("c-emoji").textContent = r.glyph;
   document.getElementById("c-name").textContent = r.piece;
@@ -6076,19 +6092,23 @@ function openCard(r, a){
   card.style.left = pos.L + "px";
   card.style.top  = pos.T + "px";
 }
-// BUG #230 — a long popup scrolls INSIDE the card (.card-inner is overflow:auto), so the
-// pointer must be able to LEAVE the POI and enter the card to scroll WITHOUT the card
-// dismissing. hideCard() is deferred by a short grace window; if the pointer lands on the
-// card in that window (cardEnter cancels the timer), the card stays. Leaving the card
-// (cardLeave) hides it for real. Pan/resize call hideCard(true) for an immediate dismiss.
-let _hideTimer = null, _overCard = false;
 function hideCard(immediate){
   if(_hideTimer){ clearTimeout(_hideTimer); _hideTimer = null; }
-  if(immediate === true){ _overCard = false; card.classList.remove("show"); return; }
-  _hideTimer = setTimeout(()=>{ if(!_overCard) card.classList.remove("show"); _hideTimer = null; }, 90);
+  if(immediate === true){ _overCard = false; _cardOwner = null; card.classList.remove("show"); return; }
+  // defer the hide behind a short grace window, but REMEMBER which POI armed it: if a
+  // newer openCard() has since handed the card to a different owner, this stale timer must
+  // NOT touch the card. Only hide when nothing newer claimed it AND we're not over the card.
+  const armedFor = _cardOwner;
+  _hideTimer = setTimeout(()=>{
+    _hideTimer = null;
+    if(_overCard) return;                 // pointer travelled onto the card — keep it (grace)
+    if(_cardOwner !== armedFor) return;   // a newer POI owns the card now — don't hide theirs
+    _cardOwner = null;
+    card.classList.remove("show");
+  }, 90);
 }
 card.addEventListener("mouseenter", ()=>{ _overCard = true; if(_hideTimer){ clearTimeout(_hideTimer); _hideTimer = null; } });
-card.addEventListener("mouseleave", ()=>{ _overCard = false; card.classList.remove("show"); });
+card.addEventListener("mouseleave", ()=>{ _overCard = false; _cardOwner = null; card.classList.remove("show"); });
 
 /* ── a tree-lined survey avenue: a faint dashed quadratic path from the manor door to a
    target, flanked by small paired tree-dots so the open ground reads as planted grounds.
