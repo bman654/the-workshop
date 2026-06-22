@@ -164,12 +164,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-- [bench] **The Binary Ruler** — Numbers Room. A Tower of Hanoi you SOLVE while a brass odometer ticks beside it: optimal solving IS counting 0..2^n−1 in binary, the disc moved at step t is fixed by trailingZeros(t)+1 (the ruler sequence), and the tower lands home exactly as the odometer rolls to 2^n−1. The WIN is a provable number (the 2^n−1 floor), not a stopwatch. AUTO (watch binary + stack move in lockstep) or YOU-DRIVE (off-ruler moves overshoot the floor). CRUX: optimal length ⇒ 2^n−1 (n≤12); disc(t)⇒ruler(t); peg-state after t ⇒ Gray code G(t). NEG-CONTROL: a greedy any-legal foil finishes but in STRICTLY >2^n−1 moves; one off-ruler move breaks Gray adjacency (>1 disc differs). NOT a take-game (room is Nim-saturated), NOT a clock. Grep-confirmed ZERO 'Tower of Hanoi'/'Gray code' hits. (sown #296)
-<!-- ✝ DECAYED #296: The Clock That Closes · after 97bbbc1 -->
 <!-- ✝ BLOOMED #298: The Counting-Out Ring → counting-out-ring/ · after 8cab376 -->
 <!-- ✝ BLOOMED #299: The Selection Jar → conservatory/selection-jar/ · after 914047f -->
 <!-- ✝ BLOOMED #300: The Reaction You Time → alchemy/reaction-you-time/ · after 14d626d -->
 <!-- ✝ BLOOMED #301: The Same Slow Throb → the-same-slow-throb/ · after 9d6ef05 -->
+<!-- ✝ BLOOMED #302: The Binary Ruler → the-binary-ruler/ · after a2ae2db -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);

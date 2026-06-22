@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Binary Ruler · The Numbers Room</title>
+<style>
+  :root{
+    --bg:#08070b;
+    --plate1:#15121b;
+    --plate2:#0d0b12;
+    --ink:#ede2f0;
+    --ink-dim:#a79ab2;
+    --gold:#c9a24a;
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.36);
+    --teal:#6fd3c4;             /* the "optimal · proven floor" voice */
+    --teal-soft:rgba(111,211,196,0.12);
+    --open:#e0664f;             /* the "overshoot · off-ruler" voice */
+    --open-soft:rgba(224,102,79,0.10);
+    --brass1:#caa657;
+    --brass2:#8a6a26;
+    --brass-dk:#3a2c10;
+    --panel:rgba(13,11,18,0.82);
+    --wheel-h:46px;             /* the odometer cell height — ONE source of truth (rollOdometer reads it) */
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1300px 800px at 50% -10%, rgba(201,162,74,0.08), transparent 58%),
+      radial-gradient(1000px 700px at 16% 110%, rgba(111,211,196,0.05), transparent 62%),
+      radial-gradient(1000px 700px at 84% 112%, rgba(224,102,79,0.04), transparent 62%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 32px);
+    mix-blend-mode:overlay;
+  }
+
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 22px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(8,7,11,0.94), rgba(8,7,11,0));
+  }
+  .topbar a, .topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--gold); opacity:1; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.4); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); max-width:54vw; overflow:hidden; text-overflow:ellipsis; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  .hero{ position:relative; z-index:1; max-width:1080px; margin:0 auto; padding:74px 24px 4px; text-align:center; }
+  .eyebrow{ font:600 11px/1 var(--font-mono); letter-spacing:.32em; text-transform:uppercase; color:var(--gold);
+    opacity:.9; margin-bottom:14px; }
+  .hero h1{
+    font-family:var(--font-serif); font-weight:600; margin:0;
+    font-size:clamp(32px, 6.5vw, 56px); letter-spacing:.5px; line-height:1.02;
+    background:linear-gradient(176deg, #f5e7c4, #c9a24a 56%, #7d6224);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+  }
+  .hero .lede{ max-width:720px; margin:14px auto 0; font:15px/1.6 var(--font-serif); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--gold); font-weight:600; }
+  .hero .lede .teal{ color:var(--teal); font-weight:600; }
+  .hero .lede .open{ color:var(--open); font-weight:600; }
+
+  .stage{ position:relative; z-index:1; max-width:1240px; margin:20px auto 0; padding:0 24px 64px;
+    display:grid; grid-template-columns:minmax(0,1fr) 392px; gap:26px; align-items:start; }
+  @media (max-width:1040px){ .stage{ grid-template-columns:1fr; max-width:620px; } }
+
+  .slab{
+    position:relative; border-radius:18px; padding:18px;
+    background:
+      radial-gradient(120% 120% at 50% 0%, rgba(201,162,74,0.07), transparent 60%),
+      linear-gradient(180deg, #17131f, #0c0a12);
+    border:1px solid rgba(201,162,74,0.18);
+    box-shadow:0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+
+  /* ── the tower ── */
+  .towerwrap{ position:relative; }
+  #towerCanvas{ display:block; width:100%; height:auto; border-radius:10px;
+    background:
+      radial-gradient(120% 130% at 50% 0%, rgba(63,84,96,0.22), transparent 62%),
+      linear-gradient(180deg, #11161b, #0a0d11);
+    box-shadow:0 0 0 3px #1a1410, 0 0 0 5px var(--gold-edge),
+      inset 0 0 40px rgba(0,0,0,0.5), 0 14px 40px rgba(0,0,0,0.45);
+    touch-action:none; cursor:pointer; }
+
+  /* the overshoot cartouche — a live floor-reading that reddens when you stray */
+  .floorcard{ margin-top:14px; display:flex; align-items:stretch; gap:12px; }
+  .floortile{ flex:1; border-radius:11px; padding:11px 13px; border:1px solid rgba(201,162,74,0.16);
+    background:linear-gradient(180deg, rgba(20,16,28,0.8), rgba(10,8,14,0.85)); transition:border-color .3s, background .3s; }
+  .floortile .k{ font:600 9.5px/1 var(--font-mono); letter-spacing:.22em; text-transform:uppercase; color:var(--ink-dim); }
+  .floortile .v{ margin-top:7px; font:600 24px/1 var(--font-serif); color:var(--ink); }
+  .floortile.opt .v{ color:var(--teal); }
+  .floortile.lead .v{ color:var(--teal); }
+  .floortile.lead.over{ border-color:rgba(224,102,79,0.55); background:linear-gradient(180deg, rgba(40,18,14,0.75), rgba(18,9,7,0.85)); }
+  .floortile.lead.over .v{ color:var(--open); }
+  .floortile .sub{ margin-top:5px; font:11px/1.35 var(--font-ui); color:var(--ink-dim); }
+  .floortile .sub .teal{ color:var(--teal); } .floortile .sub .open{ color:var(--open); }
+
+  /* controls */
+  .panel{ display:flex; flex-direction:column; gap:14px; }
+  .ctl{ border-radius:14px; padding:15px 16px; border:1px solid rgba(201,162,74,0.14);
+    background:linear-gradient(180deg, var(--plate1), var(--plate2)); }
+  .ctl h3{ margin:0 0 11px; font:600 10.5px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--gold); }
+  .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  button.b{ font:600 12px/1 var(--font-ui); letter-spacing:.02em; color:var(--ink); cursor:pointer;
+    border:1px solid rgba(201,162,74,0.28); border-radius:9px; padding:9px 13px;
+    background:linear-gradient(180deg, rgba(40,32,18,0.6), rgba(20,16,10,0.7)); transition:.18s; }
+  button.b:hover{ border-color:var(--gold); color:#fff; }
+  button.b:disabled{ opacity:.4; cursor:not-allowed; }
+  button.b.prime{ border-color:var(--gold-edge); background:linear-gradient(180deg, rgba(201,162,74,0.22), rgba(120,96,40,0.18)); color:#f5e7c4; }
+  button.b.active{ border-color:var(--teal); color:var(--teal); background:rgba(111,211,196,0.1); }
+
+  .discsel{ display:flex; align-items:center; gap:11px; }
+  .discsel input[type=range]{ flex:1; accent-color:var(--gold); }
+  .discsel .nval{ font:600 19px/1 var(--font-mono); color:var(--gold); min-width:28px; text-align:right; }
+  .speedrow label{ font:11px/1 var(--font-ui); color:var(--ink-dim); }
+
+  .hint{ font:11.5px/1.5 var(--font-ui); color:var(--ink-dim); }
+  .hint b{ color:var(--ink); font-weight:600; }
+  .hint .teal{ color:var(--teal); } .hint .open{ color:var(--open); }
+
+  /* ── THE ODOMETER (the centerpiece) ── */
+  .odo-housing{ border-radius:14px; padding:16px 14px 14px;
+    border:1px solid rgba(201,162,74,0.2);
+    background:
+      radial-gradient(120% 90% at 50% 0%, rgba(201,162,74,0.1), transparent 70%),
+      linear-gradient(180deg, #1c1710, #100c08);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 30px rgba(0,0,0,0.4); }
+  .odo-housing h3{ margin:0 0 4px; }
+  .odo-tagline{ font:11px/1.4 var(--font-ui); color:var(--ink-dim); margin-bottom:12px; }
+  .odo-tagline b{ color:var(--gold); } .odo-tagline .teal{ color:var(--teal); } .odo-tagline .open{ color:var(--open); }
+
+  .odorow{ position:relative; display:flex; gap:4px; justify-content:center; align-items:stretch;
+    padding:9px 12px; border-radius:9px;
+    background:linear-gradient(180deg, #06080a, #0c0f12 50%, #06080a);
+    box-shadow:inset 0 0 0 1.5px var(--brass-dk), inset 0 14px 18px -14px rgba(0,0,0,0.95),
+      inset 0 -14px 18px -14px rgba(0,0,0,0.95); }
+  .odorow.gray{ box-shadow:inset 0 0 0 1.5px rgba(111,211,196,0.4), inset 0 14px 18px -14px rgba(0,0,0,0.95),
+      inset 0 -14px 18px -14px rgba(0,0,0,0.95); }
+  /* the OVERSHOOT framing — when your move-wheel has rolled past the brass floor */
+  .odorow.over{ box-shadow:inset 0 0 0 1.5px rgba(224,102,79,0.7), 0 0 14px -2px rgba(224,102,79,0.4),
+      inset 0 14px 18px -14px rgba(0,0,0,0.95), inset 0 -14px 18px -14px rgba(0,0,0,0.95); }
+  .odorow .label{ position:absolute; top:-9px; left:11px; font:600 8.5px/1 var(--font-mono); letter-spacing:.16em;
+    text-transform:uppercase; padding:1px 6px; border-radius:4px; background:#0c0a12; color:var(--ink-dim); }
+  .odorow.gray .label{ color:var(--teal); }
+  .odorow.over .label{ color:var(--open); }
+  /* the brass FLOOR pip on the move-row: a teal tick marking 2ⁿ−1 the wheel can pass */
+  .odorow .floorpip{ position:absolute; top:-9px; right:11px; font:600 8px/1 var(--font-mono); letter-spacing:.1em;
+    padding:1px 6px; border-radius:4px; background:#0c0a12; color:var(--teal); border:1px solid rgba(111,211,196,0.35); }
+
+  /* each wheel is a 3D-ish window onto a vertical digit strip */
+  .wheel{ position:relative; width:30px; height:var(--wheel-h); overflow:hidden; border-radius:5px;
+    background:
+      linear-gradient(90deg, rgba(0,0,0,0.5), transparent 14%, transparent 86%, rgba(0,0,0,0.5)),
+      linear-gradient(180deg, var(--brass2), var(--brass1) 46%, var(--brass1) 54%, var(--brass2));
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,0.55), inset 0 7px 9px -6px rgba(0,0,0,0.9),
+      inset 0 -7px 9px -6px rgba(0,0,0,0.9); perspective:140px; }
+  .wheel.gray-on{ background:
+      linear-gradient(90deg, rgba(0,0,0,0.5), transparent 14%, transparent 86%, rgba(0,0,0,0.5)),
+      linear-gradient(180deg, #1f5b52, #6fd3c4 46%, #6fd3c4 54%, #1f5b52); }
+  .wheel.over-on{ background:
+      linear-gradient(90deg, rgba(0,0,0,0.5), transparent 14%, transparent 86%, rgba(0,0,0,0.5)),
+      linear-gradient(180deg, #5b241c, #e0664f 46%, #e0664f 54%, #5b241c); }
+  .wheel .strip{ position:absolute; left:0; right:0; top:0; will-change:transform; }
+  .wheel .dg{ height:var(--wheel-h); display:flex; align-items:center; justify-content:center;
+    font:700 22px/1 var(--font-mono); color:#241803; text-shadow:0 1px 0 rgba(255,255,255,0.18); }
+  .wheel.gray-on .dg{ color:#04201c; }
+  .wheel.over-on .dg{ color:#270b07; }
+  .wheel::after{ content:""; position:absolute; inset:0; pointer-events:none; border-radius:5px;
+    background:linear-gradient(180deg, rgba(0,0,0,0.55), transparent 26%, transparent 74%, rgba(0,0,0,0.55)); }
+  .wheel.carry{ animation:carryflash .4s ease; }
+  @keyframes carryflash{ 0%{ box-shadow:inset 0 0 0 1px rgba(0,0,0,0.55), 0 0 0 0 rgba(201,162,74,0); }
+    40%{ box-shadow:inset 0 0 0 1px rgba(201,162,74,0.9), 0 0 14px 2px rgba(201,162,74,0.55); }
+    100%{ box-shadow:inset 0 0 0 1px rgba(0,0,0,0.55); } }
+
+  /* the binary bit-lamps under the decimal wheels */
+  .bitlamps{ display:flex; gap:5px; justify-content:center; margin-top:11px; flex-wrap:wrap; }
+  .lamp{ display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .lamp .dot{ width:20px; height:20px; border-radius:50%;
+    background:radial-gradient(circle at 36% 32%, #20242b, #0a0c0e);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); transition:.16s; }
+  .lamp.on .dot{ background:radial-gradient(circle at 36% 32%, #ffe9a8, #d39a2a 60%, #6e4d12);
+    box-shadow:0 0 9px 1px rgba(201,162,74,0.7), inset 0 0 0 1px rgba(255,240,200,0.6); }
+  .lamp.justflip .dot{ box-shadow:0 0 12px 3px rgba(111,211,196,0.85), inset 0 0 0 1px rgba(255,255,255,0.5); }
+  .lamp .pl{ font:600 8px/1 var(--font-mono); color:var(--ink-dim); }
+  .lamp.on .pl{ color:var(--gold); }
+  .lamp.named .pl{ color:var(--teal); }
+
+  .winbar{ margin-top:13px; text-align:center; font:600 13px/1.4 var(--font-serif);
+    color:var(--teal); min-height:18px; opacity:0; transition:.4s; }
+  .winbar.show{ opacity:1; }
+
+  .legend{ font:11px/1.55 var(--font-ui); color:var(--ink-dim); }
+  .legend .sw{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+  .legend .sw.t{ background:var(--teal); } .legend .sw.o{ background:var(--open); } .legend .sw.g{ background:var(--gold); }
+
+  .footer-proof{ position:relative; z-index:1; max-width:1240px; margin:0 auto; padding:0 24px 52px; text-align:center;
+    font:11px/1.7 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  .footer-proof .teal{ color:var(--teal); }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="back" href="../numbers-room/index.html">‹ The Numbers Room</a>
+  <div class="selftest" id="selftest" title="click to re-run">self-test…</div>
+</div>
+
+<div class="hero">
+  <div class="eyebrow">The Numbers Room · Bench</div>
+  <h1>The Binary Ruler</h1>
+  <p class="lede">The <b>optimal</b> way to solve a Tower of Hanoi <b>IS counting</b> 0,1,2,… in binary.
+  The disc you move at step <i>t</i> is fixed by the ruler sequence; the tower lands home at exactly
+  <span class="teal">2<sup>n</sup>−1</span> moves. So solve it and the brass <b>odometer rolls to its
+  ceiling</b> — the number <span class="teal">is</span> the trophy. The whole peg-config is read
+  <i>straight off t</i> by a closed-form Gray decoder; the single digit it changes <i>names</i> the disc
+  that moves. Stray off the ruler and a provable floor-meter rolls your wheel <span class="open">past the
+  brass</span> — overshoot you can see.</p>
+</div>
+
+<div class="stage">
+  <!-- LEFT: the tower you play -->
+  <div class="slab towerwrap">
+    <canvas id="towerCanvas" width="760" height="460" aria-label="Tower of Hanoi"></canvas>
+    <div class="floorcard">
+      <div class="floortile lead" id="moveTile">
+        <div class="k">Your moves</div>
+        <div class="v" id="moveVal">0</div>
+        <div class="sub" id="moveSub">on the ruler so far</div>
+      </div>
+      <div class="floortile opt" id="floorTile">
+        <div class="k">Provable best from here</div>
+        <div class="v" id="floorVal">31</div>
+        <div class="sub" id="floorSub">yours + minMoves = the floor 31</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: the instrument + controls -->
+  <div class="panel">
+    <div class="ctl odo-housing">
+      <h3>The Brass Odometer</h3>
+      <div class="odo-tagline">Three faces of one act. The <b>decimal wheels</b> count your moves and
+        tumble on carry — past the <span class="teal">brass floor</span> if you stray; the
+        <span class="teal">Gray dial</span> reads G(t) and changes exactly one digit per tick — that single
+        change <i>names the disc that moves</i>.</div>
+
+      <div class="odorow" id="odoMain" style="margin-bottom:14px;">
+        <span class="label">your moves · count t</span>
+        <span class="floorpip" id="floorPip">floor 31</span>
+        <!-- wheels injected -->
+      </div>
+
+      <div class="bitlamps" id="bitlamps"></div>
+
+      <div class="odorow gray" id="odoGray" style="margin-top:16px;">
+        <span class="label">Gray dial · G(t) = t ⊕ (t≫1)</span>
+        <!-- gray wheels injected -->
+      </div>
+
+      <div class="winbar" id="winbar"></div>
+    </div>
+
+    <div class="ctl">
+      <h3>The Tower</h3>
+      <div class="discsel" style="margin-bottom:13px;">
+        <label style="font:11px/1 var(--font-ui); color:var(--ink-dim)">Discs</label>
+        <input type="range" id="discRange" min="1" max="8" step="1" value="5">
+        <span class="nval" id="discN">5</span>
+      </div>
+      <div class="row">
+        <button class="b prime" id="autoBtn">▶ Auto-solve</button>
+        <button class="b" id="stepBtn">Step +1</button>
+        <button class="b" id="resetBtn">Reset</button>
+      </div>
+      <div class="row speedrow" style="margin-top:11px;">
+        <label>Slow</label>
+        <input type="range" id="speedRange" min="60" max="900" step="20" value="340" style="flex:1; accent-color:var(--gold)">
+        <label>Fast</label>
+      </div>
+      <div class="hint" style="margin-top:12px;">
+        <b>You-drive:</b> click a peg to lift its top disc, click another peg to drop it.
+        Each <span class="teal">on-ruler</span> move rolls the brass with you; an
+        <span class="open">off-ruler</span> move sends your wheel past the optimal floor — the floor-meter
+        reddens and tells you the best you can still do.
+      </div>
+    </div>
+
+    <div class="ctl">
+      <h3>Reading the instrument</h3>
+      <div class="legend">
+        <span class="sw t"></span> <b style="color:var(--teal)">Optimal floor</b> — the tower homes at exactly 2ⁿ−1 moves; the brass pip marks it.<br>
+        <span class="sw o"></span> <b style="color:var(--open)">Overshoot</b> — your count rolls past the brass floor; the meter shows +N above it and the best you can do now.<br>
+        <span class="sw g"></span> <b style="color:var(--gold)">Carry / name</b> — a wheel rolls over; the Gray digit that changes (and the lamp that flips) names the disc to move next.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-proof">
+  self-test <span id="proofN">8/8</span> ✓ · optimal length=2ⁿ−1 · disc(t)=ruler(t)=trailingZeros(t)+1 ·
+  peg(t)=<span class="teal">Gray-decode G(t)</span> (closed form) · off-ruler overshoots
+</div>
+
+<script type="module">
+"use strict";
+// === THE BINARY RULER CORE (inlined byte-identical to core.mjs by forge) ===
+<!-- forge:include ./core.mjs -->
+
+// ───────────────────────── the render + interaction ─────────────────────────
+const cv = document.getElementById('towerCanvas');
+const ctx = cv.getContext('2d');
+let N = 5;
+let pos = freshTower(N);
+let yourMoves = 0;
+let onRulerSoFar = true;       // has the player stayed exactly on the optimal ruler?
+let auto = null;               // auto-solve timer
+let autoList = null, autoIdx = 0;
+let lifted = null;             // peg index of a lifted disc (you-drive), or null
+let prevGrayT = 0;
+
+// the odometer cell height, read from the --wheel-h CSS var (no magic number in JS)
+function wheelH(){
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--wheel-h').trim();
+  const px = parseFloat(v);
+  return Number.isFinite(px) && px > 0 ? px : 46;
+}
+
+// disc hue ramp (small→large): warm gold → teal-ward, distinct per disc
+function discColor(d){
+  const hues = [44,38,168,200,260,300,12,120];
+  const h = hues[(d - 1) % hues.length];
+  return `hsl(${h} 58% ${58 - d*1.6}%)`;
+}
+
+// ── canvas geometry ──
+function layout(){
+  const W = cv.width, H = cv.height;
+  const margin = 40, base = H - 56;
+  const pegGap = (W - 2*margin) / 3;
+  const pegX = [margin + pegGap*0.5, margin + pegGap*1.5, margin + pegGap*2.5];
+  const pegTop = 64;
+  const maxDiscW = pegGap * 0.86;
+  const minDiscW = pegGap * 0.20;
+  const discH = Math.min(26, (base - pegTop) / (N + 1));
+  return { W, H, base, pegX, pegTop, maxDiscW, minDiscW, discH };
+}
+
+function draw(flashDisc){
+  const L = layout();
+  ctx.clearRect(0,0,L.W,L.H);
+
+  // base bar
+  ctx.fillStyle = '#1b150c';
+  ctx.fillRect(28, L.base+2, L.W-56, 12);
+  ctx.fillStyle = 'rgba(201,162,74,0.25)';
+  ctx.fillRect(28, L.base+2, L.W-56, 2);
+
+  // pegs
+  for (let p = 0; p < 3; p++){
+    const x = L.pegX[p];
+    const grad = ctx.createLinearGradient(x-4,0,x+4,0);
+    grad.addColorStop(0,'#6a5220'); grad.addColorStop(.5,'#caa657'); grad.addColorStop(1,'#5c4718');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x-3, L.pegTop, 6, L.base - L.pegTop);
+    ctx.beginPath(); ctx.arc(x, L.pegTop, 5, 0, 7); ctx.fillStyle = '#caa657'; ctx.fill();
+    ctx.fillStyle = (lifted === p) ? 'rgba(111,211,196,0.9)' : 'rgba(167,154,178,0.55)';
+    ctx.font = '600 12px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(['A','B','C'][p], x, L.base + 30);
+  }
+
+  // discs: per peg, stack from the base up (largest at the bottom).
+  for (let p = 0; p < 3; p++){
+    const ordered = [];
+    for (let d = 1; d <= N; d++) if (pos[d] === p) ordered.push(d);
+    ordered.sort((a, b) => b - a);               // largest (bottom) first
+    const topD = ordered.length ? ordered[ordered.length - 1] : 0;
+    for (let i = 0; i < ordered.length; i++){
+      const d = ordered[i];
+      const frac = N === 1 ? 1 : (d - 1) / (N - 1);
+      const w = L.minDiscW + frac * (L.maxDiscW - L.minDiscW);
+      const x = L.pegX[p];
+      const yy = L.base - (i + 1) * (L.discH - 1);
+      const isLifted = (lifted === p && d === topD);
+      drawDisc(x, isLifted ? L.pegTop - 6 : yy, w, L.discH - 2, d, flashDisc === d, isLifted);
+    }
+  }
+}
+
+function drawDisc(cx, top, w, h, d, flash, lifted){
+  const x = cx - w/2;
+  const r = h/2;
+  ctx.beginPath();
+  roundRect(ctx, x, top, w, h, r);
+  const g = ctx.createLinearGradient(0, top, 0, top + h);
+  const base = discColor(d);
+  g.addColorStop(0, lighten(base, 18));
+  g.addColorStop(0.5, base);
+  g.addColorStop(1, lighten(base, -16));
+  ctx.fillStyle = g; ctx.fill();
+  ctx.lineWidth = flash ? 2.5 : 1;
+  ctx.strokeStyle = flash ? '#fff' : (lifted ? 'rgba(111,211,196,0.95)' : 'rgba(0,0,0,0.45)');
+  ctx.stroke();
+  if (flash){ ctx.save(); ctx.shadowColor = '#ffe9a8'; ctx.shadowBlur = 16; ctx.stroke(); ctx.restore(); }
+  ctx.fillStyle = 'rgba(255,255,255,0.82)';
+  ctx.font = `600 ${Math.min(13, h-6)}px ui-monospace, monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(String(d), cx, top + h/2 + 0.5);
+  ctx.textBaseline = 'alphabetic';
+}
+function roundRect(c,x,y,w,h,r){ r=Math.min(r,w/2,h/2);
+  c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+function lighten(hsl, amt){
+  const m = hsl.match(/hsl\((\d+) (\d+)% (\d+)%\)/);
+  if (!m) return hsl;
+  let l = Math.max(0, Math.min(100, +m[3] + amt));
+  return `hsl(${m[1]} ${m[2]}% ${l}%)`;
+}
+
+// ── the odometer wheels ──
+// wide enough for the WORST case the move-wheel can reach: an off-ruler overshoot can
+// push yourMoves above 2^n-1, so we size for a couple of digits of headroom.
+function digitCountFor(n){ return String((Math.pow(2, n) - 1) * 2 + 6).length; }
+const odoMain = document.getElementById('odoMain');
+const odoGray = document.getElementById('odoGray');
+const bitlamps = document.getElementById('bitlamps');
+let mainWheels = [], grayWheels = [];
+
+function buildWheels(container, count){
+  [...container.querySelectorAll('.wheel')].forEach(w => w.remove());
+  const wheels = [];
+  for (let i = 0; i < count; i++){
+    const w = document.createElement('div'); w.className = 'wheel';
+    const strip = document.createElement('div'); strip.className = 'strip';
+    for (let dgt = 0; dgt <= 10; dgt++){            // 0..9 then 0 again for clean wrap
+      const cell = document.createElement('div'); cell.className = 'dg';
+      cell.textContent = String(dgt % 10);
+      strip.appendChild(cell);
+    }
+    w.appendChild(strip);
+    container.appendChild(w);
+    wheels.push({ el: w, strip, cur: 0, _offset: 0 });
+  }
+  return wheels;
+}
+
+function buildInstrument(){
+  const dc = digitCountFor(N);
+  mainWheels = buildWheels(odoMain, dc);
+  grayWheels = buildWheels(odoGray, dc);
+  // bit lamps: one per disc, MSB(disc n) .. LSB(disc 1)
+  bitlamps.innerHTML = '';
+  for (let bit = N; bit >= 1; bit--){
+    const lamp = document.createElement('div'); lamp.className = 'lamp'; lamp.dataset.bit = bit;
+    const dot = document.createElement('div'); dot.className = 'dot';
+    const pl = document.createElement('div'); pl.className = 'pl'; pl.textContent = 'd' + bit;
+    lamp.appendChild(dot); lamp.appendChild(pl);
+    bitlamps.appendChild(lamp);
+  }
+}
+
+// roll a wheel-row to show `value` (decimal), flashing wheels that carried. The strip
+// only ever rolls FORWARD (accumulating offset) for the satisfying tumble; resets snap.
+function rollOdometer(wheels, value, animate){
+  const H = wheelH();
+  const s = String(Math.max(0, Math.round(value))).padStart(wheels.length, '0');
+  for (let i = 0; i < wheels.length; i++){
+    const dgt = +s[i];
+    const w = wheels[i];
+    const prev = w.cur;
+    if (animate){
+      let steps = (dgt - prev + 10) % 10;
+      w._offset = (w._offset || 0) + steps;
+      w.strip.style.transition = 'transform .26s cubic-bezier(.3,.8,.35,1)';
+      w.strip.style.transform = `translateY(${-(w._offset % 10) * H}px)`;
+      if (prev === 9 && dgt === 0){ w.el.classList.remove('carry'); void w.el.offsetWidth; w.el.classList.add('carry'); }
+    } else {
+      w._offset = dgt;
+      w.strip.style.transition = 'none';
+      w.strip.style.transform = `translateY(${-dgt * H}px)`;
+    }
+    w.cur = dgt;
+  }
+}
+
+// the binary lamps reflect t's bits; the gray wheels read G(t); the lamp that JUST
+// flipped (vs previous t) names the disc that moved — = the single Gray-bit change.
+function updateLamps(t, animate){
+  const justBit = animate ? (grayCode(t) ^ grayCode(prevGrayT)) : 0;
+  const flippedDisc = justBit ? (trailingZeros(justBit) + 1) : 0;
+  [...bitlamps.children].forEach(lamp => {
+    const bit = +lamp.dataset.bit;
+    const on = (t >> (bit - 1)) & 1;
+    lamp.classList.toggle('on', !!on);
+    lamp.classList.remove('justflip');
+    lamp.classList.toggle('named', flippedDisc === bit && t > 0);
+    if (animate && flippedDisc === bit){
+      void lamp.offsetWidth; lamp.classList.add('justflip');
+    }
+  });
+  return flippedDisc;
+}
+
+// MASTER refresh of the whole instrument. `t` = yourMoves; the move-wheel shows t and
+// rolls PAST the brass floor when t exceeds 2^n-1 (or you've gone off-ruler). The gray
+// wheels show G(t') for the count along the optimal trajectory you'd be at — but to keep
+// the Gray dial HONEST as the disc-namer, it reads G(t) of the move count itself, which
+// is what flips exactly one digit each tick while you're on the ruler.
+function refreshInstrument(t, animate){
+  const floor = optimalLength(N);
+  const over = (yourMoves > floor) || !onRulerSoFar;
+  rollOdometer(mainWheels, t, animate);
+  rollOdometer(grayWheels, grayCode(t), animate);
+  const flipped = updateLamps(t, animate);
+  // paint the move-row red the moment your wheel passes the brass
+  const overReached = yourMoves > floor;
+  odoMain.classList.toggle('over', overReached);
+  mainWheels.forEach(w => w.el.classList.toggle('over-on', overReached));
+  grayWheels.forEach(w => w.el.classList.add('gray-on'));
+  prevGrayT = t;
+  return flipped;
+}
+
+// ── scoreboard / overshoot cartouche (grafted from prototype A's minMoves) ──
+function updateFloorCard(){
+  const floor = optimalLength(N);
+  const best = yourMoves + minMoves(pos, N, 2);     // provable best-possible TOTAL from here
+  const overshoot = best - floor;                   // >0 ⟺ you have strayed off the ruler
+  document.getElementById('moveVal').textContent = yourMoves;
+  const moveTile = document.getElementById('moveTile');
+  const moveSub = document.getElementById('moveSub');
+  const floorTile = document.getElementById('floorTile');
+  const floorVal = document.getElementById('floorVal');
+  const floorSub = document.getElementById('floorSub');
+  const floorPip = document.getElementById('floorPip');
+
+  floorPip.textContent = 'floor ' + floor;
+
+  if (overshoot > 0){
+    moveTile.classList.add('over');
+    moveSub.innerHTML = `<span class="open">+${overshoot} above the 2ⁿ−1 floor</span> — off the ruler`;
+    floorTile.classList.add('over');
+    floorVal.textContent = best;
+    floorVal.style.color = 'var(--open)';
+    floorSub.innerHTML = `<span class="open">overshoot +${overshoot}</span> · best you can do now is ${best}`;
+  } else {
+    moveTile.classList.remove('over');
+    moveSub.innerHTML = isSolved(pos, N)
+      ? `<span class="teal">solved at the floor — perfect</span>`
+      : `<span class="teal">on the ruler</span> · ${floor - yourMoves} moves to home`;
+    floorTile.classList.remove('over');
+    floorVal.textContent = best;
+    floorVal.style.color = 'var(--teal)';
+    floorSub.innerHTML = isSolved(pos, N)
+      ? `<span class="teal">home in ${floor} = 2ⁿ−1</span>`
+      : `yours + minMoves = the floor <span class="teal">${floor}</span>`;
+  }
+}
+
+function checkWin(){
+  const floor = optimalLength(N);
+  const wb = document.getElementById('winbar');
+  if (isSolved(pos, N)){
+    if (yourMoves === floor){
+      wb.innerHTML = `★ Home in <b>${floor}</b> = 2<sup>${N}</sup>−1 — the number is the trophy.`;
+      wb.style.color = 'var(--teal)';
+    } else {
+      wb.innerHTML = `Solved in ${yourMoves} — <span style="color:var(--open)">+${yourMoves-floor} over</span> the ${floor} floor.`;
+      wb.style.color = 'var(--open)';
+    }
+    wb.classList.add('show');
+  } else { wb.classList.remove('show'); }
+}
+
+// ── player input (you-drive): click a peg to lift / drop ──
+cv.addEventListener('click', (e) => {
+  if (auto) return;
+  const L = layout();
+  const rect = cv.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (cv.width / rect.width);
+  let p = 0, best = Infinity;
+  for (let i = 0; i < 3; i++){ const dx = Math.abs(x - L.pegX[i]); if (dx < best){ best = dx; p = i; } }
+  if (lifted === null){
+    if (topDisc(pos, N, p) !== 0){ lifted = p; draw(); }
+  } else {
+    const from = lifted, to = p;
+    lifted = null;
+    if (from === to){ draw(); return; }
+    const np = applyMove(pos, N, from, to);
+    if (!np){ draw(); return; }                 // illegal — ignore
+    commitPlayerMove(np);
+  }
+});
+
+function commitPlayerMove(newPos){
+  const t = yourMoves + 1;
+  let movedDisc = 0;
+  for (let d = 1; d <= N; d++) if (newPos[d] !== pos[d]) { movedDisc = d; break; }
+  const expected = ruler(t);
+  if (onRulerSoFar && movedDisc === expected && samePrefixOptimal(newPos, t)) {
+    // still optimal
+  } else {
+    onRulerSoFar = false;
+  }
+  pos = newPos; yourMoves = t;
+  draw(movedDisc);
+  refreshInstrument(yourMoves, true);
+  updateFloorCard();
+  checkWin();
+}
+
+// is `state` exactly the optimal state after t moves? (closed-form decoder — no replay)
+function samePrefixOptimal(state, t){
+  const want = grayState(N, t);
+  for (let d = 1; d <= N; d++) if (state[d] !== want[d]) return false;
+  return true;
+}
+
+// ── auto-solve ──
+function startAuto(){
+  if (auto){ stopAuto(); return; }
+  if (isSolved(pos, N)) reset();
+  if (!samePrefixOptimal(pos, yourMoves)){ reset(); }
+  autoList = optimalMoves(N).slice(yourMoves);  // remaining optimal moves from current count
+  autoIdx = 0;
+  document.getElementById('autoBtn').classList.add('active');
+  document.getElementById('autoBtn').textContent = '⏸ Pause';
+  const tick = () => {
+    if (autoIdx >= autoList.length){ stopAuto(); return; }
+    const mv = autoList[autoIdx++];
+    pos = pos.slice(); pos[mv.disc] = mv.to;
+    yourMoves++;
+    draw(mv.disc);
+    refreshInstrument(yourMoves, true);
+    updateFloorCard(); checkWin();
+    auto = setTimeout(tick, +document.getElementById('speedRange').value);
+  };
+  tick();
+}
+function stopAuto(){
+  if (auto){ clearTimeout(auto); auto = null; }
+  document.getElementById('autoBtn').classList.remove('active');
+  document.getElementById('autoBtn').textContent = '▶ Auto-solve';
+}
+
+function stepOnce(){
+  if (auto) return;
+  if (isSolved(pos, N)) return;
+  if (!samePrefixOptimal(pos, yourMoves)){ reset(); }
+  const t = yourMoves + 1;
+  const mv = optimalMoves(N)[yourMoves];
+  pos = pos.slice(); pos[mv.disc] = mv.to;
+  yourMoves = t;
+  draw(mv.disc);
+  refreshInstrument(yourMoves, true);
+  updateFloorCard(); checkWin();
+}
+
+function reset(){
+  stopAuto();
+  pos = freshTower(N); yourMoves = 0; onRulerSoFar = true; lifted = null; prevGrayT = 0;
+  buildInstrument();
+  refreshInstrument(0, false);
+  draw(); updateFloorCard();
+  document.getElementById('winbar').classList.remove('show');
+}
+
+// ── wiring ──
+document.getElementById('autoBtn').addEventListener('click', startAuto);
+document.getElementById('stepBtn').addEventListener('click', stepOnce);
+document.getElementById('resetBtn').addEventListener('click', reset);
+document.getElementById('discRange').addEventListener('input', (e) => {
+  N = +e.target.value; document.getElementById('discN').textContent = N;
+  reset();
+});
+
+// ── self-test pill (runs the SAME runSelfTest the Node twin runs) ──
+(function(){
+  const el = document.getElementById('selftest');
+  function run(){
+    const r = runSelfTest();
+    el.classList.toggle('ok', r.fails.length === 0);
+    el.classList.toggle('bad', r.fails.length > 0);
+    el.textContent = r.fails.length === 0
+      ? `self-test ✓ ${r.pass}/${r.total} — ruler · Gray-decode · floor proven`
+      : `self-test ✗ ${r.pass}/${r.total} — ${r.fails[0]}`;
+    el.title = r.lines.map(l => (l.ok?'✓':'✗')+' '+l.name+(l.detail?' — '+l.detail:'')).join('\n');
+    const pn = document.getElementById('proofN'); if (pn) pn.textContent = `${r.pass}/${r.total}`;
+  }
+  el.addEventListener('click', run);
+  run();
+})();
+
+// ── go ──
+reset();
+window.addEventListener('resize', () => draw());
+</script>
+</body>
+</html>
