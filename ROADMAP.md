@@ -129,7 +129,6 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 <!-- gauge:garden-seeds:start -->
 ### exhibit
-- [exhibit] **The Two Bulges** — the Moon raises a tide on the near side of the ocean — and an equal one on the FAR side, the half nobody expects. A touchable Earth+Moon you orbit: drag the Moon and watch BOTH water bulges track it, so every coast sees two highs a day. FORM: a turnable orrery of water, not a graph. CLAIM: tides follow the DIFFERENTIAL of gravity across the Earth (the tidal field ∝ 1/r³, stretching along the Earth-Moon line) — the far bulge is the body falling away from the slower-pulled far water. Astrophysics vein. (sown #267)
 - [exhibit] **Why the Sky Is Blue** — shine a white beam through a tank of faintly cloudy water: the SIDE-scattered glow is blue, the beam that punches THROUGH reddens toward the far end — the same trade that paints the noon sky blue and the sunset red. FORM: a touchable tank, drag the sun low and the transmitted disk reddens live. CLAIM: Rayleigh scattering ∝ λ⁻⁴, so blue scatters ~(700/400)⁴ ≈ 9× more than red — the exact ratio read off as the sky-glow and the reddened beam. Sits between optics and the cosmology wing's last-scattering. (sown #267)
 - [exhibit] **The Top That Won't Fall** — a spinning top leaned over should topple — instead its axis swings sideways in a slow circle and it stands. A touchable gyroscope: spin it up, tip it, and watch the PRECESSION; stop the spin and it falls at once. FORM: drag the spin-rate and the lean; the precession circle widens as you slow it. CLAIM: gravity's torque doesn't tip the axis, it STEERS the angular momentum sideways — precession rate Ω = τ / L = (m g r)/(I ω), exactly inverse to spin. A classical mechanics bench (the cavern's precession is quantum). (sown #267)
 - [exhibit] **Buffon's Needle** — drop matchsticks on a floor of parallel planks and π falls out of pure chance: the fraction that LAND CROSSING a seam, inverted, converges on π. FORM: a touchable floor you rain needles onto — each lands amber (clear) or rose (crossing a line), a live tally climbing toward 3.14159 as the drops mount, drag the needle length vs plank spacing and watch the rate shift. CLAIM: for needle length ℓ ≤ plank spacing t, P(cross) = 2ℓ/(πt) exactly, so π = 2ℓ/(t·P) — geometry read straight off a histogram of luck. The Numbers Room's probability vein, kin to Galton and the Benford Mill. (sown #267)
@@ -159,11 +158,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-<!-- ✝ BLOOMED #264: The LC Tank — charge and current trading places forever → lodestone-hall/the-lc-tank/ · after c14029d -->
 <!-- ✝ DECAYED #264: The Octave Ladder Your Ear Climbs Wrong — pitch is log-frequency · after c14029d -->
 <!-- ✝ DECAYED #264: Where the Light Folds — the Caustic room and the Rainbow are the same f… · after c14029d -->
 <!-- ✝ BLOOMED #265: The Game That Cannot Tie — Hex, where someone always wins → hex/ · after 5418f0a -->
 <!-- ✝ BLOOMED #266: The Sky That Was Once Fog — the CMB as an all-sky map you stand inside → last-scattering/ · after 149a09c -->
+<!-- ✝ BLOOMED #268: The Two Bulges → two-bulges/ · after a7ff176 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
