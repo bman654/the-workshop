@@ -1,5 +1,59 @@
 # Sound Garden — Changelog
 
+## 2026-06-22 — Grain Mill (new instrument — the rack's granular family)
+
+Added `grain-mill.html`, the rack's **granular-synthesis** voice — the synthesis family it lacked. The rack
+already had pluck (Loom/Monochord), additive overtones, FM sidebands, formant (Vowel Throat), Shepard
+(Endless Staircase) and beating (Tartini/Beating Bench), but never **grains of sound**. Tip a held cello tone
+into a brass hopper and it shatters into hundreds of glowing sound-grains; GRAIN SIZE + DENSITY melt one note
+into rain → a drone → mist. Accent **#7fd4b0** (glassy mint-aqua) — a new colour family on the grid, warmer
+than Lattice's #5fe6c4 and distinct from the brass cluster. (Grains of **sound**, not the number-grains of
+the Benford Mill, nor the brass siren disc of the Tone Mill.)
+
+- **Live granular synthesis, no audio files.** `buildSourceBuffer(ac, 164.81 /*E3*/)` renders a 2.0 s seeded
+  cello-ish drone in its own tiny `OfflineAudioContext` (three detuned voices −7/0/+6 cents; saw/saw/sine →
+  lowpass 1800 → ±0.4 % vibrato). The grain engine reads random windowed slices of it. Each grain carries a
+  TRUE Hann envelope via `setValueCurveAtTime` over a shared 64-pt half-cosine table (zero-start/zero-end ⇒
+  click-free). `setSize(ms)` log-maps 8↔120 ms (long = pitch · short = breath); `setDensity` runs sparse
+  plinks → continuous wash. Four destinations: Cello / Breath / Rain / Wash.
+- **ONE engine, live AND offline.** `createGrainEngine(ac)` runs identically under a live AudioContext
+  (audible, gated behind the hopper-tip gesture) and an `OfflineAudioContext` (silent), so the sound is
+  verifiable by sight. `window.__renderOffline(seconds, seed, preset='wash')` unrolls the SAME
+  `spawnGrain`/`nextGap` loop and reuses the Carillon's exact 16-bit PCM `encodeWav`.
+- **The touchable hopper gesture (no Play button).** A brushed-brass funnel + a floating tone-pearl that hums
+  the raw source drone the instant you first touch the page (the "before"). GRAB → TIP over the funnel mouth
+  (the lip tilts, a stream pours) → RELEASE over the mouth = the pearl drops in, the drone crossfades into
+  the grain stream. Release away = springs back, nothing starts (forgiving cancel). Tapping the running
+  funnel lifts the pearl out = graceful stop. The gesture also unlocks WebAudio autoplay. Touch-friendly
+  (`touch-action:none`, ≥44 px pearl, one pointer path).
+- **The cloud IS the sound (canonical per-grain viz contract).** The engine's `_onGrain(g)` callback is the
+  single source of truth — the viz spawns a mote INSIDE it (no separate grain timer), so picture and sound
+  can never drift. `g = {whenSec,durMs,semis,peak,jitterCents}`: time→x (enter at a breathing "now" column,
+  drift left as it ages), semis→y (pitch-pure collects into a band, scattered sprays vertically), durMs→radius,
+  the Hann envelope→brightness (each mote breathes exactly as the grain does), aqua→honey hue by pitch jitter.
+  Verified `grainsSpawned === grainsSeen === motes`. Trailing motion-blur + additive 'lighter' glow + faint
+  orientation hairlines (the source-pitch y + the now column) — no axes / ticks / numbers anywhere.
+- **The density-explosion clip-guard (the whole verification point).** Equal-power overlap compensation:
+  per-grain peak = `GRAIN_PEAK(0.16) · 1/sqrt(max(1,overlap))`, so the dense wash can never sum to clip. HARD
+  cap of 64 grains *concurrent at the spawn time* — reaped from a list of grain end-times, **not** a
+  callback-decremented counter. (Root-cause fix found via the lens: a plain counter only decrements in
+  `src.onended`, which never fires during the synchronous OFFLINE unroll, so it saturated at 64 and silenced
+  every later grain — the dense Wash rendered 96 % silent until this was fixed to a time-windowed cap.)
+- **Lens-verified at BOTH slider extremes (silent offline render → `tools/audio-lens`), seed 42, 8 s:**
+  - **Rain (sparse preset):** peak **−13.67 dBFS**, clipping **no (0 %)**, mean RMS −30.15, pitch **E3 −6c**
+    (164.2 Hz), 54 onsets, silenceRatio 0.58 — sparse plinks that stay AUDIBLE (a plink, not silence).
+  - **Wash (dense preset):** peak **−13.79 dBFS**, clipping **no (0 %)**, mean RMS −26.85, pitch **E3 −9c**
+    (163.9 Hz), centroid 349 Hz, silenceRatio 0.026 — a continuous mist (was 0.96 before the cap fix).
+  - **Live slider DENSITY=0:** peak −13.62 dBFS, 0 % clipped, silenceRatio 0.89, pitch E3 −5c (audible).
+  - **Live slider DENSITY=1:** peak −16.06 dBFS, 0 % clipped, silenceRatio 0.026, pitch E3 −7c (continuous).
+  - All four land squarely in the −7…−18 dBFS target band with 0 % clipping; the cello pitch survives in
+    every case. `GRAIN_PEAK` was tuned from 0.105 → 0.16 via the lens to centre the band (was −17.3 dBFS).
+- **Rack integration.** Manifest entry appended to `instruments.js` (10th card, accent #7fd4b0, thumbnail
+  `assets/grain-mill.png` showing the hopper mid-tip with the aqua cloud). Reciprocal cross-links: the page
+  links Drift + Monochord (its sustained-tone source siblings) + ← The Orrery Estate; `monochord.html`'s
+  footer reciprocates with ↔ The Grain Mill. All new hrefs resolve 200. README updated (granular row, the
+  lens-native list, the ensemble sentence). 60 fps, clean console, `selfTest()` ok.
+
 ## 2026-06-11 — Gamelan (new instrument — the rack's 8th, → a clean 2×4)
 
 Added `gamelan.html`, the rack's **eighth** visible instrument and its interlocking-pulse /

@@ -20,11 +20,14 @@ dependencies** — all sound synthesised live with the Web Audio API, no audio f
 | **Loom** (`loom.html`) | A seeded loom weaves an evolving diatonic chord progression into shimmering Karplus–Strong plucked arpeggios; a shuttle sweeps the warp of tuned strings. |
 | **Carillon** (`carillon.html`) | A ring of tuned bells rung in slowly-evolving change-ringing permutations; long inharmonic decays overlap into shifting, resonant harmony. |
 | **Lattice** (`lattice.html`) | A glowing pitch × time grid (a Tenori-on you can *see*): a playhead column sweeps left→right; lit cells chime in scale and bloom as it crosses them. The seeded pattern is musical by construction and gently mutates so it never repeats. Pick scale/root/tempo/density/evolve; click cells to play along. |
+| **Grain Mill** (`grain-mill.html`) | The **granular** family the rack lacked (pluck/FM/additive/formant/Shepard/beating all present — never grains). Tip a held cello tone into a brass hopper and it shatters into hundreds of glowing **sound-grains**; slide GRAIN SIZE (long = pitch ↔ short = breath) and DENSITY (sparse plinks ↔ continuous wash) to melt one note into rain → a drone → mist. The luminous cloud is driven by the same grains it plays. (Grains of *sound*, not the number-grains of the Benford Mill.) |
+| **Gamelan** (`gamelan.html`) | Two interlocking parts — polos and sangsih — weave into one gap-free stream on inharmonic metallophones tuned to slendro or pelog (genuine non-12-TET, defined in cents). |
+| **Monochord** (`monochord.html`) | Pluck, slide, and touch one tensioned string — its overtones are an exactly even ladder you can see and hear (fₙ/f₁ = n). Pinch a node and the harmonic isolates. |
 
 A little ensemble: **melody** (Whitney), **harmony** (Drift), **rhythm** (Euclid),
-**texture** (Rain), **chordal motion** (Loom), **resonance** (Carillon), and a
-**sequencer you can watch** (Lattice). (`index.html` is the rack listing them;
-`instruments.js` is its manifest.)
+**texture** (Rain), **chordal motion** (Loom), **resonance** (Carillon), a
+**sequencer you can watch** (Lattice), and **grain texture** (Grain Mill).
+(`index.html` is the rack listing them; `instruments.js` is its manifest.)
 
 ## A note on verification
 
@@ -35,10 +38,14 @@ errors, and the visual animates. The actual *pleasantness* is engineered (conson
 mellow synthesis, gentle reverb, a master limiter) rather than ear-confirmed. Have a listen and
 tell me if anything sounds off.
 
-The newer **lens-native** instruments (Carillon, Lattice) go further: their synth + scheduler
-run unchanged under an `OfflineAudioContext`, so `window.__renderOffline(seconds, seed)` renders
-the sound to a WAV **silently** (no speakers) and it can be measured by eye + number through
-`tools/audio-lens/` — peak dBFS, % clipped, and detected pitches vs scale. **Lattice** is the
+The newer **lens-native** instruments (Carillon, Lattice, Monochord, Grain Mill) go further: their
+synth + scheduler run unchanged under an `OfflineAudioContext`, so `window.__renderOffline(seconds,
+seed)` renders the sound to a WAV **silently** (no speakers) and it can be measured by eye + number
+through `tools/audio-lens/` — peak dBFS, % clipped, and detected pitches vs scale. **Grain Mill** is
+verified at *both slider extremes*: sparse Rain (peak −13.7 dBFS, 0 % clipped, an audible plink) and
+dense Wash (peak −13.8 dBFS, 0 % clipped, a continuous mist) both land in band with the held cello
+pitch preserved — the equal-power overlap comp + the 64-grain cap mean the densest wash never clips.
+**Lattice** is the
 most directly verifiable of all: because it's a *visible* pitch×time sequencer, you can confirm
 it works from a single screenshot (playhead position + lit cells + a bloom flash), and its
 rendered audio measures peak ≈ −37 dBFS / 0 % clipped with every scheduled note provably

@@ -55,5 +55,11 @@ window.INSTRUMENTS = [
     name: "Monochord",
     blurb: "pluck, slide, and touch one tensioned string — its overtones are an exactly even ladder you can see and hear (fₙ/f₁=n)",
     accent: "#d9a441"
+  },
+  {
+    file: "grain-mill.html",
+    name: "Grain Mill",
+    blurb: "tip a held cello tone into a brass hopper and it shatters into hundreds of glowing sound-grains — slide GRAIN SIZE and DENSITY to melt one note into rain, a drone, then mist",
+    accent: "#7fd4b0"
   }
 ];
