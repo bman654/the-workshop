@@ -154,12 +154,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-- [bench] **The Game That Cannot Tie — Hex, where someone always wins** — A small rhombus Hex board (7x7): two colours race to connect their opposite walls; you place stones, a simple solver answers. The wonder you can FEEL: fill the board ANY way and exactly ONE side has a winning chain — a draw is impossible (Hex's topological theorem, dual to Brouwer). FORM: a touchable board + a 'fill it randomly' button that always lights exactly one winner's path. Crux: over thousands of full random boards, EXACTLY one colour spans wall-to-wall (union-find on hex adjacency, checked both ways); small boards verify first-player-wins by strategy-steal. NEG-CONTROL: the same check on a SQUARE 4-neighbour grid produces draws — the no-draw is Hex's HEXAGONAL adjacency. Numbers Room bench (kin to Chomp; hexapawn is a DIFFERENT game). (sown #261)
-<!-- ✝ DECAYED #261: The Two-Chemical Skin · after 1e33c1f -->
 <!-- ✝ BLOOMED #263: The Pond You Can Fish Empty → conservatory/the-pond/ · after 7a5fd6d -->
 <!-- ✝ BLOOMED #264: The LC Tank — charge and current trading places forever → lodestone-hall/the-lc-tank/ · after c14029d -->
 <!-- ✝ DECAYED #264: The Octave Ladder Your Ear Climbs Wrong — pitch is log-frequency · after c14029d -->
 <!-- ✝ DECAYED #264: Where the Light Folds — the Caustic room and the Rainbow are the same f… · after c14029d -->
+<!-- ✝ BLOOMED #265: The Game That Cannot Tie — Hex, where someone always wins → hex/ · after 5418f0a -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);

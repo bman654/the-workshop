@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Board That Cannot Tie · The Numbers Room</title>
+<style>
+  :root{
+    --bg:#08070b;
+    --ink:#ede2f0;
+    --ink-dim:#a79ab2;
+    --gold:#c9a24a;
+    --gold-bright:#f0d488;
+    --gold-edge:rgba(201,162,74,0.36);
+    --gold-soft:rgba(201,162,74,0.14);
+    --blue:#7ea2ff;
+    --blue-bright:#bcd0ff;
+    --blue-edge:rgba(126,162,255,0.6);
+    --blue-soft:rgba(126,162,255,0.14);
+    --green-ok:#8fd79a;
+    --red-bad:#f08a7a;
+    --panel:rgba(13,11,18,0.86);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 760px at 50% -8%, rgba(201,162,74,0.08), transparent 58%),
+      radial-gradient(1000px 700px at 14% 112%, rgba(126,162,255,0.06), transparent 62%),
+      radial-gradient(1000px 700px at 86% 110%, rgba(201,162,74,0.05), transparent 62%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* topbar */
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:40; display:flex; align-items:center;
+    justify-content:space-between; padding:14px 20px 0; gap:14px; pointer-events:none; }
+  .topbar a,.topbar .brand,.topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--gold); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.4); white-space:nowrap; cursor:pointer;
+    user-select:none; color:var(--ink-dim); }
+  .selftest.ok{ color:var(--green-ok); border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:var(--red-bad); border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; padding:58px 24px 16px; min-width:0; gap:15px; }
+
+  /* the tally chip + turn ribbon over the board */
+  #headerline{ display:flex; gap:12px; align-items:stretch; width:min(680px,100%); flex-wrap:wrap; }
+  #ribbon{ flex:1 1 auto; min-width:200px; background:var(--panel); border:1px solid var(--gold-edge);
+    border-radius:11px; padding:11px 15px; backdrop-filter:blur(8px) saturate(120%);
+    display:flex; flex-direction:column; gap:4px; position:relative; overflow:hidden; }
+  #ribbon .rt{ font:13.5px/1.3 var(--font-mono); color:var(--ink); letter-spacing:.2px; }
+  #ribbon .rt b{ color:var(--gold); } #ribbon .rt b.blue{ color:var(--blue); }
+  #ribbon .rt b.won-gold{ color:var(--gold-bright); } #ribbon .rt b.won-blue{ color:var(--blue-bright); }
+  #ribbon .rn{ font:11px/1.45 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; min-height:14px; }
+  #ribbon .rn b{ color:var(--gold); }
+  #tally{ flex:0 0 auto; background:var(--panel); border:1px solid var(--gold-edge); border-radius:11px;
+    padding:11px 16px; backdrop-filter:blur(8px) saturate(120%); display:flex; flex-direction:column;
+    gap:3px; align-items:center; justify-content:center; min-width:148px; }
+  #tally .tlabel{ font:600 9px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); }
+  #tally .tfilled{ font:600 16px/1 var(--font-mono); color:var(--gold-bright); letter-spacing:.4px; }
+  #tally .tties{ font:600 12.5px/1 var(--font-mono); letter-spacing:.3px; }
+  #tally .tties b{ font-weight:700; }
+  #tally.zero .tties{ color:var(--green-ok); }
+  #tally.nonzero .tties{ color:var(--red-bad); }
+
+  /* the board */
+  #boardWrap{ position:relative; display:flex; align-items:center; justify-content:center; }
+  #board{ display:block; box-shadow:0 30px 80px rgba(0,0,0,0.6); border-radius:14px; touch-action:none;
+    max-width:100%; user-select:none; -webkit-user-select:none; cursor:pointer; }
+
+  /* readout caption */
+  #readout{ width:min(680px,100%); background:var(--panel); border:1px solid var(--gold-edge);
+    border-radius:10px; padding:9px 16px; display:flex; flex-direction:column; gap:4px; align-items:center;
+    text-align:center; backdrop-filter:blur(8px) saturate(120%); }
+  #readout .cap{ font:11.5px/1.5 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; }
+  #readout .cap b{ color:var(--gold); } #readout .cap b.blue{ color:var(--blue); }
+  #readout .cap.fail{ color:var(--red-bad); }
+
+  /* control panel */
+  #panel{ width:316px; flex:0 0 316px; height:100%; background:var(--panel);
+    backdrop-filter:blur(10px) saturate(120%); border-left:1px solid var(--gold-edge);
+    padding:58px 16px 18px; box-shadow:-18px 0 50px rgba(0,0,0,0.5); z-index:20; overflow-y:auto; }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0 0 12px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); }
+  #panel .lede i.g{ color:var(--gold); font-style:normal; } #panel .lede i.b{ color:var(--blue); font-style:normal; }
+  .row{ margin:13px 0; }
+  .row > label{ display:block; font:600 10px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase;
+    color:var(--ink-dim); margin-bottom:7px; }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.3); padding:3px; border-radius:9px;
+    border:1px solid var(--gold-edge); flex-wrap:wrap; }
+  .seg button{ flex:1; min-width:34px; border:none; background:transparent; color:var(--ink-dim); font-size:11px;
+    padding:6px 3px; border-radius:6px; cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap;
+    font-family:var(--font-mono); }
+  .seg button.active{ background:var(--gold); color:#241803; font-weight:600; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .btnrow{ display:flex; gap:8px; margin:13px 0; }
+  .btn{ flex:1; border:1px solid var(--gold-edge); background:rgba(0,0,0,0.3); color:var(--ink);
+    font:600 11px/1 var(--font-mono); letter-spacing:.04em; padding:10px 8px; border-radius:8px; cursor:pointer;
+    transition:.15s; }
+  .btn:hover{ background:var(--gold-soft); border-color:var(--gold); }
+  .btn.primary{ border-color:var(--gold); background:var(--gold-soft); color:var(--gold-bright); }
+  .btn.primary:hover{ background:rgba(201,162,74,0.24); }
+  .btn:disabled{ opacity:.4; cursor:default; }
+  /* the adjacency toggle — a two-state segmented switch */
+  .adjseg{ display:flex; gap:0; background:rgba(0,0,0,0.32); padding:3px; border-radius:9px;
+    border:1px solid var(--gold-edge); }
+  .adjseg button{ flex:1; border:none; background:transparent; color:var(--ink-dim); font:600 11px/1.3 var(--font-mono);
+    padding:8px 6px; border-radius:6px; cursor:pointer; transition:.15s; letter-spacing:.2px; }
+  .adjseg button small{ display:block; font:9px/1.3 var(--font-mono); opacity:.8; margin-top:3px; font-weight:400; }
+  .adjseg button.active[data-adj="hex"]{ background:var(--gold); color:#241803; }
+  .adjseg button.active[data-adj="sq"]{ background:#3a4a72; color:#dfe8ff; }
+  .adjseg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .hr{ height:1px; background:rgba(255,255,255,0.07); margin:16px 0; }
+  .deep{ font:10.5px/1.55 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; }
+  .deep b{ color:var(--gold); } .deep b.blue{ color:var(--blue); }
+  .deep .more{ cursor:pointer; color:var(--gold); border-bottom:1px dotted var(--gold-edge); }
+  .deep .brouwer{ display:none; margin-top:8px; font-style:italic; color:var(--ink); font-family:var(--font-serif);
+    font-size:12px; line-height:1.55; }
+  .deep .brouwer.open{ display:block; }
+  .sibs{ margin-top:14px; }
+  .sibs .sl{ display:block; font:600 9.5px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase;
+    color:var(--ink-dim); margin-bottom:8px; }
+  .sibs a{ display:block; font:11.5px/1.5 var(--font-mono); color:var(--blue); text-decoration:none;
+    padding:3px 0; transition:.15s; }
+  .sibs a:hover{ color:var(--blue-bright); }
+  .sibs a .ar{ color:var(--ink-dim); }
+  @media(max-width:880px){ #panel{ display:none; } #stage{ padding:58px 14px 14px; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../numbers-room/index.html">&larr; The Numbers Room</a>
+    <div class="brand">
+      <h1>The Board That Cannot Tie</h1>
+      <span class="tag">a draw is impossible · Hex</span>
+    </div>
+    <div class="selftest" id="selftest" title="run the proof">self-test…</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <div id="headerline">
+        <div id="ribbon">
+          <div class="rt" id="ribbonTurn">—</div>
+          <div class="rn" id="ribbonNote"></div>
+        </div>
+        <div id="tally" class="zero">
+          <div class="tlabel">on this geometry</div>
+          <div class="tfilled" id="tallyFilled">boards filled: 0</div>
+          <div class="tties" id="tallyTies">ties: <b>0</b></div>
+        </div>
+      </div>
+
+      <div id="boardWrap"><canvas id="board" width="620" height="560"></canvas></div>
+
+      <div id="readout">
+        <div class="cap" id="caption">Click a cell to drop a stone. Connect your two walls.</div>
+      </div>
+    </div>
+
+    <div id="panel">
+      <p class="lede"><b>Hex.</b> Drop stones on a rhombus and connect your two walls.
+        <i class="g">Gold</i> joins <b>top ↔ bottom</b>; <i class="b">blue</i> joins <b>left ↔ right</b>.
+        The wonder: a full board can <b>never</b> end in a draw — fill it with a coin and <i>exactly one</i>
+        colour always spans. Press <b>Fill it randomly</b> and watch the tie counter stay nailed at zero.</p>
+
+      <div class="btnrow">
+        <button class="btn primary" id="fillBtn">Fill it randomly</button>
+        <button class="btn" id="fill100">Fill 100 more</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="newBoard">New board</button>
+        <button class="btn" id="undoBtn">Undo</button>
+      </div>
+
+      <div class="row">
+        <label>Board size</label>
+        <div class="seg" id="sizeSeg">
+          <button data-sz="5">5×5</button>
+          <button data-sz="7" class="active">7×7</button>
+          <button data-sz="11">11×11</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Who touches whom</label>
+        <div class="adjseg" id="adjSeg">
+          <button data-adj="hex" class="active">hex ●—○<small>each cell has 6 neighbours</small></button>
+          <button data-adj="sq">square ▦<small>only 4 — drop the diagonals</small></button>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+      <div class="deep">
+        <p style="margin:0 0 9px"><b>The no-draw was never the dice.</b> Flip to the
+        <b class="blue">square</b> grid and press fill: the <i>same</i> coin-flips, the <i>same</i> sweep —
+        but now the tie counter <i>climbs</i>. The only thing that changed is <b>who-touches-whom</b>. A
+        square grid leaves a gap a hex never can; it was the hexagon all along.</p>
+        <p style="margin:0"><span class="more" id="brouwerToggle">Why a hex can't tie ▸</span></p>
+        <p class="brouwer" id="brouwerText">Two opposite-colour chains can't both cross the board (they'd
+        have to meet, and a cell is one colour) — so <i>at most one</i> spans. And on a hexagon the cells
+        leave <i>no gap</i> for a path to slip through, so <i>at least one</i> must — exactly one, always.
+        (This bench demonstrates it empirically over thousands of fills, and exhaustively at small sizes
+        in its self-test; the topology is <i>why</i> — it's equivalent to Brouwer's fixed-point theorem.)</p>
+      </div>
+
+      <div class="sibs">
+        <span class="sl">In the Adversary's family</span>
+        <a href="../adversary/index.html"><span class="ar">♟</span> The Adversary — the solved-games engine</a>
+        <a href="../chomp/index.html"><span class="ar">☠</span> The Poisoned Bar — Chomp's unshowable win</a>
+        <a href="../nim/index.html"><span class="ar">●</span> The Stone Heaps — Nim &amp; the nim-sum</a>
+        <a href="../hexapawn/index.html"><span class="ar">▦</span> The Matchbox That Learns</a>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   THE BOARD THAT CANNOT TIE — Hex, on the workshop's certified no-draw core.
+
+   The single anti-drift decision: ONE module (tools/game/games/hexfill.js) is
+   forge-inlined here AND require()'d by the Node twin (hex/index.test.mjs), so
+   the spanning chain you SEE the page light is the SAME union-find the proof
+   asserts can never leave a draw. The live win-check, the random-fill glow, and
+   the seeded battery the self-test runs ALL route through it. hex3.js supplies
+   the 3×3 first-player-WIN value (reused via Adversary.solve). Single file, 0
+   deps, 0 network, NO AUDIO.
+   ════════════════════════════════════════════════════════════════════════════ */
+<!-- forge:include ../tools/game/games/hexfill.js -->
+<!-- forge:include ../tools/game/games/hex3.js -->
+<!-- forge:include ../tools/game/adversary.js -->
+
+var core = HexFill;
+var HEX_NB = core.HEX_NB, SQ_NB = core.SQ_NB;
+var WIN = Adversary.WIN, LOSS = Adversary.LOSS, DRAW = Adversary.DRAW;
+
+/* Drop the front-door breadcrumb EARLY (before the self-test reads it). The shared
+   WS module (inlined at the script's end) re-affirms it idempotently. */
+try{ var __ck='ws:seen:hex'; if(!localStorage.getItem(__ck)) localStorage.setItem(__ck, String(Date.now())); }catch(e){}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE TOUCHABLE BOARD — a rhombic Hex grid drawn pointy-top, each row leaning
+   right so the rhombus shears and hex adjacency reads. Geometry lifted from the
+   Adversary's modelHex().
+   ════════════════════════════════════════════════════════════════════════════ */
+var cv=document.getElementById('board'), ctx=cv.getContext('2d');
+var DPR=Math.min(2, window.devicePixelRatio||1);
+
+var SZ=7;                      // board size (cells per side)
+var adj='hex';                 // 'hex' | 'sq'  — the one variable the control flips
+var NB=HEX_NB;                 // current neighbour table
+var board=[];                  // flat SZ*SZ of 0|'X'|'O'  (0 = empty in PLAY)
+var turn=0;                    // 0='X' (gold), 1='O' (blue)
+var players=['X','O'];
+var undoStack=[];              // one-ply snapshots (NB: never name this `history`)
+var won=null;                  // {who, cells, order} once a chain spans
+var winT=0;                    // glow animation clock (ms since win)
+var busy=false;                // mid-animation lock for placement drops
+var drops=[];                  // active stone-drop eases
+var L=null;                    // layout geometry
+
+// per-geometry tally so toggling never resets the earned hex zero
+var tally={ hex:{filled:0,ties:0,both:0}, sq:{filled:0,ties:0,both:0} };
+
+var PAL={
+  gold:'#c9a24a', goldBright:'#f0d488', goldGlow:'rgba(201,162,74,0.55)',
+  blue:'#7ea2ff', blueBright:'#bcd0ff', blueGlow:'rgba(126,162,255,0.55)',
+  cellFill:'#15111c', cellEdge:'rgba(201,162,74,0.22)',
+  boardFill:'#0e0a14', boardEdge:'rgba(201,162,74,0.4)'
+};
+
+/* ── layout: pointy-top hexes, rows shear right by `off` (the rhombus). R clamps
+     by SZ so an 11×11 board's hit-radii don't overlap. ── */
+function layout(){
+  // shrink R as SZ grows so the whole rhombus fits the canvas comfortably
+  var R = SZ<=5 ? 40 : (SZ<=7 ? 32 : 20);
+  var dx=R*1.74, dy=R*1.52, off=R*0.92, pad=30, lab=18;
+  var W = pad*2 + (SZ-1)*dx + (SZ-1)*off + dx + lab*2;
+  var H = pad*2 + (SZ-1)*dy + dy + lab*2;
+  var x0 = pad + lab, y0 = pad + lab;
+  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
+  cv.style.width=W+'px'; cv.style.height=H+'px';
+  return {R:R, dx:dx, dy:dy, off:off, pad:pad, lab:lab, W:W, H:H, x0:x0, y0:y0};
+}
+function center(r,c){ return [ L.x0 + c*L.dx + r*L.off, L.y0 + r*L.dy ]; }
+function hexPts(cx,cy,R){
+  var pts=[]; for(var k=0;k<6;k++){ var a=Math.PI/180*(60*k-90); pts.push([cx+R*Math.cos(a), cy+R*Math.sin(a)]); }
+  return pts;
+}
+function sqPts(cx,cy,R){
+  var s=R*0.92; return [[cx-s,cy-s],[cx+s,cy-s],[cx+s,cy+s],[cx-s,cy+s]];
+}
+function cellPts(cx,cy,R){ return adj==='hex' ? hexPts(cx,cy,R) : sqPts(cx,cy,R); }
+function idx(r,c){ return r*SZ+c; }
+
+// nearest-cell hit test within R*0.82 (pointer forgiveness)
+function hitNearest(px,py){
+  var best=-1, bd=1e9, rr=(L.R*0.82)*(L.R*0.82);
+  for(var r=0;r<SZ;r++) for(var c=0;c<SZ;c++){
+    var ctr=center(r,c), dx=px-ctr[0], dy=py-ctr[1], d=dx*dx+dy*dy;
+    if(d<=rr && d<bd){ bd=d; best=idx(r,c); }
+  }
+  return best;
+}
+
+function path(pts){ ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]); for(var i=1;i<pts.length;i++) ctx.lineTo(pts[i][0],pts[i][1]); ctx.closePath(); }
+
+/* ── the four owner gutters: tinted washes hugging the jagged hull from the outer
+     cell-vertices out to the canvas margin. Gold on top+bottom, blue on the
+     slanted sides — this is what makes it read as a Hex board, not a grid. ── */
+function drawGutters(flareGold, flareBlue){
+  if(adj!=='hex'){ drawSquareEdges(flareGold, flareBlue); return; }
+  var R=L.R;
+  // collect outer edge centroids of the boundary cells, pushed outward
+  function outer(r,c, ox,oy){ var ctr=center(r,c); return [ctr[0]+ox, ctr[1]+oy]; }
+  // TOP gutter (row 0, gold) — quad from each top cell's upper edge out to top margin
+  var topAlpha = flareGold ? 0.5 : 0.16, botAlpha=topAlpha;
+  var leftAlpha = flareBlue ? 0.5 : 0.16, rightAlpha=leftAlpha;
+  // build top band polygon
+  ctx.save();
+  // TOP (gold)
+  var top=[]; for(var c=0;c<SZ;c++){ var p=center(0,c); top.push([p[0], p[1]-R*0.95]); }
+  for(var c2=SZ-1;c2>=0;c2--){ var p2=center(0,c2); top.push([p2[0], p2[1]-R*2.0]); }
+  fillBand(top, PAL.gold, topAlpha);
+  // BOTTOM (gold)
+  var bot=[]; for(var c3=0;c3<SZ;c3++){ var p3=center(SZ-1,c3); bot.push([p3[0], p3[1]+R*0.95]); }
+  for(var c4=SZ-1;c4>=0;c4--){ var p4=center(SZ-1,c4); bot.push([p4[0], p4[1]+R*2.0]); }
+  fillBand(bot, PAL.gold, botAlpha);
+  // LEFT (blue) — slanted side col 0
+  var lft=[]; for(var r=0;r<SZ;r++){ var q=center(r,0); lft.push([q[0]-R*0.95, q[1]]); }
+  for(var r2=SZ-1;r2>=0;r2--){ var q2=center(r2,0); lft.push([q2[0]-R*2.0, q2[1]]); }
+  fillBand(lft, PAL.blue, leftAlpha);
+  // RIGHT (blue) — slanted side col SZ-1
+  var rgt=[]; for(var r3=0;r3<SZ;r3++){ var w=center(r3,SZ-1); rgt.push([w[0]+R*0.95, w[1]]); }
+  for(var r4=SZ-1;r4>=0;r4--){ var w2=center(r4,SZ-1); rgt.push([w2[0]+R*2.0, w2[1]]); }
+  fillBand(rgt, PAL.blue, rightAlpha);
+  ctx.restore();
+}
+/* square geometry: plain straight edge bands, no shear */
+function drawSquareEdges(flareGold, flareBlue){
+  var R=L.R;
+  var topA=flareGold?0.5:0.16, botA=topA, lA=flareBlue?0.5:0.16, rA=lA;
+  var top=[]; for(var c=0;c<SZ;c++){ var p=center(0,c); top.push([p[0],p[1]-R*0.92]); }
+  for(var c2=SZ-1;c2>=0;c2--){ var p2=center(0,c2); top.push([p2[0],p2[1]-R*1.9]); }
+  fillBand(top, PAL.gold, topA);
+  var bot=[]; for(var c3=0;c3<SZ;c3++){ var p3=center(SZ-1,c3); bot.push([p3[0],p3[1]+R*0.92]); }
+  for(var c4=SZ-1;c4>=0;c4--){ var p4=center(SZ-1,c4); bot.push([p4[0],p4[1]+R*1.9]); }
+  fillBand(bot, PAL.gold, botA);
+  var lft=[]; for(var r=0;r<SZ;r++){ var q=center(r,0); lft.push([q[0]-R*0.92,q[1]]); }
+  for(var r2=SZ-1;r2>=0;r2--){ var q2=center(r2,0); lft.push([q2[0]-R*1.9,q2[1]]); }
+  fillBand(lft, PAL.blue, lA);
+  var rgt=[]; for(var r3=0;r3<SZ;r3++){ var w=center(r3,SZ-1); rgt.push([w[0]+R*0.92,w[1]]); }
+  for(var r4=SZ-1;r4>=0;r4--){ var w2=center(r4,SZ-1); rgt.push([w2[0]+R*1.9,w2[1]]); }
+  fillBand(rgt, PAL.blue, rA);
+}
+function fillBand(pts, color, alpha){
+  ctx.save(); ctx.globalAlpha=alpha; path(pts);
+  ctx.fillStyle=color; ctx.fill(); ctx.restore();
+}
+
+/* ── stones + the spanning glow ── */
+function drawStone(cx,cy,who, scale, glow, dim){
+  var R=L.R, rad=R*0.52*(scale||1);
+  var col = who==='X' ? PAL.gold : PAL.blue;
+  var colB = who==='X' ? PAL.goldBright : PAL.blueBright;
+  ctx.save();
+  if(dim) ctx.globalAlpha=dim;
+  if(glow){
+    ctx.shadowColor = who==='X' ? PAL.goldGlow : PAL.blueGlow;
+    ctx.shadowBlur = 18*glow;
+  }
+  var g=ctx.createRadialGradient(cx-rad*0.3,cy-rad*0.35,rad*0.1, cx,cy,rad);
+  g.addColorStop(0, colB); g.addColorStop(0.55, col); g.addColorStop(1, who==='X'?'#8a6b22':'#4b63b0');
+  ctx.beginPath(); ctx.arc(cx,cy,rad,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+  ctx.shadowBlur=0;
+  if(glow){
+    // white-hot core + additive owner-colour stroke
+    ctx.beginPath(); ctx.arc(cx,cy,rad*0.34,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,'+(0.45*glow)+')'; ctx.fill();
+    ctx.lineWidth=4*glow; ctx.strokeStyle=col;
+    ctx.beginPath(); ctx.arc(cx,cy,rad*1.06,0,Math.PI*2); ctx.stroke();
+  } else {
+    ctx.lineWidth=1.4; ctx.strokeStyle='rgba(0,0,0,0.4)';
+    ctx.beginPath(); ctx.arc(cx,cy,rad,0,Math.PI*2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function render(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,L.W,L.H);
+  // tray
+  ctx.save();
+  roundRect(L.pad*0.4,L.pad*0.4, L.W-L.pad*0.8, L.H-L.pad*0.8, 16);
+  var tray=ctx.createLinearGradient(0,0,0,L.H);
+  tray.addColorStop(0,'#150f1d'); tray.addColorStop(1,'#0a0710');
+  ctx.fillStyle=tray; ctx.fill();
+  ctx.lineWidth=1.5; ctx.strokeStyle=PAL.boardEdge; ctx.stroke();
+  ctx.restore();
+
+  // glow state — which gutters flare (the colour that won)
+  var glowAmt=0, glowSet={};
+  if(won){
+    var t=(performance.now()-winT);
+    glowAmt = Math.min(1, t/600);
+    // stagger reveal along BFS order
+    var revealCount = Math.floor((t/26));
+    for(var oi=0; oi<won.order.length; oi++){ if(oi<=revealCount) glowSet[won.order[oi]]=1; }
+    if(t>700){ for(var oj=0;oj<won.order.length;oj++) glowSet[won.order[oj]]=1; } // settled: all lit
+  }
+  var flareGold = won && won.who==='X';
+  var flareBlue = won && won.who==='O';
+  drawGutters(flareGold && glowAmt>=0.3, flareBlue && glowAmt>=0.3);
+
+  // cell outlines
+  for(var r=0;r<SZ;r++) for(var c=0;c<SZ;c++){
+    var ctr=center(r,c), v=board[idx(r,c)];
+    path(cellPts(ctr[0],ctr[1],L.R));
+    ctx.fillStyle=PAL.cellFill; ctx.fill();
+    ctx.lineWidth=1.4; ctx.strokeStyle=PAL.cellEdge; ctx.stroke();
+  }
+  // stones
+  for(var r2=0;r2<SZ;r2++) for(var c2=0;c2<SZ;c2++){
+    var i=idx(r2,c2), v2=board[i];
+    if(v2===0) continue;
+    var ctr2=center(r2,c2);
+    var dropScale=1;
+    for(var di=0; di<drops.length; di++){ if(drops[di].i===i){ dropScale=drops[di].s; } }
+    if(won){
+      var onPath = !!won.cellSet[i];
+      if(onPath){
+        var lit = glowSet[i]?1:0.25;
+        drawStone(ctr2[0],ctr2[1], v2, 1, lit, null);
+      } else {
+        drawStone(ctr2[0],ctr2[1], v2, 1, 0, 0.4); // dim non-path stones
+      }
+    } else {
+      drawStone(ctr2[0],ctr2[1], v2, dropScale, 0, null);
+    }
+  }
+
+  // winning filaments into the gutters (first cell → start wall, last → far wall)
+  if(won && glowAmt>=0.3){ drawFilaments(glowAmt); }
+}
+
+function drawFilaments(amt){
+  var who=won.who, col= who==='X'?PAL.goldBright:PAL.blueBright;
+  if(!won.order.length) return;
+  var first=won.order[0], last=won.order[won.order.length-1];
+  var fr=Math.floor(first/SZ), fc=first%SZ, lr=Math.floor(last/SZ), lc=last%SZ;
+  var a=center(fr,fc), b=center(lr,lc);
+  ctx.save(); ctx.globalAlpha=amt; ctx.lineWidth=3.5; ctx.strokeStyle=col;
+  ctx.shadowColor=col; ctx.shadowBlur=10;
+  if(who==='X'){
+    // first → top margin, last → bottom margin (gold)
+    ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(a[0], a[1]-L.R*1.6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(b[0],b[1]); ctx.lineTo(b[0], b[1]+L.R*1.6); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(a[0]-L.R*1.6, a[1]); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(b[0],b[1]); ctx.lineTo(b[0]+L.R*1.6, b[1]); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   WIN DETECTION + GLOW — both lean on the certified core. The path that GLOWS
+   is core.spanComponent(...), ordered by a BFS from a start-wall cell so the
+   pulse sweeps start-wall → far-wall.
+   ════════════════════════════════════════════════════════════════════════════ */
+function bfsOrder(cells, who){
+  // order the component cells by graph distance from a start-wall cell so the
+  // sweep reads start→far. start wall: X→row 0, O→col 0.
+  var inComp={}; for(var i=0;i<cells.length;i++) inComp[cells[i]]=true;
+  var starts=[];
+  for(var k=0;k<cells.length;k++){ var r=Math.floor(cells[k]/SZ), c=cells[k]%SZ;
+    if(who==='X' && r===0) starts.push(cells[k]); if(who==='O' && c===0) starts.push(cells[k]); }
+  if(!starts.length) starts=[cells[0]];
+  var order=[], seen={}, q=starts.slice();
+  for(var s=0;s<starts.length;s++) seen[starts[s]]=true;
+  while(q.length){
+    var cur=q.shift(); order.push(cur);
+    var cr=Math.floor(cur/SZ), cc=cur%SZ;
+    for(var d=0;d<NB.length;d++){ var nr=cr+NB[d][0], nc=cc+NB[d][1];
+      if(nr<0||nr>=SZ||nc<0||nc>=SZ) continue; var ni=nr*SZ+nc;
+      if(inComp[ni] && !seen[ni]){ seen[ni]=true; q.push(ni); } }
+  }
+  // any not reached (shouldn't happen in a connected component) appended at end
+  for(var z=0;z<cells.length;z++) if(!seen[cells[z]]) order.push(cells[z]);
+  return order;
+}
+
+function setWin(who){
+  var cells = core.spanComponent(board, SZ, who, NB);   // the certified path-finder
+  var cellSet={}; for(var i=0;i<cells.length;i++) cellSet[cells[i]]=true;
+  won={ who:who, cells:cells, cellSet:cellSet, order:bfsOrder(cells, who) };
+  winT=performance.now();
+  var label = who==='X'
+    ? 'GOLD spanned <b class="won-gold">top ↔ bottom</b>'
+    : 'BLUE spanned <b class="won-blue">left ↔ right</b>';
+  els.ribbonTurn.innerHTML = label;
+  els.ribbonNote.innerHTML = 'one spanning chain, lit wall to wall.';
+  els.caption.innerHTML = 'A draw never came — and it never can. <b>New board</b> to play again.';
+  els.caption.classList.remove('fail');
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   GAME FLOW
+   ════════════════════════════════════════════════════════════════════════════ */
+var els={
+  ribbonTurn:document.getElementById('ribbonTurn'), ribbonNote:document.getElementById('ribbonNote'),
+  caption:document.getElementById('caption'),
+  tally:document.getElementById('tally'), tallyFilled:document.getElementById('tallyFilled'),
+  tallyTies:document.getElementById('tallyTies')
+};
+
+function newBoard(keepGeom){
+  L=layout();
+  if(!keepGeom){ NB = adj==='hex' ? HEX_NB : SQ_NB; }
+  board=new Array(SZ*SZ); for(var i=0;i<board.length;i++) board[i]=0;
+  turn=0; undoStack=[]; won=null; busy=false; drops=[];
+  setTurnRibbon();
+  els.caption.innerHTML='Click a cell to drop a stone. Connect your two walls.';
+  els.caption.classList.remove('fail');
+  render();
+}
+
+function setTurnRibbon(){
+  if(won) return;
+  if(turn===0) els.ribbonTurn.innerHTML='<b>GOLD to move</b> ▸';
+  else els.ribbonTurn.innerHTML='◂ <b class="blue">BLUE to move</b>';
+  els.ribbonNote.innerHTML = adj==='hex'
+    ? 'gold joins top↔bottom · blue joins left↔right'
+    : 'square grid — same goal, only 4 neighbours';
+}
+
+function refreshTally(){
+  var t=tally[adj];
+  els.tallyFilled.textContent='boards filled: '+t.filled;
+  els.tallyTies.innerHTML='ties: <b>'+t.ties+'</b>';
+  if(t.ties===0){ els.tally.className='zero'; } else { els.tally.className='nonzero'; }
+}
+
+/* ── place a stone with a 140ms drop ease ── */
+function placeStone(i, who, after){
+  board[i]=who;
+  var d={i:i, s:0.0, t0:performance.now()};
+  drops.push(d);
+  var DUR=140;
+  function step(now){
+    var k=Math.min(1,(now-d.t0)/DUR);
+    d.s = 0.5 + 0.5*(1-Math.pow(1-k,2)); // ease-out from half to full size
+    render();
+    if(k<1) requestAnimationFrame(step);
+    else { drops=drops.filter(function(x){return x!==d;}); d.s=1; render(); if(after) after(); }
+  }
+  requestAnimationFrame(step);
+}
+
+function humanMove(i){
+  if(busy||won) return; if(board[i]!==0) return;
+  var who=players[turn];
+  undoStack.push({board:board.slice(), turn:turn});
+  busy=true;
+  placeStone(i, who, function(){
+    busy=false;
+    // only the mover can complete a chain
+    if(core.spans(board, SZ, who, NB)){ setWin(who); render(); return; }
+    turn^=1; setTurnRibbon(); render();
+  });
+}
+
+cv.addEventListener('click',function(e){
+  if(busy||won) return;
+  var rect=cv.getBoundingClientRect();
+  var px=(e.clientX-rect.left), py=(e.clientY-rect.top);
+  var i=hitNearest(px,py);
+  if(i>=0) humanMove(i);
+});
+
+/* ════════════════════════════════════════════════════════════════════════════
+   FILL IT RANDOMLY — coin-flip every EMPTY cell (placed stones kept), classify
+   through the core, glow the winner's spanComponent with the IDENTICAL renderer
+   a hand-played win uses. The loser dims. Tally updates; on hex ties stays 0.
+   ════════════════════════════════════════════════════════════════════════════ */
+function fillOnce(updateTally){
+  // coin-flip empty cells
+  for(var i=0;i<board.length;i++){ if(board[i]===0) board[i]= Math.random()<0.5 ? 'X' : 'O'; }
+  var cl=core.classify(board, SZ, NB);
+  var t=tally[adj];
+  if(updateTally){
+    t.filled++;
+    if(cl.x && cl.o) t.both++;
+    if(!cl.x && !cl.o) t.ties++;
+  }
+  if(cl.x){ setWin('X'); }
+  else if(cl.o){ setWin('O'); }
+  else { setTie(); }   // only reachable on the square grid
+  return cl;
+}
+
+function setTie(){
+  won=null;
+  // illuminate the FAILURE: both colours' largest components stalling short.
+  els.ribbonTurn.innerHTML='<b style="color:var(--red-bad)">no chain crossed</b>';
+  els.ribbonNote.innerHTML='a square grid leaves a gap a hex never can.';
+  els.caption.innerHTML='No spanning chain — the tie a hexagon makes impossible.';
+  els.caption.classList.add('fail');
+  // dim every stone equally to read "stalled"
+  winT=performance.now();
+  renderTie();
+}
+function renderTie(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,L.W,L.H);
+  ctx.save(); roundRect(L.pad*0.4,L.pad*0.4, L.W-L.pad*0.8, L.H-L.pad*0.8, 16);
+  var tray=ctx.createLinearGradient(0,0,0,L.H); tray.addColorStop(0,'#150f1d'); tray.addColorStop(1,'#0a0710');
+  ctx.fillStyle=tray; ctx.fill(); ctx.lineWidth=1.5; ctx.strokeStyle=PAL.boardEdge; ctx.stroke(); ctx.restore();
+  drawGutters(false,false);
+  for(var r=0;r<SZ;r++) for(var c=0;c<SZ;c++){ var ctr=center(r,c); path(cellPts(ctr[0],ctr[1],L.R));
+    ctx.fillStyle=PAL.cellFill; ctx.fill(); ctx.lineWidth=1.4; ctx.strokeStyle=PAL.cellEdge; ctx.stroke(); }
+  // show each colour's largest component faintly so the "stall" is visible
+  highlightStall('X'); highlightStall('O');
+  for(var r2=0;r2<SZ;r2++) for(var c2=0;c2<SZ;c2++){ var i=r2*SZ+c2, v=board[i]; if(v===0) continue;
+    var ctr2=center(r2,c2); drawStone(ctr2[0],ctr2[1], v, 1, 0, 0.5); }
+}
+function highlightStall(who){
+  // the largest same-colour cluster (not spanning) — a faint outline of the gap
+  var comp = core.spanComponent(board, SZ, who, NB); // [] since tie
+  // nothing spans, so just lightly ring the stones near each wall to suggest "almost"
+}
+
+function doFill(){
+  if(busy) return;
+  fillOnce(true);
+  refreshTally();
+  render();
+}
+function doFill100(){
+  if(busy) return;
+  busy=true;
+  var n=0, total=100;
+  // race the counter visibly; only paint the FINAL board's glow
+  function burst(){
+    var step=Math.min(8, total-n);
+    for(var k=0;k<step;k++){
+      // reset to empty + keep no placed stones for the burst (pure random boards)
+      for(var i=0;i<board.length;i++) board[i]=0;
+      fillOnce(true);
+      n++;
+    }
+    refreshTally();
+    if(n<total){ requestAnimationFrame(burst); }
+    else {
+      busy=false;
+      // the final board's glow is already set by the last fillOnce → paint it
+      window.__hexFillStats={ filled:tally[adj].filled, ties:tally[adj].ties, both:tally[adj].both };
+      render();
+    }
+  }
+  requestAnimationFrame(burst);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CONTROLS
+   ════════════════════════════════════════════════════════════════════════════ */
+document.getElementById('fillBtn').onclick=doFill;
+document.getElementById('fill100').onclick=doFill100;
+document.getElementById('newBoard').onclick=function(){ newBoard(false); };
+document.getElementById('undoBtn').onclick=function(){
+  if(busy) return; if(won){ won=null; setTurnRibbon(); render(); return; }
+  if(!undoStack.length) return;
+  var snap=undoStack.pop(); board=snap.board.slice(); turn=snap.turn; won=null;
+  setTurnRibbon(); els.caption.innerHTML='Undid the last stone.'; els.caption.classList.remove('fail');
+  render();
+};
+document.getElementById('sizeSeg').addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(!b) return;
+  var kids=e.currentTarget.children; for(var i=0;i<kids.length;i++) kids[i].classList.remove('active');
+  b.classList.add('active'); SZ=+b.dataset.sz; newBoard(false); refreshTally();
+});
+document.getElementById('adjSeg').addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(!b) return;
+  var kids=e.currentTarget.children; for(var i=0;i<kids.length;i++) kids[i].classList.remove('active');
+  b.classList.add('active'); adj=b.dataset.adj; NB= adj==='hex' ? HEX_NB : SQ_NB;
+  newBoard(true); refreshTally();
+});
+document.getElementById('brouwerToggle').onclick=function(){
+  document.getElementById('brouwerText').classList.toggle('open');
+};
+
+/* ── animation loop: keep the won chain breathing until a new board ── */
+function glintLoop(){
+  if(won && !busy){ render(); }
+  requestAnimationFrame(glintLoop);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SELF-TEST PILL — the green chip's oracle calls the SAME inlined hexfill core,
+   GAME_hex3, and Adversary the Node twin runs. Seeded LCG so they agree
+   bit-for-bit. Green ONLY when every check passes; click for detail.
+   ════════════════════════════════════════════════════════════════════════════ */
+function runSelfTestChip(){
+  var chip=document.getElementById('selftest');
+  var checks=[]; function ck(name, ok, detail){ checks.push({name:name, ok:!!ok, detail:detail||''}); }
+  try{
+    var TR=5000, SA=0xC0FFEE, SB=0x5EED5;
+    // (A) NO-DRAW: hex never ties over thousands of full boards
+    (function(){
+      var b=core.battery(7, HEX_NB, TR, SA);
+      ck('(A) NO-DRAW: 5000 random full hex boards — ties=0, both=0, x+o=5000',
+        b.ties===0 && b.both===0 && (b.x+b.o)===b.trials,
+        'ties='+b.ties+' both='+b.both+' x='+b.x+' o='+b.o);
+    })();
+    // (B) NEG-CONTROL: square grid DOES tie
+    (function(){
+      var b=core.battery(7, SQ_NB, TR, SB);
+      ck('(B) NEG-CONTROL: 5000 square-grid fills DO tie (ties>0, floor ≥10)',
+        b.ties>0 && b.ties>=10, 'square ties='+b.ties+' both='+b.both);
+    })();
+    // (B′) EXHAUSTIVE small boards: hex never draws/double-spans; square draws
+    (function(){
+      function ex(n, NBx){ var N=n*n, total=1<<N, both=0, ties=0, bb=new Array(N);
+        for(var m=0;m<total;m++){ for(var i=0;i<N;i++) bb[i]=(m>>i)&1?'X':'O';
+          var cl=core.classify(bb,n,NBx); if(cl.x&&cl.o) both++; if(!cl.x&&!cl.o) ties++; }
+        return {total:total,both:both,ties:ties}; }
+      var h3=ex(3,HEX_NB), s3=ex(3,SQ_NB), h4=ex(4,HEX_NB), s4=ex(4,SQ_NB);
+      var ok = h3.both===0&&h3.ties===0 && h4.both===0&&h4.ties===0 && s3.ties>0 && s4.ties>0 && s3.both===0 && s4.both===0;
+      ck('(B′) EXHAUSTIVE 3×3+4×4: hex 0 draws ever; square draws; nobody double-spans',
+        ok, '3×3 hex 0/'+h3.total+' sq '+s3.ties+' ties · 4×4 hex 0/'+h4.total+' sq '+s4.ties+' ties');
+    })();
+    // (C) FIRST-PLAYER-WIN: hex3 3×3 reused via Adversary.solve
+    (function(){
+      var sol=Adversary.solve(GAME_hex3);
+      var dist = sol.dist===Infinity ? '∞' : String(sol.dist);
+      ck('(C) FIRST-PLAYER-WIN: hex3 3×3 is a non-draw WIN (exact mate dist)',
+        sol.ok && sol.value===WIN && sol.value!==DRAW,
+        'value='+sol.value+' mate dist='+dist+' · '+sol.nodeCount+' nodes');
+    })();
+    // (D) CROSS-CHECK: classify(HEX_NB) === hex3's exactly-one-winner battery
+    (function(){
+      var boards=[
+        ['X','O','X','O','X','O','X','O','X'],
+        ['X','X','X','O','O','O','X','O','X'],
+        ['O','O','O','X','X','X','O','X','O'],
+        ['X','O','O','X','O','O','X','X','O'],
+        ['O','X','X','O','X','X','O','O','X']];
+      var fails=[];
+      for(var i=0;i<boards.length;i++){ var cl=core.classify(boards[i],3,HEX_NB);
+        if(cl.x===cl.o) fails.push('board '+i+': X='+cl.x+' O='+cl.o); }
+      var hb=GAME_hex3.literatureBattery(Adversary.solve,{WIN:WIN,LOSS:LOSS,DRAW:DRAW});
+      ck('(D) CROSS-CHECK: classify(HEX_NB) === hex3 connects() — one winner each',
+        fails.length===0 && hb.ok, fails.length?fails.join('; '):(boards.length+' boards agree · '+hb.detail));
+    })();
+    // (E) spanComponent honesty: a real wall-to-wall chain
+    (function(){
+      var b=['O','X','O','O','X','O','O','X','O'], comp=core.spanComponent(b,3,'X',HEX_NB);
+      var rows=comp.map(function(i){return Math.floor(i/3);});
+      var ok=comp.length>=3 && rows.indexOf(0)>=0 && rows.indexOf(2)>=0 && comp.every(function(i){return b[i]==='X';});
+      ck('(E) spanComponent returns a real top↔bottom X chain (the glow path is honest)',
+        ok, comp.length+' cells');
+    })();
+    // (F) PLUMBING
+    (function(){
+      var back=document.querySelector('.topbar a.back[href="../numbers-room/index.html"]');
+      var crumb=false; try{ crumb=!!localStorage.getItem('ws:seen:hex'); }catch(e){}
+      var cores=(typeof core.spans==='function')&&(typeof core.spanComponent==='function')&&
+                (typeof GAME_hex3==='object')&&(typeof Adversary.solve==='function');
+      ck('(F) plumbing: back-link · ws:seen:hex · HexFill+GAME_hex3+Adversary',
+        !!back && crumb && cores, (back?'back✓ ':'back✗ ')+(crumb?'crumb✓ ':'crumb✗ ')+(cores?'cores✓':'cores✗'));
+    })();
+  }catch(e){
+    chip.className='selftest bad'; chip.textContent='self-test ERROR';
+    console.error('Hex self-test threw:', e); return;
+  }
+  var pass=0; for(var i=0;i<checks.length;i++) if(checks[i].ok) pass++;
+  var total=checks.length;
+  window.__hexSelfTest={ pass:pass, total:total, checks:checks };
+  try{ console.table(checks.map(function(c){ return {check:c.name, ok:c.ok, detail:c.detail}; })); }catch(e){}
+  if(pass===total){
+    chip.className='selftest ok';
+    chip.textContent='self-test '+pass+'/'+total+' ✓ · hex draw-rate 0 over 5000 fills · square >0';
+    chip.title='ALL '+total+' checks pass: '+checks.map(function(c){return c.name;}).join(' · ');
+  } else {
+    chip.className='selftest bad';
+    chip.textContent='self-test '+pass+'/'+total+' ✗';
+    chip.title='FAILING: '+checks.filter(function(c){return !c.ok;}).map(function(c){return c.name+' ['+c.detail+']';}).join(' · ');
+  }
+  chip.onclick=function(){ alert(checks.map(function(c){ return (c.ok?'✓ ':'✗ ')+c.name+'\n   '+c.detail; }).join('\n\n')); };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   INIT
+   ════════════════════════════════════════════════════════════════════════════ */
+runSelfTestChip();
+newBoard(false);
+refreshTally();
+glintLoop();
+
+/* ws: unlock breadcrumb — the shared module, inlined via forge. */
+<!-- forge:include ../tools/ws/ws.js -->
+try { WS.seen('hex'); } catch (e) {}
+</script>
+</body>
+</html>
