@@ -47,18 +47,30 @@ nudge, pier lantern-wash. Estate-quality confirmed; deliverables in `/tmp/gate-s
 **WAVE 3a — ✅ SHIPPED** (`eee92b0`): greenhouse (dimensional 3/4 jewel-box glasshouse; loved
 silhouette kept byte-faithful). Deliverables `/tmp/gate-foundry/greenhouse/final/`.
 
-**WAVE 3b — RUNNING:** foliage + undercroft (runId **`wf_7995b8e3-74f`**, args ['foliage','undercroft'],
-sequential in scene.js). On completion: review + commit per protocol.
+**WAVE 3b — ✅ SHIPPED** (`780af5e`): foliage (lush layered trees+bushes, top-lit crowns, not
+lollipops) + undercroft (open bilco door over a descending stone STAIR into a blood-wine crimson
+throat, near lip black — unanimous judge pick). Deliverables `/tmp/gate-foundry/{foliage,undercroft}/final/`.
 
-**REMAINING after 3b:**
+**REORDER DECISION (Keystone's call):** doing the GROUNDS before the room-reps. The grounds (grass/
+road/apron) are visible in EVERY shot and were flat greybox; the buildings are now richly detailed,
+so flat grounds read as unfinished. Room-reps only appear when a room is SELECTED (a Phase-D feature),
+so they're completeness, not the default view — done after grounds + the parametric pass.
+
+**WAVE 4 — RUNNING:** grounds + mist (runId **`wf_01037da6-11f`**, args ['grounds','mist']). grounds
+(K=3, scene.js drawGrounds+drawLamp — grass occlusion plane MUST stay full+opaque, road to manor,
+road lamps, perspective apron; RESTRAINT is the test) then mist (K=2, scene-buildings.js drawMist).
+On completion: review + commit per protocol.
+
+**REMAINING after Wave 4:**
+- PARAMETRIC beauty pass: moon (disc+lit-limb glow+terminator — already decent, light touch), sun;
+  asterism stays the earned PLACEHOLDER (do NOT build the eagle — earned-only). Add LIB entries; sky
+  gradient + stars are likely fine as-is (skip unless they read flat).
 - ROOM-REPS wave (most complex — needs SETUP the foundry workflow doesn't do): (1) wire colormap.js
-  rep.swatch1..3 + rep.glow1..2 (SPEC §5.8) + add the two glow slots to the dayRecede list; (2) BLIND
-  essence-survey over the GATE-ROOMS pool to pick 3 reps; (3) add 3 bespoke draw fns to scene.js +
-  register in rooms.js BESPOKE; (4) the Glyph Stand fallback (NEW draw fn + rooms.js). Reps K=3
-  (iface 'scene'); re-evaluate K after the first 4 (Cairn + 3).
-- WAVE 4 MINOR (scene.js + drawMist): grass/midground, road, foreground apron, road lamps, mist,
-  sky gradient, stars. "direct-to-spec" — can run at K=1-2 through the same engine (add LIB entries).
-- PARAMETRIC beauty pass: moon (disc+lit-limb glow+terminator), sun, brass asterism (scene.js).
+  rep.swatch1..3 + rep.glow1..2 (SPEC §5.8) + add the two glow slots to the dayRecede list + the
+  resolve-time merge + boot wiring (TOUCHES colormap.js + the-gate.src.html boot — orchestrator-level,
+  not a parallel take agent); (2) BLIND essence-survey over the GATE-ROOMS pool to pick 3 reps (no
+  primed verdict); (3) 3 bespoke draw fns in scene.js + rooms.js BESPOKE + per-rep repColors; (4) the
+  Glyph Stand fallback. Reps K=3 (iface 'scene'); re-evaluate K after the first 4 (Cairn + 3).
 - Then Phase D systems (see below).
 
 **WAVE ROADMAP (remaining, after Wave 2):**
