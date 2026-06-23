@@ -27,12 +27,67 @@
      layer so the buildings sit in front of it. Palette-swappable (mist role). ─── */
   B.drawMist = function (parent, S) {
     var g = S.group('horizon-mist', parent);
-    var horizon = 470;
-    // a gradient-free, layered haze: two soft bands fading down from the horizon
-    S.el('rect', { x: 0, y: horizon - 64, width: S.VB_W, height: 64,
-      fill: 'var(--mist-ref, #7c8aa0)', opacity: '0.18', filter: 'url(#glow-soft)' }, g);
-    S.el('rect', { x: 0, y: horizon - 34, width: S.VB_W, height: 34,
-      fill: 'var(--mist-ref, #7c8aa0)', opacity: '0.22', filter: 'url(#glow-soft)' }, g);
+    var horizon = 470;          // the ground line where distant bases meet the grounds
+    var W = S.VB_W;
+    var MIST = 'var(--mist-ref, #7c8aa0)';
+
+    // ── a private VERTICAL-FEATHER filter so each haze band has NO hard top edge:
+    //    a one-directional blur (mostly vertical) softens the band into the sky above
+    //    and the grounds below. It is blur-only (no color), so the swappable mist
+    //    color still comes entirely from --mist-ref. Defined once, idempotent. ──
+    var svg = parent.ownerSVGElement;
+    var defs = svg ? svg.querySelector('defs') : null;
+    if (defs && !defs.querySelector('#mist-feather')) {
+      var f = S.el('filter', { id: 'mist-feather',
+        x: '-5%', y: '-80%', width: '110%', height: '260%' }, defs);
+      // strong vertical blur, gentle horizontal — feathers top/bottom into air, keeps
+      // the band spanning the full width without bleeding off the sides.
+      S.el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '2 13' }, f);
+    }
+    var FEATHER = (defs && defs.querySelector('#mist-feather')) ? 'url(#mist-feather)' : 'url(#glow-soft)';
+
+    // ── ATMOSPHERIC-PERSPECTIVE STACK: several soft bands of DECREASING opacity
+    //    stacked from the ground line upward. Lower bands are denser + thinner (the
+    //    air pools thickest where the distant bases sit); upper bands are wispier +
+    //    taller (the haze thins as it climbs). Together they read as graded depth of
+    //    air softening the manor + observatory feet — quiet, never a hard stripe. ──
+    // Each band: {top y, height, opacity}. Bottoms tucked just under the horizon so
+    // the densest pooling kisses the buildings' bases (y470).
+    // Opacity ramp nudged up one notch per band (judges: day horizon-lift was only
+    // ~10-15 luma over the bright grass, near-invisible by day) so the daytime haze
+    // is faintly READABLE while the night band stays quiet — the feather keeps every
+    // band edgeless, so a denser ramp reads as thicker air, never as a stripe.
+    var bands = [
+      { y: horizon - 64, h: 64, op: '0.08' },   // high wisp — barely there
+      { y: horizon - 50, h: 50, op: '0.12' },    // upper haze
+      { y: horizon - 38, h: 40, op: '0.16' },   // mid haze
+      { y: horizon - 26, h: 30, op: '0.21' },   // lower, denser
+      { y: horizon - 14, h: 22, op: '0.27' }    // pooling at the base line
+    ];
+    for (var i = 0; i < bands.length; i++) {
+      S.el('rect', { x: -20, y: bands[i].y, width: W + 40, height: bands[i].h,
+        fill: MIST, opacity: bands[i].op, filter: FEATHER }, g);
+    }
+
+    // ── GROUND-LINE SETTLE THREAD (concept grafted from take-2): the very thinnest,
+    //    lowest thread of haze hugging the horizon itself, a touch denser than the
+    //    base band, so the seam between far-scenery and the midground grass reads as
+    //    soft settled air rather than a drawn boundary — adding presence exactly at
+    //    the line where the distant bases meet the horizon, in the sky gaps between
+    //    the buildings. Heavily feathered, full-width, quiet. ──
+    S.el('rect', { x: -20, y: horizon - 9, width: W + 40, height: 13,
+      fill: MIST, opacity: '0.20', filter: FEATHER }, g);
+
+    // ── two faint DRIFT POOLS where the distant buildings stand: a soft lens of a
+    //    little extra air around the observatory rise (left, ~x210) and the manor
+    //    block (center, ~x800), so their feet specifically dissolve into the
+    //    distance. Wide, very low opacity, heavily feathered — depth, not shapes.
+    //    Centres lifted to ~y horizon-12 so the lens hugs the building feet rather
+    //    than spilling below the grass plane (which would occlude it). ──
+    S.el('ellipse', { cx: 230, cy: horizon - 12, rx: 280, ry: 24,
+      fill: MIST, opacity: '0.13', filter: FEATHER }, g);
+    S.el('ellipse', { cx: 800, cy: horizon - 12, rx: 370, ry: 26,
+      fill: MIST, opacity: '0.14', filter: FEATHER }, g);
   };
 
   function litWindow(S, parent, x, y, w, h) {

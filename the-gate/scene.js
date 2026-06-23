@@ -336,71 +336,312 @@
   /* ── LAYER 5 — grounds: midground grass + road to the manor + a NEAR foreground
      APRON the gate stands on (the single biggest depth cue: foreground apron →
      midground grounds → distant buildings → sky). ───────────────────────────── */
+  /* ── grounds-local deterministic PRNG (stable across re-renders, no twinkle-jump),
+     plus a 1-decimal rounder; both private to drawGrounds/drawLamp. ─────────────── */
+  function groundsRng(seed) {
+    var s = (seed * 2246822519) & 0x7fffffff || 1;
+    return function () { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  }
+  function g1f(n) { return (Math.round(n * 10) / 10); }
+
+  /* ── TAKE 3 — "the kept gravel court." A quiet, lush estate stage: a deep opaque
+     grass plane that lightens toward an atmospheric horizon, with a low pelt of
+     tonal mottling + sparse tufts only where the eye expects them (the horizon line
+     and the road verges); a believable raked-GRAVEL drive to the manor with a lit
+     crown, kerb stones and faint scatter; two brass lamp-posts; and a NEAR cobbled
+     APRON of HINTED individual flagstones receding to a top-lit back lip — the big
+     depth cue. All swappable color via roles, so it goes lush by day / dark by night;
+     only the lamp globes glow. Lit from above throughout. RESTRAINT: the stage stays
+     quiet so the hero gate + the manor keep the eye. ────────────────────────────── */
   function drawGrounds(parent) {
-    // MIDGROUND ground rises from the horizon (~y 470) toward the viewer
+    var GRASS = 'var(--grass-ref, #3c4a50)';
+    var HILL  = 'var(--hill-ref, #2c3742)';
+    var ROAD  = 'var(--road-ref, #5a5f6a)';
+    var STONE = 'var(--stone-ref, #6a7079)';
+    var BRI   = 'var(--brass-bright-ref, #f0d489)';
     var groundTop = 470;
-    el('rect', { x: 0, y: groundTop, width: VB_W, height: VB_H - groundTop, fill: 'var(--grass-ref, #3c4a50)' }, parent);
-    // a soft grade band just under the horizon so the midground isn't flat
-    el('rect', { x: 0, y: groundTop, width: VB_W, height: 70, fill: 'var(--hill-ref, #2c3742)', opacity: '0.45' }, parent);
 
-    // ROAD: a tapering ribbon from the gate seam (front, x800) straight back to the
-    // CENTERED manor doorway (x800, y472). Wide at the front, narrow at the manor —
-    // the road the opened gate reveals, leading to the destination.
-    var road = 'M 706 900 L 894 900 L 832 478 L 768 478 Z';
-    el('path', { d: road, fill: 'var(--road-ref, #5a5f6a)' }, parent);
-    // a paler crown down the middle (lit from above) + kerb edges
-    el('path', { d: 'M 800 900 L 800 478', fill: 'none',
-      stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1.2', opacity: '0.16' }, parent);
-    el('path', { d: 'M 706 900 L 768 478', fill: 'none',
-      stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1', opacity: '0.12' }, parent);
+    // ════ THE GRASS PLANE — the HARD occlusion boundary (SPEC §1.3). A full-width,
+    //   FULL-OPACITY fill x0..1600 / y470..900 hiding the manor/observatory bases. ════
+    el('rect', { x: 0, y: groundTop, width: VB_W, height: VB_H - groundTop, fill: GRASS }, parent);
 
-    // a couple of lamp posts flanking the road just inside the grounds (emissive)
-    drawLamp(parent, 612, 520, 64);
-    drawLamp(parent, 988, 520, 64);
+    // atmospheric LIGHTENING toward the horizon — the hill-toned grade band, stacked
+    // in three softening passes so the meadow recedes into haze instead of a hard line.
+    var grade = group('grass-grade', parent);
+    el('rect', { x: 0, y: groundTop, width: VB_W, height: 78, fill: HILL, opacity: '0.42' }, grade);
+    el('rect', { x: 0, y: groundTop, width: VB_W, height: 44, fill: HILL, opacity: '0.30' }, grade);
+    el('rect', { x: 0, y: groundTop, width: VB_W, height: 20, fill: 'var(--mist-ref, #7c8aa0)', opacity: '0.22' }, grade);
 
-    // ── FOREGROUND APRON: a band of NEAR paving across the very bottom that the
-    // gate + piers stand ON. Cobbled stone, lit from above, receding to a back edge
-    // (a shallow trapezoid) so it reads as ground tilting away under the gate. ──
-    var g = group('foreground-apron', parent);
-    var apronTopY = 812;              // back edge of the apron
-    // the paving slab (stone), widening toward the viewer
-    el('path', { d: 'M -40 ' + apronTopY + ' L ' + (VB_W + 40) + ' ' + apronTopY +
-      ' L ' + (VB_W + 40) + ' ' + VB_H + ' L -40 ' + VB_H + ' Z',
-      fill: 'var(--stone-ref, #6a7079)' }, g);
-    // a darker mortar shadow just under the back edge (sits the apron in front)
-    el('rect', { x: -40, y: apronTopY, width: VB_W + 80, height: 8, fill: 'rgba(0,0,0,.28)' }, g);
-    // top-lit front lip of the back edge
-    el('line', { x1: -40, y1: apronTopY + 1, x2: VB_W + 40, y2: apronTopY + 1,
-      stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1', opacity: '0.18' }, g);
-    // cobble joints — converging paving lines fanning toward the viewer (perspective)
-    var jointCount = 9;
-    for (var ci = 0; ci <= jointCount; ci++) {
-      var t = ci / jointCount;
-      var backX = 120 + t * (VB_W - 240);          // joints span the apron at the back
-      var frontX = -120 + t * (VB_W + 240);        // fan wider at the front
-      el('line', { x1: backX.toFixed(0), y1: apronTopY, x2: frontX.toFixed(0), y2: VB_H,
-        stroke: 'rgba(0,0,0,.20)', 'stroke-width': '1.2' }, g);
+    // TONAL MOTTLING — a sparse pelt of broad soft patches across the meadow giving
+    // the plane subtle life without busy-ness. Light patches up top (catching the
+    // sky), darker hollows lower/forward. Deterministic so it never jitters.
+    var mott = group('grass-mottle', parent);
+    var mr = groundsRng(91);
+    for (var mi = 0; mi < 26; mi++) {
+      var my = groundTop + 30 + mr() * 300;
+      var depth = (my - groundTop) / 330;            // 0 at horizon → 1 forward
+      var mx = mr() * VB_W;
+      var mw = 70 + mr() * 150 + depth * 90;          // wider toward the viewer
+      var mh = 14 + mr() * 22 + depth * 16;
+      var light = mr() > 0.5;
+      el('ellipse', { cx: g1f(mx), cy: g1f(my), rx: g1f(mw), ry: g1f(mh),
+        fill: light ? BRI : '#000',
+        opacity: (light ? (0.05 + depth * 0.04) : (0.07 + depth * 0.07)).toFixed(3) }, mott);
     }
-    // a couple of horizontal course lines (paving rows) with subtle near-edge light
-    var rowYs = [apronTopY + 26, apronTopY + 56];
-    for (var ri = 0; ri < rowYs.length; ri++) {
-      el('line', { x1: -40, y1: rowYs[ri], x2: VB_W + 40, y2: rowYs[ri],
-        stroke: 'rgba(0,0,0,.16)', 'stroke-width': '1.2' }, g);
+
+    // ════ THE DRIVE — a raked-gravel ribbon from the gate seam (front, wide) back to
+    //   the CENTERED manor door (narrow). Kept the exact taper + destination. ════
+    var roadG = group('drive', parent);
+    var Lf = 706, Rf = 894, Lb = 768, Rb = 832;      // front (y900) / back (y478) rails
+    var yF = 900, yB = 478;
+    function dLx(t) { return Lf + (Lb - Lf) * t; }   // t: 0 front → 1 back
+    function dRx(t) { return Rf + (Rb - Rf) * t; }
+    function dY(t)  { return yF + (yB - yF) * t; }
+    var roadD = 'M ' + Lf + ' ' + yF + ' L ' + Rf + ' ' + yF +
+                ' L ' + Rb + ' ' + yB + ' L ' + Lb + ' ' + yB + ' Z';
+    // a soft cast shadow hugging the drive's edges so it beds into the grass
+    el('path', { d: 'M ' + (Lf - 10) + ' ' + yF + ' L ' + (Rf + 10) + ' ' + yF +
+      ' L ' + (Rb + 5) + ' ' + yB + ' L ' + (Lb - 5) + ' ' + yB + ' Z',
+      fill: '#000', opacity: '0.22', filter: 'url(#glow-soft)' }, roadG);
+    // the gravel bed
+    el('path', { d: roadD, fill: ROAD }, roadG);
+    // a darker centre-worn hollow either side of the crown (cart-track wear)
+    el('path', { d: 'M ' + (Lf + 36) + ' ' + yF + ' L ' + (Lf + 70) + ' ' + yF +
+      ' L ' + dLx(1) + ' ' + yB + ' L ' + (Lb + 14) + ' ' + yB + ' Z',
+      fill: '#000', opacity: '0.10' }, roadG);
+    el('path', { d: 'M ' + (Rf - 70) + ' ' + yF + ' L ' + (Rf - 36) + ' ' + yF +
+      ' L ' + (Rb - 14) + ' ' + yB + ' L ' + dRx(1) + ' ' + yB + ' Z',
+      fill: '#000', opacity: '0.10' }, roadG);
+    // GRAVEL SCATTER — tiny stones speckled down the drive (perspective: bigger/closer
+    // toward the front), a couple lit on top. Sparse so the drive reads raked, not busy.
+    var gr = groundsRng(401);
+    for (var gi = 0; gi < 44; gi++) {
+      var t = gr() * gr();                            // bias toward the front (closer)
+      var ty = dY(t);
+      var spanL = dLx(t) + 6, spanR = dRx(t) - 6;
+      var gx = spanL + gr() * (spanR - spanL);
+      var grad = 1 - t;                                // 1 front → 0 back
+      var rr = 0.7 + grad * 1.8;
+      var lit = gr() > 0.62;
+      el('circle', { cx: g1f(gx), cy: g1f(ty), r: g1f(rr),
+        fill: lit ? BRI : '#000', opacity: (lit ? 0.22 : 0.18).toFixed(2) }, roadG);
+    }
+    // KERB STONES down each verge — a top-lit brass-bright edge that beds the drive,
+    // brightest at the near front, fading back (lit from above).
+    el('path', { d: 'M ' + Lf + ' ' + yF + ' L ' + Lb + ' ' + yB, fill: 'none',
+      stroke: BRI, 'stroke-width': '1.6', opacity: '0.22' }, roadG);
+    el('path', { d: 'M ' + Rf + ' ' + yF + ' L ' + Rb + ' ' + yB, fill: 'none',
+      stroke: BRI, 'stroke-width': '1.6', opacity: '0.22' }, roadG);
+    // the lit crown down the centre (raised, catching the sky)
+    el('path', { d: 'M 800 ' + yF + ' L 800 ' + yB, fill: 'none',
+      stroke: BRI, 'stroke-width': '2', opacity: '0.16' }, roadG);
+    // a few faint cross-flags (paving seams) stepping back up the drive (perspective)
+    var flagTs = [0.12, 0.30, 0.52, 0.76];
+    for (var fi = 0; fi < flagTs.length; fi++) {
+      var ft = flagTs[fi];
+      el('line', { x1: g1f(dLx(ft)), y1: g1f(dY(ft)), x2: g1f(dRx(ft)), y2: g1f(dY(ft)),
+        stroke: '#000', 'stroke-width': '1', opacity: (0.16 * (1 - ft) + 0.05).toFixed(2) }, roadG);
+    }
+
+    // ════ TUFTS — sparse grass blades only along the horizon line + the drive verges,
+    //   so texture sits exactly where the eye reads the meadow's edges. ════
+    drawTufts(parent);
+
+    // two brass lamp-posts flanking the road just inside the grounds (emissive).
+    // Nudged a touch OUTBOARD (x600 / x1000) so each warm globe sits over dark manor
+    // wall, not over a lit window pane, and given more HEIGHT (h78, foot lowered to
+    // y538) so they read as proper estate lamp-posts rather than bollards.
+    drawLamp(parent, 600, 538, 78);
+    drawLamp(parent, 1000, 538, 78);
+
+    // ════ FOREGROUND APRON — the near cobbled paving the gate + piers stand ON.
+    //   A shallow trapezoid (back edge y812 → y900) of HINTED individual flagstones in
+    //   a fanning perspective grid, with a top-lit back lip. The biggest depth cue. ══
+    var g = group('foreground-apron', parent);
+    var apronTopY = 812;
+    var aBackL = -40, aBackR = VB_W + 40;            // back edge (narrower visually due to fan)
+    var aFrontL = -120, aFrontR = VB_W + 120;        // front edge (fans wider toward viewer)
+    function aLx(t) { return aBackL + (aFrontL - aBackL) * t; }
+    function aRx(t) { return aBackR + (aFrontR - aBackR) * t; }
+    function aY(t)  { return apronTopY + (VB_H - apronTopY) * t; }
+    // the paving slab (stone)
+    el('path', { d: 'M ' + aBackL + ' ' + apronTopY + ' L ' + aBackR + ' ' + apronTopY +
+      ' L ' + aFrontR + ' ' + VB_H + ' L ' + aFrontL + ' ' + VB_H + ' Z',
+      fill: STONE }, g);
+    // a subtle overall down-shade so the apron darkens away from the lit back lip
+    el('path', { d: 'M ' + g1f(aLx(0.45)) + ' ' + g1f(aY(0.45)) + ' L ' + g1f(aRx(0.45)) + ' ' + g1f(aY(0.45)) +
+      ' L ' + aFrontR + ' ' + VB_H + ' L ' + aFrontL + ' ' + VB_H + ' Z',
+      fill: '#000', opacity: '0.10' }, g);
+
+    // ════ PER-STONE FLAGSTONES (grafted from take 2) — the apron reads as INDIVIDUAL
+    //   laid stones, not a uniform grid: a fanning grid of perspective joints + stagger-
+    //   bonded course rows, each stone given its own slightly lighter/darker tonal face,
+    //   a recessed left+bottom joint shadow, and a thin top-lit lip on its up-facing
+    //   (back) edge. Deterministic so it never jitters. The single biggest depth cue. ══
+    var ar = groundsRng(777);
+    var cols = 18;
+    var rowTs = [0.0, 0.20, 0.44, 0.72, 1.0];
+    for (var ri = 0; ri < rowTs.length - 1; ri++) {
+      var t0 = rowTs[ri], t1 = rowTs[ri + 1];
+      var y0 = aY(t0), y1 = aY(t1);
+      var stagger = (ri % 2) * 0.5;                  // alternate-row half-stone offset (bond)
+      for (var jx = -1; jx < cols; jx++) {
+        var cL = jx + stagger, cR = jx + 1 + stagger;
+        var fcL = Math.max(0, cL / cols), fcR = Math.min(1, cR / cols);
+        if (fcR <= 0 || fcL >= 1) continue;
+        // stone quad corners (perspective: top edge from back row, bottom from front)
+        var x0L = aLx(t0) + (aRx(t0) - aLx(t0)) * fcL;
+        var x0R = aLx(t0) + (aRx(t0) - aLx(t0)) * fcR;
+        var x1L = aLx(t1) + (aRx(t1) - aLx(t1)) * fcL;
+        var x1R = aLx(t1) + (aRx(t1) - aLx(t1)) * fcR;
+        var tint = ar();                              // gentle per-stone tonal variation
+        // a hair more per-stone contrast than take 2 so the variation survives thumbnail
+        var faceOp = (tint > 0.74) ? 0.09 : (tint < 0.26 ? -1 : 0);
+        if (faceOp > 0) {                             // a slightly LIGHTER stone face
+          el('path', { d: 'M ' + g1f(x0L) + ' ' + g1f(y0) + ' L ' + g1f(x0R) + ' ' + g1f(y0) +
+            ' L ' + g1f(x1R) + ' ' + g1f(y1) + ' L ' + g1f(x1L) + ' ' + g1f(y1) + ' Z',
+            fill: BRI, opacity: faceOp.toFixed(2) }, g);
+        } else if (faceOp < 0) {                      // a slightly DARKER stone face
+          el('path', { d: 'M ' + g1f(x0L) + ' ' + g1f(y0) + ' L ' + g1f(x0R) + ' ' + g1f(y0) +
+            ' L ' + g1f(x1R) + ' ' + g1f(y1) + ' L ' + g1f(x1L) + ' ' + g1f(y1) + ' Z',
+            fill: '#000', opacity: '0.10' }, g);
+        }
+        // recessed joint shadow on the stone's LEFT edge (lit from above → left in shade)
+        el('path', { d: 'M ' + g1f(x0L) + ' ' + g1f(y0) + ' L ' + g1f(x1L) + ' ' + g1f(y1),
+          stroke: '#000', 'stroke-width': '1.1', opacity: '0.20', fill: 'none' }, g);
+        // a thin top-lit lip on the stone's UP-facing (back) edge
+        el('path', { d: 'M ' + g1f(x0L + 1) + ' ' + g1f(y0 + 0.8) + ' L ' + g1f(x0R - 1) + ' ' + g1f(y0 + 0.8),
+          stroke: BRI, 'stroke-width': '0.8', opacity: '0.09', fill: 'none' }, g);
+      }
+      // the course row joint (horizontal seam) at the bottom of this row
+      el('path', { d: 'M ' + g1f(aLx(t1)) + ' ' + g1f(y1) + ' L ' + g1f(aRx(t1)) + ' ' + g1f(y1),
+        stroke: '#000', 'stroke-width': '1.2', opacity: (0.22 - t1 * 0.08).toFixed(2), fill: 'none' }, g);
+    }
+    // a darker mortar shadow just under the back edge (sits the apron in front)
+    el('rect', { x: aBackL, y: apronTopY, width: aBackR - aBackL, height: 8, fill: 'rgba(0,0,0,.30)' }, g);
+    // top-lit front lip of the back edge — the apron's up-facing leading coping
+    el('line', { x1: aBackL, y1: apronTopY + 1, x2: aBackR, y2: apronTopY + 1,
+      stroke: BRI, 'stroke-width': '1.4', opacity: '0.26' }, g);
+  }
+
+  /* sparse grass TUFTS — small fan-of-blades clusters along the horizon line and the
+     drive verges, drawn over the opaque plane so they texture only the read edges. */
+  function drawTufts(parent) {
+    var g = group('grass-tufts', parent);
+    var FOL = 'var(--tree-foliage-ref, #2c3a40)';
+    var GRASS = 'var(--grass-ref, #3c4a50)';
+    var BRI = 'var(--brass-bright-ref, #f0d489)';
+    var tr = groundsRng(53);
+    function tuft(cx, by, sc, lit) {
+      var blades = 3 + Math.floor(tr() * 3);
+      for (var b = 0; b < blades; b++) {
+        var spread = (b - (blades - 1) / 2) * 3.0 * sc;
+        var lean = (tr() - 0.5) * 6 * sc;
+        var hgt = (8 + tr() * 7) * sc;
+        el('path', { d: 'M ' + g1f(cx + spread) + ' ' + g1f(by) +
+          ' Q ' + g1f(cx + spread + lean * 0.5) + ' ' + g1f(by - hgt * 0.6) + ' ' +
+          g1f(cx + spread + lean) + ' ' + g1f(by - hgt),
+          fill: 'none', stroke: (lit && b === blades - 1) ? BRI : FOL,
+          'stroke-width': g1f(1.0 * sc), 'stroke-linecap': 'round',
+          opacity: (lit && b === blades - 1) ? '0.30' : '0.55' }, g);
+      }
+    }
+    // a thin scatter ALONG THE HORIZON (small + faint — distance)
+    for (var hi = 0; hi < 22; hi++) {
+      var hx = tr() * VB_W;
+      tuft(hx, 478 + tr() * 14, 0.5 + tr() * 0.3, tr() > 0.7);
+    }
+    // clusters hugging the DRIVE VERGES (a touch larger, catching the lamp/sky)
+    var verge = [ [700, 880], [900, 880], [742, 660], [858, 660], [760, 540], [840, 540] ];
+    for (var vi = 0; vi < verge.length; vi++) {
+      var depth = 1 - (verge[vi][1] - 470) / 430;
+      tuft(verge[vi][0], verge[vi][1], 0.8 + (1 - depth) * 0.6, true);
+    }
+    // a faint blanket of low GRASS-toned tufts to soften the bare plane near mid-field
+    for (var li = 0; li < 14; li++) {
+      var lx = tr() * VB_W, ly = 520 + tr() * 240;
+      var blades = 2 + Math.floor(tr() * 2), sc = 0.6 + tr() * 0.4;
+      for (var bb = 0; bb < blades; bb++) {
+        var sp = (bb - (blades - 1) / 2) * 2.6 * sc;
+        var hh = (6 + tr() * 5) * sc;
+        el('path', { d: 'M ' + g1f(lx + sp) + ' ' + g1f(ly) +
+          ' L ' + g1f(lx + sp + (tr() - 0.5) * 4) + ' ' + g1f(ly - hh),
+          fill: 'none', stroke: GRASS, 'stroke-width': g1f(1.0 * sc),
+          'stroke-linecap': 'round', opacity: '0.40' }, g);
+      }
     }
   }
 
   function drawLamp(parent, x, baseY, h) {
     var g = group(null, parent);
-    // post (brass idiom: dark body + brass stroke)
-    el('rect', { x: x - 3, y: baseY - h, width: 6, height: h, fill: 'rgba(11,14,22,.85)',
-      stroke: 'var(--brass-stroke-ref, #c9a24a)', 'stroke-width': '1.2' }, g);
-    // lantern head
-    el('rect', { x: x - 8, y: baseY - h - 14, width: 16, height: 16, rx: 2, fill: 'rgba(11,14,22,.85)',
-      stroke: 'var(--brass-stroke-ref, #c9a24a)', 'stroke-width': '1.2' }, g);
-    // emissive flame (palette-immune)
-    el('circle', { cx: x, cy: baseY - h - 6, r: 18, fill: 'var(--lamp-flame-ref, #ffd27a)',
-      opacity: '0.22', filter: 'url(#glow-soft)' }, g);
-    el('circle', { cx: x, cy: baseY - h - 6, r: 4, fill: 'var(--lamp-flame-ref, #ffd27a)' }, g);
+    var BODY = 'rgba(11,14,22,.85)';
+    var BRASS = 'var(--brass-stroke-ref, #c9a24a)';
+    var BRI = 'var(--brass-bright-ref, #f0d489)';
+    var FLAME = 'var(--lamp-flame-ref, #ffd27a)';
+    var fL = function (n) { return (Math.round(n * 10) / 10); };
+    var topY = baseY - h;                 // where the post meets the lantern collar
+
+    // a soft cast shadow at the foot so the post stands on the grass (light from above)
+    el('ellipse', { cx: x + 3, cy: baseY + 3, rx: 11, ry: 4, fill: '#000', opacity: '0.26' }, g);
+
+    // ── stepped stone-dark BASE plinth (grafted from take 2: a crisper two-step foot) ──
+    el('rect', { x: x - 7, y: baseY - 5, width: 14, height: 6, rx: 1, fill: BODY,
+      stroke: BRASS, 'stroke-width': '1' }, g);
+    el('rect', { x: x - 5, y: baseY - 9, width: 10, height: 5, rx: 1, fill: BODY,
+      stroke: BRASS, 'stroke-width': '1' }, g);
+    el('line', { x1: x - 6, y1: baseY - 4.4, x2: x + 6, y2: baseY - 4.4,
+      stroke: BRI, 'stroke-width': '0.9', opacity: '0.4' }, g);
+
+    // ── tapered POST (grafted from take 2: wider at the foot, narrower at the lantern —
+    //    a more legible brass column than a straight shaft) ──
+    el('path', { d: 'M ' + fL(x - 3.4) + ' ' + fL(baseY - 9) +
+      ' L ' + fL(x + 3.4) + ' ' + fL(baseY - 9) +
+      ' L ' + fL(x + 2.2) + ' ' + fL(topY + 3) +
+      ' L ' + fL(x - 2.2) + ' ' + fL(topY + 3) + ' Z',
+      fill: BODY, stroke: BRASS, 'stroke-width': '1.2' }, g);
+    // a brass-bright sheen up the post's left (up-light) edge
+    el('line', { x1: fL(x - 2.0), y1: fL(topY + 6), x2: fL(x - 3.0), y2: fL(baseY - 11),
+      stroke: BRI, 'stroke-width': '0.9', opacity: '0.30' }, g);
+    // a mid collar where the post meets the lantern
+    el('rect', { x: x - 5, y: topY + 1, width: 10, height: 4, rx: 1, fill: BODY,
+      stroke: BRASS, 'stroke-width': '1' }, g);
+
+    // ── LANTERN HOUSING (grafted from take 2) — a glazed cage: dark body + brass
+    //    stroke, a vertical glazing bar, and a flared brass-bright cap up top
+    //    (lit from above). Cleaner proportions than take 3's straight cage. ──
+    var lh = 17, lw = 17;
+    var lx = x - lw / 2, ly = topY - lh + 2;
+    // glass body (dark cage)
+    el('path', { d: 'M ' + fL(lx + 1.5) + ' ' + fL(ly + lh) +
+      ' L ' + fL(lx - 0.5) + ' ' + fL(ly + 2) +
+      ' L ' + fL(lx + lw + 0.5) + ' ' + fL(ly + 2) +
+      ' L ' + fL(lx + lw - 1.5) + ' ' + fL(ly + lh) + ' Z',
+      fill: BODY, stroke: BRASS, 'stroke-width': '1.2' }, g);
+    // glazing bar (vertical muntin)
+    el('line', { x1: fL(x), y1: fL(ly + 2), x2: fL(x), y2: fL(ly + lh),
+      stroke: BRASS, 'stroke-width': '0.8', opacity: '0.7' }, g);
+    // flared CAP (a stepped brass roof) — top-lit
+    el('path', { d: 'M ' + fL(lx - 2) + ' ' + fL(ly + 2) +
+      ' L ' + fL(x) + ' ' + fL(ly - 5) +
+      ' L ' + fL(lx + lw + 2) + ' ' + fL(ly + 2) + ' Z',
+      fill: BODY, stroke: BRASS, 'stroke-width': '1.2' }, g);
+    el('path', { d: 'M ' + fL(lx - 2) + ' ' + fL(ly + 2) + ' L ' + fL(x) + ' ' + fL(ly - 5),
+      stroke: BRI, 'stroke-width': '1.1', opacity: '0.4', fill: 'none' }, g);
+    // finial atop the cap
+    el('circle', { cx: x, cy: ly - 7, r: 1.8, fill: BODY, stroke: BRASS, 'stroke-width': '1' }, g);
+    el('circle', { cx: x - 0.6, cy: ly - 7.6, r: 0.7, fill: BRI, opacity: '0.85' }, g);
+
+    // ── EMISSIVE GLOBE (kept from take 3 — its strongest asset: a 3-layer warm point:
+    //    wide soft halo + a tight bright bloom + a hot core + a glint). Sits inside the
+    //    lantern cage (globe nudged DOWN to the cage centre per the judges). The hot
+    //    core is trimmed ~12% (3.4 → 3.0) so the road lamp stays unambiguously SECONDARY
+    //    to the pier lamps at full-moon brightness. Palette-immune so it blazes at night
+    //    + recedes (but stays lit) by day. ──
+    var globeY = ly + lh * 0.52;
+    el('circle', { cx: x, cy: globeY, r: 18, fill: FLAME, opacity: '0.22', filter: 'url(#glow-soft)' }, g);
+    el('circle', { cx: x, cy: globeY, r: 7, fill: FLAME, opacity: '0.5', filter: 'url(#glow-star)' }, g);
+    el('circle', { cx: x, cy: globeY, r: 3.0, fill: FLAME }, g);
+    el('circle', { cx: x - 1, cy: globeY - 1, r: 1.1, fill: '#fff', opacity: '0.7' }, g);
   }
 
   /* ── trees/bushes — rounded estate grounds framing the scene ────────────────────
