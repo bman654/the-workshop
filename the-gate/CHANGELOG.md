@@ -56,10 +56,25 @@ road/apron) are visible in EVERY shot and were flat greybox; the buildings are n
 so flat grounds read as unfinished. Room-reps only appear when a room is SELECTED (a Phase-D feature),
 so they're completeness, not the default view — done after grounds + the parametric pass.
 
-**WAVE 4 — RUNNING:** grounds + mist (runId **`wf_01037da6-11f`**, args ['grounds','mist']). grounds
-(K=3, scene.js drawGrounds+drawLamp — grass occlusion plane MUST stay full+opaque, road to manor,
-road lamps, perspective apron; RESTRAINT is the test) then mist (K=2, scene-buildings.js drawMist).
-On completion: review + commit per protocol.
+**WAVE 4 — ✅ SHIPPED** (`eb73939`): grounds (textured lawn + gravel drive + flagstone apron + brass
+road lamps; grass stays full opaque occlusion plane) + mist. **The full DEFAULT visible scene is now
+complete + estate-quality.** Deliverables `/tmp/gate-foundry/{grounds,mist}/final/`.
+
+**DECISION (Keystone):** SKIPPING a moon/sun beauty pass — they're already estate-quality (regression
+risk > gain); asterism stays the earned PLACEHOLDER (do NOT build the eagle). sky/stars fine as-is.
+
+**ROOM-REPS WAVE — IN PROGRESS (the last foundry chunk):** two prereqs running in parallel:
+1. PLUMBING agent (id **`a4814c10caf146b3f`**, background): wires colormap.js rep.swatch1..3/rep.glow1..2
+   + CM.applyRepColors merge + dayRecede, rooms.js BESPOKE/pick(id)+repColors, scene.js
+   S.setDevRoom+drawRoomRep dispatch + a GREYBOX drawGlyphStand, sequence.js ?room=<id>, boot merge.
+   It MAY touch those load-bearing files (infra step); leaves worktree dirty. ON DONE: verify Cairn
+   default UNCHANGED + ?room=<id> shows the Glyph Stand placeholder, then commit.
+2. SURVEY workflow (runId **`wf_729c3bc9-bae`**): 4 blind surveyors (distinct lenses, NO primed
+   answer) + tally → a recommended 3-rep slate (covering vertical/horizontal/mound aspects). The
+   FINAL pick of 3 is MINE. Pool stashed at /tmp/gate-foundry/room-pool.json (74 rooms).
+NEXT after both: add the 3 chosen reps to the foundry LIB (iface 'scene', with repColors) + elevate
+the Glyph Stand to estate-quality → one foundry wave (K=3 reps). Render/test via ?room=<id>. Then the
+foundry "whole set" is DONE.
 
 **REMAINING after Wave 4:**
 - PARAMETRIC beauty pass: moon (disc+lit-limb glow+terminator — already decent, light touch), sun;
