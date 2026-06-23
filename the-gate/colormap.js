@@ -110,7 +110,10 @@
       'tree.foliage':      '#4f7b3a',
       'tree.trunk':        '#5a4630',
       'stone':             '#9aa0a8',
-      'mist':              '#dfe8f2'
+      'mist':              '#dfe8f2',
+      'rep.swatch1':       '#9aa0a8',
+      'rep.swatch2':       '#9aa0a8',
+      'rep.swatch3':       '#9aa0a8'
     },
     DUSK: {
       'sky.top':           '#3b3766',
@@ -131,7 +134,10 @@
       'tree.foliage':      '#586537',
       'tree.trunk':        '#4f3c2c',
       'stone':             '#9a8e8a',
-      'mist':              '#e7c6b0'
+      'mist':              '#e7c6b0',
+      'rep.swatch1':       '#9a8e8a',
+      'rep.swatch2':       '#9a8e8a',
+      'rep.swatch3':       '#9a8e8a'
     },
     NIGHT: {
       'sky.top':           '#0a1326',
@@ -152,7 +158,10 @@
       'tree.foliage':      '#2c3a40',
       'tree.trunk':        '#2a2620',
       'stone':             '#6a7079',
-      'mist':              '#7c8aa0'
+      'mist':              '#7c8aa0',
+      'rep.swatch1':       '#6a7079',
+      'rep.swatch2':       '#6a7079',
+      'rep.swatch3':       '#6a7079'
     }
   };
 
@@ -170,7 +179,9 @@
     'asterism.line':    '#c9a24a',
     'cavern.maw':       '#7fd4c0',
     'undercroft.glow':  '#8a123a',
-    'arcade.screen':    '#37f7e0'
+    'arcade.screen':    '#37f7e0',
+    'rep.glow1':        '#7fd4c0',
+    'rep.glow2':        '#7fd4c0'
   };
 
   /* roles that are PURE EMISSIVE labels written verbatim (no dimming, ever). */
@@ -206,7 +217,8 @@
     // moon/sun/asterism are the sky payoff — keep them strong. lamp/window/maw
     // recede slightly as the world brightens.
     var fadeable = role === 'lamp.flame' || role === 'window.lit' ||
-      role === 'cavern.maw' || role === 'undercroft.glow' || role === 'arcade.screen';
+      role === 'cavern.maw' || role === 'undercroft.glow' || role === 'arcade.screen' ||
+      role === 'rep.glow1' || role === 'rep.glow2';
     if (!fadeable) return 1.0;
     // B near 1 (bright day) → 0.6; B low (night) → 1.0
     return clamp(1.0 - 0.4 * B, 0.6, 1.0);
@@ -230,6 +242,42 @@
   };
 
   function hexAsRgb(hex) { var c = hexToRgb(hex); return rgbStr(c.r, c.g, c.b); }
+
+  /* ── applyRepColors: merge ONE rep's per-band color overrides into a resolved
+     var-map (§5.8). `out` is the map CM.resolve() returned; `band` is the band
+     being painted; `B` is the current brightness; `repColors` is the SELECTED rep's
+     override map keyed by band → { 'rep.swatch1':'#..', 'rep.glow1':'#..', ... }.
+
+     For the given band, each override OVERWRITES the matching neutral default in
+     `out` (keyed by the DOTTED var name, e.g. '--rep.swatch1'):
+       • rep.swatch* (SWAPPABLE) → run through dim(hex, B), exactly like a palette role.
+       • rep.glow*   (EMISSIVE)  → run through the SAME dayRecede logic resolve() uses
+                                   for GLOW (recede by the role's own dayRecede(B)).
+     We write ONLY the dotted var here; S.applyResolved creates the dash -ref alias
+     for every key it sees. A null/missing repColors, or one lacking this band, is a
+     no-op (the neutral defaults already in `out` are left untouched). Unknown keys
+     in the override are ignored (only rep.swatch and rep.glow roles are honored). */
+  CM.applyRepColors = function (out, band, B, repColors) {
+    if (!out || !repColors) return out;
+    var bandKey = String(band || 'night').toUpperCase();
+    var over = repColors[bandKey];
+    if (!over) return out;
+    for (var role in over) {
+      if (!Object.prototype.hasOwnProperty.call(over, role)) continue;
+      var hex = over[role];
+      if (hex == null || hex === '') continue;
+      if (role.indexOf('rep.swatch') === 0) {
+        // swappable surface — dim by B like any palette role
+        out['--' + role] = dim(hex, B);
+      } else if (role.indexOf('rep.glow') === 0) {
+        // emissive accent — recede in bright light like any fadeable GLOW role
+        var recede = dayRecede(role, B);
+        out['--' + role] = recede >= 0.999 ? hexAsRgb(hex) : dim(hex, recede);
+      }
+      // any other key is outside the rep color budget — ignore.
+    }
+    return out;
+  };
 
   /* ── apply: write a var-map onto an element's inline style ──────────────────── */
   CM.apply = function (el, vars) {

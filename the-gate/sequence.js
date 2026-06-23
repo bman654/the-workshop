@@ -20,6 +20,9 @@
      ?seed=<n>           → seed the weather RNG.
      ?undercroft=1       → FORCE the undercroft hatch visible (dev review only;
                            production stays earned-only via the store predicate).
+     ?room=<id>          → PIN which room's rep renders in the grounds slot (dev
+                           review only; a slab room id, e.g. ?room=verse). Falls
+                           back to the Cairn default when absent or not in the slab.
 
    This module owns ONLY the state machine + timings + URL parsing. It calls into
    the gate's swing/spin (Gate.scenegate) and the colormap crossfade (via a
@@ -60,7 +63,8 @@
       moon: (q.moon != null && q.moon !== '' && !isNaN(+q.moon)) ? Math.max(0, Math.min(1, +q.moon)) : null,
       wx: (['clear', 'cloudy', 'storm'].indexOf(q.wx) >= 0) ? q.wx : null,
       seed: (q.seed != null && q.seed !== '' && !isNaN(+q.seed)) ? (+q.seed) : null,
-      undercroft: ('undercroft' in q) && q.undercroft !== '0' && q.undercroft !== 'false'
+      undercroft: ('undercroft' in q) && q.undercroft !== '0' && q.undercroft !== 'false',
+      room: q.room || null
     };
     return out;
   };

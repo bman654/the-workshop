@@ -25,9 +25,16 @@
   var Gate = root.Gate = root.Gate || {};
   var R = {};
 
-  // The bespoke reps we can draw. Phase A: only 'cairn'. (scene.js holds the
-  // draw fns; this is the registry of which ids have a real rep.)
-  var BESPOKE = { cairn: true };
+  // The bespoke-rep REGISTRY: room id → { rep:'<repKey>', repColors }.
+  //   • rep       — the bespoke repKey scene.js dispatches on (drawFn lookup).
+  //   • repColors — the rep's per-band custom-color overrides (§5.8), shape
+  //                 { DAY:{'rep.swatch1':'#..','rep.glow1':'#..'}, DUSK:{…}, NIGHT:{…} },
+  //                 or undefined when the rep uses only fixed estate colors.
+  // Phase A: only the Cairn, which uses fixed colors (polished black + brass) so it
+  // declares no repColors. Future reps add an entry here (and a draw fn in scene.js).
+  var BESPOKE = {
+    cairn: { rep: 'cairn', repColors: undefined }
+  };
 
   /* loadSlab(): parse the GATE-ROOMS JSON slab inlined by forge. Returns an array
      of {id,room,glyph,accent,district,href,locked} (locked already filtered out by
@@ -48,26 +55,57 @@
     } catch (e) { return []; }
   };
 
-  /* pick(): which room to display in the grounds. Phase A → the Cairn if present
-     in the slab, else a synthetic Cairn record so the greybox always renders. */
-  R.pick = function () {
+  /* projectPick(record): shape a slab record into the rep-pick object the scene
+     draws from. A room with a bespoke rep carries its repKey + repColors; every
+     other room falls back to the Glyph Stand (rep:'glyph-stand', no repColors). */
+  function projectPick(rec) {
+    var id = rec.id;
+    var be = R.hasBespoke(id) ? BESPOKE[id] : null;
+    return {
+      id: id,
+      rep: be ? be.rep : 'glyph-stand',
+      repColors: be ? be.repColors : undefined,
+      name: rec.room || id,
+      glyph: rec.glyph || '◆',
+      accent: rec.accent || '#9aa0a8',
+      src: rec
+    };
+  }
+
+  /* pick(pinId): which room to display in the grounds.
+     • If pinId is given AND present in the slab → pick THAT room (dev override).
+     • Otherwise keep the Cairn-default behavior (the greybox's stable composition):
+       the Cairn if present in the slab, else a synthetic Cairn record. */
+  R.pick = function (pinId) {
     var slab = R.loadSlab();
+
+    if (pinId) {
+      for (var p = 0; p < slab.length; p++) {
+        if (slab[p].id === pinId) return projectPick(slab[p]);
+      }
+      // pinId not in the slab → fall through to the Cairn default.
+    }
+
     var cairn = null;
     for (var i = 0; i < slab.length; i++) {
       if (slab[i].id === 'tabularium' || slab[i].id === 'cairn' ||
           /cairn/i.test(slab[i].room || '')) { cairn = slab[i]; break; }
     }
     if (cairn) {
-      return { id: 'cairn', rep: 'cairn', name: cairn.room || 'The Cairn Face',
-        glyph: cairn.glyph || '🪨', accent: cairn.accent || '#9aa0a8', src: cairn };
+      // The Cairn is a bespoke fixed-color rep regardless of its slab id.
+      return { id: 'cairn', rep: 'cairn', repColors: BESPOKE.cairn.repColors,
+        name: cairn.room || 'The Cairn Face', glyph: cairn.glyph || '🪨',
+        accent: cairn.accent || '#9aa0a8', src: cairn };
     }
     // synthetic fallback — the Cairn is a real estate fixture (Tabularium / Cairn Face)
-    return { id: 'cairn', rep: 'cairn', name: 'The Cairn Face', glyph: '🪨',
-      accent: '#9aa0a8', src: null };
+    return { id: 'cairn', rep: 'cairn', repColors: BESPOKE.cairn.repColors,
+      name: 'The Cairn Face', glyph: '🪨', accent: '#9aa0a8', src: null };
   };
 
   /* hasBespoke(id): does this room id have a bespoke rep (vs the Glyph Stand)? */
-  R.hasBespoke = function (id) { return !!BESPOKE[id]; };
+  R.hasBespoke = function (id) {
+    return Object.prototype.hasOwnProperty.call(BESPOKE, id);
+  };
 
   R.BESPOKE = BESPOKE;
 

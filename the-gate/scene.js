@@ -835,12 +835,20 @@
   }
 
   /* ── LAYER 6 — the room-rep (Cairn) + label, in front of the observatory rise ── */
+  // The bespoke rep draw fns, keyed by repKey. Any pick whose rep is NOT in this
+  // map (the Glyph Stand fallback 'glyph-stand', or an unknown key) draws the
+  // Glyph Stand placeholder. Future bespoke reps register their draw fn here.
+  var REP_DRAW = {
+    cairn: function (g, baseX, baseY, pick) { drawCairn(g, baseX, baseY); }
+  };
+
   function drawRoomRep(parent) {
     if (!Gate.rooms) return;
-    var pick = Gate.rooms.pick();
+    var pick = Gate.rooms.pick(S._devRoom);
     var g = group('room-rep', parent);
     var baseX = 230, baseY = 720;   // bottom-left grounds, in front of the rise
-    if (pick.rep === 'cairn') drawCairn(g, baseX, baseY);
+    var draw = REP_DRAW[pick.rep] || drawGlyphStand;
+    draw(g, baseX, baseY, pick);
     // label below
     var t = el('text', { x: baseX, y: baseY + 34, 'text-anchor': 'middle',
       'font-family': 'Georgia, serif', 'font-size': '20', 'font-style': 'italic',
@@ -874,6 +882,83 @@
         ' A ' + (st.w * 0.36) + ' ' + (st.h * 0.36) + ' 0 0 1 ' + (cx + st.w * 0.2) + ' ' + (y + st.dy - st.h * 0.28),
         fill: 'none', stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1.1', opacity: '0.5' }, g);
     }
+  }
+
+  /* ── the GLYPH STAND — the fallback rep for every room WITHOUT a bespoke rep
+     (§4.2 / §5.7). A GREYBOX PLACEHOLDER (a foundry beauty pass comes later): a
+     simple brass-edged stone PLINTH bottom-aligned at the ground line, holding the
+     room's glyph in a small framed slot, with the room's accent as a self-lit pip.
+     The plinth body reads as a swappable surface via --rep-swatch1-ref so it dims
+     with B and recolors per band; brass edges via --brass-stroke/bright-ref; lit
+     from above. The accent pip uses the room's OWN accent hex directly (a per-room
+     self-lit marker, like the slab's accent dot) rather than a glow slot.
+     Bottom-aligned at baseY (~y720, the ground line); sized within the rep range
+     (width ~96, height ~138 → inside [78..156] × [114..228]). NOT ornate. */
+  function drawGlyphStand(parent, cx, baseY, pick) {
+    var g = group('glyph-stand', parent);
+    var BODY = 'var(--rep-swatch1-ref, #6a7079)';        // swappable stone body
+    var BRASS = 'var(--brass-stroke-ref, #c9a24a)';      // brass edge stroke
+    var BRI = 'var(--brass-bright-ref, #f0d489)';        // brass-bright TOP sheen
+    var accent = (pick && pick.accent) || '#9aa0a8';     // room's self-lit accent pip
+    var glyph = (pick && pick.glyph) || '◆';
+    var fx = function (n) { return (Math.round(n * 10) / 10); };
+
+    var W = 96, H = 138;                 // overall footprint (within the rep range)
+    var topY = baseY - H;                // plinth top
+    var halfW = W / 2;
+
+    // soft cast shadow at the foot so the plinth stands ON the grass (light above)
+    el('ellipse', { cx: cx + 4, cy: baseY + 3, rx: halfW * 0.78, ry: 8,
+      fill: '#000', opacity: '0.26', filter: 'url(#glow-soft)' }, g);
+
+    // ── BASE — a stepped stone foot (two courses, wider than the shaft) ──
+    el('rect', { x: fx(cx - halfW), y: fx(baseY - 16), width: W, height: 16, rx: 2,
+      fill: BODY, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    el('rect', { x: fx(cx - halfW + 8), y: fx(baseY - 26), width: W - 16, height: 11, rx: 2,
+      fill: BODY, stroke: BRASS, 'stroke-width': '1.2' }, g);
+    // top-lit lip on the base's up-facing edge
+    el('line', { x1: fx(cx - halfW + 4), y1: fx(baseY - 15), x2: fx(cx + halfW - 4), y2: fx(baseY - 15),
+      stroke: BRI, 'stroke-width': '1', opacity: '0.34' }, g);
+
+    // ── SHAFT — the slender plinth body rising from the base ──
+    var shaftW = W - 28, shaftL = cx - shaftW / 2, shaftR = cx + shaftW / 2;
+    var shaftTop = topY + 10, shaftBot = baseY - 24;
+    el('rect', { x: fx(shaftL), y: fx(shaftTop), width: shaftW, height: fx(shaftBot - shaftTop), rx: 2,
+      fill: BODY, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    // brass-bright sheen up the shaft's LEFT (up-light) edge
+    el('line', { x1: fx(shaftL + 1.5), y1: fx(shaftTop + 4), x2: fx(shaftL + 1.5), y2: fx(shaftBot - 4),
+      stroke: BRI, 'stroke-width': '1', opacity: '0.28' }, g);
+
+    // ── CAPITAL — a small brass-rimmed cap holding the framed glyph slot ──
+    var capW = W - 12, capL = cx - capW / 2;
+    var capH = 14, capY = topY - 2;
+    el('rect', { x: fx(capL), y: fx(capY), width: capW, height: capH, rx: 2,
+      fill: BODY, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    el('line', { x1: fx(capL + 3), y1: fx(capY + 1.2), x2: fx(capL + capW - 3), y2: fx(capY + 1.2),
+      stroke: BRI, 'stroke-width': '1', opacity: '0.40' }, g);
+
+    // ── FRAMED GLYPH SLOT — a recessed dark panel above the capital, brass-framed,
+    //    holding the room's glyph centered ──
+    var slotW = 64, slotH = 60;
+    var slotX = cx - slotW / 2, slotY = capY - slotH - 4;
+    var slotCy = slotY + slotH / 2;
+    // dark recessed panel (the estate brass-furniture dark body)
+    el('rect', { x: fx(slotX), y: fx(slotY), width: slotW, height: slotH, rx: 3,
+      fill: 'rgba(11,14,22,.85)', stroke: BRASS, 'stroke-width': '1.4' }, g);
+    // brass-bright top-edge sheen on the frame (lit from above)
+    el('line', { x1: fx(slotX + 2), y1: fx(slotY + 1.4), x2: fx(slotX + slotW - 2), y2: fx(slotY + 1.4),
+      stroke: BRI, 'stroke-width': '1', opacity: '0.45' }, g);
+    // the room's glyph, centered in the slot
+    var gt = el('text', { x: fx(cx), y: fx(slotCy + 1), 'text-anchor': 'middle',
+      'dominant-baseline': 'central', 'font-size': '34',
+      'font-family': 'Georgia, serif' }, g);
+    gt.textContent = glyph;
+
+    // ── ACCENT PIP — a small self-lit emissive dot on the capital face (the room's
+    //    OWN accent color, treated as a self-lit marker; soft glow feather). ──
+    el('circle', { cx: fx(cx), cy: fx(capY + capH / 2), r: 3.2,
+      fill: accent, filter: 'url(#glow-soft)' }, g);
+    el('circle', { cx: fx(cx), cy: fx(capY + capH / 2), r: 1.6, fill: BRI, opacity: '0.85' }, g);
   }
 
   /* ── undercroft hatch — a FRONT-ON double cellar / bilco door set INTO the
@@ -1185,6 +1270,11 @@
   /* setDevUndercroft(on): the ?undercroft=1 dev override (boot calls this before
      build). Forces the greybox hatch visible for review only. */
   S.setDevUndercroft = function (on) { S._devUndercroft = !!on; };
+
+  /* setDevRoom(id): the ?room=<id> dev override (boot calls this before build).
+     Pins WHICH room's rep renders in the grounds slot; null/empty keeps the
+     Cairn-default pick. Drives Gate.rooms.pick(_devRoom) in drawRoomRep. */
+  S.setDevRoom = function (id) { S._devRoom = id || null; };
 
   /* ── colormap plumbing: the var roles in colormap have dots ('sky.top'); CSS
      custom-prop names with dots are legal but awkward inside SVG attr var() refs.
