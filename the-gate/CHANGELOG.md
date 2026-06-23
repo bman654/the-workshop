@@ -3,7 +3,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════
      RESUME POINTER  (read this first on a fresh/compacted context)
      ═══════════════════════════════════════════════════════════════════════ -->
-## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + P1/P2 fixed + Phase-D room-rotation shipped; K=4; NEXT = Phase D systems)
+## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + P1/P2 fixed + Phase-D room-rotation & wind-sway shipped; K=4; NEXT = weather-fx / Phase D systems)
 
 **Status:** Phase A blockout LOCKED. Phase B `SPEC.md` **LOCKED + committed**
 (`823f9f3` base + `1b3f9f4` room-rep custom-color slots `rep.swatch1..3`/`rep.glow1..2`,
@@ -156,8 +156,20 @@ derived from the BESPOKE registry, so future reps auto-join. Glyph-Stand rooms a
 stay the fallback for a `?room=` pin of an un-built room). `?room=<id>` still pins any slab room. Verified
 headless: prod→Ripple Tank (today), ?room=physics-lab→Cavern, ?room=verse→Glyph Stand.
 
-NEXT (PHASE D, remaining — see enumeration below): weather-fx canvas (+clouds), foliage+wind sway (§5.9),
-real moon wiring (sky-core.mjs), the self-test chip (moon math), audio, earned asterism, dogfood QA pass.
+**PHASE D — foliage + wind sway ✅ SHIPPED (`<this commit>`):** SPEC §5.9 is now BUILT. A scene-wide
+wind (`S.setWind`/`S.windFromWeather`: storm=strong, else a light ambient breeze) drives a gentle
+rightward GUST sway of every foliage crown via the boot's perpetual rAF (`S.swayTick`). Trees pivot at
+the trunk top (canopy sways; trunk + ground shadow stay RIGID — the crown was already an isolated <g>);
+bushes refactored so their foliage is a crown <g> (cast shadow stays on the ground), pivot at the ground
+line. Amplitude eases toward the wind target so a weather toggle ramps the sway in/out LIVE (chose the
+JS-driver mechanism over build-time SMIL for exactly this). Per-crown period + phase = no unison; bigger
+crowns sway less. Reduced-motion → never ticked (upright); `?smil` pins the phase for repro renders.
+Verified headless: a two-phase diff lights up ONLY the tree/bush crowns (+ the ripple's own animation) —
+the gate, manor, observatory, greenhouse, piers, and lamps show ZERO change (rigid per spec).
+
+NEXT (PHASE D, remaining — see enumeration below): weather-fx canvas (+clouds; rain angle can now read
+the wind), real moon wiring (sky-core.mjs), the self-test chip (moon math), audio, earned asterism,
+dogfood QA pass.
 
 PARKED for specific phases (owner playtest asks, 2026-06-23):
   • **Self-test chip** — the scene needs a self-test chip like the other exhibits that PROVES its math

@@ -550,10 +550,19 @@ palettes (the slots are the shared, bounded channel). 3 swatches + 2 glows is th
 a rep needing more than that should be flagged to the orchestrator (likely a sign it
 wants a fixed estate role instead, like `cavern.maw`).
 
-### 5.9 Wind — a shared runtime param  *(PLANNED — animation phase / Phase D; not yet built)*
+### 5.9 Wind — a shared runtime param  *(BUILT — Phase D, 2026-06-23; foliage sway live)*
 
-A single scene-wide **wind** state drives ambient sway across the frame. Spec'd now so reps are
-built wind-aware; implemented with the animation phase.
+A single scene-wide **wind** state drives ambient sway across the frame. **Implemented** for the
+foliage; reps that want to opt in still follow the rules below.
+
+**As built:** `S.setWind(level)` / `S.windFromWeather(wx)` (storm = `strong`, else a light ambient
+breeze) set the level; the boot's perpetual rAF calls `S.swayTick(now)` each frame, rotating every
+registered foliage crown (`S._foliage`) about its pivot by a gusting, rightward-biased angle whose
+amplitude eases toward the wind target (so a weather toggle ramps in). Trees pivot at the trunk top
+(canopy sways, trunk + ground shadow stay rigid); bushes pivot at the ground line. Reduced-motion →
+the boot never ticks sway (crowns stay upright); `?smil=<s>` pins the sway phase for reproducible
+renders. Chose the **JS-driver** mechanism (b) over build-time SMIL (a) because weather toggles must
+intensify the sway LIVE without a scene rebuild.
 
 - **Levels:** `'none' | 'light' | 'strong'`. The SCENE chooses it (from the weather state — calm
   in `clear`, light in `cloudy`, strong in `storm` — and/or a little randomness); it is NOT a

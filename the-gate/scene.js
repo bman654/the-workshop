@@ -678,6 +678,52 @@
     el('circle', { cx: x - 1, cy: globeY - 1, r: 1.1, fill: '#fff', opacity: '0.7' }, g);
   }
 
+  /* ── WIND + foliage sway (SPEC §5.9) ─────────────────────────────────────────
+     A single scene-wide WIND drives a gentle rightward sway of the foliage crowns
+     (trees + bushes). Wind ALWAYS blows right (+x); the level scales amplitude/speed
+     only — a draw fn never reasons about direction. The hero gate, buildings, and
+     water stay rigid: they register no crown, so they never move. Driven by the boot's
+     perpetual rAF (so a weather toggle intensifies the sway LIVE, which SMIL can't do);
+     reduced-motion = no sway (the boot simply never ticks it → crowns stay upright). */
+  var WIND_AMP = { none: 0, light: 1.5, strong: 3.4 };   // peak sway, degrees
+  var WIND_DUR = { none: 4, light: 3.6, strong: 2.1 };   // base sway period, seconds
+  S._foliage = [];                  // [{el,px,py,phase,per,heavy}] — swayable crowns
+  S._windLevel = 'light';
+  S._windAmp = WIND_AMP.light;      // current (eased) amplitude
+  S._windAmpTarget = WIND_AMP.light;
+  S._windDur = WIND_DUR.light;
+
+  S.setWind = function (level) {
+    if (WIND_AMP[level] == null) level = 'light';
+    S._windLevel = level;
+    S._windAmpTarget = WIND_AMP[level];
+    S._windDur = WIND_DUR[level];
+  };
+  // the SCENE chooses wind from weather: storm = strong; clear/cloudy = a light
+  // ambient breeze (a dead-still default reads lifeless). 'none' is reserved for
+  // reduced-motion / an explicit calm.
+  S.windFromWeather = function (wx) { S.setWind(wx === 'storm' ? 'strong' : 'light'); };
+
+  /* swayTick(nowMs): rotate each foliage crown about its pivot by a gentle GUSTING
+     angle, biased rightward (leaning into the wind). The live amplitude eases toward
+     the wind target so a weather change ramps in rather than snapping. Each crown has
+     its own period + phase so they never sway in unison; heavier (bigger) crowns sway
+     a touch less. Cheap: one transform write per crown (~7 total) per frame. */
+  S.swayTick = function (nowMs) {
+    var fol = S._foliage;
+    if (!fol || !fol.length) return;
+    S._windAmp += (S._windAmpTarget - S._windAmp) * 0.04;   // ~0.4s ease at 60fps
+    var amp = S._windAmp;
+    var t = (nowMs || 0) / 1000;
+    var twoPi = Math.PI * 2;
+    for (var i = 0; i < fol.length; i++) {
+      var f = fol[i];
+      var omega = twoPi / (S._windDur * f.per);
+      var ang = (amp * 0.62 + amp * 0.5 * Math.sin(t * omega + f.phase)) * f.heavy;
+      f.el.setAttribute('transform', 'rotate(' + (Math.round(ang * 1000) / 1000) + ' ' + f.px + ' ' + f.py + ')');
+    }
+  };
+
   /* ── trees/bushes — rounded estate grounds framing the scene ────────────────────
      ART (foundry, take 1): each tree is a TAPERED trunk (root-flare + a hinted
      limb) carrying a layered foliage MASS built from many overlapping crown lobes —
@@ -690,6 +736,7 @@
      gentle sway would pivot — but NO animation is added here (sway is Phase D). */
   function drawTrees(parent) {
     var g = group('trees', parent);
+    S._foliage.length = 0;            // rebuild the swayable-crown list from scratch
     // LEFT cluster — frames the observatory rise + flanks the cairn slot. Kept OUT
     // of the room-rep slot CORE (x152..308 below y492) so a tall rep isn't crowded:
     // the big tree sits at x96 (crown to ~x150), the others at x250/x348 keep their
@@ -817,6 +864,13 @@
       ' A ' + f1f(crownRX * 0.9) + ' ' + f1f(crownRY * 0.9) + ' 0 0 1 ' +
       f1f(x + crownRX * 0.46) + ' ' + f1f(crownCY - crownRY * 0.66),
       fill: 'none', stroke: BRI, 'stroke-width': f1f(1.2), opacity: '0.30' }, crown);
+
+    // register the crown for wind sway (SPEC §5.9): pivots at the trunk top so the
+    // canopy sways while the trunk + ground shadow (drawn into g, not crown) stay put.
+    // Bigger trees sway a touch less (heavy = 1/√sc); per-crown period + phase desync.
+    S._foliage.push({ el: crown, px: f1f(x), py: f1f(trunkTopY),
+      phase: rnd() * Math.PI * 2, per: 0.82 + rnd() * 0.36,
+      heavy: Math.max(0.7, Math.min(1.2, 1 / Math.sqrt(sc))) });
   }
 
   function drawBush(parent, x, baseY, sc) {
@@ -833,20 +887,24 @@
       { dx:   0,      dy: -2 * sc, rx: 26 * sc, ry: 22 * sc }
     ];
 
+    // the swayable foliage group (set below). The cast shadow stays OUT of it (on the
+    // ground), so only the leafy mass rustles in the wind (SPEC §5.9).
+    var crown;
     function clump(cx, cy, rx, ry, fill, op) {
       el('ellipse', { cx: f1f(cx), cy: f1f(cy), rx: f1f(rx), ry: f1f(ry), fill: fill,
-        opacity: op == null ? '1' : String(op) }, g);
+        opacity: op == null ? '1' : String(op) }, crown);
       for (var i = 0; i < 4; i++) {
         var a = (i / 4) * Math.PI * 2 + rnd() * 0.9;
         el('ellipse', { cx: f1f(cx + Math.cos(a) * rx * 0.42), cy: f1f(cy + Math.sin(a) * ry * 0.4),
           rx: f1f(rx * (0.46 + rnd() * 0.2)), ry: f1f(ry * (0.46 + rnd() * 0.2)),
-          fill: fill, opacity: op == null ? '1' : String(op) }, g);
+          fill: fill, opacity: op == null ? '1' : String(op) }, crown);
       }
     }
 
-    // dark shadow belly across the base (shadow falls down/forward)
+    // dark shadow belly across the base (shadow falls down/forward) — stays on the ground
     el('ellipse', { cx: f1f(x), cy: f1f(baseY + 8 * sc), rx: f1f(36 * sc), ry: f1f(12 * sc),
       fill: '#000', opacity: '0.22' }, g);
+    crown = group(null, g);
     // the three foliage lobes
     var i;
     for (i = 0; i < lobes.length; i++) {
@@ -855,17 +913,22 @@
     }
     // a darker overlay tuck between lobes for internal depth
     el('ellipse', { cx: f1f(x), cy: f1f(baseY + 6 * sc), rx: f1f(18 * sc), ry: f1f(12 * sc),
-      fill: '#000', opacity: '0.16' }, g);
+      fill: '#000', opacity: '0.16' }, crown);
     // top-lit crown sheen on each lobe (UP-facing edge)
     for (i = 0; i < lobes.length; i++) {
       var M = lobes[i];
       el('ellipse', { cx: f1f(x + M.dx - M.rx * 0.1), cy: f1f(baseY + M.dy - M.ry * 0.5),
-        rx: f1f(M.rx * 0.6), ry: f1f(M.ry * 0.34), fill: BRI, opacity: '0.14' }, g);
+        rx: f1f(M.rx * 0.6), ry: f1f(M.ry * 0.34), fill: BRI, opacity: '0.14' }, crown);
     }
     // a brass-bright rim along the central lobe's top ("lit from above")
     el('path', { d: 'M ' + f1f(x - 17 * sc) + ' ' + f1f(baseY - 16 * sc) +
       ' A ' + f1f(24 * sc) + ' ' + f1f(20 * sc) + ' 0 0 1 ' + f1f(x + 15 * sc) + ' ' + f1f(baseY - 18 * sc),
-      fill: 'none', stroke: BRI, 'stroke-width': '1', opacity: '0.26' }, g);
+      fill: 'none', stroke: BRI, 'stroke-width': '1', opacity: '0.26' }, crown);
+
+    // register the bush crown for wind sway — pivots at the ground line; gentler than a
+    // tree (low + springy, close to the ground), with a faster rustle period.
+    S._foliage.push({ el: crown, px: f1f(x), py: f1f(baseY),
+      phase: rnd() * Math.PI * 2, per: 0.7 + rnd() * 0.3, heavy: 0.7 });
   }
 
   /* ── LAYER 6 — the room-rep (Cairn) + label, in front of the observatory rise ── */
