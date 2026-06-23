@@ -18,6 +18,8 @@
      ?moon=<0..1>        → pin moonK (illuminated fraction) for brightness.
      ?wx=clear|cloudy|storm → pin weather.
      ?seed=<n>           → seed the weather RNG.
+     ?undercroft=1       → FORCE the undercroft hatch visible (dev review only;
+                           production stays earned-only via the store predicate).
 
    This module owns ONLY the state machine + timings + URL parsing. It calls into
    the gate's swing/spin (Gate.scenegate) and the colormap crossfade (via a
@@ -57,7 +59,8 @@
       t: (['day', 'dusk', 'night'].indexOf(q.t) >= 0) ? q.t : null,
       moon: (q.moon != null && q.moon !== '' && !isNaN(+q.moon)) ? Math.max(0, Math.min(1, +q.moon)) : null,
       wx: (['clear', 'cloudy', 'storm'].indexOf(q.wx) >= 0) ? q.wx : null,
-      seed: (q.seed != null && q.seed !== '' && !isNaN(+q.seed)) ? (+q.seed) : null
+      seed: (q.seed != null && q.seed !== '' && !isNaN(+q.seed)) ? (+q.seed) : null,
+      undercroft: ('undercroft' in q) && q.undercroft !== '0' && q.undercroft !== 'false'
     };
     return out;
   };

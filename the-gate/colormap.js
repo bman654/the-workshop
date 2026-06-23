@@ -169,7 +169,7 @@
     'asterism.star':    '#f0d489',
     'asterism.line':    '#c9a24a',
     'cavern.maw':       '#7fd4c0',
-    'undercroft.glow':  '#d8a94a',
+    'undercroft.glow':  '#8a123a',
     'arcade.screen':    '#37f7e0'
   };
 

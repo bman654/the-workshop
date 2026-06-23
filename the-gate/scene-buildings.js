@@ -96,84 +96,188 @@
      horizon (no float). Sits between the piers, read THROUGH the gate. */
   B.drawManor = function (parent, S) {
     var g = S.group('manor', parent);
-    // anchor: dead-center, distant — base sits ON the horizon (y=470, no float)
-    var mx = 800, baseY = 472, w = 230, h = 104;
-    var left = mx - w / 2, top = baseY - h;
+    // anchor: dead-center, GRAND — base sits ON the horizon (y=472, no float).
+    // The gate OPENING is x472..1128 (centered x800); the manor is scaled UP to
+    // ALMOST FILL it — main block + flanking wings span ~x506..1094, a small margin
+    // inside the piers so the bars FRAME it without clipping. Taller flanking
+    // massing adds weight without ballooning the central footprint.
+    var mx = 800, baseY = 472, w = 388, h = 120;
+    var left = mx - w / 2, top = baseY - h;   // main block x606..994
 
     // main block (pale wall)
     S.el('rect', { x: left, y: top, width: w, height: h, fill: 'var(--manor-wall-ref, #aeb6c6)',
       stroke: 'var(--brass-stroke-ref, #c9a24a)', 'stroke-width': '1' }, g);
-    // wings (lower flanks) — grounded to the same baseY
-    S.el('rect', { x: left - 42, y: top + 34, width: 50, height: baseY - (top + 34), fill: 'var(--manor-wall-ref, #aeb6c6)',
-      stroke: 'var(--brass-stroke-ref, #c9a24a)', 'stroke-width': '0.8' }, g);
-    S.el('rect', { x: left + w - 8, y: top + 34, width: 50, height: baseY - (top + 34), fill: 'var(--manor-wall-ref, #aeb6c6)',
-      stroke: 'var(--brass-stroke-ref, #c9a24a)', 'stroke-width': '0.8' }, g);
 
-    // roof (mansard) — top-lit edge
-    S.el('path', { d: 'M ' + (left - 8) + ' ' + top + ' L ' + (left + w * 0.5) + ' ' + (top - 40) +
+    // TALLER flanking wings (added visual WEIGHT) — taller than the old flanks but
+    // grounded to the same baseY; they reach OUT toward (not into) the piers so the
+    // whole manor mass almost fills the opening. wingTop is HIGHER than the old
+    // top+34 so the wings read as substantial taller massing on the sides.
+    var wingW = 100, wingTop = top + 18;
+    var lwX = left - wingW + 6;                 // left wing  x512..612
+    var rwX = left + w - 6;                     // right wing x988..1088
+    S.el('rect', { x: lwX, y: wingTop, width: wingW, height: baseY - wingTop, fill: 'var(--manor-wall-ref, #aeb6c6)',
+      stroke: 'var(--brass-stroke-ref, #c9a24a)', 'stroke-width': '0.9' }, g);
+    S.el('rect', { x: rwX, y: wingTop, width: wingW, height: baseY - wingTop, fill: 'var(--manor-wall-ref, #aeb6c6)',
+      stroke: 'var(--brass-stroke-ref, #c9a24a)', 'stroke-width': '0.9' }, g);
+    // low hip roofs capping the wings (top-lit) so they read as massing, not boxes
+    S.el('path', { d: 'M ' + (lwX - 4) + ' ' + wingTop + ' L ' + (lwX + wingW * 0.5) + ' ' + (wingTop - 26) +
+      ' L ' + (lwX + wingW + 4) + ' ' + wingTop + ' Z', fill: 'var(--manor-roof-ref, #3a4150)',
+      stroke: 'var(--brass-stroke-ref, #c9a24a)', 'stroke-width': '0.9' }, g);
+    S.el('path', { d: 'M ' + (rwX - 4) + ' ' + wingTop + ' L ' + (rwX + wingW * 0.5) + ' ' + (wingTop - 26) +
+      ' L ' + (rwX + wingW + 4) + ' ' + wingTop + ' Z', fill: 'var(--manor-roof-ref, #3a4150)',
+      stroke: 'var(--brass-stroke-ref, #c9a24a)', 'stroke-width': '0.9' }, g);
+
+    // roof (mansard) over the main block — top-lit edge
+    S.el('path', { d: 'M ' + (left - 8) + ' ' + top + ' L ' + (left + w * 0.5) + ' ' + (top - 46) +
       ' L ' + (left + w + 8) + ' ' + top + ' Z', fill: 'var(--manor-roof-ref, #3a4150)',
       stroke: 'var(--brass-stroke-ref, #c9a24a)', 'stroke-width': '1' }, g);
-    S.el('path', { d: 'M ' + (left - 8) + ' ' + top + ' L ' + (left + w * 0.5) + ' ' + (top - 40),
+    S.el('path', { d: 'M ' + (left - 8) + ' ' + top + ' L ' + (left + w * 0.5) + ' ' + (top - 46),
       fill: 'none', stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1.1', opacity: '0.45' }, g);
 
     // central clock tower (a manor signature — nods to the orrery)
     var tx = left + w * 0.5;
-    S.el('rect', { x: tx - 18, y: top - 92, width: 36, height: 58, fill: 'var(--manor-wall-ref, #aeb6c6)',
+    S.el('rect', { x: tx - 20, y: top - 96, width: 40, height: 62, fill: 'var(--manor-wall-ref, #aeb6c6)',
       stroke: 'var(--brass-stroke-ref, #c9a24a)', 'stroke-width': '1' }, g);
-    S.el('path', { d: 'M ' + (tx - 22) + ' ' + (top - 92) + ' L ' + tx + ' ' + (top - 126) +
-      ' L ' + (tx + 22) + ' ' + (top - 92) + ' Z', fill: 'var(--manor-roof-ref, #3a4150)',
+    S.el('path', { d: 'M ' + (tx - 24) + ' ' + (top - 96) + ' L ' + tx + ' ' + (top - 132) +
+      ' L ' + (tx + 24) + ' ' + (top - 96) + ' Z', fill: 'var(--manor-roof-ref, #3a4150)',
       stroke: 'var(--brass-stroke-ref, #c9a24a)', 'stroke-width': '1' }, g);
     // clock face (brass ring + emissive center)
-    S.el('circle', { cx: tx, cy: top - 64, r: 9, fill: 'rgba(11,14,22,.85)',
+    S.el('circle', { cx: tx, cy: top - 66, r: 10, fill: 'rgba(11,14,22,.85)',
       stroke: 'var(--brass-stroke-ref, #c9a24a)', 'stroke-width': '1.3' }, g);
-    S.el('circle', { cx: tx, cy: top - 64, r: 3.4, fill: 'var(--window-lit-ref, #ffcf73)', opacity: '0.85' }, g);
+    S.el('circle', { cx: tx, cy: top - 66, r: 3.6, fill: 'var(--window-lit-ref, #ffcf73)', opacity: '0.85' }, g);
 
     // a lit doorway at the foot of the central axis — the road's terminus
-    S.el('rect', { x: tx - 8, y: baseY - 26, width: 16, height: 26, rx: 1,
+    S.el('rect', { x: tx - 9, y: baseY - 30, width: 18, height: 30, rx: 1,
       fill: 'var(--window-lit-ref, #ffcf73)', opacity: '0.9' }, g);
 
     // rows of lit windows (emissive) — candle-glow from the manor
-    var cols = 5, rows = 2;
+    var cols = 6, rows = 2;
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
-        var wx = left + 22 + c * ((w - 44) / (cols - 1)) - 6;
-        var wy = top + 20 + r * 38;
-        litWindow(S, g, wx, wy, 12, 18);
+        var wx = left + 26 + c * ((w - 52) / (cols - 1)) - 6;
+        var wy = top + 24 + r * 44;
+        litWindow(S, g, wx, wy, 13, 20);
       }
     }
-    // a couple of wing windows
-    litWindow(S, g, left - 30, top + 50, 10, 15);
-    litWindow(S, g, left + w + 12, top + 50, 10, 15);
+    // wing windows (two tiers each — the taller massing reads as occupied)
+    litWindow(S, g, lwX + 20, wingTop + 28, 12, 18);
+    litWindow(S, g, lwX + 58, wingTop + 28, 12, 18);
+    litWindow(S, g, lwX + 20, wingTop + 70, 12, 18);
+    litWindow(S, g, lwX + 58, wingTop + 70, 12, 18);
+    litWindow(S, g, rwX + 22, wingTop + 28, 12, 18);
+    litWindow(S, g, rwX + 60, wingTop + 28, 12, 18);
+    litWindow(S, g, rwX + 22, wingTop + 70, 12, 18);
+    litWindow(S, g, rwX + 60, wingTop + 70, 12, 18);
   };
 
-  /* ── RIGHT: the greenhouse (glasshouse front-elevation) ─────────────────────── */
+  /* ── RIGHT: the greenhouse — a 3/4 CORNER view Victorian glasshouse ───────────
+     Drawn FORWARD into the midground (base BELOW the manor's horizon at y470, so
+     it reads as CLOSER) and at a 3/4 angle so we see TWO faces meeting at a near
+     vertical corner: a FRONT GABLE face (left) + a SIDE WALL receding back-right,
+     with the ridge roof angled in perspective and the gable end showing. Sits to
+     the RIGHT of the right pier (cap edge ~x1214), clear of the frame, leaving the
+     ground in front for the undercroft hatch. A dimensional glasshouse, not a
+     flat decal. Palette: frame=greenhouse.frame, panes=greenhouse.glass; a faint
+     warm window.lit interior glow at night. */
   B.drawGreenhouse = function (parent, S) {
     var g = S.group('greenhouse', parent);
-    // anchor: far right, near ground — base y ~470, footprint ~x1380..1580
-    var gx = 1470, baseY = 470, w = 180, h = 90;
-    var left = gx - w / 2, top = baseY - h;
+    var FR = 'var(--greenhouse-frame-ref, #222a30)';
+    var GL = 'var(--greenhouse-glass-ref, #5a7280)';
 
-    // glass body
-    S.el('rect', { x: left, y: top, width: w, height: h, fill: 'var(--greenhouse-glass-ref, #5a7280)',
-      opacity: '0.65', stroke: 'var(--greenhouse-frame-ref, #222a30)', 'stroke-width': '1' }, g);
-    // pitched glass roof
-    S.el('path', { d: 'M ' + (left - 6) + ' ' + top + ' L ' + (left + w * 0.5) + ' ' + (top - 40) +
-      ' L ' + (left + w + 6) + ' ' + top + ' Z', fill: 'var(--greenhouse-glass-ref, #5a7280)',
-      opacity: '0.6', stroke: 'var(--greenhouse-frame-ref, #222a30)', 'stroke-width': '1' }, g);
-    // glazing bars (frame)
-    var bars = 5;
-    for (var i = 1; i < bars; i++) {
-      var bx = left + i * (w / bars);
-      S.el('line', { x1: bx, y1: top, x2: bx, y2: top + h, stroke: 'var(--greenhouse-frame-ref, #222a30)', 'stroke-width': '1' }, g);
+    // ── box corners (a 3/4 projection: front face square-on, side wall sheared
+    // up-and-right with perspective foreshortening). Near vertical corner is the
+    // edge shared by both faces; the front face is to its LEFT, side wall RIGHT. ──
+    // SCALED DOWN (SC) but the SHAPE is preserved EXACTLY — every dimension is the
+    // same proportion as before, just × SC — so the owner's loved 3/4 silhouette is
+    // unchanged, only smaller. Anchored slightly lower + forward-right so its TOP
+    // (gable apex) sits clearly BELOW the manor roofline → it reads as SECONDARY.
+    var SC = 0.66;
+    var ncx = 1372, baseY = 600;      // NEAR corner foot (the closest point)
+    var wallH = 132 * SC;             // eave height at the near corner
+    var frontW = 122 * SC;            // front-face apparent width (to the left)
+    var sideRun = 188 * SC, sideRise = 40 * SC; // side wall recede (right) + perspective rise
+    var sideH = wallH - 26 * SC;      // far eave is lower (smaller w/ distance)
+
+    // front face foot-left / eave-left / eave-corner / foot-corner
+    var fL = ncx - frontW, fEaveY = baseY - wallH;
+    // side far foot / far eave
+    var sFx = ncx + sideRun, sFy = baseY - sideRise;
+    var sEaveY = sFy - sideH;
+
+    // ── SIDE WALL (recedes back-right) — drawn first (behind the front face) ──
+    var sideD = 'M ' + ncx + ' ' + baseY +
+      ' L ' + ncx + ' ' + fEaveY +
+      ' L ' + sFx + ' ' + sEaveY +
+      ' L ' + sFx + ' ' + sFy + ' Z';
+    S.el('path', { d: sideD, fill: GL, opacity: '0.55', stroke: FR, 'stroke-width': '1.4' }, g);
+
+    // ── FRONT GABLE FACE ──
+    var frontD = 'M ' + fL + ' ' + baseY +
+      ' L ' + fL + ' ' + fEaveY +
+      ' L ' + ncx + ' ' + fEaveY +
+      ' L ' + ncx + ' ' + baseY + ' Z';
+    S.el('path', { d: frontD, fill: GL, opacity: '0.7', stroke: FR, 'stroke-width': '1.6' }, g);
+
+    // ── GABLE TRIANGLE on the front face (the pitched glass end) ──
+    var ridgeFrontX = (fL + ncx) / 2;          // ridge apex above the front face
+    var ridgeApexY = fEaveY - 52 * SC;         // gable rise scaled with the rest
+    var gableD = 'M ' + fL + ' ' + fEaveY +
+      ' L ' + ridgeFrontX + ' ' + ridgeApexY +
+      ' L ' + ncx + ' ' + fEaveY + ' Z';
+    S.el('path', { d: gableD, fill: GL, opacity: '0.62', stroke: FR, 'stroke-width': '1.6' }, g);
+
+    // ── RIDGE ROOF PLANE (recedes back-right in perspective) ──
+    var ridgeBackX = ridgeFrontX + sideRun, ridgeBackY = ridgeApexY - sideRise;
+    var roofD = 'M ' + ridgeFrontX + ' ' + ridgeApexY +
+      ' L ' + ridgeBackX + ' ' + ridgeBackY +
+      ' L ' + sFx + ' ' + sEaveY +
+      ' L ' + ncx + ' ' + fEaveY + ' Z';
+    S.el('path', { d: roofD, fill: GL, opacity: '0.5', stroke: FR, 'stroke-width': '1.4' }, g);
+    // far gable end of the roof (back triangle, faint) so the ridge reads as a prism
+    S.el('path', { d: 'M ' + sFx + ' ' + sEaveY + ' L ' + ridgeBackX + ' ' + ridgeBackY +
+      ' L ' + (sFx) + ' ' + sEaveY + ' Z', fill: 'none', stroke: FR, 'stroke-width': '1' }, g);
+
+    // ── GLAZING BARS ──
+    // front face verticals
+    var fbars = 4;
+    for (var i = 1; i < fbars; i++) {
+      var bx = fL + i * (frontW / fbars);
+      S.el('line', { x1: bx, y1: fEaveY, x2: bx, y2: baseY, stroke: FR, 'stroke-width': '1' }, g);
     }
-    S.el('line', { x1: left, y1: top + h * 0.5, x2: left + w, y2: top + h * 0.5,
-      stroke: 'var(--greenhouse-frame-ref, #222a30)', 'stroke-width': '1' }, g);
-    // ridge top-edge brass sheen
-    S.el('path', { d: 'M ' + (left - 6) + ' ' + top + ' L ' + (left + w * 0.5) + ' ' + (top - 40),
-      fill: 'none', stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1', opacity: '0.3' }, g);
-    // a faint inner glow (plants/lanterns) — emissive, subtle
-    S.el('rect', { x: left + 8, y: top + h * 0.45, width: w - 16, height: h * 0.45,
-      fill: 'var(--window-lit-ref, #ffcf73)', opacity: '0.10', filter: 'url(#glow-soft)' }, g);
+    // front face mid rail
+    S.el('line', { x1: fL, y1: (fEaveY + baseY) / 2, x2: ncx, y2: (fEaveY + baseY) / 2,
+      stroke: FR, 'stroke-width': '1' }, g);
+    // side wall verticals (converge toward the far corner = perspective)
+    var sbars = 5;
+    for (var j = 1; j < sbars; j++) {
+      var t = j / sbars;
+      var topx = ncx + t * (sFx - ncx), topy = fEaveY + t * (sEaveY - fEaveY);
+      var botx = ncx + t * (sFx - ncx), boty = baseY + t * (sFy - baseY);
+      S.el('line', { x1: topx, y1: topy, x2: botx, y2: boty, stroke: FR, 'stroke-width': '0.9' }, g);
+    }
+    // roof glazing bars along the ridge (front→back)
+    var rbars = 4;
+    for (var k = 1; k < rbars; k++) {
+      var rt = k / rbars;
+      var ex = ncx + rt * (sFx - ncx), ey = fEaveY + rt * (sEaveY - fEaveY);
+      var rx = ridgeFrontX + rt * (ridgeBackX - ridgeFrontX), ry = ridgeApexY + rt * (ridgeBackY - ridgeApexY);
+      S.el('line', { x1: ex, y1: ey, x2: rx, y2: ry, stroke: FR, 'stroke-width': '0.8' }, g);
+    }
+
+    // ── near vertical corner post (emphasise the 3/4 edge) + ridge brass sheen ──
+    S.el('line', { x1: ncx, y1: baseY, x2: ncx, y2: fEaveY, stroke: FR, 'stroke-width': '2' }, g);
+    S.el('line', { x1: fL, y1: fEaveY, x2: ridgeFrontX, y2: ridgeApexY,
+      stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1.1', opacity: '0.35' }, g);
+    S.el('line', { x1: ridgeFrontX, y1: ridgeApexY, x2: ridgeBackX, y2: ridgeBackY,
+      stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1.1', opacity: '0.35' }, g);
+
+    // ── faint warm INTERIOR GLOW (plants/lanterns) seen through the glass at
+    // night — emissive (window.lit GLOW role, palette/brightness-immune). ──
+    S.el('rect', { x: fL + 8 * SC, y: baseY - wallH * 0.5, width: frontW - 16 * SC, height: wallH * 0.5 - 6 * SC,
+      fill: 'var(--window-lit-ref, #ffcf73)', opacity: '0.12', filter: 'url(#glow-soft)' }, g);
+    // a brighter low pip so it reads as a light source at night
+    S.el('rect', { x: ncx - 30 * SC, y: baseY - 34 * SC, width: 22 * SC, height: 24 * SC, rx: 1,
+      fill: 'var(--window-lit-ref, #ffcf73)', opacity: '0.16' }, g);
   };
 
   Gate.scenebuildings = B;

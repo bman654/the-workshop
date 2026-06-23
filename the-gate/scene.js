@@ -80,14 +80,17 @@
     var clouds = group('layer-clouds', svg);
     S.refs.clouds = clouds;
 
-    // LAYER 4 — far scenery (observatory + hill | manor | greenhouse)
+    // LAYER 4 — far scenery (observatory + hill | manor). The greenhouse is NO
+    // longer here: it is a FORWARD building (base below the horizon), so drawing it
+    // in far-scenery let the midground grass rect (layer 5) paint over its body —
+    // only a sliver of ridge survived. It now draws in the FORWARD furniture layer
+    // (layer 6), IN FRONT OF the grass, like the undercroft hatch.
     var farScenery = group('layer-far-scenery', svg);
     var B = Gate.scenebuildings;
     if (B) {
       if (B.drawMist) B.drawMist(farScenery, S);    // horizon haze (behind buildings)
       B.drawHillAndObservatory(farScenery, S);      // LEFT
       B.drawManor(farScenery, S);                   // CENTER (distant, behind gate)
-      B.drawGreenhouse(farScenery, S);              // RIGHT
     }
 
     // LAYER 5 — midground (grass, road, trees/bushes)
@@ -95,8 +98,12 @@
     drawGrounds(midground);
     drawTrees(midground);
 
-    // LAYER 6 — grounds furniture (cairn rep + label, undercroft hatch)
+    // LAYER 6 — grounds furniture, all IN FRONT OF the grass plane:
+    //   greenhouse (forward-right glasshouse) → cairn rep → undercroft hatch.
+    // The greenhouse draws FIRST so the undercroft hatch (more forward, lower on the
+    // grounds) reads in FRONT of / beside it — both cleanly readable on the right.
     var furniture = group('layer-furniture', svg);
+    if (B) B.drawGreenhouse(furniture, S);          // RIGHT (forward, in front of grass)
     drawRoomRep(furniture);
     drawUndercroftHatch(furniture);
 
@@ -133,6 +140,13 @@
     var m2 = el('feMerge', {}, f2);
     el('feMergeNode', { 'in': 'b2' }, m2);
     el('feMergeNode', { 'in': 'SourceGraphic' }, m2);
+
+    // a WIDE, blur-ONLY feather for the moon's lit-limb glow. Unlike glow-soft this
+    // does NOT merge the source back in — we want a pure blurred copy of the LIT
+    // crescent/gibbous shape so the halo follows the illuminated edge and fades to
+    // nothing as it wraps toward the dark limb (no glow on the dark side).
+    var f3 = el('filter', { id: 'glow-moon', x: '-90%', y: '-90%', width: '280%', height: '280%' }, defs);
+    el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '16' }, f3);
   }
 
   /* ── a faint full-bleed starfield (always present; reads at night) ───────────── */
@@ -169,35 +183,111 @@
     drawAsterism(g, 70, 24, 180);
   };
 
-  /* greybox moon: a lit disc with a rough terminator placeholder (real moon math
-     is owned by another agent's sky-core.mjs — NOT included this pass). */
+  /* ── PHASE-PARAMETRIC moon ──────────────────────────────────────────────────
+     drawMoon(g, cx, cy, r) reads three params off S:
+       S._moonFrac : illuminated fraction 0..1 (0 new · 0.5 quarter · 1 full)
+       S._moonSide : +1 = lit on the RIGHT (waxing) · -1 = lit on the LEFT (waning)
+     and renders, back→front:
+       (Fix 2) a near-DARK full disc (structural night tone, sampled from the
+               resolved observatory.body) so the unlit sphere nearly merges into
+               the night sky — only a faint hint of form, never mid-grey.
+       (Fix 3) a soft GLOW that hugs only the LIT limb: a blurred copy of the
+               illuminated crescent/gibbous PATH itself, so the halo follows the
+               lit edge and fades to nothing toward the dark side (no dark-limb
+               glow). Near-full → the lit shape is almost the whole disc, so the
+               glow approaches a full ring; thin crescent → a bright arc only.
+       the bright emissive LIT region (var(--moon.disc)).
+       a faint top-edge highlight along the lit limb ("lit from above").
+
+     TODO Phase D: feed sky-core.mjs moonPhase()/terminator() output
+       {illuminatedFraction, litSide, curvature} into S.setMoonPhase() instead of
+       the ?moon dev pin, so the drawn phase matches the user's real date. */
   function drawMoon(g, cx, cy, r) {
     var moonG = group('moon', g);
-    // halo
-    el('circle', { cx: cx, cy: cy, r: r * 1.7, fill: 'var(--moon-disc-ref, #f2ead2)',
-      opacity: '0.10', filter: 'url(#glow-soft)' }, moonG);
-    // full disc
-    el('circle', { cx: cx, cy: cy, r: r, fill: 'var(--moon-disc-ref, #f2ead2)' }, moonG);
-    // rough terminator: a darker crescent overlay offset to the right (placeholder
-    // ~60% illuminated). Phase D replaces with real terminator geometry.
-    var moonK = (S._moonK == null) ? 0.6 : S._moonK;
-    var shade = el('path', {
-      d: terminatorPath(cx, cy, r, moonK),
-      fill: 'var(--sky-top-ref, #0a1326)', opacity: '0.55'
-    }, moonG);
-    shade.setAttribute('aria-hidden', 'true');
-    // faint top-edge brass highlight ("lit from above")
-    el('path', { d: 'M ' + (cx - r * 0.7) + ' ' + (cy - r * 0.55) +
-      ' A ' + r + ' ' + r + ' 0 0 1 ' + (cx + r * 0.7) + ' ' + (cy - r * 0.55),
-      fill: 'none', stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1.2', opacity: '0.35' }, moonG);
+    var frac = clamp01(S._moonFrac == null ? 0.6 : S._moonFrac);
+    var side = (S._moonSide === -1) ? -1 : 1;       // default waxing (lit right)
+
+    // (Fix 2) the dark sphere — structural-dark, NOT mid-grey. Prefer the resolved
+    // observatory.body tone (the night structural dark); fall back to a deep tint.
+    var darkFill = resolvedRole('observatory.body') ||
+      'var(--observatory-body-ref, #181c26)';
+    el('circle', { cx: cx, cy: cy, r: r, fill: darkFill }, moonG);
+    // a whisper of rim form on the dark side so it isn't a flat hole
+    el('circle', { cx: cx, cy: cy, r: r, fill: 'none',
+      stroke: 'var(--brass-stroke-ref, #4a4436)', 'stroke-width': '0.8', opacity: '0.22' }, moonG);
+
+    // the LIT-region path (crescent/gibbous bounded by limb + terminator).
+    var litD = litRegionPath(cx, cy, r, frac, side);
+
+    if (litD) {
+      // (Fix 3 / restore) glow = blurred copies of the LIT shape (pure feather, no
+      // source merge) → naturally hugs the illuminated limb, zero glow on the dark
+      // side. TWO layers: a WIDE soft halo + a TIGHTER brighter bloom so the glow
+      // is clearly VISIBLE on the lit limb (crescent → bright arc, near-full → ring)
+      // without spilling onto the dark side.
+      el('path', { d: litD, fill: 'var(--moon-disc-ref, #f2ead2)',
+        opacity: '0.85', filter: 'url(#glow-moon)' }, moonG);   // wide soft halo
+      el('path', { d: litD, fill: 'var(--moon-disc-ref, #f2ead2)',
+        opacity: '0.6', filter: 'url(#glow-star)' }, moonG);    // tight inner bloom
+      // the bright emissive lit region
+      el('path', { d: litD, fill: 'var(--moon-disc-ref, #f2ead2)' }, moonG);
+      // faint top-edge highlight along the lit limb ("lit from above")
+      var hx = cx + side * r * 0.18;
+      el('path', { d: 'M ' + (hx - side * r * 0.5) + ' ' + (cy - r * 0.6) +
+        ' A ' + r + ' ' + r + ' 0 0 ' + (side > 0 ? 1 : 0) + ' ' + (hx + side * r * 0.4) + ' ' + (cy - r * 0.72),
+        fill: 'none', stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1.1', opacity: '0.3' }, moonG);
+    }
   }
 
-  // a crude terminator: a vertical-ish ellipse whose width tracks (1-2k) of r.
-  function terminatorPath(cx, cy, r, k) {
-    var off = (1 - 2 * k) * r;        // k=1 full → off=-r (no shade); k=0 new → off=+r
-    return 'M ' + cx + ' ' + (cy - r) +
-      ' A ' + Math.abs(off) + ' ' + r + ' 0 0 ' + (off >= 0 ? 1 : 0) + ' ' + cx + ' ' + (cy + r) +
-      ' A ' + r + ' ' + r + ' 0 0 ' + (off >= 0 ? 1 : 1) + ' ' + cx + ' ' + (cy - r) + ' Z';
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+
+  /* resolvedRole(role): read a resolved CSS var (dash alias) so the moon's dark
+     side tracks the live palette/brightness. The vars are written on #stage; the
+     svg is a descendant, so walk UP from it to the first node carrying the alias.
+     Returns null if not available yet (caller falls back to the default tint). */
+  function resolvedRole(role) {
+    try {
+      var node = S.refs && S.refs.svg;
+      while (node) {
+        var v = node.style && node.style.getPropertyValue(dashName(role));
+        if (v) return v;
+        node = node.parentNode;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  /* litRegionPath(cx,cy,r,frac,side): the illuminated portion as a closed path.
+     Built from the OUTER limb semicircle (on the lit side) + the TERMINATOR arc.
+       frac=0   → null (new moon, nothing lit)
+       frac=1   → full disc circle
+       0<frac<1 → crescent (frac<0.5) or gibbous (frac>0.5)
+     The terminator is a half-ellipse with semi-minor axis tx = r·|1−2·frac|
+     (the projected day/night boundary); its bulge direction flips at frac=0.5. */
+  function litRegionPath(cx, cy, r, frac, side) {
+    if (frac <= 0.001) return null;
+    if (frac >= 0.999) {
+      // full disc
+      return 'M ' + (cx - r) + ' ' + cy +
+        ' A ' + r + ' ' + r + ' 0 1 1 ' + (cx + r) + ' ' + cy +
+        ' A ' + r + ' ' + r + ' 0 1 1 ' + (cx - r) + ' ' + cy + ' Z';
+    }
+    var topY = cy - r, botY = cy + r;
+    var tx = r * Math.abs(1 - 2 * frac);   // terminator semi-minor axis
+    // OUTER limb: the visible semicircle on the LIT side, from top → bottom.
+    // For side=+1 (lit right) we sweep the RIGHT half (clockwise, sweep=1);
+    // for side=-1 (lit left) we sweep the LEFT half (sweep=0).
+    var limbSweep = side > 0 ? 1 : 0;
+    // TERMINATOR: half-ellipse from bottom → top closing the inner edge.
+    // gibbous (frac>0.5): terminator bows AWAY from lit side → same sweep dir as limb.
+    // crescent (frac<0.5): terminator bows INTO lit side → opposite sweep.
+    var gibbous = frac > 0.5;
+    var termSweep;
+    if (side > 0) termSweep = gibbous ? 1 : 0;   // lit right
+    else          termSweep = gibbous ? 0 : 1;   // lit left
+    return 'M ' + cx + ' ' + topY +
+      ' A ' + r + ' ' + r + ' 0 0 ' + limbSweep + ' ' + cx + ' ' + botY +
+      ' A ' + tx + ' ' + r + ' 0 0 ' + termSweep + ' ' + cx + ' ' + topY + ' Z';
   }
 
   function drawSun(g, cx, cy, r, band) {
@@ -322,9 +412,13 @@
     drawTree(g, 250, 600, 0.85);
     drawTree(g, 348, 572, 1.05);
     drawBush(g, 300, 700, 1.0);
-    drawTree(g, 1296, 588, 1.2);
-    drawTree(g, 1420, 612, 0.8);
-    drawBush(g, 1480, 716, 1.25);
+    // RIGHT-side trees FRAME the forward greenhouse (footprint ~x1291..1496) rather
+    // than sit under its translucent glass — one to its LEFT (between pier + house),
+    // one tucked to its far RIGHT at the frame edge. (Trees are midground, BEHIND the
+    // greenhouse now, so any overlap would show foliage THROUGH the glass.)
+    drawTree(g, 1232, 588, 1.2);
+    drawTree(g, 1548, 624, 0.78);
+    drawBush(g, 1500, 724, 1.1);
     drawBush(g, 1240, 706, 0.85);
     S.refs.trees = g;
   }
@@ -388,23 +482,108 @@
     }
   }
 
-  /* ── undercroft hatch — only when the unlock predicate is true (placeholder) ─── */
+  /* ── undercroft hatch — a FRONT-ON double cellar / bilco door set INTO the
+     ground, on the RIGHT in front of the (now smaller) greenhouse. We stand in
+     FRONT and slightly ABOVE, looking down INTO the hole — NOT an isometric corner.
+     The OPENING is a rectangle lying flat on the ground in perspective: the NEAR
+     edge (bottom, closest) is WIDER, the FAR edge (top, into the distance) is
+     NARROWER. Two doors SIDE BY SIDE hinged on OPPOSITE OUTER edges — the LEFT door
+     on the opening's LEFT edge, the RIGHT door on the RIGHT edge — both flung OPEN
+     OUTWARD, away from the centerline, lying back on the grass. The emissive
+     undercroft.glow seeps up from the dark depths.
+     Shown only when the unlock predicate is true (earned) OR forced via ?undercroft=1. */
   function drawUndercroftHatch(parent) {
-    var open = undercroftOpen();
-    if (!open) return;
+    if (!undercroftOpen()) return;
     var g = group('undercroft-hatch', parent);
-    var x = 1340, y = 800;        // near the greenhouse, RIGHT
-    // slanted cellar door (a parallelogram lid)
-    el('path', { d: 'M ' + x + ' ' + y + ' l 110 -28 l 26 40 l -110 28 Z',
-      fill: 'rgba(11,14,22,.9)', stroke: 'var(--brass-stroke-ref, #c9a24a)', 'stroke-width': '1.4' }, g);
-    // emissive glow from the gap (palette-immune)
-    el('path', { d: 'M ' + (x + 8) + ' ' + (y + 4) + ' l 108 -27 l 6 9 l -108 27 Z',
-      fill: 'var(--undercroft-glow-ref, #d8a94a)', opacity: '0.55', filter: 'url(#glow-soft)' }, g);
+    var FR = 'var(--brass-stroke-ref, #c9a24a)';
+
+    // OPENING rectangle in ground perspective (front-on, receding away from viewer).
+    // Centred in the right grounds, forward of (lower than) the shrunken greenhouse.
+    var cx = 1300;                  // centerline of the opening
+    var yNear = 742, yFar = 678;    // bottom (near) + top (far) edges of the hole
+    var wNear = 78, wFar = 52;      // half-widths: NEAR wider, FAR narrower (perspective)
+    var Lnear = cx - wNear, Rnear = cx + wNear;   // near corners
+    var Lfar  = cx - wFar,  Rfar  = cx + wFar;    // far corners
+
+    // a thin stone curb/lip ringing the opening, set into the grass — drawn first,
+    // slightly larger than the hole, so the rim reads as a built collar.
+    var cb = 8;
+    el('path', { d: 'M ' + (Lnear - cb) + ' ' + (yNear + cb * 0.5) +
+      ' L ' + (Lfar - cb) + ' ' + (yFar - cb * 0.4) +
+      ' L ' + (Rfar + cb) + ' ' + (yFar - cb * 0.4) +
+      ' L ' + (Rnear + cb) + ' ' + (yNear + cb * 0.5) + ' Z',
+      fill: 'var(--stone-ref, #6a7079)', stroke: FR, 'stroke-width': '1.2' }, g);
+
+    // the DARK OPENING — a rectangular hole lying flat, receding (trapezoid). This is
+    // the void you'd walk DOWN into; it reads dark (or scary-lit) from its depths.
+    var holeD = 'M ' + Lnear + ' ' + yNear +
+      ' L ' + Lfar + ' ' + yFar +
+      ' L ' + Rfar + ' ' + yFar +
+      ' L ' + Rnear + ' ' + yNear + ' Z';
+    el('path', { d: holeD, fill: 'rgba(6,7,11,.97)', stroke: FR, 'stroke-width': '1.4' }, g);
+
+    // a hint of the FAR WALL / first steps descending — a darker inner band at the
+    // far edge so the eye reads DEPTH (you could step down into it).
+    el('path', { d: 'M ' + (Lfar + 4) + ' ' + yFar +
+      ' L ' + (Rfar - 4) + ' ' + yFar +
+      ' L ' + (Rfar - 8) + ' ' + (yFar + 14) +
+      ' L ' + (Lfar + 8) + ' ' + (yFar + 14) + ' Z',
+      fill: 'rgba(0,0,0,.55)' }, g);
+
+    // the emissive GLOW seeping UP from the depths (palette-immune). Pooled in the
+    // hole (smaller than the opening, biased to the FAR/lower-interior) so it reads
+    // as menacing light rising from below, not a flat fill. undercroft.glow VALUE
+    // sets the mood (deep red-violet = scary, not welcoming).
+    var gw = wNear * 0.62, gwf = wFar * 0.55;
+    var gyN = yNear - 8, gyF = yFar + 6;
+    el('path', { d: 'M ' + (cx - gw) + ' ' + gyN +
+      ' L ' + (cx - gwf) + ' ' + gyF +
+      ' L ' + (cx + gwf) + ' ' + gyF +
+      ' L ' + (cx + gw) + ' ' + gyN + ' Z',
+      fill: 'var(--undercroft-glow-ref, #6e1430)', opacity: '0.6', filter: 'url(#glow-soft)' }, g);
+
+    // ── TWO DOORS side by side, flung OPEN OUTWARD, hinged on the OPPOSITE OUTER
+    // edges. Each open leaf lies BACK on the grass alongside the opening (a flat-ish
+    // trapezoid extending outward from its hinge edge). Drawn AFTER the hole so the
+    // leaves sit on the ground beside it, framing the dark rectangle. ──
+    var leafRun = 56;               // how far each open leaf reaches outward
+    // LEFT door: hinged on the opening's LEFT edge (Lnear..Lfar), opens to the LEFT.
+    var lhNx = Lnear, lhNy = yNear;          // near hinge point (on left edge)
+    var lhFx = Lfar,  lhFy = yFar;           // far  hinge point (on left edge)
+    el('path', { d: 'M ' + lhNx + ' ' + lhNy +
+      ' L ' + lhFx + ' ' + lhFy +
+      ' L ' + (lhFx - leafRun * 0.78) + ' ' + (lhFy - 4) +
+      ' L ' + (lhNx - leafRun) + ' ' + (lhNy + 2) + ' Z',
+      fill: 'rgba(13,16,22,.92)', stroke: FR, 'stroke-width': '1.4' }, g);
+    // left leaf plank lines + outer-edge brass sheen ("lit from above")
+    el('line', { x1: lhNx - leafRun, y1: lhNy + 2, x2: lhFx - leafRun * 0.78, y2: lhFy - 4,
+      stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1', opacity: '0.4' }, g);
+    el('line', { x1: (lhNx + lhNx - leafRun) / 2, y1: (lhNy + lhNy + 2) / 2,
+      x2: (lhFx + lhFx - leafRun * 0.78) / 2, y2: (lhFy + lhFy - 4) / 2,
+      stroke: FR, 'stroke-width': '0.8', opacity: '0.55' }, g);
+
+    // RIGHT door: hinged on the opening's RIGHT edge (Rnear..Rfar), opens to the RIGHT.
+    var rhNx = Rnear, rhNy = yNear;
+    var rhFx = Rfar,  rhFy = yFar;
+    el('path', { d: 'M ' + rhNx + ' ' + rhNy +
+      ' L ' + rhFx + ' ' + rhFy +
+      ' L ' + (rhFx + leafRun * 0.78) + ' ' + (rhFy - 4) +
+      ' L ' + (rhNx + leafRun) + ' ' + (rhNy + 2) + ' Z',
+      fill: 'rgba(13,16,22,.92)', stroke: FR, 'stroke-width': '1.4' }, g);
+    el('line', { x1: rhNx + leafRun, y1: rhNy + 2, x2: rhFx + leafRun * 0.78, y2: rhFy - 4,
+      stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1', opacity: '0.4' }, g);
+    el('line', { x1: (rhNx + rhNx + leafRun) / 2, y1: (rhNy + rhNy + 2) / 2,
+      x2: (rhFx + rhFx + leafRun * 0.78) / 2, y2: (rhFy + rhFy - 4) / 2,
+      stroke: FR, 'stroke-width': '0.8', opacity: '0.55' }, g);
+
     S.refs.undercroft = g;
   }
 
-  /* mirror index.src.html revealUndercroft EXACTLY: navigable state, not eligibility. */
+  /* mirror index.src.html revealUndercroft EXACTLY: navigable state, not eligibility.
+     PRODUCTION stays earned-only; the dev flag (?undercroft=1 → setDevUndercroft)
+     only FORCES it visible for review — it does NOT change the earned-unlock logic. */
   function undercroftOpen() {
+    if (S._devUndercroft) return true;           // dev review override
     var WS = root.WS;
     if (!WS || !WS.store) return false;
     var store = WS.store();
@@ -412,6 +591,10 @@
     return store.has('ws:seen:undercroft-rune') || store.has('ws:seen:undercroft');
   }
   S.undercroftOpen = undercroftOpen;
+
+  /* setDevUndercroft(on): the ?undercroft=1 dev override (boot calls this before
+     build). Forces the greybox hatch visible for review only. */
+  S.setDevUndercroft = function (on) { S._devUndercroft = !!on; };
 
   /* ── colormap plumbing: the var roles in colormap have dots ('sky.top'); CSS
      custom-prop names with dots are legal but awkward inside SVG attr var() refs.
@@ -432,8 +615,25 @@
     }
   };
 
-  /* setMoonK(k): stash the illuminated fraction for the greybox terminator. */
-  S.setMoonK = function (k) { S._moonK = k; };
+  /* setMoonK(k): stash the illuminated fraction. In dev, ?moon=<0..1> drives BOTH
+     the brightness moonK (consumed by the boot's colormap.B) AND the DRAWN phase
+     fraction here, so a preview at ?moon=0.2 shows a thin crescent + dim scene and
+     ?moon=0.8 shows a fat gibbous + bright scene. Default lit side = right (waxing). */
+  S.setMoonK = function (k) {
+    S._moonK = k;
+    if (S._moonFrac == null || S._moonPhasePinned !== true) S._moonFrac = k;
+  };
+
+  /* setMoonPhase({illuminatedFraction, litSide}): the Phase-D entry point. When
+     sky-core.mjs supplies the real phase, call this BEFORE refreshSkyObjects() to
+     drive the drawn moon from the user's actual date. litSide: 'right'|'left'
+     (+1 waxing / −1 waning). Pins the fraction so setMoonK can't overwrite it. */
+  S.setMoonPhase = function (p) {
+    if (!p) return;
+    if (p.illuminatedFraction != null) S._moonFrac = p.illuminatedFraction;
+    if (p.litSide != null) S._moonSide = (p.litSide === 'left' || p.litSide === -1) ? -1 : 1;
+    S._moonPhasePinned = true;
+  };
 
   Gate.scene = S;
 
