@@ -21,13 +21,42 @@ Brandon's request via the spec agent). Phase C **FOUNDRY RUNNING**: Wave 1 PILOT
 - ⚠️ Use `/Applications/Google Chrome.app` `--headless=new`; clean up orphaned agent-browser
   "Chrome for Testing" procs if the machine gets loaded (they're from prior screenshot work).
 
-**WAVE 1 PILOT — RUNNING:** Workflow runId **`wf_19aa366f-a8c`**, script
-`/tmp/gate-foundry/wave1.workflow.js` (K=4 takes → 2 judges → synthesize+build-final). The
-synth writes the FINAL gate art to the live worktree `the-gate/scene-gate.js` (LEFT DIRTY,
-uncommitted) + renders deliverables to `/tmp/gate-shots/foundry/gate/{idle,open}-*.png`.
-ON COMPLETION (Keystone): VIEW those 3 PNGs, judge estate-quality MYSELF — pass → SendUserFile
-to Brandon + `git add the-gate/ && commit` + launch Wave 2; fail → `git checkout -- the-gate/`
-to revert, STOP, post for Brandon. (Foundry cycle/ledger: cycle=719; base roles builder/judge.)
+**THE FOUNDRY ENGINE (reusable — drives every remaining wave):**
+`/tmp/gate-foundry/foundry.workflow.js` is GENERIC + args-driven. Invoke:
+`Workflow({scriptPath:'/tmp/gate-foundry/foundry.workflow.js', args:['<assetKey>',...]})`.
+It builds each asset key in `args` SEQUENTIALLY (shared-file-safe): K takes (self-render +
+iterate) → judges → synth writes the asset's draw fn into the LIVE worktree + forges + renders
+deliverables to `/tmp/gate-shots/foundry/<key>/{idle-night,idle-day,open-night}.png`, LEFT DIRTY.
+Asset library `LIB` inside the script holds geometry+brief+K+module+drawFn per asset (currently
+manor/observatory/greenhouse; ADD more entries from SPEC §4 for later waves). Each take edits ONLY
+its target draw fn (siblings byte-identical) → synth can use the winner's whole file, no merge.
+PER-WAVE PROTOCOL (Keystone): launch → on completion VIEW each asset's 3 deliverable PNGs + verify
+(node --check, interface grep, `forge --check --all` = 97 current, `git status` = only expected
+files) → pass: SendUserFile + `git add the-gate/ && git commit` → fail: `git checkout -- the-gate/`
++ STOP + post. Brandon authorized continuing through the set unattended once the PILOT passed.
+
+**WAVE 1 PILOT — ✅ SHIPPED** (`c7d1f76`): hero brass gate + gears. K=4; judges unanimously chose
+Take 1 'The Wrought Crown' (8/8.5); grafted Take 3's self-lit SUN-GEAR (orrery payoff), gear-train
+nudge, pier lantern-wash. Estate-quality confirmed; deliverables in `/tmp/gate-shots/foundry/gate/`.
+
+**WAVE 2 — RUNNING:** manor + observatory (runId **`wf_cf48412f-74c`**, args ['manor','observatory'],
+sequential in scene-buildings.js). On completion: review + commit per protocol above.
+⚠️ Workflow `args` may arrive as a JSON-STRING — the script now JSON.parses/​splits a string arg
+(don't "fix" it back to assuming an array). A 5ms/0-agent return = args didn't resolve to keys.
+
+**WAVE ROADMAP (remaining, after Wave 2):**
+- Wave 3 — supporting: greenhouse (in LIB; K=2). Then add to LIB + build: trees(+sway later), bushes,
+  undercroft hatch, the Glyph Stand, pier-lamps (already in the gate). [scene-buildings.js: greenhouse;
+  scene.js: trees/bushes/undercroft; NEW: glyph stand.]
+- Wave 3b — ROOM-REPS (K=3): Cairn rep is locked/shipped. Run a BLIND essence-survey to pick 3 reps →
+  add 3 draw fns (scene.js) + register in rooms.js BESPOKE; wire colormap.js rep.swatch1..3/rep.glow1..2
+  (SPEC §5.8) FIRST. Re-evaluate K after the first 4 reps (Cairn + 3).
+- Wave 4 — MINOR (direct-to-spec, no fan-out): grass/midground, road, foreground apron, road lamps,
+  horizon mist, sky gradient, stars. (all scene.js + scene-buildings.js drawMist.)
+- Parametric beauty pass: moon disc + lit-limb glow + terminator, sun, brass asterism (scene.js).
+- Phase D (later): weather-fx canvas, audio, real moon wiring (sky-core.mjs), earned asterism pick,
+  click-through cinematic + welcome card, gate open-state seam-furniture choreography.
+(Foundry cycle/ledger: ~cycle 720+; base roles builder/judge; marks → gitignored ledger/inbox.)
 
 (legacy status line follows; superseded by the above)
 **Status (pre-foundry):** Phase A blockout is **LOCKED** (owner-approved). Phase B (write `SPEC.md`)
