@@ -139,6 +139,8 @@
 
     if (ctx.reduced) {
       // collapse: snap gears+gate open, brief fade, short welcome, navigate.
+      // still fire the audio beats (compressed) so the open has a voice.
+      fireAudio('onGears'); fireAudio('onStopGears'); fireAudio('onSwing');
       if (Gate.scenegate) { Gate.scenegate.spinGears(2, S); Gate.scenegate.swing(1, S); }
       phase = 'fadeout';
       fadeOut(300, function () { showWelcome(900, navigate); });
@@ -147,11 +149,14 @@
 
     // 1) gears turn (2.5s)
     phase = 'gears';
+    fireAudio('onGears');
     tween(T_GEARS, function (p) {
       if (Gate.scenegate) Gate.scenegate.spinGears(2 * easeInOut(p), S);
     }, function () {
       // 2) gates swing outward (2.5s)
       phase = 'swing';
+      fireAudio('onStopGears');
+      fireAudio('onSwing');
       tween(T_SWING, function (p) {
         if (Gate.scenegate) Gate.scenegate.swing(easeInOut(p), S);
       }, function () {
@@ -165,6 +170,14 @@
     });
   };
 
+  /* fireAudio(name): invoke an optional audio-beat callback from the context.
+     The boot supplies onGears/onStopGears/onSwing/onWelcome/onNavigate so the
+     conductor's sounds sync to the open choreography without sequence.js
+     knowing anything about WebAudio. */
+  function fireAudio(name) {
+    try { if (ctx && typeof ctx[name] === 'function') ctx[name](); } catch (e) {}
+  }
+
   function fadeOut(ms, done) {
     if (ctx.overlay) {
       ctx.overlay.style.transition = 'opacity ' + ms + 'ms ease';
@@ -175,6 +188,7 @@
 
   function showWelcome(holdMs, done) {
     phase = 'welcome';
+    fireAudio('onWelcome');           // the logo motif rides the welcome reveal
     if (ctx.welcomeEl) {
       ctx.welcomeEl.style.display = 'flex';
       raf2(function () { ctx.welcomeEl.classList.add('in'); });
@@ -184,6 +198,7 @@
 
   function navigate() {
     phase = 'done';
+    fireAudio('onNavigate');          // tear down all audio before we leave
     var dest = (ctx && ctx.dest) || '../index.html';
     try { root.location.href = dest; } catch (e) {}
   }

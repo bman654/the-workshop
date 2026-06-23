@@ -804,6 +804,35 @@
   <script>
   <!-- forge:include weather.js -->
   </script>
+  <!-- ── procedural SFX builders (Gate.sfx.*) — MUST precede the conductor ── -->
+  <script>
+  <!-- forge:include audio-rain.js -->
+  </script>
+  <script>
+  <!-- forge:include audio-wind.js -->
+  </script>
+  <script>
+  <!-- forge:include audio-thunderclap.js -->
+  </script>
+  <script>
+  <!-- forge:include audio-thunderroll.js -->
+  </script>
+  <script>
+  <!-- forge:include audio-gears.js -->
+  </script>
+  <script>
+  <!-- forge:include audio-creak.js -->
+  </script>
+  <script>
+  <!-- forge:include audio-windchimes.js -->
+  </script>
+  <script>
+  <!-- forge:include audio-birdsong.js -->
+  </script>
+  <script>
+  <!-- forge:include audio-logotune.js -->
+  </script>
+  <!-- the conductor wires Gate.sfx.* into the live AudioContext via Gate.audio -->
   <script>
   <!-- forge:include audio.js -->
   </script>
@@ -966,12 +995,19 @@
       if (on === flash) return;
       flash = on;
       paintImmediate();
+      // AUDIO: the strike's audio syncs to the VISUAL flash edge (rising edge only)
+      // — a loud thunderclap + close rolling tail. Mute gates it via the master gain.
+      if (on && Gate.audio && Gate.audio.thunder) { try { Gate.audio.thunder(); } catch (e) {} }
     }
 
     // ── wire the gnomon: tap → advance band → recolor ────────────────────────
     Gate.gnomon.bind(S.refs.gnomon, function () { recolor(); });
-    // band changes from anywhere also recolor
-    Gate.timeofday.onChange(function () { recolor(); });
+    // band changes from anywhere also recolor — and re-evaluate the ambient bed
+    // (birdsong is gated on day, so a band change can start/stop it).
+    Gate.timeofday.onChange(function () {
+      recolor();
+      if (Gate.audio && Gate.audio.ambient) { try { Gate.audio.ambient(); } catch (e) {} }
+    });
 
     // ── wire the weather tri-toggle ──────────────────────────────────────────
     var wxButtons = document.querySelectorAll('#weather-toggle button');
@@ -986,6 +1022,8 @@
       syncWx(); recolor();
       S.windFromWeather(Gate.weather.weather());
       if (Gate.weatherfx) Gate.weatherfx.setWeather(Gate.weather.weather());
+      // re-evaluate the ambient bed: rain/wind/chimes/birds cross-fade per weather.
+      if (Gate.audio && Gate.audio.ambient) { try { Gate.audio.ambient(); } catch (e) {} }
     });
     syncWx();
 
@@ -1008,6 +1046,15 @@
     Gate.sequence.start({
       overlay: overlay, welcomeEl: welcomeEl, S: S,
       dev: url.dev, scene: url.scene, dest: '../index.html',
+      // ── AUDIO beats, fired by the sequence at each open phase. The very first
+      // user gesture (the gate click) is what unlocks WebAudio (autoplay policy):
+      // unlock() creates/resumes the ctx, publishes window.__wsAudioCtx, and
+      // starts the ambient bed for the current weather. All idempotent.
+      onGears:     function () { if (Gate.audio) { try { Gate.audio.gears(); } catch (e) {} } },
+      onStopGears: function () { if (Gate.audio) { try { Gate.audio.stopGears(); } catch (e) {} } },
+      onSwing:     function () { if (Gate.audio) { try { Gate.audio.creak(); } catch (e) {} } },
+      onWelcome:   function () { if (Gate.audio) { try { Gate.audio.logoTune(); } catch (e) {} } },
+      onNavigate:  function () { if (Gate.audio) { try { Gate.audio.stopAll(); } catch (e) {} } },
       onEnterIdle: function () {
         // clicking the gate (but NOT the gnomon or the chrome) opens it
         function onGateClick(ev) {
@@ -1018,6 +1065,8 @@
             if (t.parentNode && t.parentNode.id === 'gnomon-target') return;
             t = t.parentNode;
           }
+          // first gesture: unlock WebAudio + start the ambient bed.
+          if (Gate.audio && Gate.audio.unlock) { try { Gate.audio.unlock(); } catch (e) {} }
           Gate.sequence.triggerOpen();
         }
         gateHit.addEventListener('click', onGateClick);

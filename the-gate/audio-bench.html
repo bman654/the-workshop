@@ -1,0 +1,156 @@
+<meta charset="utf-8">
+<title>Gate SFX Render Bench (dev only)</title>
+<style>
+  body { font: 13px/1.5 ui-monospace, Menlo, monospace; margin: 1.5rem; max-width: 64rem; }
+  h1 { font-size: 15px; }
+  #wavout { white-space: pre-wrap; word-break: break-all; max-height: 18rem; overflow: auto;
+            background: #111; color: #6f6; padding: .5rem; border-radius: 4px; }
+  .hint { color: #888; }
+  code { background: #eee; padding: 0 .25rem; border-radius: 3px; }
+</style>
+
+<h1>Gate SFX Render Bench <span class="hint">— dev harness, not forged, not linked from the gate</span></h1>
+<p class="hint">
+  Call <code>renderWav(soundKey, durSec)</code> from the console (or via agent-browser eval).
+  It loads <code>audio-&lt;soundKey&gt;.js</code> on demand, renders the builder through an
+  OfflineAudioContext at 22050 Hz, encodes a 16-bit mono PCM WAV, drops the base64 into
+  <code>#wavout</code>, and resolves the base64 string.
+</p>
+<pre id="wavout"></pre>
+
+<script>
+'use strict';
+
+// ── Global namespace the builders assign onto ──────────────────────────────
+window.Gate = window.Gate || {};
+window.Gate.sfx = window.Gate.sfx || {};
+
+// ── Built-in proof sound: a clean 440 Hz (A4) sine, dual-use builder ───────
+window.Gate.sfx.__sine = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
+  var t0 = ctx.currentTime + when;
+  var osc = ctx.createOscillator();
+  var g = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(440, t0);
+  // Gentle fade in/out so there is no click transient; sustained body well under 0 dBFS.
+  var peak = 0.6;
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(peak, t0 + 0.01);
+  g.gain.setValueAtTime(peak, t0 + dur - 0.02);
+  g.gain.linearRampToValueAtTime(0, t0 + dur);
+  osc.connect(g).connect(dest);
+  osc.start(t0);
+  osc.stop(t0 + dur);
+  return {
+    stop: function (at) {
+      try { osc.stop(at != null ? at : ctx.currentTime); } catch (e) {}
+    }
+  };
+};
+
+// ── encodeWav(audioBuffer) -> base64 string of a 16-bit PCM mono WAV ───────
+// Self-contained, no libraries. Downmixes any channel count to mono by averaging.
+function encodeWav(audioBuffer) {
+  var nCh = audioBuffer.numberOfChannels;
+  var len = audioBuffer.length;            // frames
+  var sampleRate = audioBuffer.sampleRate;
+
+  // Downmix to a single mono Float32 track.
+  var mono = new Float32Array(len);
+  if (nCh === 1) {
+    mono.set(audioBuffer.getChannelData(0));
+  } else {
+    for (var c = 0; c < nCh; c++) {
+      var data = audioBuffer.getChannelData(c);
+      for (var i = 0; i < len; i++) { mono[i] += data[i]; }
+    }
+    var inv = 1 / nCh;
+    for (var j = 0; j < len; j++) { mono[j] *= inv; }
+  }
+
+  // WAV: 44-byte canonical header + 16-bit little-endian PCM samples (mono).
+  var bytesPerSample = 2;
+  var dataBytes = len * bytesPerSample;
+  var buffer = new ArrayBuffer(44 + dataBytes);
+  var view = new DataView(buffer);
+
+  function writeStr(off, str) {
+    for (var k = 0; k < str.length; k++) { view.setUint8(off + k, str.charCodeAt(k)); }
+  }
+
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + dataBytes, true);   // ChunkSize
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);              // Subchunk1Size (PCM)
+  view.setUint16(20, 1, true);               // AudioFormat = PCM
+  view.setUint16(22, 1, true);               // NumChannels = 1 (mono)
+  view.setUint32(24, sampleRate, true);      // SampleRate
+  view.setUint32(28, sampleRate * bytesPerSample, true); // ByteRate (mono)
+  view.setUint16(32, bytesPerSample, true);  // BlockAlign (mono, 16-bit)
+  view.setUint16(34, 16, true);              // BitsPerSample
+  writeStr(36, 'data');
+  view.setUint32(40, dataBytes, true);       // Subchunk2Size
+
+  // Float [-1,1] -> 16-bit signed PCM, clamped.
+  var off = 44;
+  for (var n = 0; n < len; n++) {
+    var s = mono[n];
+    if (s > 1) s = 1; else if (s < -1) s = -1;
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    off += bytesPerSample;
+  }
+
+  // ArrayBuffer -> base64 (chunked to avoid call-stack limits on large buffers).
+  var bytes = new Uint8Array(buffer);
+  var binary = '';
+  var CHUNK = 0x8000;
+  for (var p = 0; p < bytes.length; p += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(p, p + CHUNK));
+  }
+  return btoa(binary);
+}
+
+// ── Module loader: inject audio-<key>.js once, await its load ──────────────
+// Candidate keys like "logotune__c1" map to file "audio-logotune__c1.js".
+var __loaded = Object.create(null);
+function ensureModule(soundKey) {
+  if (window.Gate.sfx[soundKey]) return Promise.resolve();   // already defined (built-in or pre-loaded)
+  if (__loaded[soundKey]) return __loaded[soundKey];
+  __loaded[soundKey] = new Promise(function (resolve, reject) {
+    var s = document.createElement('script');
+    s.src = 'audio-' + soundKey + '.js';
+    s.async = false;
+    s.onload = function () {
+      if (window.Gate.sfx[soundKey]) resolve();
+      else reject(new Error('module ' + s.src + ' loaded but did not define Gate.sfx["' + soundKey + '"]'));
+    };
+    s.onerror = function () { reject(new Error('failed to load ' + s.src)); };
+    document.head.appendChild(s);
+  });
+  return __loaded[soundKey];
+}
+
+// ── renderWav(soundKey, durSec) -> Promise<base64 string> ──────────────────
+window.renderWav = function renderWav(soundKey, durSec) {
+  var sampleRate = 22050;
+  return ensureModule(soundKey).then(function () {
+    var builder = window.Gate.sfx[soundKey];
+    if (typeof builder !== 'function') {
+      throw new Error('Gate.sfx["' + soundKey + '"] is not a function');
+    }
+    var frames = Math.round(sampleRate * durSec);
+    var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    var ctx = new OAC(1, frames, sampleRate);
+    builder({ ctx: ctx, dest: ctx.destination, dur: durSec, when: 0, seed: 1 });
+    return ctx.startRendering();
+  }).then(function (rendered) {
+    var b64 = encodeWav(rendered);
+    document.getElementById('wavout').textContent = b64;
+    return b64;
+  });
+};
+
+// Expose encodeWav for ad-hoc console use too.
+window.encodeWav = encodeWav;
+</script>

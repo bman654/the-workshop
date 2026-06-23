@@ -3,7 +3,28 @@
 <!-- ═══════════════════════════════════════════════════════════════════════
      RESUME POINTER  (read this first on a fresh/compacted context)
      ═══════════════════════════════════════════════════════════════════════ -->
-## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + Phase-D room-rotation, wind-sway, WEATHER-FX, owner-playtest fixes/polish + **real MOON-PHASE WIRING** all shipped; K=4; NEXT = **AUDIO** is the remaining Phase-D next-phase work — grounded below)
+## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + Phase-D room-rotation, wind-sway, WEATHER-FX, owner-playtest fixes/polish, real MOON-PHASE WIRING + **AUDIO (procedural WebAudio voice)** all shipped; K=4; NEXT = the **earned-asterism runtime pick** + Phase-D beauty passes — see §9)
+
+**AUDIO — ✅ SHIPPED (2026-06-23):** the Gate now has a voice. The conductor `audio.js`
+(`Gate.audio`) is filled in (was stubbed) and nine seeded procedural-WebAudio builders ship as
+`audio-<name>.js` (`Gate.sfx.rain/wind/thunderclap/thunderroll/gears/creak/windchimes/birdsong/
+logotune`), each forge-included BEFORE `audio.js` in `the-gate.src.html`. NO binary assets — every
+sound is synthesized; each builder is dual-use (live `AudioContext` or `OfflineAudioContext`) with a
+mulberry32 PRNG, verified offline by audio-lens (self-test 12/12). The mute chip forces a single
+master `GainNode` to 0 (hard gate, nothing bypasses). `A.unlock()` on the first gate click creates/
+resumes the ctx, publishes `window.__wsAudioCtx`, and starts the ambient bed. Wiring (see SPEC §5.11):
+first click→unlock; weather/band change→`A.ambient()` cross-fade; gears phase→`A.gears`/`A.stopGears`;
+swing→`A.creak`; welcome→`A.logoTune`; navigate→`A.stopAll`; lightning flash rising edge
+(`setFlash(true)` in the boot)→`A.thunder` (clap + close roll). Ambient = rain(storm,intensity) +
+wind(clear<cloudy<storm) + occasional windchimes(not-raining) + distant thunderroll(storm) +
+birdsong(clear & DAYTIME only). E2E VERIFIED headless over HTTP against the forged `the-gate.html`
+(never file://): after the gate click `window.__wsAudioCtx` exists and the audio beats fire in order
+`unlock→gears→stopGears→creak→logoTune` with the full sequence reaching navigate; thunder fires once
+on the forced-flash rising edge; master gain reads 0.9 unmuted and the mute-ramp renders to 0 through
+the master (OfflineAudioContext proof: unmuted peak 0.9 / muted peak 0); ZERO console errors across
+the whole open sequence and all triggers. forge `--check --all` = 97 current. (Headless note: a
+synthetic click is not a trusted gesture, so the live ctx reports `suspended` and its scheduled ramps
+don't advance — an environment artifact, not a code issue; the gate math is proven offline.)
 
 **MOON-PHASE WIRING — ✅ SHIPPED (2026-06-23):** `sky-core.mjs` is now forge-included into
 `the-gate.src.html` (placed after `scene.js`, before `weather-fx.js`); after the forge strips

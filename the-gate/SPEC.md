@@ -612,6 +612,49 @@ passed to `WFX.init({reduced})`. **Dev:** `?flash` holds a strike lit (determini
 
 ---
 
+### 5.11 Audio — the procedural-WebAudio voice  *(BUILT — Phase D, 2026-06-23)*
+
+The Gate's sound (`audio.js` → `Gate.audio`, the CONDUCTOR) + nine seeded procedural
+builders (`Gate.sfx.*`, each in its own `audio-<name>.js`, forge-included BEFORE `audio.js`).
+**Everything is procedural WebAudio** — no binary assets, no samples, no `data:` URIs. Each
+builder is a DUAL-USE function `({ctx, dest, dur, when, seed, …})` that runs against any
+`BaseAudioContext` (the LIVE `AudioContext` when it ships, an `OfflineAudioContext` when it is
+verified by audio-lens), uses a seeded mulberry32 PRNG (never `Math.random`), and keeps peaks
+under 0 dBFS. The nine: **rain** (storm, `intensity`), **wind** (`strength`), **thunderclap**,
+**thunderroll** (`distance`), **gears**, **creak**, **windchimes**, **birdsong**, **logotune**.
+
+**The mute gate (hard):** every source routes through ONE master `GainNode`; the shared estate
+flag `WS.muted()` forces that gain to 0 (40 ms ramp). Nothing bypasses it. The brass mute chip
+(`#mute-btn`) toggles `WS.setMuted`; cross-tab changes re-sync via `WS.onMuteChange`.
+
+**Autoplay:** no sound until a user gesture. `A.unlock()` runs on the first gate click — it
+creates/resumes the `AudioContext`, publishes it as `window.__wsAudioCtx` (so the WS chime can
+ride it), builds the master gain, and starts the ambient bed. Idempotent.
+
+**Trigger → sound map:**
+
+| Trigger | Conductor call | Sound |
+| --- | --- | --- |
+| first gate click | `A.unlock()` | ctx up + ambient bed for current weather |
+| weather / band change | `A.ambient()` | re-evaluate + cross-fade the bed |
+| open seq. **gears** phase | `A.gears()` / `A.stopGears()` | clockwork bed (ends when phase does) |
+| open seq. **swing** phase | `A.creak()` | hinge creak |
+| **welcome** reveal | `A.logoTune()` | the logo motif |
+| **navigate** / teardown | `A.stopAll()` | stop + disconnect everything |
+| lightning flash **rising edge** (`setFlash(true)`) | `A.thunder()` | loud clap + close rolling tail |
+
+**Ambient bed (`A.ambient`), per weather × wind × time-of-day:** `rain` only in storm (scaled by
+`intensity`); `wind` always, strength `clear < cloudy < storm`; `windchimes` occasional and ONLY
+when NOT raining (clear/cloudy); a DISTANT `thunderroll` occasionally in storm (seeded long
+interval, distinct from the loud per-strike `A.thunder()`); `birdsong` ONLY in CLEAR weather during
+DAYTIME (silent at night/storm/rain). Textures (rain/wind) are stationary `dur`-second beds tiled
+back-to-back; sparse one-shots (chimes/roll/birds) are scheduled on long intervals; all transitions
+cross-fade via per-key sub-buses. Reduced motion still gets a voice (the open beats fire compressed).
+
+> Still open (future polish, NOT built): per-source level balance pass, stereo/spatial placement.
+
+---
+
 ## 6. Freshness / enrollment
 
 ### 6.1 The reclaim room-slab contract
@@ -731,8 +774,10 @@ contracts. The following are finalized in Phase D and get only a "beauty pass" n
 - **weather-fx** — ✅ BUILT 2026-06-23 (§5.10): drifting clouds (SVG clouds layer, behind buildings),
   wind-slanted rain + lightning bloom (spikes `B→1.0`) on the `#fx` canvas, tree sway (§5.9).
   Still future polish: rain splashes/ripples on the ground, birds/owls.
-- **audio** — the WebAudio engine (gears/creak/ambient bed) gated on the opening click +
-  `WS.muted()`; `audio.js` is stubbed, the mute chip is wired.
+- **audio** — ✅ BUILT 2026-06-23 (§5.11): the procedural-WebAudio CONDUCTOR (`audio.js`,
+  `Gate.audio`) + nine seeded `Gate.sfx.*` builders, all gated on the opening click +
+  `WS.muted()` (mute forces a single master `GainNode` to 0). The mute chip is wired.
+  Beauty pass (level balance / spatialization) remains future polish.
 - **real moon-phase wiring** — ✅ BUILT 2026-06-23: `sky-core.mjs` (forked geocentric sun-lon
   math, J2000 Node twin) is now forge-included in `the-gate.src.html`; the boot computes
   `moonPhase(julianDate(new Date()))` + `terminator(...)` and calls

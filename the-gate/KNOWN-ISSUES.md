@@ -11,6 +11,20 @@ issues + risks worth *remembering* across sessions. Severity: **P1** breaks/look
 
 ## Open
 
+### AUDIO — no sound below spec
+All nine procedural sounds (`Gate.sfx.rain/wind/thunderclap/thunderroll/gears/creak/windchimes/
+birdsong/logotune`) met their audio-lens TARGETs on verification (self-test 12/12). The conductor
+(`audio.js`) wires them in and the mute gate is proven (master→0). **No sound is below spec.**
+
+### P3 — live AudioContext stays `suspended` under headless e2e (environment, not a defect)
+In headless Chrome a synthetic `dispatchEvent('click')` is NOT a trusted user gesture, so
+`ctx.resume()` does not flip the context to `running` and its scheduled gain ramps don't advance
+(`currentTime` stays 0; `gain.value` reports the last *set* value, not the scheduled future one).
+This is a known browser-automation limitation. The mute-gate *math* (master→0 muted, →0.9 unmuted)
+was therefore proven by rendering the exact ramp through an `OfflineAudioContext` (where the clock
+advances) and by reading the live master gain immediately after a clean unlock (0.9). A real visitor's
+first click is a trusted gesture and resumes the context normally. No code change required.
+
 ### P3 — `?smil=` pauses ALL SMIL globally (by design, noted)
 `svg.pauseAnimations()` is document-wide, so `?smil=` freezes every SMIL animation, not just the
 targeted asset. Correct for single-rep render/judge today; revisit only if multiple independent
