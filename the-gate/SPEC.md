@@ -627,15 +627,20 @@ under 0 dBFS. The nine: **rain** (storm, `intensity`), **wind** (`strength`), **
 flag `WS.muted()` forces that gain to 0 (40 ms ramp). Nothing bypasses it. The brass mute chip
 (`#mute-btn`) toggles `WS.setMuted`; cross-tab changes re-sync via `WS.onMuteChange`.
 
-**Autoplay:** no sound until a user gesture. `A.unlock()` runs on the first gate click — it
-creates/resumes the `AudioContext`, publishes it as `window.__wsAudioCtx` (so the WS chime can
-ride it), builds the master gain, and starts the ambient bed. Idempotent.
+**Autoplay:** no sound until a user gesture (browsers forbid a fully-automatic start). `A.unlock()`
+is armed on the **first user gesture of ANY kind** — a capture-phase, once `pointerdown`/`keydown`/
+`touchstart` on `window` (boot), so tapping the gnomon, a chip, the gate, or any key opts the visitor
+in. It creates/resumes the `AudioContext`, publishes it as `window.__wsAudioCtx` (so the WS chime can
+ride it), builds the master gain, and starts the ambient bed; idempotent and the mute flag still gates
+the master. Once armed, audio stays on for the visit — so a visitor can linger and HEAR the weather
+before clicking the gate to enter. (Unlocking only on the gate-open click made the ambient bed nearly
+inaudible, since that click also navigates away.)
 
 **Trigger → sound map:**
 
 | Trigger | Conductor call | Sound |
 | --- | --- | --- |
-| first gate click | `A.unlock()` | ctx up + ambient bed for current weather |
+| first user gesture (any: gnomon/chip/gate/key) | `A.unlock()` | ctx up + ambient bed for current weather |
 | weather / band change | `A.ambient()` | re-evaluate + cross-fade the bed |
 | open seq. **gears** phase | `A.gears()` / `A.stopGears()` | clockwork bed (ends when phase does) |
 | open seq. **swing** phase | `A.creak()` | hinge creak |
