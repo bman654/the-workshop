@@ -11,12 +11,6 @@ issues + risks worth *remembering* across sessions. Severity: **P1** breaks/look
 
 ## Open
 
-### P2 — Ripple Tank has front + back walls but no visible LEFT/RIGHT walls
-The water tray reads as containing water on the near/far faces but the sides are open — it's a
-mystery why the water doesn't run out onto the grass. Add slim brass-edged left/right end walls
-(or end caps) so the tray reads as a fully-enclosed vessel. `scene.js drawRepRipple`.
-**Now the priority pickup.**
-
 ### P3 — `?smil=` pauses ALL SMIL globally (by design, noted)
 `svg.pauseAnimations()` is document-wide, so `?smil=` freezes every SMIL animation, not just the
 targeted asset. Correct for single-rep render/judge today; revisit only if multiple independent
@@ -41,6 +35,14 @@ earn bespoke reps, the emoji fallback naturally retires. The four bespoke reps a
 ---
 
 ## Resolved
+
+### P2 — Ripple Tank had front + back walls but no visible LEFT/RIGHT walls *(fixed 2026-06-23)*
+The water tray's left/right water edges met the grass directly, so the water looked like it would
+spill off the open sides. `drawRepRipple` now draws brass-edged SIDE RIM strips running from the back
+rim to the front lip along each water edge — the visible tops of the left/right walls — so the tray
+reads as a fully-enclosed vessel. Drawn back-to-front so the front lip occludes their near ends at the
+corners; the outer edge tapers in perspective (∓4 back-rim overhang → box edge at the front). Verified
+day + night: the basin reads as enclosed in both, brass edges catching the light. `scene.js drawRepRipple`.
 
 ### P1 — Scene scaled with "cover", clipped the sides on tall/narrow viewports *(fixed 2026-06-23)*
 `scene.js` now sets `preserveAspectRatio: 'xMidYMid meet'` (contain): the whole 16:9 scene stays

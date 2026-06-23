@@ -3,7 +3,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════
      RESUME POINTER  (read this first on a fresh/compacted context)
      ═══════════════════════════════════════════════════════════════════════ -->
-## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + P1 contain-fix shipped; NEXT = P2 ripple walls)
+## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + P1 contain & P2 ripple-walls fixed; NEXT = re-eval rep K / Phase D)
 
 **Status:** Phase A blockout LOCKED. Phase B `SPEC.md` **LOCKED + committed**
 (`823f9f3` base + `1b3f9f4` room-rep custom-color slots `rep.swatch1..3`/`rep.glow1..2`,
@@ -134,9 +134,12 @@ NEXT — see `the-gate/KNOWN-ISSUES.md` (the lightweight bug log; formal QA = a 
     gradient down to the grass line, solid grass below — anchored to the actual letterbox rect (recomputed
     on resize), colors = band-resolved var() refs so recolor reflows them. Verified at 1:2 portrait,
     2.67:1 ultrawide, and 16:9 (full-bleed, unchanged); bars are indistinguishable from the scene.
-  • **P2 — Ripple Tank lacks left/right end walls** (water "leaks" — add slim brass end caps).
-    **← now the priority pickup.** `scene.js drawRepRipple`.
-Then re-evaluate rep K (Brandon's standing request), then PHASE D (interactive layer — see below).
+  • **P2 — Ripple Tank lacked left/right end walls — ✅ FIXED (`<this commit>`, 2026-06-23).**
+    `drawRepRipple` now draws brass-edged SIDE RIM strips from the back rim to the front lip along each
+    water edge (the tops of the left/right walls), so the tray reads as a fully-enclosed vessel. Drawn
+    back-to-front for correct corner occlusion; outer edge tapers in perspective. Verified day + night.
+Both owner-playtest bugs are now CLEAR. NEXT: re-evaluate rep K (Brandon's standing request), then
+PHASE D (interactive layer — see below).
 
 PARKED for specific phases (owner playtest asks, 2026-06-23):
   • **Self-test chip** — the scene needs a self-test chip like the other exhibits that PROVES its math
