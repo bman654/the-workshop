@@ -39,10 +39,19 @@ files) → pass: SendUserFile + `git add the-gate/ && git commit` → fail: `git
 Take 1 'The Wrought Crown' (8/8.5); grafted Take 3's self-lit SUN-GEAR (orrery payoff), gear-train
 nudge, pier lantern-wash. Estate-quality confirmed; deliverables in `/tmp/gate-shots/foundry/gate/`.
 
-**WAVE 2 — RUNNING:** manor + observatory (runId **`wf_cf48412f-74c`**, args ['manor','observatory'],
-sequential in scene-buildings.js). On completion: review + commit per protocol above.
+**WAVE 2 — ✅ SHIPPED** (`c857578`): manor (grand Palladian pavilion, dominates) + observatory
+(ribbed dome + telescope-from-slit on a grassy rise). Deliverables `/tmp/gate-foundry/{manor,observatory}/final/`.
 ⚠️ Workflow `args` may arrive as a JSON-STRING — the script now JSON.parses/​splits a string arg
 (don't "fix" it back to assuming an array). A 5ms/0-agent return = args didn't resolve to keys.
+
+**WAVE 3a — RUNNING:** greenhouse (runId **`wf_c389fa8b-6ba`**, args ['greenhouse'], K=2,
+scene-buildings.js). On completion: review + commit per protocol, then launch WAVE 3b.
+
+**WAVE 3b — PREPPED (launch after 3a):** `Workflow({scriptPath, args:['foliage','undercroft']})`
+— both in scene.js (sequential). LIB now has `foliage` (trees+bushes, K=2) + `undercroft` (open
+bilco hatch, deep-crimson glow, K=3) with the scene.js INTERNAL interface variant (fns take
+`(parent)`, use module-local el/group/resolvedRole/litRegionPath — NOT S.el; leave ALL other
+scene.js fns byte-identical incl. undercroftOpen() predicate). Glyph Stand deferred to the room-rep wave.
 
 **WAVE ROADMAP (remaining, after Wave 2):**
 - Wave 3 — supporting: greenhouse (in LIB; K=2). Then add to LIB + build: trees(+sway later), bushes,
