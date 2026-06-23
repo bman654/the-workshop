@@ -3,7 +3,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════
      RESUME POINTER  (read this first on a fresh/compacted context)
      ═══════════════════════════════════════════════════════════════════════ -->
-## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + P1 contain & P2 ripple-walls fixed; NEXT = re-eval rep K / Phase D)
+## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + P1/P2 fixed + Phase-D room-rotation shipped; K=4; NEXT = Phase D systems)
 
 **Status:** Phase A blockout LOCKED. Phase B `SPEC.md` **LOCKED + committed**
 (`823f9f3` base + `1b3f9f4` room-rep custom-color slots `rep.swatch1..3`/`rep.glow1..2`,
@@ -138,8 +138,26 @@ NEXT — see `the-gate/KNOWN-ISSUES.md` (the lightweight bug log; formal QA = a 
     `drawRepRipple` now draws brass-edged SIDE RIM strips from the back rim to the front lip along each
     water edge (the tops of the left/right walls), so the tray reads as a fully-enclosed vessel. Drawn
     back-to-front for correct corner occlusion; outer edge tapers in perspective. Verified day + night.
-Both owner-playtest bugs are now CLEAR. NEXT: re-evaluate rep K (Brandon's standing request), then
-PHASE D (interactive layer — see below).
+Both owner-playtest bugs are now CLEAR.
+
+**REP-K DECISION (Keystone's call, 2026-06-23): K stays at 4 — do NOT build a 5th bespoke rep now.**
+Reps only surface when a room is SELECTED (a Phase-D feature that didn't exist yet), so the 3 non-Cairn
+reps were INVISIBLE in production; building more before they can appear is premature. The Glyph Stand
+fallback is estate-quality, and rep-building is parked to be absorbed into the fun-forever loop. The
+high-leverage move was to make the reps we have APPEAR — done below. (Runners-up for a future 5th still
+stand: the-top/gyroscope, transit, museum — let the generalized foundry build them on demand.)
+
+**PHASE D — room-pick rotation ✅ SHIPPED (`<this commit>`):** the grounds now FEATURE the day's rotating
+bespoke rep (`R.featuredId` in rooms.js — daily rotation among the 4 calling cards: Cairn, Cavern, Ripple
+Tank, Music Room), so the front door showcases a different room each day instead of always the Cairn. The
+3 non-Cairn reps now appear in PRODUCTION, not just via `?room=`. Deterministic from the date by design
+(stable within a page-load so the boot's repColors merge + scene's draw agree on the same room); pool is
+derived from the BESPOKE registry, so future reps auto-join. Glyph-Stand rooms are NOT auto-featured (they
+stay the fallback for a `?room=` pin of an un-built room). `?room=<id>` still pins any slab room. Verified
+headless: prod→Ripple Tank (today), ?room=physics-lab→Cavern, ?room=verse→Glyph Stand.
+
+NEXT (PHASE D, remaining — see enumeration below): weather-fx canvas (+clouds), foliage+wind sway (§5.9),
+real moon wiring (sky-core.mjs), the self-test chip (moon math), audio, earned asterism, dogfood QA pass.
 
 PARKED for specific phases (owner playtest asks, 2026-06-23):
   • **Self-test chip** — the scene needs a self-test chip like the other exhibits that PROVES its math

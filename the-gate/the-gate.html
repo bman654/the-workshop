@@ -3091,18 +3091,16 @@
    rooms comes from the GATE-ROOMS slab (re-pinned each cycle by reclaim.mjs from
    the live front-door PLACES).
 
-   Phase A (this file): only the CAIRN rep is bespoke (a stack of polished black
-   brass-rimmed stones — drawn by scene.js). rooms.js supplies the SELECTION + the
-   LABEL text from the slab.
+   Four bespoke reps are built (drawn by scene.js, keyed in REP_DRAW): the CAIRN
+   (polished black brass-rimmed stones), the CAVERN (rocky mound + glowing maw), the
+   RIPPLE TANK (water tray + emanating rings), and the MUSIC ROOM (brass organ pipes).
+   Every other room falls back to the estate-quality GLYPH STAND (a brass cartouche
+   plinth holding the room's glyph — no bare floating glyphs). rooms.js owns the
+   SELECTION (which rep to show) + feeds the rep its accent/glyph/name from the slab.
 
-   ── TODO Phase C — the rest of the reps ────────────────────────────────────
-   • 3 essence-survey reps (Orrery armillary? Physics Cavern maw? Ripple Tank
-     pond? — chosen by a blind survey, not hardcoded here) + the GLYPH STAND
-     (a designed plinth that HOLDS a room's glyph for every unbuilt room — NO bare
-     floating glyphs). Each rep is a draw fn in scene.js keyed by room id; rooms.js
-     picks which rep to show and feeds it the room's accent/glyph/name.
-   • Selection becomes "random unlocked-or-any room from the slab"; for greybox we
-     pin the Cairn so the composition is stable.
+   SELECTION (Phase D): the grounds feature the day's rotating bespoke room
+   (R.featuredId, daily), so the front door showcases a different calling card each
+   day rather than always the Cairn. ?room=<id> pins any slab room (dev/sharing).
    ═══════════════════════════════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
@@ -3174,10 +3172,40 @@
     };
   }
 
+  /* featuredId(slab): the PRODUCTION "featured room" — rotates DAILY among the
+     bespoke reps present in the slab (the estate-quality calling cards: Cairn,
+     Cavern, Ripple Tank, Music Room — and any future reps, since the pool is derived
+     from BESPOKE). The front door showcases a different room each day instead of
+     always the Cairn. Deterministic from the date by design: it must be STABLE within
+     a page-load so the two pick() calls a load makes — the boot's repColors merge and
+     scene.js's draw — agree, or the rep's custom colors wouldn't match the rep drawn.
+     Glyph-Stand rooms are deliberately EXCLUDED here (they stay the fallback for a
+     ?room= pin of an un-built room); the feature only ever shows hand-built reps. */
+  function featuredId(slab) {
+    slab = slab || [];
+    var inSlab = {};
+    for (var i = 0; i < slab.length; i++) inSlab[slab[i].id] = true;
+    var pool = [];
+    for (var id in BESPOKE) {
+      if (!Object.prototype.hasOwnProperty.call(BESPOKE, id)) continue;
+      // the Cairn is a synthetic estate fixture (not necessarily in the slab) → always
+      // eligible; every other bespoke rep must actually appear (unlocked) in the slab.
+      if (id === 'cairn' || inSlab[id]) pool.push(id);
+    }
+    if (!pool.length) return 'cairn';
+    var day = 0;
+    try {
+      var d = new Date();
+      day = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000); // 1..366
+    } catch (e) { day = 0; }
+    return pool[((day % pool.length) + pool.length) % pool.length];
+  }
+  R.featuredId = featuredId;
+
   /* pick(pinId): which room to display in the grounds.
-     • If pinId is given AND present in the slab → pick THAT room (dev override).
-     • Otherwise keep the Cairn-default behavior (the greybox's stable composition):
-       the Cairn if present in the slab, else a synthetic Cairn record. */
+     • If pinId is given AND present in the slab → pick THAT room (dev override, ?room=).
+     • Otherwise FEATURE the day's rotating bespoke room (featuredId). The Cairn is the
+       anchor — shown when it's the day's pick or when the featured room can't resolve. */
   R.pick = function (pinId) {
     var slab = R.loadSlab();
 
@@ -3185,7 +3213,16 @@
       for (var p = 0; p < slab.length; p++) {
         if (slab[p].id === pinId) return projectPick(slab[p]);
       }
-      // pinId not in the slab → fall through to the Cairn default.
+      // pinId not in the slab → fall through to the featured pick.
+    }
+
+    // PRODUCTION: feature the day's rotating bespoke room (was: always the Cairn).
+    var featId = featuredId(slab);
+    if (featId && featId !== 'cairn') {
+      for (var f = 0; f < slab.length; f++) {
+        if (slab[f].id === featId) return projectPick(slab[f]);
+      }
+      // featured room vanished from the slab → fall through to the Cairn anchor.
     }
 
     var cairn = null;
