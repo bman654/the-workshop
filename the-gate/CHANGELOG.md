@@ -3,9 +3,34 @@
 <!-- ═══════════════════════════════════════════════════════════════════════
      RESUME POINTER  (read this first on a fresh/compacted context)
      ═══════════════════════════════════════════════════════════════════════ -->
-## ▶ RESUME POINTER — current state (2026-06-23)
+## ▶ RESUME POINTER — current state (2026-06-23, foundry running)
 
-**Status:** Phase A blockout is **LOCKED** (owner-approved). Phase B (write `SPEC.md`)
+**Status:** Phase A blockout LOCKED. Phase B `SPEC.md` **LOCKED + committed**
+(`823f9f3` base + `1b3f9f4` room-rep custom-color slots `rep.swatch1..3`/`rep.glow1..2`,
+Brandon's request via the spec agent). Phase C **FOUNDRY RUNNING**: Wave 1 PILOT launched.
+
+**RENDER HARNESS (built + proven this session — reuse for every wave):**
+- `/tmp/gate-render.sh <url> <out.png>` — one-off headless-Chrome shot (virtual-time-budget
+  4500, own throwaway profile → parallel-safe, no agent-browser contention).
+- `/tmp/gate-foundry/render-take.sh <scratch> <module_relpath> <candidate|-> <port> <outdir>`
+  — copies the-gate/+tools/ from `GATE_SRC` (default /tmp/gate-worktree) → swaps the candidate
+  module in → forges → serves on <port> → shoots idle-night/idle-day/open-night → tears down.
+  gtimeout-guarded (gtimeout at /opt/homebrew/bin). USE THIS to render any take/final.
+- ⚠️ NEVER `pkill` an http.server while a chrome shot is mid-load — the shot hangs (no implicit
+  timeout). Let the helper own its server lifecycle, or use gtimeout.
+- ⚠️ Use `/Applications/Google Chrome.app` `--headless=new`; clean up orphaned agent-browser
+  "Chrome for Testing" procs if the machine gets loaded (they're from prior screenshot work).
+
+**WAVE 1 PILOT — RUNNING:** Workflow runId **`wf_19aa366f-a8c`**, script
+`/tmp/gate-foundry/wave1.workflow.js` (K=4 takes → 2 judges → synthesize+build-final). The
+synth writes the FINAL gate art to the live worktree `the-gate/scene-gate.js` (LEFT DIRTY,
+uncommitted) + renders deliverables to `/tmp/gate-shots/foundry/gate/{idle,open}-*.png`.
+ON COMPLETION (Keystone): VIEW those 3 PNGs, judge estate-quality MYSELF — pass → SendUserFile
+to Brandon + `git add the-gate/ && commit` + launch Wave 2; fail → `git checkout -- the-gate/`
+to revert, STOP, post for Brandon. (Foundry cycle/ledger: cycle=719; base roles builder/judge.)
+
+(legacy status line follows; superseded by the above)
+**Status (pre-foundry):** Phase A blockout is **LOCKED** (owner-approved). Phase B (write `SPEC.md`)
 is in progress. Phase C (asset foundry) is next.
 
 **Where the work lives:** git worktree `/tmp/gate-worktree` on branch **`the-gate`**.
