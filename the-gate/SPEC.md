@@ -357,7 +357,7 @@ parametric systems finalized in Phase D but get a beauty pass too (§9).
 | · piers (×2) + lamps | 7 | each PIER_W=72; left x400..472, right x1128..1200; body y212..900; cap & lamp up to ~y150 | column center (x436 / x1164) | substantial stone columns; lamp-globe on cap | `stone`, `brass.stroke`, `brass.bright` | `lamp.flame` (globe r9 + halo r22 at globe center ~y150) | `scene-gate.js:144-191` | stacked-stone column, stepped brass cap, brass lantern base + EMISSIVE glass globe (the night payoff) + finial. |
 | · gear-train | 7 | cluster ~x652..960 / y336..594 (driver r72 @ x800 y470; 4 smaller gears around it) | child of assembly, spins about its own bbox center | overlays the seam; reads as the drive | `brass.stroke`, `brass.bright` | — | `scene-gate.js:307-318,194-226` | 5 toothed brass gears (dark body + brass stroke), hubs/spokes/top-glint; the visible engine. |
 | · gnomon / sundial | 7 | R=38 → ~x760..836 / y594..670; center x798 y632 | center (x798, y632) | brass dial flat on the gate face | `brass.stroke`, `brass.bright`; blade body `#e6bd6f` (gnomon furniture token) | — (no GLOW; pulsing hint stroke only) | `scene-gate.js:230-270` | brass dial face + hour marks + raised triangular blade casting a shadow; the discoverable tap-target (`#gnomon-target`). |
-| · plaque | 7 | w300 h90 → x650..950 / y675..765; center x800 y720 | center (x800, y720) | brass plate over the closed leaves | `brass.stroke`, `brass.bright` | — | `scene-gate.js:273-290` | engraved brass plaque: "The Orrery Estate" (Georgia 32) / "CLICK TO OPEN" (mono 13, letterspaced). Wordmark IS the logo. (The title splash says "enter"; the gate itself instructs "OPEN".) |
+| · plaque | 7 | w300 h90 → x650..950 / y675..765; center x800 y720 | center (x800, y720) | brass plate over the closed leaves | `brass.stroke`, `brass.bright` | — | `scene-gate.js:273-290` | engraved brass plaque: "The Orrery Estate" (Georgia 32) / "CLICK TO OPEN" (mono 13, letterspaced). Wordmark IS the logo. (The title splash shows the founding words; the gate itself instructs "OPEN".) |
 | **Observatory + rise** | 4 far-scenery | hill x−40..540 / y300..480; observatory body x164..256 y296..360, dome up to ~y258, telescope to ~y240 | hill peak ~x230; observatory base x210 y360 | distant on the LEFT, behind/left of the left pier | `hill`, `observatory.body`, `observatory.dome`, `brass.stroke`, `brass.bright` | `window.lit` (2 observatory windows) | `scene-buildings.js:47-90` | a soft grass mound with a black-and-brass domed observatory: drum body, hemispherical dome with a shutter SLIT + telescope barrel poking at the sky; lit windows. |
 
 ### 4.2 SUPPORTING (K=2)
@@ -638,17 +638,21 @@ the master. Once armed, audio stays on for the visit — so a visitor can linger
 before clicking the gate to enter. (Unlocking only on the gate-open click made the ambient bed nearly
 inaudible, since that click also navigates away.)
 
-**Title splash (PRODUCTION entry + sound opt-in).** A full-bleed overlay (`#splash`, `z-index:60`,
-above the welcome card + fade overlay) is the cover of the experience: a deep night-ink vignette with
-the brass wordmark **"THE ORRERY ESTATE"** (plaque fonts/palette), a gently pulsing **"click to enter"**
-prompt, and a 🔊 sound indicator. It is a single `role="button"` activatable by click AND keyboard
-(Enter/Space), `aria-label`led and focused on load. It shows **ONLY in production** — when
-`sequence.parseUrl().dev` is FALSE (no `?dev`, no `?scene=`); in any dev/`?scene=` boot the boot
-REMOVES it immediately so the render/test harness lands straight in idle (untouched). On activate it
-calls `armAudio()` (this gesture IS the autoplay unlock → ctx resumes, ambient bed starts for the
-current weather+band; the persisted mute flag still gates the master gain at 0), then fades out over
-~600 ms (instant under `prefers-reduced-motion`) and removes itself, revealing the dwellable idle
-scene. The production fade-in proceeds beneath; the in-scene mute chip is unchanged.
+**Title splash — the founding myth (PRODUCTION entry + sound opt-in).** A full-bleed overlay (`#splash`,
+`z-index:60`, above the welcome card + fade overlay) is the cover of the experience: a near-black card
+that reads the founding legend in beat-by-beat (CSS stagger, `splash-rise`) — a lead, then **the three
+words** *"build whatever you want; have fun"* in the brass wordmark, the attribution **to the Patron**
+(the unseen founder who spoke them — `tabularium` MYTH / ROADMAP canon), then a pulsing **"click to
+begin"**. It shows **NO estate name** — the name is first met at the gate reveal. The mute chip floats
+above it (`#mute-chip` `z-index:70`, its bottom-right gate position) so sound can be set before
+entering. It is a single `role="button"` activatable by click AND keyboard (Enter/Space), `aria-label`led
+and focused on load. Shows **ONLY in production** — `sequence.parseUrl().dev` FALSE (no `?dev`, no
+`?scene=`); any dev/`?scene=` boot REMOVES it immediately so the harness lands straight in idle. On
+activate it calls `armAudio()` (this gesture IS the autoplay unlock → ctx resumes, ambient bed starts for
+the current weather+band; the persisted mute flag still gates the master at 0), then fades out ~600 ms
+(instant under `prefers-reduced-motion`) and removes itself. The production fade-in proceeds beneath.
+The **welcome / outro card** closes the bookend: below the estate title it carries a myth line
+referencing **the Hand That Guides** — *"it guides; it does not dictate."*
 
 **Trigger → sound map:**
 

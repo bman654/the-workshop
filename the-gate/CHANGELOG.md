@@ -5,6 +5,22 @@
      ═══════════════════════════════════════════════════════════════════════ -->
 ## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + Phase-D room-rotation, wind-sway, WEATHER-FX, owner-playtest fixes/polish, real MOON-PHASE WIRING + **AUDIO (procedural WebAudio voice)** all shipped; K=4; NEXT = the **earned-asterism runtime pick** + Phase-D beauty passes — see §9)
 
+**ENTRY SPLASH RE-SOULED — the founding myth — ✅ SHIPPED (2026-06-23, owner request):** the production
+title card no longer shows the estate NAME — it opens on the FOUNDING MYTH so the visitor meets the words
+before the place. A near-black card reads itself in beat-by-beat (CSS `splash-rise` stagger: lead → words
+→ attribution → "click to begin"): the lead *"The legend speaks of three words of permission —"*, then the
+canonical three words **"build whatever you want; have fun"** in the brass wordmark, attributed **to the
+Patron, the unseen founder** (canon: `tabularium/index.html` MYTH + ROADMAP — the Patron SPOKE the three
+words; "The Hand That Guides" is the separate gauge, NOT the speaker). The estate NAME is first met at the
+GATE reveal. The **mute chip** now floats at `z-index:70` (above the `z-index:60` splash), pinned
+bottom-right in its gate position, so sound can be set from the title card. The **outro / welcome card**
+closes the bookend: below the estate title, the old "keeps its mysteries" tagline is replaced by a line
+referencing **the Hand That Guides** — *"Built under a Hand the makers feel but never see — it guides; it
+does not dictate."* (intro = the Patron's words; outro = the Hand — both unseen, both a semicolon
+aphorism). Dev/`?scene=` still removes the splash immediately (harness untouched). VERIFIED over served
+HTTP (agent-browser, never file://): production splash shows the three words + NO estate name, mute chip
+at (18,18) `z70` visible over the card, dev splash absent (phase idle); forge `--check --all` = 97 current.
+
 **AUDIO PASS 3 — ✅ SHIPPED (2026-06-23):** the open-sequence gears + creak reworked from playtest
 feedback (they read too light/thin — the gears as bug-like clicks, the creak as a rodent squeak); the
 synthesis was replaced in place, builder signatures + wiring unchanged (still `A.gears()` in the gears
