@@ -1,0 +1,875 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Plucked Reed — pluck a brass reed; a burst of hiss self-organizes into a pitched string</title>
+<!-- a Sound Garden LEAF (garden growth). Reached from the front-door 'rigorous
+     voices' line in sound-garden/index.html. Copies '← sound garden'. NOT a new
+     front-door footprint — NO ws:seen. The Karplus-Strong physics (seeded noise
+     → comb pluck-filter → two-tap-lowpass feedback loop → offline render) is
+     single-sourced to ./core.mjs (the REED CORE block, byte-twinned here
+     char-for-char) and the pitch anchor semiToFreq to ../pitch-core.mjs (PITCH
+     CORE, also byte-twinned). The Node twin core.test.mjs re-extracts each slice
+     and asserts parity, and calls the SAME runReedSelfTest the in-page pill calls. -->
+<style>
+  :root{
+    --bg:#07060d; --ink:#ece9f6; --muted:#8a85a6;
+    --c:#ff9d5c;                 /* the leaf accent (copper-amber — live reed trace, values; distinct from monochord/gamelan brass) */
+    --brass:#d9a441;             /* the reed body + fret-marks (warm brass) */
+    --brass2:#e0a23c;            /* the reed highlight */
+    --hiss:#9a7bd6;              /* the raw-hiss scatter at the pluck instant (violet — clearly NOT the tone) */
+    --residue:#54e08a;           /* RESERVED: self-test verdict only */
+    --ok:#54e08a; --bad:#ff6b6b;
+    --panel:#110e1c; --line:rgba(255,255,255,.08);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--bg); color:var(--ink); overflow-x:hidden;
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased; }
+  body{ min-height:100vh; background:
+    radial-gradient(1000px 600px at 50% -10%, rgba(255,157,92,.12), transparent 60%),
+    radial-gradient(820px 520px at 14% 110%, rgba(217,164,65,.10), transparent 55%),
+    radial-gradient(820px 520px at 88% 112%, rgba(154,123,214,.08), transparent 55%),
+    var(--bg); }
+  .wrap{ max-width:1080px; margin:0 auto; padding:30px 24px 90px; }
+  a{ color:inherit; }
+  .back{ display:inline-block; font:600 11px/1 ui-monospace,Menlo,monospace; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); text-decoration:none; opacity:.8; margin-bottom:14px; }
+  .back:hover{ color:var(--c); opacity:1; }
+  header{ text-align:center; margin-bottom:8px; }
+  .kick{ font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.34em;
+    text-transform:uppercase; color:var(--muted); opacity:.85; }
+  h1{ font-family:Georgia,"Times New Roman",serif; font-weight:500;
+    font-size:clamp(34px,6vw,58px); margin:.14em 0 .1em; letter-spacing:.01em;
+    background:linear-gradient(180deg,#fff,#ecdcb0); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  .sub{ color:var(--muted); font-size:15px; font-style:italic; font-family:Georgia,serif;
+    max-width:700px; margin:0 auto; line-height:1.55; }
+  .sub b{ font-style:normal; }
+
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; }
+  .card h3{ margin:0 0 10px; font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); }
+
+  /* the stage */
+  .stage{ margin-top:26px; display:grid; gap:18px; grid-template-columns:1fr; }
+  @media(min-width:880px){ .stage{ grid-template-columns:1.5fr .65fr; align-items:start; } }
+
+  /* the REED canvas — the played instrument */
+  #reedHost{ position:relative; width:100%; height:300px; touch-action:none; }
+  #reed{ width:100%; height:100%; display:block; border-radius:12px; cursor:crosshair;
+    background:radial-gradient(130% 110% at 50% 50%, rgba(217,164,65,.05), transparent 70%), #0a0813;
+    border:1px solid var(--line); }
+  .reedHint{ margin:10px 0 0; font:600 11px/1.5 ui-monospace,Menlo,monospace; color:var(--muted); opacity:.85; }
+  .reedHint b{ color:var(--c); font-weight:600; }
+
+  .controls{ display:flex; flex-direction:column; gap:14px; }
+  .readouts{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .ro{ background:#0d0a16; border:1px solid var(--line); border-radius:10px; padding:10px 12px; overflow:hidden; }
+  .ro.full{ grid-column:1 / -1; }
+  .ro .k{ font:600 10px/1 ui-monospace,Menlo,monospace; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); }
+  .ro .v{ font:700 17px/1.25 ui-monospace,Menlo,monospace; margin-top:6px; white-space:normal; overflow-wrap:break-word; }
+  .ro .v.hiss{ color:var(--hiss); }
+
+  /* the two knobs (range sliders) */
+  .knobs{ display:flex; flex-direction:column; gap:14px; }
+  .knob label{ display:flex; justify-content:space-between; align-items:baseline;
+    font:600 11px/1.3 ui-monospace,Menlo,monospace; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  .knob label .val{ color:var(--c); text-transform:none; letter-spacing:0; font-weight:700; }
+  .knob input[type=range]{ width:100%; margin:8px 0 0; accent-color:var(--c); height:22px; }
+  .knob .d{ font:500 10.5px/1.4 ui-monospace,Menlo,monospace; color:var(--muted); margin-top:3px; opacity:.85; }
+  .knob .d em{ color:var(--c); font-style:normal; }
+
+  .btnrow{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .btn{ appearance:none; border:1px solid var(--line); background:#16121f; color:var(--ink);
+    font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.06em; padding:9px 12px;
+    border-radius:9px; cursor:pointer; transition:.18s; }
+  .btn:hover{ border-color:color-mix(in srgb,var(--c) 55%,transparent); box-shadow:0 0 18px -6px var(--c); }
+  .btn:focus-visible{ outline:2px solid color-mix(in srgb,var(--c) 60%,transparent); outline-offset:2px; }
+  .seg{ display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+  .seg .opt{ padding:9px 12px; font:600 11px/1 ui-monospace,Menlo,monospace; letter-spacing:.06em;
+    cursor:pointer; color:var(--muted); background:#0d0a16; transition:.16s; }
+  .seg .opt.on{ color:#07060d; background:var(--c); }
+
+  .note{ font-size:13px; color:var(--muted); line-height:1.6; margin:12px 0 0; }
+  .note b{ color:var(--ink); font-weight:600; }
+  .note.lit{ color:var(--residue); }
+
+  #selftest{ display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
+    font:700 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.04em; padding:9px 13px; border-radius:9px;
+    border:1px solid var(--line); background:#0d0a16; color:var(--muted); }
+  #selftest.ok{ color:var(--ok); border-color:color-mix(in srgb,var(--ok) 50%,transparent); }
+  #selftest.bad{ color:var(--bad); border-color:color-mix(in srgb,var(--bad) 50%,transparent); }
+  #selftest .dotp{ width:8px; height:8px; border-radius:50%; background:currentColor; box-shadow:0 0 8px currentColor; }
+  code{ font-family:ui-monospace,Menlo,monospace; font-size:.92em; color:#ecdcb0; }
+
+  footer{ margin-top:46px; text-align:center; color:var(--muted); opacity:.6;
+    font:11px/1.7 ui-monospace,Menlo,monospace; letter-spacing:.05em; }
+  footer a{ color:inherit; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../index.html">&larr; sound garden</a>
+  <header>
+    <div class="kick">Sound&nbsp;Garden&nbsp;·&nbsp;a&nbsp;leaf</div>
+    <h1>The Plucked Reed</h1>
+    <p class="sub">Drag across the brass reed and let go to <b style="color:var(--c)">pluck</b> it. A burst of
+      <b style="color:var(--hiss)">raw hiss</b> scatters at the spot you released &mdash; then, lap by lap, it
+      self-organizes into a clean damped <b style="color:var(--brass)">standing wave</b> that rings at a pitch.
+      The wave you watch <b>is</b> the buffer you hear. Now drag <b>DECAY</b> to the floor: the echo loop opens,
+      the string dies, and the reed falls back into the <b style="color:var(--hiss)">noise it was made of</b>.</p>
+  </header>
+
+  <div class="stage">
+    <!-- THE REED: the played instrument -->
+    <div class="card">
+      <h3>The reed &mdash; pluck it</h3>
+      <div id="reedHost"><canvas id="reed" role="application"
+        aria-label="a brass reed; click and drag across it and release to pluck — release position sets where you pluck, release speed sets how hard"></canvas></div>
+      <p class="reedHint"><b>Drag &amp; release</b> to pluck. Where you let go = where you pluck (the comb notch);
+        how fast you flick = how hard (a hard flick barks). Tap a <b>fret-mark</b> below the reed to retune.</p>
+    </div>
+
+    <!-- THE CONTROLS -->
+    <div class="card">
+      <h3>What you played</h3>
+      <div class="controls">
+        <div class="readouts">
+          <div class="ro"><div class="k">note</div><div class="v" id="roNote">&mdash;</div></div>
+          <div class="ro"><div class="k">pitch sr/N</div><div class="v" id="roHz">&mdash;</div></div>
+          <div class="ro full"><div class="k" id="roStateK">state</div><div class="v" id="roState">pluck the reed</div></div>
+        </div>
+
+        <div class="knobs">
+          <div class="knob">
+            <label>DECAY <span class="val" id="vDecay">0.990</span></label>
+            <input type="range" id="kDecay" min="0" max="1000" value="900" aria-label="decay — the loop feedback gain g">
+            <div class="d">the loop feedback gain <em>g</em>. ≈0.99 plink &middot; ≈0.9999 endless drone &middot;
+              <em>drag to the FLOOR</em> and the loop opens &mdash; the string becomes raw hiss.</div>
+          </div>
+          <div class="knob">
+            <label>BRIGHTNESS <span class="val" id="vBright">0.50</span></label>
+            <input type="range" id="kBright" min="500" max="980" value="500" aria-label="brightness — the two-tap loop-filter blend b">
+            <div class="d">the two-tap blend <em>b</em>. 0.5 = equal-average (mellow, fast high-rolloff) &middot;
+              →1 keeps the highs &mdash; the reed stays <em>jagged</em> longer before it smooths.</div>
+          </div>
+        </div>
+
+        <div class="btnrow">
+          <button class="btn" id="btnPluck">pluck (space)</button>
+          <span class="seg" id="segAudio" title="Honours the estate-wide ws:pref:muted key; muted by default.">
+            <span class="opt" data-audio="on">sound on</span>
+            <span class="opt on" data-audio="off">sound off</span>
+          </span>
+        </div>
+
+        <p class="note" id="reveal">&nbsp;</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- THE PROOF -->
+  <div class="card" style="margin-top:18px">
+    <div class="btnrow" style="justify-content:space-between;align-items:flex-start;gap:24px">
+      <div style="flex:1 1 340px;min-width:0">
+        <h3 style="margin-top:0">Why a string is just hiss in an echo loop</h3>
+        <p class="note" style="margin-top:0">
+          The pluck fills a <b>delay line</b> of length <code>N = round(SR/f)</code> with a burst of
+          <b style="color:var(--hiss)">seeded noise</b>. Then every sample, the loop reads the line one lap back
+          and feeds it forward through a tiny two-tap average:
+          <code>buf[i] = g&middot;(b&middot;buf[i&minus;N] + (1&minus;b)&middot;buf[i&minus;N&minus;1])</code>.
+          Each lap is exactly <b>N samples = one period</b>, so the buffer's local shape <b>is</b> one period of
+          the standing wave &mdash; the curve you watch is the buffer you hear.
+        </p>
+        <p class="note">
+          <b style="color:var(--c)">The reveal:</b> the loop keeps re-circulating the same hiss, and the two-tap
+          average shaves a little off the highs each lap &mdash; so the jagged noise smooths, lap by lap, into a
+          pitched wave whose period is <code>N</code>. Pull <b>DECAY to zero</b> and the loop stops feeding back:
+          no echo, no string, just the one-shot hiss. <b style="color:var(--c)">The honesty:</b> that two-tap
+          filter has gain exactly 1 at DC and &le;1 at Nyquist &mdash; it can only <b>remove</b> the hiss's
+          highs, never inject a tone. The pitch was <b>carved from noise</b> by the delay length, not added by a
+          hidden oscillator.
+        </p>
+      </div>
+      <div style="flex:1 1 280px;min-width:0">
+        <div class="btnrow">
+          <span id="selftest" title="click to re-run"><span class="dotp"></span><span id="stText">self-test &mdash;</span></span>
+        </div>
+        <p class="note" style="margin-top:12px;font-size:12px">
+          The self-test proves it EXACT: the autocorrelation period of the settled reed is <code>N+(1&minus;b)</code>
+          (within a few cents of <code>SR/N</code>) at two pitches; the fundamental's per-lap decay equals the
+          feedback gain <code>g</code>; a high partial survives longer as <code>b</code> rises; with <code>g=0</code>
+          there is NO pitched tail (only hiss); and the loop filter's DC gain is exactly 1 with Nyquist &le;1.
+          The DSP is single-sourced to <code>core.mjs</code>, byte-twinned into this page, with the Node twin
+          <code>core.test.mjs</code> proving char-for-char parity and that the recurrence is re-typed nowhere.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    a leaf of the <a href="../index.html">Sound Garden</a> &middot; all sound synthesised live (Web Audio offline render), zero dependencies &middot;
+    Karplus-Strong physics &rarr; <code>core.mjs</code> &middot; pitch &rarr; <code>sound-garden/pitch-core.mjs</code><br>
+    <a href="../the-overtone-rack/index.html">&harr; The Overtone Rack</a> &middot;
+    <a href="../the-vowel-throat/index.html">&harr; The Vowel Throat</a> &middot;
+    <a href="../the-sidebands/index.html">&harr; The Sidebands</a> &middot;
+    <a href="../the-tartini-bench/index.html">&harr; The Tartini Bench</a> &middot;
+    <a href="../the-beating-bench/index.html">&harr; The Beating Bench</a> &middot;
+    <a href="../monochord.html">&harr; The Monochord</a> &middot;
+    <a href="../../index.html">&larr; The Orrery Estate</a>
+  </footer>
+</div>
+
+<script type="module">
+"use strict";
+// ════════════════════════ INLINED SINGLE-SOURCE BYTE-TWINS ═══════════════════
+// TWO byte-twins. (a) the PITCH CORE slice (gives semiToFreq + noteName, so the
+// fret-mark Hz / note names are single-sourced), char-for-char ../pitch-core.mjs.
+// (b) the REED CORE slice (the seeded-noise → comb pluck-filter → KS feedback
+// loop → offline render + runReedSelfTest), char-for-char ./core.mjs. The Node
+// twin re-extracts each slice and asserts parity; the in-page pill AND the Node
+// twin both call the runReedSelfTest defined in (b).
+
+// ===== PITCH CORE (inlined byte-twin) BEGIN =====
+const MIDDLE_C_HZ = 261.625565;            // the ONE pitch anchor literal
+function semiToFreq(semi){ return MIDDLE_C_HZ * Math.pow(2, semi/12); }
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function noteName(semi){ const o=4+Math.floor(semi/12); const i=((semi%12)+12)%12; return NOTE_NAMES[i]+o; }
+// ===== PITCH CORE END =====
+
+// the reed's two reference pitches, DERIVED from the pitch anchor (no Hz literal
+// is re-typed). These live OUTSIDE the REED CORE slice (which takes f as numbers),
+// exactly as core.mjs places them.
+const SEMI_HOME = -5;                  // ≈196 Hz (G3) — the reed's home pitch
+const F_HOME = semiToFreq(SEMI_HOME);
+const SEMI_ALT = 4;                    // ≈329.6 Hz (E4) — a fresh second degree
+const F_ALT = semiToFreq(SEMI_ALT);
+
+// ===== REED CORE (inlined byte-twin) BEGIN =====
+// IMPORT-FREE: the recurrence, the seeded noise, the comb pluck-filter, the
+// offline render, and runReedSelfTest take only plain numbers — so the page can
+// inline this block verbatim regardless of script load order (PITCH CORE is wired
+// in separately, outside this slice), and the KS recurrence literal lives in ONE
+// place (the single-source grep checks).
+
+// THE DSP LITERALS — the ONE place these live as code.
+const DEFAULT_SR = 44100;              // the canonical render/sample rate
+const G_FLOOR = 0.0;                   // DECAY floor: loop opens, the string dies → raw hiss
+const G_PLINK = 0.99;                  // a short plink
+const G_DRONE = 0.9999;                // a near-endless drone
+const B_CLASSIC = 0.5;                 // BRIGHTNESS: classic equal-average (fastest high-rolloff)
+const MAX_RENDER_SAMPLES = 44100 * 6;  // cap the buffer so g→0.9999 can't render forever / hitch
+
+// delayLength(f, sr) = round(sr/f) — THE law that makes the pitch. An off-by-one
+// here shifts the fundamental off sr/N; the PITCH self-test leg catches it.
+function delayLength(f, sr = DEFAULT_SR){ return Math.max(2, Math.round(sr / f)); }
+
+// the fundamental the recurrence actually sounds for a delay of length N.
+function pitchOf(N, sr = DEFAULT_SR){ return sr / N; }
+
+// a tiny, fast SEEDED PRNG (mulberry32) → deterministic white noise in [-1,1].
+// Deterministic so the neg-control, the render, and the on-screen scatter agree.
+function makeRng(seed){
+  let a = (seed >>> 0) || 1;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296 * 2 - 1;
+  };
+}
+
+// the seeded excitation: a length-N noise burst, comb-notched at the pluck point
+// p∈[0,1]. The notch (subtract a copy delayed by the pluck offset) puts a node
+// where you held the reed — a pluck near the bridge (small p) keeps more highs,
+// a pluck at the middle nulls the even partials. Returns a fresh Float64Array of
+// length N scaled by `gain` (the flick strength).
+function pluckExcitation(N, p = 0.5, gain = 1, seed = 1){
+  const rng = makeRng(seed);
+  const raw = new Float64Array(N);
+  for (let i = 0; i < N; i++) raw[i] = rng();
+  const d = Math.max(1, Math.min(N - 1, Math.round(p * N)));   // the comb notch offset
+  const out = new Float64Array(N);
+  for (let i = 0; i < N; i++){
+    const prev = i - d >= 0 ? raw[i - d] : raw[i - d + N];      // wrap so the notch is periodic
+    out[i] = gain * 0.5 * (raw[i] - prev);                      // comb: node at the pluck point
+  }
+  return out;
+}
+
+// the two-tap loop filter gains at DC and Nyquist, for the honesty leg.
+//   H(z) = b + (1−b)·z^-1   ⇒   H(1) = 1 (DC),   H(−1) = b − (1−b) = 2b − 1 (Nyquist).
+// |H(±1)| ≤ 1 for b ∈ [0,1] ⇒ the loop can only REMOVE highs, never add a tone.
+function loopDcGain(b){ return b + (1 - b); }                  // = 1 exactly
+function loopNyquistGain(b){ return Math.abs(b - (1 - b)); }   // = |2b−1| ≤ 1 on [0,1]
+
+// THE PLUCK RENDER — fill the delay line with the seeded comb-notched excitation,
+// then run the Karplus-Strong recurrence to fill `total` samples:
+//     buf[i] = g · (b · buf[i−N] + (1−b) · buf[i−N−1])
+// g is the feedback gain (DECAY), b is the two-tap blend (BRIGHTNESS). With g = 0
+// the loop never feeds back: only the first N samples (the raw hiss) sound. The
+// page plays this buffer AND reads its tail window as the reed's shape — one law,
+// one eye, one ear.
+function renderReed(N, opts = {}){
+  const g = opts.g ?? G_PLINK;
+  const b = opts.b ?? B_CLASSIC;
+  const p = opts.p ?? 0.5;
+  const gain = opts.gain ?? 1;
+  const seed = opts.seed ?? 1;
+  const sr = opts.sr ?? DEFAULT_SR;
+  const total = Math.min(MAX_RENDER_SAMPLES, Math.max(N + 2, Math.floor((opts.seconds ?? 2) * sr)));
+  const buf = new Float64Array(total);
+  const exc = pluckExcitation(N, p, gain, seed);
+  for (let i = 0; i < N && i < total; i++) buf[i] = exc[i];     // the seeded hiss seeds the loop
+  for (let i = N; i < total; i++){
+    const x1 = buf[i - N];
+    const x2 = i - N - 1 >= 0 ? buf[i - N - 1] : 0;             // guard the pre-history tap (i−N−1 < 0 → 0)
+    buf[i] = g * (b * x1 + (1 - b) * x2);                       // the KS recurrence (the single-source literal)
+  }
+  return { buf, N, sr, g, b, p };
+}
+
+// RMS over a window [s, e).
+function rms(buf, s, e){
+  s = Math.max(0, s | 0); e = Math.min(buf.length, e | 0);
+  if (e <= s) return 0;
+  let acc = 0; for (let i = s; i < e; i++) acc += buf[i] * buf[i];
+  return Math.sqrt(acc / (e - s));
+}
+
+// normalized autocorrelation of buf[s..e) at integer lag. ~1 ⇒ strongly periodic
+// at that lag; ~0 ⇒ no periodicity. The periodicity probe for the PITCH and
+// NEG-CONTROL legs.
+function autocorr(buf, lag, s, e){
+  s = Math.max(0, s | 0); e = Math.min(buf.length, e | 0);
+  let num = 0, da = 0, db = 0;
+  for (let i = s; i + lag < e; i++){ const a = buf[i], c = buf[i + lag]; num += a * c; da += a * a; db += c * c; }
+  const den = Math.sqrt(da * db);
+  return den > 0 ? num / den : 0;
+}
+
+// best-lag pitch over a window: the lag in [lagMin, lagMax] that maximizes
+// autocorrelation. Returns { lag, score }. Used to recover the played pitch from
+// the SETTLED steady portion (we skip the noisy attack window before measuring).
+function bestLag(buf, lagMin, lagMax, s, e){
+  let bestLagV = lagMin, best = -Infinity;
+  for (let L = lagMin; L <= lagMax; L++){
+    const sc = autocorr(buf, L, s, e);
+    if (sc > best){ best = sc; bestLagV = L; }
+  }
+  return { lag: bestLagV, score: best };
+}
+
+// Goertzel magnitude of buf[s..e) at frequency f (Hz) — the amplitude of one
+// spectral line, normalized by window length. Used to track the FUNDAMENTAL's
+// envelope: at f0 the loop lowpass barely attenuates, so the fundamental decays
+// per lap by almost exactly the feedback gain g (the exact DECAY claim).
+function goertzel(buf, s, e, f, sr = DEFAULT_SR){
+  s = Math.max(0, s | 0); e = Math.min(buf.length, e | 0);
+  const w = 2 * Math.PI * f / sr, c = 2 * Math.cos(w);
+  let s1 = 0, s2 = 0;
+  for (let i = s; i < e; i++){ const s0 = buf[i] + c * s1 - s2; s2 = s1; s1 = s0; }
+  const re = s1 - s2 * Math.cos(w), im = s2 * Math.sin(w);
+  const Nw = e - s;
+  return Nw > 0 ? Math.sqrt(re * re + im * im) / Nw : 0;
+}
+
+// best FRACTIONAL lag: integer best lag refined by parabolic interpolation of the
+// autocorrelation peak. The two-tap loop filter adds (1−b) samples of phase delay,
+// so the true period is N + (1−b) — sub-sample, recovered here.
+function bestFracLag(buf, lagMin, lagMax, s, e){
+  const { lag } = bestLag(buf, lagMin, lagMax, s, e);
+  const y0 = autocorr(buf, lag - 1, s, e), y1 = autocorr(buf, lag, s, e), y2 = autocorr(buf, lag + 1, s, e);
+  const den = y0 - 2 * y1 + y2;
+  const delta = den !== 0 ? 0.5 * (y0 - y2) / den : 0;
+  return lag + Math.max(-0.5, Math.min(0.5, delta));
+}
+
+// spectral centroid of buf[s..e) via a naive DFT magnitude over kBins bins, in
+// units of bin index (higher ⇒ brighter). Used to show the highs die first.
+function centroid(buf, s, e, kBins = 256){
+  s = Math.max(0, s | 0); e = Math.min(buf.length, e | 0);
+  const Nw = e - s; if (Nw <= 1) return 0;
+  let num = 0, den = 0;
+  for (let k = 1; k < kBins; k++){
+    let re = 0, im = 0; const w = 2 * Math.PI * k / Nw;
+    for (let i = 0; i < Nw; i++){ const x = buf[s + i]; re += x * Math.cos(w * i); im += x * Math.sin(w * i); }
+    const mag = Math.sqrt(re * re + im * im);
+    num += k * mag; den += mag;
+  }
+  return den > 0 ? num / den : 0;
+}
+
+// ── runReedSelfTest(fHome, fAlt, sr) — the SOLE ORACLE. Same shape as the sibling
+// leaves: { pass, total, lines:[{name, ok, detail}] }. The in-page pill and the
+// Node twin both call THIS. fHome/fAlt are two pitches (derived from semiToFreq
+// upstream, passed in as numbers); sr is the sample rate.
+function runReedSelfTest(fHome, fAlt, sr = DEFAULT_SR){
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+
+  // LEG 1 — PITCH: autocorrelation of the SETTLED portion (skip the attack)
+  //   recovers a period equal to the PREDICTED N + (1−b) (the two-tap filter adds
+  //   exactly 1−b samples of phase delay), which lands within a few cents of sr/N,
+  //   re-derived at TWO fresh scale degrees. The delay length N sets the pitch; an
+  //   off-by-one in the tap would shift the recovered period a FULL sample off
+  //   (~8 cents) — far beyond the sub-sample filter delay — and go red.
+  {
+    let ok = true, worstCents = 0, worstPred = 0; const rows = [];
+    const b = 0.5;
+    for (const [label, f] of [['home', fHome], ['alt', fAlt]]){
+      const N = delayLength(f, sr);
+      const { buf } = renderReed(N, { g: 0.997, b, p: 0.5, sr, seconds: 0.5, seed: 7 });
+      const s = N * 8, e = buf.length;                          // skip ~8 laps of attack
+      const frac = bestFracLag(buf, N - 2, N + 2, s, e);        // sub-sample period near N
+      const predicted = N + (1 - b);                            // filter phase delay = 1−b
+      const predErr = Math.abs(frac - predicted);               // must match the prediction
+      const cents = Math.abs(1200 * Math.log2((sr / frac) / (sr / N)));  // closeness to sr/N
+      worstCents = Math.max(worstCents, cents); worstPred = Math.max(worstPred, predErr);
+      if (!(predErr < 0.05 && cents < 8)) { ok = false; rows.push(`${label}: frac ${frac.toFixed(3)} vs pred ${predicted}, ${cents.toFixed(2)}¢`); }
+    }
+    T('LEG 1 — PITCH: the settled-portion autocorrelation period equals the predicted N + (1−b) (the loop filter\'s sub-sample phase delay) and so lands within a few cents of sr/N, at TWO fresh scale degrees — the delay length sets the pitch; an off-by-one tap would shift the period a FULL sample (~8¢) off',
+      ok, ok ? `period = N+(1−b) at both degrees (worst pred Δ ${worstPred.toExponential(2)} samples, ${worstCents.toFixed(2)}¢ from sr/N)` : rows.join(' · '));
+  }
+
+  // LEG 2 — DECAY: tail RMS strictly < attack RMS and the broadband envelope is
+  //   monotonically non-increasing for g < 1; the FUNDAMENTAL'S per-lap decay
+  //   (measured at f0 via Goertzel, where the loop lowpass ≈ unity) matches the
+  //   feedback gain g to a fraction of a percent at TWO g values; and g → 1
+  //   sustains far longer than g ≈ 0.99. (Broadband RMS decays a touch FASTER than
+  //   g — the lowpass also bleeds the highs — so the exact g claim is read at f0.)
+  {
+    const N = delayLength(fHome, sr), f0 = sr / N, win = N * 2;
+    let ok = true; const rows = [];
+    for (const g of [0.99, 0.999]){
+      const { buf } = renderReed(N, { g, b: 0.5, p: 0.5, sr, seconds: 1.2, seed: 11 });
+      const attack = rms(buf, 0, N * 4);
+      const tail = rms(buf, buf.length - N * 4, buf.length);
+      // broadband windowed envelope (one window = one lap = N samples) non-increasing
+      const nw = Math.floor(buf.length / N);
+      let mono = true, prev = Infinity;
+      for (let w = 0; w < nw; w++){ const r = rms(buf, w * N, (w + 1) * N); if (r > prev * 1.02) mono = false; prev = r; }
+      // the FUNDAMENTAL's per-lap decay (Goertzel@f0): ≈ g exactly
+      const t0 = N * 10, t1 = N * 40, laps = (t1 - t0) / N;
+      const a0 = goertzel(buf, t0, t0 + win, f0, sr), a1 = goertzel(buf, t1, t1 + win, f0, sr);
+      const measuredG = (a0 > 0 && a1 > 0) ? Math.pow(a1 / a0, 1 / laps) : 0;
+      const gErr = Math.abs(measuredG - g) / g;
+      const legOk = tail < attack && mono && gErr < 0.002;
+      if (!legOk) { ok = false; rows.push(`g=${g}: tail<attack ${tail < attack}, mono ${mono}, measuredG@f0 ${measuredG.toFixed(5)} (Δ${(gErr*100).toFixed(3)}%)`); }
+    }
+    // g→1 sustains far longer: tail energy at g=0.9999 ≫ tail energy at g=0.99 (2 s)
+    const lo = renderReed(N, { g: 0.99, b: 0.5, sr, seconds: 2.0, seed: 11 });
+    const hi = renderReed(N, { g: 0.9999, b: 0.5, sr, seconds: 2.0, seed: 11 });
+    const tailLo = rms(lo.buf, lo.buf.length - N * 4, lo.buf.length);
+    const tailHi = rms(hi.buf, hi.buf.length - N * 4, hi.buf.length);
+    const ratio = tailLo > 0 ? tailHi / tailLo : Infinity;
+    const sustains = ratio > 30;
+    if (!sustains) { ok = false; rows.push(`g→1 sustain: tailHi/tailLo ${ratio.toFixed(1)} not ≫ 1`); }
+    T('LEG 2 — DECAY: tail RMS < attack RMS, the per-lap envelope is monotonically non-increasing for g<1, the FUNDAMENTAL\'s per-lap decay (measured at f0) matches the feedback gain g to a fraction of a percent at two g values, and g→1 sustains far longer — the DECAY knob does exactly what it says',
+      ok, ok ? `per-lap decay@f0 = g at g∈{0.99,0.999} (Δ<0.2%), envelope non-increasing, g=0.9999 tail ${ratio.toFixed(0)}× the g=0.99 tail` : rows.join(' · '));
+  }
+
+  // LEG 3 — BRIGHTNESS: the highs die FIRST and a brighter filter keeps them
+  //   alive LONGER, measured exactly. (a) the broadband centroid of the early
+  //   third exceeds the late third (the highs die first). (b) a high harmonic's
+  //   per-lap decay is strictly slower at higher b — i.e. the high partials
+  //   survive longer as b rises (eye-confirmable as the reed staying jagged later
+  //   before it smooths) — and at every b it decays faster than the fundamental
+  //   (which is why the highs die first). A static oscillator (constant spectrum)
+  //   would fail (a) outright.
+  {
+    const N = delayLength(fHome, sr), f0 = sr / N, hk = 8 * f0, win = N * 2;
+    // (a) early-third centroid > late-third centroid
+    const { buf: cb } = renderReed(N, { g: 0.999, b: 0.5, p: 0.5, sr, seconds: 0.8, seed: 13 });
+    const Lc = cb.length;
+    const cEarly = centroid(cb, Math.floor(Lc * 0.10), Math.floor(Lc * 0.10) + 1024);
+    const cLate  = centroid(cb, Math.floor(Lc * 0.78), Math.floor(Lc * 0.78) + 1024);
+    const highsDie = cEarly > cLate;
+    // (b) high-harmonic per-lap decay rises monotonically with b, and stays below g
+    let monoRise = true, belowFund = true, prev = -Infinity; const rows = [];
+    const t0 = N * 8, t1 = N * 20, laps = (t1 - t0) / N;
+    for (const b of [0.5, 0.7, 0.9]){
+      const { buf } = renderReed(N, { g: 0.999, b, p: 0.5, sr, seconds: 0.8, seed: 13 });
+      const a0 = goertzel(buf, t0, t0 + win, hk, sr), a1 = goertzel(buf, t1, t1 + win, hk, sr);
+      const decHigh = (a0 > 0 && a1 > 0) ? Math.pow(a1 / a0, 1 / laps) : 0;
+      const f0a = goertzel(buf, t0, t0 + win, f0, sr), f0b = goertzel(buf, t1, t1 + win, f0, sr);
+      const decFund = (f0a > 0 && f0b > 0) ? Math.pow(f0b / f0a, 1 / laps) : 1;
+      if (!(decHigh > prev)) monoRise = false;          // brighter b → high partial survives longer
+      if (!(decHigh < decFund - 1e-4)) belowFund = false;  // high decays faster than fundamental
+      prev = decHigh; rows.push(decHigh.toFixed(3));
+    }
+    const ok = highsDie && monoRise && belowFund;
+    T('LEG 3 — BRIGHTNESS: the broadband centroid of the early third exceeds the late third (the highs die first), and a high harmonic\'s per-lap decay rises monotonically with b (it survives LONGER as the loop filter brightens) while always decaying faster than the fundamental — exactly the in-loop lowpass at work',
+      ok, ok ? `early centroid ${cEarly.toFixed(1)} > late ${cLate.toFixed(1)}; harmonic-8 per-lap decay rises with b [${rows.join(' → ')}] and stays below the fundamental's`
+             : `highsDie=${highsDie} monoRise=${monoRise} belowFund=${belowFund} highDecays=[${rows.join(', ')}]`);
+  }
+
+  // LEG 4 — NEG-CONTROL (the playable one): with g = 0 the loop never feeds back,
+  //   so only the one-shot hiss sounds — NO sustained pitched tail (autocorrelation
+  //   of the tail at lag N has no peak). With g > 0 the SAME pluck builds a strong
+  //   periodic tail. Brightness full vs damped moves the centroid up.
+  {
+    const N = delayLength(fHome, sr);
+    const dead = renderReed(N, { g: 0.0, b: 0.5, p: 0.5, sr, seconds: 0.5, seed: 17 });
+    const live = renderReed(N, { g: 0.999, b: 0.5, p: 0.5, sr, seconds: 0.5, seed: 17 });
+    const s = N * 6;
+    const acDead = autocorr(dead.buf, N, s, dead.buf.length);
+    const acLive = autocorr(live.buf, N, s, live.buf.length);
+    // the dead tail is essentially silent (the hiss is one-shot, length N)
+    const tailDead = rms(dead.buf, N * 2, dead.buf.length);
+    // brightness: full (b=1) vs damped (b=0.5) raises the early centroid
+    const bright = centroid(renderReed(N, { g: 0.999, b: 1.0, sr, seconds: 0.4, seed: 17 }).buf, N, N + 1024);
+    const damped = centroid(renderReed(N, { g: 0.999, b: 0.5, sr, seconds: 0.4, seed: 17 }).buf, N, N + 1024);
+    const ok = acLive > 0.5 && acDead < 0.15 && tailDead < 1e-9 && bright > damped;
+    T('LEG 4 — NEG-CONTROL (playable): drag DECAY to its floor (g=0) and the loop never feeds back — only the one-shot hiss sounds, with NO periodic tail (autocorr at lag N ≈ 0), while the SAME pluck at g>0 builds a strong periodic tail; full vs damped brightness moves the centroid up — a string IS hiss trapped in an echo loop',
+      ok, ok ? `acorr@N: live ${acLive.toFixed(3)} (string) vs dead ${acDead.toFixed(3)} (no loop); dead tail silent (${tailDead.toExponential(1)}); centroid bright ${bright.toFixed(1)} > damped ${damped.toFixed(1)}`
+             : `acLive ${acLive.toFixed(3)} acDead ${acDead.toFixed(3)} tailDead ${tailDead.toExponential(2)} bright ${bright.toFixed(1)} damped ${damped.toFixed(1)}`);
+  }
+
+  // LEG 5 — LOOP-FILTER HONESTY: the two-tap lowpass has DC gain EXACTLY 1 and
+  //   Nyquist gain |2b−1| ≤ 1 across b ∈ [0,1] — so the loop can only REMOVE the
+  //   hiss's highs, never inject a tone. This is the proof the pitch was CARVED
+  //   from noise (by the delay length) and not added by a hidden oscillator.
+  {
+    let ok = true, worstDc = 0, worstNy = 0; const rows = [];
+    for (let b = 0; b <= 1.0001; b += 0.05){
+      const dc = loopDcGain(b), ny = loopNyquistGain(b);
+      worstDc = Math.max(worstDc, Math.abs(dc - 1));
+      worstNy = Math.max(worstNy, ny);
+      if (Math.abs(dc - 1) > 1e-12 || ny > 1 + 1e-12) { ok = false; rows.push(`b=${b.toFixed(2)}: dc ${dc.toFixed(6)}, ny ${ny.toFixed(6)}`); }
+    }
+    T('LEG 5 — LOOP-FILTER HONESTY: the two-tap lowpass b·x[n]+(1−b)·x[n−1] has DC gain EXACTLY 1 and Nyquist gain |2b−1| ≤ 1 for every b ∈ [0,1] — the loop can only REMOVE the hiss’s highs, never inject a tone; the pitch is carved from noise, not added by an oscillator',
+      ok, ok ? `DC gain = 1 (worst |Δ| ${worstDc.toExponential(2)}) and Nyquist gain ≤ 1 (worst ${worstNy.toFixed(3)}) across b∈[0,1]` : rows.join(' · '));
+  }
+
+  let pass = 0; for (const l of lines) if (l.ok) pass++;
+  return { pass, total: lines.length, lines };
+}
+// ===== REED CORE END =====
+
+// ════════════════════════ THE FRET-MARKS (one octave, scale degrees) ══════════
+// each fret retunes N = delayLength(semiToFreq(semi)) — no Hz literal retyped.
+const FRETS = [-7, -5, -3, -1, 0, 2, 4, 5, 7];   // a G-major-ish run around the home
+let semi = SEMI_HOME;
+function currentF(){ return semiToFreq(semi); }
+function currentN(){ return delayLength(currentF(), DEFAULT_SR); }
+
+// ════════════════════════ AUDIO (muted-by-default · ws:pref:muted) ════════════
+function readMutePref(){ try{ return localStorage.getItem('ws:pref:muted') === '1'; }catch(e){ return false; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v ? '1' : '0'); }catch(e){} }
+const Snd = { ctx:null, master:null, comp:null, on:false, muted:readMutePref() };
+function ensureCtx(){
+  if (Snd.ctx) return;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  Snd.ctx = new AC();
+  Snd.master = Snd.ctx.createGain(); Snd.master.gain.value = 0.95;
+  Snd.comp = Snd.ctx.createDynamicsCompressor();
+  Snd.comp.threshold.value = -10; Snd.comp.ratio.value = 12; Snd.comp.attack.value = 0.003; Snd.comp.release.value = 0.25;
+  Snd.master.connect(Snd.comp); Snd.comp.connect(Snd.ctx.destination);
+}
+
+// ════════════════════════ STATE ══════════════════════════════════════════════
+const state = {
+  g: 0.99, b: 0.5, p: 0.5, gain: 1,
+  N: currentN(),
+  buf: null,            // the last rendered pluck buffer (Float64Array)
+  sr: DEFAULT_SR,
+  startTime: 0,         // audio context time the current pluck started
+  playing: false,
+};
+
+// map the DECAY slider [0,1000] → g. We want fine control near 1 (where the ear
+// lives), and the floor (slider 0) to be EXACTLY g=0 (the neg-control). A power
+// curve: g = G_FLOOR..G_DRONE, dense near the top.
+function mapDecay(x){
+  // x in [0,1]; at x=0 → 0 (dead). For x>0, sweep g across [0.80, 0.9999]
+  // with a curve that puts most of the slider in the audible 0.97–0.9999 band.
+  if (x <= 0) return 0;
+  const lo = 0.80, hi = G_DRONE;
+  const eased = Math.pow(x, 0.35);          // dense near the top
+  return lo + (hi - lo) * eased;
+}
+function brightToB(v){
+  // slider [500,980] → b in [0.5, 0.98]
+  return v / 1000;
+}
+
+// ════════════════════════ THE PLUCK ══════════════════════════════════════════
+// render the buffer at the current N/g/b/p/gain, schedule it on an AudioBufferSource
+// (offline render → AudioBuffer at the context rate), and start the visual playhead.
+let pluckSeed = 1;
+function pluck(){
+  ensureCtx();
+  state.N = currentN();
+  const seconds = state.g <= 0 ? 0.6 : (state.g > 0.999 ? 4.0 : 2.2);
+  pluckSeed = (pluckSeed * 1103515245 + 12345) & 0x7fffffff;   // a fresh seed each pluck (varies the hiss)
+  const { buf } = renderReed(state.N, { g: state.g, b: state.b, p: state.p, gain: state.gain, seed: pluckSeed, seconds });
+  state.buf = buf;
+  state.scatterUntil = performance.now() + 360;               // show the hiss scatter briefly
+  // play it (if sound on)
+  if (Snd.ctx && Snd.on && !Snd.muted){
+    if (Snd.ctx.state === 'suspended') Snd.ctx.resume();
+    const ab = Snd.ctx.createBuffer(1, buf.length, state.sr);
+    ab.getChannelData(0).set(buf);
+    const src = Snd.ctx.createBufferSource(); src.buffer = ab;
+    src.connect(Snd.master); src.start();
+    state.startTime = Snd.ctx.currentTime;
+  } else {
+    state.startTime = (Snd.ctx ? Snd.ctx.currentTime : performance.now() / 1000);
+  }
+  state.playStartPerf = performance.now();
+  state.playing = true;
+  updateReadouts();
+}
+
+// ════════════════════════ THE REED CANVAS ════════════════════════════════════
+const reed = document.getElementById('reed'), rctx = reed.getContext('2d');
+let RW = 0, RH = 0, DPR = 1;
+function fitReed(){
+  const r = reed.getBoundingClientRect(); DPR = Math.min(2, window.devicePixelRatio || 1);
+  reed.width = Math.max(1, Math.round(r.width * DPR)); reed.height = Math.max(1, Math.round(r.height * DPR));
+  rctx.setTransform(DPR,0,0,DPR,0,0); RW = r.width; RH = r.height;
+}
+function getCss(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+// drag-to-pluck: pointerdown on the reed begins a drag; release-x = p, the speed
+// of the drag near release = the flick strength (gain).
+let drag = null;   // { lastX, lastT, vx }
+function reedXY(e){
+  const r = reed.getBoundingClientRect();
+  return { x:(e.clientX - r.left), y:(e.clientY - r.top) };
+}
+reed.addEventListener('pointerdown', e=>{
+  reed.setPointerCapture(e.pointerId);
+  ensureCtx();
+  const { x } = reedXY(e);
+  drag = { startX:x, lastX:x, lastT:performance.now(), vx:0, y:reedXY(e).y };
+});
+reed.addEventListener('pointermove', e=>{
+  if (!drag) return;
+  const { x, y } = reedXY(e);
+  const now = performance.now(); const dt = Math.max(1, now - drag.lastT);
+  drag.vx = (x - drag.lastX) / dt;     // px/ms
+  drag.lastX = x; drag.lastT = now; drag.y = y;
+});
+function releaseDrag(){
+  if (!drag) return;
+  const margin = 14;
+  const p = Math.max(0.02, Math.min(0.98, (drag.lastX - margin) / Math.max(1, RW - 2*margin)));
+  const speed = Math.min(3, Math.abs(drag.vx) * 1000);     // px/s-ish
+  const gain = 0.45 + Math.min(1, speed / 2.2) * 0.95;     // a flick barks
+  state.p = p; state.gain = gain;
+  drag = null;
+  pluck();
+}
+reed.addEventListener('pointerup', releaseDrag);
+reed.addEventListener('pointercancel', ()=>{ drag = null; });
+
+// the reed render loop: read the buffer window AT the current playhead and draw it
+// as the reed's vertical displacement. one period = N samples = exactly the window
+// we read → the curve you see is the buffer you hear.
+function reedFrame(){
+  rctx.clearRect(0,0,RW,RH);
+  const midY = RH/2, margin = 14, innerW = RW - 2*margin;
+
+  // the bridge + nut posts
+  rctx.fillStyle = 'rgba(217,164,65,.55)';
+  rctx.fillRect(margin-3, midY-26, 3, 52); rctx.fillRect(RW-margin, midY-26, 3, 52);
+
+  let shape = null, env = 1, scatter = false;
+  if (state.buf){
+    const N = state.N;
+    // playhead in samples since the pluck started (audio time if playing, else perf)
+    let elapsed;
+    if (Snd.ctx && Snd.on && !Snd.muted){ elapsed = Snd.ctx.currentTime - state.startTime; }
+    else { elapsed = (performance.now() - state.playStartPerf) / 1000; }
+    const head = Math.min(state.buf.length - 1, Math.max(N + 1, Math.floor(elapsed * state.sr)));
+    // the local period window [head-N, head]
+    shape = state.buf.subarray(head - N, head + 1);
+    // local peak for autoscale (so a fading tail still shows its shape) + the true envelope
+    env = rms(state.buf, head - N, head + 1);
+    // are we still in the scatter (attack) window? show the raw hiss exploding
+    scatter = performance.now() < (state.scatterUntil || 0);
+    if (elapsed * state.sr > state.buf.length - 2) state.playing = false;
+  }
+
+  // the raw-hiss scatter at the pluck instant (from the actual excitation buffer)
+  if (scatter && state.buf){
+    const N = state.N;
+    const exc = state.buf.subarray(0, N);
+    const pxX = margin + state.p * innerW;
+    rctx.save();
+    const age = Math.max(0, 1 - (performance.now() - (state.scatterUntil - 360)) / 360);
+    rctx.globalAlpha = 0.5 * age;
+    rctx.fillStyle = getCss('--hiss');
+    const npts = 90;
+    for (let i = 0; i < npts; i++){
+      const idx = Math.floor(i / npts * N);
+      const spread = (1 - age) * 60;
+      const x = pxX + (exc[idx]||0) * 60 + (Math.random()-0.5)*spread;
+      const y = midY + (exc[(idx*7)%N]||0) * (RH*0.42) + (Math.random()-0.5)*spread;
+      rctx.fillRect(x, y, 1.6, 1.6);
+    }
+    rctx.restore();
+  }
+
+  // the reed line itself
+  rctx.lineJoin = 'round'; rctx.lineCap = 'round';
+  if (shape && shape.length > 2){
+    // amplitude scale: map the displacement to pixels, with a gentle floor so the
+    // shape stays visible. brightness of the trace fades with the envelope.
+    const peak = Math.max(1e-4, ...Array.from(shape, Math.abs));
+    const amp = Math.min(RH*0.40, RH*0.40);
+    // colour: copper, dimming as the tail decays (the brightness bleeds out)
+    const lit = Math.max(0.18, Math.min(1, env * 6));
+    const trace = getCss('--c');
+    rctx.strokeStyle = trace; rctx.globalAlpha = 0.35 + 0.65*lit;
+    rctx.shadowColor = trace; rctx.shadowBlur = 10*lit;
+    rctx.lineWidth = 2.4;
+    rctx.beginPath();
+    for (let i = 0; i < shape.length; i++){
+      const x = margin + (i/(shape.length-1)) * innerW;
+      const y = midY - (shape[i]/peak) * amp;
+      if (i === 0) rctx.moveTo(x,y); else rctx.lineTo(x,y);
+    }
+    rctx.stroke();
+    rctx.shadowBlur = 0; rctx.globalAlpha = 1;
+  } else {
+    // resting reed — a straight brass line
+    rctx.strokeStyle = 'rgba(217,164,65,.5)'; rctx.lineWidth = 2.2;
+    rctx.beginPath(); rctx.moveTo(margin, midY); rctx.lineTo(RW-margin, midY); rctx.stroke();
+  }
+
+  // the fret-marks below the reed (tap to retune)
+  const fy = RH - 16;
+  rctx.textAlign = 'center'; rctx.font = '600 9px ui-monospace,Menlo,monospace';
+  fretHit.length = 0;
+  for (let i = 0; i < FRETS.length; i++){
+    const fx = margin + (i/(FRETS.length-1)) * innerW;
+    const here = FRETS[i] === semi;
+    rctx.fillStyle = here ? getCss('--brass') : 'rgba(217,164,65,.32)';
+    rctx.beginPath(); rctx.arc(fx, fy, here?4.5:3, 0, Math.PI*2); rctx.fill();
+    rctx.fillStyle = here ? getCss('--brass') : 'rgba(170,160,190,.5)';
+    rctx.fillText(noteName(FRETS[i]), fx, fy+14);
+    fretHit.push({ x:fx, y:fy, semi:FRETS[i] });
+  }
+
+  requestAnimationFrame(reedFrame);
+}
+const fretHit = [];
+// tap a fret-mark to retune (separate from the drag-pluck — a quick tap near the bottom)
+reed.addEventListener('click', e=>{
+  const { x, y } = reedXY(e);
+  if (y < RH - 36) return;                 // only the fret row
+  let best = null, bd = 1e9;
+  for (const f of fretHit){ const d = Math.abs(x - f.x); if (d < bd){ bd = d; best = f; } }
+  if (best && bd < 26){ semi = best.semi; state.N = currentN(); updateReadouts();
+    drag = null;                           // a fret tap is not a pluck
+  }
+});
+
+// ════════════════════════ READOUTS + REVEAL ══════════════════════════════════
+const roNote = document.getElementById('roNote'), roHz = document.getElementById('roHz');
+const roState = document.getElementById('roState'), reveal = document.getElementById('reveal');
+function updateReadouts(){
+  const N = currentN(); const f = state.sr / N;
+  roNote.textContent = noteName(semi);
+  roHz.textContent = f.toFixed(1) + ' Hz  (N=' + N + ')';
+  if (state.g <= 0){
+    roState.textContent = 'g = 0 — raw hiss, no string';
+    roState.className = 'v hiss';
+    reveal.classList.remove('lit');
+    reveal.innerHTML = '<b style="color:var(--hiss)">DECAY is at the floor.</b> The loop never feeds back &mdash; ' +
+      'no echo, no string. You hear (and see) only the one-shot burst of hiss the pluck was made of. ' +
+      'A string is just this hiss, trapped in an echo loop.';
+  } else {
+    roState.textContent = 'g = ' + state.g.toFixed(4) + (state.g > 0.999 ? ' — drone' : (state.g < 0.97 ? ' — plink' : ' — ringing'));
+    roState.className = 'v';
+    if (state.playing || state.buf){
+      reveal.classList.add('lit');
+      reveal.innerHTML = 'The hiss is circling the loop &mdash; each lap the two-tap average shaves the highs, ' +
+        'so the noise <b>self-organizes</b> into a pitched standing wave at <b>' + f.toFixed(1) + ' Hz</b>. ' +
+        'The curve you watch is the very buffer playing.';
+    } else {
+      reveal.classList.remove('lit'); reveal.innerHTML = '&nbsp;';
+    }
+  }
+}
+
+// ════════════════════════ THE KNOBS ══════════════════════════════════════════
+const kDecay = document.getElementById('kDecay'), kBright = document.getElementById('kBright');
+const vDecay = document.getElementById('vDecay'), vBright = document.getElementById('vBright');
+function syncDecay(){ state.g = mapDecay(+kDecay.value / 1000);
+  vDecay.textContent = state.g <= 0 ? '0 (open loop)' : state.g.toFixed(4); updateReadouts(); }
+function syncBright(){ state.b = brightToB(+kBright.value); vBright.textContent = state.b.toFixed(2); }
+kDecay.addEventListener('input', syncDecay);
+kBright.addEventListener('input', syncBright);
+
+// ════════════════════════ BUTTONS + AUDIO SEG ════════════════════════════════
+document.getElementById('btnPluck').addEventListener('click', ()=>{ state.p = 0.5; state.gain = 1; pluck(); });
+window.addEventListener('keydown', e=>{ if (e.key === ' ' && e.target === document.body){ e.preventDefault(); state.p = 0.5; state.gain = 1; pluck(); } });
+
+const segAudio = document.getElementById('segAudio');
+segAudio.addEventListener('click', e=>{
+  const opt = e.target.closest('.opt'); if (!opt) return;
+  const wantOn = opt.dataset.audio === 'on';
+  if (wantOn){ ensureCtx(); if (Snd.ctx && Snd.ctx.state === 'suspended') Snd.ctx.resume(); }
+  Snd.on = wantOn; Snd.muted = !wantOn; writeMutePref(Snd.muted);
+  [...segAudio.children].forEach(o=>o.classList.toggle('on', o===opt));
+});
+window.addEventListener('storage', e=>{ if (e.key!=='ws:pref:muted') return; Snd.muted = readMutePref(); syncAudioUI(); });
+function syncAudioUI(){ if (Snd.muted) Snd.on=false; const showOn=Snd.on&&!Snd.muted;
+  [...segAudio.children].forEach(o=>o.classList.toggle('on', (o.dataset.audio==='on')===showOn)); }
+
+// ════════════════════════ SELF-TEST PILL ════════════════════════════════════
+function runPill(){
+  let r; try{ r = runReedSelfTest(F_HOME, F_ALT, DEFAULT_SR); }catch(e){ console.error('[the-plucked-reed] self-test threw:',e);
+    r = {pass:0,total:1,lines:[{name:'self-test threw',ok:false,detail:String(e)}]}; }
+  const el = document.getElementById('selftest'), txt = document.getElementById('stText');
+  const green = r.pass === r.total;
+  el.classList.toggle('ok',green); el.classList.toggle('bad',!green);
+  txt.textContent = green ? ('a string is hiss in an echo loop ✓ '+r.pass+'/'+r.total) : ('self-test ✗ '+r.pass+'/'+r.total);
+  el.title = r.lines.map(c=>(c.ok?'✓ ':'✗ ')+c.name+(c.detail?'  ('+c.detail+')':'')).join('\n\n');
+  if (!green){ console.error('[the-plucked-reed] SELF-TEST FAILED '+r.pass+'/'+r.total);
+    for (const c of r.lines) if (!c.ok) console.error('  ✗ '+c.name+'  ·  '+c.detail); }
+  else console.log('[the-plucked-reed] self-test '+r.pass+'/'+r.total+' ✓ — the period is sr/N, the fundamental decays at g, the highs die first, g=0 leaves only hiss, and the loop filter can only remove highs. A string is just hiss in an echo loop.');
+  return r;
+}
+document.getElementById('selftest').addEventListener('click', runPill);
+window.__reedSelfTest = runReedSelfTest;
+
+// ════════════════════════ OFFLINE RENDER (Audio Lens hook · silent WAV) ══════
+// Renders the SAME KS recurrence offline at the given N and {g,b,p}, encodes a WAV.
+// The Audio Lens reads it back: detected pitch ≈ sr/N (leg 1), centroid(early) >
+// centroid(late) (leg 3), --clips false (master trim).
+function reedToWAV(N, opts){
+  opts = opts || {};
+  const sr = DEFAULT_SR;
+  const { buf } = renderReed(N, Object.assign({ sr, seconds: 2.0 }, opts));
+  // a gentle master trim + hard limiter so a hard pluck can't clip
+  const peak = Math.max(1e-6, ...Array.from(buf, Math.abs));
+  const norm = Math.min(1, 0.9 / peak);
+  const n = buf.length, ab = new ArrayBuffer(44 + n*2), dv = new DataView(ab);
+  const wr=(o,s)=>{ for(let i=0;i<s.length;i++) dv.setUint8(o+i,s.charCodeAt(i)); };
+  wr(0,'RIFF'); dv.setUint32(4,36+n*2,true); wr(8,'WAVE'); wr(12,'fmt '); dv.setUint32(16,16,true);
+  dv.setUint16(20,1,true); dv.setUint16(22,1,true); dv.setUint32(24,sr,true); dv.setUint32(28,sr*2,true);
+  dv.setUint16(32,2,true); dv.setUint16(34,16,true); wr(36,'data'); dv.setUint32(40,n*2,true);
+  let o=44; for (let i=0;i<n;i++){ let s=Math.max(-1,Math.min(1, buf[i]*norm)); dv.setInt16(o,s<0?s*0x8000:s*0x7fff,true); o+=2; }
+  return new Blob([ab],{type:'audio/wav'});
+}
+// window.__renderReed(N,{g,b,p}) → WAV blob (the verify.sh / audio-lens hook).
+window.__renderReed = function(N, opts){ return Promise.resolve(reedToWAV(N || delayLength(F_HOME), opts || {})); };
+window.__delayLength = delayLength; window.__F_HOME = F_HOME; window.__SR = DEFAULT_SR;
+
+// ════════════════════════ BOOT ══════════════════════════════════════════════
+fitReed();
+syncAudioUI();
+syncDecay(); syncBright();
+updateReadouts();
+runPill();
+requestAnimationFrame(reedFrame);
+window.addEventListener('resize', fitReed);
+</script>
+</body>
+</html>
