@@ -96,6 +96,17 @@ render their pinned room. PRE-WIRE rooms.js BESPOKE (ids→rep-key+repColors per
 dispatch BEFORE the rep foundry; then each rep take ADDS its draw fn + one dispatch line (siblings
 byte-identical). Read the plumbing agent's actual drawRoomRep dispatch + drawGlyphStand signature FIRST.
 
+**PLUMBING ✅ COMMITTED** (`ed22592`, Sela Quillwright): rep-color slots + CM.applyRepColors merge +
+?room= + drawGlyphStand greybox + REP_DRAW dispatch (`var REP_DRAW = {cairn:...}`, fallback
+drawGlyphStand(parent,cx,baseY,pick)). **BESPOKE PRE-WIRED ✅** (`616a9c2`): the 3 reps registered with
+rep-keys cavern-mound/ripple-tank/organ-pipes + per-band repColors (verified the merge tints the
+fallback). **REP FOUNDRY WAVE — RUNNING** (runId **`wf_8e9b2c6c-e42`**, args
+['glyph-stand','cavern-rep','ripple-rep','organpipes-rep'], sequential scene.js). glyph-stand elevates
+the existing drawGlyphStand (K=2); each rep ADDS a new draw fn (drawRepCavern/Ripple/OrganPipes) + ONE
+REP_DRAW entry (K=3). Rendered via ?room=<id> (extraQS threaded through the workflow). ON COMPLETION:
+review each rep via ?room= crops, verify (node --check, forge 97, diffs confined), commit, send. Then
+the foundry "whole set" is DONE. (Re-evaluate rep K after these 4 — Brandon.)
+
 **REMAINING after Wave 4:**
 - PARAMETRIC beauty pass: moon (disc+lit-limb glow+terminator — already decent, light touch), sun;
   asterism stays the earned PLACEHOLDER (do NOT build the eagle — earned-only). Add LIB entries; sky
