@@ -3,7 +3,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════
      RESUME POINTER  (read this first on a fresh/compacted context)
      ═══════════════════════════════════════════════════════════════════════ -->
-## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE — rep set 4/4 + Ripple animated)
+## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE — owner playtested; bugs logged, see NEXT)
 
 **Status:** Phase A blockout LOCKED. Phase B `SPEC.md` **LOCKED + committed**
 (`823f9f3` base + `1b3f9f4` room-rep custom-color slots `rep.swatch1..3`/`rep.glow1..2`,
@@ -126,9 +126,31 @@ is ARCHIVED to `gate-foundry/` (`1727525`) for durability — outside the-gate/,
 
 **═══ FOUNDRY COMPLETE: the full DEFAULT VISIBLE SCENE + the room-rep system + ALL 4 reps (Cairn, Cavern,
 Ripple [animated], Music Room) are shipped + estate-quality. The asset foundry "whole set" is 100% DONE. ═══**
-NEXT — re-evaluate rep K (Brandon's standing request), then PHASE D (interactive layer — see below): the
-click-through cinematic, weather-fx canvas, audio, real moon wiring (sky-core.mjs), earned asterism,
-room-pick rotation (so the bespoke reps actually appear in production, not just via ?room=).
+NEXT — see `the-gate/KNOWN-ISSUES.md` (NEW — the lightweight bug log; formal QA = a dogfood pass in
+Phase D). Priority pickups logged from owner playtest (2026-06-23):
+  • **P1 — scene clips on tall/narrow viewports.** `scene.js:61` uses `preserveAspectRatio:'xMidYMid
+    slice'` (cover) → on ~1:2 portrait only the gate shows, sides clipped. Change to `meet` (contain);
+    mind the letterbox bars (raw --bg vs the day sky — maybe extend sky/ground or style the bars).
+    **This is the first task of the next work block.**
+  • **P2 — Ripple Tank lacks left/right end walls** (water "leaks" — add slim brass end caps).
+Then re-evaluate rep K (Brandon's standing request), then PHASE D (interactive layer — see below).
+
+PARKED for specific phases (owner playtest asks, 2026-06-23):
+  • **Self-test chip** — the scene needs a self-test chip like the other exhibits that PROVES its math
+    (esp. the MOON math). → Phase D (or a dedicated self-test pass).
+  • **Clouds** — yes, deferred to the weather implementation (the `weather-fx` canvas) in Phase D.
+  • **Wind runtime param** — SPEC'd at §5.9 (`none|light|strong`, scene-chosen from weather/random,
+    always blows RIGHT; drives foliage sway; reps MAY opt in — flag flutters, smoke drifts). Build in
+    the animation phase.
+  • **fun-forever foundry** — when the gate lands + we revisit the MAIN LOOP: generalize this foundry
+    into the fun-forever workflow so the loop can build high-quality bespoke assets on demand (room-reps
+    AND e.g. an Aquarium seed foundry-building its own fish instead of sourcing from the internet — fits
+    the estate's soul). → the "update the main loop" phase; revisit when editing
+    `.claude/workflows/fun-forever.js`. Model on the archived `gate-foundry/foundry.workflow.js`.
+
+PHASE D (interactive layer): click-through cinematic, weather-fx canvas (+clouds), audio, real moon
+wiring (sky-core.mjs), earned asterism, foliage+wind sway, room-pick rotation (so the bespoke reps
+appear in production, not just via ?room=), the self-test chip, and a full dogfood QA pass.
 
 **REMAINING after Wave 4:**
 - PARAMETRIC beauty pass: moon (disc+lit-limb glow+terminator — already decent, light touch), sun;

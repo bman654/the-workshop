@@ -550,6 +550,28 @@ palettes (the slots are the shared, bounded channel). 3 swatches + 2 glows is th
 a rep needing more than that should be flagged to the orchestrator (likely a sign it
 wants a fixed estate role instead, like `cavern.maw`).
 
+### 5.9 Wind — a shared runtime param  *(PLANNED — animation phase / Phase D; not yet built)*
+
+A single scene-wide **wind** state drives ambient sway across the frame. Spec'd now so reps are
+built wind-aware; implemented with the animation phase.
+
+- **Levels:** `'none' | 'light' | 'strong'`. The SCENE chooses it (from the weather state — calm
+  in `clear`, light in `cloudy`, strong in `storm` — and/or a little randomness); it is NOT a
+  per-rep choice. Exposed once to draw fns (e.g. `S.wind`) and/or as a `--wind` scalar.
+- **Direction convention (keep it simple):** wind ALWAYS blows to the **right** (+x). Levels scale
+  amplitude/speed only, never direction. A draw fn never has to reason about wind direction.
+- **Primary consumer:** the foliage (trees/bushes) sway — crowns lean/oscillate right by an
+  amplitude set by the level (`none` = still). The hero gate, buildings, and water stay essentially
+  still (heavy/rigid); wind is a grounds-and-flora effect.
+- **Reps MAY opt in** to modulate their own animation by wind when it fits the subject (§2.5.5): a
+  rep with a FLAG flutters harder + streams right in `strong`; a CHIMNEY's smoke drifts right; a
+  weathervane points right; a windmill spins faster. A rep with no wind-sensitive element ignores
+  it. Honor reduced-motion the same way (no wind sway when reduced).
+- **Mechanism note (for the builder):** SMIL can't read a JS value mid-loop, so wind most naturally
+  enters either (a) at BUILD time — the draw fn picks its `<animate>` amplitude/dur from `S.wind`
+  when the scene is built/rebuilt — or (b) via a published `S.refs` handle a small JS driver nudges.
+  Prefer (a) for ambient loops (rebuild on weather change), (b) only if continuous response is needed.
+
 ---
 
 ## 6. Freshness / enrollment
