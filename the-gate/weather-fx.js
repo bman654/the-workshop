@@ -34,10 +34,15 @@
   var VB_W = 1600, VB_H = 900;
   var WIND_STRONG = 3.4;            // == scene.js WIND_AMP.strong (sway peak, deg)
 
-  // ── per-weather cloud cover/darkness targets (eased toward in draw) ──────────
-  var COVER = { clear: 0.0, cloudy: 1.0, storm: 1.0 };
-  var DARK  = { clear: 0.0, cloudy: 0.16, storm: 0.62 };   // dark-belly strength
+  // ── per-weather cloud targets (eased toward in draw). The fleet is TWO tiers:
+  //   tier 0 (base)  — shown for cloudy AND storm
+  //   tier 1 (storm) — shown ONLY for storm → storm has ~2× the clouds of cloudy.
+  // DARK = the dark-belly strength (storm clouds read heavy/grey). ───────────────
+  var BASE_COVER  = { clear: 0.0, cloudy: 1.0, storm: 1.0 };
+  var STORM_COVER = { clear: 0.0, cloudy: 0.0, storm: 1.0 };
+  var DARK        = { clear: 0.0, cloudy: 0.16, storm: 0.62 };
   var BELLY_FILL = '#39414f';       // stormy slate for the cloud underside
+  var N_CLOUDS = 12;                // 6 base + 6 storm-only (interleaved)
 
   // ── module state ────────────────────────────────────────────────────────────
   var S = null;                     // Gate.scene
@@ -46,8 +51,9 @@
   var onFlash = null;               // boot callback(bool) — toggles colormap flash
   var reduced = false;
 
-  var clouds = [];                  // [{g, body, belly, x, baseX, span, y, speed, bob, phase}]
-  var coverCur = 0, coverTgt = 0;   // eased cloud opacity 0..1
+  var clouds = [];                  // [{g, body, belly, tier, x, baseX, span, y, speed, bob, phase}]
+  var baseCur = 0, baseTgt = 0;     // eased opacity of the base-tier clouds
+  var stormCur = 0, stormTgt = 0;   // eased opacity of the storm-only clouds
   var darkCur = 0, darkTgt = 0;     // eased dark-belly 0..1
 
   var drops = [];                   // raindrop pool (CSS-px coords)
@@ -88,7 +94,8 @@
      Build a fixed fleet of soft, lumpy clouds into the SVG clouds layer. Each
      cloud is a cluster of overlapping ellipses: a body in --mist-ref (band-tracked,
      soft via per-ellipse alpha) and a same-shape dark belly that fades in for storm.
-     We control visibility per-weather via group opacity (coverCur/darkCur). */
+     Visibility is per-weather via group opacity, split by tier (base/storm) so storm
+     shows ~2× the clouds of cloudy. */
   function buildClouds() {
     if (!cloudsLayer) return;
     while (cloudsLayer.firstChild) cloudsLayer.removeChild(cloudsLayer.firstChild);
@@ -96,10 +103,13 @@
     var rng = mkRng(8123);
     // spread N clouds across (and a little past) the sky width, in the upper band
     // (well above the horizon line at y≈470 so they never overlap the buildings).
-    var N = 6;
+    // Tiers interleave (i%2): even = base (cloudy+storm), odd = storm-only, so both
+    // states stay evenly spread and storm simply fills in the gaps between cloudy's.
+    var N = N_CLOUDS;
     var margin = 220;                       // off-screen lead-in/out for seamless wrap
     var span = VB_W + margin * 2;
     for (var i = 0; i < N; i++) {
+      var tier = i % 2;                     // 0 = base, 1 = storm-only
       var w = 150 + rng() * 200;            // cloud half-extent-ish
       var h = 34 + rng() * 26;
       var x = -margin + (i + rng() * 0.7) * (span / N);
@@ -133,7 +143,7 @@
       body.style.opacity = '0';
       belly.style.opacity = '0';
       clouds.push({
-        g: g, body: body, belly: belly,
+        g: g, body: body, belly: belly, tier: tier,
         x: x, baseX: x, span: span,
         y: y, speed: speed, bob: 2 + rng() * 3, phase: rng() * Math.PI * 2
       });
@@ -143,16 +153,20 @@
 
   function applyCloudOpacity() {
     for (var i = 0; i < clouds.length; i++) {
-      clouds[i].body.style.opacity = coverCur.toFixed(3);
-      clouds[i].belly.style.opacity = (coverCur * darkCur).toFixed(3);
+      var c = clouds[i];
+      var cover = c.tier === 0 ? baseCur : stormCur;
+      c.body.style.opacity = cover.toFixed(3);
+      c.belly.style.opacity = (cover * darkCur).toFixed(3);
     }
   }
 
   function tickClouds(dt, nowMs) {
     if (!clouds.length) return;
-    // ease cover + dark toward the weather target
-    coverCur += (coverTgt - coverCur) * Math.min(1, dt * 1.8);
-    darkCur += (darkTgt - darkCur) * Math.min(1, dt * 1.8);
+    // ease each tier's cover + the belly darkness toward the weather target
+    var k = Math.min(1, dt * 1.8);
+    baseCur += (baseTgt - baseCur) * k;
+    stormCur += (stormTgt - stormCur) * k;
+    darkCur += (darkTgt - darkCur) * k;
     applyCloudOpacity();
     var drift = reduced ? 0 : (0.55 + windNorm() * 1.9);   // wind speeds the drift
     var t = (nowMs || 0) / 1000;
@@ -318,14 +332,16 @@
     return WFX;
   };
 
-  /* setWeather(w): set the cover/rain targets. Under reduced motion the cloud cover
-     SNAPS (no ease) so overcast reads immediately without animating. */
+  /* setWeather(w): set the per-tier cover + rain targets. Storm lights up BOTH
+     tiers (≈2× cloudy's cloud count); cloudy lights only the base tier. Under
+     reduced motion they SNAP (no ease) so overcast reads immediately. */
   WFX.setWeather = function (w) {
-    coverTgt = COVER[w] != null ? COVER[w] : 0;
+    baseTgt = BASE_COVER[w] != null ? BASE_COVER[w] : 0;
+    stormTgt = STORM_COVER[w] != null ? STORM_COVER[w] : 0;
     darkTgt = DARK[w] != null ? DARK[w] : 0;
     rainTgt = (w === 'storm') ? 1 : 0;
     if (reduced) {
-      coverCur = coverTgt; darkCur = darkTgt; rainCur = rainTgt;
+      baseCur = baseTgt; stormCur = stormTgt; darkCur = darkTgt; rainCur = rainTgt;
       applyCloudOpacity();
     }
   };

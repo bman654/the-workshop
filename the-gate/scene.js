@@ -328,8 +328,14 @@
     var sunG = group('sun', g);
     // dusk → lower toward horizon; day → higher
     var y = band === 'dusk' ? cy + 70 : cy;
-    el('circle', { cx: cx, cy: y, r: r * 2.0, fill: 'var(--sun-disc-ref, #ffe9a8)',
-      opacity: band === 'dusk' ? '0.22' : '0.14', filter: 'url(#glow-soft)' }, sunG);
+    // the soft glow halo only belongs on a BRIGHT sun: the daytime disc. A setting
+    // (dusk) sun is dim, and a storm sun is veiled by cloud — drop the halo in both
+    // so it doesn't bloom unrealistically. (Re-evaluated each recolor / weather flip.)
+    var stormy = Gate.weather && Gate.weather.weather && Gate.weather.weather() === 'storm';
+    if (band !== 'dusk' && !stormy) {
+      el('circle', { cx: cx, cy: y, r: r * 2.0, fill: 'var(--sun-disc-ref, #ffe9a8)',
+        opacity: '0.14', filter: 'url(#glow-soft)' }, sunG);
+    }
     el('circle', { cx: cx, cy: y, r: r, fill: 'var(--sun-disc-ref, #ffe9a8)' }, sunG);
   }
 

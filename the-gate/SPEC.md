@@ -591,16 +591,18 @@ design** (a deliberate split, not an accident):
   overlapping ellipses. Because the layer sits behind far-scenery, clouds obscure ONLY sky +
   sky-objects (layers 1–2) and pass BEHIND the buildings/gate. Tinted with the band-tracking
   `--mist-ref` var (so a recolor reflows them for free — **no palette role added**), plus a
-  same-shape dark-slate belly that fades in for storm. Drift via a per-cloud JS `transform`
-  (the sway technique), speed scaled by the live wind; seamless horizontal wrap.
+  same-shape dark-slate belly that fades in for storm. The fleet is TWO interleaved tiers
+  (base + storm-only) so **storm shows ≈2× the clouds of cloudy**. Drift via a per-cloud JS
+  `transform` (the sway technique), speed scaled by the live wind; seamless horizontal wrap.
 - **Rain + lightning → the foreground `#fx` 2D canvas** (above everything): rain is a particle field
   of streaks that slant right tracking the LIVE wind (`S._windAmp`); intensity eases in/out on a
   weather change. Lightning paints a jagged bolt + fork + a full-canvas sky-glow AND pulses the
   boot's `flash` via an `onFlash` callback → `CM.B` spikes to `1.0` → the dark storm-night estate is
   **revealed for an instant while the lamps/windows still blaze** (the payoff, `colormap.js:7`).
 
-**Weather → effect map:** `clear` = empty sky · `cloudy` = full cloud cover, no rain · `storm` =
-dark heavy clouds + rain + occasional lightning (random 2.6–8s interval).
+**Weather → effect map:** `clear` = empty sky · `cloudy` = base-tier cloud cover, no rain · `storm` =
+~2× the clouds (both tiers), dark + heavy, + rain + occasional lightning (random 2.6–8s interval).
+(The **sun halo** is dropped at dusk and in storm — a setting/veiled sun isn't bright — `drawSun`.)
 
 **Reduced motion (§2.5.5):** clouds still show (overcast still reads) but do NOT drift; NO rain and
 NO lightning flashing (photosensitivity). Single source of truth = `Gate.sequence.prefersReducedMotion`,
