@@ -77,6 +77,9 @@
     try { return root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches; }
     catch (e) { return false; }
   }
+  // exposed so the boot can freeze ambient SMIL (e.g. the Ripple Tank) under
+  // reduced-motion — one source of truth for the media-query check (SPEC §2.5.5).
+  SEQ.prefersReducedMotion = reducedMotion;
 
   /* start(context): begin the sequence.
      context = {
