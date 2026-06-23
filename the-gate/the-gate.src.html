@@ -817,6 +817,9 @@
   <!-- forge:include scene.js -->
   </script>
   <script>
+  <!-- forge:include weather-fx.js -->
+  </script>
+  <script>
   <!-- forge:include sequence.js -->
   </script>
 
@@ -923,6 +926,16 @@
       requestAnimationFrame(tick);
     }
 
+    // lightning flash: weather-fx pulses this on a strike. flash spikes the colormap
+    // brightness to 1.0 (CM.B), so the dark storm-night estate is REVEALED for an
+    // instant while the lamps still blaze — applied INSTANTLY (no crossfade) so it
+    // reads as a lightning pop, then snaps back when the strike's envelope decays.
+    function setFlash(on) {
+      if (on === flash) return;
+      flash = on;
+      paintImmediate();
+    }
+
     // ── wire the gnomon: tap → advance band → recolor ────────────────────────
     Gate.gnomon.bind(S.refs.gnomon, function () { recolor(); });
     // band changes from anywhere also recolor
@@ -937,7 +950,11 @@
     wxButtons.forEach(function (b) {
       b.addEventListener('click', function () { Gate.weather.set(b.getAttribute('data-wx')); });
     });
-    Gate.weather.onChange(function () { syncWx(); recolor(); S.windFromWeather(Gate.weather.weather()); });
+    Gate.weather.onChange(function () {
+      syncWx(); recolor();
+      S.windFromWeather(Gate.weather.weather());
+      if (Gate.weatherfx) Gate.weatherfx.setWeather(Gate.weather.weather());
+    });
     syncWx();
 
     // ── wire the mute chip to the shared estate flag ─────────────────────────
@@ -996,6 +1013,12 @@
     var swayOff = Gate.sequence.prefersReducedMotion && Gate.sequence.prefersReducedMotion();
     // ?smil pins the ambient SVG clock for deterministic render/judge; pin the JS sway too.
     var swayPinned = url.smil != null;
+
+    // ── weather-fx (Phase D): drifting clouds (SVG, behind buildings) + rain +
+    // lightning (foreground #fx canvas). Driven by this same rAF below. Reduced
+    // motion → static clouds, no rain, no flashing (passed through swayOff).
+    Gate.weatherfx.init({ canvas: fx, scene: S, onFlash: setFlash, reduced: swayOff });
+    if (url.flash) Gate.weatherfx.setForceFlash(true);   // dev: hold a strike lit
     function loop(now) {
       requestAnimationFrame(loop);
       if (document.hidden) { last = now; return; }   // idle when backgrounded
@@ -1007,7 +1030,9 @@
       // wind-driven foliage sway (SPEC §5.9). Skipped under reduced-motion; pinned to a
       // fixed phase when ?smil is set so animated renders are reproducible.
       if (!swayOff && S.swayTick) S.swayTick(swayPinned ? url.smil * 1000 : now);
-      // TODO Phase D: weather-fx.draw(fx, dt, band, weather, flash) — rain, lightning, clouds, birds.
+      // weather-fx: clouds drift + rain falls + lightning strikes (reads weather/wind/
+      // band live; pulses `flash` via setFlash on a strike). Pinned phase under ?smil.
+      if (Gate.weatherfx) Gate.weatherfx.draw(dt, swayPinned ? url.smil * 1000 : now);
     }
     requestAnimationFrame(loop);
 

@@ -3,7 +3,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════
      RESUME POINTER  (read this first on a fresh/compacted context)
      ═══════════════════════════════════════════════════════════════════════ -->
-## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + P1/P2 fixed + Phase-D room-rotation & wind-sway shipped; K=4; NEXT = weather-fx / Phase D systems)
+## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + P1/P2 fixed + Phase-D room-rotation, wind-sway & WEATHER-FX shipped; K=4; NEXT = real moon wiring → audio → final polish)
 
 **Status:** Phase A blockout LOCKED. Phase B `SPEC.md` **LOCKED + committed**
 (`823f9f3` base + `1b3f9f4` room-rep custom-color slots `rep.swatch1..3`/`rep.glow1..2`,
@@ -167,30 +167,27 @@ crowns sway less. Reduced-motion → never ticked (upright); `?smil` pins the ph
 Verified headless: a two-phase diff lights up ONLY the tree/bush crowns (+ the ripple's own animation) —
 the gate, manor, observatory, greenhouse, piers, and lamps show ZERO change (rigid per spec).
 
-**NEXT = WEATHER-FX (the big Phase-D piece; START HERE after compaction).** Owner's call (2026-06-23):
-do weather-fx next; defer small touches (self-test chip, etc.) to a final polish pass. Grounding (hooks
-already exist — don't re-derive):
-  • **fx canvas:** `#fx` (2D, `pointer-events:none`, ABOVE the SVG / below UI chrome), sized by
-    `resizeFx()` (DPR-aware: `fx.width/height` in device px). The boot's perpetual rAF has the exact
-    call-site (the `TODO Phase D: weather-fx.draw(fx, dt, band, weather, flash)` line) — currently empty.
-  • **state:** `Gate.weather.weather()` → `clear|cloudy|storm`; `W.isStorm()`; `W.onChange(fn)`.
-  • **wind is LIVE:** read `S._windLevel` / `S._windAmp` so RAIN slants right + CLOUDS drift speed track
-    the wind (storm = strong). Reuse the same reduced-motion guard pattern as sway.
-  • **lightning is half-wired:** `CM.B(band,moonK,weather,flash)` already spikes brightness to 1.0 when
-    `flash`; the boot has the `flash` var + `recolor()`. The lightning driver just PULSES flash=true
-    briefly (+ a canvas bolt/sky-glow) then false → recolor. The "lamps/windows blaze through a dark
-    storm night" payoff (colormap.js:7) is the goal.
-  • **ARCHITECTURE SPLIT:** CLOUDS go in the SVG **clouds layer (layer 3, `S.refs.clouds`, currently
-    empty)** — they obscure only sky/sky-objects, so they sit BEHIND the buildings/gate; drift them via
-    JS transform (like sway). RAIN + lightning bolt/glow go on the FOREGROUND **fx canvas**. Don't put
-    clouds on the fx canvas (it's above everything).
-  • Build it as its own module (e.g. `weather-fx.js`, `Gate.weatherfx`) + a forge include, so it stays
-    out of the load-bearing files; the boot's rAF calls `Gate.weatherfx.draw(...)`. Honor reduced-motion
-    (calm canvas, static/!drift clouds, no flashing). Verify headless per-state (clear/cloudy/storm) +
-    a two-frame diff for motion, same as sway.
+**WEATHER-FX — ✅ SHIPPED (2026-06-23).** New module `weather-fx.js` (`Gate.weatherfx`, forge include
+before sequence.js); boot calls `Gate.weatherfx.draw(dt, nowMs)` from the ONE perpetual rAF. Two
+surfaces by design: **CLOUDS** drift in the SVG clouds layer (`S.refs.clouds`, layer 3) BEHIND the
+buildings — overlapping ellipses tinted with the band-tracking `--mist-ref` var (NO palette role added)
++ a dark belly that fades in for storm; drift via per-cloud JS transform, speed scaled by the live wind.
+**RAIN + LIGHTNING** on the foreground `#fx` canvas: rain streaks slant right tracking `S._windAmp`;
+lightning paints a jagged bolt+fork+sky-glow AND pulses the boot's `flash` (new `setFlash()` → `CM.B`
+spikes to 1.0) so the dark storm-night estate is REVEALED while lamps/windows blaze — the payoff lands.
+Map: clear=empty · cloudy=cover, no rain · storm=dark clouds+rain+lightning. Reduced-motion → static
+clouds, no rain, no flashing. Dev: `?flash` holds a strike lit (added to sequence.parseUrl). Verified
+headless: all 6 states (clear/cloudy/storm × day/night) distinct + correctly layered, the `?flash`
+reveal shot, two-frame diffs prove rain falls + clouds drift. SPEC §5.10 + layer table updated.
 
-REMAINING after weather-fx: real moon wiring (sky-core.mjs), the self-test chip (moon math), audio,
-earned asterism, dogfood QA pass.
+**NEXT (remaining Phase D systems), owner deferred small touches to a final polish pass:**
+  1. **Real moon wiring** — `sky-core.mjs` (geocentric sun-lon + J2000 node math) → `S.setMoonPhase(
+     {illuminatedFraction, litSide})` → `drawMoon`, so the drawn phase matches the user's real date.
+     `S.setMoonPhase` is already the entry point (scene.js); just needs the math module + boot call.
+  2. **Audio** — `audio.js` is stubbed, mute chip wired; build the WebAudio bed (gears/creak/ambient)
+     gated on the opening click + `WS.muted()`.
+  3. **Earned asterism** — the placeholder stays until earned (do NOT build the eagle outright).
+  4. **Final polish pass** — the self-test chip (PROVES the moon math), + small touches; dogfood QA.
 
 PARKED for specific phases (owner playtest asks, 2026-06-23):
   • **Self-test chip** — the scene needs a self-test chip like the other exhibits that PROVES its math

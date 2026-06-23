@@ -60,12 +60,12 @@ draw fn is appended to.
 |---|---|---|---|
 | 1 | `layer-sky` | full-bleed vertical gradient `sky.top→sky.horizon` + starfield | sky gradient (`url(#sky-grad)` rect), `starfield` (90 GLOW dots, top 55% of frame) |
 | 2 | `layer-sky-objects` | the disc + asterism, ABOVE the centered manor | moon (night) OR sun (day/dusk); placeholder asterism (`refreshSkyObjects`) |
-| 3 | `layer-clouds` | **empty group** — when Phase-D clouds land they obscure ONLY layers 1–2 | (clouds, Phase D) |
+| 3 | `layer-clouds` | drifting clouds that obscure ONLY layers 1–2 (behind the buildings) | clouds (`weather-fx.js`; cumulus shown for cloudy/storm, §5.10) |
 | 4 | `layer-far-scenery` | distant buildings + horizon haze | `horizon-mist`, `observatory-rise` (hill+observatory), `manor` |
 | 5 | `layer-midground` | the grass occlusion plane + everything ON it that is BEHIND the forward furniture | grounds (grass rect, grade band, road, two road lamps), foreground apron, trees & bushes |
 | 6 | `layer-furniture` | **forward** grounds furniture, drawn IN FRONT OF the grass plane | greenhouse, cairn room-rep + label, undercroft hatch |
 | 7 | `layer-gate` | the foreground hero frame | gate assembly: leaves, crest, gears, gnomon/sundial, piers+lamps, plaque |
-| — | `#fx` `<canvas>` | FX overlay (rain/lightning/birds) — a sibling CANVAS, NOT an SVG layer | Phase D; owned by the boot HTML (`the-gate.src.html:23,69`) |
+| — | `#fx` `<canvas>` | FX overlay — rain + lightning (a sibling CANVAS above the SVG, NOT an SVG layer) | `weather-fx.js` rain/lightning (§5.10); birds still future |
 | — | UI chrome (HTML) | weather tri-toggle, mute chip, welcome card, overlay | owned by the boot HTML (`the-gate.src.html:29-87`) |
 
 ### 1.3 RULE — the grass plane is the OCCLUSION BOUNDARY
@@ -581,6 +581,33 @@ intensify the sway LIVE without a scene rebuild.
   when the scene is built/rebuilt — or (b) via a published `S.refs` handle a small JS driver nudges.
   Prefer (a) for ambient loops (rebuild on weather change), (b) only if continuous response is needed.
 
+### 5.10 Weather-fx — clouds + rain + lightning  *(BUILT — Phase D, 2026-06-23)*
+
+The atmosphere layer (`weather-fx.js` → `Gate.weatherfx`), driven by the boot's ONE perpetual rAF
+(`Gate.weatherfx.draw(dt, nowMs)` each frame). A weather toggle ramps it LIVE. **Two surfaces by
+design** (a deliberate split, not an accident):
+
+- **Clouds → the SVG clouds layer** (`S.refs.clouds`, layer 3): drifting lumpy cumulus built from
+  overlapping ellipses. Because the layer sits behind far-scenery, clouds obscure ONLY sky +
+  sky-objects (layers 1–2) and pass BEHIND the buildings/gate. Tinted with the band-tracking
+  `--mist-ref` var (so a recolor reflows them for free — **no palette role added**), plus a
+  same-shape dark-slate belly that fades in for storm. Drift via a per-cloud JS `transform`
+  (the sway technique), speed scaled by the live wind; seamless horizontal wrap.
+- **Rain + lightning → the foreground `#fx` 2D canvas** (above everything): rain is a particle field
+  of streaks that slant right tracking the LIVE wind (`S._windAmp`); intensity eases in/out on a
+  weather change. Lightning paints a jagged bolt + fork + a full-canvas sky-glow AND pulses the
+  boot's `flash` via an `onFlash` callback → `CM.B` spikes to `1.0` → the dark storm-night estate is
+  **revealed for an instant while the lamps/windows still blaze** (the payoff, `colormap.js:7`).
+
+**Weather → effect map:** `clear` = empty sky · `cloudy` = full cloud cover, no rain · `storm` =
+dark heavy clouds + rain + occasional lightning (random 2.6–8s interval).
+
+**Reduced motion (§2.5.5):** clouds still show (overcast still reads) but do NOT drift; NO rain and
+NO lightning flashing (photosensitivity). Single source of truth = `Gate.sequence.prefersReducedMotion`,
+passed to `WFX.init({reduced})`. **Dev:** `?flash` holds a strike lit (deterministic payoff shot).
+
+> Still open (future polish, NOT built): rain splashes/ripples on the ground, birds/owls.
+
 ---
 
 ## 6. Freshness / enrollment
@@ -699,9 +726,9 @@ perf (~60fps via `window.__gateFps`; clean console; zero network).
 This spec covers the STATIC composition + the palette/lighting/draw-fn/freshness/dev
 contracts. The following are finalized in Phase D and get only a "beauty pass" note here:
 
-- **weather-fx** — the `#fx` `<canvas>`: rain/ripples/splashes, lightning bloom (spikes
-  `B→1.0`), clouds (occlude ONLY sky + sky-objects, layers 1–2), birds/owls, tree sway.
-  The canvas + the single perpetual rAF loop exist and idle (`the-gate.src.html:939-965`).
+- **weather-fx** — ✅ BUILT 2026-06-23 (§5.10): drifting clouds (SVG clouds layer, behind buildings),
+  wind-slanted rain + lightning bloom (spikes `B→1.0`) on the `#fx` canvas, tree sway (§5.9).
+  Still future polish: rain splashes/ripples on the ground, birds/owls.
 - **audio** — the WebAudio engine (gears/creak/ambient bed) gated on the opening click +
   `WS.muted()`; `audio.js` is stubbed, the mute chip is wired.
 - **real moon-phase wiring** — `sky-core.mjs` (forked geocentric sun-lon math, J2000 Node

@@ -19,7 +19,10 @@ animations must be sampled at different phases at once.
 ### P3 — reduced-motion freeze is logic-verified, not emulation-tested
 The reduced-motion fix is gated on `matchMedia('(prefers-reduced-motion: reduce)')` and reuses
 the proven `pauseAnimations()` path, but it wasn't screenshot-confirmed under emulated reduced
-motion. Verify on a machine with "Reduce motion" enabled (the ripple should sit still).
+motion. Verify on a machine with "Reduce motion" enabled (the ripple should sit still). The same
+applies to the Phase-D motion (foliage sway §5.9, weather-fx clouds/rain/lightning §5.10): all share
+the one `Gate.sequence.prefersReducedMotion()` gate and are logic-verified, not emulation-tested —
+expected under reduce: clouds shown but static, no rain, no lightning flashing, crowns upright.
 
 ---
 

@@ -68,7 +68,10 @@
       // ?smil=<seconds> — freeze the SVG animation clock at a fixed time, so an
       // animated rep can be rendered/judged at chosen phases of its loop (headless
       // --virtual-time-budget does NOT advance SMIL; setCurrentTime does).
-      smil: (q.smil != null && q.smil !== '' && !isNaN(+q.smil)) ? Math.max(0, +q.smil) : null
+      smil: (q.smil != null && q.smil !== '' && !isNaN(+q.smil)) ? Math.max(0, +q.smil) : null,
+      // ?flash — dev pin: hold a lightning strike LIT so the storm-night reveal
+      // payoff (the whole estate flashing into view) can be screenshotted statically.
+      flash: ('flash' in q) && q.flash !== '0' && q.flash !== 'false'
     };
     return out;
   };
