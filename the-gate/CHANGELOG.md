@@ -50,8 +50,11 @@ SendUserFile that wave's renders, then launch the next wave):
 - Wave 1 (PILOT) — the brass gate + clockwork, K=4. I JUDGE the render myself: pass →
   continue; fail → STOP + post for Brandon.
 - Wave 2 — heroes: manor, observatory+rise (K=4 each).
-- Wave 3 — supporting (K=2): greenhouse, trees(+sway), bushes, undercroft hatch, the Cairn
-  rep, the Glyph Stand; PLUS a blind essence-survey to pick 3 room-reps → build those 3.
+- Wave 3 — supporting (K=2): greenhouse, trees(+sway), bushes, undercroft hatch, the Glyph
+  Stand. ROOM-REPS at **K=3** (Brandon: they're the trickiest — recognizable yet estate-
+  styled; start at 3, may bump to 4 like the heroes; EVALUATE after the first 4 reps = the
+  Cairn + the 3 survey winners, then tweak K up/down): build the Cairn rep + run a blind
+  essence-survey to pick 3 reps → build those 3 at K=3.
 - Wave 4 — minor (direct-to-spec): grounds/grass, road, foreground apron, horizon mist, sky
   gradient + stars; system visuals (moon disc + lit-limb glow + terminator; brass asterism).
 - Phase D (later): weather-fx (rain/lightning/clouds/birds), audio, real moon wiring,
