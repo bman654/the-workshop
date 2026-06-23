@@ -3,7 +3,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════
      RESUME POINTER  (read this first on a fresh/compacted context)
      ═══════════════════════════════════════════════════════════════════════ -->
-## ▶ RESUME POINTER — current state (2026-06-23, foundry running)
+## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE — rep set 4/4 + Ripple animated)
 
 **Status:** Phase A blockout LOCKED. Phase B `SPEC.md` **LOCKED + committed**
 (`823f9f3` base + `1b3f9f4` room-rep custom-color slots `rep.swatch1..3`/`rep.glow1..2`,
@@ -105,17 +105,28 @@ drawGlyphStand(parent,cx,baseY,pick)). **BESPOKE PRE-WIRED ✅** (`616a9c2`): al
 brass cartouche plinth, universal fallback), Cavern rep (rocky mound + teal cave glow, physics-lab),
 Ripple Tank rep (water tray + ripples, ripple). Each via rep.swatch*/rep.glow* slots + a REP_DRAW entry.
 
-**⚠️ ORGAN-PIPES (sound-garden) — DEFERRED (org MONTHLY SPEND LIMIT hit mid-wave).** All 3 takes failed
-on quota; nothing written → sound-garden safely FALLS BACK to the elevated Glyph Stand (violet-tinted via
-its repColors — a valid, dignified state). It's the ONLY remaining foundry item. WHEN QUOTA RESETS, run:
-`Workflow({scriptPath:'/tmp/gate-foundry/foundry.workflow.js', args:['organpipes-rep']})` — the LIB entry
-+ rooms.js BESPOKE sound-garden→organ-pipes + repColors are ALL already in place; the take just ADDS
-drawRepOrganPipes(parent,cx,baseY,pick) + a `'organ-pipes': …` REP_DRAW entry, rendered via
-?room=sound-garden. Review/commit per protocol → then the foundry "whole set" is 100% DONE.
+**ORGAN-PIPES (sound-garden) — ✅ SHIPPED** (`c969f0b`, wave wf_235cd455-bd1): the Music Room rep — a
+tallest-center cathedral of 7 graduated brass tubes (open bored mouths + flue mouths), fanned conical
+feet, a keyboard manual across the carved-wood console, and a lit VIOLET stop-knob (rep.glow1) that
+blazes at night + recedes by day. Synth grafted Take 1's iconic silhouette + Take 3's recognizability
+cues (open mouths, keydesk). Confined to drawRepOrganPipes + one REP_DRAW line; forge 97.
 
-**═══ FOUNDRY STATUS: the full DEFAULT VISIBLE SCENE is complete + estate-quality, and the room-rep
-system + 3 of 4 reps are shipped. Only organ-pipes remains (quota-deferred). ═══**
-After organ-pipes: re-evaluate rep K (Brandon), then PHASE D (interactive layer — see below): the
+**RIPPLE TANK — now ANIMATED** (`bc0618b`): the rings EMANATE (ambient SMIL wavefront — born → scale
+outward → fade at the rim, staggered for one continuous front; breathing drop-pip; clipped to the water
+plane; non-scaling-stroke keeps crests delicate). Added a reusable dev pin **`?smil=<seconds>`** (pauses
++ seeks the SVG animation clock) so animated assets can be rendered/judged across their loop — headless
+`--virtual-time-budget` does NOT advance SMIL; `setCurrentTime` does.
+
+**SPEC AMENDMENT — animation is now first-class** (`1928d8f`): §2.5.5 allows + ENCOURAGES ambient
+animation where it fits the room (self-contained SMIL, quiet/secondary, lit-correct every frame,
+seamless, reduced-motion-safe). Folded into the §8 judging bar + documented `?room=`/`?smil=` in §7.
+The foundry smith/judge/synth prompts were updated to match (smiths may animate + render smil phases;
+judges view the motion frames + reward fitting motion, penalize gratuitous motion). The foundry harness
+is ARCHIVED to `gate-foundry/` (`1727525`) for durability — outside the-gate/, forge still 97 files.
+
+**═══ FOUNDRY COMPLETE: the full DEFAULT VISIBLE SCENE + the room-rep system + ALL 4 reps (Cairn, Cavern,
+Ripple [animated], Music Room) are shipped + estate-quality. The asset foundry "whole set" is 100% DONE. ═══**
+NEXT — re-evaluate rep K (Brandon's standing request), then PHASE D (interactive layer — see below): the
 click-through cinematic, weather-fx canvas, audio, real moon wiring (sky-core.mjs), earned asterism,
 room-pick rotation (so the bespoke reps actually appear in production, not just via ?room=).
 
