@@ -60,6 +60,10 @@
     background-clip:text; color:transparent; }
   #welcome .sub{ color:var(--muted); font-size:clamp(15px,2.2vw,19px); font-style:italic;
     max-width:560px; margin:0 auto; line-height:1.55; }
+  /* the outro is reader-paced (≈10s) — this pulsing cue invites a click to continue early */
+  #welcome .cta{ margin-top:1.9em; font:600 12px/1 var(--mono); letter-spacing:.28em;
+    text-transform:uppercase; color:var(--muted); }
+  #welcome.in .cta{ animation:splash-pulse 2.6s ease-in-out 1.8s infinite; }
 
   /* ── TITLE SPLASH — the founding myth, the cover of the experience ───────────
      The visitor meets the THREE WORDS before the place: a near-black card that
@@ -134,6 +138,7 @@
       <div class="mark">The Orrery Estate</div>
       <h1>Welcome to the Orrery Estate</h1>
       <div class="sub">Built under a Hand the makers feel but never see — it guides; it does not dictate.</div>
+      <div class="cta">enter the estate →</div>
     </div>
 
     <!-- TITLE SPLASH — the founding myth (production entry only; the boot removes it in dev).
@@ -10240,7 +10245,7 @@ if (typeof globalThis !== 'undefined') {
    The journey (description.md):
      black → fade-in 2s → IDLE (gates closed, interactive)
        → on gate click: gears turn 2.5s → gates swing outward 2.5s
-       → fade to black 2s → welcome card holds 3s → navigate to ../index.html
+       → fade to black 2s → welcome card holds 10s (or click/key to continue) → navigate to ../index.html
 
    prefers-reduced-motion: collapse the animations (snap, short holds) but STILL
    navigate. Calls WS.seen('the-gate') on entry to IDLE.
@@ -10271,7 +10276,7 @@ if (typeof globalThis !== 'undefined') {
   var SEQ = {};
 
   // timings (ms) — real even though greybox art is rough.
-  var T_FADEIN = 2000, T_GEARS = 2500, T_SWING = 2500, T_FADEOUT = 2000, T_WELCOME = 3000;
+  var T_FADEIN = 2000, T_GEARS = 2500, T_SWING = 2500, T_FADEOUT = 2000, T_WELCOME = 10000;
 
   var phase = 'boot';        // boot|fadein|idle|gears|swing|fadeout|welcome|done
   var clicked = false;
@@ -10378,7 +10383,7 @@ if (typeof globalThis !== 'undefined') {
       fireAudio('onGears'); fireAudio('onStopGears'); fireAudio('onSwing');
       if (Gate.scenegate) { Gate.scenegate.spinGears(2, S); Gate.scenegate.swing(1, S); }
       phase = 'fadeout';
-      fadeOut(300, function () { showWelcome(900, navigate); });
+      fadeOut(300, function () { showWelcome(T_WELCOME, navigate); });
       return;
     }
 
@@ -10398,7 +10403,7 @@ if (typeof globalThis !== 'undefined') {
         // 3) fade to black (2s)
         phase = 'fadeout';
         fadeOut(T_FADEOUT, function () {
-          // 4) welcome card holds 3s → navigate
+          // 4) welcome card holds T_WELCOME (or a click/key continues early) → navigate
           showWelcome(T_WELCOME, navigate);
         });
       });
@@ -10428,7 +10433,25 @@ if (typeof globalThis !== 'undefined') {
       ctx.welcomeEl.style.display = 'flex';
       raf2(function () { ctx.welcomeEl.classList.add('in'); });
     }
-    setTimeout(done, holdMs);
+    // hold for the reader, then navigate — but let an impatient visitor click the
+    // card (or press Enter/Space/Escape) to continue early. Fires exactly once.
+    var left = false, timer = null, onKey = null;
+    function leave() {
+      if (left) return;
+      left = true;
+      if (timer) clearTimeout(timer);
+      if (ctx.welcomeEl) ctx.welcomeEl.removeEventListener('click', leave);
+      root.removeEventListener('keydown', onKey);
+      done();
+    }
+    onKey = function (ev) {
+      if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar' || ev.key === 'Escape') {
+        ev.preventDefault(); leave();
+      }
+    };
+    timer = setTimeout(leave, holdMs);
+    if (ctx.welcomeEl) ctx.welcomeEl.addEventListener('click', leave);
+    root.addEventListener('keydown', onKey);
   }
 
   function navigate() {

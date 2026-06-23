@@ -5,6 +5,15 @@
      ═══════════════════════════════════════════════════════════════════════ -->
 ## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + Phase-D room-rotation, wind-sway, WEATHER-FX, owner-playtest fixes/polish, real MOON-PHASE WIRING + **AUDIO (procedural WebAudio voice)** all shipped; K=4; NEXT = the **earned-asterism runtime pick** + Phase-D beauty passes — see §9)
 
+**OUTRO PACING — ✅ SHIPPED (2026-06-23, owner feedback):** the welcome/outro card auto-hold tripled
+`3000 → 10000 ms` (a fast reader couldn't finish it at 3 s), and it is now SKIPPABLE — a click on the
+card OR Enter/Space/Escape continues to `../index.html` immediately (the `showWelcome` setTimeout is
+paired with one-shot click + keydown handlers that clear it; fires exactly once via a `left` guard). A
+pulsing **"ENTER THE ESTATE →"** cue (`#welcome .cta`) invites the click. The same readable hold now also
+applies to the reduced-motion collapse path (was 900 ms). VERIFIED over served HTTP: forged
+`T_WELCOME = 10000`; at ~7.8 s into the open the card is still up showing the cue, and a click navigates
+to `/index.html`. forge `--check --all` = 97 current.
+
 **ENTRY SPLASH RE-SOULED — the founding myth — ✅ SHIPPED (2026-06-23, owner request):** the production
 title card no longer shows the estate NAME — it opens on the FOUNDING MYTH so the visitor meets the words
 before the place. A near-black card reads itself in beat-by-beat (CSS `splash-rise` stagger: lead → words

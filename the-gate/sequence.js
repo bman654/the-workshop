@@ -5,7 +5,7 @@
    The journey (description.md):
      black → fade-in 2s → IDLE (gates closed, interactive)
        → on gate click: gears turn 2.5s → gates swing outward 2.5s
-       → fade to black 2s → welcome card holds 3s → navigate to ../index.html
+       → fade to black 2s → welcome card holds 10s (or click/key to continue) → navigate to ../index.html
 
    prefers-reduced-motion: collapse the animations (snap, short holds) but STILL
    navigate. Calls WS.seen('the-gate') on entry to IDLE.
@@ -36,7 +36,7 @@
   var SEQ = {};
 
   // timings (ms) — real even though greybox art is rough.
-  var T_FADEIN = 2000, T_GEARS = 2500, T_SWING = 2500, T_FADEOUT = 2000, T_WELCOME = 3000;
+  var T_FADEIN = 2000, T_GEARS = 2500, T_SWING = 2500, T_FADEOUT = 2000, T_WELCOME = 10000;
 
   var phase = 'boot';        // boot|fadein|idle|gears|swing|fadeout|welcome|done
   var clicked = false;
@@ -143,7 +143,7 @@
       fireAudio('onGears'); fireAudio('onStopGears'); fireAudio('onSwing');
       if (Gate.scenegate) { Gate.scenegate.spinGears(2, S); Gate.scenegate.swing(1, S); }
       phase = 'fadeout';
-      fadeOut(300, function () { showWelcome(900, navigate); });
+      fadeOut(300, function () { showWelcome(T_WELCOME, navigate); });
       return;
     }
 
@@ -163,7 +163,7 @@
         // 3) fade to black (2s)
         phase = 'fadeout';
         fadeOut(T_FADEOUT, function () {
-          // 4) welcome card holds 3s → navigate
+          // 4) welcome card holds T_WELCOME (or a click/key continues early) → navigate
           showWelcome(T_WELCOME, navigate);
         });
       });
@@ -193,7 +193,25 @@
       ctx.welcomeEl.style.display = 'flex';
       raf2(function () { ctx.welcomeEl.classList.add('in'); });
     }
-    setTimeout(done, holdMs);
+    // hold for the reader, then navigate — but let an impatient visitor click the
+    // card (or press Enter/Space/Escape) to continue early. Fires exactly once.
+    var left = false, timer = null, onKey = null;
+    function leave() {
+      if (left) return;
+      left = true;
+      if (timer) clearTimeout(timer);
+      if (ctx.welcomeEl) ctx.welcomeEl.removeEventListener('click', leave);
+      root.removeEventListener('keydown', onKey);
+      done();
+    }
+    onKey = function (ev) {
+      if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar' || ev.key === 'Escape') {
+        ev.preventDefault(); leave();
+      }
+    };
+    timer = setTimeout(leave, holdMs);
+    if (ctx.welcomeEl) ctx.welcomeEl.addEventListener('click', leave);
+    root.addEventListener('keydown', onKey);
   }
 
   function navigate() {
