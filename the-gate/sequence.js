@@ -64,7 +64,11 @@
       wx: (['clear', 'cloudy', 'storm'].indexOf(q.wx) >= 0) ? q.wx : null,
       seed: (q.seed != null && q.seed !== '' && !isNaN(+q.seed)) ? (+q.seed) : null,
       undercroft: ('undercroft' in q) && q.undercroft !== '0' && q.undercroft !== 'false',
-      room: q.room || null
+      room: q.room || null,
+      // ?smil=<seconds> — freeze the SVG animation clock at a fixed time, so an
+      // animated rep can be rendered/judged at chosen phases of its loop (headless
+      // --virtual-time-budget does NOT advance SMIL; setCurrentTime does).
+      smil: (q.smil != null && q.smil !== '' && !isNaN(+q.smil)) ? Math.max(0, +q.smil) : null
     };
     return out;
   };

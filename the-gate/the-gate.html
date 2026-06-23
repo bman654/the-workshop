@@ -5835,47 +5835,57 @@
     var srcX = cx - 14;                                  // drop point, slightly left of centre
     var srcY = (frontTopY + backTopY) / 2 + 4;          // mid plane, a touch forward
     var ringClip = 'url(#ripple-water-clip)';
-    // Spacing WIDENS outward (a believable wavefront slows + spreads) and opacity
-    // decays steeper toward the rim so the rings fade into the water near the edge
-    // (judge fix: feather + outward-decay so they read legible-at-centre, soft-at-rim).
-    var rings = [
-      { rx: 13, op: 0.52 },
-      { rx: 24, op: 0.42 },
-      { rx: 36, op: 0.32 },
-      { rx: 49, op: 0.22 },
-      { rx: 63, op: 0.13 },
-      { rx: 78, op: 0.07 }
-    ];
+    // The rings RIPPLE: each crest is BORN at the strike point, scales outward, and
+    // fades into the water at the rim — staggered begins give one continuous wavefront.
+    // Built as ambient SMIL so the tank ripples with NO JS tick (S.refs.rippleRep stays
+    // the Phase-D handle if a richer engine ever wants to drive it). Foreshortening is
+    // preserved under scale because ry = rx·squash scales uniformly; non-scaling-stroke
+    // keeps the crest lines delicate at every radius.
     var squash = 0.34;                                   // vertical foreshorten of the rings
-    for (var ri = 0; ri < rings.length; ri++) {
-      var rg = rings[ri];
-      // a thin DARK trough riding just OUTSIDE each crest — gives the ring relief at
-      // DAY brightness (graft idea from take 3's trough ring) so crests aren't flat.
-      el('ellipse', { cx: fx(srcX), cy: fx(srcY), rx: fx(rg.rx + 1.4), ry: fx((rg.rx + 1.4) * squash),
+    var RP = 3.6;                                        // ripple period (s)
+    var NR = 5;                                          // rings in flight at once
+    var BASE = 52;                                       // un-scaled crest radius (scaled sF→eF)
+    var sF = 0.12, eF = 1.55;                            // birth / rim scale factors
+    // a centred shimmer-crest arc (the upper lit arc) at radius BASE — scales with its ring
+    var aL = -BASE * 0.78, aR = BASE * 0.78, aY = -BASE * squash * 0.62;
+    var arcD = 'M ' + fx(aL) + ' ' + fx(aY) + ' A ' + fx(BASE) + ' ' + fx(BASE * squash) +
+               ' 0 0 1 ' + fx(aR) + ' ' + fx(aY);
+    // clip stays on an UNTRANSFORMED wrapper so the water-trapezoid clip is in absolute
+    // coords; the strike point is the moving origin for the rings + pip nested inside it.
+    var clipWrap = el('g', { 'clip-path': ringClip }, g);
+    var rsrc = el('g', { transform: 'translate(' + fx(srcX) + ' ' + fx(srcY) + ')' }, clipWrap);
+    for (var ri = 0; ri < NR; ri++) {
+      var begin = fx(ri * (RP / NR)) + 's';
+      var rgrp = el('g', {}, rsrc);
+      // dark trough just outside the crest — relief at DAY brightness
+      el('ellipse', { cx: 0, cy: 0, rx: fx(BASE + 1.6), ry: fx((BASE + 1.6) * squash),
         fill: 'none', stroke: 'rgba(0,0,0,.30)', 'stroke-width': '0.9',
-        opacity: fx(rg.op * 0.55), 'clip-path': ringClip }, g);
-      // the ring body — a thin lighter wave crest (water highlight)
-      el('ellipse', { cx: fx(srcX), cy: fx(srcY), rx: fx(rg.rx), ry: fx(rg.rx * squash),
-        fill: 'none', stroke: WLITE, 'stroke-width': '1.5', opacity: rg.op,
-        'clip-path': ringClip }, g);
-      // a faint emissive caustic shimmer riding the UPPER (lit) arc of each ring,
-      // brightest at the strike and decaying outward (per-ring crest highlight).
-      var crestOp = fx(rg.op * (1.05 - ri * 0.06));
-      el('path', { d: 'M ' + fx(srcX - rg.rx * 0.78) + ' ' + fx(srcY - rg.rx * squash * 0.62) +
-        ' A ' + fx(rg.rx) + ' ' + fx(rg.rx * squash) + ' 0 0 1 ' +
-        fx(srcX + rg.rx * 0.78) + ' ' + fx(srcY - rg.rx * squash * 0.62),
-        fill: 'none', stroke: SHIM, 'stroke-width': fx(1.2 - ri * 0.08), opacity: crestOp,
-        'clip-path': ringClip, filter: 'url(#ripple-shimmer)' }, g);
+        'vector-effect': 'non-scaling-stroke' }, rgrp);
+      // the lighter wave crest (water highlight)
+      el('ellipse', { cx: 0, cy: 0, rx: fx(BASE), ry: fx(BASE * squash),
+        fill: 'none', stroke: WLITE, 'stroke-width': '1.5',
+        'vector-effect': 'non-scaling-stroke' }, rgrp);
+      // emissive caustic shimmer riding the upper lit arc
+      el('path', { d: arcD, fill: 'none', stroke: SHIM, 'stroke-width': '1.1',
+        'vector-effect': 'non-scaling-stroke', filter: 'url(#ripple-shimmer)' }, rgrp);
+      // grow the wavefront outward (eased), forever
+      el('animateTransform', { attributeName: 'transform', type: 'scale',
+        values: sF + ';' + eF, dur: RP + 's', begin: begin, repeatCount: 'indefinite',
+        calcMode: 'spline', keySplines: '0.25 0.1 0.35 1' }, rgrp);
+      // born-bright, then fade into the water at the rim
+      el('animate', { attributeName: 'opacity', values: '0;0.55;0.16;0',
+        keyTimes: '0;0.12;0.7;1', dur: RP + 's', begin: begin, repeatCount: 'indefinite' }, rgrp);
     }
-    // the bright drop point itself — a hot caustic pip where the wave is born.
-    // A pooled soft bloom under the strike (graft from take 1's hotter source +
-    // take 2's pooled glow) so the instrument reads vividly LIT at night.
-    el('ellipse', { cx: fx(srcX), cy: fx(srcY), rx: 8.5, ry: 8.5 * squash,
-      fill: SHIM, opacity: '0.34', 'clip-path': ringClip, filter: 'url(#ripple-shimmer)' }, g);
-    el('ellipse', { cx: fx(srcX), cy: fx(srcY), rx: 3.6, ry: 3.6 * squash,
-      fill: SHIM, opacity: '0.95', 'clip-path': ringClip, filter: 'url(#ripple-shimmer)' }, g);
-    el('ellipse', { cx: fx(srcX), cy: fx(srcY), rx: 1.5, ry: 1.5 * squash,
-      fill: '#eafffb', opacity: '0.6', 'clip-path': ringClip }, g);
+    // the bright drop point — a hot caustic pip where each wave is born, breathing in
+    // time with the emanation (pooled bloom + hot pip + white spark).
+    var pip = el('g', { transform: 'translate(' + fx(srcX) + ' ' + fx(srcY) + ')' }, clipWrap);
+    el('ellipse', { cx: 0, cy: 0, rx: 8.5, ry: fx(8.5 * squash),
+      fill: SHIM, opacity: '0.34', filter: 'url(#ripple-shimmer)' }, pip);
+    el('ellipse', { cx: 0, cy: 0, rx: 3.6, ry: fx(3.6 * squash),
+      fill: SHIM, opacity: '0.95', filter: 'url(#ripple-shimmer)' }, pip);
+    el('ellipse', { cx: 0, cy: 0, rx: 1.5, ry: fx(1.5 * squash), fill: '#eafffb', opacity: '0.6' }, pip);
+    el('animate', { attributeName: 'opacity', values: '0.62;1;0.62',
+      keyTimes: '0;0.12;1', dur: RP + 's', begin: '0s', repeatCount: 'indefinite' }, pip);
 
     // ════════════ FAR RIM — the back wall lip behind the water (brass) ═══════════
     el('path', { d: 'M ' + fx(farL - 4) + ' ' + fx(backTopY - 4) +
@@ -6762,7 +6772,11 @@
       wx: (['clear', 'cloudy', 'storm'].indexOf(q.wx) >= 0) ? q.wx : null,
       seed: (q.seed != null && q.seed !== '' && !isNaN(+q.seed)) ? (+q.seed) : null,
       undercroft: ('undercroft' in q) && q.undercroft !== '0' && q.undercroft !== 'false',
-      room: q.room || null
+      room: q.room || null,
+      // ?smil=<seconds> — freeze the SVG animation clock at a fixed time, so an
+      // animated rep can be rendered/judged at chosen phases of its loop (headless
+      // --virtual-time-budget does NOT advance SMIL; setCurrentTime does).
+      smil: (q.smil != null && q.smil !== '' && !isNaN(+q.smil)) ? Math.max(0, +q.smil) : null
     };
     return out;
   };
@@ -6944,6 +6958,16 @@
     // ── build the scene ──────────────────────────────────────────────────────
     paintImmediate();                 // set vars BEFORE first paint (no flash of unstyled)
     S.build(host);
+
+    // ?smil=<seconds> — freeze the SVG animation clock at a fixed phase so an animated
+    // rep can be rendered/judged at chosen points of its loop (headless
+    // --virtual-time-budget does NOT advance SMIL; setCurrentTime does). Dev-only.
+    if (url.smil != null) {
+      var svgRoot = host.querySelector('svg');
+      if (svgRoot && svgRoot.pauseAnimations) {
+        try { svgRoot.pauseAnimations(); svgRoot.setCurrentTime(url.smil); } catch (e) {}
+      }
+    }
 
     // crossfade helper used by gnomon + weather changes
     var cancelFade = null;
