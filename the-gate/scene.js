@@ -33,6 +33,8 @@
 
   var NS = 'http://www.w3.org/2000/svg';
   var VB_W = 1600, VB_H = 900;
+  var GROUND_TOP = 470;                  // the grass-plane line (SPEC §1.3 occlusion boundary)
+  var HORIZON_FRAC = GROUND_TOP / VB_H;  // 0.522 — used to anchor the letterbox backdrop
   S.VB_W = VB_W; S.VB_H = VB_H;
 
   /* ── tiny SVG helpers ─────────────────────────────────────────────────────── */
@@ -58,7 +60,11 @@
     var svg = el('svg', {
       id: 'gate-svg',
       viewBox: '0 0 ' + VB_W + ' ' + VB_H,
-      preserveAspectRatio: 'xMidYMid slice',
+      // CONTAIN (not cover): honor the 16:9 scene aspect and NEVER clip it
+      // off-screen. On an off-aspect viewport (e.g. a tall 1:2 portrait window) the
+      // whole scene stays visible, letterboxed; #stage paints sky/ground-toned bars
+      // behind the bars so they continue the scene instead of showing a raw frame.
+      preserveAspectRatio: 'xMidYMid meet',
       width: '100%', height: '100%'
     }, host);
     S.refs.svg = svg;
@@ -115,6 +121,34 @@
     S.refreshSkyObjects();
 
     return svg;
+  };
+
+  /* ── fitStageBackdrop(stageEl): seamless letterbox bars ─────────────────────────
+     The scene SVG is shown with preserveAspectRatio "xMidYMid meet" (contain) so it
+     NEVER clips off-screen — but on an off-aspect viewport it letterboxes, and the
+     bars would otherwise expose a raw page-bg frame. We paint #stage with a backdrop
+     that EXACTLY extends the scene's own sky/ground PAST the scene rectangle:
+       • solid sky.top above the scene's top edge (a portrait window's top bar),
+       • the sky gradient (sky.top→sky.horizon) from the scene top down to the grass
+         line, matching the side bars of an ultrawide window,
+       • solid grass from the grass line to the bottom (a portrait window's lower bar).
+     Colors are band-resolved var() refs, so a recolor reflows the bars for free; only
+     the px breakpoints depend on viewport size, so the boot recalls this on resize. */
+  S.fitStageBackdrop = function (stageEl) {
+    if (!stageEl) return;
+    var W = stageEl.clientWidth || VB_W, H = stageEl.clientHeight || VB_H;
+    var scale = Math.min(W / VB_W, H / VB_H);   // "meet" = fit the whole scene
+    var rH = VB_H * scale;                       // rendered scene height (px)
+    var topY = Math.max(0, (H - rH) / 2);        // scene's top edge in viewport px
+    var horY = topY + HORIZON_FRAC * rH;         // grass-plane line in viewport px
+    function c(role) { return 'var(' + dashName(role) + ',var(--bg))'; }
+    stageEl.style.background =
+      'linear-gradient(to bottom,' +
+        c('sky.top') + ' 0,' +
+        c('sky.top') + ' ' + topY.toFixed(1) + 'px,' +
+        c('sky.horizon') + ' ' + horY.toFixed(1) + 'px,' +
+        c('grass') + ' ' + horY.toFixed(1) + 'px,' +
+        c('grass') + ' 100%)';
   };
 
   /* ── defs: the sky gradient + a soft glow filter for emissives ──────────────── */
@@ -359,7 +393,7 @@
     var ROAD  = 'var(--road-ref, #5a5f6a)';
     var STONE = 'var(--stone-ref, #6a7079)';
     var BRI   = 'var(--brass-bright-ref, #f0d489)';
-    var groundTop = 470;
+    var groundTop = GROUND_TOP;
 
     // ════ THE GRASS PLANE — the HARD occlusion boundary (SPEC §1.3). A full-width,
     //   FULL-OPACITY fill x0..1600 / y470..900 hiding the manor/observatory bases. ════

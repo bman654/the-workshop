@@ -3,7 +3,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════
      RESUME POINTER  (read this first on a fresh/compacted context)
      ═══════════════════════════════════════════════════════════════════════ -->
-## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE — owner playtested; bugs logged, see NEXT)
+## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + P1 contain-fix shipped; NEXT = P2 ripple walls)
 
 **Status:** Phase A blockout LOCKED. Phase B `SPEC.md` **LOCKED + committed**
 (`823f9f3` base + `1b3f9f4` room-rep custom-color slots `rep.swatch1..3`/`rep.glow1..2`,
@@ -126,13 +126,16 @@ is ARCHIVED to `gate-foundry/` (`1727525`) for durability — outside the-gate/,
 
 **═══ FOUNDRY COMPLETE: the full DEFAULT VISIBLE SCENE + the room-rep system + ALL 4 reps (Cairn, Cavern,
 Ripple [animated], Music Room) are shipped + estate-quality. The asset foundry "whole set" is 100% DONE. ═══**
-NEXT — see `the-gate/KNOWN-ISSUES.md` (NEW — the lightweight bug log; formal QA = a dogfood pass in
-Phase D). Priority pickups logged from owner playtest (2026-06-23):
-  • **P1 — scene clips on tall/narrow viewports.** `scene.js:61` uses `preserveAspectRatio:'xMidYMid
-    slice'` (cover) → on ~1:2 portrait only the gate shows, sides clipped. Change to `meet` (contain);
-    mind the letterbox bars (raw --bg vs the day sky — maybe extend sky/ground or style the bars).
-    **This is the first task of the next work block.**
+NEXT — see `the-gate/KNOWN-ISSUES.md` (the lightweight bug log; formal QA = a dogfood pass in Phase D).
+  • **P1 — scene clips on tall/narrow viewports — ✅ FIXED (`<this commit>`, 2026-06-23).** Switched the
+    scene SVG to `preserveAspectRatio:'xMidYMid meet'` (contain) so it NEVER clips off-screen. The
+    letterbox bars are made SEAMLESS by `S.fitStageBackdrop()` (scene.js): it paints #stage with a
+    backdrop that extends the scene's own sky/ground past the scene rect — solid sky.top above, the sky
+    gradient down to the grass line, solid grass below — anchored to the actual letterbox rect (recomputed
+    on resize), colors = band-resolved var() refs so recolor reflows them. Verified at 1:2 portrait,
+    2.67:1 ultrawide, and 16:9 (full-bleed, unchanged); bars are indistinguishable from the scene.
   • **P2 — Ripple Tank lacks left/right end walls** (water "leaks" — add slim brass end caps).
+    **← now the priority pickup.** `scene.js drawRepRipple`.
 Then re-evaluate rep K (Brandon's standing request), then PHASE D (interactive layer — see below).
 
 PARKED for specific phases (owner playtest asks, 2026-06-23):

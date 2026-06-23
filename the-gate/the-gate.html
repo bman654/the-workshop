@@ -16,8 +16,19 @@
   html,body{ margin:0; height:100%; background:var(--bg); color:var(--ink);
     font-family:var(--serif); -webkit-font-smoothing:antialiased; overflow:hidden; }
 
-  /* the stage holds the SVG scene + the FX canvas + the UI chrome */
-  #stage{ position:fixed; inset:0; background:var(--bg); }
+  /* the stage holds the SVG scene + the FX canvas + the UI chrome. Its background
+     MIRRORS the scene's vertical composition — the sky gradient (sky.top→sky.horizon)
+     full-height, with a grass block over the bottom ~48% (the grass plane starts at
+     y470 of the 900-tall viewBox). The scene SVG uses preserveAspectRatio "meet"
+     (contain), so on an off-aspect viewport it letterboxes; these stage bars then
+     CONTINUE the scene's sky/ground colors seamlessly — top/bottom bars on a portrait
+     window, left/right bars on an ultrawide one — instead of exposing a raw --bg frame.
+     The vars are the band-resolved dash aliases the colormap writes onto #stage, so the
+     bars track day/dusk/night; --bg is only the pre-paint fallback. */
+  #stage{ position:fixed; inset:0;
+    background:
+      linear-gradient(var(--grass-ref,var(--bg)), var(--grass-ref,var(--bg))) bottom/100% 48% no-repeat,
+      linear-gradient(180deg, var(--sky-top-ref,var(--bg)) 0%, var(--sky-horizon-ref,var(--bg)) 100%); }
   #scene-host{ position:absolute; inset:0; }
   #scene-host svg{ display:block; width:100%; height:100%; }
   /* the FX canvas overlay (rain/lightning/birds later) — empty this pass */
@@ -4642,6 +4653,8 @@
 
   var NS = 'http://www.w3.org/2000/svg';
   var VB_W = 1600, VB_H = 900;
+  var GROUND_TOP = 470;                  // the grass-plane line (SPEC §1.3 occlusion boundary)
+  var HORIZON_FRAC = GROUND_TOP / VB_H;  // 0.522 — used to anchor the letterbox backdrop
   S.VB_W = VB_W; S.VB_H = VB_H;
 
   /* ── tiny SVG helpers ─────────────────────────────────────────────────────── */
@@ -4667,7 +4680,11 @@
     var svg = el('svg', {
       id: 'gate-svg',
       viewBox: '0 0 ' + VB_W + ' ' + VB_H,
-      preserveAspectRatio: 'xMidYMid slice',
+      // CONTAIN (not cover): honor the 16:9 scene aspect and NEVER clip it
+      // off-screen. On an off-aspect viewport (e.g. a tall 1:2 portrait window) the
+      // whole scene stays visible, letterboxed; #stage paints sky/ground-toned bars
+      // behind the bars so they continue the scene instead of showing a raw frame.
+      preserveAspectRatio: 'xMidYMid meet',
       width: '100%', height: '100%'
     }, host);
     S.refs.svg = svg;
@@ -4724,6 +4741,34 @@
     S.refreshSkyObjects();
 
     return svg;
+  };
+
+  /* ── fitStageBackdrop(stageEl): seamless letterbox bars ─────────────────────────
+     The scene SVG is shown with preserveAspectRatio "xMidYMid meet" (contain) so it
+     NEVER clips off-screen — but on an off-aspect viewport it letterboxes, and the
+     bars would otherwise expose a raw page-bg frame. We paint #stage with a backdrop
+     that EXACTLY extends the scene's own sky/ground PAST the scene rectangle:
+       • solid sky.top above the scene's top edge (a portrait window's top bar),
+       • the sky gradient (sky.top→sky.horizon) from the scene top down to the grass
+         line, matching the side bars of an ultrawide window,
+       • solid grass from the grass line to the bottom (a portrait window's lower bar).
+     Colors are band-resolved var() refs, so a recolor reflows the bars for free; only
+     the px breakpoints depend on viewport size, so the boot recalls this on resize. */
+  S.fitStageBackdrop = function (stageEl) {
+    if (!stageEl) return;
+    var W = stageEl.clientWidth || VB_W, H = stageEl.clientHeight || VB_H;
+    var scale = Math.min(W / VB_W, H / VB_H);   // "meet" = fit the whole scene
+    var rH = VB_H * scale;                       // rendered scene height (px)
+    var topY = Math.max(0, (H - rH) / 2);        // scene's top edge in viewport px
+    var horY = topY + HORIZON_FRAC * rH;         // grass-plane line in viewport px
+    function c(role) { return 'var(' + dashName(role) + ',var(--bg))'; }
+    stageEl.style.background =
+      'linear-gradient(to bottom,' +
+        c('sky.top') + ' 0,' +
+        c('sky.top') + ' ' + topY.toFixed(1) + 'px,' +
+        c('sky.horizon') + ' ' + horY.toFixed(1) + 'px,' +
+        c('grass') + ' ' + horY.toFixed(1) + 'px,' +
+        c('grass') + ' 100%)';
   };
 
   /* ── defs: the sky gradient + a soft glow filter for emissives ──────────────── */
@@ -4968,7 +5013,7 @@
     var ROAD  = 'var(--road-ref, #5a5f6a)';
     var STONE = 'var(--stone-ref, #6a7079)';
     var BRI   = 'var(--brass-bright-ref, #f0d489)';
-    var groundTop = 470;
+    var groundTop = GROUND_TOP;
 
     // ════ THE GRASS PLANE — the HARD occlusion boundary (SPEC §1.3). A full-width,
     //   FULL-OPACITY fill x0..1600 / y470..900 hiding the manor/observatory bases. ════
@@ -6961,6 +7006,9 @@
     // ── build the scene ──────────────────────────────────────────────────────
     paintImmediate();                 // set vars BEFORE first paint (no flash of unstyled)
     S.build(host);
+    // contain (meet) letterboxes on off-aspect viewports → paint seamless sky/ground
+    // bars onto #stage that extend the scene past its rect (recomputed on resize).
+    S.fitStageBackdrop(sceneRoot);
 
     // ?smil=<seconds> — freeze the SVG animation clock at a fixed phase so an animated
     // rep can be rendered/judged at chosen points of its loop (headless
@@ -7079,6 +7127,7 @@
       fx.height = Math.floor(fx.clientHeight * DPR);
     }
     window.addEventListener('resize', resizeFx);
+    window.addEventListener('resize', function () { S.fitStageBackdrop(sceneRoot); });
     resizeFx();
 
     function loop(now) {

@@ -11,20 +11,11 @@ issues + risks worth *remembering* across sessions. Severity: **P1** breaks/look
 
 ## Open
 
-### P1 — Scene scales with "cover", clips the sides on tall/narrow viewports
-`scene.js:61` sets `preserveAspectRatio: 'xMidYMid slice'` (cover: fills the viewport,
-overflow clipped). On a ~1:2 portrait window the FIRST open shows only the gate — the manor,
-observatory, greenhouse, lamps, and the room-rep slot are all clipped off-screen. **Want:
-"contain"** — honor the scene's 16:9 aspect, never clip it off-screen. Fix is `slice` → `meet`.
-*Consideration:* `meet` letterboxes on off-aspect viewports, exposing the page `--bg` (#080a0f)
-as bars — fine against the dark sky at night, but check day (light sky vs near-black bars);
-may want to extend the sky/ground fill or style the bars rather than leave raw `--bg`.
-**This is the priority pickup for the next work block.**
-
 ### P2 — Ripple Tank has front + back walls but no visible LEFT/RIGHT walls
 The water tray reads as containing water on the near/far faces but the sides are open — it's a
 mystery why the water doesn't run out onto the grass. Add slim brass-edged left/right end walls
 (or end caps) so the tray reads as a fully-enclosed vessel. `scene.js drawRepRipple`.
+**Now the priority pickup.**
 
 ### P3 — `?smil=` pauses ALL SMIL globally (by design, noted)
 `svg.pauseAnimations()` is document-wide, so `?smil=` freezes every SMIL animation, not just the
@@ -50,6 +41,16 @@ earn bespoke reps, the emoji fallback naturally retires. The four bespoke reps a
 ---
 
 ## Resolved
+
+### P1 — Scene scaled with "cover", clipped the sides on tall/narrow viewports *(fixed 2026-06-23)*
+`scene.js` now sets `preserveAspectRatio: 'xMidYMid meet'` (contain): the whole 16:9 scene stays
+visible on any viewport, never clipped. The letterbox bars are made SEAMLESS by `S.fitStageBackdrop()`
+— it paints `#stage` with a backdrop that extends the scene's own sky/ground PAST the scene rect
+(solid sky.top above the scene, the sky gradient down to the grass line, solid grass below), anchored
+to the actual letterbox rectangle and recomputed on resize. Colors are the band-resolved `var()` dash
+aliases (`--sky-top-ref`/`--sky-horizon-ref`/`--grass-ref`) the colormap already writes on `#stage`, so
+a recolor reflows the bars for free. Verified at 1:2 portrait, 2.67:1 ultrawide, and 16:9 (full-bleed,
+unchanged) — the bars are indistinguishable from the scene in every band. `scene.js` · `the-gate.src.html` boot.
 
 ### P3 — Ripple loop reads well at day/dusk/night *(confirmed 2026-06-23, owner)*
 Owner viewed all three bands; the loop reads cleanly in each (emissive shimmer recedes by day as
