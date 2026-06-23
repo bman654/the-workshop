@@ -17,6 +17,8 @@
    Refs published for the sequence animation (UNCHANGED interface):
      S.refs.leftLeaf, S.refs.rightLeaf  — the swinging <g> groups (vertical hinges,
        foreshorten via scaleX about the OUTER pier edge),
+     S.refs.seamFollow — the seam ornaments (gears + gnomon + plaque) that RIDE the
+       right leaf on open (same foreshorten, pinned to the right hinge),
      S.refs.gears (spinning gear cluster), S.refs.gnomon (#gnomon-target tap target).
    ═══════════════════════════════════════════════════════════════════════════ */
 (function (root) {
@@ -417,12 +419,25 @@
     S.refs.leftLeaf = leftLeaf;
     S.refs.rightLeaf = rightLeaf;
 
-    // central clockwork gear-train straddling the SEAM (child of the assembly).
+    // ── seam ornaments RIDE the right leaf ──────────────────────────────────
+    // The gear-train, gnomon, and plaque are mounted at the seam. They must swing
+    // open WITH a door, not hang floating in the gap. We park them in a follow
+    // group that gets the SAME foreshorten transform as the right leaf (swing()).
+    // Its transform-origin is pinned to the right hinge in view-box coords so the
+    // pivot matches the leaf exactly, regardless of the group's own bounding box —
+    // and because the gears keep their OWN inner rotate (spin), the spin and the
+    // swing compose cleanly (parent foreshorten × child rotate).
+    var seamFollow = S.group('gate-seam', g);
+    seamFollow.style.transformBox = 'view-box';
+    seamFollow.style.transformOrigin = RIGHT_HINGE + 'px ' + TOP + 'px';   // 1128,232
+    S.refs.seamFollow = seamFollow;
+
+    // central clockwork gear-train straddling the SEAM (rides the right leaf).
     // GY nudges the whole cluster DOWN so the train clears the manor's lower
     // window band (judges' fix (a)) while staying clear of the plaque below.
     var GY = 16;
     var driverY = 470 + GY;
-    var gears = S.group('gears', g);
+    var gears = S.group('gears', seamFollow);
     drawGear(S, gears, CX, driverY, 72, 22);    // big driver
     // ── self-lit SUN-GEAR at the heart of the driver (the orrery payoff, grafted
     //    from Take 3). EMISSIVE FLAME role → BLAZES at night, recedes in day via
@@ -443,9 +458,14 @@
     gears.style.transformOrigin = '50% 50%';
     S.refs.gears = gears;
 
-    // the SUNDIAL gnomon among the gears (tap → time-of-day)
-    var gnomon = drawGnomon(S, g, CX - 2, 632);
+    // the SUNDIAL gnomon among the gears (tap → time-of-day); rides the right leaf
+    var gnomon = drawGnomon(S, seamFollow, CX - 2, 632);
     S.refs.gnomon = gnomon;
+
+    // the plaque — also a seam ornament, so it rides the right leaf with the gears.
+    // (Drawn here, INTO the follow group, before the crest/piers; it doesn't overlap
+    // them, so the visible stacking is unchanged from drawing it last.)
+    drawPlaque(S, seamFollow);
 
     // the ornate arched CREST across the seam (static crown)
     drawCrest(S, g);
@@ -454,9 +474,6 @@
     // the lamp-globes sit clearly on top)
     drawPier(S, g, LEFT_PIER_CX);
     drawPier(S, g, RIGHT_PIER_CX);
-
-    // the plaque (in front)
-    drawPlaque(S, g);
 
     return g;
   };
@@ -469,6 +486,10 @@
     var skew = 4 * f;
     if (S.refs.leftLeaf)  S.refs.leftLeaf.style.transform  = 'scaleX(' + sx.toFixed(4) + ') skewY(' + (skew).toFixed(2) + 'deg)';
     if (S.refs.rightLeaf) S.refs.rightLeaf.style.transform = 'scaleX(' + sx.toFixed(4) + ') skewY(' + (-skew).toFixed(2) + 'deg)';
+    // the seam ornaments (gears + gnomon + plaque) ride the RIGHT leaf: same
+    // foreshorten, same pivot (right hinge) — so they swing open with the door
+    // instead of floating in the gap. Their own inner transforms (gear spin) compose.
+    if (S.refs.seamFollow) S.refs.seamFollow.style.transform = 'scaleX(' + sx.toFixed(4) + ') skewY(' + (-skew).toFixed(2) + 'deg)';
   };
 
   /* ── spinGears(turns): rotate the gear cluster by `turns` revolutions. ─────── */

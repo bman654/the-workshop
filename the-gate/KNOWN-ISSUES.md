@@ -39,6 +39,25 @@ earn bespoke reps, the emoji fallback naturally retires. The four bespoke reps a
 
 ## Resolved
 
+### P1 — Clicking the gnomon opened the gate instead of changing time *(fixed 2026-06-23, owner playtest)*
+The `#gate-hit` div (`position:absolute; inset:0`) sat ABOVE the scene SVG with default pointer-events,
+so it swallowed every click — the gnomon's own SVG handler never fired, and `onGateClick`'s
+"ignore the gnomon" guard could never match (its event target was always `#gate-hit`, never an SVG
+element). Fix: `#gate-hit { pointer-events:none }` so clicks fall through to the scene SVG, whose
+`onGateClick` (with the correct `gnomon-target`/`.chip` guard) owns the open trigger while the gnomon's
+handler advances time + `stopPropagation()`s. Cursor hint moved to `#scene-host`. Verified with real
+coordinate clicks (agent-browser): gnomon click advances day→dusk→night with the gate staying closed;
+clicking the gate body still runs the open sequence. `the-gate.src.html` CSS.
+
+### P1 — Gears + plaque left floating when the gate opens *(fixed 2026-06-23, owner playtest)*
+The gear-train, gnomon, and plaque are mounted at the seam but were children of the assembly (not a
+leaf), so when the leaves foreshortened open they hung floating in the gap. Fix: a `gate-seam` follow
+group now holds gears + gnomon + plaque and rides the RIGHT leaf — `swing()` gives it the SAME
+`scaleX/skewY` foreshorten, with a `transform-box:view-box` origin pinned to the right hinge so the
+pivot matches the leaf regardless of bbox. The gears keep their own inner `rotate` (spin), so spin and
+swing compose cleanly. Verified via `?scene=open`: ornaments compress into the right door, center opens
+to reveal the manor; closed state unchanged. `scene-gate.js drawGate` + `swing`.
+
 ### P2 — Ripple Tank had front + back walls but no visible LEFT/RIGHT walls *(fixed 2026-06-23)*
 The water tray's left/right water edges met the grass directly, so the water looked like it would
 spill off the open sides. `drawRepRipple` now draws brass-edged SIDE RIM strips running from the back
