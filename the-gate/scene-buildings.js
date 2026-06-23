@@ -588,18 +588,36 @@
      ground in front for the undercroft hatch. A dimensional glasshouse, not a
      flat decal. Palette: frame=greenhouse.frame, panes=greenhouse.glass; a faint
      warm window.lit interior glow at night. */
+  /* ── TAKE 1 — "The Vinery." A small jewel-box Victorian glasshouse seen at 3/4:
+     a low STONE STALL WALL grounds it, slim brass glazing bars catch the top light,
+     translucent jewel panes glint with the sky, a brass RIDGE CRESTING runs the
+     prism with little spike finials at both ends, and a turned BRASS CORNER POST
+     marks the near 3/4 edge. At night a warm PLANT-GLOW fills the lower glass with
+     a brighter lantern pip down low. Compact + quiet — clearly a utility building
+     secondary to the manor — but finely wrought in the estate's black-and-brass
+     idiom, lit from above.
+
+     Geometry is BYTE-faithful to the loved 3/4 silhouette (same SC / ncx / baseY /
+     frontW / sideRun / sideRise / gable rise) — only the RENDERING is elevated.
+     Swappable: greenhouse.frame / greenhouse.glass / stone. Brass: brass.stroke /
+     brass.bright. Emissive: window.lit (interior glow + a low pip). */
   B.drawGreenhouse = function (parent, S) {
     var g = S.group('greenhouse', parent);
-    var FR = 'var(--greenhouse-frame-ref, #222a30)';
-    var GL = 'var(--greenhouse-glass-ref, #5a7280)';
+    var FR     = 'var(--greenhouse-frame-ref, #222a30)';   // swappable frame
+    var GL     = 'var(--greenhouse-glass-ref, #5a7280)';   // swappable glass
+    var STONE  = 'var(--stone-ref, #6a7079)';              // swappable stall wall
+    var BRASS  = 'var(--brass-stroke-ref, #9c8350)';
+    var BRIGHT = 'var(--brass-bright-ref, #cdb375)';
+    var GLOW   = 'var(--window-lit-ref, #ffcf73)';
+    var TONE   = 'rgba(11,14,22,.85)';                     // estate brass DARK body
+    var SOFT   = 'url(#glow-soft)';
 
     // ── box corners (a 3/4 projection: front face square-on, side wall sheared
     // up-and-right with perspective foreshortening). Near vertical corner is the
-    // edge shared by both faces; the front face is to its LEFT, side wall RIGHT. ──
-    // SCALED DOWN (SC) but the SHAPE is preserved EXACTLY — every dimension is the
-    // same proportion as before, just × SC — so the owner's loved 3/4 silhouette is
-    // unchanged, only smaller. Anchored slightly lower + forward-right so its TOP
-    // (gable apex) sits clearly BELOW the manor roofline → it reads as SECONDARY.
+    // edge shared by both faces; the front face is to its LEFT, side wall RIGHT.
+    // SHAPE preserved EXACTLY (same proportions × SC) so the loved 3/4 silhouette
+    // is unchanged. Anchored low + forward-right so its gable apex sits clearly
+    // BELOW the manor roofline → it reads as SECONDARY. ──
     var SC = 0.66;
     var ncx = 1372, baseY = 600;      // NEAR corner foot (the closest point)
     var wallH = 132 * SC;             // eave height at the near corner
@@ -613,80 +631,230 @@
     var sFx = ncx + sideRun, sFy = baseY - sideRise;
     var sEaveY = sFy - sideH;
 
-    // ── SIDE WALL (recedes back-right) — drawn first (behind the front face) ──
+    // the low stall-wall course height (the masonry the glazing stands on)
+    var stallH = 30 * SC;             // near-corner stall height
+    var fStallY = baseY - stallH;     // front-face stall top
+    var sStallNearY = baseY - stallH; // side stall top at near corner
+    var sStallFarY  = sFy - stallH * 0.78; // side stall top at far corner (foreshortened)
+    var gh = (fEaveY + baseY) / 2;    // front mid-rail height
+
+    // helpers ----------------------------------------------------------------
+    // a translucent jewel pane: a soft glass fill + (optional) a bright sky-glint
+    // wedge in its upper-left so the surface reads as GLASS catching the sky.
+    function pane(d, op, glint, gd) {
+      S.el('path', { d: d, fill: GL, opacity: op }, g);
+      if (glint) {
+        S.el('path', { d: gd, fill: BRIGHT, opacity: '0.10' }, g);
+      }
+    }
+
+    // ════ SIDE WALL (recedes back-right) — drawn first (behind the front face) ═══
     var sideD = 'M ' + ncx + ' ' + baseY +
       ' L ' + ncx + ' ' + fEaveY +
       ' L ' + sFx + ' ' + sEaveY +
       ' L ' + sFx + ' ' + sFy + ' Z';
-    S.el('path', { d: sideD, fill: GL, opacity: '0.55', stroke: FR, 'stroke-width': '1.4' }, g);
+    pane(sideD, '0.50', false);
+    // a bright sky-glint sheet over the UPPER side glass (top-lit, recedes downward)
+    S.el('path', { d: 'M ' + ncx + ' ' + fEaveY +
+      ' L ' + sFx + ' ' + sEaveY +
+      ' L ' + sFx + ' ' + (sEaveY + sideH * 0.42) +
+      ' L ' + ncx + ' ' + (fEaveY + wallH * 0.42) + ' Z',
+      fill: BRIGHT, opacity: '0.07' }, g);
+    S.el('path', { d: sideD, fill: 'none', stroke: FR, 'stroke-width': '1.4' }, g);
 
-    // ── FRONT GABLE FACE ──
-    var frontD = 'M ' + fL + ' ' + baseY +
-      ' L ' + fL + ' ' + fEaveY +
-      ' L ' + ncx + ' ' + fEaveY +
-      ' L ' + ncx + ' ' + baseY + ' Z';
-    S.el('path', { d: frontD, fill: GL, opacity: '0.7', stroke: FR, 'stroke-width': '1.6' }, g);
-
-    // ── GABLE TRIANGLE on the front face (the pitched glass end) ──
+    // ════ ROOF — back gable end first, then the two pitched planes ══════════════
     var ridgeFrontX = (fL + ncx) / 2;          // ridge apex above the front face
     var ridgeApexY = fEaveY - 52 * SC;         // gable rise scaled with the rest
-    var gableD = 'M ' + fL + ' ' + fEaveY +
-      ' L ' + ridgeFrontX + ' ' + ridgeApexY +
-      ' L ' + ncx + ' ' + fEaveY + ' Z';
-    S.el('path', { d: gableD, fill: GL, opacity: '0.62', stroke: FR, 'stroke-width': '1.6' }, g);
-
-    // ── RIDGE ROOF PLANE (recedes back-right in perspective) ──
     var ridgeBackX = ridgeFrontX + sideRun, ridgeBackY = ridgeApexY - sideRise;
+    // back gable end (a faint glass triangle so the ridge reads as a closed prism)
+    pane('M ' + sFx + ' ' + sEaveY + ' L ' + ridgeBackX + ' ' + ridgeBackY +
+      ' L ' + sFx + ' ' + sFy + ' Z', '0.42', false);
+    // RIDGE ROOF PLANE (recedes back-right in perspective) — the UP-facing slope
+    // catches the most sky-light, so it is the brightest pane.
     var roofD = 'M ' + ridgeFrontX + ' ' + ridgeApexY +
       ' L ' + ridgeBackX + ' ' + ridgeBackY +
       ' L ' + sFx + ' ' + sEaveY +
       ' L ' + ncx + ' ' + fEaveY + ' Z';
-    S.el('path', { d: roofD, fill: GL, opacity: '0.5', stroke: FR, 'stroke-width': '1.4' }, g);
-    // far gable end of the roof (back triangle, faint) so the ridge reads as a prism
-    S.el('path', { d: 'M ' + sFx + ' ' + sEaveY + ' L ' + ridgeBackX + ' ' + ridgeBackY +
-      ' L ' + (sFx) + ' ' + sEaveY + ' Z', fill: 'none', stroke: FR, 'stroke-width': '1' }, g);
+    pane(roofD, '0.46', false);
+    // top-lit roof glaze sheet (the sky reflection sliding down the slope)
+    S.el('path', { d: 'M ' + ridgeFrontX + ' ' + ridgeApexY +
+      ' L ' + ridgeBackX + ' ' + ridgeBackY +
+      ' L ' + (ridgeBackX + (sFx - ridgeBackX) * 0.5) + ' ' + (ridgeBackY + (sEaveY - ridgeBackY) * 0.5) +
+      ' L ' + (ridgeFrontX + (ncx - ridgeFrontX) * 0.5) + ' ' + (ridgeApexY + (fEaveY - ridgeApexY) * 0.5) + ' Z',
+      fill: BRIGHT, opacity: '0.10' }, g);
+    S.el('path', { d: roofD, fill: 'none', stroke: FR, 'stroke-width': '1.2' }, g);
 
-    // ── GLAZING BARS ──
-    // front face verticals
+    // ════ FRONT GABLE FACE ══════════════════════════════════════════════════════
+    var frontD = 'M ' + fL + ' ' + baseY +
+      ' L ' + fL + ' ' + fEaveY +
+      ' L ' + ncx + ' ' + fEaveY +
+      ' L ' + ncx + ' ' + baseY + ' Z';
+    pane(frontD, '0.66', false);
+    // a bright sky-glint band across the UPPER front glass (top-lit)
+    S.el('path', { d: 'M ' + fL + ' ' + fEaveY + ' L ' + ncx + ' ' + fEaveY +
+      ' L ' + ncx + ' ' + (fEaveY + wallH * 0.30) + ' L ' + fL + ' ' + (fEaveY + wallH * 0.30) + ' Z',
+      fill: BRIGHT, opacity: '0.08' }, g);
+    S.el('path', { d: frontD, fill: 'none', stroke: FR, 'stroke-width': '1.5' }, g);
+
+    // ════ FRONT GABLE TRIANGLE (the pitched glass end above the eave) ═══════════
+    var gableD = 'M ' + fL + ' ' + fEaveY +
+      ' L ' + ridgeFrontX + ' ' + ridgeApexY +
+      ' L ' + ncx + ' ' + fEaveY + ' Z';
+    pane(gableD, '0.58', false);
+    // a sky-glint on the up-left half of the gable
+    S.el('path', { d: 'M ' + fL + ' ' + fEaveY + ' L ' + ridgeFrontX + ' ' + ridgeApexY +
+      ' L ' + ridgeFrontX + ' ' + fEaveY + ' Z', fill: BRIGHT, opacity: '0.09' }, g);
+    S.el('path', { d: gableD, fill: 'none', stroke: FR, 'stroke-width': '1.5' }, g);
+    // GRAFT (take 2, rendered CRISP): a gable SUNBURST MUNTIN SPIDER fanning from the
+    // apex — proper brass-stroke bars radiating down into the tympanum, each with a
+    // bright top glint up its up-facing side so the fan-light reads as forged brass,
+    // not the faint scratchy thin lines take 2 shipped. Anchored at the apex springing.
+    var spX = ridgeFrontX, spY = ridgeApexY + 1.5;          // fan hub just below the apex
+    var spR = (fEaveY - ridgeApexY) * 0.92;                 // spoke reach toward the eave
+    var spokes = [-0.62, -0.31, 0, 0.31, 0.62];             // five even rays
+    for (var sp = 0; sp < spokes.length; sp++) {
+      var sa = spokes[sp];
+      var ex = spX + Math.sin(sa) * spR;
+      var ey = spY + Math.cos(sa) * spR;
+      // crisp brass spoke
+      S.el('line', { x1: spX, y1: spY, x2: ex, y2: ey, stroke: BRASS, 'stroke-width': '1', opacity: '0.85' }, g);
+      // a thin bright top-lit glint up the spoke's up-facing side
+      S.el('line', { x1: spX, y1: spY - 0.7, x2: ex, y2: ey - 0.7, stroke: BRIGHT, 'stroke-width': '0.5', opacity: '0.5' }, g);
+    }
+    // a small brass hub knop where the spider's rays converge (top-lit)
+    S.el('circle', { cx: spX, cy: spY, r: 1.5, fill: TONE, stroke: BRASS, 'stroke-width': '0.8' }, g);
+    S.el('circle', { cx: spX - 0.5, cy: spY - 0.5, r: 0.7, fill: BRIGHT, opacity: '0.9' }, g);
+
+    // ════ GLAZING BARS — slim brass muntins, the up-facing edge brass-bright ════
+    // front face verticals (dark muntin + a thin bright left-edge = lit from above)
     var fbars = 4;
     for (var i = 1; i < fbars; i++) {
       var bx = fL + i * (frontW / fbars);
-      S.el('line', { x1: bx, y1: fEaveY, x2: bx, y2: baseY, stroke: FR, 'stroke-width': '1' }, g);
+      S.el('line', { x1: bx, y1: fEaveY, x2: bx, y2: fStallY, stroke: FR, 'stroke-width': '1.2' }, g);
+      S.el('line', { x1: bx - 0.7, y1: fEaveY, x2: bx - 0.7, y2: fStallY,
+        stroke: BRIGHT, 'stroke-width': '0.6', opacity: '0.5' }, g);
     }
-    // front face mid rail
-    S.el('line', { x1: fL, y1: (fEaveY + baseY) / 2, x2: ncx, y2: (fEaveY + baseY) / 2,
-      stroke: FR, 'stroke-width': '1' }, g);
+    // front mid transom rail (top-lit)
+    S.el('line', { x1: fL, y1: gh, x2: ncx, y2: gh, stroke: FR, 'stroke-width': '1.3' }, g);
+    S.el('line', { x1: fL, y1: gh - 0.8, x2: ncx, y2: gh - 0.8, stroke: BRIGHT, 'stroke-width': '0.7', opacity: '0.45' }, g);
     // side wall verticals (converge toward the far corner = perspective)
     var sbars = 5;
     for (var j = 1; j < sbars; j++) {
       var t = j / sbars;
       var topx = ncx + t * (sFx - ncx), topy = fEaveY + t * (sEaveY - fEaveY);
-      var botx = ncx + t * (sFx - ncx), boty = baseY + t * (sFy - baseY);
-      S.el('line', { x1: topx, y1: topy, x2: botx, y2: boty, stroke: FR, 'stroke-width': '0.9' }, g);
+      var sty  = (sStallNearY) + t * (sStallFarY - sStallNearY);
+      S.el('line', { x1: topx, y1: topy, x2: topx, y2: sty, stroke: FR, 'stroke-width': '1' }, g);
+      S.el('line', { x1: topx - 0.6, y1: topy, x2: topx - 0.6, y2: sty,
+        stroke: BRIGHT, 'stroke-width': '0.5', opacity: '0.4' }, g);
     }
-    // roof glazing bars along the ridge (front→back)
+    // roof glazing bars along the ridge (front→back), top-lit
     var rbars = 4;
     for (var k = 1; k < rbars; k++) {
       var rt = k / rbars;
       var ex = ncx + rt * (sFx - ncx), ey = fEaveY + rt * (sEaveY - fEaveY);
-      var rx = ridgeFrontX + rt * (ridgeBackX - ridgeFrontX), ry = ridgeApexY + rt * (ridgeBackY - ridgeApexY);
-      S.el('line', { x1: ex, y1: ey, x2: rx, y2: ry, stroke: FR, 'stroke-width': '0.8' }, g);
+      var rxk = ridgeFrontX + rt * (ridgeBackX - ridgeFrontX), ryk = ridgeApexY + rt * (ridgeBackY - ridgeApexY);
+      S.el('line', { x1: ex, y1: ey, x2: rxk, y2: ryk, stroke: FR, 'stroke-width': '0.9' }, g);
+      S.el('line', { x1: ex, y1: ey - 0.7, x2: rxk, y2: ryk - 0.7,
+        stroke: BRIGHT, 'stroke-width': '0.5', opacity: '0.45' }, g);
     }
 
-    // ── near vertical corner post (emphasise the 3/4 edge) + ridge brass sheen ──
-    S.el('line', { x1: ncx, y1: baseY, x2: ncx, y2: fEaveY, stroke: FR, 'stroke-width': '2' }, g);
-    S.el('line', { x1: fL, y1: fEaveY, x2: ridgeFrontX, y2: ridgeApexY,
-      stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1.1', opacity: '0.35' }, g);
-    S.el('line', { x1: ridgeFrontX, y1: ridgeApexY, x2: ridgeBackX, y2: ridgeBackY,
-      stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1.1', opacity: '0.35' }, g);
+    // ════ LOW STONE STALL WALL — the masonry the glazing stands on (grounds it) ═
+    // front-face stall (a low dressed-stone course with a top-lit cap)
+    S.el('rect', { x: fL, y: fStallY, width: frontW, height: baseY - fStallY,
+      fill: STONE, stroke: FR, 'stroke-width': '1.2' }, g);
+    S.el('line', { x1: fL + 1, y1: fStallY + 0.9, x2: ncx - 1, y2: fStallY + 0.9,
+      stroke: BRIGHT, 'stroke-width': '1', opacity: '0.5' }, g);
+    // a couple of faint vertical stone joints
+    for (var sj = 1; sj < 3; sj++) {
+      var sjx = fL + sj * (frontW / 3);
+      S.el('line', { x1: sjx, y1: fStallY + 2, x2: sjx, y2: baseY - 1,
+        stroke: FR, 'stroke-width': '0.6', opacity: '0.5' }, g);
+    }
+    // side-face stall (a receding parallelogram course), slightly darker (turned away)
+    var sideStallD = 'M ' + ncx + ' ' + sStallNearY +
+      ' L ' + sFx + ' ' + sStallFarY +
+      ' L ' + sFx + ' ' + sFy +
+      ' L ' + ncx + ' ' + baseY + ' Z';
+    S.el('path', { d: sideStallD, fill: STONE, stroke: FR, 'stroke-width': '1.1' }, g);
+    S.el('path', { d: sideStallD, fill: 'rgba(8,10,15,.18)' }, g);
+    S.el('line', { x1: ncx, y1: sStallNearY + 0.9, x2: sFx, y2: sStallFarY + 0.9,
+      stroke: BRIGHT, 'stroke-width': '0.8', opacity: '0.4' }, g);
 
-    // ── faint warm INTERIOR GLOW (plants/lanterns) seen through the glass at
-    // night — emissive (window.lit GLOW role, palette/brightness-immune). ──
-    S.el('rect', { x: fL + 8 * SC, y: baseY - wallH * 0.5, width: frontW - 16 * SC, height: wallH * 0.5 - 6 * SC,
-      fill: 'var(--window-lit-ref, #ffcf73)', opacity: '0.12', filter: 'url(#glow-soft)' }, g);
-    // a brighter low pip so it reads as a light source at night
-    S.el('rect', { x: ncx - 30 * SC, y: baseY - 34 * SC, width: 22 * SC, height: 24 * SC, rx: 1,
-      fill: 'var(--window-lit-ref, #ffcf73)', opacity: '0.16' }, g);
+    // ════ EAVES — a thin top-lit brass gutter course along both eave lines ══════
+    S.el('line', { x1: fL, y1: fEaveY, x2: ncx, y2: fEaveY, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    S.el('line', { x1: fL, y1: fEaveY - 0.9, x2: ncx, y2: fEaveY - 0.9, stroke: BRIGHT, 'stroke-width': '0.8', opacity: '0.6' }, g);
+    S.el('line', { x1: ncx, y1: fEaveY, x2: sFx, y2: sEaveY, stroke: BRASS, 'stroke-width': '1.2' }, g);
+    S.el('line', { x1: ncx, y1: fEaveY - 0.8, x2: sFx, y2: sEaveY - 0.8, stroke: BRIGHT, 'stroke-width': '0.7', opacity: '0.5' }, g);
+
+    // ════ BRASS RIDGE CRESTING (the prism) + spike finials at both ends ════════
+    // the ridge body (dark + brass stroke + warm halo), then a bright top glint
+    S.el('line', { x1: ridgeFrontX, y1: ridgeApexY, x2: ridgeBackX, y2: ridgeBackY,
+      stroke: TONE, 'stroke-width': '3', 'stroke-linecap': 'round', filter: SOFT }, g);
+    S.el('line', { x1: ridgeFrontX, y1: ridgeApexY, x2: ridgeBackX, y2: ridgeBackY,
+      stroke: BRASS, 'stroke-width': '1.6', 'stroke-linecap': 'round' }, g);
+    S.el('line', { x1: ridgeFrontX, y1: ridgeApexY - 1, x2: ridgeBackX, y2: ridgeBackY - 1,
+      stroke: BRIGHT, 'stroke-width': '0.9', opacity: '0.8' }, g);
+    // small cresting spikes along the ridge (the toothed Victorian crest)
+    var rdx = ridgeBackX - ridgeFrontX, rdy = ridgeBackY - ridgeApexY;
+    for (var cr = 1; cr <= 4; cr++) {
+      var cf = cr / 5;
+      var cxr = ridgeFrontX + cf * rdx, cyr = ridgeApexY + cf * rdy;
+      S.el('line', { x1: cxr, y1: cyr, x2: cxr, y2: cyr - 4 * SC,
+        stroke: BRASS, 'stroke-width': '0.9', opacity: '0.8' }, g);
+      S.el('circle', { cx: cxr, cy: cyr - 4 * SC, r: 0.9, fill: BRIGHT, opacity: '0.85' }, g);
+    }
+    // front finial (a spike-and-orb crowning the gable apex, top-lit)
+    S.el('line', { x1: ridgeFrontX, y1: ridgeApexY, x2: ridgeFrontX, y2: ridgeApexY - 11 * SC,
+      stroke: BRASS, 'stroke-width': '1.4' }, g);
+    S.el('circle', { cx: ridgeFrontX, cy: ridgeApexY - 11 * SC, r: 2.2, fill: TONE, stroke: BRASS, 'stroke-width': '1' }, g);
+    S.el('circle', { cx: ridgeFrontX - 0.6, cy: ridgeApexY - 11.6 * SC, r: 0.9, fill: BRIGHT, opacity: '0.9' }, g);
+    // back finial (a smaller spike at the far ridge end)
+    S.el('line', { x1: ridgeBackX, y1: ridgeBackY, x2: ridgeBackX, y2: ridgeBackY - 8 * SC,
+      stroke: BRASS, 'stroke-width': '1.1' }, g);
+    S.el('circle', { cx: ridgeBackX, cy: ridgeBackY - 8 * SC, r: 1.5, fill: TONE, stroke: BRASS, 'stroke-width': '0.9' }, g);
+
+    // ════ NEAR BRASS CORNER POST — the strong 3/4 edge (turned brass column) ════
+    // GRAFT (take 2): a slimmer dark-body brass COLUMN with a lit up/left face + a
+    // tidy ROUND knop (dropping take 1's blobby rect cap), brass slightly quieted so
+    // the post reads as a refined column marking the near 3/4 edge, not a slab. Same
+    // post placement as take 1 (ncx, baseY→fEaveY).
+    S.el('line', { x1: ncx, y1: baseY, x2: ncx, y2: fEaveY, stroke: TONE, 'stroke-width': '3', 'stroke-linecap': 'round' }, g);
+    S.el('line', { x1: ncx, y1: baseY, x2: ncx, y2: fEaveY, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    // bright glint up the up/left face of the post (the lit edge of the column)
+    S.el('line', { x1: ncx - 0.8, y1: baseY, x2: ncx - 0.8, y2: fEaveY, stroke: BRIGHT, 'stroke-width': '0.7', opacity: '0.65' }, g);
+    // a small tidy round brass knop where the post meets the eave (top-lit)
+    S.el('circle', { cx: ncx, cy: fEaveY, r: 2.4, fill: TONE, stroke: BRASS, 'stroke-width': '1' }, g);
+    S.el('circle', { cx: ncx - 0.7, cy: fEaveY - 0.7, r: 1, fill: BRIGHT, opacity: '0.9' }, g);
+    // a low brass door slot on the front face (a hint of entry, top-lit lintel)
+    var dwX = fL + frontW * 0.5 - 7 * SC, dwY = gh + 4 * SC, dwW = 14 * SC, dwH = fStallY - dwY;
+    S.el('rect', { x: dwX, y: dwY, width: dwW, height: dwH, rx: 1,
+      fill: 'rgba(11,14,22,.40)', stroke: BRASS, 'stroke-width': '0.9' }, g);
+    S.el('line', { x1: dwX, y1: dwY - 0.8, x2: dwX + dwW, y2: dwY - 0.8, stroke: BRIGHT, 'stroke-width': '0.8', opacity: '0.6' }, g);
+
+    // ════ WARM INTERIOR PLANT-GLOW — emissive window.lit (palette/B-immune) ════
+    // a faint fill bleeding up the lower front glass (the conservatory within)
+    S.el('rect', { x: fL + 6 * SC, y: gh, width: frontW - 12 * SC, height: fStallY - gh,
+      fill: GLOW, opacity: '0.14', filter: SOFT }, g);
+    // a soft second bleed pooling lower (denser foliage near the stall)
+    S.el('rect', { x: fL + 10 * SC, y: fStallY - (fStallY - gh) * 0.55, width: frontW - 20 * SC,
+      height: (fStallY - gh) * 0.55, fill: GLOW, opacity: '0.10', filter: SOFT }, g);
+    // a faint warm bleed up the lower side glass too (so the interior reads at depth)
+    S.el('path', { d: 'M ' + (ncx + 4) + ' ' + gh +
+      ' L ' + (sFx - 4) + ' ' + (gh + (sEaveY - fEaveY) * 0.6) +
+      ' L ' + (sFx - 4) + ' ' + (sStallFarY) +
+      ' L ' + (ncx + 4) + ' ' + sStallNearY + ' Z',
+      fill: GLOW, opacity: '0.07', filter: SOFT }, g);
+    // a brighter LOW PIP (a lantern / lit potting bench) glowing just above the
+    // stall on the front face, with a soft halo so it reads as a light SOURCE.
+    var pipX = ncx - 24 * SC, pipY = fStallY - 18 * SC, pipW = 15 * SC, pipH = 15 * SC;
+    // a wide soft halo + a tighter inner halo so the SOURCE blooms at night while
+    // its hard core stays modest (so daytime doesn't read as a flat orange block)
+    S.el('rect', { x: pipX - 5, y: pipY - 5, width: pipW + 10, height: pipH + 10, rx: 3,
+      fill: GLOW, opacity: '0.16', filter: SOFT }, g);
+    S.el('rect', { x: pipX - 2, y: pipY - 2, width: pipW + 4, height: pipH + 4, rx: 2,
+      fill: GLOW, opacity: '0.22', filter: SOFT }, g);
+    S.el('rect', { x: pipX, y: pipY, width: pipW, height: pipH, rx: 1,
+      fill: GLOW, opacity: '0.62' }, g);
   };
 
   Gate.scenebuildings = B;
