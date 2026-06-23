@@ -3,7 +3,27 @@
 <!-- ═══════════════════════════════════════════════════════════════════════
      RESUME POINTER  (read this first on a fresh/compacted context)
      ═══════════════════════════════════════════════════════════════════════ -->
-## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + Phase-D room-rotation, wind-sway, WEATHER-FX & owner-playtest fixes/polish all shipped; K=4; NEXT = owner picks AUDIO **or** MOON-PHASE WIRING after compaction — both grounded below)
+## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + Phase-D room-rotation, wind-sway, WEATHER-FX, owner-playtest fixes/polish + **real MOON-PHASE WIRING** all shipped; K=4; NEXT = **AUDIO** is the remaining Phase-D next-phase work — grounded below)
+
+**MOON-PHASE WIRING — ✅ SHIPPED (2026-06-23):** `sky-core.mjs` is now forge-included into
+`the-gate.src.html` (placed after `scene.js`, before `weather-fx.js`); after the forge strips
+the `export` keywords its fns are page globals. The boot computes the user's REAL phase from the
+wall clock — `var ph = moonPhase(julianDate(new Date())); var term = terminator(ph.illuminatedFraction,
+ph.waxing);` — and calls `S.setMoonPhase({illuminatedFraction: ph.illuminatedFraction, litSide:
+term.litSide})` BEFORE `S.build()`'s first `refreshSkyObjects()` (the first refresh is inside
+`S.build`, scene.js:121), so the drawn moon matches today's date. `?moon=<0..1>` still OVERRIDES:
+when present it pins the fraction, re-derives litSide via `terminator(moon, ph.waxing)`, AND drives
+the brightness `moonK` — an explicit `?moon` ALWAYS wins over the clock value. FORGE FIX (root cause):
+`stripModuleGuard` now also drops a bare `export default <expr>;` line (illegal/dead in an inlined
+classic `<script>`) — sky-core's `export default GateSkyCore;` was the one line forge couldn't strip,
+which would have been a syntax error that killed the inlined block. This also removed a dead
+`export default <Core>;` from 3 sibling pages' `type="module"` inlines (einstein-ring / equal-area-sweep
+/ two-bulges — functionally inert, the binding was already defined; regenerated for forge-freshness).
+VERIFIED headless over HTTP against the forged `the-gate.html`: no-param → today's waxing gibbous
+(~0.69 lit, right limb, curved terminator); `?moon=0` → new (dark disc + dim scene); `?moon=0.5` →
+straight-terminator half (right lit); `?moon=1` → full disc + brightest scene. forge `--check --all` =
+97 current; sky-core Node test 14/14.
+
 
 **Status:** Phase A blockout LOCKED. Phase B `SPEC.md` **LOCKED + committed**
 (`823f9f3` base + `1b3f9f4` room-rep custom-color slots `rep.swatch1..3`/`rep.glow1..2`,
@@ -190,8 +210,9 @@ reveal shot, two-frame diffs prove rain falls + clouds drift. SPEC §5.10 + laye
     (2) clouds are now a 2-tier fleet (12 = 6 base + 6 storm-only) → storm ≈2× cloudy. (4) gnomon focus
     box hidden on mouse click (`#gnomon-target:focus{outline:none}`; brass ring on `:focus-visible`).
 
-**NEXT — owner picks ONE after compaction (audio OR moon-phase wiring); both grounded below. Small
-touches (self-test chip, etc.) stay deferred to a final polish pass.**
+**NEXT — MOON-PHASE WIRING is now SHIPPED (see the resume pointer at top); the remaining Phase-D
+next-phase work is AUDIO (grounded below). Small touches (self-test chip, etc.) stay deferred to a
+final polish pass. The self-test chip is the natural PROOF surface for the now-live moon math.**
 
   ▸ **AUDIO** — `audio.js` (`Gate.audio` = A). Mute plumbing is DONE + wired: chip `#mute-btn` (boot
     `syncMute`), shared estate flag `WS.muted()/setMuted()/onMuteChange()`. Engine surface is INERT
@@ -205,7 +226,9 @@ touches (self-test chip, etc.) stay deferred to a final polish pass.**
     offline: render via `OfflineAudioContext`→WAV → the **audio-lens** skill (`/Users/brandon/dev/general/
     audio-lens`) for objective checks (no ears needed headless).
 
-  ▸ **MOON-PHASE WIRING** — `sky-core.mjs` is ALREADY BUILT + unit-tested (`sky-core.test.mjs`); it is NOT
+  ▸ **MOON-PHASE WIRING — ✅ SHIPPED (2026-06-23; see the resume pointer at top).** `sky-core.mjs` is
+    now forge-included + the boot drives the drawn moon from the real date; `?moon=` override intact.
+    (Historical brief retained below.) `sky-core.mjs` is ALREADY BUILT + unit-tested (`sky-core.test.mjs`); it is NOT
     yet loaded by the boot. Dual-use: forge strips the `export` keyword so a `<!-- forge:include
     sky-core.mjs -->` makes its fns global. API: `julianDate(date)` · `moonPhase(JD)`→`{illuminatedFraction,
     waxing, phaseName, age, phaseAngle}` · `terminator(illuminatedFraction, waxing)`→`{litSide, curvature,

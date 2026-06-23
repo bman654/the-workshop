@@ -733,9 +733,13 @@ contracts. The following are finalized in Phase D and get only a "beauty pass" n
   Still future polish: rain splashes/ripples on the ground, birds/owls.
 - **audio** — the WebAudio engine (gears/creak/ambient bed) gated on the opening click +
   `WS.muted()`; `audio.js` is stubbed, the mute chip is wired.
-- **real moon-phase wiring** — `sky-core.mjs` (forked geocentric sun-lon math, J2000 Node
-  twin) → `S.setMoonPhase({illuminatedFraction, litSide})` → `drawMoon` so the drawn phase
-  matches the user's real date (`scene.js:627-636`). The moon/sun also get a beauty pass.
+- **real moon-phase wiring** — ✅ BUILT 2026-06-23: `sky-core.mjs` (forked geocentric sun-lon
+  math, J2000 Node twin) is now forge-included in `the-gate.src.html`; the boot computes
+  `moonPhase(julianDate(new Date()))` + `terminator(...)` and calls
+  `S.setMoonPhase({illuminatedFraction, litSide})` BEFORE `S.build()`'s first
+  `refreshSkyObjects()`, so the drawn moon matches the user's real date. `?moon=<0..1>` still
+  OVERRIDES (pins fraction + re-derives litSide, and wins for the brightness `moonK`). The
+  moon/sun beauty pass remains future polish.
 - **earned-asterism runtime pick** — replace `asterism.js`'s PLACEHOLDER with a random
   UNLOCKED Survey-of-Heaven constellation (`Sky.state`/`WS.store`); cold-start = stars, no
   figure. The asterism gets a beauty pass.

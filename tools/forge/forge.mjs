@@ -64,6 +64,19 @@ function stripModuleGuard(src) {
       i = j; // skip through the closing line of the export list
       continue;
     }
+    // drop a default re-export of an already-bound expression: `export default Foo;`
+    // (NOT a declaration — `export default function/class/…` keeps its value and is
+    // handled by the leading-`export `-strip below). Like the `export { … }` list, a
+    // bare `export default <expr>;` has no meaning in an inlined classic <script> and
+    // is a SYNTAX ERROR there, so we drop the whole line. The negative lookahead
+    // excludes the declaration forms so they still inline (with `export ` stripped).
+    if (/^[ \t]*export\s+default\s+(?!(const|let|var|function|class|async)\b)/.test(line)) {
+      // consume through the statement's terminating `;` (handles a multi-line expr).
+      let j = i;
+      while (j < lines.length && !/;[ \t]*$/.test(lines[j])) j++;
+      i = j; // skip through the line ending the default-export statement
+      continue;
+    }
     const guardStart = /^\s*if\s*\(\s*typeof\s+module\s*!==\s*['"]undefined['"]\s*&&\s*module\.exports\s*\)/;
     if (guardStart.test(line)) {
       // Consume the whole guard. If it closes on the same line (balanced braces),

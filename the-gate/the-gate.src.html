@@ -826,6 +826,9 @@
   <!-- forge:include scene.js -->
   </script>
   <script>
+  <!-- forge:include sky-core.mjs -->
+  </script>
+  <script>
   <!-- forge:include weather-fx.js -->
   </script>
   <script>
@@ -847,8 +850,28 @@
     Gate.timeofday.init({ pin: url.t });
     Gate.weather.init({ pin: url.wx, seed: url.seed });
     Gate.audio.init();
-    var moonK = url.moon != null ? url.moon : 0.6;   // greybox default
-    S.setMoonK(moonK);                               // also drives the DRAWN phase
+
+    // ── MOON PHASE — compute the user's REAL phase from the wall clock via sky-core
+    // (forge inlined sky-core.mjs above; its `export`s become globals). moonPhase()
+    // gives the illuminated fraction + waxing flag; terminator() turns that into the
+    // lit side ('right' waxing / 'left' waning). The ?moon=<0..1> dev pin OVERRIDES
+    // the computed fraction (and re-derives its lit side) so a preview can sweep
+    // new→half→full at will; an explicit ?moon ALWAYS wins over the clock value.
+    var ph = moonPhase(julianDate(new Date()));
+    var term = terminator(ph.illuminatedFraction, ph.waxing);
+    var moonFrac = ph.illuminatedFraction, moonSide = term.litSide;
+    if (url.moon != null) {                          // ?moon=<0..1> dev override
+      moonFrac = url.moon;
+      // waxing flag is unknown for a pinned fraction → keep the real waxing sense so
+      // the override sweeps fullness while litSide stays plausible (Northern-Hemi).
+      moonSide = terminator(moonFrac, ph.waxing).litSide;
+    }
+    // moonK drives the scene BRIGHTNESS (CM.B): the dev pin wins, else the real phase.
+    var moonK = url.moon != null ? url.moon : moonFrac;
+    S.setMoonK(moonK);                               // brightness moonK (drawn frac if unpinned)
+    // pin the DRAWN phase HARD (real or overridden) BEFORE build()'s first
+    // refreshSkyObjects() so the rendered moon matches the chosen fraction + side.
+    S.setMoonPhase({ illuminatedFraction: moonFrac, litSide: moonSide });
     S.setDevUndercroft(url.undercroft);              // ?undercroft=1 forces the hatch
     S.setDevRoom(url.room);                          // ?room=<id> pins the grounds rep
 
