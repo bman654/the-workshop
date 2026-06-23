@@ -96,16 +96,28 @@ render their pinned room. PRE-WIRE rooms.js BESPOKE (ids→rep-key+repColors per
 dispatch BEFORE the rep foundry; then each rep take ADDS its draw fn + one dispatch line (siblings
 byte-identical). Read the plumbing agent's actual drawRoomRep dispatch + drawGlyphStand signature FIRST.
 
-**PLUMBING ✅ COMMITTED** (`ed22592`, Sela Quillwright): rep-color slots + CM.applyRepColors merge +
-?room= + drawGlyphStand greybox + REP_DRAW dispatch (`var REP_DRAW = {cairn:...}`, fallback
-drawGlyphStand(parent,cx,baseY,pick)). **BESPOKE PRE-WIRED ✅** (`616a9c2`): the 3 reps registered with
-rep-keys cavern-mound/ripple-tank/organ-pipes + per-band repColors (verified the merge tints the
-fallback). **REP FOUNDRY WAVE — RUNNING** (runId **`wf_8e9b2c6c-e42`**, args
-['glyph-stand','cavern-rep','ripple-rep','organpipes-rep'], sequential scene.js). glyph-stand elevates
-the existing drawGlyphStand (K=2); each rep ADDS a new draw fn (drawRepCavern/Ripple/OrganPipes) + ONE
-REP_DRAW entry (K=3). Rendered via ?room=<id> (extraQS threaded through the workflow). ON COMPLETION:
-review each rep via ?room= crops, verify (node --check, forge 97, diffs confined), commit, send. Then
-the foundry "whole set" is DONE. (Re-evaluate rep K after these 4 — Brandon.)
+**PLUMBING ✅** (`ed22592`, Sela Quillwright): rep-color slots + CM.applyRepColors merge + ?room= +
+drawGlyphStand + REP_DRAW dispatch (`var REP_DRAW={cairn,cavern-mound,ripple-tank}`, fallback
+drawGlyphStand(parent,cx,baseY,pick)). **BESPOKE PRE-WIRED ✅** (`616a9c2`): all 3 reps registered
+(rep-keys cavern-mound/ripple-tank/organ-pipes + per-band repColors).
+
+**REP FOUNDRY ✅ 3 of 4 SHIPPED** (`c6dc681`, wave wf_8e9b2c6c-e42): Glyph Stand (elevated — arched
+brass cartouche plinth, universal fallback), Cavern rep (rocky mound + teal cave glow, physics-lab),
+Ripple Tank rep (water tray + ripples, ripple). Each via rep.swatch*/rep.glow* slots + a REP_DRAW entry.
+
+**⚠️ ORGAN-PIPES (sound-garden) — DEFERRED (org MONTHLY SPEND LIMIT hit mid-wave).** All 3 takes failed
+on quota; nothing written → sound-garden safely FALLS BACK to the elevated Glyph Stand (violet-tinted via
+its repColors — a valid, dignified state). It's the ONLY remaining foundry item. WHEN QUOTA RESETS, run:
+`Workflow({scriptPath:'/tmp/gate-foundry/foundry.workflow.js', args:['organpipes-rep']})` — the LIB entry
++ rooms.js BESPOKE sound-garden→organ-pipes + repColors are ALL already in place; the take just ADDS
+drawRepOrganPipes(parent,cx,baseY,pick) + a `'organ-pipes': …` REP_DRAW entry, rendered via
+?room=sound-garden. Review/commit per protocol → then the foundry "whole set" is 100% DONE.
+
+**═══ FOUNDRY STATUS: the full DEFAULT VISIBLE SCENE is complete + estate-quality, and the room-rep
+system + 3 of 4 reps are shipped. Only organ-pipes remains (quota-deferred). ═══**
+After organ-pipes: re-evaluate rep K (Brandon), then PHASE D (interactive layer — see below): the
+click-through cinematic, weather-fx canvas, audio, real moon wiring (sky-core.mjs), earned asterism,
+room-pick rotation (so the bespoke reps actually appear in production, not just via ?room=).
 
 **REMAINING after Wave 4:**
 - PARAMETRIC beauty pass: moon (disc+lit-limb glow+terminator — already decent, light touch), sun;
