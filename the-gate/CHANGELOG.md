@@ -44,14 +44,22 @@ nudge, pier lantern-wash. Estate-quality confirmed; deliverables in `/tmp/gate-s
 ⚠️ Workflow `args` may arrive as a JSON-STRING — the script now JSON.parses/​splits a string arg
 (don't "fix" it back to assuming an array). A 5ms/0-agent return = args didn't resolve to keys.
 
-**WAVE 3a — RUNNING:** greenhouse (runId **`wf_c389fa8b-6ba`**, args ['greenhouse'], K=2,
-scene-buildings.js). On completion: review + commit per protocol, then launch WAVE 3b.
+**WAVE 3a — ✅ SHIPPED** (`eee92b0`): greenhouse (dimensional 3/4 jewel-box glasshouse; loved
+silhouette kept byte-faithful). Deliverables `/tmp/gate-foundry/greenhouse/final/`.
 
-**WAVE 3b — PREPPED (launch after 3a):** `Workflow({scriptPath, args:['foliage','undercroft']})`
-— both in scene.js (sequential). LIB now has `foliage` (trees+bushes, K=2) + `undercroft` (open
-bilco hatch, deep-crimson glow, K=3) with the scene.js INTERNAL interface variant (fns take
-`(parent)`, use module-local el/group/resolvedRole/litRegionPath — NOT S.el; leave ALL other
-scene.js fns byte-identical incl. undercroftOpen() predicate). Glyph Stand deferred to the room-rep wave.
+**WAVE 3b — RUNNING:** foliage + undercroft (runId **`wf_7995b8e3-74f`**, args ['foliage','undercroft'],
+sequential in scene.js). On completion: review + commit per protocol.
+
+**REMAINING after 3b:**
+- ROOM-REPS wave (most complex — needs SETUP the foundry workflow doesn't do): (1) wire colormap.js
+  rep.swatch1..3 + rep.glow1..2 (SPEC §5.8) + add the two glow slots to the dayRecede list; (2) BLIND
+  essence-survey over the GATE-ROOMS pool to pick 3 reps; (3) add 3 bespoke draw fns to scene.js +
+  register in rooms.js BESPOKE; (4) the Glyph Stand fallback (NEW draw fn + rooms.js). Reps K=3
+  (iface 'scene'); re-evaluate K after the first 4 (Cairn + 3).
+- WAVE 4 MINOR (scene.js + drawMist): grass/midground, road, foreground apron, road lamps, mist,
+  sky gradient, stars. "direct-to-spec" — can run at K=1-2 through the same engine (add LIB entries).
+- PARAMETRIC beauty pass: moon (disc+lit-limb glow+terminator), sun, brass asterism (scene.js).
+- Then Phase D systems (see below).
 
 **WAVE ROADMAP (remaining, after Wave 2):**
 - Wave 3 — supporting: greenhouse (in LIB; K=2). Then add to LIB + build: trees(+sway later), bushes,
