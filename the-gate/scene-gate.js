@@ -406,7 +406,7 @@
     t1.textContent = 'The Orrery Estate';
     var t2 = S.el('text', { x: px, y: py + 24, 'text-anchor': 'middle',
       'font-family': 'ui-monospace, monospace', 'font-size': '13', 'letter-spacing': '0.28em', fill: BRASS }, g);
-    t2.textContent = 'CLICK TO ENTER';
+    t2.textContent = 'CLICK TO OPEN';
     return g;
   }
 

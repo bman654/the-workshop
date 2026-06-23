@@ -357,7 +357,7 @@ parametric systems finalized in Phase D but get a beauty pass too (§9).
 | · piers (×2) + lamps | 7 | each PIER_W=72; left x400..472, right x1128..1200; body y212..900; cap & lamp up to ~y150 | column center (x436 / x1164) | substantial stone columns; lamp-globe on cap | `stone`, `brass.stroke`, `brass.bright` | `lamp.flame` (globe r9 + halo r22 at globe center ~y150) | `scene-gate.js:144-191` | stacked-stone column, stepped brass cap, brass lantern base + EMISSIVE glass globe (the night payoff) + finial. |
 | · gear-train | 7 | cluster ~x652..960 / y336..594 (driver r72 @ x800 y470; 4 smaller gears around it) | child of assembly, spins about its own bbox center | overlays the seam; reads as the drive | `brass.stroke`, `brass.bright` | — | `scene-gate.js:307-318,194-226` | 5 toothed brass gears (dark body + brass stroke), hubs/spokes/top-glint; the visible engine. |
 | · gnomon / sundial | 7 | R=38 → ~x760..836 / y594..670; center x798 y632 | center (x798, y632) | brass dial flat on the gate face | `brass.stroke`, `brass.bright`; blade body `#e6bd6f` (gnomon furniture token) | — (no GLOW; pulsing hint stroke only) | `scene-gate.js:230-270` | brass dial face + hour marks + raised triangular blade casting a shadow; the discoverable tap-target (`#gnomon-target`). |
-| · plaque | 7 | w300 h90 → x650..950 / y675..765; center x800 y720 | center (x800, y720) | brass plate over the closed leaves | `brass.stroke`, `brass.bright` | — | `scene-gate.js:273-290` | engraved brass plaque: "The Orrery Estate" (Georgia 32) / "CLICK TO ENTER" (mono 13, letterspaced). Wordmark IS the logo. |
+| · plaque | 7 | w300 h90 → x650..950 / y675..765; center x800 y720 | center (x800, y720) | brass plate over the closed leaves | `brass.stroke`, `brass.bright` | — | `scene-gate.js:273-290` | engraved brass plaque: "The Orrery Estate" (Georgia 32) / "CLICK TO OPEN" (mono 13, letterspaced). Wordmark IS the logo. (The title splash says "enter"; the gate itself instructs "OPEN".) |
 | **Observatory + rise** | 4 far-scenery | hill x−40..540 / y300..480; observatory body x164..256 y296..360, dome up to ~y258, telescope to ~y240 | hill peak ~x230; observatory base x210 y360 | distant on the LEFT, behind/left of the left pier | `hill`, `observatory.body`, `observatory.dome`, `brass.stroke`, `brass.bright` | `window.lit` (2 observatory windows) | `scene-buildings.js:47-90` | a soft grass mound with a black-and-brass domed observatory: drum body, hemispherical dome with a shutter SLIT + telescope barrel poking at the sky; lit windows. |
 
 ### 4.2 SUPPORTING (K=2)
@@ -614,14 +614,16 @@ passed to `WFX.init({reduced})`. **Dev:** `?flash` holds a strike lit (determini
 
 ### 5.11 Audio — the procedural-WebAudio voice  *(BUILT — Phase D, 2026-06-23)*
 
-The Gate's sound (`audio.js` → `Gate.audio`, the CONDUCTOR) + nine seeded procedural
+The Gate's sound (`audio.js` → `Gate.audio`, the CONDUCTOR) + eleven seeded procedural
 builders (`Gate.sfx.*`, each in its own `audio-<name>.js`, forge-included BEFORE `audio.js`).
 **Everything is procedural WebAudio** — no binary assets, no samples, no `data:` URIs. Each
 builder is a DUAL-USE function `({ctx, dest, dur, when, seed, …})` that runs against any
 `BaseAudioContext` (the LIVE `AudioContext` when it ships, an `OfflineAudioContext` when it is
 verified by audio-lens), uses a seeded mulberry32 PRNG (never `Math.random`), and keeps peaks
-under 0 dBFS. The nine: **rain** (storm, `intensity`), **wind** (`strength`), **thunderclap**,
-**thunderroll** (`distance`), **gears**, **creak**, **windchimes**, **birdsong**, **logotune**.
+under 0 dBFS. The eleven: **rain** (storm, `intensity`), **wind** (`strength`), **thunderclap**
+(a two-part "CR-AACK": delayed crack → louder slap + sub thump → FDN reverb tail), **thunderroll**
+(`distance`), **gears**, **creak**, **windchimes**, **birdsong** (day creature), **crickets** (dusk
+creature, a stationary trill texture), **owl** (night creature, a sparse hoot phrase), **logotune**.
 
 **The mute gate (hard):** every source routes through ONE master `GainNode`; the shared estate
 flag `WS.muted()` forces that gain to 0 (40 ms ramp). Nothing bypasses it. The brass mute chip
@@ -636,10 +638,23 @@ the master. Once armed, audio stays on for the visit — so a visitor can linger
 before clicking the gate to enter. (Unlocking only on the gate-open click made the ambient bed nearly
 inaudible, since that click also navigates away.)
 
+**Title splash (PRODUCTION entry + sound opt-in).** A full-bleed overlay (`#splash`, `z-index:60`,
+above the welcome card + fade overlay) is the cover of the experience: a deep night-ink vignette with
+the brass wordmark **"THE ORRERY ESTATE"** (plaque fonts/palette), a gently pulsing **"click to enter"**
+prompt, and a 🔊 sound indicator. It is a single `role="button"` activatable by click AND keyboard
+(Enter/Space), `aria-label`led and focused on load. It shows **ONLY in production** — when
+`sequence.parseUrl().dev` is FALSE (no `?dev`, no `?scene=`); in any dev/`?scene=` boot the boot
+REMOVES it immediately so the render/test harness lands straight in idle (untouched). On activate it
+calls `armAudio()` (this gesture IS the autoplay unlock → ctx resumes, ambient bed starts for the
+current weather+band; the persisted mute flag still gates the master gain at 0), then fades out over
+~600 ms (instant under `prefers-reduced-motion`) and removes itself, revealing the dwellable idle
+scene. The production fade-in proceeds beneath; the in-scene mute chip is unchanged.
+
 **Trigger → sound map:**
 
 | Trigger | Conductor call | Sound |
 | --- | --- | --- |
+| **title splash** activate (click / Enter / Space, PROD only) | `armAudio()` → `A.unlock()` | ctx up + ambient bed; splash fades + reveals idle |
 | first user gesture (any: gnomon/chip/gate/key) | `A.unlock()` | ctx up + ambient bed for current weather |
 | weather / band change | `A.ambient()` | re-evaluate + cross-fade the bed |
 | open seq. **gears** phase | `A.gears()` / `A.stopGears()` | clockwork bed (ends when phase does) |
@@ -650,11 +665,26 @@ inaudible, since that click also navigates away.)
 
 **Ambient bed (`A.ambient`), per weather × wind × time-of-day:** `rain` only in storm (scaled by
 `intensity`); `wind` always, strength `clear < cloudy < storm`; `windchimes` occasional and ONLY
-when NOT raining (clear/cloudy); a DISTANT `thunderroll` occasionally in storm (seeded long
-interval, distinct from the loud per-strike `A.thunder()`); `birdsong` ONLY in CLEAR weather during
-DAYTIME (silent at night/storm/rain). Textures (rain/wind) are stationary `dur`-second beds tiled
-back-to-back; sparse one-shots (chimes/roll/birds) are scheduled on long intervals; all transitions
-cross-fade via per-key sub-buses. Reduced motion still gets a voice (the open beats fire compressed).
+when NOT raining (clear/cloudy, ANY band); a DISTANT `thunderroll` occasionally in storm (seeded
+long interval, distinct from the loud per-strike `A.thunder()`).
+
+**Creature rotation (time-of-day band × weather).** Exactly ONE creature voice sounds at a time,
+picked by the current `Gate.timeofday.band()`, and ONLY when it is NOT raining (clear OR cloudy;
+**silent in storm**):
+
+| band | creature | mechanism |
+| --- | --- | --- |
+| `day` | **birdsong** (broadened from clear-only to any non-storm) | sparse one-shot, long interval |
+| `dusk` | **crickets** | stationary trill TEXTURE (tiled like rain/wind) |
+| `night` | **owl** | sparse hoot phrase, long interval |
+
+The band's `onChange` (boot) re-calls `A.ambient()`, so a band change CROSS-FADES the creatures —
+the leaving key's texture is `killTexture`'d / its sparse timer `clearSparse`'d, and the arriving
+key starts. Each sparse fire re-checks weather+band at fire time, so a mid-interval change is honoured.
+
+Textures (rain/wind/crickets) are stationary `dur`-second beds tiled back-to-back; sparse one-shots
+(chimes/roll/birds/owl) are scheduled on long intervals; all transitions cross-fade via per-key
+sub-buses. Reduced motion still gets a voice (the open beats fire compressed).
 
 > Still open (future polish, NOT built): per-source level balance pass, stereo/spatial placement.
 

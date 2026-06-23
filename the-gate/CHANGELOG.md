@@ -5,6 +5,31 @@
      ═══════════════════════════════════════════════════════════════════════ -->
 ## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + Phase-D room-rotation, wind-sway, WEATHER-FX, owner-playtest fixes/polish, real MOON-PHASE WIRING + **AUDIO (procedural WebAudio voice)** all shipped; K=4; NEXT = the **earned-asterism runtime pick** + Phase-D beauty passes — see §9)
 
+**AUDIO PASS 2 — ✅ SHIPPED (2026-06-23):** punchier thunder, a time-of-day creature rotation, and a
+production title-splash entry. (1) **thunderclap** reworked into a two-part "CR-AACK": a delayed
+broadband CRACK (t0+0.07s, with a silent lead-in frame so the onset detector registers it), a louder
+lowpassed SLAP with a downward cutoff sweep + a layered leading-edge click, a 74→40 Hz SUB thump for
+chest weight, and a 4-line FDN + 2 Schroeder-allpass reverb TAIL that rises only after the slap
+(audio-lens: clips:false @ -2.06 dBFS, two onsets 116 ms apart, centroid 1371 Hz, tail confirmed).
+(2) **Creature rotation** in `A.ambient` — exactly ONE creature per time-of-day band, silent in storm:
+`day`→**birdsong** (BROADENED from clear-only to any non-storm), `dusk`→**crickets** (new stationary
+trill texture, centroid 4747 Hz, quiet -25 dBFS), `night`→**owl** (new sparse hoot phrase, f0 375 Hz).
+A band change cross-fades creatures (the band's `onChange` already re-calls `A.ambient()`); windchimes
+unchanged (occasional, clear/cloudy, any band, silent in storm). New forge includes `audio-crickets.js`
++ `audio-owl.js` before `audio.js`. (3) **Title splash** (`#splash`) — a full-bleed brass-wordmark
+"THE ORRERY ESTATE" cover shown ONLY in production (dev/`?scene=` removes it immediately so the harness
+is untouched); click OR Enter/Space arms audio (the first-gesture unlock) + fades out (instant under
+reduced-motion) to reveal the dwellable idle scene; respects the persisted mute flag. (4) The gate
+**plaque** action line changed `CLICK TO ENTER`→`CLICK TO OPEN` (the splash now says "enter"; the gate
+instructs "open"). **E2E VERIFIED** headless over HTTP against the forged `the-gate.html` (never
+file://): PROD shows the splash, click dismisses it + unlocks audio (`__wsAudioCtx` running, master
+0.9), Enter also activates it; idle revealed, plaque reads "CLICK TO OPEN", gate click runs the open →
+navigates to index.html; DEV (`?dev&scene=idle`) shows NO splash, lands straight in idle; creature
+rotation confirmed (birdsong@day clear AND cloudy, crickets@dusk, owl@night, NONE in storm, windchimes
+silent in storm); mute toggles master 0.9↔0; ZERO console errors across splash dismiss, all band +
+weather changes, a forced lightning strike, the full open sequence, and the mute toggle. forge
+`--check --all` = 97 current; audio-lens self-test 12/12.
+
 **AUDIO — ✅ SHIPPED (2026-06-23):** the Gate now has a voice. The conductor `audio.js`
 (`Gate.audio`) is filled in (was stubbed) and nine seeded procedural-WebAudio builders ship as
 `audio-<name>.js` (`Gate.sfx.rain/wind/thunderclap/thunderroll/gears/creak/windchimes/birdsong/

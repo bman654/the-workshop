@@ -71,8 +71,9 @@
   // ambient layer handles (each = { node, src } returned by a Gate.sfx builder,
   // routed through its own sub-bus gain so we can cross-fade independently).
   var amb = {
-    rain:  null,   // { stop } + bus
-    wind:  null,
+    rain:     null,   // { stop } + bus
+    wind:     null,
+    crickets: null,   // dusk creature texture
   };
   var ambBus = {};         // key -> GainNode sub-bus
   var ambLoopTimers = {};  // key -> setTimeout id (texture re-arm)
@@ -104,7 +105,6 @@
     try { return (Gate.timeofday && Gate.timeofday.band) ? Gate.timeofday.band() : 'day'; }
     catch (e) { return 'day'; }
   }
-  function isDaytime() { return bandNow() === 'day'; }
 
   // wind STRENGTH per weather: clear < cloudy < storm (matches the visual sway).
   function windStrengthFor(w) {
@@ -275,14 +275,45 @@
       clearSparse('roll');
     }
 
-    // BIRDSONG — ONLY in CLEAR weather during DAYTIME (silent at night/storm/rain).
-    if (w === 'clear' && isDaytime()) {
+    // CREATURE ROTATION — exactly ONE creature voice at a time, picked by the
+    // time-of-day BAND, and ONLY when it is NOT raining (clear OR cloudy; silent
+    // in storm). The band's onChange already re-calls ambient(), so a band change
+    // cross-fades the creatures (the old key's sparse timer is cleared, the new
+    // key's starts). Each fire re-checks weather+band so a change mid-interval is
+    // honoured.
+    //   day   → birdsong   (broadened from clear-only to any non-storm)
+    //   dusk  → crickets
+    //   night → owl
+    var band = bandNow();
+    var creature = !raining
+      ? (band === 'day' ? 'birds' : band === 'dusk' ? 'crickets' : 'owl')
+      : null;
+
+    // birdsong (day): clear/cloudy, daytime.
+    if (creature === 'birds') {
       scheduleSparse('birds', 10, 26, function () {
-        if (weatherNow() !== 'clear' || !isDaytime()) return;
+        if (weatherNow() === 'storm' || bandNow() !== 'day') return;
         playOnce('birdsong', { dur: 6 }, 0.6);
       });
     } else {
       clearSparse('birds');
+    }
+
+    // crickets (dusk): a quiet stationary bed, looped like rain/wind.
+    if (creature === 'crickets') {
+      startTexture('crickets', 'crickets', {}, 0.85);
+    } else {
+      killTexture('crickets', 0.9);
+    }
+
+    // owl (night): a sparse phrase of hoots on a long seeded interval.
+    if (creature === 'owl') {
+      scheduleSparse('owl', 16, 38, function () {
+        if (weatherNow() === 'storm' || bandNow() !== 'night') return;
+        playOnce('owl', { dur: 6 }, 0.7);
+      });
+    } else {
+      clearSparse('owl');
     }
   };
 
@@ -323,9 +354,11 @@
   A.stopAll = function () {
     stopTexture('rain');
     stopTexture('wind');
+    stopTexture('crickets');
     clearSparse('chimes');
     clearSparse('roll');
     clearSparse('birds');
+    clearSparse('owl');
     A.stopGears();
     var k;
     for (k in ambBus) { if (ambBus[k]) { try { ambBus[k].disconnect(); } catch (e) {} } }

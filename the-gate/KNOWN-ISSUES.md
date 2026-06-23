@@ -12,18 +12,26 @@ issues + risks worth *remembering* across sessions. Severity: **P1** breaks/look
 ## Open
 
 ### AUDIO — no sound below spec
-All nine procedural sounds (`Gate.sfx.rain/wind/thunderclap/thunderroll/gears/creak/windchimes/
-birdsong/logotune`) met their audio-lens TARGETs on verification (self-test 12/12). The conductor
-(`audio.js`) wires them in and the mute gate is proven (master→0). **No sound is below spec.**
+All eleven procedural sounds (`Gate.sfx.rain/wind/thunderclap/thunderroll/gears/creak/windchimes/
+birdsong/crickets/owl/logotune`) met their audio-lens TARGETs on verification (self-test 12/12). The
+audio-pass-2 additions verified clean as INTEGRATED (rendered from the served forged page via the
+bench, OfflineAudioContext @22050 Hz): reworked **thunderclap** clips:false @ -2.06 dBFS with two
+distinct onsets 116 ms apart + a confirmed reverb tail; **crickets** clips:false, centroid 4747 Hz,
+quiet -25.2 dBFS, silenceRatio 0.68 (the rhythmic high-band trill); **owl** clips:false, f0 375.6 Hz
+(low warm owl band), centroid 416 Hz, silenceRatio 0.65 (a few low hoot blobs with gaps). The
+conductor (`audio.js`) wires them in and the mute gate is proven (master 0.9↔0). **No sound is below
+spec.**
 
 ### P3 — live AudioContext stays `suspended` under headless e2e (environment, not a defect)
 In headless Chrome a synthetic `dispatchEvent('click')` is NOT a trusted user gesture, so
 `ctx.resume()` does not flip the context to `running` and its scheduled gain ramps don't advance
 (`currentTime` stays 0; `gain.value` reports the last *set* value, not the scheduled future one).
-This is a known browser-automation limitation. The mute-gate *math* (master→0 muted, →0.9 unmuted)
-was therefore proven by rendering the exact ramp through an `OfflineAudioContext` (where the clock
-advances) and by reading the live master gain immediately after a clean unlock (0.9). A real visitor's
-first click is a trusted gesture and resumes the context normally. No code change required.
+This is a known browser-automation limitation. NOTE (audio-pass-2): an agent-browser **real `click`
+on the title splash** (and a real `press Enter`) IS treated as a trusted gesture in this harness —
+the context flipped to `running` and the mute-ramp rendered the master live (0.9 unmuted → 0 muted →
+0.9 unmuted, read after the 40 ms ramp settled). A *synthetic* `element.click()` in `eval` still
+leaves the context suspended, so when proving the mute gate via `eval`, drive it through the splash
+click (or render the ramp through an `OfflineAudioContext`). No code change required.
 
 ### P3 — `?smil=` pauses ALL SMIL globally (by design, noted)
 `svg.pauseAnimations()` is document-wide, so `?smil=` freezes every SMIL animation, not just the

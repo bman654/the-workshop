@@ -61,6 +61,39 @@
   #welcome .sub{ color:var(--muted); font-size:clamp(15px,2.2vw,19px); font-style:italic;
     max-width:560px; margin:0 auto; line-height:1.55; }
 
+  /* ── TITLE SPLASH — the cover of the experience (PRODUCTION entry only) ──────
+     A full-bleed deep-night overlay above everything (z above the welcome card and
+     overlay). The whole panel is a button: click OR Enter/Space arms+unlocks audio
+     (this IS the first user gesture) and dismisses, revealing the dwellable idle
+     scene. Calm + classy; reuses the estate brass/ink palette + the plaque fonts. */
+  #splash{ position:absolute; inset:0; z-index:60; display:flex;
+    align-items:center; justify-content:center; flex-direction:column; text-align:center;
+    cursor:pointer; user-select:none; -webkit-user-select:none;
+    background:
+      radial-gradient(70% 70% at 50% 42%, rgba(22,18,9,.55), rgba(4,5,9,.94) 72%, #04060a 100%),
+      linear-gradient(180deg, #06080d 0%, #04060a 100%);
+    opacity:1; transition:opacity 600ms ease; }
+  #splash.out{ opacity:0; }
+  #splash:focus{ outline:none; }
+  #splash:focus-visible{ outline:2px solid var(--brass-bright); outline-offset:-6px; }
+  #splash .s-mark{ font:600 12px/1 var(--mono); letter-spacing:.42em; text-transform:uppercase;
+    color:var(--brass); opacity:.7; margin-bottom:1.1em; }
+  #splash .s-title{ font-family:var(--serif); font-weight:500;
+    font-size:clamp(34px,7vw,68px); letter-spacing:.06em; line-height:1.05;
+    margin:0 0 .55em;
+    background:linear-gradient(180deg, var(--brass-bright), var(--brass));
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  #splash .s-prompt{ display:inline-flex; align-items:center; gap:.55em;
+    font:600 12px/1 var(--mono); letter-spacing:.26em; text-transform:uppercase;
+    color:var(--muted); }
+  #splash .s-prompt .s-enter{ animation:splash-pulse 2.4s ease-in-out infinite; }
+  #splash .s-sound{ font-size:15px; opacity:.85; }
+  @keyframes splash-pulse{ 0%,100%{ opacity:.45; } 50%{ opacity:1; } }
+  @media (prefers-reduced-motion: reduce){
+    #splash{ transition:none; }
+    #splash .s-prompt .s-enter{ animation:none; opacity:.8; }
+  }
+
   /* ── UI chrome: weather tri-toggle + mute chip (brass-styled, bottom corners) ── */
   .chip{ position:absolute; bottom:18px; z-index:30; display:flex; align-items:center; gap:1px;
     background:rgba(11,14,22,.78); border:1px solid rgba(201,162,74,.45); border-radius:10px;
@@ -94,6 +127,14 @@
       <div class="mark">The Orrery Estate</div>
       <h1>Welcome to the Orrery Estate</h1>
       <div class="sub">Where the mathematics keeps its mysteries.</div>
+    </div>
+
+    <!-- TITLE SPLASH (production entry only; the boot removes it in dev) -->
+    <div id="splash" role="button" tabindex="0"
+         aria-label="The Orrery Estate — click or press Enter to enter, with sound">
+      <div class="s-mark">A Place Where the Mathematics Keeps Its Mysteries</div>
+      <div class="s-title">THE ORRERY ESTATE</div>
+      <div class="s-prompt"><span class="s-enter">click to enter</span><span class="s-sound" aria-hidden="true">🔊</span></div>
     </div>
 
     <!-- UI chrome -->
@@ -3284,25 +3325,31 @@ window.Gate.sfx.wind = function ({ ctx, dest, dur, when = 0, seed = 1, strength 
 /* ═══════════════════════════════════════════════════════════════════════════
    audio-thunderclap.js  —  Gate.sfx.thunderclap  (procedural WebAudio)
 
-   The Gate's lightning thunderclap: a sharp broadband CRACK at t=0 that decays
-   fast into a low rolling BODY/slap. Triggered on each lightning strike, synced
-   to the visual flash edge — so all the energy lives at the very start.
+   The Gate's lightning thunderclap: a POWERFUL two-part 'CR-AACK'. A sharp
+   broadband CRACK transient at t=0, then ~110ms later a bigger BASS-HEAVY
+   body/slap, then a short reverberant decay tail (~1.2s). It pairs with the
+   separate long 'thunderroll'; this is the single per-strike impact.
 
    Architecture (per the Gate sfx contract): a dual-use builder that schedules a
    self-contained one-shot into `dest` against ANY BaseAudioContext (a live
    AudioContext when it ships, an OfflineAudioContext when it is verified). The
    exact graph rendered offline for audio-lens is the one that ships.
 
-   Three layered voices, all driven from one deterministic seeded noise bed:
-     1. CRACK  — broadband noise, ~1ms attack, hard ~55ms exp decay, highpassed
-                 so the onset reads as a bright vertical slab at t=0.
-     2. BODY   — lowpassed noise, ~300ms, with a DOWNWARD lowpass sweep so the
-                 spectrum rolls from mid into low as it decays (the rumble).
-     3. SUB    — a brief ~48 Hz sine thump that adds chest weight and pulls the
-                 spectral centroid mid-to-low. No sustained pitch (decays in
-                 ~120ms, far too short for f0 detection on the full clip).
+   Signal path:
+     dry voices ─┬─────────────────────────────► master ─► dest
+                 └─► reverb send ─► FDN tail ────►
+   Voices (all noise voices share one deterministic seeded noise bed):
+     1. CRACK  — broadband noise, ~0.5ms attack, hard ~45ms exp decay, highpass
+                 so the leading edge reads as a bright full-height vertical slab.
+     2. SLAP   — the second transient ~110ms after the crack: lowpassed noise
+                 with a downward cutoff sweep, fuller and louder than the crack.
+     3. SUB    — a ~70→40 Hz sine thump under the slap for chest weight / bass,
+                 pulling the spectral centroid LOW. Decays in ~180ms (no f0).
+     4. TAIL   — a 4-line feedback-delay network (with allpass diffusion) fed a
+                 reverb send from crack+slap, giving a ~1.2s decaying wash so
+                 silenceRatio rises late in the clip.
 
-   No ringing, no stable pitch. Peaks held well under 0 dBFS. Seeded PRNG only.
+   No ringing, no stable pitch. Peaks held near -2 dBFS but under 0. Seeded PRNG.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
@@ -3342,84 +3389,183 @@ window.Gate.sfx.wind = function ({ ctx, dest, dur, when = 0, seed = 1, strength 
 
     var t0 = ctx.currentTime + when;
 
-    // One shared noise bed covers every noise voice (offset reads keep them
-    // distinct yet fully deterministic from `seed`). Length is bounded so we
-    // never over-allocate on long `dur` values — the clap lives in < 0.6s.
-    var bedSec = Math.min(dur, 1.2);
-    var noise = makeNoiseBuffer(ctx, seed * 2654435761, bedSec);
+    // One shared noise bed covers every noise voice (offset reads via the
+    // sources' own playback keep them distinct yet fully deterministic).
+    var bedSec = Math.min(Math.max(dur, 0.5), 1.4);
+    var noise = makeNoiseBuffer(ctx, (seed * 2654435761) >>> 0, bedSec);
 
-    // Master bus → dest, so the whole clap sits comfortably under 0 dBFS with
-    // a few dB of headroom (the three voices can momentarily align in phase).
+    // Master bus → dest. A soft-clip-free safety: keep peak near -2 dBFS by
+    // budgeting per-voice gains; the master trims the summed bus.
     var master = ctx.createGain();
-    master.gain.setValueAtTime(0.62, t0);
+    master.gain.setValueAtTime(0.46, t0);
     master.connect(dest);
 
-    // ── Voice 1: the CRACK ─────────────────────────────────────────────────
-    // Broadband noise, near-instant attack, hard exponential decay. A gentle
-    // highpass keeps it crisp (not muddy) so it paints a bright full-height
-    // vertical slab at t=0.
+    // Reverb send bus → FDN tail → master. Crack + slap feed this.
+    var send = ctx.createGain();
+    send.gain.setValueAtTime(0.32, t0);
+
+    // ── Voice 1: the CRACK (first transient) ───────────────────────────────
+    // Broadband noise, near-instant attack, hard exponential decay. A highpass
+    // keeps it crisp/bright — a tall thin vertical slab at t=0.
+    // A short lead-in of silence before the crack's attack so the very first
+    // STFT analysis frame is quiet — the crack then reads as a clean spectral-
+    // flux RISE (a distinct first onset) rather than vanishing into frame 0.
+    var crackDelay = 0.07;
+    var tC = t0 + crackDelay;
     var crackSrc = ctx.createBufferSource();
     crackSrc.buffer = noise;
     var crackHP = ctx.createBiquadFilter();
     crackHP.type = 'highpass';
-    crackHP.frequency.setValueAtTime(700, t0);
-    crackHP.Q.setValueAtTime(0.5, t0);
+    crackHP.frequency.setValueAtTime(500, tC);   // broader band → more bins light up (stronger flux)
+    crackHP.Q.setValueAtTime(0.6, tC);
     var crackG = ctx.createGain();
-    var crackDecay = 0.055;                 // ~55ms body of the crack
-    crackG.gain.setValueAtTime(0.0001, t0);
-    crackG.gain.linearRampToValueAtTime(0.95, t0 + 0.001);   // ~1ms attack
-    crackG.gain.exponentialRampToValueAtTime(0.0008, t0 + crackDecay);
-    crackG.gain.setValueAtTime(0, t0 + crackDecay + 0.005);
-    crackSrc.connect(crackHP).connect(crackG).connect(master);
-    crackSrc.start(t0);
-    crackSrc.stop(t0 + crackDecay + 0.02);
+    var crackDecay = 0.035;                 // ~35ms body — snappy, clears before the slap
+    crackG.gain.setValueAtTime(0.0001, tC);
+    crackG.gain.linearRampToValueAtTime(1.0, tC + 0.0005);   // ~0.5ms attack
+    crackG.gain.exponentialRampToValueAtTime(0.0006, tC + crackDecay);
+    crackG.gain.setValueAtTime(0, tC + crackDecay + 0.003);
+    crackSrc.connect(crackHP).connect(crackG);
+    crackG.connect(master);
+    crackG.connect(send);
+    crackSrc.start(tC);
+    crackSrc.stop(tC + crackDecay + 0.02);
 
-    // ── Voice 2: the BODY / slap ───────────────────────────────────────────
-    // Lowpassed noise with a DOWNWARD cutoff sweep: starts mid (energy near the
-    // crack), then collapses toward the low end as it decays — the spectrogram
-    // shows the slab tilting/rolling down into the low rumble.
-    var bodySrc = ctx.createBufferSource();
-    bodySrc.buffer = noise;
-    bodySrc.playbackRate.setValueAtTime(0.85, t0); // slightly darker grain
-    var bodyLP = ctx.createBiquadFilter();
-    bodyLP.type = 'lowpass';
-    bodyLP.Q.setValueAtTime(0.7, t0);
-    bodyLP.frequency.setValueAtTime(2600, t0);
-    bodyLP.frequency.exponentialRampToValueAtTime(320, t0 + 0.30);
-    var bodyG = ctx.createGain();
-    var bodyDecay = 0.34;
-    bodyG.gain.setValueAtTime(0.0001, t0);
-    bodyG.gain.linearRampToValueAtTime(0.85, t0 + 0.004); // very fast, just behind the crack
-    bodyG.gain.exponentialRampToValueAtTime(0.0006, t0 + bodyDecay);
-    bodyG.gain.setValueAtTime(0, t0 + bodyDecay + 0.005);
-    bodySrc.connect(bodyLP).connect(bodyG).connect(master);
-    bodySrc.start(t0);
-    bodySrc.stop(t0 + bodyDecay + 0.02);
+    // ── Voice 2: the SLAP (second transient) ───────────────────────────────
+    // Fires ~110ms after the crack — the 'AACK'. Lowpassed noise with a
+    // downward cutoff sweep: fuller, louder and lower than the crack. Reads as
+    // a second bright slab that reaches lower (more bass) than the first.
+    var slapDelay = 0.22;
+    var tS = t0 + slapDelay;
+    var slapSrc = ctx.createBufferSource();
+    slapSrc.buffer = noise;
+    slapSrc.playbackRate.setValueAtTime(0.78, tS); // darker grain
+    var slapLP = ctx.createBiquadFilter();
+    slapLP.type = 'lowpass';
+    slapLP.Q.setValueAtTime(0.7, tS);
+    slapLP.frequency.setValueAtTime(3200, tS);
+    slapLP.frequency.exponentialRampToValueAtTime(260, tS + 0.32);
+    var slapG = ctx.createGain();
+    var slapDecay = 0.36;
+    slapG.gain.setValueAtTime(0.0001, tS);
+    slapG.gain.linearRampToValueAtTime(1.0, tS + 0.003);  // hard, fuller second hit
+    slapG.gain.exponentialRampToValueAtTime(0.0006, tS + slapDecay);
+    slapG.gain.setValueAtTime(0, tS + slapDecay + 0.005);
+    slapSrc.connect(slapLP).connect(slapG);
+    slapG.connect(master);
+    slapG.connect(send);
+    slapSrc.start(tS);
+    slapSrc.stop(tS + slapDecay + 0.02);
 
-    // ── Voice 3: the SUB thump ─────────────────────────────────────────────
-    // A short low sine "boom" for chest weight that pulls the centroid down.
-    // Pitch glides down (no fixed tone) and decays in ~120ms — too brief to
-    // register as a stable f0 over the whole clip.
+    // Slap leading EDGE: a very short broadband (unfiltered) burst exactly on
+    // the slap onset. This injects a sharp new-spectral-energy jump so the
+    // analyzer's spectral-flux detector resolves the slap as a DISTINCT second
+    // onset (the lowpassed body alone ramps in too gradually to spike flux).
+    var edgeSrc = ctx.createBufferSource();
+    edgeSrc.buffer = noise;
+    var edgeHP = ctx.createBiquadFilter();
+    edgeHP.type = 'highpass';
+    edgeHP.frequency.setValueAtTime(800, tS);
+    edgeHP.Q.setValueAtTime(0.5, tS);
+    var edgeG = ctx.createGain();
+    var edgeDecay = 0.02;
+    edgeG.gain.setValueAtTime(0.0001, tS);
+    edgeG.gain.linearRampToValueAtTime(0.7, tS + 0.0005);
+    edgeG.gain.exponentialRampToValueAtTime(0.0006, tS + edgeDecay);
+    edgeG.gain.setValueAtTime(0, tS + edgeDecay + 0.003);
+    edgeSrc.connect(edgeHP).connect(edgeG);
+    edgeG.connect(master);
+    edgeG.connect(send);
+    edgeSrc.start(tS);
+    edgeSrc.stop(tS + edgeDecay + 0.02);
+
+    // ── Voice 3: the SUB thump (bass body, under the slap) ──────────────────
+    // A low sine "boom" for chest weight that pulls the centroid down and gives
+    // the slap real low-end. Pitch glides down (no fixed tone), decays ~180ms.
     var sub = ctx.createOscillator();
     sub.type = 'sine';
-    sub.frequency.setValueAtTime(62, t0);
-    sub.frequency.exponentialRampToValueAtTime(38, t0 + 0.12);
+    sub.frequency.setValueAtTime(74, tS);
+    sub.frequency.exponentialRampToValueAtTime(40, tS + 0.18);
     var subG = ctx.createGain();
-    subG.gain.setValueAtTime(0.0001, t0);
-    subG.gain.linearRampToValueAtTime(0.55, t0 + 0.006);
-    subG.gain.exponentialRampToValueAtTime(0.0006, t0 + 0.13);
-    subG.gain.setValueAtTime(0, t0 + 0.14);
+    subG.gain.setValueAtTime(0.0001, tS);
+    subG.gain.linearRampToValueAtTime(0.85, tS + 0.006);
+    subG.gain.exponentialRampToValueAtTime(0.0006, tS + 0.20);
+    subG.gain.setValueAtTime(0, tS + 0.21);
     sub.connect(subG).connect(master);
-    sub.start(t0);
-    sub.stop(t0 + 0.16);
+    sub.start(tS);
+    sub.stop(tS + 0.23);
 
-    // Live-use handle: hard-stop everything at `at` (or now).
+    // ── Voice 4: the reverberant TAIL — a 4-line feedback-delay network ──────
+    // Two allpass diffusers smear the input, then four parallel feedback delays
+    // (mutually fed back through a shared damping lowpass) create a dense,
+    // decaying wash. Tuned to settle in ~1.2s so silenceRatio rises late.
+    var tailEnd = Math.min(dur, slapDelay + 1.4);
+
+    // Allpass diffusion stage builder (Schroeder allpass via delay + feedback).
+    function makeAllpass(delaySec, g) {
+      var d = ctx.createDelay(0.2);
+      d.delayTime.setValueAtTime(delaySec, t0);
+      var fb = ctx.createGain();    fb.gain.setValueAtTime(g, t0);
+      var ff = ctx.createGain();    ff.gain.setValueAtTime(-g, t0);
+      var input = ctx.createGain(); input.gain.setValueAtTime(1, t0);
+      var out = ctx.createGain();   out.gain.setValueAtTime(1, t0);
+      // y = -g*x + d ; d = x + g*d_delayed
+      input.connect(ff).connect(out);   // feedforward -g*x
+      input.connect(d);
+      d.connect(out);                    // delayed signal to output
+      d.connect(fb).connect(d);          // delay feedback +g
+      return { input: input, out: out };
+    }
+
+    var ap1 = makeAllpass(0.0047, 0.7);
+    var ap2 = makeAllpass(0.0123, 0.6);
+    send.connect(ap1.input);
+    ap1.out.connect(ap2.input);
+
+    // Four feedback delay lines with a shared damping lowpass in the loop.
+    var delayTimes = [0.0297, 0.0411, 0.0573, 0.0689];
+    var fdnIn = ap2.out;
+    var damp = ctx.createBiquadFilter();
+    damp.type = 'lowpass';
+    damp.frequency.setValueAtTime(2400, t0);   // dark, distant reverb
+    damp.Q.setValueAtTime(0.5, t0);
+    var fbGain = ctx.createGain();
+    fbGain.gain.setValueAtTime(0.62, t0);       // global decay rate
+    var tailG = ctx.createGain();
+    // Tail rises only AFTER the slap so it doesn't fill the crack→slap gap
+    // (which would merge the two transients into one onset).
+    tailG.gain.setValueAtTime(0.0001, t0);
+    tailG.gain.setValueAtTime(0.0001, tS + 0.04);
+    tailG.gain.linearRampToValueAtTime(0.6, tS + 0.10);
+    // Fade the tail out by tailEnd so it never rings past the clip.
+    tailG.gain.setValueAtTime(0.6, Math.max(tS + 0.10, tailEnd - 0.3));
+    tailG.gain.exponentialRampToValueAtTime(0.0005, tailEnd);
+    tailG.connect(master);
+
+    var dl = [];
+    for (var k = 0; k < delayTimes.length; k++) {
+      var dn = ctx.createDelay(0.2);
+      dn.delayTime.setValueAtTime(delayTimes[k], t0);
+      dl.push(dn);
+      fdnIn.connect(dn);          // input feeds each line
+      dn.connect(tailG);          // each line → tail output
+    }
+    // Mutual feedback: sum lines → damp → fbGain → back into each line.
+    var fbSum = ctx.createGain();
+    fbSum.gain.setValueAtTime(1 / dl.length, t0);
+    for (var m = 0; m < dl.length; m++) { dl[m].connect(fbSum); }
+    fbSum.connect(damp).connect(fbGain);
+    for (var p = 0; p < dl.length; p++) { fbGain.connect(dl[p]); }
+
+    // Live-use handle: hard-stop the scheduled sources at `at` (or now). The
+    // FDN nodes have no sources to stop, but the tail gain envelope ends them.
     return {
       stop: function (at) {
         var when2 = at != null ? at : ctx.currentTime;
         try { crackSrc.stop(when2); } catch (e) {}
-        try { bodySrc.stop(when2); } catch (e) {}
+        try { slapSrc.stop(when2); } catch (e) {}
         try { sub.stop(when2); } catch (e) {}
+        try { tailG.gain.cancelScheduledValues(when2); } catch (e) {}
+        try { tailG.gain.setValueAtTime(0, when2); } catch (e) {}
       }
     };
   };
@@ -4473,6 +4619,397 @@ Gate.sfx['birdsong'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
   </script>
   <script>
 'use strict';
+/*
+ * Gate.sfx.crickets — procedural dusk crickets (WebAudio, dual-use offline/live).
+ *
+ * WHY: at DUSK the Gate rotates its creature voices — crickets replace the
+ * daytime songbird. This is a QUIET AMBIENT BED, not a foreground sound: a
+ * narrow high band that PULSES rhythmically (regular vertical ticks in the
+ * spectrogram), the steady stridulation trill of a few crickets calling.
+ *
+ * Design (cricket stridulation = wing file-and-scraper):
+ *   • Each cricket "voice" sings a STEADY TRILL: a narrowband tone burst
+ *     (bandpass ~4–5 kHz, the dominant chirp frequency) gated rapidly on/off at
+ *     a fixed seeded pulse rate. Real field crickets pulse at tens of Hz inside
+ *     a chirp and repeat chirps a few per second; for a gentle continuous dusk
+ *     bed we run a steady pulse train (~8–14 Hz) — fast regular onsets that read
+ *     as a trill, a few audible pulses per second.
+ *   • Each pulse is a SHORT (~10–18 ms) raised-cosine grain of the carrier tone
+ *     so it opens and closes click-free, leaving a clean gap between pulses (the
+ *     regular vertical ticks).
+ *   • 3 crickets are layered at slightly different carrier pitches, pulse rates,
+ *     and start phases so they interleave into a natural, slightly shimmering
+ *     chorus rather than a metronome. A faint amplitude shimmer makes the bed
+ *     breathe like a real evening.
+ *   • The whole thing runs through a master bandpass + highpass to keep the
+ *     energy in the bright 4–5.5 kHz cricket band (high spectral centroid) and
+ *     strip any low rumble.
+ *
+ * Determinism: every random choice comes from a small seeded PRNG (mulberry32),
+ * never Math.random — a given {seed} renders bit-identical every time.
+ *
+ * Headroom: crickets are deliberately QUIET (low overall amplitude). Gains are
+ * chosen so the summed peak stays well under 0 dBFS — no clipping.
+ *
+ * Texture contract: a self-contained stationary dur-second bed — it fills the
+ * whole window with a steady trill (no long lead-in/tail silence), so it can be
+ * looped or cross-faded as an ambience layer.
+ */
+window.Gate = window.Gate || {};
+Gate.sfx = Gate.sfx || {};
+
+Gate.sfx.crickets = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
+  var t0 = ctx.currentTime + when;
+
+  // ── Seeded PRNG (mulberry32): deterministic uniform [0,1) ────────────────
+  var a = (seed >>> 0) || 1;
+  function rng() {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  function range(lo, hi) { return lo + rng() * (hi - lo); }
+
+  // ── Master bus: keep the energy in the bright cricket band so the spectral
+  //    centroid lands high (~4–5.5 kHz). A bandpass shapes the band; a highpass
+  //    strips any sub-rumble. Overall gain is LOW — this is a quiet ambience. ──
+  var bp = ctx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 4700;          // centre of the cricket band
+  bp.Q.value = 0.9;                   // broad enough to pass all three voices
+
+  var hp = ctx.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 3000;          // nothing low — keep it airy/high
+
+  var master = ctx.createGain();
+  master.gain.value = 0.22;           // quiet ambient bed
+
+  // A gentle sub-Hz amplitude shimmer so the evening "breathes" rather than
+  // sitting perfectly flat. Baked as scheduled ramps (works offline).
+  var baseLevel = 0.22;
+  var shimmerHz = 0.35;
+  var shimmerDepth = 0.10 * baseLevel;
+  var steps = Math.max(2, Math.ceil(dur * shimmerHz * 8));
+  master.gain.setValueAtTime(baseLevel, t0);
+  for (var sIdx = 1; sIdx <= steps; sIdx++) {
+    var tt = t0 + (dur * sIdx) / steps;
+    var ph = 2 * Math.PI * shimmerHz * (dur * sIdx / steps);
+    var lvl = baseLevel + shimmerDepth * Math.sin(ph);
+    master.gain.linearRampToValueAtTime(Math.max(0.0001, lvl), tt);
+  }
+
+  bp.connect(hp).connect(master).connect(dest);
+
+  var oscs = [];   // collect for live stop()
+
+  // ── One CRICKET VOICE: a steady trill. A single bandpass-shaped sine carrier
+  //    at the voice's chirp frequency, gated by a pulse train of short
+  //    raised-cosine grains at the voice's pulse rate. The carrier runs
+  //    continuously; the gain gate cuts it into clean pulses with gaps between
+  //    (the rhythmic vertical ticks). ─────────────────────────────────────────
+  function cricket(carrierHz, pulseHz, dutyMs, level, phase, harmAmt) {
+    // Continuous carrier sine at the chirp frequency.
+    var car = ctx.createOscillator();
+    car.type = 'sine';
+    car.frequency.value = carrierHz;
+
+    // A faint detuned partner an octave-ish band away adds the slightly buzzy,
+    // reedy timbre of a real cricket file-scraper without leaving the bright band.
+    var car2 = ctx.createOscillator();
+    car2.type = 'sine';
+    car2.frequency.value = carrierHz * 1.5;   // a fifth above — still in band
+    var car2g = ctx.createGain();
+    car2g.gain.value = harmAmt;
+
+    // Per-voice bandpass so each trill is its own narrow tone (the "narrowband
+    // tone burst" of the recipe) — a tight Q keeps it pure and high-centroid.
+    var vbp = ctx.createBiquadFilter();
+    vbp.type = 'bandpass';
+    vbp.frequency.value = carrierHz;
+    vbp.Q.value = 8;
+
+    // The pulse GATE: a gain node driven by a raised-cosine grain per pulse.
+    var gate = ctx.createGain();
+    gate.gain.setValueAtTime(0.0001, t0);
+
+    var period = 1 / pulseHz;
+    var grain = Math.min(dutyMs / 1000, period * 0.7);   // grain shorter than period -> clean gap
+    // Start at the voice's phase offset so the three voices interleave.
+    var pAt = t0 + phase * period;
+    var N = 24;                       // samples per grain envelope (smooth)
+    var guard = 0;
+    while (pAt < t0 + dur - grain && guard < 20000) {
+      var env = new Float32Array(N);
+      for (var i = 0; i < N; i++) {
+        var x = i / (N - 1);
+        // raised-cosine bump: 0 -> peak -> 0, click-free open & close
+        env[i] = Math.max(0.0001, level * (0.5 - 0.5 * Math.cos(2 * Math.PI * x)));
+      }
+      gate.gain.setValueCurveAtTime(env, pAt, grain);
+      gate.gain.setValueAtTime(0.0001, pAt + grain);
+      pAt += period;
+      guard++;
+    }
+
+    car.connect(vbp);
+    car2.connect(car2g).connect(vbp);
+    vbp.connect(gate).connect(bp);
+
+    car.start(t0);  car.stop(t0 + dur + 0.02);
+    car2.start(t0); car2.stop(t0 + dur + 0.02);
+    oscs.push(car, car2);
+  }
+
+  // ── Layer 3 crickets at slightly different chirp pitches, pulse rates, and
+  //    phases — a small natural chorus, not a metronome. Quiet per-voice levels
+  //    sum to a soft bed. ───────────────────────────────────────────────────
+  var nVoices = 3;
+  for (var v = 0; v < nVoices; v++) {
+    var carrierHz = range(4300, 5200);     // dominant chirp frequency, high band
+    var pulseHz   = range(8, 13);          // steady trill rate — a few audible pulses/sec
+    var dutyMs    = range(11, 17);         // short crisp pulses
+    var level     = range(0.55, 0.85);     // per-voice gain (master keeps it quiet overall)
+    var phase     = rng();                 // start phase offset within a period
+    var harmAmt   = range(0.10, 0.20);     // faint reedy fifth
+    cricket(carrierHz, pulseHz, dutyMs, level, phase, harmAmt);
+  }
+
+  // ── Live-use handle: fade the master out cleanly at a given time. ─────────
+  return {
+    stop: function (at) {
+      var when_s = at != null ? at : ctx.currentTime;
+      try {
+        master.gain.cancelScheduledValues(when_s);
+        master.gain.setValueAtTime(master.gain.value || baseLevel, when_s);
+        master.gain.linearRampToValueAtTime(0.0001, when_s + 0.08);
+      } catch (e) {}
+      for (var k = 0; k < oscs.length; k++) {
+        try { oscs[k].stop(when_s + 0.1); } catch (e) {}
+      }
+    }
+  };
+};
+  </script>
+  <script>
+'use strict';
+// ─────────────────────────────────────────────────────────────────────────────
+// Gate.sfx["owl"] — "A Distant Owl At Night"
+//
+// The Gate's NIGHT voice (replacing daytime birdsong): a single distant owl
+// hooting softly across the dark. Low, soft, breathy, unhurried — the warm
+// "hoo" of a tawny / great-horned owl, NOT a high pigeon coo and NOT a sharp
+// whistle. A short PHRASE of a few hoots separated by long quiet pauses:
+//   one low hoot ... a pause ... then a closer pair "hoo-hoo".
+//
+// Each HOOT is built from three layers so it reads as a breathy owl, not a
+// pure test tone:
+//   (1) a soft sine CARRIER in the owl band (~300–450 Hz) that bends UP a touch
+//       at the onset and DOWN on the tail (the classic rising-then-settling owl
+//       inflection), with a slow gentle vibrato so the held tone breathes;
+//   (2) a faint 2nd harmonic an octave up, much quieter, following the same
+//       contour — gives the hoot a hollow woody body without raising the pitch
+//       read (the fundamental clearly wins --pitch);
+//   (3) a whisper of band-limited breath noise under the onset — the "h" of the
+//       hoot — that fades quickly so it adds breathiness, not hiss, and never
+//       lifts the silence ratio between phrases.
+//
+// Soft raised-cosine amplitude envelopes (sampled curves) give a gentle attack
+// and a long soft decay (~0.4–0.8 s body) so there are no click transients.
+// A master lowpass + low gain seats the owl as DISTANT and warm — energy stays
+// low in the spectrum, so the spectrogram shows a few short LOW soft-edged
+// horizontal tone blobs with quiet gaps between.
+//
+// Dual-use builder: schedules into 'dest' on ANY BaseAudioContext (live
+// AudioContext when shipped, OfflineAudioContext when verified). Deterministic
+// via a seeded mulberry32 PRNG — never Math.random. Peaks well under 0 dBFS.
+// ─────────────────────────────────────────────────────────────────────────────
+window.Gate = window.Gate || {};
+Gate.sfx = Gate.sfx || {};
+
+Gate.sfx['owl'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
+  var t0 = ctx.currentTime + when;
+
+  // ── Seeded PRNG (mulberry32) — deterministic renders, no Math.random ───────
+  var s = (seed >>> 0) || 1;
+  function rnd() {
+    s |= 0; s = (s + 0x6D2B79F5) | 0;
+    var t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  function range(lo, hi) { return lo + rnd() * (hi - lo); }
+
+  // ── Master bus: a lowpass to keep the owl LOW and warm (scrub any high
+  //    breathiness into the haze), a gentle highpass to drop sub-rumble, and a
+  //    soft master gain so distance/level stay well under 0 dBFS. ─────────────
+  var lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 1400;        // soft, dull, distant — owls are low
+  lp.Q.value = 0.4;
+
+  var hp = ctx.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 150;         // trim sub-rumble below the hoot
+
+  var master = ctx.createGain();
+  master.gain.value = 0.34;         // distant + gentle
+
+  lp.connect(hp).connect(master).connect(dest);
+
+  // ── A reusable buffer of seeded white noise for the breath layer. The owl's
+  //    "h" onset is a brief band-limited puff of air; we filter it low and fade
+  //    it fast so it adds breathiness without hiss between hoots. ──────────────
+  var noiseLen = Math.max(1, Math.ceil(ctx.sampleRate * Math.min(dur, 1.0)));
+  var noiseBuf = ctx.createBuffer(1, noiseLen, ctx.sampleRate);
+  var nd = noiseBuf.getChannelData(0);
+  for (var ni = 0; ni < noiseLen; ni++) { nd[ni] = rnd() * 2 - 1; }
+
+  // ── One HOOT. A soft sine carrier in the owl band with a small up-then-down
+  //    pitch bend and a slow vibrato, a faint octave harmonic for woody body,
+  //    and a whisper of breath noise under the onset. Raised-cosine envelopes
+  //    keep every edge click-free.
+  //
+  //    at:   start time
+  //    f0:   fundamental (~300–450 Hz)
+  //    len:  total hoot length (~0.4–0.8 s)
+  //    vel:  master-relative loudness ─────────────────────────────────────────
+  function hoot(at, f0, len, vel) {
+    if (at >= t0 + dur) return;
+    if (at + len > t0 + dur) len = (t0 + dur) - at - 0.005;
+    if (len < 0.12) return;
+
+    // ── Carrier with the owl inflection: rise a touch at the onset, settle and
+    //    fall on the tail. Exponential ramps read as a natural breathy bend. ───
+    var carrier = ctx.createOscillator();
+    carrier.type = 'sine';
+    var f = carrier.frequency;
+    var fUp = f0 * 1.06;                 // small onset rise
+    var fEnd = f0 * 0.93;                // gentle settle/fall on the tail
+    f.setValueAtTime(f0, at);
+    f.exponentialRampToValueAtTime(fUp, at + len * 0.22);
+    f.exponentialRampToValueAtTime(f0, at + len * 0.55);
+    f.exponentialRampToValueAtTime(fEnd, at + len);
+
+    // ── Slow gentle vibrato so the held tone breathes (not a static sine). ────
+    var vib = ctx.createOscillator();
+    vib.type = 'sine';
+    vib.frequency.value = range(4.5, 6.5);   // slow, ~5 Hz tremble
+    var vibGain = ctx.createGain();
+    vibGain.gain.value = f0 * 0.012;         // shallow depth — subtle
+    vib.connect(vibGain).connect(f);
+
+    // ── Faint octave harmonic — hollow woody body, follows the same contour at
+    //    ×2, sits well under the fundamental so --pitch reads the low f0. ──────
+    var over = ctx.createOscillator();
+    over.type = 'sine';
+    var of = over.frequency;
+    of.setValueAtTime(f0 * 2, at);
+    of.exponentialRampToValueAtTime(fUp * 2, at + len * 0.22);
+    of.exponentialRampToValueAtTime(f0 * 2, at + len * 0.55);
+    of.exponentialRampToValueAtTime(fEnd * 2, at + len);
+    var vibGain2 = ctx.createGain();
+    vibGain2.gain.value = f0 * 0.012 * 2;
+    vib.connect(vibGain2).connect(of);
+    var overGain = ctx.createGain();
+    overGain.gain.value = 0.16;              // quiet — body, not pitch
+
+    // ── Amplitude envelope: soft raised-cosine attack (breathy, no click) and a
+    //    long soft decay. Built as a sampled curve so it is exact at any len. ──
+    var g = ctx.createGain();
+    var N = 96;
+    var env = new Float32Array(N);
+    var atkFrac = 0.30;                      // soft, slow onset — not percussive
+    for (var i = 0; i < N; i++) {
+      var x = i / (N - 1);
+      var a;
+      if (x < atkFrac) {
+        a = 0.5 - 0.5 * Math.cos(Math.PI * (x / atkFrac));        // 0→1 ease-in
+      } else {
+        var y = (x - atkFrac) / (1 - atkFrac);
+        a = 0.5 + 0.5 * Math.cos(Math.PI * y);                    // 1→0 ease-out
+      }
+      env[i] = Math.max(0.0001, a * vel);
+    }
+    g.gain.setValueCurveAtTime(env, at, len);
+
+    carrier.connect(g);
+    over.connect(overGain).connect(g);
+    g.connect(lp);
+
+    // ── Breath layer: a brief band-limited puff under the onset (the "h"). A
+    //    bandpass in the low-mid band, a fast attack/decay so it colours only
+    //    the very start of the hoot, kept faint so it never reads as hiss. ─────
+    var src = ctx.createBufferSource();
+    src.buffer = noiseBuf;
+    var bf = ctx.createBiquadFilter();
+    bf.type = 'bandpass';
+    bf.frequency.value = f0 * 2.2;           // breathy air, just above the tone
+    bf.Q.value = 0.8;
+    var bg = ctx.createGain();
+    var bN = 32;
+    var bEnv = new Float32Array(bN);
+    var bAtk = 0.25;
+    var breathLen = Math.min(len * 0.45, 0.30);
+    var breathPeak = vel * 0.10;             // whisper
+    for (var bi = 0; bi < bN; bi++) {
+      var bx = bi / (bN - 1);
+      var ba;
+      if (bx < bAtk) ba = 0.5 - 0.5 * Math.cos(Math.PI * (bx / bAtk));
+      else { var by = (bx - bAtk) / (1 - bAtk); ba = 0.5 + 0.5 * Math.cos(Math.PI * by); }
+      bEnv[bi] = Math.max(0.0001, ba * breathPeak);
+    }
+    bg.gain.setValueCurveAtTime(bEnv, at, breathLen);
+    src.connect(bf).connect(bg).connect(lp);
+
+    var tail = len + 0.03;
+    carrier.start(at);   carrier.stop(at + tail);
+    over.start(at);      over.stop(at + tail);
+    vib.start(at);       vib.stop(at + tail);
+    src.start(at);       src.stop(at + breathLen + 0.02);
+  }
+
+  // ── PHRASE: the owl's call rhythm — one low hoot, a long quiet pause, then a
+  //    closer pair "hoo-hoo". A drifting base pitch in the owl band keeps each
+  //    render natural while staying low. ─────────────────────────────────────
+  var base = range(330, 430);              // owl fundamental, low + warm
+  var cursor = t0 + range(0.30, 0.55);
+
+  // First lone hoot.
+  var h1len = range(0.55, 0.75);
+  hoot(cursor, base, h1len, range(0.80, 0.95));
+  cursor += h1len + range(1.0, 1.6);       // long quiet pause
+
+  // The closer pair: "hoo-hoo" — two hoots near each other, the 2nd a touch
+  // lower (a natural settling), with only a short gap between them.
+  if (cursor < t0 + dur - 1.0) {
+    var pBase = base * range(0.97, 1.03);
+    var p1len = range(0.45, 0.60);
+    hoot(cursor, pBase, p1len, range(0.78, 0.92));
+    cursor += p1len + range(0.28, 0.42);   // short intra-pair gap
+    var p2len = range(0.50, 0.68);
+    hoot(cursor, pBase * range(0.92, 0.98), p2len, range(0.82, 0.95));
+    cursor += p2len + range(1.0, 1.5);
+  }
+
+  // If the window still has generous room, add one more lone hoot to round out
+  // the phrase rather than leaving a long dead tail.
+  if (cursor < t0 + dur - 0.8) {
+    var h3len = range(0.50, 0.70);
+    hoot(cursor, base * range(0.96, 1.04), h3len, range(0.78, 0.90));
+  }
+
+  return {
+    stop: function (at) {
+      var when_stop = at != null ? at : ctx.currentTime;
+      try { master.gain.setTargetAtTime(0.0001, when_stop, 0.08); } catch (e) {}
+    }
+  };
+};
+  </script>
+  <script>
+'use strict';
 // ─────────────────────────────────────────────────────────────────────────────
 // Gate.sfx["logotune"] — "The Glass Staircase" (FINAL logotune for The Gate)
 //
@@ -4717,8 +5254,9 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
   // ambient layer handles (each = { node, src } returned by a Gate.sfx builder,
   // routed through its own sub-bus gain so we can cross-fade independently).
   var amb = {
-    rain:  null,   // { stop } + bus
-    wind:  null,
+    rain:     null,   // { stop } + bus
+    wind:     null,
+    crickets: null,   // dusk creature texture
   };
   var ambBus = {};         // key -> GainNode sub-bus
   var ambLoopTimers = {};  // key -> setTimeout id (texture re-arm)
@@ -4750,7 +5288,6 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
     try { return (Gate.timeofday && Gate.timeofday.band) ? Gate.timeofday.band() : 'day'; }
     catch (e) { return 'day'; }
   }
-  function isDaytime() { return bandNow() === 'day'; }
 
   // wind STRENGTH per weather: clear < cloudy < storm (matches the visual sway).
   function windStrengthFor(w) {
@@ -4921,14 +5458,45 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
       clearSparse('roll');
     }
 
-    // BIRDSONG — ONLY in CLEAR weather during DAYTIME (silent at night/storm/rain).
-    if (w === 'clear' && isDaytime()) {
+    // CREATURE ROTATION — exactly ONE creature voice at a time, picked by the
+    // time-of-day BAND, and ONLY when it is NOT raining (clear OR cloudy; silent
+    // in storm). The band's onChange already re-calls ambient(), so a band change
+    // cross-fades the creatures (the old key's sparse timer is cleared, the new
+    // key's starts). Each fire re-checks weather+band so a change mid-interval is
+    // honoured.
+    //   day   → birdsong   (broadened from clear-only to any non-storm)
+    //   dusk  → crickets
+    //   night → owl
+    var band = bandNow();
+    var creature = !raining
+      ? (band === 'day' ? 'birds' : band === 'dusk' ? 'crickets' : 'owl')
+      : null;
+
+    // birdsong (day): clear/cloudy, daytime.
+    if (creature === 'birds') {
       scheduleSparse('birds', 10, 26, function () {
-        if (weatherNow() !== 'clear' || !isDaytime()) return;
+        if (weatherNow() === 'storm' || bandNow() !== 'day') return;
         playOnce('birdsong', { dur: 6 }, 0.6);
       });
     } else {
       clearSparse('birds');
+    }
+
+    // crickets (dusk): a quiet stationary bed, looped like rain/wind.
+    if (creature === 'crickets') {
+      startTexture('crickets', 'crickets', {}, 0.85);
+    } else {
+      killTexture('crickets', 0.9);
+    }
+
+    // owl (night): a sparse phrase of hoots on a long seeded interval.
+    if (creature === 'owl') {
+      scheduleSparse('owl', 16, 38, function () {
+        if (weatherNow() === 'storm' || bandNow() !== 'night') return;
+        playOnce('owl', { dur: 6 }, 0.7);
+      });
+    } else {
+      clearSparse('owl');
     }
   };
 
@@ -4969,9 +5537,11 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
   A.stopAll = function () {
     stopTexture('rain');
     stopTexture('wind');
+    stopTexture('crickets');
     clearSparse('chimes');
     clearSparse('roll');
     clearSparse('birds');
+    clearSparse('owl');
     A.stopGears();
     var k;
     for (k in ambBus) { if (ambBus[k]) { try { ambBus[k].disconnect(); } catch (e) {} } }
@@ -6622,7 +7192,7 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
     t1.textContent = 'The Orrery Estate';
     var t2 = S.el('text', { x: px, y: py + 24, 'text-anchor': 'middle',
       'font-family': 'ui-monospace, monospace', 'font-size': '13', 'letter-spacing': '0.28em', fill: BRASS }, g);
-    t2.textContent = 'CLICK TO ENTER';
+    t2.textContent = 'CLICK TO OPEN';
     return g;
   }
 
@@ -9974,6 +10544,51 @@ if (typeof globalThis !== 'undefined') {
     ['pointerdown', 'keydown', 'touchstart'].forEach(function (ev) {
       window.addEventListener(ev, armAudio, { capture: true, once: true });
     });
+
+    // ── TITLE SPLASH (production entry only) ─────────────────────────────────
+    // The cover of the experience: a full-screen overlay that gates the PRODUCTION
+    // entry and doubles as the visitor's first gesture + sound opt-in. In dev or
+    // any ?scene= boot (url.dev TRUE) it is irrelevant — our render/test harness
+    // must land straight in idle — so we remove it immediately and never show it.
+    // On activate (click OR Enter/Space): arm audio (this gesture unlocks WebAudio
+    // and starts the ambient bed for the current weather+band; the persisted mute
+    // flag still gates the master gain), then fade the splash out and remove it so
+    // the dwellable idle scene is revealed. The production fade-in proceeds beneath.
+    var splashEl = document.getElementById('splash');
+    if (splashEl) {
+      if (url.dev) {
+        // dev / ?scene= — no splash, ever.
+        try { splashEl.parentNode.removeChild(splashEl); } catch (e) {}
+      } else {
+        var splashDone = false;
+        function dismissSplash() {
+          if (splashDone) return;
+          splashDone = true;
+          // this click/keypress IS the first user gesture → unlock WebAudio.
+          armAudio();
+          var reduced = Gate.sequence.prefersReducedMotion && Gate.sequence.prefersReducedMotion();
+          var remove = function () { try { splashEl.parentNode.removeChild(splashEl); } catch (e) {} };
+          if (reduced) { remove(); }
+          else {
+            splashEl.classList.add('out');
+            // remove after the 600ms fade; a fallback timer guards a dropped event.
+            var done = false;
+            var fin = function () { if (done) return; done = true; remove(); };
+            splashEl.addEventListener('transitionend', fin, { once: true });
+            window.setTimeout(fin, 700);
+          }
+        }
+        splashEl.addEventListener('click', dismissSplash);
+        splashEl.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar') {
+            ev.preventDefault();
+            dismissSplash();
+          }
+        });
+        // focus it so a keyboard visitor can enter without reaching for the mouse.
+        try { splashEl.focus(); } catch (e) {}
+      }
+    }
 
     // ── the click-through sequence ───────────────────────────────────────────
     var overlay = document.getElementById('overlay');
