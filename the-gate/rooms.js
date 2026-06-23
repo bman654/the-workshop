@@ -33,7 +33,24 @@
   // Phase A: only the Cairn, which uses fixed colors (polished black + brass) so it
   // declares no repColors. Future reps add an entry here (and a draw fn in scene.js).
   var BESPOKE = {
-    cairn: { rep: 'cairn', repColors: undefined }
+    cairn: { rep: 'cairn', repColors: undefined },
+    // ── the 3 essence-survey reps (Keystone's slate; draw fns added by the foundry,
+    //    keyed in scene.js REP_DRAW). Each brings its own colors via the rep.* slots. ──
+    'physics-lab': { rep: 'cavern-mound', repColors: {        // The Cavern — rocky MOUND + glowing maw
+      DAY:   { 'rep.swatch1': '#6e7680', 'rep.swatch2': '#878f99', 'rep.glow1': '#7fd4c0' },
+      DUSK:  { 'rep.swatch1': '#6a6470', 'rep.swatch2': '#827a86', 'rep.glow1': '#7fd4c0' },
+      NIGHT: { 'rep.swatch1': '#3a4048', 'rep.swatch2': '#4c535d', 'rep.glow1': '#7fd4c0' }
+    } },
+    ripple: { rep: 'ripple-tank', repColors: {                // The Ripple Tank — HORIZONTAL water tray
+      DAY:   { 'rep.swatch1': '#4fb8c8', 'rep.swatch2': '#8fdde6', 'rep.glow1': '#7fe0e8' },
+      DUSK:  { 'rep.swatch1': '#3f8a9a', 'rep.swatch2': '#6fb6c0', 'rep.glow1': '#7fe0e8' },
+      NIGHT: { 'rep.swatch1': '#2a5560', 'rep.swatch2': '#3f7a86', 'rep.glow1': '#7fe0e8' }
+    } },
+    'sound-garden': { rep: 'organ-pipes', repColors: {        // The Music Room — VERTICAL brass organ pipes
+      DAY:   { 'rep.swatch1': '#6a5640', 'rep.glow1': '#cf7bff' },
+      DUSK:  { 'rep.swatch1': '#5a4632', 'rep.glow1': '#cf7bff' },
+      NIGHT: { 'rep.swatch1': '#2e261c', 'rep.glow1': '#cf7bff' }
+    } }
   };
 
   /* loadSlab(): parse the GATE-ROOMS JSON slab inlined by forge. Returns an array
