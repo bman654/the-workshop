@@ -167,9 +167,30 @@ crowns sway less. Reduced-motion → never ticked (upright); `?smil` pins the ph
 Verified headless: a two-phase diff lights up ONLY the tree/bush crowns (+ the ripple's own animation) —
 the gate, manor, observatory, greenhouse, piers, and lamps show ZERO change (rigid per spec).
 
-NEXT (PHASE D, remaining — see enumeration below): weather-fx canvas (+clouds; rain angle can now read
-the wind), real moon wiring (sky-core.mjs), the self-test chip (moon math), audio, earned asterism,
-dogfood QA pass.
+**NEXT = WEATHER-FX (the big Phase-D piece; START HERE after compaction).** Owner's call (2026-06-23):
+do weather-fx next; defer small touches (self-test chip, etc.) to a final polish pass. Grounding (hooks
+already exist — don't re-derive):
+  • **fx canvas:** `#fx` (2D, `pointer-events:none`, ABOVE the SVG / below UI chrome), sized by
+    `resizeFx()` (DPR-aware: `fx.width/height` in device px). The boot's perpetual rAF has the exact
+    call-site (the `TODO Phase D: weather-fx.draw(fx, dt, band, weather, flash)` line) — currently empty.
+  • **state:** `Gate.weather.weather()` → `clear|cloudy|storm`; `W.isStorm()`; `W.onChange(fn)`.
+  • **wind is LIVE:** read `S._windLevel` / `S._windAmp` so RAIN slants right + CLOUDS drift speed track
+    the wind (storm = strong). Reuse the same reduced-motion guard pattern as sway.
+  • **lightning is half-wired:** `CM.B(band,moonK,weather,flash)` already spikes brightness to 1.0 when
+    `flash`; the boot has the `flash` var + `recolor()`. The lightning driver just PULSES flash=true
+    briefly (+ a canvas bolt/sky-glow) then false → recolor. The "lamps/windows blaze through a dark
+    storm night" payoff (colormap.js:7) is the goal.
+  • **ARCHITECTURE SPLIT:** CLOUDS go in the SVG **clouds layer (layer 3, `S.refs.clouds`, currently
+    empty)** — they obscure only sky/sky-objects, so they sit BEHIND the buildings/gate; drift them via
+    JS transform (like sway). RAIN + lightning bolt/glow go on the FOREGROUND **fx canvas**. Don't put
+    clouds on the fx canvas (it's above everything).
+  • Build it as its own module (e.g. `weather-fx.js`, `Gate.weatherfx`) + a forge include, so it stays
+    out of the load-bearing files; the boot's rAF calls `Gate.weatherfx.draw(...)`. Honor reduced-motion
+    (calm canvas, static/!drift clouds, no flashing). Verify headless per-state (clear/cloudy/storm) +
+    a two-frame diff for motion, same as sway.
+
+REMAINING after weather-fx: real moon wiring (sky-core.mjs), the self-test chip (moon math), audio,
+earned asterism, dogfood QA pass.
 
 PARKED for specific phases (owner playtest asks, 2026-06-23):
   • **Self-test chip** — the scene needs a self-test chip like the other exhibits that PROVES its math
