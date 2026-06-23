@@ -3,7 +3,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════
      RESUME POINTER  (read this first on a fresh/compacted context)
      ═══════════════════════════════════════════════════════════════════════ -->
-## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + P1/P2 fixed + Phase-D room-rotation, wind-sway & WEATHER-FX shipped; K=4; NEXT = real moon wiring → audio → final polish)
+## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + Phase-D room-rotation, wind-sway, WEATHER-FX & owner-playtest fixes/polish all shipped; K=4; NEXT = owner picks AUDIO **or** MOON-PHASE WIRING after compaction — both grounded below)
 
 **Status:** Phase A blockout LOCKED. Phase B `SPEC.md` **LOCKED + committed**
 (`823f9f3` base + `1b3f9f4` room-rep custom-color slots `rep.swatch1..3`/`rep.glow1..2`,
@@ -180,14 +180,44 @@ clouds, no rain, no flashing. Dev: `?flash` holds a strike lit (added to sequenc
 headless: all 6 states (clear/cloudy/storm × day/night) distinct + correctly layered, the `?flash`
 reveal shot, two-frame diffs prove rain falls + clouds drift. SPEC §5.10 + layer table updated.
 
-**NEXT (remaining Phase D systems), owner deferred small touches to a final polish pass:**
-  1. **Real moon wiring** — `sky-core.mjs` (geocentric sun-lon + J2000 node math) → `S.setMoonPhase(
-     {illuminatedFraction, litSide})` → `drawMoon`, so the drawn phase matches the user's real date.
-     `S.setMoonPhase` is already the entry point (scene.js); just needs the math module + boot call.
-  2. **Audio** — `audio.js` is stubbed, mute chip wired; build the WebAudio bed (gears/creak/ambient)
-     gated on the opening click + `WS.muted()`.
-  3. **Earned asterism** — the placeholder stays until earned (do NOT build the eagle outright).
-  4. **Final polish pass** — the self-test chip (PROVES the moon math), + small touches; dogfood QA.
+**OWNER-PLAYTEST FIXES — ✅ SHIPPED (2026-06-23, after weather-fx):**
+  • `cd8485c` — (P1) clicking the gnomon opened the gate: the `#gate-hit` overlay swallowed clicks →
+    set it `pointer-events:none` so the scene SVG's `onGateClick` (with the gnomon/chip guard) owns the
+    open while the gnomon handler advances time. (P1) gears+gnomon+plaque floated on open → a `gate-seam`
+    follow group (`S.refs.seamFollow`) rides the RIGHT leaf with the same `scaleX/skewY` (view-box origin
+    pinned to the right hinge); gears keep their inner spin. Verified with real agent-browser clicks.
+  • `161f0ff` — (1/3) sun halo dropped at dusk + in storm (`drawSun` checks band/weather); day keeps it.
+    (2) clouds are now a 2-tier fleet (12 = 6 base + 6 storm-only) → storm ≈2× cloudy. (4) gnomon focus
+    box hidden on mouse click (`#gnomon-target:focus{outline:none}`; brass ring on `:focus-visible`).
+
+**NEXT — owner picks ONE after compaction (audio OR moon-phase wiring); both grounded below. Small
+touches (self-test chip, etc.) stay deferred to a final polish pass.**
+
+  ▸ **AUDIO** — `audio.js` (`Gate.audio` = A). Mute plumbing is DONE + wired: chip `#mute-btn` (boot
+    `syncMute`), shared estate flag `WS.muted()/setMuted()/onMuteChange()`. Engine surface is INERT
+    no-ops to fill: `A.unlock()`, `A.gears()`, `A.creak()`, `A.ambient()`, `A.thunder()`, `A.stopAll()`.
+    HARD RULE (PLAN §1): OFFLINE ONLY, no network → SYNTHESIZE via WebAudio (oscillators + noise buffers),
+    never fetch samples. `A.unlock()` = create/resume an AudioContext on the OPENING CLICK (user-gesture
+    required) + publish `window.__wsAudioCtx` (the WS chime rides it). GATE every source on `A.muted()`.
+    Drive points: sequence.js `triggerOpen` gears-phase (2.5s)→`A.gears()`, swing-phase (2.5s)→`A.creak()`;
+    storm→`A.ambient()` rain/wind bed; `A.thunder()` synced to a lightning strike (weather-fx already
+    pulses `flash` via the `onFlash` callback — hang thunder off that edge); per-band ambient. VERIFY
+    offline: render via `OfflineAudioContext`→WAV → the **audio-lens** skill (`/Users/brandon/dev/general/
+    audio-lens`) for objective checks (no ears needed headless).
+
+  ▸ **MOON-PHASE WIRING** — `sky-core.mjs` is ALREADY BUILT + unit-tested (`sky-core.test.mjs`); it is NOT
+    yet loaded by the boot. Dual-use: forge strips the `export` keyword so a `<!-- forge:include
+    sky-core.mjs -->` makes its fns global. API: `julianDate(date)` · `moonPhase(JD)`→`{illuminatedFraction,
+    waxing, phaseName, age, phaseAngle}` · `terminator(illuminatedFraction, waxing)`→`{litSide, curvature,
+    terminatorBulge, isFull, …}`. TASK: add the forge include, then in the boot init compute
+    `ph = moonPhase(julianDate(new Date()))` + `term = terminator(ph.illuminatedFraction, ph.waxing)` and
+    call `S.setMoonPhase({illuminatedFraction: ph.illuminatedFraction, litSide: term.litSide})` BEFORE the
+    first `refreshSkyObjects()`, so the drawn moon matches the user's real date. Keep `?moon=` as the dev
+    override (it pins via `setMoonK`; `setMoonPhase` pins harder — mind precedence). The deferred self-test
+    chip is the natural PROOF surface for this math. Entry point `S.setMoonPhase` exists (scene.js ~2215).
+
+  ▸ Later: **earned asterism** (placeholder stays until earned — do NOT build the eagle), final polish
+    pass (self-test chip + small touches), dogfood QA.
 
 PARKED for specific phases (owner playtest asks, 2026-06-23):
   • **Self-test chip** — the scene needs a self-test chip like the other exhibits that PROVES its math
