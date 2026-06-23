@@ -161,12 +161,11 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 ### bench
 - [bench] **The Sprouts Court** — grow the Numbers Room a 7th game: its FIRST drawn/topological game. Two spots; draw a non-crossing arc between two live spots and plant a new spot on it, but a spot dies at 3 lines — last to draw wins, with a flint AI perfect on small boards. FORM (played, not graphed): a planar pencil-and-paper game on an SVG canvas — click two live spots, rubber-band a non-crossing arc, auto-plant the mid-spot, recompute lives + legal moves by live-end reachability; turn-based vs minimax for n≤4. grep-confirmed distinct from every game it holds (Nim/Latin-Square/Chomp/Hex/Nimber-Strip/Wythoff=Queen's-Walk); no sprouts/dots-boxes/hackenbush bench exists. CLAIM a self-test proves: every game from n spots lasts ∈[2n,3n−1] moves (each move nets −1 of a 3n life-pool); the perfect-play table (2nd-player wins n=1,2 · 1st-player wins n=3,4,5) — the minimax root value matches; and 0 arc-crossings across thousands of random playouts (segment-intersection check). (sown #303)
-- [bench] **The Bomb That Tells On Itself** — grow the Cavern a fresh quantum self-fact: interaction-free measurement. A single photon in a balanced Mach–Zehnder ALWAYS exits the bright port — until a live bomb sits in one arm; then 1-in-4 it trips the DARK detector and you've learned the bomb is live without ever touching it. FORM (built/routed, not read): glowing optical rails (2 beam-splitters, 2 mirrors, D-bright/D-dark); DRAG an Elitzur–Vaidman bomb into an arm, FIRE single photons one-by-one, watch each fate animate + tally D-bright/D-dark/BOOM. grep-confirmed NO mach-zehnder/elitzur-vaidman exists; distinct from the Double Slit (routing + a forbidden port lighting up, not fringes) and Two That Knew (no entanglement). CLAIM a self-test proves by unitary amplitude-propagation: no-bomb ⇒ P(bright)=1, P(dark)=0; live-bomb ⇒ P(boom)=½, P(bright)=¼, P(dark)=¼ to machine epsilon; P(dark)>0 ONLY with a bomb present (false-positive rate 0); probabilities sum to 1 at every stage. (sown #303)
-<!-- ✝ DECAYED #303: The Two-Ruler Pair · after e2cc3d5 -->
 <!-- ✝ BLOOMED #304: The Phantom Jam → the-phantom-jam/ · after 8a37a75 -->
 <!-- ✝ DECAYED #305: The Mirage's Loom → the-mirage/ · after 0ba3d5b -->
 <!-- ✝ BLOOMED #307: The Arctic Circle → arctic-circle/ · after cb3fb3e -->
 <!-- ✝ BLOOMED #308: The Brazil-Nut Box → brazil-nut-box/ · after a64ade1 -->
+<!-- ✝ BLOOMED #309: The Bomb That Tells On Itself → cavern/interaction-free/ · after c7b5f1c -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
