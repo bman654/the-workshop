@@ -84,8 +84,9 @@
     var farScenery = group('layer-far-scenery', svg);
     var B = Gate.scenebuildings;
     if (B) {
-      B.drawHillAndObservatory(farScenery, S);     // LEFT
-      B.drawManor(farScenery, S);                   // CENTER (distant)
+      if (B.drawMist) B.drawMist(farScenery, S);    // horizon haze (behind buildings)
+      B.drawHillAndObservatory(farScenery, S);      // LEFT
+      B.drawManor(farScenery, S);                   // CENTER (distant, behind gate)
       B.drawGreenhouse(farScenery, S);              // RIGHT
     }
 
@@ -156,13 +157,16 @@
     while (g.firstChild) g.removeChild(g.firstChild);
     var band = Gate.timeofday ? Gate.timeofday.band() : 'night';
 
-    // the disc sits above the manor (manor is center-right) → place upper-right
-    var discX = 1180, discY = 175, discR = 64;
+    // the disc sits DIRECTLY ABOVE the centered manor (manor at x800) → upper sky,
+    // clear of the gate crest (which peaks at ~y146)
+    var discX = 800, discY = 124, discR = 64;
     if (band === 'night') drawMoon(g, discX, discY, discR);
     else drawSun(g, discX, discY, discR, band);
 
-    // asterism to the LEFT of the disc
-    drawAsterism(g, 820, 120, 250);
+    // asterism in OPEN sky to the upper-LEFT of the disc — placed in the top-left
+    // (x<360, above the observatory) so it never clips behind the gate bars and its
+    // label is fully legible.
+    drawAsterism(g, 70, 24, 180);
   };
 
   /* greybox moon: a lit disc with a rough terminator placeholder (real moon math
@@ -239,26 +243,60 @@
     }
   }
 
-  /* ── LAYER 5 — grounds: grass band + road through the gate to the manor ─────── */
+  /* ── LAYER 5 — grounds: midground grass + road to the manor + a NEAR foreground
+     APRON the gate stands on (the single biggest depth cue: foreground apron →
+     midground grounds → distant buildings → sky). ───────────────────────────── */
   function drawGrounds(parent) {
-    // ground rises from the horizon (~y 470) to the bottom
+    // MIDGROUND ground rises from the horizon (~y 470) toward the viewer
     var groundTop = 470;
     el('rect', { x: 0, y: groundTop, width: VB_W, height: VB_H - groundTop, fill: 'var(--grass-ref, #3c4a50)' }, parent);
-    // a soft grade band so it isn't flat
-    el('rect', { x: 0, y: groundTop, width: VB_W, height: 80, fill: 'var(--hill-ref, #2c3742)', opacity: '0.5' }, parent);
+    // a soft grade band just under the horizon so the midground isn't flat
+    el('rect', { x: 0, y: groundTop, width: VB_W, height: 70, fill: 'var(--hill-ref, #2c3742)', opacity: '0.45' }, parent);
 
-    // ROAD: a winding ribbon from the gate center (bottom ~x800) up to the manor
-    // (center-right ~x1120,y470). Drawn as a tapering polygon — wide at front,
-    // narrow at the manor. Passes through the gate's center.
-    var road = 'M 720 900 L 880 900 L 1010 540 L 1140 480 L 1100 480 L 980 540 L 760 900 Z';
+    // ROAD: a tapering ribbon from the gate seam (front, x800) straight back to the
+    // CENTERED manor doorway (x800, y472). Wide at the front, narrow at the manor —
+    // the road the opened gate reveals, leading to the destination.
+    var road = 'M 706 900 L 894 900 L 832 478 L 768 478 Z';
     el('path', { d: road, fill: 'var(--road-ref, #5a5f6a)' }, parent);
-    // center line / kerb highlight (lit from above on the near edge)
-    el('path', { d: 'M 880 900 L 1010 540 L 1140 480', fill: 'none',
-      stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1', opacity: '0.18' }, parent);
+    // a paler crown down the middle (lit from above) + kerb edges
+    el('path', { d: 'M 800 900 L 800 478', fill: 'none',
+      stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1.2', opacity: '0.16' }, parent);
+    el('path', { d: 'M 706 900 L 768 478', fill: 'none',
+      stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1', opacity: '0.12' }, parent);
 
-    // a couple of lamp posts along the road (emissive flames)
-    drawLamp(parent, 640, 560, 70);
-    drawLamp(parent, 1180, 470, 50);
+    // a couple of lamp posts flanking the road just inside the grounds (emissive)
+    drawLamp(parent, 612, 520, 64);
+    drawLamp(parent, 988, 520, 64);
+
+    // ── FOREGROUND APRON: a band of NEAR paving across the very bottom that the
+    // gate + piers stand ON. Cobbled stone, lit from above, receding to a back edge
+    // (a shallow trapezoid) so it reads as ground tilting away under the gate. ──
+    var g = group('foreground-apron', parent);
+    var apronTopY = 812;              // back edge of the apron
+    // the paving slab (stone), widening toward the viewer
+    el('path', { d: 'M -40 ' + apronTopY + ' L ' + (VB_W + 40) + ' ' + apronTopY +
+      ' L ' + (VB_W + 40) + ' ' + VB_H + ' L -40 ' + VB_H + ' Z',
+      fill: 'var(--stone-ref, #6a7079)' }, g);
+    // a darker mortar shadow just under the back edge (sits the apron in front)
+    el('rect', { x: -40, y: apronTopY, width: VB_W + 80, height: 8, fill: 'rgba(0,0,0,.28)' }, g);
+    // top-lit front lip of the back edge
+    el('line', { x1: -40, y1: apronTopY + 1, x2: VB_W + 40, y2: apronTopY + 1,
+      stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1', opacity: '0.18' }, g);
+    // cobble joints — converging paving lines fanning toward the viewer (perspective)
+    var jointCount = 9;
+    for (var ci = 0; ci <= jointCount; ci++) {
+      var t = ci / jointCount;
+      var backX = 120 + t * (VB_W - 240);          // joints span the apron at the back
+      var frontX = -120 + t * (VB_W + 240);        // fan wider at the front
+      el('line', { x1: backX.toFixed(0), y1: apronTopY, x2: frontX.toFixed(0), y2: VB_H,
+        stroke: 'rgba(0,0,0,.20)', 'stroke-width': '1.2' }, g);
+    }
+    // a couple of horizontal course lines (paving rows) with subtle near-edge light
+    var rowYs = [apronTopY + 26, apronTopY + 56];
+    for (var ri = 0; ri < rowYs.length; ri++) {
+      el('line', { x1: -40, y1: rowYs[ri], x2: VB_W + 40, y2: rowYs[ri],
+        stroke: 'rgba(0,0,0,.16)', 'stroke-width': '1.2' }, g);
+    }
   }
 
   function drawLamp(parent, x, baseY, h) {
@@ -278,11 +316,16 @@
   /* ── trees/bushes (placeholder; sway comes later in weather-fx) ──────────────── */
   function drawTrees(parent) {
     var g = group('trees', parent);
-    drawTree(g, 120, 560, 1.3);
-    drawTree(g, 300, 600, 0.9);
-    drawBush(g, 480, 760, 1.1);
-    drawBush(g, 1300, 720, 1.2);
-    drawTree(g, 1480, 600, 1.0);
+    // varied sizes for a natural grounds; kept OUTSIDE the gate footprint
+    // (gate spans x400..1200) so they frame, not obscure.
+    drawTree(g, 96, 556, 1.35);
+    drawTree(g, 250, 600, 0.85);
+    drawTree(g, 348, 572, 1.05);
+    drawBush(g, 300, 700, 1.0);
+    drawTree(g, 1296, 588, 1.2);
+    drawTree(g, 1420, 612, 0.8);
+    drawBush(g, 1480, 716, 1.25);
+    drawBush(g, 1240, 706, 0.85);
     S.refs.trees = g;
   }
   function drawTree(parent, x, baseY, sc) {
