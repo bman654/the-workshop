@@ -37,8 +37,31 @@ estate-quality + token cost) before the full set (hero K=3–4, supporting K=2, 
 audio, the click-through cinematic + welcome card, gate open-state choreography) → DEFERRED
 promotion (gate → `index.html`; mind the `--follow` git landmine, PLAN §7).
 
-**The token-spend gate:** the foundry is the big spend; I proposed holding for Brandon's
-go on the gate-gears pilot. (Honor his autonomy directive — see the conversation.)
+**FOUNDRY DIRECTIVE (Brandon, 2026-06-23, before sleep):** run the **full foundry,
+PILOT-GATED**, autonomously overnight. SendUserFile sample render filenames into chat
+AS THEY LAND (per wave) so he can spotcheck on waking. Pilot the gate+gears hero FIRST;
+if it's genuinely estate-quality, continue through the whole set; if it disappoints, STOP
+and wait. He expects ~30–60 min/asset and will course-correct or stay silent.
+
+**FOUNDRY WAVE PLAN** (each wave = a Workflow: fan-out K takes → judge → synthesize →
+build-final → render the final to `/tmp/gate-shots/foundry/<asset>.png`; on completion I
+SendUserFile that wave's renders, then launch the next wave):
+- Wave 0 — write + commit `SPEC.md` (in flight; agent retry on 529).
+- Wave 1 (PILOT) — the brass gate + clockwork, K=4. I JUDGE the render myself: pass →
+  continue; fail → STOP + post for Brandon.
+- Wave 2 — heroes: manor, observatory+rise (K=4 each).
+- Wave 3 — supporting (K=2): greenhouse, trees(+sway), bushes, undercroft hatch, the Cairn
+  rep, the Glyph Stand; PLUS a blind essence-survey to pick 3 room-reps → build those 3.
+- Wave 4 — minor (direct-to-spec): grounds/grass, road, foreground apron, horizon mist, sky
+  gradient + stars; system visuals (moon disc + lit-limb glow + terminator; brass asterism).
+- Phase D (later): weather-fx (rain/lightning/clouds/birds), audio, real moon wiring,
+  the click-through cinematic + welcome card, gate open-state choreography.
+
+**API RESILIENCE:** the API was transiently 529-overloaded the night of 2026-06-23 (the
+spec agent died twice with 0 work). Agents return null / die after ~3.5 min of internal
+retries. Strategy: relaunch a failed wave/agent (the internal retries give backoff); if a
+step keeps failing, wait longer and retry, or write that artifact by hand. Nothing is lost
+— every completed asset is committed. A live background agent is the trigger across compaction.
 
 **Makers signed** (gitignored `ledger/inbox/`, uncollated — DO NOT collate; publisher's job):
 Greywright (scaffold), Selene Verit (moon math), Cosine (grand frame), Penumbra (moon +
