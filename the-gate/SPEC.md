@@ -117,6 +117,18 @@ colors; `B` is applied at resolve-time (§2.3), NOT baked in.
 | `tree.trunk` | `#5a4630` | `#4f3c2c` | `#2a2620` |
 | `stone` | `#9aa0a8` | `#9a8e8a` | `#6a7079` |
 | `mist` | `#dfe8f2` | `#e7c6b0` | `#7c8aa0` |
+| `rep.swatch1` | `#9aa0a8` | `#9a8e8a` | `#6a7079` |
+| `rep.swatch2` | `#9aa0a8` | `#9a8e8a` | `#6a7079` |
+| `rep.swatch3` | `#9aa0a8` | `#9a8e8a` | `#6a7079` |
+
+> **`rep.swatch1..3` are the room-rep SWAPPABLE color slots** (NEW roles — add to
+> `colormap.js PALETTES.{DAY,DUSK,NIGHT}`). They exist in all 3 bands with NEUTRAL
+> stone-grey defaults (an un-overridden rep just reads stony, never broken). The
+> SELECTED rep overrides these per-band with its OWN design colors — e.g. an Aquarium /
+> Ripple Tank rep supplying non-emissive blues, a manor-glass-green rep, etc. — so they
+> still dim with `B` and read "lit from above" like any swappable surface. Only ONE rep
+> renders at a time, so the three slots are SHARED/reusable across reps. See §5.8 for the
+> override mechanism + the per-band requirement.
 
 ### 2.2 Emissive GLOW roles — EXACT token values (palette-immune, fixed)
 
@@ -134,7 +146,18 @@ parts so they stay vivid at night and recede only slightly in bright day (§2.3 
 | `cavern.maw` | `#7fd4c0` | (Phase-C room-rep: Physics Cavern glowing mouth) |
 | `undercroft.glow` | `#8a123a` | the undercroft hatch's pooled depth-glow |
 | `arcade.screen` | `#37f7e0` | (Phase-C room-rep: Arcade screen) |
+| `rep.glow1` | `#7fd4c0` | room-rep EMISSIVE slot 1 (rep-overridable; neutral teal default) |
+| `rep.glow2` | `#7fd4c0` | room-rep EMISSIVE slot 2 (rep-overridable; neutral teal default) |
 
+> **`rep.glow1..2` are the room-rep EMISSIVE color slots** (NEW GLOW roles — add to
+> `colormap.js GLOW`). Palette-immune like every GLOW role; the SELECTED rep overrides
+> them with its own glow color — e.g. a Stellar Forge rep supplying emissive blues, a
+> Ripple-Tank caustic, an Aquarium bioluminescence. They are in the dayRecede fadeable
+> set (§2.3) so a bright daytime sky doesn't blow them out, and stay vivid at night.
+> Defaults are a neutral teal (matches `cavern.maw`) so an un-overridden glow still
+> reads. See §5.8. (The fixed `cavern.maw` / `arcade.screen` roles REMAIN for reps that
+> want the canonical estate colors; `rep.glow1..2` are for reps bringing NEW colors.)
+>
 > NOTE: the undercroft hatch greybox falls back to `#6e1430` inline (`scene.js:543`); the
 > canonical resolved GLOW value is `#8a123a` (`colormap.js:172`). The foundry uses the
 > `--undercroft-glow-ref` var; the fallback only matters before vars are written.
@@ -165,11 +188,12 @@ filter on the rendered scene.
 
 **dayRecede for GLOW** (`dayRecede()`, `colormap.js:204-213`): GLOW roles are written at
 full intensity at night. A subset — `lamp.flame`, `window.lit`, `cavern.maw`,
-`undercroft.glow`, `arcade.screen` — recede in bright light by factor
-`clamp(1.0 − 0.4·B, 0.6, 1.0)` (B near 1 → 0.6; B low → 1.0) so a bright daytime sky
-isn't washed out by emissives, but they NEVER drop below 0.6. The sky payoff —
-`moon.disc`, `sun.disc`, `asterism.star`, `asterism.line` — is NEVER receded (kept
-strong; `dayRecede` returns 1.0 for them).
+`undercroft.glow`, `arcade.screen`, **and the new `rep.glow1`/`rep.glow2`** — recede in
+bright light by factor `clamp(1.0 − 0.4·B, 0.6, 1.0)` (B near 1 → 0.6; B low → 1.0) so a
+bright daytime sky isn't washed out by emissives, but they NEVER drop below 0.6. The sky
+payoff — `moon.disc`, `sun.disc`, `asterism.star`, `asterism.line` — is NEVER receded
+(kept strong; `dayRecede` returns 1.0 for them). When adding `rep.glow1`/`rep.glow2`,
+ALSO add them to the `dayRecede` fadeable list in `colormap.js:208-209`.
 
 ### 2.4 The CSS-var mechanism (load-bearing — describe exactly)
 
@@ -335,7 +359,7 @@ parametric systems finalized in Phase D but get a beauty pass too (§9).
 | Asset | Layer | BBox | Anchor | Notes | Roles | Emissive | Draw fn | Art brief |
 |---|---|---|---|---|---|---|---|---|
 | **Cairn rep** (locked) | 6 furniture | stones x191..269 / y623..737 (w78 h114); label plate x139..321 / y738..762 | base-center groundline (x230, y720) | the canonical SMALL rep; the slot's reference footprint | stone body `#0c0e14` (intentional polished-black), `brass.stroke`, `brass.bright` | — | `scene.js:444-483` (`drawRoomRep`+`drawCairn`) | a stack of 5 polished black brass-rimmed stones, each top-lit with a brass-bright sheen; the estate's Tabularium fixture. |
-| **3 essence-survey reps** (TBD by blind survey, PLAN §5) | 6 furniture | the room-rep SLOT (§5) | ground-line bottom (BOTTOM-ALIGNED, grow up / spread sideways) | aspect-flexible (vertical tower / horizontal pond / low wide mound) | per-rep, palette-swapped | per-rep (e.g. `cavern.maw`, `arcade.screen`, `window.lit`) | NEW (Phase C; draw fns in `scene.js`, registered in `rooms.js` `BESPOKE`) | recognizable-yet-estate-styled front-elevations that read as terrain/instruments, not pasted icons. Working hypothesis (NOT a seed): Orrery armillary (vertical), Physics Cavern maw in the hillside (low wide mound, `cavern.maw`), Ripple Tank pond (horizontal). The survey confirms or overturns. |
+| **3 essence-survey reps** (TBD by blind survey, PLAN §5) | 6 furniture | the room-rep SLOT (§5) | ground-line bottom (BOTTOM-ALIGNED, grow up / spread sideways) | aspect-flexible (vertical tower / horizontal pond / low wide mound) | shared estate roles + **`rep.swatch1..3`** custom-color slots (§5.8) | fixed estate GLOW where it fits (`cavern.maw`, `arcade.screen`, `window.lit`) OR **`rep.glow1..2`** custom slots (§5.8) | NEW (Phase C; draw fns in `scene.js`, registered in `rooms.js` `BESPOKE`) | recognizable-yet-estate-styled front-elevations that read as terrain/instruments, not pasted icons. Working hypothesis (NOT a seed): Orrery armillary (vertical), Physics Cavern maw in the hillside (low wide mound, `cavern.maw`), Ripple Tank pond (horizontal, non-emissive `rep.swatch*` blues). The survey confirms or overturns. |
 
 ### 4.4 MINOR (direct-to-spec, no fan-out)
 
@@ -451,6 +475,63 @@ slab) in a framed slot, with the room's `accent` as a self-lit pip. Lit + palett
 like everything else — never a bare floating emoji. `rooms.js` selects bespoke vs stand
 via `R.hasBespoke(id)` / the `BESPOKE` registry (`rooms.js:28,69-72`).
 
+### 5.8 Room-rep custom colors — the rep COLOR-SLOT contract
+
+Reps need design colors the three fixed palettes can't anticipate (Stellar Forge wants
+emissive blues; an Aquarium / Ripple Tank wants non-emissive blues; etc.). The fixed
+roles (`cavern.maw`, `arcade.screen`, `window.lit`, …) cover reps that reuse canonical
+estate colors, but a NEW rep brings its own. Because **exactly one rep renders at a
+time**, we don't bake per-rep colors into the palettes — we give every rep a shared set
+of generic SLOTS it overrides for the band currently being painted.
+
+**The slots** (defined in `colormap.js`, §2.1 + §2.2):
+
+| slot | kind | dims with B? | dayRecede? | default | typical use |
+|---|---|---|---|---|---|
+| `rep.swatch1` / `rep.swatch2` / `rep.swatch3` | SWAPPABLE (palette) | yes | — | neutral stone-grey, per band | non-emissive design surfaces: pond/aquarium blues, armillary brass-greys, a hull, a foliage tone |
+| `rep.glow1` / `rep.glow2` | EMISSIVE (GLOW) | no | yes | neutral teal | self-lit design accents: Stellar Forge blue, a caustic, a bioluminescence, a screen |
+
+A draw fn references them exactly like any role, via the dash `-ref` alias (§2.4):
+`fill="var(--rep-swatch1-ref, #6a7079)"`, `fill="var(--rep-glow1-ref, #7fd4c0)"`.
+
+**How a rep declares its colors.** Each bespoke rep (in `rooms.js`'s registry / the rep's
+draw-fn module) exposes a small per-band override map keyed by the SAME role names — e.g.
+
+```js
+// in the rep's registry entry (rooms.js) — colors are AUTHORED hex per band
+repColors: {
+  DAY:   { 'rep.swatch1':'#bfe0dc', 'rep.glow1':'#6fd0ff' },
+  DUSK:  { 'rep.swatch1':'#9fb4c2', 'rep.glow1':'#6fd0ff' },
+  NIGHT: { 'rep.swatch1':'#3a5560', 'rep.glow1':'#6fd0ff' }
+}
+```
+
+**Per-band requirement (load-bearing).** A SWAPPABLE slot override (`rep.swatch*`) MUST
+be authored for all three bands (DAY/DUSK/NIGHT), exactly like the main palette — it is
+then dimmed by `B` at resolve-time, so it tracks time-of-day + weather + lightning like
+every other surface. (If a rep supplies only one band, the foundry treats the missing
+bands as that color and accepts a less-tuned look, but the contract is: author all three.)
+An EMISSIVE slot override (`rep.glow*`) is a single palette-immune color (band-independent,
+like every GLOW role); it may still vary by band if the rep wants, but one color is fine.
+
+**The override mechanism (where it merges).** `colormap.resolve(band, B)` builds the
+base var-map; the SELECTED rep's `repColors[band]` overrides are then merged on top,
+with the SAME `dim(B)` applied to `rep.swatch*` and the SAME `dayRecede(B)` applied to
+`rep.glow*`, BEFORE `S.applyResolved` writes the vars. Concretely (Phase C wiring): add a
+`CM.resolve(band, B, repColors)` optional 3rd arg, or a `CM.applyRepColors(out, band, B,
+repColors)` helper, that runs each override hex through `dim`/`dayRecede` and writes both
+the dotted var and the dash `-ref` alias. The boot calls it after `resolve()` using
+`Gate.rooms.pick().repColors` (and re-applies during a crossfade the same way the base
+map is mirrored, `the-gate.src.html:872-884`). **An un-overridden rep (or the Glyph
+Stand) just leaves the neutral defaults** — no special-casing.
+
+**Foundry rule.** A rep take that needs custom colors MUST route them through these slots
+(declare `repColors`, reference `--rep-*-ref` in the draw fn) — it must NOT hardcode hex
+for a surface that should dim/recede, and must NOT add bespoke per-room roles to the
+palettes (the slots are the shared, bounded channel). 3 swatches + 2 glows is the budget;
+a rep needing more than that should be flagged to the orchestrator (likely a sign it
+wants a fixed estate role instead, like `cavern.maw`).
+
 ---
 
 ## 6. Freshness / enrollment
@@ -489,9 +570,10 @@ by convention, then PHASE 2 `forge --all` re-inlines the fresh slab + current
 |---|---|
 | the GATE-ROOMS slab (the room POOL + names/glyphs/accents) | which asterism is unlocked (`WS.store()` + `Sky.state`) — Phase D |
 | the shared modules `ws.js`/`sky.js`/`hours.js` (re-inlined fresh) | undercroft-open (`store.has('ws:seen:undercroft-rune'\|'undercroft')`, `scene.js:585-592`) |
-| every gate module (colormap/scene/…) | mute flag (`WS.muted()`, `audio.js`) |
+| every gate module (colormap/scene/…), incl. each rep's authored `repColors` (§5.8) | mute flag (`WS.muted()`, `audio.js`) |
 | | the room pick from the pool (Phase D: random unlocked-or-any; greybox pins the Cairn) |
 | | time-of-day band (local clock via `Hours`, unless `?t=`) + weather (seeded/`?wx=`) |
+| | the SELECTED rep's `rep.swatch*`/`rep.glow*` overrides, merged into the resolved var-map per band (§5.8) — only the chosen rep's colors are written |
 
 ---
 
@@ -586,4 +668,5 @@ contracts. The following are finalized in Phase D and get only a "beauty pass" n
 
 *Locked Phase B from blockout HEAD `689e3cb`. viewBox 1600×900. Cairn footprint x191..269
 / y623..737 (w78 h114); room-rep range width 78..156 × height 114..228; the 2× max fits
-the slot (x152..308 / y492..720) cleanly.*
+the slot (x152..308 / y492..720) cleanly. Room-reps bring custom colors via shared slots
+`rep.swatch1..3` (swappable) + `rep.glow1..2` (emissive) — §5.8.*
