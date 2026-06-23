@@ -841,7 +841,8 @@
   var REP_DRAW = {
     cairn: function (g, baseX, baseY, pick) { drawCairn(g, baseX, baseY); },
     'cavern-mound': function (g, baseX, baseY, pick) { drawRepCavern(g, baseX, baseY, pick); },
-    'ripple-tank': function (g, baseX, baseY, pick) { drawRepRipple(g, baseX, baseY, pick); }
+    'ripple-tank': function (g, baseX, baseY, pick) { drawRepRipple(g, baseX, baseY, pick); },
+    'organ-pipes': function (g, baseX, baseY, pick) { drawRepOrganPipes(g, baseX, baseY, pick); }
   };
 
   function drawRoomRep(parent) {
@@ -1342,6 +1343,212 @@
       stroke: BRASS, 'stroke-width': '0.7', opacity: '0.7' }, g);
 
     S.refs.rippleRep = g;
+  }
+
+  /* ── the ORGAN-PIPES room-rep (The Music Room, room id 'sound-garden') ─────────
+     A rank of graduated brass ORGAN PIPES rising from a carved dark-wood CONSOLE:
+     a row of round brass flue pipes stepped to a TALLEST-CENTER skyline (a classic
+     mitred organ facade), each pipe a vertical brass tube with a cylindrical
+     top-lit sheen down its left flank (lit from above-left, matching the gate), a
+     brass-bright TOP rim + an upper-lip pipe-MOUTH that catches the overhead light,
+     and a tapered conical FOOT seating it on the console toe-board. The console
+     body is the swappable dark wood (rep.swatch1) with brass mouldings + a lit
+     VIOLET stop-knob (rep.glow1, #cf7bff) — the night payoff that says "this room
+     makes music". VERTICAL aspect (TALL + NARROW): ~108 wide × ~196 tall, bottom-
+     aligned at baseY, centered about cx, inside [78..156]×[114..228]. Estate idiom:
+     dark body rgba(11,14,22,.85) + brass stroke + brass-bright top edges; the only
+     emissive is the violet stop + a soft console aura. */
+  function drawRepOrganPipes(parent, cx, baseY, pick) {
+    var g = group('organ-pipes', parent);
+    var WOOD = 'var(--rep-swatch1-ref, #2e261c)';        // swappable dark wood console body
+    var DARK = 'rgba(11,14,22,.85)';                     // estate brass dark body (pipe tubes)
+    var BRASS = 'var(--brass-stroke-ref, #9c8350)';      // brass edge stroke
+    var BRI = 'var(--brass-bright-ref, #cdb375)';        // brass-bright TOP / left sheen
+    var VIO = 'var(--rep-glow1-ref, #cf7bff)';           // EMISSIVE violet music accent
+    var fx = function (n) { return (Math.round(n * 10) / 10); };
+
+    // ── footprint: TALL + NARROW. console at the foot, pipes grow UPWARD. ──
+    var W = 108;                          // overall console width
+    var halfW = W / 2;                    // 54 → x176 .. x284
+    var conH = 36;                        // carved console block height
+    var conTopY = baseY - conH;           // top of the console (pipes spring above)
+    var conL = cx - halfW, conR = cx + halfW;
+
+    // a private soft-feather filter for the violet stop's aura
+    var defs = parent.ownerSVGElement && parent.ownerSVGElement.querySelector('defs');
+    if (defs && !defs.querySelector('#organ-stop-glow')) {
+      var fG = el('filter', { id: 'organ-stop-glow', x: '-120%', y: '-120%', width: '340%', height: '340%' }, defs);
+      el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '4' }, fG);
+    }
+
+    // ── soft contact shadow so the console sits ON the grass (light from above) ──
+    el('ellipse', { cx: cx + 5, cy: baseY + 3, rx: halfW * 0.94, ry: 8,
+      fill: '#000', opacity: '0.30', filter: 'url(#glow-soft)' }, g);
+
+    // ════════════ THE PIPE RANK — graduated round brass flue pipes ════════════════
+    // 7 pipes stepped to a TALLEST-CENTER skyline. Each entry: x-offset from cx,
+    // body radius, and total speaking length (foot+body) measured UP from the
+    // toe-board (conTopY). Drawn back-to-front so the foreground centre pipe overlaps
+    // its neighbours and the row reads as a packed rank, not a fence of equal sticks.
+    var toeY = conTopY + 4;               // toe-board the pipe feet seat on
+    var pipes = [
+      { dx: -45, r: 8.5, len: 92 },
+      { dx: -30, r: 9.5, len: 124 },
+      { dx: -16, r: 10.5, len: 150 },
+      { dx: 0, r: 12, len: 170 },        // tallest centre pipe
+      { dx: 16, r: 10.5, len: 144 },
+      { dx: 30, r: 9.5, len: 116 },
+      { dx: 44, r: 8.5, len: 84 }
+    ];
+    // draw order: outermost first, working inward so centre sits ON TOP
+    var order = [0, 6, 1, 5, 2, 4, 3];
+    for (var oi = 0; oi < order.length; oi++) {
+      var p = pipes[order[oi]];
+      var px = cx + p.dx;
+      var r = p.r;
+      var topY = toeY - p.len;            // crown of this pipe
+      var footLen = 22;                   // conical foot height
+      var bodyBot = toeY - footLen;       // where the cylindrical body meets the foot
+      var bodyTopY = topY + 8;            // body starts just below the crown lip
+
+      // ── conical FOOT: a tapered cone from a point at the toe up to the body width
+      var footD = 'M ' + fx(px) + ' ' + fx(toeY) +
+        ' L ' + fx(px - r * 0.92) + ' ' + fx(bodyBot) +
+        ' L ' + fx(px + r * 0.92) + ' ' + fx(bodyBot) + ' Z';
+      el('path', { d: footD, fill: DARK, stroke: BRASS, 'stroke-width': '1.3',
+        filter: 'url(#glow-soft)' }, g);
+      // brass-bright catch down the foot's left (up-lit) edge
+      el('line', { x1: fx(px - r * 0.34), y1: fx(bodyBot + 2), x2: fx(px - 1), y2: fx(toeY - 1),
+        stroke: BRI, 'stroke-width': '1', opacity: '0.34' }, g);
+
+      // ── cylindrical BODY: an OPEN-MOUTHED tube. The wall rises to a hollow bored
+      //    crown (graft from Take 3 — the strongest 'open flue pipe' read), seated on
+      //    Take 1's fuller round body. The tube proper runs up to bodyCrownY; the
+      //    speaking end is an open elliptical BORE rimmed in brass. ──
+      var crownY = topY + r * 0.42;        // where the tube wall meets the open rim plane
+      var rimRy = Math.max(3.4, r * 0.52); // depth of the open bore oval (fuller pipe → deeper bore)
+      el('rect', { x: fx(px - r), y: fx(crownY), width: fx(r * 2), height: fx(bodyBot - crownY),
+        rx: 1.5, fill: DARK, stroke: BRASS, 'stroke-width': '1.4', filter: 'url(#glow-soft)' }, g);
+      // the dark hollow BORE — an open ellipse capping the tube (the speaking end)
+      el('ellipse', { cx: fx(px), cy: fx(crownY), rx: fx(r - 0.6), ry: fx(rimRy),
+        fill: 'rgba(0,0,0,.58)', stroke: BRASS, 'stroke-width': '1.3' }, g);
+
+      // ── cylindrical SHADING: a lighter brass sheen band down the LEFT flank
+      //    (light from above-left), then a thin dark core toward the right so the
+      //    tube reads round, not flat. ──
+      el('rect', { x: fx(px - r + 1.2), y: fx(crownY), width: fx(r * 0.78), height: fx(bodyBot - crownY),
+        rx: 1.2, fill: BRI, opacity: '0.24' }, g);
+      // a brighter specular column near the left highlight (polished-brass glint)
+      el('rect', { x: fx(px - r + 1.8), y: fx(crownY), width: fx(r * 0.26), height: fx(bodyBot - crownY),
+        rx: 1, fill: BRI, opacity: '0.40' }, g);
+      // a thin hot specular line on the up-lit edge so the tube reads polished
+      el('line', { x1: fx(px - r + 2.4), y1: fx(crownY + 2), x2: fx(px - r + 2.4), y2: fx(bodyBot - 2),
+        stroke: BRI, 'stroke-width': '1', opacity: '0.5' }, g);
+      // dark core toward the right so the cylinder turns away (rounds the tube)
+      el('rect', { x: fx(px + r * 0.40), y: fx(crownY), width: fx(r * 0.52), height: fx(bodyBot - crownY),
+        fill: 'rgba(0,0,0,.30)' }, g);
+
+      // ── brass-bright BACK rim of the open bore — the brightest catch (lit above) ──
+      el('path', { d: 'M ' + fx(px - r + 0.8) + ' ' + fx(crownY) +
+        ' A ' + fx(r - 0.6) + ' ' + fx(rimRy) + ' 0 0 1 ' + fx(px + r - 0.8) + ' ' + fx(crownY),
+        fill: 'none', stroke: BRI, 'stroke-width': '1.5', opacity: '0.85',
+        'stroke-linecap': 'round' }, g);
+      // a brass collar band just below the mouth (the pipe's neck ferrule)
+      el('line', { x1: fx(px - r + 1), y1: fx(crownY + rimRy + 1.6), x2: fx(px + r - 1), y2: fx(crownY + rimRy + 1.6),
+        stroke: BRI, 'stroke-width': '1', opacity: '0.5' }, g);
+
+      // ── the pipe MOUTH: an upper-lip cut a third of the way down — a small
+      //    brass-rimmed inverted-V flue mouth that catches the light (reads as an
+      //    organ flue pipe, not a plain rod). ──
+      var mouthY = bodyBot - (bodyBot - bodyTopY) * 0.34;
+      var mw = r * 0.84;
+      // dark mouth recess
+      el('path', { d: 'M ' + fx(px - mw) + ' ' + fx(mouthY) +
+        ' L ' + fx(px) + ' ' + fx(mouthY - 7) +
+        ' L ' + fx(px + mw) + ' ' + fx(mouthY) +
+        ' L ' + fx(px + mw) + ' ' + fx(mouthY + 4) +
+        ' L ' + fx(px - mw) + ' ' + fx(mouthY + 4) + ' Z',
+        fill: 'rgba(0,0,0,.42)', stroke: BRASS, 'stroke-width': '1' }, g);
+      // brass-bright lip on the up-facing inverted-V (lit from above)
+      el('path', { d: 'M ' + fx(px - mw) + ' ' + fx(mouthY) +
+        ' L ' + fx(px) + ' ' + fx(mouthY - 7) + ' L ' + fx(px + mw) + ' ' + fx(mouthY),
+        fill: 'none', stroke: BRI, 'stroke-width': '1.2', opacity: '0.78',
+        'stroke-linejoin': 'round' }, g);
+      // a tiny brass languid bar across the mouth foot
+      el('line', { x1: fx(px - mw), y1: fx(mouthY + 4), x2: fx(px + mw), y2: fx(mouthY + 4),
+        stroke: BRASS, 'stroke-width': '1', opacity: '0.7' }, g);
+    }
+
+    // ════════════ THE CONSOLE — a carved dark-wood block the pipes rise from ══════
+    // stepped plinth: a wider base course + the main console body + a brass impost
+    // shelf the pipe feet stand on.
+    // base course (widest)
+    el('rect', { x: fx(conL - 5), y: fx(baseY - 11), width: fx(W + 10), height: 11, rx: 2.5,
+      fill: WOOD, stroke: BRASS, 'stroke-width': '1.4', filter: 'url(#glow-soft)' }, g);
+    // main console body
+    el('rect', { x: fx(conL), y: fx(conTopY), width: fx(W), height: fx(conH - 11), rx: 2,
+      fill: WOOD, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    // a recessed carved panel on the console face (light-catch reveal)
+    el('rect', { x: fx(conL + 8), y: fx(conTopY + 5), width: fx(W - 16), height: fx(conH - 11 - 10), rx: 1.5,
+      fill: 'rgba(0,0,0,.20)', stroke: 'rgba(0,0,0,.28)', 'stroke-width': '1' }, g);
+    // ── the KEYBOARD MANUAL — a thin brass-lipped keybed across the console face
+    //    (graft from Take 3 — the single best 'this is a playable organ console' cue).
+    //    Seated in the upper reveal of the recessed panel; the lit violet stop sits
+    //    below it. ──
+    var kbX = conL + 13, kbW = W - 26, kbY = conTopY + 7.5, kbH = 5;
+    el('rect', { x: fx(kbX), y: fx(kbY), width: fx(kbW), height: kbH, rx: 1,
+      fill: '#d9d2c2', stroke: BRASS, 'stroke-width': '0.9', opacity: '0.85' }, g);
+    // black-key ticks across the manual (short marks reading as keys)
+    var nKeys = 13;
+    for (var k = 1; k < nKeys; k++) {
+      var kx = kbX + (kbW / nKeys) * k;
+      el('line', { x1: fx(kx), y1: fx(kbY + 0.6), x2: fx(kx), y2: fx(kbY + kbH * 0.6),
+        stroke: 'rgba(11,14,22,.85)', 'stroke-width': '0.9' }, g);
+    }
+    // brass-bright top-lit lip of the keybed (lit from above)
+    el('line', { x1: fx(kbX), y1: fx(kbY + 0.5), x2: fx(kbX + kbW), y2: fx(kbY + 0.5),
+      stroke: BRI, 'stroke-width': '0.9', opacity: '0.55' }, g);
+    // brass IMPOST shelf — the toe-board the pipe feet seat on (a brass moulding)
+    el('rect', { x: fx(conL + 2), y: fx(conTopY - 4), width: fx(W - 4), height: 6, rx: 1.5,
+      fill: DARK, stroke: BRASS, 'stroke-width': '1.3' }, g);
+    // brass-bright top edges (lit from above) on the impost + base course
+    el('line', { x1: fx(conL + 3), y1: fx(conTopY - 3.2), x2: fx(conR - 3), y2: fx(conTopY - 3.2),
+      stroke: BRI, 'stroke-width': '1.2', opacity: '0.6' }, g);
+    el('line', { x1: fx(conL - 3), y1: fx(baseY - 10.2), x2: fx(conR + 3), y2: fx(baseY - 10.2),
+      stroke: BRI, 'stroke-width': '1', opacity: '0.4' }, g);
+    // brass-bright sheen up the console's left (up-lit) edge
+    el('line', { x1: fx(conL + 1.4), y1: fx(baseY - 12), x2: fx(conL + 1.4), y2: fx(conTopY + 2),
+      stroke: BRI, 'stroke-width': '1.1', opacity: '0.34' }, g);
+
+    // ════════════ THE LIT VIOLET STOP-KNOB — the night payoff (rep.glow1) ═════════
+    // a small drawn brass stop-knob on the console face, its jewel glowing violet —
+    // EMISSIVE so it blazes at night + recedes in day (dayRecede). A soft aura pools
+    // around it; a flanking pair of dimmer drawstops echoes a stop-jamb.
+    var stopY = conTopY + (conH - 11) - 4.5;     // seated low on the face, below the manual
+    // soft violet aura at the console
+    el('ellipse', { cx: cx, cy: stopY, rx: 15, ry: 9, fill: VIO, opacity: '0.22',
+      filter: 'url(#organ-stop-glow)' }, g);
+    // brass knob ring + glowing jewel core
+    el('circle', { cx: fx(cx), cy: fx(stopY), r: 5.2, fill: DARK, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    el('circle', { cx: fx(cx), cy: fx(stopY), r: 3, fill: VIO, opacity: '0.95',
+      filter: 'url(#organ-stop-glow)' }, g);
+    el('circle', { cx: fx(cx - 0.8), cy: fx(stopY - 0.8), r: 1.1, fill: '#fff', opacity: '0.55' }, g);
+    // brass-bright top rim on the knob (lit from above)
+    el('path', { d: 'M ' + fx(cx - 3.4) + ' ' + fx(stopY - 3) + ' Q ' + fx(cx) + ' ' + fx(stopY - 5.6) + ' ' + fx(cx + 3.4) + ' ' + fx(stopY - 3),
+      fill: 'none', stroke: BRI, 'stroke-width': '1.1', opacity: '0.7', 'stroke-linecap': 'round' }, g);
+    // two flanking COMPANION drawstops — defined brass rings with a top-lit catch so
+    // they read clearly as a stop-jamb (winner-fix: don't let them vanish).
+    var sjx = 23;
+    for (var si = -1; si <= 1; si += 2) {
+      el('circle', { cx: fx(cx + si * sjx), cy: fx(stopY), r: 3.8, fill: DARK, stroke: BRASS, 'stroke-width': '1.4' }, g);
+      // a small recessed jewel face so the companion stop has a visible eye
+      el('circle', { cx: fx(cx + si * sjx), cy: fx(stopY), r: 1.6, fill: 'rgba(0,0,0,.45)', stroke: BRASS, 'stroke-width': '0.7' }, g);
+      // brass-bright top-lit glint on the ring (lit from above)
+      el('path', { d: 'M ' + fx(cx + si * sjx - 2.6) + ' ' + fx(stopY - 2.4) + ' Q ' + fx(cx + si * sjx) + ' ' + fx(stopY - 4.3) + ' ' + fx(cx + si * sjx + 2.6) + ' ' + fx(stopY - 2.4),
+        fill: 'none', stroke: BRI, 'stroke-width': '1', opacity: '0.7', 'stroke-linecap': 'round' }, g);
+    }
+
+    S.refs.organRep = g;
   }
 
   /* ── the GLYPH STAND — the fallback rep for every room WITHOUT a bespoke rep
