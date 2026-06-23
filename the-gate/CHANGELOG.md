@@ -76,6 +76,26 @@ NEXT after both: add the 3 chosen reps to the foundry LIB (iface 'scene', with r
 the Glyph Stand to estate-quality → one foundry wave (K=3 reps). Render/test via ?room=<id>. Then the
 foundry "whole set" is DONE.
 
+**SURVEY DONE (wf_729c3bc9-bae) + KEYSTONE'S FINAL 3-REP CALL:** The blind survey picked gnomon/sundial
++ firmament/observatory + cavern — but surveyors were BLIND to the existing scene, so 2 picks DUPLICATE
+elements already built (the gate has a brass sundial; the hero observatory is on the left hill). I
+OVERRODE those. FINAL 3 bespoke reps (aspect-covering, theme-spread, color-spread, NO duplication):
+  1. `physics-lab` (The Cavern) — MOUND — rocky outcrop + glowing arched cave mouth. accent #7fd4c0.
+     repColors: dark cool ROCK via rep.swatch1 (DAY #6e7680/DUSK #6a6470/NIGHT #3a4048) + EMISSIVE teal
+     cave glow via rep.glow1 #7fd4c0.
+  2. `ripple` (The Ripple Tank) — HORIZONTAL — wide shallow water tray, concentric ripple rings. accent
+     #54d6d0. repColors: WATER via rep.swatch1 (DAY #4fb8c8/DUSK #3f8a9a/NIGHT #2a5560) + faint caustic
+     shimmer rep.glow1 #7fe0e8; tray frame = estate brass roles.
+  3. `sound-garden` (The Music Room) — VERTICAL — rank of graduated brass ORGAN PIPES on a console.
+     accent #cf7bff. repColors: pipes = estate brass roles; VIOLET music accent via rep.glow1 #cf7bff
+     (a console pip/soft glow); console body via rep.swatch1 (warm dark wood DAY #6a5640/DUSK #5a4632/NIGHT #2e261c).
+The Cairn stays the 4th rep. Re-evaluate K after these first 4 (Brandon). RUNNERS-UP for a later 5th:
+the-top (gyroscope), transit, museum (per survey).
+⚠️ render-take.sh now takes an optional 6th arg = extra query (e.g. "room=physics-lab") so rep takes
+render their pinned room. PRE-WIRE rooms.js BESPOKE (ids→rep-key+repColors per band) + drawRoomRep
+dispatch BEFORE the rep foundry; then each rep take ADDS its draw fn + one dispatch line (siblings
+byte-identical). Read the plumbing agent's actual drawRoomRep dispatch + drawGlyphStand signature FIRST.
+
 **REMAINING after Wave 4:**
 - PARAMETRIC beauty pass: moon (disc+lit-limb glow+terminator — already decent, light touch), sun;
   asterism stays the earned PLACEHOLDER (do NOT build the eagle — earned-only). Add LIB entries; sky
