@@ -246,6 +246,24 @@ default look before vars are applied), matching the existing greybox fallbacks.
    halo), `#glow-star` (tight star bloom), `#glow-moon` (wide blur-only lit-limb halo).
    Final art may define its OWN blur/displacement filters for craft (paper-grain,
    candle-glow) but MUST NOT apply a color-tinting filter — color comes from the palette.
+5. **Ambient animation — ALLOWED and ENCOURAGED where it fits the subject.** An asset (and
+   especially a room-rep) MAY animate ambiently when motion *expresses what the thing is* —
+   a ripple tank ripples, an orrery turns, a flame flickers, a pendulum swings, a fountain
+   falls, a clock's escapement ticks, a screen scans, a forge pulses. Many reps will want
+   it; reach for it when it deepens the read. **Mechanism:** prefer self-contained **SMIL**
+   (`<animate>` / `<animateTransform>` on the asset's own `<g>`) so the loop runs with NO
+   JS tick and survives independent of the Phase-D engine; if a richer/parametric drive is
+   wanted, publish a handle on `S.refs` (§3.3) and let a driver own it. **Constraints (all
+   MUST hold):** (a) motion stays QUIET + secondary — it never pulls focus from the hero
+   gate, never jitters or strobes; (b) it preserves the lit-from-above read at every frame
+   (rule 3) and adds no color-tinting filter (rule 4); (c) it loops seamlessly and costs
+   ~nothing (a handful of animated nodes, not hundreds); (d) it degrades under
+   `prefers-reduced-motion` — gate any non-essential loop behind a reduced-motion check
+   (the `.gnomon-hint` pattern, `the-gate.src.html:62-64`) or pause it via the published
+   ref. A STATIC rep is still perfectly valid — animate only when it genuinely serves the
+   room, never as decoration for its own sake. *(Precedent: the Ripple Tank rep — emanating
+   SMIL wavefront clipped to the water plane, `scene.js drawRepRipple`; rendered/judged at
+   chosen phases via the `?smil=<seconds>` dev pin, §7.)*
 
 ---
 
@@ -591,9 +609,13 @@ boot (`the-gate.src.html:820-829`):
 | `?wx=clear\|cloudy\|storm` | pin the weather state → `weatherFactor`. |
 | `?seed=<n>` | seed the weather RNG (deterministic weather). |
 | `?undercroft=1` | FORCE the undercroft hatch visible for review only (`S.setDevUndercroft`, `scene.js:585-597`). Production stays earned-only via the store predicate; the flag does NOT change unlock logic. |
+| `?room=<id>` | PIN which room's rep shows in the grounds slot (`S.setDevRoom`; `rooms.js R.pick`). A bespoke id (`physics-lab`, `ripple`, `sound-garden`, …) draws that rep; any other slab id falls back to the Glyph Stand; omit → the Cairn default. Foundry room-rep takes render with this pin (per-asset `extraQS`). |
+| `?smil=<seconds>` | FREEZE the SVG animation clock and seek to a fixed phase (`svg.pauseAnimations(); setCurrentTime(s)`, boot). For rendering/judging an **animated** asset (§2.5.5) at chosen points of its loop — headless `--virtual-time-budget` does NOT advance SMIL; `setCurrentTime` does. Omit to let animations run live. |
 
 The foundry renders standalone previews AND swaps each take into the live blockout, then
-screenshots via these pins across DAY/DUSK/NIGHT + a couple brightness levels (§8).
+screenshots via these pins across DAY/DUSK/NIGHT + a couple brightness levels (§8). For an
+animated asset, also sample a few `?smil=` phases so the judges see the motion, not one
+frozen frame.
 
 ---
 
@@ -612,8 +634,12 @@ build-final.** Each take is a self-contained draw fn to the §3 interface. A tak
 
 **Judged on:** estate-idiom fidelity · beauty/craft · palette-swap correctness (recolors
 right across all 3 bands?) · emissive correctness (lit parts pop at night, recede in day?)
-· perspective/scale fit (stays in its §4 box, anchored right, lit from above?) · perf
-(~60fps via `window.__gateFps`; clean console; zero network).
+· perspective/scale fit (stays in its §4 box, anchored right, lit from above?) · **thematic
+animation** (does the subject suggest motion — and if so, does an ambient loop *deepen* the
+read while staying quiet, seamless, lit-correct, and reduced-motion-safe per §2.5.5? a
+static asset is fine when motion wouldn't serve it — judge whether the choice fits, not
+merely whether it moves; evaluate animated assets ACROSS their loop via the `?smil=` pin) ·
+perf (~60fps via `window.__gateFps`; clean console; zero network).
 
 ### 8.1 The ESTATE IDIOM the final art MUST adopt (PLAN §9 / RECON)
 
