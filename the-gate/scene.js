@@ -839,7 +839,9 @@
   // map (the Glyph Stand fallback 'glyph-stand', or an unknown key) draws the
   // Glyph Stand placeholder. Future bespoke reps register their draw fn here.
   var REP_DRAW = {
-    cairn: function (g, baseX, baseY, pick) { drawCairn(g, baseX, baseY); }
+    cairn: function (g, baseX, baseY, pick) { drawCairn(g, baseX, baseY); },
+    'cavern-mound': function (g, baseX, baseY, pick) { drawRepCavern(g, baseX, baseY, pick); },
+    'ripple-tank': function (g, baseX, baseY, pick) { drawRepRipple(g, baseX, baseY, pick); }
   };
 
   function drawRoomRep(parent) {
@@ -884,6 +886,464 @@
     }
   }
 
+  /* ── the CAVERN room-rep (The Physics Cavern, room id 'physics-lab') ──────────
+     A squat rocky OUTCROP / mound: dark cool faceted ROCK (rep.swatch1 body +
+     rep.swatch2 strata/light-catch) with brass-bright TOP-lit edges where the
+     overhead light grazes the up-facing facets; at its base a dark ARCHED cave
+     MOUTH glowing TEAL from within (rep.glow1, #7fd4c0) — pooled, brightest deep
+     in the throat, fading out to the rim. LOW + WIDE, bottom-aligned at baseY,
+     centered about cx. Estate idiom: faceted (not a blob), lit from above, glow
+     is emissive (blazes at night via dayRecede, recedes in day). Aspect ~150×120
+     inside [78..156]×[114..228]. */
+  function drawRepCavern(parent, cx, baseY, pick) {
+    var g = group('cavern-mound', parent);
+    var ROCK = 'var(--rep-swatch1-ref, #6a7079)';        // swappable dark rock body
+    var LITE = 'var(--rep-swatch2-ref, #878f99)';        // swappable lighter strata / light-catch facet
+    var BRASS = 'var(--brass-stroke-ref, #9c8350)';      // brass edge stroke
+    var BRI = 'var(--brass-bright-ref, #cdb375)';        // brass-bright TOP sheen
+    var GLOW = 'var(--rep-glow1-ref, #7fd4c0)';          // EMISSIVE teal cave glow
+    var fx = function (n) { return (Math.round(n * 10) / 10); };
+
+    var W = 152, H = 104;                  // LOW + WIDE footprint (squat, hugging ground)
+    var halfW = W / 2;                     // 76
+    var topY = baseY - H;                  // y616 — mound crest region
+    var L = cx - halfW, R = cx + halfW;    // x154 .. x306
+
+    // a private soft-feather filter for the cave glow's deep pooled light
+    var defs = parent.ownerSVGElement && parent.ownerSVGElement.querySelector('defs');
+    if (defs && !defs.querySelector('#cavern-maw-glow')) {
+      var fG = el('filter', { id: 'cavern-maw-glow', x: '-80%', y: '-80%', width: '260%', height: '260%' }, defs);
+      el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '5.5' }, fG);
+    }
+
+    // ── soft contact shadow so the mound sits ON the grass (light from above) ──
+    el('ellipse', { cx: cx + 6, cy: baseY + 2, rx: halfW * 0.98, ry: 8,
+      fill: '#000', opacity: '0.30', filter: 'url(#glow-soft)' }, g);
+
+    // ════════════ ROCK BODY — a craggy, BLOCKY low outcrop silhouette ════════════
+    // Built as a jagged, asymmetric run of angular ledges/steps — a broken rocky
+    // mound, NOT a smooth dome or a tent. A higher-but-stubby left massif, a
+    // notched saddle, a lower stepped right bench, and a heavy BROW that overhangs
+    // the cave mouth. Many short angular segments → reads as fractured stone.
+    var browY = topY + 40;                          // the overhanging brow top (over the maw)
+    var bodyD =
+      'M ' + fx(L) + ' ' + fx(baseY) +                              // ground left
+      ' L ' + fx(L + 2) + ' ' + fx(baseY - 34) +                    // left lower face
+      ' L ' + fx(cx - 60) + ' ' + fx(baseY - 50) +                  // left ledge step
+      ' L ' + fx(cx - 66) + ' ' + fx(topY + 34) +                   // up the left massif
+      ' L ' + fx(cx - 48) + ' ' + fx(topY + 14) +                   // left shoulder
+      ' L ' + fx(cx - 34) + ' ' + fx(topY + 6) +                    // left sub-peak (the crest)
+      ' L ' + fx(cx - 20) + ' ' + fx(topY + 20) +                   // down into notch
+      ' L ' + fx(cx - 6) + ' ' + fx(topY + 10) +                    // small mid-peak
+      ' L ' + fx(cx + 10) + ' ' + fx(topY + 30) +                   // saddle low point
+      ' L ' + fx(cx + 30) + ' ' + fx(topY + 18) +                   // right shoulder rise
+      ' L ' + fx(cx + 46) + ' ' + fx(topY + 38) +                   // step down
+      ' L ' + fx(cx + 60) + ' ' + fx(topY + 34) +                   // right bench top
+      ' L ' + fx(R - 4) + ' ' + fx(baseY - 52) +                    // right upper slope
+      ' L ' + fx(R) + ' ' + fx(baseY - 26) +                        // right lower face
+      ' L ' + fx(R - 2) + ' ' + fx(baseY) +                         // ground right
+      ' Z';
+    el('path', { d: bodyD, fill: ROCK, stroke: BRASS, 'stroke-width': '1.4',
+      filter: 'url(#glow-soft)' }, g);
+
+    // ════════════ FACET PLANES — lighter up/left-facing light-catch planes ════════
+    // Up- and left-facing planes catch overhead light (LITE); down/right faces stay
+    // ROCK. Big, distinct planes that break the silhouette into clear rock facets.
+    // left massif up-face (the big lit shoulder) — broken into TWO planes by a fold
+    // crease so the largest facet never reads as one flat sheet (graft fix).
+    el('path', { d: 'M ' + fx(cx - 66) + ' ' + fx(topY + 34) +
+      ' L ' + fx(cx - 48) + ' ' + fx(topY + 14) +
+      ' L ' + fx(cx - 41) + ' ' + fx(topY + 22) +
+      ' L ' + fx(cx - 50) + ' ' + fx(topY + 44) +
+      ' L ' + fx(cx - 56) + ' ' + fx(topY + 52) + ' Z',
+      fill: LITE, opacity: '0.60' }, g);
+    // the lower-right sub-plane of the same shoulder (turns slightly away → dimmer)
+    el('path', { d: 'M ' + fx(cx - 48) + ' ' + fx(topY + 14) +
+      ' L ' + fx(cx - 34) + ' ' + fx(topY + 6) +
+      ' L ' + fx(cx - 30) + ' ' + fx(topY + 30) +
+      ' L ' + fx(cx - 50) + ' ' + fx(topY + 44) +
+      ' L ' + fx(cx - 41) + ' ' + fx(topY + 22) + ' Z',
+      fill: LITE, opacity: '0.44' }, g);
+    // a thin shadow crease along the fold (reads as the break between planes)
+    el('path', { d: 'M ' + fx(cx - 50) + ' ' + fx(topY + 44) + ' L ' + fx(cx - 41) + ' ' + fx(topY + 22),
+      fill: 'none', stroke: 'rgba(0,0,0,.22)', 'stroke-width': '1', 'stroke-linecap': 'round' }, g);
+    // mid-peak lit cap
+    el('path', { d: 'M ' + fx(cx - 20) + ' ' + fx(topY + 20) +
+      ' L ' + fx(cx - 6) + ' ' + fx(topY + 10) +
+      ' L ' + fx(cx + 4) + ' ' + fx(topY + 30) +
+      ' L ' + fx(cx - 12) + ' ' + fx(topY + 36) + ' Z',
+      fill: LITE, opacity: '0.46' }, g);
+    // right shoulder up-plane
+    el('path', { d: 'M ' + fx(cx + 10) + ' ' + fx(topY + 30) +
+      ' L ' + fx(cx + 30) + ' ' + fx(topY + 18) +
+      ' L ' + fx(cx + 46) + ' ' + fx(topY + 38) +
+      ' L ' + fx(cx + 28) + ' ' + fx(topY + 48) + ' Z',
+      fill: LITE, opacity: '0.40' }, g);
+    // a sharp bright chip on the crest sub-peak
+    el('path', { d: 'M ' + fx(cx - 48) + ' ' + fx(topY + 14) +
+      ' L ' + fx(cx - 34) + ' ' + fx(topY + 6) +
+      ' L ' + fx(cx - 38) + ' ' + fx(topY + 20) + ' Z',
+      fill: LITE, opacity: '0.66' }, g);
+    // down/right SHADOW faces (a touch of dark to read the right side as turning away)
+    el('path', { d: 'M ' + fx(cx + 60) + ' ' + fx(topY + 34) +
+      ' L ' + fx(R - 4) + ' ' + fx(baseY - 52) +
+      ' L ' + fx(R) + ' ' + fx(baseY - 26) +
+      ' L ' + fx(cx + 54) + ' ' + fx(baseY - 22) + ' Z',
+      fill: 'rgba(0,0,0,.18)' }, g);
+
+    // ════════════ STRATA — broken sedimentary bedding LEDGES (grafted) ═══════════
+    // A few short bedding ledges (NOT full-width courses): each is a thin lighter
+    // slab inset from the rock edges + dipping slightly, carrying a brass-bright TOP
+    // edge (lit from above) and an under-ledge shadow. Broken/inset so it reads as
+    // weathered bedrock, never as masonry courses. Clipped to the squat body by an
+    // edge sampler that tightens the span as the mound narrows upward.
+    var leftEdgeAt = function (y) {            // approx left silhouette x at height y
+      var t = Math.max(0, Math.min(1, (baseY - y) / H));
+      return L + 4 + t * 56;                   // foot ~L+4, crest region ~cx-16
+    };
+    var rightEdgeAt = function (y) {           // approx right silhouette x at height y
+      var t = Math.max(0, Math.min(1, (baseY - y) / H));
+      return R - 4 - t * 16;                   // right flank only mildly inset (lower bench)
+    };
+    var beds = [
+      { y: baseY - 22, x0f: 0.08, x1f: 0.60, dip: 3 },
+      { y: baseY - 40, x0f: 0.18, x1f: 0.74, dip: -2 },
+      { y: baseY - 56, x0f: 0.28, x1f: 0.64, dip: 2 },
+      { y: baseY - 72, x0f: 0.32, x1f: 0.56, dip: -1 }
+    ];
+    for (var bi = 0; bi < beds.length; bi++) {
+      var bd = beds[bi];
+      var le = leftEdgeAt(bd.y), re = rightEdgeAt(bd.y);
+      var span = re - le;
+      var sx = le + span * bd.x0f, ex = le + span * bd.x1f;
+      // a faint tonal slab below the ledge (lighter strata band)
+      el('path', { d: 'M ' + fx(sx) + ' ' + fx(bd.y) + ' L ' + fx(ex) + ' ' + fx(bd.y + bd.dip) +
+        ' L ' + fx(ex - 4) + ' ' + fx(bd.y + bd.dip + 9) + ' L ' + fx(sx + 4) + ' ' + fx(bd.y + 9) + ' Z',
+        fill: LITE, stroke: 'none', opacity: (bi % 2 ? '0.50' : '0.30') }, g);
+      // brass-bright bedding line riding the ledge's UP edge (lit from above)
+      el('line', { x1: fx(sx), y1: fx(bd.y + 0.4), x2: fx(ex), y2: fx(bd.y + bd.dip + 0.4),
+        stroke: BRI, 'stroke-width': '1', opacity: (bi % 2 ? '0.42' : '0.30') }, g);
+      // soft shadow under the bedding ledge
+      el('line', { x1: fx(sx + 4), y1: fx(bd.y + 9), x2: fx(ex - 4), y2: fx(bd.y + bd.dip + 9),
+        stroke: 'rgba(0,0,0,.30)', 'stroke-width': '1' }, g);
+    }
+    // a couple of short vertical joint cracks (fractured stone)
+    el('path', { d: 'M ' + fx(cx - 30) + ' ' + fx(baseY - 6) + ' L ' + fx(cx - 33) + ' ' + fx(baseY - 36),
+      fill: 'none', stroke: 'rgba(0,0,0,.24)', 'stroke-width': '1.4', 'stroke-linecap': 'round' }, g);
+    el('path', { d: 'M ' + fx(cx + 50) + ' ' + fx(baseY - 4) + ' L ' + fx(cx + 47) + ' ' + fx(baseY - 40),
+      fill: 'none', stroke: 'rgba(0,0,0,.22)', 'stroke-width': '1.4', 'stroke-linecap': 'round' }, g);
+
+    // ════════════ BRASS-BRIGHT TOP EDGES — sheen on UP-facing rim facets ══════════
+    // Trace the jagged up-facing ridgeline in brass-bright so the overhead light
+    // reads as caught on the stone's top edges, matching the gate brass idiom.
+    el('path', { d: 'M ' + fx(cx - 66) + ' ' + fx(topY + 34) +
+      ' L ' + fx(cx - 48) + ' ' + fx(topY + 14) +
+      ' L ' + fx(cx - 34) + ' ' + fx(topY + 6) +
+      ' L ' + fx(cx - 20) + ' ' + fx(topY + 20) +
+      ' L ' + fx(cx - 6) + ' ' + fx(topY + 10) +
+      ' L ' + fx(cx + 10) + ' ' + fx(topY + 30) +
+      ' L ' + fx(cx + 30) + ' ' + fx(topY + 18) +
+      ' L ' + fx(cx + 46) + ' ' + fx(topY + 38) +
+      ' L ' + fx(cx + 60) + ' ' + fx(topY + 34),
+      fill: 'none', stroke: BRI, 'stroke-width': '1.2', opacity: '0.50',
+      'stroke-linejoin': 'round', filter: 'url(#glow-soft)' }, g);
+    // a brighter accent on the crest sub-peak itself
+    el('path', { d: 'M ' + fx(cx - 48) + ' ' + fx(topY + 14) +
+      ' L ' + fx(cx - 34) + ' ' + fx(topY + 6) +
+      ' L ' + fx(cx - 22) + ' ' + fx(topY + 14),
+      fill: 'none', stroke: BRI, 'stroke-width': '1.6', opacity: '0.82',
+      'stroke-linecap': 'round' }, g);
+
+    // ════════════ CAVE MOUTH — dark arched opening, glowing TEAL from within ══════
+    // Sits near the base, slightly right of the crest so it nestles under the
+    // overhang. Pooled glow: a wide soft halo deep in the throat, a brighter inner
+    // pool, then the dark arch rim on top so the light reads as coming FROM inside.
+    var mawCx = cx + 6, mawBaseY = baseY - 4;     // mouth sits just above groundline
+    var mawW = 56, mawH = 58;                      // arch span / height
+    var mawHalf = mawW / 2;
+    var mawTopY = mawBaseY - mawH;
+    // arched-opening path: flat floor + tall pointed-ish arch (springs from floor)
+    var archD =
+      'M ' + fx(mawCx - mawHalf) + ' ' + fx(mawBaseY) +
+      ' L ' + fx(mawCx - mawHalf) + ' ' + fx(mawBaseY - mawH * 0.42) +
+      ' Q ' + fx(mawCx - mawHalf) + ' ' + fx(mawTopY) + ' ' + fx(mawCx) + ' ' + fx(mawTopY) +
+      ' Q ' + fx(mawCx + mawHalf) + ' ' + fx(mawTopY) + ' ' + fx(mawCx + mawHalf) + ' ' + fx(mawBaseY - mawH * 0.42) +
+      ' L ' + fx(mawCx + mawHalf) + ' ' + fx(mawBaseY) +
+      ' Z';
+
+    // GRAFT (judges' consensus): replace Take 1's centered glowing egg-pool with
+    // Take 2's THROAT-POOL treatment — a tapering tongue of teal rising from the
+    // floor and narrowing UP into the dark (brightest deep + low, feathering toward
+    // the arch) — kept inside Take 1's wider/lower maw shape (no vertical sidewalls).
+
+    // 1) deep pooled glow — soft teal bloom seated low/deep in the throat. TIGHTENED
+    //    from the winner (was rx 1.55·half / ry 0.62·H, slightly oversized + soft).
+    el('ellipse', { cx: mawCx, cy: mawBaseY - mawH * 0.26, rx: mawHalf * 1.18, ry: mawH * 0.50,
+      fill: GLOW, opacity: '0.34', filter: 'url(#cavern-maw-glow)' }, g);
+    // 2) the dark mouth cavity (so the rim of the opening reads dark against rock)
+    el('path', { d: archD, fill: 'rgba(6,10,12,.96)' }, g);
+    // 3) THROAT POOL — a tapering tongue of light rising from the floor and narrowing
+    //    up into the dark; feathered so it reads as pooled light in a recess, not an
+    //    egg. Sized to Take 1's maw (mawHalf span, mawH height, foot on mawBaseY).
+    var throatD = 'M ' + fx(mawCx - mawHalf * 0.66) + ' ' + fx(mawBaseY - 3) +
+      ' Q ' + fx(mawCx - mawHalf * 0.58) + ' ' + fx(mawBaseY - mawH * 0.55) + ' ' + fx(mawCx - mawHalf * 0.16) + ' ' + fx(mawBaseY - mawH * 0.66) +
+      ' Q ' + fx(mawCx) + ' ' + fx(mawBaseY - mawH * 0.70) + ' ' + fx(mawCx + mawHalf * 0.16) + ' ' + fx(mawBaseY - mawH * 0.66) +
+      ' Q ' + fx(mawCx + mawHalf * 0.58) + ' ' + fx(mawBaseY - mawH * 0.55) + ' ' + fx(mawCx + mawHalf * 0.66) + ' ' + fx(mawBaseY - 3) + ' Z';
+    el('path', { d: throatD, fill: GLOW, opacity: '0.70', filter: 'url(#cavern-maw-glow)' }, g);
+    // 4) a hot teal core pooled DEEP and LOW in the throat (brightest point)
+    el('ellipse', { cx: mawCx, cy: mawBaseY - mawH * 0.20, rx: mawHalf * 0.34, ry: mawH * 0.15,
+      fill: GLOW, opacity: '0.95', filter: 'url(#cavern-maw-glow)' }, g);
+    el('ellipse', { cx: mawCx, cy: mawBaseY - mawH * 0.19, rx: mawHalf * 0.16, ry: mawH * 0.075,
+      fill: '#eafff8', opacity: '0.30', filter: 'url(#cavern-maw-glow)' }, g);
+    // 5) teal light SPILL up the inner faces of the arch (rim catches the glow),
+    //    following Take 1's arch curve — NOT vertical doorway walls.
+    el('path', { d: 'M ' + fx(mawCx - mawHalf + 3) + ' ' + fx(mawBaseY - 4) +
+      ' L ' + fx(mawCx - mawHalf + 3) + ' ' + fx(mawBaseY - mawH * 0.42) +
+      ' Q ' + fx(mawCx - mawHalf + 3) + ' ' + fx(mawTopY + 4) + ' ' + fx(mawCx) + ' ' + fx(mawTopY + 4),
+      fill: 'none', stroke: GLOW, 'stroke-width': '1.4', opacity: '0.42' }, g);
+    el('path', { d: 'M ' + fx(mawCx + mawHalf - 3) + ' ' + fx(mawBaseY - 4) +
+      ' L ' + fx(mawCx + mawHalf - 3) + ' ' + fx(mawBaseY - mawH * 0.42) +
+      ' Q ' + fx(mawCx + mawHalf - 3) + ' ' + fx(mawTopY + 4) + ' ' + fx(mawCx) + ' ' + fx(mawTopY + 4),
+      fill: 'none', stroke: GLOW, 'stroke-width': '1.2', opacity: '0.30' }, g);
+    // 6) re-stroke the arch rim in brass — THICKENED + BRIGHTENED (graft fix) so the
+    //    carved mouth lintel reads as estate brass, with a warm glow.
+    el('path', { d: 'M ' + fx(mawCx - mawHalf) + ' ' + fx(mawBaseY - mawH * 0.42) +
+      ' Q ' + fx(mawCx - mawHalf) + ' ' + fx(mawTopY) + ' ' + fx(mawCx) + ' ' + fx(mawTopY) +
+      ' Q ' + fx(mawCx + mawHalf) + ' ' + fx(mawTopY) + ' ' + fx(mawCx + mawHalf) + ' ' + fx(mawBaseY - mawH * 0.42),
+      fill: 'none', stroke: BRASS, 'stroke-width': '1.8', opacity: '0.85',
+      filter: 'url(#glow-soft)' }, g);
+    // 7) brass-bright top-lit catch riding the arch keystone (overhead light)
+    el('path', { d: 'M ' + fx(mawCx - 13) + ' ' + fx(mawTopY + 3) +
+      ' Q ' + fx(mawCx) + ' ' + fx(mawTopY - 1.5) + ' ' + fx(mawCx + 13) + ' ' + fx(mawTopY + 3),
+      fill: 'none', stroke: BRI, 'stroke-width': '1.6', opacity: '0.80',
+      'stroke-linecap': 'round' }, g);
+    // 8) GRAFT — Take 2's forged brass KEYSTONE lintel: a small chevron + boss stud
+    //    seated on the arch crown, tying the maw into the estate brass idiom.
+    el('path', { d: 'M ' + fx(mawCx - 8) + ' ' + fx(mawTopY - 2) +
+      ' L ' + fx(mawCx) + ' ' + fx(mawTopY - 8) + ' L ' + fx(mawCx + 8) + ' ' + fx(mawTopY - 2),
+      fill: 'none', stroke: BRI, 'stroke-width': '1.4', opacity: '0.62',
+      'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, g);
+    el('circle', { cx: fx(mawCx), cy: fx(mawTopY - 6), r: 2.4, fill: 'rgba(11,14,22,.85)',
+      stroke: BRASS, 'stroke-width': '1.2' }, g);
+    el('circle', { cx: fx(mawCx - 0.6), cy: fx(mawTopY - 6.6), r: 1, fill: BRI, opacity: '0.88' }, g);
+    // 9) a faint teal lick of light spilling onto the rock floor at the mouth's foot
+    el('ellipse', { cx: mawCx, cy: mawBaseY + 1, rx: mawHalf * 0.82, ry: 4.5,
+      fill: GLOW, opacity: '0.42', filter: 'url(#cavern-maw-glow)' }, g);
+
+    S.refs.cavernRep = g;
+  }
+
+  /* ── the RIPPLE TANK room-rep (The Ripple Tank, room id 'ripple') ─────────────
+     A wide shallow rectangular WATER TRAY on short brass legs: a low brass FRAME
+     holding a sheet of water seen at a slight overhead tilt (a foreshortened top
+     plane) so the SURFACE reads. The water is swappable blue/cyan (rep.swatch1
+     deep body + rep.swatch2 lighter highlight) and carries CONCENTRIC RIPPLE
+     RINGS radiating from an off-centre source point, with a faint caustic SHIMMER
+     (rep.glow1, #7fe0e8) catching the light along the wave crests. Brass body:
+     dark body rgba(11,14,22,.85) + brass stroke + brass-bright TOP-lit rim + short
+     legs, all lit from above. HORIZONTAL aspect (WIDE + SHORT): ~150×84 inside
+     [78..156]×[114..228]. Quiet estate instrument, not a cartoon puddle. */
+  function drawRepRipple(parent, cx, baseY, pick) {
+    var g = group('ripple-tank', parent);
+    var WATER = 'var(--rep-swatch1-ref, #6a7079)';       // swappable deep water body
+    var WLITE = 'var(--rep-swatch2-ref, #878f99)';       // swappable lighter water highlight
+    var DARK = 'rgba(11,14,22,.85)';                     // estate brass dark body
+    var BRASS = 'var(--brass-stroke-ref, #9c8350)';      // brass edge stroke
+    var BRI = 'var(--brass-bright-ref, #cdb375)';        // brass-bright TOP sheen
+    var SHIM = 'var(--rep-glow1-ref, #7fd4c0)';          // EMISSIVE caustic shimmer
+    var fx = function (n) { return (Math.round(n * 10) / 10); };
+
+    // ── footprint: WIDE + SHORT. tray rim at rimY, water plane tilts up behind. ──
+    var W = 150;                          // tray full width
+    var halfW = W / 2;                    // 75 → x155 .. x305
+    var legH = 16;                        // short legs lift the tray off the grass
+    var frameH = 22;                      // the visible front lip / wall thickness
+    var rimY = baseY - legH;              // y704 — bottom of the tray body (front lip foot)
+    var frontTopY = rimY - frameH;        // y682 — top of the front lip (near rim edge)
+    var backRise = 30;                    // how far the far rim sits ABOVE the near rim
+    var backTopY = frontTopY - backRise;  // y652 — far rim line (top of the tilted plane)
+    var L = cx - halfW, R = cx + halfW;   // x155 .. x305
+    // the tilted WATER PLANE is a trapezoid: wide near edge (front), inset far edge
+    var inset = 9;                        // perspective inset of the far edge
+    var nearL = L + 7, nearR = R - 7;     // near (front) water edge
+    var farL = L + inset, farR = R - inset; // far (back) water edge
+
+    // a private soft-feather filter for the caustic shimmer's pooled light
+    var defs = parent.ownerSVGElement && parent.ownerSVGElement.querySelector('defs');
+    if (defs && !defs.querySelector('#ripple-shimmer')) {
+      var fS = el('filter', { id: 'ripple-shimmer', x: '-60%', y: '-60%', width: '220%', height: '220%' }, defs);
+      el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '2.2' }, fS);
+    }
+    // a clip so the ripple rings never spill past the water plane
+    if (defs && !defs.querySelector('#ripple-water-clip')) {
+      var clip = el('clipPath', { id: 'ripple-water-clip' }, defs);
+      el('path', { d: 'M ' + fx(nearL) + ' ' + fx(frontTopY) +
+        ' L ' + fx(nearR) + ' ' + fx(frontTopY) +
+        ' L ' + fx(farR) + ' ' + fx(backTopY) +
+        ' L ' + fx(farL) + ' ' + fx(backTopY) + ' Z' }, clip);
+    }
+
+    // ── soft contact shadow so the tray sits ON the grass (light from above) ──
+    // Tightened to UNDER the footprint (was offset +5 / rx halfW*0.9 which feathered
+    // a grey halo out past the right leg). Centred, narrower, so no stray bleed.
+    el('ellipse', { cx: cx + 1, cy: baseY + 2, rx: halfW * 0.78, ry: 6,
+      fill: '#000', opacity: '0.30', filter: 'url(#glow-soft)' }, g);
+
+    // ════════════ SHORT LEGS — two front + a hint of back, brass-edged ═══════════
+    var legW = 9;
+    var legs = [cx - halfW + 16, cx + halfW - 16];   // front-left, front-right
+    for (var li = 0; li < legs.length; li++) {
+      var lx = legs[li];
+      el('rect', { x: fx(lx - legW / 2), y: fx(rimY - 1), width: legW, height: legH + 2,
+        fill: DARK, stroke: BRASS, 'stroke-width': '1.4' }, g);
+      // a tiny brass foot pad
+      el('rect', { x: fx(lx - legW / 2 - 1.5), y: fx(baseY - 2.5), width: legW + 3, height: 3.5, rx: 1.3,
+        fill: DARK, stroke: BRASS, 'stroke-width': '1.1' }, g);
+      // brass-bright top-lit sliver down the leg's near edge
+      el('line', { x1: fx(lx - legW / 2 + 0.6), y1: fx(rimY + 1), x2: fx(lx - legW / 2 + 0.6), y2: fx(baseY - 3),
+        stroke: BRI, 'stroke-width': '1', opacity: '0.5' }, g);
+    }
+
+    // ════════════ THE WATER SHEET — the tilted top plane, drawn FIRST ════════════
+    // deep water body fills the tilted trapezoid
+    el('path', { d: 'M ' + fx(nearL) + ' ' + fx(frontTopY) +
+      ' L ' + fx(nearR) + ' ' + fx(frontTopY) +
+      ' L ' + fx(farR) + ' ' + fx(backTopY) +
+      ' L ' + fx(farL) + ' ' + fx(backTopY) + ' Z',
+      fill: WATER }, g);
+    // a lighter wash toward the FAR/upper edge (water lightens with sky reflection up top)
+    el('path', { d: 'M ' + fx(farL) + ' ' + fx(backTopY) +
+      ' L ' + fx(farR) + ' ' + fx(backTopY) +
+      ' L ' + fx((nearR + farR) / 2) + ' ' + fx((frontTopY + backTopY) / 2) +
+      ' L ' + fx((nearL + farL) / 2) + ' ' + fx((frontTopY + backTopY) / 2) + ' Z',
+      fill: WLITE, opacity: '0.40' }, g);
+
+    // ════════════ CONCENTRIC RIPPLE RINGS — radiating from a source point ════════
+    // The rings are flattened ellipses (the surface is seen at a tilt, so circles
+    // foreshorten vertically). They emanate from an off-centre drop point, fading
+    // outward, each carrying a bright caustic crest on its UPPER (lit) arc.
+    var srcX = cx - 14;                                  // drop point, slightly left of centre
+    var srcY = (frontTopY + backTopY) / 2 + 4;          // mid plane, a touch forward
+    var ringClip = 'url(#ripple-water-clip)';
+    // Spacing WIDENS outward (a believable wavefront slows + spreads) and opacity
+    // decays steeper toward the rim so the rings fade into the water near the edge
+    // (judge fix: feather + outward-decay so they read legible-at-centre, soft-at-rim).
+    var rings = [
+      { rx: 13, op: 0.52 },
+      { rx: 24, op: 0.42 },
+      { rx: 36, op: 0.32 },
+      { rx: 49, op: 0.22 },
+      { rx: 63, op: 0.13 },
+      { rx: 78, op: 0.07 }
+    ];
+    var squash = 0.34;                                   // vertical foreshorten of the rings
+    for (var ri = 0; ri < rings.length; ri++) {
+      var rg = rings[ri];
+      // a thin DARK trough riding just OUTSIDE each crest — gives the ring relief at
+      // DAY brightness (graft idea from take 3's trough ring) so crests aren't flat.
+      el('ellipse', { cx: fx(srcX), cy: fx(srcY), rx: fx(rg.rx + 1.4), ry: fx((rg.rx + 1.4) * squash),
+        fill: 'none', stroke: 'rgba(0,0,0,.30)', 'stroke-width': '0.9',
+        opacity: fx(rg.op * 0.55), 'clip-path': ringClip }, g);
+      // the ring body — a thin lighter wave crest (water highlight)
+      el('ellipse', { cx: fx(srcX), cy: fx(srcY), rx: fx(rg.rx), ry: fx(rg.rx * squash),
+        fill: 'none', stroke: WLITE, 'stroke-width': '1.5', opacity: rg.op,
+        'clip-path': ringClip }, g);
+      // a faint emissive caustic shimmer riding the UPPER (lit) arc of each ring,
+      // brightest at the strike and decaying outward (per-ring crest highlight).
+      var crestOp = fx(rg.op * (1.05 - ri * 0.06));
+      el('path', { d: 'M ' + fx(srcX - rg.rx * 0.78) + ' ' + fx(srcY - rg.rx * squash * 0.62) +
+        ' A ' + fx(rg.rx) + ' ' + fx(rg.rx * squash) + ' 0 0 1 ' +
+        fx(srcX + rg.rx * 0.78) + ' ' + fx(srcY - rg.rx * squash * 0.62),
+        fill: 'none', stroke: SHIM, 'stroke-width': fx(1.2 - ri * 0.08), opacity: crestOp,
+        'clip-path': ringClip, filter: 'url(#ripple-shimmer)' }, g);
+    }
+    // the bright drop point itself — a hot caustic pip where the wave is born.
+    // A pooled soft bloom under the strike (graft from take 1's hotter source +
+    // take 2's pooled glow) so the instrument reads vividly LIT at night.
+    el('ellipse', { cx: fx(srcX), cy: fx(srcY), rx: 8.5, ry: 8.5 * squash,
+      fill: SHIM, opacity: '0.34', 'clip-path': ringClip, filter: 'url(#ripple-shimmer)' }, g);
+    el('ellipse', { cx: fx(srcX), cy: fx(srcY), rx: 3.6, ry: 3.6 * squash,
+      fill: SHIM, opacity: '0.95', 'clip-path': ringClip, filter: 'url(#ripple-shimmer)' }, g);
+    el('ellipse', { cx: fx(srcX), cy: fx(srcY), rx: 1.5, ry: 1.5 * squash,
+      fill: '#eafffb', opacity: '0.6', 'clip-path': ringClip }, g);
+
+    // ════════════ FAR RIM — the back wall lip behind the water (brass) ═══════════
+    el('path', { d: 'M ' + fx(farL - 4) + ' ' + fx(backTopY - 4) +
+      ' L ' + fx(farR + 4) + ' ' + fx(backTopY - 4) +
+      ' L ' + fx(farR) + ' ' + fx(backTopY + 0.5) +
+      ' L ' + fx(farL) + ' ' + fx(backTopY + 0.5) + ' Z',
+      fill: DARK, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    // brass-bright top-lit sheen on the far rim's UP edge (lit from above)
+    el('line', { x1: fx(farL - 2), y1: fx(backTopY - 4 + 0.6), x2: fx(farR + 2), y2: fx(backTopY - 4 + 0.6),
+      stroke: BRI, 'stroke-width': '1.2', opacity: '0.7' }, g);
+
+    // ════════════ FRONT LIP — the near wall of the tray (the thick front face) ════
+    // a slim chamfer connecting the near water edge down to the front lip top
+    el('path', { d: 'M ' + fx(nearL) + ' ' + fx(frontTopY) +
+      ' L ' + fx(nearR) + ' ' + fx(frontTopY) +
+      ' L ' + fx(R) + ' ' + fx(frontTopY + 4) +
+      ' L ' + fx(L) + ' ' + fx(frontTopY + 4) + ' Z',
+      fill: WATER, opacity: '0.55' }, g);
+    // the front face wall (the tray body the viewer sees head-on)
+    el('path', { d: 'M ' + fx(L) + ' ' + fx(frontTopY + 4) +
+      ' L ' + fx(R) + ' ' + fx(frontTopY + 4) +
+      ' L ' + fx(R - 2) + ' ' + fx(rimY) +
+      ' L ' + fx(L + 2) + ' ' + fx(rimY) + ' Z',
+      fill: DARK, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    // brass-bright top-lit rim along the FRONT lip's upper edge (the brightest line)
+    el('line', { x1: fx(L + 1), y1: fx(frontTopY + 4 + 0.7), x2: fx(R - 1), y2: fx(frontTopY + 4 + 0.7),
+      stroke: BRI, 'stroke-width': '1.4', opacity: '0.82' }, g);
+    // a soft warm glow on the front rim so the brass reads as lit, not flat
+    el('line', { x1: fx(L + 4), y1: fx(frontTopY + 4.4), x2: fx(R - 4), y2: fx(frontTopY + 4.4),
+      stroke: BRI, 'stroke-width': '2.2', opacity: '0.28', filter: 'url(#glow-soft)' }, g);
+    // two small brass corner studs on the front lip (estate furniture detail)
+    el('circle', { cx: fx(L + 10), cy: fx(frontTopY + 4), r: 1.8, fill: DARK, stroke: BRASS, 'stroke-width': '1' }, g);
+    el('circle', { cx: fx(R - 10), cy: fx(frontTopY + 4), r: 1.8, fill: DARK, stroke: BRASS, 'stroke-width': '1' }, g);
+    el('circle', { cx: fx(L + 10), cy: fx(frontTopY + 3.5), r: 0.7, fill: BRI, opacity: '0.85' }, g);
+    el('circle', { cx: fx(R - 10), cy: fx(frontTopY + 3.5), r: 0.7, fill: BRI, opacity: '0.85' }, g);
+    // brass side stiles down the front-left and front-right corners
+    el('line', { x1: fx(L + 1.5), y1: fx(frontTopY + 4), x2: fx(L + 2.5), y2: fx(rimY),
+      stroke: BRI, 'stroke-width': '1', opacity: '0.45' }, g);
+    el('line', { x1: fx(R - 1.5), y1: fx(frontTopY + 4), x2: fx(R - 2.5), y2: fx(rimY),
+      stroke: BRI, 'stroke-width': '1', opacity: '0.35' }, g);
+
+    // ── RIVETED PLATE detail on the front body (graft from take 3's rim craft) — turns
+    //    the plain dark box into a lab instrument, not a speaker cabinet. Three faint
+    //    brass plate seams break the front face into riveted panels, each seam carrying
+    //    a column of small rivet dots; the body face is slightly inset top→bottom so the
+    //    seams follow the box's mild taper.
+    var seamFracs = [0.28, 0.5, 0.72];
+    for (var si = 0; si < seamFracs.length; si++) {
+      var sf = seamFracs[si];
+      var sxT = L + 4 + (R - 4 - (L + 4)) * sf;      // x at the box TOP (frontTopY+5)
+      var sxB = (L + 2) + ((R - 2) - (L + 2)) * sf;  // x at the box FOOT (rimY) — follows taper
+      el('line', { x1: fx(sxT), y1: fx(frontTopY + 6), x2: fx(sxB), y2: fx(rimY - 1.5),
+        stroke: BRASS, 'stroke-width': '0.9', opacity: '0.40' }, g);
+      // rivet dots down the seam (three per seam), brass with a tiny top-lit catch
+      for (var rd = 0; rd < 3; rd++) {
+        var rt = 0.22 + rd * 0.30;
+        var rdx = sxT + (sxB - sxT) * rt;
+        var rdy = (frontTopY + 6) + ((rimY - 1.5) - (frontTopY + 6)) * rt;
+        el('circle', { cx: fx(rdx), cy: fx(rdy), r: 1, fill: DARK, stroke: BRASS, 'stroke-width': '0.7' }, g);
+        el('circle', { cx: fx(rdx), cy: fx(rdy - 0.4), r: 0.4, fill: BRI, opacity: '0.7' }, g);
+      }
+    }
+    // two flush LEVEL-SCREW bosses on the front body sides (the tray's adjusters),
+    // seated into the lower corners of the front face — instrument jewel detail.
+    var bossY = rimY - frameH * 0.42;
+    el('circle', { cx: fx(L + 7), cy: fx(bossY), r: 2.2, fill: DARK, stroke: BRASS, 'stroke-width': '1.2' }, g);
+    el('circle', { cx: fx(R - 7), cy: fx(bossY), r: 2.2, fill: DARK, stroke: BRASS, 'stroke-width': '1.2' }, g);
+    el('circle', { cx: fx(L + 6.4), cy: fx(bossY - 0.6), r: 0.8, fill: BRI, opacity: '0.8' }, g);
+    el('circle', { cx: fx(R - 7.6), cy: fx(bossY - 0.6), r: 0.8, fill: BRI, opacity: '0.8' }, g);
+    // a slim screw-slot across each boss (sells them as adjusters, not just studs)
+    el('line', { x1: fx(L + 5.4), y1: fx(bossY), x2: fx(L + 8.6), y2: fx(bossY),
+      stroke: BRASS, 'stroke-width': '0.7', opacity: '0.7' }, g);
+    el('line', { x1: fx(R - 8.6), y1: fx(bossY), x2: fx(R - 5.4), y2: fx(bossY),
+      stroke: BRASS, 'stroke-width': '0.7', opacity: '0.7' }, g);
+
+    S.refs.rippleRep = g;
+  }
+
   /* ── the GLYPH STAND — the fallback rep for every room WITHOUT a bespoke rep
      (§4.2 / §5.7). A GREYBOX PLACEHOLDER (a foundry beauty pass comes later): a
      simple brass-edged stone PLINTH bottom-aligned at the ground line, holding the
@@ -897,68 +1357,168 @@
   function drawGlyphStand(parent, cx, baseY, pick) {
     var g = group('glyph-stand', parent);
     var BODY = 'var(--rep-swatch1-ref, #6a7079)';        // swappable stone body
+    var DARK = 'rgba(11,14,22,.85)';                      // estate brass dark body
     var BRASS = 'var(--brass-stroke-ref, #c9a24a)';      // brass edge stroke
     var BRI = 'var(--brass-bright-ref, #f0d489)';        // brass-bright TOP sheen
     var accent = (pick && pick.accent) || '#9aa0a8';     // room's self-lit accent pip
     var glyph = (pick && pick.glyph) || '◆';
     var fx = function (n) { return (Math.round(n * 10) / 10); };
 
-    var W = 96, H = 138;                 // overall footprint (within the rep range)
-    var topY = baseY - H;                // plinth top
+    // TAKE 1 — "the museum label-plinth": a dignified stone pedestal carrying an
+    // ARCHED brass display cartouche. Stepped masonry base → tapered shaft (lit
+    // left edge, recessed light-catch panel, mortar course) → brass cornice → an
+    // arched-top brass-framed slot holding the room's glyph, with corner studs and
+    // a self-lit accent jewel crowning the arch keystone. Restraint: one tall quiet
+    // fixture, read-at-distance silhouette, all brass top-lit from above.
+
+    var W = 102, H = 150;                 // overall footprint (inside [78..156]x[114..228])
+    var topY = baseY - H;                 // cartouche top
     var halfW = W / 2;
 
-    // soft cast shadow at the foot so the plinth stands ON the grass (light above)
-    el('ellipse', { cx: cx + 4, cy: baseY + 3, rx: halfW * 0.78, ry: 8,
-      fill: '#000', opacity: '0.26', filter: 'url(#glow-soft)' }, g);
+    // ── soft cast shadow so the plinth stands ON the grass (light from above) ──
+    el('ellipse', { cx: cx + 5, cy: baseY + 3, rx: halfW * 0.82, ry: 8.5,
+      fill: '#000', opacity: '0.28', filter: 'url(#glow-soft)' }, g);
 
-    // ── BASE — a stepped stone foot (two courses, wider than the shaft) ──
-    el('rect', { x: fx(cx - halfW), y: fx(baseY - 16), width: W, height: 16, rx: 2,
+    // ════════════ STEPPED STONE BASE (two courses + a plinth riser) ════════════
+    // lower (widest) course
+    el('rect', { x: fx(cx - halfW), y: fx(baseY - 13), width: W, height: 13, rx: 2,
       fill: BODY, stroke: BRASS, 'stroke-width': '1.4' }, g);
-    el('rect', { x: fx(cx - halfW + 8), y: fx(baseY - 26), width: W - 16, height: 11, rx: 2,
-      fill: BODY, stroke: BRASS, 'stroke-width': '1.2' }, g);
-    // top-lit lip on the base's up-facing edge
-    el('line', { x1: fx(cx - halfW + 4), y1: fx(baseY - 15), x2: fx(cx + halfW - 4), y2: fx(baseY - 15),
-      stroke: BRI, 'stroke-width': '1', opacity: '0.34' }, g);
-
-    // ── SHAFT — the slender plinth body rising from the base ──
-    var shaftW = W - 28, shaftL = cx - shaftW / 2, shaftR = cx + shaftW / 2;
-    var shaftTop = topY + 10, shaftBot = baseY - 24;
-    el('rect', { x: fx(shaftL), y: fx(shaftTop), width: shaftW, height: fx(shaftBot - shaftTop), rx: 2,
-      fill: BODY, stroke: BRASS, 'stroke-width': '1.4' }, g);
-    // brass-bright sheen up the shaft's LEFT (up-light) edge
-    el('line', { x1: fx(shaftL + 1.5), y1: fx(shaftTop + 4), x2: fx(shaftL + 1.5), y2: fx(shaftBot - 4),
-      stroke: BRI, 'stroke-width': '1', opacity: '0.28' }, g);
-
-    // ── CAPITAL — a small brass-rimmed cap holding the framed glyph slot ──
-    var capW = W - 12, capL = cx - capW / 2;
-    var capH = 14, capY = topY - 2;
-    el('rect', { x: fx(capL), y: fx(capY), width: capW, height: capH, rx: 2,
-      fill: BODY, stroke: BRASS, 'stroke-width': '1.4' }, g);
-    el('line', { x1: fx(capL + 3), y1: fx(capY + 1.2), x2: fx(capL + capW - 3), y2: fx(capY + 1.2),
+    // chamfer shadow on the lower course's forward face
+    el('rect', { x: fx(cx - halfW + 1.4), y: fx(baseY - 5), width: W - 2.8, height: 4,
+      fill: 'rgba(0,0,0,.20)' }, g);
+    // upper course (stepped in)
+    el('rect', { x: fx(cx - halfW + 9), y: fx(baseY - 24), width: W - 18, height: 12, rx: 2,
+      fill: BODY, stroke: BRASS, 'stroke-width': '1.3' }, g);
+    // top-lit lips on each up-facing course edge
+    el('line', { x1: fx(cx - halfW + 3), y1: fx(baseY - 12.2), x2: fx(cx + halfW - 3), y2: fx(baseY - 12.2),
+      stroke: BRI, 'stroke-width': '1', opacity: '0.32' }, g);
+    el('line', { x1: fx(cx - halfW + 12), y1: fx(baseY - 23.2), x2: fx(cx + halfW - 12), y2: fx(baseY - 23.2),
       stroke: BRI, 'stroke-width': '1', opacity: '0.40' }, g);
 
-    // ── FRAMED GLYPH SLOT — a recessed dark panel above the capital, brass-framed,
-    //    holding the room's glyph centered ──
-    var slotW = 64, slotH = 60;
-    var slotX = cx - slotW / 2, slotY = capY - slotH - 4;
-    var slotCy = slotY + slotH / 2;
-    // dark recessed panel (the estate brass-furniture dark body)
-    el('rect', { x: fx(slotX), y: fx(slotY), width: slotW, height: slotH, rx: 3,
-      fill: 'rgba(11,14,22,.85)', stroke: BRASS, 'stroke-width': '1.4' }, g);
-    // brass-bright top-edge sheen on the frame (lit from above)
-    el('line', { x1: fx(slotX + 2), y1: fx(slotY + 1.4), x2: fx(slotX + slotW - 2), y2: fx(slotY + 1.4),
+    // ════════════ SHAFT — slender tapered pillar rising from the base ════════════
+    var shaftBot = baseY - 24;
+    var shaftTopY = topY + 30;            // cornice begins here
+    var shBotW = W - 30, shTopW = W - 40; // gentle upward taper
+    var sbL = cx - shBotW / 2, sbR = cx + shBotW / 2;
+    var stL = cx - shTopW / 2, stR = cx + shTopW / 2;
+    el('path', { d: 'M ' + fx(sbL) + ' ' + fx(shaftBot) + ' L ' + fx(stL) + ' ' + fx(shaftTopY) +
+      ' L ' + fx(stR) + ' ' + fx(shaftTopY) + ' L ' + fx(sbR) + ' ' + fx(shaftBot) + ' Z',
+      fill: BODY, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    // recessed light-catch panel down the shaft face (like the gate piers)
+    el('path', { d: 'M ' + fx(sbL + 7) + ' ' + fx(shaftBot - 5) + ' L ' + fx(stL + 6) + ' ' + fx(shaftTopY + 5) +
+      ' L ' + fx(stR - 6) + ' ' + fx(shaftTopY + 5) + ' L ' + fx(sbR - 7) + ' ' + fx(shaftBot - 5) + ' Z',
+      fill: 'rgba(0,0,0,.12)', stroke: 'rgba(0,0,0,.22)', 'stroke-width': '1' }, g);
+    // brass-bright catch riding the panel's LEFT (up-lit) reveal — lifts the
+    // column structure so it stays legible at night, not a black void.
+    el('line', { x1: fx(sbL + 8.2), y1: fx(shaftBot - 7), x2: fx(stL + 7.2), y2: fx(shaftTopY + 7),
+      stroke: BRI, 'stroke-width': '1', opacity: '0.20' }, g);
+    // a DELIBERATE brass-collared course-marker banding the shaft (a machined
+    // band + a center boss, grafted from Take 2's boss idiom) — reads as a
+    // purposeful course, never as a crack/seam in the stone.
+    var midY = (shaftBot + shaftTopY) / 2;
+    var mFrac = (shaftBot - midY) / (shaftBot - shaftTopY);
+    var mL = sbL + (stL - sbL) * mFrac, mR = sbR + (stR - sbR) * mFrac;
+    var bandH = 5;
+    // recessed band body with a brass edge on each rail
+    el('rect', { x: fx(mL + 2), y: fx(midY - bandH / 2), width: fx(mR - mL - 4), height: bandH, rx: 1.2,
+      fill: 'rgba(0,0,0,.22)', stroke: BRASS, 'stroke-width': '1.1' }, g);
+    // brass-bright top rail of the band (lit from above)
+    el('line', { x1: fx(mL + 3), y1: fx(midY - bandH / 2 + 0.6), x2: fx(mR - 3), y2: fx(midY - bandH / 2 + 0.6),
+      stroke: BRI, 'stroke-width': '1', opacity: '0.42' }, g);
+    // center machined boss — a small brass rivet seated mid-course
+    el('circle', { cx: fx(cx), cy: fx(midY), r: 3, fill: BODY, stroke: BRASS, 'stroke-width': '1.2' }, g);
+    el('circle', { cx: fx(cx - 0.6), cy: fx(midY - 0.6), r: 1.1, fill: BRI, opacity: '0.9' }, g);
+    // brass-bright sheen up the shaft's LEFT (up-lit) edge — lifted so the
+    // column structure stays legible at night.
+    el('line', { x1: fx(sbL + 1.6), y1: fx(shaftBot - 3), x2: fx(stL + 1.6), y2: fx(shaftTopY + 3),
+      stroke: BRI, 'stroke-width': '1.3', opacity: '0.40' }, g);
+
+    // ════════════ CORNICE — a stepped brass collar capping the shaft ════════════
+    var corY = shaftTopY - 8, corW = W - 22, corL = cx - corW / 2;
+    el('rect', { x: fx(corL), y: fx(corY), width: corW, height: 12, rx: 2,
+      fill: BODY, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    el('rect', { x: fx(corL - 4), y: fx(corY - 5), width: corW + 8, height: 6, rx: 1.5,
+      fill: BODY, stroke: BRASS, 'stroke-width': '1.3' }, g);
+    // cornice top-edge sheen — lifted so the collar reads as the structural
+    // shelf the cartouche seats onto, even at night.
+    el('line', { x1: fx(corL - 3), y1: fx(corY - 4.4), x2: fx(corL + corW + 3), y2: fx(corY - 4.4),
+      stroke: BRI, 'stroke-width': '1.2', opacity: '0.62' }, g);
+
+    // ════════════ ARCHED DISPLAY CARTOUCHE — the brass-framed glyph slot ════════
+    var slotW = 70, slotH = 50;
+    var slotX = cx - slotW / 2;
+    var slotBot = corY - 6;               // sits just above the cornice
+    var slotTop = slotBot - slotH;        // straight-side top, arch springs above
+    var archR = slotW / 2;                // semicircular arch radius
+    var archApex = slotTop - archR;       // peak of the arch
+    // glyph center: midpoint of the FULL arched opening (apex..base), nudged down
+    // slightly so the optical mass of the emoji sits centered in the cartouche.
+    var slotCy = (archApex + slotBot) / 2 + 8.5;
+    // arched frame outline: up the left, semicircle over, down the right, base
+    var frameD = 'M ' + fx(slotX) + ' ' + fx(slotBot) +
+      ' L ' + fx(slotX) + ' ' + fx(slotTop) +
+      ' A ' + fx(archR) + ' ' + fx(archR) + ' 0 0 1 ' + fx(slotX + slotW) + ' ' + fx(slotTop) +
+      ' L ' + fx(slotX + slotW) + ' ' + fx(slotBot) + ' Z';
+    // outer brass frame body (the estate dark brass body)
+    el('path', { d: frameD, fill: DARK, stroke: BRASS, 'stroke-width': '1.8', filter: 'url(#glow-soft)' }, g);
+    el('path', { d: frameD, fill: 'none', stroke: BRASS, 'stroke-width': '1.8' }, g);
+    // inner bevel reveal (a thinner brass line inset — a framed reveal)
+    var inset = 5;
+    var ix = slotX + inset, iw = slotW - inset * 2, ir = archR - inset;
+    var iTop = slotTop, iApexY = iTop - ir;
+    var innerD = 'M ' + fx(ix) + ' ' + fx(slotBot - inset) +
+      ' L ' + fx(ix) + ' ' + fx(iTop) +
+      ' A ' + fx(ir) + ' ' + fx(ir) + ' 0 0 1 ' + fx(ix + iw) + ' ' + fx(iTop) +
+      ' L ' + fx(ix + iw) + ' ' + fx(slotBot - inset) + ' Z';
+    el('path', { d: innerD, fill: 'rgba(0,0,0,.30)', stroke: BRASS, 'stroke-width': '1', opacity: '0.85' }, g);
+    // brass-bright sheen riding the TOP of the arch (lit from above)
+    el('path', { d: 'M ' + fx(slotX + 3) + ' ' + fx(slotTop) +
+      ' A ' + fx(archR - 3) + ' ' + fx(archR - 3) + ' 0 0 1 ' + fx(slotX + slotW - 3) + ' ' + fx(slotTop),
+      fill: 'none', stroke: BRI, 'stroke-width': '1.3', opacity: '0.55' }, g);
+
+    // ── brass YOKE seating the cartouche onto the cornice (grafted from Take 2's
+    // explicit attachment idiom): a short collar bridging the frame base down to
+    // the cornice shelf, so the arch visibly SEATS rather than just stacks. ──
+    var yokeW = slotW - 18, yokeL = cx - yokeW / 2;
+    el('rect', { x: fx(yokeL), y: fx(slotBot - 1), width: yokeW, height: fx((corY - 5) - (slotBot - 1)), rx: 1.4,
+      fill: BODY, stroke: BRASS, 'stroke-width': '1.2' }, g);
+    el('line', { x1: fx(yokeL + 1), y1: fx(slotBot - 0.4), x2: fx(yokeL + yokeW - 1), y2: fx(slotBot - 0.4),
       stroke: BRI, 'stroke-width': '1', opacity: '0.45' }, g);
-    // the room's glyph, centered in the slot
-    var gt = el('text', { x: fx(cx), y: fx(slotCy + 1), 'text-anchor': 'middle',
-      'dominant-baseline': 'central', 'font-size': '34',
+
+    // corner studs (brass rosettes) anchoring all FOUR corners of the cartouche
+    // (lower corners + the arch springline corners) for estate-brass symmetry.
+    var studY = slotBot - 5;
+    var springY = slotTop + 2;            // where the arch springs from the verticals
+    el('circle', { cx: fx(slotX + 4), cy: fx(studY), r: 2.3, fill: BODY, stroke: BRASS, 'stroke-width': '1' }, g);
+    el('circle', { cx: fx(slotX + slotW - 4), cy: fx(studY), r: 2.3, fill: BODY, stroke: BRASS, 'stroke-width': '1' }, g);
+    el('circle', { cx: fx(slotX + 4), cy: fx(springY), r: 2.3, fill: BODY, stroke: BRASS, 'stroke-width': '1' }, g);
+    el('circle', { cx: fx(slotX + slotW - 4), cy: fx(springY), r: 2.3, fill: BODY, stroke: BRASS, 'stroke-width': '1' }, g);
+    el('circle', { cx: fx(slotX + 4), cy: fx(studY - 0.7), r: 0.9, fill: BRI, opacity: '0.85' }, g);
+    el('circle', { cx: fx(slotX + slotW - 4), cy: fx(studY - 0.7), r: 0.9, fill: BRI, opacity: '0.85' }, g);
+    el('circle', { cx: fx(slotX + 4), cy: fx(springY - 0.7), r: 0.9, fill: BRI, opacity: '0.85' }, g);
+    el('circle', { cx: fx(slotX + slotW - 4), cy: fx(springY - 0.7), r: 0.9, fill: BRI, opacity: '0.85' }, g);
+
+    // ── the room's GLYPH, centered in the arched reveal ──
+    var gt = el('text', { x: fx(cx), y: fx(slotCy + 4), 'text-anchor': 'middle',
+      'dominant-baseline': 'central', 'font-size': '40',
       'font-family': 'Georgia, serif' }, g);
     gt.textContent = glyph;
 
-    // ── ACCENT PIP — a small self-lit emissive dot on the capital face (the room's
-    //    OWN accent color, treated as a self-lit marker; soft glow feather). ──
-    el('circle', { cx: fx(cx), cy: fx(capY + capH / 2), r: 3.2,
-      fill: accent, filter: 'url(#glow-soft)' }, g);
-    el('circle', { cx: fx(cx), cy: fx(capY + capH / 2), r: 1.6, fill: BRI, opacity: '0.85' }, g);
+    // ════════════ KEYSTONE ACCENT JEWEL — a self-lit pip crowning the arch ═══════
+    // the room's OWN accent treated as a self-lit marker; layered soft halo + hot
+    // core (the night payoff for an otherwise-receding stone fixture).
+    var jewelY = archApex - 5;
+    // wide soft accent halo (the room's color, glowing)
+    el('circle', { cx: fx(cx), cy: fx(jewelY), r: 7.5, fill: accent, opacity: '0.55', filter: 'url(#glow-soft)' }, g);
+    // a small brass keystone setting cradling the jewel
+    el('path', { d: 'M ' + fx(cx - 6.5) + ' ' + fx(jewelY + 6) + ' L ' + fx(cx - 4.2) + ' ' + fx(jewelY - 4.5) +
+      ' L ' + fx(cx + 4.2) + ' ' + fx(jewelY - 4.5) + ' L ' + fx(cx + 6.5) + ' ' + fx(jewelY + 6) + ' Z',
+      fill: BODY, stroke: BRASS, 'stroke-width': '1.2' }, g);
+    // the jewel: brass setting-rim (always reads) + accent fill + hot bright core,
+    // so even a near-black accent still reads as a lit gem in its brass bezel.
+    el('circle', { cx: fx(cx), cy: fx(jewelY), r: 3.6, fill: accent, stroke: BRASS, 'stroke-width': '1.1', filter: 'url(#glow-soft)' }, g);
+    el('circle', { cx: fx(cx), cy: fx(jewelY), r: 3.6, fill: accent, stroke: BRASS, 'stroke-width': '1.1' }, g);
+    el('circle', { cx: fx(cx - 0.7), cy: fx(jewelY - 0.7), r: 1.3, fill: BRI, opacity: '0.92' }, g);
   }
 
   /* ── undercroft hatch — a FRONT-ON double cellar / bilco door set INTO the
