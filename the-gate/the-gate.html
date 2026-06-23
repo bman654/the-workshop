@@ -3772,21 +3772,28 @@ window.Gate.sfx.wind = function ({ ctx, dest, dur, when = 0, seed = 1, strength 
   </script>
   <script>
 /* ═══════════════════════════════════════════════════════════════════════════
-   audio-gears.js  —  Gate.sfx.gears  —  mechanical clockwork turning
+   audio-gears.js  —  Gate.sfx.gears  —  HEAVY mechanical clockwork turning
 
-   The open-sequence "gears" phase (~2.5s of gear-spin). A dual-use procedural
+   The open-sequence "gears" phase (~2.5–3s of gear-spin). A dual-use procedural
    builder: schedule everything into `dest` against ANY BaseAudioContext (a live
    AudioContext when it ships, an OfflineAudioContext when it is verified), so the
    graph that is measured is the graph that ships. Fully deterministic — driven
    by a small seeded PRNG (mulberry32), never Math.random.
 
-   Three layers (all peaks kept well under 0 dBFS, no clipping):
-     (1) RUMBLE  — lowpassed white noise: the steady mass of turning metal.
-     (2) RATCHET — short filtered click impulses at a steady seeded period
-                   (~7.5/sec) with tiny per-click jitter, so the spectrogram
-                   shows evenly spaced vertical click-streaks.
-     (3) WHIR    — a faint sawtooth (~96 Hz) through a lowpass: a low tonal band
-                   under the clicks. Slightly detuned second saw thickens it.
+   Voiced as WEIGHT, not chatter. Heavy meshing teeth, a low grind bed, deliberate
+   metal impacts — loud and bass-forward, all peaks kept under 0 dBFS (no clipping):
+
+     (1) GRIND BED  — lowpassed brown noise + a low sawtooth (~58 Hz) through a
+                      lowpass, the two summed into a slow tremolo driven by the
+                      tooth rhythm: a continuous low rumble/grind under everything.
+     (2) RATCHET    — deliberate heavy impacts at a slow seeded period (~5/sec):
+                      each = a LOWPASSED noise thud (mass, not a bright tick)
+                      PLUS a fast-decaying low resonant "tonk" (a metal tooth
+                      seating, ~80–160 Hz). Tiny per-impact jitter keeps it
+                      mechanical; the period stays visible as heavy streaks.
+     (3) WHIR       — a low, grindy tonal band: two detuned sawtooths (~52 Hz)
+                      through a lowpass with a touch of resonance — the hum of
+                      the train turning, kept LOW and gritty.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
@@ -3825,89 +3832,149 @@ window.Gate.sfx.wind = function ({ ctx, dest, dur, when = 0, seed = 1, strength 
     master.gain.linearRampToValueAtTime(0, t0 + dur);
     master.connect(dest);
 
-    // ── Shared seeded noise buffer (white noise, [-1,1]); reused per layer. ──
+    // ── Shared seeded white-noise buffer ([-1,1]); reused for impact slices. ──
     var noiseLen = Math.max(1, Math.ceil(sr * dur));
-    var noiseBuf = ctx.createBuffer(1, noiseLen, sr);
-    var nd = noiseBuf.getChannelData(0);
-    for (var i = 0; i < noiseLen; i++) { nd[i] = rnd() * 2 - 1; }
+    var whiteBuf = ctx.createBuffer(1, noiseLen, sr);
+    var wnd = whiteBuf.getChannelData(0);
+    for (var i = 0; i < noiseLen; i++) { wnd[i] = rnd() * 2 - 1; }
 
-    // ───────────────────────────────────────────────────────────────────────
-    // LAYER 1 — RUMBLE: lowpassed noise, the steady turning mass.
-    // ───────────────────────────────────────────────────────────────────────
-    var rumbleSrc = ctx.createBufferSource();
-    rumbleSrc.buffer = noiseBuf;
-    var rumbleLP = ctx.createBiquadFilter();
-    rumbleLP.type = 'lowpass';
-    rumbleLP.frequency.setValueAtTime(220, t0);   // keep it low and dull
-    rumbleLP.Q.setValueAtTime(0.7, t0);
-    var rumbleGain = ctx.createGain();
-    rumbleGain.gain.setValueAtTime(0.16, t0);
-    rumbleSrc.connect(rumbleLP).connect(rumbleGain).connect(master);
-    rumbleSrc.start(t0);
-    rumbleSrc.stop(t0 + dur);
+    // ── Brown-noise buffer (integrated white, leaky): heavy low-frequency mass
+    //    for the grind bed. Normalised so it sits near unity without clipping. ──
+    var brownBuf = ctx.createBuffer(1, noiseLen, sr);
+    var bnd = brownBuf.getChannelData(0);
+    var last = 0, bmax = 1e-6;
+    for (var b = 0; b < noiseLen; b++) {
+      var wn = rnd() * 2 - 1;
+      last = (last + 0.02 * wn) / 1.02;   // leaky integrator → 1/f-ish, bass-heavy
+      bnd[b] = last;
+      var ab = last < 0 ? -last : last;
+      if (ab > bmax) bmax = ab;
+    }
+    var bgain = 0.9 / bmax;
+    for (var b2 = 0; b2 < noiseLen; b2++) { bnd[b2] *= bgain; }
 
-    // ───────────────────────────────────────────────────────────────────────
-    // LAYER 2 — RATCHET: short filtered click impulses at a steady period.
-    // Each click is one short slice of the noise buffer, band-passed bright and
-    // wrapped in a fast decay envelope (a tick, not a thud). Tiny per-click
-    // timing jitter keeps it mechanical, not metronomic — but the period stays
-    // visible as evenly spaced streaks.
-    // ───────────────────────────────────────────────────────────────────────
-    var clickRate = 7.5;               // clicks per second (within 6–9)
+    // Tooth rhythm — deliberate, weighty. Slower than a tick (heavy gears turn
+    // slowly). Used both for the impacts and to modulate the grind bed.
+    var clickRate = 5.0;                 // impacts per second (deliberate)
     var period = 1 / clickRate;
-    var clickDur = 0.045;              // short tick
-    // First click after the fade-in so onsets are clean & countable.
-    for (var ct = period; ct < dur - clickDur; ct += period) {
-      var jitter = (rnd() - 0.5) * period * 0.12;   // ±6% of the period
+
+    // ───────────────────────────────────────────────────────────────────────
+    // LAYER 1 — GRIND BED: lowpassed brown noise + a low saw, summed and
+    // tremolo'd by the tooth rhythm. A continuous low rumble that swells on
+    // each tooth and dips between — the body of the turning mass.
+    // ───────────────────────────────────────────────────────────────────────
+    var bedSum = ctx.createGain();       // tooth-rhythm tremolo applied here
+    bedSum.gain.setValueAtTime(0.55, t0);
+    // Slow amplitude modulation locked to the tooth period: swell at each tooth.
+    for (var bt = 0; bt < dur; bt += period) {
+      var lo = t0 + bt;
+      var mid = t0 + bt + period * 0.5;
+      bedSum.gain.setValueAtTime(0.42, lo);
+      bedSum.gain.linearRampToValueAtTime(0.72, mid);
+      bedSum.gain.linearRampToValueAtTime(0.42, lo + period);
+    }
+    bedSum.connect(master);
+
+    // Brown-noise rumble through a low lowpass.
+    var brownSrc = ctx.createBufferSource();
+    brownSrc.buffer = brownBuf;
+    var brownLP = ctx.createBiquadFilter();
+    brownLP.type = 'lowpass';
+    brownLP.frequency.setValueAtTime(180, t0);   // keep it deep
+    brownLP.Q.setValueAtTime(0.7, t0);
+    var brownGain = ctx.createGain();
+    brownGain.gain.setValueAtTime(0.85, t0);
+    brownSrc.connect(brownLP).connect(brownGain).connect(bedSum);
+    brownSrc.start(t0);
+    brownSrc.stop(t0 + dur);
+
+    // Low sawtooth grind ~58 Hz through a lowpass: tonal floor of the bed.
+    var bedSaw = ctx.createOscillator();
+    bedSaw.type = 'sawtooth';
+    bedSaw.frequency.setValueAtTime(58, t0);
+    bedSaw.frequency.linearRampToValueAtTime(64, t0 + dur);  // subtle spin-up
+    var bedSawLP = ctx.createBiquadFilter();
+    bedSawLP.type = 'lowpass';
+    bedSawLP.frequency.setValueAtTime(240, t0);
+    bedSawLP.Q.setValueAtTime(1.2, t0);
+    var bedSawGain = ctx.createGain();
+    bedSawGain.gain.setValueAtTime(0.42, t0);
+    bedSaw.connect(bedSawLP).connect(bedSawGain).connect(bedSum);
+    bedSaw.start(t0);
+    bedSaw.stop(t0 + dur);
+
+    // ───────────────────────────────────────────────────────────────────────
+    // LAYER 2 — RATCHET: deliberate HEAVY impacts. Each tooth seating =
+    //   (a) a LOWPASSED noise thud — mass and grit, not a bright tick; plus
+    //   (b) a low resonant "tonk" — a fast-decaying sine ~80–160 Hz, the metal
+    //       tooth ringing as it seats. Tiny per-impact jitter; the period stays
+    //       visible as evenly spaced heavy streaks.
+    // ───────────────────────────────────────────────────────────────────────
+    var impactDur = 0.13;                // longer than a tick → weight
+    var tonks = [];
+    for (var ct = period; ct < dur - impactDur; ct += period) {
+      var jitter = (rnd() - 0.5) * period * 0.08;   // ±4% of the period
       var ot = t0 + ct + jitter;
 
-      var clickSrc = ctx.createBufferSource();
-      clickSrc.buffer = noiseBuf;
-      // Read a different noise slice per click for variety; deterministic.
-      var off = Math.floor(rnd() * Math.max(1, (noiseLen - clickDur * sr - 1)));
-      clickSrc.loop = false;
+      // (a) Lowpassed noise thud — the dull mass of the impact.
+      var thudSrc = ctx.createBufferSource();
+      thudSrc.buffer = whiteBuf;
+      var off = Math.floor(rnd() * Math.max(1, (noiseLen - impactDur * sr - 1)));
+      thudSrc.loop = false;
 
-      var clickBP = ctx.createBiquadFilter();
-      clickBP.type = 'bandpass';
-      // Slight per-click center-freq variation: a small spread of gear teeth.
-      var cf = 1600 + rnd() * 1400;     // 1600–3000 Hz: a crisp tick
-      clickBP.frequency.setValueAtTime(cf, ot);
-      clickBP.Q.setValueAtTime(4.5, ot);
+      var thudLP = ctx.createBiquadFilter();
+      thudLP.type = 'lowpass';
+      var cf = 320 + rnd() * 220;        // 320–540 Hz: dull, weighty (no bright tick)
+      thudLP.frequency.setValueAtTime(cf, ot);
+      thudLP.Q.setValueAtTime(1.1, ot);
 
-      var clickEnv = ctx.createGain();
-      clickEnv.gain.setValueAtTime(0, ot);
-      clickEnv.gain.linearRampToValueAtTime(0.5, ot + 0.002);   // fast attack
-      clickEnv.gain.exponentialRampToValueAtTime(0.0008, ot + clickDur);
-      clickEnv.gain.setValueAtTime(0, ot + clickDur + 0.001);
+      var thudEnv = ctx.createGain();
+      thudEnv.gain.setValueAtTime(0, ot);
+      thudEnv.gain.linearRampToValueAtTime(0.62, ot + 0.004);          // soft thump attack
+      thudEnv.gain.exponentialRampToValueAtTime(0.0008, ot + impactDur);
+      thudEnv.gain.setValueAtTime(0, ot + impactDur + 0.001);
 
-      clickSrc.connect(clickBP).connect(clickEnv).connect(master);
-      // Play just the slice we need (offset into the buffer, short duration).
-      var startOff = off / sr;
-      clickSrc.start(ot, startOff, clickDur + 0.005);
+      thudSrc.connect(thudLP).connect(thudEnv).connect(master);
+      thudSrc.start(ot, off / sr, impactDur + 0.01);
+
+      // (b) Pitched "tonk" — a damped low sine, the tooth seating into mesh.
+      var tonk = ctx.createOscillator();
+      tonk.type = 'sine';
+      var thz = 80 + rnd() * 80;         // 80–160 Hz
+      tonk.frequency.setValueAtTime(thz * 1.6, ot);
+      tonk.frequency.exponentialRampToValueAtTime(thz, ot + 0.05);  // quick downward "tonk"
+      var tonkEnv = ctx.createGain();
+      tonkEnv.gain.setValueAtTime(0, ot);
+      tonkEnv.gain.linearRampToValueAtTime(0.5, ot + 0.003);
+      tonkEnv.gain.exponentialRampToValueAtTime(0.0006, ot + 0.16);  // fast metallic decay
+      tonk.connect(tonkEnv).connect(master);
+      tonk.start(ot);
+      tonk.stop(ot + 0.18);
+      tonks.push(tonk);
     }
 
     // ───────────────────────────────────────────────────────────────────────
-    // LAYER 3 — WHIR: a faint low tonal band. Two slightly detuned sawtooths
-    // through a lowpass — the continuous hum of the gear train turning.
+    // LAYER 3 — WHIR: a LOW, grindy tonal band. Two detuned sawtooths (~52 Hz)
+    // through a resonant lowpass — the continuous hum of the gear train, kept
+    // low and gritty so it reinforces the bass rather than thinning the mix.
     // ───────────────────────────────────────────────────────────────────────
     var whirLP = ctx.createBiquadFilter();
     whirLP.type = 'lowpass';
-    whirLP.frequency.setValueAtTime(360, t0);   // keep the tonal energy LOW
-    whirLP.Q.setValueAtTime(0.8, t0);
+    whirLP.frequency.setValueAtTime(300, t0);   // keep the tonal energy LOW
+    whirLP.Q.setValueAtTime(2.2, t0);           // a little grind/resonance
     var whirGain = ctx.createGain();
-    whirGain.gain.setValueAtTime(0.10, t0);
+    whirGain.gain.setValueAtTime(0.22, t0);
     whirLP.connect(whirGain).connect(master);
 
-    var baseHz = 96;                  // low fundamental (80–140 Hz band)
-    var detunes = [0, +4];            // cents-ish; second saw thickens the hum
+    var baseHz = 52;                  // very low fundamental
+    var detunes = [0, +7];            // second saw thickens & grinds the hum
     var oscs = [];
     for (var k = 0; k < detunes.length; k++) {
       var osc = ctx.createOscillator();
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(baseHz, t0);
       osc.detune.setValueAtTime(detunes[k], t0);
-      // A gentle pitch settle as the train comes up to speed (subtle).
-      osc.frequency.linearRampToValueAtTime(baseHz + 6, t0 + dur);
+      osc.frequency.linearRampToValueAtTime(baseHz + 5, t0 + dur);  // subtle spin-up
       var oscG = ctx.createGain();
       oscG.gain.setValueAtTime(0.5, t0);
       osc.connect(oscG).connect(whirLP);
@@ -3920,9 +3987,13 @@ window.Gate.sfx.wind = function ({ ctx, dest, dur, when = 0, seed = 1, strength 
     return {
       stop: function (at) {
         var when2 = at != null ? at : ctx.currentTime;
-        try { rumbleSrc.stop(when2); } catch (e) {}
+        try { brownSrc.stop(when2); } catch (e) {}
+        try { bedSaw.stop(when2); } catch (e2) {}
         for (var m = 0; m < oscs.length; m++) {
-          try { oscs[m].stop(when2); } catch (e2) {}
+          try { oscs[m].stop(when2); } catch (e3) {}
+        }
+        for (var n = 0; n < tonks.length; n++) {
+          try { tonks[n].stop(when2); } catch (e4) {}
         }
       }
     };
@@ -3938,26 +4009,32 @@ window.Gate.sfx.wind = function ({ ctx, dest, dur, when = 0, seed = 1, strength 
    iron hinges sing their wavering "eeee".
 
    ── How the sound is built ──────────────────────────────────────────────────
-   The signature of a real creak is a swept HIGH-Q resonance riding on
-   stick-slip friction. We model it with:
+   The signature of a real HEAVY iron-gate hinge is a swept HIGH-Q resonance
+   riding on slow, draggy stick-slip friction — a GROAN, not a squeak. We model
+   it with:
 
-     1. A pink-ish noise excitation (white noise gently tilted toward lows so the
-        resonance has wood/iron body rather than hiss).
+     1. A pink-ish noise excitation (white noise tilted hard toward lows so the
+        resonance has wood/iron MASS rather than hiss).
 
-     2. A narrowband BANDPASS (high Q) whose centre frequency is SWEPT across the
-        gesture (≈ 380 → 1150 Hz and partly back). On a spectrogram this is the
-        wavering narrow line that slides in pitch — the "eee".
+     2. A narrowband BANDPASS (high Q) whose centre frequency is SWEPT across a
+        LOW band (≈ 120 → 430 Hz and partly back) — well below a squeak. On a
+        spectrogram this is the wavering narrow line that slides in pitch — the
+        low "rrraawwww" of iron under load.
 
      3. STICK-SLIP amplitude modulation: friction does not release smoothly, it
-        catches and lets go. We gate the amplitude with an irregular train of
-        seeded micro-bursts (each a fast attack + decay), so the line flickers
-        and stutters the way a dry hinge actually does.
+        catches and lets go. A heavy hinge catches SLOWLY, so we gate the
+        amplitude with an irregular train of seeded micro-bursts spaced wider
+        apart (slower, draggier), each a fast grab + slow drag-off, so the line
+        flickers and lurches the way a dry, loaded hinge actually does.
 
-     4. A low WOOD-THUNK under each gesture: a short, heavily-damped low resonance
-        (~95 Hz) giving the door leaf some mass.
+     4. A heavy low IRON/WOOD THUNK under each gesture: a short, heavily-damped
+        low resonance (~55–70 Hz) giving the door leaf real mass.
 
-   Two creak gestures sit inside the window (the two door leaves), the second a
-   little higher and shorter than the first.
+     5. A faint sustained low GROAN tone (a triangle near the low sweep band)
+        under the whole gesture for body and weight.
+
+   Two slow creak gestures sit inside the window (the two door leaves), the
+   second a touch higher and shorter than the first — both staying LOW.
 
    Determinism: a seeded mulberry32 PRNG drives ALL randomness (noise samples and
    stick-slip timing), so the offline render that audio-lens verifies is byte-for
@@ -3989,11 +4066,11 @@ window.Gate.sfx.wind = function ({ ctx, dest, dur, when = 0, seed = 1, strength 
     var buf = ctx.createBuffer(1, n, ctx.sampleRate);
     var d = buf.getChannelData(0);
     var lp = 0;
-    var alpha = 0.25; // one-pole smoothing → low tilt
+    var alpha = 0.14; // one-pole smoothing → strong low tilt (heavier body)
     for (var i = 0; i < n; i++) {
       var w = rnd() * 2 - 1;              // white in [-1,1]
       lp = lp + alpha * (w - lp);         // low-passed copy
-      d[i] = 0.55 * w + 0.85 * lp;        // mostly body, a little air
+      d[i] = 0.25 * w + 1.1 * lp;         // mostly body, just a little air
     }
     return buf;
   }
@@ -4012,7 +4089,7 @@ window.Gate.sfx.wind = function ({ ctx, dest, dur, when = 0, seed = 1, strength 
     // (First render peaked at ~-24 dBFS with plenty of headroom, so we lift the
     // master to let the resonant line read more strongly; still well under 0.)
     var master = ctx.createGain();
-    master.gain.setValueAtTime(1.4, t0);
+    master.gain.setValueAtTime(1.0, t0);
     master.connect(dest);
 
     // Shared seeded noise bed; every gesture taps the same source node so the
@@ -4050,7 +4127,8 @@ window.Gate.sfx.wind = function ({ ctx, dest, dur, when = 0, seed = 1, strength 
       bp.Q.linearRampToValueAtTime(q * 0.9, start + length);
 
       // A second, weaker resonance an ~octave up gives the creak a thin overtone
-      // edge (real hinges aren't a single pole).
+      // edge (real hinges aren't a single pole). Kept faint so the sound stays
+      // LOW and does not drift toward a squeak.
       var bp2 = ctx.createBiquadFilter();
       bp2.type = 'bandpass';
       bp2.Q.setValueAtTime(q * 1.4, start);
@@ -4058,7 +4136,7 @@ window.Gate.sfx.wind = function ({ ctx, dest, dur, when = 0, seed = 1, strength 
       bp2.frequency.exponentialRampToValueAtTime(fMid * 1.98, start + length * 0.65);
       bp2.frequency.exponentialRampToValueAtTime(fEnd * 2.0, start + length);
       var bp2Gain = ctx.createGain();
-      bp2Gain.gain.setValueAtTime(0.35, start);
+      bp2Gain.gain.setValueAtTime(0.18, start);
 
       // --- stick-slip amplitude envelope ---
       // An overall hump (attack→sustain→release) MULTIPLIED by an irregular train
@@ -4083,43 +4161,58 @@ window.Gate.sfx.wind = function ({ ctx, dest, dur, when = 0, seed = 1, strength 
         else body = 1;
         body = body * body; // soften the corners
 
-        // burst amplitude — friction grabs harder early, eases late; jittered.
-        var grab = 0.55 + 0.45 * rnd();
+        // burst amplitude — friction grabs hard and unevenly; wide jitter makes
+        // the heavy hinge lurch rather than buzz.
+        var grab = 0.40 + 0.60 * rnd();
         var amp = level * body * grab;
         if (amp < 0.0008) amp = 0.0008;
 
-        // fast attack to the burst peak, then decay toward a low floor before the
-        // next catch. Short ramps keep the flutter audible without clicking.
-        var atk = 0.004 + 0.006 * rnd();
+        // fast grab to the burst peak, then a SLOW drag-off toward a low floor
+        // before the next catch — a loaded hinge releases reluctantly.
+        var atk = 0.006 + 0.012 * rnd();
         env.gain.exponentialRampToValueAtTime(amp, t + atk);
-        var rel = t + atk + (0.010 + 0.030 * rnd());
+        var rel = t + atk + (0.040 + 0.090 * rnd());
         if (rel > endT) rel = endT;
-        var floor = amp * (0.18 + 0.18 * rnd());
+        var floor = amp * (0.12 + 0.20 * rnd());
         if (floor < 0.0008) floor = 0.0008;
         env.gain.exponentialRampToValueAtTime(floor, rel);
 
         prevPeak = amp;
-        // gap to next catch: irregular, slightly denser in the middle of the gesture
-        var density = 0.020 + 0.045 * rnd();
+        // gap to next catch: WIDE and irregular — a heavy hinge catches slowly.
+        var density = 0.055 + 0.120 * rnd();
         t = rel + density;
       }
       // clean release to silence at the end
       env.gain.exponentialRampToValueAtTime(0.0006, endT + 0.02);
       // mute the source outside the gesture window via the env (it starts at ~0).
 
-      // --- low wood-thunk: a short damped low resonance giving the leaf mass ---
+      // --- heavy low iron/wood-thunk: a short damped low resonance giving the
+      // leaf real mass as it takes up slack. Lower & weightier than before. ---
       var thunkSrc = ctx.createBufferSource();
       thunkSrc.buffer = noiseBuf;
       var thunkBp = ctx.createBiquadFilter();
       thunkBp.type = 'bandpass';
-      thunkBp.Q.setValueAtTime(6, start);
+      thunkBp.Q.setValueAtTime(4, start);
       thunkBp.frequency.setValueAtTime(thunkHz, start);
       var thunkEnv = ctx.createGain();
-      // a single soft thud at the start of the gesture (the leaf taking up slack)
+      // a single heavy thud at the start of the gesture (the leaf taking up slack)
       thunkEnv.gain.setValueAtTime(0.0001, start);
-      thunkEnv.gain.exponentialRampToValueAtTime(level * 0.7, start + 0.012);
-      thunkEnv.gain.exponentialRampToValueAtTime(0.0008, start + 0.28);
-      thunkEnv.gain.setValueAtTime(0.0001, start + 0.30);
+      thunkEnv.gain.exponentialRampToValueAtTime(level * 1.0, start + 0.016);
+      thunkEnv.gain.exponentialRampToValueAtTime(0.0008, start + 0.42);
+      thunkEnv.gain.setValueAtTime(0.0001, start + 0.44);
+
+      // --- faint sustained low GROAN tone: a triangle near the low sweep band,
+      // tracking the creak's pitch, giving the gesture weight and body. ---
+      var groan = ctx.createOscillator();
+      groan.type = 'triangle';
+      groan.frequency.setValueAtTime(fLo * 0.9, start);
+      groan.frequency.exponentialRampToValueAtTime(fMid * 0.92, start + length * 0.65);
+      groan.frequency.exponentialRampToValueAtTime(fEnd * 0.9, start + length);
+      var groanEnv = ctx.createGain();
+      groanEnv.gain.setValueAtTime(0.0001, start);
+      groanEnv.gain.exponentialRampToValueAtTime(level * 0.16, start + length * 0.12);
+      groanEnv.gain.setValueAtTime(level * 0.16, start + length * 0.7);
+      groanEnv.gain.exponentialRampToValueAtTime(0.0006, endT);
 
       // --- wire it up ---
       // main resonance path
@@ -4129,20 +4222,25 @@ window.Gate.sfx.wind = function ({ ctx, dest, dur, when = 0, seed = 1, strength 
       env.connect(master);
       // thunk path is independent (its own short envelope)
       thunkSrc.connect(thunkBp).connect(thunkEnv).connect(master);
+      // groan tone path
+      groan.connect(groanEnv).connect(master);
 
       // play the noise across the whole gesture (env shapes it to the window)
       src.start(start);
       src.stop(endT + 0.05);
       thunkSrc.start(start);
-      thunkSrc.stop(start + 0.32);
+      thunkSrc.stop(start + 0.48);
+      groan.start(start);
+      groan.stop(endT + 0.05);
     }
 
     // ── Two gestures: the two door leaves. ──────────────────────────────────
-    // Higher Q (22 / 25) narrows the swept resonance into a sharper "eee" line.
-    // Leaf 1: longer, lower "eee" starting near the top of the window.
-    gesture(t0 + 0.06, 1.05, 380, 1050, 22, 0.9, 95);
+    // High Q (18 / 20) narrows the swept resonance into a focused low groan line.
+    // Both stay in a LOW band (~120–430 Hz) so it reads as iron, not a rodent.
+    // Leaf 1: longer, lower groan starting near the top of the window.
+    gesture(t0 + 0.06, 1.10, 120, 410, 18, 0.9, 58);
     // Leaf 2: a touch higher and shorter, overlapping the tail of the first.
-    gesture(t0 + 1.30, 0.95, 460, 1180, 25, 0.82, 110);
+    gesture(t0 + 1.35, 0.95, 150, 440, 20, 0.82, 68);
 
     // Live-use hook: stop the master (sources self-stop offline).
     return {

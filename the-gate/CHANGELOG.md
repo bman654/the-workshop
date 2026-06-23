@@ -5,6 +5,24 @@
      ═══════════════════════════════════════════════════════════════════════ -->
 ## ▶ RESUME POINTER — current state (2026-06-23, FOUNDRY COMPLETE + Phase-D room-rotation, wind-sway, WEATHER-FX, owner-playtest fixes/polish, real MOON-PHASE WIRING + **AUDIO (procedural WebAudio voice)** all shipped; K=4; NEXT = the **earned-asterism runtime pick** + Phase-D beauty passes — see §9)
 
+**AUDIO PASS 3 — ✅ SHIPPED (2026-06-23):** the open-sequence gears + creak reworked from playtest
+feedback (they read too light/thin — the gears as bug-like clicks, the creak as a rodent squeak); the
+synthesis was replaced in place, builder signatures + wiring unchanged (still `A.gears()` in the gears
+phase, `A.creak()` in the swing phase). (1) **gears** (`audio-gears.js`) → HEAVY clockwork: a continuous
+low GRIND BED (lowpassed brown noise + a 58 Hz saw, tooth-rhythm tremolo), deliberate heavy RATCHET
+impacts at 5/sec (lowpassed 320–540 Hz noise thud + an 80–160 Hz resonant "tonk", no bright tick), and a
+low grindy WHIR (two detuned 52 Hz saws through a resonant lowpass). audio-lens vs the old baseline:
+centroid 360→111 Hz (bassier), meanRms −28.3→−14.2 dBFS (louder), clips:false (−2.03 dBFS headroom). (2)
+**creak** (`audio-creak.js`) → a low iron-hinge GROAN, not a squeak: the swept high-Q bandpass dropped
+from ~380–1180 Hz to ~120–440 Hz, slow (1.1 s / 0.95 s) gestures, widened/roughened stick-slip bursts so
+it lurches like a loaded hinge, a heavier 58/68 Hz iron-wood thunk, and a faint sustained triangle groan
+tone under each gesture. audio-lens: clips:false @ −15.5 dBFS, f0 225 Hz / centroid 270 Hz, silenceRatio
+0.263 (not empty). Both deterministic (seeded mulberry32, no Math.random), verified offline via
+OfflineAudioContext→audio-lens (self-test 12/12), NO binary assets. **SMOKE VERIFIED** over served HTTP
+(127.0.0.1, never file://) against the forged `the-gate.html`: the splash/gate click unlocks audio
+(`__wsAudioCtx` → `running`) and runs the FULL open sequence (gears + creak fire) with ZERO console
+errors; both builders present on `Gate.sfx`. forge `--check --all` = 97 current.
+
 **AUDIO PASS 2 — ✅ SHIPPED (2026-06-23):** punchier thunder, a time-of-day creature rotation, and a
 production title-splash entry. (1) **thunderclap** reworked into a two-part "CR-AACK": a delayed
 broadband CRACK (t0+0.07s, with a silent lead-in frame so the onset detector registers it), a louder
