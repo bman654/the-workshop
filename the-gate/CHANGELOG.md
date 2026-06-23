@@ -1,5 +1,77 @@
 # The Gate — Changelog
 
+<!-- ═══════════════════════════════════════════════════════════════════════
+     RESUME POINTER  (read this first on a fresh/compacted context)
+     ═══════════════════════════════════════════════════════════════════════ -->
+## ▶ RESUME POINTER — current state (2026-06-23)
+
+**Status:** Phase A blockout is **LOCKED** (owner-approved). Phase B (write `SPEC.md`)
+is in progress. Phase C (asset foundry) is next.
+
+**Where the work lives:** git worktree `/tmp/gate-worktree` on branch **`the-gate`**.
+Commits live in the main repo's `.git` (`/Users/brandon/dev/general/creative-space`),
+so they survive a `/tmp` wipe. If `/tmp/gate-worktree` is gone, recreate it:
+`git worktree add /tmp/gate-worktree the-gate`.
+
+**Commits (the-gate branch):** `d7b9f76` scaffold · `46b6997` v2 grand frame ·
+`1c95027` v3–v5 refinements (HEAD = locked blockout).
+
+**Preview (served origin ONLY — never file://):**
+`cd /tmp/gate-worktree && python3 -m http.server 8757` then open
+`http://localhost:8757/the-gate/the-gate.html?dev&t=night&wx=clear&moon=0.55&undercroft=1`.
+Dev params: `?dev` / `?scene=idle|open` · `?t=day|dusk|night` · `?moon=0..1` (drives the
+drawn phase + brightness) · `?wx=clear|cloudy|storm` · `?seed=N` · `?undercroft=1`
+(force the earned hatch visible). Greybox shots are in `/tmp/gate-shots/` (`v5-*.png` =
+the locked blockout).
+
+**In-flight at this checkpoint:** a background agent (`ad212b448e5bdf38e`) is drafting
+`the-gate/SPEC.md`. If, on resume, `SPEC.md` is still the stub, relaunch the spec draft
+(brief pattern: PLAN §8 Phase B + this conversation).
+
+**Forward path:** review `SPEC.md` → ensure the room-rep box is **aspect-flexible**
+(horizontal pond / vertical building / wide cavern-mound), sized cairn→~2×, bottom-aligned
+on a common ground line, with the slot verified to hold the 2× max (or the conflict
+flagged) → commit the spec → **Phase C foundry: PILOT the gate+gears hero first** (calibrate
+estate-quality + token cost) before the full set (hero K=3–4, supporting K=2, minor direct)
+→ Phase D systems (real moon wiring via `sky-core.mjs`, earned asterism, `weather-fx.js`,
+audio, the click-through cinematic + welcome card, gate open-state choreography) → DEFERRED
+promotion (gate → `index.html`; mind the `--follow` git landmine, PLAN §7).
+
+**The token-spend gate:** the foundry is the big spend; I proposed holding for Brandon's
+go on the gate-gears pilot. (Honor his autonomy directive — see the conversation.)
+
+**Makers signed** (gitignored `ledger/inbox/`, uncollated — DO NOT collate; publisher's job):
+Greywright (scaffold), Selene Verit (moon math), Cosine (grand frame), Penumbra (moon +
+undercroft), Aperture (manor/greenhouse/undercroft fixes), Pane Lazaro (greenhouse layer),
+Selene's Auditor (verify) — plus the 12 recon marks (11 explorers + Januswright + Keystone/architect).
+
+**Guardrails:** add-only under `the-gate/`; NEVER touch `ROADMAP.md` or move/rewrite existing
+files; test on a served origin only; do NOT run `collate.sh` or the fun-forever loop.
+
+---
+
+## Phase A refinements (v2–v5) · blockout LOCKED  (2026-06-23)
+
+Three owner-feedback iterations on top of the scaffold; verified by an adversarial workflow.
+- **v2 (Cosine):** grand hero gate (~50% frame, masonry piers + emissive lamp-globes, arched
+  scrolled crest), foreground paving apron, centered manor, asterism moved clear of the bars,
+  seam gear-train + a legible brass sundial, observatory rebuilt with a telescope slit, horizon
+  mist. Rewrote `swing()` as horizontal foreshortening (doors on vertical hinges, not tipping).
+- **v3 (Penumbra):** greenhouse → dimensional 3/4 corner; moon dark-side dropped to structural
+  dark + lit-limb glow (no full-circle halo); phase-parametric moon (`?moon=` drives the draw);
+  undercroft hatch + `?undercroft=1` dev flag.
+- **v4 (Aperture):** greenhouse scaled down (shape kept); manor widened to nearly fill the
+  opening + taller flanking wings (now dominates); undercroft redrawn front-on as a
+  physically-correct double bilco door (hinges on OPPOSITE outer edges) over a receding ground
+  hole; undercroft glow → ominous deep crimson `#8a123a` (not welcoming yellow); moon lit-limb
+  glow restored (brighter + a second bloom layer).
+- **v5 (Pane Lazaro):** fixed the buried greenhouse — a pure LAYER move (far-scenery → forward
+  furniture, in front of the grass) + reframed the trees. No reshape.
+- **Verify (Selene's Auditor + 2 judges):** undercroft geometry PASS, moon glow PASS, manor
+  PASS; the greenhouse blocker was caught here and fixed in v5.
+
+---
+
 ## Phase A · scaffold + greybox  (2026-06)
 
 The machinery, end-to-end; rough-but-correctly-composed scene; the lighting system
@@ -47,7 +119,11 @@ built for real. Final art comes later via the asset foundry (Phase C). Built in 
   (imports `loadPlaces` from card-catalog; projects {id,room,glyph,accent,district,
   href,locked}; skips locked; idempotent; REFUSES on a short parse). Enrolls in
   `collate.sh` with ZERO edits (repo-root child).
-- `SPEC.md` — the Phase-B-locked asset spec skeleton.
+- `sky-core.mjs` + `sky-core.test.mjs` — DONE (Selene Verit): the forked moon-phase
+  math taking geocentric sun-longitude directly (fixes the orrery +180° bug); Node
+  test passes 14/14 incl. the J2000 New/Full anchors. NOT yet wired into the browser
+  moon draw (that's Phase D).
+- `SPEC.md` — the Phase-B asset spec (being written from the locked blockout).
 
 ### Systems real this pass
 - Lighting model (palette-swap + emissive + brightness ladder + JS crossfade).
@@ -59,7 +135,7 @@ built for real. Final art comes later via the asset foundry (Phase C). Built in 
 - One perpetual rAF loop (dt-clamped, hidden-gated, DPR-capped, fps gauge).
 
 ### Deferred (later phases)
-- `sky-core.mjs` real moon math + J2000 Node twin (PLAN §6) — owned by another agent.
+- Wire `sky-core.mjs` into the browser moon draw (Phase D).
 - `weather-fx.js` canvas (rain/lightning/clouds/birds/sway).
 - Audio engine sources (gears/creak/ambient).
 - Earned asterism runtime pick; 3 essence-survey room-reps + the Glyph Stand.
