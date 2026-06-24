@@ -72,7 +72,9 @@ the loop gave you) — be concrete: a fresh explorer/builder will act only on wh
    fix; `exploreMode:"none"` unless the fix is genuinely unclear. Fix the ROOT CAUSE.
    **If BUILD/foundry — be the director of a FOUNDRY-SMITH (front-gate upkeep):** pick the ripe foundry seed
    from the `gauge:foundry-seeds` fence (a `[rep]` = a bespoke front-gate room-rep · a `[gate]` = a gate asset
-   rework/polish). Put the seed's FULL intent into `basicDesign` so the smith can act — for a `[rep]`, relay the
+   rework/polish). When both a `[rep]` and a `[gate]` are ripe, take the **`[rep]` first** — it is the backlog
+   pressure the cadence reacts to; drain a missing rep before re-souling an existing one. Put the seed's FULL
+   intent into `basicDesign` so the smith can act — for a `[rep]`, relay the
    rep SPEC verbatim: `{id, room, repConcept, aspect (vertical|horizontal|mound), accent, repColors?}` (the smith
    feeds it to `gate-foundry/rep-spec.mjs`); for a `[gate]`, name the asset + the re-soul direction. Set
    `exploreMode:"none"` (the smith iterates + renders itself) unless a rep genuinely wants rival FORM concepts
@@ -109,15 +111,20 @@ the loop gave you) — be concrete: a fresh explorer/builder will act only on wh
    new structure-kind the estate hasn't named.
    **If PLAN/foundry — be the FOUNDRY-SURVEYOR (restock the rep backlog):** housekeeping = prune any decayed
    foundry seeds the gauge listed. The gate's grounds feature a rotating room-rep; most estate rooms still fall
-   back to the glyph plinth. Survey the LIVE estate for the rooms that would make the most striking bespoke reps
-   and are NOT already built (the built set is `the-gate/rooms.js` BESPOKE; the room pool is the front-door
-   PLACES / the gate's GATE-ROOMS slab — `gate-foundry/room-pool.json` is a stale snapshot, prefer the live list).
-   Set `ideationScope` + K + briefs for scouts to nominate `[rep]` seeds by DISTINCT lenses (most iconic
-   front-elevation silhouette · most thematically central · best aspect-shape coverage vertical/horizontal/mound ·
-   most intriguing to a newcomer) — each a `candidateSeeds` entry of type `rep` carrying `{id, room, repConcept,
-   aspect, accent}`. The judge curates a slate that COVERS the three aspect shapes; the publisher sows them toward
-   foundry fuel ~4. (The full blind survey is `gate-foundry/survey.workflow.js`, a power tool — but a scout pass
-   covers it.) See `gate-foundry/MAINTAINING.md`.
+   back to the glyph plinth. Get the TRUE backlog from the deterministic script — **`node gate-foundry/backlog.mjs`**
+   (oldest un-repped rooms first; it diffs the live room inventory against the `the-gate/rooms.js` BESPOKE keys,
+   so it is never stale — do NOT use the frozen `gate-foundry/room-pool.json`). **Stock `[rep]` seeds FIRST and
+   proportional to that backlog**, toward foundry fuel ceiling **8** when the backlog is deep: the count of live
+   `[rep]` seeds IS the pressure that shrinks the foundry's cadence (see `gate-foundry/MAINTAINING.md`), so a real
+   backlog must show up as real `[rep]` fuel or the foundry never speeds up to clear it. Set `ideationScope` + K +
+   briefs for scouts to nominate `[rep]` seeds by DISTINCT lenses (most iconic front-elevation silhouette · most
+   thematically central · best aspect-shape coverage vertical/horizontal/mound · most intriguing to a newcomer),
+   drawing from the backlog (lean on the oldest rooms) — each a `candidateSeeds` entry of type `rep` carrying
+   `{id, room, repConcept, aspect, accent}`. The judge curates a slate that COVERS the three aspect shapes.
+   **Only when the backlog is EMPTY** (every unlocked room already has a rep) consider a `[gate]` re-soul of a
+   drifted asset — at most ~1, or NONE if nothing needs rework. A `[gate]` adds NO pressure; it is the slow-burn
+   trickle for when the foundry has caught up. (The full blind survey is `gate-foundry/survey.workflow.js`, a
+   power tool — but a scout pass over the backlog covers it.) See `gate-foundry/MAINTAINING.md`.
 5) (Optional, any cycle) if YOU notice a gap too big for an exhibit, you MAY note a spark for ROADMAP's
    ⚡ Sparks — mention it in `rationale` so the publisher files it. Invited, never required.
 6) TRIVIAL only if the task was a one-line edit you ALREADY did + committed inline this turn (fill `rationale`).
