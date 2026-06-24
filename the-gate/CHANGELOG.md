@@ -4,6 +4,14 @@
      RESUME POINTER  (read this first on a fresh/compacted context)
      ═══════════════════════════════════════════════════════════════════════ -->
 ## ▶ RESUME POINTER — current state (2026-06-23: FOUNDRY COMPLETE + Phase-D room-rotation, wind-sway, WEATHER-FX, real MOON-PHASE WIRING, **AUDIO COMPLETE** (11 procedural sounds across 3 passes — owner verdict "sound is perfect"; creature rotation day=birds/dusk=crickets/night=owl), first-gesture audio unlock, the **founding-myth entry splash + "Hand That Guides" outro** (owner-loved bookend), reader-paced **skippable outro** (10s + click/key), all owner-playtest fixes, **EARNED-STATE PASS** (random unlocked asterism + per-visit random roomref over slab∪cairn + undercroft 3rd "discovered/closed-doors" state + ambient weather drift) — ALL SHIPPED; K=4.
+**HONESTY SELF-TEST CHIP — the gate keeps its word — ✅ SHIPPED (2026-06-23):** `selftest.js`
+(`Gate.selftest`) + a subtle top-left brass chip `#gate-honesty` that PROVES, render-blind, that the
+gate truthfully reflects earned state + sound math — 15 pass/fail invariants across asterism
+coherence / room coherence / moon math / determinism, each with a load-bearing negative control;
+`Gate.selftest.run()` testable headless. Smoke-clean over served HTTP (cold GREEN 15/15, unlocked
+GREEN, forced inconsistency → RED with the failing claim named, `?moon` pin exact), zero console
+errors. See §9 + the dated entry below.
+
 **▶▶ NEXT — to FINISH the Gate (see §9):** (1) **beauty passes** — moon/sun + asterism glow/shape polish (audio balance is owner-accepted: "perfect"). (2) **dogfood QA** — full exploratory interaction pass now that the gate is interactive (splash→gnomon→weather→open→outro+audio), + verify reduced-motion on a real machine (logic-verified only — KNOWN-ISSUES P3). (3) **go-live** (owner call) — the gate lives on branch `the-gate` and navigates to `../index.html`; making it the estate's actual entrance / merging is a separate decision.)
 
 **EARNED-STATE PASS — random unlocked asterism + random roomref + undercroft closed-doors + weather drift — ✅ SHIPPED (2026-06-23):**
@@ -508,6 +516,52 @@ Selene's Auditor (verify) — plus the 12 recon marks (11 explorers + Januswrigh
 
 **Guardrails:** add-only under `the-gate/`; NEVER touch `ROADMAP.md` or move/rewrite existing
 files; test on a served origin only; do NOT run `collate.sh` or the fun-forever loop.
+
+---
+
+## HONESTY SELF-TEST CHIP — the gate keeps its word  (2026-06-23)
+
+A new module `the-gate/selftest.js` (`Gate.selftest`), forge-included after `sequence.js`, plus a
+small brass chip `#gate-honesty` mounted by the boot. The chip PROVES, **render-blind**, that the
+front door truthfully reflects EARNED progress + sound math — it asserts MATH/COUNTS/STATE it can
+compute, never a pixel. Headless seam: `Gate.selftest.run()` → `{pass, total, passed,
+results:[{name,pass,detail}]}`.
+
+Four invariant families (15 claims), each with a load-bearing NEGATIVE CONTROL so it can genuinely
+FAIL:
+- **asterism coherence** — unlocked count from `Sky.state(Sky.visitedFromStore(WS.store()),
+  CATALOG, WINGS, FEATS)`; the gate draws a figure **IFF** count>0, and `AST.current().name ∈` the
+  unlocked set. Neg-ctrl: a stubbed `{}` (0-unlock) state forces `AST.current()` null; a stubbed
+  first-wing state forces that wing's figure — driven via `AST._reset()` + a temporary
+  `Sky.visitedFromStore` swap, always restored.
+- **room coherence** — showable count == `R.loadSlab().length + 1` (the synthetic Cairn fixture);
+  `R.pick().id ∈ (slab ∪ 'cairn')`. Neg-ctrl: a bogus `?room` pin falls back into the pool (no
+  fakery); `R.pick()` twice in a load is identical.
+- **moon math** — recompute `moonPhase(julianDate(new Date()))`/`terminator()` (the `?moon` pin
+  overrides the fraction exactly as the boot does); `illuminatedFraction ∈ [0,1]`, the drawn
+  `S._moonFrac` matches it (machine-ε for a pin; ≤5e-4 for the live clock — the physically-bounded
+  boot→run lunar drift, still far tighter than any wrong-phase bug), `S._moonSide` matches
+  `terminator().litSide ∈ {left,right}`. Neg-ctrl: a known J2000 new moon (2000-01-06) → fraction ≈0.
+- **determinism** — `AST.current()` + `R.pick()` stable within a load.
+
+**Placement + mood:** top-left (`left:14px;top:14px`, z31), clear of the weather toggle (bottom-left),
+the mute chip (bottom-right), the gate crest (centre) and the asterism slot. Low opacity (.42) at
+rest → 1 on hover/focus; green `the gate keeps its word · N/N ✓` / red `self-test ✗ N/M`; click
+re-runs + logs the per-claim breakdown to the console. Mounted hidden after `S.build()`; revealed by
+`Gate.selftest.show()` on splash dismissal (production) / immediately in dev — so it NEVER shows
+during, or overlaps, the splash/welcome overlays.
+
+**Smoke (served HTTP 127.0.0.1:8880, agent-browser, never file://), zero console errors throughout:**
+- *Cold store* (no unlocks): chip renders GREEN 15/15 — asterism coherence passes (count 0 ↔ no
+  figure), room/moon/determinism all pass. Subtle + green + clear of other UI (screenshot verified).
+- *Unlocked* (inject `ws:seen:firmament`+`ws:seen:orrery` → "The Astronomer", reload): still GREEN
+  15/15 — asterism coherence now count=1 ↔ a figure drawn whose name ∈ {The Astronomer}.
+- *Negative control* (console-stub `AST.current()` to return a phantom figure while unlock count=0):
+  chip flips RED `✗ 11/15`, the four asterism claims fail, and the console names each failing claim.
+  Restored by reload → GREEN again.
+- *`?moon=0.25` pin:* drawn fraction == 0.25 to machine-ε (exact-tolerance path).
+
+`forge --check --all` = all 97 current.
 
 ---
 

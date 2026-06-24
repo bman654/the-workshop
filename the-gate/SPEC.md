@@ -845,6 +845,26 @@ contracts. The following are finalized in Phase D and get only a "beauty pass" n
   reduced-motion false, a ~1 s timer shifts (~4%/tick) to a random different state via `W.set()`
   (which fires the boot's existing `onChange` recolor+fx+audio+wind). `startDrift()`/`stopDrift()`/
   `isDrifting()`; `?seed=<n>` seeds the drift; `?wx=` pin + reduced-motion both suppress.
+- **honesty self-test chip** — ✅ BUILT 2026-06-23 (`selftest.js`, `Gate.selftest`): a small
+  brass pill (top-left, `#gate-honesty`, low-opacity at rest → brightens on hover; green
+  `the gate keeps its word · N/N ✓` / red `self-test ✗ N/M`) that PROVES, render-blind, that
+  the gate truthfully reflects earned state + sound math. `Gate.selftest.run()` → `{pass, total,
+  passed, results:[{name,pass,detail}]}` (testable headless). Four invariant families, each with
+  a load-bearing NEGATIVE CONTROL: **(1) asterism coherence** — unlocked-asterism count from
+  `Sky.state(Sky.visitedFromStore(WS.store()), …)`; the gate draws a figure IFF count>0 and
+  `AST.current().name ∈` the unlocked set (neg-ctrl: a stubbed 0-unlock state → `current()` null;
+  a stubbed ≥1-unlock state → that wing's figure, via `AST._reset()` + a temporary
+  `Sky.visitedFromStore` swap, restored). **(2) room coherence** — showable count ==
+  `R.loadSlab().length + 1` (Cairn fixture); `R.pick().id ∈ (slab ∪ 'cairn')` (neg-ctrl: a bogus
+  `?room` pin falls back into the pool; `pick()` twice is identical). **(3) moon math** —
+  recompute `moonPhase(julianDate(new Date()))` / `terminator()` (the `?moon` pin overrides exactly
+  as the boot does); `illuminatedFraction ∈ [0,1]`, drawn `S._moonFrac` matches (machine-ε for a
+  pin, ≤5e-4 for the live clock to absorb the boot→run lunar drift), `S._moonSide` matches
+  `terminator().litSide ∈ {left,right}` (neg-ctrl: a J2000 new moon 2000-01-06 → fraction ≈0).
+  **(4) determinism** — `AST.current()` + `R.pick()` are stable within a load. Mounted hidden after
+  `S.build()`; revealed by `Gate.selftest.show()` on splash-dismissal (production) / immediately in
+  dev, so it never overlaps the splash/welcome overlays. Click re-runs + logs the per-claim
+  breakdown to the console. Render-blind by construction (asserts only counts/math/state).
 - **the click-through cinematic + welcome card** — gears 2.5s → swing 2.5s → fade 2s →
   welcome hold 3s → navigate; reduced-motion collapse; `WS.seen('the-gate')`. Timings
   live in `sequence.js`; the welcome card markup is in the boot HTML.
