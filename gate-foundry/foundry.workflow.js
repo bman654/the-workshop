@@ -379,9 +379,8 @@ asset of The Orrery Estate front gate. This is take #${i} of ${a.K}; give it its
 craft level and light direction.
 
 READ FIRST (fully): ${GATE}/the-gate/SPEC.md (esp. §1 layers, §2 lighting + EXACT
-palette tokens, §3 interface, §4 your asset row, §8 idiom); ${GATE}/${a.module} (your
-STARTING POINT); and /Users/brandon/Obsidian/Brandon/Areas/Personal/Creative-Space/ideas/the-gate/RECON.md
-(brass recipe + tokens). You may skim the finished the-gate/scene-gate.js (READ-ONLY) to match the
+palette tokens + the brass recipe, §3 interface, §4 your asset row, §8 idiom); ${GATE}/${a.module} (your
+STARTING POINT). You may skim the finished the-gate/scene-gate.js (READ-ONLY) to match the
 gate's brass craft.
 
 YOUR TARGET: elevate ONLY ${a.drawFn} in ${a.module}. Leave these BYTE-IDENTICAL: ${a.siblings}.

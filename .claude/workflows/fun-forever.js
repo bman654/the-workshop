@@ -15,12 +15,22 @@ export const meta = {
 // 1 builder + 1 publisher + 1 writer ≈ 14 agents (K=4, 2 rounds). 60 cycles
 // stays under the 1000-agent backstop. Re-launch fun-forever to keep going —
 // the DURABLE cycle lives in seedbed/state.json, so it counts on past this run.
-const MAX_ITERS = 60
 const MAX_JUDGE_ROUNDS = 2        // the judge may reject the whole batch and demand ONE refined re-round
 const MAX_BATON = 3               // a BUILD may pass the baton to a fresh builder this many times (4 builders total) — bounds the inner loop
 const FUNLOG = '/tmp/funlog.txt'
-const REPO_ROOT = '/Users/brandon/dev/general/creative-space' // the loop's repo root (holds seedbed/, the-gate/, art-foundry/) — where a BUILD/foundry cycle invokes the engine
-const STATE_PATH = REPO_ROOT + '/seedbed/state.json' // the writer reads the durable cycle from here
+
+// ── Portability + operability (all args optional; clone & run from ANYWHERE) ───
+// The loop carries NO machine-specific paths. Every seat is a subagent that inherits the launch cwd (the repo
+// root) and uses RELATIVE paths; the only ABSOLUTE need is locating the art-foundry engine for the script-level
+// workflow() call, which comes from DERIVED_ROOT (computed once below — the director-side `git rev-parse`, or
+// args.repoRoot). A test/operator launch may also force ONE specific cycle instead of obeying the gauge.
+//   args.repoRoot : absolute repo-root override (e.g. drive a pre-merge worktree from a different session cwd)
+//   args.induce   : a directive {mode,track,…} that REPLACES the gauge for ONE cycle (operability + smoke tests)
+//   args.testMode / induce.testMode : the publisher does NOT commit/push/record — leaves the tree for inspection
+const FORCED_ROOT = (typeof args !== 'undefined' && args && args.repoRoot) ? String(args.repoRoot) : null
+const INDUCE = (typeof args !== 'undefined' && args && args.induce) ? args.induce : null
+const TEST_MODE = !!((INDUCE && INDUCE.testMode) || (typeof args !== 'undefined' && args && args.testMode))
+const MAX_ITERS = INDUCE ? 1 : 60 // an induced run is a single forced cycle; the normal loop runs to the safety cap
 
 // ── Grounding — the prompts now live as tunable files in seedbed/prompts/ ──────
 // The workflow-script SANDBOX can't read files, but every SUBAGENT can. So a seat
@@ -29,10 +39,13 @@ const STATE_PATH = REPO_ROOT + '/seedbed/state.json' // the writer reads the dur
 // cycles re-tunes the live loop with no relaunch. A short always-on safety preamble
 // stays inline (guaranteed, even if a seat skips a read).
 function preamble(file) {
+  const loc = FORCED_ROOT
+    ? 'project the-workshop. FIRST run `cd ' + FORCED_ROOT + '` — that is the repo root for THIS run; do EVERYTHING there.'
+    : 'project the-workshop; your cwd is the repo root where the loop was launched — run all commands from there.'
   return [
-    'You are ONE seat in the Workshop\'s autonomous creative loop (project the-workshop; cwd = the repo root,',
-    '/Users/brandon/dev/general/creative-space). FIRST read these two files IN FULL with the Read tool and',
-    'follow them as your standing instructions, THEN act on the cycle context below:',
+    'You are ONE seat in the Workshop\'s autonomous creative loop (' + loc + ')',
+    'Read these two files IN FULL with the Read tool and follow them as your standing instructions, THEN act on',
+    'the cycle context below:',
     '  • seedbed/prompts/ground.md   — the house rules, the soul, the gauge, the ledger (EVERY seat reads this)',
     '  • seedbed/prompts/' + file + '   — your role brief for this cycle',
     'ALWAYS-ON SAFETY (holds even before you read): you are a workflow subagent with NO Agent/Task tool — do',
@@ -362,19 +375,26 @@ function stewardPrompt(d, chosen, cyc) {
 }
 
 function publisherPrompt(d, chosen, handoff, cyc) {
-  return seatPrompt('publisher.md', 'PUBLISHER (mode=' + d.mode + ' track=' + d.track + ')', {
+  const p = seatPrompt('publisher.md', 'PUBLISHER (mode=' + d.mode + ' track=' + d.track + ')', {
     cyc, mode: d.mode, track: d.track,
     handoff: handoff || null,
     curatedSeeds: chosen.curatedSeeds || [],
     writReleasedSeeds: d.writReleasedSeeds || [],
     housekeeping: d.housekeeping || null,
+    testMode: TEST_MODE || undefined,
   })
+  if (!TEST_MODE) return p
+  return p + '\n\n*** TEST CYCLE (testMode) — THIS IS A SMOKE TEST, NOT A REAL PUBLISH. Do your full fresh-eyes'
+    + ' REVIEW and report what you find, BUT do NOT `git commit`, do NOT `git push`, and do NOT run'
+    + ' `node seedbed/gauge.mjs record`. Leave ALL changes UNCOMMITTED in the working tree for inspection. In'
+    + ' your summary, state plainly whether the piece WOULD have passed review and what (if anything) is broken. ***'
 }
 
 function writerPrompt(summary, isWrit) {
+  const cd = FORCED_ROOT ? 'First run `cd ' + FORCED_ROOT + '`. ' : ''
   const body = (summary == null || String(summary).trim() === '') ? '(the publisher returned no summary)' : String(summary)
   return [
-    'Read seedbed/prompts/writer.md IN FULL and follow it to append this cycle\'s summary to the funlog at',
+    cd + 'Read seedbed/prompts/writer.md IN FULL and follow it to append this cycle\'s summary to the funlog at',
     '/tmp/funlog.txt (you are a workflow subagent — do your own work this turn; APPEND ONLY, never overwrite).',
     'YOUR CONTEXT: ' + JSON.stringify({ isWrit: !!isWrit }),
     '',
@@ -384,13 +404,26 @@ function writerPrompt(summary, isWrit) {
 }
 
 // ── The loop ─────────────────────────────────────────────────────────────────
+// Locate the repo root ONCE for the script-level workflow() engine call (the only absolute path the sandbox
+// needs). A forced/test launch supplies it; otherwise ask a cheap agent (it runs in the launch cwd = repo root).
+const DERIVED_ROOT = FORCED_ROOT || String(await agent(
+  'Output ONLY the absolute path printed by `git rev-parse --show-toplevel` (the repo root) — nothing else, no prose.',
+  { label: 'repo-root', phase: 'Direct', model: 'sonnet' })).trim()
+
 let i = 0
 while (i < MAX_ITERS) {
   i++
 
   phase('Direct')
-  const d = await agent(directorPrompt(i), { label: 'direct #' + i, phase: 'Direct', schema: DIRECTOR_SCHEMA })
-  if (d == null) { log('cycle #' + i + ': director returned nothing — skipping'); continue }
+  let d
+  if (INDUCE) {
+    // Operator/test override: skip the director + gauge and run this exact directive as ONE forced cycle.
+    d = Object.assign({ currentCycle: 9000 + i, rationale: 'INDUCED cycle (operator / smoke-test override)', headline: 'INDUCED ' + INDUCE.mode + '/' + INDUCE.track }, INDUCE)
+    log('cycle #' + d.currentCycle + ' — INDUCED ' + d.mode + '/' + d.track + (TEST_MODE ? ' [testMode: no commit]' : ''))
+  } else {
+    d = await agent(directorPrompt(i), { label: 'direct #' + i, phase: 'Direct', schema: DIRECTOR_SCHEMA })
+    if (d == null) { log('cycle #' + i + ': director returned nothing — skipping'); continue }
+  }
   const cyc = d.currentCycle || i // the DURABLE cycle # (survives relaunches); fall back to the loop index
   log('cycle #' + cyc + ' — ' + d.mode + '/' + d.track + ': ' + d.headline)
   const isFoundryBuild = d.mode === 'BUILD' && d.track === 'foundry' // forge a rep via the ART FOUNDRY engine, not a solo builder/explorers
@@ -475,8 +508,8 @@ while (i < MAX_ITERS) {
       log('cycle #' + cyc + ': foundry PREP returned no asset spec — nothing to forge; the publisher reviews the tree as-is')
     } else {
       log('cycle #' + cyc + ': PREP scaffolded ' + prep.asset.key + ' (' + prep.asset.drawFn + ', K=' + (prep.asset.K || 3) + ') — handing to the ART FOUNDRY engine')
-      const forge = await workflow({ scriptPath: REPO_ROOT + '/art-foundry/engine.workflow.js' },
-        { medium: 'visual-gate', contextRoot: REPO_ROOT, assets: [prep.asset] })
+      const forge = await workflow({ scriptPath: DERIVED_ROOT + '/art-foundry/engine.workflow.js' },
+        { medium: 'visual-gate', contextRoot: DERIVED_ROOT, assets: [prep.asset] })
       log('cycle #' + cyc + ': art-foundry → ' + ((forge && forge.status) || '?') + ' (built ' + (((forge && forge.built) || []).join(', ') || 'nothing') + ')')
       handoff = foundryHandoff(prep, forge)
     }
@@ -501,8 +534,8 @@ while (i < MAX_ITERS) {
       log('cycle #' + cyc + ': 🎨 builder requested ' + fa.assets.length + ' in-house art asset(s) across ' + media.length + ' medium(s) [' + media.join(', ') + '] — invoking the ART FOUNDRY engine')
       const forges = []
       for (const m of media) {
-        const forge = await workflow({ scriptPath: REPO_ROOT + '/art-foundry/engine.workflow.js' },
-          { medium: m, contextRoot: REPO_ROOT, assets: byMedium[m] })
+        const forge = await workflow({ scriptPath: DERIVED_ROOT + '/art-foundry/engine.workflow.js' },
+          { medium: m, contextRoot: DERIVED_ROOT, assets: byMedium[m] })
         log('cycle #' + cyc + ': art-foundry [' + m + '] → ' + ((forge && forge.status) || '?') + ' (built ' + (((forge && forge.built) || []).join(', ') || 'nothing') + ')')
         forges.push(forge)
       }

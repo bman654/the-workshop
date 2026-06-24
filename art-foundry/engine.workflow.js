@@ -75,9 +75,10 @@ const MEDIUM = resolveMedium(MEDIUM_ID)
 // (workflow scripts can't read files; every SUBAGENT can — same pattern as fun-forever's seatPrompt.)
 function preamble(promptFile) {
   return [
-    'You are ONE seat in The Orrery Estate\'s in-house ART FOUNDRY (cwd = the repo root,',
-    '/Users/brandon/dev/general/creative-space). FIRST read this file IN FULL with the Read tool and follow it',
-    'as your standing instructions, THEN act on the JSON context below:',
+    'You are ONE seat in The Orrery Estate\'s in-house ART FOUNDRY. FIRST run `cd ' + CONTEXT_ROOT + '` — that',
+    'is the repo root for this run (holds art-foundry/, the-gate/, tools/); run EVERYTHING from there. THEN read',
+    'this file IN FULL with the Read tool and follow it as your standing instructions, THEN act on the JSON',
+    'context below:',
     '  • art-foundry/prompts/' + promptFile + '   — your foundry role brief (medium-aware)',
     'ALWAYS-ON SAFETY: you are a workflow subagent with NO Agent/Task tool — do your OWN work this turn, never',
     'delegate, never release the turn or arm a Monitor (it ends your run + loses uncommitted work). Stay in the',

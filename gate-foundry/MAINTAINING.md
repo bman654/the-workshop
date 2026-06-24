@@ -132,6 +132,21 @@ The gate shares the estate's `ledger/` and forge. Every foundry publish ends:
 ledger-bound pages, re-forges) → `git add -A && git commit`. Running collate is correct; the resulting
 estate-page diff is sanctioned, not scope-creep.
 
+## Running the loop — clone-anywhere + the operator overrides
+
+`fun-forever.js` carries **no machine-specific paths**: launch it from the repo root (wherever you cloned it)
+and every seat operates from that cwd; the one absolute path it needs (to locate `art-foundry/engine.workflow.js`
+for the nested `workflow()` call) is derived at runtime via `git rev-parse`. Three optional `args` let an
+operator steer or test a run:
+
+- **`args.repoRoot`** — force the absolute repo root (e.g. drive an UNMERGED worktree from a session whose cwd
+  is elsewhere; every seat `cd`s here first).
+- **`args.induce`** — a directive `{mode, track, …}` that REPLACES the gauge for ONE cycle (`MAX_ITERS` becomes
+  1). Use it to deliberately exercise a specific cycle — e.g. a `[rep]` BUILD/foundry, a garden BUILD that
+  requests the baton + the art foundry, a PLAN/foundry survey — without waiting for the cadence to schedule it.
+- **`args.testMode`** (or `induce.testMode`) — the publisher does its full review but does NOT commit/push/record;
+  all changes stay in the working tree for inspection. The way to smoke-test a cycle without touching history.
+
 ## The engine + the power tools
 
 The live BUILD/foundry path (above) and a manual batch push share the same **competitive K-takes** idea —
