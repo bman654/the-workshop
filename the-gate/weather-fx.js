@@ -18,12 +18,22 @@
 
    Weather → effect mapping (W.weather()):
      clear  : no clouds, no rain, no lightning  (empty blue sky)
-     cloudy : full white cloud cover, no rain/lightning
-     storm  : dark heavy clouds + rain + occasional lightning
+     cloudy : full white cloud cover + LIGHT rain (a gentle drizzle that wets the
+              ground), no lightning
+     storm  : dark heavy clouds + HEAVY rain + occasional lightning
+
+   GROUND-IMPACT (splashes): drops that reach the foreground apron / near ground
+   leave a brief expanding ring-ripple + a tiny splash tick — rain hitting wet
+   stone. A fixed pool is recycled (capped, never unbounded); spawn frequency scales
+   with the eased rain intensity (storm ≫ cloudy ≫ none). Splashes live only on the
+   lower band of the canvas (the foreground apron, IN FRONT of the gate base), never
+   in the sky, to stay consistent with the scene's depth.
 
    Reduced motion (SPEC §2.5.5): clouds still show (overcast still reads) but do
-   NOT drift; NO rain, and NO lightning flashing (photosensitivity). One source of
-   truth = Gate.sequence.prefersReducedMotion, passed in at init.
+   NOT drift; NO falling rain, and NO lightning flashing (photosensitivity); NO
+   animated splashes — at most a couple of faint STATIC ripple hints so wet ground
+   still reads. One source of truth = Gate.sequence.prefersReducedMotion, passed in
+   at init.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
@@ -59,6 +69,24 @@
   var drops = [];                   // raindrop pool (CSS-px coords)
   var rainCur = 0, rainTgt = 0;     // eased rain intensity 0..1
   var MAX_DROPS = 240;
+
+  // per-weather rain intensity target (eased into rainCur). cloudy is a LIGHT
+  // drizzle, storm a HEAVY downpour; both wet the ground (→ splashes), clear is dry.
+  var RAIN = { clear: 0, cloudy: 0.42, storm: 1 };
+
+  // ── SPLASHES (ground impact) ─────────────────────────────────────────────────
+  //   A FIXED pool of ripple objects, recycled (never grows). Each frame, while
+  //   rain falls, a rate-limited spawner activates free slots near the foreground
+  //   apron; an active splash expands 1–2 flattened ring-arcs + a brief tick over
+  //   its short life, then frees itself. Capped → cheap + bounded.
+  var splashes = [];                // [{x, y, age, life, r0, active}]
+  var MAX_SPLASHES = 30;            // hard ceiling on live ripples
+  var spawnAcc = 0;                 // fractional spawn accumulator (drops/frame)
+  var STORM_SPAWN = 34;             // splashes/sec at full storm intensity
+  // splashes land on the LOWER band of the canvas (foreground apron / near ground,
+  // in front of the gate base) — fractions of canvas height, never the sky.
+  var BAND_TOP = 0.80, BAND_BOT = 1.0;
+  var splashRng = mkRng(7777);
 
   // lightning state machine (seconds)
   var nextStrike = 2.5;
@@ -232,6 +260,118 @@
     return band === 'night' ? 1.0 : band === 'dusk' ? 0.9 : 0.78;
   }
 
+  /* ── SPLASHES ──────────────────────────────────────────────────────────────────
+     spawnSplash: claim one free pool slot (scan; bounded by MAX_SPLASHES). Lands in
+     the lower band, with a slight wind-ward x nudge so impacts track the rain's lean.
+     Returns false when the pool is full (caller stops spawning that frame). */
+  function ensureSplashes() {
+    if (splashes.length) return;
+    for (var i = 0; i < MAX_SPLASHES; i++) {
+      splashes.push({ x: 0, y: 0, age: 0, life: 0, r0: 0, active: false });
+    }
+  }
+  function spawnSplash(cw, ch) {
+    for (var i = 0; i < splashes.length; i++) {
+      var s = splashes[i];
+      if (s.active) continue;
+      var ty = BAND_TOP + (BAND_BOT - BAND_TOP) * splashRng();   // 0.80..1.0
+      // perspective: ripples nearer the bottom (closer to the eye) read a touch
+      // larger + live a touch longer than those toward the back of the apron.
+      var depth = (ty - BAND_TOP) / (BAND_BOT - BAND_TOP);       // 0 back .. 1 front
+      s.x = splashRng() * cw + windNorm() * 18;
+      s.y = ty * ch;
+      s.age = 0;
+      s.life = 0.42 + 0.26 * depth + splashRng() * 0.06;          // ~0.42..0.74 s
+      s.r0 = 2.0 + 2.6 * depth;                                   // starting/peak scale
+      s.active = true;
+      return true;
+    }
+    return false;                                                // pool full
+  }
+
+  /* drawSplashes: advance + render every active ripple. Each draws up to two
+     concentric, FLATTENED (ground-perspective) ring-arcs that grow + fade, plus a
+     tiny upward tick early in life. Intensity-scaled spawning happens here too. */
+  function drawSplashes(cw, ch, dt) {
+    if (rainCur < 0.02) return;
+    ensureSplashes();
+    // intensity-scaled spawn rate: storm (rainCur→1) ≫ cloudy (rainCur≈0.42).
+    // a touch super-linear so light rain stays sparse and storm feels busy.
+    var rate = STORM_SPAWN * rainCur * rainCur;
+    spawnAcc += rate * dt;
+    while (spawnAcc >= 1) {
+      spawnAcc -= 1;
+      if (!spawnSplash(cw, ch)) { spawnAcc = 0; break; }          // pool full → drop
+    }
+    var bandA = bandRainAlpha();
+    ctx.lineCap = 'round';
+    for (var i = 0; i < splashes.length; i++) {
+      var s = splashes[i];
+      if (!s.active) continue;
+      s.age += dt;
+      if (s.age >= s.life) { s.active = false; continue; }
+      var p = s.age / s.life;                                     // 0..1 progress
+      var fade = (1 - p) * (1 - p);                               // ease-out alpha
+      var rad = s.r0 * (1 + p * 4.2);                             // expanding radius
+      var ry = rad * 0.34;                                        // flatten to ground
+      // light rain (low rainCur) still wets visibly: hold a daylight floor so a
+      // gentle drizzle reads on bright stone without making storm over-bright.
+      var aBase = (0.34 + 0.32 * rainCur) * fade * bandA;
+      // a faint DARK "wet" ring just under the bright one — water darkening the
+      // stone. This gives the ripple contrast on LIGHT daytime flagstones too
+      // (a pure light-blue glow vanishes there); the bright ring carries it on dark.
+      ctx.strokeStyle = 'rgba(28,40,58,' + (aBase * 0.55).toFixed(3) + ')';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y + 0.6, rad, ry, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      // primary (bright) ring
+      ctx.strokeStyle = 'rgba(206,224,255,' + aBase.toFixed(3) + ')';
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y, rad, ry, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      // trailing inner ring (a half-step behind), only past the first instant
+      if (p > 0.12) {
+        var rad2 = s.r0 * (1 + (p - 0.12) * 3.0);
+        ctx.strokeStyle = 'rgba(206,224,255,' + (aBase * 0.6).toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.ellipse(s.x, s.y, rad2, rad2 * 0.34, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // brief upward splash tick at the very start (the drop rebounding)
+      if (p < 0.32) {
+        var tickA = aBase * 1.4 * (1 - p / 0.32);
+        ctx.strokeStyle = 'rgba(224,236,255,' + tickA.toFixed(3) + ')';
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(s.x + windNorm() * 2.2, s.y - (3 + s.r0));
+        ctx.stroke();
+      }
+    }
+  }
+
+  /* drawStaticSplashHints (reduced motion): a couple of faint, NON-animated ripple
+     marks so wet ground still reads under rain — drawn once-per-frame at fixed,
+     seeded positions, no growth/flicker. */
+  function drawStaticSplashHints(cw, ch) {
+    if (rainCur < 0.02) return;
+    var bandA = bandRainAlpha();
+    var n = rainCur > 0.7 ? 3 : 2;                               // storm shows one more
+    var rng = mkRng(515);                                        // fixed layout, stable
+    ctx.lineWidth = 1.0;
+    for (var i = 0; i < n; i++) {
+      var x = (0.2 + rng() * 0.6) * cw;
+      var y = (BAND_TOP + rng() * (BAND_BOT - BAND_TOP) * 0.9) * ch;
+      var rad = 5 + rng() * 4;
+      ctx.strokeStyle = 'rgba(206,224,255,' + (0.22 * rainCur * bandA).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.ellipse(x, y, rad, rad * 0.34, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
   /* ── LIGHTNING ─────────────────────────────────────────────────────────────── */
   function buildBolt(cw, ch, rng) {
     var pts = [];
@@ -339,7 +479,7 @@
     baseTgt = BASE_COVER[w] != null ? BASE_COVER[w] : 0;
     stormTgt = STORM_COVER[w] != null ? STORM_COVER[w] : 0;
     darkTgt = DARK[w] != null ? DARK[w] : 0;
-    rainTgt = (w === 'storm') ? 1 : 0;
+    rainTgt = RAIN[w] != null ? RAIN[w] : 0;
     if (reduced) {
       baseCur = baseTgt; stormCur = stormTgt; darkCur = darkTgt; rainCur = rainTgt;
       applyCloudOpacity();
@@ -360,7 +500,12 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cw, ch);
     rainCur += (rainTgt - rainCur) * Math.min(1, dt * 1.5);
-    if (!reduced) drawRain(cw, ch, dt);
+    if (!reduced) {
+      drawRain(cw, ch, dt);
+      drawSplashes(cw, ch, dt);
+    } else {
+      drawStaticSplashHints(cw, ch);
+    }
     tickLightning(cw, ch, dt);
   };
 

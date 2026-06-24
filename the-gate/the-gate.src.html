@@ -941,6 +941,44 @@
     // ── parse dev URL overrides ──────────────────────────────────────────────
     var url = Gate.sequence.parseUrl(window.location.search);
 
+    // ── ?unlock=all — preview the FULLY-EARNED estate for THIS page load only, with
+    // NO write to the visitor's real WS localStorage. We override the earned-state
+    // READS in memory (never the store): wrap Sky.visitedFromStore so it reports every
+    // CATALOG room PLUS every wing/feat member as visited (→ Sky.state marks all
+    // asterisms complete → the prefer-figures pick always has rich multi-star figures,
+    // and per-load reloads cycle across them), and force the undercroft hatch OPEN via
+    // the dev pin. The room-rep pool is already the FULL GATE-ROOMS slab (the slab is
+    // inlined in the page, not gated by storage), so no extra work is needed there.
+    // Confined to the pin: with no ?unlock the wrap never runs and the real store is the
+    // sole source of truth. We do NOT call any WS setter, so localStorage is untouched.
+    if (url.unlock) {
+      try {
+        var Sky = window.Sky;
+        if (Sky && typeof Sky.visitedFromStore === 'function') {
+          // build the fully-visited set ONCE: every catalog star + every wing/feat
+          // member id (feat groups' members are pseudo/room ids NOT in the CATALOG, so
+          // catalog keys alone would leave those constellations incomplete).
+          var fullVisited = {};
+          var cat = Sky.CATALOG || {};
+          for (var ck in cat) { if (Object.prototype.hasOwnProperty.call(cat, ck)) fullVisited[ck] = true; }
+          function markMembers(groups) {
+            if (!groups) return;
+            for (var gi = 0; gi < groups.length; gi++) {
+              var mm = (groups[gi] && groups[gi].members) || [];
+              for (var mj = 0; mj < mm.length; mj++) fullVisited[mm[mj]] = true;
+            }
+          }
+          markMembers(Sky.WINGS);
+          markMembers(Sky.FEATS);
+          // wrap (don't mutate the store): every earned-state read now sees a full sky.
+          Sky.visitedFromStore = function () { return fullVisited; };
+        }
+      } catch (e) {}
+      // force the undercroft hatch OPEN (the unlocked/navigable state) without writing
+      // the ws:seen:undercroft store keys.
+      url.undercroft = 'open';
+    }
+
     // ── init subsystems with any pins ────────────────────────────────────────
     Gate.timeofday.init({ pin: url.t });
     Gate.weather.init({ pin: url.wx, seed: url.seed });

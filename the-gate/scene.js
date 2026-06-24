@@ -181,6 +181,18 @@
     // nothing as it wraps toward the dark limb (no glow on the dark side).
     var f3 = el('filter', { id: 'glow-moon', x: '-90%', y: '-90%', width: '280%', height: '280%' }, defs);
     el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '16' }, f3);
+
+    // a VERY-WIDE, gentle blur-only feather: the outermost moonlight halo (and the
+    // sun's outer corona). Pure blurred copy, no source merge — fades to nothing far
+    // from the lit shape, so it reads as soft ambient light, never a hard ring.
+    var f4 = el('filter', { id: 'glow-wide', x: '-150%', y: '-150%', width: '400%', height: '400%' }, defs);
+    el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '30' }, f4);
+
+    // a soft WARM BLOOM for lit lanterns / emissive cores: a medium blur-only feather
+    // (no source merge) so layered opacity stops stack into a gentle falloff that warms
+    // the dark around a lamp without blooming into a featureless ball.
+    var f5 = el('filter', { id: 'glow-bloom', x: '-120%', y: '-120%', width: '340%', height: '340%' }, defs);
+    el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '11' }, f5);
   }
 
   /* ── a faint full-bleed starfield (always present; reads at night) ───────────── */
@@ -256,20 +268,29 @@
     if (litD) {
       // (Fix 3 / restore) glow = blurred copies of the LIT shape (pure feather, no
       // source merge) → naturally hugs the illuminated limb, zero glow on the dark
-      // side. TWO layers: a WIDE soft halo + a TIGHTER brighter bloom so the glow
-      // is clearly VISIBLE on the lit limb (crescent → bright arc, near-full → ring)
-      // without spilling onto the dark side.
-      el('path', { d: litD, fill: 'var(--moon-disc-ref, #f2ead2)',
-        opacity: '0.85', filter: 'url(#glow-moon)' }, moonG);   // wide soft halo
-      el('path', { d: litD, fill: 'var(--moon-disc-ref, #f2ead2)',
-        opacity: '0.6', filter: 'url(#glow-star)' }, moonG);    // tight inner bloom
+      // side. LAYERED falloff (outer→inner): a very-wide gentle moonlight halo, then
+      // the wide soft halo, then a tighter brighter bloom hugging the lit limb. Each
+      // is the SAME lit shape at a different blur+opacity so the falloff is soft and
+      // continuous (crescent → bright arc, near-full → soft ring) — moonlight, not a
+      // sticker, and never any glow on the dark side.
+      var moonDisc = 'var(--moon-disc-ref, #f2ead2)';
+      el('path', { d: litD, fill: moonDisc,
+        opacity: '0.34', filter: 'url(#glow-wide)' }, moonG);   // very-wide ambient halo
+      el('path', { d: litD, fill: moonDisc,
+        opacity: '0.7', filter: 'url(#glow-moon)' }, moonG);    // wide soft halo
+      el('path', { d: litD, fill: moonDisc,
+        opacity: '0.55', filter: 'url(#glow-star)' }, moonG);   // tight inner bloom hugs limb
       // the bright emissive lit region
-      el('path', { d: litD, fill: 'var(--moon-disc-ref, #f2ead2)' }, moonG);
+      el('path', { d: litD, fill: moonDisc }, moonG);
+      // a hot inner-edge sheen tracing the LIT LIMB itself (a brighter cream rim where
+      // the moonlight is most direct) — drawn as the lit shape's blurred copy clipped to
+      // a near-white wash, kept subtle so the disc stays luminous, not glaring.
+      el('path', { d: litD, fill: '#fffdf2', opacity: '0.18', filter: 'url(#glow-star)' }, moonG);
       // faint top-edge highlight along the lit limb ("lit from above")
       var hx = cx + side * r * 0.18;
       el('path', { d: 'M ' + (hx - side * r * 0.5) + ' ' + (cy - r * 0.6) +
         ' A ' + r + ' ' + r + ' 0 0 ' + (side > 0 ? 1 : 0) + ' ' + (hx + side * r * 0.4) + ' ' + (cy - r * 0.72),
-        fill: 'none', stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1.1', opacity: '0.3' }, moonG);
+        fill: 'none', stroke: 'var(--brass-bright-ref, #f0d489)', 'stroke-width': '1.1', opacity: '0.35' }, moonG);
     }
   }
 
@@ -332,11 +353,24 @@
     // (dusk) sun is dim, and a storm sun is veiled by cloud — drop the halo in both
     // so it doesn't bloom unrealistically. (Re-evaluated each recolor / weather flip.)
     var stormy = Gate.weather && Gate.weather.weather && Gate.weather.weather() === 'storm';
+    var sunDisc = 'var(--sun-disc-ref, #ffe9a8)';
     if (band !== 'dusk' && !stormy) {
-      el('circle', { cx: cx, cy: y, r: r * 2.0, fill: 'var(--sun-disc-ref, #ffe9a8)',
-        opacity: '0.14', filter: 'url(#glow-soft)' }, sunG);
+      // a BRIGHT daytime sun: nested warm halos with layered falloff (outer→inner) so
+      // it reads as a luminous source warming the sky, not a flat milky disc. A very-wide
+      // faint corona, a warmer mid halo, then a tight bloom hugging the disc edge.
+      el('circle', { cx: cx, cy: y, r: r * 2.6, fill: sunDisc,
+        opacity: '0.08', filter: 'url(#glow-wide)' }, sunG);    // wide corona
+      el('circle', { cx: cx, cy: y, r: r * 1.7, fill: sunDisc,
+        opacity: '0.16', filter: 'url(#glow-bloom)' }, sunG);   // warm mid halo
+      el('circle', { cx: cx, cy: y, r: r * 1.12, fill: sunDisc,
+        opacity: '0.3', filter: 'url(#glow-soft)' }, sunG);     // tight edge bloom
     }
-    el('circle', { cx: cx, cy: y, r: r, fill: 'var(--sun-disc-ref, #ffe9a8)' }, sunG);
+    // the disc itself + a hotter near-white core so the source blazes from its centre
+    el('circle', { cx: cx, cy: y, r: r, fill: sunDisc }, sunG);
+    if (band !== 'dusk' && !stormy) {
+      el('circle', { cx: cx, cy: y, r: r * 0.62, fill: '#fff6dc', opacity: '0.7',
+        filter: 'url(#glow-soft)' }, sunG);                     // hot core
+    }
   }
 
   function drawAsterism(g, ox, oy, size) {
@@ -353,11 +387,36 @@
       el('line', { x1: px(a).toFixed(1), y1: py(a).toFixed(1), x2: px(b).toFixed(1), y2: py(b).toFixed(1),
         stroke: 'var(--asterism-line-ref, #c9a24a)', 'stroke-width': '1.6', opacity: '0.62' }, astG);
     }
-    // stars
+    // stars — each gets a gentle BLOOM so the figure reads as charted constellation
+    // light: a soft wide halo behind the star + the bright star body. A SUBTLE twinkle
+    // (low-amplitude SMIL opacity, staggered per-star so they don't pulse in unison)
+    // makes the figure feel alive; it is pure declarative SMIL, so the boot's global
+    // svg.pauseAnimations() under prefers-reduced-motion (and the ?smil pin) FREEZES it
+    // at frame 0 — no extra gating needed here.
+    var starFill = 'var(--asterism-star-ref, #f0d489)';
     for (var j = 0; j < fig.stars.length; j++) {
       var s = fig.stars[j];
-      el('circle', { cx: px(s).toFixed(1), cy: py(s).toFixed(1), r: (s.mag === 1 ? 4.2 : 3.0).toFixed(1),
-        fill: 'var(--asterism-star-ref, #f0d489)', filter: 'url(#glow-star)' }, astG);
+      var sx = px(s).toFixed(1), sy = py(s).toFixed(1);
+      var bright = (s.mag === 1);
+      var rad = bright ? 4.2 : 3.0;
+      // soft wide bloom behind the star (warmer/larger for the bright mag-1 stars)
+      el('circle', { cx: sx, cy: sy, r: (rad * 2.4).toFixed(1), fill: starFill,
+        opacity: bright ? '0.22' : '0.15', filter: 'url(#glow-bloom)' }, astG);
+      // the bright star body with its tight bloom
+      var star = el('circle', { cx: sx, cy: sy, r: rad.toFixed(1),
+        fill: starFill, filter: 'url(#glow-star)' }, astG);
+      // subtle twinkle — gentle opacity breathe, staggered begin + slightly varied dur
+      // so the constellation shimmers softly (NOT a strobe). Bright stars breathe less.
+      // The cycle STARTS and ENDS at full opacity (1) so that when the boot freezes SMIL
+      // at frame 0 under prefers-reduced-motion (or ?smil=0), every star holds its full,
+      // intended brightness — frozen, not dimmed.
+      var amp = bright ? '1;0.82;1' : '1;0.7;1';
+      var dur = (3.4 + (j % 4) * 0.55).toFixed(2);
+      var beg = '-' + ((j * 0.73) % 3).toFixed(2) + 's';   // negative begin → desync phase
+      el('animate', { attributeName: 'opacity', values: amp,
+        keyTimes: '0;0.5;1', dur: dur + 's', begin: beg,
+        repeatCount: 'indefinite', calcMode: 'spline',
+        keySplines: '0.4 0 0.6 1;0.4 0 0.6 1' }, star);
     }
     // engraved italic label below — WRAPPED + BOUNDED so a long name/myth never clips
     // the screen edge. The slot is top-LEFT (ox≈70, size≈180 → centered lx≈160), so a
@@ -2031,18 +2090,29 @@
     //    and burning brightest at the far back of the throat. NEVER yellow. ──
     // 1) a dim crimson FILL across the whole void floor so the depth never reads dead-flat
     el('path', { d: holeD, fill: GLOW, opacity: '0.16' }, g);
-    // 2) the pooled source: a feathered hot band concentrated at the FAR/back interior
-    el('path', { d: 'M ' + fx(Lx(0.55)) + ' ' + fx(Yy(0.55)) +
+    // 1b) a broad, very-soft warm WELL filling the throat — a wide blur-feathered pool so
+    //     the light reads as DEEP glow rising from below, not flat-lit bands. Drawn under
+    //     the hot band so the brightness builds up softly from a diffuse base.
+    el('path', { d: 'M ' + fx(Lx(0.42)) + ' ' + fx(Yy(0.42)) +
+      ' L ' + fx(Lfar + 1) + ' ' + fx(yFar) +
+      ' L ' + fx(Rfar - 1) + ' ' + fx(yFar) +
+      ' L ' + fx(Rx(0.42)) + ' ' + fx(Yy(0.42)) + ' Z',
+      fill: GLOW, opacity: '0.28', filter: 'url(#glow-bloom)' }, g);
+    // 2) the pooled source: a feathered hot band concentrated at the FAR/back interior.
+    //    Widely blurred (glow-bloom) so its top/bottom edges feather into the dark instead
+    //    of reading as a hard-edged pink stripe; peak eased down a touch for the same reason.
+    el('path', { d: 'M ' + fx(Lx(0.58)) + ' ' + fx(Yy(0.58)) +
       ' L ' + fx(Lfar + 2) + ' ' + fx(yFar) +
       ' L ' + fx(Rfar - 2) + ' ' + fx(yFar) +
-      ' L ' + fx(Rx(0.55)) + ' ' + fx(Yy(0.55)) + ' Z',
-      fill: GLOW, opacity: '0.5', filter: 'url(#glow-soft)' }, g);
-    // 3) a tighter, brighter core hugging the very back (the molten seam at the bottom of the stair)
+      ' L ' + fx(Rx(0.58)) + ' ' + fx(Yy(0.58)) + ' Z',
+      fill: GLOW, opacity: '0.44', filter: 'url(#glow-bloom)' }, g);
+    // 3) a tighter, brighter core hugging the very back (the molten seam at the bottom of
+    //    the stair) — kept on the softer glow-soft so it still pools warm without a rim.
     el('path', { d: 'M ' + fx(Lx(0.80)) + ' ' + fx(Yy(0.80)) +
       ' L ' + fx(Lfar + 8) + ' ' + fx(yFar + 2) +
       ' L ' + fx(Rfar - 8) + ' ' + fx(yFar + 2) +
       ' L ' + fx(Rx(0.80)) + ' ' + fx(Yy(0.80)) + ' Z',
-      fill: GLOW, opacity: '0.66', filter: 'url(#glow-soft)' }, g);
+      fill: GLOW, opacity: '0.6', filter: 'url(#glow-soft)' }, g);
     // 4) a DEEP-crimson shade pulled HARDER over the back band so the source reads as
     //    spec blood-wine #8a123a, never hot pink. (judge fix a) Two passes: a wide cool
     //    wash across the upper interior, then a darker cap right at the far lip.

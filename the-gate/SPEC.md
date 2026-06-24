@@ -753,6 +753,7 @@ boot (`the-gate.src.html:820-829`):
 | `?undercroft=1` | FORCE the undercroft hatch visible for review only (`S.setDevUndercroft`, `scene.js:585-597`). Production stays earned-only via the store predicate; the flag does NOT change unlock logic. |
 | `?room=<id>` | PIN which room's rep shows in the grounds slot (`S.setDevRoom`; `rooms.js R.pick`). A bespoke id (`physics-lab`, `ripple`, `sound-garden`, …) draws that rep; any other slab id falls back to the Glyph Stand; omit → the Cairn default. Foundry room-rep takes render with this pin (per-asset `extraQS`). |
 | `?smil=<seconds>` | FREEZE the SVG animation clock and seek to a fixed phase (`svg.pauseAnimations(); setCurrentTime(s)`, boot). For rendering/judging an **animated** asset (§2.5.5) at chosen points of its loop — headless `--virtual-time-budget` does NOT advance SMIL; `setCurrentTime` does. Omit to let animations run live. |
+| `?unlock` \| `?unlock=all` \| `?unlock=1` | PREVIEW the fully-EARNED estate for this page load WITHOUT touching the visitor's real WS `localStorage`. The boot (`the-gate.src.html`) wraps `Sky.visitedFromStore` so it reports every `Sky.CATALOG` star PLUS every wing/feat member as visited (→ `Sky.state` marks all asterisms `complete` → the prefer-figures pick always has rich multi-star figures; per-load reloads cycle across them) and forces the undercroft hatch OPEN (`url.undercroft='open'` → `S.setDevUndercroft`). The room-rep pool is already the full GATE-ROOMS slab (slab is inlined, not storage-gated). Confined to the pin — absent → real store is the sole source of truth; it calls NO WS setter, so `localStorage` is never mutated. For QA / critics / fresh-eyes review; ends manual `localStorage` editing. `?unlock=0\|false` → off. |
 
 The foundry renders standalone previews AND swaps each take into the live blockout, then
 screenshots via these pins across DAY/DUSK/NIGHT + a couple brightness levels (§8). For an
@@ -812,7 +813,13 @@ contracts. The following are finalized in Phase D and get only a "beauty pass" n
 
 - **weather-fx** — ✅ BUILT 2026-06-23 (§5.10): drifting clouds (SVG clouds layer, behind buildings),
   wind-slanted rain + lightning bloom (spikes `B→1.0`) on the `#fx` canvas, tree sway (§5.9).
-  Still future polish: rain splashes/ripples on the ground, birds/owls.
+  ✅ BEAUTY PASS 2026-06-24: rain ground-impact SPLASHES — drops reaching the foreground apron /
+  near-ground band leave a brief expanding ring-ripple (flattened bright ellipse + faint dark "wet"
+  under-ring for contrast on both dark night stone and bright day flagstones) + a tiny upward splash
+  tick, ~0.42–0.74s, from a FIXED recycled pool (`MAX_SPLASHES=30`); spawn rate scales super-linearly
+  with intensity. Rain map aligned: `RAIN = { clear:0, cloudy:0.42 (light drizzle), storm:1 (heavy) }`.
+  Under reduced-motion: no falling rain, only a couple of FIXED static ripple hints (no animation).
+  Still future polish: birds/owls.
 - **audio** — ✅ BUILT 2026-06-23 (§5.11): the procedural-WebAudio CONDUCTOR (`audio.js`,
   `Gate.audio`) + nine seeded `Gate.sfx.*` builders, all gated on the opening click +
   `WS.muted()` (mute forces a single master `GainNode` to 0). The mute chip is wired.
@@ -822,8 +829,11 @@ contracts. The following are finalized in Phase D and get only a "beauty pass" n
   `moonPhase(julianDate(new Date()))` + `terminator(...)` and calls
   `S.setMoonPhase({illuminatedFraction, litSide})` BEFORE `S.build()`'s first
   `refreshSkyObjects()`, so the drawn moon matches the user's real date. `?moon=<0..1>` still
-  OVERRIDES (pins fraction + re-derives litSide, and wins for the brightness `moonK`). The
-  moon/sun beauty pass remains future polish.
+  OVERRIDES (pins fraction + re-derives litSide, and wins for the brightness `moonK`).
+  ✅ BEAUTY PASS 2026-06-24: the moon + glow halo and the sun (with the two pillar lamps, the
+  arch-crown lamp, and the warm manor windows — the gate's six emissive elements) were hand-tuned
+  on the actual rendered look across day/dusk/night so each light reads cleanly and never washes out
+  (lamps cool/quiet in daylight, blaze warm against night/storm). See `scene.js` + `scene-gate.js`.
 - **earned-asterism runtime pick** — ✅ BUILT 2026-06-23 (`asterism.js`): `AST.current()`
   reads the visitor's UNLOCKED Survey (`Sky.state(Sky.visitedFromStore(WS.store()), …)`),
   filters to COMPLETE asterisms, then PREFERS FIGURES — picks ONE at random per visit
@@ -837,7 +847,9 @@ contracts. The following are finalized in Phase D and get only a "beauty pass" n
   single-star), `?seed=<n>` reproduces the random pick. The memo (`_cached`) is now read/written
   by test seams `AST._peek()`/`AST._poke(f)` so a self-test that must temporarily stub the pick can
   SAVE the live boot figure and RESTORE it — the showcased asterism therefore never re-rolls across
-  re-renders (a weather change, a recolor). The asterism still gets a beauty pass (glow/shape polish).
+  re-renders (a weather change, a recolor). ✅ BEAUTY PASS 2026-06-24: asterism star-glow tuned with
+  the rest of the gate's emissive elements (§9 moon/sun note) — figures read as bright connected
+  line-figures against the night sky without bloom-wash.
 - **per-visit random room-rep** — ✅ BUILT 2026-06-23 (`rooms.js`): `R.pick()` is now a
   PER-VISIT RANDOM pick over every unlocked slab room ∪ the synthetic Cairn fixture (the draw
   `_roll` is frozen at module-eval, the resolved pick memoized so the boot's two `pick()`

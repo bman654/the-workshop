@@ -48,6 +48,8 @@
   var FLAME  = 'var(--lamp-flame-ref, #ffd27a)';
   var BODY   = 'rgba(11,14,22,.85)';   // the estate brass DARK BODY (not swapped)
   var SOFT   = 'url(#glow-soft)';
+  var BLOOM  = 'url(#glow-bloom)';     // wider warm bloom (defined in scene.js buildDefs)
+  var WIDE   = 'url(#glow-wide)';      // very-wide gentle halo
 
   function f1(n) { return (Math.round(n * 10) / 10); }
 
@@ -283,19 +285,34 @@
     S.el('line', { x1: cx - 11, y1: lampBaseY - 15, x2: cx + 11, y2: lampBaseY - 15, stroke: BRIGHT, 'stroke-width': '1', opacity: '0.5' }, g);
 
     var globeY = lampBaseY - 30;
-    // ── EMISSIVE lamp globe (palette-IMMUNE — BLAZES at night). Layered halos. ──
-    S.el('circle', { cx: cx, cy: globeY, r: 34, fill: FLAME, opacity: '0.16', filter: SOFT }, g);
-    S.el('circle', { cx: cx, cy: globeY, r: 20, fill: FLAME, opacity: '0.34', filter: SOFT }, g);
+    // ── EMISSIVE lamp globe (palette-IMMUNE — BLAZES at night). The night payoff:
+    //    real lit lanterns glowing into the dark. LAYERED warm falloff (outer→inner)
+    //    so the light builds smoothly from a wide ambient wash to a hot core, never a
+    //    featureless ball. A warm wash also spills DOWN onto the cap stone so the lamp
+    //    visibly warms the masonry beneath it.
+    // warm spill pooling DOWN onto the brass cap / pier coping below the lantern
+    S.el('ellipse', { cx: cx, cy: lampBaseY + 6, rx: 30, ry: 16, fill: FLAME,
+      opacity: '0.16', filter: BLOOM }, g);
+    // very-wide ambient halo (faintest, biggest) → soft light bleeding into the night
+    S.el('circle', { cx: cx, cy: globeY, r: 52, fill: FLAME, opacity: '0.07', filter: WIDE }, g);
+    // wide warm halo
+    S.el('circle', { cx: cx, cy: globeY, r: 34, fill: FLAME, opacity: '0.15', filter: BLOOM }, g);
+    // mid halo
+    S.el('circle', { cx: cx, cy: globeY, r: 22, fill: FLAME, opacity: '0.3', filter: SOFT }, g);
+    // tight bloom hugging the glass
+    S.el('circle', { cx: cx, cy: globeY, r: 13, fill: FLAME, opacity: '0.5', filter: SOFT }, g);
     // lantern cage uprights around the globe
     S.el('path', { d: 'M ' + (cx - 9) + ' ' + (lampBaseY - 16) + ' L ' + (cx - 7) + ' ' + (globeY - 11) +
       ' M ' + (cx + 9) + ' ' + (lampBaseY - 16) + ' L ' + (cx + 7) + ' ' + (globeY - 11),
       fill: 'none', stroke: BRASS, 'stroke-width': '1.3' }, g);
     // glass globe (emissive fill + brass rim)
     S.el('circle', { cx: cx, cy: globeY, r: 10, fill: FLAME, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    // hot inner glow welling inside the glass (between fill and white core)
+    S.el('circle', { cx: cx, cy: globeY, r: 7, fill: '#ffe7ab', opacity: '0.9' }, g);
     // bright hot core
-    S.el('circle', { cx: cx, cy: globeY, r: 4.4, fill: '#fff3d6', opacity: '0.95' }, g);
+    S.el('circle', { cx: cx, cy: globeY, r: 4.4, fill: '#fff3d6', opacity: '0.97' }, g);
     // glass specular bead
-    S.el('circle', { cx: cx - 3.2, cy: globeY - 3.2, r: 1.8, fill: '#ffffff', opacity: '0.85' }, g);
+    S.el('circle', { cx: cx - 3.2, cy: globeY - 3.2, r: 1.8, fill: '#ffffff', opacity: '0.9' }, g);
     // lantern cap + finial spike
     S.el('path', { d: 'M ' + (cx - 8) + ' ' + (globeY - 10) + ' L ' + cx + ' ' + (globeY - 18) +
       ' L ' + (cx + 8) + ' ' + (globeY - 10) + ' Z', fill: BODY, stroke: BRASS, 'stroke-width': '1.2' }, g);
@@ -444,11 +461,17 @@
     //    dayRecede(lamp.flame). Drawn BEFORE the meshing train so the surrounding
     //    gears overlap its halo edge and it nests in the cluster, never washing
     //    out the manor behind it. ──
-    S.el('circle', { cx: CX, cy: driverY, r: 24, fill: FLAME, opacity: '0.14', filter: SOFT }, gears);
-    S.el('circle', { cx: CX, cy: driverY, r: 14, fill: FLAME, opacity: '0.55', filter: SOFT }, gears);
-    S.el('circle', { cx: CX, cy: driverY, r: 11, fill: FLAME, opacity: '0.9', stroke: BRASS, 'stroke-width': '1.4' }, gears);
+    // nested warm halos welling from a hot core — layered falloff so the heart reads as
+    // self-lit light pooling out of the gear, not a flat blob. Kept restrained (the
+    // meshing train overlaps the outer halo) so it never washes out the manor behind.
+    S.el('circle', { cx: CX, cy: driverY, r: 30, fill: FLAME, opacity: '0.09', filter: BLOOM }, gears);
+    S.el('circle', { cx: CX, cy: driverY, r: 22, fill: FLAME, opacity: '0.16', filter: SOFT }, gears);
+    S.el('circle', { cx: CX, cy: driverY, r: 14, fill: FLAME, opacity: '0.5', filter: SOFT }, gears);
+    // warm mid-tone bridging the dark gear → white core (so the core doesn't pop flat)
+    S.el('circle', { cx: CX, cy: driverY, r: 11, fill: FLAME, opacity: '0.92', stroke: BRASS, 'stroke-width': '1.4' }, gears);
+    S.el('circle', { cx: CX, cy: driverY, r: 7.5, fill: '#ffe7ab', opacity: '0.92' }, gears);
     S.el('circle', { cx: CX, cy: driverY, r: 5, fill: '#fff3d6' }, gears);
-    S.el('circle', { cx: CX - 2, cy: driverY - 2, r: 1.8, fill: '#ffffff', opacity: '0.9' }, gears);
+    S.el('circle', { cx: CX - 2, cy: driverY - 2, r: 1.8, fill: '#ffffff', opacity: '0.92' }, gears);
     // the meshing train fanning out around the driver
     drawGear(S, gears, CX - 84, 548 + GY, 44, 15);
     drawGear(S, gears, CX + 80, 544 + GY, 50, 16);

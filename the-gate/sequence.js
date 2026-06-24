@@ -26,6 +26,13 @@
      ?room=<id>          → PIN which room's rep renders in the grounds slot (dev
                            review only; a slab room id, e.g. ?room=verse). Falls
                            back to the Cairn default when absent or not in the slab.
+     ?unlock|?unlock=all → PREVIEW the fully-earned estate for this page load WITHOUT
+       (or =1)             touching the visitor's real WS localStorage: every asterism
+                           reads complete (so the sky shows rich multi-star figures that
+                           cycle across reloads), the undercroft hatch is forced OPEN,
+                           and the full room slab is the rep pool. The boot wraps the
+                           earned-state LOOKUPS in memory only — the real store is never
+                           mutated. Dev review / QA / critics only. ?unlock=0 → off.
 
    This module owns ONLY the state machine + timings + URL parsing. It calls into
    the gate's swing/spin (Gate.scenegate) and the colormap crossfade (via a
@@ -84,7 +91,18 @@
       smil: (q.smil != null && q.smil !== '' && !isNaN(+q.smil)) ? Math.max(0, +q.smil) : null,
       // ?flash — dev pin: hold a lightning strike LIT so the storm-night reveal
       // payoff (the whole estate flashing into view) can be screenshotted statically.
-      flash: ('flash' in q) && q.flash !== '0' && q.flash !== 'false'
+      flash: ('flash' in q) && q.flash !== '0' && q.flash !== 'false',
+      // ?unlock | ?unlock=all | ?unlock=1 — dev pin: preview the FULLY-EARNED estate
+      // (every asterism complete → rich multi-star figures; undercroft hatch open; the
+      // full room slab) for THIS page load WITHOUT writing the visitor's real WS store.
+      // Like the other dev pins it only takes effect under a dev/preview boot; the boot
+      // (the-gate.src.html) reads this flag and overrides the earned-state LOOKUPS in
+      // memory. ?unlock=0/false → off. Mirrors the truthy aliases of ?undercroft.
+      unlock: (function () {
+        if (!('unlock' in q)) return false;
+        var v = String(q.unlock).toLowerCase();
+        return !(v === '0' || v === 'false');           // '', '1', 'all', 'true', … → on
+      })()
     };
     return out;
   };
