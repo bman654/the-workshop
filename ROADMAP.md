@@ -74,6 +74,7 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
+- [bug] **The Cloud-Bench / Sky-Tank topbar overlap at ~390px** — at narrow mobile widths the fixed `.topbar`'s chips flex-wrap to ~3 rows and grow past the absolutely-positioned `.scene-title` (top:84px) and `#liveCap` (top:108px) scene overlays, so the topbar chips, the H1 title, the scene caption, and the self-test pill overlap into an illegible jumble at the top of the page. Affects BOTH `weather-you-can-make/` AND its sibling `why-the-sky-is-blue/` (verified identically broken — shared chrome). FIX: make the scene-title/liveCap top offsets responsive to the wrapped topbar height (the `@media (max-width:1040px)` block already nudges `#liveCap{top:96px}` but not far enough and never touches `.scene-title`) — e.g. push both overlays below the wrapped topbar, or give the topbar a solid/blurred backdrop + reserve space so overlays clear it. Fix both rooms together so they stay consistent; verify at 390px the title + chips + caption + pill no longer collide.
 <!-- ✝ FIXED #277: The front door's bottom-left NAV PLATEBAR covers the footer project lin… → index.html (front door) · after 2691595 -->
 <!-- ✝ FIXED #278: The front door's POI hover state machine drops the info card when you m… → index.html · after 37e55e8 -->
 <!-- ✝ FIXED #281: The front door's POI hover dies across a whole region after you view a… → index.html (.card-inner pointer-events scoped t… · after 23a301d -->
@@ -156,7 +157,6 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 <!-- gauge:garden-seeds:start -->
 ### exhibit
-- [exhibit] **Weather You Can Make** — the sky as a thing you TUNE until it makes a cloud (ripens the line-99 spark; the estate's first earth/sky thermodynamics). FORM you operate, never a skew-T graph: a tall air-column with two dials — surface TEMPERATURE and DEWPOINT; a parcel rises, its temperature falling on the dry adiabat and dewpoint falling slower, and at the height they MEET a flat-bottomed cumulus deck snaps into being, the cloud base riding up/down LIVE as you turn the spread. The cloud itself is the readout. CRUX a Node twin proves: the cloud base sits at the Lifted Condensation Level z_LCL = (T−Td)/(Γd−Γdew); pin the linear-lapse model so 125·(T−Td) m is the HONEST exact claim (state the model — don't claim 125 against a fuller Bolton form). NEG-CONTROLS: (a) saturated air T=Td ⇒ z_LCL=0, fog sits on the ground; (b) a parcel cooler than its environment never rises ⇒ no cloud, the dial does nothing. GAP: every atmospheric piece is OPTICS (mirage/halo/sky-blue), the engine-room adiabats are gas cycles — no dewpoint/lapse/cloud-base exists. Ship the LCL core first; buoyant-vs-stable rise is a stretch. (sown #310)
 
 
 
@@ -184,11 +184,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 ### bench
 - [bench] **The Charge Mold** — grow the young Foundry its 2nd bench (fills the ⚡ named-dark hub card): ELECTROSTATICS, the field a CLOUD of fixed charges settles to (∇²φ=−ρ). FORM (touchable, not a graph): a dark cavity you SEAT charges into — click to drop ±point charges (a setSource cell each), the relaxer settles φ, and the room draws nested EQUIPOTENTIAL rings (marching-squares of the live field) + glowing FIELD LINES (test beads ride ±∇φ via gradientAt/descendGradient, + into − sinks); drag a charge, the whole field re-settles live. Reuses the-foundry/casting-floor/core.mjs UNFORKED (setSource→relax→gradientAt; meanValueDefectAt for the loupe). CRUX (anti-circular): a lone point charge's relaxed φ matches the analytic Coulomb oracle to tol away from the singular cell; a dipole matches the analytic dipole field; NEG-control = a NEUTRAL pair (Σq=0) leaves the far field ~0 (no monopole tail). GAP grep-confirmed distinct from the Casting Floor (steady HEAT) and the Lodestone Hall (induction) — no equipotential/point-charge bench exists. (sown #310)
 - [bench] **The Sprouts Court** — grow the Numbers Room a 7th game: its FIRST drawn/topological game. Two spots; draw a non-crossing arc between two live spots and plant a new spot on it, but a spot dies at 3 lines — last to draw wins, with a flint AI perfect on small boards. FORM (played, not graphed): a planar pencil-and-paper game on an SVG canvas — click two live spots, rubber-band a non-crossing arc, auto-plant the mid-spot, recompute lives + legal moves by live-end reachability; turn-based vs minimax for n≤4. grep-confirmed distinct from every game it holds (Nim/Latin-Square/Chomp/Hex/Nimber-Strip/Wythoff=Queen's-Walk); no sprouts/dots-boxes/hackenbush bench exists. CLAIM a self-test proves: every game from n spots lasts ∈[2n,3n−1] moves (each move nets −1 of a 3n life-pool); the perfect-play table (2nd-player wins n=1,2 · 1st-player wins n=3,4,5) — the minimax root value matches; and 0 arc-crossings across thousands of random playouts (segment-intersection check). (sown #303)
-<!-- ✝ BLOOMED #308: The Brazil-Nut Box → brazil-nut-box/ · after a64ade1 -->
 <!-- ✝ BLOOMED #309: The Bomb That Tells On Itself → cavern/interaction-free/ · after c7b5f1c -->
 <!-- ✝ BLOOMED #311: The Plucked Reed → sound-garden/the-plucked-reed/ · after 1ff7fda -->
 <!-- ✝ BLOOMED #312: The Teacup Caustic → teacup-caustic/ · after 81a284f -->
 <!-- ✝ BLOOMED #313: The Toads & Frogs Court → the-toads-and-frogs-court/ · after 22012e6 -->
+<!-- ✝ BLOOMED #314: Weather You Can Make → weather-you-can-make/ · after d515a6e -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
