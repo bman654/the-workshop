@@ -826,11 +826,16 @@ contracts. The following are finalized in Phase D and get only a "beauty pass" n
   moon/sun beauty pass remains future polish.
 - **earned-asterism runtime pick** — ✅ BUILT 2026-06-23 (`asterism.js`): `AST.current()`
   reads the visitor's UNLOCKED Survey (`Sky.state(Sky.visitedFromStore(WS.store()), …)`),
-  filters to COMPLETE asterisms, picks ONE at random per visit (memoized in `_cached`),
-  affine-fits its catalog member stars (1440×900 → local 0..100 slot box, uniform scale +
-  centered). Cold-start / Sky·WS absent → `null` → bare starfield (no invented figure). Dev
-  pins read from `location.search`: `?asterism=<id>`, `?seed=<n>`. The asterism still gets a
-  beauty pass (glow/shape polish).
+  filters to COMPLETE asterisms, then PREFERS FIGURES — picks ONE at random per visit
+  (memoized in `_cached`) from those whose RESOLVED star count is ≥2 (members present in
+  `Sky.CATALOG`, so a real ≥2-star line-figure shows), falling back to the full unlocked set
+  (lone single-room feat-leads like The Surveyor included) ONLY when no ≥2-star figure is
+  unlocked. Affine-fits its catalog member stars (1440×900 → local 0..100 slot box, uniform
+  scale + centered); a lone fallback star pins to local `(50,56)` — low/close to its label,
+  not a stray midpoint dot. Cold-start / Sky·WS absent → `null` → bare starfield (no invented
+  figure). Dev pins read from `location.search`: `?asterism=<id>` honors ANY unlocked id (even
+  single-star), `?seed=<n>` reproduces the random pick. The asterism still gets a beauty pass
+  (glow/shape polish).
 - **per-visit random room-rep** — ✅ BUILT 2026-06-23 (`rooms.js`): `R.pick()` is now a
   PER-VISIT RANDOM pick over every unlocked slab room ∪ the synthetic Cairn fixture (the draw
   `_roll` is frozen at module-eval, the resolved pick memoized so the boot's two `pick()`

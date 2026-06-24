@@ -134,6 +134,15 @@
       });
     }
 
+    // Lone-star polish: a single resolved star would otherwise center at the
+    // vertical midpoint (~y42), leaving a yawning gap above the label band
+    // (label prints ~y92). Drop it lower/closer to its label (x50, y56) so it
+    // reads intentionally as "this star, named below," not a stray dot.
+    if (stars.length === 1) {
+      stars[0].x = 50;
+      stars[0].y = 56;
+    }
+
     // polyline through members in listed order (consecutive index pairs)
     var lines = [];
     for (var L = 0; L + 1 < stars.length; L++) lines.push([L, L + 1]);
@@ -163,7 +172,8 @@
 
     var pins = readPins();
 
-    // dev pin: ?asterism=<id> — honor only if that id is genuinely unlocked
+    // dev pin: ?asterism=<id> — honor ANY unlocked id (explicit dev choice, even a
+    // single-star one); ignore only if that id isn't genuinely unlocked.
     if (pins.asterism) {
       for (var p = 0; p < unlocked.length; p++) {
         if (unlocked[p].id === pins.asterism) return fitFigure(unlocked[p], Sky.CATALOG);
@@ -171,11 +181,27 @@
       // pinned id not unlocked → fall through to the random pick (no fakery)
     }
 
+    // PREFER FIGURES: a real constellation needs >=2 stars to draw a connecting
+    // line. Some Survey asterisms are single-room feat-leads (The Surveyor, etc.)
+    // and resolve to one lone star — a grand label over a stray dot reads as
+    // broken. Build a pool of those whose RESOLVED star count is >=2 (counting
+    // only members present in Sky.CATALOG, since a 2-member asterism missing a
+    // catalog entry resolves to a single star). Pick from figures when any exist;
+    // fall back to the full unlocked set (lone stars included) only when the
+    // visitor has NOTHING but single-room feat-leads — then their one star shows.
+    function resolvedStarCount(a) {
+      var m = a.members || [], n = 0;
+      for (var i = 0; i < m.length; i++) if (Sky.CATALOG[m[i]]) n++;
+      return n;
+    }
+    var figures = unlocked.filter(function (a) { return resolvedStarCount(a) >= 2; });
+    var pool = figures.length ? figures : unlocked;
+
     // pick one at random; ?seed makes it reproducible, else per-visit random
     var r = (pins.seed != null) ? mulberry32(pins.seed)() : Math.random();
-    var idx = Math.floor(r * unlocked.length);
-    if (idx >= unlocked.length) idx = unlocked.length - 1;   // guard r===1
-    return fitFigure(unlocked[idx], Sky.CATALOG);
+    var idx = Math.floor(r * pool.length);
+    if (idx >= pool.length) idx = pool.length - 1;   // guard r===1
+    return fitFigure(pool[idx], Sky.CATALOG);
   }
 
   /* ── current(): the figure to draw, CACHED for the page load ──────────────────
