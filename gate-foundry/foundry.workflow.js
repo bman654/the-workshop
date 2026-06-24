@@ -6,18 +6,20 @@ export const meta = {
   ],
 }
 
-// args = array of asset KEYS to build sequentially (shared-file-safe), e.g. ['manor','observatory'].
-// Robust to args arriving as a real array, a JSON-encoded string, or a comma/space list.
+// args: LEGACY = an array/string/comma-list of LIB asset KEYS (gateRoot defaults to the original
+// worktree). NEW = { gateRoot:'<repo root holding the-gate/>', build:[keys] } — so the harness runs
+// against the MERGED gate (creative-space/the-gate) as well as the original ${GATE}.
 let _raw = args
 if (typeof _raw === 'string') {
   try { _raw = JSON.parse(_raw) } catch (e) { _raw = _raw.split(/[,\s]+/).filter(Boolean) }
 }
-const KEYS = Array.isArray(_raw) ? _raw : (_raw ? [_raw] : [])
+const GATE = (_raw && !Array.isArray(_raw) && _raw.gateRoot) || '/tmp/gate-worktree' // gate source root (holds the-gate/, tools/, ledger/)
+const KEYS = Array.isArray(_raw) ? _raw : (_raw && Array.isArray(_raw.build)) ? _raw.build : []
 
 // ── shared prompt fragments ─────────────────────────────────────────────────
 const LEDGER = `
 LEDGER POLICY (optional, ONCE): If this work felt meaningful you MAY sign the build ledger
-by writing ONE json file to /tmp/gate-worktree/ledger/inbox/<name>-the-gate-<unixts>.json
+by writing ONE json file to ${GATE}/ledger/inbox/<name>-the-gate-<unixts>.json
 with EXACTLY: { "cycle": 720, "role": "<BASE_ROLE> · the-gate", "name": "<a fresh maker name>",
 "koan": "<one sentence>", "ts": "<run: date -u +%Y-%m-%dT%H:%M:%SZ>" }. Build it with jq.
 Sign AT MOST ONCE; do NOT collate; do NOT touch any other ledger file; pick a name not
@@ -376,8 +378,8 @@ asset of The Orrery Estate front gate. This is take #${i} of ${a.K}; give it its
 (a judge compares all takes). The hero brass GATE is already finished in this scene — match its
 craft level and light direction.
 
-READ FIRST (fully): /tmp/gate-worktree/the-gate/SPEC.md (esp. §1 layers, §2 lighting + EXACT
-palette tokens, §3 interface, §4 your asset row, §8 idiom); /tmp/gate-worktree/${a.module} (your
+READ FIRST (fully): ${GATE}/the-gate/SPEC.md (esp. §1 layers, §2 lighting + EXACT
+palette tokens, §3 interface, §4 your asset row, §8 idiom); ${GATE}/${a.module} (your
 STARTING POINT); and /Users/brandon/Obsidian/Brandon/Areas/Personal/Creative-Space/ideas/the-gate/RECON.md
 (brass recipe + tokens). You may skim the finished the-gate/scene-gate.js (READ-ONLY) to match the
 gate's brass craft.
@@ -395,10 +397,10 @@ ${ANIMATION}
 ${ifaceText(a)}
 
 YOUR LOOP (2-3 times until genuinely estate-quality):
-1. First: cp /tmp/gate-worktree/${a.module} ${candidate}   then edit ONLY ${a.drawFn} in ${candidate}.
+1. First: cp ${GATE}/${a.module} ${candidate}   then edit ONLY ${a.drawFn} in ${candidate}.
 2. node --check ${candidate}   (must pass).
 3. Render in full scene context:
-   GATE_SRC=/tmp/gate-worktree gtimeout 150 bash /tmp/gate-foundry/render-take.sh \\
+   GATE_SRC=${GATE} gtimeout 150 bash ${GATE}/gate-foundry/render-take.sh \\
      ${scratch} ${a.module} ${candidate} ${port} ${outdir}${a.extraQS ? ' "' + a.extraQS + '"' : ''}
 4. Read (view) ${outdir}/idle-night.png , ${outdir}/idle-day.png , ${outdir}/open-night.png.${a.extraQS ? ' (these shots already pin ' + a.extraQS + ' so YOUR asset is the one displayed.)' : ''}
    Critique YOUR asset against the idiom + the judge focus: ${a.judgeFocus}
@@ -408,7 +410,7 @@ YOUR LOOP (2-3 times until genuinely estate-quality):
    re-run render-take.sh with the smil pin appended, for ~3 phases across one loop period, into a
    separate out dir, e.g. (period P seconds):
      for T in 0 <P/3> <2P/3>; do
-       GATE_SRC=/tmp/gate-worktree gtimeout 150 bash /tmp/gate-foundry/render-take.sh \\
+       GATE_SRC=${GATE} gtimeout 150 bash ${GATE}/gate-foundry/render-take.sh \\
          ${scratch}-anim ${a.module} ${candidate} ${port} ${outdir}/anim-$T "${a.extraQS ? a.extraQS + '&' : ''}smil=$T"; done
    View the anim-*/idle-night.png frames; confirm the motion reads (quiet, seamless, lit-correct,
    no strobe) and tune it. Report animated:true + the phase shot paths so the JUDGES can see motion.
@@ -442,7 +444,7 @@ function judgePrompt(a, takes, n) {
     `\n    self-notes: ${t.notes}`).join('\n')
   return `You are foundry JUDGE #${n}, an exacting art director for The Orrery Estate. ${takes.length}
 smiths built FINAL art for: "${a.title}". Judge BLIND of identity — only the art. View EVERY shot
-with the Read tool. Read SPEC §8 + §4 at /tmp/gate-worktree/the-gate/SPEC.md.
+with the Read tool. Read SPEC §8 + §4 at ${GATE}/the-gate/SPEC.md.
 
 THE TAKES:
 ${list}
@@ -496,7 +498,7 @@ ${jinfo}
 JOB:
 1. Use the consensus winner as the BASE (break ties by viewing the shots yourself — Read the PNGs).
    Because every take changed ONLY ${a.drawFn} (siblings byte-identical), you can take the winner's
-   whole file as the base: cp <winner candidate> /tmp/gate-worktree/${a.module}.
+   whole file as the base: cp <winner candidate> ${GATE}/${a.module}.
 2. CONSERVATIVELY graft in ONLY the specific improvements the judges called out (and their fixes).
    Edit ONLY ${a.drawFn}; do NOT regress the winner, do NOT touch sibling fns. If a graft is risky,
    render + compare before keeping it.
@@ -504,16 +506,16 @@ JOB:
    motion belongs and a runner-up has it (or the winner lacks it), graft it in — quiet, seamless,
    lit-correct every frame, reduced-motion-safe. If the final animates, ALSO render 2-3 &smil=<t>
    phases (append to the render query) and view them to confirm the motion survived the graft.
-3. node --check /tmp/gate-worktree/${a.module}   (must pass).
+3. node --check ${GATE}/${a.module}   (must pass).
 4. Forge + render the FINAL from the LIVE worktree:
-   cd /tmp/gate-worktree && node tools/forge/forge.mjs the-gate/the-gate.src.html
-   GATE_SRC=/tmp/gate-worktree gtimeout 150 bash /tmp/gate-foundry/render-take.sh \\
+   cd ${GATE} && node tools/forge/forge.mjs the-gate/the-gate.src.html
+   GATE_SRC=${GATE} gtimeout 150 bash ${GATE}/gate-foundry/render-take.sh \\
      ${scratch} ${a.module} - ${port} ${outdir}${a.extraQS ? ' "' + a.extraQS + '"' : ''}
    (writes ${outdir}/{idle-night,idle-day,open-night}.png — the deliverables${a.extraQS ? ', pinned to ' + a.extraQS : ''}.)
 5. View those 3 PNGs; confirm estate-quality + not regressed (and the finished gate/other buildings
    are unharmed).
 6. VERIFY: grep that no sibling fn changed (diff is confined to ${a.drawFn}); then
-   cd /tmp/gate-worktree && node tools/forge/forge.mjs --check --all   (must end "all ... current").
+   cd ${GATE} && node tools/forge/forge.mjs --check --all   (must end "all ... current").
 
 ${ifaceText(a)}
 ${IDIOM}

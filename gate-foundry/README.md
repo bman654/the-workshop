@@ -5,6 +5,14 @@ tooling, not part of the gate product** (which lives entirely under `the-gate/`)
 Archived here so future rep builds are reproducible and the judge/smith prompts
 (which encode the SPEC's standards) survive.
 
+> **Maintaining the gate via the maker loop?** Read **`MAINTAINING.md`** — the manual
+> for the FOUNDRY track (how `[rep]`/`[gate]` seeds get sown, scheduled, forged, and
+> published by `fun-forever`). The workflows here are the higher-quality **power tools**
+> a foundry cycle's solo smith can fall back to. `rep-spec.mjs` is the tested scaffolder
+> that emits a new rep's `rooms.js` + `scene.js` wiring (run `rep-spec.test.mjs`).
+> The workflows take a `gateRoot` arg (default `/tmp/gate-worktree`) so they run against
+> the merged gate too: `Workflow({ scriptPath, args: { gateRoot: '<repo>', build: [...] } })`.
+
 ## What it is
 
 `foundry.workflow.js` — a generic, args-driven Workflow. A `LIB` asset library is

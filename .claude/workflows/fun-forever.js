@@ -1,11 +1,11 @@
 export const meta = {
   name: 'fun-forever',
-  description: 'The Workshop\'s creative-cycle loop. Each cycle a director RUNS the deterministic gauge (node seedbed/gauge.mjs) and obeys its mode × track; explorers diverge; a judge selects/synthesizes; a builder ships+self-verifies; a publisher reviews fresh-eyes, sows/prunes, runs `gauge.mjs record`, commits + pushes. Two tracks (gardens: gardener/planter · grounds: groundskeeper/grounds-worker) + bug-fixer. A Patron\'s WRIT outranks all: the director triages it — clauses that try to control the DEPLOYED estate are released as ordinary unmarked seeds (the collective\'s call), while operational work and off-estate creative content (a vault note, a repo asset) are mandated (the steward implements); a writ cycle is cadence-neutral (decays nothing). Each cycle\'s summary appends to /tmp/funlog.txt until cancelled.',
+  description: 'The Workshop\'s creative-cycle loop. Each cycle a director RUNS the deterministic gauge (node seedbed/gauge.mjs) and obeys its mode × track; explorers diverge; a judge selects/synthesizes; a builder ships+self-verifies; a publisher reviews fresh-eyes, sows/prunes, runs `gauge.mjs record`, commits + pushes. Tracks: gardens (gardener/planter) · grounds (groundskeeper/grounds-worker) · FOUNDRY (front-gate upkeep — a foundry-smith forges a bespoke room-rep / gate asset, or a surveyor restocks the rep backlog) · bug-fixer. A builder facing a too-big swing may PASS THE BATON — hand off to a fresh builder via a bounded inner loop, so makers stop shying from big work. A Patron\'s WRIT outranks all: the director triages it — clauses that try to control the DEPLOYED estate are released as ordinary unmarked seeds (the collective\'s call), while operational work and off-estate creative content (a vault note, a repo asset) are mandated (the steward implements); a writ cycle is cadence-neutral (decays nothing). Each cycle\'s summary appends to /tmp/funlog.txt until cancelled.',
   phases: [
     { title: 'Direct', detail: 'one director runs `node seedbed/gauge.mjs`, salvages any orphaned work, and plans the cycle the gauge names' },
     { title: 'Explore', detail: 'K parallel explorers diverge — rival approaches / FORM concepts / seed-scouting per the track' },
     { title: 'Judge', detail: 'one judge selects / integrates / curates (may reject-all → one refined re-round)' },
-    { title: 'Build', detail: 'one builder ships the piece + self-verifies (BUILD cycles only; does not commit)' },
+    { title: 'Build', detail: 'one builder ships the piece + self-verifies (BUILD cycles only; does not commit). A foundry cycle runs a foundry-smith; a too-big swing may pass the baton to fresh builders' },
     { title: 'Publish', detail: 'one publisher reviews every surface, sows/prunes, runs gauge.mjs record, commits + pushes' },
   ],
 }
@@ -17,6 +17,7 @@ export const meta = {
 // the DURABLE cycle lives in seedbed/state.json, so it counts on past this run.
 const MAX_ITERS = 60
 const MAX_JUDGE_ROUNDS = 2        // the judge may reject the whole batch and demand ONE refined re-round
+const MAX_BATON = 3               // a BUILD may pass the baton to a fresh builder this many times (4 builders total) — bounds the inner loop
 const FUNLOG = '/tmp/funlog.txt'
 const STATE_PATH = '/Users/brandon/dev/general/creative-space/seedbed/state.json' // the writer reads the durable cycle from here
 
@@ -54,7 +55,7 @@ const DIRECTOR_SCHEMA = {
   required: ['mode', 'track', 'currentCycle', 'rationale', 'headline'],
   properties: {
     mode: { enum: ['BUILD', 'PLAN', 'TRIVIAL', 'WRIT'], description: 'COPY from `node seedbed/gauge.mjs` (the "mode" field). TRIVIAL only for a tiny edit you already did + committed inline this turn. WRIT = the gauge found a Patron\'s writ — triage it (see the WRIT fields below).' },
-    track: { enum: ['garden', 'grounds', 'bug', 'writ'], description: 'COPY from the gauge (the "track" field). garden=grow what exists · grounds=new structure · bug=a fix jumps the queue · writ=the Patron\'s request.' },
+    track: { enum: ['garden', 'grounds', 'foundry', 'bug', 'writ'], description: 'COPY from the gauge (the "track" field). garden=grow what exists · grounds=new structure · foundry=front-gate upkeep (BUILD: forge a ripe [rep]/[gate] foundry seed via the foundry-smith; PLAN: survey the estate for the next bespoke reps + sow them) · bug=a fix jumps the queue · writ=the Patron\'s request.' },
     currentCycle: { type: 'integer', description: 'COPY the gauge\'s gauges.currentCycle — the durable cycle # to stamp seeds + the funlog with (NOT the within-run loop index).' },
     rationale: { type: 'string', description: 'Quote the gauge\'s reason line; note any orphaned work git status revealed + how you handled it; and (BUILD) why this piece.' },
     headline: { type: 'string', description: 'One line naming the cycle, e.g. "BUILD/grounds: open The Conservatory — the estate goes wide".' },
@@ -106,10 +107,13 @@ const BUILD_HANDOFF_SCHEMA = {
   type: 'object', additionalProperties: false,
   required: ['built', 'selfTest', 'surfacesToReview'],
   properties: {
-    built: { type: 'string', description: 'what you built + key files + line counts.' },
+    built: { type: 'string', description: 'what you built + key files + line counts. If you are passing the baton, what you got DONE so far.' },
     selfTest: { type: 'string', description: 'the self-test result you verified in-browser (in-page pill + any Node twin + console state).' },
     surfacesToReview: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['label', 'path'], properties: { label: { type: 'string' }, path: { type: 'string', description: 'served path the publisher should open, e.g. "/conservatory/index.html" or "/workbench/index.html"' } } }, description: 'EVERY page you created OR touched — the new piece AND each page where you registered it (Workbench / front-door map / sibling cross-links / a new wing landing).' },
     openConcerns: { type: 'string', description: 'anything you are unsure about or want the publisher to double-check.' },
+    // BATON (a too-big swing handed to a FRESH builder) — leave requestBaton false to finish normally.
+    requestBaton: { type: 'boolean', description: 'TRUE only if this swing is genuinely TOO BIG to finish WELL this turn and a FRESH builder should continue it (a bounded inner loop spawns one with your handoff). Do NOT request a baton for polish or a near-done piece — finish those yourself. The work you did stays in the tree; the fresh builder builds ON it.' },
+    batonHandoff: { type: 'object', additionalProperties: false, required: ['done', 'remaining', 'nextSteps'], properties: { done: { type: 'string', description: 'what is already built + verified (files + line counts) — the fresh builder must NOT redo it.' }, remaining: { type: 'string', description: 'what is left to reach the definition of done.' }, nextSteps: { type: 'string', description: 'the concrete next actions the fresh builder should take FIRST (commands, files to edit, the render/verify recipe).' }, files: { type: 'string', description: 'the key files/paths in play (what is dirty in the tree, where the work lives).' } }, description: 'REQUIRED when requestBaton is true: the handoff context that lets a fresh builder continue WITHOUT re-reading everything from scratch.' },
   },
 }
 
@@ -151,12 +155,43 @@ function judgePrompt(d, explorers, feedback, cyc, round) {
 }
 
 function buildPrompt(d, chosen, cyc) {
+  // A FOUNDRY cycle runs the foundry-smith (its own brief: the gate SPEC, the rep-spec scaffolder,
+  // the render-verify loop). Every other BUILD track runs the generic builder.
+  if (d.track === 'foundry') {
+    return seatPrompt('foundry.md', 'FOUNDRY-SMITH — forging a front-gate asset', {
+      cyc, track: d.track,
+      finalDesign: chosen.finalDesign || d.basicDesign || null,
+      definitionOfDone: d.definitionOfDone || null,
+    })
+  }
   const role = d.track === 'grounds' ? 'GROUNDS-WORKER — opening a big swing' : d.track === 'bug' ? 'BUG-FIXER' : 'PLANTER — growing the gardens'
   return seatPrompt('builder.md', 'BUILDER (' + role + ')', {
     cyc, track: d.track,
     finalDesign: chosen.finalDesign || d.basicDesign || null,
     startFromPrototype: chosen.startFromPrototype || null,
     definitionOfDone: d.definitionOfDone || null,
+  })
+}
+
+// BATON — a fresh builder continuing a too-big swing the previous builder handed off. It reads the
+// SAME role brief (foundry-smith for a foundry cycle, else the generic builder) plus the handoff
+// context, so it picks up WITHOUT re-deriving everything. It may itself pass the baton again (bounded).
+function batonPrompt(d, chosen, prevHandoff, cyc, pass) {
+  const file = d.track === 'foundry' ? 'foundry.md' : 'builder.md'
+  const roleName = d.track === 'foundry' ? 'FOUNDRY-SMITH (baton pass ' + pass + ')'
+    : d.track === 'grounds' ? 'GROUNDS-WORKER (baton pass ' + pass + ')'
+    : d.track === 'bug' ? 'BUG-FIXER (baton pass ' + pass + ')' : 'PLANTER (baton pass ' + pass + ')'
+  return seatPrompt(file, 'BUILDER — ' + roleName, {
+    cyc, track: d.track, batonPass: pass,
+    finalDesign: chosen.finalDesign || d.basicDesign || null,
+    definitionOfDone: d.definitionOfDone || null,
+    baton: {
+      note: 'You are a FRESH builder picking up a big swing a previous builder started and handed off. Their work is ALREADY in the tree — build ON it, do NOT restart. Do the nextSteps FIRST, then carry on toward the definition of done. If it is STILL too big to finish well this turn, you MAY pass the baton again (set requestBaton + an updated batonHandoff); otherwise FINISH it and leave it for the publisher (requestBaton false).',
+      done: prevHandoff.batonHandoff?.done || prevHandoff.built || null,
+      remaining: prevHandoff.batonHandoff?.remaining || null,
+      nextSteps: prevHandoff.batonHandoff?.nextSteps || null,
+      files: prevHandoff.batonHandoff?.files || null,
+    },
   })
 }
 
@@ -273,6 +308,16 @@ while (i < MAX_ITERS) {
   if (d.mode === 'BUILD') {
     phase('Build')
     handoff = await agent(buildPrompt(d, chosen, cyc), { label: 'build #' + cyc, phase: 'Build', schema: BUILD_HANDOFF_SCHEMA })
+    // BATON — a builder facing a too-big swing hands off to a FRESH builder; a bounded inner loop runs
+    // fresh builders (each with the prior handoff) until one finishes or the cap is hit. Makers stop
+    // shying from big swings: take the swing, hand off the tail.
+    let batonPass = 0
+    while (handoff && handoff.requestBaton && batonPass < MAX_BATON) {
+      batonPass++
+      log('cycle #' + cyc + ': 🪄 baton pass ' + batonPass + '/' + MAX_BATON + ' — a fresh builder picks up the swing')
+      handoff = await agent(batonPrompt(d, chosen, handoff, cyc, batonPass), { label: 'build #' + cyc + '.baton' + batonPass, phase: 'Build', schema: BUILD_HANDOFF_SCHEMA })
+    }
+    if (handoff && handoff.requestBaton) log('cycle #' + cyc + ': baton cap (' + MAX_BATON + ') reached — the publisher reviews the current state as-is')
   } else if (d.mode === 'WRIT' && !writRelease) {
     phase('Build') // mandate | mixed → do the work; ambiguous → the steward sends the escalation notify
     handoff = await agent(stewardPrompt(d, chosen, cyc), { label: 'steward #' + cyc, phase: 'Build', schema: STEWARD_HANDOFF_SCHEMA })

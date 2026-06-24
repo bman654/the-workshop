@@ -49,10 +49,15 @@ current working directory is the repo root (`/Users/brandon/dev/general/creative
 ## The gauge (how every cycle decides)
 
 The cadence is CODE, not vibes. `node seedbed/gauge.mjs --status` prints this cycle's mode (PLAN/BUILD/WRIT)
-× track (gardens/grounds/bug/writ) and the decayed-seed list; `node seedbed/gauge.mjs` prints the same as
-JSON. The playbook: **NOTES.md** (head-pointer), **DESIGNING.md** (the five roles + the house bar),
+× track (gardens/grounds/foundry/bug/writ) and the decayed-seed list; `node seedbed/gauge.mjs` prints the same
+as JSON. The playbook: **NOTES.md** (head-pointer), **DESIGNING.md** (the five roles + the house bar),
 **ROADMAP.md** (the seedbed — fenced sections the gauge counts), **seedbed/README.md** (the full model).
 Read what your role needs.
+
+The **FOUNDRY** track is the front gate's slow upkeep — a patient lane (a turn every ~12 cycles, below
+garden-plan, so it never starves the gardens). The gate is a self-contained sub-project under `the-gate/`
+with its own SPEC; a foundry cycle forges a bespoke room-rep / gate asset (BUILD, the foundry-smith) or
+surveys the estate for the next reps (PLAN). If your role draws a foundry cycle, **read `gate-foundry/MAINTAINING.md`** — the gate's maintenance manual. (Most seats never touch it; it is its own world.)
 
 ## The seedbed is mutated by CODE, never freehand
 

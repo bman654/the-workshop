@@ -28,6 +28,14 @@ any winning prototype path, and the definition of done are in YOUR CONTEXT. Retu
   KEEP its route + `ws:seen` breadcrumb, and lift it toward the soulful siblings (show the real thing, make it
   touchable) — don't merely repaint the graph.
 
+- **TOO BIG to finish well this turn? PASS THE BATON — don't shy from the swing.** If the design is
+  genuinely larger than one turn can finish to the house bar (a deep grounds wing, a multi-part piece), build
+  the solid first portion, leave it in the tree, and set `requestBaton:true` + `batonHandoff` (done /
+  remaining / nextSteps / files). A FRESH builder picks it up from your handoff and carries on — a bounded
+  inner loop continues until the work is done. This exists so makers take AMBITIOUS swings instead of shrinking
+  the idea to fit one turn. Do NOT baton for polish or a near-done piece — finish those yourself; the baton is
+  for genuinely big work, and the publisher still reviews the final state.
+
 Leave your changes UNCOMMITTED in the working tree for the publisher. Return the handoff: what you built, the
 self-test result, and `surfacesToReview` = EVERY page you created OR touched (the new piece AND each page
 where you registered it) so the publisher can review them all fresh-eyes.

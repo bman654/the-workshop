@@ -41,6 +41,10 @@ const FIXTURE = `# ROADMAP
 <!-- ✝ BLOOMED #41: Alchemy Lab → alchemy/ -->
 <!-- gauge:grounds-seeds:end -->
 
+<!-- gauge:foundry-seeds:start -->
+- [rep] **A live rep** — a bespoke front-gate rep. (sown #50 · contest #2)
+<!-- gauge:foundry-seeds:end -->
+
 <!-- gauge:garden-seeds:start -->
 ### exhibit
 - [exhibit] **The Mine** — a Lode Runner clone. (sown #109)
@@ -99,6 +103,15 @@ eq(keepFor('garden-seeds'), 5, 'keepFor defaults to DEFAULT_KEEP when none asked
   eq(parseBed(text).writs, before.writs - 1, 'the live writ count drops by exactly one')
   ok(tombs(text, 'writ').length === 0, 'the writ fence holds no ✝ after serving')
   ok(!text.includes('SERVED'), 'no SERVED marker leaks anywhere in the file')
+}
+
+// ── THE FOUNDRY FENCE: a bloomed rep prunes + tombstones like any other seed ──
+{
+  const before = parseBed(FIXTURE)
+  const { text, fence, tombstone } = removeByTitle(FIXTURE, { title: 'A live rep', reason: 'BLOOMED', cycle: 113, hint: 'the-gate/', after: 'fff6666' })
+  eq(fence, 'foundry-seeds', 'fenceOf recognizes the foundry fence (publisher can prune a bloomed rep)')
+  eq(parseBed(text).foundryFuel, before.foundryFuel - 1, 'the live foundry-seed count drops by exactly one')
+  ok(tombs(text, 'foundry-seeds').some(l => l.includes('A live rep') && l.includes('BLOOMED')), 'a BLOOMED tombstone now sits in the foundry ring')
 }
 
 // ── --keep cannot breach the writ ceiling (FENCE_KEEP.writ=0 is a hard cap) ──

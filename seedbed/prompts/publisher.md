@@ -117,6 +117,13 @@ worklog/NOTES entry **"writ · served before #N"** so the number stays free for 
 
 ### BUILD (a builder shipped a piece, left UNCOMMITTED)
 
+> **FOUNDRY cycle (track=foundry)?** The piece is a front-GATE asset, not an estate room. The surface to
+> review is the gate render: serve the repo root and open `/the-gate/the-gate.html?dev&room=<id>` across
+> idle-night / idle-day / open-night (LOOK — the gate's honesty chip is render-blind to art). Verify
+> `node tools/forge/forge.mjs --check --all` ends "all … current" and the chip stays green. The bloom is the
+> `[rep]`/`[gate]` seed: `bed rm "<title>" --reason BLOOMED --fence foundry-seeds --at "the-gate/..."`. Then
+> `record --mode BUILD --track foundry`. Everything else below applies as written. See `gate-foundry/MAINTAINING.md`.
+
 1. **FRESH-EYES REVIEW** (the point of this role): serve the site (an uncommon port you tear down) and open
    EVERY surface in the handoff's `surfacesToReview` with agent-browser in a uniquely-named session — the new
    piece AND every page where it was registered (Workbench index, the front-door map, the wing landing +

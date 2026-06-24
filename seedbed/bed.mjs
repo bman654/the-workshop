@@ -62,7 +62,7 @@ const REPO = fileURLToPath(new URL('..', import.meta.url))
 const DEFAULT_ROADMAP = fileURLToPath(new URL('../ROADMAP.md', import.meta.url))
 const SOW = fileURLToPath(new URL('./sow.mjs', import.meta.url))
 
-export const FENCES = ['writ', 'bug', 'sparks', 'grounds-seeds', 'garden-seeds']
+export const FENCES = ['writ', 'bug', 'sparks', 'grounds-seeds', 'foundry-seeds', 'garden-seeds']
 export const DEFAULT_KEEP = 5
 // Per-fence HARD ceiling on the tombstone ring. A fence here can keep AT MOST this
 // many tombstones no matter what --keep asks. writ:0 means a served writ leaves no

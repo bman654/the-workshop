@@ -70,6 +70,15 @@ the loop gave you) — be concrete: a fresh explorer/builder will act only on wh
    registers a NEW front-door footprint. Scale the house bar up; one cycle can open a wing's landing + first bench.
    **If BUILD/bug — be the BUG-FIXER:** the open `[bug]` is the target; `basicDesign` = what is broken + the
    fix; `exploreMode:"none"` unless the fix is genuinely unclear. Fix the ROOT CAUSE.
+   **If BUILD/foundry — be the director of a FOUNDRY-SMITH (front-gate upkeep):** pick the ripe foundry seed
+   from the `gauge:foundry-seeds` fence (a `[rep]` = a bespoke front-gate room-rep · a `[gate]` = a gate asset
+   rework/polish). Put the seed's FULL intent into `basicDesign` so the smith can act — for a `[rep]`, relay the
+   rep SPEC verbatim: `{id, room, repConcept, aspect (vertical|horizontal|mound), accent, repColors?}` (the smith
+   feeds it to `gate-foundry/rep-spec.mjs`); for a `[gate]`, name the asset + the re-soul direction. Set
+   `exploreMode:"none"` (the smith iterates + renders itself) unless a rep genuinely wants rival FORM concepts
+   (then `compete`, briefs = divergent looks, and the smith builds the winner). `definitionOfDone` = the rep
+   renders estate-quality across idle-night/day/open-night at `?room=<id>`, forge --check clean, the honesty chip
+   green. The gate is a self-contained sub-project (`the-gate/`, its own SPEC) — see `gate-foundry/MAINTAINING.md`.
    **When a `[bug]` is TOO BIG for one cycle — the decomposition path (use it, don't improvise):**
    - Do NOT silently convert it to bare seeds, and do NOT decompose it into child `[bug]`s. A `[bug]` is an
      unconditional queue-jumper that NEVER decays — so N child-bugs become N permanent queue-jumpers with no
@@ -98,6 +107,17 @@ the loop gave you) — be concrete: a fresh explorer/builder will act only on wh
    listed, keep the ⚡ spark supply stocked. Set briefs for scouts to TAILOR sparks → grounds seeds (a short
    paragraph, still a provocation) shaped to the current grounds, and/or propose fresh sparks. You MAY coin a
    new structure-kind the estate hasn't named.
+   **If PLAN/foundry — be the FOUNDRY-SURVEYOR (restock the rep backlog):** housekeeping = prune any decayed
+   foundry seeds the gauge listed. The gate's grounds feature a rotating room-rep; most estate rooms still fall
+   back to the glyph plinth. Survey the LIVE estate for the rooms that would make the most striking bespoke reps
+   and are NOT already built (the built set is `the-gate/rooms.js` BESPOKE; the room pool is the front-door
+   PLACES / the gate's GATE-ROOMS slab — `gate-foundry/room-pool.json` is a stale snapshot, prefer the live list).
+   Set `ideationScope` + K + briefs for scouts to nominate `[rep]` seeds by DISTINCT lenses (most iconic
+   front-elevation silhouette · most thematically central · best aspect-shape coverage vertical/horizontal/mound ·
+   most intriguing to a newcomer) — each a `candidateSeeds` entry of type `rep` carrying `{id, room, repConcept,
+   aspect, accent}`. The judge curates a slate that COVERS the three aspect shapes; the publisher sows them toward
+   foundry fuel ~4. (The full blind survey is `gate-foundry/survey.workflow.js`, a power tool — but a scout pass
+   covers it.) See `gate-foundry/MAINTAINING.md`.
 5) (Optional, any cycle) if YOU notice a gap too big for an exhibit, you MAY note a spark for ROADMAP's
    ⚡ Sparks — mention it in `rationale` so the publisher files it. Invited, never required.
 6) TRIVIAL only if the task was a one-line edit you ALREADY did + committed inline this turn (fill `rationale`).
