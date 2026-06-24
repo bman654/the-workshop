@@ -133,12 +133,11 @@ const BUILD_HANDOFF_SCHEMA = {
     batonHandoff: { type: 'object', additionalProperties: false, required: ['done', 'remaining', 'nextSteps'], properties: { done: { type: 'string', description: 'what is already built + verified (files + line counts) — the fresh builder must NOT redo it.' }, remaining: { type: 'string', description: 'what is left to reach the definition of done.' }, nextSteps: { type: 'string', description: 'the concrete next actions the fresh builder should take FIRST (commands, files to edit, the render/verify recipe).' }, files: { type: 'string', description: 'the key files/paths in play (what is dirty in the tree, where the work lives).' } }, description: 'REQUIRED when requestBaton is true: the handoff context that lets a fresh builder continue WITHOUT re-reading everything from scratch.' },
     // ART FOUNDRY (a build that needs custom in-house art it cannot hand-make well in one turn) — leave unset to finish normally.
     foundryArt: {
-      type: 'object', additionalProperties: false, required: ['medium', 'assets'],
-      description: 'IN-HOUSE ART REQUEST: set this when your piece needs custom art (exhibit visuals or ambience sounds) better forged by the K-takes art foundry than hand-made in one turn. Build the system with PLACEHOLDER art FIRST, then list the assets here: the ART FOUNDRY forges each (K takes → judges → synth, installing the winner), and a FRESH builder wires the real art in + finishes. Leave unset/empty to finish normally. NEVER forage art from the web — the foundry IS how the estate makes art in-house. (Not for gate reps — those are the BUILD/foundry track.)',
+      type: 'object', additionalProperties: false, required: ['assets'],
+      description: 'IN-HOUSE ART REQUEST: set this when your piece needs custom art (exhibit visuals AND/OR ambience sounds) better forged by the K-takes art foundry than hand-made in one turn. Build the system with PLACEHOLDER art FIRST, then list the assets here — MIX media freely in one request (e.g. fish + caustics + ambience). The ART FOUNDRY forges each (K takes → judges → synth, installing the winner; assets are grouped by medium internally), then a FRESH builder wires the real art in + finishes. Leave unset/empty to finish normally. NEVER forage art from the web — the foundry IS how the estate makes art in-house. (Not for gate reps — those are the BUILD/foundry track.)',
       properties: {
-        medium: { enum: ['visual-exhibit', 'sound'], description: 'one medium per request. visual-exhibit = a visual asset rendered in ITS OWN exhibit via your preview harness; sound = a WebAudio asset rendered offline to a WAV + analyzed.' },
-        previewHarness: { type: 'string', description: 'visual-exhibit ONLY: absolute path to a render harness YOU wrote, callable as `bash <harness> <candidate> <outdir> <port>` — it swaps the candidate art into the exhibit slot, serves it, and screenshots <outdir>/preview.png. Omit for sound (the foundry has a universal WAV bench).' },
-        assets: { type: 'array', description: 'the art assets to forge (≤15; the engine clamps + logs drops). Keep it to what the piece genuinely needs.', items: { type: 'object', additionalProperties: false, required: ['key', 'title', 'brief', 'judgeFocus', 'wireNote'], properties: {
+        assets: { type: 'array', description: 'the art assets to forge (≤15 total across all media; the engine clamps + logs drops). Keep it to what the piece genuinely needs.', items: { type: 'object', additionalProperties: false, required: ['medium', 'key', 'title', 'brief', 'judgeFocus', 'wireNote'], properties: {
+          medium: { enum: ['visual-exhibit', 'sound'], description: 'THIS asset\'s medium (mix freely across the batch). visual-exhibit = a visual asset rendered in ITS OWN exhibit via your previewHarness; sound = a WebAudio asset rendered offline to a WAV + analyzed.' },
           key: { type: 'string', description: 'a unique slug — becomes the candidate filename + the engine asset key.' },
           title: { type: 'string', description: 'a one-line title for the asset.' },
           brief: { type: 'string', description: 'the art brief the smiths build from — what this asset IS, the intended style (match the EXHIBIT, not the gate idiom), and constraints.' },
@@ -147,7 +146,8 @@ const BUILD_HANDOFF_SCHEMA = {
           judgeK: { type: 'integer', minimum: 1, maximum: 3, description: 'how many judges rank the takes (default 2).' },
           module: { type: 'string', description: 'the live file the foundry synth installs the winner into (where the exhibit/room loads this asset from).' },
           wireNote: { type: 'string', description: 'how this asset wires into the system: where the placeholder is and what the wiring builder must connect once the real art exists.' },
-          durSec: { type: 'number', description: 'sound ONLY: the render / loop length in seconds.' },
+          previewHarness: { type: 'string', description: 'visual-exhibit assets ONLY: absolute path to a render harness YOU wrote, callable as `bash <harness> <candidate> <outdir> <port>` — it swaps the candidate art into the exhibit slot, serves it, and screenshots <outdir>/preview.png. One harness may serve several visual assets (repeat the path). Omit for sound (the foundry has a universal WAV bench).' },
+          durSec: { type: 'number', description: 'sound assets ONLY: the render / loop length in seconds.' },
         } } },
       },
     },
@@ -321,28 +321,30 @@ async function settleBaton(d, chosen, handoff, cyc, tag) {
 // art into the placeholders the previous builder left, then finishes + self-tests. The foundry synth has
 // ALREADY installed each winning asset at its live location; this builder must NOT re-forge art, and the
 // art round is closed (it cannot request more). It MAY pass the baton if the wiring itself is large.
-function wiringPrompt(d, chosen, prevHandoff, forge, cyc) {
+function wiringPrompt(d, chosen, prevHandoff, forges, cyc) {
   const fa = prevHandoff.foundryArt || {}
-  const built = ((forge && forge.results) || []).filter(Boolean).map(r => ({
+  const forgeList = (Array.isArray(forges) ? forges : [forges]).filter(Boolean)
+  // Merge the per-medium forge results into one flat installed-asset list for the wiring builder.
+  const built = forgeList.flatMap(forge => ((forge.results) || []).filter(Boolean).map(r => ({
     asset: r.asset,
+    medium: forge.medium || null,
     installedArtifacts: (r.final && r.final.artifacts) || [],
     forgeClean: r.final ? r.final.forgeClean : null,
-    summary: (r.final && r.final.summary) || ('(engine status: ' + ((forge && forge.status) || '?') + ')'),
-  }))
+    summary: (r.final && r.final.summary) || ('(engine status: ' + (forge.status || '?') + ')'),
+  })))
   return seatPrompt('builder.md', 'BUILDER — WIRING the forged in-house art into the system', {
     cyc, track: d.track, wiring: true,
     finalDesign: chosen.finalDesign || d.basicDesign || null,
     definitionOfDone: d.definitionOfDone || null,
     artForged: {
-      medium: (forge && forge.medium) || fa.medium || null,
-      status: (forge && forge.status) || null,
+      media: forgeList.map(f => f.medium).filter(Boolean),
       built,
       note: 'The ART FOUNDRY just forged the in-house art a previous builder requested; each asset above is ALREADY INSTALLED in the tree at its live location by the foundry synth. YOUR JOB: wire the real art into the placeholders the previous builder left, REMOVE the placeholders, finish the system, and self-test in-browser on a SERVED origin. Do NOT re-forge or re-make the art. The art round is CLOSED — you cannot request more (any foundryArt you return is ignored). You MAY pass the baton if the WIRING itself is too big to finish well this turn.',
     },
     fromPriorBuilder: {
       built: prevHandoff.built || null,
       selfTest: prevHandoff.selfTest || null,
-      placeholdersToWire: (fa.assets || []).map(a => ({ key: a.key, module: a.module || null, wireNote: a.wireNote || null })),
+      placeholdersToWire: (fa.assets || []).map(a => ({ key: a.key, medium: a.medium || null, module: a.module || null, wireNote: a.wireNote || null })),
       openConcerns: prevHandoff.openConcerns || null,
     },
   })
@@ -490,12 +492,20 @@ while (i < MAX_ITERS) {
     //    in + finishes. One art round per build; the wiring builder cannot request more art.
     if (handoff && handoff.foundryArt && Array.isArray(handoff.foundryArt.assets) && handoff.foundryArt.assets.length) {
       const fa = handoff.foundryArt
-      const medium = fa.medium || 'visual-exhibit'
-      log('cycle #' + cyc + ': 🎨 builder requested ' + fa.assets.length + ' in-house art asset(s) (' + medium + ') — invoking the ART FOUNDRY engine')
-      const forge = await workflow({ scriptPath: REPO_ROOT + '/art-foundry/engine.workflow.js' },
-        { medium, contextRoot: REPO_ROOT, assets: fa.assets, previewHarness: fa.previewHarness || null })
-      log('cycle #' + cyc + ': art-foundry → ' + ((forge && forge.status) || '?') + ' (built ' + (((forge && forge.built) || []).join(', ') || 'nothing') + ')')
-      handoff = await agent(wiringPrompt(d, chosen, handoff, forge, cyc), { label: 'build #' + cyc + '.wire', phase: 'Build', schema: BUILD_HANDOFF_SCHEMA })
+      // Group the (possibly mixed-media) batch by medium — the engine builds a single-medium batch per call.
+      // fun-forever is the SOLE workflow() caller, so it invokes the engine once per medium group, in turn.
+      const byMedium = {}
+      for (const a of fa.assets) { const m = a.medium || 'visual-exhibit'; (byMedium[m] = byMedium[m] || []).push(a) }
+      const media = Object.keys(byMedium)
+      log('cycle #' + cyc + ': 🎨 builder requested ' + fa.assets.length + ' in-house art asset(s) across ' + media.length + ' medium(s) [' + media.join(', ') + '] — invoking the ART FOUNDRY engine')
+      const forges = []
+      for (const m of media) {
+        const forge = await workflow({ scriptPath: REPO_ROOT + '/art-foundry/engine.workflow.js' },
+          { medium: m, contextRoot: REPO_ROOT, assets: byMedium[m] })
+        log('cycle #' + cyc + ': art-foundry [' + m + '] → ' + ((forge && forge.status) || '?') + ' (built ' + (((forge && forge.built) || []).join(', ') || 'nothing') + ')')
+        forges.push(forge)
+      }
+      handoff = await agent(wiringPrompt(d, chosen, handoff, forges, cyc), { label: 'build #' + cyc + '.wire', phase: 'Build', schema: BUILD_HANDOFF_SCHEMA })
       if (handoff) handoff.foundryArt = null // the art round is closed — ignore any further art request from the wiring builder
       handoff = await settleBaton(d, chosen, handoff, cyc, 'wire')
     }

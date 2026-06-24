@@ -56,21 +56,25 @@ sound), don't shrink the idea and don't hand-make a weak version — and don't f
 
 1. **Build the system with PLACEHOLDER art first** (a flat shape, a stub `Gate.sfx` builder, a TODO slot)
    so the structure + wiring are real and testable.
-2. **Return `foundryArt`** = `{ medium, previewHarness?, assets:[…] }`. The loop forges every asset, then a
-   FRESH builder (you hand off to it) wires the real art into your placeholders. Per asset give a unique
-   `key`, `title`, `brief` (what it IS + the intended style — match THE EXHIBIT, not the gate brass idiom),
-   `judgeFocus` (the bar), `K` (1 simple … 3 complex), optional `judgeK`, `module` (the live file the synth
-   installs the winner into), and `wireNote` (where the placeholder is + what the wiring builder connects).
-   - **`medium: 'visual-exhibit'`** — a visual asset rendered in ITS OWN exhibit. You MUST supply a
+2. **Return `foundryArt`** = `{ assets:[…] }`. The loop forges every asset (grouping by medium under the
+   hood), then a FRESH builder (you hand off to it) wires the real art into your placeholders. **Each asset
+   carries its OWN `medium`, so you can MIX visuals and sounds in one request** (e.g. an aquarium's fish +
+   caustic floor + water ambience together). Per asset give `medium`, a unique `key`, `title`, `brief` (what
+   it IS + the intended style — match THE EXHIBIT, not the gate brass idiom), `judgeFocus` (the bar), `K`
+   (1 simple … 3 complex), optional `judgeK`, `module` (the live file the synth installs the winner into),
+   and `wireNote` (where the placeholder is + what the wiring builder connects). Then, by medium:
+   - **`medium: 'visual-exhibit'`** — a visual asset rendered in ITS OWN exhibit. The asset MUST carry a
      `previewHarness`: an absolute path to a small script YOU write during the placeholder build, callable as
      **`bash <harness> <candidate> <outdir> <port>`** — it swaps the candidate art file into your exhibit
      slot, serves the exhibit, and screenshots **`<outdir>/preview.png`**. That is how the foundry renders +
      judges each take in real context. (The gate-rep track uses render-take.sh; an exhibit uses YOUR harness.)
+     One harness can serve several visual assets — just repeat the path on each.
    - **`medium: 'sound'`** — a WebAudio asset; no harness needed (the foundry has a universal WAV bench). Set
      `durSec` (render/loop length). Each candidate registers a builder
      `function ({ ctx, dest, dur, when, seed }) { … }` onto `window.Gate.sfx` (see the gate's `audio-*.js`).
-3. Keep `foundryArt.assets` to what the piece genuinely needs (≤15; the engine clamps). Reserve the foundry
-   for art that warrants it — a single simple shape you can draw well yourself, just draw; don't over-reach.
+3. Keep `foundryArt.assets` to what the piece genuinely needs (≤15 total across all media; the engine clamps).
+   Reserve the foundry for art that warrants it — a single simple shape you can draw well yourself, just draw;
+   don't over-reach.
 
 This is NOT for gate reps (those are the dedicated BUILD/foundry track). `foundryArt` composes with the
 baton: build big, hand off the tail, request the art — the loop runs each in turn.

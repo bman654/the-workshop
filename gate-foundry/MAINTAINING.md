@@ -150,10 +150,11 @@ higher quality than a solo smith. The engine is the in-loop form; the rest are b
              args: { medium: 'visual-gate', contextRoot: '<repo>', assets: [ /* engine asset specs */ ] } })
   ```
 - **The exhibit-art flow (Adjustment 6).** Any garden/grounds builder whose piece needs custom in-house art
-  builds the system with PLACEHOLDER art and returns `foundryArt:{medium, previewHarness?, assets:[…]}`.
-  fun-forever (the sole `workflow()` caller) forges the batch through the engine, then spawns a FRESH WIRING
-  builder (`context.wiring`) that connects the now-installed art + finishes. One art round per build; it
-  composes with the baton. `visual-exhibit` assets need a builder-written preview harness
+  builds the system with PLACEHOLDER art and returns `foundryArt:{assets:[…]}`, where each asset carries its
+  OWN `medium` (so one build can MIX visuals + sounds — e.g. fish + caustics + ambience). fun-forever (the
+  sole `workflow()` caller) GROUPS the batch by medium and invokes the engine once per group, then spawns a
+  FRESH WIRING builder (`context.wiring`) that connects the now-installed art + finishes. One art round per
+  build; it composes with the baton. `visual-exhibit` assets carry a builder-written preview harness
   (`bash <harness> <candidate> <outdir> <port>` → `<outdir>/preview.png`); `sound` assets need none.
   **In-house ethos:** all art — audio AND gfx — is forged in-house; never forage from the web.
 - **The sound bench** — OfflineAudioContext is browser-only, so `sound` renders through the BROWSER, not
