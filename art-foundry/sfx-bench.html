@@ -1,0 +1,155 @@
+<meta charset="utf-8">
+<title>Art Foundry — SFX Render Bench (dev only)</title>
+<style>
+  body { font: 13px/1.5 ui-monospace, Menlo, monospace; margin: 1.5rem; max-width: 64rem; }
+  h1 { font-size: 15px; }
+  #wavout { white-space: pre-wrap; word-break: break-all; max-height: 18rem; overflow: auto;
+            background: #111; color: #6f6; padding: .5rem; border-radius: 4px; }
+  .hint { color: #888; }
+  code { background: #eee; padding: 0 .25rem; border-radius: 3px; }
+</style>
+
+<h1>Art Foundry — SFX Render Bench <span class="hint">— dev harness, not forged, not shipped</span></h1>
+<p class="hint">
+  A GENERALIZED lift of <code>the-gate/audio-bench.html</code>: instead of loading
+  <code>audio-&lt;key&gt;.js</code> by key, it loads ONE <code>candidate.js</code> (the WebAudio module
+  under test, copied in beside this page by <code>render-wav.sh</code>) which registers a builder onto
+  <code>window.Gate.sfx</code>. Call <code>renderCandidate(durSec)</code> from the console or via
+  <code>agent-browser eval</code>: it renders the candidate through an OfflineAudioContext at 22050 Hz,
+  encodes a 16-bit mono PCM WAV, drops the base64 into <code>#wavout</code>, sets
+  <code>window.__wavB64</code>, and RESOLVES the base64 string (agent-browser eval awaits the promise).
+</p>
+<pre id="wavout"></pre>
+
+<!-- The candidate WebAudio module under test. render-wav.sh copies the take's file to candidate.js here.
+     It must register a builder function onto Gate.sfx (its real final key, or the reserved __candidate). -->
+<script src="candidate.js"></script>
+
+<script>
+'use strict';
+
+// ── Global namespace the builders assign onto ──────────────────────────────
+window.Gate = window.Gate || {};
+window.Gate.sfx = window.Gate.sfx || {};
+
+// ── Built-in proof sound: a clean 440 Hz (A4) sine, dual-use builder ───────
+// Lets the bench self-prove (renderCandidate('__sine')) and is the one key
+// pickCandidateKey() always ignores when auto-detecting the candidate.
+window.Gate.sfx.__sine = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
+  var t0 = ctx.currentTime + when;
+  var osc = ctx.createOscillator();
+  var g = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(440, t0);
+  var peak = 0.6;
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(peak, t0 + 0.01);
+  g.gain.setValueAtTime(peak, t0 + dur - 0.02);
+  g.gain.linearRampToValueAtTime(0, t0 + dur);
+  osc.connect(g).connect(dest);
+  osc.start(t0);
+  osc.stop(t0 + dur);
+  return { stop: function (at) { try { osc.stop(at != null ? at : ctx.currentTime); } catch (e) {} } };
+};
+
+// ── encodeWav(audioBuffer) -> base64 string of a 16-bit PCM mono WAV ───────
+// Lifted VERBATIM from the proven the-gate/audio-bench.html. Self-contained, no
+// libraries. Downmixes any channel count to mono by averaging.
+function encodeWav(audioBuffer) {
+  var nCh = audioBuffer.numberOfChannels;
+  var len = audioBuffer.length;            // frames
+  var sampleRate = audioBuffer.sampleRate;
+
+  var mono = new Float32Array(len);
+  if (nCh === 1) {
+    mono.set(audioBuffer.getChannelData(0));
+  } else {
+    for (var c = 0; c < nCh; c++) {
+      var data = audioBuffer.getChannelData(c);
+      for (var i = 0; i < len; i++) { mono[i] += data[i]; }
+    }
+    var inv = 1 / nCh;
+    for (var j = 0; j < len; j++) { mono[j] *= inv; }
+  }
+
+  var bytesPerSample = 2;
+  var dataBytes = len * bytesPerSample;
+  var buffer = new ArrayBuffer(44 + dataBytes);
+  var view = new DataView(buffer);
+
+  function writeStr(off, str) {
+    for (var k = 0; k < str.length; k++) { view.setUint8(off + k, str.charCodeAt(k)); }
+  }
+
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + dataBytes, true);   // ChunkSize
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);              // Subchunk1Size (PCM)
+  view.setUint16(20, 1, true);               // AudioFormat = PCM
+  view.setUint16(22, 1, true);               // NumChannels = 1 (mono)
+  view.setUint32(24, sampleRate, true);      // SampleRate
+  view.setUint32(28, sampleRate * bytesPerSample, true); // ByteRate (mono)
+  view.setUint16(32, bytesPerSample, true);  // BlockAlign (mono, 16-bit)
+  view.setUint16(34, 16, true);              // BitsPerSample
+  writeStr(36, 'data');
+  view.setUint32(40, dataBytes, true);       // Subchunk2Size
+
+  var off = 44;
+  for (var n = 0; n < len; n++) {
+    var s = mono[n];
+    if (s > 1) s = 1; else if (s < -1) s = -1;
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    off += bytesPerSample;
+  }
+
+  var bytes = new Uint8Array(buffer);
+  var binary = '';
+  var CHUNK = 0x8000;
+  for (var p = 0; p < bytes.length; p += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(p, p + CHUNK));
+  }
+  return btoa(binary);
+}
+
+// ── pickCandidateKey — find the one builder the candidate registered ────────
+// Convention: candidate.js assigns its builder onto Gate.sfx — either the reserved
+// key '__candidate' OR its real final key. The bench ignores the built-in '__sine'
+// and resolves the single remaining function. (An explicit key wins if passed.)
+function pickCandidateKey(explicit) {
+  var sfx = window.Gate.sfx || {};
+  if (explicit && typeof sfx[explicit] === 'function') return explicit;
+  if (typeof sfx.__candidate === 'function') return '__candidate';
+  var keys = Object.keys(sfx).filter(function (k) {
+    return k !== '__sine' && k !== '__candidate' && typeof sfx[k] === 'function';
+  });
+  if (keys.length === 1) return keys[0];
+  if (keys.length > 1) {
+    throw new Error('ambiguous candidate: candidate.js registered multiple Gate.sfx builders (' +
+      keys.join(', ') + ') — register exactly ONE, or pass renderCandidate(dur, key)');
+  }
+  throw new Error('no candidate: candidate.js did not register a function onto Gate.sfx ' +
+    '(assign Gate.sfx.__candidate = function ({ ctx, dest, dur, when, seed }) { ... })');
+}
+
+// ── renderCandidate(durSec, key?) -> Promise<base64 string> ─────────────────
+window.renderCandidate = function renderCandidate(durSec, key) {
+  var sampleRate = 22050;
+  return Promise.resolve().then(function () {
+    var k = pickCandidateKey(key);
+    var builder = window.Gate.sfx[k];
+    var frames = Math.round(sampleRate * durSec);
+    var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    var ctx = new OAC(1, frames, sampleRate);
+    builder({ ctx: ctx, dest: ctx.destination, dur: durSec, when: 0, seed: 1 });
+    return ctx.startRendering();
+  }).then(function (rendered) {
+    var b64 = encodeWav(rendered);
+    document.getElementById('wavout').textContent = b64;
+    window.__wavB64 = b64;       // also stashed so a poller can read it back if needed
+    return b64;
+  });
+};
+
+window.encodeWav = encodeWav;
+</script>

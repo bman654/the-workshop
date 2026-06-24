@@ -76,13 +76,15 @@ export const MEDIA = {
     id: 'sound',
     label: 'sound — a WebAudio asset rendered offline to WAV, judged via the audio-lens analysis',
     artifact: 'audio',
-    proven: false, // wav-bench.mjs is built in B3; an agent cannot hear, so it judges the analysis
+    proven: true, // B3: lifts the proven the-gate/audio-bench.html flow; an agent can't hear → judges the analysis
     renderCommand(ctx) {
-      // Render the candidate's WebAudio offline to a WAV, then run the audio-lens skill to produce a
-      // spectral/level analysis the (deaf) judge READS. wav-bench default lives beside this engine.
-      const bench = ctx.wavBench || `${ctx.contextRoot}/art-foundry/wav-bench.mjs`
-      return `node ${bench} ${ctx.candidate} ${ctx.outdir}/asset.wav `
-        + `&& audio-lens ${ctx.outdir}/asset.wav > ${ctx.outdir}/analysis.txt`
+      // OfflineAudioContext is BROWSER-only, so the candidate cannot render in pure Node. render-wav.sh
+      // is the audio analog of render-take.sh: it serves art-foundry/sfx-bench.html with the candidate
+      // copied in, renders the WebAudio offline to a WAV via agent-browser, then runs the in-house
+      // audio-lens CLI to write analysis.txt — the spectral/level report the (deaf) judge READS.
+      const dur = ctx.durSec ? ` ${ctx.durSec}` : '' // render-wav.sh defaults to 3s when omitted
+      return `GATE_SRC=${ctx.contextRoot} gtimeout 200 bash ${ctx.contextRoot}/art-foundry/render-wav.sh `
+        + `${ctx.scratch} ${ctx.candidate} ${ctx.port} ${ctx.outdir}${dur}`
     },
     judgeArtifacts(outdir) { return [`${outdir}/asset.wav`, `${outdir}/analysis.txt`] },
     judgeVerb: 'READ the audio-lens analysis (you cannot hear — the analysis IS how you judge) + note the WAV path',
@@ -118,6 +120,8 @@ export function normalizeAsset(spec) {
     extraQS: spec.extraQS || null,
     iface: spec.iface || null,
     wireNote: spec.wireNote || null, // exhibit-art: how this asset wires into the system
+    durSec: Number.isFinite(Number(spec.durSec)) && Number(spec.durSec) > 0 ? Number(spec.durSec) : null, // sound: render length (s); render-wav.sh defaults 3
+    previewHarness: spec.previewHarness || null, // visual-exhibit/sound: a per-asset render harness override
   }
 }
 

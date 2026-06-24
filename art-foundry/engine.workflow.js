@@ -16,9 +16,10 @@ export const meta = {
      medium:        'visual-gate' | 'visual-exhibit' | 'sound'   (default 'visual-gate')
      contextRoot:   repo root holding the-gate/, tools/, art-foundry/  (default /tmp/gate-worktree)
      assets:        [ assetSpec ]  — batch (clamped to <=15). assetSpec: {key|id, title, K, judgeK,
-                    brief, geometry?, judgeFocus, module?, drawFn?, siblings?, extraQS?, iface?, wireNote?}
-     previewHarness: (visual-exhibit/sound) path to a builder-supplied render harness, OR per-asset on the spec
-     wavBench:      (sound) path to the WAV render bench (default art-foundry/wav-bench.mjs)
+                    brief, geometry?, judgeFocus, module?, drawFn?, siblings?, extraQS?, iface?, wireNote?,
+                    durSec? (sound), previewHarness? (visual-exhibit, per-asset override)}
+     previewHarness: (visual-exhibit) path to a builder-supplied render harness, OR per-asset on the spec
+                    (sound needs none — art-foundry/render-wav.sh + sfx-bench.html are the universal bench)
      outRoot:       scratch root for takes/shots (default /tmp/art-foundry)
    }
    B0 LOCK: this is a CHILD workflow — it must NOT call workflow() (nesting throws). It builds via
@@ -51,8 +52,8 @@ const MEDIA = {
     judgeVerb: 'VIEW (Read) every preview shot rendered in the exhibit context',
   },
   'sound': {
-    id: 'sound', label: 'sound — a WebAudio asset rendered offline to WAV, judged via the audio-lens analysis', artifact: 'audio', proven: false,
-    renderCommand(ctx) { const bench = ctx.wavBench || `${ctx.contextRoot}/art-foundry/wav-bench.mjs`; return `node ${bench} ${ctx.candidate} ${ctx.outdir}/asset.wav && audio-lens ${ctx.outdir}/asset.wav > ${ctx.outdir}/analysis.txt` },
+    id: 'sound', label: 'sound — a WebAudio asset rendered offline to WAV, judged via the audio-lens analysis', artifact: 'audio', proven: true,
+    renderCommand(ctx) { const dur = ctx.durSec ? ` ${ctx.durSec}` : ''; return `GATE_SRC=${ctx.contextRoot} gtimeout 200 bash ${ctx.contextRoot}/art-foundry/render-wav.sh ${ctx.scratch} ${ctx.candidate} ${ctx.port} ${ctx.outdir}${dur}` },
     judgeArtifacts(outdir) { return [`${outdir}/asset.wav`, `${outdir}/analysis.txt`] },
     judgeVerb: 'READ the audio-lens analysis (you cannot hear — the analysis IS how you judge) + note the WAV path',
   },
@@ -63,7 +64,7 @@ function normalizeAsset(spec) {
   const key = spec.key || spec.id
   if (!key) throw new Error('asset spec needs a key or id')
   if (!spec.title) throw new Error(`asset '${key}' needs a title`)
-  return { key, title: spec.title, K: clampK(spec.K ?? CAPS.maxK), judgeK: clampJudgeK(spec.judgeK ?? 2), tier: spec.tier || 'ASSET', brief: spec.brief || '', geometry: spec.geometry || '', judgeFocus: spec.judgeFocus || '', module: spec.module || null, drawFn: spec.drawFn || null, siblings: spec.siblings || null, extraQS: spec.extraQS || null, iface: spec.iface || null, wireNote: spec.wireNote || null, previewHarness: spec.previewHarness || null }
+  return { key, title: spec.title, K: clampK(spec.K ?? CAPS.maxK), judgeK: clampJudgeK(spec.judgeK ?? 2), tier: spec.tier || 'ASSET', brief: spec.brief || '', geometry: spec.geometry || '', judgeFocus: spec.judgeFocus || '', module: spec.module || null, drawFn: spec.drawFn || null, siblings: spec.siblings || null, extraQS: spec.extraQS || null, iface: spec.iface || null, wireNote: spec.wireNote || null, durSec: Number.isFinite(Number(spec.durSec)) && Number(spec.durSec) > 0 ? Number(spec.durSec) : null, previewHarness: spec.previewHarness || null }
 }
 function normalizeBatch(list) { const { assets, dropped } = clampAssets(list); return { assets: assets.map(normalizeAsset), dropped } }
 // ── END MIRROR ────────────────────────────────────────────────────────────────
@@ -85,7 +86,7 @@ function preamble(promptFile) {
 }
 
 function mediumCtxFor(asset, paths) {
-  return { contextRoot: CONTEXT_ROOT, module: asset.module, candidate: paths.candidate, port: paths.port, outdir: paths.outdir, scratch: paths.scratch, extraQS: asset.extraQS, previewHarness: asset.previewHarness || A.previewHarness, wavBench: A.wavBench }
+  return { contextRoot: CONTEXT_ROOT, module: asset.module, candidate: paths.candidate, port: paths.port, outdir: paths.outdir, scratch: paths.scratch, extraQS: asset.extraQS, previewHarness: asset.previewHarness || A.previewHarness, durSec: asset.durSec }
 }
 
 function takePrompt(asset, i, paths) {

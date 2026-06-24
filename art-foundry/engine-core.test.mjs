@@ -40,6 +40,7 @@ ok(Object.keys(MEDIA).length === 3, 'three media registered')
 ok(resolveMedium('visual-gate').proven === true, 'visual-gate is proven')
 ok(resolveMedium('visual-exhibit').proven === false, 'visual-exhibit unproven (B3)')
 ok(resolveMedium('sound').artifact === 'audio', 'sound artifact is audio')
+ok(resolveMedium('sound').proven === true, 'sound is proven (B3 — lifts the gate audio-bench flow)')
 throws(() => resolveMedium('nope'), 'unknown medium throws')
 
 // ── visual-gate renderCommand — must match the proven render-take.sh invocation ─
@@ -59,13 +60,18 @@ const ve = resolveMedium('visual-exhibit').renderCommand({ previewHarness: '/tmp
 ok(ve.includes('/tmp/ex/preview.sh') && ve.includes('/tmp/ex/take-2.js') && ve.includes('/tmp/ex/out') && ve.includes('8990'), 'visual-exhibit invokes the preview harness with candidate/outdir/port')
 ok(resolveMedium('visual-exhibit').judgeArtifacts('/tmp/ex/out')[0].endsWith('/preview.png'), 'visual-exhibit judge sees preview.png')
 
-// ── sound renderCommand — WAV render + audio-lens analysis ──────────────────────
-const sc = resolveMedium('sound').renderCommand({ contextRoot: '/tmp/g', candidate: '/tmp/s/take.js', outdir: '/tmp/s/out' })
-ok(sc.includes('/tmp/g/art-foundry/wav-bench.mjs'), 'sound defaults the WAV bench beside the engine')
-ok(sc.includes('/tmp/s/take.js') && sc.includes('/tmp/s/out/asset.wav'), 'sound renders candidate → asset.wav')
-ok(sc.includes('audio-lens') && sc.includes('/tmp/s/out/analysis.txt'), 'sound pipes the WAV through audio-lens → analysis.txt')
-const scOverride = resolveMedium('sound').renderCommand({ contextRoot: '/tmp/g', candidate: '/c.js', outdir: '/o', wavBench: '/custom/bench.mjs' })
-ok(scOverride.includes('/custom/bench.mjs') && !scOverride.includes('art-foundry/wav-bench.mjs'), 'sound honors a ctx.wavBench override')
+// ── sound renderCommand — the BROWSER bench (render-wav.sh), NOT a pure-Node bench ──
+// OfflineAudioContext is browser-only; render-wav.sh serves sfx-bench.html + drives agent-browser, then
+// runs the vendored audio-lens CLI itself (so the renderCommand does NOT re-invoke audio-lens inline).
+const sc = resolveMedium('sound').renderCommand({ contextRoot: '/tmp/g', candidate: '/tmp/s/take.js', port: 8830, outdir: '/tmp/s/out', scratch: '/tmp/s/scr' })
+ok(sc.includes('GATE_SRC=/tmp/g'), 'sound sets GATE_SRC to contextRoot')
+ok(sc.includes('/tmp/g/art-foundry/render-wav.sh'), 'sound calls render-wav.sh at contextRoot (the browser bench)')
+ok(sc.includes('/tmp/s/take.js') && sc.includes('8830') && sc.includes('/tmp/s/out') && sc.includes('/tmp/s/scr'), 'sound interpolates candidate/port/outdir/scratch')
+ok(!sc.includes('wav-bench.mjs'), 'sound no longer references the imaginary pure-Node wav-bench.mjs')
+const scDur = resolveMedium('sound').renderCommand({ contextRoot: '/tmp/g', candidate: '/c.js', port: 8831, outdir: '/o', scratch: '/s', durSec: 4.5 })
+ok(scDur.trimEnd().endsWith('4.5'), 'sound appends durSec when given')
+const scNoDur = resolveMedium('sound').renderCommand({ contextRoot: '/tmp/g', candidate: '/c.js', port: 8831, outdir: '/o', scratch: '/s' })
+ok(scNoDur.trimEnd().endsWith('/o'), 'sound omits the duration arg when absent (render-wav.sh defaults it)')
 const sArt = resolveMedium('sound').judgeArtifacts('/o')
 ok(sArt.length === 2 && sArt[0].endsWith('/asset.wav') && sArt[1].endsWith('/analysis.txt'), 'sound judge gets the WAV + the analysis')
 
@@ -77,6 +83,9 @@ ok(na.judgeK === 3, 'normalizeAsset clamps judgeK 9 → 3')
 ok(na.title === 'The Firmament rep', 'normalizeAsset keeps the title')
 ok(normalizeAsset({ key: 'k', title: 't' }).K === 3, 'normalizeAsset defaults K to maxK when absent')
 ok(normalizeAsset({ key: 'k', title: 't' }).judgeK === 2, 'normalizeAsset defaults judgeK to 2')
+ok(normalizeAsset({ key: 'k', title: 't', durSec: 2.5 }).durSec === 2.5, 'normalizeAsset keeps a positive durSec (sound)')
+ok(normalizeAsset({ key: 'k', title: 't' }).durSec === null, 'normalizeAsset defaults durSec to null (render-wav.sh defaults the length)')
+ok(normalizeAsset({ key: 'k', title: 't', durSec: -1 }).durSec === null, 'normalizeAsset rejects a non-positive durSec')
 throws(() => normalizeAsset(null), 'normalizeAsset(null) throws')
 throws(() => normalizeAsset([]), 'normalizeAsset(array) throws')
 throws(() => normalizeAsset({ title: 'no key' }), 'normalizeAsset without key/id throws')
