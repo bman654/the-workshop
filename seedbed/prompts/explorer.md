@@ -21,7 +21,16 @@ or puzzle, a sound — not reflexively another graph (an occasional graph-explai
 IF a seed makes a math claim, name its falsifiable crux. You MAY also propose a `rework`: name an existing
 exhibit that lost its soul + how to re-soul it. Put them in `candidateSeeds`.
 
-**Sizing a seed (both PLAN scouts):** propose at the scale the idea genuinely wants. The baton + the in-house
+**If `mode:PLAN` and `track:foundry` (the FOUNDRY-SURVEYOR is restocking the front-gate rep backlog):** your
+vein is `brief` — a DISTINCT lens (e.g. most iconic front-elevation silhouette · most thematically central ·
+best aspect-shape coverage vertical/horizontal/mound · most intriguing to a newcomer). Get the TRUE un-repped
+backlog from **`node gate-foundry/backlog.mjs`** (oldest un-repped rooms first — never the frozen
+room-pool.json), and THROUGH YOUR LENS nominate 1–3 rooms that most deserve a bespoke front-gate rep. Each is a
+`candidateSeeds` entry of type **`rep`** carrying `{id, room, repConcept (what the drawn calling-card object
+IS), aspect (vertical|horizontal|mound), accent (#hex)}`. Favor the OLDEST un-repped rooms; nominate `[rep]`s,
+not `[gate]` re-souls (the judge curates a slate covering the three aspect shapes). See `gate-foundry/MAINTAINING.md`.
+
+**Sizing a seed (garden + grounds scouts):** propose at the scale the idea genuinely wants. The baton + the in-house
 art foundry mean an ambitious seed IS buildable now — so don't shrink a big idea to look turn-sized. Equally,
 don't pad a small / precise / playful idea to seem grand: it is fully first-class as-is. Right-sized, unafraid
 of big (DESIGNING.md). If a seed is art-heavy, you can also pre-name the art assets it will need (what each is
