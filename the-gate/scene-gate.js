@@ -321,8 +321,13 @@
     return g;
   }
 
-  /* ── a clockwork gear (toothed disc) — cut teeth, beveled hub, spokes, sheen ─── */
-  function drawGear(S, parent, cx, cy, rOuter, teeth) {
+  /* ── a clockwork gear (toothed disc) — cut teeth, beveled hub, spokes, sheen.
+     dir/phase0 make the train KINEMATICALLY HONEST: each gear rotates about its
+     OWN center (cx,cy). `phase0` (deg) is the rest tooth-phase that seats this
+     gear's teeth into its neighbour's gaps; `dir` is the spin sign (driver +1,
+     planets −1). spinGears() later composes rotate(phase0 + spin·dir·22/teeth).
+     The gear is registered into S.refs.gearParts so the spin loop can find it. ── */
+  function drawGear(S, parent, cx, cy, rOuter, teeth, dir, phase0) {
     var g = S.group(null, parent);
     var rPitch = rOuter * 0.82, rInner = rOuter * 0.70, rHub = rOuter * 0.30;
 
@@ -363,6 +368,14 @@
 
     g.style.transformBox = 'fill-box';
     g.style.transformOrigin = '50% 50%';
+
+    // kinematic registration: each gear spins about its own center. Default the
+    // driver (dir +1, phase0 0) when params omitted.
+    dir = (dir === undefined) ? 1 : dir;
+    phase0 = phase0 || 0;
+    g.style.transform = 'rotate(' + phase0 + 'deg)';   // rest tooth-phase
+    if (!S.refs.gearParts) S.refs.gearParts = [];
+    S.refs.gearParts.push({ el: g, teeth: teeth, dir: dir, phase0: phase0 });
     return g;
   }
 
@@ -455,7 +468,8 @@
     var GY = 16;
     var driverY = 470 + GY;
     var gears = S.group('gears', seamFollow);
-    drawGear(S, gears, CX, driverY, 72, 22);    // big driver
+    S.refs.gearParts = [];                       // fresh registry per build
+    drawGear(S, gears, CX, driverY, 72, 22, 1, 0);    // big driver (reference: dir +1, phase0 0)
     // ── self-lit SUN-GEAR at the heart of the driver (the orrery payoff, grafted
     //    from Take 3). EMISSIVE FLAME role → BLAZES at night, recedes in day via
     //    dayRecede(lamp.flame). Drawn BEFORE the meshing train so the surrounding
@@ -472,11 +486,22 @@
     S.el('circle', { cx: CX, cy: driverY, r: 7.5, fill: '#ffe7ab', opacity: '0.92' }, gears);
     S.el('circle', { cx: CX, cy: driverY, r: 5, fill: '#fff3d6' }, gears);
     S.el('circle', { cx: CX - 2, cy: driverY - 2, r: 1.8, fill: '#ffffff', opacity: '0.92' }, gears);
-    // the meshing train fanning out around the driver
-    drawGear(S, gears, CX - 84, 548 + GY, 44, 15);
-    drawGear(S, gears, CX + 80, 544 + GY, 50, 16);
-    drawGear(S, gears, CX + 10, 372 + GY, 34, 12);
-    drawGear(S, gears, CX - 70, 410 + GY, 26, 11);
+    // the meshing train fanning out around the driver. Each planet is NUDGED
+    // RADIALLY inward (bearing from the driver preserved, so the fan composition
+    // is unchanged) until its pitch circle is tangent to the driver's:
+    //   center-distance = rPitch_driver + rPitch_sat = 0.82·(72 + rOuter_sat).
+    // Original (cx,cy) → nudged (cx,cy); inward nudge in px noted. phase0 (deg)
+    // is the rest tooth-phase, derived from the zoomed render so a planet TOOTH
+    // seats into the driver GAP at the contact point (½-pitch interlock). All
+    // planets counter-rotate (dir −1) at rate ∝ 22/teeth.
+    //   G1 15t: (716,564)→(730.3,550.7) nudge 19.5  phase0 +11
+    //   G2 16t: (880,560)→(873.4,553.9) nudge  8.9  phase0  +9
+    //   G3 12t: (810,388)→(808.8,399.5) nudge 11.6  phase0  +6
+    //   G4 11t: (730,426)→(739.0,433.7) nudge 11.8  phase0 +16
+    drawGear(S, gears, 730.3, 550.7, 44, 15, -1, 11);   // G1
+    drawGear(S, gears, 873.4, 553.9, 50, 16, -1,  9);   // G2
+    drawGear(S, gears, 808.8, 399.5, 34, 12, -1,  6);   // G3
+    drawGear(S, gears, 739.0, 433.7, 26, 11, -1, 16);   // G4
     gears.style.transformBox = 'fill-box';
     gears.style.transformOrigin = '50% 50%';
     S.refs.gears = gears;
@@ -515,9 +540,25 @@
     if (S.refs.seamFollow) S.refs.seamFollow.style.transform = 'scaleX(' + sx.toFixed(4) + ') skewY(' + (-skew).toFixed(2) + 'deg)';
   };
 
-  /* ── spinGears(turns): rotate the gear cluster by `turns` revolutions. ─────── */
+  /* ── spinGears(turns): drive the train KINEMATICALLY. Each gear rotates about
+     its OWN center (no rigid cluster rotate): the driver turns +turns·360°; each
+     planet turns the OPPOSITE way at a rate inversely proportional to its tooth
+     count (22-tooth driver ÷ planet teeth), so contact velocities match and the
+     teeth stay meshed through the whole turn. The rest phase0 is preserved, so
+     the rotation composes as rotate(phase0 + turns·360·dir·22/teeth). The
+     sun-core circles are NOT in gearParts → they never rotate (and being
+     concentric are rotation-invariant anyway). The gears group itself carries no
+     rotate, so the swing's parent foreshorten on seamFollow composes cleanly with
+     each gear's own-center spin. ──────────────────────────────────────────── */
   G.spinGears = function (turns, S) {
-    if (S.refs.gears) S.refs.gears.style.transform = 'rotate(' + (turns * 360) + 'deg)';
+    var parts = S.refs && S.refs.gearParts;
+    if (!parts) return;
+    var DRIVER_TEETH = 22;
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      var deg = p.phase0 + turns * 360 * p.dir * (DRIVER_TEETH / p.teeth);
+      p.el.style.transform = 'rotate(' + deg + 'deg)';
+    }
   };
 
   Gate.scenegate = G;
