@@ -52,7 +52,8 @@
       DAY:   { 'rep.swatch1': '#6a5640', 'rep.glow1': '#cf7bff' },
       DUSK:  { 'rep.swatch1': '#5a4632', 'rep.glow1': '#cf7bff' },
       NIGHT: { 'rep.swatch1': '#2e261c', 'rep.glow1': '#cf7bff' }
-    } }
+    } },
+    'firmament': { rep: 'firmament-rep', repColors: { DAY: { 'rep.swatch1': '#7e8da0', 'rep.swatch2': '#9fb0c2', 'rep.glow1': '#8fb8dd' }, DUSK: { 'rep.swatch1': '#6a7486', 'rep.swatch2': '#869aae', 'rep.glow1': '#8fb8dd' }, NIGHT: { 'rep.swatch1': '#39424f', 'rep.swatch2': '#4c5868', 'rep.glow1': '#8fb8dd' } } }
   };
 
   /* loadSlab(): parse the GATE-ROOMS JSON slab inlined by forge. Returns an array
