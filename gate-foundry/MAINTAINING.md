@@ -137,16 +137,32 @@ estate-page diff is sanctioned, not scope-creep.
 The live BUILD/foundry path (above) and a manual batch push share the same **competitive K-takes** idea —
 higher quality than a solo smith. The engine is the in-loop form; the rest are by-hand power tools:
 
-- **`art-foundry/engine.workflow.js`** — THE general in-house art engine BUILD/foundry runs (and any future
-  exhibit-art build). Per asset: K smith-takes → blind judges → a synthesizer installs the winner. It is a
-  CHILD workflow (builds via `agent()`/`parallel()`, never `workflow()` — it can't nest), medium-parametrized
-  (`visual-gate` proven; `visual-exhibit`/`sound` scaffolded). Its tested pure core is `art-foundry/
-  engine-core.mjs` (caps K≤3, ≤15 assets; the media registry) — the workflow INLINES a mirror, keep-in-sync.
-  Its seat briefs are `art-foundry/prompts/{foundry-smith,foundry-judge,foundry-synth}.md`. Run it by hand:
+- **`art-foundry/engine.workflow.js`** — THE general in-house art engine BUILD/foundry runs AND any
+  exhibit-art build invokes. Per asset: K smith-takes → blind judges → a synthesizer installs the winner. It
+  is a CHILD workflow (builds via `agent()`/`parallel()`, never `workflow()` — it can't nest),
+  medium-parametrized over THREE proven media: `visual-gate` (render-take.sh shots), `visual-exhibit` (a
+  builder-supplied preview harness → `preview.png`), and `sound` (the browser SFX bench → WAV + audio-lens
+  analysis). Its tested pure core is `art-foundry/engine-core.mjs` (caps K≤3, ≤15 assets; the media registry)
+  — the workflow INLINES a mirror, keep-in-sync. Its seat briefs are `art-foundry/prompts/{foundry-smith,
+  foundry-judge,foundry-synth}.md`. Run it by hand:
   ```js
   Workflow({ scriptPath: '<repo>/art-foundry/engine.workflow.js',
              args: { medium: 'visual-gate', contextRoot: '<repo>', assets: [ /* engine asset specs */ ] } })
   ```
+- **The exhibit-art flow (Adjustment 6).** Any garden/grounds builder whose piece needs custom in-house art
+  builds the system with PLACEHOLDER art and returns `foundryArt:{medium, previewHarness?, assets:[…]}`.
+  fun-forever (the sole `workflow()` caller) forges the batch through the engine, then spawns a FRESH WIRING
+  builder (`context.wiring`) that connects the now-installed art + finishes. One art round per build; it
+  composes with the baton. `visual-exhibit` assets need a builder-written preview harness
+  (`bash <harness> <candidate> <outdir> <port>` → `<outdir>/preview.png`); `sound` assets need none.
+  **In-house ethos:** all art — audio AND gfx — is forged in-house; never forage from the web.
+- **The sound bench** — OfflineAudioContext is browser-only, so `sound` renders through the BROWSER, not
+  Node. `art-foundry/sfx-bench.html` (a generalized lift of `the-gate/audio-bench.html`) loads ONE
+  `candidate.js` that registers a `Gate.sfx` builder and renders it offline to a 16-bit mono WAV at 22050 Hz;
+  `art-foundry/render-wav.sh` (the audio analog of render-take.sh) serves it, drives the render via
+  agent-browser, decodes the base64 to `asset.wav`, and runs the vendored `tools/audio-lens` CLI to write
+  `analysis.txt` (the deaf judge's "ears"). The audio-lens CLI is vendored into `tools/audio-lens/`
+  (zero-dependency; `node tools/audio-lens/bin/audio-lens.js self-test` → 12/12) so the estate is self-contained.
 - **`gate-foundry/foundry.workflow.js`** — the LEGACY harness that forged the original 8 gate buildings +
   the first 3 reps; its `LIB` holds those hardcoded asset rows. Kept as a manual power tool to re-forge an
   original LIB asset (`args:{gateRoot, build:['manor',…]}`); it is NOT in the loop path (the engine is).
@@ -156,7 +172,7 @@ higher quality than a solo smith. The engine is the in-loop form; the rest are b
   (For the routine surveyor backlog, `gate-foundry/backlog.mjs` is the deterministic live source, not the
   frozen pool.)
 - **`gate-foundry/render-take.sh`** — renders a candidate (or the live files with `-`) in full scene
-  context; `GATE_SRC` is the gate root (default the worktree).
+  context; `GATE_SRC` is the gate root (default the worktree). (`art-foundry/render-wav.sh` is its sound twin.)
 
 ## Passing the baton (any big swing, not just the gate)
 

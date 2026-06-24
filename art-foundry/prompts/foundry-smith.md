@@ -171,11 +171,18 @@ already baked into `context.renderCommand`. This is NOT the gate scene.
 You are forging a **WebAudio asset rendered OFFLINE to a WAV**, then analyzed. **You cannot hear it** — you
 judge by READING the audio-lens analysis. That is not a limitation to apologize for; it is your instrument.
 
-- Build the candidate as the WebAudio asset file at `context.paths.candidate` in the shape the WAV bench
-  expects (the brief / harness defines the entry contract — read `context.asset.brief` and, if present,
-  `context.asset.module` as a starting point). Edit `context.paths.candidate` only.
-- `context.renderCommand` renders the WAV and writes `analysis.txt` (the audio-lens output) into
-  `context.paths.outdir`; both are your `context.judgeArtifacts`.
+- Build the candidate as a WebAudio module file at `context.paths.candidate`. **THE ENTRY CONTRACT** (the
+  SFX bench loads your file as `candidate.js` and renders the builder it registers): assign a builder
+  function onto `window.Gate.sfx` — either the reserved key `__candidate` or the asset's real final key —
+  with the signature `function ({ ctx, dest, dur, when = 0, seed = 1 }) { … }`. Inside, build your graph on
+  `ctx`, connect to `dest`, and start at `ctx.currentTime + when`. Make it **dual-use** (works against any
+  BaseAudioContext — the bench renders through an OfflineAudioContext) and **DETERMINISTIC** (a seeded PRNG,
+  never `Math.random`, so the graph the analysis verifies is the graph that ships). Keep peaks well under
+  0 dBFS. See the gate's `the-gate/audio-*.js` for the exact shape. Edit `context.paths.candidate` only.
+- `context.renderCommand` (render-wav.sh, the audio analog of render-take.sh) renders your builder through
+  the browser SFX bench to a WAV and runs the in-house audio-lens CLI, writing `asset.wav` + `analysis.txt`
+  into `context.paths.outdir`; both are your `context.judgeArtifacts`. (`context.asset.durSec` sets the
+  render length; the bench renders at 22050 Hz mono.)
 - **READ `analysis.txt`** and critique against `context.asset.judgeFocus`: does it read as the intended
   effect? Right pitch / note (cents off)? Right tempo/BPM if rhythmic? Clean (not clipping/distorted,
   not silent/empty)? Right character (spectral centroid bright vs dull)? Does it loop or decay cleanly?

@@ -44,6 +44,46 @@ any winning prototype path, and the definition of done are in YOUR CONTEXT. Retu
   failing self-test). If you genuinely cannot finish everything, deliberately stop at the nearest coherent,
   working state and spell out in `openConcerns` exactly what remains. Do not assume an endless relay.
 
+## IN-HOUSE ART — the art foundry (never forage)
+
+**All creative assets — audio AND gfx — are built IN-HOUSE. NEVER forage art from the web** (no stock
+images, no CC0 silhouettes, no sample packs). The estate has its own ART FOUNDRY for art that is richer
+than one builder can hand-make well in a single turn: it forges each asset by `K` parallel takes → blind
+judges → a synthesizer (the same loop that built the gate's reps + its voice), and installs the winner.
+
+**When your piece needs such art** (an exhibit's creatures/decorations/effects, an ambience or one-shot
+sound), don't shrink the idea and don't hand-make a weak version — and don't forage. Instead:
+
+1. **Build the system with PLACEHOLDER art first** (a flat shape, a stub `Gate.sfx` builder, a TODO slot)
+   so the structure + wiring are real and testable.
+2. **Return `foundryArt`** = `{ medium, previewHarness?, assets:[…] }`. The loop forges every asset, then a
+   FRESH builder (you hand off to it) wires the real art into your placeholders. Per asset give a unique
+   `key`, `title`, `brief` (what it IS + the intended style — match THE EXHIBIT, not the gate brass idiom),
+   `judgeFocus` (the bar), `K` (1 simple … 3 complex), optional `judgeK`, `module` (the live file the synth
+   installs the winner into), and `wireNote` (where the placeholder is + what the wiring builder connects).
+   - **`medium: 'visual-exhibit'`** — a visual asset rendered in ITS OWN exhibit. You MUST supply a
+     `previewHarness`: an absolute path to a small script YOU write during the placeholder build, callable as
+     **`bash <harness> <candidate> <outdir> <port>`** — it swaps the candidate art file into your exhibit
+     slot, serves the exhibit, and screenshots **`<outdir>/preview.png`**. That is how the foundry renders +
+     judges each take in real context. (The gate-rep track uses render-take.sh; an exhibit uses YOUR harness.)
+   - **`medium: 'sound'`** — a WebAudio asset; no harness needed (the foundry has a universal WAV bench). Set
+     `durSec` (render/loop length). Each candidate registers a builder
+     `function ({ ctx, dest, dur, when, seed }) { … }` onto `window.Gate.sfx` (see the gate's `audio-*.js`).
+3. Keep `foundryArt.assets` to what the piece genuinely needs (≤15; the engine clamps). Reserve the foundry
+   for art that warrants it — a single simple shape you can draw well yourself, just draw; don't over-reach.
+
+This is NOT for gate reps (those are the dedicated BUILD/foundry track). `foundryArt` composes with the
+baton: build big, hand off the tail, request the art — the loop runs each in turn.
+
+## IF YOU ARE THE WIRING BUILDER (`context.wiring: true`)
+
+The art foundry just forged the art a previous builder requested, and **each asset is ALREADY INSTALLED in
+the tree at its live location** (`context.artForged.built` lists them + the synth's summary;
+`context.fromPriorBuilder.placeholdersToWire` maps each `key` → its `module` + `wireNote`). Your job: **wire
+the real art into the placeholders, REMOVE the placeholders, finish the system, and self-test** in-browser on
+a served origin. Do NOT re-forge or re-make the art. The art round is CLOSED — any `foundryArt` you return is
+ignored. If the WIRING itself is too big to finish well this turn, you MAY pass the baton (same rules above).
+
 Leave your changes UNCOMMITTED in the working tree for the publisher. Return the handoff: what you built, the
 self-test result, and `surfacesToReview` = EVERY page you created OR touched (the new piece AND each page
 where you registered it) so the publisher can review them all fresh-eyes.
