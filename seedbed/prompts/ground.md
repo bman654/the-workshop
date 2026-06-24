@@ -23,6 +23,11 @@ current working directory is the repo root (`/Users/brandon/dev/general/creative
 - **THE GROUNDED GATE:** "grounded" (enacted as a thing you see/touch/play/hear) and "expressive" (vivid
   prose / frame) are SEPARATE axes — a vivid caption can NEVER lift a piece that stays an abstract chart. The
   five questions weigh a piece only AFTER it clears the grounded + accessible floor. (DESIGNING.md: "the grounded gate".)
+- **All creative assets are forged IN-HOUSE — never forage** (no stock images, CC0 silhouettes, or sample
+  packs; audio AND graphics). The estate's **art foundry** forges rich assets (sound / visual / animation) at
+  scale via K-takes → judge → synth, so ambition and in-house craft don't trade off — and **size is no reason
+  to shrink an idea** (the baton + foundry build past one maker's reach), nor to inflate a small one. Right-sized,
+  unafraid of big. (DESIGNING.md.)
 - The loop may REWORK existing pieces to re-soul them (a `rework` garden seed), not only build new.
 - Full story: **DESIGNING.md** (the five questions + the roles) + **seedbed/README.md** ("the soul & the audit").
 

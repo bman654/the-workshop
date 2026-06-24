@@ -21,6 +21,12 @@ or puzzle, a sound — not reflexively another graph (an occasional graph-explai
 IF a seed makes a math claim, name its falsifiable crux. You MAY also propose a `rework`: name an existing
 exhibit that lost its soul + how to re-soul it. Put them in `candidateSeeds`.
 
+**Sizing a seed (both PLAN scouts):** propose at the scale the idea genuinely wants. The baton + the in-house
+art foundry mean an ambitious seed IS buildable now — so don't shrink a big idea to look turn-sized. Equally,
+don't pad a small / precise / playful idea to seem grand: it is fully first-class as-is. Right-sized, unafraid
+of big (DESIGNING.md). If a seed is art-heavy, you can also pre-name the art assets it will need (what each is
++ medium) so the build can plan its foundry pass.
+
 **Otherwise (a BUILD or WRIT cycle — developing the piece/task):** the piece/task is `title` — `where`, and
 the skeleton from the director is `basicDesign` (all in your context).
 - **IN CHARACTER:** if this is a Patron's WRIT (`mode:WRIT`), produce any CREATIVE content (prose, an image,

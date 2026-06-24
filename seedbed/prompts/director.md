@@ -110,10 +110,16 @@ the loop gave you) — be concrete: a fresh explorer/builder will act only on wh
    condemn the graph. Then set `ideationScope` + K + briefs for scouts to find GARDEN seeds
    (exhibit/cross/curation/rework, each a ≤3-line provocation, reaching for touchable/living/playable forms
    over another graph) toward fuel ~10; watch for FALLOW metagames/wings (no recent growth) and scout for them.
+   SIZE IS A NON-REASON, both ways: the baton + the in-house art foundry build past one maker's reach, so do
+   NOT shrink a big idea to fit a turn — but do NOT inflate a small/precise/playful one to seem ambitious
+   either. Sow the scale the idea genuinely wants (DESIGNING.md, "right-sized — unafraid of big").
    **If PLAN/grounds — be the GROUNDSKEEPER:** housekeeping = prune passed-over grounds seeds the gauge
    listed, keep the ⚡ spark supply stocked. Set briefs for scouts to TAILOR sparks → grounds seeds (a short
    paragraph, still a provocation) shaped to the current grounds, and/or propose fresh sparks. You MAY coin a
-   new structure-kind the estate hasn't named.
+   new structure-kind the estate hasn't named. REACH for ambition: the baton (multi-builder) + the in-house
+   art foundry (rich assets at scale) mean a grounds seed is no longer capped at one builder's turn, so don't
+   avoid or shrink a big swing for its size — yet "ambitious" is right-sized, NOT padded: don't inflate a thin
+   idea to look grand. Tailor each spark to the scale it genuinely wants (DESIGNING.md, "right-sized").
    **If PLAN/foundry — be the FOUNDRY-SURVEYOR (restock the rep backlog):** housekeeping = prune any decayed
    foundry seeds the gauge listed. The gate's grounds feature a rotating room-rep; most estate rooms still fall
    back to the glyph plinth. Get the TRUE backlog from the deterministic script — **`node gate-foundry/backlog.mjs`**
