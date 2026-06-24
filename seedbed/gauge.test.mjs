@@ -10,18 +10,20 @@ const ok = (cond, msg) => { if (cond) { pass++ } else { fail++; console.error(' 
 const eq = (a, b, msg) => ok(a === b, `${msg} — got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`)
 
 // helper: build a roadmap string with N garden + M grounds + S sparks + B bugs
-function bedDoc({ writs = [], garden = [], grounds = [], sparks = [], bugs = [] } = {}) {
+function bedDoc({ writs = [], garden = [], grounds = [], foundry = [], sparks = [], bugs = [] } = {}) {
   const sec = (name, lines) => `<!-- gauge:${name}:start -->\n${lines.join('\n')}\n<!-- gauge:${name}:end -->`
   return [
     sec('writ', writs),
     sec('bug', bugs),
     sec('garden-seeds', garden),
     sec('grounds-seeds', grounds),
+    sec('foundry-seeds', foundry),
     sec('sparks', sparks),
   ].join('\n\n')
 }
 const G = (pitch, sown) => `- [exhibit] **${pitch}** — a gap. (sown #${sown})`
 const GR = (pitch, sown, contest) => `- [room] **${pitch}** — a wing. (sown #${sown} · contest #${contest})`
+const F = (pitch, sown, contest) => `- [rep] **${pitch}** — a bespoke rep. (sown #${sown} · contest #${contest})`
 const SP = (t) => `- ${t}`
 const W = (pitch) => `- [writ] **${pitch}** — a request from the Patron.`
 const st = (o = {}) => ({ cycle: 30, lastGardenPlan: 28, lastBigSwing: 28, bigSwingsBuilt: 2, tally: {}, ...o })
@@ -37,6 +39,9 @@ eq(classify('engine/curation'), 'grounds', 'engine/…→grounds (first token wi
 eq(classify('metagame · GRAND'), 'grounds', 'metagame→grounds')
 eq(classify('map'), 'grounds', 'map→grounds')
 eq(classify('bug'), 'bug', 'bug→bug')
+eq(classify('rep'), 'foundry', 'rep→foundry (a bespoke front-gate room-rep)')
+eq(classify('gate'), 'foundry', 'gate→foundry (a gate asset rework/polish)')
+eq(classify('REP'), 'foundry', 'rep is case-insensitive')
 eq(classify('quasicrystal'), 'grounds', 'novel kind→grounds (big by default)')
 
 console.log('parseBed (live vs struck vs tombstone):')
@@ -268,6 +273,91 @@ console.log('cadence simulation — 24 cycles, builds dominate, swings periodic:
   ok(builds > plans * 1.5, `builds (${builds}) dominate plans (${plans})`)
   ok(counts['BUILD/grounds'] >= 2, `at least 2 big swings in 24 cycles (got ${counts['BUILD/grounds']})`)
   ok(counts['BUILD/garden'] >= 10, `garden builds are the staple (got ${counts['BUILD/garden']})`)
+}
+
+console.log('FOUNDRY track — the patient sub-project upkeep lane:')
+{
+  // parse: the foundry-seeds fence is counted as foundryFuel; its seeds carry a contest stamp
+  let bed = parseBed(bedDoc({ foundry: [F('Cavern rep', 30, 0), F('Pond rep', 30, 0)] }))
+  eq(bed.foundryFuel, 2, 'foundryFuel counts live foundry seeds')
+  eq(bed.foundrySeeds[0].contest, 0, 'foundry seed contest stamp parsed')
+
+  // decay: a foundry seed decays against foundryBuilt (its OWN contest clock), never bigSwingsBuilt
+  const fb = 6
+  bed = parseBed(bedDoc({ foundry: [F('contender', 24, fb - 1), F('loser', 24, fb - TH.foundryDecayStrikes)] }))
+  let d = decayed(bed, st({ cycle: 40, foundryBuilt: fb }))
+  ok(d.some(x => x.pitch.includes('loser') && x.track === 'foundry'), 'foundry seed at strikes≥threshold decays')
+  ok(!d.some(x => x.pitch.includes('contender')), 'contender foundry seed survives')
+  // ISOLATION: a flood of GROUNDS swings (bigSwingsBuilt huge) must NOT decay a young foundry seed
+  d = decayed(parseBed(bedDoc({ foundry: [F('fresh rep', 24, fb)] })), st({ cycle: 99, bigSwingsBuilt: 99, foundryBuilt: fb }))
+  eq(d.length, 0, 'a grounds-swing flood never ages a foundry seed (decay clocks are separate)')
+
+  // ladder — a foundry TURN comes due (gardens healthy, no swing due): BUILD if ripe, else PLAN/survey
+  const healthyGarden = [G('a', 40), G('b', 40), G('c', 40), G('d', 40), G('e', 40)] // fuel 5 (>4), so no garden-plan
+  const grounds2 = [GR('w', 40, 2), GR('w2', 40, 2)] // fuel 2 (≥floor), groundsSince kept <9 → no grounds action
+  const due = { cycle: 40, lastGardenPlan: 38, lastBigSwing: 38, bigSwingsBuilt: 2, lastFoundry: 28, foundryBuilt: 0, tally: {} } // foundrySince 12
+
+  d = decide(due, parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: [F('Pond rep', 39, 0)] })))
+  eq(d.mode + '/' + d.track, 'BUILD/foundry', 'foundry due + ripe seed → BUILD/foundry')
+  eq(d.role, 'foundry-smith', 'BUILD/foundry is the foundry-smith')
+
+  d = decide(due, parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: [] })))
+  eq(d.mode + '/' + d.track, 'PLAN/foundry', 'foundry due + bed dry → PLAN/foundry (survey + restock)')
+  eq(d.role, 'foundry-surveyor', 'PLAN/foundry is the foundry-surveyor')
+
+  // a foundry seed never decays at BUILD/foundry time? — it just isn't due to. The directive's decay list
+  // covers ALL tracks, so confirm a decayable foundry seed shows up under any non-writ directive:
+  d = decide({ ...due, foundryBuilt: 9 }, parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: [F('stale rep', 5, 1), F('ripe rep', 39, 9)] })))
+  ok(d.decayed.some(x => x.track === 'foundry' && x.pitch.includes('stale')), 'a decayed foundry seed appears in the directive decay list')
+
+  // PRIORITY — foundry sits BELOW garden-plan: when garden is ALSO due, garden-plan wins
+  d = decide({ ...due, lastGardenPlan: 34 }, parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: [F('Pond rep', 39, 0)] }))) // gardenBuilds 6 ≥ interval
+  eq(d.mode + '/' + d.track, 'PLAN/garden', 'garden-plan outranks a due foundry turn (foundry never starves the gardens)')
+
+  // not due yet → the garden-build staple, not foundry
+  d = decide({ ...due, lastFoundry: 35 }, parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: [F('Pond rep', 39, 0)] }))) // foundrySince 5 < 12
+  eq(d.mode + '/' + d.track, 'BUILD/garden', 'foundry not due → the garden-build staple holds')
+
+  // DORMANCY — an UNSEEDED state (no lastFoundry) keeps foundry dormant forever (back-compat safety)
+  d = decide(st({ cycle: 99, lastGardenPlan: 97, lastBigSwing: 97 }), parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: [F('Pond rep', 39, 0)] })))
+  ok(d.track !== 'foundry', 'state without lastFoundry never fires a foundry turn (lastFoundry ?? cycle ⇒ since 0)')
+
+  // record — a foundry BUILD advances BOTH clocks; a foundry PLAN advances only the interval clock
+  const fbase = { cycle: 40, lastGardenPlan: 38, lastBigSwing: 30, bigSwingsBuilt: 2, lastFoundry: 28, foundryBuilt: 2, tally: {},
+    fence: { garden: ['A'], grounds: ['W'], foundry: ['Pond rep', 'Cavern rep'] } }
+
+  let r = applyRecord(fbase, { mode: 'BUILD', track: 'foundry' }, { garden: ['A'], grounds: ['W'], foundry: ['Cavern rep'] })
+  eq(r.cycle, 41, 'foundry build bumps the durable cycle')
+  eq(r.lastFoundry, 41, 'foundry build resets the foundry interval clock')
+  eq(r.foundryBuilt, 3, 'foundry build increments the foundry contest counter')
+  eq(r.lastBigSwing, 30, 'foundry build does NOT touch the grounds swing clock')
+  eq(r.bigSwingsBuilt, 2, 'foundry build is NOT a grounds swing')
+  eq(r.tally.foundryBloomed, 1, 'foundry build blooms the one forged rep (derived from the bed diff)')
+  eq(r.tally.foundryDecayed || 0, 0, 'one removal on a foundry build decays nothing')
+
+  r = applyRecord(fbase, { mode: 'PLAN', track: 'foundry' }, { garden: ['A'], grounds: ['W'], foundry: ['Pond rep', 'Cavern rep', 'Forge rep', 'Clock rep'] })
+  eq(r.lastFoundry, 41, 'foundry PLAN (survey) resets the interval clock')
+  eq(r.foundryBuilt, 2, 'foundry PLAN does NOT advance the contest counter (it forged nothing)')
+  eq(r.tally.foundrySown, 2, 'foundry PLAN derives sown from the freshly-surveyed reps')
+  eq(r.tally.foundryBloomed || 0, 0, 'a foundry PLAN blooms nothing')
+
+  // a NON-foundry cycle carries the foundry clocks forward UNTOUCHED (they must persist across the loop)
+  r = applyRecord(fbase, { mode: 'BUILD', track: 'garden' }, { garden: [], grounds: ['W'], foundry: ['Pond rep', 'Cavern rep'] })
+  eq(r.lastFoundry, 28, 'a garden build leaves lastFoundry untouched (carried forward)')
+  eq(r.foundryBuilt, 2, 'a garden build leaves foundryBuilt untouched')
+  r = applyRecord(fbase, { mode: 'BUILD', track: 'grounds' }, { garden: ['A'], grounds: [], foundry: ['Pond rep', 'Cavern rep'] })
+  eq(r.lastFoundry, 28, 'a grounds swing leaves the foundry interval clock untouched')
+  eq(r.foundryBuilt, 2, 'a grounds swing leaves the foundry contest counter untouched')
+
+  // a WRIT may RELEASE a clause into the foundry bed, credited as sown, cadence still frozen
+  const wb = { cycle: 50, lastGardenPlan: 44, lastBigSwing: 41, bigSwingsBuilt: 3, lastFoundry: 30, foundryBuilt: 1, tally: {},
+    fence: { garden: ['A'], grounds: ['W'], foundry: ['Pond rep'] } }
+  r = applyRecord(wb, { mode: 'WRIT', track: 'writ' }, { garden: ['A'], grounds: ['W'], foundry: ['Pond rep', 'A released rep'] })
+  eq(r.cycle, 50, 'WRIT releasing a foundry clause still holds the cycle clock')
+  eq(r.lastFoundry, 30, 'WRIT does not touch the foundry interval clock')
+  eq(r.foundryBuilt, 1, 'WRIT does not advance the foundry contest counter')
+  eq(r.tally.foundrySown, 1, 'a foundry clause released by a writ is credited as sown')
+  eq(r.fence.foundry.join(','), 'Pond rep,A released rep', 'WRIT re-baselines the foundry snapshot too')
 }
 
 console.log(`\n${fail === 0 ? '✓' : '✗'} gauge.test.mjs: ${pass}/${pass + fail} passed`)

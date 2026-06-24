@@ -9,12 +9,17 @@
 //     planter ripens+sows one (a bench / cross / curation / rework).
 //   GROUNDS (big track) — new structure. groundskeeper tailors sparks→grounds
 //     seeds; grounds-worker opens a wing / engine / metagame / map / medium.
+//   FOUNDRY (upkeep track) — a self-contained sub-project (the front GATE today).
+//     A patient turn forges a bespoke room-rep / gate asset (BUILD, via the K-takes
+//     foundry harness) or surveys the estate for the next reps (PLAN). It sits BELOW
+//     garden-plan in the ladder, so it never starves the gardens.
 //
 // FUEL IS DERIVED (counted live from ROADMAP.md), never hand-maintained — so a
 // bloomed seed pruned from the bed drops fuel automatically (no "fuel 5→4" drift,
 // and crosses burn fuel exactly like exhibits: both are garden seeds). Only the
 // COUNTERS persist in state.json (cycle, lastGardenPlan, lastBigSwing,
-// bigSwingsBuilt) — durable across loop relaunches (the ledger lesson).
+// bigSwingsBuilt, + lastFoundry/foundryBuilt for the foundry track) — durable
+// across loop relaunches (the ledger lesson).
 //
 // Usage:
 //   node seedbed/gauge.mjs            → the JSON directive for THIS cycle (director reads it)
@@ -43,17 +48,29 @@ export const TH = {
   groundsInterval: 9,     // BUILD/grounds (a swing!) when (cycle - lastBigSwing) >= this AND a ripe one exists
   groundsDecayStrikes: 4, // a grounds seed decays when (bigSwingsBuilt - contest) >= this (contests lost)
   sparkFloor: 3,          // the groundskeeper keeps at least this many sparks on hand
+  // FOUNDRY — the sub-project upkeep track (the front GATE today; any self-contained sub-project later).
+  // Patient by design: it sits BELOW garden-plan in the ladder, so it NEVER starves the gardens — at most
+  // one foundry TURN every foundryInterval cycles. A turn FORGES a ripe asset (BUILD/foundry, the K-takes→
+  // judge→synth harness) or, if the foundry bed is dry, SURVEYS the estate for the next bespoke reps and
+  // restocks (PLAN/foundry). Decay is contest-based like grounds (punished only for losing its turn, never
+  // for waiting). foundry has no fuel FLOOR that forces a PLAN — a dry bed simply means the next turn surveys.
+  foundryFuelCeiling: 4,  // the survey refills the foundry bed toward this (advisory)
+  foundryInterval: 12,    // a foundry TURN comes due when (cycle - lastFoundry) >= this — slow upkeep, won't crowd the gardens
+  foundryDecayStrikes: 4, // a foundry seed decays when (foundryBuilt - contest) >= this (foundry contests lost, never mere waiting)
 }
 
 // ── Classify a seed kind into a track ─────────────────────────────────────────
-// Garden = grow what exists. Grounds = new structure. Unknown → grounds (a
-// spark-coined NEW concept defaults to the big track). bug jumps the queue.
+// Garden = grow what exists. Grounds = new structure. Foundry = sub-project asset
+// upkeep (a gate rep / a gate asset rework). Unknown → grounds (a spark-coined NEW
+// concept defaults to the big track). bug jumps the queue.
 const GARDEN_KINDS = new Set(['exhibit', 'cross', 'curation', 'grow', 'rework'])
 const GROUNDS_KINDS = new Set(['room', 'engine', 'metagame', 'map', 'medium', 'wing'])
+const FOUNDRY_KINDS = new Set(['rep', 'gate']) // rep = a bespoke front-gate room-rep · gate = a gate asset rework/polish
 export function classify(kind) {
   const k = String(kind || '').toLowerCase().split(/[\/·\s]/)[0]
   if (k === 'writ') return 'writ'
   if (k === 'bug') return 'bug'
+  if (FOUNDRY_KINDS.has(k)) return 'foundry'
   if (GARDEN_KINDS.has(k)) return 'garden'
   if (GROUNDS_KINDS.has(k)) return 'grounds'
   return 'grounds' // unknown / novel kind → big track by default
@@ -65,7 +82,7 @@ export function classify(kind) {
 // are excluded). Each carries a stamp: garden "(sown #N)", grounds adds
 // "· contest #M". Sparks are plain "- " lines in the sparks section.
 // 'writ' first: a Patron's Writ outranks everything (see the decision ladder).
-const SECTIONS = ['writ', 'garden-seeds', 'grounds-seeds', 'sparks', 'bug']
+const SECTIONS = ['writ', 'garden-seeds', 'grounds-seeds', 'foundry-seeds', 'sparks', 'bug']
 function section(text, name) {
   const m = text.match(new RegExp(`<!--\\s*gauge:${name}:start\\s*-->([\\s\\S]*?)<!--\\s*gauge:${name}:end\\s*-->`))
   return m ? m[1] : null
@@ -96,6 +113,7 @@ export function parseBed(text) {
   const writs = liveSeedLines(section(text, 'writ'))
   const garden = liveSeedLines(section(text, 'garden-seeds'))
   const grounds = liveSeedLines(section(text, 'grounds-seeds'))
+  const foundry = liveSeedLines(section(text, 'foundry-seeds'))
   const sparks = liveSparkLines(section(text, 'sparks'))
   const bugs = liveSeedLines(section(text, 'bug'))
   const present = SECTIONS.filter(s => section(text, s) != null)
@@ -103,11 +121,13 @@ export function parseBed(text) {
     writs: writs.length,
     gardenFuel: garden.length,
     groundsFuel: grounds.length,
+    foundryFuel: foundry.length,
     sparks: sparks.length,
     bugs: bugs.length,
     writSeeds: writs.map(l => ({ kind: kindOf(l), pitch: pitchOf(l) })),
     gardenSeeds: garden.map(l => ({ kind: kindOf(l), pitch: pitchOf(l), ...stampOf(l) })),
     groundsSeeds: grounds.map(l => ({ kind: kindOf(l), pitch: pitchOf(l), ...stampOf(l) })),
+    foundrySeeds: foundry.map(l => ({ kind: kindOf(l), pitch: pitchOf(l), ...stampOf(l) })),
     sectionsPresent: present,
   }
 }
@@ -125,6 +145,14 @@ export function decayed(bed, state, th = TH) {
       out.push({ track: 'grounds', pitch: s.pitch, strikes: state.bigSwingsBuilt - s.contest })
     }
   }
+  // foundry seeds decay against the foundryBuilt counter (foundry contests lost), NOT bigSwingsBuilt —
+  // a grounds swing must never age a foundry seed it never competed with.
+  const foundryBuilt = state.foundryBuilt ?? 0
+  for (const s of bed.foundrySeeds || []) {
+    if (s.contest != null && foundryBuilt - s.contest >= th.foundryDecayStrikes) {
+      out.push({ track: 'foundry', pitch: s.pitch, strikes: foundryBuilt - s.contest })
+    }
+  }
   return out
 }
 
@@ -133,11 +161,18 @@ export function decide(state, bed, th = TH) {
   const cycle = state.cycle
   const gardenBuilds = cycle - state.lastGardenPlan
   const groundsSince = cycle - state.lastBigSwing
+  // FOUNDRY clocks default so an UNSEEDED state stays dormant: lastFoundry ?? cycle ⇒ foundrySince 0 ⇒ no
+  // foundry turn until state.json explicitly carries lastFoundry (a migrated/live estate does; fixtures don't).
+  const foundryBuilt = state.foundryBuilt ?? 0
+  const lastFoundry = state.lastFoundry ?? cycle
+  const foundrySince = cycle - lastFoundry
+  const foundryFuel = bed.foundryFuel ?? 0
   const gauges = {
     cycle,
     currentCycle: cycle + 1, // the cycle ABOUT to run — stamp seeds + the funlog with this
     gardenFuel: bed.gardenFuel, gardenBuilds,
     groundsFuel: bed.groundsFuel, groundsSince,
+    foundryFuel, foundrySince, foundryBuilt,
     bigSwingsBuilt: state.bigSwingsBuilt, sparks: bed.sparks, bugs: bed.bugs, writs: bed.writs,
   }
   let r
@@ -162,6 +197,16 @@ export function decide(state, bed, th = TH) {
       : `gardenBuilds=${gardenBuilds} ≥ ${th.gardenInterval} (a while since planting)`
     r = { mode: 'PLAN', track: 'garden', role: 'gardener',
       reason: `${why} — tend the beds: prune decayed FIRST, then file ≤3-line seeds toward fuel ${th.gardenFuelCeiling}.` }
+  } else if (foundrySince >= th.foundryInterval) {
+    // A foundry TURN has come due (and the gardens are healthy — this branch sits below garden-plan).
+    // Forge a ripe asset if the bed holds one; otherwise survey the estate for the next reps + restock.
+    if (foundryFuel >= 1) {
+      r = { mode: 'BUILD', track: 'foundry', role: 'foundry-smith',
+        reason: `foundrySince=${foundrySince} ≥ ${th.foundryInterval} and ${foundryFuel} ripe foundry seed(s) — forge a front-gate asset (the door's slow upkeep).` }
+    } else {
+      r = { mode: 'PLAN', track: 'foundry', role: 'foundry-surveyor',
+        reason: `foundrySince=${foundrySince} ≥ ${th.foundryInterval} and the foundry bed is dry — survey the estate for the next bespoke reps, then sow toward fuel ${th.foundryFuelCeiling}.` }
+    }
   } else {
     r = { mode: 'BUILD', track: 'garden', role: 'planter',
       reason: `gardenFuel=${bed.gardenFuel} (>${th.gardenFuelFloor}), gardenBuilds=${gardenBuilds} (<${th.gardenInterval}) — pull a garden seed (or dream one) and sow it.` }
@@ -184,7 +229,7 @@ function saveState(s) { writeFileSync(STATE, JSON.stringify(s, null, 2) + '\n') 
 // tolerated (the prose says "gardens"/"grounds"); counts coerce non-numbers → 0
 // (a forgotten "--sown N" placeholder must not crash the cycle bump or poison the tally).
 const MODES = { BUILD: 'BUILD', PLAN: 'PLAN', TRIVIAL: 'TRIVIAL', WRIT: 'WRIT' }
-const TRACKS = { garden: 'garden', gardens: 'garden', grounds: 'grounds', ground: 'grounds', bug: 'bug', bugs: 'bug', writ: 'writ', writs: 'writ' }
+const TRACKS = { garden: 'garden', gardens: 'garden', grounds: 'grounds', ground: 'grounds', foundry: 'foundry', foundries: 'foundry', bug: 'bug', bugs: 'bug', writ: 'writ', writs: 'writ' }
 // currentBed (optional) = { garden: [seed-title, …], grounds: [seed-title, …] } — the
 // bed AFTER this cycle's edits. When given, the tally is DERIVED by diffing it against
 // the snapshot in state.fence (like fuel — the bed is the source of truth, so a sloppy
@@ -194,7 +239,7 @@ export function applyRecord(state, { mode, track, bloomed, sown, decayed } = {},
   const m = MODES[String(mode).toUpperCase()]
   const t = TRACKS[String(track).toLowerCase()]
   if (!m) throw new Error(`record: unknown --mode "${mode}" (want BUILD | PLAN | TRIVIAL | WRIT)`)
-  if (!t) throw new Error(`record: unknown --track "${track}" (want garden | grounds | bug | writ)`)
+  if (!t) throw new Error(`record: unknown --track "${track}" (want garden | grounds | foundry | bug | writ)`)
 
   // ── A Patron's Writ is CADENCE-NEUTRAL ──────────────────────────────────────
   // It advances NO clock (cycle / lastGardenPlan / lastBigSwing / bigSwingsBuilt all
@@ -211,8 +256,8 @@ export function applyRecord(state, { mode, track, bloomed, sown, decayed } = {},
     const sw = { ...state }
     if (currentBed) {
       const tally = { ...(state.tally || {}) }
-      const old = state.fence || { garden: [], grounds: [] }
-      for (const fence of ['garden', 'grounds']) {
+      const old = state.fence || { garden: [], grounds: [], foundry: [] }
+      for (const fence of ['garden', 'grounds', 'foundry']) {
         const cur = new Set(currentBed[fence] || [])
         const prev = new Set(old[fence] || [])
         const sownN = [...cur].filter(x => !prev.has(x)).length // released this writ
@@ -220,7 +265,7 @@ export function applyRecord(state, { mode, track, bloomed, sown, decayed } = {},
         // NB: a seed absent from cur is NOT booked decayed — a writ never prunes the beds.
       }
       sw.tally = tally
-      sw.fence = { garden: [...(currentBed.garden || [])], grounds: [...(currentBed.grounds || [])] }
+      sw.fence = { garden: [...(currentBed.garden || [])], grounds: [...(currentBed.grounds || [])], foundry: [...(currentBed.foundry || [])] }
     }
     return sw
   }
@@ -229,6 +274,12 @@ export function applyRecord(state, { mode, track, bloomed, sown, decayed } = {},
   s.cycle = state.cycle + 1 // every completed cycle advances the durable clock
   if (m === 'PLAN' && t === 'garden') s.lastGardenPlan = s.cycle
   if (m === 'BUILD' && t === 'grounds') { s.lastBigSwing = s.cycle; s.bigSwingsBuilt = state.bigSwingsBuilt + 1 }
+  // A foundry TURN (build OR survey) resets the interval clock; only a BUILD advances the foundry contest
+  // counter (its decay clock). The fields carry forward untouched on every non-foundry cycle via {...state}.
+  if (t === 'foundry') {
+    s.lastFoundry = s.cycle
+    if (m === 'BUILD') s.foundryBuilt = (state.foundryBuilt ?? 0) + 1
+  }
   const tally = { ...(state.tally || {}) }
   const bump = (k, n) => { tally[k] = (tally[k] || 0) + n }
 
@@ -236,8 +287,8 @@ export function applyRecord(state, { mode, track, bloomed, sown, decayed } = {},
     // DERIVED: diff the fence (by seed title) vs the last snapshot. A seed that left
     // the bed BLOOMED (a BUILD in its own fence ships exactly one) or else DECAYED (pruned).
     // A seed edited IN PLACE keeps its title → in neither set → correctly counted as nothing.
-    const old = state.fence || { garden: [], grounds: [] }
-    for (const fence of ['garden', 'grounds']) {
+    const old = state.fence || { garden: [], grounds: [], foundry: [] }
+    for (const fence of ['garden', 'grounds', 'foundry']) {
       const cur = new Set(currentBed[fence] || [])
       const prev = new Set(old[fence] || [])
       const sownN = [...cur].filter(x => !prev.has(x)).length
@@ -247,10 +298,10 @@ export function applyRecord(state, { mode, track, bloomed, sown, decayed } = {},
       bump(`${fence}Bloomed`, bloomsHere)
       bump(`${fence}Decayed`, goneN - bloomsHere)
     }
-    s.fence = { garden: [...(currentBed.garden || [])], grounds: [...(currentBed.grounds || [])] }
+    s.fence = { garden: [...(currentBed.garden || [])], grounds: [...(currentBed.grounds || [])], foundry: [...(currentBed.foundry || [])] }
   } else {
     const num = x => { const n = Number(x); return Number.isFinite(n) ? n : 0 }
-    const ns = t === 'grounds' ? 'grounds' : 'garden'
+    const ns = t === 'grounds' ? 'grounds' : t === 'foundry' ? 'foundry' : 'garden'
     bump(`${ns}Sown`, num(sown)); bump(`${ns}Bloomed`, num(bloomed)); bump(`${ns}Decayed`, num(decayed))
   }
   s.tally = tally
@@ -278,7 +329,7 @@ function main() {
     if (!f.mode || !f.track) { console.error('record needs --mode and --track'); process.exit(2) }
     const state = loadState()
     const bed = parseBed(readFileSync(ROADMAP, 'utf8'))
-    const currentBed = { garden: bed.gardenSeeds.map(s => s.pitch), grounds: bed.groundsSeeds.map(s => s.pitch) }
+    const currentBed = { garden: bed.gardenSeeds.map(s => s.pitch), grounds: bed.groundsSeeds.map(s => s.pitch), foundry: bed.foundrySeeds.map(s => s.pitch) }
     let ns
     try { ns = applyRecord(state, { mode: f.mode, track: f.track }, currentBed) } // tally DERIVED from the bed diff
     catch (e) { console.error(e.message); process.exit(2) }
@@ -286,9 +337,9 @@ function main() {
     const dt = ns.tally, ot = state.tally || {}
     const delta = (k) => (dt[k] || 0) - (ot[k] || 0)
     if (String(f.mode).toUpperCase() === 'WRIT') {
-      console.log(`recorded WRIT/writ: cadence HELD at cycle ${ns.cycle} (no clock advanced → nothing decayed) · released ${delta('gardenSown')} garden + ${delta('groundsSown')} grounds seed(s) to the beds`)
+      console.log(`recorded WRIT/writ: cadence HELD at cycle ${ns.cycle} (no clock advanced → nothing decayed) · released ${delta('gardenSown')} garden + ${delta('groundsSown')} grounds + ${delta('foundrySown')} foundry seed(s) to the beds`)
     } else {
-      console.log(`recorded ${f.mode}/${f.track}: cycle ${state.cycle} → ${ns.cycle}  ·  garden +${delta('gardenSown')} sown / ${delta('gardenBloomed')} bloomed / ${delta('gardenDecayed')} decayed · grounds +${delta('groundsSown')} sown / ${delta('groundsBloomed')} bloomed / ${delta('groundsDecayed')} decayed`)
+      console.log(`recorded ${f.mode}/${f.track}: cycle ${state.cycle} → ${ns.cycle}  ·  garden +${delta('gardenSown')} sown / ${delta('gardenBloomed')} bloomed / ${delta('gardenDecayed')} decayed · grounds +${delta('groundsSown')} sown / ${delta('groundsBloomed')} bloomed / ${delta('groundsDecayed')} decayed · foundry +${delta('foundrySown')} sown / ${delta('foundryBloomed')} bloomed / ${delta('foundryDecayed')} decayed`)
     }
     console.log(JSON.stringify(ns, null, 2))
     return
@@ -301,12 +352,14 @@ function main() {
   // an unstamped live seed counts as fuel but can NEVER decay — flag it loudly
   const unstamped = bed.gardenSeeds.filter(s => s.sown == null).map(s => s.pitch)
     .concat(bed.groundsSeeds.filter(s => s.contest == null).map(s => s.pitch))
+    .concat((bed.foundrySeeds || []).filter(s => s.contest == null).map(s => s.pitch))
 
   if (cmd === '--status' || cmd === '--check') {
     const g = d.gauges
     console.log(`🎲 cycle ${g.currentCycle} (last completed ${g.cycle})`)
     console.log(`   GARDEN  fuel=${g.gardenFuel} (floor ${TH.gardenFuelFloor}/ceil ${TH.gardenFuelCeiling}) · builds-since-plan=${g.gardenBuilds} (cap ${TH.gardenInterval})`)
     console.log(`   GROUNDS fuel=${g.groundsFuel} (floor ${TH.groundsFuelFloor}/ceil ${TH.groundsFuelCeiling}) · since-swing=${g.groundsSince} (interval ${TH.groundsInterval}) · swings-built=${g.bigSwingsBuilt} · sparks=${g.sparks}`)
+    console.log(`   FOUNDRY fuel=${g.foundryFuel} (ceil ${TH.foundryFuelCeiling}) · since-turn=${g.foundrySince} (interval ${TH.foundryInterval}) · forged=${g.foundryBuilt}`)
     console.log(`   ${g.writs ? '✒️  ' : ''}writs=${g.writs}   bugs=${g.bugs}`)
     console.log(`\n▶ ${d.mode} / ${d.track}  (be the ${d.role})`)
     console.log(`   ${d.reason}`)
@@ -316,7 +369,7 @@ function main() {
     }
     if (missing.length) console.log(`\n⚠ ROADMAP missing gauge sections: ${missing.join(', ')} (fuel counted as 0 there)`)
     if (unstamped.length) console.log(`\n⚠ ${unstamped.length} UNSTAMPED seed(s) — they count as fuel but can NEVER decay; add (sown #N) / (· contest #M):\n   · ${unstamped.join('\n   · ')}`)
-    console.log(`\n${ratio(state.tally, 'garden')}\n${ratio(state.tally, 'grounds')}`)
+    console.log(`\n${ratio(state.tally, 'garden')}\n${ratio(state.tally, 'grounds')}\n${ratio(state.tally, 'foundry')}`)
     if (cmd === '--check') console.log('\nstate shape OK ✓')
     return
   }

@@ -133,6 +133,21 @@ one shared key `ws:pref:muted`, all 56 audio surfaces now shared-wired, browser-
 
 ---
 
+## 🔩 Foundry seeds — front-gate upkeep (the foundry-smith forges one bespoke rep / gate asset)
+
+The estate's front door is a self-contained sub-project (`the-gate/`) with its own SPEC + asset foundry.
+A `[rep]` grows the gate's rotating room-rep set (a bespoke front-elevation for one estate room that today
+falls back to the glyph plinth); a `[gate]` re-souls or polishes an existing gate asset. The foundry-smith
+forges it through the K-takes → judge → synthesize harness (`gate-foundry/`). Patient cadence: one foundry
+turn every ~12 cycles, below garden-plan — it never starves the gardens. See **gate-foundry/MAINTAINING.md**.
+A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizontal | mound) + accent, e.g.
+`[rep] **The Firmament rep** — an armillary sphere of nested brass rings · aspect:vertical · room:firmament · accent:#cba15a`.
+
+<!-- gauge:foundry-seeds:start -->
+<!-- gauge:foundry-seeds:end -->
+
+---
+
 ## 🌱 Garden seeds — grow what exists (the staple; the planter sows one)
 
 <!-- gauge:garden-seeds:start -->
