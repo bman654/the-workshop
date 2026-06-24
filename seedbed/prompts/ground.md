@@ -56,8 +56,9 @@ Read what your role needs.
 
 The **FOUNDRY** track is the front gate's slow upkeep — a patient lane (a turn every ~12 cycles, below
 garden-plan, so it never starves the gardens). The gate is a self-contained sub-project under `the-gate/`
-with its own SPEC; a foundry cycle forges a bespoke room-rep / gate asset (BUILD, the foundry-smith) or
-surveys the estate for the next reps (PLAN). If your role draws a foundry cycle, **read `gate-foundry/MAINTAINING.md`** — the gate's maintenance manual. (Most seats never touch it; it is its own world.)
+with its own SPEC; a foundry cycle forges a bespoke room-rep / gate asset (BUILD — a PREP scaffolds it, then
+the ART FOUNDRY engine forges the art via K takes → judges → synth) or surveys the estate for the next reps
+(PLAN). If your role draws a foundry cycle, **read `gate-foundry/MAINTAINING.md`** — the gate's maintenance manual. (Most seats never touch it; it is its own world.)
 
 ## The seedbed is mutated by CODE, never freehand
 

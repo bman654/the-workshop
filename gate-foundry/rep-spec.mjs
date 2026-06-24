@@ -5,10 +5,11 @@
 // drawRep<Name> function. This module OWNS that deterministic wiring so the foundry
 // smith only has to make the ART (the drawFn body), which the publisher then reviews.
 //
-// It is the tested twin behind seedbed/prompts/foundry.md: a foundry cycle's smith runs
-//   node gate-foundry/rep-spec.mjs --spec '<json>'
+// It is the tested twin behind seedbed/prompts/foundry-prep.md: a BUILD/foundry cycle's PREP runs
+//   node gate-foundry/rep-spec.mjs --spec '<json>'   (or pipe the JSON to `… -`)
 // to print the exact BESPOKE entry, the REP_DRAW line, the drawFn stub, and the slot
-// geometry for the rep's aspect, then applies them and iterates on the art.
+// geometry for the rep's aspect, applies them, then hands the stub to the ART FOUNDRY engine
+// (art-foundry/engine.workflow.js), whose K smiths forge the art inside the drawFn.
 //
 // A rep SPEC (from a [rep] seed) is:
 //   { id, room?, repConcept, aspect, accent?, repName?, repKey?, repColors? }

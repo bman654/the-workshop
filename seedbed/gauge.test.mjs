@@ -300,7 +300,7 @@ console.log('FOUNDRY track — the patient sub-project upkeep lane:')
 
   d = decide(due, parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: [F('Pond rep', 39, 0)] })))
   eq(d.mode + '/' + d.track, 'BUILD/foundry', 'foundry due + ripe seed → BUILD/foundry')
-  eq(d.role, 'foundry-smith', 'BUILD/foundry is the foundry-smith')
+  eq(d.role, 'foundry-prep', 'BUILD/foundry hands to the foundry-prep (then the ART FOUNDRY engine)')
 
   d = decide(due, parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: [] })))
   eq(d.mode + '/' + d.track, 'PLAN/foundry', 'foundry due + bed dry → PLAN/foundry (survey + restock)')

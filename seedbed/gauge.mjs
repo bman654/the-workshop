@@ -218,8 +218,8 @@ export function decide(state, bed, th = TH) {
     // survey the estate for the next reps + restock. (BUILD-vs-survey keys off TOTAL foundryFuel, not repFuel.)
     const pace = effInterval < th.foundryInterval ? ` (sped up from ${th.foundryInterval} by ${repFuel} [rep] seed(s) of pressure)` : ''
     if (foundryFuel >= 1) {
-      r = { mode: 'BUILD', track: 'foundry', role: 'foundry-smith',
-        reason: `foundrySince=${foundrySince} ≥ ${effInterval}${pace} and ${foundryFuel} ripe foundry seed(s) — forge a front-gate asset (the door's upkeep).` }
+      r = { mode: 'BUILD', track: 'foundry', role: 'foundry-prep',
+        reason: `foundrySince=${foundrySince} ≥ ${effInterval}${pace} and ${foundryFuel} ripe foundry seed(s) — forge a front-gate asset (the PREP scaffolds it, then the ART FOUNDRY engine forges the art).` }
     } else {
       r = { mode: 'PLAN', track: 'foundry', role: 'foundry-surveyor',
         reason: `foundrySince=${foundrySince} ≥ ${effInterval}${pace} and the foundry bed is dry — survey the estate for the next bespoke reps, then sow toward fuel ${th.foundryFuelCeiling}.` }

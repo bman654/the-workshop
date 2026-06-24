@@ -1,11 +1,11 @@
 export const meta = {
   name: 'fun-forever',
-  description: 'The Workshop\'s creative-cycle loop. Each cycle a director RUNS the deterministic gauge (node seedbed/gauge.mjs) and obeys its mode × track; explorers diverge; a judge selects/synthesizes; a builder ships+self-verifies; a publisher reviews fresh-eyes, sows/prunes, runs `gauge.mjs record`, commits + pushes. Tracks: gardens (gardener/planter) · grounds (groundskeeper/grounds-worker) · FOUNDRY (front-gate upkeep — a foundry-smith forges a bespoke room-rep / gate asset, or a surveyor restocks the rep backlog) · bug-fixer. A builder facing a too-big swing may PASS THE BATON — hand off to a fresh builder via a bounded inner loop, so makers stop shying from big work. A Patron\'s WRIT outranks all: the director triages it — clauses that try to control the DEPLOYED estate are released as ordinary unmarked seeds (the collective\'s call), while operational work and off-estate creative content (a vault note, a repo asset) are mandated (the steward implements); a writ cycle is cadence-neutral (decays nothing). Each cycle\'s summary appends to /tmp/funlog.txt until cancelled.',
+  description: 'The Workshop\'s creative-cycle loop. Each cycle a director RUNS the deterministic gauge (node seedbed/gauge.mjs) and obeys its mode × track; explorers diverge; a judge selects/synthesizes; a builder ships+self-verifies; a publisher reviews fresh-eyes, sows/prunes, runs `gauge.mjs record`, commits + pushes. Tracks: gardens (gardener/planter) · grounds (groundskeeper/grounds-worker) · FOUNDRY (front-gate upkeep — BUILD forges a bespoke room-rep / gate asset via the ART FOUNDRY engine (a PREP scaffolds the wiring, then K parallel takes → judges → synth), or a surveyor restocks the rep backlog) · bug-fixer. A builder facing a too-big swing may PASS THE BATON — hand off to a fresh builder via a bounded inner loop, so makers stop shying from big work. A Patron\'s WRIT outranks all: the director triages it — clauses that try to control the DEPLOYED estate are released as ordinary unmarked seeds (the collective\'s call), while operational work and off-estate creative content (a vault note, a repo asset) are mandated (the steward implements); a writ cycle is cadence-neutral (decays nothing). Each cycle\'s summary appends to /tmp/funlog.txt until cancelled.',
   phases: [
     { title: 'Direct', detail: 'one director runs `node seedbed/gauge.mjs`, salvages any orphaned work, and plans the cycle the gauge names' },
     { title: 'Explore', detail: 'K parallel explorers diverge — rival approaches / FORM concepts / seed-scouting per the track' },
     { title: 'Judge', detail: 'one judge selects / integrates / curates (may reject-all → one refined re-round)' },
-    { title: 'Build', detail: 'one builder ships the piece + self-verifies (BUILD cycles only; does not commit). A foundry cycle runs a foundry-smith; a too-big swing may pass the baton to fresh builders' },
+    { title: 'Build', detail: 'one builder ships the piece + self-verifies (BUILD cycles only; does not commit). A foundry cycle runs PREP then the ART FOUNDRY engine (K takes → judges → synth) instead; a too-big swing may pass the baton to fresh builders' },
     { title: 'Publish', detail: 'one publisher reviews every surface, sows/prunes, runs gauge.mjs record, commits + pushes' },
   ],
 }
@@ -19,7 +19,8 @@ const MAX_ITERS = 60
 const MAX_JUDGE_ROUNDS = 2        // the judge may reject the whole batch and demand ONE refined re-round
 const MAX_BATON = 3               // a BUILD may pass the baton to a fresh builder this many times (4 builders total) — bounds the inner loop
 const FUNLOG = '/tmp/funlog.txt'
-const STATE_PATH = '/Users/brandon/dev/general/creative-space/seedbed/state.json' // the writer reads the durable cycle from here
+const REPO_ROOT = '/Users/brandon/dev/general/creative-space' // the loop's repo root (holds seedbed/, the-gate/, art-foundry/) — where a BUILD/foundry cycle invokes the engine
+const STATE_PATH = REPO_ROOT + '/seedbed/state.json' // the writer reads the durable cycle from here
 
 // ── Grounding — the prompts now live as tunable files in seedbed/prompts/ ──────
 // The workflow-script SANDBOX can't read files, but every SUBAGENT can. So a seat
@@ -55,7 +56,7 @@ const DIRECTOR_SCHEMA = {
   required: ['mode', 'track', 'currentCycle', 'rationale', 'headline'],
   properties: {
     mode: { enum: ['BUILD', 'PLAN', 'TRIVIAL', 'WRIT'], description: 'COPY from `node seedbed/gauge.mjs` (the "mode" field). TRIVIAL only for a tiny edit you already did + committed inline this turn. WRIT = the gauge found a Patron\'s writ — triage it (see the WRIT fields below).' },
-    track: { enum: ['garden', 'grounds', 'foundry', 'bug', 'writ'], description: 'COPY from the gauge (the "track" field). garden=grow what exists · grounds=new structure · foundry=front-gate upkeep (BUILD: forge a ripe [rep]/[gate] foundry seed via the foundry-smith; PLAN: survey the estate for the next bespoke reps + sow them) · bug=a fix jumps the queue · writ=the Patron\'s request.' },
+    track: { enum: ['garden', 'grounds', 'foundry', 'bug', 'writ'], description: 'COPY from the gauge (the "track" field). garden=grow what exists · grounds=new structure · foundry=front-gate upkeep (BUILD: ripen a ripe [rep]/[gate] foundry seed into a foundrySpec — a PREP scaffolds it + the ART FOUNDRY engine forges the art via K takes; PLAN: survey the estate for the next bespoke reps + sow them) · bug=a fix jumps the queue · writ=the Patron\'s request.' },
     currentCycle: { type: 'integer', description: 'COPY the gauge\'s gauges.currentCycle — the durable cycle # to stamp seeds + the funlog with (NOT the within-run loop index).' },
     rationale: { type: 'string', description: 'Quote the gauge\'s reason line; note any orphaned work git status revealed + how you handled it; and (BUILD) why this piece.' },
     headline: { type: 'string', description: 'One line naming the cycle, e.g. "BUILD/grounds: open The Conservatory — the estate goes wide".' },
@@ -74,6 +75,21 @@ const DIRECTOR_SCHEMA = {
     writWork: { enum: ['mandate', 'release', 'mixed', 'ambiguous'], description: 'WRIT: your triage verdict (see the triage TEST in the director steps). mandate = the cycle DOES the work (operational, OR creative content that lands OFF the deployed estate — a vault note, a repo asset, an analysis, a message). release = the request tries to exert creative control over the deployed estate (a new exhibit, redesign, re-soul, taste call) → release it as ordinary seeds, build nothing. mixed = some clauses each. ambiguous = you cannot decide which pile, OR cannot understand the request, OR it is impossible / out of scope → the steward consumes the writ doing NO work and sends the Patron a Slack notify with the problem + the writ text. For mandate/mixed fill the BUILD fields (title/basicDesign/exploreMode/K/briefs/definitionOfDone); for release/ambiguous set exploreMode "none".' },
     writReleasedSeeds: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['type', 'title', 'text'], properties: { type: { type: 'string', description: 'garden: exhibit|cross|curation|rework · grounds: room|engine|metagame|map|medium · or spark' }, title: { type: 'string' }, text: { type: 'string', description: 'the FULL ≤3-line seed line in ordinary ROADMAP house style — phrased exactly like a seed the collective itself would write. NEVER mention the Patron / the writ / its origin: a released clause carries no providence and gets no priority.' } } }, description: 'WRIT (creative-only/mixed): each creative clause, rephrased as a normal seed/spark for the publisher to sow UNMARKED into the ordinary beds. The collective may take it up or let it decay like any other.' },
     writOutsideAction: { type: 'string', description: 'WRIT: if (and only if) the writ AUTHORIZES one outside action (a Slack/email message, a vault write, etc.), copy that authorization here VERBATIM. The STEWARD alone performs it, exactly once; leave empty if the writ authorizes none.' },
+    // FOUNDRY (BUILD/foundry only — the ripened build-ready rep spec the ART FOUNDRY engine forges)
+    foundrySpec: {
+      type: 'object', additionalProperties: false,
+      required: ['id', 'repConcept', 'aspect', 'kind'],
+      properties: {
+        id: { type: 'string', description: 'the estate room id (its slab id + the ?room= pin), e.g. "firmament".' },
+        room: { type: 'string', description: 'the room display name, e.g. "The Firmament".' },
+        repConcept: { type: 'string', description: 'what the drawn calling-card object IS, e.g. "an armillary sphere of nested brass rings".' },
+        aspect: { enum: ['vertical', 'horizontal', 'mound'], description: 'which slot shape the rep fills: vertical (tall+narrow) | horizontal (wide+short) | mound (squat).' },
+        accent: { type: 'string', description: 'the room accent hex (a fallback glow / the glyph-stand pip).' },
+        repColors: { type: 'object', description: 'optional per-band rep palette: { DAY:{"rep.swatch1":"#..","rep.glow1":"#.."}, DUSK:{…}, NIGHT:{…} } — band keys + dotted role keys.' },
+        kind: { enum: ['rep', 'gate'], description: 'rep = a NEW bespoke room-rep (the PREP scaffolds new wiring via rep-spec.mjs) · gate = re-soul an EXISTING rep/asset (PREP resolves the LIVE drawFn, no new wiring).' },
+      },
+      description: 'BUILD/foundry ONLY: ripen the ripe [rep]/[gate] seed into this structured spec — the foundry PREP feeds it to gate-foundry/rep-spec.mjs + composes the engine asset spec; the ART FOUNDRY engine then forges the art via K parallel takes (you do NOT design the art or run explorers).',
+    },
   },
 }
 
@@ -118,6 +134,36 @@ const BUILD_HANDOFF_SCHEMA = {
   },
 }
 
+// FOUNDRY PREP — the deterministic-scaffold + spec-compose step before the ART FOUNDRY forges a gate rep.
+// PREP returns the engine asset spec (what art-foundry/engine.workflow.js consumes) + what it wired in.
+const FOUNDRY_PREP_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['asset', 'scaffolded', 'forgeClean'],
+  properties: {
+    asset: {
+      type: 'object', additionalProperties: false,
+      required: ['key', 'title', 'module', 'drawFn', 'iface', 'extraQS', 'geometry', 'brief', 'judgeFocus', 'siblings'],
+      properties: {
+        key: { type: 'string', description: 'the engine asset key = the rep key (e.g. "firmament-rep").' },
+        title: { type: 'string', description: 'a one-line title for the rep, e.g. "the Firmament rep — an armillary sphere".' },
+        K: { type: 'integer', minimum: 1, maximum: 3, description: 'parallel takes for the engine (simple rep → 2; complex/animated → 3). Default 3 if omitted.' },
+        judgeK: { type: 'integer', minimum: 1, maximum: 3, description: 'judges per asset (default 2).' },
+        module: { type: 'string', description: 'always "the-gate/scene.js" for a gate rep — the LIVE file the engine elevates.' },
+        drawFn: { type: 'string', description: 'the EXACT scene.js fn name the engine elevates: drawRep<Name> (you stubbed it for a [rep]; for a [gate] it is the EXISTING fn you resolved).' },
+        siblings: { type: 'string', description: 'what the engine must keep BYTE-IDENTICAL (every other fn in scene.js — build/buildDefs/grounds/drawRoomRep + the REP_DRAW map apart from this rep\'s ONE line/etc.).' },
+        iface: { type: 'string', description: 'always "scene" for a gate rep (a module-internal helper, not the cross-module (parent,S) form).' },
+        extraQS: { type: 'string', description: 'the ?room= pin that forces THIS rep on screen, e.g. "room=firmament" (= rep-spec.mjs renderQS).' },
+        geometry: { type: 'string', description: 'the aspect slot geometry (copy rep-spec.mjs\'s geometry string for the aspect).' },
+        brief: { type: 'string', description: 'the ART BRIEF you composed: what the object IS, the estate idiom, the roles (rep.swatch*/rep.glow1), EMISSIVE, restraint — enough for a smith to forge it.' },
+        judgeFocus: { type: 'string', description: 'the judge focus you composed: the specific questions a judge scores this rep on (does it read as X? right aspect? glow at night? idiom-faithful?).' },
+      },
+    },
+    scaffolded: { type: 'string', description: 'what you wired into the LIVE tree: the rooms.js BESPOKE entry + the scene.js REP_DRAW line + the drawRep<Name> stub ([rep]); OR "existing drawFn resolved — no new wiring" ([gate]).' },
+    forgeClean: { type: 'boolean', description: 'node --check passed on the touched files AND `node tools/forge/forge.mjs --check --all` is current after your scaffolding (the rep renders empty-but-valid at ?room=<id>).' },
+    openConcerns: { type: 'string', description: 'anything the foundry / publisher should know (e.g. a tricky aspect fit, a [gate] whose live drawFn name differs from the seed).' },
+  },
+}
+
 const STEWARD_HANDOFF_SCHEMA = {
   type: 'object', additionalProperties: false,
   required: ['did', 'outsideActionPerformed'],
@@ -156,15 +202,8 @@ function judgePrompt(d, explorers, feedback, cyc, round) {
 }
 
 function buildPrompt(d, chosen, cyc) {
-  // A FOUNDRY cycle runs the foundry-smith (its own brief: the gate SPEC, the rep-spec scaffolder,
-  // the render-verify loop). Every other BUILD track runs the generic builder.
-  if (d.track === 'foundry') {
-    return seatPrompt('foundry.md', 'FOUNDRY-SMITH — forging a front-gate asset', {
-      cyc, track: d.track,
-      finalDesign: chosen.finalDesign || d.basicDesign || null,
-      definitionOfDone: d.definitionOfDone || null,
-    })
-  }
+  // The generic builder for every solo-builder BUILD track. (BUILD/foundry does NOT use this — it runs
+  // the foundry PREP + the ART FOUNDRY engine instead; see the foundry branch in the loop.)
   const role = d.track === 'grounds' ? 'GROUNDS-WORKER — opening a big swing' : d.track === 'bug' ? 'BUG-FIXER' : 'PLANTER — growing the gardens'
   return seatPrompt('builder.md', 'BUILDER (' + role + ')', {
     cyc, track: d.track,
@@ -174,22 +213,53 @@ function buildPrompt(d, chosen, cyc) {
   })
 }
 
+// FOUNDRY PREP — the seat that runs BEFORE the ART FOUNDRY engine on a BUILD/foundry cycle: it
+// deterministically scaffolds the rep wiring (gate-foundry/rep-spec.mjs) into the LIVE tree and composes
+// the engine asset spec (art brief / judgeFocus / geometry) from the director's ripened foundrySpec.
+function foundryPrepPrompt(d, cyc) {
+  return seatPrompt('foundry-prep.md', 'FOUNDRY PREP — scaffold + spec a bespoke gate rep', {
+    cyc, track: d.track,
+    foundrySpec: d.foundrySpec || null,
+    basicDesign: d.basicDesign || null, // the ripe seed line, as context / a fallback if foundrySpec is thin
+  })
+}
+
+// Assemble the PUBLISHER's handoff from the foundry PREP + the engine's synth result. (This handoff is
+// built by the SCRIPT, not returned by an agent, so it needs no schema — extra fields like `foundry` are
+// fine; the publisher reviews the dirty tree the engine left + commits, as on any BUILD cycle.)
+function foundryHandoff(prep, forge) {
+  const r = forge && forge.results && forge.results[0]
+  const final = (r && r.final) || null
+  const a = prep.asset
+  return {
+    foundry: true,
+    built: 'FOUNDRY forged "' + a.title + '" — rep ' + a.key + ' → ' + a.drawFn + ' in ' + a.module + '. '
+      + (final && final.summary ? final.summary : ('engine status: ' + ((forge && forge.status) || 'no result'))),
+    selfTest: final
+      ? ('synth: forgeClean=' + final.forgeClean + ', interfacePreserved=' + final.interfacePreserved
+        + '; final artifacts: ' + ((final.artifacts || []).join(', ') || 'none'))
+      : '(no synth result — the publisher must render + verify the rep itself before committing)',
+    surfacesToReview: [{ label: a.title + ' in situ', path: '/the-gate/the-gate.html?dev&' + a.extraQS }],
+    openConcerns: [prep.openConcerns, (final && final.changesFromWinner ? 'synth grafts: ' + final.changesFromWinner : null)]
+      .filter(Boolean).join(' · ') || null,
+    scaffolded: prep.scaffolded || null,
+  }
+}
+
 // BATON — a fresh builder continuing a too-big swing the previous builder handed off. It reads the
-// SAME role brief (foundry-smith for a foundry cycle, else the generic builder) plus the handoff
-// context, so it picks up WITHOUT re-deriving everything. It may itself pass the baton again (bounded)
-// UNLESS it is the TERMINAL pass (pass === MAX_BATON, the last builder the loop will ever spawn): the
-// terminal builder is told it CANNOT hand off and MUST finish or reach a clean, publishable stop.
+// generic builder brief plus the handoff context, so it picks up WITHOUT re-deriving everything. It may
+// itself pass the baton again (bounded) UNLESS it is the TERMINAL pass (pass === MAX_BATON, the last
+// builder the loop will ever spawn): the terminal builder is told it CANNOT hand off and MUST finish or
+// reach a clean, publishable stop. (BUILD/foundry never reaches the baton — its engine handles the swing.)
 function batonPrompt(d, chosen, prevHandoff, cyc, pass) {
-  const file = d.track === 'foundry' ? 'foundry.md' : 'builder.md'
   const isTerminal = pass >= MAX_BATON // the last allowed builder — no further baton can ever be spawned
   const passTag = 'baton pass ' + pass + '/' + MAX_BATON + (isTerminal ? ', TERMINAL' : '')
-  const roleName = d.track === 'foundry' ? 'FOUNDRY-SMITH (' + passTag + ')'
-    : d.track === 'grounds' ? 'GROUNDS-WORKER (' + passTag + ')'
+  const roleName = d.track === 'grounds' ? 'GROUNDS-WORKER (' + passTag + ')'
     : d.track === 'bug' ? 'BUG-FIXER (' + passTag + ')' : 'PLANTER (' + passTag + ')'
   const note = isTerminal
     ? 'You are a FRESH builder picking up a big swing a previous builder started and handed off, AND you are the TERMINAL builder — the LAST pass in this chain (pass ' + pass + ' of ' + MAX_BATON + '). NO MORE HAND-OFFS ARE POSSIBLE: even if you set requestBaton, the loop will IGNORE it and go straight to the publisher. So you MUST finish the work this turn, OR bring it to a clean, publishable stopping point — never leave it half-broken (no half-written files, no broken pages, no failing self-test). Their work is ALREADY in the tree — build ON it, do NOT restart. Do the nextSteps FIRST, then drive toward the definition of done; if you truly cannot finish everything, deliberately stop at the nearest coherent, working state and explain in openConcerns exactly what remains.'
     : 'You are a FRESH builder picking up a big swing a previous builder started and handed off. Their work is ALREADY in the tree — build ON it, do NOT restart. Do the nextSteps FIRST, then carry on toward the definition of done. If it is STILL too big to finish well this turn, you MAY pass the baton again (set requestBaton + batonReason + an updated batonHandoff); otherwise FINISH it and leave it for the publisher (requestBaton false). NOTE: this chain is bounded — pass ' + MAX_BATON + ' is the TERMINAL builder and cannot hand off, so do not assume an endless relay.'
-  return seatPrompt(file, 'BUILDER — ' + roleName, {
+  return seatPrompt('builder.md', 'BUILDER — ' + roleName, {
     cyc, track: d.track, batonPass: pass, maxBatonPass: MAX_BATON, isTerminalPass: isTerminal,
     finalDesign: chosen.finalDesign || d.basicDesign || null,
     definitionOfDone: d.definitionOfDone || null,
@@ -246,6 +316,7 @@ while (i < MAX_ITERS) {
   if (d == null) { log('cycle #' + i + ': director returned nothing — skipping'); continue }
   const cyc = d.currentCycle || i // the DURABLE cycle # (survives relaunches); fall back to the loop index
   log('cycle #' + cyc + ' — ' + d.mode + '/' + d.track + ': ' + d.headline)
+  const isFoundryBuild = d.mode === 'BUILD' && d.track === 'foundry' // forge a rep via the ART FOUNDRY engine, not a solo builder/explorers
 
   if (d.mode === 'TRIVIAL') {
     await agent(writerPrompt(d.rationale), { label: 'log #' + cyc, phase: 'Publish', model: 'sonnet' })
@@ -274,6 +345,8 @@ while (i < MAX_ITERS) {
   const writRelease = d.mode === 'WRIT' && d.writWork === 'release'
   if (writRelease) {
     chosen = { finalDesign: '' } // pure release: nothing to build; the publisher just releases the seeds (mandate/mixed/ambiguous run the steward)
+  } else if (isFoundryBuild) {
+    chosen = { finalDesign: '' } // foundry builds from d.foundrySpec via the engine's K parallel takes — NO fun-forever explorers/judge (the engine IS the divergence, judged on rendered art)
   } else if ((d.mode === 'BUILD' || d.mode === 'WRIT') && d.exploreMode === 'none') {
     chosen = { finalDesign: d.basicDesign }
   } else if (briefs.length === 0) {
@@ -314,7 +387,23 @@ while (i < MAX_ITERS) {
 
   // ── Build (BUILD: the builder; WRIT w/ operational work: the steward) — neither commits → Publish ──
   let handoff = null
-  if (d.mode === 'BUILD') {
+  if (isFoundryBuild) {
+    // ── FOUNDRY/build: forge a bespoke gate rep via the ART FOUNDRY engine ──────────────────────────
+    // No explore/judge/baton. fun-forever (top level) is the SOLE workflow() caller — it invokes the
+    // engine ONE level deep (a child can't nest). Flow: PREP (scaffold + spec) → engine (K takes →
+    // judges → synth, into the live tree, left DIRTY) → Publish (reviews + commits).
+    phase('Build')
+    const prep = await agent(foundryPrepPrompt(d, cyc), { label: 'foundry-prep #' + cyc, phase: 'Build', schema: FOUNDRY_PREP_SCHEMA })
+    if (!prep || !prep.asset) {
+      log('cycle #' + cyc + ': foundry PREP returned no asset spec — nothing to forge; the publisher reviews the tree as-is')
+    } else {
+      log('cycle #' + cyc + ': PREP scaffolded ' + prep.asset.key + ' (' + prep.asset.drawFn + ', K=' + (prep.asset.K || 3) + ') — handing to the ART FOUNDRY engine')
+      const forge = await workflow({ scriptPath: REPO_ROOT + '/art-foundry/engine.workflow.js' },
+        { medium: 'visual-gate', contextRoot: REPO_ROOT, assets: [prep.asset] })
+      log('cycle #' + cyc + ': art-foundry → ' + ((forge && forge.status) || '?') + ' (built ' + (((forge && forge.built) || []).join(', ') || 'nothing') + ')')
+      handoff = foundryHandoff(prep, forge)
+    }
+  } else if (d.mode === 'BUILD') {
     phase('Build')
     handoff = await agent(buildPrompt(d, chosen, cyc), { label: 'build #' + cyc, phase: 'Build', schema: BUILD_HANDOFF_SCHEMA })
     // BATON — a builder facing a too-big swing hands off to a FRESH builder; a bounded inner loop runs

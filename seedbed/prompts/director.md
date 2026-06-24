@@ -70,17 +70,22 @@ the loop gave you) — be concrete: a fresh explorer/builder will act only on wh
    registers a NEW front-door footprint. Scale the house bar up; one cycle can open a wing's landing + first bench.
    **If BUILD/bug — be the BUG-FIXER:** the open `[bug]` is the target; `basicDesign` = what is broken + the
    fix; `exploreMode:"none"` unless the fix is genuinely unclear. Fix the ROOT CAUSE.
-   **If BUILD/foundry — be the director of a FOUNDRY-SMITH (front-gate upkeep):** pick the ripe foundry seed
-   from the `gauge:foundry-seeds` fence (a `[rep]` = a bespoke front-gate room-rep · a `[gate]` = a gate asset
-   rework/polish). When both a `[rep]` and a `[gate]` are ripe, take the **`[rep]` first** — it is the backlog
-   pressure the cadence reacts to; drain a missing rep before re-souling an existing one. Put the seed's FULL
-   intent into `basicDesign` so the smith can act — for a `[rep]`, relay the
-   rep SPEC verbatim: `{id, room, repConcept, aspect (vertical|horizontal|mound), accent, repColors?}` (the smith
-   feeds it to `gate-foundry/rep-spec.mjs`); for a `[gate]`, name the asset + the re-soul direction. Set
-   `exploreMode:"none"` (the smith iterates + renders itself) unless a rep genuinely wants rival FORM concepts
-   (then `compete`, briefs = divergent looks, and the smith builds the winner). `definitionOfDone` = the rep
-   renders estate-quality across idle-night/day/open-night at `?room=<id>`, forge --check clean, the honesty chip
-   green. The gate is a self-contained sub-project (`the-gate/`, its own SPEC) — see `gate-foundry/MAINTAINING.md`.
+   **If BUILD/foundry — RIPEN the rep into a build-ready spec for the ART FOUNDRY:** pick the ripe foundry
+   seed from the `gauge:foundry-seeds` fence (a `[rep]` = a bespoke front-gate room-rep · a `[gate]` = a
+   re-soul/polish of an existing rep or gate asset). When both a `[rep]` and a `[gate]` are ripe, take the
+   **`[rep]` first** — it is the backlog pressure the cadence reacts to; drain a missing rep before re-souling
+   an existing one. You do NOT design the art and you do NOT run explorers — the foundry's K parallel takes
+   ARE the divergence (each smith forges a rival take, judged on RENDERED art, then synthesized). YOUR job is
+   to RIPEN the ≤3-line seed into the structured **`foundrySpec`** the foundry forges:
+   `{ id, room, repConcept (what the drawn calling-card object IS), aspect (vertical|horizontal|mound),
+   accent (#hex), repColors? ({DAY/DUSK/NIGHT}→{"rep.swatch1":"#..","rep.glow1":"#..",…}), kind (rep|gate) }`.
+   For a `[rep]` set `kind:"rep"` (the foundry PREP scaffolds the NEW wiring via `gate-foundry/rep-spec.mjs`);
+   for a `[gate]` set `kind:"gate"`, put the existing rep/asset id in `id` + the re-soul direction in
+   `repConcept` (PREP resolves the LIVE drawFn — no new wiring). ALWAYS set `exploreMode:"none"` for a foundry
+   cycle (the engine handles divergence; never spin up fun-forever explorers here — even a rep that "wants
+   rival looks" gets them from the K takes). `definitionOfDone` = the rep renders estate-quality across
+   idle-night/day/open-night at `?room=<id>`, forge --check clean, the honesty chip green. The gate is a
+   self-contained sub-project (`the-gate/`, its own SPEC) — see `gate-foundry/MAINTAINING.md`.
    **When a `[bug]` is TOO BIG for one cycle — the decomposition path (use it, don't improvise):**
    - Do NOT silently convert it to bare seeds, and do NOT decompose it into child `[bug]`s. A `[bug]` is an
      unconditional queue-jumper that NEVER decays — so N child-bugs become N permanent queue-jumpers with no

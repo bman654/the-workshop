@@ -14,7 +14,8 @@ is the gate's slow-upkeep lane, deliberately **patient** when caught up but **ad
 
 - A **foundry TURN** comes due when `foundrySince >= effInterval`, and it sits **below garden-plan** in the
   decision ladder — so it can never starve the gardens or jump ahead of a bug or a swing.
-- When a turn is due and the foundry bed holds a ripe seed → **`BUILD/foundry`** (a foundry-smith forges it).
+- When a turn is due and the foundry bed holds a ripe seed → **`BUILD/foundry`** (a PREP scaffolds the
+  wiring, then the ART FOUNDRY engine forges the art: K parallel takes → blind judges → a synthesizer).
 - When a turn is due and the foundry bed is dry → **`PLAN/foundry`** (a surveyor restocks the rep backlog).
   The BUILD-vs-survey choice keys off **TOTAL** `foundryFuel` (all foundry seeds), not the rep pressure count.
 - Foundry seeds **decay** like grounds seeds, but on their OWN clock (`foundryBuilt` contests lost, never
@@ -97,21 +98,28 @@ It prints, ready to paste:
 
 The aspect is one of **vertical** (tall+narrow), **horizontal** (wide+short), or **mound** (low+wide); the
 slot bottom-aligns on the ground line in `[78..156]×[114..228]`. `rep-spec.mjs` owns this deterministic
-plumbing (proven by `rep-spec.test.mjs`); the smith owns the ART inside the drawFn.
+plumbing (proven by `rep-spec.test.mjs`); the ART FOUNDRY engine's smiths own the ART inside the drawFn.
 
 ## A BUILD/foundry cycle, end to end
 
-1. **Director** reads the gauge, picks the ripe foundry seed, relays its spec in `basicDesign`.
-2. **Foundry-smith** (`seedbed/prompts/foundry.md`): runs `rep-spec.mjs`, applies ①②③, then makes the art —
-   render in full scene context and LOOK, iterate 2–3×:
-   ```
-   GATE_SRC="$(pwd)" gtimeout 150 bash gate-foundry/render-take.sh \
-     /tmp/foundry-<id> the-gate/scene.js - <port> /tmp/foundry-<id>/out "room=<id>"
-   ```
-   then `node tools/forge/forge.mjs the-gate/the-gate.src.html` + `--check --all`. Leaves it UNCOMMITTED.
-3. **Publisher**: fresh-eyes review of `/the-gate/the-gate.html?dev&room=<id>` across the three bands,
+A foundry BUILD does NOT run a solo smith or fun-forever explorers — it runs the **ART FOUNDRY engine**
+(`art-foundry/engine.workflow.js`), the only `workflow()` fun-forever nests (one level; a child can't nest).
+The engine's K parallel takes ARE the divergence, judged on RENDERED art:
+
+1. **Director** reads the gauge, picks the ripe foundry seed, and RIPENS it into the structured
+   `foundrySpec` `{id, room, repConcept, aspect, accent, repColors?, kind:rep|gate}` (`exploreMode:"none"`).
+2. **Foundry PREP** (`seedbed/prompts/foundry-prep.md`): runs `rep-spec.mjs`, applies ①②③ into the LIVE
+   tree (a `[rep]` — leaving the drawFn a STUB; a `[gate]` resolves the existing drawFn, no new wiring),
+   `forge --check --all`, and composes the **engine asset spec** (art brief + judgeFocus + geometry + K).
+3. **ART FOUNDRY engine** (invoked by fun-forever as `workflow({scriptPath:'…/art-foundry/engine.workflow.js'},
+   {medium:'visual-gate', contextRoot, assets:[spec]})`): per asset, K **smiths** each `cp` the live
+   `scene.js` → a candidate, elevate ONLY the rep drawFn, and render in full scene context via
+   `render-take.sh` (`room=<id>` pinned); blind **judges** view the shots + rank; a **synthesizer** installs
+   the winner into the live `scene.js`, forges, verifies, and leaves it UNCOMMITTED.
+4. **Publisher**: fresh-eyes review of `/the-gate/the-gate.html?dev&room=<id>` across the three bands,
    `bed rm "<title>" --reason BLOOMED --fence foundry-seeds --at the-gate/…`, `gauge.mjs record --mode BUILD
-   --track foundry`, then the standing **ledger collate + commit** (below).
+   --track foundry`, then the standing **ledger collate + commit** (below). No baton for foundry — the K
+   takes handle a big asset, and a nested workflow can't nest further.
 
 A **PLAN/foundry** cycle is the mirror: the director sets surveyor briefs, scouts nominate `[rep]`
 candidates from the LIVE estate (excluding rooms already in `rooms.js` BESPOKE), the judge curates a slate
@@ -124,22 +132,29 @@ The gate shares the estate's `ledger/` and forge. Every foundry publish ends:
 ledger-bound pages, re-forges) → `git add -A && git commit`. Running collate is correct; the resulting
 estate-page diff is sanctioned, not scope-creep.
 
-## Power tools (for a bigger push than one cycle)
+## The engine + the power tools
 
-The original gate assets + reps were forged by a **competitive K-takes harness** — higher quality than a
-solo smith, run by hand for a batch:
+The live BUILD/foundry path (above) and a manual batch push share the same **competitive K-takes** idea —
+higher quality than a solo smith. The engine is the in-loop form; the rest are by-hand power tools:
 
-- **`gate-foundry/foundry.workflow.js`** — per asset: fan out K smith-takes → blind judges → a synthesizer
-  installs the winner. Pass the gate root + the assets to build:
+- **`art-foundry/engine.workflow.js`** — THE general in-house art engine BUILD/foundry runs (and any future
+  exhibit-art build). Per asset: K smith-takes → blind judges → a synthesizer installs the winner. It is a
+  CHILD workflow (builds via `agent()`/`parallel()`, never `workflow()` — it can't nest), medium-parametrized
+  (`visual-gate` proven; `visual-exhibit`/`sound` scaffolded). Its tested pure core is `art-foundry/
+  engine-core.mjs` (caps K≤3, ≤15 assets; the media registry) — the workflow INLINES a mirror, keep-in-sync.
+  Its seat briefs are `art-foundry/prompts/{foundry-smith,foundry-judge,foundry-synth}.md`. Run it by hand:
   ```js
-  Workflow({ scriptPath: '<repo>/gate-foundry/foundry.workflow.js',
-             args: { gateRoot: '<repo>', build: ['manor', 'observatory'] } })
+  Workflow({ scriptPath: '<repo>/art-foundry/engine.workflow.js',
+             args: { medium: 'visual-gate', contextRoot: '<repo>', assets: [ /* engine asset specs */ ] } })
   ```
-  Its `LIB` holds the gate's built assets + the existing reps; a new rep is added to the LIB (or built solo
-  by a foundry-smith following `rep-spec.mjs`). `gateRoot` defaults to the original `/tmp/gate-worktree`.
+- **`gate-foundry/foundry.workflow.js`** — the LEGACY harness that forged the original 8 gate buildings +
+  the first 3 reps; its `LIB` holds those hardcoded asset rows. Kept as a manual power tool to re-forge an
+  original LIB asset (`args:{gateRoot, build:['manor',…]}`); it is NOT in the loop path (the engine is).
 - **`gate-foundry/survey.workflow.js`** + `room-pool.json` — the blind 4-lens essence-survey that picked the
   first bespoke reps. `room-pool.json` is a snapshot of the rooms at gate-build time; for a fresh survey,
   regenerate the pool from the live front-door PLACES (the gate's GATE-ROOMS slab) so new rooms are eligible.
+  (For the routine surveyor backlog, `gate-foundry/backlog.mjs` is the deterministic live source, not the
+  frozen pool.)
 - **`gate-foundry/render-take.sh`** — renders a candidate (or the live files with `-`) in full scene
   context; `GATE_SRC` is the gate root (default the worktree).
 
