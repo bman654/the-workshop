@@ -218,6 +218,15 @@
      changed store/pins; never called by the scene). */
   AST._reset = function () { _cached = undefined; };
 
+  /* test seams: read/write the live memo so a self-test that must temporarily stub
+     the pick (the asterism negative-control) can SAVE the live figure before the stub
+     and RESTORE it after — leaving AST.current() returning the EXACT figure drawn at
+     boot. Without this, _reset() after a stub re-rolls a different random figure on the
+     next current() call (the first weather change), corrupting the showcased pick.
+     Never called by the scene. */
+  AST._peek = function () { return _cached; };
+  AST._poke = function (f) { _cached = f; };
+
   AST.PLACEHOLDER = PLACEHOLDER;
 
   Gate.asterism = AST;

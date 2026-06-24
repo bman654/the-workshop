@@ -122,12 +122,21 @@
     return { names: names, count: count };
   }
 
-  /* fitCount(stubVisited): re-run AST.current() against a STUBBED visited-set by
+  /* currentUnderStub(stubVisited): re-run AST.current() against a STUBBED visited-set by
      temporarily swapping Sky.visitedFromStore + dropping AST's memo, then restore.
      Returns the figure (or null). This is the asterism negative-control harness:
      a 0-unlock stub MUST yield null; a ≥1-unlock stub MUST yield a figure. Only
      usable when Sky + AST are present; returns the sentinel {unavailable:true}
-     otherwise so the caller degrades the control gracefully. */
+     otherwise so the caller degrades the control gracefully.
+
+     NON-DESTRUCTIVE to the live pick: we SAVE the live memo before stubbing and RESTORE
+     it after (via AST._peek/_poke), so AST.current() afterward returns the EXACT figure
+     drawn at boot. A bare _reset() would instead re-roll a different random figure on the
+     next current() call (the first weather change → drawAsterism), changing the showcased
+     asterism — the chip would corrupt the very figure it vouches for. We restore the saved
+     memo whether or not it was ever computed: a still-undefined memo restores cleanly
+     (current() recomputes the same live pick on demand), and a computed figure/null is
+     reinstated verbatim. Falls back to _reset() only on an older AST without the seams. */
   function currentUnderStub(stubVisited) {
     var Sky = root.Sky, AST = Gate.asterism;
     if (!Sky || !AST || typeof AST.current !== 'function' || typeof AST._reset !== 'function'
@@ -135,6 +144,8 @@
       return { unavailable: true };
     }
     var origVisited = Sky.visitedFromStore;
+    var canRestore = (typeof AST._peek === 'function' && typeof AST._poke === 'function');
+    var savedMemo = canRestore ? AST._peek() : undefined;
     var fig;
     try {
       Sky.visitedFromStore = function () { return stubVisited; };
@@ -144,7 +155,8 @@
       fig = { threw: String(e) };
     } finally {
       Sky.visitedFromStore = origVisited;
-      AST._reset();                  // drop the stubbed memo so the live pick re-computes
+      if (canRestore) AST._poke(savedMemo);   // reinstate the live boot pick verbatim
+      else AST._reset();                       // older AST: drop the stubbed memo
     }
     return { fig: fig };
   }

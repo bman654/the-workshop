@@ -834,8 +834,10 @@ contracts. The following are finalized in Phase D and get only a "beauty pass" n
   scale + centered); a lone fallback star pins to local `(50,56)` — low/close to its label,
   not a stray midpoint dot. Cold-start / Sky·WS absent → `null` → bare starfield (no invented
   figure). Dev pins read from `location.search`: `?asterism=<id>` honors ANY unlocked id (even
-  single-star), `?seed=<n>` reproduces the random pick. The asterism still gets a beauty pass
-  (glow/shape polish).
+  single-star), `?seed=<n>` reproduces the random pick. The memo (`_cached`) is now read/written
+  by test seams `AST._peek()`/`AST._poke(f)` so a self-test that must temporarily stub the pick can
+  SAVE the live boot figure and RESTORE it — the showcased asterism therefore never re-rolls across
+  re-renders (a weather change, a recolor). The asterism still gets a beauty pass (glow/shape polish).
 - **per-visit random room-rep** — ✅ BUILT 2026-06-23 (`rooms.js`): `R.pick()` is now a
   PER-VISIT RANDOM pick over every unlocked slab room ∪ the synthetic Cairn fixture (the draw
   `_roll` is frozen at module-eval, the resolved pick memoized so the boot's two `pick()`
@@ -863,7 +865,9 @@ contracts. The following are finalized in Phase D and get only a "beauty pass" n
   `Sky.state(Sky.visitedFromStore(WS.store()), …)`; the gate draws a figure IFF count>0 and
   `AST.current().name ∈` the unlocked set (neg-ctrl: a stubbed 0-unlock state → `current()` null;
   a stubbed ≥1-unlock state → that wing's figure, via `AST._reset()` + a temporary
-  `Sky.visitedFromStore` swap, restored). **(2) room coherence** — showable count ==
+  `Sky.visitedFromStore` swap. The stub is NON-DESTRUCTIVE: `currentUnderStub()` saves the live memo
+  with `AST._peek()` before stubbing and restores it with `AST._poke()` after, so the live boot pick
+  the gate draws is never re-rolled by the self-test). **(2) room coherence** — showable count ==
   `R.loadSlab().length + 1` (Cairn fixture); `R.pick().id ∈ (slab ∪ 'cairn')` (neg-ctrl: a bogus
   `?room` pin falls back into the pool; `pick()` twice is identical). **(3) moon math** —
   recompute `moonPhase(julianDate(new Date()))` / `terminator()` (the `?moon` pin overrides exactly

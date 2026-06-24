@@ -359,17 +359,70 @@
       el('circle', { cx: px(s).toFixed(1), cy: py(s).toFixed(1), r: (s.mag === 1 ? 4.2 : 3.0).toFixed(1),
         fill: 'var(--asterism-star-ref, #f0d489)', filter: 'url(#glow-star)' }, astG);
     }
-    // engraved italic label below
+    // engraved italic label below — WRAPPED + BOUNDED so a long name/myth never clips
+    // the screen edge. The slot is top-LEFT (ox≈70, size≈180 → centered lx≈160), so a
+    // text-anchor:middle line longer than ~2·(lx−margin) overflowed past x=0 and was cut
+    // off (e.g. The Wagerer / The Coilwright / The Automaton myths). We word-wrap each
+    // block to a bounded line length, then CLAMP the shared anchor x so no line's
+    // estimated half-width pushes its left edge below MARGIN or its right edge past
+    // VB_W−MARGIN. Measure-free: estimate a line's pixel width from char-count × a
+    // per-char advance for the font size + letter-spacing (conservative over-estimate so
+    // we clamp safely without a DOM text-metrics call).
+    var MARGIN = 12;                                  // keep ≥12px off either screen edge
     var lx = ox + size * 0.5, ly = oy + size * 0.92;
-    var t = el('text', { x: lx.toFixed(1), y: ly.toFixed(1), 'text-anchor': 'middle',
-      'font-family': 'Georgia, serif', 'font-style': 'italic', 'font-size': '20',
-      fill: 'var(--asterism-line-ref, #c9a24a)', opacity: '0.85' }, astG);
-    t.textContent = fig.name;
-    if (fig.myth) {
-      var t2 = el('text', { x: lx.toFixed(1), y: (ly + 20).toFixed(1), 'text-anchor': 'middle',
+
+    // per-char advance estimates (px). Georgia italic 20 ≈ 0.52em → ~10.4px/char; the myth
+    // is ui-monospace 11 with 0.18em letter-spacing → glyph ~0.60em + 0.18em track ≈ 8.6px/char.
+    var NAME_ADV = 10.4, MYTH_ADV = 8.6;
+    // bounded wrap widths: the myth is uppercased + wide-tracked → budget ~20 chars/line;
+    // the name is shorter glyphs but bigger font → allow a touch more.
+    var NAME_MAX_CH = 22, MYTH_MAX_CH = 20;
+
+    // greedy word-wrap a string to <= maxCh characters per line (never splits a word; a
+    // single over-long word occupies its own line and is clamped horizontally below).
+    function wrap(str, maxCh) {
+      var words = String(str).split(/\s+/), lines = [], line = '';
+      for (var w = 0; w < words.length; w++) {
+        if (!words[w]) continue;
+        var cand = line ? line + ' ' + words[w] : words[w];
+        if (cand.length > maxCh && line) { lines.push(line); line = words[w]; }
+        else line = cand;
+      }
+      if (line) lines.push(line);
+      return lines.length ? lines : [''];
+    }
+
+    var nameLines = wrap(fig.name, NAME_MAX_CH);
+    var mythLines = fig.myth ? wrap(fig.myth.toUpperCase(), MYTH_MAX_CH) : [];
+
+    // CLAMP the shared anchor x so every line stays within [MARGIN, VB_W−MARGIN]. With
+    // text-anchor:middle a line spans [lx − halfW, lx + halfW]; find the widest half-width
+    // across all lines and shift lx inward if either edge would breach the margin.
+    var maxHalf = 0;
+    for (var ni = 0; ni < nameLines.length; ni++)
+      maxHalf = Math.max(maxHalf, nameLines[ni].length * NAME_ADV / 2);
+    for (var mi = 0; mi < mythLines.length; mi++)
+      maxHalf = Math.max(maxHalf, mythLines[mi].length * MYTH_ADV / 2);
+    if (lx - maxHalf < MARGIN) lx = MARGIN + maxHalf;
+    if (lx + maxHalf > VB_W - MARGIN) lx = VB_W - MARGIN - maxHalf;
+
+    // render the NAME lines (font 20, ~22px line-height), stacked at/under ly
+    var ny = ly;
+    for (var n = 0; n < nameLines.length; n++) {
+      var tn = el('text', { x: lx.toFixed(1), y: ny.toFixed(1), 'text-anchor': 'middle',
+        'font-family': 'Georgia, serif', 'font-style': 'italic', 'font-size': '20',
+        fill: 'var(--asterism-line-ref, #c9a24a)', opacity: '0.85' }, astG);
+      tn.textContent = nameLines[n];
+      ny += 22;
+    }
+    // render the MYTH lines (font 11, ~14px line-height) below the name block
+    var my = ny + 6;
+    for (var m = 0; m < mythLines.length; m++) {
+      var tm = el('text', { x: lx.toFixed(1), y: my.toFixed(1), 'text-anchor': 'middle',
         'font-family': 'ui-monospace, monospace', 'font-size': '11', 'letter-spacing': '0.18em',
         fill: 'var(--asterism-line-ref, #c9a24a)', opacity: '0.5' }, astG);
-      t2.textContent = fig.myth.toUpperCase();
+      tm.textContent = mythLines[m];
+      my += 14;
     }
   }
 

@@ -15,6 +15,14 @@ coherence / room coherence / moon math / determinism, each with a load-bearing n
 GREEN, forced inconsistency → RED with the failing claim named, `?moon` pin exact), zero console
 errors. See §9 + the dated entry below.
 
+**ASTERISM POLISH — ✅ FIXED (2026-06-23):** two confirmed asterism bugs — (1) the chip self-test no
+longer re-rolls the showcased pick on the first weather change (new `AST._peek`/`_poke` memo seams;
+`selftest.js` `currentUnderStub()` SAVES/RESTORES the live memo instead of leaving it `_reset()`), and
+(2) `drawAsterism()` now WRAPS + horizontally CLAMPS the name·myth so long myths (The Wagerer / The
+Coilwright / The Automaton) never clip the screen edge. Verified across weather changes (label stable,
+chip 15/15, neg-ctrl still flips + restores) and per-figure screenshots (`/tmp/ast-polish-shots/`); see
+the dated entry below.
+
 **▶▶ NEXT — to FINISH the Gate (see §9):** (1) **beauty passes** — moon/sun + asterism glow/shape polish (audio balance is owner-accepted: "perfect"). (2) **dogfood QA** — full exploratory interaction pass now that the gate is interactive (splash→gnomon→weather→open→outro+audio), + verify reduced-motion on a real machine (logic-verified only — KNOWN-ISSUES P3). (3) **go-live** (owner call) — the gate lives on branch `the-gate` and navigates to `../index.html`; making it the estate's actual entrance / merging is a separate decision.)
 
 **ASTERISM PREFER-FIGURES REFINEMENT — showcase a real constellation, never a lone dot under a grand label — ✅ SHIPPED (2026-06-23):**
@@ -540,6 +548,55 @@ Selene's Auditor (verify) — plus the 12 recon marks (11 explorers + Januswrigh
 
 **Guardrails:** add-only under `the-gate/`; NEVER touch `ROADMAP.md` or move/rewrite existing
 files; test on a served origin only; do NOT run `collate.sh` or the fun-forever loop.
+
+---
+
+## ASTERISM POLISH — chip self-test stops re-rolling the live pick + name·myth wraps/bounds so it never clips  (2026-06-23)
+
+Two confirmed asterism bugs in The Gate, fixed surgically (`asterism.js`, `selftest.js`, `scene.js`
+only — no other file touched):
+
+**Bug 1 — the showcased asterism RE-PICKED on the first weather change.** The pick is memoized in
+`asterism.js` (`var _cached`; `AST.current()` caches it so it's stable per load). But the honesty
+chip's self-test (`selftest.js` `currentUnderStub()`) ran on load and, to drive the asterism
+negative-control, swapped `Sky.visitedFromStore` → `AST._reset()` → `AST.current()` (a stubbed
+figure) → restored `visitedFromStore` → then `AST._reset()` AGAIN to "drop the stubbed memo". That
+final reset cleared the LIVE cache, so the next `current()` call (the first weather change →
+`refreshSkyObjects` → `drawAsterism` → `current()`) re-rolled a DIFFERENT random figure — the chip
+corrupted the very figure it vouches for. **Fix:** (1) `asterism.js` adds two memo test seams next to
+`_reset` — `AST._peek()` (getter) and `AST._poke(f)` (setter). (2) `selftest.js` `currentUnderStub()`
+now SAVES the live memo with `_peek()` before the stub and RESTORES it with `_poke()` in `finally`
+(falling back to `_reset()` only on an older AST without the seams), so after the whole self-test
+`AST.current()` returns the EXACT figure drawn at boot. The 15 invariants still all pass and the
+negative control still genuinely fails — only the live-state mutation is removed.
+
+**Bug 2 — the name/myth CLIPPED off the LEFT edge.** `drawAsterism()` drew the name (font 20) and
+myth (font 11, 0.18em letter-spacing) `text-anchor:middle` at `lx = ox + size*0.5`. The slot is
+top-left (ox≈70, size≈180 → lx≈160), so long myths (The Wagerer "Pours belief, never spills it; lets
+the evidence decide the level." — the longest; The Coilwright; The Automaton) overflowed past x=0 and
+were cut off. **Fix** (`scene.js` `drawAsterism` only): greedy word-WRAP the name (≤22 ch/line) and
+myth (≤20 ch/line — uppercased + wide-tracked, budgeted conservatively) into stacked `<text>` lines;
+estimate each line's width measure-free (char-count × per-char advance) and CLAMP the shared anchor
+`lx` so no line's left edge falls below a 12px margin nor its right edge past `VB_W−12` (VB_W=1600).
+Emissive colors/fonts/anchor unchanged; the block runs downward from y≈190 and stays well within
+VB_H=900.
+
+**Verify (served HTTP 127.0.0.1:8886, agent-browser session "ast-polish", `?scene=idle&t=night`,
+store injected via `ws:seen:<room>`=Date.now() + reload, zero console errors throughout, pixels
+LOOKED at):**
+- *RE-PICK:* The Automaton (context-window/temperature-dial/the-turn/partition) → boot drew "The
+  Automaton" + chip 15/15. Across 4 weather changes (storm→clear→rain→clear) the `#asterism` label
+  stayed "The Automaton" every time (was: re-rolled on the first change). Forcing an inconsistency
+  (a figure drawn against a stubbed 0-unlock world) flipped the chip RED 13/15 with the two asterism
+  claims failing, then RESTORED cleanly to "The Automaton" + 15/15 — negative control intact, live
+  pick non-destructive.
+- *CLIP:* The Automaton (myth → 3 lines), The Coilwright lodestone-hall/bootstrap-bench (3 lines),
+  and the longest single-star fallback The Wagerer belief-beam (4 lines) all rendered FULLY on-screen,
+  nothing cut at either edge (`/tmp/ast-polish-shots/{automaton,coilwright,wagerer-fallback}.png`). A
+  pathological 47-char unbreakable name confirmed the clamp engages (anchor x 160→256, left edge at
+  the 12px margin).
+
+`forge --check --all` = all 97 current.
 
 ---
 
