@@ -3,7 +3,10 @@
 <!-- ═══════════════════════════════════════════════════════════════════════
      RESUME POINTER  (read this first on a fresh/compacted context)
      ═══════════════════════════════════════════════════════════════════════ -->
-## ▶ RESUME POINTER — current state (2026-06-23: FOUNDRY COMPLETE + Phase-D room-rotation, wind-sway, WEATHER-FX, real MOON-PHASE WIRING, **AUDIO COMPLETE** (11 procedural sounds across 3 passes — owner verdict "sound is perfect"; creature rotation day=birds/dusk=crickets/night=owl), first-gesture audio unlock, the **founding-myth entry splash + "Hand That Guides" outro** (owner-loved bookend), reader-paced **skippable outro** (10s + click/key), all owner-playtest fixes, **EARNED-STATE PASS** (random unlocked asterism + per-visit random roomref over slab∪cairn + undercroft 3rd "discovered/closed-doors" state + ambient weather drift) — ALL SHIPPED; K=4.
+## ▶ RESUME POINTER — current state (2026-06-23: FOUNDRY COMPLETE + Phase-D room-rotation, wind-sway, WEATHER-FX, real MOON-PHASE WIRING, **AUDIO COMPLETE** (11 procedural sounds across 3 passes — owner verdict "sound is perfect"; creature rotation day=birds/dusk=crickets/night=owl), first-gesture audio unlock, the **founding-myth entry splash + "Hand That Guides" outro** (owner-loved bookend), reader-paced **skippable outro** (10s + click/key), all owner-playtest fixes, **EARNED-STATE PASS** (random unlocked asterism + per-visit random roomref over slab∪cairn + undercroft 3rd "discovered/closed-doors" state + ambient weather drift) — ALL SHIPPED; K=4. **Undercroft predicate
+FIXED 2026-06-23** — `undercroftState()` now reads the real reveal keys (`-rune||-undercroft`→open, else `-opening`→closed)
+so the owner's opening-only store correctly draws the SEALED closed doors (was wrongly falling through to 'none'); see the
+dated entry below.
 **HONESTY SELF-TEST CHIP — the gate keeps its word — ✅ SHIPPED (2026-06-23):** `selftest.js`
 (`Gate.selftest`) + a subtle top-left brass chip `#gate-honesty` that PROVES, render-blind, that the
 gate truthfully reflects earned state + sound math — 15 pass/fail invariants across asterism
@@ -13,6 +16,22 @@ GREEN, forced inconsistency → RED with the failing claim named, `?moon` pin ex
 errors. See §9 + the dated entry below.
 
 **▶▶ NEXT — to FINISH the Gate (see §9):** (1) **beauty passes** — moon/sun + asterism glow/shape polish (audio balance is owner-accepted: "perfect"). (2) **dogfood QA** — full exploratory interaction pass now that the gate is interactive (splash→gnomon→weather→open→outro+audio), + verify reduced-motion on a real machine (logic-verified only — KNOWN-ISSUES P3). (3) **go-live** (owner call) — the gate lives on branch `the-gate` and navigates to `../index.html`; making it the estate's actual entrance / merging is a separate decision.)
+
+**UNDERCROFT PREDICATE FIX — read the real reveal keys (opening→closed, rune||undercroft→open) — ✅ FIXED (2026-06-23):**
+a reported bug: the owner's real published store has ONLY `ws:seen:undercroft-opening` (the opening was witnessed —
+DISCOVERED but not yet unsealed) and the gate drew NO hatch at all. Root cause: `undercroftState()` (`scene.js`) read the
+WRONG keys — it mapped `ws:seen:undercroft-rune`→closed (backwards) and IGNORED `ws:seen:undercroft-opening` entirely, so
+an opening-only store fell through to `'none'`. **Fix** (`scene.js`, `undercroftState()` only): re-point the predicate to
+mirror `revealUndercroft()` in `index.src.html` (~line 4194) — `runeFound = ws:seen:undercroft-rune || ws:seen:undercroft`
+→ `'open'` (UNSEALED/navigable; wins), else `openingSeen = ws:seen:undercroft-opening` → `'closed'` (DISCOVERED but
+sealed — the beat reached BEFORE runeFound), else `'none'`. Dev override (`S._devUndercroft`) + the `WS`/`store.ok` guards
+left UNCHANGED; `drawUndercroftHatch` UNTOUCHED (its closed-doors + open-doors drawing was already correct). Doc-comment
+above the function + SPEC §9 corrected to state the real mapping. *Smoke (agent-browser over served HTTP, never file://,
+`?scene=idle`, zero console errors throughout):* (1) cleared store → `undercroftState()`='none', no hatch drawn; (2) set
+ONLY `ws:seen:undercroft-opening` (the OWNER'S EXACT CASE) → 'closed', hatch renders with DOORS SHUT — brass-framed bilco
+leaves meeting at a centre seam, iron hasp/padlock, NO crimson glow (looked at the pixels); (3) + `ws:seen:undercroft-rune`
+→ 'open', both leaves flung back with the crimson depth-glow seeping up; (4) `?undercroft=closed`→closed, `?undercroft=1`
+→open; (5) zero genuine console errors (only the 15/15 honesty self-test logs). forge `--check --all` = 97 current.
 
 **EARNED-STATE PASS — random unlocked asterism + random roomref + undercroft closed-doors + weather drift — ✅ SHIPPED (2026-06-23):**
 four disjoint earned-state features, integrated together and smoke-verified over served HTTP (agent-browser, never
@@ -38,8 +57,10 @@ file://), zero console errors across every path:
 
   • **Undercroft 3rd state** (`scene.js`, `sequence.js`, `the-gate.src.html`): the front door now surfaces the
     intermediate beat between "undiscovered" and "unsealed". New `undercroftState()` → `'none'|'closed'|'open'`
-    (dev override first, then store keys in priority: `ws:seen:undercroft` → open, `ws:seen:undercroft-rune` only →
-    closed, neither → none). `undercroftOpen()` kept (returns `state==='open'`). `drawUndercroftHatch` draws the
+    (dev override first, then store keys in priority — mirroring `revealUndercroft()`: `ws:seen:undercroft-rune` ||
+    `ws:seen:undercroft` → open, else `ws:seen:undercroft-opening` → closed, else none). [Predicate corrected
+    2026-06-23 — see the dated entry below; this line reflects the fix.] `undercroftOpen()` kept (returns
+    `state==='open'`). `drawUndercroftHatch` draws the
     SAME curb/footprint for open+closed (identical cx=1300, yNear=742/yFar=678); closed adds two shut plank leaves
     meeting at a centre seam with an iron hasp/padlock latch and NO crimson glow ("there but sealed").
     `?undercroft=closed` (or `=2`) forces closed, `=1` forces open (tri-state in `parseUrl`). *Smoke:* all three

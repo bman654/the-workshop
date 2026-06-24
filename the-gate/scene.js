@@ -2272,19 +2272,23 @@
      way down, read off the per-visitor WS store (mirrors index.src.html's reveal
      keys) with a dev override on top.
 
-     STORE-KEY MAPPING (the semantics this Gate implements):
-       • neither key                  → 'none'   — undiscovered: draw nothing.
-       • ws:seen:undercroft-rune only → 'closed' — DISCOVERED the rune but not yet
-                                         entered/unsealed: the cellar doors sit SHUT
-                                         and latched in the grounds — "there, but
-                                         sealed", a found-but-locked promise.
-       • ws:seen:undercroft           → 'open'   — UNSEALED (actually went down): the
-                                         bilco doors flung back, crimson depth-glow
-                                         seeping up. This key wins even without -rune.
+     STORE-KEY MAPPING (mirrors revealUndercroft's runeFound / openingSeen, ~line 4194):
+       runeFound   = ws:seen:undercroft-rune OR ws:seen:undercroft  (whole + navigable)
+       openingSeen = ws:seen:undercroft-opening                     (the opening witnessed)
 
-     This refines index.src.html, where BOTH keys collapse to "found/navigable"
-     (revealUndercroft line: `runeFound = -rune || undercroft`). On the front door we
-     surface the intermediate "discovered-not-unsealed" beat as the closed doors.
+       • runeFound (either key)        → 'open'   — UNSEALED / navigable: the bilco
+                                         doors flung back, crimson depth-glow seeping
+                                         up. Wins over -opening (you've gone down).
+       • else ws:seen:undercroft-opening only → 'closed' — DISCOVERED but not yet
+                                         unsealed: the cellar doors sit SHUT and
+                                         latched in the grounds — "there, but sealed",
+                                         a found-but-locked promise. THIS is the beat
+                                         a visitor reaches BEFORE runeFound.
+       • else                          → 'none'   — undiscovered: draw nothing.
+
+     In index.src.html the same two predicates drive the POI: runeFound → whole/
+     navigable tile, else (opening-only) → broken/sealed tile. The front door surfaces
+     that intermediate "discovered-not-unsealed" beat as the closed doors.
      The dev pin (?undercroft → S._devUndercroft = 'closed'|'open') FORCES a state for
      review; production stays earned-only via the store keys. */
   function undercroftState() {
@@ -2293,8 +2297,10 @@
     if (!WS || !WS.store) return 'none';
     var store = WS.store();
     if (!store.ok) return 'none';                // file:// or storage off → nothing unlocked
-    if (store.has('ws:seen:undercroft')) return 'open';        // unsealed → open
-    if (store.has('ws:seen:undercroft-rune')) return 'closed'; // discovered → closed
+    // runeFound: whole + navigable (mirrors revealUndercroft) → wins
+    if (store.has('ws:seen:undercroft-rune') || store.has('ws:seen:undercroft')) return 'open';
+    // openingSeen: the opening was witnessed = DISCOVERED but still sealed
+    if (store.has('ws:seen:undercroft-opening')) return 'closed';
     return 'none';
   }
   S.undercroftState = undercroftState;

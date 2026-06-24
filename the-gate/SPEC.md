@@ -729,7 +729,7 @@ by convention, then PHASE 2 `forge --all` re-inlines the fresh slab + current
 | Pinned into `the-gate.html` at build (forge time) | Read LIVE at runtime (never pinned) |
 |---|---|
 | the GATE-ROOMS slab (the room POOL + names/glyphs/accents) | which asterism is unlocked (`WS.store()` + `Sky.state`) — Phase D |
-| the shared modules `ws.js`/`sky.js`/`hours.js` (re-inlined fresh) | undercroft-open (`store.has('ws:seen:undercroft-rune'\|'undercroft')`, `scene.js:585-592`) |
+| the shared modules `ws.js`/`sky.js`/`hours.js` (re-inlined fresh) | undercroft state (`undercroftState()`: `-rune\|\|-undercroft`→open, else `-opening`→closed, `scene.js`) |
 | every gate module (colormap/scene/…), incl. each rep's authored `repColors` (§5.8) | mute flag (`WS.muted()`, `audio.js`) |
 | | the room pick from the pool (Phase D: random unlocked-or-any; greybox pins the Cairn) |
 | | time-of-day band (local clock via `Hours`, unless `?t=`) + weather (seeded/`?wx=`) |
@@ -836,11 +836,15 @@ contracts. The following are finalized in Phase D and get only a "beauty pass" n
   `_roll` is frozen at module-eval, the resolved pick memoized so the boot's two `pick()`
   calls agree). `?room=<id>` pins a slab room exactly; `?seed=<n>` reproduces the random pick.
   Bespoke rooms render rep+repColors; everything else falls back to the Glyph Stand.
-- **undercroft 3rd state (discovered-but-sealed)** — ✅ BUILT 2026-06-23 (`scene.js`,
-  `sequence.js`, the boot): `undercroftState()` → `'none'|'closed'|'open'` from store keys
-  (`ws:seen:undercroft`→open, `ws:seen:undercroft-rune` only→closed, neither→none). Closed
-  draws the SAME curb/footprint as open (cx=1300) plus two shut plank leaves + centre seam +
-  iron hasp/padlock and NO crimson glow. `?undercroft=closed|2` forces closed, `=1` forces open.
+- **undercroft 3rd state (discovered-but-sealed)** — ✅ BUILT 2026-06-23, predicate corrected
+  2026-06-23 (`scene.js`, `sequence.js`, the boot): `undercroftState()` → `'none'|'closed'|'open'`
+  off the SAME reveal predicates as `revealUndercroft()` (index.src.html ~4194) — `runeFound =
+  ws:seen:undercroft-rune || ws:seen:undercroft` → open (UNSEALED/navigable; wins), else
+  `openingSeen = ws:seen:undercroft-opening` → closed (DISCOVERED but sealed — the beat reached
+  BEFORE runeFound), else → none. Closed draws the SAME curb/footprint as open (cx=1300) plus two
+  shut plank leaves + centre seam + iron hasp/padlock and NO crimson glow. `?undercroft=closed|2`
+  forces closed, `=1` forces open. (Earlier the predicate read `undercroft-rune`→closed and ignored
+  `-opening`, so an opening-only store — the owner's real case — wrongly fell through to 'none'.)
 - **ambient weather drift** — ✅ BUILT 2026-06-23 (`weather.js`): with no `?wx=` pin and
   reduced-motion false, a ~1 s timer shifts (~4%/tick) to a random different state via `W.set()`
   (which fires the boot's existing `onChange` recolor+fx+audio+wind). `startDrift()`/`stopDrift()`/
