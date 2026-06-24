@@ -68,6 +68,19 @@
   var master = null;       // the ONE master GainNode — mute forces this to 0
   var MASTER_LEVEL = 0.9;  // unmuted master level (headroom under unity)
 
+  // Storm-bed sub-bus levels (the duck in thunder() ramps these around).
+  var RAIN_BUS = 0.78;     // the dominant masker — sits a touch under its old 0.85
+  var WIND_BUS = 0.70;
+  // Sidechain duck: how far the bed drops UNDER a strike so the clap+roll punch
+  // a hole in the rain (the way real thunder does), then recovers. Verified
+  // offline (layered storm render): clap peak ≈ +8.6 dB over the ducked-bed
+  // peak, roll body ≈ +2.8 dB over the ducked bed, summed peak < 0 dBFS.
+  var DUCK_RAIN_TO = 0.30; // rain ducks to ~38% (-8.3 dB) under the strike
+  var DUCK_WIND_TO = 0.34; // wind ducks to ~49% (-6.3 dB)
+  var DUCK_ATTACK  = 0.03; // fast drop so the bed is down by the time the clap body lands
+  var DUCK_HOLD    = 0.70; // held under the crack + early roll
+  var DUCK_RELEASE = 1.7;  // bed eases back up over the rolling tail
+
   // ambient layer handles (each = { node, src } returned by a Gate.sfx builder,
   // routed through its own sub-bus gain so we can cross-fade independently).
   var amb = {
@@ -244,15 +257,18 @@
     var w = weatherNow();
     var raining = (w === 'storm');
 
-    // RAIN — only in storm, scaled by intensity. Cross-fade in/out.
+    // RAIN — only in storm, scaled by intensity. Cross-fade in/out. The rain is
+    // the brightest, highest-RMS bed (the dominant masker of the clap's crack
+    // band), so it sits a touch under its old level (0.85 → 0.78) to give the
+    // strike room; the sidechain duck in thunder() does the rest.
     if (raining) {
-      startTexture('rain', 'rain', { intensity: rainIntensityFor(w) }, 0.85);
+      startTexture('rain', 'rain', { intensity: rainIntensityFor(w) }, RAIN_BUS);
     } else {
       killTexture('rain', 0.9);
     }
 
     // WIND — always present, strength clear < cloudy < storm.
-    startTexture('wind', 'wind', { strength: windStrengthFor(w) }, 0.7);
+    startTexture('wind', 'wind', { strength: windStrengthFor(w) }, WIND_BUS);
 
     // WINDCHIMES — occasional, ONLY when NOT raining (clear / cloudy).
     if (!raining) {
@@ -317,13 +333,41 @@
     }
   };
 
-  /* ── thunder(): clap NOW + rolling tail. Wired to the lightning flash edge. ─ */
+  /* ── duckBed(): sidechain-duck the rain+wind beds under a strike, then release.
+     This is the heart of the thunder mix: a clap's sustained energy is tiny next
+     to the rain wash (energetic masking), so rather than push the clap into
+     clipping we briefly drop the bed so the strike "punches a hole" in the rain
+     and the rolling tail is heard as the body. The bus is ramped from its CURRENT
+     value (so overlapping strikes don't fight) down to a fraction of its BASE
+     level, held, then eased back to base. Only ducks a bed that is actually up. */
+  function duckOne(key, baseLevel, duckTo) {
+    var g = ambBus[key];
+    if (!g) return;                  // bed not playing (e.g. not a storm) → skip
+    var t = ctx.currentTime;
+    try {
+      g.gain.cancelScheduledValues(t);
+      g.gain.setValueAtTime(g.gain.value, t);
+      g.gain.linearRampToValueAtTime(duckTo, t + DUCK_ATTACK);
+      g.gain.setValueAtTime(duckTo, t + DUCK_ATTACK + DUCK_HOLD);
+      g.gain.linearRampToValueAtTime(baseLevel, t + DUCK_ATTACK + DUCK_HOLD + DUCK_RELEASE);
+    } catch (e) { try { g.gain.value = baseLevel; } catch (e2) {} }
+  }
+  function duckBed() {
+    duckOne('rain', RAIN_BUS, DUCK_RAIN_TO);
+    duckOne('wind', WIND_BUS, DUCK_WIND_TO);
+  }
+
+  /* ── thunder(): clap NOW + rolling tail, with the bed ducked under it. Wired
+     to the lightning flash edge. The clap punches through a hole ducked into the
+     rain/wind; the boosted close roll follows as the strike's body. ─────────── */
   A.thunder = function () {
     if (!ctx) return;
+    // duck the storm bed FIRST so the hole is opening as the clap lands...
+    duckBed();
     // loud, present crack on the strike...
-    playOnce('thunderclap', { dur: 2.5 }, 0.9);
-    // ...with a close rolling tail underneath it.
-    playOnce('thunderroll', { dur: 5, distance: 'close' }, 0.7);
+    playOnce('thunderclap', { dur: 2.5 }, 0.95);
+    // ...with a close rolling tail (now boosted in its builder) as the body.
+    playOnce('thunderroll', { dur: 5, distance: 'close' }, 0.95);
   };
 
   /* ── gears(): clockwork bed during the gears phase; stop when it ends. ───── */

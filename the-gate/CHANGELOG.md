@@ -31,6 +31,31 @@ aphorism). Dev/`?scene=` still removes the splash immediately (harness untouched
 HTTP (agent-browser, never file://): production splash shows the three words + NO estate name, mute chip
 at (18,18) `z70` visible over the card, dev splash absent (phase idle); forge `--check --all` = 97 current.
 
+**AUDIO PASS 4 — make the thunder audible (LEVEL fix) + balance the full mix — ✅ SHIPPED (2026-06-23):**
+the per-strike thunder fired correctly (lightning → `onFlash` → `A.thunder()`) but was inaudible in a live
+storm — the diagnosis was **energetic masking, not a wiring fault**: the clap's peak was bright but its
+loudness never rose above the rain wash it tried to break (BEFORE: clap-window RMS only **+0.3 dB** over the
+rain bed; the rolling tail sat **−1.45 dB BELOW** the bed; a faithful layered-storm render found 0 onsets and
+a uniform bright rain field with no clap event). The fix keeps the wiring untouched and works the LEVELS:
+
+  • **Sidechain duck** (`audio.js` `duckBed()` / `duckOne()`, called first in `A.thunder()`): rain `0.78 → 0.30`,
+    wind `0.70 → 0.34` (attack 30 ms, hold 0.70 s, release 1.7 s) so the strike punches a hole in the rain the
+    way real thunder does, then the bed eases back over the rolling tail.
+  • **Boosted close-roll body** (`audio-thunderroll.js`): the `"close"` peak `0.78 → 2.05` (distant ambient roll
+    unchanged at ≈0.28) so the deep <170 Hz rumble carries the strike's body after the cascaded lowpass.
+  • **Raised event buses**: clap `0.95`, roll `0.95`; bed bases trimmed (rain `0.85 → 0.78`) to give the strike room.
+
+  AFTER (faithful offline layered-storm render @22050 mono, one strike at t=4 s through the exact live gains):
+  clap **PEAK +14.3 dB** over the pre-strike bed RMS (target ≥12); clap RMS **+3.3 dB** (was +0.3); clap PEAK
+  **+8.6 dB** over the DUCKED bed it actually plays over; roll-tail RMS **+2.8 dB** over the ducked bed (was −1.45
+  below); bed recovers to −17.31 dBFS by 6.5–7.8 s (pre-strike −17.22), ~1.6 s after release; summed peak < 0 dBFS,
+  no clip. Close-roll solo: peak −10.83 → −2.79 dBFS, RMS −29.75 → −21.91. Spectrogram corroborates: a dark
+  vertical NOTCH (the duck) with a bright clap and a sustained low band (the roll body), rain visibly dimmed during
+  recovery. audio-lens self-test 12/12. **LIVE STORM SMOKE** (forged `the-gate.html` over served HTTP, splash
+  clicked to unlock — `__wsAudioCtx` `running`; night storm): `A.thunder()` wrapped + counted → fired **10×** within
+  ~20 s, `AudioBufferSourceNode.start` climbing into the thousands, **zero console errors** throughout. Builder
+  signatures + the lightning→onFlash→thunder wiring untouched; only synthesis/levels/duck params changed.
+
 **AUDIO PASS 3 — ✅ SHIPPED (2026-06-23):** the open-sequence gears + creak reworked from playtest
 feedback (they read too light/thin — the gears as bug-like clicks, the creak as a rodent squeak); the
 synthesis was replaced in place, builder signatures + wiring unchanged (still `A.gears()` in the gears

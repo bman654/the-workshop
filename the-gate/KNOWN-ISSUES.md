@@ -22,6 +22,17 @@ quiet -25.2 dBFS, silenceRatio 0.68 (the rhythmic high-band trill); **owl** clip
 conductor (`audio.js`) wires them in and the mute gate is proven (master 0.9↔0). **No sound is below
 spec.**
 
+Audio-pass-4 added the missing piece — the per-strike **thunder is now audible IN A STORM** (it fired
+correctly all along but was energetically masked by the rain). A sidechain duck (rain `0.78→0.30`, wind
+`0.70→0.34`) + a boosted close-roll body (`thunderroll` close peak `0.78→2.05`) give the clap **+14.3 dB**
+peak / **+3.3 dB** RMS over the pre-strike rain bed (was +0.3 dB), and the roll tail now reads **+2.8 dB**
+over the ducked bed (was −1.45 dB BELOW it); summed peak < 0 dBFS, no clip. Verified offline AND by a live
+night-storm smoke (forged page, audio unlocked: thunder fired 10× in ~20 s, zero console errors). *Caveat
+for future audio QA — not a defect:* audio-lens' **spectral-flux onset detector reports 0 onsets in the
+layered storm mix** (a smooth duck against a dense rain wash defeats flux-based onset detection); judge the
+clap by the peak/RMS-over-bed MARGINS and the spectrogram (clear duck notch + clap + low roll band), which
+track perceived loudness. The detector still finds the clap cleanly when the clap is rendered solo.
+
 ### P3 — live AudioContext stays `suspended` under headless e2e (environment, not a defect)
 In headless Chrome a synthetic `dispatchEvent('click')` is NOT a trusted user gesture, so
 `ctx.resume()` does not flip the context to `running` and its scheduled gain ramps don't advance

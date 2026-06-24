@@ -124,8 +124,12 @@
     // The rumble swells in fast, then rolls out exponentially over ~dur so the
     // tail fades into silence (silenceRatio climbs toward the end).
     var master = ctx.createGain();
-    // Close is loud+present; distant is much quieter.
-    var peak = 0.78 - d * 0.5;        // close ≈0.78, distant ≈0.28
+    // Close is loud+present; distant is much quieter. The deep (<170 Hz) band
+    // loses a lot of energy to the cascaded lowpass, so the CLOSE roll needs a
+    // hefty internal level to carry the BODY of a strike (it's the rumble the
+    // ear hears as "thunder" after the crack). Pure low-end has headroom: even
+    // at this level the summed peak stays well under 0 dBFS (verified offline).
+    var peak = 2.05 - d * 1.77;       // close ≈2.05, distant ≈0.28
     var attack = 0.12;                // fast but not a click
     master.gain.setValueAtTime(0.0001, t0);
     master.gain.exponentialRampToValueAtTime(peak, t0 + attack);
