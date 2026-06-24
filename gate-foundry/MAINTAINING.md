@@ -147,6 +147,26 @@ operator steer or test a run:
 - **`args.testMode`** (or `induce.testMode`) — the publisher does its full review but does NOT commit/push/record;
   all changes stay in the working tree for inspection. The way to smoke-test a cycle without touching history.
 
+> **⚠️ HOW TO PASS THESE RELIABLY — top-level `args` is FLAKY; use the wrapper.** Launching `fun-forever.js`
+> directly as a top-level `Workflow({scriptPath, args:{…}})` is **not reliable**: the harness can silently
+> deliver the `args` global EMPTY (observed 2026-06-24 — a smoke launch saw no `args`, fell back to the launch
+> cwd, and ran a REAL gauge cycle against the wrong repo; the identical payload parsed fine in a 0-agent probe,
+> so it is a delivery flake, not a parse bug). **A nested `workflow()` CHILD call delivers `args` as a real
+> object, reliably** — so drive an induced/test run from a tiny throwaway wrapper:
+> ```js
+> // smoke-runner.js — hard-code the directive in the BODY (zero top-level-args dependency),
+> // then invoke fun-forever as a CHILD; the object reaches it intact.
+> export const meta = { name: 'induce-runner', description: '…', phases: [{ title: 'Run' }] }
+> const REPO = '/abs/path/to/clone'
+> const induce = { mode: 'PLAN', track: 'foundry', testMode: true, /* … */ }
+> return await workflow({ scriptPath: REPO + '/.claude/workflows/fun-forever.js' }, { repoRoot: REPO, induce })
+> ```
+> Caveat: `workflow()` nests only ONE level, so the child must not itself call `workflow()` — fine for any
+> **PLAN** cycle, but NOT for a **BUILD/foundry** or exhibit-art build (those invoke the engine via `workflow()`,
+> which would throw under the wrapper). Induce those by launching `fun-forever.js` top-level and **verifying the
+> first journal line** reports the forced root + induce before trusting it; re-launch if `args` came through empty.
+> The autonomous production loop passes NO `args`, so it is unaffected by any of this.
+
 ## The engine + the power tools
 
 The live BUILD/foundry path (above) and a manual batch push share the same **competitive K-takes** idea —

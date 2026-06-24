@@ -30,6 +30,11 @@ const FUNLOG = '/tmp/funlog.txt'
 // `args` may arrive as an OBJECT (a workflow() child call) OR a JSON STRING (a top-level Workflow-tool launch).
 // Parse defensively, exactly like art-foundry/engine.workflow.js does — a silent miss here once read args off a
 // STRING (→ undefined), so the loop fell back to the launch cwd and pointed a REAL cycle at the wrong repo. Load-bearing.
+// ⚠️ Even WITH this parse, TOP-LEVEL `args` delivery is FLAKY: it can arrive EMPTY (a probe parsed the identical
+// payload fine, yet a real launch saw nothing → fell back to a real gauge cycle). To induce/test RELIABLY, drive
+// this script from a throwaway wrapper that calls it via `workflow(..., objArgs)` as a CHILD (objects deliver
+// intact); for engine-using cycles that can't be nested, launch top-level but VERIFY the startup log line below.
+// See gate-foundry/MAINTAINING.md "Running the loop". The autonomous loop passes no args, so it is unaffected.
 let _args = (typeof args !== 'undefined') ? args : null
 if (typeof _args === 'string') { try { _args = JSON.parse(_args) } catch (e) { _args = null } }
 const A = (_args && typeof _args === 'object' && !Array.isArray(_args)) ? _args : {}
