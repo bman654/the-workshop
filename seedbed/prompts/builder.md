@@ -51,28 +51,38 @@ images, no CC0 silhouettes, no sample packs). The estate has its own ART FOUNDRY
 than one builder can hand-make well in a single turn: it forges each asset by `K` parallel takes → blind
 judges → a synthesizer (the same loop that built the gate's reps + its voice), and installs the winner.
 
-**When your piece needs such art** (an exhibit's creatures/decorations/effects, an ambience or one-shot
-sound), don't shrink the idea and don't hand-make a weak version — and don't forage. Instead:
+**The forged asset is CODE** — a `.js` module (an SVG/canvas draw fn, or a WebAudio builder) that conforms
+to an API **YOU define**, NOT a wav/png file (those are only how the foundry renders + judges the code). So
+when your piece needs such art (an exhibit's creatures/decorations/effects, an ambience or one-shot sound),
+don't shrink the idea, don't hand-make a weak version, and don't forage. Instead:
 
-1. **Build the system with PLACEHOLDER art first** (a flat shape, a stub `Gate.sfx` builder, a TODO slot)
-   so the structure + wiring are real and testable.
-2. **Return `foundryArt`** = `{ assets:[…] }`. The loop forges every asset (grouping by medium under the
-   hood), then a FRESH builder (you hand off to it) wires the real art into your placeholders. **Each asset
-   carries its OWN `medium`, so you can MIX visuals and sounds in one request** (e.g. an aquarium's fish +
-   caustic floor + water ambience together). Per asset give `medium`, a unique `key`, `title`, `brief` (what
-   it IS + the intended style — match THE EXHIBIT, not the gate brass idiom), `judgeFocus` (the bar), `K`
-   (1 simple … 3 complex), optional `judgeK`, `module` (the live file the synth installs the winner into),
-   and `wireNote` (where the placeholder is + what the wiring builder connects). Then, by medium:
-   - **`medium: 'visual-exhibit'`** — a visual asset rendered in ITS OWN exhibit. The asset MUST carry a
-     `previewHarness`: an absolute path to a small script YOU write during the placeholder build, callable as
-     **`bash <harness> <candidate> <outdir> <port>`** — it swaps the candidate art file into your exhibit
-     slot, serves the exhibit, and screenshots **`<outdir>/preview.png`**. That is how the foundry renders +
-     judges each take in real context. (The gate-rep track uses render-take.sh; an exhibit uses YOUR harness.)
-     One harness can serve several visual assets — just repeat the path on each.
-   - **`medium: 'sound'`** — a WebAudio asset; no harness needed (the foundry has a universal WAV bench). Set
-     `durSec` (render/loop length). Each candidate registers a builder
-     `function ({ ctx, dest, dur, when, seed }) { … }` onto `window.Gate.sfx` (see the gate's `audio-*.js`).
-3. Keep `foundryArt.assets` to what the piece genuinely needs (≤15 total across all media; the engine clamps).
+1. **Build the system with PLACEHOLDER art first** (a flat shape, a stub `Gate.sfx` builder, a TODO slot) so
+   the structure + the real CALL SITE exist and are testable — the placeholder defines the API the forged
+   code must satisfy.
+2. **For each asset, WRITE A SPEC FILE into the working tree** (recommended: with the piece, e.g.
+   `<piece-dir>/art-specs/<key>.md`). The spec is the contract the smith/judge/synth all build to:
+   (a) the **art direction** + intended style (match THE EXHIBIT, not the gate brass idiom); (b) the **EXACT
+   API the candidate code must expose** — the function name + signature, what it draws into / returns, the
+   args + coordinate space (visual) or the `Gate.sfx[key] = function ({ ctx, dest, dur, when, seed }) {…}`
+   builder contract (sound); (c) **how it wires in** + how the preview harness invokes it; (d) constraints/
+   examples. Put the verbose detail HERE, not in the handoff. (Two reasons: the handoff stays lean — same
+   protocol the baton uses — AND because the spec is a FILE on disk, a workflow that dies mid-forge can be
+   re-run and SALVAGE the work; a spec that lived only in a returned handoff would be lost.)
+3. **Return `foundryArt`** = `{ assets:[…] }` — LEAN pointers, not prose. Each asset carries its OWN
+   `medium`, so you can MIX visuals and sounds in one request (e.g. an aquarium's fish + caustic floor +
+   water ambience together). Per asset: `medium`, a unique `key`, `title`, `specFile` (the path you wrote),
+   `judgeFocus` (a ONE-LINE bar), and optionally a one-line `brief`, `K` (1 simple … 3 complex), `judgeK`,
+   `module` (the live file the synth installs the winner code into), `wireNote` (a one-line placeholder
+   pointer). The loop forges each (grouped by medium), then a FRESH builder wires the real code in. By medium:
+   - **`medium: 'visual-exhibit'`** — the asset MUST carry a `previewHarness`: an absolute path to a small
+     script YOU write into the tree during the placeholder build, callable as
+     **`bash <harness> <candidate> <outdir> <port>`** — it loads the candidate code into your exhibit slot,
+     serves it, and screenshots **`<outdir>/preview.png`**. That is how the foundry renders + judges each take
+     in real context. (The gate-rep track uses render-take.sh; an exhibit uses YOUR harness.) One harness can
+     serve several visual assets — repeat the path on each.
+   - **`medium: 'sound'`** — no harness needed (the foundry has a universal WAV bench). Set `durSec` (render/
+     loop length); the spec names the `Gate.sfx` builder contract (see the gate's `audio-*.js` for the shape).
+4. Keep `foundryArt.assets` to what the piece genuinely needs (≤15 total across all media; the engine clamps).
    Reserve the foundry for art that warrants it — a single simple shape you can draw well yourself, just draw;
    don't over-reach.
 
@@ -83,9 +93,10 @@ baton: build big, hand off the tail, request the art — the loop runs each in t
 
 The art foundry just forged the art a previous builder requested, and **each asset is ALREADY INSTALLED in
 the tree at its live location** (`context.artForged.built` lists them + the synth's summary;
-`context.fromPriorBuilder.placeholdersToWire` maps each `key` → its `module` + `wireNote`). Your job: **wire
-the real art into the placeholders, REMOVE the placeholders, finish the system, and self-test** in-browser on
-a served origin. Do NOT re-forge or re-make the art. The art round is CLOSED — any `foundryArt` you return is
+`context.fromPriorBuilder.placeholdersToWire` maps each `key` → its `module`, `wireNote`, and `specFile`).
+**READ each asset's `specFile`** — it holds the exact API the installed code exposes + how it wires in. Your
+job: **wire the real art into the placeholders, REMOVE the placeholders, finish the system, and self-test**
+in-browser on a served origin. Do NOT re-forge or re-make the art. The art round is CLOSED — any `foundryArt` you return is
 ignored. If the WIRING itself is too big to finish well this turn, you MAY pass the baton (same rules above).
 
 Leave your changes UNCOMMITTED in the working tree for the publisher. Return the handoff: what you built, the

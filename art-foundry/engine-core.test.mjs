@@ -86,6 +86,8 @@ ok(normalizeAsset({ key: 'k', title: 't' }).judgeK === 2, 'normalizeAsset defaul
 ok(normalizeAsset({ key: 'k', title: 't', durSec: 2.5 }).durSec === 2.5, 'normalizeAsset keeps a positive durSec (sound)')
 ok(normalizeAsset({ key: 'k', title: 't' }).durSec === null, 'normalizeAsset defaults durSec to null (render-wav.sh defaults the length)')
 ok(normalizeAsset({ key: 'k', title: 't', durSec: -1 }).durSec === null, 'normalizeAsset rejects a non-positive durSec')
+ok(normalizeAsset({ key: 'k', title: 't', specFile: '/x/art-specs/k.md' }).specFile === '/x/art-specs/k.md', 'normalizeAsset carries specFile (the full contract lives in a tree file, not inline)')
+ok(normalizeAsset({ key: 'k', title: 't' }).specFile === null, 'normalizeAsset defaults specFile to null')
 throws(() => normalizeAsset(null), 'normalizeAsset(null) throws')
 throws(() => normalizeAsset([]), 'normalizeAsset(array) throws')
 throws(() => normalizeAsset({ title: 'no key' }), 'normalizeAsset without key/id throws')

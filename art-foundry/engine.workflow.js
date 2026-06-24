@@ -64,7 +64,7 @@ function normalizeAsset(spec) {
   const key = spec.key || spec.id
   if (!key) throw new Error('asset spec needs a key or id')
   if (!spec.title) throw new Error(`asset '${key}' needs a title`)
-  return { key, title: spec.title, K: clampK(spec.K ?? CAPS.maxK), judgeK: clampJudgeK(spec.judgeK ?? 2), tier: spec.tier || 'ASSET', brief: spec.brief || '', geometry: spec.geometry || '', judgeFocus: spec.judgeFocus || '', module: spec.module || null, drawFn: spec.drawFn || null, siblings: spec.siblings || null, extraQS: spec.extraQS || null, iface: spec.iface || null, wireNote: spec.wireNote || null, durSec: Number.isFinite(Number(spec.durSec)) && Number(spec.durSec) > 0 ? Number(spec.durSec) : null, previewHarness: spec.previewHarness || null }
+  return { key, title: spec.title, K: clampK(spec.K ?? CAPS.maxK), judgeK: clampJudgeK(spec.judgeK ?? 2), tier: spec.tier || 'ASSET', brief: spec.brief || '', geometry: spec.geometry || '', judgeFocus: spec.judgeFocus || '', module: spec.module || null, drawFn: spec.drawFn || null, siblings: spec.siblings || null, extraQS: spec.extraQS || null, iface: spec.iface || null, wireNote: spec.wireNote || null, specFile: spec.specFile || null, durSec: Number.isFinite(Number(spec.durSec)) && Number(spec.durSec) > 0 ? Number(spec.durSec) : null, previewHarness: spec.previewHarness || null }
 }
 function normalizeBatch(list) { const { assets, dropped } = clampAssets(list); return { assets: assets.map(normalizeAsset), dropped } }
 // ── END MIRROR ────────────────────────────────────────────────────────────────

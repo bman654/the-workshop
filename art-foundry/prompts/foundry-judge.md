@@ -20,7 +20,11 @@ Monitor (that ends your run). Return `JUDGE_SCHEMA`.
   PNG. Sound: READ the audio-lens analysis (you cannot hear — the analysis IS how you judge). Do exactly
   what `context.judgeVerb` says, for every take.
 - `context.asset` — `.key`, `.title`, `.tier`, `.brief` (the art brief the smiths worked from), and
-  `.judgeFocus` — **the asset-specific bar. This is your primary rubric — score against it.**
+  `.judgeFocus` — **the asset-specific bar. This is your primary rubric — score against it.** For exhibit-art,
+  if `.specFile` is set, READ IT for the full art direction + the exact API the winning CODE must expose
+  (an asset that ignores the spec's contract — wrong style, or art that won't drop into the named API — is
+  not deliverable however pretty it renders). The judged artifact (PNG/WAV) is how you SEE the code, but the
+  deliverable is the CODE meeting that contract.
 - `context.takes` — the array of takes. Each take: `.take` (its number), `.candidatePath` (FYI only — do
   NOT open or judge the source; judge the rendered artifact, blind), `.artifacts` (the artifact paths to
   consume via `context.judgeVerb`), `.animated` (did this take add motion?), `.animShots` (if animated, the

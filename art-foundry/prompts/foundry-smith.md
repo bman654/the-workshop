@@ -26,7 +26,15 @@ do not invent paths:
   against THIS), `.module` (the source file to start from), `.drawFn` (the EXACT function(s) you may edit),
   `.siblings` (functions/helpers to leave **byte-identical**), `.extraQS` (a render query pin, may be null),
   `.iface` (`'scene'` | `'buildings'`, only meaningful for `visual-gate`), `.wireNote` (any extra wiring the
-  asset needs, may be null — read it and honor it).
+  asset needs, may be null — read it and honor it), `.specFile` (exhibit-art: a path to the FULL contract).
+- **`context.asset.specFile` (exhibit-art) — if set, READ IT IN FULL FIRST.** It is the authoritative
+  contract the requesting builder wrote: the art direction AND the **exact API your CODE must expose** (the
+  function name + signature, what it draws into / returns, the args/coordinate space, or the sound builder
+  contract) so it drops into the system + the preview harness can render it. `.brief`/`.judgeFocus` here are
+  only a short gloss; the specFile is the source of truth. Build to it EXACTLY — a wrong API surface fails.
+- **WHAT YOU DELIVER IS CODE** — a `.js` module (an SVG/canvas draw fn for `visual-exhibit`, a WebAudio
+  builder for `sound`), NOT an image or a wav. The PNG/WAV the render produces is only how the judge SEES/
+  HEARS your code; the artifact that ships is the candidate `.js` itself.
 - `context.paths` — `.candidate` (write your finished take HERE), `.scratch` (a scratch dir for the
   renderer), `.outdir` (where artifacts land), `.port` (the served-origin port reserved for you).
 - `context.renderCommand` — **the EXACT bash to render this take. RUN IT VERBATIM.** Do not edit, re-order,
@@ -152,11 +160,14 @@ anchored as stated) and `context.asset.wireNote` if present.
 You are forging an asset that renders in **its OWN exhibit**, via the builder-supplied preview harness
 already baked into `context.renderCommand`. This is NOT the gate scene.
 
+- **You write CODE: a JS module at `context.paths.candidate`** that exposes the EXACT API named in
+  `context.asset.specFile` (the function/global the exhibit + the preview harness call to draw this asset —
+  e.g. `window.Aquarium.fish = function (svg, opts) { … }`). READ the specFile in full and conform to its API
+  surface precisely; a mismatch means the harness can't render it and the wiring builder can't drop it in.
 - **MATCH THE EXHIBIT'S OWN visual style — do NOT impose the gate brass idiom.** The exhibit has its own
-  look; your job is to fit it beautifully. Read `context.asset.brief` for the intended style and
-  `context.asset.judgeFocus` for the bar. If `context.asset.module` names a starting file, start from it
-  and edit only `context.asset.drawFn`; otherwise build the candidate asset file at
-  `context.paths.candidate` in the shape the brief/harness expects.
+  look; fit it beautifully (the specFile defines the intended style; `context.asset.judgeFocus` is the bar).
+  If `context.asset.module` names a starting file, start from it and edit only `context.asset.drawFn`;
+  otherwise build the candidate module fresh per the specFile's contract.
 - The render produces `context.judgeArtifacts` (a preview PNG rendered in the exhibit context). VIEW it and
   critique against `context.asset.judgeFocus` + the general bar: craft, composition, legibility, and
   whether it reads cleanly AS the intended thing inside its exhibit.

@@ -151,11 +151,16 @@ higher quality than a solo smith. The engine is the in-loop form; the rest are b
   ```
 - **The exhibit-art flow (Adjustment 6).** Any garden/grounds builder whose piece needs custom in-house art
   builds the system with PLACEHOLDER art and returns `foundryArt:{assets:[…]}`, where each asset carries its
-  OWN `medium` (so one build can MIX visuals + sounds — e.g. fish + caustics + ambience). fun-forever (the
-  sole `workflow()` caller) GROUPS the batch by medium and invokes the engine once per group, then spawns a
-  FRESH WIRING builder (`context.wiring`) that connects the now-installed art + finishes. One art round per
-  build; it composes with the baton. `visual-exhibit` assets carry a builder-written preview harness
-  (`bash <harness> <candidate> <outdir> <port>` → `<outdir>/preview.png`); `sound` assets need none.
+  OWN `medium` (so one build can MIX visuals + sounds — e.g. fish + caustics + ambience). **The forged asset
+  is CODE** (an SVG/canvas draw fn or a WebAudio builder conforming to a builder-defined API), not a wav/png —
+  those are only the render the judge consumes. The full per-asset contract (art direction + the exact API
+  the code must expose + the wiring) lives in a **spec FILE the builder writes into the working tree**
+  (`<piece>/art-specs/<key>.md`), referenced by `assets[].specFile`; the handoff stays lean (pointers), and
+  the on-disk spec lets a re-run SALVAGE the work if a workflow dies mid-forge. fun-forever (the sole
+  `workflow()` caller) GROUPS the batch by medium and invokes the engine once per group, then spawns a FRESH
+  WIRING builder (`context.wiring`) that reads each `specFile`, connects the now-installed code + finishes.
+  One art round per build; it composes with the baton. `visual-exhibit` assets carry a builder-written
+  preview harness (`bash <harness> <candidate> <outdir> <port>` → `<outdir>/preview.png`); `sound` needs none.
   **In-house ethos:** all art — audio AND gfx — is forged in-house; never forage from the web.
 - **The sound bench** — OfflineAudioContext is browser-only, so `sound` renders through the BROWSER, not
   Node. `art-foundry/sfx-bench.html` (a generalized lift of `the-gate/audio-bench.html`) loads ONE

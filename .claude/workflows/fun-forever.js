@@ -134,19 +134,20 @@ const BUILD_HANDOFF_SCHEMA = {
     // ART FOUNDRY (a build that needs custom in-house art it cannot hand-make well in one turn) — leave unset to finish normally.
     foundryArt: {
       type: 'object', additionalProperties: false, required: ['assets'],
-      description: 'IN-HOUSE ART REQUEST: set this when your piece needs custom art (exhibit visuals AND/OR ambience sounds) better forged by the K-takes art foundry than hand-made in one turn. Build the system with PLACEHOLDER art FIRST, then list the assets here — MIX media freely in one request (e.g. fish + caustics + ambience). The ART FOUNDRY forges each (K takes → judges → synth, installing the winner; assets are grouped by medium internally), then a FRESH builder wires the real art in + finishes. Leave unset/empty to finish normally. NEVER forage art from the web — the foundry IS how the estate makes art in-house. (Not for gate reps — those are the BUILD/foundry track.)',
+      description: 'IN-HOUSE ART REQUEST: set this when your piece needs custom art (exhibit visuals AND/OR ambience sounds) better forged by the K-takes art foundry than hand-made in one turn. The forged asset is CODE — a JS module (an SVG/canvas draw fn, or a WebAudio builder) conforming to an API YOU define — NOT a wav/png file (those are only the render the judge looks at). Build the system with PLACEHOLDER art FIRST, then WRITE a spec FILE per asset in the working tree (the exact contract: art direction + the API surface the code must expose + how it wires in) and list the assets here — keep this handoff LEAN (pointers, not prose). MIX media freely in one request (e.g. fish + caustics + ambience). The foundry forges each (K takes → judges → synth, installing the winner; grouped by medium), then a FRESH builder wires the real art in. Leave unset/empty to finish normally. NEVER forage art from the web. (Not for gate reps — those are the BUILD/foundry track.)',
       properties: {
-        assets: { type: 'array', description: 'the art assets to forge (≤15 total across all media; the engine clamps + logs drops). Keep it to what the piece genuinely needs.', items: { type: 'object', additionalProperties: false, required: ['medium', 'key', 'title', 'brief', 'judgeFocus', 'wireNote'], properties: {
-          medium: { enum: ['visual-exhibit', 'sound'], description: 'THIS asset\'s medium (mix freely across the batch). visual-exhibit = a visual asset rendered in ITS OWN exhibit via your previewHarness; sound = a WebAudio asset rendered offline to a WAV + analyzed.' },
+        assets: { type: 'array', description: 'the art assets to forge (≤15 total across all media; the engine clamps + logs drops). Keep it to what the piece genuinely needs.', items: { type: 'object', additionalProperties: false, required: ['medium', 'key', 'title', 'judgeFocus', 'specFile'], properties: {
+          medium: { enum: ['visual-exhibit', 'sound'], description: 'THIS asset\'s medium (mix freely across the batch). visual-exhibit = a visual asset (SVG/canvas JS) rendered in ITS OWN exhibit via your previewHarness; sound = a WebAudio builder rendered offline to a WAV + analyzed.' },
           key: { type: 'string', description: 'a unique slug — becomes the candidate filename + the engine asset key.' },
           title: { type: 'string', description: 'a one-line title for the asset.' },
-          brief: { type: 'string', description: 'the art brief the smiths build from — what this asset IS, the intended style (match the EXHIBIT, not the gate idiom), and constraints.' },
-          judgeFocus: { type: 'string', description: 'the asset-specific bar the judges score against.' },
+          specFile: { type: 'string', description: 'absolute path to a markdown spec FILE you WROTE into the working tree (recommended: with the piece, e.g. <piece-dir>/art-specs/<key>.md). It holds the FULL contract the smith/judge/synth/wiring-builder all read: (1) the art direction + intended style (match the EXHIBIT); (2) the EXACT API the candidate CODE must expose — the function name + signature, what it draws into / returns, the args/params, the coordinate space (visual) or the Gate.sfx builder contract (sound); (3) how it wires into the system + how the preview harness invokes it; (4) constraints/examples. Keeping it as a FILE keeps this handoff lean AND lets a workflow re-run salvage the work after an interruption — the spec survives on disk.' },
+          judgeFocus: { type: 'string', description: 'a ONE-LINE bar the judges score against (the full rubric is in the specFile).' },
+          brief: { type: 'string', description: 'OPTIONAL one-line gloss of what this asset is (the full brief lives in specFile — do NOT inline a long brief here).' },
           K: { type: 'integer', minimum: 1, maximum: 3, description: 'parallel takes — simple → 1, complex → up to 3 (you pick per asset).' },
           judgeK: { type: 'integer', minimum: 1, maximum: 3, description: 'how many judges rank the takes (default 2).' },
-          module: { type: 'string', description: 'the live file the foundry synth installs the winner into (where the exhibit/room loads this asset from).' },
-          wireNote: { type: 'string', description: 'how this asset wires into the system: where the placeholder is and what the wiring builder must connect once the real art exists.' },
-          previewHarness: { type: 'string', description: 'visual-exhibit assets ONLY: absolute path to a render harness YOU wrote, callable as `bash <harness> <candidate> <outdir> <port>` — it swaps the candidate art into the exhibit slot, serves it, and screenshots <outdir>/preview.png. One harness may serve several visual assets (repeat the path). Omit for sound (the foundry has a universal WAV bench).' },
+          module: { type: 'string', description: 'the live file the foundry synth installs the winner CODE into (where the exhibit/room loads this asset from).' },
+          wireNote: { type: 'string', description: 'OPTIONAL one-line pointer to where the placeholder is (the full wiring is in specFile).' },
+          previewHarness: { type: 'string', description: 'visual-exhibit assets ONLY: absolute path to a render harness YOU wrote into the working tree, callable as `bash <harness> <candidate> <outdir> <port>` — it loads the candidate CODE, renders it in the exhibit slot, and screenshots <outdir>/preview.png. One harness may serve several visual assets (repeat the path). Omit for sound (the foundry has a universal WAV bench).' },
           durSec: { type: 'number', description: 'sound assets ONLY: the render / loop length in seconds.' },
         } } },
       },
@@ -344,7 +345,7 @@ function wiringPrompt(d, chosen, prevHandoff, forges, cyc) {
     fromPriorBuilder: {
       built: prevHandoff.built || null,
       selfTest: prevHandoff.selfTest || null,
-      placeholdersToWire: (fa.assets || []).map(a => ({ key: a.key, medium: a.medium || null, module: a.module || null, wireNote: a.wireNote || null })),
+      placeholdersToWire: (fa.assets || []).map(a => ({ key: a.key, medium: a.medium || null, module: a.module || null, wireNote: a.wireNote || null, specFile: a.specFile || null })),
       openConcerns: prevHandoff.openConcerns || null,
     },
   })

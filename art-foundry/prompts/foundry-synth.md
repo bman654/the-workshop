@@ -15,8 +15,10 @@ never arm a Monitor (that ends your run and loses uncommitted work).
 - `context.medium` — `'visual-gate'` | `'visual-exhibit'` | `'sound'`. **Branch on this.**
   `context.artifactKind` is `'image'` or `'audio'`.
 - `context.asset` — the full asset spec: `.key`, `.title`, `.tier`, `.brief`, `.geometry`, `.judgeFocus`,
-  `.module` (the LIVE file to install into, for visual-gate), `.drawFn` (the ONLY fn you may edit),
-  `.siblings` (keep byte-identical), `.extraQS`, `.iface` (`'scene'`|`'buildings'`), `.wireNote`.
+  `.module` (the LIVE file to install into), `.drawFn` (the ONLY fn you may edit, visual-gate),
+  `.siblings` (keep byte-identical), `.extraQS`, `.iface` (`'scene'`|`'buildings'`), `.wireNote`,
+  `.specFile` (exhibit-art: READ IT — the API the installed CODE must expose + the wiring contract; install
+  to match it exactly). The winner you install is a CODE module, not the rendered PNG/WAV.
 - `context.takes` — `[{ take, candidatePath, artifacts, notes, animated }]`. Each `.candidatePath` is the
   finished candidate file from that take — your BASE comes from one of these.
 - `context.judges` — `[{ judge, winner, graftNotes, verdict }]`. The judges' picks + graft notes +

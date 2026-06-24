@@ -120,6 +120,7 @@ export function normalizeAsset(spec) {
     extraQS: spec.extraQS || null,
     iface: spec.iface || null,
     wireNote: spec.wireNote || null, // exhibit-art: how this asset wires into the system
+    specFile: spec.specFile || null, // exhibit-art: path to the full asset contract (read by smith/judge/synth) — the deliverable is CODE, not a wav/png
     durSec: Number.isFinite(Number(spec.durSec)) && Number(spec.durSec) > 0 ? Number(spec.durSec) : null, // sound: render length (s); render-wav.sh defaults 3
     previewHarness: spec.previewHarness || null, // visual-exhibit/sound: a per-asset render harness override
   }
