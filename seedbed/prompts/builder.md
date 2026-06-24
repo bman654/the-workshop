@@ -44,6 +44,27 @@ any winning prototype path, and the definition of done are in YOUR CONTEXT. Retu
   failing self-test). If you genuinely cannot finish everything, deliberately stop at the nearest coherent,
   working state and spell out in `openConcerns` exactly what remains. Do not assume an endless relay.
 
+## AUDIO — unlock on a user gesture, ALWAYS (browser autoplay policy)
+
+**If your piece makes sound, gate it behind a real user CLICK — do this by habit, it is easy to forget and
+the failure is silent.** Browsers start every `AudioContext` *suspended*; it produces NO sound until you
+`ctx.resume()` (or create it) inside a genuine user-gesture handler (click/keydown/pointerdown). Sound armed
+on load, on a timer, or after a fetch will simply never play — and you may not notice, because it fails
+quietly. So:
+
+- **Design the page so the exhibit does NOTHING until the viewer acts**, and use THAT first gesture to unlock
+  audio (create/`resume()` the context + start the bed in the handler). Most exhibits have a natural control
+  for this — a Play/Start button, "pluck the string", "drop the ball" — wire the unlock onto it.
+- **No natural control? Add a one-click curtain** — a modal overlay ("click to begin" / "tap for sound") that
+  captures the first gesture and dismisses on click; that click is the unlock. (The front gate does exactly
+  this: `the-gate/audio.js` `unlock()` resumes the ctx + starts the ambient bed on the first opening click —
+  a worked example to copy.)
+- **Respect the ONE shared mute** — any page that makes sound reads/writes `ws:pref:muted` via `WS` (never a
+  per-page key), so a visitor mutes once and it holds estate-wide.
+- **VERIFY it actually sounds** — after the gesture, confirm in-browser that `ctx.state === 'running'` and the
+  graph is producing output (audio-lens a captured render if useful); never assume — silent failure is the
+  whole hazard here.
+
 ## IN-HOUSE ART — the art foundry (never forage)
 
 **All creative assets — audio AND gfx — are built IN-HOUSE. NEVER forage art from the web** (no stock

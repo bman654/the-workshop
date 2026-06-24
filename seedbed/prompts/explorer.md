@@ -38,5 +38,13 @@ the skeleton from the director is `basicDesign` (all in your context).
     HTML prototype of your approach at exactly that path. Make it real enough to judge against the others
     (need NOT be production-polished; touch only that /tmp file). Put its path in `prototypePath`. You may
     serve it + agent-browser to sanity-check.
+- **ART FIDELITY when exploring — go LOW on purpose if the concept is art-heavy.** The BUILD stage has an
+  in-house ART FOUNDRY that forges high-fidelity assets (exhibit visuals, ambience/SFX, animations) — so a
+  prototype does NOT need polished art to make its case. Use BLOCK / CONCEPT art (flat shapes, a placeholder
+  tone, a greybox) that conveys the DIRECTION, and spend your effort on the idea: the metaphor, the
+  interaction, the composition, what the piece SHOWS. Then **name the art assets the build will need** in your
+  `proposal` (a short list — what each is, its medium: visual / sound / animation) so the judge + builder can
+  plan the foundry pass. Do NOT let "the art isn't polished yet" shrink an ambitious idea — that is exactly
+  what the foundry exists to solve.
 
 If your context carries judge `feedback`, this is a refinement round — REFINE per that feedback.
