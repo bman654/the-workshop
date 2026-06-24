@@ -3,8 +3,47 @@
 <!-- ═══════════════════════════════════════════════════════════════════════
      RESUME POINTER  (read this first on a fresh/compacted context)
      ═══════════════════════════════════════════════════════════════════════ -->
-## ▶ RESUME POINTER — current state (2026-06-23: FOUNDRY COMPLETE + Phase-D room-rotation, wind-sway, WEATHER-FX, real MOON-PHASE WIRING, **AUDIO COMPLETE** (11 procedural sounds across 3 passes — owner verdict "sound is perfect"; creature rotation day=birds/dusk=crickets/night=owl), first-gesture audio unlock, the **founding-myth entry splash + "Hand That Guides" outro** (owner-loved bookend), reader-paced **skippable outro** (10s + click/key), all owner-playtest fixes — ALL SHIPPED; K=4.
-**▶▶ NEXT — to FINISH the Gate (see §9):** (1) **earned-asterism runtime pick** — the one real feature left: wire `asterism.js`'s placeholder to a RANDOM UNLOCKED constellation from `Sky.CATALOG` (affine-fit 1440×900 → slot origin 70,24), gated on `Sky.state`/`WS.store`; cold-start (nothing unlocked) = bare stars, no figure. DO NOT hand-draw a constellation (esp. not "the eagle") — it's a runtime PICK from the existing catalog. (2) **beauty passes** — moon/sun + asterism glow/shape polish (audio balance is owner-accepted: "perfect"). (3) **dogfood QA** — full exploratory interaction pass now that the gate is interactive (splash→gnomon→weather→open→outro+audio), + verify reduced-motion on a real machine (logic-verified only — KNOWN-ISSUES P3). (4) **go-live** (owner call) — the gate lives on branch `the-gate` and navigates to `../index.html`; making it the estate's actual entrance / merging is a separate decision.)
+## ▶ RESUME POINTER — current state (2026-06-23: FOUNDRY COMPLETE + Phase-D room-rotation, wind-sway, WEATHER-FX, real MOON-PHASE WIRING, **AUDIO COMPLETE** (11 procedural sounds across 3 passes — owner verdict "sound is perfect"; creature rotation day=birds/dusk=crickets/night=owl), first-gesture audio unlock, the **founding-myth entry splash + "Hand That Guides" outro** (owner-loved bookend), reader-paced **skippable outro** (10s + click/key), all owner-playtest fixes, **EARNED-STATE PASS** (random unlocked asterism + per-visit random roomref over slab∪cairn + undercroft 3rd "discovered/closed-doors" state + ambient weather drift) — ALL SHIPPED; K=4.
+**▶▶ NEXT — to FINISH the Gate (see §9):** (1) **beauty passes** — moon/sun + asterism glow/shape polish (audio balance is owner-accepted: "perfect"). (2) **dogfood QA** — full exploratory interaction pass now that the gate is interactive (splash→gnomon→weather→open→outro+audio), + verify reduced-motion on a real machine (logic-verified only — KNOWN-ISSUES P3). (3) **go-live** (owner call) — the gate lives on branch `the-gate` and navigates to `../index.html`; making it the estate's actual entrance / merging is a separate decision.)
+
+**EARNED-STATE PASS — random unlocked asterism + random roomref + undercroft closed-doors + weather drift — ✅ SHIPPED (2026-06-23):**
+four disjoint earned-state features, integrated together and smoke-verified over served HTTP (agent-browser, never
+file://), zero console errors across every path:
+
+  • **Earned asterism** (`asterism.js`): `AST.current()` now reads the visitor's UNLOCKED Survey via
+    `Sky.state(Sky.visitedFromStore(WS.store()), …)`, filters to COMPLETE asterisms, and picks ONE at random per
+    visit (memoized in `_cached` so the boot's repeated calls agree), affine-fitting its member stars from the
+    1440×900 catalog into the local 0..100 slot box (uniform scale, centered, y-band clears the label). Cold-start
+    (nothing unlocked) or Sky/WS absent → `null` → bare starfield, **no invented eagle**. Dev pins (local
+    `location.search`): `?asterism=<id>` pins an unlocked wing/feat (falls through if not unlocked), `?seed=<n>`
+    makes the pick reproducible. Placeholder retained only as `AST.PLACEHOLDER`. *Smoke:* clean store → bare stars
+    no figure; inject `ws:seen:firmament`+`ws:seen:orrery` → "The Astronomer" renders upper-left (real catalog
+    figure, verified against `Sky.WINGS`/`Sky.FEATS` names).
+
+  • **Random roomref** (`rooms.js`): `R.pick()` reworked from a daily-deterministic bespoke-only feature to a
+    PER-VISIT RANDOM pick over the FULL pool = every unlocked slab room ∪ the synthetic Cairn fixture
+    (sentinel `' cairn-fixture'`). The per-load draw `_roll` is frozen at module-eval and the resolved pick
+    memoized in `_cachedRandom`, so the two `pick()` calls a load makes (boot repColors merge + scene draw) agree.
+    `?room=<id>` still pins a slab room exactly (bespoke → rep+repColors, others → Glyph Stand); `?seed=<n>` makes
+    the random pick reproducible. *Smoke:* 8 seeds → 8 different rooms; seed=43 → Cairn fixture (both calls agree);
+    `?room=ripple` → Ripple-Tank rep with matching cyan repColors; `?room=verse` → Glyph Stand.
+
+  • **Undercroft 3rd state** (`scene.js`, `sequence.js`, `the-gate.src.html`): the front door now surfaces the
+    intermediate beat between "undiscovered" and "unsealed". New `undercroftState()` → `'none'|'closed'|'open'`
+    (dev override first, then store keys in priority: `ws:seen:undercroft` → open, `ws:seen:undercroft-rune` only →
+    closed, neither → none). `undercroftOpen()` kept (returns `state==='open'`). `drawUndercroftHatch` draws the
+    SAME curb/footprint for open+closed (identical cx=1300, yNear=742/yFar=678); closed adds two shut plank leaves
+    meeting at a centre seam with an iron hasp/padlock latch and NO crimson glow ("there but sealed").
+    `?undercroft=closed` (or `=2`) forces closed, `=1` forces open (tri-state in `parseUrl`). *Smoke:* all three
+    states render correctly in the exact same spot.
+
+  • **Weather drift** (`weather.js`): when NO `?wx=` pin is active AND reduced-motion is false, a ~1 s
+    `setInterval` `driftStep()` shifts (~4% per tick) to a random DIFFERENT state via the module's own `W.set()`,
+    so the boot's existing `onChange` (recolor + weather-fx + audio + wind) runs for free. `?seed=<n>` seeds the
+    drift PRNG for reproducibility. New API: `startDrift()`/`stopDrift()`/`isDrifting()`; `init()` calls
+    `stopDrift()` first so re-init never stacks timers. *Smoke:* unpinned → `isDrifting()` true (observed an
+    organic clear→storm drift); a forced `set('storm')` ran the full recolor+rain pipeline; `?wx=` pin and
+    reduced-motion both suppress (`isDrifting()` false). forge `--check --all` = 97 current.
 
 **OUTRO PACING — ✅ SHIPPED (2026-06-23, owner feedback):** the welcome/outro card auto-hold tripled
 `3000 → 10000 ms` (a fast reader couldn't finish it at 3 s), and it is now SKIPPABLE — a click on the

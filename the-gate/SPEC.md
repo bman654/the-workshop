@@ -824,9 +824,27 @@ contracts. The following are finalized in Phase D and get only a "beauty pass" n
   `refreshSkyObjects()`, so the drawn moon matches the user's real date. `?moon=<0..1>` still
   OVERRIDES (pins fraction + re-derives litSide, and wins for the brightness `moonK`). The
   moon/sun beauty pass remains future polish.
-- **earned-asterism runtime pick** — replace `asterism.js`'s PLACEHOLDER with a random
-  UNLOCKED Survey-of-Heaven constellation (`Sky.state`/`WS.store`); cold-start = stars, no
-  figure. The asterism gets a beauty pass.
+- **earned-asterism runtime pick** — ✅ BUILT 2026-06-23 (`asterism.js`): `AST.current()`
+  reads the visitor's UNLOCKED Survey (`Sky.state(Sky.visitedFromStore(WS.store()), …)`),
+  filters to COMPLETE asterisms, picks ONE at random per visit (memoized in `_cached`),
+  affine-fits its catalog member stars (1440×900 → local 0..100 slot box, uniform scale +
+  centered). Cold-start / Sky·WS absent → `null` → bare starfield (no invented figure). Dev
+  pins read from `location.search`: `?asterism=<id>`, `?seed=<n>`. The asterism still gets a
+  beauty pass (glow/shape polish).
+- **per-visit random room-rep** — ✅ BUILT 2026-06-23 (`rooms.js`): `R.pick()` is now a
+  PER-VISIT RANDOM pick over every unlocked slab room ∪ the synthetic Cairn fixture (the draw
+  `_roll` is frozen at module-eval, the resolved pick memoized so the boot's two `pick()`
+  calls agree). `?room=<id>` pins a slab room exactly; `?seed=<n>` reproduces the random pick.
+  Bespoke rooms render rep+repColors; everything else falls back to the Glyph Stand.
+- **undercroft 3rd state (discovered-but-sealed)** — ✅ BUILT 2026-06-23 (`scene.js`,
+  `sequence.js`, the boot): `undercroftState()` → `'none'|'closed'|'open'` from store keys
+  (`ws:seen:undercroft`→open, `ws:seen:undercroft-rune` only→closed, neither→none). Closed
+  draws the SAME curb/footprint as open (cx=1300) plus two shut plank leaves + centre seam +
+  iron hasp/padlock and NO crimson glow. `?undercroft=closed|2` forces closed, `=1` forces open.
+- **ambient weather drift** — ✅ BUILT 2026-06-23 (`weather.js`): with no `?wx=` pin and
+  reduced-motion false, a ~1 s timer shifts (~4%/tick) to a random different state via `W.set()`
+  (which fires the boot's existing `onChange` recolor+fx+audio+wind). `startDrift()`/`stopDrift()`/
+  `isDrifting()`; `?seed=<n>` seeds the drift; `?wx=` pin + reduced-motion both suppress.
 - **the click-through cinematic + welcome card** — gears 2.5s → swing 2.5s → fade 2s →
   welcome hold 3s → navigate; reduced-motion collapse; `WS.seen('the-gate')`. Timings
   live in `sequence.js`; the welcome card markup is in the boot HTML.

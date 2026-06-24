@@ -2888,6 +2888,16 @@
   var state = { weather: 'clear', manual: false };
   var subs = [];
 
+  /* DRIFT (PLAN §7): when no ?wx= pin is active, weather not only STARTS random
+     but slowly CHANGES — every ~DRIFT_MS a ~DRIFT_P chance to shift to a random
+     DIFFERENT state. Gentle (4%/s ≈ a change every ~25s), and suppressed under
+     prefers-reduced-motion. The timer just calls set(), so the boot's existing
+     onChange handler (recolor + weatherfx + audio + wind) runs for free. */
+  var DRIFT_MS = 1000;
+  var DRIFT_P = 0.04;
+  var driftTimer = null;     // setInterval handle (null when not drifting)
+  var driftRng = Math.random; // replaced with a seeded PRNG when ?seed= is set
+
   function notify() {
     for (var i = 0; i < subs.length; i++) {
       try { subs[i](state.weather); } catch (e) {}
@@ -2912,21 +2922,75 @@
     return 'storm';
   }
 
+  /* reducedMotion(): one source of truth — defer to sequence.js if present
+     (it owns the media-query check), else fall back to matchMedia directly. */
+  function reducedMotion() {
+    try {
+      if (Gate.sequence && typeof Gate.sequence.prefersReducedMotion === 'function') {
+        return Gate.sequence.prefersReducedMotion();
+      }
+      return root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch (e) { return false; }
+  }
+
+  /* driftStep(): one ~1s tick. With DRIFT_P probability, shift to a random
+     state DIFFERENT from the current one, via set() (which fires onChange). */
+  function driftStep() {
+    if (driftRng() >= DRIFT_P) return;
+    // pick uniformly among the two states that aren't the current one
+    var others = [];
+    for (var i = 0; i < STATES.length; i++) {
+      if (STATES[i] !== state.weather) others.push(STATES[i]);
+    }
+    if (!others.length) return;
+    var next = others[Math.floor(driftRng() * others.length) % others.length];
+    // drift is an ambient change, not a visitor choice — keep manual=false so a
+    // later ?wx-less reload / programmatic logic can still tell it apart if it
+    // ever cares. set() flips manual=true, so restore it afterward.
+    var wasManual = state.manual;
+    W.set(next);
+    state.manual = wasManual;
+  }
+
+  /* startDrift(): begin the ambient drift (idempotent). */
+  function startDrift() {
+    stopDrift();
+    if (typeof root.setInterval !== 'function') return;
+    driftTimer = root.setInterval(driftStep, DRIFT_MS);
+  }
+
+  /* stopDrift(): halt the ambient drift cleanly. */
+  function stopDrift() {
+    if (driftTimer != null && typeof root.clearInterval === 'function') {
+      root.clearInterval(driftTimer);
+    }
+    driftTimer = null;
+  }
+
   /* init(opts): opts.pin (from ?wx=) forces a state; else seed the RNG from
-     opts.seed (?seed=) or a time-derived seed and pick one. */
+     opts.seed (?seed=) or a time-derived seed and pick one. When unpinned and
+     motion is allowed, also begin the ambient drift. */
   W.init = function (opts) {
     opts = opts || {};
+    stopDrift(); // re-init is idempotent: never stack two timers
     if (opts.pin && STATES.indexOf(opts.pin) >= 0) {
       state.weather = opts.pin;
       state.manual = true;
-      return state.weather;
+      return state.weather; // pinned weather stays put — no drift
     }
-    var seed = (opts.seed != null && !isNaN(+opts.seed))
+    var seeded = (opts.seed != null && !isNaN(+opts.seed));
+    var seed = seeded
       ? (+opts.seed >>> 0)
       : ((Date.now() / 60000) | 0); // changes ~once a minute when unseeded
     var rng = mulberry32(seed);
     state.weather = pick(rng);
     state.manual = false;
+    // drift RNG: seeded (reproducible with ?seed=) when a seed is given — derived
+    // from the seed so it doesn't reproduce the very same stream as the picker —
+    // else a fresh per-load Math.random (no shared global other modules depend on).
+    driftRng = seeded ? mulberry32(((+opts.seed >>> 0) ^ 0x9E3779B9) | 0) : Math.random;
+    // suppress surprise changes under reduced-motion (PLAN §7)
+    if (!reducedMotion()) startDrift();
     return state.weather;
   };
 
@@ -2944,6 +3008,12 @@
 
   W.STATES = STATES;
   W.onChange = function (fn) { if (typeof fn === 'function') subs.push(fn); };
+
+  /* drift controls — exposed so the drift can be stopped/started cleanly
+     (e.g. a settings toggle, or a test). startDrift() is idempotent. */
+  W.stopDrift = stopDrift;
+  W.startDrift = startDrift;
+  W.isDrifting = function () { return driftTimer != null; };
 
   Gate.weather = W;
 
@@ -5802,22 +5872,21 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
    shows an eagle; that figure does NOT exist in the estate's Survey of Heaven and
    we are NOT inventing it.
 
-   Phase A (this file): draw a PLACEHOLDER labeled brass asterism (a few GLOW stars
-   + connecting lines + an italic name) to the LEFT of the moon/sun, so the
-   composition has the right shape and the emissive read can be judged.
+   Phase D (this file): AST.current() returns the visitor's OWN earned figure —
+   one of their UNLOCKED Survey-of-Heaven constellations, picked at random per
+   VISIT (cached for the page load), affine-fit from Sky's 1440×900 catalog into
+   the 0..100 local box scene.js drawAsterism expects. Cold-start (nothing
+   unlocked, or Sky/WS absent) → null, and drawAsterism draws the bare starfield.
 
-   ── TODO Phase D — the REAL earned-constellation logic ──────────────────────
-   Replace pickPlaceholder() with a runtime pick from the visitor's UNLOCKED
-   Survey-of-Heaven constellations:
-       var st = Sky.state(Sky.visitedFromStore(WS.store()), Sky.CATALOG,
-                          Sky.WINGS, Sky.FEATS);
-       var unlocked = st.asterisms.filter(a => a.complete);
-       if (!unlocked.length) → draw NOTHING (authentic cold-start: stars, no figure)
-       else pick one at random → .name = label, .myth = sub-label, .members map
-            through Sky.CATALOG {x,y} (a 1440×900 viewBox — affine-fit into the
-            gate's sky box, never blit raw).
-   Emissive: stars var(--asterism.star), lines var(--asterism.line) — identical at
-   all bands (most brilliant at night). Match the front door's charted-star CSS.
+   The pick is CACHED in a module var so repeated AST.current() calls in one page
+   load agree (scene.js may call it more than once). Dev pins for reproducible
+   review (read from location.search, degrade gracefully without a DOM):
+       ?asterism=<id>   pin a specific unlocked asterism by id (wing/feat id);
+                        ignored if that id isn't currently unlocked.
+       ?seed=<n>        make the random pick deterministic (same n → same figure).
+
+   Emissive: stars var(--asterism-star-ref), lines var(--asterism-line-ref) —
+   handled by scene.js; here we only supply geometry + labels.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
@@ -5827,11 +5896,11 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
 
   /* The placeholder figure: a small 5-star bent line + a name, authored in a
      local 0..100 unit box that the scene affine-fits into the sky's asterism slot.
-     (Deliberately NOT the eagle — a neutral "surveyor's kite" so nobody mistakes
-     the greybox for a shipped invented constellation.) */
+     Kept as the documented shape contract + a fallback only when explicitly asked
+     for (AST.PLACEHOLDER); current() never returns it in Phase D. */
   var PLACEHOLDER = {
-    name: 'Asterism',           // Phase D: real .name from a complete Survey wing
-    myth: '(placeholder)',      // Phase D: real .myth sub-label
+    name: 'Asterism',
+    myth: '(placeholder)',
     stars: [
       { x: 18, y: 30, mag: 1 },
       { x: 42, y: 16, mag: 2 },
@@ -5839,16 +5908,156 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
       { x: 50, y: 58, mag: 2 },
       { x: 30, y: 70, mag: 2 }
     ],
-    // connecting lines as index pairs into stars[]
     lines: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 0]]
   };
 
-  /* current(): the figure to draw. Phase A → always the placeholder.
-     Phase D → the randomly-picked unlocked Survey asterism, or null (draw nothing). */
+  /* ── the 0..100 destination box (with a small inset so a figure never crowds the
+     slot edges / the label below) ──────────────────────────────────────────────
+     drawAsterism does sc=size/100; px=ox+p.x*sc, and prints the label at y≈92, so
+     we keep stars inside roughly [PAD, 100-PAD] × [PAD, 78] to leave label room. */
+  var PAD = 8;
+  var BOX_MIN = PAD, BOX_MAX = 100 - PAD;   // x span and (top of) y span
+  var BOX_Y_MAX = 76;                       // keep figures above the label band
+
+  /* ── a tiny seedable PRNG (mulberry32) so ?seed gives a reproducible pick ───── */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ── read dev pins from location.search WITHOUT depending on sequence.js ──────
+     (asterism.js is a leaf module; reuse the same param names but parse locally so
+     it works in isolation / in a Node harness where there is no DOM). */
+  function readPins() {
+    var search = '';
+    try {
+      if (root && root.location && typeof root.location.search === 'string') {
+        search = root.location.search;
+      }
+    } catch (e) { /* no DOM → no pins */ }
+    var q = {};
+    search.replace(/^\?/, '').split('&').forEach(function (kv) {
+      if (!kv) return;
+      var i = kv.indexOf('=');
+      var k = i < 0 ? kv : kv.slice(0, i);
+      var v = i < 0 ? '' : kv.slice(i + 1);
+      try { v = decodeURIComponent(v); } catch (e2) {}
+      q[k] = v;
+    });
+    return {
+      asterism: (q.asterism != null && q.asterism !== '') ? q.asterism : null,
+      seed: (q.seed != null && q.seed !== '' && !isNaN(+q.seed)) ? (+q.seed) : null
+    };
+  }
+
+  /* ── affine-fit a chosen Survey asterism into the local 0..100 box ────────────
+     `ast` is a Sky asterisms[] entry ({id,name,myth,members,complete}); we read each
+     member's {x,y,mag} from Sky.CATALOG (a 1440×900 viewBox) and map the figure's
+     bounding box into [PAD,100-PAD] × [PAD,BOX_Y_MAX], preserving aspect (uniform
+     scale = min of the two axis scales) and centering. Lines thread members in their
+     listed order (the same polyline Sky draws). Returns the {stars,lines,name,myth}
+     shape drawAsterism expects, or null if fewer than 1 member resolves. */
+  function fitFigure(ast, catalog) {
+    var members = ast.members || [];
+    var raw = [];
+    for (var i = 0; i < members.length; i++) {
+      var c = catalog[members[i]];
+      if (c) raw.push({ x: c.x, y: c.y, mag: c.mag || 2 });
+    }
+    if (!raw.length) return null;
+
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (var j = 0; j < raw.length; j++) {
+      if (raw[j].x < minX) minX = raw[j].x;
+      if (raw[j].x > maxX) maxX = raw[j].x;
+      if (raw[j].y < minY) minY = raw[j].y;
+      if (raw[j].y > maxY) maxY = raw[j].y;
+    }
+    var srcW = maxX - minX, srcH = maxY - minY;
+    var dstW = BOX_MAX - BOX_MIN, dstH = BOX_Y_MAX - BOX_MIN;
+
+    // uniform scale preserving aspect; a degenerate (single point / flat line) axis
+    // contributes no constraint (Infinity), so the other axis governs.
+    var sx = srcW > 0 ? dstW / srcW : Infinity;
+    var sy = srcH > 0 ? dstH / srcH : Infinity;
+    var s = Math.min(sx, sy);
+    if (!isFinite(s)) s = 1;   // single point: arbitrary scale, will be centered
+
+    // center the scaled figure within the destination box
+    var fitW = srcW * s, fitH = srcH * s;
+    var offX = BOX_MIN + (dstW - fitW) / 2;
+    var offY = BOX_MIN + (dstH - fitH) / 2;
+
+    var stars = [];
+    for (var k = 0; k < raw.length; k++) {
+      stars.push({
+        x: +(offX + (raw[k].x - minX) * s).toFixed(2),
+        y: +(offY + (raw[k].y - minY) * s).toFixed(2),
+        mag: raw[k].mag
+      });
+    }
+
+    // polyline through members in listed order (consecutive index pairs)
+    var lines = [];
+    for (var L = 0; L + 1 < stars.length; L++) lines.push([L, L + 1]);
+
+    return { name: ast.name, myth: ast.myth, stars: stars, lines: lines };
+  }
+
+  /* ── pick the earned figure (uncached) ──────────────────────────────────────── */
+  function pickEarned() {
+    var Sky = root.Sky, WS = root.WS;
+    if (!Sky || !WS || typeof Sky.state !== 'function'
+        || typeof Sky.visitedFromStore !== 'function' || typeof WS.store !== 'function') {
+      return null;   // libs absent → degrade to bare starfield
+    }
+
+    var store;
+    try { store = WS.store(); } catch (e) { return null; }
+
+    var st;
+    try {
+      st = Sky.state(Sky.visitedFromStore(store), Sky.CATALOG, Sky.WINGS, Sky.FEATS);
+    } catch (e2) { return null; }
+    if (!st || !st.asterisms) return null;
+
+    var unlocked = st.asterisms.filter(function (a) { return a && a.complete; });
+    if (!unlocked.length) return null;   // authentic cold-start: draw nothing
+
+    var pins = readPins();
+
+    // dev pin: ?asterism=<id> — honor only if that id is genuinely unlocked
+    if (pins.asterism) {
+      for (var p = 0; p < unlocked.length; p++) {
+        if (unlocked[p].id === pins.asterism) return fitFigure(unlocked[p], Sky.CATALOG);
+      }
+      // pinned id not unlocked → fall through to the random pick (no fakery)
+    }
+
+    // pick one at random; ?seed makes it reproducible, else per-visit random
+    var r = (pins.seed != null) ? mulberry32(pins.seed)() : Math.random();
+    var idx = Math.floor(r * unlocked.length);
+    if (idx >= unlocked.length) idx = unlocked.length - 1;   // guard r===1
+    return fitFigure(unlocked[idx], Sky.CATALOG);
+  }
+
+  /* ── current(): the figure to draw, CACHED for the page load ──────────────────
+     scene.js may call this more than once per render; the pick (and its random
+     choice) MUST be stable within a load, so we memoize. `_cached === undefined`
+     means "not yet computed"; a computed null (cold-start) is cached too. */
+  var _cached;   // undefined until first call; then a figure object OR null
   AST.current = function () {
-    // TODO Phase D: read Sky + WS here; return null when nothing is unlocked.
-    return PLACEHOLDER;
+    if (_cached === undefined) _cached = pickEarned();
+    return _cached;
   };
+
+  /* test seam: drop the memo (used only by the node self-test to re-pick under a
+     changed store/pins; never called by the scene). */
+  AST._reset = function () { _cached = undefined; };
 
   AST.PLACEHOLDER = PLACEHOLDER;
 
@@ -5872,9 +6081,13 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
    plinth holding the room's glyph — no bare floating glyphs). rooms.js owns the
    SELECTION (which rep to show) + feeds the rep its accent/glyph/name from the slab.
 
-   SELECTION (Phase D): the grounds feature the day's rotating bespoke room
-   (R.featuredId, daily), so the front door showcases a different calling card each
-   day rather than always the Cairn. ?room=<id> pins any slab room (dev/sharing).
+   SELECTION (Phase E): the grounds feature a RANDOM room PER VISIT, drawn from the
+   FULL pool of unlocked rooms — every room in the GATE-ROOMS slab PLUS the synthetic
+   Cairn fixture (which is not a real slab room). Each page-load lands on a different
+   room (a fresh calling card each visit), but the pick is CACHED so it is STABLE
+   within a load: the boot's repColors merge and scene.js's draw both call pick() and
+   MUST agree, or the rep's custom colors wouldn't match the rep drawn. ?room=<id>
+   pins any slab room (dev/sharing); ?seed=<n> makes the random pick reproducible.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
@@ -5976,43 +6189,113 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
   }
   R.featuredId = featuredId;
 
-  /* pick(pinId): which room to display in the grounds.
-     • If pinId is given AND present in the slab → pick THAT room (dev override, ?room=).
-     • Otherwise FEATURE the day's rotating bespoke room (featuredId). The Cairn is the
-       anchor — shown when it's the day's pick or when the featured room can't resolve. */
-  R.pick = function (pinId) {
-    var slab = R.loadSlab();
-
-    if (pinId) {
-      for (var p = 0; p < slab.length; p++) {
-        if (slab[p].id === pinId) return projectPick(slab[p]);
-      }
-      // pinId not in the slab → fall through to the featured pick.
-    }
-
-    // PRODUCTION: feature the day's rotating bespoke room (was: always the Cairn).
-    var featId = featuredId(slab);
-    if (featId && featId !== 'cairn') {
-      for (var f = 0; f < slab.length; f++) {
-        if (slab[f].id === featId) return projectPick(slab[f]);
-      }
-      // featured room vanished from the slab → fall through to the Cairn anchor.
-    }
-
+  /* cairnPick(slab): the synthetic Cairn fixture as a rep-pick. The Cairn is a real
+     estate landmark (the Tabularium / Cairn Face) that may or may not surface in the
+     slab as its own row; we mirror its name/glyph/accent from the slab when present
+     (matched by id 'tabularium'/'cairn' or a "cairn" in the room name) and otherwise
+     fall back to the synthetic defaults. It always renders the fixed-color 'cairn'
+     rep regardless of which slab id (if any) it borrowed its label from. */
+  function cairnPick(slab) {
+    slab = slab || [];
     var cairn = null;
     for (var i = 0; i < slab.length; i++) {
       if (slab[i].id === 'tabularium' || slab[i].id === 'cairn' ||
           /cairn/i.test(slab[i].room || '')) { cairn = slab[i]; break; }
     }
-    if (cairn) {
-      // The Cairn is a bespoke fixed-color rep regardless of its slab id.
-      return { id: 'cairn', rep: 'cairn', repColors: BESPOKE.cairn.repColors,
-        name: cairn.room || 'The Cairn Face', glyph: cairn.glyph || '🪨',
-        accent: cairn.accent || '#9aa0a8', src: cairn };
-    }
-    // synthetic fallback — the Cairn is a real estate fixture (Tabularium / Cairn Face)
     return { id: 'cairn', rep: 'cairn', repColors: BESPOKE.cairn.repColors,
-      name: 'The Cairn Face', glyph: '🪨', accent: '#9aa0a8', src: null };
+      name: cairn ? (cairn.room || 'The Cairn Face') : 'The Cairn Face',
+      glyph: cairn ? (cairn.glyph || '🪨') : '🪨',
+      accent: cairn ? (cairn.accent || '#9aa0a8') : '#9aa0a8',
+      src: cairn || null };
+  }
+
+  /* CAIRN_POOL_ID: the sentinel id standing for the synthetic Cairn fixture inside
+     the random pool. It is NOT necessarily a real slab id (the Cairn may have no slab
+     row), so we use a distinct token to avoid colliding with any slab room. */
+  var CAIRN_POOL_ID = ' cairn-fixture';
+
+  /* mulberry32(seed): a tiny deterministic 32-bit PRNG → a function returning a float
+     in [0,1). Used to make the ?seed-driven pick reproducible across loads. */
+  function mulberry32(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /* urlSeed(): read ?seed=<n> from the live query string (so a review URL can pin a
+     reproducible random pick) — null when absent/blank/non-numeric. We parse it here
+     rather than threading it through pick()'s callers, both of which pass only the
+     ?room pin; this keeps the per-visit pick stable for a given ?seed without
+     touching the boot/scene call sites. */
+  function urlSeed() {
+    try {
+      var search = (root.location && root.location.search) || '';
+      var m = /[?&]seed=([^&]+)/.exec(search);
+      if (!m) return null;
+      var v = +decodeURIComponent(m[1]);
+      return isNaN(v) ? null : v;
+    } catch (e) { return null; }
+  }
+
+  /* _roll: the per-load random draw in [0,1), captured ONCE. If ?seed is present it
+     is derived deterministically from the seed (reproducible review); otherwise it is
+     a single Math.random() frozen at module init. Freezing here is what makes the two
+     pick() calls a load makes agree (the boot repColors merge + scene.js draw). */
+  var _roll = (function () {
+    var s = urlSeed();
+    return s != null ? mulberry32(s)() : Math.random();
+  })();
+
+  /* _cachedRandom: the resolved random pick object, memoized after the first
+     non-pinned pick() call so every later call in the same load returns the SAME
+     room (so its repColors match the drawn rep). Keyed on nothing because the random
+     pool is load-stable; a ?room pin bypasses this cache (it is itself deterministic). */
+  var _cachedRandom = null;
+
+  /* randomPick(): choose AT RANDOM (per visit, stable within the load) from the pool
+     of every slab room ∪ the synthetic Cairn fixture. The Cairn is appended as a
+     sentinel so it competes evenly with the real rooms even when it has no slab row. */
+  function randomPick() {
+    if (_cachedRandom) return _cachedRandom;
+    var slab = R.loadSlab();
+    var pool = [];
+    for (var i = 0; i < slab.length; i++) pool.push(slab[i].id);
+    pool.push(CAIRN_POOL_ID);                 // the Cairn fixture is always eligible
+    var idx = Math.floor(_roll * pool.length);
+    if (idx >= pool.length) idx = pool.length - 1;   // guard _roll === 1 edge
+    if (idx < 0) idx = 0;
+    var chosenId = pool[idx];
+    if (chosenId === CAIRN_POOL_ID) {
+      _cachedRandom = cairnPick(slab);
+    } else {
+      var rec = null;
+      for (var j = 0; j < slab.length; j++) {
+        if (slab[j].id === chosenId) { rec = slab[j]; break; }
+      }
+      // a slab row matched its own id by construction; fall back to the Cairn if not.
+      _cachedRandom = rec ? projectPick(rec) : cairnPick(slab);
+    }
+    return _cachedRandom;
+  }
+
+  /* pick(pinId): which room to display in the grounds.
+     • If pinId (?room=) is given AND present in the slab → pick THAT room (dev override).
+     • Otherwise pick AT RANDOM (per visit, stable within a load) from the full pool of
+       every unlocked slab room ∪ the synthetic Cairn fixture. Bespoke rooms render
+       their rep + repColors; every other room falls back to the Glyph Stand. */
+  R.pick = function (pinId) {
+    if (pinId) {
+      var slab = R.loadSlab();
+      for (var p = 0; p < slab.length; p++) {
+        if (slab[p].id === pinId) return projectPick(slab[p]);
+      }
+      // pinId not in the slab → fall through to the per-visit random pick.
+    }
+    return randomPick();
   };
 
   /* hasBespoke(id): does this room id have a bespoke rep (vs the Glyph Stand)? */
@@ -9326,9 +9609,18 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
      on the opening's LEFT edge, the RIGHT door on the RIGHT edge — both flung OPEN
      OUTWARD, away from the centerline, lying back on the grass. The emissive
      undercroft.glow seeps up from the dark depths.
-     Shown only when the unlock predicate is true (earned) OR forced via ?undercroft=1. */
+     THREE states (see undercroftState):
+       'none'   → nothing drawn.
+       'open'   → the full carved stoop: void + descending steps + crimson depth-glow,
+                  with both timber leaves flung OPEN on their outer hinges (UNCHANGED).
+       'closed' → the SAME stone collar + footprint, but the two leaves drawn SHUT and
+                  flush over the mouth, latched, with no glow seeping — "found but
+                  sealed". The void/steps/glow are not drawn (the doors cap the hole).
+     Shown only when the store predicate earns it OR forced via ?undercroft=1|closed. */
   function drawUndercroftHatch(parent) {
-    if (!undercroftOpen()) return;
+    var state = undercroftState();
+    if (state === 'none') return;
+    var open = (state === 'open');
     var g = group('undercroft-hatch', parent);
     var FR  = 'var(--brass-stroke-ref, #9c8350)';   // brass stroke
     var BRI = 'var(--brass-bright-ref, #cdb375)';    // brass-bright TOP-edge sheen
@@ -9404,12 +9696,16 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
       fill: 'none', stroke: BRI, 'stroke-width': '1', opacity: '0.32' }, g);
 
     // ── THE VOID + DESCENDING STONE STEPS ──
-    // Base of the hole: near-black so the depth reads bottomless behind the steps/glow.
+    // Base of the hole: near-black so the depth reads bottomless behind the steps/glow
+    // (open) or so no grass shows through the shut-door seams (closed). Drawn in BOTH
+    // states — the steps/glow that follow are OPEN-only.
     var holeD = 'M ' + fx(Lnear) + ' ' + fx(yNear) +
       ' L ' + fx(Lfar) + ' ' + fx(yFar) +
       ' L ' + fx(Rfar) + ' ' + fx(yFar) +
       ' L ' + fx(Rnear) + ' ' + fx(yNear) + ' Z';
     el('path', { d: holeD, fill: 'rgba(5,5,9,.99)', stroke: FR, 'stroke-width': '1.6' }, g);
+
+    if (open) {
 
     // ── EMISSIVE DEPTH-GLOW (drawn FIRST, low in the throat) — deep crimson pooling
     //    from the depths, biased FAR/LOWER. The steps are then drawn OVER the near half
@@ -9504,6 +9800,8 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
       ' L ' + fx(Rx(0.48) - 5) + ' ' + fx(Yy(0.48)) +
       ' L ' + fx(Rx(0.30) - 5) + ' ' + fx(Yy(0.30)) + ' Z',
       fill: 'rgba(3,3,6,.5)', filter: 'url(#glow-soft)' }, g);
+
+    }  // end if (open) — void + descending steps + depth-glow + near-throat vignette
 
     // ── TWO TIMBER LEAVES flung OPEN on OPPOSITE OUTER hinges, laid back on the grass.
     //    Each is a heavy plank door (dark estate body + brass-stroke frame) with plank
@@ -9602,30 +9900,157 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
       return lg;
     }
 
-    // LEFT leaf hinged on the opening's LEFT edge, opens LEFT (dir = -1).
-    leaf(-1, Lnear, yNear, Lfar, yFar);
-    // RIGHT leaf hinged on the opening's RIGHT edge, opens RIGHT (dir = +1).
-    leaf(+1, Rnear, yNear, Rfar, yFar);
+    // ── CLOSED-STATE leaf: the SAME plank door drawn SHUT and flush, capping its HALF
+    //    of the mouth (hinge on the outer rim, free edge meeting its twin at the centre
+    //    seam). Lit from above, latched at the centre, no glow seeping — "found but
+    //    sealed". Footprint is exactly the curb's opening, so it sits where the open
+    //    hatch's hole is. dir=-1 → LEFT half (rim→centre); dir=+1 → RIGHT half. ──
+    function closedLeaf(dir) {
+      var lg = group(null, g);
+      // near + far OUTER corners (on the rim) and INNER corners (at the centre seam).
+      var oNx = (dir < 0) ? Lnear : Rnear, oNy = yNear;   // outer near (rim)
+      var oFx = (dir < 0) ? Lfar  : Rfar,  oFy = yFar;    // outer far  (rim)
+      var iNx = cx, iNy = yNear;                          // inner near (centre seam)
+      var iFx = cx, iFy = yFar;                           // inner far  (centre seam)
+      // the shut leaf face — a flat plank lying in the opening plane (no thickness band:
+      // it sits flush in the mouth, the curb supplies the raised lip).
+      el('path', { d: 'M ' + fx(oNx) + ' ' + fx(oNy) +
+        ' L ' + fx(oFx) + ' ' + fx(oFy) +
+        ' L ' + fx(iFx) + ' ' + fx(iFy) +
+        ' L ' + fx(iNx) + ' ' + fx(iNy) + ' Z',
+        fill: bodyFill, stroke: FR, 'stroke-width': '1.4', filter: 'url(#glow-soft)' }, lg);
+      // PLANK boards running rim→centre: alternating warm/dark grain banding + seams,
+      // matching the open leaf's plank read so the two states are clearly the same door.
+      var nP = 3;
+      for (var b0 = 0; b0 < nP; b0++) {
+        var fa = b0 / nP, fb = (b0 + 1) / nP;
+        var nAx = oNx + (iNx - oNx) * fa, nAy = oNy + (iNy - oNy) * fa;
+        var nBx = oNx + (iNx - oNx) * fb, nBy = oNy + (iNy - oNy) * fb;
+        var fAx = oFx + (iFx - oFx) * fa, fAy = oFy + (iFy - oFy) * fa;
+        var fBx = oFx + (iFx - oFx) * fb, fBy = oFy + (iFy - oFy) * fb;
+        el('path', { d: 'M ' + fx(nAx) + ' ' + fx(nAy) + ' L ' + fx(fAx) + ' ' + fx(fAy) +
+          ' L ' + fx(fBx) + ' ' + fx(fBy) + ' L ' + fx(nBx) + ' ' + fx(nBy) + ' Z',
+          fill: (b0 % 2 === 0) ? FR : '#000', opacity: (b0 % 2 === 0) ? '0.16' : '0.30' }, lg);
+      }
+      for (var p = 1; p < nP; p++) {
+        var fp = p / nP;
+        var aX = oNx + (iNx - oNx) * fp, aY = oNy + (iNy - oNy) * fp;   // along near edge
+        var bX = oFx + (iFx - oFx) * fp, bY = oFy + (iFy - oFy) * fp;   // along far edge
+        el('line', { x1: fx(aX), y1: fx(aY), x2: fx(bX), y2: fx(bY),
+          stroke: '#000', 'stroke-width': '1', opacity: '0.45' }, lg);
+        el('line', { x1: fx(aX), y1: fx(aY - 1), x2: fx(bX), y2: fx(bY - 1),
+          stroke: BRI, 'stroke-width': '0.6', opacity: '0.26' }, lg);
+      }
+      // END-CLEATS binding the planks along the near + far rails
+      el('line', { x1: fx(oNx), y1: fx(oNy), x2: fx(iNx), y2: fx(iNy),
+        stroke: FR, 'stroke-width': '2', opacity: '0.7' }, lg);
+      el('line', { x1: fx(oFx), y1: fx(oFy), x2: fx(iFx), y2: fx(iFy),
+        stroke: FR, 'stroke-width': '1.6', opacity: '0.6' }, lg);
+      // brass-bright sheen on the up-facing NEAR edge (top light from above)
+      el('line', { x1: fx(oNx), y1: fx(oNy - 1), x2: fx(iNx), y2: fx(iNy - 1),
+        stroke: BRI, 'stroke-width': '1.2', opacity: '0.5' }, lg);
+      // IRON STRAP-HINGE seated on the OUTER rim (where this leaf is hinged), mirroring
+      // the open leaf's strap: a band reaching in from the rim with two bolts.
+      var smx = (oNx + iNx) / 2 - dir * 4, smy = (oNy + iNy) / 2;       // strap reaches inward from rim
+      el('path', { d: 'M ' + fx(oNx - dir * 3) + ' ' + fx(oNy) +
+        ' L ' + fx(smx) + ' ' + fx(smy) +
+        ' L ' + fx((oFx + iFx) / 2 - dir * 4) + ' ' + fx((oFy + iFy) / 2) +
+        ' L ' + fx(oFx - dir * 3) + ' ' + fx(oFy) + ' Z',
+        fill: 'none', stroke: FR, 'stroke-width': '1.4', opacity: '0.85' }, lg);
+      el('circle', { cx: fx(oNx - dir * 6), cy: fx(oNy + 1), r: 2, fill: bodyFill, stroke: FR, 'stroke-width': '0.9' }, lg);
+      el('circle', { cx: fx(oNx - dir * 6 - 0.6), cy: fx(oNy + 0.4), r: 0.8, fill: BRI, opacity: '0.85' }, lg);
+      el('circle', { cx: fx(smx), cy: fx(smy), r: 1.8, fill: bodyFill, stroke: FR, 'stroke-width': '0.8' }, lg);
+      el('circle', { cx: fx(smx - 0.5), cy: fx(smy - 0.6), r: 0.7, fill: BRI, opacity: '0.8' }, lg);
+      // hinge BARREL knuckles seated on the rim (near + far pintles)
+      el('circle', { cx: fx(oNx), cy: fx(oNy), r: 2.6, fill: bodyFill, stroke: FR, 'stroke-width': '1.1' }, lg);
+      el('circle', { cx: fx(oNx - 0.7), cy: fx(oNy - 0.9), r: 0.9, fill: BRI, opacity: '0.85' }, lg);
+      el('circle', { cx: fx(oFx), cy: fx(oFy), r: 2.1, fill: bodyFill, stroke: FR, 'stroke-width': '1' }, lg);
+      el('circle', { cx: fx(oFx - 0.6), cy: fx(oFy - 0.8), r: 0.7, fill: BRI, opacity: '0.8' }, lg);
+      return lg;
+    }
+
+    if (open) {
+      // LEFT leaf hinged on the opening's LEFT edge, opens LEFT (dir = -1).
+      leaf(-1, Lnear, yNear, Lfar, yFar);
+      // RIGHT leaf hinged on the opening's RIGHT edge, opens RIGHT (dir = +1).
+      leaf(+1, Rnear, yNear, Rfar, yFar);
+    } else {
+      // CLOSED: both leaves shut, meeting at the centre seam, then a central latch.
+      closedLeaf(-1);   // left half (rim → centre)
+      closedLeaf(+1);    // right half (centre → rim)
+      // ── CENTRE SEAM + LATCH — the two leaves meet down the centreline; an iron hasp
+      //    and staple span the seam (drawn OVER both leaves) so it reads SEALED, not
+      //    merely shut. A faint top-light catch, no crimson glow (the dark is capped). ──
+      el('line', { x1: fx(cx), y1: fx(yNear), x2: fx(cx), y2: fx(yFar),
+        stroke: '#000', 'stroke-width': '1.6', opacity: '0.6' }, g);          // the seam shadow
+      el('line', { x1: fx(cx), y1: fx(yNear), x2: fx(cx), y2: fx(yFar),
+        stroke: BRI, 'stroke-width': '0.5', opacity: '0.22' }, g);            // hairline top-light on the seam
+      var lcy = (yNear + yFar) / 2 + 6;                                       // hasp centred a touch forward
+      // hasp plate spanning the seam + the staple loop + a padlock body hanging below
+      el('rect', { x: fx(cx - 9), y: fx(lcy - 5), width: 18, height: 10, rx: 2,
+        fill: bodyFill, stroke: FR, 'stroke-width': '1.2' }, g);
+      el('line', { x1: fx(cx - 9), y1: fx(lcy - 5), x2: fx(cx + 9), y2: fx(lcy - 5),
+        stroke: BRI, 'stroke-width': '0.7', opacity: '0.5' }, g);             // hasp top edge sheen
+      el('rect', { x: fx(cx - 3), y: fx(lcy + 3), width: 6, height: 8, rx: 1.5,
+        fill: bodyFill, stroke: FR, 'stroke-width': '1.1' }, g);             // padlock body
+      el('path', { d: 'M ' + fx(cx - 2) + ' ' + fx(lcy + 3) +
+        ' Q ' + fx(cx - 2) + ' ' + fx(lcy) + ' ' + fx(cx) + ' ' + fx(lcy) +
+        ' Q ' + fx(cx + 2) + ' ' + fx(lcy) + ' ' + fx(cx + 2) + ' ' + fx(lcy + 3),
+        fill: 'none', stroke: FR, 'stroke-width': '1.1' }, g);              // padlock shackle
+      el('circle', { cx: fx(cx), cy: fx(lcy + 7), r: 0.9, fill: BRI, opacity: '0.6' }, g); // keyhole catch
+    }
 
     S.refs.undercroft = g;
   }
 
-  /* mirror index.src.html revealUndercroft EXACTLY: navigable state, not eligibility.
-     PRODUCTION stays earned-only; the dev flag (?undercroft=1 → setDevUndercroft)
-     only FORCES it visible for review — it does NOT change the earned-unlock logic. */
-  function undercroftOpen() {
-    if (S._devUndercroft) return true;           // dev review override
+  /* undercroftState() → 'none' | 'closed' | 'open' — the THREE-state model of the
+     way down, read off the per-visitor WS store (mirrors index.src.html's reveal
+     keys) with a dev override on top.
+
+     STORE-KEY MAPPING (the semantics this Gate implements):
+       • neither key                  → 'none'   — undiscovered: draw nothing.
+       • ws:seen:undercroft-rune only → 'closed' — DISCOVERED the rune but not yet
+                                         entered/unsealed: the cellar doors sit SHUT
+                                         and latched in the grounds — "there, but
+                                         sealed", a found-but-locked promise.
+       • ws:seen:undercroft           → 'open'   — UNSEALED (actually went down): the
+                                         bilco doors flung back, crimson depth-glow
+                                         seeping up. This key wins even without -rune.
+
+     This refines index.src.html, where BOTH keys collapse to "found/navigable"
+     (revealUndercroft line: `runeFound = -rune || undercroft`). On the front door we
+     surface the intermediate "discovered-not-unsealed" beat as the closed doors.
+     The dev pin (?undercroft → S._devUndercroft = 'closed'|'open') FORCES a state for
+     review; production stays earned-only via the store keys. */
+  function undercroftState() {
+    if (S._devUndercroft === 'open' || S._devUndercroft === 'closed') return S._devUndercroft;
     var WS = root.WS;
-    if (!WS || !WS.store) return false;
+    if (!WS || !WS.store) return 'none';
     var store = WS.store();
-    if (!store.ok) return false; // file:// or storage off → nothing unlocked
-    return store.has('ws:seen:undercroft-rune') || store.has('ws:seen:undercroft');
+    if (!store.ok) return 'none';                // file:// or storage off → nothing unlocked
+    if (store.has('ws:seen:undercroft')) return 'open';        // unsealed → open
+    if (store.has('ws:seen:undercroft-rune')) return 'closed'; // discovered → closed
+    return 'none';
   }
+  S.undercroftState = undercroftState;
+
+  /* undercroftOpen(): kept for any caller — true ONLY in the fully-unsealed state
+     (the open hatch). 'closed'/'none' are both falsy here. */
+  function undercroftOpen() { return undercroftState() === 'open'; }
   S.undercroftOpen = undercroftOpen;
 
-  /* setDevUndercroft(on): the ?undercroft=1 dev override (boot calls this before
-     build). Forces the greybox hatch visible for review only. */
-  S.setDevUndercroft = function (on) { S._devUndercroft = !!on; };
+  /* setDevUndercroft(state): the ?undercroft dev override (boot calls this before
+     build). Accepts the TRI-STATE the URL parser produces:
+       null / false / 0 / undefined → no override (earned-only via the store);
+       'open'  (or any truthy non-'closed' alias) → force the open hatch;
+       'closed' (or 2)              → force the found-but-sealed closed doors.
+     Stored as the literal 'open'|'closed' string (or null) so undercroftState reads
+     it directly; legacy boolean `true` is honored as 'open' for safety. */
+  S.setDevUndercroft = function (state) {
+    if (state === 'closed') S._devUndercroft = 'closed';
+    else if (state === 'open' || state === true) S._devUndercroft = 'open';
+    else S._devUndercroft = null;
+  };
 
   /* setDevRoom(id): the ?room=<id> dev override (boot calls this before build).
      Pins WHICH room's rep renders in the grounds slot; null/empty keeps the
@@ -10306,8 +10731,11 @@ if (typeof globalThis !== 'undefined') {
      ?moon=<0..1>        → pin moonK (illuminated fraction) for brightness.
      ?wx=clear|cloudy|storm → pin weather.
      ?seed=<n>           → seed the weather RNG.
-     ?undercroft=1       → FORCE the undercroft hatch visible (dev review only;
-                           production stays earned-only via the store predicate).
+     ?undercroft=1       → FORCE the undercroft hatch OPEN (doors flung back, glow
+                           seeping). Dev review only; production stays earned-only
+                           via the store predicate.
+     ?undercroft=closed  → FORCE the undercroft hatch CLOSED (the found-but-sealed
+       (or =2)             third state: doors shut + latched, no glow). Dev only.
      ?room=<id>          → PIN which room's rep renders in the grounds slot (dev
                            review only; a slab room id, e.g. ?room=verse). Falls
                            back to the Cairn default when absent or not in the slab.
@@ -10351,7 +10779,17 @@ if (typeof globalThis !== 'undefined') {
       moon: (q.moon != null && q.moon !== '' && !isNaN(+q.moon)) ? Math.max(0, Math.min(1, +q.moon)) : null,
       wx: (['clear', 'cloudy', 'storm'].indexOf(q.wx) >= 0) ? q.wx : null,
       seed: (q.seed != null && q.seed !== '' && !isNaN(+q.seed)) ? (+q.seed) : null,
-      undercroft: ('undercroft' in q) && q.undercroft !== '0' && q.undercroft !== 'false',
+      // ?undercroft — TRI-STATE dev override (null = earned-only; 'closed' = force
+      // the found-but-sealed doors-shut state; 'open' = force the open hatch). The
+      // truthy aliases (1/true/open) map to 'open'; closed/2 map to 'closed';
+      // absent or 0/false → null (no override). Mirrors S.undercroftState().
+      undercroft: (function () {
+        if (!('undercroft' in q)) return null;
+        var v = String(q.undercroft).toLowerCase();
+        if (v === '0' || v === 'false') return null;
+        if (v === 'closed' || v === '2') return 'closed';
+        return 'open';                                   // '', '1', 'true', 'open', …
+      })(),
       room: q.room || null,
       // ?smil=<seconds> — freeze the SVG animation clock at a fixed time, so an
       // animated rep can be rendered/judged at chosen phases of its loop (headless
@@ -10568,7 +11006,7 @@ if (typeof globalThis !== 'undefined') {
     // pin the DRAWN phase HARD (real or overridden) BEFORE build()'s first
     // refreshSkyObjects() so the rendered moon matches the chosen fraction + side.
     S.setMoonPhase({ illuminatedFraction: moonFrac, litSide: moonSide });
-    S.setDevUndercroft(url.undercroft);              // ?undercroft=1 forces the hatch
+    S.setDevUndercroft(url.undercroft);              // ?undercroft tri-state: null|'closed'|'open' (forces the hatch)
     S.setDevRoom(url.room);                          // ?room=<id> pins the grounds rep
 
     // the SELECTED rep, computed once: its repColors (§5.8) are merged into the

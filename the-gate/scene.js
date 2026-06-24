@@ -1874,9 +1874,18 @@
      on the opening's LEFT edge, the RIGHT door on the RIGHT edge — both flung OPEN
      OUTWARD, away from the centerline, lying back on the grass. The emissive
      undercroft.glow seeps up from the dark depths.
-     Shown only when the unlock predicate is true (earned) OR forced via ?undercroft=1. */
+     THREE states (see undercroftState):
+       'none'   → nothing drawn.
+       'open'   → the full carved stoop: void + descending steps + crimson depth-glow,
+                  with both timber leaves flung OPEN on their outer hinges (UNCHANGED).
+       'closed' → the SAME stone collar + footprint, but the two leaves drawn SHUT and
+                  flush over the mouth, latched, with no glow seeping — "found but
+                  sealed". The void/steps/glow are not drawn (the doors cap the hole).
+     Shown only when the store predicate earns it OR forced via ?undercroft=1|closed. */
   function drawUndercroftHatch(parent) {
-    if (!undercroftOpen()) return;
+    var state = undercroftState();
+    if (state === 'none') return;
+    var open = (state === 'open');
     var g = group('undercroft-hatch', parent);
     var FR  = 'var(--brass-stroke-ref, #9c8350)';   // brass stroke
     var BRI = 'var(--brass-bright-ref, #cdb375)';    // brass-bright TOP-edge sheen
@@ -1952,12 +1961,16 @@
       fill: 'none', stroke: BRI, 'stroke-width': '1', opacity: '0.32' }, g);
 
     // ── THE VOID + DESCENDING STONE STEPS ──
-    // Base of the hole: near-black so the depth reads bottomless behind the steps/glow.
+    // Base of the hole: near-black so the depth reads bottomless behind the steps/glow
+    // (open) or so no grass shows through the shut-door seams (closed). Drawn in BOTH
+    // states — the steps/glow that follow are OPEN-only.
     var holeD = 'M ' + fx(Lnear) + ' ' + fx(yNear) +
       ' L ' + fx(Lfar) + ' ' + fx(yFar) +
       ' L ' + fx(Rfar) + ' ' + fx(yFar) +
       ' L ' + fx(Rnear) + ' ' + fx(yNear) + ' Z';
     el('path', { d: holeD, fill: 'rgba(5,5,9,.99)', stroke: FR, 'stroke-width': '1.6' }, g);
+
+    if (open) {
 
     // ── EMISSIVE DEPTH-GLOW (drawn FIRST, low in the throat) — deep crimson pooling
     //    from the depths, biased FAR/LOWER. The steps are then drawn OVER the near half
@@ -2052,6 +2065,8 @@
       ' L ' + fx(Rx(0.48) - 5) + ' ' + fx(Yy(0.48)) +
       ' L ' + fx(Rx(0.30) - 5) + ' ' + fx(Yy(0.30)) + ' Z',
       fill: 'rgba(3,3,6,.5)', filter: 'url(#glow-soft)' }, g);
+
+    }  // end if (open) — void + descending steps + depth-glow + near-throat vignette
 
     // ── TWO TIMBER LEAVES flung OPEN on OPPOSITE OUTER hinges, laid back on the grass.
     //    Each is a heavy plank door (dark estate body + brass-stroke frame) with plank
@@ -2150,30 +2165,157 @@
       return lg;
     }
 
-    // LEFT leaf hinged on the opening's LEFT edge, opens LEFT (dir = -1).
-    leaf(-1, Lnear, yNear, Lfar, yFar);
-    // RIGHT leaf hinged on the opening's RIGHT edge, opens RIGHT (dir = +1).
-    leaf(+1, Rnear, yNear, Rfar, yFar);
+    // ── CLOSED-STATE leaf: the SAME plank door drawn SHUT and flush, capping its HALF
+    //    of the mouth (hinge on the outer rim, free edge meeting its twin at the centre
+    //    seam). Lit from above, latched at the centre, no glow seeping — "found but
+    //    sealed". Footprint is exactly the curb's opening, so it sits where the open
+    //    hatch's hole is. dir=-1 → LEFT half (rim→centre); dir=+1 → RIGHT half. ──
+    function closedLeaf(dir) {
+      var lg = group(null, g);
+      // near + far OUTER corners (on the rim) and INNER corners (at the centre seam).
+      var oNx = (dir < 0) ? Lnear : Rnear, oNy = yNear;   // outer near (rim)
+      var oFx = (dir < 0) ? Lfar  : Rfar,  oFy = yFar;    // outer far  (rim)
+      var iNx = cx, iNy = yNear;                          // inner near (centre seam)
+      var iFx = cx, iFy = yFar;                           // inner far  (centre seam)
+      // the shut leaf face — a flat plank lying in the opening plane (no thickness band:
+      // it sits flush in the mouth, the curb supplies the raised lip).
+      el('path', { d: 'M ' + fx(oNx) + ' ' + fx(oNy) +
+        ' L ' + fx(oFx) + ' ' + fx(oFy) +
+        ' L ' + fx(iFx) + ' ' + fx(iFy) +
+        ' L ' + fx(iNx) + ' ' + fx(iNy) + ' Z',
+        fill: bodyFill, stroke: FR, 'stroke-width': '1.4', filter: 'url(#glow-soft)' }, lg);
+      // PLANK boards running rim→centre: alternating warm/dark grain banding + seams,
+      // matching the open leaf's plank read so the two states are clearly the same door.
+      var nP = 3;
+      for (var b0 = 0; b0 < nP; b0++) {
+        var fa = b0 / nP, fb = (b0 + 1) / nP;
+        var nAx = oNx + (iNx - oNx) * fa, nAy = oNy + (iNy - oNy) * fa;
+        var nBx = oNx + (iNx - oNx) * fb, nBy = oNy + (iNy - oNy) * fb;
+        var fAx = oFx + (iFx - oFx) * fa, fAy = oFy + (iFy - oFy) * fa;
+        var fBx = oFx + (iFx - oFx) * fb, fBy = oFy + (iFy - oFy) * fb;
+        el('path', { d: 'M ' + fx(nAx) + ' ' + fx(nAy) + ' L ' + fx(fAx) + ' ' + fx(fAy) +
+          ' L ' + fx(fBx) + ' ' + fx(fBy) + ' L ' + fx(nBx) + ' ' + fx(nBy) + ' Z',
+          fill: (b0 % 2 === 0) ? FR : '#000', opacity: (b0 % 2 === 0) ? '0.16' : '0.30' }, lg);
+      }
+      for (var p = 1; p < nP; p++) {
+        var fp = p / nP;
+        var aX = oNx + (iNx - oNx) * fp, aY = oNy + (iNy - oNy) * fp;   // along near edge
+        var bX = oFx + (iFx - oFx) * fp, bY = oFy + (iFy - oFy) * fp;   // along far edge
+        el('line', { x1: fx(aX), y1: fx(aY), x2: fx(bX), y2: fx(bY),
+          stroke: '#000', 'stroke-width': '1', opacity: '0.45' }, lg);
+        el('line', { x1: fx(aX), y1: fx(aY - 1), x2: fx(bX), y2: fx(bY - 1),
+          stroke: BRI, 'stroke-width': '0.6', opacity: '0.26' }, lg);
+      }
+      // END-CLEATS binding the planks along the near + far rails
+      el('line', { x1: fx(oNx), y1: fx(oNy), x2: fx(iNx), y2: fx(iNy),
+        stroke: FR, 'stroke-width': '2', opacity: '0.7' }, lg);
+      el('line', { x1: fx(oFx), y1: fx(oFy), x2: fx(iFx), y2: fx(iFy),
+        stroke: FR, 'stroke-width': '1.6', opacity: '0.6' }, lg);
+      // brass-bright sheen on the up-facing NEAR edge (top light from above)
+      el('line', { x1: fx(oNx), y1: fx(oNy - 1), x2: fx(iNx), y2: fx(iNy - 1),
+        stroke: BRI, 'stroke-width': '1.2', opacity: '0.5' }, lg);
+      // IRON STRAP-HINGE seated on the OUTER rim (where this leaf is hinged), mirroring
+      // the open leaf's strap: a band reaching in from the rim with two bolts.
+      var smx = (oNx + iNx) / 2 - dir * 4, smy = (oNy + iNy) / 2;       // strap reaches inward from rim
+      el('path', { d: 'M ' + fx(oNx - dir * 3) + ' ' + fx(oNy) +
+        ' L ' + fx(smx) + ' ' + fx(smy) +
+        ' L ' + fx((oFx + iFx) / 2 - dir * 4) + ' ' + fx((oFy + iFy) / 2) +
+        ' L ' + fx(oFx - dir * 3) + ' ' + fx(oFy) + ' Z',
+        fill: 'none', stroke: FR, 'stroke-width': '1.4', opacity: '0.85' }, lg);
+      el('circle', { cx: fx(oNx - dir * 6), cy: fx(oNy + 1), r: 2, fill: bodyFill, stroke: FR, 'stroke-width': '0.9' }, lg);
+      el('circle', { cx: fx(oNx - dir * 6 - 0.6), cy: fx(oNy + 0.4), r: 0.8, fill: BRI, opacity: '0.85' }, lg);
+      el('circle', { cx: fx(smx), cy: fx(smy), r: 1.8, fill: bodyFill, stroke: FR, 'stroke-width': '0.8' }, lg);
+      el('circle', { cx: fx(smx - 0.5), cy: fx(smy - 0.6), r: 0.7, fill: BRI, opacity: '0.8' }, lg);
+      // hinge BARREL knuckles seated on the rim (near + far pintles)
+      el('circle', { cx: fx(oNx), cy: fx(oNy), r: 2.6, fill: bodyFill, stroke: FR, 'stroke-width': '1.1' }, lg);
+      el('circle', { cx: fx(oNx - 0.7), cy: fx(oNy - 0.9), r: 0.9, fill: BRI, opacity: '0.85' }, lg);
+      el('circle', { cx: fx(oFx), cy: fx(oFy), r: 2.1, fill: bodyFill, stroke: FR, 'stroke-width': '1' }, lg);
+      el('circle', { cx: fx(oFx - 0.6), cy: fx(oFy - 0.8), r: 0.7, fill: BRI, opacity: '0.8' }, lg);
+      return lg;
+    }
+
+    if (open) {
+      // LEFT leaf hinged on the opening's LEFT edge, opens LEFT (dir = -1).
+      leaf(-1, Lnear, yNear, Lfar, yFar);
+      // RIGHT leaf hinged on the opening's RIGHT edge, opens RIGHT (dir = +1).
+      leaf(+1, Rnear, yNear, Rfar, yFar);
+    } else {
+      // CLOSED: both leaves shut, meeting at the centre seam, then a central latch.
+      closedLeaf(-1);   // left half (rim → centre)
+      closedLeaf(+1);    // right half (centre → rim)
+      // ── CENTRE SEAM + LATCH — the two leaves meet down the centreline; an iron hasp
+      //    and staple span the seam (drawn OVER both leaves) so it reads SEALED, not
+      //    merely shut. A faint top-light catch, no crimson glow (the dark is capped). ──
+      el('line', { x1: fx(cx), y1: fx(yNear), x2: fx(cx), y2: fx(yFar),
+        stroke: '#000', 'stroke-width': '1.6', opacity: '0.6' }, g);          // the seam shadow
+      el('line', { x1: fx(cx), y1: fx(yNear), x2: fx(cx), y2: fx(yFar),
+        stroke: BRI, 'stroke-width': '0.5', opacity: '0.22' }, g);            // hairline top-light on the seam
+      var lcy = (yNear + yFar) / 2 + 6;                                       // hasp centred a touch forward
+      // hasp plate spanning the seam + the staple loop + a padlock body hanging below
+      el('rect', { x: fx(cx - 9), y: fx(lcy - 5), width: 18, height: 10, rx: 2,
+        fill: bodyFill, stroke: FR, 'stroke-width': '1.2' }, g);
+      el('line', { x1: fx(cx - 9), y1: fx(lcy - 5), x2: fx(cx + 9), y2: fx(lcy - 5),
+        stroke: BRI, 'stroke-width': '0.7', opacity: '0.5' }, g);             // hasp top edge sheen
+      el('rect', { x: fx(cx - 3), y: fx(lcy + 3), width: 6, height: 8, rx: 1.5,
+        fill: bodyFill, stroke: FR, 'stroke-width': '1.1' }, g);             // padlock body
+      el('path', { d: 'M ' + fx(cx - 2) + ' ' + fx(lcy + 3) +
+        ' Q ' + fx(cx - 2) + ' ' + fx(lcy) + ' ' + fx(cx) + ' ' + fx(lcy) +
+        ' Q ' + fx(cx + 2) + ' ' + fx(lcy) + ' ' + fx(cx + 2) + ' ' + fx(lcy + 3),
+        fill: 'none', stroke: FR, 'stroke-width': '1.1' }, g);              // padlock shackle
+      el('circle', { cx: fx(cx), cy: fx(lcy + 7), r: 0.9, fill: BRI, opacity: '0.6' }, g); // keyhole catch
+    }
 
     S.refs.undercroft = g;
   }
 
-  /* mirror index.src.html revealUndercroft EXACTLY: navigable state, not eligibility.
-     PRODUCTION stays earned-only; the dev flag (?undercroft=1 → setDevUndercroft)
-     only FORCES it visible for review — it does NOT change the earned-unlock logic. */
-  function undercroftOpen() {
-    if (S._devUndercroft) return true;           // dev review override
+  /* undercroftState() → 'none' | 'closed' | 'open' — the THREE-state model of the
+     way down, read off the per-visitor WS store (mirrors index.src.html's reveal
+     keys) with a dev override on top.
+
+     STORE-KEY MAPPING (the semantics this Gate implements):
+       • neither key                  → 'none'   — undiscovered: draw nothing.
+       • ws:seen:undercroft-rune only → 'closed' — DISCOVERED the rune but not yet
+                                         entered/unsealed: the cellar doors sit SHUT
+                                         and latched in the grounds — "there, but
+                                         sealed", a found-but-locked promise.
+       • ws:seen:undercroft           → 'open'   — UNSEALED (actually went down): the
+                                         bilco doors flung back, crimson depth-glow
+                                         seeping up. This key wins even without -rune.
+
+     This refines index.src.html, where BOTH keys collapse to "found/navigable"
+     (revealUndercroft line: `runeFound = -rune || undercroft`). On the front door we
+     surface the intermediate "discovered-not-unsealed" beat as the closed doors.
+     The dev pin (?undercroft → S._devUndercroft = 'closed'|'open') FORCES a state for
+     review; production stays earned-only via the store keys. */
+  function undercroftState() {
+    if (S._devUndercroft === 'open' || S._devUndercroft === 'closed') return S._devUndercroft;
     var WS = root.WS;
-    if (!WS || !WS.store) return false;
+    if (!WS || !WS.store) return 'none';
     var store = WS.store();
-    if (!store.ok) return false; // file:// or storage off → nothing unlocked
-    return store.has('ws:seen:undercroft-rune') || store.has('ws:seen:undercroft');
+    if (!store.ok) return 'none';                // file:// or storage off → nothing unlocked
+    if (store.has('ws:seen:undercroft')) return 'open';        // unsealed → open
+    if (store.has('ws:seen:undercroft-rune')) return 'closed'; // discovered → closed
+    return 'none';
   }
+  S.undercroftState = undercroftState;
+
+  /* undercroftOpen(): kept for any caller — true ONLY in the fully-unsealed state
+     (the open hatch). 'closed'/'none' are both falsy here. */
+  function undercroftOpen() { return undercroftState() === 'open'; }
   S.undercroftOpen = undercroftOpen;
 
-  /* setDevUndercroft(on): the ?undercroft=1 dev override (boot calls this before
-     build). Forces the greybox hatch visible for review only. */
-  S.setDevUndercroft = function (on) { S._devUndercroft = !!on; };
+  /* setDevUndercroft(state): the ?undercroft dev override (boot calls this before
+     build). Accepts the TRI-STATE the URL parser produces:
+       null / false / 0 / undefined → no override (earned-only via the store);
+       'open'  (or any truthy non-'closed' alias) → force the open hatch;
+       'closed' (or 2)              → force the found-but-sealed closed doors.
+     Stored as the literal 'open'|'closed' string (or null) so undercroftState reads
+     it directly; legacy boolean `true` is honored as 'open' for safety. */
+  S.setDevUndercroft = function (state) {
+    if (state === 'closed') S._devUndercroft = 'closed';
+    else if (state === 'open' || state === true) S._devUndercroft = 'open';
+    else S._devUndercroft = null;
+  };
 
   /* setDevRoom(id): the ?room=<id> dev override (boot calls this before build).
      Pins WHICH room's rep renders in the grounds slot; null/empty keeps the

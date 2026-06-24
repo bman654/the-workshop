@@ -18,8 +18,11 @@
      ?moon=<0..1>        → pin moonK (illuminated fraction) for brightness.
      ?wx=clear|cloudy|storm → pin weather.
      ?seed=<n>           → seed the weather RNG.
-     ?undercroft=1       → FORCE the undercroft hatch visible (dev review only;
-                           production stays earned-only via the store predicate).
+     ?undercroft=1       → FORCE the undercroft hatch OPEN (doors flung back, glow
+                           seeping). Dev review only; production stays earned-only
+                           via the store predicate.
+     ?undercroft=closed  → FORCE the undercroft hatch CLOSED (the found-but-sealed
+       (or =2)             third state: doors shut + latched, no glow). Dev only.
      ?room=<id>          → PIN which room's rep renders in the grounds slot (dev
                            review only; a slab room id, e.g. ?room=verse). Falls
                            back to the Cairn default when absent or not in the slab.
@@ -63,7 +66,17 @@
       moon: (q.moon != null && q.moon !== '' && !isNaN(+q.moon)) ? Math.max(0, Math.min(1, +q.moon)) : null,
       wx: (['clear', 'cloudy', 'storm'].indexOf(q.wx) >= 0) ? q.wx : null,
       seed: (q.seed != null && q.seed !== '' && !isNaN(+q.seed)) ? (+q.seed) : null,
-      undercroft: ('undercroft' in q) && q.undercroft !== '0' && q.undercroft !== 'false',
+      // ?undercroft — TRI-STATE dev override (null = earned-only; 'closed' = force
+      // the found-but-sealed doors-shut state; 'open' = force the open hatch). The
+      // truthy aliases (1/true/open) map to 'open'; closed/2 map to 'closed';
+      // absent or 0/false → null (no override). Mirrors S.undercroftState().
+      undercroft: (function () {
+        if (!('undercroft' in q)) return null;
+        var v = String(q.undercroft).toLowerCase();
+        if (v === '0' || v === 'false') return null;
+        if (v === 'closed' || v === '2') return 'closed';
+        return 'open';                                   // '', '1', 'true', 'open', …
+      })(),
       room: q.room || null,
       // ?smil=<seconds> — freeze the SVG animation clock at a fixed time, so an
       // animated rep can be rendered/judged at chosen phases of its loop (headless
