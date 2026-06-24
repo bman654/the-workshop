@@ -140,10 +140,14 @@ A `[rep]` grows the gate's rotating room-rep set (a bespoke front-elevation for 
 falls back to the glyph plinth); a `[gate]` re-souls or polishes an existing gate asset. The foundry-smith
 forges it through the K-takes → judge → synthesize harness (`gate-foundry/`). Patient cadence: one foundry
 turn every ~12 cycles, below garden-plan — it never starves the gardens. See **gate-foundry/MAINTAINING.md**.
-A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizontal | mound) + accent, e.g.
-`[rep] **The Firmament rep** — an armillary sphere of nested brass rings · aspect:vertical · room:firmament · accent:#cba15a`.
+A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizontal | mound) + accent — e.g.
+(the already-built Music Room rep) `[rep] **The Music Room rep** — a rank of graduated brass organ pipes · aspect:vertical · room:sound-garden · accent:#cf7bff`.
 
 <!-- gauge:foundry-seeds:start -->
+- [rep] **The Hours rep** — a brass SUNDIAL for The Hours: a wide engraved dial face with a triangular gnomon throwing a shadow line, on a short pedestal · aspect:horizontal · room:gnomon · accent:#e6bd6f (sown #313 · contest #0)
+- [rep] **The Clockwork rep** — a standing brass CLOCKWORK AUTOMATON for The Clockwork Automata: an exposed gear-train and a small figure, with a slow ambient gear-turn if it serves the read · aspect:vertical · room:clockwork · accent:#7ad0c4 (sown #313 · contest #0)
+- [rep] **The Lodestone rep** — a LODESTONE on a plinth for The Lodestone Hall: a dark magnetite block ringed by iron-filing arcs, a cool blue field-glow as the night payoff · aspect:mound · room:lodestone-hall · accent:#7fd4ff (sown #313 · contest #0)
+- [rep] **The Firmament rep** — an ARMILLARY SPHERE for The Observatory: nested brass rings (equator, meridian, ecliptic) around a small gilt earth — the estate's orrery motif · aspect:vertical · room:firmament · accent:#9db4ff (sown #313 · contest #0)
 <!-- gauge:foundry-seeds:end -->
 
 ---
