@@ -123,6 +123,33 @@ worklog/NOTES entry **"writ · served before #N"** so the number stays free for 
 > `node tools/forge/forge.mjs --check --all` ends "all … current" and the chip stays green. The bloom is the
 > `[rep]`/`[gate]` seed: `bed rm "<title>" --reason BLOOMED --fence foundry-seeds --at "the-gate/..."`. Then
 > `record --mode BUILD --track foundry`. Everything else below applies as written. See `gate-foundry/MAINTAINING.md`.
+>
+> **Viewing a rep in situ.** The three render-take shots (idle-night / idle-day / open-night, all `wx=clear`)
+> are NOT enough — a rep that reads fine in clear moonlight can wash out in daylight or vanish under a storm.
+> Before blooming, open the rep yourself across times-of-day and weather using the gate's dev query params.
+> URL form (serve the repo root):
+>
+> `/the-gate/the-gate.html?dev&room=<id>&scene=<idle|open>&t=<day|dusk|night>&wx=<clear|cloudy|storm>&moon=<0..1>&undercroft=<open|closed>`
+>
+> All params verified against `the-gate/sequence.js` `parseUrl()` (lines 62–112) and the boot in
+> `the-gate/the-gate.src.html` (lines 942–1009). Allowed values:
+>
+> | Param | Allowed values | Effect |
+> |---|---|---|
+> | `dev` | present (flag, no value) | Dev/preview boot: no fade, scene shown immediately; enables the other pins. (`scene=idle`/`scene=open` also implies dev.) |
+> | `room=<id>` | any **slab `id`** present in the GATE-ROOMS data slab (e.g. `verse`, `compositor`, `physics-lab`, `ripple`, `sound-garden`) | Pins which room's rep stands in the grounds. An `<id>` not in the slab silently falls back to the per-visit random pick. |
+> | `scene=<...>` | `idle`, `open` | `idle` = gates closed (the landing state); `open` = gates already swung open (no animation). |
+> | `t=<...>` | `day`, `dusk`, `night` | Time-of-day band. Anything else → unpinned (real clock). |
+> | `wx=<...>` | `clear`, `cloudy`, `storm` | Weather. Anything else → unpinned. (These are the full set; the `#weather-toggle` UI buttons are the same three.) |
+> | `moon=<...>` | a number in `[0, 1]` (clamped) | Moon illuminated fraction → drives scene brightness. Omit for the real wall-clock phase. |
+> | `undercroft=<...>` | `open` (aliases `1`, `true`, `''`), `closed` (alias `2`); `0`/`false`/absent → no override | Forces the undercroft hatch state. |
+> | `seed=<n>` | any number | Makes the per-visit random room pick reproducible (ignored when `room=` pins a slab room). |
+> | `smil=<seconds>` | a number ≥ 0 | Freezes the SVG animation clock at a fixed phase, so an animated rep renders deterministically at a chosen point in its loop. |
+> | `unlock` | present / `1` / `all` / `true` (`0`/`false` → off) | Previews the FULLY-EARNED estate for this load only (every asterism complete → rich sky figures; forces the undercroft hatch open). It does NOT gate room reps — the GATE-ROOMS slab is the full unlocked pool, so a rep is viewable via `room=<id>` WITHOUT `unlock`. Use it only to preview the earned sky/undercroft alongside the rep. No localStorage is written. |
+>
+> Open the rep AT LEAST at night, in daylight, and under storm — and any other revealing combo (e.g.
+> `t=dusk`, a near-new `moon=0.05` vs full `moon=1`, or `scene=open` so the rep reads behind swung-open gates).
+> Confirm it stays legible, keeps its silhouette, and its accent/glow still track the light before blooming the seed.
 
 1. **FRESH-EYES REVIEW** (the point of this role): serve the site (an uncommon port you tear down) and open
    EVERY surface in the handoff's `surfacesToReview` with agent-browser in a uniquely-named session — the new
