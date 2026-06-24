@@ -46,7 +46,11 @@
   var SEQ = {};
 
   // timings (ms) — real even though greybox art is rough.
-  var T_FADEIN = 2000, T_GEARS = 2500, T_SWING = 2500, T_FADEOUT = 2000, T_WELCOME = 10000;
+  // T_REVEAL_HOLD: the single best beat of the crossing is the gates swung wide
+  // REVEALING the manor. Without a beat here the fade-to-black starts the instant the
+  // swing ends, so a first-timer barely registers the reveal. Hold the open manor in
+  // view ~1.0s before the cut so the reveal lands (NOT so long the sequence drags).
+  var T_FADEIN = 2000, T_GEARS = 2500, T_SWING = 2500, T_REVEAL_HOLD = 1000, T_FADEOUT = 2000, T_WELCOME = 10000;
 
   var phase = 'boot';        // boot|fadein|idle|gears|swing|fadeout|welcome|done
   var clicked = false;
@@ -191,12 +195,16 @@
       tween(T_SWING, function (p) {
         if (Gate.scenegate) Gate.scenegate.swing(easeInOut(p), S);
       }, function () {
-        // 3) fade to black (2s)
-        phase = 'fadeout';
-        fadeOut(T_FADEOUT, function () {
-          // 4) welcome card holds T_WELCOME (or a click/key continues early) → navigate
-          showWelcome(T_WELCOME, navigate);
-        });
+        // 3) HOLD the reveal — gates wide, manor in view — so the best beat lands
+        //    before the cut, then fade to black (2s). (The reduced-motion COLLAPSE
+        //    path above snaps with no hold; only this full sequence dwells here.)
+        setTimeout(function () {
+          phase = 'fadeout';
+          fadeOut(T_FADEOUT, function () {
+            // 4) welcome card holds T_WELCOME (or a click/key continues early) → navigate
+            showWelcome(T_WELCOME, navigate);
+          });
+        }, T_REVEAL_HOLD);
       });
     });
   };

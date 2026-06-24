@@ -393,30 +393,43 @@
     // makes the figure feel alive; it is pure declarative SMIL, so the boot's global
     // svg.pauseAnimations() under prefers-reduced-motion (and the ?smil pin) FREEZES it
     // at frame 0 — no extra gating needed here.
+    // A charted figure star must read as a DELIBERATE node — distinctly brighter +
+    // larger than the faint background starfield (r 0.5–1.6, opacity 0.25–0.65, no
+    // glow) — even when the figure is only two stars and leans on a single line. So
+    // each node is a layered EMISSIVE jewel (asterism.star role, warm #f0d489): a
+    // strong wide warm bloom, the bright warm body, and a crisp near-white hot core
+    // that pins it as a true point of light. Kin to a real star-chart node, not a blob.
     var starFill = 'var(--asterism-star-ref, #f0d489)';
     for (var j = 0; j < fig.stars.length; j++) {
       var s = fig.stars[j];
       var sx = px(s).toFixed(1), sy = py(s).toFixed(1);
       var bright = (s.mag === 1);
-      var rad = bright ? 4.2 : 3.0;
-      // soft wide bloom behind the star (warmer/larger for the bright mag-1 stars)
-      el('circle', { cx: sx, cy: sy, r: (rad * 2.4).toFixed(1), fill: starFill,
-        opacity: bright ? '0.22' : '0.15', filter: 'url(#glow-bloom)' }, astG);
-      // the bright star body with its tight bloom
-      var star = el('circle', { cx: sx, cy: sy, r: rad.toFixed(1),
-        fill: starFill, filter: 'url(#glow-star)' }, astG);
+      var rad = bright ? 4.6 : 3.4;            // a touch larger than before, clearly > starfield
+      // (1) wide warm bloom — the charted star's halo. Markedly stronger than before
+      //     so the node glows as a deliberate figure point against the dense field.
+      el('circle', { cx: sx, cy: sy, r: (rad * 2.7).toFixed(1), fill: starFill,
+        opacity: bright ? '0.40' : '0.30', filter: 'url(#glow-bloom)' }, astG);
+      // (2) a tighter warm inner halo to seat the bloom into a defined core (not a haze)
+      el('circle', { cx: sx, cy: sy, r: (rad * 1.55).toFixed(1), fill: starFill,
+        opacity: bright ? '0.55' : '0.45', filter: 'url(#glow-star)' }, astG);
+      // (3) the bright star body — twinkles. Grouped with its hot core so they breathe
+      //     as one. The twinkle STARTS/ENDS at full opacity (1) so a SMIL freeze under
+      //     prefers-reduced-motion / ?smil=0 holds the figure at its full intended brightness.
+      var node = el('g', {}, astG);
+      el('circle', { cx: sx, cy: sy, r: rad.toFixed(1),
+        fill: starFill, filter: 'url(#glow-star)' }, node);
+      // (4) crisp near-white hot core — pins the node as a true point of light, the cue
+      //     the eye reads as "a charted star" before it ever traces the connecting line.
+      el('circle', { cx: sx, cy: sy, r: (bright ? 1.7 : 1.3).toFixed(1), fill: '#fff7e0' }, node);
       // subtle twinkle — gentle opacity breathe, staggered begin + slightly varied dur
       // so the constellation shimmers softly (NOT a strobe). Bright stars breathe less.
-      // The cycle STARTS and ENDS at full opacity (1) so that when the boot freezes SMIL
-      // at frame 0 under prefers-reduced-motion (or ?smil=0), every star holds its full,
-      // intended brightness — frozen, not dimmed.
-      var amp = bright ? '1;0.82;1' : '1;0.7;1';
+      var amp = bright ? '1;0.84;1' : '1;0.74;1';
       var dur = (3.4 + (j % 4) * 0.55).toFixed(2);
       var beg = '-' + ((j * 0.73) % 3).toFixed(2) + 's';   // negative begin → desync phase
       el('animate', { attributeName: 'opacity', values: amp,
         keyTimes: '0;0.5;1', dur: dur + 's', begin: beg,
         repeatCount: 'indefinite', calcMode: 'spline',
-        keySplines: '0.4 0 0.6 1;0.4 0 0.6 1' }, star);
+        keySplines: '0.4 0 0.6 1;0.4 0 0.6 1' }, node);
     }
     // engraved italic label below — WRAPPED + BOUNDED so a long name/myth never clips
     // the screen edge. The slot is top-LEFT (ox≈70, size≈180 → centered lx≈160), so a

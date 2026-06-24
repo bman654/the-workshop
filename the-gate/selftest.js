@@ -343,7 +343,9 @@
     // Tucked TOP-LEFT (weather toggle is bottom-left, mute bottom-right; the top is
     // free). Clear of the asterism slot (top-left of the SVG viewBox, but that is the
     // scene's own upper sky, far above this fixed 14px chrome) and the gate crest.
-    // Low opacity at rest so it never breaks the cinematic mood; brightens on hover.
+    // A quiet OATH, not throwaway chrome: this chip is the soul of the estate's
+    // founding honesty principle. It rests at a modest opacity — noticeable as a
+    // standing vow, still secondary to the scene — and brightens to full on hover/focus.
     st.textContent =
       '#' + CHIP_ID + '{position:absolute;left:14px;top:14px;z-index:31;' +
       'display:none;align-items:center;gap:8px;cursor:pointer;user-select:none;text-align:left;' +
@@ -352,7 +354,7 @@
       'color:var(--muted,#8a8472);background:rgba(11,14,22,.62);' +
       'border:1px solid rgba(201,162,74,.26);' +
       '-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);' +
-      'opacity:.42;transition:opacity .25s ease,border-color .25s ease,color .25s ease,background .25s ease;}' +
+      'opacity:.6;transition:opacity .25s ease,border-color .25s ease,color .25s ease,background .25s ease;}' +
       '#' + CHIP_ID + ':hover,#' + CHIP_ID + ':focus-visible{opacity:1;' +
       'border-color:rgba(201,162,74,.6);background:rgba(11,14,22,.82);outline:none;}' +
       '#' + CHIP_ID + ' .gh-dot{flex:0 0 auto;width:7px;height:7px;border-radius:50%;' +
