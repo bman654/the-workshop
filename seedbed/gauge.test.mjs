@@ -24,6 +24,7 @@ function bedDoc({ writs = [], garden = [], grounds = [], foundry = [], sparks = 
 const G = (pitch, sown) => `- [exhibit] **${pitch}** — a gap. (sown #${sown})`
 const GR = (pitch, sown, contest) => `- [room] **${pitch}** — a wing. (sown #${sown} · contest #${contest})`
 const F = (pitch, sown, contest) => `- [rep] **${pitch}** — a bespoke rep. (sown #${sown} · contest #${contest})`
+const FG = (pitch, sown, contest) => `- [gate] **${pitch}** — a gate re-soul. (sown #${sown} · contest #${contest})` // a [gate] foundry seed (re-soul; NO pressure)
 const SP = (t) => `- ${t}`
 const W = (pitch) => `- [writ] **${pitch}** — a request from the Patron.`
 const st = (o = {}) => ({ cycle: 30, lastGardenPlan: 28, lastBigSwing: 28, bigSwingsBuilt: 2, tally: {}, ...o })
@@ -358,6 +359,80 @@ console.log('FOUNDRY track — the patient sub-project upkeep lane:')
   eq(r.foundryBuilt, 1, 'WRIT does not advance the foundry contest counter')
   eq(r.tally.foundrySown, 1, 'a foundry clause released by a writ is credited as sown')
   eq(r.fence.foundry.join(','), 'Pond rep,A released rep', 'WRIT re-baselines the foundry snapshot too')
+}
+
+console.log('FOUNDRY adaptive cadence — [rep] pressure shrinks the effective interval ([gate] does NOT):')
+{
+  // The gardens are healthy and no swing is due, so the foundry branch is reachable. We move lastFoundry to
+  // tune foundrySince and read back gauges.foundryEffInterval + gauges.repFuel + the chosen directive.
+  const healthyGarden = [G('a', 40), G('b', 40), G('c', 40), G('d', 40), G('e', 40)] // fuel 5 (>4): no garden-plan
+  const grounds2 = [GR('w', 40, 2), GR('w2', 40, 2)] // fuel 2 (≥floor), groundsSince kept <9 → no grounds action
+  // base state: cycle 40, gardens fresh, no swing due. lastFoundry tunes foundrySince per case.
+  const fstate = (lastFoundry) => ({ cycle: 40, lastGardenPlan: 38, lastBigSwing: 38, bigSwingsBuilt: 2, lastFoundry, foundryBuilt: 0, tally: {} })
+
+  // the cadence table: repFuel → effective interval
+  const eff = (repFuel) => {
+    const reps = Array.from({ length: repFuel }, (_, i) => F(`rep ${i}`, 39, 0))
+    return decide(fstate(0), parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: reps }))).gauges.foundryEffInterval
+  }
+  eq(eff(0), 12, 'repFuel 0 → eff-interval 12 (patient)')
+  eq(eff(1), 12, 'repFuel 1 → 12 (still within comfort)')
+  eq(eff(2), 12, 'repFuel 2 (= comfort) → 12 (caught up)')
+  eq(eff(3), 10, 'repFuel 3 → 10')
+  eq(eff(4), 8,  'repFuel 4 → 8')
+  eq(eff(5), 6,  'repFuel 5 → 6')
+  eq(eff(6), 5,  'repFuel 6 → 5 (floor)')
+  eq(eff(9), 5,  'repFuel 9 (well past) → 5 (clamped at the floor, never below)')
+
+  // a [rep]-heavy bed fires SOONER than the patient 12: foundrySince=5 (lastFoundry=35) is BELOW 12 (no turn),
+  // but with 6 [rep] seeds the eff-interval is 5, so foundrySince=5 ≥ 5 → a foundry turn fires.
+  const sixReps = [F('r1', 39, 0), F('r2', 39, 0), F('r3', 39, 0), F('r4', 39, 0), F('r5', 39, 0), F('r6', 39, 0)]
+  let d = decide(fstate(35), parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: sixReps }))) // foundrySince 5
+  eq(d.gauges.repFuel, 6, '6 [rep] seeds → repFuel 6')
+  eq(d.gauges.foundryEffInterval, 5, '6 [rep] seeds shrink the eff-interval to the floor (5)')
+  eq(d.track, 'foundry', 'a [rep]-heavy bed fires the foundry SOONER than the patient 12 (foundrySince 5 ≥ eff 5)')
+  eq(d.mode, 'BUILD', 'ripe [rep] bed → BUILD/foundry')
+  // PROOF it is the pressure that fired it: the SAME foundrySince=5 with NO reps stays patient (no foundry turn)
+  d = decide(fstate(35), parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: [] })))
+  eq(d.gauges.foundryEffInterval, 12, 'an empty foundry bed keeps the patient 12')
+  ok(d.track !== 'foundry', 'with no [rep] pressure, foundrySince 5 < 12 → no foundry turn (the garden-build staple holds)')
+
+  // a [gate]-ONLY bed creates NO pressure: repFuel 0 → patient interval 12 (re-souls are a slow burn).
+  const gatesOnly = [FG('re-soul A', 39, 0), FG('re-soul B', 39, 0), FG('re-soul C', 39, 0), FG('re-soul D', 39, 0), FG('re-soul E', 39, 0), FG('re-soul F', 39, 0)]
+  d = decide(fstate(35), parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: gatesOnly }))) // foundrySince 5
+  eq(d.gauges.repFuel, 0, 'a [gate]-only bed → repFuel 0 (re-souls create NO pressure)')
+  eq(d.gauges.foundryFuel, 6, 'the [gate] seeds DO count as total foundryFuel (just not as pressure)')
+  eq(d.gauges.foundryEffInterval, 12, 'a [gate]-only bed stays at the patient interval 12 — mechanically different from [rep]')
+  ok(d.track !== 'foundry', '6 [gate] re-souls at foundrySince 5 do NOT fire a turn (no pressure → still patient)')
+
+  // intermediate: repFuel 4 → eff-interval 8. foundrySince=8 (lastFoundry=32) fires; foundrySince=7 does not.
+  const fourReps = [F('r1', 39, 0), F('r2', 39, 0), F('r3', 39, 0), F('r4', 39, 0)]
+  d = decide(fstate(32), parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: fourReps }))) // foundrySince 8
+  eq(d.gauges.foundryEffInterval, 8, 'repFuel 4 → eff-interval 8 (intermediate, matches the table)')
+  eq(d.track, 'foundry', 'repFuel 4 fires the foundry at foundrySince 8 ≥ eff 8')
+  d = decide(fstate(33), parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: fourReps }))) // foundrySince 7
+  ok(d.track !== 'foundry', 'repFuel 4 with foundrySince 7 < eff 8 → not yet due')
+
+  // BUILD-vs-survey keys off TOTAL foundryFuel, not repFuel — a ripe rep BUILDs, an all-decayed bed SURVEYs.
+  // ripe: 3 [rep] seeds (repFuel 3 → eff 10), foundrySince=10 fires, foundryFuel 3 ≥ 1 → BUILD/foundry.
+  const threeReps = [F('r1', 39, 0), F('r2', 39, 0), F('r3', 39, 0)]
+  d = decide(fstate(30), parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: threeReps }))) // foundrySince 10
+  eq(d.gauges.foundryEffInterval, 10, 'repFuel 3 → eff-interval 10')
+  eq(d.mode + '/' + d.track, 'BUILD/foundry', 'ripe foundry bed (foundryFuel ≥ 1) → BUILD/foundry')
+  // dry: zero foundryFuel but a turn is due (patient eff 12, foundrySince 12) → PLAN/foundry survey.
+  d = decide({ cycle: 40, lastGardenPlan: 38, lastBigSwing: 38, bigSwingsBuilt: 2, lastFoundry: 28, foundryBuilt: 0, tally: {} },
+    parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: [] }))) // foundrySince 12, repFuel 0, foundryFuel 0
+  eq(d.gauges.foundryFuel, 0, 'an empty bed → total foundryFuel 0')
+  eq(d.mode + '/' + d.track, 'PLAN/foundry', 'a due turn with zero TOTAL foundryFuel → PLAN/foundry (survey), keyed off total fuel not repFuel')
+
+  // the BUILD-vs-survey branch keys off TOTAL fuel even when repFuel is 0 but [gate] fuel is present:
+  // a [gate]-only bed under a manually-due clock still BUILDs (total fuel ≥ 1), proving the build decision
+  // is on TOTAL foundryFuel, not repFuel. (foundrySince 12 ≥ the patient eff 12, since repFuel 0.)
+  d = decide({ cycle: 40, lastGardenPlan: 38, lastBigSwing: 38, bigSwingsBuilt: 2, lastFoundry: 28, foundryBuilt: 0, tally: {} },
+    parseBed(bedDoc({ garden: healthyGarden, grounds: grounds2, foundry: [FG('re-soul A', 39, 0)] }))) // foundrySince 12, repFuel 0, foundryFuel 1
+  eq(d.gauges.repFuel, 0, 'a single [gate] seed → repFuel 0 (no pressure)')
+  eq(d.gauges.foundryEffInterval, 12, 'repFuel 0 (only [gate] fuel) → patient eff-interval 12')
+  eq(d.mode + '/' + d.track, 'BUILD/foundry', 'a due turn with [gate]-only fuel still BUILDs (total foundryFuel ≥ 1), proving build keys off TOTAL fuel')
 }
 
 console.log(`\n${fail === 0 ? '✓' : '✗'} gauge.test.mjs: ${pass}/${pass + fail} passed`)

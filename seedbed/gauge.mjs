@@ -50,12 +50,21 @@ export const TH = {
   sparkFloor: 3,          // the groundskeeper keeps at least this many sparks on hand
   // FOUNDRY — the sub-project upkeep track (the front GATE today; any self-contained sub-project later).
   // Patient by design: it sits BELOW garden-plan in the ladder, so it NEVER starves the gardens — at most
-  // one foundry TURN every foundryInterval cycles. A turn FORGES a ripe asset (BUILD/foundry, the K-takes→
+  // one foundry TURN every (effective) interval cycles. A turn FORGES a ripe asset (BUILD/foundry, the K-takes→
   // judge→synth harness) or, if the foundry bed is dry, SURVEYS the estate for the next bespoke reps and
   // restocks (PLAN/foundry). Decay is contest-based like grounds (punished only for losing its turn, never
   // for waiting). foundry has no fuel FLOOR that forces a PLAN — a dry bed simply means the next turn surveys.
-  foundryFuelCeiling: 4,  // the survey refills the foundry bed toward this (advisory)
-  foundryInterval: 12,    // a foundry TURN comes due when (cycle - lastFoundry) >= this — slow upkeep, won't crowd the gardens
+  //
+  // ADAPTIVE CADENCE — the effective interval shrinks under [rep] PRESSURE so the foundry catches up when the
+  // un-repped backlog grows (rooms get created ~every 8–9 cycles, faster than reps get built). Pressure is
+  // driven ONLY by live [rep] seeds (a room missing ANY rep), NEVER by [gate] re-souls (a no-pressure slow
+  // burn). effInterval = max(foundryMinInterval, foundryInterval − foundryRamp × max(0, repFuel − foundryComfort)).
+  //   repFuel 0–2 → 12 (patient) · 3 → 10 · 4 → 8 · 5 → 6 · 6+ → 5 (floor, ~2× grounds).
+  foundryFuelCeiling: 8,  // the survey refills the foundry bed toward this (advisory; raised 4→8 to hold a deeper backlog)
+  foundryInterval: 12,    // BASE/max/patient interval — a foundry TURN comes due when foundrySince >= effInterval; with no [rep] pressure effInterval = this (slow upkeep, won't crowd the gardens)
+  foundryMinInterval: 5,  // FLOOR/fastest interval — effInterval never drops below this even under heavy [rep] pressure (~2× the grounds interval)
+  foundryRamp: 2,         // cycles shaved off the interval per [rep] seed above foundryComfort
+  foundryComfort: 2,      // [rep] fuel <= this ⇒ the base (patient) interval — the foundry is caught up
   foundryDecayStrikes: 4, // a foundry seed decays when (foundryBuilt - contest) >= this (foundry contests lost, never mere waiting)
 }
 
@@ -167,12 +176,17 @@ export function decide(state, bed, th = TH) {
   const lastFoundry = state.lastFoundry ?? cycle
   const foundrySince = cycle - lastFoundry
   const foundryFuel = bed.foundryFuel ?? 0
+  // ADAPTIVE foundry cadence — PRESSURE is the count of live [rep] seeds only (a room missing ANY rep),
+  // NEVER [gate] re-souls. The effective interval shrinks as repFuel rises above the comfort band, down to
+  // a floor — so the foundry speeds up to clear a growing backlog and stays patient when caught up.
+  const repFuel = (bed.foundrySeeds || []).filter(s => s.kind === 'rep').length
+  const effInterval = Math.max(th.foundryMinInterval, th.foundryInterval - th.foundryRamp * Math.max(0, repFuel - th.foundryComfort))
   const gauges = {
     cycle,
     currentCycle: cycle + 1, // the cycle ABOUT to run — stamp seeds + the funlog with this
     gardenFuel: bed.gardenFuel, gardenBuilds,
     groundsFuel: bed.groundsFuel, groundsSince,
-    foundryFuel, foundrySince, foundryBuilt,
+    foundryFuel, repFuel, foundrySince, foundryBuilt, foundryEffInterval: effInterval,
     bigSwingsBuilt: state.bigSwingsBuilt, sparks: bed.sparks, bugs: bed.bugs, writs: bed.writs,
   }
   let r
@@ -197,15 +211,18 @@ export function decide(state, bed, th = TH) {
       : `gardenBuilds=${gardenBuilds} ≥ ${th.gardenInterval} (a while since planting)`
     r = { mode: 'PLAN', track: 'garden', role: 'gardener',
       reason: `${why} — tend the beds: prune decayed FIRST, then file ≤3-line seeds toward fuel ${th.gardenFuelCeiling}.` }
-  } else if (foundrySince >= th.foundryInterval) {
-    // A foundry TURN has come due (and the gardens are healthy — this branch sits below garden-plan).
-    // Forge a ripe asset if the bed holds one; otherwise survey the estate for the next reps + restock.
+  } else if (foundrySince >= effInterval) {
+    // A foundry TURN has come due (and the gardens are healthy — this branch sits below garden-plan). The
+    // effective interval is ADAPTIVE: it shrinks under [rep] pressure (repFuel above comfort) toward the floor,
+    // so a growing un-repped backlog speeds the foundry up. Forge a ripe asset if the bed holds one; otherwise
+    // survey the estate for the next reps + restock. (BUILD-vs-survey keys off TOTAL foundryFuel, not repFuel.)
+    const pace = effInterval < th.foundryInterval ? ` (sped up from ${th.foundryInterval} by ${repFuel} [rep] seed(s) of pressure)` : ''
     if (foundryFuel >= 1) {
       r = { mode: 'BUILD', track: 'foundry', role: 'foundry-smith',
-        reason: `foundrySince=${foundrySince} ≥ ${th.foundryInterval} and ${foundryFuel} ripe foundry seed(s) — forge a front-gate asset (the door's slow upkeep).` }
+        reason: `foundrySince=${foundrySince} ≥ ${effInterval}${pace} and ${foundryFuel} ripe foundry seed(s) — forge a front-gate asset (the door's upkeep).` }
     } else {
       r = { mode: 'PLAN', track: 'foundry', role: 'foundry-surveyor',
-        reason: `foundrySince=${foundrySince} ≥ ${th.foundryInterval} and the foundry bed is dry — survey the estate for the next bespoke reps, then sow toward fuel ${th.foundryFuelCeiling}.` }
+        reason: `foundrySince=${foundrySince} ≥ ${effInterval}${pace} and the foundry bed is dry — survey the estate for the next bespoke reps, then sow toward fuel ${th.foundryFuelCeiling}.` }
     }
   } else {
     r = { mode: 'BUILD', track: 'garden', role: 'planter',
@@ -359,7 +376,7 @@ function main() {
     console.log(`🎲 cycle ${g.currentCycle} (last completed ${g.cycle})`)
     console.log(`   GARDEN  fuel=${g.gardenFuel} (floor ${TH.gardenFuelFloor}/ceil ${TH.gardenFuelCeiling}) · builds-since-plan=${g.gardenBuilds} (cap ${TH.gardenInterval})`)
     console.log(`   GROUNDS fuel=${g.groundsFuel} (floor ${TH.groundsFuelFloor}/ceil ${TH.groundsFuelCeiling}) · since-swing=${g.groundsSince} (interval ${TH.groundsInterval}) · swings-built=${g.bigSwingsBuilt} · sparks=${g.sparks}`)
-    console.log(`   FOUNDRY fuel=${g.foundryFuel} (ceil ${TH.foundryFuelCeiling}) · since-turn=${g.foundrySince} (interval ${TH.foundryInterval}) · forged=${g.foundryBuilt}`)
+    console.log(`   FOUNDRY fuel=${g.foundryFuel} (ceil ${TH.foundryFuelCeiling}) · repFuel=${g.repFuel} (pressure) · since-turn=${g.foundrySince} (eff-interval ${g.foundryEffInterval} of base ${TH.foundryInterval}..${TH.foundryMinInterval}) · forged=${g.foundryBuilt}`)
     console.log(`   ${g.writs ? '✒️  ' : ''}writs=${g.writs}   bugs=${g.bugs}`)
     console.log(`\n▶ ${d.mode} / ${d.track}  (be the ${d.role})`)
     console.log(`   ${d.reason}`)

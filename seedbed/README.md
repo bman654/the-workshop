@@ -157,7 +157,15 @@ that cycle, so no two seats ever both act. State it in the writ:
 ## Thresholds (tunable — top of `gauge.mjs`)
 
 `gardenFuelFloor 4 · ceiling 10 · interval 6 · decayAge 15` ·
-`groundsFuelFloor 2 · ceiling 3 · interval 9 · decayStrikes 4` · `sparkFloor 3`.
+`groundsFuelFloor 2 · ceiling 3 · interval 9 · decayStrikes 4` · `sparkFloor 3` ·
+`foundryFuelCeiling 8 · decayStrikes 4` · **adaptive interval** `12 (base) → 5 (floor)`.
+
+The **foundry** track (the front-gate upkeep lane, below garden-plan in the ladder)
+has an **adaptive** interval driven by `[rep]` pressure: with `repFuel` (live `[rep]`
+seeds) ≤ `foundryComfort 2` it stays at the patient `foundryInterval 12`, then shrinks
+by `foundryRamp 2` per extra `[rep]` down to the `foundryMinInterval 5` floor
+(`repFuel` 3→10 · 4→8 · 5→6 · 6+→5). `[gate]` re-souls create **no** pressure. See
+`gate-foundry/MAINTAINING.md` for the full track.
 
 Tuned for Brandon's instinct: **~⅓ of filed seeds decay, ~⅔ get sown** (enough
 churn to keep ideas fresh, enough patience to give each a fair chance). Watch the
