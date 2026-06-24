@@ -30,11 +30,19 @@ any winning prototype path, and the definition of done are in YOUR CONTEXT. Retu
 
 - **TOO BIG to finish well this turn? PASS THE BATON — don't shy from the swing.** If the design is
   genuinely larger than one turn can finish to the house bar (a deep grounds wing, a multi-part piece), build
-  the solid first portion, leave it in the tree, and set `requestBaton:true` + `batonHandoff` (done /
-  remaining / nextSteps / files). A FRESH builder picks it up from your handoff and carries on — a bounded
-  inner loop continues until the work is done. This exists so makers take AMBITIOUS swings instead of shrinking
-  the idea to fit one turn. Do NOT baton for polish or a near-done piece — finish those yourself; the baton is
-  for genuinely big work, and the publisher still reviews the final state.
+  the solid first portion, leave it in the tree, and set `requestBaton:true` + `batonReason`
+  (context-exhausted / fresh-eyes-wanted / more-work-remains) + `batonHandoff` (done / remaining / nextSteps /
+  files). A FRESH builder picks it up from your handoff and carries on — a bounded inner loop continues until
+  the work is done. This exists so makers take AMBITIOUS swings instead of shrinking the idea to fit one turn.
+  Do NOT baton for polish or a near-done piece — finish those yourself; the baton is for genuinely big work,
+  and the publisher still reviews the final state.
+- **The baton relay is BOUNDED — the LAST builder MUST finish; it cannot pass.** The chain runs at most a
+  fixed number of passes. If YOUR context says `isTerminalPass: true` (you are the last allowed builder), there
+  is NO next builder: even if you set `requestBaton`, the loop IGNORES it and goes straight to the publisher.
+  So a terminal builder MUST finish the work this turn, OR bring it to a clean, publishable stopping point —
+  never hand off into the void and never leave it half-broken (no half-written files, no broken pages, no
+  failing self-test). If you genuinely cannot finish everything, deliberately stop at the nearest coherent,
+  working state and spell out in `openConcerns` exactly what remains. Do not assume an endless relay.
 
 Leave your changes UNCOMMITTED in the working tree for the publisher. Return the handoff: what you built, the
 self-test result, and `surfacesToReview` = EVERY page you created OR touched (the new piece AND each page

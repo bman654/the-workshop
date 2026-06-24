@@ -112,7 +112,8 @@ const BUILD_HANDOFF_SCHEMA = {
     surfacesToReview: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['label', 'path'], properties: { label: { type: 'string' }, path: { type: 'string', description: 'served path the publisher should open, e.g. "/conservatory/index.html" or "/workbench/index.html"' } } }, description: 'EVERY page you created OR touched — the new piece AND each page where you registered it (Workbench / front-door map / sibling cross-links / a new wing landing).' },
     openConcerns: { type: 'string', description: 'anything you are unsure about or want the publisher to double-check.' },
     // BATON (a too-big swing handed to a FRESH builder) — leave requestBaton false to finish normally.
-    requestBaton: { type: 'boolean', description: 'TRUE only if this swing is genuinely TOO BIG to finish WELL this turn and a FRESH builder should continue it (a bounded inner loop spawns one with your handoff). Do NOT request a baton for polish or a near-done piece — finish those yourself. The work you did stays in the tree; the fresh builder builds ON it.' },
+    requestBaton: { type: 'boolean', description: 'TRUE only if this swing is genuinely TOO BIG to finish WELL this turn and a FRESH builder should continue it (a bounded inner loop spawns one with your handoff). Do NOT request a baton for polish or a near-done piece — finish those yourself. The work you did stays in the tree; the fresh builder builds ON it. NOTE: a TERMINAL builder (told it is the last pass) CANNOT hand off — the loop ignores its requestBaton — so it MUST finish or reach a clean stopping point.' },
+    batonReason: { enum: ['context-exhausted', 'fresh-eyes-wanted', 'more-work-remains'], description: 'REQUIRED when requestBaton is true: WHY you are handing off, so the publisher (and next builder) know the state. context-exhausted = you ran low on turn/context budget mid-build · fresh-eyes-wanted = the work is at a juncture better continued by a fresh perspective · more-work-remains = the design is simply larger than one turn and there is genuinely more to build.' },
     batonHandoff: { type: 'object', additionalProperties: false, required: ['done', 'remaining', 'nextSteps'], properties: { done: { type: 'string', description: 'what is already built + verified (files + line counts) — the fresh builder must NOT redo it.' }, remaining: { type: 'string', description: 'what is left to reach the definition of done.' }, nextSteps: { type: 'string', description: 'the concrete next actions the fresh builder should take FIRST (commands, files to edit, the render/verify recipe).' }, files: { type: 'string', description: 'the key files/paths in play (what is dirty in the tree, where the work lives).' } }, description: 'REQUIRED when requestBaton is true: the handoff context that lets a fresh builder continue WITHOUT re-reading everything from scratch.' },
   },
 }
@@ -175,18 +176,26 @@ function buildPrompt(d, chosen, cyc) {
 
 // BATON — a fresh builder continuing a too-big swing the previous builder handed off. It reads the
 // SAME role brief (foundry-smith for a foundry cycle, else the generic builder) plus the handoff
-// context, so it picks up WITHOUT re-deriving everything. It may itself pass the baton again (bounded).
+// context, so it picks up WITHOUT re-deriving everything. It may itself pass the baton again (bounded)
+// UNLESS it is the TERMINAL pass (pass === MAX_BATON, the last builder the loop will ever spawn): the
+// terminal builder is told it CANNOT hand off and MUST finish or reach a clean, publishable stop.
 function batonPrompt(d, chosen, prevHandoff, cyc, pass) {
   const file = d.track === 'foundry' ? 'foundry.md' : 'builder.md'
-  const roleName = d.track === 'foundry' ? 'FOUNDRY-SMITH (baton pass ' + pass + ')'
-    : d.track === 'grounds' ? 'GROUNDS-WORKER (baton pass ' + pass + ')'
-    : d.track === 'bug' ? 'BUG-FIXER (baton pass ' + pass + ')' : 'PLANTER (baton pass ' + pass + ')'
+  const isTerminal = pass >= MAX_BATON // the last allowed builder — no further baton can ever be spawned
+  const passTag = 'baton pass ' + pass + '/' + MAX_BATON + (isTerminal ? ', TERMINAL' : '')
+  const roleName = d.track === 'foundry' ? 'FOUNDRY-SMITH (' + passTag + ')'
+    : d.track === 'grounds' ? 'GROUNDS-WORKER (' + passTag + ')'
+    : d.track === 'bug' ? 'BUG-FIXER (' + passTag + ')' : 'PLANTER (' + passTag + ')'
+  const note = isTerminal
+    ? 'You are a FRESH builder picking up a big swing a previous builder started and handed off, AND you are the TERMINAL builder — the LAST pass in this chain (pass ' + pass + ' of ' + MAX_BATON + '). NO MORE HAND-OFFS ARE POSSIBLE: even if you set requestBaton, the loop will IGNORE it and go straight to the publisher. So you MUST finish the work this turn, OR bring it to a clean, publishable stopping point — never leave it half-broken (no half-written files, no broken pages, no failing self-test). Their work is ALREADY in the tree — build ON it, do NOT restart. Do the nextSteps FIRST, then drive toward the definition of done; if you truly cannot finish everything, deliberately stop at the nearest coherent, working state and explain in openConcerns exactly what remains.'
+    : 'You are a FRESH builder picking up a big swing a previous builder started and handed off. Their work is ALREADY in the tree — build ON it, do NOT restart. Do the nextSteps FIRST, then carry on toward the definition of done. If it is STILL too big to finish well this turn, you MAY pass the baton again (set requestBaton + batonReason + an updated batonHandoff); otherwise FINISH it and leave it for the publisher (requestBaton false). NOTE: this chain is bounded — pass ' + MAX_BATON + ' is the TERMINAL builder and cannot hand off, so do not assume an endless relay.'
   return seatPrompt(file, 'BUILDER — ' + roleName, {
-    cyc, track: d.track, batonPass: pass,
+    cyc, track: d.track, batonPass: pass, maxBatonPass: MAX_BATON, isTerminalPass: isTerminal,
     finalDesign: chosen.finalDesign || d.basicDesign || null,
     definitionOfDone: d.definitionOfDone || null,
     baton: {
-      note: 'You are a FRESH builder picking up a big swing a previous builder started and handed off. Their work is ALREADY in the tree — build ON it, do NOT restart. Do the nextSteps FIRST, then carry on toward the definition of done. If it is STILL too big to finish well this turn, you MAY pass the baton again (set requestBaton + an updated batonHandoff); otherwise FINISH it and leave it for the publisher (requestBaton false).',
+      note,
+      reason: prevHandoff.batonReason || null, // WHY the previous builder handed off (context-exhausted / fresh-eyes-wanted / more-work-remains)
       done: prevHandoff.batonHandoff?.done || prevHandoff.built || null,
       remaining: prevHandoff.batonHandoff?.remaining || null,
       nextSteps: prevHandoff.batonHandoff?.nextSteps || null,
@@ -314,10 +323,17 @@ while (i < MAX_ITERS) {
     let batonPass = 0
     while (handoff && handoff.requestBaton && batonPass < MAX_BATON) {
       batonPass++
-      log('cycle #' + cyc + ': 🪄 baton pass ' + batonPass + '/' + MAX_BATON + ' — a fresh builder picks up the swing')
+      const isTerminal = batonPass >= MAX_BATON // this pass is the LAST builder the loop will ever spawn
+      const why = handoff.batonReason ? ' (' + handoff.batonReason + ')' : ''
+      log('cycle #' + cyc + ': 🪄 baton pass ' + batonPass + '/' + MAX_BATON + (isTerminal ? ' (TERMINAL — must finish)' : '') + why + ' — a fresh builder picks up the swing')
       handoff = await agent(batonPrompt(d, chosen, handoff, cyc, batonPass), { label: 'build #' + cyc + '.baton' + batonPass, phase: 'Build', schema: BUILD_HANDOFF_SCHEMA })
+      // The TERMINAL builder cannot hand off into the void: force-drop any baton it requests so the loop
+      // exits to the publisher rather than depending on the terminal builder voluntarily not asking.
+      if (isTerminal && handoff && handoff.requestBaton) {
+        log('cycle #' + cyc + ': terminal builder (pass ' + batonPass + '/' + MAX_BATON + ') requested another baton — IGNORED; the publisher reviews the current state as-is')
+        handoff.requestBaton = false
+      }
     }
-    if (handoff && handoff.requestBaton) log('cycle #' + cyc + ': baton cap (' + MAX_BATON + ') reached — the publisher reviews the current state as-is')
   } else if (d.mode === 'WRIT' && !writRelease) {
     phase('Build') // mandate | mixed → do the work; ambiguous → the steward sends the escalation notify
     handoff = await agent(stewardPrompt(d, chosen, cyc), { label: 'steward #' + cyc, phase: 'Build', schema: STEWARD_HANDOFF_SCHEMA })
