@@ -8,7 +8,7 @@ overwrite or truncate. Your context carries the SUMMARY (verbatim) and whether t
 Steps:
 
 1) Read the DURABLE cycle number from state (do NOT guess it, do NOT use any number you infer from the text):
-   `CYC=$(node -p "require('/Users/brandon/dev/general/creative-space/seedbed/state.json').cycle")`
+   `CYC=$(node -p "require(process.cwd()+'/seedbed/state.json').cycle")`  (cwd = the repo root; no absolute path)
 2) Write the header (CYC expanded) then the body byte-for-byte via a QUOTED heredoc (so `$` / backticks survive):
    - header for a normal cycle: `===== fun cycle #${CYC} =====`
    - header for a writ cycle (`isWrit` true): `===== Patron's writ (after cycle #${CYC}) =====`

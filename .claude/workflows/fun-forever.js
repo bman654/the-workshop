@@ -519,6 +519,9 @@ while (i < MAX_ITERS) {
     if (!prep || !prep.asset) {
       log('cycle #' + cyc + ': foundry PREP returned no asset spec — nothing to forge; the publisher reviews the tree as-is')
     } else {
+      // Operator/test K override (induce.K) — lets a deliberately-cheap smoke cap takes; the engine clamps ≤3.
+      // A normal director cycle never sets this, so production foundry builds keep their full K.
+      if (INDUCE && INDUCE.K && prep.asset) prep.asset.K = INDUCE.K
       log('cycle #' + cyc + ': PREP scaffolded ' + prep.asset.key + ' (' + prep.asset.drawFn + ', K=' + (prep.asset.K || 3) + ') — handing to the ART FOUNDRY engine')
       const forge = await workflow({ scriptPath: DERIVED_ROOT + '/art-foundry/engine.workflow.js' },
         { medium: 'visual-gate', contextRoot: DERIVED_ROOT, assets: [prep.asset] })
