@@ -27,9 +27,15 @@ const FUNLOG = '/tmp/funlog.txt'
 //   args.repoRoot : absolute repo-root override (e.g. drive a pre-merge worktree from a different session cwd)
 //   args.induce   : a directive {mode,track,…} that REPLACES the gauge for ONE cycle (operability + smoke tests)
 //   args.testMode / induce.testMode : the publisher does NOT commit/push/record — leaves the tree for inspection
-const FORCED_ROOT = (typeof args !== 'undefined' && args && args.repoRoot) ? String(args.repoRoot) : null
-const INDUCE = (typeof args !== 'undefined' && args && args.induce) ? args.induce : null
-const TEST_MODE = !!((INDUCE && INDUCE.testMode) || (typeof args !== 'undefined' && args && args.testMode))
+// `args` may arrive as an OBJECT (a workflow() child call) OR a JSON STRING (a top-level Workflow-tool launch).
+// Parse defensively, exactly like art-foundry/engine.workflow.js does — a silent miss here once read args off a
+// STRING (→ undefined), so the loop fell back to the launch cwd and pointed a REAL cycle at the wrong repo. Load-bearing.
+let _args = (typeof args !== 'undefined') ? args : null
+if (typeof _args === 'string') { try { _args = JSON.parse(_args) } catch (e) { _args = null } }
+const A = (_args && typeof _args === 'object' && !Array.isArray(_args)) ? _args : {}
+const FORCED_ROOT = A.repoRoot ? String(A.repoRoot) : null
+const INDUCE = (A.induce && typeof A.induce === 'object' && !Array.isArray(A.induce)) ? A.induce : null
+const TEST_MODE = !!((INDUCE && INDUCE.testMode) || A.testMode)
 const MAX_ITERS = INDUCE ? 1 : 60 // an induced run is a single forced cycle; the normal loop runs to the safety cap
 
 // ── Grounding — the prompts now live as tunable files in seedbed/prompts/ ──────
@@ -409,6 +415,12 @@ function writerPrompt(summary, isWrit) {
 const DERIVED_ROOT = FORCED_ROOT || String(await agent(
   'Output ONLY the absolute path printed by `git rev-parse --show-toplevel` (the repo root) — nothing else, no prose.',
   { label: 'repo-root', phase: 'Direct', model: 'sonnet' })).trim()
+
+// Announce the resolved run config in the FIRST log line — a misfire (wrong root / unintended real cycle) is
+// then visible at a glance in /workflows instead of only after a build lands.
+log('fun-forever start — root=' + DERIVED_ROOT + (FORCED_ROOT ? ' (forced via args.repoRoot)' : ' (derived via git rev-parse)')
+  + ' · ' + (INDUCE ? ('INDUCED ' + INDUCE.mode + '/' + INDUCE.track + ', single cycle') : ('normal gauge loop, up to ' + MAX_ITERS + ' cycles'))
+  + (TEST_MODE ? ' · TESTMODE (publisher will NOT commit/push/record)' : ''))
 
 let i = 0
 while (i < MAX_ITERS) {
