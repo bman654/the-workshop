@@ -29,6 +29,10 @@ const FIXTURE = `# ROADMAP
 - [room] **An existing grounds seed** — already here. (sown #50 · contest #4)
 <!-- gauge:grounds-seeds:end -->
 
+<!-- gauge:foundry-seeds:start -->
+- [rep] **An existing rep** — already here. (sown #50 · contest #2)
+<!-- gauge:foundry-seeds:end -->
+
 <!-- gauge:garden-seeds:start -->
 ### exhibit
 - [exhibit] **An existing exhibit** — already here. (sown #50)
@@ -47,6 +51,11 @@ eq(route('curation').sub, 'curation', 'curation alias → curation subsection')
 eq(route('bench').sub, 'bench', 'bench → bench subsection')
 eq(route('room').fence, 'grounds-seeds', 'room → grounds fence')
 eq(route('engine').stamp, 'contest', 'grounds seeds get a contest stamp')
+eq(route('engine').contestSource, 'grounds', 'grounds contest comes from bigSwingsBuilt')
+eq(route('rep').fence, 'foundry-seeds', 'rep → foundry fence')
+eq(route('gate').fence, 'foundry-seeds', 'gate → foundry fence')
+eq(route('rep').stamp, 'contest', 'foundry seeds get a contest stamp')
+eq(route('rep').contestSource, 'foundry', 'foundry contest comes from foundryBuilt')
 eq(route('exhibit').stamp, 'sown', 'garden seeds get a sown stamp')
 eq(route('bug').fence, 'bug', 'bug → bug fence')
 eq(route('bug').stamp, null, 'bug is never stamped')
@@ -91,12 +100,15 @@ const batch = `[exhibit] **New Exhibit** — fresh.
 
 [room] **New Room** — a wing.
 
+[rep] **New Rep** — a bespoke front-gate rep.
+
 [bug] **A new bug.** broke.
 
 ⚡ **A new spark** — raw.
 
 [writ] **Slack me a summary.** AUTHORIZES: send-slack — the steward only.`
-const { text } = insert(FIXTURE, parseBatch(batch), { cycle: 105, contest: 8 })
+// distinct contest values prove per-fence isolation: grounds stamps from contest (8), foundry from foundryContest (3)
+const { text } = insert(FIXTURE, parseBatch(batch), { cycle: 105, contest: 8, foundryContest: 3 })
 
 // the gauge must now COUNT every insertion in the right place
 const bed = parseBed(text)
@@ -104,10 +116,12 @@ eq(bed.writs, 1, 'gauge counts the new writ')
 eq(bed.bugs, 1, 'gauge counts the new bug')
 eq(bed.sparks, 2, 'gauge counts existing + new spark')
 eq(bed.groundsFuel, 2, 'gauge counts existing + new grounds seed')
+eq(bed.foundryFuel, 2, 'gauge counts existing + new foundry seed')
 eq(bed.gardenFuel, 3, 'gauge counts existing exhibit + new exhibit + new cross')
 ok(text.includes('**New Exhibit** — fresh. (sown #105)'), 'new exhibit stamped')
 ok(text.includes('**New Cross** — links a×b. (sown #105)'), 'new cross stamped')
-ok(text.includes('**New Room** — a wing. (sown #105 · contest #8)'), 'new room stamped with contest')
+ok(text.includes('**New Room** — a wing. (sown #105 · contest #8)'), 'new room stamped with the GROUNDS contest (#8)')
+ok(text.includes('**New Rep** — a bespoke front-gate rep. (sown #105 · contest #3)'), 'new rep stamped with the FOUNDRY contest (#3, not the grounds #8)')
 ok(text.includes('- [bug] **A new bug.** broke.\n'), 'new bug inserted unstamped')
 ok(text.includes('- [writ] **Slack me a summary.** AUTHORIZES: send-slack — the steward only.\n') && !text.includes('Slack me a summary.** AUTHORIZES: send-slack — the steward only. (sown'), 'writ inserted unstamped')
 // new cross sits under ### cross, not ### exhibit
@@ -126,10 +140,11 @@ const dir = mkdtempSync(join(tmpdir(), 'sow-test-'))
 const rm = join(dir, 'ROADMAP.md')
 writeFileSync(rm, FIXTURE)
 const SOW = fileURLToPath(new URL('./sow.mjs', import.meta.url))
-execFileSync('node', [SOW, '--roadmap', rm, '--cycle', '105', '--contest', '8', '-'], { input: batch, encoding: 'utf8' })
+execFileSync('node', [SOW, '--roadmap', rm, '--cycle', '105', '--contest', '8', '--foundry-contest', '3', '-'], { input: batch, encoding: 'utf8' })
 const after = readFileSync(rm, 'utf8')
 const bed2 = parseBed(after)
-ok(bed2.writs === 1 && bed2.bugs === 1 && bed2.sparks === 2 && bed2.groundsFuel === 2 && bed2.gardenFuel === 3, 'CLI end-to-end: gauge counts all insertions')
+ok(bed2.writs === 1 && bed2.bugs === 1 && bed2.sparks === 2 && bed2.groundsFuel === 2 && bed2.foundryFuel === 2 && bed2.gardenFuel === 3, 'CLI end-to-end: gauge counts all insertions (incl. foundry)')
+ok(after.includes('**New Rep** — a bespoke front-gate rep. (sown #105 · contest #3)'), 'CLI end-to-end: foundry rep stamped with --foundry-contest')
 
 console.log(`${fail ? '✗' : '✓'} sow.test: ${pass}/${pass + fail} passed`)
 process.exit(fail ? 1 : 0)

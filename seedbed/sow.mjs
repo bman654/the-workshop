@@ -17,12 +17,13 @@
 //     several lines if you like — they fold into one ROADMAP line).
 //   • Each block must LEAD with its kind:  [writ] (the Patron — top priority)  ·
 //     [exhibit] / [cross] / [curate] / [rework] / [bench]   (garden)   ·   [room] /
-//     [engine] / [metagame] / [map] / [medium] / [wing]   (grounds)   ·   [bug]   ·
-//     ⚡  or  [spark]   (spark).
+//     [engine] / [metagame] / [map] / [medium] / [wing]   (grounds)   ·   [rep] / [gate]
+//     (foundry — front-gate upkeep)   ·   [bug]   ·   ⚡  or  [spark]   (spark).
 //   • A leading "- " is optional (added if absent). A block whose first line
 //     starts with "#" is a comment and is skipped.
-//   • A stamp is added if you didn't write one. Garden→"(sown #N)",
-//     grounds→"(sown #N · contest #M)"; writs, bugs & sparks are never stamped.
+//   • A stamp is added if you didn't write one. Garden→"(sown #N)", grounds &
+//     foundry→"(sown #N · contest #M)" (grounds' contest = bigSwingsBuilt, foundry's
+//     = foundryBuilt); writs, bugs & sparks are never stamped.
 //   • A [writ] may carry "AUTHORIZES: <one outside action> — the steward only".
 //
 //   Example batch file:
@@ -40,7 +41,8 @@
 //   node seedbed/sow.mjs --no-commit <file>    edit ROADMAP.md but don't commit
 //   node seedbed/sow.mjs --push <file>         also push after committing
 //   node seedbed/sow.mjs --cycle N <file>      override the (sown #N) stamp
-//   node seedbed/sow.mjs --contest M <file>    override the · contest #M stamp
+//   node seedbed/sow.mjs --contest M <file>    override the grounds · contest #M stamp
+//   node seedbed/sow.mjs --foundry-contest M <file>  override the foundry · contest #M stamp
 //   node seedbed/sow.mjs --no-stamp <file>     don't auto-stamp
 //   node seedbed/sow.mjs --message "…" <file>  override the commit message
 //   node seedbed/sow.mjs --roadmap <path>      operate on a different ROADMAP (tests)
@@ -63,6 +65,7 @@ const DEFAULT_ROADMAP = fileURLToPath(new URL('../ROADMAP.md', import.meta.url))
 // utility). Garden seeds live under "### <sub>" headings inside the garden fence.
 const GARDEN_SUB = { exhibit: 'exhibit', cross: 'cross', curate: 'curation', curation: 'curation', rework: 'rework', bench: 'bench', grow: 'exhibit' }
 const GROUNDS_KINDS = new Set(['room', 'engine', 'metagame', 'map', 'medium', 'wing'])
+const FOUNDRY_KINDS = new Set(['rep', 'gate']) // rep = a bespoke front-gate room-rep · gate = a gate asset rework/polish
 
 export function route(kind) {
   const k = String(kind || '').toLowerCase().trim()
@@ -70,7 +73,10 @@ export function route(kind) {
   if (k === 'spark') return { fence: 'sparks', stamp: null, spark: true }
   if (k === 'bug') return { fence: 'bug', stamp: null }
   if (k in GARDEN_SUB) return { fence: 'garden-seeds', sub: GARDEN_SUB[k], stamp: 'sown' }
-  if (GROUNDS_KINDS.has(k)) return { fence: 'grounds-seeds', stamp: 'contest' }
+  if (GROUNDS_KINDS.has(k)) return { fence: 'grounds-seeds', stamp: 'contest', contestSource: 'grounds' }
+  // foundry seeds use the SAME (sown #N · contest #M) stamp shape as grounds, but their contest #M is the
+  // foundryBuilt counter (not bigSwingsBuilt) — so the gauge's foundry decay clock reads them correctly.
+  if (FOUNDRY_KINDS.has(k)) return { fence: 'foundry-seeds', stamp: 'contest', contestSource: 'foundry' }
   return null
 }
 
@@ -95,7 +101,7 @@ export function parseBatch(text) {
       line = `- ${body}`
     }
     const r = route(kind)
-    if (!r) throw new Error(`unknown kind "[${kind}]". Valid: writ / ${[...Object.keys(GARDEN_SUB), ...GROUNDS_KINDS, 'bug', 'spark'].join(' / ')}`)
+    if (!r) throw new Error(`unknown kind "[${kind}]". Valid: writ / ${[...Object.keys(GARDEN_SUB), ...GROUNDS_KINDS, ...FOUNDRY_KINDS, 'bug', 'spark'].join(' / ')}`)
     const tm = body.match(/\*\*(.+?)\*\*/)
     items.push({ kind, route: r, title: tm ? tm[1].trim() : body.replace(/^\[[^\]]+\]\s*/, '').slice(0, 50), line })
   }
@@ -130,7 +136,7 @@ function anchorFor(lines, r) {
 // PURE: text + stamped items → new text. Groups items by anchor, inserts each
 // group as one ordered block, applies bottom-up so earlier splices don't shift
 // later anchors. Returns { text, plan:[{anchorLabel, lines}] }.
-export function insert(roadmapText, items, { cycle, contest, noStamp, fromBug } = {}) {
+export function insert(roadmapText, items, { cycle, contest, foundryContest, noStamp, fromBug } = {}) {
   const lines = roadmapText.split('\n')
   const groups = new Map() // anchorIdx → { label, lines:[] }
   for (const it of items) {
@@ -139,7 +145,9 @@ export function insert(roadmapText, items, { cycle, contest, noStamp, fromBug } 
     // is LOAD-BEARING: the tag must sit LEFT of the trailing stamp so restamp's
     // trailing-stamp regex leaves it intact and the gauge still counts the seed.
     const clean = fromBug ? `${it.line} (from bug: ${String(fromBug).replace(/\s+/g, ' ').trim().slice(0, 48)})` : it.line
-    const out = noStamp ? clean : stamp(clean, it.kind, cycle, contest)
+    // foundry seeds stamp their contest from foundryBuilt; grounds (and the default) from bigSwingsBuilt.
+    const itemContest = it.route.contestSource === 'foundry' ? foundryContest : contest
+    const out = noStamp ? clean : stamp(clean, it.kind, cycle, itemContest)
     const label = it.route.sub ? `${it.route.fence} › ${it.route.sub}` : it.route.fence
     if (!groups.has(idx)) groups.set(idx, { label, lines: [] })
     groups.get(idx).lines.push(out)
@@ -156,7 +164,7 @@ async function liveStamps(roadmapText) {
   const g = await import('./gauge.mjs')
   const state = g.loadState()
   const d = g.decide(state, g.parseBed(roadmapText))
-  return { cycle: d.gauges.currentCycle, contest: state.bigSwingsBuilt }
+  return { cycle: d.gauges.currentCycle, contest: state.bigSwingsBuilt, foundryContest: state.foundryBuilt ?? 0 }
 }
 
 // ── git preflight: never commit into a half-rewritten tree ─────────────────────
@@ -192,6 +200,7 @@ function parseArgs(argv) {
     else if (a === '--push') o.push = true
     else if (a === '--cycle') o.cycle = Number(argv[++i])
     else if (a === '--contest') o.contest = Number(argv[++i])
+    else if (a === '--foundry-contest') o.foundryContest = Number(argv[++i])
     else if (a === '--message' || a === '-m') o.message = argv[++i]
     else if (a === '--roadmap') o.roadmap = argv[++i]
     else if (a === '--from-bug') o.fromBug = argv[++i]
@@ -226,11 +235,12 @@ async function main() {
   const roadmapText = readFileSync(roadmapPath, 'utf8')
 
   // stamp values
-  let cycle = o.cycle, contest = o.contest
-  if (!o.noStamp && (cycle == null || contest == null)) {
+  let cycle = o.cycle, contest = o.contest, foundryContest = o.foundryContest
+  if (!o.noStamp && (cycle == null || contest == null || foundryContest == null)) {
     const live = await liveStamps(roadmapText)
     if (cycle == null) cycle = live.cycle
     if (contest == null) contest = live.contest
+    if (foundryContest == null) foundryContest = live.foundryContest
   }
 
   // duplicate-title soft check (warn, don't block)
@@ -238,12 +248,15 @@ async function main() {
     if (it.title && roadmapText.includes(`**${it.title}**`)) console.error(`⚠ a title "${it.title}" already appears in ROADMAP — possible double-sow.`)
   }
 
-  const { text, plan } = insert(roadmapText, items, { cycle, contest, noStamp: o.noStamp, fromBug: o.fromBug })
+  const { text, plan } = insert(roadmapText, items, { cycle, contest, foundryContest, noStamp: o.noStamp, fromBug: o.fromBug })
   const message = o.message || defaultMessage(items, cycle)
 
   // ── report the plan ──
   const anyStamped = !o.noStamp && items.some(it => it.route.stamp != null)
-  console.log(`📥 sowing ${items.length} item(s)${anyStamped ? ` · stamp (sown #${cycle}${contest != null ? ` · contest #${contest}` : ''})` : ''}${o.fromBug ? ` · provenance (from bug: ${String(o.fromBug).replace(/\s+/g, ' ').trim().slice(0, 48)})` : ''}:`)
+  const hasGroundsContest = items.some(it => it.route.contestSource === 'grounds')
+  const hasFoundryContest = items.some(it => it.route.contestSource === 'foundry')
+  const contestStr = [hasGroundsContest ? `contest #${contest}` : null, hasFoundryContest ? `foundry-contest #${foundryContest}` : null].filter(Boolean).join(' · ')
+  console.log(`📥 sowing ${items.length} item(s)${anyStamped ? ` · stamp (sown #${cycle}${contestStr ? ` · ${contestStr}` : ''})` : ''}${o.fromBug ? ` · provenance (from bug: ${String(o.fromBug).replace(/\s+/g, ' ').trim().slice(0, 48)})` : ''}:`)
   for (const g of plan) { console.log(`  → ${g.anchorLabel}`); for (const l of g.lines) console.log(`      ${l.length > 110 ? l.slice(0, 107) + '…' : l}`) }
 
   if (o.dryRun) { console.log('\n(--dry-run — nothing written, nothing committed)'); return }
