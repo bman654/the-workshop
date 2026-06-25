@@ -24,8 +24,10 @@
 // Usage:
 //   node seedbed/gauge.mjs            → the JSON directive for THIS cycle (director reads it)
 //   node seedbed/gauge.mjs --status   → the same, human-readable
-//   node seedbed/gauge.mjs record --mode BUILD --track garden [--bloomed n --sown n --decayed n]
-//                                     → publisher applies the cycle outcome (mutates state.json)
+//   node seedbed/gauge.mjs record --mode BUILD --track garden --cycle N [--bloomed n --sown n --decayed n]
+//                                     → publisher applies the cycle outcome (mutates state.json).
+//                                       --cycle N (= gauges.currentCycle) is the idempotency key: a re-record
+//                                       of an already-recorded cycle is an observable NO-OP (exit 0, no save).
 //   node seedbed/gauge.mjs --check    → validate state shape + print the directive
 
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -252,7 +254,20 @@ const TRACKS = { garden: 'garden', gardens: 'garden', grounds: 'grounds', ground
 // the snapshot in state.fence (like fuel — the bed is the source of truth, so a sloppy
 // or dishonest agent report can't poison the decay-ratio metric). When omitted, falls
 // back to the explicit --bloomed/--sown/--decayed counts (manual / tests only).
-export function applyRecord(state, { mode, track, bloomed, sown, decayed } = {}, currentBed = null) {
+//
+// IDEMPOTENCY — an optional `cycle` (= N, the cycle being recorded = gauges.currentCycle)
+// guards against an accidental double-record in one turn. record is the SOLE state-mutation
+// surface and is NOT otherwise idempotent: it unconditionally runs cycle = cycle + 1 and bumps
+// the per-track counters, so running it twice would advance the durable clock + every counter
+// TWICE — two legit consecutive cycles and one accidental same-turn re-run look identical. When
+// `cycle` is provided AND state.cycle >= cycle (this cycle is already recorded — after one
+// successful record of N the durable state.cycle becomes N, so a re-run passing N sees N >= N),
+// applyRecord RETURNS A SENTINEL { noop: true, state, cycle } with the input state UNCHANGED —
+// it advances no clock, bumps no counter, re-baselines nothing. When `cycle` is omitted it
+// behaves EXACTLY as before (fully backward-compatible: manual calls + tests are unchanged). The
+// guard is SCOPED OUT of the WRIT branch on purpose — a writ is already cadence-neutral (advances
+// no clock), so a writ re-run only re-baselines the fence/sown tally, which is out of scope here.
+export function applyRecord(state, { mode, track, bloomed, sown, decayed, cycle } = {}, currentBed = null) {
   const m = MODES[String(mode).toUpperCase()]
   const t = TRACKS[String(track).toLowerCase()]
   if (!m) throw new Error(`record: unknown --mode "${mode}" (want BUILD | PLAN | TRIVIAL | WRIT)`)
@@ -286,6 +301,12 @@ export function applyRecord(state, { mode, track, bloomed, sown, decayed } = {},
     }
     return sw
   }
+
+  // IDEMPOTENCY GUARD (non-WRIT only): if this cycle is already recorded, NO-OP. After a successful
+  // record of cycle N the durable state.cycle is N, so a re-run passing --cycle N sees state.cycle (N)
+  // >= N and returns the input state untouched + a flag the CLI can see. Omitting `cycle` skips the
+  // guard entirely (today's exact behavior — double-advance and all).
+  if (cycle != null && state.cycle >= cycle) return { noop: true, state, cycle }
 
   const s = { ...state }
   s.cycle = state.cycle + 1 // every completed cycle advances the durable clock
@@ -347,9 +368,16 @@ function main() {
     const state = loadState()
     const bed = parseBed(readFileSync(ROADMAP, 'utf8'))
     const currentBed = { garden: bed.gardenSeeds.map(s => s.pitch), grounds: bed.groundsSeeds.map(s => s.pitch), foundry: bed.foundrySeeds.map(s => s.pitch) }
+    // --cycle N (optional) = gauges.currentCycle, the idempotency key. flags() captures it as a string;
+    // coerce to a number. When present, a re-record of an already-recorded cycle is an observable NO-OP.
+    const cycle = f.cycle != null && f.cycle !== true ? Number(f.cycle) : undefined
     let ns
-    try { ns = applyRecord(state, { mode: f.mode, track: f.track }, currentBed) } // tally DERIVED from the bed diff
+    try { ns = applyRecord(state, { mode: f.mode, track: f.track, cycle }, currentBed) } // tally DERIVED from the bed diff
     catch (e) { console.error(e.message); process.exit(2) }
+    if (ns.noop) { // already recorded this cycle — hold state, do not save, exit clean
+      console.log(`already recorded cycle ${cycle} — record is a no-op (state held at cycle ${state.cycle})`)
+      process.exit(0)
+    }
     saveState(ns)
     const dt = ns.tally, ot = state.tally || {}
     const delta = (k) => (dt[k] || 0) - (ot[k] || 0)

@@ -53,7 +53,7 @@ with N automatically; you don't pass it.)
 4. **REPLACE** the NOTES.md current-state block (don't append); write the worklog block (newest-first) + an
    INDEX line.
 5. **RUN THE GAUGE RECORD** (the ONLY thing that mutates state.json — the tally is DERIVED from the bed diff,
-   pass NO counts): `node seedbed/gauge.mjs record --mode PLAN --track <track>`. Sanity-check the printed
+   pass NO counts): `node seedbed/gauge.mjs record --mode PLAN --track <track> --cycle N`. Sanity-check the printed
    derived sown·bloomed·decayed match what you did.
 6. **LEDGER + PUBLISH** (see the bottom section).
 
@@ -106,7 +106,7 @@ worklog/NOTES entry **"writ · served before #N"** so the number stays free for 
    that waiver OVERRIDES the silence: in BOTH maker-visible channels you MAY name that writ and link its seeds to
    it, exactly as the writ permits — honor the writ's own instruction over the default. (The default silence still
    governs every writ that grants no such waiver.)
-6. **RUN THE GAUGE RECORD** — cadence-neutral: `node seedbed/gauge.mjs record --mode WRIT --track writ`.
+6. **RUN THE GAUGE RECORD** — cadence-neutral: `node seedbed/gauge.mjs record --mode WRIT --track writ --cycle N`.
 7. **LEDGER + PUBLISH** — commit the REPO changes only (operational repo files + the ROADMAP edits). The vault
    write / message the steward made is already done and is not a repo artifact. **COMMIT SUBJECT — apply the
    CO-OCCURRENCE RULE from step 5** (it is maker-visible via the recent-commits list every seat receives, the
@@ -171,7 +171,7 @@ worklog/NOTES entry **"writ · served before #N"** so the number stays free for 
 5. **CLEANUP:** tear down YOUR http server / browser session (the specific one — never a broad pkill); delete
    stray /tmp prototypes; if a `.src.html` was touched run `forge --check --all`; confirm the tree has nothing stray.
 6. **RUN THE GAUGE RECORD** (DERIVED from the bed diff, pass NO counts): `node seedbed/gauge.mjs record --mode
-   BUILD --track <track>`. Sanity-check the printed sown·bloomed·decayed.
+   BUILD --track <track> --cycle N`. Sanity-check the printed sown·bloomed·decayed.
 7. **LEDGER + PUBLISH.** Your summary must describe what shipped, what you CAUGHT & fixed in review, and the
    final verification.
 

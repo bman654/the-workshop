@@ -217,6 +217,75 @@ console.log('record — state transitions:')
   eq(applyRecord(base, { mode: 'PLAN', track: 'garden', sown: '<#seeds>' }).tally.gardenSown, 0, 'non-numeric count → 0 (no NaN in state)')
 }
 
+console.log('record idempotency — --cycle N guards an accidental double-record:')
+{
+  // record is the SOLE state-mutation surface but is NOT otherwise idempotent: applyRecord
+  // unconditionally runs cycle = cycle + 1 and bumps every per-track counter, so running it
+  // twice in one turn advances the durable clock + counters TWICE. The --cycle N idempotency
+  // key (N = gauges.currentCycle) makes a re-record of an already-recorded cycle a NO-OP.
+  const base = st({ cycle: 30, lastGardenPlan: 28, lastBigSwing: 21, bigSwingsBuilt: 2,
+    lastFoundry: 20, foundryBuilt: 4, tally: {} })
+  // gauges.currentCycle = state.cycle + 1, so the cycle ABOUT to be recorded here is N = 31.
+  const N = base.cycle + 1
+
+  // ── GROUNDS: the first record of cycle N advances the clock + every grounds counter exactly once.
+  const first = applyRecord(base, { mode: 'BUILD', track: 'grounds', cycle: N })
+  ok(!first.noop, 'first record of cycle N is NOT a no-op (it actually records)')
+  eq(first.cycle, 31, 'first record advances the durable cycle once (30 → 31)')
+  eq(first.lastBigSwing, 31, 'first record sets lastBigSwing to the new cycle')
+  eq(first.bigSwingsBuilt, 3, 'first record bumps bigSwingsBuilt exactly once (2 → 3)')
+
+  // ── the SECOND record of the SAME cycle N (state.cycle now 31 ≥ N=31) is an observable NO-OP:
+  //    nothing advances, nothing bumps, the input state is returned byte-identical.
+  const before = JSON.stringify(first)
+  const second = applyRecord(first, { mode: 'BUILD', track: 'grounds', cycle: N })
+  ok(second.noop === true, 'the second record of cycle N signals noop:true')
+  ok(second.state === first, 'the no-op returns the EXACT input state object (unchanged)')
+  eq(second.state.cycle, 31, 'the no-op does NOT advance the cycle (held at 31, not 32)')
+  eq(second.state.bigSwingsBuilt, 3, 'the no-op does NOT bump bigSwingsBuilt (held at 3, not 4)')
+  eq(second.state.lastBigSwing, 31, 'the no-op leaves lastBigSwing untouched')
+  eq(JSON.stringify(second.state), before, 'the no-op leaves state byte-identical')
+
+  // ── EVERY per-track counter is guarded — prove garden + foundry counters also bump exactly once,
+  //    then NO-OP on the re-run. (lastGardenPlan / lastFoundry / foundryBuilt are the other clocks.)
+  const gFirst = applyRecord(base, { mode: 'PLAN', track: 'garden', cycle: N })
+  eq(gFirst.lastGardenPlan, 31, 'garden PLAN: first record resets lastGardenPlan to N once')
+  const gSecond = applyRecord(gFirst, { mode: 'PLAN', track: 'garden', cycle: N })
+  ok(gSecond.noop && gSecond.state.lastGardenPlan === 31, 'garden PLAN: re-record NO-OPs (lastGardenPlan held at 31)')
+
+  const fFirst = applyRecord(base, { mode: 'BUILD', track: 'foundry', cycle: N })
+  eq(fFirst.lastFoundry, 31, 'foundry BUILD: first record resets lastFoundry to N once')
+  eq(fFirst.foundryBuilt, 5, 'foundry BUILD: first record bumps foundryBuilt exactly once (4 → 5)')
+  const fSecond = applyRecord(fFirst, { mode: 'BUILD', track: 'foundry', cycle: N })
+  ok(fSecond.noop && fSecond.state.lastFoundry === 31 && fSecond.state.foundryBuilt === 5,
+    'foundry BUILD: re-record NO-OPs (lastFoundry + foundryBuilt both held)')
+
+  // ── TWO LEGIT CONSECUTIVE cycles still advance — the guard only catches a re-run of the SAME N.
+  //    After recording N, recording N+1 (the next cycle's currentCycle) advances normally.
+  const next = applyRecord(first, { mode: 'BUILD', track: 'grounds', cycle: N + 1 })
+  ok(!next.noop, 'recording the NEXT cycle (N+1) is not a no-op')
+  eq(next.cycle, 32, 'two legit consecutive cycles advance the clock twice (31 → 32)')
+  eq(next.bigSwingsBuilt, 4, 'two legit consecutive grounds builds bump the counter twice (3 → 4)')
+
+  // ── BACKWARD-COMPAT CONTROL: with --cycle OMITTED, behavior is EXACTLY as before — a double-record
+  //    DOUBLE-advances (this is the bug the key guards against; the old call path is unchanged).
+  const noKey1 = applyRecord(base, { mode: 'BUILD', track: 'grounds' }) // no cycle
+  ok(!noKey1.noop, 'no --cycle → never returns a noop sentinel (today exact behavior)')
+  eq(noKey1.cycle, 31, 'no --cycle: first record advances once')
+  const noKey2 = applyRecord(noKey1, { mode: 'BUILD', track: 'grounds' }) // no cycle again
+  eq(noKey2.cycle, 32, 'no --cycle: a second record DOUBLE-advances the cycle (32) — backward-compatible')
+  eq(noKey2.bigSwingsBuilt, 4, 'no --cycle: a second record DOUBLE-bumps the counter (4) — the guarded-against bug')
+
+  // ── the guard is SCOPED OUT of WRIT (cadence-neutral already): passing --cycle to a WRIT is harmless
+  //    and never NO-OPs the WRIT path (a writ advances no clock, so there is nothing to guard).
+  const wbase = st({ cycle: 50, lastGardenPlan: 44, lastBigSwing: 41, bigSwingsBuilt: 3, tally: {},
+    fence: { garden: ['A'], grounds: ['W'], foundry: [] } })
+  const w = applyRecord(wbase, { mode: 'WRIT', track: 'writ', cycle: 51 }, { garden: ['A', 'NewSeed'], grounds: ['W'], foundry: [] })
+  ok(!w.noop, 'a WRIT with --cycle never returns a noop sentinel (the guard is scoped out of WRIT)')
+  eq(w.cycle, 50, 'a WRIT with --cycle still holds the cycle clock (cadence-neutral)')
+  eq(w.tally.gardenSown, 1, 'a WRIT with --cycle still credits a released clause as sown')
+}
+
 console.log('derived tally — record diffs the bed (the agent can NOT mis-count):')
 {
   const base = st({ cycle: 40, lastGardenPlan: 38, lastBigSwing: 30, bigSwingsBuilt: 2, tally: {},
