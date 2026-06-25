@@ -1,0 +1,977 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Comb — drag one brass delay and the spectrum grows teeth at (n+½)/τ; you SEE them slide and HEAR the flange whoosh</title>
+<!-- a Sound Garden LEAF (garden growth of the feedforward comb filter / flanger).
+     Reached from the front-door 'rigorous voices' line in sound-garden/index.html.
+     Copies '← sound garden'. NOT a new front-door footprint — NO ws:seen. The
+     feedforward-comb physics (the magnitude law combMagSq + the notch ladder
+     notchFreq + the time-domain combSampleTone + runCombSelfTest) is single-sourced
+     to ./core.mjs (the COMB CORE block, byte-twinned here char-for-char); the pitch
+     anchor semiToFreq comes from ../pitch-core.mjs (PITCH CORE, also byte-twinned).
+     The Node twin core.test.mjs re-extracts each slice and asserts parity.
+
+     THE LOCKSTEP CONTRACT (the soul): ONE state.tau (and state.g) drives BOTH the
+     drawn comb (draw() reads |H(f)| from combMag) AND the live audio (a Web-Audio
+     DelayNode whose delayTime IS τ and whose echo gain IS g — the literal
+     delay-and-add y = x + g·x(·−τ)) through the same law — the eye and the ear
+     cannot disagree. The LFO sweeps state.tau, so the teeth you SEE slide are the
+     teeth you HEAR whoosh.
+
+     TWO STATED SETTINGS, never conflated:
+       • the LIVE rig sweeps τ ∈ [0.2,12] ms and g ∈ [0,1] freely under the hand;
+         the comb is drawn + heard at whatever delay/depth the hand chooses, over
+         pink noise (broadband, so every tooth is audible) or a held tone.
+       • the LENS-CHECK render (window.__renderComb) runs the SAME delay-and-add on a
+         FIXED probe of pure tones at a FIXED band (τ pinned, tones on the peaks n/τ
+         and notches (n+½)/τ) so every checked tooth clears the Audio Lens's 60 Hz
+         floor / 5 kHz ceiling / 3% dedup. THAT is the only heard-headless claim.
+         See verify.sh. -->
+<style>
+  :root{
+    --bg:#07060d; --ink:#ece9f6; --muted:#8a85a6;
+    --c:#caa45a;                 /* the leaf accent (brass — the delay lever/chassis) */
+    --band:#6fd3ff;              /* the spectrum band (cyan — the surviving energy) */
+    --tooth:#ff9d7a;             /* the comb teeth / notches (coral — the cancelled energy) */
+    --brass:#caa45a;             /* the delay lever + chassis (brass) */
+    --peak:#b59bff;              /* the peaks where the echo lands in phase (violet) */
+    --ok:#54e08a; --bad:#ff6b6b; /* RESERVED for the self-test pill verdict only */
+    --panel:#110e1c; --line:rgba(255,255,255,.08);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--bg); color:var(--ink); overflow-x:hidden;
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased; }
+  body{ min-height:100vh; background:
+    radial-gradient(1000px 600px at 50% -10%, rgba(111,211,255,.12), transparent 60%),
+    radial-gradient(820px 520px at 14% 110%, rgba(202,164,90,.08), transparent 55%),
+    radial-gradient(820px 520px at 88% 112%, rgba(255,157,122,.07), transparent 55%),
+    var(--bg); }
+  .wrap{ max-width:1080px; margin:0 auto; padding:30px 24px 90px; }
+  a{ color:inherit; }
+  .back{ display:inline-block; font:600 11px/1 ui-monospace,Menlo,monospace; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); text-decoration:none; opacity:.8; margin-bottom:14px; }
+  .back:hover{ color:var(--c); opacity:1; }
+  header{ text-align:center; margin-bottom:8px; }
+  .kick{ font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.34em;
+    text-transform:uppercase; color:var(--muted); opacity:.85; }
+  h1{ font-family:Georgia,"Times New Roman",serif; font-weight:500;
+    font-size:clamp(34px,6vw,58px); margin:.14em 0 .1em; letter-spacing:.01em;
+    background:linear-gradient(180deg,#fff,#cdeaff); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  .sub{ color:var(--muted); font-size:15px; font-style:italic; font-family:Georgia,serif;
+    max-width:740px; margin:0 auto; line-height:1.55; }
+  .sub b{ font-style:normal; }
+
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; }
+  .card h3{ margin:0 0 10px; font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); }
+
+  /* the stage: one column on mobile → the rig beside the readouts on desktop. */
+  .stage{ margin-top:26px; display:grid; gap:18px; grid-template-columns:minmax(0,1fr); }
+  .stage > .card{ min-width:0; }
+  @media(min-width:860px){ .stage{ grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr); align-items:start; } }
+
+  /* ── THE SPECTRUM STRIP — the ONE drawn object: a glowing band the teeth ride ── */
+  #combHost{ position:relative; width:100%; height:300px; touch-action:none; }
+  #comb{ width:100%; height:100%; display:block; border-radius:12px; cursor:ew-resize;
+    background:
+      radial-gradient(120% 90% at 50% 0%, rgba(111,211,255,.06), transparent 60%),
+      radial-gradient(120% 90% at 50% 100%, rgba(255,157,122,.05), transparent 60%), #0a0813; }
+  #comb:focus-visible{ outline:2px solid color-mix(in srgb,var(--brass) 60%,transparent); outline-offset:-2px; }
+  .stageHint{ margin:10px 0 0; font:600 11px/1.5 ui-monospace,Menlo,monospace; color:var(--muted); opacity:.85; }
+  .stageHint b{ color:var(--ink); font-weight:600; }
+
+  /* ── THE DELAY LEVER — the hero verb, a brass slider ── */
+  .sliderrow{ display:flex; align-items:center; gap:12px; background:#0d0a16; border:1px solid var(--line);
+    border-radius:10px; padding:10px 12px; margin-top:14px; }
+  .sliderrow label{ font:600 11px/1.3 ui-monospace,Menlo,monospace; color:var(--muted); min-width:0; flex:0 0 auto; }
+  .sliderrow input[type=range]{ flex:1 1 auto; min-width:0; accent-color:var(--brass); }
+  .sliderrow .bval{ font:700 12px/1 ui-monospace,Menlo,monospace; color:var(--brass); flex:0 0 auto; min-width:64px; text-align:right; }
+
+  .controls{ display:flex; flex-direction:column; gap:14px; }
+  .readouts{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media(max-width:430px){ .readouts{ grid-template-columns:1fr; } }
+  .ro{ background:#0d0a16; border:1px solid var(--line); border-radius:10px; padding:10px 12px; overflow:hidden; }
+  .ro.wide{ grid-column:1 / -1; }
+  .ro .k{ font:600 10px/1 ui-monospace,Menlo,monospace; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); }
+  .ro .v{ font:700 17px/1.2 ui-monospace,Menlo,monospace; margin-top:6px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ro .v.tau{ color:var(--brass); }
+  .ro .v.first{ color:var(--tooth); }
+  .ro .v.spc{ color:var(--peak); }
+  .ro .v.depth{ color:var(--band); }
+
+  .detentrow{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .detent{ font:700 11px/1 ui-monospace,Menlo,monospace; letter-spacing:.04em; cursor:pointer; user-select:none;
+    padding:9px 13px; border-radius:9px; border:1px solid color-mix(in srgb,var(--tooth) 45%,transparent);
+    background:#150f12; color:var(--tooth); transition:.16s; }
+  .detent:hover{ background:#1d1316; box-shadow:0 0 16px -6px var(--tooth); }
+  .detent:focus-visible{ outline:2px solid color-mix(in srgb,var(--tooth) 60%,transparent); outline-offset:2px; }
+
+  .seg{ display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+  .seg .opt{ padding:9px 12px; font:600 11px/1 ui-monospace,Menlo,monospace; letter-spacing:.06em;
+    cursor:pointer; color:var(--muted); background:#0d0a16; transition:.16s; }
+  .seg .opt.on{ color:#07060d; background:var(--c); }
+  .seg.lfo .opt.on{ background:var(--band); }
+
+  .note{ font-size:13px; color:var(--muted); line-height:1.6; margin:12px 0 0; }
+  .note b{ color:var(--ink); font-weight:600; }
+  .note.lit{ color:var(--tooth); }
+
+  /* the SELF-TEST pill — green/red RESERVED for the verdict only */
+  #selftest{ display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
+    font:700 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.04em; padding:9px 13px; border-radius:9px;
+    border:1px solid var(--line); background:#0d0a16; color:var(--muted); }
+  #selftest.ok{ color:var(--ok); border-color:color-mix(in srgb,var(--ok) 50%,transparent); }
+  #selftest.bad{ color:var(--bad); border-color:color-mix(in srgb,var(--bad) 50%,transparent); }
+  #selftest .dotp{ width:8px; height:8px; border-radius:50%; background:currentColor; box-shadow:0 0 8px currentColor; }
+
+  footer{ margin-top:46px; text-align:center; color:var(--muted); opacity:.6;
+    font:11px/1.7 ui-monospace,Menlo,monospace; letter-spacing:.05em; }
+  footer a{ color:inherit; }
+  code{ font-family:ui-monospace,Menlo,monospace; font-size:.92em; color:#cdeaff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../index.html">&larr; sound garden</a>
+  <header>
+    <div class="kick">Sound&nbsp;Garden&nbsp;·&nbsp;a&nbsp;leaf</div>
+    <h1>The Comb</h1>
+    <p class="sub">Add a sound to a <b style="color:var(--brass)">short-delayed copy</b> of itself and the spectrum grows a
+      <b style="color:var(--tooth)">comb of notches</b> &mdash; the echo cancels itself wherever it lands a half-cycle out of phase.
+      Drag the <b style="color:var(--brass)">delay&nbsp;&tau;</b> and the teeth slide: the first notch sits at <b>1/(2&tau;)</b>,
+      the teeth spaced <b>1/&tau;</b> apart. The comb you SEE is the comb you HEAR &mdash; one lever drives both, and as it
+      sweeps you hear the jet-plane <b style="color:var(--band)">flange whoosh</b>.</p>
+  </header>
+
+  <div class="stage">
+    <!-- THE RIG: the ONE drawn object — the spectrum strip the teeth ride -->
+    <div class="card">
+      <div class="stageHint" style="margin:0 0 12px">THE SPECTRUM &mdash; one glowing band the teeth ride; it <b>is</b> the heard timbre</div>
+      <div id="combHost">
+        <canvas id="comb" role="application" tabindex="0"
+          aria-label="the feedforward comb spectrum: a glowing cyan band across frequency, dipping to coral notches at frequencies (n plus one half) over tau, with violet peaks at n over tau. Drag left or right (or use the arrow keys) to change the delay tau; Home sets the shortest delay. The teeth slide as tau changes."></canvas>
+      </div>
+      <p class="stageHint">Drag the strip <b>left/right</b> (or focus it and use &larr;/&rarr;, Home = shortest &tau;) to change the
+        <b style="color:var(--brass)">delay&nbsp;&tau;</b>. Watch the <b style="color:var(--tooth)">coral notches</b> slide &mdash; the first at
+        <b>1/(2&tau;)</b>, the rest <b>1/&tau;</b> apart. Flip on the <b style="color:var(--band)">LFO</b> and they sweep themselves.</p>
+
+      <div class="sliderrow">
+        <label for="tauRange">delay&nbsp;&tau;</label>
+        <input type="range" id="tauRange" min="0.2" max="12" step="0.01" value="1"
+          aria-label="delay tau in milliseconds, 0.2 to 12">
+        <span class="bval" id="tauVal">1.00 ms</span>
+      </div>
+
+      <div class="detentrow" style="margin-top:12px">
+        <span class="detent" id="snapZero" role="button" tabindex="0"
+          title="Set the delay to zero — the echo lands on top of the original, the spectrum goes flat, the teeth vanish.">&#9662; collapse the delay (&tau;&rarr;0 &mdash; teeth vanish)</span>
+      </div>
+    </div>
+
+    <!-- THE READOUTS + the depth + the audio controls -->
+    <div class="card">
+      <h3>The comb</h3>
+      <div class="controls">
+        <div class="readouts">
+          <div class="ro"><div class="k">&tau; delay</div><div class="v tau" id="roTau">&mdash;</div></div>
+          <div class="ro"><div class="k">first notch 1/(2&tau;)</div><div class="v first" id="roFirst">&mdash;</div></div>
+          <div class="ro"><div class="k">tooth spacing 1/&tau;</div><div class="v spc" id="roSpacing">&mdash;</div></div>
+          <div class="ro"><div class="k">notch depth</div><div class="v depth" id="roDepth">&mdash;</div></div>
+          <div class="ro wide"><div class="k">teeth in the audible band</div><div class="v" id="roTeeth" style="color:var(--tooth)">&mdash;</div></div>
+        </div>
+
+        <div class="sliderrow" style="margin-top:0">
+          <label for="gRange">echo&nbsp;depth&nbsp;g</label>
+          <input type="range" id="gRange" min="0" max="1" step="0.001" value="1"
+            aria-label="echo depth g, 0 to 1">
+          <span class="bval" id="gVal" style="color:var(--band)">1.000</span>
+        </div>
+
+        <div class="detentrow">
+          <span class="seg lfo" id="segLfo" title="Auto-sweep the delay τ — the teeth slide and you hear the classic flange whoosh.">
+            <span class="opt" data-lfo="on">LFO sweep on</span>
+            <span class="opt on" data-lfo="off">LFO off</span>
+          </span>
+        </div>
+
+        <div class="detentrow">
+          <span class="seg" id="segSrc" title="The source the comb colours: broadband pink noise (every tooth audible) or a held tone.">
+            <span class="opt on" data-src="noise">pink noise</span>
+            <span class="opt" data-src="tone">held tone</span>
+          </span>
+        </div>
+
+        <div class="detentrow">
+          <span class="seg" id="segAudio" title="Honours the estate-wide ws:pref:muted key; muted by default.">
+            <span class="opt" data-audio="on">sound on</span>
+            <span class="opt on" data-audio="off">sound off</span>
+          </span>
+        </div>
+
+        <p class="note" id="reveal">&nbsp;</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- THE PROOF -->
+  <div class="card" style="margin-top:18px">
+    <div class="detentrow" style="justify-content:space-between;align-items:flex-start;gap:24px">
+      <div style="flex:1 1 340px;min-width:0">
+        <h3 style="margin-top:0">Why a comb appears (and where the teeth land)</h3>
+        <p class="note" style="margin-top:0">
+          Add a signal to a copy delayed by &tau;:
+          <code>y(t) = x(t) + g&middot;x(t&minus;&tau;)</code>. Its transfer is
+          <code>H(f) = 1 + g&middot;e<sup>&minus;j2&pi;f&tau;</sup></code>, so the magnitude response is a cosine ripple,
+          <code>|H(f)|&sup2; = 1 + 2g&middot;cos(2&pi;f&tau;) + g&sup2;</code>. It <b style="color:var(--peak)">peaks</b> where the echo lands
+          in phase (<code>f = n/&tau;</code>) and <b style="color:var(--tooth)">dips</b> where it lands a half-cycle out of phase
+          (<code>cos = &minus;1</code>). The dips are the teeth.
+        </p>
+        <p class="note">
+          <b style="color:var(--tooth)">The notch ladder:</b> the dips sit at <code>f = (n+&frac12;)/&tau;</code> &mdash; the
+          <b>first notch at exactly 1/(2&tau;)</b>, the teeth spaced <b>1/&tau;</b> apart, <b>independent of g</b>. The
+          <b style="color:var(--band)">echo depth g</b> sets only how DEEP they cut: the notch floor is <code>|1&minus;g|</code>, a
+          <b>true zero at g=1</b> (total cancellation). <b style="color:var(--peak)">The negative control:</b> set <b>&tau;=0</b> and the echo
+          lands on top of the original &mdash; <code>y = (1+g)&middot;x</code>, a flat gain, <b>no teeth</b>. The comb is the delay.
+        </p>
+        <p class="note" style="font-size:12px">
+          <b style="color:var(--brass)">Two stated settings.</b> The LIVE rig sweeps &tau; and g freely over pink noise or a tone.
+          The headless heard-claim is made by <code>verify.sh</code> on the SAME delay-and-add at a FIXED probe
+          (<code>window.__renderComb</code>: tones parked on the peaks <code>n/&tau;</code> and notches <code>(n+&frac12;)/&tau;</code>) so every
+          checked tooth clears the Audio&nbsp;Lens's 60&nbsp;Hz floor, 5&nbsp;kHz ceiling and 3% dedup &mdash; the live UI's
+          &tau;/g are NOT used by that render.
+        </p>
+      </div>
+      <div style="flex:1 1 280px;min-width:0">
+        <div class="detentrow">
+          <span id="selftest" title="click to re-run"><span class="dotp"></span><span id="stText">self-test &mdash;</span></span>
+        </div>
+        <p class="note" style="margin-top:12px;font-size:12px">
+          The self-test proves it EXACT: the first notch is <code>1/(2&tau;)</code> and the spacing <code>1/&tau;</code> to the bit across
+          a &tau; grid; the magnitude <code>|H|&sup2;</code> matches <code>|1+g&middot;e<sup>&minus;j2&pi;f&tau;</sup>|&sup2;</code> by two
+          independent computations; a rendered sum-of-tones probe is <b>annihilated on the notches</b> and <b>doubled on the peaks</b>;
+          the depth floor is <code>|1&minus;g|</code> (a true 0 at g=1) while the notch FREQUENCIES never move with g; and at
+          <b>&tau;=0</b> (or <b>g=0</b>) the spectrum is dead flat. The physics is single-sourced to <code>core.mjs</code>,
+          byte-twinned into this page, with the Node twin <code>core.test.mjs</code> proving char-for-char parity.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    a leaf of the <a href="../index.html">Sound Garden</a> &middot; all sound synthesised live (Web Audio), zero dependencies &middot;
+    feedforward-comb physics &rarr; <code>core.mjs</code> &middot; pitch &rarr; <code>sound-garden/pitch-core.mjs</code><br>
+    <a href="../the-sidebands/index.html">&harr; The Sidebands</a> &mdash; its TIME-domain mirror: FM SPREADS energy INTO a comb of tones; here a delay NOTCHES energy OUT of one &middot;
+    <a href="../the-plucked-reed/index.html">&harr; The Plucked Reed</a> &middot;
+    <a href="../the-stopped-pipe/index.html">&harr; The Stopped Pipe</a> &middot;
+    <a href="../the-beating-bench/index.html">&harr; The Beating Bench</a> &middot;
+    <a href="../../index.html">&larr; The Orrery Estate</a>
+  </footer>
+</div>
+
+<script type="module">
+"use strict";
+// ════════════════════════ INLINED SINGLE-SOURCE BYTE-TWINS ═══════════════════
+// TWO byte-twins, in order. (a) the PITCH CORE slice (gives semiToFreq, so the
+// optional tone source's pitch is single-sourced), char-for-char ../pitch-core.mjs.
+// (b) the COMB CORE slice (the feedforward magnitude law + the notch ladder + the
+// time-domain delay-and-add + runCombSelfTest), char-for-char ./core.mjs. The Node
+// twin re-extracts each slice and asserts parity; the in-page pill AND the Node twin
+// both call the runCombSelfTest defined in (b).
+
+// ===== PITCH CORE (inlined byte-twin) BEGIN =====
+const MIDDLE_C_HZ = 261.625565;            // the ONE pitch anchor literal
+function semiToFreq(semi){ return MIDDLE_C_HZ * Math.pow(2, semi/12); }
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function noteName(semi){ const o=4+Math.floor(semi/12); const i=((semi%12)+12)%12; return NOTE_NAMES[i]+o; }
+// ===== PITCH CORE END =====
+
+// the bench's hero defaults, with the band DERIVED from the pitch anchor (no Hz
+// literal is re-typed for the audible probe). These live OUTSIDE the COMB CORE
+// slice (which takes τ/g/f as parameters), exactly as core.mjs places them. The
+// self-test is pinned to these so the pill and the Node twin agree. (The LIVE rig
+// defaults below are a separate, stated setting.)
+const TAU0 = 0.001;                         // 1.0 ms — the self-test hero delay (first notch 500 Hz)
+const G0 = 1.0;                             // hero echo gain — a full-depth feedforward comb (true nulls)
+const SEMI_PROBE = 0;                       // the probe tone anchor: middle C as a semitone offset
+const PROBE_FC = semiToFreq(SEMI_PROBE);    // ≈261.63 Hz — the live tone the comb colours
+
+// ===== COMB CORE (inlined byte-twin) BEGIN =====
+// IMPORT-FREE: every function takes the delay τ, the echo gain g and the frequency
+// f (and, where needed, the order n) as PARAMETERS — so the page can inline this
+// block verbatim regardless of script load order, and the pitch anchor is never
+// re-typed inside the slice (the single-source grep checks). The feedforward-comb
+// transfer law lives here and ONLY here.
+
+// THE FEEDFORWARD-COMB MAGNITUDE-SQUARED — |H(f)|² for the delay-and-add
+// y = x + g·x(·−τ). H(f) = 1 + g·e^(−j2πfτ), so
+//   |H|² = (1 + g·cos θ)² + (g·sin θ)² = 1 + 2g·cos θ + g²,   θ = 2πfτ.
+// This single function is the SOLE source of every comb height the bench draws,
+// the cosine ripple whose dips are the teeth. τ = 0 ⇒ θ = 0 ⇒ |H|² = (1+g)² flat;
+// g = 0 ⇒ |H|² = 1 flat. The dips sit at cos θ = −1 (f = (n+½)/τ); the peaks at
+// cos θ = +1 (f = n/τ).
+function combMagSq(f, tau, g){
+  const theta = 2 * Math.PI * f * tau;
+  return 1 + 2 * g * Math.cos(theta) + g * g;
+}
+
+// the comb magnitude |H(f)| — the drawn spectrum envelope (heights), the root of
+// the magnitude-squared. A tone at frequency f leaves the comb scaled by THIS.
+function combMag(f, tau, g){ return Math.sqrt(Math.max(0, combMagSq(f, tau, g))); }
+
+// THE NOTCH LADDER — the frequency of the n-th comb tooth (dip), n = 0,1,2,…:
+//   f_notch(n) = (n + ½)/τ.
+// The FIRST notch (n=0) is EXACTLY 1/(2τ); consecutive teeth are spaced 1/τ apart.
+// EXACT for any τ > 0, INDEPENDENT of the gain g — the delay alone places the teeth.
+function notchFreq(n, tau){ return (n + 0.5) / tau; }
+
+// THE PEAK LADDER — the frequency of the n-th comb peak (where the echo lands in
+// phase): f_peak(n) = n/τ for n = 0,1,2,… (the carrier peak at DC, then 1/τ, 2/τ…).
+function peakFreq(n, tau){ return n / tau; }
+
+// the comb's notch spacing Δf = 1/τ — the tooth-to-tooth interval (also the
+// peak-to-peak interval). Halving τ doubles every tooth's frequency.
+function notchSpacing(tau){ return 1 / tau; }
+
+// the notch DEPTH and peak HEIGHT of the comb: the magnitude floor at a dip is
+// |1−g| and the magnitude ceiling at a peak is 1+g. At g=1 the floor is a TRUE 0
+// (total cancellation); at g=0 floor === ceiling === 1 (flat, no comb).
+function notchDepth(g){ return Math.abs(1 - g); }
+function peakHeight(g){ return 1 + g; }
+
+// THE FEEDFORWARD-COMB SAMPLE — the time-domain delay-and-add evaluated for a pure
+// cosine probe x(t) = cos(2πf t): y(t) = cos(2πf t) + g·cos(2πf (t−τ)). This is the
+// ONLY place the feedforward time-domain law lives as code (the single-source grep
+// asserts this fragment appears in exactly one file). τ = 0 ⇒ y = (1+g)·x.
+function combSampleTone(f, tau, g, t){ return Math.cos(2 * Math.PI * f * t) + g * Math.cos(2 * Math.PI * f * (t - tau)); }
+
+// render N samples of the delay-and-add output for a SUM of equal-amplitude cosine
+// probe tones (each entry of `freqs`), at `sampleRate`. The summed cosines pass
+// through the SAME delay-and-add, so each tone is scaled by combMag(f,τ,g): a tone
+// on a notch is cancelled, one on a peak doubled. Used by the DFT confrontation.
+function renderCombTones(freqs, tau, g, sampleRate, N){
+  const out = new Float64Array(N);
+  for (let i = 0; i < N; i++){
+    const t = i / sampleRate;
+    let s = 0;
+    for (let k = 0; k < freqs.length; k++) s += combSampleTone(freqs[k], tau, g, t);
+    out[i] = s;
+  }
+  return out;
+}
+
+// a self-contained single-bin DFT: the DFT-bin magnitude of `samples` at frequency
+// `freq`, normalised by N so a cosine of amplitude c reads c/2. A DIRECT correlation
+// against cos/sin at `freq` — not the recursive Goertzel, whose error grows over N
+// samples; the direct sum keeps the analytic identities exact to <1e-9 even over a
+// long window. The test feeds it renderCombTones(...) to MEASURE each probe tone's
+// surviving amplitude and confront it with combMag(f,τ,g).
+function dftMag(samples, freq, sampleRate){
+  const N = samples.length;
+  const w = 2 * Math.PI * freq / sampleRate;
+  const TAU = 2 * Math.PI;
+  let re = 0, im = 0, ph = 0;
+  for (let i = 0; i < N; i++){
+    re += samples[i] * Math.cos(ph); im -= samples[i] * Math.sin(ph);
+    ph += w; if (ph >= TAU) ph -= TAU;     // keep the phase small so cos/sin stay accurate over a long window
+  }
+  return Math.sqrt(re * re + im * im) / N;
+}
+
+// THE LEAKAGE-FREE WINDOW for a probe whose tones are all integer multiples of a
+// base spacing `df` (Hz): render exactly `periods` periods of df with `spp` samples
+// per df-period — then the effective sample rate SR = spp·df puts every tone on an
+// EXACT DFT bin (bin = its df-multiple × periods), so the single-bin DFT reads
+// combMag(f,τ,g)/2 to machine epsilon, with no window roundoff from a
+// non-commensurate sample rate. For the comb the natural spacing is the notch
+// spacing 1/τ; the half-spacing 1/(2τ) (peaks AND notches both land on the grid)
+// is the base, so df = 1/(2τ). Returns { SR, N }.
+function analysisWindow(df, spp = 512, periods = 64){
+  const SR = spp * df;       // samples per second = samples-per-df-period × df-periods-per-second
+  const N = spp * periods;   // total samples = one df-period's worth × the number of periods
+  return { SR, N };
+}
+
+// ── runCombSelfTest(tau, g) — the SOLE ORACLE. Same shape as the sibling leaves:
+// { pass, total, lines:[{name, ok, detail}] }. The in-page pill and the Node twin
+// both call THIS, so they cannot disagree. tau is the hero delay; g the echo gain.
+// Five legs prove the feedforward comb is a real, exact notch ladder: the first
+// notch is 1/(2τ) and the spacing 1/τ to machine-ε; the magnitude is the cosine
+// ripple by two independent methods; a rendered sum-of-tones probe is annihilated
+// on the notches and doubled on the peaks; and τ=0 / g=0 are flat (no teeth).
+function runCombSelfTest(tau, g){
+  const lines = [];
+  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
+
+  // LEG 1 — THE FIRST NOTCH IS 1/(2τ) AND THE SPACING IS 1/τ (exact): across a τ
+  //   grid, notchFreq(0,τ) === 1/(2τ) to the bit and the consecutive-tooth gap
+  //   notchFreq(n+1,τ) − notchFreq(n,τ) === 1/τ to <1e-9, AND combMagSq evaluated
+  //   AT each notch frequency equals the dip floor (1−g)² to <1e-9 (the teeth land
+  //   where the law dips). INDEPENDENT of g — the delay alone places the teeth.
+  {
+    let ok = true, worstFirst = 0, worstSpace = 0, worstDip = 0, worstAt = { n: 0, tt: 0.001 };
+    for (const tt of [0.0002, 0.0005, 0.001, 0.003, 0.006, 0.012]){
+      const first = notchFreq(0, tt);
+      const dFirst = Math.abs(first - 1 / (2 * tt));
+      if (dFirst > worstFirst){ worstFirst = dFirst; }
+      const dipFloor = (1 - g) * (1 - g);                 // (1−g)² — the magnitude-squared dip floor
+      for (let n = 0; n <= 8; n++){
+        const fn = notchFreq(n, tt);
+        const gap = notchFreq(n + 1, tt) - fn;
+        const dSpace = Math.abs(gap - 1 / tt);
+        if (dSpace > worstSpace){ worstSpace = dSpace; }
+        const dDip = Math.abs(combMagSq(fn, tt, g) - dipFloor);
+        if (dDip >= worstDip){ worstDip = dDip; worstAt = { n, tt }; }
+        if (dFirst >= 1e-9 || dSpace >= 1e-6 || dDip >= 1e-9) ok = false;
+      }
+    }
+    T('LEG 1 — the notch ladder is exact: across a τ grid the first notch === 1/(2τ) to the bit and the tooth spacing === 1/τ to <1e-9, AND |H|² evaluated at each notch frequency equals the dip floor (1−g)² to <1e-9 — the teeth land EXACTLY where the law dips, independent of g',
+      ok, ok ? `first notch Δ ${worstFirst.toExponential(2)} · spacing Δ ${worstSpace.toExponential(2)} · |H|²-at-notch vs (1−g)² Δ ${worstDip.toExponential(2)} (worst at n=${worstAt.n}, τ=${worstAt.tt}s)`
+             : `mismatch (first Δ ${worstFirst.toExponential(2)}, spacing Δ ${worstSpace.toExponential(2)}, dip Δ ${worstDip.toExponential(2)})`);
+  }
+
+  // LEG 2 — THE MAGNITUDE IS THE COSINE RIPPLE (second-method confrontation): the
+  //   closed-form combMagSq(f,τ,g) equals the magnitude-squared of the COMPLEX
+  //   transfer H = 1 + g·e^(−j2πfτ) assembled from its real/imag parts, over an
+  //   (f,τ) grid to <1e-12 — two disjoint computations of the same response agree.
+  {
+    let ok = true, worst = 0;
+    for (const tt of [0.0005, 0.001, 0.004, 0.009]){
+      for (let f = 50; f <= 5000; f += 37.5){
+        const theta = 2 * Math.PI * f * tt;
+        const re = 1 + g * Math.cos(theta), im = -g * Math.sin(theta);   // H = 1 + g·e^(−jθ)
+        const ref = re * re + im * im;                                   // |H|² from the complex parts
+        const d = Math.abs(combMagSq(f, tt, g) - ref);
+        if (d > worst) worst = d;
+        if (d >= 1e-12) ok = false;
+      }
+    }
+    T('LEG 2 — the magnitude IS the cosine ripple: the closed-form |H|² = 1 + 2g·cos(2πfτ) + g² equals |1 + g·e^(−j2πfτ)|² assembled from the complex parts over an (f,τ) grid to <1e-12 — two disjoint computations of the same transfer agree',
+      ok, ok ? `closed-form === complex |H|² to <1e-12 across the grid (worst Δ ${worst.toExponential(2)})`
+             : `mismatch (worst Δ ${worst.toExponential(2)})`);
+  }
+
+  // LEG 3 — CANCELLATION & DOUBLING (the rendered probe matches the math): render a
+  //   SUM of equal-amplitude cosine probe tones — some parked ON notches (n+½)/τ,
+  //   some on peaks n/τ — through the delay-and-add, then the DFT reads each tone's
+  //   surviving amplitude as combMag(f,τ,g)/2 to <1e-9. At g=1 the notch tones are
+  //   annihilated (≈0) while the peak tones double (≈1) — the comb the ear gets is
+  //   the comb the law draws.
+  {
+    const df = 1 / (2 * tau);                              // half-spacing: peaks AND notches on the grid
+    const { SR, N } = analysisWindow(df);
+    const peaks = [peakFreq(1, tau), peakFreq(2, tau), peakFreq(3, tau)];     // 1/τ, 2/τ, 3/τ
+    const notches = [notchFreq(0, tau), notchFreq(1, tau), notchFreq(2, tau)]; // 1/(2τ), 3/(2τ), 5/(2τ)
+    const freqs = peaks.concat(notches);
+    const y = renderCombTones(freqs, tau, g, SR, N);
+    let ok = true, worst = 0; const rows = [];
+    for (const f of freqs){
+      const measured = dftMag(y, f, SR);
+      const want = combMag(f, tau, g) / 2;                 // a cosine of amplitude |H| reads |H|/2
+      const d = Math.abs(measured - want); worst = Math.max(worst, d);
+      if (d >= 1e-9){ ok = false; rows.push(`f=${f.toFixed(0)} ${measured.toExponential(3)}≠${want.toExponential(3)}`); }
+    }
+    // at g=1: notch tones annihilated (<1e-9), peak tones doubled (~1.0)
+    const notchAmp = notches.map(f => dftMag(y, f, SR));
+    const peakAmp = peaks.map(f => dftMag(y, f, SR));
+    const deepOK = (g < 1) ? true : notchAmp.every(a => a < 1e-9) && peakAmp.every(a => a > 0.49);
+    ok = ok && deepOK;
+    T('LEG 3 — cancellation & doubling: a rendered SUM of probe tones — some on notches (n+½)/τ, some on peaks n/τ — leaves the delay-and-add scaled by combMag(f,τ,g)/2 at every tone to <1e-9; at g=1 the notch tones are annihilated (≈0) while the peak tones double (≈1) — the heard comb IS the drawn comb',
+      ok, ok ? `every tone === combMag/2 to <1e-9 (worst Δ ${worst.toExponential(2)})` + (g >= 1 ? ` · notch tones [${notchAmp.map(a=>a.toExponential(1)).join(', ')}] ≈ 0 · peak tones [${peakAmp.map(a=>a.toFixed(3)).join(', ')}] ≈ 1` : ` · g=${g} (partial notch, depth |1−g|=${Math.abs(1-g).toFixed(3)})`)
+             : `${rows.join(', ')}`);
+  }
+
+  // LEG 4 — THE GAIN SETS THE DEPTH, NOT THE PLACE: as g sweeps 0→1 the notch FLOOR
+  //   |H|min = |1−g| shrinks monotonically to a true 0 while the peak CEILING
+  //   |H|max = 1+g grows to 2 — yet the notch FREQUENCIES stay exactly (n+½)/τ for
+  //   every g (the place is the delay's, the depth is the gain's). Checked at the
+  //   first notch across a g grid to <1e-12.
+  {
+    let ok = true, worstFloor = 0, worstCeil = 0, worstPlace = 0;
+    const fn = notchFreq(0, tau), fp = peakFreq(1, tau);
+    let prevFloor = Infinity, mono = true;
+    for (let gg = 0; gg <= 1.0001; gg += 0.1){
+      const floor = combMag(fn, tau, gg);                  // |H| at the first notch
+      const ceil = combMag(fp, tau, gg);                   // |H| at the first nonzero peak
+      worstFloor = Math.max(worstFloor, Math.abs(floor - Math.abs(1 - gg)));
+      worstCeil = Math.max(worstCeil, Math.abs(ceil - (1 + gg)));
+      // the notch frequency is gain-independent: combMagSq dips at fn for every g
+      worstPlace = Math.max(worstPlace, Math.abs(combMagSq(fn, tau, gg) - (1 - gg) * (1 - gg)));
+      if (floor > prevFloor + 1e-12) mono = false; prevFloor = floor;
+    }
+    ok = mono && worstFloor < 1e-12 && worstCeil < 1e-12 && worstPlace < 1e-9;
+    T('LEG 4 — the gain sets the DEPTH, not the place: as g sweeps 0→1 the notch floor |H|min = |1−g| shrinks monotonically to a true 0 and the peak ceiling |H|max = 1+g grows to 2, yet the notch frequencies stay exactly (n+½)/τ for every g — the delay places the teeth, the gain deepens them',
+      ok, ok ? `floor === |1−g| (Δ ${worstFloor.toExponential(2)}), ceiling === 1+g (Δ ${worstCeil.toExponential(2)}), monotone ✓ · place fixed (Δ ${worstPlace.toExponential(2)})`
+             : `floor Δ ${worstFloor.toExponential(2)} / ceil Δ ${worstCeil.toExponential(2)} / monotone ${mono} / place Δ ${worstPlace.toExponential(2)}`);
+  }
+
+  // LEG 5 — THE NEGATIVE CONTROL, to a true flat: at τ=0 the comb collapses to a
+  //   flat gain — combMagSq(f,0,g) === (1+g)² for EVERY f (no teeth); and at g=0 the
+  //   signal is untouched — combMagSq(f,τ,0) === 1 for every f. The comb is the
+  //   DELAY: remove the delayed copy (τ=0) or its gain (g=0) and the spectrum is
+  //   dead flat — the teeth need a delayed copy to interfere with.
+  {
+    let okTau = true, okG = true, worstTau = 0, worstG = 0;
+    const flatTau = (1 + g) * (1 + g);
+    for (let f = 50; f <= 5000; f += 50){
+      const dT = Math.abs(combMagSq(f, 0, g) - flatTau);   // τ=0 is flat at (1+g)² (the cos(0)=1 floor of the law)
+      const dG = combMagSq(f, tau, 0) - 1;                 // g=0 leaves |H|²=1 — a bit-exact identity (no float work)
+      if (dT > worstTau) worstTau = dT;
+      if (Math.abs(dG) > worstG) worstG = Math.abs(dG);
+      if (dT >= 1e-12) okTau = false;                      // (1+g)² itself carries float roundoff for non-dyadic g
+      if (dG !== 0) okG = false;                            // g=0 ⇒ |H|²=1 must be EXACT (the law adds nothing)
+    }
+    const ok = okTau && okG;
+    T('LEG 5 — the negative control: at τ=0 the comb is a flat gain |H|² === (1+g)² for EVERY f (no teeth, to <1e-12), and at g=0 the signal is untouched |H|² === 1 for every f (bit-exact) — the comb is the DELAY; remove the delayed copy (or its gain) and the spectrum is dead flat',
+      ok, ok ? `τ=0 ⇒ |H|² === (1+g)² (worst Δ ${worstTau.toExponential(2)}) · g=0 ⇒ |H|² === 1 (Δ=${worstG}, bit-exact) — both flat, no teeth`
+             : `τ=0 worst Δ ${worstTau.toExponential(2)} / g=0 worst Δ ${worstG.toExponential(2)}`);
+  }
+
+  let pass = 0; for (const l of lines) if (l.ok) pass++;
+  return { pass, total: lines.length, lines };
+}
+// ===== COMB CORE END =====
+
+// ════════════════════════ LIVE STATE ═════════════════════════════════════════
+// the LIVE rig's defaults — a SEPARATE, stated setting from the self-test constants
+// above (the page copy + CHANGELOG say so). τ boots at 1.0 ms (first notch 500 Hz,
+// a handful of teeth across the audible band); g boots at 1.0 (full-depth comb, the
+// teeth cut to true nulls so the first sight is a deep comb). The audible band the
+// strip draws runs FMIN…FMAX Hz.
+const FMIN = 40, FMAX = 6000;                // the drawn (and audible) frequency band
+const state = {
+  tau: 0.001,                                // live delay (1.0 ms)
+  g: 1.0,                                     // live echo depth (full comb)
+  src: 'noise',                               // 'noise' (pink) or 'tone'
+  lfo: false,                                 // LFO auto-sweep of τ
+};
+// the LFO sweep band (ms) + rate (Hz) — a slow flange. Clamped to the slider range.
+const LFO_LO = 0.4, LFO_HI = 7.0, LFO_RATE = 0.18;
+// the live slider bounds (ms). g is hard-clamped [0,1] — no recursive feedback path
+// exists (the hero is the FEEDFORWARD comb the self-test proves; an IIR loop would
+// change the transfer to one this core does NOT prove, so it is deliberately absent).
+const TAU_MIN_MS = 0.2, TAU_MAX_MS = 12;
+
+// ════════════════════════ AUDIO (muted-by-default · ws:pref:muted) ════════════
+// THE LIVE COMB is a literal Web-Audio delay-and-add: source → [dry gain] + [DelayNode(τ)
+// → echo gain g] → sum → master. delayTime IS state.tau, the echo gain IS state.g —
+// the exact y = x + g·x(·−τ). ONE state drives this AND the drawn comb (the lockstep
+// contract). The source is either pink noise (a looping noise buffer, broadband so
+// every tooth is audible) or a held tone at PROBE_FC.
+function readMutePref(){ try{ return localStorage.getItem('ws:pref:muted') === '1'; }catch(e){ return false; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v ? '1' : '0'); }catch(e){} }
+const Snd = { ctx:null, master:null, comp:null, on:false, muted:readMutePref(),
+  src:null, tone:null, dry:null, delay:null, echo:null, lfoOsc:null, lfoGain:null, amp:null, noiseBuf:null };
+
+// build a ~2 s looping PINK-noise buffer (Voss/Paul-Kellet approximation) — broadband
+// so the comb's teeth are audible as dark bands carved out of a full spectrum.
+function makePinkBuffer(ctx){
+  const len = Math.floor(ctx.sampleRate * 2);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+  for (let i=0;i<len;i++){
+    const w = Math.random()*2-1;
+    b0=0.99886*b0+w*0.0555179; b1=0.99332*b1+w*0.0750759; b2=0.96900*b2+w*0.1538520;
+    b3=0.86650*b3+w*0.3104856; b4=0.55000*b4+w*0.5329522; b5=-0.7616*b5-w*0.0168980;
+    const out=b0+b1+b2+b3+b4+b5+b6+w*0.5362; b6=w*0.115926;
+    d[i]=out*0.11;
+  }
+  return buf;
+}
+function ensureCtx(){
+  if (Snd.ctx) return;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  Snd.ctx = new AC();
+  const t = Snd.ctx.currentTime;
+  Snd.master = Snd.ctx.createGain(); Snd.master.gain.value = 0.9;
+  Snd.comp = Snd.ctx.createDynamicsCompressor();
+  Snd.comp.threshold.value = -14; Snd.comp.ratio.value = 12; Snd.comp.attack.value = 0.003; Snd.comp.release.value = 0.25;
+  Snd.amp = Snd.ctx.createGain(); Snd.amp.gain.setValueAtTime(0.00001, t);
+
+  // THE DELAY-AND-ADD: source splits into a dry path and a delayed (×g) path; their
+  // sum is the feedforward comb. delayTime = τ, echo gain = g — the exact law.
+  Snd.dry = Snd.ctx.createGain(); Snd.dry.gain.value = 1.0;
+  Snd.delay = Snd.ctx.createDelay(0.05);                       // max 50 ms (> the 12 ms slider ceiling)
+  Snd.delay.delayTime.setValueAtTime(state.tau, t);
+  Snd.echo = Snd.ctx.createGain(); Snd.echo.gain.setValueAtTime(state.g, t);   // echo gain = g
+  // sum the two paths into amp (the delay-and-add), then through the master/compressor.
+  Snd.dry.connect(Snd.amp);
+  Snd.delay.connect(Snd.echo); Snd.echo.connect(Snd.amp);
+  // a halved amp so the doubled (peak) regions stay below full scale (1+g ≤ 2): the
+  // FEEDFORWARD comb has bounded gain, so a fixed 0.5 trim tames it (the compressor is a safety net).
+  Snd.amp.gain.value = 0.00001;
+  Snd.amp.connect(Snd.master); Snd.master.connect(Snd.comp); Snd.comp.connect(Snd.ctx.destination);
+
+  // the LFO — a slow sine sweeping delayTime between LFO_LO…LFO_HI ms (the flange).
+  Snd.lfoOsc = Snd.ctx.createOscillator(); Snd.lfoOsc.type = 'sine'; Snd.lfoOsc.frequency.value = LFO_RATE;
+  Snd.lfoGain = Snd.ctx.createGain(); Snd.lfoGain.gain.value = 0;        // 0 until the LFO is armed
+  Snd.lfoOsc.connect(Snd.lfoGain); Snd.lfoGain.connect(Snd.delay.delayTime);
+  Snd.lfoOsc.start(t);
+
+  buildSource();
+}
+function buildSource(){
+  if (!Snd.ctx) return;
+  // tear down any existing source
+  try{ if (Snd.src){ Snd.src.stop(); Snd.src.disconnect(); } }catch(e){}
+  try{ if (Snd.tone){ Snd.tone.stop(); Snd.tone.disconnect(); } }catch(e){}
+  Snd.src = null; Snd.tone = null;
+  const t = Snd.ctx.currentTime;
+  if (state.src === 'noise'){
+    if (!Snd.noiseBuf) Snd.noiseBuf = makePinkBuffer(Snd.ctx);
+    Snd.src = Snd.ctx.createBufferSource(); Snd.src.buffer = Snd.noiseBuf; Snd.src.loop = true;
+    Snd.src.connect(Snd.dry); Snd.src.connect(Snd.delay); Snd.src.start(t);
+  } else {
+    Snd.tone = Snd.ctx.createOscillator(); Snd.tone.type = 'sawtooth';   // a tone rich enough to land partials on teeth
+    Snd.tone.frequency.setValueAtTime(PROBE_FC, t);
+    const tg = Snd.ctx.createGain(); tg.gain.value = 0.5;
+    Snd.tone.connect(tg); tg.connect(Snd.dry); tg.connect(Snd.delay); Snd.tone.start(t);
+  }
+}
+function applyGains(){
+  if (!Snd.ctx) return;
+  const a = Snd.on ? 0.5 : 0.00001;
+  Snd.amp.gain.setTargetAtTime(Math.max(0.00001, a), Snd.ctx.currentTime, 0.02);
+}
+// the LOCKSTEP audio half of the contract: ONE state.tau sets delayTime and state.g
+// the echo gain. Called by the SAME setTau / g handlers that drive draw() — eye and
+// ear move together. (When the LFO is on it owns delayTime; the slider is disabled.)
+function applyComb(){
+  if (!Snd.ctx) return;
+  const t = Snd.ctx.currentTime;
+  if (!state.lfo) Snd.delay.delayTime.setTargetAtTime(state.tau, t, 0.02);
+  Snd.echo.gain.setTargetAtTime(state.g, t, 0.02);
+}
+function applyLfo(){
+  if (!Snd.ctx) return;
+  const t = Snd.ctx.currentTime;
+  if (state.lfo){
+    const mid = (LFO_LO + LFO_HI) / 2 / 1000, amp = (LFO_HI - LFO_LO) / 2 / 1000;   // ms → s
+    Snd.delay.delayTime.setTargetAtTime(mid, t, 0.05);
+    Snd.lfoGain.gain.setTargetAtTime(amp, t, 0.05);
+  } else {
+    Snd.lfoGain.gain.setTargetAtTime(0, t, 0.05);
+    Snd.delay.delayTime.setTargetAtTime(state.tau, t, 0.05);
+  }
+}
+
+const segAudio = document.getElementById('segAudio');
+segAudio.addEventListener('click', e=>{
+  const opt = e.target.closest('.opt'); if (!opt) return;
+  const wantOn = opt.dataset.audio === 'on';
+  if (wantOn){ ensureCtx(); if (Snd.ctx && Snd.ctx.state === 'suspended') Snd.ctx.resume(); applyComb(); applyLfo(); }
+  Snd.on = wantOn; Snd.muted = !wantOn; writeMutePref(Snd.muted);
+  applyGains();
+  [...segAudio.children].forEach(o=>o.classList.toggle('on', o===opt));
+});
+window.addEventListener('storage', e=>{ if (e.key!=='ws:pref:muted') return;
+  Snd.muted = readMutePref(); syncAudioUI(); });
+function syncAudioUI(){ if (Snd.muted) Snd.on=false; const showOn=Snd.on&&!Snd.muted;
+  [...segAudio.children].forEach(o=>o.classList.toggle('on', (o.dataset.audio==='on')===showOn)); }
+
+const segSrc = document.getElementById('segSrc');
+segSrc.addEventListener('click', e=>{
+  const opt = e.target.closest('.opt'); if (!opt) return;
+  state.src = opt.dataset.src;
+  [...segSrc.children].forEach(o=>o.classList.toggle('on', o===opt));
+  if (Snd.ctx){ buildSource(); }
+});
+
+const segLfo = document.getElementById('segLfo');
+segLfo.addEventListener('click', e=>{
+  const opt = e.target.closest('.opt'); if (!opt) return;
+  state.lfo = opt.dataset.lfo === 'on';
+  [...segLfo.children].forEach(o=>o.classList.toggle('on', o===opt));
+  tauRange.disabled = state.lfo;
+  ensureCtx(); if (Snd.on && Snd.ctx && Snd.ctx.state==='suspended') Snd.ctx.resume();
+  applyLfo();
+  if (state.lfo){ startLfoDraw(); } else { stopLfoDraw(); redraw(); }
+});
+
+// ════════════════════════ DERIVED LIVE QUANTITIES ════════════════════════════
+function getCss(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function tauSec(){ return state.tau; }                       // τ in seconds (state stores seconds)
+// freq → x pixel on a LOG frequency axis (the audible band spans many octaves).
+function freqToX(f, w){ const lo=Math.log2(FMIN), hi=Math.log2(FMAX);
+  return 16 + (Math.log2(Math.max(FMIN, Math.min(FMAX, f))) - lo) / (hi - lo) * (w - 32); }
+
+// ════════════════════════ THE SPECTRUM STRIP (canvas + drag) ══════════════════
+const combHost = document.getElementById('combHost');
+const combCv = document.getElementById('comb'), cctx = combCv.getContext('2d');
+function fit(cv){ const r=cv.getBoundingClientRect(), dpr=Math.min(2,window.devicePixelRatio||1);
+  cv.width=Math.max(1,r.width*dpr); cv.height=Math.max(1,r.height*dpr);
+  const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); return {w:r.width,h:r.height}; }
+
+// THE STRIP DRAW — a glowing cyan energy band whose HEIGHT is |H(f)| over the
+// audible band (log-f axis). The band dips to coral notches at (n+½)/τ and crests at
+// violet peaks at n/τ. Heights read from the CORE's combMag ONLY (zero math literals
+// in the draw). At g=1 the notches cut to the baseline (true nulls).
+function draw(tauOverride){
+  const {w,h} = fit(combCv);
+  cctx.clearRect(0,0,w,h);
+  const tau = (tauOverride != null) ? tauOverride : state.tau;
+  const g = state.g;
+  const baseY = h - 30;                              // the floor (|H|=0)
+  const topPad = 22;
+  const railH = baseY - topPad;                      // pixels for |H|=2 (the max, 1+g at g=1)
+  const HMAX = 2;                                    // the ceiling |H|=1+g ≤ 2
+
+  // sample the band on a fine log-f grid and stroke the filled energy band.
+  const yOf = (f) => baseY - Math.max(0, Math.min(HMAX, combMag(f, tau, g))) / HMAX * railH;
+  const N = Math.max(180, Math.floor(w));
+  const lo = Math.log2(FMIN), hi = Math.log2(FMAX);
+  cctx.beginPath();
+  cctx.moveTo(16, baseY);
+  for (let i=0;i<=N;i++){ const f = Math.pow(2, lo + (hi-lo)*i/N); cctx.lineTo(freqToX(f,w), yOf(f)); }
+  cctx.lineTo(w-16, baseY); cctx.closePath();
+  const grad = cctx.createLinearGradient(0, topPad, 0, baseY);
+  grad.addColorStop(0, 'rgba(111,211,255,.42)'); grad.addColorStop(1, 'rgba(111,211,255,.05)');
+  cctx.fillStyle = grad; cctx.fill();
+  // the bright top edge of the band
+  cctx.beginPath();
+  for (let i=0;i<=N;i++){ const f = Math.pow(2, lo + (hi-lo)*i/N); const x=freqToX(f,w), y=yOf(f); if(i===0)cctx.moveTo(x,y);else cctx.lineTo(x,y); }
+  cctx.strokeStyle = getCss('--band'); cctx.lineWidth = 2; cctx.shadowColor = getCss('--band'); cctx.shadowBlur = 10;
+  cctx.stroke(); cctx.shadowBlur = 0;
+
+  // the baseline floor
+  cctx.strokeStyle = 'rgba(255,255,255,.12)'; cctx.lineWidth = 1;
+  cctx.beginPath(); cctx.moveTo(16, baseY); cctx.lineTo(w-16, baseY); cctx.stroke();
+
+  // mark the NOTCH teeth — coral verticals dropping to the floor at (n+½)/τ.
+  let firstNotchX = null;
+  for (let n=0; n<200; n++){
+    const fN = notchFreq(n, tau); if (fN < FMIN) continue; if (fN > FMAX) break;
+    const x = freqToX(fN, w);
+    if (firstNotchX === null) firstNotchX = x;
+    cctx.save();
+    cctx.strokeStyle = getCss('--tooth'); cctx.globalAlpha = 0.9; cctx.lineWidth = 2; cctx.lineCap='round';
+    cctx.shadowColor = getCss('--tooth'); cctx.shadowBlur = 8;
+    cctx.beginPath(); cctx.moveTo(x, yOf(fN)); cctx.lineTo(x, baseY); cctx.stroke();
+    // a small coral tooth-tip disc sitting at the notch floor
+    cctx.beginPath(); cctx.arc(x, yOf(fN), 2.6, 0, 2*Math.PI); cctx.fillStyle = getCss('--tooth'); cctx.fill();
+    cctx.restore();
+  }
+  // mark the PEAK crests — faint violet ticks at n/τ (skip DC).
+  for (let n=1; n<200; n++){
+    const fP = peakFreq(n, tau); if (fP < FMIN) continue; if (fP > FMAX) break;
+    const x = freqToX(fP, w);
+    cctx.save(); cctx.strokeStyle = getCss('--peak'); cctx.globalAlpha = 0.32; cctx.lineWidth = 1.5;
+    cctx.beginPath(); cctx.moveTo(x, yOf(fP)); cctx.lineTo(x, yOf(fP)-8); cctx.stroke();
+    cctx.beginPath(); cctx.arc(x, yOf(fP), 2.2, 0, 2*Math.PI); cctx.fillStyle = getCss('--peak'); cctx.globalAlpha=0.5; cctx.fill();
+    cctx.restore();
+  }
+
+  // a label on the first notch (1/(2τ)) when it sits in-band and there is room.
+  const firstN = notchFreq(0, tau);
+  if (firstN >= FMIN && firstN <= FMAX && firstNotchX !== null && w >= 430){
+    cctx.fillStyle = getCss('--tooth'); cctx.font = '600 10px ui-monospace,Menlo,monospace'; cctx.textAlign='center';
+    cctx.fillText('1/(2τ)', Math.min(w-30, Math.max(30, firstNotchX)), topPad - 6);
+  }
+
+  // frequency axis ticks (a few decade markers)
+  cctx.fillStyle = 'rgba(255,255,255,.45)'; cctx.font = '600 9px ui-monospace,Menlo,monospace'; cctx.textAlign='center';
+  for (const f of [50,100,200,500,1000,2000,5000]){ if (f<FMIN||f>FMAX) continue;
+    const x = freqToX(f, w); cctx.fillText(f>=1000?(f/1000)+'k':String(f), x, baseY + 14); }
+
+  // the staged caption stamped on the canvas at τ→0 (flat — no teeth)
+  cctx.textAlign = 'center';
+  if (firstN > FMAX){
+    cctx.fillStyle = getCss('--peak'); cctx.font = '700 12px ui-monospace,Menlo,monospace';
+    cctx.fillText('τ → 0 — the echo lands on the original: a flat (1+g)× gain, no teeth', w*0.5, topPad + 4);
+  }
+}
+
+// drag the strip left/right → τ over [TAU_MIN_MS, TAU_MAX_MS] ms; the whole canvas is the surface.
+let dragging = false, dragX0 = 0, dragTau0 = 0;
+function setTau(ms){
+  const clamped = Math.max(TAU_MIN_MS, Math.min(TAU_MAX_MS, ms));
+  state.tau = clamped / 1000;                 // store seconds
+  tauRange.value = clamped;
+  tauVal.textContent = clamped.toFixed(2) + ' ms';
+  applyComb();
+  redraw();
+}
+combCv.addEventListener('pointerdown', e=>{ if (state.lfo) return; dragging = true; combCv.setPointerCapture(e.pointerId);
+  dragX0 = e.clientX; dragTau0 = state.tau*1000;
+  ensureCtx(); if (Snd.on && Snd.ctx && Snd.ctx.state==='suspended') Snd.ctx.resume(); });
+combCv.addEventListener('pointermove', e=>{ if (!dragging) return;
+  const r = combCv.getBoundingClientRect();
+  // dragging RIGHT lengthens τ (teeth slide toward lower freq / pack tighter); a full
+  // sweep spans the slider range. (τ is in ms here.)
+  const dx = (e.clientX - dragX0) / Math.max(1, r.width);
+  setTau(dragTau0 + dx * (TAU_MAX_MS - TAU_MIN_MS)); });
+combCv.addEventListener('pointerup', ()=>{ dragging = false; });
+combCv.addEventListener('pointercancel', ()=>{ dragging = false; });
+combCv.addEventListener('wheel', e=>{ if (state.lfo) return; e.preventDefault(); ensureCtx();
+  setTau(state.tau*1000 + (e.deltaY < 0 ? 0.1 : -0.1)); }, {passive:false});
+combCv.addEventListener('keydown', e=>{
+  if (state.lfo) return;
+  let ms = state.tau*1000, handled = true;
+  const step = e.shiftKey ? 0.02 : 0.2;
+  switch(e.key){
+    case 'ArrowRight': case 'ArrowUp': ms = state.tau*1000 + step; break;
+    case 'ArrowLeft': case 'ArrowDown': ms = state.tau*1000 - step; break;
+    case 'Home': ms = TAU_MIN_MS; break;
+    case 'End': ms = TAU_MAX_MS; break;
+    default: handled = false;
+  }
+  if (handled){ e.preventDefault(); ensureCtx(); setTau(ms); }
+});
+
+// ════════════════════════ THE READOUTS + THE REVEAL CAPTION ═══════════════════
+const roTau = document.getElementById('roTau'), roFirst = document.getElementById('roFirst');
+const roSpacing = document.getElementById('roSpacing'), roDepth = document.getElementById('roDepth');
+const roTeeth = document.getElementById('roTeeth'), reveal = document.getElementById('reveal');
+function fmtHz(f){ return f>=1000 ? (f/1000).toFixed(2)+' kHz' : f.toFixed(0)+' Hz'; }
+function updateReadouts(){
+  const tau = state.tau, g = state.g;
+  roTau.textContent = (tau*1000).toFixed(2) + ' ms';
+  roFirst.textContent = fmtHz(notchFreq(0, tau));
+  roSpacing.textContent = fmtHz(notchSpacing(tau));
+  const depth = notchDepth(g);
+  roDepth.textContent = (g >= 1) ? '0 (true null)' : depth.toFixed(3) + ' (|1−g|)';
+  // teeth: count notches in the audible band
+  let teeth = 0; for (let n=0;n<400;n++){ const f=notchFreq(n,tau); if (f<FMIN) continue; if (f>FMAX) break; teeth++; }
+  roTeeth.textContent = teeth + ' notches · ' + (g>=1 ? 'cut to silence' : (g===0 ? 'no comb (g=0)' : 'partial'));
+  // the reveal caption
+  if (g === 0){
+    reveal.classList.remove('lit');
+    reveal.innerHTML = '<b>g = 0</b> — the echo is silent, the signal passes untouched. <b style="color:var(--band)">No teeth</b>: |H|² ≡ 1, flat. The comb needs a delayed copy to interfere with.';
+  } else if (g >= 1){
+    reveal.classList.add('lit');
+    reveal.innerHTML = 'At <b>g = 1</b> the notches cut to a <b style="color:var(--tooth)">true zero</b> — total cancellation. The first tooth sits at <b>1/(2τ) = ' + fmtHz(notchFreq(0,tau)) + '</b>, the rest <b>' + fmtHz(notchSpacing(tau)) + '</b> apart.';
+  } else {
+    reveal.classList.remove('lit');
+    reveal.innerHTML = 'The delay breeds a <b style="color:var(--tooth)">comb</b> with teeth at (n+½)/τ — first at <b>' + fmtHz(notchFreq(0,tau)) + '</b>, spacing <b>' + fmtHz(notchSpacing(tau)) + '</b>. Depth |1−g| = <b>' + notchDepth(g).toFixed(3) + '</b>; push g→1 to cut to silence.';
+  }
+}
+
+function redraw(){ draw(); updateReadouts(); }
+
+// ════════════════════════ THE LFO DRAW LOOP (animate the sliding teeth) ════════
+let lfoRAF = 0, lfoT0 = 0;
+function startLfoDraw(){ if (lfoRAF) return; lfoT0 = performance.now(); lfoTick(); }
+function stopLfoDraw(){ if (lfoRAF){ cancelAnimationFrame(lfoRAF); lfoRAF = 0; } }
+function lfoTick(){
+  if (!state.lfo){ lfoRAF = 0; return; }
+  const t = (performance.now() - lfoT0) / 1000;
+  // mirror the audio LFO: a sine sweep of τ between LFO_LO…LFO_HI ms at LFO_RATE Hz.
+  const mid = (LFO_LO + LFO_HI)/2, amp = (LFO_HI - LFO_LO)/2;
+  const ms = mid + amp * Math.sin(2*Math.PI*LFO_RATE*t);
+  const tauS = ms/1000;
+  tauVal.textContent = ms.toFixed(2) + ' ms (LFO)';
+  roTau.textContent = (tauS*1000).toFixed(2) + ' ms';
+  roFirst.textContent = fmtHz(notchFreq(0, tauS));
+  roSpacing.textContent = fmtHz(notchSpacing(tauS));
+  draw(tauS);
+  lfoRAF = requestAnimationFrame(lfoTick);
+}
+
+// ════════════════════════ THE DELAY + DEPTH CONTROLS ══════════════════════════
+const tauRange = document.getElementById('tauRange'), tauVal = document.getElementById('tauVal');
+tauRange.addEventListener('input', ()=>{ ensureCtx(); setTau(parseFloat(tauRange.value)); });
+const snapZero = document.getElementById('snapZero');
+function doSnapZero(){ ensureCtx(); setTau(TAU_MIN_MS); /* slider floors at 0.2 ms; the draw shows the flat caption only when the first notch leaves the band */
+  // additionally push the AUDIO toward a true τ=0 collapse so the ear hears the flat doubling.
+  if (Snd.ctx && !state.lfo){ Snd.delay.delayTime.setTargetAtTime(0.0000001, Snd.ctx.currentTime, 0.02); }
+  // draw the genuinely-flat (τ=0) spectrum so the negative control is SEEN, not just floored.
+  draw(0); }
+snapZero.addEventListener('click', doSnapZero);
+snapZero.addEventListener('keydown', e=>{ if (e.key===' '||e.key==='Enter'){ e.preventDefault(); doSnapZero(); } });
+
+const gRange = document.getElementById('gRange'), gVal = document.getElementById('gVal');
+gRange.addEventListener('input', ()=>{ state.g = parseFloat(gRange.value); gVal.textContent = state.g.toFixed(3); applyComb(); if(!state.lfo) redraw(); });
+
+// ════════════════════════ SELF-TEST PILL ════════════════════════════════════
+function runPill(){
+  let r; try{ r = runCombSelfTest(TAU0, G0); }catch(e){ console.error('[the-comb] self-test threw:',e);
+    r = {pass:0,total:1,lines:[{name:'self-test threw',ok:false,detail:String(e)}]}; }
+  const el = document.getElementById('selftest'), txt = document.getElementById('stText');
+  const green = r.pass === r.total;
+  el.classList.toggle('ok',green); el.classList.toggle('bad',!green);
+  txt.textContent = green ? ('the teeth land at (n+½)/τ ✓ '+r.pass+'/'+r.total) : ('self-test ✗ '+r.pass+'/'+r.total);
+  el.title = r.lines.map(c=>(c.ok?'✓ ':'✗ ')+c.name+(c.detail?'  ('+c.detail+')':'')).join('\n\n');
+  if (!green){ console.error('[the-comb] SELF-TEST FAILED '+r.pass+'/'+r.total);
+    for (const c of r.lines) if (!c.ok) console.error('  ✗ '+c.name+'  ·  '+c.detail); }
+  else console.log('[the-comb] self-test '+r.pass+'/'+r.total+' ✓ — the first notch is 1/(2τ) and the spacing 1/τ to the bit, |H|² matches the complex transfer, the rendered probe is annihilated on the notches and doubled on the peaks, the depth floor is |1−g| (a true 0 at g=1) while the notch frequencies never move with g, and τ=0 / g=0 are dead flat. The comb is real, born of the delay.');
+  return r;
+}
+document.getElementById('selftest').addEventListener('click', runPill);
+window.__combSelfTest = runCombSelfTest;
+// a tiny LIVE-audio probe (for the ear-check / self-verify): reports the ctx state +
+// a short RMS sample of the live delay-and-add output, so a headless check can confirm
+// the graph actually produces sound after the unlock gesture. Returns a Promise.
+window.__combAudio = function(ms){
+  if (!Snd.ctx) return Promise.resolve({ ctx:'none', running:false, rms:0 });
+  const an = Snd.ctx.createAnalyser(); an.fftSize = 2048;
+  Snd.master.connect(an);
+  return new Promise(res=>setTimeout(()=>{
+    const buf = new Float32Array(an.fftSize); an.getFloatTimeDomainData(buf);
+    let s=0; for (let i=0;i<buf.length;i++) s+=buf[i]*buf[i];
+    try{ Snd.master.disconnect(an); }catch(e){}
+    res({ ctx:Snd.ctx.state, running:Snd.ctx.state==='running', on:Snd.on, rms:Math.sqrt(s/buf.length) });
+  }, ms||250));
+};
+
+// ════════════════════════ OFFLINE RENDER (Audio Lens hook · silent WAV) ══════
+// Renders `seconds` of the SAME delay-and-add on a FIXED 3-tone probe at a FIXED
+// band — NOT the live UI τ/g. The probe puts ONE tone on a comb PEAK (n/τ = 1000 Hz)
+// and TWO on comb NOTCHES ((n+½)/τ = 500, 1500 Hz) for the pinned τ; verify.sh's
+// audio-lens top-3 confirms which survive. At g=1 the two notch tones are annihilated
+// and only the peak tone survives (top-3 = {1000} alone); at τ=0 (NEG) the comb is
+// disarmed so all three survive equally (the notch tones RE-APPEAR in top-3). Three
+// tones, ≥500 Hz apart (far past the 3% dedup), all inside 60…5000 Hz — so the lens
+// reads them as DISTINCT peaks and top-3 captures every survivor. The render uses a
+// DelayNode (the literal feedforward comb), exactly as the live rig does. encodeWAV
+// mirrors the sibling leaves (no cross-repo import). This is the two-settings seam
+// Tartini/Sidebands use.
+const LENS_TAU = 0.001;                 // pinned τ = 1.0 ms → spacing 1000 Hz, first notch 500 Hz
+const LENS_PEAKS = [1000];              // a comb PEAK n/τ (n=1) — survives, doubled
+const LENS_NOTCHES = [500, 1500];       // comb NOTCHES (n+½)/τ (n=0,1) — annihilated at g=1
+function renderCombWAV(seconds, opts){
+  opts = opts || {};
+  const tau = (opts.tau != null) ? opts.tau : LENS_TAU;
+  const g = (opts.g != null) ? opts.g : 1.0;
+  const sr = 24000, len = Math.max(1, Math.floor(seconds*sr));
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const ac = new OAC(1, len, sr);
+  const freqs = LENS_PEAKS.concat(LENS_NOTCHES);          // 1000 (peak) · 500, 1500 (notches)
+  const master = ac.createGain(); master.gain.value = 0.95;
+  // a per-tone trim so the summed probe (×2 on the peak) stays below full scale.
+  const trim = ac.createGain(); trim.gain.value = 0.5 / freqs.length;
+  const dry = ac.createGain(); dry.gain.value = 1.0;
+  const delay = ac.createDelay(0.05); delay.delayTime.value = tau;
+  const echo = ac.createGain(); echo.gain.value = g;
+  for (const f of freqs){ const o = ac.createOscillator(); o.type='sine'; o.frequency.value=f;
+    o.connect(trim); o.start(0); o.stop(seconds); }
+  trim.connect(dry); trim.connect(delay);            // the delay-and-add: trimmed probe → dry + delayed
+  dry.connect(master); delay.connect(echo); echo.connect(master);
+  master.connect(ac.destination);
+  return ac.startRendering().then(buf=>encodeWAV(buf));
+}
+function encodeWAV(buf){
+  const ch=buf.getChannelData(0), sr=buf.sampleRate, n=ch.length;
+  const ab=new ArrayBuffer(44+n*2), dv=new DataView(ab);
+  const wr=(o,s)=>{ for(let i=0;i<s.length;i++) dv.setUint8(o+i,s.charCodeAt(i)); };
+  wr(0,'RIFF'); dv.setUint32(4,36+n*2,true); wr(8,'WAVE'); wr(12,'fmt '); dv.setUint32(16,16,true);
+  dv.setUint16(20,1,true); dv.setUint16(22,1,true); dv.setUint32(24,sr,true); dv.setUint32(28,sr*2,true);
+  dv.setUint16(32,2,true); dv.setUint16(34,16,true); wr(36,'data'); dv.setUint32(40,n*2,true);
+  let o=44; for (let i=0;i<n;i++){ let s=Math.max(-1,Math.min(1,ch[i])); dv.setInt16(o,s<0?s*0x8000:s*0x7fff,true); o+=2; }
+  return new Blob([ab],{type:'audio/wav'});
+}
+window.__renderComb = function(seconds, opts){ return renderCombWAV(seconds||2, opts||{}); };
+
+// ════════════════════════ BOOT ══════════════════════════════════════════════
+tauRange.value = state.tau*1000; tauVal.textContent = (state.tau*1000).toFixed(2) + ' ms';
+gRange.value = state.g; gVal.textContent = state.g.toFixed(3);
+syncAudioUI();
+redraw();
+runPill();
+window.addEventListener('resize', ()=>{ if (state.lfo) draw(); else redraw(); });
+</script>
+</body>
+</html>
