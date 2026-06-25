@@ -53,7 +53,8 @@
       DUSK:  { 'rep.swatch1': '#5a4632', 'rep.glow1': '#cf7bff' },
       NIGHT: { 'rep.swatch1': '#2e261c', 'rep.glow1': '#cf7bff' }
     } },
-    'firmament': { rep: 'firmament-rep', repColors: { DAY: { 'rep.swatch1': '#7e8da0', 'rep.swatch2': '#9fb0c2', 'rep.glow1': '#8fb8dd' }, DUSK: { 'rep.swatch1': '#6a7486', 'rep.swatch2': '#869aae', 'rep.glow1': '#8fb8dd' }, NIGHT: { 'rep.swatch1': '#39424f', 'rep.swatch2': '#4c5868', 'rep.glow1': '#8fb8dd' } } }
+    'firmament': { rep: 'firmament-rep', repColors: { DAY: { 'rep.swatch1': '#7e8da0', 'rep.swatch2': '#9fb0c2', 'rep.glow1': '#8fb8dd' }, DUSK: { 'rep.swatch1': '#6a7486', 'rep.swatch2': '#869aae', 'rep.glow1': '#8fb8dd' }, NIGHT: { 'rep.swatch1': '#39424f', 'rep.swatch2': '#4c5868', 'rep.glow1': '#8fb8dd' } } },
+    'clockwork': { rep: 'clockwork-rep', repColors: { DAY: { 'rep.swatch1': '#c9a24a', 'rep.swatch2': '#b08a3c', 'rep.swatch3': '#8a6e30', 'rep.glow1': '#7ad0c4', 'rep.glow2': '#9fe3da' }, DUSK: { 'rep.swatch1': '#a98a4a', 'rep.swatch2': '#917640', 'rep.swatch3': '#6f5a30', 'rep.glow1': '#7ad0c4', 'rep.glow2': '#8fdcd2' }, NIGHT: { 'rep.swatch1': '#8a8a7a', 'rep.swatch2': '#73736a', 'rep.swatch3': '#565650', 'rep.glow1': '#7ad0c4', 'rep.glow2': '#a6ece2' } } }
   };
 
   /* loadSlab(): parse the GATE-ROOMS JSON slab inlined by forge. Returns an array

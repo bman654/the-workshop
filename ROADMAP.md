@@ -144,9 +144,9 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 <!-- gauge:foundry-seeds:start -->
 - [rep] **The Hours rep** — a brass SUNDIAL for The Hours: a wide engraved dial face with a triangular gnomon throwing a shadow line, on a short pedestal · aspect:horizontal · room:gnomon · accent:#e6bd6f (sown #313 · contest #0)
-- [rep] **The Clockwork rep** — a standing brass CLOCKWORK AUTOMATON for The Clockwork Automata: an exposed gear-train and a small figure, with a slow ambient gear-turn if it serves the read · aspect:vertical · room:clockwork · accent:#7ad0c4 (sown #313 · contest #0)
 - [rep] **The Lodestone rep** — a LODESTONE on a plinth for The Lodestone Hall: a dark magnetite block ringed by iron-filing arcs, a cool blue field-glow as the night payoff · aspect:mound · room:lodestone-hall · accent:#7fd4ff (sown #313 · contest #0)
 <!-- ✝ BLOOMED #313: The Firmament rep → the-gate drawRepFirmament — shipped as a DOME (… · after 03a2fe5 -->
+<!-- ✝ BLOOMED #323: The Clockwork rep → the-gate/scene.js (drawRepClockwork) + rooms.js · after 164fc9c -->
 <!-- gauge:foundry-seeds:end -->
 
 ---
