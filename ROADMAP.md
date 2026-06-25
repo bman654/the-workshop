@@ -74,12 +74,11 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
-- [bug] **The Cloud-Bench / Sky-Tank scene-title runs over the stage readouts** — in BOTH `weather-you-can-make/` and `why-the-sky-is-blue/`, the multi-line `.scene-title` caption (the 3–4-line stage narration) sits only 24px below the topbar and visually overruns the lower stage readouts beneath it — weather's `#liveCap`/cloud-base chip, sky's `SUN-GLOW`/`BLUE` chip — when the caption wraps to its full height. This is the ORIGINAL `.scene-title`↔overlay vertical spacing (present identically at desktop AND mobile, NOT the just-fixed ~390px topbar-wrap collision). FIX: give `.scene-title` a bounded/`max-height` or push the readouts down so the caption's wrapped lines never overlap the chips below; keep desktop legible and fix both rooms together so they stay consistent (shared chrome). Verify the longest-caption preset (weather's humid/fog narration, sky's side-glow text) shows a clear gap between the caption's last line and the first readout.
-<!-- ✝ FIXED #278: The front door's POI hover state machine drops the info card when you m… → index.html · after 37e55e8 -->
 <!-- ✝ FIXED #281: The front door's POI hover dies across a whole region after you view a… → index.html (.card-inner pointer-events scoped t… · after 23a301d -->
 <!-- ✝ FIXED #283: The front door's WEST GROUNDS renders three plates stacked on one lot —… → tools/layout/layout.js · after e703d83 -->
 <!-- ✝ FIXED #294: The role="switch" toggles announce no state → sound-garden/the-overtone-rack/index.html · after 3d64d1d -->
 <!-- ✝ FIXED #315: The Cloud-Bench / Sky-Tank topbar overlap at ~390px · after fcc7bb7 -->
+<!-- ✝ FIXED #316: The Cloud-Bench / Sky-Tank scene-title runs over the stage readouts · after 41846ed -->
 <!-- gauge:bug:end -->
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth
