@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Heap That Knows Its Own Angle · The Gardens</title>
+<style>
+  :root{
+    --bg:#080a0f;
+    --plate1:#121420;
+    --plate2:#0b0d16;
+    --ink:#ece7da;
+    --ink-dim:#9a9582;
+    --indigo:#5a6bd8;
+    --indigo-soft:rgba(90,107,216,0.14);
+    --indigo-edge:rgba(90,107,216,0.34);
+    --indigo-lit:#aeb8ff;
+    --grain:#caa45a;
+    --grain-lt:#e3c279;
+    --grain-dk:#6f5526;
+    --brass1:#caa657;
+    --brass2:#8a6a26;
+    --brass-dk:#3a2c10;
+    --gold:#caa45a;
+    --gold-edge:rgba(202,164,90,0.40);
+    --hot:#f2c14e;
+    --hot-glow:rgba(242,193,78,0.6);
+    --panel:rgba(11,13,22,0.82);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1300px 820px at 50% -12%, rgba(90,107,216,0.07), transparent 58%),
+      radial-gradient(1000px 700px at 16% 112%, rgba(202,164,90,0.06), transparent 62%),
+      radial-gradient(1000px 700px at 84% 112%, rgba(242,193,78,0.04), transparent 62%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 32px);
+    mix-blend-mode:overlay;
+  }
+
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 22px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(8,10,15,0.94), rgba(8,10,15,0));
+  }
+  .topbar a, .topbar .selftest, .topbar .mute{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--hot); opacity:1; }
+  .topright{ display:flex; gap:10px; align-items:center; }
+  .mute{ font:600 10.5px/1 var(--font-mono); letter-spacing:.06em; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.4); color:var(--ink-dim); cursor:pointer; user-select:none; white-space:nowrap; }
+  .mute:hover{ color:var(--ink); border-color:var(--gold); }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--gold-edge); background:rgba(0,0,0,0.4); white-space:nowrap; cursor:pointer; user-select:none;
+    color:var(--ink-dim); max-width:46vw; overflow:hidden; text-overflow:ellipsis; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  .hero{ position:relative; z-index:1; max-width:1120px; margin:0 auto; padding:74px 24px 4px; text-align:center; }
+  .eyebrow{ font:600 11px/1 var(--font-mono); letter-spacing:.32em; text-transform:uppercase; color:var(--indigo);
+    opacity:.92; margin-bottom:14px; }
+  .hero h1{
+    font-family:var(--font-serif); font-weight:600; margin:0;
+    font-size:clamp(30px, 6vw, 54px); letter-spacing:.5px; line-height:1.02;
+    background:linear-gradient(176deg, #fff0c8, #f2c14e 52%, #b07f24);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+  }
+  .hero .lede{ max-width:760px; margin:14px auto 0; font:15px/1.6 var(--font-serif); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--hot); font-weight:600; }
+  .hero .lede .ind{ color:var(--indigo-lit); font-weight:600; }
+
+  /* ── the stage: controls LEFT, brass tray RIGHT ── */
+  .stage{ position:relative; z-index:1; max-width:1240px; margin:22px auto 0; padding:0 24px 56px;
+    display:grid; grid-template-columns:362px minmax(0,1fr); gap:24px; align-items:start; }
+  @media (max-width:900px){ .stage{ grid-template-columns:1fr; max-width:680px; }
+    .panel{ order:2; } .trayslab{ order:1; } }
+
+  .slab{
+    position:relative; border-radius:18px; padding:18px;
+    background:
+      radial-gradient(120% 120% at 50% 0%, rgba(90,107,216,0.05), transparent 60%),
+      linear-gradient(180deg, #121420, #0b0d16);
+    border:1px solid rgba(202,164,90,0.18);
+    box-shadow:0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+
+  .trayslab{ display:flex; flex-direction:column; }
+  #trayHost{ position:relative; width:100%; aspect-ratio:7/5; max-height:min(70vh,560px); margin:0 auto; }
+  #tray{ display:block; width:100%; height:100%; border-radius:10px;
+    background:
+      radial-gradient(130% 130% at 50% 38%, rgba(18,20,30,0.92), rgba(5,6,10,1) 84%);
+    box-shadow:0 0 0 3px #1a1410, 0 0 0 5px var(--gold-edge),
+      inset 0 0 70px rgba(0,0,0,0.55), 0 14px 40px rgba(0,0,0,0.45);
+    touch-action:none; cursor:grab; }
+  #tray.grabbing{ cursor:grabbing; }
+  .stamp{ position:absolute; top:12px; left:14px; font:600 9.5px/1.4 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); opacity:.6; pointer-events:none; }
+  .stamp .v{ color:var(--hot); }
+
+  /* readout cartouche under the tray */
+  .readcard{ margin-top:14px; display:flex; align-items:stretch; gap:12px; }
+  .readtile{ flex:1; border-radius:11px; padding:11px 13px; border:1px solid rgba(202,164,90,0.16);
+    background:linear-gradient(180deg, rgba(18,20,30,0.8), rgba(9,11,16,0.85)); }
+  .readtile .k{ font:600 9.5px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--ink-dim); }
+  .readtile .val{ margin-top:7px; font:600 23px/1 var(--font-serif); color:var(--ink); }
+  .readtile.h .val{ color:var(--hot); }
+  .readtile.t .val{ color:var(--indigo-lit); }
+  .readtile .sub{ margin-top:5px; font:11px/1.35 var(--font-ui); color:var(--ink-dim); }
+  .readtile .sub .ind{ color:var(--indigo-lit); } .readtile .sub .bead{ color:var(--hot); }
+  .liveCap{ margin-top:12px; font:600 12px/1.5 var(--font-mono); letter-spacing:.03em; color:var(--ink-dim);
+    text-align:center; min-height:1.5em; transition:color .35s; }
+  .liveCap.lit{ color:var(--hot); text-shadow:0 0 14px var(--hot-glow); }
+  .liveCap.cold{ color:var(--indigo-lit); }
+
+  /* controls */
+  .panel{ display:flex; flex-direction:column; gap:14px; }
+  .ctl{ border-radius:14px; padding:15px 16px; border:1px solid rgba(202,164,90,0.14);
+    background:linear-gradient(180deg, var(--plate1), var(--plate2)); }
+  .ctl.prime{ border-color:rgba(202,164,90,0.30); box-shadow:inset 0 0 30px rgba(202,164,90,0.05); }
+  .ctl h3{ margin:0 0 11px; font:600 10.5px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--gold);
+    display:flex; justify-content:space-between; align-items:baseline; }
+  .ctl h3 .badge{ color:var(--ink-dim); font-size:9px; letter-spacing:.12em; }
+  .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+
+  /* the μ-dial */
+  .dialwrap{ display:flex; gap:14px; align-items:center; }
+  #muDialHost{ position:relative; width:148px; height:148px; flex:0 0 auto; }
+  #muDial{ display:block; width:100%; height:100%; touch-action:none; cursor:grab; border-radius:50%; }
+  #muDial.grabbing{ cursor:grabbing; }
+  .dialread{ flex:1; min-width:0; }
+  .dialread .mat{ font:600 14px/1.1 var(--font-serif); color:var(--hot); }
+  .dialread .thetar{ margin-top:6px; font:600 22px/1 var(--font-mono); color:var(--indigo-lit); }
+  .dialread .mu{ margin-top:4px; font:11px/1.3 var(--font-mono); color:var(--ink-dim); }
+  .dialread .matnote{ margin-top:6px; font:10.5px/1.35 var(--font-ui); color:var(--ink-dim); font-style:italic; }
+
+  .slider{ display:flex; align-items:center; gap:11px; }
+  .slider input[type=range]{ flex:1; accent-color:var(--hot); }
+  .slider input[type=range]:focus-visible{ outline:2px solid var(--hot); outline-offset:3px; }
+  .slider .nval{ font:600 15px/1 var(--font-mono); color:var(--indigo-lit); min-width:58px; text-align:right; }
+  .sronly{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
+
+  button.b{ font:600 12px/1 var(--font-ui); letter-spacing:.02em; color:var(--ink); cursor:pointer;
+    border:1px solid rgba(202,164,90,0.28); border-radius:9px; padding:9px 12px;
+    background:linear-gradient(180deg, rgba(40,32,18,0.6), rgba(20,16,10,0.7)); transition:.18s; }
+  button.b:hover{ border-color:var(--gold); color:#fff; }
+  button.b:focus-visible{ outline:2px solid var(--hot); outline-offset:2px; }
+  button.b.prime{ border-color:var(--hot); background:linear-gradient(180deg, rgba(242,193,78,0.18), rgba(160,120,40,0.16)); color:#fff3d4; }
+  button.b.prime:hover{ border-color:#ffe6a8; }
+
+  .hint{ font:11.5px/1.55 var(--font-ui); color:var(--ink-dim); }
+  .hint b{ color:var(--ink); font-weight:600; }
+  .hint .ind{ color:var(--indigo-lit); } .hint .bead{ color:var(--hot); }
+
+  .footer-proof{ position:relative; z-index:1; max-width:1180px; margin:0 auto; padding:0 24px 52px; text-align:center;
+    font:11px/1.7 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  .footer-proof .bead{ color:var(--hot); } .footer-proof .ind{ color:var(--indigo-lit); }
+
+  /* the begin-curtain (the first-gesture unlock) */
+  .curtain{ position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(closest-side, rgba(8,10,15,0.86), rgba(8,10,15,0.97)); cursor:pointer; transition:opacity .5s; }
+  .curtain.gone{ opacity:0; pointer-events:none; }
+  .curtain .card{ text-align:center; max-width:440px; padding:30px; }
+  .curtain .ce{ font:600 11px/1 var(--font-mono); letter-spacing:.3em; text-transform:uppercase; color:var(--indigo); }
+  .curtain h2{ font-family:var(--font-serif); font-weight:600; font-size:30px; margin:14px 0 10px;
+    background:linear-gradient(176deg, #fff0c8, #f2c14e 60%, #b07f24); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .curtain p{ font:13px/1.6 var(--font-serif); color:var(--ink-dim); }
+  .curtain .go{ margin-top:18px; display:inline-block; font:600 12px/1 var(--font-mono); letter-spacing:.12em; text-transform:uppercase;
+    color:#fff3d4; border:1px solid var(--hot); border-radius:24px; padding:12px 22px; background:linear-gradient(180deg, rgba(242,193,78,0.2), rgba(160,120,40,0.16)); }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="back" href="../index.html">‹ The Orrery Estate</a>
+  <div class="topright">
+    <div class="mute" id="mute" title="estate-wide mute">♪ sound off</div>
+    <div class="selftest" id="selftest" title="click to re-run">self-test…</div>
+  </div>
+</div>
+
+<div class="hero">
+  <div class="eyebrow">The Gardens · The Assayer's Tray</div>
+  <h1>The Heap That Knows Its Own Angle</h1>
+  <p class="lede">Pour dry sand into a tray and it always slumps to the same slope — about <b>34°</b> — no
+  matter how much you pour. <span class="ind">Spin the tray</span> and the sand keeps that angle, ignoring
+  the turning frame. The angle isn't sand's whim: it's <b>friction</b>, exactly. Turn the <b>μ-dial</b> and
+  the heap stands at <span class="ind">θ<sub>r</sub> = atan(μ)</span> — flatten μ toward zero and it can't
+  stand at all; crank it toward glue and it stands straight up. <span class="ind">Drag the dial down past
+  the heap's own slope and the face lets go.</span></p>
+</div>
+
+<div class="stage">
+  <!-- LEFT: the three brass instruments -->
+  <div class="panel">
+    <div class="ctl prime">
+      <h3>μ — the friction dial <span class="badge">θ<sub>r</sub> = atan(μ)</span></h3>
+      <div class="dialwrap">
+        <div id="muDialHost">
+          <canvas id="muDial" aria-hidden="true"></canvas>
+        </div>
+        <div class="dialread">
+          <div class="mat" id="dialMat">DRY SAND</div>
+          <div class="thetar" id="dialTheta">θ<sub>r</sub> 34.0°</div>
+          <div class="mu" id="dialMu">μ = tan θ<sub>r</sub> = 0.67</div>
+          <div class="matnote" id="dialNote">the famous repose angle</div>
+        </div>
+      </div>
+      <input type="range" class="sronly" id="muRange" min="0.5" max="89.5" step="0.1" value="34"
+        aria-label="repose angle theta_r in degrees, sets friction mu = tan(theta_r)" aria-valuetext="34 degrees, dry sand">
+      <div class="hint" style="margin-top:11px;">
+        Drag the dial. Engraved detents mark real materials — <b>beads</b>, <b>rice</b>, <b>sand</b>,
+        <b>gravel</b> — but the exact law is <span class="ind">θ<sub>r</sub>=atan(μ)</span>. Turn it <b>down</b>
+        below the heap's slope and the face <span class="bead">avalanches</span>; turn it up and it stands steeper.
+      </div>
+    </div>
+
+    <div class="ctl">
+      <h3>φ — tilt the tray <span class="badge">grab the tray too</span></h3>
+      <div class="slider">
+        <input type="range" id="phiRange" min="-80" max="80" step="1" value="0"
+          aria-label="tray tilt phi in degrees" aria-valuetext="0 degrees, level">
+        <span class="nval" id="phiVal">0°</span>
+      </div>
+      <div class="row" style="margin-top:11px;">
+        <button class="b" id="toFlat">⊾ level</button>
+        <button class="b" id="toRight">⟳ tilt right</button>
+        <button class="b" id="toLeft">⟲ tilt left</button>
+      </div>
+      <div class="hint" style="margin-top:10px;">
+        Gravity stays straight down; the <b>tray</b> turns. A settled face holds the <i>same</i> angle to true
+        horizontal however you spin it — <span class="ind">watch the plumb-bob stay plumb</span>. Tilt past
+        θ<sub>r</sub> and a front of grain lets go to stay pinned at the repose angle.
+      </div>
+    </div>
+
+    <div class="ctl">
+      <h3>build the heap</h3>
+      <div class="row">
+        <button class="b prime" id="pour">⛲ pour</button>
+        <button class="b" id="rebuild">↺ dump &amp; re-pour</button>
+        <button class="b" id="reset">⌂ reset</button>
+      </div>
+      <div class="hint" style="margin-top:10px;">
+        <b>Pour</b> grows the pile <span class="bead">bigger at the same angle</span> — pour-independence you
+        can feel. <b>Dump &amp; re-pour</b> builds it from a different mess and it settles to the <i>same</i>
+        slope — history-independence. The protractor needle parks on the θ<sub>r</sub> tick every time.
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: the living brass tray -->
+  <div class="slab trayslab">
+    <div id="trayHost">
+      <canvas id="tray" aria-label="A side-on brass assay tray of dry grain. A friction dial sets the angle of repose; tilting the tray never changes the angle the settled surface makes with true horizontal."></canvas>
+      <div class="stamp">assayer's tray · <span class="v" id="poured">poured ×0</span></div>
+    </div>
+    <div class="readcard">
+      <div class="readtile h">
+        <div class="k">Surface angle β</div>
+        <div class="val" id="betaVal">34.0°</div>
+        <div class="sub">the needle on the free face</div>
+      </div>
+      <div class="readtile t">
+        <div class="k">Repose θ<sub>r</sub> = atan(μ)</div>
+        <div class="val" id="thetaVal">34.0°</div>
+        <div class="sub" id="thetaSub"><span class="ind">DRY SAND</span> · μ=0.67</div>
+      </div>
+    </div>
+    <div class="liveCap" id="liveCap">settled at the repose angle — turn the dial or spin the tray</div>
+  </div>
+</div>
+
+<div class="footer-proof">
+  self-test <span id="proofN">8/8</span> ✓ · the heap rests at <span class="bead">θ<sub>r</sub> = atan(μ)</span> (Mohr–Coulomb) ·
+  <span class="ind">CRUX-1</span> a facet slips exactly when |θ<sub>world</sub>|&gt;θ<sub>r</sub> ·
+  CRUX-2 the relaxed face = θ<sub>r</sub> for any amount/history ·
+  CRUX-3 needle = atan(μ) · CRUX-4 glue stands · CRUX-5 frictionless puddles · CRUX-6 lower μ → it lets go ·
+  Σz conserved · order-independent — proven exact, the picture stepped from the same flux
+</div>
+
+<div class="curtain" id="curtain">
+  <div class="card">
+    <div class="ce">The Gardens · The Assayer's Tray</div>
+    <h2>The Heap That Knows Its Own Angle</h2>
+    <p>A side-on tray of dry grain. Set the friction, spin the tray, pour — and watch the slope it always
+    returns to. <span style="color:var(--ink)">Tap to enter</span> — a soft brass hiss runs when a face lets
+    go (one estate-wide mute, top-right).</p>
+    <div class="go">tap to enter ✦</div>
+  </div>
+</div>
+
+<script type="module">
+"use strict";
+// === THE HEAP CORE (inlined byte-identical to core.mjs by forge) ===
+<!-- forge:include ./core.mjs -->
+
+// ───────────────────────── the instrument render + interaction ─────────────────────────
+const cv = document.getElementById('tray');
+const ctx = cv.getContext('2d');
+const host = document.getElementById('trayHost');
+let DPR = Math.min(2, window.devicePixelRatio || 1);
+
+// ── the live heap state (DETERMINISTIC bulk; only sprites use the seeded rng) ──
+let st = makeHeap({ thetaR: 34 * D2R, phi: 0 });
+setPyramid(st, { peak: 28, slope: 0.74, base: 2 });   // a sand pile a hair over repose
+relax(st);                                              // pre-settle to a clean toe
+let pourCount = 0;
+let phiTargetAnim = null;     // when the level/tilt buttons animate φ
+
+// ── cosmetic rolling-grain sprites (driven FROM relaxation flux; never the proof) ──
+const SPRITE_CAP = 340;
+let sprites = [];
+let spriteRng = mulberry32(0xC0FFEE);
+let slipFlash = 0;            // a slip-plane flash that decays
+let cascadeEnergy = 0;        // recent avalanche size (drives hiss + caption)
+
+// ── stable grain-speckle texture (seeded fractions; ride the surface as z changes) ──
+const SPECK = [];
+(function(){ const r = mulberry32(0x5A11D); for (let k = 0; k < 220; k++) SPECK.push({ cf: r(), df: 0.08 + 0.9 * r(), j: r() }); })();
+
+// ─────────────────────────────── geometry ───────────────────────────────
+let pivot = { x: 0, y: 0 }, trayW = 0, trayH = 0, colPx = 0, zScale = 0;
+const PHI_MAX = PHI_MAX_DEG * D2R;
+function fit(){
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  const r = host.getBoundingClientRect();
+  cv.width = Math.max(1, Math.round(r.width * DPR));
+  cv.height = Math.max(1, Math.round(r.height * DPR));
+  const W = cv.width, H = cv.height;
+  pivot = { x: W / 2, y: H / 2 };
+  // size the tray so its rotated bounding box always fits the canvas (φ up to ±80°)
+  const ar = 5 / 7;                              // trayH / trayW (the assay-boat shape)
+  const s = Math.abs(Math.sin(PHI_MAX)), c = Math.abs(Math.cos(PHI_MAX));
+  const m = Math.round(Math.min(W, H) * 0.045);  // breathing margin
+  const limW = (W / 2 - m) / (0.5 * (c + ar * s));
+  const limH = (H / 2 - m) / (0.5 * (s + ar * c));
+  trayW = Math.min(limW, limH);
+  trayH = trayW * ar;
+  colPx = trayW / (st.ncol - 1);
+  zScale = colPx;                                // dx=1 ⇒ heights drawn at column scale ⇒ angle-faithful
+  draw();
+}
+
+// tray-local (lx, ly; y down, origin = tray center) → screen px
+function toScreen(lx, ly){
+  const cph = Math.cos(st.phi), sph = Math.sin(st.phi);
+  return [pivot.x + lx * cph - ly * sph, pivot.y + lx * sph + ly * cph];
+}
+function colLocalX(i){ return (i - (st.ncol - 1) / 2) * colPx; }
+const floorLY = () => trayH / 2;
+function surfLY(i){ return trayH / 2 - st.z[i] * zScale; }
+
+// ─────────────────────────────── the draw ───────────────────────────────
+function draw(){
+  const W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // 1) the gravity reference — a plumb-bob hanging straight DOWN (screen frame)
+  drawPlumb();
+
+  // 2) the rotating tray + heap (all in tray-local coords via the canvas transform)
+  ctx.save();
+  ctx.translate(pivot.x, pivot.y);
+  ctx.rotate(st.phi);
+  drawTrayBody();
+  drawHeap();
+  drawSprites();
+  ctx.restore();
+
+  // 3) the protractor instrument, pinned at the downhill toe (screen frame)
+  drawProtractor();
+}
+
+function drawPlumb(){
+  // a small brass bracket up top, a thread, a teardrop bob — always vertical
+  const px = pivot.x, top = pivot.y - trayH * 0.62, len = trayH * 0.42;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(174,184,255,0.30)'; ctx.lineWidth = 1.4; ctx.setLineDash([2, 4]);
+  ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, top + len); ctx.stroke(); ctx.setLineDash([]);
+  const by = top + len;
+  const g = ctx.createRadialGradient(px - 2, by - 2, 1, px, by, 8);
+  g.addColorStop(0, '#dfe4ff'); g.addColorStop(0.6, '#7f8cd8'); g.addColorStop(1, '#37407e');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(px, by - 9); ctx.bezierCurveTo(px + 7, by - 4, px + 5, by + 7, px, by + 9);
+  ctx.bezierCurveTo(px - 5, by + 7, px - 7, by - 4, px, by - 9); ctx.fill();
+  ctx.fillStyle = 'rgba(174,184,255,0.7)'; ctx.font = '600 9px var(--font-mono)';
+  ctx.textAlign = 'center'; ctx.fillText('plumb', px, top - 5);
+  ctx.restore();
+}
+
+function drawTrayBody(){
+  const hw = trayW / 2, hh = trayH / 2;
+  // glass interior wash
+  ctx.save();
+  roundRect(ctx, -hw, -hh, trayW, trayH, 7);
+  const wash = ctx.createLinearGradient(0, -hh, 0, hh);
+  wash.addColorStop(0, 'rgba(30,32,48,0.5)'); wash.addColorStop(1, 'rgba(8,9,14,0.92)');
+  ctx.fillStyle = wash; ctx.fill();
+  ctx.restore();
+  // faint tray-horizontal gridline (rotates WITH the tray — the frame's own level)
+  ctx.save();
+  ctx.strokeStyle = 'rgba(202,164,90,0.10)'; ctx.lineWidth = 1;
+  for (let f = 0.25; f < 1; f += 0.25){ const y = -hh + trayH * f; ctx.beginPath(); ctx.moveTo(-hw, y); ctx.lineTo(hw, y); ctx.stroke(); }
+  ctx.restore();
+}
+
+function drawTrayFrame(){
+  const hw = trayW / 2, hh = trayH / 2;
+  ctx.save();
+  ctx.lineWidth = Math.max(3, trayW * 0.012);
+  const rim = ctx.createLinearGradient(-hw, -hh, hw, hh);
+  rim.addColorStop(0, '#e6c878'); rim.addColorStop(0.5, '#8a6a26'); rim.addColorStop(1, '#3a2c10');
+  ctx.strokeStyle = rim; roundRect(ctx, -hw, -hh, trayW, trayH, 7); ctx.stroke();
+  // trunnion pivots (the brass axle the tray turns on)
+  ctx.fillStyle = '#caa657';
+  for (const sx of [-1, 1]){ ctx.beginPath(); ctx.arc(sx * hw, 0, trayW * 0.018, 0, 6.28); ctx.fill(); }
+  ctx.restore();
+}
+
+// the heap fill + grain texture; colour morphs with μ (rough sandstone → smooth bead)
+function drawHeap(){
+  const hw = trayW / 2, hh = trayH / 2;
+  // μ→0 smooth pale beads · sand · μ→∞ dark angular sandstone
+  const tr = clamp(st.thetaR / (Math.PI / 2), 0, 1);
+  const top = mixHex('#f4e3b0', '#e3c279', '#9a7a36', tr);
+  const mid = mixHex('#e7cf8e', '#caa45a', '#7c5e28', tr);
+  const bot = mixHex('#b89a5a', '#6f5526', '#42330f', tr);
+
+  ctx.save();
+  roundRect(ctx, -hw, -hh, trayW, trayH, 7); ctx.clip();   // keep grain inside the glass
+
+  // body fill under the surface
+  ctx.beginPath();
+  ctx.moveTo(colLocalX(0), floorLY());
+  for (let i = 0; i < st.ncol; i++) ctx.lineTo(colLocalX(i), surfLY(i));
+  ctx.lineTo(colLocalX(st.ncol - 1), floorLY());
+  ctx.closePath();
+  const fill = ctx.createLinearGradient(0, -hh, 0, hh);
+  fill.addColorStop(0, top); fill.addColorStop(0.45, mid); fill.addColorStop(1, bot);
+  ctx.fillStyle = fill; ctx.fill();
+
+  // embedded grain speckles (stable fractions riding the surface)
+  ctx.globalAlpha = 0.5;
+  for (const sp of SPECK){
+    const i = Math.min(st.ncol - 1, Math.round(sp.cf * (st.ncol - 1)));
+    const zc = st.z[i]; if (zc < 0.4) continue;
+    const lx = colLocalX(i) + (sp.j - 0.5) * colPx * 1.2;
+    const ly = floorLY() - sp.df * zc * zScale;
+    const rr = colPx * (0.32 + 0.5 * sp.j) * (1.1 - 0.5 * tr);
+    ctx.fillStyle = sp.j > 0.5 ? top : bot;
+    ctx.beginPath(); ctx.arc(lx, ly, rr, 0, 6.28); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // the bright free-surface line (this is the face the needle reads)
+  ctx.beginPath();
+  for (let i = 0; i < st.ncol; i++){ const x = colLocalX(i), y = surfLY(i); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  ctx.strokeStyle = 'rgba(255,238,196,0.55)'; ctx.lineWidth = Math.max(1, colPx * 0.5); ctx.stroke();
+
+  ctx.restore();
+  drawTrayFrame();
+}
+
+function drawSprites(){
+  // tumbling rolling-layer grains (cosmetic) — small warm motes streaming down the face
+  ctx.save();
+  const hw = trayW / 2, hh = trayH / 2;
+  roundRect(ctx, -hw, -hh, trayW, trayH, 7); ctx.clip();
+  for (const s of sprites){
+    const a = Math.min(1, s.life * 2.2);
+    ctx.globalAlpha = 0.85 * a;
+    const g = ctx.createRadialGradient(s.x - s.r * 0.3, s.y - s.r * 0.3, s.r * 0.1, s.x, s.y, s.r);
+    g.addColorStop(0, '#fff0c8'); g.addColorStop(0.6, '#e3c279'); g.addColorStop(1, '#8a6a26');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.28); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  // a slip-plane flash along the avalanching face
+  if (slipFlash > 0.02){
+    const f = steepestFaceLocal();
+    if (f){
+      ctx.globalAlpha = slipFlash * 0.6;
+      ctx.strokeStyle = '#fff3d4'; ctx.lineWidth = Math.max(1.5, colPx * 0.7);
+      ctx.beginPath();
+      for (let i = f.i0; i <= f.i1 + 1; i++){ const x = colLocalX(i), y = surfLY(i); i === f.i0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+      ctx.stroke(); ctx.globalAlpha = 1;
+    }
+  }
+  ctx.restore();
+}
+
+// the steepest face in local index terms (for the slip flash + the protractor)
+function steepestFaceLocal(){ return steepestFace(st); }
+
+function drawProtractor(){
+  const f = steepestFace(st);
+  // the downhill toe = the lower (larger screen-y) endpoint of the steepest face
+  const A = toScreen(colLocalX(f.i0), surfLY(f.i0));
+  const B = toScreen(colLocalX(f.i1 + 1), surfLY(f.i1 + 1));
+  let toe = A[1] >= B[1] ? A : B, top = A[1] >= B[1] ? B : A;
+  // clamp the anchor a touch inside the canvas
+  const ax = clamp(toe[0], 64, cv.width - 64), ay = clamp(toe[1], 70, cv.height - 30);
+  const R = Math.min(trayW * 0.34, 118 * DPR);
+  const beta = Math.abs(f.angle);             // measured surface angle (world)
+  const thr = st.thetaR;                       // the θ_r tick
+
+  ctx.save();
+  ctx.translate(ax, ay);
+  // which way is "uphill" on screen (the heap side): from toe toward the top endpoint
+  const upSign = (top[0] - toe[0]) >= 0 ? 1 : -1;   // +1 = heap is to the right
+
+  // engraved arc 0..90° on the uphill side, plus a horizontal baseline (true level)
+  ctx.strokeStyle = 'rgba(202,164,90,0.34)'; ctx.lineWidth = 1.3;
+  ctx.beginPath(); ctx.moveTo(-upSign * R * 0.18, 0); ctx.lineTo(upSign * R, 0); ctx.stroke();   // baseline (level)
+  ctx.beginPath();
+  if (upSign > 0) ctx.arc(0, 0, R, -Math.PI / 2, 0);
+  else ctx.arc(0, 0, R, Math.PI, Math.PI * 1.5);
+  ctx.stroke();
+  // ticks every 10°
+  ctx.strokeStyle = 'rgba(202,164,90,0.22)'; ctx.lineWidth = 1; ctx.fillStyle = 'rgba(202,164,90,0.5)';
+  ctx.font = `600 ${Math.round(8 * DPR)}px var(--font-mono)`; ctx.textAlign = 'center';
+  for (let d = 0; d <= 90; d += 10){
+    const a = d * D2R, x0 = upSign * Math.cos(a), y0 = -Math.sin(a);
+    ctx.beginPath(); ctx.moveTo(x0 * R * 0.92, y0 * R * 0.92); ctx.lineTo(x0 * R, y0 * R); ctx.stroke();
+    if (d % 30 === 0) ctx.fillText(d + '°', x0 * (R + 11 * DPR), y0 * (R + 11 * DPR) + 3);
+  }
+
+  // the θ_r tick (indigo, glowing) — the law the dial sets
+  drawTickArm(thr, upSign, R * 1.02, 'rgba(174,184,255,0.95)', 3.2 * DPR, true);
+  // the brass needle on the actual face (parks on the tick at rest)
+  drawTickArm(beta, upSign, R * 0.96, '#f2c14e', 3.4 * DPR, false);
+
+  // a small hub
+  ctx.fillStyle = '#caa657'; ctx.beginPath(); ctx.arc(0, 0, 4 * DPR, 0, 6.28); ctx.fill();
+  // labels
+  ctx.fillStyle = 'rgba(174,184,255,0.9)'; ctx.font = `600 ${Math.round(9.5 * DPR)}px var(--font-mono)`;
+  ctx.textAlign = upSign > 0 ? 'left' : 'right';
+  ctx.fillText('θ_r ' + (thr * R2D).toFixed(0) + '°', upSign * (R * 0.30), -R * 0.74);
+  ctx.fillStyle = '#f2c14e';
+  ctx.fillText('β ' + (beta * R2D).toFixed(0) + '°', upSign * (R * 0.30), -R * 0.58);
+  ctx.restore();
+}
+function drawTickArm(angRad, upSign, len, color, w, glow){
+  const a = angRad, x = upSign * Math.cos(a) * len, y = -Math.sin(a) * len;
+  ctx.save();
+  if (glow){ ctx.shadowColor = color; ctx.shadowBlur = 10; }
+  ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(x, y); ctx.stroke();
+  ctx.restore();
+}
+
+function roundRect(c, x, y, w, h, r){
+  r = Math.min(r, w / 2, h / 2);
+  c.beginPath();
+  c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+}
+
+// colour helpers: blend three stops by t∈[0,1]
+function mixHex(a, b, c, t){ return t < 0.5 ? lerpHex(a, b, t * 2) : lerpHex(b, c, (t - 0.5) * 2); }
+function lerpHex(a, b, t){
+  const pa = [parseInt(a.slice(1, 3), 16), parseInt(a.slice(3, 5), 16), parseInt(a.slice(5, 7), 16)];
+  const pb = [parseInt(b.slice(1, 3), 16), parseInt(b.slice(3, 5), 16), parseInt(b.slice(5, 7), 16)];
+  const m = pa.map((v, i) => Math.round(v + (pb[i] - v) * t));
+  return 'rgb(' + m.join(',') + ')';
+}
+
+// ─────────────────────── physics step + sprite drive ───────────────────────
+const FRAME_SWEEPS = 70;              // relaxation sweeps per frame while cascading (tunes the snap)
+function stepPhysics(){
+  const before = totalMass(st);
+  let moved = 0;
+  for (let s = 0; s < FRAME_SWEEPS; s++){
+    relaxStep(st);
+    let m = 0; for (let i = 0; i < st.lastFlux.length; i++) m += Math.abs(st.lastFlux[i]);
+    moved += m;
+    // spawn rolling sprites from THIS sweep's flux (the picture stepped from the proof)
+    if (m > 0.02 && sprites.length < SPRITE_CAP) spawnFromFlux();
+    if (st._maxExcess < RELAX_EPS) break;
+  }
+  if (moved > 0.01){
+    cascadeEnergy = Math.min(1, cascadeEnergy + moved * 0.012);
+    slipFlash = Math.min(1, slipFlash + moved * 0.02);
+  }
+  void before;
+  return moved;
+}
+function spawnFromFlux(){
+  for (let i = 0; i < st.lastFlux.length; i += 2){
+    const q = st.lastFlux[i];
+    if (Math.abs(q) < 0.03) continue;
+    if (spriteRng() > 0.35) continue;
+    const dir = q > 0 ? 1 : -1;       // downhill direction along the face (in column index)
+    const lx = colLocalX(i) + (spriteRng() - 0.5) * colPx;
+    const ly = surfLY(i) - colPx * 0.4;
+    const sc = toScreen(lx, ly);       // sprites live in SCREEN space so they tumble under gravity-down
+    const speed = (0.8 + spriteRng() * 1.6) * colPx;
+    // initial nudge along the face's screen tangent (downhill), then gravity takes over
+    const tang = dir * colPx, tsc = toScreen(lx + tang, surfLY(clamp(i + dir, 0, st.ncol - 1)) - colPx * 0.4);
+    const tx = tsc[0] - sc[0], ty = tsc[1] - sc[1], tl = Math.hypot(tx, ty) || 1;
+    sprites.push({ x: sc[0], y: sc[1], vx: (tx / tl) * speed, vy: (ty / tl) * speed * 0.5, r: colPx * (0.3 + spriteRng() * 0.5), life: 1 });
+    if (sprites.length >= SPRITE_CAP) break;
+  }
+}
+function tickSprites(dt){
+  const g = 0.045 * trayH * dt;        // gravity (screen-down)
+  for (const s of sprites){
+    s.vy += g; s.x += s.vx * dt * 60 * 0.016; s.y += s.vy * dt;
+    s.life -= dt * 1.7;
+  }
+  sprites = sprites.filter(s => s.life > 0 && s.y < cv.height + 20);
+}
+
+// ─────────────────────────── the RAF loop ───────────────────────────
+let last = performance.now();
+let wasCascading = false;
+function frame(now){
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  // animate φ toward a button target
+  if (phiTargetAnim != null){
+    const d = phiTargetAnim - st.phi;
+    if (Math.abs(d) < 0.004){ st.phi = phiTargetAnim; phiTargetAnim = null; }
+    else st.phi += Math.sign(d) * Math.min(Math.abs(d), 2.6 * dt);
+    syncPhiUI();
+  }
+  const moved = stepPhysics();
+  const cascading = st._maxExcess >= RELAX_EPS && moved > 0.01;
+  if (cascading) audioHiss(cascadeEnergy);
+  if (wasCascading && !cascading) audioThunk(cascadeEnergy);
+  wasCascading = cascading;
+
+  cascadeEnergy *= 0.92; slipFlash *= 0.90;
+  tickSprites(dt);
+  updateReadouts(cascading);
+  draw();
+  requestAnimationFrame(frame);
+}
+
+// ─────────────────────────── readouts + captions ───────────────────────────
+const $ = (id) => document.getElementById(id);
+function nearestMaterial(thetaRdeg){
+  let best = MATERIALS[0], bd = 1e9;
+  for (const m of MATERIALS){ const d = Math.abs(m.deg - thetaRdeg); if (d < bd){ bd = d; best = m; } }
+  return { m: best, near: bd < 2.2 };
+}
+function updateReadouts(cascading){
+  const beta = faceAngle(st) * R2D;
+  const thr = st.thetaR * R2D, mu = muFromThetaR(st.thetaR);
+  $('betaVal').textContent = beta.toFixed(1) + '°';
+  $('thetaVal').textContent = thr.toFixed(1) + '°';
+  const nm = nearestMaterial(thr);
+  $('thetaSub').innerHTML = `<span class="ind">${nm.near ? nm.m.name : '—'}</span> · μ=${mu < 100 ? mu.toFixed(2) : '∞'}`;
+  $('poured').textContent = 'poured ×' + pourCount;
+  // caption
+  const cap = $('liveCap'); cap.classList.remove('lit', 'cold');
+  if (st.thetaR < 3 * D2R){ cap.textContent = 'μ→0: it cannot stand — a flat puddle'; cap.classList.add('cold'); }
+  else if (st.thetaR > 86 * D2R){ cap.textContent = 'μ→∞: glued solid — it stands vertical'; cap.classList.add('lit'); }
+  else if (cascading){ cap.textContent = 'the face let go — sliding to ' + thr.toFixed(0) + '°'; cap.classList.add('lit'); }
+  else if (Math.abs(beta - thr) < 0.8){ cap.textContent = 'settled at the repose angle — β = θ_r = ' + thr.toFixed(0) + '°'; }
+  else { cap.textContent = 'the needle rests on the θ_r tick'; }
+}
+function syncPhiUI(){
+  const d = Math.round(st.phi * R2D);
+  $('phiRange').value = d; $('phiVal').textContent = d + '°';
+  $('phiRange').setAttribute('aria-valuetext', d === 0 ? '0 degrees, level' : d + ' degrees');
+}
+
+// ─────────────────────────── the μ-dial (canvas rotary) ───────────────────────────
+const dialCv = $('muDial'), dctx = dialCv.getContext('2d');
+const DIAL_SPAN = 150 * D2R;     // the pointer sweeps −150°..+150° → θ_r 0.5..89.5°
+function dialFit(){
+  const d = Math.min(2, window.devicePixelRatio || 1);
+  const box = document.getElementById('muDialHost').getBoundingClientRect();
+  dialCv.width = Math.round(box.width * d); dialCv.height = Math.round(box.height * d);
+  drawDial();
+}
+function thetaRToDialAng(thetaRdeg){ const f = (thetaRdeg - 0.5) / 89; return -DIAL_SPAN + f * 2 * DIAL_SPAN; }
+function drawDial(){
+  const W = dialCv.width, H = dialCv.height, cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.44;
+  dctx.clearRect(0, 0, W, H);
+  // brass body
+  const body = dctx.createRadialGradient(cx - R * 0.3, cy - R * 0.3, R * 0.1, cx, cy, R);
+  body.addColorStop(0, '#e6c878'); body.addColorStop(0.55, '#a9842f'); body.addColorStop(1, '#5a451a');
+  dctx.fillStyle = body; dctx.beginPath(); dctx.arc(cx, cy, R, 0, 6.28); dctx.fill();
+  dctx.strokeStyle = '#3a2c10'; dctx.lineWidth = Math.max(2, R * 0.04); dctx.stroke();
+  // inner knurl ring
+  dctx.strokeStyle = 'rgba(58,44,16,0.6)'; dctx.lineWidth = 1;
+  for (let k = 0; k < 48; k++){ const a = k / 48 * 6.28; dctx.beginPath(); dctx.moveTo(cx + Math.cos(a) * R * 0.84, cy + Math.sin(a) * R * 0.84); dctx.lineTo(cx + Math.cos(a) * R * 0.92, cy + Math.sin(a) * R * 0.92); dctx.stroke(); }
+  // engraved material detents
+  dctx.font = `600 ${Math.round(R * 0.13)}px var(--font-mono)`; dctx.textAlign = 'center'; dctx.textBaseline = 'middle';
+  for (const m of MATERIALS){
+    const a = thetaRToDialAng(m.deg) - Math.PI / 2;   // 0° at top, sweep clockwise
+    const x1 = cx + Math.cos(a) * R * 0.66, y1 = cy + Math.sin(a) * R * 0.66;
+    const x2 = cx + Math.cos(a) * R * 0.82, y2 = cy + Math.sin(a) * R * 0.82;
+    dctx.strokeStyle = 'rgba(20,14,4,0.8)'; dctx.lineWidth = Math.max(1.5, R * 0.02);
+    dctx.beginPath(); dctx.moveTo(x1, y1); dctx.lineTo(x2, y2); dctx.stroke();
+  }
+  // the pointer
+  const pa = thetaRToDialAng(st.thetaR * R2D) - Math.PI / 2;
+  const px = cx + Math.cos(pa) * R * 0.72, py = cy + Math.sin(pa) * R * 0.72;
+  dctx.strokeStyle = '#fff3d4'; dctx.lineWidth = Math.max(2.4, R * 0.06); dctx.lineCap = 'round'; dctx.shadowColor = 'rgba(242,193,78,0.8)'; dctx.shadowBlur = 8;
+  dctx.beginPath(); dctx.moveTo(cx, cy); dctx.lineTo(px, py); dctx.stroke(); dctx.shadowBlur = 0;
+  // hub
+  dctx.fillStyle = '#2a2008'; dctx.beginPath(); dctx.arc(cx, cy, R * 0.13, 0, 6.28); dctx.fill();
+  dctx.strokeStyle = '#caa657'; dctx.lineWidth = 1.5; dctx.stroke();
+}
+function setThetaRDeg(deg, fromDial){
+  deg = clamp(deg, 0.5, 89.5);
+  st.thetaR = deg * D2R;
+  $('muRange').value = deg.toFixed(1);
+  const mu = muFromThetaR(st.thetaR);
+  const nm = nearestMaterial(deg);
+  $('dialMat').textContent = nm.near ? nm.m.name : 'θ_r ' + deg.toFixed(0) + '°';
+  $('dialTheta').innerHTML = 'θ<sub>r</sub> ' + deg.toFixed(1) + '°';
+  $('dialMu').innerHTML = 'μ = tan θ<sub>r</sub> = ' + (mu < 100 ? mu.toFixed(2) : '∞');
+  $('dialNote').textContent = nm.near ? nm.m.note : 'θ_r = atan(μ) — the Coulomb law';
+  $('muRange').setAttribute('aria-valuetext', deg.toFixed(0) + ' degrees' + (nm.near ? ', ' + nm.m.name : ''));
+  drawDial();
+}
+// dial drag → point at cursor → set θ_r (clamped to the live span)
+let dialDrag = false;
+function dialAngleFromEvent(e){
+  const r = dialCv.getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const p = e.touches ? e.touches[0] : e;
+  let a = Math.atan2(p.clientY - cy, p.clientX - cx) + Math.PI / 2;   // 0 at top
+  while (a > Math.PI) a -= 6.28318; while (a < -Math.PI) a += 6.28318;
+  a = clamp(a, -DIAL_SPAN, DIAL_SPAN);
+  const f = (a + DIAL_SPAN) / (2 * DIAL_SPAN);
+  return 0.5 + f * 89;
+}
+function dialDown(e){ dialDrag = true; dialCv.classList.add('grabbing'); setThetaRDeg(dialAngleFromEvent(e), true); audioTick(); e.preventDefault(); }
+function dialMove(e){ if (!dialDrag) return; const prev = Math.round(st.thetaR * R2D / 4); setThetaRDeg(dialAngleFromEvent(e), true); if (Math.round(st.thetaR * R2D / 4) !== prev) audioTick(); e.preventDefault(); }
+function dialUp(){ dialDrag = false; dialCv.classList.remove('grabbing'); }
+dialCv.addEventListener('mousedown', dialDown); window.addEventListener('mousemove', dialMove); window.addEventListener('mouseup', dialUp);
+dialCv.addEventListener('touchstart', dialDown, { passive: false }); window.addEventListener('touchmove', dialMove, { passive: false }); window.addEventListener('touchend', dialUp);
+$('muRange').addEventListener('input', (e) => { setThetaRDeg(+e.target.value, false); audioTick(); });
+
+// ─────────────────────────── tilt: slider + grab-the-tray ───────────────────────────
+$('phiRange').addEventListener('input', (e) => { st.phi = clamp(+e.target.value * D2R, -PHI_MAX, PHI_MAX); phiTargetAnim = null; syncPhiUI(); });
+$('toFlat').addEventListener('click', () => { phiTargetAnim = 0; });
+$('toRight').addEventListener('click', () => { phiTargetAnim = 55 * D2R; });
+$('toLeft').addEventListener('click', () => { phiTargetAnim = -55 * D2R; });
+
+let trayDrag = false, dragStartPhi = 0, dragStartAng = 0;
+function trayAngOf(e){ const r = cv.getBoundingClientRect(); const p = e.touches ? e.touches[0] : e; return Math.atan2((p.clientY - (r.top + r.height / 2)), (p.clientX - (r.left + r.width / 2))); }
+function trayDown(e){ trayDrag = true; cv.classList.add('grabbing'); dragStartAng = trayAngOf(e); dragStartPhi = st.phi; phiTargetAnim = null; e.preventDefault(); }
+function trayMove(e){ if (!trayDrag) return; const a = trayAngOf(e); st.phi = clamp(dragStartPhi + (a - dragStartAng), -PHI_MAX, PHI_MAX); syncPhiUI(); e.preventDefault(); }
+function trayUp(){ trayDrag = false; cv.classList.remove('grabbing'); }
+cv.addEventListener('mousedown', trayDown); window.addEventListener('mousemove', trayMove); window.addEventListener('mouseup', trayUp);
+cv.addEventListener('touchstart', trayDown, { passive: false }); cv.addEventListener('touchmove', trayMove, { passive: false }); window.addEventListener('touchend', trayUp);
+
+// ─────────────────────────── build the heap ───────────────────────────
+$('pour').addEventListener('click', () => {
+  const c = Math.round((st.ncol - 1) / 2);
+  for (let k = 0; k < 90; k++) pourAt(st, c + Math.round((spriteRng() - 0.5) * 5), 1);
+  pourCount++; audioTick();
+});
+$('rebuild').addEventListener('click', () => {
+  const seed = (Math.random() * 1e9) | 0;
+  setLumps(st, { seed, amp: 16 + (seed % 10), base: 3, bumps: 3 + (seed % 4) });
+  pourCount++; cascadeEnergy = 0.4;
+});
+$('reset').addEventListener('click', () => {
+  st.phi = 0; phiTargetAnim = null; syncPhiUI();
+  st.z.fill(0); setPyramid(st, { peak: 28, slope: 0.74, base: 2 });
+  setThetaRDeg(34, false); pourCount = 0; sprites = [];
+});
+
+// ─────────────────────── procedural audio (shared estate mute) ───────────────────────
+// the single source of truth is the estate-wide WS mute (ws:pref:muted); a visitor
+// mutes once and it holds everywhere. Sound is gentle + event-driven (a hiss only
+// when a face lets go), gated behind the begin-curtain's first gesture.
+let actx = null, master = null, muted = false;
+try { muted = (typeof WS !== 'undefined' && WS.muted) ? WS.muted() : false; } catch (e) { muted = false; }
+function audioUnlock(){
+  if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
+  try {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    master = actx.createGain(); master.gain.value = muted ? 0 : 0.9; master.connect(actx.destination);
+    if (actx.state === 'suspended') actx.resume();
+  } catch (e) { actx = null; }
+}
+function reflectMute(){
+  if (master && actx) master.gain.setTargetAtTime(muted ? 0 : 0.9, actx.currentTime, 0.02);
+  $('mute').textContent = muted ? '♪ sound off' : '♫ sound on';
+}
+function setMuted(m){
+  muted = m;
+  try { if (typeof WS !== 'undefined' && WS.setMuted) WS.setMuted(m); } catch (e) {}
+  reflectMute();
+}
+try { if (typeof WS !== 'undefined' && WS.onMuteChange) WS.onMuteChange((m) => { muted = m; reflectMute(); }); } catch (e) {}
+$('mute').addEventListener('click', () => { audioUnlock(); setMuted(!muted); });
+let lastHiss = 0;
+function audioHiss(intensity){
+  if (!actx || muted || intensity < 0.04) return;
+  const t = actx.currentTime; if (t - lastHiss < 0.05) return; lastHiss = t;
+  const dur = 0.12 + intensity * 0.12;
+  const n = actx.createBufferSource(); const buf = actx.createBuffer(1, Math.ceil(actx.sampleRate * dur), actx.sampleRate);
+  const ch = buf.getChannelData(0); for (let i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1);
+  n.buffer = buf;
+  const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2400 + intensity * 2600; bp.Q.value = 0.7;
+  const g = actx.createGain(); const amp = Math.min(0.5, 0.1 + intensity * 0.5);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(amp, t + dur * 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  n.connect(bp); bp.connect(g); g.connect(master); n.start(t); n.stop(t + dur);
+}
+function audioThunk(intensity){
+  if (!actx || muted || intensity < 0.1) return;
+  const t = actx.currentTime;
+  const o = actx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(58, t + 0.18);
+  const g = actx.createGain(); g.gain.setValueAtTime(Math.min(0.4, 0.12 + intensity * 0.3), t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.24);
+}
+function audioTick(){
+  if (!actx || muted) return;
+  const t = actx.currentTime;
+  const o = actx.createOscillator(); o.type = 'square'; o.frequency.value = 1800;
+  const g = actx.createGain(); g.gain.setValueAtTime(0.06, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.035);
+}
+
+// ─────────────────────────── the begin-curtain ───────────────────────────
+const curtain = $('curtain');
+function enter(){ audioUnlock(); reflectMute(); curtain.classList.add('gone'); setTimeout(() => curtain.remove(), 600); }
+curtain.addEventListener('click', enter);
+
+// ─────────────────────────── self-test pill ───────────────────────────
+(function(){
+  const el = $('selftest');
+  function run(){
+    const r = runHeapSelfTest();
+    el.classList.toggle('ok', r.fails.length === 0);
+    el.classList.toggle('bad', r.fails.length > 0);
+    el.textContent = r.fails.length === 0
+      ? `self-test ✓ ${r.pass}/${r.total} — θ_r = atan(μ), invariant`
+      : `self-test ✗ ${r.pass}/${r.total} — ${r.fails[0]}`;
+    el.title = r.lines.map(l => (l.ok ? '✓' : '✗') + ' ' + l.name + (l.detail ? ' — ' + l.detail : '')).join('\n');
+    if (r.fails.length) console.error('The Heap self-test failed:', r.fails);
+    const pn = $('proofN'); if (pn) pn.textContent = `${r.pass}/${r.total}`;
+  }
+  el.addEventListener('click', run);
+  run();
+})();
+
+// ─────────────────────────── go ───────────────────────────
+window.addEventListener('resize', () => { fit(); dialFit(); });
+setThetaRDeg(34, false);
+syncPhiUI();
+dialFit();
+fit();
+$('mute').textContent = muted ? '♪ sound off' : '♫ sound on';
+requestAnimationFrame(frame);
+
+/* ws: unlock breadcrumb — the shared module (one source of truth), inlined via
+   forge. Records this piece's first-visit so direct visits register for the Survey
+   of Heaven / Undercroft. The explicit ws:seen:the-heap write below is the literal
+   form the forge --audit-seen check looks for. Harmless if storage is off. */
+<!-- forge:include ../tools/ws/ws.js -->
+try { WS.seen('the-heap'); } catch (e) {}
+try { var __k = 'ws:seen:the-heap'; if (localStorage.getItem(__k) == null) localStorage.setItem(__k, String(Date.now())); } catch (e) {}
+</script>
+</body>
+</html>
