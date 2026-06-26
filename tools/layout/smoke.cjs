@@ -18,49 +18,23 @@ const Leg = require('./legibility.cjs');
 const C = Sky.CATALOG;
 const STAR_PAD = 12;
 
-// the declarative PLACES (content stripped; only spatial declarations matter here)
-const PLACES = [
-  { id:'verse', district:'manor', tier:2, wing:'studies', footprint:'house-wing', order:10 },
-  { id:'compositor', district:'manor', tier:2, wing:'studies', footprint:'house-wing', order:20 },
-  { id:'cartographer', district:'manor', tier:2, wing:'studies', footprint:'house-wing', order:30 },
-  { id:'sound-garden', district:'manor', tier:2, wing:'east', footprint:'house-wing', order:10 },
-  { id:'threshold', district:'manor', tier:2, wing:'east', footprint:'east-wing', order:20 },
-  { id:'clockwork', district:'manor', tier:2, wing:'maker', footprint:'clockwork' },
-  { id:'aerodrome', district:'grounds', tier:1, wing:'aerospace', footprint:'launch-rail', prefer:'top' },
-  { id:'strange-garden', district:'grounds', tier:1, wing:'glasshouses', footprint:'glasshouse' },
-  { id:'kirigami', district:'grounds', tier:2, wing:'glasshouses', footprint:'glasshouse' },
-  { id:'conservatory', district:'grounds', tier:2, wing:'conservatory', footprint:'glasshouse-wing' },
-  { id:'hall-of-mirrors', district:'grounds', tier:1, wing:'optics', footprint:'hall' },
-  { id:'refraction-run', district:'grounds', tier:1, wing:'optics', footprint:'tank', prefer:['bottom','right'] },
-  { id:'numbers-room', district:'grounds', tier:2, wing:'number', footprint:'numbers-room' },
-  { id:'benford-mill', district:'grounds', tier:2, wing:'number', footprint:'benford-mill', prefer:['bottom','right'] },
-  { id:'hexapawn', district:'grounds', tier:2, wing:'number', footprint:'hexapawn', prefer:['bottom','right'] },
-  { id:'quiet-room', district:'grounds', tier:2, wing:'number', footprint:'quiet-room', prefer:['bottom','right'] },
-  { id:'the-coin-that-lies', district:'grounds', tier:2, wing:'number', footprint:'coin-balance', prefer:['bottom','right'] },
-  { id:'belief-beam', district:'grounds', tier:2, wing:'number', footprint:'belief-beam', prefer:['bottom','right'] },
-  { id:'midway', district:'grounds', tier:1, wing:'amusements', footprint:'coaster', order:5 },
-  { id:'daedalus', district:'grounds', tier:1, wing:'amusements', footprint:'maze', order:20 },
-  { id:'arcade', district:'grounds', tier:1, wing:'amusements', footprint:'arcade', order:10 },
-  { id:'puzzle-pavilion', district:'grounds', tier:1, wing:'amusements', footprint:'pavilion', order:15 },
-  { id:'warren', district:'grounds', tier:1, wing:'amusements', footprint:'warren', order:25 },
-  { id:'engine-room', district:'grounds', tier:2, wing:'works', footprint:'engine', order:10 },
-  { id:'alchemy', district:'grounds', tier:2, wing:'works', footprint:'laboratory', order:20 },
-  { id:'lodestone-hall', district:'grounds', tier:1, wing:'induction', footprint:'coil', prefer:['right','bottom'] },
-  { id:'bootstrap-bench', district:'grounds', tier:2, wing:'induction', footprint:'bootstrap-bench', prefer:['right','bottom'] },
-  { id:'the-drawing-room', district:'grounds', tier:1, wing:'drawing-engines', footprint:'drawing-table', prefer:['bottom','right'] },
-  { id:'construction-bench', district:'grounds', tier:1, wing:'figures-you-construct', footprint:'construction-bench', prefer:['left','bottom'] },
-  { id:'firmament', district:'observatory', tier:1, footprint:'tower' },
-  { id:'relativity', district:'observatory', tier:1, wing:'moving-frame', footprint:'tower', prefer:'right' },
-  { id:'first-light', district:'observatory', tier:1, wing:'cosmology', footprint:'tower', prefer:['left','bottom'] },
-  { id:'recombination', district:'observatory', tier:1, wing:'cosmology', footprint:'tower', prefer:['left','bottom'] },
-  { id:'breathing-star', district:'observatory', tier:2, wing:'stellar', footprint:'breathing-star', prefer:['right','bottom'] },
-  { id:'transit', district:'observatory', tier:1, wing:'exoplanets', footprint:'tower', prefer:['right','bottom'] },
-  { id:'equal-area-sweep', district:'observatory', tier:2, wing:'celestial-mechanics', footprint:'tower', prefer:['right','bottom'] },
-  { id:'einstein-ring', district:'observatory', tier:2, wing:'celestial-mechanics', footprint:'tower', prefer:['right','bottom'] },
-  { id:'workbench', district:'outbuilding', tier:3, footprint:'shed' },
-  { id:'physics-lab', district:'cavern', tier:1, footprint:'cave' },
-  { id:'undercroft', district:'beneath', tier:3, footprint:'stair', locked:true },
-];
+/* THE STRUCTURAL CORPUS IS THE LIVE DOOR (#328). This suite used to solve a HAND-
+   MAINTAINED fixture of the PLACES — but it drifted stale (it carried only 6 of the
+   number wing's 9 rooms, 1 of drawing-engines' 2, and was missing ~35 live rooms),
+   so the geometry it tested no longer matched the door it ships. That staleness is a
+   landmine: the #328 Pascal-triangle re-budget passed the LIVE solve but tripped the
+   fixture's phantom drawing-engines sprawl. The fix is to test REALITY — read the
+   single source of truth (index.src.html's PLACES) the same way the observatory /
+   plate / crowding / legibility sub-tests below already do. One loader, reused. */
+function loadLive() {
+  const SRC = path.join(__dirname, '..', '..', 'index.src.html');
+  const src = fs.readFileSync(SRC, 'utf8');
+  const a = src.indexOf('const PLACES = ['), b = src.indexOf('\n];', a);
+  if (a < 0 || b < 0) throw new Error('smoke.cjs: could not read live PLACES from index.src.html');
+  // eslint-disable-next-line no-eval
+  return eval('(' + src.slice(a + 'const PLACES = '.length, b + 2) + ')').filter(p => !p.locked);
+}
+const PLACES = loadLive();
 
 let fail = 0;
 const sol = Layout.solve(PLACES);
@@ -124,12 +98,7 @@ catch(e){ console.log('  ✓ unknown district throws:', e.message.slice(0,60)); 
        past the plate); and (C) the GENERAL column-collapse GUARD fires LOUD when a
        crowded district would otherwise stack one crushed column. ── */
 function observatoryRingsSelfTest() {
-  const SRC = path.join(__dirname, '..', '..', 'index.src.html');
-  const src = fs.readFileSync(SRC, 'utf8');
-  const a = src.indexOf('const PLACES = ['), b = src.indexOf('\n];', a);
-  if (a < 0 || b < 0) { console.log('  (could not read live PLACES — skipping observatory rings)'); return; }
-  // eslint-disable-next-line no-eval
-  const LIVE = eval('(' + src.slice(a + 'const PLACES = '.length, b + 2) + ')').filter(p => !p.locked);
+  const LIVE = loadLive();
   const obs = LIVE.filter(p => p.district === 'observatory');
   const s = Layout.solve(LIVE);
   console.log('\n=== OBSERVATORY RINGS (the rise as a contour-map · #275) — HARD PASS ===');
@@ -202,13 +171,7 @@ observatoryRingsSelfTest();
    plate into a generous open frame + score NAME-ONLY (the at-a-glance label is the
    room name; the "PIECE · tag" sub-line is the reward-on-arrival under the loupe). */
 function plateSelfTest() {
-  const SRC = path.join(__dirname, '..', '..', 'index.src.html');
-  const src = fs.readFileSync(SRC, 'utf8');
-  const start = src.indexOf('const PLACES = [');
-  const end = src.indexOf('\n];', start);
-  if (start < 0 || end < 0) { console.log('  (could not read live PLACES — skipping plate self-test)'); return; }
-  // eslint-disable-next-line no-eval
-  const LIVE = eval('(' + src.slice(start + 'const PLACES = '.length, end + 2) + ')').filter(p => !p.locked);
+  const LIVE = loadLive();
 
   console.log('\n=== PLATES (More Than One Front Door · #262) — HARD PASS ===');
   const P = Layout.plates(LIVE);
@@ -370,6 +333,70 @@ function wingDisjointSelfTest() {
 wingDisjointSelfTest();
 
 /* ════════════════════════════════════════════════════════════════════════════
+   THE NUMBER WING'S PASCAL TRIANGLE — HARD PASS (#328). The grounds-side echo of
+   the observatory-rings check (#275). The number wing's rooms used to pack through
+   the shared grid, which forced ONE crushed column (its tight sub-region fits only 1
+   column of tier-2 lots) and fitInto then crushed that tall stack into 14×10px specks.
+   placeNumberPascal now lays the wing as a centred Pascal's TRIANGLE. Over the LIVE
+   number-wing solve this asserts:
+   (A) EVERY number-room footprint ≥ a MIN-LEGIBLE size — no specks, on par with the
+       sibling grounds wings (the 14×10 crush is gone);
+   (B) the rows STRICTLY widen toward the base — a real triangle (apex of 1, each row
+       wider than the one above), not a column and not a square; and
+   (C) a NEG-CONTROL proving the bespoke formation is load-bearing: the shared GRID
+       would still collapse these rooms into 1 column in this region (colsByWidth==1),
+       so it is the triangle — not a roomier budget — that rescues legibility. ── */
+function numberPascalSelfTest() {
+  console.log('\n=== THE NUMBER WING — PASCAL TRIANGLE (the grounds-side rings · #328) — HARD PASS ===');
+  const MIN_W = 30, MIN_H = 20;                            // the "no speck" floor (crowded siblings sit ~28-31px; the crush was 14×10)
+  const numIds = PLACES.filter(p => p.wing === 'number').map(p => p.id);
+  if (!numIds.length) { console.log('  (no number-wing rooms in the live PLACES — skipping)'); fail++; return; }
+  const feet = numIds.map(id => sol.foot[id]);
+
+  // (A) MIN-LEGIBLE — no footprint is a speck.
+  let smallest = Infinity, smallId = null, legible = true;
+  for (const id of numIds) {
+    const f = sol.foot[id]; const w = f.r != null ? f.r * 2 : f.w, h = f.r != null ? f.r * 2 : f.h;
+    if (Math.min(w, h) < smallest) { smallest = Math.min(w, h); smallId = id; }
+    if (w < MIN_W - 0.5 || h < MIN_H - 0.5) { legible = false; console.log('    SPECK', id, Math.round(w) + '×' + Math.round(h)); }
+  }
+  if (!legible) fail++;
+  const minW = Math.round(Math.min(...feet.map(f => f.w))), minH = Math.round(Math.min(...feet.map(f => f.h)));
+  console.log('  (A) min-legible (≥ ' + MIN_W + '×' + MIN_H + '): smallest lot ' + minW + '×' + minH +
+    ' @ ' + smallId + ' — ' + (legible ? '✓ no specks (the 14×10 crush is gone)' : '✗ SEE SPECKS'));
+
+  // (B) group rooms into rows by Y; the rows must STRICTLY widen toward the base.
+  const rowsMap = {};
+  for (const id of numIds) { const f = sol.foot[id]; const key = Math.round(f.y); (rowsMap[key] = rowsMap[key] || []).push(f); }
+  const ys = Object.keys(rowsMap).map(Number).sort((p, q) => p - q);
+  const rowW = ys.map(y => { const a = rowsMap[y]; return Math.max(...a.map(f => f.x + f.w)) - Math.min(...a.map(f => f.x)); });
+  const rowN = ys.map(y => rowsMap[y].length);
+  let strict = ys.length >= 3 && rowN[0] === 1;           // a real triangle: ≥3 rows, apex of 1
+  for (let i = 1; i < rowW.length; i++) if (rowW[i] <= rowW[i - 1] + 1e-6) strict = false;
+  if (!strict) fail++;
+  console.log('  (B) rows strictly widen toward the base: ' + ys.length + ' rows ' +
+    rowN.map((n, i) => n + ':' + Math.round(rowW[i]) + 'px').join(' → ') + ' — ' +
+    (strict ? '✓ a real triangle (apex of 1, each row wider)' : '✗ NOT strictly widening'));
+
+  // (C) NEG-CONTROL: the shared grid would STILL collapse this wing into 1 column in
+  //     its region, so the bespoke triangle is what carries legibility (not the budget).
+  const reg = Layout.GROUNDS_WINGS.number;
+  const band = Layout.bandFor(2, 'grounds');               // the wing's tier-2 lot
+  const WING_PAD = 14, GUTTER = 16;                         // the grid's pad + gutter (placeGrounds path)
+  const maxW = reg.w - 2 * WING_PAD;
+  const colsByWidth = Math.max(1, Math.floor((maxW + GUTTER) / (band.w + GUTTER)));
+  const gridWouldCollapse = colsByWidth === 1;
+  if (!gridWouldCollapse) fail++;
+  console.log('  (C) neg-control — the shared grid still forces 1 column here (' + band.w +
+    'px lots in a ' + reg.w + 'px region → colsByWidth=' + colsByWidth + '): ' +
+    (gridWouldCollapse ? '✓ the triangle is load-bearing, not the budget' : '✗ grid would NOT collapse (NC void)'));
+
+  console.log('  ── NUMBER WING PASCAL TRIANGLE: ' +
+    (legible && strict && gridWouldCollapse ? '✓ ALL CLAIMS PASS' : '✗ SEE FAILURES ABOVE') + ' ──');
+}
+numberPascalSelfTest();
+
+/* ════════════════════════════════════════════════════════════════════════════
    #103 CROWDING-REGRESSION RATCHET (#283, second half of the forward ratchet).
    The FULL-plate label-crowding (every room's label drawn at once) is DELIBERATELY
    tolerated — the door draws ZERO room labels at rest and the visitor TRAVELS between
@@ -378,7 +405,12 @@ wingDisjointSelfTest();
    plate composite as a BASELINE and FAIL the build only if a LATER addition pushes
    crowding MEASURABLY above it. The #103 "intended" warning keeps its rationale; this
    just stops the next room from quietly re-crowding the plate past where we left it. ── */
-const CROWDING_BASELINE = 0.955;   // re-baselined #295 when The Cartouche joined drawing-engines (an
+const CROWDING_BASELINE = 0.919;   // re-baselined #328: the number wing's Pascal triangle (placeNumberPascal)
+                                   //   spreads its 9 labels out of one crushed column, so the full-plate
+                                   //   composite DROPPED 0.955→0.919 (a genuine de-crowding) — re-pinned per
+                                   //   the ratchet's own ≥0.02-drop guidance so the next add is measured
+                                   //   against today's truth, not stale slack. (was 0.955, the #295 value:)
+                                   // re-baselined #295 when The Cartouche joined drawing-engines (an
                                    //   intentional room-add — the documented "if intentional, re-baseline"
                                    //   path). NOTE: the ratchet was ALREADY tripped at HEAD before #295
                                    //   (composite had drifted to 0.949 > the old 0.938 ceiling as rooms
@@ -389,12 +421,7 @@ const CROWDING_BASELINE = 0.955;   // re-baselined #295 when The Cartouche joine
                                    //   (was 0.934, the #283 West-Grounds-fix value.)
 const CROWDING_TOL = 0.004;        // a hair of slack for harmless reorderings (≈0.4%)
 function crowdingRatchet() {
-  const SRC = path.join(__dirname, '..', '..', 'index.src.html');
-  const src = fs.readFileSync(SRC, 'utf8');
-  const a = src.indexOf('const PLACES = ['), b = src.indexOf('\n];', a);
-  if (a < 0 || b < 0) { console.log('  (could not read live PLACES — skipping crowding ratchet)'); return; }
-  // eslint-disable-next-line no-eval
-  const LIVE = eval('(' + src.slice(a + 'const PLACES = '.length, b + 2) + ')').filter(p => !p.locked);
+  const LIVE = loadLive();
   const rep = Leg.score(Layout.solve(LIVE), LIVE);
   const c = rep.overall.composite;
   const ceiling = CROWDING_BASELINE + CROWDING_TOL;
@@ -420,13 +447,7 @@ console.log(fail ? ('\n✗ '+fail+' STRUCTURAL FAILURES') : '\n✓ ALL LAYOUT CH
    truth — it carries room/piece/tag, so the modeled label boxes are faithful) and
    run the legibility conscience. This is a WARNING section, NOT part of `fail`. */
 function liveLegibility() {
-  const SRC = path.join(__dirname, '..', '..', 'index.src.html');
-  const src = fs.readFileSync(SRC, 'utf8');
-  const start = src.indexOf('const PLACES = [');
-  const end = src.indexOf('\n];', start);
-  if (start < 0 || end < 0) { console.log('  (could not read live PLACES — skipping legibility)'); return; }
-  // eslint-disable-next-line no-eval
-  const LIVE = eval('(' + src.slice(start + 'const PLACES = '.length, end + 2) + ')').filter(p => !p.locked);
+  const LIVE = loadLive();
   const sol = Layout.solve(LIVE);
   const rep = Leg.score(sol, LIVE);
   console.log('\n=== LEGIBILITY (modeled-label crowding PROXY · #103) ===');

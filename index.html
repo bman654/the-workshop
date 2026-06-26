@@ -2436,7 +2436,7 @@ var Layout = (function () {
      (it is the district-tiling table, not a per-room position). */
   var GROUNDS_WINGS = {
     optics:      { x: 214, y: 392, w: 196, h: 132 },   // west park (Hall of Mirrors) — pulled E off the far wall
-    number:      { x: 470, y: 664, w: 224, h: 120 },   // lower-left park (Numbers Room) — lifted off the bottom margin
+    number:      { x: 432, y: 651, w: 214, h: 150 },   // lower-central park (Numbers Room) — a Pascal's-TRIANGLE host (#328), not a column. ENLARGED + re-anchored to seat the bespoke triangle (placeNumberPascal): the old 224×120 column-region crushed the wing's 9 rooms into one 14×10px stack (packGrid forced 1 column). This wider+taller band fills the lower-central gap between drawing-engines (right ~x428) and the (#328-nudged) induction wing (left ~x649), below the workbench shed (bottom y651) and above the benford-mill catalog star (x490 y810) — finalized via the LIVE Layout.solve so the solved triangle (39×28 lots, base bottom ~y792) is star-clear + DISJOINT from both neighbor wings.
     works:       { x: 700, y: 540, w: 300, h: 222 },   // working edge, south of the house — lifted, tightened
     glasshouses: { x: 240, y: 560, w: 230, h: 130 },   // living systems (Strange Garden) west-low
     amusements:  { x: 910, y: 240, w: 190, h: 280 }    // upper-right court (arcade + maze); width 280→190 (#283) so the budget ends at x1100, disjoint from horology (x1100+). The old 280 budget overlapped horology, and a SPARSE amusements pack (e.g. the 3-room hours.test fixture) packed wide enough that its SOLVED rect clipped horology — the new wing-disjoint guard caught it. The live 9 rooms still pack one tidy column at x986-1024.
@@ -2486,7 +2486,7 @@ var Layout = (function () {
      and DISJOINT from the works wing rect (its bottom-left corner reached ~y708) above,
      now enforced by assertGroundsWingsDisjoint. Still west of the x720 midline, so all
      three EM rooms ride the West Grounds plate together. */
-  GROUNDS_WINGS.induction = { x: 582, y: 686, w: 130, h: 124 };
+  GROUNDS_WINGS.induction = { x: 624, y: 686, w: 102, h: 124 };  // #328 nudge: shifted RIGHT ~28px (from x582 w130) so the Numbers wing's new Pascal TRIANGLE can breathe to ~39px lots in the lower-central gap. Its solved column moves to x~649-701 — still WEST of The Works (rect left x706, ~5px clear) and clear of foundry/catalog stars (verified via the live Layout.solve + assertGroundsWingsDisjoint). The three EM rooms still ride the West-Grounds plate together.
   /* DRAWING-ENGINES — The Drawing Room, the estate's COMPUTE-BY-DRAWING wing (a
      Scheiner pantograph that copies your hand at a dialed scale). Kin to the other
      brass drawing-engines (linkage's exact line, the trammel's ellipse, the
@@ -2975,6 +2975,72 @@ var Layout = (function () {
     emitDistrictRect('manor', du, solution);
   }
 
+  /* ── THE PASCAL-TRIANGLE formation (#328) — the number wing's bespoke 2-D layout,
+     the grounds-side echo of placeObservatoryRings (#275). The wing's nine tier-2
+     rooms cannot fit ≥2 columns in a tight grounds sub-region, so the shared grid
+     packed them as ONE crushed column of 9 (14×10px specks). Instead lay the rooms as
+     a CENTRED PASCAL'S TRIANGLE: row r holds (r+1) rooms; every row is centred over
+     the apex; the final partial row SPREADS its rooms symmetrically across a span one
+     pitch wider than the row above, so the rows STRICTLY widen toward the base (a real
+     triangle) and the silhouette stays balanced — the live n=9 base of 3 sits at the
+     far-left, centre, and far-right of a 4-wide base, "a balancing gap". SCALES as the
+     wing grows (a 10th room completes the base; an 11th opens a new base row). The
+     uniform slot is sized to FILL the sub-region at the tier-2 building aspect, well
+     above the crush. Pure + deterministic; mirrors placeObservatoryRings's contract
+     (setFoot each room, push one wing tint-rect, return the slot rects). ── */
+  function triangleRows(n) {
+    var rows = [], placed = 0, cap = 1;
+    while (placed < n) { var k = Math.min(cap, n - placed); rows.push(k); placed += k; cap++; }
+    // never hang a single room alone on the base — merge a lone last room up so the base
+    // stays ≥ 2 wide (keeps strict-widening + a balanced silhouette for the n=2,4,7,11,…
+    // "triangular+1" counts the wing will pass through as it grows).
+    if (rows.length >= 2 && rows[rows.length - 1] === 1) { rows[rows.length - 2] += 1; rows.pop(); }
+    return rows;
+  }
+  function placeNumberPascal(list, region, solution, conf) {
+    var rows = triangleRows(list.length);
+    var R = rows.length;
+    var gh = 11, gv = 7, pad = 9;                            // row gutters + slot-union→tint pad
+    // each row r spreads its rooms across spanU(r) slot-pitches, centred. spanU strictly
+    // increases down the rows (≥ r, and ≥ count−1 so rooms never collide), so the base is
+    // the widest row and every row is strictly wider than the one above it.
+    var spanU = [];
+    for (var r = 0; r < R; r++) spanU.push(Math.max(r, rows[r] - 1));
+    var baseU = spanU[R - 1];                                // widest row's span, in pitches
+    var aspect = SIZE_BAND[2].h / SIZE_BAND[2].w;            // rooms read as tier-2 grounds buildings
+    var availW = region.w - 2 * pad, availH = region.h - 2 * pad;
+    // base pixel width = baseU·pitchX + sw = (baseU+1)·sw + baseU·gh ≤ availW;
+    // total height = R·sh + (R−1)·gv ≤ availH, sh = aspect·sw.
+    var swByW = (availW - baseU * gh) / (baseU + 1);
+    var swByH = (availH - (R - 1) * gv) / (R * aspect);
+    var sw = Math.min(swByW, swByH, SIZE_BAND[2].w);         // fill, but never past a tier-2 lot
+    var sh = aspect * sw;
+    var pitchX = sw + gh, pitchY = sh + gv;
+    var formH = R * sh + (R - 1) * gv;
+    var cx = region.x + region.w / 2;
+    var top = region.y + (region.h - formH) / 2;            // vertically centred in the region
+    var slotRects = [], used = 0;
+    for (var ri = 0; ri < R; ri++) {
+      var c = rows[ri], ext = spanU[ri] * pitchX, rowY = top + ri * pitchY;
+      for (var s = 0; s < c; s++) {
+        var t = (c === 1) ? 0.5 : s / (c - 1);             // 0..1 across the row's span
+        var slotCx = cx - ext / 2 + t * ext;
+        var slot = { x: slotCx - sw / 2, y: rowY, w: sw, h: sh };
+        setFoot(solution, list[used++], slot);
+        slotRects.push(slot);
+      }
+    }
+    // one wing tint-rect over the slot union (+ pad), exactly like placeObservatoryRings,
+    // so the engraved "THE NUMBER WING" label + accent wash still read on the plate.
+    var wu = rectUnion(slotRects);
+    solution.wingRects.push({
+      district: 'grounds', wing: 'number',
+      label: wingLabel('number'), accent: wingAccent('number', conf.hue),
+      x: wu.x - pad, y: wu.y - pad, w: wu.w + 2 * pad, h: wu.h + 2 * pad
+    });
+    return slotRects;
+  }
+
   /* the GROUNDS: each wing goes to its own sub-region (GROUNDS_WINGS), so the
      grounds spread across the field instead of crowding one block. */
   function placeGrounds(rooms, solution) {
@@ -2995,6 +3061,15 @@ var Layout = (function () {
       var sub = GROUNDS_WINGS[wid];
       if (!sub && wid === 'conservatory') sub = GROUNDS_WINGS.conservatory_band;
       if (!sub) sub = GROUNDS_WINGS[wid] || { x: FIELD.x, y: FIELD.y + 480, w: 240, h: 130 };
+      // THE NUMBER WING takes a bespoke Pascal's-triangle formation (#328) instead of
+      // the shared grid (which collapsed its 9 rooms into one crushed column) — the
+      // grounds-side echo of the observatory's rings. It setFoots its own rooms + pushes
+      // its own wing tint-rect, and returns the slot rects to fold into the district union.
+      if (wid === 'number') {
+        var triRects = placeNumberPascal(list, sub, solution, conf);
+        for (var ti = 0; ti < triRects.length; ti++) allDU.push(triRects[ti]);
+        continue;
+      }
       var band = bandFor(list[0].tier, 'grounds');
       var pk = packGrid(list.length, band.w, band.h, sub.w - 2 * WING_PAD);
       var ft = fitInto(pk.w + 2 * WING_PAD, pk.h + 2 * WING_PAD, sub, 6);
