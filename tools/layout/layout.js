@@ -211,6 +211,18 @@ var Layout = (function () {
      clear of every footprint, every catalog star, AND mutually DISJOINT from The Works,
      induction, the number wing and every other grounds wing region. */
   GROUNDS_WINGS.foundry = { x: 706, y: 714, w: 200, h: 96 };
+  /* PROCESSIONS — The Processional Ground, where THE LONG WAY HOME is walked: the
+     twelve stations of the hero's journey laid as a tilted ring that sinks below one
+     horizon into a frozen star sky and climbs back to a new dawn. A WALKED PLACE
+     (not a chart), so it lives on the GROUNDS — seated in the open UPPER-CENTRAL
+     court NORTH of the manor house, a ceremonial approach to the seat of the estate:
+     in the clear band RIGHT of The Aerodrome's launch court (ends ~x566) and LEFT of
+     The Construction Bench's figures-you-construct wing (begins ~x790), ABOVE the
+     manor district (begins y296). Sized for a tier-1 grand anchor footprint. Finalized
+     via the LIVE Layout.solve (the solved tier-1 footprint seats at x595-763 y171-287,
+     star-clear, and mutually DISJOINT from aerospace, figures-you-construct, the manor
+     and every other wing region — verified by assertGroundsWingsDisjoint + smoke.cjs). */
+  GROUNDS_WINGS.processions = { x: 568, y: 150, w: 222, h: 158 };
 
   /* ── THE WING-ON-WING DISJOINTNESS GUARD (#283). Nothing used to assert that two
      grounds wings never shared the SAME DRAWN GROUND. Each wing was budgeted + checked
@@ -282,7 +294,8 @@ var Layout = (function () {
     'drawing-engines': { label: 'DRAWING ENGINES', accent: '#c9a24a' },
     'figures-you-construct': { label: 'FIGURES YOU CONSTRUCT', accent: '#6f9fc0' },
     'kinetics-sound': { label: 'KINETICS & SOUND', accent: '#d8a94a' },
-    waves:       { label: 'WAVES',              accent: '#54d6d0' }
+    waves:       { label: 'WAVES',              accent: '#54d6d0' },
+    processions: { label: 'THE PROCESSIONAL GROUND', accent: '#c9a24a' }
   };
   function wingLabel(slug) {
     if (WING_META[slug] && WING_META[slug].label) return WING_META[slug].label;

@@ -68,14 +68,14 @@ const FOOTPRINTS = [
   { id: 'cartographer',     x: 696,   y: 363,  w: 22,   h: 16 },
   { id: 'sound-garden',     x: 696,   y: 435,  w: 22,   h: 16 },
   { id: 'threshold',        x: 720,   y: 435,  w: 22,   h: 16 },
-  { id: 'strange-garden',   x: 322,   y: 629,  w: 67,   h: 47 },
-  { id: 'firmament',        x: 293,   y: 193,  w: 13,   h: 13 },  // tower r→bbox
-  { id: 'daedalus',         x: 1026,  y: 363,  w: 48,   h: 33 },
-  { id: 'arcade',           x: 1026,  y: 288,  w: 48,   h: 33 },
+  { id: 'strange-garden',   x: 341,   y: 638,  w: 28,   h: 19 },
+  { id: 'firmament',        x: 320,   y: 268,  w: 19,   h: 19 },  // tower r→bbox
+  { id: 'daedalus',         x: 990,   y: 369,  w: 31,   h: 21 },
+  { id: 'arcade',           x: 990,   y: 273,  w: 31,   h: 21 },
   { id: 'workbench',        x: 520,   y: 589,  w: 88,   h: 61 },
   { id: 'undercroft',       x: 698,   y: 517,  w: 46,   h: 64 },
-  { id: 'hall-of-mirrors',  x: 275,   y: 404,  w: 73,   h: 50 },  // the optics wing — the feat-stars cluster beside it
-  { id: 'refraction-run',   x: 275,   y: 461,  w: 73,   h: 50 },  // The Photon's Errand — the optics fly-through, the new 'tank' footprint below the Hall
+  { id: 'hall-of-mirrors',  x: 293,   y: 401,  w: 37,   h: 26 },  // the optics wing — the feat-stars cluster beside it
+  { id: 'refraction-run',   x: 293,   y: 460,  w: 37,   h: 26 },  // The Photon's Errand — the optics fly-through, the new 'tank' footprint below the Hall
   { id: 'gnomon',           x: 1118,  y: 203,  w: 142,  h: 98 }  // The Hours — the horology wing's open east-park sundial
 ];
 const FURNITURE = [
