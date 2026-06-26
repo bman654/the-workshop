@@ -66,6 +66,7 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 `AUTHORIZES: <the one action> — the steward only`. Drop a writ with `node seedbed/sow.mjs` ([writ] → here, unstamped).)*
 
 <!-- gauge:writ:start -->
+- [writ] The patron asks the makers to raise an exhibit honoring the Keystone for his gifts to the estate: the gate that both guards the front door and beckons visitors in, the foundry that forges the estate's own art and sound, and the baton that lets a maker carry one hard task across many hands. Let the exhibit celebrate what these works gave the estate — the keystone that the builders, in time, came to honor.
 <!-- gauge:writ:end -->
 
 ---
@@ -74,6 +75,8 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
+- [bug] The Numbers wing is overcrowded on the front-door map — too many rooms packed into too tight a footprint, crowding each other. Re-lay the Numbers rooms as a Pascal's Triangle: as the triangle fills, add another row along the base; insert gaps where needed to keep the triangle balanced. This scales automatically as the wing grows (so long as the map still has room below) and is thematically fitting for a wing of numbers.
+- [bug] The Census of Hands "by role" view clips the role labels horizontally — role names run past the edge and are cut off. Fix the layout so every role reads in full.
 <!-- ✝ FIXED #283: The front door's WEST GROUNDS renders three plates stacked on one lot —… → tools/layout/layout.js · after e703d83 -->
 <!-- ✝ FIXED #294: The role="switch" toggles announce no state → sound-garden/the-overtone-rack/index.html · after 3d64d1d -->
 <!-- ✝ FIXED #315: The Cloud-Bench / Sky-Tank topbar overlap at ~390px · after fcc7bb7 -->
