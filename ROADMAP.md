@@ -75,12 +75,11 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 
 <!-- gauge:bug:start -->
 - [bug] The Numbers wing is overcrowded on the front-door map — too many rooms packed into too tight a footprint, crowding each other. Re-lay the Numbers rooms as a Pascal's Triangle: as the triangle fills, add another row along the base; insert gaps where needed to keep the triangle balanced. This scales automatically as the wing grows (so long as the map still has room below) and is thematically fitting for a wing of numbers.
-- [bug] The Census of Hands "by role" view clips the role labels horizontally — role names run past the edge and are cut off. Fix the layout so every role reads in full.
-<!-- ✝ FIXED #283: The front door's WEST GROUNDS renders three plates stacked on one lot —… → tools/layout/layout.js · after e703d83 -->
 <!-- ✝ FIXED #294: The role="switch" toggles announce no state → sound-garden/the-overtone-rack/index.html · after 3d64d1d -->
 <!-- ✝ FIXED #315: The Cloud-Bench / Sky-Tank topbar overlap at ~390px · after fcc7bb7 -->
 <!-- ✝ FIXED #316: The Cloud-Bench / Sky-Tank scene-title runs over the stage readouts · after 41846ed -->
 <!-- ✝ FIXED #319: `gauge.mjs record` is not idempotent — a double-run silently double-adv… → seedbed/gauge.mjs · after 594e9ee -->
+<!-- ✝ FIXED #327: The Census of Hands "by role" view clips the role labels horizontally —… → census/index.src.html · after 3448448 -->
 <!-- gauge:bug:end -->
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth

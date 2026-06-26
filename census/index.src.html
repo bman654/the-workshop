@@ -221,7 +221,7 @@
     <div class="panel">
       <h3>Colophon · the census self-test</h3>
       <p>This is not a tally the room made up. Every stone is <b>read</b>, one per mark, from the estate's true <code>ledger/ledger.jsonl</code>. The self-test asserts the count is a pure function of that record: the marks' <b>seq is contiguous 1…N</b> (no gap, no double), every stone <b>round-trips byte-true</b> to its source line, and — the heart of it — the <b>Σ of all role-buckets === N exactly</b>: no hand double-counted, none dropped. Every figure the page shows is re-derived from the file; not one is typed in. The logic is single-sourced to <code>census/core.mjs</code> with a Node twin <code>census/core.test.mjs</code> (green, exit 0) — this pill computes the identical battery from the same bytes.</p>
-      <p style="font-size:12.5px;opacity:.82"><b>The normalization rule, stated honestly:</b> a maker's role string is folded to one of twelve <i>base seats</i> by its leading word, with all decoration after the first separator&nbsp;( <code>(</code> · <code>·</code> · <code>—</code> · <code>:</code> · <code>/</code> )&nbsp;dropped as provenance — so <code>builder (planter)</code> is a <b>builder</b> (its head) and <code>planter (builder)</code> a <b>planter</b>; each mark counts <i>once</i>, in the seat it led with. <code>gardener</code> and <code>groundskeeper</code> are the two keeper seats — siblings that sow the gardens and the grounds. Three named aliases fold word-for-word ( <code>scout</code>→explorer, <code>cycle-fixer</code>→bug-fixer, <code>the planter</code>→planter ). A thirteenth catch-all <i>other</i> keeps the map total; on today's ledger every real role maps to a base, so <i>other</i> holds <b>0</b>.</p>
+      <p style="font-size:12.5px;opacity:.82"><b>The normalization rule, stated honestly:</b> a maker's role string is folded to one of twelve <i>base seats</i> by its leading word, with all decoration after the first separator&nbsp;( <code>(</code> · <code>·</code> · <code>—</code> · <code>:</code> · <code>/</code> )&nbsp;dropped as provenance — so <code>builder (planter)</code> is a <b>builder</b> (its head) and <code>planter (builder)</code> a <b>planter</b>; each mark counts <i>once</i>, in the seat it led with. <code>gardener</code> and <code>groundskeeper</code> are the two keeper seats — siblings that sow the gardens and the grounds. Three named aliases fold word-for-word ( <code>scout</code>→explorer, <code>cycle-fixer</code>→bug-fixer, <code>the planter</code>→planter ). A thirteenth catch-all <i>other</i> keeps the map total: the gate-foundry seats ( <code>foundry-smith</code> · <code>foundry-judge</code> · <code>foundry-synth</code> ) and the <code>wiring-builder</code> name no base seat, so they fold <i>here</i> — the partition stays total (<b>Σ === N</b>) without minting a bucket for every gate role. The self-test pins that off-base count to the verified claim.</p>
       <div class="proofgrid" id="proofgrid"></div>
       <button id="tamperBtn">⚠ Drop a mark (negative control) — prove the count bites</button>
     </div>
@@ -291,11 +291,11 @@ const roleOrder = CENSUS.roleOrder;            // buckets by count desc
 // raw-role lookup by seq (for the marginalia; koan rides on the token)
 const RAWBYSEQ = new Map(TOKENS.map(t => [t.seq, t]));
 
-/* ── geometry of the frame ── */
-const VW = 1100, VH = 560;
-const TOK = 8, GAP = 2.2, STEP = TOK + GAP;    // a stone is 8×8 on a 10.2 grid
-const ROLE_BASE_Y = 470;                        // bricks sit on this baseline
-const MAX_ROWS = 26;                            // a brick caps here, then grows right
+/* ── geometry of the frame ── single-sourced from core.ROLE_GEOM (inlined above),
+   so the DOM layout and the Node twin's fit-check share ONE set of constants. */
+const { VW, VH, TOK, GAP, MAX_ROWS } = ROLE_GEOM;
+const STEP = TOK + GAP;                          // a stone is TOK×TOK on a (TOK+GAP) grid
+const ROLE_BASE_Y = 470;                        // bricks sit on this baseline (vertical; not width)
 
 /* the per-role fill walk: brass → rust as the seat shrinks (roleOrder index). The
    founder is the only --gilt stone (handled separately). */
@@ -341,28 +341,16 @@ function layoutByRole(){
   const bySeat = new Map(roleOrder.map(b => [b, []]));
   for(const tk of TOKENS){ if(tk.seq !== FOUNDER_SEQ) bySeat.get(tk.bucket).push(tk.seq); }
 
-  // a brick's width in sub-columns = ceil(count / MAX_ROWS); compute total width to center
-  const seats = roleOrder.filter(b => byRole.get(b) > 0 && !(b==='architect' && byRole.get(b)===1 && bySeat.get(b).length===0));
-  // architect bucket holds only the founder (pedestaled), so its brick is empty → skip its column
-  const brickCols = b => Math.max(1, Math.ceil(bySeat.get(b).length / MAX_ROWS));
-  const SEAT_GAP = 26;
-  // Each seat occupies a SLOT wide enough for BOTH its brick and its horizontal
-  // caption — the narrow tail (steward, gardener…) has a 1-column brick but a wide
-  // label, so the slot, not the brick, sets the pitch and the labels never collide.
-  // .blabel is 10px mono ≈ 6.6px/char; 7.2 + pad keeps the longest ("GROUNDS-WORKER") clear.
-  const labelW = b => b.length * 7.2 + 12;
-  const slotW = b => Math.max(brickCols(b)*STEP + SEAT_GAP, labelW(b));
-  let totalW = 0;
-  for(const b of seats){ totalW += slotW(b); }
-  let cx = (VW - totalW)/2;
+  // The slot-width arithmetic + the FITTED viewBox width live in core.roleLayout —
+  // ONE source shared with the Node twin's no-clip fit-check. We only LAY the stones
+  // and furniture into the slots it sizes. W ≥ totalW so cx ≥ 0 → nothing is clipped,
+  // and the viewport (set in applyLayout) scales the whole pyramid to fit, forever.
+  const L = roleLayout(CENSUS);
 
-  for(const b of seats){
-    const seqs = bySeat.get(b);
-    const cols = brickCols(b);
-    const brickW = cols*STEP;
-    const slot = slotW(b);
-    const brickX = cx + (slot - brickW)/2;          // brick centered within its slot
-    const labelCX = cx + slot/2;                     // label centered on the slot
+  for(const s of L.slots){
+    const seqs = bySeat.get(s.bucket);
+    const brickX = s.brickX;                          // brick centered within its slot
+    const labelCX = s.labelCX;                        // label centered on the slot
     // fill bottom-up, column by column
     for(let k=0;k<seqs.length;k++){
       const col = Math.floor(k / MAX_ROWS);
@@ -374,17 +362,16 @@ function layoutByRole(){
     // furniture: label + count beneath the brick, centered on the slot
     const lbl = document.createElementNS(SVGNS,'text');
     lbl.setAttribute('class','blabel'); lbl.setAttribute('x', labelCX);
-    lbl.setAttribute('y', ROLE_BASE_Y + 20); lbl.textContent = b.toUpperCase();
+    lbl.setAttribute('y', ROLE_BASE_Y + 20); lbl.textContent = s.bucket.toUpperCase();
     furnitureLayer.appendChild(lbl);
     const cnt = document.createElementNS(SVGNS,'text');
     cnt.setAttribute('class','bcount'); cnt.setAttribute('x', labelCX);
-    cnt.setAttribute('y', ROLE_BASE_Y + 33); cnt.textContent = byRole.get(b);
+    cnt.setAttribute('y', ROLE_BASE_Y + 33); cnt.textContent = byRole.get(s.bucket);
     furnitureLayer.appendChild(cnt);
-    cx += slot;
   }
 
   // THE FOUNDER — the lone architect stone on a gilded pedestal, centered above the roll
-  const pedX = VW/2, pedTop = 70;
+  const pedX = L.pedX, pedTop = 70;
   pos.set(FOUNDER_SEQ, {x: pedX - TOK/2, y: pedTop});
   // pedestal block
   const ped = document.createElementNS(SVGNS,'rect');
@@ -411,7 +398,7 @@ function layoutByRole(){
   cap2.textContent = 'the room that remembers, gone before the mortar set';
   furnitureLayer.appendChild(cap2);
 
-  return pos;
+  return { pos, W: L.W };
 }
 
 /* ═══════════════ LAYOUT B — ONCE-OR-AGAIN (two square pools) ═══════════════
@@ -438,7 +425,10 @@ function layoutOnceAgain(){
   const wOnce = colsOnce*STEP, wAgain = colsAgain*STEP;
   const POOL_GAP = 120;
   const groupW = wOnce + POOL_GAP + wAgain;
-  const startX = (VW - groupW)/2;
+  // fit the viewport to the pair the same way the role view does: W ≥ VW, centered,
+  // so the two pools never clip even if √-growth eventually widens them past VW.
+  const W = Math.max(VW, groupW + 2*ROLE_GEOM.SIDE_MARGIN);
+  const startX = (W - groupW)/2;
   const a = packSquare(once, startX, topY);
   const b = packSquare(again, startX + wOnce + POOL_GAP, topY);
 
@@ -457,7 +447,7 @@ function layoutOnceAgain(){
   mk(startX, wOnce, 'NAMED ONCE', CENSUS.once.tokens + ' hands, each a single mark', '#cba15a');
   mk(startX + wOnce + POOL_GAP, wAgain, 'THE HANDS THAT RETURNED',
      CENSUS.again.names + ' hands · ' + CENSUS.again.tokens + ' marks', '#c87a4a');
-  return pos;
+  return { pos, W };
 }
 
 /* ═══════════════════ APPLY a layout (re-position only) ═══════════════════ */
@@ -468,7 +458,11 @@ function clearFurniture(){ while(furnitureLayer.firstChild) furnitureLayer.remov
 
 function applyLayout(){
   clearFurniture();
-  const pos = mode === 'role' ? layoutByRole() : layoutOnceAgain();
+  const { pos, W } = mode === 'role' ? layoutByRole() : layoutOnceAgain();
+  // FIT THE VIEWPORT TO THE CONTENT — set the viewBox to the laid width; with
+  // preserveAspectRatio='xMidYMid meet' the SVG uniformly scales the whole pyramid
+  // (square stones preserved) to fit its container with no clip, however wide it grows.
+  $('census').setAttribute('viewBox', '0 0 ' + W + ' ' + VH);
   for(const tk of TOKENS){
     const p = pos.get(tk.seq); if(!p) continue;
     els.get(tk.seq).setAttribute('transform', 'translate('+p.x+','+p.y+')');

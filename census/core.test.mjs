@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import {
   selfTest, verdict, buildCensus, normalizeRole, headOf, tamper,
-  canonicalLine, BUCKETS, CLAIM
+  canonicalLine, roleLayout, ROLE_GEOM, BUCKETS, CLAIM
 } from './core.mjs';
 
 // The default ledger is ../ledger/ledger.jsonl, resolved relative to THIS module —
@@ -73,6 +73,44 @@ for (const mode of ['drop', 'dup']) {
 console.log('\n— partition closes on the real ledger —');
 let sum = 0; for (const b of BUCKETS) sum += census.byRole.get(b);
 ok('Σ buckets === N === ' + N, sum === N, sum + '');
+
+console.log('\n— role view FITS its viewport (no clip), now and at 2× growth —');
+// The bug we fixed: the "by role" pyramid's summed slot width crept past the old
+// fixed 1100-unit viewBox and clipped the end captions (PUBLISHER, GROUNDSKEEPER).
+// The fit: core.roleLayout chooses a viewBox width W ≥ totalW so cx ≥ 0 and every
+// stone/caption/pedestal x lands in [0, W]. Assert that on the LIVE ledger AND a
+// synthetic ~2×-grown one (proving the fit scales as the ledger grows forever).
+const EPS = 1e-9;
+function fitsViewport(c) {
+  const L = roleLayout(c);
+  const ok = L.W >= L.totalW - EPS && L.minX >= -EPS && L.maxX <= L.W + EPS;
+  return { ok, L };
+}
+// grow the ledger ~`factor`× by replicating its marks (re-seq'd contiguous, names
+// suffixed so they stay distinct) — every bucket's count scales, the bricks widen,
+// totalW blows past VW, and the fit must still hold.
+function growLedger(rawText, factor) {
+  const base = rawText.split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l));
+  const out = [];
+  let seq = 1;
+  for (let r = 0; r < factor; r++) {
+    for (const m of base) out.push(canonicalLine({ ...m, seq: seq++, name: r ? m.name + '#' + r : m.name }));
+  }
+  return out.join('\n') + '\n';
+}
+const liveFit = fitsViewport(census);
+ok('live role layout fits W (minX≥0, maxX≤W, W≥totalW)', liveFit.ok,
+  'W=' + liveFit.L.W.toFixed(1) + ' totalW=' + liveFit.L.totalW.toFixed(1) +
+  ' x∈[' + liveFit.L.minX.toFixed(1) + ',' + liveFit.L.maxX.toFixed(1) + ']');
+// the live pyramid genuinely overflows the BASE viewBox (this is the bug) — the fit
+// is doing real work, not a no-op: assert totalW > VW so W had to grow.
+ok('live pyramid overflows base VW (' + ROLE_GEOM.VW + ') — the fit is load-bearing',
+  liveFit.L.totalW > ROLE_GEOM.VW, 'totalW=' + liveFit.L.totalW.toFixed(1));
+const grown = buildCensus(growLedger(raw, 2));
+const grownFit = fitsViewport(grown);
+ok('2×-grown role layout still fits W (scales forever)', grownFit.ok,
+  'N=' + grown.N + ' W=' + grownFit.L.W.toFixed(1) + ' totalW=' + grownFit.L.totalW.toFixed(1) +
+  ' x∈[' + grownFit.L.minX.toFixed(1) + ',' + grownFit.L.maxX.toFixed(1) + ']');
 
 console.log('\n' + (fails === 0 ? 'ALL GREEN' : fails + ' RED') );
 process.exit(fails === 0 ? 0 : 1);

@@ -181,6 +181,83 @@ export function buildCensus(raw) {
   };
 }
 
+/* ── ROLE_GEOM + roleLayout: the "by role" pyramid's SLOT-WIDTH ARITHMETIC ──────
+   The single source of the role-view layout's horizontal geometry, shared by BOTH
+   the DOM layoutByRole (which lays the stones + furniture) and the Node twin (which
+   asserts the chosen viewBox FITS the laid content — no clip). Pure: census → widths.
+
+   The bug this single-sources away: each seat occupies a SLOT wide enough for both
+   its brick and its caption; as the ledger grows the big seats span more sub-columns
+   and the SUMMED slot width (totalW) creeps past the old fixed 1100-unit viewBox,
+   clipping the end captions. The fix is to FIT the viewport to the content — set the
+   viewBox width W = max(VW, totalW + margin) so cx = (W - totalW)/2 is never negative
+   and preserveAspectRatio='xMidYMid meet' uniformly scales the whole pyramid to fit
+   with NO clip (square stones preserved), correct as the ledger grows forever. */
+export const ROLE_GEOM = {
+  VW: 1100, VH: 560,           // the base viewBox; W grows past VW when the pyramid does
+  TOK: 8, GAP: 2.2,            // a stone is TOK×TOK on a (TOK+GAP) grid
+  MAX_ROWS: 26,                // a brick caps at MAX_ROWS rows, then grows a column right
+  SEAT_GAP: 26,                // the gutter folded into each seat's slot
+  LABEL_PER_CHAR: 7.2, LABEL_PAD: 12, // .blabel 10px mono ≈ 7.2px/char + pad (longest: GROUNDS-WORKER)
+  SIDE_MARGIN: 24              // breathing room each side when the pyramid is wider than VW
+};
+
+/* roleLayout(census) → the role view's laid widths + the fitted viewBox W.
+   Returns:
+     founderSeq        — the lone pedestaled architect (min seq; never in a brick).
+     seats             — the buckets that get a brick, in pyramid order (count desc).
+     slots             — per seat { bucket, cols, seatLen, slot, labelW, x, brickX, labelCX }.
+     totalW            — Σ slot widths (the pyramid's true laid width).
+     W                 — the chosen viewBox width = max(VW, totalW + 2·SIDE_MARGIN).
+     cx                — the left edge of the first slot = (W - totalW)/2  (≥ 0, never clips).
+     pedX              — the founder pedestal's center = W/2.
+     STEP              — TOK + GAP (the stone pitch), echoed for the caller.
+     minX, maxX        — the laid content's x-extent (stones + captions + pedestal);
+                         a fitted layout has minX ≥ 0 and maxX ≤ W (nothing clipped). */
+export function roleLayout(census, geom = ROLE_GEOM) {
+  const { VW, TOK, GAP, MAX_ROWS, SEAT_GAP, LABEL_PER_CHAR, LABEL_PAD, SIDE_MARGIN } = geom;
+  const STEP = TOK + GAP;
+  const { byRole, roleOrder, tokens } = census;
+  const founderSeq = tokens.length ? tokens.reduce((m, t) => Math.min(m, t.seq), Infinity) : 1;
+  // non-founder marks per bucket (the founder is pedestaled, never inside a brick)
+  const seatLen = new Map(roleOrder.map((b) => [b, 0]));
+  for (const t of tokens) if (t.seq !== founderSeq) seatLen.set(t.bucket, (seatLen.get(t.bucket) || 0) + 1);
+  // the seats that get a brick — skip an architect bucket that holds only the founder
+  const seats = roleOrder.filter((b) =>
+    byRole.get(b) > 0 && !(b === 'architect' && byRole.get(b) === 1 && (seatLen.get(b) || 0) === 0));
+  const brickCols = (b) => Math.max(1, Math.ceil((seatLen.get(b) || 0) / MAX_ROWS));
+  const labelW = (b) => b.length * LABEL_PER_CHAR + LABEL_PAD;
+  const slotW = (b) => Math.max(brickCols(b) * STEP + SEAT_GAP, labelW(b));
+  // size every slot, accumulate the total laid width
+  let totalW = 0;
+  const slots = seats.map((b) => {
+    const cols = brickCols(b), slot = slotW(b);
+    totalW += slot;
+    return { bucket: b, cols, seatLen: seatLen.get(b) || 0, slot, labelW: labelW(b) };
+  });
+  // FIT THE VIEWPORT TO THE CONTENT — W is at least VW but grows to hold a wider
+  // pyramid (+ a side margin), so cx = (W - totalW)/2 is never negative → no clip.
+  const W = Math.max(VW, totalW + 2 * SIDE_MARGIN);
+  const cx = (W - totalW) / 2;
+  // assign each slot its x and record the laid x-extent (stones + captions)
+  let x = cx, minX = Infinity, maxX = -Infinity;
+  for (const s of slots) {
+    s.x = x;                                   // slot left edge
+    const brickW = s.cols * STEP;
+    s.brickX = x + (s.slot - brickW) / 2;       // brick centered within its slot
+    s.labelCX = x + s.slot / 2;                 // caption centered on the slot
+    const stoneRight = s.brickX + Math.max(0, s.cols - 1) * STEP + TOK;
+    minX = Math.min(minX, s.brickX, s.labelCX - s.labelW / 2);
+    maxX = Math.max(maxX, stoneRight, s.labelCX + s.labelW / 2);
+    x += s.slot;
+  }
+  const pedX = W / 2;                           // the founder pedestal, centered on W
+  minX = Math.min(minX, pedX - 26, pedX - TOK / 2);
+  maxX = Math.max(maxX, pedX + 26, pedX + TOK / 2);
+  if (!isFinite(minX)) { minX = 0; maxX = W; }   // degenerate (no seats) — fit trivially
+  return { founderSeq, seats, slots, totalW, W, cx, pedX, STEP, minX, maxX };
+}
+
 /* ── kinOf: a census + a seq → the other marks that share its name OR its bucket ─
    Backs the "pluck a token, thread a brass line to its kin" interaction. Pure.
    Returns { sameName: [seq…], sameRole: [seq…] } excluding the token itself. */
@@ -255,9 +332,13 @@ export function selfTest(raw, claim) {
   // N (and thus the sum) away from claim.N, and THIS leg bites RED.
   if (claim) add('Σ bucket counts === pinned census total (' + claim.N + ')',
     sum === claim.N, sum + ' vs ' + claim.N);
-  // and the catch-all stays empty on the real ledger (every role maps to a base)
-  add('every role maps to a base bucket (0 in other)', census.byRole.get(OTHER) === 0,
-    census.byRole.get(OTHER) + ' in other');
+  // and the catch-all 'other' holds the OFF-BASE seats (the gate-foundry +
+  // wiring marks that name no base seat); it tracks the pinned claim, so the
+  // partition stays total (Σ === N) without minting a bucket for every gate role.
+  const otherN = census.byRole.get(OTHER);
+  if (claim) add('catch-all (other) === pinned claim (' + (claim.byRole.other || 0) + ')',
+    otherN === (claim.byRole.other || 0), otherN + ' off-base marks (foundry/wiring seats)');
+  else add('catch-all (other) is well-formed (≤ N)', otherN <= N, otherN + ' off-base marks');
 
   // (3) ROUND-TRIP — every token byte-true to its source mark's load-bearing fields
   let rt = true, rtSeq = null;
@@ -331,12 +412,12 @@ export function verdict(checks) {
    Σ === N. other === 0: every role string maps to one of the TWELVE base buckets
    (gardener + groundskeeper, the two keeper seats, both seated). */
 export const CLAIM = {
-  N: 1384,
+  N: 1386,
   distinctNames: 1132,
-  againNames: 124,        // hands that signed >1 mark (376 of the 1384 tokens)
+  againNames: 125,        // hands that signed >1 mark (379 of the 1386 tokens)
   byRole: {
-    publisher: 342, explorer: 322, director: 203, judge: 145, builder: 263,
-    planter: 32, 'bug-fixer': 11, gardener: 9, 'grounds-worker': 15,
+    publisher: 343, explorer: 322, director: 203, judge: 145, builder: 263,
+    planter: 32, 'bug-fixer': 12, gardener: 9, 'grounds-worker': 15,
     steward: 6, architect: 3, groundskeeper: 2, other: 31
   }
 };
