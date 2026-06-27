@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<title>The Sightline — the figure you draw by walking</title>
+<!--
+  THE SIGHTLINE — the vantages wing's SECOND room (kin to The Vantage). A figure
+  no single pose can show; you DRAW it by the ORDER you walk. The camera is the
+  Vantage's projection UNFORKED (the-sightline/core.mjs reuses vantage/core.mjs's
+  projectNorm/backProject); the room adds a painter's-order occlusion layer + the
+  unveil permutation σ. The core is forge-inlined between the SIGHTLINE CORE
+  sentinels; core.test.mjs byte-parity-checks it. Edit index.src.html + core.mjs,
+  then: node tools/forge/forge.mjs the-sightline/index.src.html
+  ART: the gilt-slab material, the engraved constellation figure, and the bell
+  instrument are forged in-house by the art foundry (cycle 339) and installed
+  between the SIGHTLINE-ART sentinels; the dark-vault firmament is hand-drawn.
+  Each forged asset's art direction lives in the-sightline/art-specs/.
+-->
+<style>
+  :root{
+    --bg:#070a16; --bg2:#0c1126; --ink:#e8ecff; --dim:#8895c4;
+    --gold:#e7b55b; --gold-hi:#ffd98a; --gold-deep:#9c7327;
+    --rim:#39406b; --good:#7be3a0; --bad:#ff7d7d; --blue:#9db4ff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:radial-gradient(120% 90% at 50% 6%,#0e1430 0%,#070a16 55%,#04060f 100%);color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;overflow:hidden;user-select:none}
+  #stage{position:fixed;inset:0}
+  canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+  canvas.drag{cursor:grabbing}
+  a.back{position:fixed;top:13px;left:14px;z-index:8;color:var(--dim);text-decoration:none;font-size:12.5px;letter-spacing:.04em}
+  a.back:hover{color:var(--gold-hi)}
+  a.xlink{position:fixed;top:13px;right:14px;z-index:8;color:var(--blue);text-decoration:none;font-size:12.5px;letter-spacing:.04em}
+  a.xlink:hover{color:#dce6ff}
+  /* ── crest ── */
+  #crest{position:fixed;top:14px;left:0;right:0;text-align:center;pointer-events:none;z-index:5}
+  #crest h1{font-size:19px;letter-spacing:.22em;font-weight:500;color:var(--gold-hi);
+    text-transform:uppercase;text-shadow:0 0 18px rgba(231,181,91,.35)}
+  #crest .sub{font-size:12.5px;color:var(--dim);letter-spacing:.04em;margin-top:3px;font-style:italic}
+  /* ── ribbon ── */
+  #ribwrap{position:fixed;left:0;right:0;bottom:74px;display:flex;flex-direction:column;align-items:center;gap:7px;z-index:5;pointer-events:none}
+  #ribbon{display:flex;gap:5px}
+  .cell{width:30px;height:9px;border-radius:2px;background:#161c38;border:1px solid var(--rim);transition:all .18s ease}
+  .cell.lit{background:linear-gradient(180deg,var(--gold-hi),var(--gold));border-color:var(--gold-hi);box-shadow:0 0 10px rgba(231,181,91,.6)}
+  .cell.shatter{background:#3a1620;border-color:var(--bad);box-shadow:0 0 9px rgba(255,125,125,.5)}
+  #status{font-size:12.5px;letter-spacing:.05em;color:var(--dim);min-height:16px;text-align:center}
+  #status b{color:var(--gold-hi);font-weight:600}
+  #status .scr{color:var(--bad)}
+  #status .win{color:var(--good)}
+  /* ── controls ── */
+  #bar{position:fixed;left:0;right:0;bottom:18px;display:flex;justify-content:center;gap:9px;z-index:6;flex-wrap:wrap;padding:0 10px}
+  button{font-family:inherit;font-size:12.5px;letter-spacing:.06em;color:var(--ink);background:#141a36;
+    border:1px solid var(--rim);border-radius:7px;padding:8px 13px;cursor:pointer;transition:all .15s}
+  button:hover{background:#1d2650;border-color:var(--gold-deep);color:var(--gold-hi)}
+  button.go{border-color:var(--gold-deep);color:var(--gold-hi)}
+  button.on{color:var(--gold-hi);border-color:var(--gold-deep);background:#22182b}
+  /* ── self-test pill + panel ── */
+  #pill{position:fixed;top:54px;right:12px;z-index:7;font-size:11px;letter-spacing:.04em;
+    background:rgba(8,11,24,.92);border:1px solid var(--rim);border-radius:20px;padding:5px 12px;cursor:pointer;
+    color:var(--good);backdrop-filter:blur(3px)}
+  #pill.fail{color:var(--bad)}
+  #pill .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--good);margin-right:6px;vertical-align:middle;box-shadow:0 0 7px var(--good)}
+  #pill.fail .dot{background:var(--bad);box-shadow:0 0 7px var(--bad)}
+  #proof{position:fixed;top:88px;right:12px;width:336px;max-width:46vw;background:rgba(8,11,24,.95);
+    border:1px solid var(--rim);border-radius:10px;padding:11px 13px;z-index:7;font-size:11.5px;line-height:1.5;
+    backdrop-filter:blur(3px);display:none}
+  #proof.show{display:block}
+  #proof h2{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-hi);margin-bottom:7px;font-weight:600}
+  #proof .row{display:flex;gap:7px;align-items:baseline;margin:3px 0;color:var(--dim)}
+  #proof .mk{font-family:ui-monospace,Menlo,monospace;font-size:11px;flex:0 0 auto}
+  #proof .mk.ok{color:var(--good)} #proof .mk.no{color:var(--bad)}
+  #proof .tx{flex:1}
+  #proof .tx b{color:var(--ink);font-weight:600}
+  #proof .verdict{margin-top:8px;padding-top:7px;border-top:1px solid var(--rim);font-size:11.5px;color:var(--good)}
+  #proof .verdict.fail{color:var(--bad)}
+  #hint{position:fixed;left:12px;top:54px;width:236px;font-size:11.5px;color:var(--dim);line-height:1.55;z-index:5;
+    background:rgba(8,11,24,.7);border:1px solid var(--rim);border-radius:9px;padding:10px 12px}
+  #hint b{color:var(--blue)}
+  #hint .k{color:var(--gold-hi)}
+  /* ── victory crest ── */
+  #victory{position:fixed;left:0;right:0;top:40%;text-align:center;z-index:6;pointer-events:none;opacity:0;transition:opacity 1.1s ease}
+  #victory.show{opacity:1}
+  #victory .name{font-size:24px;letter-spacing:.16em;color:var(--gold-hi);text-transform:uppercase;text-shadow:0 0 24px rgba(231,181,91,.6)}
+  #victory .echo{font-size:13px;color:var(--blue);font-style:italic;margin-top:5px;letter-spacing:.05em}
+  @media(max-width:760px){#hint{display:none}#proof{max-width:64vw}}
+</style>
+</head>
+<body>
+<!-- first-visit breadcrumb (a DIRECT visit must register for the Survey of Heaven / Undercroft) -->
+<script>try{ var __ck='ws:seen:the-sightline'; if(!localStorage.getItem(__ck)) localStorage.setItem(__ck, String(Date.now())); }catch(e){}</script>
+<a class="back" href="../index.html">&larr; The Orrery Estate</a>
+<a class="xlink" href="../vantage/index.html" title="the wing's POSE room — Cor Caeli, resolved from one earned vantage">&harr; The Vantage</a>
+<div id="stage"><canvas id="cv"></canvas></div>
+
+<div id="crest">
+  <h1>The Sightline</h1>
+  <div class="sub">a figure no single pose can show — you draw it by the order you walk</div>
+</div>
+
+<div id="hint">
+  <b>Drag</b> to orbit &middot; <b>scroll / pinch</b> to dolly.<br>
+  The gilt slabs hide one another in a sealed stack. As you fly, each face peeks out <i>through the gap the slab in front opens</i>. Uncover them <span class="k">in the right order</span> and a constellation kindles at fixed sockets in the dark — one stroke per slab. Uncover one out of turn and the figure tangles and resets. <br><span class="k">Walk the Sightline</span> flies the solving path; the painter's draw you see is exactly the rule the proof checks.
+</div>
+
+<div id="ribwrap">
+  <div id="ribbon"></div>
+  <div id="status">the slabs are stacked &mdash; <b>drag to begin</b>, or press ▶ Walk the Sightline</div>
+</div>
+
+<div id="victory"><div class="name">Argo, the Little Ship</div><div class="echo">the path's answer to Cor Caeli's pose — found by walking, not by standing still</div></div>
+
+<div id="bar">
+  <button id="walk" class="go">▶ Walk the Sightline</button>
+  <button id="reset">↺ Reset view</button>
+  <button id="mute" title="Honours the estate-wide ws:pref:muted key; muted by default.">🔇 Sound off</button>
+</div>
+
+<div id="pill"><span class="dot"></span><span id="pilltext">core …</span></div>
+<div id="proof">
+  <h2>core.mjs · camera + visibility self-test</h2>
+  <div id="proofrows"></div>
+  <div class="verdict" id="verdict">…</div>
+</div>
+
+<script>
+// ===== forge inlines the SOLE camera+visibility authority between the sentinels =====
+<!-- forge:include ./core.mjs -->
+</script>
+
+<script>
+"use strict";
+/* ============================ THE RENDER ================================= */
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=Math.min(2,window.devicePixelRatio||1), SCALE=1, CX=0, CY=0;
+function resize(){
+  W=cv.clientWidth; H=cv.clientHeight;
+  cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+  SCALE=Math.min(W,H)*0.42; CX=W*0.5; CY=H*0.52;
+}
+window.addEventListener('resize',resize);
+
+// camera (the reused 3-DOF vantage pose) — start at the room's sealed-stack pose
+let C={yaw:START.yaw, pitch:START.pitch, dolly:START.dolly};
+function toScreen(u,v){ return [CX+u*SCALE, CY-v*SCALE]; }   // v up
+
+// ── assembly state ──
+let armed=false;                // assembly + audio begin on the first gesture
+let expected=0;                 // next star (stroke index) we need
+let ignited=[];                 // star indices lit, in order
+let exposedPrev=new Array(NSLAB).fill(false);
+let scrambleFlash=0;            // frames of red flash
+let badStroke=null;             // [fromStarPos, toStarPos] to flash on scramble
+let won=false;
+let bright=0;                   // victory vault-brighten ease 0→1
+
+function resetAssembly(){
+  expected=0; ignited=[]; won=false; scrambleFlash=0; badStroke=null; bright=0;
+  exposedPrev=new Array(NSLAB).fill(false);
+  document.getElementById('victory').classList.remove('show');
+  paintRibbon();
+  setStatus(armed ? 'orbit on — uncover the next face in turn' : 'the slabs are stacked &mdash; <b>drag to begin</b>, or press ▶ Walk the Sightline');
+}
+function arm(){
+  if(armed) return; armed=true;
+  Audio.unlock();
+  // prime so the currently-exposed slab fires its star on the next frame
+  exposedPrev=new Array(NSLAB).fill(false);
+  setStatus('orbit on — uncover the next face in turn');
+}
+
+function stepAssembly(exposedNow){
+  if(!armed) { exposedPrev=exposedNow.slice(); return; }
+  const events=[];
+  for(let i=0;i<NSLAB;i++) if(exposedNow[i] && !exposedPrev[i]) events.push(i);
+  exposedPrev=exposedNow.slice();
+  if(won) return;
+  if(events.length===0) return;
+  // process events in increasing star-stroke index so a frame that uncovers
+  // several at once is judged by the figure's order, not array order.
+  events.sort((a,b)=>starOfSlab[a]-starOfSlab[b]);
+  for(const slab of events){
+    const star=starOfSlab[slab];
+    if(star===expected){
+      ignited.push(star); expected++;
+      Audio.chime(star);
+      paintRibbon();
+      if(expected===NSLAB){ doWin(); }
+      else setStatus('star <b>'+(star+1)+'</b> of 12 kindled — keep walking');
+    } else {
+      doScramble(star);
+      return;
+    }
+  }
+}
+function doWin(){
+  won=true;
+  Audio.chord();
+  document.getElementById('victory').classList.add('show');
+  setStatus('<span class="win">✦ the ship is drawn — THE SIGHTLINE answers ✦</span>');
+}
+function doScramble(badStar){
+  badStroke = ignited.length>0 ? [FIGURE[ignited[ignited.length-1]], FIGURE[badStar]] : null;
+  scrambleFlash=42;
+  expected=0; ignited=[];
+  exposedPrev=new Array(NSLAB).fill(false);   // allow an immediate clean restart
+  Audio.clatter();
+  paintRibbon(true);
+  setStatus('<span class="scr">✕ out of turn — the figure tangles. find the order.</span>');
+}
+
+// ── ribbon DOM ──
+const ribbon=document.getElementById('ribbon');
+for(let i=0;i<NSLAB;i++){ const d=document.createElement('div'); d.className='cell'; ribbon.appendChild(d); }
+function paintRibbon(shatter){
+  const cells=ribbon.children;
+  for(let i=0;i<NSLAB;i++){
+    cells[i].className='cell'+(i<ignited.length?' lit':'')+(shatter&&i>=ignited.length?' shatter':'');
+  }
+  if(shatter) setTimeout(()=>{ for(let i=0;i<NSLAB;i++) ribbon.children[i].classList.remove('shatter'); },240);
+}
+const statusEl=document.getElementById('status');
+function setStatus(h){ statusEl.innerHTML=h; }
+
+// ── draw ──
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  drawFirmamentBack();
+  // slabs, painter-sorted (far → near) using the SOLE visibility authority
+  const {ex, ps}=exposedSet(slabs,C);
+  const order=slabs.map((_,i)=>i).sort((a,b)=>ps[b].depth-ps[a].depth); // far first
+  for(const i of order) drawSlab(i, ps[i], ex[i]);
+  drawFigureOverlay();
+  if(scrambleFlash>0){
+    ctx.save(); ctx.globalAlpha=Math.min(.5,scrambleFlash/42*0.5);
+    const g=ctx.createRadialGradient(CX,CY,SCALE*0.3,CX,CY,SCALE*1.5);
+    g.addColorStop(0,'rgba(255,80,80,0)'); g.addColorStop(1,'rgba(255,40,60,0.9)');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H); ctx.restore();
+    scrambleFlash--;
+  }
+  if(won && bright<1) bright=Math.min(1,bright+0.018);
+  if(won && bright>0){
+    ctx.save(); ctx.globalAlpha=bright*0.20;
+    const g=ctx.createRadialGradient(CX,H*0.30,10,CX,H*0.30,SCALE*1.7);
+    g.addColorStop(0,'rgba(255,224,150,0.9)'); g.addColorStop(1,'rgba(255,224,150,0)');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H); ctx.restore();
+  }
+  // logic from the freshly-computed exposure (visual == claim)
+  stepAssembly(ex);
+}
+
+// firmament map: place the figure at FIXED sockets high in the vault (it never
+// migrates with the slab stack — this is what keeps the reveal framed).
+function figScreen(p){
+  const fx=CX + p[0]*SCALE*0.74;
+  const fy=(H*0.30) - p[1]*SCALE*0.30;
+  return [fx,fy];
+}
+function drawFirmamentBack(){
+  const g=ctx.createLinearGradient(0,0,0,H*0.62);
+  g.addColorStop(0,'rgba(28,38,82,'+(0.55+bright*0.2)+')'); g.addColorStop(1,'rgba(8,11,24,0)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H*0.62);
+  for(let i=0;i<NSLAB;i++){
+    if(i<ignited.length) continue;
+    const [x,y]=figScreen(FIGURE[i]);
+    ctx.beginPath(); ctx.arc(x,y,2.1,0,7); ctx.fillStyle='rgba(120,135,190,0.34)'; ctx.fill();
+  }
+}
+// <<SIGHTLINE-ART:figure>> — FORGED engraved constellation + gold stroke (art foundry · cycle 339).
+// Contract: drawFigureOverlay() paints the ignited stars at FIXED sockets figScreen(FIGURE[k]) and the
+// gold connecting stroke in ignition order, plus the scramble bad-stroke + the won closure. May read:
+// ctx, ignited, FIGURE, figScreen, bright, badStroke, scrambleFlash, won. See art-specs/constellation-figure.md.
+// "the engraver's chart": an old hand-engraved celestial chart. Each lit socket is an
+// incised compass-star (four long radiant points + four short diagonals + a bright cut
+// core in a soft ignition halo). The connecting line is an inked-quill gold stroke laid
+// down in three passes — a warm under-glow, a crisp body line, and a bright hairline
+// edge — with the freshest (leading) star burning a touch hotter, like the pen is still
+// there. Won-closure blazes: the hull closes, the whole figure gains a soft constellation
+// bloom + a brighter inner blaze core. Scramble throws a jarring red dashed error-bolt
+// with an X struck through the wrong star — the wrongness is felt. Render-only.
+function drawFigureOverlay(){
+  const pts = ignited.map(i => figScreen(FIGURE[i]));
+  const hasScramble = !!(badStroke && scrambleFlash > 0);
+  if(pts.length === 0 && !hasScramble) return;
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // ---- WON: a quiet constellation bloom behind the closed figure ----
+  if(won && bright > 0 && pts.length){
+    let cx = 0, cy = 0;
+    for(const p of pts){ cx += p[0]; cy += p[1]; }
+    cx /= pts.length; cy /= pts.length;
+    let R = 1;
+    for(const p of pts) R = Math.max(R, Math.hypot(p[0]-cx, p[1]-cy));
+    const g = ctx.createRadialGradient(cx, cy, R*0.08, cx, cy, R*1.45);
+    g.addColorStop(0,   'rgba(255,231,168,'+(0.22*bright)+')');
+    g.addColorStop(0.5, 'rgba(255,209,120,'+(0.11*bright)+')');
+    g.addColorStop(1,   'rgba(255,208,118,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, R*1.4, 0, 7); ctx.fill();
+    // a brighter inner blaze core for the victory beat
+    const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, R*0.5);
+    cg.addColorStop(0, 'rgba(255,247,210,'+(0.17*bright)+')');
+    cg.addColorStop(1, 'rgba(255,224,150,0)');
+    ctx.fillStyle = cg;
+    ctx.beginPath(); ctx.arc(cx, cy, R*0.5, 0, 7); ctx.fill();
+  }
+
+  // ---- the engraved connecting stroke (in ignition order) ----
+  if(pts.length >= 2){
+    const baseW = 1.7 + bright*1.4;
+    // 1) warm ignition under-glow
+    ctx.shadowColor = 'rgba(255,196,96,'+(0.55 + 0.4*bright)+')';
+    ctx.shadowBlur  = 8 + bright*18;
+    ctx.strokeStyle = 'rgba(255,205,118,'+(0.32 + 0.22*bright)+')';
+    ctx.lineWidth   = baseW + 2.6;
+    strokePath(pts);
+    ctx.shadowBlur = 0;
+    // 2) crisp body line — the engraved gold
+    ctx.strokeStyle = 'rgba(255,221,140,'+(0.90 + 0.10*bright)+')';
+    ctx.lineWidth   = baseW;
+    strokePath(pts);
+    // 3) bright inked hairline (the quill's lit edge)
+    ctx.strokeStyle = 'rgba(255,246,214,'+(0.50 + 0.42*bright)+')';
+    ctx.lineWidth   = Math.max(0.6, baseW*0.4);
+    strokePath(pts);
+    // 4) the freshest segment burns a touch hotter (the pen is here) — not when won
+    if(!won && pts.length >= 2){
+      const a = pts[pts.length-2], b = pts[pts.length-1];
+      ctx.strokeStyle = 'rgba(255,250,224,0.9)';
+      ctx.shadowColor = 'rgba(255,214,128,0.9)';
+      ctx.shadowBlur  = 9;
+      ctx.lineWidth   = baseW*0.55;
+      ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+    // 5) won: close the hull back to the masthead, completing the ship
+    if(won && pts.length >= 3){
+      ctx.strokeStyle = 'rgba(255,221,140,'+(0.45*bright)+')';
+      ctx.shadowColor = 'rgba(255,196,96,'+(0.6*bright)+')';
+      ctx.shadowBlur  = 12*bright;
+      ctx.lineWidth   = baseW*0.85;
+      ctx.beginPath();
+      ctx.moveTo(pts[pts.length-1][0], pts[pts.length-1][1]);
+      ctx.lineTo(pts[0][0], pts[0][1]);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  // ---- engraved compass-star glyphs at every lit socket ----
+  for(let k = 0; k < pts.length; k++){
+    const lead = (k === pts.length-1 && !won);   // the most-recent star
+    chartStar(pts[k][0], pts[k][1], lead, bright);
+  }
+
+  // ---- scramble: the wrong stroke, legibly tangled ----
+  if(hasScramble){
+    const a = figScreen(badStroke[0]), b = figScreen(badStroke[1]);
+    const fade = scrambleFlash/42;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,72,72,'+(0.95*fade)+')';
+    ctx.shadowColor = 'rgba(255,40,52,'+(0.9*fade)+')';
+    ctx.shadowBlur  = 11;
+    ctx.lineWidth   = 2.7;
+    ctx.setLineDash([6,5]);
+    ctx.lineDashOffset = -(42 - scrambleFlash)*1.6;   // the bolt crackles outward
+    ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+    // struck-out X over the wrong star
+    const s = 6.5;
+    ctx.lineWidth = 2.2;
+    ctx.strokeStyle = 'rgba(255,96,96,'+(0.95*fade)+')';
+    ctx.beginPath();
+    ctx.moveTo(b[0]-s, b[1]-s); ctx.lineTo(b[0]+s, b[1]+s);
+    ctx.moveTo(b[0]+s, b[1]-s); ctx.lineTo(b[0]-s, b[1]+s);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.restore();
+
+  // ---- helpers (hoisted) ----
+  function strokePath(P){
+    ctx.beginPath();
+    for(let k = 0; k < P.length; k++){
+      k === 0 ? ctx.moveTo(P[k][0], P[k][1]) : ctx.lineTo(P[k][0], P[k][1]);
+    }
+    ctx.stroke();
+  }
+  function chartStar(x, y, lead, b){
+    ctx.save();
+    ctx.translate(x, y);
+    // a tight ignition halo — kept smaller than the rays so the glyph reads as a
+    // cut star, not a blurred dot
+    const haloR = 7.4 + b*5 + (lead ? 2.5 : 0);
+    const hg = ctx.createRadialGradient(0,0,0, 0,0,haloR);
+    hg.addColorStop(0,   'rgba(255,238,186,'+(0.50 + 0.34*b + (lead?0.14:0))+')');
+    hg.addColorStop(0.55,'rgba(255,208,118,'+(0.14 + 0.13*b)+')');
+    hg.addColorStop(1,   'rgba(255,208,118,0)');
+    ctx.fillStyle = hg;
+    ctx.beginPath(); ctx.arc(0,0,haloR,0,7); ctx.fill();
+    // four long compass points — crisp, engraved, poking beyond the halo
+    const major = 10.0 + b*3.2 + (lead ? 2.2 : 0);
+    const minor = major*0.40;
+    ctx.shadowColor = 'rgba(255,206,112,'+(0.45 + 0.35*b)+')';
+    ctx.shadowBlur  = 3 + b*4;
+    ctx.strokeStyle = 'rgba(255,239,196,'+(0.95)+')';
+    ctx.lineWidth = 1.4 + b*0.45;
+    for(let i = 0; i < 4; i++){
+      const ang = i*Math.PI/2;
+      ctx.beginPath(); ctx.moveTo(0,0);
+      ctx.lineTo(Math.cos(ang)*major, Math.sin(ang)*major); ctx.stroke();
+    }
+    // four short diagonal rays
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,221,140,0.58)';
+    ctx.lineWidth = 1.0;
+    for(let i = 0; i < 4; i++){
+      const ang = i*Math.PI/2 + Math.PI/4;
+      ctx.beginPath(); ctx.moveTo(0,0);
+      ctx.lineTo(Math.cos(ang)*minor, Math.sin(ang)*minor); ctx.stroke();
+    }
+    // bright incised core
+    ctx.fillStyle = '#fffbef';
+    ctx.shadowColor = 'rgba(255,224,148,1)';
+    ctx.shadowBlur = 7 + b*9 + (lead ? 3 : 0);
+    ctx.beginPath(); ctx.arc(0,0, 2.1 + b*1.0 + (lead?0.7:0), 0, 7); ctx.fill();
+    ctx.restore();
+  }
+}
+// <<END SIGHTLINE-ART:figure>>
+
+// <<SIGHTLINE-ART:slab>> — FORGED gilt-slab material (art foundry · cycle 339).
+// Contract: drawSlab(i,p,exposed) paints slab i's projected screen quad. p={u,v,depth,quad}
+// (quad = 4 world-corner projections in normalised image units; toScreen() maps to px).
+// Module-scope it may read: ctx, toScreen, SCALE, bright, drawEngravedStar. See art-specs/slab-material.md.
+// A solid beveled brass-leaf plate: a uniform chamfered bevel (rim-lit up-facing
+// edges, near-black down-facing edge that GROUNDS the plate), a depth-graded
+// patina (cool green-bronze far -> warm yellow-gold near), faint hand-beaten
+// brass-leaf streaks, and a contained intaglio engraved star — brighter + haloed
+// when exposed, dim + shadowed when occluded. Reads in-scope: ctx, toScreen, SCALE, bright.
+function drawSlab(i, p, exposed){
+  const clamp01=(x)=>x<0?0:x>1?1:x;
+  const lerp=(a,b,k)=>a+(b-a)*k;
+  const mix=(c1,c2,k)=>[lerp(c1[0],c2[0],k),lerp(c1[1],c2[1],k),lerp(c1[2],c2[2],k)];
+  const cl=(c)=>'rgb('+(Math.max(0,Math.min(255,c[0]))|0)+','+(Math.max(0,Math.min(255,c[1]))|0)+','+(Math.max(0,Math.min(255,c[2]))|0)+')';
+  const clA=(c,a)=>'rgba('+(Math.max(0,Math.min(255,c[0]))|0)+','+(Math.max(0,Math.min(255,c[1]))|0)+','+(Math.max(0,Math.min(255,c[2]))|0)+','+a+')';
+  const poly=(pp)=>{ ctx.beginPath(); ctx.moveTo(pp[0][0],pp[0][1]); for(let k=1;k<pp.length;k++) ctx.lineTo(pp[k][0],pp[k][1]); ctx.closePath(); };
+  // deterministic per-slab tooling rng (seed from index only)
+  let seed=((i+1)*2654435761)>>>0;
+  const rnd=()=>{ seed=(seed*1664525+1013904223)>>>0; return seed/4294967296; };
+
+  const q=p.quad.map(c=>toScreen(c[0],c[1]));      // BL, BR, TR, TL in screen px
+  const d=p.depth;
+  const t=clamp01((7.2-d)/3.2);                     // 1 near, 0 far
+  const lift=bright*0.30;                           // victory vault-brighten
+
+  // centroid
+  const cx=(q[0][0]+q[1][0]+q[2][0]+q[3][0])/4;
+  const cy=(q[0][1]+q[1][1]+q[2][1]+q[3][1])/4;
+
+  // depth-graded patina: far = cool green-bronze + dim; near = warm yellow-gold
+  const faceFar =[66, 82, 56];
+  const faceNear=[178,142, 74];
+  let face=mix(faceFar,faceNear,t);
+  const warm=exposed?1:0;
+  face=[ face[0]*(1+lift)+warm*26, face[1]*(1+lift)+warm*15, face[2]*(1+lift)+warm*3 ];
+
+  // slab metrics + uniform chamfer width
+  const wB=Math.hypot(q[1][0]-q[0][0],q[1][1]-q[0][1]);
+  const hR=Math.hypot(q[2][0]-q[1][0],q[2][1]-q[1][1]);
+  const minDim=Math.min(wB,hR)||10;
+  const bevel=Math.max(3.5,Math.min(17,minDim*0.17));
+  const inner=q.map(pt=>{ const dx=cx-pt[0], dy=cy-pt[1], L=Math.hypot(dx,dy)||1; return [pt[0]+dx/L*bevel, pt[1]+dy/L*bevel]; });
+
+  ctx.save();
+
+  // 0) dark slab body underneath — seals AA seams + reads as plate thickness
+  poly(q); ctx.fillStyle=cl(mix(face,[8,10,16],0.80)); ctx.fill();
+
+  // 1) the four chamfer faces, shaded by how each catches the light from above
+  for(let e=0;e<4;e++){
+    const a=q[e], b=q[(e+1)%4], ib=inner[(e+1)%4], ia=inner[e];
+    let nx=(b[1]-a[1]), ny=-(b[0]-a[0]); const nl=Math.hypot(nx,ny)||1; nx/=nl; ny/=nl;
+    const mxx=(a[0]+b[0])/2, myy=(a[1]+b[1])/2;
+    if((mxx-cx)*nx+(myy-cy)*ny<0){ nx=-nx; ny=-ny; }   // force outward normal
+    const ld=clamp01((-ny+1)/2);                         // 0 down-facing .. 1 up-facing
+    const k=0.34+1.16*ld;                                // deeper shadow .. brighter lip
+    let bc=[face[0]*k, face[1]*k, face[2]*k];
+    const rim=Math.pow(ld,2.2)*(0.50+0.50*t)*(exposed?1:0.55);  // warm rim-light on near/top edge
+    bc=[ bc[0]+rim*125, bc[1]+rim*95, bc[2]+rim*38 ];
+    // GROUND the plate: drive the down-facing chamfer toward near-black so the
+    // near slab reads as a solid plate with weight, not a thin lozenge (graft: take 2's bottom lip).
+    const ground=Math.pow(1-ld,2.0)*0.55;
+    bc=[ bc[0]*(1-ground), bc[1]*(1-ground), bc[2]*(1-ground) ];
+    ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.lineTo(ib[0],ib[1]); ctx.lineTo(ia[0],ia[1]); ctx.closePath();
+    ctx.fillStyle=cl(bc); ctx.fill();
+  }
+
+  // 2) the brass-leaf face — a vertical sheen gradient with a high specular band
+  const topMid=[(inner[2][0]+inner[3][0])/2,(inner[2][1]+inner[3][1])/2];
+  const botMid=[(inner[0][0]+inner[1][0])/2,(inner[0][1]+inner[1][1])/2];
+  const g=ctx.createLinearGradient(topMid[0],topMid[1],botMid[0],botMid[1]);
+  g.addColorStop(0.00, cl(mix(face,[255,235,180],0.16+0.18*t)));
+  g.addColorStop(0.13, cl(mix(face,[255,242,205],(exposed?0.25:0.15)+0.11*t)));  // specular band
+  g.addColorStop(0.52, cl(face));
+  g.addColorStop(1.00, cl([face[0]*0.64,face[1]*0.60,face[2]*0.54]));
+  poly(inner); ctx.fillStyle=g; ctx.fill();
+
+  // 3) hand-beaten brass-leaf streaks, clipped to the face
+  ctx.save(); poly(inner); ctx.clip();
+  const NST=5;
+  for(let s=0;s<NST;s++){
+    const u=(s+0.5)/NST + (rnd()-0.5)*0.06;
+    const top=[lerp(inner[3][0],inner[2][0],u), lerp(inner[3][1],inner[2][1],u)];
+    const bot=[lerp(inner[0][0],inner[1][0],u), lerp(inner[0][1],inner[1][1],u)];
+    ctx.beginPath(); ctx.moveTo(top[0],top[1]); ctx.lineTo(bot[0],bot[1]);
+    ctx.strokeStyle = (rnd()>0.5) ? clA(mix(face,[255,240,200],0.55),0.10*(0.5+t)) : clA([0,0,0],0.07);
+    ctx.lineWidth=Math.max(0.6,bevel*0.16); ctx.stroke();
+  }
+  ctx.restore();
+
+  // 4) thin brass rim around the plate edge (exposed = a tamed warm glow that pops the peelable slab)
+  poly(q);
+  ctx.lineWidth=Math.max(0.8,bevel*0.20);
+  ctx.strokeStyle = exposed ? 'rgba(255,217,138,0.95)' : clA(mix(face,[205,172,92],0.45),0.70);
+  if(exposed){ ctx.shadowColor='rgba(255,205,120,0.45)'; ctx.shadowBlur=4+bright*4; }
+  ctx.stroke(); ctx.shadowBlur=0;
+
+  // 5) the engraved star, sized to the face (capped so it stays inside the plate)
+  const sz=Math.min(SCALE*0.05*(0.6+t*0.7), minDim*0.32);
+  drawEngravedStar(cx,cy,Math.max(6,sz), exposed);
+
+  ctx.restore();
+}
+// Intaglio star: cut INTO the leaf. The recessed floor is dark; lit from above,
+// the lower inner wall catches light (bright, offset down) while the upper inner
+// wall stays in shadow (offset up). Exposed -> bright catch + a CONTAINED warm
+// halo (scaled to glyph size, not a fixed bloom). Occluded -> a dim dark intaglio.
+function drawEngravedStar(x,y,r,exposed){
+  ctx.save();
+  ctx.translate(x,y);
+  const off=Math.max(0.8, r*0.07);
+  const path=(scale)=>{
+    ctx.beginPath();
+    for(let k=0;k<=10;k++){
+      const ang=-Math.PI/2 + k*Math.PI/5;
+      const rad=((k%2===0)?r:r*0.42)*scale;
+      const px=Math.cos(ang)*rad, py=Math.sin(ang)*rad;
+      if(k===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+    }
+    ctx.closePath();
+  };
+
+  // shadowed upper wall of the cut (offset up, dark) — reads the glyph as carved
+  ctx.save(); ctx.translate(0,-off);
+  path(1.0); ctx.fillStyle='rgba(16,14,7,0.6)'; ctx.fill();
+  ctx.restore();
+
+  // recessed floor (the cut itself), slightly inset. When exposed the cut glows
+  // warm (lit from within the gilded vault); occluded it stays a dark intaglio.
+  path(0.92);
+  if(exposed){ ctx.shadowColor='rgba(255,213,140,0.9)'; ctx.shadowBlur=r*0.6; }
+  ctx.fillStyle=exposed?'rgba(255,206,128,0.82)':'rgba(26,28,18,0.66)';
+  ctx.fill(); ctx.shadowBlur=0;
+
+  // lit lower wall of the cut (offset down, bright catch) — luminous + haloed when exposed
+  ctx.save(); ctx.translate(0, off);
+  path(1.0);
+  if(exposed){ ctx.shadowColor='rgba(255,224,150,0.95)'; ctx.shadowBlur=r*0.5; }
+  ctx.fillStyle=exposed?'rgba(255,236,180,0.98)':'rgba(176,150,96,0.5)';
+  ctx.fill(); ctx.shadowBlur=0;
+  ctx.restore();
+
+  // a fine incised outline to read the glyph crisply at any scale
+  path(1.0);
+  ctx.lineWidth=Math.max(0.7,r*0.06);
+  ctx.strokeStyle=exposed?'rgba(255,228,160,0.85)':'rgba(150,124,74,0.5)';
+  ctx.stroke();
+
+  ctx.restore();
+}
+// <<END SIGHTLINE-ART:slab>>
+
+/* ============================ AUDIO (in-house · muted-by-default) =========
+   The forged carillon/monochord bell (art foundry · cycle 339) — warm struck
+   partials with a fast attack and an exponential decay — rings a rising
+   MAJOR-PENTATONIC phrase as the stars ignite, resolves on the high tonic + a
+   major chord when the figure closes, and clatters a detuned cluster on a
+   scramble. No samples; all synthesised live. Honours the shared estate-wide
+   mute (ws:pref:muted). Instrument art direction: art-specs/bell-instrument.md.
+   ======================================================================== */
+const Audio = (function(){
+  let ctx=null, master=null;
+  const PENT=[0,2,4,7,9];                 // major pentatonic degrees
+  const BASE=220;                          // A3
+  function muted(){ return sndMuted(); }
+  function freqForRank(r){ const semis=PENT[r%PENT.length]+12*Math.floor(r/PENT.length); return BASE*Math.pow(2,semis/12); }
+  function unlock(){
+    if(ctx) { if(ctx.state==='suspended') ctx.resume(); return; }
+    try{
+      ctx=new (window.AudioContext||window.webkitAudioContext)();
+      master=ctx.createGain(); master.gain.value=0.9; master.connect(ctx.destination);
+      if(ctx.state==='suspended') ctx.resume();
+    }catch(e){ ctx=null; }
+  }
+  // <<SIGHTLINE-ART:bell>> — FORGED bell instrument (art foundry · cycle 339).
+  // Contract: bell(freq, when, dur, gain, inharm) schedules ONE struck-bell voice on
+  // the live `ctx` into `master` at AudioContext time `when`, fundamental `freq` Hz,
+  // length `dur` s, peak `gain`, optional stretched-partial `inharm`. Gates on ctx &&
+  // !muted(). Carillon/monochord lineage. See art-specs/bell-instrument.md.
+  function bell(freq, when, dur, gain, inharm){
+    if(!ctx||muted()) return;
+    const t0=when, st=inharm||0;
+    // Partial set [ratio, amp, decayScale] — a warm carillon/monochord voice:
+    // a sub-octave HUM under a dominant prime (clean pitch), a slowly-beating
+    // detuned TWIN for life, an octave, quiet upper partials that give the strike
+    // its shimmer then fade fast, and a faint high "ting" for attack bite —
+    // leaving the warm hum to ring out. Ratios avoid the classic minor tierce so
+    // the closing major chord resolves sweetly.
+    const partials=[
+      [0.5   , 0.26 , 1.00],  // hum — an octave below, warm body
+      [1.0   , 1.00 , 1.00],  // prime — the named note (dominant → clean pitch)
+      [1.0025, 0.42 , 1.00],  // beating twin — slow chorus shimmer (scales w/ pitch)
+      [2.0   , 0.34 , 0.78],  // octave — adds air; tail lengthened for a fuller ring
+      [2.5   , 0.10 , 0.50],  // ~major tenth — a touch of colour
+      [3.01  , 0.13 , 0.42],  // strike shimmer (gentle inharmonic stretch = bell clang)
+      [4.18  , 0.06 , 0.32],
+      [5.42  , 0.035, 0.24],
+      [6.83  , 0.02 , 0.16],  // faint high "ting" — strike bite, dies fast (deterministic)
+    ];
+    let psum=0; for(const p of partials) psum+=p[1];
+    const norm=1.05/psum;             // single voice peaks ~1.05·gain → present, chord-safe
+
+    // Voice bus: high-pass clears sub rumble; low-pass cutoff FALLS through the
+    // decay so the strike kindles bright, then mellows to a celestial hum.
+    const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=70; hp.Q.value=0.5;
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass';  lp.Q.value=0.6;
+    const fc0=Math.min(8200, freq*7   + 1400);
+    const fc1=Math.max(420 , Math.min(3200, freq*2.4 + 600));
+    lp.frequency.setValueAtTime(fc0, t0);
+    lp.frequency.exponentialRampToValueAtTime(fc1, t0+Math.min(dur,1.2));
+    const out=ctx.createGain(); out.gain.value=gain;
+    hp.connect(lp); lp.connect(out); out.connect(master);
+
+    const tEnd=t0+dur;
+    for(const [ratio,amp,dec] of partials){
+      const o=ctx.createOscillator(); o.type='sine';
+      o.frequency.value=freq*ratio*(1+st*(ratio-1));   // gentle inharmonic stretch
+      const g=ctx.createGain();
+      const pk=amp*norm, pdur=Math.max(0.05, dur*dec);
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(pk, t0+0.004);    // ~4 ms attack — struck, no click
+      g.gain.exponentialRampToValueAtTime(0.00008, t0+pdur);
+      o.connect(g); g.connect(hp);
+      o.start(t0); o.stop(tEnd+0.02);                  // all oscillators stop by when+dur
+    }
+  }
+  // <<END SIGHTLINE-ART:bell>>
+  function chime(rank){ if(!ctx) return; const dur=rank>=NSLAB-1?2.4:1.25; bell(freqForRank(rank), ctx.currentTime, dur, 0.5, 0.0006); }
+  function chord(){
+    if(!ctx) return; const t=ctx.currentTime;
+    const root=freqForRank(NSLAB-1);                      // the high tonic the phrase resolved to
+    [0,4,7,12].forEach((s,i)=> bell(root*Math.pow(2,s/12)/2, t+i*0.06, 2.8, 0.34, 0.0005));
+  }
+  function clatter(){
+    if(!ctx||muted()) return; const t=ctx.currentTime;
+    // a short detuned-cluster knock: dissonant minor-2nd stack, fast decay
+    [1,1.06,1.13,1.49].forEach((m,i)=>{ const o=ctx.createOscillator(); o.type='triangle'; o.frequency.value=180*m;
+      const g=ctx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.12,t+0.004); g.gain.exponentialRampToValueAtTime(0.0001,t+0.28);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t+0.3); });
+  }
+  return { unlock, chime, chord, clatter, ctx:()=>ctx };
+})();
+
+/* ============================ INTERACTION ================================= */
+let dragging=false, lx=0, ly=0;
+cv.addEventListener('pointerdown',e=>{ dragging=true; lx=e.clientX; ly=e.clientY; cv.setPointerCapture(e.pointerId); cv.classList.add('drag'); stopWalk(); arm(); });
+cv.addEventListener('pointermove',e=>{
+  if(!dragging) return;
+  const dx=e.clientX-lx, dy=e.clientY-ly; lx=e.clientX; ly=e.clientY;
+  C.yaw   += dx*0.005;
+  C.pitch += dy*0.004;
+  C.pitch = Math.max(-1.0, Math.min(1.0, C.pitch));
+});
+cv.addEventListener('pointerup',()=>{ dragging=false; cv.classList.remove('drag'); });
+cv.addEventListener('pointercancel',()=>{ dragging=false; cv.classList.remove('drag'); });
+cv.addEventListener('wheel',e=>{ e.preventDefault(); stopWalk(); arm(); C.dolly=Math.max(3.4,Math.min(8.5, C.dolly + e.deltaY*0.0035)); }, {passive:false});
+let pinch0=null;
+cv.addEventListener('touchstart',e=>{ if(e.touches.length===2){ pinch0=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); } });
+cv.addEventListener('touchmove',e=>{ if(e.touches.length===2 && pinch0){ const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); C.dolly=Math.max(3.4,Math.min(8.5, C.dolly + (pinch0-d)*0.01)); pinch0=d; stopWalk(); arm(); } },{passive:false});
+
+// ── auto walk the solving path (the assist for a stuck visitor) ──
+let walking=false, walkT=0;
+function stopWalk(){ walking=false; document.getElementById('walk').textContent='▶ Walk the Sightline'; }
+document.getElementById('walk').addEventListener('click',()=>{
+  if(walking){ stopWalk(); return; }
+  resetAssembly(); arm();
+  C={yaw:FLIGHT.yaw0, pitch:FLIGHT.pitch, dolly:FLIGHT.dolly};
+  exposedPrev=new Array(NSLAB).fill(false);
+  walkT=0; walking=true; document.getElementById('walk').textContent='❚❚ Stop';
+});
+document.getElementById('reset').addEventListener('click',()=>{ stopWalk(); C={yaw:START.yaw,pitch:START.pitch,dolly:START.dolly}; armed=false; resetAssembly(); });
+
+// ── mute button (shared ws:pref:muted) ──
+const muteBtn=document.getElementById('mute');
+// muted by default (key unset → muted), but an EXPLICIT estate-wide preference
+// (ws:pref:muted '0'/'1', read/written via WS) is honored across tabs.
+function sndMuted(){ var raw=null; try{ raw=localStorage.getItem('ws:pref:muted'); }catch(e){ return true; } return raw===null ? true : raw==='1'; }
+function readMuted(){ return sndMuted(); }
+function writeMuted(v){ try{ if(typeof WS!=='undefined'&&WS.setMuted) WS.setMuted(v); else localStorage.setItem('ws:pref:muted', v?'1':'0'); }catch(e){} }
+function syncMute(){ const m=readMuted(); muteBtn.textContent=m?'🔔 Sound on':'🔇 Mute'; muteBtn.classList.toggle('on',!m); }
+muteBtn.addEventListener('click',()=>{ const m=readMuted(); writeMuted(!m); if(m){ Audio.unlock(); } syncMute(); });
+try{ if(typeof WS!=='undefined'&&WS.onMuteChange) WS.onMuteChange(syncMute); }catch(e){}
+window.addEventListener('storage',e=>{ if(e.key==='ws:pref:muted') syncMute(); });
+
+// ── proof pill + panel ──
+function renderProof(){
+  const r=runSelfTest();
+  const rows=document.getElementById('proofrows'); rows.innerHTML='';
+  for(const c of r.checks){
+    const row=document.createElement('div'); row.className='row';
+    row.innerHTML='<span class="mk '+(c.pass?'ok':'no')+'">'+(c.pass?'✓':'✕')+' '+c.mk+'</span><span class="tx">'+c.info+'</span>';
+    rows.appendChild(row);
+  }
+  const v=document.getElementById('verdict');
+  v.textContent = r.ok ? '✓ all 6 checks pass — the figure is a fact of the PATH, proven exact' : '✕ a check failed';
+  v.className='verdict'+(r.ok?'':' fail');
+  return r;
+}
+const pillR=runSelfTest();
+const pill=document.getElementById('pill');
+document.getElementById('pilltext').textContent = pillR.ok ? 'core ✓ '+pillR.checks.length+'/'+pillR.checks.length+' — σ proven' : 'core ✕ failed';
+pill.classList.toggle('fail', !pillR.ok);
+pill.addEventListener('click',()=>{ const p=document.getElementById('proof'); p.classList.toggle('show'); if(p.classList.contains('show')) renderProof(); });
+
+// ── main loop ──
+function loop(){
+  if(walking){
+    walkT+=0.0045;
+    if(walkT>=1) walkT=1;
+    const tt=walkT*walkT*(3-2*walkT);
+    C.yaw=FLIGHT.yaw0+(FLIGHT.yaw1-FLIGHT.yaw0)*tt; C.pitch=FLIGHT.pitch; C.dolly=FLIGHT.dolly;
+    if(walkT>=1) stopWalk();
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+resize();
+syncMute();
+(function prime(){ exposedPrev=new Array(NSLAB).fill(false); paintRibbon(); })();
+loop();
+
+// expose for console sanity + a deterministic driver of the LIVE event loop
+window.__sightline={ runSelfTest, revealOrder, SIGMA, slabs,
+  state:()=>({expected, ignited:ignited.slice(), won, armed}),
+  audioState:()=>{ const c=Audio.ctx(); return c?{state:c.state}:{state:'none'}; },
+  setPose:(p)=>{ C={...C,...p}; },
+  // render-only: drive the solving flight to fraction t (partial reveal) and stop,
+  // leaving the camera mid-flight with some slabs peeled + some stars lit (for the
+  // art-foundry preview harness). Does not win unless t≈1.
+  previewState:(t=0.65,steps=200)=>{
+    resetAssembly(); armed=true; const T=Math.max(0,Math.min(1,t));
+    for(let k=0;k<=steps;k++){
+      const tt=(k/steps)*T; const ttt=tt*tt*(3-2*tt);
+      C={yaw:FLIGHT.yaw0+(FLIGHT.yaw1-FLIGHT.yaw0)*ttt, pitch:FLIGHT.pitch, dolly:FLIGHT.dolly};
+      stepAssembly(exposedSet(slabs,C).ex);
+    }
+    return {ignited:ignited.slice(), won};
+  },
+  driveSolution:(steps=240)=>{
+    resetAssembly(); armed=true;
+    for(let k=0;k<=steps;k++){
+      const tt=k/steps; const ttt=tt*tt*(3-2*tt);
+      C={yaw:FLIGHT.yaw0+(FLIGHT.yaw1-FLIGHT.yaw0)*ttt, pitch:FLIGHT.pitch, dolly:FLIGHT.dolly};
+      stepAssembly(exposedSet(slabs,C).ex);
+    }
+    return {expected, ignited:ignited.slice(), won};
+  }};
+</script>
+
+<script>
+// ── shared estate ws: module (mute key + first-visit breadcrumb) ──
+<!-- forge:include ../tools/ws/ws.js -->
+try { WS.seen('the-sightline'); } catch (e) {}
+</script>
+</body>
+</html>
