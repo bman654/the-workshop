@@ -160,7 +160,6 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 ### cross
 - [cross] **The Pilot — Fly the Least-Time Road (a piloted eikonal fly-through)** — the Pilot constellation's promised 2nd star: bank a light-ray FIRST-PERSON toward a far focus through a shimmering graded-index medium (mirage air / graded fibre); release the stick and the AUTOPILOT 'falls into the law,' snapping to the eikonal road while a stopwatch scores your hand-flown ride against the optimum. FORM: a fly-through cockpit — a register that exists NOWHERE estate-wide (refraction-run + mirage are both top-down; grep-confirmed no cockpit/fly-through). MUST reuse refraction-run/core.mjs's VERIFIED Bouguer/eikonal predicate (don't fork the law). CRUX: hand-flown arrival time ≥ eikonal time, equality IFF n·sinθ stays constant along the ride. Keep it 2.5D banking strata, not a WebGL tunnel. (sown #348)
-- [cross] **The Sirenist — Give the Driven Plate its Voice (adopt singing-plate)** — the driven Chladni plate ALREADY exists (singing-plate has a drive-frequency slider, "the plate rings only at an eigenfrequency") but it sits MUTED, a Workbench orphan unwired from the Sirenist — the gap is SOUND + WIRING, not another plate. Cross it in: sweep the DRIVE RATE and the plate truly SINGS the eigenfrequency it snaps to as the sand figure blooms — 'the rate you watch into the pitch you hear' — and adopt it as the Sirenist's 2nd member (keep its eigen self-test green; default-muted via ws:pref:muted, one click to voice — respect the shared-laptop audio courtesy). (sown #348)
 
 
 ### curation
@@ -179,11 +178,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-<!-- ✝ BLOOMED #344: The Ball-and-Disk Integrator — the Reckoner's second star → ball-and-disk/ · after a6622d9 -->
 <!-- ✝ BLOOMED #345: The Drift Jar — the current that won't drift, finally does → conservatory/the-drift-jar/ · after a0aaddb -->
 <!-- ✝ BLOOMED #346: The Unstamped Bag — why I can't tell dog-bites-man from man-bites-dog → clockwork/unstamped-bag.html · after 1d75c46 -->
 <!-- ✝ BLOOMED #347: The Homicidal Chauffeur — Dodge the Automaton → the-homicidal-chauffeur/ · after 2dedd77 -->
 <!-- ✝ DECAYED #348: The Coastline Rule → make the measured coast the touchable hero (a cali… · after 67e9f24 -->
+<!-- ✝ BLOOMED #352: The Sirenist — Give the Driven Plate its Voice (adopt singing-plate) → singing-plate/ · after 8ebf299 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);

@@ -225,6 +225,15 @@
     // edge, and every existing catalog star (nearest = refraction-run feat-stars at
     // x275+, Δx>120) by the CATALOG INTEGRITY self-test (live-solve probe).
     'tone-mill': { x: 150, y: 500, mag: 1 },
+    // The Singing Plate — the Kinetics & Sound wing's Chladni eigen-bench, now given its
+    // VOICE (cycle #352, "The Sirenist"): the driven plate SINGS the eigenfrequency it
+    // snaps to. A mag-2 COMPANION star one band directly ABOVE its kin tone-mill (150,500),
+    // in the max-margin dark LEFT band; lit on first visit (ws:seen:singing-plate). The
+    // SECOND member of The Sirenist feat-group, so its asterism reads ≥2 stars. Verified
+    // clear of every footprint/furniture box, the manor pool, the viewBox edge, and every
+    // existing catalog star (nearest = tone-mill @51px, the-long-way-home @65px) by the
+    // CATALOG INTEGRITY self-test.
+    'singing-plate': { x: 150, y: 449, mag: 2 },
     // The Drawing Room — the drawing-engines wing's founding room (compute by
     // drawing; the pantograph copies your hand at a dialed scale). A FEATS-flavoured
     // field star in the dark BOTTOM margin band, LEFT of the induction pair
@@ -332,13 +341,14 @@
     // a betatron) ship.
     { id: 'coilwright', name: 'The Coilwright', myth: 'Makes the current by moving; pays for every spark.',
       members: ['lodestone-hall', 'bootstrap-bench'] },
-    // The Sirenist — the Kinetics & Sound wing's reward constellation. Founded with
-    // one star (The Tone Mill, a plain `ws:seen:tone-mill` room crumb); like every
-    // feat-group it is ADDITIVE — it NEVER feeds the wings-only all-skies capstone.
-    // Sized for the wing's promised siblings (a free stroboscope, a driven Chladni
-    // plate, a seen-and-heard tuning-fork beat) as they ship.
+    // The Sirenist — the Kinetics & Sound wing's reward constellation. Founded by The Tone
+    // Mill (`ws:seen:tone-mill`) and grown by The Singing Plate (`ws:seen:singing-plate`),
+    // the driven Chladni plate that SINGS its eigenmode — the same rate→pitch law in a
+    // second instrument. Like every feat-group it is ADDITIVE — it NEVER feeds the wings-
+    // only all-skies capstone. Sized to keep growing as more of the wing's seen-and-heard
+    // kin (a free stroboscope, a tuning-fork beat) ship.
     { id: 'sirenist', name: 'The Sirenist', myth: 'Spins the rate you watch into the pitch you hear.',
-      members: ['tone-mill'] },
+      members: ['tone-mill', 'singing-plate'] },
     // The Wagerer — the Belief Beam's reward constellation. Founded with one star (The Belief
     // Beam, a plain `ws:seen:belief-beam` room crumb); like every feat-group it is ADDITIVE — it
     // NEVER feeds the wings-only all-skies capstone. Sized for the wing's promised inference kin
@@ -597,7 +607,9 @@
       furnace:   { text: 'The Engine Room — the Furnace charted',        cls: 'sky-tally-furnace' },
       surveyor:  { text: 'Curved Country — the Surveyor charted',        cls: 'sky-tally-surveyor' },
       wagerer:   { text: 'The Belief Beam — the Wagerer charted',        cls: 'sky-tally-wagerer' },
-      reckoner:  { text: 'The Reckoning Cabinet — the Reckoner charted',  cls: 'sky-tally-reckoner' }
+      reckoner:  { text: 'The Reckoning Cabinet — the Reckoner charted',  cls: 'sky-tally-reckoner' },
+      coilwright:{ text: 'Electromagnetism — the Coilwright charted',     cls: 'sky-tally-coilwright' },
+      sirenist:  { text: 'Kinetics & Sound — the Sirenist charted',       cls: 'sky-tally-sirenist' }
     };
     var subY = 848;
     for (i = 0; i < FEATS.length; i++) {
