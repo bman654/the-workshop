@@ -256,6 +256,21 @@ var Layout = (function () {
      star-clear, and mutually DISJOINT from aerospace, figures-you-construct, the manor
      and every other wing region — verified by assertGroundsWingsDisjoint + smoke.cjs). */
   GROUNDS_WINGS.processions = { x: 568, y: 150, w: 222, h: 158 };
+  /* THE DEEP HEARTH — the estate's wing for the planet's own heat engine: one side-on
+     survey plate read sky→core, whose live bench tunes a volcanic conduit until the gas
+     volume fraction reaches ¾ and the coherent lava ooze UNZIPS into an explosive jet.
+     A DEEP-EARTH theme wants the LOW band, but the dense lower-right (foundry, statics,
+     physics-lab) is full; the live Layout.solve scan found the LOWEST genuinely-open
+     pocket in the lower WEST-CENTRAL park — ABOVE the Number wing (its solved rect begins
+     ~y651), BELOW the Waves tanks (end ~y536), RIGHT of the Glasshouses cluster (ends
+     ~x372), and LEFT of the pinned manor shell (x574). Footprints may overlap the candle-
+     pool decoration (the Number wing already does), so the pool is no keep-out. One front-
+     door POI (tier-1 wing landing) ⇒ a compact solved rect. FINALIZED via the live
+     Layout.solve + assertGroundsWingsDisjoint + smoke.cjs — clear of every footprint,
+     every catalog star, and mutually DISJOINT from Waves, the Number wing, the Glasshouses
+     and every other grounds wing. Its page-content kinship to The Foundry rides the cards,
+     not the map. */
+  GROUNDS_WINGS['the-deep-hearth'] = { x: 392, y: 550, w: 152, h: 88 };
 
   /* ── THE WING-ON-WING DISJOINTNESS GUARD (#283). Nothing used to assert that two
      grounds wings never shared the SAME DRAWN GROUND. Each wing was budgeted + checked
@@ -329,7 +344,8 @@ var Layout = (function () {
     'kinetics-sound': { label: 'KINETICS & SOUND', accent: '#d8a94a' },
     waves:       { label: 'WAVES',              accent: '#54d6d0' },
     processions: { label: 'THE PROCESSIONAL GROUND', accent: '#c9a24a' },
-    statics:     { label: 'STATICS',                accent: '#c9974c' }
+    statics:     { label: 'STATICS',                accent: '#c9974c' },
+    'the-deep-hearth': { label: 'THE DEEP HEARTH',  accent: '#e24a2a' }
   };
   function wingLabel(slug) {
     if (WING_META[slug] && WING_META[slug].label) return WING_META[slug].label;
