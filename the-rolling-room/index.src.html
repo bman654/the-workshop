@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Rolling Room · The Gardens</title>
+<style>
+  :root{
+    --bg:#08080b;
+    --ink:#efe6d6;
+    --ink-dim:#a3947f;
+    --amber:#f0a83a;             /* the thermal accent — the hot plate */
+    --amber-hot:#ffce7a;
+    --amber-soft:rgba(240,168,58,0.13);
+    --amber-edge:rgba(240,168,58,0.38);
+    --warm:#ffd9a0;              /* up-welling warm fluid */
+    --cold:#5a6ab0;              /* cold ceiling / down-welling */
+    --cold-hot:#8da0e8;
+    --good:#7fce7c;
+    --bad-hot:#ff8a5c;
+    --panel:rgba(15,12,10,0.9);
+    --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --font-ser:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; min-height:100%; color:var(--ink); font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+    background:
+      radial-gradient(1200px 720px at 50% -10%, rgba(240,168,58,0.10), transparent 60%),
+      radial-gradient(960px 660px at 16% 116%, rgba(90,106,176,0.07), transparent 62%),
+      var(--bg); }
+
+  .topbar{ position:sticky; top:0; z-index:30; display:flex; align-items:center; gap:14px;
+    padding:11px 20px; background:linear-gradient(180deg, rgba(8,8,11,0.95), rgba(8,8,11,0.7) 70%, transparent);
+    backdrop-filter:blur(3px); }
+  .topbar a.back{ color:#cdb98e; text-decoration:none; font:600 11px/1 var(--font-mono);
+    letter-spacing:.16em; text-transform:uppercase; padding:6px 10px; border-radius:7px;
+    border:1px solid transparent; transition:.2s; white-space:nowrap; }
+  .topbar a.back:hover{ color:var(--amber-hot); border-color:var(--amber-edge); }
+  .topbar .spacer{ flex:1; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--amber-edge); color:var(--ink-dim); background:rgba(0,0,0,0.4); white-space:nowrap;
+    cursor:pointer; user-select:none; max-width:56vw; overflow:hidden; text-overflow:ellipsis; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  .hero{ max-width:1120px; margin:0 auto; padding:30px 24px 6px; text-align:center; }
+  .eyebrow{ font:600 11px/1 var(--font-mono); letter-spacing:.32em; text-transform:uppercase; color:var(--amber);
+    opacity:.92; margin-bottom:13px; }
+  .hero h1{ font-family:var(--font-ser); font-weight:600; margin:0; font-size:clamp(32px,6.4vw,54px);
+    letter-spacing:.4px; line-height:1.03;
+    background:linear-gradient(174deg, #fff0c8, #f0a83a 54%, #b07024);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .hero .lede{ max-width:760px; margin:14px auto 0; font:15px/1.62 var(--font-ser); color:var(--ink); opacity:.92; }
+  .hero .lede b{ color:var(--amber-hot); font-weight:600; }
+  .hero .lede .cold{ color:var(--cold-hot); font-weight:600; }
+  .hero .lede .kc{ font-family:var(--font-mono); color:var(--amber); font-size:13.5px; }
+
+  .wrap{ max-width:1120px; margin:16px auto 0; padding:0 24px 12px; }
+
+  /* ── THE FLUID CELL — a thin letterbox layer (Lx : 1 ≈ 5.66 : 1) ── */
+  .stage{ position:relative; }
+  canvas#cell{ width:100%; display:block; border-radius:12px; background:#050506;
+    box-shadow:0 20px 64px rgba(0,0,0,.6), inset 0 0 0 1px rgba(240,168,58,.10);
+    touch-action:none; cursor:crosshair; }
+
+  /* the regime pill — top-left overlay */
+  .pill{ position:absolute; top:14px; left:15px; z-index:6; display:flex; align-items:center; gap:8px;
+    padding:7px 13px; border-radius:9px; background:rgba(8,8,11,0.74); border:1px solid var(--amber-edge);
+    font:600 12px/1 var(--font-mono); letter-spacing:.04em; color:var(--ink-dim); pointer-events:none;
+    transition:transform .18s cubic-bezier(.2,1.5,.4,1), border-color .3s, color .3s; }
+  .pill .dot{ width:9px; height:9px; border-radius:50%; flex:none; background:#555; transition:.3s; }
+  .pill.still .dot{ background:#6b7290; box-shadow:0 0 6px rgba(107,114,144,.6); }
+  .pill.growing{ color:var(--amber-hot); border-color:var(--amber); }
+  .pill.growing .dot{ background:var(--amber); box-shadow:0 0 9px var(--amber); }
+  .pill.settled{ color:var(--warm); border-color:var(--amber-edge); }
+  .pill.settled .dot{ background:var(--warm); box-shadow:0 0 9px rgba(255,217,160,.7); }
+  .pill.flip{ color:var(--cold-hot); border-color:rgba(90,106,176,.6); }
+  .pill.flip .dot{ background:var(--cold-hot); box-shadow:0 0 8px rgba(141,160,232,.7); }
+  .pill.pop{ transform:scale(1.14); }
+  .pill .sub{ color:var(--ink-dim); font-weight:400; font-size:11px; }
+
+  /* the σ side-rail — DEMOTED faint bottom-right tile (the math under the snap) */
+  .siderail{ position:absolute; right:13px; bottom:12px; z-index:6; opacity:.45;
+    display:flex; align-items:center; gap:9px; padding:7px 10px; border-radius:8px;
+    background:rgba(8,8,11,0.6); border:1px solid rgba(240,168,58,.16);
+    font:500 9.5px/1.3 var(--font-mono); color:var(--ink-dim); pointer-events:none; transition:opacity .3s; }
+  .siderail:hover{ opacity:.85; }
+  .siderail canvas{ display:block; width:42px; height:30px; }
+  .siderail .lab b{ color:var(--amber); font-weight:600; }
+  .siderail .lab .cap{ display:block; font-size:8.5px; opacity:.7; margin-top:2px; max-width:108px; }
+
+  /* ── THE DIAL — ΔT / Ra, with the glowing Ra_c notch at the 50% track mark ── */
+  .console{ margin-top:18px; display:grid; grid-template-columns:1fr 300px; gap:18px; align-items:stretch; }
+  @media(max-width:860px){ .console{ grid-template-columns:1fr; } }
+  .card{ background:var(--panel); border:1px solid #2a2118; border-radius:12px; padding:16px 18px;
+    box-shadow:0 12px 40px rgba(0,0,0,.45); }
+  .card h3{ margin:0 0 4px; font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--amber); }
+  .card .hint{ font:12.5px/1.55 var(--font-ser); color:#cdbfa8; margin:6px 0 0; }
+  .card .hint b{ color:var(--amber-hot); font-weight:600; } .card .hint .cold{ color:var(--cold-hot); }
+
+  .readrow{ display:flex; gap:18px; align-items:baseline; margin:10px 0 4px; }
+  .read{ display:flex; flex-direction:column; gap:2px; }
+  .read .k{ font:600 9px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase; color:var(--ink-dim); }
+  .read .v{ font:600 26px/1 var(--font-ser); color:var(--ink); }
+  .read.hot .v{ color:var(--amber-hot); } .read.coldv .v{ color:var(--cold-hot); }
+  .read .v small{ font-size:13px; color:var(--ink-dim); font-weight:400; }
+
+  .dialwrap{ position:relative; margin:14px 2px 4px; }
+  .dialwrap input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:8px; border-radius:5px;
+    background:linear-gradient(90deg, #3a4a8a 0%, #54607f 38%, #6a5a3a 56%, #b9802e 78%, #f0a83a 100%);
+    outline:none; cursor:pointer; }
+  .dialwrap input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:18px; height:26px;
+    border-radius:5px; background:linear-gradient(180deg,#ffe7b0,#caa24a); border:1px solid #6a4d18;
+    box-shadow:0 2px 7px rgba(0,0,0,.6); cursor:grab; }
+  .dialwrap input[type=range]::-moz-range-thumb{ width:18px; height:26px; border-radius:5px;
+    background:linear-gradient(180deg,#ffe7b0,#caa24a); border:1px solid #6a4d18; cursor:grab; }
+  .dialwrap input[type=range]:focus-visible{ box-shadow:0 0 0 3px var(--amber-edge); }
+  /* the Ra_c notch at the 50% mark */
+  .notch{ position:absolute; top:-7px; bottom:-7px; left:50%; width:2px; transform:translateX(-1px);
+    background:var(--amber-hot); box-shadow:0 0 8px var(--amber-hot); border-radius:2px; pointer-events:none;
+    transition:box-shadow .15s, background .15s; }
+  .notch.pulse{ box-shadow:0 0 18px var(--amber-hot), 0 0 30px var(--amber); }
+  .notch .nlab{ position:absolute; top:-19px; left:50%; transform:translateX(-50%); white-space:nowrap;
+    font:600 8.5px/1 var(--font-mono); color:var(--amber-hot); }
+  .ticks{ display:flex; justify-content:space-between; margin-top:9px; font:500 9.5px/1 var(--font-mono);
+    color:var(--ink-dim); letter-spacing:.02em; }
+  .ticks span.mid{ color:var(--amber); }
+
+  .presets{ display:flex; gap:7px; margin-top:14px; flex-wrap:wrap; }
+  .presets button{ flex:1 1 0; min-width:84px; border:1px solid var(--amber-edge); border-radius:8px;
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); font:600 11px/1.25 var(--font-mono); letter-spacing:.02em;
+    padding:9px 6px; cursor:pointer; transition:.18s; }
+  .presets button:hover{ border-color:var(--amber); color:var(--amber-hot); background:var(--amber-soft); }
+  .presets button:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+  .presets button small{ display:block; font-weight:400; font-size:9px; opacity:.7; margin-top:3px; }
+  .presets button.flip{ border-color:rgba(90,106,176,.5); }
+  .presets button.flip:hover{ color:var(--cold-hot); background:rgba(90,106,176,.14); }
+
+  .btn{ width:100%; margin-top:11px; border:1px solid var(--amber-edge); border-radius:9px;
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); font:600 11px/1 var(--font-mono);
+    letter-spacing:.1em; text-transform:uppercase; padding:11px 0; cursor:pointer; transition:.18s; }
+  .btn:hover{ border-color:var(--amber); color:var(--amber-hot); background:var(--amber-soft); }
+  .btn.prime{ border-color:var(--amber); color:var(--amber-hot); }
+  .btn:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+
+  .toggle{ display:flex; align-items:center; gap:8px; margin-top:12px; font:11.5px/1.3 var(--font-ui);
+    color:var(--ink-dim); cursor:pointer; user-select:none; }
+  .toggle input{ accent-color:var(--amber); width:15px; height:15px; }
+
+  .legend{ display:flex; gap:15px; margin-top:13px; font:10.5px/1.4 var(--font-mono); color:var(--ink-dim);
+    flex-wrap:wrap; }
+  .legend span{ display:flex; align-items:center; gap:6px; }
+  .legend .sw{ width:14px; height:10px; border-radius:3px; flex:none; }
+  .legend .sw.warm{ background:linear-gradient(90deg,#ffd9a0,#f0a83a); box-shadow:0 0 7px rgba(240,168,58,.5); }
+  .legend .sw.cold{ background:linear-gradient(90deg,#8da0e8,#3a4a8a); box-shadow:0 0 7px rgba(90,106,176,.45); }
+  .legend .sw.dye{ background:linear-gradient(90deg,#fff0e0,#ff8aa0,#b58cff); }
+
+  footer{ max-width:1120px; margin:10px auto 0; padding:20px 24px 40px; text-align:center;
+    color:#8a7556; font:12px/1.7 var(--font-ser); }
+  footer .proof{ font-family:var(--font-mono); font-size:11px; color:#7a6648; letter-spacing:.01em; }
+  footer .proof b{ color:var(--amber); } footer .proof .cold{ color:var(--cold-hot); }
+  footer .kin{ margin-top:12px; }
+  footer .kin a{ color:#bfa377; text-decoration:none; border-bottom:1px dotted #4a3c28; }
+  footer .kin a:hover{ color:var(--amber-hot); }
+  .visually-hidden{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="back" href="../index.html">‹ The Orrery Estate</a>
+  <div class="spacer"></div>
+  <div class="selftest" id="selftest" title="click to re-run the proof + solver self-test">self-test…</div>
+</div>
+
+<div class="hero">
+  <div class="eyebrow">The Gardens · The Rolling Room</div>
+  <h1>The Rolling Room</h1>
+  <p class="lede">A thin layer of fluid, <b>heated from below</b>. Turn the heat up gently and nothing happens —
+  it just sits there and conducts, dead still. But cross one exact threshold and the <i>whole layer</i> spontaneously
+  breaks into a row of slow, counter-rotating <b>rolls</b>. That threshold is the critical Rayleigh number,
+  <span class="kc">Ra<sub>c</sub> = 27π⁴/4 = 657.5113645</span> — and the rolls you watch are the honest fluid solver,
+  not an animation. <span class="cold">Drive the heat the wrong way</span> (warm on top) and it can never start.
+  <b>Drag the dial up across the notch</b>, and drop a bead of dye to watch it get seized.</p>
+</div>
+
+<div class="wrap">
+  <div class="stage">
+    <canvas id="cell" aria-label="A thin horizontal layer of fluid heated from below; cross the critical Rayleigh number and it breaks into counter-rotating convection rolls"></canvas>
+    <div class="pill still" id="pill"><span class="dot"></span><span id="pillText">still — conducting</span></div>
+    <div class="siderail" aria-hidden="true">
+      <canvas id="spark" width="84" height="60"></canvas>
+      <div class="lab">growth rate <b>σ(k)</b><span id="sigVal"></span>
+        <span class="cap">the math under the snap — the peak kisses zero at Ra<sub>c</sub>; the picture is the point.</span></div>
+    </div>
+  </div>
+
+  <div class="console">
+    <!-- LEFT: the heat dial -->
+    <div class="card">
+      <h3>The heat dial — ΔT across the layer</h3>
+      <div class="readrow">
+        <div class="read hot"><span class="k">ΔT (warmer floor)</span><span class="v" id="dtVal">+30.0°</span></div>
+        <div class="read" id="raRead"><span class="k">Rayleigh number Ra</span><span class="v" id="raVal">986 <small id="raMult">1.5× Ra_c</small></span></div>
+      </div>
+      <div class="dialwrap">
+        <input type="range" id="dial" min="-20" max="60" step="0.25" value="30"
+          aria-label="temperature difference across the fluid layer, in degrees" aria-valuetext="+30 degrees, Ra 986, rolling">
+        <div class="notch" id="notch"><span class="nlab">Ra_c</span></div>
+      </div>
+      <div class="ticks"><span>−20° · warm top</span><span class="mid">+20° · onset</span><span>+60° · 3× Ra_c</span></div>
+      <div class="presets">
+        <button id="pBelow" type="button">just below<small>ΔT 19° · still</small></button>
+        <button id="pAbove" type="button">just above<small>ΔT 21° · gentlest rolls</small></button>
+        <button id="pHard" type="button">hard drive<small>ΔT 60° · 3× Ra_c</small></button>
+        <button id="pFlip" type="button" class="flip">flip it<small>ΔT −20° · warm top</small></button>
+      </div>
+      <p class="hint" id="liveHint">Above the notch the layer rolls; below it, stillness. The closer you sit to
+        <b>Ra_c</b>, the slower the snap — that is real <i>critical slowing-down</i>, felt at the knife-edge.</p>
+    </div>
+
+    <!-- RIGHT: the dye + display controls -->
+    <div class="card">
+      <h3>The dye</h3>
+      <p class="hint">Drop a bead of luminous dye into the layer and watch the rolls <b>wind</b> it into spirals —
+        or, below the notch, watch it just sit and soften. <span class="cold">Tap anywhere on the layer</span> to drop more.</p>
+      <button class="btn prime" id="drop" type="button">↯ drop a bead of dye</button>
+      <button class="btn" id="reseed" type="button">↺ reset the layer</button>
+      <label class="toggle"><input type="checkbox" id="redmo"> Reduced motion (one settled frame, no loop)</label>
+      <div class="legend">
+        <span><span class="sw warm"></span> warm rising</span>
+        <span><span class="sw cold"></span> cold sinking</span>
+        <span><span class="sw dye"></span> dye</span>
+      </div>
+    </div>
+  </div>
+  <div class="visually-hidden" id="aria" role="status" aria-live="polite"></div>
+</div>
+
+<footer>
+  <div class="proof" id="proofLine">self-test <span id="proofN">…</span> ✓ · onset <b>Ra<sub>c</sub> = 27π⁴/4 = 657.5113645</b> at
+    <b>k<sub>c</sub> = π/√2</b> · band of unstable modes brackets k<sub>c</sub> · <span class="cold">heat-from-above (Ra&lt;0) decays for every k</span>
+    · the rolls are the live ψ–ω field, the proof pinned to &lt;1e-9</div>
+  <div class="kin">kin: <a href="../brazil-nut-box/index.html">The Brazil-Nut Box</a> — granular convection, the same roll made of grains.</div>
+</footer>
+
+<script type="module">
+"use strict";
+// === THE ROLLING ROOM CORE (inlined byte-identical to core.mjs by forge) ===
+<!-- forge:include ./core.mjs -->
+
+// ───────────────────────────── DOM + state ──────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const cv = $('cell'), ctx = cv.getContext('2d');
+const spark = $('spark'), sctx = spark.getContext('2d');
+
+// the ONE shared interaction state — the dial sets Ra; the solver does the rest.
+const state = { deltaT: 30, Ra: 30 * RA_PER_DEG, dyeReleased: false };
+
+// ── grid / tempo (the 4-roll shipping default; honest ψ–ω field) ──
+const NX = 96, NZ = 33, LX = 4 * Math.SQRT2;          // 4 rolls = 2·λ_c
+const DT = 2e-4, SWEEPS = 11;                          // CFL-safe explicit step
+const DTAU = 0.0125;                                   // sim-time advanced per display frame
+const SUBSTEPS = Math.max(1, Math.round(DTAU / DT));   // ≈ 62 substeps/frame
+let cell = makeCell({ nx: NX, nz: NZ, Lx: LX, Pr: 1, Ra: state.Ra, seed: 0x1bada55, eps: 0.05 });
+
+// the LUT offscreen buffer (solver-resolution, upscaled with smoothing)
+const lut = document.createElement('canvas'); lut.width = NX; lut.height = NZ;
+const lctx = lut.getContext('2d');
+const lutImg = lctx.createImageData(NX, NZ);
+
+// ── dye tracers (additive winding filaments) ──
+const DYE_CAP = 2200;
+const dye = [];        // {x,z,px,pz,tint,age}
+let dyeHead = 0;
+const TINTS = [[255,242,214],[255,150,140],[181,140,255],[255,196,120],[150,210,255]];
+let tintCycle = 0;
+
+// ── visual envelope (cosmetic emphasis over the honest rollAmp = thetaRMS) ──
+let vis = 0;             // asymmetric: fast bloom-up, slow relax-down
+let rmsSmooth = 0, rmsRate = 0;   // smoothed amplitude + its time-derivative
+let crossPulse = 0;      // one-shot crossing cue (ripple flash + notch pulse + pill pop)
+let floorFlash = 0;      // floor-ignition flash on a fresh bloom
+let prevAbove = (state.Ra > RA_C);
+let reduced = false;
+
+// ─────────────────────────── canvas sizing ──────────────────────────────────
+let DPR = Math.min(2, window.devicePixelRatio || 1);
+function fit(){
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  // pick a height that keeps the Lx:1 cell visible inside a small frame margin
+  const cssW = cv.clientWidth || 1000;
+  const cssH = Math.max(150, Math.round(cssW / (LX / 1.20)));   // frame margin ⇒ cell aspect ~Lx
+  cv.style.height = cssH + 'px';
+  cv.width = Math.round(cssW * DPR);
+  cv.height = Math.round(cssH * DPR);
+  draw();
+}
+
+// the cell interior rect (preserve Lx:1, centred, leaving a brass/indigo frame)
+function geom(){
+  const W = cv.width, H = cv.height;
+  const padX = W * 0.014, padTop = H * 0.085, padBot = H * 0.085;
+  let iw = W - 2 * padX, ih = H - padTop - padBot;
+  // enforce Lx:1 aspect of the interior (letterbox within the canvas)
+  if (iw / ih > LX){ const niw = ih * LX; const ix = (W - niw) / 2; return { W, H, ix, iy: padTop, iw: niw, ih }; }
+  else { const nih = iw / LX; const iy = (H - nih) / 2; return { W, H, ix: padX, iy, iw, ih: nih }; }
+}
+
+// ─────────────────────────── the thermal LUT ────────────────────────────────
+// map total temperature T=(1−z)+θ (cold ceiling → hot floor) through a diverging
+// indigo→amber ramp; `vis` lifts the contrast as the rolls bloom (cosmetic only).
+function thermalColor(T, out){
+  // clamp with a little headroom so strong tongues saturate
+  let t = T; if (t < -0.15) t = -0.15; if (t > 1.15) t = 1.15;
+  // diverging around 0.5: cold (indigo) below, warm (amber) above
+  const m = (t - 0.5) * 2;            // −1 cold … +1 hot
+  const sat = 0.55 + 0.45 * vis;      // dim when still, vivid when rolling
+  if (m >= 0){
+    const f = Math.min(1, m) * sat;
+    out[0] = 30 + f * (255 - 30);
+    out[1] = 28 + f * (190 - 28);
+    out[2] = 44 + f * (110 - 44);
+  } else {
+    const f = Math.min(1, -m) * sat;
+    out[0] = 30 + f * (66 - 30);
+    out[1] = 28 + f * (96 - 28);
+    out[2] = 44 + f * (170 - 44);
+  }
+}
+
+function paintBody(g){
+  const flip = state.Ra < 0;          // heat-from-above ⇒ paint warm on top (stable read)
+  const data = lutImg.data;
+  const th = cell.theta;
+  const rgb = [0, 0, 0];
+  for (let j = 0; j < NZ; j++){
+    const jj = flip ? (NZ - 1 - j) : j;
+    const z = jj / (NZ - 1);
+    const base = 1 - z;               // conduction profile T_bg
+    for (let i = 0; i < NX; i++){
+      const T = base + th[jj * NX + i];
+      thermalColor(T, rgb);
+      const p = (j * NX + i) * 4;
+      data[p] = rgb[0]; data[p + 1] = rgb[1]; data[p + 2] = rgb[2]; data[p + 3] = 255;
+    }
+  }
+  lctx.putImageData(lutImg, 0, 0);
+  ctx.save();
+  roundRectPath(ctx, g.ix, g.iy, g.iw, g.ih, 6); ctx.clip();
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(lut, 0, 0, NX, NZ, g.ix, g.iy, g.iw, g.ih);
+  ctx.restore();
+}
+
+// ─────────────────────────── the dye render ─────────────────────────────────
+function dropDye(xFrac, zFrac){
+  const cx = xFrac * LX, cz = Math.max(0.12, Math.min(0.88, zFrac));
+  const tint = TINTS[tintCycle % TINTS.length]; tintCycle++;
+  const n = 480, R = 0.32;
+  for (let i = 0; i < n; i++){
+    const a = Math.random() * 6.2832, r = Math.sqrt(Math.random()) * R;
+    const x = ((cx + Math.cos(a) * r) % LX + LX) % LX;
+    const z = Math.max(0.02, Math.min(0.98, cz + Math.sin(a) * r * 0.5));
+    const t = { x, z, px: x, pz: z, tint, age: 0 };
+    if (dye.length < DYE_CAP) dye.push(t);
+    else { dye[dyeHead] = t; dyeHead = (dyeHead + 1) % DYE_CAP; }
+  }
+  state.dyeReleased = true;
+}
+
+// advect every tracer by the live field (RK2), wrap x, reflect z, + tiny high-Schmidt
+// diffusion so filaments hold many turns yet a still blob only softens.
+function advectDye(dtau){
+  const diff = 0.0016;
+  for (let n = 0; n < dye.length; n++){
+    const t = dye[n];
+    t.px = t.x; t.pz = t.z;
+    const v1 = velocityAt(cell, t.x, t.z);
+    const xm = t.x + v1[0] * dtau * 0.5, zm = t.z + v1[1] * dtau * 0.5;
+    const v2 = velocityAt(cell, xm, zm);
+    let x = t.x + v2[0] * dtau + (Math.random() * 2 - 1) * diff;
+    let z = t.z + v2[1] * dtau + (Math.random() * 2 - 1) * diff;
+    x = (x % LX + LX) % LX;
+    if (z < 0) z = -z; else if (z > 1) z = 2 - z;
+    t.x = x; t.z = z; t.age++;
+  }
+}
+
+function drawDye(g){
+  if (!dye.length) return;
+  ctx.save();
+  roundRectPath(ctx, g.ix, g.iy, g.iw, g.ih, 6); ctx.clip();
+  ctx.globalCompositeOperation = 'lighter';
+  const sx = g.iw / LX, sy = g.ih;
+  for (let n = 0; n < dye.length; n++){
+    const t = dye[n];
+    const x0 = g.ix + t.x * sx, y0 = g.iy + g.ih - t.z * sy;
+    let x1 = g.ix + t.px * sx, y1 = g.iy + g.ih - t.pz * sy;
+    // suppress the seam streak when a tracer wraps
+    if (Math.abs(t.x - t.px) > LX * 0.5){ x1 = x0; y1 = y0; }
+    const c = t.tint;
+    ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},0.5)`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x0, y0); ctx.stroke();
+    ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},0.5)`;
+    ctx.beginPath(); ctx.arc(x0, y0, 1.05, 0, 6.2832); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ─────────────────────────── frame furniture ────────────────────────────────
+function drawFrame(g){
+  // hot brass plate (floor) glow + cold indigo plate (ceiling) rim
+  ctx.save();
+  roundRectPath(ctx, g.ix, g.iy, g.iw, g.ih, 6); ctx.clip();
+  const floorGlow = ctx.createLinearGradient(0, g.iy + g.ih, 0, g.iy + g.ih - g.ih * 0.32);
+  const fa = state.Ra < 0 ? 0.05 : (0.12 + 0.5 * floorFlash + 0.18 * vis);
+  floorGlow.addColorStop(0, `rgba(255,176,70,${fa})`); floorGlow.addColorStop(1, 'rgba(255,176,70,0)');
+  ctx.fillStyle = floorGlow; ctx.fillRect(g.ix, g.iy + g.ih - g.ih * 0.32, g.iw, g.ih * 0.32);
+  const ceilGlow = ctx.createLinearGradient(0, g.iy, 0, g.iy + g.ih * 0.30);
+  ceilGlow.addColorStop(0, 'rgba(120,140,230,0.10)'); ceilGlow.addColorStop(1, 'rgba(120,140,230,0)');
+  ctx.fillStyle = ceilGlow; ctx.fillRect(g.ix, g.iy, g.iw, g.ih * 0.30);
+  // a one-shot shear ripple sweeping across on the upward crossing
+  if (crossPulse > 0.01){
+    const sweep = (1 - crossPulse) * g.iw;
+    const rg = ctx.createLinearGradient(g.ix + sweep - g.iw * 0.18, 0, g.ix + sweep + g.iw * 0.18, 0);
+    rg.addColorStop(0, 'rgba(255,240,210,0)'); rg.addColorStop(0.5, `rgba(255,240,210,${0.22 * crossPulse})`);
+    rg.addColorStop(1, 'rgba(255,240,210,0)');
+    ctx.fillStyle = rg; ctx.fillRect(g.ix, g.iy, g.iw, g.ih);
+  }
+  ctx.restore();
+  // the brass hot-plate bar (bottom) + indigo cold-plate bar (top)
+  const barH = Math.max(3, g.H * 0.012);
+  let hb = ctx.createLinearGradient(0, g.iy + g.ih, 0, g.iy + g.ih + barH);
+  hb.addColorStop(0, '#ffce7a'); hb.addColorStop(1, '#8a5a1a');
+  ctx.fillStyle = hb; ctx.fillRect(g.ix, g.iy + g.ih, g.iw, barH);
+  let cb = ctx.createLinearGradient(0, g.iy - barH, 0, g.iy);
+  cb.addColorStop(0, '#3a4a8a'); cb.addColorStop(1, '#8da0e8');
+  ctx.fillStyle = cb; ctx.fillRect(g.ix, g.iy - barH, g.iw, barH);
+  // amber inset frame
+  ctx.strokeStyle = 'rgba(240,168,58,0.30)'; ctx.lineWidth = Math.max(1, g.H * 0.004);
+  roundRectPath(ctx, g.ix, g.iy, g.iw, g.ih, 6); ctx.stroke();
+}
+
+function roundRectPath(c, x, y, w, h, r){
+  r = Math.min(r, w / 2, h / 2);
+  c.beginPath();
+  c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+}
+
+// ─────────────────────────── the full draw ──────────────────────────────────
+function draw(){
+  const g = geom();
+  ctx.clearRect(0, 0, g.W, g.H);
+  paintBody(g);
+  drawFrame(g);
+  drawDye(g);
+}
+
+// ─────────────────────── the regime pill + readouts ─────────────────────────
+let pillPop = 0;
+function updatePill(){
+  const pill = $('pill'), txt = $('pillText');
+  pill.classList.remove('still', 'growing', 'settled', 'flip');
+  let cls, label;
+  if (state.Ra < 0){ cls = 'flip'; label = 'still ❄ — heated from above'; }
+  else if (state.Ra <= RA_C){ cls = 'still'; label = 'still — conducting heat'; }
+  else {
+    // above onset: growing vs settled by the SIGN of the smoothed dRMS/dt
+    if (rmsSmooth > 0.04 && rmsRate < 0.02){ cls = 'settled'; label = 'rolling — settled'; }
+    else { cls = 'growing'; label = 'rolling — growing'; }
+  }
+  pill.classList.add(cls);
+  if (pillPop > 0.5) pill.classList.add('pop'); else pill.classList.remove('pop');
+  txt.textContent = label;
+}
+
+function updateReadouts(){
+  $('dtVal').textContent = (state.deltaT >= 0 ? '+' : '') + state.deltaT.toFixed(1) + '°';
+  const ra = state.Ra;
+  $('raVal').firstChild.nodeValue = Math.abs(ra) >= 100 ? Math.round(ra) + ' ' : ra.toFixed(1) + ' ';
+  const mult = ra / RA_C;
+  let mtxt;
+  if (ra < 0) mtxt = '(warm top)';
+  else if (mult < 0.999) mtxt = (mult).toFixed(2) + '× Ra_c';
+  else if (Math.abs(mult - 1) < 0.02) mtxt = '= Ra_c (onset)';
+  else mtxt = mult.toFixed(2) + '× Ra_c';
+  $('raMult').textContent = mtxt;
+  const rr = $('raRead'); rr.classList.toggle('hot', ra > RA_C); rr.classList.toggle('coldv', ra < 0);
+}
+
+// the σ(k) sparkline — growthRate over a k window; the peak kisses zero at Ra_c.
+function drawSpark(){
+  const w = spark.width, h = spark.height;
+  sctx.clearRect(0, 0, w, h);
+  const kLo = 0.4, kHi = 6.0;
+  // y-scale: symmetric about the current peak so the zero crossing is legible
+  const peak = maxGrowthRate(state.Ra, { Pr: 1 }).sigma;
+  const span = Math.max(2.5, Math.abs(peak) * 1.4, 3);
+  const y0 = h / 2;                       // σ = 0 baseline
+  // zero line
+  sctx.strokeStyle = 'rgba(163,148,127,0.5)'; sctx.lineWidth = 1;
+  sctx.beginPath(); sctx.moveTo(0, y0); sctx.lineTo(w, y0); sctx.stroke();
+  // the curve
+  sctx.strokeStyle = state.Ra > RA_C ? '#ffce7a' : (state.Ra < 0 ? '#8da0e8' : '#a3947f');
+  sctx.lineWidth = 1.5; sctx.beginPath();
+  for (let i = 0; i <= w; i++){
+    const k = kLo + (kHi - kLo) * i / w;
+    const s = growthRate(state.Ra, k, { Pr: 1 });
+    const y = y0 - (s / span) * (h / 2 - 2);
+    if (i === 0) sctx.moveTo(i, y); else sctx.lineTo(i, y);
+  }
+  sctx.stroke();
+  // mark k_c
+  const xkc = (KC - kLo) / (kHi - kLo) * w;
+  sctx.strokeStyle = 'rgba(240,168,58,0.4)'; sctx.setLineDash([2, 2]);
+  sctx.beginPath(); sctx.moveTo(xkc, 0); sctx.lineTo(xkc, h); sctx.stroke(); sctx.setLineDash([]);
+  $('sigVal').textContent = ' = ' + peak.toFixed(1);
+}
+
+// ───────────────────── the dial: notch, magnet, mapping ──────────────────────
+const dial = $('dial');
+function applyDial(v, fromPointer){
+  // magnetic catch near Ra_c (pointer-drag only): park astride onset
+  if (fromPointer && Math.abs(v - DELTAT_C) < 0.55) v = DELTAT_C;
+  state.deltaT = v;
+  state.Ra = v * RA_PER_DEG;
+  cell.Ra = state.Ra;
+  dial.value = String(v);
+  dial.setAttribute('aria-valuetext',
+    `${v.toFixed(1)} degrees, Ra ${Math.round(state.Ra)}, ${state.Ra < 0 ? 'still, heated from above' : state.Ra <= RA_C ? 'still, conducting' : 'rolling'}`);
+  updateReadouts(); updatePill(); drawSpark();
+  maybeCross();
+  if (reduced) settleStaticFrame();
+}
+
+// the hysteretic upward-only crossing cue + floor-ignition (no strobe at the knife-edge)
+let aboveHyst = (state.Ra > RA_C);
+function maybeCross(){
+  const HB = 6;   // Ra hysteresis band around Ra_c
+  if (!aboveHyst && state.Ra > RA_C + HB){
+    aboveHyst = true;
+    crossPulse = 1; floorFlash = 1; pillPop = 1;
+    $('notch').classList.add('pulse');
+    setTimeout(() => $('notch').classList.remove('pulse'), 520);
+    announce('crossed Ra_c — the layer is rolling');
+    // floor-ignition: if the layer is genuinely still, re-seed a fresh eps comb so it blooms
+    if (thetaRMS(cell) < 0.012) seedField(cell, 0.05);
+  } else if (aboveHyst && state.Ra < RA_C - HB){
+    aboveHyst = false;
+    announce(state.Ra < 0 ? 'heated from above — the layer is still' : 'below Ra_c — the layer is still');
+  }
+}
+
+let lastAnnounce = 0, announceTimer = 0;
+function announce(msg){
+  clearTimeout(announceTimer);
+  announceTimer = setTimeout(() => { $('aria').textContent = msg; }, 360);   // debounce
+}
+
+// ─────────────────────────── the rAF loop ───────────────────────────────────
+let raf = 0, last = performance.now(), acc = 0;
+function frame(now){
+  const realDt = Math.min(60, now - last); last = now;
+  // rAF-coalesce: advance ~one DTAU of sim per frame (cap to avoid spiral-of-death)
+  let frames = 1; acc += realDt;
+  if (acc > 50){ frames = 2; acc = 0; }   // a dropped frame ⇒ catch up at most one extra
+  for (let f = 0; f < frames; f++){
+    for (let n = 0; n < SUBSTEPS; n++) step(cell, DT, SWEEPS);
+    advectDye(DTAU);
+  }
+  // amplitude readout + asymmetric vis envelope (fast up / slow down)
+  const rms = thetaRMS(cell);
+  rmsRate = (rms - rmsSmooth);
+  rmsSmooth += (rms - rmsSmooth) * 0.12;
+  const target = Math.min(1, rms * 6);
+  vis += (target - vis) * (target > vis ? 0.20 : 0.05);
+  crossPulse *= 0.94; floorFlash *= 0.92; pillPop *= 0.90;
+  if (pillPop < 0.5) $('pill').classList.remove('pop');
+  updatePill();
+  draw();
+  raf = requestAnimationFrame(frame);
+}
+
+// reduced-motion: settle to a static rolling frame + wound dye, no loop
+function settleStaticFrame(){
+  cancelAnimationFrame(raf); raf = 0;
+  // bounded synchronous settle at the current Ra
+  const N = state.Ra > RA_C ? 70 : 40;
+  for (let f = 0; f < N; f++){ for (let n = 0; n < SUBSTEPS; n++) step(cell, DT, SWEEPS); advectDye(DTAU); }
+  const rms = thetaRMS(cell);
+  vis = Math.min(1, rms * 6); rmsSmooth = rms; rmsRate = 0;
+  floorFlash = 0; crossPulse = 0;
+  updatePill(); draw();
+}
+
+// ───────────────────────────── wiring ───────────────────────────────────────
+let pointerDrag = false;
+dial.addEventListener('pointerdown', () => { pointerDrag = true; });
+window.addEventListener('pointerup', () => { pointerDrag = false; });
+dial.addEventListener('input', () => applyDial(parseFloat(dial.value), pointerDrag));
+
+$('pBelow').addEventListener('click', () => { seedField(cell, 0.05); applyDial(19, false); flashBtn('pBelow'); });
+$('pAbove').addEventListener('click', () => {
+  // start from a PRE-SEEDED partially-grown field so a click blooms in ~1–2s
+  seedField(cell, 0.10); applyDial(21, false); flashBtn('pAbove');
+});
+$('pHard').addEventListener('click', () => { applyDial(60, false); flashBtn('pHard'); });
+$('pFlip').addEventListener('click', () => { applyDial(-20, false); flashBtn('pFlip'); });
+function flashBtn(id){ const b = $(id); b.style.borderColor = 'var(--amber)'; setTimeout(() => b.style.borderColor = '', 240); }
+
+$('drop').addEventListener('click', () => dropDye(0.5, 0.5));
+$('reseed').addEventListener('click', () => {
+  cell = makeCell({ nx: NX, nz: NZ, Lx: LX, Pr: 1, Ra: state.Ra, seed: (Math.random() * 1e9) >>> 0, eps: 0.05 });
+  dye.length = 0; dyeHead = 0; state.dyeReleased = false; vis = 0; rmsSmooth = 0;
+  if (reduced) settleStaticFrame();
+});
+
+// tap the layer to drop dye where you point
+cv.addEventListener('pointerdown', (e) => {
+  const r = cv.getBoundingClientRect(); const g = geom();
+  const px = (e.clientX - r.left) * (cv.width / r.width);
+  const py = (e.clientY - r.top) * (cv.height / r.height);
+  const xf = (px - g.ix) / g.iw, zf = 1 - (py - g.iy) / g.ih;
+  if (xf >= 0 && xf <= 1 && zf >= 0 && zf <= 1) dropDye(xf, zf);
+});
+
+$('redmo').addEventListener('change', (e) => {
+  reduced = e.target.checked;
+  if (reduced) settleStaticFrame();
+  else { last = performance.now(); raf = requestAnimationFrame(frame); }
+});
+
+window.addEventListener('resize', fit);
+
+// ── self-test pill (runs the SAME runRollingRoomSelfTest the Node twin runs) ──
+(function(){
+  const el = $('selftest');
+  function run(){
+    let r; try { r = runRollingRoomSelfTest(); }
+    catch (e){ el.className = 'selftest bad'; el.textContent = '✗ self-test failed to load'; console.error(e); return; }
+    el.classList.toggle('ok', r.fails.length === 0);
+    el.classList.toggle('bad', r.fails.length > 0);
+    el.textContent = r.fails.length === 0
+      ? `✓ ${r.pass}/${r.total} · Ra_c=657.5113645 pinned`
+      : `✗ ${r.pass}/${r.total} — ${r.fails[0].slice(0, 40)}`;
+    el.title = r.lines.map(l => (l.ok ? '✓' : '✗') + ' ' + l.name + (l.detail ? ' — ' + l.detail : '')).join('\n');
+    const pn = $('proofN'); if (pn) pn.textContent = `${r.pass}/${r.total}`;
+    if (r.fails.length) console.error('Rolling Room self-test failed:', r.fails);
+  }
+  el.addEventListener('click', run);
+  run();
+})();
+
+// ── go ──
+reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+$('redmo').checked = reduced;
+fit();
+updateReadouts(); updatePill(); drawSpark();
+if (reduced) settleStaticFrame();
+else raf = requestAnimationFrame(frame);
+
+/* ws: unlock breadcrumb — the shared module (one source of truth), inlined via
+   forge. Records this piece's first-visit so direct visits register for the Survey
+   of Heaven / Undercroft. The explicit ws:seen:the-rolling-room write below is the
+   literal-string form the forge --audit-seen check looks for. Harmless if storage off. */
+<!-- forge:include ../tools/ws/ws.js -->
+try { WS.seen('the-rolling-room'); } catch (e) {}
+try { var __k = 'ws:seen:the-rolling-room'; if (localStorage.getItem(__k) == null) localStorage.setItem(__k, String(Date.now())); } catch (e) {}
+</script>
+</body>
+</html>

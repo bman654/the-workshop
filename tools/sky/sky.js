@@ -223,7 +223,16 @@
     // first visit (ws:seen:the-keystone-arch). Verified clear of every footprint/
     // furniture box, the manor pool, the viewBox edge, and every existing catalog star
     // by the CATALOG INTEGRITY self-test.
-    'the-keystone-arch': { x: 1250, y: 872, mag: 1 }
+    'the-keystone-arch': { x: 1250, y: 872, mag: 1 },
+    // The Rolling Room — the Rayleigh–Bénard convection bench (cross Ra_c=27π⁴/4 and a
+    // still fluid layer breaks into rolls). A field star in the dark right-grounds band
+    // just RIGHT of the physics-lab footprint (x1026–1164) and below the gnomon park,
+    // near its games/statics kin; lit on first visit (ws:seen:the-rolling-room). Verified
+    // clear of every footprint/furniture box (physics-lab box is x1026–1164 y687–782 —
+    // this star sits ABOVE it, bottom edge y672 < 687), the manor pool, the viewBox edge,
+    // and every existing catalog star (nearest = belief-beam 1240,630 Δx=35 / differential-
+    // gear 1180,700 Δy=40 / collisions 1180,560 Δy=100) by CATALOG INTEGRITY + the live smoke.
+    'the-rolling-room': { x: 1205, y: 660, mag: 1 }
   };
 
   /* ── DATA: the six wings (companion-pairs), each an asterism ────────────────
