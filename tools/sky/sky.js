@@ -187,6 +187,14 @@
     // manor pool, the viewBox edge, and every existing catalog star (nearest = collisions
     // @140px) by the CATALOG INTEGRITY self-test (re-runnable /tmp star-placement verifier).
     'differential-gear': { x: 1180, y: 700, mag: 1 },
+    // The Ball-and-Disk Integrator — the Reckoning Cabinet's integrating organ (drag the radius;
+    // the dial winds ∫x du). A FEATS-flavoured field star a tight twin DIRECTLY BELOW the
+    // differential-gear (68px), the SECOND member of The Reckoner feat-group; lit on first visit
+    // (ws:seen:ball-and-disk). Verified clear of EVERY footprint bbox (incl. physics-lab
+    // 1026..1164 × 687..782, which the sky.test subset-mirror does NOT cover — smoke's full-solve
+    // does), the furniture, the manor pool, the viewBox edge, and every catalog star (nearest =
+    // differential-gear @68px) by both the CATALOG INTEGRITY self-test and smoke's STAR-COLLISION.
+    'ball-and-disk': { x: 1180, y: 768, mag: 2 },
     // The Shepherd — the Arcade's herd-a-living-flock game (steer a dog; the sheep flee; pen them
     // all). A FEATS-flavoured field star in the dark amusements band right of the Daedalus/Arcade
     // footprints; lit on first visit (ws:seen:the-shepherd). The lead member of The Drover feat-group.
@@ -303,12 +311,14 @@
     // Sized for a future fly-through branch should more piloted least-time scenes ship.
     { id: 'pilot', name: 'The Pilot', myth: 'Flies the least-time road; falls into the law.',
       members: ['refraction-run'] },
-    // The Reckoner — the Reckoning Cabinet's reward constellation. Founded with one star
-    // (The Differential Gear, a plain `ws:seen:differential-gear` room crumb); like every
-    // feat-group it is ADDITIVE — it NEVER feeds the wings-only all-skies capstone. Sized
-    // for the cabinet's analog-adder kin should more reckon-by-measuring scenes ship.
-    { id: 'reckoner', name: 'The Reckoner', myth: 'Reckons by measuring a shape; the cage reads the mean.',
-      members: ['differential-gear'] },
+    // The Reckoner — the Reckoning Cabinet's reward constellation. Founded with The Differential
+    // Gear (the adder) and grown by The Ball-and-Disk Integrator (the integrating organ) — both
+    // plain `ws:seen:<id>` room crumbs; the engraved name now sits over TWO stars (the two organs
+    // of a differential analyzer), completion requiring both. Like every feat-group it is
+    // ADDITIVE — it NEVER feeds the wings-only all-skies capstone. Sized for the cabinet's
+    // analog-instrument kin as more reckon-by-measuring scenes ship.
+    { id: 'reckoner', name: 'The Reckoner', myth: 'Reckons by measuring a shape; one reads the mean, one the integral.',
+      members: ['differential-gear', 'ball-and-disk'] },
     // The Drover — the Arcade's herding reward constellation. Founded with one star (The Shepherd,
     // a plain `ws:seen:the-shepherd` room crumb); like every feat-group it is ADDITIVE — it NEVER
     // feeds the wings-only all-skies capstone. Sized for the amusements' steer-the-living-system kin.
@@ -586,7 +596,8 @@
       automaton: { text: "The Maker's Wing — the Automaton charted",     cls: 'sky-tally-automaton' },
       furnace:   { text: 'The Engine Room — the Furnace charted',        cls: 'sky-tally-furnace' },
       surveyor:  { text: 'Curved Country — the Surveyor charted',        cls: 'sky-tally-surveyor' },
-      wagerer:   { text: 'The Belief Beam — the Wagerer charted',        cls: 'sky-tally-wagerer' }
+      wagerer:   { text: 'The Belief Beam — the Wagerer charted',        cls: 'sky-tally-wagerer' },
+      reckoner:  { text: 'The Reckoning Cabinet — the Reckoner charted',  cls: 'sky-tally-reckoner' }
     };
     var subY = 848;
     for (i = 0; i < FEATS.length; i++) {

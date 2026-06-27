@@ -52,7 +52,7 @@ const CORE = (new Function(slab + '\nreturn RECKONING_CORE;'))();
 
 // ── (C) the cabinet's structural invariants (mirrors the in-page wiring test) ──
 {
-  line(CORE.STATION_IDS.length === 5, 'C1 · five stations declared  ::  ' + CORE.STATION_IDS.join(','));
+  line(CORE.STATION_IDS.length === 6, 'C1 · six stations declared  ::  ' + CORE.STATION_IDS.join(','));
   line(CORE.OFFSITE === 'gnomon', 'C2 · the gnomon is the sole offsite station  ::  ' + CORE.OFFSITE);
   line(!CORE.STATION_IDS.includes('nomograph'), 'C3 · the Nomograph is NOT a built station (the lacuna)');
 }
@@ -62,7 +62,7 @@ const CORE = (new Function(slab + '\nreturn RECKONING_CORE;'))();
   const hrefs = {
     slipstick: '../slipstick/index.html', astrolabe: '../astrolabe/index.html',
     planimeter: '../planimeter/index.html', abacus: '../abacus/index.html',
-    gnomon: '../hours/index.html',
+    'ball-and-disk': '../ball-and-disk/index.html', gnomon: '../hours/index.html',
   };
   for (const id of CORE.STATION_IDS) {
     let exists = false;

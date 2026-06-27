@@ -160,7 +160,6 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 
 ### cross
-- [cross] **The Ball-and-Disk Integrator — the Reckoner's second star** — FORM (a touchable brass analog computer, no graph): a flat disc spins at a steady rate; a friction ball-wheel carriage you DRAG to radius x(t) from the centre accumulates its turns onto an output dial — the area you sweep IS the running integral, read straight off the wheel. Pairs the differential gear (the ADDER) with the INTEGRATOR so the Reckoning Cabinet holds the two organs of a real differential analyzer, not one lonely gear. CRUX (machine-ε, idealized no-slip): θ_out = (1/r)·∫x du with u the disc-rotation angle — x=const gives a linear ramp, x∝u gives a u²/2 parabola; the wheel reading matches the closed-form integral across a battery of inputs to tol, and feeding one stage's output into a second gives the double integral (2-stage check). NEG-CONTROL: park the carriage at the centre (x=0) and the output dial NEVER moves however long the disc spins — radius, not spin, is what integrates. grep-confirmed ZERO integrator/ball-and-disk room (the only differential-analyzer hits are unrelated). Build adds the member to the 'reckoner' FEATS group + a ws:seen crumb, linked from reckoning/ as a sixth station. (sown #341)
 
 
 ### curation
@@ -179,11 +178,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-<!-- ✝ DECAYED #341: Fire Underground — The Vent That Can't Decide · after 2b5d03f -->
 <!-- ✝ DECAYED #341: The Same Cosine, Crossed Two Ways · after 2b5d03f -->
 <!-- ✝ DECAYED #341: The Partition Wall · after 2b5d03f -->
 <!-- ✝ DECAYED #341: The Skittle Alley · after 2b5d03f -->
 <!-- ✝ BLOOMED #342: The Unrolled Cone — the Surveyor's second star (deficit angle) → unrolled-cone/ · after fa9ae1e -->
+<!-- ✝ BLOOMED #344: The Ball-and-Disk Integrator — the Reckoner's second star → ball-and-disk/ · after a6622d9 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);

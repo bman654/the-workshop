@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Ball-and-Disk Integrator · the wheel that integrates</title>
+<style>
+  :root{
+    --panel-bg: rgba(20,15,9,0.88);
+    --panel-edge: rgba(214,176,108,0.40);
+    --ink: #f0e2c4;
+    --ink-dim: #b8a172;
+    --accent: #e6bd6f;
+    --accent-soft: rgba(230,189,111,0.16);
+    --brass: #c9a24a;
+    --brass-lit: #f4d489;
+    --cool: #8fbfe0;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --bg: #0b0805;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; color:var(--ink); font-family:var(--font-ui);
+    background:#0b0805;
+    background:
+      radial-gradient(1200px 760px at 60% 14%, rgba(120,84,36,0.18), transparent 60%),
+      radial-gradient(900px 620px at 16% 92%, rgba(70,52,30,0.16), transparent 60%),
+      #0b0805;
+    overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:flex-start;
+    justify-content:space-between; padding:14px 20px 0; pointer-events:none; }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:3px; }
+  .back{ font:600 11px/1.35 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.22s; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .back.sib{ text-transform:none; letter-spacing:.02em; opacity:.66; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+  .selftest{ font:600 10.5px/1.35 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer;
+    color:var(--ink-dim); max-width:320px; text-align:right; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; }
+  #svg{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  .wsCue{ position:absolute; left:18px; bottom:14px; font:600 9.5px/1 var(--font-mono); letter-spacing:.18em;
+    text-transform:uppercase; color:rgba(184,161,114,0.5); pointer-events:none; }
+
+  #panel{ width:352px; flex:0 0 352px; height:100%; background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge); padding:62px 18px 26px;
+    box-shadow:-18px 0 50px rgba(0,0,0,0.5); z-index:20; overflow-y:auto; }
+  #panel .lede{ font-size:11.8px; color:var(--ink-dim); line-height:1.6; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 9px; border-top:1px solid rgba(214,176,108,0.18); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+
+  .presets{ display:grid; grid-template-columns:1fr; gap:7px; }
+  .preset{ font:600 11px/1.3 var(--font-ui); padding:10px 12px; border-radius:9px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; transition:.16s; text-align:left;
+    display:flex; align-items:baseline; gap:9px; }
+  .preset:hover{ border-color:var(--accent); color:var(--ink); }
+  .preset.on{ border-color:var(--accent); color:var(--ink); background:var(--accent-soft); }
+  .preset .g{ font-size:14px; color:var(--accent); width:18px; text-align:center; }
+  .preset b{ color:var(--ink); font-weight:600; }
+  .preset span{ display:block; font:9.5px/1.3 var(--font-mono); color:var(--ink-dim); letter-spacing:.01em; margin-top:2px; }
+  .preset.chain.on{ border-color:#9ec6e6; background:rgba(120,170,210,0.14); }
+
+  .controls{ display:flex; gap:8px; margin-top:9px; }
+  .ctl{ flex:1 1 auto; font:600 11px/1.2 var(--font-mono); letter-spacing:.04em; padding:9px 10px; border-radius:8px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; transition:.16s; text-align:center; }
+  .ctl:hover{ border-color:var(--accent); color:var(--ink); }
+
+  .scrub{ margin-top:11px; display:none; }
+  .scrub.show{ display:block; }
+  .scrub label{ font:600 9.5px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); }
+  .scrub input[type=range]{ width:100%; margin-top:7px; accent-color:var(--brass); }
+
+  .facts{ margin-top:10px; font:11px/1.62 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  .facts .frow{ display:flex; justify-content:space-between; gap:10px; padding:2px 0; }
+  .facts .frow b{ color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums; }
+  .facts .frow.hero b{ color:var(--brass-lit); font-size:14px; }
+  .facts .frow.sub span{ color:rgba(184,161,114,0.74); }
+  .facts .frow.sub b{ color:var(--ink-dim); }
+  .facts .frow.match b{ color:#8fd79a; }
+  .facts .frow.match.free b{ color:#9ec6e6; }
+
+  .regime{ margin-top:11px; padding:10px 12px; border-radius:9px; border:1px solid rgba(214,176,108,0.22);
+    background:rgba(0,0,0,0.3); font:11px/1.55 var(--font-mono); color:var(--ink-dim); }
+  .regime b{ color:var(--ink); }
+  .regime .glyph{ font-size:15px; color:var(--accent); margin-right:6px; }
+
+  .claim{ margin-top:13px; font:10.5px/1.6 var(--font-mono); color:var(--ink-dim); }
+  .claim b{ color:var(--ink); }
+  .scope{ margin-top:12px; padding-top:11px; border-top:1px solid rgba(214,176,108,0.16);
+    font:10px/1.6 var(--font-mono); color:rgba(184,161,114,0.78); letter-spacing:.01em; }
+  .foot{ margin-top:16px; font:10px/1.6 var(--font-mono); color:rgba(184,161,114,0.62); letter-spacing:.02em; }
+  .foot a{ color:var(--ink-dim); }
+  .foot a:hover{ color:var(--accent); }
+
+  @media (max-width:880px){
+    #wrap{ flex-direction:column; }
+    #panel{ width:100%; flex:0 0 auto; height:auto; max-height:48%; border-left:none;
+      border-top:1px solid var(--panel-edge); padding:14px 16px 22px; }
+    #stage{ flex:1 1 52%; }
+    .topbar{ flex-wrap:wrap; align-items:center; padding:10px 14px 9px; column-gap:10px; row-gap:6px;
+      background:linear-gradient(180deg, var(--bg) 64%, rgba(11,8,5,0) 100%); }
+    .backs{ flex:1 1 auto; }
+    .selftest{ order:2; flex:0 0 auto; max-width:52%; }
+    .brand{ order:3; flex:1 0 100%; }
+    .brand h1{ font-size:18px; }
+    .brand .tag{ display:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="back" href="../reckoning/index.html">part of The Reckoning Cabinet &#8599;</a>
+      <a class="back sib" href="../differential-gear/index.html">The Differential Gear &middot; the two organs of the differential analyzer &#8599;</a>
+    </div>
+    <div class="brand">
+      <h1>The Ball-and-Disk Integrator</h1>
+      <span class="tag">drag the radius &middot; the dial winds &int;x&thinsp;du</span>
+    </div>
+    <div class="selftest" id="selftest" title="The integrator proves its own claim — click to expand.">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <svg id="svg" viewBox="0 0 1000 720" preserveAspectRatio="xMidYMid meet" aria-label="A brushed-brass ball-and-disk integrator: a spinning disc, a friction ball you drag along a radial track, and an output odometer dial."></svg>
+      <div class="wsCue">The Reckoning Cabinet &middot; the wheel that integrates</div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede"><b>Drag the brass ball along the track.</b> Its distance from the centre is the radius <b>x</b>.
+        The disc spins by itself through angle <b>u</b>; a ball that rolls without slipping turns the output wheel by
+        <b>d&theta; = (x&middot;du)/r</b>. So the odometer dial winds the running integral
+        <b>&theta; = (1/r)&thinsp;&int;x&thinsp;du</b> &mdash; no arithmetic anywhere. The gold trail is the arc the ball inks on
+        the disc as it rolls; the odometer counts how much of that arc has passed under the ball.</p>
+
+      <div class="sect">Be shown a program, then grab the ball</div>
+      <div class="presets" id="presets">
+        <button class="preset" data-prog="const"><span class="g">&#8213;</span><b>Hold</b>
+          <span>park the ball at x=0.42 &middot; disc spins &rarr; dial ramps LINEAR; the gold thread thickens to a band</span></button>
+        <button class="preset" data-prog="linear"><span class="g">&#8599;</span><b>Ramp &mdash; x grows with u</b>
+          <span>the machine drives the ball outward &middot; dial winds u&sup2;/2 PARABOLA; paints an Archimedean spiral, halts at the rim</span></button>
+        <button class="preset" data-prog="sine"><span class="g">&#8767;</span><b>Oscillate &mdash; x = sin u</b>
+          <span>the ball swings through the centre &middot; dial WINDS then UNWINDS as x flips sign; a rosette, cool past centre</span></button>
+        <button class="preset chain" data-prog="chain"><span class="g">&#8748;</span><b>Chain &int;&int; &mdash; reveal stage two</b>
+          <span>stage one's dial drives stage two's radius &middot; a constant becomes a ramp becomes a parabola (the double integral)</span></button>
+        <button class="preset" data-prog="zero"><span class="g">&#8857;</span><b>Centre &mdash; the neg-control</b>
+          <span>park dead-centre (x=0) &middot; the disc spins forever, the dial never moves, no gold. Radius, not spin, integrates.</span></button>
+      </div>
+
+      <div class="controls">
+        <button class="ctl" id="pauseBtn">&#10073;&#10073; pause</button>
+        <button class="ctl" id="resetBtn">&#8635; reset</button>
+      </div>
+
+      <div class="scrub" id="scrubBox">
+        <label for="scrub">reduced motion &middot; scrub the disc angle u by hand</label>
+        <input type="range" id="scrub" min="0" max="100" value="0">
+      </div>
+
+      <div class="sect">What the dial reads</div>
+      <div class="facts">
+        <div class="frow"><span>radius x = (ball&minus;centre)/R<sub>disc</sub></span><b id="fX">&mdash;</b></div>
+        <div class="frow"><span>disc angle u</span><b id="fU">&mdash;</b></div>
+        <div class="frow hero"><span>OUTPUT &theta; = (1/r)&thinsp;&int;x&thinsp;du</span><b id="fTheta">&mdash;</b></div>
+        <div class="frow sub" id="rowMachine"><span id="lblMachine">machine dial (rolled)</span><b id="fMachine">&mdash;</b></div>
+        <div class="frow sub" id="rowClosed"><span id="lblClosed">calculus (closed form)</span><b id="fClosed">&mdash;</b></div>
+        <div class="frow match" id="rowMatch"><span id="lblMatch">|machine &minus; calculus|</span><b id="fMatch">&mdash;</b></div>
+      </div>
+
+      <div class="regime" id="regimeBox"><span class="glyph" id="regimeGlyph">&#8226;</span><span id="regimeText">Tap a program above, or grab the ball and drive the radius yourself.</span></div>
+
+      <p class="claim">The wheel winds <b>&theta; = (1/r)&thinsp;&int;x&thinsp;du</b> exactly. With a program loaded the dial is
+        <b>recomputed</b> from the rolling law and matched to the closed-form integral to <b>&lt;1e&minus;12</b> &mdash;
+        bit-exact for any polynomial radius (Hold, Ramp), convergent for the transcendental (Oscillate), and the two-stage
+        Chain reproduces the exact double integral. Grab the ball and you become the program: the dial then accumulates an
+        honest hand-driven Riemann sum (no exactness claimed &mdash; you are the integrand).</p>
+
+      <p class="scope">Honest scope: this is the ideal <b style="color:var(--ink-dim)">no-slip point-contact</b> law &mdash; the
+        governing relation &theta; = (1/r)&int;x&thinsp;du, not a friction model. A real ball creeps a little; slip scales the
+        output by a constant but never changes the law's form. We assert the law, not the tribology.</p>
+
+      <div class="foot">A reckoning-wing bench &middot; the integrating organ, twin to
+        <a href="../differential-gear/index.html">The Differential Gear</a> the adder &mdash; the two organs of a
+        differential analyzer. Set a radius, spin the disc, read the integral.</div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+/* =====================================================================================
+   THE LAW — inlined here byte-for-byte from core.mjs, between the SAME sentinels. This is
+   the estate idiom (differential-gear / cutting-gears / buffon all inline): the page is
+   fully self-contained and opens from file://, AND the dial the visitor winds is provably
+   the SAME code core.test.mjs gates. Do NOT hand-edit a constant here — core.test.mjs's
+   byte-parity check fails the instant this slab drifts from core.mjs.
+   ===================================================================================== */
+// === INTEGRATOR-CORE BEGIN ===
+// THE LOCAL LAW — one disc micro-turn winds the wheel by arc / radius. Exact algebra; the
+// page's free-drag animation and the neg-control both step THIS. At x=0 it returns 0 for ANY
+// du: parked at the centre, the dial never moves however long the disc spins. RADIUS, not
+// spin, is what integrates.
+function dTheta(x, du, r) { return (x * du) / r; }
+
+// THE MACHINE INTEGRATOR — accumulate the local law as the disc turns 0→u. This is the
+// ROLLING MACHINE: it only ever SAMPLES the radius program x(s) and sums wheel rotation; it
+// never sees a closed form. The accumulator is a composite Boole rule (degree-5 Newton–Cotes,
+// truncation error O(h⁶)) — a high-order stand-in for the continuum integral the real disc
+// performs. Consequence: BIT-EXACT (to a few ULPs, relative) for any POLYNOMIAL radius program
+// up to quintic, and <1e-12 for the transcendental sine program at N≥512.
+function rollOut(xOf, u, r, N = 1024) {
+  N = Math.max(4, Math.round(N / 4) * 4);          // Boole groups panels in fours
+  const h = u / N;
+  let s = 7 * (xOf(0) + xOf(u));
+  for (let k = 1; k < N; k++) {
+    const w = (k % 4 === 0) ? 14 : (k % 2 === 0 ? 12 : 32);
+    s += w * xOf(k * h);
+  }
+  return (2 * h / 45) * s / r;
+}
+
+// A 2-STAGE CHAIN — stage 1's output dial drives stage 2's carriage radius, both discs on the
+// SAME input shaft u. Nesting the integrator reproduces the exact DOUBLE integral
+//        θ₂(u) = (1/(r₁r₂)) ∫₀^u ∫₀^s x₁(t) dt ds.
+function chainOut(x1Of, u, r1, r2, N = 1024) {
+  return rollOut(s => rollOut(x1Of, s, r1, N), u, r2, N);
+}
+
+// THE CANONICAL PROGRAMS — single source of truth shared by the page's loaded buttons AND the
+// proof. Each carries the radius law x(u) AND its closed-form antiderivative θ(u,r); the page
+// shows machine-dial vs closed-form live, and runSelfTest pins them to <1e-12. 'exact' = the
+// integrator is bit-exact on it (polynomial cargo); 'convergent' = transcendental, <1e-12.
+const PROGRAMS = [
+  { id: 'const',  desc: 'hold x constant → the dial ramps LINEARLY',
+    x: (u) => 0.42,          closed: (u, r) => 0.42 * u / r,          kind: 'exact' },
+  { id: 'linear', desc: 'let x grow with the disc → a u²/2 PARABOLA',
+    x: (u) => 0.3 * u,       closed: (u, r) => 0.3 * u * u / 2 / r,   kind: 'exact' },
+  { id: 'sine',   desc: 'x = sin u → the dial traces 1 − cos u',
+    x: (u) => Math.sin(u),   closed: (u, r) => (1 - Math.cos(u)) / r, kind: 'convergent' },
+  { id: 'zero',   desc: 'park the carriage at the CENTRE (x = 0) → the dial never moves',
+    x: (u) => 0,             closed: (u, r) => 0,                     kind: 'exact' },
+];
+// canonical machine radii (wheel radii). R drives the single stage; R1,R2 the chained stages.
+const R = 0.7, R1 = 0.9, R2 = 1.3;
+
+// THE SOLE ORACLE. Six checks; the in-page pill and the Node twin both call THIS. Each check
+// is { name, pass, info }; returns { checks, passed, total, ok }.
+function runSelfTest() {
+  const checks = [];
+  const log = (name, pass, info) => checks.push({ name, pass, info });
+  const EPS = 1e-12, TAU = Math.PI * 2;
+  const us = [];                                   // a dense generic-u sweep (no period luck)
+  for (let i = 1; i <= 240; i++) us.push(i / 240 * 4 * Math.PI);
+
+  // (1) THE THREE CANONICAL PROGRAMS match their closed-form integral to <1e-12 (absolute;
+  //     their output stays O(1) over the disc's natural range).
+  {
+    let mx = 0;
+    for (const p of PROGRAMS) if (p.id !== 'zero')
+      for (const u of us) mx = Math.max(mx, Math.abs(rollOut(p.x, u, R) - p.closed(u, R)));
+    log('1 · const→linear · linear→u²/2 · sin→1−cos all match closed form',
+      mx < EPS, 'max|Δ|=' + mx.toExponential(2) + ' over ' + (us.length * 3) + ' pts');
+  }
+
+  // (2) POLYNOMIAL-EXACTNESS — the integrator is BIT-EXACT (not merely convergent) for every
+  //     polynomial radius program up to quintic: ∫u^n = u^{n+1}/(n+1). Relative tolerance,
+  //     because the output magnitude ranges over many orders (differential-gear's lesson).
+  {
+    let mx = 0;
+    for (let n = 0; n <= 5; n++)
+      for (const u of us) {
+        const want = u ** (n + 1) / (n + 1) / R;
+        mx = Math.max(mx, Math.abs(rollOut((s) => s ** n, u, R) - want) / (Math.abs(want) + 1e-300));
+      }
+    log('2 · BIT-EXACT for every polynomial radius program x=u^0..u^5 (∫u^n=u^{n+1}/(n+1))',
+      mx < EPS, 'max rel|Δ|=' + mx.toExponential(2) + ' (only the transcendental sine is convergent)');
+  }
+
+  // (3) THE 2-STAGE CHAIN reproduces the exact DOUBLE integral. const→u² (∫∫1 = u²/2) and
+  //     sine→(u − sin u) (∫∫sin), both to <1e-12. The chain nests the integrator (O(N²)), so
+  //     the in-page pill samples a small smooth u-set; the Node twin sweeps it densely.
+  {
+    const a = 0.5;
+    const usChain = [0.7, 1.6, Math.PI, 4.0, 2 * Math.PI, 8.0, 3 * Math.PI, 4 * Math.PI];
+    let mx = 0;
+    for (const u of usChain) {
+      mx = Math.max(mx, Math.abs(chainOut((s) => a, u, R1, R2) - a * u * u / (2 * R1 * R2)));
+      mx = Math.max(mx, Math.abs(chainOut(Math.sin, u, R1, R2) - (u - Math.sin(u)) / (R1 * R2)));
+    }
+    log('3 · the 2-stage chain reproduces the exact ∫∫: const→u²/2 · sin→u−sin u',
+      mx < EPS, 'max|Δ|=' + mx.toExponential(2) + ' over ' + (usChain.length * 2) + ' pts');
+  }
+
+  // (4) NEG-CONTROL — park at the centre (x=0) and the dial NEVER moves, however long the disc
+  //     spins. dTheta(0,·)=0 for any micro-turn, AND rollOut(0,·) = exactly 0 over a MILLION
+  //     turns. Radius, not spin, is what integrates.
+  {
+    let stepZero = true;
+    for (const du of [0.1, 1, 1e6, -3, TAU * 1e6]) if (dTheta(0, du, R) !== 0) stepZero = false;
+    const spun = rollOut((u) => 0, TAU * 1e6, R, 4096);
+    log('4 · NEG-CONTROL: x=0 → dial frozen (dθ≡0; ∫ over 1e6 turns is exactly 0)',
+      stepZero && spun === 0, 'million-turn dial = ' + spun + ' (exactly 0) · step-zero ' + stepZero);
+  }
+
+  // (5) FTC BRIDGE — the dial's RATE equals the local law: d/du θ_out(u) = x(u)/r. Ties the
+  //     integral the machine winds back to the local arc/radius law (fundamental theorem).
+  {
+    let mx = 0; const d = 1e-6;
+    for (const p of [PROGRAMS[1], PROGRAMS[2]])
+      for (let i = 1; i <= 60; i++) {
+        const u = 0.2 + i / 60 * 5;
+        const rate = (rollOut(p.x, u + d, R) - rollOut(p.x, u - d, R)) / (2 * d);
+        mx = Math.max(mx, Math.abs(rate - p.x(u) / R));
+      }
+    log('5 · FTC: the dial-rate dθ/du equals the local law x/r (∫ and the arc-law agree)',
+      mx < 1e-5, 'max|Δ|=' + mx.toExponential(2));
+  }
+
+  // (6) TAMPER — the common MISCONCEPTION is "the dial measures how far the disc SPUN" (θ ∝ u,
+  //     ignoring x). Feed the linear program through that wrong law and it gives a STRAIGHT
+  //     LINE where the true law gives a PARABOLA — they diverge by O(1). The radius-weighted
+  //     law is the only one that fits; the law is specific.
+  {
+    const wrong = (u, r) => u / r;                 // arc ∝ disc angle only — x forgotten
+    let mx = 0;
+    for (const u of us) mx = Math.max(mx, Math.abs(rollOut(PROGRAMS[1].x, u, R) - wrong(u, R)));
+    log('6 · TAMPER: the "spin-not-radius" misconception (θ∝u) diverges from the parabola',
+      mx > 1e-3, 'max|Δ|=' + mx.toExponential(2) + ' (only the radius-weighted ∫ fits)');
+  }
+
+  const passed = checks.filter((c) => c.pass).length;
+  return { checks, passed, total: checks.length, ok: passed === checks.length };
+}
+// === INTEGRATOR-CORE END ===
+
+/* expose the law on a public handle so the page is re-auditable from the console. */
+window.__ballAndDisk = { dTheta, rollOut, chainOut, PROGRAMS, R, R1, R2, runSelfTest };
+
+/* =====================================================================================
+   GEOMETRY — a face-on brass machine. ONE big disc (stage 1) at left-centre; a horizontal
+   radial TRACK across its full diameter (crosses the centre, so negative radius is real); a
+   draggable friction BALL on the track; and a right-hand console with an OUTPUT DIAL +
+   odometer. CHAIN mode reveals a SECOND disc whose radius is driven by stage 1's output.
+   ===================================================================================== */
+const SVG = "http://www.w3.org/2000/svg";
+const svg = document.getElementById('svg');
+
+const DCX = 330, DCY = 372, RDISC = 240;        // stage-1 disc centre + pixel radius
+const D2CX = 728, D2CY = 486, RDISC2 = 150;     // stage-2 disc (chain reveal)
+const DIAL_CX = 812, DIAL_CY = 176, DIAL_R = 78; // output dial face
+const OMEGA = 0.9;                               // disc spin rate (rad/s) — UI only
+const PITCH = 6;                                 // gold-spiral per-revolution stacking (px)
+const TAU = Math.PI * 2;
+
+const PROG_BY_ID = {}; PROGRAMS.forEach(p => PROG_BY_ID[p.id] = p);
+// per-program auto-halt on u (rim / in-range guards) and reduced-motion settle point
+const UMAX = { const: Infinity, linear: 1 / 0.3, sine: Infinity, zero: Infinity, chain: 0.9 / 0.42 };
+const UREP = { const: 3.0, linear: 1 / 0.3, sine: 5.0, zero: 3.0, chain: 0.9 / 0.42 };
+
+const state = {
+  progId: 'const',         // loaded program id, or 'free' when the user grabs the ball
+  chain: false,            // chain (∫∫) reveal mode
+  u: 0,                    // accumulated disc angle (the input variable)
+  x: 0.42,                 // current radius in [-1,1] (free-drag owns this; loaded derives it)
+  thetaFree: 0,            // free-drag accumulated output (honest Riemann)
+  paused: false,
+  dragging: false,
+  reduced: !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches),
+  ink: { dPos: '', dNeg: '', last: 0, n: 0 },   // gold-trail path strings (warm / cool)
+  ink2: { dPos: '', dNeg: '', last: 0, n: 0 },
+  lastWhole: 0,            // last integer output turn (for the whole-turn flash)
+  flash: 0,               // flash timer
+};
+
+/* ── the radius the machine is currently presenting ── */
+function radiusNow() {
+  if (state.progId === 'free') return state.x;
+  const p = PROG_BY_ID[state.chain ? 'const' : state.progId];
+  return Math.max(-1, Math.min(1, p.x(state.u)));   // physical: the ball can't leave the disc
+}
+/* ── the output θ the dial reads RIGHT NOW (the proven scalar) ── */
+function outputNow() {
+  if (state.progId === 'free') return state.thetaFree;
+  if (state.chain) return chainOut(PROG_BY_ID.const.x, state.u, R1, R2);   // stage-2 dial = ∫∫
+  return rollOut(PROG_BY_ID[state.progId].x, state.u, R);
+}
+/* ── stage-1 output (chain only) — drives stage-2's radius ── */
+function stage1Now() { return rollOut(PROG_BY_ID.const.x, state.u, R1); }
+/* ── the closed-form the loaded program should match (null in free / chain handled inline) ── */
+function closedNow() {
+  if (state.progId === 'free') return null;
+  if (state.chain) return 0.42 * state.u * state.u / (2 * R1 * R2);   // ∫∫ const = a·u²/2
+  return PROG_BY_ID[state.progId].closed(state.u, R);
+}
+
+/* =====================================================================================
+   RENDER — a static brass frame (rebuilt on chain-toggle) + a live group redrawn per frame.
+   ===================================================================================== */
+const defs = el('defs', {});
+defs.innerHTML =
+  '<radialGradient id="discFace" cx="40%" cy="34%" r="74%">' +
+    '<stop offset="0%" stop-color="#9a7733"/><stop offset="40%" stop-color="#75591f"/>' +
+    '<stop offset="78%" stop-color="#4e3c18"/><stop offset="100%" stop-color="#33270f"/></radialGradient>' +
+  '<radialGradient id="dialFace" cx="42%" cy="34%" r="72%">' +
+    '<stop offset="0%" stop-color="#1b1810"/><stop offset="60%" stop-color="#13110a"/>' +
+    '<stop offset="100%" stop-color="#0c0a06"/></radialGradient>' +
+  '<linearGradient id="brassBar" x1="0" y1="0" x2="0" y2="1">' +
+    '<stop offset="0%" stop-color="#e8cd86"/><stop offset="50%" stop-color="#a07e34"/>' +
+    '<stop offset="100%" stop-color="#5a431c"/></linearGradient>' +
+  '<linearGradient id="goldInk" x1="0" y1="0" x2="1" y2="1">' +
+    '<stop offset="0%" stop-color="#f6dc97"/><stop offset="100%" stop-color="#e0a93f"/></linearGradient>' +
+  '<radialGradient id="ballFace" cx="36%" cy="30%" r="72%">' +
+    '<stop offset="0%" stop-color="#fff4d6"/><stop offset="45%" stop-color="#e7c878"/>' +
+    '<stop offset="100%" stop-color="#7a5a22"/></radialGradient>' +
+  '<filter id="drop" x="-30%" y="-30%" width="160%" height="160%">' +
+    '<feDropShadow dx="0" dy="9" stdDeviation="14" flood-color="#000" flood-opacity="0.55"/></filter>';
+svg.appendChild(defs);
+
+const scene = el('g', { filter: 'url(#drop)' });
+svg.appendChild(scene);
+const gStatic = el('g', {}); scene.appendChild(gStatic);   // engraved frame (rebuilt on chain toggle)
+const gInk    = el('g', {}); scene.appendChild(gInk);      // stage-1 gold trail (rotates with disc)
+const gInk2   = el('g', {}); scene.appendChild(gInk2);     // stage-2 gold trail
+const gLive   = el('g', {}); scene.appendChild(gLive);     // discs, ball, dial, needles (per frame)
+
+// ── helpers ──
+function el(tag, attrs) { const n = document.createElementNS(SVG, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); return n; }
+function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+function txt(x, y, s, cls) { const t = el('text', cls); t.setAttribute('x', x); t.setAttribute('y', y); t.textContent = s; return t; }
+
+/* ── the engraved brass disc (face-on): machining rings + 0..1 radius scale + ONE rim notch.
+      Drawn STATIC (the brass body) plus a rotating index-notch handled in the live pass. ── */
+function drawDiscFace(parent, cx, cy, rpx, label) {
+  parent.appendChild(el('circle', { cx, cy, r: rpx + 12, fill: 'none', stroke: 'rgba(214,176,108,0.22)', 'stroke-width': 2 }));
+  parent.appendChild(el('circle', { cx, cy, r: rpx, fill: 'url(#discFace)', stroke: '#3c2d12', 'stroke-width': 2 }));
+  // concentric machining rings — darker grooves + a faint bright highlight, brushed-metal feel
+  for (let i = 1; i <= 8; i++) {
+    parent.appendChild(el('circle', { cx, cy, r: rpx * i / 9, fill: 'none', stroke: 'rgba(28,20,8,0.45)', 'stroke-width': 1.1 }));
+    parent.appendChild(el('circle', { cx, cy, r: rpx * i / 9 + 1.1, fill: 'none', stroke: 'rgba(214,176,108,0.10)', 'stroke-width': 0.7 }));
+  }
+  // engraved 0..1 radius scale along the +x track
+  for (let k = 0; k <= 10; k++) {
+    const rr = rpx * k / 10;
+    parent.appendChild(el('line', { x1: cx + rr, y1: cy - 4, x2: cx + rr, y2: cy + 4,
+      stroke: 'rgba(244,212,137,0.45)', 'stroke-width': k % 5 === 0 ? 1.6 : 0.8 }));
+  }
+  parent.appendChild(txt(cx + rpx * 0.5, cy - 11, '0.5', { fill: 'rgba(214,176,108,0.6)', 'font-family': 'var(--font-mono)', 'font-size': 9, 'text-anchor': 'middle' }));
+  parent.appendChild(txt(cx + rpx + 2, cy - 11, '1', { fill: 'rgba(214,176,108,0.6)', 'font-family': 'var(--font-mono)', 'font-size': 9, 'text-anchor': 'middle' }));
+  if (label) parent.appendChild(txt(cx, cy + rpx + 30, label, { fill: 'rgba(244,212,137,0.8)', 'font-family': 'var(--font-mono)', 'font-size': 11.5, 'font-weight': 600, 'text-anchor': 'middle', 'letter-spacing': '0.14em' }));
+}
+
+function buildStatic() {
+  clear(gStatic);
+  if (!state.chain) {
+    // ── single-stage frame ──
+    drawDiscFace(gStatic, DCX, DCY, RDISC, 'THE  DISC  —  spins through  u');
+    // the radial track across the FULL diameter (crosses centre → negative radius reachable)
+    gStatic.appendChild(el('rect', { x: DCX - RDISC - 30, y: DCY - 5, width: 2 * RDISC + 60, height: 10, rx: 5, fill: 'url(#brassBar)', stroke: '#3c2d12', 'stroke-width': 1, opacity: 0.92 }));
+    gStatic.appendChild(txt(DCX - RDISC - 6, DCY + 26, '−x', { fill: 'rgba(143,191,224,0.7)', 'font-family': 'var(--font-mono)', 'font-size': 11, 'text-anchor': 'middle' }));
+    gStatic.appendChild(txt(DCX + RDISC + 6, DCY + 26, '+x', { fill: 'rgba(214,176,108,0.7)', 'font-family': 'var(--font-mono)', 'font-size': 11, 'text-anchor': 'middle' }));
+    // shafting up to the output console
+    gStatic.appendChild(el('line', { x1: DCX + RDISC + 30, y1: DCY, x2: DIAL_CX, y2: DCY, stroke: 'url(#brassBar)', 'stroke-width': 6, opacity: 0.6 }));
+    gStatic.appendChild(el('line', { x1: DIAL_CX, y1: DCY, x2: DIAL_CX, y2: DIAL_CY + DIAL_R + 22, stroke: 'url(#brassBar)', 'stroke-width': 6, opacity: 0.6 }));
+    buildConsole(gStatic, DIAL_CX, DIAL_CY, DIAL_R, 'OUTPUT  θ = (1/r) ∫x du');
+    // the honest disc caption
+    gStatic.appendChild(txt(DCX, DCY + RDISC + 52, 'the ball inks the disc it rolls; the odometer counts the disc-arc rolled under the ball — that length is ∫x du',
+      { fill: 'rgba(184,161,114,0.66)', 'font-family': 'var(--font-mono)', 'font-size': 10.5, 'text-anchor': 'middle' }));
+  } else {
+    // ── chain (∫∫) frame: two discs on one shaft ──
+    drawDiscFace(gStatic, DCX - 70, DCY - 56, 162, 'STAGE 1  —  x = 0.42 (held)');
+    drawDiscFace(gStatic, D2CX, D2CY, RDISC2, 'STAGE 2  —  radius = stage-1 dial');
+    // stage-1 track
+    gStatic.appendChild(el('rect', { x: DCX - 70 - 162 - 14, y: DCY - 56 - 4, width: 2 * 162 + 28, height: 8, rx: 4, fill: 'url(#brassBar)', stroke: '#3c2d12', 'stroke-width': 1, opacity: 0.9 }));
+    // stage-2 track
+    gStatic.appendChild(el('rect', { x: D2CX - RDISC2 - 14, y: D2CY - 4, width: 2 * RDISC2 + 28, height: 8, rx: 4, fill: 'url(#brassBar)', stroke: '#3c2d12', 'stroke-width': 1, opacity: 0.9 }));
+    // linkage: stage-1 dial → stage-2 carriage radius
+    gStatic.appendChild(el('line', { x1: DCX - 70 + 162 + 10, y1: DCY - 56, x2: D2CX - RDISC2 - 10, y2: D2CY, stroke: 'rgba(158,198,230,0.5)', 'stroke-width': 2, 'stroke-dasharray': '5 5' }));
+    gStatic.appendChild(txt((DCX - 70 + 162 + D2CX - RDISC2) / 2, (DCY - 56 + D2CY) / 2 - 8, 'drives radius', { fill: 'rgba(158,198,230,0.7)', 'font-family': 'var(--font-mono)', 'font-size': 9.5, 'text-anchor': 'middle' }));
+    buildConsole(gStatic, DIAL_CX, DIAL_CY, DIAL_R, 'OUTPUT  θ₂ = (1/r₁r₂) ∫∫x');
+    gStatic.appendChild(txt(500, 678, 'a constant held on stage 1 becomes a ramp on its dial, which becomes a parabola on stage 2 — the double integral, felt',
+      { fill: 'rgba(184,161,114,0.66)', 'font-family': 'var(--font-mono)', 'font-size': 10.5, 'text-anchor': 'middle' }));
+  }
+}
+
+/* ── the output console: a dark dial face with a 0..1 fractional-turn graticule + an odometer
+      plate below. The needle + filling sector + drum digits are LIVE. ── */
+function buildConsole(parent, cx, cy, r, caption) {
+  parent.appendChild(el('circle', { cx, cy, r: r + 9, fill: 'none', stroke: 'rgba(214,176,108,0.3)', 'stroke-width': 2 }));
+  parent.appendChild(el('circle', { cx, cy, r, fill: 'url(#dialFace)', stroke: '#3c2d12', 'stroke-width': 2 }));
+  for (let k = 0; k < 20; k++) {
+    const a = -Math.PI / 2 + k / 20 * TAU;
+    const big = k % 5 === 0;
+    parent.appendChild(el('line', {
+      x1: cx + Math.cos(a) * (r - (big ? 12 : 7)), y1: cy + Math.sin(a) * (r - (big ? 12 : 7)),
+      x2: cx + Math.cos(a) * (r - 2), y2: cy + Math.sin(a) * (r - 2),
+      stroke: big ? 'rgba(244,212,137,0.7)' : 'rgba(214,176,108,0.36)', 'stroke-width': big ? 1.5 : 0.8 }));
+  }
+  parent.appendChild(txt(cx, cy - r - 16, caption, { fill: 'rgba(244,212,137,0.82)', 'font-family': 'var(--font-mono)', 'font-size': 11, 'font-weight': 600, 'text-anchor': 'middle', 'letter-spacing': '0.06em' }));
+  parent.appendChild(txt(cx, cy + 4, 'turns', { fill: 'rgba(184,161,114,0.5)', 'font-family': 'var(--font-mono)', 'font-size': 9, 'text-anchor': 'middle' }));
+}
+
+/* ── build the gold ink path incrementally (O(1) per frame): material-frame points, warm for
+      x≥0, cool/pale for x<0; the whole group is rotated with the disc so the trail rides it. ── */
+function inkAdd(ink, cx, cy, rpx, xval, u) {
+  if (ink.n > 3200) return;                       // trail full — stop growing (keeps it O(1))
+  const base = xval * rpx;                         // signed offset along the +x track
+  if (Math.abs(base) < 0.5) return;                // at/near the centre — radius zero inks NOTHING
+  const pr = base + Math.sign(base) * PITCH * (u / TAU);
+  if (Math.abs(pr) > rpx) return;                  // would spiral off the disc — stop
+  const mx = (cx + pr * Math.cos(u)).toFixed(2);   // material-frame point (group rotates by +u)
+  const my = (cy - pr * Math.sin(u)).toFixed(2);
+  const neg = xval < 0;
+  const tgt = neg ? 'dNeg' : 'dPos';
+  // moveto when the pen jumps sides (or first point on this path), else lineto
+  const jump = (ink.last !== (neg ? -1 : 1));
+  ink[tgt] += (ink[tgt] === '' || jump ? ' M' : ' L') + mx + ' ' + my;
+  ink.last = neg ? -1 : 1;
+  ink.n++;
+}
+function inkClear(ink) { ink.dPos = ''; ink.dNeg = ''; ink.last = 0; ink.n = 0; }
+function paintInk(group, ink, u) {
+  clear(group);
+  group.setAttribute('transform', 'rotate(' + (u * 180 / Math.PI) + ' ' + (state.chain ? D2CX : DCX) + ' ' + (state.chain ? D2CY : DCY) + ')');
+  if (ink.dPos) {
+    group.appendChild(el('path', { d: ink.dPos, fill: 'none', stroke: 'rgba(255,225,150,0.22)', 'stroke-width': 5.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));  // glow
+    group.appendChild(el('path', { d: ink.dPos, fill: 'none', stroke: 'url(#goldInk)', 'stroke-width': 2.6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+  }
+  if (ink.dNeg) {
+    group.appendChild(el('path', { d: ink.dNeg, fill: 'none', stroke: 'rgba(143,191,224,0.20)', 'stroke-width': 5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+    group.appendChild(el('path', { d: ink.dNeg, fill: 'none', stroke: 'rgba(176,212,240,0.9)', 'stroke-width': 2.3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+  }
+}
+
+/* ── a friction ball on a track at signed radius xval (in [-1,1]) ── */
+function drawBall(parent, cx, cy, rpx, xval, lit) {
+  const bx = cx + xval * rpx;
+  parent.appendChild(el('line', { x1: bx, y1: cy - 13, x2: bx, y2: cy + 13, stroke: '#3c2d12', 'stroke-width': 8, 'stroke-linecap': 'round' }));
+  parent.appendChild(el('line', { x1: bx, y1: cy - 13, x2: bx, y2: cy + 13, stroke: 'url(#brassBar)', 'stroke-width': 4, 'stroke-linecap': 'round' }));
+  parent.appendChild(el('circle', { cx: bx, cy, r: 12, fill: 'url(#ballFace)', stroke: lit ? '#f4d489' : '#3c2d12', 'stroke-width': lit ? 2.4 : 1.6 }));
+  parent.appendChild(el('circle', { cx: bx, cy, r: 3, fill: '#3c2d12' }));
+}
+
+/* ── the disc's ONE bright rim index-notch (so the spin is countable) ── */
+function drawNotch(parent, cx, cy, rpx, u) {
+  const a = -u;   // material angle 0 carried forward by +u
+  const nx = cx + Math.cos(a) * (rpx - 14), ny = cy - Math.sin(a) * (rpx - 14);
+  parent.appendChild(el('circle', { cx: nx, cy: ny, r: 6, fill: '#f4d489', stroke: '#5b431b', 'stroke-width': 1.6 }));
+}
+
+/* ── the output dial needle + the FILLING sector (the integral, felt) + the odometer drums ── */
+function drawDial(parent, cx, cy, r, theta) {
+  const frac = theta - Math.floor(theta);          // fractional output turn ∈ [0,1)
+  const a0 = -Math.PI / 2;                          // 12 o'clock
+  const a1 = a0 + frac * TAU;                       // needle angle (clockwise)
+  // filling sector
+  if (frac > 0.0005) {
+    const large = frac > 0.5 ? 1 : 0;
+    const ex = cx + Math.cos(a1) * (r - 4), ey = cy + Math.sin(a1) * (r - 4);
+    const sx = cx + Math.cos(a0) * (r - 4), sy = cy + Math.sin(a0) * (r - 4);
+    parent.appendChild(el('path', { d: 'M' + cx + ' ' + cy + ' L' + sx + ' ' + sy + ' A' + (r - 4) + ' ' + (r - 4) + ' 0 ' + large + ' 1 ' + ex + ' ' + ey + ' Z', fill: 'rgba(244,212,137,0.18)', stroke: 'none' }));
+  }
+  // needle
+  const nx = cx + Math.cos(a1) * (r - 8), ny = cy + Math.sin(a1) * (r - 8);
+  parent.appendChild(el('line', { x1: cx, y1: cy, x2: nx, y2: ny, stroke: state.flash > 0 ? '#fff0c8' : '#f4d489', 'stroke-width': 3, 'stroke-linecap': 'round' }));
+  parent.appendChild(el('circle', { cx, cy, r: 5, fill: '#f4d489', stroke: '#5b431b', 'stroke-width': 1.2 }));
+  // whole-turn flash ring
+  if (state.flash > 0) parent.appendChild(el('circle', { cx, cy, r: r + 9, fill: 'none', stroke: 'rgba(255,240,200,' + (state.flash * 0.7).toFixed(2) + ')', 'stroke-width': 3 }));
+  // odometer drum plate below the dial
+  drawOdometer(parent, cx, cy + r + 30, theta);
+}
+
+function drawOdometer(parent, cx, cy, theta) {
+  const neg = theta < 0;
+  const v = Math.abs(theta);
+  const whole = Math.floor(v);
+  const s = (neg ? '-' : '') + String(whole).padStart(3, '0') + '.' + (v - whole).toFixed(2).slice(2);
+  const cells = s.length, cw = 17, w = cells * cw, x0 = cx - w / 2;
+  parent.appendChild(el('rect', { x: x0 - 6, y: cy - 14, width: w + 12, height: 28, rx: 5, fill: '#0d0b07', stroke: 'rgba(214,176,108,0.4)', 'stroke-width': 1.2 }));
+  for (let i = 0; i < cells; i++) {
+    const ch = s[i];
+    if (ch !== '.' && ch !== '-') parent.appendChild(el('rect', { x: x0 + i * cw + 1.5, y: cy - 12, width: cw - 3, height: 24, rx: 2, fill: 'rgba(40,32,18,0.7)', stroke: 'rgba(90,67,28,0.6)', 'stroke-width': 0.6 }));
+    parent.appendChild(txt(x0 + i * cw + cw / 2, cy + 6, ch, { fill: state.flash > 0 ? '#fff0c8' : '#f4d489', 'font-family': 'var(--font-mono)', 'font-size': 16, 'font-weight': 700, 'text-anchor': 'middle' }));
+  }
+}
+
+function render() {
+  clear(gLive);
+  const u = state.u;
+  if (!state.chain) {
+    const x = radiusNow();
+    drawNotch(gLive, DCX, DCY, RDISC, u);
+    drawBall(gLive, DCX, DCY, RDISC, x, state.dragging || state.progId === 'free');
+    drawDial(gLive, DIAL_CX, DIAL_CY, DIAL_R, outputNow());
+    // generous invisible hit-target for the ball / track
+    gLive.appendChild(el('rect', { x: DCX - RDISC - 30, y: DCY - 26, width: 2 * RDISC + 60, height: 52, fill: 'transparent', 'data-track': '1', style: 'cursor:ew-resize' }));
+    paintInk(gInk, state.ink, u);
+  } else {
+    const s1x = 0.42;
+    const s1 = stage1Now();
+    const s2x = Math.max(-1, Math.min(1, s1));      // stage-2 radius = stage-1 dial (physical clamp; demo stays in-range)
+    drawNotch(gLive, DCX - 70, DCY - 56, 162, u);
+    drawNotch(gLive, D2CX, D2CY, RDISC2, u);
+    drawBall(gLive, DCX - 70, DCY - 56, 162, s1x, false);
+    drawBall(gLive, D2CX, D2CY, RDISC2, s2x, false);
+    drawDial(gLive, DIAL_CX, DIAL_CY, DIAL_R, outputNow());
+    paintInk(gInk2, state.ink2, u);
+  }
+  if (state.flash > 0) state.flash = Math.max(0, state.flash - 0.06);
+}
+
+/* =====================================================================================
+   THE STEP — one rAF loop owns dt. While running, the disc turns du = ω·dt; loaded programs
+   recompute the exact dial, free-drag accumulates the honest local law dTheta(x,du,r).
+   ===================================================================================== */
+function advance(du) {
+  const before = outputNow();
+  if (state.progId === 'free') {
+    state.thetaFree += dTheta(state.x, du, R);      // honest hand-driven Riemann
+    state.u += du;
+    inkAdd(state.ink, DCX, DCY, RDISC, state.x, state.u);
+  } else {
+    const cap = state.chain ? UMAX.chain : (UMAX[state.progId] || Infinity);
+    state.u = Math.min(state.u + du, cap);
+    if (!state.chain) inkAdd(state.ink, DCX, DCY, RDISC, radiusNow(), state.u);
+    else inkAdd(state.ink2, D2CX, D2CY, RDISC2, Math.max(-1, Math.min(1, stage1Now())), state.u);
+    if (state.u >= cap && cap !== Infinity) state.paused = true;   // halt at the rim / in-range edge
+  }
+  const after = outputNow();
+  if (Math.floor(Math.abs(after)) !== Math.floor(Math.abs(before))) state.flash = 1;  // whole-turn tick
+}
+
+let lastT = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+  if (!state.reduced && !state.paused && !state.dragging) advance(OMEGA * dt);
+  else if (state.dragging) { advance(OMEGA * dt); }   // disc keeps spinning while you hold the ball
+  render();
+  updatePanel();
+  requestAnimationFrame(loop);
+}
+
+/* =====================================================================================
+   INTERACTION — drag the ball along the track to set the radius. Grabbing it switches to
+   FREE mode (you become the program); the disc keeps spinning and the dial Riemann-sums.
+   ===================================================================================== */
+function radiusFromPointer(ev) {
+  const r = svg.getBoundingClientRect();
+  const sx = (ev.clientX - r.left) / r.width * 1000;
+  return Math.max(-1, Math.min(1, (sx - DCX) / RDISC));
+}
+svg.addEventListener('pointerdown', (ev) => {
+  if (state.chain) return;                            // chain is a guided reveal (drag the single-stage track)
+  const t = ev.target;
+  if (!(t && t.getAttribute && t.getAttribute('data-track'))) return;
+  state.dragging = true;
+  state.progId = 'free';
+  document.querySelectorAll('.preset').forEach(b => b.classList.remove('on'));
+  state.x = radiusFromPointer(ev);
+  svg.setPointerCapture(ev.pointerId);
+  ev.preventDefault();
+});
+svg.addEventListener('pointermove', (ev) => {
+  if (!state.dragging) return;
+  state.x = radiusFromPointer(ev);
+  if (state.reduced) { settleReduced(); render(); updatePanel(); }   // no loop in reduced — re-derive by hand
+});
+function endDrag(ev) { if (!state.dragging) return; state.dragging = false; try { svg.releasePointerCapture(ev.pointerId); } catch (e) {} }
+svg.addEventListener('pointerup', endDrag);
+svg.addEventListener('pointercancel', endDrag);
+
+/* =====================================================================================
+   PRESET PROGRAMS + transport.
+   ===================================================================================== */
+function loadProgram(id) {
+  state.chain = (id === 'chain');
+  state.progId = id;
+  state.u = 0; state.thetaFree = 0; state.paused = false; state.flash = 0; state.lastWhole = 0;
+  inkClear(state.ink); inkClear(state.ink2);
+  document.querySelectorAll('.preset').forEach(b => b.classList.toggle('on', b.dataset.prog === id));
+  buildStatic();
+  if (state.reduced) settleReduced();
+  updatePanel();
+}
+document.querySelectorAll('.preset').forEach(b => b.addEventListener('click', () => loadProgram(b.dataset.prog)));
+
+const pauseBtn = document.getElementById('pauseBtn');
+pauseBtn.addEventListener('click', () => {
+  state.paused = !state.paused;
+  pauseBtn.innerHTML = state.paused ? '&#9658; play' : '&#10073;&#10073; pause';
+});
+document.getElementById('resetBtn').addEventListener('click', () => loadProgram(state.progId === 'free' ? 'const' : state.progId));
+
+/* =====================================================================================
+   REDUCED MOTION — no rAF; a brass SCRUB lever sets u by hand, everything a pure function of
+   (program, u, x). On load + each program-change settle to a representative U_rep.
+   ===================================================================================== */
+const scrubBox = document.getElementById('scrubBox');
+const scrub = document.getElementById('scrub');
+function uMaxRep() { return state.progId === 'free' ? 6.0 : UREP[state.chain ? 'chain' : state.progId]; }
+function settleReduced() {
+  const umax = uMaxRep();
+  state.u = umax * (+scrub.value) / 100;
+  if (state.progId === 'free') state.thetaFree = state.x * state.u / R;   // ∫ of a held radius = x·u/r
+  rebuildInkTo(state.u);
+}
+function rebuildInkTo(uEnd) {
+  inkClear(state.ink); inkClear(state.ink2);
+  const N = 420, h = uEnd / N;
+  for (let k = 0; k <= N; k++) {
+    const uu = k * h;
+    if (!state.chain) {
+      const xv = state.progId === 'free' ? state.x : Math.max(-1, Math.min(1, PROG_BY_ID[state.progId].x(uu)));
+      inkAdd(state.ink, DCX, DCY, RDISC, xv, uu);
+    } else {
+      inkAdd(state.ink2, D2CX, D2CY, RDISC2, Math.max(-1, Math.min(1, rollOut(PROG_BY_ID.const.x, uu, R1))), uu);
+    }
+  }
+}
+scrub.addEventListener('input', () => { settleReduced(); render(); updatePanel(); });
+
+/* =====================================================================================
+   PANEL READOUTS + the live regime legend.
+   ===================================================================================== */
+function fmtTurns(theta) { return theta.toFixed(3) + ' turns'; }
+function classifyRegime() {
+  if (state.progId === 'free') {
+    if (Math.abs(state.x) < 0.04) return { g: '⊙', t: 'DEAD STILL — the ball is at the centre, so the dial cannot move however long the disc spins.' };
+    return { g: state.x > 0 ? '↻' : '↺', t: 'YOU are the program — the dial accumulates an honest hand-driven Riemann sum of the radius you hold. ' + (state.x < 0 ? 'Negative radius unwinds it.' : '') };
+  }
+  if (state.progId === 'zero') return { g: '⊙', t: 'DEAD STILL — radius zero. The disc spins forever; the dial reads 0.000. Radius, not spin, integrates.' };
+  if (state.progId === 'const') return { g: '—', t: 'RAMPING — a held radius winds the dial LINEARLY; the gold thread thickens into a band.' };
+  if (state.progId === 'linear') return { g: '↗', t: state.paused ? 'HALTED at the rim — the ball cannot leave the disc, so we stop rather than desync the picture from the parabola.' : 'PARABOLA — the radius grows with u, so the dial winds u²/2; the trail paints an Archimedean spiral.' };
+  if (state.progId === 'sine') return { g: '∿', t: 'WINDING / UNWINDING — the ball swings through the centre; the dial winds while x>0 and unwinds while x<0. A rosette, cool past centre.' };
+  if (state.chain) return { g: '∬', t: state.paused ? 'CHAIN HALTED — stage-1 radius reached the rim; the in-range double integral is complete.' : 'CHAINED ∫∫ — stage-1 ramps, drives stage-2 radius, stage-2 winds the parabola: the double integral.' };
+  return { g: '•', t: '' };
+}
+function updatePanel() {
+  const x = state.chain ? 0.42 : radiusNow();
+  document.getElementById('fX').textContent = (state.chain ? 0.42 : x).toFixed(3) + (Math.abs(x) > 0.985 && !state.chain ? '  (rim)' : (Math.abs(x) < 0.02 ? '  (centre)' : ''));
+  document.getElementById('fU').textContent = (state.u / TAU).toFixed(3) + ' turns  ·  u=' + state.u.toFixed(2);
+  const theta = outputNow();
+  document.getElementById('fTheta').textContent = fmtTurns(theta);
+
+  const rowM = document.getElementById('rowMatch');
+  if (state.progId === 'free') {
+    document.getElementById('lblMachine').textContent = 'mode';
+    document.getElementById('fMachine').textContent = 'free-drag';
+    document.getElementById('lblClosed').textContent = 'method';
+    document.getElementById('fClosed').textContent = 'Riemann sum';
+    document.getElementById('lblMatch').textContent = 'exactness claimed';
+    document.getElementById('fMatch').textContent = 'none — you are the integrand';
+    rowM.classList.add('free');
+  } else {
+    const m = state.chain ? chainOut(PROG_BY_ID.const.x, state.u, R1, R2) : rollOut(PROG_BY_ID[state.progId].x, state.u, R);
+    const c = closedNow();
+    document.getElementById('lblMachine').textContent = 'machine dial (rolled)';
+    document.getElementById('fMachine').textContent = m.toFixed(6);
+    document.getElementById('lblClosed').textContent = 'calculus (closed form)';
+    document.getElementById('fClosed').textContent = c.toFixed(6);
+    document.getElementById('lblMatch').textContent = '|machine − calculus|';
+    document.getElementById('fMatch').textContent = Math.abs(m - c).toExponential(2);
+    rowM.classList.remove('free');
+  }
+  const r = classifyRegime();
+  document.getElementById('regimeGlyph').innerHTML = r.g;
+  document.getElementById('regimeText').textContent = r.t;
+}
+
+/* =====================================================================================
+   BOOT — wire the self-test pill (counts from runSelfTest, never hardcoded), drop ws:seen,
+   build the scene, start the loop (or settle the reduced-motion scrub).
+   ===================================================================================== */
+function boot() {
+  const st = runSelfTest();
+  const badge = document.getElementById('selftest');
+  badge.classList.toggle('ok', st.ok);
+  badge.classList.toggle('bad', !st.ok);
+  badge.textContent = st.ok
+    ? ('self-test ' + st.passed + '/' + st.total + ' ✓ · θ = (1/r)∫x du matches the closed forms to <1e-12 · x=0 ≡ 0')
+    : ('✗ ' + st.passed + '/' + st.total + ' — FAILED: ' + st.checks.filter(c => !c.pass).map(c => c.name).join('; '));
+  badge.addEventListener('click', () => {
+    alert(st.checks.map(c => (c.pass ? '✓ ' : '✗ ') + c.name + '\n   [' + c.info + ']').join('\n'));
+  });
+  st.checks.forEach(c => console.log((c.pass ? 'PASS' : 'FAIL') + '  ' + c.name + '  [' + c.info + ']'));
+
+  try { localStorage.setItem('ws:seen:ball-and-disk', '1'); } catch (e) {}
+
+  buildStatic();
+  document.querySelector('.preset[data-prog="const"]').classList.add('on');
+
+  if (state.reduced) {
+    scrubBox.classList.add('show');
+    pauseBtn.style.display = 'none';
+    settleReduced();
+    render();
+    updatePanel();
+  } else {
+    requestAnimationFrame(loop);
+  }
+}
+boot();
+</script>
+</body>
+</html>
