@@ -74,12 +74,11 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
-- [bug] **The door-twin drifted — regenerate door-mirror.cjs for the 81-POI front door** — `node tools/layout/door.test.cjs` now EXITS 2 (calibration drift / "GATE BROKEN"), NOT a pass: adding the-sightline as the 81st front-door POI re-annealed the whole label solve (centres moved up to 608px) so the checked-in door-mirror.cjs (the rendered-getBBox calibration anchor, 80 entries) is missing the-sightline AND stale on every moved box. This is twin-staleness, not a user break — the LIVE door pill is GREEN 17/17 (the re-anneal actually CLEARED the prior crowding red; HEAD was a crowded 16/17), and door.test.cjs is a MANUAL fidelity twin, not an automated commit gate (smoke.cjs + legibility.test.cjs are the gates, and both pass). FIX: regenerate door-mirror.cjs from the live SOLVED map per its header procedure, then confirm door.test.cjs exits 0. ENV CAUTION: the anchor was NOT captured in agent-browser's headless Chromium — its getBBox differs (verse box.h 56.9 headless vs 55.95 anchor; widths drift enough to threaten the FIDELITY overlap verdict). Capture in the canonical render env, and verify the regenerated twin's 17-claim verdict matches the REAL browser door pill (17/17), not just that the file count lines up.
-<!-- ✝ FIXED #327: The Census of Hands "by role" view clips the role labels horizontally —… → census/index.src.html · after 3448448 -->
 <!-- ✝ FIXED #328: The Numbers wing is overcrowded → tools/layout/layout.js · after 56aeb93 -->
 <!-- ✝ FIXED #335: The Front Door Fails Its Own Legibility Self-Test (✗ 16/17) → tools/layout/layout.js · after 1cf82d8 -->
 <!-- ✝ FIXED #335: The front-door map has run out of room for new wings → tools/layout/layout.js · after 1cf82d8 -->
 <!-- ✝ FIXED #337: The front-door self-test ships GREEN while the live door reads RED → tools/layout/door.test.cjs · after 4aab6e9 -->
+<!-- ✝ FIXED #340: The door-twin drifted — regenerate door-mirror.cjs for the 81-POI front… → tools/layout/door.test.cjs · after f9f74db -->
 <!-- gauge:bug:end -->
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth

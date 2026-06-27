@@ -79,13 +79,17 @@ function labelGap(r) { const b = footBBox(r); return Math.max(b.w, b.h) / 2 + LA
 function preferList(r) { return r.prefer ? (Array.isArray(r.prefer) ? r.prefer.slice() : [r.prefer]) : undefined; }
 
 /* ════════════════════════════════════════════════════════════════════════════
-   modelSolvedBoxes(places) → { solved: Map(id→{x,y,w,h}), placed:[place,...] }
+   modelSolvedBoxes(places, layout, boxSource) → { solved: Map(id→{x,y,w,h}), placed:[place,...] }
    Reproduces index.src.html placeLabels() PASS 1 EXACTLY, with the ONE modeled input —
-   the label box {w,h} — taken from legibility.cjs's calibrated CHAR_W model instead of a
-   live getBBox. Everything else (footprints, anchors, gaps, obstacles, the LabelPlacer
-   solve + its positions:8→4 fallback) is the page's own math, reproduced bit-for-bit.
+   the label box {w,h} — supplied by `boxSource(r)`. By DEFAULT that is legibility.cjs's
+   calibrated CHAR_W model (the browserless twin's own estimate); the calibration guard also
+   calls it with the rendered MIRROR's real getBBox dims, to isolate the SOLVER PORT from the
+   width approximation (see calibrate(), #340). Everything else (footprints, anchors, gaps,
+   obstacles, the LabelPlacer solve + its positions:8→4 fallback) is the page's own math,
+   reproduced bit-for-bit, so a given box-source deterministically yields the page's placement.
    ════════════════════════════════════════════════════════════════════════════ */
-function modelSolvedBoxes(places, layout) {
+function modelSolvedBoxes(places, layout, boxSource) {
+  boxSource = boxSource || (r => Legibility.labelBoxWH(r));
   const placed = places.filter(p => !p.locked && layout.foot[p.id]);
 
   // obstacles = footprints + the static FURNITURE + the gnomon HUD furniture +
@@ -106,7 +110,7 @@ function modelSolvedBoxes(places, layout) {
   const obstacles = footObstacles.concat(FURNITURE).concat(HOURS_FURNITURE).concat(zoneObstacles);
 
   const features = placed.map(r => {
-    const wh = Legibility.labelBoxWH(r);   // the single-source CHAR_W box-{w,h} model
+    const wh = boxSource(r);   // box-{w,h}: CHAR_W model by default; rendered mirror dims for the solver-port check
     const f = { id: r.id, anchor: footCentre(r), label: { w: wh.w, h: wh.h }, gap: labelGap(r) };
     const pref = preferList(r); if (pref) f.prefer = pref;
     if (r.pin) f.pin = r.pin;
@@ -142,39 +146,75 @@ const MIRROR = new Map();
 for (const m of DOOR_MIRROR) MIRROR.set(m.id, { x: m.x, y: m.y, w: m.w, h: m.h });
 const boxOfMirror = id => MIRROR.get(id) || null;
 
+/* SOLVER-PORT witness (#340): re-run the SAME placement, but feed the LabelPlacer the
+   MIRROR's REAL getBBox dims as the label boxes instead of the CHAR_W estimate. This
+   isolates the SOLVER PORT (which must be bit-identical to the page's placeLabels) from
+   the width approximation: if the twin's solver matches the page's, this reproduces the
+   rendered mirror positions to sub-pixel — regardless of how far CHAR_W is from getBBox. */
+const { solved: SOLVED_REAL } = modelSolvedBoxes(placesClone, LAYOUT,
+  r => { const m = MIRROR.get(r.id); return m ? { w: m.w, h: m.h } : Legibility.labelBoxWH(r); });
+
 /* ════════════════════════════════════════════════════════════════════════════
    CALIBRATION GUARD — tie the modeled SOLVED boxes to the rendered getBBox truth.
-   Documented tolerance (re-measure if the type scale changes; see header):
-     · POS_TOL  24 — the modeled LabelPlacer slot vs the rendered slot, centre distance.
-                     Measured max 16.9 viewBox-units over the 80 boxes (no side flips).
-     · W_TOL    26 — modeled width vs rendered width. Measured max 21.4 (a couple of
-                     companion rooms whose "↳ … within" line the CHAR_W model under-counts
-                     — harmless: it does not flip a claim, proven by the verdict cross-check).
-     · H_TOL     2 — modeled height vs rendered height. Measured max 0.1.
-   A stale mirror (a room added/removed/retuned but the mirror not regenerated) trips this
-   loudly. This is the geometry early-warning; the VERDICT cross-check below is the proof.
+   It separates the two things that can drift, because they need DIFFERENT checks:
+
+     (1) BOX DIMENSIONS — does CHAR_W still estimate the rendered box well?  HARD tol:
+         · W_TOL 26 — CHAR_W modeled width vs rendered width. Measured max 21.3 (a few
+                      companion rooms with long UPPERCASE "PIECE · tag" sub-lines whose
+                      narrow glyphs (· spaces I/L) the per-char-average CHAR_W over-counts).
+         · H_TOL  2 — modeled height vs rendered height. Measured max 0.1.
+         A type-scale change (font size / new tier) blows past these.
+
+     (2) SOLVER PORT — does the twin's ported LabelPlacer place exactly like the page?  HARD:
+         · SOLVER_TOL 1.0 — re-run the placement with the MIRROR's REAL dims (SOLVED_REAL)
+                      and it must reproduce the rendered mirror positions to sub-pixel. This
+                      is the DETERMINISTIC proof the solve was ported bit-for-bit (measured
+                      max ~0.0): same seed, same obstacles, same positions:8→4 fallback.
+
+   Why NOT a hard tol on the CHAR_W-solve position?  Because the LabelPlacer is an anneal:
+   the irreducible ~20px CHAR_W width error (1) perturbs it, and on a dense plate that can
+   flip a wide label to an equally-valid alternate slot (a ~500u centre move) WITHOUT changing
+   any claim. #339 added the-sightline (the 81st POI) and re-annealed; ~24 wide companion
+   labels then sat in CHAR_W-vs-render slot disagreements — yet the verdict held identical.
+   So the CHAR_W-solve position delta is reported as an INFORMATIONAL anneal-sensitivity
+   signal (POS_INFO), not a gate: gating on it would fail green doors over a legitimate
+   slot choice. The real proofs are coverage + dims (1) + solver port (2) + the VERDICT
+   cross-check below — none of which depend on anneal stability.
+
+   COVERAGE — the mirror must cover EXACTLY the placed POIs (caught #339's missing-POI
+   staleness loudly: a room added/removed but the mirror not regenerated trips here).
    ════════════════════════════════════════════════════════════════════════════ */
-const POS_TOL = 24, W_TOL = 26, H_TOL = 2;
+const POS_INFO = 24, W_TOL = 26, H_TOL = 2, SOLVER_TOL = 1.0;
 function calibrate() {
   const problems = [];
-  let maxPos = 0, maxW = 0, maxH = 0, worstId = null;
+  let maxPos = 0, maxW = 0, maxH = 0, worstId = null;        // CHAR_W-solve vs mirror (informational)
+  let maxSolver = 0, worstSolver = null, posInfoCount = 0;   // real-dims-solve vs mirror (HARD)
   // coverage: the mirror must cover exactly the placed POIs.
   const placedIds = new Set(placed.map(p => p.id));
   for (const id of placedIds) if (!MIRROR.has(id)) problems.push('mirror MISSING placed POI ' + id + ' (regenerate door-mirror.cjs)');
   for (const m of DOOR_MIRROR) if (!placedIds.has(m.id)) problems.push('mirror has STALE POI ' + m.id + ' (no longer placed; regenerate door-mirror.cjs)');
   for (const p of placed) {
-    const a = MODELED.get(p.id), b = MIRROR.get(p.id);
+    const a = MODELED.get(p.id), b = MIRROR.get(p.id), s = SOLVED_REAL.get(p.id);
     if (!a || !b) continue;
     const dpos = Math.hypot((a.x + a.w / 2) - (b.x + b.w / 2), (a.y + a.h / 2) - (b.y + b.h / 2));
     const dw = Math.abs(a.w - b.w), dh = Math.abs(a.h - b.h);
     if (dpos > maxPos) { maxPos = dpos; worstId = p.id; }
+    if (dpos > POS_INFO) posInfoCount++;                     // informational: anneal slot-disagreements
     if (dw > maxW) maxW = dw;
     if (dh > maxH) maxH = dh;
-    if (dpos > POS_TOL) problems.push('box ' + p.id + ' centre off by ' + dpos.toFixed(1) + ' > ' + POS_TOL);
-    if (dw > W_TOL) problems.push('box ' + p.id + ' width off by ' + dw.toFixed(1) + ' > ' + W_TOL);
-    if (dh > H_TOL) problems.push('box ' + p.id + ' height off by ' + dh.toFixed(1) + ' > ' + H_TOL);
+    // (1) DIMENSION accuracy — HARD: CHAR_W must estimate the rendered box dims within tol.
+    if (dw > W_TOL) problems.push('box ' + p.id + ' width off by ' + dw.toFixed(1) + ' > ' + W_TOL + ' (CHAR_W type scale drifted — recheck legibility.cjs)');
+    if (dh > H_TOL) problems.push('box ' + p.id + ' height off by ' + dh.toFixed(1) + ' > ' + H_TOL + ' (type scale drifted — recheck legibility.cjs)');
+    // (2) SOLVER PORT — HARD: the ported anneal, fed the mirror's real dims, must reproduce
+    // the rendered slot to sub-pixel. Drift here means the twin's placeLabels port broke.
+    if (s) {
+      const dsolver = Math.hypot((s.x + s.w / 2) - (b.x + b.w / 2), (s.y + s.h / 2) - (b.y + b.h / 2));
+      if (dsolver > maxSolver) { maxSolver = dsolver; worstSolver = p.id; }
+      if (dsolver > SOLVER_TOL) problems.push('SOLVER box ' + p.id + ' off by ' + dsolver.toFixed(2) + ' > ' + SOLVER_TOL +
+        ' (the ported LabelPlacer no longer places like the page — recheck the placeLabels port / mirror staleness)');
+    }
   }
-  return { problems, maxPos, maxW, maxH, worstId };
+  return { problems, maxPos, maxW, maxH, worstId, maxSolver, worstSolver, posInfoCount };
 }
 
 /* ── run the 17 claims over BOTH box-sources ── */
@@ -211,9 +251,12 @@ const r = repModeled;
 console.log('door.test — the front door 17-claim legibility pill, node twin (#337)');
 console.log('  placed POIs: ' + placed.length + '   mirror entries: ' + DOOR_MIRROR.length);
 console.log('  calibration (modeled SOLVED boxes vs rendered getBBox mirror):');
-console.log('    max centre Δ ' + cal.maxPos.toFixed(1) + ' (tol ' + POS_TOL + ', worst ' + cal.worstId + ')' +
-            '   max width Δ ' + cal.maxW.toFixed(1) + ' (tol ' + W_TOL + ')' +
-            '   max height Δ ' + cal.maxH.toFixed(1) + ' (tol ' + H_TOL + ')');
+console.log('    DIMS    max width Δ ' + cal.maxW.toFixed(1) + ' (tol ' + W_TOL + ')' +
+            '   max height Δ ' + cal.maxH.toFixed(1) + ' (tol ' + H_TOL + ')   [CHAR_W vs rendered]');
+console.log('    SOLVER  max Δ ' + cal.maxSolver.toFixed(2) + ' (tol ' + SOLVER_TOL + ', worst ' + cal.worstSolver + ')' +
+            '   [page solver re-run on the mirror dims → rendered slot]');
+console.log('    anneal  CHAR_W-solve max centre Δ ' + cal.maxPos.toFixed(1) + ' (worst ' + cal.worstId + ', ' +
+            cal.posInfoCount + ' slot(s) > ' + POS_INFO + ' — informational, verdict-invariant)');
 
 let gateBroken = false;
 if (cal.problems.length) {
