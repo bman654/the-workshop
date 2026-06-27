@@ -200,6 +200,15 @@ var Layout = (function () {
      assertGroundsWingsDisjoint — clear of every footprint, every catalog star, AND
      mutually DISJOINT from amusements, works and every other wing region. */
   GROUNDS_WINGS['figures-you-construct'] = { x: 790, y: 336, w: 168, h: 232 };
+  /* STATICS — the structural-mechanics precinct (The Keystone Arch + The Infinite
+     Overhang): masonry that stands by its own shape. Seated in the OPEN lower-right
+     grounds band, BELOW the Conservatory band (it ends ~y698) and RIGHT of The Works
+     (ends ~x1000), a genuinely clear SE lot. Sized for the two rooms + a growth lot
+     (an obvious sibling: a flying-buttress / thrust-line bench). Verified mutually
+     DISJOINT from every grounds wing (nearest = conservatory_band above) and clear of
+     the keystone catalog star (1250,872, just SE of the budget) via smoke.cjs's live
+     Layout.solve + assertGroundsWingsDisjoint. */
+  GROUNDS_WINGS.statics = { x: 1020, y: 712, w: 196, h: 140 };
   /* FOUNDRY — The Casting Floor, the estate's CASTING HOUSE: a pinned mold (Dirichlet
      rim) is poured full of molten chaos, then RELEASED to cool and forget the pour,
      relaxing to the one harmonic field its boundary allows; a bead then rides −∇T to
@@ -295,7 +304,8 @@ var Layout = (function () {
     'figures-you-construct': { label: 'FIGURES YOU CONSTRUCT', accent: '#6f9fc0' },
     'kinetics-sound': { label: 'KINETICS & SOUND', accent: '#d8a94a' },
     waves:       { label: 'WAVES',              accent: '#54d6d0' },
-    processions: { label: 'THE PROCESSIONAL GROUND', accent: '#c9a24a' }
+    processions: { label: 'THE PROCESSIONAL GROUND', accent: '#c9a24a' },
+    statics:     { label: 'STATICS',                accent: '#c9974c' }
   };
   function wingLabel(slug) {
     if (WING_META[slug] && WING_META[slug].label) return WING_META[slug].label;

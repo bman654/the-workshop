@@ -216,7 +216,14 @@
     // Room (300,868), near its grounds kin; lit on first visit (ws:seen:the-heap).
     // Verified clear of every footprint/furniture box, the manor pool, the viewBox
     // edge, and every existing catalog star by the CATALOG INTEGRITY self-test.
-    'the-heap': { x: 208, y: 882, mag: 1 }
+    'the-heap': { x: 208, y: 882, mag: 1 },
+    // The Keystone Arch — the statics precinct's founding room (drop the last wedge and
+    // the dry-stacked ring locks rigid). A field star in the dark lower-right grounds
+    // band, near its statics kin the Infinite Overhang and the games cluster; lit on
+    // first visit (ws:seen:the-keystone-arch). Verified clear of every footprint/
+    // furniture box, the manor pool, the viewBox edge, and every existing catalog star
+    // by the CATALOG INTEGRITY self-test.
+    'the-keystone-arch': { x: 1250, y: 872, mag: 1 }
   };
 
   /* ── DATA: the six wings (companion-pairs), each an asterism ────────────────
