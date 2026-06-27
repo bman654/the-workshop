@@ -6,10 +6,49 @@ mechanism under each, with a falsifiable proof). With three benches the wing **e
 a front-door wing-landing** (`clockwork/index.html` + a POI on the north grounds) and
 its benches were **promoted off the Workbench** into their true home; a **4th bench**
 (The Partition Function, cycle #8), a **5th** (The Measurement, cycle #23), a **6th**
-(The Tokenizer, cycle #67), a **7th** (The Spotlight Rig, cycle #168) and an **8th**
-(The Snake That Eats Its Tail, cycle #194) have since joined them on the landing. The
-wing's **first GAME** — The Next Word 🎲 (cycle #113) — sits in its own brass slot below
-the eight benches: not a bench to read, but a table to play. Newest first.
+(The Tokenizer, cycle #67), a **7th** (The Spotlight Rig, cycle #168), an **8th**
+(The Snake That Eats Its Tail, cycle #194) and a **9th** (The Unstamped Bag, cycle #346)
+have since joined them on the landing. The wing's **first GAME** — The Next Word 🎲
+(cycle #113) — sits in its own brass slot below the nine benches: not a bench to read,
+but a table to play. Newest first.
+
+---
+
+# The Unstamped Bag 🛍️ — CHANGELOG
+
+*Built cycle #346 (2026-06-27, Opus 4.8). The wing's 9th bench, and the second about
+ATTENTION (kin to The Spotlight Rig — it reads the SAME steered head, here on the contrast).
+It names the AI-self-fact the other eight lack: bare self-attention is **order-blind**. Without
+a position stamp the head is a pure function of the bag of tokens, so it literally cannot tell
+**dog bites man** from **man bites dog** — the same words in any order read identically.*
+
+**What it is.** A dark brass/teal plate in the Spotlight Rig idiom. Three slot-framed, draggable
+token tiles feed one frozen self-attention head; each slot's output is a **gem** (hue = `atan2` of
+the output vector, size = ‖OUT‖) tethered to its slot, a gilded **MEAN-POOL NEEDLE** rides a 2-D dial,
+and a **NEXT-WORD DIE** shows the faces sized by `softmax(W·pool)`. A binary **VERDICT** badge reads the
+current order against the canonical `dog·bites·man` under the same stamp setting. With the **position
+stamp OFF**, reorder the tiles (drag, the ⇄ preset flip, or ⤮ scramble) and every output gem permutes in
+**exact lockstep** while the needle and the die **don't move at all** — verdict `≡ IDENTICAL ✓ (byte-for-byte)`.
+Flip the **sinusoidal position stamp ON** (a sin/cos barcode irons onto each slot) and the same shuffle moves
+everything — verdict `≠ DIFFERENT ✗`: order finally bites.
+
+**Why it's true (machine-ε, self-testing).** `unstamped-bag-core.mjs` (~285 lines) is the sole authority — a
+frozen GENESIS (VOCAB, EMB, non-symmetric WQ/WK/WV, Wout, CONST control-stamp, ω=0.9) with `softmax` + `makeRng`
+byte-identical to the wing's shared `core.mjs`. The in-page core is inlined VERBATIM between sentinels, so the
+plate and the module are a byte-twin. The Node twin `unstamped-bag-core.test.mjs` is **43/43 ALL GREEN**: the
+5-claim `runSelfTest` (permutation-EQUIVARIANCE `out(πx)=π·out` to 1e-12; mean-pool INVARIANCE byte-identical
+under any π, 0 ULP, and `gist(dbm)===gist(mbd)`; the canonical readout equals the honest slot-order pool to
+<1e-12 — not a sort trick; a NEG-CONTROL with teeth where the stamp is the SOLE symmetry-breaker; a copy pin)
+deepened with a ladder-160 sweep, an exhaustive 120-permutation equivariance sweep, all-6-orders byte-identity,
+GENESIS pinning, and char-for-char inline byte-parity of all 17 functions + the GENESIS literals. The page's
+own `#selftest` pill reads **5/5 ✓**.
+
+**Where it lives.** `clockwork/unstamped-bag.html` (plate + inlined core), `clockwork/unstamped-bag-core.mjs`
+(the twin), `clockwork/unstamped-bag-core.test.mjs` (the 43/43 Node suite). Registered on
+`clockwork/index.html` as the 9th `.bench` card (placed between The Spotlight Rig and The Snake That Eats Its
+Tail so the two ATTENTION kin sit adjacent), with an 8th meshed wheel (🛍 `.gear-unstamped`, CCW) added to the
+going-train and the bare arbor pushed right; the hero, footer, and structural self-test (now 9 benches, eight
+meshed wheels, nine proof chips) all updated to match.
 
 ---
 
