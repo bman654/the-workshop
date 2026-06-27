@@ -36,7 +36,7 @@ salvaging orphaned work that `git status` reveals.
 | | **🌱 GARDENS** — *grow what exists* (small) | **🏛️ GROUNDS** — *new structure* (big) |
 |---|---|---|
 | **PLAN** | **gardener** — prune · file ≤3-line seeds · *audit & mark a piece for rework* | **groundskeeper** — keep sparks, tailor → grounds seeds |
-| **BUILD** | **planter** — ripen + sow one (bench · cross · curation · **rework**) | **grounds-worker** — open a wing · engine · metagame · map · medium |
+| **BUILD** | **planter** — ripen + sow one (bench · cross · curation · **rework**) — *deepen before you detach* | **grounds-worker** — **deepen a wing** (gather kin under one roof) · open a new wing · engine · metagame · map · medium |
 
 (plus **bug-fixer** — an open `[bug]` jumps the queue ahead of all ordinary work; a `[writ]` is the sole
 exception that outranks it. A bug is an unconditional, never-decaying queue-jumper, so when one is **too big
@@ -50,8 +50,11 @@ collective's call), while operational work and off-estate content (a vault note,
 the agent-can't-perceive exception, and the full writ model live in **director.md** + **seedbed/README.md**.)
 A **big swing is anything bigger than
 an exhibit.** *Growing* an existing wing (a new bench) or metagame (a new constellation/crossover) is
-**garden** work — that's where most cycles live; the grounds track is the periodic forcing-function that
-keeps the estate spreading *wide*, not just deep.
+**garden** work — that's where most cycles live. The grounds track is the forcing-function for big
+structure, and it swings **inward as readily as outward**: *deepening* an existing wing — gathering kin
+under one roof, raising a second hall the wing was always missing — is a first-class grounds swing,
+**equal to opening a new one** (and, while the estate rebalances, usually the better one). Keep the estate
+spreading wide AND deep; never detach a lone new structure where it could have gathered into one that stands.
 
 ---
 
@@ -66,7 +69,7 @@ Tend the small beds; **do not build.**
 
 ## 🌱 BUILD/gardens — be the planter
 
-1. **Pull a garden seed that calls to you** — a new `exhibit`/`cross`/`curation`, **or a `rework`** (re-souling a tired exhibit is first-class work, equal to a new one) — or ignore the bed and dream a small one (the bed is a floor, not a ceiling). You **ripen** it (complete the design — choose the *how*) and **sow** it (build + ship) in one cycle. While the estate rebalances, a `rework` that calls to you is *especially* worth answering.
+1. **Pull a garden seed that calls to you** — a new `exhibit`/`cross`/`curation`, a **`bench` that *deepens* a built wing** (a second bench under one roof) or a **companion within a room**, **or a `rework`** (re-souling a tired exhibit is first-class work, equal to a new one) — or ignore the bed and dream a small one (the bed is a floor, not a ceiling). You **ripen** it (complete the design — choose the *how*) and **sow** it (build + ship) in one cycle. **Apply the deepen-or-detach test** (the house bar, below): prefer a piece that *gathers* into a room that stands over one more *detached* card. While the estate rebalances, a `rework`, a `bench`, or a companion that *deepens* what stands is *especially* worth answering.
 2. **Reworking — re-soul, don't repaint.** Pulling a `rework` means going back to a piece that lost (or never had) its soul and **re-growing it toward the five questions** — usually: take a *graph of the thing* and turn it into *the thing you can see and touch*. Keep what's good (the correct math becomes a quiet secondary layer, not the headline); add what's missing — the real phenomenon, the interaction, the play. The bar to clear is *the soulful siblings*: Newton's Cradle, the double-slit, the Strange Garden. Ship it in place (replace/grow the existing files); the `rework` seed blooms with provenance, same as any sow.
 3. **Let form express content.** A bench/room with a strong native metaphor (optics, time, sound, *life*) should let it shape *how you move through it* — don't reflexively copy the vertical door-list (the Hall of Mirrors was optics and got a plain list — the cautionary tale), and don't reflexively reach for an axes-and-curve plot (the quantum drift did, and went sterile — the newer cautionary tale). A plain collection (a rack, an index) can stay plain; diverge wherever there's a phenomenon to *show* or a metaphor to honor.
 4. **Metagames are a consideration, not a mandate.** Wire the Undercroft/Survey only where the tie is natural; leave it where it'd be forced or the layer is marked complete.
@@ -80,11 +83,22 @@ Keep the big-swing pipeline alive; **do not build.**
 
 ## 🏛️ BUILD/grounds — be the grounds-worker
 
-Open a **big swing**: a new front-door wing, a reusable engine/tool/medium, a brand-new metagame
-layer, or a map expansion. **Ripen** the chosen grounds seed (commit to a form — for a room, generate
-a few divergent FORM concepts first) and **sow** it; register it on the front-door map. Same house bar
-as a bench, scaled up. *Raise ambition, never lower the bar — if no grounds seed is ripe when a swing
-is due, the gauge sends the groundskeeper instead; never fake a wing to satisfy a number.*
+Open a **big swing** — and a big swing goes **inward as readily as outward**. Run the **deepen-or-detach
+test** (the house bar, below) before you choose:
+- **DEEPEN an existing wing** (gather kin under one roof): a second hall the wing was always missing, a
+  companion structure that *rides within* a built wing — wing-scale work that lands **under an existing
+  roof** rather than minting a new front-door footprint. While the estate rebalances, this is **usually the
+  better swing**: it grows the hierarchy and warms the center instead of thinning both.
+- **DETACH a new structure**: a new front-door wing, a reusable engine/tool/medium, a brand-new metagame
+  layer, or a map expansion — when the thing is a **genuine new family with no honest home** (ideally with a
+  sibling soon to follow).
+
+**Ripen** the chosen grounds seed (commit to a form — for a room, generate a few divergent FORM concepts
+first) and **sow** it. A **DETACH** registers a NEW front-door footprint; a **DEEPEN** appends **under the
+existing wing** (the new hall/companion rides *within* its parent — **no new wing slug**), so the map-judge
+sees kin gathered, not a grand name over one dot. Same house bar as a bench, scaled up. *Raise ambition,
+never lower the bar — if no grounds seed is ripe when a swing is due, the gauge sends the groundskeeper
+instead; never fake a wing to satisfy a number.*
 
 ## ⚡ Sparks — where the big ideas start
 
@@ -107,6 +121,8 @@ A piece is *done* when it earns its place by **the five questions** — the esta
 
 **Right-sized — unafraid of big, never "bigger is better."** The one-builder-one-turn ceiling is gone: the **baton** (a build hands off to a fresh builder mid-stream) and the **in-house art foundry** (rich sound/visual/animation assets forged at scale) let a seed grow past what one maker finishes in one cycle. So *size is no longer a reason to avoid or shrink an idea* — don't decline a seed for being big, don't quietly trim one to fit a turn; sow the scale the idea wants and let those tools build it. But this is **not** "bigger is better": a **small, quiet, precise, or playful** piece is *fully first-class* when that's what the idea wants. Steer between the two equal failures — **shrinking a big idea to fit one turn** and **inflating a small idea to seem ambitious** — and pick the scale the *idea itself* calls for. ("Fewer, richer pieces over many shallow" is a tie-breaker for where to spend a cycle, never an order to never build small.)
 
+**Deepen before you detach — gather, don't scatter.** Before raising a NEW structure (a new exhibit → its own card, a new room → its own wing, a new wing → its own building), ask the **deepen-or-detach test**: *could this gather INTO something that already stands?* A new piece that could ride **within** an existing room, a new room that is really a **second bench under** an existing wing's roof, a new wing that is really **kin inside** an existing one — each is a chance to deepen the estate's hierarchy and warm its center instead of thinning both. **Detach only when the thing is a genuine new family with no honest home** (ideally with a sibling soon to follow). **Default to gathering:** deepening kin under one roof is first-class work, equal to raising a new roof — and, while the estate rebalances, usually the better call. (This is the structural twin of *right-sized*: there, pick the **scale** the idea wants; here, pick the **home** the idea wants — and prefer the one that already stands.)
+
 **All creative assets are forged IN-HOUSE — never forage.** Audio *and* graphics: no stock images, no CC0 silhouettes, no sample packs. Art richer than one builder can hand-make well in a turn is exactly what the **art foundry** is for — build with placeholders + a per-asset spec file, the foundry forges each via K-takes → judge → synth, a final pass wires it in. The foundry is what makes this ethos affordable for rich exhibits, so ambition and in-house craft no longer trade off.
 
 And the build holds together (the house hygiene):
@@ -122,5 +138,5 @@ And the build holds together (the house hygiene):
 - **When a piece makes a falsifiable claim, prove it exact** — a beloved register (invariance to ~machine precision, a winnability proof, a convergence check…), and the right finishing move for a bench built on a claim. But it is *one register among many*, never the gate: art, sound, play, and living things carry no claim and owe no self-test (the founding generators have none by design — don't retrofit one).
 - **One mute for the whole estate** — any page that makes sound reads/writes the single shared key **`ws:pref:muted`** (via `WS`), so a visitor mutes *once* and it holds everywhere (Sound Garden, the front-door ambient layer, the Survey's discovery melodies, any audio piece). Never invent a per-page mute key. Default: respect it on load; honor the browser's autoplay gate (sound waits for a click).
 - **Forge pages** (`*.src.html` → `*.html`): edit the `.src.html`, run `node tools/forge/forge.mjs <file>`; `--check --all` verifies. Editing a shared include (e.g. `tools/ws/ws.js`) restales every inlined page → `forge.mjs --all`.
-- **Front door** = a DECLARATIVE district/slot estate map (rebuilt 2026-06-15). Add a room by appending one `PLACES` entry in `index.src.html` that **declares** `{district, tier, wing}` (+ content) — **never pixels**; the renderer (`tools/layout/layout.js`, the 4th forge include) owns ALL geometry (coordinates, sizes, boundaries, routes, zone labels, label sides), so crowding/dead-space/rim-accretion/clipping are impossible by construction. Companions ride "within" their parent room. The full process — what you declare, the six districts, the per-room **map judge** (right district/inside-vs-external · true kin · new-wing-vs-existing · unique name · sky tie), the separate **estate-composition critic** (the rendered whole; runs after a new wing/config change; may tune only the config tables + furniture + page CSS), and the **reveal-all-secrets** rule — is in **`tools/layout/map-process.md`**. Any map screenshot/critique MUST first run `tools/layout/reveal-all-secrets.js` (light every constellation + the Undercroft) or it won't compose for the hidden features. Browser-verify with a `?v=N` cache-bust (python http.server sends no cache headers).
+- **Front door** = a DECLARATIVE district/slot estate map (rebuilt 2026-06-15). Add a room by appending one `PLACES` entry in `index.src.html` that **declares** `{district, tier, wing}` (+ content) — **never pixels**; the renderer (`tools/layout/layout.js`, the 4th forge include) owns ALL geometry (coordinates, sizes, boundaries, routes, zone labels, label sides), so crowding/dead-space/rim-accretion/clipping are impossible by construction. **The Manor is the inhabited center the estate radiates from** — the warm grand core that the grounds, observatory, outbuildings and cavern orbit; an enclosed/interior/instrument/document room belongs *in* the Manor (and grows it), while open-air/landscape/working/amusement themes orbit it on the grounds or an external precinct. The Manor must stay the plate's dominant central mass and GROW as interior wings arrive — never shrink toward one card among the outbuildings; the estate-composition critic guards this (map-process.md's MANOR-PRIMACY check). Companions ride "within" their parent room. The full process — what you declare, the districts (a near-closed set — a full plate's answer is a new *layer*, not another flat district), the per-room **map judge** (right district/inside-vs-external · true kin · new-wing-vs-existing · unique name · sky tie), the separate **estate-composition critic** (the rendered whole; runs after a new wing/config change; may tune only the config tables + furniture + page CSS), and the **reveal-all-secrets** rule — is in **`tools/layout/map-process.md`**. Any map screenshot/critique MUST first run `tools/layout/reveal-all-secrets.js` (light every constellation + the Undercroft) or it won't compose for the hidden features. Browser-verify with a `?v=N` cache-bust (python http.server sends no cache headers).
 - **Spoiler etiquette** (Brandon's one standing request): the hidden world stays out of the *chat summary* to him — NOTES/worklog/SPECs carry the full inventory. See NOTES.md.

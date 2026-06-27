@@ -57,17 +57,24 @@ the loop gave you) — be concrete: a fresh explorer/builder will act only on wh
    - **Triage + serve EXACTLY ONE writ per cycle;** a writ cycle is cadence-neutral so the gauge re-fires WRIT
      next cycle for the next one. A writ cycle prunes NOTHING and decays NOTHING (the gauge hands an empty decay list).
 3) **If BUILD/garden — be the PLANTER:** pick a garden seed that calls to you (or dream a small one — the bed
-   is a floor, not a ceiling): a bench, a `cross`, a `curation`, a new bench that GROWS a built wing, or a
-   `rework` (re-souling a tired exhibit — first-class, EQUAL to a new one, especially worth answering while
-   the estate rebalances). Write a `basicDesign`: the one idea + the FORM it takes (what real thing you SHOW /
+   is a floor, not a ceiling): a bench, a `cross`, a `curation`, a **`bench` (or companion) that *deepens* a built wing or room** —
+   gathering kin under one roof, not detaching a new card — or a `rework` (re-souling a tired exhibit —
+   first-class, EQUAL to a new one, especially worth answering while the estate rebalances). **Apply the
+   deepen-or-detach test** (DESIGNING.md, "deepen before you detach"): prefer a piece that *gathers* into
+   existing kin over one more *detached* card. Write a `basicDesign`: the one idea + the FORM it takes (what real thing you SHOW /
    how it is touched or played — reach PAST a plain graph) + IF it makes a math claim, the claim its self-test
    proves. Choose `exploreMode`; set K (2–4) + briefs; state `definitionOfDone`. For a REWORK, name the
    existing piece, the soul it lacks, and how you re-grow it toward the soulful siblings (Newton's Cradle ·
    the double-slit firing particles · the Strange Garden) — keep the correct math a quiet layer, add the thing itself.
-   **If BUILD/grounds — be the GROUNDS-WORKER:** pick a ripe grounds seed and open a BIG SWING (a new
-   front-door wing / engine / metagame layer / map expansion). For a room, set `exploreMode:"compete"` with
-   briefs that are DIVERGENT FORM CONCEPTS (let form express content — don't default to a vertical list). It
-   registers a NEW front-door footprint. Scale the house bar up; one cycle can open a wing's landing + first bench.
+   **If BUILD/grounds — be the GROUNDS-WORKER:** pick a ripe grounds seed and open a BIG SWING — which goes
+   **inward as readily as outward**. **Apply the deepen-or-detach test** (DESIGNING.md, "deepen before you
+   detach"): a swing that **DEEPENS** an existing wing (a second hall, a companion riding *within* a built
+   wing — gather kin under one roof) is first-class and, while the estate rebalances, usually the better call;
+   **DETACH** a new front-door wing / engine / metagame layer / map expansion only for a genuine new family
+   with no honest home. For a room, set `exploreMode:"compete"` with briefs that are DIVERGENT FORM CONCEPTS
+   (let form express content — don't default to a vertical list). A **DETACH** registers a NEW front-door
+   footprint; a **DEEPEN** appends **under the existing wing** (no new wing slug). Scale the house bar up; one
+   cycle can open a new wing's landing + first bench, OR deepen a built wing with a new hall.
    **If BUILD/bug — be the BUG-FIXER:** the open `[bug]` is the target; `basicDesign` = what is broken + the
    fix; `exploreMode:"none"` unless the fix is genuinely unclear. Fix the ROOT CAUSE.
    **If BUILD/foundry — RIPEN the rep into a build-ready spec for the ART FOUNDRY:** pick the ripe foundry
@@ -110,6 +117,13 @@ the loop gave you) — be concrete: a fresh explorer/builder will act only on wh
    condemn the graph. Then set `ideationScope` + K + briefs for scouts to find GARDEN seeds
    (exhibit/cross/curation/rework, each a ≤3-line provocation, reaching for touchable/living/playable forms
    over another graph) toward fuel ~10; watch for FALLOW metagames/wings (no recent growth) and scout for them.
+   GATHER THE SINGLETONS (a standing curation invitation): the Survey-of-Heaven carries SIX lone-star
+   constellations — The Surveyor, The Pilot, The Reckoner, The Drover, The Sirenist, The Wagerer (each a
+   grand name over a single dot; defined in tools/sky/sky.js's FEATS). A `cross` or `curation` seed that
+   ships the PROMISED SIBLING for one of them — a Gauss-Bonnet polygon for the Surveyor, a second
+   least-time fly-through for the Pilot, a driven Chladni plate for the Sirenist — so the engraved name
+   finally sits over ≥2 stars, is high-value garden fuel; or fold a truly-orphan one into kin. Reach for
+   the touchable/playable sibling, not another graph.
    SIZE IS A NON-REASON, both ways: the baton + the in-house art foundry build past one maker's reach, so do
    NOT shrink a big idea to fit a turn — but do NOT inflate a small/precise/playful one to seem ambitious
    either. Sow the scale the idea genuinely wants (DESIGNING.md, "right-sized — unafraid of big").

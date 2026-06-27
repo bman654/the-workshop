@@ -29,6 +29,7 @@ current working directory is the repo root (wherever this clone lives — run ev
   to shrink an idea** (the baton + foundry build past one maker's reach), nor to inflate a small one. Right-sized,
   unafraid of big. (DESIGNING.md.)
 - The loop may REWORK existing pieces to re-soul them (a `rework` garden seed), not only build new.
+- **The estate is a HIERARCHY WITH A WARM CENTER — not a flat, detached sprawl.** Three habits hold this: **(1) Deepen before you detach** — grow by *deepening what stands* (a companion within a room, kin gathered under one roof, a wing grown a second hall) at least as much as by raising new structures; a new thing that could ride *within* one that stands should gather there, and you detach a lone new structure only for a genuine new family with no honest home. **(2) The Manor is the inhabited center** — the grand warm core the grounds, observatory, outbuildings and cavern orbit; an enclosed/interior/instrument/document room belongs *in* it (growing it), open-air/landscape/working/amusement themes orbit it outside, and it must stay the plate's dominant central mass, never thin toward one card among the outbuildings. **(3) No grand name over one dot** — a wing, a constellation, a family earns its engraved name only at TWO; until then it joins existing kin or arrives holding a named sibling's hand. (Full statements: DESIGNING.md + tools/layout/map-process.md.)
 - Full story: **DESIGNING.md** (the five questions + the roles) + **seedbed/README.md** ("the soul & the audit").
 
 ## House rules (must follow)

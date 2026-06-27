@@ -16,12 +16,18 @@ any winning prototype path, and the definition of done are in YOUR CONTEXT. Retu
   page); a piece that makes NO claim (art / sound / play / a living thing) needs no self-test — do not invent one.
 - Serve it (an UNCOMMON port you tear down) and browser-verify with agent-browser in a UNIQUELY-named session
   (any self-test green, clean console, ~60fps); a new front-door page MUST drop its `ws:seen:<id>`.
-- **If GROUNDS-WORKER (a big swing):** register a NEW front-door footprint by appending one PLACES entry that
-  DECLARES `{district, tier, wing}` (NEVER pixels — the renderer owns geometry; see
-  tools/layout/map-process.md for the six districts, the inside-vs-external call, and the per-room map-judge
-  axes). Re-forge. After any map change, REVEAL ALL SECRETS (tools/layout/reveal-all-secrets.js) before you
+- **If GROUNDS-WORKER (a big swing):** first apply the **deepen-or-detach test** (DESIGNING.md) — is this
+  swing *deepening* an existing wing or *detaching* a new one? A **DETACH** registers a NEW front-door
+  footprint by appending one PLACES entry that DECLARES `{district, tier, wing}` with a **new** `wing` slug.
+  A **DEEPEN** appends its PLACES entry **under an existing wing** — the same `{district, wing}` as its kin
+  (a companion rides "within" its parent room) — so it gathers under one roof and mints **no** new wing slug.
+  Either way NEVER pixels — the renderer owns geometry; see tools/layout/map-process.md for the districts,
+  the inside-vs-external call, and the per-room map-judge axes (axis 3 rewards DEEPENING an existing wing over
+  minting a lone new one). When you register the room's Survey-of-Heaven star, LIGHT an existing constellation
+  or land WITH a named sibling — do NOT found a new lone-star FEATS group (a grand name over one dot; the
+  Gate's asterism engine won't draw a 1-star figure). The byte-frozen six capstone WINGS stay untouched. Re-forge. After any map change, REVEAL ALL SECRETS (tools/layout/reveal-all-secrets.js) before you
   screenshot, and sweep the rendered whole like the estate-composition critic (tune only config
-  tables/furniture/page-CSS, never the manor pin / FIELD / grouping / frozen sky capstone). Then build the
+  tables/furniture/page-CSS, never the manor pin (x586 y296 — the FROZEN origin; the manor's W/H + lotScale ARE config the critic may tune to hold its primacy) / FIELD / grouping / frozen sky capstone). Then build the
   wing's LANDING + its first bench (the Hall/Cavern/Engine-Room mold). Let FORM express content.
 - **Else (PLANTER / a garden piece):** register it where it belongs (the right Workbench group / wing /
   front-door map). If this is a REWORK, you are re-growing an EXISTING piece IN PLACE: edit/replace its files,

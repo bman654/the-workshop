@@ -14,7 +14,7 @@ type + title + the full line in house style. KEEP THE ≤3-LINE RULE (a provocat
 season leaves the bed richer but legible. Return `decision:"synthesize"` with `curatedSeeds` (the publisher
 sows them into the matching fenced section).
 
-**Otherwise (BUILD/WRIT — choose the design to build):** the goal is `title`; "done" means `definitionOfDone`.
+**Otherwise (BUILD/WRIT — choose the design to build):** the goal is `title`; "done" means `definitionOfDone`. **Weigh the deepen-or-detach test** (DESIGNING.md, "deepen before you detach"): reward a design that DEEPENS something that stands (a companion within a room, a second bench/hall under an existing roof, kin gathered into an existing wing) over one that DETACHES a new lone structure beside it. Gather over scatter; a detach must EARN it — a genuine new family with no honest home.
 - **If `exploreMode:facets`** — INTEGRATE the facets into ONE coherent, build-ready design, reconciling their
   couplings (named in each `risks`). Return `decision:"synthesize"` with the integrated `finalDesign`.
 - **Else** — PICK the strongest whole approach (`decision:"accept"`) OR graft a hybrid
