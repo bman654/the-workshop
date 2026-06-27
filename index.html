@@ -2454,6 +2454,21 @@ var Layout = (function () {
       inside: false, style: 'hatch',
       label: 'THE OUTSKIRTS', hue: '#7fd4c0', tint: 0.04
     },
+    /* THE LOWER WORKS — the structural / masonry precinct, graduated to its OWN
+       district + plate (#335) so the statics rooms (The Keystone Arch + The Infinite
+       Overhang) stop elbowing the foundry, the works and the cavern in the crowded SE.
+       Seated in the open lower-central pocket BELOW the works (alchemy ends ~y694),
+       RIGHT of the foundry casting-floor (ends ~x855) and LEFT of the cavern/physics-
+       lab (starts ~x1026). placeLowerWorks lays its rooms as a COURSE of equal dry-cut
+       ashlar stones (a corbel that wraps to stacked courses as the precinct grows), so
+       a structural sibling can NEVER re-collide its neighbours — it just lengthens the
+       course. Verified clear of every footprint + catalog star via smoke.cjs's live
+       Layout.solve (the region sits wholly inside the star-clear FIELD envelope). */
+    lowerworks: {
+      region: { x: 884, y: 704, w: 132, h: 108 },
+      inside: false, style: 'course-line',
+      label: 'THE LOWER WORKS', hue: '#c9974c', tint: 0.045
+    },
     beneath: {
       region: { x: 686, y: 514, w: 70, h: 70 },
       inside: true, gated: true, style: 'stipple',
@@ -2566,6 +2581,15 @@ var Layout = (function () {
      the keystone catalog star (1250,872, just SE of the budget) via smoke.cjs's live
      Layout.solve + assertGroundsWingsDisjoint. */
   GROUNDS_WINGS.statics = { x: 1020, y: 712, w: 196, h: 140 };
+  /* THE WINGLESS REMAINDER BUCKET — grounds rooms that declare NO wing (currently just
+     the rattleback) pack into this sub-region. It was a hard-coded fallback at the field's
+     lower-LEFT edge (x162) that crammed the rattleback's 122px footprint against the western
+     glasshouses cluster (x341), overlapping strange-garden + weather-you-can-make. Given its
+     OWN clear west band (right edge ~x314, well clear of the glasshouses), it re-homes the
+     loner without crowding a sibling. placeGrounds emits NO wing rect for '_remainder' (it is
+     a bucket, not a precinct), so this adds no drawn wing + no wing-pair to the disjointness
+     count — it only moves the footprint to clear ground. */
+  GROUNDS_WINGS._remainder = { x: 176, y: 660, w: 150, h: 104 };
   /* FOUNDRY — The Casting Floor, the estate's CASTING HOUSE: a pinned mold (Dirichlet
      rim) is poured full of molten chaos, then RELEASED to cool and forget the pour,
      relaxing to the one harmonic field its boundary allows; a bead then rides −∇T to
@@ -2912,6 +2936,7 @@ var Layout = (function () {
     placeObservatory(byDistrict.observatory || [], solution);
     placeSimpleDistrict('outbuilding', byDistrict.outbuilding || [], solution);
     placeSimpleDistrict('cavern', byDistrict.cavern || [], solution);
+    placeLowerWorks(byDistrict.lowerworks || [], solution);
 
     // ── HARD GUARD (#283): no two GROUNDS wings may share DRAWN ground (tint rect +
     //    engraved label). A build error here means a GROUNDS_WINGS budget collided a
@@ -3171,6 +3196,74 @@ var Layout = (function () {
     emitDistrictRect(district, du, solution);
   }
 
+  /* ── THE COURSED-ASHLAR formation (#335) — THE LOWER WORKS' bespoke 2-D layout, the
+     structural-precinct echo of placeNumberPascal (#328) / placeObservatoryRings (#275).
+     The masonry rooms (a keystone arch, an overhang) are laid as a COURSE of EQUAL dry-cut
+     stones — a horizontal row, every stone the same size, each sized to FILL the lot — that
+     WRAPS to stacked courses (a corbel) as the precinct grows, base widest. All stones are
+     equal regardless of declared tier (the masonry metaphor: dressed ashlar in a course),
+     and read as landscape blocks (the tier-2 building aspect), well above any speck crush.
+     SCALES by lengthening the course / adding a course, so a structural sibling never elbows
+     a neighbour — it just extends the masonry. Pure + deterministic; mirrors the bespoke-
+     placer contract (setFoot each room, push ONE wing tint-rect, return the slot rects;
+     the caller emitDistrictRect's the district hull). ── */
+  function placeLowerWorks(rooms, solution) {
+    if (!rooms.length) return;
+    var conf = DISTRICTS.lowerworks, region = conf.region;
+    var list = rooms.slice().sort(byOrderId);
+    var n = list.length;
+    var gh = 10, gv = 9, pad = 8;                           // stone gutters (h/v) + slot-union→tint pad
+    var aspect = SIZE_BAND[2].h / SIZE_BAND[2].w;           // stones read as landscape ashlar blocks
+    var availW = region.w - 2 * pad, availH = region.h - 2 * pad;
+    // choose the course layout (C stones/course × R courses): lay the FEWEST courses (one
+    // long low course for the live 2 rooms), each stone FILLING the lot width, and WRAP to a
+    // new course only when another stone would shrink the course below the legibility floor —
+    // the masonry intent (a row of dressed ashlar, not a tall column). Rt rising → fewer
+    // stones per course → WIDER stones, so the first Rt that clears the floor is the longest
+    // legible course. Fall back to the widest-stone layout if no course count clears it.
+    var MIN_SW = 30;                                        // the no-speck floor (crowded siblings sit ~28-31px)
+    var chosen = null, fallback = null;
+    for (var Rt = 1; Rt <= n; Rt++) {
+      var Ct = Math.ceil(n / Rt);
+      var swByW = (availW - (Ct - 1) * gh) / Ct;            // fill the course width
+      var shByH = (availH - (Rt - 1) * gv) / Rt;            // fill the stack height
+      var swT = Math.min(swByW, shByH / aspect, SIZE_BAND[1].w);  // aspect-locked, capped at a grand lot
+      if (swT <= 0) continue;
+      if (!fallback || swT > fallback.sw) fallback = { C: Ct, R: Rt, sw: swT };
+      if (swT >= MIN_SW && !chosen) chosen = { C: Ct, R: Rt, sw: swT };
+    }
+    var best = chosen || fallback;
+    var C = best.C, R = best.R, sw = best.sw, sh = sw * aspect;
+    var pitchX = sw + gh, pitchY = sh + gv;
+    var totalH = R * sh + (R - 1) * gv;
+    var cx = region.x + region.w / 2;
+    var top = region.y + (region.h - totalH) / 2;           // the corbel is vertically centred
+    var slotRects = [], used = 0;
+    for (var r = 0; r < R; r++) {
+      // the TOP course (r=0) may be partial; every lower course is full C — so the BASE
+      // is the widest, a real corbel (a stack that never hangs a wide row over a narrow one).
+      var inThis = (r === 0) ? (n - (R - 1) * C) : C;
+      var courseW = inThis * sw + (inThis - 1) * gh;
+      var left = cx - courseW / 2;
+      var rowY = top + r * pitchY;
+      for (var s = 0; s < inThis; s++) {
+        var slot = { x: left + s * pitchX, y: rowY, w: sw, h: sh };
+        setFoot(solution, list[used++], slot);
+        slotRects.push(slot);
+      }
+    }
+    // ONE wing tint-rect over the slot union (+ pad) — the engraved "STATICS" label + accent
+    // wash still read inside the district (emitted here now, not by placeGrounds).
+    var wid = list[0].wing || 'statics';
+    var wu = rectUnion(slotRects);
+    solution.wingRects.push({
+      district: 'lowerworks', wing: wid,
+      label: wingLabel(wid), accent: wingAccent(wid, conf.hue),
+      x: wu.x - pad, y: wu.y - pad, w: wu.w + 2 * pad, h: wu.h + 2 * pad
+    });
+    emitDistrictRect('lowerworks', wu, solution);
+  }
+
   function emitDistrictRect(district, du, solution) {
     if (!du) return;
     var conf = DISTRICTS[district];
@@ -3282,7 +3375,8 @@ var Layout = (function () {
     'grounds-west': { label: 'THE WEST GROUNDS',    hue: '#86b39a' },
     'grounds-east': { label: 'THE EAST GROUNDS',    hue: '#37c9b0' },
     'observatory':  { label: 'THE OBSERVATORY RISE', hue: '#9db4ff' },
-    'outskirts':    { label: 'THE OUTSKIRTS',       hue: '#7fd4c0' }
+    'outskirts':    { label: 'THE OUTSKIRTS',       hue: '#7fd4c0' },
+    'lowerworks':   { label: 'THE LOWER WORKS',     hue: '#c9974c' }
   };
 
   function footCentreOf(f) {
@@ -3372,6 +3466,7 @@ var Layout = (function () {
     for (var li = 0; li < pids.length; li++) if (pids[li] !== 'manor') link('manor', pids[li]);
     link('grounds-west', 'grounds-east');
     link('observatory', 'grounds-west');
+    link('grounds-east', 'lowerworks');   // the Lower Works is the East Grounds' downstairs neighbour (#335)
     // emit a stable edge list (each undirected pair once, a<b)
     var edges = [];
     for (var a in adj) for (var b in adj[a]) if (a < b) edges.push([a, b]);
@@ -4987,13 +5082,13 @@ const PLACES = [
   { id:"the-keystone-arch", room:"The Keystone Arch", piece:"The Keystone Arch", glyph:"🧱",
     accent:"#c9974c", href:"the-keystone-arch/index.html", tag:"drop the wedge — the estate locks rigid",
     companion:null,
-    district:"grounds", tier:1, wing:"statics", footprint:"keystone-arch", prefer:["top","right","ne"], skyStar:"the-keystone-arch",
+    district:"lowerworks", tier:1, wing:"statics", footprint:"keystone-arch", prefer:["top","right","ne"], skyStar:"the-keystone-arch",
     blurb:"Nine dry-cut stone wedges, no mortar — raise them from the springers and the ring CAN'T stand: with the crown still open it sags into the gap, a heap pretending to be an arch. Drop the last wedge, the KEYSTONE, and it SNAPS rigid — a single line of pure compression, the LINE OF THRUST, threads from springer to springer and stays inside the stone. Toggle the thrust line on and watch it nest in the MIDDLE THIRD: every joint in compression, no tension anywhere — the most-centred line equioscillates at |e|=0.133, comfortably inside the ring (t/2=0.5). Then poke it two ways. PULL a haunch stone and it's jammed by the squeeze — the arch holds itself shut, it cannot come. LIFT the keystone back out and there is no admissible thrust line at ALL: the eccentricity blows past t/2, the half-arches rotate about their springers, and the span falls. Three of the stones are carved — a self-portrait of an estate built one turn at a time: the GATE (a haunch that carries the side-thrust down to the ground, cut first and leaned on most), the FOUNDRY (the other haunch, where the thrust runs closest to the stone's edge and still holds), and the KEYSTONE itself as the BATON — the last stone, laid by a hand that never cut the first springer. The statics are a DOM-free core with a headless Node twin: a contained, all-compressive line provably EXISTS for the seated arch (max|e|=0.1334<0.5) and provably NONE does for the keystone-removed one (worst|e|=0.880, an unbalanced gravity moment −2.490 about the springer) — Heyman's safe theorem made touchable. Founds the STATICS precinct beside the Infinite Overhang; kin to The Catenary — the hanging chain inverted IS this line of thrust — and The Bending Column." },
 
   { id:"overhang", room:"The Infinite Overhang", piece:"The Infinite Overhang", glyph:"📚",
     accent:"#e8b86b", href:"overhang/index.html", tag:"the harmonic overhang you stack",
     companion:null,
-    district:"grounds", tier:2, wing:"statics", footprint:"overhang", prefer:["bottom","right","se"],
+    district:"lowerworks", tier:2, wing:"statics", footprint:"overhang", prefer:["bottom","right","se"],
     blurb:"Stack books at the edge of a table and slide them out over thin air — how far past the cliff can the top one float and the tower still stand? Drag any book and watch the colored dot under it: each dot is a sub-stack's center of mass, green while it rides over its support, red the instant it crosses the edge below — and then that layer topples into the dark. Hit snap-optimal and every book lays at its 1/(2k) offset, the textbook single-wide stack balanced on a chain of knife-edges. The classic single-wide harmonic optimum is exactly ½·H(n) book-lengths, and because the harmonic series diverges there is NO ceiling: with enough books you can overhang ANY distance — yet each new book buys an ever-smaller nudge, 1/(2k), shown live in the divergence ledger (it takes 4 books to clear one length, 31 for two, 227 for three). A self-test proves the optimum is ½·H(n) to machine ε, that every sub-stack CoM sits exactly on its support edge, and the divergence thresholds — with a tamper button that breaks it red and a vertical-stack control that stays green. Kin to the dissection bench and the rattleback: a thing you touch, the mechanism made visible." },
 
   { id:"clockwork", room:"The Clockwork Automata", piece:"The Clockwork Automata", glyph:"⚙️",
@@ -7883,7 +7978,7 @@ window.addEventListener("resize", ()=> hideCard(true));
     const LIVE = PLACES.filter(p=>!p.locked);
     const P = Layout.plates(LIVE);
     if(!P || !P.ids.length) return;
-    const PREF = ["manor","grounds-west","grounds-east","observatory","outskirts"];
+    const PREF = ["manor","grounds-west","grounds-east","lowerworks","observatory","outskirts"];
     const PRESETS = PREF.filter(id=> P.ids.indexOf(id)>=0)
                         .concat(P.ids.filter(id=> PREF.indexOf(id)<0));
 

@@ -97,6 +97,21 @@ var Layout = (function () {
       inside: false, style: 'hatch',
       label: 'THE OUTSKIRTS', hue: '#7fd4c0', tint: 0.04
     },
+    /* THE LOWER WORKS — the structural / masonry precinct, graduated to its OWN
+       district + plate (#335) so the statics rooms (The Keystone Arch + The Infinite
+       Overhang) stop elbowing the foundry, the works and the cavern in the crowded SE.
+       Seated in the open lower-central pocket BELOW the works (alchemy ends ~y694),
+       RIGHT of the foundry casting-floor (ends ~x855) and LEFT of the cavern/physics-
+       lab (starts ~x1026). placeLowerWorks lays its rooms as a COURSE of equal dry-cut
+       ashlar stones (a corbel that wraps to stacked courses as the precinct grows), so
+       a structural sibling can NEVER re-collide its neighbours — it just lengthens the
+       course. Verified clear of every footprint + catalog star via smoke.cjs's live
+       Layout.solve (the region sits wholly inside the star-clear FIELD envelope). */
+    lowerworks: {
+      region: { x: 884, y: 704, w: 132, h: 108 },
+      inside: false, style: 'course-line',
+      label: 'THE LOWER WORKS', hue: '#c9974c', tint: 0.045
+    },
     beneath: {
       region: { x: 686, y: 514, w: 70, h: 70 },
       inside: true, gated: true, style: 'stipple',
@@ -209,6 +224,15 @@ var Layout = (function () {
      the keystone catalog star (1250,872, just SE of the budget) via smoke.cjs's live
      Layout.solve + assertGroundsWingsDisjoint. */
   GROUNDS_WINGS.statics = { x: 1020, y: 712, w: 196, h: 140 };
+  /* THE WINGLESS REMAINDER BUCKET — grounds rooms that declare NO wing (currently just
+     the rattleback) pack into this sub-region. It was a hard-coded fallback at the field's
+     lower-LEFT edge (x162) that crammed the rattleback's 122px footprint against the western
+     glasshouses cluster (x341), overlapping strange-garden + weather-you-can-make. Given its
+     OWN clear west band (right edge ~x314, well clear of the glasshouses), it re-homes the
+     loner without crowding a sibling. placeGrounds emits NO wing rect for '_remainder' (it is
+     a bucket, not a precinct), so this adds no drawn wing + no wing-pair to the disjointness
+     count — it only moves the footprint to clear ground. */
+  GROUNDS_WINGS._remainder = { x: 176, y: 660, w: 150, h: 104 };
   /* FOUNDRY — The Casting Floor, the estate's CASTING HOUSE: a pinned mold (Dirichlet
      rim) is poured full of molten chaos, then RELEASED to cool and forget the pour,
      relaxing to the one harmonic field its boundary allows; a bead then rides −∇T to
@@ -555,6 +579,7 @@ var Layout = (function () {
     placeObservatory(byDistrict.observatory || [], solution);
     placeSimpleDistrict('outbuilding', byDistrict.outbuilding || [], solution);
     placeSimpleDistrict('cavern', byDistrict.cavern || [], solution);
+    placeLowerWorks(byDistrict.lowerworks || [], solution);
 
     // ── HARD GUARD (#283): no two GROUNDS wings may share DRAWN ground (tint rect +
     //    engraved label). A build error here means a GROUNDS_WINGS budget collided a
@@ -814,6 +839,74 @@ var Layout = (function () {
     emitDistrictRect(district, du, solution);
   }
 
+  /* ── THE COURSED-ASHLAR formation (#335) — THE LOWER WORKS' bespoke 2-D layout, the
+     structural-precinct echo of placeNumberPascal (#328) / placeObservatoryRings (#275).
+     The masonry rooms (a keystone arch, an overhang) are laid as a COURSE of EQUAL dry-cut
+     stones — a horizontal row, every stone the same size, each sized to FILL the lot — that
+     WRAPS to stacked courses (a corbel) as the precinct grows, base widest. All stones are
+     equal regardless of declared tier (the masonry metaphor: dressed ashlar in a course),
+     and read as landscape blocks (the tier-2 building aspect), well above any speck crush.
+     SCALES by lengthening the course / adding a course, so a structural sibling never elbows
+     a neighbour — it just extends the masonry. Pure + deterministic; mirrors the bespoke-
+     placer contract (setFoot each room, push ONE wing tint-rect, return the slot rects;
+     the caller emitDistrictRect's the district hull). ── */
+  function placeLowerWorks(rooms, solution) {
+    if (!rooms.length) return;
+    var conf = DISTRICTS.lowerworks, region = conf.region;
+    var list = rooms.slice().sort(byOrderId);
+    var n = list.length;
+    var gh = 10, gv = 9, pad = 8;                           // stone gutters (h/v) + slot-union→tint pad
+    var aspect = SIZE_BAND[2].h / SIZE_BAND[2].w;           // stones read as landscape ashlar blocks
+    var availW = region.w - 2 * pad, availH = region.h - 2 * pad;
+    // choose the course layout (C stones/course × R courses): lay the FEWEST courses (one
+    // long low course for the live 2 rooms), each stone FILLING the lot width, and WRAP to a
+    // new course only when another stone would shrink the course below the legibility floor —
+    // the masonry intent (a row of dressed ashlar, not a tall column). Rt rising → fewer
+    // stones per course → WIDER stones, so the first Rt that clears the floor is the longest
+    // legible course. Fall back to the widest-stone layout if no course count clears it.
+    var MIN_SW = 30;                                        // the no-speck floor (crowded siblings sit ~28-31px)
+    var chosen = null, fallback = null;
+    for (var Rt = 1; Rt <= n; Rt++) {
+      var Ct = Math.ceil(n / Rt);
+      var swByW = (availW - (Ct - 1) * gh) / Ct;            // fill the course width
+      var shByH = (availH - (Rt - 1) * gv) / Rt;            // fill the stack height
+      var swT = Math.min(swByW, shByH / aspect, SIZE_BAND[1].w);  // aspect-locked, capped at a grand lot
+      if (swT <= 0) continue;
+      if (!fallback || swT > fallback.sw) fallback = { C: Ct, R: Rt, sw: swT };
+      if (swT >= MIN_SW && !chosen) chosen = { C: Ct, R: Rt, sw: swT };
+    }
+    var best = chosen || fallback;
+    var C = best.C, R = best.R, sw = best.sw, sh = sw * aspect;
+    var pitchX = sw + gh, pitchY = sh + gv;
+    var totalH = R * sh + (R - 1) * gv;
+    var cx = region.x + region.w / 2;
+    var top = region.y + (region.h - totalH) / 2;           // the corbel is vertically centred
+    var slotRects = [], used = 0;
+    for (var r = 0; r < R; r++) {
+      // the TOP course (r=0) may be partial; every lower course is full C — so the BASE
+      // is the widest, a real corbel (a stack that never hangs a wide row over a narrow one).
+      var inThis = (r === 0) ? (n - (R - 1) * C) : C;
+      var courseW = inThis * sw + (inThis - 1) * gh;
+      var left = cx - courseW / 2;
+      var rowY = top + r * pitchY;
+      for (var s = 0; s < inThis; s++) {
+        var slot = { x: left + s * pitchX, y: rowY, w: sw, h: sh };
+        setFoot(solution, list[used++], slot);
+        slotRects.push(slot);
+      }
+    }
+    // ONE wing tint-rect over the slot union (+ pad) — the engraved "STATICS" label + accent
+    // wash still read inside the district (emitted here now, not by placeGrounds).
+    var wid = list[0].wing || 'statics';
+    var wu = rectUnion(slotRects);
+    solution.wingRects.push({
+      district: 'lowerworks', wing: wid,
+      label: wingLabel(wid), accent: wingAccent(wid, conf.hue),
+      x: wu.x - pad, y: wu.y - pad, w: wu.w + 2 * pad, h: wu.h + 2 * pad
+    });
+    emitDistrictRect('lowerworks', wu, solution);
+  }
+
   function emitDistrictRect(district, du, solution) {
     if (!du) return;
     var conf = DISTRICTS[district];
@@ -925,7 +1018,8 @@ var Layout = (function () {
     'grounds-west': { label: 'THE WEST GROUNDS',    hue: '#86b39a' },
     'grounds-east': { label: 'THE EAST GROUNDS',    hue: '#37c9b0' },
     'observatory':  { label: 'THE OBSERVATORY RISE', hue: '#9db4ff' },
-    'outskirts':    { label: 'THE OUTSKIRTS',       hue: '#7fd4c0' }
+    'outskirts':    { label: 'THE OUTSKIRTS',       hue: '#7fd4c0' },
+    'lowerworks':   { label: 'THE LOWER WORKS',     hue: '#c9974c' }
   };
 
   function footCentreOf(f) {
@@ -1015,6 +1109,7 @@ var Layout = (function () {
     for (var li = 0; li < pids.length; li++) if (pids[li] !== 'manor') link('manor', pids[li]);
     link('grounds-west', 'grounds-east');
     link('observatory', 'grounds-west');
+    link('grounds-east', 'lowerworks');   // the Lower Works is the East Grounds' downstairs neighbour (#335)
     // emit a stable edge list (each undirected pair once, a<b)
     var edges = [];
     for (var a in adj) for (var b in adj[a]) if (a < b) edges.push([a, b]);

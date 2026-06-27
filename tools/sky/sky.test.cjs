@@ -70,8 +70,8 @@ const FOOTPRINTS = [
   { id: 'threshold',        x: 720,   y: 435,  w: 22,   h: 16 },
   { id: 'strange-garden',   x: 341,   y: 638,  w: 28,   h: 19 },
   { id: 'firmament',        x: 320,   y: 268,  w: 19,   h: 19 },  // tower r→bbox
-  { id: 'daedalus',         x: 990,   y: 369,  w: 31,   h: 21 },
-  { id: 'arcade',           x: 990,   y: 273,  w: 31,   h: 21 },
+  { id: 'daedalus',         x: 992,   y: 351,  w: 26,   h: 18 },
+  { id: 'arcade',           x: 992,   y: 269,  w: 26,   h: 18 },
   { id: 'workbench',        x: 520,   y: 589,  w: 88,   h: 61 },
   { id: 'undercroft',       x: 698,   y: 517,  w: 46,   h: 64 },
   { id: 'hall-of-mirrors',  x: 293,   y: 401,  w: 37,   h: 26 },  // the optics wing — the feat-stars cluster beside it
