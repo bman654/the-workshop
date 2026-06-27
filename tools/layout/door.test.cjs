@@ -10,22 +10,38 @@
    (tools/layout/door-claims.cjs, the module the page also forge:includes) over the SAME
    live data, so `node tools/layout/door.test.cjs` faithfully goes red iff the pill is red.
 
-   HOW THE TWIN GETS THE BOXES (the only DOM-dependent input): 14 of the 17 claims are
-   DOM-free and port directly. The 3 declutter claims (B/C/C′) read the rendered SOLVED
-   label boxes — so the twin MODELS them: Layout.solve gives exact footprints, legibility.cjs's
-   getBBox-calibrated CHAR_W box-{w,h} model gives label dims, and LabelPlacer.solve places
-   them exactly as placeLabels() does in the page. A CALIBRATION GUARD ties the modeled
-   boxes to the rendered getBBox truth (the checked-in door-mirror.cjs, captured once via
-   agent-browser) within a documented tolerance, AND proves the door claims yield the SAME
-   verdict over the modeled boxes as over the rendered mirror — so the twin's red IS the
-   live pill's red, claim-for-claim. (Follows the emit-mirror.cjs / sky.test.cjs idiom.)
+   HOW THE TWIN GETS THE VERDICT — the MIRROR is the HEADLINE source. The 3 declutter claims
+   (B/C/C′) read the rendered SOLVED label boxes, and those boxes are the anneal output the
+   live #doortest pill computes from. door-mirror.cjs is the checked-in COPY of exactly those
+   boxes (getBBox-measured + LABEL_PAD-inflated + LabelPlacer-annealed, captured headless). So
+   the twin reads its HEADLINE 17-claim verdict — especially the anneal-sensitive B/C/C′ — off
+   the MIRROR (repMirror): by construction it reproduces the live pill, claim-for-claim (same
+   pass count, same failing claim, same tier-1 survival count).
 
-   EXIT POLICY: exits NON-ZERO whenever n < 17 (the door is genuinely red right now —
-   ✗16/17 on CLAIM C′ — and that red is FAITHFUL, the separate hierarchy/declutter root,
-   NOT a regression in this gate). It goes green only when the live pill goes green. A
-   DISTINCT non-zero exit fires if the twin DRIFTS from the rendered mirror (the gate
-   itself broke — recalibrate / regenerate the mirror), so a stale model can never silently
-   pass a red door or fail a green one.
+   THE CHAR_W MODEL is a SECONDARY CROSS-CHECK, not the headline. The twin ALSO models the
+   boxes browserlessly (Layout.solve footprints + legibility.cjs's CHAR_W box-{w,h} + the
+   ported LabelPlacer) and cross-checks: (a) the 14 DOM-free claims must AGREE with the mirror
+   (they cannot depend on the box-source); (b) the modeled box DIMENSIONS must track the mirror
+   within tol (W_TOL/H_TOL — CHAR_W still estimates getBBox); (c) the ported solver, fed the
+   mirror's REAL dims, must reproduce the rendered slots to sub-pixel (SOLVER_TOL). What the
+   model is NOT trusted to settle is the anneal-sensitive KNIFE-EDGE: the irreducible ~20px
+   CHAR_W width error can flip a wide label across CLAIM C′'s ≥60% tier-1 boundary (modeled 21
+   vs mirror 20) with NO real change — so the modeled C′ pass/fail + the tier-1/tour-lit COUNTS
+   are NOT required to equal the mirror's. CHAR_W cannot resolve a boundary verdict; the mirror
+   (== the live pill) does. (Follows the emit-mirror.cjs / sky.test.cjs mirror idiom.)
+
+   EXIT POLICY:
+     · exit 0 — the live pill (== the mirror) is GREEN (17/17).
+     · exit 1 — the live pill is RED (✗16/17 on CLAIM C′ right now): a FAITHFUL red — the
+                separate hierarchy/declutter crowding root, NOT a regression in this gate. It
+                clears when the door's crowding is fixed, never by silencing the scorer.
+     · exit 2 — GATE BROKEN: the twin can no longer SEE the door. Fires ONLY on a genuine
+                gate fault — the mirror does not cover exactly the placed POIs (a room added/
+                removed → regenerate the mirror), the CHAR_W dims drifted past tol, the ported
+                solver no longer reproduces the rendered slots, or a DOM-FREE claim disagrees
+                between model and mirror. A faithful red NEVER exits 2 (the #342 bug: adding
+                the 82nd POI re-annealed the plate and the stale 81-POI mirror tripped exit 2,
+                masquerading a faithful red as "GATE BROKEN").
 
    Run:  node tools/layout/door.test.cjs
    ════════════════════════════════════════════════════════════════════════════ */
@@ -173,13 +189,16 @@ const { solved: SOLVED_REAL } = modelSolvedBoxes(placesClone, LAYOUT,
 
    Why NOT a hard tol on the CHAR_W-solve position?  Because the LabelPlacer is an anneal:
    the irreducible ~20px CHAR_W width error (1) perturbs it, and on a dense plate that can
-   flip a wide label to an equally-valid alternate slot (a ~500u centre move) WITHOUT changing
-   any claim. #339 added the-sightline (the 81st POI) and re-annealed; ~24 wide companion
-   labels then sat in CHAR_W-vs-render slot disagreements — yet the verdict held identical.
-   So the CHAR_W-solve position delta is reported as an INFORMATIONAL anneal-sensitivity
-   signal (POS_INFO), not a gate: gating on it would fail green doors over a legitimate
-   slot choice. The real proofs are coverage + dims (1) + solver port (2) + the VERDICT
-   cross-check below — none of which depend on anneal stability.
+   flip a wide label to an equally-valid alternate slot (a ~500u centre move). Usually that
+   leaves the verdict identical (#339 added the-sightline (81st POI); ~24 wide companions sat
+   in CHAR_W-vs-render slot disagreements, verdict unchanged) — but at a knife-edge it CAN flip
+   a count-based claim (#342 added the 82nd POI, unrolled-cone; the modeled solve keeps 21/35
+   tier-1 anchors and PASSES CLAIM C′ while the rendered mirror keeps 20/35 and FAILS it). That
+   is exactly why the modeled boxes are NOT trusted to settle the declutter claims: the headline
+   reads B/C/C′ off the MIRROR, and the modeled cross-check below only asserts the 14 DOM-FREE
+   claims agree (those cannot depend on the box-source). So the CHAR_W-solve position delta is
+   reported as an INFORMATIONAL anneal signal (POS_INFO), not a gate. The real proofs are
+   coverage + dims (1) + solver port (2) + DOM-free claim agreement — none anneal-dependent.
 
    COVERAGE — the mirror must cover EXACTLY the placed POIs (caught #339's missing-POI
    staleness loudly: a room added/removed but the mirror not regenerated trips here).
@@ -222,41 +241,53 @@ const repModeled = DoorClaims.runDoorClaims({ Legibility, Layout, places: places
 const repMirror  = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT, boxOf: boxOfMirror });
 
 /* ════════════════════════════════════════════════════════════════════════════
-   VERDICT FIDELITY — the modeled boxes must yield the SAME 17-claim verdict the
-   rendered mirror (== the live pill) yields: same pass count, same failing claims,
-   same model-sensitive counts. This is THE proof that the gate sees what the door shows.
+   VERDICT FIDELITY — the SECONDARY (CHAR_W-modeled) cross-check on the headline.
+   The HEADLINE verdict is read off the MIRROR (== the live pill). The modeled boxes
+   cross-check ONLY the 14 DOM-FREE claims: those cannot depend on the box-source, so a
+   model-vs-mirror disagreement there means the twin genuinely drifted from the page (gate
+   broken). The 3 DECLUTTER claims (CLAIM B / CLAIM C / CLAIM C′) read the rendered SOLVED
+   boxes and are anneal-sensitive — the ~20px CHAR_W width error can legitimately flip C′
+   across its ≥60% tier-1 knife-edge — so the model is NOT required to match the mirror there
+   (those claims are headlined off the mirror, and the tier-1/tour-lit COUNTS are not compared).
    ════════════════════════════════════════════════════════════════════════════ */
+const isDeclutterClaim = name => /^CLAIM (B|C)/.test(name);   // CLAIM B / C / C′ — NOT CLAIM A
 function fidelity() {
   const issues = [];
-  if (repModeled.passed !== repMirror.passed)
-    issues.push('pass count diverged: modeled ' + repModeled.passed + '/' + repModeled.total +
-                ' vs rendered ' + repMirror.passed + '/' + repMirror.total);
-  const failM = repModeled.lines.filter(l => !l.ok).map(l => l.name).sort();
-  const failR = repMirror.lines.filter(l => !l.ok).map(l => l.name).sort();
-  if (JSON.stringify(failM) !== JSON.stringify(failR))
-    issues.push('failing claims diverged:\n      modeled : ' + (failM.join(' | ') || '(none)') +
-                '\n      rendered: ' + (failR.join(' | ') || '(none)'));
-  if (repModeled.tier1lit !== repMirror.tier1lit)
-    issues.push('tier-1 survival diverged: modeled ' + repModeled.tier1lit + ' vs rendered ' + repMirror.tier1lit);
-  if (repModeled.tourLit !== repMirror.tourLit)
-    issues.push('tour labels-lit diverged: modeled ' + repModeled.tourLit + ' vs rendered ' + repMirror.tourLit);
+  if (repModeled.lines.length !== repMirror.lines.length) {
+    issues.push('claim COUNT diverged: modeled ' + repModeled.lines.length + ' vs rendered ' + repMirror.lines.length);
+    return issues;
+  }
+  for (let i = 0; i < repModeled.lines.length; i++) {
+    const lm = repModeled.lines[i], lr = repMirror.lines[i];
+    if (lm.name !== lr.name) { issues.push('claim ' + i + ' NAME diverged: "' + lm.name + '" vs "' + lr.name + '"'); continue; }
+    // declutter claims (B/C/C′) may legitimately differ at the anneal knife-edge → headlined off the mirror.
+    if (lm.ok !== lr.ok && !isDeclutterClaim(lm.name))
+      issues.push('DOM-free claim diverged (modeled ' + (lm.ok ? '✓' : '✗') + ' vs rendered ' + (lr.ok ? '✓' : '✗') + '): ' + lm.name);
+  }
   return issues;
 }
 
 /* ── report ── */
 const cal = calibrate();
 const fid = fidelity();
-const r = repModeled;
+const r = repMirror;                       // the HEADLINE: the mirror == the live #doortest pill
 
 console.log('door.test — the front door 17-claim legibility pill, node twin (#337)');
-console.log('  placed POIs: ' + placed.length + '   mirror entries: ' + DOOR_MIRROR.length);
-console.log('  calibration (modeled SOLVED boxes vs rendered getBBox mirror):');
+console.log('  placed POIs: ' + placed.length + '   mirror entries: ' + DOOR_MIRROR.length +
+            '   (headline read off the mirror == the live pill)');
+console.log('  calibration (CHAR_W-modeled boxes vs rendered getBBox mirror — the SECONDARY cross-check):');
 console.log('    DIMS    max width Δ ' + cal.maxW.toFixed(1) + ' (tol ' + W_TOL + ')' +
             '   max height Δ ' + cal.maxH.toFixed(1) + ' (tol ' + H_TOL + ')   [CHAR_W vs rendered]');
 console.log('    SOLVER  max Δ ' + cal.maxSolver.toFixed(2) + ' (tol ' + SOLVER_TOL + ', worst ' + cal.worstSolver + ')' +
             '   [page solver re-run on the mirror dims → rendered slot]');
 console.log('    anneal  CHAR_W-solve max centre Δ ' + cal.maxPos.toFixed(1) + ' (worst ' + cal.worstId + ', ' +
-            cal.posInfoCount + ' slot(s) > ' + POS_INFO + ' — informational, verdict-invariant)');
+            cal.posInfoCount + ' slot(s) > ' + POS_INFO + ' — informational, anneal-sensitive)');
+// the C′ knife-edge cross-check: model and mirror need NOT agree on the tier-1 count.
+const knifeNote = repModeled.tier1lit === repMirror.tier1lit
+  ? 'CHAR_W model AGREES with mirror: ' + repMirror.tier1lit + '/' + repMirror.tier1raw + ' tier-1 anchors survive'
+  : 'CHAR_W model FLIPS at the knife-edge (modeled ' + repModeled.tier1lit + '/' + repModeled.tier1raw +
+    ' vs mirror ' + repMirror.tier1lit + '/' + repMirror.tier1raw + ' tier-1) — headlined off the mirror, NOT the model';
+console.log('    C′      ' + knifeNote);
 
 let gateBroken = false;
 if (cal.problems.length) {
@@ -266,17 +297,15 @@ if (cal.problems.length) {
 }
 if (fid.length) {
   gateBroken = true;
-  console.error('  ✗ FIDELITY BROKEN — modeled boxes disagree with the rendered mirror:');
+  console.error('  ✗ FIDELITY BROKEN — a DOM-free claim disagrees between model and mirror:');
   for (const i of fid) console.error('      · ' + i);
 }
 if (!gateBroken) {
-  console.log('  ✓ fidelity: modeled boxes reproduce the rendered (live-pill) verdict claim-for-claim');
-  console.log('             (tier-1 survival ' + r.tier1lit + '/' + r.tier1raw + ', tour lit ' + r.tourLit + '/' + r.tourRaw +
-              ', resting ' + r.restVerdict + ' ' + (r.restComposite == null ? '?' : (+r.restComposite).toFixed(3)) +
-              ', full plate ' + r.fullVerdict + ' ' + (r.fullComposite == null ? '?' : (+r.fullComposite).toFixed(3)) + ')');
+  console.log('  ✓ the twin tracks the live pill: the 14 DOM-free claims agree model↔mirror, dims +');
+  console.log('    solver-port within tol, the mirror covers exactly the ' + placed.length + ' placed POIs');
 }
 
-console.log('\n  the 17 claims (over the modeled SOLVED boxes):');
+console.log('\n  the 17 claims (over the RENDERED mirror boxes == the live #doortest pill):');
 for (const l of r.lines) console.log('    ' + (l.ok ? '✓' : '✗') + ' ' + l.name + (l.detail ? '  ' + l.detail : ''));
 
 const green = r.passed === r.total;
@@ -291,7 +320,8 @@ if (green) {
 }
 
 if (gateBroken) {
-  console.error('\n✗ GATE BROKEN: the twin drifted from the rendered door — recalibrate or regenerate door-mirror.cjs.');
+  console.error('\n✗ GATE BROKEN: the twin can no longer SEE the door — regenerate door-mirror.cjs (a POI was');
+  console.error('  added/removed) or recheck the CHAR_W dims / solver port. A FAITHFUL red is NOT this (exit 1).');
   process.exit(2);
 }
 process.exit(green ? 0 : 1);

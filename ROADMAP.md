@@ -74,12 +74,11 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
-- [bug] **The door-twin drifted again — regenerate door-mirror.cjs for the 82-POI front door** — `node tools/layout/door.test.cjs` EXITS 2 ("GATE BROKEN — the twin drifted from the rendered door"): the FIDELITY check reads "tour labels-lit diverged: modeled 34 vs rendered 32" because adding the 82nd POI (the Unrolled Cone) re-annealed the whole label solve, and the checked-in getBBox mirror was captured at 81 POIs (#340). FIX (the #340 recipe, recurring): recapture the SOLVED getBBox boxes from a PRISTINE headless agent-browser load of the forged `index.html` (headless Chromium IS the canonical 55.9/40.9 env — #340 corrected the seed's inverted env caution), regenerate `tools/layout/door-mirror.cjs`, and confirm the twin's 17-claim verdict MATCHES the live browser pill. NOTE: the live pill now reads ✗16/17 (CLAIM C′ tier-1 survival dipped under 60% as the anneal re-landed) — so the regenerated twin should faithfully EXIT 1 (faithful red), not exit 0; the deeper crowding ROOT is the live hierarchy curation seeds' job (Marry kin singletons · Gather the singleton constellations · Re-center the Manor), NOT this bug. This is the 2nd mirror-drift in 3 cycles (#340 was the 81-POI capture) — consider hardening the fidelity check to tolerate a POI-count change (e.g. derive the labels-lit count rather than pin it).
-<!-- ✝ FIXED #328: The Numbers wing is overcrowded → tools/layout/layout.js · after 56aeb93 -->
 <!-- ✝ FIXED #335: The Front Door Fails Its Own Legibility Self-Test (✗ 16/17) → tools/layout/layout.js · after 1cf82d8 -->
 <!-- ✝ FIXED #335: The front-door map has run out of room for new wings → tools/layout/layout.js · after 1cf82d8 -->
 <!-- ✝ FIXED #337: The front-door self-test ships GREEN while the live door reads RED → tools/layout/door.test.cjs · after 4aab6e9 -->
 <!-- ✝ FIXED #340: The door-twin drifted — regenerate door-mirror.cjs for the 81-POI front… → tools/layout/door.test.cjs · after f9f74db -->
+<!-- ✝ FIXED #343: The door-twin drifted again — regenerate door-mirror.cjs for the 82-POI… → tools/layout/door.test.cjs · after 8fcf030 -->
 <!-- gauge:bug:end -->
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth
