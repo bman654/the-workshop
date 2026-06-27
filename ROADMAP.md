@@ -74,12 +74,11 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
-- [bug] The front-door self-test ships GREEN while the live door reads RED. After #335 the bug fence was cleared on the claim "the door self-test returns 17/17" — but the live door pill is still ✗16/17 (FULL PLATE CROWDED 0.92 · LEGIBLE 0.11 at fit-view), essentially unchanged. The gap is a hole in the gate, not a one-off: the pill's failing 17th claim is the LIVE drawn plate's declutter/legibility, and NO node gate covers it — smoke.cjs asserts partition/overlaps (now 80/80 disjoint) and legibility.test.cjs asserts only the CONSCIENCE's self-consistency (29/29), but neither renders the actual door and checks its real verdict. So a builder who runs the node gates sees green and ships, while the rendered front door is still red. This is the same class as the earlier crate crash — the live front-door render keeps falling outside the automated gate. Fix the BLINDNESS (do NOT just force the pill green): bring the live door self-test's 17 claims under a node twin (or otherwise into the gate) so a still-crowded / illegible front door can no longer pass as 17/17, and a publisher's "door self-test ✓" claim is one the gate can actually back. (The crowding's ROOT — why the plate is over-full — is a separate matter the hierarchy writ speaks to; this bug only asks that the gate stop reporting green over a red door.)
-<!-- ✝ FIXED #319: `gauge.mjs record` is not idempotent — a double-run silently double-adv… → seedbed/gauge.mjs · after 594e9ee -->
 <!-- ✝ FIXED #327: The Census of Hands "by role" view clips the role labels horizontally —… → census/index.src.html · after 3448448 -->
 <!-- ✝ FIXED #328: The Numbers wing is overcrowded → tools/layout/layout.js · after 56aeb93 -->
 <!-- ✝ FIXED #335: The Front Door Fails Its Own Legibility Self-Test (✗ 16/17) → tools/layout/layout.js · after 1cf82d8 -->
 <!-- ✝ FIXED #335: The front-door map has run out of room for new wings → tools/layout/layout.js · after 1cf82d8 -->
+<!-- ✝ FIXED #337: The front-door self-test ships GREEN while the live door reads RED → tools/layout/door.test.cjs · after 4aab6e9 -->
 <!-- gauge:bug:end -->
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth

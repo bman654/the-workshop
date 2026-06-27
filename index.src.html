@@ -824,6 +824,21 @@
 
 <script>
 /* ════════════════════════════════════════════════════════════════════════════
+   THE DOOR'S 17-CLAIM LEGIBILITY PILL — single-sourced (inlined at build time by
+   forge). Provides the `DoorClaims` global: the loupe declutter (revealedSet /
+   declutterIds) + the 17-claim runDoorClaims(), the ONE place that logic lives. The
+   LOUPE below delegates its declutter here, and the #doortest pill calls
+   DoorClaims.runDoorClaims() with the page's real getBBox SOLVED boxes — while the
+   Node twin tools/layout/door.test.cjs requires the SAME module and runs the SAME 17
+   claims over MODELED SOLVED boxes, so the gate now faithfully reports what the door
+   shows (it can no longer go green over a red door). The box-{w,h} model the twin
+   calibrates against lives in legibility.cjs (labelBoxWH), inlined ABOVE.
+   See tools/layout/door-claims.cjs + tools/layout/door.test.cjs. */
+<!-- forge:include tools/layout/door-claims.cjs -->
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
    THE HOURS — the day/light CORE (inlined at build time by forge). Provides the
    `Hours` global: a continuous day-phase keyed to the TRUE solar altitude (the
    SAME sun the Gnomon sundial keeps — its solar functions are copied verbatim
@@ -4433,8 +4448,12 @@ const LOUPE = (function(){
   try{
     const loupeEl = document.getElementById("loupe");
     const VB = { w:1440, h:900 };
-    const LOUPE_SCREEN  = 300;   // the loupe radius in CSS px (screen space)
-    const MIN_SCREEN_GAP = 18;   // breathing room demanded between two on-screen labels (CSS px)
+    // SINGLE SOURCE (#337): the loupe radius + screen gap + the declutter itself live in
+    // tools/layout/door-claims.cjs (the DoorClaims global), which the door pill + the Node
+    // twin also use. We read the constants from there and delegate revealedSet/declutterIds
+    // to it, so the live loupe and the door's CLAIM B/C self-test share ONE implementation.
+    const LOUPE_SCREEN  = DoorClaims.LOUPE_SCREEN;   // the loupe radius in CSS px (screen space)
+    const MIN_SCREEN_GAP = DoorClaims.MIN_SCREEN_GAP; // breathing room between two on-screen labels (CSS px)
     const ZONE_FLOOR = 0.06;     // (legacy) district-caption fade floor — unused since #276 held the caption at ZONE_FULL
     const ZONE_FULL  = 0.7;      // the resting zone-label opacity (matches .zone-label CSS)
     // WING-LABEL LEVEL-OF-DETAIL: the wing sub-captions are HIDDEN at the resting fit-view
@@ -4487,56 +4506,16 @@ const LOUPE = (function(){
        that a fixed SCREEN gap thins the set as k changes. Claim B in the door pill
        proves the no-overlap property DIRECTLY over a focus×zoom sweep; it must never
        be replaced by a score() call. */
-    function revealedSet(focus, k){
-      if(!focus) return [];
-      const loupeVB = LOUPE_SCREEN / k, loupeVB2 = loupeVB*loupeVB;
-      const padVB = MIN_SCREEN_GAP / k;
-      const cand = [];
-      for(const p of PLACES){
-        if(p.locked && !SOLVED.has(p.id)) continue;     // gated stair (not yet revealed)
-        const box = solvedBox(p.id); if(!box) continue;  // only placed labels can light
-        const c = footCentre(p);
-        const d2 = (c.cx-focus.x)**2 + (c.cy-focus.y)**2;
-        if(d2 > loupeVB2) continue;                      // outside the loupe
-        cand.push({ id:p.id, box, d2, tier:(p.tier||9) });
-      }
-      cand.sort((a,b)=> a.tier-b.tier || a.d2-b.d2);     // nearest-focus first, tier-ranked
-      const admitted = [];
-      for(const cd of cand){
-        const inf = { x:cd.box.x-padVB, y:cd.box.y-padVB, w:cd.box.w+2*padVB, h:cd.box.h+2*padVB };
-        let ok = true;
-        for(const a of admitted){ if(overlapRect(inf, a.box)){ ok=false; break; } }
-        if(ok) admitted.push(cd);
-      }
-      return admitted.map(a=> a.id);
-    }
-    function overlapRect(a,b){ return a.x < b.x+b.w && b.x < a.x+a.w && a.y < b.y+b.h && b.y < a.y+a.h; }
+    // DELEGATE to the single-source declutter (#337). solvedBox returns null for a gated
+    // stair (not yet revealed → not in SOLVED), so DoorClaims.revealedSet's box-null skip
+    // reproduces the old `p.locked && !SOLVED.has(p.id)` guard exactly.
+    function revealedSet(focus, k){ return DoorClaims.revealedSet(PLACES, solvedBox, focus, k); }
 
     /* declutterIds(ids, focus, k) → a NON-OVERLAPPING subset of the candidate ids, the
        SAME greedy screen-space pass revealedSet() uses but seeded over an EXPLICIT id
-       list (the guided-tour whole-district set) instead of a loupe radius. Tier-first,
-       then nearest `focus` (the plate centre); admit a label only if its SOLVED box,
-       inflated by the screen gap at scale k, clears every already-admitted box. So the
-       tour set is provably overlap-free however crowded the raw district is (#262). */
-    function declutterIds(ids, focus, k){
-      const padVB = MIN_SCREEN_GAP / Math.max(k, 0.0001);
-      const cand = [];
-      for(const id of ids){
-        const box = solvedBox(id); if(!box) continue;
-        const p = poiById(id); const c = p ? footCentre(p) : { cx:box.x, cy:box.y };
-        const d2 = focus ? (c.cx-focus.x)**2 + (c.cy-focus.y)**2 : 0;
-        cand.push({ id, box, d2, tier:(p&&p.tier)||9 });
-      }
-      cand.sort((a,b)=> a.tier-b.tier || a.d2-b.d2);
-      const admitted = [];
-      for(const cd of cand){
-        const inf = { x:cd.box.x-padVB, y:cd.box.y-padVB, w:cd.box.w+2*padVB, h:cd.box.h+2*padVB };
-        let ok = true;
-        for(const a of admitted){ if(overlapRect(inf, a.box)){ ok=false; break; } }
-        if(ok) admitted.push(cd);
-      }
-      return admitted.map(a=> a.id);
-    }
+       list (the guided-tour whole-district set). DELEGATED to the single-source module
+       (#337) so the tour set is decluttered by the SAME code the loupe + the door pill use. */
+    function declutterIds(ids, focus, k){ return DoorClaims.declutterIds(ids, PLACES, solvedBox, focus, k); }
 
     /* the set of room labels to LIGHT right now:
        · HOVER / TAB ("near") — exactly the ONE hovered room (BUG#216-2; the leader +
@@ -4796,209 +4775,24 @@ const LOUPE = (function(){
    ════════════════════════════════════════════════════════════════════════════ */
 (function(){
   var btn = document.getElementById("doortest");
-  if(!btn || typeof Legibility === "undefined" || typeof Layout === "undefined") return;
+  if(!btn || typeof Legibility === "undefined" || typeof Layout === "undefined" || typeof DoorClaims === "undefined") return;
   var txt = document.getElementById("dt-text");
   var sub = document.getElementById("dt-sub");
 
-  /* ── THE SHARED CONTROL CORPUS — byte-for-byte the controls in
-     legibility.test.cjs (CLEAN + crowdedCorpus(n)). Kept identical so the page
-     proves the SAME thing the Node twin proves. ── */
-  var CLEAN = [
-    { id:'a', room:'Alpha',   piece:'Alpha',   tag:'one',   district:'manor',       tier:2, wing:'studies', footprint:'house-wing' },
-    { id:'b', room:'Beta',    piece:'Beta',    tag:'two',   district:'observatory', tier:1,                  footprint:'tower' },
-    { id:'c', room:'Gamma',   piece:'Gamma',   tag:'three', district:'grounds',     tier:2, wing:'works',   footprint:'engine' },
-    { id:'d', room:'Delta',   piece:'Delta',   tag:'four',  district:'cavern',      tier:1,                  footprint:'cave' },
-    { id:'e', room:'Epsilon', piece:'Epsilon', tag:'five',  district:'outbuilding', tier:3,                  footprint:'shed' },
-    { id:'f', room:'Zeta',    piece:'Zeta',    tag:'six',   district:'grounds',     tier:2, wing:'optics',  footprint:'hall' }
-  ];
-  function crowdedCorpus(n){
-    var out = [];
-    for(var i=0;i<n;i++) out.push({ id:'x'+i, room:'Crowded Room '+i, piece:'Crowded Piece '+i, tag:'jammed',
-      district:'grounds', tier:1, wing:'amusements', footprint:'arcade', order:i });
-    return out;
-  }
-
-  /* runDoorSelfTest() — mirrors legibility.test.cjs's assertions exactly. Returns
-     { pass, total, lines:[{name,ok,detail}], liveVerdict, liveComposite }. */
+  /* runDoorSelfTest() — the door's 17-claim legibility pill, now SINGLE-SOURCED (#337).
+     The 17 claims + the loupe declutter live in DoorClaims (tools/layout/door-claims.cjs);
+     here we just hand them the page's REAL getBBox SOLVED boxes as the injected box-source
+     (the loupe above shares the same module). The Node twin tools/layout/door.test.cjs runs
+     the SAME 17 claims over MODELED SOLVED boxes — so the gate now faithfully reports what
+     this pill shows (it can no longer go green over a red door). The returned report shape is
+     unchanged (pass/total/passed/lines + the rest/full composites + the overlap/tour counts),
+     so render() below is untouched. */
   function runDoorSelfTest(){
-    var L = Legibility, lines = [];
-    function check(name, cond, detail){ lines.push({ name:name, ok:!!cond, detail:detail||"" }); }
-
-    var cleanRep   = L.score(Layout.solve(CLEAN), CLEAN);
-    var crowdedRep = L.score(Layout.solve(crowdedCorpus(12)), crowdedCorpus(12));
-    var TH = L.THRESHOLD;
-
-    // CLAIM 1 + 2: the two controls straddle the threshold.
-    check("clean-positive PASSES (composite < threshold)",
-      cleanRep.pass && cleanRep.overall.composite < TH,
-      "["+cleanRep.overall.composite+" < "+TH+"]");
-    check("crowded-negative FAILS (composite > threshold)",
-      !crowdedRep.pass && crowdedRep.overall.composite > TH,
-      "["+crowdedRep.overall.composite+" > "+TH+"]");
-
-    // CLAIM 4: the threshold derives from the controls (clean << threshold << crowded).
-    check("threshold derives from controls: clean << threshold << crowded",
-      cleanRep.overall.composite < TH - 0.05 && crowdedRep.overall.composite > TH + 0.05,
-      "["+cleanRep.overall.composite+" << "+TH+" << "+crowdedRep.overall.composite+"]");
-    // the weights are the documented gap-dominant blend and sum to 1.
-    check("weights are gap-dominant and normalized",
-      L.WEIGHTS.gap===0.5 && L.WEIGHTS.density===0.3 && L.WEIGHTS.leader===0.2 &&
-      Math.abs(L.WEIGHTS.gap + L.WEIGHTS.density + L.WEIGHTS.leader - 1) < 1e-9,
-      "[gap="+L.WEIGHTS.gap+" density="+L.WEIGHTS.density+" leader="+L.WEIGHTS.leader+"]");
-
-    // CLAIM 3: monotonicity — density AND composite non-decreasing across n=2..12.
-    var prevD = -1, prevC = -1, densMono = true, compMono = true, EPS = 1e-9;
-    for(var n=2;n<=12;n++){
-      var rep = L.score(Layout.solve(crowdedCorpus(n)), crowdedCorpus(n));
-      if(rep.overall.density   < prevD - EPS) densMono = false;
-      if(rep.overall.composite < prevC - EPS) compMono = false;
-      prevD = rep.overall.density; prevC = rep.overall.composite;
-    }
-    check("density monotone non-decreasing (sweep n=2..12)", densMono);
-    check("composite monotone non-decreasing (sweep n=2..12)", compMono);
-
-    // FACET-2 crux: EXACT-INTEGER crossing counter + segIntersectsRect.
-    check("two crossing segments → 1",
-      L.countCrossings([{x0:0,y0:0,x1:10,y1:10},{x0:0,y0:10,x1:10,y1:0}]) === 1);
-    check("parallel segments → 0",
-      L.countCrossings([{x0:0,y0:0,x1:10,y1:0},{x0:0,y0:5,x1:10,y1:5}]) === 0);
-    check("shared-endpoint (sibling stubs) → 0",
-      L.countCrossings([{x0:5,y0:5,x1:0,y1:0},{x0:5,y0:5,x1:10,y1:0}]) === 0);
-    check("three mutually-crossing segments → 3",
-      L.countCrossings([{x0:0,y0:0,x1:10,y1:6},{x0:0,y0:6,x1:10,y1:0},{x0:5,y0:-2,x1:5,y1:8}]) === 3);
-    check("leader through rect interior → intrusion",
-      L.segIntersectsRect(0,5,20,5,{x:8,y:0,w:4,h:10},0) === true);
-    check("leader missing rect → no intrusion",
-      L.segIntersectsRect(0,50,20,50,{x:8,y:0,w:4,h:10},0) === false);
-
-    // ── CLAIM A: the RESTING fit-view layer (district captions only = ZERO per-room
-    //    labels) is LEGIBLE. Feed the LIVE conscience the SAME solve the plate uses,
-    //    with the EMPTY label set. This is the fix at the layer a visitor reads.
-    var restComposite = null, restVerdict = "?";
-    var fullComposite = null, fullVerdict = "?";
-    try{
-      var restRep = L.score(LAYOUT, []);            // the resting layer: no POI labels
-      restComposite = restRep.overall.composite; restVerdict = restRep.overall.verdict;
-      var fullRep = L.score(LAYOUT, PLACES);        // the old all-at-once plate (the bug)
-      fullComposite = fullRep.overall.composite; fullVerdict = fullRep.overall.verdict;
-    }catch(e){ /* leave unknown */ }
-    check("CLAIM A — RESTING fit-view layer is LEGIBLE (composite < threshold)",
-      restVerdict === "LEGIBLE" && restComposite != null && restComposite < TH,
-      "["+restComposite+" < "+TH+"]");
-    // the bug is never DEFINED AWAY: the full plate, all 46 labels at once, is STILL
-    // CROWDED. The fix is to not DRAW that layer at rest — not to silence the scorer.
-    check("the full plate (all 46 labels at once) is STILL CROWDED (#103 acknowledged)",
-      fullVerdict === "CROWDED" && fullComposite != null && fullComposite > TH,
-      "[full "+fullComposite+" > "+TH+"]");
-
-    // ── CLAIM B: the REVEALED layer never re-crowds — a GEOMETRIC proof of ZERO
-    //    rendered label-overlaps across a full focus×zoom sweep (every POI × 7 zooms),
-    //    reusing the loupe's OWN revealedSet() + the SOLVED boxes that actually paint.
-    //    NOT a lowered composite — score() is viewBox-scale-invariant and cannot
-    //    certify the multi-room revealed set (see the loupe's invariance note).
-    var overlaps = 0, pairs = 0, sweepRan = false;
-    try{
-      function rb(id){ var s = SOLVED.get(id); return s ? s.box : null; }
-      function ov(a,b){ return a.x < b.x+b.w && b.x < a.x+a.w && a.y < b.y+b.h && b.y < a.y+a.h; }
-      var ZOOMS = [1,1.5,2,2.5,3,3.5,4];
-      for(var zi=0; zi<ZOOMS.length; zi++){
-        for(var pi=0; pi<PLACES.length; pi++){
-          var pp = PLACES[pi]; if(!SOLVED.has(pp.id)) continue;
-          var cc = footCentre(pp);
-          var ids = LOUPE.revealedSet({ x:cc.cx, y:cc.cy }, ZOOMS[zi]);
-          for(var ii=0; ii<ids.length; ii++) for(var jj=ii+1; jj<ids.length; jj++){
-            var ba = rb(ids[ii]), bb = rb(ids[jj]); if(!ba || !bb) continue;
-            pairs++; if(ov(ba, bb)) overlaps++;
-          }
-        }
-      }
-      sweepRan = true;
-    }catch(e){ /* sweep unavailable → claim cannot be asserted */ }
-    check("CLAIM B — revealed declutter: ZERO rendered overlaps (46 focuses × 7 zooms)",
-      sweepRan && overlaps === 0, "["+overlaps+" overlaps / "+pairs+" pairs]");
-
-    // ── CLAIM C (#262 re-model): the GUIDED-TOUR district label set, as the loupe
-    //    actually lights it, is declutter-clean. A guided tour lights the navigated
-    //    PLATE's whole-POI set — but the SOLVED boxes are placed for the whole estate at
-    //    once, so the RAW set re-crowds (the loupe DECLUTTERS it: tier-first, nearest the
-    //    plate centre, admitting a label only if its box clears every admitted one at the
-    //    plate's framed scale). This claim reproduces that EXACT declutter per preset —
-    //    partitioning live places with the SAME pure Layout.plates() the page + Node twin
-    //    use — and asserts ZERO rendered overlaps in the lit subset. We ALSO assert the
-    //    declutter is non-trivial (it admits the MAJORITY of each plate's tier-1 anchors),
-    //    so it is a real legible set, not "show almost nothing to be safe".
-    var tourOverlaps = 0, tourPairs = 0, tourPlates = 0, tourLit = 0, tourRaw = 0, tourRan = false;
-    try{
-      function rb2(id){ var s = SOLVED.get(id); return s ? s.box : null; }
-      function ov2(a,b){ return a.x < b.x+b.w && b.x < a.x+a.w && a.y < b.y+b.h && b.y < a.y+a.h; }
-      function fc2(p){ return footCentre(p); }
-      var GAP = Legibility ? 18 : 18;       // = MIN_SCREEN_GAP (the loupe's screen gap)
-      // declutter a plate's ids the SAME greedy way the loupe does (mirror of declutterIds)
-      function declutter(ids, focus, k){
-        var pad = GAP / Math.max(k, 0.0001), cand = [];
-        for(var i=0;i<ids.length;i++){
-          var box = rb2(ids[i]); if(!box) continue;
-          var p = PLACES.find(function(q){ return q.id===ids[i]; });
-          var c = p ? fc2(p) : { cx:box.x, cy:box.y };
-          cand.push({ id:ids[i], box:box, d2:(c.cx-focus.x)*(c.cx-focus.x)+(c.cy-focus.y)*(c.cy-focus.y), tier:(p&&p.tier)||9 });
-        }
-        cand.sort(function(a,b){ return a.tier-b.tier || a.d2-b.d2; });
-        var adm=[];
-        for(var j=0;j<cand.length;j++){
-          var cd=cand[j], inf={ x:cd.box.x-pad, y:cd.box.y-pad, w:cd.box.w+2*pad, h:cd.box.h+2*pad }, ok=true;
-          for(var a=0;a<adm.length;a++){ if(ov2(inf, adm[a].box)){ ok=false; break; } }
-          if(ok) adm.push(cd);
-        }
-        return adm.map(function(x){ return x.id; });
-      }
-      var liveP = PLACES.filter(function(p){ return !p.locked; });
-      var part = Layout.plates(liveP);
-      var lockedId2 = (PLACES.find(function(p){ return p.locked; })||{}).id;
-      var byPlate = {};
-      for(var pi2=0; pi2<PLACES.length; pi2++){
-        var pp2 = PLACES[pi2]; if(!SOLVED.has(pp2.id)) continue;
-        var pid2 = part.roomPlate[pp2.id];
-        if(!pid2 && pp2.id === lockedId2) pid2 = "manor";
-        if(!pid2) continue;
-        (byPlate[pid2] = byPlate[pid2] || []).push(pp2.id);
-      }
-      var tier1raw = 0, tier1lit = 0;
-      for(var pk in byPlate){
-        tourPlates++;
-        var ids2 = byPlate[pk], fr = part.frame[pk] || { cx:720, cy:450, k:1 };
-        tourRaw += ids2.length;
-        var lit = declutter(ids2, { x:fr.cx, y:fr.cy }, fr.k || 1);
-        tourLit += lit.length;
-        var litSet = {}; for(var li=0; li<lit.length; li++) litSet[lit[li]] = 1;
-        // every admitted pair is non-overlapping (the property a visitor reads)
-        for(var ai=0; ai<lit.length; ai++) for(var aj=ai+1; aj<lit.length; aj++){
-          var ba2 = rb2(lit[ai]), bb2 = rb2(lit[aj]); if(!ba2 || !bb2) continue;
-          tourPairs++; if(ov2(ba2, bb2)) tourOverlaps++;
-        }
-        // tier-1 coverage: how many of the plate's tier-1 anchors survive the declutter
-        for(var ti=0; ti<ids2.length; ti++){
-          var tp = PLACES.find(function(q){ return q.id===ids2[ti]; });
-          if(tp && tp.tier===1){ tier1raw++; if(litSet[ids2[ti]]) tier1lit++; }
-        }
-      }
-      tourRan = true;
-      var tier1ok = tier1raw===0 || tier1lit >= Math.ceil(tier1raw*0.6);
-      check("CLAIM C — guided-tour district label set: ZERO rendered overlaps (all "+tourPlates+" presets)",
-        tourOverlaps === 0, "["+tourOverlaps+" overlaps / "+tourPairs+" pairs · "+tourLit+"/"+tourRaw+" labels lit across "+tourPlates+" plates]");
-      check("CLAIM C′ — the tour declutter is non-trivial (keeps ≥60% of tier-1 anchors)",
-        tier1ok, "["+tier1lit+"/"+tier1raw+" tier-1 anchors survive]");
-    }catch(e){ /* partition unavailable → claim cannot be asserted */
-      check("CLAIM C — guided-tour district label set: ZERO rendered overlaps",
-        false, "[sweep threw: "+e+"]");
-    }
-
-    var passN = 0; for(var k=0;k<lines.length;k++) if(lines[k].ok) passN++;
-    return { pass: passN === lines.length, total: lines.length, passed: passN,
-             lines: lines,
-             restVerdict: restVerdict, restComposite: restComposite,
-             fullVerdict: fullVerdict, fullComposite: fullComposite,
-             overlaps: overlaps, pairs: pairs,
-             tourOverlaps: tourOverlaps, tourPairs: tourPairs, tourPlates: tourPlates };
+    return DoorClaims.runDoorClaims({
+      Legibility: Legibility, Layout: Layout,
+      places: PLACES, layout: LAYOUT,
+      boxOf: function(id){ var s = SOLVED.get(id); return s ? s.box : null; }
+    });
   }
 
   function render(){

@@ -151,6 +151,27 @@ function subLen(r) {
 }
 function nameLen(r) { return (r.room || r.id || '').length; }
 
+/* ── THE LABEL BOX-{w,h} MODEL (single source) ────────────────────────────────
+   The modeled width/height of a POI's rendered label group, from the calibrated
+   CHAR_W type scale (header). This is the ONE place the box dims are derived; both
+   buildLabelModel (the conscience) AND tools/layout/door.test.cjs (the door pill's
+   Node twin, which models the SOLVED boxes the loupe declutter runs on) call it, so
+   the modeled box can never drift between the two. The model is calibrated against
+   the live getBBox truth — see door.test.cjs's checked-in MIRROR + its calibration
+   guard (modeled ≈ rendered within a documented tolerance). opts.nameOnly drops the
+   UPPERCASE "PIECE · tag" sub-line (the plate-view name-only model, #262). */
+function labelBoxWH(r, opts) {
+  opts = opts || {};
+  const nameOnly = !!opts.nameOnly;
+  const w = nameOnly
+    ? nameLen(r) * CHAR_W_NAME + 2 * PAD
+    : Math.max(nameLen(r) * CHAR_W_NAME, subLen(r) * CHAR_W_SUB) + 2 * PAD;
+  const h = nameOnly
+    ? BOX_H_NAME + 2 * PAD
+    : (r.companion ? BOX_H_COMPANION : BOX_H_BASE) + 2 * PAD;
+  return { w, h };
+}
+
 function buildLabelModel(places, solution, opts) {
   opts = opts || {};
   // NAME-ONLY mode (the PLATE self-test): drop the UPPERCASE "PIECE · tag" sub-line
@@ -169,13 +190,9 @@ function buildLabelModel(places, solution, opts) {
     if (!f) continue; // locked/undercroft (not in sol.foot) and any unplaced id
     footMeta[r.id] = { district: r.district };
 
-    // ── box dims from the MEASURED model (header) ──
-    const boxW = nameOnly
-      ? nameLen(r) * CHAR_W_NAME + 2 * PAD
-      : Math.max(nameLen(r) * CHAR_W_NAME, subLen(r) * CHAR_W_SUB) + 2 * PAD;
-    const boxH = nameOnly
-      ? BOX_H_NAME + 2 * PAD
-      : (r.companion ? BOX_H_COMPANION : BOX_H_BASE) + 2 * PAD;
+    // ── box dims from the MEASURED model (header), via the single-source helper ──
+    const wh = labelBoxWH(r, { nameOnly });
+    const boxW = wh.w, boxH = wh.h;
 
     // ── seat the box with the RENDERER'S OWN geometry ──
     // a relayed plate may carry a deterministic per-room `relaySide` (the L/R fan the
@@ -532,6 +549,7 @@ function renderAscii(report) {
 return {
   score,
   buildLabelModel,
+  labelBoxWH,          // the single-source box-{w,h} model (the door twin calibrates against it)
   gapSubScore,
   leaderClutter,
   densitySubScore,
@@ -544,7 +562,7 @@ return {
   rectGap,
   // tunables (so tests can assert the threshold derivation):
   WEIGHTS, THRESHOLD, LABEL_GAP, LABEL_BOUNDS,
-  CHAR_W_NAME, CHAR_W_SUB, PAD, DENSITY_H, DENSITY_K, BOX_H_NAME
+  CHAR_W_NAME, CHAR_W_SUB, PAD, DENSITY_H, DENSITY_K, BOX_H_NAME, BOX_H_BASE, BOX_H_COMPANION
 };
 })();
 
