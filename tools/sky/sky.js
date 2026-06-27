@@ -155,6 +155,14 @@
     // edge, and every existing catalog star (nearest = feat-maze @86px) by the
     // CATALOG INTEGRITY self-test (re-runnable /tmp star-placement verifier).
     'holonomy': { x: 130,  y: 700, mag: 1 },
+    // The Unrolled Cone — Curved Country's SECOND hall (a cone's deficit angle: all
+    // the curvature crammed to one point). A FEATS-flavoured field star in the dark
+    // SW earth-corner, west of The Holonomy Walk and above the survey nameplate, near
+    // its open west-park cone footprint; lit on first visit (ws:seen:unrolled-cone).
+    // The companion member of The Surveyor feat-group (so the asterism reads ≥2 stars).
+    // Verified clear of every footprint/furniture box, the manor pool, the viewBox
+    // edge, and every existing catalog star by the CATALOG INTEGRITY self-test.
+    'unrolled-cone': { x: 40,  y: 730, mag: 2 },
     // The Long Way Home — the Processional Ground's hero's-journey ring (the descent
     // and the dawn, walked, charted over the Orrery's pinned sky). A WAYFARER'S star in
     // the dark WEST margin, set beside its declared companion the ORRERY (120,400) — the
@@ -288,7 +296,7 @@
     // deficit angle, a curvature-cancelling torus). Like every feat-group it is
     // ADDITIVE — it NEVER feeds the wings-only all-skies capstone.
     { id: 'surveyor', name: 'The Surveyor', myth: 'Walks the loop; brings home the twist no chart can hide.',
-      members: ['holonomy'] },
+      members: ['holonomy', 'unrolled-cone'] },
     // The Pilot — Optics' fly-through reward constellation. Founded with one star
     // (The Photon's Errand, a plain `ws:seen:refraction-run` room crumb); like every
     // feat-group it is ADDITIVE — it NEVER feeds the wings-only all-skies capstone.
