@@ -137,10 +137,10 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 (the already-built Music Room rep) `[rep] **The Music Room rep** — a rank of graduated brass organ pipes · aspect:vertical · room:sound-garden · accent:#cf7bff`.
 
 <!-- gauge:foundry-seeds:start -->
-- [rep] **The Lodestone rep** — a LODESTONE on a plinth for The Lodestone Hall: a dark magnetite block ringed by iron-filing arcs, a cool blue field-glow as the night payoff · aspect:mound · room:lodestone-hall · accent:#7fd4ff (sown #313 · contest #0)
 <!-- ✝ BLOOMED #313: The Firmament rep → the-gate drawRepFirmament — shipped as a DOME (… · after 03a2fe5 -->
 <!-- ✝ BLOOMED #323: The Clockwork rep → the-gate/scene.js (drawRepClockwork) + rooms.js · after 164fc9c -->
 <!-- ✝ BLOOMED #336: The Hours rep → the-gate/scene.js (drawRepGnomon) · after 4b48727 -->
+<!-- ✝ BLOOMED #351: The Lodestone rep → the-gate/scene.js drawRepLodestoneHall + rooms.… · after a5cc3c3 -->
 <!-- gauge:foundry-seeds:end -->
 
 ---

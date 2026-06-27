@@ -55,7 +55,8 @@
     } },
     'firmament': { rep: 'firmament-rep', repColors: { DAY: { 'rep.swatch1': '#7e8da0', 'rep.swatch2': '#9fb0c2', 'rep.glow1': '#8fb8dd' }, DUSK: { 'rep.swatch1': '#6a7486', 'rep.swatch2': '#869aae', 'rep.glow1': '#8fb8dd' }, NIGHT: { 'rep.swatch1': '#39424f', 'rep.swatch2': '#4c5868', 'rep.glow1': '#8fb8dd' } } },
     'clockwork': { rep: 'clockwork-rep', repColors: { DAY: { 'rep.swatch1': '#c9a24a', 'rep.swatch2': '#b08a3c', 'rep.swatch3': '#8a6e30', 'rep.glow1': '#7ad0c4', 'rep.glow2': '#9fe3da' }, DUSK: { 'rep.swatch1': '#a98a4a', 'rep.swatch2': '#917640', 'rep.swatch3': '#6f5a30', 'rep.glow1': '#7ad0c4', 'rep.glow2': '#8fdcd2' }, NIGHT: { 'rep.swatch1': '#8a8a7a', 'rep.swatch2': '#73736a', 'rep.swatch3': '#565650', 'rep.glow1': '#7ad0c4', 'rep.glow2': '#a6ece2' } } },
-    'gnomon': { rep: 'gnomon-rep', repColors: { DAY: { 'rep.swatch1': '#d8a94f', 'rep.swatch2': '#9a9388', 'rep.glow1': '#ffe2a0' }, DUSK: { 'rep.swatch1': '#bd8a44', 'rep.swatch2': '#867d70', 'rep.glow1': '#ffcf86' }, NIGHT: { 'rep.swatch1': '#6f5d3c', 'rep.swatch2': '#4a4842', 'rep.glow1': '#bcd8ff' } } }
+    'gnomon': { rep: 'gnomon-rep', repColors: { DAY: { 'rep.swatch1': '#d8a94f', 'rep.swatch2': '#9a9388', 'rep.glow1': '#ffe2a0' }, DUSK: { 'rep.swatch1': '#bd8a44', 'rep.swatch2': '#867d70', 'rep.glow1': '#ffcf86' }, NIGHT: { 'rep.swatch1': '#6f5d3c', 'rep.swatch2': '#4a4842', 'rep.glow1': '#bcd8ff' } } },
+    'lodestone-hall': { rep: 'lodestone-hall-rep', repColors: { DAY: { 'rep.swatch1': '#44505e', 'rep.swatch2': '#6b7a8c', 'rep.glow1': '#7fd4ff' }, DUSK: { 'rep.swatch1': '#3a4654', 'rep.swatch2': '#5a6678', 'rep.glow1': '#7fd4ff' }, NIGHT: { 'rep.swatch1': '#232c38', 'rep.swatch2': '#3a4656', 'rep.glow1': '#9ae0ff' } } }
   };
 
   /* loadSlab(): parse the GATE-ROOMS JSON slab inlined by forge. Returns an array
