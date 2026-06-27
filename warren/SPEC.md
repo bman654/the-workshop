@@ -63,6 +63,15 @@ live state is stranded — the solver's reverse-reachability pass **rejects** a 
 softlocks (this is the one discipline grafted from the pressure-plate explorer; the patrol
 explorer lacked it).
 
+## A continuous cousin (gathered, not detached)
+
+The Warren is the estate's **discrete** pursuit — *where you stand*, on a turn clock. Its
+**continuous** twin, **The Homicidal Chauffeur** (`../the-homicidal-chauffeur/`), is *when you
+jink*: a fast car that can only turn so tight, dodged on a smooth curve. The two are gathered by a
+reciprocal `.cousin` framing card (one lesson — *exploit the constraint, not your speed*), no new
+front-door footprint. **A third pursuit piece would earn the family its own dedicated landing**
+(the Hall/Cavern mold); until then, two pieces gather by link.
+
 ## Documented future benches (NOT built — the Warren's next floors)
 
 The shipped slice is **one floor, one patrol monster** — like the Lamplighter shipped
