@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Soap-Film Surveyor</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,12,9,0.88);
+    --panel-edge: rgba(201,162,74,0.34);
+    --ink: #edeef4;
+    --ink-dim: #9a9caa;
+    --accent: #c9a24a;
+    --accent-soft: rgba(201,162,74,0.16);
+    --film: #7fd4e8;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --bg: #06080c;
+    --stage: #080b11;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%; overflow-x:hidden; max-width:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-ui);
+    overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none; gap:10px;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .backs{ display:flex; gap:16px; align-items:center; min-width:0; flex-wrap:wrap; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .back.sib{ color:rgba(127,212,232,0.8); }
+  .back.sib:hover{ color:var(--film); }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.3px; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; min-height:0; }
+  #board{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:crosshair; }
+  #board.grab{ cursor:grab; } #board.grabbing{ cursor:grabbing; }
+
+  #hud{ position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    font:11px/1.4 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.6);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 12px; letter-spacing:.3px;
+    pointer-events:none; opacity:0; transition:opacity .15s; max-width:calc(100% - 24px); text-align:center; z-index:10; }
+  #hud.show{ opacity:1; }
+  #hud b{ color:var(--accent); }
+  #banner{ position:absolute; left:50%; top:60px; transform:translateX(-50%);
+    font:600 11px/1.5 var(--font-mono); letter-spacing:.08em;
+    padding:8px 15px; border-radius:14px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.55); color:var(--ink-dim); z-index:10; transition:.3s;
+    max-width:calc(100% - 24px); text-align:center; }
+  #banner.film{ color:var(--film); border-color:rgba(127,212,232,0.5); background:rgba(16,40,50,0.6); }
+  #banner.win{ color:#8fd79a; border-color:rgba(120,200,130,0.55); background:rgba(26,52,34,0.6); }
+  #banner.warn{ color:#f0b07a; border-color:rgba(220,150,90,0.5); background:rgba(60,38,18,0.55); }
+  #banner b{ color:var(--ink); font-weight:700; }
+  #banner .film-n{ color:var(--film); } #banner .warn-n{ color:#f0b07a; } #banner .ok-n{ color:#8fd79a; }
+
+  #panel{
+    width:340px; flex:0 0 340px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:56px 16px 24px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:16px 0 8px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:2px; }
+  .seg{ display:flex; gap:0; border:1px solid var(--panel-edge); border-radius:8px; overflow:hidden; min-width:0; }
+  .seg button{ flex:1; min-width:0; font:600 11px/1 var(--font-mono); letter-spacing:.04em; padding:10px 6px; border:none;
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; transition:.16s; }
+  .seg button + button{ border-left:1px solid var(--panel-edge); }
+  .seg button.on{ background:var(--accent-soft); color:var(--accent); }
+  .seg button:hover{ color:var(--ink); }
+  .presets{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:7px; }
+  .preset{ font:600 10.5px/1.2 var(--font-ui); padding:9px 6px; border-radius:8px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.25); color:var(--ink-dim); cursor:pointer; transition:.16s; text-align:center; min-width:0; }
+  .preset:hover{ border-color:var(--accent); color:var(--ink); }
+  .preset.on{ border-color:rgba(201,162,74,0.6); background:var(--accent-soft); color:var(--accent); }
+  .preset b{ display:block; color:var(--ink); font-weight:600; margin-bottom:2px; font-size:11px; }
+  .preset.on b{ color:var(--accent); }
+  .preset span{ font:9px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:0; }
+  .btnrow{ display:flex; gap:8px; margin:10px 0 2px; flex-wrap:wrap; }
+  .btn{ flex:1 1 auto; min-width:0; font:600 11px/1 var(--font-ui); letter-spacing:.02em; padding:10px 10px;
+    border-radius:8px; border:1px solid var(--panel-edge); background:rgba(0,0,0,0.3); color:var(--ink);
+    cursor:pointer; transition:.18s; white-space:nowrap; }
+  .btn:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .btn.primary{ background:rgba(201,162,74,0.16); border-color:rgba(201,162,74,0.5); color:var(--accent); }
+  .btn.primary:hover{ background:rgba(201,162,74,0.26); }
+  .btn.film{ background:rgba(127,212,232,0.12); border-color:rgba(127,212,232,0.45); color:var(--film); }
+  .btn.film:hover{ background:rgba(127,212,232,0.2); }
+  .btn:disabled{ opacity:.4; cursor:default; }
+  .togrow{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin:11px 0 2px;
+    font:600 10.5px/1.3 var(--font-mono); letter-spacing:.03em; color:var(--ink-dim); }
+  .switch{ position:relative; width:38px; height:20px; flex:0 0 38px; border-radius:11px; border:1px solid var(--panel-edge);
+    background:rgba(0,0,0,0.4); cursor:pointer; transition:.18s; }
+  .switch::after{ content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%;
+    background:var(--ink-dim); transition:.18s; }
+  .switch.on{ background:var(--accent-soft); border-color:rgba(201,162,74,0.55); }
+  .switch.on::after{ left:20px; background:var(--accent); }
+  .facts{ margin-top:10px; font:11px/1.6 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  .facts .frow{ display:flex; justify-content:space-between; gap:10px; padding:3px 0; align-items:baseline; }
+  .facts .frow span{ min-width:0; }
+  .facts .frow b{ color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .facts .frow b.film{ color:var(--film); } .facts .frow b.warn{ color:#f0b07a; } .facts .frow b.win{ color:#8fd79a; }
+  .facts .eqn{ margin-top:10px; padding:9px 11px; border-radius:8px; border:1px solid rgba(201,162,74,0.16);
+    background:rgba(0,0,0,0.28); color:var(--ink-dim); font-size:10.5px; line-height:1.6; }
+  .facts .eqn b{ color:var(--ink); }
+  .hide{ display:none !important; }
+  .foot{ margin-top:20px; font:10px/1.55 var(--font-mono); color:rgba(154,156,170,0.6); letter-spacing:.02em; }
+  .foot a{ color:var(--ink-dim); } .foot a.sib{ color:rgba(127,212,232,0.75); }
+
+  @media (max-width:640px){
+    #wrap{ flex-direction:column; }
+    #stage{ flex:1 1 auto; min-height:0; }
+    #panel{ width:100%; flex:0 0 auto; max-height:46vh; border-left:none; border-top:1px solid var(--panel-edge);
+      padding:14px 14px 20px; box-shadow:0 -16px 40px rgba(0,0,0,0.5); }
+    .topbar{ padding:8px 12px 0; } .brand{ display:none; }
+    .back{ font-size:10px; }
+    #banner{ top:46px; font-size:10px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../../index.html">&larr; The Orrery Estate</a>
+      <a class="back" href="../../workbench/index.html">&larr; workbench</a>
+      <a class="back sib" href="../index.html">&harr; The Catenoid</a>
+    </div>
+    <div class="brand">
+      <h1>The Soap-Film Surveyor</h1>
+      <span class="tag">the shortest road, found by a film</span>
+    </div>
+    <div class="selftest" id="selftest" title="Click for detail · per-check PASS lines are in the console">checking&hellip;</div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="board"></canvas>
+      <div id="banner">&mdash;</div>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">Plant a few <b>posts</b> and a soap film stretched between them pulls itself to the
+        <b>shortest total road</b> that joins them &mdash; the <b>Steiner minimal tree</b>. Where strands meet,
+        they always meet at <b>120&deg;</b>. <b>Drag a post</b> and the film re-snaps live; stretch it far and
+        the junctions <b>rotate through a transient X</b>. Then try to beat it: <b>lay your own roads</b> and
+        drop the film to see how close you came.</p>
+
+      <div class="sect">Mode</div>
+      <div class="seg" id="modeSeg">
+        <button data-mode="survey" class="on">Survey the film</button>
+        <button data-mode="lay">Lay your roads</button>
+      </div>
+
+      <div class="sect">Posts</div>
+      <div class="presets" id="presets">
+        <button class="preset on" data-preset="triangle"><b>Triangle</b><span>3 &middot; &radic;3</span></button>
+        <button class="preset" data-preset="square"><b>Square</b><span>4 &middot; 1+&radic;3</span></button>
+        <button class="preset" data-preset="pentagon"><b>Pentagon</b><span>5 &middot; 3.891</span></button>
+      </div>
+
+      <!-- SURVEY controls -->
+      <div id="surveyCtl">
+        <div class="togrow">
+          <span>Show junction angles</span>
+          <div class="switch" id="angSw" role="switch" aria-checked="false"></div>
+        </div>
+        <div class="btnrow">
+          <button class="btn" id="forceBtn">Force a + junction</button>
+          <button class="btn primary hide" id="releaseBtn">Release &mdash; let it split</button>
+        </div>
+        <div class="facts" id="surveyFacts">
+          <div class="frow"><span>film road length</span><b class="film" id="fLen">&mdash;</b></div>
+          <div class="frow"><span>junctions &middot; all 120&deg;</span><b id="fJ">&mdash;</b></div>
+          <div class="frow"><span>vs. independent oracle</span><b id="fOracle">&mdash;</b></div>
+          <div class="eqn" id="fEqn">At every junction three strands meet at <b>120&deg;</b> &mdash; any sharper
+            corner could be cut shorter. The film solves a problem with no formula by simply <b>pulling tight</b>.</div>
+        </div>
+      </div>
+
+      <!-- LAY controls -->
+      <div id="layCtl" class="hide">
+        <p class="lede" id="layHelp" style="margin-top:4px"><b>Tap a post</b> to start a road &middot; tap another
+          node to connect &middot; <b>tap empty ground</b> to drop a junction &middot; tap a road to erase &middot;
+          drag a junction to move it.</p>
+        <div class="btnrow">
+          <button class="btn film" id="dropBtn">&#8779; Drop the film</button>
+        </div>
+        <div class="btnrow">
+          <button class="btn" id="undoBtn">&#8630; Undo</button>
+          <button class="btn" id="clearBtn">Clear</button>
+          <button class="btn primary hide" id="newRoadsBtn">&#8635; Lay new roads</button>
+        </div>
+        <div class="facts" id="layFacts">
+          <div class="frow"><span>your roads</span><b id="sYour">&mdash;</b></div>
+          <div class="frow"><span>the film (minimum)</span><b class="film" id="sFilm">&mdash;</b></div>
+          <div class="frow"><span>naive spanning tree</span><b id="sMst">&mdash;</b></div>
+          <div class="frow"><span>single hub (the &times;)</span><b id="sStar">&mdash;</b></div>
+          <div class="eqn" id="sEqn">Connect every post with the least total road. The film never crosses roads in
+            a + &mdash; it always splits a crossing into two <b>120&deg;</b> junctions, which is shorter.</div>
+        </div>
+      </div>
+
+      <div class="foot">
+        The same surface tension as <a class="sib" href="../index.html">The Catenoid</a> &mdash; there a film
+        spans two rings and minimises <i>area</i>; here it spans posts and minimises <i>length</i>. The colour is
+        real <a href="../../iridescence/index.html">thin-film interference</a>. A pure
+        <a href="../steiner-core.mjs">core module</a> owns the math; an
+        <a href="../steiner-oracle.mjs">independent closed-form oracle</a> checks it; the self-test pill proves
+        relaxed length === oracle to machine precision on the canonical cases, every junction 120&deg;, and that a
+        forced + is always longer than the split.
+      </div>
+    </aside>
+  </div>
+
+<script type="module">
+import Core, { solve, beginRelax, stepRelax, forceCross, spanningTree, hubStar, measureNetwork, PRESETS } from '../steiner-core.mjs';
+import { steinerExact } from '../steiner-oracle.mjs';
+
+// ============================================================================
+// THE FILM PAINT — real thin-film interference colour (CIE 1931 · D65), a
+// faithful re-derivation of the iridescence pipeline's CIE math (pure colour,
+// not proof-bearing). A 256-entry thickness→sRGB LUT drives the iridescent core
+// of every strand. The shimmer/sag are "still searching" cues only — amplitude
+// →0 the instant the film settles, so every measured state is dead straight.
+// ============================================================================
+const CIE = (function(){
+  const gauss=(x,mu,s1,s2)=>{ const t=(x-mu)*(x<mu?s1:s2); return Math.exp(-0.5*t*t); };
+  const cieX=nm=>1.056*gauss(nm,599.8,0.0264,0.0323)+0.362*gauss(nm,442.0,0.0624,0.0374)-0.065*gauss(nm,501.1,0.0490,0.0382);
+  const cieY=nm=>0.821*gauss(nm,568.8,0.0213,0.0247)+0.286*gauss(nm,530.9,0.0613,0.0322);
+  const cieZ=nm=>1.217*gauss(nm,437.0,0.0845,0.0278)+0.681*gauss(nm,459.0,0.0385,0.0725);
+  const LMIN=380,LMAX=780,LSTEP=5; const LAM=[]; for(let l=LMIN;l<=LMAX+1e-9;l+=LSTEP) LAM.push(l);
+  const D65=[49.98,52.31,54.65,68.70,82.75,87.12,91.49,92.46,93.43,90.06,86.68,95.77,104.86,110.94,117.01,117.41,117.81,116.34,114.86,115.39,115.92,112.37,108.81,109.08,109.35,108.58,107.80,106.30,104.79,106.24,107.69,106.05,104.41,104.23,104.05,102.02,100.00,98.17,96.33,96.06,95.79,92.24,88.69,89.35,90.01,89.80,89.60,88.65,87.70,85.49,83.29,83.49,83.70,81.86,80.03,80.12,80.21,81.25,82.28,80.28,78.28,74.00,69.72,70.67,71.61,72.98,74.35,67.98,61.60,65.74,69.89,72.49,75.09,69.34,63.59,55.01,46.42,56.61,66.81,65.09,63.38];
+  const enc=c=>{ c=c<=0?0:c; return c<=0.0031308?12.92*c:1.055*Math.pow(c,1/2.4)-0.055; };
+  function colorAt(n,t){
+    let X=0,Y=0,Z=0,Yn=0;
+    for(let i=0;i<LAM.length;i++){ const l=LAM[i],w=D65[i];
+      const d=(4*Math.PI*n*t)/l; const s=Math.sin(d/2); const r=s*s;
+      const xb=cieX(l),yb=cieY(l),zb=cieZ(l);
+      X+=w*r*xb; Y+=w*r*yb; Z+=w*r*zb; Yn+=w*yb; }
+    const inv=Yn>0?1/Yn:0; X*=inv; Y*=inv; Z*=inv;
+    let r=3.2406*X-1.5372*Y-0.4986*Z, g=-0.9689*X+1.8758*Y+0.0415*Z, b=0.0557*X-0.2040*Y+1.0570*Z;
+    const m=Math.min(r,g,b); if(m<0){ r-=m; g-=m; b-=m; }
+    const mx=Math.max(r,g,b,1); r/=mx; g/=mx; b/=mx;
+    return [Math.round(255*enc(r)),Math.round(255*enc(g)),Math.round(255*enc(b))];
+  }
+  // LUT over a thickness band that sweeps cyan→gold→magenta (the estate palette)
+  const N=256, T0=300, T1=760, LUT=new Array(N);
+  for(let i=0;i<N;i++) LUT[i]=colorAt(1.33, T0+(T1-T0)*i/(N-1));
+  return { LUT, lut:(u)=>LUT[Math.max(0,Math.min(N-1,Math.round(u*(N-1))))] };
+})();
+
+// ============================================================================
+// VIEW — single canvas, single RAF, one pointer dispatcher keyed on mode.
+// FILM owns TIME+PAINT; CORE owns SPACE+LENGTH. The view re-derives no length,
+// angle, or topology — it only chooses nSteps (time) and how to paint.
+// ============================================================================
+const board=document.getElementById('board'), ctx=board.getContext('2d');
+const DPR=Math.max(1,Math.min(2,window.devicePixelRatio||1));
+let W=0,Hh=0,TIME=0;
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches || /[?&]reduce=1/.test(location.search);
+
+const ST={
+  mode:'survey', preset:'triangle',
+  posts:[], rstate:null, net:null, settled:true, paused:false, forced:false,
+  showAngles:false,
+  blooms:[], slowmo:0,
+  dragPost:-1, lastGlobalCheck:0,
+  // lay-roads game
+  game:{ hubs:[], roads:[], armed:null }, undo:[],
+  filmDropped:false, bloomT:-1, smt:null, mst:null, star:null,
+  pointer:{x:0,y:0,active:false},
+  coachShown:false
+};
+
+function clonePts(a){ return a.map(p=>({x:p.x,y:p.y})); }
+function view(){ const cx=W*0.5, cy=Hh*0.52; const scale=Math.min(W,Math.max(220,Hh))*0.34; return {cx,cy,scale}; }
+function p2x(p){ const v=view(); return {x:v.cx+p.x*v.scale, y:v.cy-p.y*v.scale}; }
+function x2p(sx,sy){ const v=view(); return {x:(sx-v.cx)/v.scale, y:-(sy-v.cy)/v.scale}; }
+
+function resize(){
+  const st=document.getElementById('stage'); W=st.clientWidth; Hh=st.clientHeight;
+  board.width=Math.round(W*DPR); board.height=Math.round(Hh*DPR);
+  board.style.width=W+'px'; board.style.height=Hh+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+// ---------------------------------------------------------------------------
+function loadPreset(name){
+  ST.preset=name;
+  ST.posts=clonePts(PRESETS[name].anchors);
+  document.querySelectorAll('#presets .preset').forEach(b=>b.classList.toggle('on',b.dataset.preset===name));
+  resetSurvey();
+  resetGame();
+  refreshFacts();
+}
+function resetSurvey(){
+  ST.forced=false; ST.paused=false; ST.slowmo=0; ST.blooms.length=0;
+  document.getElementById('releaseBtn').classList.add('hide');
+  document.getElementById('forceBtn').classList.remove('hide');
+  if(reduced){ ST.net=solve(ST.posts); ST.settled=true; ST.rstate=null; }
+  else { ST.rstate=beginRelax(ST.posts); ST.net=solve(ST.posts); ST.settled=false; }
+}
+function resetGame(){
+  ST.game={hubs:[],roads:[],armed:null}; ST.undo=[];
+  ST.filmDropped=false; ST.bloomT=-1; ST.smt=ST.mst=ST.star=null;
+  document.getElementById('newRoadsBtn').classList.add('hide');
+  document.getElementById('dropBtn').classList.remove('hide');
+}
+
+// ---------------------------------------------------------------------------
+// PAINT
+// ---------------------------------------------------------------------------
+function draw(){
+  ctx.clearRect(0,0,W,Hh);
+  drawGlassCell();
+  if(ST.mode==='lay'){
+    drawRoads(ST.filmDropped?0.32:1);                // player roads beneath the film
+    if(ST.filmDropped && ST.smt) drawFilm(ST.smt, ST.bloomT<0?1:ST.bloomT, true);
+    drawPosts();
+    if(ST.game.armed!=null && ST.pointer.active) drawRubber();
+  } else {
+    if(ST.net) drawFilm(ST.net, 1, ST.settled);
+    drawBlooms();
+    drawPosts();
+    if(ST.showAngles && ST.net) drawAngles(ST.net);
+  }
+}
+
+function drawGlassCell(){
+  const m=Math.min(W,Hh)*0.04;
+  const g=ctx.createRadialGradient(W*0.5,Hh*0.5,Math.min(W,Hh)*0.1, W*0.5,Hh*0.5,Math.max(W,Hh)*0.62);
+  g.addColorStop(0,'rgba(16,22,30,0.55)'); g.addColorStop(1,'rgba(6,8,12,0)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,Hh);
+  ctx.save(); ctx.strokeStyle='rgba(201,162,74,0.10)'; ctx.lineWidth=1;
+  roundRect(m,m+34,W-2*m,Hh-2*m-40,14); ctx.stroke(); ctx.restore();
+}
+function roundRect(x,y,w,h,r){ ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+function drawFilm(net, reveal, settled){
+  const searching = !settled && !reduced;
+  const drift = reduced?0:TIME*0.00018;
+  // glow + iridescent core, additive
+  ctx.globalCompositeOperation='lighter';
+  net.edges.forEach((e,ei)=>{
+    const A=p2x(net.nodes[e[0]]), B=p2x(net.nodes[e[1]]);
+    const segLen=Math.hypot(B.x-A.x,B.y-A.y); if(segLen<0.5) return;
+    // soft wide glow
+    ctx.lineCap='round'; ctx.lineWidth=11; ctx.strokeStyle='rgba(127,212,232,'+(0.05*reveal).toFixed(3)+')';
+    ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+    ctx.lineWidth=5.5; ctx.strokeStyle='rgba(127,212,232,'+(0.08*reveal).toFixed(3)+')';
+    ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+    // bright iridescent core, sampled along the strand
+    const K=Math.max(6,Math.min(40,Math.round(segLen/8)));
+    const sag = searching ? 5.0*Math.sin(TIME*0.004+ei) : 0;          // searching cue only
+    const nx=-(B.y-A.y)/segLen, ny=(B.x-A.x)/segLen;
+    ctx.lineWidth=2.0;
+    for(let k=0;k<K;k++){
+      const t0=k/K, t1=(k+1)/K;
+      const u0=t0*reveal, u1=t1*reveal; if(t0>reveal) break;
+      const bow0=Math.sin(t0*Math.PI)*sag, bow1=Math.sin(t1*Math.PI)*sag;
+      const x0=A.x+(B.x-A.x)*t0+nx*bow0, y0=A.y+(B.y-A.y)*t0+ny*bow0;
+      const x1=A.x+(B.x-A.x)*Math.min(t1,reveal)+nx*bow1, y1=A.y+(B.y-A.y)*Math.min(t1,reveal)+ny*bow1;
+      const phase=(ei*0.13 + t0*0.55 + drift)%1;
+      const shimmer=searching?0.10*Math.sin(TIME*0.003+ei+t0*6):0;
+      const c=CIE.lut((phase+shimmer+1)%1);
+      ctx.strokeStyle='rgba('+c[0]+','+c[1]+','+c[2]+','+(0.85*reveal).toFixed(3)+')';
+      ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+    }
+  });
+  // junction beads
+  net.junctions.forEach(j=>{
+    const P=p2x(net.nodes[j.node]); const deg=net.nodes[j.node].degree;
+    const hot = deg>=4;                            // the transient X (or forced +)
+    const rad=hot?7:4.5;
+    const c=hot?[255,196,120]:CIE.lut((j.node*0.17+0.2)%1);
+    const gl=ctx.createRadialGradient(P.x,P.y,0,P.x,P.y,rad*2.4);
+    gl.addColorStop(0,'rgba('+c[0]+','+c[1]+','+c[2]+','+(0.9*reveal)+')');
+    gl.addColorStop(1,'rgba('+c[0]+','+c[1]+','+c[2]+',0)');
+    ctx.fillStyle=gl; ctx.beginPath(); ctx.arc(P.x,P.y,rad*2.4,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,'+(0.85*reveal)+')'; ctx.beginPath(); ctx.arc(P.x,P.y,rad*0.5,0,7); ctx.fill();
+  });
+  ctx.globalCompositeOperation='source-over';
+}
+
+function drawPosts(){
+  ST.posts.forEach((p,i)=>{
+    const P=p2x(p); const active=(ST.mode==='survey'&&ST.dragPost===i);
+    if(active){ ctx.fillStyle='rgba(201,162,74,0.18)'; ctx.beginPath(); ctx.arc(P.x,P.y,18,0,7); ctx.fill(); }
+    const g=ctx.createRadialGradient(P.x-3,P.y-3,1,P.x,P.y,10);
+    g.addColorStop(0,'#f2dca0'); g.addColorStop(0.5,'#c9a24a'); g.addColorStop(1,'#7c6020');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(P.x,P.y,9,0,7); ctx.fill();
+    ctx.strokeStyle='rgba(40,30,10,0.7)'; ctx.lineWidth=1.4; ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(P.x-3,P.y-3,2.2,0,7); ctx.fill();
+  });
+}
+function drawRoads(alpha){
+  // player hubs + roads (dim chalk)
+  const nodes=gameNodes();
+  ST.game.roads.forEach(r=>{
+    const A=p2x(nodes[r[0]]), B=p2x(nodes[r[1]]);
+    ctx.strokeStyle='rgba(222,226,240,'+(0.42*alpha)+')'; ctx.lineWidth=2.2; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+  });
+  ST.game.hubs.forEach((h,i)=>{
+    const P=p2x(h); const active=(ST.dragHub===i);
+    if(active){ ctx.fillStyle='rgba(201,162,74,0.16)'; ctx.beginPath(); ctx.arc(P.x,P.y,15,0,7); ctx.fill(); }
+    ctx.fillStyle='rgba(214,200,150,'+(0.92*alpha)+')'; ctx.beginPath(); ctx.arc(P.x,P.y,5.5,0,7); ctx.fill();
+    ctx.strokeStyle='rgba(40,30,10,0.6)'; ctx.lineWidth=1; ctx.stroke();
+  });
+  if(ST.game.armed!=null){
+    const N=gameNodes(); const a=ST.game.armed;
+    if(N[a]){ const P=p2x(N[a]); ctx.strokeStyle='rgba(201,162,74,0.9)'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(P.x,P.y,12,0,7); ctx.stroke(); }
+  }
+}
+function drawRubber(){
+  const N=gameNodes(); const a=ST.game.armed; if(a==null||!N[a]) return;
+  const P=p2x(N[a]);
+  ctx.save(); ctx.setLineDash([5,5]); ctx.strokeStyle='rgba(201,162,74,0.55)'; ctx.lineWidth=1.6;
+  ctx.beginPath(); ctx.moveTo(P.x,P.y); ctx.lineTo(ST.pointer.x,ST.pointer.y); ctx.stroke(); ctx.restore();
+}
+function drawAngles(net){
+  ctx.font='600 11px '+getComputedStyle(document.body).getPropertyValue('--font-mono');
+  net.junctions.forEach(j=>{
+    if(net.nodes[j.node].degree<3) return;
+    const P=p2x(net.nodes[j.node]);
+    const txt=j.plateau?'120.0°':j.angles.map(a=>a.toFixed(0)).join('·');
+    ctx.fillStyle='rgba(0,0,0,0.6)'; const w=ctx.measureText(txt).width;
+    ctx.fillRect(P.x+9,P.y-17,w+8,15);
+    ctx.fillStyle=j.plateau?'#8fd79a':'#f0b07a'; ctx.fillText(txt,P.x+13,P.y-6);
+  });
+}
+function drawBlooms(){
+  if(reduced){ ST.blooms.length=0; return; }
+  ctx.globalCompositeOperation='lighter';
+  ST.blooms=ST.blooms.filter(b=>{
+    const age=(TIME-b.t0)/720; if(age>=1) return false;
+    const P=p2x(b); const r=8+age*70; const a=(1-age)*0.5;
+    for(let k=0;k<5;k++){ const rr=r-k*5; if(rr<=0.5) continue; const c=CIE.lut((age*0.6+k*0.2)%1);
+      ctx.strokeStyle='rgba('+c[0]+','+c[1]+','+c[2]+','+(a*(1-k/6)).toFixed(3)+')'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(P.x,P.y,rr,0,7); ctx.stroke(); }
+    return true;
+  });
+  ctx.globalCompositeOperation='source-over';
+}
+
+// ---------------------------------------------------------------------------
+// SURVEY interaction — draggable posts
+// ---------------------------------------------------------------------------
+function nearestPost(sx,sy){
+  let bi=-1, bd=20;
+  ST.posts.forEach((p,i)=>{ const P=p2x(p); const d=Math.hypot(P.x-sx,P.y-sy); if(d<bd){ bd=d; bi=i; } });
+  return bi;
+}
+// ---------------------------------------------------------------------------
+// LAY-ROADS interaction
+// ---------------------------------------------------------------------------
+function gameNodes(){ return ST.posts.concat(ST.game.hubs); }   // ids: 0..P-1 posts, P.. hubs
+function nearestNode(sx,sy){
+  const N=gameNodes(); let bi=-1, bd=18;
+  N.forEach((p,i)=>{ const P=p2x(p); const d=Math.hypot(P.x-sx,P.y-sy); if(d<bd){ bd=d; bi=i; } });
+  return bi;
+}
+function nearestRoad(sx,sy){
+  const N=gameNodes(); let bi=-1, bd=8;
+  ST.game.roads.forEach((r,i)=>{
+    const A=p2x(N[r[0]]), B=p2x(N[r[1]]);
+    const d=ptSeg(sx,sy,A.x,A.y,B.x,B.y); if(d<bd){ bd=d; bi=i; }
+  });
+  return bi;
+}
+function ptSeg(px,py,ax,ay,bx,by){
+  const dx=bx-ax,dy=by-ay; const L2=dx*dx+dy*dy||1; let t=((px-ax)*dx+(py-ay)*dy)/L2; t=Math.max(0,Math.min(1,t));
+  return Math.hypot(px-(ax+dx*t),py-(ay+dy*t));
+}
+function pushUndo(){ ST.undo.push(JSON.stringify(ST.game)); if(ST.undo.length>40) ST.undo.shift(); }
+
+// pointer dispatcher (keyed on mode)
+let down=null;
+board.addEventListener('pointerdown',e=>{
+  const r=board.getBoundingClientRect(); const sx=e.clientX-r.left, sy=e.clientY-r.top;
+  board.setPointerCapture(e.pointerId);
+  ST.pointer.active=true; ST.pointer.x=sx; ST.pointer.y=sy;
+  if(ST.mode==='survey'){
+    if(ST.paused) return;                            // forced + is paused until Release
+    const i=nearestPost(sx,sy);
+    if(i>=0){ ST.dragPost=i; ST.settled=false; if(!reduced) ST.rstate=beginRelax(ST.posts);  // fresh global-seeded state each grab
+      board.classList.add('grabbing'); }
+    down={sx,sy,moved:false};
+  } else {
+    if(ST.filmDropped) return;
+    const hub=nearestNode(sx,sy);
+    down={sx,sy,moved:false, hub, hubIsDraggable:(hub>=ST.posts.length)};
+    if(down.hubIsDraggable){ ST.dragHub=hub-ST.posts.length; }
+  }
+});
+board.addEventListener('pointermove',e=>{
+  const r=board.getBoundingClientRect(); const sx=e.clientX-r.left, sy=e.clientY-r.top;
+  ST.pointer.x=sx; ST.pointer.y=sy;
+  if(!down) return;
+  if(Math.hypot(sx-down.sx,sy-down.sy)>6) down.moved=true;
+  if(ST.mode==='survey'){
+    if(ST.dragPost>=0){ const pp=x2p(sx,sy); ST.posts[ST.dragPost]={x:pp.x,y:pp.y}; ST.settled=false;
+      if(reduced){ /* show straight move; snap on up */ } }
+  } else {
+    if(ST.dragHub!=null && down.moved){ const pp=x2p(sx,sy); ST.game.hubs[ST.dragHub]={x:pp.x,y:pp.y}; }
+  }
+});
+board.addEventListener('pointerup',e=>{
+  const r=board.getBoundingClientRect(); const sx=e.clientX-r.left, sy=e.clientY-r.top;
+  ST.pointer.active=false;
+  board.classList.remove('grabbing');
+  if(!down){ return; }
+  if(ST.mode==='survey'){
+    if(ST.dragPost>=0){
+      ST.dragPost=-1;
+      // snap to the exact global optimum the instant the drag ends (authoritative)
+      ST.net=solve(ST.posts); ST.settled=true; ST.rstate=null;
+      if(reduced) showHud('re-snapped · '+ST.net.steinerCount+' junctions · length <b>'+ST.net.totalLength.toFixed(4)+'</b>');
+      refreshFacts();
+    }
+    down=null; return;
+  }
+  // LAY mode gesture resolution
+  if(ST.filmDropped){ down=null; return; }
+  if(down.hubIsDraggable && down.moved){ pushUndo(); refreshFacts(); ST.dragHub=null; down=null; return; }
+  ST.dragHub=null;
+  // a TAP
+  const node=nearestNode(sx,sy); const road=nearestRoad(sx,sy);
+  const armed=ST.game.armed;
+  if(node>=0){
+    if(armed==null){ ST.game.armed=node; }
+    else if(node===armed){ ST.game.armed=null; }
+    else { pushUndo(); addRoad(armed,node); ST.game.armed=null; }
+  } else if(road>=0 && armed==null){
+    pushUndo(); ST.game.roads.splice(road,1);
+  } else if(armed!=null){
+    // drop a hub + chain
+    pushUndo(); const pp=x2p(sx,sy); ST.game.hubs.push({x:pp.x,y:pp.y});
+    const newId=ST.posts.length+ST.game.hubs.length-1; addRoad(armed,newId); ST.game.armed=newId;
+  } else {
+    ST.game.armed=null;
+  }
+  refreshFacts(); down=null;
+});
+function addRoad(a,b){
+  if(a===b) return;
+  for(const r of ST.game.roads){ if((r[0]===a&&r[1]===b)||(r[0]===b&&r[1]===a)) return; }
+  ST.game.roads.push([a,b]);
+}
+
+// ---------------------------------------------------------------------------
+// CONTROLS
+// ---------------------------------------------------------------------------
+document.querySelectorAll('#modeSeg button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  ST.mode=b.dataset.mode;
+  document.getElementById('surveyCtl').classList.toggle('hide',ST.mode!=='survey');
+  document.getElementById('layCtl').classList.toggle('hide',ST.mode!=='lay');
+  if(ST.mode==='survey'){ resetSurvey(); document.getElementById('banner').className=''; }
+  else { resetGame(); if(!ST.coachShown){ showHud('Tap a post to start a road · tap empty ground to drop a junction.'); ST.coachShown=true; }
+    document.getElementById('banner').className=''; document.getElementById('banner').textContent='Lay roads to connect every post, then drop the film.'; }
+  refreshFacts();
+}));
+document.querySelectorAll('#presets .preset').forEach(b=>b.addEventListener('click',()=>loadPreset(b.dataset.preset)));
+document.getElementById('angSw').addEventListener('click',function(){
+  ST.showAngles=!ST.showAngles; this.classList.toggle('on',ST.showAngles); this.setAttribute('aria-checked',ST.showAngles);
+});
+document.getElementById('forceBtn').addEventListener('click',()=>{
+  ST.rstate=forceCross(ST.posts); ST.forced=true; ST.paused=true; ST.settled=false;
+  ST.net=hubStar(ST.posts);
+  document.getElementById('forceBtn').classList.add('hide');
+  document.getElementById('releaseBtn').classList.remove('hide');
+  const banner=document.getElementById('banner'); banner.className='warn';
+  const isSq=Math.abs(ST.net.totalLength-2*Math.SQRT2)<1e-6;
+  banner.innerHTML='A forced + junction · length <b>'+ST.net.totalLength.toFixed(4)+'</b>'+(isSq?' = 2&radic;2':'')+' &middot; <i>unstable</i>';
+  if(reduced){ // jump straight to the split + caption
+    releaseCross(true);
+  }
+});
+document.getElementById('releaseBtn').addEventListener('click',()=>releaseCross(false));
+function releaseCross(instant){
+  ST.paused=false; ST.forced=ST.forced; // stepRelax handles the split
+  document.getElementById('releaseBtn').classList.add('hide');
+  document.getElementById('forceBtn').classList.remove('hide');
+  const banner=document.getElementById('banner');
+  if(instant||reduced){
+    ST.net=solve(ST.posts); ST.settled=true; ST.rstate=null;
+    const isSq=Math.abs(ST.net.totalLength-(1+Math.sqrt(3)))<1e-6;
+    banner.className='film';
+    banner.innerHTML='Split into two 120° junctions · length <b>'+ST.net.totalLength.toFixed(4)+'</b>'+(isSq?' = 1+&radic;3 &lt; 2&radic;2':' &mdash; shorter than the +');
+    refreshFacts();
+  } else {
+    banner.className='film';
+    banner.innerHTML='The + is unstable — it splits into two <b>120°</b> junctions, shorter than the forced +.';
+  }
+}
+document.getElementById('undoBtn').addEventListener('click',()=>{
+  if(ST.undo.length){ ST.game=JSON.parse(ST.undo.pop()); refreshFacts(); }
+});
+document.getElementById('clearBtn').addEventListener('click',()=>{ pushUndo(); ST.game={hubs:[],roads:[],armed:null}; refreshFacts(); });
+document.getElementById('dropBtn').addEventListener('click',dropFilm);
+document.getElementById('newRoadsBtn').addEventListener('click',()=>{
+  ST.filmDropped=false; ST.bloomT=-1; document.getElementById('newRoadsBtn').classList.add('hide');
+  document.getElementById('dropBtn').classList.remove('hide');
+  const banner=document.getElementById('banner'); banner.className=''; banner.textContent='Lay new roads — the film waits as a faint ghost.';
+});
+
+function dropFilm(){
+  // connectivity: all posts in one component (UI bookkeeping, not a physics claim)
+  const N=gameNodes().length, parent=[...Array(N).keys()];
+  const find=i=>{ while(parent[i]!==i){ parent[i]=parent[parent[i]]; i=parent[i]; } return i; };
+  for(const [a,b] of ST.game.roads){ parent[find(a)]=find(b); }
+  let root=-1, ok=true;
+  for(let i=0;i<ST.posts.length;i++){ const r=find(i); if(root<0) root=r; else if(r!==root) ok=false; }
+  if(!ok){
+    const banner=document.getElementById('banner'); banner.className='warn';
+    banner.textContent='Some posts are not connected yet — join them all, then drop the film.';
+    showHud('Connect <b>every post</b> into one network first.');
+    return;
+  }
+  ST.smt=solve(ST.posts); ST.mst=spanningTree(ST.posts); ST.star=hubStar(ST.posts);
+  ST.filmDropped=true; ST.bloomT=reduced?1:0;
+  document.getElementById('dropBtn').classList.add('hide');
+  document.getElementById('newRoadsBtn').classList.remove('hide');
+  scoreboard();
+}
+function scoreboard(){
+  const N=gameNodes();
+  const your=measureNetwork(N,ST.game.roads).length;
+  const smt=ST.smt.totalLength, mst=ST.mst.totalLength, star=ST.star.totalLength;
+  const overFilm=(your-smt)/smt, filmVsMst=(mst-smt)/mst;
+  const banner=document.getElementById('banner');
+  let head;
+  if(overFilm<=0.005){ banner.className='win'; head='You found it — matched the film to within <b>'+(Math.max(0,overFilm)*100).toFixed(1)+'%</b>.'; }
+  else if(your<mst*(1-1e-4)){ banner.className='film'; head='Your roads ran <b>'+(overFilm*100).toFixed(1)+'%</b> longer than the film — but you beat the naive tree by <b class="ok-n">'+((mst-your)/mst*100).toFixed(1)+'%</b>.'; }
+  else if(your<=mst*(1+1e-4)){ banner.className='film'; head='You drew the naive spanning tree — the film still beats it by <b class="film-n">'+(filmVsMst*100).toFixed(1)+'%</b> with its 120° junctions.'; }
+  else { banner.className='warn'; head='Your roads ran <b>'+(overFilm*100).toFixed(1)+'%</b> longer — even a plain spanning tree would have beaten them by <b class="warn-n">'+((your-mst)/your*100).toFixed(1)+'%</b>.'; }
+  banner.innerHTML=head+'<br><span style="opacity:.8">The film is <b class="film-n">'+(filmVsMst*100).toFixed(1)+'%</b> shorter than the naive tree — that saving is what 120° junctions buy.</span>';
+  refreshFacts(your);
+}
+
+// ---------------------------------------------------------------------------
+function fmt(x,d){ return (x==null||isNaN(x))?'—':x.toFixed(d==null?4:d); }
+function refreshFacts(yourLen){
+  if(ST.mode==='survey'){
+    const net=ST.net||solve(ST.posts);
+    document.getElementById('fLen').textContent=fmt(net.totalLength);
+    const js=net.junctions.filter(j=>net.nodes[j.node].kind==='steiner');
+    const all120=js.length>0 && js.every(j=>j.plateau);
+    document.getElementById('fJ').textContent=js.length+(js.length?(all120?' · all 120°':' · X'):' · (none)');
+    document.getElementById('fJ').className=all120?'win':(js.length?'warn':'');
+    try{ const o=steinerExact(ST.posts).length; document.getElementById('fOracle').textContent='Δ '+Math.abs(net.totalLength-o).toExponential(1);
+      document.getElementById('fOracle').className='film'; }catch(e){ document.getElementById('fOracle').textContent='—'; }
+  } else {
+    const N=gameNodes(); const your= yourLen!=null?yourLen:(ST.game.roads.length?measureNetwork(N,ST.game.roads).length:null);
+    document.getElementById('sYour').textContent=fmt(your);
+    document.getElementById('sFilm').textContent=ST.smt?fmt(ST.smt.totalLength):'—';
+    document.getElementById('sMst').textContent=ST.mst?fmt(ST.mst.totalLength):fmt(spanningTree(ST.posts).totalLength);
+    document.getElementById('sStar').textContent=ST.star?fmt(ST.star.totalLength):fmt(hubStar(ST.posts).totalLength);
+  }
+}
+// cheap per-frame facts (no oracle call) for the live drag
+function liveFacts(){
+  if(ST.mode!=='survey' || !ST.net) return;
+  const net=ST.net;
+  document.getElementById('fLen').textContent=fmt(net.totalLength);
+  const js=net.junctions.filter(j=>net.nodes[j.node].kind==='steiner');
+  const all120=js.length>0 && js.every(j=>j.plateau);
+  const hasX=net.junctions.some(j=>net.nodes[j.node].degree>=4);
+  document.getElementById('fJ').textContent=js.length+(hasX?' · X':(js.length?(all120?' · all 120°':' · …'):' · (none)'));
+  document.getElementById('fJ').className=hasX?'warn':(all120?'win':(js.length?'':''));
+}
+function showHud(msg){ const h=document.getElementById('hud'); h.innerHTML=msg; h.classList.add('show');
+  clearTimeout(showHud._t); showHud._t=setTimeout(()=>h.classList.remove('show'),3600); }
+
+// ---------------------------------------------------------------------------
+// SELF-TEST pill
+// ---------------------------------------------------------------------------
+function paintChip(){
+  const chip=document.getElementById('selftest');
+  let res; try{ res=Core.runSelfTest(); }catch(e){ chip.className='selftest bad'; chip.textContent='self-test error'; console.error(e); return; }
+  if(res.pass===res.total){ chip.className='selftest ok'; chip.textContent='self-test '+res.pass+'/'+res.total+' ✓'; }
+  else { chip.className='selftest bad'; chip.textContent='self-test '+res.pass+'/'+res.total+' ✗'; }
+  chip._res=res;
+}
+document.getElementById('selftest').addEventListener('click',function(){
+  const r=this._res||Core.runSelfTest(); const d=r.detail;
+  showHud('Self-test <b>'+r.pass+'/'+r.total+'</b> · square relax <b>'+d.square.relax.toFixed(6)+'</b> vs oracle (Δ'+
+    Math.abs(d.square.relax-d.square.oracle).toExponential(1)+') · max angle err '+d.maxAngleErr.toExponential(1)+
+    '° · forced + '+d.negControl.cross.toFixed(4)+' > split '+d.negControl.split.toFixed(4));
+});
+
+// ---------------------------------------------------------------------------
+// RAF
+// ---------------------------------------------------------------------------
+function loop(now){
+  TIME=now;
+  if(ST.mode==='survey' && !ST.paused && ST.rstate && !ST.settled && !reduced){
+    const nSteps= ST.slowmo>0?2:(ST.dragPost>=0?9:16);
+    const o=stepRelax(ST.rstate,ST.posts,nSteps);
+    ST.net=o.net; ST.settled=o.settled;
+    liveFacts();
+    if(o.flip){ ST.blooms.push({x:o.flip.crossNode.x,y:o.flip.crossNode.y,t0:TIME}); ST.slowmo=1;
+      showHud('topology flip — the junctions rotate through a transient <b>X</b>'); }
+    // THROTTLED global-optimum guard (~7/sec, never per-frame): the cheap live
+    // relaxer can lag the true topology on a big drag; if the live film runs
+    // longer than the authoritative solve(), re-seed to the global minimum.
+    if(ST.dragPost>=0 && TIME-ST.lastGlobalCheck>140){
+      ST.lastGlobalCheck=TIME;
+      const g=solve(ST.posts);
+      if(ST.net.totalLength > g.totalLength + 1e-4){ ST.rstate=beginRelax(ST.posts); ST.net=g; }
+    }
+    if(o.settled){ ST.net=solve(ST.posts); refreshFacts(); }   // snap to the GLOBAL optimum + full readout once settled
+  }
+  if(ST.slowmo>0) ST.slowmo=Math.max(0,ST.slowmo-0.018);
+  if(ST.filmDropped && ST.bloomT>=0 && ST.bloomT<1 && !reduced) ST.bloomT=Math.min(1,ST.bloomT+0.018);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+window.addEventListener('resize',resize);
+resize(); loadPreset('triangle'); paintChip(); requestAnimationFrame(loop);
+try{ localStorage.setItem('ws:seen:soap-film','1'); }catch(e){}
+</script>
+</body>
+</html>

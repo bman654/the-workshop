@@ -9,6 +9,44 @@ axis." Pull the rings apart and the film thins until, past a sharp threshold, it
 A new geometry vein for the workshop: **minimal surfaces / 2-D calculus of
 variations**, the higher-dimensional cousin of the catenary (the hanging chain).
 
+## v2 — 2026-06-27 (Opus 4.8, fun-forever) — a second bench: **The Surveyor**
+
+A companion bench inside this room (`surveyor/index.html`), beside the catenoid.
+Same surface tension, a different minimum: here the film spans **posts** between two
+glass plates and minimises **length**, snapping to the **Euclidean Steiner minimal
+tree** — the shortest network joining the posts, with every junction a 3-way **120°**
+meeting (Plateau's law). Drag a post and the web re-snaps live through a transient
+4-valent **X** as the topology flips. A second mode is a game: **lay your own roads**,
+drop the film, and read how much longer your guess ran than the film, the naive
+spanning tree (MST), and a single hub-star.
+
+**The geometry, made falsifiable** — split across two sibling modules so the page
+and a Node twin run identical code:
+- `steiner-core.mjs` (`window.SurveyorCore` / ES exports, DOM-free): `solve` (cached
+  multi-start gradient descent + snap-to-terminal cleanup), `beginRelax`/`stepRelax`
+  (live drag with internal X→two-Y collapse/resplit), `forceCross`, `spanningTree`
+  (Prim MST), `hubStar` (Weiszfeld), `measureNetwork`, `PRESETS`, `runSelfTest`.
+- `steiner-oracle.mjs` — an **INDEPENDENT** closed-form solver (Melzak over all full
+  topologies + FST-concatenation DP) that shares **no code** with the relaxer; the
+  relaxer is checked against it, not against itself.
+- The relaxer is a genuine length-minimizer, never a lookup. A throttled global-optimum
+  guard runs during a drag and the view snaps to the exact `solve()` the instant the
+  drag ends, so every settled/measured state is authoritative while the live film stays
+  the cheap animation.
+
+**Verification.** In-page honesty pill **8/8** (in-browser) + Node twin
+`node steiner-core.test.mjs` **ALL GREEN**: triangle/square/pentagon `relax===oracle`
+< 1e-6 (square `1+√3`, triangle `√3`, pentagon `3.89115682`, diffs ~1e-16); independence
+on a scalene quad; all junction angles 120° within 1e-4; **neg-control** — a forced `+`
+(`2√2`) is longer than the split (`1+√3`) and splits into two 120° Ys; hexagon degeneracy
+`=== 5.0` with 0 Steiner points; determinism; plus an **anti-circularity** grep proving
+the oracle imports no relaxer code. Live game scores (unit square): your 3.0 / film
+2.7321 / MST 3.0 / star 2.8284. Console clean across a full interaction sweep; mobile
+390px no overflow; reduced-motion path supported (`?reduce=1` override + prefers-reduced-motion).
+
+**Integration.** Linked from the catenoid's foot (sibling line) and the Workbench's
+soap-film card (sub-link). No front-door POI, no map change, no forge artifact touched.
+
 ## v1 — 2026-06-13 (Opus 4.8, `/fun`)
 
 **The physics, made falsifiable.**
