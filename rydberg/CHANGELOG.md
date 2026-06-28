@@ -1,10 +1,75 @@
 # The Rydberg Constant — CHANGELOG
 
-🔬 *read off starlight* — a Workbench → Computation bench where a **blind line-fitter**
-that knows zero atomic physics reads the Rydberg constant off four smudged hydrogen
-lines. A `[cross]` of **The Plumbline** 📐 × **The Spectroscope** 🌈 (the Computation
-group, the card after The Plumbline). Slug `rydberg/`. Standalone Workbench page →
-**ws:seen EXEMPT** (DESIGNING §4/§47).
+⚛ *the atom & its quantum jumps* — a Workbench → Computation piece: a touchable Bohr
+atom whose electron you pluck up an orbit and watch fall to **n=2**, firing a **Balmer
+photon** that streaks across one canvas to paint its line on a spectral plate while the
+matching **−R/n² energy-staircase** rung-gap lights in the same colour. Read the Rydberg
+constant **twice** — geometrically off the staircase rungs, statistically off the blind
+line-fit — on one gilt CODATA mark. A `[cross]` of **The Plumbline** 📐 × **The
+Spectroscope** 🌈 (the Computation group, the card after The Plumbline); the original
+blind line-fitter that reads R off four smudged lines is **demoted, kept byte-exact**, in
+a quiet drawer. Slug `rydberg/`. Standalone Workbench page → **ws:seen EXEMPT**
+(DESIGNING §4/§47). *(Was, through v1.1, a `read off starlight` regression bench — a
+1/λ-vs-u=1/n² scatter + a wall of fitting stats; re-souled into the atom at v2 below.)*
+
+---
+
+## v2 — the atom & its quantum jumps (2026-06-27, cycle #353 — a `[rework]` re-soul)
+
+**Why re-soul.** v1 delivered R off a regression SCATTER while the thing the constant is
+MADE of — the atom, its 1/n² energy ladder, the photons it fires — showed only as static
+lines feeding dots. A vivid caption couldn't lift an abstract chart over the **grounded
+gate**, so the `[rework]` (sown #348) made the atom + its quantum jumps the touchable
+hero and DEMOTED the regression rather than gutting it.
+
+**The stage** — one full-stage canvas, one rAF loop, one coordinate space, all procedural:
+- **LEFT — the −R/n² energy staircase.** E=0 series limit (gilt) at top, rungs n=3..6
+  crowding upward, the bold gilt **n=2 Balmer floor** at bottom, n=1 hinted off-plate
+  (→ ultraviolet / Lyman). When a photon lands, the matching rung-GAP lights in the
+  photon's true colour with its floating 1/λ.
+- **CENTER — the Bohr atom (hero).** A warm gilt proton-nucleus, nested orbits r∝n²
+  (slate), a chalk-white electron riding its orbit with a motion-trail, a seeded
+  starfield. Click an outer orbit → the electron tweens UP, holds/glows, then DECAYS to
+  n=2 and fires a Balmer wave-packet streaking RIGHT across all regions seamlessly.
+- **RIGHT — the spectral plate.** Starts BLANK; photons paint Hα 656 (red) · Hβ 486
+  (cyan) · Hγ 434 (blue) · Hδ 410 (violet) at true `wavelengthToRGB` colour, brightness ∝
+  accumulated hits, crowding toward the marked 364.6 nm series-limit edge (mirroring the
+  staircase). Plate-line brightness and rung-gap brightness share ONE `acc[n]`, so **the
+  lit rung-gap === the painted line** is structural, not decorative.
+
+**Interaction.** Click an orbit · FIRE ALL FOUR · AUTO/rain toggle · RESET PLATE · an
+optional WebAudio chime (default-muted, gesture-unlocked, honours the estate-wide
+`ws:pref:muted`; pitch ∝ c/λ). `prefers-reduced-motion` ⇒ instant-fill, no streaks
+(electron + starfield frozen too).
+
+**The two-readings payoff** (the reused `.twice`/`.agree` card): **R-from-the-STAIRCASE**
+(`rFromLadder`, geometric/exact) vs **R-from-the-REGRESSION** (`−fitL2(seeded points).m`,
+statistical) on one gilt CODATA mark — two code-disjoint computations, one constant. The
+whole v1 regression machinery (σ slider, seed stepper, L2/L1, the vacuum/air +277 ppm
+trap, the ±t·SE band, R², ppm, the old `−slope === 4·intercept` consistency check) is
+**demoted but kept BYTE-EXACT** inside a collapsed `<details>` drawer with its own shrunk
+scatter plot — nothing was gutted.
+
+**New crux legs** added to `rydberg-core.mjs` (pure helpers `termValue` / `rungDrop` /
+`rFromLadder` + their self-test legs, exported): **(e) photon law** — for n=3..6 the n→2
+rung-DROP `termValue(2)−termValue(n)` equals the photon wavenumber 1/λ AND `R_H(¼−1/n²)`
+to machine-ε (the lit rung-gap === the painted line === the law, a render-faithfulness
+check, not a tautology); **(f) two readings** — `rFromLadder` === `−slope` of the blind
+fit to <1e-9 and === R_H to <1e-12; **(g) neg-control** — a wrong-floor **Lyman**
+`R_H(1−1/n²)` jump lands OUTSIDE the Balmer plate window and matches no Balmer line.
+
+**Verification (this cycle).** Node twin `node rydberg/rydberg-core.test.mjs` → **18/18
+PASS** (the 3 new legs picked up by `runSelfTest`, now 8/8 in-page; byte-twin char-for-char
+16304 chars identical; spectroscope byte-twin intact; anti-circularity grep clean).
+In-browser (publisher fresh-eyes, served `:8791`, agent-browser session `pub353`): pill
+GREEN **`the atom emits R ✓ 8/8`**, 0 console errors, idle render + live orbit-click excite
+(a single pointerdown on the n=4 ring fired one violet photon onto the plate) + FIRE ALL
+FOUR cascade (plate painted Hα/Hβ/Hγ/Hδ, staircase rung-gaps lit in matching colours) +
+regression drawer expands with its scatter + fit line + t·SE band + gilt intercept whisker;
+**no horizontal overflow at 1400px OR 390px** (mobile layout clean and legible). `forge
+--check --all` all 110 files current. The reciprocal teaser in **The Spectroscope** was
+re-souled to *→ The Rydberg Atom*; the **Workbench** card re-souled (⚛ glyph, new
+kind/blurb).
 
 ---
 

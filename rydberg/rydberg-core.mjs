@@ -125,6 +125,24 @@ function recoverR(points) {
   };
 }
 
+// ── THE ENERGY-LADDER helpers — the staircase the re-souled page makes touchable. ─
+// termValue(n) = R_H/n² is the binding energy of level n in wavenumber units (/m):
+// the term that sits at HEIGHT −R_H/n² on the −R/n² staircase (E=0 at the series
+// limit n→∞, the n=2 floor at the bottom). rungDrop(n) = termValue(2)−termValue(n)
+// is the n→2 (Balmer) photon's WAVENUMBER 1/λ — the height of the lit rung-gap AND
+// the colour of the painted plate line: one number, read three ways. rFromLadder(ns)
+// reads R back OFF the staircase by a least-squares-THROUGH-ORIGIN fit of the term
+// values termValue(n) against u=1/n² (slope = Σ u·termValue / Σ u²). On the EXACT
+// term values this is R_H to machine-ε — a GEOMETRIC reading, code-disjoint from the
+// line-position regression (−slope of fitL2). All flow from the single-source RYDBERG_H.
+function termValue(n) { return RYDBERG_H / (n * n); }
+function rungDrop(n) { return termValue(2) - termValue(n); }
+function rFromLadder(ns) {
+  let num = 0, den = 0;
+  for (const n of ns) { const u = 1 / (n * n); num += u * termValue(n); den += u * u; }
+  return num / den;
+}
+
 // ── runSelfTest() — the SOLE ORACLE. Same shape as plumbline's: ───────────────
 // { pass, total, lines:[{name, ok, detail}] }. The in-page pill and the Node twin
 // both call THIS. Every detail carries LIVE numbers (calls the imported fits).
@@ -228,6 +246,68 @@ function runSelfTest() {
              : `slope ${(fracSlope * 1e6).toFixed(2)}ppm inter ${(fracInter * 1e6).toFixed(2)}ppm expected ${(fracExpected * 1e6).toFixed(2)}ppm r2=${f.r2}`);
   }
 
+  // ── LEG (e) — THE PHOTON LAW (ladder ↔ light): the lit rung-gap === the line. ─
+  // For each Balmer n the staircase rung-DROP termValue(2)−termValue(n) equals the
+  // emitted photon's WAVENUMBER 1/λ to machine-ε, AND equals R_H(¼−1/n²). So the
+  // lit rung-gap on the staircase, the painted line on the plate, and the law are
+  // ONE number. Honest framing: a RENDER-FAITHFULNESS check — it catches a unit slip
+  // / a −R/n vs −R/n² confusion / a mis-scaled plate the render could otherwise hide
+  // — NOT a re-asserted tautology (the page draws all three from these same calls).
+  {
+    let worstLight = 0, worstLaw = 0;
+    for (const n of NS) {
+      const drop = rungDrop(n);
+      const waveNum = 1 / (balmerWavelengthNm(n) * 1e-9);   // 1/λ in /m
+      const law = RYDBERG_H * (1 / 4 - 1 / (n * n));
+      worstLight = Math.max(worstLight, Math.abs(drop - waveNum) / waveNum);
+      worstLaw = Math.max(worstLaw, Math.abs(drop - law) / Math.abs(law));
+    }
+    const ok = worstLight <= 1e-12 && worstLaw <= 1e-12;
+    T('LEG (e) — photon law (ladder ↔ light): for n=3..6 the n→2 rung-DROP termValue(2)−termValue(n) equals the photon wavenumber 1/λ AND R_H(¼−1/n²) to machine-ε — the lit rung-gap === the painted plate line === the law (a render-faithfulness check, not a tautology)',
+      ok, ok ? `worst |drop−1/λ|/(1/λ) ${worstLight.toExponential(1)} · worst |drop−R(¼−1/n²)|/law ${worstLaw.toExponential(1)} ≤ 1e-12 (n=3..6)`
+             : `worstLight=${worstLight.toExponential(2)} worstLaw=${worstLaw.toExponential(2)}`);
+  }
+
+  // ── LEG (f) — TWO READINGS, ONE CONSTANT (the BUILD's wiring guard). ──────────
+  // R off the STAIRCASE (rFromLadder: least-squares-through-origin on the term
+  // values — geometric) and R off the REGRESSION (−slope of the blind line fit on
+  // the noiseless line positions — statistical) are two CODE-DISJOINT computations,
+  // and both equal R_H. Honest caption: a CONSISTENCY proof of the wiring (a
+  // no-intercept model on term values vs an intercept model on line positions, both
+  // flowing from RYDBERG_H) — it guards the BUILD, not two physical instruments.
+  {
+    const Rladder = rFromLadder([2, 3, 4, 5, 6]);
+    const Rreg = -fitL2(buildPoints({ medium: 'vacuum', noiseFrac: 0, seed: 1 })).m;
+    const dPair = Math.abs(Rladder - Rreg) / RYDBERG_H;
+    const dTruth = Math.abs(Rladder - RYDBERG_H) / RYDBERG_H;
+    const ok = dPair <= 1e-9 && dTruth <= 1e-12;
+    T('LEG (f) — two readings, one constant: R from the STAIRCASE (rFromLadder, least-squares-through-origin on the term values) === R from the REGRESSION (−slope of the blind line fit) to <1e-9, and === R_H to <1e-12 — two code-disjoint computations on one gilt mark (a wiring-consistency proof, not two instruments)',
+      ok, ok ? `|R_ladder−R_reg|/R ${dPair.toExponential(1)} ≤1e-9 · |R_ladder−R_H|/R ${dTruth.toExponential(1)} ≤1e-12`
+             : `dPair=${dPair.toExponential(2)} dTruth=${dTruth.toExponential(2)}`);
+  }
+
+  // ── LEG (g) — NEG-CONTROL (wrong floor): a Lyman jump misses the Balmer plate. ─
+  // The Lyman wavenumber R_H(1−1/n²) (transitions to n=1, the WRONG floor) for
+  // n∈{2,3} lands OUTSIDE the Balmer plate window [1/(680 nm), 1/(360 nm)] and
+  // matches NO Balmer line 1/(balmerWavelengthNm(m)·1e-9) to within 1% — proof that
+  // a non-Balmer / wrong-floor transition does NOT land on a Balmer line.
+  {
+    const winLo = 1 / (680e-9), winHi = 1 / (360e-9);     // plate window, /m (wavenumber)
+    let allOutside = true, worstMatch = Infinity;
+    for (const n of [2, 3]) {
+      const lyman = RYDBERG_H * (1 - 1 / (n * n));         // n→1 wavenumber (wrong floor)
+      if (lyman >= winLo && lyman <= winHi) allOutside = false;
+      for (const m of NS) {
+        const balmer = 1 / (balmerWavelengthNm(m) * 1e-9);
+        worstMatch = Math.min(worstMatch, Math.abs(lyman - balmer) / balmer);
+      }
+    }
+    const ok = allOutside && worstMatch > 0.01;
+    T('LEG (g) — neg-control (wrong floor): the Lyman wavenumber R_H(1−1/n²) for n=2,3 lands OUTSIDE the Balmer plate window [1/680nm,1/360nm] and matches no Balmer line to within 1% — a non-Balmer / wrong-floor jump does NOT land on a Balmer line',
+      ok, ok ? `Lyman n=2,3 outside [${(winLo / 1e6).toFixed(2)},${(winHi / 1e6).toFixed(2)}]×10⁶/m · nearest Balmer ${(worstMatch * 100).toFixed(0)}% off (≫1%)`
+             : `allOutside=${allOutside} worstMatch=${(worstMatch * 100).toFixed(2)}%`);
+  }
+
   const pass = lines.filter(l => l.ok).length;
   return { pass, total: lines.length, lines };
 }
@@ -236,6 +316,7 @@ function runSelfTest() {
 export {
   NS, T_DOF2_68, T_DOF2_95,
   meanInvLambdaVac, buildPoints, fitL2SE, recoverR, runSelfTest,
+  termValue, rungDrop, rFromLadder,
   // re-export the imported truth so the page (Option A inline) and the Node twin
   // reach the SAME single-source values through ONE import of this module:
   RYDBERG_H, balmerWavelengthNm, balmerWavelengthAirNm,

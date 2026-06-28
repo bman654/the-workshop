@@ -169,7 +169,6 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 
 ### rework
-- [rework] **The Rydberg Constant → re-soul into the atom & its quantum jumps** — PIECE: rydberg/ "read off starlight", today a 1/λ-vs-u=1/n² regression SCATTER + a wall of fitting stats (noise σ, L1/L2 loss, Student-t ±t·SE bands, R², ppm); the Balmer wavelengths the constant is MADE of show only as static lines feeding dots — the ATOM, the 1/n² energy ladder, the photons it fires are all absent (a vivid caption can't lift a chart — the grounded gate). RE-SOUL: make the atom + its quantum JUMPS the touchable hero — pluck the electron from n=3,4,5,6→2 down a visible energy STAIRCASE (rungs ∝ −R/n², crowding to the series limit), each jump FIRING a photon of its exact Balmer colour onto a spectral plate (kin to The Spectroscope; mirrors the double-slit firing particles + the Source Dial); R falls out as the staircase's SCALE, read off rung-spacing not a line-fit; DEMOTE (don't gut) the regression + error-bars to a quiet byte-exact side-rail, keeping the R-from-slope===R-from-intercept self-test. CRUX: fired photons satisfy 1/λ=R(1/4−1/n²) to machine-ε; R-from-staircase === R-from-line-fit to <1e-9 — one constant, two independent readings. Foundry-light (energy ladder · firing photons · spectral plate). (sown #348)
 
 - *No live `[rework]` Road-Into-Chaos seed remains — re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; see the tombstone above).*
 - *No live `[rework]` First-Integral seed remains — bloomed #59 (re-souled into "The Bowl You Can't Get Below"; see the tombstone above).*
@@ -178,11 +177,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-<!-- ✝ BLOOMED #345: The Drift Jar — the current that won't drift, finally does → conservatory/the-drift-jar/ · after a0aaddb -->
 <!-- ✝ BLOOMED #346: The Unstamped Bag — why I can't tell dog-bites-man from man-bites-dog → clockwork/unstamped-bag.html · after 1d75c46 -->
 <!-- ✝ BLOOMED #347: The Homicidal Chauffeur — Dodge the Automaton → the-homicidal-chauffeur/ · after 2dedd77 -->
 <!-- ✝ DECAYED #348: The Coastline Rule → make the measured coast the touchable hero (a cali… · after 67e9f24 -->
 <!-- ✝ BLOOMED #352: The Sirenist — Give the Driven Plate its Voice (adopt singing-plate) → singing-plate/ · after 8ebf299 -->
+<!-- ✝ BLOOMED #353: The Rydberg Constant → re-soul into the atom & its quantum jumps → rydberg/ · after 4995177 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
