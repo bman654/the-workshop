@@ -134,19 +134,45 @@ a room where things are made by hand. [short pause] Nothing here was commissione
 ## Inlining (and why the page stays self-contained)
 
 "Self-contained" is a property of the **shipped file**, not the authoring process —
-the same principle that lets `forge` inline an engine. Audio is inlined the same way:
+the same principle that lets `forge` inline an engine. Audio is inlined the same way,
+and `forge` now folds it for you with two **inline** directives (substring tokens that
+drop into an attribute or mid-statement, unlike own-line `forge:include`):
 
-- the **`.mp3`** becomes a `data:audio/mpeg;base64,…` URI on an `<audio>` element (or
-  fed to the Web Audio API), and
-- the **`.json`** becomes an inline JavaScript literal.
+- the **`.mp3`** becomes a `data:audio/mpeg;base64,…` URI via `forge:asset` —
+  ```html
+  <audio src="<!-- forge:asset piece.mp3 -->" controls></audio>
+  ```
+  forge emits the *bare* `data:<mime>;base64,…` string; the author owns the quotes
+  and the element (so the same token also works in CSS `url(…)` or a future
+  `<img src>`); and
+- the **`.json`** becomes an inline literal via `forge:json` —
+  ```html
+  <script>const TIMING = <!-- forge:json piece.json -->;</script>
+  ```
+  forge `JSON.parse`s the file (failing the build loud on bad JSON) then emits the
+  file's **original text verbatim** — a pure passthrough, not a re-serialize.
+
+**Allow-table.** `forge:asset` recognises `.mp3 .wav .ogg .m4a` (audio) and
+`.png .jpg .jpeg .gif .svg .webp` (image); an unknown extension is a hard build
+error (almost always a wrong sibling — better to fail than ship a non-playable
+`data:application/octet-stream`).
+
+**Byte-stable / round-trip.** The base64 fold is a pure function of the asset's
+bytes producing single-line ASCII, so `forge --check` proves the shipped `.html`
+matches a fresh build (a tampered asset byte turns `--check` red) — the same
+staleness contract forge gives the engine. The inlined blob decodes byte-identical
+to the source file (covered by `tools/forge/forge.test.mjs`).
+
+**Size policy.** Page weight is the cost (a few minutes of 64k speech is a couple of
+MB base64'd; for a write-once page that earns its voice, that trade is worth it).
+forge enforces it on the *encoded* length: an asset over **4 MiB** ships with a
+yellow `⚠` warning by default — pass **`--strict`** (on BUILD or `--check`) to make
+that warning fatal for a pre-ship sweep — and an asset over **24 MiB** is *always*
+fatal (the "never silently ship a giant page" floor), `--strict` or not.
 
 So nothing is fetched at runtime, and the Colophon's own promise — *"nothing fetched
 from the network… open any one in a browser and it simply runs"* — stays literally
-true even with a voice. The cost is page weight (a few minutes of 64k speech is a
-couple of MB base64'd); for a write-once page that earns its voice, that trade is
-worth it. `forge` does not yet inline binary assets — adding that is part of the work
-(see the open writ); the target is a directive that base64-folds an audio sibling, the
-way `forge:include` folds a script.
+true even with a voice.
 
 ## Reproducibility — the honest caveat
 

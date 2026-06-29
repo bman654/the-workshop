@@ -13,11 +13,20 @@
 
    See adventure/ADVENTURE.SPEC.md §7 (forge) and §5 (the self-contained artifact).
 
+   Beyond forge:include (own-line, inlines a script), forge folds two INLINE
+   (substring) directives so a page can carry its own binary + data:
+     <!-- forge:asset <relpath> -->  → a bare data:<mime>;base64,… URI in place
+                                       (drops into src="…" / url(…))
+     <!-- forge:json  <relpath> -->  → a validated JSON literal, emitted verbatim
+   An asset over 4 MiB encoded ships with a warning (--strict makes it fatal);
+   over 24 MiB is always fatal.
+
    CLI:
      forge <file.src.html> [more.src.html ...]   build the named src files
      forge --all [root]                          build every *.src.html under root (recursive)
      forge --check <file.src.html | --all [root]>  build in memory, diff vs on-disk
                                                    .html; exit 1 if any drift
+     forge [--check] --strict …                  an oversized-asset warning ⇒ failure
      forge --help                                usage
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -25,10 +34,112 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const DIRECTIVE = /^[ \t]*<!--[ \t]*forge:include[ \t]+(.+?)[ \t]*-->[ \t]*$/;
+
+/* The INLINE directives — substring tokens, NOT line-anchored, so they drop into
+   an attribute or mid-statement (`<audio src="<!-- forge:asset v.mp3 -->">` or
+   `const T = <!-- forge:json piece.json -->;`). GLOBAL flag + non-greedy `(.+?)`
+   so multiple tokens on one line each fold. Unlike forge:include (which owns its
+   whole line and replaces it 1:1), these splice a value into the line the author
+   wrote. A line-anchored include line can never also carry an inline token — the
+   include regex requires the directive be the WHOLE line — so the passes don't
+   collide. */
+const ASSET = /<!--[ \t]*forge:asset[ \t]+(.+?)[ \t]*-->/g;
+const JSONLIT = /<!--[ \t]*forge:json[ \t]+(.+?)[ \t]*-->/g;
+
+/* The frozen MIME allow-table for forge:asset. An unknown extension is a hard
+   error (see inlineAsset): it's almost always an author pointing at the wrong
+   sibling, and failing at build beats silently shipping a non-playable
+   data:application/octet-stream. Audio is the writ's need; the image rows are
+   cheap table data (not branches) serving the named-future <img src> use. */
+const MIME = Object.freeze({
+  '.mp3':  'audio/mpeg',
+  '.wav':  'audio/wav',
+  '.ogg':  'audio/ogg',
+  '.m4a':  'audio/mp4',
+  '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif':  'image/gif',
+  '.svg':  'image/svg+xml',
+  '.webp': 'image/webp',
+});
+
+/* Size policy for an inlined asset (on the BASE64-ENCODED length):
+   - HARD ceiling: always fatal, even without --strict (never silently ship a
+     giant page).
+   - WARN: ~3 MiB raw; matches the voice README's "couple of MB" target. Under
+     --strict it's fatal; otherwise forge ships it with a yellow stderr warning
+     (the tool informs, the author decides). */
+const HARD_BYTES = 24 * 1024 * 1024;   // 24 MiB encoded → ALWAYS fatal
+const WARN_BYTES = 4 * 1024 * 1024;    // 4 MiB encoded (~3 MiB raw) → warn / --strict-fatal
+
 const SKIP_DIRS = new Set(['.git', 'node_modules']);
 
 /* A forge-level error we present cleanly (no raw stack at the user). */
 class ForgeError extends Error {}
+
+/* Resolve an extension to its MIME type, or throw listing the allow-table. */
+function mimeFor(rel) {
+  const ext = path.extname(rel).toLowerCase();
+  const mime = MIME[ext];
+  if (!mime) {
+    throw new ForgeError(
+      'forge:asset unknown extension "' + ext + '" for "' + rel + '".\n' +
+      '  Known: ' + Object.keys(MIME).join(', ') + '.');
+  }
+  return mime;
+}
+
+/* forge:asset — read a sibling file as BINARY (no encoding; routing it through
+   readText's utf8+CRLF path would corrupt the bytes), base64-encode it, enforce
+   the size policy, and return the BARE `data:<mime>;base64,<…>` string. The author
+   owns the surrounding quotes/element, so the value drops straight into an
+   `<audio src="…">`, a CSS `url(…)`, or a future `<img src>`. The encoded blob is
+   pure single-line ASCII (no CR/LF), so the fold is a pure function of the bytes —
+   --check sees no drift, and editing the asset's bytes turns --check red. */
+function inlineAsset(incPath, rel, srcFile, strict) {
+  if (!fs.existsSync(incPath)) {
+    throw new ForgeError(
+      'forge:asset target not found: "' + rel + '"\n' +
+      '  (resolved to ' + incPath + ', relative to ' + srcFile + ')');
+  }
+  const mime = mimeFor(rel);                       // throws on unknown ext before any read
+  let bytes;
+  try { bytes = fs.readFileSync(incPath); }        // BINARY read — no 'utf8'
+  catch (e) { throw new ForgeError('forge:asset cannot read "' + rel + '": ' + e.message); }
+  const b64 = bytes.toString('base64');
+  const encoded = b64.length;
+  if (encoded > HARD_BYTES) {
+    throw new ForgeError(
+      'forge:asset "' + rel + '" is ' + (encoded / 1048576).toFixed(1) +
+      ' MiB base64-encoded — over the ' + (HARD_BYTES / 1048576) +
+      ' MiB hard ceiling. Refusing to inline (a page this heavy is a mistake).');
+  }
+  if (encoded > WARN_BYTES) {
+    const msg = 'forge:asset "' + rel + '" is ' + (encoded / 1048576).toFixed(1) +
+      ' MiB base64-encoded (over the ' + (WARN_BYTES / 1048576) + ' MiB warn line).';
+    if (strict) throw new ForgeError(msg + ' (--strict: a warning is a failure.)');
+    console.error('  ⚠ ' + msg + ' Inlining anyway (pass --strict to refuse).');
+  }
+  return 'data:' + mime + ';base64,' + b64;
+}
+
+/* forge:json — JSON.parse the file to validate it (fail the build loud on bad
+   JSON), then emit the file's ORIGINAL text VERBATIM (CRLF→LF normalized like
+   every include). We deliberately do NOT re-serialize: the fold stays a pure
+   passthrough so --check sees no drift. The page owns the wrapping, e.g.
+   `const TIMING = <!-- forge:json piece.json -->;`. */
+function inlineJson(incPath, rel, srcFile) {
+  if (!fs.existsSync(incPath)) {
+    throw new ForgeError(
+      'forge:json target not found: "' + rel + '"\n' +
+      '  (resolved to ' + incPath + ', relative to ' + srcFile + ')');
+  }
+  const text = readText(incPath);                  // utf8 + CRLF→LF (a JSON literal IS text)
+  try { JSON.parse(text); }
+  catch (e) { throw new ForgeError('forge:json invalid JSON in "' + rel + '": ' + e.message); }
+  return text.replace(/\n$/, '');                  // trim one trailing newline; emit verbatim
+}
 
 /* ── Strip the dual-use module guard + leading `export ` + bare top-level `import`s
    from an included .js / .mjs so the inline is clean in a browser. The guard is
@@ -117,8 +228,28 @@ function readText(file) {
   return raw.replace(/\r\n/g, '\n');
 }
 
-/* Build one .src.html → the inlined HTML string (does not write). */
-function buildOne(srcFile) {
+/* Run the INLINE passes (forge:asset, forge:json) over one text block, splicing
+   each token's value in place. Tallies the substitutions into `tally` so the
+   directive-count guard knows an asset-only page is valid. Used on every non-
+   include line AND over the content of an included partial (so a directive INSIDE
+   an include still folds). */
+function applyInline(text, srcDir, srcFile, strict, tally) {
+  let out = text.replace(ASSET, (_full, rel) => {
+    rel = rel.trim();
+    tally.asset++;
+    return inlineAsset(path.resolve(srcDir, rel), rel, srcFile, strict);
+  });
+  out = out.replace(JSONLIT, (_full, rel) => {
+    rel = rel.trim();
+    tally.json++;
+    return inlineJson(path.resolve(srcDir, rel), rel, srcFile);
+  });
+  return out;
+}
+
+/* Build one .src.html → the inlined HTML string (does not write).
+   `strict` makes a size WARNing fatal (default: warn + ship). */
+function buildOne(srcFile, strict = false) {
   if (!/\.src\.html$/.test(srcFile)) {
     throw new ForgeError('"' + srcFile + '" is not a *.src.html file.');
   }
@@ -130,10 +261,15 @@ function buildOne(srcFile) {
   const lines = text.split('\n');
 
   let includeCount = 0;
+  const tally = { asset: 0, json: 0 };
   const outLines = [];
   for (const line of lines) {
     const m = line.match(DIRECTIVE);
-    if (!m) { outLines.push(line); continue; }
+    if (!m) {
+      // a non-include line may carry inline forge:asset / forge:json tokens
+      outLines.push(applyInline(line, srcDir, srcFile, strict, tally));
+      continue;
+    }
 
     const rel = m[1].trim();
     const incPath = path.resolve(srcDir, rel);
@@ -144,16 +280,20 @@ function buildOne(srcFile) {
     }
     let content = readText(incPath);
     if (/\.[cm]?js$/.test(incPath)) content = stripModuleGuard(content);
+    // An inline directive INSIDE an included partial still folds.
+    content = applyInline(content, srcDir, srcFile, strict, tally);
     // Inline verbatim (trim a single trailing newline so the block sits flush;
     // the directive line itself is replaced 1:1).
     outLines.push(content.replace(/\n$/, ''));
     includeCount++;
   }
 
-  if (includeCount === 0) {
+  // An asset-only or json-only .src.html (no include) is valid.
+  if (includeCount + tally.asset + tally.json === 0) {
     throw new ForgeError(
-      'no forge:include directives found in "' + srcFile + '".\n' +
-      '  Add lines like:  <!-- forge:include engine/lantern.js -->');
+      'no forge directives found in "' + srcFile + '".\n' +
+      '  Add lines like:  <!-- forge:include engine/lantern.js -->\n' +
+      '  or inline tokens: <!-- forge:asset voice.mp3 -->  /  <!-- forge:json timing.json -->');
   }
 
   // Banner: inject after <!DOCTYPE html> (case-insensitive) if present, else as
@@ -314,10 +454,18 @@ Usage:
       (so direct visits register for the Survey of Heaven / Undercroft, not just
       map clicks). Soft warning by default; --strict exits 1 on any offender.
 
+  --strict (BUILD / --check): treat an oversized-asset WARNING as a failure.
+      An asset over 4 MiB encoded is shipped with a yellow warning by default;
+      --strict refuses it. The 24 MiB hard ceiling is fatal regardless.
+
   node tools/forge/forge.mjs --help
 
-Directive (one per line, inside a <script> block in the .src.html):
-  <!-- forge:include <relpath> -->
+Directives:
+  <!-- forge:include <relpath> -->   (own line) inline a source file verbatim.
+  <!-- forge:asset <relpath> -->     (inline) emit a bare data:<mime>;base64,…
+                                     URI — drop it inside src="…" / url(…).
+  <!-- forge:json <relpath> -->      (inline) validate + emit a JSON literal
+                                     verbatim, e.g. const T = <!-- forge:json t.json -->;
   <relpath> resolves relative to the .src.html's own directory.`;
 
 function main(argv) {
@@ -339,7 +487,9 @@ function main(argv) {
 
   // --check mode: build in memory, diff against the on-disk .html.
   if (args[0] === '--check') {
-    const rest = args.slice(1);
+    let rest = args.slice(1);
+    const strict = rest.includes('--strict');
+    rest = rest.filter(a => a !== '--strict');     // strip the global flag from the file list
     let files;
     if (rest[0] === '--all' || rest.length === 0) {
       files = findSrcFiles(rest[1] ? path.resolve(rest[1]) : defaultRoot());
@@ -352,7 +502,7 @@ function main(argv) {
     for (const f of files) {
       const out = outPathFor(f);
       let built, current;
-      try { built = buildOne(f); }
+      try { built = buildOne(f, strict); }
       catch (e) { console.error('  ✗ ' + rel(f) + ' — build error: ' + e.message); drift++; continue; }
       try { current = fs.readFileSync(out, 'utf8').replace(/\r\n/g, '\n'); }
       catch { console.error('  ✗ ' + rel(out) + ' — MISSING (run forge to generate it)'); drift++; continue; }
@@ -371,19 +521,21 @@ function main(argv) {
     return 0;
   }
 
-  // --all mode: build everything under root.
+  // BUILD mode (--all or named files). --strict is a global flag here too.
+  const strict = args.includes('--strict');
+  const buildArgs = args.filter(a => a !== '--strict');
   let files;
-  if (args[0] === '--all') {
-    files = findSrcFiles(args[1] ? path.resolve(args[1]) : defaultRoot());
+  if (buildArgs[0] === '--all') {
+    files = findSrcFiles(buildArgs[1] ? path.resolve(buildArgs[1]) : defaultRoot());
     if (!files.length) { console.log('forge --all: no .src.html files found.'); return 0; }
   } else {
-    files = args.map(f => path.resolve(f));
+    files = buildArgs.map(f => path.resolve(f));
   }
 
   let built = 0;
   for (const f of files) {
     let html;
-    try { html = buildOne(f); }
+    try { html = buildOne(f, strict); }
     catch (e) { console.error('forge: ' + e.message); return 1; }
     const out = outPathFor(f);
     try { fs.writeFileSync(out, html); }

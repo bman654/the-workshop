@@ -44,6 +44,34 @@ Inside a `.src.html`, an HTML comment on its own line marks an inline slot:
   `export ` keyword, so the inline is clean in a browser. (The guard is inert in a
   browser anyway; this is just tidiness.) Non-`.js` includes are inlined verbatim.
 
+### Inline directives (`forge:asset`, `forge:json`)
+
+`forge:include` owns its whole line. Two further directives are **inline** — they are
+substring tokens, so they splice a value into the middle of a line the author wrote
+(and multiple may share one line). They fold a page's own binary + data so it stays
+self-contained:
+
+```html
+<audio src="<!-- forge:asset piece.mp3 -->" controls></audio>
+<script>const TIMING = <!-- forge:json piece.json -->;</script>
+```
+
+- **`forge:asset <relpath>`** reads the sibling as **binary**, base64-encodes it, and
+  emits the *bare* `data:<mime>;base64,…` string (the author owns the surrounding
+  quotes/element, so it also drops into CSS `url(…)` or a future `<img src>`). The MIME
+  comes from a frozen allow-table: `.mp3 .wav .ogg .m4a` (audio), `.png .jpg .jpeg
+  .gif .svg .webp` (image). An unknown extension is a hard error.
+- **`forge:json <relpath>`** `JSON.parse`s the file to validate it (a build error on
+  bad JSON) then emits its **original text verbatim** — a pure passthrough, not a
+  re-serialize, so `--check` sees no drift.
+- The fold is a pure function of the asset's bytes → single-line ASCII, so `--check`
+  catches a stale page (a tampered asset byte turns it red), and the inlined blob
+  decodes byte-identical to the source. An inline directive inside an **included**
+  partial folds too.
+- **Size policy** (on the encoded length): over **4 MiB** → a `⚠` warning, shipped
+  anyway by default (`--strict` makes it fatal); over **24 MiB** → always fatal.
+- A page may carry *only* inline directives (no `forge:include`) and still be valid.
+
 ## The banner
 
 forge stamps the very top of the output (right after `<!doctype html>`) with a
@@ -73,6 +101,11 @@ node tools/forge/forge.mjs --all adventure
 node tools/forge/forge.mjs --check adventure/the-lamplighter.src.html
 node tools/forge/forge.mjs --check --all
 
+# --strict (BUILD or --check): treat an oversized-asset WARNING as a failure.
+# Default ships a >4 MiB asset with a ⚠; --strict refuses it (a pre-ship gate).
+# The 24 MiB hard ceiling is fatal regardless of --strict.
+node tools/forge/forge.mjs --check --strict --all
+
 # Help
 node tools/forge/forge.mjs --help
 ```
@@ -84,8 +117,14 @@ the engine but forgets to re-forge a tale, `--check` catches it.
 ## Errors
 
 forge fails with a helpful message and a nonzero exit (never a raw stack) on:
-a missing input, an input that isn't `*.src.html`, a `forge:include` target that
-doesn't exist, or a `.src.html` with no directives. It handles CRLF/LF, multiple
+a missing input, an input that isn't `*.src.html`, a `forge:include` /
+`forge:asset` / `forge:json` target that doesn't exist, or a `.src.html` with no
+directives at all. The inline directives add three more: a **`forge:asset`** with an
+**unknown extension** (error lists the allow-table), an asset **over the 24 MiB hard
+ceiling** (always fatal) or over the 4 MiB warn line under **`--strict`**, and a
+**`forge:json`** pointing at **invalid JSON**. A failed build also surfaces in
+`--check` (a per-file "build error" → nonzero exit), so a missing/oversized/invalid
+asset is caught by a pre-ship sweep for free. forge handles CRLF/LF, multiple
 directives, and a missing trailing newline, and always emits a single trailing
 newline.
 
