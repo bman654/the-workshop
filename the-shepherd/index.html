@@ -353,10 +353,40 @@ function stepDog(dog, tgt){
   return dog;
 }
 
+// fleeAccum(xi, yi, sources) → the SUMMED flee acceleration on a sheep at (xi,yi) from every
+//   fixed repeller in `sources` (each {x,y}), plus the fear readout. Each source contributes the
+//   SAME capped inverse-square repulsion the single shepherd always did:
+//       mag = K_FLEE/(d²+1), clamped to FLEE_CAP, then ×taper where taper = 1 − d/FLEE_RANGE,
+//   zero beyond FLEE_RANGE. The forces ADD; the fear (fmax) is the nearest source's taper (the max,
+//   since taper falls with distance). This is the ONE generalization that turns The Shepherd's one
+//   dog into The Standing Stones' K stones — with exactly one source it is byte-identical to the
+//   original inline flee (same `d = √d² || 1e-6`, same cap-before-taper order, same fear = taper).
+function fleeAccum(xi, yi, sources){
+  const D = DEFAULTS;
+  let ax = 0, ay = 0, fmax = 0;
+  for (let s = 0; s < sources.length; s++){
+    const src = sources[s];
+    const rx = xi - src.x, ry = yi - src.y;
+    const d2 = rx * rx + ry * ry;
+    const d = Math.sqrt(d2) || 1e-6;
+    if (d < D.FLEE_RANGE){
+      let mag = D.K_FLEE / (d2 + 1);            // inverse-square (+1 softens the singularity)
+      if (mag > D.FLEE_CAP) mag = D.FLEE_CAP;   // CAP: a close repeller presses, never flings
+      const taper = 1 - d / D.FLEE_RANGE;       // smooth edge of influence (0 at FLEE_RANGE)
+      mag *= taper;
+      ax += rx / d * mag; ay += ry / d * mag;
+      if (taper > fmax) fmax = taper;           // fear tracks the NEAREST source's proximity
+    }
+  }
+  return { ax, ay, fmax };
+}
+
 // step(state, H, params, rng) → advance the flock ONE deterministic frame IN PLACE.
 //   params: {
-//     shepherd: {x,y} | null,   // the dog's CURRENT position — the point the flock flees (the
-//                               //   engine sees only a point; the dog's spring lives in stepDog)
+//     shepherd: {x,y} | null,   // ONE repeller (the dog) — the point the flock flees (the engine
+//                               //   sees only a point; the dog's spring lives in stepDog)
+//     stones:   [{x,y},…]|null, // OR K fixed repellers (The Standing Stones). Prefer stones[];
+//                               //   else the single shepherd is wrapped as a one-element list.
 //     bounds: {x0,y0,x1,y1},    // the world rect (sheep turn away from the edges)
 //     fences: [{x0,y0,x1,y1}],  // solid wall rects (sheep are projected out of, with reflection) — optional
 //     fold:   [x0,y0,x1,y1,...],// the fold polygon — for the ONE-WAY VALVE (a folded sheep can't wander out)
@@ -371,7 +401,14 @@ function step(state, H, params, rng){
   const n = state.n;
   const px = state.px, py = state.py, vx = state.vx, vy = state.vy, fear = state.fear;
   const sepOn = p.separation !== false;
-  const sh = p.shepherd || null;
+  // FLEE SOURCES: the flock flees any number of fixed repellers. The Shepherd drives ONE
+  // (the dog, p.shepherd); a place-then-release puzzle (The Standing Stones) sets K fixed
+  // stones (p.stones). Prefer the explicit stones[]; otherwise wrap the single shepherd point
+  // as a one-element list. With exactly one source the accumulation below is BYTE-IDENTICAL to
+  // the original single-source flee (same capped inverse-square, same taper, same fear) — so the
+  // Shepherd's law is untouched and its byte-parity twin still holds.
+  let sources = p.stones || null;
+  if (!sources && p.shepherd) sources = [p.shepherd];
   const b = p.bounds;
   const CONTACT = 2 * state.RADIUS;
 
@@ -437,23 +474,19 @@ function step(state, H, params, rng){
       accx += tx / td * D.K_COH; accy += ty / td * D.K_COH;
     }
 
-    // FLEE the shepherd: inverse-square, CAPPED, zero beyond FLEE_RANGE.
+    // FLEE the repellers: inverse-square, CAPPED, zero beyond FLEE_RANGE, ACCUMULATED over every
+    // source (one shepherd, or K fixed stones). fleeAccum returns the summed force + the fear
+    // readout (the NEAREST source's taper). With one source this is byte-identical to the original
+    // single-source flee. The flock's law does not change with the number of repellers — each one
+    // contributes the SAME pressure; they simply add.
     let f = 0;
-    if (sh){
-      const rx = xi - sh.x, ry = yi - sh.y;
-      const d2 = rx * rx + ry * ry;
-      const d = Math.sqrt(d2) || 1e-6;
-      if (d < D.FLEE_RANGE){
-        let mag = D.K_FLEE / (d2 + 1);            // inverse-square (+1 softens the singularity)
-        if (mag > D.FLEE_CAP) mag = D.FLEE_CAP;   // CAP: a close shepherd presses, never flings
-        // taper to 0 at FLEE_RANGE so the edge of influence is smooth (no pop)
-        const taper = 1 - d / D.FLEE_RANGE;
-        mag *= taper;
-        accx += rx / d * mag; accy += ry / d * mag;
-        // FEAR (the colour readout) tracks PROXIMITY, not the capped force: a sheep close to the
-        // shepherd reads as panicked even as the flee pushes it out of range. 0 at the rim → 1 at contact.
-        f = taper;                                 // = 1 - d/FLEE_RANGE ∈ (0,1]
-      }
+    if (sources){
+      const fa = fleeAccum(xi, yi, sources);
+      accx += fa.ax; accy += fa.ay;
+      // FEAR (the colour readout) tracks PROXIMITY to the nearest source, not the summed force: a
+      // sheep close to a repeller reads panicked even as the flee pushes it away. 0 at the rim → 1
+      // at contact. (= max taper over the sources, since taper falls with distance.)
+      f = fa.fmax;
     }
 
     // EDGE turn-away (soft): keep sheep off the world walls

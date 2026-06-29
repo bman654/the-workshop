@@ -236,6 +236,53 @@ function spread(fl){ const c = centroid(fl); let s = 0; for (let i = 0; i < fl.n
   ck('overtime edge: a stray outside the rim never yields a false win', !falseWin && countInFold(fl, fold) === 11);
 }
 
+// ---- 4d. (NEW) MULTI-SOURCE FLEE — the fleeAccum generalization (The Standing Stones) ----
+//   The flock now flees K fixed `stones` instead of one shepherd. Two guarantees the twin must hold:
+//   (a) K=1 stones[] is BYTE-IDENTICAL to the single shepherd point (the Shepherd's law is untouched);
+//   (b) under MANY stones pressing the flock, the hard floor still never reaches 0 (Claim 1 holds for
+//       any number of repellers — they only add force, they never weaken the projection).
+{
+  // (a) K=1 parity: a stones:[P] run must match a shepherd:P run bit-for-bit.
+  const bounds = { x0: 0, y0: 0, x1: 600, y1: 600 };
+  const drive = (paramsFor) => {
+    const rng = mulberry32(31337);
+    const fl = makeFlock({ n: 38, rng, x0: 40, y0: 40, x1: 320, y1: 320 });
+    const H = makeHash(DEFAULTS.PERCEPT);
+    for (let t = 0; t < 500; t++){
+      const P = { x: 200 + Math.cos(t * 0.021) * 150, y: 220 + Math.sin(t * 0.019) * 140 };
+      step(fl, H, paramsFor(P), rng);
+    }
+    return Array.from(fl.px).concat(Array.from(fl.py), Array.from(fl.fear));
+  };
+  const sh = drive((P) => ({ shepherd: P, bounds, separation: true }));
+  const one = drive((P) => ({ stones: [P], bounds, separation: true }));
+  ck('multi-source: K=1 stones[] is byte-identical to single shepherd (law untouched)', JSON.stringify(sh) === JSON.stringify(one));
+
+  // (b) the hard floor holds under MANY fixed stones squeezing the flock toward a corner.
+  const stones = [{ x: 120, y: 120 }, { x: 360, y: 120 }, { x: 120, y: 360 }, { x: 360, y: 360 }, { x: 240, y: 240 }];
+  const rng = mulberry32(2718);
+  const fl = makeFlock({ n: 44, rng, x0: 160, y0: 160, x1: 320, y1: 320 });
+  const H = makeHash(DEFAULTS.PERCEPT);
+  let worst = Infinity, everZero = false;
+  for (let t = 0; t < 2200; t++){
+    step(fl, H, { stones, bounds, separation: true }, rng);
+    const ms = minPairSep(fl);
+    if (ms < worst) worst = ms;
+    if (!(ms > 0)) everZero = true;
+  }
+  ck('multi-source (5 stones): hard floor never reached 0', !everZero && worst > 0, `worst=${worst.toFixed(4)}`);
+
+  // (c) K-stone determinism: the same stone placement + seed reproduces byte-true, twice.
+  const kRun = () => {
+    const rng2 = mulberry32(909090);
+    const fl2 = makeFlock({ n: 30, rng: rng2, x0: 60, y0: 60, x1: 300, y1: 300 });
+    const H2 = makeHash(DEFAULTS.PERCEPT);
+    for (let t = 0; t < 400; t++) step(fl2, H2, { stones, bounds, separation: true }, rng2);
+    return Array.from(fl2.px).concat(Array.from(fl2.py));
+  };
+  ck('multi-source: K-stone run is deterministic (same placement+seed ⇒ byte-true)', JSON.stringify(kRun()) === JSON.stringify(kRun()));
+}
+
 // ---- 5. runSelfTest (the in-page pill source) ----
 {
   const r = runSelfTest({});

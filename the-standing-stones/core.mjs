@@ -1,3 +1,23 @@
+// The Standing Stones — Node-twin core. A PLACEMENT puzzle kin to The Shepherd: you set K fixed
+// standing-stones (repellers), then RELEASE, and the flock's own boids+flee dynamics carry every sheep
+// into the fold with NO further input. The level is solved the instant the stones stand in the right places.
+//
+// SOLE AUTHORITY. The flock LAW lives in The Shepherd — this file inlines it BYTE-IDENTICAL between the
+// CORE BEGIN / CORE END sentinels (core.test.mjs asserts this slab === the-shepherd/core.mjs's slab, so
+// there is ONE law, not two copies that can drift). The fleeAccum helper grafted into The Shepherd is what
+// lets the SAME law take K stones instead of one dog. Above CORE END sits this bench's OWN layer — the
+// hand-authored levels, the deterministic forward sim, and the self-test — between the STONES BEGIN /
+// STONES END sentinels, ALSO byte-twinned into index.html. The watched flock IS the tested flock.
+//
+// CLAIMS (the quiet correctness layer; the puzzle is the point):
+//   EXACT — determinism (same {placement,seed,level} ⇒ byte-identical trajectory + verdict; a FAILED run
+//           reproduces byte-true, so you iterate on placement, not luck); the hard-floor invariant
+//           (minPairSep>0 every step, under any number of stones); WIN ≡ allInFold (no false/missed win).
+//   MODELED — the flock dynamics (boids separation/alignment/cohesion + capped inverse-square flee). This
+//           is a believable HERDING MODEL, not a measurement of how real sheep move.
+//
+// run:  node core.test.mjs
+
 // === CORE BEGIN ===
 // The Shepherd — boids-herding engine (single source of truth).
 //
@@ -591,8 +611,155 @@ function winPredicateExact(squarePoly){
 
 // === CORE END ===
 
+// === STONES BEGIN ===
+// ── THE BENCH LAYER — levels, the deterministic forward sim, the self-test. Sits ABOVE the flock
+//    law (which it never touches). Byte-twinned into index.html between these sentinels. ─────────
+
+const W = 600;                                   // the world is a fixed 600×600 square (engine is pixel-blind)
+function rect(x0, y0, x1, y1){ return { x0, y0, x1, y1 }; }
+
+// LEVELS — hand-authored winnable geometries. Each: a seed, the flock scatter rect, the fence rects
+// (the walls forming the gate gap), the fold polygon, a stone BUDGET, and a hand-checked SOLUTION (the
+// stone placement the reveal shows + the self-test uses to prove the level is winnable). These three
+// are FROZEN — verified winnable @ the step-counts the self-test prints, with zero-stones LOSING on
+// both L2 and L3 (the stones are load-bearing on every gated geometry).
+const LEVELS = [
+  { // L1 — OPEN FIELD. No walls. One stone above the flock presses the whole scatter down into the fold.
+    name: 'Open Field',
+    sub: 'No walls. One stone above the flock nudges them down to the fold.',
+    seed: 7, n: 24, budget: 2,
+    scatter: [120, 90, 480, 300],
+    fences: [],
+    fold: [210, 430, 390, 430, 390, 560, 210, 560],     // a wide pen along the bottom-centre
+    solution: [{ x: 300, y: 150 }],                      // a single stone up top presses the flock down
+  },
+  { // L2 — THE BOTTLENECK. A wall bisects the field with a single gate gap; the fold lies below it.
+    name: 'The Bottleneck',
+    sub: 'A wall splits the field — thread the flock through the single gate.',
+    seed: 23, n: 26, budget: 3,
+    scatter: [80, 70, 520, 250],
+    fences: [rect(0, 330, 250, 360), rect(350, 330, 600, 360)],   // gate gap centred at x 250..350
+    fold: [200, 440, 400, 440, 400, 575, 200, 575],
+    // press from upper-left & upper-right to funnel toward the gate, one below to seal them in
+    solution: [{ x: 150, y: 150 }, { x: 450, y: 150 }, { x: 300, y: 200 }],
+  },
+  { // L3 — THE FUNNEL. A centred gate, an island straddling DIRECTLY below it, the fold offset lower-
+    //    right. The island blocks the straight drift-into-fold path, so the flock must be pressed
+    //    through the gate, steered RIGHT around the island, then sealed — drift alone never makes the
+    //    turn (zero-stones provably loses). Solution found + robustness-checked by search.
+    name: 'The Funnel',
+    sub: 'A centred gate, an island below it, the fold off to the right. Press, steer around, seal.',
+    seed: 101, n: 28, budget: 4,
+    scatter: [70, 60, 530, 210],
+    fences: [rect(0, 300, 250, 330), rect(350, 300, 600, 330),     // gate gap at x 250..350 (centre)
+             rect(220, 380, 400, 430)],                            // island straddling below the gate
+    fold: [400, 460, 560, 460, 560, 580, 400, 580],                // fold lower-RIGHT of the island
+    solution: [{ x: 246, y: 196 }, { x: 423, y: 128 }, { x: 160, y: 434 }, { x: 382, y: 551 }],
+  },
+];
+
+// makeSim(level, stones) → a fresh deterministic forward sim for a level + a stone placement. PURE:
+//   no wall-clock, no RAF. The page replays this SAME function frame-by-frame for the live watch, and
+//   the Node twin runs it headless — same bytes either way.
+function makeSim(level, stones){
+  const rng = mulberry32(level.seed);
+  const flock = makeFlock({ n: level.n, rng, x0: level.scatter[0], y0: level.scatter[1],
+    x1: level.scatter[2], y1: level.scatter[3] });
+  const H = makeHash(DEFAULTS.PERCEPT);
+  const params = { stones: stones.map(s => ({ x: s.x, y: s.y })),
+    bounds: { x0: 0, y0: 0, x1: W, y1: W }, fences: level.fences, fold: level.fold, separation: true };
+  return { rng, flock, H, params, level, step: 0, won: false, minSep: Infinity };
+}
+function simStep(sim){
+  step(sim.flock, sim.H, sim.params, sim.rng);
+  sim.step++;
+  const ms = minPairSep(sim.flock);
+  if (ms < sim.minSep) sim.minSep = ms;
+  if (!sim.won && allInFold(sim.flock, sim.level.fold)) sim.won = true;   // WIN latches; the valve keeps it
+  return sim;
+}
+// runToEnd(level, stones, maxSteps) → drive a fresh sim forward up to maxSteps (stopping the moment it
+//   wins), and return { won, steps, minSep, fp }. fp = an FNV-1a hash of the final sheep positions — a
+//   byte-true fingerprint for the determinism proof.
+function runToEnd(level, stones, maxSteps){
+  const sim = makeSim(level, stones);
+  for (let t = 0; t < maxSteps && !sim.won; t++) simStep(sim);
+  return { won: sim.won, steps: sim.step, minSep: sim.minSep, fp: fingerprint(sim.flock) };
+}
+function fingerprint(flock){
+  // FNV-1a over the raw float bytes of every sheep position — byte-true identity.
+  const buf = new ArrayBuffer(8); const dv = new DataView(buf);
+  let h = 0x811c9dc5 >>> 0;
+  for (let i = 0; i < flock.n; i++){
+    dv.setFloat64(0, flock.px[i]); for (let b = 0; b < 8; b++){ h ^= dv.getUint8(b); h = Math.imul(h, 0x01000193); }
+    dv.setFloat64(0, flock.py[i]); for (let b = 0; b < 8; b++){ h ^= dv.getUint8(b); h = Math.imul(h, 0x01000193); }
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+// selfTest() → proves the EXACT claims and drives the in-page pill. Pure (no DOM). Returns
+//   { ok, checks:[{key,name,ok,val}], detReproOK, allWin, winSteps }. The MAX cap is generous so a
+//   winnable level always reaches its latch within the watch.
+function selfTest(){
+  const checks = [];
+  const MAX = 2600;
+
+  // (1) DETERMINISM — two independent runs of L3's 4-stone solution match byte-for-byte (fp, won, steps).
+  {
+    const a = runToEnd(LEVELS[2], LEVELS[2].solution, MAX);
+    const b = runToEnd(LEVELS[2], LEVELS[2].solution, MAX);
+    const ok = a.fp === b.fp && a.won === b.won && a.steps === b.steps;
+    checks.push({ key: 'det', name: 'determinism', ok, val: 'fp ' + a.fp });
+  }
+  // also a FAILED run must reproduce byte-true (the iterate-on-placement promise): a deliberately bad
+  // placement LOSES, and loses IDENTICALLY twice. (You debug a loss, you don't re-roll the dice.)
+  let detReproOK = true;
+  {
+    const bad = [{ x: 50, y: 50 }];
+    const a = runToEnd(LEVELS[1], bad, MAX), b = runToEnd(LEVELS[1], bad, MAX);
+    detReproOK = (a.fp === b.fp && a.won === b.won && a.won === false);
+  }
+
+  // (2) INVARIANT under MULTI-SOURCE flee — minPairSep>0 over a full 4-stone L3 run (the hard floor
+  //     holds however many stones press the flock; it is a positional constraint, not a soft force).
+  {
+    const r = runToEnd(LEVELS[2], LEVELS[2].solution, MAX);
+    const ok = r.minSep > 0;
+    checks.push({ key: 'sep', name: 'minPairSep>0 (4-stone run)', ok, val: r.minSep.toFixed(2) });
+  }
+  // (3) WIN ≡ allInFold — exhaustive on a concave fold incl. the notch-is-out + on-edge-is-in cases.
+  {
+    const concave = [400, 400, 560, 400, 560, 560, 480, 500, 400, 560];
+    let ok = true;
+    ok = ok && pointInPolygon(420, 430, concave) === true;     // inside the solid lobe
+    ok = ok && pointInPolygon(480, 555, concave) === false;    // in the concave NOTCH ⇒ OUT
+    ok = ok && pointInPolygon(560, 480, concave) === true;     // on-edge ⇒ IN
+    ok = ok && pointInPolygon(561, 480, concave) === false;    // just outside ⇒ OUT
+    ok = ok && allInFold({ n: 3, px: [420, 540, 450], py: [430, 420, 450] }, concave) === true;   // no missed win
+    ok = ok && allInFold({ n: 3, px: [420, 540, 480], py: [430, 420, 555] }, concave) === false;  // no false win
+    checks.push({ key: 'win', name: 'WIN≡allInFold', ok, val: 'exact' });
+  }
+  // (4) NEG-CONTROL — zero stones never solves a GATED level. Assert on BOTH L2 AND L3: cohesion alone
+  //     cannot thread a gate, so the stones are load-bearing on every gated geometry (not decoration).
+  {
+    const z2 = runToEnd(LEVELS[1], [], MAX), z3 = runToEnd(LEVELS[2], [], MAX);
+    const ok = (z2.won === false) && (z3.won === false);
+    checks.push({ key: 'neg', name: 'zero stones ⇒ every gated level unsolved', ok,
+      val: ok ? 'unsolved×2' : ('L2=' + (z2.won ? 'won' : '-') + ' L3=' + (z3.won ? 'won' : '-')) });
+  }
+  // levels-winnable: every hand-authored solution actually WINS (run at each level's ACTUAL n).
+  let allWin = true; const winSteps = [];
+  for (const L of LEVELS){ const r = runToEnd(L, L.solution, MAX); allWin = allWin && r.won; winSteps.push(r.won ? r.steps : 'X'); }
+
+  const ok = checks.every(c => c.ok) && detReproOK && allWin;
+  return { ok, checks, detReproOK, allWin, winSteps };
+}
+// === STONES END ===
+
 export {
-  mulberry32, makeFlock, makeHash, rebuildHash, step, stepDog, fleeAccum,
-  minPairSep, pointInPolygon, allInFold, countInFold,
-  runSelfTest, _onSegment, DEFAULTS,
+  // the flock law (re-exported from the inlined Shepherd slab — one authority)
+  mulberry32, makeFlock, makeHash, step, fleeAccum,
+  minPairSep, pointInPolygon, allInFold, countInFold, DEFAULTS,
+  // the bench layer
+  W, rect, LEVELS, makeSim, simStep, runToEnd, fingerprint, selfTest,
 };
