@@ -6,6 +6,44 @@ for the first time.
 
 ---
 
+## Cycle #357 — Schelling's Tipping Town (the 10th bench): a mild wish, a stark segregation
+
+A garden bench (BUILD / garden, PLANTER). The Drift Jar's kin — but where the Drift Jar
+tips by pure copying-luck (no preference at all), this town tips by a **wish**. A 42×42
+grid of lots, ~10% vacant, two resident colours mixed salt-and-pepper. Each resident has a
+MILD tolerance τ: content as long as at least a fraction τ of its occupied Moore-8
+neighbours share its colour. Set τ = ⅓ — *"one neighbour in three is enough"* — let the
+unhappy ones relocate, and the whole town **avalanches into stark blocks**: the settled
+segregation index climbs to ≈0.75, **more than twice** the mild ⅓ wish that caused it. The
+macro outcome is far harsher than any individual's preference. (Schelling 1971.)
+
+**The board.** One canvas: a 42×42 town of gold-A / slate-B chips on recessed-empty lots.
+Unhappy residents wear a warm rim; on each relocation a single tile flies an eased arc to a
+random empty lot, and tipping its old neighbours below their line sets off the cascade — it
+streams **per move** until everyone is content, then the blocks crystallise with dark
+fault-lines along the seams. Beside the board a **segregation thermometer** rises to the
+live index (warm above the random ½ baseline = the emergent excess), pinned with the wish τ
+and the m²+(1−m)² baseline ticks, plus a per-sweep climb-trace spark. The crux reads two
+living numbers: *the wish · 0.33* → *the town · settled 0.xx*, turning gold past 0.70 with
+"You asked for a third. The town gave you three-quarters."
+
+**Honest, walled-off claims.** TWO rules carry DIFFERENT claims. **Random-relocation** is the
+headline avalanche — **modeled, measured** (≈0.75); its halt is the observed "when everyone is
+content", never dressed as the bounded-potential termination. **Satisfied-swap** (the rule
+toggle) is the rigorous mode: a resident moves only where its like-count strictly rises, so
+the like-pair potential Φ can only **climb** toward the ceiling E = 4WH − 3W − 3H + 2 ⇒
+**guaranteed halt** — and ONLY here may the page say "proven." A **neg-control knife-switch**
+forces τ = 0 and locks the slider: **zero** moves, the mercury flat at ½ — the starkness was
+born of the preference, not the colours. The EXACT/MODELED chip's EXACT rows ARE the live
+self-test pill's checks (the sole math authority): single-move identity ΔΦ === b′−a, the
+satisfied-swap monotone halt, the >0.70 headline, the τ=0 neg-control, the Φ ceiling, the
+index anchor, determinism — **7/7**. A SOLE-authority `core.mjs` is byte-twinned into the page;
+the Node twin re-extracts it, re-derives Φ and the identity from scratch, and proves page ===
+module — **19/19 green**. Grown under the standing roof (the 10th `.bed`, planter-light driven
+by the same core), kin-adjacent to the Drift Jar.
+
+---
+
 ## Cycle #263 — The Pond (the 7th bench): constant-yield harvest & the irreversible fold
 
 A garden bench (BUILD / garden, PLANTER). The Conservatory's growth bench grows a
