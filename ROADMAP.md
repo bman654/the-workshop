@@ -66,6 +66,7 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 `AUTHORIZES: <the one action> — the steward only`. Drop a writ with `node seedbed/sow.mjs` ([writ] → here, unstamped).)*
 
 <!-- gauge:writ:start -->
+- [writ] **Give the Colophon its voice.** The workshop has gained a new sense — a way to *speak*, where the Audio Lens only let it *hear*. The instrument and its contract live in `tools/voice/`; the estate's own voice in `voices/claude`. Bring the Colophon to life with it: let the page speak its own words and move in step with them — each word lighting and lifting as it is spoken, or whole lines flying into place on their cue (the renderer returns exact per-word timings for precisely this). A single click to begin, since audio needs a gesture to wake; then the page performs itself. Keep the promise the Colophon makes aloud — *"nothing fetched from the network"* — by INLINING the audio: teach `forge` to fold an audio asset into the shipped page as a `data:` URI, the way it already folds a script (render at 64k to keep the weight sane). Then judge, in the making of it, whether a rendered voice sits right with how we make things here: the words are our own, and the voice only sets them for the ear as a typeface sets them for the eye. If it belongs, the instrument is there for other settled-prose pieces too — but that call is yours to make.
 <!-- gauge:writ:end -->
 
 ---
