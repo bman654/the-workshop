@@ -52,10 +52,9 @@ with N automatically; you don't pass it.)
    self-flag.
 4. **REPLACE** the NOTES.md current-state block (don't append); write the worklog block (newest-first) + an
    INDEX line.
-5. **RUN THE GAUGE RECORD** (the ONLY thing that mutates state.json — the tally is DERIVED from the bed diff,
-   pass NO counts): `node seedbed/gauge.mjs record --mode PLAN --track <track> --cycle N`. Sanity-check the printed
-   derived sown·bloomed·decayed match what you did.
-6. **LEDGER + PUBLISH** (see the bottom section).
+5. **SEAL THE CYCLE** (see the SEAL section at the bottom) — one atomic script records the gauge (`--mode PLAN
+   --track <track>`, DERIVED from the bed diff), collates the ledger, commits, and pushes. After it returns,
+   sanity-check the printed derived sown·bloomed·decayed match what you did.
 
 ### WRIT (Patron cycle) — bookkeeping + publishing; perform NO outside action
 
@@ -106,14 +105,15 @@ worklog/NOTES entry **"writ · served before #N"** so the number stays free for 
    that waiver OVERRIDES the silence: in BOTH maker-visible channels you MAY name that writ and link its seeds to
    it, exactly as the writ permits — honor the writ's own instruction over the default. (The default silence still
    governs every writ that grants no such waiver.)
-6. **RUN THE GAUGE RECORD** — cadence-neutral: `node seedbed/gauge.mjs record --mode WRIT --track writ --cycle N`.
-7. **LEDGER + PUBLISH** — commit the REPO changes only (operational repo files + the ROADMAP edits). The vault
-   write / message the steward made is already done and is not a repo artifact. **COMMIT SUBJECT — apply the
-   CO-OCCURRENCE RULE from step 5** (it is maker-visible via the recent-commits list every seat receives, the
-   ORIGINAL leak vector): if this cycle SOWED seeds (a RELEASE), the subject reports them as an ORDINARY sow
-   ("Sow N seed(s) into the beds") and does NOT mention the writ or the Patron at all; if it sowed NONE
-   (mandate/escalation), describe the writ + its operational work plainly. **Never put "writ served" and "seeds
-   sown" in the same subject.** The full writ→seed provenance lives ONLY in the worklog.
+6. **SEAL THE CYCLE** (see the SEAL section at the bottom) — the seal records cadence-neutrally (`--mode WRIT
+   --track writ`), collates, commits, and pushes the REPO changes only (operational repo files + the ROADMAP
+   edits; the vault write / message the steward made is already done and is not a repo artifact). **COMMIT
+   SUBJECT — apply the CO-OCCURRENCE RULE from step 5** (the subject you write into the seal's message file is
+   maker-visible via the recent-commits list every seat receives, the ORIGINAL leak vector): if this cycle
+   SOWED seeds (a RELEASE), the subject reports them as an ORDINARY sow ("Sow N seed(s) into the beds") and does
+   NOT mention the writ or the Patron at all; if it sowed NONE (mandate/escalation), describe the writ + its
+   operational work plainly. **Never put "writ served" and "seeds sown" in the same subject.** The full writ→seed
+   provenance lives ONLY in the worklog.
 
 ### BUILD (a builder shipped a piece, left UNCOMMITTED)
 
@@ -170,16 +170,32 @@ worklog/NOTES entry **"writ · served before #N"** so the number stays free for 
    `rework` blooms exactly like any sow — the re-souled piece is the bloom.
 5. **CLEANUP:** tear down YOUR http server / browser session (the specific one — never a broad pkill); delete
    stray /tmp prototypes; if a `.src.html` was touched run `forge --check --all`; confirm the tree has nothing stray.
-6. **RUN THE GAUGE RECORD** (DERIVED from the bed diff, pass NO counts): `node seedbed/gauge.mjs record --mode
-   BUILD --track <track> --cycle N`. Sanity-check the printed sown·bloomed·decayed.
-7. **LEDGER + PUBLISH.** Your summary must describe what shipped, what you CAUGHT & fixed in review, and the
-   final verification.
+6. **SEAL THE CYCLE** (see the SEAL section at the bottom) — one atomic script records the gauge (`--mode BUILD
+   --track <track>`, DERIVED from the bed diff, pass NO counts), collates the ledger, commits, and pushes. Your
+   summary must describe what shipped (COMMITTED + PUSHED), what you CAUGHT & fixed in review, and the final
+   verification.
 
-## LEDGER + PUBLISH (every branch, BEFORE you commit)
+## SEAL THE CYCLE (every branch — the FINAL, atomic step)
 
-- Run `bash ledger/collate.sh` — it folds every `ledger/inbox/*.json` mark into `ledger/ledger.jsonl`
-  (sequential seq) and clears the inbox. Run it on PLAN cycles too; an empty inbox is a harmless no-op.
-- You MAY add your OWN mark first (optional, only if something true wants saying): `bash ledger/sign.sh
-  publisher "<a name>" "<your koan>"` (no cycle arg), then collate.
-- **PUBLISH:** `git add` + `commit` + `push`. Include the updated `ledger/ledger.jsonl`, ROADMAP.md (the
-  `bed` edits), the worklog, NOTES, and the piece's files. Your summary describes committed, pushed work.
+Everything above (review, bookkeeping, bed edits, NOTES/worklog rewrites, cleanup) is LLM work; once it is all
+done, the cycle is sealed by ONE deterministic shell call so a quota / API death can never strand it half-done.
+DO NOT run `gauge record`, `collate`, `git commit`, or `git push` yourself as separate steps — the seal does all
+four, in the safe order, as a single tool call that completes locally regardless of quota.
+
+1. **(Optional) leave your own ledger mark** — only if something true wants saying: `bash ledger/sign.sh
+   publisher "<a name>" "<your koan>"` (no cycle arg). A forced koan is worse than silence. (The seal collates it.)
+2. **Write your commit message to a file** — the full subject + body, in house style, to a **/tmp** path (NOT
+   inside the repo, so `git add -A` never sweeps it into the commit), e.g. `/tmp/seal-msg-<N>.txt`. The subject
+   is maker-visible (every seat gets the recent-commits list), so for a WRIT apply the CO-OCCURRENCE RULE above.
+3. **Run the seal** — `bash seedbed/seal-cycle.sh <mode> <track> <N> /tmp/seal-msg-<N>.txt`. In order it:
+   collates the ledger (folds your + the makers' inbox marks, re-pins every ledger-bound room, re-forges) →
+   asserts `forge --check --all` is clean → runs `gauge record --mode <mode> --track <track> --cycle <N>` (the
+   SOLE state mutation, DERIVED from the bed diff, idempotent on re-run) → `git add -A` + `git commit` → `git
+   push`. It prints each phase + the final HEAD / depth / gauge status. Read that output: your summary (the
+   loop's return value) must describe the COMMITTED, PUSHED result and confirm the derived sown·bloomed·decayed.
+
+WHY ONE SCRIPT: the old flow ran record → collate → commit → push as four separate model-driven steps; a
+weekly-quota death between `record` and `commit` advanced the gauge counter but never committed, stranding the
+cycle in a state a restart can't resume (a fresh director runs the gauge, sees N+1, and treats the dirty tree as
+orphaned). The seal folds them into one local call (quota throttles API round-trips, not shell execution), so
+either the whole cycle seals or — if quota dies before you call it — nothing recorded and publish re-runs cleanly.

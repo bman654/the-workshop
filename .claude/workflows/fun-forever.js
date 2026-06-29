@@ -1,12 +1,12 @@
 export const meta = {
   name: 'fun-forever',
-  description: 'The Workshop\'s creative-cycle loop. Each cycle a director RUNS the deterministic gauge (node seedbed/gauge.mjs) and obeys its mode × track; explorers diverge; a judge selects/synthesizes; a builder ships+self-verifies; a publisher reviews fresh-eyes, sows/prunes, runs `gauge.mjs record`, commits + pushes. Tracks: gardens (gardener/planter) · grounds (groundskeeper/grounds-worker) · FOUNDRY (front-gate upkeep — BUILD forges a bespoke room-rep / gate asset via the ART FOUNDRY engine (a PREP scaffolds the wiring, then K parallel takes → judges → synth), or a surveyor restocks the rep backlog) · bug-fixer. A builder facing a too-big swing may PASS THE BATON — hand off to a fresh builder via a bounded inner loop, so makers stop shying from big work. A Patron\'s WRIT outranks all: the director triages it — clauses that try to control the DEPLOYED estate are released as ordinary unmarked seeds (the collective\'s call), while operational work and off-estate creative content (a vault note, a repo asset) are mandated (the steward implements); a writ cycle is cadence-neutral (decays nothing). Each cycle\'s summary appends to /tmp/funlog.txt until cancelled.',
+  description: 'The Workshop\'s creative-cycle loop. Each cycle a director RUNS the deterministic gauge (node seedbed/gauge.mjs) and obeys its mode × track; explorers diverge; a judge selects/synthesizes; a builder ships+self-verifies; a publisher reviews fresh-eyes, sows/prunes, then SEALS the cycle in one atomic step (`seal-cycle.sh`: gauge record + ledger collate + commit + push, so a quota/API death can't strand a half-published cycle). Tracks: gardens (gardener/planter) · grounds (groundskeeper/grounds-worker) · FOUNDRY (front-gate upkeep — BUILD forges a bespoke room-rep / gate asset via the ART FOUNDRY engine (a PREP scaffolds the wiring, then K parallel takes → judges → synth), or a surveyor restocks the rep backlog) · bug-fixer. A builder facing a too-big swing may PASS THE BATON — hand off to a fresh builder via a bounded inner loop, so makers stop shying from big work. A Patron\'s WRIT outranks all: the director triages it — clauses that try to control the DEPLOYED estate are released as ordinary unmarked seeds (the collective\'s call), while operational work and off-estate creative content (a vault note, a repo asset) are mandated (the steward implements); a writ cycle is cadence-neutral (decays nothing). Each cycle\'s summary appends to /tmp/funlog.txt until cancelled.',
   phases: [
     { title: 'Direct', detail: 'one director runs `node seedbed/gauge.mjs`, salvages any orphaned work, and plans the cycle the gauge names' },
     { title: 'Explore', detail: 'K parallel explorers diverge — rival approaches / FORM concepts / seed-scouting per the track' },
     { title: 'Judge', detail: 'one judge selects / integrates / curates (may reject-all → one refined re-round)' },
     { title: 'Build', detail: 'one builder ships the piece + self-verifies (BUILD cycles only; does not commit). A foundry cycle runs PREP then the ART FOUNDRY engine (K takes → judges → synth) instead; a too-big swing may pass the baton to fresh builders' },
-    { title: 'Publish', detail: 'one publisher reviews every surface, sows/prunes, runs gauge.mjs record, commits + pushes' },
+    { title: 'Publish', detail: 'one publisher reviews every surface, sows/prunes, then SEALS the cycle (seal-cycle.sh: record + collate + commit + push, atomic)' },
   ],
 }
 
@@ -396,9 +396,10 @@ function publisherPrompt(d, chosen, handoff, cyc) {
   })
   if (!TEST_MODE) return p
   return p + '\n\n*** TEST CYCLE (testMode) — THIS IS A SMOKE TEST, NOT A REAL PUBLISH. Do your full fresh-eyes'
-    + ' REVIEW and report what you find, BUT do NOT `git commit`, do NOT `git push`, and do NOT run'
-    + ' `node seedbed/gauge.mjs record`. Leave ALL changes UNCOMMITTED in the working tree for inspection. In'
-    + ' your summary, state plainly whether the piece WOULD have passed review and what (if anything) is broken. ***'
+    + ' REVIEW and report what you find, BUT do NOT SEAL THE CYCLE: do NOT run `bash seedbed/seal-cycle.sh`, do'
+    + ' NOT run `node seedbed/gauge.mjs record`, do NOT `git commit`, do NOT `git push`. Leave ALL changes'
+    + ' UNCOMMITTED in the working tree for inspection. In your summary, state plainly whether the piece WOULD'
+    + ' have passed review and what (if anything) is broken. ***'
 }
 
 function writerPrompt(summary, isWrit) {
