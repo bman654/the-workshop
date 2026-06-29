@@ -55,25 +55,56 @@ prose ─▶ tagged input (.txt) ─▶ tts ─▶ out.mp3 + out.json ─▶ pag
 2. **Produce a tagged input file.** Copy the prose into a `.txt` and add any of the
    emotion/style tags below to colour the delivery. The tags are *for the renderer*;
    they are not shown to the reader.
-3. **Render.** From the repo root:
+3. **Render** with the `claude-tts` wrapper — it works from **any** directory (it
+   self-locates the voice) and bakes in the right defaults:
 
    ```bash
-   tts --voices-dir ./voices --voice claude --timestamps \
-       --bitrate 64k -o <piece>.mp3 <piece>.txt
+   tools/voice/claude-tts <piece>.txt -o <piece>.mp3
    ```
 
-   This writes `<piece>.mp3` and `<piece>.json`. (`--timestamps` is what emits the
-   `.json`; without it you get audio only.) Run `tts --help` for the full set of
-   options — it is the authoritative reference for invocation.
+   This writes `<piece>.mp3` (the estate's `claude` voice, 64k mono) **and**
+   `<piece>.json` (the word timings). Anything extra you pass is forwarded to the
+   underlying `tts` and overrides a default — e.g. add `--bitrate 96k`. Run
+   `tts --help` for the full option set.
 
-   Prefer **`--bitrate 64k`** for anything destined to be inlined: speech is fine at
-   64k mono and it keeps the base64 weight down. The default is 128k.
+   > Under the hood that is `tts --voices-dir <repo>/voices --voice claude
+   > --bitrate 64k <piece>.txt -o <piece>.mp3 --timestamps`. The wrapper exists so no
+   > one has to remember the voices path (the old `--voices-dir ./voices` only worked
+   > from the repo root) or the flags. Call `tts` directly only to escape the
+   > defaults entirely. **64k mono** is the inline-friendly default; the bare `tts`
+   > default is 128k.
 4. **Build the experience** from three inputs together: the **original prose** (for
    the on-screen text and the animation targets), the **`.mp3`** (the audio element),
    and the **`.json`** (the per-word cue times to drive the animation).
 5. **Inline at build.** Reference the assets from your `.src.html` and let `forge`
    fold them into the shipped `.html` (see *Inlining* below), so the page stays
    self-contained.
+
+## The timing JSON
+
+The sidecar is small — inline it as a JS literal. Its shape (verified):
+
+```json
+{
+  "audio": "piece.mp3",
+  "sample_rate": 44100,
+  "duration_ms": 2276,
+  "text": "The workshop has found its voice.",
+  "items": [
+    { "type": "word", "value": "The",   "s": 20,   "e": 121 },
+    { "type": "word", "value": "voice", "s": 1611, "e": 2034 }
+  ]
+}
+```
+
+- **`items[]`** is the timeline, in document order. Each carries `type` (`"word"`,
+  or an expression cue for tags like `[sigh]`), `value` (the token as spoken), and
+  **`s` / `e` — start / end in milliseconds** from the top of the audio.
+- Drive the animation off `s`/`e`: on each `requestAnimationFrame` read
+  `audio.currentTime * 1000` and light / scale / fly the word whose `[s, e)`
+  window contains it. `duration_ms` is the full length; `text` is the source string.
+- The word `value`s are the spoken tokens (punctuation may be attached or split),
+  so map them onto your on-screen prose by order, not by exact string match.
 
 ## Emotion & style tags
 
