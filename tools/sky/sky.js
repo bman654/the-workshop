@@ -185,6 +185,16 @@
     // Hall), the manor pool, the viewBox edge, and every existing catalog star
     // (nearest = cartographer @272px) by the CATALOG INTEGRITY self-test.
     'refraction-run': { x: 392, y: 486, mag: 1 },
+    // The Light That Falls Around a Star — Optics' gravitational-lens fly-through (you
+    // AIM the impact parameter b and watch starlight fall around a dark mass; thread the
+    // hidden star, earn the Einstein ring on-axis). A mag-2 COMPANION star a tight twin
+    // 62px DIRECTLY BELOW its founder refraction-run (392,486) in the optics band; lit on
+    // first visit (ws:seen:starlight-bend). The SECOND member of The Pilot feat-group, so
+    // its asterism now reads ≥2 stars and the engraved name sits over two dots — the SAME
+    // least-time road bent by gravity instead of glass. Verified clear of every footprint/
+    // furniture box, the manor pool, the viewBox edge, and every existing catalog star
+    // (nearest = refraction-run @62px) by the CATALOG INTEGRITY self-test.
+    'starlight-bend': { x: 392, y: 548, mag: 2 },
     // The Differential Gear — the Reckoning Cabinet's bevel-gear adder (crank two rims;
     // the cage reads the average). A FEATS-flavoured field star in the dark lower-right
     // band below the manor pool, near its number-wing kin (collisions @1180,560); lit on
@@ -328,12 +338,15 @@
     // ADDITIVE — it NEVER feeds the wings-only all-skies capstone.
     { id: 'surveyor', name: 'The Surveyor', myth: 'Walks the loop; brings home the twist no chart can hide.',
       members: ['holonomy', 'unrolled-cone'] },
-    // The Pilot — Optics' fly-through reward constellation. Founded with one star
-    // (The Photon's Errand, a plain `ws:seen:refraction-run` room crumb); like every
-    // feat-group it is ADDITIVE — it NEVER feeds the wings-only all-skies capstone.
-    // Sized for a future fly-through branch should more piloted least-time scenes ship.
+    // The Pilot — Optics' fly-through reward constellation. Founded by The Photon's Errand
+    // (`ws:seen:refraction-run`, fly least-time through slow glass) and grown by The Light
+    // That Falls Around a Star (`ws:seen:starlight-bend`, fly the SAME least-time road bent
+    // by gravity instead of glass — thread the hidden star, earn the Einstein ring on-axis);
+    // the engraved name now sits over TWO dots. Like every feat-group it is ADDITIVE — it
+    // NEVER feeds the wings-only all-skies capstone. Sized to keep growing as more piloted
+    // least-time scenes ship.
     { id: 'pilot', name: 'The Pilot', myth: 'Flies the least-time road; falls into the law.',
-      members: ['refraction-run'] },
+      members: ['refraction-run', 'starlight-bend'] },
     // The Reckoner — the Reckoning Cabinet's reward constellation. Founded with The Differential
     // Gear (the adder) and grown by The Ball-and-Disk Integrator (the integrating organ) — both
     // plain `ws:seen:<id>` room crumbs; the engraved name now sits over TWO stars (the two organs
