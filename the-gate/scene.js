@@ -1075,7 +1075,8 @@
     'clockwork-rep': function (g, baseX, baseY, pick) { drawRepClockwork(g, baseX, baseY, pick); },
     'gnomon-rep': function (g, baseX, baseY, pick) { drawRepGnomon(g, baseX, baseY, pick); },
     'lodestone-hall-rep': function (g, baseX, baseY, pick) { drawRepLodestoneHall(g, baseX, baseY, pick); },
-    'strange-garden-rep': function (g, baseX, baseY, pick) { drawRepStrangeGarden(g, baseX, baseY, pick); }
+    'strange-garden-rep': function (g, baseX, baseY, pick) { drawRepStrangeGarden(g, baseX, baseY, pick); },
+    'cartographer-rep': function (g, baseX, baseY, pick) { drawRepCartographer(g, baseX, baseY, pick); }
   };
 
   function drawRoomRep(parent) {
@@ -3096,6 +3097,365 @@
     }
 
     S.refs.glasshouseRep = g;
+  }
+
+  /* ── the CARTOGRAPHER room-rep (The Map Room, room id 'cartographer') ─────────
+     An open folio ATLAS laid on a slanted oak READING-STAND: the spread tilts up
+     and away (a wide trapezoid page, like the ripple tank's tilted water plane),
+     two pages with a centre gutter, faint coastline/contour lines etched across
+     the spread. An engraved brass COMPASS-ROSE glows on the NEAR page — the SINGLE
+     emissive accent (rep.glow1), sitting flat ON the page, NOT a separate standing
+     disk. WIDE + SHORT (horizontal), bottom-aligned at baseY, centred about cx.
+     Idiom mirrors drawRepRipple: short brass-edged oak frame/legs (dark body
+     rgba(11,14,22,.85) + --brass-stroke-ref + --brass-bright-ref top sheen, lit
+     from above), the page sheets via the swappable rep.swatch* roles (parchment
+     body + lighter highlight), the rose emissive via rep.glow1 (blazes at night,
+     recedes in day per dayRecede). Aspect ~150×96 inside [78..156]×[114..228].
+     STATIC is perfectly valid here; if motion is reached for it must stay quiet,
+     seamless, lit-correct, reduced-motion-safe (§2.5.5) — but a still calling-card
+     atlas serves the room well. */
+  function drawRepCartographer(parent, cx, baseY, pick) {
+    // TAKE 1 — "the atlas at rest": a STATIC, dignified open folio ATLAS laid on a
+    // slanted oak reading-stand. The page spread is a wide trapezoid tilting up+away
+    // (near edge wider than far, mirroring the ripple tank's tilted plane), split by a
+    // centre gutter/spine into two facing pages. Faint coastline/contour HAIRLINES are
+    // etched across the spread (a hint of a chart, not a literal map). A single engraved
+    // brass COMPASS-ROSE blazes FLAT on the near page (lower-right), foreshortened with
+    // the page tilt — the ONE emissive accent (rep.glow1), with a soft feathered bloom
+    // that pools at night and recedes by day (dayRecede on the glow role). Below: a
+    // slanted oak top-board on short brass-edged trestle legs, lifting the book off the
+    // grass. Brass idiom: dark body + brass stroke + brass-bright TOP-lit edges, lit from
+    // above; pages recolor per band via rep.swatch1/2; no gradient material, no tint.
+    var g = group('cartographer-rep', parent);
+    var PAGE = 'var(--rep-swatch1-ref, #6f5d3c)';        // swappable parchment body (vellum→tea-brown)
+    var PLITE = 'var(--rep-swatch2-ref, #7a7058)';       // swappable lighter page highlight / far-page wash
+    var DARK = 'rgba(11,14,22,.85)';                     // estate brass dark body (oak frame)
+    var BRASS = 'var(--brass-stroke-ref, #9c8350)';      // brass edge stroke
+    var BRI = 'var(--brass-bright-ref, #cdb375)';        // brass-bright TOP sheen
+    var ROSE = 'var(--rep-glow1-ref, #ffdf9a)';          // EMISSIVE warm gold compass-rose glow
+    var INK = 'rgba(40,28,14,.70)';                      // parchment-ink contour hairline tone (bumped so the chart survives deep night)
+    var fx = function (n) { return (Math.round(n * 10) / 10); };
+
+    // ── footprint: WIDE + SHORT. book spread on a low reading-stand. ──
+    var W = 150;                          // spread full width at the near edge
+    var halfW = W / 2;                    // 75 → x155 .. x305
+    var legH = 18;                        // short trestle legs lift the stand off the grass
+    var standH = 12;                      // the slanted top-board thickness (front face)
+    var standTopY = baseY - legH;         // y702 — front foot of the top-board
+    var boardFrontY = standTopY - standH; // y690 — top of the board's front face (book near edge sits here)
+    var backRise = 34;                    // how far the FAR page edge sits ABOVE the near edge (the tilt)
+    var farTopY = boardFrontY - backRise; // y656 — far page line (top of the tilted spread)
+    var L = cx - halfW, R = cx + halfW;   // x155 .. x305
+    // the tilted PAGE SPREAD: a wide near edge (front), inset far edge (back). The book
+    // is OPEN, so the two pages slope DOWN into a central GUTTER valley — the spine sits
+    // LOWER than the outer page edges. The outer edges (left & right) lift up a touch
+    // (the pages bow outward), and the near outer corners curl slightly up off the board.
+    var inset = 16;                       // perspective inset of the far edge
+    var nearL = L + 4, nearR = R - 4;     // near (front) outer page corners
+    var farL = L + inset, farR = R - inset; // far (back) outer page corners
+    var bow = 7;                          // how much the OUTER page edges lift above the gutter
+    // the centre spine/gutter (the valley) runs near→far down the middle, sitting LOWER
+    var nearMidX = cx, farMidX = cx;
+    var gutNearY = boardFrontY + bow + 2; // gutter dips below the lifted outer edges
+    var gutFarY = farTopY + bow + 1;
+    // outer page edges lift up (the open book's pages bow away from the spine)
+    var nearOuterY = boardFrontY;         // near outer corners (lifted)
+    var farOuterY = farTopY;
+    // mid-page ridge points (top of each page's outward bow), used for the page surfaces
+    var midNearY = boardFrontY - 1, midFarY = farTopY - 1;
+
+    // ── private soft-feather filter for the compass-rose's pooled glow ──
+    var defs = parent.ownerSVGElement && parent.ownerSVGElement.querySelector('defs');
+    if (defs && !defs.querySelector('#cartographer-rose-glow')) {
+      var fR = el('filter', { id: 'cartographer-rose-glow', x: '-90%', y: '-90%', width: '280%', height: '280%' }, defs);
+      el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '2.6' }, fR);
+    }
+    // a clip covering BOTH pages (outer corners + gutter valley) so contour hairlines +
+    // rose never spill past the spread. Shaped as the open-book outline (down at gutter).
+    if (defs && !defs.querySelector('#cartographer-page-clip')) {
+      var clip = el('clipPath', { id: 'cartographer-page-clip' }, defs);
+      el('path', { d: 'M ' + fx(nearL) + ' ' + fx(nearOuterY) +
+        ' L ' + fx(nearMidX) + ' ' + fx(gutNearY) +
+        ' L ' + fx(nearR) + ' ' + fx(nearOuterY) +
+        ' L ' + fx(farR) + ' ' + fx(farOuterY) +
+        ' L ' + fx(farMidX) + ' ' + fx(gutFarY) +
+        ' L ' + fx(farL) + ' ' + fx(farOuterY) + ' Z' }, clip);
+    }
+
+    // ── soft contact shadow so the stand sits ON the grass (light from above) ──
+    el('ellipse', { cx: cx + 2, cy: baseY + 2, rx: halfW * 0.82, ry: 6,
+      fill: '#000', opacity: '0.30', filter: 'url(#glow-soft)' }, g);
+
+    // ════════════ TRESTLE LEGS — short, splayed, brass-edged oak ═════════════════
+    // Two A-frame trestle legs (front pair), the stand reading wide+low. Drawn first
+    // so the top-board occludes their upper ends.
+    var legSpan = halfW - 22;
+    var trestles = [cx - legSpan, cx + legSpan];
+    for (var ti = 0; ti < trestles.length; ti++) {
+      var tx = trestles[ti];
+      var splay = (tx < cx) ? -6 : 6;     // feet splay outward
+      // leg post (slightly tapered, from board foot down to a splayed foot)
+      el('path', { d: 'M ' + fx(tx - 4) + ' ' + fx(standTopY - 1) +
+        ' L ' + fx(tx + 4) + ' ' + fx(standTopY - 1) +
+        ' L ' + fx(tx + 3 + splay) + ' ' + fx(baseY) +
+        ' L ' + fx(tx - 3 + splay) + ' ' + fx(baseY) + ' Z',
+        fill: DARK, stroke: BRASS, 'stroke-width': '1.4' }, g);
+      // brass foot pad
+      el('rect', { x: fx(tx - 5 + splay), y: fx(baseY - 2.5), width: 10, height: 3.5, rx: 1.3,
+        fill: DARK, stroke: BRASS, 'stroke-width': '1.1' }, g);
+      // brass-bright top-lit sliver down the leg's near (up-lit) edge
+      el('line', { x1: fx(tx - 3.4), y1: fx(standTopY + 1), x2: fx(tx - 2.4 + splay), y2: fx(baseY - 3),
+        stroke: BRI, 'stroke-width': '1', opacity: '0.5' }, g);
+    }
+    // a low stretcher rail tying the trestles together (instrument-furniture detail)
+    el('rect', { x: fx(cx - legSpan), y: fx(baseY - 9), width: fx(legSpan * 2), height: 4, rx: 1.5,
+      fill: DARK, stroke: BRASS, 'stroke-width': '1.1' }, g);
+    el('line', { x1: fx(cx - legSpan + 2), y1: fx(baseY - 8.4), x2: fx(cx + legSpan - 2), y2: fx(baseY - 8.4),
+      stroke: BRI, 'stroke-width': '0.9', opacity: '0.4' }, g);
+
+    // ════════════ STAND TOP-BOARD — the slanted oak lectern board (front face) ════
+    // The visible front face of the slanted board the book lies on. Its top edge is
+    // the near edge of the book; the board tilts back with the spread.
+    el('path', { d: 'M ' + fx(L + 2) + ' ' + fx(boardFrontY + 2) +
+      ' L ' + fx(R - 2) + ' ' + fx(boardFrontY + 2) +
+      ' L ' + fx(R - 4) + ' ' + fx(standTopY) +
+      ' L ' + fx(L + 4) + ' ' + fx(standTopY) + ' Z',
+      fill: DARK, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    // brass-bright top-lit rim along the board's upper front edge (the brightest line)
+    el('line', { x1: fx(L + 3), y1: fx(boardFrontY + 2.6), x2: fx(R - 3), y2: fx(boardFrontY + 2.6),
+      stroke: BRI, 'stroke-width': '1.3', opacity: '0.8' }, g);
+    // a soft warm glow on the board lip so the brass reads as lit, not flat
+    el('line', { x1: fx(L + 6), y1: fx(boardFrontY + 3), x2: fx(R - 6), y2: fx(boardFrontY + 3),
+      stroke: BRI, 'stroke-width': '2', opacity: '0.26', filter: 'url(#glow-soft)' }, g);
+    // a small brass book-LEDGE / stop bar along the front (keeps the folio from sliding)
+    el('rect', { x: fx(cx - 30), y: fx(boardFrontY - 0.5), width: 60, height: 3, rx: 1.2,
+      fill: DARK, stroke: BRASS, 'stroke-width': '1' }, g);
+    el('line', { x1: fx(cx - 28), y1: fx(boardFrontY), x2: fx(cx + 28), y2: fx(boardFrontY),
+      stroke: BRI, 'stroke-width': '0.8', opacity: '0.55' }, g);
+
+    // ════════════ THE BOOK BLOCK — the stacked-leaf thickness under the spread ════
+    // The book has real thickness: a dark text-block whose front + outer faces show a
+    // stack of cream page-edges (striations). It follows the open-book outline so the
+    // pages clearly sit ON a thick folio, not a flat sheet. Drawn below the surfaces.
+    var blockH = 7;                       // visible leaf-stack thickness at the front
+    // front leaf-stack face (under the near edge of both pages, down to the board)
+    el('path', { d: 'M ' + fx(nearL) + ' ' + fx(nearOuterY) +
+      ' L ' + fx(nearMidX) + ' ' + fx(gutNearY) +
+      ' L ' + fx(nearR) + ' ' + fx(nearOuterY) +
+      ' L ' + fx(nearR + 1) + ' ' + fx(nearOuterY + blockH) +
+      ' L ' + fx(nearMidX) + ' ' + fx(gutNearY + blockH) +
+      ' L ' + fx(nearL - 1) + ' ' + fx(nearOuterY + blockH) + ' Z',
+      fill: DARK, stroke: BRASS, 'stroke-width': '1.1' }, g);
+    // cream leaf striations across the front block face (the visible page edges)
+    for (var lf = 0; lf < 4; lf++) {
+      var ly = nearOuterY + 1.6 + lf * 1.4;
+      var lyg = gutNearY + 1.6 + lf * 1.4;
+      el('path', { d: 'M ' + fx(nearL + 1) + ' ' + fx(ly) + ' L ' + fx(nearMidX) + ' ' + fx(lyg) +
+        ' L ' + fx(nearR - 1) + ' ' + fx(ly),
+        fill: 'none', stroke: PLITE, 'stroke-width': '0.7', opacity: (0.5 - lf * 0.08).toFixed(2) }, g);
+    }
+    // brass-bright catch on the block's top front leaf edge (lit from above)
+    el('path', { d: 'M ' + fx(nearL + 1) + ' ' + fx(nearOuterY + 0.4) + ' L ' + fx(nearMidX) + ' ' + fx(gutNearY + 0.4) +
+      ' L ' + fx(nearR - 1) + ' ' + fx(nearOuterY + 0.4),
+      fill: 'none', stroke: BRI, 'stroke-width': '0.8', opacity: '0.45' }, g);
+
+    // ════════════ THE PAGE SPREAD — two facing pages tenting up from the gutter ════
+    // Each page is its own quad: outer edge LIFTED, inner (gutter) edge LOW. The right
+    // page reads a touch lighter (catches the overhead light on its outward bow). Far
+    // edge of each page is the lighter sky-wash band.
+    // LEFT page
+    el('path', { d: 'M ' + fx(nearL) + ' ' + fx(nearOuterY) +
+      ' L ' + fx(nearMidX) + ' ' + fx(gutNearY) +
+      ' L ' + fx(farMidX) + ' ' + fx(gutFarY) +
+      ' L ' + fx(farL) + ' ' + fx(farOuterY) + ' Z',
+      fill: PAGE, stroke: BRASS, 'stroke-width': '1' }, g);
+    // RIGHT page (the bowed outward face catches a little more light → slightly lighter)
+    el('path', { d: 'M ' + fx(nearMidX) + ' ' + fx(gutNearY) +
+      ' L ' + fx(nearR) + ' ' + fx(nearOuterY) +
+      ' L ' + fx(farR) + ' ' + fx(farOuterY) +
+      ' L ' + fx(farMidX) + ' ' + fx(gutFarY) + ' Z',
+      fill: PAGE, stroke: BRASS, 'stroke-width': '1' }, g);
+    // light wash toward the FAR edge of each page (upper pages catch sky light)
+    el('path', { d: 'M ' + fx(farL) + ' ' + fx(farOuterY) + ' L ' + fx(farMidX) + ' ' + fx(gutFarY) +
+      ' L ' + fx(farR) + ' ' + fx(farOuterY) +
+      ' L ' + fx((nearR + farR) / 2) + ' ' + fx((nearOuterY + farOuterY) / 2 + 1) +
+      ' L ' + fx(cx) + ' ' + fx((gutNearY + gutFarY) / 2 + 1) +
+      ' L ' + fx((nearL + farL) / 2) + ' ' + fx((nearOuterY + farOuterY) / 2 + 1) + ' Z',
+      fill: PLITE, opacity: '0.38' }, g);
+    // the RIGHT page's outward bow catches an extra sliver of light along its outer edge
+    el('path', { d: 'M ' + fx(nearR) + ' ' + fx(nearOuterY) + ' L ' + fx(farR) + ' ' + fx(farOuterY) +
+      ' L ' + fx(farR - 9) + ' ' + fx(farOuterY + 2) + ' L ' + fx(nearR - 11) + ' ' + fx(nearOuterY + 2) + ' Z',
+      fill: PLITE, opacity: '0.28' }, g);
+
+    // contour/coastline HAIRLINES — delicate, clipped to the spread, NON-noisy. A few
+    // nested closed coastline blobs on the LEFT page + a couple of contour sweeps on
+    // the RIGHT, all in faint parchment-ink. Non-scaling thin strokes.
+    var pageClip = el('g', { 'clip-path': 'url(#cartographer-page-clip)' }, g);
+    // helper: a point on the open-book surface from (u,v) in [0..1] (u across the spread,
+    // v near→far). y rises toward the outer edges and DIPS into the gutter at u=0.5, so
+    // ink laid on the pages follows the open-book bow (not a flat sheet).
+    var planePt = function (u, v) {
+      var tL = nearL + (farL - nearL) * v, tR = nearR + (farR - nearR) * v;
+      var outerY = nearOuterY + (farOuterY - nearOuterY) * v;
+      var dip = bow * (1 - Math.abs(2 * u - 1));   // 0 at outer edges, max at gutter
+      return [fx(tL + (tR - tL) * u), fx(outerY + dip)];
+    };
+    // a faint GRATICULE first (a few meridians + parallels across the whole spread) —
+    // the quiet chart frame. Kept sparse + low so the COASTLINE reads as the dominant
+    // mark (the brief's 'delicate hint', dialed back from a literal grid).
+    var meridU = [0.30, 0.70];                  // two meridians (skip the gutter at u=0.5)
+    for (var mi = 0; mi < meridU.length; mi++) {
+      var ma = planePt(meridU[mi], 0.14), mb = planePt(meridU[mi], 0.90);
+      el('line', { x1: ma[0], y1: ma[1], x2: mb[0], y2: mb[1],
+        stroke: INK, 'stroke-width': '0.45', opacity: '0.22',
+        'vector-effect': 'non-scaling-stroke' }, pageClip);
+    }
+    var paraV = [0.34, 0.66];                   // two parallels
+    for (var pv = 0; pv < paraV.length; pv++) {
+      var pa = planePt(0.08, paraV[pv]), pb = planePt(0.92, paraV[pv]);
+      el('line', { x1: pa[0], y1: pa[1], x2: pb[0], y2: pb[1],
+        stroke: INK, 'stroke-width': '0.45', opacity: '0.20',
+        'vector-effect': 'non-scaling-stroke' }, pageClip);
+    }
+    // LEFT-page COASTLINE: nested concentric contours (a little topo landmass) — the
+    // dominant chart mark. Built as concentric wobbled rings in (u,v) space so they
+    // NEST like a real contour map, then mapped onto the open-book bow via planePt.
+    var coastU = 0.27, coastV = 0.46;           // landmass centre on the left page
+    var wob = [1.00, 0.78, 1.14, 0.86, 1.04, 0.72, 1.18, 0.82, 0.96, 1.10, 0.88];
+    var NSEG = wob.length;
+    for (var ci = 0; ci < 3; ci++) {
+      var rad = 0.075 + ci * 0.05;              // growing contour ring
+      var d = '';
+      for (var k = 0; k <= NSEG; k++) {
+        var ang = (k / NSEG) * Math.PI * 2;
+        var rr = rad * wob[k % NSEG];
+        var uu = coastU + Math.cos(ang) * rr * 0.92;
+        var vv = coastV + Math.sin(ang) * rr * 1.10;
+        var p = planePt(uu, vv);
+        d += (k === 0 ? 'M ' : 'L ') + p[0] + ' ' + p[1] + ' ';
+      }
+      d += 'Z';
+      el('path', { d: d, fill: 'none', stroke: INK,
+        'stroke-width': ci === 0 ? '0.85' : '0.6',
+        'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke',
+        opacity: (0.56 - ci * 0.11).toFixed(2) }, pageClip);
+    }
+    // RIGHT-page: a couple of gentle latitude-style contour sweeps (a quieter echo of
+    // the coastline, so the rose isn't sitting on a blank field) — kept fainter.
+    for (var li2 = 0; li2 < 2; li2++) {
+      var vy = 0.30 + li2 * 0.22;
+      var a = planePt(0.58, vy), b = planePt(0.72, vy - 0.03), c2 = planePt(0.86, vy + 0.02);
+      el('path', { d: 'M ' + a[0] + ' ' + a[1] + ' Q ' + b[0] + ' ' + b[1] + ' ' + c2[0] + ' ' + c2[1],
+        fill: 'none', stroke: INK, 'stroke-width': '0.6', 'vector-effect': 'non-scaling-stroke',
+        opacity: '0.34' }, pageClip);
+    }
+
+    // the CENTRE GUTTER/SPINE: a soft shaded crease down the middle (book fold), with a
+    // brass-bright catch on its up-lit (left) side.
+    el('path', { d: 'M ' + fx(nearMidX) + ' ' + fx(gutNearY) +
+      ' L ' + fx(farMidX) + ' ' + fx(gutFarY),
+      fill: 'none', stroke: 'rgba(0,0,0,.30)', 'stroke-width': '2.4',
+      'stroke-linecap': 'round', filter: 'url(#glow-soft)' }, g);
+    el('line', { x1: fx(nearMidX - 1.4), y1: fx(gutNearY), x2: fx(farMidX - 1.4), y2: fx(gutFarY),
+      stroke: BRI, 'stroke-width': '0.7', opacity: '0.30' }, g);
+
+    // ════════════ THE COMPASS-ROSE — flat on the NEAR page (lower-right), emissive ══
+    // A multi-point engraved star-rose lying FLAT on the page (foreshortened with the
+    // tilt: vertically squashed), with N/E/S/W rays, a graduated ring, and a warm gold
+    // glow that pools at night (rep.glow1) and recedes by day. NOT a standing disk —
+    // it sits ON the parchment, drawn within the page plane.
+    var roseU = 0.74, roseV = 0.56;                      // lower-right of the spread
+    var rc = planePt(roseU, roseV);
+    var rcx = rc[0], rcy = rc[1];
+    var rOuter = 18;                                     // rose radius (page units, near edge)
+    var squash = 0.46;                                   // vertical foreshorten (page tilt)
+    var localScale = 1 - 0.26 * roseV;                   // pages narrow with v → rose smaller
+    var Ro = rOuter * localScale;
+    // The bloom is ONE feathered layer BEHIND; the rose geometry is drawn CRISP on top so
+    // the star reads as an ENGRAVED INSTRUMENT, not a fuzzy blob. Both groups share the
+    // page tilt. The bloom is the rep's stronger warm GLOW POOL (the night payoff).
+    var bloomG = el('g', { transform: 'translate(' + rcx + ' ' + rcy + ') scale(1 ' + squash + ')',
+      filter: 'url(#cartographer-rose-glow)' }, g);
+    // pooled bloom — soft, feathered, behind the crisp art. A QUIET breathing pulse
+    // (the §2.5.5 lamp-breath) lives on the pool only: a faint opacity swell, no spin /
+    // no page flutter. It STARTS + ENDS at the full-bright frame so the boot's global
+    // pauseAnimations() under prefers-reduced-motion / ?smil=0 freezes it lit, not dim —
+    // the documented estate convention (no extra JS gating needed).
+    var breath = el('g', {}, bloomG);
+    el('circle', { cx: 0, cy: 0, r: fx(Ro * 1.40), fill: ROSE, opacity: '0.22' }, breath);
+    el('circle', { cx: 0, cy: 0, r: fx(Ro * 0.58), fill: ROSE, opacity: '0.36' }, breath);
+    el('animate', { attributeName: 'opacity', values: '1;0.80;1', keyTimes: '0;0.5;1',
+      dur: '5.5s', begin: '0s', repeatCount: 'indefinite', calcMode: 'spline',
+      keySplines: '0.4 0 0.6 1;0.4 0 0.6 1' }, breath);
+
+    var rg = el('g', { transform: 'translate(' + rcx + ' ' + rcy + ') scale(1 ' + squash + ')' }, g);
+    // the STAR-ROSE rays, drawn FIRST so the bezel ring + hub sit atop them. 4 long
+    // cardinal + 4 short intercardinal points, each an ENGRAVED kite: a dark facet body
+    // (brass-outlined) with a bright gold LIT flank along its upper-left edge + a hot
+    // gold edge tracing the ray — reads as an engraved instrument lit from above
+    // (Take-3 facet craft), crisper than a flat starburst.
+    var DARKFACE = 'rgba(11,14,22,.70)';
+    var ray = function (angDeg, len, halfWid, lit) {
+      var a = angDeg * Math.PI / 180;
+      var ca = Math.cos(a), sa = Math.sin(a);
+      var px = -sa, py = ca;                              // perpendicular
+      var tx = ca * len, ty = sa * len;                  // tip
+      var sx = ca * (len * 0.30), sy = sa * (len * 0.30); // shoulder along axis
+      var d = 'M 0 0' +
+        ' L ' + fx(sx + px * halfWid) + ' ' + fx(sy + py * halfWid) +
+        ' L ' + fx(tx) + ' ' + fx(ty) +
+        ' L ' + fx(sx - px * halfWid) + ' ' + fx(sy - py * halfWid) + ' Z';
+      // dark engraved body — crisp diamond facet, brass-outlined
+      el('path', { d: d, fill: DARKFACE, stroke: BRASS, 'stroke-width': '0.9',
+        'vector-effect': 'non-scaling-stroke', 'stroke-linejoin': 'round' }, rg);
+      // the lit (upper-left) flank filled bright gold = lit from above
+      el('path', { d: 'M 0 0 L ' + fx(sx + px * halfWid) + ' ' + fx(sy + py * halfWid) +
+        ' L ' + fx(tx) + ' ' + fx(ty),
+        fill: ROSE, opacity: lit ? '0.90' : '0.60', stroke: 'none' }, rg);
+      // a hot gold edge tracing the ray so the point reads crisp
+      el('line', { x1: 0, y1: 0, x2: fx(tx), y2: fx(ty), stroke: ROSE,
+        'stroke-width': lit ? '0.9' : '0.6', opacity: lit ? '0.9' : '0.6',
+        'vector-effect': 'non-scaling-stroke', 'stroke-linecap': 'round' }, rg);
+    };
+    var Rlong = Ro * 0.92, Rshort = Ro * 0.50, hw = Ro * 0.165;
+    // intercardinals first (NE/SE/SW/NW), then cardinals over them
+    ray(-45, Rshort, hw, false); ray(45, Rshort, hw, false);
+    ray(135, Rshort, hw, false); ray(225, Rshort, hw, false);
+    ray(-90, Rlong, hw, true);   // N (up) — most lit
+    ray(0, Rlong, hw, false);    // E
+    ray(90, Rlong, hw, false);   // S
+    ray(180, Rlong, hw, true);   // W
+    // graduated BEZEL RING — a brass ring with fine tick graduations (Take-3 instrument
+    // bezel): an outer brass ring + a gold inner liner + 36 fine ticks (every 10°,
+    // longer on the quadrants), so the rose reads as a charted compass, not a star.
+    var Rring = Ro * 1.02;
+    el('circle', { cx: 0, cy: 0, r: fx(Rring), fill: 'none', stroke: BRASS, 'stroke-width': '1.3',
+      'vector-effect': 'non-scaling-stroke', opacity: '0.9' }, rg);
+    el('circle', { cx: 0, cy: 0, r: fx(Rring), fill: 'none', stroke: ROSE, 'stroke-width': '0.8',
+      'vector-effect': 'non-scaling-stroke', opacity: '0.82' }, rg);
+    el('circle', { cx: 0, cy: 0, r: fx(Rring - 2.6), fill: 'none', stroke: BRASS, 'stroke-width': '0.6',
+      'vector-effect': 'non-scaling-stroke', opacity: '0.55' }, rg);
+    for (var tk = 0; tk < 36; tk++) {
+      var ta = (tk / 36) * Math.PI * 2;
+      var major = (tk % 9 === 0);
+      var t1 = Rring - 0.6, t2 = Rring - (major ? 4.2 : 2.2);
+      el('line', { x1: fx(Math.cos(ta) * t2), y1: fx(Math.sin(ta) * t2),
+        x2: fx(Math.cos(ta) * t1), y2: fx(Math.sin(ta) * t1),
+        stroke: ROSE, 'stroke-width': major ? '0.9' : '0.55',
+        'vector-effect': 'non-scaling-stroke', opacity: major ? '0.88' : '0.5' }, rg);
+    }
+    // hub: a brass setting + a hot white-gold core (the rose's brightest point)
+    el('circle', { cx: 0, cy: 0, r: fx(Ro * 0.20), fill: DARKFACE, stroke: BRASS,
+      'stroke-width': '0.9', 'vector-effect': 'non-scaling-stroke' }, rg);
+    el('circle', { cx: 0, cy: 0, r: fx(Ro * 0.12), fill: ROSE, opacity: '0.96' }, rg);
+    el('circle', { cx: fx(-Ro * 0.03), cy: fx(-Ro * 0.03), r: fx(Ro * 0.05), fill: '#fff7e2', opacity: '0.85' }, rg);
+    // a tiny fleur-de-lis on the N tip — the cartographer's flourish, kept very small
+    el('path', { d: 'M 0 ' + fx(-Rlong) + ' l -1.7 -2.5 l 1.7 1.0 l 1.7 -1.0 Z',
+      fill: ROSE, opacity: '0.92', stroke: BRASS, 'stroke-width': '0.5',
+      'vector-effect': 'non-scaling-stroke' }, rg);
+
+    S.refs.cartographerRep = g;
+    if (S && S.refs) { S.refs.cartographerRose = breath; }   // Phase-D handle for the lamp-breath
   }
 
   /* ── the GLYPH STAND — the fallback rep for every room WITHOUT a bespoke rep
