@@ -9187,6 +9187,50 @@ window.addEventListener("resize", ()=> hideCard(true));
       }
     }
 
+    /* ════════════════════════════════════════════════════════════════════════════
+       #380 CHILD-MAP MODE — a descended child is an ISOLATED context, not a half-map.
+       Keyed on isChild() so EVERY future detach:true wing inherits this (the template),
+       never special-cased to "amusements". Two helpers HIDE the whole parent estate on
+       child-enter and restore it exactly on ascend/free-explore:
+         · setParentVisible(on)        — every NON-child plate's POI tiles + their label
+           wrappers, AND every parent gate face (a gate whose toPlate is NOT the child we
+           are inside). display:none, not opacity — a dimmed parent still reads as "there".
+         · setParentChromeVisible(on)  — the parent's drawn chrome layers wholesale: the
+           district/wing precinct hulls (#precincts), the circulation (#paths), the manor
+           shell (#manor), the engraved district captions (#zonelabels) + wing sub-captions
+           (#winglabels). None of these groups carry CHILD content (the child draws its own
+           .child-midway ground in #pois + its per-room labels in #roomlabels, and its own
+           wing chrome is already folded by setChildVisible), so toggling them wholesale is
+           the correct, complete hide. On ascend they restore to exactly their prior state.
+       ════════════════════════════════════════════════════════════════════════════ */
+    const PARENT_CHROME = ["precincts","paths","manor","zonelabels","winglabels"]
+      .map(id=>document.getElementById(id)).filter(Boolean);
+    function setParentChromeVisible(on){
+      for(const g of PARENT_CHROME) g.style.display = on ? "" : "none";
+    }
+    // hide/show every NON-child plate's tiles + labels, plus parent gate faces (gates whose
+    // child is NOT the one we are inside). `insideChild` = the child pid we descended into.
+    function setParentVisible(on, insideChild){
+      for(const p of P.ids){
+        if(isChild(p)) continue;   // child sets are governed by relayChild / setChildVisible
+        for(const tile of (tilePlate[p]||[])){
+          tile.style.display = on ? "" : "none";
+          tile.style.pointerEvents = on ? "" : "none";
+          const w = labelWrapById[tile.dataset.id];
+          if(w) w.style.display = on ? "" : "none";
+        }
+      }
+      // parent gate faces: the descended child's OWN gate hides anyway (you're inside it);
+      // every OTHER gate (a sibling detached wing's threshold) is parent furniture → hide it.
+      for(const cpid in gateGroups){
+        if(cpid === insideChild) continue;
+        const gp = gateGroups[cpid];
+        gp.style.display = on ? "" : "none";
+        gp.style.pointerEvents = on ? "" : "none";
+        gp.setAttribute("tabindex", on ? "0" : "-1");
+      }
+    }
+
     // ── THE GATE FACES + the child MIDWAY GROUND, drawn into #pois. The gate face is a
     //    .gate-face SVG group at gates[].box (the brass-and-ink idiom); clicking/Entering it
     //    descends into the child. The midway ground (faint promenade + distant pennants under
@@ -9296,14 +9340,18 @@ window.addEventListener("resize", ()=> hideCard(true));
       here = null;
       if(clearStack) stack.length = 0;
       clearRelay();
+      // #380: dropping out of a child-map RESTORES the whole parent estate — undo the
+      // display:none child mode set on parent tiles/labels AND re-show the parent chrome.
+      setParentChromeVisible(true);
       for(const p of P.ids){
         const child = isChild(p);
         for(const tile of (tilePlate[p]||[])){
           if(child){ tile.style.display = "none"; tile.style.pointerEvents = "none"; const w = labelWrapById[tile.dataset.id]; if(w) w.style.display = "none"; }
-          else { tile.style.opacity = ""; tile.style.pointerEvents = ""; }
+          else { tile.style.display = ""; tile.style.opacity = ""; tile.style.pointerEvents = ""; const w = labelWrapById[tile.dataset.id]; if(w) w.style.display = ""; }
         }
       }
-      for(const gp of Object.values(gateGroups)){ gp.style.opacity = ""; gp.style.pointerEvents = ""; gp.setAttribute("tabindex","0"); }
+      // re-show every gate face (clear both display — set by child mode — and opacity — set by a district tour).
+      for(const gp of Object.values(gateGroups)){ gp.style.display = ""; gp.style.opacity = ""; gp.style.pointerEvents = ""; gp.setAttribute("tabindex","0"); }
       try{ LOUPE.setTourSet(null); }catch(_){}   // restore circle-intersection/zoom-LOD
       renderBar();
     }
@@ -9332,28 +9380,74 @@ window.addEventListener("resize", ()=> hideCard(true));
       window.__panCamera.frameTo(P.frame[pid]);      // suppresses the drop-out signal; bypasses K_MAX
       if(armTimer) clearTimeout(armTimer);
       if(!reduce) armTimer = setTimeout(()=>viewport.classList.remove("walking","walking-deep"), child ? 960 : 760);
-      // dim + make inert every plate you are NOT touring; light + enable the one you are.
-      for(const p of P.ids){
-        const on = (p===pid);
-        for(const tile of (tilePlate[p]||[])){
-          tile.style.opacity = on ? "" : "0.16";
-          tile.style.pointerEvents = on ? "" : "none";   // dimmed rooms fire no hover/labels
+      if(child){
+        /* #380 CHILD-MAP MODE: a descended child is its OWN context. HIDE the whole parent
+           estate (not dim it) + ALL parent chrome — only the 15 child tiles (relaid above),
+           the .child-midway ground, the depth ribbon, and the child's own labels remain. */
+        setParentVisible(false, pid);
+        setParentChromeVisible(false);
+        // the descended child's OWN gate hides (you are already inside it) — kept out of the
+        // setParentVisible sweep above so it can't flicker, hidden explicitly here.
+        if(gateGroups[pid]){ const og = gateGroups[pid]; og.style.opacity = "0"; og.style.pointerEvents = "none"; og.setAttribute("tabindex","-1"); }
+        showRibbon(pid);
+        // the loupe lights the child set, DECLUTTERED over where each child label TRULY PAINTS
+        // inside the midway — not the stale canonical column (the 4/15 symptom). The painted box
+        // is the canonical SOLVED label box (a) SHIFTED by the same relay delta relayChild applied
+        // to the tile+wrapper, and (b) COUNTER-SCALED by 1/k about its label anchor — because the
+        // #roomlabels layer rides the scale(k) viewport and scaleLabelText() shrinks each revealed
+        // name by 1/k about (tx,ty) to hold a constant SCREEN size. Reserving that true small box
+        // (vs the full untransformed box) admits a label for every child room the airy fan has room
+        // for, while STILL guaranteeing zero on-screen overlap — it is exactly the rendered rect.
+        // Loupe-local: SOLVED / the door pill / sky / door-mirror are untouched.
+        let childFoot = null;
+        try{
+          const d = childDelta[pid];
+          const fk = (P.frame[pid] && P.frame[pid].k) ? P.frame[pid].k : 1;
+          const inv = fk > 1.0001 ? (1/fk) : 1;
+          if(d){ childFoot = {};
+            for(const id in d){
+              const s = SOLVED.get(id); if(!s || !s.box) continue;
+              const b = s.box, dd = d[id];
+              const w = labelWrapById[id];
+              const ax = w ? parseFloat(w.dataset.tx) : NaN, ay = w ? parseFloat(w.dataset.ty) : NaN;
+              // counter-scale the box about its anchor (matches scaleLabelText), then shift by delta.
+              let rx, ry, rw, rh;
+              if(inv !== 1 && isFinite(ax) && isFinite(ay)){
+                rx = ax + (b.x - ax)*inv; ry = ay + (b.y - ay)*inv; rw = b.w*inv; rh = b.h*inv;
+              } else { rx = b.x; ry = b.y; rw = b.w; rh = b.h; }
+              childFoot[id] = { x: rx + dd.dx, y: ry + dd.dy, w: rw, h: rh };
+            }
+          }
+        }catch(_){ childFoot = null; }
+        try{ LOUPE.setTourSet(idsByPlate[pid]||[], P.frame[pid], Array.from(distByPlate[pid]||[]), childFoot); }catch(_){}
+      } else {
+        /* PARENT DISTRICT TOUR (unchanged behaviour, #262): restore the estate first — we
+           may be arriving from a child layer via the stack — then dim the un-toured plates. */
+        setParentChromeVisible(true);
+        setParentVisible(true, null);
+        for(const p of P.ids){
+          if(isChild(p)) continue;
+          const on = (p===pid);
+          for(const tile of (tilePlate[p]||[])){
+            tile.style.opacity = on ? "" : "0.16";
+            tile.style.pointerEvents = on ? "" : "none";   // dimmed rooms fire no hover/labels
+          }
         }
+        // the gate faces dim with their parent plate. Parent gate stays lit/clickable when
+        // its parent is toured. Dimmed gates leave the tab order (no hidden keyboard target).
+        for(const cpid in gateGroups){
+          const gp = gateGroups[cpid];
+          const par = P.parentOf[cpid];
+          const on = (pid===par);                     // show the gate when touring its parent
+          gp.style.display = "";                       // undo any child-mode hide
+          gp.style.opacity = on ? "" : "0.16";
+          gp.style.pointerEvents = on ? "" : "none";
+          gp.setAttribute("tabindex", on ? "0" : "-1");
+        }
+        hideRibbon();
+        // the loupe lights the WHOLE navigated plate (decluttered at the plate's framed scale).
+        try{ LOUPE.setTourSet(idsByPlate[pid]||[], P.frame[pid], Array.from(distByPlate[pid]||[])); }catch(_){}
       }
-      // the gate faces dim with their parent plate; the descended child's own gate hides
-      // (you are already inside). Parent gate stays lit/clickable when its parent is toured.
-      // Dimmed gates also leave the tab order so a keyboard user can't trigger a hidden one.
-      for(const cpid in gateGroups){
-        const gp = gateGroups[cpid];
-        const par = P.parentOf[cpid];
-        const on = child ? false : (pid===par);    // show the gate when touring its parent
-        gp.style.opacity = on ? "" : (child && cpid===pid ? "0" : "0.16");
-        gp.style.pointerEvents = on ? "" : "none";
-        gp.setAttribute("tabindex", on ? "0" : "-1");
-      }
-      if(child) showRibbon(pid); else hideRibbon();
-      // the loupe lights the WHOLE navigated plate (decluttered at the plate's framed scale).
-      try{ LOUPE.setTourSet(idsByPlate[pid]||[], P.frame[pid], Array.from(distByPlate[pid]||[])); }catch(_){}
       renderBar();
     }
     // DESCEND: the gate face's action — push the parent onto the stack, enter the child.
@@ -9376,9 +9470,17 @@ window.addEventListener("resize", ()=> hideCard(true));
       gp.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } });
     }
 
-    // THE DROP-OUT: any by-hand camera move while touring returns to free-explore. The
-    // panZoom module fires this from wheel / drag / ±/arrows / fit (never from frameTo).
-    window.__panCamera.onManual = function(){ if(here) freeExplore(true); };
+    // THE DROP-OUT (#262) vs CHILD-MAP NAVIGATION (#380). A by-hand camera move (wheel / drag /
+    // ±/arrows / fit; never frameTo) means two different things by depth:
+    //   · in a PARENT DISTRICT TOUR — "give me the whole estate back" → drop out to free-explore.
+    //   · INSIDE A CHILD MAP — navigate WITHIN the child. The child is a self-contained context;
+    //     a pan/zoom must NOT exit it or re-show the parent. The camera has already applied the
+    //     move (panZoom's own k/tx/ty), so we simply DO NOT drop out — the view moves, the child
+    //     stays whole, the ribbon stays up. Only the ribbon / Back / Esc ascends. (__panCamera
+    //     exposes no per-frame clamp, so this suppress-the-drop-out is the minimum correct mode;
+    //     the visitor freely roams the child layer and the existing edge clamp keeps the plate
+    //     from being dragged fully off-screen.)
+    window.__panCamera.onManual = function(){ if(here && !isChild(here)) freeExplore(true); };
 
     // global keyboard: esc / backspace retreats/ascends while touring (when not typing).
     window.addEventListener("keydown", (e)=>{
@@ -9577,10 +9679,21 @@ const LOUPE = (function(){
     // district named as densely as the geometry allows, with ZERO on-screen overlap —
     // which Claim C in the door pill proves over every preset.
     let tourSet = null, tourDistricts = null;
-
+    // CHILD-MAP MODE (#380): inside a detached wing's layer the tiles + their label wrappers
+    // are RE-LAID from the canonical tight column (SOLVED.box) to the airy relay foot. So the
+    // declutter must score overlap over the box where a child label ACTUALLY renders — the
+    // relay foot — not the stale canonical box, or most child labels lose to phantom crowding
+    // and never light (the 4/15 symptom). The plate-switcher hands us a per-id relay-box map
+    // for the active child tour; solvedBox consults it FIRST so the SAME greedy screen-space
+    // pass admits child labels by their true on-screen position. null = no child tour (the
+    // canonical SOLVED map is the sole source — the door pill, sky stars + mirror are untouched).
+    let tourSolvedBox = null;
     // the SOLVED render box for a POI's label, in viewBox units (what actually paints).
     // If a label was never solved (shouldn't happen for a present POI), skip it.
-    function solvedBox(id){ const s = SOLVED.get(id); return s ? s.box : null; }
+    function solvedBox(id){
+      if(tourSolvedBox){ const rb = tourSolvedBox[id]; if(rb) return rb; }   // child relay foot
+      const s = SOLVED.get(id); return s ? s.box : null;
+    }
     function poiById(id){ return PLACES.find(p=> p.id===id); }
 
     /* revealedSet(focus, k) → [ids] — the loupe + greedy screen-space declutter.
@@ -9769,14 +9882,19 @@ const LOUPE = (function(){
        keys whose engraved caption stays full. The raw set is DECLUTTERED here into a
        provably overlap-free subset (the SOLVED boxes are placed for the whole estate, so
        a raw whole-district light re-crowds). Pass (null) to drop back to free-explore. */
-    function setTourSet(ids, frame, districts){
+    function setTourSet(ids, frame, districts, childFoot){
       if(ids && ids.length){
+        // CHILD-MAP MODE (#380): a child tour passes its per-id RELAY-foot box map so the
+        // declutter scores overlap where the re-laid child labels truly render (the airy
+        // midway), not the canonical column. Set it BEFORE declutterIds so the pass admits
+        // them by true position; it stays set while the child tour is lit (solvedBox reads it).
+        tourSolvedBox = (childFoot && Object.keys(childFoot).length) ? childFoot : null;
         const focus = frame ? { x:frame.cx, y:frame.cy } : null;
         const fk = (frame && frame.k) ? frame.k : 1;
         tourSet = declutterIds(ids, focus, fk);
         tourDistricts = (districts && districts.length) ? new Set(districts) : null;
       } else {
-        tourSet = null; tourDistricts = null;
+        tourSet = null; tourDistricts = null; tourSolvedBox = null;
       }
       renderReveal();
     }
