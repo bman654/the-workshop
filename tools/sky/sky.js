@@ -105,6 +105,13 @@
     // footprint/furniture box, the manor pool, the viewBox edge, and every existing catalog star
     // by sky.test.cjs CATALOG INTEGRITY (re-runnable /tmp star-placement verifier).
     'hexapawn':       { x: 1060, y: 560, mag: 2 },
+    // The Long Chain — the number wing's Dots-and-Boxes room (the game greedy loses). A field star
+    // a tight companion below-left of its games kin The Matchbox (hexapawn @1060,560): Δ(20,65) →
+    // ≥2*STAR_PAD(12) on the y-axis (the test's both-axes rule). The SECOND member of The Strategist
+    // feat-group, so its asterism reads ≥2 stars and the engraved name sits over two dots. Lit on
+    // first visit (ws:seen:the-long-chain). Verified clear of every footprint/furniture box, the manor
+    // pool, the viewBox edge, and every existing catalog star by sky.test.cjs CATALOG INTEGRITY.
+    'the-long-chain': { x: 1040, y: 625, mag: 1 },
     // The Belief Beam — the number wing's Bayesian apparatus (belief is a conserved liquid).
     // A FEATS-flavoured field star in the dark lower-right band below the manor pool, between
     // its number-wing kin collisions (1180,560) and differential-gear (1180,700); lit on first
@@ -361,6 +368,13 @@
     // ADDITIVE — it NEVER feeds the wings-only all-skies capstone.
     { id: 'surveyor', name: 'The Surveyor', myth: 'Walks the loop; brings home the twist no chart can hide.',
       members: ['holonomy', 'unrolled-cone'] },
+    // The Strategist — the number wing's solved-games reward constellation: two rooms where you
+    // learn to beat a provably perfect opponent. Founded by The Matchbox That Learns (Hexapawn, a
+    // machine that teaches itself to stop losing) and grown by The Long Chain (Dots-and-Boxes, won
+    // by handing boxes back). Two stars, so the engraved name never sits over a lone dot. ADDITIVE —
+    // it never feeds the wings-only all-skies capstone.
+    { id: 'strategist', name: 'The Strategist', myth: 'Wins by the move that looks like a mistake.',
+      members: ['hexapawn', 'the-long-chain'] },
     // The Pilot — Optics' fly-through reward constellation. Founded by The Photon's Errand
     // (`ws:seen:refraction-run`, fly least-time through slow glass) and grown by The Light
     // That Falls Around a Star (`ws:seen:starlight-bend`, fly the SAME least-time road bent

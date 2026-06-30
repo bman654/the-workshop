@@ -41,6 +41,7 @@ const COILWRIGHT= FEAT_GROUPS.find(g => g.id === 'coilwright');// Electromagneti
 const SIRENIST  = FEAT_GROUPS.find(g => g.id === 'sirenist');  // Kinetics & Sound's founding star (The Tone Mill)
 const WAGERER   = FEAT_GROUPS.find(g => g.id === 'wagerer');   // the Belief Beam's founding star (The Belief Beam)
 const CARILLONNEUR = FEAT_GROUPS.find(g => g.id === 'carillonneur'); // the Barrel House's two founding rooms (Pin-Barrel + Mirror Drum)
+const STRATEGIST = FEAT_GROUPS.find(g => g.id === 'strategist'); // the number wing's solved-games pair (Matchbox + Long Chain)
 // the legacy Optician sub-suite (174-228) refers to `FEATS` as the single Optician group.
 const FEATS = OPTICIAN;
 
@@ -437,9 +438,9 @@ WINGS.forEach(w => w.members.forEach(m => ALL_WING_MEMBERS.push(m)));
   //    game), The Coilwright (Electromagnetism's induction wing) and The Sirenist (Kinetics &
   //    Sound's siren wing) are each founded on a real front-door room's `ws:seen` crumb, sized
   //    to grow as their wings' siblings ship. ──
-  eq(FEAT_GROUPS.length, 11, 'BIJECTION: there are exactly eleven feat-groups');
-  eq(FEAT_GROUPS.length, new Set(FEAT_GROUPS.map(g => g.id)).size, 'BIJECTION: the eleven feat-group ids are distinct');
-  ok(!!OPTICIAN && !!AUTOMATON && !!FURNACE && !!SURVEYOR && !!PILOT && !!RECKONER && !!DROVER && !!COILWRIGHT && !!SIRENIST && !!WAGERER && !!CARILLONNEUR, 'BIJECTION: the eleven feat-groups are Optician + Automaton + Furnace + Surveyor + Pilot + Reckoner + Drover + Coilwright + Sirenist + Wagerer + Carillonneur');
+  eq(FEAT_GROUPS.length, 12, 'BIJECTION: there are exactly twelve feat-groups');
+  eq(FEAT_GROUPS.length, new Set(FEAT_GROUPS.map(g => g.id)).size, 'BIJECTION: the twelve feat-group ids are distinct');
+  ok(!!OPTICIAN && !!AUTOMATON && !!FURNACE && !!SURVEYOR && !!PILOT && !!RECKONER && !!DROVER && !!COILWRIGHT && !!SIRENIST && !!WAGERER && !!CARILLONNEUR && !!STRATEGIST, 'BIJECTION: the twelve feat-groups are Optician + Automaton + Furnace + Surveyor + Pilot + Reckoner + Drover + Coilwright + Sirenist + Wagerer + Carillonneur + Strategist');
 
   // every member belongs to exactly one group across WINGS + FEAT_GROUPS (no dupe across
   // the whole catalog of asterisms). memberWing already holds the wing assignments.
