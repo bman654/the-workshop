@@ -405,7 +405,14 @@ numberPascalSelfTest();
    plate composite as a BASELINE and FAIL the build only if a LATER addition pushes
    crowding MEASURABLY above it. The #103 "intended" warning keeps its rationale; this
    just stops the next room from quietly re-crowding the plate past where we left it. ── */
-const CROWDING_BASELINE = 0.929;   // re-baselined #358: The Standing Stones joined the amusements wing (its
+const CROWDING_BASELINE = 0.939;   // re-baselined #366: The Level Ride joined the amusements wing (its
+                                   //   rolling/constant-width kin, a sibling of The Top on the Midway's rolling
+                                   //   run — an intentional room-add, the documented "if intentional, re-baseline"
+                                   //   path). The grounds full-plate composite rose 0.929→0.939 as the new ride
+                                   //   packed into the densest district; pinned here so the next add is measured
+                                   //   against today's truth. The door draws ZERO room labels at rest (#212), so
+                                   //   the full-plate crowding stays an intended WARNING, not a defect. (was 0.929:)
+                                   // re-baselined #358: The Standing Stones joined the amusements wing (its
                                    //   herding-puzzle kin, a sibling of The Shepherd under the Drover roof — an
                                    //   intentional room-add, the documented "if intentional, re-baseline" path).
                                    //   The grounds full-plate composite rose 0.919→0.929 as the new bench packed
