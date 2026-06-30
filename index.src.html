@@ -302,6 +302,10 @@
      (NOT the 0.28 the Undercroft rune was too dim at), and hover/focus lifts the whole booth.
      The accent (--c) is set per-gate inline (the wing accent #37f7e0). ---- */
   .gate-face{ cursor:pointer; }
+  /* the invisible full-box hit-area (#369): painted-transparent + pointer-events:all so a REAL
+     click anywhere in the footprint — including the open-arch negative space — catches + descends
+     (SVG hit-tests only painted pixels; the thin-stroke art alone would let a click fall through). */
+  .gate-face .gate-hit{ fill:rgba(0,0,0,0); stroke:none; pointer-events:all; }
   .gate-face .gate-line{ stroke:var(--brass); stroke-width:1.4; fill:none; opacity:.82; }
   .gate-face .gate-fill{ fill:color-mix(in srgb,var(--c,#37f7e0) 9%,var(--paper)); stroke:var(--brass); stroke-width:1; opacity:.92; }
   .gate-face .gate-glow{ fill:var(--c,#37f7e0); opacity:.5; transform-box:fill-box; transform-origin:center;
@@ -1715,6 +1719,9 @@ function drawStair(g, r){ // the cellar stair: a small treaded square descending
 function drawGateFacePlaceholder(g, box, accent){
   const {x,y,w,h} = box;
   const ah = h*0.62, by = y+ah, bw = w*0.72, bx = x+(w-bw)/2; // arch height, booth top, booth box
+  // the invisible full-box HIT-AREA (#369), FIRST in paint order — a painted-but-transparent
+  // rect so a real click anywhere in the footprint (incl. the open arch) catches + descends.
+  g.appendChild(el("rect",{ x, y, width:w, height:h, fill:"rgba(0,0,0,0)", stroke:"none", class:"gate-hit" }));
   // the midway ARCH (a rounded gateway over the booth)
   g.appendChild(el("path",{ d:`M${x+2} ${by} V${y+ah*0.42} Q${x+2} ${y+2} ${x+w*0.5} ${y+2} Q${x+w-2} ${y+2} ${x+w-2} ${y+ah*0.42} V${by}`,
     class:"gate-fill" }));
@@ -4472,9 +4479,27 @@ window.addEventListener("resize", ()=> hideCard(true));
         d[r.id] = { dx: rf.x - cx0, dy: rf.y - cy0 };
       }
     }
-    // apply / clear the re-lay translate on a child plate's tiles + their labels.
+    // THE FOLD MADE REAL (#369 bug-fix): a detached wing's tiles LEAVE the parent plate. At
+    // rest/free-explore the child's 15 .poi tiles + their label wrappers are display:none on the
+    // parent (only the synthetic gate face remains in the hole — no crowded canonical column),
+    // and they exist solely in the child layer reached by descent. setChildVisible(cpid,on)
+    // shows/hides the whole child set; descend() shows+relays them, ascend()/free-explore hides
+    // them again. (The conscience reads the AIRY relay foot for child rooms via DoorClaims
+    // childFoot, so the live C′ pill agrees with this render — the canonical SOLVED map, the sky
+    // stars, and the door-mirror keep reading the untouched canonical foot.)
+    function setChildVisible(cpid, on){
+      for(const tile of (tilePlate[cpid]||[])){
+        tile.style.display = on ? "" : "none";
+        tile.style.pointerEvents = on ? "" : "none";
+        const w = labelWrapById[tile.dataset.id];
+        if(w) w.style.display = on ? "" : "none";
+      }
+    }
+    // apply / clear the re-lay translate on a child plate's tiles + their labels (the fold +
+    // the midway placement are one move: reveal the child set AND translate it to the relay foot).
     function relayChild(cpid, on){
       const d = childDelta[cpid]; if(!d) return;
+      setChildVisible(cpid, on);
       for(const tile of (tilePlate[cpid]||[])){
         const id = tile.dataset.id, dd = d[id];
         const t = (on && dd) ? `translate(${dd.dx} ${dd.dy})` : "";
@@ -4513,6 +4538,12 @@ window.addEventListener("resize", ()=> hideCard(true));
         midwayByChild[g.toPlate] = mid;
       }
     }
+
+    // FOLD THE CHILD AWAY AT BUILD TIME (#369): the moment the partition is known, the detached
+    // wing's tiles leave the parent plate (display:none), so the resting render shows ONLY the
+    // gate face in the hole — never the crowded canonical column, even for the frame before the
+    // first freeExplore() runs. descend() reveals + relays them into the airy midway.
+    for(const cpid of (P.childPlates||[])) setChildVisible(cpid, false);
 
     // ── THE WAYFINDER STRIP (#platebar): always lists ALL 5 presets; a Back button
     //    shows ONLY while a guided-tour history stack exists. ──
@@ -4577,18 +4608,20 @@ window.addEventListener("resize", ()=> hideCard(true));
       hideRibbon();
     }
 
-    // FREE-EXPLORE: the whole estate lit + clickable, the standard loupe restored, the
+    // FREE-EXPLORE: the whole PARENT estate lit + clickable, the standard loupe restored, the
     // bar reset to all-5 / no-Back / cleared stack. The resting + drop-out state. A by-hand
-    // drop-out from depth un-dims everything AND un-folds the child back to canonical (child
-    // tiles are real rooms — the gate is then re-enterable).
+    // drop-out from depth FOLDS the child back AWAY (its tiles leave the parent — only the lit
+    // gate remains in the hole, re-enterable). The fold is real: at rest a visitor sees the
+    // gate alone, never the crowded canonical column the detach was built to relieve (#369).
     function freeExplore(clearStack){
       here = null;
       if(clearStack) stack.length = 0;
       clearRelay();
       for(const p of P.ids){
+        const child = isChild(p);
         for(const tile of (tilePlate[p]||[])){
-          tile.style.opacity = "";
-          tile.style.pointerEvents = "";
+          if(child){ tile.style.display = "none"; tile.style.pointerEvents = "none"; const w = labelWrapById[tile.dataset.id]; if(w) w.style.display = "none"; }
+          else { tile.style.opacity = ""; tile.style.pointerEvents = ""; }
         }
       }
       for(const gp of Object.values(gateGroups)){ gp.style.opacity = ""; gp.style.pointerEvents = ""; gp.setAttribute("tabindex","0"); }
@@ -5168,10 +5201,16 @@ const LOUPE = (function(){
      unchanged (pass/total/passed/lines + the rest/full composites + the overlap/tour counts),
      so render() below is untouched. */
   function runDoorSelfTest(){
+    // #369 — feed the conscience the RELAY foot of every detached child room (the airy midway
+    // geometry the render actually produces), so CLAIM C′ flips ✗16/17→✓17/17 by DEPTH. With no
+    // detached wing childFootOf returns {} (the byte-identical pre-fold path). The canonical
+    // SOLVED map this pill reads as boxOf is UNTOUCHED — the relay is a parallel override.
+    var part = Layout.plates(PLACES.filter(function(p){ return !p.locked; }));
     return DoorClaims.runDoorClaims({
       Legibility: Legibility, Layout: Layout,
       places: PLACES, layout: LAYOUT,
-      boxOf: function(id){ var s = SOLVED.get(id); return s ? s.box : null; }
+      boxOf: function(id){ var s = SOLVED.get(id); return s ? s.box : null; },
+      childFoot: DoorClaims.childFootOf(part)
     });
   }
 

@@ -41,6 +41,13 @@ function footCentre(r) {
   if (r.footprint === 'tower') return { cx: r.x, cy: r.y };
   return { cx: r.x + r.w / 2, cy: r.y + r.h / 2 };
 }
+/* footprint top-left (towers store centre+r; a box stores x,y). The relay DELTA the page's
+   relayChild() applies to a detached child tile is (relayFoot.topLeft − canonicalFoot.topLeft);
+   the same delta moves the room's SOLVED label box into the airy midway. #369. */
+function footTopLeft(r) {
+  if (r.footprint === 'tower') return { x: r.x - r.r, y: r.y - r.r };
+  return { x: r.x, y: r.y };
+}
 function overlapRect(a, b) {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
@@ -130,7 +137,16 @@ function crowdedCorpus(n) {
    layout  — Layout.solve(places) (the LAYOUT), for CLAIM A + the full-plate composite.
    boxOf   — id → {x,y,w,h}|null : the INJECTED rendered-label box source (page: real
              getBBox SOLVED boxes; twin: modeled SOLVED boxes). This is the ONLY thing that
-             differs between the live pill and the node twin.
+             differs between the live pill and the node twin (besides childFoot).
+   childFoot — (optional, #369) id → {x,y,w,h} relay foot for each DETACHED child room
+             (P.childLayout[cpid].foot[id]). Present ⇒ CLAIM C/C′ declutter those rooms at the
+             airy midway geometry the render actually produces (the box shifted by relayChild's
+             delta, the centre the relay foot centre) — the DEPTH that flips C′ ✗16/17→✓17/17.
+             Both callers build it identically from DoorClaims.childFootOf(Layout.plates(live)).
+   detachOff — (optional, #369 NEG-CONTROL) when true the internal partition uses
+             Layout.plates(.., {detachOff:true}) (no child plate; the detached wing rides its
+             crowded parent again) AND childFoot is ignored. C′ MUST go RED — the canonical
+             "depth did it" control (mirrors fold.test F4). Default false (the live path).
 
    Returns { pass, total, passed, lines:[{name,ok,detail}], restComposite, restVerdict,
              fullComposite, fullVerdict, overlaps, pairs, tourOverlaps, tourPairs,
@@ -141,6 +157,24 @@ function runDoorClaims(args) {
   var Legibility = args.Legibility, Layout = args.Layout;
   var places = args.places, boxOf = args.boxOf;
   var layout = args.layout || Layout.solve(places);
+  // #369 THE FAIRGROUND GATE — the RELAY override for detached child rooms. childFoot maps a
+  // detached-wing room id → its RELAY foot box {x,y,w,h} (P.childLayout[cpid].foot[id]). When
+  // supplied, CLAIM C/C′ declutter a child room at its AIRY relay geometry — the LIVE geometry
+  // the render actually produces (the page hides the canonical column at rest and the descended
+  // midway lays each tile at its relay foot). The relay box is the canonical SOLVED box shifted
+  // by the SAME delta relayChild() applies (relayFoot.topLeft − canonicalFoot.topLeft), so the
+  // twin's box === the rendered box; the relay CENTRE feeds the loupe distance term. This is the
+  // DEPTH that flips C′ ✗→✓ — with childFoot absent/empty (the detach-OFF neg-control) C′ stays
+  // RED on the crowded canonical column. The canonical SOLVED map / sky / mirror are UNTOUCHED.
+  var childFoot = args.childFoot || null;
+  // #369 NEG-CONTROL — detachOff:true forces the internal partition back to the pre-fold shape
+  // (Layout.plates(.., {detachOff:true})): NO child plate, the detached wing's rooms ride their
+  // crowded parent grounds plate again, and the relay is moot (no child rooms ⇒ childFoot inert).
+  // This is the canonical "depth did it" control: C′ MUST go RED here, proving the FOLD (a new
+  // airy child frame + the relay), not a scorer tweak, is what flips C′ green. Mirrors fold.test
+  // F4's opts.detachOff. (childFoot is left as-is — it simply matches no room under detachOff.)
+  var detachOff = !!args.detachOff;
+  if (detachOff) childFoot = null;   // the pre-fold control: no relay, the rooms ride the parent
   var L = Legibility, lines = [];
   function check(name, cond, detail) { lines.push({ name: name, ok: !!cond, detail: detail || '' }); }
 
@@ -240,11 +274,31 @@ function runDoorClaims(args) {
   var tier1raw = 0, tier1lit = 0;
   try {
     var liveP = places.filter(function (p) { return !p.locked; });
-    var part = Layout.plates(liveP);
+    var part = Layout.plates(liveP, detachOff ? { detachOff: true } : undefined);
     var lockedId = (places.find(function (p) { return p.locked; }) || {}).id;
+    // #369 — the RELAY override. For each detached child room, project its canonical SOLVED box
+    // and footprint centre into the airy midway: the box is shifted by the SAME delta the page's
+    // relayChild() applies (relayFoot.topLeft − canonicalFoot.topLeft), the centre is the relay
+    // foot centre. boxOfC/placesC are used ONLY inside this declutter — the partition above stays
+    // on the canonical places, and boxOf/places elsewhere (CLAIM B, the resting/full composites)
+    // are untouched. childFoot empty (detach OFF) ⇒ boxOfC === boxOf, placesC === places ⇒ C′ red.
+    var relayBox = {};      // id → shifted SOLVED box
+    var relayView = {};     // id → a places-view entry carrying the relay foot centre
+    if (childFoot) {
+      for (var pj = 0; pj < places.length; pj++) {
+        var rp = places[pj], rf = childFoot[rp.id]; if (!rf) continue;
+        var cb = boxOf(rp.id);
+        var tl = footTopLeft(rp);
+        if (cb) relayBox[rp.id] = { x: cb.x + (rf.x - tl.x), y: cb.y + (rf.y - tl.y), w: cb.w, h: cb.h };
+        relayView[rp.id] = { id: rp.id, tier: rp.tier, district: rp.district, wing: rp.wing,
+          footprint: 'box', x: rf.x, y: rf.y, w: rf.w, h: rf.h };
+      }
+    }
+    var boxOfC = function (id) { return relayBox[id] || boxOf(id); };
+    var placesC = places.map(function (p) { return relayView[p.id] || p; });
     var byPlate = {};
     for (var pi2 = 0; pi2 < places.length; pi2++) {
-      var pp2 = places[pi2]; if (!boxOf(pp2.id)) continue;
+      var pp2 = places[pi2]; if (!boxOfC(pp2.id)) continue;
       var pid2 = part.roomPlate[pp2.id];
       if (!pid2 && pp2.id === lockedId) pid2 = 'manor';
       if (!pid2) continue;
@@ -254,11 +308,11 @@ function runDoorClaims(args) {
       tourPlates++;
       var ids2 = byPlate[pk], fr = part.frame[pk] || { cx: 720, cy: 450, k: 1 };
       tourRaw += ids2.length;
-      var lit = declutterIds(ids2, places, boxOf, { x: fr.cx, y: fr.cy }, fr.k || 1);
+      var lit = declutterIds(ids2, placesC, boxOfC, { x: fr.cx, y: fr.cy }, fr.k || 1);
       tourLit += lit.length;
       var litSet = {}; for (var li = 0; li < lit.length; li++) litSet[lit[li]] = 1;
       for (var ai = 0; ai < lit.length; ai++) for (var aj = ai + 1; aj < lit.length; aj++) {
-        var ba2 = boxOf(lit[ai]), bb2 = boxOf(lit[aj]); if (!ba2 || !bb2) continue;
+        var ba2 = boxOfC(lit[ai]), bb2 = boxOfC(lit[aj]); if (!ba2 || !bb2) continue;
         tourPairs++; if (overlapRect(ba2, bb2)) tourOverlaps++;
       }
       for (var ti = 0; ti < ids2.length; ti++) {
@@ -293,13 +347,30 @@ function byPlateLookup(places, id) {
   return null;
 }
 
+/* childFootOf(part) → { id: {x,y,w,h} } — the relay foot of every detached child room, flattened
+   from a Layout.plates() result (part.childLayout[cpid].foot). The ONE place this map is built,
+   so the page pill + both node twins feed runDoorClaims the IDENTICAL relay override (#369). With
+   no detached wing it returns {} (the byte-identical pre-fold path — C′ reads the canonical boxes). */
+function childFootOf(part) {
+  var out = {};
+  if (!part || !part.childPlates) return out;
+  for (var i = 0; i < part.childPlates.length; i++) {
+    var cpid = part.childPlates[i], cl = part.childLayout && part.childLayout[cpid];
+    if (!cl || !cl.foot) continue;
+    for (var id in cl.foot) out[id] = cl.foot[id];
+  }
+  return out;
+}
+
 return {
   footCentre: footCentre,
+  footTopLeft: footTopLeft,
   overlapRect: overlapRect,
   LOUPE_SCREEN: LOUPE_SCREEN,
   MIN_SCREEN_GAP: MIN_SCREEN_GAP,
   revealedSet: revealedSet,
   declutterIds: declutterIds,
+  childFootOf: childFootOf,
   CLEAN: CLEAN,
   crowdedCorpus: crowdedCorpus,
   runDoorClaims: runDoorClaims

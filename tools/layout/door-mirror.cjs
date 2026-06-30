@@ -17,8 +17,13 @@
    "parent" for a room on a parent plate, "child:amusements" for a detached-wing room —
    so the GATE-BROKEN guard can assert the mirror covers EXACTLY the placed POIs across
    BOTH frames (a stale/missing child box trips exit 2). The label BOXES themselves are the
-   CANONICAL solved positions (the door pill's SOLVED map + Layout.plates partition is what
-   flips CLAIM C′ green — the child rooms decluttered at the child plate's own airy frame).
+   CANONICAL solved positions — the getBBox truth the live SOLVED map holds (the page never
+   overwrites SOLVED; placeLabels runs with all tiles visible). The RELAY that flips CLAIM C′
+   green is NOT baked into these boxes: it is applied LIVE on top of them — both the page pill
+   and door.test feed runDoorClaims a `childFoot` = DoorClaims.childFootOf(Layout.plates(live)),
+   which shifts each detached child room's canonical box by relayChild's delta into the airy
+   midway during the C/C′ declutter (#369). So the mirror stays the plain canonical getBBox
+   anchor; the depth lives in the engine's childLayout, read fresh, never hand-baked here.
 
    ── REGENERATE when the rooms / type scale change (so the mirror tracks reality) ──
    Adding/removing a POI re-anneals the WHOLE plate, so the mirror MUST be regenerated then

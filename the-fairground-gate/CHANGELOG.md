@@ -9,6 +9,54 @@ Grounds now fan across their own airy midway, and you ENTER them through a lit f
 fold relieves the door's crowding — CLAIM C′ flips the door pill from ✗16/17 RED to ✓17/17 GREEN —
 proving DEPTH, not a scorer tweak, did it (the neg-control with detach OFF stays red).*
 
+## #376 — bug-fix: the fold now EXECUTES in the live render (it shipped green on twins, broken in the browser)
+
+#369 shipped green on the modeled twins but the fold never ran in the live page: the 15 amusement
+tiles stayed crammed on the parent grounds-east plate (the gate drawn OVER them), the relay was a
+transient on-descend transform never reflected in the page's box-of-record, a real pointer click in
+the open arch fell THROUGH the thin-stroke art and missed, and the live `#doortest` pill computed
+CLAIM C′ from the CROWDED canonical boxes → ✗16/17 RED (the canonical path sits at the 22/23
+knife-edge; the headless capture landed 23, masking the red). The root-cause fix, in four coupled
+parts — NO change to `layout.js`, `solution.foot`, or the sky:
+
+- **(A) THE FOLD IS REAL AT REST** (`index.src.html` platewalk). A detached wing's tiles LEAVE the
+  parent: `setChildVisible(cpid,false)` sets the 15 `child:amusements` `.poi` tiles + their label
+  wrappers to `display:none` at build time and on free-explore (the parent shows ONLY the synthetic
+  gate face in the hole — no crowded column). `descend()`/`relayChild()` reveal + relay them into
+  the airy midway; ascend/free-explore fold them away again. (`placeLabels()` still runs with all
+  tiles visible, so the canonical `SOLVED` map is unchanged — sky, the door-mirror, and the resting
+  composite read the untouched canonical foot.)
+- **(B) CLAIM C′ FLIPS GREEN AT THE TRUE SOURCE** (`door-claims.cjs`). `runDoorClaims` now takes a
+  `childFoot` map (the engine's relay foot, `DoorClaims.childFootOf(Layout.plates(live))`); the C/C′
+  declutter projects each detached child room's canonical SOLVED box by relayChild's delta into the
+  airy midway and reads its centre from the relay foot — the LIVE geometry the render produces. The
+  live pill (and door.test) both feed it, so C′ flips ✗16/17→✓17/17 by DEPTH (mirror 26/38 solid).
+  A `detachOff` neg-control (no child plate, the rooms back on grounds-east) keeps C′ RED — proving
+  the FOLD, not a scorer tweak, did it. The canonical SOLVED map / sky / mirror boxes are UNTOUCHED;
+  the relay is a parallel override applied only inside the declutter.
+- **(C) THE GATE IS TRULY CLICKABLE** (`gate-art.js` drawFace + the placeholder). An invisible
+  full-box `.gate-hit` rect (fill `rgba(0,0,0,0)`, FIRST in paint order) under-paints the art so a
+  real pointer click anywhere in the footprint — including the open-arch negative space — catches
+  and descends (SVG hit-tests only painted pixels; the thin-stroke arch alone let clicks fall
+  through). The `.gate-glow`/`.gate-chev` contract + the visible art are unchanged.
+- **(D) THE VERIFICATION GAP IS CLOSED** (the #337 blind spot, several times over). `door.test.cjs`
+  + `fold.test.cjs` now feed the SAME live `childFoot` the page does (`fold.test` F6 runs the exact
+  `runDoorClaims` seam the pill runs; the detachOff neg-control is asserted in BOTH twins). A NEW
+  live-DOM gate `tools/layout/gate-dom.test.mjs` drives a real headless browser and asserts what the
+  Node twins CANNOT see: D1 at rest the 15 child tiles are display:none/getBBox=0 (the column is
+  GONE), D2 `document.elementFromPoint` over the open-arch centre returns a `.gate-face` descendant,
+  D3 a REAL arch click descends (midway reveals, ribbon shows, 15 tiles relayed), D4 ascend re-folds
+  + the gate is re-enterable, D5 the live pill reads 17/17. door-mirror.cjs stays the plain canonical
+  getBBox anchor (its header now documents that the relay is applied LIVE on top, never baked here).
+
+Verified in a real browser (agent-browser, top-level index.html): at rest the grounds-east plate
+shows only the lit gate (15 tiles folded away); a real click in the arch descends into the midway
+where the rides fan out airily; ascend returns; the live `#doortest` reads 17/17 GREEN. All gates
+green: forge --check (120 current) · door.test 17/17 + detachOff neg-control RED · fold.test (6
+cruxes incl. the new F6 live-C′ seam) · legibility 29/29 · sky 73/73 · audit-seen 87/87 · the new
+gate-dom.test (D1–D5). The gate/midway/ribbon art is unchanged — this fix is render-pipeline +
+conscience plumbing + verification only.
+
 ## #369 — built (the declarative fold primitive + the founding amusements detach)
 
 A render-owning grounds swing. The work is in three layers:

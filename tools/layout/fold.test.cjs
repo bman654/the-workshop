@@ -329,9 +329,30 @@ console.log('\nCRUX F5 — GENERALITY (a DIFFERENT wing detaches the same way):'
   console.log('    amusements is just the primitive\'s first caller — the fold is general.');
 }
 
+/* ── F6 — THE SHARED C′ SEAM (the EXACT path the live #doortest pill runs) ── */
+console.log('\nCRUX F6 — THE LIVE C′ SEAM (DoorClaims.runDoorClaims with the engine childFoot):');
+{
+  // run the SHARED door-claims module the page + door.test both call, with the LIVE relay foot
+  // (DoorClaims.childFootOf(P)) as the override, over the canonical modeled boxes — the SAME
+  // computation the live pill performs. C′ MUST flip green; with childFoot:{} (the relay
+  // suppressed) it MUST stay red. This binds fold.test directly to the page's code path: the
+  // #369 bug was the page NOT feeding this relay, so the live pill stayed red while the twins
+  // (which modeled their own relay) went green. Now they share one seam.
+  const childFoot = DoorClaims.childFootOf(P);
+  const boxOfCanon = id => solvedCanon.get(id) || null;
+  const repOn = DoorClaims.runDoorClaims({ Legibility, Layout, places: clone, layout: LAYOUT, boxOf: boxOfCanon, childFoot });
+  const repOff = DoorClaims.runDoorClaims({ Legibility, Layout, places: clone, layout: LAYOUT, boxOf: boxOfCanon, detachOff: true });
+  const cpOn = repOn.lines.find(l => /CLAIM C′/.test(l.name));
+  const cpOff = repOff.lines.find(l => /CLAIM C′/.test(l.name));
+  crux('childFoot present (the page\'s fold): C′ flips ✓ AND detachOff (no fold): C′ stays ✗',
+    childFoot && Object.keys(childFoot).length > 0 && cpOn && cpOn.ok && cpOff && !cpOff.ok,
+    '[fold ON ' + cpOn.detail + ' → ' + (cpOn.ok ? '✓' : '✗') + '  ·  detachOff ' + cpOff.detail + ' → ' + (cpOff.ok ? '✓' : '✗') + ']');
+  console.log('    this is the path the live pill runs — fold.test now fails iff the page would.');
+}
+
 console.log('');
 if (fail === 0) {
-  console.log('PASS — all five cruxes hold: the declarative fold ships a real depth layer (bijection + tree + the C′ flip + neg-control + generality).');
+  console.log('PASS — all six cruxes hold: the declarative fold ships a real depth layer (bijection + tree + the C′ flip + neg-control + generality + the shared live C′ seam).');
   process.exit(0);
 } else {
   console.log('FAIL — ' + fail + ' crux(es) failed.');

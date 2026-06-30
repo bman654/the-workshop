@@ -49,6 +49,15 @@
     accent = accent || "#37f7e0";
     var cx = x + w * 0.5;
 
+    // 0. THE HIT-AREA (#369 bug-fix) — an invisible full-box rect, FIRST in paint order so it
+    //    under-paints all the art. SVG hit-tests only PAINTED pixels, and the gate art is thin
+    //    brass strokes + an open arch (mostly negative space), so a REAL pointer click in the
+    //    arch would otherwise fall THROUGH the .gate-face <g> and miss. A fill of "rgba(0,0,0,0)"
+    //    (fully transparent, but PAINTED) makes the whole footprint — arch void included —
+    //    catch the click and descend. (fill:"none" would NOT hit-test; the fill must exist.)
+    g.appendChild(E("rect", { x: n(x), y: n(y), width: n(w), height: n(h),
+      fill: "rgba(0,0,0,0)", stroke: "none", "class": "gate-hit" }));
+
     // geometry (ALL absolute coords derived from the box origin x,y — never mix abs/rel) ----
     var archTop = y + 6;                 // crown of the arch (leave top ~6px for the legend)
     var archSpring = y + h * 0.34;       // where the arch shoulders meet the piers

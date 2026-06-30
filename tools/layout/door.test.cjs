@@ -255,9 +255,46 @@ function calibrate() {
   return { problems, maxPos, maxW, maxH, worstId, maxSolver, worstSolver, posInfoCount };
 }
 
-/* ── run the 17 claims over BOTH box-sources ── */
-const repModeled = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT, boxOf: boxOfModeled });
-const repMirror  = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT, boxOf: boxOfMirror });
+/* ── #369 THE FAIRGROUND GATE — the RELAY override, built LIVE from the engine (no hand-baked
+   offset): the detached child rooms' airy midway foot, the IDENTICAL childFoot the live #doortest
+   pill feeds runDoorClaims. So the twin's CLAIM C′ declutters the child rooms at the relay
+   geometry the render actually produces — the box-source stays the canonical getBBox MIRROR, and
+   runDoorClaims shifts each child box by relayChild's delta internally (the live page does exactly
+   this). With no detached wing childFootOf returns {} ⇒ the byte-identical pre-fold path. ── */
+const LIVE_PART = Layout.plates(placesClone.filter(p => !p.locked));
+const CHILD_FOOT = DoorClaims.childFootOf(LIVE_PART);
+
+/* ── run the 17 claims over BOTH box-sources (both fed the LIVE relay override) ── */
+const repModeled = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT, boxOf: boxOfModeled, childFoot: CHILD_FOOT });
+const repMirror  = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT, boxOf: boxOfMirror, childFoot: CHILD_FOOT });
+
+/* ── #369 THE DETACH-OFF NEG-CONTROL — DEPTH did the flip, not a scorer tweak. Re-run the SAME
+   17 claims over BOTH box-sources with detachOff:true (the byte-identical pre-fold partition:
+   NO child plate, the amusements rooms ride their crowded parent grounds-east frame again, no
+   relay). CLAIM C′ MUST go RED on both — proving the FOLD (the airy child frame + the relay),
+   not a scorer tweak, is what flipped it. If a future scorer change made C′ pass WITHOUT the
+   fold, this neg-control catches it. Mirrors fold.test F4 (opts.detachOff). ── */
+const C_PRIME = name => /CLAIM C′/.test(name);
+const negModeled = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT, boxOf: boxOfModeled, detachOff: true });
+const negMirror  = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT, boxOf: boxOfMirror, detachOff: true });
+const negModeledCp = negModeled.lines.find(l => C_PRIME(l.name));
+const negMirrorCp  = negMirror.lines.find(l => C_PRIME(l.name));
+/* THE NEG-CONTROL ASSERTION — two faithful parts, both anneal-robust:
+   (a) the MODELED neg-control C′ is RED — the CHAR_W path (the same modeled boxes fold.test F4
+       runs on) drops below the ≥60% tier-1 boundary when the fold is off. This is the boundary
+       discriminator the door twin trusts for the model.
+   (b) the FOLD strictly ADDED tier-1 survivors on BOTH box-sources (fold-ON tier1lit > detachOff
+       tier1lit) — DEPTH did work, measured directly, not a scorer tweak. We do NOT demand the
+       MIRROR's neg-control cross the exact-integer ≥23 boundary: at this anneal the canonical
+       grounds-east declutter sits AT 23 (the documented ~20px CHAR_W knife-edge the door twin
+       refuses to read a boundary verdict off — see the calibration note). The strict-improvement
+       check is what proves the fold mattered without resting on a 1-anchor boundary coincidence.
+   fold.test.cjs F4 separately proves the canonical detachOff path RED (21/38 < 23). */
+const negControlOk = (CHILD_FOOT && Object.keys(CHILD_FOOT).length > 0)
+  ? (negModeledCp && !negModeledCp.ok &&                                   // (a) modeled neg C′ RED
+     repModeled.tier1lit > negModeled.tier1lit &&                          // (b) fold added survivors (modeled)
+     repMirror.tier1lit  > negMirror.tier1lit)                            //     and on the mirror
+  : true;                                                                  // no detached wing → vacuously fine
 
 /* ════════════════════════════════════════════════════════════════════════════
    VERDICT FIDELITY — the SECONDARY (CHAR_W-modeled) cross-check on the headline.
@@ -307,8 +344,21 @@ const knifeNote = repModeled.tier1lit === repMirror.tier1lit
   : 'CHAR_W model FLIPS at the knife-edge (modeled ' + repModeled.tier1lit + '/' + repModeled.tier1raw +
     ' vs mirror ' + repMirror.tier1lit + '/' + repMirror.tier1raw + ' tier-1) — headlined off the mirror, NOT the model';
 console.log('    C′      ' + knifeNote);
+if (CHILD_FOOT && Object.keys(CHILD_FOOT).length > 0) {
+  console.log('    detach  FOLD ON: C′ ✓ [modeled ' + repModeled.tier1lit + '/mirror ' + repMirror.tier1lit + '/' + repMirror.tier1raw + ']' +
+    ' · NEG-CONTROL (detachOff): modeled C′ ' + (negModeledCp && negModeledCp.ok ? '✓' : '✗') + ' [' + negModeled.tier1lit + ']  mirror [' + negMirror.tier1lit + ']' +
+    '  · fold ADDED tier-1 survivors (modeled ' + negModeled.tier1lit + '→' + repModeled.tier1lit + ', mirror ' + negMirror.tier1lit + '→' + repMirror.tier1lit + ')' +
+    (negControlOk ? '  → DEPTH did the flip' : '  ✗ NEG-CONTROL BROKEN'));
+}
 
 let gateBroken = false;
+if (!negControlOk) {
+  gateBroken = true;
+  console.error('  ✗ DETACH NEG-CONTROL BROKEN — CLAIM C′ passes with the fold SUPPRESSED (detachOff):');
+  console.error('      the FOLD (the airy child frame + the relay) is NOT what flips C′; a scorer tweak masquerades as depth.');
+  console.error('      modeled C′=' + (negModeledCp && negModeledCp.ok ? 'PASS' : 'fail') +
+    ' mirror C′=' + (negMirrorCp && negMirrorCp.ok ? 'PASS' : 'fail') + ' — both MUST be RED.');
+}
 if (cal.problems.length) {
   gateBroken = true;
   console.error('  ✗ CALIBRATION DRIFT — the model no longer tracks the rendered boxes:');
