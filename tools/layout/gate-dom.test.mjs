@@ -125,6 +125,25 @@ function descendState() {
 }
 const isDescended = s => s.midOp === '1' && s.ribbonShown && s.relayedCount >= 10;
 
+// #382 — read the LIT child-label set the loupe is showing right now, with the RENDERED overlap
+// count (real getBoundingClientRect boxes). The child map now OWNS its labels: a re-solved fan
+// layout (all 15 seat) + a DYNAMIC loupe (the lit set recomputes as you zoom/pan). The OLD code
+// (translate-only canonical column + a frozen tour set) could only seat ~9/15 and never recomputed.
+function litChildState() {
+  return abEval(`(function(){
+    var live=Array.from(document.querySelectorAll('#roomlabels .labelgroup.live'))
+      .filter(function(L){ return getComputedStyle(L).display!=='none'; });
+    var boxes=live.map(function(L){ var r=L.getBoundingClientRect();
+      return { id:L.dataset.id, x:r.left, y:r.top, w:r.width, h:r.height }; })
+      .filter(function(b){ return b.w>0; });
+    var ov=0; for(var i=0;i<boxes.length;i++) for(var j=i+1;j<boxes.length;j++){
+      var a=boxes[i],b=boxes[j]; if(a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h) ov++; }
+    return JSON.stringify({ lit: boxes.length, overlaps: ov,
+      ids: boxes.map(function(b){ return b.id; }).sort(),
+      k: +(window.__panCamera ? window.__panCamera.k : 0).toFixed(3) });
+  })()`);
+}
+
 // read the detached AMUSEMENTS wing's OWN chrome — its dashed capsule (.wing-bound) and its
 // engraved caption (.wing-label "AMUSEMENTS"). At rest / after ascend BOTH must be display:none,
 // or the parent shows an empty capsule + label wrapped round the gate (the #376 incomplete fold).
@@ -321,6 +340,47 @@ async function main() {
     // (the detach-OFF C′-RED neg-control — DEPTH did the flip, not a scorer tweak — is proven in
     // Node: fold.test.cjs F4 [21/38 < 23 → RED] AND door.test.cjs's explicit childFoot:{} run.)
 
+    // ════════════════════════════════════════════════════════════════════════════
+    //  #382 — THE CHILD MAP OWNS ITS LABELS. The two coupled root causes the old code shipped:
+    //    (1) the child REUSED the canonical column placement (boxes packed for a 23px column),
+    //        so only ~9/15 could light in the airy fan without overlap; and
+    //    (2) the reveal was the FROZEN tour set — the loupe was INERT inside the child (zooming
+    //        / panning never recomputed the lit labels).
+    //  These two checks prove BOTH are fixed in the LIVE rendered DOM (real CDP input):
+    //    D6 — re-solved fan: the landing lights WELL PAST 9 (the old ceiling) with ZERO rendered
+    //         overlaps — the fan's room is used, not the inherited column's.
+    //    D7 — dynamic loupe: a REAL zoom-in (CDP click on the brass +) RECOMPUTES the lit set
+    //         (it changes — the loupe lights what's under its circle + drops what's outside) and
+    //         stays overlap-free. The frozen-set bug would leave the lit set IDENTICAL on zoom.
+    // ════════════════════════════════════════════════════════════════════════════
+    // re-descend (we ascended in D4) via a REAL input click on the lit gate.
+    const rD = ab('find', 'role', 'button', 'click', '--name', GATE_NAME);
+    ab('wait', '1500');
+    if (rD.status !== 0) {
+      check('D6 — child map OWNS its labels: landing lights > 9 with zero overlap (re-solved fan)', false,
+        '[could not re-descend for the #382 checks: ' + (rD.stderr || rD.stdout || '').trim() + ']');
+      check('D7 — dynamic loupe: a real zoom-in recomputes the lit child set, overlap-free', false, '[skipped — re-descend failed]');
+    } else {
+      const landing = litChildState();
+      check('D6 — child map OWNS its labels: the landing lights > 9 (past the old column ceiling) with ZERO rendered overlap',
+        landing.lit > 9 && landing.overlaps === 0,
+        '[' + landing.lit + ' labels lit at framed scale, ' + landing.overlaps + ' rendered overlaps, k=' + landing.k + ']');
+
+      // D7 — REAL zoom-in (CDP click on the brass + control) must RECOMPUTE the lit set.
+      const before = litChildState();
+      ab('find', 'role', 'button', 'click', '--name', 'zoom in'); ab('wait', '450');
+      ab('find', 'role', 'button', 'click', '--name', 'zoom in'); ab('wait', '550');
+      const after = litChildState();
+      const recomputed = (after.k > before.k + 0.01) &&            // the camera really zoomed
+        (after.lit !== before.lit || after.ids.join(',') !== before.ids.join(',')); // the set changed
+      check('D7 — the loupe is LIVE inside the child: a real zoom-in RECOMPUTES the lit set (not a frozen tour set), overlap-free',
+        recomputed && after.overlaps === 0,
+        '[k ' + before.k + '→' + after.k + ', lit ' + before.lit + '→' + after.lit + ', set-changed=' +
+        (after.ids.join(',') !== before.ids.join(',')) + ', overlaps=' + after.overlaps + ']');
+      // ascend back so teardown leaves the estate clean (and to not strand the camera deep).
+      ascendToParent();
+    }
+
   } finally {
     // 4. TEARDOWN — close exactly OUR session + kill exactly OUR server child (never a broad pkill;
     //    this laptop also runs the maker's own servers — CLEANUP GUARDRAIL).
@@ -330,7 +390,7 @@ async function main() {
 
   console.log('');
   if (fail === 0) {
-    console.log('PASS — the fold is REAL in the live DOM: tiles AND wing chrome gone at rest, the gate is truly clickable, a REAL INPUT click descends (CDP press→release, not a synthetic dispatch), ascend re-folds, the pill is 17/17.');
+    console.log('PASS — the fold is REAL in the live DOM: tiles AND wing chrome gone at rest, the gate is truly clickable, a REAL INPUT click descends (CDP press→release, not a synthetic dispatch), ascend re-folds, the pill is 17/17 — AND (#382) the child map OWNS its labels: the re-solved fan lights past the old 9-ceiling with zero overlap, and the loupe is LIVE (a real zoom-in recomputes the lit set).');
     process.exit(exitCode);
   } else {
     console.log('FAIL — ' + fail + ' live-DOM check(s) failed: the fold is NOT executing in the rendered page (the #369 bug). The headless twins cannot see this — that is why this gate exists.');

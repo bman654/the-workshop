@@ -9,6 +9,54 @@ Grounds now fan across their own airy midway, and you ENTER them through a lit f
 fold relieves the door's crowding — CLAIM C′ flips the door pill from ✗16/17 RED to ✓17/17 GREEN —
 proving DEPTH, not a scorer tweak, did it (the neg-control with detach OFF stays red).*
 
+## #382 — bug-fix: the descended child map now OWNS its labels (a re-solved fan + a LIVE loupe), the template for every `detach:true` child
+
+#380 made the descended child a self-contained CHILD-MAP MODE (the parent estate hidden, a place you
+pan/zoom to navigate), but its LABELS still behaved like the estate's because the child layer reused the
+estate's machinery. Two coupled root causes, both fixed at root in `index.src.html` (no change to
+`layout.js`/`solution.foot`/sky/`door-mirror.cjs`/`door-claims.cjs` — the canonical SOLVED map, the door
+pill's inputs, and the relay-foot `childFoot` the C′ pill reads are all untouched):
+
+- **(1) PLACEMENT WAS CANONICAL, NOT CHILD.** Each child label kept the placement SOLVED for the tight
+  grounds-east COLUMN (its side/offset/box), merely translated by the relay delta + counter-scaled by
+  1/k (`childFoot` did box.shift+scale, never a re-solve). A layout packed for a 23px column collides in
+  the open fan — only ~9/15 could light at the framed scale. **FIX:** `childLabelSolve(pid)` re-runs the
+  SAME `LabelPlacer.solve()` engine `placeLabels()` uses, seeded with ONLY this child's POIs at their
+  RELAY FAN footprints (`P.childLayout[pid].foot`), in bounds spanning the FULL page width (the fan stacks
+  its rooms in two narrow centre columns and leaves the wide flanks clear for labels — the room the column
+  never had), biasing each column's labels OUTWARD into its flank (`sideById`). Each label's solve dims are
+  inflated by the loupe's screen gap so the SOLVE reserves the declutter's breathing room (the recovered
+  real boxes carry it as space). The solve seats **all 15 with ZERO raw overlap**; `childRelabel(pid,true)`
+  re-seats every child label ABSOLUTELY via `applyPlacement` (the leader redrawn from the relaid footprint),
+  and `childRelabel(pid,false)` restores the canonical seating byte-for-byte on ascend.
+
+- **(2) REVEAL WAS THE FROZEN TOUR-SET; THE LOUPE WAS INERT.** `wantSet()` short-circuited on `tourSet` for
+  every tour — returning the whole-plate set decluttered ONCE at the framed scale, never consulting the live
+  camera. Inside a child the loupe circle was drawn but dead: zooming/panning never recomputed the labels
+  under it. **FIX:** `wantSet()` now branches on `tourIsChild` (tracked in the loupe, keyed on `isChild` — the
+  TEMPLATE for every future `detach:true` child, never special-cased to "amusements"). At the descent
+  LANDING (no manual move yet) it lights the full re-solved fan decluttered at the framed scale (14/15 for
+  amusements, zero overlap); once the visitor pans/zooms BY HAND (`__panCamera.onManual` → `LOUPE.childNavigate()`,
+  which does NOT drop out per #380) it follows the free-explore loupe — `DoorClaims.revealedSet` over the live
+  `curK`/`curFocus`, reading the child's relay-foot places view for the distance term — so the circle LIGHTS
+  the labels under it and DROPS those outside, recomputing live. A hover/tab (`curSingleId`) still names its
+  one room at any zoom.
+
+VERIFIED in a real headless browser with REAL CDP input (the descend click + the zoom were genuine CDP
+`Input.dispatchMouseEvent`, never synthetic — the #337/#378 standing lesson): at the framed scale **14/15**
+labels spread across the fan with **0 rendered overlaps** (measured by real `getBoundingClientRect`); a real
+zoom-in recomputes the lit set (k 1.107→2.169, lit 14→4, the id-set changes, 0 overlaps); a hover names its one
+room at zoom; ascend restores 15→72 with the canonical label seating **byte-identical** (tx/ty/leader diff = 0
+across a full descend→zoom→ascend round-trip); the `#doortest` pill stays GREEN 17/17 at rest/descended/ascended;
+zero console errors. `gate-dom.test.mjs` EXTENDED with D6 (the landing lights past the old 9-ceiling, overlap-free)
+and D7 (a real zoom-in recomputes the lit set) — both green, and D1-D5 (the #369/#376/#380 regressions) stay green;
+`fold.test.cjs` 6/6, `door.test.cjs` 17/17, `label.test.cjs` 12/12, `forge --check` all 124 current.
+
+The 1 label that drops below 15 at the framed landing (k≈1.107) is the declutter's extra screen-gap demand at
+that low zoom — NOT a geometric impossibility (the solve seats all 15 with zero overlap), and the dynamic loupe
+surfaces it the instant the visitor zooms into its region. No perceivable remainder survives that warrants a
+fresh `[bug]`.
+
 ## #378 — bug-fix: the gate now takes a REAL pointer click (green twice, broken under a real mouse twice — the #337 blind spot a third time)
 
 #376 made the fold *render* — at rest the tiles went `display:none` and a synthetic `dispatchEvent`/`.click()`

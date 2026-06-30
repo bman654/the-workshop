@@ -9174,8 +9174,11 @@ window.addEventListener("resize", ()=> hideCard(true));
         for(const t of chrome.labels) t.style.display = "none";
       }
     }
-    // apply / clear the re-lay translate on a child plate's tiles + their labels (the fold +
-    // the midway placement are one move: reveal the child set AND translate it to the relay foot).
+    // apply / clear the re-lay translate on a child plate's TILES (the fold + the midway
+    // placement are one move: reveal the child set AND translate each footprint to its relay
+    // foot). The LABELS are NOT rigid-translated here — they are RE-SOLVED for the airy fan and
+    // re-seated absolutely by childRelabel() (#382), so the wrapper stays at identity and the
+    // label box lands where the child solve placed it. clearing on=false restores both.
     function relayChild(cpid, on){
       const d = childDelta[cpid]; if(!d) return;
       setChildVisible(cpid, on);
@@ -9183,7 +9186,136 @@ window.addEventListener("resize", ()=> hideCard(true));
         const id = tile.dataset.id, dd = d[id];
         const t = (on && dd) ? `translate(${dd.dx} ${dd.dy})` : "";
         tile.setAttribute("transform", t);
-        const w = labelWrapById[id]; if(w) w.setAttribute("transform", t);
+        const w = labelWrapById[id]; if(w) w.setAttribute("transform", "");   // wrapper at identity; childRelabel seats the label
+      }
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════════
+       #382 THE CHILD MAP OWNS ITS LABELS — re-solve the child's labels in the fan.
+
+       THE BUG this replaces: the old child loupe merely TRANSLATED each canonical SOLVED
+       label box (placed for the tight grounds-east column) by the relay delta + counter-scale.
+       A layout packed for a 23px column collides in the open midway fan — only ~9/15 could
+       light without overlap. The fan affords FAR more room than the column; "9 is the max"
+       held only for the INHERITED column placement, never the best the fan allows.
+
+       THE FIX: re-run the SAME LabelPlacer.solve() engine placeLabels() uses, but seeded with
+       ONLY this child's POIs at their RELAY FAN footprints (P.childLayout[pid].foot), inside the
+       child's relay envelope. This gives the child its OWN non-overlapping layout that uses the
+       room the fan affords (expect all 15 to seat). The solved boxes (a) re-SEAT each child
+       label absolutely via applyPlacement (leader redrawn from the relaid footprint), and (b)
+       feed the loupe's solvedBox() + the dynamic child reveal as the true rendered boxes.
+
+       Keyed on isChild (the TEMPLATE for every detach:true child), child-LOCAL: the canonical
+       SOLVED map, the #doortest pill, the sky stars + door-mirror are untouched. ── */
+    // id → the label registry parts (group/wrap/leader/dot/texts/rule/r). Built from LABELS.
+    const partsById = {};
+    LABELS.forEach((parts, a)=>{ if(parts && parts.r) partsById[parts.r.id] = parts; });
+    // per child: the saved canonical label seating (lg transform + leader d/dot + wrapper tx/ty),
+    // so ascend restores the exact pre-descent placement (the canonical SOLVED map untouched).
+    const childCanonSeat = {};   // pid → { id: {lgT, leaderD, dotX, dotY, tx, ty} }
+    // per child: the SOLVED child label boxes {x,y,w,h} in viewBox units (the airy fan), and a
+    // relay-foot "places" view (footprint:'box' at the fan position) for the loupe distance term.
+    const childSolved = {};      // pid → { id: {x,y,w,h} }
+    const childPlacesByPid = {}; // pid → [{id,tier,district,wing,footprint:'box',x,y,w,h}]
+
+    // a footprint-box view of a relay foot, so footBBox/footCentre/labelGap read the fan position.
+    function relayView(meta, rf){
+      return { id:meta.id, tier:meta.tier, district:meta.district, wing:meta.wing||null,
+               accent:meta.accent, footprint:"box", x:rf.x, y:rf.y, w:rf.w, h:rf.h };
+    }
+    // SOLVE this child's labels over its relay fan. Memoized per pid (the fan is deterministic).
+    function childLabelSolve(pid){
+      if(childSolved[pid]) return;
+      const cl = P.childLayout[pid]; if(!cl || !cl.foot) return;
+      const env = P.bbox[pid] || LABEL_BOUNDS;
+      // THE FAN AFFORDS THE OPEN FLANKS: relayPlate stacks the rooms in two narrow CENTRE columns
+      // (FIELD.x+0.40w / +0.60w), leaving the wide flanks (FIELD's far-left + far-right) clear for
+      // labels — that is the room the fan affords that the 23px column never did. So the solve
+      // bounds span the FULL page width (LABEL_BOUNDS.x), bounded vertically to the fan band (env.y
+      // ±pad). sideById biases each column's labels OUTWARD into its flank (left col → 'left').
+      const PADY = 60;
+      const by = Math.max(LABEL_BOUNDS.y, env.y - PADY);
+      const bounds = { x: LABEL_BOUNDS.x, y: by, w: LABEL_BOUNDS.w,
+        h: Math.min(LABEL_BOUNDS.y + LABEL_BOUNDS.h, env.y + env.h + PADY) - by };
+      // INFLATE each label's solve dims by the loupe's SCREEN GAP (in viewBox units at the framed
+      // scale), so the SOLVE itself reserves the declutter's breathing room — far more labels then
+      // survive the framed-scale declutter at the descent landing (12/15 → 14/15 for amusements),
+      // and the recovered REAL boxes (shrunk back by padVB) still carry 0 raw overlap.
+      const fk = (P.frame[pid] && P.frame[pid].k) ? P.frame[pid].k : 1;
+      const padVB = (DoorClaims.MIN_SCREEN_GAP || 18) / Math.max(fk, 0.0001);
+      const places = [], features = [], obstacles = [];
+      for(const r of P.members[pid]){
+        const rf = cl.foot[r.id]; if(!rf) continue;
+        const parts = partsById[r.id]; if(!parts) continue;
+        const meta = PLACES.find(p=>p.id===r.id) || r;
+        const view = relayView(meta, rf);
+        places.push(view);
+        obstacles.push(footBBox(view));               // keep labels off the relaid footprints
+        // the label's measured box size — its rendered w/h, from the canonical SOLVED box.
+        const s = SOLVED.get(r.id);
+        const lw = s && s.box ? s.box.w : 80, lh = s && s.box ? s.box.h : 28;
+        const f = { id:r.id, anchor:labelAnchor(view), label:{ w:lw + 2*padVB, h:lh + 2*padVB }, gap:labelGap(view) };
+        const side = cl.sideById && cl.sideById[r.id];
+        if(side) f.prefer = [side];                   // bias toward the fan column's outward flank
+        features.push(f);
+      }
+      const spec = { bounds, features, obstacles, seed:LABEL_SEED };
+      let res = LabelPlacer.solve(Object.assign({ positions:8 }, spec));
+      if(res.overlaps > 0){
+        const alt = LabelPlacer.solve(Object.assign({ positions:4 }, spec));
+        if(alt.overlaps < res.overlaps) res = alt;
+      }
+      const boxes = childSolved[pid] = {};
+      const sideById = {};
+      // recover the REAL box from the inflated placement (the solve placed the inflated top-left;
+      // shrink back by padVB on every side → the true rendered box, which carries the gap as space).
+      res.placements.forEach(p=>{ boxes[p.id] = { x:p.label.x + padVB, y:p.label.y + padVB, w:p.label.w - 2*padVB, h:p.label.h - 2*padVB }; sideById[p.id] = p.side; });
+      childPlacesByPid[pid] = places;
+      // stash so applyPlacement uses the relay-foot view (the leader draws from the fan tile).
+      childSolved[pid]._sideById = sideById;
+    }
+    // RE-SEAT every child label at its solved fan box (on=true) or restore canonical (on=false).
+    function childRelabel(pid, on){
+      const cl = P.childLayout[pid]; if(!cl) return;
+      if(on){
+        childLabelSolve(pid);
+        const boxes = childSolved[pid]; if(!boxes) return;
+        const seat = childCanonSeat[pid] = childCanonSeat[pid] || {};
+        for(const r of P.members[pid]){
+          const parts = partsById[r.id]; if(!parts) continue;
+          const rf = cl.foot[r.id], box = boxes[r.id]; if(!rf || !box) continue;
+          // stash the canonical seating ONCE (before the first re-seat) so ascend restores it.
+          if(!seat[r.id]){
+            const w = parts.wrap;
+            seat[r.id] = {
+              lgT: parts.group.getAttribute("transform") || "",
+              leaderD: parts.leader.getAttribute("d") || "",
+              dotX: parts.dot.getAttribute("cx"), dotY: parts.dot.getAttribute("cy"),
+              tx: w ? w.dataset.tx : undefined, ty: w ? w.dataset.ty : undefined
+            };
+          }
+          // re-seat with a synthetic parts whose .r is the relay-foot view, so applyPlacement
+          // draws the leader from the FAN footprint to the re-solved label box (both absolute).
+          const meta = PLACES.find(p=>p.id===r.id) || r;
+          const view = relayView(meta, rf);
+          const side = (childSolved[pid]._sideById && childSolved[pid]._sideById[r.id]) || "right";
+          applyPlacement(Object.assign({}, parts, { r:view }), box, side);
+        }
+      } else {
+        const seat = childCanonSeat[pid]; if(!seat) return;
+        for(const id in seat){
+          const parts = partsById[id]; if(!parts) continue;
+          const s = seat[id];
+          parts.group.setAttribute("transform", s.lgT);
+          parts.leader.setAttribute("d", s.leaderD);
+          if(s.dotX!=null) parts.dot.setAttribute("cx", s.dotX);
+          if(s.dotY!=null) parts.dot.setAttribute("cy", s.dotY);
+          if(parts.wrap){
+            if(s.tx!=null) parts.wrap.dataset.tx = s.tx; if(s.ty!=null) parts.wrap.dataset.ty = s.ty;
+            if(parts.baseTranslate && s.tx!=null && s.ty!=null) parts.baseTranslate = { x:parseFloat(s.tx), y:parseFloat(s.ty) };
+          }
+        }
       }
     }
 
@@ -9327,7 +9459,7 @@ window.addEventListener("resize", ()=> hideCard(true));
     // re-lay state: the child plate currently re-laid into its midway (null = none down).
     let relaidChild = null;
     function clearRelay(){
-      if(relaidChild){ relayChild(relaidChild, false); if(midwayByChild[relaidChild]) midwayByChild[relaidChild].style.opacity = "0"; relaidChild = null; }
+      if(relaidChild){ childRelabel(relaidChild, false); relayChild(relaidChild, false); if(midwayByChild[relaidChild]) midwayByChild[relaidChild].style.opacity = "0"; relaidChild = null; }
       hideRibbon();
     }
 
@@ -9372,6 +9504,7 @@ window.addEventListener("resize", ()=> hideCard(true));
       // lands on the airy fan, not the tight canonical column).
       if(child && relaidChild !== pid){
         relayChild(pid, true);
+        childRelabel(pid, true);   // #382: re-solve + re-seat the child's labels in the airy fan
         if(midwayByChild[pid]) midwayByChild[pid].style.opacity = "1";
         relaidChild = pid;
       }
@@ -9390,36 +9523,18 @@ window.addEventListener("resize", ()=> hideCard(true));
         // setParentVisible sweep above so it can't flicker, hidden explicitly here.
         if(gateGroups[pid]){ const og = gateGroups[pid]; og.style.opacity = "0"; og.style.pointerEvents = "none"; og.setAttribute("tabindex","-1"); }
         showRibbon(pid);
-        // the loupe lights the child set, DECLUTTERED over where each child label TRULY PAINTS
-        // inside the midway — not the stale canonical column (the 4/15 symptom). The painted box
-        // is the canonical SOLVED label box (a) SHIFTED by the same relay delta relayChild applied
-        // to the tile+wrapper, and (b) COUNTER-SCALED by 1/k about its label anchor — because the
-        // #roomlabels layer rides the scale(k) viewport and scaleLabelText() shrinks each revealed
-        // name by 1/k about (tx,ty) to hold a constant SCREEN size. Reserving that true small box
-        // (vs the full untransformed box) admits a label for every child room the airy fan has room
-        // for, while STILL guaranteeing zero on-screen overlap — it is exactly the rendered rect.
-        // Loupe-local: SOLVED / the door pill / sky / door-mirror are untouched.
-        let childFoot = null;
-        try{
-          const d = childDelta[pid];
-          const fk = (P.frame[pid] && P.frame[pid].k) ? P.frame[pid].k : 1;
-          const inv = fk > 1.0001 ? (1/fk) : 1;
-          if(d){ childFoot = {};
-            for(const id in d){
-              const s = SOLVED.get(id); if(!s || !s.box) continue;
-              const b = s.box, dd = d[id];
-              const w = labelWrapById[id];
-              const ax = w ? parseFloat(w.dataset.tx) : NaN, ay = w ? parseFloat(w.dataset.ty) : NaN;
-              // counter-scale the box about its anchor (matches scaleLabelText), then shift by delta.
-              let rx, ry, rw, rh;
-              if(inv !== 1 && isFinite(ax) && isFinite(ay)){
-                rx = ax + (b.x - ax)*inv; ry = ay + (b.y - ay)*inv; rw = b.w*inv; rh = b.h*inv;
-              } else { rx = b.x; ry = b.y; rw = b.w; rh = b.h; }
-              childFoot[id] = { x: rx + dd.dx, y: ry + dd.dy, w: rw, h: rh };
-            }
-          }
-        }catch(_){ childFoot = null; }
-        try{ LOUPE.setTourSet(idsByPlate[pid]||[], P.frame[pid], Array.from(distByPlate[pid]||[]), childFoot); }catch(_){}
+        // #382 — the child map OWNS its labels + a LIVE loupe. childRelabel() above re-solved the
+        // child's labels in the airy fan (their OWN non-overlapping layout, all 15 seated) and
+        // re-seated them ABSOLUTELY; childSolved[pid] is that solved box map and childPlacesByPid[pid]
+        // the relay-foot places view (the fan footprint centres for the loupe's distance term). Hand
+        // BOTH to the loupe, flagged isChild:true — so wantSet() drives the DYNAMIC free-explore loupe
+        // (revealedSet over the live curK/curFocus), not the frozen tour set: zoom in and the loupe
+        // circle LIGHTS the labels under it + DROPS those outside, recomputing live as you pan/zoom.
+        // solvedBox() reads childSolved[pid] (the true rendered boxes) so overlap scoring is exact.
+        // Loupe-local: the canonical SOLVED map / the #doortest pill / sky / door-mirror are untouched.
+        const childFoot = childSolved[pid] || null;
+        const childPlaces = childPlacesByPid[pid] || null;
+        try{ LOUPE.setTourSet(idsByPlate[pid]||[], P.frame[pid], Array.from(distByPlate[pid]||[]), childFoot, childPlaces); }catch(_){}
       } else {
         /* PARENT DISTRICT TOUR (unchanged behaviour, #262): restore the estate first — we
            may be arriving from a child layer via the stack — then dim the un-toured plates. */
@@ -9480,7 +9595,12 @@ window.addEventListener("resize", ()=> hideCard(true));
     //     exposes no per-frame clamp, so this suppress-the-drop-out is the minimum correct mode;
     //     the visitor freely roams the child layer and the existing edge clamp keeps the plate
     //     from being dragged fully off-screen.)
-    window.__panCamera.onManual = function(){ if(here && !isChild(here)) freeExplore(true); };
+    window.__panCamera.onManual = function(){
+      if(here && !isChild(here)){ freeExplore(true); return; }
+      // INSIDE A CHILD MAP (#380): a manual move does NOT drop out — it NAVIGATES within the child.
+      // #382: flip the child loupe to its LIVE reveal (the circle lights/drops labels as you roam).
+      if(here && isChild(here)){ try{ LOUPE.childNavigate(); }catch(_){} }
+    };
 
     // global keyboard: esc / backspace retreats/ascends while touring (when not typing).
     window.addEventListener("keydown", (e)=>{
@@ -9688,10 +9808,17 @@ const LOUPE = (function(){
     // pass admits child labels by their true on-screen position. null = no child tour (the
     // canonical SOLVED map is the sole source — the door pill, sky stars + mirror are untouched).
     let tourSolvedBox = null;
+    // #382 CHILD-MAP DYNAMIC LOUPE: a descended child map is a place you PAN/ZOOM to navigate
+    // (#380), so its reveal must follow the FREE-EXPLORE loupe (more labels as you zoom into a
+    // region), NOT the frozen whole-plate tour set. tourIsChild flags that the active tour is a
+    // child layer; tourChildPlaces is the relay-foot "places" view (footprint:'box' at the fan
+    // position) the loupe's distance term reads — so the loupe circle measures from the AIRY fan
+    // footprints, not the canonical column. Both are cleared back to null on ascend/free-explore.
+    let tourIsChild = false, tourChildPlaces = null, childNavigated = false;
     // the SOLVED render box for a POI's label, in viewBox units (what actually paints).
     // If a label was never solved (shouldn't happen for a present POI), skip it.
     function solvedBox(id){
-      if(tourSolvedBox){ const rb = tourSolvedBox[id]; if(rb) return rb; }   // child relay foot
+      if(tourSolvedBox){ const rb = tourSolvedBox[id]; if(rb) return rb; }   // child-solved fan box
       const s = SOLVED.get(id); return s ? s.box : null;
     }
     function poiById(id){ return PLACES.find(p=> p.id===id); }
@@ -9714,13 +9841,15 @@ const LOUPE = (function(){
     // DELEGATE to the single-source declutter (#337). solvedBox returns null for a gated
     // stair (not yet revealed → not in SOLVED), so DoorClaims.revealedSet's box-null skip
     // reproduces the old `p.locked && !SOLVED.has(p.id)` guard exactly.
-    function revealedSet(focus, k){ return DoorClaims.revealedSet(PLACES, solvedBox, focus, k); }
+    // #382: in a CHILD layer the distance term must read the RELAY-foot positions (the fan), so the
+    // loupe circle measures from where each tile + label actually paints, not the canonical column.
+    function revealedSet(focus, k){ return DoorClaims.revealedSet(tourChildPlaces || PLACES, solvedBox, focus, k); }
 
     /* declutterIds(ids, focus, k) → a NON-OVERLAPPING subset of the candidate ids, the
        SAME greedy screen-space pass revealedSet() uses but seeded over an EXPLICIT id
        list (the guided-tour whole-district set). DELEGATED to the single-source module
        (#337) so the tour set is decluttered by the SAME code the loupe + the door pill use. */
-    function declutterIds(ids, focus, k){ return DoorClaims.declutterIds(ids, PLACES, solvedBox, focus, k); }
+    function declutterIds(ids, focus, k){ return DoorClaims.declutterIds(ids, tourChildPlaces || PLACES, solvedBox, focus, k); }
 
     /* the set of room labels to LIGHT right now:
        · HOVER / TAB ("near") — exactly the ONE hovered room (BUG#216-2; the leader +
@@ -9729,6 +9858,30 @@ const LOUPE = (function(){
          a true level-of-detail neighbourhood (BUG#216-5).
        · REST — nothing (only the district captions show).  */
     function wantSet(){
+      // #382 CHILD-MAP MODE: inside a descended child layer the reveal follows the DYNAMIC
+      // free-explore loupe over the LIVE camera (curK/curFocus), NOT the frozen tour set — a
+      // child map is a place you pan/zoom to navigate (#380), so the loupe circle must LIGHT the
+      // labels under it + DROP those outside, recomputing live. At the framed scale (k≈1, no
+      // pan) curFocus is the plate centre, so the whole fan lights (the descent landing); zoom
+      // in and only the labels under the circle survive. A hover/tab (curSingleId) always names
+      // its one room at any zoom. The child's labels were re-solved for the fan, so their boxes
+      // never re-crowd — the declutter is the SAME geometric guarantee as free-explore.
+      if(tourIsChild){
+        // THE DESCENT LANDING (no manual move yet): show the WHOLE fan named — the child-solved
+        // set decluttered at the framed scale (now all 15 seat, the re-solve's win). This is the
+        // "here is the midway, every amusement named" first read. Once the visitor pans/zooms BY
+        // HAND (childNavigated, set by __panCamera.onManual), the loupe goes LIVE: the circle
+        // lights the labels under it + drops those outside, recomputing as curK/curFocus track
+        // the camera. A hover/tab (curSingleId) always names its one room in either mode.
+        let set;
+        if(childNavigated && curFocus){
+          set = DoorClaims.revealedSet(tourChildPlaces || PLACES, solvedBox, curFocus, curK || 1);
+        } else {
+          set = tourSet ? tourSet.slice() : [];   // the landing: the full decluttered fan
+        }
+        if(curSingleId && solvedBox(curSingleId) && set.indexOf(curSingleId) < 0) set.push(curSingleId);
+        return set;
+      }
       // GUIDED-TOUR (#262): the plate-switcher lit the WHOLE district — light its
       // DECLUTTERED label set (every POI in the navigated plate whose SOLVED box fits
       // without overlap at the plate's framed scale), never the moving circle-loupe. A
@@ -9882,28 +10035,41 @@ const LOUPE = (function(){
        keys whose engraved caption stays full. The raw set is DECLUTTERED here into a
        provably overlap-free subset (the SOLVED boxes are placed for the whole estate, so
        a raw whole-district light re-crowds). Pass (null) to drop back to free-explore. */
-    function setTourSet(ids, frame, districts, childFoot){
+    let tourFrameFocus = null;
+    function setTourSet(ids, frame, districts, childFoot, childPlaces){
       if(ids && ids.length){
-        // CHILD-MAP MODE (#380): a child tour passes its per-id RELAY-foot box map so the
-        // declutter scores overlap where the re-laid child labels truly render (the airy
-        // midway), not the canonical column. Set it BEFORE declutterIds so the pass admits
-        // them by true position; it stays set while the child tour is lit (solvedBox reads it).
-        tourSolvedBox = (childFoot && Object.keys(childFoot).length) ? childFoot : null;
+        // CHILD-MAP MODE (#380/#382): a child tour passes its child-SOLVED box map (childFoot) +
+        // its relay-foot places view (childPlaces). solvedBox reads childFoot so overlap scoring
+        // is over the airy fan; the DYNAMIC loupe (wantSet's tourIsChild branch) reads childPlaces
+        // for the distance term. Set BEFORE declutterIds. childPlaces present ⇒ this is a CHILD
+        // layer (drive the live loupe); absent ⇒ a parent district tour (the frozen set).
+        tourSolvedBox = (childFoot && Object.keys(childFoot).filter(k=>k!=="_sideById").length) ? childFoot : null;
+        tourChildPlaces = (childPlaces && childPlaces.length) ? childPlaces : null;
+        tourIsChild = !!tourChildPlaces;
+        childNavigated = false;   // a fresh descent lands on the full fan; a manual move goes live
         const focus = frame ? { x:frame.cx, y:frame.cy } : null;
         const fk = (frame && frame.k) ? frame.k : 1;
+        tourFrameFocus = focus;
+        // the tour set (frozen) is still computed as the fallback / the parent-tour path; the
+        // child branch ignores it in favour of the live loupe but keeps it as a graceful default.
         tourSet = declutterIds(ids, focus, fk);
         tourDistricts = (districts && districts.length) ? new Set(districts) : null;
       } else {
-        tourSet = null; tourDistricts = null; tourSolvedBox = null;
+        tourSet = null; tourDistricts = null; tourSolvedBox = null; tourIsChild = false; tourChildPlaces = null; tourFrameFocus = null; childNavigated = false;
       }
       renderReveal();
     }
+    /* #382 — the plate-switcher calls this from __panCamera.onManual when a by-hand pan/zoom
+       happens INSIDE a child layer (where a manual move must NOT drop out, #380). It flips the
+       child loupe from the descent-landing full-fan set to the LIVE circle reveal + re-renders. */
+    function childNavigate(){ if(tourIsChild && !childNavigated){ childNavigated = true; } renderReveal(); }
 
     out.renderReveal = renderReveal;
     out.revealNear = revealNear;
     out.clearNear = clearNear;
     out.setZoom = setZoom;
     out.setTourSet = setTourSet;     // guided-tour whole-district lit set (#262 re-model)
+    out.childNavigate = childNavigate; // #382 — flip the child loupe to its LIVE reveal on a manual move
     out.revealedSet = revealedSet;   // exposed for the door pill's Claim-B geometric proof
 
     /* ── input wiring (event delegation on #pois so we touch no per-POI handler) ──
