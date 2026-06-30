@@ -74,12 +74,11 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
-- [bug] **The door-twin drifted — regenerate door-mirror.cjs for the current front-door POI set** — `node tools/layout/door.test.cjs` exits non-zero with `GATE BROKEN`: the checked-in `tools/layout/door-mirror.cjs` is STALE — it is `mirror MISSING placed POI the-standing-stones` (placed on the front door at #358 but never added to the twin), and because adding a room re-packs the whole solve every other label's rendered slot drifted from the stale copy (`SOLVER box transit off by 643`, `weather-you-can-make` 568, etc.). The 17 RENDERED claims still PASS (the live `#doortest` pill is GREEN — the deployed door is fine); this is the calibration twin gone blind, not a live regression. FIX: regenerate the mirror from the real solve (the same one-shot headless-browser/`emit-mirror.cjs` regen done at #340 + #343), paste the fresh block into `door-mirror.cjs`, and confirm `door.test.cjs` returns to exit 0. Clears the path for the `[map] Fairground Gate` seed, which needs a SEEING door twin to assert its RED→GREEN crowding claim.
-<!-- ✝ FIXED #335: The Front Door Fails Its Own Legibility Self-Test (✗ 16/17) → tools/layout/layout.js · after 1cf82d8 -->
 <!-- ✝ FIXED #335: The front-door map has run out of room for new wings → tools/layout/layout.js · after 1cf82d8 -->
 <!-- ✝ FIXED #337: The front-door self-test ships GREEN while the live door reads RED → tools/layout/door.test.cjs · after 4aab6e9 -->
 <!-- ✝ FIXED #340: The door-twin drifted — regenerate door-mirror.cjs for the 81-POI front… → tools/layout/door.test.cjs · after f9f74db -->
 <!-- ✝ FIXED #343: The door-twin drifted again — regenerate door-mirror.cjs for the 82-POI… → tools/layout/door.test.cjs · after 8fcf030 -->
+<!-- ✝ FIXED #360: The door-twin drifted — regenerate door-mirror.cjs for the current fron… → tools/layout/door-mirror.cjs · after 9cad56f -->
 <!-- gauge:bug:end -->
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth
