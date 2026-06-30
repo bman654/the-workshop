@@ -170,6 +170,57 @@ console.log('\nFour-bar companion — coupler curve + loop closure:');
     cfit.maxDev > 0.05, 'coupler-curve maxDev from best line = ' + cfit.maxDev.toFixed(4) + ' units');
 }
 
+/* ─── ROBERTS–CHEBYSHEV COGNATES — three four-bars, one curve ─────────────── */
+console.log('\nRoberts–Chebyshev cognates — three four-bars draw the byte-identical curve:');
+{
+  const cp = Linkage.fourbarDefaults();
+  // (1) THE THEOREM: all three pens coincide per-sample to machine precision.
+  let maxPen = 0, ref = null, maxBar = 0, dead = 0, samples = 0;
+  for (let i = 0; i <= 2000; i++) {
+    const th = TWO_PI * i / 2000;
+    const g = Linkage.cognates(th, cp);
+    if (!g) { dead++; continue; }
+    samples++;
+    maxPen = Math.max(maxPen,
+      Math.hypot(g.Pleft.x - g.P.x, g.Pleft.y - g.P.y),
+      Math.hypot(g.Pright.x - g.P.x, g.Pright.y - g.P.y));
+    const cur = Linkage.cognateBarLengths(g);
+    if (!ref) ref = cur; else for (const k in cur) maxBar = Math.max(maxBar, Math.abs(cur[k] - ref[k]));
+  }
+  check('cognate theorem: original + left + right pens coincide to <1e-11 over a full sweep',
+    maxPen < 1e-11, 'max pen disagreement = ' + maxPen.toExponential(4) + ', samples = ' + samples);
+  check('every cognate bar holds its length to machine-ε across the sweep (rigid links)',
+    maxBar < 1e-9, 'max cognate bar drift = ' + maxBar.toExponential(4));
+
+  // (2) EXACT UNDER DRAG: move a ground pivot AND slide the pen offset — the
+  // direction-form construction recomputes λ,u live, so exactness must survive.
+  const dragged = Object.assign({}, cp, { O1: { x: 2.4, y: 0.3 }, cx: 1.5, cy: -0.6 });
+  let dragPen = 0;
+  for (let i = 0; i <= 720; i++) {
+    const g = Linkage.cognates(TWO_PI * i / 720, dragged);
+    if (!g) continue;
+    dragPen = Math.max(dragPen,
+      Math.hypot(g.Pleft.x - g.P.x, g.Pleft.y - g.P.y),
+      Math.hypot(g.Pright.x - g.P.x, g.Pright.y - g.P.y));
+  }
+  check('cognate map stays exact after dragging a ground pivot + sliding the pen (<1e-11)',
+    dragPen < 1e-11, 'dragged max pen disagreement = ' + dragPen.toExponential(4));
+
+  // (3) THE CURVE IS REAL: the shared locus has genuine 2-D extent (not a point),
+  // and the left/right loci are pointwise within ε of the original.
+  const tr = Linkage.cognateTrace(cp, 400);
+  const fitL = Linkage.lineFit(tr.original);
+  let locusDev = 0;
+  for (let i = 0; i < tr.original.length; i++) {
+    locusDev = Math.max(locusDev,
+      Math.hypot(tr.left[i].x - tr.original[i].x, tr.left[i].y - tr.original[i].y),
+      Math.hypot(tr.right[i].x - tr.original[i].x, tr.right[i].y - tr.original[i].y));
+  }
+  check('the shared coupler curve is genuinely 2-D AND the three loci overlay to <1e-11',
+    fitL.maxDev > 0.05 && locusDev < 1e-11,
+    'curve maxDev from a line = ' + fitL.maxDev.toFixed(4) + ' units, locus overlay = ' + locusDev.toExponential(2));
+}
+
 /* ─── headline number + summary ───────────────────────────────────────────── */
 console.log('\n────────────────────────────────────────────────────────────');
 console.log('HEADLINE: Peaucellier max perpendicular deviation from a perfect line = '

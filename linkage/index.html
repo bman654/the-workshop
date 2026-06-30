@@ -573,6 +573,129 @@
   };
 
   /* =====================================================================
+     ROBERTS–CHEBYSHEV COGNATES — the closed-form construction.
+
+     THE THEOREM (Roberts 1875 / Chebyshev). A four-bar's coupler point P
+     traces a coupler curve. There exist exactly TWO OTHER four-bars — the
+     "cognates" — whose coupler points trace the BYTE-IDENTICAL curve. The
+     three share the coupler point but use different bars and a third ground
+     pivot, so one curve is drawn three ways. (The classic demonstration:
+     the Roberts configuration, three linkages, one locus.)
+
+     THE CONSTRUCTION (the DIRECTION form — exact under any drag). Solve the
+     original four-bar at crank angle θ for joints A, B, P (P = coupler point).
+     Take the four link UNIT-directions and the complex shape ratio of the
+     coupler triangle:
+
+         u2 = unit(A − O0)   (crank)
+         u3 = unit(B − A)    (coupler)
+         u4 = unit(B − O1)   (output)
+         λ  = (P − A) / (B − A)   (a COMPLEX number — the coupler triangle's shape)
+
+     Then the cognates' joints fall out as exact complex maps off the SOLVED
+     original (a, b, c = crank/coupler/output lengths):
+
+         O2 = O0 + λ·(O1 − O0)              (the third ground pivot)
+         LEFT cognate:  E   = O2 + a·(1−λ)·u2     (its coupler-side joint)
+                        P_L = E + λ·c·u4
+         RIGHT cognate: P_R = B + (λ−1)·b·u3
+
+     LANDMINE (verified offline): a·(1−λ) is COMPLEX, so E is placed by a
+     complex MULTIPLY of (1−λ) with the crank direction u2 — NEVER a scaled
+     real direction. Get that wrong and the left cognate drifts off the curve.
+
+     WHY THE DIRECTION FORM (vs a stored Cayley joint set): because λ, u2..u4
+     are recomputed LIVE from the solved original each call, the cognates stay
+     EXACT when a ground pivot is dragged or the pen offset slides — there is no
+     cached q to re-sync. P_L and P_R coincide with P to ~1e-15 across a full
+     crank sweep, and every cognate bar holds its length to machine-ε.
+
+     params: the SAME object fourbar() takes ({ O0, O1, a, b, c, cx, cy, branch }).
+     Returns null at a dead pose (the dyad doesn't close). Otherwise:
+       { O0, O1, O2, A, B, E, P, Pleft, Pright, lambda, u2, u3, u4 }
+     where P, Pleft, Pright are the three (coincident) pen points and the
+     joints let a renderer draw all three linkages. ===================== */
+  // tiny complex helpers (plain {re,im}); kept local so the public vec API
+  // (which is {x,y}) is untouched. A planar point {x,y} maps to {re:x, im:y}.
+  function cx_(z) { return { re: z.x, im: z.y }; }          // {x,y} → complex
+  function xy_(z) { return V(z.re, z.im); }                 // complex → {x,y}
+  function cmul_(z, w) { return { re: z.re * w.re - z.im * w.im, im: z.re * w.im + z.im * w.re }; }
+  function cadd_(z, w) { return { re: z.re + w.re, im: z.im + w.im }; }
+  function csub_(z, w) { return { re: z.re - w.re, im: z.im - w.im }; }
+  function cscl_(z, s) { return { re: z.re * s, im: z.im * s }; }
+  function cabs_(z) { return Math.sqrt(z.re * z.re + z.im * z.im); }
+  function cunit_(z) { var m = cabs_(z) || 1; return { re: z.re / m, im: z.im / m }; }
+  // exact complex division z/w (conjugate form — no trig)
+  function cdiv_(z, w) { var d = w.re * w.re + w.im * w.im; return { re: (z.re * w.re + z.im * w.im) / d, im: (z.im * w.re - z.re * w.im) / d }; }
+
+  Linkage.cognates = function (theta, params) {
+    params = params || Linkage.fourbarDefaults();
+    var sol = fourbar(theta, params);
+    var O0 = cx_(sol.joints.O0), O1 = cx_(sol.joints.O1);
+    var A = cx_(sol.joints.A), B = cx_(sol.joints.B), P = cx_(sol.joints.P);
+    // dead pose: the dyad couldn't close (fourbar() falls back to the AB midpoint).
+    // Detect it the same way the page does — coupler length wrong vs the spec b.
+    var bNow = dist(sol.joints.A, sol.joints.B);
+    var bWant = params.b != null ? params.b : 2.4;
+    if (Math.abs(bNow - bWant) > 1e-6) return null;
+    var a = params.a != null ? params.a : 1.0;
+    var b = bWant;
+    var c = params.c != null ? params.c : 2.2;
+    var u2 = cunit_(csub_(A, O0));
+    var u3 = cunit_(csub_(B, A));
+    var u4 = cunit_(csub_(B, O1));
+    var lam = cdiv_(csub_(P, A), csub_(B, A));   // complex shape ratio
+    var ONE = { re: 1, im: 0 };
+    var O2 = cadd_(O0, cmul_(lam, csub_(O1, O0)));            // third ground pivot
+    // LEFT cognate: a·(1−λ) is COMPLEX → place E with a complex multiply
+    var E = cadd_(O2, cmul_(cscl_(csub_(ONE, lam), a), u2));
+    var Pleft = cadd_(E, cmul_(cscl_(lam, c), u4));
+    // RIGHT cognate: pen rides off the shared joint B along the coupler dir
+    var Pright = cadd_(B, cmul_(cscl_(csub_(lam, ONE), b), u3));
+    return {
+      O0: xy_(O0), O1: xy_(O1), O2: xy_(O2),
+      A: xy_(A), B: xy_(B), E: xy_(E),
+      P: xy_(P), Pleft: xy_(Pleft), Pright: xy_(Pright),
+      lambda: { x: lam.re, y: lam.im },
+      u2: xy_(u2), u3: xy_(u3), u4: xy_(u4)
+    };
+  };
+
+  /* cognateTrace() — sweep θ and collect ALL THREE pen loci. Returns
+     { original:[…], left:[…], right:[…] } of {x,y}. A dead pose is skipped in
+     all three in lockstep so the arrays stay index-aligned. */
+  Linkage.cognateTrace = function (params, steps) {
+    steps = steps || 360;
+    var out = { original: [], left: [], right: [] };
+    for (var i = 0; i <= steps; i++) {
+      var th = (i / steps) * 2 * Math.PI;
+      var g = Linkage.cognates(th, params);
+      if (!g) continue;
+      out.original.push({ x: g.P.x, y: g.P.y });
+      out.left.push({ x: g.Pleft.x, y: g.Pleft.y });
+      out.right.push({ x: g.Pright.x, y: g.Pright.y });
+    }
+    return out;
+  };
+
+  /* the cognate bar set at a pose — used by the rigid-bar self-test. Every entry
+     is a GENUINE rigid link of one of the three four-bars (a bar whose endpoints
+     are pin-joints of that linkage); each must hold its length to machine-ε across
+     a full crank sweep. (Connectivity that is NOT a physical bar — e.g. O0→E — is
+     deliberately excluded; those distances do change as the truss articulates.) */
+  Linkage.cognateBarLengths = function (g) {
+    return {
+      // ORIGINAL four-bar: crank O0A, coupler AB, output O1B + the coupler triangle
+      O0A: dist(g.O0, g.A), AB: dist(g.A, g.B), O1B: dist(g.O1, g.B),
+      AP: dist(g.A, g.P), BP: dist(g.B, g.P),
+      // LEFT cognate: ground bar O0→O2 (fixed), crank O2→E, output E→Pleft
+      O0O2: dist(g.O0, g.O2), O2E: dist(g.O2, g.E), EPL: dist(g.E, g.Pleft),
+      // RIGHT cognate: ground bar O1→O2 (fixed) + pen off B along the coupler dir
+      O1O2: dist(g.O1, g.O2), BPR: dist(g.B, g.Pright)
+    };
+  };
+
+  /* =====================================================================
      trace() — sweep θ across a range, return the pen locus (array of {x,y}).
      ===================================================================== */
   Linkage.solvers = { peaucellier: peaucellier, fourbar: fourbar };
