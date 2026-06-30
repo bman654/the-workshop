@@ -112,6 +112,12 @@
     // every footprint/furniture box, the manor pool, the viewBox edge, and every existing catalog
     // star by sky.test.cjs CATALOG INTEGRITY (re-runnable /tmp star-placement verifier).
     'belief-beam':    { x: 1240, y: 630, mag: 1 },
+    // The Likelihood Sluice — a tight mag-2 companion 62px directly below belief-beam (1240,630),
+    // the Wagerer feat-group's pre-named 2nd star (lit on first visit, ws:seen:likelihood-sluice).
+    // Verified clear: nearest the-rolling-room Δ(35,32), differential-gear Δ(60,8), belief-beam
+    // Δ(0,62) — all ≥ 2*STAR_PAD(24) on at least one axis (the test's both-axes rule); inside the
+    // 1440×900 viewBox. Re-confirmed clear of every catalog star by sky.test.cjs CATALOG INTEGRITY.
+    'likelihood-sluice': { x: 1240, y: 692, mag: 2 },
     // ── the feats constellation: nine "Feats of Light" earned in the Hall of Mirrors,
     //    laid out as a vertical LENS (a pointed oval) threading the WEST GROUNDS left
     //    margin beside the Hall footprint (x124 y430 w148 h74). These are PSEUDO-ids
@@ -360,12 +366,14 @@
     // kin (a free stroboscope, a tuning-fork beat) ship.
     { id: 'sirenist', name: 'The Sirenist', myth: 'Spins the rate you watch into the pitch you hear.',
       members: ['tone-mill', 'singing-plate'] },
-    // The Wagerer — the Belief Beam's reward constellation. Founded with one star (The Belief
-    // Beam, a plain `ws:seen:belief-beam` room crumb); like every feat-group it is ADDITIVE — it
-    // NEVER feeds the wings-only all-skies capstone. Sized for the wing's promised inference kin
-    // (a likelihood-ratio sluice, a conjugate-prior dial, a credible-interval lantern) as they ship.
+    // The Wagerer — the Belief Beam's reward constellation. Now TWO stars: The Belief Beam (the
+    // founding `ws:seen:belief-beam` crumb) and The Likelihood Sluice (`ws:seen:likelihood-sluice`),
+    // the same additive log-LR law given two gates so belief decides WHEN to act. Like every
+    // feat-group it is ADDITIVE — it NEVER feeds the wings-only all-skies capstone; its engraved name
+    // now sits over two stars, and its tally fires only when BOTH crumbs exist. Room for more
+    // inference kin (a conjugate-prior dial, a credible-interval lantern) as they ship.
     { id: 'wagerer', name: 'The Wagerer', myth: 'Pours belief, never spills it; lets the evidence decide the level.',
-      members: ['belief-beam'] }
+      members: ['belief-beam', 'likelihood-sluice'] }
   ];
 
   Sky.CATALOG = CATALOG;
