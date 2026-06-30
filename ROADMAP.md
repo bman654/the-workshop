@@ -144,11 +144,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 - [rep] **The Hall of Mirrors rep** — a glass PRISM on a low optical bench, a thin white beam striking one face and fanning out the far side into a live spectrum band (the dispersed rays are the emissive accent — bloom at night, recede to a faint ghost by day; a barely-there hue-drift keeps the light alive) · aspect:horizontal · room:hall-of-mirrors · accent:#e0664f (sown #364 · contest #3)
 - [rep] **The Engine Room rep** — a beam-engine A-FRAME standing a big brass-rimmed spoked FLYWHEEL at one side, a rocking walking-beam pinned across the top, a connecting-rod dropping to a stubby cylinder; warm-amber heat at the firebox mouth is the emissive glow (PREP: re-judge aspect from rendered proportions — vertical if the A-frame dominates, horizontal if the flywheel+beam spread wins) · aspect:vertical · room:engine-room · accent:#ffb24a (sown #364 · contest #3)
 - [rep] **The Deep Hearth rep** — a slim cut-away basalt CHIMNEY-SECTION revealing a glowing magma conduit climbing through banded strata, an ember bloom at its foot; the molten conduit is the emissive glow · aspect:vertical · room:the-deep-hearth · accent:#ff7a3c (sown #364 · contest #3)
-- [rep] **The Glasshouse rep** — a low wide GLASSHOUSE: a shallow gable of brass-mullioned glass panes on a stone sill, faint living-green glow within and a few self-lit specimen motes; the longest-waiting un-repped room in the whole estate (entry 1) · aspect:mound · room:strange-garden · accent:#7fd08a (sown #364 · contest #3)
 <!-- ✝ BLOOMED #313: The Firmament rep → the-gate drawRepFirmament — shipped as a DOME (… · after 03a2fe5 -->
 <!-- ✝ BLOOMED #323: The Clockwork rep → the-gate/scene.js (drawRepClockwork) + rooms.js · after 164fc9c -->
 <!-- ✝ BLOOMED #336: The Hours rep → the-gate/scene.js (drawRepGnomon) · after 4b48727 -->
 <!-- ✝ BLOOMED #351: The Lodestone rep → the-gate/scene.js drawRepLodestoneHall + rooms.… · after a5cc3c3 -->
+<!-- ✝ BLOOMED #371: The Glasshouse rep → the-gate/scene.js drawRepStrangeGarden · after 39ea07d -->
 <!-- gauge:foundry-seeds:end -->
 
 ---
