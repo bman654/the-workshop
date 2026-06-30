@@ -9,6 +9,50 @@ Grounds now fan across their own airy midway, and you ENTER them through a lit f
 fold relieves the door's crowding — CLAIM C′ flips the door pill from ✗16/17 RED to ✓17/17 GREEN —
 proving DEPTH, not a scorer tweak, did it (the neg-control with detach OFF stays red).*
 
+## #385 — bug-fix: every descended child leader's FOOT-DOT now lands ON its tile (the leader-foot follow-up to #382)
+
+#382 re-solved the descended child's labels into an open fan, but the LEADER LINES still pointed at the
+wrong place: each leader's foot anchored on the wide relay CELL, not the relaid TILE, so the foot-dot sat
+OFF the smaller tile — column-keyed (left col ≈ (0,+18), right col ≈ (+43,+12) from the tile centre).
+Root cause, all in `index.src.html` (no change to `layout.js`/`solution.foot`/sky/`door-*.cjs` — the
+canonical SOLVED map, the door pill's inputs, and the #382 fan SOLVE are all untouched):
+
+- **THE LEADER ANCHORED ON THE CELL, NOT THE TILE.** `childRelabel()` (the leader-anchor site, ~L4682)
+  drew each child leader from `relayView(meta, rf)` — a footprint box at the wide RELAY CELL's dimensions
+  `{x:rf.x, y:rf.y, w:rf.w, h:rf.h}`. But `relayChild()` only TRANSLATES each tile by `childDelta {dx,dy}`
+  (a move, no scale), so the rendered tile keeps its CANONICAL footprint (box `meta.w/meta.h`, tower
+  `meta.r`) with its top-left at the relay foot — smaller than, and tucked into the upper-left of, the
+  cell. `footCentre`/`footBBox` in `applyPlacement` therefore anchored each leader on the cell, off the
+  tile. **FIX:** a new sibling fn `relayTileView(meta, rf)` (~L4585) returns the TILE footprint — box →
+  `{footprint:'box', x:rf.x, y:rf.y, w:meta.w, h:meta.h}`; tower → `{footprint:'tower', x:rf.x+meta.r,
+  y:rf.y+meta.r, r:meta.r}` (NEVER collapsed to a box — `footBBox`/`footCentre`/`labelAnchor` branch on
+  `footprint` and the round-tile geometry differs). Its delta math mirrors `childDelta` (same
+  `meta.footprint==='tower'` discriminator), so the leader anchor and the rendered tile move as ONE.
+  `childRelabel`'s ONE behavior change swaps the synthetic-parts `.r` handed to `applyPlacement` from
+  `relayView` → `relayTileView`. `relayView` itself is byte-untouched — it stays the conservative CELL
+  view used as the label-avoidance OBSTACLE + feature anchor/gap, where reserving the whole cell is
+  harmless. The #382 fan SOLVE (`childLabelSolve`) and its obstacle/anchor inputs are byte-untouched, so
+  the label TEXT boxes stay byte-stable — only where each leader's FOOT attaches moves.
+
+**REGRESSION GUARD** (`tools/layout/gate-dom.test.mjs`): new **D8** (`childLeaderFootState` reader) asserts
+every LIVE child leader foot-dot lands ON its tile's rendered bbox at the landing across BOTH fan columns
+(`maxOutside ≤ 5` screen-px); a cell-anchor regression lands tens of px out and fails loudly. ALSO
+corrected the #382 D6 overlap metric to score the inner `.labeltext` box rather than the `.labelgroup`
+WRAPPER: the wrapper bbox also encloses the leader+dot, and a correctly-reattached (longer, honest) leader
+can cross a neighbour's wrapper bbox — normal cartography, NOT a label clash. The text-box metric is
+exactly what the page's own loupe declutter scores (`solvedBox()` reads `childSolved` = the solved TEXT
+boxes), so D6 stays the true #382 invariant (all seat, zero TEXT overlap) — only the measurement proxy
+changed, never the #382 solve.
+
+**VERIFIED** (publisher "Foot-Reeve", REAL CDP input): `gate-dom.test.mjs` **11/11** GREEN — D8: 14 leaders,
+maxOutside=0px, both columns; D6: 14 lit, 0 TEXT overlaps; D5: pill 17/17. Independent live measurement:
+14 leaders (8 L / 6 R), all on-tile; the worst RIGHT column (dotX~792.6) now inside each tile bbox
+(761.5–799.9; pre-fix ~+43px past). Ascend restores the canonical estate map untouched. `forge --check
+--all` all 124 current. The live AMUSEMENTS child set is all box-style renders, so D8 exercises the box
+branch on real rooms; `relayTileView`'s tower branch is covered by code review + the `childDelta`
+delta-mirror argument, and the fix is keyed on the `detach:true` template so a future wing with a tower
+room will exercise it.
+
 ## #382 — bug-fix: the descended child map now OWNS its labels (a re-solved fan + a LIVE loupe), the template for every `detach:true` child
 
 #380 made the descended child a self-contained CHILD-MAP MODE (the parent estate hidden, a place you

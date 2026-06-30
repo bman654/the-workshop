@@ -9220,9 +9220,30 @@ window.addEventListener("resize", ()=> hideCard(true));
     const childPlacesByPid = {}; // pid → [{id,tier,district,wing,footprint:'box',x,y,w,h}]
 
     // a footprint-box view of a relay foot, so footBBox/footCentre/labelGap read the fan position.
+    // NB: this is the RELAY CELL view (the wide fan SLOT, w=rf.w/h=rf.h) — used for the label-
+    // avoidance OBSTACLE + the feature anchor/gap, where reserving the whole cell is conservative
+    // and harmless. It is NOT the leader anchor (see relayTileView + the #385 note below).
     function relayView(meta, rf){
       return { id:meta.id, tier:meta.tier, district:meta.district, wing:meta.wing||null,
                accent:meta.accent, footprint:"box", x:rf.x, y:rf.y, w:rf.w, h:rf.h };
+    }
+    /* #385 LEADER FOOT-ON-TILE: relayChild only TRANSLATES each tile by childDelta {dx,dy} (a move,
+       no scale), so a descended child tile keeps its CANONICAL footprint (box meta.w/meta.h or tower
+       meta.r) with its top-left landing at the relay foot (rf.x, rf.y). The leader anchor must
+       describe THAT true rendered tile — not the wide relay CELL (rf.w/rf.h) relayView returns —
+       or the foot-dot lands off the smaller tile, column-keyed (the bug). This sibling returns the
+       TILE footprint, translated by the SAME delta math as childDelta (L~4497), so the leader anchor
+       and the rendered tile move as ONE. Box → canonical w/h at (rf.x,rf.y); tower → centre at the
+       translated canonical centre (rf.x+r, rf.y+r) with radius r (NEVER collapse a tower to a box —
+       footBBox/footCentre/labelAnchor branch on footprint and the round-tile geometry differs). */
+    function relayTileView(meta, rf){
+      const base = { id:meta.id, tier:meta.tier, district:meta.district, wing:meta.wing||null, accent:meta.accent };
+      if(meta.footprint==="tower"){
+        // childDelta: dx = rf.x - (meta.x - meta.r); after translate the centre is meta.x+dx = rf.x+meta.r.
+        return Object.assign(base, { footprint:"tower", x:rf.x + meta.r, y:rf.y + meta.r, r:meta.r });
+      }
+      // childDelta: dx = rf.x - meta.x; the canonical box top-left lands at (rf.x, rf.y), size unchanged.
+      return Object.assign(base, { footprint:"box", x:rf.x, y:rf.y, w:meta.w, h:meta.h });
     }
     // SOLVE this child's labels over its relay fan. Memoized per pid (the fan is deterministic).
     function childLabelSolve(pid){
@@ -9295,10 +9316,14 @@ window.addEventListener("resize", ()=> hideCard(true));
               tx: w ? w.dataset.tx : undefined, ty: w ? w.dataset.ty : undefined
             };
           }
-          // re-seat with a synthetic parts whose .r is the relay-foot view, so applyPlacement
-          // draws the leader from the FAN footprint to the re-solved label box (both absolute).
+          // re-seat with a synthetic parts whose .r is the relay TILE view, so applyPlacement
+          // draws the leader from the rendered tile's TRUE footprint to the re-solved label box
+          // (both absolute). #385: this is the TILE view (canonical w/h or tower r translated to the
+          // relay foot), NOT relayView's wide CELL — footBBox/footCentre here must match where the
+          // tile actually renders, or the foot-dot lands off the smaller tile (the bug). The label
+          // BOX is unchanged: only where its leader's FOOT attaches moves.
           const meta = PLACES.find(p=>p.id===r.id) || r;
-          const view = relayView(meta, rf);
+          const view = relayTileView(meta, rf);
           const side = (childSolved[pid]._sideById && childSolved[pid]._sideById[r.id]) || "right";
           applyPlacement(Object.assign({}, parts, { r:view }), box, side);
         }

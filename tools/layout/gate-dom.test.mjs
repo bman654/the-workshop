@@ -129,18 +129,68 @@ const isDescended = s => s.midOp === '1' && s.ribbonShown && s.relayedCount >= 1
 // count (real getBoundingClientRect boxes). The child map now OWNS its labels: a re-solved fan
 // layout (all 15 seat) + a DYNAMIC loupe (the lit set recomputes as you zoom/pan). The OLD code
 // (translate-only canonical column + a frozen tour set) could only seat ~9/15 and never recomputed.
+//
+// #385 — the overlap test measures the INNER .labeltext box (the actual rendered roomname/sub
+// block), NOT the .labelgroup WRAPPER. The wrapper bbox also encloses the LEADER line + foot-dot;
+// once #385 reattached each leader to its TILE (not the wide relay cell), a leader honestly reaches
+// across the fan and a thin leader line can cross a neighbour's wrapper bbox — normal cartography,
+// not a label clash. "Do the LABELS collide" is a text-box question, and it is exactly what the
+// page's own loupe declutter scores (solvedBox() reads childSolved = the solved TEXT boxes). So we
+// score the .labeltext boxes: the #382 fan invariant (all seat, zero TEXT overlap) holds, and the
+// metric is robust to the correct leader geometry. (The lit SET is still read off .labelgroup.live.)
 function litChildState() {
   return abEval(`(function(){
     var live=Array.from(document.querySelectorAll('#roomlabels .labelgroup.live'))
       .filter(function(L){ return getComputedStyle(L).display!=='none'; });
-    var boxes=live.map(function(L){ var r=L.getBoundingClientRect();
-      return { id:L.dataset.id, x:r.left, y:r.top, w:r.width, h:r.height }; })
+    var boxes=live.map(function(L){
+        var t=L.querySelector('.labeltext')||L; var r=t.getBoundingClientRect();
+        return { id:L.dataset.id, x:r.left, y:r.top, w:r.width, h:r.height }; })
       .filter(function(b){ return b.w>0; });
     var ov=0; for(var i=0;i<boxes.length;i++) for(var j=i+1;j<boxes.length;j++){
       var a=boxes[i],b=boxes[j]; if(a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h) ov++; }
     return JSON.stringify({ lit: boxes.length, overlaps: ov,
       ids: boxes.map(function(b){ return b.id; }).sort(),
       k: +(window.__panCamera ? window.__panCamera.k : 0).toFixed(3) });
+  })()`);
+}
+
+// #385 — THE LEADER FOOT LANDS ON ITS TILE. When descended, each relayed child tile keeps its
+// CANONICAL footprint (a move, no scale) while the leader was anchored on the WIDE relay CELL —
+// so the foot-dot landed OFF the smaller tile (left col ≈ (-7,+16), right col ≈ (+53,+16) from the
+// tile centre). The fix anchors the leader on the rendered TILE footprint. This reader measures,
+// for every LIVE child leader-dot, the dot's screen position vs its OWN tile's rendered screen
+// bbox: maxOutside = the largest distance any dot sits OUTSIDE its tile bbox (0 == on/inside the
+// tile, the fix). It also reports the worst dot→tile-centre offset so a regression to the cell
+// anchor (which lands at the cell's far edge, tens of px past the tile) is loud. Screen-space
+// (getBoundingClientRect) is the robust common frame — both dot + tile bake in every transform/CTM.
+function childLeaderFootState() {
+  return abEval(`(function(){
+    function rect(el){ var r=el.getBoundingClientRect(); return { x:r.left, y:r.top, w:r.width, h:r.height, cx:r.left+r.width/2, cy:r.top+r.height/2 }; }
+    // every LIVE child label group that is shown, with a foot-dot AND a matching rendered tile.
+    var live=Array.from(document.querySelectorAll('#roomlabels .labelgroup.live[data-id]'))
+      .filter(function(L){ return getComputedStyle(L).display!=='none'; });
+    var rows=[];
+    live.forEach(function(L){
+      var id=L.dataset.id;
+      var dot=L.querySelector('.leader-dot'); if(!dot) return;
+      var tile=document.querySelector('#pois .poi[data-id="'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'"]');
+      if(!tile || getComputedStyle(tile).display==='none') return;
+      var tr=tile.getBoundingClientRect(); if(tr.width<=0||tr.height<=0) return;
+      var dr=dot.getBoundingClientRect(); var dx=dr.left+dr.width/2, dy=dr.top+dr.height/2;
+      // how far the dot sits OUTSIDE the tile bbox (0 if on/inside). Clamp each axis to the box.
+      var ox=Math.max(0, tr.left-dx, dx-(tr.left+tr.width));
+      var oy=Math.max(0, tr.top-dy, dy-(tr.top+tr.height));
+      var outside=Math.hypot(ox,oy);
+      var tcx=tr.left+tr.width/2, tcy=tr.top+tr.height/2;
+      var offCtr=Math.hypot(dx-tcx, dy-tcy);    // dot vs tile-centre (cell anchor → tens of px)
+      rows.push({ id:id, outside:+outside.toFixed(2), offCtr:+offCtr.toFixed(2),
+        tileW:+tr.width.toFixed(1), tileH:+tr.height.toFixed(1) });
+    });
+    var maxOutside=rows.reduce(function(m,r){ return Math.max(m,r.outside); }, 0);
+    var maxOffCtr=rows.reduce(function(m,r){ return Math.max(m,r.offCtr); }, 0);
+    var worst=rows.slice().sort(function(a,b){ return b.outside-a.outside; })[0]||null;
+    return JSON.stringify({ count:rows.length, maxOutside:+maxOutside.toFixed(2),
+      maxOffCtr:+maxOffCtr.toFixed(2), worst:worst });
   })()`);
 }
 
@@ -360,11 +410,28 @@ async function main() {
       check('D6 — child map OWNS its labels: landing lights > 9 with zero overlap (re-solved fan)', false,
         '[could not re-descend for the #382 checks: ' + (rD.stderr || rD.stdout || '').trim() + ']');
       check('D7 — dynamic loupe: a real zoom-in recomputes the lit child set, overlap-free', false, '[skipped — re-descend failed]');
+      check('D8 (#385) — every child leader FOOT-DOT lands ON its tile', false, '[skipped — re-descend failed]');
     } else {
       const landing = litChildState();
       check('D6 — child map OWNS its labels: the landing lights > 9 (past the old column ceiling) with ZERO rendered overlap',
         landing.lit > 9 && landing.overlaps === 0,
         '[' + landing.lit + ' labels lit at framed scale, ' + landing.overlaps + ' rendered overlaps, k=' + landing.k + ']');
+
+      // ── D8 (#385) — EVERY child leader's FOOT-DOT lands ON its tile, BOTH fan columns ──
+      // Measured AT THE LANDING (framed base scale, full set lit, so both fan columns are present).
+      // The bug anchored each leader on the wide relay CELL, not the rendered TILE, so the foot-dot
+      // sat OFF the tile (right col ~+53 viewBox-px from centre, well past the smaller tile's right
+      // edge). The fix anchors on the TILE footprint: every dot now sits ON its tile's bbox
+      // (outside≈0). FOOT_TOL is a few screen px for the dot radius (r:2) + AA — a cell-anchor
+      // regression lands tens of px out and fails loudly (maxOffCentre exposes it even louder).
+      const FOOT_TOL = 5;
+      const foot = childLeaderFootState();
+      check('D8 (#385) — every child leader FOOT-DOT lands ON its tile (relay TILE anchor, not the wide CELL) — both fan columns',
+        foot.count >= 6 && foot.maxOutside <= FOOT_TOL,
+        '[' + foot.count + ' leaders measured, maxOutside=' + foot.maxOutside + 'px (tol ' + FOOT_TOL +
+        '), maxOffCentre=' + foot.maxOffCtr + 'px' +
+        (foot.worst ? ', worst=' + foot.worst.id + ' (outside ' + foot.worst.outside + ', tile ' +
+          foot.worst.tileW + '×' + foot.worst.tileH + ')' : '') + ']');
 
       // D7 — REAL zoom-in (CDP click on the brass + control) must RECOMPUTE the lit set.
       const before = litChildState();
@@ -377,6 +444,7 @@ async function main() {
         recomputed && after.overlaps === 0,
         '[k ' + before.k + '→' + after.k + ', lit ' + before.lit + '→' + after.lit + ', set-changed=' +
         (after.ids.join(',') !== before.ids.join(',')) + ', overlaps=' + after.overlaps + ']');
+
       // ascend back so teardown leaves the estate clean (and to not strand the camera deep).
       ascendToParent();
     }
@@ -390,7 +458,7 @@ async function main() {
 
   console.log('');
   if (fail === 0) {
-    console.log('PASS — the fold is REAL in the live DOM: tiles AND wing chrome gone at rest, the gate is truly clickable, a REAL INPUT click descends (CDP press→release, not a synthetic dispatch), ascend re-folds, the pill is 17/17 — AND (#382) the child map OWNS its labels: the re-solved fan lights past the old 9-ceiling with zero overlap, and the loupe is LIVE (a real zoom-in recomputes the lit set).');
+    console.log('PASS — the fold is REAL in the live DOM: tiles AND wing chrome gone at rest, the gate is truly clickable, a REAL INPUT click descends (CDP press→release, not a synthetic dispatch), ascend re-folds, the pill is 17/17 — AND (#382) the child map OWNS its labels: the re-solved fan lights past the old 9-ceiling with zero overlap, and the loupe is LIVE (a real zoom-in recomputes the lit set) — AND (#385) every child leader FOOT-DOT lands ON its tile (anchored on the relay TILE, not the wide CELL).');
     process.exit(exitCode);
   } else {
     console.log('FAIL — ' + fail + ' live-DOM check(s) failed: the fold is NOT executing in the rendered page (the #369 bug). The headless twins cannot see this — that is why this gate exists.');
