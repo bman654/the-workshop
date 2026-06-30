@@ -342,6 +342,7 @@ var Layout = (function () {
     'drawing-engines': { label: 'DRAWING ENGINES', accent: '#c9a24a' },
     'figures-you-construct': { label: 'FIGURES YOU CONSTRUCT', accent: '#6f9fc0' },
     'kinetics-sound': { label: 'KINETICS & SOUND', accent: '#d8a94a' },
+    'barrel-house': { label: 'THE BARREL HOUSE', accent: '#c9a24a' },
     waves:       { label: 'WAVES',              accent: '#54d6d0' },
     processions: { label: 'THE PROCESSIONAL GROUND', accent: '#c9a24a' },
     statics:     { label: 'STATICS',                accent: '#c9974c' },

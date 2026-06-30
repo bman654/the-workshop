@@ -288,7 +288,30 @@
     // this star sits ABOVE it, bottom edge y672 < 687), the manor pool, the viewBox edge,
     // and every existing catalog star (nearest = belief-beam 1240,630 Δx=35 / differential-
     // gear 1180,700 Δy=40 / collisions 1180,560 Δy=100) by CATALOG INTEGRITY + the live smoke.
-    'the-rolling-room': { x: 1205, y: 660, mag: 1 }
+    'the-rolling-room': { x: 1205, y: 660, mag: 1 },
+    // The Barrel House — the MANOR's new music-box wing (a clock of PLACE, not rate;
+    // distinct from the Acoustic Siren next door). The FRONT-DOOR wing star, lit on
+    // first visit of the landing (ws:seen:the-barrel-house). A field star in the dark
+    // LEFT-CENTRAL margin pocket BELOW the-long-way-home (215,448) and ABOVE the-heap
+    // (208,882) / the-drawing-room (300,868), in the open band right of holonomy
+    // (130,700). Verified clear of every footprint/furniture box, the manor pool, the
+    // viewBox edge, and every existing catalog star by the CATALOG INTEGRITY self-test.
+    'the-barrel-house': { x: 250, y: 630, mag: 1 },
+    // The Pin-Barrel — the wing's founding room (the delay canon, three voices chase one
+    // tune). The lead member of The Carillonneur feat-group; lit on first visit
+    // (ws:seen:pin-barrel). A field star one band below its wing star the-barrel-house
+    // (250,630). Verified clear of every footprint/furniture box, the manor pool, the
+    // viewBox edge, and every existing catalog star (nearest = the-barrel-house Δy=55,
+    // holonomy 130,700 Δx=120) by CATALOG INTEGRITY.
+    'pin-barrel': { x: 250, y: 685, mag: 1 },
+    // The Mirror Drum — the wing's crab-canon room (voice 1 = retrograde reflection of
+    // voice 0, read backward at one instant). The SECOND member of The Carillonneur
+    // feat-group, so its asterism reads ≥2 stars; a mag-2 companion star beside its kin;
+    // lit on first visit (ws:seen:mirror-drum). Verified clear of every footprint/
+    // furniture box, the manor pool, the viewBox edge, and every existing catalog star
+    // (nearest = the-barrel-house 250,630 Δx=42, pin-barrel 250,685 Δx=42/Δy=27) by
+    // CATALOG INTEGRITY.
+    'mirror-drum': { x: 292, y: 658, mag: 2 }
   };
 
   /* ── DATA: the six wings (companion-pairs), each an asterism ────────────────
@@ -386,7 +409,16 @@
     // now sits over two stars, and its tally fires only when BOTH crumbs exist. Room for more
     // inference kin (a conjugate-prior dial, a credible-interval lantern) as they ship.
     { id: 'wagerer', name: 'The Wagerer', myth: 'Pours belief, never spills it; lets the evidence decide the level.',
-      members: ['belief-beam', 'likelihood-sluice'] }
+      members: ['belief-beam', 'likelihood-sluice'] },
+    // The Carillonneur — the Barrel House's reward constellation (the music-box wing where
+    // TIME IS THE CRANK). Founded by The Pin-Barrel (`ws:seen:pin-barrel`, the delay canon)
+    // and grown by The Mirror Drum (`ws:seen:mirror-drum`, the crab canon) — the two named
+    // founding rooms, so its engraved name sits over TWO stars from the start. Like every
+    // feat-group it is ADDITIVE — it NEVER feeds the wings-only all-skies capstone. Sized to
+    // keep growing as the wing's named-dark third (The Mensuration Barrel, 2:1) and further
+    // music-box kin ship.
+    { id: 'carillonneur', name: 'The Carillonneur', myth: 'Sets the pins, then lets the turning hand be the only clock.',
+      members: ['pin-barrel', 'mirror-drum'] }
   ];
 
   Sky.CATALOG = CATALOG;
