@@ -3304,6 +3304,7 @@ function drawPrecincts(){
     g.appendChild(el("path",{ d:roundRectPath(w.x,w.y,w.w,w.h,r), class:"wing-tint" }));
     g.appendChild(el("path",{ d:roundRectPath(w.x,w.y,w.w,w.h,r), class:"wing-bound" }));
     precincts.appendChild(g);
+    if(w.wing) wingChrome(w.wing).bounds.push(g);   // #376: this wing's capsule, foldable by slug
   });
 }
 
@@ -3374,6 +3375,16 @@ function drawCirculation(){
    and each WING label on its wing-rect's top edge — never floating. */
 const ZONE_LABEL = new Map();   // district → its engraved DISTRICT caption (always-on at rest)
 const WING_LABEL = new Map();   // district → [wing caption <text>] (LOD layer, hidden at rest)
+// #376 GATE FOLD: a detached wing's OWN chrome — its dashed capsule <g>(.wing-bound) and its
+// engraved <text>.wing-label — keyed by the wing SLUG, so setChildVisible can fold the whole
+// wing away (not just its POI tiles), leaving only the lit gate in a clean hole. (child plate id
+// is "child:<slug>"; a wing slug may own >1 rect/label, so each value is an array.)
+const WING_CHROME_BY_SLUG = new Map();   // wing slug → { bounds:[<g>...], labels:[<text>...] }
+function wingChrome(slug){
+  let c = WING_CHROME_BY_SLUG.get(slug);
+  if(!c){ c = { bounds:[], labels:[] }; WING_CHROME_BY_SLUG.set(slug, c); }
+  return c;
+}
 function drawZoneLabels(){
   LAYOUT.districtRects.forEach(d=>{
     // seat the label on the district's top boundary, centred
@@ -3409,6 +3420,7 @@ function drawZoneLabels(){
     winglabels.appendChild(t);
     if(!WING_LABEL.has(w.district)) WING_LABEL.set(w.district, []);
     WING_LABEL.get(w.district).push(t);
+    if(w.wing) wingChrome(w.wing).labels.push(t);   // #376: this wing's caption, foldable by slug
   });
 }
 
@@ -4283,8 +4295,10 @@ renderEstate();
     let dragging=false, moved=false, startX=0, startY=0, startTx=0, startTy=0;
     sheet.addEventListener("pointerdown", (e)=>{
       if(e.button!==0) return;
-      // a drag starting on a POI (or the rune/legend) must NOT pan — let the link work
-      if(e.target.closest && e.target.closest(".poi")) return;
+      // a drag starting on a POI or a GATE FACE must NOT pan — let the click navigate (#376:
+      // the gate is a .gate-face, not a .poi; without this, pressing it starts a pan and
+      // sheet.setPointerCapture steals the gate group's compatibility click, so descend never fires).
+      if(e.target.closest && (e.target.closest(".poi") || e.target.closest(".gate-face"))) return;
       dragging=true; moved=false; startX=e.clientX; startY=e.clientY; startTx=tx; startTy=ty;
       sheet.classList.add("grabbing");
       sheet.setPointerCapture && sheet.setPointerCapture(e.pointerId);
@@ -4313,7 +4327,7 @@ renderEstate();
 
     // ── double-click empty plate = reset ──
     sheet.addEventListener("dblclick", (e)=>{
-      if(e.target.closest && e.target.closest(".poi")) return;
+      if(e.target.closest && (e.target.closest(".poi") || e.target.closest(".gate-face"))) return;
       e.preventDefault(); reset();
     });
 
@@ -4493,6 +4507,21 @@ window.addEventListener("resize", ()=> hideCard(true));
         tile.style.pointerEvents = on ? "" : "none";
         const w = labelWrapById[tile.dataset.id];
         if(w) w.style.display = on ? "" : "none";
+      }
+      // #376: fold the detached wing's OWN chrome too — its dashed capsule (.wing-bound <g>)
+      // and its engraved caption (.wing-label). The parent must show ONLY the lit gate in a
+      // clean hole; an empty capsule + "AMUSEMENTS" wrapped round the gate is the leftover the
+      // tile-only fold left behind. This chrome marks the wing's CANONICAL grounds-east column,
+      // which is detached for good — and on descend the tiles RE-LAY to the airy midway envelope
+      // (a different region entirely; the .child-midway ground stands in for the wing there),
+      // so the canonical capsule/label are never the right thing to draw. Hence: keep the chrome
+      // folded WHENEVER the column is folded — at rest AND during descent. (display:none also
+      // wins over the wing-label's zoom-LOD opacity, so it stays gone at every zoom.)
+      const slug = cpid.indexOf("child:")===0 ? cpid.slice(6) : null;
+      const chrome = slug ? WING_CHROME_BY_SLUG.get(slug) : null;
+      if(chrome){
+        for(const g of chrome.bounds) g.style.display = "none";
+        for(const t of chrome.labels) t.style.display = "none";
       }
     }
     // apply / clear the re-lay translate on a child plate's tiles + their labels (the fold +

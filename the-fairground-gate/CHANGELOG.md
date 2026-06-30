@@ -9,6 +9,53 @@ Grounds now fan across their own airy midway, and you ENTER them through a lit f
 fold relieves the door's crowding — CLAIM C′ flips the door pill from ✗16/17 RED to ✓17/17 GREEN —
 proving DEPTH, not a scorer tweak, did it (the neg-control with detach OFF stays red).*
 
+## #378 — bug-fix: the gate now takes a REAL pointer click (green twice, broken under a real mouse twice — the #337 blind spot a third time)
+
+#376 made the fold *render* — at rest the tiles went `display:none` and a synthetic `dispatchEvent`/`.click()`
+descended, so every modeled twin, the new live-DOM test, AND the publisher's own probe reported green. But a
+REAL pointer click anywhere on the lit gate did NOTHING. The fix, three coupled defects + a hardened guard,
+NO change to `layout.js`/`solution.foot`/sky:
+
+- **(1) ROOT CAUSE — the real click was stolen by pan capture** (`index.src.html` platewalk). The map's
+  `pointerdown` pan handler bailed only for `.poi` (`if(e.target.closest(".poi")) return;`) — but the gate is
+  a `.gate-face`, not a `.poi`. So pressing the gate started a pan: `sheet.setPointerCapture(e.pointerId)` ran,
+  and capture on `#sheet` then STOLE the gate group's compatibility `click`, so the gate's own `click→descend`
+  listener never fired under a real pointer sequence. A synthetic `dispatchEvent` skips `pointerdown` + capture
+  entirely and poke-fires the listener directly — which is the ONLY reason everything was green. FIX: extend
+  the bail-out to navigate instead of pan — `if(e.target.closest(".poi") || e.target.closest(".gate-face")) return;`
+  — and mirror the same exclusion in the dblclick reset guard so a double-click on the gate doesn't reset.
+- **(2) INCOMPLETE FOLD — the wing's own chrome stayed drawn** (`index.src.html`). The tile-only fold left the
+  detached wing's CANONICAL chrome behind: `path.wing-bound` (the tall dashed wing capsule) and `text.wing-label`
+  (the district caption "AMUSEMENTS") stayed rendered round the gate, so the parent showed an empty dashed
+  capsule + label instead of just the lit gate in a clean hole. A module-level `WING_CHROME_BY_SLUG` map +
+  `wingChrome(slug)` helper now captures each wing's `<g>.wing-bound` and `<text>.wing-label` keyed by slug as
+  they're drawn; `setChildVisible` folds that chrome (`display:none`) keyed by the child plate's slug. DESIGN
+  CALL: the chrome stays folded DURING descent too (not revealed) — on descend the tiles RE-LAY to the airy
+  midway envelope (a different region), while the canonical capsule/label sit at the detached grounds-east
+  column, so revealing them would draw a misplaced stray box far from the midway the child view actually shows.
+  The `.child-midway` ground IS the wing's depiction in the child view.
+- **(3) THE BLIND TEST IS NOW REAL INPUT** (`tools/layout/gate-dom.test.mjs`, +150). The D3 descend step no
+  longer uses a synthetic `dispatchEvent`. D3a (CONTROL) keeps the synthetic dispatch — it still descends,
+  proving the click→go listener is WIRED (necessary, not sufficient). D3b (THE FIX) drives a TRUE input-level
+  click — agent-browser's `find role button click` issues a genuine CDP `Input.dispatchMouseEvent` press→release
+  at the gate's painted centre — the exact path the bug broke. D1b (chrome folded at rest) + D4b (chrome
+  re-folded after ascend) added as live-DOM assertions of defect 2. THE STANDING LESSON THIS GATE RECORDS:
+  **`el.dispatchEvent(...)` and `.click()` are NOT a real click** — they bypass `pointerdown`, pointer-capture,
+  drag-vs-click arbitration, and painted-pixel hit-testing, the exact machinery a real pointer (and a real bug)
+  lives on. A "live-DOM" test driven by `dispatchEvent` is still SYNTHETIC and stays blind to this whole class.
+  Guard-suite rule: real-pointer behavior is only proven by real input. (Investigation note: agent-browser's
+  low-level `mouse down/up` verbs press at (0,0) in this version and miss the gate — the ref/role-based `click`
+  is the correct real-input driver, a genuine press→release at the element's painted centre.)
+
+Verified by real eyes (publisher "Stilewright", served the repo root :8791, agent-browser session `ws378-pub`,
+both torn down by exact PID/name): at rest the lit gate sits in a CLEAN HOLE (0 capsules + 0 labels overlapping
+the gate footprint, 15 child tiles `display:none`); a single REAL CDP press→release click DESCENDS (midway
+opacity 1, the "back through the gate" ribbon up, the bar reads "DOWN IN AMUSEMENTS", the amusement rooms fan
+out across the midway); the ribbon ASCENDS and re-folds (midway 0, 15 tiles folded, gate re-enterable, chrome
+still folded); zero console errors; the live `#doortest` pill stays PASSABLE 17/17 GREEN throughout. Guards:
+`gate-dom.test.mjs` D1·D1b·D2·D3a·D3b·D4·D4b·D5 all green (exit 0); `fold.test.cjs` 6/6, `door.test.cjs` 17/17,
+`legibility.test.cjs` 29/29; `forge --check --all` all 120 current.
+
 ## #376 — bug-fix: the fold now EXECUTES in the live render (it shipped green on twins, broken in the browser)
 
 #369 shipped green on the modeled twins but the fold never ran in the live page: the 15 amusement

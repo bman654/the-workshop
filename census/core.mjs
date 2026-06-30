@@ -412,11 +412,11 @@ export function verdict(checks) {
    Σ === N. other === 0: every role string maps to one of the TWELVE base buckets
    (gardener + groundskeeper, the two keeper seats, both seated). */
 export const CLAIM = {
-  N: 1571,
-  distinctNames: 1275,
-  againNames: 147,        // hands that signed >1 mark (443 of the 1571 tokens)
+  N: 1573,
+  distinctNames: 1277,
+  againNames: 147,        // hands that signed >1 mark (443 of the 1573 tokens)
   byRole: {
-    publisher: 393, explorer: 357, director: 215, judge: 166, builder: 296,
+    publisher: 394, explorer: 357, director: 215, judge: 166, builder: 297,
     planter: 32, 'bug-fixer': 12, gardener: 10, 'grounds-worker': 16,
     steward: 7, architect: 3, groundskeeper: 2, other: 62
   }
