@@ -140,17 +140,16 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 (the already-built Music Room rep) `[rep] **The Music Room rep** — a rank of graduated brass organ pipes · aspect:vertical · room:sound-garden · accent:#cf7bff`.
 
 <!-- gauge:foundry-seeds:start -->
-- [rep] **The Arcade rep** — an upright arcade CABINET: a canted marquee crown overhanging a dark glowing screen bezel, a forward-angled control deck with two stub joysticks, a tapered kick-plate base; the SCREEN is the emissive pooled glow · aspect:vertical · room:arcade · accent:#cf7bff (sown #364 · contest #3)
 - [rep] **The Study rep** — a sloped scriptorium LECTERN bearing an open illuminated manuscript, a quill standing in an inkpot at its edge, the topmost verse-line glowing gold as if just written · aspect:mound · room:verse · accent:#cba15a (sown #364 · contest #3)
 - [rep] **The Hedge Maze rep** — a clipped topiary maze ARCHWAY: a low broad densely-clipped green hedge mass pierced by one dark arched mouth receding into the labyrinth, two stubby topiary finials capping the corners; cool path-light pooled deep in the mouth is the emissive glow · aspect:mound · room:daedalus · accent:#7fc98a (sown #364 · contest #3)
 - [rep] **The Hall of Mirrors rep** — a glass PRISM on a low optical bench, a thin white beam striking one face and fanning out the far side into a live spectrum band (the dispersed rays are the emissive accent — bloom at night, recede to a faint ghost by day; a barely-there hue-drift keeps the light alive) · aspect:horizontal · room:hall-of-mirrors · accent:#e0664f (sown #364 · contest #3)
 - [rep] **The Engine Room rep** — a beam-engine A-FRAME standing a big brass-rimmed spoked FLYWHEEL at one side, a rocking walking-beam pinned across the top, a connecting-rod dropping to a stubby cylinder; warm-amber heat at the firebox mouth is the emissive glow (PREP: re-judge aspect from rendered proportions — vertical if the A-frame dominates, horizontal if the flywheel+beam spread wins) · aspect:vertical · room:engine-room · accent:#ffb24a (sown #364 · contest #3)
 - [rep] **The Deep Hearth rep** — a slim cut-away basalt CHIMNEY-SECTION revealing a glowing magma conduit climbing through banded strata, an ember bloom at its foot; the molten conduit is the emissive glow · aspect:vertical · room:the-deep-hearth · accent:#ff7a3c (sown #364 · contest #3)
-<!-- ✝ BLOOMED #323: The Clockwork rep → the-gate/scene.js (drawRepClockwork) + rooms.js · after 164fc9c -->
 <!-- ✝ BLOOMED #336: The Hours rep → the-gate/scene.js (drawRepGnomon) · after 4b48727 -->
 <!-- ✝ BLOOMED #351: The Lodestone rep → the-gate/scene.js drawRepLodestoneHall + rooms.… · after a5cc3c3 -->
 <!-- ✝ BLOOMED #371: The Glasshouse rep → the-gate/scene.js drawRepStrangeGarden · after 39ea07d -->
 <!-- ✝ BLOOMED #377: The Map Room rep → the-gate/scene.js drawRepCartographer + rooms.js · after d332120 -->
+<!-- ✝ BLOOMED #384: The Arcade rep → the-gate/scene.js (drawRepArcade) + rooms.js · after 60429d8 -->
 <!-- gauge:foundry-seeds:end -->
 
 ---
