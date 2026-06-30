@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Rijke Tube · The Engine Room</title>
+<style>
+  :root{
+    --bg:#0b0908;            /* warm coal-black ground, kin to the Engine Room */
+    --plate1:#171210;
+    --plate2:#0f0b0a;
+    --ink:#f0e7dc;
+    --ink-dim:#a7988a;
+    --brass:#d9a441;
+    --brass-bright:#fbe9c8;
+    --brass-deep:#8f6520;
+    --brass-edge:rgba(217,164,65,0.36);
+    --fire:#e8703a;          /* heat / firebox orange */
+    --ember:#ffb454;
+    --condenser:#5fa8d3;
+    --panel:rgba(14,11,10,0.82);
+    --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --font-serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%; color:var(--ink); font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+    background:
+      radial-gradient(1200px 760px at 50% -8%, rgba(232,112,58,0.10), transparent 58%),
+      radial-gradient(900px 640px at 18% 112%, rgba(217,164,65,0.05), transparent 62%),
+      var(--bg);
+  }
+  /* riveted iron-plate texture, matching the wing landing */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 30px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 30px);
+    mix-blend-mode:overlay;
+  }
+
+  /* ── topbar ── */
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:40; display:flex; align-items:center;
+    justify-content:space-between; padding:13px 20px; gap:12px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(11,9,8,0.94), rgba(11,9,8,0)); }
+  .topbar a,.topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--brass); opacity:1; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); padding:6px 11px; border-radius:20px; white-space:nowrap;
+    border:1px solid var(--brass-edge); background:rgba(0,0,0,0.4); color:var(--ink-dim); cursor:pointer; user-select:none; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  .wrap{ position:relative; z-index:1; max-width:1080px; margin:0 auto; padding:84px 24px 60px; }
+  .eyebrow{ font:600 11px/1 var(--font-mono); letter-spacing:.32em; text-transform:uppercase; color:var(--fire); opacity:.9; text-align:center; }
+  h1{ font-family:var(--font-serif); font-weight:600; margin:14px 0 0; text-align:center;
+    font-size:clamp(34px,6.4vw,58px); line-height:1.04;
+    background:linear-gradient(176deg,#fbe9c8,#d9a441 56%,#8f6520);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .lede{ max-width:680px; margin:16px auto 0; text-align:center; font:15.5px/1.62 var(--font-serif); opacity:.9; }
+  .lede b{ color:var(--brass); } .lede .hot{ color:var(--fire); }
+
+  /* ── the console: tube on the left, the operator's panel on the right ── */
+  .console{ display:grid; grid-template-columns:320px 1fr; gap:30px; margin-top:34px;
+    background:linear-gradient(180deg,var(--plate1),var(--plate2));
+    border:1px solid rgba(217,164,65,0.12); border-radius:16px; padding:26px;
+    box-shadow:0 24px 60px rgba(0,0,0,0.45), inset 0 1px 0 rgba(232,112,58,0.08); }
+
+  /* the pipe bay */
+  .pipe-bay{ position:relative; display:flex; flex-direction:column; align-items:center; }
+  .pipe-bay .cap{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); margin-bottom:12px; opacity:.85; }
+  #pipe{ touch-action:none; cursor:grab; display:block; border-radius:12px;
+    background:radial-gradient(120% 90% at 50% 100%, rgba(20,12,9,0.9), #070504 72%); }
+  #pipe.dragging{ cursor:grabbing; }
+  .readout{ margin-top:14px; text-align:center; }
+  .note-line{ font-family:var(--font-serif); font-size:30px; font-weight:600; color:var(--brass-bright);
+    letter-spacing:.5px; min-height:36px; transition:color .3s; }
+  .note-line.silent{ color:var(--ink-dim); }
+  .hz-line{ font:12.5px/1.4 var(--font-mono); color:var(--ink-dim); margin-top:4px; }
+
+  /* the operator's panel */
+  .panel{ display:flex; flex-direction:column; gap:18px; }
+  .verdict{ border-radius:12px; padding:16px 18px; border:1px solid rgba(217,164,65,0.14); background:rgba(0,0,0,0.32); }
+  .verdict .state{ font-family:var(--font-serif); font-size:26px; font-weight:600; letter-spacing:.4px; }
+  .verdict .state.roar{ color:var(--fire); } .verdict .state.sputter{ color:var(--ember); }
+  .verdict .state.silent{ color:var(--ink-dim); }
+  .verdict .gline{ font:12px/1.5 var(--font-mono); color:var(--ink-dim); margin-top:6px; }
+  .verdict .gline b.pos{ color:#8fd79a; } .verdict .gline b.neg{ color:#f08a7a; }
+
+  .dials{ display:flex; gap:18px; }
+  .dial{ flex:1; text-align:center; }
+  .dial .knob{ position:relative; width:112px; height:112px; margin:0 auto; cursor:ns-resize; touch-action:none; outline:none; border-radius:50%; }
+  .dial .knob:focus-visible{ box-shadow:0 0 0 2px var(--brass); }
+  .dial .knob svg{ display:block; width:112px; height:112px; }
+  .dial .lab{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim); margin-top:10px; }
+  .dial .val{ font-family:var(--font-serif); font-size:16px; color:var(--brass); margin-top:3px; }
+  .dial .hint{ font:9.5px/1.4 var(--font-mono); color:var(--ink-dim); opacity:.6; margin-top:2px; }
+
+  .ctl{ }
+  .ctl .lab{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:7px; }
+  .ctl .lab .name{ font:600 10px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); }
+  .ctl .lab .val{ font:13px/1 var(--font-mono); color:var(--brass); font-variant-numeric:tabular-nums; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:5px; border-radius:3px;
+    background:linear-gradient(90deg, var(--brass-deep), var(--brass)); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:18px; height:18px;
+    border-radius:50%; background:radial-gradient(circle at 35% 30%, #fbe9c8, #d9a441 60%, #8f6520);
+    border:1px solid rgba(0,0,0,0.4); cursor:pointer; box-shadow:0 0 8px rgba(217,164,65,0.5); }
+  input[type=range]::-moz-range-thumb{ width:18px; height:18px; border:1px solid rgba(0,0,0,0.4);
+    border-radius:50%; background:radial-gradient(circle at 35% 30%, #fbe9c8, #d9a441 60%, #8f6520); cursor:pointer; }
+
+  .controls{ display:flex; gap:10px; flex-wrap:wrap; }
+  button.op{ font:600 12px/1 var(--font-mono); letter-spacing:.04em; padding:11px 15px; border-radius:9px; cursor:pointer;
+    border:1px solid rgba(232,112,58,0.3); background:rgba(232,112,58,0.07); color:var(--ink); transition:.2s; }
+  button.op:hover{ background:rgba(232,112,58,0.16); border-color:rgba(232,112,58,0.55); }
+  button.op.armed{ background:rgba(232,112,58,0.22); border-color:var(--fire); color:#fff; }
+  button.op.muted{ border-color:var(--ink-dim); color:var(--ink-dim); background:rgba(0,0,0,0.3); }
+
+  .challenge{ border-radius:12px; padding:14px 16px; border:1px dashed rgba(217,164,65,0.28); background:rgba(217,164,65,0.04); }
+  .challenge h3{ margin:0 0 6px; font:600 10px/1 var(--font-mono); letter-spacing:.2em; text-transform:uppercase; color:var(--brass); }
+  .challenge .task{ font:13px/1.5 var(--font-serif); }
+  .challenge .task b{ color:var(--ember); }
+  .challenge .won{ color:#8fd79a; font-weight:600; }
+  .challenge .moves{ font:11px/1.4 var(--font-mono); color:var(--ink-dim); margin-top:6px; }
+  .challenge .nx{ margin-top:8px; font:600 10px/1 var(--font-mono); color:var(--fire); background:none; border:none; cursor:pointer; padding:0; letter-spacing:.06em; }
+
+  /* the tiny mode-shape readout — a small SECONDARY chip, never a second panel */
+  .modeshape{ display:flex; align-items:center; gap:12px; border-radius:10px; padding:10px 12px;
+    border:1px solid rgba(217,164,65,0.1); background:rgba(0,0,0,0.28); }
+  .modeshape svg{ flex:0 0 84px; width:84px; height:46px; }
+  .modeshape .mtext{ font:10.5px/1.5 var(--font-mono); color:var(--ink-dim); }
+  .modeshape .mtext b.inphase{ color:#8fd79a; } .modeshape .mtext b.outphase{ color:#f08a7a; }
+
+  .law{ font:11.5px/1.6 var(--font-serif); color:var(--ink-dim); border-top:1px solid rgba(217,164,65,0.1); padding-top:14px; }
+  .law b{ color:var(--brass); }
+  .law .chip{ display:inline-block; font:600 9px/1 var(--font-mono); padding:3px 7px; border-radius:4px; vertical-align:middle; margin-top:6px; }
+  .law .chip.exact{ color:#8fd79a; border:1px solid rgba(120,200,130,0.4); background:rgba(28,52,36,0.3); }
+  .law .chip.modeled{ color:#e8c46a; border:1px solid rgba(220,180,90,0.4); background:rgba(60,48,20,0.3); }
+
+  @media (max-width:820px){ .console{ grid-template-columns:1fr; } #pipe{ width:100%; max-width:300px; } }
+  @media (prefers-reduced-motion:reduce){ }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">← The Engine Room</a>
+    <div class="selftest" id="selftest" title="Re-runs the Rayleigh self-test live.">checking…</div>
+  </div>
+
+  <div class="wrap">
+    <div class="eyebrow">Engine Room · bench the sixth · the heat engine you HEAR</div>
+    <h1>The Rijke Tube</h1>
+    <p class="lede">Every other engine in this wing turns <span class="hot">heat</span> into a turning shaft.
+      This one turns it into <b>a note you can hear across the room</b>. Drag the glowing gauze into the lower
+      half and the air column <b>finds its voice</b> on nothing but confined heat — past the midpoint it goes
+      dead silent. A taller pipe hums lower.</p>
+
+    <div class="console">
+      <div class="pipe-bay">
+        <div class="cap">drag the gauze · stoke the firebox</div>
+        <canvas id="pipe" width="300" height="520" aria-label="The glowing Rijke tube — drag the wire gauze up and down"></canvas>
+        <div class="readout">
+          <div id="noteLine" class="note-line silent">— silent —</div>
+          <div id="hzLine" class="hz-line">stoke the firebox, then drag the gauze low</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="verdict">
+          <div class="state silent" id="stateLabel">cold &amp; silent</div>
+          <div class="gline" id="gline">press <b>STOKE</b> to wake the firebox</div>
+        </div>
+
+        <div class="dials">
+          <div class="dial">
+            <div class="knob" id="heatKnob" role="slider" aria-label="Heat flux" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0"></div>
+            <div class="lab">Heat flux</div>
+            <div class="val" id="heatVal">—</div>
+            <div class="hint">drag ↑↓ · keys ↑↓</div>
+          </div>
+          <div class="dial">
+            <div class="knob" id="gauzeKnob" role="slider" aria-label="Gauze height" aria-valuemin="0" aria-valuemax="100" aria-valuenow="25" tabindex="0"></div>
+            <div class="lab">Gauze height</div>
+            <div class="val" id="gauzeVal">—</div>
+            <div class="hint">or drag it on the pipe</div>
+          </div>
+        </div>
+
+        <div class="ctl">
+          <div class="lab"><span class="name">Pipe length &nbsp;L &nbsp;(retunes the voice)</span><span class="val" id="lenVal">1.00 m</span></div>
+          <input type="range" id="rLen" min="0.45" max="1.85" step="0.005" value="1.00" aria-label="Pipe length in metres">
+        </div>
+
+        <div class="controls">
+          <button class="op" id="stokeBtn">🔥 STOKE — wake the firebox</button>
+          <button class="op muted" id="muteBtn" title="Estate-wide mute">🔊</button>
+        </div>
+
+        <div class="challenge">
+          <h3 id="chTitle">The Stoker’s Trial</h3>
+          <div class="task" id="chTask">…</div>
+          <div class="moves" id="chMoves"></div>
+          <button class="nx" id="chNext" hidden>↻ next trial</button>
+        </div>
+
+        <div class="modeshape" aria-hidden="true">
+          <svg id="modeSvg" viewBox="0 0 84 46" preserveAspectRatio="none"></svg>
+          <div class="mtext" id="modeText">the pressure wave <b>p′</b> and the heat pulse <b>q′</b> set the sign of γ.</div>
+        </div>
+
+        <div class="law">
+          <b>Rayleigh’s criterion.</b> A flame feeds the standing wave only when it gives its heat where the
+          air is being <i>compressed</i>. For a gauze at fractional height <b>u = x<sub>h</sub>/L</b> in an
+          open–open tube the growth rate reduces to <b>γ ∝ Q·sin(2π·u)</b>: it <b>sings in the lower half</b>
+          (0&lt;u&lt;½), falls <b>silent in the upper half</b> (½&lt;u&lt;1), and is <b>dead-zero exactly at
+          u=½</b>. Heat→0 silences it everywhere.
+          <br><span class="chip exact">sign of γ vs. position · midpoint=0 · heat→0 ⇒ silence — EXACT</span>
+          <span class="chip modeled">buoyant draft · orientation · settling time — MODELED</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════════════
+   THE RIJKE TUBE — CORE  (DOM-free; this slice is the BYTE-TWIN of core.mjs in
+   this folder — kept import/export-free so it is valid in both a <script> and a
+   module. A parity grep in core.test.mjs asserts the two slices are identical.)
+   The ONE idea: a heat engine whose work output is SOUND. The verdict, the
+   canvas, and the audio gain all read the SAME γ — eye and ear cannot drift.
+   ════════════════════════════════════════════════════════════════════════════ */
+// ===== RIJKE-CORE (byte-twin of core.mjs) BEGIN =====
+const C_AIR = 343;        // m/s — speed of sound in dry air (~20 °C, sea level)
+const TOL = 1e-12;        // amplitude gate: |γ| below this is treated as dead silence
+
+// Fundamental of an open–open pipe: f = c / 2L. A TALLER pipe hums LOWER.
+// (Exact relation; not part of the snapped instability core.)
+function fundamentalHz(L, c = C_AIR){ return c / (2 * L); }
+
+// THE RAYLEIGH GROWTH RATE (up to a positive constant): γ ∝ Q · sin(2π·u).
+//   u = the gauze's fractional height x_h/L ∈ (0,1); Q ≥ 0 is the heat input.
+// The midpoint SNAP: work in half-turns t = 2u so the nodes land on integers.
+// When t is an integer (u = 0, ½, 1) the sine is mathematically 0 → we return a
+// bit-exact 0, never the library's 1e-16. Q=0 short-circuits to 0 (neg control).
+function growthRate(u, Q){
+  if (!(Q > 0)) return 0;                 // no heat ⇒ no instability (negative control)
+  const t = 2 * u;                        // half-turns: a node sits at every integer t
+  if (t === Math.round(t)) return 0;      // EXACT node — the dead-silent midpoint/mouths
+  return Q * Math.sin(Math.PI * t);       // sin(2π·u) = sin(π·t), now provably non-node
+}
+
+// Does the tube sing? Strictly γ > TOL. Encodes confinement + heat: Q=0 ⇒ false,
+// the midpoint ⇒ false, the upper half ⇒ false.
+function sings(u, Q){ return growthRate(u, Q) > TOL; }
+
+// Audible amplitude of the saturated limit cycle: a positive γ drives the tone
+// up to a bounded plateau (tanh); γ ≤ TOL decays to silence. Smooth, in [0,1].
+// The TOL gate makes the audible midpoint TRULY dead — no 1e-16 whisper — so the
+// ear matches the pinned claim exactly. The onset/swell FEEL constants live in
+// the page (they touch no pinned claim); this is the saturation only.
+function targetAmp(u, Q, k = 3.2){ const g = growthRate(u, Q); return g > TOL ? Math.tanh(k * g) : 0; }
+// ===== RIJKE-CORE (byte-twin of core.mjs) END =====
+
+/* ════════════════════════════════════════════════════════════════════════════
+   FEEL CONSTANTS — kept OUTSIDE the snapped core (they touch no pinned claim).
+   The onset threshold and the regime classifier are the FEEL of the instrument:
+   below a small positive γ the tube tries but cannot HOLD a tone (it sputters),
+   above it the tube self-excites and ROARS. The verdict AND the audio both read
+   this one classifier, so the word on the panel and the sound never disagree.
+   ════════════════════════════════════════════════════════════════════════════ */
+const ONSET = 0.18;                        // normalised γ needed to hold a self-excited tone
+function regime(u, Q){
+  const g = growthRate(u, Q);
+  if (g <= TOL) return 'silent';
+  return g >= ONSET ? 'roar' : 'sputter';
+}
+// loudness the ear hears: 0 below onset, rising past it, saturating via targetAmp.
+function loudness(u, Q){
+  const g = growthRate(u, Q);
+  if (g <= ONSET) return 0;                 // below onset the tone cannot hold → silent
+  return targetAmp(u, Q);                   // saturated plateau (reads the SAME γ)
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   STATE — the one console the eye, ear & verdict all read.
+   ════════════════════════════════════════════════════════════════════════════ */
+const S = { u:0.25, Q:0.0, L:1.00, stoked:false };   // u=gauze height frac, Q∈[0,1] heat
+const $ = id => document.getElementById(id);
+
+/* ════════════════════════════════════════════════════════════════════════════
+   AUDIO — gesture-gated, ws:pref:muted-aware, never autoplay.
+   A warm flue-pipe voice: the tube's own fundamental f=c/2L plus a few partials,
+   swelling in with a soft attack when the gauze enters the singing zone, with a
+   breath of band-passed noise as the firebox draft you hear under the tone.
+   ════════════════════════════════════════════════════════════════════════════ */
+function readMutePref(){ try{ return localStorage.getItem('ws:pref:muted') === '1'; }catch(e){ return false; } }
+function writeMutePref(v){ try{ localStorage.setItem('ws:pref:muted', v ? '1' : '0'); }catch(e){} }
+
+// flue-pipe partial weights (a warm, slightly hollow tone) + a faint breathy chiff
+const PARTIALS = [ {h:1,w:1.00}, {h:2,w:0.34}, {h:3,w:0.20}, {h:4,w:0.09}, {h:6,w:0.05} ];
+const Audio = { ctx:null, master:null, comp:null, voiceBus:null, oscs:[], gains:[],
+  noise:null, noiseBp:null, noiseGain:null, on:false, muted:readMutePref(), lastAmp:0, lastHz:null };
+
+function ensureAudio(){
+  if (Audio.ctx) return Audio.ctx;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  const ctx = new AC();
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -10; comp.knee.value = 14; comp.ratio.value = 4;
+  comp.attack.value = 0.004; comp.release.value = 0.22;
+  const master = ctx.createGain(); master.gain.value = 0;      // estate mute lives here
+  const voiceBus = ctx.createGain(); voiceBus.gain.value = 0;  // the SWELL envelope (loudness)
+  voiceBus.connect(master); master.connect(comp); comp.connect(ctx.destination);
+  const base = fundamentalHz(S.L);
+  for (const p of PARTIALS){
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = base * p.h;
+    const g = ctx.createGain(); g.gain.value = p.w * 0.5;
+    o.connect(g); g.connect(voiceBus); o.start();
+    Audio.oscs.push(o); Audio.gains.push(g);
+  }
+  // a breath of band-passed noise — the firebox draft under the tone
+  const bufLen = Math.floor(ctx.sampleRate * 2), buf = ctx.createBuffer(1, bufLen, ctx.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < bufLen; i++) d[i] = Math.random() * 2 - 1;
+  const noise = ctx.createBufferSource(); noise.buffer = buf; noise.loop = true;
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = base; bp.Q.value = 2.4;
+  const ng = ctx.createGain(); ng.gain.value = 0;
+  noise.connect(bp); bp.connect(ng); ng.connect(master); noise.start();
+  Audio.ctx = ctx; Audio.comp = comp; Audio.master = master; Audio.voiceBus = voiceBus;
+  Audio.noise = noise; Audio.noiseBp = bp; Audio.noiseGain = ng; Audio.lastHz = base;
+  return ctx;
+}
+function sounding(){ return Audio.on && !Audio.muted && Audio.ctx; }
+
+// re-tune all partials (and the noise band) to the current pipe length.
+function retune(){
+  if (!Audio.ctx) return;
+  const base = fundamentalHz(S.L), now = Audio.ctx.currentTime;
+  Audio.oscs.forEach((o,i)=>{
+    const f = base * PARTIALS[i].h;
+    o.frequency.cancelScheduledValues(now); o.frequency.setValueAtTime(o.frequency.value, now);
+    o.frequency.linearRampToValueAtTime(f, now + 0.08);
+  });
+  if (Audio.noiseBp){ Audio.noiseBp.frequency.cancelScheduledValues(now);
+    Audio.noiseBp.frequency.setValueAtTime(Audio.noiseBp.frequency.value, now);
+    Audio.noiseBp.frequency.linearRampToValueAtTime(base, now + 0.08); }
+  Audio.lastHz = base;
+}
+
+// the SWELL — drive the voice bus toward loudness() with a soft attack (the tube
+// finding its voice) and a gentler release. The breath rides the regime.
+function updateVoice(){
+  if (!Audio.ctx) return;
+  const amp = loudness(S.u, S.Q);            // the SAME γ the canvas & verdict read
+  const reg = regime(S.u, S.Q);
+  const now = Audio.ctx.currentTime, g = Audio.voiceBus.gain;
+  const rising = amp > Audio.lastAmp;
+  const tau = rising ? 0.30 : 0.55;          // attack faster than decay — a satisfying swell-in
+  g.cancelScheduledValues(now); g.setValueAtTime(g.value, now);
+  g.linearRampToValueAtTime(amp * 0.85, now + tau);
+  // the draft breath: a faint hiss when sputtering or roaring, silent when dead
+  if (Audio.noiseGain){
+    const nt = reg === 'silent' ? 0 : (reg === 'sputter' ? 0.045 : 0.03 + amp * 0.04);
+    const ng = Audio.noiseGain.gain;
+    ng.cancelScheduledValues(now); ng.setValueAtTime(ng.value, now); ng.linearRampToValueAtTime(nt, now + 0.18);
+  }
+  Audio.lastAmp = amp;
+}
+function setMasterGain(target){
+  if (!Audio.ctx) return;
+  const g = Audio.master.gain, now = Audio.ctx.currentTime;
+  g.cancelScheduledValues(now); g.setValueAtTime(g.value, now);
+  g.linearRampToValueAtTime(target, now + 0.18);
+}
+function syncMuteBtn(){
+  const b = $('muteBtn');
+  b.classList.toggle('muted', Audio.muted);
+  b.textContent = Audio.muted ? '🔇' : '🔊';
+  b.title = Audio.muted ? 'Muted estate-wide — click to unmute' : 'Mute the estate';
+}
+// wake audio on the first genuine gesture (autoplay-safe).
+function wakeAudioOnGesture(){
+  if (Audio.muted) return;
+  const ctx = ensureAudio();
+  if (ctx && ctx.state === 'suspended') ctx.resume();
+  if (ctx){ Audio.on = true; retune(); setMasterGain(1); updateVoice(); }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE STOKER'S TRIAL — the tiny game. Two challenges alternate; each WIN prints
+   the WHY (Rayleigh's feedback going positive / negative), so the game teaches.
+   ════════════════════════════════════════════════════════════════════════════ */
+const Trial = { kind:'loudest', startMoves:0, won:false };
+let trialMoveCount = 0;            // counts dial / gauze nudges since trial start
+function newTrial(kind){
+  Trial.won = false; Trial.startMoves = trialMoveCount; Trial.kind = kind || 'loudest';
+  if (Trial.kind === 'silence'){
+    // start it ROARING; ask to silence in ≤2 moves (1 suffices: gauze → upper half).
+    S.u = 0.25; S.Q = 1.0; S.stoked = true; if (sounding()) updateVoice();
+    $('chTitle').textContent = 'The Stoker’s Trial · silence it';
+    $('chTask').innerHTML = 'The furnace is <b>roaring</b>. Silence it in <b>two moves</b> or fewer.';
+  } else {
+    $('chTitle').textContent = 'The Stoker’s Trial · the loudest hold';
+    $('chTask').innerHTML = 'Find the <b>loudest</b> setting the furnace can hold.';
+  }
+  $('chNext').hidden = true;
+  $('chMoves').textContent = '';
+  refresh();
+}
+function checkTrial(){
+  if (Trial.won) return;
+  const ld = loudness(S.u, S.Q), reg = regime(S.u, S.Q);
+  if (Trial.kind === 'loudest'){
+    if (ld >= 0.98){
+      Trial.won = true;
+      $('chTask').innerHTML = '<span class="won">✓ Loudest hold found.</span> The crest of sin(2π·u) sits at ' +
+        '<b>u=¼</b> with the firebox wide open — heat dumped exactly where the wave compresses hardest, so ' +
+        'Rayleigh’s feedback is most positive.';
+      $('chNext').hidden = false;
+    }
+  } else {  // silence in ≤2 moves
+    const used = trialMoveCount - Trial.startMoves;
+    if (reg === 'silent'){
+      Trial.won = true;
+      const how = used <= 2 ? ('<span class="won">✓ Silenced in ' + used + ' move' + (used === 1 ? '' : 's') + '.</span>')
+                            : ('Silenced — but it took ' + used + ' moves.');
+      $('chTask').innerHTML = how + ' Push the gauze into the <b>upper half</b> (or cut the heat) and the heat ' +
+        'now lands where the air is rushing OUT — Rayleigh’s feedback goes negative and drains the wave.';
+      $('chNext').hidden = false;
+    }
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE BRASS KNOBS — drag ↑/↓ (and keyboard ↑/↓), ARIA slider role. From E2.
+   ════════════════════════════════════════════════════════════════════════════ */
+function drawKnob(el, frac, accent){
+  const a0 = -220 * Math.PI / 180, a1 = 40 * Math.PI / 180;     // sweep lower-left → lower-right
+  const ang = a0 + (a1 - a0) * frac;
+  const cx = 56, cy = 56, r = 42;
+  let ticks = '';
+  for (let i = 0; i <= 10; i++){
+    const ta = a0 + (a1 - a0) * (i / 10);
+    const x1 = cx + Math.cos(ta) * (r + 4), y1 = cy + Math.sin(ta) * (r + 4);
+    const x2 = cx + Math.cos(ta) * (r + 9), y2 = cy + Math.sin(ta) * (r + 9);
+    ticks += '<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" stroke="rgba(217,164,65,0.3)" stroke-width="1.5"/>';
+  }
+  const sweepEnd = ang, largeArc = (sweepEnd - a0) > Math.PI ? 1 : 0;
+  const ax0 = cx + Math.cos(a0) * (r + 6.5), ay0 = cy + Math.sin(a0) * (r + 6.5);
+  const ax1 = cx + Math.cos(sweepEnd) * (r + 6.5), ay1 = cy + Math.sin(sweepEnd) * (r + 6.5);
+  const px = cx + Math.cos(ang) * (r - 8), py = cy + Math.sin(ang) * (r - 8);
+  el.innerHTML =
+    '<svg viewBox="0 0 112 112">' +
+      '<defs><radialGradient id="kg-' + el.id + '" cx="42%" cy="38%" r="70%">' +
+        '<stop offset="0%" stop-color="#3a2c20"/><stop offset="70%" stop-color="#241a12"/><stop offset="100%" stop-color="#140d09"/>' +
+      '</radialGradient></defs>' +
+      ticks +
+      '<path d="M ' + ax0.toFixed(1) + ' ' + ay0.toFixed(1) + ' A ' + (r + 6.5) + ' ' + (r + 6.5) + ' 0 ' + largeArc + ' 1 ' + ax1.toFixed(1) + ' ' + ay1.toFixed(1) + '" fill="none" stroke="' + accent + '" stroke-width="3" stroke-linecap="round" opacity="0.9"/>' +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="url(#kg-' + el.id + ')" stroke="rgba(217,164,65,0.4)" stroke-width="1.5"/>' +
+      '<line x1="' + cx + '" y1="' + cy + '" x2="' + px.toFixed(1) + '" y2="' + py.toFixed(1) + '" stroke="' + accent + '" stroke-width="4" stroke-linecap="round"/>' +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="6" fill="#1a120c" stroke="' + accent + '" stroke-width="2"/>' +
+    '</svg>';
+}
+function bindKnob(el, get, set){
+  let dragging = false, lastY = 0;
+  el.addEventListener('pointerdown', e => {
+    dragging = true; lastY = e.clientY; el.setPointerCapture(e.pointerId);
+    if (!Audio.ctx) wakeAudioOnGesture();
+    e.preventDefault();
+  });
+  el.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const f = Math.max(0, Math.min(1, get() - (e.clientY - lastY) / 200));
+    lastY = e.clientY; set(f);
+  });
+  el.addEventListener('pointerup', () => { dragging = false; });
+  el.addEventListener('keydown', e => {
+    if (e.key === 'ArrowUp'){ set(Math.min(1, get() + 0.04)); e.preventDefault(); }
+    else if (e.key === 'ArrowDown'){ set(Math.max(0, get() - 0.04)); e.preventDefault(); }
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE PIPE — E0's visual chassis: a glowing brass organ pipe (open-open), the
+   firebox heat-glow pool at the base, the singing-zone wash + the dead-midpoint
+   node line, the draggable hot wire-gauze, and a standing-wave envelope pinched
+   at the node whose swell tracks the saturated tone.
+   ════════════════════════════════════════════════════════════════════════════ */
+const cv = $('pipe'), ctx2d = cv.getContext('2d');
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+cv.width = 300 * DPR; cv.height = 520 * DPR; cv.style.width = '300px'; cv.style.height = '520px';
+ctx2d.scale(DPR, DPR);
+const W = 300, H = 520;
+const PIPE_TOP = 38, PIPE_BOT = 482;          // y-pixels of the tube ends (top = open mouth)
+const PIPE_X = 150, baseHalfW = 46;
+function uToY(u){ return PIPE_BOT - u * (PIPE_BOT - PIPE_TOP); }   // u=0 bottom, u=1 top
+function yToU(y){ return (PIPE_BOT - y) / (PIPE_BOT - PIPE_TOP); }
+function halfW(){ return baseHalfW * (0.78 + 0.22 / S.L); }       // taller pipe drawn slimmer
+
+let phase = 0;
+function drawPipe(){
+  const hw = halfW(), x0 = PIPE_X - hw, x1 = PIPE_X + hw;
+  const amp = loudness(S.u, S.Q);
+  const reg = regime(S.u, S.Q);
+  const singing = amp > 0;
+  ctx2d.clearRect(0, 0, W, H);
+
+  // ── firebox heat-glow pool at the base, brightness ∝ Q ──
+  const glowR = 60 + 60 * S.Q;
+  const baseGlow = ctx2d.createRadialGradient(PIPE_X, PIPE_BOT + 10, 4, PIPE_X, PIPE_BOT + 10, glowR);
+  baseGlow.addColorStop(0, `rgba(255,200,120,${0.42 * S.Q + 0.04})`);
+  baseGlow.addColorStop(0.45, `rgba(232,112,58,${0.30 * S.Q})`);
+  baseGlow.addColorStop(1, 'rgba(232,112,58,0)');
+  ctx2d.fillStyle = baseGlow;
+  ctx2d.fillRect(0, PIPE_BOT - glowR + 10, W, glowR + 30);
+
+  // ── the SINGING ZONE wash on the lower half (the Rayleigh region) ──
+  const midY = uToY(0.5);
+  const zone = ctx2d.createLinearGradient(0, PIPE_BOT, 0, midY);
+  zone.addColorStop(0, 'rgba(143,215,154,0.10)');
+  zone.addColorStop(1, 'rgba(143,215,154,0.0)');
+  ctx2d.fillStyle = zone;
+  ctx2d.fillRect(x0 - 6, midY, (x1 - x0) + 12, PIPE_BOT - midY);
+  // the midpoint node line — dead silent
+  ctx2d.strokeStyle = 'rgba(95,168,211,0.5)'; ctx2d.lineWidth = 1; ctx2d.setLineDash([4, 5]);
+  ctx2d.beginPath(); ctx2d.moveTo(x0 - 12, midY); ctx2d.lineTo(x1 + 12, midY); ctx2d.stroke();
+  ctx2d.setLineDash([]);
+  // zone labels — RIGHT-anchored to the canvas edge so they never clip past it
+  // (the gutter beside the pipe is too narrow for the full phrases at short L;
+  //  the lower/upper-half meaning is carried by the label's POSITION on the pipe
+  //  + spelled out in full in the intro and the Rayleigh WHY below).
+  ctx2d.font = '10px ui-monospace,Menlo,monospace'; ctx2d.textAlign = 'right';
+  const labelX = W - 6;
+  ctx2d.fillStyle = 'rgba(95,168,211,0.75)';  ctx2d.fillText('node · γ=0', labelX, midY + 3);
+  ctx2d.fillStyle = 'rgba(143,215,154,0.6)';  ctx2d.fillText('SINGS', labelX, (midY + PIPE_BOT) / 2);
+  ctx2d.fillStyle = 'rgba(167,152,138,0.55)'; ctx2d.fillText('silent', labelX, (PIPE_TOP + midY) / 2);
+  ctx2d.textAlign = 'left';
+
+  // ── the standing-wave envelope (open-open fundamental: antinodes at the ends,
+  //    a node at the center). Swells with loudness; sputter flickers. ──
+  phase += (reg === 'roar' ? 0.13 : 0.05);
+  const flick = reg === 'sputter' ? (0.4 + 0.6 * Math.abs(Math.sin(phase * 3.1))) : 1;
+  const swAmp = (hw - 6) * (0.12 + 0.88 * amp) * (singing ? (0.55 + 0.45 * Math.sin(phase)) * flick : 0.10);
+  ctx2d.lineWidth = 1.5;
+  ctx2d.strokeStyle = singing ? `rgba(255,200,110,${0.30 + 0.55 * amp})` : 'rgba(217,164,65,0.1)';
+  if (singing){ ctx2d.shadowColor = 'rgba(255,180,90,0.8)'; ctx2d.shadowBlur = (reg === 'roar' ? 13 : 5); }
+  for (const sgn of [1, -1]){
+    ctx2d.beginPath();
+    for (let y = PIPE_TOP + 4; y <= PIPE_BOT - 4; y += 4){
+      const yy = (y - PIPE_TOP) / (PIPE_BOT - PIPE_TOP);     // 0 top .. 1 bottom
+      const env = Math.abs(Math.cos(Math.PI * yy));          // 1 at both ends, 0 at center (pinched node)
+      const x = PIPE_X + sgn * swAmp * env;
+      if (y === PIPE_TOP + 4) ctx2d.moveTo(x, y); else ctx2d.lineTo(x, y);
+    }
+    ctx2d.stroke();
+  }
+  ctx2d.shadowBlur = 0;
+
+  // ── the brass pipe walls — gradient column, glowing when it sings ──
+  const wall = ctx2d.createLinearGradient(x0, 0, x1, 0);
+  wall.addColorStop(0,   '#5a4322');
+  wall.addColorStop(0.18,'#caa050');
+  wall.addColorStop(0.5, singing ? '#fbe9c8' : '#e7cd94');
+  wall.addColorStop(0.82,'#caa050');
+  wall.addColorStop(1,   '#5a4322');
+  ctx2d.save();
+  if (singing){ ctx2d.shadowColor = `rgba(217,164,65,${0.5 * amp})`; ctx2d.shadowBlur = 22 * amp; }
+  ctx2d.lineWidth = 4; ctx2d.strokeStyle = wall;
+  ctx2d.beginPath(); ctx2d.moveTo(x0, PIPE_TOP); ctx2d.lineTo(x0, PIPE_BOT); ctx2d.stroke();
+  ctx2d.beginPath(); ctx2d.moveTo(x1, PIPE_TOP); ctx2d.lineTo(x1, PIPE_BOT); ctx2d.stroke();
+  ctx2d.restore();
+  // open mouths at both ends (open-open) — elliptical lips
+  ctx2d.strokeStyle = '#caa050'; ctx2d.lineWidth = 2;
+  ctx2d.beginPath(); ctx2d.ellipse(PIPE_X, PIPE_TOP, hw, 7, 0, 0, Math.PI * 2); ctx2d.stroke();
+  ctx2d.beginPath(); ctx2d.ellipse(PIPE_X, PIPE_BOT, hw, 7, 0, 0, Math.PI * 2); ctx2d.stroke();
+
+  // ── the hot wire-gauze the visitor drags, glowing ∝ Q ──
+  const gy = uToY(S.u);
+  const gGlow = ctx2d.createRadialGradient(PIPE_X, gy, 2, PIPE_X, gy, hw + 10);
+  gGlow.addColorStop(0, `rgba(255,${150 + 80 * S.Q | 0},80,${0.55 * S.Q + 0.18})`);
+  gGlow.addColorStop(1, 'rgba(232,112,58,0)');
+  ctx2d.fillStyle = gGlow; ctx2d.beginPath();
+  ctx2d.ellipse(PIPE_X, gy, hw + 10, 13, 0, 0, Math.PI * 2); ctx2d.fill();
+  ctx2d.strokeStyle = `rgba(255,${170 + 60 * S.Q | 0},90,0.95)`; ctx2d.lineWidth = 2;
+  ctx2d.beginPath(); ctx2d.moveTo(x0 + 2, gy); ctx2d.lineTo(x1 - 2, gy); ctx2d.stroke();
+  ctx2d.lineWidth = 1; ctx2d.strokeStyle = `rgba(255,${190 + 50 * S.Q | 0},120,0.7)`;
+  for (let gx = x0 + 6; gx < x1 - 2; gx += 6){
+    ctx2d.beginPath(); ctx2d.moveTo(gx, gy - 4); ctx2d.lineTo(gx, gy + 4); ctx2d.stroke();
+  }
+  // grip handle hint
+  ctx2d.fillStyle = 'rgba(251,233,200,0.85)';
+  ctx2d.beginPath(); ctx2d.arc(x1 + 1, gy, 4, 0, Math.PI * 2); ctx2d.fill();
+
+  requestAnimationFrame(drawPipe);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE TINY MODE-SHAPE READOUT — a small secondary chip. p′ pressure ∝ cos(πx/L),
+   u′ velocity ∝ sin(πx/L), and a gauze marker colored by the sign of γ, so
+   "p′ and q′ in phase" becomes touchable. Minimal — never a second large panel.
+   ════════════════════════════════════════════════════════════════════════════ */
+function drawModeShape(){
+  const g = growthRate(S.u, S.Q);
+  const wv = 84, hv = 46, padX = 4;
+  // x runs 0..1 along the tube (left=bottom mouth, right=top mouth) to match the
+  // open-open fundamental: pressure antinode at center, velocity antinodes at ends.
+  let pPath = '', uPath = '';
+  for (let i = 0; i <= 40; i++){
+    const x = i / 40;
+    const p = Math.cos(Math.PI * (x - 0.5));      // pressure: 0 at ends, ±1 at center
+    const vel = Math.sin(Math.PI * (x - 0.5));    // velocity: ±1 at ends, 0 at center
+    const px = padX + x * (wv - 2 * padX);
+    const py = hv / 2 - p * (hv / 2 - 6);
+    const uy = hv / 2 - vel * (hv / 2 - 6);
+    pPath += (i === 0 ? 'M' : 'L') + px.toFixed(1) + ' ' + py.toFixed(1) + ' ';
+    uPath += (i === 0 ? 'M' : 'L') + px.toFixed(1) + ' ' + uy.toFixed(1) + ' ';
+  }
+  // gauze marker at fractional height u (here mapped left→right as 1-u so "low"
+  // shows near the center pressure antinode = the in-phase region)
+  const gx = padX + (S.u) * (wv - 2 * padX);
+  const inPhase = g > TOL;
+  const mc = inPhase ? '#8fd79a' : (g < -TOL ? '#f08a7a' : '#a7988a');
+  $('modeSvg').innerHTML =
+    '<line x1="0" y1="' + (hv / 2) + '" x2="' + wv + '" y2="' + (hv / 2) + '" stroke="rgba(167,152,138,0.25)" stroke-width="0.7"/>' +
+    '<path d="' + pPath + '" fill="none" stroke="#d9a441" stroke-width="1.6"/>' +
+    '<path d="' + uPath + '" fill="none" stroke="rgba(95,168,211,0.7)" stroke-width="1.2" stroke-dasharray="2 2"/>' +
+    '<line x1="' + gx.toFixed(1) + '" y1="3" x2="' + gx.toFixed(1) + '" y2="' + (hv - 3) + '" stroke="' + mc + '" stroke-width="1.6"/>' +
+    '<circle cx="' + gx.toFixed(1) + '" cy="' + (hv / 2) + '" r="2.6" fill="' + mc + '"/>';
+  const mt = $('modeText');
+  if (g > TOL) mt.innerHTML = 'pressure <b>p′</b> (gold) and the heat pulse <b>q′</b> are <b class="inphase">in phase</b> here — the wave is fed.';
+  else if (g < -TOL) mt.innerHTML = 'pressure <b>p′</b> and the heat pulse <b>q′</b> are <b class="outphase">out of phase</b> — the wave is drained.';
+  else mt.innerHTML = 'at the <b>node</b> the pressure swing is zero — heat does no work on the wave (γ = 0).';
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   READOUT — note name, Hz.
+   ════════════════════════════════════════════════════════════════════════════ */
+const NOTE_NAMES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+function hzToNote(hz){
+  const midi = Math.round(69 + 12 * Math.log2(hz / 440));
+  const name = NOTE_NAMES[((midi % 12) + 12) % 12], oct = Math.floor(midi / 12) - 1;
+  const exact = 440 * Math.pow(2, (midi - 69) / 12);
+  const cents = Math.round(1200 * Math.log2(hz / exact));
+  return { label: name + oct, cents };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   REFRESH — recompute the one console, repaint the panel from it.
+   ════════════════════════════════════════════════════════════════════════════ */
+function refresh(){
+  const reg = regime(S.u, S.Q), g = growthRate(S.u, S.Q), hz = fundamentalHz(S.L);
+  // verdict
+  const st = $('stateLabel'), gl = $('gline');
+  st.className = 'state ' + reg;
+  st.textContent = !S.stoked ? 'cold & silent' : (reg === 'roar' ? 'ROARING' : (reg === 'sputter' ? 'sputtering…' : 'silent'));
+  const gsign = g > TOL ? '<b class="pos">γ &gt; 0</b>' : (g < -TOL ? '<b class="neg">γ &lt; 0</b>' : '<b>γ = 0</b>');
+  gl.innerHTML = 'γ = Q·sin(2π·u) = ' + g.toFixed(3) + '  ' + gsign +
+    ' · u=' + S.u.toFixed(2) + ' · Q=' + (S.Q * 100).toFixed(0) + '% · f=' + hz.toFixed(0) + ' Hz';
+  // note readout
+  const nl = $('noteLine'), hl = $('hzLine');
+  if (reg !== 'silent'){
+    const n = hzToNote(hz);
+    nl.classList.remove('silent');
+    nl.textContent = n.label + (n.cents ? ` ${n.cents > 0 ? '+' : ''}${n.cents}¢` : '');
+    hl.textContent = `${hz.toFixed(1)} Hz  ·  f = c / 2L`;
+  } else {
+    nl.classList.add('silent'); nl.textContent = '— silent —';
+    if (S.Q <= 0 || !S.stoked) hl.textContent = `${hz.toFixed(1)} Hz · no heat — no voice`;
+    else if (g === 0) hl.textContent = `${hz.toFixed(1)} Hz · the dead midpoint node`;
+    else if (g < 0) hl.textContent = `${hz.toFixed(1)} Hz · upper half drains the wave`;
+    else hl.textContent = `${hz.toFixed(1)} Hz · below onset — it can't hold`;
+  }
+  // dials
+  $('heatVal').textContent = (S.Q * 100).toFixed(0) + '%';
+  $('gauzeVal').textContent = 'u = ' + S.u.toFixed(2) + (S.u < 0.5 ? '  (low)' : (S.u > 0.5 ? '  (high)' : '  (½)'));
+  drawKnob($('heatKnob'), S.Q, '#e8703a');
+  drawKnob($('gauzeKnob'), 1 - S.u, '#d9a441');     // dial up = gauze up
+  $('heatKnob').setAttribute('aria-valuenow', String(Math.round(S.Q * 100)));
+  $('gauzeKnob').setAttribute('aria-valuenow', String(Math.round(S.u * 100)));
+  $('lenVal').textContent = S.L.toFixed(2) + ' m';
+  // mode shape
+  drawModeShape();
+  // audio
+  if (sounding()){ retune(); updateVoice(); }
+  // trial
+  checkTrial();
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE SELF-TEST PILL — re-runs the inlined core LIVE + DOM wiring checks.
+   ════════════════════════════════════════════════════════════════════════════ */
+function runSelfTest(){
+  const checks = [];
+  const add = (name, ok, info, star) => checks.push({ name, ok:!!ok, info: info || '', star:!!star });
+  let _s = 0x9e3779b9;
+  const rnd = () => { _s ^= _s << 13; _s ^= _s >>> 17; _s ^= _s << 5; _s >>>= 0; return _s / 4294967296; };
+
+  // (1)★ lower half sings
+  { let ok = true, w = '';
+    for (let k = 0; k < 600; k++){ const u = 0.001 + rnd() * 0.498, Q = 0.05 + rnd() * 0.95;
+      const g = growthRate(u, Q); if (!(g > TOL)){ ok = false; w = `u=${u.toFixed(3)} γ=${g.toExponential(2)}`; break; } }
+    add('(1)★ lower half (0<u<½), Q>0 ⇒ γ>0 — the pipe sings (600 samples)', ok, ok ? 'every lower-half config sang' : 'FAIL ' + w, true); }
+  // (2)★ upper half silent
+  { let ok = true, w = '';
+    for (let k = 0; k < 600; k++){ const u = 0.502 + rnd() * 0.496, Q = 0.05 + rnd() * 0.95;
+      const g = growthRate(u, Q); if (!(g < -TOL)){ ok = false; w = `u=${u.toFixed(3)} γ=${g.toExponential(2)}`; break; } }
+    add('(2)★ upper half (½<u<1), Q>0 ⇒ γ<0 — the voice dies (600 samples)', ok, ok ? 'every upper-half config was silent' : 'FAIL ' + w, true); }
+  // (3)★ midpoint exactly dead
+  { let ok = true, w = '';
+    for (let k = 0; k < 300; k++){ const Q = rnd() * 1000; if (growthRate(0.5, Q) !== 0){ ok = false; w = `Q=${Q.toFixed(2)}`; break; } }
+    ok = ok && growthRate(0.5, 1) === 0;
+    add('(3)★ midpoint u=½ ⇒ γ === 0 EXACTLY for any Q (bit-exact, the snap holds)', ok, ok ? `Math.sin(π)=${Math.sin(Math.PI).toExponential(1)}≠0, but γ(½)=0 exactly` : 'FAIL ' + w, true); }
+  // (4)★ neg control
+  { let ok = true, w = '';
+    for (let k = 0; k < 400; k++){ const u = rnd(); if (growthRate(u, 0) !== 0 || targetAmp(u, 0) !== 0 || sings(u, 0)){ ok = false; w = `u=${u.toFixed(3)}`; break; } }
+    add('(4)★ neg-control: Q=0 ⇒ γ=0 & targetAmp=0 ∀u & sings()=false — heat AND confinement required', ok, ok ? 'no heat ⇒ no voice anywhere' : 'FAIL ' + w, true); }
+  // (5)★ antisymmetry + sign flip
+  { let ok = true, w = '';
+    for (let k = 0; k < 400; k++){ const u = 0.001 + rnd() * 0.498, Q = 0.05 + rnd() * 0.95;
+      if (Math.abs(growthRate(u, Q) + growthRate(1 - u, Q)) > 1e-12){ ok = false; w = `u=${u.toFixed(3)}`; break; } }
+    ok = ok && growthRate(0.5 - 1e-4, 0.6) > 0 && growthRate(0.5 + 1e-4, 0.6) < 0;
+    add('(5)★ antisymmetry γ(u)=−γ(1−u) to machine ε & sign flips across ½', ok, ok ? 'the upper half mirrors the lower' : 'FAIL ' + w, true); }
+  // (6)★ f=c/2L strictly decreasing
+  { let ok = true, w = '', prev = Infinity;
+    for (let i = 0; i <= 80; i++){ const L = 0.4 + i * 0.0185, f = fundamentalHz(L); if (!(f < prev)){ ok = false; w = `L=${L.toFixed(3)}`; break; } prev = f; }
+    add('(6)★ f=c/2L strictly decreasing in L — a taller pipe hums lower (81 steps)', ok, ok ? `f(1m)=${fundamentalHz(1).toFixed(1)} Hz, f(1.8m)=${fundamentalHz(1.8).toFixed(1)} Hz` : 'FAIL ' + w, true); }
+  // (7) loudness/verdict single source of truth: silent ⟺ no loudness; any loudness ⟹ γ>0
+  { let ok = true, w = '';
+    for (let k = 0; k < 600; k++){ const u = 0.001 + rnd() * 0.998, Q = rnd();
+      const r = regime(u, Q), ld = loudness(u, Q), g = growthRate(u, Q);
+      if (r === 'silent' && ld > 0){ ok = false; w = `silent w/ loud u=${u.toFixed(3)}`; break; }
+      if (ld > 0 && !(g > 0)){ ok = false; w = `loud w/ γ≤0 u=${u.toFixed(3)}`; break; } }
+    add('(7) regime(silent) ⟺ loudness 0, and any loudness ⟹ γ>0 — verdict, ear & γ never disagree', ok, ok ? 'one ledger' : 'FAIL ' + w); }
+  // (8) source purity
+  { const src = growthRate.toString();
+    const leaked = ['document','window','AudioContext','canvas','localStorage','C_AIR','fundamentalHz'].filter(t => src.includes(t));
+    add('(8) source purity: growthRate() references no DOM/audio/pipe — it is pure math', leaked.length === 0, leaked.length === 0 ? 'pure: only u and Q' : 'LEAKED ' + leaked.join(',')); }
+  // (D1) DOM wiring: dials + verdict reflect the core
+  { add('(D1) heat & gauze dials present and verdict reads core regime', !!$('heatKnob') && !!$('gauzeKnob') &&
+      (!S.stoked || $('stateLabel').classList.contains(regime(S.u, S.Q))), 'eye reads the core'); }
+
+  const pass = checks.filter(c => c.ok).length, total = checks.length, green = pass === total;
+  const el = $('selftest');
+  el.className = 'selftest ' + (green ? 'ok' : 'bad');
+  el.textContent = `self-test ${pass}/${total}` + (green ? ' ✓' : ' ✗');
+  el.title = checks.map(c => (c.ok ? '✓' : '✗') + ' ' + c.name).join('\n');
+  console.log('%cThe Rijke Tube — in-page self-test', 'color:#d9a441;font-weight:bold');
+  for (const c of checks) console.log((c.ok ? '  ✓ ' : '  ✗ ') + c.name + (c.info ? '  ·  ' + c.info : ''));
+  console.log(`${pass}/${total} ${green ? '✓ ALL GREEN' : '✗ FAILURES'}`);
+  return { checks, pass, total };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CONTROLS WIRING + BOOT
+   ════════════════════════════════════════════════════════════════════════════ */
+// drag the gauze directly on the pipe (also wakes audio on first grab)
+let dragging = false;
+function pointerU(ev){
+  const r = cv.getBoundingClientRect();
+  const y = (ev.clientY - r.top) * (H / r.height);
+  return Math.max(0.02, Math.min(0.98, yToU(y)));
+}
+function startDrag(ev){
+  dragging = true; cv.classList.add('dragging');
+  if (!Audio.ctx) wakeAudioOnGesture();
+  S.u = pointerU(ev); S.stoked = true; if (S.Q <= 0) S.Q = 0.7; trialMoveCount++; refresh(); ev.preventDefault();
+}
+function moveDrag(ev){ if (!dragging) return; S.u = pointerU(ev); trialMoveCount++; refresh(); }
+function endDrag(){ dragging = false; cv.classList.remove('dragging'); }
+cv.addEventListener('pointerdown', startDrag);
+window.addEventListener('pointermove', moveDrag);
+window.addEventListener('pointerup', endDrag);
+
+function boot(){
+  bindKnob($('heatKnob'), () => S.Q, v => { S.Q = v; if (v > 0) S.stoked = true; trialMoveCount++; refresh(); });
+  bindKnob($('gauzeKnob'), () => 1 - S.u, v => { S.u = 1 - v; trialMoveCount++; refresh(); });
+
+  $('rLen').addEventListener('input', e => { S.L = +e.target.value; refresh(); });
+
+  $('stokeBtn').addEventListener('click', function(){
+    S.stoked = true; if (S.Q < 0.6) S.Q = 0.85;       // a stoke wakes the firebox
+    wakeAudioOnGesture(); refresh();
+    this.classList.add('armed'); this.textContent = '🔥 stoked';
+  });
+  $('muteBtn').addEventListener('click', function(){
+    Audio.muted = !Audio.muted; writeMutePref(Audio.muted);
+    if (Audio.muted) setMasterGain(0); else if (Audio.on) setMasterGain(1);
+    syncMuteBtn();
+  });
+  $('chNext').addEventListener('click', () => newTrial(Trial.kind === 'loudest' ? 'silence' : 'loudest'));
+  $('selftest').addEventListener('click', runSelfTest);
+
+  // estate-wide mute sync (cross-tab)
+  window.addEventListener('storage', function(e){
+    if (e.key !== 'ws:pref:muted') return;
+    Audio.muted = readMutePref();
+    if (Audio.muted) setMasterGain(0); else if (Audio.on) setMasterGain(1);
+    syncMuteBtn();
+  });
+
+  syncMuteBtn();
+  newTrial('loudest');
+  runSelfTest();
+  requestAnimationFrame(drawPipe);
+}
+
+// test affordances for headless QA
+window.__rijkeSelfTest = runSelfTest;
+window.__rijkeDebug = () => ({
+  on: Audio.on, muted: Audio.muted, ctxState: Audio.ctx ? Audio.ctx.state : 'none',
+  oscCount: Audio.oscs.length, voiceBus: Audio.voiceBus ? +Audio.voiceBus.gain.value.toFixed(4) : null,
+  master: Audio.master ? +Audio.master.gain.value.toFixed(4) : null,
+  baseHz: Audio.oscs[0] ? +Audio.oscs[0].frequency.value.toFixed(1) : null,
+  regime: regime(S.u, S.Q), gamma: +growthRate(S.u, S.Q).toFixed(5), S: { ...S }
+});
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+</script>
+</body>
+</html>
