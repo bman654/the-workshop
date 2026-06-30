@@ -143,6 +143,20 @@ function crowdedCorpus(n) {
              airy midway geometry the render actually produces (the box shifted by relayChild's
              delta, the centre the relay foot centre) — the DEPTH that flips C′ ✗16/17→✓17/17.
              Both callers build it identically from DoorClaims.childFootOf(Layout.plates(live)).
+   modelBox  — (optional, #386) id → {x,y,w,h}|null : the DETERMINISTIC modeled SOLVED box
+             (Legibility.modelSolvedBoxes — modeled label dims + a modeled anneal position),
+             a pure function of the declarations + layout, IDENTICAL at every viewport. When
+             supplied, CLAIM C′'s NON-TRIVIALITY tier-1 count scores against THIS box instead
+             of the box-source `boxOf` — so C′ becomes a viewport-INVARIANT property of the
+             canonical layout, NOT of the browser's live getBBox font rasterization (whose
+             ±sub-pixel width noise perturbs the anneal and tipped the count ±2 across window
+             shapes, flipping the gate red↔green though the layout/frame-scale k/gap are all
+             viewport-invariant). The live pill + the node twin pass the byte-identical
+             modelBox, so they agree by construction. CLAIM B's overlap sweep, CLAIM C's
+             overlap sweep, and the rest/full composites still read the LIVE `boxOf` — they
+             measure what the eye actually renders; only C′'s layout invariant moves to the
+             model. Absent ⇒ C′ falls back to `boxOf` (the pre-#386 behaviour, for callers that
+             don't supply a model). The relay (childFoot) shift is applied to modelBox too.
    detachOff — (optional, #369 NEG-CONTROL) when true the internal partition uses
              Layout.plates(.., {detachOff:true}) (no child plate; the detached wing rides its
              crowded parent again) AND childFoot is ignored. C′ MUST go RED — the canonical
@@ -175,6 +189,10 @@ function runDoorClaims(args) {
   // F4's opts.detachOff. (childFoot is left as-is — it simply matches no room under detachOff.)
   var detachOff = !!args.detachOff;
   if (detachOff) childFoot = null;   // the pre-fold control: no relay, the rooms ride the parent
+  // #386 — the DETERMINISTIC modeled SOLVED-box source for CLAIM C′'s non-triviality invariant.
+  // id → {x,y,w,h}|null, a pure function of the declarations + layout (Legibility.modelSolvedBoxes),
+  // IDENTICAL at every viewport. Absent ⇒ C′ falls back to the live boxOf (pre-#386 behaviour).
+  var modelBox = args.modelBox || null;
   var L = Legibility, lines = [];
   function check(name, cond, detail) { lines.push({ name: name, ok: !!cond, detail: detail || '' }); }
 
@@ -296,6 +314,25 @@ function runDoorClaims(args) {
     }
     var boxOfC = function (id) { return relayBox[id] || boxOf(id); };
     var placesC = places.map(function (p) { return relayView[p.id] || p; });
+
+    // #386 — the DETERMINISTIC modeled box-source for CLAIM C′'s non-triviality count. Same
+    // relay shift as boxOfC, but the base box is the MODELED SOLVED box (modelBox), so the
+    // count is a pure function of the layout — invariant at every viewport. When modelBox is
+    // absent it IS boxOfC (the pre-#386 fallback). CLAIM C's OVERLAP sweep stays on boxOfC
+    // (the live getBBox boxes — it measures rendered reality); ONLY C′'s tier-1 count below
+    // reads boxOfM. The relay box for a child room is the MODELED box shifted by the same delta.
+    var relayBoxM = {};
+    if (childFoot && modelBox) {
+      for (var pm = 0; pm < places.length; pm++) {
+        var rpm = places[pm], rfm = childFoot[rpm.id]; if (!rfm) continue;
+        var mb = modelBox(rpm.id); var tlm = footTopLeft(rpm);
+        if (mb) relayBoxM[rpm.id] = { x: mb.x + (rfm.x - tlm.x), y: mb.y + (rfm.y - tlm.y), w: mb.w, h: mb.h };
+      }
+    }
+    var boxOfM = modelBox
+      ? function (id) { return relayBoxM[id] || modelBox(id) || boxOfC(id); }
+      : boxOfC;
+
     var byPlate = {};
     for (var pi2 = 0; pi2 < places.length; pi2++) {
       var pp2 = places[pi2]; if (!boxOfC(pp2.id)) continue;
@@ -308,24 +345,31 @@ function runDoorClaims(args) {
       tourPlates++;
       var ids2 = byPlate[pk], fr = part.frame[pk] || { cx: 720, cy: 450, k: 1 };
       tourRaw += ids2.length;
+      // CLAIM C — the RENDERED overlap sweep, over the LIVE boxes (boxOfC). Measures the eye.
       var lit = declutterIds(ids2, placesC, boxOfC, { x: fr.cx, y: fr.cy }, fr.k || 1);
       tourLit += lit.length;
-      var litSet = {}; for (var li = 0; li < lit.length; li++) litSet[lit[li]] = 1;
       for (var ai = 0; ai < lit.length; ai++) for (var aj = ai + 1; aj < lit.length; aj++) {
         var ba2 = boxOfC(lit[ai]), bb2 = boxOfC(lit[aj]); if (!ba2 || !bb2) continue;
         tourPairs++; if (overlapRect(ba2, bb2)) tourOverlaps++;
       }
+      // CLAIM C′ — the NON-TRIVIALITY tier-1 count, over the MODELED boxes (boxOfM). A
+      // viewport-INVARIANT layout property: the SAME greedy declutter, but on the deterministic
+      // modeled SOLVED boxes — so the survivor count cannot wobble with the browser's live font
+      // rasterization (which it did, tipping the gate red↔green by ±2 across window shapes, #386).
+      var litM = declutterIds(ids2, placesC, boxOfM, { x: fr.cx, y: fr.cy }, fr.k || 1);
+      var litMSet = {}; for (var lm = 0; lm < litM.length; lm++) litMSet[litM[lm]] = 1;
       for (var ti = 0; ti < ids2.length; ti++) {
         var tp = byPlateLookup(places, ids2[ti]);
-        if (tp && tp.tier === 1) { tier1raw++; if (litSet[ids2[ti]]) tier1lit++; }
+        if (tp && tp.tier === 1) { tier1raw++; if (litMSet[ids2[ti]]) tier1lit++; }
       }
     }
     tourRan = true;
     var tier1ok = tier1raw === 0 || tier1lit >= Math.ceil(tier1raw * 0.6);
     check('CLAIM C — guided-tour district label set: ZERO rendered overlaps (all ' + tourPlates + ' presets)',
       tourOverlaps === 0, '[' + tourOverlaps + ' overlaps / ' + tourPairs + ' pairs · ' + tourLit + '/' + tourRaw + ' labels lit across ' + tourPlates + ' plates]');
-    check('CLAIM C′ — the tour declutter is non-trivial (keeps ≥60% of tier-1 anchors)',
-      tier1ok, '[' + tier1lit + '/' + tier1raw + ' tier-1 anchors survive]');
+    check('CLAIM C′ — the tour declutter is non-trivial: ≥60% of tier-1 anchors survive by the ' +
+      'viewport-INVARIANT modeled box (a layout property, not live font rasterization)',
+      tier1ok, '[' + tier1lit + '/' + tier1raw + ' tier-1 anchors survive' + (modelBox ? ' · modeled' : '') + ']');
   } catch (e) {
     check('CLAIM C — guided-tour district label set: ZERO rendered overlaps',
       false, '[sweep threw: ' + e + ']');

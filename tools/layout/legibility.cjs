@@ -89,6 +89,7 @@ const BOX_H_NAME = 18;     // NAME-ONLY block height (just the 16.5px serif name
 const PAD = 3;             // LABEL_PAD — the backing-stroke halo (index.src.html:2004)
 const LABEL_GAP = 14;      // LABEL_GAP (index.src.html:2000) — leader breathing room
 const LABEL_BOUNDS = { x: 46, y: 52, w: 1348, h: 790 }; // index.src.html:1995
+const LABEL_SEED = 0x5EED; // LABEL_SEED (index.src.html:3504) — the placeLabels solver seed
 
 /* composite weights + derived threshold (see header) */
 const WEIGHTS = { gap: 0.5, density: 0.3, leader: 0.2 };
@@ -171,6 +172,71 @@ function labelBoxWH(r, opts) {
     : (r.companion ? BOX_H_COMPANION : BOX_H_BASE) + 2 * PAD;
   return { w, h };
 }
+
+/* ── THE MODELED SOLVED-BOX MAP (single source — the door pill's CLAIM C′ + the twins) ──
+   modelSolvedBoxes(places, layout) → Map(id → {x,y,w,h}) : the DETERMINISTIC, browserless
+   model of the front door's SOLVED label boxes. It reproduces index.src.html placeLabels()
+   PASS 1 EXACTLY — the SAME footprints + FURNITURE + gnomon-HUD furniture + engraved zone-
+   caption obstacles, the SAME LabelPlacer.solve over the SAME seed with the positions:8→4
+   fallback — but feeds the solver the calibrated CHAR_W box dims (labelBoxWH) INSTEAD of the
+   browser's live getBBox text widths. So unlike the page's runtime SOLVED map (whose box
+   {w,h} come from getBBox font rasterization, and whose annealed POSITIONS therefore wobble
+   by viewport/DPI), this map is a pure function of the DECLARATIONS + the layout — IDENTICAL
+   at every viewport. It is the box-source the door pill's CLAIM C′ non-triviality invariant
+   scores against (a layout property, not a render artifact), and the SAME map tools/layout/
+   door.test.cjs + fold.test.cjs build, so the live pill and the node twins agree by
+   construction. (CLAIM B + the rest/full composites + CLAIM C's overlap sweep still read the
+   LIVE getBBox boxes — they measure rendered reality; only C′'s invariant reads this model.)
+
+   `places` carries the canonical solved footprints (x/y/w/h|r), exactly as placeLabels reads
+   them after copying layout.foot onto PLACES. `opts.furniture` is the page's static FURNITURE
+   obstacle list (the door pill + the twins pass index.src.html's FURNITURE) — the gnomon HUD +
+   the engraved zone captions are derived deterministically inside, so the model never depends on
+   a runtime-populated array. Pure; no DOM; same output in Node + browser. */
+function modelSolvedBoxes(places, layout, opts) {
+  opts = opts || {};
+  const placed = places.filter(p => !p.locked && layout.foot && layout.foot[p.id]);
+  // obstacles = footprints + the static FURNITURE + the gnomon HUD furniture + the engraved
+  // zone-caption boxes — reproduced from the page's OWN derivation (placeLabels + the gnomon
+  // HUD push). The page seeds FURNITURE/HUD/zone identically; we rebuild HUD + zone here
+  // deterministically so the model never depends on a runtime-populated array.
+  const footObstacles = placed.map(p => footBBox(p));
+  const FURNITURE = opts.furniture || [];
+  const HOURS_FURNITURE = [];
+  const gnomon = places.find(p => p.id === 'gnomon');
+  if (gnomon && layout.foot && layout.foot.gnomon) {
+    const GX = gnomon.x + gnomon.w / 2, GY = gnomon.y + gnomon.h / 2, DIAL_R = 30;
+    const hudY = GY - (DIAL_R + 18);
+    HOURS_FURNITURE.push({ x: GX - 170, y: hudY - 13, w: 340, h: 30 });        // clock+phase
+    HOURS_FURNITURE.push({ x: GX - 95, y: GY + DIAL_R + 30, w: 190, h: 14 });  // self-test pill
+  }
+  const zoneObstacles = (layout.districtRects || []).map(d => {
+    const labelW = d.label.length * 6.4;
+    return { x: d.x + d.w / 2 - labelW / 2, y: d.y - 17, w: labelW, h: 15 };
+  });
+  const obstacles = footObstacles.concat(FURNITURE).concat(HOURS_FURNITURE).concat(zoneObstacles);
+
+  const features = placed.map(r => {
+    const wh = labelBoxWH(r);
+    const f = { id: r.id, anchor: footCentre(r), label: { w: wh.w, h: wh.h }, gap: labelGapOf(r) };
+    const pref = preferSideList(r); if (pref) f.prefer = pref;
+    if (r.pin) f.pin = r.pin;
+    return f;
+  });
+  const spec = { bounds: LABEL_BOUNDS, features, obstacles, seed: LABEL_SEED };
+  let res = LabelPlacer.solve(Object.assign({ positions: 8 }, spec));
+  if (res.overlaps > 0) {
+    const alt = LabelPlacer.solve(Object.assign({ positions: 4 }, spec));
+    if (alt.overlaps < res.overlaps) res = alt;
+  }
+  const solved = new Map();
+  res.placements.forEach(p => solved.set(p.id, { x: p.label.x, y: p.label.y, w: p.label.w, h: p.label.h }));
+  return solved;
+}
+/* the per-feature gap + prefer-list helpers placeLabels uses (labelGap / preferList). The seat
+   side is irrelevant — the solver picks the slot; we only need the gap + prefer hints to match. */
+function labelGapOf(r) { const b = footBBox(r); return Math.max(b.w, b.h) / 2 + LABEL_GAP; }
+function preferSideList(r) { return r.prefer ? (Array.isArray(r.prefer) ? r.prefer.slice() : [r.prefer]) : undefined; }
 
 function buildLabelModel(places, solution, opts) {
   opts = opts || {};
@@ -550,6 +616,7 @@ return {
   score,
   buildLabelModel,
   labelBoxWH,          // the single-source box-{w,h} model (the door twin calibrates against it)
+  modelSolvedBoxes,    // the single-source DETERMINISTIC modeled SOLVED-box map (CLAIM C′ invariant)
   gapSubScore,
   leaderClutter,
   densitySubScore,
@@ -561,7 +628,7 @@ return {
   segIntersectsRect,
   rectGap,
   // tunables (so tests can assert the threshold derivation):
-  WEIGHTS, THRESHOLD, LABEL_GAP, LABEL_BOUNDS,
+  WEIGHTS, THRESHOLD, LABEL_GAP, LABEL_BOUNDS, LABEL_SEED,
   CHAR_W_NAME, CHAR_W_SUB, PAD, DENSITY_H, DENSITY_K, BOX_H_NAME, BOX_H_BASE, BOX_H_COMPANION
 };
 })();

@@ -9,6 +9,52 @@ Grounds now fan across their own airy midway, and you ENTER them through a lit f
 fold relieves the door's crowding — CLAIM C′ flips the door pill from ✗16/17 RED to ✓17/17 GREEN —
 proving DEPTH, not a scorer tweak, did it (the neg-control with detach OFF stays red).*
 
+## #386 — bug-fix: CLAIM C′'s non-triviality count now reads a DETERMINISTIC modeled box, so the door pill no longer flips on WINDOW SHAPE alone
+
+The front door's `#doortest` pill flipped ✗16/17 ⇄ ✓17/17 on the **window's shape with nothing else
+changed** — RED at 1100×950 (23/39), 2000×700 (22/39) and tall high-DPI windows, GREEN at common aspects
+(26/39). The failing line was always CLAIM C′ ("the tour declutter is non-trivial — keeps ≥60% of tier-1
+anchors"). **Root cause** (confirmed empirically): C′ scored its tier-1 survivor count over the LIVE
+`SOLVED` boxes — boxes whose `{w,h}` come from the browser's `getBBox` font rasterization (viewport/DPI
+dependent). That ±sub-pixel width noise perturbs the `LabelPlacer` ANNEAL into different slot POSITIONS
+(~500u moves), tipping the greedy declutter's survivor count by ±2 across window shapes. The best
+achievable count (26/39) cleared the 60% gate by only ~2 anchors, so a shape that cost two screen-space
+survivors tipped an otherwise-sound door red. Verified the POSITION is the dominant noise carrier (swapping
+ONLY the box dims while keeping the live solved position does NOT stabilize it). The verdict: a **measurement
+artifact**, not the conscience faithfully reporting a tighter layer — C′ ought to measure a property of the
+*canonical layout*, not the *browser's live font rasterization*. The fix routes C′ through a fully
+deterministic modeled SOLVED box.
+
+- **A SINGLE-SOURCE DETERMINISTIC SOLVED-BOX MODEL.** New `Legibility.modelSolvedBoxes(places, layout,
+  {furniture})` (`tools/layout/legibility.cjs`, +69) reproduces `placeLabels()` PASS-1 EXACTLY — the same
+  footprints + FURNITURE + gnomon-HUD furniture + engraved zone-caption obstacles, the same
+  `LabelPlacer.solve` over the same `LABEL_SEED` with the positions:8→4 fallback — but feeds the solver the
+  calibrated CHAR_W box dims (`labelBoxWH`) INSTEAD of the browser's live `getBBox` text widths. So it is a
+  pure function of the DECLARATIONS + the layout — IDENTICAL at every viewport, and byte-identical Node↔browser.
+- **C′ NOW SCORES THE MODELED BOX; everything else still reads the eye.** `runDoorClaims`
+  (`tools/layout/door-claims.cjs`, +52) gains an optional `modelBox` source. CLAIM C′'s tier-1 count
+  declutters over the modeled box (with the same relay-delta applied for a detached child); CLAIM C's overlap
+  sweep, CLAIM B, and the rest/full composites stay on the LIVE box — they measure what the eye actually
+  renders. `modelBox` absent ⇒ C′ falls back to the live box (pre-#386 behaviour preserved). The live pill
+  (`index.src.html` ~L5552, +10) builds `MODELED = Legibility.modelSolvedBoxes(PLACES, LAYOUT, {furniture:
+  FURNITURE})` and passes it; the page's runtime `SOLVED` map is UNTOUCHED (a parallel deterministic source).
+  The node twin builds the SAME model, so the pill and the twin agree by construction.
+
+**REGRESSION GUARD** (`tools/layout/door.test.cjs`, +75): MODELED now comes from the single-source
+`Legibility.modelSolvedBoxes`; new #386 assertions — (1) C′'s tier-1 count is IDENTICAL across
+`boxOf=modeled/mirror/perturbed` [26/26/26] ✓ invariant (reads only `modelBox`); (2) non-vacuous: a pre-#386
+control (boxOf-scored C′, +80px) reads a DIFFERENT count (22 vs 26) — reproducing the bug AND proving the fix
+in one control; the detachOff neg-control still goes RED [22] so DEPTH still did the original flip. Wired into
+the gate-broken (exit-2) guard.
+
+**VERIFIED** (publisher "Sash-Reeve", REAL CDP input, fresh load each viewport): the REAL `#doortest` pill DOM
+reads GREEN "door PASSABLE — 17/17 ✓" at ALL 11 viewports incl. the three that were RED — 1100×950, 2000×700,
+1280×800@2x — plus 1366×768, 1024×768, 1920×1080, 900×900, 768×1024, 1440×900@2x, 2560×1080, 1024×1366@2x.
+C′'s tier-1 count is STABLE at 26/39 at EVERY viewport (≥⌈39×0.6⌉=24, clears with margin) and equals the
+twin's 26/39 by construction. Console clean; clicking the pill re-runs without throw and stays green; the door
+renders correctly. Headless: `door.test.cjs` 17/17, `fold.test.cjs`, `legibility.test.cjs`, `gate-dom.test.mjs`
+all EXIT 0, `forge --check --all` all 124 current.
+
 ## #385 — bug-fix: every descended child leader's FOOT-DOT now lands ON its tile (the leader-foot follow-up to #382)
 
 #382 re-solved the descended child's labels into an open fan, but the LEADER LINES still pointed at the

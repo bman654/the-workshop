@@ -3922,6 +3922,7 @@ const BOX_H_NAME = 18;     // NAME-ONLY block height (just the 16.5px serif name
 const PAD = 3;             // LABEL_PAD — the backing-stroke halo (index.src.html:2004)
 const LABEL_GAP = 14;      // LABEL_GAP (index.src.html:2000) — leader breathing room
 const LABEL_BOUNDS = { x: 46, y: 52, w: 1348, h: 790 }; // index.src.html:1995
+const LABEL_SEED = 0x5EED; // LABEL_SEED (index.src.html:3504) — the placeLabels solver seed
 
 /* composite weights + derived threshold (see header) */
 const WEIGHTS = { gap: 0.5, density: 0.3, leader: 0.2 };
@@ -4004,6 +4005,71 @@ function labelBoxWH(r, opts) {
     : (r.companion ? BOX_H_COMPANION : BOX_H_BASE) + 2 * PAD;
   return { w, h };
 }
+
+/* ── THE MODELED SOLVED-BOX MAP (single source — the door pill's CLAIM C′ + the twins) ──
+   modelSolvedBoxes(places, layout) → Map(id → {x,y,w,h}) : the DETERMINISTIC, browserless
+   model of the front door's SOLVED label boxes. It reproduces index.src.html placeLabels()
+   PASS 1 EXACTLY — the SAME footprints + FURNITURE + gnomon-HUD furniture + engraved zone-
+   caption obstacles, the SAME LabelPlacer.solve over the SAME seed with the positions:8→4
+   fallback — but feeds the solver the calibrated CHAR_W box dims (labelBoxWH) INSTEAD of the
+   browser's live getBBox text widths. So unlike the page's runtime SOLVED map (whose box
+   {w,h} come from getBBox font rasterization, and whose annealed POSITIONS therefore wobble
+   by viewport/DPI), this map is a pure function of the DECLARATIONS + the layout — IDENTICAL
+   at every viewport. It is the box-source the door pill's CLAIM C′ non-triviality invariant
+   scores against (a layout property, not a render artifact), and the SAME map tools/layout/
+   door.test.cjs + fold.test.cjs build, so the live pill and the node twins agree by
+   construction. (CLAIM B + the rest/full composites + CLAIM C's overlap sweep still read the
+   LIVE getBBox boxes — they measure rendered reality; only C′'s invariant reads this model.)
+
+   `places` carries the canonical solved footprints (x/y/w/h|r), exactly as placeLabels reads
+   them after copying layout.foot onto PLACES. `opts.furniture` is the page's static FURNITURE
+   obstacle list (the door pill + the twins pass index.src.html's FURNITURE) — the gnomon HUD +
+   the engraved zone captions are derived deterministically inside, so the model never depends on
+   a runtime-populated array. Pure; no DOM; same output in Node + browser. */
+function modelSolvedBoxes(places, layout, opts) {
+  opts = opts || {};
+  const placed = places.filter(p => !p.locked && layout.foot && layout.foot[p.id]);
+  // obstacles = footprints + the static FURNITURE + the gnomon HUD furniture + the engraved
+  // zone-caption boxes — reproduced from the page's OWN derivation (placeLabels + the gnomon
+  // HUD push). The page seeds FURNITURE/HUD/zone identically; we rebuild HUD + zone here
+  // deterministically so the model never depends on a runtime-populated array.
+  const footObstacles = placed.map(p => footBBox(p));
+  const FURNITURE = opts.furniture || [];
+  const HOURS_FURNITURE = [];
+  const gnomon = places.find(p => p.id === 'gnomon');
+  if (gnomon && layout.foot && layout.foot.gnomon) {
+    const GX = gnomon.x + gnomon.w / 2, GY = gnomon.y + gnomon.h / 2, DIAL_R = 30;
+    const hudY = GY - (DIAL_R + 18);
+    HOURS_FURNITURE.push({ x: GX - 170, y: hudY - 13, w: 340, h: 30 });        // clock+phase
+    HOURS_FURNITURE.push({ x: GX - 95, y: GY + DIAL_R + 30, w: 190, h: 14 });  // self-test pill
+  }
+  const zoneObstacles = (layout.districtRects || []).map(d => {
+    const labelW = d.label.length * 6.4;
+    return { x: d.x + d.w / 2 - labelW / 2, y: d.y - 17, w: labelW, h: 15 };
+  });
+  const obstacles = footObstacles.concat(FURNITURE).concat(HOURS_FURNITURE).concat(zoneObstacles);
+
+  const features = placed.map(r => {
+    const wh = labelBoxWH(r);
+    const f = { id: r.id, anchor: footCentre(r), label: { w: wh.w, h: wh.h }, gap: labelGapOf(r) };
+    const pref = preferSideList(r); if (pref) f.prefer = pref;
+    if (r.pin) f.pin = r.pin;
+    return f;
+  });
+  const spec = { bounds: LABEL_BOUNDS, features, obstacles, seed: LABEL_SEED };
+  let res = LabelPlacer.solve(Object.assign({ positions: 8 }, spec));
+  if (res.overlaps > 0) {
+    const alt = LabelPlacer.solve(Object.assign({ positions: 4 }, spec));
+    if (alt.overlaps < res.overlaps) res = alt;
+  }
+  const solved = new Map();
+  res.placements.forEach(p => solved.set(p.id, { x: p.label.x, y: p.label.y, w: p.label.w, h: p.label.h }));
+  return solved;
+}
+/* the per-feature gap + prefer-list helpers placeLabels uses (labelGap / preferList). The seat
+   side is irrelevant — the solver picks the slot; we only need the gap + prefer hints to match. */
+function labelGapOf(r) { const b = footBBox(r); return Math.max(b.w, b.h) / 2 + LABEL_GAP; }
+function preferSideList(r) { return r.prefer ? (Array.isArray(r.prefer) ? r.prefer.slice() : [r.prefer]) : undefined; }
 
 function buildLabelModel(places, solution, opts) {
   opts = opts || {};
@@ -4383,6 +4449,7 @@ return {
   score,
   buildLabelModel,
   labelBoxWH,          // the single-source box-{w,h} model (the door twin calibrates against it)
+  modelSolvedBoxes,    // the single-source DETERMINISTIC modeled SOLVED-box map (CLAIM C′ invariant)
   gapSubScore,
   leaderClutter,
   densitySubScore,
@@ -4394,7 +4461,7 @@ return {
   segIntersectsRect,
   rectGap,
   // tunables (so tests can assert the threshold derivation):
-  WEIGHTS, THRESHOLD, LABEL_GAP, LABEL_BOUNDS,
+  WEIGHTS, THRESHOLD, LABEL_GAP, LABEL_BOUNDS, LABEL_SEED,
   CHAR_W_NAME, CHAR_W_SUB, PAD, DENSITY_H, DENSITY_K, BOX_H_NAME, BOX_H_BASE, BOX_H_COMPANION
 };
 })();
@@ -4564,6 +4631,20 @@ function crowdedCorpus(n) {
              airy midway geometry the render actually produces (the box shifted by relayChild's
              delta, the centre the relay foot centre) — the DEPTH that flips C′ ✗16/17→✓17/17.
              Both callers build it identically from DoorClaims.childFootOf(Layout.plates(live)).
+   modelBox  — (optional, #386) id → {x,y,w,h}|null : the DETERMINISTIC modeled SOLVED box
+             (Legibility.modelSolvedBoxes — modeled label dims + a modeled anneal position),
+             a pure function of the declarations + layout, IDENTICAL at every viewport. When
+             supplied, CLAIM C′'s NON-TRIVIALITY tier-1 count scores against THIS box instead
+             of the box-source `boxOf` — so C′ becomes a viewport-INVARIANT property of the
+             canonical layout, NOT of the browser's live getBBox font rasterization (whose
+             ±sub-pixel width noise perturbs the anneal and tipped the count ±2 across window
+             shapes, flipping the gate red↔green though the layout/frame-scale k/gap are all
+             viewport-invariant). The live pill + the node twin pass the byte-identical
+             modelBox, so they agree by construction. CLAIM B's overlap sweep, CLAIM C's
+             overlap sweep, and the rest/full composites still read the LIVE `boxOf` — they
+             measure what the eye actually renders; only C′'s layout invariant moves to the
+             model. Absent ⇒ C′ falls back to `boxOf` (the pre-#386 behaviour, for callers that
+             don't supply a model). The relay (childFoot) shift is applied to modelBox too.
    detachOff — (optional, #369 NEG-CONTROL) when true the internal partition uses
              Layout.plates(.., {detachOff:true}) (no child plate; the detached wing rides its
              crowded parent again) AND childFoot is ignored. C′ MUST go RED — the canonical
@@ -4596,6 +4677,10 @@ function runDoorClaims(args) {
   // F4's opts.detachOff. (childFoot is left as-is — it simply matches no room under detachOff.)
   var detachOff = !!args.detachOff;
   if (detachOff) childFoot = null;   // the pre-fold control: no relay, the rooms ride the parent
+  // #386 — the DETERMINISTIC modeled SOLVED-box source for CLAIM C′'s non-triviality invariant.
+  // id → {x,y,w,h}|null, a pure function of the declarations + layout (Legibility.modelSolvedBoxes),
+  // IDENTICAL at every viewport. Absent ⇒ C′ falls back to the live boxOf (pre-#386 behaviour).
+  var modelBox = args.modelBox || null;
   var L = Legibility, lines = [];
   function check(name, cond, detail) { lines.push({ name: name, ok: !!cond, detail: detail || '' }); }
 
@@ -4717,6 +4802,25 @@ function runDoorClaims(args) {
     }
     var boxOfC = function (id) { return relayBox[id] || boxOf(id); };
     var placesC = places.map(function (p) { return relayView[p.id] || p; });
+
+    // #386 — the DETERMINISTIC modeled box-source for CLAIM C′'s non-triviality count. Same
+    // relay shift as boxOfC, but the base box is the MODELED SOLVED box (modelBox), so the
+    // count is a pure function of the layout — invariant at every viewport. When modelBox is
+    // absent it IS boxOfC (the pre-#386 fallback). CLAIM C's OVERLAP sweep stays on boxOfC
+    // (the live getBBox boxes — it measures rendered reality); ONLY C′'s tier-1 count below
+    // reads boxOfM. The relay box for a child room is the MODELED box shifted by the same delta.
+    var relayBoxM = {};
+    if (childFoot && modelBox) {
+      for (var pm = 0; pm < places.length; pm++) {
+        var rpm = places[pm], rfm = childFoot[rpm.id]; if (!rfm) continue;
+        var mb = modelBox(rpm.id); var tlm = footTopLeft(rpm);
+        if (mb) relayBoxM[rpm.id] = { x: mb.x + (rfm.x - tlm.x), y: mb.y + (rfm.y - tlm.y), w: mb.w, h: mb.h };
+      }
+    }
+    var boxOfM = modelBox
+      ? function (id) { return relayBoxM[id] || modelBox(id) || boxOfC(id); }
+      : boxOfC;
+
     var byPlate = {};
     for (var pi2 = 0; pi2 < places.length; pi2++) {
       var pp2 = places[pi2]; if (!boxOfC(pp2.id)) continue;
@@ -4729,24 +4833,31 @@ function runDoorClaims(args) {
       tourPlates++;
       var ids2 = byPlate[pk], fr = part.frame[pk] || { cx: 720, cy: 450, k: 1 };
       tourRaw += ids2.length;
+      // CLAIM C — the RENDERED overlap sweep, over the LIVE boxes (boxOfC). Measures the eye.
       var lit = declutterIds(ids2, placesC, boxOfC, { x: fr.cx, y: fr.cy }, fr.k || 1);
       tourLit += lit.length;
-      var litSet = {}; for (var li = 0; li < lit.length; li++) litSet[lit[li]] = 1;
       for (var ai = 0; ai < lit.length; ai++) for (var aj = ai + 1; aj < lit.length; aj++) {
         var ba2 = boxOfC(lit[ai]), bb2 = boxOfC(lit[aj]); if (!ba2 || !bb2) continue;
         tourPairs++; if (overlapRect(ba2, bb2)) tourOverlaps++;
       }
+      // CLAIM C′ — the NON-TRIVIALITY tier-1 count, over the MODELED boxes (boxOfM). A
+      // viewport-INVARIANT layout property: the SAME greedy declutter, but on the deterministic
+      // modeled SOLVED boxes — so the survivor count cannot wobble with the browser's live font
+      // rasterization (which it did, tipping the gate red↔green by ±2 across window shapes, #386).
+      var litM = declutterIds(ids2, placesC, boxOfM, { x: fr.cx, y: fr.cy }, fr.k || 1);
+      var litMSet = {}; for (var lm = 0; lm < litM.length; lm++) litMSet[litM[lm]] = 1;
       for (var ti = 0; ti < ids2.length; ti++) {
         var tp = byPlateLookup(places, ids2[ti]);
-        if (tp && tp.tier === 1) { tier1raw++; if (litSet[ids2[ti]]) tier1lit++; }
+        if (tp && tp.tier === 1) { tier1raw++; if (litMSet[ids2[ti]]) tier1lit++; }
       }
     }
     tourRan = true;
     var tier1ok = tier1raw === 0 || tier1lit >= Math.ceil(tier1raw * 0.6);
     check('CLAIM C — guided-tour district label set: ZERO rendered overlaps (all ' + tourPlates + ' presets)',
       tourOverlaps === 0, '[' + tourOverlaps + ' overlaps / ' + tourPairs + ' pairs · ' + tourLit + '/' + tourRaw + ' labels lit across ' + tourPlates + ' plates]');
-    check('CLAIM C′ — the tour declutter is non-trivial (keeps ≥60% of tier-1 anchors)',
-      tier1ok, '[' + tier1lit + '/' + tier1raw + ' tier-1 anchors survive]');
+    check('CLAIM C′ — the tour declutter is non-trivial: ≥60% of tier-1 anchors survive by the ' +
+      'viewport-INVARIANT modeled box (a layout property, not live font rasterization)',
+      tier1ok, '[' + tier1lit + '/' + tier1raw + ' tier-1 anchors survive' + (modelBox ? ' · modeled' : '') + ']');
   } catch (e) {
     check('CLAIM C — guided-tour district label set: ZERO rendered overlaps',
       false, '[sweep threw: ' + e + ']');
@@ -10194,10 +10305,20 @@ const LOUPE = (function(){
     // detached wing childFootOf returns {} (the byte-identical pre-fold path). The canonical
     // SOLVED map this pill reads as boxOf is UNTOUCHED — the relay is a parallel override.
     var part = Layout.plates(PLACES.filter(function(p){ return !p.locked; }));
+    // #386 — CLAIM C′'s NON-TRIVIALITY invariant scores against the DETERMINISTIC modeled SOLVED
+    // boxes (Legibility.modelSolvedBoxes: modeled label dims + a modeled anneal, a pure function of
+    // the declarations + LAYOUT), NOT the live getBBox SOLVED boxes — so the tier-1 survivor count
+    // is a viewport-INVARIANT layout property, identical at every window shape, and equal to the
+    // node twin's count by construction. CLAIM B + the rest/full composites + CLAIM C's overlap
+    // sweep still read the LIVE getBBox boxOf below — they measure what the eye renders; only C′'s
+    // invariant moves to the model. (The page's runtime SOLVED map is UNTOUCHED — modelBox is a
+    // parallel deterministic source built fresh here.)
+    var MODELED = Legibility.modelSolvedBoxes(PLACES, LAYOUT, { furniture: FURNITURE });
     return DoorClaims.runDoorClaims({
       Legibility: Legibility, Layout: Layout,
       places: PLACES, layout: LAYOUT,
       boxOf: function(id){ var s = SOLVED.get(id); return s ? s.box : null; },
+      modelBox: function(id){ return MODELED.get(id) || null; },
       childFoot: DoorClaims.childFootOf(part)
     });
   }

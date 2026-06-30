@@ -154,7 +154,12 @@ for (const p of placesClone) {
   else { p.x = f.x; p.y = f.y; p.w = f.w; p.h = f.h; }
 }
 
-const { solved: MODELED, placed } = modelSolvedBoxes(placesClone, LAYOUT);
+// #386 — the MODELED SOLVED boxes come from the SINGLE-SOURCE Legibility.modelSolvedBoxes (the
+// SAME map the live #doortest pill + fold.test build), so the twin's CHAR_W-modeled boxes cannot
+// drift from the page's. (Byte-identical to the local modelSolvedBoxes default path; that local
+// helper is retained for the SOLVED_REAL solver-port witness below, which feeds the mirror dims.)
+const MODELED = Legibility.modelSolvedBoxes(placesClone, LAYOUT, { furniture: FURNITURE });
+const placed = placesClone.filter(p => !p.locked && LAYOUT.foot[p.id]);
 const boxOfModeled = id => MODELED.get(id) || null;
 
 /* the rendered-truth box-source: the checked-in getBBox mirror. */
@@ -265,8 +270,12 @@ const LIVE_PART = Layout.plates(placesClone.filter(p => !p.locked));
 const CHILD_FOOT = DoorClaims.childFootOf(LIVE_PART);
 
 /* ── run the 17 claims over BOTH box-sources (both fed the LIVE relay override) ── */
-const repModeled = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT, boxOf: boxOfModeled, childFoot: CHILD_FOOT });
-const repMirror  = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT, boxOf: boxOfMirror, childFoot: CHILD_FOOT });
+// #386 — BOTH box-sources get the SAME deterministic modelBox for CLAIM C′'s non-triviality
+// count. CLAIM C′ is now a viewport-INVARIANT layout property (the modeled SOLVED boxes), so the
+// mirror-headlined C′ === the modeled C′ === the live pill's C′, by construction. boxOf still
+// drives CLAIM B + CLAIM C's overlap sweep + the rest/full composites (rendered reality).
+const repModeled = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT, boxOf: boxOfModeled, modelBox: boxOfModeled, childFoot: CHILD_FOOT });
+const repMirror  = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT, boxOf: boxOfMirror,  modelBox: boxOfModeled, childFoot: CHILD_FOOT });
 
 /* ── #369 THE DETACH-OFF NEG-CONTROL — DEPTH did the flip, not a scorer tweak. Re-run the SAME
    17 claims over BOTH box-sources with detachOff:true (the byte-identical pre-fold partition:
@@ -275,8 +284,8 @@ const repMirror  = DoorClaims.runDoorClaims({ Legibility, Layout, places: places
    not a scorer tweak, is what flipped it. If a future scorer change made C′ pass WITHOUT the
    fold, this neg-control catches it. Mirrors fold.test F4 (opts.detachOff). ── */
 const C_PRIME = name => /CLAIM C′/.test(name);
-const negModeled = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT, boxOf: boxOfModeled, detachOff: true });
-const negMirror  = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT, boxOf: boxOfMirror, detachOff: true });
+const negModeled = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT, boxOf: boxOfModeled, modelBox: boxOfModeled, detachOff: true });
+const negMirror  = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT, boxOf: boxOfMirror,  modelBox: boxOfModeled, detachOff: true });
 const negModeledCp = negModeled.lines.find(l => C_PRIME(l.name));
 const negMirrorCp  = negMirror.lines.find(l => C_PRIME(l.name));
 /* THE NEG-CONTROL ASSERTION — two faithful parts, both anneal-robust:
@@ -295,6 +304,40 @@ const negControlOk = (CHILD_FOOT && Object.keys(CHILD_FOOT).length > 0)
      repModeled.tier1lit > negModeled.tier1lit &&                          // (b) fold added survivors (modeled)
      repMirror.tier1lit  > negMirror.tier1lit)                            //     and on the mirror
   : true;                                                                  // no detached wing → vacuously fine
+
+/* ════════════════════════════════════════════════════════════════════════════
+   #386 — CLAIM C′ IS COMPUTED OVER THE DETERMINISTIC MODELED BOX, AND IS
+   VIEWPORT-INVARIANT. The bug: the live #doortest pill scored C′'s tier-1 declutter on
+   the LIVE getBBox SOLVED boxes, whose ±sub-pixel font-rasterization width noise perturbed
+   the anneal POSITION (a ~500u slot move per the calibration note) and tipped the survivor
+   count ±2 across window shapes — flipping the gate red↔green though the layout, frame scale
+   k, and gap constant are all viewport-invariant. The fix routes C′ through modelBox
+   (Legibility.modelSolvedBoxes — a pure function of the declarations + LAYOUT). Two falsifiable
+   guards prove it (each over the LIVE relay so the fold is exercised):
+     (1) C′ DOES NOT CONSULT THE BOX-SOURCE. With the SAME modelBox, C′'s tier-1 count is
+         IDENTICAL whether boxOf is the modeled boxes, the rendered mirror, or a deliberately
+         WIDTH-PERTURBED mirror. If C′ still read boxOf's dims, the perturbed run would differ.
+     (2) THE PERTURBATION IS REAL — and would HAVE moved the pre-#386 C′. A CONTROL run over the
+         perturbed boxOf with NO modelBox (C′ falls back to boxOf — the old path) yields a
+         DIFFERENT C′ count: exactly the screen-space wobble the bug was. So guard (1) is not
+         vacuous — the perturbation genuinely tips a boxOf-scored C′, yet the modeled C′ ignores
+         it. One control reproduces the bug AND proves the fix.
+   ════════════════════════════════════════════════════════════════════════════ */
+const PERTURB = 80;   // px added to every label width — large enough to tip a boxOf-scored declutter
+const boxOfPerturbed = id => { const m = MIRROR.get(id); return m ? { x: m.x, y: m.y, w: m.w + PERTURB, h: m.h } : null; };
+const repPerturbed = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT,
+  boxOf: boxOfPerturbed, modelBox: boxOfModeled, childFoot: CHILD_FOOT });
+// the pre-#386 CONTROL: NO modelBox, so C′ falls back to the (perturbed) boxOf — the old path.
+const repPerturbedNoModel = DoorClaims.runDoorClaims({ Legibility, Layout, places: placesClone, layout: LAYOUT,
+  boxOf: boxOfPerturbed, childFoot: CHILD_FOOT });
+// guard (1): the modeled C′ tier-1 count is invariant to the box-source (it reads only modelBox).
+const cPrimeInvariant = repModeled.tier1lit === repMirror.tier1lit &&
+                        repMirror.tier1lit === repPerturbed.tier1lit &&
+                        repModeled.tier1raw === repPerturbed.tier1raw;
+// guard (2): non-vacuous — the pre-#386 boxOf-scored C′ DOES move under the same perturbation
+// (the screen-space wobble that was the bug), while the modeled C′ does not (the fix).
+const perturbationBites = repPerturbedNoModel.tier1lit !== repModeled.tier1lit;
+const cPrimeModelOk = cPrimeInvariant && perturbationBites;
 
 /* ════════════════════════════════════════════════════════════════════════════
    VERDICT FIDELITY — the SECONDARY (CHAR_W-modeled) cross-check on the headline.
@@ -338,12 +381,14 @@ console.log('    SOLVER  max Δ ' + cal.maxSolver.toFixed(2) + ' (tol ' + SOLVER
             '   [page solver re-run on the mirror dims → rendered slot]');
 console.log('    anneal  CHAR_W-solve max centre Δ ' + cal.maxPos.toFixed(1) + ' (worst ' + cal.worstId + ', ' +
             cal.posInfoCount + ' slot(s) > ' + POS_INFO + ' — informational, anneal-sensitive)');
-// the C′ knife-edge cross-check: model and mirror need NOT agree on the tier-1 count.
-const knifeNote = repModeled.tier1lit === repMirror.tier1lit
-  ? 'CHAR_W model AGREES with mirror: ' + repMirror.tier1lit + '/' + repMirror.tier1raw + ' tier-1 anchors survive'
-  : 'CHAR_W model FLIPS at the knife-edge (modeled ' + repModeled.tier1lit + '/' + repModeled.tier1raw +
-    ' vs mirror ' + repMirror.tier1lit + '/' + repMirror.tier1raw + ' tier-1) — headlined off the mirror, NOT the model';
-console.log('    C′      ' + knifeNote);
+// #386 — CLAIM C′ now reads the DETERMINISTIC modeled box (modelBox), so the tier-1 count is a
+// viewport-INVARIANT layout property: identical across box-sources (modeled / mirror / perturbed).
+console.log('    C′      modeled box (viewport-INVARIANT): ' + repModeled.tier1lit + '/' + repModeled.tier1raw +
+  ' tier-1 anchors survive — IDENTICAL over boxOf=modeled/mirror/perturbed [' +
+  repModeled.tier1lit + '/' + repMirror.tier1lit + '/' + repPerturbed.tier1lit + ']' +
+  (cPrimeInvariant ? ' ✓ invariant' : ' ✗ DRIFTED') +
+  '  · pre-#386 control (boxOf-scored, +' + PERTURB + 'px) would read ' + repPerturbedNoModel.tier1lit +
+  ' (the bug)' + (perturbationBites ? ' ✓ guard non-vacuous' : ' ✗ perturbation inert'));
 if (CHILD_FOOT && Object.keys(CHILD_FOOT).length > 0) {
   console.log('    detach  FOLD ON: C′ ✓ [modeled ' + repModeled.tier1lit + '/mirror ' + repMirror.tier1lit + '/' + repMirror.tier1raw + ']' +
     ' · NEG-CONTROL (detachOff): modeled C′ ' + (negModeledCp && negModeledCp.ok ? '✓' : '✗') + ' [' + negModeled.tier1lit + ']  mirror [' + negMirror.tier1lit + ']' +
@@ -368,6 +413,15 @@ if (fid.length) {
   gateBroken = true;
   console.error('  ✗ FIDELITY BROKEN — a DOM-free claim disagrees between model and mirror:');
   for (const i of fid) console.error('      · ' + i);
+}
+if (!cPrimeModelOk) {
+  gateBroken = true;
+  console.error('  ✗ CLAIM C′ INVARIANCE BROKEN (#386) — C′ is no longer a viewport-invariant layout property:');
+  if (!cPrimeInvariant) console.error('      · C′ tier-1 count DIFFERS across box-sources (modeled ' + repModeled.tier1lit +
+    ' / mirror ' + repMirror.tier1lit + ' / perturbed ' + repPerturbed.tier1lit + ') — C′ must read ONLY modelBox, never boxOf.');
+  if (!perturbationBites) console.error('      · the pre-#386 control (boxOf-scored C′, +' + PERTURB + 'px) read the SAME count (' +
+    repPerturbedNoModel.tier1lit + ') as the modeled C′ — the invariance guard is vacuous (the perturbation must tip a ' +
+    'boxOf-scored C′ to prove the model\'s stability is real; raise PERTURB).');
 }
 if (!gateBroken) {
   console.log('  ✓ the twin tracks the live pill: the 14 DOM-free claims agree model↔mirror, dims +');
