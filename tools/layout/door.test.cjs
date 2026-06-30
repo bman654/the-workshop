@@ -212,6 +212,25 @@ function calibrate() {
   const placedIds = new Set(placed.map(p => p.id));
   for (const id of placedIds) if (!MIRROR.has(id)) problems.push('mirror MISSING placed POI ' + id + ' (regenerate door-mirror.cjs)');
   for (const m of DOOR_MIRROR) if (!placedIds.has(m.id)) problems.push('mirror has STALE POI ' + m.id + ' (no longer placed; regenerate door-mirror.cjs)');
+  // #369 FRAME COVERAGE — the mirror must cover EXACTLY the placed POIs across BOTH frames
+  // (parent ∪ child:<wing>). Each row carries a `frame` tag; it must match the LIVE
+  // Layout.plates partition (a detached wing's rooms tagged 'child:<wing>', the rest 'parent').
+  // A stale/missing child box — or a frame tag that drifted from the live fold — trips here,
+  // so a re-anneal that moves a room across the gate cannot silently leave the mirror stale.
+  const livePart = Layout.plates(placesClone.filter(p => !p.locked));
+  const frameOf = id => { const pid = livePart.roomPlate[id]; return (pid && pid.indexOf('child:') === 0) ? pid : 'parent'; };
+  for (const m of DOOR_MIRROR) {
+    if (!placedIds.has(m.id)) continue;  // staleness already reported above
+    const want = frameOf(m.id);
+    const got = m.frame || 'parent';     // pre-#369 mirrors had no tag → treated as 'parent'
+    if (got !== want) problems.push('mirror row ' + m.id + ' tagged frame:' + JSON.stringify(got) +
+      ' but the live fold puts it on ' + JSON.stringify(want) + ' (regenerate door-mirror.cjs — the detach changed)');
+  }
+  // every detached child plate must be represented in the mirror (no child frame left uncovered).
+  for (const cpid of (livePart.childPlates || [])) {
+    const have = DOOR_MIRROR.some(m => m.frame === cpid);
+    if (!have) problems.push('mirror covers NO rows for child frame ' + cpid + ' (the detached wing is uncaptured; regenerate door-mirror.cjs)');
+  }
   for (const p of placed) {
     const a = MODELED.get(p.id), b = MIRROR.get(p.id), s = SOLVED_REAL.get(p.id);
     if (!a || !b) continue;

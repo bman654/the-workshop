@@ -28,12 +28,35 @@ THE DECLARATIVE SPATIAL CLAIM (the whole map decision surface — six fields, mo
 - skyStar   OPTIONAL — the catalog id this room lights (defaults to id); a no-op affirmation that makes a future rename safe.
 - prefer    OPTIONAL — a label-SIDE seed ('left'|'right'|'top'|'bottom'|'ne'|… or an array) that biases the LabelPlacer's start; it cannot force a collision.
 - locked    undercroft only — gating unchanged; defers placement to revealUndercroft.
+- detach     OPTIONAL (#369) — set `detach:true` on ANY ONE room of a wing to fold the WHOLE wing into its own child LAYER (see "THE DECLARATIVE FOLD" below). The first realized depth layer: the `amusements` wing (declared on `arcade`). This is the DEPTH lever the rest of this doc points at — a full wing detaches into a nested zoom-sheet reached through a gate, instead of crowding a flat district.
 
 GONE FROM THE API (renderer owns; a designer can no longer place a pixel, size a box, choose a label side, or pin a label): x, y, w, h, r, pin, prefer-as-pin.
 
 ADDING A WHOLE NEW DISTRICT (now **near-frozen** — the set is presumed CLOSED): the plate already carries its full tiling of districts, so minting another is a **near-prohibited** act, not merely a rare one. A new flat district does not add room — it subdivides a finite surface further, the exact reflex that crowded this plate. The bar: a new district is justified ONLY for a genuinely new INSIDE-vs-EXTERNAL realm that no existing district could ever host — **never** for "the SE is crowded" / "we're out of room" (that is a DEPTH signal → a new LAYER, above, not a tile). Mechanically a district is still one DISTRICTS entry (region + inside + style + label + hue) in layout.js (+ a GROUNDS_WINGS sub-region for a grounds wing), config-only and reviewed, else Layout.solve throws — but treat the THRESHOLD as near-prohibitive, and never as the default remedy for fullness.
 
 So a room-add is: {district, tier} (+ optional wing/footprint/order + the content fields). That is the entire human/agent decision.
+
+## THE DECLARATIVE FOLD — a wing detaches into its own child LAYER (#369, the depth primitive)
+
+The opening section names DEPTH as the structural answer to a full plate: a full wing detaches into a nested zoom-sheet reached by descending into it, NOT another flat rim district. #369 SHIPPED that primitive — generically, owned by the layout engine — and `amusements` is its **first caller**. This is the first realized `detach:true` wing.
+
+**The declaration.** Set `detach:true` on ANY ONE room of a wing (it is declared on `arcade`, the amusements anchor). `Layout.detachedWings(places)` reads the flag and returns `{amusements:true,…}` — pure, deterministic, reads only `places`. Empty when nothing detaches.
+
+**What the engine does (all in `layout.js`, the one place the magic lives):**
+- `plateOf(r, solution, detached)` gains ONE branch BEFORE the district/midline logic: a room in a detached wing routes to `'child:'+r.wing` instead of its parent grounds plate. Everything else is unchanged.
+- `plates(places[, opts])` threads `detached` through and adds three GENERAL pieces (none hard-codes "amusements"):
+  - **the CHILD plate** is a first-class plate framed from its OWN field envelope — `relayPlate(members)` fans the wing's rooms across the open FIELD, and the child's bbox/frame use the SAME `frameFor`/`PLATE_PAD`/`PLATE_K_MAX` math the parents use. The relay foot is plate-LOCAL and is exposed in a SEPARATE `childLayout[pid]` map — it is **never** written back onto the canonical `solution.foot` (so `sky.test.cjs`/`emit-mirror.cjs` keep reading the untouched canonical foot; the sky stars stay put).
+  - **the parent GATE FACE** auto-emits: when a wing fully detaches, its room footprints vanish from the parent plate and the engine fills the hole with ONE synthetic gate tile centred in `GROUNDS_WINGS[wing]`, tagged `{wing,kind:'gate',toPlate:'child:'+wing,accent,label}`. It is furniture — NO card, NO `ws:seen`, NO sky-star — and is EXCLUDED from the room count + bijection.
+  - **the DESCENT edge** threads the camera graph generically: `link('child:'+wing, parentPid)` where `parentPid` is the parent plate the gate centre falls on (grounds-east for amusements; a fallback to the other grounds side or the manor hub if that plate is empty, so a child is never stranded). A tree gains exactly V−1 such edges.
+- `opts.detachOff:true` forces every wing back onto its parent plate — the NEG-CONTROL. With it set, `plates()` is byte-identical to pre-#369.
+
+**Return shape.** `plates()` gains `detached`, `childPlates:['child:amusements']`, `childLayout`, `parentOf`, `gates`. Everything else keeps its shape — a child is just another entry in `ids`.
+
+**The page (`index.src.html`, the platewalk module).** The child is reached ONLY through its in-map gate face (an in-map threshold, like the Undercroft stair) — `child:*` ids are excluded from the platebar presets while still carrying a frame. Clicking the gate `descend()`s: re-lays the child's tiles to their relay foot (translating each `.poi` AND its label wrapper by the same delta, so leaders are unchanged), flies the camera into the child frame on a deeper ease (`.walking-deep`), shows the cobbled MIDWAY ground + a sewn-ribbon breadcrumb. `ascend()` (== the existing tour `retreat()`, also Esc/Backspace/`↩ back`) eases back up. A by-hand wheel/drag at depth drops to free-explore and un-folds. Reduced-motion degrades the dive to an instant frame. Each detached room is the SAME `.poi` link, so descending drops `ws:seen` + lights the sky star with zero new wiring.
+
+**Why depth, not a scorer tweak (the load-bearing win).** Folding amusements relieves the door's crowding: the 15 amusement rooms left a tight ~23px-wide grounds-east column and now declutter at their own airy child frame, so the door pill's CLAIM C′ (≥60% of tier-1 anchors survive the tour declutter) flips ✗16/17 → ✓17/17. The NEG-CONTROL (detach OFF) keeps C′ red, proving the DEPTH did it. All proven by `tools/layout/fold.test.cjs` (a headless Node twin over the live `Layout.plates`: bijection across layers · the descent graph is a tree rooted at the door · the C′ flip MEASURED · the neg-control · generality on a synthetic 2-wing fixture), and sealed by `door.test.cjs` going green once `door-mirror.cjs` was regenerated with a per-row `frame` tag (parent | child:&lt;wing&gt;) and its GATE-BROKEN guard extended to require exact coverage across BOTH frames.
+
+**To detach a future wing:** declare `detach:true` on one of its rooms and ensure the wing has a `GROUNDS_WINGS[wing]` region (for the gate face). The engine mints `child:<wing>`, one gate, one descent edge — `amusements` is just the primitive's first caller.
 
 ---
 

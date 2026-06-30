@@ -1046,8 +1046,27 @@ var Layout = (function () {
                        : { x: f.x, y: f.y, w: f.w, h: f.h };
   }
 
-  /* which plate a room belongs to, given the solved solution (for the W/E split). */
-  function plateOf(r, solution) {
+  /* ── THE DECLARATIVE FOLD (#369) — a wing DETACHES into its own child LAYER iff any of
+     its rooms declares `detach:true`. Pure, deterministic, reads only `places`: returns a
+     {wingSlug:true,...} map (empty when nothing detaches). A detached wing's rooms leave the
+     parent plate for a `child:<wing>` plate (a first-class plate reached only through a gate),
+     and the parent fills the vacated footprint with one synthetic GATE FACE. This is the one
+     primitive; `amusements` is simply its first caller. ── */
+  function detachedWings(places) {
+    var det = {};
+    for (var i = 0; i < places.length; i++) {
+      var r = places[i];
+      if (r.locked) continue;
+      if (r.detach && r.wing) det[r.wing] = true;
+    }
+    return det;
+  }
+
+  /* which plate a room belongs to, given the solved solution (for the W/E split). The
+     `detached` map (from detachedWings) is threaded in: a room in a detached wing goes to
+     its child plate BEFORE the district/midline logic — everything else is UNCHANGED. */
+  function plateOf(r, solution, detached) {
+    if (detached && r.wing && detached[r.wing]) return 'child:' + r.wing;  // the fold
     if (r.district === 'grounds') {
       var c = footCentreOf(solution.foot[r.id]);
       var mid = FIELD.x + FIELD.w / 2;
@@ -1058,29 +1077,58 @@ var Layout = (function () {
     return r.district; // manor, observatory
   }
 
-  /* Layout.plates(places) → the total/disjoint partition + per-plate camera bbox +
-     the reciprocal inter-plate road graph. Pure & deterministic (solves once). */
-  function plates(places) {
+  /* Layout.plates(places[, opts]) → the total/disjoint partition (parent ∪ child layers) +
+     per-plate camera bbox + the reciprocal inter-plate road graph. Pure & deterministic
+     (solves once). `opts.detachOff:true` forces every wing back onto its parent plate — the
+     NEG-CONTROL that proves the fold (with it set, the return is byte-identical to pre-#369). */
+  function plates(places, opts) {
+    opts = opts || {};
     var live = places.filter(function (p) { return !p.locked; });
     var solution = solve(live);
 
-    // 1. PARTITION (total + disjoint)
+    // 0. THE FOLD: which wings detach into their own child layer (empty unless a room
+    //    declares detach:true; suppressed entirely under the detachOff neg-control).
+    var detached = opts.detachOff ? {} : detachedWings(live);
+
+    // 1. PARTITION (total + disjoint) — a detached wing's rooms route to child:<wing>.
     var members = {};   // plateId → [room,...]
     var roomPlate = {}; // roomId → plateId
     for (var i = 0; i < live.length; i++) {
-      var pid = plateOf(live[i], solution);
+      var pid = plateOf(live[i], solution, detached);
       (members[pid] = members[pid] || []).push(live[i]);
       roomPlate[live[i].id] = pid;
     }
 
-    // 2. per-plate bbox over member footprints + camera frame
+    // 1b. CHILD LAYOUT: re-lay each child plate's rooms in its OWN field envelope via the
+    //     plate-LOCAL relayPlate fan (the same construction the floor-twin scores). The relay
+    //     foot is plate-LOCAL and is NEVER written back onto solution.foot (its own warning) —
+    //     emit-mirror.cjs / sky.test.cjs keep reading the untouched canonical foot. We expose
+    //     it in a SEPARATE childLayout map so the page draws the child midway from it.
+    var childPlates = [];          // ['child:amusements',...] sorted
+    var childLayout = {};          // pid → {foot:{id:{x,y,w,h}}, sideById:{id:'left'|'right'}}
+    var childWingOf = {};          // pid → wing slug
+    for (var cw in detached) {
+      var cpid = 'child:' + cw;
+      if (!members[cpid]) continue;                 // a detached wing with no live rooms folds nothing
+      var relay = relayPlate(members[cpid]);
+      childLayout[cpid] = { foot: relay.foot, sideById: relay.sideById };
+      childWingOf[cpid] = cw;
+      childPlates.push(cpid);
+    }
+    childPlates.sort();
+
+    // 2. per-plate bbox over member footprints + camera frame. A PARENT plate's bbox reads
+    //    the canonical solution.foot; a CHILD plate's bbox reads its OWN relay foot envelope
+    //    (childLayout) — a child is a first-class plate framed from its own field.
     var bbox = {};
     var pids = Object.keys(members).sort();
     for (var pi = 0; pi < pids.length; pi++) {
       var p = pids[pi], rooms = members[p];
+      var cl = childLayout[p];
       var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       for (var ri = 0; ri < rooms.length; ri++) {
-        var b = footBBoxOf(solution.foot[rooms[ri].id]);
+        var b = cl ? cl.foot[rooms[ri].id] : footBBoxOf(solution.foot[rooms[ri].id]);
+        if (!b) continue;
         if (b.x < x0) x0 = b.x; if (b.y < y0) y0 = b.y;
         if (b.x + b.w > x1) x1 = b.x + b.w; if (b.y + b.h > y1) y1 = b.y + b.h;
       }
@@ -1098,6 +1146,7 @@ var Layout = (function () {
     }
 
     // 3. CAMERA FRAME per plate: bbox padded ×PLATE_PAD, min-framed, centred, k clamped.
+    //    A child is framed by the SAME math the parents use — first-class.
     var VB = { w: 1440, h: 900 };
     var frame = {};
     for (var fi = 0; fi < pids.length; fi++) {
@@ -1114,18 +1163,58 @@ var Layout = (function () {
       };
     }
 
+    // 3b. THE PARENT GATE FACE: when a wing fully detaches, its room footprints vanish
+    //     from the parent plate, leaving a hole. The engine fills it with ONE synthetic
+    //     gate-face tile, centred in the wing's GROUNDS_WINGS region. It is NOT a PLACES
+    //     room — no card, no ws:seen, no sky-star — it is furniture excluded from every
+    //     count. The page draws it as the in-map threshold that descends into the child.
+    var gates = [];
+    var parentOf = {};   // child plate → the parent plate its gate centre falls on
+    var GATE_W = 96, GATE_H = 120;
+    for (var ci = 0; ci < childPlates.length; ci++) {
+      var cpid2 = childPlates[ci], cwing = childWingOf[cpid2];
+      var reg = GROUNDS_WINGS[cwing];
+      if (!reg) continue;
+      var gx = reg.x + reg.w / 2 - GATE_W / 2;
+      var gy = reg.y + reg.h / 2 - GATE_H / 2;
+      // the parent plate the gate centre falls on (mirrors plateOf's grounds W/E split).
+      // FALLBACK so a child is NEVER stranded: if that plate has no live rooms (e.g. all of
+      // one grounds side detached), attach the descent edge to the other grounds plate, else
+      // to the manor hub — the guaranteed-present warm centre. The graph stays connected.
+      var gcx = gx + GATE_W / 2, gMid = FIELD.x + FIELD.w / 2;
+      var parentPid = gcx < gMid ? 'grounds-west' : 'grounds-east';
+      if (!members[parentPid]) {
+        var other = parentPid === 'grounds-west' ? 'grounds-east' : 'grounds-west';
+        parentPid = members[other] ? other : 'manor';
+      }
+      gates.push({
+        wing: cwing, kind: 'gate', toPlate: cpid2,
+        box: { x: gx, y: gy, w: GATE_W, h: GATE_H },
+        accent: wingAccent(cwing),
+        label: wingLabel(cwing)
+      });
+      parentOf[cpid2] = parentPid;
+    }
+
     // 4. the RECIPROCAL inter-plate ROAD GRAPH (manor is the hub; W/E share the mid
-    //    wall; observatory shares the NW corner with grounds-west)
+    //    wall; observatory shares the NW corner with grounds-west). The DESCENT EDGE then
+    //    threads each child to the parent plate its gate face sits on — generically.
     var adj = {};
     function link(a, b) {
       if (!members[a] || !members[b] || a === b) return;
       (adj[a] = adj[a] || {})[b] = true;
       (adj[b] = adj[b] || {})[a] = true;
     }
-    for (var li = 0; li < pids.length; li++) if (pids[li] !== 'manor') link('manor', pids[li]);
+    for (var li = 0; li < pids.length; li++) {
+      if (pids[li] === 'manor') continue;
+      if (childWingOf[pids[li]]) continue;          // children join via the gate edge, not the manor hub
+      link('manor', pids[li]);
+    }
     link('grounds-west', 'grounds-east');
     link('observatory', 'grounds-west');
     link('grounds-east', 'lowerworks');   // the Lower Works is the East Grounds' downstairs neighbour (#335)
+    // the descent edges: child ↔ the parent plate its gate face falls on (reciprocal).
+    for (var pcd in parentOf) link(pcd, parentOf[pcd]);
     // emit a stable edge list (each undirected pair once, a<b)
     var edges = [];
     for (var a in adj) for (var b in adj[a]) if (a < b) edges.push([a, b]);
@@ -1133,15 +1222,21 @@ var Layout = (function () {
 
     return {
       ids: pids,
-      members: members,    // plateId → [room,...]  (total + disjoint over live rooms)
+      members: members,    // plateId → [room,...]  (total + disjoint over live rooms, parent ∪ child)
       roomPlate: roomPlate,// roomId → plateId
-      bbox: bbox,          // plateId → {x,y,w,h} (manor extended to enclose beneath)
+      bbox: bbox,          // plateId → {x,y,w,h} (manor extended to enclose beneath; child from its relay foot)
       frame: frame,        // plateId → {k,tx,ty,cx,cy,fw,fh}  the camera target
       adj: adj,            // plateId → {neighbourId:true}
       edges: edges,        // [[a,b],...] each undirected pair once (a<b), sorted
       meta: PLATE_META,
       beneath: beneathSlot(),
-      solution: solution
+      solution: solution,
+      // ── the fold (#369): empty/absent shapes when nothing detaches (byte-identical to pre-#369) ──
+      detached: detached,        // {wingSlug:true,...}
+      childPlates: childPlates,  // ['child:<wing>',...] sorted (subset of ids)
+      childLayout: childLayout,  // pid → {foot, sideById}  the child's own relay envelope
+      parentOf: parentOf,        // child pid → the parent plate its gate face sits on
+      gates: gates               // [{wing,kind,toPlate,box,accent,label},...] the synthetic gate faces
     };
   }
 
@@ -1199,6 +1294,7 @@ var Layout = (function () {
     wingLabel: wingLabel,
     wingAccent: wingAccent,
     plates: plates,
+    detachedWings: detachedWings,
     relayPlate: relayPlate,
     PLATE_META: PLATE_META,
     assertGroundsWingsDisjoint: assertGroundsWingsDisjoint,

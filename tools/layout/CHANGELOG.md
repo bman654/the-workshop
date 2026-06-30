@@ -4,6 +4,40 @@ A log of the grounds-engine swings that change how the estate-plan map is solved
 scored, or pre-checked. (Per-room map declarations are NOT logged here — only
 engine/process changes.)
 
+## 2026-06-30 — The Fairground Gate: the declarative fold (#369, a grounds big-swing)
+
+The estate's first true **detach-into-depth LAYER** — the DEPTH lever this doc's opening section
+has long pointed at, now realized as a generic primitive owned by the engine. A wing whose any room
+declares `detach:true` folds out of its crowded parent plate into its own `child:<wing>` layer,
+reached only by descending through a synthetic in-map GATE FACE. `amusements` is the first caller:
+its 15 rides leave a tight ~23px grounds-east column for their own airy child frame.
+
+- **`layout.js`** (+110) — `detachedWings(places)` (pure, reads only `places`); `plateOf` gains ONE
+  detach branch before the district/midline logic; `plates(places[, opts])` threads `detached`
+  through and adds three GENERAL pieces — a first-class CHILD plate framed from its OWN `relayPlate`
+  envelope (exposed in a separate `childLayout` map; canonical `solution.foot` NEVER overwritten, so
+  the sky stars + mirrors are unaffected), an auto-emitted parent GATE FACE (furniture, excluded from
+  every count), and a generic DESCENT edge (with a no-strand fallback). New return fields: `detached`,
+  `childPlates`, `childLayout`, `parentOf`, `gates`. `opts.detachOff:true` = the byte-identical
+  NEG-CONTROL.
+- **`fold.test.cjs`** (NEW, +339) — the headless Node twin over the live `Layout.plates`, lifted from
+  the proven `/tmp/foldsim.cjs` kernel into the smoke.cjs CRUX idiom: F1 BIJECTION across layers
+  (86/86) · F2 the descent graph is a TREE rooted at the door (live + a synthetic 2-detached-wing
+  fixture) · F3 the C′ flip MEASURED (26/38 ≥ 23) · F4 the NEG-CONTROL (detach OFF stays 21/38 red) ·
+  F5 GENERALITY (a different wing detaches the same way).
+- **`door-mirror.cjs`** (regenerated headless, the #337 canonical env) — now carries a per-row
+  `frame` tag (parent | child:&lt;wing&gt;); the re-anneal from 15 rooms leaving grounds-east moved the
+  whole label solve, so the mirror was recaptured.
+- **`door.test.cjs`** — the GATE-BROKEN coverage guard extended: the mirror must cover EXACTLY the
+  placed POIs across BOTH frames AND each row's `frame` tag must match the live fold (a stale/mistagged
+  child box trips exit 2). The live pill now reads PASSABLE 17/17 — CLAIM C′ flipped GREEN because the
+  detached amusements rooms declutter at their own airy child frame.
+
+The page wiring (descend/ascend, the gate face + midway + ribbon, the tile re-lay) lives in
+`index.src.html`; see `the-fairground-gate/CHANGELOG.md` + the "THE DECLARATIVE FOLD" section of
+`map-process.md`. Scope: the LAYER mechanism + the founding amusements detach + the gate/midway/ribbon
+art — the 15 bench interiors are untouched.
+
 ## 2026-06-21 — More Than One Front Door (#262, a grounds big-swing)
 
 The lone CROWDED front-door plate became a **walkable set of plates** the visitor
