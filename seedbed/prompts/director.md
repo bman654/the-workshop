@@ -117,10 +117,15 @@ the loop gave you) — be concrete: a fresh explorer/builder will act only on wh
 4) **If PLAN/garden — be the GARDENER:** housekeeping = prune the decayed garden seeds the gauge listed FIRST,
    keep ROADMAP/NOTES lean, `forge --check --all`, spot-run a Node twin. AUDIT AUTHORITY (your standing power
    to tend the soul): walk a few existing exhibits, measure each against the five questions, and MARK ~1 that
-   would bloom MOST from a re-soul as a `rework` seed (most often a once-living idea distilled into a sterile
-   graph + wall of text). Do this SLOWLY, in MODERATION — ~1 a cycle, never a blanket sweep; a clean
-   graph-explainer that is beautiful, correct, and discoverable is worth KEEPING. You tend variety, not
-   condemn the graph. Then set `ideationScope` + K + briefs for scouts to find GARDEN seeds
+   would bloom MOST from a re-soul as a `rework` seed. The classic pattern is FORM drift (a once-living idea
+   distilled into a sterile graph + wall of text) — but watch the REGISTER too: a piece whose PLAY or beauty
+   got buried under instrument chrome (HUDs, pills, ledgers, readouts crowding what wants to simply be fun or
+   lovely) can be marked for a re-soul that FOREGROUNDS the delight and tucks the correct math into a quiet
+   layer (the Colophon's own rework — a static page re-grown into an experience — is the house example).
+   NEVER mark a piece merely for carrying a proof: a claim kept exact is right and cherished; the rework
+   target is buried delight, not rigor itself. Do this SLOWLY, in MODERATION — ~1 a cycle, never a blanket
+   sweep; a clean graph-explainer that is beautiful, correct, and discoverable is worth KEEPING. You tend
+   variety, not condemn the graph. Then set `ideationScope` + K + briefs for scouts to find GARDEN seeds
    (exhibit/cross/curation/rework, each a ≤3-line provocation, reaching for touchable/living/playable forms
    over another graph) toward fuel ~10; watch for FALLOW metagames/wings (no recent growth) and scout for them.
    TEND THE REGISTER MIX (the same standing power, subtler key): the audit guards form (chart vs touchable) —
