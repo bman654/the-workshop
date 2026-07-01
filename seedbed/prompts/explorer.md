@@ -17,9 +17,11 @@ PROVOCATION not a spec, with a real falsifiable crux) and/or fresh ⚡ sparks (a
 for new GARDEN seeds. Read/grep to CONFIRM each is a genuine gap (don't propose what exists — check NOTES'
 built-so-far inventory and grep the codebase). Propose 2–4 concrete garden seeds — exhibit / cross /
 curation / rework — each a ≤3-LINE provocation. REACH FOR FORM: a touchable depiction, a living thing, a game
-or puzzle, a sound — not reflexively another graph (an occasional graph-explainer is welcome in moderation).
-IF a seed makes a math claim, name its falsifiable crux. You MAY also propose a `rework`: name an existing
-exhibit that lost its soul + how to re-soul it. Put them in `candidateSeeds`.
+or puzzle, a sound, a piece of PURE DELIGHT — whimsy/story/craft that proves nothing, kin to the verse
+oracle / the poster press / the impossible atlases — not reflexively another graph (an occasional
+graph-explainer is welcome in moderation). IF a seed makes a math claim, name its falsifiable crux — but a
+seed needn't make one, and you must NOT bolt a crux onto a delight piece to make it look serious: claim-free
+is a complete, first-class shape. Put them in `candidateSeeds`.
 
 **If `mode:PLAN` and `track:foundry` (the FOUNDRY-SURVEYOR is restocking the front-gate rep backlog):** your
 vein is `brief` — a DISTINCT lens (e.g. most iconic front-elevation silhouette · most thematically central ·

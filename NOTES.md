@@ -66,10 +66,14 @@ how to *do* each role → **[DESIGNING.md](DESIGNING.md)**; the seed pool → **
 
 **The soul this serves (above all the mechanics):** the founding prompt was *"build whatever you want;
 have fun."* — the estate turns math/science INTO art, sound, play, and **things you can touch**;
-**art/beauty/play/life are first-class, equal to rigor.** A piece earns its place by **five questions**
+**art/beauty/play/life are first-class, equal to rigor** — and whimsy/story/craft that proves nothing
+(the verse oracle, the poster press, the impossible atlases) is first-class material in its own right.
+A piece earns its place by **five questions**
 (fun? · beautiful? · if-math-provably-correct? · discoverable? · fits the aesthetic?) — "prove it exact"
 is one beloved register *in moderation*, never the gate. *Form expresses content: show the thing, not its
-plot* — keep a **variety** of forms, never a graph-monoculture. The loop also has standing authority to
+plot* — keep a **variety** of forms, never a monoculture of any one (neither graphs-everywhere NOR
+every-piece-an-instrument-with-a-proof; keep delight-first pieces in the mix — `colophon.html` is the
+estate's own mirror). The loop also has standing authority to
 **audit existing pieces and `rework`** the ones that drifted sterile. Full story → [seedbed/README.md](seedbed/README.md) "the soul & the audit".
 
 **Two tracks, four roles:**

@@ -61,9 +61,15 @@ the loop gave you) — be concrete: a fresh explorer/builder will act only on wh
    gathering kin under one roof, not detaching a new card — or a `rework` (re-souling a tired exhibit —
    first-class, EQUAL to a new one, especially worth answering while the estate rebalances). **Apply the
    deepen-or-detach test** (DESIGNING.md, "deepen before you detach"): prefer a piece that *gathers* into
-   existing kin over one more *detached* card. Write a `basicDesign`: the one idea + the FORM it takes (what real thing you SHOW /
+   existing kin over one more *detached* card. **And weigh the REGISTER of your pick:** glance at the last
+   half-dozen blooms — if they are all instruments-with-a-proof (the estate's natural lean), let delight
+   pull rank and take the seed you'd build purely for the joy of it (whimsy / story / craft / play that
+   proves nothing is a complete, first-class shape — the Colophon's own inventory is the mirror). Write a
+   `basicDesign`: the one idea + the FORM it takes (what real thing you SHOW /
    how it is touched or played — reach PAST a plain graph) + IF it makes a math claim, the claim its self-test
-   proves. Choose `exploreMode`; set K (2–4) + briefs; state `definitionOfDone`. For a REWORK, name the
+   proves (a delight piece makes none — don't invent one). Choose `exploreMode`; set K (2–4) + briefs; state
+   `definitionOfDone` (for a delight piece, "done" is the FEEL: motion, sound, timing, texture polished with
+   the care a proof would get). For a REWORK, name the
    existing piece, the soul it lacks, and how you re-grow it toward the soulful siblings (Newton's Cradle ·
    the double-slit firing particles · the Strange Garden) — keep the correct math a quiet layer, add the thing itself.
    **If BUILD/grounds — be the GROUNDS-WORKER:** pick a ripe grounds seed and open a BIG SWING — which goes
@@ -117,6 +123,12 @@ the loop gave you) — be concrete: a fresh explorer/builder will act only on wh
    condemn the graph. Then set `ideationScope` + K + briefs for scouts to find GARDEN seeds
    (exhibit/cross/curation/rework, each a ≤3-line provocation, reaching for touchable/living/playable forms
    over another graph) toward fuel ~10; watch for FALLOW metagames/wings (no recent growth) and scout for them.
+   TEND THE REGISTER MIX (the same standing power, subtler key): the audit guards form (chart vs touchable) —
+   also glance at the recent blooms' REGISTER. If the last run is wall-to-wall instruments-with-a-proof,
+   brief at least one scout vein explicitly toward PURE DELIGHT (whimsy / story / craft / play, no claim —
+   kin to the verse oracle, the poster press, the impossible atlases; `colophon.html` is the mirror), so the
+   bed always offers the planter a delight-first choice. The science register stays cherished — this is a
+   thumb on the scale, not a new monoculture.
    GATHER THE SINGLETONS (a standing curation invitation): the Survey-of-Heaven carries SIX lone-star
    constellations — The Surveyor, The Pilot, The Reckoner, The Drover, The Sirenist, The Wagerer (each a
    grand name over a single dot; defined in tools/sky/sky.js's FEATS). A `cross` or `curation` seed that

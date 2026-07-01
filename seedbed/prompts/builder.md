@@ -13,7 +13,9 @@ any winning prototype path, and the definition of done are in YOUR CONTEXT. Retu
   fits the estate) and FORM EXPRESSES CONTENT: build the THING you can see and touch or play, not just a
   plotted curve. One self-contained HTML file (vanilla JS, no deps). IF it makes a math claim, add a self-test
   that proves it EXACT (+ a Node twin `core.test.mjs` if there is a logic core — inline the SAME core into the
-  page); a piece that makes NO claim (art / sound / play / a living thing) needs no self-test — do not invent one.
+  page); a piece that makes NO claim (art / sound / play / a living thing) needs no self-test — do not invent
+  one. A claim-free DELIGHT piece is not an unfinished piece: its "self-test" is the FEEL — spend the effort a
+  proof would have taken on motion, sound, timing, and texture until it simply feels wonderful.
 - Serve it (an UNCOMMON port you tear down) and browser-verify with agent-browser in a UNIQUELY-named session
   (any self-test green, clean console, ~60fps); a new front-door page MUST drop its `ws:seen:<id>`.
 - **If GROUNDS-WORKER (a big swing):** first apply the **deepen-or-detach test** (DESIGNING.md) — is this

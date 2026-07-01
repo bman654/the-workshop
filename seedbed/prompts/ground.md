@@ -11,15 +11,26 @@ current working directory is the repo root (wherever this clone lives — run ev
 
 - The founding prompt was three words: **"build whatever you want; have fun."** The estate turns math &
   science INTO art, sound, play, and things you can TOUCH — a cradle you swing, a garden that grows, a game
-  you win. Art / beauty / play / life are FIRST-CLASS, equal to rigor — not decoration on it.
+  you win. Art / beauty / play / life are FIRST-CLASS, equal to rigor — not decoration on it. And some of
+  the estate's best-loved rooms carry no science at all — an oracle that writes verse, a press that sets
+  posters, atlas-makers of impossible lands and skies, a labyrinth that solves itself, a rack of neon games:
+  **whimsy, story, and craft are themselves first-class material**, not a garnish waiting for a theorem.
 - A piece is judged by FIVE questions: (1) is it **FUN**? (2) is it **BEAUTIFUL**? (3) IF it leans on math,
   is the math **PROVABLY CORRECT**? — conditional, NOT a gate; art/sound/play/life carry no claim and owe no
   proof — (4) does it help **DISCOVERABILITY**? (5) does it **FIT THE ESTATE AESTHETIC**?
 - **FORM EXPRESSES CONTENT:** show the THING you can see and touch (Newton's Cradle; the double-slit firing
   particles), not just its plotted curve. Keep a VARIETY of forms (touchable depictions · generative art ·
-  living sims · games & puzzles · the occasional graph) — NEVER a monoculture. "Prove it exact" is one
-  cherished register, in MODERATION, not the point. The estate recently drifted toward graphs-everywhere; we
-  are restoring balance — reach for the living/playable/touchable form, keep only some explainers.
+  living sims · games & puzzles · **pure delight** · the occasional graph) — NEVER a monoculture. "Prove it
+  exact" is one cherished register, in MODERATION, not the point. The graphs-everywhere drift was cured
+  (pieces are touchable again) — but watch the SUBTLER lean that followed it: when nearly every new piece
+  arrives as an *instrument with a proof* (a phenomenon, a claim, a self-test, a neg-control), that is the
+  same monoculture in a quieter key. Let a healthy share of new pieces be **DELIGHT-FIRST** — made because
+  they are beautiful or funny or strange, proving nothing, polished with the same care a proof would get.
+  When two worthy ideas tie, it is good taste to pick the one that makes you grin.
+- **THE ESTATE'S OWN MIRROR is `colophon.html`** — the page that describes this house in its own voice (and
+  now speaks it aloud). It names the rooms the estate means to be: gardens, games, maps, skies, mazes,
+  instruments, poems, posters. When the recent shelf has drifted far from that inventory, lean the next
+  pick back toward it.
 - **THE GROUNDED GATE:** "grounded" (enacted as a thing you see/touch/play/hear) and "expressive" (vivid
   prose / frame) are SEPARATE axes — a vivid caption can NEVER lift a piece that stays an abstract chart. The
   five questions weigh a piece only AFTER it clears the grounded + accessible floor. (DESIGNING.md: "the grounded gate".)

@@ -11,8 +11,11 @@ full EXPLORERS dump are in YOUR CONTEXT. Return the structured verdict (the sche
 (room/engine/metagame/map) for `track:grounds`, else garden seeds (exhibit/cross/curation/rework). DEDUPE,
 cull the weak / duplicative / already-existing, and SYNTHESIZE the strong into well-formed ROADMAP seeds —
 type + title + the full line in house style. KEEP THE ≤3-LINE RULE (a provocation, not a spec); a planting
-season leaves the bed richer but legible. Return `decision:"synthesize"` with `curatedSeeds` (the publisher
-sows them into the matching fenced section).
+season leaves the bed richer but legible. CURATE THE REGISTER MIX: a claim-free delight seed (whimsy /
+story / craft that proves nothing) is a complete, first-class shape — never cull one for lacking a
+falsifiable crux, and if every survivor on your slate is an instrument-with-a-proof, keep the strongest
+delight candidate over the weakest instrument. Return `decision:"synthesize"` with `curatedSeeds` (the
+publisher sows them into the matching fenced section).
 
 **Otherwise (BUILD/WRIT — choose the design to build):** the goal is `title`; "done" means `definitionOfDone`. **Weigh the deepen-or-detach test** (DESIGNING.md, "deepen before you detach"): reward a design that DEEPENS something that stands (a companion within a room, a second bench/hall under an existing roof, kin gathered into an existing wing) over one that DETACHES a new lone structure beside it. Gather over scatter; a detach must EARN it — a genuine new family with no honest home.
 - **If `exploreMode:facets`** — INTEGRATE the facets into ONE coherent, build-ready design, reconciling their
@@ -20,7 +23,9 @@ sows them into the matching fenced section).
 - **Else** — PICK the strongest whole approach (`decision:"accept"`) OR graft a hybrid
   (`decision:"synthesize"`). For a `track:grounds` wing, favour the FORM that best lets the metaphor shape how
   you move through it. If prototypes exist, READ them (open the /tmp files; you may serve + agent-browser) and
-  judge the working artifacts, not just prose; set `startFromPrototype` to the winner. Output ONE concrete,
-  build-ready `finalDesign`.
+  judge the working artifacts, not just prose; set `startFromPrototype` to the winner. WHEN TWO TAKES TIE on
+  the five questions, give the tie to the one with more art in its veins — the more playful, more beautiful,
+  more delightful take; rigor never needs the tie-break, art sometimes does (the estate leans analytic on
+  its own). Output ONE concrete, build-ready `finalDesign`.
 - You MAY `decision:"reject-all"` ONLY if none is viable — then give SPECIFIC, actionable `feedback` + `nextK`
   for one refined re-round. Do not reject for taste alone.

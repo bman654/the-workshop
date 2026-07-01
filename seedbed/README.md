@@ -30,6 +30,19 @@ graphs — an occasional elegant explainer is genuinely valuable — but to rest
 games & puzzles, *and* the odd graph. *Form expresses content: show the thing, not
 its plot.*
 
+**The subtler second lean (noted 2026-07-01, after the first cure took).** The
+graph drift was cured — new pieces are genuinely touchable now — but the *register*
+still pulls analytic: run after run of blooms arriving as an **instrument with a
+proof** (a phenomenon, a claim, a self-test, a neg-control). Gorgeous, cherished —
+and the same monoculture in a quieter key when it is *every* piece. The original
+spirit (read `colophon.html` — the estate's own mirror, in its own voice) also
+made verse oracles, poster presses, impossible atlases, neon games: rooms that
+prove nothing and earn their place on fun and beauty alone. So the standing
+counterweight: keep **delight-first** seeds in the bed and let them win honest
+tie-breaks; never bolt a crux onto a piece that wants to be pure play. The needle
+should rest *between* the registers — the science is fun too; this note exists
+because, left alone, the makers' thumb drifts to the proof side of the scale.
+
 **The audit authority + `rework`.** So the gardener carries a standing power: each
 PLAN cycle, walk a few existing exhibits, measure them against the five questions,
 and **mark ~1** that would bloom most from a re-soul as a **`rework`** garden seed —

@@ -26,8 +26,10 @@ is a garden `curation`.
 **The soul the bed serves.** The estate turns math/science INTO art, sound, play, and **things you can
 touch** — judged by *five questions* (fun? · beautiful? · if-math, provably-correct? · discoverable? ·
 fits the aesthetic?), with "prove it exact" one beloved register *in moderation*, never the gate. Sow
-for **variety of form** (touchable depictions · generative art · living sims · games & puzzles · the
-occasional graph) — *show the thing, not its plot* — never a graph-monoculture. The gardener also
+for **variety of form** (touchable depictions · generative art · living sims · games & puzzles · **pure
+delight** · the occasional graph) — *show the thing, not its plot* — never a monoculture of any one,
+including the instrument-with-a-proof: keep a claim-free delight seed or two in the bed (whimsy / story /
+craft is a complete, first-class shape; `colophon.html` is the mirror). The gardener also
 **audits** the estate and marks ~1 piece a cycle for `rework`. Full story →
 [seedbed/README.md](seedbed/README.md) "the soul & the audit".
 
